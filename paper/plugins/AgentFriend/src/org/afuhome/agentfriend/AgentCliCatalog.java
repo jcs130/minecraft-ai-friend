@@ -45,7 +45,7 @@ final class AgentCliCatalog {
         add(specs,"book","item","item","/mycli book","补领命格书","背包有空位；已有时不重复发放","领取结果");
         add(specs,"kit","item","item","/mycli kit","补领罗盘和命格书","背包有空位","领取结果");
         add(specs,"menu","item","gui","/mycli menu","打开技能罗盘原版箱子界面","在线玩家","原版菜单");
-        add(specs,"protect","safety","read","/mycli protect break|place <x> <y> <z>","操作方块前查询保护；坐标必须是绝对整数","同维度已加载方块，距玩家不超过 16 格","mcagent:protection JSON；deny 不操作，unknown 暂缓");
+        add(specs,"protect","safety","read","/mycli protect break|place|container <x> <y> <z>","操作方块/开箱前查询保护与物品归属；坐标必须是绝对整数","同维度已加载方块，距玩家不超过 16 格","mcagent:protection JSON；deny 不操作，unknown 暂缓");
         add(specs,"goto","travel","teleport","/mycli goto <公共地点ID|arena|guild|personal:名字>","传送术前往公共或私人地点","目标已存在且安全；消耗 6 魔力；私人名 1–24 位英文数字_-","MC_DESTINATION 与成功后 MC_TRAVEL；失败不扣费");
         add(specs,"waypoint","travel","read","/mycli waypoint [add|remove <名字>]","列出公共/私人传送点或保存/删除私人点","在线玩家；add/remove 名称为 1–24 位英文数字_-","MC_WAYPOINT 绝对坐标或操作结果");
         add(specs,"locate","team","read","/mycli locate list|nearest|玩家名|off|tp <玩家名|nearest>","查在线队友绝对坐标、追踪或安全传送","目标在线且非旁观者","MC_PLAYER 绝对坐标或追踪/传送结果");
@@ -57,6 +57,7 @@ final class AgentCliCatalog {
         add(specs,"goddess","goddess","read","/mycli goddess skills|learn feather|night|pray <话>","女神技艺和祈愿","学习需满足条件；祈愿需女神在线","技能列表、学习或送达结果");
 
         add(specs,"protect.break","safety","read","/mycli protect break <x> <y> <z>","预判能否挖掘该绝对坐标方块","整数坐标；同维度、16 格内、区块已加载","mcagent:protection status=deny|unknown|allow_likely");
+        add(specs,"protect.container","safety","read","/mycli protect container <x> <y> <z>","开箱前查询实体储物归属；公会门内仅萌萌可取放","整数坐标；同维度、16格内、已加载；门口公共箱可存取","MC_PROTECTION 与 mcagent:protection；guild_owner_only 则停止，按 publicCommand 找公共箱");
         add(specs,"coach.status","info","read","/mycli coach status","查看本人提醒开关、触发门槛和冷却","在线玩家","MC_COACH type=status");
         add(specs,"coach.on","info","write","/mycli coach on","为本人启用提醒，跨重登保留","在线非旁观玩家","MC_COACH type=status enabled=true");
         add(specs,"coach.off","info","write","/mycli coach off","为本人关闭提醒，跨重登保留","在线玩家","MC_COACH type=status enabled=false");
@@ -133,7 +134,7 @@ final class AgentCliCatalog {
         add(specs,"guild.claim","adventure","item","/mycli guild claim","交付已完成任务并结算声望/奖励","活动任务已达成","声望与奖励箱结果");
         add(specs,"guild.rewards","storage","gui","/mycli guild rewards","打开与试炼共用的本人奖励箱","远程开启 2 魔力；实体箱旁免费","原版箱子菜单与远程 MC_STORAGE_MAGIC");
         add(specs,"guild.stash","storage","gui","/mycli guild stash","打开与试炼共用的本人私人箱","远程开启 2 魔力；实体箱旁免费","原版箱子菜单与远程 MC_STORAGE_MAGIC");
-        add(specs,"guild.shared","storage","read","/mycli guild shared","列出四组公会公共双箱的绝对坐标；所有玩家可用普通箱子方式存取","公会服务区已建成","MC_GUILD_SHARED 坐标及 54 格容量");
+        add(specs,"guild.shared","storage","read","/mycli guild shared","门内物品归萌萌；列出门口四组公共双箱坐标，所有玩家可存取","公会服务区已建成；实体开箱前可用 protect.container 查询","MC_GUILD_SHARED 坐标及54格容量；门内无权操作返回 MC_GUILD_ACCESS");
         add(specs,"guild.trader","adventure","gui","/mycli guild trader","查看公会接待员坐标；到门口打开购买、回收和任务菜单","公会服务区已建成","MC_GUILD_TRADER 与原版容器菜单");
         add(specs,"guild.travel","adventure","teleport","/mycli guild travel <遗迹ID>","前往已开放地下城遗迹的外围安全点","ID 从公会看板/文档获取；目标可用；8 魔力","成功后 MC_TRAVEL 或拒绝原因");
         add(specs,"life.board","life","read","/mycli life board","查看七类生活公会的每日委托和精确 ID","在线玩家","私人看板文字");

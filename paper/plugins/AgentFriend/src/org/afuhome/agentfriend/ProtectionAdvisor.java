@@ -41,8 +41,8 @@ final class ProtectionAdvisor {
     void forget(Player player) { lastQuery.remove(player.getUniqueId()); }
 
     void command(Player player, String[] args) {
-        if (args.length != 5 || !(args[1].equalsIgnoreCase("break") || args[1].equalsIgnoreCase("place"))) {
-            player.sendMessage("用法：/mycli protect break|place <x> <y> <z>；只查询自己附近已加载的方块。");
+        if (args.length != 5 || !(args[1].equalsIgnoreCase("break") || args[1].equalsIgnoreCase("place") || args[1].equalsIgnoreCase("container"))) {
+            player.sendMessage("用法：/mycli protect break|place|container <x> <y> <z>；只查询自己附近已加载的方块。");
             return;
         }
         String action = args[1].toLowerCase(java.util.Locale.ROOT);
@@ -50,7 +50,7 @@ final class ProtectionAdvisor {
         try {
             x = Integer.parseInt(args[2]); y = Integer.parseInt(args[3]); z = Integer.parseInt(args[4]);
         } catch (NumberFormatException invalid) {
-            player.sendMessage("坐标必须是整数：/mycli protect break|place <x> <y> <z>");
+            player.sendMessage("坐标必须是整数：/mycli protect break|place|container <x> <y> <z>");
             return;
         }
         JsonObject result = new JsonObject();
@@ -74,6 +74,13 @@ final class ProtectionAdvisor {
             result.addProperty("allowed", false);
             result.addProperty("reason", reason);
         }
+        if ((reason != null && reason.startsWith("guild_owner")) || plugin.guildHall().containsProperty(new Location(player.getWorld(), x, y, z)))
+            plugin.guildStorage().ownershipFields(result);
+        send(player, result);
+        if (action.equals("container")) player.sendMessage("MC_PROTECTION " + result);
+    }
+
+    void send(Player player, JsonObject result) {
         byte[] bytes = result.toString().getBytes(StandardCharsets.UTF_8);
         if (player.getListeningPluginChannels().contains(CHANNEL)) {
             player.sendPluginMessage(plugin, CHANNEL, bytes);
@@ -100,6 +107,16 @@ final class ProtectionAdvisor {
             return "unknown_out_of_range";
         if (!player.getWorld().isChunkLoaded(x >> 4, z >> 4)) return "unknown_unloaded_chunk";
         Block block = player.getWorld().getBlockAt(x, y, z);
+        if (action.equals("container")) {
+            if (!plugin.guildStorage().physicalContainer(block)) return "unknown_not_container";
+            if (plugin.guildStorage().deniesContainer(player, block)) return "guild_owner_only";
+            try {
+                RegionQuery query = WorldGuard.getInstance().getPlatform().getRegionContainer().createQuery();
+                if (!query.testState(BukkitAdapter.adapt(block.getLocation()), WorldGuardPlugin.inst().wrapPlayer(player), Flags.CHEST_ACCESS)) return "worldguard";
+            } catch (RuntimeException | LinkageError unavailable) { return "unknown_worldguard"; }
+            return null;
+        }
+        if (plugin.guildStorage().deniesEdit(player, block)) return "guild_owner_only";
         if (plugin.villageProtection().deniesEdit(block)) return "village_structure";
         if (plugin.guildHall().deniesEdit(block)) return "guild_hall";
         if (plugin.lifeBuildings().deniesEdit(block)) return "life_guild_building";

@@ -365,6 +365,11 @@ final class GuildHallManager implements Listener {
     }
     private boolean servicesFailClosed(Block b) { return built && servicesBuilt && !ready && inServices(b); }
 
+    boolean isSharedChest(Block b) {
+        return servicesBuilt && b.getWorld() == world && (b.getX() == x + 16 || b.getX() == x + 17)
+                && b.getY() == y + 1 && b.getZ() >= z + 7 && b.getZ() <= z + 13 && (b.getZ() - z - 7) % 2 == 0;
+    }
+
     private String inspectServices() {
         if (!built || !ready || world == null) return "公会大厅或保护数据未就绪";
         if (x != -489 || y != 66 || z != -502) return "这套共享箱地基只适用于当前村庄公会坐标";
@@ -462,6 +467,7 @@ final class GuildHallManager implements Listener {
 
     void storageInfo(Player player) {
         if (!servicesBuilt || !ready) { player.sendMessage("§e公会共享箱尚未开放。"); return; }
+        player.sendMessage("§c公会门内实体储物和展示物归萌萌所有，其他人无权取放；需要物资装备请使用门口东南侧公共箱。");
         player.sendMessage("§6公会东南侧有四组双箱。所有玩家可像普通箱子一样存放和取用；不是个人奖励箱。");
         for (int i = 0; i < SHARED_LABELS.length; i++) {
             int dz = 7 + i * 2;
@@ -603,11 +609,12 @@ final class GuildHallManager implements Listener {
         return true;
     }
 
-    private boolean inHall(Block b) {
-        return built && b.getWorld() == world && b.getX() >= x - 9 && b.getX() <= x + 9
-                && b.getY() >= y - 2 && b.getY() <= y + 10
-                && b.getZ() >= z - 7 && b.getZ() <= z + 7;
+    boolean containsProperty(Location at) {
+        return built && at != null && at.getWorld() == world && at.getBlockX() >= x - 9 && at.getBlockX() <= x + 9
+                && at.getBlockY() >= y - 2 && at.getBlockY() <= y + 10
+                && at.getBlockZ() >= z - 7 && at.getBlockZ() <= z + 7;
     }
+    private boolean inHall(Block b) { return containsProperty(b.getLocation()); }
     private boolean protectedFabric(Block b) {
         return inHall(b) && fabric.get(key(b)) == b.getType() || servicesBlock(b);
     }

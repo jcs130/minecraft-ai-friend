@@ -33,7 +33,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 /** Owner UUID travels with the vanilla ItemStack through Java, Geyser and Mineflayer. */
 final class SoulboundGear implements Listener {
-    private static final UUID MENGMENG = UUID.fromString("00000000-0000-0000-0009-00000d9f9c7b");
+    static final UUID MENGMENG = UUID.fromString("00000000-0000-0000-0009-00000d9f9c7b");
     private final NamespacedKey ownerKey;
     private final Map<UUID, Long> noticeAt = new HashMap<>();
 

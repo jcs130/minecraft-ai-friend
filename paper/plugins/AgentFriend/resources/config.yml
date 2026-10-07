@@ -1,5 +1,8 @@
 arena-built: false
 last-run: 0
+guild-storage:
+  # Exact Floodgate UUID of Mengmeng (.MicroKQ). OP does not bypass property ownership.
+  owner-uuid: '00000000-0000-0000-0009-00000d9f9c7b'
 nametags:
   # Only real Agent player accounts receive the short overhead role prefix.
   # Camera and Goddess spectator accounts are intentionally absent.

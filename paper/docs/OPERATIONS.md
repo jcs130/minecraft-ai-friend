@@ -1,5 +1,17 @@
 # Paper 分支维护与发布
 
+## 冒险者公会物品归属发布（2026-10-06 19:01）
+
+AgentFriend **0.3.86 已正式生效**，SHA256 `A0E3DA65B37084A1D4FCCA0507F5B81EC271F685CA0675AED59E224EA600B9EE`。门内实体储物和展示物归萌萌固定 Floodgate UUID `00000000-0000-0000-0009-00000d9f9c7b`（`.MicroKQ`）所有；其他人包括游戏内 OP 无权取放、破坏或捡走私有掉落物。服务器取消实际操作，私发中文说明和 `MC_GUILD_ACCESS`，同时走 `mcagent:protection`；已附身的登记 Eye 可镜像拒绝聊天。需要装备/物资使用门口四组公共双箱，`/mycli guild shared` 查询坐标。详细范围、预检查与维护审计见 [物品归属](GUILD_PROPERTY.md)。
+
+最终 JAR 的隔离服 16 项真实 Mineflayer 检查通过：普通玩家、登记 Agent、非主人 OP 拒绝；主人开箱取放；公共双箱两半跨玩家取放；跨边界双箱；漏斗进出；丢物恢复和主人拾取；盔甲架/展示框；对应 Eye 私有拒绝镜像与接口发现。初次脚本的背包缓存观察、悬空目标距离及展示框支撑错误已修正，失败回执保留，最终通过回执才作为验收依据。测试只在 25567/25587；主人 UUID 是隔离测试覆盖值，停服后已恢复原隔离配置和配对清单。
+
+发布前仅 CortiLan、CortiEye、Goddess 三个已核实服务账号在线，副本 `active=false,count=0`。既有 `Afu-MC-DailyBackup` 正常停服，在 E/F **`20261006-190032/.complete`** 完成后启用唯一 0.3.86；任务结果 0，待发布计划已消费。Java **30976** 于 19:00:37 启动，19:01 恢复就绪；LAN 网关、唯一女神桥 **10604**、Eye watcher **32348** 恢复。AuraSkills `startup-verified` 的 success/transform/behavior 全部 true，CortiEyeMirror 保持 0.1.9，礼物目录 12 项 ready=true。
+
+正式服临时普通客户端确认三只门内木桶均无开箱包且收到固定主人 UUID、`guild_owner_only`、中文公共箱提示；预检查拒绝，门口四组双箱均可打开 54 格，随后关闭退出。没有从正式箱子取放任何物资。三个维度难度均 Normal、`keepInventory=true`。19:03 核验 CortiLan/Goddess 在线，**CortiEye 原机客户端尚未回连**，`camera=offline,attached=false`；watcher 在线不代表镜头恢复。基岩真机触控/手柄画面仍需实际客户端确认。
+
+私有最终/失败回执、新 JAR、正式旧 JAR、发布计划及知识原件保存在 E/F `repairs\guild-ownership-20261006`。回退须再走正常停服备份流程，禁用 0.3.86、启用保留的 0.3.85，保留世界和玩家数据；旧版没有本次物品归属拦截，回退后必须明确告知并安排人工管理。不得使用 `/reload`。
+
 ## 村庄警报与支援传送发布（2026-10-06 13:34）
 
 AgentFriend **0.3.85 已正式生效**，SHA256 `E699542FF9DFB55CB1137AE8132F06C958B805E0034243D43241294CD7A272AD`。旧日志中的多条目标位于村庄地下，旧 X/Z 筛选会把它们作为警报；现在排除无关地下巡逻怪和野生女巫，真实原版 Raid 成员保留。活敌人连续观察 4 秒才发警报，同事件仅提示一次，敌人消失后立即停止支援。玩法及 Agent 协议见 [村庄守望](VILLAGE_SUPPORT.md)。

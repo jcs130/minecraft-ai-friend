@@ -200,6 +200,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private LifeGuildBuildings lifeBuildings;
     private VillageWatchManager villageWatch;
     private GuildHallManager guildHall;
+    private GuildStorageOwnership guildStorage;
     private PvpArenaManager pvpArena;
     private TrialRoadManager trialRoad;
     private CombatSpells combatSpells;
@@ -256,6 +257,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         villageStructureProtection = new VillageStructureProtection(this);
         lifeBuildings = new LifeGuildBuildings(this, lifeGuild);
         protectionAdvisor = new ProtectionAdvisor(this);
+        guildStorage = new GuildStorageOwnership(this);
         agentCoach = new AgentCoach(this);
         agentCoach.start();
         playerNameTags = new PlayerNameTags(this);
@@ -323,6 +325,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private World world() { return Bukkit.getWorld("world"); }
     VillageStructureProtection villageProtection() { return villageStructureProtection; }
     GuildHallManager guildHall() { return guildHall; }
+    GuildStorageOwnership guildStorage() { return guildStorage; }
+    ProtectionAdvisor protectionAdvisor() { return protectionAdvisor; }
     DailyBoardManager dailyBoard() { return dailyBoard; }
     VillageWatchManager villageWatch() { return villageWatch; }
     LifeGuildBuildings lifeBuildings() { return lifeBuildings; }
@@ -677,6 +681,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             villageWatch.audit(sender); return true;
         }
+        if (args.length == 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("guildstorageaudit")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台审计公会物品归属。"); return true;
+            }
+            guildStorage.audit(sender); return true;
+        }
         if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("gift")) {
             goddessGift(sender, args);
             return true;
@@ -907,7 +917,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("Agent：/mycli list [分类|命令] [页码] 发现能力；/mycli explain <ID> 或 /mycli help <ID> 查询准确用法，不会执行。");
         p.sendMessage("/mycli coach status|on|off  查看或调整个人提醒；连续死亡、久未行动或久未使用 /mycli 时低频提示。");
         p.sendMessage("/mycli spells list [页]  查看技能；/mycli spells explain <ID>  查看目标、消耗、冷却和用法；/mycli cast <ID>  施法");
-        p.sendMessage("/mycli protect break|place <x> <y> <z>  查询附近方块能否操作；Agent 挖掘前先查");
+        p.sendMessage("/mycli protect break|place|container <x> <y> <z>  查询附近方块/实体储物能否操作；拒绝则停止");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "造物术没有想要的物品时，会向女神提交申请；也可从罗盘选择更多造物。");
         p.sendMessage("/mycli compass  补领罗盘；/mycli book  补领命格书；/mycli menu  打开罗盘");
         p.sendMessage("/mycli guide [start|explore|magic|gear|guild|dungeon|team]  分步指引；手柄从罗盘选旅途指南");
@@ -2109,6 +2119,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     @EventHandler public void onInteract(PlayerInteractEvent event) {
         if (event.getHand() != EquipmentSlot.HAND) return;
+        if (guildStorage != null && guildStorage.handleInteract(event)) return;
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         if (SkillTome.isTome(event.getItem())) {
             event.setCancelled(true);
@@ -2604,7 +2615,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 2 && args[0].equalsIgnoreCase("skillbook")) return List.of("list", "use");
         if (args.length == 2 && (args[0].equalsIgnoreCase("explain") || args[0].equalsIgnoreCase("help")))
             return AgentCliCatalog.ids();
-        if (args.length == 2 && args[0].equalsIgnoreCase("protect")) return List.of("break", "place");
+        if (args.length == 2 && args[0].equalsIgnoreCase("protect")) return List.of("break", "place", "container");
         if (args.length == 2 && args[0].equalsIgnoreCase("guide"))
             return List.of("start", "explore", "magic", "gear", "guild", "dungeon", "team", "menu");
         if (args.length == 2 && args[0].equalsIgnoreCase("imprint")) {

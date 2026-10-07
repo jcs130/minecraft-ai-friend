@@ -7,12 +7,13 @@
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
 | 技能、法术、快捷施法 | `plugins/AgentFriend/src/` 的技能表、菜单和提示；`plugins/AgentFriend/spells-*.yml` 的 MagicSpells 配置；AuraSkills 配置；[技能体系](SKILL_SYSTEM.md)、[位移与远程物品操作](TRAVEL_MAGIC.md) | 玩家魔力、等级、已学技能、道具刻印，以及八项法术按 UUID 记录的 `plugins/AgentFriend/spell-mastery.yml` | 修改源码或法术配置，构建后在隔离服验证，再按发布流程更新；**尚无统一热加载技能包** |
-| 公会任务与等级 | 静态 37 张仍在 `GuildManager.java`；0.3.78 起的动态卡模板在 `plugins/AgentFriend/dynamic-board.yml`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中的 `guild-players` 和 `dynamic-board.today`；动态模板文件 | 已支持的供货与日常目标可改 YAML 后用 `mycli admin board reload`、`replace` 或 `regenerate` 热更新；新判定类型仍需开发。正式服 0.3.85 已包含此功能，详见 [动态看板](DYNAMIC_BOARD.md) |
+| 公会任务与等级 | 静态 37 张仍在 `GuildManager.java`；0.3.78 起的动态卡模板在 `plugins/AgentFriend/dynamic-board.yml`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中的 `guild-players` 和 `dynamic-board.today`；动态模板文件 | 已支持的供货与日常目标可改 YAML 后用 `mycli admin board reload`、`replace` 或 `regenerate` 热更新；新判定类型仍需开发。正式服 0.3.86 已包含此功能，详见 [动态看板](DYNAMIC_BOARD.md) |
+| 公会物品归属 | `GuildStorageOwnership.java`；[归属规则](GUILD_PROPERTY.md) | 大厅实体库存与展示物/掉落物 PDC；萌萌固定 UUID；门口公共箱 | 0.3.86 服务器拒绝其他人取放，收到 `guild_owner_only` 应停止并改去公共箱；`protect container` 可预检查。变更主人需核实 UUID、正常重启及读回，不能用测试身份覆盖正式配置 |
 | 生活公会 | `LifeGuildManager.java` 的七类原版行动委托；`LifeGuildBuildings.java` 的四馆、入口台阶与七位导师；[生活公会规则](LIFE_GUILDS.md) | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `life-guild` 及四馆地基，另有四份 `life-building-*-mask.tsv` 结构保护快照 | 先扩展原版动作事件、任务 ID、原版菜单与 `/mycli life`；若要换任务目标，须保留在途任务迁移及防重复领奖逻辑；建筑/保护快照须随世界同组备份。四馆入口修复见 [建筑记录](LIFE_GUILD_BUILDINGS.md) |
 | 试炼塔、地下城与奖励 | `DungeonManager.java` 的楼层、坐标、怪物和建造逻辑；奖励逻辑在源码中；自然遗迹由既有数据包生成 | 世界区块、实体、保护快照、`dungeon-active-run`、每人每天每层领奖账本、个人奖励、私人储物和施工标记 | 可在隔离世界设计、实现和测试新的副本；**正式服没有“输入描述即安全生成地下城”的通用能力** |
 | PvP 竞技场 | `PvpArenaManager.java` 的自愿匹配、同款装备和积分；[PvP 规则](PVP_ARENA.md) | `pvp-records`、`pvp-escrow.yml`、竞技场方块及 WorldGuard 区域 | 运营 Agent 可查看本人对局和排行榜；改地图或计分规则须隔离测试和完整备份，不可在有人对战时发布 |
-| 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 起正式生效，当前 0.3.85 继承，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP 八工具已重新发现。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |
-| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在正式重启自动激活；0.3.85/0.1.9 及 40 连接已发布，容量与边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) | 可检查、构建、测试、备份和发布；源码提交不会自动改变正式服 |
+| 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 起正式生效，当前 0.3.86 继承，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP 八工具已重新发现。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |
+| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在正式重启自动激活；0.3.86/0.1.9 及 40 连接已发布，容量与边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) | 可检查、构建、测试、备份和发布；源码提交不会自动改变正式服 |
 
 2026-10-06 已修复女神附魔书字段错误和现存确认损坏的 1 本，并正式发布 0.3.84 校验入口：书必须使用 `stored_enchantments`，装备使用 `enchantments`。私聊与造物都使用同一受校验入口；女神只选礼物，服务器生成属性并核对实际库存。不要依据闪光认定铁砧可用，也不要把字段错误归咎于刻印保护。现状见 [女神附魔书](GODDESS_BOOKS.md)、[礼物校验](GODDESS_GIFTS.md)。
 
@@ -98,7 +99,7 @@ AgentFriend 0.3.33 已在正式服提供该查询；Cortico 的自动挖掘入�
 
 每项委托都要让手柄玩家通过原版公会看板完成接单与领奖，也要给 Agent 一个 `/mycli guild` 路径。奖励进入个人箱，需验证玩家退出、死亡或重启后不会丢失或重复发放。价格、声望和稀有物品要与同等级试炼奖励比较，避免一个低风险任务无限产出高阶装备。
 
-0.3.61 起公会门内有接待员，右键打开任务、购买、装备回收和实体绿宝石交易；她调用现有余额与报价流程。大厅东南侧四组原版公共双箱每组 54 格，所有人可存取，按武器、护甲、补给、杂物挂牌。Agent 先用 `/mycli guild trader|shared` 获取绝对坐标，走到箱旁后用 Mineflayer 标准 `openContainer`/`deposit`/`withdraw`，每次重新读取箱内库存；不要把公共箱当成个人存储，更不能自动出售他人捐赠物。箱体及地台保护只阻止破坏结构，不锁箱内物品。坐标、施工与回退方式见 [公会接待与共享箱](GUILD_SERVICES.md)。
+0.3.61 起公会门内有接待员，右键打开任务、购买、装备回收和实体绿宝石交易；她调用现有余额与报价流程。0.3.86 将门内实体储物、展示物和掉落物归萌萌所有，其他人实际操作由服务器拒绝并返回 `MC_GUILD_ACCESS reason=guild_owner_only`；开箱前可 `/mycli protect container <x> <y> <z>` 查询，拒绝应停止并改去门口公共箱，见 [物品归属](GUILD_PROPERTY.md)。大厅东南侧四组原版公共双箱每组 54 格，所有人可存取，按武器、护甲、补给、杂物挂牌。Agent 先用 `/mycli guild trader|shared` 获取绝对坐标，走到公共箱旁后用 Mineflayer 标准 `openContainer`/`deposit`/`withdraw`，每次重新读取箱内库存；不要把公共箱当成个人存储，更不能自动出售他人捐赠物。公共箱体及地台保护阻止破坏结构，箱内物品可共享。坐标、施工与回退方式见 [公会接待与共享箱](GUILD_SERVICES.md)。
 
 Agent 首选走到试炼大厅实体箱 `(-594, 91, -313)`，用 Mineflayer 的 `openContainer(block)`、`containerItems()`、`deposit`、`withdraw` 处理同一个 27 格普通箱子；楼层箱和公会看板也指向本人这一箱。箱中既有已装入的试炼、公会奖励，也可存放自己的物品，按 UUID 隔离。`/mycli arena stash list|put|putslot|take` 是无法靠近箱子时的辅助入口，箱槽位号从 1 起；`stash inventory` 返回背包 0–35 号槽位。`/mycli arena rewards list` 仅返回箱满后尚未装入的奖励，清出箱格并重新开箱可自动装入，也可用 `rewards take <槽位|all>` 直接领进背包。不要把公共世界箱子当作私人箱，也不要把箱子里现有的存货与待入箱队列重复计算。
 
