@@ -8,7 +8,7 @@ AgentFriend **0.3.86 已正式生效**，SHA256 `A0E3DA65B37084A1D4FCCA0507F5B81
 
 发布前仅 CortiLan、CortiEye、Goddess 三个已核实服务账号在线，副本 `active=false,count=0`。既有 `Afu-MC-DailyBackup` 正常停服，在 E/F **`20261006-190032/.complete`** 完成后启用唯一 0.3.86；任务结果 0，待发布计划已消费。Java **30976** 于 19:00:37 启动，19:01 恢复就绪；LAN 网关、唯一女神桥 **10604**、Eye watcher **32348** 恢复。AuraSkills `startup-verified` 的 success/transform/behavior 全部 true，CortiEyeMirror 保持 0.1.9，礼物目录 12 项 ready=true。
 
-正式服临时普通客户端确认三只门内木桶均无开箱包且收到固定主人 UUID、`guild_owner_only`、中文公共箱提示；预检查拒绝，门口四组双箱均可打开 54 格，随后关闭退出。没有从正式箱子取放任何物资。三个维度难度均 Normal、`keepInventory=true`。19:03 核验 CortiLan/Goddess 在线，**CortiEye 原机客户端尚未回连**，`camera=offline,attached=false`；watcher 在线不代表镜头恢复。基岩真机触控/手柄画面仍需实际客户端确认。
+正式服临时普通客户端确认三只门内木桶均无开箱包且收到固定主人 UUID、`guild_owner_only`、中文公共箱提示；预检查拒绝，门口四组双箱均可打开 54 格，随后关闭退出。没有从正式箱子取放任何物资。三个维度难度均 Normal、`keepInventory=true`。19:03 核验 CortiLan/Goddess 在线，**CortiEye 原机客户端尚未回连**，`camera=offline,attached=false`；watcher 在线不代表镜头恢复。19:10 最终复核原机 CortiEye 已实际回连，`camera=online,attached=true,cameraNightVision=true`，重启前三个账号均恢复；未用同名探针替代。基岩真机触控/手柄画面仍需实际客户端确认。
 
 私有最终/失败回执、新 JAR、正式旧 JAR、发布计划及知识原件保存在 E/F `repairs\guild-ownership-20261006`。回退须再走正常停服备份流程，禁用 0.3.86、启用保留的 0.3.85，保留世界和玩家数据；旧版没有本次物品归属拦截，回退后必须明确告知并安排人工管理。不得使用 `/reload`。
 
