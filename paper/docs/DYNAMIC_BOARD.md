@@ -3,7 +3,7 @@
 2026-10-07 扩展：工程和多阶段生活任务使用独立的 `task-market.yml`，复用公会任务槽和奖励，配置/验收/能力记录见 [任务市场](TASK_MARKET.md)。每日看板仍使用本文的 `dynamic-board.yml` 和八种动作目标；不要把工程目标写入旧每日模板而误认为会生效。0.3.87 安装/发布状态见 [OPERATIONS.md](OPERATIONS.md)。
 
 状态：0.3.78 已发布，2026-10-03 18:45；下文 §1–9 保留原始需求，§10 是实际运营接口与边界 · 提出人：扛枪 · 起草：史提西亚（Goddess）· 2026-10-03 晚
-关联：[LIFE_GUILDS.md](LIFE_GUILDS.md) · [OPERATIONS.md](OPERATIONS.md) · AgentFriend 正式服 0.3.78
+关联：[LIFE_GUILDS.md](LIFE_GUILDS.md) · [OPERATIONS.md](OPERATIONS.md) · 自 AgentFriend 0.3.78 起，当前正式服 0.3.87
 
 ## 1. 背景与目标
 

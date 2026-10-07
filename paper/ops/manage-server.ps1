@@ -789,6 +789,8 @@ function Backup-Server {
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dest 'backup.json') -Encoding UTF8
         New-Item -ItemType File -Path (Join-Path $dest '.complete') -Force | Out-Null
         Log "Backup complete: $dest"
+        # Pending deployments require both verified recovery copies before any JAR changes.
+        Mirror-LatestBackup
         Deploy-PendingServerSettings
         Deploy-PendingAgentFriend
         Deploy-PendingEyeMirror
@@ -803,7 +805,6 @@ function Backup-Server {
         }
     }
     PruneSnapshots $backupRoot
-    Mirror-LatestBackup
 }
 
 if ($Action -eq 'Status') {

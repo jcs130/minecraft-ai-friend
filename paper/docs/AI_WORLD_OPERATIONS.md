@@ -4,21 +4,21 @@
 
 ## 先认清现状
 
-2026-10-07 已实现 0.3.87 任务市场候选：`task-market.yml` 配置 1–8 步工程/生活委托，桥、路、建筑、红石实际验收，按本人保存完成/放弃/失败及耗时证据。`guild engineering|verify|assessment` 和原版菜单可发现内容；正式服目前仍 0.3.86，候选隔离与发布状态见 [任务市场](TASK_MARKET.md)、[维护与发布](OPERATIONS.md)。在正式发布前不要向玩家宣称这些命令已可用。
+2026-10-07 13:50 已正式发布 **0.3.87** 任务市场：`task-market.yml` 配置 1–8 步工程/生活委托，桥、路、建筑、红石实际验收，按本人保存完成/放弃/失败及耗时证据。六工程+六生活任务启用、六场地自动登记；`guild engineering|verify|assessment` 和原版菜单可发现内容。E/F `20261007-135006/.complete` 完整，正式普通客户端 17 项只读检查通过；原机 CortiEye 待重连，基岩画面待真机。验收与回退见 [任务市场](TASK_MARKET.md)、[维护与发布](OPERATIONS.md)。
 
-2026-10-07 已在线处理普通村民滞留地下和集合钟不可达：24 位原村民回到地面，公共集合钟在 `(-542,67,-452)`；当前已加载成年村民 44 位，版本保持 0.3.86。普通玩家用 `/mycli village villagers` 找附近职业村民；固定服务 NPC 不纳入普通村民救援。证据、维护边界与回退见 [村民地面巡检](VILLAGE_RESIDENTS.md)。
+2026-10-07 发布前已在线处理普通村民滞留地下和集合钟不可达：24 位原村民回到地面，公共集合钟在 `(-542,67,-452)`；救援时已加载成年村民 44 位，当时版本为 0.3.86。普通玩家用 `/mycli village villagers` 找附近职业村民；固定服务 NPC 不纳入普通村民救援。证据、维护边界与回退见 [村民地面巡检](VILLAGE_RESIDENTS.md)。
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
 | 技能、法术、快捷施法 | `plugins/AgentFriend/src/` 的技能表、菜单和提示；`plugins/AgentFriend/spells-*.yml` 的 MagicSpells 配置；AuraSkills 配置；[技能体系](SKILL_SYSTEM.md)、[位移与远程物品操作](TRAVEL_MAGIC.md) | 玩家魔力、等级、已学技能、道具刻印，以及八项法术按 UUID 记录的 `plugins/AgentFriend/spell-mastery.yml` | 修改源码或法术配置，构建后在隔离服验证，再按发布流程更新；**尚无统一热加载技能包** |
 | 公会任务与等级 | 静态 37 张仍在 `GuildManager.java`；0.3.78 起的动态卡模板在 `plugins/AgentFriend/dynamic-board.yml`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中的 `guild-players` 和 `dynamic-board.today`；动态模板文件 | 已支持的供货与日常目标可改 YAML 后用 `mycli admin board reload`、`replace` 或 `regenerate` 热更新；新判定类型仍需开发。正式服 0.3.86 已包含此功能，详见 [动态看板](DYNAMIC_BOARD.md) |
-| 任务市场（0.3.87 已验证候选，待维护发布） | `task-market.yml`，村庄 12 张任务配置及三张动态备料示例；[任务市场](TASK_MARKET.md) | `config.yml` 的 `task-market` 场地基准/项目账本/本人评估，`guild-players.<UUID>.active.market` 在途条件 | 可热更步骤、目标、奖励；施工前登记稳定场地 ID。66 项真实流程、13 项重启/并发、六场地和备料通过；已排既有 2026-10-08 04:00 维护，正式 0.3.86 尚不能使用新命令 |
+| 任务市场（0.3.87 已正式发布） | `task-market.yml`，村庄 12 张任务配置及三张动态备料示例；[任务市场](TASK_MARKET.md) | `config.yml` 的 `task-market` 场地基准/项目账本/本人评估，`guild-players.<UUID>.active.market` 在途条件 | 可热更步骤、目标、奖励；施工前登记稳定场地 ID。66 项真实流程、13 项重启/并发、六场地和备料隔离通过，正式 17 项只读验证通过；六场地已自动登记，Agent 自由选择任务 |
 | 公会物品归属 | `GuildStorageOwnership.java`；[归属规则](GUILD_PROPERTY.md) | 大厅实体库存与展示物/掉落物 PDC；萌萌固定 UUID；门口公共箱 | 0.3.86 服务器拒绝其他人取放，收到 `guild_owner_only` 应停止并改去公共箱；`protect container` 可预检查。变更主人需核实 UUID、正常重启及读回，不能用测试身份覆盖正式配置 |
 | 生活公会 | `LifeGuildManager.java` 的七类原版行动委托；`LifeGuildBuildings.java` 的四馆、入口台阶与七位导师；[生活公会规则](LIFE_GUILDS.md) | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `life-guild` 及四馆地基，另有四份 `life-building-*-mask.tsv` 结构保护快照 | 先扩展原版动作事件、任务 ID、原版菜单与 `/mycli life`；若要换任务目标，须保留在途任务迁移及防重复领奖逻辑；建筑/保护快照须随世界同组备份。四馆入口修复见 [建筑记录](LIFE_GUILD_BUILDINGS.md) |
 | 试炼塔、地下城与奖励 | `DungeonManager.java` 的楼层、坐标、怪物和建造逻辑；奖励逻辑在源码中；自然遗迹由既有数据包生成 | 世界区块、实体、保护快照、`dungeon-active-run`、每人每天每层领奖账本、个人奖励、私人储物和施工标记 | 可在隔离世界设计、实现和测试新的副本；**正式服没有“输入描述即安全生成地下城”的通用能力** |
 | PvP 竞技场 | `PvpArenaManager.java` 的自愿匹配、同款装备和积分；[PvP 规则](PVP_ARENA.md) | `pvp-records`、`pvp-escrow.yml`、竞技场方块及 WorldGuard 区域 | 运营 Agent 可查看本人对局和排行榜；改地图或计分规则须隔离测试和完整备份，不可在有人对战时发布 |
-| 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 起正式生效，当前 0.3.86 继承，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP 八工具已重新发现。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |
-| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在正式重启自动激活；0.3.86/0.1.9 及 40 连接已发布，容量与边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) | 可检查、构建、测试、备份和发布；源码提交不会自动改变正式服 |
+| 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 起正式生效，当前 0.3.87 继承，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP 八工具已重新发现。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |
+| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在正式重启自动激活；0.3.87/0.1.9 及 40 连接已发布，容量与边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) | 可检查、构建、测试、备份和发布；先完成 E/F 校验镜像，再替换 JAR；源码提交不会自动改变正式服 |
 
 2026-10-06 已修复女神附魔书字段错误和现存确认损坏的 1 本，并正式发布 0.3.84 校验入口：书必须使用 `stored_enchantments`，装备使用 `enchantments`。私聊与造物都使用同一受校验入口；女神只选礼物，服务器生成属性并核对实际库存。不要依据闪光认定铁砧可用，也不要把字段错误归咎于刻印保护。现状见 [女神附魔书](GODDESS_BOOKS.md)、[礼物校验](GODDESS_GIFTS.md)。
 
