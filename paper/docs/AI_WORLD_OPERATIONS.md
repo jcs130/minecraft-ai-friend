@@ -4,6 +4,8 @@
 
 ## 先认清现状
 
+2026-10-07 已在线处理普通村民滞留地下和集合钟不可达：24 位原村民回到地面，公共集合钟在 `(-542,67,-452)`；当前已加载成年村民 44 位，版本保持 0.3.86。普通玩家用 `/mycli village villagers` 找附近职业村民；固定服务 NPC 不纳入普通村民救援。证据、维护边界与回退见 [村民地面巡检](VILLAGE_RESIDENTS.md)。
+
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
 | 技能、法术、快捷施法 | `plugins/AgentFriend/src/` 的技能表、菜单和提示；`plugins/AgentFriend/spells-*.yml` 的 MagicSpells 配置；AuraSkills 配置；[技能体系](SKILL_SYSTEM.md)、[位移与远程物品操作](TRAVEL_MAGIC.md) | 玩家魔力、等级、已学技能、道具刻印，以及八项法术按 UUID 记录的 `plugins/AgentFriend/spell-mastery.yml` | 修改源码或法术配置，构建后在隔离服验证，再按发布流程更新；**尚无统一热加载技能包** |
