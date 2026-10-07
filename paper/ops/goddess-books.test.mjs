@@ -7,7 +7,7 @@ test('mending book uses transferable enchantments and an auditable dry run', asy
   assert.equal(result.ok, true);
   assert.equal(result.dryRun, true);
   assert.deepEqual(result.commands, [
-    'minecraft:give BookAudit minecraft:enchanted_book[stored_enchantments={levels:{"minecraft:mending":1}}] 1',
+    'mycli admin gift <request16> BookAudit gift:mending_book 1 <recipe-hash>',
   ]);
 });
 

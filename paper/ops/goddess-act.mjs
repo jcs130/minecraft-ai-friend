@@ -12,8 +12,9 @@
 
 import net from 'node:net';
 import { readFileSync, appendFileSync, existsSync, writeFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import { deliverGift } from './goddess-delivery.mjs';
 
 const HOST = '127.0.0.1';
 const PORT = 25575;
@@ -146,6 +147,7 @@ const ACTIONS = {
   // Books store transferable enchants separately from equipment enchants.
   mendingbook: {
     readOnly: false,
+    gift: 'mending_book',
     build: (t) => [`minecraft:give ${t} minecraft:enchanted_book[stored_enchantments={levels:{"minecraft:mending":1}}] 1`],
     pattern: /^minecraft:give [A-Za-z0-9_.-]{3,17} minecraft:enchanted_book\[stored_enchantments=\{levels:\{"minecraft:mending":1\}\}\] 1$/,
   },
@@ -310,6 +312,9 @@ export async function run(argv = process.argv.slice(2)) {
     }
   }
   if (!spec.readOnly && !opts.commit) {
+    if (spec.gift) return { ok: true, dryRun: true,
+      commands: [`mycli admin gift <request16> ${target} gift:${spec.gift} 1 <recipe-hash>`],
+      message: 'dry-run only; pass --commit to use the verified delivery service' };
     return { ok: true, dryRun: true, commands, message: 'dry-run only; pass --commit to send' };
   }
   if (!spec.readOnly) {
@@ -323,6 +328,19 @@ export async function run(argv = process.argv.slice(2)) {
     if (!who.names.includes(target)) {
       record({ action, target, commit: true, error: 'target not online', online: who.names });
       return { ok: false, code: 69, message: `${target} is not online; nothing sent (online: ${who.names.join(', ') || 'none'})` };
+    }
+  }
+  if (spec.gift) {
+    const request = randomBytes(8).toString('hex');
+    noteCooldown(key);
+    record({ action, target, request, commit: true, phase: 'requested' });
+    try {
+      const result = await deliverGift(target, { decision: 'approve', gift: spec.gift, amount: 1 }, request);
+      record({ action, target, request, commit: true, result });
+      return { ok: result.ok, code: result.ok ? 0 : 71, results: [JSON.stringify(result)], requestId: request };
+    } catch (error) {
+      record({ action, target, request, commit: true, error: error.message });
+      return { ok: false, code: 71, message: `Unconfirmed gift request=${request}; check mycli admin giftstatus before retrying: ${clean(error.message)}` };
     }
   }
   const results = await rconBatch(commands);

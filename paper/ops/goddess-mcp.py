@@ -150,5 +150,43 @@ def teach_skill(player: str, skill: str) -> str:
     return reply
 
 
+@mcp.tool()
+def gift_catalogue() -> str:
+    """Read validated gift presets, exact enchantments/potion types and quantity limits. Changes nothing."""
+    return _run(ROOT / "goddess-delivery.mjs", "catalog")
+
+
+@mcp.tool()
+def deliver_gift(player: str, request_id: str, amount: int = 1, gift: str = "", item: str = "") -> str:
+    """Deliver an approved gift via the server item factory and verify its durable receipt.
+
+    Select either a catalogue gift ID or a plain minecraft item ID. Never pass NBT.
+    request_id must be a stable 16-digit lowercase hexadecimal ID for this one approval.
+    On an uncertain outcome, inspect the SAME request; do not make a new ID and reissue.
+    """
+    if not PLAYER.fullmatch(player) or not re.fullmatch(r"[a-f0-9]{16}", request_id):
+        raise ValueError("invalid gift target/request")
+    if type(amount) is not int or not 1 <= amount <= 16 or bool(gift) == bool(item):
+        raise ValueError("select one gift or plain item, amount 1–16")
+    if gift and not re.fullmatch(r"[a-z0-9_]{1,48}", gift):
+        raise ValueError("invalid gift preset")
+    if item and not re.fullmatch(r"minecraft:[a-z0-9_]+", item):
+        raise ValueError("invalid plain item")
+    reply = _run(ROOT / "goddess-delivery.mjs", "--player", player,
+                 "--gift" if gift else "--item", gift or item,
+                 "--amount", str(amount), "--request", request_id, "--commit")
+    _record("deliver_gift", {"player": player, "request": request_id,
+                            "gift": gift, "item": item, "amount": amount}, reply)
+    return reply
+
+
+@mcp.tool()
+def gift_receipt(request_id: str) -> str:
+    """Read the original grant receipt after timeout or repeat; does not deliver anything."""
+    if not re.fullmatch(r"[a-f0-9]{16}", request_id):
+        raise ValueError("invalid gift request")
+    return _rcon(f"mycli admin giftstatus {request_id}")
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")

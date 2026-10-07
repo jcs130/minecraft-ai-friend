@@ -1,0 +1,63 @@
+# Hot reload: mycli admin giftcatalog reload. The server validates every recipe.
+schema-version: 1
+gifts:
+  mending_book:
+    title: 修补 I 附魔书
+    item: minecraft:enchanted_book
+    max-amount: 4
+    enchantments: {minecraft:mending: 1}
+  protection_book:
+    title: 保护 IV 附魔书
+    item: minecraft:enchanted_book
+    max-amount: 4
+    enchantments: {minecraft:protection: 4}
+  unbreaking_book:
+    title: 耐久 III 附魔书
+    item: minecraft:enchanted_book
+    max-amount: 4
+    enchantments: {minecraft:unbreaking: 3}
+  sharpness_book:
+    title: 锋利 V 附魔书
+    item: minecraft:enchanted_book
+    max-amount: 2
+    enchantments: {minecraft:sharpness: 5}
+  efficiency_book:
+    title: 效率 V 附魔书
+    item: minecraft:enchanted_book
+    max-amount: 2
+    enchantments: {minecraft:efficiency: 5}
+  fortune_book:
+    title: 时运 III 附魔书
+    item: minecraft:enchanted_book
+    max-amount: 2
+    enchantments: {minecraft:fortune: 3}
+  silk_touch_book:
+    title: 精准采集 I 附魔书
+    item: minecraft:enchanted_book
+    max-amount: 2
+    enchantments: {minecraft:silk_touch: 1}
+  strength_potion:
+    title: 力量药水
+    item: minecraft:potion
+    max-amount: 4
+    potion: minecraft:strength
+  long_strength_potion:
+    title: 延长力量药水
+    item: minecraft:potion
+    max-amount: 4
+    potion: minecraft:long_strength
+  healing_potion:
+    title: 治疗药水
+    item: minecraft:potion
+    max-amount: 4
+    potion: minecraft:healing
+  fire_resistance_potion:
+    title: 抗火药水
+    item: minecraft:potion
+    max-amount: 4
+    potion: minecraft:fire_resistance
+  water_bottle:
+    title: 水瓶
+    item: minecraft:potion
+    max-amount: 4
+    potion: minecraft:water

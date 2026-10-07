@@ -1,8 +1,8 @@
 import net from 'node:net';
 import { readFileSync } from 'node:fs';
 
-export function command(text, timeoutMs = 60000) {
-  const properties = readFileSync('E:/MC/server/server.properties', 'utf8');
+export function command(text, timeoutMs = 60000, connection = {}) {
+  const properties = readFileSync(connection.properties ?? 'E:/MC/server/server.properties', 'utf8');
   const password = properties.match(/^rcon\.password=(.*)$/m)?.[1].trim();
   if (!password) throw new Error('RCON password is not configured');
   const packet = (id, type, body) => {
@@ -15,7 +15,7 @@ export function command(text, timeoutMs = 60000) {
     return out;
   };
   return new Promise((resolve, reject) => {
-    const socket = net.connect(25575, '127.0.0.1');
+    const socket = net.connect(connection.port ?? 25575, '127.0.0.1');
     let buffer = Buffer.alloc(0);
     let authed = false;
     let answer = '';

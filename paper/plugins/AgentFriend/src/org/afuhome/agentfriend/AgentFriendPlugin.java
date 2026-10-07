@@ -177,7 +177,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private final Set<UUID> mobs = new HashSet<>();
     private final Map<UUID, Long> fireworksCooldown = new HashMap<>();
     private final Map<String, Long> goddessCooldown = new HashMap<>();
-    private final Map<String, Long> giftNonces = new HashMap<>();
+    private GoddessGifts goddessGifts;
     private NamespacedKey compassKey;
     private NamespacedKey focusKey;
     private NamespacedKey focusSpellKey;
@@ -225,6 +225,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     @Override public void onEnable() {
         saveDefaultConfig();
+        goddessGifts = new GoddessGifts(this);
         arenaBuilt = getConfig().getBoolean("arena-built", false);
         lastRun = getConfig().getLong("last-run", 0L);
         compassKey = new NamespacedKey(this, "skill_compass");
@@ -309,7 +310,6 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         compassAutoPaused.clear();
         teamTeleportAt.clear();
         focusUseAt.clear();
-        giftNonces.clear();
         if (viewerStatePublisher != null) viewerStatePublisher.stop();
         if (agentStatePublisher != null) agentStatePublisher.stop();
         if (skillEventPublisher != null) skillEventPublisher.stop();
@@ -672,6 +672,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("gift")) {
             goddessGift(sender, args);
             return true;
+        }
+        if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("giftcatalog")) {
+            goddessGifts.catalog(sender, args); return true;
+        }
+        if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("giftstatus")) {
+            goddessGifts.status(sender, args); return true;
         }
         if (args.length == 4 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("teach")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
@@ -1062,65 +1068,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     private void goddessGift(CommandSender sender, String[] args) {
-        if (!(sender instanceof Player goddess) || !goddess.getName().equals("Goddess")
-                || !goddess.getUniqueId().equals(GODDESS_UUID) || !goddess.isOp()) {
-            sender.sendMessage("仅限在线的女神服主发放造物礼物。");
-            return;
-        }
-        if (args.length != 6 || !args[2].matches("[a-f0-9]{16}")) {
-            sender.sendMessage("QDJ-GIFT INVALID FAIL format");
-            return;
-        }
-        String nonce = args[2];
-        if (!args[3].matches("[A-Za-z0-9_.-]{1,32}") || !args[4].matches("minecraft:[a-z0-9_]+")) {
-            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL argument");
-            return;
-        }
-        Player target = Bukkit.getPlayerExact(args[3]);
-        if (target == null || target.getGameMode() == GameMode.SPECTATOR) {
-            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL offline");
-            return;
-        }
-        Material material = Material.getMaterial(args[4].substring("minecraft:".length()).toUpperCase(Locale.ROOT));
-        if (material == null || !material.isItem() || FORBIDDEN_GIFTS.contains(material)
-                || material.name().endsWith("_SPAWN_EGG")) {
-            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL item");
-            return;
-        }
-        int amount;
-        try { amount = Integer.parseInt(args[5]); }
-        catch (NumberFormatException error) { sender.sendMessage("QDJ-GIFT " + nonce + " FAIL amount"); return; }
-        int stackSize = material.getMaxStackSize();
-        if (amount < 1 || amount > 16 || amount > stackSize) {
-            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL amount");
-            return;
-        }
-        long now = System.currentTimeMillis();
-        giftNonces.entrySet().removeIf(entry -> now - entry.getValue() > 86_400_000L);
-        if (giftNonces.putIfAbsent(nonce, now) != null) {
-            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL duplicate");
-            return;
-        }
-        int capacity = 0;
-        for (ItemStack existing : target.getInventory().getStorageContents()) {
-            if (existing == null || existing.getType().isAir()) capacity += stackSize;
-            else if (existing.getType() == material && !existing.hasItemMeta())
-                capacity += Math.max(0, stackSize - existing.getAmount());
-        }
-        if (capacity < amount) {
-            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL inventory");
-            target.sendMessage(ChatColor.YELLOW + "女神想送你礼物，但背包没有空位；请先腾出空间再申请。");
-            return;
-        }
-        if (!target.getInventory().addItem(new ItemStack(material, amount)).isEmpty()) {
-            sender.sendMessage("QDJ-GIFT " + nonce + " FAIL inventory-changed");
-            getLogger().severe("Goddess gift partially applied to " + target.getUniqueId() + "; do not retry blindly");
-            return;
-        }
-        target.sendMessage(ChatColor.LIGHT_PURPLE + "女神批准了造物申请：" + material.name().toLowerCase(Locale.ROOT)
-                + " ×" + amount + " 已放进你的背包。");
-        sender.sendMessage("QDJ-GIFT " + nonce + " OK");
-        getLogger().info("Goddess gift " + material + " x" + amount + " to " + target.getUniqueId());
+        goddessGifts.give(sender, args);
     }
     private void fireworks(Player p) {
         long now = System.currentTimeMillis();
