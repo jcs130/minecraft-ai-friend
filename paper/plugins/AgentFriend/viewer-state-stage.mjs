@@ -6,6 +6,9 @@ const require = createRequire('E:/Cortico/package.json');
 const mineflayer = require('mineflayer');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const suffix = String(Date.now()).slice(-6);
+const stagePort = Number(process.env.MC_STAGE_PORT ?? 25566);
+const stageRcon = process.env.MC_STAGE_RCON ?? 'E:/MC/staging/arena-dungeon-20260928/rcon-stage.mjs';
+assert.notEqual(stagePort, 25565, 'This test must not run against the live server');
 const cases = [
   { name: `VSNew${suffix}`, channels: ['mcviewer:state'] },
   { name: `VSOld${suffix}`, channels: ['corti:viewer_state'] },
@@ -15,7 +18,7 @@ const captures = new Map(cases.map(({ name }) => [name, []]));
 const errors = [];
 const chatLeaks = [];
 const bots = cases.map(({ name }) => mineflayer.createBot({
-  host: '127.0.0.1', port: 25566, username: name, auth: 'offline', version: '1.20.6',
+  host: '127.0.0.1', port: stagePort, username: name, auth: 'offline', version: '1.20.6',
 }));
 
 for (const bot of bots) {
@@ -64,8 +67,8 @@ try {
     assert.ok(latest(name, ownChannel).state.mana && latest(name, ownChannel).state.skills.length,
       `${name} has no loaded personal state`);
   }
-  // Paper only delivers channels registered by the client. The server attempts
-  // mcviewer:state for every player, but an old-only client observes the alias.
+  // Paper only delivers channels registered by the client. An old-only client
+  // receives the alias; clients with both subscriptions receive one copy.
   assert.ok(latest(cases[1].name, 'corti:viewer_state'), 'legacy-only client did not receive compatibility copy');
   assert.equal(captures.get(cases[0].name).filter((p) => p.channel === 'corti:viewer_state').length, 0);
   assert.equal(captures.get(cases[2].name).filter((p) => p.channel === 'corti:viewer_state').length, 0);
@@ -74,7 +77,7 @@ try {
   const firstFarming = initial[0].skills.find((skill) => skill.id.endsWith(':farming'));
   assert.ok(firstFarming, 'AuraSkills farming is absent');
   const xpReply = execFileSync('node', [
-    'E:/MC/staging/arena-dungeon-20260928/rcon-stage.mjs',
+    stageRcon,
     `skills xp add ${cases[0].name} farming 5 silent`,
   ], { encoding: 'utf8' });
   assert.ok(!xpReply.includes('Error') && !xpReply.includes('Unknown'), xpReply);

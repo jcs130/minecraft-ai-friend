@@ -12,7 +12,7 @@
 | 试炼塔、地下城与奖励 | `DungeonManager.java` 的楼层、坐标、怪物和建造逻辑；奖励逻辑在源码中；自然遗迹由既有数据包生成 | 世界区块、实体、保护快照、`dungeon-active-run`、每人每天每层领奖账本、个人奖励、私人储物和施工标记 | 可在隔离世界设计、实现和测试新的副本；**正式服没有“输入描述即安全生成地下城”的通用能力** |
 | PvP 竞技场 | `PvpArenaManager.java` 的自愿匹配、同款装备和积分；[PvP 规则](PVP_ARENA.md) | `pvp-records`、`pvp-escrow.yml`、竞技场方块及 WorldGuard 区域 | 运营 Agent 可查看本人对局和排行榜；改地图或计分规则须隔离测试和完整备份，不可在有人对战时发布 |
 | 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机 | 可解答、引导、审核缺项申请并执行已有管理能力。现有 MCP 仅暴露有限的可审计工具；QwenPaw Agent 自身的文件/开发能力是另一层，不应把 MCP 工具范围误当作全部开发权限 |
-| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本 | 正式世界、白名单、密钥、日志和备份都在运行主机 | 可检查、构建、测试、备份和发布；源码提交不会自动改变正式服 |
+| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在线应用，Viewer 0.3.82 排队安全维护发布 | 可检查、构建、测试、备份和发布；源码提交不会自动改变正式服 |
 
 0.3.67 起，已注册公会玩家的头顶和玩家列表名称前显示 `◆青铜` 至 `◆钻石`，Agent 仍保留 `[Agent]`；未入会玩家不显示公会等级。此标记读取本人声望并随升级刷新，供玩家辨认身份，Agent 应继续用 `/mycli guild status` 获取准确的声望、等级和任务状态。实现与兼容性见 [玩家头顶标记](PLAYER_NAMETAGS.md)。
 

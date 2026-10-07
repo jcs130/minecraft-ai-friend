@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -49,8 +50,10 @@ final class ViewerStatePublisher implements Listener {
     private BukkitTask pollTask;
     private final Map<UUID, LastState> lastStates = new HashMap<>();
     private final Set<UUID> pendingInitial = new HashSet<>();
+    private final Map<LabelKey, String> localizedNames = new HashMap<>();
 
     private record LastState(String json, String route, long sentAt) {}
+    private record LabelKey(String type, String id) {}
 
     ViewerStatePublisher(AgentFriendPlugin plugin, CombatSpells combatSpells,
             ProspectingSpell prospectingSpell, UtilitySpells utilitySpells) {
@@ -73,6 +76,7 @@ final class ViewerStatePublisher implements Listener {
         Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin, LEGACY_CHANNEL);
         lastStates.clear();
         pendingInitial.clear();
+        localizedNames.clear();
     }
 
     @EventHandler public void onJoin(PlayerJoinEvent event) {
@@ -107,12 +111,14 @@ final class ViewerStatePublisher implements Listener {
 
     private void publish(Player player, boolean force) {
         if (!player.isOnline()) return;
+        Set<String> listening = player.getListeningPluginChannels();
+        if (!listening.contains(CHANNEL) && !listening.contains(LEGACY_CHANNEL)) return;
         JsonObject root = buildState(player);
         byte[] payload = encodeBounded(root);
         if (payload == null) return;
         String json = new String(payload, StandardCharsets.UTF_8);
-        // Attempt the generic channel for every connection. Paper delivers it only
-        // when the client registers it; mirror the old channel for legacy-only clients.
+        // Registered viewers receive the generic channel; old-only viewers also
+        // receive the compatibility alias, which Paper delivers to their channel.
         boolean mirrorLegacy = usesLegacyChannel(player);
         String route = mirrorLegacy ? CHANNEL + "+" + LEGACY_CHANNEL : CHANNEL;
         long now = System.currentTimeMillis();
@@ -164,7 +170,8 @@ final class ViewerStatePublisher implements Listener {
                 double xp = capped ? 0 : Math.max(0, finite(user.getSkillXp(skill)));
                 JsonObject entry = new JsonObject();
                 entry.addProperty("id", skillId);
-                entry.addProperty("name", name(skill.getDisplayName(LABEL_LOCALE), skillId));
+                entry.addProperty("name", localizedName("skill", skillId,
+                        () -> skill.getDisplayName(LABEL_LOCALE)));
                 entry.addProperty("level", level);
                 entry.addProperty("xp", xp);
                 entry.addProperty("requiredXp", required);
@@ -202,7 +209,8 @@ final class ViewerStatePublisher implements Listener {
             try {
                 int level = user.getManaAbilityLevel(ability);
                 if (level > 0 && seen.add(abilityId))
-                    addAbility(result, abilityId, ability.getDisplayName(LABEL_LOCALE), level, null);
+                    addAbility(result, abilityId, localizedName("mana-ability", abilityId,
+                            () -> ability.getDisplayName(LABEL_LOCALE)), level, null);
             } catch (IllegalArgumentException ignored) {
                 // The registry can contain enabled abilities absent from this user's loaded skill set.
             }
@@ -216,7 +224,8 @@ final class ViewerStatePublisher implements Listener {
             try {
                 int level = user.getAbilityLevel(ability);
                 if (level > 0 && seen.add(abilityId))
-                    addAbility(result, abilityId, ability.getDisplayName(LABEL_LOCALE), level, null);
+                    addAbility(result, abilityId, localizedName("ability", abilityId,
+                            () -> ability.getDisplayName(LABEL_LOCALE)), level, null);
             } catch (IllegalArgumentException ignored) {
                 // The registry can contain enabled abilities absent from this user's loaded skill set.
             }
@@ -256,6 +265,14 @@ final class ViewerStatePublisher implements Listener {
 
     private String id(NamespacedId id) {
         return (id.getNamespace() + ":" + id.getKey()).toLowerCase(Locale.ROOT);
+    }
+
+    private String localizedName(String type, String id, Supplier<String> resolve) {
+        // AuraSkills 2.4 creates a new MessageKey identity for each display-name
+        // lookup. Resolve fixed Chinese labels once per registry entry, rather
+        // than growing its message cache on every player/HUD update.
+        return localizedNames.computeIfAbsent(new LabelKey(type, id),
+                ignored -> name(resolve.get(), id));
     }
 
     private String name(String label, String fallback) {

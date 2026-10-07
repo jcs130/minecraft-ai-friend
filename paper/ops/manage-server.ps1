@@ -27,6 +27,9 @@ $eventLog = Join-Path $opsDir 'manage-server.log'
 $bedrockHealthFile = Join-Path $opsDir 'bedrock-health.json'
 $pendingAgentFriendDeploy = Join-Path $opsDir 'agentfriend-deploy.pending.json'
 $pendingEyeMirrorDeploy = Join-Path $opsDir 'cortieye-deploy.pending.json'
+$jvmDiagnosticRequest = Join-Path $opsDir 'jvm-diagnostics.requested'
+$auraCachePatchRequest = Join-Path $opsDir 'auraskills-cache-fix.requested.json'
+$auraCachePatchJar = Join-Path $opsDir 'instrumentation\auraskills-cache-patch.jar'
 
 function Log([string]$message) {
     $line = '{0} [{1}] {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Action, $message
@@ -340,6 +343,69 @@ function DungeonActive {
     return ($Matches[1] -eq 'true')
 }
 
+function Collect-JvmDiagnostics {
+    # Run in the scheduled task's security context, which owns the Paper JVM.
+    # -all avoids requesting a Full GC; the histogram still briefly scans the heap.
+    $status = Probe
+    if ($status -notmatch 'Paper 1\.20\.6 \(proto 766\)') { throw 'Unexpected server for JVM diagnostics.' }
+    $listeners = @(Listener)
+    if ($listeners.Count -ne 1) { throw 'Expected exactly one Paper listener for JVM diagnostics.' }
+    $jvmProcessId = [int]$listeners[0].OwningProcess
+    $destination = Join-Path (Join-Path $opsDir 'diagnostics') (Get-Date -Format 'yyyyMMdd-HHmmss-fff')
+    New-Item -ItemType Directory -Path $destination -Force | Out-Null
+    Move-Item -LiteralPath $jvmDiagnosticRequest -Destination (Join-Path $destination 'request.completed')
+    $jcmd = Join-Path (Split-Path -Parent $java) 'jcmd.exe'
+    foreach ($diagnostic in @(
+        @{ Name = 'heap-info'; Arguments = @('GC.heap_info') },
+        @{ Name = 'class-histogram-all'; Arguments = @('GC.class_histogram', '-all') }
+    )) {
+        $stdout = Join-Path $destination "$($diagnostic.Name).txt"
+        $stderr = Join-Path $destination "$($diagnostic.Name).error.txt"
+        $diagnosticProcess = Start-Process -FilePath $jcmd -ArgumentList (@([string]$jvmProcessId) + $diagnostic.Arguments) `
+            -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+        $null = $diagnosticProcess.Handle
+        if (-not $diagnosticProcess.WaitForExit(30000)) {
+            Stop-Process -Id $diagnosticProcess.Id
+            throw "JVM diagnostic timed out: $($diagnostic.Name). See $destination"
+        }
+        $diagnosticProcess.Refresh()
+        $expected = if ($diagnostic.Name -eq 'heap-info') { 'garbage-first heap' } else { '^Total\s+\d+\s+\d+' }
+        if (($null -ne $diagnosticProcess.ExitCode -and $diagnosticProcess.ExitCode -ne 0) -or
+            -not (Select-String -LiteralPath $stdout -Pattern $expected -Quiet)) {
+            throw "JVM diagnostic failed: $($diagnostic.Name). See $destination"
+        }
+    }
+    Log "JVM diagnostics complete for PID=${jvmProcessId}: $destination"
+}
+
+function Apply-AuraSkillsCachePatch {
+    $request = Get-Content -LiteralPath $auraCachePatchRequest -Raw | ConvertFrom-Json
+    if ($request.mode -notin @('fix', 'rollback')) { throw 'Unsupported AuraSkills cache patch mode.' }
+    if (-not (Test-Path -LiteralPath $auraCachePatchJar)) { throw 'AuraSkills cache patch tool is missing.' }
+    $status = Probe
+    if ($status -notmatch 'Paper 1\.20\.6 \(proto 766\)') { throw 'Unexpected server for AuraSkills cache patch.' }
+    $listeners = @(Listener)
+    if ($listeners.Count -ne 1) { throw 'Expected exactly one Paper listener for AuraSkills cache patch.' }
+    $jvmProcessId = [int]$listeners[0].OwningProcess
+    $destination = Join-Path (Join-Path $opsDir 'diagnostics') (Get-Date -Format 'yyyyMMdd-HHmmss-fff')
+    New-Item -ItemType Directory -Path $destination -Force | Out-Null
+    Move-Item -LiteralPath $auraCachePatchRequest -Destination (Join-Path $destination 'cache-patch.request.json')
+    $resultFile = Join-Path $destination 'cache-patch.result.json'
+    $patchProcess = Start-Process -FilePath $java -ArgumentList @('--add-modules', 'jdk.attach', '-jar', $auraCachePatchJar,
+        '--pid', [string]$jvmProcessId, '--agent', $auraCachePatchJar, '--mode', $request.mode, '--result', $resultFile) `
+        -WindowStyle Hidden -RedirectStandardOutput (Join-Path $destination 'cache-patch.stdout.txt') `
+        -RedirectStandardError (Join-Path $destination 'cache-patch.stderr.txt') -PassThru
+    $null = $patchProcess.Handle
+    if (-not $patchProcess.WaitForExit(45000)) {
+        Stop-Process -Id $patchProcess.Id
+        throw "AuraSkills cache patch timed out. Check $destination before retrying."
+    }
+    if (-not (Test-Path -LiteralPath $resultFile)) { throw "AuraSkills cache patch has no result: $destination" }
+    $result = Get-Content -LiteralPath $resultFile -Raw | ConvertFrom-Json
+    if ($result.success -ne $true) { throw "AuraSkills cache patch failed. See $resultFile" }
+    Log "AuraSkills cache patch $($request.mode) applied to PID=${jvmProcessId}: $resultFile"
+}
+
 function Start-Server {
     if (Listener) {
         $status = Probe
@@ -357,7 +423,12 @@ function Start-Server {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $stdout = Join-Path $serverDir "startup-$stamp.log"
     $stderr = Join-Path $serverDir "startup-$stamp.error.log"
-    $proc = Start-Process -FilePath $java -ArgumentList '-Xms1G','-Xmx4G','-jar',(Join-Path $serverDir 'server.jar'),'nogui' `
+    $javaArguments = @('-Xms1G', '-Xmx4G', '-Xlog:gc*,safepoint:file=logs/gc-%t.log:time,uptime,level,tags:filecount=5,filesize=20M')
+    if (Test-Path -LiteralPath $auraCachePatchJar) {
+        $javaArguments += "-javaagent:$auraCachePatchJar"
+        Log 'Enabling the pinned AuraSkills message cache patch at startup'
+    }
+    $proc = Start-Process -FilePath $java -ArgumentList ($javaArguments + @('-jar', (Join-Path $serverDir 'server.jar'), 'nogui')) `
         -WorkingDirectory $serverDir -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
     Log "Launching Paper PID=$($proc.Id), log=$stdout"
     $deadline = (Get-Date).AddSeconds(120)
@@ -632,7 +703,7 @@ function Backup-Server {
         # locks, control tokens, and logs are intentionally not restorable.
         $opsCopy = Join-Path $dest 'ops'
         & robocopy.exe $opsDir $opsCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP `
-            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'agent-lan-gateway.reload.requested' | Out-Null
+            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Incomplete backup: $dest" }
         $probeCopy = Join-Path $dest 'probe'
         & robocopy.exe 'E:\MC\probe' $probeCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'node_modules' | Out-Null
@@ -741,6 +812,8 @@ try {
         'Watchdog' {
             if (Test-Path -LiteralPath $repairFile) { Repair-NoRcon; break }
             if (Test-Path -LiteralPath $pausedFile) { exit 0 }
+            if (Test-Path -LiteralPath $auraCachePatchRequest) { Apply-AuraSkillsCachePatch; break }
+            if (Test-Path -LiteralPath $jvmDiagnosticRequest) { Collect-JvmDiagnostics; break }
             if (Test-Path -LiteralPath $gatewayReloadFile) { Reload-Gateway; break }
             if (Listener) { $null = Probe; $null = Rcon 'minecraft:list'; Start-Gateway; Start-Goddess; EnsureSpectatorBinding; Check-BedrockHealth }
             else { Start-Server }
