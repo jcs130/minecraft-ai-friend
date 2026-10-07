@@ -1,0 +1,198 @@
+# Edit this file on the server, then run /mycli admin board reload and regenerate.
+# Existing static GuildManager contracts are unaffected. Only the goal/source
+# types documented in docs/DYNAMIC_BOARD.md are accepted.
+schema-version: 1
+cards-per-day: 4
+templates:
+  supply_torches:
+    source: shared_stock
+    chest: supplies
+    item: TORCH
+    trigger-below: 48
+    max-request: 16
+    goal: donate
+    title: 给村庄补火把
+    description: 公会补给箱还有 {stock} 个火把；交付 {count} 个，照亮大家的路。
+    icon: TORCH
+    beneficiary: 村庄伙伴
+    priority: 100
+    reward: {fame: 6, emeralds: 2, bonus: BREAD, bonus-count: 2}
+  supply_bread:
+    source: shared_stock
+    chest: supplies
+    item: BREAD
+    trigger-below: 32
+    max-request: 12
+    goal: donate
+    title: 备好路上的面包
+    description: 公会补给箱还有 {stock} 个面包；交付 {count} 个。
+    icon: BREAD
+    beneficiary: 出门冒险的人
+    priority: 98
+    reward: {fame: 6, emeralds: 2, bonus: HONEY_BOTTLE, bonus-count: 1}
+  supply_arrows:
+    source: shared_stock
+    chest: weapons
+    item: ARROW
+    trigger-below: 64
+    max-request: 24
+    goal: donate
+    title: 给远行者备箭
+    description: 公会武器箱还有 {stock} 支箭；交付 {count} 支。
+    icon: ARROW
+    beneficiary: 远行者
+    priority: 96
+    reward: {fame: 6, emeralds: 2, bonus: IRON_INGOT, bonus-count: 2}
+  supply_iron:
+    source: shared_stock
+    chest: misc
+    item: IRON_INGOT
+    trigger-below: 24
+    max-request: 8
+    goal: donate
+    title: 铁料补仓
+    description: 公会杂物箱还有 {stock} 块铁；交付 {count} 块。
+    icon: IRON_INGOT
+    beneficiary: 工坊伙伴
+    priority: 94
+    reward: {fame: 7, emeralds: 3, bonus: REDSTONE, bonus-count: 2}
+  wheat_day:
+    source: always
+    item: WHEAT
+    goal: donate
+    target: 12
+    title: 今天的麦穗
+    description: 给公会交付 {count} 个小麦，留作明天的面包。
+    icon: WHEAT
+    reward: {fame: 5, emeralds: 2, bonus: BREAD, bonus-count: 2}
+  berry_day:
+    source: always
+    item: SWEET_BERRIES
+    goal: donate
+    target: 12
+    title: 林间小果篮
+    description: 给公会交付 {count} 颗甜浆果。
+    icon: SWEET_BERRIES
+    reward: {fame: 5, emeralds: 2, bonus: BREAD, bonus-count: 2}
+  pumpkin_day:
+    source: always
+    item: PUMPKIN
+    goal: donate
+    target: 4
+    title: 南瓜上桌
+    description: 给公会交付 {count} 个南瓜。
+    icon: PUMPKIN
+    reward: {fame: 5, emeralds: 2, bonus: PUMPKIN_PIE, bonus-count: 2}
+  potato_day:
+    source: always
+    item: POTATO
+    goal: donate
+    target: 12
+    title: 热乎乎的晚饭
+    description: 给公会交付 {count} 个马铃薯。
+    icon: POTATO
+    reward: {fame: 5, emeralds: 2, bonus: BAKED_POTATO, bonus-count: 2}
+  paper_day:
+    source: always
+    item: PAPER
+    goal: donate
+    target: 12
+    title: 补一叠纸
+    description: 给公会交付 {count} 张纸，让大家记录旅途。
+    icon: PAPER
+    reward: {fame: 5, emeralds: 2, bonus: BOOK, bonus-count: 1}
+  honey_day:
+    source: always
+    item: HONEY_BOTTLE
+    goal: donate
+    target: 3
+    title: 一点甜味
+    description: 给公会交付 {count} 瓶蜂蜜。
+    icon: HONEY_BOTTLE
+    reward: {fame: 6, emeralds: 2, bonus: COOKIE, bonus-count: 4}
+  copper_day:
+    source: always
+    item: COPPER_INGOT
+    goal: donate
+    target: 8
+    title: 铜料整理
+    description: 给公会交付 {count} 块铜，留给大家做工具。
+    icon: COPPER_INGOT
+    reward: {fame: 5, emeralds: 2, bonus: REDSTONE, bonus-count: 3}
+  seed_day:
+    source: always
+    item: WHEAT_SEEDS
+    goal: donate
+    target: 16
+    title: 留种到明天
+    description: 给公会交付 {count} 粒小麦种子。
+    icon: WHEAT_SEEDS
+    reward: {fame: 5, emeralds: 2, bonus: BONE_MEAL, bonus-count: 4}
+  pond_day:
+    source: always
+    item: ANY_FISH
+    goal: fish
+    target: 2
+    title: 河边待一会儿
+    description: 今天亲手钓起 {count} 条鱼。
+    icon: FISHING_ROD
+    reward: {fame: 5, emeralds: 2, bonus: CAMPFIRE, bonus-count: 1}
+  bread_day:
+    source: always
+    item: BREAD
+    goal: craft
+    target: 2
+    title: 新鲜面包
+    description: 今天亲手合成 {count} 次面包。
+    icon: BREAD
+    reward: {fame: 5, emeralds: 2, bonus: HONEY_BOTTLE, bonus-count: 1}
+  light_day:
+    source: always
+    goal: lanterns
+    target: 5
+    title: 点亮小路
+    description: 在允许建造的地方放置 {count} 个火把或灯笼。
+    icon: LANTERN
+    reward: {fame: 5, emeralds: 2, bonus: TORCH, bonus-count: 4}
+  team_day:
+    source: always
+    goal: party_floor
+    floor: 2
+    target: 1
+    title: 结伴向前
+    description: 和至少一位队友一起通关试炼第 2 层。
+    icon: SHIELD
+    reward: {fame: 7, emeralds: 3, bonus: GOLDEN_APPLE, bonus-count: 1}
+  rainy_fish:
+    source: rainy
+    item: ANY_FISH
+    goal: fish
+    target: 3
+    title: 雨天钓客
+    description: 雨天亲手钓起 {count} 条鱼，听听水面的声音。
+    icon: FISHING_ROD
+    priority: 40
+    reward: {fame: 8, emeralds: 4, bonus: CAMPFIRE, bonus-count: 1}
+  harvest_festival:
+    source: calendar
+    months: [9, 10]
+    item: WHEAT
+    goal: donate
+    target: 16
+    title: 秋日收获祭
+    description: 给公会交付 {count} 个小麦，分享秋天的收成。
+    icon: HAY_BLOCK
+    priority: 30
+    reward: {fame: 7, emeralds: 3, bonus: PUMPKIN_PIE, bonus-count: 2}
+  patrol_lights:
+    source: village_alert
+    goal: lanterns
+    target: 4
+    title: 村口再亮一些
+    description: 村外有巡逻动静；在允许建造处放置 {count} 盏灯或火把。
+    icon: LANTERN
+    priority: 50
+    reward: {fame: 7, emeralds: 3, bonus: SHIELD, bonus-count: 1}
+  supply_engineering_stone: {"source":"shared_stock","chest":"misc","item":"STONE_BRICKS","trigger-below":64,"max-request":24,"goal":"donate","title":"公共工程备石砖","description":"杂物公共箱还有 {stock} 块石砖；补上 {count} 块，供修路架桥取用。","icon":"STONE_BRICKS","beneficiary":"施工伙伴","priority":93,"reward":{"fame":7,"emeralds":3,"bonus":"BREAD","bonus-count":2}}
+  supply_engineering_wood: {"source":"shared_stock","chest":"misc","item":"OAK_PLANKS","trigger-below":64,"max-request":24,"goal":"donate","title":"公共工程备木料","description":"杂物公共箱还有 {stock} 块橡木板；补上 {count} 块，给公共桥和岗亭备料。","icon":"OAK_PLANKS","beneficiary":"施工伙伴","priority":92,"reward":{"fame":6,"emeralds":2,"bonus":"BREAD","bonus-count":2}}
+  supply_engineering_redstone: {"source":"shared_stock","chest":"misc","item":"REDSTONE","trigger-below":32,"max-request":12,"goal":"donate","title":"公共机关备红石","description":"杂物公共箱还有 {stock} 份红石；交付 {count} 份，供调试门和桥的机关。","icon":"REDSTONE","beneficiary":"机关工坊","priority":91,"reward":{"fame":7,"emeralds":3,"bonus":"BREAD","bonus-count":2}}

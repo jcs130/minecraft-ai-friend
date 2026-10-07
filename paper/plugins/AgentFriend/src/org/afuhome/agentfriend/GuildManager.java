@@ -28,7 +28,7 @@ final class GuildManager implements Listener {
     private static final int[] THRESHOLDS = {0, 10, 30, 70, 150, 350};
     enum Goal { FLOOR, KILLS, PARTY_FLOOR, CLAIMS, EXPLORE, DONATE, CRAFT, FISH, PEAK, BIOME_BORDER,
             LANTERNS, ERUDITE, PRAYER_ROAD, PILGRIMAGE, FAST_FLOOR, NO_DEATH,
-            LIGHT_FLOOR, STONE_FLOOR, WITCH_KILLS }
+            LIGHT_FLOOR, STONE_FLOOR, WITCH_KILLS, BRIDGE, ROAD, BUILD, REDSTONE }
     /** 智能考核维度：0感知探索 1战斗执行 2长程规划 3社会协作 4语言理解 5约束遵守。 */
     private static final String[] DIMS = {"感知", "战斗", "规划", "协作", "语言", "约束"};
     record Contract(String id, String title, String description, Material icon,
@@ -153,12 +153,16 @@ final class GuildManager implements Listener {
     String adventurerRankName(Player player) { return RANKS[adventurerRank(player)]; }
     private Contract contract(String id) {
         for (Contract quest : CONTRACTS) if (quest.id().equals(id)) return quest;
+        Contract market = plugin.taskMarket() == null ? null : plugin.taskMarket().offered(id);
+        if (market != null) return market;
         DailyBoardManager.Card card = plugin.dailyBoard() == null ? null : plugin.dailyBoard().card(id);
         return card == null ? null : card.contract();
     }
     private Contract active(Player p) {
         String path = base(p.getUniqueId()) + ".active";
         String id = plugin.getConfig().getString(path + ".id", "");
+        if (plugin.taskMarket() != null && plugin.taskMarket().isMarket(id))
+            return plugin.taskMarket().active(p);
         Contract found = contract(id);
         if (found == null && id.startsWith("db_")) {
             String beneficiary = plugin.getConfig().getString(path + ".beneficiary", "公会伙伴");
@@ -192,7 +196,9 @@ final class GuildManager implements Listener {
         }
         return plugin.getConfig().getInt(base(p.getUniqueId()) + ".active.progress", 0);
     }
+    int marketProgress(Player player) { return progress(player); }
     private boolean doneToday(Player p, Contract quest) {
+        if (plugin.taskMarket() != null && plugin.taskMarket().onceCompleted(quest.id())) return true;
         DailyBoardManager.Card card = plugin.dailyBoard() == null ? null : plugin.dailyBoard().card(quest.id());
         String day = card == null ? today() : card.date();
         return day.equals(plugin.getConfig().getString(base(p.getUniqueId()) + ".daily." + quest.id()));
@@ -206,6 +212,14 @@ final class GuildManager implements Listener {
             case "menu", "菜单" -> plugin.openGuildMenu(player);
             case "join", "register", "注册" -> join(player);
             case "status", "rank", "状态", "等级" -> status(player);
+            case "engineering", "market", "projects", "任务市场" -> plugin.taskMarket().command(player, args);
+            case "assessment", "能力记录" -> plugin.taskMarket().assessment(player);
+            case "verify", "验收" -> {
+                Contract quest = active(player);
+                if (quest == null || !plugin.taskMarket().isMarket(quest.id()))
+                    player.sendMessage(ChatColor.YELLOW + "先接取任务市场委托；常驻任务直接 guild status 查看进度。");
+                else plugin.taskMarket().verify(player, quest, ready -> { });
+            }
             case "accept", "接单" -> {
                 if (args.length < 3) player.sendMessage(ChatColor.YELLOW + "用法：/mycli guild accept <任务ID>");
                 else accept(player, args[2].toLowerCase(Locale.ROOT));
@@ -245,6 +259,7 @@ final class GuildManager implements Listener {
 
     private void board(Player player) {
         status(player);
+        plugin.taskMarket().list(player);
         player.sendMessage(ChatColor.GOLD + "【今日 · " + plugin.dailyBoard().boardDate() + " · 动态委托】");
         for (DailyBoardManager.Card card : plugin.dailyBoard().cards()) {
             Contract quest = card.contract();
@@ -290,14 +305,21 @@ final class GuildManager implements Listener {
         player.sendMessage(quest == null ? ChatColor.GRAY + "当前没有在办的委托。"
                 : ChatColor.AQUA + "正在进行：" + quest.title() + " [" + progress(player) + "/"
                 + quest.target() + "]" + (progress(player) >= quest.target() ? "；可交付领取" : ""));
+        if (quest != null && plugin.taskMarket().engineering(quest))
+            player.sendMessage(ChatColor.GRAY + "工程进度为上次验收快照；/mycli guild verify 重新验收实际结构。");
     }
 
     private void accept(Player player, String id) {
         Contract quest = contract(id);
         if (quest == null) { player.sendMessage(ChatColor.RED + "没有这个任务 ID；/mycli guild board 查看精确名称。"); return; }
         if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能接单。"); return; }
-        if (!dungeon.isBuilt()) { player.sendMessage(ChatColor.RED + "地下城暂未建成，不能接此任务。"); return; }
+        boolean market = plugin.taskMarket().isMarket(id);
+        if (!dungeon.isBuilt() && !market) { player.sendMessage(ChatColor.RED + "地下城暂未建成，不能接此任务。"); return; }
         if (active(player) != null) { player.sendMessage(ChatColor.YELLOW + "先完成并交付当前任务。"); return; }
+        if (plugin.taskMarket().isMarket(plugin.getConfig().getString(base(player.getUniqueId()) + ".active.id", ""))) {
+            player.sendMessage(ChatColor.RED + "在途任务快照异常，已保留记录；请联系服主修复，不能覆盖任务。"); return;
+        }
+        if (market && !plugin.taskMarket().canAccept(player, quest)) return;
         if (doneToday(player, quest)) { player.sendMessage(ChatColor.YELLOW + "这张委托今日已经完成，明天再来。"); return; }
         if (!availableToday(player, quest)) {
             player.sendMessage(ChatColor.YELLOW + "「" + quest.title() + "」今日看板未开放（每日维度轮换）；/mycli guild board 看今日开放清单。");
@@ -321,6 +343,7 @@ final class GuildManager implements Listener {
         plugin.getConfig().set(path + ".id", quest.id());
         plugin.getConfig().set(path + ".progress", 0);
         plugin.getConfig().set(path + ".accepted", today());
+        if (market) plugin.taskMarket().accepted(player, id);
         DailyBoardManager.Card offered = plugin.dailyBoard().card(quest.id());
         if (offered != null) {
             plugin.getConfig().set(path + ".snapshot", offered.save());
@@ -347,6 +370,7 @@ final class GuildManager implements Listener {
         if (quest.siteId() != null && quest.goal() == Goal.EXPLORE) player.sendMessage(ChatColor.AQUA
                 + "用传送罗盘选择「" + DungeonExpeditions.site(quest.siteId()).name()
                 + "」或输入 /mycli guild travel " + quest.siteId() + "；落点在遗迹外约 70 格。");
+        if (market) plugin.taskMarket().command(player, new String[]{"guild", "engineering", id});
         plugin.getLogger().info("Guild accepted: player=" + player.getUniqueId() + ", contract=" + quest.id());
     }
 
@@ -707,6 +731,7 @@ final class GuildManager implements Listener {
     }
 
     private boolean availableToday(Player player, Contract quest) {
+        if (plugin.taskMarket() != null && plugin.taskMarket().offered(quest.id()) != null) return true;
         if (plugin.dailyBoard() != null && plugin.dailyBoard().card(quest.id()) != null) return true;
         if (poolIds().contains(quest.id())) return true;
         // 等级特权：黑铁 +1、白金 +2 的个人追加池（seed=日期+uuid，公平可复现）
@@ -734,6 +759,7 @@ final class GuildManager implements Listener {
     }
 
     private void advance(Player player, Contract quest) {
+        if (plugin.taskMarket().isMarket(quest.id()) && player.getGameMode() != GameMode.SURVIVAL) return;
         int current = progress(player);
         if (current >= quest.target()) return;
         int next = current + 1;
@@ -747,6 +773,7 @@ final class GuildManager implements Listener {
     private void abandon(Player player) {
         Contract quest = active(player);
         if (quest == null) { player.sendMessage(ChatColor.YELLOW + "当前没有可放弃的任务。"); return; }
+        if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().abandoned(player);
         plugin.getConfig().set(base(player.getUniqueId()) + ".active", null);
         plugin.saveConfig();
         player.sendMessage(ChatColor.YELLOW + "已放弃「" + quest.title() + "」，本次进度清零；可重新接单。");
@@ -754,6 +781,15 @@ final class GuildManager implements Listener {
     }
 
     private void claim(Player player) {
+        Contract quest = active(player);
+        if (quest != null && plugin.taskMarket().isMarket(quest.id())) {
+            plugin.taskMarket().verify(player, quest, ready -> { if (ready) claimVerified(player); });
+            return;
+        }
+        claimVerified(player);
+    }
+
+    private void claimVerified(Player player) {
         Contract quest = active(player);
         if (quest == null) { player.sendMessage(ChatColor.YELLOW + "当前没有可交付的任务。"); return; }
         if (progress(player) < quest.target()) {
@@ -782,8 +818,10 @@ final class GuildManager implements Listener {
                         + "（需 ×" + quest.target() + "）；备齐再来交付。"); return;
             }
             playerBefore = cloneItems(player.getInventory().getStorageContents());
-            if (dynamic != null && dynamic.chest() >= 0) {
-                chest = plugin.guildHall().sharedInventory(dynamic.chest());
+            int deliveryChest = dynamic != null ? dynamic.chest() : plugin.taskMarket().isMarket(quest.id())
+                    ? plugin.taskMarket().chest(player) : -1;
+            if (deliveryChest >= 0) {
+                chest = plugin.guildHall().sharedInventory(deliveryChest);
                 if (chest == null || freeCapacity(chest, offer) < quest.target()) {
                     player.sendMessage(ChatColor.YELLOW + "公共补给箱暂时不可用或已满；物品未扣除，请稍后再交付。");
                     return;
@@ -800,6 +838,7 @@ final class GuildManager implements Listener {
                 player.sendMessage(ChatColor.RED + "背包物品发生变化；交付未执行，请重试。"); return;
             }
         }
+        if (plugin.taskMarket().isMarket(quest.id()) && plugin.taskMarket().advanceStep(player)) return;
         String path = base(player.getUniqueId());
         int emeraldGain = quest.emeralds();
         if (effectiveRank(player) >= 3) emeraldGain += Math.max(1, quest.emeralds() / 10); // 黄金特权：结算绿宝石 +10%
@@ -819,6 +858,7 @@ final class GuildManager implements Listener {
         String completedDate = dynamic == null ? today() : dynamic.date();
         plugin.getConfig().set(path + ".daily." + quest.id(), completedDate);
         plugin.getConfig().set(path + ".everDone." + quest.id(), completedDate);
+        if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().completed(player);
         plugin.getConfig().set(path + ".active", null);
         plugin.saveConfig();
         player.sendMessage(ChatColor.GREEN + "委托交付成功！声望 +" + gain
@@ -878,6 +918,7 @@ final class GuildManager implements Listener {
         inventory.setItem(0, icon(Material.BOOK, "§6冒险者档案", "等级：" + RANKS[rank],
                 "声望：" + fame(player), member(player) ? "点击查看当前任务" : "点击注册入会"));
         inventory.setItem(7, icon(Material.CLOCK, "§6今日动态委托", "每日 05:00 更新", "下方是常驻委托"));
+        inventory.setItem(8, icon(Material.BRICKS, "§6任务市场 · 工程与生活", "架桥、修路、建造、红石与多阶段生活任务", "点击查看任务与本人能力记录"));
         List<DailyBoardManager.Card> dynamic = plugin.dailyBoard().cards();
         for (int i = 0; i < Math.min(5, dynamic.size()); i++) {
             Contract quest = dynamic.get(i).contract();
@@ -916,6 +957,7 @@ final class GuildManager implements Listener {
 
     void click(Player player, int slot) {
         if (slot == 0) { if (member(player)) status(player); else join(player); }
+        else if (slot == 8) plugin.taskMarket().openMenu(player);
         else if (slot >= 1 && slot <= plugin.dailyBoard().cards().size())
             accept(player, plugin.dailyBoard().cards().get(slot - 1).id());
         else if (slot >= 10 && slot < 10 + CONTRACTS.size()) accept(player, CONTRACTS.get(slot - 10).id());

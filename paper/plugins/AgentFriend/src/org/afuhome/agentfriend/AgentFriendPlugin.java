@@ -196,6 +196,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private DungeonManager dungeon;
     private GuildManager guild;
     private DailyBoardManager dailyBoard;
+    private TaskMarketManager taskMarket;
     private LifeGuildManager lifeGuild;
     private LifeGuildBuildings lifeBuildings;
     private VillageWatchManager villageWatch;
@@ -263,6 +264,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         playerNameTags = new PlayerNameTags(this);
         playerNameTags.start();
         dailyBoard = new DailyBoardManager(this);
+        taskMarket = new TaskMarketManager(this);
         soulboundGear = new SoulboundGear(this);
         getServer().getPluginManager().registerEvents(soulboundGear, this);
         dungeonGearAura = new DungeonGearAura(this);
@@ -328,6 +330,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     GuildStorageOwnership guildStorage() { return guildStorage; }
     ProtectionAdvisor protectionAdvisor() { return protectionAdvisor; }
     DailyBoardManager dailyBoard() { return dailyBoard; }
+    TaskMarketManager taskMarket() { return taskMarket; }
+    GuildManager guild() { return guild; }
     VillageWatchManager villageWatch() { return villageWatch; }
     LifeGuildBuildings lifeBuildings() { return lifeBuildings; }
     TrialRoadManager trialRoad() { return trialRoad; }
@@ -581,6 +585,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
+                && (args[1].equalsIgnoreCase("market") || args[1].equalsIgnoreCase("engineering"))) {
+            boolean console = sender instanceof ConsoleCommandSender || sender instanceof RemoteConsoleCommandSender;
+            boolean goddess = sender instanceof Player player && player.getUniqueId().equals(GODDESS_UUID)
+                    && player.isOp() && player.getGameMode() == GameMode.SPECTATOR;
+            if (!console && !goddess) { sender.sendMessage("只允许控制台或女神观战账号维护任务市场。"); return true; }
+            taskMarket.admin(sender, args); return true;
+        }
         if (args.length >= 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("board")) {
             boolean console = sender instanceof ConsoleCommandSender || sender instanceof RemoteConsoleCommandSender;
             boolean goddess = sender instanceof Player player && player.getUniqueId().equals(GODDESS_UUID)

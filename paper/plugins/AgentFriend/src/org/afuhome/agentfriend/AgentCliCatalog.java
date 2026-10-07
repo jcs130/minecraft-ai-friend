@@ -126,6 +126,9 @@ final class AgentCliCatalog {
         add(specs,"arena.leave","adventure","teleport","/mycli arena leave","退出试炼返回入口","正在试炼区域内","传送或拒绝原因");
         add(specs,"guild.hall","adventure","teleport","/mycli guild hall","前往公会大厅","安全落点可用；6 魔力","成功后 MC_TRAVEL 或失败原因");
         add(specs,"guild.board","adventure","read","/mycli guild board","列出 05:00 更新的今日动态委托与常驻任务 ID","在线玩家","本人任务、声望及 mcagent:board 今日数据");
+        add(specs,"guild.engineering","adventure","read","/mycli guild engineering [list|menu|任务ID]","查看可配置的工程/生活任务、阶段、材料、场地与验收要求","在线玩家；mcagent:market 单播","MC_MARKET_BOARD / MC_MARKET_DETAIL；工程不会每天过期");
+        add(specs,"guild.verify","adventure","read","/mycli guild verify","验收本人当前市场阶段；工程查真实增量、通路、覆盖率或红石通断","已接单；工程须生存模式到场且区域已加载","MC_MARKET_CHECK 的 ready/progress/reason/evidence；未通过不领奖");
+        add(specs,"guild.assessment","adventure","read","/mycli guild assessment","读取本人各类任务的已验收步骤、失败检查和最近任务证据","只读本人记录；耗时含离线","MC_MARKET_ASSESSMENT；不把任务记录当作未测能力");
         add(specs,"guild.menu","adventure","gui","/mycli guild menu","打开原版公会任务面板","在线玩家","原版菜单");
         add(specs,"guild.join","adventure","write","/mycli guild join","注册冒险者公会","非旁观者；已入会时显示状态","入会回执");
         add(specs,"guild.status","adventure","read","/mycli guild status","查看本人公会等级、声望与活动任务","在线玩家","个人状态");
