@@ -15,6 +15,15 @@ test('declines return text without a gift command', () => {
   assert.throws(() => giftCommand('0123456789abcdef', 'Afu', decision));
 });
 
+test('approval cannot silently issue a blank enchanted book', () => {
+  const decision = parseCreationDecision('{"decision":"approve","item":"minecraft:enchanted_book","amount":1,"message":"修补书已送达","enchantments":{"mending":1}}');
+  assert.equal(decision.decision, 'decline');
+  assert.match(decision.message, /需要先确认附魔种类/);
+  assert.throws(() => giftCommand('0123456789abcdef', 'Afu', decision));
+  assert.throws(() => giftCommand('0123456789abcdef', 'Afu',
+    { decision: 'approve', item: 'minecraft:enchanted_book', amount: 1 }));
+});
+
 test('untrusted names, commands, quantities and prose cannot become gifts', () => {
   for (const response of [
     '{"decision":"approve","item":"minecraft:stone;op Steve","amount":1}',

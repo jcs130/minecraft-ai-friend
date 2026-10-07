@@ -23,7 +23,7 @@ const STATE = 'E:/MC/ops/goddess-act-state.json';
 const VILLAGE = { x: -544, y: 67, z: -440 }; // spawn village, from ops/FAMILY_WORLD.md
 const COOLDOWN_MS = 30_000;
 // Write actions that need a live target: refuse politely if that player is offline.
-const NEEDS_TARGET = new Set(['guide', 'relight', 'feather', 'heal', 'bread', 'bed', 'sword', 'wonder', 'knight', 'charm']);
+const NEEDS_TARGET = new Set(['guide', 'relight', 'feather', 'heal', 'bread', 'bed', 'sword', 'mendingbook', 'wonder', 'knight', 'charm']);
 const ACTOR = 'qwenpaw:mc_godness:goddess-act';
 
 const NAME = /^[A-Za-z0-9_.-]{1,17}$/; // 3-16 vanilla + optional Floodgate dot prefix
@@ -143,6 +143,12 @@ const ACTIONS = {
     build: (t) => [`minecraft:give ${t} minecraft:diamond_sword[enchantments={levels:{"minecraft:fire_aspect":1}}] 1`],
     pattern: /^minecraft:give [A-Za-z0-9_.-]{3,17} minecraft:diamond_sword\[enchantments=\{levels:\{"minecraft:fire_aspect":1\}\}\] 1$/,
   },
+  // Books store transferable enchants separately from equipment enchants.
+  mendingbook: {
+    readOnly: false,
+    build: (t) => [`minecraft:give ${t} minecraft:enchanted_book[stored_enchantments={levels:{"minecraft:mending":1}}] 1`],
+    pattern: /^minecraft:give [A-Za-z0-9_.-]{3,17} minecraft:enchanted_book\[stored_enchantments=\{levels:\{"minecraft:mending":1\}\}\] 1$/,
+  },
   // 女神的"神迹"：屏幕大字 + 一行小字 + 光点 + 一声轻响。全部字面量写死，目标名是唯一变量。
   wonder: {
     readOnly: false,
@@ -249,12 +255,16 @@ async function rconBatch(commands) {
   });
 }
 
-async function onlineNames() {
-  const out = await rconBatch(['minecraft:list']);
-  const text = (out[0] || '') + ' ' + (out[1] || '');
+export function namesFromList(text) {
   const m = text.match(/There (?:are|is) \d+ of a max of \d+ players online:\s*(.*)$/i);
-  if (!m) return { count: NaN, names: [], raw: text.trim() };
-  const names = m[1].split(',').map((s) => s.trim()).filter(Boolean);
+  if (!m) return [];
+  return m[1].split(',').map((s) => s.trim().match(/(?:^|\s)([A-Za-z0-9_.-]{3,17})\s+\([a-f0-9-]{36}\)$/i)?.[1]).filter(Boolean);
+}
+
+async function onlineNames() {
+  const out = await rconBatch(['minecraft:list uuids']);
+  const text = (out[0] || '') + ' ' + (out[1] || '');
+  const names = namesFromList(text.trim());
   return { count: names.length, names, raw: text.trim() };
 }
 

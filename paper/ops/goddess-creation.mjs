@@ -1,6 +1,9 @@
 const PLAYER = /^[A-Za-z0-9_.-]{1,32}$/;
 const ITEM = /^minecraft:[a-z0-9_]+$/;
 const NONCE = /^[a-f0-9]{16}$/;
+// The current plugin gift command creates a plain Material ItemStack.
+// Never turn approval of a magic book into an empty, unusable enchanted book.
+const UNSUPPORTED_GIFTS = new Set(['minecraft:enchanted_book']);
 
 export function parseCreationDecision(text) {
   if (typeof text !== 'string' || text.length > 600) throw new Error('invalid Goddess decision length');
@@ -17,12 +20,15 @@ export function parseCreationDecision(text) {
       || !Number.isInteger(value.amount) || value.amount < 1 || value.amount > 16) {
     throw new Error('invalid Goddess approval');
   }
+  if (UNSUPPORTED_GIFTS.has(value.item)) {
+    return { decision: 'decline', message: '附魔书需要先确认附魔种类，再由女神送给你。' };
+  }
   return { decision: 'approve', item: value.item, amount: value.amount, message };
 }
 
 export function giftCommand(nonce, player, decision) {
   if (!NONCE.test(nonce) || !PLAYER.test(player) || decision.decision !== 'approve'
-      || !ITEM.test(decision.item) || !Number.isInteger(decision.amount)
+      || !ITEM.test(decision.item) || UNSUPPORTED_GIFTS.has(decision.item) || !Number.isInteger(decision.amount)
       || decision.amount < 1 || decision.amount > 16) throw new Error('invalid gift command data');
   return `/mycli admin gift ${nonce} ${player} ${decision.item} ${decision.amount}`;
 }

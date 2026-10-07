@@ -77,7 +77,9 @@ async function askGoddess(item) {
     // Fixed identity is intentionally denied mutating MCP tools by QwenPaw policy.
     channel: 'console', user_id: 'afu-game-bridge',
     session_id: `afu-goddess:${item.player.toLowerCase()}`,
-    input: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+    input: [{ role: 'user', content: [{ type: 'text', text: prompt + (item.kind === 'creation'
+      ? '本次 JSON 发放只能生成裸材料，不支持附魔书；请求附魔书时请拒绝并说明需另行核实发放，不能用空白附魔书代替。'
+      : '') }] }],
     timeout: 180,
   };
   const post = await fetch(API, { method: 'POST', headers, body: JSON.stringify(payload), signal: AbortSignal.timeout(15000) });
