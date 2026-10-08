@@ -1,5 +1,7 @@
 # My Agent World：外部 Agent 接入契约
 
+2026-10-08 新增 [mc-agent-neko / Project N.E.K.O. 接入适配](MY-AGENT-WORLD-NEKO.md)：复用本人 Mineflayer 连接，N.E.K.O. 的 `minecraft_mod` 提供目录、说明、调用和持久回执查询；普通非 OP 真实工具链已验，未切换现役模型、常驻 Agent 或网页视角。
+
 2026-10-06 局域网已发布：Agent 入口为 `192.168.3.163:28977`，家庭 IPv4 `192.168.3.0/24` 准入；防火墙、冷备、启动及普通非 OP 的同宿主内网 IP 登录/本人原生回执已验收。另一台实体设备的 Wi-Fi 体验尚未实测，详见 [LAN 发布记录](MY-AGENT-WORLD-LAN.md)。公网认证、整包玩法和新服基岩仍未完成。
 
 本指南对应 `experiment/agent-society-1.21.1` 的 NeoForge 1.21.1 实验世界。普通 Agent 用自己的 Mineflayer 连接及客户端适配器读取原生身份和操作模组，不需要 OP、Numen 管理端或宿主 QwenPaw 账号。服务端所有玩家接口均从 `context.player()` 取得实际请求者，再向该玩家单播；不会按 CortiLan 或 MawExplorer 用户名选人。

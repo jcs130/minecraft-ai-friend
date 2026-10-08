@@ -1,0 +1,66 @@
+﻿My Agent World：Neko Agent 接入指南（2026-10-08）
+
+可以使用 mc-agent-neko 控制游戏角色，Project N.E.K.O. 负责对话并调用它。N.E.K.O. 是可选入口，其他 Agent 也能直接使用服务器提供的原生 SDK。
+
+游戏连接：192.168.3.163:28977
+版本：Java 1.21.1，离线登录，使用自己的独立玩家名。
+这是家庭局域网入口。28976 是完整 Java 模组客户端后端；旧千灯纪公网地址不是这个新服入口。
+
+本机代码目录：
+E:\mc-agent-neko
+E:\Project-N.E.K.O
+E:\minecraft-ai-friend-society-lab（服务器源码和接入适配）
+
+已经接通：
+1. 在 Neko 自己的 Mineflayer 连接上挂接原生 SDK。
+2. N.E.K.O. 的 Minecraft 插件增加 minecraft_mod 工具。
+3. 48 项原生操作的目录、参数说明、真实调用和私有回执。
+4. 殖民地、女仆、Ars 法术、Create、Domum、Curios 的已适配功能。
+5. 同一写请求不会重复执行；结果未知时停止继续写入，先查询原回执。
+
+Agent 的标准使用方法：
+先 minecraft_mod(operation="list") 查目录。
+再 minecraft_mod(operation="explain", id="操作ID") 查参数和条件。
+最后 minecraft_mod(operation="call", id="操作ID", args={参数对象})。
+写入可以指定唯一 callId；不指定时客户端会生成并返回它。
+超时后保存 callId，使用 minecraft_mod(operation="result", callId="原ID") 查询，不能换 ID 重试。
+
+例如：
+{"operation":"call","id":"spell.glyphs","args":{"limit":1}}
+{"operation":"call","id":"curios.open","args":{},"callId":"open-curios-001"}
+
+Neko 自己也有以下命令：
+!modList()
+!modExplain("curios.open")
+!modCall("curios.open", "{}")
+!modStatus()
+!modResult("原callId")
+
+操作条件：
+先读真实库存、组件与窗口状态，按 schema 提供参数。
+坐标使用绝对坐标。代理 Player Head 等名称不是实际模组物品身份。
+模组写入前结束正在进行的移动、战斗或进食，避免多个动作同时控制身体。
+施法成功不等于命中；调用成功不等于任务完成，应再读取真实状态确认。
+
+启动参数和环境：
+Node 22；Mineflayer 4.37.1、minecraft-protocol 1.66.2、minecraft-data 3.112.0。
+MAW_NEKO_ADAPTER_FILE=E:\minecraft-ai-friend-society-lab\world\src\neko-adapter\native-runtime.cjs
+MAW_NEKO_LEDGER_DIR=E:\QiandengJiSocietyLab\integrations\neko\ledgers
+NEKO_PLUGIN_WS_HOST=127.0.0.1
+NEKO_PLUGIN_WS_PORT=48909
+NEKO_AGENT_SCREENSHOT_INTERVAL_MS=0
+DEBUG_CHAT=0
+NODE_PATH=E:\QiandengJiSocietyLab\gateway\permanent\node\node_modules
+
+N.E.K.O. Minecraft 插件的 ws_url 填 ws://127.0.0.1:48909。
+Neko 设置使用上述游戏地址和版本，关闭 allow_insecure_coding，禁用 !newAction。
+模型配置由接入方配置；本机调试仍用 QwenPaw 与线上 qwen3.7-plus，不使用本地 27B。
+完整安装、锁文件、账本对账与回滚说明：
+E:\minecraft-ai-friend-society-lab\docs\MY-AGENT-WORLD-NEKO.md
+
+当前实测边界：
+两个普通非 OP 测试账号已验证真实登录、Neko 命令、N.E.K.O. 插件工具及原生饰品栏打开；回执只返回请求连接，重复请求没有重复执行。
+本轮没有调用模型，没有启动 Neko 的长期自主循环或完整对话桌面端；测试账号已经退出。
+现有服务器、世界和 MawExplorer 保持，原自主暂停没有解除。
+现有网页 http://192.168.3.163:28984 仍是 MawExplorer 的画面，尚未切换成 Neko 画面。
+完整模组玩法、新服基岩、公网准入及 Neko 同连接网页输出仍有待验证。

@@ -71,6 +71,37 @@ SOCIETY_SERVICE_MANIFEST = {
     'worker': {'port': 28984, 'purpose': 'QwenPaw decisions, ordinary player actions, same-connection native web view'},
 }
 
+# Optional client-framework integration. This checks installed artifacts only;
+# it must not report an autonomous Neko/dialogue runtime as healthy from a file.
+NEKO_ADAPTER_MANIFEST = Path('E:/QiandengJiSocietyLab/integrations/neko/installation.json')
+
+
+def probe_neko_adapters(manifest_path=None):
+    checks = {}
+    report = {'schemaVersion': 1, 'scope': 'installed_neko_adapter_artifacts',
+              'runtimeObservation': 'not_checked', 'autonomousPlayVerified': False,
+              'allModsVerified': False, 'publicAccessReady': False, 'checks': checks}
+    try:
+        manifest = json.loads(Path(manifest_path or NEKO_ADAPTER_MANIFEST).read_text(encoding='utf-8'))
+        checks['installation-manifest'] = manifest.get('schemaVersion') == 1
+        checks['pinned-upstreams'] = (manifest.get('mcAgentNekoRevision') == '23f5971203e3f4d15ef416ff8e5cc67965845d82'
+            and manifest.get('projectNekoRevision') == 'fb2a2e731a8c954478d08678b0c8cf40e8145a54')
+        files = manifest.get('files')
+        checks['artifact-list'] = isinstance(files, list) and len(files) >= 13
+        if isinstance(files, list):
+            for index, row in enumerate(files):
+                filename = Path(row['path'])
+                checks[f'artifact-{index}'] = (filename.is_absolute() and filename.is_file()
+                    and hashlib.sha256(filename.read_bytes()).hexdigest() == row.get('sha256'))
+        checks['structured-tool'] = manifest.get('tool') == 'minecraft_mod'
+        checks['native-contract'] = (manifest.get('operationCount') == 48 and manifest.get('samePlayerConnection') is True
+            and manifest.get('automaticReplay') is False and manifest.get('pluginMessageBroadcast') is False)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        checks['manifest-readable'] = False
+        report['error'] = type(exc).__name__
+    report['ok'] = bool(checks) and all(checks.values())
+    return report
+
 
 def probe_society_service():
     from uuid import UUID
@@ -1960,6 +1991,10 @@ def inventory_lock_failure(reason):
 
 
 def main():
+    if sys.argv[1:] == ['--neko']:
+        report = probe_neko_adapters()
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
     if sys.argv[1:] == ['--society']:
         report = probe_society_service()
         target = PROJECT / 'reports' / 'my-agent-world-runtime-health.json'
