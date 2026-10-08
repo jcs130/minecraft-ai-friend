@@ -1,13 +1,14 @@
 # Agent 角色皮肤
 
-## NEKO 白色猫娘（2026-10-08 19:40:24已在线生效）
+## NEKO 白色猫娘（2026-10-08 19:48:21已在线生效）
 
-`ag_NEKO`（`6e8b395e-4349-3d44-99f5-b7488825e426`）现绑定`afu_neko_whitecat`，slim手臂。外观为白色猫耳兜帽、浅色长发和白色服装，少量浅灰/淡粉细节。素材来自[ShadowCat100：White Cat Girl](https://www.minecraftskins.com/skin/23050342/white-cat-girl/)；原始64×64 PNG的SHA256为`c77a7b6bee493b6e0228b1a3eae13250fdf7db5326bcc7aa6420a831ec31a1fb`。服务器通过SkinsRestorer在线生成并保存签名预设，Mojang材质`d8c68d4b05a1b147b51b68148038f81f07d3413f2b1ec24acc2e1ed6fa76573a`与选中PNG可见像素逐项相同。未将第三方PNG或签名存储文件提交Git。
+`ag_NEKO`（`6e8b395e-4349-3d44-99f5-b7488825e426`）绑定`afu_neko_whitecat`，slim手臂。外观为白色猫耳兜帽、浅色长发和白色服装，少量浅灰/淡粉细节。素材来自[ShadowCat100：White Cat Girl](https://www.minecraftskins.com/skin/23050342/white-cat-girl/)；原始64×64 PNG的SHA256为`c77a7b6bee493b6e0228b1a3eae13250fdf7db5326bcc7aa6420a831ec31a1fb`。SkinsRestorer 15.12.6已生成并保存签名预设，Mojang材质`d8c68d4b05a1b147b51b68148038f81f07d3413f2b1ec24acc2e1ed6fa76573a`与选中PNG可见像素相同；第三方PNG和签名存储文件只保存在私有快照中。
 
-在线应用命令：`skinsrestorer:skin set afu_neko_whitecat ag_NEKO slim`。7项原生验证通过：精确账号UUID、持久CUSTOM绑定、在线观察者收到逐字相同value/signature、slim元数据、刷新后绑定保持、NEKO原连接在线、原机CortiEye仍附身。前后E/F双盘皮肤快照校验完成；除NEKO原映射外，33份既有皮肤记录及插件配置哈希保持。临时观察账号已退出并移除白名单。
+首次19:40:24应用后，服务器日志确认NEKO于19:41:43自行执行`/skin clear`，清除了新皮肤。随后仅为该精确UUID设置LuckPerms节点`skinsrestorer.command.clear=false`，再在线执行`skinsrestorer:skin set afu_neko_whitecat ag_NEKO slim`。临时观察账号实测清空命令明确提示“很抱歉, 你沒有權限執行這個指令”，选中皮肤保持，测试节点已移除。权限前后导出确认其他玩家、全部组和轨道保持原样，只有NEKO新增这一条非默认权限。
 
-无需服务器或Agent重启，AgentFriend仍为0.3.95。首次观察探针对原来空的textures字段解码失败，未发送换装指令，失败证据保留；修正空值处理后完成实际应用。这里只确认原版Java签名材质下发，不以此代替手机/Xbox实机画面。回退可在线`skinsrestorer:skin clear ag_NEKO`；原UUID之前没有选中的皮肤，勿恢复整份玩家目录覆盖他人后续换装。私有原件与回执：E/F `repairs/neko-skin-20261008`；[公开换装清单](../manifests/neko-skin-20261008.json)。
+最终10项检查通过：临时账号及NEKO的实际UUID、清空命令明确拒绝及皮肤保持、精确CUSTOM持久绑定、原版观察客户端收到完全相同的签名纹理、slim元数据、刷新后映射保持、NEKO原连接在线、原机CortiEye继续附身。E/F双盘快照已核对；32份既有其他皮肤记录与SkinsRestorer配置哈希保持，另1份玩家皮肤缓存只刷新了签名时间，解码后的材质保持。观察账号已退出并移除白名单。无需服务器或Agent重启，AgentFriend仍为0.3.95。手机/Xbox实际画面仍需真实客户端观察。
 
+控制台回退：先`lp user 6e8b395e-4349-3d44-99f5-b7488825e426 permission unset skinsrestorer.command.clear`，再`skinsrestorer:skin clear ag_NEKO`。原UUID没有选中皮肤；勿整目录恢复覆盖他人的换装。私有原件、失败探针与最终回执：E/F `repairs/neko-skin-20261008`；[公开换装清单](../manifests/neko-skin-20261008.json)。
 
 ## 2026-10-08 在线换装
 

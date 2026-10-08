@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "status": "applied-online",
-  "appliedAt": "2026-10-08T19:40:24.441000+08:00",
+  "appliedAt": "2026-10-08T19:48:21.955000+08:00",
   "plugin": "SkinsRestorer 15.12.6",
   "serverPluginVersionUnchanged": "AgentFriend 0.3.95",
   "account": "ag_NEKO",
@@ -17,11 +17,11 @@
     "pngSha256": "c77a7b6bee493b6e0228b1a3eae13250fdf7db5326bcc7aa6420a831ec31a1fb"
   },
   "textureUrl": "https://textures.minecraft.net/texture/d8c68d4b05a1b147b51b68148038f81f07d3413f2b1ec24acc2e1ed6fa76573a",
-  "checks": 7,
+  "checks": 10,
   "signedTextureObservedByNativeClient": true,
   "originalAgentRemainedOnline": true,
   "originalCortiEyeAttached": true,
-  "preexistingOtherSkinRecordsUnchanged": 33,
+  "preexistingOtherSkinRecordsUnchanged": 32,
   "configurationUnchanged": true,
   "restartRequired": false,
   "agentClientChanges": false,
@@ -33,5 +33,39 @@
   "limits": [
     "Java native signed profile verified; mobile/Xbox visual acceptance requires a real client."
   ],
-  "rollback": "skinsrestorer:skin clear ag_NEKO; prior exact UUID mapping had no selected skin identifier."
+  "rollback": "lp user 6e8b395e-4349-3d44-99f5-b7488825e426 permission unset skinsrestorer.command.clear; skinsrestorer:skin clear ag_NEKO (console). Prior exact UUID mapping had no selected skin identifier.",
+  "initialAppliedAt": "2026-10-08T19:40:24.441000+08:00",
+  "preexistingPlayerSkinCacheRefreshes": [
+    {
+      "path": "skins/a387ce13-334f-458f-b04c-7bd8a01e497e.playerskin",
+      "sameTexture": true,
+      "onlySignedTimestampRefreshed": true
+    }
+  ],
+  "history": [
+    {
+      "event": "initial-signed-skin-applied",
+      "at": "2026-10-08T19:40:24.441000+08:00",
+      "checks": 7
+    },
+    {
+      "event": "agent-cleared-own-skin",
+      "at": "2026-10-08T19:41:43+08:00"
+    },
+    {
+      "event": "self-clear-denied-and-skin-reapplied",
+      "at": "2026-10-08T19:48:21.955000+08:00",
+      "checks": 10
+    }
+  ],
+  "selfClearProtection": {
+    "plugin": "LuckPerms 5.5.71",
+    "userUuid": "6e8b395e-4349-3d44-99f5-b7488825e426",
+    "permission": "skinsrestorer.command.clear",
+    "value": false,
+    "explicitDenialVerifiedWithDisposableIdentity": true,
+    "deniedClearRetainedSkin": true,
+    "otherUsersAndGroupsUnchanged": true,
+    "temporaryTestPermissionRemoved": true
+  }
 }
