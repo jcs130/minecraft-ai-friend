@@ -10,4 +10,6 @@ AgentFriend 0.3.77 每约 6 秒读取 `ops/agent-eye-pairs.json` 的 Agent 名�
 
 Eye 观战账号的登记及附身规则见 [Agent 观战账号](AGENT_EYES.md)。`fulumu` 已按登记表自动显示 `[Agent]`；`fulumu_eye` 与 Goddess 均不显示。登记表只表示服务账号身份，公会日常委托仍以各自 UUID 记录。
 
+角色皮肤独立于身份铭牌维护；桐人当前实际账号 `ag_Kirito` 与 Corti 的在线换装记录、UUID 和维护方式见 [Agent 角色皮肤](AGENT_SKINS.md)。
+
 隔离验证脚本 `paper/plugins/AgentFriend/guild-rank-nametags-stage.mjs` 用三个真实 1.20.6 Mineflayer 连接检查公会前缀；`agent-registry-stage.mjs` 验证热登记、撤销、损坏配置拒绝与恢复。正式服 RCON 名单已读回 `[Agent] fulumu`。基岩真机仍需确认字体与颜色；Geyser Pong 只能证明网络可达，不能替代画面验收。回退为停服后仅启用上一版 AgentFriend JAR；公会数据无需迁移。
