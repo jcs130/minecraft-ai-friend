@@ -33,6 +33,14 @@ const manager = new ActionManager(agent);
 await assert.rejects(manager.runAction('action:test', () => { throw Error('must not run'); }), /native_body_reserved_or_unknown/);
 const own = [], other = [];
 agent.bot._client = {uuid: '11111111-1111-4111-8111-111111111111'};
+const nativeItems=Array(46).fill(null);
+nativeItems[9]={id:'patchouli:guide_book',count:1,displayName:'Native guide',snbt:'{id:"patchouli:guide_book",count:1}'};
+agent.bot.mawNative.sdk={menu:{current:()=>({playerUuid:agent.bot._client.uuid,windowId:1,stateId:5,
+    menuType:'curios:curios_container',playerInventory:nativeItems,carried:null})}};
+agent.bot.inventory={slots:Array(46).fill({name:'paper',count:99})};
+const nativeInventory=await commands.executeCommand(agent,'!inventory');
+assert.match(nativeInventory,/NATIVE_INVENTORY/); assert.match(nativeInventory,/patchouli:guide_book/);
+assert.match(nativeInventory,/"slot":9/); assert.equal(nativeInventory.includes('paper'),false);
 agent.bot.mawNative.request = async () => ({ok: true, operationCount: 48});
 wsServer.agent = agent;
 wsServer.broadcast = message => other.push(message);
@@ -42,7 +50,7 @@ await new Promise(resolve => setImmediate(resolve));
 // Disabled adapter is a private, explicit rejection, never game chat or broadcast.
 assert.equal(own[0].code, 'native_adapter_not_enabled'); assert.equal(other.length, 0);
 console.log(JSON.stringify({ok: true, registeredCommands: 5, nativeJsonEscaping: true,
-    parserAndMultiCommand: true, bodyGuard: true, privateSocketRoute: true, modelCalls: 0}));
+    parserAndMultiCommand: true, bodyGuard: true, privateSocketRoute: true, nativeInventory: true, modelCalls: 0}));
 // Upstream imports install housekeeping timers even without Agent.start().
 // This is a bounded offline test, with no Minecraft/WebSocket connection.
 process.exit(0);

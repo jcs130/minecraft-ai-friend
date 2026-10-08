@@ -46,8 +46,10 @@ def plan_neko(repo: Path) -> dict[str, tuple[str | None, str]]:
         ("const bot = createBot(options);", "const bot = createBot(options);\n    attachNative(bot, username); // Same player's connection, before login/spawn."),
     ])
     patch("src/agent/commands/queries.js", [
-        ("import * as world from '../library/world.js';", "import { nativeQueries } from '../../integrations/maw_native.js';\nimport * as world from '../library/world.js';"),
+        ("import * as world from '../library/world.js';", "import { nativeQueries, nativeInventoryText } from '../../integrations/maw_native.js';\nimport * as world from '../library/world.js';"),
         ("export const queryList = [", "export const queryList = [\n    ...nativeQueries,"),
+        ('name: "!inventory",\n        description: "Get your bot\'s inventory.",\n        perform: function (agent) {',
+         'name: "!inventory",\n        description: "Get your own inventory. Native mod connection: real IDs/counts/slots, not proxy items; full components via menu.current.",\n        perform: function (agent) {\n            const native = nativeInventoryText(agent);\n            if (native !== null) return pad(native);'),
     ])
     patch("src/agent/commands/actions.js", [
         ("import * as skills from '../library/skills.js';", "import { nativeActions } from '../../integrations/maw_native.js';\nimport * as skills from '../library/skills.js';"),
@@ -87,6 +89,7 @@ def plan_neko(repo: Path) -> dict[str, tuple[str | None, str]]:
                                  "prismarine-chunk": "1.41.0", "vec3": "0.2.0"})
     planned["package.json"] = (before, json.dumps(package, ensure_ascii=False, indent=4) + "\n")
     planned["src/integrations/maw_native.js"] = (None, (SOURCE / "neko-native.js").read_text(encoding="utf-8"))
+    planned["src/integrations/native-inventory.cjs"] = (None, (SOURCE / "native-inventory.cjs").read_text(encoding="utf-8"))
     planned["src/models/maw_codingplan.js"] = (None, (SOURCE / "codingplan-model.js").read_text(encoding="utf-8"))
     planned["package-lock.json"] = (None, (SOURCE / "mc-agent-neko.package-lock.json").read_text(encoding="utf-8"))
     return planned
@@ -142,6 +145,14 @@ def main() -> None:
     parser.add_argument("--record", type=Path, help="Write the verified installation hash manifest outside source repositories")
     parser.add_argument("--apply", action="store_true")
     options = parser.parse_args()
+    # Upgrade only exact files recorded by our previous installation. A user
+    # edit, including an edit to an already managed overlay, still conflicts.
+    previous_hashes = {}
+    if options.record and options.record.is_file():
+        prior = json.loads(options.record.read_text(encoding="utf-8"))
+        if prior.get("schemaVersion") != 1 or prior.get("tool") != "minecraft_mod":
+            raise ValueError("preserving an unrecognized installation record")
+        previous_hashes = {str(Path(row["path"]).resolve()): row["sha256"] for row in prior.get("files", [])}
     targets = [(options.neko.resolve(), plan_neko(options.neko)), (options.project_neko.resolve(), plan_project(options.project_neko))]
     changes = []
     for repo, files in targets:
@@ -152,7 +163,8 @@ def main() -> None:
             package_equivalent = name == "package.json" and current is not None and json.loads(current) == json.loads(after)
             if current == after or package_equivalent:
                 continue
-            if current != before:
+            managed = target.is_file() and previous_hashes.get(str(target.resolve())) == hashlib.sha256(target.read_bytes()).hexdigest()
+            if current != before and not managed:
                 raise ValueError(f"local change conflict, preserved: {target}")
             changes.append((repo, name, target, current, after))
     print(json.dumps({"mode": "apply" if options.apply else "preview", "changes": [str(c[2]) for c in changes]}, ensure_ascii=False))
@@ -190,10 +202,10 @@ def main() -> None:
                 stream.write(after)
     if options.record:
         installed = [repo / name for repo, planned in targets for name in planned]
-        owned = [SOURCE / name for name in ("native-runtime.cjs", "neko-native.js", "codingplan-model.js", "codingplan-bridge.cjs", "project-neko/native_mod.py", "mc-agent-neko.package-lock.json")]
+        owned = [SOURCE / name for name in ("native-runtime.cjs", "neko-native.js", "native-inventory.cjs", "native-presentation.cjs", "codingplan-model.js", "codingplan-bridge.cjs", "project-neko/native_mod.py", "mc-agent-neko.package-lock.json")]
         owned += [Path(__file__).resolve(), ROOT / "world/src/neoforge-handshake/mod-agent-client.cjs",
                   ROOT / "world/src/neoforge-handshake/mod-call-client.cjs", ROOT / "world/src/neoforge-handshake/menu-client.cjs",
-                  ROOT / "tools/run_neko_trial.mjs", ROOT / "tools/start_neko_trial.py", ROOT / "world/src/society-agent/action-deadline.cjs"]
+                  ROOT / "tools/run_neko_trial.mjs", ROOT / "tools/start_neko_trial.py", ROOT / "tools/probe_neko_gui.py", ROOT / "world/src/society-agent/action-deadline.cjs"]
         record = {"schemaVersion": 1, "at": datetime.now(timezone.utc).isoformat(),
                   "mcAgentNekoRevision": NEKO_REV, "projectNekoRevision": PROJECT_REV,
                   "tool": "minecraft_mod", "operationCount": 49, "samePlayerConnection": True,

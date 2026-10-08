@@ -3,6 +3,7 @@
 import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 const require = createRequire(import.meta.url);
+export const nativeInventoryText = require('./native-inventory.cjs').nativeInventoryText;
 const enabled = Boolean(process.env.MAW_NEKO_ADAPTER_FILE);
 const adapter = enabled ? require(process.env.MAW_NEKO_ADAPTER_FILE) : null;
 

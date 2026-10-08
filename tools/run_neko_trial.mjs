@@ -13,11 +13,11 @@ fs.mkdirSync('bots/_supervisor', { recursive: true })
 const lock = path.join(root, 'runner.lock')
 const fd = fs.openSync(lock, 'wx')
 fs.writeSync(fd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })); fs.fsyncSync(fd); fs.closeSync(fd)
-let closing = false, agent, viewer, stream, heartbeat
+let closing = false, agent, viewer, stream, heartbeat, presentationObserver
 const startedAt = Date.now(), eventsFile = path.join(root, 'trial-events.jsonl')
 const report = { schemaVersion: 1, username: config.username, startedAt: new Date().toISOString(), phase: 'starting',
   model: 'qwen3.7-plus', provider: 'aliyun-codingplan-direct', qwenpawConnected: false, modelLoopStarted: false,
-  deaths: 0, pathDistance: 0, commands: [], privatePackets: 0, errors: [], fullModPlayVerified: false }
+  deaths: 0, pathDistance: 0, commands: [], modOperations: [], privatePackets: 0, errors: [], fullModPlayVerified: false }
 function record (kind, data = {}) {
   const event = { at: new Date().toISOString(), kind, ...data }
   fs.appendFileSync(eventsFile, JSON.stringify(event) + '\n'); console.log('NEKO_TRIAL ' + JSON.stringify(event))
@@ -27,7 +27,8 @@ function snapshot () {
   return { at: new Date().toISOString(), phase: report.phase, username: config.username, playerUuid: bot?._client?.uuid ?? null,
     health: bot?.health ?? null, food: bot?.food ?? null, position: bot?.entity ? { x: bot.entity.position.x, y: bot.entity.position.y, z: bot.entity.position.z } : null,
     inventory: bot?.inventory?.items()?.map(i => ({ slot: i.slot, id: i.name, count: i.count })) ?? [],
-    native: bot?.mawNative?.status() ?? null, model: modelBridge?.status() ?? null }
+    native: bot?.mawNative?.status() ?? null, model: modelBridge?.status() ?? null,
+    presentation: presentationObserver?.status() ?? null }
 }
 function persist () {
   fs.writeFileSync(path.join(root, 'status.json.tmp'), JSON.stringify({ ...report, current: snapshot(), pid: process.pid }, null, 2))
@@ -47,6 +48,7 @@ async function shutdown (reason, code = 0) {
     try { const end = new Promise(r => { bot.once('end', r); setTimeout(r, 4000) }); bot.quit('Neko bounded trial finished'); await end } catch {}
   }
   try { await viewer?.close() } catch {}
+  try { presentationObserver?.close() } catch {}
   try { stream?.detach?.() } catch {}
   try { bot?.mawNative?.close() } catch {}
   report.phase = 'stopped'; report.endedAt = new Date().toISOString(); record('stopped', { reason, code }); persist()
@@ -72,6 +74,7 @@ const { prepareNativeWorldPreviewHost, createNativePlayerPresentation } = await 
 const prepared = await prepareNativeWorldPreviewHost({ assetDirectory: config.assetDirectory, port: config.viewerPort })
 const { attachNativeViewerPackets } = require(config.nativePacketFile)
 const nbt = require('prismarine-nbt')
+const { attachNativeModPresentation } = require('../world/src/neko-adapter/native-presentation.cjs')
 // Agent's ESM graph has cycles and a top-level-await model registry. Import its
 // public entry first; racing direct imports of cyclic command modules hits TDZ.
 const { Agent } = await load('src/agent/agent.js')
@@ -91,7 +94,17 @@ for (const command of [...queries.queryList, ...actions.actionsList.filter(c => 
     try {
       const result = await original(...args)
       let receipt = {}
-      try { const parsed = JSON.parse(result); receipt = Object.fromEntries(['ok', 'code', 'outcomeKnown', 'outcomeUnknown'].filter(key => Object.hasOwn(parsed, key)).map(key => [key, parsed[key]])) } catch {}
+      try {
+        const parsed = JSON.parse(result)
+        receipt = Object.fromEntries(['ok', 'code', 'outcomeKnown', 'outcomeUnknown'].filter(key => Object.hasOwn(parsed, key)).map(key => [key, parsed[key]]))
+        if (command.name === '!modCall') {
+          const native = parsed.result ?? {}, operation = { playerUuid: parsed.playerUuid, operation: parsed.id ?? args[1],
+            requestId: native.requestId ?? parsed.callId ?? null, at: new Date().toISOString(), ok: parsed.ok,
+            readOnly: parsed.readOnly, changed: native.changed ?? null, code: native.code ?? parsed.code ?? null,
+            outcomeUnknown: parsed.outcomeUnknown === true || native.outcomeKnown === false }
+          report.modOperations.push(operation); if (report.modOperations.length > 8) report.modOperations.shift()
+        }
+      } catch {}
       const summary = { at: new Date().toISOString(), name: command.name, durationMs: Date.now() - began, result: String(result ?? '').slice(0, 450), receipt }
       report.commands.push(summary)
       fs.appendFileSync(path.join(root, 'command-results.jsonl'), JSON.stringify({ at: new Date().toISOString(), name: command.name, args: args.slice(1), result }) + '\n')
@@ -114,10 +127,12 @@ const originalSetup = agent.setupBotEventHandlers.bind(agent)
 agent.setupBotEventHandlers = bot => {
   stream = attachNativeViewerPackets(bot, prepared.registrySha256)
   const sdk = bot.mawNative.sdk
+  presentationObserver = attachNativeModPresentation(bot, sdk)
   viewer = prepared.attach({ bot, nativeStream: stream, expectedUsername: config.username, simplifyNBT: nbt.simplify,
     getAgentStatus: () => ({ ...snapshot(), mode: report.phase === 'playing' ? 'acting' : report.phase, goal: config.mission, reason: report.reason ?? '',
-      receipts: report.commands.slice(-8).map(c => ({ at: c.at, action: { type: c.name }, result: c.receipt ?? {} })) }),
-    getPresentationState: () => createNativePlayerPresentation({ playerUuid: bot._client.uuid, menu: sdk.menu.current(), spellState: sdk.spell.current() }) })
+      receipts: report.modOperations.map(c => ({ at: c.at, action: { type: c.operation }, result: { ok: c.ok, code: c.code ?? (c.ok ? 'native_receipt_ok' : 'native_receipt_refused'), outcomeUnknown: c.outcomeUnknown } })) }),
+    getPresentationState: () => createNativePlayerPresentation({ playerUuid: bot._client.uuid, menu: sdk.menu.current(),
+      ...presentationObserver.current(), modOperations: report.modOperations }) })
   void viewer.listen().then(() => record('viewer_ready', { url: viewer.url }))
   bot._client.on('packet', (data, meta) => {
     if (meta.name !== 'custom_payload' || !String(data.channel).startsWith('maw_agent:')) return
