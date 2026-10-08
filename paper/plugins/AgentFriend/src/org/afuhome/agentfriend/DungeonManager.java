@@ -227,6 +227,7 @@ final class DungeonManager implements Listener {
     private int floor;
     private Difficulty difficulty = Difficulty.NORMAL;
     private long runStartedAt;
+    private String runId = UUID.randomUUID().toString();
     private long floorStartedAt;
     private long spawnAt;
     private long advanceAt;
@@ -297,6 +298,7 @@ final class DungeonManager implements Listener {
         plugin.getConfig().set(RUN_STATE + ".participants",
                 participants.stream().map(UUID::toString).toList());
         plugin.getConfig().set(RUN_STATE + ".run-started-at", runStartedAt);
+        plugin.getConfig().set(RUN_STATE + ".id", runId);
         plugin.getConfig().set(RUN_STATE + ".floor-started-at", floorStartedAt);
         plugin.getConfig().set(RUN_STATE + ".advance-at", advanceAt);
         plugin.getConfig().set(RUN_STATE + ".cleared", cleared);
@@ -332,12 +334,13 @@ final class DungeonManager implements Listener {
         participants.clear();
         participants.addAll(savedIds);
         floor = savedFloor;
-        List<?> savedWave = plugin.getConfig().getList(RUN_STATE + ".wave");
-        activeWave = savedFloor == REST_FLOOR ? List.of() : savedWave == null || savedWave.isEmpty()
-                ? waveCatalog.wave(savedFloor, THEMES.get(savedFloor - 1).mobs()) : DungeonWaveCatalog.parse(savedWave);
         Difficulty savedDifficulty = Difficulty.parse(plugin.getConfig().getString(RUN_STATE + ".difficulty", "normal"));
         difficulty = savedDifficulty == null ? Difficulty.NORMAL : savedDifficulty;
+        List<?> savedWave = plugin.getConfig().getList(RUN_STATE + ".wave");
+        activeWave = savedFloor == REST_FLOOR ? List.of() : difficulty == Difficulty.NORMAL || savedWave == null || savedWave.isEmpty()
+                ? waveCatalog.wave(savedFloor, THEMES.get(savedFloor - 1).mobs(), difficulty != Difficulty.NORMAL) : DungeonWaveCatalog.parse(savedWave);
         runStartedAt = plugin.getConfig().getLong(RUN_STATE + ".run-started-at", now);
+        runId = plugin.getConfig().getString(RUN_STATE + ".id", Long.toString(runStartedAt));
         floorStartedAt = plugin.getConfig().getLong(RUN_STATE + ".floor-started-at", now);
         advanceAt = plugin.getConfig().getLong(RUN_STATE + ".advance-at", 0);
         cleared = plugin.getConfig().getBoolean(RUN_STATE + ".cleared", false);
@@ -496,12 +499,14 @@ final class DungeonManager implements Listener {
                         + " selfFloor=" + selfFloor + " remainingMobs=" + remaining
                         + " trackedMobs=" + (active && spawned && !cleared ? mobs.size() : 0)
                         + " missingMobs=" + missing + " outsideMobs=" + outside
-                        + " anomaly=" + anomaly + " searchAdvice=" + searchAdvice
+                        + " downed=" + plugin.isDowned(player)
+                        + " anomaly=" + anomaly + " searchAdvice=" + (plugin.isDowned(player) ? "wait_rescue_or_clear" : searchAdvice)
                         + " lastOutcome=" + plugin.getConfig().getString("dungeon-last-outcome", "none")
                         + " lastFloor=" + plugin.getConfig().getInt("dungeon-last-finish-floor", 0)
                         + " lastReason=" + plugin.getConfig().getString("dungeon-last-finish-reason", "none")
                         + " lastRunParticipant=" + plugin.getConfig().getStringList("dungeon-last-participants")
                                 .contains(player.getUniqueId().toString()));
+                if (plugin.trialRescue() != null) plugin.trialRescue().report(player);
                 player.sendMessage("MC_DUNGEON entrance " + LocationOutput.fields(lobbyButton())
                         + " chestX=-594 chestY=91 chestZ=-313 scope=public participant=" + participant);
                 if (active) player.sendMessage("MC_DUNGEON floor=" + floor + " "
@@ -652,6 +657,7 @@ final class DungeonManager implements Listener {
         }
         active = true;
         runStartedAt = now;
+        runId = UUID.randomUUID().toString();
         persistRun();
         for (UUID id : participants) {
             Player player = Bukkit.getPlayer(id);
@@ -693,6 +699,7 @@ final class DungeonManager implements Listener {
         }
         active = true;
         runStartedAt = now;
+        runId = UUID.randomUUID().toString();
         persistRun();
         announce(ChatColor.GOLD + "已从检查点直达第七层驿站〔" + difficulty.label + "〕；队伍可补给，再继续深入。");
     }
@@ -735,7 +742,7 @@ final class DungeonManager implements Listener {
         participants.addAll(arrived);
         participants.addAll(disconnected);
         floor = number;
-        activeWave = number == REST_FLOOR ? List.of() : waveCatalog.wave(number, THEMES.get(number - 1).mobs());
+        activeWave = number == REST_FLOOR ? List.of() : waveCatalog.wave(number, THEMES.get(number - 1).mobs(), difficulty != Difficulty.NORMAL);
         outsideSince = 0;
         spawned = false;
         cleared = number == REST_FLOOR;
@@ -795,10 +802,11 @@ final class DungeonManager implements Listener {
             return;
         }
         enrollPlayersOnCurrentFloor();
+        if (waveCleared() && plugin.trialRescue() != null) plugin.trialRescue().reviveTeam(rescueKey(), "room_cleared");
         boolean anyone = false;
         for (UUID id : participants) {
             Player p = Bukkit.getPlayer(id);
-            if (p != null && p.isOnline() && !p.isDead() && inFloor(p.getLocation(), floor)) {
+            if (p != null && p.isOnline() && !p.isDead() && !plugin.isDowned(p) && inFloor(p.getLocation(), floor)) {
                 anyone = true; break;
             }
         }
@@ -806,7 +814,7 @@ final class DungeonManager implements Listener {
             if (participants.stream().anyMatch(id -> Bukkit.getPlayer(id) == null)) pauseRun(now);
             else if (participants.stream().anyMatch(id -> {
                 Player player = Bukkit.getPlayer(id);
-                return player != null && player.isOnline() && !player.isDead();
+                return player != null && player.isOnline() && !player.isDead() && !plugin.isDowned(player);
             })) {
                 if (outsideSince == 0) {
                     outsideSince = now;
@@ -867,6 +875,7 @@ final class DungeonManager implements Listener {
         });
         if (!mobs.isEmpty()) return;
         cleared = true;
+        if (plugin.trialRescue() != null) plugin.trialRescue().reviveTeam(rescueKey(), "room_cleared");
         int credited = rewardFloor();
         announce(ChatColor.GREEN + "第 " + floor + "/" + maxFloor() + " 层已通关！奖励已放进个人箱子（" + credited + " 人）。");
         if (floor == maxFloor()) finish(true, "cleared", maxFloor() + " 层完成！打开奖励箱领取，再按红色木按钮回地面。");
@@ -952,7 +961,7 @@ final class DungeonManager implements Listener {
                 player.sendMessage(ChatColor.RED + "地下城重连传送失败；请联系服主，试炼仍保留到宽限期结束。");
                 return;
             }
-            if (advancedWhileAway) player.setHealth(player.getMaxHealth());
+            if (advancedWhileAway && !plugin.isDowned(player)) player.setHealth(player.getMaxHealth());
             player.setNoDamageTicks(60);
             if (pausedAt > 0) resumeRun(System.currentTimeMillis());
             player.sendMessage(ChatColor.GREEN + "已恢复第 " + floor + "/" + maxFloor() + " 层试炼。"
@@ -976,7 +985,7 @@ final class DungeonManager implements Listener {
                             {-14,0},{14,0},{-9,13},{9,13},{-9,-13},{9,-13}}
                     : new int[][]{{-6,-5},{6,-5},{-6,5},{6,5},{0,7},{0,-7},
                             {-8,0},{8,0},{-10,-8},{10,-8},{-10,8},{10,8}};
-        if (activeWave.isEmpty()) activeWave = waveCatalog.wave(floor, theme.mobs());
+        if (activeWave.isEmpty()) activeWave = waveCatalog.wave(floor, theme.mobs(), difficulty != Difficulty.NORMAL);
         for (int i = 0; i < activeWave.size(); i++) {
             int[] spot = spots[i];
             Location at = center(floor).add(spot[0], 0, spot[1]);
@@ -1039,7 +1048,10 @@ final class DungeonManager implements Listener {
                     if (player != null && inFloor(player.getLocation(), floor)) bossBar.addPlayer(player);
                 }
             }
-            if (e instanceof Mob mob) { configured.equip(mob, 1); applyDifficulty(mob); }
+            if (e instanceof Mob mob) {
+                if (difficulty != Difficulty.NORMAL) configured.equip(mob, 1);
+                applyDifficulty(mob);
+            }
             mobs.add(e.getUniqueId());
             lastMobPosition.put(e.getUniqueId(), e.getLocation().clone());
             lastMobMovedAt.put(e.getUniqueId(), System.currentTimeMillis());
@@ -1108,7 +1120,7 @@ final class DungeonManager implements Listener {
 
     private boolean validParticipantTarget(LivingEntity target) {
         return target instanceof Player player && participants.contains(player.getUniqueId())
-                && player.isOnline() && !player.isDead() && inFloor(player.getLocation(), floor);
+                && player.isOnline() && !player.isDead() && !plugin.isDowned(player) && inFloor(player.getLocation(), floor);
     }
 
     private Player nearestParticipant(Location at) {
@@ -1451,6 +1463,7 @@ final class DungeonManager implements Listener {
 
     private void finish(boolean won, String reason, String message) {
         if (!active) return;
+        if (plugin.trialRescue() != null) plugin.trialRescue().releaseTeam(rescueKey(), rescueExit());
         plugin.getLogger().info("Dungeon finished: won=" + won + ", floor=" + floor
                 + ", reason=" + reason + ", remaining=" + mobs.size() + ", message=" + message);
         plugin.getConfig().set("dungeon-last-outcome", won ? "won" : "failed");
@@ -1472,6 +1485,20 @@ final class DungeonManager implements Listener {
         plugin.getConfig().set("dungeon-last-run", lastRun);
         plugin.getConfig().set(RUN_STATE, null);
         plugin.saveConfig();
+    }
+
+    private String rescueKey() { return "tower:" + runId; }
+    private boolean waveCleared() {
+        return cleared || spawned && mobs.stream().noneMatch(uuid -> {
+            Entity e = Bukkit.getEntity(uuid); return e instanceof LivingEntity l && e.isValid() && !l.isDead();
+        });
+    }
+    private Location rescueExit() { return new Location(world(), X + .5, LOBBY_Y + 1, Z - 17 + .5); }
+    TrialRescueManager.Team rescueTeam(UUID id) {
+        if (!active || !participants.contains(id)) return null;
+        return new TrialRescueManager.Team(rescueKey(), Set.copyOf(participants), at -> inFloor(at, floor), pausedAt > 0,
+                this::waveCleared,
+                () -> finish(false, "party_defeated", "全队已倒下，本次试炼失败并撤回入口；已赢得的奖励保留在个人箱。"), rescueExit());
     }
 
     private void announce(String message) {

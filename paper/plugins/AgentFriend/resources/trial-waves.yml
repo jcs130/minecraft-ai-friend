@@ -1,4 +1,5 @@
 schema-version: 1
+# Adventure/apocalypse only. Normal keeps the legacy themes and weapons.
 # Every entry is a native enemy. Twelve per floor is the hard limit.
 # Floors not listed keep their existing deep-wing encounters; floor 7 stays a rest stop.
 floors:

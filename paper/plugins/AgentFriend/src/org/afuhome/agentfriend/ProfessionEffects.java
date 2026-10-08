@@ -251,7 +251,7 @@ final class ProfessionEffects implements Listener {
     private List<Player> allies(Player p, double range, int count, boolean wounded, String name) {
         List<Player> targets = new ArrayList<>();
         for (Player target : p.getWorld().getPlayers()) {
-            if (target.getGameMode() != GameMode.SURVIVAL || target.isDead() || plugin.pvpParticipant(target)
+            if (target.getGameMode() != GameMode.SURVIVAL || target.isDead() || plugin.isDowned(target) || plugin.pvpParticipant(target)
                     || !name.isBlank() && !target.getName().equalsIgnoreCase(name) || !visible(p, target, range)) continue;
             if (wounded && target.getHealth() >= target.getMaxHealth() - .001) continue;
             targets.add(target);

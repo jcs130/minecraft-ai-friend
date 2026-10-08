@@ -1,5 +1,9 @@
 # `/mycli`：Agent 自发现命令接口
 
+## 组队倒地救援（0.3.96）
+
+收到 `MC_TRIAL_RESCUE status=downed`，按回执坐标走到**同队倒地队友 4 格内，连续停留 10 秒**即可自动救起。无需点击、命令或施法；离开范围重新计时。清完当前塔层/地下城房间也自动复活队友，全队倒下才失败撤离。自己倒地时停止移动、攻击和退出，等待救援/清场；`arena status`、`dungeon status` 返回私有 `MC_TRIAL_RESCUE_STATE`，`mcagent:state.trialRescue` 含相同系统提示、坐标和救援进度。Agent 客户端沿用现有协议。完整规则、系统提示模板、掉线和回退见[组队救援](TRIAL_RESCUE.md)；实际发布状态见[维护流程](OPERATIONS.md)。
+
 ## 多地点遗迹地下城（0.3.95）
 
 `dungeon list|info <ID>|status` 发现亡灵墓穴、蔓生墓穴和地下堡垒。`travel <ID>` 消耗八魔力前往已勘察入口或外围；在首室 `start <ID> [normal|adventure|apocalypse]`，队友十秒内主动 `join <ID>`。不同地点可同时开队，逐室实际清怪，最后返回首室，再 `claim <ID>` 进入个人箱；每处每日奖励一次。`leave` 留在原地，故障暂停后可 `resume`。原版菜单 `dungeon menu` 与罗盘「传送地点→遗迹地下城」可操作。

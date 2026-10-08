@@ -110,6 +110,7 @@ final class ProfessionManager implements Listener {
     }
     /** Every old native entry point uses this gate; legacy players retain their current qualification. */
     boolean basicAllowed(Player p, String id) {
+        if (plugin.isDowned(p)) { result(p, "cast", "downed", id); return false; }
         if (!SpellGuide.baseIds().contains(id) || !available()) return true;
         if (level(p, id) > 0) return true;
         result(p, "cast", "not_learned", id);
@@ -300,6 +301,7 @@ final class ProfessionManager implements Listener {
         return until == null ? 0 : Math.max(0, until.getAsLong() - System.currentTimeMillis());
     }
     String denial(Player p, ProfessionCatalog.Skill skill, boolean runtime) {
+        if (plugin.isDowned(p)) return "downed";
         if (!available()) return "data_unavailable";
         if (p.getGameMode() != GameMode.SURVIVAL || p.isDead()) return "survival_required";
         if (plugin.pvpParticipant(p)) return "pvp_active";
@@ -503,6 +505,7 @@ final class ProfessionManager implements Listener {
             case "not_prepared" -> "技能未准备；/mycli skills prepare " + id;
             case "equipment_required" -> "当前手持装备不符合技能要求。";
             case "cooldown" -> "技能冷却还需 " + ((remaining(p, id) + 999) / 1000) + " 秒。";
+            case "downed" -> "倒地中不能施法；队友靠近4格停留10秒，或清完本层/本室可复活。";
             case "survival_required" -> "新职业技能需要生存模式；观察者不能施放。";
             case "data_unavailable" -> "职业账本暂不可用；没有执行技能，请联系服主。";
             case "no_target", "protected_target" -> "没有有效目标，或目标受到保护；未消耗魔力。";

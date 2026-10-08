@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "status": "deployed",
+  "version": "0.3.96",
+  "releasedAt": "2026-10-08T21:37:45+08:00",
+  "sha256": "9D291B5B806BC73E6994C7AFA6F9FB6F931450A02D9A635557D3F14F8080A173",
+  "bytes": 861916,
+  "javaPid": 27436,
+  "snapshot": "20261008-213645",
+  "taskResult": 0,
+  "backupBeforeReplacement": true,
+  "normalTrials": "Pre-0.3.95 THEMES, original weapons and normal multipliers; enhanced waves only adventure/apocalypse",
+  "rescue": {
+    "minimumParty": 2,
+    "radius": 4,
+    "continuousSeconds": 10,
+    "roomClearRevives": true,
+    "allDownFails": true,
+    "reviveHealth": 10,
+    "vanillaProtectionTicks": 40,
+    "persistentSessionId": true,
+    "partialProgressAcrossRestart": false,
+    "singlePlayerVanillaDeath": true
+  },
+  "agentGuidance": [
+    "Private system chat and coordinates",
+    "MC_TRIAL_RESCUE_STATE via arena/dungeon status",
+    "Optional trialRescue instructions in schemaVersion=1 state payload",
+    "CLI descriptions and Goddess knowledge"
+  ],
+  "tests": [
+    {
+      "file": "pre-2026-10-08T13-31-47.043Z.json",
+      "checks": 28,
+      "sha256": "9D291B5B806BC73E6994C7AFA6F9FB6F931450A02D9A635557D3F14F8080A173",
+      "scope": "pre"
+    },
+    {
+      "file": "post-2026-10-08T13-35-57.528Z.json",
+      "checks": 23,
+      "sha256": "9D291B5B806BC73E6994C7AFA6F9FB6F931450A02D9A635557D3F14F8080A173",
+      "scope": "post"
+    },
+    {
+      "file": "live-2026-10-08T13-39-27.402Z.json",
+      "checks": 20,
+      "sha256": "9D291B5B806BC73E6994C7AFA6F9FB6F931450A02D9A635557D3F14F8080A173",
+      "scope": "production read-only discovery and native menus"
+    }
+  ],
+  "preservation": {
+    "oldStashPlayers": 8,
+    "oldOccupiedSlotsWithIdenticalMetadata": 152,
+    "all540SlotRangeCompared": true,
+    "regionCount": 49,
+    "legacyQualifications": 114,
+    "taskTemplates": 34,
+    "taskSites": 7,
+    "lands": 3,
+    "originalMaintenanceRosterReconnected": [
+      "Goddess",
+      "CortiEye",
+      "ag_NEKO",
+      "CortiLan"
+    ],
+    "originalCortiEyeAttached": true,
+    "difficultyNormalKeepInventoryAllDimensions": true,
+    "auraCurrentStartupVerified": true,
+    "temporaryWhitelistEntriesRemoved": true
+  },
+  "geyser": {
+    "version": "2.11.3-b1249",
+    "sha256": "39d8a45eca9f2413080b9597c67d1b2bf3bc9b62e8577f46eb83c9c8abfc4499",
+    "newBedrock": "26.52",
+    "stageChecks": 7,
+    "maintenanceFixtureChecks": 6
+  },
+  "agentClientChanges": false,
+  "stageStoppedAndRestored": true,
+  "limits": [
+    "Controlled native combat and proximity fixtures; not autonomous LLM rescue or long-term 16-Agent load.",
+    "Actual Xbox/Bedrock 26.52 login, visuals and controller behavior not verified.",
+    "Full Bukkit item semantics preserved; compressed NBT bytes may reorder across login."
+  ]
+}

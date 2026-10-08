@@ -52,7 +52,10 @@ final class DungeonWaveCatalog {
             waves=Map.copyOf(next);return "success";
         }catch(Exception e){plugin.getLogger().warning("Trial wave configuration retained: "+e.getMessage());return "invalid_configuration";}
     }
-    List<Enemy> wave(int floor,EntityType[] fallback){return waves.getOrDefault(floor,Arrays.stream(fallback).map(t->new Enemy(t,0,"")).toList());}
+    List<Enemy> wave(int floor,EntityType[] fallback,boolean enhanced){
+        List<Enemy> legacy=Arrays.stream(fallback).map(t->new Enemy(t,0,"")).toList();
+        return enhanced?waves.getOrDefault(floor,legacy):legacy;
+    }
     int configuredFloors(){return waves.size();}
     static List<Enemy> parse(List<?> entries){
         if(entries==null||entries.isEmpty())throw new IllegalArgumentException("empty_wave");List<Enemy> result=new ArrayList<>();

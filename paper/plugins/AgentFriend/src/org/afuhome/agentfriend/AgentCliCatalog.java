@@ -132,7 +132,7 @@ final class AgentCliCatalog {
         add(specs,"locate.nearest","team","write","/mycli locate nearest","追踪同世界最近队友","同世界有可见非旁观队友","BossBar 方向和距离");
         add(specs,"locate.off","team","write","/mycli locate off","停止追踪队友","在线玩家","停止结果");
         add(specs,"locate.tp","team","teleport","/mycli locate tp <玩家名|nearest>","安全传送到队友附近","队友在线可见；8 魔力、20 秒冷却；有安全落点","成功后 MC_TRAVEL 与绝对坐标；失败不扣费");
-        add(specs,"arena.status","adventure","read","/mycli arena status","查看本人参赛身份、全服试炼进度和入口/楼层绝对坐标","在线玩家","MC_DUNGEON status 的 participant/selfState 与全服状态分开");
+        add(specs,"arena.status","adventure","read","/mycli arena status","查看本人参赛身份、试炼进度、倒地队友坐标及救援进度","在线玩家；队友4格内停留10秒或本层清场可自动复活","MC_DUNGEON status 与 MC_TRIAL_RESCUE_STATE；downed 时等待救援，不自动退出");
         add(specs,"dungeon.list","adventure","read","/mycli dungeon list|info <ID>|status [ID]","发现不同地点的建筑地下城、真实房间坐标与本人进度","只读免费；info 指明首室深度和逐室路线","私有 MC_SITE_DUNGEON_LIST/ITEM/INFO/STATE JSON，schemaVersion=1");
         add(specs,"dungeon.travel","adventure","teleport","/mycli dungeon travel <ID>","前往已勘察的入口或外围；沿建筑道路深入首室","8魔力、基础传送资格；不能在试炼/PvP/另一地下城内使用","沿用 MC_TRAVEL 成功回执；抵达入口不计完成");
         add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","在真实建筑首室发起挑战，其他地点可同时开队","生存角色亲自到首室，未参加其他活动；10秒集结、每队最多8人","MC_SITE_DUNGEON_RESULT；逐室清怪、返回首室才登记奖励；无自动免费位移");
@@ -146,7 +146,7 @@ final class AgentCliCatalog {
         add(specs,"pvp.leave","adventure","write","/mycli pvp leave","退出排队或认输；还原原物品与位置","已排队或正在比赛","本人 MC_PVP 与 MC_PVP_RESULT");
         add(specs,"pvp.lobby","adventure","teleport","/mycli pvp lobby","前往天空竞技场观众平台","竞技场已建；比赛中不可用；6 魔力","本人 MC_PVP、MC_TRAVEL 与大厅绝对坐标");
         add(specs,"pvp.board","adventure","read","/mycli pvp board","查看积分榜","在线玩家","私人 MC_PVP_RANK 列表");
-        add(specs,"arena.start","adventure","write","/mycli arena start","与入口按钮附近队友一起开始试炼","在入口且符合组队/冷却条件","挑战开始或拒绝原因");
+        add(specs,"arena.start","adventure","write","/mycli arena start","与入口按钮附近队友一起开始试炼；组队全员倒地才失败撤离","在入口且符合组队/冷却条件；队友靠近4格停留10秒或清场可复活倒地者","挑战开始或拒绝原因；倒地回执 MC_TRIAL_RESCUE");
         add(specs,"arena.difficulty","adventure","write","/mycli arena difficulty [auto|normal|adventure|apocalypse]","按冒险者公会等级自动匹配，或手动选择下次本人发起试炼的难度；高等级打低难度奖励减少","在线玩家；多人由按钮发起者决定，奖励按各自等级结算","私有 MC_DUNGEON_DIFFICULTY 回执，含推荐档位与选择模式");
         add(specs,"arena.rest","adventure","teleport","/mycli arena rest","从远处直达深层驿站并继续挑战","满足驿站解锁与挑战条件；每名入场者 8 魔力","成功后 MC_TRAVEL 或拒绝原因");
         add(specs,"arena.next","adventure","write","/mycli arena next","查询自动下楼状态；在驿站可触发 10 秒后出发","挑战进行中；驿站需已清场","倒计时/状态");

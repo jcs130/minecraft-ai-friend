@@ -52,7 +52,7 @@ final class SiteDungeonManager implements Listener {
         static Mode parse(String id){for(var m:values())if(m.id.equals(id))return m;throw new IllegalArgumentException("unknown_difficulty");}
     }
     private static final class Run {
-        final Site site;final String id=UUID.randomUUID().toString();final Mode mode;
+        final Site site;String id=UUID.randomUUID().toString();final Mode mode;
         final Set<UUID> party=new LinkedHashSet<>();final Map<UUID,Integer> attendance=new HashMap<>();
         final Map<UUID,DungeonWaveCatalog.Enemy> mobs=new LinkedHashMap<>();final Set<Chunk> held=new HashSet<>();
         final Map<UUID,Long> hits=new HashMap<>();
@@ -84,6 +84,13 @@ final class SiteDungeonManager implements Listener {
     boolean hasActiveRuns(){return !runs.isEmpty()||!blockedCheckpoints.isEmpty();}
     List<String> ids(){return new ArrayList<>(sites.keySet());}
     boolean activityArea(Location at){return sites.values().stream().anyMatch(s->s.contains(at));}
+    private String rescueKey(Run r){return "site:"+r.id;}
+    TrialRescueManager.Team rescueTeam(UUID id){
+        Run r=runs.values().stream().filter(run->run.party.contains(id)).findFirst().orElse(null);if(r==null)return null;
+        return new TrialRescueManager.Team(rescueKey(r),Set.copyOf(r.party),r.site::contains,r.pausedAt>0||!r.fault.isEmpty(),
+                ()->r.phase.equals("fighting")&&r.mobs.isEmpty()&&!r.invalid,
+                ()->end(r,"party_defeated"),r.site.rooms.getFirst().center(Bukkit.getWorld(r.site.world)));
+    }
     private boolean playing(Player p){return p!=null&&p.isOnline()&&!p.isDead()&&p.getGameMode()==GameMode.SURVIVAL;}
     private List<Player> present(Run r){return r.party.stream().map(Bukkit::getPlayer).filter(this::playing).filter(p->r.site.contains(p.getLocation())).toList();}
     private void send(Player p,String prefix,Map<String,?> fields){Map<String,Object> data=new LinkedHashMap<>();data.put("schemaVersion",1);data.putAll(fields);p.sendMessage(prefix+" "+JSON.toJson(data));}
@@ -196,6 +203,7 @@ final class SiteDungeonManager implements Listener {
         result(p,"join",s.id,"success");
     }
     private void status(Player p,String id){
+        if(plugin.trialRescue()!=null)plugin.trialRescue().report(p);
         Run r=id.isEmpty()?own(p):runs.get(site(id).id);
         if(r==null){send(p,"MC_SITE_DUNGEON_STATE",Map.of("active",false,"participant",false,"pendingRewards",pendingSites(p.getUniqueId())));return;}
         Room target=r.stage>=r.site.rooms.size()?r.site.rooms.getFirst():r.room();
@@ -226,7 +234,8 @@ final class SiteDungeonManager implements Listener {
         try{
             long now=System.currentTimeMillis();if(now-r.started>TIMEOUT_MS){end(r,"time_limit");continue;}
             List<Player> present=present(r);
-            if(present.isEmpty()){
+            if(present.isEmpty() || present.stream().allMatch(plugin::isDowned)
+                    && r.party.stream().anyMatch(id->Bukkit.getPlayer(id)==null&&plugin.trialRescue()!=null&&!plugin.trialRescue().downed(id))){
                 if(r.pausedAt==0){r.pausedAt=now;clean(r);if(r.phase.equals("fighting"))r.phase="moving";persist();}
                 else if(now-r.pausedAt>REJOIN_MS)end(r,"return_grace_expired");
                 continue;
@@ -243,11 +252,12 @@ final class SiteDungeonManager implements Listener {
             if(r.invalid){end(r,"missing_or_unloaded_enemy_retry_required");continue;}
             for(UUID id:new ArrayList<>(r.mobs.keySet())){
                 Entity e=Bukkit.getEntity(id);if(!(e instanceof Mob mob)||!e.isValid()||mob.isDead()){r.invalid=true;continue;}
-                Player nearest=present.stream().filter(p->r.room().contains(p.getLocation())).min(Comparator.comparingDouble(p->p.getLocation().distanceSquared(mob.getLocation()))).orElse(null);
+                Player nearest=present.stream().filter(p->!plugin.isDowned(p)&&r.room().contains(p.getLocation())).min(Comparator.comparingDouble(p->p.getLocation().distanceSquared(mob.getLocation()))).orElse(null);
                 if(nearest!=null){mob.setTarget(nearest);if(!r.room().contains(mob.getLocation())){Location safe=safeSpots(r).stream().filter(l->l.distanceSquared(nearest.getLocation())>=9).findFirst().orElse(null);if(safe!=null)mob.teleport(safe);}}
             }
             if(r.invalid)continue;
             if(r.mobs.isEmpty()){
+                if(plugin.trialRescue()!=null)plugin.trialRescue().reviveTeam(rescueKey(r),"room_cleared");
                 for(Player p:present)if(r.room().contains(p.getLocation()))r.attendance.merge(p.getUniqueId(),1,Integer::sum);
                 clean(r);r.stage++;r.phase=r.stage==r.site.rooms.size()?"returning":"moving";persist();
                 tell(r,"§a战斗室已清理；"+(r.phase.equals("returning")?"返回首室完成本次探索并登记奖励。":"步行前往下一室："+r.room().name+" "+r.room().x+","+r.room().y+","+r.room().z));
@@ -298,6 +308,7 @@ final class SiteDungeonManager implements Listener {
     private void end(Run r,String reason){
         Object before=plugin.getConfig().get(ROOT+".cooldowns."+r.site.id);runs.remove(r.site.id);plugin.getConfig().set(ROOT+".cooldowns."+r.site.id,System.currentTimeMillis());
         try{persist();}catch(RuntimeException e){runs.put(r.site.id,r);plugin.getConfig().set(ROOT+".cooldowns."+r.site.id,before);throw e;}
+        if(plugin.trialRescue()!=null)plugin.trialRescue().releaseTeam(rescueKey(r),r.site.rooms.getFirst().center(Bukkit.getWorld(r.site.world)));
         clean(r);tell(r,"§e地下城结束："+reason+"。已登记的奖励仍可 claim；没有登记的房间不发奖。");
     }
     private void atomic(Runnable change){
@@ -314,7 +325,7 @@ final class SiteDungeonManager implements Listener {
             plugin.getConfig().set(ROOT+".runs",null);
             for(Run r:runs.values()){
                 String path=ROOT+".runs."+r.site.id;Map<String,Object> saved=new LinkedHashMap<>();
-                saved.put("mode",r.mode.id);saved.put("definition",JSON.toJson(r.site));saved.put("stage",r.stage);saved.put("phase",r.phase);saved.put("fault",r.fault);saved.put("started",r.started);saved.put("pausedAt",r.pausedAt);saved.put("party",r.party.stream().map(UUID::toString).toList());
+                saved.put("id",r.id);saved.put("mode",r.mode.id);saved.put("definition",JSON.toJson(r.site));saved.put("stage",r.stage);saved.put("phase",r.phase);saved.put("fault",r.fault);saved.put("started",r.started);saved.put("pausedAt",r.pausedAt);saved.put("party",r.party.stream().map(UUID::toString).toList());
                 Map<String,Integer> attendance=new LinkedHashMap<>();r.attendance.forEach((id,count)->attendance.put(id.toString(),count));saved.put("attendance",attendance);plugin.getConfig().set(path,saved);
             }
         });
@@ -323,6 +334,7 @@ final class SiteDungeonManager implements Listener {
         var saved=plugin.getConfig().getConfigurationSection(ROOT+".runs");if(saved==null)return;
         for(String id:saved.getKeys(false))try{
             Site site=site(id);var c=saved.getConfigurationSection(id);Run r=new Run(site,Mode.parse(c.getString("mode","normal")));
+            r.id=c.getString("id",r.id);UUID.fromString(r.id);
             require(JSON.toJson(site).equals(c.getString("definition")),"definition_changed_checkpoint_preserved");
             r.stage=c.getInt("stage");require(r.stage>=0&&r.stage<=site.rooms.size(),"invalid_checkpoint");r.started=c.getLong("started");if(System.currentTimeMillis()-r.started>TIMEOUT_MS){plugin.getLogger().info("Site dungeon checkpoint expired: "+id);continue;}
             r.phase=r.stage==site.rooms.size()?"returning":"moving";r.fault=c.getString("fault","");r.pausedAt=c.getLong("pausedAt",System.currentTimeMillis());if(r.pausedAt==0)r.pausedAt=System.currentTimeMillis();
@@ -334,14 +346,14 @@ final class SiteDungeonManager implements Listener {
     private boolean owned(Entity e){return e!=null&&e.getScoreboardTags().contains(TAG);}
     private Run owner(Entity e){if(e==null)return null;Shot shot=shots.get(e.getUniqueId());if(shot!=null)return shot.run;if(!owned(e))return null;return runs.values().stream().filter(r->r.mobs.containsKey(e.getUniqueId())).findFirst().orElse(null);}
     private Entity actor(Entity e){if(e instanceof Projectile p){ProjectileSource source=p.getShooter();return source instanceof Entity a?a:null;}return e;}
-    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void target(EntityTargetLivingEntityEvent e){Run r=owner(e.getEntity());if(r!=null&&e.getTarget()!=null&&!(e.getTarget() instanceof Player p&&playing(p)&&r.party.contains(p.getUniqueId())&&r.room().contains(p.getLocation())))e.setCancelled(true);}
+    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void target(EntityTargetLivingEntityEvent e){Run r=owner(e.getEntity());if(r!=null&&e.getTarget()!=null&&!(e.getTarget() instanceof Player p&&playing(p)&&!plugin.isDowned(p)&&r.party.contains(p.getUniqueId())&&r.room().contains(p.getLocation())))e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void damage(EntityDamageByEntityEvent e){
         Run from=owner(e.getDamager());if(from==null)from=owner(actor(e.getDamager()));Run to=owner(e.getEntity());
-        if(from!=null){if(!(e.getEntity() instanceof Player p&&playing(p)&&from.party.contains(p.getUniqueId())&&from.room().contains(p.getLocation())))e.setCancelled(true);else{e.setDamage(e.getDamage()*from.mode.damage);from.hits.put(actor(e.getDamager()).getUniqueId(),System.currentTimeMillis());}}
+        if(from!=null){if(!(e.getEntity() instanceof Player p&&playing(p)&&!plugin.isDowned(p)&&from.party.contains(p.getUniqueId())&&from.room().contains(p.getLocation())))e.setCancelled(true);else{e.setDamage(e.getDamage()*from.mode.damage);from.hits.put(actor(e.getDamager()).getUniqueId(),System.currentTimeMillis());}}
         if(to!=null&&actor(e.getDamager()) instanceof Player p&&!to.party.contains(p.getUniqueId()))e.setCancelled(true);
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void launch(ProjectileLaunchEvent e){Run r=owner(actor(e.getEntity()));if(r==null)return;if(shots.size()>=128){e.setCancelled(true);return;}e.getEntity().addScoreboardTag(SHOT_TAG);shots.put(e.getEntity().getUniqueId(),new Shot(r,System.currentTimeMillis()+15_000));}
-    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void splash(PotionSplashEvent e){Run r=owner(e.getPotion());if(r==null)r=owner(actor(e.getPotion()));if(r!=null)for(LivingEntity l:e.getAffectedEntities())if(!(l instanceof Player p&&playing(p)&&r.party.contains(p.getUniqueId())&&r.room().contains(p.getLocation())))e.setIntensity(l,0);}
+    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void splash(PotionSplashEvent e){Run r=owner(e.getPotion());if(r==null)r=owner(actor(e.getPotion()));if(r!=null)for(LivingEntity l:e.getAffectedEntities())if(!(l instanceof Player p&&playing(p)&&!plugin.isDowned(p)&&r.party.contains(p.getUniqueId())&&r.room().contains(p.getLocation())))e.setIntensity(l,0);}
     @EventHandler public void death(EntityDeathEvent e){Run r=owner(e.getEntity());if(r!=null){r.mobs.remove(e.getEntity().getUniqueId());e.getDrops().clear();e.setDroppedExp(0);}}
     @EventHandler public void load(EntitiesLoadEvent e){for(Entity entity:e.getEntities())if((owned(entity)||entity.getScoreboardTags().contains(SHOT_TAG))&&owner(entity)==null)entity.remove();}
     @EventHandler public void rejoin(PlayerJoinEvent e){Run r=own(e.getPlayer());if(r!=null)e.getPlayer().sendMessage("§e地下城进度保留；dungeon status 查看当前室，5分钟内步行返回即可续打，不自动免费传送。");}

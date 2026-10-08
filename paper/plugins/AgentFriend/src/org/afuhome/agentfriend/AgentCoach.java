@@ -200,7 +200,7 @@ final class AgentCoach implements Listener {
     private void tick() {
         long now = System.currentTimeMillis();
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (!player.isOnline() || player.isDead() || !enabled(player)) continue;
+            if (!player.isOnline() || player.isDead() || plugin.isDowned(player) || !enabled(player)) continue;
             Session state = session(player);
             if (player.getPersistentDataContainer().has(pendingDeathKey, PersistentDataType.BYTE)) {
                 if (deaths(player, now) == 0) player.getPersistentDataContainer().remove(pendingDeathKey);

@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "status": "staged-not-deployed",
+  "status": "deployed",
   "version": "2.11.3",
   "build": 1249,
   "commit": "f66329d9d21b3c836edc014fbb9d8312fbe34285",
   "sha256": "39d8a45eca9f2413080b9597c67d1b2bf3bc9b62e8577f46eb83c9c8abfc4499",
   "bytes": 47170037,
   "sourceUrl": "https://download.geysermc.org/v2/projects/geyser/versions/2.11.3/builds/1249/downloads/spigot",
-  "productionBuild": 1247,
+  "productionBuild": 1249,
   "bedrockVersions": [
     "26.30",
     "26.31",
@@ -29,8 +29,7 @@
   "offlineMaintenanceFixtureChecks": 6,
   "stageStoppedCleanly": true,
   "deploymentPlanQueued": false,
-  "waitingFor": "Maintenance timing: a human player is online; no disconnect performed without the requested choice.",
-  "restartRequired": true,
+  "restartRequired": false,
   "agentClientChanges": false,
   "thirdPartyJarsCommitted": false,
   "backupCopies": [
@@ -39,5 +38,15 @@
   ],
   "limits": [
     "UDP Pong, runtime version and Java spawn are verified; actual Bedrock 26.52 phone/Xbox authentication and visuals require a real client."
-  ]
+  ],
+  "releasedAt": "2026-10-08T21:37:45+08:00",
+  "javaPid": 27436,
+  "snapshot": "20261008-213645",
+  "pairedAgentFriend": "0.3.96",
+  "taskResult": 0,
+  "backupBeforeReplacement": true,
+  "productionRuntimeVerified": true,
+  "productionLanAndUdpVerified": true,
+  "originalCortiEyeAttached": true,
+  "nekoSkinPreserved": true
 }

@@ -210,6 +210,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private UtilitySpells utilitySpells;
     private SpellMastery spellMastery;
     private ProfessionManager professions;
+    private TrialRescueManager trialRescue;
     private PlayerContracts playerContracts;
     private VillageStructureProtection villageStructureProtection;
     private VillageTrades villageTrades;
@@ -283,6 +284,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         dungeonGearAura = new DungeonGearAura(this);
         dungeonGearAura.start();
         villageTrades = new VillageTrades(this);
+        trialRescue = new TrialRescueManager(this);
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
         agentStatePublisher = new AgentStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
@@ -314,6 +316,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (agentCoach != null) agentCoach.stop();
         if (playerNameTags != null) playerNameTags.stop();
         if (dungeon != null) dungeon.shutdown();
+        if (trialRescue != null) trialRescue.shutdown();
         if (active) {
             lastRun = System.currentTimeMillis();
             getConfig().set("last-run", lastRun);
@@ -357,6 +360,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     TaskMarketManager taskMarket() { return taskMarket; }
     GuildManager guild() { return guild; }
     ProfessionManager professions() { return professions; }
+    TrialRescueManager trialRescue() { return trialRescue; }
+    boolean isDowned(Player p) { return trialRescue != null && trialRescue.downed(p); }
     PlayerContracts playerContracts() { return playerContracts; }
     PvpArenaManager pvp() { return pvpArena; }
     VillageWatchManager villageWatch() { return villageWatch; }
@@ -498,6 +503,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSpellPreCast(SpellCastEvent event) {
         if (!(event.getCaster() instanceof Player p)) return;
+        if (isDowned(p)) { event.setCancelled(true); return; }
         if (professions != null && professions.skill(event.getSpell().getInternalName()) != null) {
             // Also gates programmatic MagicSpells casts if an operator adds a wrapper with this ID.
             event.setCancelled(true);
@@ -964,6 +970,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return true;
         }
         if (agentCoach != null) agentCoach.mycliUsed(player);
+        if (trialRescue != null && trialRescue.blockCommand(player, args)) return true;
         if (args.length == 0) { help(player); return true; }
         if (args[0].equalsIgnoreCase("help")) {
             if (args.length == 1) help(player);
@@ -1112,6 +1119,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.GRAY + "生活法术由 MagicSpells 管冷却，战斗、探矿与探索法术由 AgentFriend 管冷却。");
     }
     private void cast(Player p, String raw) {
+        if (isDowned(p)) { p.sendMessage("§e倒地中，请等待队友靠近救援或清场复活。"); return; }
         if (p.getGameMode() == GameMode.SPECTATOR) { p.sendMessage(ChatColor.RED + "旁观者不能施法。"); return; }
         String id = raw.toLowerCase(Locale.ROOT);
         if (professions.skill(id.split("\\s+", 2)[0]) != null) { professions.cast(p, raw); return; }
@@ -1424,7 +1432,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         List<Player> wounded = new ArrayList<>();
         if (caster.getHealth() < caster.getMaxHealth()) wounded.add(caster);
         for (Entity entity : caster.getNearbyEntities(8.0, 8.0, 8.0)) {
-            if (entity instanceof Player player && !player.isDead()
+            if (entity instanceof Player player && !player.isDead() && !isDowned(player)
                     && player.getGameMode() != GameMode.SPECTATOR
                     && caster.getLocation().distanceSquared(player.getLocation()) <= 64.0
                     && player.getHealth() < player.getMaxHealth()) wounded.add(player);
