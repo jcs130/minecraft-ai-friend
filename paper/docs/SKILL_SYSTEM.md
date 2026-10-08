@@ -48,6 +48,8 @@
 
 ## 运营与后续迭代
 
+2026-10-08 的 [角色职业与传承技能设计](CHARACTER_SKILLS_DESIGN.md) 给出桐人剑士、其他职业职责，以及通过公会委托和特殊事件获得个人能力的方案，比较了 MagicSpells、AuraSkills、MMOCore、Fabled、BetonQuest 与 MythicMobs。该方案尚未实现，新职业和新剑技未在 0.3.91 发放；现有技能与学习状态继续按本页规则运行。
+
 本次先给八项 AgentFriend 原生法术加可验证的成长。下一批可评估治疗/支援的**有效治疗量**、公会任务授予的专精选择、不同地下城的技能搭配提示，以及装备刻印的多样化词条。每项都要先定义成功事件、增益上限、Boss 伤害边界、手柄入口、Agent 文本回执和基岩画面，再在隔离服完成真实协议测试。公会声望不能直接兑换无限伤害；付费或服主身份不能越过公共规则。
 
 参考官方设计说明：[Minecraft Dungeons 总览](https://www.minecraft.net/en-us/about-dungeons)、[开发者谈装备与神器搭配](https://www.minecraft.net/pt-br/article/dungeons-september-dev-blog)、[开发者谈数值上限和终局调整](https://www.minecraft.net/it-it/article/dungeons-dev-blog---adjusting-endgame)。这里只借鉴角色构筑与数值边界，不使用它的专有内容或资源。
