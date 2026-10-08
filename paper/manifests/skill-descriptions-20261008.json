@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "status": "applied",
+  "appliedAt": "2026-10-08T12:32:41.748Z",
+  "verifiedAt": "2026-10-08T12:34:23.788Z",
+  "pluginVersion": "0.3.95",
+  "updatedSkills": [
+    "sword_thrust",
+    "sword_parry",
+    "sword_arc",
+    "sword_step",
+    "sword_beam",
+    "twin_legacy",
+    "guardian_ward",
+    "guardian_oath",
+    "scout_mark",
+    "scout_watch",
+    "healer_mend",
+    "healer_cleanse",
+    "healer_beacon",
+    "mage_bolt",
+    "mage_frost",
+    "mage_flame"
+  ],
+  "descriptionCount": 16,
+  "skillsYamlSha256": "d3df335d6618ff24c7152bbd52003326f40f95dec8ba20f8a1245796bbc90191",
+  "agentFriendJarUnchanged": true,
+  "gameplayFieldsAndOtherContentFilesUnchanged": true,
+  "reloadCommand": "mycli admin professions reload",
+  "restartRequired": false,
+  "agentClientChanges": false,
+  "backup": {
+    "scope": "Four profession content files before description-only hot reload",
+    "verifiedCopies": [
+      "E",
+      "F"
+    ]
+  },
+  "verification": {
+    "isolatedYamlParsingAndCompleteSemanticComparison": true,
+    "actualPaperCatalogReload": true,
+    "nativeSkillInfoAll16": true,
+    "nativeLearningMenuRightClick": true,
+    "privateSpellGuideEntry": true,
+    "pointsNotSpentByQueries": true,
+    "checks": 36,
+    "qaWhitelistEntryRemoved": true,
+    "initialHoverAssumptionAndStandaloneRegistryAttemptRetained": true
+  },
+  "limits": [
+    "Description changes only; no new gameplay-effect test was required.",
+    "Java protocol and native menu verification; Bedrock/Xbox visual and controller acceptance still requires actual clients.",
+    "The static spell-guide mana line is the entry cost. Current-rank costs and all ranks are available through skills info and the learning menu."
+  ],
+  "privateEvidence": "E/F repairs/skill-descriptions-20261008"
+}

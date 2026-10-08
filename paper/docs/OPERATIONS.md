@@ -1,5 +1,10 @@
 # Paper 分支维护与发布
 
+## 2026-10-08 技能说明在线修订（0.3.95，配置热更新）
+
+2026-10-08T20:35:52+08:00 完成说明核对。16项职业技能简介已按现行等级表补齐伤害、人数、持续时间和魔力，尤其抚愈及高阶圣愈的群疗、减伤和短时怪物攻击护佑。逐级资格/点数/效果通过学习菜单右键及 `/mycli skills info <ID>` 查看，命格书重新打开刷新个人状态。 `skills.yml` 仅16个description字段变化，技能ID、效果、数值、解锁和点数价格保持；同版JAR未替换，服务器未重启。E/F `repairs/skill-descriptions-20261008/before` 的四份配置已逐字节核验；隔离SnakeYAML解析/完整语义比较通过，正式Paper目录热加载成功，普通客户端读取16项逐级详情、原图鉴及学习菜单右键、查询不耗点，共36项检查通过。首次把菜单悬停误当详情的失败和离线加载器缺少Paper注册表的尝试保留，随后按真实右键路径验证。基岩/Xbox真机视觉仍待验收。配置SHA256 `d3df335d6618ff24c7152bbd52003326f40f95dec8ba20f8a1245796bbc90191`，记录见[说明修订清单](../manifests/skill-descriptions-20261008.json)。回退仅还原该快照的skills.yml并执行`mycli admin professions reload`，保留玩家账本与世界。
+
+
 ## 2026-10-08 公共箱工具误拦修复与多地点地下城（0.3.95）
 
 2026-10-08 19:26:05 已正式发布 AgentFriend **0.3.95**（843719字节，SHA256 `D7D9D9FC75E1B2CEB91822C5890FC5AFC9D292120BEDE755909CB0673CE8A157`），Java PID **22124**。E/F `20261008-192507/.complete` 在替换前完整，正常任务结果0。修复拿斧头、锄头、铲子开公共箱被误判为修改领地的问题，十二组公共双箱可取放，私有木桶仍明确拒绝、非主人仍不能拆箱。试炼塔前六层增强远程女巫与精英怪；三处已生成的Dungeons and Taverns建筑开放逐室挑战、主动组队与实际返程领奖，配怪和房间可配置热更新。原Agent客户端未改；四个原在线服务账号已回连，原机CortiEye实际camera=online/attached=true。三维度普通/keepInventory=true、AuraSkills当前startup-verified通过。
