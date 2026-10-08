@@ -1,6 +1,7 @@
 'use strict'
+const { validateModToolAction } = require('./mod-tool.cjs')
 
-const ACTIONS = new Set(['tools', 'inspect', 'navigate', 'gather', 'dig', 'craft', 'select', 'place', 'block_inspect', 'block_verify', 'recipes', 'entity_inspect', 'entity_interact', 'use_block', 'use_item', 'eat', 'attack', 'menu_click', 'close_menu', 'maid', 'colony', 'spell', 'domum', 'collision', 'wait'])
+const ACTIONS = new Set(['tools', 'inspect', 'look', 'navigate', 'gather', 'dig', 'craft', 'select', 'place', 'block_inspect', 'block_verify', 'recipes', 'entity_inspect', 'entity_interact', 'use_block', 'use_item', 'eat', 'attack', 'menu_click', 'close_menu', 'maid', 'colony', 'spell', 'domum', 'collision', 'mod', 'wait'])
 const ID = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const position = p => p && ['x', 'y', 'z'].every(k => Number.isInteger(p[k]) && Math.abs(p[k]) <= 29999984)
@@ -31,6 +32,9 @@ function parsePlan (text) {
   })
   for (const action of plan.actions) {
     if (!action || !ACTIONS.has(action.type)) throw Error('PLAN_ACTION_INVALID')
+    if (action.type === 'mod') validateModToolAction(action)
+    if (action.type === 'look' && (!action.position || Object.keys(action.position).sort().join(',') !== 'x,y,z' ||
+        ['x', 'y', 'z'].some(key => !Number.isFinite(action.position[key]) || Math.abs(action.position[key]) > 29999984))) throw Error('PLAN_LOOK_POSITION_INVALID')
     if (['navigate', 'gather', 'dig', 'place', 'use_block', 'block_inspect', 'collision'].includes(action.type) && !position(action.position)) throw Error('PLAN_POSITION_INVALID')
     if (action.aimOffset !== undefined && (!['gather', 'dig', 'use_block', 'block_inspect', 'collision'].includes(action.type) || !Array.isArray(action.aimOffset) || action.aimOffset.length !== 3 || action.aimOffset.some(value => !Number.isFinite(value) || value < 0 || value > 1))) throw Error('PLAN_AIM_OFFSET_INVALID')
     if (action.type === 'collision' && (!ID.test(action.expectedBlockId || '') ||
@@ -79,7 +83,7 @@ function parsePlan (text) {
           (args.requestId !== undefined && (typeof args.requestId !== 'string' || !/^[A-Za-z0-9:_-]{1,64}$/.test(args.requestId)))) throw Error('PLAN_COLONY_RESOURCES_INVALID')
     }
     if (action.type === 'colony' && action.operation === 'placeHut' && (!position(action.args?.position) ||
-        !['builder', 'home', 'farmer', 'warehouse', 'blacksmith', 'cook', 'deliveryman'].includes(action.args?.hutType) ||
+        !['builder', 'home', 'farmer', 'warehouse', 'blacksmith', 'cook', 'deliveryman', 'university'].includes(action.args?.hutType) ||
         !Number.isInteger(action.args?.inventorySlot) || action.args.inventorySlot < 0 || action.args.inventorySlot > 35 ||
         typeof action.args?.expectedSnbt !== 'string' || !action.args.expectedSnbt)) throw Error('PLAN_COLONY_HUT_INVALID')
     if (action.type === 'spell' && !['list', 'explain', 'cast'].includes(action.operation)) throw Error('PLAN_SPELL_INVALID')

@@ -202,7 +202,7 @@ function attachColonyClient (bot, { timeoutMs = 4000 } = {}) {
     })
   }
   function placeHut ({ position, hutType, inventorySlot, expectedSnbt, requestId }) {
-    if (!validPosition(position) || !['builder', 'home', 'farmer', 'warehouse', 'blacksmith', 'cook', 'deliveryman'].includes(hutType) ||
+    if (!validPosition(position) || !['builder', 'home', 'farmer', 'warehouse', 'blacksmith', 'cook', 'deliveryman', 'university'].includes(hutType) ||
         !validInventoryItem(inventorySlot, expectedSnbt)) throw mutationError('INVALID_COLONY_HUT', requestId, 'place_hut', false)
     return ask('maw_agent:colony_action', { kind: 'place_hut', position, hutType, inventorySlot, expectedSnbt, requestId })
   }
@@ -216,8 +216,29 @@ function attachColonyClient (bot, { timeoutMs = 4000 } = {}) {
     })
   }
 
+  function management (args = {}) {
+    if (!validPosition(args.buildingPosition) || Object.keys(args).some(k => !['buildingPosition', 'requestId'].includes(k))) throw Error('INVALID_COLONY_MANAGEMENT')
+    return ask('maw_agent:colony_query', { ...args, kind: 'management' })
+  }
+  function research (args = {}) {
+    if (!validPosition(args.buildingPosition) || Object.keys(args).some(k => !['buildingPosition', 'offset', 'limit', 'requestId'].includes(k)) ||
+        (args.offset !== undefined && (!Number.isInteger(args.offset) || args.offset < 0 || args.offset > 10000)) ||
+        (args.limit !== undefined && (!Number.isInteger(args.limit) || args.limit < 1 || args.limit > 12))) throw Error('INVALID_COLONY_RESEARCH')
+    return ask('maw_agent:colony_query', { ...args, kind: 'research' })
+  }
+  function manage (kind, args, keys, valid) {
+    if (!args || !validPosition(args.buildingPosition) || Object.keys(args).some(k => !['buildingPosition', 'requestId', ...keys].includes(k)) || !valid(args)) throw mutationError('INVALID_COLONY_MANAGEMENT_ACTION', args?.requestId, kind, false)
+    return ask('maw_agent:colony_action', { ...args, kind })
+  }
+  const citizenId = a => Number.isSafeInteger(a.citizenId) && a.citizenId > 0
   return {
     events,
+    management,
+    research,
+    assignCitizen: args => manage('assign_citizen', args, ['moduleId', 'expectedModuleKey', 'citizenId', 'assign', 'expectedAssignedCitizenIds'], a => citizenId(a) && Number.isInteger(a.moduleId) && a.moduleId > 0 && typeof a.expectedModuleKey === 'string' && a.expectedModuleKey.length > 0 && typeof a.assign === 'boolean' && Array.isArray(a.expectedAssignedCitizenIds) && a.expectedAssignedCitizenIds.length <= 24 && a.expectedAssignedCitizenIds.every(id => Number.isSafeInteger(id) && id > 0)),
+    setHiringMode: args => manage('hiring_mode', args, ['moduleId', 'expectedModuleKey', 'mode', 'expectedMode'], a => Number.isInteger(a.moduleId) && a.moduleId > 0 && typeof a.expectedModuleKey === 'string' && a.expectedModuleKey.length > 0 && ['auto', 'manual', 'default', 'locked'].includes(a.mode) && ['auto', 'manual', 'default', 'locked'].includes(a.expectedMode)),
+    pauseCitizen: args => manage('pause_citizen', args, ['citizenId', 'paused', 'expectedPaused'], a => citizenId(a) && typeof a.paused === 'boolean' && typeof a.expectedPaused === 'boolean'),
+    startResearch: args => manage('start_research', args, ['researchId'], a => typeof a.researchId === 'string' && /^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(a.researchId)),
     status,
     capabilities,
     resources,

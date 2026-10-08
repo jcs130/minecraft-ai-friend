@@ -13,15 +13,32 @@ function fixture () {
   for (const row of modOperationCatalog().operations) {
     const [group, method] = row.id.split('.')
     clients[group] ||= {}
+    if (['create', 'curios'].includes(group)) { clients.mods ||= {}; clients.mods[group] = clients[group] }
     clients[group][method] = (...args) => {
       calls.push({ id: row.id, args })
       return Promise.resolve({ schemaVersion: 1, playerUuid: owner, ok: true, requestId: 'native-id', code: 'native', nested: { unchanged: 3 } })
     }
   }
+  clients.mods.world = { interact: clients.world.interact }
   const api = attachModCallClient(bot, clients)
   return { bot, calls, clients, api }
 }
+const setting = { position: pos, expectedBlockId: 'create:brass_funnel', behaviourIndex: 0,
+  expectedBehaviour: 'com.simibubi.create.foundation.blockEntity.behaviour.filtering.FilteringBehaviour',
+  expectedHeldSnbt: '', expectedHotbarSlot: 0 }
 const args = {
+  'world.interact': { position: pos, expectedBlockId: 'create:fluid_tank', expectedProperties: {}, expectedHeldSnbt: '', expectedHotbarSlot: 0 },
+  'colony.management': { buildingPosition: pos }, 'colony.research': { buildingPosition: pos },
+  'colony.assignCitizen': { buildingPosition: pos, moduleId: 2, expectedModuleKey: 'worker', citizenId: 3, assign: true, expectedAssignedCitizenIds: [] },
+  'colony.setHiringMode': { buildingPosition: pos, moduleId: 2, expectedModuleKey: 'worker', mode: 'manual', expectedMode: 'auto' },
+  'colony.pauseCitizen': { buildingPosition: pos, citizenId: 3, paused: true, expectedPaused: false },
+  'colony.startResearch': { buildingPosition: pos, researchId: 'minecolonies:civilian/stamina' },
+  'spell.configure': { slot: 1, name: '跳跃', glyphs: ['ars_nouveau:self', 'ars_nouveau:leap'] },
+  'spell.select': { slot: 1 },
+  'create.settings': { position: pos }, 'create.fluids': { position: pos },
+  'create.setValue': { ...setting, expectedRow: 0, expectedValue: 64, row: 1, value: 16 },
+  'create.setFilter': { ...setting, expectedFilterSnbt: '' },
+  'curios.page': { page: 0, expectedContainerId: 1, expectedStateId: 2 },
   'menu.click': { slot: 9 }, 'native.entity': { entityId: 7, expectedUuid: other },
   'native.recipes': { recipeType: 'create:milling', limit: 2 },
   'colony.resources': { buildingPosition: pos }, 'colony.found': { ...inventory, position: pos, name: '测试城镇' },
@@ -38,11 +55,11 @@ const args = {
   'domum.select': { selection: 'variant', groupId: 'domum_ornamentum:fpanel', variantIndex: 2, choiceSnbt: '{count:1}' },
   'collision.query': { position: pos, expectedBlockId: 'minecraft:stone', expectedProperties: {} }
 }
-test('all 30 declared operations dispatch to the exact native adapter with actual arguments', async () => {
+test('all 48 declared operations dispatch to the exact native adapter with actual arguments', async () => {
   const f = fixture()
   try {
     const list = f.api.operations()
-    assert.equal(list.operationCount, 30); assert.equal(list.remoteSupportVerified, false)
+    assert.equal(list.operationCount, 48); assert.equal(list.remoteSupportVerified, false)
     for (const row of list.operations) {
       const result = await f.api.call(row.id, args[row.id] || {})
       assert.equal(result.code, 'native'); assert.equal(f.calls.at(-1).id, row.id)
@@ -168,4 +185,16 @@ test('return values cannot mutate adapter caches and disconnect/detach removes n
   f.api.detach(); f.api.detach()
   await assert.rejects(f.api.call('menu.click', { slot: 9 }), { code: 'MOD_CALL_CONNECTION_CLOSED' })
   assert.equal(f.bot.listenerCount('spawn'), 0); assert.equal(f.bot.listenerCount('respawn'), 0)
+})
+
+test('array schemas reject sparse, overlong, duplicate citizen IDs and unknown glyph fields before dispatch', async () => {
+  const f = fixture()
+  try {
+    for (const data of [{ ...args['spell.configure'], glyphs: new Array(2) },
+      { ...args['spell.configure'], glyphs: ['ars_nouveau:self', 5] },
+      { ...args['spell.configure'], glyphs: Array(33).fill('ars_nouveau:self') },
+      { ...args['spell.configure'], glyphs: [] }]) await assert.rejects(f.api.call('spell.configure', data), e => e.knownNotApplied)
+    await assert.rejects(f.api.call('colony.assignCitizen', { ...args['colony.assignCitizen'], expectedAssignedCitizenIds: [2, 2] }), e => e.knownNotApplied)
+    assert.equal(f.calls.length, 0)
+  } finally { f.api.detach() }
 })

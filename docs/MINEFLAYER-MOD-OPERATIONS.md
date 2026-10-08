@@ -1,5 +1,7 @@
 # Mineflayer 模组操作接入
 
+2026-10-08：当前 NeoForge 1.21.1 生活服已发布原生模组操作扩展，见 [Agent 模组操作指南](MY-AGENT-WORLD-MOD-OPERATIONS.md)；下文保留早期研究背景，不能代替当前 SDK 目录和运行锁。
+
 适用：隔离的 My Agent World，Minecraft 1.21.1 / NeoForge 21.1.248。接口按本仓库 2026-10-05 的 `world/src/neoforge-handshake/` 源码编写。版本、模组或注册表变更后必须重新导出号表并验证；详细运行证据见 [MY-AGENT-WORLD-LAB.md](MY-AGENT-WORLD-LAB.md) 与 [普通 Agent 发展链验收](MY-AGENT-WORLD-AUTONOMOUS-LIFECYCLE.md)。本文不更改原 Paper 千灯纪的连接方式。
 
 2026-10-05 新增 `colony.capabilities()` 和 `placeHut()`。前者即使没有城镇也返回本人真实 `constructionOptions`，后者允许 `builder/home/farmer/warehouse/blacksmith/cook/deliveryman`，参数为 `position/hutType/inventorySlot/expectedSnbt/requestId`。真实住宅物品 ID 为 `minecolonies:blockhutcitizen`。查询共用每 10 tick 节流，连续手工测试至少间隔约 600 ms；不能把节流失败当作缺功能。完整蓝图、原生权限、工单与去重限制见发展链文档。

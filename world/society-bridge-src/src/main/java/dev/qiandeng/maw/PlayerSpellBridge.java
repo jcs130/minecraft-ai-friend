@@ -5,6 +5,8 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.hollingsworth.arsnouveau.api.mana.IManaCap;
+import com.hollingsworth.arsnouveau.api.event.SpellCastEvent;
+import com.hollingsworth.arsnouveau.api.event.SpellCostCalcEvent;
 import com.hollingsworth.arsnouveau.api.registry.SpellCasterRegistry;
 import com.hollingsworth.arsnouveau.api.spell.AbstractCaster;
 import com.hollingsworth.arsnouveau.api.spell.Spell;
@@ -19,6 +21,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 
@@ -35,12 +38,27 @@ import java.util.UUID;
 final class PlayerSpellBridge {
     private static final int MAX_PAYLOAD = 65536;
     private static final int MAX_RECEIPTS = 64;
-    private static final Set<String> QUERY_FIELDS = Set.of("schemaVersion", "kind", "requestId", "spellId");
+    private static final Set<String> QUERY_FIELDS = Set.of("schemaVersion", "kind", "requestId", "spellId", "offset", "limit");
     private static final Set<String> ACTION_FIELDS = Set.of("schemaVersion", "kind", "requestId", "spellId",
-            "expectedHeldSnbt", "expectedHotbarSlot");
+            "expectedHeldSnbt", "expectedHotbarSlot", "slot", "glyphs", "name");
     // Retain reconnect receipts during this process. They are not a persistent ledger.
     private static final Map<UUID, LinkedHashMap<String, Cached>> RECEIPTS = new LinkedHashMap<>();
     private record Cached(String fingerprint, String receipt) {}
+    private static final ThreadLocal<CastEvidence> ACTIVE_CAST = new ThreadLocal<>();
+    private static final class CastEvidence {
+        final ServerPlayer player;
+        SpellCastEvent attempt;
+        SpellCostCalcEvent.Post expenditure;
+        CastEvidence(ServerPlayer player) { this.player = player; }
+    }
+    private static void observeCast(SpellCastEvent event) {
+        var active = ACTIVE_CAST.get();
+        if (active != null && active.attempt == null && event.getEntity() == active.player) active.attempt = event;
+    }
+    private static void observeExpenditure(SpellCostCalcEvent.Post event) {
+        var active = ACTIVE_CAST.get();
+        if (active != null && active.attempt != null && event.context == active.attempt.context) active.expenditure = event;
+    }
 
     private record Query(String json) implements CustomPacketPayload {
         static final Type<Query> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("maw_agent", "spell_query"));
@@ -72,7 +90,11 @@ final class PlayerSpellBridge {
         buf.readBytes(bytes);
         return new String(bytes, StandardCharsets.UTF_8);
     }
-    static void register(IEventBus modBus) { modBus.addListener(PlayerSpellBridge::registerPayloads); }
+    static void register(IEventBus modBus) {
+        modBus.addListener(PlayerSpellBridge::registerPayloads);
+        NeoForge.EVENT_BUS.addListener(PlayerSpellBridge::observeCast);
+        NeoForge.EVENT_BUS.addListener(PlayerSpellBridge::observeExpenditure);
+    }
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
         var registrar = event.registrar("1").optional();
         registrar.playToClient(State.TYPE, State.CODEC, (payload, context) -> {});
@@ -156,12 +178,8 @@ final class PlayerSpellBridge {
         return result;
     }
     private static String fingerprint(JsonObject input) {
-        // Fixed-order, typed mutation fields: JSON field order does not change identity.
         JsonObject normalized = new JsonObject();
-        normalized.addProperty("kind", input.get("kind").getAsString());
-        normalized.addProperty("spellId", input.get("spellId").getAsString());
-        normalized.addProperty("expectedHeldSnbt", input.get("expectedHeldSnbt").getAsString());
-        normalized.addProperty("expectedHotbarSlot", input.get("expectedHotbarSlot").getAsInt());
+        input.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(e -> normalized.add(e.getKey(), e.getValue()));
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(normalized.toString().getBytes(StandardCharsets.UTF_8)));
@@ -192,7 +210,7 @@ final class PlayerSpellBridge {
             if (!input.get("schemaVersion").isJsonPrimitive() ||
                     !input.get("schemaVersion").getAsJsonPrimitive().isNumber() ||
                     input.get("schemaVersion").getAsDouble() != 1 ||
-                    (mutation ? !action.equals("cast") : !Set.of("list", "explain").contains(action))) {
+                    (mutation ? !(action.equals("cast") || ArsOperations.ACTIONS.contains(action)) : !(Set.of("list", "explain").contains(action) || ArsOperations.QUERIES.contains(action)))) {
                 send(player, failed(result, "unsupported_spell_action").toString()); return;
             }
             if (mutation) {
@@ -219,7 +237,10 @@ final class PlayerSpellBridge {
             result.add("state", observation(player));
             ItemStack held = player.getMainHandItem();
             AbstractCaster<?> caster = held.getItem() instanceof SpellBook ? SpellCasterRegistry.from(held) : null;
-            if (action.equals("list")) {
+            if (ArsOperations.QUERIES.contains(action) || ArsOperations.ACTIONS.contains(action)) {
+                ArsOperations.handle(player, input, result);
+                result.add("state", observation(player));
+            } else if (action.equals("list")) {
                 JsonArray spells = new JsonArray();
                 if (caster != null) {
                     int limit = Math.min(caster.getMaxSlots(), 32);
@@ -285,20 +306,33 @@ final class PlayerSpellBridge {
                                         float healthBefore = player.getHealth();
                                         result.addProperty("manaBefore", before);
                                         result.addProperty("healthBefore", healthBefore);
-                                        String nativeResult = caster.castSpell(player.level(), player, InteractionHand.MAIN_HAND,
-                                                null, spell).getResult().name();
+                                        var evidence = new CastEvidence(player);
+                                        String nativeResult;
+                                        ACTIVE_CAST.set(evidence);
+                                        try {
+                                            nativeResult = caster.castSpell(player.level(), player, InteractionHand.MAIN_HAND,
+                                                    null, spell).getResult().name();
+                                        } finally { ACTIVE_CAST.remove(); }
                                         double after = mana.getCurrentMana();
                                         boolean spent = before - after > 0.000001;
+                                        // Ars emits Post only in the actual SUCCESS -> expendMana path,
+                                        // including zero-cost casts. CONSUME alone is unconditional.
+                                        boolean confirmed = spent || evidence.expenditure != null;
+                                        boolean ambiguous = !confirmed && evidence.attempt != null && !evidence.attempt.isCanceled();
                                         result.addProperty("nativeInteraction", nativeResult);
                                         result.addProperty("manaAfter", after);
                                         result.addProperty("manaSpent", before - after);
                                         result.addProperty("healthAfter", player.getHealth());
                                         result.addProperty("healthChanged", player.getHealth() != healthBefore);
-                                        result.addProperty("castConfirmed", spent);
-                                        result.addProperty("ok", spent);
-                                        result.addProperty("code", spent ? "ars_cast_confirmed" : "ars_cast_not_confirmed");
-                                        // Native CONSUME is unconditional, including insufficient mana.
-                                        // A resource debit confirms casting, not arbitrary spell effects.
+                                        result.addProperty("castConfirmed", confirmed);
+                                        result.addProperty("nativeCastAttemptObserved", evidence.attempt != null);
+                                        result.addProperty("nativeCastCanceled", evidence.attempt != null && evidence.attempt.isCanceled());
+                                        result.add("nativeExpendedCost", evidence.expenditure == null ? JsonNull.INSTANCE : new com.google.gson.JsonPrimitive(Math.max(0, evidence.expenditure.currentCost)));
+                                        result.addProperty("castEvidence", evidence.expenditure != null ? "native_expenditure_event" : spent ? "native_mana_debit" : "none");
+                                        result.addProperty("ok", confirmed);
+                                        result.addProperty("outcomeKnown", !ambiguous);
+                                        result.addProperty("code", confirmed ? "ars_cast_confirmed" : ambiguous ? "ars_cast_outcome_unknown" : "ars_cast_not_confirmed");
+                                        // Confirmation is casting, not arbitrary target effects.
                                         result.add("state", observation(player));
                                         player.containerMenu.broadcastChanges();
                                     }

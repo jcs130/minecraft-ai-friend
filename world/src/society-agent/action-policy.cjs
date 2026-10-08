@@ -1,7 +1,9 @@
 'use strict'
+const { modToolIsReadOnly } = require('./mod-tool.cjs')
 // Classification is the installed action contract, never a model-provided
 // readOnly flag. Mutating methods remain conservative even before an ACK.
 function actionIsReadOnly (action) {
+  if (action?.type === 'mod') return modToolIsReadOnly(action)
   if (['tools', 'inspect', 'recipes', 'block_inspect', 'block_verify', 'entity_inspect', 'collision', 'wait'].includes(action?.type)) return true
   if (action?.type === 'domum') return ['state', 'choices'].includes(action.operation)
   if (action?.type === 'maid') return ['list', 'status', 'tasks'].includes(action.operation)

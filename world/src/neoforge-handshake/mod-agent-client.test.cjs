@@ -15,7 +15,7 @@ test('external frameworks attach ordinary distinct accounts without a model prov
   try {
     assert.equal(one.contract().playerUuid, uuidA); assert.equal(two.contract().playerUuid, uuidB)
     assert.equal(one.contract().allModsVerified, false); assert.equal(one.contract().publicAccessReady, false)
-    assert.equal(one.contract().directCallAvailable, true); assert.equal(one.contract().directOperationCount, 30)
+    assert.equal(one.contract().directCallAvailable, true); assert.equal(one.contract().directOperationCount, 48)
     assert.equal(a.writes.length, 0); assert.equal(b.writes.length, 0)
     const query = one.call('native.recipes', { recipeType: 'create:milling', limit: 1 })
     const id = JSON.parse(a.writes[0].body.data).requestId
@@ -27,7 +27,7 @@ test('external frameworks attach ordinary distinct accounts without a model prov
       schemaVersion: 1, kind: 'world_receipt', requestId: id, playerUuid: uuidA, query: 'recipes', ok: true, recipes: [] })) })
     assert.equal((await query).playerUuid, uuidA)
     const tools = one.tools('colony'); assert.match(tools.tool.parameters.operation, /resources/)
-    const contract = one.contract(); contract.channels.length = 0; assert.equal(one.contract().channels.length, 16)
+    const contract = one.contract(); contract.channels.length = 0; assert.equal(one.contract().channels.length, 19)
   } finally { one.detach(); two.detach() }
   assert.equal(a._client.listenerCount('custom_payload'), 0)
   assert.equal(a.listenerCount('end'), 0); assert.equal(one.contract().closed, true)

@@ -92,7 +92,7 @@ class PlayerColonyBridgeAudit(unittest.TestCase):
         self.assertEqual(hashlib.sha256(self.jar.read_bytes()).hexdigest(), PIN)
         rules = (SOURCE / "ColonyConstructionRules.java").read_text(encoding="utf-8")
         specs = re.findall(r'new Hut\("([^"]+)", "([^"]+)", "([^"]+)"\)', rules)
-        self.assertEqual({row[0] for row in specs}, {"townhall", "builder", "home", "farmer", "warehouse", "blacksmith", "cook", "deliveryman"})
+        self.assertEqual({row[0] for row in specs}, {"townhall", "builder", "home", "farmer", "warehouse", "blacksmith", "cook", "deliveryman", "university"})
         with zipfile.ZipFile(self.jar) as archive:
             for kind, item, path in specs:
                 with self.subTest(hut=kind):
@@ -152,7 +152,7 @@ public final class ColonyConstructionRulesTest {
             var result=ColonyConstructionRules.confirm(Set.of(2),List.of(actual),SITE,BUILDER);
             if (!result.code().equals("build_requested") || result.order()!=actual) throw new AssertionError("Missing native receipt");
         }
-        for (String invalid:List.of("townhall","minecolonies:blockhuthome","../fundamentals/home1.blueprint","HOME","home ","university",""))
+        for (String invalid:List.of("townhall","minecolonies:blockhuthome","../fundamentals/home1.blueprint","HOME","home ","enchanter",""))
             if(ColonyConstructionRules.hut(invalid)!=null) throw new AssertionError("Untrusted hut path/type admitted");
         if(ColonyConstructionRules.hut(null)!=null) throw new AssertionError("Null admitted");
         if(ColonyConstructionRules.hut("home")==null || ColonyConstructionRules.hut("builder")==null) throw new AssertionError("Missing real allowed hut");
@@ -171,7 +171,7 @@ public final class ColonyConstructionRulesTest {
     def test_actual_bridge_compiles_against_locked_native_api_and_uses_permission_inventory_blueprint_paths(self):
         with tempfile.TemporaryDirectory(prefix="colony-native-api-audit-") as temporary:
             self.run_java([str(self.java.with_name("javac.exe")), "-proc:none", "--release", "21", "-encoding", "UTF-8", "-cp", self.cp,
-                           "-d", temporary, str(SOURCE / "PlayerColonyBridge.java"), str(SOURCE / "ColonyConstructionRules.java"),
+                           "-d", temporary, str(SOURCE / "PlayerColonyBridge.java"), str(SOURCE / "ColonyManagement.java"), str(SOURCE / "ModRequest.java"), str(SOURCE / "ColonyConstructionRules.java"),
                            str(SOURCE / "ColonyActionReplay.java"), str(SOURCE / "ColonyResourcePage.java")])
             text = self.run_java([str(self.java.with_name("javap.exe")), "-classpath", temporary, "-p", "-c", "dev.qiandeng.maw.PlayerColonyBridge"])
             calls = re.findall(r"// (?:InterfaceMethod|Method) ([^\r\n]+)", text)
@@ -279,7 +279,7 @@ public final class ColonyCapabilitiesTest {
             file = Path(temporary) / "ColonyCapabilitiesTest.java"
             file.write_text(harness, encoding="utf-8")
             self.run_java([str(self.java.with_name("javac.exe")), "-proc:none", "--release", "21", "-encoding", "UTF-8", "-cp", self.cp,
-                           "-d", temporary, *(str(SOURCE / name) for name in ("PlayerColonyBridge.java", "ColonyConstructionRules.java", "ColonyActionReplay.java", "ColonyResourcePage.java")), str(file)])
+                           "-d", temporary, *(str(SOURCE / name) for name in ("PlayerColonyBridge.java", "ColonyManagement.java", "ModRequest.java", "ColonyConstructionRules.java", "ColonyActionReplay.java", "ColonyResourcePage.java")), str(file)])
             result = self.run_java([str(self.java), "-cp", temporary + os.pathsep + self.cp, "dev.qiandeng.maw.ColonyCapabilitiesTest"])
             self.assertIn("native response branch passed", result)
             bytecode = self.run_java([str(self.java.with_name("javap.exe")), "-classpath", temporary, "-p", "-c", "dev.qiandeng.maw.PlayerColonyBridge"])
@@ -369,7 +369,7 @@ public final class ColonyResourcePageTest {
         with tempfile.TemporaryDirectory(prefix="colony-resource-native-audit-") as temporary:
             self.run_java([str(self.java.with_name("javac.exe")), "-proc:none", "--release", "21", "-encoding", "UTF-8", "-cp", self.cp,
                            "-d", temporary, *(str(SOURCE / name) for name in (
-                               "PlayerColonyBridge.java", "ColonyConstructionRules.java", "ColonyActionReplay.java", "ColonyResourcePage.java"))])
+                               "PlayerColonyBridge.java", "ColonyManagement.java", "ModRequest.java", "ColonyConstructionRules.java", "ColonyActionReplay.java", "ColonyResourcePage.java"))])
             text = self.run_java([str(self.java.with_name("javap.exe")), "-classpath", temporary, "-p", "-c", "dev.qiandeng.maw.PlayerColonyBridge"])
             resource_fact = text.split("private static com.google.gson.JsonObject resourceFact(", 1)[1].split("\n  private static ", 1)[0]
             self.assertIn("BuildingBuilderResource.getItemStack:", resource_fact)
@@ -388,7 +388,7 @@ public final class ColonyResourcePageTest {
         with tempfile.TemporaryDirectory(prefix="colony-provider-stock-audit-") as temporary:
             self.run_java([str(self.java.with_name("javac.exe")), "-proc:none", "--release", "21", "-encoding", "UTF-8", "-cp", self.cp,
                            "-d", temporary, *(str(SOURCE / name) for name in (
-                               "PlayerColonyBridge.java", "ColonyConstructionRules.java", "ColonyActionReplay.java", "ColonyResourcePage.java"))])
+                               "PlayerColonyBridge.java", "ColonyManagement.java", "ModRequest.java", "ColonyConstructionRules.java", "ColonyActionReplay.java", "ColonyResourcePage.java"))])
             text = self.run_java([str(self.java.with_name("javap.exe")), "-classpath", temporary, "-p", "-c", "dev.qiandeng.maw.PlayerColonyBridge"])
             self.assertNotIn("getAllContent:", text, "a single rack's cached map excludes associated provider racks")
             provider = text.split("private static net.neoforged.neoforge.items.IItemHandler buildingProvider(", 1)[1].split("\n  private static ", 1)[0]

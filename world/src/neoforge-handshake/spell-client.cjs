@@ -5,6 +5,7 @@ const { EventEmitter } = require('node:events')
 const { TextDecoder } = require('node:util')
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const utf8 = new TextDecoder('utf-8', { fatal: true })
+const mutating = kind => ['cast', 'learn_glyph', 'configure', 'select'].includes(kind)
 const validUuid = value => typeof value === 'string' && UUID.test(value)
 
 // Uses this bot's connection; target body/player UUIDs are never sent.
@@ -57,10 +58,10 @@ function attachSpellClient (bot, { timeoutMs = 4000 } = {}) {
     state = null
     for (const [requestId, request] of pending) {
       clearTimeout(request.timer)
-      const error = new Error(`${request.kind === 'cast' ? 'SPELL_CAST_OUTCOME_UNKNOWN' : reason} ${requestId}`)
+      const error = new Error(`${mutating(request.kind) ? 'SPELL_CAST_OUTCOME_UNKNOWN' : reason} ${requestId}`)
       error.requestId = requestId
-      error.outcomeUnknown = request.kind === 'cast'
-      error.outcomeKnown = request.kind !== 'cast'
+      error.outcomeUnknown = mutating(request.kind)
+      error.outcomeKnown = !mutating(request.kind)
       error.retryAutomatically = false
       request.reject(error)
     }
@@ -78,15 +79,15 @@ function attachSpellClient (bot, { timeoutMs = 4000 } = {}) {
     if (!identity()) return Promise.reject(new Error('SPELL_ACTOR_UNAVAILABLE'))
     if (!/^[A-Za-z0-9:_-]{1,64}$/.test(requestId)) return Promise.reject(new Error('INVALID_SPELL_REQUEST_ID'))
     if (pending.has(requestId)) return Promise.reject(new Error('SPELL_REQUEST_ALREADY_PENDING'))
-    if (kind === 'cast' && issuedCasts.has(requestId)) return Promise.reject(new Error('SPELL_CAST_ALREADY_ISSUED'))
-    if (kind === 'cast') issuedCasts.add(requestId)
+    if (mutating(kind) && issuedCasts.has(requestId)) return Promise.reject(new Error('SPELL_CAST_ALREADY_ISSUED'))
+    if (mutating(kind)) issuedCasts.add(requestId)
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(requestId)
-        if (kind === 'cast') state = null
-        const error = new Error(`${kind === 'cast' ? 'SPELL_CAST_OUTCOME_UNKNOWN' : 'SPELL_QUERY_TIMEOUT'} ${requestId}`)
+        if (mutating(kind)) state = null
+        const error = new Error(`${mutating(kind) ? 'SPELL_CAST_OUTCOME_UNKNOWN' : 'SPELL_QUERY_TIMEOUT'} ${requestId}`)
         error.requestId = requestId
-        error.outcomeUnknown = kind === 'cast'
+        error.outcomeUnknown = mutating(kind)
         error.retryAutomatically = false
         reject(error)
       }, timeoutMs)
@@ -99,9 +100,9 @@ function attachSpellClient (bot, { timeoutMs = 4000 } = {}) {
       } catch (error) {
         clearTimeout(timer)
         pending.delete(requestId)
-        if (kind === 'cast') state = null
+        if (mutating(kind)) state = null
         error.requestId = requestId
-        error.outcomeUnknown = kind === 'cast'
+        error.outcomeUnknown = mutating(kind)
         error.retryAutomatically = false
         reject(error)
       }
@@ -126,8 +127,33 @@ function attachSpellClient (bot, { timeoutMs = 4000 } = {}) {
     }
     return ask('maw_agent:spell_action', 'cast', { spellId, expectedHeldSnbt, expectedHotbarSlot }, options.requestId)
   }
+  function heldAction (kind, fields = {}, options = {}) {
+    if (Object.keys(options).some(k => !['expectedHeldSnbt', 'expectedHotbarSlot', 'requestId'].includes(k))) throw new Error('UNSUPPORTED_SPELL_OPTION')
+    const expectedHeldSnbt = options.expectedHeldSnbt ?? state?.heldSnbt
+    const expectedHotbarSlot = options.expectedHotbarSlot ?? state?.selectedHotbarSlot
+    if (typeof expectedHeldSnbt !== 'string' || !Number.isInteger(expectedHotbarSlot) || expectedHotbarSlot < 0 || expectedHotbarSlot > 8) throw new Error('SPELL_STATE_UNAVAILABLE')
+    return ask('maw_agent:spell_action', kind, { ...fields, expectedHeldSnbt, expectedHotbarSlot }, options.requestId)
+  }
+  function glyphs (args = {}) {
+    const { offset = 0, limit = 12, requestId } = args
+    if (Object.keys(args).some(k => !['offset', 'limit', 'requestId'].includes(k)) || !Number.isInteger(offset) || offset < 0 || offset > 10000 || !Number.isInteger(limit) || limit < 1 || limit > 24) throw new Error('INVALID_GLYPH_QUERY')
+    return ask('maw_agent:spell_query', 'glyphs', { offset, limit }, requestId)
+  }
+  function configure (args) {
+    const { slot, glyphs, name, ...options } = args
+    if (!Number.isInteger(slot) || slot < 0 || slot > 99 || typeof name !== 'string' || name.length > 64 || !Array.isArray(glyphs) || !glyphs.length || glyphs.length > 32 || glyphs.some(g => typeof g !== 'string' || !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(g))) throw new Error('INVALID_SPELL_RECIPE')
+    return heldAction('configure', { slot, glyphs, name }, options)
+  }
+  function select (slot, options = {}) {
+    if (!Number.isInteger(slot) || slot < 0 || slot > 99) throw new Error('INVALID_SPELL_SLOT')
+    return heldAction('select', { slot }, options)
+  }
   return {
     events,
+    glyphs,
+    learnGlyph: options => heldAction('learn_glyph', {}, options),
+    configure,
+    select,
     current: () => !closed && state?.playerUuid?.toLowerCase() === identity() ? structuredClone(state) : null,
     list: () => ask('maw_agent:spell_query', 'list'),
     explain,

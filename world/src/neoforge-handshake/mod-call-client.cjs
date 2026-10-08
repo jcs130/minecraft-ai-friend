@@ -4,6 +4,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const namespace = { type: 'string', pattern: '^[a-z0-9_.-]+:[a-z0-9_./-]+$', maxLength: 256 }
 const uuid = { type: 'string', pattern: UUID.source }
 const requestId = { type: 'string', pattern: '^[A-Za-z0-9:_-]{1,64}$' }
+const aimOffset = { type: 'array', items: { type: 'number', minimum: 0, maximum: 1 }, minItems: 3, maxItems: 3 }
 const integer = (minimum, maximum) => ({ type: 'integer', minimum, maximum })
 const position = { type: 'object', required: ['x', 'y', 'z'], additionalProperties: false,
   properties: Object.fromEntries(['x', 'y', 'z'].map(k => [k, integer(-2147483648, 2147483647)])) }
@@ -21,6 +22,54 @@ const domumSelection = { ...object({ selection: { type: 'string', enum: ['group'
 // Explicit bindings, not dynamic property traversal or a remote eval endpoint.
 // These are the actual low-level APIs. Maw's body-plan descriptors are separate.
 const definitions = [
+  ['world.interact', false, '本人实际主手右键近处可见方块，调用原生 useItemOn；组件/方块状态 CAS，接受交互后仍须观察效果。',
+    object({ position, aimOffset, expectedBlockId: namespace, expectedProperties: { type: 'object', properties: {}, additionalProperties: { type: 'string', maxLength: 256 } },
+      expectedHeldSnbt: { type: 'string', maxLength: 60000 }, expectedHotbarSlot: integer(0, 8), requestId },
+      ['position', 'expectedBlockId', 'expectedProperties', 'expectedHeldSnbt', 'expectedHotbarSlot']), (c, a) => c.mods.world.interact(a)],
+  ['colony.management', true, '在小屋旁查询实际岗位/住房模块、居民及 CAS；需本城镇成员。',
+    object({ buildingPosition: position, requestId }, ['buildingPosition']), (c, a) => c.colony.management(a)],
+  ['colony.assignCitizen', false, '按模块完整居民列表 CAS 原生雇用/解雇或安排住房；跨建筑先解除原岗位。',
+    object({ buildingPosition: position, moduleId: integer(1, 65535), expectedModuleKey: { type: 'string', minLength: 1, maxLength: 256 }, citizenId: integer(1, 2147483647), assign: { type: 'boolean' },
+      expectedAssignedCitizenIds: { type: 'array', items: integer(1, 2147483647), maxItems: 24, uniqueItems: true }, requestId },
+    ['buildingPosition', 'moduleId', 'expectedModuleKey', 'citizenId', 'assign', 'expectedAssignedCitizenIds']), (c, a) => c.colony.assignCitizen(a)],
+  ['colony.setHiringMode', false, '设置原生 default/auto/manual/locked 招聘模式；旧模式 CAS 与 MANAGE_HUTS 权限。',
+    object({ buildingPosition: position, moduleId: integer(1, 65535), expectedModuleKey: { type: 'string', minLength: 1, maxLength: 256 }, mode: { type: 'string', enum: ['default', 'auto', 'manual', 'locked'] },
+      expectedMode: { type: 'string', enum: ['default', 'auto', 'manual', 'locked'] }, requestId }, ['buildingPosition', 'moduleId', 'expectedModuleKey', 'mode', 'expectedMode']), (c, a) => c.colony.setHiringMode(a)],
+  ['colony.pauseCitizen', false, '按居民原暂停状态 CAS 暂停/恢复工作。',
+    object({ buildingPosition: position, citizenId: integer(1, 2147483647), paused: { type: 'boolean' }, expectedPaused: { type: 'boolean' }, requestId },
+      ['buildingPosition', 'citizenId', 'paused', 'expectedPaused']), (c, a) => c.colony.pauseCitizen(a)],
+  ['colony.research', true, '大学旁分页查询原生研究、前置、实际成本与本人/大学资源是否足够。',
+    object({ buildingPosition: position, offset: integer(0, 10000), limit: integer(1, 12), requestId }, ['buildingPosition']), (c, a) => c.colony.research(a)],
+  ['colony.startResearch', false, '通过原生大学逻辑开始研究，核对前置并实际扣除材料；不跳过时间。',
+    object({ buildingPosition: position, researchId: namespace, requestId }, ['buildingPosition', 'researchId']), (c, a) => c.colony.startResearch(a)],
+  ['spell.glyphs', true, '分页发现 Ars 符文、本人是否已学、配置是否启用及等级。',
+    object({ offset: integer(0, 10000), limit: integer(1, 24), requestId }), (c, a) => c.spell.glyphs(a)],
+  ['spell.learnGlyph', false, '右键学习本人手中真实符文；原生消耗一件并同步已学和魔力上限。',
+    object({ expectedHeldSnbt: snbt, expectedHotbarSlot: integer(0, 8), requestId }), (c, a) => c.spell.learnGlyph(a)],
+  ['spell.configure', false, '配置手中真实法术书的槽位；检查已学/启用符文、书等级、长度与原生组合规则。',
+    object({ slot: integer(0, 99), name: { type: 'string', maxLength: 64 }, glyphs: { type: 'array', items: namespace, minItems: 1, maxItems: 32 },
+      expectedHeldSnbt: snbt, expectedHotbarSlot: integer(0, 8), requestId }, ['slot', 'name', 'glyphs']), (c, a) => c.spell.configure(a)],
+  ['spell.select', false, '按手中书完整 SNBT CAS 选择一个已配置的实际槽位。',
+    object({ slot: integer(0, 99), expectedHeldSnbt: snbt, expectedHotbarSlot: integer(0, 8), requestId }, ['slot']), (c, a) => { const { slot, ...options } = a; return c.spell.select(slot, options) }],
+  ['create.settings', true, '查询本人近处可见机械原生数值/过滤设置、可编辑条件及 CAS。',
+    object({ position, aimOffset, requestId }, ['position']), (c, a) => c.mods.create.settings(a)],
+  ['create.fluids', true, '读取近处可见机器当前面的真实流体罐；装卸仍用真实容器和原生方块交互。',
+    object({ position, aimOffset, requestId }, ['position']), (c, a) => c.mods.create.fluids(a)],
+  ['create.setValue', false, '修改原生机械面板数值；方块、行为、旧值及手中物品 CAS，保留扳手/权限要求。',
+    object({ position, aimOffset, expectedBlockId: namespace, behaviourIndex: integer(0, 65535), expectedBehaviour: { type: 'string', maxLength: 256 },
+      expectedRow: integer(0, 65535), expectedValue: integer(-1000000, 1000000), row: integer(0, 65535), value: integer(0, 1000000),
+      expectedHeldSnbt: { type: 'string', maxLength: 60000 }, expectedHotbarSlot: integer(0, 8), requestId },
+      ['position', 'expectedBlockId', 'behaviourIndex', 'expectedBehaviour', 'expectedRow', 'expectedValue', 'row', 'value', 'expectedHeldSnbt', 'expectedHotbarSlot']), (c, a) => c.mods.create.setValue(a)],
+  ['create.setFilter', false, '用实际手持物原生设置/清除过滤器；实际 FilterItem 会正常消耗/退还。',
+    object({ position, aimOffset, expectedBlockId: namespace, behaviourIndex: integer(0, 65535), expectedBehaviour: { type: 'string', maxLength: 256 },
+      expectedFilterSnbt: { type: 'string', maxLength: 60000 }, expectedHeldSnbt: { type: 'string', maxLength: 60000 }, expectedHotbarSlot: integer(0, 8), requestId },
+      ['position', 'expectedBlockId', 'behaviourIndex', 'expectedBehaviour', 'expectedFilterSnbt', 'expectedHeldSnbt', 'expectedHotbarSlot']), (c, a) => c.mods.create.setFilter(a)],
+  ['curios.state', true, '查询本人真实饰品槽、完整组件和原生菜单槽位映射。', object(), c => c.mods.curios.state()],
+  ['curios.open', false, '打开本人原生饰品菜单；使用 menu.click 取放，原装备/诅咒/有效槽规则保留。',
+    object({ requestId }), (c, a) => c.mods.curios.open(a)],
+  ['curios.page', false, '切换当前本人饰品菜单页；容器/状态 CAS 且游标必须为空。',
+    object({ page: integer(0, 255), expectedContainerId: integer(0, 255), expectedStateId: integer(0, 32767), requestId },
+      ['page', 'expectedContainerId', 'expectedStateId']), (c, a) => c.mods.curios.page(a)],
   ['menu.current', true, '本人当前原生菜单缓存；未收到或失效时返回 null。', object(), c => c.menu.current()],
   ['menu.click', false, '原生 PICKUP，0 左键整堆、1 右键逐个；使用当前完整槽位/游标 CAS。',
     object({ slot: integer(0, 200), button: { ...integer(0, 1), default: 0 } }, ['slot']), (c, a) => c.menu.click(a.slot, a.button ?? 0)],
@@ -37,7 +86,7 @@ const definitions = [
     object({ ...inventory, position, name: { type: 'string', minLength: 1, maxLength: 64 } }, ['position', 'name', 'inventorySlot', 'expectedSnbt']), (c, a) => c.colony.found(a)],
   ['colony.placeBuilder', false, '消耗本人建筑工 hut 物品，登记原生建筑。', hut, (c, a) => c.colony.placeBuilder(a)],
   ['colony.placeHut', false, '放置已支持的真实 hut；不会直接建成建筑。',
-    object({ ...hut.properties, hutType: { type: 'string', enum: ['builder', 'home', 'farmer', 'warehouse', 'blacksmith', 'cook', 'deliveryman'] } },
+    object({ ...hut.properties, hutType: { type: 'string', enum: ['builder', 'home', 'farmer', 'warehouse', 'blacksmith', 'cook', 'deliveryman', 'university'] } },
       [...hut.required, 'hutType']), (c, a) => c.colony.placeHut(a)],
   ['colony.requestBuild', false, '在原生权限/距离规则下登记施工单。',
     object({ buildingPosition: position, builderPosition: position, requestId }, ['buildingPosition', 'builderPosition']), (c, a) => c.colony.requestBuild(a)],
@@ -99,6 +148,15 @@ function validate (value, schema, path = 'args') {
       if (!child || child === false) throw failure('MOD_CALL_ARGUMENT_UNSUPPORTED', { field: `${path}.${key}` })
       validate(item, child, `${path}.${key}`)
     }
+  } else if (schema.type === 'array') {
+    if (!Array.isArray(value) || value.length < (schema.minItems ?? 0) || value.length > (schema.maxItems ?? Infinity)) bad()
+    if (schema.uniqueItems && new Set(value.map(v => JSON.stringify(v))).size !== value.length) bad()
+    for (let i = 0; i < value.length; i++) {
+      if (!Object.hasOwn(value, i)) bad()
+      validate(value[i], schema.items, `${path}[${i}]`)
+    }
+  } else if (schema.type === 'number') {
+    if (!Number.isFinite(value) || value < schema.minimum || value > schema.maximum) bad()
   } else if (schema.type === 'integer') {
     if (!Number.isSafeInteger(value) || value < schema.minimum || value > schema.maximum) bad()
   } else if (schema.type === 'string') {
@@ -119,20 +177,26 @@ function modOperationCatalog (id) {
     limits: ['native_adapters_only_not_body_plans', 'server_preconditions_and_permissions_apply', 'no_automatic_retry'] }
 }
 
+function validateModArguments (id, args = {}) {
+  const definition = typeof id === 'string' ? byId.get(id) : null
+  if (!definition) throw failure('MOD_OPERATION_NOT_FOUND')
+  safeJson(args)
+  if (Buffer.byteLength(JSON.stringify(args), 'utf8') > 65536) throw failure('MOD_CALL_ARGUMENT_BUDGET_EXCEEDED')
+  validate(args, definition.parameters)
+  if (id === 'domum.select' && args.selection === 'variant' &&
+      (!Object.hasOwn(args, 'variantIndex') || !Object.hasOwn(args, 'choiceSnbt'))) throw failure('MOD_CALL_VARIANT_PARAMETERS_REQUIRED')
+  return true
+}
+
 function attachModCallClient (bot, clients, isClosed = () => false) {
   let closed = false, epoch = 0, inFlight = null, unknown = null
   const identity = () => typeof bot._client.uuid === 'string' && UUID.test(bot._client.uuid) ? bot._client.uuid.toLowerCase() : null
   const contextChanged = () => { epoch++ }
   bot.on('spawn', contextChanged); bot.on('respawn', contextChanged)
   async function call (id, args = {}) {
-    const definition = typeof id === 'string' ? byId.get(id) : null
-    if (!definition) throw failure('MOD_OPERATION_NOT_FOUND')
-    safeJson(args)
-    if (Buffer.byteLength(JSON.stringify(args), 'utf8') > 65536) throw failure('MOD_CALL_ARGUMENT_BUDGET_EXCEEDED')
-    validate(args, definition.parameters)
+    validateModArguments(id, args)
+    const definition = byId.get(id)
     const immutableArgs = structuredClone(args)
-    if (id === 'domum.select' && immutableArgs.selection === 'variant' &&
-        (!Object.hasOwn(immutableArgs, 'variantIndex') || !Object.hasOwn(immutableArgs, 'choiceSnbt'))) throw failure('MOD_CALL_VARIANT_PARAMETERS_REQUIRED')
     if (closed || isClosed()) throw failure('MOD_CALL_CONNECTION_CLOSED')
     const uuid = identity(), observedEpoch = epoch
     if (!uuid) throw failure('MOD_CALL_PLAYER_NOT_READY')
@@ -176,4 +240,4 @@ function attachModCallClient (bot, clients, isClosed = () => false) {
     detach () { if (closed) return; closed = true; bot.off('spawn', contextChanged); bot.off('respawn', contextChanged) } }
 }
 
-module.exports = { attachModCallClient, modOperationCatalog }
+module.exports = { attachModCallClient, modOperationCatalog, validateModArguments }

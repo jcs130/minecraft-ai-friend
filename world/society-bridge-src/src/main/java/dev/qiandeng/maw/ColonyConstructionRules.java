@@ -14,6 +14,7 @@ final class ColonyConstructionRules {
             new Hut("farmer", "minecolonies:blockhutfarmer", "agriculture/horticulture/farmer1.blueprint"),
             new Hut("warehouse", "minecolonies:blockhutwarehouse", "craftsmanship/storage/warehouse1.blueprint"),
             new Hut("blacksmith", "minecolonies:blockhutblacksmith", "craftsmanship/metallurgy/blacksmith1.blueprint"),
+            new Hut("university", "minecolonies:blockhutuniversity", "education/university1.blueprint"),
             new Hut("cook", "minecolonies:blockhutcook", "fundamentals/cook1.blueprint"),
             new Hut("deliveryman", "minecolonies:blockhutdeliveryman", "craftsmanship/storage/deliveryman1.blueprint"));
 

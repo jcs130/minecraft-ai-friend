@@ -2,6 +2,7 @@
 const descriptors = [
   ['tools', '查询可执行工具说明，未知模组能力不会伪装为已支持。', { operation: 'list|explain', id: 'explain时工具type' }, { type: 'tools', operation: 'explain', id: 'recipes' }],
   ['inspect', '读取本人完整原生库存、foodOptions、可见地表、附近真实实体、模组只读状态。槽0为合成预览。', {}, { type: 'inspect' }],
+  ['look', '转向16格内绝对目标点，可瞄准空中或真实目标；用于法术方向和避开机器交互。返回实际原生视线查询，不把转头当成施法或命中。', { position: '绝对有限数{x,y,z}，可含小数，如实体眼睛/方块表面' }, { type: 'look', position: { x: 0.5, y: 68, z: 0.5 } }],
   ['navigate', '走向16格内绝对脚下格坐标，不自动挖路或搭路；实际同目标水平格且高度差<=.125才reached，返回真实position/3D距离/高度差，停在下层不算到达。', { position: '绝对整数{x,y,z}，玩家脚下可站立格' }, { type: 'navigate', position: { x: 0, y: 64, z: 0 } }],
   ['gather', '挖一块并走近拾取；blockBroken和真实inventoryDelta.added共同确认。不自动重挖air；晚到掉落可在新inspect中核验，不能改称本次已经pickup。不同首个服务器ray hit返回blocking真实坐标供重新计划。', { position: '绝对整数', expectedId: '可选原生namespaced block ID', aimOffset: '可选[0..1]^3，surface建议偏移只是采样，必须再通过真实server ray' }, { type: 'gather', position: { x: 0, y: 65, z: 0 }, expectedId: 'minecraft:oak_log' }],
   ['dig', '只确认方块破坏，不代表已取得掉落；实际阻挡块只读返回，不自动改挖阻挡。', { position: '绝对整数', expectedId: '可选原生block ID', aimOffset: '可选[0..1]^3' }],
@@ -26,11 +27,13 @@ const descriptors = [
     { position: '绝对整数{x,y,z}', expectedBlockId: '真实原生namespaced ID', expectedProperties: '原生look.block.properties完整对象，包括所有朝向/半层等属性；无属性用{}', dimension: '可选真实namespace:path', aimOffset: '可选[0..1]^3，默认[.5,.5,.5]' }],
   ['maid', '东方女仆：只操作本人已拥有8格内伙伴；tasks列真实可用任务；follow/pickup/task均核验服务器maidState。',
     { operation: 'list|status|tasks|follow|pickup|task|bag', maidUuid: '除list外必需真实maid UUID', args: 'follow:{follow:bool};pickup:{pickup:bool};task:{taskId:tasks返回原生ID}' }, { type: 'maid', operation: 'follow', maidUuid: '从modStates.maid读取', args: { follow: true } }],
-  ['colony', 'MineColonies原玩法：capabilities读取固定原蓝图、hut类型、出生距离/权限条件；status读取真实建筑/工单/居民请求。placeHut放hut不等于完工，requestBuild注册新原生workOrder不等于建筑完成；需后续status确证built=true、目标level及constructionPending=false。交料accepted不等于居民任务完成，核验真实request状态；当前没有hire接口。',
-    { operation: 'status|capabilities|resources|found|placeBuilder|placeHut|requestBuild|deliver|stockResource', args: 'resources:{buildingPosition:绝对整数,offset:0..10000默认0,limit:1..24默认12}分页读取完整原生需求SNBT及nextOffset，需求模板不能冒充本人库存expectedSnbt；found:{position,name,inventorySlot,expectedSnbt};placeBuilder:{position,inventorySlot,expectedSnbt};placeHut:{position,hutType:builder|home|farmer|warehouse|blacksmith|cook|deliveryman,inventorySlot,expectedSnbt};requestBuild:{buildingPosition,builderPosition};deliver:{buildingPosition,token,inventorySlot,quantity,expectedSnbt};stockResource:{buildingPosition,inventorySlot,quantity,expectedSnbt}',
+  ['colony', 'MineColonies原玩法：capabilities读取固定原蓝图、hut类型、出生距离/权限条件；status读取真实建筑/工单/居民请求。placeHut放hut不等于完工，requestBuild注册新原生workOrder不等于建筑完成；需后续status确证built=true、目标level及constructionPending=false。交料accepted不等于居民任务完成，核验真实request状态；岗位分配、招聘模式与大学研究使用mod工具的colony.*接口。',
+    { operation: 'status|capabilities|resources|found|placeBuilder|placeHut|requestBuild|deliver|stockResource', args: 'resources:{buildingPosition:绝对整数,offset:0..10000默认0,limit:1..24默认12}分页读取完整原生需求SNBT及nextOffset，需求模板不能冒充本人库存expectedSnbt；found:{position,name,inventorySlot,expectedSnbt};placeBuilder:{position,inventorySlot,expectedSnbt};placeHut:{position,hutType:builder|home|farmer|warehouse|blacksmith|cook|deliveryman|university,inventorySlot,expectedSnbt};requestBuild:{buildingPosition,builderPosition};deliver:{buildingPosition,token,inventorySlot,quantity,expectedSnbt};stockResource:{buildingPosition,inventorySlot,quantity,expectedSnbt}',
       inventorySlot: '0..8为规范背包36..44，9..35为同编号普通库存；quantity1..64；expectedSnbt从本人真实库存原样取' }],
   ['spell', 'Ars：先持真实法术书，再list/explain实际槽位和glyph；cast消耗本人魔力。空timeline有codec；未知动态内容明确拒绝。施放确认不代表目标效果已核验。',
     { operation: 'list|explain|cast', id: 'explain/cast必需list返回ars_nouveau:slot_N' }],
+  ['mod', '查询与调用本服原生模组接口。list列能力，explain读完整JSON schema，call按参数执行；殖民地岗位/研究、学习符文/编书、机械设置/过滤/流体和饰品菜单都走同一玩家连接，保留权限、材料与未知结果暂停。',
+    { operation: 'list|explain|call', id: 'explain/call必需list返回operation ID，如colony.management；大小写保持原样', args: 'call参数必须符合explain返回的parameters；坐标绝对，组件原样回传，不能传actor/UUID替他人操作' }, { type: 'mod', operation: 'explain', id: 'spell.configure' }],
   ['wait', '有界等待，并响应维护/死亡取消；不自动重放旧动作。', { seconds: '0..30' }]
 ].map(([id, description, parameters, example]) => ({ id, description, parameters, ...(example ? { example } : {}) }))
 function agentToolCatalog (id) {

@@ -4,9 +4,11 @@
 
 本指南对应 `experiment/agent-society-1.21.1` 的 NeoForge 1.21.1 实验世界。普通 Agent 用自己的 Mineflayer 连接及客户端适配器读取原生身份和操作模组，不需要 OP、Numen 管理端或宿主 QwenPaw 账号。服务端所有玩家接口均从 `context.player()` 取得实际请求者，再向该玩家单播；不会按 CortiLan 或 MawExplorer 用户名选人。
 
-当前交付按用户最新要求验收“功能可发现、状态可读、操作可调用”；不要求接入框架或模型先自主经营。新增统一入口 `sdk.operations()/sdk.operations(id)/sdk.call(id,args)`，绑定 30 项已有原生操作；[完整调用说明](MY-AGENT-WORLD-NATIVE-CALL-API.md)记录参数发现、实际结果和失败恢复。尚缺的专用模组接口继续在能力清单标明。
+当前交付按用户最新要求验收“功能可发现、状态可读、操作可调用”；不要求接入框架或模型先自主经营。新增统一入口 `sdk.operations()/sdk.operations(id)/sdk.call(id,args)`，绑定 48 项原生操作；[完整调用说明](MY-AGENT-WORLD-NATIVE-CALL-API.md)记录参数发现、实际结果和失败恢复。尚缺的专用模组接口继续在能力清单标明。
 
 目前 LAN 入口是 `192.168.3.163:28977`，匹配 Java 模组客户端后端为 `192.168.3.163:28976`；服务器本机仍可使用 `127.0.0.1`。均未作为新服的公网入口。前门和后端使用离线登录；公网准入、账号归属认证、连接并发/速率限制及新服基岩兼容尚需另行完成。现有旧服公网地址不能当成本实验服地址，也不能直接将这个离线前门映射到公网。使用独立、未被占用的玩家名；每个 Agent 只控制自己的玩家连接。
+
+2026-10-08 操作扩展：`sdk.operations()` 可查询新增殖民地岗位/研究、Ars 学习编书、Create 设置/过滤/流体和 Curios 饰品原生接口；[实际操作步骤](MY-AGENT-WORLD-MOD-OPERATIONS.md)包含限制与回执。
 
 ## 连接与客户端适配器
 
@@ -35,7 +37,7 @@ bot.once('spawn', async () => {
 bot.once('end', () => sdk.detach())
 ```
 
-`sdk.operations()` 是 30 项原生适配器调用的目录，包含读写属性与 JSON Schema；`sdk.call` 返回实际原生结果或缓存副本，失效缓存为 `null`。它不会声明所有远端功能通过。`sdk.tools()` 另外返回现有 Maw Agent 执行器的 25 项工具说明，属于 `maw_agent_executor_descriptors`，没有 `execute(plan)` 方法。外部框架自行调度身体动作、死亡/重生取消、意图/回执持久化和世界后置条件验证。仅连接 Mineflayer、不接这些适配器，不能据代理图标正确操作完整模组包。
+`sdk.operations()` 是 48 项原生适配器调用的目录，包含读写属性与 JSON Schema；`sdk.call` 返回实际原生结果或缓存副本，失效缓存为 `null`。它不会声明所有远端功能通过。`sdk.tools()` 另外返回现有 Maw Agent 执行器的 27 项工具说明，属于 `maw_agent_executor_descriptors`，没有 `execute(plan)` 方法。外部框架自行调度身体动作、死亡/重生取消、意图/回执持久化和世界后置条件验证。仅连接 Mineflayer、不接这些适配器，不能据代理图标正确操作完整模组包。
 
 `sdk.contract().allModsVerified` 和 `publicAccessReady` 当前均为 `false`。不要将“客户端安装了适配器”写成“服务端全部玩法可用”。运行服务部署记录与实际验证见 [原生兼容维护](MY-AGENT-WORLD-NATIVE-COMPATIBILITY.md)、[自主发展验收](MY-AGENT-WORLD-AUTONOMOUS-LIFECYCLE.md)及[持久服务](MY-AGENT-WORLD-PERSISTENT-SERVER.md)。
 
@@ -55,13 +57,17 @@ bot.once('end', () => sdk.detach())
 | `sdk.collision.query/lookAtBlock` | 本人准星第一可见方块的真实服务器碰撞形状；绑定完整原生属性及维度。未知类明确不可用，目前未接入 Mineflayer 物理或寻路。 |
 | `sdk.colony.found/placeBuilder/placeHut/requestBuild` | 消耗玩家自己的原生物品、检查原权限、距离、原蓝图和位置，登记真实殖民地建筑/工单。放置 hut 和登记工单均不等于完工。 |
 | `sdk.colony.deliver/stockResource` | 按实际槽位、数量及本人库存完整 `expectedSnbt` 交料；随后核验实际请求、库存和工单。 |
-| `sdk.spell.list/explain/cast` | Ars 本人实际持书、配置槽位、glyph、魔力与施放确认。无持书或未配置是明确拒绝，不算魔法完整可玩。 |
+| `sdk.spell.list/explain/cast` | Ars 本人实际持书、配置槽位、glyph、魔力与施放确认。无持书或未配置是明确拒绝。 |
+| `sdk.spell.glyphs/learnGlyph/configure/select` | 查询原生符文、消耗真实符文学习、编辑真实书和选槽；保留启用/已学/书等级/组合规则。 |
+| `sdk.colony.management/assignCitizen/setHiringMode/pauseCitizen/research/startResearch` | 小屋旁按本人原权限管理岗位、招聘与大学研究；完整前置状态，实际扣料，不直接完成研究。 |
+| `sdk.create.settings/setValue/setFilter/fluids` | 可见机器原生设置、过滤与当前面流体；实际桶交互用 `sdk.world.interact` 并核验后置状态。 |
+| `sdk.curios.state/open/page` | 本人真实饰品栏和当前实际菜单槽映射；穿脱使用 `menu.click`，保留饰品有效性规则。 |
 
 普通物品操作还可使用 `native-crafting-client.cjs` 的 `craftNativeGrid` 和 `native-block-client.cjs` 的 `placeNativeHeld`；需传入本人真实菜单/方块查询接口。菜单暂支持 PICKUP 左右键，其他 GUI 按钮、滑条、文本输入和模组专属网络操作不能靠点击槽位自动覆盖。
 
 网关为每条玩家连接同步 `maw_agent:menu_state/world_state/colony_state/maid_state/spell_state/domum_state` 的 UTF-8 JSON；客户端动作分别走该账号的 `*_action` 或 `*_query`。每份私有回执须匹配自己的登录 UUID、requestId 和动作/查询类型，不能按玩家显示名或仅 requestId 接受。不得发到公屏、广播或旁观者账号。
 
-当前聚合客户端注册 16 个实际频道。菜单上限 64 KiB；Domum 状态/回执上限 16 KiB；世界/殖民地/女仆/法术的服务端 JSON 采用各自有界预算。超预算会明确报告缺口；不截断 SNBT 后当作完整物品。查看场景的 `mcviewer:native_packet` 是本连接原始包的独立二进制镜像，采用 MCNP + deflateRaw + Node v8 序列化，须用对应解码器和准确注册表 SHA。它不属于上述 JSON 协议，也不是通用 Python/HTTP API。
+当前聚合客户端注册 19 个实际频道。菜单及新增 `maw_agent:mod_*` 上限 64 KiB；Domum 状态/回执上限 16 KiB；世界/殖民地/女仆/法术的服务端 JSON 采用各自有界预算。超预算会明确报告缺口；不截断 SNBT 后当作完整物品。查看场景的 `mcviewer:native_packet` 是本连接原始包的独立二进制镜像，采用 MCNP + deflateRaw + Node v8 序列化，须用对应解码器和准确注册表 SHA。它不属于上述 JSON 协议，也不是通用 Python/HTTP API。
 
 ## 必须遵守的身份、槽位和坐标
 
@@ -99,6 +105,6 @@ Domum 的实际方块 ID 为 `domum_ornamentum:architectscutter`。先从本人�
 
 ## 开放前验收范围
 
-已打通的有限入口包括普通生存操作、原生菜单、部分农夫乐事料理/切割、Create 磨石及受限加工定义、配置好的 Ars 法术、本人女仆工作设置、MineColonies 部分建造/交料。Create 流体/运动结构/完整生产线、Ars 制书学 glyph 与全效果、女仆全部任务生命周期、殖民地全部岗位/生产物流与持续自然发展、复杂地下城攻略、全模组碰撞导航、完整客户端渲染和基岩新服入口仍需分别验证。
+已打通有限入口包括普通生存、原生菜单、部分农夫乐事料理/切割、Create 磨石/数值和过滤设置/排液器注水、Ars 符文学习/编书/选槽/施法、本人女仆工作设置、MineColonies 部分建造/交料及原生岗位/研究。具体参数和证据见 [模组操作指南](MY-AGENT-WORLD-MOD-OPERATIONS.md)。完整动力工厂/流体管网/运动结构、Ars 符文获取与全仪式效果、全部女仆任务、殖民地生产物流、特殊地下城机关、全模组碰撞寻路、完整客户端画面和新服基岩仍需分别适配或验收。
 
 接口验收按“可发现 → 可读完整原生事实 → 普通账号可调用 → 实际效果或明确拒绝可验证 → 死亡/断线后不重放”的链路逐项评估。接口场景可以使用标明的给料夹具，无需先证明自主采集或长期运营。独立账号与私有隔离、对外认证/容量、渲染和基岩沿各自范围验收，不用常驻 MawExplorer 一个身份替代全部结果。

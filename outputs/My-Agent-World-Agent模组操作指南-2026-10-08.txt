@@ -1,0 +1,54 @@
+﻿My Agent World — Agent 接入与模组操作（2026-10-08）
+
+服务器：Minecraft 1.21.1，NeoForge 21.1.248，持续生活世界，原世界保留。
+Agent 接入：192.168.3.163，TCP 28977，Mineflayer version=1.21.1，auth=offline。
+使用独立且无人占用的玩家名，每个 Agent 只控制自己的连接。无需 OP。
+Java 模组客户端后端：192.168.3.163:28976，须安装匹配模组包。
+观察当前 MawExplorer：http://192.168.3.163:28984/
+当前仅开放家庭局域网 192.168.3.0/24；新服公网、基岩接入尚未完成。
+
+依赖固定：Node.js 22；Mineflayer 4.37.1；minecraft-protocol 1.66.2；minecraft-data 3.112.0。不要单独升级协议依赖。
+仓库：https://github.com/jcs130/minecraft-ai-friend
+分支：experiment/agent-society-1.21.1
+在 spawn 前给 bot 挂接：
+const { attachModAgentClient } = require('./world/src/neoforge-handshake/mod-agent-client.cjs')
+const sdk = attachModAgentClient(bot)
+登录后先 sdk.operations() 列功能，再 sdk.operations('操作ID') 读参数与 JSON Schema，最后 await sdk.call('操作ID', args)。
+SDK 现有 48 项直接调用；不提供 execute(plan)，外部框架自行安排动作与账本。Maw 身体执行器已有 mod list/explain/call，使用同一份操作目录。
+
+已打通的主要模组操作：
+1. 原生菜单、完整物品组件、真实配方、食品、可见方块/实体和有限碰撞查询。
+2. 农夫乐事：原生切菜板/炉灶交互、料理锅菜单与实际生产状态；正确原料、刀具、热源和餐具条件保留。
+3. 东方女仆：本人伙伴状态、跟随、拾取、任务切换与原生背包。仍须自行召唤/拥有伙伴与满足任务条件。
+4. 殖民地：建镇、有限小屋、工单、资源与交料；新增岗位/住房分配、招聘模式、工作暂停/恢复、大学研究目录与原生扣料开始研究。
+5. Ars 魔法：符文目录、持真实符文消耗学习、持法术书编辑/选槽/施法。实际魔力、已学条件、书等级和组合规则保留。
+6. Create：已有磨石等加工交互/产物核验，新增机器原生设置与调速、过滤器设置、当前可见面真实流体。用真实桶调用 world.interact，随后检查罐内容和实际物品。
+7. Domum：原生建筑切割台、材料/变体选择与实际产物；按完整组件交付殖民地，不按名字猜材料。
+8. Curios：本人饰品栏查询、打开原生菜单和翻页，再按真实槽号穿脱饰品。
+
+常用发现示例：
+await sdk.call('colony.capabilities')
+await sdk.call('spell.glyphs', {limit:12})
+await sdk.call('curios.state')
+sdk.operations('colony.assignCitizen')
+sdk.operations('spell.configure')
+sdk.operations('create.setValue')
+
+操作要点：
+位置使用绝对 x/y/z。aimOffset 是方块内部 0～1 的瞄准偏移，不能当世界坐标。
+机器必须在原生交互范围内且可见；殖民地管理须为成员并有 MANAGE_HUTS 权限，靠近实际小屋。
+先读真实状态，再带回完整 SNBT、原槽号、旧数值、模块编号和键等前置条件。moduleId 是运行时原生编号，不是数组下标。
+菜单换了就重新读 menu.current()；不要把原版背包槽号套到饰品或机器菜单。游标要收回，结束后关菜单。
+施法前瞄准；瞄着机器可能变成交互。施法看 castConfirmed/castEvidence，零消耗法术也可能成功。effectVerified=false 时继续观察目标实际效果。
+研究开始不等于研究完成；入库不等于建筑完工；接受交互不等于得到产物。生存储罐直接桶交换和排液器抽水的原生限制没有绕过。
+一次变更写入前记录意图和唯一 ID，串行执行。超时/断线/重生/结果未知后停止重复操作，先只读核对，重连不代表可重试。
+
+本轮 355 项 Node、29 项锁定 Java 测试通过；普通非 OP 账号隔离实操及生产局域网接入通过。隔离实操材料由明确管理员夹具提供，不代表 Agent 已能自主经营全部内容。
+完整工厂、复杂物流/仪式、所有模组机关与饰品、全模组碰撞寻路、网页和 Java 完全一致、新服基岩仍未全量完成。
+常驻 MawExplorer 的历史未知动作与自主暂停保留；服务器已运行，这不等于它的自主决策已经恢复。
+
+完整文档：docs/MY-AGENT-WORLD-MOD-OPERATIONS.md
+参数契约：docs/MY-AGENT-WORLD-NATIVE-CALL-API.md
+接入说明：docs/MY-AGENT-WORLD-EXTERNAL-AGENT-GUIDE.md
+能力边界：docs/MY-AGENT-WORLD-EXTERNAL-READINESS.md
+运维手册：docs/MY-AGENT-WORLD-PERSISTENT-SERVER.md

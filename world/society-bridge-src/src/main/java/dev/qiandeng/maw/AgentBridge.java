@@ -63,6 +63,7 @@ public final class AgentBridge {
         PlayerColonyBridge.register(eventBus);
         PlayerSpellBridge.register(eventBus);
         PlayerMaidBridge.register(eventBus);
+        ModOperationsBridge.register(eventBus);
     }
 
     private static void register(RegisterCommandsEvent event) {

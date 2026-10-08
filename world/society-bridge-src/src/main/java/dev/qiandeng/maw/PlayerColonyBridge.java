@@ -223,8 +223,9 @@ final class PlayerColonyBridge {
         options.addProperty("scope", "fixed_original_level_one_huts");
         options.addProperty("structurePack", ColonyConstructionRules.PACK);
         options.addProperty("requestBuildSemantics", "native_next_level_subject_to_research_and_builder_rules");
-        options.addProperty("hireAvailable", false);
-        options.addProperty("workerConfigurationAvailable", false);
+        options.addProperty("hireAvailable", true);
+        options.addProperty("workerConfigurationAvailable", true);
+        options.addProperty("researchAvailable", true);
         options.addProperty("foodDelivery", "open_native_deliverable_requests_only");
         ServerConfiguration config = (ServerConfiguration) MineColonies.getConfig().getServer();
         JsonObject founding = new JsonObject();
@@ -293,6 +294,7 @@ final class PlayerColonyBridge {
             case "warehouse" -> ModBlocks.blockHutWareHouse;
             case "blacksmith" -> ModBlocks.blockHutBlacksmith;
             case "cook" -> ModBlocks.blockHutCook;
+            case "university" -> ModBlocks.blockHutUniversity;
             case "deliveryman" -> ModBlocks.blockHutDeliveryman;
             default -> null;
         };
@@ -401,7 +403,7 @@ final class PlayerColonyBridge {
             if (!requestId.matches("[A-Za-z0-9:_-]{1,64}")) return;
             String kind = query.get("kind").getAsString();
             if (query.get("schemaVersion").getAsInt() != 1
-                    || !(kind.equals("status") || kind.equals("capabilities") || kind.equals("resources"))) {
+                    || !(kind.equals("status") || kind.equals("capabilities") || kind.equals("resources") || ColonyManagement.QUERIES.contains(kind))) {
                 reject(player, requestId, "unsupported_query"); return;
             }
             int now = player.getServer().getTickCount();
@@ -409,6 +411,9 @@ final class PlayerColonyBridge {
             if (last != null && now - last < 10) { reject(player, requestId, "rate_limited"); return; }
             LAST_QUERY_TICK.put(player.getUUID(), now);
             IColony colony = playerColony(player);
+            if (ColonyManagement.QUERIES.contains(kind)) {
+                send(player, ColonyManagement.query(player, query)); return;
+            }
             if (kind.equals("resources")) {
                 handleResources(player, query, requestId, colony);
                 return;
@@ -487,7 +492,8 @@ final class PlayerColonyBridge {
                             workerModuleCount++;
                             if (workers.size() >= 4) continue;
                             JsonObject module = new JsonObject();
-                            module.addProperty("moduleId", moduleId);
+                            module.addProperty("moduleId", worker.getProducer().getRuntimeID());
+                            module.addProperty("moduleKey", worker.getProducer().key);
                             module.addProperty("capacity", worker.getModuleMax());
                             module.addProperty("full", worker.isFull());
                             module.addProperty("hiringMode", worker.getHiringMode().name().toLowerCase(java.util.Locale.ROOT));
@@ -768,6 +774,9 @@ final class PlayerColonyBridge {
                 return;
             }
             receiptReserved = true;
+            if (ColonyManagement.ACTIONS.contains(kind)) {
+                actionReply(player, ColonyManagement.action(player, input)); return;
+            }
             if (kind.equals("found") || kind.equals("place_builder") || kind.equals("place_hut") || kind.equals("request_build")) {
                 handleConstruction(player, input, requestId, kind);
                 return;

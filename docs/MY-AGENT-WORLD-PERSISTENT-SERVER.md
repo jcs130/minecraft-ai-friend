@@ -2,7 +2,7 @@
 
 2026-10-06：已按用户要求开放家庭 LAN，防火墙、冷备、持久配置与健康启动完成；同宿主 LAN IP 普通 Agent 登录/三项本人原生调用、网页与 SSE 已通过，另一台实体设备尚未实测。当前入口见下表和 [局域网部署](MY-AGENT-WORLD-LAN.md)。原 world-life 和 27 JAR 保留，主 Agent 的历史未知动作仍暂停。网络可达不代表全部模组、Java 完整画面或新服基岩已完成。
 
-更新：2026-10-06。本文说明新的 NeoForge 生存服与普通玩家 Agent，具体游玩验收记录由维护者在文末追加。端口、世界、角色与恢复规则以本文及当前运行配置为准；[研究记录](MY-AGENT-WORLD-LAB.md)中的 28978/28980/28983 等历史研究端口不能代替本文的常驻入口。最新普通 Agent 与殖民地发展链的证明、失败和缺口见 [发展链验收](MY-AGENT-WORLD-AUTONOMOUS-LIFECYCLE.md)。
+更新：2026-10-08。本文说明新的 NeoForge 生存服与普通玩家 Agent，具体游玩验收记录由维护者在文末追加。端口、世界、角色与恢复规则以本文及当前运行配置为准；[研究记录](MY-AGENT-WORLD-LAB.md)中的 28978/28980/28983 等历史研究端口不能代替本文的常驻入口。最新普通 Agent 与殖民地发展链的证明、失败和缺口见 [发展链验收](MY-AGENT-WORLD-AUTONOMOUS-LIFECYCLE.md)。
 
 ## 运行目录与入口
 
@@ -13,7 +13,7 @@
 | 旧实验世界 | `server\world-lab` | 保留，与新生活世界分开 |
 | 注册表研究副本 | `E:\QiandengJiSocietyLab\research\registry-server` | 保留其研究世界、号表和原始证据，不当作当前生活服 |
 | 常驻号表与网关缓存 | `gateway\permanent\registry`、`gateway\permanent\idmap.json`、`gateway\permanent\knowledge.json` | 从通过验证的研究产物复制，配置引用常驻目录，不依赖清理研究副本 |
-| 原生网页资产 | `assets\native-20261005-v13-colony-production` | 保留模组原始资源、冲突与完整性清单；当前区块号表SHA256为 `039bd785956b452e7788a8a3a351477536fedf082b6724aceac0a64c580b5712`；YSM 试换范围见 [模型记录](MY-AGENT-WORLD-YSM.md) |
+| 原生网页资产 | `assets\native-20261008-v14-mod-operations` | 保留模组原始资源、冲突与完整性清单；当前区块号表SHA256为 `039bd785956b452e7788a8a3a351477536fedf082b6724aceac0a64c580b5712`；YSM 试换范围见 [模型记录](MY-AGENT-WORLD-YSM.md) |
 | Java 服务端 | `192.168.3.163:28976` | 家庭 LAN 模组后端；真人 Java 客户端须匹配模组包并单独验证 |
 | Agent 协议网关 | `192.168.3.163:28977` | Mineflayer 玩家从这里登录，完成 NeoForge 兼容与原生数据转发 |
 | Agent 同连接网页 | `http://192.168.3.163:28984/` | 观察 MawExplorer 的真实行动与本人原生世界数据 |
@@ -382,3 +382,22 @@ SNBT 输入限定64KiB、16层、4096节点，保留原生数值类型和组件�
 该轮 inspect 实际收到同UUID、epoch1 的 `server_recipe_manager` 目录：共6286配方、44种类型，包含 FD cooking28/cutting105、Create milling55/mixing46/pressing8、TLM altar43 等；初小页返回原 `ars_creo:starbuncle_wheel` 配方，definitionAvailable=true。目录有 nextOffset、时间和epoch；未知语义的配方明确 definitionAvailable=false，不臆造流体、概率加工或社会玩法。实际Food默认组件读到腐肉 hunger600tick、概率0.8，SNBT patch缺省不再被当作无副作用。
 
 09:50:59实服健康 `healthy/heartbeatFresh=true / paused=false`，Java37296、gate36012、worker36004均ready且problem=null，本人原UUID不变、当前entityId81。实体流available、46槽本人规范库存、实际Ars100/100均收到。第348轮继续新模型任务，无autonomy暂停；账本762意图/762结果、零未结算动作。正在运行的任务尚未返回时session不作成功匹配声明。gate/worker本轮warning/error均0，Java累积warning342/error11如实保留，短时就绪不代表长期稳定性。
+
+
+## 原生模组操作发布（2026-10-08）
+
+现有 Mineflayer 入口增加到 48 项直接调用、27 项身体工具，SDK 共声明 19 个实际频道。新增殖民地岗位/招聘/暂停/大学研究，Ars 符文学习/编书/选槽，Create 原生数值面板/过滤/流体读取，Curios 原生饰品菜单和带完整前置条件的 world.interact。操作步骤、参数发现和边界见 [Agent 模组操作指南](MY-AGENT-WORLD-MOD-OPERATIONS.md)。沿用已有 Supervisor 的依赖、健康与子进程守护，没有另起无守护服务。
+
+隔离服普通非 OP 生存账号完成实际岗位更换、满员/过期状态拒绝、研究不足拒绝与真实扣料进入进行中、符文消耗学习、真实书编辑和原生施法、机器调速/过滤、排液器注水及饰品穿脱。真实减耗戒指让一次基础费用 5 的法术实际费用为 0，已用 Ars 原生 expenditure event 确认；没有用 SUCCESS 或固定魔力差伪造施法确认。管理员仅提供设备、材料、大学夹具与定位，模型调用 0，不算自主采集或长期经营验收。
+
+最终回归 355 项 Node、29 项锁定 Java API/构建测试通过，0 失败、0 跳过。93 条隔离测试独立原始回执及先前失败都留在仓库外 `research/mod-operations-20261008/`。原生目标效果仍需独立核验；完整工厂、仪式、物流和所有饰品未逐项通过。
+
+17:52 接受 `modops-20261008-main-shutdown` 后，确认三子服务存档退出 0、原 Supervisor 退出，再冷备 `E:\QiandengJiSocietyLab\backups\mod-operations-20261008`。没有重生成 `world-life`。更新的桥 SHA-256 为 `3abe0916341aaebbf9f44774c19a088233ce5599db873a2386ee48b118d9aa28`；锁文件、运行 JAR 与新资产来源记录相同，39767 个资产文件完整性通过，原 v13 资产保留。27 个模组 JAR 总数保持，仅替换自有桥。
+
+17:56 以新的 owned Supervisor 启动并用 `modops-20261008-main-resume` 恢复维护。runId `7688158f77b24c65b70536d5f4d5ca3e`；18:00 新鲜健康确认 Java 14112、Gate 30952、worker 21940 全部 ready、problem=null。普通非 OP `MawModQA1008` 从同宿主 LAN 地址实际登录，通过身体 mod dispatcher 发现 48 项，成功读取本人 colony.capabilities/spell.glyphs/curios.state，打开本人原生饰品菜单再关闭，23 个原始单播包无 UUID/协议错误。这个测试不代替另一台实体设备或全玩法验收。
+
+IPv4 LAN 范围和管理回环保持；旧 25565 两实例 PID 29944/31092 及 QwenPaw 8088 PID 19304 与维护前相同。新服隔离 QA 已 shutdown，28978/28979/28986/28987 不再监听。主 MawExplorer 仍在线，原 UUID、autonomy.paused、model-task.json 原字节和账本前缀完整；未重投原未知导航，未调用新模型任务。当前自主暂停与本轮已结束的服务器维护暂停是两回事。
+
+Java 本轮健康计数 error=1/warning=33（包括启动类注解警告等原始日志），Gate/worker error=0/warning=0，保留计数，不据短时就绪声称长期无故障。`allModsVerified/publicAccessReady/completeSceneParityVerified` 继续为 false，新服基岩与公网未完成。
+
+18:02 运行 `world/ops/health/health_mon.py --society`：服务、同账号原生库存/实体/YSM 数据等 11 项通过，`autonomy-active=false`，因此总 `ok=false`。这与保留历史自主暂停一致；不能把三服务 ready 改写为自主循环已恢复。原始报告为 `research/mod-operations-20261008/main-society-health.json`。

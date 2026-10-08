@@ -11,6 +11,23 @@ const BOOK = '{id:"ars_nouveau:novice_spell_book",count:1,components:{"ars_nouve
 const STATE = { playerUuid: PLAYER, heldItem: 'ars_nouveau:novice_spell_book', heldSnbt: BOOK,
   selectedHotbarSlot: 2, mana: { current: 150, max: 150 }, health: 10, casterEquipped: true }
 
+test('learning and editing use held-item CAS, keep native receipts and treat respawn as unknown', async t => {
+  const { bot, spell, writes, emit } = fixture(t)
+  let read = spell.list(); emit({ requestId: writes.at(-1).body.requestId, action: 'list', ok: true, state: STATE }); await read
+  const learning = spell.learnGlyph({ requestId: 'learn-native-1' })
+  assert.equal(writes.at(-1).body.kind, 'learn_glyph'); assert.equal(writes.at(-1).body.expectedHeldSnbt, BOOK)
+  emit({ requestId: 'learn-native-1', action: 'learn_glyph', ok: false, code: 'glyph_item_not_held', state: STATE })
+  assert.equal((await learning).code, 'glyph_item_not_held')
+  const writing = spell.configure({ slot: 1, name: '跳跃', glyphs: ['ars_nouveau:glyph_self', 'ars_nouveau:glyph_leap'], requestId: 'write-native-1' })
+  assert.deepEqual(writes.at(-1).body.glyphs, ['ars_nouveau:glyph_self', 'ars_nouveau:glyph_leap'])
+  const rejected = assert.rejects(writing, e => e.outcomeUnknown && e.retryAutomatically === false)
+  bot.emit('respawn'); await rejected; assert.equal(spell.current(), null)
+  await assert.rejects(spell.configure({ slot: 1, name: '跳跃', glyphs: ['ars_nouveau:glyph_self'], requestId: 'write-native-1', expectedHeldSnbt: BOOK, expectedHotbarSlot: 2 }), /ALREADY_ISSUED/)
+  read = spell.glyphs({ offset: 24, limit: 12 })
+  emit({ requestId: writes.at(-1).body.requestId, action: 'glyphs', ok: true, glyphs: [], state: STATE }); await read
+  const selecting = spell.select(0); emit({ requestId: writes.at(-1).body.requestId, action: 'select', ok: true, state: STATE }); assert.equal((await selecting).ok, true)
+})
+
 function fixture (t, options) {
   const bot = new EventEmitter()
   bot._client = new EventEmitter()
@@ -27,6 +44,25 @@ function fixture (t, options) {
   t.after(() => spell.detach())
   return { bot, spell, writes, emit, errors }
 }
+
+test('zero-cost native expenditure confirms a cast without inventing target effects; ambiguous casts stay unknown', async t => {
+  const { spell, writes, emit } = fixture(t)
+  const read = spell.list()
+  emit({ requestId: writes.at(-1).body.requestId, action: 'list', ok: true, state: STATE }); await read
+  const cast = spell.cast('ars_nouveau:slot_0', { requestId: 'zero-cost-once' })
+  emit({ requestId: 'zero-cost-once', action: 'cast', ok: true, castConfirmed: true,
+    manaBefore: 150, manaAfter: 150, manaSpent: 0, nativeExpendedCost: 0,
+    castEvidence: 'native_expenditure_event', effectVerified: false, state: STATE })
+  const result = await cast
+  assert.equal(result.castConfirmed, true); assert.equal(result.manaSpent, 0)
+  assert.equal(result.castEvidence, 'native_expenditure_event'); assert.equal(result.effectVerified, false)
+  const ambiguous = spell.cast('ars_nouveau:slot_0', { requestId: 'no-expenditure-proof' })
+  emit({ requestId: 'no-expenditure-proof', action: 'cast', ok: false, outcomeKnown: false,
+    code: 'ars_cast_outcome_unknown', castConfirmed: false, effectVerified: false, state: STATE })
+  assert.equal((await ambiguous).outcomeKnown, false)
+  assert.equal(spell.current(), null)
+  await assert.rejects(spell.cast('ars_nouveau:slot_0', { requestId: 'no-expenditure-proof', expectedHeldSnbt: BOOK, expectedHotbarSlot: 2 }), /ALREADY_ISSUED/)
+})
 
 test('native list and explain preserve actual recipe and book components, without an actor parameter', async t => {
   const { spell, writes, emit } = fixture(t)

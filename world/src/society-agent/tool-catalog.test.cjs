@@ -5,7 +5,7 @@ const uuid = '11111111-2222-3333-8444-555555555555'
 const parse = action => parsePlan(JSON.stringify({ goal: '生活', reason: '按原生证据操作', actions: [action] }))
 test('tool list/explain expose installed parameters and bounded declared coverage without inventing all-mod support', () => {
   const list = agentToolCatalog()
-  assert.equal(list.tools.length, 25); assert.equal(new Set(list.tools.map(tool => tool.id)).size, list.tools.length)
+  assert.equal(list.tools.length, 27); assert.equal(new Set(list.tools.map(tool => tool.id)).size, list.tools.length)
   for (const id of ['recipes', 'block_inspect', 'block_verify', 'entity_inspect', 'entity_interact', 'maid', 'colony', 'spell', 'eat']) assert.ok(agentToolCatalog(id).tool.parameters)
   assert.ok(agentToolCatalog('block_inspect').tool.parameters.aimOffset.includes('.03'))
   assert.equal(agentToolCatalog('summon_anything').ok, false)

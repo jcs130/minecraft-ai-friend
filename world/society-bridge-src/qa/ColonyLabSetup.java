@@ -39,6 +39,7 @@ public final class ColonyLabSetup {
                         .executes(context -> found(context.getSource(),
                                 StringArgumentType.getString(context, "owner")))));
         root.then(positionCommand("builder", ColonyLabSetup::builder));
+        root.then(positionCommand("university_fixture", ColonyLabSetup::university));
         root.then(positionCommand("fix", ColonyLabSetup::fix));
         root.then(positionCommand("request_build", ColonyLabSetup::requestBuild));
         root.then(positionCommand("request_planks", ColonyLabSetup::requestPlanks));
@@ -100,6 +101,20 @@ public final class ColonyLabSetup {
         building.setStructurePack("Minecolonies Original");
         building.setBlueprintPath(path);
         building.calculateCorners();
+    }
+
+    /** Explicit prebuilt university fixture for research API QA, never a player action. */
+    private static int university(CommandSourceStack source, BlockPos pos) {
+        ServerLevel level = source.getServer().overworld();
+        if (!(level.getBlockEntity(pos) instanceof TileEntityColonyBuilding tile)) return reply(source, "university_tile_missing");
+        tile.setBlueprintPath("education/university1.blueprint");
+        IColony colony = IColonyManager.getInstance().getColonyByPosFromWorld(level, pos);
+        if (colony == null) return reply(source, "colony_missing");
+        IBuilding building = colony.getServerBuildingManager().addNewBuilding(tile, level);
+        if (!(building instanceof com.minecolonies.core.colony.buildings.workerbuildings.BuildingUniversity)) return reply(source, "university_required");
+        configure(building, "education/university1.blueprint");
+        building.setBuildingLevel(1); building.markDirty(); colony.markDirty();
+        return reply(source, "operator_fixture_university_level=" + building.getBuildingLevel());
     }
 
     private static int fix(CommandSourceStack source, BlockPos pos) {
