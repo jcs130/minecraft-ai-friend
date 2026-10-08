@@ -27,6 +27,7 @@ $eventLog = Join-Path $opsDir 'manage-server.log'
 $bedrockHealthFile = Join-Path $opsDir 'bedrock-health.json'
 $pendingAgentFriendDeploy = Join-Path $opsDir 'agentfriend-deploy.pending.json'
 $pendingEyeMirrorDeploy = Join-Path $opsDir 'cortieye-deploy.pending.json'
+$pendingGeyserDeploy = Join-Path $opsDir 'geyser-deploy.pending.json'
 $pendingServerSettings = Join-Path $opsDir 'server-settings.pending.json'
 $jvmDiagnosticRequest = Join-Path $opsDir 'jvm-diagnostics.requested'
 $auraCachePatchRequest = Join-Path $opsDir 'auraskills-cache-fix.requested.json'
@@ -258,7 +259,8 @@ function HumanPlayers {
     # Keep the restart safety gate conservative: only verified service accounts.
     # feiyu_bot was explicitly confirmed as a bot by the owner on 2026-10-06.
     # ag_Kirito was explicitly identified as an Agent by the owner (verified 2026-10-08).
-    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye', 'feiyu_bot', 'ag_Kirito')
+    # ag_NEKO explicitly confirmed by the owner as a reconnectable Agent on 2026-10-08.
+    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye', 'feiyu_bot', 'ag_Kirito', 'ag_NEKO')
     $roster = PlayerRoster
     @($roster.Names | Where-Object { $serviceNames -notcontains $_ })
 }
@@ -664,6 +666,49 @@ function Deploy-PendingServerSettings {
     Log "Server settings applied after backup: max-players=$($plan.maxPlayers), ignore-spectators=$ignoreValue"
 }
 
+function Deploy-PendingGeyser {
+    if (-not (Test-Path -LiteralPath $pendingGeyserDeploy)) { return }
+    $plan = Get-Content -LiteralPath $pendingGeyserDeploy -Raw | ConvertFrom-Json
+    $source = [IO.Path]::GetFullPath([string]$plan.source)
+    $releaseRoot = [IO.Path]::GetFullPath('E:\MC\releases').TrimEnd('\')
+    $target = Join-Path $serverDir 'plugins\Geyser-Spigot.jar'
+    if (-not $source.StartsWith(($releaseRoot + '\'), [StringComparison]::OrdinalIgnoreCase) -or
+        [IO.Path]::GetFileName($source) -notmatch '^Geyser-Spigot-\d+\.\d+\.\d+-b\d+\.jar$' -or
+        $plan.sha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+        $plan.previousSha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+        -not (Test-Path -LiteralPath $source -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $target -PathType Leaf)) { throw 'Pending Geyser deployment is invalid.' }
+    if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $plan.sha256 -or
+        (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $plan.previousSha256) {
+        throw 'Geyser candidate or previous JAR hash changed.'
+    }
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+    $previous = "$target.before-$stamp"
+    $staged = "$target.pending"
+    if ((Test-Path -LiteralPath $previous) -or (Test-Path -LiteralPath $staged)) {
+        throw 'Inspect an existing incomplete Geyser deployment before retrying.'
+    }
+    try {
+        Copy-Item -LiteralPath $source -Destination $staged
+        if ((Get-FileHash -LiteralPath $staged -Algorithm SHA256).Hash -ne $plan.sha256) {
+            throw 'Staged Geyser JAR hash mismatch.'
+        }
+        Rename-Item -LiteralPath $target -NewName ([IO.Path]::GetFileName($previous))
+        Rename-Item -LiteralPath $staged -NewName 'Geyser-Spigot.jar'
+    } catch {
+        Remove-Item -LiteralPath $staged -Force -ErrorAction SilentlyContinue
+        if ((Test-Path -LiteralPath $previous) -and -not (Test-Path -LiteralPath $target)) {
+            Rename-Item -LiteralPath $previous -NewName 'Geyser-Spigot.jar'
+        }
+        Move-Item -LiteralPath $pendingGeyserDeploy -Destination "$pendingGeyserDeploy.failed-$stamp"
+        throw
+    }
+    $receiptDir = Join-Path (Join-Path $opsDir 'geyser-deployments') $stamp
+    New-Item -ItemType Directory -Path $receiptDir -Force | Out-Null
+    Move-Item -LiteralPath $pendingGeyserDeploy -Destination (Join-Path $receiptDir 'plan.applied.json')
+    Log "Geyser deployed after complete E/F backup: SHA256=$($plan.sha256), previous=$previous"
+}
+
 function Deploy-PendingEyeMirror {
     if (-not (Test-Path -LiteralPath $pendingEyeMirrorDeploy)) { return }
     $plan = Get-Content -LiteralPath $pendingEyeMirrorDeploy -Raw | ConvertFrom-Json
@@ -753,7 +798,7 @@ function Backup-Server {
         # locks, control tokens, and logs are intentionally not restorable.
         $opsCopy = Join-Path $dest 'ops'
         & robocopy.exe $opsDir $opsCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP `
-            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'server-settings.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' | Out-Null
+            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Incomplete backup: $dest" }
         $probeCopy = Join-Path $dest 'probe'
         & robocopy.exe 'E:\MC\probe' $probeCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'node_modules' | Out-Null
@@ -795,6 +840,7 @@ function Backup-Server {
         Deploy-PendingServerSettings
         Deploy-PendingAgentFriend
         Deploy-PendingEyeMirror
+        Deploy-PendingGeyser
     }
     finally {
         if ($wasRunning) {
