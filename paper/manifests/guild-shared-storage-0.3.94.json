@@ -1,9 +1,9 @@
 {
   "version": "0.3.94",
-  "status": "candidate-not-deployed",
+  "status": "deployed",
   "sha256": "C53FA4AB275867001EC1274A362C376389E6A3E0D9F09DAE433EC6648A240455",
   "bytes": 800787,
-  "currentProductionVersion": "0.3.92",
+  "currentProductionVersion": "0.3.94",
   "onlinePhysicalRepair": {
     "completedAt": "2026-10-08T09:42:11.561Z",
     "publicGroups": 12,
@@ -20,14 +20,133 @@
     "candidateFunctionalChecks": 21,
     "normalRestartChecks": 7,
     "productionOnlineReadOnlyChecks": 19,
-    "allPassed": true,
+    "allPassed": false,
     "stageRestored": true,
     "actualBedrockXboxVisualVerified": false,
-    "new16LlmGameplayLoadTest": false
+    "new16LlmGameplayLoadTest": false,
+    "allStorageAndContractCoreChecksPassed": true,
+    "productionReleasedStoragePassedChecks": 20,
+    "productionReleasedStorageTotalChecks": 21,
+    "productionContractsAndMenusChecks": 25,
+    "originalEyeReadinessPassed": false,
+    "failedAttemptsRetained": true
   },
   "releaseGate": "Afu-MC-DailyBackup; no human player or active dungeon; E/F complete full backup before JAR replacement",
   "agentClientChanges": false,
   "includesSourceFeaturesFrom": "0.3.93",
   "rollback": "preserve physical overflow chests, goods and public land rules; old plugin needs manual original-chest headroom",
-  "currentMaintenanceBlock": "unverified_online_account:ag_NEKO"
+  "currentMaintenanceBlock": null,
+  "runtimeState": "deployed",
+  "releasedAt": "2026-10-08T18:21:11+08:00",
+  "javaPidAtRelease": 33296,
+  "previousSha256": "10E42183647EA1B5A2C7F3E918AB15A43E1571CEEFBA8F087E8593FB051DD375",
+  "backup": {
+    "snapshot": "20261008-182016",
+    "completeCopies": [
+      "E",
+      "F"
+    ],
+    "completeBeforeJarReplacement": true,
+    "scheduledTaskResult": 0
+  },
+  "ownerConfirmedServiceAccount": "ag_NEKO",
+  "tests": [
+    {
+      "file": "pre-2026-10-08T09-58-57.028Z.json",
+      "checks": 21,
+      "sha256": "C53FA4AB275867001EC1274A362C376389E6A3E0D9F09DAE433EC6648A240455",
+      "scope": "pre"
+    },
+    {
+      "file": "post-2026-10-08T10-03-35.565Z.json",
+      "checks": 7,
+      "sha256": "C53FA4AB275867001EC1274A362C376389E6A3E0D9F09DAE433EC6648A240455",
+      "scope": "post"
+    },
+    {
+      "file": "live-2026-10-08T10-22-14.226Z.json",
+      "checks": 21,
+      "passedChecks": 20,
+      "passed": false,
+      "failed": [
+        "actual original Eye remains attached"
+      ],
+      "scope": "production storage read-only plus actual original Eye readiness"
+    },
+    {
+      "file": "contracts-live-2026-10-08T10-22-41.775Z.json",
+      "checks": 25,
+      "passed": true,
+      "sha256": "C53FA4AB275867001EC1274A362C376389E6A3E0D9F09DAE433EC6648A240455",
+      "scope": "production funded-contract discovery, denied unfunded publication, native menus; no user inventory/escrow/skill purchases"
+    }
+  ],
+  "preservation": {
+    "oldStashPlayers": 7,
+    "oldOccupiedSlotsWithIdenticalMetadata": 135,
+    "regionCount": 49,
+    "legacyQualifications": 114,
+    "taskTemplates": 34,
+    "taskSites": 7,
+    "originalMaintenanceRosterReconnected": [
+      "CortiLan",
+      "Goddess",
+      "ag_NEKO"
+    ],
+    "missingOriginalAccounts": [
+      "CortiEye"
+    ],
+    "originalCortiEyeAttached": false,
+    "difficultyNormalKeepInventoryAllDimensions": true,
+    "auraCurrentStartupVerified": true,
+    "temporaryWhitelistEntriesRemoved": true
+  },
+  "features": {
+    "publicStorage": {
+      "doubleChestGroups": 12,
+      "slotsPerCategory": 162,
+      "totalSlots": 648,
+      "sameCategoryOverflow": true,
+      "rollbackAcrossAllAffectedBoxes": true,
+      "aggregatedStock": true,
+      "hotRegistration": true
+    },
+    "inheritedPersonalChestAndContracts": {
+      "personalChestPages": 10,
+      "personalChestCapacity": 540,
+      "original54SlotIdsPreserved": true,
+      "pendingRewardStacks": 1024,
+      "remotePersonalChestMana": 2,
+      "contractTypes": [
+        "delivery",
+        "hunt",
+        "explore",
+        "structure"
+      ],
+      "currency": "existing_arena_emerald_wallet",
+      "publisherWithinBlocks": 32,
+      "assigneesPerContract": 1,
+      "actualGoodsAndEscrow": true,
+      "realExplorationAndReturn": true,
+      "durablePreparedAndRemovedRecovery": true,
+      "compactEvidenceReplies": true,
+      "agentClientChanges": false,
+      "newContractsRequireRestart": false
+    }
+  },
+  "historicalUpstreamValidation": {
+    "version": "0.3.93",
+    "sha256": "D2E930F259DFF33600384B16948B190F1CF479C95F76A404122EB1E69D771095",
+    "functional": 67,
+    "restart": 15,
+    "controlled16PlusEye": 7,
+    "sameAsDeployedArtifact": false,
+    "manifest": "player-contracts-0.3.93.json"
+  },
+  "limits": [
+    "No new sixteen autonomous LLM long-term gameplay load acceptance.",
+    "Bedrock mobile and Xbox visuals/controller input require actual-client acceptance.",
+    "World saves and reward files are not asserted atomic across arbitrary power loss.",
+    "Original remote CortiEye has not reconnected; live camera readiness check failed. Watcher does not start remote clients; no replacement Eye was created."
+  ]
 }

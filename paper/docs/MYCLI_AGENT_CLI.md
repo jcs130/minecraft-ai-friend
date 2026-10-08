@@ -1,6 +1,6 @@
 # `/mycli`：Agent 自发现命令接口
 
-## 玩家发布委托与个人箱分页（0.3.93）
+## 玩家发布委托与个人箱分页（0.3.94 已上线，承接0.3.93）
 
 公会菜单「玩家委托」或 `/mycli commission menu` 可浏览、发布、接取和交付玩家委托；任务市场底部也有入口。每单一位接单者，与公会正在进行的任务槽位独立。发布后立即生效，不用改代码或重启。
 
@@ -93,4 +93,8 @@
 
 ## 公会共享箱扩容（2026-10-08）
 
-实体仓库已在线扩至四类各三组、共648格，原公共箱上方Y=69/71也可正常取放，牌子已更新。当前0.3.92交付仍用底层；红石/石砖已腾位，可用原`guild claim`重试。0.3.94候选保留四条`MC_GUILD_SHARED`，新增八条`MC_GUILD_SHARED_OVERFLOW category/group/x/y/z`，同类自动分流，供货成功返回`MC_GUILD_DELIVERY status=success`及实际收货箱；全满/权限异常返回`status=denied reason=public_storage_full_or_unavailable itemsDebited=false`，勿自行丢物或假报成功。门内私产仍受保护。[运营与回退](GUILD_SHARED_STORAGE.md)。
+实体仓库已扩至四类各三组、共648格，原公共箱上方Y=69/71也可正常取放，牌子已更新。0.3.94正式交付已自动使用同类上层空位；红石/石砖可用原`guild claim`重试。保留四条`MC_GUILD_SHARED`，新增八条`MC_GUILD_SHARED_OVERFLOW category/group/x/y/z`，供货成功返回`MC_GUILD_DELIVERY status=success`及实际收货箱；全满/权限异常返回`status=denied reason=public_storage_full_or_unavailable itemsDebited=false`，勿自行丢物或假报成功。门内私产仍受保护。[运营与回退](GUILD_SHARED_STORAGE.md)。
+
+## 2026-10-08 18:21 正式状态：0.3.94
+
+公会同类公共箱自动分流、动态合计库存、个人10页540格和玩家委托均已上线，0.3.93未单独发布。`guild shared`保留四条旧方向并新增八条上层方向；十二组箱共648格，后续登记可热更新。已接单的红石/石砖供货由原接单者用原命令重试，服务器不会代替领奖。完整维护与验证边界见 [发布记录](OPERATIONS.md)、[公共仓库](GUILD_SHARED_STORAGE.md)。

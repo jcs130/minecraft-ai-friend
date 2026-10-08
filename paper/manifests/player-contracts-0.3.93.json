@@ -2,10 +2,11 @@
   "schemaVersion": 1,
   "plugin": "AgentFriend",
   "version": "0.3.93",
-  "runtimeState": "candidate",
+  "runtimeState": "superseded-candidate",
   "productionVersionAtCheck": "0.3.92",
+  "currentProductionVersion": "0.3.94",
   "deploymentQueued": false,
-  "deploymentBlocker": "Human player online; existing maintenance safety gate preserved. Await logout or user direction.",
+  "deploymentBlocker": null,
   "sha256": "D2E930F259DFF33600384B16948B190F1CF479C95F76A404122EB1E69D771095",
   "bytes": 789681,
   "verifiedAt": "2026-10-08T09:24:10.049064+00:00",
@@ -68,5 +69,9 @@
     "Bedrock/Xbox visuals and controller input require actual clients."
   ],
   "documentation": "paper/docs/MYCLI_AGENT_CLI.md",
-  "privateEvidence": "E/F repairs/player-contracts-20261008"
+  "privateEvidence": "E/F repairs/player-contracts-20261008",
+  "sourceFeaturesDeployedIn": "0.3.94",
+  "deployedArtifactSha256": "C53FA4AB275867001EC1274A362C376389E6A3E0D9F09DAE433EC6648A240455",
+  "originalCandidateJarDeployed": false,
+  "note": "D2 artifact and its 67/15/7 reports retained as historical upstream evidence. Its source features are active in the C53 0.3.94 release; use the new manifest for current runtime checks."
 }

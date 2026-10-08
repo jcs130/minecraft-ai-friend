@@ -6,15 +6,20 @@ import {createHash} from 'node:crypto';
 import {command} from '../ops/rcon-client.mjs';
 import {fix1206PotionProtocol} from '../ops/minecraft-1206-potion.mjs';
 const require=createRequire('E:/MC/probe/package.json');fix1206PotionProtocol(require);const mf=require('mineflayer');
-const roots=['E:/MC/ops/repairs/player-contracts-20261008','F:/MC-backups/repairs/player-contracts-20261008'],name='ContractLive93',expected='D2E930F259DFF33600384B16948B190F1CF479C95F76A404122EB1E69D771095';
+const releases={
+ '0.3.93':{folder:'player-contracts-20261008',name:'ContractLive93',sha256:'D2E930F259DFF33600384B16948B190F1CF479C95F76A404122EB1E69D771095'},
+ '0.3.94':{folder:'guild-storage-20261008',name:'ContractLive94',sha256:'C53FA4AB275867001EC1274A362C376389E6A3E0D9F09DAE433EC6648A240455'}
+};
+const version=process.argv[2]??'0.3.93',release=releases[version];assert.ok(release,'Unknown release');
+const roots=['E:/MC/ops/repairs/','F:/MC-backups/repairs/'].map(p=>p+release.folder),name=release.name,expected=release.sha256;
 const rcon=q=>command(q,15000),sleep=ms=>new Promise(r=>setTimeout(r,ms)),json=s=>JSON.parse(s.slice(s.indexOf('{')));
 let bot,added=false,last=0;const report={passed:false,startedAt:new Date().toISOString(),checks:[],messages:[],packets:[],server:{}};
 function check(name,ok,detail){report.checks.push({name,ok:!!ok,detail});assert.ok(ok,name+': '+JSON.stringify(detail??''));console.log('PASS '+name);}
 async function until(f,label){const end=Date.now()+16000;while(Date.now()<end){if(f())return;await sleep(80);}throw Error(label+' timeout');}
 async function ask(q,prefix){const n=report.messages.length;await sleep(Math.max(0,1200-(Date.now()-last)));last=Date.now();bot.chat(q);if(prefix)await until(()=>report.messages.slice(n).some(s=>s.startsWith(prefix)),q);await sleep(150);return report.messages.slice(n);}
 try{
- report.candidateSha256=createHash('sha256').update(readFileSync('E:/MC/server/plugins/AgentFriend-0.3.93.jar')).digest('hex').toUpperCase();check('live final artifact matches all isolation tests',report.candidateSha256===expected);
- report.server.version=await rcon('version AgentFriend');check('production runtime is 0.3.93',report.server.version.includes('0.3.93'));
+ report.candidateSha256=createHash('sha256').update(readFileSync('E:/MC/server/plugins/AgentFriend-'+version+'.jar')).digest('hex').toUpperCase();check('live final artifact matches expected release hash',report.candidateSha256===expected);
+ report.server.version=await rcon('version AgentFriend');check('production runtime is '+version,report.server.version.includes(version));
  report.server.market=await rcon('mycli admin market list');check('thirty-four prior task templates and seven sites remain',(report.server.market.match(/^tm_/gm)||[]).length===34&&(report.server.market.match(/^site=/gm)||[]).length===7);
  const roles=json(await rcon('mycli admin professions audit'));check('three professions and sixteen skills keep a valid ledger',roles.ready&&roles.professions===3&&roles.skills===16);
  const land=json(await rcon('mycli admin land audit'));check('guild private property and builder tower ownership remain',land.lands.some(l=>l.id==='adventurers_guild'&&l.ownerUuid==='00000000-0000-0000-0009-00000d9f9c7b'&&l.publicContainers===0)&&land.lands.some(l=>l.id==='sky_view_tower'&&l.ownerUuid==='ccba3629-1f58-33d2-bd0c-f7ba6e699816'&&l.publicContainers===1));
@@ -38,4 +43,4 @@ try{
  report.server.gifts=await rcon('mycli admin giftcatalog');check('Goddess verified gifts remain ready',report.server.gifts.includes('"ready":true'));
  report.server.eye=await rcon('cortieye');report.server.roster=await rcon('minecraft:list uuids');report.server.mspt=await rcon('mspt');report.passed=true;
 }catch(e){report.error=String(e.stack||e);console.error(e);process.exitCode=1;}
-finally{if(bot){if(bot.currentWindow)bot.closeWindow(bot.currentWindow);bot.quit('production discovery checks done');await sleep(400);}if(added)await rcon('minecraft:whitelist remove '+name);report.finishedAt=new Date().toISOString();for(const root of roots)writeFileSync(root+'/live-'+new Date().toISOString().replaceAll(':','-')+'.json',JSON.stringify(report,null,2));console.log(JSON.stringify({passed:report.passed,checks:report.checks.length,error:report.error,eye:report.server.eye,mspt:report.server.mspt}));}
+finally{if(bot){if(bot.currentWindow)bot.closeWindow(bot.currentWindow);bot.quit('production discovery checks done');await sleep(400);}if(added)await rcon('minecraft:whitelist remove '+name);report.finishedAt=new Date().toISOString();for(const root of roots)writeFileSync(root+(version==='0.3.93'?'/live-':'/contracts-live-')+new Date().toISOString().replaceAll(':','-')+'.json',JSON.stringify(report,null,2));console.log(JSON.stringify({passed:report.passed,checks:report.checks.length,error:report.error,eye:report.server.eye,mspt:report.server.mspt}));}
