@@ -41,8 +41,8 @@ final class ProtectionAdvisor {
     void forget(Player player) { lastQuery.remove(player.getUniqueId()); }
 
     void command(Player player, String[] args) {
-        if (args.length != 5 || !(args[1].equalsIgnoreCase("break") || args[1].equalsIgnoreCase("place") || args[1].equalsIgnoreCase("container"))) {
-            player.sendMessage("用法：/mycli protect break|place|container <x> <y> <z>；只查询自己附近已加载的方块。");
+        if (args.length != 5 || !(args[1].equalsIgnoreCase("break") || args[1].equalsIgnoreCase("place") || args[1].equalsIgnoreCase("container") || args[1].equalsIgnoreCase("use"))) {
+            player.sendMessage("用法：/mycli protect break|place|container|use <x> <y> <z>；只查询自己附近已加载的方块。");
             return;
         }
         String action = args[1].toLowerCase(java.util.Locale.ROOT);
@@ -50,7 +50,7 @@ final class ProtectionAdvisor {
         try {
             x = Integer.parseInt(args[2]); y = Integer.parseInt(args[3]); z = Integer.parseInt(args[4]);
         } catch (NumberFormatException invalid) {
-            player.sendMessage("坐标必须是整数：/mycli protect break|place|container <x> <y> <z>");
+            player.sendMessage("坐标必须是整数：/mycli protect break|place|container|use <x> <y> <z>");
             return;
         }
         JsonObject result = new JsonObject();
@@ -76,21 +76,26 @@ final class ProtectionAdvisor {
         }
         if ((reason != null && reason.startsWith("guild_owner")) || plugin.guildHall().containsProperty(new Location(player.getWorld(), x, y, z)))
             plugin.guildStorage().ownershipFields(result);
+        plugin.lands().fields(result, new Location(player.getWorld(), x, y, z));
         send(player, result);
-        if (action.equals("container")) player.sendMessage("MC_PROTECTION " + result);
+        player.sendMessage("MC_PROTECTION " + result);
     }
 
     void send(Player player, JsonObject result) {
+        send(player, result, CHANNEL);
+    }
+
+    void send(Player player, JsonObject result, String channel) {
         byte[] bytes = result.toString().getBytes(StandardCharsets.UTF_8);
-        if (player.getListeningPluginChannels().contains(CHANNEL)) {
-            player.sendPluginMessage(plugin, CHANNEL, bytes);
+        if (player.getListeningPluginChannels().contains(channel)) {
+            player.sendPluginMessage(plugin, channel, bytes);
         } else {
             // CraftPlayer.sendPluginMessage silently skips clients that did not
             // register the channel. CortiLan's current Mineflayer connection is
             // one of them. Send the same vanilla custom payload directly.
             CraftPlayer craft = (CraftPlayer) player;
             craft.getHandle().connection.send(new ClientboundCustomPayloadPacket(
-                    new DiscardedPayload(new ResourceLocation(CHANNEL), Unpooled.wrappedBuffer(bytes))));
+                    new DiscardedPayload(new ResourceLocation(channel), Unpooled.wrappedBuffer(bytes))));
         }
     }
 
@@ -107,28 +112,32 @@ final class ProtectionAdvisor {
             return "unknown_out_of_range";
         if (!player.getWorld().isChunkLoaded(x >> 4, z >> 4)) return "unknown_unloaded_chunk";
         Block block = player.getWorld().getBlockAt(x, y, z);
+        if (!plugin.lands().allows(player, action, block.getLocation()))
+            return plugin.guildHall().containsProperty(block.getLocation()) ? "guild_owner_only" : "land_permission_denied";
         if (action.equals("container")) {
             if (!plugin.guildStorage().physicalContainer(block)) return "unknown_not_container";
             if (plugin.guildStorage().deniesContainer(player, block)) return "guild_owner_only";
             try {
-                RegionQuery query = WorldGuard.getInstance().getPlatform().getRegionContainer().createQuery();
-                if (!query.testState(BukkitAdapter.adapt(block.getLocation()), WorldGuardPlugin.inst().wrapPlayer(player), Flags.CHEST_ACCESS)) return "worldguard";
+                if (!plugin.lands().stateAllows(player, "container", block.getLocation())) return "worldguard";
+            } catch (RuntimeException | LinkageError unavailable) { return "unknown_worldguard"; }
+            return null;
+        }
+        if (action.equals("use")) {
+            try {
+                if (!plugin.lands().stateAllows(player, "use", block.getLocation())) return "worldguard";
             } catch (RuntimeException | LinkageError unavailable) { return "unknown_worldguard"; }
             return null;
         }
         if (plugin.guildStorage().deniesEdit(player, block)) return "guild_owner_only";
-        if (plugin.villageProtection().deniesEdit(block)) return "village_structure";
-        if (plugin.guildHall().deniesEdit(block)) return "guild_hall";
+        if (plugin.villageProtection().deniesEdit(player, block)) return "village_structure";
+        if (plugin.guildHall().deniesEdit(player, block)) return "guild_hall";
         if (plugin.lifeBuildings().deniesEdit(block)) return "life_guild_building";
         if (action.equals("break") ? plugin.trialRoad().deniesBreak(block)
                 : plugin.trialRoad().deniesPlace(block)) return "trial_road";
         if (plugin.deniesArenaEdit(block)) return "arena";
         if (plugin.dungeon().deniesEdit(block.getLocation())) return "dungeon";
         try {
-            RegionQuery query = WorldGuard.getInstance().getPlatform().getRegionContainer().createQuery();
-            boolean allowed = query.testBuild(BukkitAdapter.adapt(block.getLocation()),
-                    WorldGuardPlugin.inst().wrapPlayer(player),
-                    action.equals("break") ? Flags.BLOCK_BREAK : Flags.BLOCK_PLACE);
+            boolean allowed = plugin.lands().stateAllows(player, action, block.getLocation());
             if (!allowed) return "worldguard";
         } catch (RuntimeException | LinkageError unavailable) {
             plugin.getLogger().warning("Protection query unavailable: " + unavailable);

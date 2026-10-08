@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "releasedAt": "2026-10-08T12:27:23+08:00",
+  "plugin": "AgentFriend",
+  "version": "0.3.90",
+  "bytes": 644680,
+  "sha256": "3C78F0F66120EEA06A3CAA1BC1A31CC6178FA4266D1779252925BDCFF3D504F7",
+  "runtimeState": "deployed",
+  "backend": {"plugin": "WorldGuard", "version": "7.0.10", "alreadyInstalled": true},
+  "configuration": "plugins/AgentFriend/lands.yml",
+  "regionPrefix": "qd_land_",
+  "initialClaim": "adventurers_guild",
+  "onlineManagement": "mycli admin land reload|audit",
+  "backup": {"snapshot": "20261008-122638", "verifiedCopies": ["E", "F"], "completeBeforeJarReplacement": true},
+  "tests": {"isolatedGameplay": 36, "hotConfigurationAnd16Clients": 10, "normalRestart": 7, "productionReadOnly": 26},
+  "limits": [
+    "16 clients performed controlled permission queries, not long-running LLM gameplay.",
+    "Native Bedrock container protocol used; physical Bedrock/Xbox UI awaits client verification.",
+    "CortiLan and ag_Kirito reconnected; original CortiEye client remained offline at release readback."
+  ],
+  "documentation": "paper/docs/LANDS.md"
+}

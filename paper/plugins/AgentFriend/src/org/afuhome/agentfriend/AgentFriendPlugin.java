@@ -220,6 +220,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private DungeonGearAura dungeonGearAura;
     private TravelMagic travelMagic;
     private WaypointManager waypoints;
+    private LandManager lands;
 
     boolean isSoulbound(ItemStack item) {
         return soulboundGear != null && soulboundGear.owner(item) != null;
@@ -259,6 +260,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         villageStructureProtection = new VillageStructureProtection(this);
         lifeBuildings = new LifeGuildBuildings(this, lifeGuild);
         protectionAdvisor = new ProtectionAdvisor(this);
+        lands = new LandManager(this);
         guildStorage = new GuildStorageOwnership(this);
         waypoints = new WaypointManager(this);
         agentCoach = new AgentCoach(this);
@@ -291,6 +293,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (lands != null) lands.stop();
         if (waypoints != null) waypoints.shutdown();
         if (taskMarket != null) taskMarket.shutdown();
         if (pvpArena != null) pvpArena.shutdown();
@@ -333,6 +336,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     GuildHallManager guildHall() { return guildHall; }
     GuildStorageOwnership guildStorage() { return guildStorage; }
     ProtectionAdvisor protectionAdvisor() { return protectionAdvisor; }
+    LandManager lands() { return lands; }
     DailyBoardManager dailyBoard() { return dailyBoard; }
     TaskMarketManager taskMarket() { return taskMarket; }
     GuildManager guild() { return guild; }
@@ -710,6 +714,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             guildStorage.audit(sender); return true;
         }
+        if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("land")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台管理领地；玩家可用 /mycli land 查询。"); return true;
+            }
+            if (args.length == 3 && args[2].equalsIgnoreCase("reload")) lands.reload(sender);
+            else if (args.length == 3 && args[2].equalsIgnoreCase("audit")) lands.audit(sender);
+            else sender.sendMessage("mycli admin land reload|audit；编辑 plugins/AgentFriend/lands.yml 后重载。");
+            return true;
+        }
         if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("gift")) {
             goddessGift(sender, args);
             return true;
@@ -913,6 +926,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "skillbook", "技能书" -> SkillTome.command(player, args, spellMastery);
             case "status", "状态" -> status(player);
             case "protect", "保护" -> protectionAdvisor.command(player, args);
+            case "land", "领地" -> lands.command(player, args);
             case "cast", "咏唱", "施法" -> cast(player, tail(args, 1));
             case "goto", "传送" -> gotoPlace(player, tail(args, 1));
             case "waypoint", "传送点" -> waypoint(player, args);
@@ -940,7 +954,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("Agent：/mycli list [分类|命令] [页码] 发现能力；/mycli explain <ID> 或 /mycli help <ID> 查询准确用法，不会执行。");
         p.sendMessage("/mycli coach status|on|off  查看或调整个人提醒；连续死亡、久未行动或久未使用 /mycli 时低频提示。");
         p.sendMessage("/mycli spells list [页]  查看技能；/mycli spells explain <ID>  查看目标、消耗、冷却和用法；/mycli cast <ID>  施法");
-        p.sendMessage("/mycli protect break|place|container <x> <y> <z>  查询附近方块/实体储物能否操作；拒绝则停止");
+        p.sendMessage("/mycli protect break|place|container|use <x> <y> <z>  查询附近方块/实体储物能否操作；拒绝则停止");
+        p.sendMessage("/mycli land here|list|info <ID>|menu 查看领地归属、主人与我的权限");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "造物术没有想要的物品时，会向女神提交申请；也可从罗盘选择更多造物。");
         p.sendMessage("/mycli compass  补领罗盘；/mycli book  补领命格书；/mycli menu  打开罗盘");
         p.sendMessage("/mycli guide [start|explore|magic|gear|guild|dungeon|team]  分步指引；手柄从罗盘选旅途指南");
@@ -1921,6 +1936,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         Inventory inv = Bukkit.createInventory(null,
                 page.equals("guild") || page.equals("imprint") || page.equals("spell_guide") ? 54 : 27, title);
         if (page.equals("skills")) {
+            inv.setItem(0, item(Material.GRASS_BLOCK, "§a领地与物品归属", "查看各处领地主人和自己的权限", "领地内无权操作会收到明确提示"));
             inv.setItem(2, item(Material.WRITTEN_BOOK, "§d法术图鉴", "逐项查看效果、目标、魔力、冷却和学习条件", "先读说明，再决定是否施放"));
             inv.setItem(3, item(Material.SUNFLOWER, "§a生活公会", "种田、烹饪、钓鱼、建筑、写书和红石工坊", "手柄点击接单；Agent 用 /mycli life board"));
             inv.setItem(4, item(Material.WRITTEN_BOOK, "§6❖ 旅途指南", "从这里开始：手柄可选图标，不必打字", "也可以拿起命格书，翻页阅读"));
@@ -2200,6 +2216,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (slot == top.getSize() - 1) return;
             if (page.equals("skills")) {
                 switch (slot) {
+                    case 0 -> lands.open(p, 1);
                     case 2 -> openMenu(p, "spell_guide");
                     case 3 -> openMenu(p, "life");
                     case 5 -> openMenu(p, "mastery");
@@ -2588,14 +2605,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         Block block = event.getBlock();
         if (event.getPlayer().getGameMode() != GameMode.SURVIVAL
                 || !inVillage(block.getLocation()) || !VILLAGE_WEEDS.contains(block.getType())) return;
+        if (guildStorage.deniesEdit(event.getPlayer(), block)) {
+            event.setCancelled(true); guildStorage.denied(event.getPlayer(), "break", block.getLocation()); return;
+        }
+        if (lands.denyIfNeeded(event.getPlayer(), "break", block.getLocation())) { event.setCancelled(true); return; }
         event.setCancelled(true);
         block.breakNaturally(event.getPlayer().getInventory().getItemInMainHand());
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
         if (arenaBuilt && inBuild(event.getBlock().getLocation())) event.setCancelled(true);
-        else if (event.isCancelled() && event.getPlayer().getGameMode() == GameMode.SURVIVAL
-                && inVillage(event.getBlock().getLocation()) && VILLAGE_WEEDS.contains(event.getBlock().getType()))
-            event.setCancelled(false);
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onVillagerDamage(EntityDamageEvent event) {
         if (event.getEntity() instanceof Villager && inVillage(event.getEntity().getLocation()))
@@ -2623,6 +2641,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) event.blockList().removeIf(b -> inBuild(b.getLocation()));
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (args.length == 2 && args[0].equalsIgnoreCase("land")) return List.of("here", "list", "info", "menu");
+        if (args.length == 3 && args[0].equalsIgnoreCase("land") && args[1].equalsIgnoreCase("info")) return lands.ids();
         if (args.length == 1) return AgentCliCatalog.roots();
         if (args.length == 2 && args[0].equalsIgnoreCase("list")) return AgentCliCatalog.filters();
         if (args.length == 2 && args[0].equalsIgnoreCase("spells")) return List.of("list", "explain");
@@ -2634,7 +2654,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 2 && args[0].equalsIgnoreCase("skillbook")) return List.of("list", "use");
         if (args.length == 2 && (args[0].equalsIgnoreCase("explain") || args[0].equalsIgnoreCase("help")))
             return AgentCliCatalog.ids();
-        if (args.length == 2 && args[0].equalsIgnoreCase("protect")) return List.of("break", "place", "container");
+        if (args.length == 2 && args[0].equalsIgnoreCase("protect")) return List.of("break", "place", "container", "use");
         if (args.length == 2 && args[0].equalsIgnoreCase("guide"))
             return List.of("start", "explore", "magic", "gear", "guild", "dungeon", "team", "menu");
         if (args.length == 2 && args[0].equalsIgnoreCase("imprint")) {

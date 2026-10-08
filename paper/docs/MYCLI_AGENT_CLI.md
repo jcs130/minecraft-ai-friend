@@ -28,7 +28,9 @@
 
 0.3.89 可用 `/mycli list waypoint` 发现命名地点管理：`add 下界营地` 记录亲自到达的位置，`goto personal:下界营地` 每次成功耗 6 魔力；`share` 返回 `shared:分享码`，`unshare` 立即撤回。中文命名、默认私有、分页、改名与更新见 [命名传送点](NAMED_WAYPOINTS.md)。查询用 `MC_WAYPOINT_LIST`，操作用 `MC_WAYPOINT_RESULT`；传送的 `status=pending` 需继续等待最终 `success/denied` 和实际 `MC_TRAVEL`，不能当作已抵达。旧 home 仍走原路径。
 
-建议 Agent 在首次进入或服务器版本变化后 `list` → `explain`，缓存稳定 ID 与用法；准备施法时再用 `/mycli spells explain <ID>` 核对目标、魔力、冷却及失败条件。有动作前仍检查当前状态。挖掘、放置前使用 `/mycli protect break|place <绝对x> <绝对y> <绝对z>`，从本人连接的 `mcagent:protection` plugin message 读取 JSON；`deny` 不操作、`unknown` 暂缓、`allow_likely` 才尝试；实际方块事件仍是最终判定。箱子优先按原版容器协议操作实体箱，`arena stash` 是远程辅助接口。`MC_CLI_*` 仍仅通过系统聊天发给发命令的玩家，保护查询是单独的 plugin channel；客户端须分别收集两种回执。
+建议 Agent 在首次进入或服务器版本变化后 `list` → `explain`，缓存稳定 ID 与用法；准备施法时再用 `/mycli spells explain <ID>` 核对目标、魔力、冷却及失败条件。有动作前仍检查当前状态。挖掘、放置、开箱或使用前使用 `/mycli protect break|place|container|use <绝对x> <绝对y> <绝对z>`，从本人连接的 `mcagent:protection` plugin message 读取 JSON；0.3.90 也发 `MC_PROTECTION` 聊天回执。`deny` 不操作、`unknown` 暂缓、`allow_likely` 才尝试；实际事件仍是最终判定。箱子优先按原版容器协议操作实体箱，`arena stash` 是远程辅助接口。`MC_CLI_*` 仍仅通过系统聊天发给发命令的玩家。
+
+0.3.90 用 `/mycli land here|list [页码]|info <ID>|menu` 查询主人与自身权限；发现入口 `/mycli list land`。查询聊天拆为 `MC_LAND_INFO` 和 `MC_LAND_PERMISSIONS`，分页为 `MC_LAND_LIST` + 逐条 `MC_LAND_ITEM`，原始 `mcagent:land` JSON 带同名 `type`。实际拒绝 `MC_LAND_ACCESS allowed=false` 后停止重试，公会物资转 `/mycli guild shared` 的公共箱；旧 `MC_GUILD_ACCESS` 继续可用。授权和撤权在线生效，不能缓存一次允许就永久操作。规则及回执字段见 [玩家领地](LANDS.md)。
 
 0.3.81 起，Agent 主动传送前需从本人 `mcagent:state.mana.current` 预留魔力：归乡、地点、公会和竞技场入口 6；队友、遗迹和深层驿站 8。`MC_DESTINATION` 只是目标坐标，成功瞬移以 `MC_TRAVEL` 和实际位置为准；失败不扣费。远程开个人箱或用文字指令成功远程存取、领取一次消耗 2 魔力，返回 `MC_STORAGE_MAGIC`；到实体箱旁按原版容器协议操作免费。详情见 [位移与远程物品操作](TRAVEL_MAGIC.md)。
 

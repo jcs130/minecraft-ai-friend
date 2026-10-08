@@ -1,6 +1,6 @@
 # 千灯纪：Agent 团队维护、开发与运营手册
 
-**2026-10-07 23:54 最新正式状态：**0.3.89 已上线中文命名地点、三个维度与可撤回分享。玩家在线记录和管理无需改代码，成功传送 6 魔力；53 项隔离和重启检查、17 项正式只读检查通过。E/F `20261007-235346/.complete` 完整后正常重启，原机 CortiEye 实际附身。任务市场 28 张与既有世界/账本保留，普通难度和 keepInventory=true。玩法及边界见 [命名传送点](NAMED_WAYPOINTS.md)、[维护与发布](OPERATIONS.md)。
+**2026-10-08 12:27 最新正式状态：**0.3.90 已上线不同玩家的领地，现有 WorldGuard 执行保护，`lands.yml` 可在线增减地块、转让和授权/撤权。冒险者公会仍归萌萌，主人可改建，访客可进出、接任务和使用门口公共箱。罗盘「领地归属」和 Agent `land here/info/list` 可查询；无权操作有中文与私有 JSON 拒绝。53 项隔离/16连接/重启、26 项正式只读通过，E/F `20261008-122638/.complete` 在替换前完整，正常发布任务结果 0。命名传送点、28 张任务、三维度普通/keepInventory=true、原区域及角色皮肤保留；CortiLan/ag_Kirito 已回连，CortiEye 本次读回仍 offline/attached=false，需原客户端重连。规则、边界与回退见 [玩家领地](LANDS.md)、[维护与发布](OPERATIONS.md)。
 
 本文是 `qiandengji-personal-stash` 分支的长期工作约定。目标是让 Agent 团队持续提出、制作、验证和运营新内容，同时让六岁玩家、手柄玩家、Java 玩家、基岩玩家和 Mineflayer Agent 在同一世界里获得可理解、可完成的体验。当前正式服的启停、备份、发布命令仍以 [维护与发布](OPERATIONS.md) 为准；本手册说明内容如何从想法进入这个流程。
 
@@ -16,7 +16,7 @@
 | 技能、法术、快捷施法 | `plugins/AgentFriend/src/` 的技能表、菜单和提示；`plugins/AgentFriend/spells-*.yml` 的 MagicSpells 配置；AuraSkills 配置；[技能体系](SKILL_SYSTEM.md)、[位移与远程物品操作](TRAVEL_MAGIC.md) | 玩家魔力、等级、已学技能、道具刻印，以及八项法术按 UUID 记录的 `plugins/AgentFriend/spell-mastery.yml` | 修改源码或法术配置，构建后在隔离服验证，再按发布流程更新；**尚无统一热加载技能包** |
 | 公会任务与等级 | 静态 37 张仍在 `GuildManager.java`；0.3.78 起的动态卡模板在 `plugins/AgentFriend/dynamic-board.yml`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中的 `guild-players` 和 `dynamic-board.today`；动态模板文件 | 已支持的供货与日常目标可改 YAML 后用 `mycli admin board reload`、`replace` 或 `regenerate` 热更新；新判定类型仍需开发。正式服 0.3.86 已包含此功能，详见 [动态看板](DYNAMIC_BOARD.md) |
 | 任务市场（0.3.88 已正式发布） | `task-market.yml`，28 张工程/生活/远征模板；[任务市场](TASK_MARKET.md)、[探索委托](EXPLORATION_CONTRACTS.md) | `config.yml` 的工程账本/本人评估、`guild-players.<UUID>.active.market` 的冻结条件与探索去重状态 | 热更新目标、维度、结构/群系键、路线门槛、步骤与奖励；工程登记基准，探索读已加载自然生成元数据。每人一次远行履历、返程和重启续接已验证 |
-| 公会物品归属 | `GuildStorageOwnership.java`；[归属规则](GUILD_PROPERTY.md) | 大厅实体库存与展示物/掉落物 PDC；萌萌固定 UUID；门口公共箱 | 0.3.86 服务器拒绝其他人取放，收到 `guild_owner_only` 应停止并改去公共箱；`protect container` 可预检查。变更主人需核实 UUID、正常重启及读回，不能用测试身份覆盖正式配置 |
+| 玩家领地与公会归属（0.3.90） | `LandManager.java`、现有 WorldGuard 与 `GuildStorageOwnership.java`；[领地配置](LANDS.md)、[公会规则](GUILD_PROPERTY.md) | `plugins/AgentFriend/lands.yml`；WorldGuard `qd_land_*` 区域；实体私产 PDC；公会当前主人萌萌 UUID | 控制台 `mycli admin land reload/audit` 在线新增、更换主人和授权/撤权；不同玩家可有不同领地。Agent `land here/info/list` 和 `protect break/place/container/use`，收到 `MC_LAND_ACCESS` 或 `guild_owner_only` 应停止；公会公共箱与任务开放。实际部署状态见维护记录 |
 | 生活公会 | `LifeGuildManager.java` 的七类原版行动委托；`LifeGuildBuildings.java` 的四馆、入口台阶与七位导师；[生活公会规则](LIFE_GUILDS.md) | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `life-guild` 及四馆地基，另有四份 `life-building-*-mask.tsv` 结构保护快照 | 先扩展原版动作事件、任务 ID、原版菜单与 `/mycli life`；若要换任务目标，须保留在途任务迁移及防重复领奖逻辑；建筑/保护快照须随世界同组备份。四馆入口修复见 [建筑记录](LIFE_GUILD_BUILDINGS.md) |
 | 试炼塔、地下城与奖励 | `DungeonManager.java` 的楼层、坐标、怪物和建造逻辑；奖励逻辑在源码中；自然遗迹由既有数据包生成 | 世界区块、实体、保护快照、`dungeon-active-run`、每人每天每层领奖账本、个人奖励、私人储物和施工标记 | 可在隔离世界设计、实现和测试新的副本；**正式服没有“输入描述即安全生成地下城”的通用能力** |
 | PvP 竞技场 | `PvpArenaManager.java` 的自愿匹配、同款装备和积分；[PvP 规则](PVP_ARENA.md) | `pvp-records`、`pvp-escrow.yml`、竞技场方块及 WorldGuard 区域 | 运营 Agent 可查看本人对局和排行榜；改地图或计分规则须隔离测试和完整备份，不可在有人对战时发布 |

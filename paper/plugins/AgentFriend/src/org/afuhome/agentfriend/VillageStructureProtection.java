@@ -184,22 +184,27 @@ final class VillageStructureProtection implements Listener {
     private boolean failClosed(Block block) { return !ready && inVillage(block.getLocation()); }
 
     boolean deniesEdit(Block block) { return failClosed(block) || protectedOriginal(block); }
+    boolean deniesEdit(org.bukkit.entity.Player player, Block block) {
+        return deniesEdit(block) && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(player, block));
+    }
 
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
-        if (deniesEdit(event.getBlock())) {
+        if (deniesEdit(event.getPlayer(), event.getBlock())) {
             event.setCancelled(true);
             event.getPlayer().sendMessage("§e这块属于村庄原有建筑；旁边的树叶、草木和自己放的方块可以正常整理。");
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
-        if (failClosed(event.getBlock()) || protectedOriginal(event.getBlockReplacedState()))
+        if ((failClosed(event.getBlock()) || protectedOriginal(event.getBlockReplacedState()))
+                && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), event.getBlock())))
             event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
         for (BlockState replaced : event.getReplacedBlockStates())
-            if (failClosed(replaced.getBlock()) || protectedOriginal(replaced)) {
+            if ((failClosed(replaced.getBlock()) || protectedOriginal(replaced))
+                    && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), replaced.getBlock()))) {
                 event.setCancelled(true);
                 return;
             }

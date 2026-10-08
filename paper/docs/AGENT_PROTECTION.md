@@ -1,13 +1,15 @@
-# Agent 挖掘与放置前的保护查询
+# Agent 操作前的保护查询
 
 从 AgentFriend 0.3.33 起，玩家可用本人账号执行：
 
 ```text
 /mycli protect break -551 68 -432
 /mycli protect place -554 67 -440
+/mycli protect container -494 67 -505
+/mycli protect use -491 67 -502
 ```
 
-坐标是目标方块的绝对整数坐标，世界取发命令的玩家当前所在维度。一次只查一个目标，范围是玩家眼睛周围 16 格；只查已加载区块，不会加载新区块。服务端按这名玩家的 WorldGuard 身份和当前建筑保护规则计算。每个有效查询的结果只通过发命令玩家连接上的 `mcagent:protection` clientbound plugin message 发送，消息体是 UTF-8 JSON 原始字节，不带长度前缀；`deny`、`unknown`、`allow_likely` 都发送。没有 `MC_PROTECT` 聊天副本、广播、动作栏或标题。命令语法错误仍用普通聊天提示用法。原版 Java/基岩客户端若不处理此频道，看不到结构化查询结果；Mineflayer 应监听协议 `custom_payload`。查询不会把完整保护地图或隐藏方块材质发给客户端。
+坐标是目标方块的绝对整数坐标，世界取发命令的玩家当前所在维度。一次只查一个目标，范围是玩家眼睛周围 16 格；只查已加载区块，不会加载新区块。服务端按这名玩家的 WorldGuard 身份和当前建筑保护规则计算。每个有效查询通过发命令玩家连接上的 `mcagent:protection` clientbound plugin message 发送，消息体是 UTF-8 JSON 原始字节，不带长度前缀；`deny`、`unknown`、`allow_likely` 都发送。0.3.90 同时私发 `MC_PROTECTION` 聊天 JSON，纯聊天 Agent 也可读取；旧 `MC_PROTECT` 前缀仍不发送。命令语法错误用普通聊天提示用法。Mineflayer 可监听协议 `custom_payload`。查询不会把完整保护地图或隐藏方块材质发给客户端。
 
 ```json
 {"schemaVersion":1,"action":"break","world":"minecraft:overworld","x":-551,"y":68,"z":-432,"status":"deny","allowed":false,"reason":"village_structure"}
@@ -17,4 +19,4 @@
 
 Mineflayer 在连接上监听 `custom_payload`，只处理 `packet.channel === 'mcagent:protection'`，以 `JSON.parse(Buffer.from(packet.data).toString('utf8'))` 解码。客户端可以通过 `minecraft:register` 注册频道；0.3.42 对未注册连接也会发送同一种原生 custom-payload 包，因为 Paper 的 `Player.sendPluginMessage` 会静默跳过未注册连接。用 `action/world/x/y/z` 对上本次请求，再要求 `status === 'allow_likely'` 才尝试操作。每名玩家自己的查询只回到自己的连接；Agent 不能指定别的账号或远处坐标来扫描世界。不要再等待 `messagestr` 中的 `MC_PROTECT`。
 
-以后若要把“当前站在安全区”作为环境提示，可另加低频区域摘要；不要把建筑快照直接当作长期客户端缓存。建筑保护以单块原始材质为条件，道路还保护走廊净空，WorldGuard 权限依玩家而异，发送一张静态区块地图会产生错误判断。
+0.3.90 可用 `/mycli land here|list|info <ID>` 查询领地主人和当前身份；技能罗盘也有「领地归属」。领地权限在线变化，不能把一次允许永久缓存。实际拒绝用 `MC_LAND_ACCESS`，公会兼容 `MC_GUILD_ACCESS`；收到拒绝停止该目标，物资装备去门口公共箱。配置与协议见 [玩家领地](LANDS.md)。

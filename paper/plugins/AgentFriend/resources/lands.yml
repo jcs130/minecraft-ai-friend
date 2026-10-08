@@ -1,0 +1,27 @@
+# Runtime copy: plugins/AgentFriend/lands.yml
+# After editing, console: mycli admin land reload
+# UUIDs are authoritative. members receive full build/storage permission.
+schema-version: 1
+lands:
+  adventurers_guild:
+    title: 冒险者公会
+    world: world
+    # Bounds follow the existing guild-hall position, including future moves.
+    source: guild-hall
+    owner-uuid: '00000000-0000-0000-0009-00000d9f9c7b'
+    members: []
+    # Visitors may use doors, public workstations and quest/trade services.
+    # Physical containers, building and private stock remain restricted.
+    visitor-use: true
+
+# A second player's claim can be added online (use a real player UUID):
+#  forest_cottage:
+#    title: 林间小屋
+#    world: world
+#    source: bounds
+#    min: [100, 60, 100]
+#    max: [115, 85, 115]
+#    owner-uuid: '<full player UUID>'
+#    members: []
+#    visitor-use: false
+# To release a non-guild claim, keep its ID with enabled: false, then reload.

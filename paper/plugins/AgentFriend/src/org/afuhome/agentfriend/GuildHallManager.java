@@ -467,7 +467,7 @@ final class GuildHallManager implements Listener {
 
     void storageInfo(Player player) {
         if (!servicesBuilt || !ready) { player.sendMessage("§e公会共享箱尚未开放。"); return; }
-        player.sendMessage("§c公会门内实体储物和展示物归萌萌所有，其他人无权取放；需要物资装备请使用门口东南侧公共箱。");
+        player.sendMessage("§c公会门内实体储物和展示物归" + plugin.guildStorage().ownerLabel() + "所有，未授权的人无权取放；需要物资装备请使用门口东南侧公共箱。");
         player.sendMessage("§6公会东南侧有四组双箱。所有玩家可像普通箱子一样存放和取用；不是个人奖励箱。");
         for (int i = 0; i < SHARED_LABELS.length; i++) {
             int dz = 7 + i * 2;
@@ -624,18 +624,23 @@ final class GuildHallManager implements Listener {
     }
     private boolean failClosed(Block b) { return built && !ready && inHall(b) || servicesFailClosed(b); }
     boolean deniesEdit(Block block) { return protectedFabric(block) || failClosed(block); }
+    boolean deniesEdit(Player player, Block block) {
+        return deniesEdit(block) && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(player, block));
+    }
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
-        if (deniesEdit(event.getBlock())) {
+        if (deniesEdit(event.getPlayer(), event.getBlock())) {
             event.setCancelled(true);
             event.getPlayer().sendMessage("§e这是冒险者公会的建筑。周围的草木可以正常整理。");
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
-        if (protectedFabric(event.getBlockReplacedState()) || failClosed(event.getBlock())) event.setCancelled(true);
+        if ((protectedFabric(event.getBlockReplacedState()) || failClosed(event.getBlock()))
+                && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), event.getBlock()))) event.setCancelled(true);
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
         for (org.bukkit.block.BlockState state : event.getReplacedBlockStates())
-            if (protectedFabric(state) || failClosed(state.getBlock())) { event.setCancelled(true); return; }
+            if ((protectedFabric(state) || failClosed(state.getBlock()))
+                    && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), state.getBlock()))) { event.setCancelled(true); return; }
     }
     @EventHandler public void onBurn(BlockBurnEvent event) {
         if (protectedFabric(event.getBlock()) || failClosed(event.getBlock())) event.setCancelled(true);

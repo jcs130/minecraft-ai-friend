@@ -257,7 +257,8 @@ function PlayerRoster {
 function HumanPlayers {
     # Keep the restart safety gate conservative: only verified service accounts.
     # feiyu_bot was explicitly confirmed as a bot by the owner on 2026-10-06.
-    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye', 'feiyu_bot')
+    # ag_Kirito was explicitly identified as an Agent by the owner (verified 2026-10-08).
+    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye', 'feiyu_bot', 'ag_Kirito')
     $roster = PlayerRoster
     @($roster.Names | Where-Object { $serviceNames -notcontains $_ })
 }

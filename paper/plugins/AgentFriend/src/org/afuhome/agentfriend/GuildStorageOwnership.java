@@ -59,7 +59,7 @@ import org.bukkit.persistence.PersistentDataType;
 /** Physical hall property belongs to an exact player UUID; public services stay outside its bounds. */
 final class GuildStorageOwnership implements Listener {
     private final AgentFriendPlugin plugin;
-    private final UUID owner;
+    private final UUID fallbackOwner;
     private final NamespacedKey droppedOwner;
     private final NamespacedKey displayOwner;
     private final Map<UUID, Notice> notices = new HashMap<>();
@@ -73,7 +73,7 @@ final class GuildStorageOwnership implements Listener {
             configured = null;
             plugin.getLogger().severe("Invalid guild storage owner UUID: hall storage remains locked.");
         }
-        owner = configured;
+        fallbackOwner = configured;
         droppedOwner = new NamespacedKey(plugin, "guild_storage_drop_owner");
         displayOwner = new NamespacedKey(plugin, "guild_property_owner");
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
@@ -86,7 +86,10 @@ final class GuildStorageOwnership implements Listener {
         }, 40L);
     }
 
-    boolean owns(Player player) { return owner != null && owner.equals(player.getUniqueId()); }
+    private UUID owner() { return plugin.lands().guildOwner() != null ? plugin.lands().guildOwner() : fallbackOwner; }
+    String ownerLabel() { UUID id = owner(); return SoulboundGear.MENGMENG.equals(id) ? "萌萌" : plugin.lands().ownerName(id); }
+    boolean owns(Player player) { return plugin.lands().guildOwner() != null ? plugin.lands().guildMember(player)
+            : owner() != null && owner().equals(player.getUniqueId()); }
     private boolean inside(Location at) { return plugin.guildHall().containsProperty(at); }
     boolean deniesEdit(Player player, Block block) { return inside(block.getLocation()) && !owns(player); }
 
@@ -115,25 +118,25 @@ final class GuildStorageOwnership implements Listener {
     boolean deniesContainer(Player player, Block block) { return !owns(player) && protectedContainer(block) != null; }
 
     void ownershipFields(JsonObject data) {
-        data.addProperty("owner", "萌萌");
-        data.addProperty("ownerUuid", owner == null ? null : owner.toString());
+        data.addProperty("owner", ownerLabel());
+        data.addProperty("ownerUuid", owner() == null ? null : owner().toString());
         data.addProperty("publicCommand", "/mycli guild shared");
     }
 
-    private void denied(Player player, String action, Location at) {
+    void denied(Player player, String action, Location at) {
         String key = action + ":" + at.getBlockX() + ":" + at.getBlockY() + ":" + at.getBlockZ();
         long now = System.currentTimeMillis();
         Notice last = notices.get(player.getUniqueId());
         if (last != null && last.key().equals(key) && now - last.time() < 1000) return;
         notices.put(player.getUniqueId(), new Notice(key, now));
-        player.sendMessage("§c【无权操作】公会内物品归萌萌所有，禁止其他人取放或破坏。§e物资装备请用门口东南侧公共箱（-473,67,-495）；/mycli guild shared 查看全部位置。");
+        player.sendMessage("§c【无权操作】公会内物品归" + ownerLabel() + "所有，禁止未授权的人取放或破坏。§e物资装备请用门口东南侧公共箱（-473,67,-495）；/mycli guild shared 查看全部位置。");
         JsonObject data = new JsonObject();
         data.addProperty("schemaVersion", 1);
         data.addProperty("kind", "guild_storage");
         data.addProperty("action", action);
         data.addProperty("status", "deny");
         data.addProperty("allowed", false);
-        data.addProperty("reason", owner == null ? "guild_owner_unavailable" : "guild_owner_only");
+        data.addProperty("reason", owner() == null ? "guild_owner_unavailable" : "guild_owner_only");
         data.addProperty("world", at.getWorld().getKey().toString());
         data.addProperty("x", at.getBlockX()); data.addProperty("y", at.getBlockY()); data.addProperty("z", at.getBlockZ());
         ownershipFields(data);
@@ -188,9 +191,9 @@ final class GuildStorageOwnership implements Listener {
     private boolean propertyDisplay(Entity entity) { return display(entity) && (inside(entity.getLocation())
             || entity.getPersistentDataContainer().has(displayOwner, PersistentDataType.STRING)); }
     private void markProperty(Entity entity) {
-        if (owner == null || !inside(entity.getLocation())) return;
-        if (display(entity)) entity.getPersistentDataContainer().set(displayOwner, PersistentDataType.STRING, owner.toString());
-        if (entity instanceof Item item) item.getPersistentDataContainer().set(droppedOwner, PersistentDataType.STRING, owner.toString());
+        if (owner() == null || !inside(entity.getLocation())) return;
+        if (display(entity)) entity.getPersistentDataContainer().set(displayOwner, PersistentDataType.STRING, owner().toString());
+        if (entity instanceof Item item) item.getPersistentDataContainer().set(droppedOwner, PersistentDataType.STRING, owner().toString());
     }
     @EventHandler public void onEntitySpawn(EntitySpawnEvent event) { markProperty(event.getEntity()); }
     @EventHandler public void onEntitiesLoad(EntitiesLoadEvent event) {
@@ -201,8 +204,8 @@ final class GuildStorageOwnership implements Listener {
         event.getEntities().forEach(this::markProperty);
     }
     @EventHandler public void onVehicleMove(VehicleMoveEvent event) {
-        if (owner != null && display(event.getVehicle()) && (inside(event.getFrom()) || inside(event.getTo())))
-            event.getVehicle().getPersistentDataContainer().set(displayOwner, PersistentDataType.STRING, owner.toString());
+        if (owner() != null && display(event.getVehicle()) && (inside(event.getFrom()) || inside(event.getTo())))
+            event.getVehicle().getPersistentDataContainer().set(displayOwner, PersistentDataType.STRING, owner().toString());
     }
     private Player responsible(Entity source) {
         if (source instanceof Player player) return player;
@@ -237,8 +240,8 @@ final class GuildStorageOwnership implements Listener {
         return inside(item.getLocation()) || item.getPersistentDataContainer().has(droppedOwner, PersistentDataType.STRING);
     }
     @EventHandler public void onSpawn(ItemSpawnEvent event) {
-        if (inside(event.getLocation()) && owner != null)
-            event.getEntity().getPersistentDataContainer().set(droppedOwner, PersistentDataType.STRING, owner.toString());
+        if (inside(event.getLocation()) && owner() != null)
+            event.getEntity().getPersistentDataContainer().set(droppedOwner, PersistentDataType.STRING, owner().toString());
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onDrop(PlayerDropItemEvent event) {
         if (inside(event.getPlayer().getLocation()) && !owns(event.getPlayer())) {
@@ -247,9 +250,8 @@ final class GuildStorageOwnership implements Listener {
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onPickup(EntityPickupItemEvent event) {
         if (!privateDrop(event.getItem())) return;
-        String originalOwner = event.getItem().getPersistentDataContainer().get(droppedOwner, PersistentDataType.STRING);
-        if (event.getEntity() instanceof Player player && (originalOwner == null ? owns(player)
-                : player.getUniqueId().toString().equals(originalOwner))) return;
+        // Legacy UUID tags identify guild property; current land roles govern access after transfer.
+        if (event.getEntity() instanceof Player player && owns(player)) return;
         event.setCancelled(true);
         if (event.getEntity() instanceof Player player) denied(player, "pickup", event.getItem().getLocation());
     }
@@ -284,7 +286,7 @@ final class GuildStorageOwnership implements Listener {
         JsonObject data = new JsonObject();
         data.addProperty("schemaVersion", 1);
         data.addProperty("hallBuilt", plugin.guildHall().isBuilt());
-        data.addProperty("ownerReady", owner != null);
+        data.addProperty("ownerReady", owner() != null);
         ownershipFields(data);
         data.addProperty("opBypass", false);
         data.addProperty("loadedOnly", true);
