@@ -94,7 +94,7 @@ def probe_neko_adapters(manifest_path=None):
                 checks[f'artifact-{index}'] = (filename.is_absolute() and filename.is_file()
                     and hashlib.sha256(filename.read_bytes()).hexdigest() == row.get('sha256'))
         checks['structured-tool'] = manifest.get('tool') == 'minecraft_mod'
-        checks['native-contract'] = (manifest.get('operationCount') == 48 and manifest.get('samePlayerConnection') is True
+        checks['native-contract'] = (manifest.get('operationCount') == 49 and manifest.get('samePlayerConnection') is True
             and manifest.get('automaticReplay') is False and manifest.get('pluginMessageBroadcast') is False)
     except (OSError, ValueError, TypeError, KeyError) as exc:
         checks['manifest-readable'] = False

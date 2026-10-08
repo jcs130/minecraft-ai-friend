@@ -9,6 +9,7 @@ function attachMenuClient (bot, { timeoutMs = 5000 } = {}) {
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60000) throw new Error('INVALID_MENU_TIMEOUT')
   const events = new EventEmitter()
   const pending = new Map()
+  let pendingClose = null
   let state = null
   let epoch = 0
   let closed = false
@@ -44,6 +45,12 @@ function attachMenuClient (bot, { timeoutMs = 5000 } = {}) {
       if (!validState(body, uuid)) { events.emit('protocolError', new Error('INVALID_MENU_STATE')); return }
       state = body
       events.emit('state', structuredClone(state))
+      if (pendingClose && body.windowId === 0 && pendingClose.uuid === uuid && pendingClose.epoch === epoch) {
+        const request = pendingClose
+        clearTimeout(request.timer); pendingClose = null
+        request.resolve({ schemaVersion: 1, playerUuid: uuid, requestId: request.requestId, action: 'close',
+          ok: true, changed: true, outcomeKnown: true, source: 'native_menu_snapshot_after_vanilla_close', state: structuredClone(state) })
+      }
     } else if (body.kind === 'menu_state_error') {
       state = null
       events.emit('stateError', body)
@@ -75,6 +82,13 @@ function attachMenuClient (bot, { timeoutMs = 5000 } = {}) {
   function reset (code) {
     state = null
     epoch++
+    if (pendingClose) {
+      const request = pendingClose
+      clearTimeout(request.timer); pendingClose = null
+      const error = new Error(`${code} ${request.requestId}: menu close outcome unknown`)
+      Object.assign(error, { requestId: request.requestId, outcomeUnknown: true, retryAutomatically: false })
+      request.reject(error)
+    }
     for (const request of pending.values()) {
       clearTimeout(request.timer)
       const error = new Error(`${code} ${request.requestId}: outcome unknown; inspect authoritative state before any new action`)
@@ -95,6 +109,7 @@ function attachMenuClient (bot, { timeoutMs = 5000 } = {}) {
 
   async function click (slot, button = 0) {
     if (closed) throw new Error('MENU_CONNECTION_CLOSED')
+    if (pendingClose) return { ok: false, code: 'menu_close_in_flight', outcomeKnown: true, outcomeUnknown: false }
     const uuid = identity()
     if (!uuid || !validState(state, uuid)) state = null
     if (!state) throw new Error('MENU_STATE_UNAVAILABLE: wait for maw_agent:menu_state')
@@ -144,10 +159,40 @@ function attachMenuClient (bot, { timeoutMs = 5000 } = {}) {
     })
   }
 
+  // Standard close packet, confirmed by a subsequent authoritative snapshot
+  // on this same player connection. Never infer success from local UI state.
+  async function close () {
+    if (closed) throw new Error('MENU_CONNECTION_CLOSED')
+    const uuid = identity()
+    if (!uuid || !validState(state, uuid)) state = null
+    if (!state) throw new Error('MENU_STATE_UNAVAILABLE: wait for maw_agent:menu_state')
+    const refusal = code => ({ ok: false, code, playerUuid: uuid, outcomeKnown: true, outcomeUnknown: false })
+    if (pending.size || pendingClose) return refusal('menu_action_in_flight')
+    if (state.carried?.count > 0) return refusal('clear_cursor_before_close')
+    if (state.windowId === 0) return { ok: true, changed: false, outcomeKnown: true, playerUuid: uuid, code: 'already_closed', state: structuredClone(state) }
+    const windowId = state.windowId, requestId = randomUUID()
+    return new Promise((resolve, reject) => {
+      const fail = code => {
+        clearTimeout(pendingClose?.timer); pendingClose = null; state = null
+        const error = new Error(`${code} ${requestId}: menu close outcome unknown`)
+        Object.assign(error, { requestId, outcomeUnknown: true, retryAutomatically: false })
+        reject(error)
+      }
+      const timer = setTimeout(() => fail('MENU_CLOSE_TIMEOUT'), timeoutMs)
+      pendingClose = { requestId, uuid, epoch, timer, resolve, reject }
+      try {
+        if (bot.currentWindow?.id === windowId && typeof bot.closeWindow === 'function') bot.closeWindow(bot.currentWindow)
+        else bot._client.write('close_window', { windowId })
+      }
+      catch { fail('MENU_CLOSE_WRITE_FAILED') }
+    })
+  }
+
   return {
     events,
     current: () => !closed && validState(state, identity()) ? structuredClone(state) : null,
     click,
+    close,
     detach: () => {
       bot._client.off('custom_payload', onPayload)
       bot.off('end', onEnd)

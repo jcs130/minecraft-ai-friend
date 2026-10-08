@@ -14,7 +14,7 @@ E:\minecraft-ai-friend-society-lab（服务器源码和接入适配）
 已经接通：
 1. 在 Neko 自己的 Mineflayer 连接上挂接原生 SDK。
 2. N.E.K.O. 的 Minecraft 插件增加 minecraft_mod 工具。
-3. 48 项原生操作的目录、参数说明、真实调用和私有回执。
+3. 49 项原生操作（新增 menu.close 关闭本人模组界面）的目录、参数说明、真实调用和私有回执。
 4. 殖民地、女仆、Ars 法术、Create、Domum、Curios 的已适配功能。
 5. 同一写请求不会重复执行；结果未知时停止继续写入，先查询原回执。
 
@@ -63,4 +63,10 @@ E:\minecraft-ai-friend-society-lab\docs\MY-AGENT-WORLD-NEKO.md
 本轮没有调用模型，没有启动 Neko 的长期自主循环或完整对话桌面端；测试账号已经退出。
 现有服务器、世界和 MawExplorer 保持，原自主暂停没有解除。
 现有网页 http://192.168.3.163:28984 仍是 MawExplorer 的画面，尚未切换成 Neko 画面。
-完整模组玩法、新服基岩、公网准入及 Neko 同连接网页输出仍有待验证。
+完整模组玩法、新服基岩与公网准入仍有待验证。Neko 同连接网页本次已接通，见后面的实机更新。
+
+2026-10-08 实机更新：
+先不接 QwenPaw。mc-agent-neko 已直接使用线上 Coding Plan 的 qwen3.7-plus，以普通账号 MawNeko 实际登录。模型已查询 Ars 法术与符文，打开和关闭本人 Curios 饰品界面，完成约 5.85 格的真实行走，生命 20、死亡 0。
+这是限时测试，非长期自主托管；网页视角在测试存活时使用 http://127.0.0.1:28990/third/，仅当前电脑可访问。原服和原 MawExplorer 暂停状态保持。
+尚未完成自然采集、制造、施法命中、长期殖民地经营及全部视觉模型验收，不能称所有模组都已可自主游玩。
+独立启动入口：tools/start_neko_trial.py --config <绝对配置路径>，密钥通过 MAW_NEKO_CODINGPLAN_API_KEY 环境变量传入；不需要 QwenPaw 服务。每个账号固定账本目录，unknown 先核查，不能删账本重试。

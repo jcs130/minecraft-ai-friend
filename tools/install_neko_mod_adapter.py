@@ -87,6 +87,7 @@ def plan_neko(repo: Path) -> dict[str, tuple[str | None, str]]:
                                  "prismarine-chunk": "1.41.0", "vec3": "0.2.0"})
     planned["package.json"] = (before, json.dumps(package, ensure_ascii=False, indent=4) + "\n")
     planned["src/integrations/maw_native.js"] = (None, (SOURCE / "neko-native.js").read_text(encoding="utf-8"))
+    planned["src/models/maw_codingplan.js"] = (None, (SOURCE / "codingplan-model.js").read_text(encoding="utf-8"))
     planned["package-lock.json"] = (None, (SOURCE / "mc-agent-neko.package-lock.json").read_text(encoding="utf-8"))
     return planned
 
@@ -189,12 +190,13 @@ def main() -> None:
                 stream.write(after)
     if options.record:
         installed = [repo / name for repo, planned in targets for name in planned]
-        owned = [SOURCE / name for name in ("native-runtime.cjs", "neko-native.js", "project-neko/native_mod.py", "mc-agent-neko.package-lock.json")]
+        owned = [SOURCE / name for name in ("native-runtime.cjs", "neko-native.js", "codingplan-model.js", "codingplan-bridge.cjs", "project-neko/native_mod.py", "mc-agent-neko.package-lock.json")]
         owned += [Path(__file__).resolve(), ROOT / "world/src/neoforge-handshake/mod-agent-client.cjs",
-                  ROOT / "world/src/neoforge-handshake/mod-call-client.cjs", ROOT / "world/src/society-agent/action-deadline.cjs"]
+                  ROOT / "world/src/neoforge-handshake/mod-call-client.cjs", ROOT / "world/src/neoforge-handshake/menu-client.cjs",
+                  ROOT / "tools/run_neko_trial.mjs", ROOT / "tools/start_neko_trial.py", ROOT / "world/src/society-agent/action-deadline.cjs"]
         record = {"schemaVersion": 1, "at": datetime.now(timezone.utc).isoformat(),
                   "mcAgentNekoRevision": NEKO_REV, "projectNekoRevision": PROJECT_REV,
-                  "tool": "minecraft_mod", "operationCount": 48, "samePlayerConnection": True,
+                  "tool": "minecraft_mod", "operationCount": 49, "samePlayerConnection": True,
                   "automaticReplay": False, "pluginMessageBroadcast": False,
                   "runtimeObservation": "not_checked", "allModsVerified": False, "publicAccessReady": False,
                   "files": [{"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for p in installed + owned]}

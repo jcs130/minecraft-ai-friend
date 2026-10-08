@@ -55,11 +55,11 @@ const args = {
   'domum.select': { selection: 'variant', groupId: 'domum_ornamentum:fpanel', variantIndex: 2, choiceSnbt: '{count:1}' },
   'collision.query': { position: pos, expectedBlockId: 'minecraft:stone', expectedProperties: {} }
 }
-test('all 48 declared operations dispatch to the exact native adapter with actual arguments', async () => {
+test('all 49 declared operations dispatch to the exact native adapter with actual arguments', async () => {
   const f = fixture()
   try {
     const list = f.api.operations()
-    assert.equal(list.operationCount, 48); assert.equal(list.remoteSupportVerified, false)
+    assert.equal(list.operationCount, 49); assert.equal(list.remoteSupportVerified, false)
     for (const row of list.operations) {
       const result = await f.api.call(row.id, args[row.id] || {})
       assert.equal(result.code, 'native'); assert.equal(f.calls.at(-1).id, row.id)

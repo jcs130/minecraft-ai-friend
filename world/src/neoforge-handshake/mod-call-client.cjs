@@ -71,6 +71,7 @@ const definitions = [
     object({ page: integer(0, 255), expectedContainerId: integer(0, 255), expectedStateId: integer(0, 32767), requestId },
       ['page', 'expectedContainerId', 'expectedStateId']), (c, a) => c.mods.curios.page(a)],
   ['menu.current', true, '本人当前原生菜单缓存；未收到或失效时返回 null。', object(), c => c.menu.current()],
+  ['menu.close', false, '关闭本人当前原生界面；光标必须为空。按原版关闭包发送，等待本人原生菜单快照确认；超时为 unknown，不重试。', object(), c => c.menu.close()],
   ['menu.click', false, '原生 PICKUP，0 左键整堆、1 右键逐个；使用当前完整槽位/游标 CAS。',
     object({ slot: integer(0, 200), button: { ...integer(0, 1), default: 0 } }, ['slot']), (c, a) => c.menu.click(a.slot, a.button ?? 0)],
   ['world.look', true, '服务端读取本人准星首个可见方块及有限真实机器状态。', object(), c => c.world.look()],

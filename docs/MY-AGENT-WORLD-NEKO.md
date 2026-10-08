@@ -2,7 +2,31 @@
 
 2026-10-08：已为 [mc-agent-neko](https://github.com/wehos/mc-agent-neko) 和 [Project N.E.K.O.](https://github.com/Project-N-E-K-O/N.E.K.O) 接通原生模组工具。mc-agent-neko 提供 Mineflayer 身体，N.E.K.O. 现有 Minecraft 插件增加 `minecraft_mod` 工具；后者是可选对话入口，普通 Agent 仍可直接使用框架无关的 [原生 SDK](MY-AGENT-WORLD-NATIVE-CALL-API.md)。
 
-本轮没有替换现役 MawExplorer、启动第二条模型循环、重启 Minecraft 或重生成世界。MawExplorer 的原自主暂停、旧未知导航和模型任务保持。两个 QA 角色已退出，测试 WebSocket 已关闭。本轮验收的是工具调用链，不是 Neko 长期自主生活、对话/语音 UI、所有模组内容或 Neko 自己的网页画面。
+已增加独立普通玩家 MawNeko 的限时实机测试：mc-agent-neko 直接调用阿里云 Coding Plan `qwen3.7-plus`，不连接 QwenPaw，也不启动 N.E.K.O. 对话平台。没有替换现役 MawExplorer、重启 Minecraft 或重生成世界；MawExplorer 的原自主暂停、旧未知导航和模型任务保持。前一阶段的两个 QA 已退出；本次账号与记录独立。
+
+## 直接模型实机测试（2026-10-08）
+
+真实模型已完成 Ars 法术目录、6 项符文及各自已学习状态查询，打开本人 Curios 饰品菜单，并用新增 `menu.close` 关闭。关闭发送标准 `close_window`，必须收到同一玩家后续原生 `windowId=0` 快照才确认成功；光标有物品时拒绝，断线或超时为 unknown。它不是点击空槽或伪造本地界面状态。
+
+隔离自动脱困干扰后，模型选择目标并实际走了约 5.85 格，最终位置约 `(-429.56,66,390.5)`，生命 20、死亡 0。模型自己的到达描述不能代替真实位置：目标是 `(-429.5,65,390.5)`，实际到达其附近，并非逐坐标完全相等。本次未授予 OP、物资或传送，也未完成自然采集、制造、施法命中或长期殖民地经营。
+
+同一个 bot 已接入 mc-visual-console 原资产视角：`http://127.0.0.1:28990/third/`。该端口仅本机，限时进程退出后关闭。村庄、位置、真实模组物品名与已支持的原资产图标可见；Soul Spell 专用模型仍明确标为未支持，完整人物/动画/界面一致性不作已验收声明。法术/魔力 HUD 当前未取得匹配快照时显示未同步，不能填默认值冒充。
+
+入口为 `tools/start_neko_trial.py --config <绝对配置路径>`，密钥只从进程环境 `MAW_NEKO_CODINGPLAN_API_KEY` 传入。无需安装、启动或调用 QwenPaw；本机可选 `--credential-file` 只用其现有本地解密器读取已加密凭据，不连接其 API 或修改配置。模型模块由安装器复制到上游 `src/models/maw_codingplan.js`，profile 使用 `{ "api":"mawcp", "model":"qwen3.7-plus" }`。
+
+本机配置和私有证据在 `E:\QiandengJiSocietyLab\integrations\neko\trial-20261008`，故障归档在 `research/neko-run-20261008`，不提交凭据或原始游戏日志。运行器有唯一进程锁、心跳、15 分钟时限与外层停止回路；本次保留同一账号/账本，累计模型调用上限经复核由 24 增至 32，没有删除旧记录或更换账号绕过未知结果。默认上限 24，配置硬上限 64；不自动重试模型异常或游戏未知写入。`stop.requested` 请求正常退出；旧锁、未完成意图和 unknown 必须先检查，不能清账本重跑。
+
+本次暴露并修复 ESM 循环导入初始化、日志包装破坏上游动作函数身份、缺少关闭模组菜单及网页状态包含 Vec3 实例的问题。上游自动脱困曾抢断行走并挖走 1 个泥土，记录保留；最终测试禁用自主模式和导航中的挖掘/搭建，受伤即停止。前期耗尽自设测试预算是本地限额，不是 Coding Plan 套餐用尽。
+
+本次定向回归 213 项 Node、9 项 Python 通过，Neko 上游命令/JSON 转义/身体占用/私有 WebSocket 入口检查通过；不是全部上游平台测试。原服 runId 和 Java/网关/worker PID 不变，原自主暂停、model-task 与 QwenPaw 配置/凭据文件哈希逐项未变。源码更新后重新生成安装清单，`--neko` 仍只验文件，不把限时实测冒充长期在线健康。
+
+首次部署可复制 [trial.example.json](../world/src/neko-adapter/trial.example.json) 到自己的部署目录，核对本机 Node、模组资产及仓库绝对路径，固定玩家名和状态目录。示例复用 28990/28991/48909，须等当前测试结束或选择空闲端口；启动器不会接管已有进程。由安全终端环境提供密钥后运行：
+
+```powershell
+python tools/start_neko_trial.py --config E:\自己的部署目录\neko-trial.json
+```
+
+首次自动创建状态目录及 `model-config.json`；后续保留该文件与调用账本，不因重启自动清空或放宽限额。`status.json` 是当前快照，`trial-events.jsonl`、`command-results.jsonl`、`native-packets.jsonl`、`model-calls.jsonl` 是私有累计证据；`process-exit.json` 记录外层回收结果。完整模组菜单与模型回复可能包含游戏隐私，不能直接上传公共仓库。
 
 ## 实际接入链
 
@@ -18,7 +42,7 @@ Project N.E.K.O. 的 minecraft_mod(operation, id, args, callId)
 
 Neko 自己的模型也能使用 `!modList()`、`!modExplain("id")`、`!modCall("id", "参数JSON字符串")`、`!modStatus()`、`!modResult("callId")`。命令文档会自动包含这些入口，解析器支持转义的 JSON 字符串与完整 SNBT。普通移动、战斗和采集仍使用原 Neko 工具；模组身份、完整物品组件、窗口与 CAS 通过原生接口读取，不能拿代理 player_head 或代理方块 ID 当成实际模组内容。
 
-现有 48 项原生操作中 23 项只读、25 项变更；同一本人连接注册 19 个 SDK 频道。范围包括殖民地岗位/研究/供料、女仆任务/背包、Ars 学习/编书/选槽/施法、Create 设置/过滤/流体查询、Domum 切割与 Curios 饰品。目录存在不代表任意机器、原生 GUI 或完整自主生产链都已经适配，具体限制见 [模组操作指南](MY-AGENT-WORLD-MOD-OPERATIONS.md)。
+现有 49 项原生操作中 23 项只读、26 项变更（含 menu.close）；同一本人连接注册 19 个 SDK 频道。范围包括殖民地岗位/研究/供料、女仆任务/背包、Ars 学习/编书/选槽/施法、Create 设置/过滤/流体查询、Domum 切割与 Curios 饰品。目录存在不代表任意机器、原生 GUI 或完整自主生产链都已经适配，具体限制见 [模组操作指南](MY-AGENT-WORLD-MOD-OPERATIONS.md)。
 
 ## 安装与配置
 
@@ -89,4 +113,4 @@ python world/ops/health/health_mon.py --society
 
 `--neko` 只检查安装清单与当前代码/锁文件哈希，明确不代表 Neko 已自主在线。`--society` 仍检查现役三服务；其中 autonomy-active 因用户原自主暂停为 false，不能冒充全绿。安装收据在 `E:\QiandengJiSocietyLab\integrations\neko\installation.json`，私有实测证据在 `research/neko-adapter-20261008/`，都不提交。
 
-持久在线 Neko 必须接入进程守护、健康与停机回路，并完成模型路由；本次没有新增裸常驻进程。现有 `http://192.168.3.163:28984` 仍显示 MawExplorer，不能当成 Neko 视角。Neko 同连接的 mc-visual-console 输出尚未接线，完整动画/碰撞、复杂生产和新服基岩/公网仍按原能力清单保留未验项。
+本次只有带守护与时限的 Neko 实机测试，尚未设为长期托管服务。现有 `http://192.168.3.163:28984` 仍显示 MawExplorer；MawNeko 使用上文 28990 同连接视角。完整动画/碰撞、复杂生产和新服基岩/公网仍按原能力清单保留未验项。

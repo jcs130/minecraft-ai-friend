@@ -16,7 +16,8 @@ function fixture (t, options) {
   bot._client = new EventEmitter()
   bot._client.uuid = OWN
   const writes = []
-  bot._client.write = (name, packet) => writes.push({ name, channel: packet.channel, request: JSON.parse(packet.data.toString('utf8')) })
+  bot._client.write = (name, packet) => writes.push({ name, channel: packet.channel,
+    request: name === 'custom_payload' ? JSON.parse(packet.data.toString('utf8')) : packet })
   const menu = attachMenuClient(bot, options)
   t.after(() => menu.detach())
   const emit = body => bot._client.emit('custom_payload', { channel: 'maw_agent:menu_state', data: Buffer.from(JSON.stringify(body)) })
@@ -179,4 +180,63 @@ test('disconnect keeps old client closed and invalidates state and pending actio
   assert.equal(menu.current(), null)
   await assert.rejects(menu.click(0), /MENU_CONNECTION_CLOSED/)
   assert.equal(writes.length, 1)
+})
+
+test('native menu close uses standard packet and requires later owned window-zero state', async t => {
+  const { menu, emit, writes } = fixture(t)
+  emit(state())
+  let resolved = false
+  const result = menu.close().then(value => { resolved = true; return value })
+  assert.deepEqual(writes, [{ name: 'close_window', channel: undefined, request: { windowId: 3 } }])
+  assert.equal((await menu.click(0)).code, 'menu_close_in_flight')
+  emit(state({ windowId: 0, playerUuid: OTHER, self: { playerUuid: OTHER } }))
+  emit(state())
+  await Promise.resolve()
+  assert.equal(resolved, false)
+  emit(state({ windowId: 0 }))
+  const receipt = await result
+  assert.equal(receipt.ok, true)
+  assert.equal(receipt.outcomeKnown, true)
+  assert.equal(receipt.source, 'native_menu_snapshot_after_vanilla_close')
+  assert.equal(receipt.state.windowId, 0)
+  assert.equal((await menu.close()).code, 'already_closed')
+  assert.equal(writes.length, 1)
+})
+
+test('recognized vanilla windows retain Mineflayer close bookkeeping but still need native confirmation', async t => {
+  const { menu, bot, emit, writes } = fixture(t)
+  bot.currentWindow = { id: 3 }
+  bot.closeWindow = window => { bot._client.write('close_window', { windowId: window.id }); bot.currentWindow = null }
+  emit(state())
+  const result = menu.close()
+  assert.equal(bot.currentWindow, null)
+  assert.deepEqual(writes[0].request, { windowId: 3 })
+  emit(state({ windowId: 0 }))
+  assert.equal((await result).outcomeKnown, true)
+})
+
+test('close refuses occupied cursor and concurrent click without a close packet', async t => {
+  const { menu, emit, writes, receipt } = fixture(t)
+  emit(state({ carried: { id: 'minecraft:diamond', count: 1, snbt: 'full-components' } }))
+  assert.equal((await menu.close()).code, 'clear_cursor_before_close')
+  assert.equal(writes.length, 0)
+  emit(state())
+  const click = menu.click(0)
+  assert.equal((await menu.close()).code, 'menu_action_in_flight')
+  receipt(writes[0].request.requestId)
+  await click
+  assert.equal(writes.length, 1)
+})
+
+test('lost close snapshot and lifecycle change stay unknown and never replay the close', async t => {
+  for (const lifecycle of [null, 'respawn', 'end']) {
+    const { menu, bot, emit, writes } = fixture(t, { timeoutMs: 15 })
+    emit(state())
+    const close = menu.close()
+    const rejected = assert.rejects(close, error => error.outcomeUnknown === true && error.retryAutomatically === false)
+    if (lifecycle) bot.emit(lifecycle)
+    await rejected
+    assert.equal(writes.length, 1)
+    assert.equal(menu.current(), null)
+  }
 })
