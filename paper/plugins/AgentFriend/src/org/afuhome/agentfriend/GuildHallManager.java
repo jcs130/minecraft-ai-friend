@@ -468,13 +468,14 @@ final class GuildHallManager implements Listener {
     void storageInfo(Player player) {
         if (!servicesBuilt || !ready) { player.sendMessage("§e公会共享箱尚未开放。"); return; }
         player.sendMessage("§c公会门内实体储物和展示物归" + plugin.guildStorage().ownerLabel() + "所有，未授权的人无权取放；需要物资装备请使用门口东南侧公共箱。");
-        player.sendMessage("§6公会东南侧有四组双箱。所有玩家可像普通箱子一样存放和取用；不是个人奖励箱。");
+        player.sendMessage("§6公会东南侧有四类公共双箱；上层扩容箱同样可存取。所有玩家可像普通箱子一样使用；不是个人奖励箱。");
         for (int i = 0; i < SHARED_LABELS.length; i++) {
             int dz = 7 + i * 2;
             player.sendMessage("MC_GUILD_SHARED id=" + new String[]{"weapons", "armor", "supplies", "misc"}[i]
                     + " name=" + SHARED_LABELS[i] + " dimension=minecraft:overworld x=" + (x + 16)
                     + " y=" + (y + 1) + " z=" + (z + dz) + " scope=public slots=54");
         }
+        if (plugin.guildShared() != null) plugin.guildShared().storageInfo(player);
     }
 
     Inventory sharedInventory(int category) {
@@ -548,7 +549,7 @@ final class GuildHallManager implements Listener {
         menu.setItem(10, menuItem(Material.WRITABLE_BOOK, "§e聊聊公会任务", "§7查看今日委托和冒险者等级"));
         menu.setItem(12, menuItem(Material.EMERALD, "§a购买装备与补给", "§7用个人绿宝石余额结算"));
         menu.setItem(14, menuItem(Material.HOPPER, "§6回收多余装备", "§7从背包或个人奖励箱选取并确认"));
-        menu.setItem(16, menuItem(Material.CHEST, "§b公会共享箱", "§7大厅东南侧，四组普通双箱，可存可取"));
+        menu.setItem(16, menuItem(Material.CHEST, "§b公会共享箱", "§7大厅东南侧，四类箱与上层扩容，可存可取"));
         menu.setItem(22, menuItem(Material.EMERALD_BLOCK, "§a实体绿宝石交易", "§7原版村民交易界面"));
         receptionMenus.put(menu, player.getUniqueId());
         player.openInventory(menu);

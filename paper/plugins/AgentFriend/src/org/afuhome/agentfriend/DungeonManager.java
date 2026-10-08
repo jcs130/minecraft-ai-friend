@@ -1591,19 +1591,22 @@ final class DungeonManager implements Listener {
     /** Console-only, previewable transfer of ordinary personal-stash surplus to the public guild chests. */
     void donatePlainStash(Player target, GuildHallManager hall, boolean apply, CommandSender sender) {
         Inventory source = liveStash(target.getUniqueId());
-        Inventory[] shared = new Inventory[4];
-        Inventory[] simulated = new Inventory[4];
-        for (int category = 0; category < shared.length; category++) {
-            shared[category] = hall.sharedInventory(category);
-            if (shared[category] == null) {
+        List<List<Inventory>> shared = new ArrayList<>(), simulated = new ArrayList<>();
+        for (int category = 0; category < 4; category++) {
+            List<Inventory> pool = plugin.guildShared().inventories(category);
+            if (pool == null) {
                 sender.sendMessage("MC_STASH_SHARE ok=false reason=shared_chest_unavailable category=" + category);
                 return;
             }
-            simulated[category] = Bukkit.createInventory(null, 54);
-            ItemStack[] contents = shared[category].getContents();
-            for (int slot = 0; slot < contents.length; slot++)
-                if (contents[slot] != null) contents[slot] = contents[slot].clone();
-            simulated[category].setContents(contents);
+            shared.add(pool); List<Inventory> simulation = new ArrayList<>();
+            for (Inventory physical : pool) {
+                Inventory copy = Bukkit.createInventory(null, 54);
+                ItemStack[] contents = physical.getContents();
+                for (int slot = 0; slot < contents.length; slot++)
+                    if (contents[slot] != null) contents[slot] = contents[slot].clone();
+                copy.setContents(contents); simulation.add(copy);
+            }
+            simulated.add(simulation);
         }
         List<GuildDonation> plan = new ArrayList<>();
         int[] groups = new int[4];
@@ -1617,11 +1620,7 @@ final class DungeonManager implements Listener {
                 continue;
             }
             int category = guildDonationCategory(item.getType());
-            ItemStack[] before = simulated[category].getContents();
-            for (int prior = 0; prior < before.length; prior++)
-                if (before[prior] != null) before[prior] = before[prior].clone();
-            if (!simulated[category].addItem(item.clone()).isEmpty()) {
-                simulated[category].setContents(before);
+            if (GuildSharedStorage.place(simulated.get(category), item.clone()) == null) {
                 skippedFull++;
                 continue;
             }
@@ -1633,19 +1632,15 @@ final class DungeonManager implements Listener {
                 + " weapons=" + groups[0] + " armor=" + groups[1]
                 + " supplies=" + groups[2] + " misc=" + groups[3]);
         if (!apply || plan.isEmpty()) return;
-        ItemStack[][] originals = new ItemStack[4][];
-        for (int category = 0; category < shared.length; category++) {
-            originals[category] = shared[category].getContents();
-            for (int slot = 0; slot < originals[category].length; slot++)
-                if (originals[category][slot] != null) originals[category][slot] = originals[category][slot].clone();
-        }
+        List<GuildSharedStorage.Receipt> changes = new ArrayList<>();
         for (GuildDonation move : plan) {
-            if (!shared[move.category()].addItem(move.item().clone()).isEmpty()) {
-                for (int category = 0; category < shared.length; category++)
-                    shared[category].setContents(originals[category]);
+            GuildSharedStorage.Receipt receipt = GuildSharedStorage.place(shared.get(move.category()), move.item().clone());
+            if (receipt == null) {
+                for (int i = changes.size() - 1; i >= 0; i--) changes.get(i).rollback();
                 sender.sendMessage("MC_STASH_SHARE ok=false reason=destination_changed rollback=true");
                 return;
             }
+            changes.add(receipt);
         }
         for (GuildDonation move : plan) {
             source.setItem(move.slot(), null);

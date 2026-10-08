@@ -183,7 +183,7 @@ final class AgentCliCatalog {
         add(specs,"guild.claim","adventure","item","/mycli guild claim","交付已完成任务并结算声望/奖励","活动任务已达成","声望与奖励箱结果");
         add(specs,"guild.rewards","storage","gui","/mycli guild rewards","打开与试炼共用的本人奖励箱","远程开启 2 魔力；实体箱旁免费","原版箱子菜单与远程 MC_STORAGE_MAGIC");
         add(specs,"guild.stash","storage","gui","/mycli guild stash","打开与试炼共用的本人私人箱","远程开启 2 魔力；实体箱旁免费","原版箱子菜单与远程 MC_STORAGE_MAGIC");
-        add(specs,"guild.shared","storage","read","/mycli guild shared","门内物品服从当前领地主人；门口四组公共双箱所有玩家可存取","公会服务区已建成；实体开箱前可用 protect.container 查询","MC_GUILD_SHARED 坐标及54格容量；门内无权操作返回 MC_GUILD_ACCESS");
+        add(specs,"guild.shared","storage","read","/mycli guild shared","门内物品服从当前领地主人；门口四类公共箱及同类扩容箱所有玩家可存取","公会服务区已建成；实体开箱前可用 protect.container 查询；交付自动使用同类空箱","原 MC_GUILD_SHARED 坐标及54格容量；新增 MC_GUILD_SHARED_OVERFLOW 坐标；满仓 MC_GUILD_DELIVERY denied/itemsDebited=false；门内无权操作 MC_GUILD_ACCESS");
         add(specs,"guild.trader","adventure","gui","/mycli guild trader","查看公会接待员坐标；到门口打开购买、回收和任务菜单","公会服务区已建成","MC_GUILD_TRADER 与原版容器菜单");
         add(specs,"guild.travel","adventure","teleport","/mycli guild travel <遗迹ID>","前往已开放地下城遗迹的外围安全点","ID 从公会看板/文档获取；目标可用；8 魔力","成功后 MC_TRAVEL 或拒绝原因");
         add(specs,"life.board","life","read","/mycli life board","查看七类生活公会的每日委托和精确 ID","在线玩家","私人看板文字");

@@ -1,0 +1,9 @@
+# Additional physical double chests. Both halves must first be declared public
+# in lands.yml; this file never creates blocks or moves existing belongings.
+# After construction: /mycli admin land reload, then /mycli admin sharedstorage reload.
+schema-version: 1
+extras:
+  weapons: []
+  armor: []
+  supplies: []
+  misc: []

@@ -201,6 +201,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private LifeGuildBuildings lifeBuildings;
     private VillageWatchManager villageWatch;
     private GuildHallManager guildHall;
+    private GuildSharedStorage guildShared;
     private GuildStorageOwnership guildStorage;
     private PvpArenaManager pvpArena;
     private TrialRoadManager trialRoad;
@@ -265,6 +266,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         lifeBuildings = new LifeGuildBuildings(this, lifeGuild);
         protectionAdvisor = new ProtectionAdvisor(this);
         lands = new LandManager(this);
+        guildShared = new GuildSharedStorage(this);
         guildStorage = new GuildStorageOwnership(this);
         waypoints = new WaypointManager(this);
         landmarks = new LandmarkManager(this);
@@ -343,6 +345,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private World world() { return Bukkit.getWorld("world"); }
     VillageStructureProtection villageProtection() { return villageStructureProtection; }
     GuildHallManager guildHall() { return guildHall; }
+    GuildSharedStorage guildShared() { return guildShared; }
     GuildStorageOwnership guildStorage() { return guildStorage; }
     ProtectionAdvisor protectionAdvisor() { return protectionAdvisor; }
     LandManager lands() { return lands; }
@@ -743,6 +746,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 sender.sendMessage("只允许服务器控制台审计公会物品归属。"); return true;
             }
             guildStorage.audit(sender); return true;
+        }
+        if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("sharedstorage")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台管理公共仓库；玩家使用 /mycli guild shared 查询。"); return true;
+            }
+            if (args.length == 3 && args[2].equalsIgnoreCase("reload")) guildShared.reload(sender);
+            else if (args.length == 3 && args[2].equalsIgnoreCase("audit")) guildShared.audit(sender);
+            else sender.sendMessage("mycli admin sharedstorage reload|audit；编辑 guild-shared-chests.yml 后重载。");
+            return true;
         }
         if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("land")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {

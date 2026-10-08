@@ -1,0 +1,32 @@
+{
+  "version": "0.3.94",
+  "status": "candidate-not-deployed",
+  "sha256": "C53FA4AB275867001EC1274A362C376389E6A3E0D9F09DAE433EC6648A240455",
+  "bytes": 800787,
+  "currentProductionVersion": "0.3.92",
+  "onlinePhysicalRepair": {
+    "completedAt": "2026-10-08T09:42:11.561Z",
+    "publicGroups": 12,
+    "slots": 648,
+    "movedStacks": 80,
+    "fullItemComponentsVerifiedPerTransfer": true,
+    "allBoxesOpenToNonownerFromGround": true,
+    "originalPrivateGuildOwnerPreserved": true,
+    "restarted": false,
+    "sharedSnapshotStoneBrickDelta": -4,
+    "pickupAndDepositCountForThatStack": 48
+  },
+  "validation": {
+    "candidateFunctionalChecks": 21,
+    "normalRestartChecks": 7,
+    "productionOnlineReadOnlyChecks": 19,
+    "allPassed": true,
+    "stageRestored": true,
+    "actualBedrockXboxVisualVerified": false,
+    "new16LlmGameplayLoadTest": false
+  },
+  "releaseGate": "Afu-MC-DailyBackup; no human player or active dungeon; E/F complete full backup before JAR replacement",
+  "agentClientChanges": false,
+  "includesSourceFeaturesFrom": "0.3.93",
+  "rollback": "preserve physical overflow chests, goods and public land rules; old plugin needs manual original-chest headroom"
+}

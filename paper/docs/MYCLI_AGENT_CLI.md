@@ -89,3 +89,8 @@
 `profession choose warrior|mage|priest` 只解锁入门学习资格。`skills points/info <ID>/mine` 查询；`skills learn <ID>` 与 `upgrade <ID>` 明确花点，`prepare/unprepare` 调整四项主动和一项传承。`skills respec confirm` 默认10魔力、5分钟冷却，退回实际已花点数，保留解锁资格、唯一归属和旧施法冷却。旧基础资格保留，新玩家需学习通用技能。
 
 新增私有 `MC_SKILL_POINTS` 和 `MC_SKILL.level/maxLevel/nextPointCost/levels[]`；`MC_SKILL_UNLOCK` 表示资格，不表示免费学会。旧状态 schemaVersion 与频道保持，profession.points 为增量字段。命格书、原版学习/洗点确认菜单提供真人入口。详情见 [战法牧与技能点](CHARACTER_SKILLS.md)。
+
+
+## 公会共享箱扩容（2026-10-08）
+
+实体仓库已在线扩至四类各三组、共648格，原公共箱上方Y=69/71也可正常取放，牌子已更新。当前0.3.92交付仍用底层；红石/石砖已腾位，可用原`guild claim`重试。0.3.94候选保留四条`MC_GUILD_SHARED`，新增八条`MC_GUILD_SHARED_OVERFLOW category/group/x/y/z`，同类自动分流，供货成功返回`MC_GUILD_DELIVERY status=success`及实际收货箱；全满/权限异常返回`status=denied reason=public_storage_full_or_unavailable itemsDebited=false`，勿自行丢物或假报成功。门内私产仍受保护。[运营与回退](GUILD_SHARED_STORAGE.md)。

@@ -802,8 +802,10 @@ final class GuildManager implements Listener {
         if (doneToday(player, quest)) {
             player.sendMessage(ChatColor.RED + "今日奖励已结算；请联系服主核对异常记录。"); return;
         }
-        ItemStack[] playerBefore = null, chestBefore = null;
-        Inventory chest = null;
+        ItemStack[] playerBefore = null;
+        GuildSharedStorage.Receipt delivery = null;
+        int deliveryCategory = -1;
+        Material deliveredMaterial = null;
         DailyBoardManager.Card dynamic = null;
         if (plugin.dailyBoard() != null && plugin.dailyBoard().card(quest.id()) != null) {
             java.util.Map<?, ?> snapshot = snapshot(player);
@@ -824,27 +826,27 @@ final class GuildManager implements Listener {
             int deliveryChest = dynamic != null ? dynamic.chest() : plugin.taskMarket().isMarket(quest.id())
                     ? plugin.taskMarket().chest(player) : -1;
             if (deliveryChest >= 0) {
-                chest = plugin.guildHall().sharedInventory(deliveryChest);
-                if (chest == null || freeCapacity(chest, offer) < quest.target()) {
-                    player.sendMessage(ChatColor.YELLOW + "公共补给箱暂时不可用或已满；物品未扣除，请稍后再交付。");
+                delivery = plugin.guildShared().deposit(deliveryChest, new ItemStack(offer, quest.target()));
+                if (delivery == null) {
+                    player.sendMessage(ChatColor.YELLOW + "同类公共箱及扩容箱空间不足或暂不可用；物品未扣除，任务和奖励未改变。/mycli guild shared 查看公共仓库。");
+                    player.sendMessage("MC_GUILD_DELIVERY {\"schemaVersion\":1,\"status\":\"denied\",\"reason\":\"public_storage_full_or_unavailable\",\"itemsDebited\":false}");
                     return;
                 }
-                chestBefore = cloneItems(chest.getContents());
-                if (!chest.addItem(new ItemStack(offer, quest.target())).isEmpty()) {
-                    chest.setContents(chestBefore);
-                    player.sendMessage(ChatColor.RED + "补给箱没能收下物品；请联系服主核对。"); return;
-                }
+                deliveryCategory = deliveryChest; deliveredMaterial = offer;
             }
             if (!removePlainStorage(player, offer, quest.target())) {
                 player.getInventory().setStorageContents(playerBefore);
-                if (chest != null) chest.setContents(chestBefore);
+                if (delivery != null) delivery.rollback();
                 player.sendMessage(ChatColor.RED + "背包物品发生变化；交付未执行，请重试。"); return;
             }
         }
-        if (plugin.taskMarket().isMarket(quest.id()) && plugin.taskMarket().advanceStep(player)) return;
+        if (plugin.taskMarket().isMarket(quest.id()) && plugin.taskMarket().advanceStep(player)) {
+            if (delivery != null) delivery.announce(player, deliveryCategory, deliveredMaterial, quest.target());
+            return;
+        }
         if (plugin.taskMarket().isMarket(quest.id()) && !plugin.taskMarket().beforeComplete(player)) {
             if (playerBefore != null) player.getInventory().setStorageContents(playerBefore);
-            if (chest != null) chest.setContents(chestBefore);
+            if (delivery != null) delivery.rollback();
             return;
         }
         String path = base(player.getUniqueId());
@@ -852,7 +854,7 @@ final class GuildManager implements Listener {
         if (effectiveRank(player) >= 3) emeraldGain += Math.max(1, quest.emeralds() / 10); // 黄金特权：结算绿宝石 +10%
         if (!dungeon.queueGuildRewards(player.getUniqueId(), emeraldGain, quest.bonus(), quest.bonusCount())) {
             if (playerBefore != null) player.getInventory().setStorageContents(playerBefore);
-            if (chest != null) chest.setContents(chestBefore);
+            if (delivery != null) delivery.rollback();
             player.sendMessage(ChatColor.RED + "个人奖励箱数据异常，交付未执行；请联系服主核对。");
             plugin.getLogger().warning("Guild reward refused: player=" + player.getUniqueId()
                     + ", contract=" + quest.id());
@@ -874,7 +876,8 @@ final class GuildManager implements Listener {
                 + (dims >= 3 ? "（含三维度 +20% 加成，今日已集 " + dims + " 个维度）" : "")
                 + "，绿宝石 ×" + emeraldGain + "及额外奖励已存入个人试炼箱。");
         if (dynamic != null) player.sendMessage(ChatColor.GREEN + dynamic.beneficiary()
-                + "收到了这份帮助。" + (chest == null ? "" : "物资已进入公会公共箱。"));
+                + "收到了这份帮助。" + (delivery == null ? "" : "物资已进入公会公共仓库（含同类扩容箱）。"));
+        if (delivery != null) delivery.announce(player, deliveryCategory, deliveredMaterial, quest.target());
         if (rankIndex(nextFame) > certified(player)) checkCertify(player);
         plugin.getLogger().info("Guild claimed: player=" + player.getUniqueId() + ", contract=" + quest.id()
                 + ", fame=" + nextFame);

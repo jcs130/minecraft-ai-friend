@@ -265,6 +265,11 @@ final class LandManager implements Listener {
     }
 
     boolean contains(Location at) { return find(at) != null; }
+    boolean publicContainer(Location at) {
+        Land land = find(at);
+        return ready && land != null && land.publicContainers().contains(
+                BlockVector3.at(at.getBlockX(), at.getBlockY(), at.getBlockZ()));
+    }
     List<String> ids() { return lands.keySet().stream().sorted().toList(); }
     List<String> landmarkLands(Player player) {
         return lands.values().stream().filter(l -> l.landmark() && l.owner().equals(player.getUniqueId()))

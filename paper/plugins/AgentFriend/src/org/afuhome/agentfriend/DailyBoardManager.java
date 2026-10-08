@@ -258,8 +258,8 @@ final class DailyBoardManager implements Listener {
         return switch (template.source()) {
             case "always" -> true;
             case "shared_stock" -> {
-                Inventory chest = plugin.guildHall().sharedInventory(template.chest());
-                yield chest != null && stock(chest, template.item()) < template.triggerBelow();
+                int count = plugin.guildShared().plainStock(template.chest(), template.item());
+                yield count >= 0 && count < template.triggerBelow();
             }
             case "rainy" -> {
                 World world = Bukkit.getWorld("world");
@@ -281,9 +281,8 @@ final class DailyBoardManager implements Listener {
     private Card resolve(Template template, String day) {
         int count = template.target(), stock = 0;
         if (template.chest() >= 0) {
-            Inventory chest = plugin.guildHall().sharedInventory(template.chest());
-            if (chest == null) return null;
-            stock = stock(chest, template.item());
+            stock = plugin.guildShared().plainStock(template.chest(), template.item());
+            if (stock < 0) return null;
             count = Math.min(template.maxRequest(), Math.max(1, template.triggerBelow() - stock));
         }
         String itemText = template.item() == null ? "" : template.item().name().toLowerCase(Locale.ROOT);
