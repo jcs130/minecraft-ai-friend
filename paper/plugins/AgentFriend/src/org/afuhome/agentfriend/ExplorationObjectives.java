@@ -156,10 +156,13 @@ final class ExplorationObjectives {
     private final AgentFriendPlugin plugin;
     private final Map<UUID, Survey> surveys = new HashMap<>();
     private boolean dirty;
-    ExplorationObjectives(AgentFriendPlugin plugin) { this.plugin = plugin; }
-    private String path(Player p) { return "guild-players." + p.getUniqueId() + ".active.market.exploration"; }
+    private final java.util.function.Function<Player,String> pathProvider;
+    ExplorationObjectives(AgentFriendPlugin plugin) { this(plugin,p->"guild-players." + p.getUniqueId() + ".active.market.exploration"); }
+    ExplorationObjectives(AgentFriendPlugin plugin,java.util.function.Function<Player,String> pathProvider) { this.plugin=plugin;this.pathProvider=pathProvider; }
+    private String path(Player p) { return pathProvider.apply(p); }
     void resetMovement(Player p) { Survey s = surveys.get(p.getUniqueId()); if (s != null) s.previous = null; }
     void clear(Player p) { surveys.remove(p.getUniqueId()); plugin.getConfig().set(path(p), null); }
+    void forget(Player p) { surveys.remove(p.getUniqueId()); }
     void quit(Player p) { surveys.remove(p.getUniqueId()); flush(); }
     void flush() { if (dirty) { dirty = false; plugin.saveConfig(); } }
     EngineeringSites.Result observe(Player p, Target target, int required, String token) {

@@ -102,8 +102,8 @@ final class ArenaEconomy implements Listener {
     private void openRecycleMenu(Player player, int page) {
         List<Candidate> candidates = new ArrayList<>();
         Inventory stash = dungeon.liveStash(player.getUniqueId());
-        for (int slot = 0; slot < stash.getSize(); slot++)
-            if (eligible(stash.getItem(slot))) candidates.add(new Candidate(true, slot));
+        for (int slot = 0; slot < dungeon.stashCapacity(); slot++)
+            if (eligible(dungeon.stashItem(player.getUniqueId(),slot))) candidates.add(new Candidate(true, slot));
         for (int slot = 0; slot < 36; slot++)
             if (eligibleSource(player, false, slot, player.getInventory().getItem(slot)))
                 candidates.add(new Candidate(false, slot));
@@ -198,10 +198,12 @@ final class ArenaEconomy implements Listener {
     void pruneChestDuplicates(Player player, boolean apply, CommandSender sender) {
         UUID owner = player.getUniqueId();
         Inventory stash = dungeon.liveStash(owner);
+        int usedSlots = (int) java.util.Arrays.stream(dungeon.stashContents(owner))
+                .filter(item -> item != null && !item.getType().isAir()).count();
         List<Integer> remove = new ArrayList<>();
         int total = 0;
-        for (int slot = 0; slot < stash.getSize(); slot++) {
-            ItemStack item = stash.getItem(slot);
+        for (int slot = 0; slot < dungeon.stashCapacity(); slot++) {
+            ItemStack item = dungeon.stashItem(owner,slot);
             if (item == null || item.getAmount() != 1 || !eligible(item)
                     || !item.hasItemMeta() || !item.getItemMeta().hasDisplayName()
                     || !item.getItemMeta().hasLore()) continue;
@@ -209,7 +211,7 @@ final class ArenaEconomy implements Listener {
             for (ItemStack bag : player.getInventory().getContents())
                 if (bag != null && bag.isSimilar(item)) { kept = true; break; }
             for (int previous = 0; !kept && previous < slot; previous++) {
-                ItemStack other = stash.getItem(previous);
+                ItemStack other = dungeon.stashItem(owner,previous);
                 if (other != null && other.isSimilar(item) && !remove.contains(previous)) kept = true;
             }
             if (!kept) continue;
@@ -227,11 +229,11 @@ final class ArenaEconomy implements Listener {
         }
         sender.sendMessage("MC_ARENA_PRUNE player=" + player.getName() + " apply=" + apply
                 + " count=" + remove.size() + " credited=" + total
-                + " chestUsedBefore=" + (stash.getSize() - countEmpty(stash))
-                + " chestUsedAfter=" + (stash.getSize() - countEmpty(stash) - remove.size())
+                + " chestUsedBefore=" + usedSlots
+                + " chestUsedAfter=" + (usedSlots - remove.size())
                 + " balanceBefore=" + balance(owner) + " balanceAfter=" + (balance(owner) + total));
         if (!apply || remove.isEmpty()) return;
-        for (int slot : remove) stash.setItem(slot, null);
+        for (int slot : remove) dungeon.setStashItem(owner,slot,null);
         plugin.getConfig().set(WALLET + owner, balance(owner) + total);
         dungeon.saveStash(stash, owner);
         sender.sendMessage("MC_ARENA_PRUNE success=true player=" + player.getName() + " removed=" + remove.size());
@@ -249,7 +251,7 @@ final class ArenaEconomy implements Listener {
                     || !item.hasItemMeta() || !item.getItemMeta().hasDisplayName()
                     || !item.getItemMeta().hasLore()) continue;
             boolean kept = false;
-            for (ItemStack chestItem : stash.getContents())
+            for (ItemStack chestItem : dungeon.stashContents(owner))
                 if (chestItem != null && chestItem.isSimilar(item)) { kept = true; break; }
             for (int previous = 0; !kept && previous < slot; previous++) {
                 ItemStack other = player.getInventory().getItem(previous);
@@ -329,14 +331,14 @@ final class ArenaEconomy implements Listener {
     private void list(Player player, String[] args) {
         UUID owner = player.getUniqueId();
         int page = args.length == 4 ? parsePositive(args[3]) : 1;
-        if (args.length > 4 || page < 1 || page > 8) {
+        if (args.length > 4 || page < 1 || page > 48) {
             reply(player, "recycle_list", false, "usage_recycle_list_page", null, 0, balance(owner), false, null);
             return;
         }
         List<Candidate> candidates = new ArrayList<>();
         Inventory stash = dungeon.liveStash(owner);
-        for (int slot = 0; slot < stash.getSize(); slot++) {
-            ItemStack stack = stash.getItem(slot);
+        for (int slot = 0; slot < dungeon.stashCapacity(); slot++) {
+            ItemStack stack = dungeon.stashItem(owner,slot);
             if (eligible(stack)) candidates.add(new Candidate(true, slot));
         }
         for (int slot = 0; slot < 36; slot++) {
@@ -373,7 +375,7 @@ final class ArenaEconomy implements Listener {
             return;
         }
         int slot = parseNonnegative(args[4]) - (stash ? 1 : 0);
-        if (slot < 0 || slot >= (stash ? 54 : 36)) {
+        if (slot < 0 || slot >= (stash ? dungeon.stashCapacity() : 36)) {
             reply(player, "quote", false, "invalid_slot", null, 0, balance(owner), false, null);
             return;
         }
@@ -435,7 +437,7 @@ final class ArenaEconomy implements Listener {
         remainder.setAmount(current.getAmount() - quote.quantity());
         if (quote.stash()) {
             Inventory inv = dungeon.liveStash(owner);
-            inv.setItem(quote.slot(), remainder.getAmount() == 0 ? null : remainder);
+            dungeon.setStashItem(owner,quote.slot(),remainder.getAmount() == 0 ? null : remainder);
             plugin.getConfig().set(WALLET + owner, oldBalance + quote.price());
             dungeon.saveStash(inv, owner);
         } else {
@@ -490,7 +492,7 @@ final class ArenaEconomy implements Listener {
     }
 
     private ItemStack source(Player player, boolean stash, int slot) {
-        return stash ? dungeon.liveStash(player.getUniqueId()).getItem(slot) : player.getInventory().getItem(slot);
+        return stash ? dungeon.stashItem(player.getUniqueId(),slot) : player.getInventory().getItem(slot);
     }
 
     private static int parsePositive(String raw) {

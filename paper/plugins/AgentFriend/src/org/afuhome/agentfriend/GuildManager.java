@@ -214,6 +214,7 @@ final class GuildManager implements Listener {
             case "join", "register", "注册" -> join(player);
             case "status", "rank", "状态", "等级" -> status(player);
             case "engineering", "market", "projects", "任务市场" -> plugin.taskMarket().command(player, args);
+            case "commission", "commissions", "玩家委托" -> plugin.playerContracts().command(player,java.util.Arrays.copyOfRange(args,1,args.length));
             case "assessment", "能力记录" -> plugin.taskMarket().assessment(player);
             case "verify", "验收" -> {
                 Contract quest = active(player);
@@ -927,6 +928,7 @@ final class GuildManager implements Listener {
                 "声望：" + fame(player), member(player) ? "点击查看当前任务" : "点击注册入会"));
         inventory.setItem(7, icon(Material.CLOCK, "§6今日动态委托", "每日 05:00 更新", "下方是常驻委托"));
         inventory.setItem(8, icon(Material.BRICKS, "§6任务市场 · 千灯纪委托", "远征探索、工程、红石与多阶段生活任务", "点击查看任务与本人能力记录"));
+        inventory.setItem(9,icon(Material.WRITABLE_BOOK,"§6玩家委托","收购、结伴讨伐与探索；报酬先托管"));
         List<DailyBoardManager.Card> dynamic = plugin.dailyBoard().cards();
         for (int i = 0; i < Math.min(5, dynamic.size()); i++) {
             Contract quest = dynamic.get(i).contract();
@@ -948,7 +950,7 @@ final class GuildManager implements Listener {
                 : "放弃「" + quest.title() + "」；进度清零"));
         inventory.setItem(49, icon(Material.EMERALD, "§a交付已完成委托", quest == null ? "没有在办的任务"
                 : quest.title() + " " + progress(player) + "/" + quest.target(), "点击领取声望与箱中物资"));
-        inventory.setItem(50, icon(Material.CHEST, "§6个人奖励箱", "远程开启 2 魔力；实体箱旁免费"));
+        inventory.setItem(50, icon(Material.CHEST, "§6个人奖励箱", "左键第1页；右键选择10页540格；远程2魔力"));
         inventory.setItem(51, icon(Material.IRON_SWORD, "§c前往地下城", "前往试炼塔入口"));
         inventory.setItem(52, icon(Material.ARROW, "§7返回技能", "返回技能罗盘"));
         inventory.setItem(47, icon(Material.SUNFLOWER, "§a生活公会", "种田、烹饪、钓鱼、建筑、写书和红石机关"));
@@ -966,6 +968,7 @@ final class GuildManager implements Listener {
     void click(Player player, int slot) {
         if (slot == 0) { if (member(player)) status(player); else join(player); }
         else if (slot == 8) plugin.taskMarket().openMenu(player);
+        else if (slot == 9) plugin.playerContracts().open(player,1);
         else if (slot >= 1 && slot <= plugin.dailyBoard().cards().size())
             accept(player, plugin.dailyBoard().cards().get(slot - 1).id());
         else if (slot >= 10 && slot < 10 + CONTRACTS.size()) accept(player, CONTRACTS.get(slot - 10).id());

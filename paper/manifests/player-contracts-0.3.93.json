@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "plugin": "AgentFriend",
+  "version": "0.3.93",
+  "runtimeState": "candidate",
+  "productionVersionAtCheck": "0.3.92",
+  "deploymentQueued": false,
+  "deploymentBlocker": "Human player online; existing maintenance safety gate preserved. Await logout or user direction.",
+  "sha256": "D2E930F259DFF33600384B16948B190F1CF479C95F76A404122EB1E69D771095",
+  "bytes": 789681,
+  "verifiedAt": "2026-10-08T09:24:10.049064+00:00",
+  "features": {
+    "personalChestPages": 10,
+    "personalChestCapacity": 540,
+    "original54SlotIdsPreserved": true,
+    "pendingRewardStacks": 1024,
+    "remotePersonalChestMana": 2,
+    "contractTypes": [
+      "delivery",
+      "hunt",
+      "explore",
+      "structure"
+    ],
+    "currency": "existing_arena_emerald_wallet",
+    "publisherWithinBlocks": 32,
+    "assigneesPerContract": 1,
+    "actualGoodsAndEscrow": true,
+    "realExplorationAndReturn": true,
+    "durablePreparedAndRemovedRecovery": true,
+    "compactEvidenceReplies": true,
+    "agentClientChanges": false,
+    "newContractsRequireRestart": false
+  },
+  "tests": {
+    "matrix": [
+      {
+        "report": "pre-2026-10-08T09-09-57.783Z.json",
+        "checks": 67,
+        "passed": true
+      },
+      {
+        "report": "post-2026-10-08T09-12-01.077Z.json",
+        "checks": 15,
+        "passed": true
+      },
+      {
+        "report": "load-2026-10-08T09-16-54.919Z.json",
+        "checks": 7,
+        "passed": true
+      }
+    ],
+    "controlledLoad": {
+      "ordinaryClients": 16,
+      "eyeClients": 1,
+      "queries": 64,
+      "mspt": "§6Server tick times §e(§7avg§e/§7min§e/§7max§e)§6 from last 5s§7,§6 10s§7,§6 1m§e:\n§6◴ §a21.5§7/§a6.5§7/§c498.6§e, §a18.1§7/§a6.5§7/§c498.6§e, §a8.8§7/§a1.0§7/§c498.6\n",
+      "beforeChunks": "§9Chunks in §aworld§r:\n§9Total: §31160§9 Inactive: §3367§9 Full: §3250§9 Block Ticking: §3190§9 Entity Ticking: §3353\n§9Chunks in §aworld_nether§r:\n§9Total: §3334§9 Inactive: §30§9 Full: §3158§9 Block Ticking: §3110§9 Entity Ticking: §366\n§9Chunks in §aworld_the_end§r:\n§9Total: §3154§9 Inactive: §30§9 Full: §374§9 Block Ticking: §350§9 Entity Ticking: §330\n§9Chunks in §aall listed worlds§3:\n§9Total: §31648§9 Inactive: §3367§9 Full: §3482§9 Block Ticking: §3350§9 Entity Ticking: §3449\n",
+      "afterChunks": "§9Chunks in §aworld§r:\n§9Total: §31160§9 Inactive: §3367§9 Full: §3250§9 Block Ticking: §3190§9 Entity Ticking: §3353\n§9Chunks in §aworld_nether§r:\n§9Total: §3334§9 Inactive: §30§9 Full: §3158§9 Block Ticking: §3110§9 Entity Ticking: §366\n§9Chunks in §aworld_the_end§r:\n§9Total: §3154§9 Inactive: §30§9 Full: §374§9 Block Ticking: §350§9 Entity Ticking: §330\n§9Chunks in §aall listed worlds§3:\n§9Total: §31648§9 Inactive: §3367§9 Full: §3482§9 Block Ticking: §3350§9 Entity Ticking: §3449\n"
+    },
+    "stageBaselineRestoredAndStopped": true,
+    "failedAttemptsRetained": true
+  },
+  "limits": [
+    "Production deployment and production-client verification have not occurred.",
+    "Controlled 16-client warm-area queries had 21.5ms last-five-second average and a 498.6ms maximum tick; no extra loaded chunks, but this is not long-term autonomous LLM validation.",
+    "Crash windows use isolated native inventory journals and a normal JVM restart, not production fault injection.",
+    "A full actual mansion expedition was not replayed in this release; target validation and unfinished-route denial were checked using the existing native survey implementation.",
+    "Bedrock/Xbox visuals and controller input require actual clients."
+  ],
+  "documentation": "paper/docs/MYCLI_AGENT_CLI.md",
+  "privateEvidence": "E/F repairs/player-contracts-20261008"
+}

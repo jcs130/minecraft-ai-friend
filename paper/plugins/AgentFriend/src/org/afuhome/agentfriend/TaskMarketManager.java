@@ -713,6 +713,8 @@ final class TaskMarketManager implements Listener {
         menuItem(inventory, 38, Material.EMERALD, "§a交付当前阶段", "全部阶段完成后统一领奖");
         menuItem(inventory, 39, Material.BARRIER, "§c放弃任务", "已交付材料不返还；保留评估记录");
         menuItem(inventory, 40, Material.WRITABLE_BOOK, "§6我的能力记录", "已验收步骤、失败和耗时");
+        menuItem(inventory,41,Material.WRITABLE_BOOK,"§6玩家委托","自行发布物资、讨伐与探索招募");
+        menuItem(inventory,42,Material.CHEST,"§6个人箱分页","10页共540格，保留原槽位");
         menuItem(inventory, 44, Material.ARROW, "§7返回公会", "返回公会看板");
         player.openInventory(inventory); menus.put(player.getUniqueId(), new Menu(inventory, ids));
     }
@@ -734,6 +736,8 @@ final class TaskMarketManager implements Listener {
             case 38 -> plugin.guild().command(player, new String[]{"guild", "claim"});
             case 39 -> plugin.guild().command(player, new String[]{"guild", "abandon"});
             case 40 -> assessment(player);
+            case 41 -> Bukkit.getScheduler().runTask(plugin,()->plugin.playerContracts().open(player,1));
+            case 42 -> Bukkit.getScheduler().runTask(plugin,()->plugin.dungeon().openStashPages(player));
             case 44 -> Bukkit.getScheduler().runTask(plugin, () -> plugin.openGuildMenu(player));
             default -> { }
         }

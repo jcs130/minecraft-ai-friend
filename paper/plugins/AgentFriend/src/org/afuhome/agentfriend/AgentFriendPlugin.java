@@ -209,6 +209,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private UtilitySpells utilitySpells;
     private SpellMastery spellMastery;
     private ProfessionManager professions;
+    private PlayerContracts playerContracts;
     private VillageStructureProtection villageStructureProtection;
     private VillageTrades villageTrades;
     private ViewerStatePublisher viewerStatePublisher;
@@ -273,6 +274,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         playerNameTags.start();
         dailyBoard = new DailyBoardManager(this);
         taskMarket = new TaskMarketManager(this);
+        playerContracts = new PlayerContracts(this);
         soulboundGear = new SoulboundGear(this);
         getServer().getPluginManager().registerEvents(soulboundGear, this);
         dungeonGearAura = new DungeonGearAura(this);
@@ -297,6 +299,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (playerContracts != null) playerContracts.shutdown();
         if (professions != null) professions.shutdown();
         if (lands != null) lands.stop();
         if (waypoints != null) waypoints.shutdown();
@@ -349,6 +352,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     TaskMarketManager taskMarket() { return taskMarket; }
     GuildManager guild() { return guild; }
     ProfessionManager professions() { return professions; }
+    PlayerContracts playerContracts() { return playerContracts; }
+    PvpArenaManager pvp() { return pvpArena; }
     VillageWatchManager villageWatch() { return villageWatch; }
     LifeGuildBuildings lifeBuildings() { return lifeBuildings; }
     TrialRoadManager trialRoad() { return trialRoad; }
@@ -968,6 +973,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             case "pvp", "duel", "决斗" -> pvpArena.command(player, args);
             case "guild", "公会", "工会" -> guild.command(player, args);
+            case "commission", "commissions", "玩家委托" -> playerContracts.command(player,args);
             case "life", "生活" -> lifeGuild.command(player, args);
             case "village", "村庄" -> villageWatch.command(player, args);
             case "goddess", "女神" -> goddess(player, args);
@@ -2406,6 +2412,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     default -> { }
                 }
             } else if (page.equals("guild")) {
+                if(slot==50&&event.isRightClick()){dungeon.openStashPages(p);return;}
                 if (slot == 51) gotoPlace(p, "arena");
                 else if (slot == 52) openMenu(p, "skills");
                 else if (slot == 47) openMenu(p, "life");

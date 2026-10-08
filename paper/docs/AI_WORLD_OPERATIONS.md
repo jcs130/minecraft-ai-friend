@@ -12,6 +12,7 @@
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
+| 玩家委托与分页箱（0.3.93候选，尚未上线） | 公会玩家委托、`commission list/mine/info/menu/publish/accept/claim/abandon/cancel`，`arena stash pages/page/list`；[玩法](MYCLI_AGENT_CLI.md) | config.yml的player-contracts.jobs/active、既有余额/待入箱队列和0–539槽位 | 隔离67/15/7通过；正式仍0.3.92，真人在线门禁等待退出。上线后发布供货/同行无需代码或重启，每单一人、实物与真实探索验收，10页540格；不改Agent客户端 |
 | 命名传送点（0.3.89） | 罗盘地点页、`waypoint add/list/shared/menu`、`goto personal:名字/shared:分享码`；[命名地点](NAMED_WAYPOINTS.md) | `plugins/AgentFriend/waypoints.yml` 按主人/世界 UUID 保存，默认每人 32 点 | 玩家亲自到达后在线中文命名、改名、更新和撤回分享；记录免费，成功传送 6 魔力。主动分享公开发现者与坐标；不改代码、不重启。旧 home 保留；部署状态以维护记录为准 |
 | 技能、法术、快捷施法 | 既有技能源码与 MagicSpells/AuraSkills；0.3.92 新增 professions.yml / skills.yml / skill-unlocks.yml / skill-points.yml；[职业与传承](CHARACTER_SKILLS.md)、[技能体系](SKILL_SYSTEM.md)、[位移](TRAVEL_MAGIC.md) | 既有魔力/等级/刻印/熟练度；profession-ledger.json 的 UUID 资格、学习等级、已获/已花点数、最高成长、冷却、唯一归属；config.yml pending 收据 | 旧效果发布流程保留；新职业固定效果、逐级点数/效果、洗点费用和解锁可整体验证热加载，失败保留旧目录，新效果仍需代码发布；正式启用以维护记录为准 |
 | 公会任务与等级 | 静态 37 张仍在 `GuildManager.java`；0.3.78 起的动态卡模板在 `plugins/AgentFriend/dynamic-board.yml`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中的 `guild-players` 和 `dynamic-board.today`；动态模板文件 | 已支持的供货与日常目标可改 YAML 后用 `mycli admin board reload`、`replace` 或 `regenerate` 热更新；新判定类型仍需开发。正式服 0.3.86 已包含此功能，详见 [动态看板](DYNAMIC_BOARD.md) |

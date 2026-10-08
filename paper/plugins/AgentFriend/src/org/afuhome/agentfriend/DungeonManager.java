@@ -102,7 +102,14 @@ final class DungeonManager implements Listener {
     private static final String DAILY_CLAIMS = "dungeon-daily-claims.";
     private static final String DIFFICULTY_CHOICE = "dungeon-difficulty.";
     private static final String DEATH_GUIDE = "dungeon-death-guide.";
-    private static final int MAX_BONUS_QUEUE = 128;
+    private static final int MAX_BONUS_QUEUE = 1024;
+    private PagedPersonalStash storage;
+    private PagedPersonalStash storage() { if(storage==null)storage=new PagedPersonalStash(plugin);return storage; }
+    int stashCapacity() { return PagedPersonalStash.CAPACITY; }
+    ItemStack stashItem(UUID id,int slot) { return storage().item(id,slot); }
+    ItemStack[] stashContents(UUID id) { return storage().contents(id); }
+    void setStashItem(UUID id,int slot,ItemStack item) { storage().set(id,slot,item);storage().write(storage().page(id,slot/54),id); }
+    void openStashPages(Player player) { storage().select(player); }
     private static final Material[] REWARD_TYPES = {
             Material.EMERALD, Material.IRON_INGOT, Material.BREAD,
             Material.EXPERIENCE_BOTTLE, Material.GOLDEN_APPLE,
@@ -904,7 +911,7 @@ final class DungeonManager implements Listener {
     }
     private boolean hasPersonalChestContents(UUID id) {
         if (hasPendingRewards(id)) return true;
-        for (int slot = 0; slot < STASH_SIZE; slot++)
+        for (int slot = 0; slot < PagedPersonalStash.CAPACITY; slot++)
             if (plugin.getConfig().getItemStack(stashPath(id, slot)) != null) return true;
         return false;
     }
@@ -1214,7 +1221,7 @@ final class DungeonManager implements Listener {
     private boolean hasBossRelic(UUID id, Player player) {
         for (ItemStack item : bonusItems(id)) if (bossRelic(item)) return true;
         for (ItemStack item : player.getInventory().getContents()) if (bossRelic(item)) return true;
-        for (int slot = 0; slot < STASH_SIZE; slot++)
+        for (int slot = 0; slot < PagedPersonalStash.CAPACITY; slot++)
             if (bossRelic(plugin.getConfig().getItemStack(stashPath(id, slot)))) return true;
         return false;
     }
@@ -1549,23 +1556,8 @@ final class DungeonManager implements Listener {
                 + " count=" + item.getAmount() + " name=" + name
                 + " enchants=" + (enchants.isEmpty() ? "-" : enchants);
     }
-    Inventory liveStash(UUID id) {
-        for (Map.Entry<Inventory, UUID> entry : stashMenus.entrySet())
-            if (entry.getValue().equals(id)) return entry.getKey();
-        Inventory inv = Bukkit.createInventory(null, STASH_SIZE, ChatColor.GOLD + "个人试炼箱");
-        for (int slot = 0; slot < inv.getSize(); slot++) {
-            ItemStack saved = plugin.getConfig().getItemStack(stashPath(id, slot));
-            if (saved != null) inv.setItem(slot, saved.clone());
-        }
-        return inv;
-    }
-    void saveStash(Inventory inv, UUID id) {
-        for (int slot = 0; slot < inv.getSize(); slot++) {
-            ItemStack item = inv.getItem(slot);
-            plugin.getConfig().set(stashPath(id, slot), item == null || item.getType().isAir() ? null : item.clone());
-        }
-        plugin.saveConfig();
-    }
+    Inventory liveStash(UUID id) { return storage().page(id,0); }
+    void saveStash(Inventory inv, UUID id) { storage().write(inv,id);plugin.saveConfig(); }
 
     private static final Set<Material> PLAIN_GUILD_DONATIONS = Set.of(
             Material.ARROW, Material.BOW, Material.CROSSBOW, Material.SHIELD,
@@ -1668,6 +1660,7 @@ final class DungeonManager implements Listener {
     boolean storeItemForBackpackRecovery(Player player) {
         Inventory stash = liveStash(player.getUniqueId());
         int free = stash.firstEmpty();
+        for(int i=1;free<0&&i<PagedPersonalStash.PAGES;i++){stash=storage().page(player.getUniqueId(),i);free=stash.firstEmpty();}
         if (free < 0) return false;
         int chosen = -1;
         for (int slot = 0; slot < 36; slot++) {
@@ -1692,7 +1685,7 @@ final class DungeonManager implements Listener {
         return true;
     }
     /** Move ledger rewards into the real chest before opening it. Keep overflow in the ledger. */
-    private void materializeRewards(Inventory inv, UUID id) {
+    private boolean materializeRewards(Inventory inv, UUID id) {
         boolean moved = false;
         List<ItemStack> bonus = bonusItems(id);
         if (!bonus.isEmpty()) {
@@ -1724,14 +1717,21 @@ final class DungeonManager implements Listener {
             }
             if (remaining != pending(id, material)) plugin.getConfig().set(rewardPath(id, material), remaining);
         }
-        if (moved) saveStash(inv, id);
+        if (moved) storage().write(inv,id);
+        return moved;
     }
-    void openStash(Player player) {
+    void openStash(Player player) { openStash(player,0); }
+    void openStash(Player player,int page) {
         UUID id = player.getUniqueId();
-        Inventory inv = liveStash(id);
+        if(page<0||page>=PagedPersonalStash.PAGES||player.getGameMode()==GameMode.SPECTATOR)return;
+        Inventory inv = storage().page(id,page);
         if (player.getOpenInventory().getTopInventory() == inv && stashMenus.containsKey(inv)) return;
         if (!remoteStashReady(player)) return;
-        materializeRewards(inv, id);
+        player.closeInventory();
+        boolean moved=false;
+        for(int i=0;i<PagedPersonalStash.PAGES;i++)moved|=materializeRewards(storage().page(id,i),id);
+        if(moved)plugin.saveConfig();
+        player.sendMessage("个人箱第"+(page+1)+"/10页，共540格；/mycli arena stash pages 选择其他页。");
         stashMenus.put(inv, id);
         player.openInventory(inv);
         if (player.getOpenInventory().getTopInventory() == inv) chargeRemoteStash(player);
@@ -1752,15 +1752,19 @@ final class DungeonManager implements Listener {
             player.sendMessage("MC_INVENTORY_SUMMARY slots=0-35");
             return;
         }
-        if (action.equals("list") && args.length == 3) {
+        if(action.equals("pages")&&args.length==3){openStashPages(player);return;}
+        if(action.equals("page")&&args.length==4){try{int page=Integer.parseInt(args[3]);if(page<1||page>10)throw new NumberFormatException();openStash(player,page-1);}catch(NumberFormatException e){player.sendMessage("页码为1–10");}return;}
+        if (action.equals("list") && (args.length == 3||args.length==4)) {
+            int page=1;try{if(args.length==4)page=Integer.parseInt(args[3]);if(page<1||page>10)throw new NumberFormatException();}catch(NumberFormatException e){player.sendMessage("页码为1–10");return;}
+            inv=storage().page(id,page-1);
             int entries = 0;
             for (int slot = 0; slot < inv.getSize(); slot++) {
                 ItemStack item = inv.getItem(slot);
                 if (item == null || item.getType().isAir()) continue;
-                player.sendMessage("MC_STASH slot=" + (slot + 1) + itemFields(item));
+                player.sendMessage("MC_STASH slot=" + (storage().offset(inv)+slot + 1) + itemFields(item));
                 entries++;
             }
-            player.sendMessage("MC_STASH_SUMMARY occupied=" + entries + "/" + STASH_SIZE);
+            player.sendMessage("MC_STASH_SUMMARY occupied=" + entries + "/" + STASH_SIZE + " page="+page+" pages=10 capacity=540");
             return;
         }
         if (action.equals("putslot") && args.length == 5) {
@@ -1783,7 +1787,7 @@ final class DungeonManager implements Listener {
             ItemStack part = source.clone();
             part.setAmount(Math.min(source.getAmount(), wanted));
             int attempted = part.getAmount();
-            int left = inv.addItem(part).values().stream().mapToInt(ItemStack::getAmount).sum();
+            int left = storage().add(id,part);
             int moved = attempted - left;
             if (moved > 0) {
                 source.setAmount(source.getAmount() - moved);
@@ -1810,7 +1814,7 @@ final class DungeonManager implements Listener {
                 ItemStack part = source.clone();
                 part.setAmount(Math.min(source.getAmount(), wanted - moved));
                 int attempted = part.getAmount();
-                int left = inv.addItem(part).values().stream().mapToInt(ItemStack::getAmount).sum();
+                int left = storage().add(id,part);
                 int deposited = attempted - left;
                 if (deposited <= 0) break;
                 source.setAmount(source.getAmount() - deposited);
@@ -1827,10 +1831,11 @@ final class DungeonManager implements Listener {
             try { slot = Integer.parseInt(args[3]) - 1; }
             catch (NumberFormatException invalid) { slot = -1; }
             wanted = args.length == 5 ? positiveCount(args[4]) : 64;
-            if (slot < 0 || slot >= STASH_SIZE || wanted < 1) {
-                player.sendMessage("用法：/mycli arena stash take <1–54 槽位> [1–64 数量]"); return;
+            if (slot < 0 || slot >= PagedPersonalStash.CAPACITY || wanted < 1) {
+                player.sendMessage("用法：/mycli arena stash take <1–540 槽位> [1–64 数量]"); return;
             }
-            ItemStack source = inv.getItem(slot);
+            inv=storage().page(id,slot/54);
+            ItemStack source = inv.getItem(slot%54);
             if (source == null || source.getType().isAir()) {
                 player.sendMessage("MC_STASH_TAKE slot=" + (slot + 1) + " moved=0 reason=empty"); return;
             }
@@ -1842,7 +1847,7 @@ final class DungeonManager implements Listener {
             int moved = attempted - left;
             if (moved > 0) {
                 source.setAmount(source.getAmount() - moved);
-                inv.setItem(slot, source.getAmount() > 0 ? source : null);
+                inv.setItem(slot%54, source.getAmount() > 0 ? source : null);
                 saveStash(inv, id);
                 player.saveData();
                 plugin.guildRewardClaimed(player);

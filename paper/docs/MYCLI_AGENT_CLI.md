@@ -1,5 +1,44 @@
 # `/mycli`：Agent 自发现命令接口
 
+## 玩家发布委托与个人箱分页（0.3.93）
+
+公会菜单「玩家委托」或 `/mycli commission menu` 可浏览、发布、接取和交付玩家委托；任务市场底部也有入口。每单一位接单者，与公会正在进行的任务槽位独立。发布后立即生效，不用改代码或重启。
+
+```text
+/mycli commission list                         # 所有进行中的玩家委托，每页9项
+/mycli commission mine                         # 本人发布/承接记录，含完成历史
+/mycli commission publish delivery iron_ingot 64 10 收购铁锭
+/mycli commission publish hunt zombie 8 15 结伴守夜
+/mycli commission publish explore nether 20 下界同行勘察
+/mycli commission publish structure minecraft:mansion 30 林地府邸调查
+/mycli commission info pc_012345abcdef
+/mycli commission accept pc_012345abcdef
+/mycli commission claim                        # 验收当前接单
+/mycli commission abandon                      # 放弃并重新开放
+/mycli commission cancel pc_012345abcdef        # 仅发布者撤回未接单委托
+/mycli arena wallet                            # 当前绿宝石余额
+```
+
+**报酬使用既有试炼/装备回收的绿宝石余额，不是背包里的绿宝石物品。**发布先扣余额并托管，验收成功给接单者余额；未接单撤回退回原报酬。接单后发布者不能单方面撤回，接单者可放弃后再撤。不能接自己的单；每人最多同时承接一单、发布五个未结束委托；全服最多200个未结束、4000条历史。报酬1–100000，物资1–1024个，怪物1–128只；标题1–40字符。
+
+- `delivery`：验收时扣除接单者背包里的实际普通物品，保留附魔、命名及绑定物品；货物进入发布者个人奖励箱待入箱队列。奖励箱满不会把货物丢到地上；队列也满则拒绝交付，不扣物品。
+- `hunt`：发布者须在接单者32格内同行。接单者真实击杀，或实际伤害目标后30秒内由发布者补刀，才能计数；旁观、不相干玩家击杀不计。目标是允许列表里的原版敌对怪物。
+- `explore`：指定维度，实走至少64格、四个16格区域及20秒移动；发布者须在32格内同行。完成后双方回到接单者接单位置16格内再验收，传送不算走查。
+- `structure`：使用原版大型结构注册键，要求实际进入自然生成结构、实走24格、四个4格区域、20秒移动及两个生成区段，再同行返程。支持府邸、下界要塞、末地城、要塞据点、古城、堡垒遗迹、废弃矿井和五类村庄；海底神殿的原版生成结构只有一个整体区段，按一个区段验收。埋藏宝藏等太小的结构不能发布成走查任务；不会用 locate 自动找目标或生成新区块。
+
+私发文字及可选 `mcagent:commission` 返回 `MC_COMMISSION_LIST`、`MC_COMMISSION`、`MC_COMMISSION_RESULT`。操作判断 `success/reason`，不要以聊天“收到命令”当成交付。详情含双方姓名、目标、报酬、状态、进度、本人余额、时间及探索证据。交付日志将实际扣物、货物队列和报酬关联；正常重启后继续恢复，冲突时保留记录并停止该玩家物品操作，服主先备份检查，勿删记录重发奖励。
+
+个人箱扩成 **10页×54格，共540格**，沿用原版箱子界面。旧命令和第1页槽位1–54不变；普通 `put/putslot` 自动向后面的页存放，`take` 使用全局槽位1–540。
+
+```text
+/mycli arena stash pages       # 原版分页菜单，也可公会个人箱入口右键
+/mycli arena stash page 2      # 打开第2页
+/mycli arena stash list 2      # 第2页槽位55–108；不加页码仍只列第1页
+/mycli arena stash take 55 1
+```
+
+待入箱奖励自动填入所有页，保留真实物品附魔等元数据；额外物品队列上限1024组。试炼实体个人箱旁存取免费，远程实际开页/取放仍需学会基础传送技能并消耗2魔力。分页选择及只读列表免费。Java/基岩使用原版菜单和文字，Mineflayer 不需改客户端；基岩触控、Xbox手柄观感须真机验收。部署时间、验证证据与回退见 [维护流程](OPERATIONS.md)。
+
 ## 职业与传承（0.3.92）
 
 新增 `profession status|list|menu|choose|leave`、`skills mine|menu|prepare|unprepare`，沿用旧 `skills list|explain`。`list cast`、`explain cast.<ID>` 及 `spells` 动态发现新技能。两个状态频道保持 schemaVersion 1 和原字段语义，仅增加可选 `profession` 及本人当前合格的新 abilities；无需修改 Agent 客户端。私有回执、任务解锁、装备与魔力规则见 [职业与传承](CHARACTER_SKILLS.md)。部署状态以维护记录为准。
