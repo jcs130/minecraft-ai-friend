@@ -1,5 +1,11 @@
 # `/mycli`：Agent 自发现命令接口
 
+## 原图寻宝（0.3.98）
+
+`/mycli guild map` 读取主手已有目标地图或在途绑定的地图；`explain guild.map` 已登记为只读接口。主手拿原图，`guild accept tm_map_hunt` 接单，真实探索/开新天然藏宝箱，再回接单点 `guild verify` / `guild claim`。原图和战利品保留，不要求改客户端。默认四区域、二十四格新路线、十五秒有效行进和十六格返程范围；每人每个目的地一次。
+
+`mcagent:market` 私有 `MC_TREASURE_MAP` 含原图目标和返程位置，`mapsConsumed=false`；文字 `MC_TREASURE_TARGET` 提供原图X/Z，`MC_TREASURE_RETURN` 提供返程坐标。验收继续用 `MC_MARKET_CHECK.ready/reason/evidence`，`return_to_acceptance_point` 意味着必须返程；到访、传送或模型自报不算调查。普通地图无目标时明确拒绝。支持原版与当前遗迹包的原版目标地图，完整字段见 [原图寻宝](TREASURE_MAP_TASKS.md)。
+
 ## 0.3.97：Agent直接发现职业技能
 
 2026-10-08 21:54:52 已正式发布 AgentFriend **0.3.97**（864034字节，SHA256 `8C76078711FD8FB457E848BEFC9C39BAFE5330617AD8CE7B557532E6AD4F6A9B`），Java PID **33800**。E/F `20261008-215351/.complete` 在替换前完整，正常任务结果0。修复Agent技能发现入口：补齐skills.list/skills.explain登记，基础与战法牧可按分类查询，登录、help和魔法指南明确技能目录与学习步骤；默认旧分页及原回执字段保留，新增分类/总量/版本、效果摘要、职业和详情命令。当前20基础+16职业共36项，原技能ID、各级效果、点数价格和学习资格不变。

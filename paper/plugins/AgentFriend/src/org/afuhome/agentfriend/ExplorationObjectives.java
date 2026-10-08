@@ -83,6 +83,28 @@ final class ExplorationObjectives {
         return switch (world.getEnvironment()) { case NETHER -> "nether"; case THE_END -> "end"; default -> "overworld"; };
     }
     private record Place(String instance, String key, List<String> parts, String bounds) { }
+    record MapPlace(String instance, String key, String bounds) { }
+    /** Identify only loaded natural structure metadata; a map icon is not a structure type. */
+    static MapPlace mapPlace(Location at, int x, int z) {
+        LevelChunk chunk = ((CraftWorld) at.getWorld()).getHandle().getChunkSource()
+                .getChunkAtIfLoadedImmediately(at.getBlockX() >> 4, at.getBlockZ() >> 4);
+        if (chunk == null) return null;
+        Set<net.minecraft.world.level.levelgen.structure.Structure> types = new LinkedHashSet<>(chunk.getAllStarts().keySet());
+        types.addAll(chunk.getAllReferences().keySet());
+        if (types.size() > 32) return null;
+        for (var type : types) {
+            String key = CraftStructure.minecraftToBukkit(type).getKey().toString();
+            Place place = structure(at, new Target(GuildManager.Goal.STRUCTURE, dimension(at.getWorld()),
+                    List.of(key), 4, 8, 5, 1, 1, 0));
+            if (place == null) continue;
+            String[] halves = place.bounds.split(":");
+            String[] min = halves[0].split(","), max = halves[1].split(",");
+            if (x >= Integer.parseInt(min[0]) - 8 && x <= Integer.parseInt(max[0]) + 8
+                    && z >= Integer.parseInt(min[2]) - 8 && z <= Integer.parseInt(max[2]) + 8)
+                return new MapPlace(place.instance, place.key, place.bounds);
+        }
+        return null;
+    }
     private static Place structure(Location at, Target target) {
         var source = ((CraftWorld) at.getWorld()).getHandle().getChunkSource();
         int cx = at.getBlockX() >> 4, cz = at.getBlockZ() >> 4;
@@ -101,7 +123,10 @@ final class ExplorationObjectives {
                 if (startChunk == null) continue; // Never synchronously load a remote structure start.
                 StructureStart start = startChunk.getStartForStructure(nms);
                 if (start == null || !start.isValid() || start.getPieces().size() > 4096) continue;
-                var box = start.getBoundingBox();
+                // BuriedTreasurePiece moves its one-block box down during terrain placement.
+                // StructureStart may still cache its pre-placement height until a chunk reload.
+                var box = key.equals("minecraft:buried_treasure") && start.getPieces().size() == 1
+                        ? start.getPieces().getFirst().getBoundingBox() : start.getBoundingBox();
                 if (!box.isInside(at.getBlockX(), at.getBlockY(), at.getBlockZ())) continue;
                 List<String> parts = new ArrayList<>(); int index = 0;
                 for (var piece : start.getPieces()) {
@@ -165,7 +190,11 @@ final class ExplorationObjectives {
     void forget(Player p) { surveys.remove(p.getUniqueId()); }
     void quit(Player p) { surveys.remove(p.getUniqueId()); flush(); }
     void flush() { if (dirty) { dirty = false; plugin.saveConfig(); } }
+    void changed() { dirty = true; }
     EngineeringSites.Result observe(Player p, Target target, int required, String token) {
+        return observe(p, target, required, token, "");
+    }
+    EngineeringSites.Result observe(Player p, Target target, int required, String token, String boundInstance) {
         Survey s = surveys.get(p.getUniqueId());
         if (s == null || !s.token.equals(token)) {
             try { s = new Survey(token, plugin.getConfig().getString(path(p), "")); }
@@ -188,6 +217,9 @@ final class ExplorationObjectives {
         if (target.goal == GuildManager.Goal.STRUCTURE) {
             place = structure(at, target);
             if (place == null) { s.previous = null; return result(s, target, required, "structure_unobserved_or_start_unloaded"); }
+            if (!boundInstance.isEmpty() && !boundInstance.equals(place.instance)) {
+                s.previous = null; return result(s, target, required, "different_map_structure");
+            }
         }
         String biome = at.getWorld().getBiome(at).getKey().toString();
         if (target.goal == GuildManager.Goal.BIOME && !target.keys.contains(biome)) {

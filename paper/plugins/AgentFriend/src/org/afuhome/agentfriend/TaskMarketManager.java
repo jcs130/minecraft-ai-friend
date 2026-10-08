@@ -45,12 +45,12 @@ final class TaskMarketManager implements Listener {
             GuildManager.Goal.WITCH_KILLS, GuildManager.Goal.CLAIMS, GuildManager.Goal.EXPLORE,
             GuildManager.Goal.PEAK, GuildManager.Goal.DIMENSION, GuildManager.Goal.STRUCTURE,
             GuildManager.Goal.BIOME, GuildManager.Goal.RETURN, GuildManager.Goal.MELEE_KILLS,
-            GuildManager.Goal.PARRY, GuildManager.Goal.HEALING, GuildManager.Goal.MARK_KILLS);
+            GuildManager.Goal.PARRY, GuildManager.Goal.HEALING, GuildManager.Goal.MARK_KILLS, GuildManager.Goal.MAP_HUNT);
     private static final Map<String, Integer> CHESTS = Map.of("weapons", 0, "armor", 1, "supplies", 2, "misc", 3);
     record Step(String title, String description, GuildManager.Goal goal, int target, int floor,
-            String site, int chest, ExplorationObjectives.Target exploration) { }
+            String site, int chest, ExplorationObjectives.Target exploration, MapObjectives.Rules map) { }
     record Task(String key, String title, String description, String beneficiary, Material icon,
-            boolean enabled, boolean project, boolean repeatOnce, int minRank, int fame, int emeralds,
+            boolean enabled, boolean project, boolean repeatOnce, boolean repeatDestination, int minRank, int fame, int emeralds,
             Material bonus, int bonusCount, List<Step> steps, ProjectHandovers.Grant grant, String definition) {
         String id() { return "tm_" + key; }
         GuildManager.Contract contract(int index) {
@@ -59,7 +59,7 @@ final class TaskMarketManager implements Listener {
                     step.description, icon, step.goal, step.target, step.floor, minRank, fame,
                     emeralds, bonus, bonusCount, step.site, EngineeringSites.GOALS.contains(step.goal) ? 2
                     : step.goal == GuildManager.Goal.PARTY_FLOOR ? 3 : step.goal == GuildManager.Goal.EXPLORE
-                    || step.goal == GuildManager.Goal.PEAK || ExplorationObjectives.GOALS.contains(step.goal) ? 0 : ACTIONS.contains(step.goal)
+                    || step.goal == GuildManager.Goal.PEAK || step.map != null || ExplorationObjectives.GOALS.contains(step.goal) ? 0 : ACTIONS.contains(step.goal)
                     && Set.of(GuildManager.Goal.CRAFT, GuildManager.Goal.DONATE, GuildManager.Goal.FISH,
                     GuildManager.Goal.LANTERNS).contains(step.goal) ? 2 : 1);
         }
@@ -75,6 +75,7 @@ final class TaskMarketManager implements Listener {
     private final EngineeringSites engineering;
     private final ProjectHandovers handovers;
     private final ExplorationObjectives exploration;
+    private final MapObjectives maps;
     private final File file;
     private Map<String, Task> tasks = Map.of();
     private Map<String, EngineeringSites.Site> drafts = Map.of();
@@ -85,7 +86,7 @@ final class TaskMarketManager implements Listener {
     private int surveyCursor;
 
     TaskMarketManager(AgentFriendPlugin plugin) {
-        this.plugin = plugin; engineering = new EngineeringSites(plugin); exploration = new ExplorationObjectives(plugin);
+        this.plugin = plugin; engineering = new EngineeringSites(plugin); exploration = new ExplorationObjectives(plugin); maps = new MapObjectives(plugin, exploration);
         handovers = new ProjectHandovers(plugin, engineering);
         file = new File(plugin.getDataFolder(), "task-market.yml");
         if (!file.exists()) plugin.saveResource("task-market.yml", false);
@@ -101,6 +102,7 @@ final class TaskMarketManager implements Listener {
         Task task = frozen(player);
         if (task == null) return;
         Step step = task.steps.get(index(player));
+        if (step.map != null) { EngineeringSites.Result result = observe(player, task); player.sendMessage("§7" + MapObjectives.hint(result.reason())); mapInfo(player); return; }
         if (step.exploration == null) return;
         EngineeringSites.Result result = observe(player, task); JsonObject e = result.evidence();
         if (step.goal == GuildManager.Goal.RETURN) {
@@ -126,9 +128,10 @@ final class TaskMarketManager implements Listener {
     }
     private EngineeringSites.Result observe(Player player, Task task) {
         Step step = task.steps.get(index(player));
-        if (step.exploration == null) return null;
+        if (step.exploration == null && step.map == null) return null;
         int previous = plugin.getConfig().getInt(activePath(player) + ".progress", 0);
-        EngineeringSites.Result result = exploration.observe(player, step.exploration, step.target, run(player) + ":" + index(player));
+        EngineeringSites.Result result = step.map != null ? maps.observe(player, step.map, step.target, run(player))
+                : exploration.observe(player, step.exploration, step.target, run(player) + ":" + index(player));
         plugin.getConfig().set(activePath(player) + ".progress", result.progress());
         if (result.ready() && previous < step.target) {
             JsonObject data = new JsonObject(); data.addProperty("task", task.id()); data.addProperty("step", index(player) + 1);
@@ -230,7 +233,7 @@ final class TaskMarketManager implements Listener {
         String scope = row.getString("scope", "personal");
         if (!scope.equals("personal") && !scope.equals("project")) throw new IllegalArgumentException(key + " scope");
         String repeat = row.getString("repeat", "daily");
-        if (!Set.of("daily", "once").contains(repeat)) throw new IllegalArgumentException(key + " repeat");
+        if (!Set.of("daily", "once", "destination").contains(repeat)) throw new IllegalArgumentException(key + " repeat");
         int rank = row.getInt("min-rank", 0), fame = row.getInt("reward.fame"), emeralds = row.getInt("reward.emeralds");
         int bonusCount = row.getInt("reward.bonus-count");
         Material icon = item(row.getString("icon", "")), bonus = item(row.getString("reward.bonus", ""));
@@ -259,17 +262,22 @@ final class TaskMarketManager implements Listener {
             int chest = stepYaml.contains("chest") ? CHESTS.getOrDefault(stepYaml.getString("chest"), -2) : -1;
             if (chest == -2 || chest >= 0 && goal != GuildManager.Goal.DONATE) throw new IllegalArgumentException(key + " chest");
             ExplorationObjectives.Target survey = ExplorationObjectives.parse(goal, stepYaml, target);
+            MapObjectives.Rules map = goal == GuildManager.Goal.MAP_HUNT ? MapObjectives.parse(stepYaml, target) : null;
             if (goal == GuildManager.Goal.RETURN && (steps.isEmpty() || steps.getLast().exploration == null
                     || steps.getLast().exploration.goal() == GuildManager.Goal.RETURN
                     || steps.getLast().exploration.dimension().equals(survey.dimension())))
                 throw new IllegalArgumentException(key + " return must follow exploration in another dimension");
             steps.add(new Step(text(stepYaml, "title", 50), text(stepYaml, "description", 180), goal, target, floor,
-                    site == null || site.isBlank() ? null : site, chest, survey));
+                    site == null || site.isBlank() ? null : site, chest, survey, map));
         }
         if (steps.isEmpty() || steps.size() > 8 || scope.equals("project") && steps.stream().noneMatch(s -> EngineeringSites.GOALS.contains(s.goal)))
             throw new IllegalArgumentException(key + " steps (1..8; project must contain engineering)");
+        long mapSteps = steps.stream().filter(s -> s.map != null).count();
+        if (mapSteps > 1 || mapSteps == 1 && (scope.equals("project") || steps.getLast().map == null)
+                || repeat.equals("destination") && mapSteps != 1)
+            throw new IllegalArgumentException(key + " map_hunt must be the last personal step; destination repeat requires it");
         YamlConfiguration frozen = new YamlConfiguration(); frozen.set("task", row.getValues(false));
-        return new Task(key, title, description, beneficiary, icon, row.getBoolean("enabled", true), scope.equals("project"), repeat.equals("once"),
+        return new Task(key, title, description, beneficiary, icon, row.getBoolean("enabled", true), scope.equals("project"), repeat.equals("once"), repeat.equals("destination"),
                 rank, fame, emeralds, bonus, bonusCount, List.copyOf(steps), ProjectHandovers.parse(row, scope.equals("project"), steps), frozen.saveToString());
     }
     private static String text(ConfigurationSection row, String key, int limit) {
@@ -307,6 +315,10 @@ final class TaskMarketManager implements Listener {
         Task active = frozen(player), task = active != null && active.id().equals(id) ? active : tasks.get(id);
         return task != null && task.repeatOnce && plugin.getConfig().contains("guild-players." + player.getUniqueId() + ".everDone." + id);
     }
+    boolean destinationRepeat(Player player, String id) {
+        Task active = frozen(player), task = active != null && active.id().equals(id) ? active : tasks.get(id);
+        return task != null && task.repeatDestination;
+    }
     String gate(Task task) {
         if (onceCompleted(task.id())) return "project_completed";
         if (task.project && !plugin.getConfig().getString(ROOT + ".projects." + task.id() + ".owner", "").isEmpty()) return "project_reserved";
@@ -319,7 +331,7 @@ final class TaskMarketManager implements Listener {
         String gate = gate(task);
         if (task.id().equals(plugin.getConfig().getString(activePath(player) + ".id", ""))) return "in_progress";
         if (task.repeatOnce && onceCompleted(player, task.id())) return "completed_once";
-        if (gate.equals("available") && java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).toString()
+        if (!task.repeatDestination && gate.equals("available") && java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).toString()
                 .equals(plugin.getConfig().getString("guild-players." + player.getUniqueId() + ".daily." + task.id(), ""))) return "done_today";
         return gate;
     }
@@ -332,10 +344,15 @@ final class TaskMarketManager implements Listener {
         String gate = gate(task);
         if (!gate.equals("available")) { player.sendMessage("§e不能接这张任务：" + gate + "。/mycli guild engineering 查看场地状态。"); return false; }
         if (player.getGameMode() != GameMode.SURVIVAL) { player.sendMessage("§e任务市场需要生存模式；旁观者不能施工或领奖。"); return false; }
+        if (task.steps.stream().anyMatch(s -> s.map != null)) {
+            String denial = maps.denial(player);
+            if (!denial.equals("available")) { player.sendMessage("§e不能接寻宝委托：" + denial + "。" + MapObjectives.hint(denial)); return false; }
+        }
         return true;
     }
     void accepted(Player player, String id) {
         exploration.clear(player);
+        maps.clear(player);
         Task task = tasks.get(id); String run = UUID.randomUUID().toString(); String path = marketPath(player);
         plugin.getConfig().set(path + ".definition", task.definition);
         plugin.getConfig().set(path + ".skill-rewards", plugin.professions().rewards("guild_contract", id));
@@ -343,6 +360,7 @@ final class TaskMarketManager implements Listener {
         plugin.getConfig().set(path + ".run", run); plugin.getConfig().set(path + ".step", 0);
         plugin.getConfig().set(path + ".started-at", System.currentTimeMillis());
         plugin.getConfig().set(path + ".step-started-at", System.currentTimeMillis());
+        for (int i = 0; i < task.steps.size(); i++) if (task.steps.get(i).map != null) maps.accepted(player, run, i);
         if (task.project) {
             plugin.getConfig().set(ROOT + ".projects." + id + ".owner", player.getUniqueId().toString());
             plugin.getConfig().set(ROOT + ".projects." + id + ".run", run);
@@ -350,6 +368,25 @@ final class TaskMarketManager implements Listener {
         }
     }
     int chest(Player player) { Task task = frozen(player); return task == null ? -1 : task.steps.get(index(player)).chest; }
+    void mapInfo(Player player) {
+        JsonObject data = maps.info(player);
+        Task task = frozen(player);
+        if (task != null) for (Step step : task.steps) if (step.map != null) data.add("requirements", step.map.json());
+        if (data.get("success").getAsBoolean()) {
+            JsonObject map = data.getAsJsonObject("map");
+            player.sendMessage("§6地图目标：" + map.get("title").getAsString() + "；" + map.get("dimension").getAsString()
+                    + " X=" + map.get("x") + " Z=" + map.get("z") + "（图上标记，不提供藏宝深度）。");
+            player.sendMessage("MC_TREASURE_TARGET mapId=" + map.get("mapId") + " dimension=" + map.get("dimension").getAsString()
+                    + " x=" + map.get("x") + " z=" + map.get("z") + " heightKnown=false");
+            if (data.has("returnTo")) {
+                JsonObject at = data.getAsJsonObject("returnTo");
+                player.sendMessage("MC_TREASURE_RETURN dimension=" + at.get("dimension").getAsString() + " x=" + at.get("x")
+                        + " y=" + at.get("y") + " z=" + at.get("z"));
+            }
+            player.sendMessage("§7" + (data.has("returnTo") ? "已绑定接单时的地图；换主手物品不改变目的地。" : "主手持此图后接 tm_map_hunt；先找目标、探索，再回接单点交付。"));
+        } else player.sendMessage("§e" + MapObjectives.hint(data.get("reason").getAsString()));
+        send(player, "MC_TREASURE_MAP", data);
+    }
     boolean engineering(GuildManager.Contract contract) { return contract != null && EngineeringSites.GOALS.contains(contract.goal()); }
 
     void verify(Player player, GuildManager.Contract contract, Consumer<Boolean> finish) {
@@ -364,7 +401,7 @@ final class TaskMarketManager implements Listener {
         }
         lastCheck.put(player.getUniqueId(), now);
         String run = run(player); int step = index(player);
-        if (task.steps.get(step).exploration != null) {
+        if (task.steps.get(step).exploration != null || task.steps.get(step).map != null) {
             EngineeringSites.Result result = observe(player, task);
             if (result.ready() && step + 1 == task.steps.size()) recheckEarlier(player, task, run, step, 0, result, finish);
             else checked(player, task, run, step, result, finish);
@@ -428,6 +465,7 @@ final class TaskMarketManager implements Listener {
         data.add("evidence", result.evidence()); send(player, "MC_MARKET_CHECK", data);
         player.sendMessage((result.ready() ? "§a验收通过：" : "§e验收未通过：") + result.reason()
                 + "（" + result.progress() + "/" + task.steps.get(step).target + "）。");
+        if (task.steps.get(step).map != null) player.sendMessage("§7" + MapObjectives.hint(result.reason()));
         JsonObject evidence = result.evidence();
         if (evidence.has("distinctZones") && task.steps.get(step).goal != GuildManager.Goal.RETURN) player.sendMessage("§7探索：不同区域 " + evidence.get("distinctZones") + "/" + task.steps.get(step).target
                 + "，有效行进 " + evidence.get("distance") + " 格 / " + evidence.get("movingSeconds") + " 秒，建筑区段 "
@@ -463,6 +501,7 @@ final class TaskMarketManager implements Listener {
     }
     void completed(Player player) {
         Task task = frozen(player); if (task == null) return;
+        if (task.steps.get(index(player)).map != null) maps.completed(player);
         recordStep(player, task, index(player));
         finishRun(player, task, "completed");
         plugin.professions().queue(player.getUniqueId(), "guild_contract:" + task.id(), run(player),
@@ -477,10 +516,13 @@ final class TaskMarketManager implements Listener {
         }
         release(player, task, true);
         exploration.clear(player);
+        maps.clear(player);
         player.sendMessage("§a" + task.beneficiary + "收到了这份帮助。能力记录已保存：/mycli guild assessment");
     }
     boolean beforeComplete(Player player) {
         Task task = frozen(player);
+        if (task != null && task.steps.get(index(player)).map != null
+                && !maps.observe(player, task.steps.get(index(player)).map, task.steps.get(index(player)).target, run(player)).ready()) return false;
         if (task != null && !plugin.professions().taskDenial(player, task.definition).equals("available")) {
             player.sendMessage("§e交付需要接单时约定的职业资格；进度保留。"); return false;
         }
@@ -510,6 +552,7 @@ final class TaskMarketManager implements Listener {
     void abandoned(Player player) {
         Task task = frozen(player); if (task == null) return;
         finishRun(player, task, "abandoned"); release(player, task, false); exploration.clear(player);
+        maps.clear(player);
     }
     private void release(Player player, Task task, boolean complete) {
         if (!task.project) return;
@@ -580,7 +623,7 @@ final class TaskMarketManager implements Listener {
     private JsonObject summary(Task task) {
         JsonObject row = new JsonObject(); row.addProperty("id", task.id()); row.addProperty("title", task.title);
         row.addProperty("description", task.description); row.addProperty("scope", task.project ? "project" : "personal");
-        row.addProperty("repeat", task.project || task.repeatOnce ? "once" : "daily");
+        row.addProperty("repeat", task.project || task.repeatOnce ? "once" : task.repeatDestination ? "destination" : "daily");
         row.addProperty("stepCount", task.steps.size()); row.addProperty("fame", task.fame); row.addProperty("emeralds", task.emeralds);
         row.addProperty("minRank", task.minRank); return row;
     }
@@ -602,6 +645,12 @@ final class TaskMarketManager implements Listener {
             row.addProperty("goal", step.goal.name().toLowerCase(Locale.ROOT)); row.addProperty("target", step.target);
             row.addProperty("floor", step.floor); row.addProperty("site", step.site == null ? "" : step.site);
             row.addProperty("chest", step.chest);
+            if (step.map != null) {
+                row.add("mapHunt", step.map.json());
+                player.sendMessage("§7寻宝：主手持现有目标地图接单；天然藏宝箱须亲自新开，遗迹须深入走查；"
+                        + step.target + "区域/" + step.map.minDistance() + "格/" + step.map.minSeconds() + "秒有效路线，再返回接单点。地图不消耗，同一目的地每人一次。");
+                if (task.id().equals(plugin.getConfig().getString(activePath(player) + ".id"))) mapInfo(player);
+            }
             if (step.exploration != null) {
                 row.add("exploration", step.exploration.json());
                 player.sendMessage("§7探索验收：" + step.exploration.conditions(step.target));
@@ -704,7 +753,7 @@ final class TaskMarketManager implements Listener {
         for (int i = 0; i < ids.size(); i++) {
             Task task = tasks.get(ids.get(i)); ItemStack item = new ItemStack(task.icon);
             var meta = item.getItemMeta(); meta.setDisplayName("§e" + task.title);
-            meta.setLore(List.of(task.description, task.steps.size() + " 个阶段 · " + (task.project ? "公共工程仅结算一次" : task.repeatOnce ? "本人远行履历仅一次" : "本人每日一次"),
+            meta.setLore(List.of(task.description, task.steps.size() + " 个阶段 · " + (task.project ? "公共工程仅结算一次" : task.repeatOnce ? "本人远行履历仅一次" : task.repeatDestination ? "每个新目的地一次，换图可继续" : "本人每日一次"),
                     "声望 +" + task.fame + " / 绿宝石 ×" + task.emeralds, "状态：" + state(task, player), "左键接单，右键看步骤"));
             item.setItemMeta(meta); inventory.setItem(i, item);
         }
@@ -751,6 +800,7 @@ final class TaskMarketManager implements Listener {
         if (menu != null && event.getInventory() == menu.inventory) menus.remove(event.getPlayer().getUniqueId());
     }
     @EventHandler public void quit(org.bukkit.event.player.PlayerQuitEvent event) {
+        maps.forget(event.getPlayer());
         exploration.quit(event.getPlayer());
         UUID id = event.getPlayer().getUniqueId(); menus.remove(id); lastCheck.remove(id); frozenTasks.remove(id);
     }

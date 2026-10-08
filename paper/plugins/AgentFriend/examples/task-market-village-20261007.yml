@@ -12,6 +12,16 @@ sites:
   watch_post: {"world":"world","min":[-464,67,-524],"max":[-458,72,-520],"deck-y":67,"materials":["OAK_PLANKS","OAK_LOG","OAK_FENCE","OAK_STAIRS","OAK_SLAB","STONE_BRICKS","COBBLESTONE","GLASS_PANE","LANTERN"]}
   drawbridge: {"world":"world","min":[-572,63,-562],"max":[-566,67,-539],"deck-y":63,"materials":["OAK_PLANKS","OAK_SLAB","STONE_BRICKS"],"start":[-569,63,-562],"end":[-569,63,-539],"components":{"STICKY_PISTON":2,"REDSTONE_LAMP":1,"LEVER":1,"REDSTONE_WIRE":8},"outputs":[{"at":[-571,63,-551],"material":"STICKY_PISTON"},{"at":[-571,63,-550],"material":"STICKY_PISTON"}]}
 tasks:
+  map_hunt:
+    scope: personal
+    repeat: destination
+    title: 图上的远行
+    description: 主手拿现有藏宝图或遗迹地图接单，按图寻找天然目标；亲自开新藏宝箱或深入遗迹走查，再回接单点交回记录。
+    beneficiary: 冒险者公会地图档案
+    icon: FILLED_MAP
+    reward: {fame: 12, emeralds: 4, bonus: BREAD, bonus-count: 3}
+    steps:
+      - {title: 寻图、调查与归来, description: 原图标记绑定接单；探索四个不同区域、二十四格新路线及十五秒有效行进，再回接单点十六格内交付。天然藏宝箱须亲自新开，旧空箱、自制箱或只到坐标不算。, goal: map_hunt, target: 4, zone-size: 4, min-distance: 24, min-seconds: 15, min-sections: 1, treasure-radius: 32, return-radius: 16}
   north_river_bridge:
     enabled: true
     scope: project

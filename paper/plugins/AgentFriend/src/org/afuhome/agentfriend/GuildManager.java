@@ -29,7 +29,7 @@ final class GuildManager implements Listener {
     enum Goal { FLOOR, KILLS, PARTY_FLOOR, CLAIMS, EXPLORE, DIMENSION, STRUCTURE, BIOME, RETURN, DONATE, CRAFT, FISH, PEAK, BIOME_BORDER,
             LANTERNS, ERUDITE, PRAYER_ROAD, PILGRIMAGE, FAST_FLOOR, NO_DEATH,
             LIGHT_FLOOR, STONE_FLOOR, WITCH_KILLS, BRIDGE, ROAD, BUILD, REDSTONE,
-            MELEE_KILLS, PARRY, HEALING, MARK_KILLS }
+            MELEE_KILLS, PARRY, HEALING, MARK_KILLS, MAP_HUNT }
     /** 智能考核维度：0感知探索 1战斗执行 2长程规划 3社会协作 4语言理解 5约束遵守。 */
     private static final String[] DIMS = {"感知", "战斗", "规划", "协作", "语言", "约束"};
     record Contract(String id, String title, String description, Material icon,
@@ -200,6 +200,7 @@ final class GuildManager implements Listener {
     int marketProgress(Player player) { return progress(player); }
     private boolean doneToday(Player p, Contract quest) {
         if (plugin.taskMarket() != null && plugin.taskMarket().onceCompleted(p, quest.id())) return true;
+        if (plugin.taskMarket() != null && plugin.taskMarket().destinationRepeat(p, quest.id())) return false;
         DailyBoardManager.Card card = plugin.dailyBoard() == null ? null : plugin.dailyBoard().card(quest.id());
         String day = card == null ? today() : card.date();
         return day.equals(plugin.getConfig().getString(base(p.getUniqueId()) + ".daily." + quest.id()));
@@ -214,6 +215,7 @@ final class GuildManager implements Listener {
             case "join", "register", "注册" -> join(player);
             case "status", "rank", "状态", "等级" -> status(player);
             case "engineering", "market", "projects", "任务市场" -> plugin.taskMarket().command(player, args);
+            case "map", "treasure", "藏宝图" -> plugin.taskMarket().mapInfo(player);
             case "commission", "commissions", "玩家委托" -> plugin.playerContracts().command(player,java.util.Arrays.copyOfRange(args,1,args.length));
             case "assessment", "能力记录" -> plugin.taskMarket().assessment(player);
             case "verify", "验收" -> {
@@ -309,7 +311,7 @@ final class GuildManager implements Listener {
                 + quest.target() + "]" + (progress(player) >= quest.target() ? "；可交付领取" : ""));
         if (quest != null && plugin.taskMarket().engineering(quest))
             player.sendMessage(ChatColor.GRAY + "工程进度为上次验收快照；/mycli guild verify 重新验收实际结构。");
-        if (quest != null && ExplorationObjectives.GOALS.contains(quest.goal())) plugin.taskMarket().surveyStatus(player);
+        if (quest != null && (ExplorationObjectives.GOALS.contains(quest.goal()) || quest.goal() == Goal.MAP_HUNT)) plugin.taskMarket().surveyStatus(player);
     }
 
     private void accept(Player player, String id) {

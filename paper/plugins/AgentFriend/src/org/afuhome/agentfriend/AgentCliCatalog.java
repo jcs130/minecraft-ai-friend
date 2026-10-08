@@ -182,13 +182,14 @@ final class AgentCliCatalog {
         add(specs,"guild.hall","adventure","teleport","/mycli guild hall","前往公会大厅","安全落点可用；6 魔力","成功后 MC_TRAVEL 或失败原因");
         add(specs,"guild.board","adventure","read","/mycli guild board","列出 05:00 更新的今日动态委托与常驻任务 ID","在线玩家","本人任务、声望及 mcagent:board 今日数据");
         add(specs,"guild.engineering","adventure","read","/mycli guild engineering [list|menu|任务ID]","查看可配置的远征、工程和生活任务；market 是同义入口","在线玩家；mcagent:market 单播","MC_MARKET_BOARD / MC_MARKET_DETAIL；repeat 区分每日/本人一次");
-        add(specs,"guild.market","adventure","read","/mycli guild market [list|menu|任务ID]","查看千灯纪委托；探索要求新区域、路线、行进和建筑区段/群系","探索要求见详情 exploration 字段；不能只到坐标","MC_MARKET_BOARD / MC_MARKET_DETAIL；MC_MARKET_SURVEY 记录探索阶段达成");
-        add(specs,"guild.verify","adventure","read","/mycli guild verify","验收本人市场阶段的真实工程、动作或探索路线证据","已接单；生存模式；探索不计站定、重复路线和传送位移","MC_MARKET_CHECK 的 ready/progress/reason/evidence；未通过不领奖");
+        add(specs,"guild.market","adventure","read","/mycli guild market [list|menu|任务ID]","查看千灯纪委托；探索要求真实路线，现有藏宝图/遗迹地图可接寻宝委托","探索见 exploration；寻宝见 mapHunt，不能只到坐标","MC_MARKET_BOARD / MC_MARKET_DETAIL；MC_MARKET_SURVEY 记录探索阶段达成");
+        add(specs,"guild.map","adventure","read","/mycli guild map","读取主手目标地图或在途寻宝地图的真实标记与返程坐标","藏宝图/探险家/遗迹地图；普通地图无目标则明确拒绝；读取不消耗地图","MC_TREASURE_MAP / MC_TREASURE_TARGET / MC_TREASURE_RETURN；只提供原图X/Z，不揭示藏宝深度，不传送");
+        add(specs,"guild.verify","adventure","read","/mycli guild verify","验收本人市场阶段的真实工程、动作、探索或地图寻宝证据","已接单；寻宝需真实探索/新开天然藏宝箱并返接单点；传送不增加路线","MC_MARKET_CHECK 的 ready/progress/reason/evidence；未通过不领奖");
         add(specs,"guild.assessment","adventure","read","/mycli guild assessment","读取本人各类任务的已验收步骤、失败检查和最近任务证据","只读本人记录；耗时含离线","MC_MARKET_ASSESSMENT；不把任务记录当作未测能力");
         add(specs,"guild.menu","adventure","gui","/mycli guild menu","打开原版公会任务面板","在线玩家","原版菜单");
         add(specs,"guild.join","adventure","write","/mycli guild join","注册冒险者公会","非旁观者；已入会时显示状态","入会回执");
         add(specs,"guild.status","adventure","read","/mycli guild status","查看本人公会等级、声望与活动任务","在线玩家","个人状态");
-        add(specs,"guild.accept","adventure","write","/mycli guild accept <任务ID>","接取一张公会任务；接单可自动入会","满足等级/每日限制；同一时间一单","任务进度或拒绝原因");
+        add(specs,"guild.accept","adventure","write","/mycli guild accept <任务ID>","接取一张公会任务；接单可自动入会；tm_map_hunt绑定主手现有目标地图","满足等级/次数限制；同一时间一单；寻宝同一目的地每人一次，复制图不能重复领奖","任务进度或拒绝原因");
         add(specs,"guild.abandon","adventure","write","/mycli guild abandon","放弃当前公会任务","有活动任务","放弃结果");
         add(specs,"guild.claim","adventure","item","/mycli guild claim","交付已完成任务并结算声望/奖励","活动任务已达成","声望与奖励箱结果");
         add(specs,"guild.rewards","storage","gui","/mycli guild rewards","打开与试炼共用的本人奖励箱","远程开启 2 魔力；实体箱旁免费","原版箱子菜单与远程 MC_STORAGE_MAGIC");

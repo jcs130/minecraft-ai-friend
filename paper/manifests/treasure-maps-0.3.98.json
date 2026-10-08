@@ -1,0 +1,96 @@
+{
+  "releasedAt": "2026-10-08T23:24:01+08:00",
+  "releasedAtLocal": "2026-10-08 23:24:01",
+  "version": "0.3.98",
+  "candidateSha256": "EFF8C9B52576DBC016092E3C2C2D4FCDD06E8EEFA959186EB78497EFB25CF6CC",
+  "bytes": 886121,
+  "javaPid": 25800,
+  "snapshot": "20261008-232258",
+  "taskResult": 0,
+  "backupBeforeReplacement": true,
+  "tests": [
+    {
+      "file": "map-stage-1791472638459.json",
+      "checks": 41,
+      "scope": "isolated original map/ruins/treasure",
+      "sha256": "EFF8C9B52576DBC016092E3C2C2D4FCDD06E8EEFA959186EB78497EFB25CF6CC"
+    },
+    {
+      "file": "map-restart-1791472907001.json",
+      "checks": 10,
+      "scope": "isolated normal restart",
+      "sha256": "EFF8C9B52576DBC016092E3C2C2D4FCDD06E8EEFA959186EB78497EFB25CF6CC"
+    },
+    {
+      "file": "eye-1791472948580.json",
+      "checks": 4,
+      "scope": "attached native Eye",
+      "sha256": "EFF8C9B52576DBC016092E3C2C2D4FCDD06E8EEFA959186EB78497EFB25CF6CC"
+    },
+    {
+      "file": "read-live-1791473081649.json",
+      "checks": 11,
+      "scope": "production read-only",
+      "sha256": "EFF8C9B52576DBC016092E3C2C2D4FCDD06E8EEFA959186EB78497EFB25CF6CC"
+    }
+  ],
+  "agentClientChanges": false,
+  "otherPluginJarsPreserved": true,
+  "productionMspt": "§6Server tick times §e(§7avg§e/§7min§e/§7max§e)§6 from last 5s§7,§6 10s§7,§6 1m§e:\n§6◴ §a11.8§7/§a4.3§7/§c421.9§e, §a9.3§7/§a4.3§7/§c421.9§e, §a8.2§7/§a4.2§7/§c421.9\n",
+  "preservation": {
+    "oldStashPlayers": 8,
+    "oldOccupiedSlotsWithIdenticalMetadata": 152,
+    "all540SlotRangeCompared": true,
+    "regionCount": 49,
+    "legacyQualifications": 114,
+    "existingMapsUnchanged": 11,
+    "oldTaskTemplatesUnchanged": 34,
+    "taskTemplates": 35,
+    "taskSites": 7,
+    "originalMaintenanceRosterReconnected": [
+      "Goddess",
+      "CortiLan",
+      "CortiEye",
+      "ag_NEKO"
+    ],
+    "originalCortiEyeAttached": true,
+    "difficultyNormalKeepInventoryAllDimensions": true,
+    "auraCurrentStartupVerified": true,
+    "temporaryWhitelistEntriesRemoved": true
+  },
+  "status": "deployed",
+  "goal": "map_hunt",
+  "taskId": "tm_map_hunt",
+  "repeat": "destination",
+  "mapItemsReplacedOrEditedOrConsumed": false,
+  "originalMarkersRead": true,
+  "realExplorationAndReturnRequired": true,
+  "freshNaturalTreasureAndActualOpenRequired": true,
+  "defaultRules": {
+    "zones": 4,
+    "zoneSize": 4,
+    "distance": 24,
+    "movingSeconds": 15,
+    "minSections": 1,
+    "treasureRadius": 32,
+    "returnRadius": 16
+  },
+  "stageStoppedAndOriginalStageUnchanged": true,
+  "limits": [
+    "隔离测试使用受控走查场地，验证原图、天然生成元数据、原生开箱、返程及去重；不是LLM自主战斗/寻宝或长期负载验收。基岩沿用原版地图、文本和箱式菜单，Xbox/基岩真机手柄画面仍待设备验收。"
+  ],
+  "goddessKnowledge": {
+    "manual": "docs/SERVER_UPDATES.md",
+    "sha256": "2B7E7164CDAED4DCF41D8862481C11531FD723C4F5F44150228868CB7BFDD0CB",
+    "copiedByteIdentically": true,
+    "readOnlyQuestionsPassed": 2,
+    "successfulCurrentManualReads": 1,
+    "replyCharacters": [
+      89,
+      82
+    ],
+    "agentClientProgramsChanged": false,
+    "inGameChatSent": false,
+    "documentationSyncNeededRestart": false
+  }
+}
