@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "pack": "world-life-20261009",
+  "server": "Paper 1.20.6 build 151 / Java 21",
+  "agentFriend": {
+    "version": "0.3.99",
+    "sha256": "59CCE54DE06261D53CF2068DEE5DF4BD6809062A12EB7666467D784E916F705D",
+    "bytes": 898509
+  },
+  "plugins": [
+    {
+      "id": "BetonQuest",
+      "version": "3.2.0",
+      "filename": "BetonQuest-3.2.0.jar",
+      "sha256": "70A43C05A4A6D627FD0BC9908E07A6551A26A36671360416410F1D96BDD363B0",
+      "bytes": 5746005,
+      "source": "https://cdn.modrinth.com/data/uVhukxY9/versions/Sfp4oOVr/BetonQuest-3.2.0.jar",
+      "purpose": "真实行动实习与原版对话菜单"
+    },
+    {
+      "id": "FancyNpcs",
+      "version": "2.9.0",
+      "filename": "FancyNpcs-2.9.0.jar",
+      "sha256": "B7C992BDC7C01F9A7DC2943351BA7D37ABB3A0C317BA0A52125326352230F57E",
+      "bytes": 6772485,
+      "source": "https://cdn.modrinth.com/data/EeyAn23L/versions/pqPHT6wS/FancyNpcs-2.9.0.jar",
+      "purpose": "原版村民外观的旅途导师"
+    },
+    {
+      "id": "Citizens",
+      "version": "2.0.40-b4013",
+      "filename": "Citizens-2.0.40-b4013.jar",
+      "sha256": "38701D6101DFD8B1ACC667C5049D7574AD2892B467CD7EAF54E387B65CA0B2B3",
+      "bytes": 4111268,
+      "source": "https://ci.citizensnpcs.co/job/Citizens2/4013/artifact/dist/target/Citizens-2.0.40-b4013.jar",
+      "purpose": "持久服务 NPC"
+    },
+    {
+      "id": "Denizen",
+      "version": "1.3.4-b7311-DEV",
+      "filename": "Denizen-1.3.4-b7311-DEV.jar",
+      "sha256": "C0B374FB360A244076CF14BB746A403BCE74964082C86E15C7230F738009DC04",
+      "bytes": 5607269,
+      "source": "https://ci.citizensnpcs.co/job/Denizen_Developmental/7311/artifact/target/Denizen-1.3.4-b7311-DEV.jar",
+      "purpose": "数据脚本化的旅人故事"
+    },
+    {
+      "id": "ConditionalEvents",
+      "version": "4.80.3",
+      "filename": "ConditionalEvents-4.80.3.jar",
+      "sha256": "3F9C588D664D604B09113397A6DC04C1B7AD288C2550D8270C96669EB61C7E74",
+      "bytes": 345509,
+      "source": "https://cdn.modrinth.com/data/4EEcEnDG/versions/5UbBem3Z/ConditionalEvents-4.80.3.jar",
+      "purpose": "登录新玩法指引"
+    },
+    {
+      "id": "WorldEvents",
+      "version": "1.8.30",
+      "filename": "WorldEvents-1.8.30.jar",
+      "sha256": "381F1A5BC64D0754A428BF2A814D492233DC73537C09F8DC3E23C54E0C1F0601",
+      "bytes": 545337,
+      "source": "https://cdn.modrinth.com/data/fnfOvMBj/versions/3TwBGHnL/WorldEvents-1.8.30.jar",
+      "purpose": "三种有界正向随机活动"
+    },
+    {
+      "id": "MythicMobs",
+      "version": "5.9.5",
+      "filename": "MythicMobs-5.9.5.jar",
+      "sha256": "FAEEB0E9E896F052C872380F6CE89D977DF05E1ED4CF08ADA2A36E942F9E5E84",
+      "bytes": 19136105,
+      "source": "https://cdn.modrinth.com/data/NLuc7Jjh/versions/30bT5eJT/MythicMobs-5.9.5.jar",
+      "purpose": "三种独立活动精英模板，无默认随机刷怪"
+    },
+    {
+      "id": "Shopkeepers",
+      "version": "2.23.3",
+      "filename": "Shopkeepers-2.23.3.jar",
+      "sha256": "8228D8C11D98C8B74A80B0336F5B65735CAB249AA56A2A1218EDCEE6C61C725C",
+      "bytes": 1977115,
+      "source": "https://mediafilez.forgecdn.net/files/5975/37/Shopkeepers-2.23.3.jar",
+      "purpose": "原版补给交易"
+    },
+    {
+      "id": "NPCSpeak",
+      "version": "1.0",
+      "filename": "NPCSpeak-1.0.jar",
+      "sha256": "50A528809D2D3EF60BB0A2FACCB09BDBD5D8550736A333334194A5DC83F73A7A",
+      "bytes": 98401,
+      "source": "https://cdn.modrinth.com/data/v8S600nJ/versions/YQsVzU9F/NPCSpeak-1.0.jar",
+      "purpose": "通过现役 QwenPaw 的附近村民聊天"
+    },
+    {
+      "id": "ImageFrame",
+      "version": "2026.1.5.0",
+      "filename": "ImageFrame-2026.1.5.0.jar",
+      "sha256": "65B5C14EB6BD847F1CC0F4985EFA95AB43D2F3E2F67DBAEC2ECF3EA327FDE9B1",
+      "bytes": 4762072,
+      "source": "https://cdn.modrinth.com/data/lJFOpcEj/versions/dKkWOwRr/ImageFrame-2026.1.5.0.jar",
+      "purpose": "已有照片导入原版地图和展示框；无自动快门"
+    }
+  ],
+  "excluded": [
+    {
+      "id": "CameraPlugin",
+      "version": "1.0.9",
+      "reason": "需要额外摄影客户端/账号和图形运行链路；未部署"
+    },
+    {
+      "id": "CameraObscura",
+      "reason": "当前公开发行是 Fabric，Paper 付费候选未购买，未混装"
+    },
+    {
+      "id": "TobysCamera",
+      "reason": "公开 Paper 候选要求 1.21.11+ 和额外 Fabric 摄影客户端"
+    },
+    {
+      "id": "Exposure/Snapcam",
+      "reason": "客户端 Forge/Fabric 模组，与当前 Paper/原客户端边界不符"
+    },
+    {
+      "id": "Shopkeepers",
+      "version": "2.28.1",
+      "reason": "实测要求 API 1.21.5，改用 2.23.3"
+    },
+    {
+      "id": "WorldEvents",
+      "version": "1.9.5",
+      "reason": "实测关闭菜单触发 InventoryView 不兼容，改用官方 1.8.30 修复版本"
+    },
+    {
+      "id": "Citizens",
+      "version": "2.0.44-b4258",
+      "reason": "发行包不包含当前 1.20.6 NMS，改用带 v1_20_R4 的 b4013"
+    }
+  ],
+  "dependencyCaches": [
+    {
+      "coordinate": "org.slf4j:slf4j-api:1.7.36",
+      "source": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar",
+      "sha1": "6c62681a2f655b49963a5983b8b0950a6120ae14",
+      "sha256": "D3EF575E3E4979678DC01BF1DCCE51021493B4D11FB7F1BE8AD982877C16A1C0",
+      "bytes": 41125
+    }
+  ]
+}

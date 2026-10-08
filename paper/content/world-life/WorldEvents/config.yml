@@ -1,0 +1,50 @@
+check-updates: false
+scheduling:
+  enabled: true
+  interval-minutes: 40
+  max-concurrent-events: 1
+  event-cooldown-minutes: 60
+  events-per-cycle: 1
+  start-delay-seconds: 5
+  pre-start-announcements:
+    enabled: false
+    seconds-before-start: 10
+    message: <gradient:#FFD700:#FFA500><bold>%symbol% Upcoming Event</bold></gradient>
+      <dark_gray>»</dark_gray> <yellow>%event%</yellow> <gray>starts in</gray> <aqua><bold>%time%s</bold></aqua><gray>.</gray>
+  pause-if-low-tps: true
+  pause-events-tps-threshold: 18.0
+boss-bar:
+  enabled: true
+  update-interval-ticks: 20
+  rotation-interval-ticks: 100
+  multiple-events-suffix: ' &7(+{count} others)'
+announcements:
+  enabled: true
+  send-end-message: true
+  end-message-format: <gold>[村庄活动]</gold> <yellow>%event%</yellow> <gray>已结束。</gray>
+  start-sound: ENTITY_PLAYER_LEVELUP
+  end-sound: BLOCK_NOTE_BLOCK_PLING
+  sound-volume: 0.5
+  sound-pitch: 1.0
+countdown-warnings:
+  enabled: true
+  times:
+  - 30
+  - 10
+  - 5
+  message: <gold>[村庄活动]</gold> <yellow>%event%</yellow> <gray>还有 %time% 秒结束。</gray>
+performance:
+  async-event-selection: true
+  max-selection-time-ms: 50
+world-settings:
+  default:
+    enabled: false
+  world:
+    enabled: true
+debug:
+  verbose-logging: false
+  log-event-selection: false
+  log-cooldowns: false
+hooks:
+  griefprevention:
+    ignore-claims: false

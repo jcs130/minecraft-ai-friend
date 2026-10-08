@@ -220,6 +220,7 @@ final class LifeGuildManager implements Listener {
         player.sendMessage(ChatColor.GREEN + contract.guild() + "委托完成！声望 +" + contract.reputation()
                 + "（" + rank(reputation) + "）；绿宝石与小礼物已进入个人试炼箱。");
         receipt(player, "claim", contract, true, "claimed");
+        plugin.recordWorldLesson(player, "life");
         plugin.getLogger().info("Life guild claim: player=" + player.getUniqueId() + ", id=" + contract.id());
     }
 

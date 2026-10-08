@@ -1,0 +1,136 @@
+prefix: <gold>[村庄活动]</gold>
+global-prefix: <gold>[村庄活动]</gold>
+commands:
+  no-permission: '{prefix} <red>没有权限使用这个活动管理命令。</red>'
+  player-only: '{prefix} <yellow>请在游戏内使用。</yellow>'
+  reload-success: '{prefix} <green>Configuration reloaded successfully!</green>'
+  reload-error: '{prefix} <red>An error occurred while reloading configuration.</red>'
+  help:
+    header: <gradient:#FFD700:#FFA500><st>══════</st> <bold>WorldEvents Help</bold>
+      <st>══════</st></gradient>
+    title: '  <gray>Managed by <yellow>WorldEvents</yellow></gray>'
+    subtitle: '  <gray>Version: <gold>{version}</gold></gray>'
+    separator: <gradient:#FFD700:#FFA500><st>══════════════════════════</st></gradient>
+    player-header: <gold><bold>PLAYER COMMANDS</bold></gold>
+    admin-header: <red><bold>ADMIN COMMANDS</bold></red>
+    pro-header: <light_purple><bold>PRO COMMANDS</bold></light_purple>
+    footer: <gradient:#FFD700:#FFA500><st>══════════════════════════</st></gradient>
+    tip: '<gray><i>Tip: Hover over commands to see descriptions!</i></gray>'
+    toggle: <gray>Toggle event notifications</gray>
+    togglebar: <gray>Toggle boss bar visibility</gray>
+    list: <gray>List active events</gray>
+    info: <gray>View scheduling info</gray>
+    bet: <gray>Place bets on events</gray>
+    vote: <gray>Vote for the next event</gray>
+    leaderboard: <gray>View event leaderboard</gray>
+    shop: <gray>Open event shop</gray>
+    quest: <gray>View event quests</gray>
+    start: <gray>Force start an event</gray>
+    stop: <gray>Stop an active event</gray>
+    reload: <gray>Reload configuration</gray>
+    cooldowns: <gray>View event cooldowns</gray>
+    clear: <gray>Clear event cooldowns</gray>
+    editor: <gray>Open event editor GUI</gray>
+    bossrush: <gray>Start a boss rush event</gray>
+    chain: <gray>Manage event chains</gray>
+    playlist: <gray>Manage event playlists</gray>
+    twitch: <gray>Manage Twitch integration</gray>
+    discord: <gray>Manage Discord integration</gray>
+    analytics: <gray>View event analytics</gray>
+    calendar: <gray>View event calendar</gray>
+    history: <gray>View event history</gray>
+  start:
+    usage: '{prefix} <red>Usage: /wevent start <event></red>'
+    not-found: '{prefix} <red>Event ''<yellow>{event}</yellow>'' not found!</red>'
+    success: '{prefix} <green>Successfully started event <yellow>{event}</yellow>!</green>'
+    max-reached: '{prefix} <red>Cannot start event. Max concurrent events reached
+      ({count}/{max}).</red>'
+  stop:
+    none-active: '{prefix} <red>No events are currently active.</red>'
+    not-found: '{prefix} <red>Event ''<yellow>{event}</yellow>'' is not active!</red>'
+    success: '{prefix} <green>Successfully stopped event <yellow>{event}</yellow>!</green>'
+    all-success: '{prefix} <green>Successfully stopped {count} active events!</green>'
+  list:
+    none: '{prefix} <gray>当前没有正在进行的活动。</gray>'
+    header: <gold>当前活动（{count}/{max}）：</gold>
+    entry: ' <gray>•</gray> <yellow>{event}</yellow> <gray>（剩余 {time}）</gray>'
+    footer: <gray>活动开始与结束会有中文公告。</gray>
+  info:
+    header: '{prefix} <gradient:#FFD700:#FFA500>Scheduling Information:</gradient>'
+    enabled: ' <dark_gray>•</dark_gray> <gray>Status:</gray> {status}'
+    interval: ' <dark_gray>•</dark_gray> <gray>Interval:</gray> <yellow>{interval}m</yellow>'
+    max-events: ' <dark_gray>•</dark_gray> <gray>Max Events:</gray> <yellow>{max}</yellow>'
+    cooldown: ' <dark_gray>•</dark_gray> <gray>Cooldown:</gray> <yellow>{cooldown}m</yellow>'
+    active: ' <dark_gray>•</dark_gray> <gray>Active:</gray> <yellow>{count}/{max}</yellow>'
+    footer: <gray>Use <yellow>/wevent help</yellow> for more commands</gray>
+  event-info:
+    not-found: '{prefix} <red>Event ''<yellow>{event}</yellow>'' not found!</red>'
+    header: <gold><bold>══════ Event Info ══════</bold></gold>
+    name: '<gray>Name: <white>{name}</white></gray>'
+    display-name: '<gray>Display Name: </gray>'
+    type: '<gray>Type: <white>{type}</white></gray>'
+    duration: '<gray>Duration: <white>{duration}</white></gray>'
+    weight: '<gray>Weight: <white>{weight}</white></gray>'
+    enabled: '<gray>Enabled: {status}</gray>'
+    hidden: '<gray>Hidden: {status}</gray>'
+    status-active: '<green>Status: Active ({time} remaining)</green>'
+    status-cooldown: '<red>Status: Cooldown ({time} remaining)</red>'
+    status-ready: '<green>Status: Ready</green>'
+    footer: <gold><bold>══════════════════════</bold></gold>
+  toggle:
+    enabled: '{prefix} <green>Event notifications enabled.</green>'
+    disabled: '{prefix} <red>Event notifications disabled.</red>'
+  togglebar:
+    visible: '{prefix} <green>Boss bar is now visible.</green>'
+    hidden: '{prefix} <red>Boss bar is now hidden.</red>'
+  extend:
+    usage: '{prefix} <red>Usage: /wevent extend <event> <seconds></red>'
+    positive-seconds: '{prefix} <red>Seconds must be a positive number.</red>'
+    invalid-number: '{prefix} <red>Invalid number: {input}</red>'
+    success: '{prefix} <green>Extended <yellow>{event}</yellow> by <yellow>{seconds}</yellow>
+      seconds. (<yellow>{time}</yellow> remaining)</green>'
+    not-active: '{prefix} <red>Event <yellow>{event}</yellow> is not active!</red>'
+  cooldowns:
+    none: '{prefix} <green>No events are currently on cooldown.</green>'
+    header: <gradient:#FFD700:#FFA500>Event Cooldowns:</gradient>
+    entry: ' <dark_gray>•</dark_gray> <yellow>{event}</yellow>: <gray>{time}</gray>'
+hover:
+  click-to-run: <gray>Click to run command</gray>
+status:
+  enabled: <green>Enabled</green>
+  disabled: <red>Disabled</red>
+betting:
+  types:
+    survival:
+      name: Survival
+      desc: Survive the event without dying
+    death-over:
+      name: Deaths Over
+      desc: Total server deaths exceeds threshold
+    death-under:
+      name: Deaths Under
+      desc: Total server deaths stays under threshold
+    first-treasure:
+      name: First Treasure
+      desc: Be the first to find the treasure
+    fast:
+      name: Fast Completion
+      desc: Event ends in under target time
+    slow:
+      name: Slow Completion
+      desc: Event lasts longer than target time
+time:
+  seconds: '{time}s'
+  minutes: '{time}m'
+  hours: '{time}h'
+  days: '{time}d'
+  short-format: '{minutes}m {seconds}s'
+plural:
+  second: second
+  seconds: seconds
+  minute: minute
+  minutes: minutes
+  hour: hour
+  hours: hours
+  day: day
+  days: days

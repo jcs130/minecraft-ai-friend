@@ -1,0 +1,23 @@
+npc-provider: builtin
+backend: openai
+ollama:
+  url: http://localhost:11434
+  model: llama3
+  timeout-seconds: 140
+openai:
+  url: http://127.0.0.1:25579
+  api-key: RENDER_FROM_PRIVATE_ADAPTER_CONFIG
+  model: qwenpaw-npc
+streaming: false
+moderation:
+  enabled: false
+  blocked-phrases: []
+  blocked-response: I cannot discuss that topic.
+  discord-webhook: ''
+memory:
+  enabled: false
+  max-age-days: 30
+conversation:
+  max-exchanges: 10
+  cooldown-seconds: 3
+  listen-timeout-seconds: 60

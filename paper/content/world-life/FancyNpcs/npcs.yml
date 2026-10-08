@@ -1,0 +1,25 @@
+npcs:
+  7a52737c-8d5c-40e6-ab56-468b4497f4b2:
+    name: qd_mentor
+    creator: 00000000-0000-0000-0000-000000000000
+    displayName: 旅途导师·小满
+    type: VILLAGER
+    location:
+      world: world
+      x: -534.5
+      y: 67.0
+      z: -441.5
+      yaw: 0.0
+      pitch: 0.0
+    showInTab: false
+    spawnEntity: true
+    collidable: true
+    glowing: false
+    glowingColor: white
+    turnToPlayer: false
+    turnToPlayerDistance: -1
+    interactionCooldown: 0.0
+    scale: 1.0
+    visibility_distance: -1
+    skin:
+      mirrorSkin: false

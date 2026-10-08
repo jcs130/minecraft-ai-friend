@@ -1,0 +1,5 @@
+{
+  "send_metrics": false,
+  "send_errors": false,
+  "disable_logging": false
+}

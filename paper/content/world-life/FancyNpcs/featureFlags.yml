@@ -1,0 +1,6 @@
+feature-flags:
+  player-npcs: false
+  use-native-threads: false
+  enable-debug-mode: false
+  enable-folia-visibility-fix: false
+  use-minecraft-usercache: false

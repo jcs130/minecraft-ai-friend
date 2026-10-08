@@ -1,0 +1,49 @@
+data-version: 3|2|3839
+'1':
+  uniqueId: 0ca8e5d5-7ec0-48d6-94fc-5ec19c72e044
+  world: world
+  x: -547
+  y: 67
+  z: -442
+  yaw: 0.0
+  type: admin
+  name: 村庄补给商
+  object:
+    type: villager
+    baby: false
+    profession: minecraft:none
+    villagerType: minecraft:plains
+    villagerLevel: 1
+  recipes:
+    '1':
+      resultItem:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: BREAD
+        amount: 6
+      item1:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: EMERALD
+        amount: 2
+    '2':
+      resultItem:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: PAPER
+        amount: 8
+      item1:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: EMERALD
+    '3':
+      resultItem:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: MAP
+      item1:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: EMERALD
+        amount: 2
+  snapshots: []

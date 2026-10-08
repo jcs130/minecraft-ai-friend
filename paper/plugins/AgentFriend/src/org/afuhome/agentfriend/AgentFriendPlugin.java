@@ -234,6 +234,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     @Override public void onEnable() {
         saveDefaultConfig();
+        worldLife = new WorldLifeManager(this);
         goddessGifts = new GoddessGifts(this);
         arenaBuilt = getConfig().getBoolean("arena-built", false);
         lastRun = getConfig().getLong("last-run", 0L);
@@ -467,6 +468,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     void publishSkill(Player player, String spell, String body, Location position) {
         if (skillEventPublisher != null) skillEventPublisher.publish(player, spell, body, position);
+        recordWorldLesson(player, "cast");
+    }
+
+    private WorldLifeManager worldLife;
+    void recordWorldLesson(Player player, String lesson) {
+        if (worldLife != null) worldLife.note(player, lesson);
     }
 
     long totalBuiltinCooldownMs(String spell) {
@@ -1015,6 +1022,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "guild", "公会", "工会" -> guild.command(player, args);
             case "commission", "commissions", "玩家委托" -> playerContracts.command(player,args);
             case "life", "生活" -> lifeGuild.command(player, args);
+            case "world", "世界生活" -> worldLife.command(player, args);
             case "village", "村庄" -> villageWatch.command(player, args);
             case "goddess", "女神" -> goddess(player, args);
             default -> player.sendMessage(ChatColor.RED + "未知子命令。先用 /mycli list 发现命令，再用 /mycli explain <ID> 查看用法；不会猜测并执行其他命令。");
@@ -1051,6 +1059,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
         p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|stash  公会大厅、任务与声望");
         p.sendMessage("/mycli life board|menu|status|accept <ID>|claim|write <书名>|<正文>  生活公会");
+        p.sendMessage("/mycli world list|menu|npcs|talk <NPC ID> <话>|guide start|events|photos  世界生活与新手实习");
         p.sendMessage("/mycli village threat|support [事件ID]|villagers  查实时敌情、支援传送术（8魔力）、村民收购报价");
         p.sendMessage("/mycli pvp status|join|leave|lobby|board|menu  同款装备一对一竞技场；罗盘可用");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
@@ -2105,6 +2114,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(15, item(Material.PLAYER_HEAD, "§b⑥ 找队友", "追踪方向，或安全传送到队友身边"));
             inv.setItem(16, item(Material.WRITTEN_BOOK, "§e翻开命格书", "查看本人状态与全部旅途指引", "页面箭头可用手柄选择"));
             inv.setItem(17, item(Material.SUNFLOWER, "§a⑦ 生活公会", "钓鱼、种田、烹饪、建筑、写书与红石机关", "每日小委托；不必打怪也能成长"));
+            inv.setItem(19, item(Material.OAK_SAPLING, "§a⑧ 村庄新生活", "新手实操、村民对话、世界活动与照片展示", "原版菜单；Agent 可用 /mycli world list"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能罗盘", "回到技能罗盘"));
         } else if (page.equals("combat")) {
             inv.setItem(11, item(Material.AMETHYST_SHARD, "§d星芒箭·自动锁敌", "优先准星 18 格；否则锁定 12 格内最近怪物", "瞬发；伤害 5；4 魔力；3 秒冷却"));
@@ -2369,6 +2379,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 15 -> openMenu(p, "players");
                     case 16 -> p.openBook(statusBook(p));
                     case 17 -> openMenu(p, "life");
+                    case 19 -> worldLife.command(p, new String[]{"world", "menu"});
                     case 22 -> openMenu(p, "skills");
                     default -> { }
                 }

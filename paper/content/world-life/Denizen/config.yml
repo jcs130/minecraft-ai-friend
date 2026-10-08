@@ -1,0 +1,163 @@
+Debug:
+  Show: true
+  Ex command help: true
+  Ex command debug: true
+  Line length: 300
+  Trim length limit: 4096
+  Allow console redirection: false
+  Stats: true
+  Override help: true
+  Container default: true
+  Limit per tick: 5000
+  Extra info: false
+  Verbose: false
+  Prefix: ''
+  Show loading info: false
+  Show future warnings: false
+  Warn on async packets: false
+  Warning rate: 10000
+  Verify thread: false
+  Paste URL: default
+Scripts:
+  Support legacy Spigot names: true
+  World:
+    Events:
+      On player chats:
+        Use asynchronous event: false
+      On time changes:
+        Frequency of check: 250t
+  Interact:
+    Queue speed: instant
+  Queue speed: instant
+  Encoding: utf8
+  Command:
+    Auto init: false
+  Economy:
+    Pass async to main thread: false
+Queues:
+  Id parts:
+    Prefix: true
+    Numeric: true
+    Words: true
+Traits:
+  Health:
+    Enabled: false
+    Block drops: false
+    Respawn:
+      Enabled: false
+      Delay: 10s
+    Animated death:
+      Enabled: false
+Triggers:
+  Chat:
+    Enabled: true
+    Use asynchronous event: false
+    Cooldown: 2s
+    Range: 3
+    Overhearing range: 4
+    Prerequisites:
+      Must be looking in direction of NPC: true
+      Must be able to see NPC: true
+    Formats:
+      Player to NPC: 'You -> <npc.nickname>: <text>'
+      Player to NPC overheard: '<player.name> -> <npc.nickname>: <text>'
+    Appears globally:
+      If triggers missing: true
+      If triggers failed: true
+      If NPC uninteractable: true
+  Click:
+    Enabled: true
+    Cooldown: 2s
+    Range: -1
+  Damage:
+    Enabled: false
+    Cooldown: 0.5s
+  Proximity:
+    Enabled: false
+    Cooldown: 1s
+    Range: 10
+Commands:
+  Engage:
+    Timeout: 150s
+  While:
+    Max loops: 10000
+  Chat:
+    Options:
+      Multiple targets format: '%target%, %target%, %target%, and others'
+      Range for bystanders: 5.0
+    Formats:
+      No target: '[<[talker].name>]: <[message]>'
+      To target: '[<[talker].name>] -> You: <[message]>'
+      With target to bystanders: '[<[talker].name>] -> <[target].name>: <[message]>'
+      With targets to bystanders: '[<[talker].name>] -> [<[targets]>]: <[message]>'
+  CreateWorld:
+    Allow symbols in names: false
+    Allow weird paths: false
+  Delete:
+    Allow file deletion: true
+  Remove:
+    Always warn on mass delete: false
+  Restart:
+    Allow server stop: false
+    Allow server restart: true
+  Filecopy:
+    Allow copying files: true
+  Log:
+    Allow logging: true
+  Yaml:
+    Allow saving outside folder: false
+    Limit path: none
+  Redis:
+    Allow: true
+  SQL:
+    Allow: true
+  Mongo:
+    Allow: true
+  Webget:
+    Allow: true
+  WebServer:
+    Allow: false
+    Webroot: webroot/
+  File:
+    Allow read: false
+    Allow write: false
+    Restrict path: data/
+  Security:
+    Allow restricted actions: false
+Tags:
+  Timeout: 10
+  Timeout when silent: false
+  Block tags:
+    Max blocks: 1000000
+  Chat history:
+    Max messages: 10
+  List flags:
+    I know what im doing and need this: false
+  Nullify skull skin ids: false
+  Polygon default inclusive: false
+Reflection:
+  Allow reading fields: true
+  Allow core methods: true
+  Allow set command: false
+  Allow set private fields: false
+  Allow set final fields: false
+Saves:
+  Offline player cache timeout: 300
+  Load async on login: true
+  Skip flag cleaning: false
+  Skip chunk flag cleaning: false
+  Only save if world save is on: false
+  Save world player file delay: 10s
+  World player data max cache: 1h
+Packets:
+  Interception: true
+  Auto init: false
+Colors:
+  base: <&2>
+  emphasis: <&b>
+  error: <red>
+  warning: <yellow>
+  item: <gold>
+  lore: <&7>
+  npc: <&a>
+  default: <white>

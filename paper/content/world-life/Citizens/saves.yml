@@ -1,0 +1,40 @@
+last-created-npc-id: 0
+npc:
+- traits:
+    scoreboardtrait:
+      tags:
+      - CITIZENS_NPC
+    location:
+      worldid: 64726c6d-6e51-4bed-b11c-ec6210292081
+      x: -544.5
+      y: 67.0
+      z: -441.5
+      bodyYaw: 0.0
+      pitch: 0.0
+      yaw: 0.0
+    type: VILLAGER
+    assignment:
+      assignment_list:
+      - qd_wayfarer
+    triggers:
+      enabled:
+        CHAT: true
+        CLICK: true
+        PROXIMITY: false
+        DAMAGE: false
+      properly_set:
+        CHAT: false
+        CLICK: true
+        PROXIMITY: false
+        DAMAGE: false
+      duration:
+        CLICK: 2.0
+      radius:
+        CLICK: 3
+  traitnames: scoreboardtrait,owner,spawned,assignment,location,constants,type,triggers,chunktickettrait
+  name: 旅人阿岚
+  navigator:
+    usedefaultstuckaction: false
+    speedmodifier: 1.0
+    avoidwater: false
+  uuid: 7be0c245-1c3f-4c79-9214-27ce82da9ad6

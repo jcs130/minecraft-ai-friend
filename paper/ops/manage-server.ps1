@@ -32,6 +32,8 @@ $pendingServerSettings = Join-Path $opsDir 'server-settings.pending.json'
 $jvmDiagnosticRequest = Join-Path $opsDir 'jvm-diagnostics.requested'
 $auraCachePatchRequest = Join-Path $opsDir 'auraskills-cache-fix.requested.json'
 $auraCachePatchJar = Join-Path $opsDir 'instrumentation\auraskills-cache-patch.jar'
+$pendingContentDeploy = Join-Path $opsDir 'content-plugins.pending.json'
+. (Join-Path $PSScriptRoot 'content-deploy.ps1')
 
 function Log([string]$message) {
     $line = '{0} [{1}] {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Action, $message
@@ -345,7 +347,12 @@ function DungeonActive {
     if ($audit -notmatch '(?m)^MC_DUNGEON_AUDIT floor=\d+ active=(true|false)\b') {
         throw 'Could not verify whether a dungeon run is active.'
     }
-    return ($Matches[1] -eq 'true')
+    $towerActive = ($Matches[1] -eq 'true')
+    $sites = Rcon 'mycli admin dungeons audit'
+    if ($sites -notmatch '(?m)^MC_SITE_DUNGEON_AUDIT ready=true sites=\d+ activeRuns=(\d+)\b') {
+        throw 'Could not verify whether a site dungeon run is active.'
+    }
+    return ($towerActive -or [int]$Matches[1] -gt 0)
 }
 
 function Collect-JvmDiagnostics {
@@ -775,6 +782,7 @@ function Backup-Server {
             if ($humans.Count) { Log "Backup skipped: human joined during preflight: $($humans -join ', ')"; return }
             if (((Test-Path -LiteralPath $pendingAgentFriendDeploy) -or
                  (Test-Path -LiteralPath $pendingEyeMirrorDeploy) -or
+                 (Test-Path -LiteralPath $pendingContentDeploy) -or
                  (Test-Path -LiteralPath $pendingServerSettings)) -and (DungeonActive)) {
                 Log 'Backup and pending deployment skipped: dungeon run active'
                 return
@@ -798,7 +806,7 @@ function Backup-Server {
         # locks, control tokens, and logs are intentionally not restorable.
         $opsCopy = Join-Path $dest 'ops'
         & robocopy.exe $opsDir $opsCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP `
-            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' | Out-Null
+            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Incomplete backup: $dest" }
         $probeCopy = Join-Path $dest 'probe'
         & robocopy.exe 'E:\MC\probe' $probeCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'node_modules' | Out-Null
@@ -837,6 +845,7 @@ function Backup-Server {
         Log "Backup complete: $dest"
         # Pending deployments require both verified recovery copies before any JAR changes.
         Mirror-LatestBackup
+        Deploy-PendingContent
         Deploy-PendingServerSettings
         Deploy-PendingAgentFriend
         Deploy-PendingEyeMirror

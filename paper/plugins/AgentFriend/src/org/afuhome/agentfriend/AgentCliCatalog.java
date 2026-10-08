@@ -29,6 +29,15 @@ final class AgentCliCatalog {
 
     private static Map<String, Spec> createSpecs() {
         Map<String, Spec> specs = new LinkedHashMap<>();
+        add(specs,"world","life","read","/mycli world list|menu|npcs|talk <ID> <话>|end|guide start|events|photos","世界生活内容入口：新手实习、村民聊天、世界事件、村民交易和照片展示","查询免费；聊天须在NPC八格内；当前照片仅导入/展示，没有自动快门","MC_WORLD JSON及NPC实际答复");
+        add(specs,"world.list","life","read","/mycli world list","查看各内容插件实际启用状态和入口","查询免费，不执行技能","MC_WORLD type=catalog");
+        add(specs,"world.menu","life","gui","/mycli world menu","打开Java、基岩和Agent共用的原版生活菜单","在线玩家","27格原版菜单");
+        add(specs,"world.npcs","life","read","/mycli world npcs","查看可聊天村民的ID、真实位置和是否在八格内","查询免费；先步行靠近，不自动传送","MC_WORLD type=npcs");
+        add(specs,"world.talk","life","chat","/mycli world talk <NPC ID> <话>","与附近村民自然交谈，NPC有独立性格与对话记录","生存角色；NPC八格内；180字内；等待实际答复；对话不替代任务验收","MC_WORLD type=talk status=submitted或denied；NPC实际答复另到达");
+        add(specs,"world.end","life","write","/mycli world end","结束村民对话，恢复普通公屏聊天","本人的当前对话","MC_WORLD type=talk status=ended");
+        add(specs,"world.guide","life","write","/mycli world guide start|status","新手实习：查看技能目录、真正成功施法、完成生活委托；服务器记录证据","主动开始；失败施法/自称完成不计进度；不代学、不代花点","MC_WORLD type=guide/guide_progress");
+        add(specs,"world.events","life","read","/mycli world events","查看正在进行的世界生活事件","查询免费；活动公告另发；活动不自动完成任务","MC_WORLD type=events与WorldEvents当前列表");
+        add(specs,"world.photos","life","read","/mycli world photos","查看个人照片地图及导入方法，可挂展示框","ImageFrame已启用；打印消耗空地图；自动拍摄尚未启用","MC_WORLD type=photos automaticCaptureReady=false与个人相册列表");
         add(specs,"profession","magic","read","/mycli profession status|list|menu|choose <ID>|leave <ID>","选择一个主战职业；list 查看当前开放路线；保留旧技能和成长","生存模式选择；UUID 学习账本；不改背包","MC_PROFESSION / MC_PROFESSION_RESULT");
         add(specs,"profession.status","magic","read","/mycli profession status","查看本人当前职业和准备槽","查询免费","MC_PROFESSION");
         add(specs,"profession.menu","magic","gui","/mycli profession menu","打开原版职业和技能菜单","Java、基岩手柄和 Mineflayer 共用","54 格原版菜单");

@@ -1,0 +1,48 @@
+actions:
+  begin: tag add apprenticeship
+  catalog_proof: tag add catalog_verified
+  cast_proof: tag add cast_verified
+  life_proof: tag add life_verified
+conditions:
+  started: tag apprenticeship
+  catalog: tag catalog_verified
+  cast: tag cast_verified
+  life: tag life_verified
+conversations:
+  mentor:
+    quester: 旅途导师·小满
+    first: welcome
+    NPC_options:
+      welcome:
+        text: 欢迎来到千灯纪！实习要亲自查技能、施法、交生活委托。你想先了解什么？
+        pointers: magic,life,rescue,bye
+      magic:
+        text: 先用 /mycli world guide start 报名，再用 /mycli skills list common 查基础技能。学技能要技能点，施法有魔力与冷却。实际成功才记实习进度。
+        pointers: back,bye
+      life:
+        text: 用 /mycli life board 选生活委托，亲自完成后交付。公共箱可用；萌萌公会内私产不能拿拆。
+        pointers: back,bye
+      rescue:
+        text: 组队试炼队友倒地后，同队存活者在4格内连续停留10秒就能扶起。清完本层或本室也能复活；全队倒地才失败。
+        pointers: back,bye
+    player_options:
+      magic:
+        text: 怎样使用技能？
+        pointers: magic
+      life:
+        text: 我想做生活委托。
+        pointers: life
+      rescue:
+        text: 怎样救队友？
+        pointers: rescue
+      back:
+        text: 再问一件事。
+        pointers: welcome
+      bye:
+        text: 谢谢，我去实际试试！
+package:
+  version: 3.2.0-QUEST-2
+npcs:
+  mentor: FancyNpcs 7a52737c-8d5c-40e6-ab56-468b4497f4b2
+npc_conversations:
+  mentor: mentor

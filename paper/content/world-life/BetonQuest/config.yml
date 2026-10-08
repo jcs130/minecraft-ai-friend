@@ -1,0 +1,171 @@
+configVersion: 3.2.0-CONFIG-1
+text_parser: legacyminimessage
+date_format: dd.MM.yyyy HH:mm
+default_notify_io: chat
+updater:
+  enabled: false
+  strategy: MINOR
+  automatic: false
+  ingame_notification: true
+downloader:
+  pull_request: false
+  repo_whitelist:
+  - BetonQuest/Quest-Tutorials
+debug:
+  enabled: false
+  history: 10
+mysql:
+  enabled: false
+  host: ''
+  port: ''
+  user: ''
+  pass: ''
+  base: ''
+  prefix: betonquest_
+  reconnect_interval: 1000
+profile:
+  initial_name: default
+language:
+  default: zh-CN
+  questlang_whitelist: []
+conversation:
+  default_io: chest,tellraw
+  block_item_transfer: true
+  interceptor:
+    default: redischat,packetevents,simple
+    display_history: true
+    delay: 50
+  damage:
+    combat_delay: 10
+    invincible: false
+  stop:
+    distance: 5.3
+    notify: true
+  cmd_blacklist:
+  - spawn
+  color:
+    npc: '@[minimessage]<dark_red>'
+    player: '@[minimessage]<dark_green>'
+    text: '@[minimessage]<green><italic>'
+    answer: '@[minimessage]<gray>'
+    number: '@[minimessage]<yellow>'
+    option: '@[minimessage]<aqua>'
+  io:
+    menu:
+      line_length: 320
+      line_count: 10
+      bottom_margin: 0
+      line_fill_before: 10
+      refresh_delay: 180
+      rate_limit: 10
+      set_speed: true
+      base_speed: false
+      npc_name_type: chat
+      npc_name_align: center
+      npc_name_separator: true
+      options_separator: true
+      control_select: jump,left_click
+      control_move: scroll,move
+      control_cancel: sneak
+      npc_name: '@[minimessage]<yellow>{npc_name}'
+      npc_text: '@[minimessage] <white>{npc_text}'
+      npc_text_wrap: '@[minimessage] '
+      option_text: '@[minimessage]    <dark_gray>[ <aqua>{option_text}</aqua> ]'
+      option_text_wrap: '@[minimessage]    '
+      option_selected_text: '@[minimessage] <gray>» <dark_gray>[ <white><underlined>{option_text}</underlined></white>
+        ]'
+      option_selected_text_wrap: '@[minimessage]    <white><underlined>'
+      scroll_up: '@[minimessage]<white>        ↑</white>'
+      scroll_down: '@[minimessage]<white>        ↓</white>'
+    chest:
+      show_number: true
+      show_npc_text: true
+    slowtellraw:
+      message_delay: 10
+    dialog:
+      quester_in_title: true
+      only_buttons: false
+      button_width: 250
+      button_render_padding: 13
+      close_with_escape: true
+      close_button_enabled: true
+npc:
+  accept_left_click: false
+  interaction_limit: 500
+hologram:
+  default: DecentHolograms,FancyHolograms,HolographicDisplays
+  update_interval: 200
+hider:
+  player_update_interval: 20
+  npc_update_interval: 100
+item:
+  quest:
+    lore: true
+    unbreakable: true
+    remove_after_respawn: true
+    update_legacy_on_join: false
+  backpack:
+    previous_button: ''
+    next_button: ''
+    cancel_button: ''
+    compass_button: ''
+journal:
+  default_slot: -1
+  lock_default_slot: false
+  show_in_backpack: true
+  give_on_respawn: false
+  custom_model_data: -1
+  format:
+    line_length: 114
+    line_count: 14
+    one_entry_per_page: false
+    reversed_order: true
+    full_main_page: false
+    separator: '@[minimessage]<newline>'
+    hide_date: false
+    color:
+      date:
+        day: '@[minimessage]<blue>'
+        hour: '@[minimessage]<gold>'
+      line: '@[minimessage]<dark_red>'
+      text: '@[minimessage]<black>'
+menu:
+  default_close: true
+hook:
+  citizens: true
+  mythicmobs: true
+  vault: true
+  worldguard: true
+  skript: true
+  mcmmo: true
+  effectlib: true
+  heroes: true
+  magic: true
+  denizen: true
+  fabled: true
+  quests: true
+  shopkeepers: true
+  placeholderapi: true
+  holographicdisplays: true
+  decentholograms: true
+  worldedit: true
+  fastasyncworldedit: true
+  packetevents: true
+  brewery: true
+  breweryx: true
+  jobs: true
+  mythiclib: true
+  mmocore: true
+  mmoitems: true
+  luckperms: true
+  auraskills: true
+  fake-block: true
+  redischat: true
+  train_carts: true
+  fancynpcs: true
+  znpcsplus: true
+  craftengine: true
+  itemsadder: true
+  nexo: true
+  fancyholograms: true
+  thebrewingproject: true

@@ -1,0 +1,38 @@
+QD_Ranger:
+  Type: SKELETON
+  Display: '&6遗迹游猎者'
+  Health: 32
+  Damage: 4
+  Options:
+    PreventOtherDrops: true
+    PreventSunburn: true
+    Despawn: true
+    AlwaysShowName: true
+  Equipment:
+  - BOW HAND
+  Drops:
+  - arrow 2-4 1
+  - bone 1-2 1
+QD_Guard:
+  Type: HUSK
+  Display: '&c遗迹守卫'
+  Health: 48
+  Damage: 5
+  Options:
+    PreventOtherDrops: true
+    Despawn: true
+    AlwaysShowName: true
+  Drops:
+  - rotten_flesh 2-3 1
+  - iron_nugget 1-3 0.5
+QD_Hexer:
+  Type: WITCH
+  Display: '&5遗迹药师'
+  Health: 36
+  Options:
+    PreventOtherDrops: true
+    Despawn: true
+    AlwaysShowName: true
+  Drops:
+  - redstone 1-3 1
+  - glowstone_dust 1-2 0.5

@@ -214,6 +214,7 @@ final class SpellGuide {
         if (page < pages) player.sendMessage("MC_SPELL_NEXT /mycli spells list "
                 + (filter.equals("all") ? "" : filter + " ") + (page + 1));
         discoveryHint(player);
+        if (plugin instanceof AgentFriendPlugin agentFriend) agentFriend.recordWorldLesson(player, "catalog");
     }
     static void detail(Player player, String id) {
         Entry entry = find(id);

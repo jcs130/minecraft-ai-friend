@@ -1,0 +1,68 @@
+Config:
+  update_notification: false
+  data_save_time: 5
+  retain_player_data_until_restart: true
+  debug_actions: false
+  experimental:
+    variable_replacement: false
+  item_meta_variable_enabled: false
+  use_minimessage: false
+  register_commands: []
+  to_condition_groups:
+    group1:
+    - '%player_has_permission_conditionalevents.somepermission% == yes'
+Messages:
+  prefix: '&4[&bConditionalEvents&4] '
+  commandReload: '&aConfig Reloaded.'
+  commandNoPermissions: '&cYou don''t have permissions to use this command.'
+  commandResetError: '&cUse &7/ce reset <player> <event>/all'
+  eventDoesNotExists: '&cThat event doesn''t exists on the config.'
+  eventDataReset: '&aData reset for player &e%player% &aon event &e%event%&a!'
+  eventDataResetAll: '&aAll data reset for player &e%player%&a!'
+  eventDataResetForAllPlayers: '&aData reset for &eall players &aon event &e%event%&a!'
+  eventDataResetAllForAllPlayers: '&aAll player data reset.'
+  eventEnableError: '&cUse &7/ce enable <event>'
+  eventDisableError: '&cUse &7/ce disable <event>'
+  eventEnabled: '&aEvent &7%event% &aenabled.'
+  eventDisabled: '&aEvent &7%event% &adisabled.'
+  eventIsNotEnabled: '&cThat event is not enabled.'
+  commandDebugError: '&cUse &7/ce debug <event>'
+  debugEnabled: '&aDebug now enabled for event &7%event%&a!'
+  debugDisabled: '&aDebug disabled for event &7%event%&a!'
+  debugEnabledPlayer: '&aDebug now enabled for event &7%event% &aand player &7%player%&a!'
+  debugDisabledPlayer: '&aDebug disabled for event &7%event% &aand player &7%player%&a!'
+  onlyPlayerCommand: '&cThis command can be only used by a player.'
+  playerHasNotPlayedRecentlyOrNoData: '&cThat player has not played recently or doesn''t
+    have any data.'
+  seconds: s
+  minutes: m
+  hours: h
+  days: d
+  placeholderAPICooldownReady: Ready!
+  placeholderAPICooldownNameError: No event with that name!
+  commandCallError: '&cUse &7/ce call <event> (optional)%variable1%=<value1>;%variableN%=<valueN>
+    (optional)player:<player>'
+  commandCallInvalidEvent: '&cYou can only execute a CALL event.'
+  commandCallCorrect: '&aEvent &7%event% &asuccessfully executed.'
+  commandCallCorrectPlayer: '&aEvent &7%event% &asuccessfully executed for player
+    &7%player%&a.'
+  commandCallFailed: '&cEvent &7%event% &ccould not be executed. Maybe a format error?'
+  playerNotOnline: '&cThat player is not online.'
+  commandItemError: '&cUse &7/ce item <save/remove> <name>'
+  savedItemDoesNotExists: '&cThat saved item doesn''t exists.'
+  savedItemRemoved: '&aItem &7%name% &aremoved.'
+  mustHaveItemInHand: '&cYou must have an item on your hand.'
+  savedItemAlreadyExists: '&cA saved item with that name already exists.'
+  savedItemAdded: '&aItem &7%name% &asaved.'
+  commandInterruptError: '&cUse &7/ce interrupt <event> (optional)<player>'
+  commandInterruptCorrect: '&aActions of event &7%event% &ainterrupted.'
+  commandInterruptCorrectPlayer: '&aActions of event &7%event% &ainterrupted for player
+    &7%player%&a.'
+Events:
+  qd_welcome:
+    type: player_join
+    conditions: []
+    actions:
+      default:
+      - 'wait: 7'
+      - 'message: &a[村庄生活] &f新手实习、村民聊天、丰收事件与照片地图：/mycli world list。手柄可打开旅途指南→村庄新生活。'

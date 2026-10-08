@@ -1,0 +1,40 @@
+events:
+  qd-harvest:
+    enabled: true
+    type: BUMPER_HARVEST
+    duration: 300
+    announcement: <gold>[丰收时节]</gold> <green>接下来5分钟成熟作物产量加倍，记得补种！</green>
+    display-name: 丰收时节
+    symbol: ✿
+    weight: 30
+    bossbar-color: GREEN
+    start-sound: BLOCK_CROP_BREAK
+    multiplier: 2.0
+  qd-traveler:
+    enabled: true
+    type: POTION_EFFECT
+    duration: 180
+    announcement: <aqua>[旅人顺风]</aqua> <gray>3分钟速度I；沿途探索，别忘了留路标。</gray>
+    display-name: 旅人顺风
+    symbol: ☆
+    weight: 20
+    bossbar-color: BLUE
+    start-sound: BLOCK_NOTE_BLOCK_CHIME
+    effects:
+    - type: SPEED
+      amplifier: 0
+      duration: 180
+  qd-clear-sight:
+    enabled: true
+    type: POTION_EFFECT
+    duration: 180
+    announcement: <yellow>[星灯夜巡]</yellow> <gray>3分钟夜视；寻找村庄里需要帮忙的人。</gray>
+    display-name: 星灯夜巡
+    symbol: ☾
+    weight: 20
+    bossbar-color: YELLOW
+    start-sound: BLOCK_NOTE_BLOCK_CHIME
+    effects:
+    - type: NIGHT_VISION
+      amplifier: 0
+      duration: 180

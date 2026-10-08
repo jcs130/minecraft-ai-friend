@@ -1,0 +1,24 @@
+Configuration:
+  MobDrops:
+    DefaultDropMethod: VANILLA
+    DoLootsplosionByDefault: false
+    DoHologramNameByDefault: false
+    DoItemGlowByDefault: false
+    DoItemBeamByDefault: false
+    DoItemVFXByDefault: false
+    DefaultItemVFX:
+      Material: POTION
+      Model: 1
+    DoPerPlayerDropsByDefault: false
+    DoClientsideDropsByDefault: false
+    MinimumDamagePercentForDrops: 1%
+    DefaultDeathHologram: []
+    DefaultLeaderboardTimeout: 6000
+    DefaultDeathChatMessage: []
+  MobEggs:
+    Material: PIG_SPAWN_EGG
+    DefaultDisplay: <mob.name> Spawn Egg
+    DefaultLore:
+    - <dark_gray>A Mythical Egg that can</dark_gray>
+    - <dark_gray>be used to resurrect a</dark_gray>
+    - <dark_gray><mob.name></dark_gray>

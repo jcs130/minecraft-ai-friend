@@ -1,0 +1,407 @@
+main-menu:
+  title: <bold><gradient:#FF6B6B:#4ECDC4>★ WorldEvents Editor ★</gradient></bold>
+  rows: 3
+  items:
+    view-events:
+      slot: 10
+      material: BOOK
+      name: <bold><gradient:#FFD93D:#FF6B6B>◆ View Events</gradient></bold>
+      lore:
+      - ''
+      - <gray>• Browse all configured events
+      - <gray>• Start, stop, or toggle events
+      - <gray>• Quick access to editing
+      - ''
+      - <yellow>▶ Click to open</yellow>
+      action: OPEN_EVENT_LIST
+    create-event:
+      slot: 12
+      material: EMERALD
+      name: <bold><gradient:#6BCB77:#2ECC71>✦ Create Event</gradient></bold>
+      lore:
+      - ''
+      - <gray>• Create a new custom event
+      - <gray>• Choose from available event types
+      - <gray>• Configure all settings
+      - ''
+      - <green>▶ Click to create</green>
+      action: CREATE_EVENT
+    loot-pools:
+      slot: 14
+      material: CHEST
+      name: <bold><gradient:#FFD93D:#FFA500>⛃ Loot Pools</gradient></bold>
+      lore:
+      - ''
+      - <gray>• Manage item collections
+      - <gray>• Edit drop chances
+      - <gray>• Create new pools
+      - ''
+      - <yellow>▶ Click to open</yellow>
+      action: OPEN_LOOT_POOLS
+    pro-features:
+      slot: 16
+      material: AMETHYST_SHARD
+      name: <bold><gradient:#A855F7:#EC4899>★ PRO Features</gradient></bold>
+      lore:
+      - ''
+      - <gray>• Modifiers, Scheduler, Analytics
+      - <gray>• Templates, Betting, Voting
+      - <gray>• Shop, Leaderboards
+      - ''
+      - <light_purple>▶ Click to open PRO Dashboard</light_purple>
+      action: OPEN_PRO_DASHBOARD
+    info:
+      slot: 22
+      material: NETHER_STAR
+      name: <bold><gradient:#A855F7:#EC4899>★ Plugin Info</gradient></bold>
+      lore:
+      - ''
+      - '<white>◆ Total Events: <aqua>%total_events%</aqua></white>'
+      - '<white>⚡ Active Now: <green>%active_events%</green></white>'
+      - '<white>★ Version: <gold>%version%</gold></white>'
+      - ''
+      - <dark_gray>WorldEvents</dark_gray>
+  fillers:
+    border:
+      material: GRAY_STAINED_GLASS_PANE
+      slots:
+      - 0-9
+      - 11
+      - 13
+      - 15
+      - 17-21
+      - 23-26
+event-list:
+  title: <bold><gradient:#667EEA:#764BA2>◆ Events • Page %page%/%total_pages% ◆</gradient></bold>
+  rows: 6
+  items:
+    back:
+      slot: 45
+      material: DARK_OAK_DOOR
+      name: <bold><gradient:#FF6B6B:#EE5A5A>◀ Back</gradient></bold>
+      lore:
+      - <gray>Return to main menu</gray>
+      action: BACK
+    previous-page:
+      slot: 47
+      material: ARROW
+      name: <bold><gradient:#FFD93D:#FFA500>◀ Previous</gradient></bold>
+      lore:
+      - <gray>Go to page %prev_page%</gray>
+      action: PREV_PAGE
+    new-event:
+      slot: 49
+      material: EMERALD
+      name: <bold><gradient:#6BCB77:#2ECC71>✦ New Event</gradient></bold>
+      lore:
+      - <gray>Create a new event</gray>
+      action: CREATE_EVENT
+    controls:
+      slot: 51
+      material: PAPER
+      name: <bold><gradient:#4ECDC4:#44A08D>★ Controls</gradient></bold>
+      lore:
+      - ''
+      - <gold>▶</gold> <white>Left Click:</white> <aqua>Edit Event</aqua>
+      - <gold>▶</gold> <white>Right Click:</white> <yellow>Toggle On/Off</yellow>
+      - <gold>▶</gold> <white>Shift+Left:</white> <green>Start Event</green>
+      - <gold>▶</gold> <white>Shift+Right:</white> <red>Stop Event</red>
+      - ''
+      - '<dark_gray>Total: %total_events% events</dark_gray>'
+    next-page:
+      slot: 53
+      material: ARROW
+      name: <bold><gradient:#FFD93D:#FFA500>Next ▶</gradient></bold>
+      lore:
+      - <gray>Go to page %next_page%</gray>
+      action: NEXT_PAGE
+  fillers:
+    nav-bar:
+      material: BLACK_STAINED_GLASS_PANE
+      slots:
+      - 46
+      - 48
+      - 50
+      - 52
+loot-pool-list:
+  title: <bold><gradient:#FFD93D:#FFA500>⛃ Loot Pools • Page %page%/%total_pages%
+    ⛃</gradient></bold>
+  rows: 6
+  items:
+    back:
+      slot: 45
+      material: DARK_OAK_DOOR
+      name: <bold><gradient:#FF6B6B:#EE5A5A>◀ Back</gradient></bold>
+      lore:
+      - <gray>Return to main menu</gray>
+      action: BACK
+    previous-page:
+      slot: 47
+      material: ARROW
+      name: <bold><gradient:#FFD93D:#FFA500>◀ Previous</gradient></bold>
+      lore:
+      - <gray>Go to page %prev_page%</gray>
+      action: PREV_PAGE
+    new-pool:
+      slot: 49
+      material: EMERALD
+      name: <bold><gradient:#6BCB77:#2ECC71>✦ New Pool</gradient></bold>
+      lore:
+      - <gray>Create a new loot pool</gray>
+      action: CREATE_POOL
+    next-page:
+      slot: 53
+      material: ARROW
+      name: <bold><gradient:#FFD93D:#FFA500>Next ▶</gradient></bold>
+      lore:
+      - <gray>Go to page %next_page%</gray>
+      action: NEXT_PAGE
+  fillers:
+    nav-bar:
+      material: BLACK_STAINED_GLASS_PANE
+      slots:
+      - 46
+      - 48
+      - 50
+      - 52
+event-editor:
+  title: '<bold><gradient:#667EEA:#764BA2>✦ Editing: %event_name% ✦</gradient></bold>'
+  rows: 6
+  items:
+    status:
+      slot: 10
+      material: '%status_material%'
+      name: ● Status
+      action: TOGGLE_STATUS
+    duration:
+      slot: 12
+      material: CLOCK
+      name: <bold><gradient:#FFD93D:#FFA500>⏱ Duration</gradient></bold>
+      lore:
+      - ''
+      - '<white>Current: <aqua>%duration%</aqua></white>'
+      - ''
+      - <yellow>▶ Click to change</yellow>
+      action: EDIT_DURATION
+    weight:
+      slot: 14
+      material: ANVIL
+      name: <bold><gradient:#A855F7:#EC4899>⚖ Weight</gradient></bold>
+      lore:
+      - ''
+      - '<white>Current: <aqua>%weight%</aqua></white>'
+      - <gray>Higher = more likely to start</gray>
+      - ''
+      - <yellow>▶ Click to change</yellow>
+      action: EDIT_WEIGHT
+    display-name:
+      slot: 16
+      material: NAME_TAG
+      name: <bold><gradient:#4ECDC4:#44A08D>◆ Display Name</gradient></bold>
+      lore:
+      - ''
+      - '<white>Current: </white>%display_name%'
+      - ''
+      - <yellow>▶ Click to change</yellow>
+      action: EDIT_DISPLAY_NAME
+    boss-bar-color:
+      slot: 19
+      material: '%boss_bar_color_material%'
+      name: '<bold><gradient:#FF6B6B:#EE5A5A>Color: %color%</gradient></bold>'
+      action: EDIT_BOSS_BAR_COLOR
+    boss-bar-style:
+      slot: 21
+      material: '%boss_bar_style_material%'
+      name: '<bold><gradient:#667EEA:#764BA2>Style: %style%</gradient></bold>'
+      action: EDIT_BOSS_BAR_STYLE
+    hidden-mode:
+      slot: 23
+      material: '%hidden_material%'
+      name: ● Hidden Mode
+      lore:
+      - ''
+      - <gray>Prevents this event from showing</gray>
+      - <gray>in the /we list command.</gray>
+      - ''
+      - '<white>Status: %hidden_status%</white>'
+      - ''
+      - <yellow>▶ Click to toggle</yellow>
+      action: TOGGLE_HIDDEN
+    conditions:
+      slot: 25
+      material: HOPPER
+      name: <bold><gradient:#A855F7:#EC4899>🛡 Conditions</gradient></bold>
+      lore:
+      - ''
+      - <gray>Time, weather, player limits</gray>
+      - '<white>Status: %conditions_status%</white>'
+      - ''
+      - <yellow>▶ Click to edit</yellow>
+      action: EDIT_CONDITIONS
+    start-sound:
+      slot: 28
+      material: NOTE_BLOCK
+      name: <bold><gradient:#6BCB77:#2ECC71>♪ Start Sound</gradient></bold>
+      lore:
+      - ''
+      - '<white>Current: <aqua>%start_sound%</aqua></white>'
+      - ''
+      - <yellow>▶ Click to change</yellow>
+      action: EDIT_START_SOUND
+    end-sound:
+      slot: 30
+      material: NOTE_BLOCK
+      name: <bold><gradient:#FF6B6B:#EE5A5A>♪ End Sound</gradient></bold>
+      lore:
+      - ''
+      - '<white>Current: <aqua>%end_sound%</aqua></white>'
+      - ''
+      - <yellow>▶ Click to change</yellow>
+      action: EDIT_END_SOUND
+    ambient-sound:
+      slot: 32
+      material: JUKEBOX
+      name: <bold><gradient:#667EEA:#764BA2>♪ Ambient Sound</gradient></bold>
+      lore:
+      - ''
+      - '<white>Current: <aqua>%ambient_sound%</aqua></white>'
+      - ''
+      - <yellow>▶ Click to change</yellow>
+      action: EDIT_AMBIENT_SOUND
+    rewards:
+      slot: 34
+      material: CHEST
+      name: <bold><gradient:#FFD93D:#FFA500>⛃ Rewards</gradient></bold>
+      lore:
+      - ''
+      - <gray>Money, XP, items, commands</gray>
+      - '<white>Status: %rewards_status%</white>'
+      - ''
+      - <yellow>▶ Click to edit</yellow>
+      action: EDIT_REWARDS
+    permission:
+      slot: 37
+      material: TRIPWIRE_HOOK
+      name: <bold><gradient:#FFD93D:#FFA500>🛡 Permission</gradient></bold>
+      action: EDIT_PERMISSION
+    spawn-filters:
+      slot: 43
+      material: SPAWNER
+      name: <bold><gradient:#A855F7:#EC4899>🛡 Spawn Filters</gradient></bold>
+      action: EDIT_SPAWN_FILTERS
+    start-stop:
+      slot: 39
+      material: '%start_stop_material%'
+      name: '%start_stop_name%'
+      action: TOGGLE_ACTIVE
+    delete:
+      slot: 41
+      material: TNT
+      name: <bold><gradient:#FF0000:#8B0000>✘ Delete Event</gradient></bold>
+      lore:
+      - ''
+      - <red>Permanently delete this event</red>
+      - ''
+      - <yellow>Shift+Click to confirm</yellow>
+      action: DELETE_EVENT
+    back:
+      slot: 45
+      material: DARK_OAK_DOOR
+      name: <bold><gradient:#FF6B6B:#EE5A5A>◀ Back</gradient></bold>
+      lore:
+      - <gray>Return to event list</gray>
+      action: BACK
+    save:
+      slot: 49
+      material: WRITABLE_BOOK
+      name: <bold><gradient:#6BCB77:#2ECC71>✔ Save Changes</gradient></bold>
+      lore:
+      - <gray>Save all changes to disk</gray>
+      action: SAVE
+  fillers:
+    empty:
+      material: BLACK_STAINED_GLASS_PANE
+      slots:
+      - 0-3
+      - 5-9
+      - 11
+      - 13
+      - 15
+      - 17
+      - 18
+      - 20
+      - 22
+      - 24
+      - 26
+      - 27
+      - 29
+      - 31
+      - 33
+      - 35
+      - 36
+      - 38
+      - 40
+      - 42
+      - 44
+      - 46-48
+      - 50-53
+conditions-editor:
+  title: <bold><gradient:#A855F7:#EC4899>🛡 Conditions • %event_name% 🛡</gradient></bold>
+  rows: 5
+  items:
+    time:
+      slot: 10
+      material: CLOCK
+      name: <bold><gradient:#FFD93D:#FFA500>⏱ Time</gradient></bold>
+      action: EDIT_TIME
+    weather:
+      slot: 12
+      material: WATER_BUCKET
+      name: <bold><gradient:#4ECDC4:#44A08D>◆ Weather</gradient></bold>
+      action: EDIT_WEATHER
+    min-players:
+      slot: 14
+      material: PLAYER_HEAD
+      name: <bold><gradient:#6BCB77:#2ECC71>● Min Players</gradient></bold>
+      action: EDIT_MIN_PLAYERS
+    max-players:
+      slot: 16
+      material: SKELETON_SKULL
+      name: <bold><gradient:#FF6B6B:#EE5A5A>● Max Players</gradient></bold>
+      action: EDIT_MAX_PLAYERS
+    worlds:
+      slot: 22
+      material: GRASS_BLOCK
+      name: <bold><gradient:#667EEA:#764BA2>◆ Worlds</gradient></bold>
+      action: EDIT_WORLDS
+    back:
+      slot: 36
+      material: DARK_OAK_DOOR
+      name: <bold><gradient:#FF6B6B:#EE5A5A>◀ Back</gradient></bold>
+      lore:
+      - <gray>Return to event editor</gray>
+      action: BACK
+    save:
+      slot: 40
+      material: WRITABLE_BOOK
+      name: <bold><gradient:#6BCB77:#2ECC71>✔ Save</gradient></bold>
+      lore:
+      - <gray>Save conditions</gray>
+      action: SAVE
+  fillers:
+    empty:
+      material: GRAY_STAINED_GLASS_PANE
+      slots:
+      - 0-9
+      - 11
+      - 13
+      - 15
+      - 17-21
+      - 23-35
+      - 37-39
+      - 41-44
+    nav-bar:
+      material: PURPLE_STAINED_GLASS_PANE
+      slots:
+      - 36
+      - 40

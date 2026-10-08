@@ -1,6 +1,12 @@
 # 千灯纪：Agent 团队维护、开发与运营手册
 
-**2026-10-08 23:24:01 最新正式状态：**已正式发布 AgentFriend **0.3.98**（886121字节，SHA256 `EFF8C9B52576DBC016092E3C2C2D4FCDD06E8EEFA959186EB78497EFB25CF6CC`），Java PID **25800**。E/F `20261008-232258/.complete` 均在替换前完整，正常维护任务结果0。直接复用玩家已有藏宝图、原版探险家地图与遗迹地图；接单只读原图目标，不替换、不改写、不消耗。天然藏宝箱须亲自新开，遗迹须实际走查，完成后返接单点交回记录；地图和战利品保留。每人每个目的地一次，同日换新目的地可继续，复制图或同建筑偏移标记不能重复领奖。文字、奖励和路线条件可热更新，在途约定冻结，Agent客户端程序未改。 同一最终JAR隔离完整流程/正常重启/真实附身Eye/正式只读分别41、10、4、11项通过。原11份地图数据文件摘要保持；原34任务和7场地完全保留，仅追加通用寻宝任务，市场共35张。8位玩家152个占用槽位在540格范围保留元数据，114旧资格、49个区域及公共箱规则保持。四个原维护账号已回连，原机CortiEye实际attached=true；三维度普通/keepInventory=true、AuraSkills当前启动验证和其他插件JAR摘要通过。
+**最新正式状态：**2026-10-09 01:09:41 正式部署及入口恢复完成，AgentFriend **0.3.99**（898509字节，SHA256 `59CCE54DE06261D53CF2068DEE5DF4BD6809062A12EB7666467D784E916F705D`），当前 Java PID **34088**。十个生活插件全部启用；新手实习、村民真实模型对话、故事、商店和三个正向定时活动已开放，图片可导入地图并挂墙，自动快门尚未接入。三个精英仅为管理员活动模板，普通试炼配怪保持。原 Agent 客户端程序未改。
+
+原8位玩家152个占用槽位在完整540格范围逐项保留元数据，114个旧技能资格、35张市场任务/7场地、49个WorldGuard区域、原11份地图数据和十九个既有第三方插件JAR保留。三维度普通/keepInventory=true，Goddess旁观者和AuraSkills当前startup-verified通过。CortiLan、ag_NEKO、Goddess已回连；原机CortiEye当前offline/attached=false，配对及watcher正常，不能说原直播镜头已恢复。 Java/LAN及正式基岩UDP入口已实际复核。基岩玩法均用原版实体、聊天、箱式菜单、地图和展示框；隔离无Xbox认证探针未成功登录，手机/Xbox真实画面和操作仍待设备验收，不能把Pong算完整兼容验收。
+
+女神资料箱已同步新版手册，实际读取与简短答疑两项通过；入口及照片边界按[当前玩家说明](SERVER_UPDATES.md)回答。
+
+**2026-10-08 23:24:01 历史发布记录：**已正式发布 AgentFriend **0.3.98**（886121字节，SHA256 `EFF8C9B52576DBC016092E3C2C2D4FCDD06E8EEFA959186EB78497EFB25CF6CC`），Java PID **25800**。E/F `20261008-232258/.complete` 均在替换前完整，正常维护任务结果0。直接复用玩家已有藏宝图、原版探险家地图与遗迹地图；接单只读原图目标，不替换、不改写、不消耗。天然藏宝箱须亲自新开，遗迹须实际走查，完成后返接单点交回记录；地图和战利品保留。每人每个目的地一次，同日换新目的地可继续，复制图或同建筑偏移标记不能重复领奖。文字、奖励和路线条件可热更新，在途约定冻结，Agent客户端程序未改。 同一最终JAR隔离完整流程/正常重启/真实附身Eye/正式只读分别41、10、4、11项通过。原11份地图数据文件摘要保持；原34任务和7场地完全保留，仅追加通用寻宝任务，市场共35张。8位玩家152个占用槽位在540格范围保留元数据，114旧资格、49个区域及公共箱规则保持。四个原维护账号已回连，原机CortiEye实际attached=true；三维度普通/keepInventory=true、AuraSkills当前启动验证和其他插件JAR摘要通过。
 
 本文是 `qiandengji-personal-stash` 分支的长期工作约定。目标是让 Agent 团队持续提出、制作、验证和运营新内容，同时让六岁玩家、手柄玩家、Java 玩家、基岩玩家和 Mineflayer Agent 在同一世界里获得可理解、可完成的体验。当前正式服的启停、备份、发布命令仍以 [维护与发布](OPERATIONS.md) 为准；本手册说明内容如何从想法进入这个流程。
 
@@ -12,10 +18,11 @@
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
+| 村庄生活（0.3.99） | `world list/menu/npcs/talk/end/guide/events/photos`、罗盘旅途指南；[插件包](WORLD_LIFE_PLUGINS.md) | UUID实习账本、BetonQuest数据库、NPC持久数据、本人ImageFrame图片；既有QwenPaw原生任务 | 已开放三步真实操作实习、村民对话/故事、补给商和正向活动。NPC/任务/精英内容可编辑插件配置后隔离热加载；不自动发奖或替代旧技能体系。照片支持已有截图导入/挂墙，自动拍摄未接入。 |
 | 组队救援（0.3.96已上线） | 4格内停留10秒自动救起，当前层/室清场自动复活；`arena status`、`dungeon status`；[救援规则及系统提示](TRIAL_RESCUE.md) | config.yml的trial-rescue、原塔检查点和地下城场次ID；保留原奖励和物品 | 服务器私发倒地坐标、救援方法与进度；Agent用原移动能力靠近并等待。全员倒地才失败，离线/正常重启保留，部分救援计时重置。普通塔恢复原配怪，强化仅用于冒险/末日 |
 | 玩家委托与分页箱（0.3.94） | 公会玩家委托、`commission list/mine/info/menu/publish/accept/claim/abandon/cancel`，`arena stash pages/page/list`；[玩法](MYCLI_AGENT_CLI.md) | config.yml的player-contracts.jobs/active、既有余额/待入箱队列和0–539槽位 | 已上线；玩家发布供货/同行无需代码或重启，每单一人、托管报酬、实物与真实探索返程验收。10页540格，待入箱队列1024组；客户端沿用现有协议 |
 | 命名传送点（0.3.89） | 罗盘地点页、`waypoint add/list/shared/menu`、`goto personal:名字/shared:分享码`；[命名地点](NAMED_WAYPOINTS.md) | `plugins/AgentFriend/waypoints.yml` 按主人/世界 UUID 保存，默认每人 32 点 | 玩家亲自到达后在线中文命名、改名、更新和撤回分享；记录免费，成功传送 6 魔力。主动分享公开发现者与坐标；不改代码、不重启。旧 home 保留；部署状态以维护记录为准 |
-| 技能、法术、快捷施法 | 既有技能源码与 MagicSpells/AuraSkills；0.3.92 新增 professions.yml / skills.yml / skill-unlocks.yml / skill-points.yml；[职业与传承](CHARACTER_SKILLS.md)、[技能体系](SKILL_SYSTEM.md)、[位移](TRAVEL_MAGIC.md) | 既有魔力/等级/刻印/熟练度；profession-ledger.json 的 UUID 资格、学习等级、已获/已花点数、最高成长、冷却、唯一归属；config.yml pending 收据 | 旧效果发布流程保留；新职业固定效果、逐级点数/效果、洗点费用和解锁可整体验证热加载，失败保留旧目录，新效果仍需代码发布；战法牧与点数已于0.3.92上线，当前0.3.98继续保留，16项逐级简介已热更新，0.3.97的skills list profession或warrior/mage/priest直接发现职业技艺，skills info查逐级详情；学习菜单右键/命格书提供详情和个人状态 |
+| 技能、法术、快捷施法 | 既有技能源码与 MagicSpells/AuraSkills；0.3.92 新增 professions.yml / skills.yml / skill-unlocks.yml / skill-points.yml；[职业与传承](CHARACTER_SKILLS.md)、[技能体系](SKILL_SYSTEM.md)、[位移](TRAVEL_MAGIC.md) | 既有魔力/等级/刻印/熟练度；profession-ledger.json 的 UUID 资格、学习等级、已获/已花点数、最高成长、冷却、唯一归属；config.yml pending 收据 | 旧效果发布流程保留；新职业固定效果、逐级点数/效果、洗点费用和解锁可整体验证热加载，失败保留旧目录，新效果仍需代码发布；战法牧与点数已于0.3.92上线，当前0.3.99继续保留，16项逐级简介已热更新，0.3.97的skills list profession或warrior/mage/priest直接发现职业技艺，skills info查逐级详情；学习菜单右键/命格书提供详情和个人状态 |
 | 公会公共仓库（0.3.95） | 十二组原版双箱、648格；`guild shared`；[公共仓库](GUILD_SHARED_STORAGE.md) | 原版世界实体箱；`lands.yml`公共例外；`guild-shared-chests.yml` | 已启用供货跨同类箱、拒绝回退并合计库存；后续已建实体双箱登记用`land reload`和`sharedstorage reload`热更新，无需改代码或重启 |
 | 公会任务与等级 | 静态 37 张仍在 `GuildManager.java`；0.3.78 起的动态卡模板在 `plugins/AgentFriend/dynamic-board.yml`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中的 `guild-players` 和 `dynamic-board.today`；动态模板文件 | 已支持的供货与日常目标可改 YAML 后用 `mycli admin board reload`、`replace` 或 `regenerate` 热更新；新判定类型仍需开发。正式服 0.3.86 已包含此功能，详见 [动态看板](DYNAMIC_BOARD.md) |
 | 原图寻宝（0.3.98） | 任务市场`tm_map_hunt`、`guild map/verify/claim`；[规则](TREASURE_MAP_TASKS.md) | 在途原图目标/返程/自然开箱证明、原探索去重状态、本人目的地及建筑结算账本 | 直接复用现有原版/遗迹地图，不修改地图；实际探索后返程交记录，换新目的地可继续。文字、路线门槛和奖励可热配置；不调用locate、不自动生成目标区块，不改Agent客户端 |
@@ -25,8 +32,8 @@
 | 生活公会 | `LifeGuildManager.java` 的七类原版行动委托；`LifeGuildBuildings.java` 的四馆、入口台阶与七位导师；[生活公会规则](LIFE_GUILDS.md) | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `life-guild` 及四馆地基，另有四份 `life-building-*-mask.tsv` 结构保护快照 | 先扩展原版动作事件、任务 ID、原版菜单与 `/mycli life`；若要换任务目标，须保留在途任务迁移及防重复领奖逻辑；建筑/保护快照须随世界同组备份。四馆入口修复见 [建筑记录](LIFE_GUILD_BUILDINGS.md) |
 | 试炼塔、地下城与奖励（0.3.95） | trial-waves.yml前六层；dungeons.yml三个真实建筑；罗盘地点页、`dungeon list/info/travel/start/join/status/resume/leave/claim/menu`；[规则](DUNGEON_NETWORK.md) | config.yml的旧试炼波次快照、site-dungeons.runs/receipts/claimed/cooldowns，既有个人奖励；世界实体和建筑 | 控制台`trialwaves reload`/`dungeons reload`整体验证热更，活动期间拒绝换目录；新地点可指定已勘察付费entry。逐室原生战斗和实际返程，每处每日一次奖励。全服新地点48怪/128飞行物，不根据文字直接覆盖世界生成建筑 |
 | PvP 竞技场 | `PvpArenaManager.java` 的自愿匹配、同款装备和积分；[PvP 规则](PVP_ARENA.md) | `pvp-records`、`pvp-escrow.yml`、竞技场方块及 WorldGuard 区域 | 运营 Agent 可查看本人对局和排行榜；改地图或计分规则须隔离测试和完整备份，不可在有人对战时发布 |
-| 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 起正式生效，当前 0.3.98 继承，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP 八工具已重新发现。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |
-| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在正式重启自动激活；0.3.98/0.1.9 及 40 连接已发布，容量与边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) | 可检查、构建、测试、备份和发布；先完成 E/F 校验镜像，再替换 JAR；源码提交不会自动改变正式服 |
+| 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 起正式生效，当前 0.3.99 继承，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP 八工具已重新发现。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |
+| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在正式重启自动激活；0.3.99/0.1.9 及 40 连接已发布，容量与边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) | 可检查、构建、测试、备份和发布；先完成 E/F 校验镜像，再替换 JAR；源码提交不会自动改变正式服 |
 
 2026-10-06 已修复女神附魔书字段错误和现存确认损坏的 1 本，并正式发布 0.3.84 校验入口：书必须使用 `stored_enchantments`，装备使用 `enchantments`。私聊与造物都使用同一受校验入口；女神只选礼物，服务器生成属性并核对实际库存。不要依据闪光认定铁砧可用，也不要把字段错误归咎于刻印保护。现状见 [女神附魔书](GODDESS_BOOKS.md)、[礼物校验](GODDESS_GIFTS.md)。
 

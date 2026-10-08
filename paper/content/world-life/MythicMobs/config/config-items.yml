@@ -1,0 +1,34 @@
+Configuration:
+  ItemUpdating:
+    Enabled: true
+  EnableFancyDropEffectsEverywhere: false
+  DefaultItemOptions:
+    Material: STONE
+    PreventEnchanting: false
+    PreventCrafting: modeled
+    PreventAnviling: default
+    PreventSmithing: default
+  ItemSkills:
+    JoinDelay: 20
+  ItemStats:
+    Rounding: 2
+    SaveRatios: false
+  LoreTemplates:
+    EnableDefaultTemplate: false
+    DefaultTemplateName: DEFAULT
+    DefaultTemplate:
+    - Line:
+      - '{stats}'
+      - '{stats}<gray>Bonus Stats:'
+      - '{stats-each}<green> <stat.display>'
+    - Filler: ''
+    - Line:
+      - '{augments:GEM}<gray>Gems:'
+      - '{augments-each:GEM}<yellow><augment.display>'
+    - Filler: ''
+    - Line:
+      - '{lore}'
+  CustomBlocks:
+    SwapIsPickBlock: true
+  Furniture:
+    DefaultType: DISPLAY

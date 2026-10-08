@@ -1,0 +1,21 @@
+language: default
+skip_invisible_npcs: true
+disable_interaction_cooldown_message: false
+mute_version_notification: true
+enable_autosave: true
+autosave_interval: 15
+npc_update_interval: 60
+npc_update_visibility_interval: 20
+register_commands: true
+turn_to_player_distance: 5
+turn_to_player_reset_to_initial_direction: false
+visibility_distance: 20
+mineskin_api_key: ''
+remove_npcs_from_playerlist_delay: 2000
+swing_arm_on_update: true
+blocked_commands:
+- op
+- ban
+max-npcs:
+- fancynpcs.max-npcs.5: 5
+- fancynpcs.max-npcs.10: 10

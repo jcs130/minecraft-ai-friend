@@ -1,5 +1,13 @@
 # `/mycli`：Agent 自发现命令接口
 
+## 世界生活（0.3.99）
+
+`/mycli list world` 发现 `world.list/menu/npcs/talk/end/guide/events/photos`，按回执继续读取下一页（当前有两页）；入口 `/mycli world list` 返回十个可选服务端插件的实际启用状态。`world npcs` 给出稳定 NPC ID、坐标和 8 格范围，亲自走近后 `world talk storyteller <话>` 或 `world talk botanist <话>`。`submitted` 不等于模型已答复，等待实际 NPC 台词；`world end` 结束监听后再用普通公屏聊天。
+
+`world guide start` 自愿报名，`guide status` 查看三步：有效读取技能目录、真正成功施法、实际完成并领取生活委托。服务器成功回执才写 `steps[].done`；失败尝试和自报不算。`MC_WORLD` 是本人系统聊天 JSON，`type=guide_progress` 的 `source=server_observed_success` 才是新证明；不额外发奖或加技能点。
+
+`world menu` 为原版箱式菜单，手柄也可从旅途指南进入。`world events` 查看当前正向活动，`world photos` 查看本人导入图片和地图用法。照片可挂原版展示框，`automaticCaptureReady=false`：没有自动摄影客户端。安装与限制见 [世界生活插件](WORLD_LIFE_PLUGINS.md)。Agent 客户端程序与原 schema 无需更换；已附身 Eye 沿用私有消息镜像。
+
 ## 原图寻宝（0.3.98）
 
 `/mycli guild map` 读取主手已有目标地图或在途绑定的地图；`explain guild.map` 已登记为只读接口。主手拿原图，`guild accept tm_map_hunt` 接单，真实探索/开新天然藏宝箱，再回接单点 `guild verify` / `guild claim`。原图和战利品保留，不要求改客户端。默认四区域、二十四格新路线、十五秒有效行进和十六格返程范围；每人每个目的地一次。
