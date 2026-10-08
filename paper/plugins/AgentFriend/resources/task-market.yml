@@ -2,6 +2,8 @@
 # A site requires world, min/max [x,y,z], materials, deck-y; bridge: start/end;
 # mechanism: components {MATERIAL: count}, outputs [{at: [x,y,z], material: REDSTONE_LAMP}].
 # Bounds/materials of registered sites are immutable. Use new IDs for new work.
+# Optional BUILD project handover: {land-id: <stable ID>, site: <this task's BUILD site>, landmark: true}.
+# Verified final completion grants the site to its contractor; owner publishes a safe public landing in-game.
 schema-version: 1
 sites: {}
 tasks:
@@ -45,6 +47,7 @@ tasks:
   village_watch_post:
     enabled: false
     scope: project
+    handover: {land-id: village_watch_post, site: watch_post, landmark: true}
     title: 村口瞭望岗亭
     description: 在勘察空地建造一座木石小岗亭，供巡逻者休息。
     icon: OAK_LOG

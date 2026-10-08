@@ -1,5 +1,22 @@
 # Paper 分支维护与发布
 
+## 2026-10-08 工程完工交接与公共地标（0.3.91）
+
+2026-10-08 13:04 已正式发布 AgentFriend **0.3.91**（676162 字节，SHA256 `ECFFB3A910E77BB9A8AAC47ED048D8B7D8FE75EA2845413BE030A34AE99039F0`），Java PID **27360**，正常备份任务结果 0，E/F `20261008-130342/.complete` 在替换前完整。BUILD 委托可用 handover 配置交接给验收完成者，主人到场登记公共地标，传送每次 6 魔力，后续内容运营无需重启。原 29 张任务/7 场地条件保留，仅观景塔和岗亭补交接政策；CortiLan 的原完工观景塔已核实历史并交接，原奖励与证据不变，塔上礼物箱单独公共，其余储物私有。公会仍归萌萌。最终同一 JAR 隔离 41、重启/下界/16Agent+Eye 13、正式只读 25 项通过；16Agent+1Eye 是受控 64 次查询，5 秒平均 MSPT 6.2，不代表长期 LLM 自主施工。13:17 最终复核 CortiLan/ag_Kirito/Goddess/CortiEye 均在线，原机 CortiEye 已恢复 camera=online、attached=true；基岩/Xbox 真机画面待验收。规则、迁移和回退见 [工程与公共地标](PROJECT_LANDMARKS.md)、[维护流程](OPERATIONS.md)。
+
+13:03:42 正常停服保存，E/F `.complete` 分别于 13:03:45 / 13:03:46 写入，13:03:46 才替换唯一启用 JAR。13:03:47 启动 Java 27360，13:04:32 Ready；女神桥 29904、Eye watcher 31112、LAN 网关 32088 恢复且单实例。AuraSkills 本次 PID 的 startup-verified / transformApplied / behaviorVerified 全部成功，三维度普通难度与 keepInventory=true、角色皮肤保留。CortiEye 在本次维护前曾回连，维护后 13:10 原客户端仍离线；13:17 最终实查原机已回连，camera=online、attached=true、cameraNightVision=true。
+
+健康确认后在线修改 `task-market.yml`，仅给 `sky_view_tower` 和 `village_watch_post` 增加 handover；29 张模板的其他条件及 7 个登记场地定义逐项相同。`mycli admin market handover tm_sky_view_tower` 核实 CortiLan UUID 和原 run `5806c539-ec5e-4006-a5a1-64d1b0795161` 的 BUILD 完工证据，新增 `qd_land_sky_view_tower`；原 28 个主世界区域及下界/末地各一项字段不变。现存礼物箱 `(-558,85,-572)` 经实查单独登记公共，新增单格 `qd_public_container_sky_view_tower_0`，其他库存私有。普通正式客户端实际开箱且没有取放物品。萌萌公会的门内私产、门口四组公共箱继续原规则。
+
+公共地标需当前主人亲自到安全落点起名，罗盘「公共地标与建筑 → 管理我的地标」或 `landmark publish <领地ID> <名字>`。正式只读验收时公共目录为 0，观景塔尚待 CortiLan 登记落点；不能把管理权交接成功说成已经开放传送。之后目录实时反映主人登记/撤回。成功传送 6 魔力，共用私人点的活动/边界/安全检查；转让、撤销及异步等待时重新检查，访客不因此获得建造权。
+
+隔离使用真实普通 Java/Mineflayer 施工、原生 Eye 附身消息、箱子菜单与聊天命名。41 项验证含冻结交接政策、未完工无奖励、重复交接不重发、OP/伙伴无登记权、实际拆建拒绝、6 魔力及特效、原私人/分享点回归、礼物箱例外；13 项验证含真实写失败 pending 收据在正常重启恢复、在途工程续交、保留后续转让、下界实际建造与跨维度传送。16 个 Agent 连接加一个 Eye 的 64 次目录查询无新增/增长区块，最近 5 秒 MSPT 平均/最小/最大 6.2/4.1/10.8；完整 1 分钟最大 275.6 包含接入和切维度准备期，原始报告保留，不作长期自主游玩承诺。正式普通客户端 25 项只读通过。基岩/Xbox 画面需真机。
+
+隔离首次发现 Bukkit 内存 Map 不能按 ConfigurationSection 读取，已改用 createSection，并以最终 SHA 重跑。消息先后顺序、手持罗盘误开自身菜单、运营脚本块尾匹配、首次只等中心区块的勘察假设失败均保留；正式文件在配置候选语义检查通过后才写入。隔离服已正常停止并恢复原 0.3.86、原配置/配对/区域，测试辅助插件禁用。私有证据在 E/F `repairs/project-landmarks-20261008`，公开清单 `manifests/project-landmarks-0.3.91.json`。
+
+回退前正常备份，保留已生成领地、公开箱区域、landmarks.yml、完成/奖励收据与世界。若回退 0.3.90，先暂停新交接委托并核对在途快照与 pending 收据；旧版本不执行交接/地标命令，也不管理新增公共箱例外，须审计 `qd_public_container_*` 区域。不要仅回退完成标记或施工基准，不用旧世界覆盖之后玩家进度。详细运营见 [工程与地标](PROJECT_LANDMARKS.md)。
+
+
 ## 玩家领地（0.3.90，2026-10-08 12:27 正式生效）
 
 AgentFriend **0.3.90**，644680 字节，SHA256 `3C78F0F66120EEA06A3CAA1BC1A31CC6178FA4266D1779252925BDCFF3D504F7`，Java PID **29972**。接入已安装的 WorldGuard 7.0.10，不新增第三方插件。正式 `lands.yml` 仅有冒险者公会，主人为萌萌 `.MicroKQ` 的真实 Floodgate UUID；X `-498..-480`、Y `64..76`、Z `-509..-495`。主人和受信任玩家可改建原大厅及管理私产；访客可以走入、接任务和使用公共工作站，门口四组公共双箱正常。新增不同玩家的地块、改主人、授权/撤权均可控制台 `mycli admin land reload/audit` 在线完成。完整规则、配置示例和权限边界见 [玩家领地](LANDS.md)。

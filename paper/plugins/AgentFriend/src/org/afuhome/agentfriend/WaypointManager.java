@@ -23,6 +23,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -240,6 +242,10 @@ final class WaypointManager implements Listener {
         if (p.isInsideVehicle() || p.isGliding() || p.isFlying()) return "not_standing";
         return null;
     }
+    String recordingDenial(Player p, Location at) {
+        String reason = actor(p);
+        return reason == null ? safe(p, at) : reason;
+    }
     private static boolean hazard(Material type) {
         return switch (type) {
             case LAVA, WATER, FIRE, SOUL_FIRE, MAGMA_BLOCK, CACTUS, CAMPFIRE, SOUL_CAMPFIRE,
@@ -280,17 +286,23 @@ final class WaypointManager implements Listener {
         if (!publicShare && point == null && value.matches("[A-Za-z0-9_-]{1,24}") && plugin.personalHome(p, value) != null) return false;
         if (!ready(p, "teleport")) return true;
         if (point == null) { result(p, "teleport", false, publicShare ? "share_unavailable" : "not_found", null); return true; }
+        travel(p, raw, point.name, point.location(), () -> point.equals(points.get(point.id)),
+                outcome -> result(p, "teleport", outcome.success(), outcome.reason(), point));
+        return true;
+    }
+    record Outcome(boolean success, String reason) { }
+    /** Personal points and landmarks share one pending-request gate and the same paid, safe travel. */
+    void travel(Player p, String raw, String title, Location at, BooleanSupplier stillValid, Consumer<Outcome> reply) {
         String denied = actor(p);
-        if (denied != null) { result(p, "teleport", false, denied, point); return true; }
-        if (requests.containsKey(p.getUniqueId())) { result(p, "teleport", false, "busy", point); return true; }
-        Location at = point.location();
-        if (at == null) { result(p, "teleport", false, "world_unavailable", point); return true; }
-        if (!plugin.hasMana(p, TravelMagic.LOCAL_MANA)) { result(p, "teleport", false, "not_enough_mana", point); return true; }
+        if (denied != null) { reply.accept(new Outcome(false, denied)); return; }
+        if (requests.containsKey(p.getUniqueId())) { reply.accept(new Outcome(false, "busy")); return; }
+        if (at == null) { reply.accept(new Outcome(false, "world_unavailable")); return; }
+        if (!plugin.hasMana(p, TravelMagic.LOCAL_MANA)) { reply.accept(new Outcome(false, "not_enough_mana")); return; }
         Location origin = p.getLocation().clone();
         UUID request = UUID.randomUUID(), player = p.getUniqueId(); requests.put(player, request);
-        result(p, "teleport", false, "loading", point);
+        reply.accept(new Outcome(false, "loading"));
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (requests.remove(player, request)) { Player online = Bukkit.getPlayer(player); if (online != null) result(online, "teleport", false, "timeout", point); }
+            if (requests.remove(player, request) && Bukkit.getPlayer(player) != null) reply.accept(new Outcome(false, "timeout"));
         }, 200L);
         try { at.getWorld().getChunkAtAsync(at.getBlockX() >> 4, at.getBlockZ() >> 4, false).whenComplete((chunk, error) -> {
             if (!plugin.isEnabled()) return;
@@ -300,9 +312,8 @@ final class WaypointManager implements Listener {
                 if (online == null) return;
                 boolean ticket = chunk != null && chunk.addPluginChunkTicket(plugin);
                 try {
-                    Point latest = points.get(point.id);
                     String reason = actor(online);
-                    if (reason == null && (latest == null || !latest.equals(point))) reason = "point_changed";
+                    if (reason == null && !stillValid.getAsBoolean()) reason = "point_changed";
                     if (reason == null && (online.getWorld() != origin.getWorld() || online.getLocation().distanceSquared(origin) > 4)) reason = "moved";
                     if (reason == null && (error != null || chunk == null)) reason = "chunk_unavailable";
                     Location landing = null;
@@ -315,19 +326,18 @@ final class WaypointManager implements Listener {
                         var query = WorldGuard.getInstance().getPlatform().getRegionContainer().createQuery();
                         if (!query.testState(BukkitAdapter.adapt(online.getLocation()), WorldGuardPlugin.inst().wrapPlayer(online), Flags.EXIT)) reason = "protected_exit";
                     } catch (RuntimeException | LinkageError unavailable) { reason = "protection_unavailable"; }
-                    if (reason != null) { result(online, "teleport", false, reason, point); return; }
+                    if (reason != null) { reply.accept(new Outcome(false, reason)); return; }
                     online.sendMessage("MC_DESTINATION id=" + raw + " " + LocationOutput.fields(landing));
-                    boolean moved = plugin.travelMagic().teleport(online, landing, raw, "传送点术·" + point.name, TravelMagic.LOCAL_MANA);
-                    result(online, "teleport", moved, moved ? "ok" : "teleport_rejected", point);
+                    boolean moved = plugin.travelMagic().teleport(online, landing, raw, "传送点术·" + title, TravelMagic.LOCAL_MANA);
+                    reply.accept(new Outcome(moved, moved ? "ok" : "teleport_rejected"));
                     plugin.refreshAgentState(online);
                 } finally { if (ticket) chunk.removePluginChunkTicket(plugin); }
             });
         }); } catch (RuntimeException error) {
             requests.remove(player, request);
-            result(p, "teleport", false, "chunk_unavailable", point);
+            reply.accept(new Outcome(false, "chunk_unavailable"));
             plugin.getLogger().warning("Waypoint chunk request failed: " + error);
         }
-        return true;
     }
     private JsonObject json(Point v, boolean shared) {
         JsonObject j = new JsonObject(); j.addProperty("id", v.id.toString()); j.addProperty("name", v.name);
@@ -422,6 +432,7 @@ final class WaypointManager implements Listener {
     }
     void beginCreate(Player p) { if (ready(p, "add")) prompt(p, "add", null); }
     private void prompt(Player p, String action, UUID point) {
+        if (plugin.landmarks() != null) plugin.landmarks().cancelInput(p);
         p.closeInventory(); Input input = new Input(action, point, System.currentTimeMillis() + 60_000);
         inputs.put(p.getUniqueId(), input);
         p.sendMessage(ChatColor.AQUA + "请在聊天框输入传送点名字（1–24 个中文字、字母、数字、_、-），60 秒内有效；输入 取消 可退出。此条输入不会发到公屏。新建会记录输入时站立的位置。");
@@ -429,6 +440,7 @@ final class WaypointManager implements Listener {
             if (inputs.remove(p.getUniqueId(), input) && p.isOnline()) p.sendMessage(ChatColor.YELLOW + "传送点命名已超时；之后的聊天恢复正常。请重新点击新建。");
         }, 1200L);
     }
+    void cancelInput(Player p) { inputs.remove(p.getUniqueId()); }
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onChat(AsyncChatEvent event) {
         Input input = inputs.remove(event.getPlayer().getUniqueId());

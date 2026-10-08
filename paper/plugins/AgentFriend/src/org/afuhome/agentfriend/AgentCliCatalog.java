@@ -105,6 +105,14 @@ final class AgentCliCatalog {
         add(specs,"waypoint.shared","travel","read","/mycli waypoint shared [页码]","分页列出主动分享的地点","在线玩家；不会展示未分享地点；不移动、不加载区块","MC_WAYPOINT_LIST JSON；scope=shared");
         add(specs,"waypoint.menu","travel","gui","/mycli waypoint menu","打开命名地点菜单，支持命名、分享和传送","Java/基岩原版箱子菜单；命名输入不进公共聊天","地点菜单；实际传送成功才扣 6 魔力");
         add(specs,"waypoint.cancel","travel","write","/mycli waypoint cancel","取消菜单发起的命名输入","本人会话；免费","MC_WAYPOINT_RESULT JSON");
+        add(specs,"landmark.list","travel","read","/mycli landmark list [页码]","列出当前公开的建筑地标","不加载区块；领地撤销或换主人后旧点停用","MC_LANDMARK_LIST 和逐条 MC_LANDMARK_ITEM；完整 mcagent:landmark JSON");
+        add(specs,"landmark.mine","travel","read","/mycli landmark mine [页码]","查看自己可管理的地标建筑","只列当前本人拥有且允许登记地标的领地；免费","MC_LANDMARK_LIST scope=own");
+        add(specs,"landmark.info","travel","read","/mycli landmark info <领地ID>","查看建筑管理者、建造履历和地标状态","免费；工程完成者由验收账本确定","MC_LANDMARK_INFO 和 MC_LANDMARK_RESULT；完整 mcagent:landmark JSON");
+        add(specs,"landmark.publish","travel","write","/mycli landmark publish <领地ID> <名字>","把亲自到达的建筑安全落点登记为公共地标","仅当前领地主人生存角色；站在地块内；名字 1–24 位；不占个人点配额；免费","MC_LANDMARK_RESULT success/denied 和 MC_LANDMARK_ITEM；大家用 goto landmark:<领地ID>，成功 6 魔力");
+        add(specs,"landmark.update","travel","write","/mycli landmark update <领地ID>","更新公共地标到本人当前安全位置","仅当前领地主人；站在建筑内；免费","MC_LANDMARK_RESULT；旧菜单传送在施放前重新检查");
+        add(specs,"landmark.unpublish","travel","write","/mycli landmark unpublish <领地ID>","撤回地标传送，保留建筑管理权","仅当前领地主人；免费","MC_LANDMARK_RESULT；目录和旧目标立即失效");
+        add(specs,"landmark.menu","travel","gui","/mycli landmark menu","打开公共地标和本人建筑管理菜单","Java/基岩原版箱子菜单；聊天命名仅发服务器","原版菜单；传送 pending 须等最终结果及 MC_TRAVEL；失败不扣魔力");
+        add(specs,"landmark.cancel","travel","write","/mycli landmark cancel","取消地标菜单的命名输入","仅本人会话；免费","MC_LANDMARK_RESULT");
         add(specs,"locate.list","team","read","/mycli locate list","列出可见在线队友位置","在线玩家","每人一条 MC_PLAYER 绝对坐标");
         add(specs,"locate.nearest","team","write","/mycli locate nearest","追踪同世界最近队友","同世界有可见非旁观队友","BossBar 方向和距离");
         add(specs,"locate.off","team","write","/mycli locate off","停止追踪队友","在线玩家","停止结果");

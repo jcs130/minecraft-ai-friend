@@ -50,7 +50,7 @@ final class TaskMarketManager implements Listener {
             String site, int chest, ExplorationObjectives.Target exploration) { }
     record Task(String key, String title, String description, String beneficiary, Material icon,
             boolean enabled, boolean project, boolean repeatOnce, int minRank, int fame, int emeralds,
-            Material bonus, int bonusCount, List<Step> steps, String definition) {
+            Material bonus, int bonusCount, List<Step> steps, ProjectHandovers.Grant grant, String definition) {
         String id() { return "tm_" + key; }
         GuildManager.Contract contract(int index) {
             Step step = steps.get(index);
@@ -72,6 +72,7 @@ final class TaskMarketManager implements Listener {
     private record Frozen(String definition, Task task) { }
     private final AgentFriendPlugin plugin;
     private final EngineeringSites engineering;
+    private final ProjectHandovers handovers;
     private final ExplorationObjectives exploration;
     private final File file;
     private Map<String, Task> tasks = Map.of();
@@ -84,11 +85,13 @@ final class TaskMarketManager implements Listener {
 
     TaskMarketManager(AgentFriendPlugin plugin) {
         this.plugin = plugin; engineering = new EngineeringSites(plugin); exploration = new ExplorationObjectives(plugin);
+        handovers = new ProjectHandovers(plugin, engineering);
         file = new File(plugin.getDataFolder(), "task-market.yml");
         if (!file.exists()) plugin.saveResource("task-market.yml", false);
         reload(); Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, CHANNEL);
         registerStartupSites();
+        Bukkit.getScheduler().runTask(plugin, () -> handovers.recover(Bukkit.getConsoleSender()));
         Bukkit.getScheduler().runTaskTimer(plugin, this::surveyPlayers, 5L, 5L);
         Bukkit.getScheduler().runTaskTimer(plugin, exploration::flush, 600L, 600L);
     }
@@ -187,9 +190,11 @@ final class TaskMarketManager implements Listener {
                 nextSites.put(id, site);
             }
             Map<String, Task> nextTasks = new LinkedHashMap<>();
+            Set<String> landIds = new LinkedHashSet<>();
             for (String key : taskRows.getKeys(false)) {
                 ConfigurationSection row = taskRows.getConfigurationSection(key);
                 Task task = parse(key, row);
+                if (task.grant != null && !landIds.add(task.grant.landId())) throw new IllegalArgumentException("duplicate handover land ID");
                 if (task.enabled) for (Step step : task.steps) if (EngineeringSites.GOALS.contains(step.goal)) {
                     EngineeringSites.Site site = nextSites.getOrDefault(step.site, engineering.site(step.site));
                     if (site == null) throw new IllegalArgumentException(task.id() + " missing site " + step.site);
@@ -263,7 +268,7 @@ final class TaskMarketManager implements Listener {
             throw new IllegalArgumentException(key + " steps (1..8; project must contain engineering)");
         YamlConfiguration frozen = new YamlConfiguration(); frozen.set("task", row.getValues(false));
         return new Task(key, title, description, beneficiary, icon, row.getBoolean("enabled", true), scope.equals("project"), repeat.equals("once"),
-                rank, fame, emeralds, bonus, bonusCount, List.copyOf(steps), frozen.saveToString());
+                rank, fame, emeralds, bonus, bonusCount, List.copyOf(steps), ProjectHandovers.parse(row, scope.equals("project"), steps), frozen.saveToString());
     }
     private static String text(ConfigurationSection row, String key, int limit) {
         String value = row.getString(key, "");
@@ -304,6 +309,8 @@ final class TaskMarketManager implements Listener {
         if (onceCompleted(task.id())) return "project_completed";
         if (task.project && !plugin.getConfig().getString(ROOT + ".projects." + task.id() + ".owner", "").isEmpty()) return "project_reserved";
         for (String site : task.sites()) if (!engineering.available(site)) return "site_unavailable:" + site;
+        String handover = handovers.available(task, "");
+        if (!handover.equals("available")) return handover;
         return "available";
     }
     private String state(Task task, Player player) {
@@ -457,11 +464,18 @@ final class TaskMarketManager implements Listener {
             plugin.getConfig().set(ROOT + ".projects." + task.id() + ".completed-by", player.getUniqueId().toString());
             plugin.getConfig().set(ROOT + ".projects." + task.id() + ".completed-name", player.getName());
             plugin.getConfig().set(ROOT + ".projects." + task.id() + ".completed-at", System.currentTimeMillis());
+            plugin.getConfig().set(ROOT + ".projects." + task.id() + ".completed-run", run(player));
+            handovers.record(task, player.getUniqueId(), run(player));
         }
         release(player, task, true);
         exploration.clear(player);
         player.sendMessage("§a" + task.beneficiary + "收到了这份帮助。能力记录已保存：/mycli guild assessment");
     }
+    boolean beforeComplete(Player player) {
+        Task task = frozen(player);
+        return task != null && handovers.beforeComplete(player, task, run(player));
+    }
+    void afterComplete(Player player, String id) { handovers.apply(id, player); }
     void abandoned(Player player) {
         Task task = frozen(player); if (task == null) return;
         finishRun(player, task, "abandoned"); release(player, task, false); exploration.clear(player);
@@ -541,6 +555,12 @@ final class TaskMarketManager implements Listener {
     }
     private void detail(Player player, Task task) {
         JsonObject data = summary(task); JsonArray steps = new JsonArray();
+        if (task.grant != null) {
+            JsonObject grant = new JsonObject(); grant.addProperty("landId", task.grant.landId()); grant.addProperty("site", task.grant.site());
+            grant.addProperty("ownerPolicy", "verified_completing_contractor"); grant.addProperty("landmarkEnabled", task.grant.landmark()); data.add("handover", grant);
+            player.sendMessage("§a完工交接：验收完成者管理领地「" + task.grant.landId() + "」，访客可参观，私人储物仍受保护。"
+                    + (task.grant.landmark() ? "主人可亲自到安全落点登记公共地标，供大家消耗 6 魔力传送。" : ""));
+        }
         for (int i = 0; i < task.steps.size(); i++) {
             Step step = task.steps.get(i); JsonObject row = new JsonObject();
             row.addProperty("index", i + 1); row.addProperty("title", step.title); row.addProperty("description", step.description);
@@ -619,6 +639,12 @@ final class TaskMarketManager implements Listener {
     }
     void admin(CommandSender sender, String[] args) {
         String action = args.length > 2 ? args[2].toLowerCase(Locale.ROOT) : "list";
+        if (action.equals("handovers") && args.length == 3) { handovers.recover(sender); sender.sendMessage("已检查待交接账本；成功项目不会重复发奖或重置主人。"); return; }
+        if (action.equals("handover") && args.length == 4) {
+            Task task = tasks.get(args[3]);
+            if (task == null) sender.sendMessage("任务不存在。"); else handovers.adopt(task, sender);
+            return;
+        }
         if (action.equals("reload")) { sender.sendMessage(reload() ? "任务市场已热加载；在途任务保留接单快照。" : "配置校验失败，保留上次有效任务市场。"); return; }
         if (action.equals("list")) {
             for (Task task : tasks.values()) sender.sendMessage(task.id() + " enabled=" + task.enabled + " " + gate(task));
@@ -634,7 +660,7 @@ final class TaskMarketManager implements Listener {
         if (action.equals("retire") && args.length == 4) {
             sender.sendMessage(engineering.retire(args[3]) ? "场地已撤下，原快照/完成账本保留。" : "不能撤下：场地不存在、在办或正在扫描。"); return;
         }
-        sender.sendMessage("用法：mycli admin market list|reload|register <场地ID>|retire <场地ID>");
+        sender.sendMessage("用法：mycli admin market list|reload|register <场地ID>|retire <场地ID>|handovers|handover <已完成任务ID>");
     }
 
     void openMenu(Player player) {

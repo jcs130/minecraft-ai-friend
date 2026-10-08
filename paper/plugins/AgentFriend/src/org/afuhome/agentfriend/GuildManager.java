@@ -840,6 +840,11 @@ final class GuildManager implements Listener {
             }
         }
         if (plugin.taskMarket().isMarket(quest.id()) && plugin.taskMarket().advanceStep(player)) return;
+        if (plugin.taskMarket().isMarket(quest.id()) && !plugin.taskMarket().beforeComplete(player)) {
+            if (playerBefore != null) player.getInventory().setStorageContents(playerBefore);
+            if (chest != null) chest.setContents(chestBefore);
+            return;
+        }
         String path = base(player.getUniqueId());
         int emeraldGain = quest.emeralds();
         if (effectiveRank(player) >= 3) emeraldGain += Math.max(1, quest.emeralds() / 10); // 黄金特权：结算绿宝石 +10%
@@ -862,6 +867,7 @@ final class GuildManager implements Listener {
         if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().completed(player);
         plugin.getConfig().set(path + ".active", null);
         plugin.saveConfig();
+        if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().afterComplete(player, quest.id());
         player.sendMessage(ChatColor.GREEN + "委托交付成功！声望 +" + gain
                 + (dims >= 3 ? "（含三维度 +20% 加成，今日已集 " + dims + " 个维度）" : "")
                 + "，绿宝石 ×" + emeraldGain + "及额外奖励已存入个人试炼箱。");

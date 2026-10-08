@@ -15,6 +15,8 @@ import com.sk89q.worldguard.protection.managers.RegionManager;
 import com.sk89q.worldguard.protection.regions.ProtectedCuboidRegion;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
 import java.util.*;
 import org.bukkit.*;
 import org.bukkit.block.Block;
@@ -43,6 +45,7 @@ import org.bukkit.persistence.PersistentDataType;
 /** Configured ownership backed by persistent WorldGuard regions, without OP bypass. */
 final class LandManager implements Listener {
     static final String PREFIX = "qd_land_";
+    private static final String PUBLIC_PREFIX = "qd_public_container_";
     static final String GUILD = "adventurers_guild";
     static final String CHANNEL = "mcagent:land";
     private final AgentFriendPlugin plugin;
@@ -50,13 +53,16 @@ final class LandManager implements Listener {
     private final NamespacedKey property;
     private Map<String, Land> lands = Map.of();
     private boolean ready;
+    private byte[] activeSource;
+    private Set<String> reservedIds = Set.of();
     private final Map<UUID, Notice> notices = new HashMap<>();
     private final Map<Inventory, Menu> menus = new IdentityHashMap<>();
     private record Notice(String key, long time) { }
     private record Menu(UUID viewer, int page, List<String> ids) { }
     private record Denial(Location at, Land land) { }
     private record Land(String id, String title, World world, BlockVector3 min, BlockVector3 max,
-                        UUID owner, Set<UUID> members, boolean visitorUse, boolean guild) { }
+                        UUID owner, Set<UUID> members, boolean visitorUse, boolean guild,
+                        String projectTask, String projectRun, boolean landmark, Set<BlockVector3> publicContainers) { }
 
     LandManager(AgentFriendPlugin plugin) {
         this.plugin = plugin;
@@ -98,13 +104,14 @@ final class LandManager implements Listener {
                 && a.min().z() <= b.max().z() && a.max().z() >= b.min().z();
     }
 
-    void reload(CommandSender sender) {
+    boolean reload(CommandSender sender) {
         Map<RegionManager, Map<String, ProtectedRegion>> originals = new LinkedHashMap<>();
         Map<String, Land> previousLands = lands;
         boolean previouslyReady = ready;
         try {
             YamlConfiguration yaml = new YamlConfiguration();
-            yaml.load(file);
+            byte[] source = Files.readAllBytes(file.toPath());
+            yaml.loadFromString(new String(source, StandardCharsets.UTF_8));
             if (yaml.getInt("schema-version", 0) != 1) throw new IllegalArgumentException("schema-version 必须为 1");
             ConfigurationSection definitions = yaml.getConfigurationSection("lands");
             if (definitions == null || definitions.getKeys(false).isEmpty() || definitions.getKeys(false).size() > 128)
@@ -143,7 +150,25 @@ final class LandManager implements Listener {
                 String title = s.getString("title", id);
                 if (title == null || title.isBlank() || title.length() > 60 || title.chars().anyMatch(c -> c < 32 || c == 167))
                     throw new IllegalArgumentException(id + " 的名称无效");
-                Land land = new Land(id, title, world, min, max, owner, Set.copyOf(members), bool(s, "visitor-use", false), guild);
+                String task = s.getString("project-task", ""), run = s.getString("project-run", "");
+                if (task.isEmpty() != run.isEmpty() || !task.isEmpty() && !task.matches("tm_[a-z0-9_]{2,40}"))
+                    throw new IllegalArgumentException(id + " 的工程来源无效");
+                if (!run.isEmpty()) uuid(run);
+                boolean landmark = bool(s, "landmark-enabled", false);
+                if (landmark && (guild || !bool(s, "visitor-use", false)))
+                    throw new IllegalArgumentException(id + " 的地标须允许访客使用，且不能是公会私产");
+                Set<BlockVector3> publicContainers = new LinkedHashSet<>();
+                if (s.contains("public-containers") && !s.isList("public-containers")) throw new IllegalArgumentException("public-containers 需要坐标列表");
+                for (Object value : s.getList("public-containers", List.of())) {
+                    YamlConfiguration entry = new YamlConfiguration(); entry.set("at", value);
+                    BlockVector3 p = point(entry, "at");
+                    if (guild || p.x() < min.x() || p.x() > max.x() || p.y() < min.y() || p.y() > max.y() || p.z() < min.z() || p.z() > max.z())
+                        throw new IllegalArgumentException(id + " 的公共箱须在自己的非公会领地内");
+                    publicContainers.add(p);
+                }
+                if (publicContainers.size() > 16) throw new IllegalArgumentException(id + " 最多登记 16 格公共储物方块");
+                Land land = new Land(id, title, world, min, max, owner, Set.copyOf(members), bool(s, "visitor-use", false), guild,
+                        task, run, landmark, Set.copyOf(publicContainers));
                 for (Land other : proposed.values()) if (intersects(land, other))
                     throw new IllegalArgumentException(id + " 与 " + other.id() + " 重叠，需先划清边界");
                 proposed.put(id, land);
@@ -165,7 +190,7 @@ final class LandManager implements Listener {
             Map<RegionManager, Map<String, ProtectedRegion>> replacements = new LinkedHashMap<>();
             originals.forEach((manager, regions) -> {
                 Map<String, ProtectedRegion> next = new HashMap<>(regions);
-                next.keySet().removeIf(id -> id.startsWith(PREFIX));
+                next.keySet().removeIf(id -> id.startsWith(PREFIX) || id.startsWith(PUBLIC_PREFIX));
                 replacements.put(manager, next);
             });
             for (Land land : proposed.values()) {
@@ -186,6 +211,13 @@ final class LandManager implements Listener {
                     region.setFlag(flag, StateFlag.State.DENY);
                 region.setFlag(Flags.DENY_MESSAGE, "这里是「" + land.title() + "」，物资与建造权限归领地主人；/mycli land here 查看归属。");
                 replacements.get(manager(land.world())).put(region.getId(), region);
+                int index = 0;
+                for (BlockVector3 point : land.publicContainers().stream().sorted(Comparator.comparing(BlockVector3::toString)).toList()) {
+                    ProtectedCuboidRegion box = new ProtectedCuboidRegion(PUBLIC_PREFIX + land.id() + "_" + index++, point, point);
+                    box.setPriority(51); box.setFlag(Flags.PASSTHROUGH, StateFlag.State.ALLOW);
+                    box.setFlag(Flags.CHEST_ACCESS, StateFlag.State.ALLOW);
+                    replacements.get(manager(land.world())).put(box.getId(), box);
+                }
             }
             for (var entry : replacements.entrySet()) entry.getKey().setRegions(entry.getValue());
             for (RegionManager manager : replacements.keySet()) manager.save();
@@ -199,6 +231,9 @@ final class LandManager implements Listener {
             }
             JsonObject result = new JsonObject(); result.addProperty("status", "success"); result.addProperty("count", lands.size());
             sender.sendMessage("MC_LAND_RELOAD " + result);
+            activeSource = source;
+            reservedIds = Set.copyOf(definitions.getKeys(false));
+            return true;
         } catch (Exception | LinkageError error) {
             lands = previousLands; ready = previouslyReady;
             if (!originals.isEmpty()) for (var entry : originals.entrySet()) {
@@ -209,6 +244,7 @@ final class LandManager implements Listener {
             result.addProperty("detail", error.getMessage()); result.addProperty("retainedPrevious", ready);
             sender.sendMessage("MC_LAND_RELOAD " + result);
             plugin.getLogger().warning("Land configuration rejected; previous protections retained: " + error.getMessage());
+            return false;
         }
     }
 
@@ -223,13 +259,88 @@ final class LandManager implements Listener {
             if (land != null) return land;
             UUID owner = region.getOwners().getUniqueIds().stream().findFirst().orElse(null);
             return new Land(id, id, at.getWorld(), region.getMinimumPoint(), region.getMaximumPoint(), owner,
-                    Set.copyOf(region.getMembers().getUniqueIds()), false, id.equals(GUILD));
+                    Set.copyOf(region.getMembers().getUniqueIds()), false, id.equals(GUILD), "", "", false, Set.of());
         }
         return null;
     }
 
     boolean contains(Location at) { return find(at) != null; }
     List<String> ids() { return lands.keySet().stream().sorted().toList(); }
+    List<String> landmarkLands(Player player) {
+        return lands.values().stream().filter(l -> l.landmark() && l.owner().equals(player.getUniqueId()))
+                .map(Land::id).sorted().toList();
+    }
+    JsonObject landmarkInfo(String id) {
+        Land land = lands.get(id);
+        return ready && land != null ? info(land, null) : null;
+    }
+    String landmarkOwnerDenial(Player player, String id) {
+        Land land = lands.get(id);
+        if (!ready || land == null) return "land_unavailable";
+        if (!land.owner().equals(player.getUniqueId())) return "not_land_owner";
+        return land.landmark() ? null : "landmark_not_enabled";
+    }
+    boolean landmarkActive(String id, UUID owner, Location at) {
+        Land land = lands.get(id);
+        if (!ready || land == null || !land.landmark() || !land.owner().equals(owner)
+                || at == null || !land.world().equals(at.getWorld())) return false;
+        // Keep the full standing space inside the grant, including its supporting floor.
+        return at.getBlockX() >= land.min().x() && at.getBlockX() <= land.max().x()
+                && at.getBlockZ() >= land.min().z() && at.getBlockZ() <= land.max().z()
+                && at.getBlockY() - 1 >= land.min().y() && at.getBlockY() + 1 <= land.max().y();
+    }
+
+    String projectAvailability(String id, String task, String run, EngineeringSites.Site site) {
+        if (!ready) return "land_data_unavailable";
+        Land existing = lands.get(id);
+        if (existing != null) return existing.projectTask().equals(task) && existing.projectRun().equals(run)
+                ? "already_applied" : "land_id_taken";
+        if (lands.size() >= 128) return "land_limit_reached";
+        World world = Bukkit.getWorld(site.world());
+        if (world == null) return "world_unavailable";
+        var a = site.box().min(); var b = site.box().max();
+        Land proposed = new Land(id, id, world, BlockVector3.at(a.x(), a.y(), a.z()), BlockVector3.at(b.x(), b.y(), b.z()),
+                new UUID(0, 1), Set.of(), true, false, task, run, true, Set.of());
+        for (Land land : lands.values()) if (intersects(proposed, land)) return "land_overlap:" + land.id();
+        if (reservedIds.contains(id)) return "land_id_reserved";
+        return "available";
+    }
+
+    /** Durable, idempotent grant. Replaying a receipt never undoes a later owner transfer. */
+    String projectConfigurationDenial() {
+        try { return Arrays.equals(activeSource, Files.readAllBytes(file.toPath())) ? null : "land_config_pending_reload"; }
+        catch (Exception error) { return "land_data_unavailable"; }
+    }
+    String grantProject(String id, String title, UUID owner, String task, String run,
+                        EngineeringSites.Site site, boolean landmark) {
+        String gate = projectAvailability(id, task, run, site);
+        if (!gate.equals("available")) return gate;
+        byte[] before = activeSource.clone();
+        try {
+            if (!Arrays.equals(before, Files.readAllBytes(file.toPath()))) return "land_config_pending_reload";
+            YamlConfiguration yaml = new YamlConfiguration(); yaml.loadFromString(new String(before, StandardCharsets.UTF_8));
+            String base = "lands." + id + ".";
+            yaml.set(base + "title", title); yaml.set(base + "world", site.world()); yaml.set(base + "source", "bounds");
+            yaml.set(base + "min", site.box().min().save()); yaml.set(base + "max", site.box().max().save());
+            yaml.set(base + "owner-uuid", owner.toString()); yaml.set(base + "members", List.of());
+            yaml.set(base + "visitor-use", true); yaml.set(base + "landmark-enabled", landmark);
+            yaml.set(base + "project-task", task); yaml.set(base + "project-run", run);
+            writeSource(yaml.saveToString().getBytes(StandardCharsets.UTF_8));
+            if (reload(Bukkit.getConsoleSender())) return "applied";
+            writeSource(before);
+            return "land_configuration_rejected";
+        } catch (Exception error) {
+            try { writeSource(before); } catch (Exception rollback) { plugin.getLogger().severe("Project land file rollback failed: " + rollback); }
+            plugin.getLogger().severe("Project handover retained for retry: " + task + " " + error);
+            return "land_save_failed";
+        }
+    }
+    private void writeSource(byte[] source) throws java.io.IOException {
+        Path path = file.toPath(), tmp = path.resolveSibling("lands.yml.project.tmp");
+        Files.write(tmp, source);
+        try { Files.move(tmp, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
+        catch (AtomicMoveNotSupportedException unsupported) { Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING); }
+    }
     UUID guildOwner() { Land land = lands.get(GUILD); return ready && land != null ? land.owner() : null; }
     boolean guildMember(Player player) { Land land = lands.get(GUILD); return ready && land != null && member(player, land); }
     private boolean member(Player player, Land land) {
@@ -453,6 +564,13 @@ final class LandManager implements Listener {
         JsonArray min=new JsonArray();min.add(land.min().x());min.add(land.min().y());min.add(land.min().z());data.add("min",min);
         JsonArray max=new JsonArray();max.add(land.max().x());max.add(land.max().y());max.add(land.max().z());data.add("max",max);
         data.addProperty("visitorUse",land.visitorUse());data.addProperty("opBypass",false);
+        data.addProperty("landmarkEnabled",land.landmark());
+        data.addProperty("publicContainers",land.publicContainers().size());
+        if(!land.projectTask().isEmpty()) {
+            data.addProperty("projectTask",land.projectTask());
+            data.addProperty("projectRun",land.projectRun());
+            data.addProperty("builderUuid",plugin.getConfig().getString("task-market.projects."+land.projectTask()+".completed-by",""));
+        }
         if(viewer!=null){Location at=new Location(land.world(),land.min().x(),land.min().y(),land.min().z());JsonObject permissions=new JsonObject();for(String action:List.of("break","place","container","use","interact","drop","pickup"))permissions.addProperty(action,allows(viewer,action,at));data.add("permissions",permissions);data.addProperty("role",viewer.getUniqueId().equals(land.owner())?"owner":member(viewer,land)?"member":"visitor");}
         return data;
     }

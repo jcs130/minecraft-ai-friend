@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "releasedAt": "2026-10-08T13:04:32+08:00",
+  "plugin": "AgentFriend",
+  "version": "0.3.91",
+  "bytes": 676162,
+  "sha256": "ECFFB3A910E77BB9A8AAC47ED048D8B7D8FE75EA2845413BE030A34AE99039F0",
+  "previousSha256": "3C78F0F66120EEA06A3CAA1BC1A31CC6178FA4266D1779252925BDCFF3D504F7",
+  "runtimeState": "deployed",
+  "javaPidAtRelease": 27360,
+  "backup": {
+    "snapshot": "20261008-130342",
+    "verifiedCopies": [
+      "E",
+      "F"
+    ],
+    "completeBeforeJarReplacement": true,
+    "scheduledTaskResult": 0
+  },
+  "features": {
+    "configuredBuildHandover": "verified_completing_contractor",
+    "handoverReceipt": "durable_pending_with_idempotent_recovery",
+    "publicLandmarkRegistration": "current_owner_physically_present_at_safe_landing",
+    "publicTeleportMana": 6,
+    "publicLandmarksUsePersonalQuota": false,
+    "publicStorage": "explicit_coordinates_only_except_adventurers_guild",
+    "contentChangesRequireRestart": false
+  },
+  "productionContentAtVerification": {
+    "taskTemplatesPreserved": 29,
+    "registeredSitesPreserved": 7,
+    "handoverPoliciesAdded": [
+      "sky_view_tower",
+      "village_watch_post"
+    ],
+    "completedTower": {
+      "landId": "sky_view_tower",
+      "task": "tm_sky_view_tower",
+      "verifiedOriginalRun": "5806c539-ec5e-4006-a5a1-64d1b0795161",
+      "owner": "CortiLan",
+      "ownerUuid": "ccba3629-1f58-33d2-bd0c-f7ba6e699816",
+      "min": [
+        -572,
+        74,
+        -582
+      ],
+      "max": [
+        -554,
+        90,
+        -568
+      ],
+      "publicGiftContainer": [
+        -558,
+        85,
+        -572
+      ],
+      "originalCompletionRewardsAndEvidencePreserved": true,
+      "publicLanding": "awaiting_owner_registration"
+    },
+    "publicLandmarkCountAtVerification": 0,
+    "existingRegionsPreserved": {
+      "world": 28,
+      "world_nether": 1,
+      "world_the_end": 1
+    },
+    "regionsAdded": [
+      "qd_land_sky_view_tower",
+      "qd_public_container_sky_view_tower_0"
+    ],
+    "guildOwnerAndPrivateStoragePreserved": true,
+    "normalDifficultyAndKeepInventoryAllDimensions": true,
+    "characterSkinsPreserved": true,
+    "auraskillsStartupBehaviorVerified": true
+  },
+  "tests": {
+    "isolatedGameplay": 41,
+    "restartNetherAnd16AgentClientsWithEye": 13,
+    "productionReadOnly": 25,
+    "sameFinalJarVerified": true,
+    "controlledLoad": {
+      "agentClients": 16,
+      "eyeClients": 1,
+      "catalogueQueries": 64,
+      "extraGeneratedOrLoadedChunks": 0,
+      "last5sMspt": {
+        "average": 6.2,
+        "minimum": 4.1,
+        "maximum": 10.8
+      },
+      "full1mMaximumMsptIncludingJoinAndDimensionSetup": 275.6
+    },
+    "productionLast5sMspt": {
+      "average": 7.4,
+      "minimum": 4.2,
+      "maximum": 17.9
+    },
+    "failedAttemptsRetained": true,
+    "stageBaselineRestoredAndStopped": true,
+    "temporaryProductionWhitelistEntriesRemoved": true
+  },
+  "limits": [
+    "Ownership follows the verified completing contractor, not attribution of every placed block or aesthetic quality.",
+    "16 Agent clients performed controlled queries, not long-running LLM gameplay; the recorded setup spike remains in evidence.",
+    "Public landings require owner registration; the deployed tower has management rights but no published destination at verification.",
+    "Native protocol menus and effects were tested; physical Bedrock/Xbox UI awaits client verification."
+  ],
+  "documentation": "paper/docs/PROJECT_LANDMARKS.md",
+  "finalReadback": {
+    "at": "2026-10-08T13:17:26+08:00",
+    "originalEyeCameraOnline": true,
+    "originalEyeAttached": true,
+    "publicLanding": "awaiting_owner_registration"
+  }
+}

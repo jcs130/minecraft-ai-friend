@@ -1,5 +1,10 @@
 # `/mycli`：Agent 自发现命令接口
 
+## 工程建筑与公共地标（0.3.91）
+
+`landmark list|mine|info|menu|publish|update|unpublish|cancel` 和 `goto landmark:<领地ID>` 已接入 CLI 图鉴。主人登记免费，成功传送 6 魔力；解析 MC_LANDMARK_RESULT 的 pending/最终回执、MC_TRAVEL 与实际位置。完整 JSON 单播 mcagent:landmark，目录逐条短消息；权限与配置见 [工程地标](PROJECT_LANDMARKS.md)。
+
+
 适用 Paper 1.20.6 的 AgentFriend 0.3.37 起。玩家账号通过原版聊天发送命令；Java、基岩和 Mineflayer 收到的文字回执相同。它不依赖客户端模组，也不把命令目录广播给别人。服主控制台的 `admin` 命令不在玩家目录内。0.3.38 新增 `/mycli coach status|on|off`，用于管理个人低频游玩提醒，规则见 [Agent 游玩提醒](AGENT_COACH.md)。
 
 ## 从发现到执行

@@ -220,6 +220,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private DungeonGearAura dungeonGearAura;
     private TravelMagic travelMagic;
     private WaypointManager waypoints;
+    private LandmarkManager landmarks;
     private LandManager lands;
 
     boolean isSoulbound(ItemStack item) {
@@ -263,6 +264,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         lands = new LandManager(this);
         guildStorage = new GuildStorageOwnership(this);
         waypoints = new WaypointManager(this);
+        landmarks = new LandmarkManager(this);
         agentCoach = new AgentCoach(this);
         agentCoach.start();
         playerNameTags = new PlayerNameTags(this);
@@ -295,6 +297,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     @Override public void onDisable() {
         if (lands != null) lands.stop();
         if (waypoints != null) waypoints.shutdown();
+        if (landmarks != null) landmarks.shutdown();
         if (taskMarket != null) taskMarket.shutdown();
         if (pvpArena != null) pvpArena.shutdown();
         if (dungeonGearAura != null) dungeonGearAura.stop();
@@ -337,6 +340,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     GuildStorageOwnership guildStorage() { return guildStorage; }
     ProtectionAdvisor protectionAdvisor() { return protectionAdvisor; }
     LandManager lands() { return lands; }
+    WaypointManager waypoints() { return waypoints; }
+    LandmarkManager landmarks() { return landmarks; }
     DailyBoardManager dailyBoard() { return dailyBoard; }
     TaskMarketManager taskMarket() { return taskMarket; }
     GuildManager guild() { return guild; }
@@ -930,6 +935,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "cast", "咏唱", "施法" -> cast(player, tail(args, 1));
             case "goto", "传送" -> gotoPlace(player, tail(args, 1));
             case "waypoint", "传送点" -> waypoint(player, args);
+            case "landmark", "地标" -> landmarks.command(player, args);
             case "locate", "找队友" -> locate(player, args);
             case "arena", "试炼" -> {
                 if (dungeon.isBuilt()) dungeon.command(player, args);
@@ -966,6 +972,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli cast leap|flight|golem|sense  跃空、限时飞行、守护傀儡、探测怪物");
         p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>|shared:<分享码>；传送 6 魔力");
         p.sendMessage("/mycli waypoint add|update|remove|share|unshare <名字>；rename <旧名> <新名>；list|shared [页码]；menu");
+        p.sendMessage("/mycli landmark list|mine|menu；publish <领地ID> <名字>；update|unpublish <领地ID>；goto landmark:<领地ID> 每次 6 魔力");
         p.sendMessage("/mycli locate [list|nearest|玩家名|off]  追踪队友；/mycli locate tp <玩家名|nearest> 安全传送，8 魔力");
         p.sendMessage(dungeon.isBuilt()
                 ? "/mycli arena difficulty auto|normal|adventure|apocalypse；start|rest|next|shop|recycle|wallet|loot|status|rewards|stash|leave"
@@ -1266,6 +1273,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void gotoPlace(Player p, String raw, boolean homeSpell) {
         String id = raw.toLowerCase(Locale.ROOT);
         if ((id.startsWith("personal:") || id.startsWith("shared:")) && waypoints.gotoPoint(p, raw)) return;
+        if (id.startsWith("landmark:")) { landmarks.travel(p, raw.substring(raw.indexOf(':') + 1)); return; }
         if (id.equals("guild") || id.equals("公会") || id.equals("工会")) {
             guildHall.teleport(p);
             return;
@@ -2051,6 +2059,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(16, item(Material.FILLED_MAP, "§6遗迹远征", "六处自然遗迹：墓穴、营地、古镇与堡垒", "传送到遗迹外围；8 魔力，仍需步行探索"));
             inv.setItem(23, item(Material.BELL, "§b支援传送术", "重查村庄敌情，直达活敌人附近", "8 魔力；20 秒冷却"));
             inv.setItem(24, item(Material.MAP, "§b大家分享的传送点", "探索者主动分享的地点；传送 6 魔力"));
+            inv.setItem(25, item(Material.LODESTONE, "§6公共地标与建筑", "查看建造者管理的公共建筑；传送 6 魔力", "主人可登记安全落点，免费公开或撤回"));
             if (dungeon.isExpanded()) inv.setItem(17, item(Material.CAMPFIRE, "§6深层驿站", "通关第六层后解锁直达；8 魔力", "工作台、商人和深层首领战"));
             if (dungeon.isBuilt()) {
                 inv.setItem(18, item(Material.WOODEN_SWORD, "§a普通试炼", "适合第一次挑战；到入口按按钮确认并开始"));
@@ -2312,6 +2321,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 21 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "auto"}); }
                     case 23 -> villageWatch.support(p, null);
                     case 24 -> waypoints.open(p, "shared", 1);
+                    case 25 -> landmarks.open(p, false, 1);
                     case 22 -> openMenu(p, "skills");
                     default -> PUBLIC_PLACES.stream().filter(place -> place.slot() == slot).findFirst()
                             .ifPresent(place -> gotoPlace(p, place.id()));
@@ -2690,6 +2700,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 2 && args[0].equalsIgnoreCase("goto")) {
             List<String> places = new ArrayList<>(PUBLIC_PLACES.stream().map(PublicPlace::id).toList());
             places.add("arena"); places.add("guild"); places.add("personal:"); places.add("shared:");
+            places.addAll(landmarks.targets());
             if (sender instanceof Player player) places.addAll(waypoints.names(player).stream().map(name -> "personal:" + name).toList());
             return places;
         }
@@ -2712,6 +2723,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return List.of("first_step", "pest_control", "deep_explorer", "treasure_vault");
         if (args.length == 2 && args[0].equalsIgnoreCase("waypoint"))
             return List.of("add", "update", "remove", "rename", "share", "unshare", "list", "shared", "menu", "cancel");
+        if (args.length == 2 && args[0].equalsIgnoreCase("landmark"))
+            return List.of("list", "mine", "info", "menu", "publish", "update", "unpublish", "cancel");
+        if (args.length == 3 && args[0].equalsIgnoreCase("landmark") && sender instanceof Player player)
+            return args[1].equalsIgnoreCase("info") ? lands.ids() : lands.landmarkLands(player);
         if (args.length == 3 && args[0].equalsIgnoreCase("waypoint")
                 && List.of("update", "remove", "rename", "share", "unshare").contains(args[1].toLowerCase(Locale.ROOT))
                 && sender instanceof Player player) return waypoints.names(player);
