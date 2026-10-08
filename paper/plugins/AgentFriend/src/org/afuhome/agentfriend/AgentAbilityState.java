@@ -73,7 +73,21 @@ final class AgentAbilityState {
         if (plugin.hasLearnedSkill(player, "night"))
             addBuiltin(result, player, "night", "夜视", "minecraft:golden_carrot");
         addMagicSpells(result, player);
+        if (plugin.professions() != null) for (var skill : plugin.professions().skills()) {
+            if (!plugin.professions().denial(player, skill, false).equals("ready")) continue;
+            add(result, "mycli:" + skill.id(), skill.title(), plugin.professions().level(player,skill.id()), skill.cooldown(),
+                    plugin.professions().remaining(player, skill.id()), skill.icon().getKey().toString());
+        }
+        filterBasics(result,player);
         return result;
+    }
+    private void filterBasics(JsonArray result, Player player) {
+        if (plugin.professions()==null || !plugin.professions().ledger.ready()) return;
+        for (int i=result.size()-1;i>=0;i--) {
+            String id=result.get(i).getAsJsonObject().get("id").getAsString(); id=id.substring(id.indexOf(':')+1);
+            if (id.startsWith("conjure_")) id="give";
+            if (SpellGuide.baseIds().contains(id) && plugin.professions().level(player,id)==0) result.remove(i);
+        }
     }
 
     private void addBuiltin(JsonArray result, Player player, String id, String name, String icon) {

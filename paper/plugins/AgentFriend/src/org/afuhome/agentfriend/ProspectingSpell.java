@@ -63,6 +63,7 @@ final class ProspectingSpell {
     }
 
     void cast(Player player, String requested) {
+        if (!plugin.professions().basicAllowed(player,"prospect")) return;
         String category = requested.isBlank() ? "all" : requested.toLowerCase(Locale.ROOT);
         if (!category.equals("all") && !category.equals("coal") && !category.equals("iron")
                 && !category.equals("copper") && !category.equals("gold") && !category.equals("gems")

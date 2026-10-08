@@ -1,0 +1,9 @@
+schema-version: 1
+# Accepted contracts freeze this resolved skill list, so edits affect future acceptance only.
+unlocks:
+  sword_arc_trial: {source: guild_contract, source-id: tm_sword_arc_trial, skills: [sword_arc], repeat: once_per_player}
+  sword_road_trial: {source: guild_contract, source-id: tm_sword_road_trial, skills: [sword_step, sword_beam], repeat: once_per_player}
+  twin_legacy_trial: {source: guild_contract, source-id: tm_twin_legacy_trial, skills: [twin_legacy], repeat: once_per_player}
+  healer_trial: {source: guild_contract, source-id: tm_healer_trial, skills: [healer_beacon], repeat: once_per_player}
+  mage_trial: {source: guild_contract, source-id: tm_mage_trial, skills: [mage_flame, scout_watch], repeat: once_per_player}
+  village_oath: {source: raid_victory, source-id: village_defense, skills: [guardian_ward, guardian_oath], repeat: once_per_player}

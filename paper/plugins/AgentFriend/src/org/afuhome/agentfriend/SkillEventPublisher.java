@@ -28,6 +28,8 @@ final class SkillEventPublisher {
                 || !Double.isFinite(position.getZ())) return;
         String normalized = id.startsWith("conjure_") ? "conjure" : id;
         String title = title(normalized);
+        if (title == null && plugin.professions() != null && plugin.professions().skill(normalized) != null)
+            title = plugin.professions().skill(normalized).title();
         if (title == null) return;
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);

@@ -44,7 +44,8 @@ final class TaskMarketManager implements Listener {
             GuildManager.Goal.FLOOR, GuildManager.Goal.PARTY_FLOOR, GuildManager.Goal.KILLS,
             GuildManager.Goal.WITCH_KILLS, GuildManager.Goal.CLAIMS, GuildManager.Goal.EXPLORE,
             GuildManager.Goal.PEAK, GuildManager.Goal.DIMENSION, GuildManager.Goal.STRUCTURE,
-            GuildManager.Goal.BIOME, GuildManager.Goal.RETURN);
+            GuildManager.Goal.BIOME, GuildManager.Goal.RETURN, GuildManager.Goal.MELEE_KILLS,
+            GuildManager.Goal.PARRY, GuildManager.Goal.HEALING, GuildManager.Goal.MARK_KILLS);
     private static final Map<String, Integer> CHESTS = Map.of("weapons", 0, "armor", 1, "supplies", 2, "misc", 3);
     record Step(String title, String description, GuildManager.Goal goal, int target, int floor,
             String site, int chest, ExplorationObjectives.Target exploration) { }
@@ -180,8 +181,8 @@ final class TaskMarketManager implements Listener {
             YamlConfiguration yaml = new YamlConfiguration(); yaml.load(file);
             if (yaml.getInt("schema-version") != 1) throw new IllegalArgumentException("schema-version");
             ConfigurationSection siteRows = yaml.getConfigurationSection("sites"), taskRows = yaml.getConfigurationSection("tasks");
-            if (siteRows == null || taskRows == null || taskRows.getKeys(false).size() > 32
-                    || siteRows.getKeys(false).size() > 32) throw new IllegalArgumentException("sites/tasks (max 32 each)");
+            if (siteRows == null || taskRows == null || taskRows.getKeys(false).size() > 36
+                    || siteRows.getKeys(false).size() > 32) throw new IllegalArgumentException("max 36 tasks / 32 sites");
             Map<String, EngineeringSites.Site> nextSites = new LinkedHashMap<>();
             for (String id : siteRows.getKeys(false)) {
                 EngineeringSites.Site site = EngineeringSites.parse(id, siteRows.getConfigurationSection(id));
@@ -222,6 +223,7 @@ final class TaskMarketManager implements Listener {
     }
     private Task parse(String key, ConfigurationSection row) {
         if (!key.matches("[a-z0-9_]{2,40}") || row == null) throw new IllegalArgumentException("task " + key);
+        plugin.professions().validateTask(row);
         String title = text(row, "title", 60), description = text(row, "description", 180);
         String beneficiary = row.getString("beneficiary", "千灯纪居民");
         if (beneficiary.length() > 40) throw new IllegalArgumentException(key + " beneficiary");
@@ -324,6 +326,8 @@ final class TaskMarketManager implements Listener {
     boolean canAccept(Player player, GuildManager.Contract contract) {
         Task task = tasks.get(contract.id());
         if (task == null || !task.enabled) return false;
+        String qualification = plugin.professions().taskDenial(player, task.definition);
+        if (!qualification.equals("available")) { player.sendMessage("§e不能接单：" + qualification); return false; }
         if (task.repeatOnce && onceCompleted(player, task.id())) { player.sendMessage("§e这张远行履历已完成；每人仅结算一次。可以选择其他探索委托。"); return false; }
         String gate = gate(task);
         if (!gate.equals("available")) { player.sendMessage("§e不能接这张任务：" + gate + "。/mycli guild engineering 查看场地状态。"); return false; }
@@ -334,6 +338,7 @@ final class TaskMarketManager implements Listener {
         exploration.clear(player);
         Task task = tasks.get(id); String run = UUID.randomUUID().toString(); String path = marketPath(player);
         plugin.getConfig().set(path + ".definition", task.definition);
+        plugin.getConfig().set(path + ".skill-rewards", plugin.professions().rewards("guild_contract", id));
         frozenTasks.put(player.getUniqueId(), new Frozen(task.definition, task));
         plugin.getConfig().set(path + ".run", run); plugin.getConfig().set(path + ".step", 0);
         plugin.getConfig().set(path + ".started-at", System.currentTimeMillis());
@@ -449,6 +454,7 @@ final class TaskMarketManager implements Listener {
         plugin.getConfig().set(path + ".step-started-at", System.currentTimeMillis());
         plugin.getConfig().set(path + ".last-evidence", null); plugin.getConfig().set(path + ".last-reason", null);
         plugin.getConfig().set(activePath(player) + ".progress", 0);
+        plugin.getConfig().set(path + ".action-evidence", null); plugin.getConfig().set(path + ".action-amount", null);
         plugin.saveConfig();
         GuildManager.Contract next = task.contract(index + 1);
         player.sendMessage("§a阶段已交付，继续：" + next.title() + "。" + next.description()
@@ -459,6 +465,8 @@ final class TaskMarketManager implements Listener {
         Task task = frozen(player); if (task == null) return;
         recordStep(player, task, index(player));
         finishRun(player, task, "completed");
+        plugin.professions().queue(player.getUniqueId(), "guild_contract:" + task.id(), run(player),
+                plugin.getConfig().getStringList(marketPath(player) + ".skill-rewards"));
         if (task.project) {
             plugin.getConfig().set(ROOT + ".projects." + task.id() + ".completed", true);
             plugin.getConfig().set(ROOT + ".projects." + task.id() + ".completed-by", player.getUniqueId().toString());
@@ -473,9 +481,32 @@ final class TaskMarketManager implements Listener {
     }
     boolean beforeComplete(Player player) {
         Task task = frozen(player);
+        if (task != null && !plugin.professions().taskDenial(player, task.definition).equals("available")) {
+            player.sendMessage("§e交付需要接单时约定的职业资格；进度保留。"); return false;
+        }
         return task != null && handovers.beforeComplete(player, task, run(player));
     }
-    void afterComplete(Player player, String id) { handovers.apply(id, player); }
+    void afterComplete(Player player, String id) { handovers.apply(id, player); plugin.professions().recover(); }
+
+    /** Verified combat/healing events only; identifiers prevent reusing a defeated entity within a step. */
+    void professionAction(Player player, GuildManager.Goal goal, double amount, String evidenceId) {
+        Task task = frozen(player);
+        if (task == null || player.getGameMode() != GameMode.SURVIVAL || player.isDead()
+                || task.steps.get(index(player)).goal != goal || !Double.isFinite(amount) || amount <= 0) return;
+        if (!plugin.professions().taskDenial(player, task.definition).equals("available")) return;
+        String path = marketPath(player);
+        List<String> evidence = new ArrayList<>(plugin.getConfig().getStringList(path + ".action-evidence"));
+        if (!evidenceId.isEmpty()) {
+            if (evidence.contains(evidenceId) || evidence.size() >= 4096) return;
+            evidence.add(evidenceId); plugin.getConfig().set(path + ".action-evidence", evidence);
+        }
+        int target = task.steps.get(index(player)).target;
+        double total = Math.min(target, plugin.getConfig().getDouble(path + ".action-amount", 0) + amount);
+        int before = plugin.getConfig().getInt(activePath(player) + ".progress");
+        plugin.getConfig().set(path + ".action-amount", total);
+        plugin.getConfig().set(activePath(player) + ".progress", (int) Math.floor(total + .0001)); plugin.saveConfig();
+        if (before < target && total >= target) player.sendMessage("§a本阶段实际行动已达成；/mycli guild claim 交付。");
+    }
     void abandoned(Player player) {
         Task task = frozen(player); if (task == null) return;
         finishRun(player, task, "abandoned"); release(player, task, false); exploration.clear(player);
@@ -555,6 +586,10 @@ final class TaskMarketManager implements Listener {
     }
     private void detail(Player player, Task task) {
         JsonObject data = summary(task); JsonArray steps = new JsonArray();
+        List<String> rewards = task.id().equals(plugin.getConfig().getString(activePath(player) + ".id"))
+                ? plugin.getConfig().getStringList(marketPath(player) + ".skill-rewards") : plugin.professions().rewards("guild_contract", task.id());
+        data.add("skillRewards", new com.google.gson.Gson().toJsonTree(rewards));
+        if (!rewards.isEmpty()) player.sendMessage("§d全部阶段验收后学习：" + String.join(",", rewards) + "；接单时冻结奖励。");
         if (task.grant != null) {
             JsonObject grant = new JsonObject(); grant.addProperty("landId", task.grant.landId()); grant.addProperty("site", task.grant.site());
             grant.addProperty("ownerPolicy", "verified_completing_contractor"); grant.addProperty("landmarkEnabled", task.grant.landmark()); data.add("handover", grant);

@@ -29,6 +29,21 @@ final class AgentCliCatalog {
 
     private static Map<String, Spec> createSpecs() {
         Map<String, Spec> specs = new LinkedHashMap<>();
+        add(specs,"profession","magic","read","/mycli profession status|list|menu|choose <ID>|leave <ID>","选择一个主战职业；list 查看当前开放路线；保留旧技能和成长","生存模式选择；UUID 学习账本；不改背包","MC_PROFESSION / MC_PROFESSION_RESULT");
+        add(specs,"profession.status","magic","read","/mycli profession status","查看本人当前职业和准备槽","查询免费","MC_PROFESSION");
+        add(specs,"profession.menu","magic","gui","/mycli profession menu","打开原版职业和技能菜单","Java、基岩手柄和 Mineflayer 共用","54 格原版菜单");
+        add(specs,"profession.choose","magic","write","/mycli profession choose <ID>","选择职业方向，解锁入门技能的学习资格","生存模式；最多一个主战和两个生活职业；冷却不重置","MC_PROFESSION_RESULT");
+        add(specs,"profession.leave","magic","write","/mycli profession leave <ID>","离开职业，取消其技能准备；学习历史保留","本人所选职业","MC_PROFESSION_RESULT");
+        add(specs,"skills","magic","read","/mycli skills list|explain <ID>|mine|prepare <ID>|unprepare <ID>","旧技能图鉴别名保留；新增本人职业技能资格与准备","旧技能不占新准备槽","MC_SPELL_*、MC_SKILL、MC_SKILL_ASSESSMENT");
+        add(specs,"skills.mine","magic","read","/mycli skills mine","查看本人新技能、装备、资格、来源和实际能力统计","查询免费；未学技能也显示获取途径","MC_SKILL、MC_SKILL_POINTS 与 MC_SKILL_ASSESSMENT");
+        add(specs,"skills.respec","magic","write","/mycli skills respec confirm","洗点退回已花点数；保留原资格、职业与事件解锁","默认10魔力、5分钟冷却；保留施法冷却；试炼/PvP外","MC_PROFESSION_RESULT 与 MC_SKILL_POINTS");
+        add(specs,"skills.points","magic","read","/mycli skills points","本人技能点余额、已花、上限和成长进度","三个职业共用点数；切换不退点","MC_SKILL_POINTS");
+        add(specs,"skills.learn","magic","write","/mycli skills learn <ID>","花技能点学习基础或职业技能","基础人人可学；职业需当前方向和任务/事件资格","MC_PROFESSION_RESULT 与 MC_SKILL_POINTS");
+        add(specs,"skills.upgrade","magic","write","/mycli skills upgrade <ID>","花更多技能点提升职业技能等级","已学会、具备资格、余额足够；原冷却保留","MC_PROFESSION_RESULT 与 MC_SKILL_POINTS");
+        add(specs,"skills.info","magic","read","/mycli skills info <ID>","查看各级效果、费用和本人解锁条件","查询免费","MC_SKILL 与 MC_SPELL_DETAIL");
+        add(specs,"skills.learnmenu","magic","read","/mycli skills learnmenu","打开原版技能学习升级菜单","普通Java和基岩菜单协议","原版容器菜单");
+        add(specs,"skills.prepare","magic","write","/mycli skills prepare <ID>","准备已学职业技能","当前职业；最多四项新主动和一项传承","MC_PROFESSION_RESULT");
+        add(specs,"skills.unprepare","magic","write","/mycli skills unprepare <ID>","取消准备，保留学习记录和冷却","当前职业；已学会","MC_PROFESSION_RESULT");
         add(specs,"help","info","read","/mycli help [ID]","查看玩家帮助；有 ID 时查看该命令详情","在线玩家","帮助或 MC_CLI_DETAIL");
         add(specs,"list","info","read","/mycli list [分类|命令|all] [页码]","分页发现命令；默认只列顶层命令","在线玩家","MC_CLI_LIST、MC_CLI_ITEM");
         add(specs,"explain","info","read","/mycli explain <ID|命令 子命令>","查询用法、前提、效果和回执；绝不执行目标命令","在线玩家","MC_CLI_DETAIL");
@@ -193,7 +208,17 @@ final class AgentCliCatalog {
         return List.copyOf(filters);
     }
 
-    static List<String> ids() { return SPECS.keySet().stream().sorted().toList(); }
+    private static Map<String, Spec> catalogSpecs() {
+        Map<String, Spec> specs = new LinkedHashMap<>(SPECS);
+        for (SpellGuide.Entry spell : SpellGuide.entries()) {
+            String id = "cast." + spell.id();
+            specs.putIfAbsent(id, new Spec(id, "magic", "cast", spell.command(), spell.effect(),
+                    spell.requires(), "MC_PROFESSION_RESULT、mcagent:event"));
+        }
+        return specs;
+    }
+
+    static List<String> ids() { return catalogSpecs().keySet().stream().sorted().toList(); }
 
     static void list(Player player, String[] args) {
         if (args.length > 3) { error(player, "INVALID_ARGUMENT", "用法：/mycli list [分类|命令|all] [页码]"); return; }
@@ -207,7 +232,7 @@ final class AgentCliCatalog {
             catch (NumberFormatException invalid) { error(player, "INVALID_PAGE", "页码必须是正整数"); return; }
         }
         List<Spec> matches = new ArrayList<>();
-        for (Spec spec : SPECS.values()) if (filter.equals("all")
+        for (Spec spec : catalogSpecs().values()) if (filter.equals("all")
                 || filter.equals("roots") && spec.root()
                 || filter.equals(spec.category())
                 || filter.equals(spec.id().split("\\.")[0]) && !spec.root()) matches.add(spec);
@@ -238,7 +263,11 @@ final class AgentCliCatalog {
         if (args.length <= from) { error(player, "MISSING_ID", "用法：/mycli explain <ID>；先用 /mycli list"); return; }
         String id = String.join(".", java.util.Arrays.copyOfRange(args, from, args.length))
                 .toLowerCase(Locale.ROOT);
-        Spec spec = SPECS.get(id);
+        Spec spec = catalogSpecs().get(id);
+        if (spec == null && id.startsWith("cast.")) {
+            SpellGuide.Entry spell = SpellGuide.find(id);
+            if (spell != null) spec = new Spec(id, "magic", "cast", spell.command(), spell.effect(), spell.requires(), "MC_PROFESSION_RESULT、mcagent:event");
+        }
         if (spec == null) { error(player, "UNKNOWN_ID", "未知 ID " + id + "；先用 /mycli list <分类|命令>"); return; }
         JsonObject detail = new JsonObject();
         detail.addProperty("schemaVersion", 1);

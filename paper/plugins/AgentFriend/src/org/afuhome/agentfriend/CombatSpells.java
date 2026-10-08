@@ -44,6 +44,7 @@ final class CombatSpells {
     }
 
     void cast(Player caster, String spell) {
+        if (!plugin.professions().basicAllowed(caster,spell)) return;
         if (caster.getGameMode() == org.bukkit.GameMode.SPECTATOR) {
             caster.sendMessage(ChatColor.RED + "旁观者不能施法。");
             return;

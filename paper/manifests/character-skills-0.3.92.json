@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "releasedAt": "2026-10-08T16:09:30+08:00",
+  "contentActivatedAt": "2026-10-08T08:13:12.498Z",
+  "plugin": "AgentFriend",
+  "version": "0.3.92",
+  "bytes": 759749,
+  "sha256": "10E42183647EA1B5A2C7F3E918AB15A43E1571CEEFBA8F087E8593FB051DD375",
+  "previousSha256": "ECFFB3A910E77BB9A8AAC47ED048D8B7D8FE75EA2845413BE030A34AE99039F0",
+  "runtimeState": "deployed",
+  "javaPidAtRelease": 31092,
+  "backup": {
+    "snapshot": "20261008-160838",
+    "verifiedCopies": [
+      "E",
+      "F"
+    ],
+    "completeBeforeJarReplacement": true,
+    "scheduledTaskResult": 0
+  },
+  "features": {
+    "professions": [
+      "warrior",
+      "mage",
+      "priest"
+    ],
+    "professionSkills": 16,
+    "commonSkills": 20,
+    "initialPoints": 6,
+    "pointCap": 30,
+    "enabledAuraLevelGainsPerPoint": 5,
+    "respec": {
+      "mana": 10,
+      "cooldownSeconds": 300,
+      "refund": "actual_paid_points",
+      "retains": [
+        "legacy_basic_qualifications",
+        "earned_points",
+        "aura_level_high_water",
+        "current_profession",
+        "quest_and_raid_unlock_receipts",
+        "unique_legacy_ownership",
+        "spell_cooldown_deadlines"
+      ]
+    },
+    "maximumSkillRank": 3,
+    "advancedHealingRank3": {
+      "allies": 4,
+      "healthPerAlly": 12,
+      "mana": 18,
+      "singleMonsterHitWardSeconds": 6,
+      "maximumDamageReduced": 6,
+      "monsterAttackImmunityMs": 1500
+    },
+    "statusBookDisplaysPointsRanksCostsOriginsAndRespec": true,
+    "contentConfigurationRequiresRestart": false,
+    "agentClientChanges": false
+  },
+  "productionContentAtVerification": {
+    "legacyPlayerQualificationsPreserved": 114,
+    "originalTemplatesPreserved": 29,
+    "newTrials": 5,
+    "totalTemplates": 34,
+    "sitesPreserved": 7,
+    "kiritoAssigned": "warrior",
+    "kiritoAutoPurchases": false,
+    "guildOwnerAndTowerOwnershipPreserved": true,
+    "normalDifficultyAndKeepInventoryAllDimensions": true,
+    "auraskillsStartupBehaviorVerified": true,
+    "originalFourClientsReconnected": true,
+    "originalCortiEyeAttached": true
+  },
+  "tests": {
+    "matrix": [
+      {
+        "report": "stage-2026-10-08T07-45-05.201Z.json",
+        "sha256": "2898183E30888A11674A2064A9360C6E810FFA7F46490DA544BEF49054958699",
+        "checks": 45,
+        "passed": true
+      },
+      {
+        "report": "operations-pre-2026-10-08T07-45-47.558Z.json",
+        "sha256": "2898183E30888A11674A2064A9360C6E810FFA7F46490DA544BEF49054958699",
+        "checks": 7,
+        "passed": true
+      },
+      {
+        "report": "operations-post-2026-10-08T07-47-50.875Z.json",
+        "sha256": "2898183E30888A11674A2064A9360C6E810FFA7F46490DA544BEF49054958699",
+        "checks": 7,
+        "passed": true
+      },
+      {
+        "report": "operations-corrupt-2026-10-08T07-52-05.815Z.json",
+        "sha256": "10E42183647EA1B5A2C7F3E918AB15A43E1571CEEFBA8F087E8593FB051DD375",
+        "checks": 3,
+        "passed": true
+      },
+      {
+        "report": "points-pre-2026-10-08T08-00-49.223Z.json",
+        "sha256": "10E42183647EA1B5A2C7F3E918AB15A43E1571CEEFBA8F087E8593FB051DD375",
+        "checks": 27,
+        "passed": true
+      },
+      {
+        "report": "points-post-2026-10-08T08-02-54.595Z.json",
+        "sha256": "10E42183647EA1B5A2C7F3E918AB15A43E1571CEEFBA8F087E8593FB051DD375",
+        "checks": 7,
+        "passed": true
+      },
+      {
+        "report": "operations-load-2026-10-08T08-05-22.208Z.json",
+        "sha256": "10E42183647EA1B5A2C7F3E918AB15A43E1571CEEFBA8F087E8593FB051DD375",
+        "checks": 4,
+        "passed": true
+      },
+      {
+        "report": "live-2026-10-08T08-14-34.710Z.json",
+        "sha256": "10E42183647EA1B5A2C7F3E918AB15A43E1571CEEFBA8F087E8593FB051DD375",
+        "checks": 21,
+        "passed": true,
+        "scope": "production queries, ordinary denied operations and native menu/book delivery"
+      }
+    ],
+    "earlierBundleEquivalence": {
+      "earlierSha256": "2898183e30888a11674a2064a9360c6e810ffa7f46490da544bef49054958699",
+      "finalSha256": "10e42183647ea1b5a2c7f3e918ab15a43e1571ceefba8f087e8593fb051dd375",
+      "identicalClasses": 147,
+      "changedEntries": [
+        "skill-points.yml"
+      ]
+    },
+    "controlledLoad": {
+      "agentClients": 16,
+      "eyeClients": 1,
+      "paidSkillCasts": 48,
+      "queries": 48,
+      "newOrExtraLoadedChunks": 0,
+      "last5sMspt": {
+        "average": 10.1,
+        "minimum": 4.9,
+        "maximum": 21.1
+      },
+      "last1mMaximumMspt": 34.7
+    },
+    "productionLast5sMspt": {
+      "average": 6.9,
+      "minimum": 3.9,
+      "maximum": 44.3
+    },
+    "productionLast1mMaximumMsptIncludingProbeLogin": 353.3,
+    "temporaryProductionWhitelistEntryRemoved": true,
+    "failedAttemptsRetained": true,
+    "stageBaselineRestoredAndStopped": true
+  },
+  "limits": [
+    "Earlier gameplay and recovery reports used the byte-identical 147 compiled classes; final bundle changed only skill-points.yml and reran points, restart, corrupt-ledger and 16-client load checks.",
+    "Raid and dungeon progression use real native event/callback adapters in isolation, not autonomous complete raid waves or full tower completion.",
+    "Controlled clients do not establish long-term performance of 16 LLM agents.",
+    "Bedrock mobile and Xbox visual/controller acceptance requires actual clients."
+  ],
+  "documentation": "paper/docs/CHARACTER_SKILLS.md",
+  "privateEvidence": "E/F repairs/profession-skills-20261008"
+}

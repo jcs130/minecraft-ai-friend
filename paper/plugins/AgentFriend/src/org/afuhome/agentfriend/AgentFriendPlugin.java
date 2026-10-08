@@ -208,6 +208,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private ProspectingSpell prospectingSpell;
     private UtilitySpells utilitySpells;
     private SpellMastery spellMastery;
+    private ProfessionManager professions;
     private VillageStructureProtection villageStructureProtection;
     private VillageTrades villageTrades;
     private ViewerStatePublisher viewerStatePublisher;
@@ -258,6 +259,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         combatSpells = new CombatSpells(this);
         prospectingSpell = new ProspectingSpell(this);
         utilitySpells = new UtilitySpells(this);
+        professions = new ProfessionManager(this);
         villageStructureProtection = new VillageStructureProtection(this);
         lifeBuildings = new LifeGuildBuildings(this, lifeGuild);
         protectionAdvisor = new ProtectionAdvisor(this);
@@ -295,6 +297,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (professions != null) professions.shutdown();
         if (lands != null) lands.stop();
         if (waypoints != null) waypoints.shutdown();
         if (landmarks != null) landmarks.shutdown();
@@ -345,6 +348,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     DailyBoardManager dailyBoard() { return dailyBoard; }
     TaskMarketManager taskMarket() { return taskMarket; }
     GuildManager guild() { return guild; }
+    ProfessionManager professions() { return professions; }
     VillageWatchManager villageWatch() { return villageWatch; }
     LifeGuildBuildings lifeBuildings() { return lifeBuildings; }
     TrialRoadManager trialRoad() { return trialRoad; }
@@ -480,6 +484,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSpellPreCast(SpellCastEvent event) {
         if (!(event.getCaster() instanceof Player p)) return;
+        if (professions != null && professions.skill(event.getSpell().getInternalName()) != null) {
+            // Also gates programmatic MagicSpells casts if an operator adds a wrapper with this ID.
+            event.setCancelled(true);
+            if (event.getSpellCastState() == Spell.SpellCastState.NORMAL)
+                professions.cast(p, event.getSpell().getInternalName());
+            return;
+        }
+        String basic = event.getSpell().getInternalName().toLowerCase(Locale.ROOT);
+        if (basic.startsWith("conjure_")) basic = "give";
+        if (!professions.basicAllowed(p,basic)) { event.setCancelled(true); return; }
         if (event.getSpell().getInternalName().equalsIgnoreCase("heal")
                 && event.getSpellCastState() == Spell.SpellCastState.NORMAL) {
             event.setCancelled(true);
@@ -605,6 +619,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length >= 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("professions")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台维护职业账本。"); return true;
+            }
+            professions.admin(sender, args); return true;
+        }
         if (args.length >= 2 && args[0].equalsIgnoreCase("admin")
                 && (args[1].equalsIgnoreCase("market") || args[1].equalsIgnoreCase("engineering"))) {
             boolean console = sender instanceof ConsoleCommandSender || sender instanceof RemoteConsoleCommandSender;
@@ -926,7 +946,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "guide", "指引", "指南" -> guide(player, args);
             case "book", "命格书" -> giveStatusBook(player);
             case "kit", "入门" -> { giveCompass(player); giveStatusBook(player); }
-            case "spells", "skills", "技能" -> SpellGuide.command(player, args);
+            case "spells", "skills", "技能" -> {
+                if (args.length > 1 && Set.of("mine", "prepare", "unprepare", "menu", "learnmenu", "points", "learn", "upgrade", "info", "respec").contains(args[1].toLowerCase(Locale.ROOT)))
+                    professions.command(player, args);
+                else SpellGuide.command(player, args);
+            }
+            case "profession", "职业" -> professions.command(player, args);
             case "mastery", "熟练度" -> spellMastery.report(player);
             case "skillbook", "技能书" -> SkillTome.command(player, args, spellMastery);
             case "status", "状态" -> status(player);
@@ -967,6 +992,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli guide [start|explore|magic|gear|guild|dungeon|team]  分步指引；手柄从罗盘选旅途指南");
         p.sendMessage("/mycli focus give|list|bind <技能ID>  领取、查看或绑定法杖；手持使用即施法");
         p.sendMessage("/mycli mastery  查看战斗、探索、采集法术的个人熟练度与下一级门槛");
+        p.sendMessage("/mycli profession status|menu|choose <ID>|leave <ID>；skills mine|prepare|unprepare <ID>  职业与传承");
         p.sendMessage("/mycli skillbook list|use [槽位]  查看并研习试炼掉落的实体技能书；手柄可手持使用");
         p.sendMessage("/mycli imprint [list|技能ID]  在附魔台附近给手持工具刻印；潜行使用工具施法");
         p.sendMessage("/mycli cast leap|flight|golem|sense  跃空、限时飞行、守护傀儡、探测怪物");
@@ -1050,6 +1076,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void cast(Player p, String raw) {
         if (p.getGameMode() == GameMode.SPECTATOR) { p.sendMessage(ChatColor.RED + "旁观者不能施法。"); return; }
         String id = raw.toLowerCase(Locale.ROOT);
+        if (professions.skill(id.split("\\s+", 2)[0]) != null) { professions.cast(p, raw); return; }
         if (id.equals("support") || id.equals("支援") || id.equals("支援传送术")) {
             villageWatch.support(p, null); return;
         }
@@ -1097,6 +1124,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     private void conjure(Player p, String raw) {
+        if (!professions.basicAllowed(p,"give")) return;
         String id = switch (raw.toLowerCase(Locale.ROOT)) {
             case "bread", "面包" -> "bread";
             case "torch", "火把" -> "torch";
@@ -1137,6 +1165,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         goddessGifts.give(sender, args);
     }
     private void fireworks(Player p) {
+        if (!professions.basicAllowed(p,"fireworks")) return;
         long now = System.currentTimeMillis();
         long ready = fireworksCooldown.getOrDefault(p.getUniqueId(), 0L);
         if (now < ready) { p.sendMessage(ChatColor.RED + "烟花术还需 " + ((ready - now + 999) / 1000) + " 秒。"); return; }
@@ -1163,6 +1192,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     private void starlight(Player p) {
+        if (!professions.basicAllowed(p,"starlight")) return;
         long now = System.currentTimeMillis();
         String key = p.getUniqueId() + ":starlight";
         long until = goddessCooldown.getOrDefault(key, 0L);
@@ -1193,22 +1223,20 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return id.equals("feather") ? featherKey : id.equals("night") ? nightKey : null;
     }
 
+    void revokePaidBasic(Player p, String id) { NamespacedKey key=skillKey(id); if (key!=null) p.getPersistentDataContainer().remove(key); }
+    boolean oldGoddessLearned(Player p, String id) { NamespacedKey key = skillKey(id); return key != null && learned(p,key); }
+    boolean canLearnGoddess(Player p) { SkillsUser user = skillsUser(p); return p.getLevel() >= 5 || user != null && user.getSkillLevel(Skills.ALCHEMY) >= 2; }
+    void finishGoddessLearning(Player p, String id) {
+        if (oldGoddessLearned(p,id)) return;
+        SkillsUser user = skillsUser(p);
+        if (user == null || user.getSkillLevel(Skills.ALCHEMY) < 2) p.setLevel(Math.max(0,p.getLevel()-5));
+        p.getPersistentDataContainer().set(skillKey(id),PersistentDataType.BYTE,(byte)1);
+    }
     private boolean learnSkill(Player p, String id) {
         NamespacedKey key = skillKey(id);
         if (key == null) { p.sendMessage(ChatColor.RED + "只能学习 feather 或 night。"); return false; }
         if (learned(p, key)) { p.sendMessage(ChatColor.YELLOW + "你已经学会了。"); return false; }
-        SkillsUser user = skillsUser(p);
-        boolean alchemyUnlock = user != null && user.getSkillLevel(Skills.ALCHEMY) >= 2;
-        if (!alchemyUnlock && p.getLevel() < 5) {
-            p.sendMessage(ChatColor.RED + "需要原版经验 5 级，或炼金等级 2；首次通关试炼也会自动学会。");
-            return false;
-        }
-        if (!alchemyUnlock) p.setLevel(p.getLevel() - 5);
-        p.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);
-        p.sendMessage(ChatColor.GREEN + "已学会 " + (id.equals("feather") ? "羽落" : "夜视")
-                + (alchemyUnlock ? "（炼金等级奖励）" : "（已消耗原版经验 5 级）")
-                + "；再次点击罗盘中的图标即可咏唱。");
-        return true;
+        String reason = professions.purchase(p,id,false); professions.result(p,"learn",reason,id); return reason.equals("success");
     }
 
     private void castOrLearn(Player p, String id) {
@@ -1217,6 +1245,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     private void goddessSpell(Player p, String id) {
+        if (!professions.basicAllowed(p,id)) return;
         NamespacedKey key = skillKey(id);
         if (key == null || !learned(p, key)) {
             p.sendMessage(ChatColor.RED + "还没学会这项女神技艺；输入 /mycli goddess skills。");
@@ -1342,6 +1371,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     private void groupHeal(Player caster) {
+        if (!professions.basicAllowed(caster,"heal")) return;
         if (caster.getGameMode() == GameMode.SPECTATOR || caster.isDead()) {
             caster.sendMessage(ChatColor.RED + "旁观者或倒下的玩家不能施法。");
             return;
@@ -1368,7 +1398,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (!spendMana(caster, 6)) return;
         goddessCooldown.put(key, now + GROUP_HEAL_COOLDOWN_MS);
         for (Player player : wounded) {
+            double before = player.getHealth();
             player.setHealth(Math.min(player.getMaxHealth(), player.getHealth() + 6.0));
+            if (professions != null) professions.observedHealing(caster, player, player.getHealth() - before);
             player.getWorld().spawnParticle(Particle.HEART, player.getLocation().add(0, 1.4, 0),
                     8, 0.45, 0.5, 0.45, 0.01);
         }
@@ -1693,7 +1725,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private String imprintedSpell(ItemStack stack) {
         if (stack == null || !stack.hasItemMeta()) return null;
         String id = stack.getItemMeta().getPersistentDataContainer().get(imprintSpellKey, PersistentDataType.STRING);
-        return id != null && FOCUS_SPELLS.stream().anyMatch(spell -> spell.id().equals(id)) ? id : null;
+        return id != null && (FOCUS_SPELLS.stream().anyMatch(spell -> spell.id().equals(id)) || professions.skill(id) != null) ? id : null;
+    }
+    private FocusSpell focusDefinition(String id) {
+        FocusSpell existing = FOCUS_SPELLS.stream().filter(spell -> spell.id().equals(id)).findFirst().orElse(null);
+        if (existing != null) return existing;
+        var skill = professions.skill(id);
+        return skill == null ? null : new FocusSpell(skill.id(), -1, skill.icon(), "§d" + skill.title(), skill.description());
     }
     private boolean nearEnchantingTable(Player player) {
         Location at = player.getLocation();
@@ -1724,7 +1762,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         openMenu(player, "imprint");
     }
     private void imprint(Player player, String id) {
-        FocusSpell spell = FOCUS_SPELLS.stream().filter(entry -> entry.id().equals(id)).findFirst().orElse(null);
+        FocusSpell spell = focusDefinition(id);
         if (spell == null) { player.sendMessage(ChatColor.RED + "没有这个可刻印法术；/mycli imprint list 查看 ID。"); return; }
         if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能刻印。"); return; }
         ItemStack stack = player.getInventory().getItemInMainHand();
@@ -1761,7 +1799,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private FocusSpell focusSpell(ItemStack stack) {
         if (!isFocus(stack)) return null;
         String id = stack.getItemMeta().getPersistentDataContainer().get(focusSpellKey, PersistentDataType.STRING);
-        return FOCUS_SPELLS.stream().filter(spell -> spell.id().equals(id)).findFirst().orElse(null);
+        return focusDefinition(id);
     }
     private ItemStack focusItem(FocusSpell spell) {
         ItemStack stack = item(Material.BLAZE_ROD, "§d✦ 灵纹法杖 · " + ChatColor.stripColor(spell.title()),
@@ -1779,7 +1817,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         else p.sendMessage(ChatColor.RED + "背包已满；腾出一格后输入 /mycli focus give 领取法杖。");
     }
     private void bindFocus(Player p, String id) {
-        FocusSpell spell = FOCUS_SPELLS.stream().filter(entry -> entry.id().equals(id)).findFirst().orElse(null);
+        FocusSpell spell = focusDefinition(id);
         if (spell == null) { p.sendMessage(ChatColor.RED + "没有这个可绑定技能；使用 /mycli focus list 查看 ID。"); return; }
         ItemStack[] storage = p.getInventory().getStorageContents();
         for (int slot = 0; slot < storage.length; slot++) {
@@ -1796,6 +1834,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             String ids = FOCUS_SPELLS.subList(start, Math.min(start + 8, FOCUS_SPELLS.size()))
                     .stream().map(FocusSpell::id).collect(java.util.stream.Collectors.joining(", "));
             p.sendMessage(ChatColor.GRAY + ids);
+        }
+        if (!professions.ids().isEmpty()) {
+            p.sendMessage(ChatColor.LIGHT_PURPLE + "职业刻印 ID：" + String.join(", ", professions.ids()));
+            p.sendMessage(ChatColor.GRAY + "装备要求仍然生效；剑技请刻印在剑上，/mycli skills mine 查看本人资格，罗盘「职业与传承」可直接施法。");
         }
     }
     private void focusCommand(Player p, String[] args) {
@@ -1867,7 +1909,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         meta.setPages(
                 "§6❖ 千灯纪 · 命格书 ❖§r\n" + p.getName() + "\n\n生命 " + Math.round(p.getHealth())
                         + "/" + Math.round(p.getMaxHealth()) + "\n饥饿 " + p.getFoodLevel()
-                        + "/20\n原版经验等级 " + p.getLevel() + "\n" + manaLine + "\n\n向右翻页，查看战绩与任务 →",
+                        + "/20\n原版经验等级 " + p.getLevel() + "\n" + manaLine + "\n" + professions.bookSummary(p) + "\n\n向右翻页，查看战绩与任务 →",
                 "§c冒险战绩§r\n\n击败怪物 " + p.getStatistic(Statistic.MOB_KILLS)
                         + "\n击败玩家 " + p.getStatistic(Statistic.PLAYER_KILLS)
                         + "\n死亡次数 " + p.getStatistic(Statistic.DEATHS)
@@ -1875,7 +1917,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 guild.bookPage(p),
                 lifeGuild.bookPage(p),
                 "§d角色成长§r\n\n" + auraLine
-                        + "\n\n当前没有可手动分配的属性点。AuraSkills 技能随活动获取经验并升级；法术靠成功施放提高熟练度。",
+                        + "\n\nAuraSkills 随活动成长，技能点用于学习和升级。基础法术的原熟练度保留；具体余额与费用请看命格技能页。",
                 "§d法术熟练度 · 战斗§r\n\n" + masteryBookLine(p, "starbolt") + "\n"
                         + masteryBookLine(p, "frostnova") + "\n" + masteryBookLine(p, "flamewave")
                         + "\n\n成功施放 8 次升 2 级，24 次升 3 级。",
@@ -1891,6 +1933,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 "§5给工具刻印魔法§r\n\n手持镐、剑等工具，潜行使用附魔台，再选技能图标。\n\n需要经验 3 级和青金石 1 个。\n\n刻印后潜行对方块使用工具施法；原附魔保留。",
                 "§c试炼塔与奖励§r\n\n从村庄沿路走到塔。按入口石按钮选难度，再点「开始」；附近队友一起进入。\n\n清怪后 10 秒自动下楼并补满生命。\n\n奖励在入口个人箱；死亡后也去那里拿。",
                 "§6给旅人的话§r\n\n村庄里安全，村外有怪。先选一个公会任务，再结伴探险。\n\nAgent 用 /mycli guide 看指令；遇到困难可联系女神。\n\n命格书每次打开都会更新你的状态。");
+        meta.addPage(professions.bookPages(p).toArray(String[]::new));
         meta.getPersistentDataContainer().set(statusBookKey, PersistentDataType.BYTE, (byte) 1);
         stack.setItemMeta(meta);
         return stack;
@@ -1944,6 +1987,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         Inventory inv = Bukkit.createInventory(null,
                 page.equals("guild") || page.equals("imprint") || page.equals("spell_guide") ? 54 : 27, title);
         if (page.equals("skills")) {
+            inv.setItem(1, item(Material.NAME_TAG, "§b职业与传承", "选择一个主战职业和最多两个生活职业", "查看准备槽、获取途径和成长委托"));
             inv.setItem(0, item(Material.GRASS_BLOCK, "§a领地与物品归属", "查看各处领地主人和自己的权限", "领地内无权操作会收到明确提示"));
             inv.setItem(2, item(Material.WRITTEN_BOOK, "§d法术图鉴", "逐项查看效果、目标、魔力、冷却和学习条件", "先读说明，再决定是否施放"));
             inv.setItem(3, item(Material.SUNFLOWER, "§a生活公会", "种田、烹饪、钓鱼、建筑、写书和红石工坊", "手柄点击接单；Agent 用 /mycli life board"));
@@ -2225,6 +2269,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (slot == top.getSize() - 1) return;
             if (page.equals("skills")) {
                 switch (slot) {
+                    case 1 -> professions.open(p, "roles");
                     case 0 -> lands.open(p, 1);
                     case 2 -> openMenu(p, "spell_guide");
                     case 3 -> openMenu(p, "life");
@@ -2651,6 +2696,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) event.blockList().removeIf(b -> inBuild(b.getLocation()));
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (args.length == 2 && args[0].equalsIgnoreCase("profession")) return List.of("status", "list", "menu", "choose", "leave");
+        if (args.length == 3 && args[0].equalsIgnoreCase("profession") && Set.of("choose", "leave").contains(args[1]))
+            return professions.roleIds();
+        if (args.length == 2 && args[0].equalsIgnoreCase("skills")) return List.of("list", "explain", "mine", "menu", "learnmenu", "points", "learn", "upgrade", "prepare", "unprepare", "respec", "info");
+        if (args.length == 3 && args[0].equalsIgnoreCase("skills")) return SpellGuide.entries().stream().map(SpellGuide.Entry::id).toList();
         if (args.length == 2 && args[0].equalsIgnoreCase("land")) return List.of("here", "list", "info", "menu");
         if (args.length == 3 && args[0].equalsIgnoreCase("land") && args[1].equalsIgnoreCase("info")) return lands.ids();
         if (args.length == 1) return AgentCliCatalog.roots();
@@ -2670,14 +2720,17 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 2 && args[0].equalsIgnoreCase("imprint")) {
             List<String> choices = new ArrayList<>(List.of("list"));
             choices.addAll(FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> !id.contains(" ")).toList());
+            choices.addAll(professions.ids());
             return choices;
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("imprint") && args[1].equalsIgnoreCase("prospect"))
             return FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> id.startsWith("prospect "))
                     .map(id -> id.substring("prospect ".length())).toList();
         if (args.length == 2 && args[0].equalsIgnoreCase("focus")) return List.of("give", "list", "menu", "bind");
-        if (args.length == 3 && args[0].equalsIgnoreCase("focus") && args[1].equalsIgnoreCase("bind"))
-            return FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> !id.contains(" ")).toList();
+        if (args.length == 3 && args[0].equalsIgnoreCase("focus") && args[1].equalsIgnoreCase("bind")) {
+            List<String> choices = new ArrayList<>(FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> !id.contains(" ")).toList());
+            choices.addAll(professions.ids()); return choices;
+        }
         if (args.length == 4 && args[0].equalsIgnoreCase("focus") && args[1].equalsIgnoreCase("bind")
                 && args[2].equalsIgnoreCase("prospect"))
             return FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> id.startsWith("prospect "))
@@ -2692,7 +2745,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (sender instanceof Player viewer) trackablePlayers(viewer).forEach(target -> choices.add(target.getName()));
             return choices;
         }
-        if (args.length == 2 && args[0].equalsIgnoreCase("cast")) return List.of("home", "support", "blink", "selfheal", "heal", "food", "give", "fireworks", "starlight", "starbolt", "frostnova", "flamewave", "prospect", "leap", "flight", "golem", "sense", "feather", "night");
+        if (args.length == 2 && args[0].equalsIgnoreCase("cast")) {
+            List<String> choices = new ArrayList<>(List.of("home", "support", "blink", "selfheal", "heal", "food", "give", "fireworks", "starlight", "starbolt", "frostnova", "flamewave", "prospect", "leap", "flight", "golem", "sense", "feather", "night"));
+            choices.addAll(professions.ids()); return choices;
+        }
         if (args.length == 3 && args[0].equalsIgnoreCase("cast") && args[1].equalsIgnoreCase("prospect")) return List.of("all", "coal", "iron", "copper", "gold", "gems", "diamond", "redstone", "ancient");
         if (args.length == 3 && args[0].equalsIgnoreCase("cast") && args[1].equalsIgnoreCase("give")) return List.of("bread", "torch", "oak_log", "cobblestone", "crafting_table", "chest", "cake", "glass");
         if (args.length == 2 && args[0].equalsIgnoreCase("goddess")) return List.of("skills", "learn", "pray");

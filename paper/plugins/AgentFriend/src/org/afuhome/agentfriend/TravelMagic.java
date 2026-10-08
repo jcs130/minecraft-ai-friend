@@ -52,6 +52,7 @@ final class TravelMagic implements Listener {
     }
 
     boolean teleport(Player player, Location destination, String id, String name, int mana) {
+        if (!plugin.professions().basicAllowed(player,id.equals("home") ? "home" : id.equals("support") ? "support" : "travel")) return false;
         if (player.getGameMode() == GameMode.SPECTATOR) {
             player.sendMessage(ChatColor.RED + "旁观者不能使用传送术。"); return false;
         }
@@ -74,6 +75,7 @@ final class TravelMagic implements Listener {
     }
 
     boolean command(Player player, String command, Location expected, String id, String name, int mana) {
+        if (!plugin.professions().basicAllowed(player,id.equals("home") ? "home" : "travel")) return false;
         if (player.getGameMode() == GameMode.SPECTATOR) {
             player.sendMessage(ChatColor.RED + "旁观者不能使用传送术。"); return false;
         }
@@ -94,6 +96,7 @@ final class TravelMagic implements Listener {
         String root = line.substring(1).split("\\s+", 2)[0].toLowerCase(Locale.ROOT);
         root = root.substring(root.lastIndexOf(':') + 1);
         if (!TELEPORT_COMMANDS.contains(root)) return;
+        if (!plugin.professions().basicAllowed(event.getPlayer(),"travel")) { event.setCancelled(true); return; }
         pending.put(event.getPlayer().getUniqueId(), new Pending("command", "指令传送", LOCAL_MANA,
                 null, System.currentTimeMillis() + COMMAND_WINDOW_MS));
     }
@@ -141,7 +144,7 @@ final class TravelMagic implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onTeleportCheck(PlayerTeleportEvent event) {
         Pending request = request(event);
-        if (request != null && !plugin.hasMana(event.getPlayer(), request.mana())) {
+        if (request != null && (!plugin.professions().basicAllowed(event.getPlayer(),request.id().equals("home") ? "home" : "travel") || !plugin.hasMana(event.getPlayer(), request.mana()))) {
             event.setCancelled(true);
             pending.remove(event.getPlayer().getUniqueId());
         }

@@ -1,0 +1,183 @@
+schema-version: 1
+# Effects are bounded native server primitives. Learning uses skill points; each cast additionally uses AuraSkills mana.
+skills:
+  sword_thrust:
+    title: 突刺
+    profession: warrior
+    icon: IRON_SWORD
+    effect: sword_thrust
+    equipment: sword
+    mana: 4
+    cooldown-seconds: 8
+    limits: {range: 3, targets: 1, power: 8, duration-seconds: 1}
+    description: 准星前方三格内突刺一名可见敌人，基础伤害上限八；不会隔墙锁敌。
+    origin: 选择战士解锁学习资格；随后完成剑路初试解锁弧光斩。
+  sword_parry:
+    title: 架势格挡
+    profession: warrior
+    icon: SHIELD
+    effect: sword_parry
+    equipment: sword
+    mana: 4
+    cooldown-seconds: 12
+    limits: {range: 3, targets: 1, power: 6, duration-seconds: 2}
+    description: 持剑准备两秒，抵挡一次正面怪物近战，减免一半伤害且最多六点；准备成功即耗魔力。
+    origin: 选择战士解锁学习资格；实际挡住攻击才能计入格挡试炼。
+  sword_arc:
+    title: 弧光斩
+    profession: warrior
+    icon: DIAMOND_SWORD
+    effect: sword_cone
+    equipment: sword
+    mana: 7
+    cooldown-seconds: 12
+    limits: {range: 3, targets: 3, power: 4, duration-seconds: 1}
+    description: 挥斩正面三格扇形内最多三名可见敌人，每名基础伤害四；不破坏方块。
+    origin: 完成任务 tm_sword_arc_trial，验收持剑近战击杀和有效格挡。
+  sword_step:
+    title: 步法斩
+    profession: warrior
+    icon: RABBIT_FOOT
+    effect: sword_step
+    equipment: sword
+    mana: 6
+    cooldown-seconds: 15
+    limits: {range: 3, targets: 1, power: 5, duration-seconds: 1}
+    description: 沿完整平地安全前进三格后挥斩一名敌人；墙角、岩浆、悬空和领地禁止进入处均拒绝。
+    origin: 学会弧光斩后完成任务 tm_sword_road_trial。
+  sword_beam:
+    title: 剑气
+    profession: warrior
+    icon: AMETHYST_SHARD
+    effect: sword_beam
+    equipment: sword
+    mana: 8
+    cooldown-seconds: 16
+    limits: {range: 10, targets: 1, power: 6, duration-seconds: 1}
+    description: 向准星方向释放最多十格的剑气，命中一名可见敌人；墙会阻挡剑气。
+    origin: 完成任务 tm_sword_road_trial，与步法斩一并获得。
+  twin_legacy:
+    title: 双剑觉醒·星流连斩
+    profession: warrior
+    icon: NETHERITE_SWORD
+    effect: sword_combo
+    equipment: two_swords
+    legacy: true
+    world-limit: 0
+    mana: 14
+    cooldown-seconds: 90
+    limits: {range: 3, targets: 1, power: 16, duration-seconds: 2}
+    description: 双手各持一把剑，对同一敌人进行四段连斩，总基础伤害最多十六；每段重查装备、视线、距离和资格。
+    origin: 完成传承任务 tm_twin_legacy_trial，需格挡、组队深层和两处首领层履历。
+  guardian_ward:
+    title: 守护阵
+    profession: warrior
+    icon: SHIELD
+    effect: ward
+    equipment: shield
+    mana: 7
+    cooldown-seconds: 20
+    limits: {range: 5, targets: 4, power: 4, duration-seconds: 6}
+    description: 为五格内最多四名生存玩家准备六秒护阵，各抵挡一次怪物攻击，减半且每人最多四点。
+    origin: 实际参与原版袭击并获胜后，与村庄誓约一同获得。
+  guardian_oath:
+    title: 传承·村庄誓约
+    profession: warrior
+    icon: BELL
+    effect: ward
+    equipment: shield
+    legacy: true
+    world-limit: 0
+    mana: 12
+    cooldown-seconds: 90
+    limits: {range: 8, targets: 4, power: 6, duration-seconds: 8}
+    description: 八格内最多四名队友获得八秒誓约护阵，各抵挡一次怪物攻击，减半且每人最多六点。
+    origin: 参与原版袭击并获胜，实际造成十点伤害、为队友治疗八点怪物伤量或减免四点伤害之一。
+  scout_mark:
+    title: 秘法标记
+    profession: mage
+    icon: ENDER_EYE
+    effect: mark
+    equipment: none
+    mana: 3
+    cooldown-seconds: 10
+    limits: {range: 12, targets: 1, power: 1, duration-seconds: 8}
+    description: 以秘法标记前方十二格内一名可见敌人，持续八秒显示私有原版粒子并给出绝对坐标。
+    origin: 选择法师解锁学习资格；本人或近旁队友击败仍有效的标记者才计入法师试炼。
+  scout_watch:
+    title: 秘法巡望
+    profession: mage
+    icon: SPYGLASS
+    effect: mark
+    equipment: none
+    mana: 6
+    cooldown-seconds: 20
+    limits: {range: 12, targets: 3, power: 1, duration-seconds: 12}
+    description: 同时标记前方最多三名可见敌人十二秒，私有粒子给本人及实际附身的 Eye 查看。
+    origin: 完成任务 tm_mage_trial，包含标记后的击杀、下界实地调查和返程。
+  healer_mend:
+    title: 抚愈
+    profession: priest
+    icon: GLISTERING_MELON_SLICE
+    effect: mend
+    equipment: none
+    mana: 4
+    cooldown-seconds: 8
+    limits: {range: 8, targets: 1, power: 6, duration-seconds: 1}
+    description: 治疗八格内最近一名受伤生存玩家最多六点；可在命令后指定玩家名；不会治疗旁观者。
+    origin: 选择牧师解锁学习资格；只有为其他玩家恢复真实怪物伤量才计入治疗试炼。
+  healer_cleanse:
+    title: 净化
+    profession: priest
+    icon: HONEY_BOTTLE
+    effect: cleanse
+    equipment: none
+    mana: 4
+    cooldown-seconds: 16
+    limits: {range: 1, targets: 1, power: 1, duration-seconds: 1}
+    description: 解除自身中毒与凋零；没有这些状态时不扣费。
+    origin: 选择牧师解锁学习资格。
+  healer_beacon:
+    title: 高阶圣愈术
+    profession: priest
+    icon: BEACON
+    effect: mend
+    equipment: none
+    mana: 10
+    cooldown-seconds: 24
+    limits: {range: 8, targets: 4, power: 8, duration-seconds: 1}
+    description: 按等级治疗二至四名友军，每人八至十二点；二级附短时怪物攻击减伤，三级另有一点五秒怪物攻击护佑。
+    origin: 完成任务 tm_healer_trial，需实际队友怪物伤量二十四点和组队试炼第三层。
+  mage_bolt:
+    title: 奥术飞矢
+    profession: mage
+    icon: AMETHYST_SHARD
+    effect: arcane_bolt
+    equipment: none
+    mana: 6
+    cooldown-seconds: 5
+    limits: {range: 12, targets: 1, power: 6, duration-seconds: 1}
+    description: 攻击准星前方十二格内一名可见敌人，基础伤害六；墙体阻挡，不破坏方块。
+    origin: 选择法师解锁学习资格；可直接施法、绑定原法杖或刻印原版工具。
+  mage_frost:
+    title: 霜寒束缚
+    profession: mage
+    icon: PACKED_ICE
+    effect: frost_cone
+    equipment: none
+    mana: 8
+    cooldown-seconds: 14
+    limits: {range: 5, targets: 3, power: 3, duration-seconds: 3}
+    description: 五格正面扇形最多三名可见敌人，每名基础伤害三并尝试附加三秒缓慢一；不冻住玩家和村民。
+    origin: 选择法师解锁学习资格；为战士接敌或牧师救援争取时间。
+  mage_flame:
+    title: 炎流
+    profession: mage
+    icon: BLAZE_POWDER
+    effect: flame_cone
+    equipment: none
+    mana: 9
+    cooldown-seconds: 18
+    limits: {range: 4, targets: 3, power: 4, duration-seconds: 1}
+    description: 四格正面扇形攻击最多三名可见敌人，每名基础伤害四；炎光不会点燃实体或建筑。
+    origin: 完成任务 tm_mage_trial，实际协战、调查下界并返回。

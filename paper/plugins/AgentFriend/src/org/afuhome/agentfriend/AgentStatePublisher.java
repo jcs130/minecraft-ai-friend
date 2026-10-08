@@ -118,6 +118,7 @@ final class AgentStatePublisher implements Listener {
         }
         root.add("abilities", abilities.build(player));
         root.add("equipmentEffects", DungeonGearAura.effects(player));
+        if (plugin.professions() != null) root.add("profession", plugin.professions().state(player));
         StatePayload payload = encodeBounded(root);
         if (payload == null) {
             plugin.getLogger().warning("Agent state exceeds 16384 bytes even without abilities; not sent.");

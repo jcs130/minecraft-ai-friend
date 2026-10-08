@@ -1866,7 +1866,7 @@ final class DungeonManager implements Listener {
                 && world().getBlockAt(chestX(number), Y[number - 1] + 1, chestZ(number)).getType() == Material.CHEST;
     }
     private boolean remoteStashReady(Player player) {
-        return nearStash(player) || plugin.hasMana(player, 2);
+        return nearStash(player) || plugin.professions().basicAllowed(player,"travel") && plugin.hasMana(player, 2);
     }
     private void chargeRemoteStash(Player player) {
         if (nearStash(player)) return;

@@ -28,7 +28,8 @@ final class GuildManager implements Listener {
     private static final int[] THRESHOLDS = {0, 10, 30, 70, 150, 350};
     enum Goal { FLOOR, KILLS, PARTY_FLOOR, CLAIMS, EXPLORE, DIMENSION, STRUCTURE, BIOME, RETURN, DONATE, CRAFT, FISH, PEAK, BIOME_BORDER,
             LANTERNS, ERUDITE, PRAYER_ROAD, PILGRIMAGE, FAST_FLOOR, NO_DEATH,
-            LIGHT_FLOOR, STONE_FLOOR, WITCH_KILLS, BRIDGE, ROAD, BUILD, REDSTONE }
+            LIGHT_FLOOR, STONE_FLOOR, WITCH_KILLS, BRIDGE, ROAD, BUILD, REDSTONE,
+            MELEE_KILLS, PARRY, HEALING, MARK_KILLS }
     /** 智能考核维度：0感知探索 1战斗执行 2长程规划 3社会协作 4语言理解 5约束遵守。 */
     private static final String[] DIMS = {"感知", "战斗", "规划", "协作", "语言", "约束"};
     record Contract(String id, String title, String description, Material icon,

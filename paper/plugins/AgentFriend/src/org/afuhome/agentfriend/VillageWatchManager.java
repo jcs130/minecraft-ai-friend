@@ -246,6 +246,7 @@ final class VillageWatchManager implements Listener {
     }
 
     void support(Player player, String expectedIncident) {
+        if (!plugin.professions().basicAllowed(player,"support")) { supportResult(player,false,"not_learned",null); return; }
         Threat live = snapshot();
         refresh(live, System.currentTimeMillis());
         if (player.getGameMode() != GameMode.SURVIVAL && player.getGameMode() != GameMode.ADVENTURE) {

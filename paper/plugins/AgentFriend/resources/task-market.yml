@@ -7,6 +7,66 @@
 schema-version: 1
 sites: {}
 tasks:
+  sword_arc_trial:
+    scope: personal
+    repeat: once
+    profession: warrior
+    title: 剑路初试
+    description: 用真实近战与正面格挡证明剑士基础，学会保护同行的弧光斩。
+    icon: IRON_SWORD
+    reward: {fame: 8, emeralds: 3, bonus: BREAD, bonus-count: 2}
+    steps:
+      - {title: 持剑迎敌, description: 持剑在四格内亲自击败三名不同敌人；只计真实击杀，不计查询和挥空。, goal: melee_kills, target: 3}
+      - {title: 两次有效格挡, description: 架势准备后挡住两次正面怪物近战；仅准备不算进度。, goal: parry, target: 2}
+  sword_road_trial:
+    scope: personal
+    repeat: once
+    profession: warrior
+    requires-skills: [sword_arc]
+    title: 剑士同行之路
+    description: 从独自战斗走向组队远征，学习步法斩和剑气。
+    icon: RABBIT_FOOT
+    reward: {fame: 12, emeralds: 4, bonus: GOLDEN_APPLE, bonus-count: 1}
+    steps:
+      - {title: 苔径磨剑, description: 亲自通关试炼第三层。, goal: floor, target: 1, floor: 3}
+      - {title: 海渊同行, description: 与至少一名生存队友共同通关第五层。, goal: party_floor, target: 1, floor: 5}
+  twin_legacy_trial:
+    scope: personal
+    repeat: once
+    profession: warrior
+    requires-skills: [sword_arc, sword_step]
+    title: 传承·星流双剑
+    description: 经历有效格挡、组队首领和深层首领后，获得有来历的双剑觉醒。
+    icon: NETHERITE_SWORD
+    reward: {fame: 24, emeralds: 8, bonus: DIAMOND, bonus-count: 1}
+    steps:
+      - {title: 五次化解, description: 实际挡住五次正面怪物近战；格挡架势消耗魔力。, goal: parry, target: 5}
+      - {title: 宝库同袍, description: 至少两名队友共同通关第六层首领。, goal: party_floor, target: 1, floor: 6}
+      - {title: 深层见证, description: 亲自通关第十层首领，留下不同首领层履历。, goal: floor, target: 1, floor: 10}
+      - {title: 归途磨剑, description: 亲自持剑近战击败八名不同敌人。, goal: melee_kills, target: 8}
+  healer_trial:
+    scope: personal
+    repeat: once
+    profession: priest
+    title: 灯火同行
+    description: 抚愈受怪物伤害的同伴，并一起完成试炼，学习灯火群愈。
+    icon: BEACON
+    reward: {fame: 12, emeralds: 4, bonus: HONEY_BOTTLE, bonus-count: 2}
+    steps:
+      - {title: 为同伴抚愈, description: 为其他生存玩家实际恢复二十四点近两分钟内的怪物伤量；自疗、摔伤和过量治疗不计。, goal: healing, target: 24}
+      - {title: 苔径同行, description: 至少两名生存玩家共同通关第三层。, goal: party_floor, target: 1, floor: 3}
+  mage_trial:
+    scope: personal
+    repeat: once
+    profession: mage
+    title: 法师·元素之路
+    description: 用魔法标记协助战斗，亲自调查下界并返回，学会炎流与秘法巡望。
+    icon: SPYGLASS
+    reward: {fame: 14, emeralds: 5, bonus: ARROW, bonus-count: 12}
+    steps:
+      - {title: 秘法协战, description: 八秒标记内由本人或近旁生存队友击败三名不同敌人；施法者须在三十二格内。, goal: mark_kills, target: 3}
+      - {title: 下界路线调查, description: 实际走查下界四个不同区域、至少六十四格新路线和二十秒有效行进，传送或站定不算。, goal: dimension, dimension: nether, target: 4, zone-size: 16, min-distance: 64, min-seconds: 20}
+      - {title: 带回见闻, description: 从下界实际返回主世界，再交付这段远行履历。, goal: return, dimension: overworld, target: 1}
   east_gully_bridge:
     enabled: false
     scope: project

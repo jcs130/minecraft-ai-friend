@@ -1,5 +1,9 @@
 # `/mycli`：Agent 自发现命令接口
 
+## 职业与传承（0.3.92）
+
+新增 `profession status|list|menu|choose|leave`、`skills mine|menu|prepare|unprepare`，沿用旧 `skills list|explain`。`list cast`、`explain cast.<ID>` 及 `spells` 动态发现新技能。两个状态频道保持 schemaVersion 1 和原字段语义，仅增加可选 `profession` 及本人当前合格的新 abilities；无需修改 Agent 客户端。私有回执、任务解锁、装备与魔力规则见 [职业与传承](CHARACTER_SKILLS.md)。部署状态以维护记录为准。
+
 ## 工程建筑与公共地标（0.3.91）
 
 `landmark list|mine|info|menu|publish|update|unpublish|cancel` 和 `goto landmark:<领地ID>` 已接入 CLI 图鉴。主人登记免费，成功传送 6 魔力；解析 MC_LANDMARK_RESULT 的 pending/最终回执、MC_TRAVEL 与实际位置。完整 JSON 单播 mcagent:landmark，目录逐条短消息；权限与配置见 [工程地标](PROJECT_LANDMARKS.md)。
@@ -40,3 +44,9 @@
 0.3.81 起，Agent 主动传送前需从本人 `mcagent:state.mana.current` 预留魔力：归乡、地点、公会和竞技场入口 6；队友、遗迹和深层驿站 8。`MC_DESTINATION` 只是目标坐标，成功瞬移以 `MC_TRAVEL` 和实际位置为准；失败不扣费。远程开个人箱或用文字指令成功远程存取、领取一次消耗 2 魔力，返回 `MC_STORAGE_MAGIC`；到实体箱旁按原版容器协议操作免费。详情见 [位移与远程物品操作](TRAVEL_MAGIC.md)。
 
 目录元数据在 `AgentCliCatalog.java`，实际命令派发仍在 `AgentFriendPlugin.java`、`GuildManager.java`、`DungeonManager.java` 等。新增、改名或修改行为时必须同步目录中的 ID、前提、回执说明；不要把控制台管理命令加入玩家列表。隔离服回归脚本 `plugins/AgentFriend/mycli-catalog-stage.mjs` 用 Mineflayer 检查翻页、两种 explain 写法、错误码及查询无状态副作用。客户端画面与手柄操作仍需真实客户端体验验收。
+
+## 0.3.92 技能点与职业（发布状态见维护记录）
+
+`profession choose warrior|mage|priest` 只解锁入门学习资格。`skills points/info <ID>/mine` 查询；`skills learn <ID>` 与 `upgrade <ID>` 明确花点，`prepare/unprepare` 调整四项主动和一项传承。`skills respec confirm` 默认10魔力、5分钟冷却，退回实际已花点数，保留解锁资格、唯一归属和旧施法冷却。旧基础资格保留，新玩家需学习通用技能。
+
+新增私有 `MC_SKILL_POINTS` 和 `MC_SKILL.level/maxLevel/nextPointCost/levels[]`；`MC_SKILL_UNLOCK` 表示资格，不表示免费学会。旧状态 schemaVersion 与频道保持，profession.points 为增量字段。命格书、原版学习/洗点确认菜单提供真人入口。详情见 [战法牧与技能点](CHARACTER_SKILLS.md)。

@@ -150,6 +150,7 @@ final class ViewerStatePublisher implements Listener {
             root.add("skills", skills(user));
         }
         root.add("abilities", abilities(player, user != null && user.isLoaded() ? user : null));
+        if (plugin.professions() != null) root.add("profession", plugin.professions().state(player));
         root.add("equipmentEffects", DungeonGearAura.effects(player));
         return root;
     }
@@ -197,6 +198,15 @@ final class ViewerStatePublisher implements Listener {
         Set<String> seen = new HashSet<>(Set.of("mycli:starbolt", "mycli:frostnova", "mycli:flamewave",
                 "mycli:prospect", "mycli:leap", "mycli:flight", "mycli:golem", "mycli:sense"));
         addMagicSpells(result, player, seen);
+        if (plugin.professions() != null) for (var skill : plugin.professions().skills()) {
+            if (plugin.professions().denial(player, skill, false).equals("ready"))
+                addAbility(result, "mycli:" + skill.id(), skill.title(), plugin.professions().level(player,skill.id()), plugin.professions().remaining(player, skill.id()));
+        }
+        if (plugin.professions()!=null && plugin.professions().ledger.ready()) for (int i=result.size()-1;i>=0;i--) {
+            String id=result.get(i).getAsJsonObject().get("id").getAsString(); id=id.substring(id.indexOf(':')+1);
+            if (id.startsWith("conjure_")) id="give";
+            if (SpellGuide.baseIds().contains(id) && plugin.professions().level(player,id)==0) result.remove(i);
+        }
         if (user == null) return result;
 
         var registry = AuraSkillsApi.get().getGlobalRegistry();

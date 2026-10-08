@@ -1,6 +1,6 @@
 # 千灯纪 Paper 分支开发说明
 
-- **2026-10-08 职业与传承技能方案仅完成设计：**见 [角色职业与传承](docs/CHARACTER_SKILLS_DESIGN.md)。已查正式 ag_Kirito 在线生存及现有 AuraSkills 2.4.0 / MagicSpells Beta 15。方案优先复用现有魔力与效果引擎，新增职业资格、桐人剑技及任务/事件幂等解锁，并比较 MMOCore/Fabled/BetonQuest/MythicMobs。当前正式仍 0.3.91，新职业、剑技、配置字段和命令均未实现/发放；不能将设计描述当作已上线能力。
+- **战法牧、技能点与洗点已上线（0.3.92）：**2026-10-08 16:09 已正式发布 AgentFriend **0.3.92**（759749 字节，SHA256 `10E42183647EA1B5A2C7F3E918AB15A43E1571CEEFBA8F087E8593FB051DD375`），Java PID **31092**。正常任务结果 0，E/F `20261008-160838/.complete` 在替换前完整。战士/法师/牧师共十六项技能，通用基础二十项；初始 6 点、上限 30，AuraSkills 有效累计成长每 5 级增 1 点。新学习和升级花点，洗点默认 10 魔力/300 秒，退回实际支出，保留旧资格、任务/事件解锁、传承归属及施法冷却。命格书和原版罗盘菜单显示余额、等级、费用与来源。114 个既有玩家 UUID 基础资格保留，桐人设为战士但未代购技能。正式市场 34 张/7 场地，原 29 张不变。四个原账号已回连，原机 CortiEye 实际附身；三维度普通/keepInventory=true 与 AuraSkills 本次 startup-verified 通过。规则、验证边界与回退见 [职业与传承](docs/CHARACTER_SKILLS.md)、[维护流程](docs/OPERATIONS.md)。
 
 - **工程委托与公共地标已上线（0.3.91）：**2026-10-08 13:04 已正式发布 AgentFriend **0.3.91**（676162 字节，SHA256 `ECFFB3A910E77BB9A8AAC47ED048D8B7D8FE75EA2845413BE030A34AE99039F0`），Java PID **27360**，正常备份任务结果 0，E/F `20261008-130342/.complete` 在替换前完整。BUILD 委托可用 handover 配置交接给验收完成者，主人到场登记公共地标，传送每次 6 魔力，后续内容运营无需重启。原 29 张任务/7 场地条件保留，仅观景塔和岗亭补交接政策；CortiLan 的原完工观景塔已核实历史并交接，原奖励与证据不变，塔上礼物箱单独公共，其余储物私有。公会仍归萌萌。最终同一 JAR 隔离 41、重启/下界/16Agent+Eye 13、正式只读 25 项通过；16Agent+1Eye 是受控 64 次查询，5 秒平均 MSPT 6.2，不代表长期 LLM 自主施工。13:17 最终复核 CortiLan/ag_Kirito/Goddess/CortiEye 均在线，原机 CortiEye 已恢复 camera=online、attached=true；基岩/Xbox 真机画面待验收。规则、迁移和回退见 [工程与公共地标](docs/PROJECT_LANDMARKS.md)、[维护流程](docs/OPERATIONS.md)。
 

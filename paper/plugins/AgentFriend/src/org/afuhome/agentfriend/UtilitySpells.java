@@ -83,6 +83,7 @@ final class UtilitySpells implements Listener {
     }
 
     void cast(Player player, String spell) {
+        if (!plugin.professions().basicAllowed(player,spell)) return;
         if (player.getGameMode() == GameMode.SPECTATOR) {
             player.sendMessage(ChatColor.RED + "旁观者不能施法。");
             return;

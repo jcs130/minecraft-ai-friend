@@ -97,14 +97,21 @@ final class SpellGuide {
                     "先学会：原版经验 5 级、炼金等级 2 免费，或首次通过试炼第三层。", "未学会、魔力不足或冷却中不能施放。", "无熟练度升级。", "矿洞和夜间探索前施放；观战者夜视另行设置。"));
 
     private SpellGuide() { }
-    static List<Entry> entries() { return SPELLS; }
+    static java.util.Set<String> baseIds() { return SPELLS.stream().map(Entry::id).collect(java.util.stream.Collectors.toSet()); }
+    static List<Entry> entries() {
+        List<Entry> entries = new ArrayList<>(SPELLS);
+        var plugin = org.bukkit.Bukkit.getPluginManager().getPlugin("AgentFriend");
+        if (plugin instanceof AgentFriendPlugin friend && friend.professions() != null)
+            friend.professions().skills().stream().map(ProfessionCatalog.Skill::guide).forEach(entries::add);
+        return List.copyOf(entries);
+    }
     static Entry find(String raw) {
         String id = raw.toLowerCase(Locale.ROOT).trim();
         if (id.startsWith("cast.")) id = id.substring(5);
         if (id.equals("village.support")) id = "support";
         if (id.startsWith("prospect ")) id = "prospect";
         if (id.startsWith("give ")) id = "give";
-        for (Entry entry : SPELLS) if (entry.id().equals(id)) return entry;
+        for (Entry entry : entries()) if (entry.id().equals(id)) return entry;
         return null;
     }
     static String costLine(String raw) {
@@ -141,6 +148,7 @@ final class SpellGuide {
         detail(player, String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
     }
     static void list(Player player, int page) {
+        List<Entry> SPELLS = entries();
         int pages = (SPELLS.size() + PAGE_SIZE - 1) / PAGE_SIZE;
         if (page < 1 || page > pages) { error(player, "INVALID_PAGE", "页码范围 1–" + pages); return; }
         JsonObject header = new JsonObject();
