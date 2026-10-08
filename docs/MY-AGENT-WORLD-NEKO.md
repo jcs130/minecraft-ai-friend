@@ -50,6 +50,16 @@ python tools/start_neko_trial.py --config E:\自己的部署目录\neko-trial.js
 
 首次自动创建状态目录及 `model-config.json`；后续保留该文件与调用账本，不因重启自动清空或放宽限额。`status.json` 是当前快照，`trial-events.jsonl`、`command-results.jsonl`、`native-packets.jsonl`、`model-calls.jsonl` 是私有累计证据；`process-exit.json` 记录外层回收结果。完整模组菜单与模型回复可能包含游戏隐私，不能直接上传公共仓库。
 
+## 风车任务与通用建造（2026-10-09）
+
+新增[Create 风车实机任务](MY-AGENT-WORLD-CREATE-WINDMILL.md)。工作台及机械材料都走普通玩家真实取放/合成；`native.craftRecipe` 使用服务端返回的 recipeId，处理 2×2/3×3 槽位和多堆原料。`inventory.equip/select`、`world.lookAt/place/dig` 使用本人原生 ID/完整组件与真实后置状态。Neko 摘要不再夹带整份渲染注册表，但网页继续读取完整本人状态。
+
+记忆写入等待结束，前台和摘要推理按有界队列串行；退出先等待在途模型及原生操作，停止后拒绝继续派发动作。模型调用最大可配置 1024，默认值保持 24；本轮经审计实际累计预算为 576、完成时累计 529，包含前序测试，累计账本不清零。这是本地成本边界，不是 Coding Plan 供应商额度判断。目标、真实回执进度及私有 `task-feedback.txt` 澄清固定加入每次决策，防止上游 500 字摘要遗忘任务，未知写入仍不可重投。
+
+八帆风车在 (-395,64,415) 已由普通 MawNeko 实际制作、摆放、启动，两次原生角度变化证明 1 RPM/8 帆且无卡转；供料、人工恢复和工具澄清的范围详见任务记录。表面瞄准保留真实射线/服务端限流，错误手持回执含实际状态，同参数同身体状态的已知失败三次后停止派发并提示改换方法。不能把此有限任务写成全模组、自然采集或长期无人干预均通过。
+
+原生测试启用且 chat_ingame=false 时，同时关闭长段回复的私聊输出，修复上游 private 分支无视配置而触发实际 disconnect.spam 的问题。模型回复仍保留私有本机 WebSocket/账本，不调高服务端 spam 阈值。寻路约束改在真实 spawn 后安装，覆盖两个规划入口与执行时新建 movement，显式原生建造操作继续可用。
+
 ## 实际接入链
 
 ```text
@@ -64,7 +74,7 @@ Project N.E.K.O. 的 minecraft_mod(operation, id, args, callId)
 
 Neko 自己的模型也能使用 `!modList()`、`!modExplain("id")`、`!modCall("id", "参数JSON字符串")`、`!modStatus()`、`!modResult("callId")`。命令文档会自动包含这些入口，解析器支持转义的 JSON 字符串与完整 SNBT。普通移动、战斗和采集仍使用原 Neko 工具；模组身份、完整物品组件、窗口与 CAS 通过原生接口读取，不能拿代理 player_head 或代理方块 ID 当成实际模组内容。
 
-现有 49 项原生操作中 23 项只读、26 项变更（含 menu.close）；同一本人连接注册 19 个 SDK 频道。范围包括殖民地岗位/研究/供料、女仆任务/背包、Ars 学习/编书/选槽/施法、Create 设置/过滤/流体查询、Domum 切割与 Curios 饰品。目录存在不代表任意机器、原生 GUI 或完整自主生产链都已经适配，具体限制见 [模组操作指南](MY-AGENT-WORLD-MOD-OPERATIONS.md)。
+现有 56 项原生操作中 23 项只读、33 项变更（含 menu.close）；同一本人连接注册 19 个 SDK 频道。范围包括殖民地岗位/研究/供料、女仆任务/背包、Ars 学习/编书/选槽/施法、Create 设置/过滤/流体查询、Domum 切割与 Curios 饰品，并增加通用原生配方合成、选槽、装备、注视、放置和挖掘。目录存在不代表任意机器、原生 GUI 或完整自主生产链都已经适配，具体限制见 [模组操作指南](MY-AGENT-WORLD-MOD-OPERATIONS.md)及[风车任务](MY-AGENT-WORLD-CREATE-WINDMILL.md)。
 
 ## 安装与配置
 

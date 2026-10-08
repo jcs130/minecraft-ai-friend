@@ -3,6 +3,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const { craftNativeGrid } = require('./native-crafting-client.cjs')
+const { craftNativeRecipe } = require('./recipe-crafting-client.cjs')
 
 function item (id, count, components = {}) {
   return { id, count, components: structuredClone(components), mayPickup: true,
@@ -64,6 +65,38 @@ function nativeMenu ({ type = 'minecraft:inventory', inventory = {}, inputs = { 
 }
 
 const planks = { ingredients: [{ slot: 1, id: 'minecraft:oak_log' }], outputId: 'minecraft:oak_planks', outputCount: 4 }
+
+function recipeQuery(menu, ingredients, grid, output) {
+  return {recipes:async()=>({ok:true,playerUuid:menu.state.playerUuid,recipes:[{
+    recipeId:'test:actual_recipe',type:'minecraft:crafting',serializer:'minecraft:crafting_shaped',definitionAvailable:true,
+    output,grid:{...grid,ordering:'row_major'},ingredients:ingredients.map((id,index)=>({index,empty:false,requiredCount:1,alternatives:[{id,count:1}]}))
+  }]})}
+}
+test('native recipe mapping preserves vertical patterns in both original menu widths',async()=>{
+  for(const[type,lower,source]of[['minecraft:inventory',3,36],['minecraft:crafting',4,37]]){
+    const output=item('create:shaft',8),menu=nativeMenu({type,inputs:{1:'create:andesite_alloy',[lower]:'create:andesite_alloy'},output,inventory:{[source]:item('create:andesite_alloy',2)}})
+    const query=recipeQuery(menu,['create:andesite_alloy','create:andesite_alloy'],{width:1,height:2},output)
+    const result=await craftNativeRecipe(menu,query,menu.state.playerUuid,{recipeId:'test:actual_recipe'})
+    assert.equal(result.ok,true);assert.deepEqual(result.ingredients.map(i=>i.slot),[1,lower]);assert.equal(menu.state.slots[source],null)
+    assert.equal(result.snbt,output.snbt);assert.equal(menu.state.carried,null)
+  }
+})
+test('explicit input recovery preserves complete components before the selected recipe is crafted',async()=>{
+  const output=item('minecraft:oak_planks',4),menu=nativeMenu({inventory:{36:item('minecraft:oak_log',1)}})
+  const old=item('test:unused',2,{'test:owner':'retained'});menu.state.slots[3]=old
+  const query=recipeQuery(menu,['minecraft:oak_log'],{width:1,height:1},output)
+  assert.equal((await craftNativeRecipe(menu,query,menu.state.playerUuid,{recipeId:'test:actual_recipe'})).code,'crafting_grid_not_empty')
+  assert.equal(menu.clicks.length,0)
+  const result=await craftNativeRecipe(menu,query,menu.state.playerUuid,{recipeId:'test:actual_recipe',clearInputs:true})
+  assert.equal(result.ok,true);assert.deepEqual(menu.state.slots[9],old);assert.equal(menu.state.carried,null)
+})
+test('a recipe with mismatched full output components cannot take or consume its result',async()=>{
+  const output=item('minecraft:oak_planks',4,{'test:actual':1}),menu=nativeMenu({inventory:{36:item('minecraft:oak_log',1)},output})
+  const query=recipeQuery(menu,['minecraft:oak_log'],{width:1,height:1},item('minecraft:oak_planks',4))
+  const result=await craftNativeRecipe(menu,query,menu.state.playerUuid,{recipeId:'test:actual_recipe'})
+  assert.equal(result.code,'crafting_recipe_output_components_mismatch');assert.equal(menu.clicks.some(c=>c.slot===0),false)
+  assert.equal(menu.state.slots[1].id,'minecraft:oak_log')
+})
 
 test('actual slot permission array overrides an item-shaped mayPickup hint', async () => {
   const menu = nativeMenu({ inventory: { 36: item('minecraft:oak_log', 4) } })

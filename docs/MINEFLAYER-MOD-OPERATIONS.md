@@ -307,3 +307,5 @@ async function castHeldSpellOnce (bot, mod, hotbarSlot, desiredSpellId) {
 切菜板加工可用 `use_block` 的 `intent:"process"`，带真实 `recipeId`；原生 `heldToolMatches` 和板内输入必须匹配。投料用 `intent:"load"`，取物用 `intent:"collect"`。不会自动选中刀具；薄板建议 `aimOffset:[0.5,0.03,0.5]`，交互实际 face/cursor 仍取服务端准星射线。权限拒绝且状态无变化返回失败。
 
 Create 6.0.10 的 milling/crushing/cutting/pressing/filling/emptying 有限定义已适配：导出全部 `processing.rollableResults`、单个物品原始概率、完整原生物品组件、流体数量及 codec、真实加工工作量。小麦磨粉：必得面粉1，额外两份面粉分别25%概率、种子25%概率，不能将显示用第一产物当全部结果。查询不滚随机结果。多输入、盆地、序列、动态处理器、复杂流体组件谓词仍明确拒绝；可读定义与可操作全流程分开，`executionAvailable/machineExecutionVerified/fluidHandlingAvailable` 保持 false。
+
+2026-10-09：新增通用 `native.craftRecipe`，按真实 recipeId 在本人当前 2×2/工作台 3×3 菜单制造一次，核对完整产物组件。新增 `inventory.select/equip` 与 `world.lookAt/place/dig`，供同连接 Agent 使用原生材料建造。风车的最低风帆数、运行/转速/角度/卡住和装配错误从真实 BlockEntity 读取；不能以放置或右键受理当作已开始发电。具体步骤、槽号语义与验收边界见[风车任务](MY-AGENT-WORLD-CREATE-WINDMILL.md)。

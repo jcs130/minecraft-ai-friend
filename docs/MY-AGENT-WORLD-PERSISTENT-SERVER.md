@@ -401,3 +401,19 @@ IPv4 LAN 范围和管理回环保持；旧 25565 两实例 PID 29944/31092 及 Q
 Java 本轮健康计数 error=1/warning=33（包括启动类注解警告等原始日志），Gate/worker error=0/warning=0，保留计数，不据短时就绪声称长期无故障。`allModsVerified/publicAccessReady/completeSceneParityVerified` 继续为 false，新服基岩与公网未完成。
 
 18:02 运行 `world/ops/health/health_mon.py --society`：服务、同账号原生库存/实体/YSM 数据等 11 项通过，`autonomy-active=false`，因此总 `ok=false`。这与保留历史自主暂停一致；不能把三服务 ready 改写为自主循环已恢复。原始报告为 `research/mod-operations-20261008/main-society-health.json`。
+
+## 风车任务桥更新（2026-10-09）
+
+为普通 Agent 建造任务增加真实 Create 轴承和本人已跟踪转子状态。沿原 Supervisor 执行 `windmill-maintenance-stop-20261009`，确认三子进程正常退出、端口关闭后冷备 `research/neko-windmill-20261009/cold-backup.zip`；76 文件、13,876,248 字节，重新打开 ZIP 核验 CRC、文件集合及逐文件 SHA 后才替换桥。编译目录仅作构建，未启动隔离 Java 游戏服，不能称已做隔离游玩验收。
+
+首次风车桥 SHA-256 为 `37f6741a7ddcae3e4e6f42ba1c54976441198d558e628e6080d221b4894a70b7`。其后显示修复发布的当前桥为 `5cd6436ed7a135ba0809f11816aba50d7685cc5d98433e31a2bdecdf793b4c99`，运行 JAR 与仓库锁一致。27 JAR 数量保持。两次桥均没有 assets 内容变化，冷备旧桥与新桥逐项比较相同；继续使用原 v14 资产，不修改旧导出的来源记录冒充本次重新导出。原纹理/模型源 Create JAR 保持。
+
+`windmill-maintenance-resume-20261009` 已结束维护；同 runId `7688158f77b24c65b70536d5f4d5ca3e` 的 Java 19380、Gate 29852、worker 33564 就绪。01:25 的 `--society` 仍为 11 项通过、autonomy-active=false，符合保留主 MawExplorer 自主暂停。此维护与任务的临时普通 MawNeko 连接分别管理，不重放旧未知导航或自动解除主账号暂停。
+
+独立 Neko 线上模型任务见[风车任务记录](MY-AGENT-WORLD-CREATE-WINDMILL.md)。任务进度及失败累计保留；低血量停机后单独记录一次测试角色定位和瞬时治疗，未授予 OP、无敌或机械零件。临时网页 `127.0.0.1:28990` 只在该限时进程存活时可用，不代替原常驻服务。旧 Paper/QwenPaw、路由器和公网映射未改。
+
+01:42 模型完成普通玩家风车任务；01:47 为修复已跟踪转子中心遮挡造成的渲染缺失，使用新请求 `windmill-visual-maintenance-stop-20261009` 正常停三子进程并核验全部退出 0。冷备 `research/neko-windmill-20261009/completed-windmill-cold-backup.zip`，76 文件/13,992,904 字节，CRC、文件集合及逐文件 SHA 全通过，才替换已实际编译的桥。`windmill-visual-maintenance-resume-20261009` 已成功恢复；同 runId 的 Java 32348、Gate 37824、worker 34028 全 ready。维护结束，不重放这两条旧请求。
+
+01:49 相同普通 MawNeko 重新登录，仅观察已完成任务，累计模型调用保持 529；风车同 UUID 在重启后继续转动，网页显示原帆模型。主 MawExplorer 原自主暂停和旧 unknown、五份保护文件原哈希均保持。旧 Paper 25565/宿主 8088 不在本次维护范围。
+
+01:52 最终 `--neko` 安装文件校验全通过；`--society` 11 项数据/服务检查通过，`autonomy-active=false`，总 ok=false，符合原 MawExplorer 暂停，不改成自主健康。端口复核显示旧 25565 两进程现为 33288/34088（与本轮早前观察的 PID 不同）、8088 为 19304；这些服务未纳入本次操作，不以其 PID 前后相同作验收证据。

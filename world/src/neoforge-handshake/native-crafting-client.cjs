@@ -19,7 +19,7 @@ function layoutFor (state) {
 // server computes the recipe and ItemStack; this helper never invents a result
 // or reconstructs its components. A failure leaves observable inputs/cursor in
 // place for inspection, without attempting an unknown action again or undoing it.
-async function craftNativeGrid (menu, { ingredients, outputId, outputCount = 1 } = {}) {
+async function craftNativeGrid (menu, { ingredients, outputId, outputCount = 1, expectedOutputSnbt } = {}) {
   if (!menu || typeof menu.current !== 'function' || typeof menu.click !== 'function') {
     throw new TypeError('A native menu client is required')
   }
@@ -145,6 +145,7 @@ async function craftNativeGrid (menu, { ingredients, outputId, outputCount = 1 }
     }
     const produced = state.slots[0]
     requireItem(produced, outputId, outputCount, 'crafting_result_mismatch')
+    if (expectedOutputSnbt !== undefined && produced.snbt !== expectedOutputSnbt) fail('crafting_recipe_output_components_mismatch')
     if (state.mayPickup[0] !== true) fail('crafting_result_not_pickable')
     if (!empty(state.slots[destination])) fail('output_inventory_slot_changed')
 

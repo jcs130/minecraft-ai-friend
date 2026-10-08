@@ -20,6 +20,9 @@ function fixture () {
     }
   }
   clients.mods.world = { interact: clients.world.interact }
+  clients.menu.current = () => { calls.push({id:'menu.current',args:[]}); return {ok:true,code:'native',playerUuid:owner,menuType:'minecraft:inventory',selectedHotbarSlot:0,slots:Array(46).fill(null),carried:null} }
+  clients.construction = { lookAt: clients.world.lookAt, select: clients.inventory.select, equip: clients.inventory.equip,
+    craft: clients.native.craft, craftRecipe: clients.native.craftRecipe, place: clients.world.place, dig: clients.world.dig }
   const api = attachModCallClient(bot, clients)
   return { bot, calls, clients, api }
 }
@@ -27,6 +30,13 @@ const setting = { position: pos, expectedBlockId: 'create:brass_funnel', behavio
   expectedBehaviour: 'com.simibubi.create.foundation.blockEntity.behaviour.filtering.FilteringBehaviour',
   expectedHeldSnbt: '', expectedHotbarSlot: 0 }
 const args = {
+  'world.lookAt': { position: pos }, 'inventory.select': { hotbarSlot: 0, expectedSnbt: '' },
+  'inventory.equip': { sourceSlot: 9, hotbarSlot: 1, expectedId: 'minecraft:crafting_table' },
+  'native.craft': { ingredients: [{ slot: 1, id: 'minecraft:oak_log' }], outputId: 'minecraft:oak_planks', outputCount: 4 },
+  'native.craftRecipe': { recipeId: 'minecraft:oak_planks' },
+  'world.place': { referencePosition: pos, face: { x: 0, y: 1, z: 0 }, referenceBlockId: 'minecraft:stone', referenceProperties: {},
+    hotbarSlot: 0, itemId: 'create:shaft', blockId: 'create:shaft', expectedSnbt: '{id:"create:shaft",count:1}' },
+  'world.dig': { position: pos, expectedBlockId: 'minecraft:short_grass', expectedProperties: {}, expectedHotbarSlot: 0, expectedHeldSnbt: '' },
   'world.interact': { position: pos, expectedBlockId: 'create:fluid_tank', expectedProperties: {}, expectedHeldSnbt: '', expectedHotbarSlot: 0 },
   'colony.management': { buildingPosition: pos }, 'colony.research': { buildingPosition: pos },
   'colony.assignCitizen': { buildingPosition: pos, moduleId: 2, expectedModuleKey: 'worker', citizenId: 3, assign: true, expectedAssignedCitizenIds: [] },
@@ -55,11 +65,11 @@ const args = {
   'domum.select': { selection: 'variant', groupId: 'domum_ornamentum:fpanel', variantIndex: 2, choiceSnbt: '{count:1}' },
   'collision.query': { position: pos, expectedBlockId: 'minecraft:stone', expectedProperties: {} }
 }
-test('all 49 declared operations dispatch to the exact native adapter with actual arguments', async () => {
+test('all 56 declared operations dispatch to the exact native adapter with actual arguments', async () => {
   const f = fixture()
   try {
     const list = f.api.operations()
-    assert.equal(list.operationCount, 49); assert.equal(list.remoteSupportVerified, false)
+    assert.equal(list.operationCount, 56); assert.equal(list.remoteSupportVerified, false)
     for (const row of list.operations) {
       const result = await f.api.call(row.id, args[row.id] || {})
       assert.equal(result.code, 'native'); assert.equal(f.calls.at(-1).id, row.id)
@@ -79,6 +89,21 @@ test('catalog exposes JSON schema and remains immutable to the caller', () => {
   assert.equal(modOperationCatalog(operation.id).operation.parameters.properties.inventorySlot.maximum, 35)
   assert.equal(modOperationCatalog('colony.hire').code, 'mod_operation_not_found')
 })
+
+test('interaction reports actual wrong hand and cannot dispatch after hand changes during visible aiming', async () => {
+  const f = fixture()
+  try {
+    const wrong = await f.api.call('world.interact', { ...args['world.interact'], expectedHotbarSlot: 3 })
+    assert.equal(wrong.observed.selectedHotbarSlot, 0); assert.match(wrong.hint, /inventory.select/)
+    assert.equal(f.calls.some(row => row.id === 'world.interact'), false)
+    let selected = 0
+    f.clients.menu.current = () => ({ menuType: 'minecraft:inventory', selectedHotbarSlot: selected, slots: Array(46).fill(null), carried: null })
+    f.clients.construction.lookAt = async () => { selected = 1; return { ok: true, aimOffsetUsed: [0.5, 0.1, 0.5] } }
+    const changed = await f.api.call('world.interact', args['world.interact'])
+    assert.equal(changed.code, 'native_interaction_menu_or_hand_changed')
+    assert.equal(f.calls.some(row => row.id === 'world.interact'), false)
+  } finally { f.api.detach() }
+})
 test('unknown methods and invalid, extra, other-player or overriding parameters cannot dispatch', async () => {
   const f = fixture()
   try {
@@ -89,6 +114,7 @@ test('unknown methods and invalid, extra, other-player or overriding parameters 
       ['menu.click', { slot: 1, button: 2 }], ['maid.setFollow', { maidUuid: other, follow: 1 }],
       ['domum.select', { selection: 'variant', groupId: 'domum_ornamentum:fpanel' }],
       ['domum.select', { ...args['domum.select'], state: {} }]
+      ,['world.place', { ...args['world.place'], face: { x: 1, y: 1, z: 0 } }]
     ]) {
       await assert.rejects(f.api.call(id, data), e => e.outcomeKnown && e.knownNotApplied)
     }

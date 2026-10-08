@@ -6,6 +6,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.simibubi.create.AllRecipeTypes;
 import com.simibubi.create.content.kinetics.base.KineticBlockEntity;
+import com.simibubi.create.content.contraptions.ControlledContraptionEntity;
+import com.simibubi.create.content.contraptions.bearing.WindmillBearingBlockEntity;
 import com.simibubi.create.content.kinetics.millstone.MillingRecipe;
 import com.simibubi.create.content.kinetics.millstone.MillstoneBlockEntity;
 import net.minecraft.core.BlockPos;
@@ -152,6 +154,31 @@ final class PlayerWorldBridge {
             row.add("backItem", PlayerMenuBridge.nativeItem(player, maid.getBackpackShowItem()));
             row.add("bannerItem", PlayerMenuBridge.nativeItem(player, maid.getBackpackShowItem()));
             rows.add(row);
+        }
+        return rows;
+    }
+
+    static JsonArray contraptionRenderStates(ServerPlayer player) {
+        JsonArray rows = new JsonArray();
+        int bytes = 0;
+        for (UUID uuid : TRACKED.getOrDefault(player.getUUID(), Set.of()).stream().sorted().toList()) {
+            Entity entity = player.serverLevel().getEntity(uuid);
+            // Rendering follows the entity actually tracked by this connection.
+            // Its centre can be hidden by its own bearing while sails remain
+            // visible. Java clients still receive its geometry and depth-test
+            // it; centre-point LOS would incorrectly erase the entire rotor.
+            // This is not the visibility-gated native.entity/world.look API.
+            if (!(entity instanceof ControlledContraptionEntity contraption) || !isTracked(player, entity) ||
+                    !entity.isAlive() || player.distanceTo(entity) > 32) continue;
+            if (rows.size() >= 4) break;
+            JsonObject row = PlayerWindmillState.contraption(player, contraption);
+            int size = row.toString().getBytes(StandardCharsets.UTF_8).length;
+            if (bytes + size > 24000) {
+                row.remove("blocks"); row.addProperty("available", false);
+                row.addProperty("reason", "contraption_snapshot_budget_exceeded");
+                size = row.toString().getBytes(StandardCharsets.UTF_8).length;
+            }
+            rows.add(row); bytes += size;
         }
         return rows;
     }
@@ -395,6 +422,9 @@ final class PlayerWorldBridge {
                         block.add("processing", millstone(player, machine, rotation));
                     }
                     block.add("kinetic", rotation);
+                }
+                if (entity instanceof WindmillBearingBlockEntity bearing) {
+                    block.add("windmill", PlayerWindmillState.bearing(bearing));
                 }
                 if (entity instanceof AbstractStoveBlockEntity stove) {
                     JsonObject fd = new JsonObject();

@@ -10,6 +10,7 @@ const { attachNativeWorldQuery } = require('../society-agent/native-world-query.
 const { agentToolCatalog } = require('../society-agent/tool-catalog.cjs')
 const { attachModOperationsClient } = require('./mod-operations-client.cjs')
 const { attachModCallClient } = require('./mod-call-client.cjs')
+const { attachConstructionClient } = require('./construction-client.cjs')
 
 // Framework-neutral adapters on ONE ordinary player's existing connection.
 // A local API catalog is not proof that a remote bridge or every mod is ready.
@@ -21,6 +22,7 @@ function attachModAgentClient (bot) {
     colony: attachColonyClient(bot), spell: attachSpellClient(bot),
     domum: attachDomumClient(bot), collision: attachCollisionClient(bot), mods: attachModOperationsClient(bot) }
   clients.world.interact = clients.mods.world.interact
+  clients.construction = attachConstructionClient(bot, clients.menu, clients.world, clients.native)
   let closed = false
   const calls = attachModCallClient(bot, clients, () => closed)
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

@@ -24,13 +24,14 @@ bot.once('spawn', async () => {
 })
 ```
 
-`operations()` 是实际适配器的 **48 项调用绑定**，`remoteSupportVerified=false`；目录存在不表示当前服务器、机器或角色满足条件。`operations(id)` 的未知 ID 返回 `mod_operation_not_found`。`call(id,args)` 严格核对目录参数；未知操作、额外玩家参数、非法坐标或槽位在发送前拒绝。
+`operations()` 是实际适配器的 **56 项调用绑定**，`remoteSupportVerified=false`；目录存在不表示当前服务器、机器或角色满足条件。`operations(id)` 的未知 ID 返回 `mod_operation_not_found`。`call(id,args)` 严格核对目录参数；未知操作、额外玩家参数、非法坐标或槽位在发送前拒绝。
 
 | 命名空间 | 项数 | 范围 |
 | --- | --- | --- |
-| `menu` | 2 | 本人窗口缓存、真实左右键 PICKUP |
-| `world` | 2 | 本人原生视线、可见方块的原生主手交互 |
-| `native` | 2 | 真实配方分页、已跟踪可见实体身份 |
+| `menu` | 3 | 本人窗口缓存、真实左右键 PICKUP、关闭窗口 |
+| `world` | 5 | 本人原生视线、注视、原生主手交互、普通放置与挖掘 |
+| `native` | 4 | 真实配方分页、已跟踪可见实体身份、按网格或真实 recipeId 合成 |
+| `inventory` | 2 | 选择真实快捷栏、把本人背包物品装备至空快捷栏 |
 | `colony` | 15 | 权限/蓝图/需求、建镇/小屋/供料、岗位/招聘/暂停和研究 |
 | `maid` | 7 | 本人女仆状态、任务、跟随、拾取和真实背包菜单 |
 | `spell` | 8 | 本人法术状态/说明、符文目录/学习、编书/选槽和原生施法 |
@@ -39,9 +40,9 @@ bot.once('spawn', async () => {
 | `create` | 4 | 原生数值/过滤面板、流体罐读取与修改设置 |
 | `curios` | 3 | 本人真实饰品槽、原生菜单打开与翻页 |
 
-合计 23 项只读、25 项变更。其中 `menu.current/spell.current/domum.current` 是本地缓存读取，未收到或失效时返回 `null`，不能当作远端成功。完整参数以运行时 `operations(id).operation.parameters` 为准，避免手工维护第二套参数定义。
+合计 23 项只读、33 项变更。其中 `menu.current/spell.current/domum.current` 是本地缓存读取，未收到或失效时返回 `null`，不能当作远端成功。完整参数以运行时 `operations(id).operation.parameters` 为准，避免手工维护第二套参数定义。
 
-`sdk.tools()` 仍是 Maw 身体执行器的 27 项计划描述，和上述可直接调用目录分别记录。它没有 `execute(plan)`。移动、采集、攻击、普通右键及合成/放置仍使用已有身体执行器或接入方自己的 Mineflayer 调度；`lookAtBlock` 等接收 Block/Vec3 的直接 API 不混入 JSON 调用目录。FD 料理、Create 磨粉等以真实方块交互和 `menu.click` 为底座，新增 `mod` 身体工具复用这 48 项绑定，支持 list/explain/call；`look` 控制真实朝向。并未增加所有机器的专用管理接口。
+`sdk.tools()` 仍是 Maw 身体执行器的 27 项计划描述，和上述可直接调用目录分别记录。它没有 `execute(plan)`。移动、攻击等使用已有身体执行器或接入方自己的 Mineflayer 调度；需要 Block/Vec3 的低层 API 不混入 JSON 目录。FD 料理、Create 磨粉等以真实方块交互和 `menu.click` 为底座，`mod` 身体工具复用这 56 项绑定，支持 list/explain/call。通用建造新增操作见[风车任务](MY-AGENT-WORLD-CREATE-WINDMILL.md)，没有为每台机器增加管理后门。
 
 ## 调用与实际结果
 

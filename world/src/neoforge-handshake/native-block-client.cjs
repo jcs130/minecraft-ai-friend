@@ -19,7 +19,7 @@ const sequenceByBot = new WeakMap()
 // Trust the server's private inventory snapshot, then send vanilla use-on-block
 // under this player's connection. Never retry an unknown placement automatically.
 async function placeNativeHeld (bot, menu, world, { hotbarSlot, itemId, referenceBlock, face, expectedBlockId,
-  verificationOffset = [0.5, 0.5, 0.5] }) {
+  verificationOffset = [0.5, 0.5, 0.5], expectedItemSnbt, expectedReference, onDispatch = () => {} }) {
   if (!Number.isInteger(hotbarSlot) || hotbarSlot < 0 || hotbarSlot > 8) throw new Error('INVALID_HOTBAR_SLOT')
   if (!/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(itemId) ||
       !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(expectedBlockId)) throw new Error('INVALID_REGISTRY_ID')
@@ -48,6 +48,9 @@ async function placeNativeHeld (bot, menu, world, { hotbarSlot, itemId, referenc
   if (selected?.id !== itemId || selected.count < 1) {
     return { ok: false, code: 'native_item_not_selected', selected: selected?.id || null, retryAutomatically: false }
   }
+  if (expectedItemSnbt !== undefined && selected.snbt !== expectedItemSnbt) {
+    return { ok: false, code: 'native_placement_item_changed', retryAutomatically: false }
+  }
   const target = bot.blockAt(dest)
   if (!target) return { ok: false, code: 'destination_not_loaded', retryAutomatically: false }
   if (target.name !== 'air') return { ok: false, code: 'destination_not_air', retryAutomatically: false }
@@ -55,9 +58,21 @@ async function placeNativeHeld (bot, menu, world, { hotbarSlot, itemId, referenc
   const dx = 0.5 + face.x * 0.5
   const dy = 0.5 + face.y * 0.5
   const dz = 0.5 + face.z * 0.5
+  if (expectedReference) {
+    const actual = await world.lookAtBlock(referenceBlock, [dx, dy, dz])
+    const properties = value => JSON.stringify(Object.fromEntries(Object.entries(value || {}).sort(([a], [b]) => a.localeCompare(b))))
+    if (!actual.ok || actual.block?.id !== expectedReference.id || properties(actual.block.properties) !== properties(expectedReference.properties)) {
+      return { ok: false, code: 'native_placement_reference_changed', observed: actual, retryAutomatically: false }
+    }
+    const held = menu.current()?.slots?.[36 + hotbarSlot]
+    if (held?.snbt !== selected.snbt || menu.current()?.selectedHotbarSlot !== hotbarSlot) {
+      return { ok: false, code: 'native_placement_item_changed', retryAutomatically: false }
+    }
+  }
   await bot.lookAt(referenceBlock.position.offset(dx, dy, dz), true)
   const sequence = (sequenceByBot.get(bot) || 0) + 1
   sequenceByBot.set(bot, sequence)
+  onDispatch()
   bot._client.write('block_place', { location: referenceBlock.position, direction: faceNumber,
     hand: 0, cursorX: dx, cursorY: dy, cursorZ: dz, insideBlock: false, sequence })
 

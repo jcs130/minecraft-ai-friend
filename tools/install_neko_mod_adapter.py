@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import subprocess
 from datetime import datetime, timezone
@@ -55,6 +56,24 @@ def plan_neko(repo: Path) -> dict[str, tuple[str | None, str]]:
         ("import * as skills from '../library/skills.js';", "import { nativeActions } from '../../integrations/maw_native.js';\nimport * as skills from '../library/skills.js';"),
         ("export const actionsList = [", "export const actionsList = [\n    ...nativeActions,"),
     ])
+    patch("src/agent/library/world.js", [
+        ("return mc.getAllBiomes()[biomeId].name;",
+         "const biome = (bot?.mawNative ? bot.registry?.biomes : mc.getAllBiomes())?.[biomeId];\n    return typeof biome?.name === 'string' ? biome.name : 'unavailable (biome registry not received)';"),
+    ])
+    name = "src/agent/agent.js"
+    before = original(repo, NEKO_REV, name)
+    start = before.index("    async handleMessage(")
+    end = before.index("    async routeResponse(", start)
+    method = before[start:end]
+    # Upstream otherwise starts asynchronous memory summarization without
+    # waiting, racing the next foreground request and losing task context.
+    method = re.sub(r"(?<!await )this\.history\.add\(", "await this.history.add(", method)
+    after = before[:start] + method + before[end:]
+    # The upstream private-chat branch ignores chat_ingame. Long model thoughts
+    # became dozens of /msg packets and triggered vanilla disconnect.spam.
+    after = replace_once(after, "            for (let username of settings.only_chat_with) {\n                try { this.bot.whisper(username, message); }",
+                         "            for (let username of (settings.chat_ingame || !process.env.MAW_NEKO_ADAPTER_FILE ? settings.only_chat_with : [])) {\n                try { this.bot.whisper(username, message); }")
+    planned[name] = (before, after)
     name = "src/agent/commands/index.js"
     before = original(repo, NEKO_REV, name)
     after = before
@@ -205,10 +224,14 @@ def main() -> None:
         owned = [SOURCE / name for name in ("native-runtime.cjs", "neko-native.js", "native-inventory.cjs", "native-presentation.cjs", "codingplan-model.js", "codingplan-bridge.cjs", "project-neko/native_mod.py", "mc-agent-neko.package-lock.json")]
         owned += [Path(__file__).resolve(), ROOT / "world/src/neoforge-handshake/mod-agent-client.cjs",
                   ROOT / "world/src/neoforge-handshake/mod-call-client.cjs", ROOT / "world/src/neoforge-handshake/menu-client.cjs",
+                  ROOT / "world/src/neoforge-handshake/construction-client.cjs",
+                  ROOT / "world/src/neoforge-handshake/recipe-crafting-client.cjs",
+                  ROOT / "world/src/neoforge-handshake/native-block-client.cjs", ROOT / "world/src/neoforge-handshake/native-crafting-client.cjs",
+                  SOURCE / "windmill-task.cjs", SOURCE / "task-navigation.cjs", SOURCE / "task-context.cjs", SOURCE / "task-attempts.cjs",
                   ROOT / "tools/run_neko_trial.mjs", ROOT / "tools/start_neko_trial.py", ROOT / "tools/probe_neko_gui.py", ROOT / "world/src/society-agent/action-deadline.cjs"]
         record = {"schemaVersion": 1, "at": datetime.now(timezone.utc).isoformat(),
                   "mcAgentNekoRevision": NEKO_REV, "projectNekoRevision": PROJECT_REV,
-                  "tool": "minecraft_mod", "operationCount": 49, "samePlayerConnection": True,
+                  "tool": "minecraft_mod", "operationCount": 56, "samePlayerConnection": True,
                   "automaticReplay": False, "pluginMessageBroadcast": False,
                   "runtimeObservation": "not_checked", "allModsVerified": False, "publicAccessReady": False,
                   "files": [{"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for p in installed + owned]}

@@ -12,9 +12,10 @@ function append (file, value) {
 }
 class CodingPlanBridge {
   constructor ({ journalPath, maxCalls = 24, minIntervalMs = 4000, apiKey, fetchImpl = globalThis.fetch, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
-    if (!path.isAbsolute(journalPath || '') || !apiKey || !Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > 64 || minIntervalMs < 0) throw Error('NEKO_TRIAL_CONFIG_INVALID')
+    if (!path.isAbsolute(journalPath || '') || !apiKey || !Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > 1024 || minIntervalMs < 0) throw Error('NEKO_TRIAL_CONFIG_INVALID')
     this.file = journalPath; this.maxCalls = maxCalls; this.interval = minIntervalMs
     this.key = apiKey; this.fetch = fetchImpl; this.sleep = sleep; this.busy = false; this.last = 0
+    this.tail = Promise.resolve(); this.pending = 0; this.closed = false
     fs.mkdirSync(path.dirname(journalPath), { recursive: true })
     if (fs.existsSync(journalPath) && fs.statSync(journalPath).size > 16 * 1024 * 1024) throw Error('NEKO_MODEL_JOURNAL_TOO_LARGE')
     const lines = fs.existsSync(journalPath) ? fs.readFileSync(journalPath, 'utf8').split('\n').filter(Boolean).map(JSON.parse) : []
@@ -22,8 +23,22 @@ class CodingPlanBridge {
     const finished = new Set(lines.filter(row => row.kind === 'result').map(row => row.requestId))
     this.blocked = lines.some(row => row.kind === 'intent' && !finished.has(row.requestId)) || lines.some(row => row.kind === 'halt')
   }
-  status () { return { provider: 'aliyun-codingplan-direct', model: 'qwen3.7-plus', calls: this.count, maxCalls: this.maxCalls, inFlight: this.busy, blocked: this.blocked } }
+  status () { return { provider: 'aliyun-codingplan-direct', model: 'qwen3.7-plus', calls: this.count, maxCalls: this.maxCalls,
+    inFlight: this.busy || this.pending > 0, queuedCalls: Math.max(0, this.pending - (this.busy ? 1 : 0)), blocked: this.blocked, closed: this.closed } }
+  close () { this.closed = true }
   async request (turns, systemMessage) {
+    if (this.closed) throw Error('NEKO_MODEL_CONNECTION_CLOSED')
+    if (this.pending >= 8) throw Error('NEKO_MODEL_QUEUE_FULL')
+    const input = structuredClone(turns), previous = this.tail
+    let release
+    this.tail = new Promise(resolve => { release = resolve }); this.pending++
+    try {
+      await previous
+      if (this.closed) throw Error('NEKO_MODEL_CONNECTION_CLOSED')
+      return await this.requestNow(input, systemMessage)
+    } finally { this.pending--; release() }
+  }
+  async requestNow (turns, systemMessage) {
     if (this.blocked) throw Error('NEKO_MODEL_RECONCILIATION_REQUIRED')
     if (this.busy) throw Error('NEKO_MODEL_BUSY')
     if (this.count >= this.maxCalls) throw Error('NEKO_TRIAL_MODEL_BUDGET_REACHED')

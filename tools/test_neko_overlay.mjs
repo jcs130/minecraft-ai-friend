@@ -4,9 +4,15 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 const root = path.resolve(process.argv[2]);
 const load = relative => import(pathToFileURL(path.join(root, relative)).href);
+const { Agent } = await load('src/agent/agent.js');
 const commands = await load('src/agent/commands/index.js');
 const { ActionManager } = await load('src/agent/action_manager.js');
 const { wsServer } = await load('src/websocket/ws_server.js');
+const world = await load('src/agent/library/world.js');
+assert.equal(world.getBiomeName({mawNative:{},world:{getBiome:()=>9999},entity:{position:{}},
+    registry:{biomes:{9999:{name:'example:modded_biome'}}}}),'example:modded_biome');
+assert.equal(world.getBiomeName({mawNative:{},world:{getBiome:()=>9999},entity:{position:{}},
+    registry:{biomes:{}}}),'unavailable (biome registry not received)');
 let calls = [];
 const agent = {blocked_actions: [], bot: {mawNative: {bindAgent() {}, bodyBlocked: () => false,
     async request(message) {calls.push(message); return {ok: true, id: message.id, args: message.args};}}}};
@@ -49,8 +55,22 @@ wsServer.handleMessage({type: 'native_mod', schemaVersion: 1, requestId: 'check'
 await new Promise(resolve => setImmediate(resolve));
 // Disabled adapter is a private, explicit rejection, never game chat or broadcast.
 assert.equal(own[0].code, 'native_adapter_not_enabled'); assert.equal(other.length, 0);
+const { setSettings } = await load('src/agent/settings.js');
+setSettings({ only_chat_with: ['admin'], chat_ingame: false, language: 'en' });
+const whispers = [], chatAgent = { bot: { whisper: (...args) => whispers.push(args) } };
+const priorAdapter = process.env.MAW_NEKO_ADAPTER_FILE;
+process.env.MAW_NEKO_ADAPTER_FILE = 'offline-native-test';
+const broadcastResponse = wsServer.broadcastAgentResponse;
+wsServer.broadcastAgentResponse = () => {};
+await Agent.prototype.openChat.call(chatAgent, 'reasoning '.repeat(1000));
+assert.equal(whispers.length, 0, 'native chat_ingame=false must suppress private as well as public chat');
+delete process.env.MAW_NEKO_ADAPTER_FILE;
+await Agent.prototype.openChat.call(chatAgent, 'normal non-native private reply');
+assert.equal(whispers.length, 1, 'unconfigured upstream private chat is preserved');
+if (priorAdapter !== undefined) process.env.MAW_NEKO_ADAPTER_FILE = priorAdapter;
+wsServer.broadcastAgentResponse = broadcastResponse;
 console.log(JSON.stringify({ok: true, registeredCommands: 5, nativeJsonEscaping: true,
-    parserAndMultiCommand: true, bodyGuard: true, privateSocketRoute: true, nativeInventory: true, modelCalls: 0}));
+    parserAndMultiCommand: true, bodyGuard: true, privateSocketRoute: true, nativeInventory: true, nativeChatSuppression: true, modelCalls: 0}));
 // Upstream imports install housekeeping timers even without Agent.start().
 // This is a bounded offline test, with no Minecraft/WebSocket connection.
 process.exit(0);

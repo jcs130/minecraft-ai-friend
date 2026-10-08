@@ -22,10 +22,52 @@ const domumSelection = { ...object({ selection: { type: 'string', enum: ['group'
 // Explicit bindings, not dynamic property traversal or a remote eval endpoint.
 // These are the actual low-level APIs. Maw's body-plan descriptors are separate.
 const definitions = [
-  ['world.interact', false, '本人实际主手右键近处可见方块，调用原生 useItemOn；组件/方块状态 CAS，接受交互后仍须观察效果。',
+  ['world.lookAt', false, '转动本人视角，读取绝对坐标处首个实际可见方块及原生机器状态；不移动、不穿墙读取。',
+    object({ position, aimOffset }, ['position']), (c, a) => c.construction.lookAt(a)],
+  ['inventory.select', false, '选择本人快捷栏索引 0–8（原生菜单槽 36–44）。expectedId 为空手用 minecraft:air；可选 expectedSnbt 进一步限定组件。内部始终核对完整原生 SNBT。须关闭菜单、清空光标。',
+    object({ hotbarSlot: integer(0, 8), expectedId: namespace, expectedSnbt: { type: 'string', maxLength: 65536 } }, ['hotbarSlot']), (c, a) => c.construction.select(a)],
+  ['inventory.equip', false, '将本人 inventory 菜单 sourceSlot 的整堆物品移动到空快捷栏 hotbarSlot(0–8)并持有。sourceSlot 是实际菜单槽号：1–4 合成输入、9–35 背包、36–44 快捷栏；绝不是快捷栏索引。以 expectedId 核对来源，内部逐次使用完整 SNBT CAS；不会扔掉/替换已有快捷栏物品。',
+    object({ sourceSlot: integer(1, 44), hotbarSlot: integer(0, 8), expectedId: namespace, expectedSnbt: snbt }, ['sourceSlot', 'hotbarSlot', 'expectedId']), (c, a) => c.construction.equip(a)],
+  ['native.craft', false, '在本人真实 2×2/工作台 3×3 网格合成一次，原生取放且核验产物完整组件。先查询 native.recipes，ingredients.slot 为网格 1–4/1–9；一次产物完整入背包。',
+    object({ ingredients: { type: 'array', minItems: 1, maxItems: 9, items: object({ slot: integer(1, 9), id: namespace, count: integer(1, 64) }, ['slot', 'id']) },
+      outputId: namespace, outputCount: integer(1, 64) }, ['ingredients', 'outputId', 'outputCount']), (c, a) => c.construction.craft(a)],
+  ['world.place', false, '用本人快捷栏真实物品放一格，核对手持完整 SNBT、支撑块原生 ID/全部属性、实际消耗与放置后方块。referencePosition 是支撑格绝对坐标，face 为单轴单位向量，blockId 为期望产物。须先关闭菜单；不自动移动/重试。',
+    object({ referencePosition: position, face: position, referenceBlockId: namespace,
+      referenceProperties: { type: 'object', properties: {}, additionalProperties: { type: 'string', maxLength: 256 } },
+      hotbarSlot: integer(0, 8), itemId: namespace, blockId: namespace, expectedSnbt: snbt, verificationOffset: aimOffset },
+      ['referencePosition', 'face', 'referenceBlockId', 'referenceProperties', 'hotbarSlot', 'itemId', 'blockId']), (c, a) => c.construction.place(a)],
+  ['native.craftRecipe', false, '按 native.recipes 返回的真实 recipeId 合成一次；自动映射当前 2×2/3×3 网格，选择已有材料并核对真实输出完整组件。须先打开所需工作台。clearInputs:true 显式把旧合成输入归还空背包格；不丢物、不制造成品、不重试。',
+    object({ recipeId: namespace, clearInputs: { type: 'boolean' } }, ['recipeId']), (c, a) => c.construction.craftRecipe(a)],
+  ['world.dig', false, '挖掘本人可见近处单格，核对原生方块/全部属性、工具完整组件及服务器移除证据。不会自动拾取、不挖邻格；未知结果停止变更。',
+    object({ position, aimOffset, expectedBlockId: namespace, expectedProperties: { type: 'object', properties: {}, additionalProperties: { type: 'string', maxLength: 256 } },
+      expectedHotbarSlot: integer(0, 8), expectedHeldSnbt: { type: 'string', maxLength: 65536 } },
+      ['position', 'expectedBlockId', 'expectedProperties', 'expectedHotbarSlot', 'expectedHeldSnbt']), (c, a) => c.construction.dig(a)],
+  ['world.interact', false, '本人实际主手右键可见近处方块；自动以本人完整手持 SNBT 作 CAS，可显式 expectedHeldSnbt 限定。空手 SNBT 是空字符串，不是空气物品。接受交互仍须观察效果。',
     object({ position, aimOffset, expectedBlockId: namespace, expectedProperties: { type: 'object', properties: {}, additionalProperties: { type: 'string', maxLength: 256 } },
       expectedHeldSnbt: { type: 'string', maxLength: 60000 }, expectedHotbarSlot: integer(0, 8), requestId },
-      ['position', 'expectedBlockId', 'expectedProperties', 'expectedHeldSnbt', 'expectedHotbarSlot']), (c, a) => c.mods.world.interact(a)],
+      ['position', 'expectedBlockId', 'expectedProperties', 'expectedHotbarSlot']), async (c, a) => {
+        const checkHand = () => {
+          const state = c.menu.current()
+          if (state?.menuType !== 'minecraft:inventory' || state.carried || state.selectedHotbarSlot !== a.expectedHotbarSlot) return {
+            ok: false, code: 'native_interaction_menu_or_hand_changed', outcomeKnown: true, outcomeUnknown: false,
+            observed: { menuType: state?.menuType ?? null, selectedHotbarSlot: state?.selectedHotbarSlot ?? null,
+              carried: state?.carried ?? null, held: state?.slots?.[36 + state.selectedHotbarSlot] ?? null },
+            hint: 'menu.click moves inventory items; inventory.select changes the held hotbar index. Close other menus and empty the cursor first.' }
+          return null
+        }
+        const rejected = checkHand()
+        if (rejected) return rejected
+        let offset = a.aimOffset
+        if (!offset) {
+          const visible = await c.construction.lookAt({ position: a.position })
+          if (!visible.ok) return { ...visible, outcomeKnown: true, outcomeUnknown: false, interactionDispatched: false }
+          offset = visible.aimOffsetUsed ?? [0.5, 0.5, 0.5]
+        }
+        const changed = checkHand()
+        if (changed) return changed
+        const state = c.menu.current()
+        return c.mods.world.interact({ ...a, aimOffset: offset, expectedHeldSnbt: a.expectedHeldSnbt ?? state.slots[36 + a.expectedHotbarSlot]?.snbt ?? '' })
+      }],
   ['colony.management', true, '在小屋旁查询实际岗位/住房模块、居民及 CAS；需本城镇成员。',
     object({ buildingPosition: position, requestId }, ['buildingPosition']), (c, a) => c.colony.management(a)],
   ['colony.assignCitizen', false, '按模块完整居民列表 CAS 原生雇用/解雇或安排住房；跨建筑先解除原岗位。',
@@ -143,7 +185,8 @@ function validate (value, schema, path = 'args') {
   const bad = () => { throw failure('MOD_CALL_ARGUMENT_INVALID', { field: path }) }
   if (schema.type === 'object') {
     if (!value || Array.isArray(value) || typeof value !== 'object') bad()
-    if ((schema.required || []).some(k => !Object.hasOwn(value, k))) bad()
+    const missing = (schema.required || []).filter(k => !Object.hasOwn(value, k))
+    if (missing.length) throw failure('MOD_CALL_ARGUMENT_INVALID', { field: path, missingFields: missing })
     for (const [key, item] of Object.entries(value)) {
       const child = Object.hasOwn(schema.properties, key) ? schema.properties[key] : schema.additionalProperties
       if (!child || child === false) throw failure('MOD_CALL_ARGUMENT_UNSUPPORTED', { field: `${path}.${key}` })
@@ -167,7 +210,8 @@ function validate (value, schema, path = 'args') {
   if (schema.enum && !schema.enum.includes(value)) bad()
 }
 function modOperationCatalog (id) {
-  const rows = definitions.map(({ invoke, ...d }) => structuredClone(d))
+  const rows = definitions.map(({ invoke, ...d }) => ({ ...structuredClone(d),
+    invocation: { command: '!modCall', idArgument: d.id, argsArgument: 'JSON-encoded string matching parameters; operation IDs are not !commands' } }))
   if (id !== undefined) {
     const operation = rows.find(d => d.id === id)
     return operation ? { ok: true, schemaVersion: 1, operation, readOnly: true } :
@@ -184,8 +228,10 @@ function validateModArguments (id, args = {}) {
   safeJson(args)
   if (Buffer.byteLength(JSON.stringify(args), 'utf8') > 65536) throw failure('MOD_CALL_ARGUMENT_BUDGET_EXCEEDED')
   validate(args, definition.parameters)
+  if (id === 'inventory.select' && !Object.hasOwn(args, 'expectedId') && !Object.hasOwn(args, 'expectedSnbt')) throw failure('MOD_CALL_SELECTION_ID_REQUIRED')
   if (id === 'domum.select' && args.selection === 'variant' &&
       (!Object.hasOwn(args, 'variantIndex') || !Object.hasOwn(args, 'choiceSnbt'))) throw failure('MOD_CALL_VARIANT_PARAMETERS_REQUIRED')
+  if (id === 'world.place' && (Object.values(args.face).reduce((sum, value) => sum + Math.abs(value), 0) !== 1)) throw failure('MOD_CALL_BLOCK_FACE_INVALID')
   return true
 }
 

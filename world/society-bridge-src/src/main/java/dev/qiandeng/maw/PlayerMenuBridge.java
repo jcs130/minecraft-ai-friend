@@ -231,6 +231,7 @@ final class PlayerMenuBridge {
         self.add("motion", PlayerRenderMotion.snapshot(player));
         state.add("self", self);
         state.add("entityRenderStates", PlayerWorldBridge.maidRenderStates(player));
+        state.add("contraptionRenderStates", PlayerWorldBridge.contraptionRenderStates(player));
         String menuType;
         int menuTypeId;
         try {
