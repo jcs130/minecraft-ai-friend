@@ -28,5 +28,6 @@
   "releaseGate": "Afu-MC-DailyBackup; no human player or active dungeon; E/F complete full backup before JAR replacement",
   "agentClientChanges": false,
   "includesSourceFeaturesFrom": "0.3.93",
-  "rollback": "preserve physical overflow chests, goods and public land rules; old plugin needs manual original-chest headroom"
+  "rollback": "preserve physical overflow chests, goods and public land rules; old plugin needs manual original-chest headroom",
+  "currentMaintenanceBlock": "unverified_online_account:ag_NEKO"
 }
