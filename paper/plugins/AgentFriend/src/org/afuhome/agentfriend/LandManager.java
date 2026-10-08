@@ -480,7 +480,10 @@ final class LandManager implements Listener {
             if (denied != null) { e.setCancelled(true); deny(e.getPlayer(), "container", denied.at(), denied.land()); return; }
         }
         String action = e.getAction() == Action.PHYSICAL ? "place" : b.getState() instanceof BlockInventoryHolder ? "container" : "use";
-        if (e.getItem() != null) {
+        // Ordinary right-click opens a container even while holding an axe, hoe, or shovel.
+        // Sneaking still uses the held item, so retain the block-modification checks there.
+        boolean opensContainer = b.getState() instanceof BlockInventoryHolder && !e.getPlayer().isSneaking();
+        if (e.getItem() != null && !opensContainer) {
             String type = e.getItem().getType().name();
             if (type.endsWith("_AXE") || type.endsWith("_HOE") || type.endsWith("_SHOVEL")
                     || List.of("BONE_MEAL", "HONEYCOMB", "FLINT_AND_STEEL", "FIRE_CHARGE", "SHEARS", "BRUSH").contains(type)) action = "place";

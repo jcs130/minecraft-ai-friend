@@ -133,6 +133,14 @@ final class AgentCliCatalog {
         add(specs,"locate.off","team","write","/mycli locate off","停止追踪队友","在线玩家","停止结果");
         add(specs,"locate.tp","team","teleport","/mycli locate tp <玩家名|nearest>","安全传送到队友附近","队友在线可见；8 魔力、20 秒冷却；有安全落点","成功后 MC_TRAVEL 与绝对坐标；失败不扣费");
         add(specs,"arena.status","adventure","read","/mycli arena status","查看本人参赛身份、全服试炼进度和入口/楼层绝对坐标","在线玩家","MC_DUNGEON status 的 participant/selfState 与全服状态分开");
+        add(specs,"dungeon.list","adventure","read","/mycli dungeon list|info <ID>|status [ID]","发现不同地点的建筑地下城、真实房间坐标与本人进度","只读免费；info 指明首室深度和逐室路线","私有 MC_SITE_DUNGEON_LIST/ITEM/INFO/STATE JSON，schemaVersion=1");
+        add(specs,"dungeon.travel","adventure","teleport","/mycli dungeon travel <ID>","前往已勘察的入口或外围；沿建筑道路深入首室","8魔力、基础传送资格；不能在试炼/PvP/另一地下城内使用","沿用 MC_TRAVEL 成功回执；抵达入口不计完成");
+        add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","在真实建筑首室发起挑战，其他地点可同时开队","生存角色亲自到首室，未参加其他活动；10秒集结、每队最多8人","MC_SITE_DUNGEON_RESULT；逐室清怪、返回首室才登记奖励；无自动免费位移");
+        add(specs,"dungeon.join","adventure","write","/mycli dungeon join <ID>","主动加入该处正在集结的队伍","亲自站在首室，发起后10秒内加入，未参加其他活动","MC_SITE_DUNGEON_RESULT；每室清场须在场，最后返回首室");
+        add(specs,"dungeon.leave","adventure","write","/mycli dungeon leave","退出自己的遗迹挑战，留在原地","只影响本人；未登记的奖励不发放","MC_SITE_DUNGEON_RESULT；队伍空后清理该队标记怪");
+        add(specs,"dungeon.resume","adventure","write","/mycli dungeon resume","在存储或房间出怪问题解决后重试暂停的挑战","须为该队成员；失败不清场、不发奖、不自动连续刷怪","MC_SITE_DUNGEON_RESULT；status 的 fault 说明暂停原因");
+        add(specs,"dungeon.claim","adventure","item","/mycli dungeon claim [ID]","把完整探索凭据结算到个人奖励箱","每处上海日期每日奖励一次；队列满保留凭据，可重试","MC_SITE_DUNGEON_RESULT success/reason；结算与去重在同一原子配置写入");
+        add(specs,"dungeon.menu","adventure","gui","/mycli dungeon menu","选择不同地点的地下城、路线、难度和组队","Java/基岩共用原版箱式菜单；地点罗盘有入口","普通箱式菜单；点击详情不会自动开始或传送");
         add(specs,"pvp.status","adventure","read","/mycli pvp status","本人积分、胜负、匹配及对手状态和大厅绝对坐标","在线玩家","本人 MC_PVP JSON");
         add(specs,"pvp.join","adventure","write","/mycli pvp join","传送入场并匹配；第二人加入后自动倒数","非旁观者、未在试炼中；6 魔力；原物品先安全暂存","本人 MC_PVP action=join 与成功后 MC_TRAVEL");
         add(specs,"pvp.leave","adventure","write","/mycli pvp leave","退出排队或认输；还原原物品与位置","已排队或正在比赛","本人 MC_PVP 与 MC_PVP_RESULT");

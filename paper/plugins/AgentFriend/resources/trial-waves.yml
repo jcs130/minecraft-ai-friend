@@ -1,0 +1,33 @@
+schema-version: 1
+# Every entry is a native enemy. Twelve per floor is the hard limit.
+# Floors not listed keep their existing deep-wing encounters; floor 7 stays a rest stop.
+floors:
+  '1':
+    - {type: WITCH, count: 2, health: 30}
+    - {type: SKELETON, count: 2, health: 24}
+    - {type: ZOMBIE, count: 2, health: 28}
+  '2':
+    - {type: WITCH, count: 2, health: 34}
+    - {type: PILLAGER, count: 2, health: 30}
+    - {type: HUSK, count: 2, health: 32}
+    - {type: CAVE_SPIDER, count: 1, health: 20}
+  '3':
+    - {type: WITCH, count: 2, health: 36}
+    - {type: STRAY, count: 3, health: 30}
+    - {type: VINDICATOR, count: 1, health: 48, name: 霜墓执斧者}
+    - {type: WITHER_SKELETON, count: 1, health: 36}
+  '4':
+    - {type: WITCH, count: 2, health: 38}
+    - {type: BLAZE, count: 3, health: 32}
+    - {type: WITHER_SKELETON, count: 2, health: 40}
+    - {type: MAGMA_CUBE, count: 1, health: 16}
+  '5':
+    - {type: WITCH, count: 3, health: 40}
+    - {type: DROWNED, count: 2, health: 36}
+    - {type: STRAY, count: 2, health: 34}
+    - {type: VINDICATOR, count: 1, health: 56, name: 海晶守门人}
+  '6':
+    - {type: WITCH, count: 3, health: 42}
+    - {type: PILLAGER, count: 2, health: 36}
+    - {type: WITHER_SKELETON, count: 2, health: 44}
+    - {type: RAVAGER, count: 1, health: 110, name: 宝库破阵兽}

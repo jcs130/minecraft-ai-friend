@@ -277,6 +277,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         dailyBoard = new DailyBoardManager(this);
         taskMarket = new TaskMarketManager(this);
         playerContracts = new PlayerContracts(this);
+        siteDungeons = new SiteDungeonManager(this);
         soulboundGear = new SoulboundGear(this);
         getServer().getPluginManager().registerEvents(soulboundGear, this);
         dungeonGearAura = new DungeonGearAura(this);
@@ -301,6 +302,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (siteDungeons != null) siteDungeons.shutdown();
         if (playerContracts != null) playerContracts.shutdown();
         if (professions != null) professions.shutdown();
         if (lands != null) lands.stop();
@@ -367,13 +369,17 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     Player attachedEye(Player player) {
         return playerNameTags == null ? null : playerNameTags.attachedEye(player);
     }
-    boolean dungeonParticipant(Player player) { return dungeon != null && dungeon.isParticipant(player); }
+    private SiteDungeonManager siteDungeons;
+    SiteDungeonManager siteDungeons() { return siteDungeons; }
+    boolean dungeonParticipant(Player player) { return dungeon != null && dungeon.isParticipant(player)
+            || siteDungeons != null && siteDungeons.isParticipant(player); }
     boolean pvpParticipant(Player player) { return pvpArena != null && pvpArena.inMatch(player); }
     boolean namedTravelBlocked(Player player) {
         return dungeonParticipant(player) || pvpArena != null && pvpArena.blocksNamedTravel(player);
     }
     boolean namedTravelActivityArea(Location at) {
-        return arenaBuilt && inBuild(at) || pvpArena != null && pvpArena.namedTravelArea(at);
+        return arenaBuilt && inBuild(at) || pvpArena != null && pvpArena.namedTravelArea(at)
+                || siteDungeons != null && siteDungeons.activityArea(at);
     }
     void refreshAgentState(Player player) { if (agentStatePublisher != null) agentStatePublisher.afterCast(player); }
     void openPvpMenu(Player player) { openMenu(player, "pvp"); }
@@ -812,11 +818,24 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             else pvpArena.build(sender);
             return true;
         }
+        if (args.length == 3 && args[0].equalsIgnoreCase("admin")
+                && Set.of("dungeons", "trialwaves").contains(args[1].toLowerCase(Locale.ROOT))) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台热更新地下城配置。"); return true;
+            }
+            if (!Set.of("reload", "audit").contains(args[2].toLowerCase(Locale.ROOT))) {
+                sender.sendMessage("用法：mycli admin dungeons|trialwaves reload|audit"); return true;
+            }
+            if (args[1].equalsIgnoreCase("dungeons")) siteDungeons.admin(sender, args[2].toLowerCase(Locale.ROOT));
+            else dungeon.waveConfig(sender, args[2].equalsIgnoreCase("reload"));
+            return true;
+        }
         if (args.length == 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("dungeonaudit")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
                 sender.sendMessage("只允许服务器控制台检查试炼怪物。"); return true;
             }
             dungeon.audit(sender);
+            siteDungeons.audit(sender);
             return true;
         }
         if ((args.length == 3 || args.length == 4) && args[0].equalsIgnoreCase("admin")
@@ -984,6 +1003,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 else arenaCommand(player, args);
             }
             case "pvp", "duel", "决斗" -> pvpArena.command(player, args);
+            case "dungeon", "地下城" -> siteDungeons.command(player, args);
             case "guild", "公会", "工会" -> guild.command(player, args);
             case "commission", "commissions", "玩家委托" -> playerContracts.command(player,args);
             case "life", "生活" -> lifeGuild.command(player, args);
@@ -2122,6 +2142,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(23, item(Material.BELL, "§b支援传送术", "重查村庄敌情，直达活敌人附近", "8 魔力；20 秒冷却"));
             inv.setItem(24, item(Material.MAP, "§b大家分享的传送点", "探索者主动分享的地点；传送 6 魔力"));
             inv.setItem(25, item(Material.LODESTONE, "§6公共地标与建筑", "查看建造者管理的公共建筑；传送 6 魔力", "主人可登记安全落点，免费公开或撤回"));
+            inv.setItem(26, item(Material.WITHER_SKELETON_SKULL, "§6遗迹地下城", "不同地点独立组队，逐室清怪与精英战", "真实建筑；可看路线、加入挑战、领取个人奖励"));
             if (dungeon.isExpanded()) inv.setItem(17, item(Material.CAMPFIRE, "§6深层驿站", "通关第六层后解锁直达；8 魔力", "工作台、商人和深层首领战"));
             if (dungeon.isBuilt()) {
                 inv.setItem(18, item(Material.WOODEN_SWORD, "§a普通试炼", "适合第一次挑战；到入口按按钮确认并开始"));
@@ -2385,6 +2406,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 23 -> villageWatch.support(p, null);
                     case 24 -> waypoints.open(p, "shared", 1);
                     case 25 -> landmarks.open(p, false, 1);
+                    case 26 -> siteDungeons.command(p, new String[]{"dungeon", "menu"});
                     case 22 -> openMenu(p, "skills");
                     default -> PUBLIC_PLACES.stream().filter(place -> place.slot() == slot).findFirst()
                             .ifPresent(place -> gotoPlace(p, place.id()));
@@ -2715,6 +2737,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) event.blockList().removeIf(b -> inBuild(b.getLocation()));
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (args.length == 2 && args[0].equalsIgnoreCase("dungeon")) return List.of("list", "info", "travel", "start", "join", "status", "resume", "leave", "claim", "menu");
+        if (args.length == 3 && args[0].equalsIgnoreCase("dungeon")) return siteDungeons.ids();
+        if (args.length == 4 && args[0].equalsIgnoreCase("dungeon") && args[1].equalsIgnoreCase("start")) return List.of("normal", "adventure", "apocalypse");
         if (args.length == 2 && args[0].equalsIgnoreCase("profession")) return List.of("status", "list", "menu", "choose", "leave");
         if (args.length == 3 && args[0].equalsIgnoreCase("profession") && Set.of("choose", "leave").contains(args[1]))
             return professions.roleIds();

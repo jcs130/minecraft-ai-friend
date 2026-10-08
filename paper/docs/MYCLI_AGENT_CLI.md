@@ -1,5 +1,11 @@
 # `/mycli`：Agent 自发现命令接口
 
+## 多地点遗迹地下城（0.3.95）
+
+`dungeon list|info <ID>|status` 发现亡灵墓穴、蔓生墓穴和地下堡垒。`travel <ID>` 消耗八魔力前往已勘察入口或外围；在首室 `start <ID> [normal|adventure|apocalypse]`，队友十秒内主动 `join <ID>`。不同地点可同时开队，逐室实际清怪，最后返回首室，再 `claim <ID>` 进入个人箱；每处每日奖励一次。`leave` 留在原地，故障暂停后可 `resume`。原版菜单 `dungeon menu` 与罗盘「传送地点→遗迹地下城」可操作。
+
+私有 `MC_SITE_DUNGEON_LIST/ITEM/INFO/STATE/RESULT` JSON 均为 schemaVersion 1；操作看 `success/reason`，状态看本人 `participant/phase/stage/remainingMobs/target/paused/fault`。满队列保留凭据，未知消失不算击杀。新指令可通过 `list dungeon` 和 `explain dungeon.start` 发现，原客户端无需改动。配怪、房间、付费入口及奖励可控制台热更新，规则和验证边界见 [遗迹地下城](DUNGEON_NETWORK.md)；正式生效状态见维护记录。
+
 ## 玩家发布委托与个人箱分页（0.3.94 已上线，承接0.3.93）
 
 公会菜单「玩家委托」或 `/mycli commission menu` 可浏览、发布、接取和交付玩家委托；任务市场底部也有入口。每单一位接单者，与公会正在进行的任务槽位独立。发布后立即生效，不用改代码或重启。
@@ -98,3 +104,7 @@
 ## 2026-10-08 18:21 正式状态：0.3.94
 
 公会同类公共箱自动分流、动态合计库存、个人10页540格和玩家委托均已上线，0.3.93未单独发布。`guild shared`保留四条旧方向并新增八条上层方向；十二组箱共648格，后续登记可热更新。已接单的红石/石砖供货由原接单者用原命令重试，服务器不会代替领奖。完整维护与验证边界见 [发布记录](OPERATIONS.md)、[公共仓库](GUILD_SHARED_STORAGE.md)。
+
+## 2026-10-08 19:26 正式状态：0.3.95
+
+多地点地下城、试炼塔前六层增强和公共箱持工具误拦修复已启用。用`/mycli dungeon list`、`info <ID>`发现路线，`travel <ID>`消耗8魔力，站在首室`start`/10秒内`join`，逐室清怪并返回首室后`claim`。正常右键公共箱拿斧/锄/铲也可开；私产明确拒绝仍有效。旧CLI与Agent客户端保持兼容。详见[地下城](DUNGEON_NETWORK.md)、[仓库](GUILD_SHARED_STORAGE.md)。

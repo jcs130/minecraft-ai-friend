@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "version": "0.3.95",
+  "status": "deployed",
+  "releasedAt": "2026-10-08T19:26:05+08:00",
+  "sha256": "D7D9D9FC75E1B2CEB91822C5890FC5AFC9D292120BEDE755909CB0673CE8A157",
+  "bytes": 843719,
+  "previousVersion": "0.3.94",
+  "previousSha256": "C53FA4AB275867001EC1274A362C376389E6A3E0D9F09DAE433EC6648A240455",
+  "javaPidAtRelease": 22124,
+  "backup": {
+    "snapshot": "20261008-192507",
+    "copies": [
+      "E",
+      "F"
+    ],
+    "completeBeforeJarReplacement": true,
+    "scheduledTaskResult": 0
+  },
+  "features": {
+    "publicContainerHeldToolFix": true,
+    "configuredTrialFloors": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "nativeBuildingSites": {
+      "undead_crypt": 3,
+      "creeping_crypt": 3,
+      "bunker": 2
+    },
+    "optInPartyLimit": 8,
+    "globalSiteMobLimit": 48,
+    "projectileLimit": 128,
+    "paidApproachMana": 8,
+    "physicalRoomsAndReturnRequired": true,
+    "durablePrivateReceipts": true,
+    "dailyRewardPerSite": 1,
+    "hotConfig": [
+      "trial-waves.yml",
+      "dungeons.yml"
+    ]
+  },
+  "tests": [
+    {
+      "file": "pre-2026-10-08T11-20-04.402Z.json",
+      "checks": 38,
+      "sha256": "D7D9D9FC75E1B2CEB91822C5890FC5AFC9D292120BEDE755909CB0673CE8A157",
+      "scope": "pre"
+    },
+    {
+      "file": "post-2026-10-08T11-22-45.728Z.json",
+      "checks": 13,
+      "sha256": "D7D9D9FC75E1B2CEB91822C5890FC5AFC9D292120BEDE755909CB0673CE8A157",
+      "scope": "post"
+    },
+    {
+      "file": "routes-2026-10-08T11-22-51.352Z.json",
+      "checks": 9,
+      "sha256": "D7D9D9FC75E1B2CEB91822C5890FC5AFC9D292120BEDE755909CB0673CE8A157",
+      "scope": "isolated routes or party"
+    },
+    {
+      "file": "party-2026-10-08T11-23-46.997Z.json",
+      "checks": 13,
+      "sha256": "D7D9D9FC75E1B2CEB91822C5890FC5AFC9D292120BEDE755909CB0673CE8A157",
+      "scope": "isolated routes or party"
+    },
+    {
+      "file": "container-tools-stage-2026-10-08T11-22-37.850Z.json",
+      "checks": 41,
+      "sha256": "D7D9D9FC75E1B2CEB91822C5890FC5AFC9D292120BEDE755909CB0673CE8A157",
+      "scope": "stage"
+    },
+    {
+      "file": "container-tools-live-after-2026-10-08T11-27-07.380Z.json",
+      "checks": 41,
+      "sha256": "D7D9D9FC75E1B2CEB91822C5890FC5AFC9D292120BEDE755909CB0673CE8A157",
+      "scope": "production open-only container tools and ownership"
+    },
+    {
+      "file": "live-2026-10-08T11-26-44.160Z.json",
+      "checks": 16,
+      "sha256": "D7D9D9FC75E1B2CEB91822C5890FC5AFC9D292120BEDE755909CB0673CE8A157",
+      "scope": "production read-only discovery and native menus"
+    }
+  ],
+  "preservation": {
+    "oldStashPlayers": 7,
+    "oldOccupiedSlotsWithIdenticalMetadata": 140,
+    "all540SlotRangeCompared": true,
+    "regionCount": 49,
+    "legacyQualifications": 114,
+    "taskTemplates": 34,
+    "taskSites": 7,
+    "lands": 3,
+    "originalMaintenanceRosterReconnected": [
+      "Goddess",
+      "CortiEye",
+      "ag_NEKO",
+      "CortiLan"
+    ],
+    "originalCortiEyeAttached": true,
+    "difficultyNormalKeepInventoryAllDimensions": true,
+    "auraCurrentStartupVerified": true,
+    "temporaryWhitelistEntriesRemoved": true
+  },
+  "agentClientChanges": false,
+  "failedAttemptsRetained": true,
+  "limits": [
+    "Controlled native protocol, combat, party and pathfinding fixtures; no sixteen autonomous LLM long-term acceptance.",
+    "Paths verified between internal rooms and back; paid undead foyer verified. Surface approach to first rooms of creeping crypt and bunker not automated in this run.",
+    "Bedrock/Xbox visual and controller acceptance requires an actual client.",
+    "No arbitrary power-loss atomicity claim across world and reward files."
+  ]
+}

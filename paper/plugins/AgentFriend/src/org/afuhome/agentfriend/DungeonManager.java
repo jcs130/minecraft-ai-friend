@@ -216,6 +216,8 @@ final class DungeonManager implements Listener {
     private final Map<UUID, Long> lastMobAttackAt = new HashMap<>();
     private final Map<UUID, Long> lastMobProjectileAt = new HashMap<>();
     private final ArenaEconomy economy;
+    private final DungeonWaveCatalog waveCatalog;
+    private List<DungeonWaveCatalog.Enemy> activeWave = List.of();
     private boolean built;
     private boolean expanded;
     private boolean challengeBuilt;
@@ -240,6 +242,7 @@ final class DungeonManager implements Listener {
         checkpointKey = new NamespacedKey(plugin, "dungeon_rest_unlocked");
         merchantKey = new NamespacedKey(plugin, "dungeon_merchant");
         economy = new ArenaEconomy(plugin, this);
+        waveCatalog = new DungeonWaveCatalog(plugin);
         built = plugin.getConfig().getBoolean("dungeon-built", false);
         expanded = plugin.getConfig().getBoolean("dungeon-expanded", false);
         challengeBuilt = plugin.getConfig().getBoolean("dungeon-challenge-built", false);
@@ -290,6 +293,7 @@ final class DungeonManager implements Listener {
         if (!active) return;
         plugin.getConfig().set(RUN_STATE + ".floor", floor);
         plugin.getConfig().set(RUN_STATE + ".difficulty", difficulty.id);
+        plugin.getConfig().set(RUN_STATE + ".wave", activeWave.stream().map(DungeonWaveCatalog.Enemy::saved).toList());
         plugin.getConfig().set(RUN_STATE + ".participants",
                 participants.stream().map(UUID::toString).toList());
         plugin.getConfig().set(RUN_STATE + ".run-started-at", runStartedAt);
@@ -328,6 +332,9 @@ final class DungeonManager implements Listener {
         participants.clear();
         participants.addAll(savedIds);
         floor = savedFloor;
+        List<?> savedWave = plugin.getConfig().getList(RUN_STATE + ".wave");
+        activeWave = savedFloor == REST_FLOOR ? List.of() : savedWave == null || savedWave.isEmpty()
+                ? waveCatalog.wave(savedFloor, THEMES.get(savedFloor - 1).mobs()) : DungeonWaveCatalog.parse(savedWave);
         Difficulty savedDifficulty = Difficulty.parse(plugin.getConfig().getString(RUN_STATE + ".difficulty", "normal"));
         difficulty = savedDifficulty == null ? Difficulty.NORMAL : savedDifficulty;
         runStartedAt = plugin.getConfig().getLong(RUN_STATE + ".run-started-at", now);
@@ -416,7 +423,8 @@ final class DungeonManager implements Listener {
     private List<Player> groupNearLobbyButton(Location button) {
         List<Player> group = new ArrayList<>();
         for (Player player : Bukkit.getOnlinePlayers())
-            if (nearLobbyButton(player, button)) group.add(player);
+            if (nearLobbyButton(player, button) && !plugin.pvpParticipant(player)
+                    && (plugin.siteDungeons() == null || !plugin.siteDungeons().isParticipant(player))) group.add(player);
         return group;
     }
 
@@ -427,6 +435,8 @@ final class DungeonManager implements Listener {
             if (player.isDead() || (player.getGameMode() != GameMode.SURVIVAL
                     && player.getGameMode() != GameMode.ADVENTURE)
                     || !inFloor(player.getLocation(), floor)
+                    || plugin.pvpParticipant(player)
+                    || (plugin.siteDungeons() != null && plugin.siteDungeons().isParticipant(player))
                     || !participants.add(player.getUniqueId())) continue;
             changed = true;
             player.sendMessage(ChatColor.GREEN + "你已加入第 " + floor + " 层试炼队伍；本层清怪后会随队自动进入下一层。"
@@ -527,6 +537,10 @@ final class DungeonManager implements Listener {
     String selectedDifficultyLabel(Player player) { return chosenDifficulty(player).label; }
     String selectedDifficultyMode(Player player) { return difficultyMode(player); }
     boolean hasActiveRun() { return active; }
+    void waveConfig(CommandSender sender, boolean reload) {
+        String result = reload ? active ? "active_run" : waveCatalog.reload() : "audit";
+        sender.sendMessage("MC_TRIAL_WAVES status=" + result + " configuredFloors=" + waveCatalog.configuredFloors() + " maxMobsPerFloor=12 activeRun=" + active);
+    }
     String activeDifficultyLabel() { return active ? difficulty.label : "无"; }
 
     private String difficultyMode(Player player) {
@@ -615,6 +629,9 @@ final class DungeonManager implements Listener {
     }
 
     private void start(Player starter) {
+        if (plugin.siteDungeons() != null && plugin.siteDungeons().isParticipant(starter)) {
+            starter.sendMessage(ChatColor.RED + "你正在遗迹地下城中；先完成或 dungeon leave 再参加试炼塔。"); return;
+        }
         if (starter.getGameMode() == GameMode.SPECTATOR) { starter.sendMessage(ChatColor.RED + "旁观者不能启动。"); return; }
         if (!nearLobbyButton(starter, lobbyButton())) {
             starter.sendMessage(ChatColor.RED + "请站到地面入口石按钮附近 12 格内再启动。 "
@@ -651,6 +668,9 @@ final class DungeonManager implements Listener {
     }
 
     private void startAtRest(Player starter) {
+        if (plugin.siteDungeons() != null && plugin.siteDungeons().isParticipant(starter)) {
+            starter.sendMessage(ChatColor.RED + "你正在遗迹地下城中；先完成或 dungeon leave。"); return;
+        }
         if (!expanded) { starter.sendMessage(ChatColor.YELLOW + "深层驿站尚未开放。"); return; }
         if (starter.getGameMode() == GameMode.SPECTATOR || starter.isDead()) {
             starter.sendMessage(ChatColor.RED + "旁观者或倒下的玩家不能进入驿站。"); return;
@@ -715,6 +735,7 @@ final class DungeonManager implements Listener {
         participants.addAll(arrived);
         participants.addAll(disconnected);
         floor = number;
+        activeWave = number == REST_FLOOR ? List.of() : waveCatalog.wave(number, THEMES.get(number - 1).mobs());
         outsideSince = 0;
         spawned = false;
         cleared = number == REST_FLOOR;
@@ -955,13 +976,15 @@ final class DungeonManager implements Listener {
                             {-14,0},{14,0},{-9,13},{9,13},{-9,-13},{9,-13}}
                     : new int[][]{{-6,-5},{6,-5},{-6,5},{6,5},{0,7},{0,-7},
                             {-8,0},{8,0},{-10,-8},{10,-8},{-10,8},{10,8}};
-        for (int i = 0; i < theme.mobs().length; i++) {
+        if (activeWave.isEmpty()) activeWave = waveCatalog.wave(floor, theme.mobs());
+        for (int i = 0; i < activeWave.size(); i++) {
             int[] spot = spots[i];
             Location at = center(floor).add(spot[0], 0, spot[1]);
             // Raised platforms are deliberate terrain; spawn atop their surface.
             while (at.getBlock().getType().isSolid() && at.getY() < Y[floor - 1] + 5)
                 at.add(0, 1, 0);
-            Entity e = world().spawnEntity(at, theme.mobs()[i]);
+            DungeonWaveCatalog.Enemy configured = activeWave.get(i);
+            Entity e = world().spawnEntity(at, configured.type());
             e.addScoreboardTag(MOB_TAG);
             e.getPersistentDataContainer().set(mobKey, PersistentDataType.BYTE, (byte) 1);
             if (e instanceof MagmaCube cube) cube.setSize(1); // No untagged split children after a clear.
@@ -998,7 +1021,8 @@ final class DungeonManager implements Listener {
             }
             if (e instanceof Ravager ravager) {
                 bossId = ravager.getUniqueId();
-                String bossName = floor == FINAL_FLOOR ? "星灯主宰" : "深渊守卫";
+                String bossName = !configured.name().isEmpty() ? configured.name()
+                        : floor == FINAL_FLOOR ? "星灯主宰" : "深渊守卫";
                 ravager.setCustomName(ChatColor.DARK_PURPLE + bossName);
                 ravager.setCustomNameVisible(true);
                 if (ravager.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null) {
@@ -1015,7 +1039,7 @@ final class DungeonManager implements Listener {
                     if (player != null && inFloor(player.getLocation(), floor)) bossBar.addPlayer(player);
                 }
             }
-            if (e instanceof Mob mob) applyDifficulty(mob);
+            if (e instanceof Mob mob) { configured.equip(mob, 1); applyDifficulty(mob); }
             mobs.add(e.getUniqueId());
             lastMobPosition.put(e.getUniqueId(), e.getLocation().clone());
             lastMobMovedAt.put(e.getUniqueId(), System.currentTimeMillis());
@@ -1023,7 +1047,7 @@ final class DungeonManager implements Listener {
                     + ", type=" + e.getType() + ", at=" + LocationOutput.fields(e.getLocation()));
         }
         announce(ChatColor.RED + "第 " + floor + "/" + maxFloor() + " 层〔" + difficulty.label + "〕：" + theme.name()
-                + "，" + theme.mobs().length + " 只怪物！");
+                + "，" + activeWave.size() + " 只怪物！女巫与远程怪需优先处理。");
     }
 
     private void applyDifficulty(Mob mob) {
@@ -1167,7 +1191,9 @@ final class DungeonManager implements Listener {
     }
 
     void audit(CommandSender sender) {
-        sender.sendMessage("MC_DUNGEON_AUDIT floor=" + floor + " active=" + active + " spawned=" + spawned);
+        sender.sendMessage("MC_DUNGEON_AUDIT floor=" + floor + " active="
+                + (active || plugin.siteDungeons() != null && plugin.siteDungeons().hasActiveRuns())
+                + " spawned=" + spawned + " towerActive=" + active);
         int count = 0;
         for (UUID id : mobs) {
             Entity entity = Bukkit.getEntity(id);

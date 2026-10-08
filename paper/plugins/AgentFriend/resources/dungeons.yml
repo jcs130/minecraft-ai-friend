@@ -1,0 +1,85 @@
+schema-version: 1
+# Existing Dungeons and Taverns 3.2 buildings in this world's seed; no generated replacement.
+# Inspect actual room floors before adding locations. Enemies spawn only on loaded, clear ground.
+sites:
+  undead_crypt:
+    name: 亡灵墓穴·三室封印
+    world: world
+    expedition: undead_crypt
+    entry: [-425, 4, 677]
+    icon: WITHER_SKELETON_SKULL
+    hint: 深入墓穴，弓手压制、凋灵守卫与精英巫师；最后返回首室
+    reward: {emeralds: 8, item: IRON_INGOT, count: 4}
+    rooms:
+      - name: 守墓前厅
+        center: [-425, 4, 677]
+        radius: 4
+        mobs:
+          - {type: WITCH, count: 1, health: 34}
+          - {type: SKELETON, count: 2, health: 28}
+          - {type: ZOMBIE, count: 2, health: 32}
+      - name: 霜骨侧殿
+        center: [-420, 4, 649]
+        radius: 4
+        mobs:
+          - {type: WITCH, count: 2, health: 36}
+          - {type: STRAY, count: 2, health: 30}
+          - {type: WITHER_SKELETON, count: 1, health: 44}
+      - name: 封印主墓
+        center: [-425, 0, 663]
+        radius: 6
+        mobs:
+          - {type: WITCH, count: 2, health: 40}
+          - {type: WITHER_SKELETON, count: 2, health: 42}
+          - {type: VINDICATOR, count: 1, health: 80, name: 亡骸守墓者}
+  creeping_crypt:
+    name: 蔓生墓穴·女巫秘仪
+    world: world
+    expedition: creeping_crypt
+    icon: POTION
+    hint: 蔓生建筑内的毒雾混战；先处理投药女巫，注意洞穴蜘蛛
+    reward: {emeralds: 10, item: LAPIS_LAZULI, count: 6}
+    rooms:
+      - name: 蔓藤前殿
+        center: [1159, 45, 209]
+        radius: 6
+        mobs:
+          - {type: WITCH, count: 2, health: 34}
+          - {type: CAVE_SPIDER, count: 2, health: 20}
+          - {type: HUSK, count: 1, health: 36}
+      - name: 密林回廊
+        center: [1147, 45, 223]
+        radius: 6
+        mobs:
+          - {type: WITCH, count: 3, health: 38}
+          - {type: SKELETON, count: 2, health: 32}
+          - {type: CAVE_SPIDER, count: 1, health: 24}
+      - name: 女巫祭仪室
+        center: [1164, 45, 246]
+        radius: 6
+        mobs:
+          - {type: WITCH, count: 1, health: 100, name: 蔓生大巫师}
+          - {type: WITCH, count: 2, health: 42}
+          - {type: VINDICATOR, count: 2, health: 48}
+  bunker:
+    name: 地下堡垒·掠夺者战团
+    world: world
+    expedition: bunker
+    icon: CROSSBOW
+    hint: 从地面入口沿梯井深入，突破弩手交叉火力和持斧精英
+    reward: {emeralds: 12, item: GOLDEN_APPLE, count: 2}
+    rooms:
+      - name: 堡垒哨室
+        center: [-1182, 18, -1547]
+        radius: 3
+        mobs:
+          - {type: PILLAGER, count: 2, health: 34}
+          - {type: WITCH, count: 1, health: 36}
+          - {type: VINDICATOR, count: 1, health: 44}
+      - name: 弩手守备室
+        center: [-1170, 18, -1553]
+        radius: 3
+        mobs:
+          - {type: PILLAGER, count: 2, health: 38}
+          - {type: WITCH, count: 1, health: 40}
+          - {type: VINDICATOR, count: 1, health: 90, name: 战团执斧长}
