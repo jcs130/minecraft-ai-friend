@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "status": "applied-online",
+  "appliedAt": "2026-10-08T19:40:24.441000+08:00",
+  "plugin": "SkinsRestorer 15.12.6",
+  "serverPluginVersionUnchanged": "AgentFriend 0.3.95",
+  "account": "ag_NEKO",
+  "uuid": "6e8b395e-4349-3d44-99f5-b7488825e426",
+  "preset": "afu_neko_whitecat",
+  "model": "slim",
+  "source": {
+    "author": "ShadowCat100",
+    "title": "White Cat Girl",
+    "page": "https://www.minecraftskins.com/skin/23050342/white-cat-girl/",
+    "pngUrl": "https://www.minecraftskins.com/uploads/skins/2025/02/09/white-cat-girl-23050342.png?v973",
+    "model": "slim",
+    "pngSha256": "c77a7b6bee493b6e0228b1a3eae13250fdf7db5326bcc7aa6420a831ec31a1fb"
+  },
+  "textureUrl": "https://textures.minecraft.net/texture/d8c68d4b05a1b147b51b68148038f81f07d3413f2b1ec24acc2e1ed6fa76573a",
+  "checks": 7,
+  "signedTextureObservedByNativeClient": true,
+  "originalAgentRemainedOnline": true,
+  "originalCortiEyeAttached": true,
+  "preexistingOtherSkinRecordsUnchanged": 33,
+  "configurationUnchanged": true,
+  "restartRequired": false,
+  "agentClientChanges": false,
+  "temporaryWhitelistRemoved": true,
+  "backupCopies": [
+    "E",
+    "F"
+  ],
+  "limits": [
+    "Java native signed profile verified; mobile/Xbox visual acceptance requires a real client."
+  ],
+  "rollback": "skinsrestorer:skin clear ag_NEKO; prior exact UUID mapping had no selected skin identifier."
+}
