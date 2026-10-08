@@ -1,5 +1,23 @@
 # 战法牧、技能点与传承（AgentFriend 0.3.92）
 
+## 0.3.97：Agent直接发现职业技能
+
+2026-10-08 21:54:52 已正式发布 AgentFriend **0.3.97**（864034字节，SHA256 `8C76078711FD8FB457E848BEFC9C39BAFE5330617AD8CE7B557532E6AD4F6A9B`），Java PID **33800**。E/F `20261008-215351/.complete` 在替换前完整，正常任务结果0。修复Agent技能发现入口：补齐skills.list/skills.explain登记，基础与战法牧可按分类查询，登录、help和魔法指南明确技能目录与学习步骤；默认旧分页及原回执字段保留，新增分类/总量/版本、效果摘要、职业和详情命令。当前20基础+16职业共36项，原技能ID、各级效果、点数价格和学习资格不变。
+
+```text
+/mycli skills list profession
+/mycli skills list warrior
+/mycli skills list mage
+/mycli skills list priest
+/mycli skills info healer_beacon
+/mycli skills points
+/mycli explain skills.list
+```
+
+`list profession` 有多页，按 `pages` 和 `MC_SPELL_NEXT` 继续读取。默认 `skills list 1` 与 `spells list 1` 保留原排序和字段；分类后仍每页最多7项。`common`查基础，`profession`查全部职业，`warrior/mage/priest`按战法牧筛选。`skills info <ID>`查各级效果、点数、本人资格；本人按条件选职业、学习、升级和准备后施法。所有查询免费，不代学或代花点。
+
+系统登录提示、`help`和`guide magic`同步入口。`MC_SPELL_LIST`保留schemaVersion=1与旧page/pages/total，另含filter/catalogTotal/commonTotal/professionTotal/catalogVersion/professionListCommand；每项增加profession/summary/detailCommand。高阶圣愈术无需靠翻到全图鉴第5页才能发现。组队救援为自动副本规则，仍用arena/dungeon status查询，不作为可学习施法技能。
+
 2026-10-08 16:09 已正式发布；正常 E/F 备份重启完成，五张试炼随后热加载。发布、21 项正式检查及原账号回连见 [维护记录](OPERATIONS.md) 和 [清单](../manifests/character-skills-0.3.92.json)。历史设计与插件比较见 [设计提案](CHARACTER_SKILLS_DESIGN.md)。
 
 ## 怎样开始
@@ -20,7 +38,7 @@
 /mycli skills respec confirm
 ```
 
-`skills list/explain` 继续作为原图鉴别名。`profession status/list/menu/leave` 查询、打开菜单或离开职业；查询不施法。选职业只解锁入门技能的学习资格，需要本人花点学习。学习后自动在空槽准备，最多四项新增主动技能与一项传承。
+`skills list/explain` 保留图鉴别名，并支持上述分类发现入口。`profession status/list/menu/leave` 查询、打开菜单或离开职业；查询不施法。选职业只解锁入门技能的学习资格，需要本人花点学习。学习后自动在空槽准备，最多四项新增主动技能与一项传承。
 
 命格书每次打开刷新：首页技能点简报，后面有职业、已获/已花/可用点数、上限和成长方法，逐项技能等级、下一等级费用、当前效果，以及未解锁技能的任务来源。新页按原版书本宽度与高度分页。学习菜单和命令详情提供完整等级数值。
 

@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "status": "deployed",
+  "version": "0.3.97",
+  "releasedAt": "2026-10-08T21:54:52+08:00",
+  "sha256": "8C76078711FD8FB457E848BEFC9C39BAFE5330617AD8CE7B557532E6AD4F6A9B",
+  "bytes": 864034,
+  "javaPid": 33800,
+  "snapshot": "20261008-215351",
+  "taskResult": 0,
+  "backupBeforeReplacement": true,
+  "catalog": {
+    "common": 20,
+    "profession": 16,
+    "total": 36,
+    "filters": [
+      "all",
+      "common",
+      "profession",
+      "warrior",
+      "mage",
+      "priest"
+    ],
+    "pageSize": 7,
+    "legacyDefaultOrderAndFieldsPreserved": true,
+    "addedDiscoveryIds": [
+      "skills.list",
+      "skills.explain"
+    ],
+    "schemaVersion": 1,
+    "newHeaderFields": [
+      "filter",
+      "catalogTotal",
+      "commonTotal",
+      "professionTotal",
+      "catalogVersion",
+      "professionListCommand"
+    ],
+    "newItemFields": [
+      "profession",
+      "summary",
+      "detailCommand"
+    ]
+  },
+  "tests": [
+    {
+      "file": "stage-2026-10-08T13-53-16.108Z.json",
+      "checks": 30,
+      "sha256": "8C76078711FD8FB457E848BEFC9C39BAFE5330617AD8CE7B557532E6AD4F6A9B",
+      "scope": "stage"
+    },
+    {
+      "file": "live-2026-10-08T13-56-09.113Z.json",
+      "checks": 30,
+      "sha256": "8C76078711FD8FB457E848BEFC9C39BAFE5330617AD8CE7B557532E6AD4F6A9B",
+      "scope": "production read-only skill discovery, descriptions and system prompts"
+    }
+  ],
+  "skillEffectsCostsIdsAndEligibilityChanged": false,
+  "agentClientChanges": false,
+  "preservation": {
+    "oldStashPlayers": 8,
+    "oldOccupiedSlotsWithIdenticalMetadata": 152,
+    "all540SlotRangeCompared": true,
+    "regionCount": 49,
+    "legacyQualifications": 114,
+    "taskTemplates": 34,
+    "taskSites": 7,
+    "lands": 3,
+    "originalMaintenanceRosterReconnected": [
+      "Goddess",
+      "CortiLan",
+      "CortiEye",
+      "ag_NEKO"
+    ],
+    "originalCortiEyeAttached": true,
+    "difficultyNormalKeepInventoryAllDimensions": true,
+    "auraCurrentStartupVerified": true,
+    "temporaryWhitelistEntriesRemoved": true
+  },
+  "otherPluginJarsPreserved": true,
+  "stageStoppedAndRestored": true,
+  "limits": [
+    "Read-only native-client checks, not autonomous LLM learning/casting or long-term multi-Agent load.",
+    "No new Xbox/Bedrock device visuals or controller verification in this release."
+  ]
+}

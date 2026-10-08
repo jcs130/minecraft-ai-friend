@@ -542,7 +542,7 @@ final class ProfessionManager implements Listener {
             String title = catalog != null && catalog.roles.containsKey(combat) ? catalog.roles.get(combat).title() : "尚未选择";
             List<String> life = ProfessionLedger.strings(profile, "life");
             p.sendMessage("§6职业：" + title + (life.isEmpty() ? "" : "；生活：" + String.join(",", life)));
-            p.sendMessage("§7/mycli profession choose <ID>；skills mine|prepare|unprepare <ID>；旧技能照常使用。");
+            p.sendMessage("§7/mycli skills list profession 查职业技艺；skills info <ID> 查各级效果/资格；skills points 查点数；profession choose <ID> 后按条件 learn/upgrade/prepare，旧技能照常使用。");
             if (catalog != null) for (ProfessionCatalog.Role role : catalog.roles.values()) p.sendMessage("§b" + role.id() + " " + role.title() + (role.combat() ? " · 主战职业" : " · 生活职业"));
             return;
         }

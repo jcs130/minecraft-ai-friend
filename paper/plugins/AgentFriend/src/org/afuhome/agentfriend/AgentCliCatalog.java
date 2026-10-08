@@ -34,7 +34,9 @@ final class AgentCliCatalog {
         add(specs,"profession.menu","magic","gui","/mycli profession menu","打开原版职业和技能菜单","Java、基岩手柄和 Mineflayer 共用","54 格原版菜单");
         add(specs,"profession.choose","magic","write","/mycli profession choose <ID>","选择职业方向，解锁入门技能的学习资格","生存模式；最多一个主战和两个生活职业；冷却不重置","MC_PROFESSION_RESULT");
         add(specs,"profession.leave","magic","write","/mycli profession leave <ID>","离开职业，取消其技能准备；学习历史保留","本人所选职业","MC_PROFESSION_RESULT");
-        add(specs,"skills","magic","read","/mycli skills list|explain <ID>|mine|prepare <ID>|unprepare <ID>","旧技能图鉴别名保留；新增本人职业技能资格与准备","旧技能不占新准备槽","MC_SPELL_*、MC_SKILL、MC_SKILL_ASSESSMENT");
+        add(specs,"skills","magic","read","/mycli skills list [分类] [页码]|info <ID>|mine|points|learn <ID>|upgrade <ID>","基础和战法牧技能图鉴；list profession 直接查看职业技艺，默认列表有多页","查询免费；学习与升级耗点，施法需要本人资格","MC_SPELL_*、MC_SKILL、MC_SKILL_POINTS、MC_SKILL_ASSESSMENT");
+        add(specs,"skills.list","magic","read","/mycli skills list [all|common|profession|warrior|mage|priest] [页码]","分页发现基础和职业技能；如 list priest 查看抚愈、净化、高阶圣愈","查询免费；旧 list <页码> 保留；按 pages 和 MC_SPELL_NEXT 读后续页","MC_SPELL_LIST 含分类/总量/版本，MC_SPELL_ITEM 含效果摘要/职业/详情命令");
+        add(specs,"skills.explain","magic","read","/mycli skills explain <ID>","读取法术图鉴说明；逐级数值、技能点和本人条件用 skills info <ID>","查询免费，不执行技能","MC_SPELL_DETAIL");
         add(specs,"skills.mine","magic","read","/mycli skills mine","查看本人新技能、装备、资格、来源和实际能力统计","查询免费；未学技能也显示获取途径","MC_SKILL、MC_SKILL_POINTS 与 MC_SKILL_ASSESSMENT");
         add(specs,"skills.respec","magic","write","/mycli skills respec confirm","洗点退回已花点数；保留原资格、职业与事件解锁","默认10魔力、5分钟冷却；保留施法冷却；试炼/PvP外","MC_PROFESSION_RESULT 与 MC_SKILL_POINTS");
         add(specs,"skills.points","magic","read","/mycli skills points","本人技能点余额、已花、上限和成长进度","三个职业共用点数；切换不退点","MC_SKILL_POINTS");
@@ -50,7 +52,7 @@ final class AgentCliCatalog {
         add(specs,"coach","info","read","/mycli coach status|on|off","查看或调整本人低频提醒；默认 Java 开、基岩关","在线玩家；旁观者不收到提醒","MC_COACH JSON");
         add(specs,"guide","info","read","/mycli guide [start|explore|magic|gear|guild|dungeon|team]","分主题游玩指引；menu 打开手柄菜单","在线玩家","聊天指引或原版菜单");
         add(specs,"status","info","read","/mycli status","查看本人生命、魔力、公会及试炼状态","在线玩家","个人状态与 MC_DUNGEON 坐标");
-        add(specs,"spells","magic","read","/mycli spells list [页码]|explain <技能ID>","分页发现全部自研法术；逐项读取效果、目标、消耗、冷却和用法","在线玩家；查询不会施法","本人 MC_SPELL_LIST/ITEM/DETAIL JSON");
+        add(specs,"spells","magic","read","/mycli spells list [分类] [页码]|explain <技能ID>","基础及职业技能图鉴；profession/warrior/mage/priest 可直接查战法牧技能","在线玩家；查询不会施法","本人 MC_SPELL_LIST/ITEM/DETAIL JSON");
         add(specs,"mastery","magic","read","/mycli mastery","查看本人法术熟练度与升级门槛","在线玩家","熟练度报告");
         add(specs,"skillbook","magic","item","/mycli skillbook list|use [槽位]","列出或使用实体技艺研习书；也可手持右键","背包有研习书且对应技能未满级","MC_SKILLBOOK 私有回执");
         add(specs,"cast","magic","cast","/mycli cast <技能ID> [参数]","施放生活、战斗或探索法术","本人非旁观者；魔力/学习/冷却由技能检查","技能结果；部分返回 MC_* 坐标");
@@ -84,8 +86,8 @@ final class AgentCliCatalog {
         add(specs,"coach.off","info","write","/mycli coach off","为本人关闭提醒，跨重登保留","在线玩家","MC_COACH type=status enabled=false");
         add(specs,"protect.place","safety","read","/mycli protect place <x> <y> <z>","预判能否在绝对坐标放置方块","整数坐标；同维度、16 格内、区块已加载","mcagent:protection status=deny|unknown|allow_likely");
         add(specs,"cast.selfheal","magic","cast","/mycli cast selfheal","治疗自己；圣愈术","非旁观者；MagicSpells 魔力与冷却检查","治疗结果与视觉提示");
-        add(specs,"spells.list","magic","read","/mycli spells list [页码]","分页列出全部自研法术 ID、类别、魔力、冷却与施法命令","在线玩家；查询不会施法","本人 MC_SPELL_LIST/ITEM JSON，下一页命令");
-        add(specs,"spells.explain","magic","read","/mycli spells explain <技能ID>","读取单项法术效果、目标、前提、失败条件、成长与战术建议","在线玩家；查询不会施法","本人 MC_SPELL_DETAIL JSON");
+        add(specs,"spells.list","magic","read","/mycli spells list [分类] [页码]","skills list 的兼容别名；profession/warrior/mage/priest 可直接查职业技能","查询免费；默认 all 多页，旧 list <页码> 保留","MC_SPELL_LIST/ITEM/NEXT");
+        add(specs,"spells.explain","magic","read","/mycli spells explain <ID>","skills explain 的兼容别名；各级价格和条件用 skills info <ID>","查询免费，不执行技能","MC_SPELL_DETAIL");
         add(specs,"skillbook.list","magic","read","/mycli skillbook list","列出背包内真实研习书、槽位、技能与可得熟练度","本人在线","MC_SKILLBOOK action=list|summary");
         add(specs,"skillbook.use","magic","item","/mycli skillbook use [背包槽位0–35]","消耗一册研习书增加对应技能熟练度；满级不消耗","本人持有该书且未满 3 级","MC_SKILLBOOK action=use");
         add(specs,"cast.heal","magic","cast","/mycli cast heal","治疗 8 格内所有受伤玩家（含自己）","非旁观者；6 魔力；12 秒冷却；无需瞄准","治疗人数、视觉提示与私有技能事件");

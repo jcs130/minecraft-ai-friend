@@ -1,5 +1,31 @@
 # Paper 分支维护与发布
 
+## 2026-10-08 Agent技能目录发现修复（0.3.97）
+
+2026-10-08 21:54:52 已正式发布 AgentFriend **0.3.97**（864034字节，SHA256 `8C76078711FD8FB457E848BEFC9C39BAFE5330617AD8CE7B557532E6AD4F6A9B`），Java PID **33800**。E/F `20261008-215351/.complete` 在替换前完整，正常任务结果0。修复Agent技能发现入口：补齐skills.list/skills.explain登记，基础与战法牧可按分类查询，登录、help和魔法指南明确技能目录与学习步骤；默认旧分页及原回执字段保留，新增分类/总量/版本、效果摘要、职业和详情命令。当前20基础+16职业共36项，原技能ID、各级效果、点数价格和学习资格不变。
+
+最终同包隔离30、正式普通客户端只读30项通过。原8位玩家152个占用槽位在完整540格范围保留元数据，114旧技能资格、34任务/7场地、49个区域语义与公共箱配置保留。四个原维护账号已回连，原机CortiEye实际attached=true；三维度普通/keepInventory=true和AuraSkills当前startup-verified通过。Geyser1249及其他插件JAR原摘要保持，Agent客户端程序未改。
+
+实查0.3.96职业目录ready=true、3职业16项；默认图鉴36项/6页，第一页全为旧基础技能，高阶圣愈位于第5页且info已有完整3级数值。但skills.list和skills.explain缺少命令登记，explain返回UNKNOWN_ID。修复注册并增加分类查询，登录系统提示明确技能总量、逐级详情和学习流程；救援仍是副本自动规则。
+
+```text
+/mycli skills list profession
+/mycli skills list warrior
+/mycli skills list mage
+/mycli skills list priest
+/mycli skills info healer_beacon
+/mycli skills points
+/mycli explain skills.list
+```
+
+`list profession` 有多页，按 `pages` 和 `MC_SPELL_NEXT` 继续读取。默认 `skills list 1` 与 `spells list 1` 保留原排序和字段；分类后仍每页最多7项。`common`查基础，`profession`查全部职业，`warrior/mage/priest`按战法牧筛选。`skills info <ID>`查各级效果、点数、本人资格；本人按条件选职业、学习、升级和准备后施法。所有查询免费，不代学或代花点。
+
+最终同包30项检查覆盖6种过滤的全部页、旧第一页原字段/顺序、别名、过滤后下一页、4个发现登记、圣愈原3级效果/价格、错误过滤和页码拒绝、help/指南、自动救援说明、查询不学技能且不耗点。初候选17项后因重复spells.list登记触发初始化异常，已保留失败JAR/日志并去重；最终8C760包完整重跑30项通过，仅发布最终包。隔离服正常停止，原JAR/配置/白名单/配对/保护按原摘要恢复，未替换结构region文件或安装QA插件。
+
+正常任务先完整备份、镜像校验，再替换唯一AgentFriend JAR；原维护服务名单和无活动挑战门禁保留。仅更新查询/提示，不更改技能配置、效果实现、学习价格/账本或Agent客户端。原机Eye实际回连，未用同名探针替代。原版系统聊天/JSON沿现有Java/Agent/Geyser路径，基岩/Xbox本轮无真机视觉与手柄新增验收。
+
+回退先正常停服及E/F完整快照，恢复保留的0.3.96代码；最新世界、玩家数据、职业账本、trial-rescue和副本检查点继续保留，不用旧数据库覆盖新进度。旧代码缺少新增分类和发现登记。公开[清单](../manifests/skill-discovery-0.3.97.json)，私有成功/失败回执在E/F repairs/skill-discovery-20261008。
+
 ## 2026-10-08 普通试炼回调、组队救援与基岩兼容（0.3.96）
 
 2026-10-08 21:37:45 已正式发布 AgentFriend **0.3.96**（861916字节，SHA256 `9D291B5B806BC73E6994C7AFA6F9FB6F931450A02D9A635557D3F14F8080A173`），Java PID **27436**。E/F `20261008-213645/.complete` 在替换前完整，正常维护任务结果0。普通试炼塔恢复增强前配怪与武器，增强女巫/精英保留给冒险和末日。至少两人组队时致命伤害先倒地；同队存活者在4格内连续停留10秒自动救起，清完当前层/室也自动复活，全队倒下才失败撤回入口。服务器私有系统提示、坐标回执、CLI和兼容原schema的状态包说明救援方法；原Agent客户端未改。正常重启和离线清场均保留正确场次与物品。Geyser同时更新2.11.3-b1249，新增基岩26.52支持。原四个维护服务账号已回连，原机CortiEye实际camera=online/attached=true，三维度普通/keepInventory=true和AuraSkills当前startup-verified通过。

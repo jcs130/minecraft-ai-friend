@@ -608,6 +608,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (backpackChanges > 0) getLogger().info("Updated Minepacks shortcut for "
                     + player.getUniqueId() + "; slots=" + backpackChanges);
             if (player.getGameMode() == GameMode.SPECTATOR) return;
+            SpellGuide.discoveryHint(player);
             soulboundGear.bindMengmengKit(player);
             BackpackShortcutMigration.restoreMissing(player, dungeon);
             if (!hasCompass(player)) giveCompass(player);
@@ -1029,7 +1030,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.GOLD + "千灯纪技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
         p.sendMessage("Agent：/mycli list [分类|命令] [页码] 发现能力；/mycli explain <ID> 或 /mycli help <ID> 查询准确用法，不会执行。");
         p.sendMessage("/mycli coach status|on|off  查看或调整个人提醒；连续死亡、久未行动或久未使用 /mycli 时低频提示。");
-        p.sendMessage("/mycli spells list [页]  查看技能；/mycli spells explain <ID>  查看目标、消耗、冷却和用法；/mycli cast <ID>  施法");
+        p.sendMessage("/mycli skills list [all|common|profession|warrior|mage|priest] [页] 查看基础/战法牧技能；skills info <ID> 查各级效果与学习条件；cast <ID> 施法");
         p.sendMessage("/mycli protect break|place|container|use <x> <y> <z>  查询附近方块/实体储物能否操作；拒绝则停止");
         p.sendMessage("/mycli land here|list|info <ID>|menu 查看领地归属、主人与我的权限");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "造物术没有想要的物品时，会向女神提交申请；也可从罗盘选择更多造物。");
@@ -1070,7 +1071,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             case "magic", "魔法" -> {
                 p.sendMessage(ChatColor.LIGHT_PURPLE + "【魔法】罗盘左上角「法术图鉴」先看说明，再点施放；法杖手持使用可瞬发，潜行使用可换绑定。未学会的羽落、夜视先选图标学习。");
-                p.sendMessage(ChatColor.GRAY + "Agent：/mycli spells list；/mycli spells explain <ID>；/mycli cast <ID>。/mycli focus list 查看法杖绑定，/mycli status 看魔力。");
+                p.sendMessage(ChatColor.GRAY + "Agent：/mycli skills list profession；list warrior|mage|priest 按方向查询；/mycli skills info <ID> 查各级效果与学习条件；/mycli skills points 查点数。学习 learn、升级 upgrade、准备 prepare 后再 cast；/mycli focus list 看法杖，/mycli status 看魔力。");
             }
             case "gear", "装备", "刻印" -> {
                 p.sendMessage(ChatColor.LIGHT_PURPLE + "【工具刻印】手持镐、剑等工具，在附魔台旁潜行使用附魔台，选择要刻印的法术；之后潜行对方块使用工具施法。");
