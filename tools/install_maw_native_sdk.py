@@ -45,8 +45,9 @@ def install(destination: Path) -> dict:
     files = {p.relative_to(SOURCE).as_posix(): p.read_bytes() for p in source_files}
     package = json.loads((SOURCE/'society-agent/package.json').read_text('utf-8'))
     package.update(name='@my-agent-world/native-sdk', version='0.2.0', main='native-sdk/index.cjs',
-                   description='Model-neutral My Agent World native body SDK', private=True)
+                   description='Model-neutral My Agent World native body SDK', private=True, license='MIT')
     files['package.json'] = (json.dumps(package, indent=2)+'\n').encode()
+    files['LICENSE'] = (REPO/'LICENSE').read_bytes()
     result = subprocess.run([str(NODE), '-e', 'process.stdout.write(JSON.stringify(require("./world/src/native-sdk/catalog.cjs").operationCatalog(),null,2))'],
                             cwd=REPO, capture_output=True, text=True, encoding='utf-8', timeout=15, check=True)
     catalog = json.loads(result.stdout)

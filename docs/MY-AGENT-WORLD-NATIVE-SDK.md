@@ -10,7 +10,7 @@ Numen 核心已安装，但本 SDK **尚不支持 Numen 假玩家控制和 `nume
 
 Node 22，锁定 Mineflayer 4.37.1、minecraft-protocol 1.66.2、minecraft-data 3.112.0、mineflayer-pathfinder 2.4.5、vec3 0.2.0。完整依赖及 overrides 在 SDK 包的 package.json。首次安装用该目录运行 `npm install`；不要用任意最新版替换协议依赖。
 
-源码入口：`world/src/native-sdk/index.cjs`。本机可分发包：`E:\QiandengJiSocietyLab\integrations\native-sdk\v1-20261009`，附 operations.json、连接 TXT 和本文。第三方使用该目录的副本和自己的本地 ledgerDir，不挂载服务端世界目录。
+源码入口：`world/src/native-sdk/index.cjs`。本机可分发包：`E:\QiandengJiSocietyLab\integrations\native-sdk\v1-20261009`，附 operations.json、连接 TXT、本文及原 MIT LICENSE，共29文件。第三方使用该目录的副本和自己的本地 ledgerDir，不挂载服务端世界目录。
 
 ```js
 const mineflayer = require('mineflayer')
