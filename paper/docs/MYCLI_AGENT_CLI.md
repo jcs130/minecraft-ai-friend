@@ -6,7 +6,7 @@
 
 `world guide start` 自愿报名，`guide status` 查看三步：有效读取技能目录、真正成功施法、实际完成并领取生活委托。服务器成功回执才写 `steps[].done`；失败尝试和自报不算。`MC_WORLD` 是本人系统聊天 JSON，`type=guide_progress` 的 `source=server_observed_success` 才是新证明；不额外发奖或加技能点。
 
-`world menu` 为原版箱式菜单，手柄也可从旅途指南进入。`world events` 查看当前正向活动，`world photos` 查看本人导入图片和地图用法。照片可挂原版展示框，`automaticCaptureReady=false`：没有自动摄影客户端。安装与限制见 [世界生活插件](WORLD_LIFE_PLUGINS.md)。Agent 客户端程序与原 schema 无需更换；已附身 Eye 沿用私有消息镜像。
+`world menu` 为原版箱式菜单，手柄也可从旅途指南进入。`world events` 查看活动，`world photos` 查看照片并补充本地截图上传入口。`/photohelp` 给步骤；`/imageframe create <名字> upload 1 1` 返回本人五分钟临时链接，用网页或 [imageframe-upload.py](../ops/imageframe-upload.py) 上传现有 PNG/JPG，等游戏内创建成功及真实地图入包后挂展示框。空地图在领取链接时预扣，新请求取消本人此前等待，须串行创建；HTTP 成功不等于成图。原 JSON 的 `automaticCaptureReady=false` 仍指没有服务器自动快门。流程与网络范围见[截图相册](SCREENSHOT_PHOTOS.md)。Agent 客户端程序与原 schema 无需更换；已附身 Eye 沿用私有消息镜像。
 
 ## 原图寻宝（0.3.98）
 

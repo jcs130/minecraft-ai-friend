@@ -1,5 +1,7 @@
 # 千灯纪：Agent 团队维护、开发与运营手册
 
+**2026-10-09 08:16:03 当前配置：**AgentFriend仍为0.3.99，新增截图直接上传及 `/photohelp`。服务器只绑定LAN `192.168.3.163:8517`，原Agent/Eye客户端与全部插件JAR保持；截图来自现有工具，HTTP接受后还须验证真实地图，玩家串行创建。E/F `20261009-081417/.complete` 在替换前完整，Java PID26896，任务结果0；隔离22、脚本边界4、正式只读18项通过。普通/keepInventory、Goddess旁观者及AuraSkills当前启动验证通过。CortiLan/ag_NEKO/Goddess已回连，原机CortiEye当前offline/attached=false，配对/watcher保留，不能称镜头恢复；手机/Xbox画面待真机。详见[截图相册](SCREENSHOT_PHOTOS.md)、[维护记录](OPERATIONS.md)。下方旧发布时点为历史。
+
 **最新正式状态：**2026-10-09 01:09:41 正式部署及入口恢复完成，AgentFriend **0.3.99**（898509字节，SHA256 `59CCE54DE06261D53CF2068DEE5DF4BD6809062A12EB7666467D784E916F705D`），当前 Java PID **34088**。十个生活插件全部启用；新手实习、村民真实模型对话、故事、商店和三个正向定时活动已开放，图片可导入地图并挂墙，自动快门尚未接入。三个精英仅为管理员活动模板，普通试炼配怪保持。原 Agent 客户端程序未改。
 
 原8位玩家152个占用槽位在完整540格范围逐项保留元数据，114个旧技能资格、35张市场任务/7场地、49个WorldGuard区域、原11份地图数据和十九个既有第三方插件JAR保留。三维度普通/keepInventory=true，Goddess旁观者和AuraSkills当前startup-verified通过。CortiLan、ag_NEKO、Goddess已回连；原机CortiEye当前offline/attached=false，配对及watcher正常，不能说原直播镜头已恢复。 Java/LAN及正式基岩UDP入口已实际复核。基岩玩法均用原版实体、聊天、箱式菜单、地图和展示框；隔离无Xbox认证探针未成功登录，手机/Xbox真实画面和操作仍待设备验收，不能把Pong算完整兼容验收。
@@ -18,7 +20,7 @@
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
-| 村庄生活（0.3.99） | `world list/menu/npcs/talk/end/guide/events/photos`、罗盘旅途指南；[插件包](WORLD_LIFE_PLUGINS.md) | UUID实习账本、BetonQuest数据库、NPC持久数据、本人ImageFrame图片；既有QwenPaw原生任务 | 已开放三步真实操作实习、村民对话/故事、补给商和正向活动。NPC/任务/精英内容可编辑插件配置后隔离热加载；不自动发奖或替代旧技能体系。照片支持已有截图导入/挂墙，自动拍摄未接入。 |
+| 村庄生活（0.3.99） | `world list/menu/npcs/talk/end/guide/events/photos`、`/photohelp`、罗盘旅途指南；[插件包](WORLD_LIFE_PLUGINS.md) | UUID实习账本、BetonQuest数据库、NPC持久数据、本人ImageFrame图片；既有QwenPaw原生任务 | 已开放三步真实操作实习、村民对话/故事、补给商和正向活动。NPC/任务/精英可编辑配置后隔离热加载。现有截图通过本人临时链接直接上传成地图并挂墙，原客户端无须更换；服务器不代按快门。 |
 | 组队救援（0.3.96已上线） | 4格内停留10秒自动救起，当前层/室清场自动复活；`arena status`、`dungeon status`；[救援规则及系统提示](TRIAL_RESCUE.md) | config.yml的trial-rescue、原塔检查点和地下城场次ID；保留原奖励和物品 | 服务器私发倒地坐标、救援方法与进度；Agent用原移动能力靠近并等待。全员倒地才失败，离线/正常重启保留，部分救援计时重置。普通塔恢复原配怪，强化仅用于冒险/末日 |
 | 玩家委托与分页箱（0.3.94） | 公会玩家委托、`commission list/mine/info/menu/publish/accept/claim/abandon/cancel`，`arena stash pages/page/list`；[玩法](MYCLI_AGENT_CLI.md) | config.yml的player-contracts.jobs/active、既有余额/待入箱队列和0–539槽位 | 已上线；玩家发布供货/同行无需代码或重启，每单一人、托管报酬、实物与真实探索返程验收。10页540格，待入箱队列1024组；客户端沿用现有协议 |
 | 命名传送点（0.3.89） | 罗盘地点页、`waypoint add/list/shared/menu`、`goto personal:名字/shared:分享码`；[命名地点](NAMED_WAYPOINTS.md) | `plugins/AgentFriend/waypoints.yml` 按主人/世界 UUID 保存，默认每人 32 点 | 玩家亲自到达后在线中文命名、改名、更新和撤回分享；记录免费，成功传送 6 魔力。主动分享公开发现者与坐标；不改代码、不重启。旧 home 保留；部署状态以维护记录为准 |

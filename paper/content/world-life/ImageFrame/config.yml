@@ -29,10 +29,10 @@ Settings:
   TryDeleteBlankMapFiles: false
   CombinedByDefault: false
 UploadService:
-  Enabled: false
-  DisplayURL: http://change.this.to.your.server.ip.in.the.config
+  Enabled: true
+  DisplayURL: http://192.168.3.163:8517
   WebServer:
-    Host: 0.0.0.0
+    Host: 192.168.3.163
     Port: 8517
 ImageFrameClient:
   Enabled: false

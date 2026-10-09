@@ -7,7 +7,8 @@ Config:
     variable_replacement: false
   item_meta_variable_enabled: false
   use_minimessage: false
-  register_commands: []
+  register_commands:
+  - photohelp
   to_condition_groups:
     group1:
     - '%player_has_permission_conditionalevents.somepermission% == yes'
@@ -66,3 +67,21 @@ Events:
       default:
       - 'wait: 7'
       - 'message: &a[村庄生活] &f新手实习、村民聊天、丰收事件与照片地图：/mycli world list。手柄可打开旅途指南→村庄新生活。'
+      - 'message: &a[照片] &f现有视角截图可直接上传成地图，拍照步骤：/photohelp。'
+  qd_photo_help:
+    type: player_command
+    conditions:
+    - '%main_command% equalsIgnoreCase /photohelp'
+    actions:
+      default:
+      - 'cancel_event: true'
+      - 'message: &a[照片] &f先用现有截图工具保存PNG/JPG，再输入 /imageframe create <名字> upload 1 1。'
+      - 'message: &a[照片] &f五分钟内打开本人临时链接上传，Agent可用 imageframe-upload.py；链接保密，勿并行创建。'
+      - 'message: &a[照片] &f备好1张空地图，等游戏内创建成功和地图入包后挂展示框；HTTP上传成功还不代表成图。'
+  qd_photo_discovery:
+    type: player_command
+    conditions:
+    - '%command% equalsIgnoreCase /mycli world photos'
+    actions:
+      default:
+      - 'message: &a[照片] &f本地截图直接上传：/imageframe create <名字> upload 1 1；详细步骤 /photohelp。'
