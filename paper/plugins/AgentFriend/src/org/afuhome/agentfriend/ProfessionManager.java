@@ -357,7 +357,6 @@ final class ProfessionManager implements Listener {
         metric(p, "casts", 1);
         plugin.publishSkill(p, skill.id(), body, p.getLocation());
         p.sendTitle("§b" + skill.title(), "§7✦ " + skill.mana() + " 魔力 ✦", 3, 24, 7);
-        p.getWorld().spawnParticle(Particle.END_ROD, p.getLocation().add(0, 1, 0), 12, .35, .5, .35, .01);
         p.playSound(p.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, .6f, 1.1f);
         result(p, "cast", "success", skill.id()); p.sendMessage("§b" + skill.title() + "：" + body);
     }

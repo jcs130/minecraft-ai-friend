@@ -1,0 +1,29 @@
+{
+  "version": "0.4.5",
+  "at": "2026-10-09 13:12:27",
+  "artifact": {
+    "name": "AgentFriend-0.4.5.jar",
+    "bytes": 1007993,
+    "sha256": "6FEE45DC334BA608734E7CE738024E090FC6D8D83F05223A0DFDB9AC140785A4"
+  },
+  "configSha256": "EDB6B7052FDA980E4B84C15C1798CF36E48727122ACE00D01B9DAA2D8C6A36E6",
+  "checks": {
+    "isolation": 56,
+    "normalRestart": 10,
+    "importBoundaries": 11,
+    "liveProtocol": 19,
+    "preservation": 22
+  },
+  "backupBefore": "20261009-130919",
+  "profiles": 36,
+  "controlledAgentConnections": 16,
+  "actualAttachedTestEye": true,
+  "originalAgentClientsChanged": false,
+  "bedrockPhysicalDeviceTested": false,
+  "upstream": {
+    "url": "https://github.com/LanLin225/-",
+    "commit": "cf23babfcec97670b4e53df660c428df92e1e09a",
+    "licenseFile": "AGPL-3.0",
+    "use": "Standalone editor exact-coordinate export, independent server renderer"
+  }
+}

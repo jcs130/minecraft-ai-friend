@@ -1,5 +1,9 @@
 # `/mycli`：Agent 自发现命令接口
 
+## 0.4.5 原版技能粒子
+
+`/mycli visuals`只读返回本人MC_VISUALS schemaVersion1：enabled、skills/profiles、active、admitted/dropped、packets/throttled/errors、lastTickPackets/peakTickPackets及全服/连接预算。可用`/mycli explain visuals`查说明。真实施法沿用原命令/资格/耗费和mcagent:event，粒子只作画面，不作验收证据；原客户端不改。维护preview仅控制台，纯粒子、不发技能成功、不推进新手/委托。见[技能特效](SKILL_VISUALS.md)。
+
 ## 0.4.4 实体难度按钮与登录玩法入口
 
 `/mycli arena entrance`返回私有MC_TRIAL_BUTTONS JSON：普通/冒险/末日三个实体按钮坐标、confirmationRequired及对应命令。区块未加载ready:null/unknown_unloaded，不强制加载；靠近重查。按实体按钮选择具体档位，再点菜单开始；原difficulty/start/status回执与资源规则保持。详见[试炼入口](TRIAL_ENTRANCE_BUTTONS.md)。

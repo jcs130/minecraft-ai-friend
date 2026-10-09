@@ -1,0 +1,30 @@
+{
+  "upstream": "LanLin225/-",
+  "commit": "cf23babfcec97670b4e53df660c428df92e1e09a",
+  "layer": {
+    "shape": "star6",
+    "count": 32,
+    "seed": 221,
+    "thickness": 0,
+    "height": 1,
+    "turns": 3,
+    "arms": 6,
+    "spread": 0,
+    "flow": 0,
+    "flat": true,
+    "tilt": 0,
+    "thickY": 0,
+    "stack": 1,
+    "stackGap": 0.35,
+    "lift": 0.2,
+    "particle": "dust_color_transition",
+    "name": "星尘六芒星",
+    "radius": 1.5,
+    "expand": 0,
+    "rise": 0.1,
+    "lifetime": 24,
+    "pSize": 0.75,
+    "color1": "#FFF3B0",
+    "color2": "#A8C8FF"
+  }
+}

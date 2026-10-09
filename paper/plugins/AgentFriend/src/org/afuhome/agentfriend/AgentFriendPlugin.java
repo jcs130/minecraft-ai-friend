@@ -265,6 +265,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     boolean isSoulbound(ItemStack item) {
         return soulboundGear != null && soulboundGear.owner(item) != null;
     }
+    private SkillVisuals skillVisuals;
     private final SpellPresentation spellPresentation = new SpellPresentation(this);
 
     @Override public void onEnable() {
@@ -300,6 +301,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         prospectingSpell = new ProspectingSpell(this);
         utilitySpells = new UtilitySpells(this);
         professions = new ProfessionManager(this);
+        skillVisuals = new SkillVisuals(this);
         villageStructureProtection = new VillageStructureProtection(this);
         lifeBuildings = new LifeGuildBuildings(this, lifeGuild);
         protectionAdvisor = new ProtectionAdvisor(this);
@@ -344,6 +346,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     @Override public void onDisable() {
         if (siteDungeons != null) siteDungeons.shutdown();
         if (playerContracts != null) playerContracts.shutdown();
+        if (skillVisuals != null) skillVisuals.stop();
         if (professions != null) professions.shutdown();
         if (lands != null) lands.stop();
         if (waypoints != null) waypoints.shutdown();
@@ -518,6 +521,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     TravelMagic travelMagic() { return travelMagic; }
 
     void publishSkill(Player player, String spell, String body, Location position) {
+        if (skillVisuals != null) skillVisuals.play(player, spell, position);
         if (skillEventPublisher != null) skillEventPublisher.publish(player, spell, body, position);
         recordWorldLesson(player, "cast");
         if (taskMarket != null) taskMarket.worldAction(player, GuildManager.Goal.SKILL_CAST,
@@ -715,6 +719,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length >= 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("visuals")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台维护特效；/mycli visuals 可查看当前配置与限流状态。"); return true;
+            }
+            skillVisuals.admin(sender, args); return true;
+        }
         if (args.length >= 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("coach")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
                 sender.sendMessage("只允许服务器控制台维护迎新指引。"); return true;
@@ -1084,6 +1094,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     professions.command(player, args);
                 else SpellGuide.command(player, args);
             }
+            case "visuals", "特效" -> skillVisuals.audit(player);
             case "profession", "职业" -> professions.command(player, args);
             case "mastery", "熟练度" -> spellMastery.report(player);
             case "skillbook", "技能书" -> SkillTome.command(player, args, spellMastery);

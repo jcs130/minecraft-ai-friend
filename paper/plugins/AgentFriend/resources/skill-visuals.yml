@@ -1,0 +1,1209 @@
+# Cosmetic only. Hot reload: mycli admin visuals reload.
+# starlight_studio uses the pinned upstream tool exact export; see docs/SKILL_VISUALS.md.
+schema-version: 1
+enabled: true
+budget:
+  view-distance: 24
+  max-viewers: 12
+  max-active: 32
+  max-per-caster: 2
+  packets-per-tick: 256
+  packets-per-viewer-tick: 64
+effects:
+  home:
+    skills:
+    - home
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: helix
+      particle: DUST
+      count: 24
+      radius: 0.8
+      height: 2.1
+      lift: 0.15
+      spin: 0.45
+      expand: 0.2
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFFFFF'
+      phase: 0
+  travel:
+    skills:
+    - travel
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: helix
+      particle: DUST
+      count: 24
+      radius: 1
+      height: 2.3
+      lift: 0.15
+      spin: -0.4
+      expand: 0.2
+      size: 0.75
+      color: '#B388FF'
+      color-end: '#7CE8FF'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#B388FF'
+      color-end: '#7CE8FF'
+      phase: 0
+  blink:
+    skills:
+    - blink
+    anchor: caster
+    duration-ticks: 15
+    interval-ticks: 3
+    layers:
+    - shape: helix
+      particle: DUST
+      count: 24
+      radius: 0.6
+      height: 1.6
+      lift: 0.15
+      spin: 1
+      expand: 0.2
+      size: 0.75
+      color: '#7CE8FF'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.6
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#7CE8FF'
+      color-end: '#FFFFFF'
+      phase: 0
+  storage:
+    skills:
+    - storage
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: cube
+      particle: DUST
+      count: 24
+      radius: 0.45
+      height: 1
+      lift: 0.5
+      spin: 0.3
+      expand: 0.2
+      size: 0.75
+      color: '#C5A3FF'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.45
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#C5A3FF'
+      color-end: '#FFFFFF'
+      phase: 0
+  conjure:
+    skills:
+    - conjure
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: cube
+      particle: DUST
+      count: 24
+      radius: 0.55
+      height: 1
+      lift: 0.45
+      spin: -0.3
+      expand: 0.2
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.55
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFFFFF'
+      phase: 0
+  selfheal:
+    skills:
+    - selfheal
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: lotus
+      particle: DUST
+      count: 24
+      radius: 0.85
+      height: 1.6
+      lift: 0.3
+      spin: 0.2
+      expand: 0.2
+      size: 0.75
+      color: '#6FE6A5'
+      color-end: '#FFF3B0'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#6FE6A5'
+      color-end: '#FFF3B0'
+      phase: 0
+  heal:
+    skills:
+    - heal
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: lotus
+      particle: DUST
+      count: 24
+      radius: 2.4
+      height: 1.4
+      lift: 0.15
+      spin: 0.2
+      expand: 0.4
+      size: 0.75
+      color: '#A8FFD8'
+      color-end: '#FFD166'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#A8FFD8'
+      color-end: '#FFD166'
+      phase: 0
+  food:
+    skills:
+    - food
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: star
+      particle: DUST
+      count: 24
+      radius: 0.9
+      height: 1.3
+      lift: 0.6
+      spin: -0.2
+      expand: 0.2
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFF3B0'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFF3B0'
+      phase: 0
+  starbolt:
+    skills:
+    - starbolt
+    anchor: target
+    duration-ticks: 15
+    interval-ticks: 3
+    layers:
+    - shape: helix
+      particle: DUST
+      count: 24
+      radius: 0.35
+      height: 0.5
+      lift: 0
+      spin: 0.2
+      expand: 0.2
+      size: 0.75
+      color: '#A8C8FF'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: beam
+      particle: DUST
+      count: 20
+      radius: 3
+      height: 0
+      lift: 0
+      spin: 0.2
+      expand: 0
+      size: 0.75
+      color: '#B388FF'
+      color-end: '#7CE8FF'
+      phase: 0
+  frostnova:
+    skills:
+    - frostnova
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: snowflake
+      particle: DUST
+      count: 24
+      radius: 2.7
+      height: 0.3
+      lift: 0.12
+      spin: 0.2
+      expand: 0.8
+      size: 0.75
+      color: '#9FE8FF'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: SNOWFLAKE
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#9FE8FF'
+      color-end: '#FFFFFF'
+      phase: 0
+  flamewave:
+    skills:
+    - flamewave
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: fan
+      particle: DUST
+      count: 24
+      radius: 3
+      height: 0.9
+      lift: 0.2
+      spin: 0.2
+      expand: 0.8
+      size: 0.75
+      color: '#FF6B00'
+      color-end: '#FFD166'
+      phase: 0
+    - shape: ring
+      particle: FLAME
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FF6B00'
+      color-end: '#FFD166'
+      phase: 0
+  prospect:
+    skills:
+    - prospect
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: diamond
+      particle: DUST
+      count: 24
+      radius: 0.65
+      height: 0.8
+      lift: 1
+      spin: 0.5
+      expand: 0.2
+      size: 0.75
+      color: '#2EE6A8'
+      color-end: '#FFD166'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.65
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#2EE6A8'
+      color-end: '#FFD166'
+      phase: 0
+  sense:
+    skills:
+    - sense
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: ring
+      particle: DUST
+      count: 24
+      radius: 1.4
+      height: 0
+      lift: 0.15
+      spin: 0.2
+      expand: 1.5
+      size: 0.75
+      color: '#00E5FF'
+      color-end: '#B388FF'
+      phase: 0
+    - shape: ring
+      particle: ELECTRIC_SPARK
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#00E5FF'
+      color-end: '#B388FF'
+      phase: 0
+  leap:
+    skills:
+    - leap
+    anchor: caster
+    duration-ticks: 18
+    interval-ticks: 3
+    layers:
+    - shape: wings
+      particle: DUST
+      count: 24
+      radius: 1.2
+      height: 0.9
+      lift: 0.4
+      spin: 0.2
+      expand: 0.2
+      size: 0.75
+      color: '#BDEFFF'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: CLOUD
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#BDEFFF'
+      color-end: '#FFFFFF'
+      phase: 0
+  flight:
+    skills:
+    - flight
+    anchor: caster
+    duration-ticks: 36
+    interval-ticks: 3
+    layers:
+    - shape: wings
+      particle: DUST
+      count: 24
+      radius: 1.8
+      height: 1.2
+      lift: 0.5
+      spin: 0.2
+      expand: 0.2
+      size: 0.75
+      color: '#FFFFFF'
+      color-end: '#7CE8FF'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FFFFFF'
+      color-end: '#7CE8FF'
+      phase: 0
+  golem:
+    skills:
+    - golem
+    anchor: target
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: cube
+      particle: DUST
+      count: 24
+      radius: 0.8
+      height: 1.8
+      lift: 0.1
+      spin: 0
+      expand: 0.2
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: CRIT
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFFFFF'
+      phase: 0
+  feather:
+    skills:
+    - feather
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: wings
+      particle: DUST
+      count: 24
+      radius: 1
+      height: 0.8
+      lift: 0.25
+      spin: 0.2
+      expand: 0.2
+      size: 0.75
+      color: '#FFF7E0'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: CLOUD
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FFF7E0'
+      color-end: '#FFFFFF'
+      phase: 0
+  night:
+    skills:
+    - night
+    anchor: caster
+    duration-ticks: 18
+    interval-ticks: 3
+    layers:
+    - shape: eyes
+      particle: DUST
+      count: 24
+      radius: 0.5
+      height: 1
+      lift: 0
+      spin: 0
+      expand: 0.2
+      size: 0.75
+      color: '#7CE8FF'
+      color-end: '#B388FF'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.5
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#7CE8FF'
+      color-end: '#B388FF'
+      phase: 0
+  fireworks:
+    skills:
+    - fireworks
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: star
+      particle: DUST
+      count: 24
+      radius: 1.4
+      height: 1.8
+      lift: 1.5
+      spin: 0.2
+      expand: 0.8
+      size: 0.75
+      color: '#FF4D8D'
+      color-end: '#FFD166'
+      phase: 0
+    - shape: ring
+      particle: FLAME
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FF4D8D'
+      color-end: '#FFD166'
+      phase: 0
+  sword_thrust:
+    skills:
+    - sword_thrust
+    anchor: caster
+    duration-ticks: 12
+    interval-ticks: 3
+    layers:
+    - shape: crescent
+      particle: DUST
+      count: 24
+      radius: 0.7
+      height: 0.8
+      lift: 0.5
+      spin: 0.2
+      expand: 0.2
+      size: 0.75
+      color: '#FFFFFF'
+      color-end: '#7CE8FF'
+      phase: 0
+    - shape: ring
+      particle: CRIT
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FFFFFF'
+      color-end: '#7CE8FF'
+      phase: 0
+  sword_parry:
+    skills:
+    - sword_parry
+    anchor: caster
+    duration-ticks: 18
+    interval-ticks: 3
+    layers:
+    - shape: shield
+      particle: DUST
+      count: 24
+      radius: 0.65
+      height: 1.7
+      lift: 0.1
+      spin: 0
+      expand: 0
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.65
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFFFFF'
+      phase: 0
+  sword_arc:
+    skills:
+    - sword_arc
+    anchor: caster
+    duration-ticks: 15
+    interval-ticks: 3
+    layers:
+    - shape: crescent
+      particle: DUST
+      count: 24
+      radius: 2
+      height: 0.9
+      lift: 0.4
+      spin: 0.1
+      expand: 0.4
+      size: 0.75
+      color: '#7CE8FF'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: CRIT
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#7CE8FF'
+      color-end: '#FFFFFF'
+      phase: 0
+  sword_step:
+    skills:
+    - sword_step
+    anchor: caster
+    duration-ticks: 15
+    interval-ticks: 3
+    layers:
+    - shape: crescent
+      particle: DUST
+      count: 24
+      radius: 1.5
+      height: 0.8
+      lift: 0.35
+      spin: 0.2
+      expand: 0.2
+      size: 0.75
+      color: '#2EE6A8'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: CRIT
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#2EE6A8'
+      color-end: '#FFFFFF'
+      phase: 0
+  sword_beam:
+    skills:
+    - sword_beam
+    anchor: caster
+    duration-ticks: 15
+    interval-ticks: 3
+    layers:
+    - shape: beam
+      particle: DUST
+      count: 24
+      radius: 3
+      height: 0
+      lift: 0
+      spin: 0.2
+      expand: 0.2
+      size: 0.75
+      color: '#7CE8FF'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: CRIT
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#7CE8FF'
+      color-end: '#FFFFFF'
+      phase: 0
+  twin_legacy:
+    skills:
+    - twin_legacy
+    anchor: caster
+    duration-ticks: 36
+    interval-ticks: 3
+    layers:
+    - shape: crescent
+      particle: DUST
+      count: 24
+      radius: 1.7
+      height: 1
+      lift: 0.5
+      spin: 0.2
+      expand: 0.2
+      size: 0.75
+      color: '#7CE8FF'
+      color-end: '#B388FF'
+      phase: 0
+    - shape: crescent
+      particle: DUST
+      count: 24
+      radius: 1.7
+      height: 1
+      lift: 0.8
+      spin: -0.3
+      expand: 0.2
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFFFFF'
+      phase: 3.14
+  guardian_ward:
+    skills:
+    - guardian_ward
+    anchor: caster
+    duration-ticks: 30
+    interval-ticks: 3
+    layers:
+    - shape: shield
+      particle: DUST
+      count: 24
+      radius: 1.2
+      height: 2
+      lift: 0.1
+      spin: 0.2
+      expand: 0.2
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFFFFF'
+      phase: 0
+  guardian_oath:
+    skills:
+    - guardian_oath
+    anchor: caster
+    duration-ticks: 36
+    interval-ticks: 3
+    layers:
+    - shape: shield
+      particle: DUST
+      count: 24
+      radius: 1.7
+      height: 2.2
+      lift: 0.1
+      spin: 0.2
+      expand: 0.2
+      size: 0.75
+      color: '#A8FFD8'
+      color-end: '#FFD166'
+      phase: 0
+    - shape: ring
+      particle: DUST
+      count: 16
+      radius: 2.3
+      height: 1
+      lift: 0.1
+      spin: 0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#FFFFFF'
+      phase: 0
+  scout_mark:
+    skills:
+    - scout_mark
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: diamond
+      particle: DUST
+      count: 24
+      radius: 0.7
+      height: 1
+      lift: 1
+      spin: 0
+      expand: 0.2
+      size: 0.75
+      color: '#FF9EC4'
+      color-end: '#B388FF'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FF9EC4'
+      color-end: '#B388FF'
+      phase: 0
+  scout_watch:
+    skills:
+    - scout_watch
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: diamond
+      particle: DUST
+      count: 24
+      radius: 1.1
+      height: 1
+      lift: 1
+      spin: 0.3
+      expand: 0.2
+      size: 0.75
+      color: '#B388FF'
+      color-end: '#00E5FF'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#B388FF'
+      color-end: '#00E5FF'
+      phase: 0
+  healer_mend:
+    skills:
+    - healer_mend
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: lotus
+      particle: DUST
+      count: 24
+      radius: 1
+      height: 1.8
+      lift: 0.3
+      spin: 0.2
+      expand: 0.2
+      size: 0.75
+      color: '#FFBDE7'
+      color-end: '#A8FFD8'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FFBDE7'
+      color-end: '#A8FFD8'
+      phase: 0
+  healer_cleanse:
+    skills:
+    - healer_cleanse
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: helix
+      particle: DUST
+      count: 24
+      radius: 0.6
+      height: 2
+      lift: 0.1
+      spin: 0.6
+      expand: 0.2
+      size: 0.75
+      color: '#FFFFFF'
+      color-end: '#7CE8FF'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.6
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FFFFFF'
+      color-end: '#7CE8FF'
+      phase: 0
+  healer_beacon:
+    skills:
+    - healer_beacon
+    anchor: caster
+    duration-ticks: 36
+    interval-ticks: 3
+    layers:
+    - shape: lotus
+      particle: DUST
+      count: 24
+      radius: 2.7
+      height: 2
+      lift: 0.15
+      spin: 0.2
+      expand: 0.2
+      size: 0.75
+      color: '#FFD166'
+      color-end: '#A8FFD8'
+      phase: 0
+    - shape: helix
+      particle: DUST
+      count: 16
+      radius: 0.7
+      height: 2.4
+      lift: 0.1
+      spin: -0.5
+      expand: 0.2
+      size: 0.75
+      color: '#A8FFD8'
+      color-end: '#FFFFFF'
+      phase: 0
+  mage_bolt:
+    skills:
+    - mage_bolt
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: helix
+      particle: DUST
+      count: 24
+      radius: 0.8
+      height: 1.4
+      lift: 0.2
+      spin: 0.8
+      expand: 0.2
+      size: 0.75
+      color: '#B388FF'
+      color-end: '#FF9AD5'
+      phase: 0
+    - shape: ring
+      particle: END_ROD
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#B388FF'
+      color-end: '#FF9AD5'
+      phase: 0
+  mage_frost:
+    skills:
+    - mage_frost
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: snowflake
+      particle: DUST
+      count: 24
+      radius: 2.2
+      height: 0.4
+      lift: 0.25
+      spin: 0.2
+      expand: 0.6
+      size: 0.75
+      color: '#5AD1FF'
+      color-end: '#FFFFFF'
+      phase: 0
+    - shape: ring
+      particle: SNOWFLAKE
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#5AD1FF'
+      color-end: '#FFFFFF'
+      phase: 0
+  mage_flame:
+    skills:
+    - mage_flame
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: fan
+      particle: DUST
+      count: 24
+      radius: 2.5
+      height: 1.3
+      lift: 0.3
+      spin: 0.2
+      expand: 0.6
+      size: 0.75
+      color: '#FF4D2E'
+      color-end: '#FFD166'
+      phase: 0
+    - shape: ring
+      particle: FLAME
+      count: 8
+      radius: 0.7
+      height: 0.1
+      lift: 0.2
+      spin: -0.2
+      expand: 0.3
+      size: 0.75
+      color: '#FF4D2E'
+      color-end: '#FFD166'
+      phase: 0
+  starlight_studio:
+    skills:
+    - starlight
+    anchor: caster
+    duration-ticks: 24
+    interval-ticks: 3
+    layers:
+    - shape: points
+      particle: DUST_COLOR_TRANSITION
+      size: 0.75
+      color: '#FFF3B0'
+      color-end: '#A8C8FF'
+      spin: 0.2
+      expand: 0.15
+      lift: 0
+      points:
+      - - 0.0
+        - 1.3
+        - -1.5
+      - - 0.157
+        - 1.304
+        - -1.21
+      - - 0.315
+        - 1.308
+        - -0.921
+      - - 0.53
+        - 1.311
+        - -0.73
+      - - 0.86
+        - 1.315
+        - -0.739
+      - - 1.189
+        - 1.319
+        - -0.747
+      - - 1.184
+        - 1.323
+        - -0.563
+      - - 1.012
+        - 1.326
+        - -0.281
+      - - 0.84
+        - 1.33
+        - 0.0
+      - - 1.012
+        - 1.334
+        - 0.281
+      - - 1.184
+        - 1.338
+        - 0.563
+      - - 1.189
+        - 1.341
+        - 0.747
+      - - 0.86
+        - 1.345
+        - 0.739
+      - - 0.53
+        - 1.349
+        - 0.73
+      - - 0.315
+        - 1.353
+        - 0.921
+      - - 0.157
+        - 1.356
+        - 1.21
+      - - 0.0
+        - 1.36
+        - 1.5
+      - - -0.157
+        - 1.364
+        - 1.21
+      - - -0.315
+        - 1.368
+        - 0.921
+      - - -0.53
+        - 1.371
+        - 0.73
+      - - -0.86
+        - 1.375
+        - 0.739
+      - - -1.189
+        - 1.379
+        - 0.747
+      - - -1.184
+        - 1.383
+        - 0.563
+      - - -1.012
+        - 1.386
+        - 0.281
+      - - -0.84
+        - 1.39
+        - 0.0
+      - - -1.012
+        - 1.394
+        - -0.281
+      - - -1.184
+        - 1.398
+        - -0.563
+      - - -1.189
+        - 1.401
+        - -0.747
+      - - -0.86
+        - 1.405
+        - -0.739
+      - - -0.53
+        - 1.409
+        - -0.73
+      - - -0.315
+        - 1.413
+        - -0.921
+      - - -0.157
+        - 1.416
+        - -1.21
