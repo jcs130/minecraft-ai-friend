@@ -15,7 +15,7 @@
 
 准入范围为家里 IPv4 `192.168.3.0/24`。没有新增基岩服务或公网端口。旧服域名不能作为本服入口。离线用户名是家庭调试身份方式，不是外部账号认证；每个 Agent 使用独立名字，避免顶掉其他玩家。当前 `max-players=4` 是配置上限，未声称更大并发容量。
 
-Agent 按 [接入指南](MY-AGENT-WORLD-EXTERNAL-AGENT-GUIDE.md)安装原生适配器和锁定依赖；连接示例的 host 改为 `192.168.3.163`、port 保持 `28977`，版本为 `1.21.1`。`sdk.operations()/operations(id)/call(id,args)` 的 30 项绑定和参数不变。网页仍观察常驻 MawExplorer 的同连接数据，不能把它当成新 Agent 的画面；新的账号需另接自己的原生观察链。
+Agent 按 [接入指南](MY-AGENT-WORLD-EXTERNAL-AGENT-GUIDE.md)安装原生适配器和锁定依赖；连接示例的 host 改为 `192.168.3.163`、port 保持 `28977`，版本为 `1.21.1`、`auth: offline`。2026-10-09 SDK 已有 60 项操作（25 只读、35 变更）及 19 个原生频道；通过 `sdk.operations()/operations(id)/call(id,args)` 自查实际能力与必填字段，完整清单见 [原生调用 API](MY-AGENT-WORLD-NATIVE-CALL-API.md)。网页仍观察常驻 MawExplorer 的同连接数据，不能把它当成新 Agent 的画面；新的账号需另接自己的原生观察链。可直接转发的短版见 [局域网连接方法](MY-AGENT-WORLD-LAN-CONNECT.txt)。
 
 ## 持久配置
 
