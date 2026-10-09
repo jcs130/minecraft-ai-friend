@@ -111,6 +111,8 @@ class HealthSmokeTests(unittest.TestCase):
         with patch('http.client.HTTPConnection',return_value=connection), \
                 patch.object(bridge,'bedrock_probe',return_value={'motd':'My Agent World','maxPlayers':4}), \
                 patch.object(bridge,'load_config',return_value={'gamePort':bridge.TCP_PORT}), \
+                patch('maw_bedrock_resources.validate',return_value={'itemCount':1,'perNamespace':{'test':1}}), \
+                patch('maw_bedrock_resources.registered_items',return_value={'nativeItems':1}), \
                 patch.object(health.subprocess,'run',return_value=firewall), \
                 patch.object(health,'probe_agent_observatory',side_effect=AssertionError('legacy probe called')):
             report=health.probe_panel_smoke(scope='society-bedrock')

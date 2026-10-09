@@ -140,6 +140,14 @@ def probe_society_bedrock():
         pong = bridge.bedrock_probe()
         checks['raknet-positive-smoke'] = pong['motd'] == 'My Agent World' and pong['maxPlayers'] == 4
         checks['fixed-artifacts-config'] = bridge.load_config(bridge.ROOT/'services/bedrock.json')['gamePort'] == 28995
+        from maw_bedrock_resources import validate as validate_resources, registered_items
+        resources = validate_resources(bridge.ROOT/'bedrock/plugins/Geyser', deployed=True)
+        checks['native-item-resources'] = resources['itemCount'] > 0
+        registration = registered_items(bridge.ROOT/'bedrock/ops/logs/bedrock.log', resources,
+                                        time.time()-row.get('uptimeSeconds', 0)-5)
+        checks['geyser-native-items-registered'] = registration['nativeItems'] == resources['itemCount']
+        report['resources'] = {'itemCount': resources['itemCount'], 'perNamespace': resources['perNamespace'],
+                               'actualBedrockVisualVerified': False, 'registration': registration}
         firewall = subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
             str(tools/'maw_lan_firewall.ps1'), '-Mode', 'Status', '-Bedrock'],
             capture_output=True, text=True, encoding='utf-8', timeout=20)

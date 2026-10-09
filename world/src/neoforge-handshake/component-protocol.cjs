@@ -58,7 +58,8 @@ function registryFromTsv (text) {
   return result
 }
 
-function createBackendComponentProtocol (registry, particles = null, entitySerializers = null) {
+function createBackendComponentProtocol (registry, particles = null, entitySerializers = null, direction = 'toClient') {
+  if (!['toClient', 'toServer'].includes(direction)) throw Error('INVALID_NATIVE_PROTOCOL_DIRECTION')
   const protocol = structuredClone(mcData.protocol)
   const vanillaMappings = protocol.types.SlotComponentType[1].mappings
   const mappings = {}
@@ -204,7 +205,7 @@ return ctx.varint(value)
       `.trim())]
     }
   })
-  compiler.addProtocol(protocol, ['play', 'toClient'])
+  compiler.addProtocol(protocol, ['play', direction])
   nbt.addTypesToCompiler('big', compiler)
   const compiled = compiler.compileProtoDefSync()
   const parsePacketBuffer = compiled.parsePacketBuffer.bind(compiled)
@@ -221,12 +222,12 @@ return ctx.varint(value)
   return compiled
 }
 
-function loadBackendComponentProtocol (file, particleFile = null, entitySerializerFile = null) {
+function loadBackendComponentProtocol (file, particleFile = null, entitySerializerFile = null, direction = 'toClient') {
   if (particleFile && !file) throw Error('PARTICLE_PROTOCOL_REQUIRES_COMPONENT_REGISTRY')
   if (entitySerializerFile && !file) throw Error('ENTITY_METADATA_PROTOCOL_REQUIRES_COMPONENT_REGISTRY')
   return file ? createBackendComponentProtocol(registryFromTsv(fs.readFileSync(file, 'utf8')),
     particleFile ? registryFromTsv(fs.readFileSync(particleFile, 'utf8')) : null,
-    entitySerializerFile ? registryFromTsv(fs.readFileSync(entitySerializerFile, 'utf8')) : null) : null
+    entitySerializerFile ? registryFromTsv(fs.readFileSync(entitySerializerFile, 'utf8')) : null, direction) : null
 }
 
 // The vanilla connection cannot receive mod component type IDs. Strip only

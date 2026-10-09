@@ -43,6 +43,9 @@ const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONEN
   process.env.GATE_ENTITY_SERIALIZERS_FILE)
 const NativeViewer = require('./native-viewer-packet.cjs')
 const { BedrockProjection } = require('./bedrock-projection.cjs')
+const { BedrockItems } = require('./bedrock-items.cjs')
+const bedrockItemWriter = process.env.GATE_BEDROCK_PROJECTION === '1'
+  ? loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE, null, null, 'toServer') : null
 const nativeViewerHash = process.env.GATE_NATIVE_VIEWER === '1'
   ? NativeViewer.registryHash(process.env.GATE_NATIVE_STATES_FILE) : null
 
@@ -238,7 +241,10 @@ const sessionCount = () => sessions.size
 
 function startSession (front, username) {
   const sess = { front, username, phase: 'config', retry: 0, closed: false, reconnecting: false, backReady: false, frontQueue: [], playQueue: [] }
-  if (process.env.GATE_BEDROCK_PROJECTION === '1') sess.bedrockProjection = new BedrockProjection()
+  if (process.env.GATE_BEDROCK_PROJECTION === '1') {
+    sess.bedrockProjection = new BedrockProjection()
+    sess.bedrockItems = BedrockItems.load(process.env.GATE_BEDROCK_ITEMS_FILE)
+  }
   sessions.add(sess)
 
   // client 级 'packet' 事件：(params, metadata, buffer, fullBuffer)，不随换态被清
@@ -270,6 +276,7 @@ function closeSession (sess, reason) {
     // 【chunk 断流诊断 2026-08-29】chunk 计数随摘要打出（queue=排队期 play=开闸后）
     log(`census[${sess.username}] chunk: queue=${sess.queueChunkCount || 0} play=${sess.playChunkCount || 0}`)
     if (sess.bedrockProjection) log(`bedrock-projection[${sess.username}] ${JSON.stringify(sess.bedrockProjection.stats)}`)
+    if (sess.bedrockItems) log(`bedrock-items[${sess.username}] ${JSON.stringify(sess.bedrockItems.stats)}`)
   } catch (err) {}
   try { sess.back?.end() } catch (e) {}
   try { if (!sess.front.ended) sess.front.end(reason) } catch (e) {}
@@ -606,7 +613,10 @@ function relayTo (sess, target, name, params, dir) {
       }
       return
     }
-    if (componentProtocol && ['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'].includes(name)) params = vanillaProjection(params)
+    if (sess.bedrockItems) {
+      try { params = sess.bedrockItems.outgoing(name, params) }
+      catch (error) { kickFront(sess, '基岩物品显示转换失败：' + error.message); return }
+    } else if (componentProtocol && ['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'].includes(name)) params = vanillaProjection(params)
     if (REMAP.hasMap()) params = REMAP.remapOut(name, params) // 后端→前端: NeoForge号→原版号 ✓
     if (sess.bedrockProjection) {
       try {
@@ -622,11 +632,16 @@ function relayTo (sess, target, name, params, dir) {
     // 【时间包普查】前端方向也计数(与 backCensus 对照找丢包层)
     sess.frontCensus = sess.frontCensus || {}
     sess.frontCensus[name] = (sess.frontCensus[name] || 0) + 1
+  } else if (sess.bedrockItems && ['window_click', 'set_creative_slot'].includes(name)) {
+    try { params = sess.bedrockItems.incoming(name, params) }
+    catch (error) { kickFront(sess, '基岩物品身份校验失败，请重连刷新背包：' + error.message); return }
   } else if (REMAP.hasMap()) {
     params = REMAP.remapIn(name, params) // 前端→后端: 原版号→NeoForge号 ✓
   }
   try {
-    target.write(name, params)
+    if (target === sess.back && sess.bedrockItems && name === 'window_click' && bedrockItemWriter) {
+      target.writeRaw(bedrockItemWriter.createPacketBuffer('packet', { name, params }))
+    } else target.write(name, params)
     if (cookingPotMenu) {
       target.write('open_window', cookingPotMenu)
       log(`DEBUG：[${sess.username}] 农夫乐事烹饪锅菜单转成原版 9x1（window=${cookingPotMenu.windowId}）`)
@@ -658,7 +673,11 @@ function normalizeCustomPayload (params) {
 // 返回 true = 已处置（自答或有意吞掉），不透传；false = 非新约通道，照常透传。
 function handleNeoForgePayload (sess, channel, data) {
   if (sess.bedrockProjection && channel === P.CH.FROZEN_REGISTRY) {
-    try { sess.bedrockProjection.learn(data) } catch (error) {
+    try {
+      sess.bedrockProjection.learn(data)
+      const registry = sess.bedrockProjection.registries.get('minecraft:item')
+      if (registry && sess.bedrockItems && !sess.bedrockItems.stats.registryVerified) sess.bedrockItems.verifyRegistry(registry)
+    } catch (error) {
       kickFront(sess, '基岩注册表映射失败：' + error.message); return true
     }
   }

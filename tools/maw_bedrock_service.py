@@ -150,6 +150,17 @@ def load_config(path: Path, *, root: Path = ROOT) -> dict:
     gate_env.pop('GATE_LAN_SUBNET', None)
     expected_files = {directory / name: sha for name, sha in ARTIFACTS.items()}
     expected_files[directory / 'plugins/Geyser/config.yml'] = hashlib.sha256(geyser_config().encode()).hexdigest()
+    resources = directory/'plugins/Geyser'
+    if (resources/'resource-contract.json').exists():
+        import maw_bedrock_resources as resource_builder
+        contract = resource_builder.validate(resources, deployed=True)
+        expected_files[resources/'resource-contract.json'] = hashlib.sha256((resources/'resource-contract.json').read_bytes()).hexdigest()
+        for name, subdirectory in [(resource_builder.PACK, 'packs'), (resource_builder.MAPPINGS, 'custom_mappings'),
+                                   (resource_builder.CATALOG, '')]:
+            expected_files[resources/subdirectory/name] = contract['files'][name]['sha256']
+        if hashlib.sha256(Path(gate_env['GATE_IDMAP_FILE']).read_bytes()).hexdigest() != contract['inputs']['idmapSha256']:
+            raise ValueError('Bedrock resources do not match the native item projection')
+        gate_env['GATE_BEDROCK_ITEMS_FILE'] = str(resources/resource_builder.CATALOG)
     stat = path.stat()
     stamps = {path: (stat.st_size, stat.st_mtime_ns)}
     stat = main_path.stat(); stamps[main_path] = (stat.st_size, stat.st_mtime_ns)

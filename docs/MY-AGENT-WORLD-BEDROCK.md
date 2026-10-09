@@ -1,6 +1,6 @@
 # My Agent World：基岩版局域网桥接
 
-2026-10-09：独立 ViaProxy + Geyser 桥已常驻运行，家庭网段 UDP 防火墙放行已读回。5 项健康/冒烟检查、协议转换和进世界收取区块、背包的 Java 侧测试通过；真实手机登录和模组操作未验收。不要把发现响应当作完整基岩客户端游玩成功。
+2026-10-09：独立 ViaProxy + Geyser 桥常驻运行，家庭网段 UDP 防火墙放行已读回。首批 732 种模组静态物品的原始图标、名称与自定义映射已部署，7 项健康/冒烟检查通过；实际手机下载与显示未验收。详见 [资源适配范围与维护](MY-AGENT-WORLD-BEDROCK-RESOURCES.md)。不要把发现响应或 Java 转换测试当作完整基岩客户端游玩成功。
 
 ## 入口与链路
 
@@ -17,13 +17,13 @@
 
 新 UDP 监听只绑定 `192.168.3.163`，IPv6 不监听；显式防火墙规则仅允许 `192.168.3.0/24`，另阻止其他 IPv4 源。没有路由器映射或公网发布，不占用旧 Paper 的 19132/19140 或现有其他 UDP 服务。原 Java、网关和 worker 本轮均未重启。
 
-基岩端使用已有号表的兼容方块/物品表示，尚未添加本模组包专用的基岩资源映射。网页的原始 NeoForge 贴图、模型和原生 GUI 适配不能自动变成基岩能力。模组特有界面、女仆/YSM 外观、Create 动态结构及法术效果需逐项实测；不能据入口可用宣称全部可玩。[Geyser 自定义物品文档](https://geysermc.org/wiki/geyser/custom-items/)要求另外提供相应映射和基岩资源包。Agent 仍用其本人 Mineflayer 连接和原生 SDK。
+首批静态生成型物品采用原模组贴图及独立 Geyser 自定义物品定义；其他物品和世界方块仍使用原有兼容表示。网页的原始 NeoForge 贴图、模型和原生 GUI 适配不能自动变成基岩能力。模组特有界面、女仆/YSM 外观、Create 动态结构及法术效果需逐项适配；不能据入口可用宣称全部可玩。[Geyser 自定义物品文档](https://geysermc.org/wiki/geyser/custom-items/)要求另外提供相应映射和基岩资源包。Agent 仍用其本人 Mineflayer 连接和原生 SDK。
 
 28994 独有 `GATE_BEDROCK_PROJECTION=1`：按该连接收到的真实 NeoForge FrozenRegistrySnapshot 还原标签、属性和原版实体 ID，不把原始模组号交给 ViaVersion；没有基岩定义的模组实体暂不发送，其后续 metadata 也不发送，避免错读成其他生物。这意味着部分模组 NPC/敌人暂不可见，不能宣称模组战斗可用。原网关有意跳过的模组配方流未被伪造为已支持：向转换层声明空配方目录，配方书及实际合成必须另外验收；原 Agent 原生配方 SDK 保持。普通包转换异常仅结束该连接，不使网关进程退出。
 
 ## 入服自动下载资源
 
-已启用 `enable-integrated-pack=true`、`enable-custom-content=true` 和 `force-resource-packs=true`。这是 Geyser 基础兼容资源的自动下发配置；真实手机的下载提示/完成尚未实测。连接时若提示资源下载，应选择“下载并加入”。当前没有冒充整套模组已转换的空白自制包。
+已启用 `enable-integrated-pack=true`、`enable-custom-content=true` 和 `force-resource-packs=true`。除 Geyser 基础兼容资源外，现已部署 451,684 字节的 `maw-native-icons.mcpack`，提供 732 种物品原图及图标索引。真实手机的下载提示/完成尚未实测。连接时若提示资源下载，应选择“下载并加入”。
 
 玩家在其他服务器看到的自动下载通常是基岩资源包；基岩原生附加包还可以包含行为内容。Java 的 NeoForge JAR 不能交给基岩版直接运行。后续本服专属的贴图/模型/声音包放在 `bedrock/plugins/Geyser/packs/*.mcpack`，自定义物品映射放在 `custom_mappings/*.json`（或对应 Geyser 扩展），正常重启本桥后随登录发送，不必重启主世界。[官方资源包下发说明](https://geysermc.org/wiki/geyser/packs/)明确支持本地包并要求先转换为基岩格式。资源转换、物品/方块/实体映射和原生交互是三项独立验收；下载完成不能替代玩法验收。
 
@@ -42,7 +42,7 @@ $py = 'C:\Users\lzl19\.cache\codex-runtimes\codex-primary-runtime\dependencies\p
 & $py world/ops/health/health_mon.py --society-bedrock-smoke
 ```
 
-健康探针核对新鲜守护状态、所属 Java/UDP 监听、RakNet Pong、锁定文件及实际防火墙规则；冒烟只检查新基岩入口，不改历史服务验收。健康不等于真实基岩登录或完整模组验收。
+健康探针核对新鲜守护状态、所属 Java/UDP 监听、RakNet Pong、锁定文件、实际防火墙规则、资源包与映射完整性及当前 Geyser 进程实际注册数量；冒烟只检查新基岩入口，不改历史服务验收。健康不等于真实基岩登录或完整模组验收。
 
 只读查看防火墙：
 
