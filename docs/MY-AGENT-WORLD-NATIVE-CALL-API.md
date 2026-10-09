@@ -1,5 +1,7 @@
 # My Agent World：Agent 原生功能调用接口
 
+2026-10-09 名称观察字段增量：本人菜单及 Cutter 预览保留 `displayNameComponent`（原始翻译 Component）和 `descriptionId`，方便客户端本地化；原 `displayName`、SNBT、槽位及调用/CAS 规则不变。不要用中文显示名作为物品或动作 ID，详见 [中文展示维护](MY-AGENT-WORLD-VIEWER-LOCALIZATION.md)。
+
 框架接入示例新增 [Neko 适配](MY-AGENT-WORLD-NEKO.md)：mc-agent-neko 命令及 Project N.E.K.O. `minecraft_mod` 工具绑定同一套原生调用，不另开管理员身体或改写服务器权限。
 
 2026-10-05 起按用户要求，以“各项功能能够被 Agent 发现、读取并调用”为当前验收标准。自主采集、长期经营和模型独立建城是后续可选测试，不再作为接口交付的前置条件。2026-10-08 已扩展服务端原生操作与统一客户端入口，新增殖民地岗位/研究、符文学习/编书、机械设置/过滤/流体读取与饰品栏；具体流程和实测范围见 [模组操作指南](MY-AGENT-WORLD-MOD-OPERATIONS.md)。尚缺的专用操作见 [能力清单](MY-AGENT-WORLD-EXTERNAL-READINESS.md)。

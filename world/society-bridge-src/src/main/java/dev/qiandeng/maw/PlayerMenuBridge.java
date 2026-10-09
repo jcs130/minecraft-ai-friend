@@ -6,6 +6,7 @@ import com.google.gson.JsonParser;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
@@ -134,6 +135,10 @@ final class PlayerMenuBridge {
         value.addProperty("id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
         value.addProperty("count", stack.getCount());
         value.addProperty("displayName", stack.getHoverName().getString());
+        // Keep the original translatable Component and its arguments. The
+        // server's flattened (usually English) string is not a client locale.
+        value.add("displayNameComponent", ComponentSerialization.CODEC.encodeStart(
+                RegistryOps.create(JsonOps.INSTANCE, player.registryAccess()), stack.getHoverName()).getOrThrow());
         value.addProperty("descriptionId", stack.getDescriptionId());
         // Full native components are retained as SNBT. The proxy item shown by
         // Mineflayer is only a visual approximation and must never be treated as identity.

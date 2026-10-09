@@ -1,5 +1,7 @@
 # My Agent World：Domum 原生制板接入
 
+2026-10-09 后续：菜单和预览新增原 `displayNameComponent` / `descriptionId`，网页按原翻译键与材质参数显示中文，完整 SNBT 和调用规则保持。图标扩展与当前资产见 [图标与中文维护](MY-AGENT-WORLD-VIEWER-LOCALIZATION.md)。
+
 2026-10-09 已在常驻新服以普通非 OP 的 mc-agent-neko 身体实测：普通放置/交互打开 Cutter，选 `domum_ornamentum:fpanel` 的 full 款式，真实两次各放入 1 圆石、每次取出 4 面板，最终 8 件真实库存且光标为空，重连后保留。产物实际包含 `domum_ornamentum:texture_data`（`minecraft:block/oak_planks` → `minecraft:cobblestone`）和 `minecraft:block_state`（`type:full`）。站位/机器物品和材料是披露的管理员测试夹具，不是自主采集证明。
 
 首次打开尚未选组时，原 `currentGroup` 可以为 null；服务端现返回真实空选择和零当前变体，不再触发异常，也不会替玩家自动选组。快照增加原模组分组及款式的第一页各最多 10 个实际模板/材质预览；每项保留原索引和完整 SNBT，菜单/windowId/stateId/本人 UUID 继续校验。预览不是可取物品或库存槽。取物、材料消耗仍必须走真实 `menu.click`，实际产物按菜单回执确认。

@@ -4,6 +4,9 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.mojang.serialization.JsonOps;
+import net.minecraft.resources.RegistryOps;
+import net.minecraft.network.chat.ComponentSerialization;
 import com.ldtteam.domumornamentum.block.IMateriallyTexturedBlock;
 import com.ldtteam.domumornamentum.block.ModBlocks;
 import com.ldtteam.domumornamentum.client.model.data.MaterialTextureData;
@@ -105,7 +108,13 @@ final class DomumCutterBridge {
         JsonObject value = new JsonObject(); boolean empty = stack == null || stack.isEmpty();
         value.addProperty("id", empty ? "minecraft:air" : BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
         value.addProperty("count", empty ? 0 : stack.getCount()); value.addProperty("snbt", snbt(player, stack));
-        if (!empty) value.addProperty("name", stack.getHoverName().getString()); return value;
+        if (!empty) {
+            value.addProperty("name", stack.getHoverName().getString());
+            value.addProperty("descriptionId", stack.getDescriptionId());
+            value.add("displayNameComponent", ComponentSerialization.CODEC.encodeStart(
+                    RegistryOps.create(JsonOps.INSTANCE, player.registryAccess()), stack.getHoverName()).getOrThrow());
+        }
+        return value;
     }
     private static Location location(ArchitectsCutterContainer menu) {
         try {

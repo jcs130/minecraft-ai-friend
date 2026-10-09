@@ -21,7 +21,7 @@ const result = await sdk.call('ysm.select', {
 
 本轮普通非 OP `MawVisualQA1009` 通过真实 mc-agent-neko Mineflayer 身体与上游 WebSocket 调用完成 Steve → Alex → Boy/red，实际浏览器显示原模型；错误纹理、过期 CAS 被拒绝，同 callId 仅返回既有回执。重连与新服正常重启后 Boy/red 保留，MawExplorer 的 Boy/blue 不变。测试未启动 `Agent.start`、没有模型调用或 QwenPaw 连接。测试站位和切割台材料有明确管理员夹具，仅证明普通接口和画面可用，不声称自主生存获得材料。
 
-当前桥 SHA256 为 `576c911f0ba2b9f07c7a03f246e21a2497c9d36646e55ca0959be9a2372dfe28`；资产目录为 `native-20261008-v14-mod-operations`，27 个运行 JAR。下方 2026-10-05 的 v10/v11 数量、哈希、显示范围和维护记录均为历史，不能用作当前锁。
+当前桥 SHA256 为 `a672b1d233941b31e782f0465d379e1b2e90756daa30882988277d1f3647f8ec`；资产目录为 `native-20261009-v15-chinese-icons`，27 个运行 JAR。本次新增中文与图标适配，YSM 原资源保持，详见 [网页中文与图标维护](MY-AGENT-WORLD-VIEWER-LOCALIZATION.md)。下方 2026-10-05 的 v10/v11 数量、哈希、显示范围和维护记录均为历史，不能用作当前锁。
 
 ## 2026-10-05 历史实现
 

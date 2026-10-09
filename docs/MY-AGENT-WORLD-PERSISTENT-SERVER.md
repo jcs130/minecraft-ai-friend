@@ -1,5 +1,7 @@
 # My Agent World：常驻服运维与 Agent 操作指引
 
+2026-10-09 图标/中文增量已发布：桥 `a672b1d2…47f8ec`、原资产 v15、原版及模组名称 Component 翻译、Domum 第一页十组原生图标。原暂停/未知动作、世界及其他 26 JAR 保留；当前维护与恢复边界见 [图标与中文维护](MY-AGENT-WORLD-VIEWER-LOCALIZATION.md)。
+
 2026-10-06：已按用户要求开放家庭 LAN，防火墙、冷备、持久配置与健康启动完成；同宿主 LAN IP 普通 Agent 登录/三项本人原生调用、网页与 SSE 已通过，另一台实体设备尚未实测。当前入口见下表和 [局域网部署](MY-AGENT-WORLD-LAN.md)。原 world-life 和 27 JAR 保留，主 Agent 的历史未知动作仍暂停。网络可达不代表全部模组、Java 完整画面或新服基岩已完成。
 
 更新：2026-10-08。本文说明新的 NeoForge 生存服与普通玩家 Agent，具体游玩验收记录由维护者在文末追加。端口、世界、角色与恢复规则以本文及当前运行配置为准；[研究记录](MY-AGENT-WORLD-LAB.md)中的 28978/28980/28983 等历史研究端口不能代替本文的常驻入口。最新普通 Agent 与殖民地发展链的证明、失败和缺口见 [发展链验收](MY-AGENT-WORLD-AUTONOMOUS-LIFECYCLE.md)。
@@ -13,7 +15,7 @@
 | 旧实验世界 | `server\world-lab` | 保留，与新生活世界分开 |
 | 注册表研究副本 | `E:\QiandengJiSocietyLab\research\registry-server` | 保留其研究世界、号表和原始证据，不当作当前生活服 |
 | 常驻号表与网关缓存 | `gateway\permanent\registry`、`gateway\permanent\idmap.json`、`gateway\permanent\knowledge.json` | 从通过验证的研究产物复制，配置引用常驻目录，不依赖清理研究副本 |
-| 原生网页资产 | `assets\native-20261008-v14-mod-operations` | 保留模组原始资源、冲突与完整性清单；当前区块号表SHA256为 `039bd785956b452e7788a8a3a351477536fedf082b6724aceac0a64c580b5712`；YSM 试换范围见 [模型记录](MY-AGENT-WORLD-YSM.md) |
+| 原生网页资产 | `assets\native-20261009-v15-chinese-icons` | 保留 v14 原模型/贴图，新增官方 zh_cn；区块号表 SHA256 仍为 `039bd785956b452e7788a8a3a351477536fedf082b6724aceac0a64c580b5712`；当前范围见 [图标与汉化](MY-AGENT-WORLD-VIEWER-LOCALIZATION.md) |
 | Java 服务端 | `192.168.3.163:28976` | 家庭 LAN 模组后端；真人 Java 客户端须匹配模组包并单独验证 |
 | Agent 协议网关 | `192.168.3.163:28977` | Mineflayer 玩家从这里登录，完成 NeoForge 兼容与原生数据转发 |
 | Agent 同连接网页 | `http://192.168.3.163:28984/` | 观察 MawExplorer 的真实行动与本人原生世界数据 |
