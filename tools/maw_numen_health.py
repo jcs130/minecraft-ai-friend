@@ -18,6 +18,8 @@ def probe(root=ROOT, fetch=urlopen):
     checks = {}
     report = {'schemaVersion': 1, 'scope': 'official_numen_install_and_supervised_server',
               'numenVersion': VERSION, 'modelRequests': 0, 'worldActions': 0,
+              'clientOptional': True, 'numenRequiredOnServer': True,
+              'unattendedServerMcpImplemented': False,
               'officialMcp': {'location': 'owner_java_client', 'liveClientVerified': False},
               'checks': checks, 'ok': False}
     try:
@@ -46,9 +48,25 @@ def probe(root=ROOT, fetch=urlopen):
         checks['native-lan-entrance-ready'] = any(r['id'] == 'gate' and r['port'] == 28977 and r['ready'] for r in owner['services'])
         log = (root/'server/logs/latest.log').read_text('utf-8', errors='replace')
         checks['new-core-and-api-loaded'] = all(f'Numen {VERSION} ({mod})' in log for mod in ('numen', 'numen_api'))
+        compat = mods/'maw_numen_compat-0.1.0.jar'
+        compiled = json.loads((root/'build/numen-optional-client/build-record.json').read_text('utf-8'))
+        repo = Path(__file__).resolve().parents[1]
+        lock = json.loads((repo/'manifests/society-lab-1.21.1.lock.json').read_text('utf-8'))
+        locked = next(item for item in lock['builtArtifacts'] if item['name'] == compat.name)
+        checks['optional-client-compat-jar-and-lock'] = (hashlib.sha256(compat.read_bytes()).hexdigest()
+                == compiled['sha256'] == locked['sha256'] and compiled['numenSha256'] == SHA
+                and compiled['apiSha256'] == API_SHA)
+        with zipfile.ZipFile(compat) as z:
+            mixins = json.loads(z.read('maw_numen_compat.mixins.json'))
+            checks['optional-client-server-mixins'] = (mixins['required'] is True
+                and mixins['server'] == ['NumenNetworkChannelMixin', 'NumenClientTransportMixin']
+                and not mixins.get('client')
+                and all('dev/qiandeng/maw/numencompat/mixin/'+name+'.class' in z.namelist()
+                        for name in mixins['server']))
+        checks['optional-client-compat-loaded'] = 'Numen 0.1.4.1 client channels are optional' in log
     except Exception as error:
         report['error'] = f'{type(error).__name__}: {error}'[:350]
-    report['ok'] = len(checks) == 11 and all(checks.values())
+    report['ok'] = len(checks) == 14 and all(checks.values())
     return report
 
 

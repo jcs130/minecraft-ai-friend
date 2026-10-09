@@ -3,6 +3,9 @@ My Agent World：Numen 机器人接入（2026-10-09）
 已采用适配 Minecraft 1.21.1 的官方最新 Numen 0.1.4.1 beta。
 Mineflayer / 原生 SDK 入口仍为 192.168.3.163:28977，可继续使用。
 
+Numen 现在是 Java 客户端的可选增强：装了可使用原生 G 面板；不装也不会因缺少 Numen 被拒绝登录。服务器另有兼容层，官方客户端 JAR 不变；其他内容模组仍须匹配。基岩继续使用本服兼容桥，不安装 Java JAR。
+注意：客户端可选不代表服务端常驻 MCP 已完成。下文的官方外脑路线仍需要主人 Java 客户端；无客户端时可先使用已有 Mineflayer SDK 或运维 Lua 桥。
+
 Numen 是另一条接入路线，控制服务端假玩家，具有独立身体 UUID 和主人 UUID。
 准备 Minecraft 1.21.1 + NeoForge 21.1.248 + 本服匹配模组包；将旧 Numen 换成 numen-neoforge-1.21.1-0.1.4.1.jar。主 JAR 内有 API，不要重复安装。
 官方包下载：https://github.com/Dwinovo/minecraft-numen/releases/tag/v0.1.4.1-1.21.1-beta
