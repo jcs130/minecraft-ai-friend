@@ -14,6 +14,8 @@
 
 2026-10-08 操作扩展：`sdk.operations()` 可查询新增殖民地岗位/研究、Ars 学习编书、Create 设置/过滤/流体和 Curios 饰品原生接口；[实际操作步骤](MY-AGENT-WORLD-MOD-OPERATIONS.md)包含限制与回执。
 
+2026-10-09：旧千灯纪身体接口接入优先使用[原生身体 SDK](MY-AGENT-WORLD-NATIVE-SDK.md)，含70项目录、状态、异步动作、持久 action_id、取消/重连对账及 Python JSONL 示例。[短版连接说明](MY-AGENT-WORLD-NATIVE-SDK-CONNECT.txt)。这是普通玩家连接 provider，Numen 假玩家控制/原身份恢复仍未接入。
+
 ## 连接与客户端适配器
 
 运行时固定为 Node.js 22、Mineflayer 4.37.1、minecraft-protocol 1.66.2、minecraft-data 3.112.0；使用仓库运行清单所锁的依赖和服务器注册表，不自行升级其中一个包。连接版本为 `1.21.1`。客户端框架和模型可自行选择；当前适配器不负责调用模型。

@@ -165,7 +165,7 @@ final class PlayerMenuBridge {
 
     static JsonObject nativeItem(ServerPlayer player, ItemStack stack) { return item(player, stack); }
 
-    private static JsonObject snapshot(ServerPlayer player) {
+    static JsonObject snapshot(ServerPlayer player) {
         AbstractContainerMenu menu = player.containerMenu;
         JsonObject state = new JsonObject();
         state.addProperty("schemaVersion", 1);

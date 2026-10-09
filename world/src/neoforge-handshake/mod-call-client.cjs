@@ -299,4 +299,10 @@ function attachModCallClient (bot, clients, isClosed = () => false) {
     detach () { if (closed) return; closed = true; bot.off('spawn', contextChanged); bot.off('respawn', contextChanged) } }
 }
 
-module.exports = { attachModCallClient, modOperationCatalog, validateModArguments }
+function validateJsonArguments (args, schema) {
+  safeJson(args)
+  if (Buffer.byteLength(JSON.stringify(args), 'utf8') > 65536) throw failure('MOD_CALL_ARGUMENT_BUDGET_EXCEEDED')
+  validate(args, schema)
+  return true
+}
+module.exports = { attachModCallClient, modOperationCatalog, validateModArguments, validateJsonArguments }

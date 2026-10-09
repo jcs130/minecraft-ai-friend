@@ -17,7 +17,7 @@ test('spell aiming accepts finite absolute points and rejects malformed or unbou
 test('body plans discover the same operations and typed schemas as the external SDK', async () => {
   const calls = { call () { throw Error('catalog must not dispatch') } }
   const list = await runModToolAction(parse({ type: 'mod', operation: 'list' }), calls)
-  assert.equal(list.operationCount, 49)
+  assert.equal(list.operationCount, 60)
   assert.deepEqual(list.operations.map(row => row.id), modOperationCatalog().operations.map(row => row.id))
   assert.equal(list.operations[0].parameters, undefined)
   const explained = await runModToolAction(parse({ type: 'mod', operation: 'explain', id: 'colony.assignCitizen' }), calls)

@@ -46,6 +46,12 @@ function attachNativeWorldQuery (bot, { timeoutMs = 4000 } = {}) {
     })
   }
   return {
+    capabilities () { return ask('capabilities', {}) },
+    bodySnapshot () { return ask('body_snapshot', {}) },
+    bodyObserve ({ radius = 8 } = {}) {
+      if (!Number.isInteger(radius) || radius < 1 || radius > 12) throw Error('NATIVE_BODY_RADIUS_INVALID')
+      return ask('body_observe', { radius })
+    },
     entity ({ entityId, expectedUuid }) {
       if (!Number.isSafeInteger(entityId) || entityId < 0 || !UUID.test(expectedUuid || '')) throw Error('NATIVE_ENTITY_QUERY_INVALID')
       return ask('entity', { entityId, expectedUuid: expectedUuid.toLowerCase() })

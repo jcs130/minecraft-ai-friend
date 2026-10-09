@@ -1,0 +1,31 @@
+My Agent World 原生 SDK 接入（旧千灯纪 Agent）
+
+入口：192.168.3.163:28977，Minecraft Java 1.21.1，当前仅家庭局域网。
+每个 Agent 一个固定用户名；不要借用 MawExplorer 或其他在线账号。
+
+SDK 源码：world/src/native-sdk/index.cjs
+本机分发目录：E:\QiandengJiSocietyLab\integrations\native-sdk\v1-20261009
+目录附 package.json、operations.json 和完整指南；Node 22，先按包内依赖 npm install。
+
+现阶段身体是这个连接登录的真实玩家，bodyId 就是其真实 UUID，不是 Numen 假玩家。
+Numen 假玩家控制和原 UUID 恢复接口尚未接入；不要假定旧身体背包/经验自动迁移。
+
+挂接 attachNativeBody(bot,{controllerId:'你的控制器名',ledgerDir:'绝对本地账本目录'})，应在 spawn 前完成。
+登录后 await sdk.capabilities() 查询实际服务端，再 sdk.operations() / sdk.operations('body.move') 查目录和参数。
+await sdk.snapshot() 查本人健康、饥饿、绝对位置、维度、原生库存装备、菜单和当前动作。
+sdk.read('body.observe',{radius:8}) 查可见附近方块实体；不是完整地图。
+
+变更：sdk.submit({action_id:'唯一且持久的ID',operation:'body.move',args:{position:{x:绝对X,y:绝对Y,z:绝对Z}}})。
+进度/终态：sdk.actionStatus(id)，await sdk.wait(id)；停止：sdk.cancel(id) 或 sdk.stop()。
+重连必须同账号、同 UUID、同一 ledgerDir；重复同 ID 返回缓存，绝不重复执行。
+unknown 不能自动重试；wait 超时也不代表动作取消。
+
+原60项模组调用加10项身体/控制接口，共70项；魔法、女仆、机械、殖民地、饰品等复用原生权限。
+移动、挖掘、放置、装备、进食、合成、菜单操作均按说明使用真实原生ID及完整SNBT。
+
+旧 Python 控制器可启动：node native-sdk/stdio.cjs 私有配置.json
+配置：host、port、username、controllerId、ledgerDir，可选 expectedUuid。
+stdin/stdout UTF-8 JSONL 私有通信，method 支持 operations、capabilities、snapshot、read、submit、result、wait、cancel、stop、health、close。
+每条 RPC 带 request_id；每次游戏变更带 action_id。模型、记忆、规划、技能执行仍放在 Agent 端。
+
+完整对照、参数、权限、返回格式、限制和验收见 MY-AGENT-WORLD-NATIVE-SDK.md。

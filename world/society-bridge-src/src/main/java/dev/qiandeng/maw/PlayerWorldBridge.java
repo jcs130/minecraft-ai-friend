@@ -58,7 +58,7 @@ import java.util.HashSet;
 /** Native identity for only the block this player can currently see. */
 final class PlayerWorldBridge {
     private static final int MAX_REQUEST = 4096;
-    private static final int MAX_STATE = 16384;
+    private static final int MAX_STATE = 65536;
     private static final Map<UUID, Integer> LAST_QUERY_TICK = new HashMap<>();
     private static final Map<UUID, Set<UUID>> TRACKED = new HashMap<>();
 
@@ -232,15 +232,16 @@ final class PlayerWorldBridge {
         if (player.connection != null && player.connection.hasChannel(State.TYPE)) {
             result.addProperty("playerUuid", player.getUUID().toString());
             String json = result.toString();
+            int budget = result.has("query") && result.get("query").getAsString().equals("body_snapshot") ? MAX_STATE : 16384;
             // Never truncate a native item component or let encoding a large
             // component fail the connection. The caller receives an explicit
             // private failure instead of an apparently complete inventory.
-            if (json.getBytes(StandardCharsets.UTF_8).length > MAX_STATE) {
+            if (json.getBytes(StandardCharsets.UTF_8).length > budget) {
                 JsonObject oversized = result(result.get("requestId").getAsString());
                 oversized.addProperty("playerUuid", player.getUUID().toString());
                 oversized.addProperty("ok", false);
                 oversized.addProperty("code", "world_state_too_large");
-                oversized.addProperty("maxBytes", MAX_STATE);
+                oversized.addProperty("maxBytes", budget);
                 json = oversized.toString();
             }
             PacketDistributor.sendToPlayer(player, new State(json));
@@ -355,7 +356,8 @@ final class PlayerWorldBridge {
             if (!requestId.matches("[A-Za-z0-9:_-]{1,64}")) return;
             String kind = input.get("kind").getAsString();
             if (input.get("schemaVersion").getAsInt() != 1 ||
-                    !(kind.equals("look") || kind.equals("entity") || kind.equals("recipes") || kind.equals("collision"))) {
+                    !(kind.equals("look") || kind.equals("entity") || kind.equals("recipes") || kind.equals("collision") ||
+                            kind.equals("capabilities") || kind.equals("body_snapshot") || kind.equals("body_observe"))) {
                 reject(player, requestId, "unsupported_query"); return;
             }
             int now = player.getServer().getTickCount();
@@ -364,6 +366,9 @@ final class PlayerWorldBridge {
                 reject(player, requestId, "rate_limited"); return;
             }
             LAST_QUERY_TICK.put(player.getUUID(), now);
+            if (kind.equals("capabilities") || kind.equals("body_snapshot") || kind.equals("body_observe")) {
+                send(player, PlayerBodyState.query(player, input, result(requestId))); return;
+            }
             if (kind.equals("collision")) { send(player, PlayerCollisionBridge.query(player, input, requestId)); return; }
             if (kind.equals("entity")) { entity(player, input, requestId); return; }
             if (kind.equals("recipes")) { send(player, PlayerRecipeCatalog.query(player, input, result(requestId))); return; }

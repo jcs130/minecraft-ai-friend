@@ -74,6 +74,7 @@ SOCIETY_SERVICE_MANIFEST = {
 # Optional client-framework integration. This checks installed artifacts only;
 # it must not report an autonomous Neko/dialogue runtime as healthy from a file.
 NEKO_ADAPTER_MANIFEST = Path('E:/QiandengJiSocietyLab/integrations/neko/installation.json')
+SOCIETY_NATIVE_SDK_MANIFEST = Path('E:/QiandengJiSocietyLab/integrations/native-sdk/installation.json')
 
 
 def probe_neko_adapters(manifest_path=None):
@@ -393,6 +394,12 @@ def probe_agent_frame():
 
 
 def probe_panel_smoke(scope=None):
+    if scope == 'society-native-sdk':
+        spec = importlib.util.spec_from_file_location('maw_native_sdk_health', PROJECT/'tools/maw_native_sdk_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        native = module.probe()
+        return {'ok': native['ok'], 'society_native_sdk': native, 'modelRequests': 0, 'worldActions': 0}
     if scope == 'society-bedrock':
         bedrock = probe_society_bedrock()
         return {'ok': bedrock['ok'], 'society_bedrock': bedrock,
@@ -2067,6 +2074,10 @@ def inventory_lock_failure(reason):
 
 
 def main():
+    if sys.argv[1:] == ['--society-native-sdk-smoke']:
+        report = probe_panel_smoke(scope='society-native-sdk')
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
     if sys.argv[1:] == ['--society-bedrock-smoke']:
         report = probe_panel_smoke(scope='society-bedrock')
         print(json.dumps(report, ensure_ascii=False, indent=2))

@@ -79,3 +79,4 @@
 - 镜像 COPY 的资产(资产/worker/bundle):Dockerfile 必须显式 COPY,重建镜像会丢「只活在旧镜像层」的文件。
 - RCON 探针/脚本:Source RCON 响应包按 request-id 匹配读取,双读会卡到超时假红。
 - 页签/满高不滚布局里,卡片顺序=可见性:后加的卡必须显式排位并加冒烟断言。
+2026-10-09 原生身体 SDK 已发布：src/native-sdk 70项目录/SDK本地持久action_id/异步进度取消对账、服务端本人状态与可见观察、Python JSONL，包integrations/native-sdk/v1-20261009共28文件。连接身体是Mineflayer登录玩家，Numen假玩家控制/restore=false，旧main@5cee660仅对照，不假称已迁原身体记忆技能。471Node+11Python/实际Java审计全过0skip，隔离和正式LAN28977各8闭环通过，重连同UUID同ID缓存零追加、JSONL实际读状态正常退出，0模型。桥b32a15cc…a477与锁/编译源相符，87冷备文件CRC逐SHA通过，26其他JAR/资源保持；原owner7688158f…新27748/39660/11320健康，原MawExplorer暂停/7927420b未知及3231738原账本前缀保留，仅追加停启生命周期3行，5保护配置SHA全等，旧Paper/路由/基岩桥未改。QA全exit0/临时端口关闭/QA属性mods恢复，stop/resume/shutdown维护完成勿重放。首次spawn前用户名SDK初始化失败及无游戏动作QA进程37048强制清理、旧断言/环境失败证据保留，监听预算有界且清理恢复；17最终验收全真，SDK健康scope仅包/桥/守护。文档docs/MY-AGENT-WORLD-NATIVE-SDK.md/TXT；私有research/native-sdk-integration-20261009勿上传。继续experiment/agent-society-1.21.1。
