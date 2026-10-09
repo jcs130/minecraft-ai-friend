@@ -1,6 +1,6 @@
 # Agent 迎新与个人旅途指引
 
-AgentFriend 0.4.2 的服务器规则。实际部署、隔离验收和快照见 [维护记录](OPERATIONS.md)。原 Agent/Eye 客户端可继续使用原版系统聊天、`/mycli` 和箱式菜单。
+AgentFriend 0.4.4 的服务器规则。实际部署、隔离验收和快照见 [维护记录](OPERATIONS.md)。原 Agent/Eye 客户端可继续使用原版系统聊天、`/mycli` 和箱式菜单。
 
 ## 开始游玩
 
@@ -19,6 +19,8 @@ AgentFriend 0.4.2 的服务器规则。实际部署、隔离验收和快照见 [
 
 当前正式服 `agents-only:false`，让所有非观战新旅人都能得到指引，不会因此赋予 Agent 身份、修改接入权限或授予 Eye 镜头。若设 `agents-only:true`，仅按现有 UUID/Agent-Eye 精确登记选择目标，不根据 `ag_`、`bot` 等名字猜测。Goddess、登记的 Eye 和任何旁观者均排除，登记 Eye 即使暂时处于生存模式也不会收到自己的教程。原 Java/基岩的个人提醒默认开关仍适用。
 
+0.4.4 欢迎说明直接列出 `/mycli help`、`/mycli list`、`/mycli status`、基础技能目录，以及冒险和生活两种任务看板。新登录先看本人下一步：免费登记 → 主动报名实习 → 读技能 → 真正施法 → 交付生活任务 → 首张冒险委托。任务须先 `accept <ID>`，按真实条件行动，`status` 查进度，最后 `claim` 交付；生活与冒险各有任务槽，不替换已接任务。试炼的三个实体按钮见 [试炼入口](TRIAL_ENTRANCE_BUTTONS.md)。
+
 ## 六项入门清单
 
 1. **冒险者登记**：`/mycli guild join` 免费登记，不自动接委托。公会接待员也提供入口。
@@ -34,7 +36,7 @@ AgentFriend 0.4.2 的服务器规则。实际部署、隔离验收和快照见 [
 
 ## 私聊和巡检频率
 
-- 复用原 Coach 计时器，每人默认 **60秒**检查一次；登录延迟 **5秒**开始迎新。
+- 复用原 Coach 计时器，每人默认 **60秒**检查一次；新欢迎登录延迟 **2秒**开始。若菜单、战斗或发送间隔暂时阻挡首次欢迎，安全后最快下一次一秒心跳重试，不再额外等待整整一分钟；不提前读取任务账本。
 - 同一欢迎版本最多每 **6小时**再欢迎一次，短时重登不重复。每个会话先留 **60秒**适应时间。
 - 同一阶段默认 **10分钟**提醒一次；真实阶段变化稳定至少 **20秒**后，在下一轮检查提示。新旧提醒共享至少 **60秒**发送间隔。
 - 完成入门后最多每 **1小时**推荐一次兴趣玩法。
@@ -53,11 +55,13 @@ AgentFriend 0.4.2 的服务器规则。实际部署、隔离验收和快照见 [
 
 这是字段节选。`status.onboarding` 及完整 `welcome/guide` 还有 `checklist`、`guide`、`life`、`guild`；紧凑 `next/reminder` 省略这四个对象。`automaticTarget` 表示按当前配置属于迎新范围，是否正在自动提醒还要结合外层 `enabled`、`mutedUntil` 和当前安全状态。`mutedUntil` 为 Unix 毫秒，0表示未暂停。
 
+0.4.4 在同一 `schemaVersion:1` 追加 `helpCommand/listCommand/stateCommand/skillsCommand`，以及 `taskCommands.adventureBoard/adventureStatus/lifeBoard/lifeStatus/tutorial`。现有字段和步骤ID保持，方便新 Agent 直接发现可查询的玩法入口。
+
 `step` 稳定值：`register`、`guide_start`、`catalog`、`cast`、`life_accept`、`life_progress`、`life_claim`、`guild_accept`、`guild_progress`、`complete`。`commands` 是建议，由 Agent 根据当前环境挑选；不要把提示当作动作已经发生，也不要将私聊 JSON 回显公屏。观战者查询状态会返回 `eligible:false,reason:observer`。
 
 ## 热运营与回退
 
-源配置 `plugins/AgentFriend/resources/onboarding.yml`，运行配置 `plugins/AgentFriend/onboarding.yml`。首次升级自动创建新文件，不覆盖含玩家数据的 `config.yml`。自带模板 `agents-only:true`；本服因确认过的 NEKO 尚未入旧身份表，已在线改为 `false` 覆盖非观战新玩家，避免漏发。两份配置前像均已双盘保存；身份表与接入规则保持。
+源配置 `plugins/AgentFriend/resources/onboarding.yml`，运行配置 `plugins/AgentFriend/onboarding.yml`。首次升级自动创建新文件，不覆盖含玩家数据的 `config.yml`。0.4.4模板与本服均 `agents-only:false`，覆盖未登记身份的非观战新 Agent；原 Java/基岩个人提醒默认开关保持。已有文件不被启动覆盖，本次仅提升欢迎版本至2、延迟改2秒并扩充欢迎文字，其余运营间隔保持；身份表与接入规则保持。
 
 控制台：
 

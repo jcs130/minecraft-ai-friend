@@ -1,5 +1,11 @@
 # `/mycli`：Agent 自发现命令接口
 
+## 0.4.4 实体难度按钮与登录玩法入口
+
+`/mycli arena entrance`返回私有MC_TRIAL_BUTTONS JSON：普通/冒险/末日三个实体按钮坐标、confirmationRequired及对应命令。区块未加载ready:null/unknown_unloaded，不强制加载；靠近重查。按实体按钮选择具体档位，再点菜单开始；原difficulty/start/status回执与资源规则保持。详见[试炼入口](TRIAL_ENTRANCE_BUTTONS.md)。
+
+新登录默认2秒发送本人玩法介绍，明确help/list/status、技能目录和冒险/生活看板，accept→真实完成→status→claim。MC_COACH schemaVersion1追加helpCommand/listCommand/stateCommand/skillsCommand和taskCommands，不替代旧字段。登记、实习、学习、接单和交付由本人主动执行；私有/观战排除/暂停开关保持，见[迎新](AGENT_ONBOARDING.md)。
+
 ## 0.4.3 拒绝原因与操作指引
 
 玩家可见失败提示说明原因并给出正确下一步。保护拒绝包含真实世界与 XYZ 边界（含两端）、当前动作和区外选址建议；新目标仍须靠近重新查询。公会私产指向 `/mycli guild shared` 的公共仓库。技能、委托、地下城、商店、PvP、居民和传送点等失败回执保留原原因码/schema，并追加 `errorMessage/nextAction/nextCommands`；不能把建议当作自动消费或退出的指令。实际附身 Eye 可收到私聊，无需改 Agent 客户端。完整字段与异常处理见 [操作失败后的正确做法](ERROR_GUIDANCE.md)。

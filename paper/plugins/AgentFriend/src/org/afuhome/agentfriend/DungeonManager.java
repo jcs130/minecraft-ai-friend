@@ -529,6 +529,7 @@ final class DungeonManager implements Listener {
                         + " chestZ=" + chestZ(floor) + " scope=global participant=" + participant);
             }
             case "start" -> start(player);
+            case "entrance" -> plugin.trialButtons().describe(player);
             case "difficulty", "难度" -> chooseDifficulty(player, args);
             case "rest", "checkpoint", "驿站" -> startAtRest(player);
             case "next" -> next(player);
@@ -623,15 +624,7 @@ final class DungeonManager implements Listener {
             openStash(event.getPlayer());
             return true;
         }
-        if (block.getX() == X - 6 && block.getY() == LOBBY_Y + 2 && block.getZ() == Z - 8
-                && block.getType() == Material.STONE_BUTTON) {
-            event.setCancelled(true);
-            Player player = event.getPlayer();
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                if (player.isOnline()) plugin.openDungeonDifficultyMenu(player);
-            });
-            return true;
-        }
+        if (plugin.trialButtons().handleInteract(event)) return true;
         if (n > 0 && block.getX() == nextX(n) && block.getY() == Y[n - 1] + 1
                 && block.getZ() == chestZ(n) && block.getType() == Material.STONE_BUTTON) {
             event.setCancelled(true);

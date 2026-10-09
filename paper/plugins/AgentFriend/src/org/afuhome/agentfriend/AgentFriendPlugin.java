@@ -228,6 +228,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private long nextWaveAt;
     private long lastRun;
     private DungeonManager dungeon;
+    private TrialEntranceControls trialButtons;
     private GuildManager guild;
     private DailyBoardManager dailyBoard;
     private TaskMarketManager taskMarket;
@@ -287,6 +288,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         getCommand("mycli").setExecutor(this);
         getCommand("mycli").setTabCompleter(this);
         dungeon = new DungeonManager(this);
+        trialButtons = new TrialEntranceControls(this);
         guild = new GuildManager(this, dungeon);
         lifeGuild = new LifeGuildManager(this, dungeon);
         villageWatch = new VillageWatchManager(this, dungeon);
@@ -406,6 +408,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     LifeGuildBuildings lifeBuildings() { return lifeBuildings; }
     TrialRoadManager trialRoad() { return trialRoad; }
     DungeonManager dungeon() { return dungeon; }
+    TrialEntranceControls trialButtons() { return trialButtons; }
     boolean isRegisteredAgent(Player player) {
         return playerNameTags != null && playerNameTags.isAgent(player);
     }
@@ -880,6 +883,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             getLogger().info("Console taught " + args[3] + " to " + target.getUniqueId());
             return true;
         }
+        if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("trialbuttons")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台维护试炼入口；玩家用 /mycli arena entrance 查看三个难度按钮。"); return true;
+            }
+            trialButtons.admin(sender, args.length == 3 ? args[2].toLowerCase(Locale.ROOT) : "");
+            return true;
+        }
         if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("buildarena")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
                 sender.sendMessage("只允许服务器控制台安装试炼场。"); return true;
@@ -1127,7 +1137,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli landmark list|mine|menu；publish <领地ID> <名字>；update|unpublish <领地ID>；goto landmark:<领地ID> 每次 6 魔力");
         p.sendMessage("/mycli locate [list|nearest|玩家名|off]  追踪队友；/mycli locate tp <玩家名|nearest> 安全传送，8 魔力");
         p.sendMessage(dungeon.isBuilt()
-                ? "/mycli arena difficulty auto|normal|adventure|apocalypse；start|rest|next|shop|recycle|wallet|loot|status|rewards|stash|leave"
+                ? "/mycli arena difficulty auto|normal|adventure|apocalypse；entrance|start|rest|next|shop|recycle|wallet|loot|status|rewards|stash|leave"
                 : "/mycli arena start|status|leave  试炼场；也可按场内按钮启动");
         p.sendMessage("/mycli guild hall|board|menu|join|status|accept <ID>|abandon|claim|rewards|stash  公会大厅、任务与声望");
         p.sendMessage("/mycli life board|menu|status|accept <ID>|claim|write <书名>|<正文>  生活公会");
@@ -1160,7 +1170,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 p.sendMessage(ChatColor.GRAY + "Agent：/mycli guild board；/mycli guild accept <任务ID>；/mycli guild status；/mycli guild claim；/mycli arena rewards list；/mycli arena stash list。");
             }
             case "dungeon", "地下城", "试炼" -> {
-                p.sendMessage(ChatColor.GOLD + "【试炼塔】从村庄沿道路走到入口；按石按钮打开难度菜单，选普通／冒险／末日或自动，再点「开始」。附近队友会一起进入；清怪 10 秒后自动下楼并补满生命。");
+                p.sendMessage(ChatColor.GOLD + "【试炼塔】从村庄沿道路走到入口；按入口普通（绿）／冒险（橙）／末日（紫）三个按钮选择难度，再点菜单「开始」。附近队友会一起进入；清怪 10 秒后自动下楼并补满生命。");
                 p.sendMessage(ChatColor.GRAY + "奖励在入口个人箱，死亡后也到那里拿。Agent 可像普通箱子一样 openContainer/withdraw/deposit；远程开箱需 2 魔力。");
             }
             case "team", "队友" -> {
@@ -1438,7 +1448,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (landing.getBlock().getType() != Material.AIR || landing.clone().add(0, 1, 0).getBlock().getType() != Material.AIR) {
                 p.sendMessage(ChatColor.RED + "试炼场入口受阻，传送已取消。"); return;
             }
-            if (travelMagic.teleport(p, landing, "arena", "试炼场传送术", TravelMagic.LOCAL_MANA)) p.sendMessage(ChatColor.GREEN + "已到试炼场入口；按石按钮选难度，再点菜单里的「开始」。 "
+            if (travelMagic.teleport(p, landing, "arena", "试炼场传送术", TravelMagic.LOCAL_MANA)) p.sendMessage(ChatColor.GREEN + "已到试炼场入口；按普通／冒险／末日三个按钮选难度，再点菜单里的「开始」。 "
                     + LocationOutput.fields(landing));
             return;
         }
@@ -2056,7 +2066,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         + " · 夜视 " + learnedLabel(p, nightKey) + "\n未学时选图标学习。",
                 "§d技能成长§r\n\n战斗：星芒箭、霜环、焰浪。\n探索：跃空、飞行、守护傀儡、探敌。\n采集：探矿。\n\n成功施放 8 次升 2 级、24 次升 3 级。罗盘选「技能成长」看本人进度；失败不计数。",
                 "§5给工具刻印魔法§r\n\n手持镐、剑等工具，潜行使用附魔台，再选技能图标。\n\n需要经验 3 级和青金石 1 个。\n\n刻印后潜行对方块使用工具施法；原附魔保留。",
-                "§c试炼塔与奖励§r\n\n从村庄沿路走到塔。按入口石按钮选难度，再点「开始」；附近队友一起进入。\n\n清怪后 10 秒自动下楼并补满生命。\n\n奖励在入口个人箱；死亡后也去那里拿。",
+                "§c试炼塔与奖励§r\n\n从村庄沿路走到塔。按入口普通／冒险／末日三个按钮选难度，再点「开始」；附近队友一起进入。\n\n清怪后 10 秒自动下楼并补满生命。\n\n奖励在入口个人箱；死亡后也去那里拿。",
                 "§6给旅人的话§r\n\n村庄里安全，村外有怪。先选一个公会任务，再结伴探险。\n\nAgent 用 /mycli guide 看指令；遇到困难可联系女神。\n\n命格书每次打开都会更新你的状态。");
         meta.addPage(professions.bookPages(p).toArray(String[]::new));
         meta.getPersistentDataContainer().set(statusBookKey, PersistentDataType.BYTE, (byte) 1);
@@ -2215,7 +2225,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(11, item(Material.BLAZE_ROD, "§d② 学会魔法", "打开技能罗盘；选图标直接施法", "法杖可绑定喜欢的技能"));
             inv.setItem(12, item(Material.ENCHANTING_TABLE, "§5③ 给工具刻印", "拿着镐或剑到附魔台旁", "潜行使用附魔台，选要刻印的技能"));
             inv.setItem(13, item(Material.LECTERN, "§6④ 接公会任务", "打开任务看板；选一张委托", "完成后在看板交付，奖励进个人箱"));
-            inv.setItem(14, item(Material.IRON_SWORD, "§c⑤ 结伴打试炼塔", "从村庄沿路走到入口石按钮", "选难度后点开始；附近队友一起进入"));
+            inv.setItem(14, item(Material.IRON_SWORD, "§c⑤ 结伴打试炼塔", "入口有普通／冒险／末日三个按钮", "按按钮选难度后确认开始；附近队友一起进入"));
             inv.setItem(15, item(Material.PLAYER_HEAD, "§b⑥ 找队友", "追踪方向，或安全传送到队友身边"));
             inv.setItem(16, item(Material.WRITTEN_BOOK, "§e翻开命格书", "查看本人状态与全部旅途指引", "页面箭头可用手柄选择"));
             inv.setItem(17, item(Material.SUNFLOWER, "§a⑦ 生活公会", "钓鱼、种田、烹饪、建筑、写书与红石机关", "每日小委托；不必打怪也能成长"));
@@ -2265,7 +2275,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             for (PublicPlace place : PUBLIC_PLACES) {
                 inv.setItem(place.slot(), item(place.icon(), place.title(), place.hint(), "传送消耗 6 魔力"));
             }
-            inv.setItem(13, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "入口传送 6 魔力；按钮组队，清怪自动下楼" : "传送 6 魔力；按钮启动三波战斗"));
+            inv.setItem(13, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "入口传送6魔力；三个按钮选难度，再确认组队" : "传送 6 魔力；按钮启动三波战斗"));
             inv.setItem(14, item(Material.NAME_TAG, "§b新建传送点", "记录当前位置，在聊天框起名字", "支持中文；默认私有；记录免费"));
             inv.setItem(15, item(Material.ENDER_EYE, "§b我的传送点", "查看、传送、改名和分享；传送 6 魔力"));
             inv.setItem(16, item(Material.FILLED_MAP, "§6遗迹远征", "六处自然遗迹：墓穴、营地、古镇与堡垒", "传送到遗迹外围；8 魔力，仍需步行探索"));
@@ -2931,7 +2941,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("arena"))
             return dungeon != null && dungeon.isBuilt()
-                    ? List.of("difficulty", "start", "rest", "status", "next", "shop", "rewards", "leave") : List.of("start", "status", "leave");
+                    ? List.of("difficulty", "entrance", "start", "rest", "status", "next", "shop", "rewards", "leave") : List.of("start", "status", "leave");
         if (args.length == 3 && args[0].equalsIgnoreCase("arena") && args[1].equalsIgnoreCase("difficulty"))
             return List.of("auto", "normal", "adventure", "apocalypse");
         if (args.length == 2 && args[0].equalsIgnoreCase("guild"))

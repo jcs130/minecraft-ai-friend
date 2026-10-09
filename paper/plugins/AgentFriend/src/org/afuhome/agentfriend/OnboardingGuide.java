@@ -124,12 +124,19 @@ final class OnboardingGuide implements Listener {
     boolean poll(Player p, long now, long quietUntil) {
         Session session = sessions.computeIfAbsent(p.getUniqueId(), id -> new Session(now, ms("welcome-delay-seconds")));
         if (now < session.nextCheck) return false;
+        if (!target(p) || now < time(p, mutedUntil)) {
+            session.nextCheck = now + ms("poll-seconds"); return false;
+        }
+        boolean welcomeDue = p.getPersistentDataContainer().getOrDefault(welcomeRevision, PersistentDataType.INTEGER, 0) != revision()
+                || now - time(p, welcomeAt) >= ms("welcome-cooldown-seconds");
+        // A new arrival closing their first menu should not have to wait a whole polling minute.
+        // This only checks a player's safety/PDC; ledgers are read after the checks pass.
+        session.nextCheck = now + (welcomeDue ? 1000L : ms("poll-seconds"));
+        if (!safe(p, now, quietUntil) || !gapReady(p, now)) return false;
         session.nextCheck = now + ms("poll-seconds");
-        if (!target(p) || now < time(p, mutedUntil) || !safe(p, now, quietUntil) || !gapReady(p, now)) return false;
         JsonObject state = state(p); String current = state.get("step").getAsString();
         String stored = p.getPersistentDataContainer().getOrDefault(lastStep, PersistentDataType.STRING, "");
-        if (p.getPersistentDataContainer().getOrDefault(welcomeRevision, PersistentDataType.INTEGER, 0) != revision()
-                || now - time(p, welcomeAt) >= ms("welcome-cooldown-seconds")) {
+        if (welcomeDue) {
             show(p, state, "welcome", true);
             p.getPersistentDataContainer().set(welcomeRevision, PersistentDataType.INTEGER, revision());
             p.getPersistentDataContainer().set(welcomeAt, PersistentDataType.LONG, now);
@@ -203,6 +210,12 @@ final class OnboardingGuide implements Listener {
         JsonObject result = state.deepCopy(); result.addProperty("schemaVersion", 1); result.addProperty("type", type);
         result.addProperty("reason", "onboarding"); result.addProperty("source", "server_observed_state");
         result.addProperty("statusCommand", "/mycli coach next"); result.addProperty("menuCommand", "/mycli coach menu");
+        result.addProperty("helpCommand", "/mycli help"); result.addProperty("listCommand", "/mycli list");
+        result.addProperty("stateCommand", "/mycli status"); result.addProperty("skillsCommand", "/mycli skills list common");
+        JsonObject tasks = new JsonObject(); tasks.addProperty("adventureBoard", "/mycli guild board");
+        tasks.addProperty("adventureStatus", "/mycli guild status"); tasks.addProperty("lifeBoard", "/mycli life board");
+        tasks.addProperty("lifeStatus", "/mycli life status"); tasks.addProperty("tutorial", "/mycli world guide start");
+        result.add("taskCommands", tasks);
         if (!full) { result.remove("checklist"); result.remove("guide"); result.remove("life"); result.remove("guild"); }
         p.sendMessage("MC_COACH " + result);
     }

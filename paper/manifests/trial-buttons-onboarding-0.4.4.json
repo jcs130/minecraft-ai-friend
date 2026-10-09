@@ -1,0 +1,40 @@
+{
+  "version": "0.4.4",
+  "at": "2026-10-09 12:38:09",
+  "artifact": {
+    "name": "AgentFriend-0.4.4.jar",
+    "bytes": 988378,
+    "sha256": "18E70E0C5B005FB1973A75CEA07FE9C856294250B5EE51A710D06D30C3E9E050"
+  },
+  "checks": {
+    "isolation": 46,
+    "normalRestart": 10,
+    "liveProtocol": 29,
+    "preservation": 22
+  },
+  "backupBefore": "20261009-123208",
+  "backupAfter": "20261009-123451",
+  "buttons": [
+    {
+      "difficulty": "normal",
+      "x": -596,
+      "y": 92,
+      "z": -313
+    },
+    {
+      "difficulty": "adventure",
+      "x": -596,
+      "y": 92,
+      "z": -310
+    },
+    {
+      "difficulty": "apocalypse",
+      "x": -596,
+      "y": 92,
+      "z": -307
+    }
+  ],
+  "confirmationRequired": true,
+  "agentClientsChanged": false,
+  "bedrockPhysicalDeviceTested": false
+}
