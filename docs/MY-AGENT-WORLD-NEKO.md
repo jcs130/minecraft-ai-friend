@@ -1,5 +1,9 @@
 # My Agent World：Neko 接入与维护
 
+2026-10-09 原生界面与 YSM 更新：SDK 现为 60 项（25 只读、35 变更）/19 频道，增加 `ysm.catalog/select`。普通非 OP 的真实 mc-agent-neko 身体通过上游 WebSocket 完成 Steve、Alex、Boy/red 换模，错误纹理/旧 CAS 拒绝，重复 callId 不再派发；网页使用原模型和 PNG。Domum 首次未选组的空值读取已修复，实际选择 full 面板并用 2 圆石制作 8 面板，完整材质组件和库存重连保留；网页增加原生第一页款式、产物和背包面板图标。详见 [YSM](MY-AGENT-WORLD-YSM.md)、[制板指南](MY-AGENT-WORLD-DOMUM-CUTTER.md)。本轮 UI QA 为零模型调用，未重启旧自主试验、未清除 1275 次累计账本，也未接 QwenPaw；管理员测试站位/材料明确披露，不计自主采集。下方较早的 58 项、未做 Domum 实机及只支持 Boy 的描述是阶段记录。
+
+可复现有限 UI 测试工具 `tools/probe_neko_visual.mjs <config.json>` 接收绝对路径的 `nekoDirectory/stateDirectory/assetDirectory/viewerHostFile`、`username/host/port/viewerPort/wsPort` 与 30–1800 秒 `durationSeconds`。沿用接入环境的 `NODE_PATH`（本机为 `E:\QiandengJiSocietyLab\gateway\permanent\node\node_modules`），必须使用新的状态目录，启动真实 `initBot` 和原生 SDK，不调用模型或 `Agent.start`、不生成材料/传送/执行管理员命令。测试使用本机 WebSocket 和本人画面；状态目录内新建 `stop.requested` 可正常退出。旧目录与未知账本不复用、不删除，结束需核对 `exit.json`、无在途变更及光标为空。私有原始包、JAR、资源和截图不提交。
+
 2026-10-09 配方实测修复：模组木板标签曾令箱子的原生配方超过大小限制，现通过 `ingredientEncoding=prior_index_references_v1` 与前序 `alternativesFrom` 保留完整候选/组件并压缩重复项。`native.craftRecipe` 自动展开，非法引用在所有菜单点击前拒绝；不可用定义返回实际原因，不误称缺材料。冷备并更新新服桥后，MawNeko 已实际从材料合成普通箱子和漏斗；磨粉及后续面包生产仍按实机记录逐段核验。原服、原 MawExplorer 暂停和旧未知记录保持，未接 QwenPaw API。
 
 09:57：漏斗尚未实际放置，模型重复选择空手而未装备漏斗，本次有限测试已正常停止，累计用量 1275 / 1280 保留，无在途或新未知。服务器持续运行；生产链未完成，不代表已可无人干预经营。下次继续须先核对现场/本人物品与原停止记录，不能清账本或重投旧未知。

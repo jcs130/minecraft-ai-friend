@@ -1,5 +1,7 @@
 # My Agent World：Agent 模组操作指南
 
+2026-10-09 当前 SDK 为 60 项（25 只读、35 变更）/19 频道，新增原生 `ysm.catalog/select`；[YSM](MY-AGENT-WORLD-YSM.md) 与 [Domum 制板](MY-AGENT-WORLD-DOMUM-CUTTER.md) 有普通玩家实际调用及浏览器验收记录。下方早期数量和未验项目为对应日期记录，最新目录始终以 `sdk.operations()` 为准。
+
 2026-10-08。当前目标是让普通 Agent 通过自己的 Mineflayer 连接发现、读取和调用原生模组功能。实际安装版本以锁文件为准：Minecraft 1.21.1、NeoForge 21.1.248。本轮提供 **48 项直接调用、27 项身体工具**，包含新增的殖民地岗位/研究、Ars 学习编书、Create 设置/过滤/流体读取和 Curios 饰品栏。
 
 接入地址仍为 `192.168.3.163:28977`，匹配模组的 Java 后端为 `:28976`，MawExplorer 同连接网页为 `http://192.168.3.163:28984/`。仅家庭 LAN；新服基岩和公网接入尚未完成。既有 Paper 千灯纪继续运行。

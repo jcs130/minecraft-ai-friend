@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.ldtteam.domumornamentum.block.IMateriallyTexturedBlock;
 import com.ldtteam.domumornamentum.block.ModBlocks;
+import com.ldtteam.domumornamentum.client.model.data.MaterialTextureData;
 import com.ldtteam.domumornamentum.container.ArchitectsCutterContainer;
 import com.ldtteam.domumornamentum.recipe.ModRecipeTypes;
 import com.ldtteam.domumornamentum.recipe.architectscutter.ArchitectsCutterRecipeInput;
@@ -147,6 +148,43 @@ final class DomumCutterBridge {
             group.addProperty("variantCount", entry.getValue().size()); groups.add(group);
         }
         state.add("groups", groups);
+        // Original ArchitectsCutterScreen displays ten group/variant previews.
+        // These are copied templates, never inventory slots or granted items.
+        JsonArray groupPreviews = new JsonArray(); index = 0;
+        for (var entry : ModBlocks.getInstance().getOrComputeItemGroups().entrySet()) {
+            if (index >= 10) break;
+            JsonObject preview = new JsonObject(); preview.addProperty("buttonId", index++);
+            preview.addProperty("groupId", entry.getKey().toString());
+            preview.add("item", item(player, entry.getValue().isEmpty() ? ItemStack.EMPTY : entry.getValue().getFirst()));
+            groupPreviews.add(preview);
+        }
+        state.add("groupPreviews", groupPreviews);
+        JsonArray variantPreviews = new JsonArray();
+        // A newly opened native container has no group until the Java screen
+        // clicks its remembered first group. Do not query a null map key or
+        // silently perform that client-side selection for an Agent.
+        var currentGroup = cutter.getCurrentGroup();
+        var templates = currentGroup == null ? null : ModBlocks.getInstance().getOrComputeItemGroups().get(currentGroup);
+        int selectedIndex = templates == null ? -1 : templates.indexOf(cutter.getCurrentVariant());
+        state.addProperty("currentVariantIndex", selectedIndex);
+        state.addProperty("variantPreviewTotal", templates == null ? 0 : templates.size());
+        if (templates != null) for (index = 0; index < Math.min(10, templates.size()); index++) {
+            ItemStack previewStack = templates.get(index).copy();
+            if (cutter.outputInventorySlot.hasItem() && previewStack.getItem() instanceof BlockItem blockItem
+                    && blockItem.getBlock() instanceof IMateriallyTexturedBlock textured) {
+                // Same original material operation as texturizeVariantUsingCurrentInput.
+                var materials = MaterialTextureData.builder(); int componentIndex = 0;
+                for (var component : textured.getComponents()) {
+                    var inputItem = cutter.inputInventory.getItem(componentIndex++).getItem();
+                    if (inputItem instanceof BlockItem material) materials.setComponent(component.getId(), material.getBlock());
+                }
+                materials.writeToItemStack(previewStack);
+            }
+            JsonObject preview = new JsonObject(); preview.addProperty("variantIndex", index);
+            preview.add("item", item(player, previewStack)); variantPreviews.add(preview);
+        }
+        state.add("variantPreviews", variantPreviews); state.addProperty("previewOffset", 0);
+        state.addProperty("previewSource", "Domum_1.0.231_original_templates_current_materials");
         JsonArray recipes = new JsonArray(); int total = 0;
         var variant = cutter.getCurrentVariant();
         if (variant != null && !variant.isEmpty()) {

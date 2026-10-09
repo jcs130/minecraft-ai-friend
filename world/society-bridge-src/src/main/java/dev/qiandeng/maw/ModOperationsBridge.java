@@ -41,8 +41,8 @@ import java.util.UUID;
 final class ModOperationsBridge {
     private static final int MAX_BYTES = 65536;
     private static final Map<UUID, ColonyActionReplay> RECEIPTS = new HashMap<>();
-    private static final Set<String> READS = Set.of("create_settings", "create_fluids", "curios_state");
-    private static final Set<String> WRITES = Set.of("create_value", "create_filter", "curios_open", "curios_page", "world_interact");
+    private static final Set<String> READS = Set.of("create_settings", "create_fluids", "curios_state", "ysm_catalog");
+    private static final Set<String> WRITES = Set.of("create_value", "create_filter", "curios_open", "curios_page", "world_interact", "ysm_select");
     private record Query(String json) implements CustomPacketPayload {
         static final Type<Query> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("maw_agent", "mod_query"));
         static final StreamCodec<RegistryFriendlyByteBuf, Query> CODEC = StreamCodec.of((b, p) -> write(b, p.json), b -> new Query(read(b)));
@@ -169,7 +169,19 @@ final class ModOperationsBridge {
                 if (replay.outcome() != ColonyActionReplay.Outcome.NEW) ModRequest.fail(replay.outcome() == ColonyActionReplay.Outcome.CONFLICT ? "request_id_conflict" : "request_outcome_unknown_check_world");
                 reserved = true; ModRequest.active(player);
             }
-            if (kind.equals("world_interact")) {
+            if (kind.equals("ysm_catalog")) {
+                ModRequest.fields(input, "offset", "limit");
+                result.add("state", YsmOperations.catalog(player, ModRequest.integer(input, "offset", 0, 10000), ModRequest.integer(input, "limit", 1, 24)));
+                result.addProperty("ok", true);
+            } else if (kind.equals("ysm_select")) {
+                ModRequest.fields(input, "modelId", "texture", "expectedModelId", "expectedTexture", "expectedEnabled", "expectedMandatory");
+                YsmOperations.validateSelection(player, input); result.add("before", YsmOperations.requireState(player));
+                String modelId = ModRequest.text(input, "modelId", 256), texture = ModRequest.text(input, "texture", 256);
+                started = true; YsmOperations.select(player, modelId, texture);
+                JsonObject after = YsmOperations.requireState(player); result.add("after", after);
+                boolean applied = after.get("modelId").getAsString().equals(modelId) && after.get("texture").getAsString().equals(texture);
+                result.addProperty("ok", applied); result.addProperty("code", applied ? "ysm_native_selection_verified" : "ysm_native_selection_not_applied");
+            } else if (kind.equals("world_interact")) {
                 ModRequest.fields(input, "position", "aimOffset", "expectedBlockId", "expectedProperties", "expectedHeldSnbt", "expectedHotbarSlot");
                 ModRequest.held(player, input);
                 if (player.containerMenu != player.inventoryMenu || !player.containerMenu.getCarried().isEmpty()) ModRequest.fail("close_current_menu_and_clear_cursor_first");

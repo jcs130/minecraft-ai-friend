@@ -38,6 +38,7 @@ function attachModAgentClient (bot) {
     ...clients,
     create: clients.mods.create,
     curios: clients.mods.curios,
+    ysm: clients.mods.ysm,
     call: calls.call,
     operations: calls.operations,
     callStatus: calls.callStatus,

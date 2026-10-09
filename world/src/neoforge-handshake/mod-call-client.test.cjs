@@ -13,7 +13,7 @@ function fixture () {
   for (const row of modOperationCatalog().operations) {
     const [group, method] = row.id.split('.')
     clients[group] ||= {}
-    if (['create', 'curios'].includes(group)) { clients.mods ||= {}; clients.mods[group] = clients[group] }
+    if (['create', 'curios', 'ysm'].includes(group)) { clients.mods ||= {}; clients.mods[group] = clients[group] }
     clients[group][method] = (...args) => {
       calls.push({ id: row.id, args })
       return Promise.resolve({ schemaVersion: 1, playerUuid: owner, ok: true, requestId: 'native-id', code: 'native', nested: { unchanged: 3 } })
@@ -50,6 +50,7 @@ const args = {
   'create.setValue': { ...setting, expectedRow: 0, expectedValue: 64, row: 1, value: 16 },
   'create.setFilter': { ...setting, expectedFilterSnbt: '' },
   'curios.page': { page: 0, expectedContainerId: 1, expectedStateId: 2 },
+  'ysm.select': { modelId: 'misc/2_steve', texture: 'tartaric_acid', expectedModelId: 'default', expectedTexture: 'default', expectedEnabled: true, expectedMandatory: false },
   'menu.click': { slot: 9 }, 'native.entity': { entityId: 7, expectedUuid: other },
   'native.recipes': { recipeType: 'create:milling', limit: 2 },
   'colony.resources': { buildingPosition: pos }, 'colony.found': { ...inventory, position: pos, name: '测试城镇' },
@@ -66,11 +67,11 @@ const args = {
   'domum.select': { selection: 'variant', groupId: 'domum_ornamentum:fpanel', variantIndex: 2, choiceSnbt: '{count:1}' },
   'collision.query': { position: pos, expectedBlockId: 'minecraft:stone', expectedProperties: {} }
 }
-test('all 58 declared operations dispatch to the exact native adapter with actual arguments', async () => {
+test('all 60 declared operations dispatch to the exact native adapter with actual arguments', async () => {
   const f = fixture()
   try {
     const list = f.api.operations()
-    assert.equal(list.operationCount, 58); assert.equal(list.remoteSupportVerified, false)
+    assert.equal(list.operationCount, 60); assert.equal(list.remoteSupportVerified, false)
     for (const row of list.operations) {
       const result = await f.api.call(row.id, args[row.id] || {})
       assert.equal(result.code, 'native'); assert.equal(f.calls.at(-1).id, row.id)

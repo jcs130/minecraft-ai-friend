@@ -1,10 +1,12 @@
 # My Agent World：外部 Agent 接入就绪审计
 
+2026-10-09 增量：普通账号 `ysm.catalog/select` 真实换模与重连通过；网页增加原 Steve、Alex、Boy 的有限展示。Domum 原 Cutter 制作圆石 panel、完整组件/库存重连和第一页款式预览/面板动态材质图标已实机验证。SDK 60 项/19 频道，尚未通过的全部模型/装备/第一人称、滚动 GUI、公开准入、复杂生产及整包验收继续保留 false。详见 [YSM](MY-AGENT-WORLD-YSM.md) 和 [制板](MY-AGENT-WORLD-DOMUM-CUTTER.md)；下方旧日期的能力表是阶段记录。
+
 2026-10-06 网络发布补充：家庭 LAN 已配置，Java/Agent/网页为 `192.168.3.163:28976/28977/28984`，管理 28985 仍回环；正规提权重试、冷备、健康启动、普通非 OP 的同宿主 LAN IP 登录和原生调用/网页 SSE 已验收，另一台实体设备未实测。详见 [LAN 记录](MY-AGENT-WORLD-LAN.md)。不改变下文 `readiness/allModsVerified/publicAccessReady=false`，LAN 可达与完整玩法就绪分别验收。
 
 审计日期：2026-10-05。范围：`experiment/agent-society-1.21.1`、Minecraft 1.21.1 / NeoForge 21.1.248，以及 `E:\QiandengJiSocietyLab` 的当前实验服。旧 Paper 千灯纪、公网映射和旧服基岩入口不在本次范围。
 
-**当前判定：`readiness=false`。** 部分专用功能调用和真正外部身份/并发仍缺适配或验收。用户 2026-10-05 已明确以“各项功能能够被 Agent 调用”为当前目标；自主采集、长期经营和独立建城不再作为接口交付前置。已有同一 Mineflayer 玩家连接上的原生观察、若干真实操作及 [48 项统一调用绑定](MY-AGENT-WORLD-NATIVE-CALL-API.md)；绑定数量不等于整包全部玩法已实现。此文件分别记录接口、场景、渲染和公开接入边界。
+**当前判定：`readiness=false`。** 部分专用功能调用和真正外部身份/并发仍缺适配或验收。用户 2026-10-05 已明确以“各项功能能够被 Agent 调用”为当前目标；自主采集、长期经营和独立建城不再作为接口交付前置。已有同一 Mineflayer 玩家连接上的原生观察、若干真实操作及 [60 项统一调用绑定](MY-AGENT-WORLD-NATIVE-CALL-API.md)；绑定数量不等于整包全部玩法已实现。此文件分别记录接口、场景、渲染和公开接入边界。
 
 ## 证据口径
 

@@ -31,6 +31,7 @@ MAID_JAR = "touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar"
 FOOD_JAR = "FarmersDelight-1.21.1-1.3.4.jar"
 CURIOS_JAR = "curios-neoforge-9.5.1+1.21.1.jar"
 GECKO_JAR = "geckolib-neoforge-1.21.1-4.9.3.jar"
+YSM_JAR = "ysm-2.6.5-neoforge+mc1.21.1-release.jar"
 NAME = "maw_agent_bridge-0.1.0.jar"
 
 
@@ -124,6 +125,9 @@ def main() -> None:
     curios = mods / CURIOS_JAR
     if not curios.is_file():
         raise ValueError("Pinned Curios JAR is required for real accessory menus")
+    ysm = mods / YSM_JAR
+    if not ysm.is_file() or sha256(ysm) != "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb":
+        raise ValueError("Pinned YSM 2.6.5 JAR is required for native model selection")
     if not installed_numen.is_file() or sha256(installed_numen) != sha256(NUMEN_JAR):
         raise ValueError("Lab Numen JAR does not match this worktree build")
     if not ars.is_file():
@@ -148,7 +152,7 @@ def main() -> None:
     spec.loader.exec_module(helper)
     classpath = os.pathsep.join((helper.full_cp(server / "libraries"), str(API_JAR),
                                  str(NUMEN_JAR), str(ars), str(create), str(ponder),
-                                 str(minecolonies), str(structurize), str(domum), str(blockui), str(maid), str(food), str(curios), str(gecko)))
+                                 str(minecolonies), str(structurize), str(domum), str(blockui), str(maid), str(food), str(curios), str(gecko), str(ysm)))
     sources = sorted((SOURCE / "src" / "main" / "java").rglob("*.java"))
     resource = SOURCE / "src" / "main" / "resources" / "META-INF" / "neoforge.mods.toml"
     if not sources or not resource.is_file():
@@ -191,6 +195,7 @@ def main() -> None:
               "foodSha256": sha256(food),
               "curiosSha256": sha256(curios),
               "geckoSha256": sha256(gecko),
+              "ysmSha256": sha256(ysm),
               "sources": {str(path.relative_to(REPO)).replace("\\", "/"): sha256(path)
                           for path in (*sources, resource, Path(__file__))}}
     (build / "build-record.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")

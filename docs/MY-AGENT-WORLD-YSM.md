@@ -1,4 +1,29 @@
-# My Agent World：YSM 模型试换（2026-10-05）
+# My Agent World：YSM 接入与原模型展示
+
+## 当前更新（2026-10-09）
+
+普通玩家现在可通过本人的 SDK 调用 `ysm.catalog` 分页读取原模组模型、纹理 ID、授权与当前外形，再以 `ysm.select` 切换本人外形。服务端调用锁定 YSM 2.6.5 原生 serverbound 处理器，保留原授权、服主强制模型及允许换模配置；不授予模型、不修改他人 attachment。选择必须携带当前模型、纹理、enabled、mandatory 四项 CAS，失败或未知不能自动重投。
+
+```js
+const catalog = await sdk.call('ysm.catalog', { offset: 0, limit: 12 })
+if (!catalog.ok) throw new Error(catalog.code)
+const current = catalog.state.current
+const result = await sdk.call('ysm.select', {
+  modelId: 'misc/2_steve', texture: 'tartaric_acid',
+  expectedModelId: current.modelId, expectedTexture: current.texture,
+  expectedEnabled: current.enabled, expectedMandatory: current.mandatory
+})
+```
+
+目标 ID 必须从真实目录发现；示例并不为任意模型授予权限。统一调用目录现为 60 项（25 只读、35 变更），仍使用 19 个 SDK 频道。选择成功只证明原生外形状态已改变，不能作为该模型网页渲染通过的证明。
+
+网页已绑定三套原资源：`misc/1_alex / gsl`（61 骨骼、47 方块、64×64 PNG），`misc/2_steve / tartaric_acid`（61 骨骼、46 方块、64×64 PNG），以及 `misc/3_default_boy / blue|red`（58 骨骼、156 方块、128×128 PNG）。不使用别名或替代人体。Alex 原资源没有 idle clip，页面明确报告这一缺口；原 `default/default` 及其他模型、装备、第一人称手臂和完整动画仍未适配。原有 `parity=false` 与严格完整场景验收限制保留。
+
+本轮普通非 OP `MawVisualQA1009` 通过真实 mc-agent-neko Mineflayer 身体与上游 WebSocket 调用完成 Steve → Alex → Boy/red，实际浏览器显示原模型；错误纹理、过期 CAS 被拒绝，同 callId 仅返回既有回执。重连与新服正常重启后 Boy/red 保留，MawExplorer 的 Boy/blue 不变。测试未启动 `Agent.start`、没有模型调用或 QwenPaw 连接。测试站位和切割台材料有明确管理员夹具，仅证明普通接口和画面可用，不声称自主生存获得材料。
+
+当前桥 SHA256 为 `576c911f0ba2b9f07c7a03f246e21a2497c9d36646e55ca0959be9a2372dfe28`；资产目录为 `native-20261008-v14-mod-operations`，27 个运行 JAR。下方 2026-10-05 的 v10/v11 数量、哈希、显示范围和维护记录均为历史，不能用作当前锁。
+
+## 2026-10-05 历史实现
 
 常驻实验服 `E:\QiandengJiSocietyLab\server\world-life` 已安装 YSM 2.6.5（NeoForge / Minecraft 1.21.1）。普通玩家 MawExplorer 使用 `misc/3_default_boy`、`blue` 贴图；原 UUID `e371227c-09fa-3722-84f4-f3228a552c3c`、非 OP 身份与原世界保留。原女仆继续使用 TLM 灵梦模型。没有修改旧 Paper 服务、路由器或公网端口。
 

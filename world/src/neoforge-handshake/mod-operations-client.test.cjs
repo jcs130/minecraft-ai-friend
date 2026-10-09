@@ -26,7 +26,9 @@ test('native Create/Curios requests use only this connection and raw UTF-8 paylo
       ['create', 'setFilter', { expectedFilterSnbt: '' }, 'create_filter', true],
       ['curios', 'state', undefined, 'curios_state', false],
       ['curios', 'open', {}, 'curios_open', true],
-      ['curios', 'page', { page: 0 }, 'curios_page', true]
+      ['curios', 'page', { page: 0 }, 'curios_page', true],
+      ['ysm', 'catalog', { offset: 2, limit: 3 }, 'ysm_catalog', false],
+      ['ysm', 'select', { modelId: 'misc/2_steve', texture: 'tartaric_acid', expectedModelId: 'default', expectedTexture: 'default', expectedEnabled: true, expectedMandatory: false }, 'ysm_select', true]
     ]) {
       const pending = f.client[group][name](args); const wire = f.writes.at(-1)
       assert.equal(wire.name, 'custom_payload'); assert.equal(wire.body.kind, action)

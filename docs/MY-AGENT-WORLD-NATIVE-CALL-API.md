@@ -24,7 +24,7 @@ bot.once('spawn', async () => {
 })
 ```
 
-`operations()` 是实际适配器的 **58 项调用绑定**，`remoteSupportVerified=false`；目录存在不表示当前服务器、机器或角色满足条件。`operations(id)` 的未知 ID 返回 `mod_operation_not_found`。`call(id,args)` 严格核对目录参数；未知操作、额外玩家参数、非法坐标或槽位在发送前拒绝。
+`operations()` 是实际适配器的 **60 项调用绑定**，`remoteSupportVerified=false`；目录存在不表示当前服务器、机器或角色满足条件。`operations(id)` 的未知 ID 返回 `mod_operation_not_found`。`call(id,args)` 严格核对目录参数；未知操作、额外玩家参数、非法坐标或槽位在发送前拒绝。
 
 2026-10-09 配方编码更新：模组扩展木板标签后，箱子的八处相同候选列表曾使单条定义超过 8192 字节。服务端现在无损复用重复列表：`ingredientEncoding="prior_index_references_v1"` 时，`ingredients[].alternativesFrom` 指向同一配方中更早的 `ingredient.index`，继承其完整 `alternatives`（包括名称、数量、SNBT），不是没有材料。首个列表与空格保留原样；不提高每行 8192 字节、整包 16 KiB 或候选数量限制。通用 `native.craftRecipe` 自动展开，非法前向、自引用、未知编码、重复索引或混合内联/引用在任何菜单点击前拒绝。其他客户端直接解析 `native.recipes` 时也须处理该标记；无法处理应明确拒绝，不能猜材料。定义仍不可用时，合成回执保留服务端 `definitionCode`，不能把它误当作缺少材料。
 
@@ -41,10 +41,11 @@ bot.once('spawn', async () => {
 | `collision` | 1 | 本人可见方块的有限真实碰撞查询 |
 | `create` | 4 | 原生数值/过滤面板、流体罐读取与修改设置 |
 | `curios` | 3 | 本人真实饰品槽、原生菜单打开与翻页 |
+| `ysm` | 2 | 原模组模型/纹理/本人授权目录，以及本人外形的四字段 CAS 切换 |
 
-合计 24 项只读、34 项变更。其中 `menu.current/spell.current/domum.current` 是本地缓存读取，未收到或失效时返回 `null`，不能当作远端成功。完整参数以运行时 `operations(id).operation.parameters` 为准，避免手工维护第二套参数定义。
+合计 25 项只读、35 项变更，19 个 SDK 频道。其中 `menu.current/spell.current/domum.current` 是本地缓存读取，未收到或失效时返回 `null`，不能当作远端成功。完整参数以运行时 `operations(id).operation.parameters` 为准，避免手工维护第二套参数定义。
 
-`sdk.tools()` 仍是 Maw 身体执行器的 27 项计划描述，和上述可直接调用目录分别记录。它没有 `execute(plan)`。移动、攻击等使用已有身体执行器或接入方自己的 Mineflayer 调度；需要 Block/Vec3 的低层 API 不混入 JSON 目录。FD 料理、Create 磨粉等以真实方块交互和 `menu.click` 为底座，`mod` 身体工具复用这 58 项绑定，支持 list/explain/call。通用建造新增操作见[风车任务](MY-AGENT-WORLD-CREATE-WINDMILL.md)，没有为每台机器增加管理后门。
+`sdk.tools()` 仍是 Maw 身体执行器的 27 项计划描述，和上述可直接调用目录分别记录。它没有 `execute(plan)`。移动、攻击等使用已有身体执行器或接入方自己的 Mineflayer 调度；需要 Block/Vec3 的低层 API 不混入 JSON 目录。FD 料理、Create 磨粉等以真实方块交互和 `menu.click` 为底座，`mod` 身体工具复用这 60 项绑定，支持 list/explain/call。通用建造新增操作见[风车任务](MY-AGENT-WORLD-CREATE-WINDMILL.md)，没有为每台机器增加管理后门。
 
 ## 调用与实际结果
 
@@ -54,6 +55,7 @@ bot.once('spawn', async () => {
 - 打开真实女仆背包或机器后，读取 `sdk.call('menu.current')` 的实际窗口，再调用 `sdk.call('menu.click',{slot,button:0})`；`slot` 来自当前布局，不能复用旧窗口编号。
 - `sdk.call('spell.list')` 读取本人当前真实书的配置槽；用真实 `spellId` 调用 `spell.explain/cast`。未持书、未配置或缺魔力是正式拒绝。施法确认与目标命中分别核验。
 - 切割台先 `domum.state/choices`，再 `domum.select`；选择变体必须同时传真实 `variantIndex/choiceSnbt`，不接受调用方覆盖缓存 `state`。取出仍走真实菜单。
+- 换 YSM 模型先 `ysm.catalog`，用返回的 `state.current` 构造 `expectedModelId/expectedTexture/expectedEnabled/expectedMandatory`，目标模型和纹理来自实际目录。`ysm.select` 保留原授权和服主锁定，不指定其他玩家；网页支持范围见 [YSM 指南](MY-AGENT-WORLD-YSM.md)。
 
 位置均为绝对坐标。交料的 `expectedSnbt` 取本人实时库存；建筑需求模板和他人物品不能作为自己的库存前置条件。入库、登记施工或切换劳动任务不等于最终完工。
 

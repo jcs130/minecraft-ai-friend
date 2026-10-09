@@ -1,5 +1,11 @@
 # My Agent World：Domum 原生制板接入
 
+2026-10-09 已在常驻新服以普通非 OP 的 mc-agent-neko 身体实测：普通放置/交互打开 Cutter，选 `domum_ornamentum:fpanel` 的 full 款式，真实两次各放入 1 圆石、每次取出 4 面板，最终 8 件真实库存且光标为空，重连后保留。产物实际包含 `domum_ornamentum:texture_data`（`minecraft:block/oak_planks` → `minecraft:cobblestone`）和 `minecraft:block_state`（`type:full`）。站位/机器物品和材料是披露的管理员测试夹具，不是自主采集证明。
+
+首次打开尚未选组时，原 `currentGroup` 可以为 null；服务端现返回真实空选择和零当前变体，不再触发异常，也不会替玩家自动选组。快照增加原模组分组及款式的第一页各最多 10 个实际模板/材质预览；每项保留原索引和完整 SNBT，菜单/windowId/stateId/本人 UUID 继续校验。预览不是可取物品或库存槽。取物、材料消耗仍必须走真实 `menu.click`，实际产物按菜单回执确认。
+
+网页已接原 Cutter PNG、原按钮 UV、第一页选择状态和真实圆石面板的动态材质图标。滚动位置与后续页面、其他动态 Domum 物品仍明确未支持；不能把部分预览当作完整 Java GUI。原生只读查询有 tick 限流，观察器已提供新鲜缓存时可读取 `domum.current`；拒绝不能伪装成成功或自动重投变更。当前接口包仍不超过 16 KiB。
+
 这条接口让普通 Agent 玩家使用本人已经打开的 Architect's Cutter 原生菜单，发现材质组件、原生组和变体，并选择原生输出。输入材料与取出成品仍走 `menu.click`，原生配方负责材质、数量、消耗和输出。没有额外的 `craft`、成品发放、物品构造或殖民地需求改写功能。
 
 适配对象锁定为 NeoForge 1.21.1、Domum Ornamentum `1.0.231`、MineColonies `1.1.1319`。其他版本必须重新核对 API 和原生菜单行为。

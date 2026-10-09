@@ -4,8 +4,8 @@ const { randomUUID } = require('node:crypto')
 const { EventEmitter } = require('node:events')
 const { TextDecoder } = require('node:util')
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const reads = new Set(['create_settings', 'create_fluids', 'curios_state'])
-const writes = new Set(['create_value', 'create_filter', 'curios_open', 'curios_page', 'world_interact'])
+const reads = new Set(['create_settings', 'create_fluids', 'curios_state', 'ysm_catalog'])
+const writes = new Set(['create_value', 'create_filter', 'curios_open', 'curios_page', 'world_interact', 'ysm_select'])
 const utf8 = new TextDecoder('utf-8', { fatal: true })
 const error = (code, requestId, dispatched = false, mutation = false) => Object.assign(new Error(code), {
   code, requestId, dispatched, outcomeKnown: !(mutation && dispatched), outcomeUnknown: mutation && dispatched,
@@ -75,6 +75,7 @@ function attachModOperationsClient (bot, { timeoutMs = 4000 } = {}) {
     create: { settings: args => request('create_settings', args), fluids: args => request('create_fluids', args),
       setValue: args => request('create_value', args), setFilter: args => request('create_filter', args) },
     curios: { state: () => request('curios_state'), open: args => request('curios_open', args), page: args => request('curios_page', args) },
+    ysm: { catalog: (args = {}) => request('ysm_catalog', { offset: 0, limit: 12, ...args }), select: args => request('ysm_select', args) },
     detach () { bot._client.off('custom_payload', payload); bot.off('spawn', reset); bot.off('respawn', reset); bot.off('end', end); end() }
   }
 }
