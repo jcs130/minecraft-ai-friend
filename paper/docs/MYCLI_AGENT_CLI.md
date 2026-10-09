@@ -1,5 +1,9 @@
 # `/mycli`：Agent 自发现命令接口
 
+## 0.4.1 技能罗盘布局
+
+`/mycli menu` 当前打开45格五排主菜单，底排九项常用技能直接施放，未学只进入学习页，不自动花点；关闭移至右上。原27格GUI的固定槽位已调整，原Agent命令、技能ID和状态包保持，无须更新客户端；使用 `/mycli cast <ID>` 或动态读取当前窗口，不能按旧槽位猜操作。图鉴每页36项，详情返回当前页；地点页36格，遗迹地下城与关闭按钮独立。规则与九项ID见[技能罗盘](COMPASS_MENU.md)。
+
 ## 居民事务与商店（0.4.0）
 
 `/mycli list world` 新增 `world.board`、`world.shops`，分页按回执的下一页继续。`/mycli world board` 返回 `MC_WORLD type=board`，含 `season`、`contracts[]` 的真实 `state`、详情、报酬及 `acceptCommand`，以及 `claimCommand`、`assessmentCommand`；`world board menu` 是原版45格九卡菜单。`world shops` 返回 `type=shops`，含原版商人UUID、世界坐标和用途。原字段与私有Eye镜像保留，原客户端无须更新。

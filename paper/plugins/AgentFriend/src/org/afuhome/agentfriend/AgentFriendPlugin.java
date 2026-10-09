@@ -165,6 +165,39 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             new PublicPlace("cherry", 11, Material.CHERRY_SAPLING, "§d樱花林", "探索樱花树林"),
             new PublicPlace("plains", 12, Material.MAP, "§e平原村庄", "探索另一座村庄"));
     private final Map<Inventory, String> menus = new HashMap<>();
+    private final Map<UUID, Integer> spellGuidePages = new HashMap<>();
+    private record CompassButton(int slot, Material icon, String title, String hint, String action) { }
+    private static final List<CompassButton> COMPASS_BUTTONS = List.of(
+            new CompassButton(0, Material.WRITTEN_BOOK, "旅途指南", "从这里开始，查看探索、技能与公会指引", "menu:guide"),
+            new CompassButton(1, Material.WRITABLE_BOOK, "命格书", "查看本人状态、职业与旅途说明", "book"),
+            new CompassButton(2, Material.NAME_TAG, "职业与传承", "选择战法牧与生活方向，查看解锁途径", "profession:roles"),
+            new CompassButton(3, Material.EXPERIENCE_BOTTLE, "技能学习与升级", "用技能点学习；只打开页面不会扣点", "profession:learn"),
+            new CompassButton(4, Material.ENCHANTED_BOOK, "我的职业技能", "准备已学职业技能，再选择施放", "profession:skills"),
+            new CompassButton(5, Material.EXPERIENCE_BOTTLE, "技能成长", "查看战斗、探索与采集熟练度", "menu:mastery"),
+            new CompassButton(6, Material.BOOK, "法术图鉴", "分页阅读全部基础与职业技能；查看不施法", "menu:spell_guide"),
+            new CompassButton(7, Material.BLAZE_ROD, "灵纹法杖", "绑定技能后手持使用；绑定本身不施法", "menu:focus"),
+            new CompassButton(9, Material.LODESTONE, "传送地点", "公共、命名与分享地点；成功传送消耗魔力", "menu:places"),
+            new CompassButton(10, Material.PLAYER_HEAD, "找队友", "追踪队友方向，或消耗魔力安全传送", "menu:players"),
+            new CompassButton(11, Material.GRASS_BLOCK, "领地与物品归属", "查看领地主人、授权与储物权限", "lands"),
+            new CompassButton(12, Material.LECTERN, "冒险者公会", "注册、接委托、交付与查看个人奖励", "menu:guild"),
+            new CompassButton(13, Material.SUNFLOWER, "生活公会", "农耕、烹饪、钓鱼、建筑、写书与红石", "menu:life"),
+            new CompassButton(14, Material.WRITABLE_BOOK, "任务市场", "工程、探索、职业试炼与居民事务", "market"),
+            new CompassButton(15, Material.BELL, "居民事务板", "农耕补种、真实交易、照片与遗迹调查", "world:board"),
+            new CompassButton(16, Material.OAK_SAPLING, "村庄新生活", "居民聊天、新手实习、商店与世界活动", "world:menu"),
+            new CompassButton(17, Material.FILLED_MAP, "生活照片", "查看本人相册与现有截图导入步骤", "world:photos"),
+            new CompassButton(18, Material.BLAZE_POWDER, "战斗法术", "星芒箭、霜环与焰浪；按原规则消耗魔力", "menu:combat"),
+            new CompassButton(19, Material.ELYTRA, "探索法术", "跃空、飞行、傀儡、心眼与支援传送", "menu:utility"),
+            new CompassButton(20, Material.SPYGLASS, "探矿术", "选择矿种，成功扫描才消耗魔力", "menu:prospect"),
+            new CompassButton(21, Material.CRAFTING_TABLE, "造物术", "固定生活物资；成功造物消耗魔力", "menu:conjure"),
+            new CompassButton(22, Material.FIREWORK_ROCKET, "观赏法术", "烟花与星尘；均有魔力与冷却要求", "menu:cosmetic"),
+            new CompassButton(23, Material.IRON_SWORD, "试炼场", "传送至入口；6魔力，挑战仍需确认", "arena"),
+            new CompassButton(24, Material.WITHER_SKELETON_SKULL, "遗迹地下城", "查看三个地点、路线、组队与个人领奖", "dungeons"),
+            new CompassButton(25, Material.DIAMOND_SWORD, "PvP竞技场", "双方自愿匹配，同款装备对战", "menu:pvp"),
+            new CompassButton(26, Material.LEATHER_CHESTPLATE, "换装皮肤", "打开皮肤画廊，手柄可直接选择", "skins"));
+    // The entire final row is casting. Keep close/navigation outside these nine slots.
+    private static final List<String> COMPASS_QUICK = List.of(
+            "night", "selfheal", "blink", "flight", "heal", "feather", "food", "sense", "home");
+    private static final int GUIDE_PAGE_SIZE = 36;
     private final Map<Inventory, Map<Integer, UUID>> playerMenuTargets = new HashMap<>();
     private final Map<UUID, UUID> trackedPlayers = new HashMap<>();
     private final Map<UUID, BossBar> trackingBars = new HashMap<>();
@@ -641,6 +674,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         savedCompassTargets.remove(id);
         teamTeleportAt.remove(id);
         focusUseAt.remove(id);
+        spellGuidePages.remove(id);
         removeTrackingBar(id);
     }
 
@@ -2020,7 +2054,62 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         stack.setItemMeta(meta);
         return stack;
     }
+    private boolean compassKnown(Player p, String id) {
+        return professions.level(p, id) > 0 && (!(id.equals("night") || id.equals("feather")) || hasLearnedSkill(p, id));
+    }
+    private void fillCompass(Player p, Inventory inv) {
+        for (CompassButton button : COMPASS_BUTTONS)
+            inv.setItem(button.slot(), item(button.icon(), (button.slot() < 9 ? "§d" : button.slot() < 18 ? "§a" : "§b")
+                    + button.title(), button.hint(), button.action().equals("arena") ? "点击传送；成功消耗6魔力" : "点击查看；打开页面不会施法"));
+        for (int slot = 27; slot < 36; slot++)
+            inv.setItem(slot, item(Material.GRAY_STAINED_GLASS_PANE, "§7↓ 底排常用技能 · 点击施法",
+                    "未学技能先打开学习页，不会自动扣技能点", "技能的魔力、冷却、范围与安全规则保持"));
+        for (int i = 0; i < COMPASS_QUICK.size(); i++) {
+            String id = COMPASS_QUICK.get(i); SpellGuide.Entry entry = SpellGuide.find(id);
+            boolean known = compassKnown(p, id);
+            inv.setItem(36 + i, item(entry.icon(), (known ? "§e" : "§8") + entry.name() + (known ? " · 施放" : " · 未学习"),
+                    entry.costLine(), known ? "点击直接施法；失败与冷却按原规则处理" : "点击打开技能学习页；不会自动购买",
+                    entry.command()));
+        }
+    }
+    private void compassClick(Player p, int slot) {
+        if (slot >= 36 && slot < 45) {
+            String id = COMPASS_QUICK.get(slot - 36);
+            if (compassKnown(p, id)) cast(p, id);
+            else {
+                p.sendMessage("§d尚未学会" + SpellGuide.find(id).name() + "；先在学习页确认，快捷栏不会自动扣技能点。");
+                professions.open(p, "learn");
+            }
+            return;
+        }
+        CompassButton button = COMPASS_BUTTONS.stream().filter(b -> b.slot() == slot).findFirst().orElse(null);
+        if (button == null) return;
+        String action = button.action();
+        if (action.startsWith("menu:")) openMenu(p, action.substring(5));
+        else if (action.startsWith("profession:")) professions.open(p, action.substring(11));
+        else if (action.startsWith("world:")) worldLife.command(p, new String[]{"world", action.substring(6), "menu"});
+        else switch (action) {
+            case "book" -> p.openBook(statusBook(p));
+            case "lands" -> lands.open(p, 1);
+            case "market" -> taskMarket.openMenu(p);
+            case "arena" -> gotoPlace(p, "arena");
+            case "dungeons" -> siteDungeons.command(p, new String[]{"dungeon", "menu"});
+            case "skins" -> { if (!p.performCommand("skins")) p.sendMessage("§c皮肤画廊暂时不可用。"); }
+            default -> { }
+        }
+    }
+    private boolean isSpellGuidePage(String page) { return page.equals("spell_guide") || page.startsWith("spell_guide:"); }
+    private int spellGuidePage(String page) {
+        int requested = page.equals("spell_guide") ? 0 : Integer.parseInt(page.substring("spell_guide:".length()));
+        return Math.max(0, Math.min(requested, Math.max(0, (SpellGuide.entries().size() - 1) / GUIDE_PAGE_SIZE)));
+    }
+    private int menuCloseSlot(String page, int size) { return page.equals("skills") ? 8 : size - 1; }
     private void openMenu(Player p, String page) {
+        if (isSpellGuidePage(page)) {
+            int requested = page.equals("spell_guide") ? spellGuidePages.getOrDefault(p.getUniqueId(), 0) : spellGuidePage(page);
+            page = "spell_guide:" + spellGuidePage("spell_guide:" + requested);
+            spellGuidePages.put(p.getUniqueId(), spellGuidePage(page));
+        }
         String title = switch (page) {
             case "skills" -> "§5✦ 技能罗盘";
             case "spell_guide" -> "§d✦ 法术图鉴";
@@ -2030,6 +2119,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "expeditions" -> "§6✦ 遗迹远征";
             case "players" -> "§b✦ 找队友";
             case "combat" -> "§c✦ 战斗法术";
+            case "cosmetic" -> "§e✦ 观赏法术";
             case "prospect" -> "§d✦ 探矿术";
             case "focus" -> "§d✦ 灵纹法杖绑定";
             case "imprint" -> "§5✦ 附魔台法术刻印";
@@ -2040,47 +2130,27 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "life_sites" -> "§a✦ 生活公会地图";
             case "pvp" -> "§c✦ PvP竞技场";
             case "arena_difficulty" -> "§6✦ 试炼难度与开场";
-            default -> page.startsWith("spell_info:")
+            default -> isSpellGuidePage(page) ? "§d✦ 法术图鉴 · " + (spellGuidePage(page) + 1) + "/" + Math.max(1, (SpellGuide.entries().size() + GUIDE_PAGE_SIZE - 1) / GUIDE_PAGE_SIZE)
+                    : page.startsWith("spell_info:")
                     ? "§d✦ " + SpellGuide.find(page.substring("spell_info:".length())).name()
                     : "§6✦ 造物术";
         };
-        Inventory inv = Bukkit.createInventory(null,
-                page.equals("guild") || page.equals("imprint") || page.equals("spell_guide") ? 54 : 27, title);
+        Inventory inv = Bukkit.createInventory(null, page.equals("skills") ? 45 : page.equals("places") ? 36
+                : page.equals("guild") || page.equals("imprint") || isSpellGuidePage(page) ? 54 : 27, title);
         if (page.equals("skills")) {
-            inv.setItem(1, item(Material.NAME_TAG, "§b职业与传承", "选择一个主战职业和最多两个生活职业", "查看准备槽、获取途径和成长委托"));
-            inv.setItem(0, item(Material.GRASS_BLOCK, "§a领地与物品归属", "查看各处领地主人和自己的权限", "领地内无权操作会收到明确提示"));
-            inv.setItem(2, item(Material.WRITTEN_BOOK, "§d法术图鉴", "逐项查看效果、目标、魔力、冷却和学习条件", "先读说明，再决定是否施放"));
-            inv.setItem(3, item(Material.SUNFLOWER, "§a生活公会", "种田、烹饪、钓鱼、建筑、写书和红石工坊", "手柄点击接单；Agent 用 /mycli life board"));
-            inv.setItem(4, item(Material.WRITTEN_BOOK, "§6❖ 旅途指南", "从这里开始：手柄可选图标，不必打字", "也可以拿起命格书，翻页阅读"));
-            inv.setItem(7, item(Material.WRITABLE_BOOK, "§6冒险者公会", "接地下城委托，获得声望与等级"));
-            inv.setItem(8, item(Material.ELYTRA, "§b探索法术", "跃空、飞行、守护傀儡、探敌术"));
-            inv.setItem(9, item(Material.BLAZE_ROD, "§d灵纹法杖", "手持使用瞬发技能；潜行使用可换绑定"));
-            inv.setItem(10, item(Material.COMPASS, "§d归乡", "回到出生村庄；6 魔力"));
-            inv.setItem(11, item(Material.ENDER_PEARL, "§d闪现", "朝视线短距离移动；消耗 4 魔力"));
-            inv.setItem(12, item(Material.GLISTERING_MELON_SLICE, "§d范围治疗", "8 格内受伤玩家全部恢复 3 颗心；消耗 6 魔力"));
-            inv.setItem(13, item(Material.BREAD, "§d饱食", "恢复饥饿；消耗 3 魔力"));
-            inv.setItem(14, item(Material.FIREWORK_ROCKET, "§d烟花术", "无伤害光效；消耗 1 魔力；10 秒冷却"));
-            inv.setItem(15, item(Material.GLOWSTONE_DUST, "§d星尘术", "无伤害星光；消耗 1 魔力；10 秒冷却"));
-            String learning = "未学；原版经验 5 级或炼金等级 2，点击学习";
-            inv.setItem(19, item(Material.FEATHER, "§b羽落", learned(p, featherKey, "已学会；点击咏唱；消耗 2 魔力", learning)));
-            inv.setItem(20, item(Material.LANTERN, "§b夜视", learned(p, nightKey, "已学会；点击咏唱；消耗 2 魔力", learning)));
-            inv.setItem(21, item(Material.GOLDEN_APPLE, "§a圣愈术·治疗自己", "回复 4 颗心；消耗 6 魔力"));
-            inv.setItem(18, item(Material.BLAZE_POWDER, "§c战斗法术", "星芒箭、霜环、焰浪；只伤怪物"));
-            inv.setItem(17, item(Material.SPYGLASS, "§d探矿术", "基础 24 格；挖矿等级提高范围", "刻印工具再 +8 格；点击选择矿种"));
-            inv.setItem(16, item(Material.LODESTONE, "§b传送地点", "公共、自己命名和分享地点；每次 6 魔力"));
-            inv.setItem(22, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "传送至村外试炼入口；6 魔力" : "传送至村外战斗场；6 魔力"));
-            inv.setItem(23, item(Material.CRAFTING_TABLE, "§6造物术", "选择生活物资；每次消耗 4 魔力"));
-            inv.setItem(24, item(Material.PLAYER_HEAD, "§b找队友", "追踪方向，或传送到队友身边"));
-            inv.setItem(25, item(Material.LEATHER_CHESTPLATE, "§d换装皮肤", "打开皮肤画廊，手柄也可选择"));
-            inv.setItem(5, item(Material.EXPERIENCE_BOTTLE, "§d技能成长", "战斗、探索、采集三类熟练度", "成功施法 8/24 次升级；点击查看"));
-            inv.setItem(6, item(Material.IRON_SWORD, "§cPvP竞技场", "双方自愿匹配；同款装备 1v1", "自动倒数与记录胜负；点击打开"));
-        } else if (page.equals("spell_guide")) {
-            List<SpellGuide.Entry> entries = SpellGuide.entries();
-            for (int i = 0; i < entries.size(); i++) {
+            fillCompass(p, inv);
+        } else if (isSpellGuidePage(page)) {
+            List<SpellGuide.Entry> entries = SpellGuide.entries(); int current = spellGuidePage(page);
+            int start = current * GUIDE_PAGE_SIZE, end = Math.min(entries.size(), start + GUIDE_PAGE_SIZE);
+            for (int i = start; i < end; i++) {
                 SpellGuide.Entry entry = entries.get(i);
-                inv.setItem(9 + i, item(entry.icon(), "§d" + entry.name(), SpellGuide.preview(entry)));
+                inv.setItem(9 + i - start, item(entry.icon(), "§d" + entry.name(), SpellGuide.preview(entry)));
             }
-            inv.setItem(49, item(Material.ARROW, "§7返回技能罗盘", "全部技能仍可在原罗盘施放"));
+            inv.setItem(4, item(Material.BOOK, "§d全部法术 · 第" + (current + 1) + "页", "基础与职业合计 " + entries.size() + " 项", "点击技能先看说明；每页最多36项"));
+            if (current > 0) inv.setItem(45, item(Material.ARROW, "§e上一页"));
+            inv.setItem(47, item(Material.EXPERIENCE_BOTTLE, "§d技能学习与升级", "打开学习页，不会自动扣技能点"));
+            inv.setItem(49, item(Material.COMPASS, "§7返回技能罗盘", "底排是九项常用快捷技能"));
+            if (end < entries.size()) inv.setItem(52, item(Material.ARROW, "§e下一页"));
         } else if (page.startsWith("spell_info:")) {
             SpellGuide.Entry entry = SpellGuide.find(page.substring("spell_info:".length()));
             inv.setItem(4, item(Material.WRITTEN_BOOK, "§d" + entry.name(), entry.command()));
@@ -2125,6 +2195,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(13, item(Material.SNOWBALL, "§b霜环", "身边最多 4 只怪物；伤害 2 并减速；7 魔力；14 秒冷却"));
             inv.setItem(15, item(Material.BLAZE_POWDER, "§6焰浪", "前方最多 4 只怪物；伤害 4 并燃烧；8 魔力；10 秒冷却"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
+        } else if (page.equals("cosmetic")) {
+            SpellGuide.Entry fireworks = SpellGuide.find("fireworks"), starlight = SpellGuide.find("starlight");
+            inv.setItem(11, item(fireworks.icon(), "§e" + fireworks.name(), fireworks.costLine(), "点击施放；原有资格与冷却照常"));
+            inv.setItem(15, item(starlight.icon(), "§e" + starlight.name(), starlight.costLine(), "点击施放；原有资格与冷却照常"));
+            inv.setItem(22, item(Material.ARROW, "§7返回技能罗盘"));
         } else if (page.equals("utility")) {
             inv.setItem(10, item(Material.RABBIT_FOOT, "§b跃空术", "高高跳起并缓降；4 魔力；8 秒冷却"));
             inv.setItem(12, item(Material.ELYTRA, "§d飞行术", "自由飞行 15 秒；10 魔力；90 秒冷却"));
@@ -2260,7 +2335,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(20, item(Material.AMETHYST_SHARD, "§d申请更多物品", "由女神判断；手柄可选择常见愿望"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         }
-        inv.setItem(inv.getSize() - 1, item(Material.BARRIER, "§c关闭", "关闭菜单"));
+        inv.setItem(menuCloseSlot(page, inv.getSize()), item(Material.BARRIER, "§c关闭", "关闭菜单"));
         menus.put(inv, page);
         p.openInventory(inv);
     }
@@ -2324,40 +2399,23 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (!(event.getWhoClicked() instanceof Player p)) return;
         int slot = event.getRawSlot();
         if (slot < 0 || slot >= top.getSize() || event.getClick().isShiftClick()) return;
+        if (page.equals("skills") && slot >= 27 && slot < 36) return;
+        if (isSpellGuidePage(page) && slot < 9) return;
         menus.remove(top); // A second click packet cannot cast from this menu.
         p.closeInventory();
         Bukkit.getScheduler().runTask(this, () -> {
             if (!p.isOnline()) return;
-            if (slot == top.getSize() - 1) return;
+            if (slot == menuCloseSlot(page, top.getSize())) return;
             if (page.equals("skills")) {
-                switch (slot) {
-                    case 1 -> professions.open(p, "roles");
-                    case 0 -> lands.open(p, 1);
-                    case 2 -> openMenu(p, "spell_guide");
-                    case 3 -> openMenu(p, "life");
-                    case 5 -> openMenu(p, "mastery");
-                    case 6 -> openMenu(p, "pvp");
-                    case 4 -> openMenu(p, "guide");
-                    case 7 -> openMenu(p, "guild");
-                    case 8 -> openMenu(p, "utility");
-                    case 9 -> openMenu(p, "focus");
-                    case 10 -> cast(p, "home"); case 11 -> cast(p, "blink");
-                    case 12 -> cast(p, "heal"); case 13 -> cast(p, "food");
-                    case 14 -> cast(p, "fireworks"); case 15 -> cast(p, "starlight");
-                    case 19 -> castOrLearn(p, "feather"); case 20 -> castOrLearn(p, "night");
-                    case 21 -> cast(p, "selfheal");
-                    case 18 -> openMenu(p, "combat");
-                    case 17 -> openMenu(p, "prospect");
-                    case 16 -> openMenu(p, "places");
-                    case 22 -> gotoPlace(p, "arena"); case 23 -> openMenu(p, "conjure");
-                    case 24 -> openMenu(p, "players");
-                    case 25 -> { if (!p.performCommand("skins")) p.sendMessage(ChatColor.RED + "皮肤画廊暂时不可用。"); }
-                    default -> { }
-                }
-            } else if (page.equals("spell_guide")) {
+                compassClick(p, slot);
+            } else if (isSpellGuidePage(page)) {
+                int current = spellGuidePage(page), start = current * GUIDE_PAGE_SIZE;
                 if (slot == 49) openMenu(p, "skills");
-                else if (slot >= 9 && slot < 9 + SpellGuide.entries().size())
-                    openMenu(p, "spell_info:" + SpellGuide.entries().get(slot - 9).id());
+                else if (slot == 47) professions.open(p, "learn");
+                else if (slot == 45 && current > 0) openMenu(p, "spell_guide:" + (current - 1));
+                else if (slot == 52 && start + GUIDE_PAGE_SIZE < SpellGuide.entries().size()) openMenu(p, "spell_guide:" + (current + 1));
+                else if (slot >= 9 && slot < 9 + GUIDE_PAGE_SIZE && start + slot - 9 < SpellGuide.entries().size())
+                    openMenu(p, "spell_info:" + SpellGuide.entries().get(start + slot - 9).id());
             } else if (page.startsWith("spell_info:")) {
                 String id = page.substring("spell_info:".length());
                 if (slot == 22) openMenu(p, "spell_guide");
@@ -2395,6 +2453,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 22 -> openMenu(p, "skills");
                     default -> { }
                 }
+            } else if (page.equals("cosmetic")) {
+                if (slot == 11) cast(p, "fireworks");
+                else if (slot == 15) cast(p, "starlight");
+                else if (slot == 22) openMenu(p, "skills");
             } else if (page.equals("utility")) {
                 switch (slot) {
                     case 10 -> cast(p, "leap"); case 12 -> cast(p, "flight");

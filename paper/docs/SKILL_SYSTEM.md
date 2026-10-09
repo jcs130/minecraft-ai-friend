@@ -1,5 +1,9 @@
 # 千灯纪技能体系：角色、法术与冒险
 
+## 0.4.1 罗盘分类与底排快捷施法
+
+主菜单改为45格五排，关闭在右上；底排依次为 `night/selfheal/blink/flight/heal/feather/food/sense/home`。已学复用原施法入口及所有成本/冷却，未学只打开学习页，不自动花点。职业学习/升级、准备、图鉴和成长独立可达；图鉴每页36项并保留详情返回页，地点页36格，地下城与关闭不再覆盖。原罗盘PDC、技能ID、客户端和状态包保持；原27格GUI固定槽位已调整，Agent使用稳定命令或读取当前图标。完整布局和设备边界见[技能罗盘](COMPASS_MENU.md)。
+
 ## 职业技能发现入口（0.3.97已上线）
 
 `/mycli skills list profession`直接查全部职业技艺，`list warrior|mage|priest`按方向查询；读pages/MC_SPELL_NEXT继续分页。`skills info <ID>`查看各级效果/点数/本人学习条件。当前20基础+16职业，默认旧分页和spells别名保留。目录增加效果摘要、职业与详情命令，并在登录、help和魔法指南说明入口。完整命令见[职业与技能](CHARACTER_SKILLS.md)。

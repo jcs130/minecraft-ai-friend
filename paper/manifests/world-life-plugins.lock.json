@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "pack": "world-life-season-20261009",
+  "pack": "compass-menu-20261009",
   "server": "Paper 1.20.6 build 151 / Java 21",
   "agentFriend": {
-    "version": "0.4.0",
-    "sha256": "F2C32D62254007F3577D05605FC6B84E9643322B432A4C7798D31125829A8AF9",
-    "bytes": 916350
+    "version": "0.4.1",
+    "sha256": "2800C7771120115B64FA84D9306ADE308172FCEF398D4DE2B8031241E4B44EB3",
+    "bytes": 919465
   },
   "plugins": [
     {

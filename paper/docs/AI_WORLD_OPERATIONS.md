@@ -1,5 +1,11 @@
 # 千灯纪：Agent 团队维护、开发与运营手册
 
+**0.4.1收尾核验（2026-10-09 10:11:21）：**正式Java PID39240、维护任务结果0，当前在线ag_NEKO/Goddess/CortiLan/CortiEye。原机CortiEye已实际回连附身，camera=online/attached=true并有夜视。女神资料箱与玩家手册SHA256同为 `D7EF3DE5957ED511124C52200591EC0EE4C2B48B663005989D189701AEEA30B3`，另附技能罗盘指南；两项原生只读问答实际读取后答复63/58字符，准确解释底排前四技能、未学不自动花点、右上关闭、每页36项和原耗魔冷却，没有主动游戏公告。下方旧连接状态与手册摘要为各历史时点。
+
+
+
+**2026-10-09 10:03:42 技能罗盘整理已上线：**AgentFriend **0.4.1**（919465字节，SHA256 `2800C7771120115B64FA84D9306ADE308172FCEF398D4DE2B8031241E4B44EB3`），Java PID39240，既有维护任务正常备份重启。E/F `20261009-100203/.complete` 均在替换前完整，仅替换AgentFriend JAR。主菜单45格五排，最底九格为夜视、圣愈、闪现、飞行、范围治疗、羽落、饱食、探敌、归乡；关闭移至右上角。未学点击只打开学习页，不自动花点；原资格、魔力、冷却和安全规则保留。图鉴每页36项、详情返回原页；地点页扩36格，恢复被关闭按钮覆盖的地下城入口。原Agent/Eye客户端程序与29个其他插件JAR保持。隔离57项、正式普通协议30项、旧数据17项通过。基岩入口已响应，手机/Xbox实际画面和手柄点击待设备验收。原机Eye实际回连情况见最终核验，不把watcher在线当作镜头恢复。规则见[技能罗盘](COMPASS_MENU.md)，下方旧版本为各发布时点。私有回执在E/F `repairs/compass-menu-20261009`。
+
 **本次收尾复核：**原机CortiEye已实际恢复 `camera=online attached=true cameraNightVision=true`，目标CortiLan；Goddess/CortiLan/CortiEye/ag_NEKO四个原服务账号均已回连。女神资料箱与玩家手册SHA256同为 `F3947044583989863935E2DA693A6809597FFC441B503D0FBE5E4F075433C69D`，另附村庄生活季指南；两项原生只读问答实际读取两份资料后答复111/70字符，准确解释原格补种、普通配怪和本人照片保留，没有主动游戏公告。下方维护期间尚未回连的记录为历史。
 
 **2026-10-09 09:25:57 村庄生活季已上线：**AgentFriend **0.4.0**（916350字节，SHA256 `F2C32D62254007F3577D05605FC6B84E9643322B432A4C7798D31125829A8AF9`），Java PID39068，正常维护任务结果0。E/F `20261009-092349/.complete` 均在替换前完整。九张居民事务把农耕、原格补种、原版交易、公共补给、本人新照片挂墙、真实施法和三处遗迹调查接入现有公会验收与能力记录；原35张任务/7场地保留，共44张。新增禾仓和灯穗两个真实商人，居民对话、故事和活动指向可接任务；Mythic精英只接入冒险/末日地下城，普通配怪保留。原Agent/Eye客户端未改。规则与热运营见[村庄生活季](VILLAGE_LIFE_SEASON.md)。隔离完整流程34、地下城30、热更新/真实NPC答复10、正常重启/16受控Agent加1附身Eye11项通过；正式只读27、旧数据18项通过。基岩入口已响应，手机/Xbox实际画面待设备；这不是16个LLM长期自主游玩的性能承诺。09:30:35原机CortiEye实际回连附身并有夜视；随后四个原服务账号全部回连。下方旧版本和旧连接状态均为各自发布时点。私有回执在E/F `repairs/world-life-season-20261009`。
@@ -30,6 +36,7 @@
 | 组队救援（0.3.96已上线） | 4格内停留10秒自动救起，当前层/室清场自动复活；`arena status`、`dungeon status`；[救援规则及系统提示](TRIAL_RESCUE.md) | config.yml的trial-rescue、原塔检查点和地下城场次ID；保留原奖励和物品 | 服务器私发倒地坐标、救援方法与进度；Agent用原移动能力靠近并等待。全员倒地才失败，离线/正常重启保留，部分救援计时重置。普通塔恢复原配怪，强化仅用于冒险/末日 |
 | 玩家委托与分页箱（0.3.94） | 公会玩家委托、`commission list/mine/info/menu/publish/accept/claim/abandon/cancel`，`arena stash pages/page/list`；[玩法](MYCLI_AGENT_CLI.md) | config.yml的player-contracts.jobs/active、既有余额/待入箱队列和0–539槽位 | 已上线；玩家发布供货/同行无需代码或重启，每单一人、托管报酬、实物与真实探索返程验收。10页540格，待入箱队列1024组；客户端沿用现有协议 |
 | 命名传送点（0.3.89） | 罗盘地点页、`waypoint add/list/shared/menu`、`goto personal:名字/shared:分享码`；[命名地点](NAMED_WAYPOINTS.md) | `plugins/AgentFriend/waypoints.yml` 按主人/世界 UUID 保存，默认每人 32 点 | 玩家亲自到达后在线中文命名、改名、更新和撤回分享；记录免费，成功传送 6 魔力。主动分享公开发现者与坐标；不改代码、不重启。旧 home 保留；部署状态以维护记录为准 |
+| 技能罗盘（0.4.1） | 原版45格五排、底排九项；`/mycli menu`；[布局](COMPASS_MENU.md) | 原罗盘PDC/技能账本保持，图鉴页码仅在线记忆 | 已学点击原施法，未学只打开学习页；图鉴每页36项，地点页36格。原Agent命令和客户端保持，基岩实际设备待验收 |
 | 技能、法术、快捷施法 | 既有技能源码与 MagicSpells/AuraSkills；0.3.92 新增 professions.yml / skills.yml / skill-unlocks.yml / skill-points.yml；[职业与传承](CHARACTER_SKILLS.md)、[技能体系](SKILL_SYSTEM.md)、[位移](TRAVEL_MAGIC.md) | 既有魔力/等级/刻印/熟练度；profession-ledger.json 的 UUID 资格、学习等级、已获/已花点数、最高成长、冷却、唯一归属；config.yml pending 收据 | 旧效果发布流程保留；新职业固定效果、逐级点数/效果、洗点费用和解锁可整体验证热加载，失败保留旧目录，新效果仍需代码发布；战法牧与点数已于0.3.92上线，当前0.3.99继续保留，16项逐级简介已热更新，0.3.97的skills list profession或warrior/mage/priest直接发现职业技艺，skills info查逐级详情；学习菜单右键/命格书提供详情和个人状态 |
 | 公会公共仓库（0.3.95） | 十二组原版双箱、648格；`guild shared`；[公共仓库](GUILD_SHARED_STORAGE.md) | 原版世界实体箱；`lands.yml`公共例外；`guild-shared-chests.yml` | 已启用供货跨同类箱、拒绝回退并合计库存；后续已建实体双箱登记用`land reload`和`sharedstorage reload`热更新，无需改代码或重启 |
 | 公会任务与等级 | 静态 37 张仍在 `GuildManager.java`；0.3.78 起的动态卡模板在 `plugins/AgentFriend/dynamic-board.yml`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中的 `guild-players` 和 `dynamic-board.today`；动态模板文件 | 已支持的供货与日常目标可改 YAML 后用 `mycli admin board reload`、`replace` 或 `regenerate` 热更新；新判定类型仍需开发。正式服 0.3.86 已包含此功能，详见 [动态看板](DYNAMIC_BOARD.md) |
