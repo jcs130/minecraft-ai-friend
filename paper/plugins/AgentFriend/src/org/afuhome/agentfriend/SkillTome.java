@@ -80,7 +80,8 @@ final class SkillTome {
             if (args.length == 3) try { slot = Integer.parseInt(args[2]); }
             catch (NumberFormatException ignored) { slot = -1; }
             if (slot < 0 || slot >= 36) {
-                player.sendMessage("MC_SKILLBOOK action=use ok=false reason=invalid_slot"); return;
+                player.sendMessage("MC_SKILLBOOK action=use ok=false reason=invalid_slot");
+                player.sendMessage("§e槽位无效；/mycli skillbook list 查研习书准确背包槽位，再 skillbook use <0–35>。"); return;
             }
             use(player, slot, mastery);
             return;
@@ -92,19 +93,23 @@ final class SkillTome {
         ItemStack item = player.getInventory().getItem(slot);
         String id = spell(item);
         if (id == null) {
-            player.sendMessage("MC_SKILLBOOK action=use ok=false reason=not_skillbook slot=" + slot); return;
+            player.sendMessage("MC_SKILLBOOK action=use ok=false reason=not_skillbook slot=" + slot);
+            player.sendMessage("§e此槽不是技艺研习书；/mycli skillbook list 查可用书与槽位，改用列出的槽。未消耗物品。"); return;
         }
         if (player.getGameMode() == GameMode.SPECTATOR) {
-            player.sendMessage("MC_SKILLBOOK action=use ok=false reason=spectator slot=" + slot); return;
+            player.sendMessage("MC_SKILLBOOK action=use ok=false reason=spectator slot=" + slot);
+            player.sendMessage("§e观战者不能使用研习书；请使用对应生存角色，/mycli skillbook list 查看其可用研习书。"); return;
         }
         if (mastery.rank(player, id) >= 3) {
-            player.sendMessage(ChatColor.YELLOW + "这项技艺已经练到 3 级；研习书留在背包中。");
+            player.sendMessage(ChatColor.YELLOW + "这项技艺已满3级，书保留；/mycli mastery 查其他技艺，选择未满级技能对应的研习书使用。");
             player.sendMessage("MC_SKILLBOOK action=use ok=false reason=max_level slot=" + slot + " id=" + id);
             return;
         }
         int practice = item.getItemMeta().getPersistentDataContainer().get(PRACTICE, PersistentDataType.INTEGER);
         int gained = mastery.grantTraining(player, id, practice);
-        if (gained <= 0) return;
+        if (gained <= 0) {
+            player.sendMessage("§e研习未增加熟练度，书未消耗；/mycli mastery 核对等级，持续异常把技能ID和时间告知服主。"); return;
+        }
         if (item.getAmount() == 1) player.getInventory().setItem(slot, null);
         else {
             item.setAmount(item.getAmount() - 1);

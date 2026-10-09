@@ -355,6 +355,8 @@ final class WaypointManager implements Listener {
         j.addProperty("status", reason.equals("loading") ? "pending" : success ? "success" : "denied");
         j.addProperty("spentMana", success && action.equals("teleport") ? 6 : 0);
         if (v != null) j.add("point", json(v, action.equals("share") || action.equals("unshare")));
+        ActionFeedback.Advice advice = !success && !reason.equals("loading") ? ActionFeedback.advice("waypoint", reason, "") : null;
+        if (advice != null) advice.add(j);
         p.sendMessage("MC_WAYPOINT_RESULT " + j);
         String hint = switch (reason) {
             case "ok" -> switch (action) {
@@ -384,6 +386,7 @@ final class WaypointManager implements Listener {
             default -> "请按命令说明重试。";
         };
         p.sendMessage((success ? ChatColor.GREEN : ChatColor.YELLOW) + hint);
+        if (advice != null) p.sendMessage("§a【正确做法】" + advice.next());
     }
     private String label(Point v) {
         World w = Bukkit.getWorld(v.world);

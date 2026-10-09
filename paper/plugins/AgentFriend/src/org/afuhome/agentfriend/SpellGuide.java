@@ -228,7 +228,10 @@ final class SpellGuide {
         JsonObject data = new JsonObject();
         data.addProperty("schemaVersion", 1);
         data.addProperty("code", code);
-        data.addProperty("hint", hint);
+        data.addProperty("hint", hint); data.addProperty("nextAction", hint + "；复制图鉴中的准确ID，用 /mycli skills info <ID> 查看条件与费用。");
+        com.google.gson.JsonArray commands = new com.google.gson.JsonArray(); commands.add("/mycli spells list"); commands.add("/mycli skills info <ID>");
+        data.add("nextCommands", commands);
         player.sendMessage("MC_SPELL_ERROR " + data);
+        player.sendMessage("§e" + data.get("nextAction").getAsString());
     }
 }

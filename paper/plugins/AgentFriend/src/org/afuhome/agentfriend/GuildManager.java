@@ -257,7 +257,7 @@ final class GuildManager implements Listener {
 
     private void join(Player player) {
         if (player.getGameMode() == GameMode.SPECTATOR) {
-            player.sendMessage(ChatColor.RED + "旁观者不能接公会任务。"); return;
+            player.sendMessage(ChatColor.RED + "旁观者不能接公会任务；请使用生存角色，/mycli guild board 查看可接任务。"); return;
         }
         if (member(player)) { status(player); return; }
         String path = base(player.getUniqueId());
@@ -325,10 +325,10 @@ final class GuildManager implements Listener {
     private void accept(Player player, String id) {
         Contract quest = contract(id);
         if (quest == null) { player.sendMessage(ChatColor.RED + "没有这个任务 ID；/mycli guild board 查看精确名称。"); return; }
-        if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能接单。"); return; }
+        if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能接单；请使用生存角色，/mycli guild board 查看委托。"); return; }
         boolean market = plugin.taskMarket().isMarket(id);
-        if (!dungeon.isBuilt() && !market) { player.sendMessage(ChatColor.RED + "地下城暂未建成，不能接此任务。"); return; }
-        if (active(player) != null) { player.sendMessage(ChatColor.YELLOW + "先完成并交付当前任务。"); return; }
+        if (!dungeon.isBuilt() && !market) { player.sendMessage(ChatColor.RED + "地下城暂未建成；/mycli guild board 选择其他开放任务，或联系服主检查场地。"); return; }
+        if (active(player) != null) { player.sendMessage(ChatColor.YELLOW + "已有在途任务；先 /mycli guild status 查进度，完成后 guild claim；若决定换单可 guild abandon，当前进度会清零。"); return; }
         if (plugin.taskMarket().isMarket(plugin.getConfig().getString(base(player.getUniqueId()) + ".active.id", ""))) {
             player.sendMessage(ChatColor.RED + "在途任务快照异常，已保留记录；请联系服主修复，不能覆盖任务。"); return;
         }
@@ -785,7 +785,7 @@ final class GuildManager implements Listener {
 
     private void abandon(Player player) {
         Contract quest = active(player);
-        if (quest == null) { player.sendMessage(ChatColor.YELLOW + "当前没有可放弃的任务。"); return; }
+        if (quest == null) { player.sendMessage(ChatColor.YELLOW + "当前没有可放弃的任务；/mycli guild status 核对，想接单请 guild board 查看开放清单。"); return; }
         if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().abandoned(player);
         plugin.getConfig().set(base(player.getUniqueId()) + ".active", null);
         plugin.saveConfig();
@@ -804,10 +804,10 @@ final class GuildManager implements Listener {
 
     private void claimVerified(Player player) {
         Contract quest = active(player);
-        if (quest == null) { player.sendMessage(ChatColor.YELLOW + "当前没有可交付的任务。"); return; }
+        if (quest == null) { player.sendMessage(ChatColor.YELLOW + "当前没有可交付的任务；/mycli guild status 核对在途记录，没有任务时先 guild board 选单再 accept。"); return; }
         if (progress(player) < quest.target()) {
             player.sendMessage(ChatColor.YELLOW + "还需完成「" + quest.title() + "」：" + progress(player)
-                    + "/" + quest.target()); return;
+                    + "/" + quest.target() + "；/mycli guild status 核对条件，继续实际行动；工程先 guild verify 验收，完成后再 claim。"); return;
         }
         if (doneToday(player, quest)) {
             player.sendMessage(ChatColor.RED + "今日奖励已结算；请联系服主核对异常记录。"); return;
@@ -838,7 +838,7 @@ final class GuildManager implements Listener {
             if (deliveryChest >= 0) {
                 delivery = plugin.guildShared().deposit(deliveryChest, new ItemStack(offer, quest.target()));
                 if (delivery == null) {
-                    player.sendMessage(ChatColor.YELLOW + "同类公共箱及扩容箱空间不足或暂不可用；物品未扣除，任务和奖励未改变。/mycli guild shared 查看公共仓库。");
+                    player.sendMessage(ChatColor.YELLOW + "同类公共仓库已满或不可用；未扣物，任务保留。/mycli guild shared 查同类全部箱；将可用公共物资领取到本人库存腾位后再 claim，箱体或权限异常请联系服主，不放进大厅私有箱。");
                     player.sendMessage("MC_GUILD_DELIVERY {\"schemaVersion\":1,\"status\":\"denied\",\"reason\":\"public_storage_full_or_unavailable\",\"itemsDebited\":false}");
                     return;
                 }

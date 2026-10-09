@@ -54,7 +54,7 @@ final class TravelMagic implements Listener {
     boolean teleport(Player player, Location destination, String id, String name, int mana) {
         if (!plugin.professions().basicAllowed(player,id.equals("home") ? "home" : id.equals("support") ? "support" : "travel")) return false;
         if (player.getGameMode() == GameMode.SPECTATOR) {
-            player.sendMessage(ChatColor.RED + "旁观者不能使用传送术。"); return false;
+            player.sendMessage(ChatColor.RED + "旁观者不能使用传送术；请使用对应的生存角色，/mycli status 核对状态。"); return false;
         }
         if (!plugin.hasMana(player, mana)) return false;
         Location departure = player.getLocation().clone();
@@ -63,7 +63,7 @@ final class TravelMagic implements Listener {
         try { moved = player.teleport(destination); }
         finally { internal.remove(player.getUniqueId()); }
         if (!moved) {
-            player.sendMessage(ChatColor.RED + "传送被保护规则取消；没有消耗魔力。"); return false;
+            player.sendMessage(ChatColor.RED + "传送被保护规则取消；未耗魔。先 /mycli land here 核对权限，再 /mycli waypoint 另选公开安全目标；持续异常联系服主。"); return false;
         }
         if (!plugin.spendMana(player, mana)) {
             plugin.getLogger().severe("Accepted travel could not be charged: " + player.getUniqueId());
@@ -77,7 +77,7 @@ final class TravelMagic implements Listener {
     boolean command(Player player, String command, Location expected, String id, String name, int mana) {
         if (!plugin.professions().basicAllowed(player,id.equals("home") ? "home" : "travel")) return false;
         if (player.getGameMode() == GameMode.SPECTATOR) {
-            player.sendMessage(ChatColor.RED + "旁观者不能使用传送术。"); return false;
+            player.sendMessage(ChatColor.RED + "旁观者不能使用传送术；请使用对应的生存角色，/mycli status 核对状态。"); return false;
         }
         if (!plugin.hasMana(player, mana)) return false;
         UUID uuid = player.getUniqueId();

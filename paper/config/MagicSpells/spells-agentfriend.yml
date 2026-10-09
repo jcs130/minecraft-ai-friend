@@ -15,7 +15,7 @@ selfheal:
     cost: [] # Charged from AuraSkills by AgentFriend on successful cast.
     str-cost: 6 shared mana
     str-cast-self: Sacred healing restores your health.
-    str-max-health: You are already at full health.
+    str-max-health: '目标已经满血；靠近受伤友军再 /mycli cast heal，当前无需重复治疗。'
     effects:
         hearts:
             position: target

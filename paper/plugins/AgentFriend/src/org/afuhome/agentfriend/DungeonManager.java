@@ -410,6 +410,20 @@ final class DungeonManager implements Listener {
         return false;
     }
 
+    ProtectionArea protectionArea(Location at) {
+        if (!inBuild(at)) return null;
+        if (at.getY() >= Y[BASE_FLOORS - 1] && at.getY() <= Y[0] + 7
+                && Math.abs(at.getBlockX() - X) <= RADIUS && Math.abs(at.getBlockZ() - Z) <= RADIUS)
+            return ProtectionArea.box("trial_base", "试炼塔基础六层", world(), X - RADIUS, Y[BASE_FLOORS - 1], Z - RADIUS,
+                    X + RADIUS, Y[0] + 7, Z + RADIUS);
+        for (int n = REST_FLOOR; n <= (challengeBuilt ? FINAL_FLOOR : BOSS_FLOOR); n++) {
+            int centerX = n <= BOSS_FLOOR ? WING_X : CHALLENGE_X, r = radius(n);
+            ProtectionArea area = ProtectionArea.box("trial_floor_" + n, "试炼塔第" + n + "层", world(),
+                    centerX - r, Y[n - 1], WING_Z - r, centerX + r, Y[n - 1] + 7, WING_Z + r);
+            if (area.contains(at)) return area;
+        }
+        return null;
+    }
     boolean deniesEdit(Location at) { return inBuild(at); }
 
     private Location lobbyButton() {
@@ -637,12 +651,12 @@ final class DungeonManager implements Listener {
         if (plugin.siteDungeons() != null && plugin.siteDungeons().isParticipant(starter)) {
             starter.sendMessage(ChatColor.RED + "你正在遗迹地下城中；先完成或 dungeon leave 再参加试炼塔。"); return;
         }
-        if (starter.getGameMode() == GameMode.SPECTATOR) { starter.sendMessage(ChatColor.RED + "旁观者不能启动。"); return; }
+        if (starter.getGameMode() == GameMode.SPECTATOR) { starter.sendMessage(ChatColor.RED + "旁观者不能启动挑战；请使用生存角色，/mycli arena status 查看入口和规则。"); return; }
         if (!nearLobbyButton(starter, lobbyButton())) {
             starter.sendMessage(ChatColor.RED + "请站到地面入口石按钮附近 12 格内再启动。 "
                     + LocationOutput.fields(lobbyButton())); return;
         }
-        if (active) { starter.sendMessage(ChatColor.YELLOW + "已有队伍在挑战试炼塔。"); return; }
+        if (active) { starter.sendMessage(ChatColor.YELLOW + "已有队伍在挑战试炼塔；/mycli arena status 查看，等本场结束后再开场，或 dungeon list 选择别处。"); return; }
         long now = System.currentTimeMillis();
         if (now - lastRun < COOLDOWN_MS) {
             starter.sendMessage(ChatColor.YELLOW + "试炼场休息中，还需 " + ((COOLDOWN_MS - (now - lastRun) + 999) / 1000) + " 秒。");
@@ -653,7 +667,7 @@ final class DungeonManager implements Listener {
         participants.clear(); mobs.clear();
         difficulty = chosenDifficulty(starter);
         if (enterFloor(1, group) == 0) {
-            starter.sendMessage(ChatColor.RED + "地下城入口传送失败，试炼未启动。"); return;
+            starter.sendMessage(ChatColor.RED + "地下城入口传送失败，试炼未启动；/mycli status 查魔力，/mycli arena status 核对入口；站在安全处再试，持续失败联系服主。"); return;
         }
         active = true;
         runStartedAt = now;
@@ -677,9 +691,9 @@ final class DungeonManager implements Listener {
         if (plugin.siteDungeons() != null && plugin.siteDungeons().isParticipant(starter)) {
             starter.sendMessage(ChatColor.RED + "你正在遗迹地下城中；先完成或 dungeon leave。"); return;
         }
-        if (!expanded) { starter.sendMessage(ChatColor.YELLOW + "深层驿站尚未开放。"); return; }
+        if (!expanded) { starter.sendMessage(ChatColor.YELLOW + "深层驿站尚未开放；/mycli arena status 查看基础挑战，或联系服主确认开放安排。"); return; }
         if (starter.getGameMode() == GameMode.SPECTATOR || starter.isDead()) {
-            starter.sendMessage(ChatColor.RED + "旁观者或倒下的玩家不能进入驿站。"); return;
+            starter.sendMessage(ChatColor.RED + "旁观者或倒地玩家不能进入驿站；请使用存活的生存角色，倒地者等队友靠近救援或清层后再行动。"); return;
         }
         if (!starter.getPersistentDataContainer().has(checkpointKey, PersistentDataType.BYTE)) {
             starter.sendMessage(ChatColor.YELLOW + "先通关第六层，即可解锁深层驿站直达。"); return;
@@ -695,7 +709,7 @@ final class DungeonManager implements Listener {
         participants.clear(); mobs.clear();
         difficulty = chosenDifficulty(starter);
         if (enterFloor(REST_FLOOR, group) == 0) {
-            starter.sendMessage(ChatColor.RED + "驿站传送失败，挑战未启动。"); return;
+            starter.sendMessage(ChatColor.RED + "驿站传送失败，挑战未启动；/mycli status 查魔力与状态，/mycli arena status 查驿站条件；持续失败联系服主。"); return;
         }
         active = true;
         runStartedAt = now;
@@ -729,7 +743,7 @@ final class DungeonManager implements Listener {
                     player.sendMessage(ChatColor.GOLD + "第 13 层岩浆会造成伤害；本层不再自动给予抗火，请观察地形并绕行。");
                     player.sendMessage("MC_DUNGEON_HAZARD floor=13 type=minecraft:lava autoFireResistance=false");
                 }
-            } else player.sendMessage(ChatColor.RED + "传送未成功，你没有进入本层队伍。");
+            } else player.sendMessage(ChatColor.RED + "传送未成功，你没有进入本层队伍；/mycli arena status 核对场次，不要隔层追怪；把楼层和时间告知服主检查落点。");
         }
         if (arrived.isEmpty()) return 0;
         for (UUID id : participants) {
@@ -781,11 +795,11 @@ final class DungeonManager implements Listener {
 
     private void leave(Player player) {
         if (!inLobby(player.getLocation()) && floorAt(player.getLocation()) == 0) {
-            player.sendMessage(ChatColor.RED + "你目前不在试炼场内。"); return;
+            player.sendMessage(ChatColor.RED + "你目前不在试炼场内；/mycli arena status 核对所在场次，要挑战可 /mycli goto arena 前往入口。"); return;
         }
         Location landing = new Location(world(), X + 0.5, LOBBY_Y + 1.0, Z - 17 + 0.5, 0, 0);
         if (landing.getBlock().getType() != Material.AIR || landing.clone().add(0, 1, 0).getBlock().getType() != Material.AIR) {
-            player.sendMessage(ChatColor.RED + "地面入口受阻，返回已取消。"); return;
+            player.sendMessage(ChatColor.RED + "地面入口受阻，返回已取消；停止重复传送，/mycli arena status 记录楼层并联系服主清理落点，不拆保护建筑。"); return;
         }
         if (player.teleport(landing)) {
             if (participants.remove(player.getUniqueId())) persistRun();
@@ -1294,6 +1308,7 @@ final class DungeonManager implements Listener {
         int room = participant ? floorAt(player.getLocation()) : 0;
         if (room == 0 || room != floor) {
             player.sendMessage("MC_DUNGEON_LAYOUT participant=false reason=not_in_active_room");
+            player.sendMessage("§e你不在本人活动房间；/mycli arena status 查参赛和楼层，未开场请从入口启动，不要跨层找怪。");
             return;
         }
         String hazard = switch (room) {
@@ -1649,6 +1664,7 @@ final class DungeonManager implements Listener {
             List<Inventory> pool = plugin.guildShared().inventories(category);
             if (pool == null) {
                 sender.sendMessage("MC_STASH_SHARE ok=false reason=shared_chest_unavailable category=" + category);
+                sender.sendMessage("正确做法：先 mycli admin guildstorageaudit 与 guild shared 核对同类公共箱体/权限，修复后重新预览捐赠，不改用公会私产箱。");
                 return;
             }
             shared.add(pool); List<Inventory> simulation = new ArrayList<>();
@@ -1691,6 +1707,7 @@ final class DungeonManager implements Listener {
             if (receipt == null) {
                 for (int i = changes.size() - 1; i >= 0; i--) changes.get(i).rollback();
                 sender.sendMessage("MC_STASH_SHARE ok=false reason=destination_changed rollback=true");
+                sender.sendMessage("正确做法：目标公共箱已变化，转移已回退；暂停同时取放箱子，重新预览后再确认捐赠。");
                 return;
             }
             changes.add(receipt);
@@ -1825,10 +1842,12 @@ final class DungeonManager implements Listener {
             }
             ItemStack source = player.getInventory().getItem(slot);
             if (source == null || source.getType().isAir()) {
-                player.sendMessage("MC_STASH_PUT slot=" + slot + " moved=0 reason=empty"); return;
+                player.sendMessage("MC_STASH_PUT slot=" + slot + " moved=0 reason=empty");
+                player.sendMessage("§e此背包槽为空；先核对本人背包0–35槽，选有物品的槽再 stash putslot。未移动物品。"); return;
             }
             if (plugin.isSoulbound(source)) {
-                player.sendMessage("MC_STASH_PUT slot=" + slot + " moved=0 reason=soulbound"); return;
+                player.sendMessage("MC_STASH_PUT slot=" + slot + " moved=0 reason=soulbound");
+                player.sendMessage("§e此物品已绑定，不能存入个人奖励箱；请保留在本人背包或装备栏，改选普通物品存入。未移动物品。"); return;
             }
             if (!remoteStashReady(player)) return;
             Material material = source.getType();
@@ -1885,7 +1904,8 @@ final class DungeonManager implements Listener {
             inv=storage().page(id,slot/54);
             ItemStack source = inv.getItem(slot%54);
             if (source == null || source.getType().isAir()) {
-                player.sendMessage("MC_STASH_TAKE slot=" + (slot + 1) + " moved=0 reason=empty"); return;
+                player.sendMessage("MC_STASH_TAKE slot=" + (slot + 1) + " moved=0 reason=empty");
+                player.sendMessage("§e此个人箱槽为空；/mycli arena stash list 查看全部页面的物品与实际槽号，再 take 指定非空槽。"); return;
             }
             if (!remoteStashReady(player)) return;
             ItemStack part = source.clone();
@@ -2065,13 +2085,13 @@ final class DungeonManager implements Listener {
     }
 
     void build(CommandSender sender) {
-        if (built) { sender.sendMessage("六层基础试炼已经建成；拒绝重复覆盖。"); return; }
+        if (built) { sender.sendMessage("六层基础试炼已经建成；拒绝重复覆盖。请停止重建，先核对建成/施工标记、原保护快照和世界现状；中断施工须按维护流程备份现场再恢复，不清标记绕过保护。"); return; }
         if (!plugin.getConfig().getBoolean("arena-built", false)) { sender.sendMessage("请先建原有地面试炼场。"); return; }
         if (plugin.getConfig().getBoolean("dungeon-building", false)) {
             sender.sendMessage("上次施工中断；必须检查世界或从备份恢复，不可重试覆盖。"); return;
         }
         World w = world();
-        if (w == null) { sender.sendMessage("主世界尚未加载。"); return; }
+        if (w == null) { sender.sendMessage("主世界尚未加载；请服主检查世界启动日志并恢复加载，再重试，不重新生成原世界。"); return; }
         for (Player p : Bukkit.getOnlinePlayers()) if (p.getGameMode() != GameMode.SPECTATOR
                 && sameWorld(p.getLocation()) && Math.abs(p.getLocation().getBlockX() - X) <= RADIUS
                 && Math.abs(p.getLocation().getBlockZ() - Z) <= RADIUS
@@ -2121,18 +2141,18 @@ final class DungeonManager implements Listener {
 
     private boolean surveyExpansionSite(CommandSender sender) {
         if (!built || !plugin.getConfig().getBoolean("dungeon-built", false)) {
-            sender.sendMessage("六层基础试炼未建成，不能扩建。"); return false;
+            sender.sendMessage("六层基础试炼未建成；先 mycli admin dungeonaudit 查建造状态，核对完整备份和场地，再按维护流程建基础层。"); return false;
         }
-        if (expanded) { sender.sendMessage("深层分区已经建成，拒绝重复覆盖。"); return false; }
+        if (expanded) { sender.sendMessage("深层分区已经建成，拒绝重复覆盖。请停止重建，先核对建成/施工标记、原保护快照和世界现状；中断施工须按维护流程备份现场再恢复，不清标记绕过保护。"); return false; }
         if (active || plugin.getConfig().isConfigurationSection(RUN_STATE)) {
-            sender.sendMessage("当前有活动试炼或重连检查点，不能施工。"); return false;
+            sender.sendMessage("有活动试炼或重连检查点，未施工；mycli admin dungeonaudit 核对，等玩家正常完成/离场和检查点结束，再备份施工。"); return false;
         }
         if (plugin.getConfig().getBoolean("dungeon-expansion-building", false)) {
             sender.sendMessage("上次深层施工中断；先核查并从施工前备份恢复。"); return false;
         }
         World w = world();
         if (w == null || Y[BOSS_FLOOR - 1] < w.getMinHeight() + 4) {
-            sender.sendMessage("主世界未加载或深度不足。"); return false;
+            sender.sendMessage("主世界未加载或深度不足；核对世界 min-height 和启动日志，保持旧场地，请服主另选符合高度的方案后再施工。"); return false;
         }
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (player.getGameMode() == GameMode.SPECTATOR || !sameWorld(player.getLocation())) continue;
@@ -2150,7 +2170,7 @@ final class DungeonManager implements Listener {
                     Block block = w.getBlockAt(WING_X + dx, y + dy, WING_Z + dz);
                     if (block.getState() instanceof TileState || suspicious(block.getType())) {
                         sender.sendMessage("深层发现容器或结构，拒绝施工：" + block.getLocation()
-                                + " " + block.getType()); return false;
+                                + " " + block.getType() + "；保留该容器/结构，调整施工方案后重新 survey，不直接挖除覆盖。"); return false;
                     }
                 }
         }
@@ -2186,20 +2206,20 @@ final class DungeonManager implements Listener {
 
     private boolean surveyChallengeSite(CommandSender sender, int centerX, int centerZ) {
         if (!built || !expanded || !plugin.getConfig().getBoolean("dungeon-expanded", false)) {
-            sender.sendMessage("十层试炼尚未建成，不能施工新侧翼。"); return false;
+            sender.sendMessage("十层试炼尚未建成；先 mycli admin dungeonaudit 核对基础和深层状态，完成正常建造验收后再申请侧翼。"); return false;
         }
         if (challengeBuilt || plugin.getConfig().getBoolean("dungeon-challenge-built", false)) {
-            sender.sendMessage("挑战侧翼已经建成，拒绝重复覆盖。"); return false;
+            sender.sendMessage("挑战侧翼已经建成，拒绝重复覆盖。请停止重建，先核对建成/施工标记、原保护快照和世界现状；中断施工须按维护流程备份现场再恢复，不清标记绕过保护。"); return false;
         }
         if (active || plugin.getConfig().isConfigurationSection(RUN_STATE)) {
-            sender.sendMessage("有试炼或重连检查点，不能施工。"); return false;
+            sender.sendMessage("有活动试炼或重连检查点，未施工；mycli admin dungeonaudit 核对，等场次和重连宽限正常结束，再备份施工。"); return false;
         }
         if (plugin.getConfig().getBoolean("dungeon-challenge-building", false)) {
             sender.sendMessage("施工中断标记仍在；先检查并恢复施工前快照。"); return false;
         }
         World w = world();
         if (w == null || Y[10] < w.getMinHeight() + 4 || Y[14] + 7 >= w.getMaxHeight()) {
-            sender.sendMessage("主世界未加载或高度不足。"); return false;
+            sender.sendMessage("主世界未加载或高度不足；核对世界 min-height/max-height 和启动日志，请服主另选符合高度的方案，不修改原世界凑条件。"); return false;
         }
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (player.getGameMode() == GameMode.SPECTATOR || !sameWorld(player.getLocation())) continue;
@@ -2217,7 +2237,7 @@ final class DungeonManager implements Listener {
                     Block block = w.getBlockAt(centerX + dx, y + dy, centerZ + dz);
                     if (block.getState() instanceof TileState || suspicious(block.getType())) {
                         sender.sendMessage("挑战侧翼发现容器或结构，拒绝施工：" + block.getLocation()
-                                + " " + block.getType()); return false;
+                                + " " + block.getType() + "；保留该容器/结构，调整施工方案后重新 survey，不直接挖除覆盖。"); return false;
                     }
                 }
         }
@@ -2477,8 +2497,18 @@ final class DungeonManager implements Listener {
         if (built && event.getEntity() instanceof Monster && floorAt(event.getLocation()) > 0
                 && event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.CUSTOM) event.setCancelled(true);
     }
-    @EventHandler public void onBreak(BlockBreakEvent event) { if (inBuild(event.getBlock().getLocation())) event.setCancelled(true); }
-    @EventHandler public void onPlace(BlockPlaceEvent event) { if (inBuild(event.getBlock().getLocation())) event.setCancelled(true); }
+    @EventHandler public void onBreak(BlockBreakEvent event) {
+        if (inBuild(event.getBlock().getLocation())) {
+            event.setCancelled(true);
+            plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "dungeon", protectionArea(event.getBlock().getLocation()));
+        }
+    }
+    @EventHandler public void onPlace(BlockPlaceEvent event) {
+        if (inBuild(event.getBlock().getLocation())) {
+            event.setCancelled(true);
+            plugin.protectionAdvisor().denied(event.getPlayer(), "place", event.getBlock().getLocation(), "dungeon", protectionArea(event.getBlock().getLocation()));
+        }
+    }
     @EventHandler public void onChange(EntityChangeBlockEvent event) { if (inBuild(event.getBlock().getLocation())) event.setCancelled(true); }
     @EventHandler public void onBurn(BlockBurnEvent event) { if (inBuild(event.getBlock().getLocation())) event.setCancelled(true); }
     @EventHandler public void onIgnite(BlockIgniteEvent event) { if (inBuild(event.getBlock().getLocation())) event.setCancelled(true); }

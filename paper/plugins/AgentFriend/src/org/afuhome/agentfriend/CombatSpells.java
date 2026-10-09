@@ -46,7 +46,7 @@ final class CombatSpells {
     void cast(Player caster, String spell) {
         if (!plugin.professions().basicAllowed(caster,spell)) return;
         if (caster.getGameMode() == org.bukkit.GameMode.SPECTATOR) {
-            caster.sendMessage(ChatColor.RED + "旁观者不能施法。");
+            caster.sendMessage(ChatColor.RED + "旁观者不能施法；请使用对应的生存角色行动，/mycli status 查看当前状态。");
             return;
         }
         switch (spell) {
@@ -60,7 +60,7 @@ final class CombatSpells {
     private boolean ready(Player caster, String spell) {
         long remaining = remainingCooldownMs(caster, spell);
         if (remaining <= 0) return true;
-        caster.sendMessage(ChatColor.RED + "此法术还需 " + ((remaining + 999) / 1000) + " 秒。");
+        caster.sendMessage(ChatColor.RED + "此法术还需 " + ((remaining + 999) / 1000) + " 秒；等待结束后再施放，重复提交不会缩短冷却。");
         return false;
     }
 
@@ -173,7 +173,7 @@ final class CombatSpells {
         if (!ready(caster, "frostnova")) return;
         List<Enemy> enemies = nearbyHostiles(caster, 5.5, 4);
         if (enemies.isEmpty()) {
-            caster.sendMessage(ChatColor.YELLOW + "霜环附近没有看得见的怪物；未消耗魔力。");
+            caster.sendMessage(ChatColor.YELLOW + "霜环附近没有看得见的怪物；未耗魔。/mycli skills info frostnova 查范围，靠近可见敌人再施放，勿攻击村民。");
             return;
         }
         if (!begin(caster, "frostnova", 7)) return;
@@ -213,7 +213,7 @@ final class CombatSpells {
         }
         enemies.sort(Comparator.comparingDouble(enemy -> enemy.getLocation().distanceSquared(caster.getLocation())));
         if (enemies.isEmpty()) {
-            caster.sendMessage(ChatColor.YELLOW + "焰浪前方没有看得见的怪物；未消耗魔力。");
+            caster.sendMessage(ChatColor.YELLOW + "焰浪前方没有看得见的怪物；未耗魔。/mycli skills info flamewave 查范围，面对可见敌人、移开遮挡后再施放。");
             return;
         }
         if (!begin(caster, "flamewave", 8)) return;

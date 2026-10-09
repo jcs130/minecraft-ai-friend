@@ -70,6 +70,7 @@ import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.potion.PotionEffect;
@@ -432,8 +433,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     void openPlacesMenu(Player player) { openMenu(player, "places"); }
     void openDungeonDifficultyMenu(Player player) {
         if (dungeon != null && dungeon.isBuilt()) openMenu(player, "arena_difficulty");
-        else player.sendMessage(ChatColor.RED + "试炼塔尚未建成。");
+        else player.sendMessage(ChatColor.RED + "试炼塔尚未建成；请联系服主检查场地，或 /mycli dungeon list 选择已开放的地下城。");
     }
+    ProtectionArea arenaProtectionArea(Location at) {
+        if (!arenaBuilt || !inBuild(at)) return null;
+        if (Math.abs(at.getBlockX() - X) <= 13 && Math.abs(at.getBlockZ() - Z) <= 13)
+            return ProtectionArea.box("trial_lobby", "试炼场大厅", world(), X - 13, 75, Z - 13, X + 13, 100, Z + 13);
+        return ProtectionArea.box("trial_entrance", "试炼场入口通道", world(), X - 3, 75, Z - 23, X + 3, 100, Z - 13);
+    }
+    ProtectionArea pvpProtectionArea(Location at) { return pvpArena.protectionArea(at); }
     boolean deniesArenaEdit(Block block) { return arenaBuilt && inBuild(block.getLocation()); }
     void guildMobDefeated(Player player, org.bukkit.entity.EntityType type) { if (guild != null) guild.onDungeonMobDefeated(player, type); }
     void guildFloorCleared(Player player, int floor, int partySize) {
@@ -483,10 +491,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     boolean hasMana(Player p, double amount) {
         SkillsUser user = skillsUser(p);
-        if (user == null) { p.sendMessage(ChatColor.RED + "魔力数据还没加载，请稍后再试。"); return false; }
+        if (user == null) { p.sendMessage(ChatColor.RED + "魔力数据还没加载；等几秒后 /mycli status 确认已加载再施法，持续异常请联系服主。"); return false; }
         if (user.getMana() + 0.0001 < amount) {
             p.sendMessage(ChatColor.RED + "魔力不足：当前 " + Math.round(user.getMana()) + "/"
-                    + Math.round(user.getMaxMana()) + "，需要 " + Math.round(amount) + "。");
+                    + Math.round(user.getMaxMana()) + "，需要 " + Math.round(amount) + "。先停止耗魔、等待自然恢复；/mycli status 查魔力，足够后再施放一次。");
             return false;
         }
         return true;
@@ -575,13 +583,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (cost == null || event.getSpellCastState() != Spell.SpellCastState.NORMAL) return;
         if (p.getGameMode() == GameMode.SPECTATOR) {
             event.setCancelled(true);
-            p.sendMessage(ChatColor.RED + "旁观者不能施法。");
+            p.sendMessage(ChatColor.RED + "旁观者不能施法；请使用对应的生存角色行动，/mycli status 查看当前状态。");
             return;
         }
         SkillsUser user = skillsUser(p);
         if (user == null || user.getMana() + 0.0001 < cost) {
             event.setCancelled(true);
-            p.sendMessage(ChatColor.RED + "魔力不足：需要 " + Math.round(cost) + "。用罗盘的命格书查看当前魔力。");
+            p.sendMessage(ChatColor.RED + "魔力不足：需要 " + Math.round(cost) + "。用 /mycli status 或命格书查看；停止耗魔等自然恢复，足够后再施放一次。");
         } else if (event.getSpell().getInternalName().equalsIgnoreCase("blink") && travelMagic != null)
             travelMagic.exemptBlink(p);
     }
@@ -689,6 +697,20 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             event.setCancelled(true);
     }
 
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onNativeSpellHelp(PlayerCommandPreprocessEvent event) {
+        String[] words = event.getMessage().trim().split("\\s+");
+        if (words.length > 2 || !(words[0].equalsIgnoreCase("/cast") || words[0].equalsIgnoreCase("/magicspells:cast"))) return;
+        if (!com.nisovin.magicspells.MagicSpells.isLoaded()) return;
+        if (words.length == 2 && com.nisovin.magicspells.MagicSpells.getSpellByName(words[1].replace("\"", "").replace("'", "")) != null) return;
+        // MagicSpells hardcodes this command error. Keep its original handling,
+        // then append a private recovery step without changing or casting it.
+        Player player = event.getPlayer();
+        Bukkit.getScheduler().runTask(this, () -> {
+            if (player.isOnline()) player.sendMessage("§a【正确做法】未找到技能或缺少ID；/mycli skills list 查准确ID，/mycli skills info <ID> 查条件，再 /mycli cast <ID>。");
+        });
+    }
+
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length >= 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("coach")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
@@ -770,7 +792,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 sender.sendMessage("研习书发放成功：" + target.getUniqueId() + " " + args[3] + " +" + practice);
                 getLogger().info("Console granted skill tome " + args[3] + " +" + practice
                         + " to " + target.getUniqueId());
-            } catch (IllegalArgumentException bad) { sender.sendMessage("技能 ID 无效或熟练度只允许 4|8。"); }
+            } catch (IllegalArgumentException bad) { sender.sendMessage("技能ID无效或熟练度只允许4|8；先 /mycli skills list 复制合法基础技能ID，再按原命令使用4或8的整数值。"); }
             return true;
         }
         if ((args.length == 4 || args.length == 5) && args[0].equalsIgnoreCase("admin")
@@ -1177,7 +1199,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     private void cast(Player p, String raw) {
         if (isDowned(p)) { p.sendMessage("§e倒地中，请等待队友靠近救援或清场复活。"); return; }
-        if (p.getGameMode() == GameMode.SPECTATOR) { p.sendMessage(ChatColor.RED + "旁观者不能施法。"); return; }
+        if (p.getGameMode() == GameMode.SPECTATOR) { p.sendMessage(ChatColor.RED + "旁观者不能施法；请使用对应的生存角色行动，/mycli status 查看当前状态。"); return; }
         String id = raw.toLowerCase(Locale.ROOT);
         if (professions.skill(id.split("\\s+", 2)[0]) != null) { professions.cast(p, raw); return; }
         if (id.equals("support") || id.equals("支援") || id.equals("支援传送术")) {
@@ -1223,7 +1245,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             combatSpells.cast(p, id); return;
         }
         // Dispatch as the same player: MagicSpells retains its own permission, mana and cooldown checks.
-        if (!p.performCommand("cast " + id)) p.sendMessage(ChatColor.RED + "MagicSpells 当前未受理，请联系管理员。");
+        if (!p.performCommand("cast " + id)) p.sendMessage(ChatColor.RED + "MagicSpells 当前未受理；停止重试，用 /mycli status 核对角色状态，并将技能ID和时间告知服主检查插件。");
     }
 
     private void conjure(Player p, String raw) {
@@ -1243,7 +1265,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             requestCreation(p, raw);
             return;
         }
-        if (!p.performCommand("cast conjure_" + id)) p.sendMessage(ChatColor.RED + "造物术当前未受理，请联系管理员。");
+        if (!p.performCommand("cast conjure_" + id)) p.sendMessage(ChatColor.RED + "造物术当前未受理；停止重试，用 /mycli status 核对魔力，将物品ID和时间告知服主检查插件。");
     }
     private void requestCreation(Player p, String raw) {
         String wanted = raw.replaceAll("[\\p{Cntrl}\\u00a7]", " ").replaceAll("\\s+", " ").trim();
@@ -1411,7 +1433,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return;
         }
         if (id.equals("arena") || id.equals("试炼场")) {
-            if (!arenaBuilt) { p.sendMessage(ChatColor.RED + "试炼场尚未建成。"); return; }
+            if (!arenaBuilt) { p.sendMessage(ChatColor.RED + "试炼场尚未建成；请联系服主检查场地，或 /mycli guild board 选择其他委托。"); return; }
             Location landing = new Location(world(), X + 0.5, FLOOR + 1.0, Z - 17 + 0.5, 0, 0);
             if (landing.getBlock().getType() != Material.AIR || landing.clone().add(0, 1, 0).getBlock().getType() != Material.AIR) {
                 p.sendMessage(ChatColor.RED + "试炼场入口受阻，传送已取消。"); return;
@@ -1422,7 +1444,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         if (PUBLIC_PLACES.stream().anyMatch(place -> place.id().equals(id))) {
             Location destination = publicWarp(id);
-            if (destination == null) { p.sendMessage(ChatColor.RED + "公共传送点不可用。"); return; }
+            if (destination == null) { p.sendMessage(ChatColor.RED + "公共传送点不可用；/mycli waypoint 查看当前有效地点，另选公开目标；持续异常请联系服主。"); return; }
             if (!travelMagic.command(p, "warp " + id, destination, homeSpell ? "home" : id,
                     homeSpell ? "归乡术" : "公共传送术", TravelMagic.LOCAL_MANA))
                 p.sendMessage(ChatColor.RED + "公共传送点未受理。");
@@ -1435,7 +1457,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             String name = raw.substring("personal:".length());
             if (!name.matches("[A-Za-z0-9_-]{1,24}")) { p.sendMessage(ChatColor.RED + "私人传送点名只用英文、数字、_、-，最长 24 字符。"); return; }
             Location destination = personalHome(p, name);
-            if (destination == null) { p.sendMessage(ChatColor.RED + "私人传送点不可用。"); return; }
+            if (destination == null) { p.sendMessage(ChatColor.RED + "私人传送点不可用；/mycli waypoint list 查看本人有效地点，确认名字；需要新点可站在安全平地 waypoint add <名字>。"); return; }
             if (!travelMagic.command(p, "home " + name, destination, "personal:" + name,
                     "私人传送术", TravelMagic.LOCAL_MANA)) p.sendMessage(ChatColor.RED + "私人传送点未受理。");
             else {
@@ -1443,7 +1465,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             return;
         }
-        p.sendMessage(ChatColor.RED + "未知地点。输入 /mycli help。重名地点不会自动选择。");
+        p.sendMessage(ChatColor.RED + "未知或重名地点；先 /mycli waypoint 查看准确目标，个人点用 personal:<名字>，分享点用 shared:<码>，地标用 landmark:<ID>。");
     }
     private void waypoint(Player p, String[] args) {
         if (args.length == 1) {
@@ -1476,7 +1498,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void groupHeal(Player caster) {
         if (!professions.basicAllowed(caster,"heal")) return;
         if (caster.getGameMode() == GameMode.SPECTATOR || caster.isDead()) {
-            caster.sendMessage(ChatColor.RED + "旁观者或倒下的玩家不能施法。");
+            caster.sendMessage(ChatColor.RED + "旁观者或倒地玩家不能施法；观战者请使用生存角色，倒地者等队友在4格内停留10秒或清完本层/本室后再行动。");
             return;
         }
         long now = System.currentTimeMillis();
@@ -1495,7 +1517,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     && player.getHealth() < player.getMaxHealth()) wounded.add(player);
         }
         if (wounded.isEmpty()) {
-            caster.sendMessage(ChatColor.YELLOW + "8 格内没有需要治疗的玩家；未消耗魔力或冷却。");
+            caster.sendMessage(ChatColor.YELLOW + "8格内没有需要治疗的玩家；未耗魔或冷却。靠近受伤友军8格内再 /mycli cast heal；已满血则无需治疗。");
             return;
         }
         if (!spendMana(caster, 6)) return;
@@ -1561,7 +1583,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (args[2].equalsIgnoreCase("nearest")) { teleportNearest(viewer); return; }
             trackablePlayers(viewer).stream().filter(target -> target.getName().equalsIgnoreCase(args[2]))
                     .findFirst().ifPresentOrElse(target -> teleportToTeammate(viewer, target.getUniqueId()),
-                            () -> viewer.sendMessage(ChatColor.RED + "队友不在线或不可传送：" + args[2]));
+                            () -> viewer.sendMessage(ChatColor.RED + "队友不在线或不可传送：" + args[2] + "；/mycli locate list 核对准确名字、世界与在线状态，等目标可用后再传送。"));
             return;
         }
         if (args.length != 2) {
@@ -1572,7 +1594,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (choice.equalsIgnoreCase("nearest")) { trackNearest(viewer); return; }
         List<Player> visible = trackablePlayers(viewer);
         if (choice.equalsIgnoreCase("list")) {
-            if (visible.isEmpty()) { viewer.sendMessage(ChatColor.GRAY + "当前没有可定位的在线队友。"); return; }
+            if (visible.isEmpty()) { viewer.sendMessage(ChatColor.GRAY + "当前没有可定位的在线队友；等待队友上线后 /mycli locate list 刷新，当前可继续自己的探索。"); return; }
             viewer.sendMessage(ChatColor.AQUA + "在线队友：");
             for (Player target : visible) {
                 Location at = target.getLocation();
@@ -1585,7 +1607,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         visible.stream().filter(target -> target.getName().equalsIgnoreCase(choice)).findFirst()
                 .ifPresentOrElse(target -> trackPlayer(viewer, target.getUniqueId()),
-                        () -> viewer.sendMessage(ChatColor.RED + "没有找到可定位的在线玩家：" + choice));
+                        () -> viewer.sendMessage(ChatColor.RED + "没有找到可定位的在线玩家：" + choice + "；/mycli locate list 复制准确名字，目标须在线且非旁观者。"));
     }
 
     private void trackNearest(Player viewer) {
@@ -1593,7 +1615,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 .filter(target -> target.getWorld().equals(viewer.getWorld()))
                 .min(Comparator.comparingDouble(target -> target.getLocation().distanceSquared(viewer.getLocation())))
                 .ifPresentOrElse(target -> trackPlayer(viewer, target.getUniqueId()),
-                        () -> viewer.sendMessage(ChatColor.YELLOW + "当前世界没有可定位的在线队友。"));
+                        () -> viewer.sendMessage(ChatColor.YELLOW + "当前世界没有可定位的在线队友；/mycli locate list 查看其他世界队友，先通过正常入口到同一世界再追踪。"));
     }
 
     private void teleportNearest(Player viewer) {
@@ -1601,7 +1623,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 .filter(target -> target.getWorld().equals(viewer.getWorld()))
                 .min(Comparator.comparingDouble(target -> target.getLocation().distanceSquared(viewer.getLocation())))
                 .ifPresentOrElse(target -> teleportToTeammate(viewer, target.getUniqueId()),
-                        () -> viewer.sendMessage(ChatColor.YELLOW + "当前世界没有可传送的在线队友。"));
+                        () -> viewer.sendMessage(ChatColor.YELLOW + "当前世界没有可传送的在线队友；/mycli locate list 核对世界和状态，等队友在线且位置安全后再试。"));
     }
 
     static boolean safeLanding(Block feet) {
@@ -1643,7 +1665,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         long now = System.currentTimeMillis();
         long wait = teamTeleportAt.getOrDefault(viewer.getUniqueId(), 0L) + TEAM_TELEPORT_COOLDOWN_MS - now;
         if (wait > 0) {
-            viewer.sendMessage(ChatColor.YELLOW + "传送冷却还剩 " + ((wait + 999) / 1000) + " 秒。"); return;
+            viewer.sendMessage(ChatColor.YELLOW + "传送冷却还剩 " + ((wait + 999) / 1000) + " 秒；等待结束再传一次，/mycli locate list 可先核对队友。"); return;
         }
         Location landing = safeNear(target);
         if (landing == null) {
@@ -1708,7 +1730,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (target == null || !trackablePlayers(viewer).contains(target)) {
                 trackedPlayers.remove(tracking.getKey());
                 removeTrackingBar(tracking.getKey());
-                viewer.sendMessage(ChatColor.YELLOW + "追踪已结束：队友离线或暂时不可定位。");
+                viewer.sendMessage(ChatColor.YELLOW + "追踪已结束：队友离线或暂不可定位；/mycli locate list 刷新，确认上线后再 locate <准确玩家名>。");
                 continue;
             }
             showTracking(viewer, target);
@@ -1806,7 +1828,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     + "。/mycli goto arena 前往。");
             case "start" -> startArena(p);
             case "leave" -> {
-                if (!inside(p.getLocation())) { p.sendMessage("你目前不在试炼场内。"); return; }
+                if (!inside(p.getLocation())) { p.sendMessage("你目前不在试炼场内；/mycli arena status 核对所在场次，要挑战可 /mycli goto arena 前往入口。"); return; }
                 gotoPlace(p, "arena");
             }
             default -> p.sendMessage(ChatColor.RED + "用法：/mycli arena start|status|leave");
@@ -1867,7 +1889,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void imprint(Player player, String id) {
         FocusSpell spell = focusDefinition(id);
         if (spell == null) { player.sendMessage(ChatColor.RED + "没有这个可刻印法术；/mycli imprint list 查看 ID。"); return; }
-        if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能刻印。"); return; }
+        if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能刻印；请使用生存角色持工具在附魔台4格内操作，/mycli imprint list 查可用技能。"); return; }
         ItemStack stack = player.getInventory().getItemInMainHand();
         if (!imprintable(stack)) { player.sendMessage(ChatColor.RED + "这件物品不能刻印；请手持镐、剑、工具或望远镜。"); return; }
         if (!nearEnchantingTable(player)) { player.sendMessage(ChatColor.RED + "要在附魔台 4 格内刻印法术。"); return; }
@@ -2103,7 +2125,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "market" -> taskMarket.openMenu(p);
             case "arena" -> gotoPlace(p, "arena");
             case "dungeons" -> siteDungeons.command(p, new String[]{"dungeon", "menu"});
-            case "skins" -> { if (!p.performCommand("skins")) p.sendMessage("§c皮肤画廊暂时不可用。"); }
+            case "skins" -> { if (!p.performCommand("skins")) p.sendMessage("§c皮肤画廊暂不可用；稍后 /mycli world list 查看服务，持续异常请把时间与 skins 命令告知服主。"); }
             default -> { }
         }
     }
@@ -2591,7 +2613,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     private void buildArena(CommandSender sender) {
         World w = world();
-        if (w == null) { sender.sendMessage("主世界尚未加载。"); return; }
+        if (w == null) { sender.sendMessage("主世界尚未加载；请服主检查世界启动日志并恢复加载，再重试，不重新生成原世界。"); return; }
         if (arenaBuilt) { sender.sendMessage("试炼场已登记。拒绝重复覆盖；先审查并手动维护。"); return; }
         // Refuse unexpected buildings or tall terrain before touching any block.
         for (int dx = -RADIUS; dx <= RADIUS; dx++) for (int dz = -RADIUS; dz <= RADIUS; dz++) {
@@ -2652,9 +2674,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     private void startArena(Player starter) {
-        if (!arenaBuilt) { starter.sendMessage(ChatColor.RED + "试炼场尚未建成。"); return; }
+        if (!arenaBuilt) { starter.sendMessage(ChatColor.RED + "试炼场尚未建成；请联系服主检查场地，或 /mycli guild board 选择其他委托。"); return; }
         if (!inside(starter.getLocation())) { starter.sendMessage(ChatColor.RED + "请站在试炼场内启动。"); return; }
-        if (starter.getGameMode() == GameMode.SPECTATOR) { starter.sendMessage(ChatColor.RED + "旁观者不能启动。"); return; }
+        if (starter.getGameMode() == GameMode.SPECTATOR) { starter.sendMessage(ChatColor.RED + "旁观者不能启动挑战；请使用生存角色，/mycli arena status 查看入口和规则。"); return; }
         if (active) { starter.sendMessage(ChatColor.YELLOW + "当前试炼还在进行。"); return; }
         long now = System.currentTimeMillis();
         if (now - lastRun < RUN_COOLDOWN_MS) {
@@ -2806,14 +2828,20 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         block.breakNaturally(event.getPlayer().getInventory().getItemInMainHand());
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
-        if (arenaBuilt && inBuild(event.getBlock().getLocation())) event.setCancelled(true);
+        if (arenaBuilt && inBuild(event.getBlock().getLocation())) {
+            event.setCancelled(true);
+            protectionAdvisor.denied(event.getPlayer(), "break", event.getBlock().getLocation(), "arena", arenaProtectionArea(event.getBlock().getLocation()));
+        }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onVillagerDamage(EntityDamageEvent event) {
         if (event.getEntity() instanceof Villager && inVillage(event.getEntity().getLocation()))
             event.setCancelled(true);
     }
     @EventHandler public void onPlace(BlockPlaceEvent event) {
-        if (arenaBuilt && inBuild(event.getBlock().getLocation())) event.setCancelled(true);
+        if (arenaBuilt && inBuild(event.getBlock().getLocation())) {
+            event.setCancelled(true);
+            protectionAdvisor.denied(event.getPlayer(), "place", event.getBlock().getLocation(), "arena", arenaProtectionArea(event.getBlock().getLocation()));
+        }
     }
     @EventHandler public void onEntityChange(EntityChangeBlockEvent event) {
         if (arenaBuilt && inBuild(event.getBlock().getLocation())) event.setCancelled(true);

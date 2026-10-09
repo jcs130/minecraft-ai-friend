@@ -239,8 +239,17 @@ final class GoddessGifts implements Listener {
     private void fail(CommandSender sender, String nonce, String reason) {
         JsonObject result = new JsonObject(); result.addProperty("request", nonce);
         result.addProperty("ok", false); result.addProperty("reason", reason);
+        String next = switch (reason) {
+            case "permission" -> "礼物发放仅限现役女神和维护控制台；玩家请 /mycli goddess pray <祈愿> 申请，不冒用女神身份。";
+            case "inventory" -> "请收件人先空出背包格，核对礼物状态与目录后再申请发放。";
+            case "offline" -> "等收件人的生存角色在线，核对准确玩家名后再申请。";
+            case "argument", "catalog" -> "先 mycli admin giftcatalog 查看合法礼物ID和数量，按命令格式提交，不用普通书冒充附魔书。";
+            default -> "停止重复发奖；用 mycli admin giftstatus <原16位请求ID> 核对回执，把原因码和原请求ID交服主处理，不换请求ID重发未知结果。";
+        };
+        result.addProperty("nextAction", next);
         sender.sendMessage("QDJ-GIFT " + nonce + " FAIL " + reason);
         sender.sendMessage("MC_GIFT_RESULT " + result);
+        sender.sendMessage("正确做法：" + next);
         plugin.getLogger().info("Goddess gift rejected request=" + nonce + " reason=" + reason);
     }
     private static ItemStack[] copy(ItemStack[] input) {

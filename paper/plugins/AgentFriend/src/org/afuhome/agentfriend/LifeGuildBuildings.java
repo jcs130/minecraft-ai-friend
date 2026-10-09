@@ -280,7 +280,7 @@ final class LifeGuildBuildings implements Listener {
         Survey site = inspect(x, z, false);
         sender.sendMessage(site.valid() ? "生活公会候选地可建：" + hall.id() + " x=" + x + " z=" + z
                 + " floorY=" + site.y() + " logs=" + site.logs()
-                : "生活公会候选地不可建：" + hall.id() + " x=" + x + " z=" + z + "；" + site.issue());
+                : "生活公会候选地不可建：" + hall.id() + " x=" + x + " z=" + z + "；" + site.issue() + "；按原因另选未保护空地，再 survey；不拆已有村屋和容器。");
     }
 
     void build(CommandSender sender, String id, int x, int z) {
@@ -288,7 +288,7 @@ final class LifeGuildBuildings implements Listener {
         if (hall == null) { sender.sendMessage("建筑 ID：harvest|harbor|workshop|library"); return; }
         if (built(hall) || plugin.getConfig().getBoolean(path(hall) + ".building")
                 || Files.exists(maskPath(hall))) {
-            sender.sendMessage("此生活公会已建、施工曾中断或保护快照已存在；拒绝覆盖。"); return;
+            sender.sendMessage("此生活公会已建、施工曾中断或保护快照已存在；拒绝覆盖。请停止重建，先核对建成/施工标记、原保护快照和世界现状；中断施工须按维护流程备份现场再恢复，不清标记绕过保护。"); return;
         }
         Survey site = inspect(x, z, true);
         if (!site.valid()) { sender.sendMessage("未施工：" + site.issue()); return; }
@@ -636,6 +636,16 @@ final class LifeGuildBuildings implements Listener {
                     && b.getY() >= plot.y() - 4 && b.getY() <= plot.y() + 8) return true;
         return false;
     }
+    ProtectionArea protectionArea(Location at) {
+        if (at == null || at.getWorld() != world) return null;
+        for (var entry : plots.entrySet()) {
+            Plot p = entry.getValue();
+            ProtectionArea area = new ProtectionArea("life_guild_" + entry.getKey(), hall(entry.getKey()).name(), world,
+                    p.x() - 6, p.y() - 4, p.z() - 6, p.x() + 6, p.y() + 8, p.z() + 8, "structure_mask_envelope");
+            if (area.contains(at)) return area;
+        }
+        return null;
+    }
     boolean deniesEdit(Block block) {
         return inBuiltPlot(block) && (!ready || fabric.get(key(block)) == block.getType());
     }
@@ -646,14 +656,20 @@ final class LifeGuildBuildings implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
         if (deniesEdit(event.getBlock())) {
             event.setCancelled(true);
-            event.getPlayer().sendMessage("§e这是生活公会的建筑，周围草木可正常整理。");
+            plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "life_guild_building", protectionArea(event.getBlock().getLocation()));
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
-        if (deniesEdit(event.getBlockReplacedState())) event.setCancelled(true);
+        if (deniesEdit(event.getBlockReplacedState())) {
+            event.setCancelled(true);
+            plugin.protectionAdvisor().denied(event.getPlayer(), "place", event.getBlock().getLocation(), "life_guild_building", protectionArea(event.getBlock().getLocation()));
+        }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
-        if (event.getReplacedBlockStates().stream().anyMatch(this::deniesEdit)) event.setCancelled(true);
+        for (var state : event.getReplacedBlockStates()) if (deniesEdit(state)) {
+            event.setCancelled(true);
+            plugin.protectionAdvisor().denied(event.getPlayer(), "place", state.getLocation(), "life_guild_building", protectionArea(state.getLocation())); break;
+        }
     }
     @EventHandler public void onBurn(BlockBurnEvent event) {
         if (deniesEdit(event.getBlock())) event.setCancelled(true);

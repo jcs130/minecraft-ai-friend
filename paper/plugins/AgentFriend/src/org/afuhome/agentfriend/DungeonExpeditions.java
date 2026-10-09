@@ -48,14 +48,14 @@ final class DungeonExpeditions {
         Site site = site(id);
         if (site == null) {
             player.sendMessage(ChatColor.RED + "没有这个遗迹；可选 "
-                    + String.join("、", SITES.stream().map(Site::id).toList()) + "。");
+                    + String.join("、", SITES.stream().map(Site::id).toList()) + "；复制准确ID后 /mycli guild travel <ID>。");
             return;
         }
         if (player.getGameMode() == org.bukkit.GameMode.SPECTATOR) {
             player.sendMessage(ChatColor.RED + "旁观者不参与遗迹远征。"); return;
         }
         World world = Bukkit.getWorld("world");
-        if (world == null) { player.sendMessage(ChatColor.RED + "主世界尚未加载。"); return; }
+        if (world == null) { player.sendMessage(ChatColor.RED + "主世界尚未加载；请服主检查世界启动日志并恢复加载，再重试，不重新生成原世界。"); return; }
         player.sendMessage(ChatColor.YELLOW + "正在寻找「" + site.name() + "」附近的安全落脚处……");
         world.getChunkAtAsync(site.approachX() >> 4, site.approachZ() >> 4)
                 .whenComplete((chunk, error) -> Bukkit.getScheduler().runTask(plugin, () -> {
@@ -65,7 +65,7 @@ final class DungeonExpeditions {
                     }
                     Location landing = safeLanding(world, site);
                     if (landing == null) {
-                        player.sendMessage(ChatColor.RED + "没有找到安全落脚处，传送已取消。"); return;
+                        player.sendMessage(ChatColor.RED + "没有找到安全落脚处，传送已取消；不要拆开保护建筑。/mycli guide explore 查看遗迹探索与路线，或联系服主检查入口。"); return;
                     }
                     if (!plugin.travelMagic().teleport(player, landing, "expedition:" + site.id(),
                             "遗迹远征术", TravelMagic.DISTANT_MANA)) return;

@@ -151,7 +151,10 @@ final class LandmarkManager implements Listener {
     private void result(Player player, String action, boolean success, String reason, String id) {
         JsonObject data = new JsonObject(); data.addProperty("action", action); data.addProperty("status", reason.equals("loading") ? "pending" : success ? "success" : "denied");
         data.addProperty("reason", reason); data.addProperty("id", id); data.addProperty("manaCost", action.equals("teleport") ? 6 : 0);
-        data.addProperty("spentMana", success && action.equals("teleport") ? 6 : 0); machine(player, "MC_LANDMARK_RESULT", data);
+        data.addProperty("spentMana", success && action.equals("teleport") ? 6 : 0);
+        ActionFeedback.Advice advice = !success && !reason.equals("loading") ? ActionFeedback.advice("landmark", reason, id) : null;
+        if (advice != null) advice.add(data);
+        machine(player, "MC_LANDMARK_RESULT", data);
         String hint = switch (reason) {
             case "ok" -> action.equals("teleport") ? "已到达公共地标。" : action.equals("unpublish") ? "已撤回公共传送，建筑管理权保留。" : "公共地标已登记：/mycli goto landmark:" + id + "；每次 6 魔力。";
             case "published" -> "此地标已公开，管理者及建造履历见领地信息。";
@@ -170,6 +173,7 @@ final class LandmarkManager implements Listener {
             default -> "操作未完成（" + reason + "），未消耗魔力；/mycli landmark menu 查看地标。";
         };
         player.sendMessage((success ? "§a" : "§e") + hint);
+        if (advice != null) player.sendMessage("§a【正确做法】" + advice.next());
     }
     private void usage(Player p) { p.sendMessage("/mycli landmark list|mine [页码]|menu|info <领地ID>|publish <领地ID> <名字>|update <领地ID>|unpublish <领地ID>|cancel"); }
     private ItemStack icon(Material material, String name, String... lore) {

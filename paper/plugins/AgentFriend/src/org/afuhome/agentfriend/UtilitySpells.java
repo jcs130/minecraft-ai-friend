@@ -85,7 +85,7 @@ final class UtilitySpells implements Listener {
     void cast(Player player, String spell) {
         if (!plugin.professions().basicAllowed(player,spell)) return;
         if (player.getGameMode() == GameMode.SPECTATOR) {
-            player.sendMessage(ChatColor.RED + "旁观者不能施法。");
+            player.sendMessage(ChatColor.RED + "旁观者不能施法；请使用对应的生存角色行动，/mycli status 查看当前状态。");
             return;
         }
         switch (spell) {
@@ -100,7 +100,7 @@ final class UtilitySpells implements Listener {
     private boolean ready(Player player, String spell) {
         long wait = remainingCooldownMs(player, spell);
         if (wait <= 0) return true;
-        player.sendMessage(ChatColor.YELLOW + "这项法术还需 " + ((wait + 999) / 1000) + " 秒。");
+        player.sendMessage(ChatColor.YELLOW + "这项法术还需 " + ((wait + 999) / 1000) + " 秒；等冷却结束后再施放，重复提交不会缩短时间。");
         return false;
     }
 
@@ -180,7 +180,7 @@ final class UtilitySpells implements Listener {
         }
         Location spot = safeGolemSpot(player);
         if (spot == null) {
-            player.sendMessage(ChatColor.YELLOW + "附近没有足够宽敞的落脚处召唤铁傀儡；未消耗魔力。");
+            player.sendMessage(ChatColor.YELLOW + "附近没有足够宽敞的落脚处召唤铁傀儡；未耗魔。移到开阔、有完整地面的地方再施法，不拆受保护建筑。");
             return;
         }
         if (!begin(player, "golem", 12)) return;
@@ -219,7 +219,7 @@ final class UtilitySpells implements Listener {
         List<Enemy> hostiles = nearbyHostiles(player);
         if (hostiles.isEmpty()) {
             player.sendMessage(ChatColor.GREEN + "" + (SENSE_BASE_RANGE + (plugin.mastery().rank(player, "sense") - 1) * 4)
-                    + " 格内没有发现怪物；未消耗魔力，也未进入冷却。");
+                    + " 格内未发现怪物；未耗魔或冷却。先 /mycli village threat 核对真实敌情，必要时安全靠近目标再探敌，不必追旧警报。");
             return;
         }
         if (!begin(player, "sense", 3)) return;

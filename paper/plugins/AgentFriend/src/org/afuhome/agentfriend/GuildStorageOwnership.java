@@ -129,7 +129,6 @@ final class GuildStorageOwnership implements Listener {
         Notice last = notices.get(player.getUniqueId());
         if (last != null && last.key().equals(key) && now - last.time() < 1000) return;
         notices.put(player.getUniqueId(), new Notice(key, now));
-        player.sendMessage("§c【无权操作】公会内物品归" + ownerLabel() + "所有，禁止未授权的人取放或破坏。§e物资装备请用门口东南侧公共箱（-473,67,-495）；/mycli guild shared 查看全部位置。");
         JsonObject data = new JsonObject();
         data.addProperty("schemaVersion", 1);
         data.addProperty("kind", "guild_storage");
@@ -140,6 +139,8 @@ final class GuildStorageOwnership implements Listener {
         data.addProperty("world", at.getWorld().getKey().toString());
         data.addProperty("x", at.getBlockX()); data.addProperty("y", at.getBlockY()); data.addProperty("z", at.getBlockZ());
         ownershipFields(data);
+        plugin.protectionAdvisor().enrich(player, data, at, plugin.guildHall().propertyArea());
+        if (!plugin.protectionAdvisor().explain(player, data)) return;
         plugin.protectionAdvisor().send(player, data);
         player.sendMessage("MC_GUILD_ACCESS " + data);
     }

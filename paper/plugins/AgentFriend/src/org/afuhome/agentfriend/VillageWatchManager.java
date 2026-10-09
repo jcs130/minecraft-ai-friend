@@ -313,6 +313,8 @@ final class VillageWatchManager implements Listener {
         data.addProperty("requiredMana", SUPPORT_MANA);
         data.addProperty("spentMana", success ? SUPPORT_MANA : 0);
         data.addProperty("cooldownRemainingMs", remainingSupportCooldownMs(player));
+        ActionFeedback.Advice advice = success ? null : ActionFeedback.advice("support", reason, "");
+        if (advice != null) advice.add(data);
         if (success) {
             data.add("position", position(player.getLocation()));
             data.addProperty("dimension", player.getWorld().getKey().toString());
@@ -330,6 +332,7 @@ final class VillageWatchManager implements Listener {
             case "survival_only" -> "仅生存/冒险玩家可用。";
             default -> "当前位置或参数不允许传送。";
         });
+        if (advice != null) player.sendMessage("§a【正确做法】" + advice.next());
         send(player, data);
         player.sendMessage("MC_VILLAGE_SUPPORT " + data);
     }
@@ -397,7 +400,7 @@ final class VillageWatchManager implements Listener {
                     + " @ " + coords(villager.getLocation()) + "；收购 "
                     + (buys.isEmpty() ? "当前无绿宝石报价" : buys.toString()));
         }
-        if (list.size() == 0) player.sendMessage(ChatColor.YELLOW + "96 格内没有已加载的成年职业村民。");
+        if (list.size() == 0) player.sendMessage(ChatColor.YELLOW + "96格内没有已加载的成年职业村民；沿安全道路到村庄地面钟(-542,67,-452)附近后重查 /mycli village villagers；仍无村民请联系服主，不冒险挖进地下。");
         JsonObject data = new JsonObject();
         data.addProperty("schemaVersion", 1);
         data.addProperty("kind", "villagers");

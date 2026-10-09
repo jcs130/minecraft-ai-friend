@@ -174,8 +174,8 @@ final class LifeGuildManager implements Listener {
     private void accept(Player player, String id) {
         Contract contract = byId(id);
         if (contract == null) { player.sendMessage(ChatColor.RED + "未知生活委托；/mycli life board 查看任务 ID。"); return; }
-        if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能接委托。"); return; }
-        if (active(player) != null) { player.sendMessage(ChatColor.YELLOW + "先交付或放弃当前生活委托。"); return; }
+        if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能接委托；请使用生存角色，/mycli life board 查看生活委托。"); return; }
+        if (active(player) != null) { player.sendMessage(ChatColor.YELLOW + "先 /mycli life status 查当前委托，完成后 life claim；想换单可 life abandon，当前进度会清零。"); return; }
         if (completedToday(player, contract)) { player.sendMessage(ChatColor.YELLOW + "这项委托今日已完成，明天再来。"); return; }
         String path = base(player) + ".active";
         plugin.getConfig().set(path + ".id", contract.id());
@@ -203,7 +203,7 @@ final class LifeGuildManager implements Listener {
 
     private void abandon(Player player) {
         Contract contract = active(player);
-        if (contract == null) { player.sendMessage(ChatColor.YELLOW + "没有在办的生活委托。"); return; }
+        if (contract == null) { player.sendMessage(ChatColor.YELLOW + "没有在办的生活委托；/mycli life status 核对，想接单先 life board 查ID，再 life accept <ID>。"); return; }
         plugin.getConfig().set(base(player) + ".active", null);
         plugin.saveConfig();
         player.sendMessage(ChatColor.YELLOW + "已放弃「" + contract.title() + "」。");
@@ -212,9 +212,9 @@ final class LifeGuildManager implements Listener {
 
     private void claim(Player player) {
         Contract contract = active(player);
-        if (contract == null) { player.sendMessage(ChatColor.YELLOW + "没有可交付的生活委托。"); return; }
+        if (contract == null) { player.sendMessage(ChatColor.YELLOW + "没有可交付的生活委托；/mycli life status 核对，先 life board 选单，accept 后按说明完成再 claim。"); return; }
         if (progress(player) < contract.target()) {
-            player.sendMessage(ChatColor.YELLOW + "还需完成 " + progress(player) + "/" + contract.target()); return;
+            player.sendMessage(ChatColor.YELLOW + "当前进度 " + progress(player) + "/" + contract.target() + "；/mycli life status 核对目标，继续「" + contract.description() + "」，完成后 life claim。"); return;
         }
         if (completedToday(player, contract)) { player.sendMessage(ChatColor.RED + "今日已结算，请联系服主核对。"); return; }
         if (!dungeon.queueGuildRewards(player.getUniqueId(), contract.emeralds(), contract.gift(), contract.giftCount())) {

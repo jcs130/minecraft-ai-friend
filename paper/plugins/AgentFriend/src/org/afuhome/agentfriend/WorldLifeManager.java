@@ -74,8 +74,8 @@ final class WorldLifeManager implements Listener {
     }
     private void denied(Player p, String reason) {
         JsonObject data = new JsonObject(); data.addProperty("status", "denied"); data.addProperty("reason", reason);
-        emit(p, "result", data);
-        p.sendMessage(ChatColor.YELLOW + "生活内容：" + reason + "。用 /mycli world list 查看当前入口。");
+        ActionFeedback.Advice advice = ActionFeedback.advice("world", reason, ""); advice.add(data);
+        emit(p, "result", data); advice.send(p);
     }
     void command(Player p, String[] args) {
         String sub = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "list";

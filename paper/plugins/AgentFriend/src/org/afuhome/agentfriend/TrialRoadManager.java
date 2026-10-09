@@ -229,7 +229,7 @@ final class TrialRoadManager implements Listener {
     void survey(CommandSender sender) {
         String error = inspect();
         sender.sendMessage(error == null ? "试炼道路可施工：103 格中心线、312 格路面，起点 -570,63,-411，终点 -590,90,-329；护栏 "
-                + plan.rails().size() : "试炼道路暂不可施工：" + error);
+                + plan.rails().size() : "试炼道路暂不可施工：" + error + "；请服主核对路线、原建筑和保护快照，调整方案后重新 survey，不清除冲突建筑强建。");
     }
 
     void build(CommandSender sender) {
@@ -357,22 +357,48 @@ final class TrialRoadManager implements Listener {
         Integer floor = plan.deck().get(new Pos(block.getX(), block.getZ()));
         return floor != null && Math.abs(block.getY() - floor) <= 3;
     }
+    private ProtectionArea guidanceArea;
+    ProtectionArea protectionArea(org.bukkit.Location at) {
+        if (!built || at == null || at.getWorld() != world || plan == null) return null;
+        if (guidanceArea == null) {
+            int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+            int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+            for (String key : fabric.keySet()) {
+                String[] xyz = key.split(","); int x = Integer.parseInt(xyz[0]), y = Integer.parseInt(xyz[1]), z = Integer.parseInt(xyz[2]);
+                minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+                minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+            }
+            for (var entry : plan.deck().entrySet()) {
+                minX = Math.min(minX, entry.getKey().x()); maxX = Math.max(maxX, entry.getKey().x());
+                minZ = Math.min(minZ, entry.getKey().z()); maxZ = Math.max(maxZ, entry.getKey().z());
+                minY = Math.min(minY, entry.getValue() - 3); maxY = Math.max(maxY, entry.getValue() + 3);
+            }
+            if (minX > maxX) return null;
+            guidanceArea = new ProtectionArea("trial_road", "村庄至试炼场公共道路（含净空）", world,
+                    minX, minY, minZ, maxX, maxY, maxZ, "structure_mask_envelope");
+        }
+        return guidanceArea.contains(at) ? guidanceArea : null;
+    }
     boolean deniesBreak(Block block) { return protectedFabric(block) || failClosed(block); }
     boolean deniesPlace(Block block) { return deniesBreak(block) || pathHeadroom(block); }
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
         if (deniesBreak(event.getBlock())) {
             event.setCancelled(true);
-            event.getPlayer().sendMessage("§e这是通往试炼场的公共道路；路旁的草木仍可整理。");
+            plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "trial_road", protectionArea(event.getBlock().getLocation()));
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
         if (protectedFabric(event.getBlockReplacedState()) || pathHeadroom(event.getBlock())
-                || failClosed(event.getBlock())) event.setCancelled(true);
+                || failClosed(event.getBlock())) {
+            event.setCancelled(true);
+            plugin.protectionAdvisor().denied(event.getPlayer(), "place", event.getBlock().getLocation(), "trial_road", protectionArea(event.getBlock().getLocation()));
+        }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
         for (org.bukkit.block.BlockState state : event.getReplacedBlockStates())
             if (protectedFabric(state) || pathHeadroom(state.getBlock()) || failClosed(state.getBlock())) {
-                event.setCancelled(true); return;
+                event.setCancelled(true);
+                plugin.protectionAdvisor().denied(event.getPlayer(), "place", state.getLocation(), "trial_road", protectionArea(state.getLocation())); return;
             }
     }
     @EventHandler public void onBurn(BlockBurnEvent event) {

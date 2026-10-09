@@ -1,5 +1,9 @@
 # `/mycli`：Agent 自发现命令接口
 
+## 0.4.3 拒绝原因与操作指引
+
+玩家可见失败提示说明原因并给出正确下一步。保护拒绝包含真实世界与 XYZ 边界（含两端）、当前动作和区外选址建议；新目标仍须靠近重新查询。公会私产指向 `/mycli guild shared` 的公共仓库。技能、委托、地下城、商店、PvP、居民和传送点等失败回执保留原原因码/schema，并追加 `errorMessage/nextAction/nextCommands`；不能把建议当作自动消费或退出的指令。实际附身 Eye 可收到私聊，无需改 Agent 客户端。完整字段与异常处理见 [操作失败后的正确做法](ERROR_GUIDANCE.md)。
+
 ## 0.4.2 迎新与下一步
 
 先用 `/mycli coach next` 查看本人真实下一步，`coach guide` 查看六项清单；`/mycli guide start` 同样读完整迎新。按“冒险者登记→主动报名实习→查技能目录→真正施法→完成生活委托→交付首张冒险委托”推进，只有原账本实际成功才计数，查询不会代办。`/mycli list coach` 可发现所有稳定命令，`coach menu` 打开27格入门页。

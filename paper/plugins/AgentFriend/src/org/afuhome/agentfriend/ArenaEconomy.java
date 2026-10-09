@@ -218,6 +218,7 @@ final class ArenaEconomy implements Listener {
             int price = unitPrice(item);
             if ((long) balance(owner) + total + price > MAX_BALANCE) {
                 sender.sendMessage("MC_ARENA_PRUNE success=false reason=wallet_cap player=" + player.getName());
+                sender.sendMessage("正确做法：目标钱包已到上限，停止回收；先让玩家 arena wallet 核对余额并自行购买需要的物品，再重新预览回收。");
                 return;
             }
             remove.add(slot);
@@ -261,6 +262,7 @@ final class ArenaEconomy implements Listener {
             int price = unitPrice(item);
             if ((long) balance(owner) + total + price > MAX_BALANCE) {
                 sender.sendMessage("MC_ARENA_PRUNE_BAG success=false reason=wallet_cap player=" + player.getName());
+                sender.sendMessage("正确做法：目标钱包已到上限，停止回收；先让玩家 arena wallet 核对余额并自行购买需要的物品，再重新预览。");
                 return;
             }
             remove.add(slot);
@@ -633,7 +635,10 @@ final class ArenaEconomy implements Listener {
         response.addProperty("pending", pending);
         if (details != null) for (Map.Entry<String, com.google.gson.JsonElement> field : details.entrySet())
             response.add(field.getKey(), field.getValue());
+        ActionFeedback.Advice advice = success ? null : ActionFeedback.advice("economy", reason, "");
+        if (advice != null) advice.add(response);
         // Player#sendMessage is point-to-point: never publish economy state to public chat.
         player.sendMessage("MC_ARENA_ECONOMY " + response);
+        if (advice != null) advice.send(player);
     }
 }

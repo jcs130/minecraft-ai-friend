@@ -108,14 +108,14 @@ use-exp-bar-as-cast-time-bar: true
 cooldowns-persist-through-reload: true
 sound-on-cooldown: ""
 sound-missing-reagents: ""
-str-unknown-spell: You do not know a spell with that name.
+str-unknown-spell: '未找到或尚未学会这项法术；/mycli skills list 查准确ID，/mycli skills info <ID> 查学习条件。'
 str-spell-change: You are now using the %s spell.
 str-spell-change-empty: You are no longer using a spell.
-str-on-cooldown: That spell is on cooldown (%c seconds remaining).
-str-missing-reagents: You do not have the required reagents for that spell.
-str-cant-cast: You can't cast that spell right now.
-str-cant-bind: You cannot bind that spell to that item.
-str-wrong-world: You cannot cast that spell here.
+str-on-cooldown: '法术还需冷却 %c 秒；等待结束再施放一次，重复提交不会缩短冷却。'
+str-missing-reagents: '施法资源不足；/mycli skills info <ID> 查费用，备齐材料/经验；/mycli status 查魔力，等恢复足够再施法。'
+str-cant-cast: '当前条件不能施法；/mycli status 查角色、活动和魔力，/mycli skills info <ID> 查目标/装备条件，满足后再施放。'
+str-cant-bind: '此物品不能绑定该法术；/mycli focus list 查可绑定ID，手持灵纹法杖再 focus bind <ID>；工具刻印用 imprint。'
+str-wrong-world: '此处或此世界不允许该法术；停止原地重试，/mycli skills info <ID> 查使用条件，到允许的地点再施放。'
 str-console-name: Admin
 str-xp-auto-learned: You have learned the %s spell!
 allow-anticheat-integrations: false

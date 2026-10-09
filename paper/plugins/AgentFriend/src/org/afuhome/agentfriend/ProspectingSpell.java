@@ -74,13 +74,13 @@ final class ProspectingSpell {
         }
         long wait = remainingCooldownMs(player);
         if (wait > 0) {
-            player.sendMessage(ChatColor.YELLOW + "探矿术冷却还剩 " + ((wait + 999) / 1000) + " 秒。");
+            player.sendMessage(ChatColor.YELLOW + "探矿术冷却还剩 " + ((wait + 999) / 1000) + " 秒；等冷却结束再探测，不必连续重发命令。");
             return;
         }
         Location source = player.getLocation();
         World world = source.getWorld();
         if (world == null || world.getEnvironment() == World.Environment.THE_END) {
-            player.sendMessage(ChatColor.YELLOW + "这里没有可探测的矿脉。");
+            player.sendMessage(ChatColor.YELLOW + "此维度没有可探测矿脉；请通过正常传送门回主世界，或去下界探远古残骸，再 /mycli cast prospect <类型>。");
             return;
         }
         long now = System.currentTimeMillis();
@@ -94,7 +94,7 @@ final class ProspectingSpell {
         int range = rangeFor(miningLevel, imprintedTool);
         OreTarget target = findClosestOre(source, range, category);
         if (target == null) {
-            player.sendMessage(ChatColor.YELLOW + "周围 " + range + " 格内没有发现这种矿脉；未消耗魔力，也未进入冷却。");
+            player.sendMessage(ChatColor.YELLOW + "周围 " + range + " 格内未发现这种矿脉；未耗魔或冷却。先沿安全矿道换一片区域，或 /mycli cast prospect all 探测其他种类。");
             return;
         }
         Location closest = target.location();

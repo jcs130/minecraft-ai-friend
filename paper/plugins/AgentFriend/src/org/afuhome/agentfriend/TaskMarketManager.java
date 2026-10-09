@@ -370,11 +370,11 @@ final class TaskMarketManager implements Listener {
         Task task = tasks.get(contract.id());
         if (task == null || !task.enabled) return false;
         String qualification = plugin.professions().taskDenial(player, task.definition);
-        if (!qualification.equals("available")) { player.sendMessage("§e不能接单：" + qualification); return false; }
+        if (!qualification.equals("available")) { ActionFeedback.advice("market", qualification, task.id()).send(player); return false; }
         if (task.repeatOnce && onceCompleted(player, task.id())) { player.sendMessage("§e这张远行履历已完成；每人仅结算一次。可以选择其他探索委托。"); return false; }
         String gate = gate(task);
-        if (!gate.equals("available")) { player.sendMessage("§e不能接这张任务：" + gate + "。/mycli guild engineering 查看场地状态。"); return false; }
-        if (player.getGameMode() != GameMode.SURVIVAL) { player.sendMessage("§e任务市场需要生存模式；旁观者不能施工或领奖。"); return false; }
+        if (!gate.equals("available")) { ActionFeedback.advice("market", gate, task.id()).send(player); return false; }
+        if (player.getGameMode() != GameMode.SURVIVAL) { player.sendMessage("§e任务市场需要生存模式；请使用生存角色，/mycli status 核对状态，/mycli guild board 查看可接任务。"); return false; }
         if (task.steps.stream().anyMatch(s -> s.map != null)) {
             String denial = maps.denial(player);
             if (!denial.equals("available")) { player.sendMessage("§e不能接寻宝委托：" + denial + "。" + MapObjectives.hint(denial)); return false; }
@@ -423,7 +423,7 @@ final class TaskMarketManager implements Listener {
     void verify(Player player, GuildManager.Contract contract, Consumer<Boolean> finish) {
         Task task = frozen(player);
         if (task == null || !contract.id().equals(task.id()) || player.getGameMode() != GameMode.SURVIVAL || player.isDead()) {
-            player.sendMessage("§c任务状态无效；没有交付或领奖。"); finish.accept(false); return;
+            player.sendMessage("§c任务状态无效；未交付或领奖。停止重交，/mycli guild status 保留当前记录并把任务ID和时间告知服主。"); finish.accept(false); return;
         }
         long now = System.currentTimeMillis();
         if (!checking.add(player.getUniqueId())) { player.sendMessage("§e正在验收，请等待当前结果。"); return; }
@@ -493,9 +493,13 @@ final class TaskMarketManager implements Listener {
         JsonObject data = new JsonObject(); data.addProperty("task", task.id()); data.addProperty("step", step + 1);
         data.addProperty("ready", result.ready()); data.addProperty("progress", result.progress());
         data.addProperty("target", task.steps.get(step).target); data.addProperty("reason", result.reason());
-        data.add("evidence", result.evidence()); send(player, "MC_MARKET_CHECK", data);
+        data.add("evidence", result.evidence());
+        ActionFeedback.Advice advice = result.ready() ? null : ActionFeedback.advice("market", result.reason(), task.id());
+        if (advice != null) advice.add(data);
+        send(player, "MC_MARKET_CHECK", data);
         player.sendMessage((result.ready() ? "§a验收通过：" : "§e验收未通过：") + result.reason()
                 + "（" + result.progress() + "/" + task.steps.get(step).target + "）。");
+        if (advice != null) player.sendMessage("§a【正确做法】" + advice.next());
         if (task.steps.get(step).map != null) player.sendMessage("§7" + MapObjectives.hint(result.reason()));
         JsonObject evidence = result.evidence();
         if (evidence.has("distinctZones") && task.steps.get(step).goal != GuildManager.Goal.RETURN) player.sendMessage("§7探索：不同区域 " + evidence.get("distinctZones") + "/" + task.steps.get(step).target
@@ -809,10 +813,10 @@ final class TaskMarketManager implements Listener {
         if (action.equals("handovers") && args.length == 3) { handovers.recover(sender); sender.sendMessage("已检查待交接账本；成功项目不会重复发奖或重置主人。"); return; }
         if (action.equals("handover") && args.length == 4) {
             Task task = tasks.get(args[3]);
-            if (task == null) sender.sendMessage("任务不存在。"); else handovers.adopt(task, sender);
+            if (task == null) sender.sendMessage("任务不存在；mycli admin market list 查看有效任务ID，再使用准确ID操作。"); else handovers.adopt(task, sender);
             return;
         }
-        if (action.equals("reload")) { sender.sendMessage(reload() ? "任务市场已热加载；在途任务保留接单快照。" : "配置校验失败，保留上次有效任务市场。"); return; }
+        if (action.equals("reload")) { sender.sendMessage(reload() ? "任务市场已热加载；在途任务保留接单快照。" : "配置校验失败，保留有效市场；按控制台诊断修正 task-market.yml，再 mycli admin market reload；不要改写在途快照。"); return; }
         if (action.equals("list")) {
             for (Task task : tasks.values()) sender.sendMessage(task.id() + " enabled=" + task.enabled + " " + gate(task));
             for (String id : drafts.keySet()) sender.sendMessage("site=" + id + " registered=" + engineering.exists(id)
@@ -821,11 +825,15 @@ final class TaskMarketManager implements Listener {
         if (action.equals("register") && args.length == 4) {
             EngineeringSites.Site site = drafts.get(args[3]);
             if (site == null) { sender.sendMessage("未定义场地；先编辑 task-market.yml 并 reload。"); return; }
-            engineering.register(site, answer -> { sender.sendMessage(answer); if (answer.startsWith("registered：")) publishAll(); });
+            engineering.register(site, answer -> {
+                sender.sendMessage(answer);
+                if (answer.startsWith("registered：")) publishAll();
+                else sender.sendMessage("正确做法：mycli admin market list 核对场地ID与状态，按原因修正 task-market.yml 后 reload；保护冲突请另选场地，旧基准不可覆盖。");
+            });
             sender.sendMessage("已申请逐格场地登记；请等待 registered 或拒绝回执。"); return;
         }
         if (action.equals("retire") && args.length == 4) {
-            sender.sendMessage(engineering.retire(args[3]) ? "场地已撤下，原快照/完成账本保留。" : "不能撤下：场地不存在、在办或正在扫描。"); return;
+            sender.sendMessage(engineering.retire(args[3]) ? "场地已撤下，原快照/完成账本保留。" : "不能撤下：场地不存在、在办或正在扫描；mycli admin market list 查准确ID，等在途项目/扫描结束后再 retire，不删其快照。"); return;
         }
         sender.sendMessage("用法：mycli admin market list|reload|register <场地ID>|retire <场地ID>|handovers|handover <已完成任务ID>");
     }

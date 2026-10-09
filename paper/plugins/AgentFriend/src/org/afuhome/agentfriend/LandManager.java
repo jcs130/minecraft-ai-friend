@@ -209,7 +209,9 @@ final class LandManager implements Listener {
                 for (StateFlag flag : List.of(Flags.TNT, Flags.CREEPER_EXPLOSION, Flags.OTHER_EXPLOSION, Flags.FIRE_SPREAD,
                         Flags.LAVA_FIRE, Flags.ENDER_BUILD, Flags.GHAST_FIREBALL, Flags.WITHER_DAMAGE))
                     region.setFlag(flag, StateFlag.State.DENY);
-                region.setFlag(Flags.DENY_MESSAGE, "这里是「" + land.title() + "」，物资与建造权限归领地主人；/mycli land here 查看归属。");
+                region.setFlag(Flags.DENY_MESSAGE, "「" + land.title() + "」保护区 " + land.world().getKey() + " "
+                        + protectionArea(land).range() + "（含边界）；请停止未授权操作。需施工请另选区外目标，靠近后 /mycli protect break|place <x> <y> <z> 查询；"
+                        + (land.guild() ? "领物资请用 /mycli guild shared。" : "/mycli land info " + land.id() + " 核对主人并申请授权。"));
                 replacements.get(manager(land.world())).put(region.getId(), region);
                 int index = 0;
                 for (BlockVector3 point : land.publicContainers().stream().sorted(Comparator.comparing(BlockVector3::toString)).toList()) {
@@ -392,6 +394,20 @@ final class LandManager implements Listener {
         return name == null ? id.toString() : name;
     }
 
+    ProtectionArea protectionArea(Location at) { return protectionArea(find(at)); }
+    private ProtectionArea protectionArea(Land land) {
+        return land == null ? null : ProtectionArea.box(PREFIX + land.id(), land.title(), land.world(),
+                land.min().x(), land.min().y(), land.min().z(), land.max().x(), land.max().y(), land.max().z());
+    }
+    boolean deniesContainer(Player player, Block block) {
+        return block.getState() instanceof BlockInventoryHolder holder && deniedInventory(player, holder.getInventory()) != null;
+    }
+    ProtectionArea containerArea(Player player, Block block) {
+        if (!(block.getState() instanceof BlockInventoryHolder holder)) return null;
+        Denial denial = deniedInventory(player, holder.getInventory());
+        return denial == null ? null : protectionArea(denial.land());
+    }
+
     void fields(JsonObject data, Location at) {
         Land land = find(at);
         if (land == null) return;
@@ -417,8 +433,6 @@ final class LandManager implements Listener {
         Notice previous = notices.get(player.getUniqueId()); long now = System.currentTimeMillis();
         if (previous != null && previous.key().equals(key) && now - previous.time() < 1000) return;
         notices.put(player.getUniqueId(), new Notice(key, now));
-        player.sendMessage("§c【无权操作】「" + land.title() + "」归 " + ownerName(land.owner())
-                + " 所有，你没有这项权限。§e" + (land.guild() ? "物资装备请用门口公共箱；/mycli guild shared。" : "/mycli land here 查看归属与权限。"));
         JsonObject data = new JsonObject(); data.addProperty("schemaVersion", 1); data.addProperty("kind", "land");
         data.addProperty("status", "deny"); data.addProperty("allowed", false); data.addProperty("reason", ready ? "land_permission_denied" : "land_unavailable");
         data.addProperty("action", action); data.addProperty("world", at.getWorld().getKey().toString());
@@ -427,6 +441,8 @@ final class LandManager implements Listener {
         data.addProperty("owner", ownerName(land.owner())); data.addProperty("ownerUuid", land.owner()==null?null:land.owner().toString());
         data.addProperty("landCommand", "/mycli land info " + land.id());
         if(land.guild())data.addProperty("publicCommand", "/mycli guild shared");
+        plugin.protectionAdvisor().enrich(player, data, at, protectionArea(land));
+        if (!plugin.protectionAdvisor().explain(player, data)) return;
         plugin.protectionAdvisor().send(player, data); machine(player, "MC_LAND_ACCESS", data);
     }
 

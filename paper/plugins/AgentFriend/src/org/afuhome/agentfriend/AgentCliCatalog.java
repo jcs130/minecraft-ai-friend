@@ -73,7 +73,7 @@ final class AgentCliCatalog {
         add(specs,"book","item","item","/mycli book","补领命格书","背包有空位；已有时不重复发放","领取结果");
         add(specs,"kit","item","item","/mycli kit","补领罗盘和命格书","背包有空位","领取结果");
         add(specs,"menu","item","gui","/mycli menu","打开技能罗盘原版箱子界面","在线玩家","原版菜单");
-        add(specs,"protect","safety","read","/mycli protect break|place|container <x> <y> <z>","操作方块/开箱前查询保护与物品归属；坐标必须是绝对整数","同维度已加载方块，距玩家不超过 16 格","mcagent:protection JSON；deny 不操作，unknown 暂缓");
+        add(specs,"protect","safety","read","/mycli protect break|place|container <x> <y> <z>","操作方块/开箱前查询保护与物品归属；坐标必须是绝对整数","同维度已加载方块，距玩家不超过 16 格","mcagent:protection JSON；deny 不操作，unknown 暂缓；areas 含世界/含边界坐标与形状，nextAction/nextCommands 给正确做法，区外目标仍须重新查询");
         add(specs,"goto","travel","teleport","/mycli goto <公共地点ID|arena|guild|personal:名字|shared:分享码>","传送术前往公共、本人或分享地点","安全落点；6 魔力；个人名支持 1–24 位中文字母数字_-；不在活动中","命名地点先返回 MC_WAYPOINT_RESULT status=pending，最终 success/denied；成功 MC_TRAVEL；失败不扣费");
         add(specs,"waypoint","travel","read","/mycli waypoint","只读列出公共、本人命名地点和旧 home","在线玩家；不移动、不扣费","MC_WAYPOINT 绝对坐标和 MC_WAYPOINT_LIST JSON");
         add(specs,"locate","team","read","/mycli locate list|nearest|玩家名|off|tp <玩家名|nearest>","查在线队友绝对坐标、追踪或安全传送","目标在线且非旁观者","MC_PLAYER 绝对坐标或追踪/传送结果");
@@ -324,6 +324,10 @@ final class AgentCliCatalog {
         error.addProperty("schemaVersion", 1);
         error.addProperty("code", code);
         error.addProperty("hint", hint);
+        error.addProperty("nextAction", hint + "；先 /mycli list 查看准确命令，再 /mycli explain <ID> 核对用法。");
+        com.google.gson.JsonArray commands = new com.google.gson.JsonArray(); commands.add("/mycli list"); commands.add("/mycli explain <ID>");
+        error.add("nextCommands", commands);
         player.sendMessage("MC_CLI_ERROR " + error);
+        player.sendMessage("§e" + error.get("nextAction").getAsString());
     }
 }

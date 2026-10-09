@@ -47,7 +47,13 @@ final class PlayerContracts implements Listener {
     private static boolean live(ConfigurationSection c){return Set.of("open","accepted","settling").contains(c.getString("state",""));}
     private boolean own(Player p,ConfigurationSection c){return p.getUniqueId().toString().equals(c.getString("owner"));}
     private boolean taken(Player p,ConfigurationSection c){return p.getUniqueId().toString().equals(c.getString("runner"));}
-    private void result(Player p,String action,String id,String reason){JsonObject j=new JsonObject();j.addProperty("action",action);j.addProperty("id",id);j.addProperty("success",reason.equals("success"));j.addProperty("reason",reason);send(p,"MC_COMMISSION_RESULT",j);String hint=switch(reason){case "insufficient_wallet"->"绿宝石余额不足，试炼或回收装备可赚取";case "plain_items_missing"->"普通物资不足，附魔、命名和绑定物品不计";case "objective_incomplete"->"尚未完成走查、返程或讨伐条件";case "self_contract"->"不能接自己的委托";case "not_open"->"委托已被接取或已结束";case "owner_only"->"只有发布者可以撤回";case "runner_only"->"只有接单者可以交付或放弃";case "not_accepted"->"委托已结束或未处于接单状态";case "accepted_contract_requires_abandon"->"只能撤回未接单委托；已接单须先由接单者放弃";case "already_accepting_contract"->"请先完成或放弃当前玩家委托";case "owner_pending_full"->"发布者奖励队列已满，请先腾出空间";case "data_unavailable"->"记录保存失败，本次未扣款，请联系服主";case "structure_not_supported"->"请选择府邸、要塞、末地城、古城、据点、村庄等可走查的大型遗迹";case "survival_required"->"需要存活的生存玩家，且不能处于竞技或交付恢复中";default->reason;};p.sendMessage(reason.equals("success")?"§a玩家委托操作完成。":"§e委托未执行："+hint+"；/mycli commission info "+id+" 查看约定。");}
+    private void result(Player p,String action,String id,String reason){
+        JsonObject j=new JsonObject();j.addProperty("action",action);j.addProperty("id",id);
+        j.addProperty("success",reason.equals("success"));j.addProperty("reason",reason);
+        ActionFeedback.Advice advice=reason.equals("success")?null:ActionFeedback.advice("commission",reason,id);
+        if(advice!=null)advice.add(j);send(p,"MC_COMMISSION_RESULT",j);
+        if(advice!=null)advice.send(p);else p.sendMessage("§a玩家委托操作完成。");
+    }
     private void send(Player p,String prefix,JsonObject j){j.addProperty("schemaVersion",1);j.addProperty("type",prefix);p.sendMessage(prefix+" "+j);byte[] bytes=j.toString().getBytes(StandardCharsets.UTF_8);if(bytes.length<=32766)p.sendPluginMessage(plugin,CHANNEL,bytes);}
     private void require(boolean condition,String reason){if(!condition)throw new IllegalArgumentException(reason);}
     private void atomic(Runnable change) {
@@ -162,7 +168,7 @@ final class PlayerContracts implements Listener {
         boolean assisted=killer.getUniqueId().toString().equals(c.getString("owner"))&&System.currentTimeMillis()-participation.getOrDefault(p.getUniqueId()+":"+e.getEntity().getUniqueId(),0L)<=30000;
         if(!killer.getUniqueId().equals(p.getUniqueId())&&!assisted)continue;
         List<String> kills=new ArrayList<>(c.getStringList("kills"));if(kills.contains(e.getEntity().getUniqueId().toString()))return;kills.add(e.getEntity().getUniqueId().toString());
-        try{atomic(()->{c.set("kills",kills);c.set("progress",kills.size());});p.sendMessage("§a结伴讨伐 "+kills.size()+"/"+c.getInt("count")+"；完成后 commission claim 结算。");}catch(IllegalArgumentException failed){p.sendMessage("§c此次讨伐记录写入失败，未增加进度。");}
+        try{atomic(()->{c.set("kills",kills);c.set("progress",kills.size());});p.sendMessage("§a结伴讨伐 "+kills.size()+"/"+c.getInt("count")+"；完成后 commission claim 结算。");}catch(IllegalArgumentException failed){p.sendMessage("§c此次讨伐记录写入失败，未增加进度；停止重复讨伐结算，/mycli commission mine 查记录，将时间和委托ID告知服主修复保存。");}
         }
         String suffix=":"+e.getEntity().getUniqueId();participation.keySet().removeIf(key->key.endsWith(suffix));
     }

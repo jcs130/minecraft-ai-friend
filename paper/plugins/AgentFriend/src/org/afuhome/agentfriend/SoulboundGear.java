@@ -55,7 +55,7 @@ final class SoulboundGear implements Listener {
         long now = System.currentTimeMillis();
         if (now - noticeAt.getOrDefault(player.getUniqueId(), 0L) < 2000L) return;
         noticeAt.put(player.getUniqueId(), now);
-        player.sendMessage(ChatColor.LIGHT_PURPLE + "这件专属装备已绑定，会留在主人身上。");
+        player.sendMessage(ChatColor.LIGHT_PURPLE + "这件专属装备已绑定；请留在主人背包或装备栏正常使用，不能丢弃、转交或放入外部箱子。要整理库存请改选普通物品。");
     }
 
     private boolean bind(Player player, int slot) {
@@ -109,10 +109,10 @@ final class SoulboundGear implements Listener {
     void adminBind(CommandSender sender, Player player, String rawSlot, boolean apply) {
         int slot;
         try { slot = Integer.parseInt(rawSlot); }
-        catch (NumberFormatException invalid) { sender.sendMessage("槽位必须是 0–40。"); return; }
-        if (slot < 0 || slot > 40) { sender.sendMessage("槽位必须是 0–40。"); return; }
+        catch (NumberFormatException invalid) { sender.sendMessage("槽位必须是0–40的整数；先核对目标玩家背包/装备栏，再 bindgear 只读预览。"); return; }
+        if (slot < 0 || slot > 40) { sender.sendMessage("槽位必须是0–40的整数；先核对目标玩家背包/装备栏，再 bindgear 只读预览。"); return; }
         ItemStack item = player.getInventory().getItem(slot);
-        if (item == null || item.getType().isAir()) { sender.sendMessage("该槽位为空。"); return; }
+        if (item == null || item.getType().isAir()) { sender.sendMessage("该槽位为空；核对目标玩家背包/装备栏，改选有单件装备的准确槽，再只读预览。"); return; }
         String existing = owner(item);
         sender.sendMessage("bindgear player=" + player.getName() + " uuid=" + player.getUniqueId()
                 + " slot=" + slot + " item=" + item.getType() + " amount=" + item.getAmount()
@@ -120,9 +120,9 @@ final class SoulboundGear implements Listener {
                     ? ChatColor.stripColor(item.getItemMeta().getDisplayName()) : "(原版)")
                 + " owner=" + (existing == null ? "none" : existing));
         if (!apply) { sender.sendMessage("核对物品后执行 /mycli admin bindgear " + player.getName() + " " + slot + " apply"); return; }
-        if (existing != null) { sender.sendMessage("已有绑定；未修改。"); return; }
-        if (item.getAmount() != 1) { sender.sendMessage("仅单件装备可绑定；未修改。"); return; }
-        if (!bind(player, slot)) { sender.sendMessage("绑定失败；未修改。"); return; }
+        if (existing != null) { sender.sendMessage("已有绑定，未修改；保留原归属，另选尚未绑定的单件装备。不要覆盖其他主人的绑定。"); return; }
+        if (item.getAmount() != 1) { sender.sendMessage("仅单件装备可绑定，未修改；将目标装备单独放入一格，先预览再确认 apply。"); return; }
+        if (!bind(player, slot)) { sender.sendMessage("绑定失败，未修改；请核对玩家UUID、背包槽位及可绑定装备，先 mycli admin bindgear <玩家名> <槽位> 只读预览，不要重复覆盖。"); return; }
         sender.sendMessage("已绑定到 " + player.getUniqueId() + "；槽位 " + slot);
         player.sendMessage(ChatColor.LIGHT_PURPLE + "一件专属装备已绑定：" + item.getType().name() + "。可正常使用，无法丢弃或放入公共箱。");
     }

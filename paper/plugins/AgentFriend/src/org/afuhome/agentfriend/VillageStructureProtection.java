@@ -188,17 +188,32 @@ final class VillageStructureProtection implements Listener {
         return deniesEdit(block) && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(player, block));
     }
 
+    ProtectionArea protectionArea(Location at) {
+        if (at == null || at.getWorld() != world) return null;
+        if (!ready && inVillage(at)) return ProtectionArea.box("village_unavailable", "村庄保护数据未就绪", world,
+                -650, world.getMinHeight(), -550, -430, world.getMaxHeight() - 1, -330);
+        for (int i = 0; i < houses.size(); i++) {
+            Box b = houses.get(i);
+            if (b.contains(at)) return new ProtectionArea("village_house_" + (i + 1), "村庄原有房屋", world,
+                    b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, "structure_mask_envelope");
+        }
+        return null;
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
         if (deniesEdit(event.getPlayer(), event.getBlock())) {
             event.setCancelled(true);
-            event.getPlayer().sendMessage("§e这块属于村庄原有建筑；旁边的树叶、草木和自己放的方块可以正常整理。");
+            plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "village_structure", protectionArea(event.getBlock().getLocation()));
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
         if ((failClosed(event.getBlock()) || protectedOriginal(event.getBlockReplacedState()))
                 && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), event.getBlock())))
+        {
             event.setCancelled(true);
+            plugin.protectionAdvisor().denied(event.getPlayer(), "place", event.getBlock().getLocation(), "village_structure", protectionArea(event.getBlock().getLocation()));
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
@@ -206,6 +221,7 @@ final class VillageStructureProtection implements Listener {
             if ((failClosed(replaced.getBlock()) || protectedOriginal(replaced))
                     && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), replaced.getBlock()))) {
                 event.setCancelled(true);
+                plugin.protectionAdvisor().denied(event.getPlayer(), "place", replaced.getLocation(), "village_structure", protectionArea(replaced.getLocation()));
                 return;
             }
     }

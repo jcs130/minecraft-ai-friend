@@ -84,6 +84,19 @@ final class SiteDungeonManager implements Listener {
     boolean hasActiveRuns(){return !runs.isEmpty()||!blockedCheckpoints.isEmpty();}
     List<String> ids(){return new ArrayList<>(sites.keySet());}
     boolean activityArea(Location at){return sites.values().stream().anyMatch(s->s.contains(at));}
+    ProtectionArea protectionArea(Location at) {
+        for (Run run : runs.values()) {
+            Site s = run.site; if (!s.contains(at)) continue;
+            return ProtectionArea.box("site_dungeon_" + s.id, "挑战中的" + s.name, at.getWorld(),
+                    s.rooms.stream().mapToInt(Room::x).min().orElseThrow() - 24,
+                    s.rooms.stream().mapToInt(Room::y).min().orElseThrow() - 8,
+                    s.rooms.stream().mapToInt(Room::z).min().orElseThrow() - 24,
+                    s.rooms.stream().mapToInt(Room::x).max().orElseThrow() + 24,
+                    s.rooms.stream().mapToInt(Room::y).max().orElseThrow() + 12,
+                    s.rooms.stream().mapToInt(Room::z).max().orElseThrow() + 24);
+        }
+        return null;
+    }
     private String rescueKey(Run r){return "site:"+r.id;}
     TrialRescueManager.Team rescueTeam(UUID id){
         Run r=runs.values().stream().filter(run->run.party.contains(id)).findFirst().orElse(null);if(r==null)return null;
@@ -94,7 +107,13 @@ final class SiteDungeonManager implements Listener {
     private boolean playing(Player p){return p!=null&&p.isOnline()&&!p.isDead()&&p.getGameMode()==GameMode.SURVIVAL;}
     private List<Player> present(Run r){return r.party.stream().map(Bukkit::getPlayer).filter(this::playing).filter(p->r.site.contains(p.getLocation())).toList();}
     private void send(Player p,String prefix,Map<String,?> fields){Map<String,Object> data=new LinkedHashMap<>();data.put("schemaVersion",1);data.putAll(fields);p.sendMessage(prefix+" "+JSON.toJson(data));}
-    private void result(Player p,String action,String site,String reason){send(p,"MC_SITE_DUNGEON_RESULT",Map.of("action",action,"id",site,"success",reason.equals("success"),"reason",reason));if(!reason.equals("success"))p.sendMessage("§c地下城操作未完成："+reason+"；用 /mycli dungeon info "+site+" 查看入口和规则。");}
+    private void result(Player p,String action,String site,String reason){
+        Map<String,Object> data=new LinkedHashMap<>();data.put("action",action);data.put("id",site);
+        data.put("success",reason.equals("success"));data.put("reason",reason);
+        ActionFeedback.Advice advice=reason.equals("success")?null:ActionFeedback.advice("dungeon",reason,site);
+        if(advice!=null){data.put("errorMessage",advice.message());data.put("nextAction",advice.next());data.put("nextCommands",advice.commands());}
+        send(p,"MC_SITE_DUNGEON_RESULT",data);if(advice!=null)advice.send(p);
+    }
     private void tell(Run r,String message){for(UUID id:r.party){Player p=Bukkit.getPlayer(id);if(p!=null)p.sendMessage(message);}}
     private Site site(String id){Site s=sites.get(id);require(s!=null,"unknown_dungeon");return s;}
     private String reload(){
@@ -363,8 +382,8 @@ final class SiteDungeonManager implements Listener {
     @EventHandler public void death(EntityDeathEvent e){Run r=owner(e.getEntity());if(r!=null){r.mobs.remove(e.getEntity().getUniqueId());e.getDrops().clear();e.setDroppedExp(0);}}
     @EventHandler public void load(EntitiesLoadEvent e){for(Entity entity:e.getEntities())if((owned(entity)||entity.getScoreboardTags().contains(SHOT_TAG))&&owner(entity)==null)entity.remove();}
     @EventHandler public void rejoin(PlayerJoinEvent e){Run r=own(e.getPlayer());if(r!=null)e.getPlayer().sendMessage("§e地下城进度保留；dungeon status 查看当前室，5分钟内步行返回即可续打，不自动免费传送。");}
-    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void breakBlock(BlockBreakEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getBlock().getLocation()))){e.setCancelled(true);e.getPlayer().sendMessage("§c挑战中的地下城不能拆建；请通过原有道路探索。");}}
-    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void placeBlock(BlockPlaceEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getBlock().getLocation()))){e.setCancelled(true);e.getPlayer().sendMessage("§c挑战中的地下城不能拆建。");}}
+    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void breakBlock(BlockBreakEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getBlock().getLocation()))){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"break",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
+    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void placeBlock(BlockPlaceEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getBlock().getLocation()))){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"place",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnNatural(SpawnerSpawnEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnWild(CreatureSpawnEvent e){if(e.getSpawnReason()==CreatureSpawnEvent.SpawnReason.NATURAL&&runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
     private ItemStack icon(Material material,String name,String... lore){ItemStack item=new ItemStack(material);var meta=item.getItemMeta();meta.setDisplayName(name);meta.setLore(List.of(lore));item.setItemMeta(meta);return item;}

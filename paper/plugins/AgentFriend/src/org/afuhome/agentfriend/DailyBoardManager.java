@@ -325,14 +325,14 @@ final class DailyBoardManager implements Listener {
             return;
         }
         if (action.equals("reload")) {
-            sender.sendMessage(reloadTemplates() ? "模板已热加载；当日卡片保持不变，可执行 regenerate。" : "模板校验失败，仍使用上次有效配置。");
+            sender.sendMessage(reloadTemplates() ? "模板已热加载；当日卡片保持不变，可执行 regenerate。" : "模板校验失败，仍使用上次有效配置；按控制台校验原因修正 dynamic-board.yml，再 mycli admin board reload；勿 regenerate 覆盖当前有效板。");
             return;
         }
         if (action.equals("regenerate")) {
             Set<String> excluded = new HashSet<>(plugin.getConfig().getStringList(ROOT + ".previous.signatures"));
             for (Card card : cards) excluded.add(card.signature());
             List<Card> next = generate(boardDate(), excluded);
-            if (next.size() < 3) { sender.sendMessage("可用且不重复的模板不足 3 张；保留当前看板。"); return; }
+            if (next.size() < 3) { sender.sendMessage("可用且不重复模板不足3张，保留看板；在 dynamic-board.yml 补齐至少3张 enabled 且条件可用的不同模板，reload 后再检查。"); return; }
             persist(boardDate(), next);
             sender.sendMessage("今日看板已重新生成 " + next.size() + " 张。");
             return;
@@ -356,7 +356,7 @@ final class DailyBoardManager implements Listener {
                     || action.equals("replace") && index == cards.size()
                     || action.equals("add") && cards.size() >= 5) { usage(sender); return; }
             Card card = resolve(template, boardDate());
-            if (card == null) { sender.sendMessage("目标公共箱不可用；不能发布这张供货卡。"); return; }
+            if (card == null) { sender.sendMessage("目标公共箱不可用，未发布供货卡；先 /mycli guild shared 核对箱体和公共权限，修复后重新发布，不改用大厅私有箱。"); return; }
             List<Card> next = new ArrayList<>(cards);
             if (next.stream().anyMatch(c -> c.id().equals(card.id()) && (action.equals("add") || !c.equals(next.get(index))))) {
                 sender.sendMessage("这张模板已在今日看板中。"); return;

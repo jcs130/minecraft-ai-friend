@@ -130,14 +130,17 @@ final class PvpArenaManager implements Listener {
             json.addProperty("opponent", opponent == null ? "offline" : opponent.getName());
             json.addProperty("phase", match.live ? "fighting" : "countdown");
         }
+        ActionFeedback.Advice advice = ok ? null : ActionFeedback.advice("pvp", reason, "");
+        if (advice != null) advice.add(json);
         p.sendMessage("MC_PVP " + json);
+        if (advice != null) advice.send(p);
     }
 
     private void status(Player p) {
         result(p, "status", built(), built() ? "ok" : "arena_not_built");
         p.sendMessage(built()
                 ? ChatColor.GOLD + "PvP竞技场：同款铁剑、弓、锁链甲；180 秒限时，胜负记积分。"
-                : ChatColor.RED + "PvP竞技场尚未建成。");
+                : ChatColor.RED + "PvP竞技场尚未建成；/mycli dungeon list 选择开放挑战，并联系服主确认竞技场开放。");
     }
     private void lobby(Player p) {
         if (!built() || world == null) { result(p, "lobby", false, "arena_not_built"); return; }
@@ -364,7 +367,7 @@ final class PvpArenaManager implements Listener {
         } catch (Exception error) {
             plugin.getLogger().severe("PvP inventory restore failed for " + p.getUniqueId()
                     + "; escrow retained: " + error);
-            p.sendMessage(ChatColor.RED + "PvP原物品恢复失败，快照已保留；请联系服主。");
+            p.sendMessage(ChatColor.RED + "PvP原物品恢复失败，快照已保留；不要丢物或改动背包，用 /mycli pvp status 保留状态并联系服主恢复原物品。");
         }
     }
 
@@ -451,7 +454,7 @@ final class PvpArenaManager implements Listener {
                 || command.equals("/mycli status") || command.startsWith("/msg ")
                 || command.startsWith("/tell ") || command.startsWith("/r ")) return;
         event.setCancelled(true);
-        event.getPlayer().sendMessage(ChatColor.RED + "同款装备竞技中只能查看状态或退出，不可使用其他指令/法术。");
+        event.getPlayer().sendMessage(ChatColor.RED + "同款装备竞技中只允许查看状态或退出；/mycli pvp status 查对局，决定认输可 /mycli pvp leave，原物品恢复后再使用其他命令。");
     }
     @EventHandler public void onPotion(EntityPotionEffectEvent event) {
         if (event.getEntity() instanceof Player p && inMatch(p) && match.live && !match.closing)
@@ -463,19 +466,24 @@ final class PvpArenaManager implements Listener {
         if (room <= 0) event.setCancelled(true);
         else event.setAmount(Math.min(event.getAmount(), room));
     }
+    ProtectionArea protectionArea(Location at) {
+        if (!built() || at == null || at.getWorld() != world) return null;
+        ProtectionArea area = ProtectionArea.box("pvp_arena", "同款装备竞技场", world, X - 15, Y - 2, Z - 15, X + 15, Y + 8, Z + 15);
+        return area.contains(at) ? area : null;
+    }
     @EventHandler public void onBreak(BlockBreakEvent event) {
-        if (built() && event.getBlock().getWorld() == world
-                && Math.abs(event.getBlock().getX() - X) <= 15
-                && Math.abs(event.getBlock().getZ() - Z) <= 15
-                && event.getBlock().getY() >= Y - 2 && event.getBlock().getY() <= Y + 8)
+        ProtectionArea area = protectionArea(event.getBlock().getLocation());
+        if (area != null) {
             event.setCancelled(true);
+            plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "pvp_arena", area);
+        }
     }
     @EventHandler public void onPlace(BlockPlaceEvent event) {
-        if (built() && event.getBlock().getWorld() == world
-                && Math.abs(event.getBlock().getX() - X) <= 15
-                && Math.abs(event.getBlock().getZ() - Z) <= 15
-                && event.getBlock().getY() >= Y - 2 && event.getBlock().getY() <= Y + 8)
+        ProtectionArea area = protectionArea(event.getBlock().getLocation());
+        if (area != null) {
             event.setCancelled(true);
+            plugin.protectionAdvisor().denied(event.getPlayer(), "place", event.getBlock().getLocation(), "pvp_arena", area);
+        }
     }
     void shutdown() {
         if (match != null) {
@@ -490,7 +498,7 @@ final class PvpArenaManager implements Listener {
     }
 
     void survey(CommandSender sender) {
-        if (world == null) { sender.sendMessage("MC_PVP_SURVEY ok=false reason=world_missing"); return; }
+        if (world == null) { sender.sendMessage("MC_PVP_SURVEY ok=false reason=world_missing"); sender.sendMessage("正确做法：检查主世界启动日志，恢复加载后重新 survey；不要新建世界覆盖存档。"); return; }
         int occupied = 0;
         for (int dx = -15; dx <= 15; dx++)
             for (int dz = -15; dz <= 15; dz++)
@@ -503,9 +511,9 @@ final class PvpArenaManager implements Listener {
     }
     void build(CommandSender sender) {
         if (built() || plugin.getConfig().getBoolean("pvp-arena.building", false)) {
-            sender.sendMessage("竞技场已建或施工中断；拒绝重复建造。"); return;
+            sender.sendMessage("竞技场已建或施工中断；拒绝重复建造。请停止重建，先核对建成/施工标记、原保护快照和世界现状；中断施工须按维护流程备份现场再恢复，不清标记绕过保护。"); return;
         }
-        if (world == null) { sender.sendMessage("主世界未加载。"); return; }
+        if (world == null) { sender.sendMessage("主世界未加载；请服主检查启动日志并恢复加载，再重试，不重新生成原世界。"); return; }
         for (int dx = -15; dx <= 15; dx++)
             for (int dz = -15; dz <= 15; dz++)
                 for (int dy = 0; dy <= 5; dy++)
@@ -547,7 +555,7 @@ final class PvpArenaManager implements Listener {
             sender.sendMessage("MC_PVP_BUILD ok=true x=" + X + " y=" + Y + " z=" + Z);
         } catch (Exception error) {
             plugin.getLogger().severe("PvP build interrupted; leave building marker for recovery: " + error);
-            sender.sendMessage("施工失败；保留标记，请从备份恢复。");
+            sender.sendMessage("施工失败，标记保留；停止重复施工，先备份事故现场，按施工前完整备份恢复并核对世界后再开放。");
         }
     }
 }

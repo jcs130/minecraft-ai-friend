@@ -491,30 +491,16 @@ final class ProfessionManager implements Listener {
         JsonObject data = new JsonObject(); data.addProperty("action", action); data.addProperty("reason", reason);
         data.addProperty("skill", id); data.addProperty("success", reason.equals("success"));
         if (action.equals("cast")) data.addProperty("cooldownRemainingMs", remaining(p, id));
+        ActionFeedback.Advice advice = null;
+        if (!reason.equals("success")) {
+            advice = ActionFeedback.advice("skills", reason, id); advice.add(data);
+            if (reason.equals("cooldown")) data.addProperty("errorMessage", "技能冷却还需 " + ((remaining(p, id) + 999) / 1000) + " 秒。");
+        }
         notice(p, "MC_PROFESSION_RESULT", data);
-        if (!reason.equals("success")) p.sendMessage("§e" + switch (reason) {
-            case "insufficient_points" -> "技能点不足；命格书可查看余额和成长方式。";
-            case "nothing_to_refund" -> "没有已花的技能点；未消耗魔力。";
-            case "activity_active" -> "试炼/PvP中不能洗点，请先退出活动。";
-            case "prerequisite" -> "羽落/夜视仍需原版经验5级或炼金2级；条件不足未扣技能点。";
-            case "locked" -> "尚未取得学习资格；查看技能图鉴中的任务或事件条件。";
-            case "already_learned" -> "已经学会；升级用 /mycli skills upgrade " + id;
-            case "max_level" -> "已达到最高技能等级；基础技能的原熟练度照常成长。";
-            case "profession_required" -> "需要先选择对应职业。";
-            case "not_learned" -> "尚未学会；职业菜单和图鉴可查看获取途径。";
-            case "not_prepared" -> "技能未准备；/mycli skills prepare " + id;
-            case "equipment_required" -> "当前手持装备不符合技能要求。";
-            case "cooldown" -> "技能冷却还需 " + ((remaining(p, id) + 999) / 1000) + " 秒。";
-            case "downed" -> "倒地中不能施法；队友靠近4格停留10秒，或清完本层/本室可复活。";
-            case "survival_required" -> "新职业技能需要生存模式；观察者不能施放。";
-            case "data_unavailable" -> "职业账本暂不可用；没有执行技能，请联系服主。";
-            case "no_target", "protected_target" -> "没有有效目标，或目标受到保护；未消耗魔力。";
-            case "unsafe_path" -> "前方路径或落点不安全；未消耗魔力。";
-            case "prepared_limit" -> "最多准备 4 项新主动技能和 1 项传承；先 unprepare 一项。";
-            case "life_limit" -> "最多选择两个生活职业；先 leave 一项。";
-            case "already_effective" -> "现有状态已足够，无需重复施放；未消耗魔力。";
-            default -> "操作未执行：" + reason + "。";
-        });
+        if (advice != null) {
+            if (reason.equals("cooldown")) p.sendMessage("§e" + data.get("errorMessage").getAsString());
+            advice.send(p);
+        }
     }
     private void notice(Player p, String type, JsonObject data) {
         data.addProperty("schemaVersion", 1); data.addProperty("scope", "self");
@@ -602,12 +588,12 @@ final class ProfessionManager implements Listener {
     }
     void admin(CommandSender sender, String[] args) {
         String action = args.length > 2 ? args[2] : "audit";
-        if (action.equals("reload")) { sender.sendMessage(reload() ? "职业技能已热加载；原学习与冷却保留。" : "配置校验失败，保留上一有效目录。"); return; }
+        if (action.equals("reload")) { sender.sendMessage(reload() ? "职业技能已热加载；原学习与冷却保留。" : "配置校验失败，保留有效目录；按控制台诊断修正 professions.yml/skills.yml/skill-points.yml，再 mycli admin professions reload，不改玩家账本。"); return; }
         if (action.equals("recover")) { recover(); sender.sendMessage("已重试 pending 技能收据。"); return; }
         if (action.equals("assign") && args.length == 5) try {
             UUID id = UUID.fromString(args[3]); sender.sendMessage("profession assign " + id + " " + choose(id, args[4]));
             plugin.getLogger().info("Console profession assignment: " + id + " " + args[4]); return;
-        } catch (IllegalArgumentException invalid) { sender.sendMessage("必须使用玩家 UUID。不能使用名字作为授权。"); return; }
+        } catch (IllegalArgumentException invalid) { sender.sendMessage("必须使用完整玩家UUID；控制台 minecraft:list uuids 核对当前玩家，复制对应UUID后再 assign，不以名字猜授权。"); return; }
         if (action.equals("audit")) {
             JsonObject data = new JsonObject(); data.addProperty("ready", available()); data.addProperty("error", ledger.error());
             data.addProperty("skills", skills().size()); data.addProperty("professions", catalog == null ? 0 : catalog.roles.size());

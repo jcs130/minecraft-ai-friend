@@ -1,5 +1,11 @@
 # Agent 操作前的保护查询
 
+## 0.4.3：拒绝原因与正确下一步
+
+查询拒绝和实际操作被拦截时，服务器私聊说明动作、目标维度/坐标、保护区名称及包含两端的真实边界，并给出下一步。拆建提示区外 X/Z 选址范围；换目标后仍须靠近重新查询，不能据此认定外面一定允许。公会私产引导到 `/mycli guild shared`，全局限制提示联系服主，服务异常停止操作。村屋/道路掩码和多边形明确标注“外包范围”，不把内部所有空地说成禁区。
+
+原回执字段和 `schemaVersion:1` 保持；拒绝时追加 `actionLabel`、`areas[]`（`id/name/world/min/max/shape/inclusive/envelopeOnly`）、`boundaryInclusive`、`retrySameAction:false`、`nextAction`、`nextCommands[]`。全局和数据不完整分别标记 `globalProtection`、`boundsIncomplete`。建议命令须按本人状态判断后使用，不自动执行。附身 Eye 可收到本人私聊；客户端不用更新。详见 [操作失败后的正确做法](ERROR_GUIDANCE.md)。
+
 从 AgentFriend 0.3.33 起，玩家可用本人账号执行：
 
 ```text

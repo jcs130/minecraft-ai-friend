@@ -206,12 +206,12 @@ final class GuildHallManager implements Listener {
         Site site = inspect(cx, cz, false);
         sender.sendMessage(site.valid() ? "公会大厅候选地可建：x=" + cx + " z=" + cz + " floorY=" + site.y()
                         + " logs=" + site.logs() + " leaves=" + site.leaves()
-                : "公会大厅候选地不可建：x=" + cx + " z=" + cz + "；" + site.error());
+                : "公会大厅候选地不可建：x=" + cx + " z=" + cz + "；" + site.error() + "；按冲突原因另选空地后重新 survey，不清除既有村屋或容器来强建。");
     }
 
     void build(CommandSender sender, int cx, int cz) {
         if (built || plugin.getConfig().getBoolean("guild-hall.building", false) || Files.exists(maskPath())) {
-            sender.sendMessage("大厅已建、施工曾中断或保护快照已存在；拒绝覆盖。"); return;
+            sender.sendMessage("大厅已建、施工曾中断或保护快照已存在；拒绝覆盖。请停止重建，先核对建成/施工标记、原保护快照和世界现状；中断施工须按维护流程备份现场再恢复，不清标记绕过保护。"); return;
         }
         Site site = inspect(cx, cz, true);
         if (!site.valid()) { sender.sendMessage("未施工：" + site.error()); return; }
@@ -398,13 +398,13 @@ final class GuildHallManager implements Listener {
         String issue = inspectServices();
         sender.sendMessage(issue == null ? "公会服务区可建：四组 54 格原版共享双箱，入口接待员；地基 "
                 + (x + 13) + ".." + (x + 18) + "," + y + "," + (z + 7) + ".." + (z + 13)
-                : "公会服务区不可建：" + issue);
+                : "公会服务区不可建：" + issue + "；保留现有箱体与建筑，请服主核对服务区方案和地形后再 survey，不直接覆盖。");
     }
 
     void buildServices(CommandSender sender) {
         if (servicesBuilt || plugin.getConfig().getBoolean("guild-hall.services-building", false)
                 || Files.exists(servicesMaskPath())) {
-            sender.sendMessage("公会服务区已建、施工曾中断或保护快照已存在；拒绝覆盖。"); return;
+            sender.sendMessage("公会服务区已建、施工曾中断或保护快照已存在；拒绝覆盖。请停止重建，先核对建成/施工标记、原保护快照和世界现状；中断施工须按维护流程备份现场再恢复，不清标记绕过保护。"); return;
         }
         String issue = inspectServices();
         if (issue != null) { sender.sendMessage("未施工：" + issue); return; }
@@ -466,7 +466,7 @@ final class GuildHallManager implements Listener {
     }
 
     void storageInfo(Player player) {
-        if (!servicesBuilt || !ready) { player.sendMessage("§e公会共享箱尚未开放。"); return; }
+        if (!servicesBuilt || !ready) { player.sendMessage("§e公会共享箱尚未开放；/mycli guild shared 查询现有箱体，持续未开放请联系服主；不要取大厅私产。"); return; }
         player.sendMessage("§c公会门内实体储物和展示物归" + plugin.guildStorage().ownerLabel() + "所有，未授权的人无权取放；需要物资装备请使用门口东南侧公共箱。");
         player.sendMessage("§6公会东南侧有四类公共双箱；上层扩容箱同样可存取。所有玩家可像普通箱子一样使用；不是个人奖励箱。");
         for (int i = 0; i < SHARED_LABELS.length; i++) {
@@ -491,7 +491,7 @@ final class GuildHallManager implements Listener {
     }
 
     void traderInfo(Player player) {
-        if (!servicesBuilt || !ready) { player.sendMessage("§e公会接待员尚未到岗。"); return; }
+        if (!servicesBuilt || !ready) { player.sendMessage("§e公会接待员尚未到岗；可用 /mycli guild board 查看委托，交易服务请联系服主检查接待员。"); return; }
         player.sendMessage("MC_GUILD_TRADER dimension=minecraft:overworld x=" + (x - 4)
                 + " y=" + (y + 1) + " z=" + (z + 5) + " scope=public");
         player.sendMessage("§e右键公会接待员查看任务、购买和回收；Agent 可用"
@@ -544,7 +544,7 @@ final class GuildHallManager implements Listener {
     }
 
     void openReceptionMenu(Player player) {
-        if (!servicesBuilt || !ready) { player.sendMessage("§e公会接待员尚未到岗。"); return; }
+        if (!servicesBuilt || !ready) { player.sendMessage("§e公会接待员尚未到岗；可用 /mycli guild board 查看委托，交易服务请联系服主检查接待员。"); return; }
         Inventory menu = Bukkit.createInventory(null, 27, "冒险者公会 · 接待员阿莉娅");
         menu.setItem(10, menuItem(Material.WRITABLE_BOOK, "§e聊聊公会任务", "§7查看今日委托和冒险者等级"));
         menu.setItem(12, menuItem(Material.EMERALD, "§a购买装备与补给", "§7用个人绿宝石余额结算"));
@@ -588,7 +588,7 @@ final class GuildHallManager implements Listener {
     }
 
     void teleport(Player player) {
-        if (!built || !ready) { player.sendMessage(ChatColor.RED + "公会大厅尚未开放。"); return; }
+        if (!built || !ready) { player.sendMessage(ChatColor.RED + "公会大厅尚未开放；可用 /mycli guild board 查询任务，或联系服主核对大厅状态。"); return; }
         Location landing = new Location(world, x + .5, y + 1, z + 4.5, 180, 0);
         if (!landing.getBlock().getType().isAir() || !landing.clone().add(0, 1, 0).getBlock().getType().isAir()) {
             player.sendMessage(ChatColor.RED + "公会大厅入口受阻，传送取消。"); return;
@@ -615,6 +615,16 @@ final class GuildHallManager implements Listener {
                 && at.getBlockY() >= y - 2 && at.getBlockY() <= y + 10
                 && at.getBlockZ() >= z - 7 && at.getBlockZ() <= z + 7;
     }
+    ProtectionArea propertyArea() {
+        return !built || world == null ? null : ProtectionArea.box("guild_property", "冒险者公会私产", world,
+                x - 9, y - 2, z - 7, x + 9, y + 10, z + 7);
+    }
+    ProtectionArea protectionArea(Location at) {
+        if (containsProperty(at)) return propertyArea();
+        if (at == null || at.getWorld() != world || !inServices(at.getBlock())) return null;
+        return new ProtectionArea("guild_services", "公会门口公共服务设施", world,
+                x + 13, y - 1, z + 7, x + 18, y + 4, z + 13, "structure_mask_envelope");
+    }
     private boolean inHall(Block b) { return containsProperty(b.getLocation()); }
     private boolean protectedFabric(Block b) {
         return inHall(b) && fabric.get(key(b)) == b.getType() || servicesBlock(b);
@@ -631,17 +641,23 @@ final class GuildHallManager implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
         if (deniesEdit(event.getPlayer(), event.getBlock())) {
             event.setCancelled(true);
-            event.getPlayer().sendMessage("§e这是冒险者公会的建筑。周围的草木可以正常整理。");
+            plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "guild_hall", protectionArea(event.getBlock().getLocation()));
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
         if ((protectedFabric(event.getBlockReplacedState()) || failClosed(event.getBlock()))
-                && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), event.getBlock()))) event.setCancelled(true);
+                && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), event.getBlock()))) {
+            event.setCancelled(true);
+            plugin.protectionAdvisor().denied(event.getPlayer(), "place", event.getBlock().getLocation(), "guild_hall", protectionArea(event.getBlock().getLocation()));
+        }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
         for (org.bukkit.block.BlockState state : event.getReplacedBlockStates())
             if ((protectedFabric(state) || failClosed(state.getBlock()))
-                    && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), state.getBlock()))) { event.setCancelled(true); return; }
+                    && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), state.getBlock()))) {
+                event.setCancelled(true);
+                plugin.protectionAdvisor().denied(event.getPlayer(), "place", state.getLocation(), "guild_hall", protectionArea(state.getLocation())); return;
+            }
     }
     @EventHandler public void onBurn(BlockBurnEvent event) {
         if (protectedFabric(event.getBlock()) || failClosed(event.getBlock())) event.setCancelled(true);
