@@ -145,6 +145,13 @@ final class GuildManager implements Listener {
     private String today() { return LocalDate.now(GUILD_ZONE).toString(); }
     private boolean member(Player p) { return plugin.getConfig().contains(base(p.getUniqueId()) + ".joined"); }
     boolean hasJoined(Player p) { return member(p); }
+    com.google.gson.JsonObject onboardingState(Player p) {
+        com.google.gson.JsonObject out = new com.google.gson.JsonObject();
+        out.addProperty("joined", member(p));
+        out.addProperty("completed", plugin.getConfig().getInt(base(p.getUniqueId()) + ".completed", 0));
+        out.addProperty("activeId", plugin.getConfig().getString(base(p.getUniqueId()) + ".active.id", ""));
+        return out;
+    }
     private int fame(Player p) { return plugin.getConfig().getInt(base(p.getUniqueId()) + ".fame", 0); }
     private int rankIndex(int fame) {
         int rank = 0;

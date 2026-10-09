@@ -60,7 +60,7 @@ final class AgentCliCatalog {
         add(specs,"help","info","read","/mycli help [ID]","查看玩家帮助；有 ID 时查看该命令详情","在线玩家","帮助或 MC_CLI_DETAIL");
         add(specs,"list","info","read","/mycli list [分类|命令|all] [页码]","分页发现命令；默认只列顶层命令","在线玩家","MC_CLI_LIST、MC_CLI_ITEM");
         add(specs,"explain","info","read","/mycli explain <ID|命令 子命令>","查询用法、前提、效果和回执；绝不执行目标命令","在线玩家","MC_CLI_DETAIL");
-        add(specs,"coach","info","read","/mycli coach status|on|off","查看或调整本人低频提醒；默认 Java 开、基岩关","在线玩家；旁观者不收到提醒","MC_COACH JSON");
+        add(specs,"coach","info","read","/mycli coach status|next|guide|menu|later|on|off","按本人真实进度指引冒险者登记、新手实习与首张委托；低频私聊","自动迎新面向已登记的Agent；Java提醒默认开、基岩关；旁观者不参加","MC_COACH JSON；原status字段保留，增加onboarding");
         add(specs,"guide","info","read","/mycli guide [start|explore|magic|gear|guild|dungeon|team]","分主题游玩指引；menu 打开手柄菜单","在线玩家","聊天指引或原版菜单");
         add(specs,"status","info","read","/mycli status","查看本人生命、魔力、公会及试炼状态","在线玩家","个人状态与 MC_DUNGEON 坐标");
         add(specs,"spells","magic","read","/mycli spells list [分类] [页码]|explain <技能ID>","基础及职业技能图鉴；profession/warrior/mage/priest 可直接查战法牧技能","在线玩家；查询不会施法","本人 MC_SPELL_LIST/ITEM/DETAIL JSON");
@@ -92,7 +92,11 @@ final class AgentCliCatalog {
         add(specs,"land.list","safety","read","/mycli land list [页码]","分页查看已登记领地","每页最多 9 项","MC_LAND_LIST");
         add(specs,"land.info","safety","read","/mycli land info <ID>","查看指定领地的主人、边界和本人权限","领地 ID 稳定；信任按 UUID","MC_LAND_INFO；not_found 表示 ID 不存在");
         add(specs,"land.menu","safety","menu","/mycli land menu","打开原版领地归属菜单，手柄可查看","技能罗盘左上角也可进入","原版 27 格菜单；点击详情不会传送");
-        add(specs,"coach.status","info","read","/mycli coach status","查看本人提醒开关、触发门槛和冷却","在线玩家","MC_COACH type=status");
+        add(specs,"coach.status","info","read","/mycli coach status","查看本人提醒开关、触发门槛、暂停截止时间、真实入门清单与下一步","在线玩家；查询不代办任务","MC_COACH type=status，含onboarding");
+        add(specs,"coach.next","info","read","/mycli coach next","按服务器实际登记、实习与委托账本给出当前一步和可执行命令","在线非观战玩家；不自动接单、学习、施法或领奖","MC_COACH type=next reason=onboarding");
+        add(specs,"coach.guide","info","read","/mycli coach guide","阅读玩法介绍、六项入门清单、本人进度与下一步","在线非观战玩家；只读","MC_COACH type=guide reason=onboarding");
+        add(specs,"coach.menu","info","gui","/mycli coach menu","打开手柄友好的新手页，查看清单并自愿登记、报名或查询技能","点击相应动作才登记/报名；学习技能仍走原耗点确认","原版27格菜单");
+        add(specs,"coach.later","info","write","/mycli coach later","暂停本人所有自动提醒，默认30分钟；跨重登保留","仍可主动查询；coach on 可提前恢复","MC_COACH type=status，onboarding.mutedUntil为Unix毫秒");
         add(specs,"coach.on","info","write","/mycli coach on","为本人启用提醒，跨重登保留","在线非旁观玩家","MC_COACH type=status enabled=true");
         add(specs,"coach.off","info","write","/mycli coach off","为本人关闭提醒，跨重登保留","在线玩家","MC_COACH type=status enabled=false");
         add(specs,"protect.place","safety","read","/mycli protect place <x> <y> <z>","预判能否在绝对坐标放置方块","整数坐标；同维度、16 格内、区块已加载","mcagent:protection status=deny|unknown|allow_likely");

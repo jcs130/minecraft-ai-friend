@@ -122,6 +122,10 @@ final class PlayerNameTags implements Listener {
                 && (agentUuids.contains(player.getUniqueId())
                 || registeredAgentNames.contains(player.getName().toLowerCase(Locale.ROOT)));
     }
+    boolean isObserver(Player player) {
+        return player.getGameMode() == GameMode.SPECTATOR || player.getName().equalsIgnoreCase("Goddess")
+                || registeredEyes.values().stream().anyMatch(name -> name.equalsIgnoreCase(player.getName()));
+    }
 
     Player attachedEye(Player agent) {
         String eyeName = registeredEyes.get(agent.getName().toLowerCase(Locale.ROOT));

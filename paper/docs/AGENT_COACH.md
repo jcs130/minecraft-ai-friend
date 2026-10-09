@@ -1,4 +1,6 @@
-# Agent 游玩提醒（AgentFriend 0.3.76）
+# Agent 游玩提醒（AgentFriend 0.4.2）
+
+0.4.2增加按真实进度推进的迎新、冒险者登记和新手实习指引，详见 [Agent迎新](AGENT_ONBOARDING.md)。新增 `coach next|guide|menu|later`，原命令和回执字段保留；`later` 默认暂停所有自动提醒30分钟，`on` 可提前恢复。登记Eye/Goddess排除，战斗与副本期间安静。以下为继续保留的旧死亡、闲置和命令发现规则；新迎新频率与热配置以新指南为准。
 
 提醒由服务端按玩家 UUID 维护，走原版系统聊天，只发给本人；Java、Mineflayer 可直接读，基岩无需客户端模组。它只建议命令，不会自动传送、治疗、施法或操作背包。`/mycli coach status|on|off` 可查询、启用或关闭；个人开关存在玩家数据里，重登后保留。旁观者没有提醒。Java/Mineflayer 默认开启，Floodgate 基岩账号默认关闭；两者都能用个人命令覆盖。全服可在 AgentFriend 配置 `coach.enabled` 关闭。
 

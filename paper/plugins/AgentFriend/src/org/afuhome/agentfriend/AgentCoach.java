@@ -13,6 +13,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -30,6 +32,7 @@ final class AgentCoach implements Listener {
         long lastMycli;
         boolean idleSent;
         boolean unusedSent;
+        long quietUntil;
         Session(long now) { lastActivity = now; lastMycli = now; }
     }
 
@@ -41,6 +44,7 @@ final class AgentCoach implements Listener {
     private final NamespacedKey pendingDeathKey;
     private final NamespacedKey lastHintKey;
     private BukkitTask timer;
+    private final OnboardingGuide onboarding;
 
     AgentCoach(AgentFriendPlugin plugin) {
         this.plugin = plugin;
@@ -49,18 +53,20 @@ final class AgentCoach implements Listener {
         deathCountKey = new NamespacedKey(plugin, "coach_death_count");
         pendingDeathKey = new NamespacedKey(plugin, "coach_pending_death");
         lastHintKey = new NamespacedKey(plugin, "coach_last_hint");
+        onboarding = new OnboardingGuide(plugin);
     }
 
     void start() {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         long now = System.currentTimeMillis();
-        for (Player player : Bukkit.getOnlinePlayers()) sessions.put(player.getUniqueId(), new Session(now));
+        for (Player player : Bukkit.getOnlinePlayers()) { sessions.put(player.getUniqueId(), new Session(now)); onboarding.joined(player); }
         timer = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 20L);
     }
 
     void stop() {
         if (timer != null) timer.cancel();
         sessions.clear();
+        onboarding.stop();
     }
 
     private long seconds(String key, long fallback) {
@@ -76,7 +82,7 @@ final class AgentCoach implements Listener {
     }
 
     private boolean enabled(Player player) {
-        if (player.getGameMode() == GameMode.SPECTATOR || !plugin.getConfig().getBoolean("coach.enabled", true))
+        if (plugin.isObserver(player) || !plugin.getConfig().getBoolean("coach.enabled", true))
             return false;
         Byte choice = player.getPersistentDataContainer().get(enabledKey, PersistentDataType.BYTE);
         if (choice != null) return choice != 0;
@@ -103,12 +109,17 @@ final class AgentCoach implements Listener {
         String action = args.length > 1 ? args[1].toLowerCase(java.util.Locale.ROOT) : "status";
         switch (action) {
             case "status" -> status(player);
+            case "next" -> onboarding.guide(player, false);
+            case "guide" -> onboarding.guide(player, true);
+            case "menu" -> onboarding.menu(player);
+            case "later" -> { onboarding.pause(player); status(player); }
             case "on", "off" -> {
                 boolean on = action.equals("on");
-                if (on && player.getGameMode() == GameMode.SPECTATOR) {
+                if (on && plugin.isObserver(player)) {
                     commandError(player, "SPECTATOR"); return;
                 }
                 player.getPersistentDataContainer().set(enabledKey, PersistentDataType.BYTE, (byte) (on ? 1 : 0));
+                if (on) onboarding.resume(player);
                 player.getPersistentDataContainer().remove(pendingDeathKey);
                 player.getPersistentDataContainer().remove(deathCountKey);
                 player.getPersistentDataContainer().remove(deathStartKey);
@@ -127,7 +138,7 @@ final class AgentCoach implements Listener {
         JsonObject error = new JsonObject();
         error.addProperty("schemaVersion", 1);
         error.addProperty("code", code);
-        error.addProperty("usage", "/mycli coach status|on|off");
+        error.addProperty("usage", "/mycli coach status|next|guide|menu|later|on|off");
         player.sendMessage("MC_COACH_ERROR " + error);
     }
 
@@ -141,6 +152,7 @@ final class AgentCoach implements Listener {
         result.addProperty("idleSeconds", seconds("idle-seconds", 900) / 1000);
         result.addProperty("unusedSeconds", seconds("unused-seconds", 2700) / 1000);
         result.addProperty("cooldownSeconds", seconds("cooldown-seconds", 1800) / 1000);
+        result.add("onboarding", onboarding.state(player));
         player.sendMessage("MC_COACH " + result);
     }
 
@@ -152,10 +164,24 @@ final class AgentCoach implements Listener {
 
     @EventHandler public void onJoin(PlayerJoinEvent event) {
         sessions.put(event.getPlayer().getUniqueId(), new Session(System.currentTimeMillis()));
+        onboarding.joined(event.getPlayer());
     }
 
     @EventHandler public void onQuit(PlayerQuitEvent event) {
         sessions.remove(event.getPlayer().getUniqueId());
+        onboarding.forget(event.getPlayer());
+    }
+    void guide(Player p, boolean full) { onboarding.guide(p, full); }
+    void menu(Player p) { onboarding.menu(p); }
+    void admin(org.bukkit.command.CommandSender sender, String[] args) { onboarding.admin(sender, args); }
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDamage(EntityDamageEvent event) {
+        long until = System.currentTimeMillis() + onboarding.quietMillis();
+        if (event.getEntity() instanceof Player p) session(p).quietUntil = until;
+        if (event instanceof EntityDamageByEntityEvent attack) {
+            if (attack.getDamager() instanceof Player p) session(p).quietUntil = until;
+            else if (attack.getDamager() instanceof org.bukkit.entity.Projectile shot && shot.getShooter() instanceof Player p) session(p).quietUntil = until;
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR) public void onDeath(PlayerDeathEvent event) {
@@ -202,6 +228,8 @@ final class AgentCoach implements Listener {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (!player.isOnline() || player.isDead() || plugin.isDowned(player) || !enabled(player)) continue;
             Session state = session(player);
+            if (now < state.quietUntil || onboarding.paused(player, now)
+                    || plugin.dungeonParticipant(player) || plugin.pvpParticipant(player)) continue;
             if (player.getPersistentDataContainer().has(pendingDeathKey, PersistentDataType.BYTE)) {
                 if (deaths(player, now) == 0) player.getPersistentDataContainer().remove(pendingDeathKey);
                 else if (send(player, now, "deaths", deaths(player, now),
@@ -213,6 +241,7 @@ final class AgentCoach implements Listener {
                 }
                 continue;
             }
+            if (onboarding.poll(player, now, state.quietUntil)) continue;
             if (!state.idleSent && now - state.lastActivity >= seconds("idle-seconds", 900)) {
                 if (send(player, now, "idle", 0,
                         "停留较久，可以查看世界能力和下一步路线。",
@@ -234,6 +263,7 @@ final class AgentCoach implements Listener {
     private boolean send(Player player, long now, String reason, int count, String message, String... commands) {
         long last = player.getPersistentDataContainer().getOrDefault(lastHintKey, PersistentDataType.LONG, 0L);
         if (now - last < seconds("cooldown-seconds", 1800)) return false;
+        if (!onboarding.gapReady(player, now)) return false;
         JsonObject result = new JsonObject();
         result.addProperty("schemaVersion", 1);
         result.addProperty("type", "reminder");
@@ -245,6 +275,7 @@ final class AgentCoach implements Listener {
         result.add("commands", options);
         player.sendMessage("MC_COACH " + result);
         player.getPersistentDataContainer().set(lastHintKey, PersistentDataType.LONG, now);
+        onboarding.delivered(player, now);
         return true;
     }
 }

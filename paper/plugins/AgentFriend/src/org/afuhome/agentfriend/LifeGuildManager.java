@@ -84,6 +84,17 @@ final class LifeGuildManager implements Listener {
     private boolean completedToday(Player player, Contract contract) {
         return today().equals(plugin.getConfig().getString(base(player) + ".done." + contract.id()));
     }
+    JsonObject onboardingState(Player player) {
+        JsonObject out = new JsonObject(); Contract contract = active(player);
+        out.addProperty("activeId", contract == null ? "" : contract.id());
+        out.addProperty("title", contract == null ? "" : contract.title());
+        out.addProperty("instruction", contract == null ? "" : contract.description());
+        out.addProperty("progress", contract == null ? 0 : progress(player));
+        out.addProperty("target", contract == null ? 0 : contract.target());
+        out.addProperty("ready", contract != null && progress(player) >= contract.target());
+        out.addProperty("availableId", CONTRACTS.stream().filter(c -> !completedToday(player,c)).map(Contract::id).findFirst().orElse(""));
+        return out;
+    }
 
     void command(Player player, String[] args) {
         String action = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "board";

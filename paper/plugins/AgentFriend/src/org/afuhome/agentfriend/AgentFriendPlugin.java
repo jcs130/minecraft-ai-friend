@@ -395,6 +395,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     TaskMarketManager taskMarket() { return taskMarket; }
     GuildManager guild() { return guild; }
     ProfessionManager professions() { return professions; }
+    WorldLifeManager worldLife() { return worldLife; }
+    LifeGuildManager lifeGuild() { return lifeGuild; }
     TrialRescueManager trialRescue() { return trialRescue; }
     boolean isDowned(Player p) { return trialRescue != null && trialRescue.downed(p); }
     PlayerContracts playerContracts() { return playerContracts; }
@@ -405,6 +407,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     DungeonManager dungeon() { return dungeon; }
     boolean isRegisteredAgent(Player player) {
         return playerNameTags != null && playerNameTags.isAgent(player);
+    }
+    boolean isObserver(Player player) {
+        return player.getGameMode() == GameMode.SPECTATOR || player.getName().equalsIgnoreCase("Goddess")
+                || playerNameTags != null && playerNameTags.isObserver(player);
     }
     Player attachedEye(Player player) {
         return playerNameTags == null ? null : playerNameTags.attachedEye(player);
@@ -650,7 +656,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             int backpackChanges = BackpackShortcutMigration.migrate(player);
             if (backpackChanges > 0) getLogger().info("Updated Minepacks shortcut for "
                     + player.getUniqueId() + "; slots=" + backpackChanges);
-            if (player.getGameMode() == GameMode.SPECTATOR) return;
+            if (isObserver(player)) return;
             SpellGuide.discoveryHint(player);
             soulboundGear.bindMengmengKit(player);
             BackpackShortcutMigration.restoreMissing(player, dungeon);
@@ -659,8 +665,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (!hasFocus(player)) giveFocus(player);
             if (!player.getPersistentDataContainer().has(guideSeenKey, PersistentDataType.BYTE)) {
                 player.getPersistentDataContainer().set(guideSeenKey, PersistentDataType.BYTE, (byte) 1);
-                player.sendMessage(ChatColor.GOLD + "欢迎来到千灯纪！手持技能罗盘按使用键，选择「旅途指南」开始冒险。");
-                player.sendMessage(ChatColor.AQUA + "手柄无需打字；命格书可翻页阅读。Agent 可输入 /mycli guide 查看操作指令。");
+                player.sendMessage(ChatColor.GOLD + "欢迎来到千灯纪！罗盘 → 旅途指南 → 新手入门，按本人实际进度开始冒险。");
+                player.sendMessage(ChatColor.AQUA + "Agent：/mycli coach next 查看下一步，coach guide 阅读玩法；先登记冒险者，再报名新手实习。手柄可直接点入门页。");
             }
         }, 40L);
     }
@@ -684,6 +690,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length >= 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("coach")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台维护迎新指引。"); return true;
+            }
+            agentCoach.admin(sender, args); return true;
+        }
         if (args.length >= 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("professions")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
                 sender.sendMessage("只允许服务器控制台维护职业账本。"); return true;
@@ -1075,7 +1087,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void help(Player p) {
         p.sendMessage(ChatColor.GOLD + "千灯纪技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
         p.sendMessage("Agent：/mycli list [分类|命令] [页码] 发现能力；/mycli explain <ID> 或 /mycli help <ID> 查询准确用法，不会执行。");
-        p.sendMessage("/mycli coach status|on|off  查看或调整个人提醒；连续死亡、久未行动或久未使用 /mycli 时低频提示。");
+        p.sendMessage("/mycli coach next|guide|menu|status|later|on|off  查看本人新手进度与下一步；暂停或关闭低频私聊提醒。");
         p.sendMessage("/mycli skills list [all|common|profession|warrior|mage|priest] [页] 查看基础/战法牧技能；skills info <ID> 查各级效果与学习条件；cast <ID> 施法");
         p.sendMessage("/mycli protect break|place|container|use <x> <y> <z>  查询附近方块/实体储物能否操作；拒绝则停止");
         p.sendMessage("/mycli land here|list|info <ID>|menu 查看领地归属、主人与我的权限");
@@ -1106,18 +1118,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         String topic = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "start";
         switch (topic) {
             case "menu", "目录" -> openMenu(p, "guide");
-            case "start", "开始" -> {
-                p.sendMessage(ChatColor.GOLD + "【千灯纪 · 从这里开始】1 读命格书；2 用技能罗盘选地点；3 到公会看板接一张任务。");
-                p.sendMessage(ChatColor.GRAY + "Agent：/mycli status 查看本人状态；/mycli waypoint 列地点；/mycli goto <地点ID> 前往；/mycli guide <主题> 看下一步。");
-                p.sendMessage(ChatColor.AQUA + "主题：explore、magic、gear、guild、dungeon、team。手柄：罗盘 → 旅途指南，选图标即可进入对应菜单。");
-            }
+            case "start", "开始", "onboarding" -> agentCoach.guide(p, true);
+            case "next" -> agentCoach.guide(p, false);
             case "explore", "探索" -> {
                 p.sendMessage(ChatColor.GOLD + "【探索】先去出生村庄、樱花林等公共地点；遗迹落点在外围，需要步行探索。罗盘可保存自己的营地。");
                 p.sendMessage(ChatColor.GRAY + "Agent：/mycli waypoint add 下界营地；/mycli goto personal:下界营地；/mycli waypoint share 下界营地。记录当前位置免费，传送 6 魔力；分享后可撤回。");
                 p.sendMessage(ChatColor.GRAY + "挖掘/放置前：/mycli protect break|place <x> <y> <z>；deny 不动、unknown 暂缓、allow_likely 可尝试。");
             }
             case "magic", "魔法" -> {
-                p.sendMessage(ChatColor.LIGHT_PURPLE + "【魔法】罗盘左上角「法术图鉴」先看说明，再点施放；法杖手持使用可瞬发，潜行使用可换绑定。未学会的羽落、夜视先选图标学习。");
+                p.sendMessage(ChatColor.LIGHT_PURPLE + "【魔法】罗盘「法术图鉴」先看说明，再点施放；法杖手持使用可瞬发，潜行使用可换绑定。未学会的羽落、夜视先选图标学习。");
                 p.sendMessage(ChatColor.GRAY + "Agent：/mycli skills list profession；list warrior|mage|priest 按方向查询；/mycli skills info <ID> 查各级效果与学习条件；/mycli skills points 查点数。学习 learn、升级 upgrade、准备 prepare 后再 cast；/mycli focus list 看法杖，/mycli status 看魔力。");
             }
             case "gear", "装备", "刻印" -> {
@@ -1150,7 +1159,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.GRAY + "每项可用原版经验 5 级学习，炼金等级 2 免费学习，或首次通过试炼第三层自动学会。");
         p.sendMessage(ChatColor.GRAY + "魔力统一使用 AuraSkills；MagicSpells 处理生活法术，AgentFriend 处理战斗、探矿与探索法术。");
         p.sendMessage(ChatColor.GRAY + "技能分战斗、探索、采集；/mycli mastery 看每项熟练度和下一级所需次数。罗盘也可点技能成长。");
-        p.sendMessage(ChatColor.GRAY + "逐项说明：/mycli spells explain <英文 ID>；手柄可从罗盘左上角打开法术图鉴。");
+        p.sendMessage(ChatColor.GRAY + "逐项说明：/mycli spells explain <英文 ID>；手柄可从罗盘打开法术图鉴。");
     }
     private void status(Player p) {
         SkillsUser user = skillsUser(p);
@@ -2021,7 +2030,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 "§6第一步：打开罗盘§r\n\n把技能罗盘拿在手上，按使用键。\n\n选「旅途指南」可直接进入地点、魔法、公会与队友菜单。\n\n想先逛逛？选「传送地点」去樱花林。",
                 "§b手柄也能玩§r\n\n罗盘：使用键打开。\n方向键：选择图标。\n确认键：使用或进入。\n返回键：关闭菜单。\n\n命格书用页面左右箭头翻页；不用打字。",
                 "§a探索与队友§r\n\n罗盘「传送地点」选村庄、樱花林与遗迹。去遗迹后还要步行探索。\n\n「找队友」可追踪方向或传送过去。\n\n在地点页保存自己的营地，方便回家。",
-                "§d魔法与技能§r\n\n罗盘左上角「法术图鉴」能逐项查看效果、目标、消耗和冷却，再决定是否施放。\n\nAgent：/mycli spells list；/mycli spells explain <ID>。\n\n羽落 " + learnedLabel(p, featherKey)
+                "§d魔法与技能§r\n\n罗盘「法术图鉴」能逐项查看效果、目标、消耗和冷却，再决定是否施放。\n\nAgent：/mycli spells list；/mycli spells explain <ID>。\n\n羽落 " + learnedLabel(p, featherKey)
                         + " · 夜视 " + learnedLabel(p, nightKey) + "\n未学时选图标学习。",
                 "§d技能成长§r\n\n战斗：星芒箭、霜环、焰浪。\n探索：跃空、飞行、守护傀儡、探敌。\n采集：探矿。\n\n成功施放 8 次升 2 级、24 次升 3 级。罗盘选「技能成长」看本人进度；失败不计数。",
                 "§5给工具刻印魔法§r\n\n手持镐、剑等工具，潜行使用附魔台，再选技能图标。\n\n需要经验 3 级和青金石 1 个。\n\n刻印后潜行对方块使用工具施法；原附魔保留。",
@@ -2188,6 +2197,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(15, item(Material.PLAYER_HEAD, "§b⑥ 找队友", "追踪方向，或安全传送到队友身边"));
             inv.setItem(16, item(Material.WRITTEN_BOOK, "§e翻开命格书", "查看本人状态与全部旅途指引", "页面箭头可用手柄选择"));
             inv.setItem(17, item(Material.SUNFLOWER, "§a⑦ 生活公会", "钓鱼、种田、烹饪、建筑、写书与红石机关", "每日小委托；不必打怪也能成长"));
+            inv.setItem(18, item(Material.NAME_TAG, "§b新手入门与下一步", "本人进度：登记、实习、真实施法与委托", "点击打开入门页；不会自动学习或接单"));
             inv.setItem(19, item(Material.OAK_SAPLING, "§a⑧ 村庄新生活", "新手实操、村民对话、世界活动与照片展示", "原版菜单；Agent 可用 /mycli world list"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能罗盘", "回到技能罗盘"));
         } else if (page.equals("combat")) {
@@ -2441,6 +2451,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 15 -> openMenu(p, "players");
                     case 16 -> p.openBook(statusBook(p));
                     case 17 -> openMenu(p, "life");
+                    case 18 -> agentCoach.menu(p);
                     case 19 -> worldLife.command(p, new String[]{"world", "menu"});
                     case 22 -> openMenu(p, "skills");
                     default -> { }
@@ -2838,7 +2849,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 2 && args[0].equalsIgnoreCase("spells")) return List.of("list", "explain");
         if (args.length == 3 && args[0].equalsIgnoreCase("spells") && args[1].equalsIgnoreCase("explain"))
             return SpellGuide.entries().stream().map(SpellGuide.Entry::id).toList();
-        if (args.length == 2 && args[0].equalsIgnoreCase("coach")) return List.of("status", "on", "off");
+        if (args.length == 2 && args[0].equalsIgnoreCase("coach")) return List.of("status", "next", "guide", "menu", "later", "on", "off");
         if (args.length == 2 && args[0].equalsIgnoreCase("pvp"))
             return List.of("status", "join", "leave", "lobby", "board", "menu");
         if (args.length == 2 && args[0].equalsIgnoreCase("skillbook")) return List.of("list", "use");
@@ -2846,7 +2857,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return AgentCliCatalog.ids();
         if (args.length == 2 && args[0].equalsIgnoreCase("protect")) return List.of("break", "place", "container", "use");
         if (args.length == 2 && args[0].equalsIgnoreCase("guide"))
-            return List.of("start", "explore", "magic", "gear", "guild", "dungeon", "team", "menu");
+            return List.of("start", "next", "onboarding", "explore", "magic", "gear", "guild", "dungeon", "team", "menu");
         if (args.length == 2 && args[0].equalsIgnoreCase("imprint")) {
             List<String> choices = new ArrayList<>(List.of("list"));
             choices.addAll(FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> !id.contains(" ")).toList());

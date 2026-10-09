@@ -1,0 +1,51 @@
+# Agent onboarding is advice only; quests, skills, rewards and ownership keep their original rules.
+# Edit then console: mycli admin coach reload. Invalid candidates retain the last valid settings.
+schema-version: 1
+welcome-revision: 1
+enabled: true
+agents-only: true
+poll-seconds: 60
+welcome-delay-seconds: 5
+welcome-cooldown-seconds: 21600
+session-grace-seconds: 60
+reminder-seconds: 600
+progress-delay-seconds: 20
+min-gap-seconds: 60
+combat-quiet-seconds: 30
+complete-reminder-seconds: 3600
+pause-seconds: 1800
+welcome:
+  - 欢迎来到千灯纪！技能与战法牧、工程与远征委托、生活公会、村民聊天和照片记录都可体验；/mycli coach next 查自己的下一步。
+  - 入门路线：冒险者登记→报名新手实习→读技能目录→真正成功施法→完成生活委托→交付首张冒险委托。手柄用罗盘→旅途指南→新手入门。
+  - 技能、主动传送和远程取物耗魔；学习升级花技能点。公会门口公共箱可用，门内私产归萌萌；收到权限拒绝就停止。提醒仅私发本人，可暂停或关闭。
+steps:
+  register:
+    title: 先登记为冒险者
+    message: 用 /mycli guild join 免费登记。接待员与门口公共物资可用 guild trader/shared 查询；登记不会替你接任务。
+  guide_start:
+    title: 报名小满的新手实习
+    message: 用 /mycli world guide start 自愿报名。三项证明是报名后读技能目录、成功施法、完成并交付生活委托；只说完成不会计数。
+  catalog:
+    title: 看看自己能学什么
+    message: 用 /mycli skills list common 读取基础技能；按 MC_SPELL_NEXT 继续翻页。skills info <ID> 查条件，skills points 查点数；查询免费，不会代学。
+  cast:
+    title: 亲手成功施放一次技能
+    message: 先看本人魔力、学习资格和冷却，再选一个适合当前场景的技能；失败不会完成实习。
+  life_accept:
+    title: 选择第一项生活实践
+    message: 用 /mycli life board 查看七类生活委托，选喜欢的接单。完成后一定 life claim，真实领奖成功才算实习证明。
+  life_progress:
+    title: 继续当前生活委托
+    message: 按自己已接的任务真实行动；只计算合规的原版操作。保护拒绝时停止，换获准位置；别为了提醒放弃在途任务。
+  life_claim:
+    title: 生活委托已达标，记得交付
+    message: 用 /mycli life claim 结算当前委托。奖励进入个人奖励箱或待入箱队列，空间不足不等于奖励丢失。
+  guild_accept:
+    title: 接取第一张冒险委托
+    message: 新手实习已经完成，挑一张冒险者公会委托试试。先接单再操作，和居民事务共用一个任务槽。
+  guild_progress:
+    title: 完成当前冒险委托并交付
+    message: 用 /mycli guild status 复查真实步骤；每阶段达标后 guild claim，全部完成才发最终奖。不根据聊天自报或到达一次就判探索完成。
+  complete:
+    title: 入门已完成，选择自己的生活
+    message: 居民事务、种田交易、建造、实地探索、藏宝图、组队地下城和照片都可继续；职业技能按自己的方向学习，保留魔力与技能点选择。

@@ -230,7 +230,7 @@ final class WorldLifeManager implements Listener {
             if (!save()) { ledger.set(base + ".started", null); denied(p, "guide_storage_failed"); return; }
             bq(p, "begin");
         }
-        JsonObject out = new JsonObject(); out.addProperty("started", ledger.getBoolean(base + ".started"));
+        JsonObject out = guideState(p);
         JsonArray steps = new JsonArray();
         String[] descriptions = {"读取技能目录 /mycli skills list common", "按本人资格真正成功施放一次技能；失败或只说已施法不算", "完成并交付一项生活公会委托 /mycli life board"};
         int done = 0;
@@ -244,6 +244,12 @@ final class WorldLifeManager implements Listener {
         out.addProperty("travelInstruction", "技能学习/升级耗技能点；成功传送耗6魔力，支援传送耗8魔力；旧技能资格保留。");
         emit(p, "guide", out);
         p.sendMessage(ChatColor.AQUA + "新手实习 " + done + "/3；用 /mycli world guide status 随时复查。进度由真实服务器回执记录。");
+    }
+    JsonObject guideState(Player p) {
+        String base = "players." + p.getUniqueId(); JsonObject out = new JsonObject();
+        out.addProperty("started", ledger.getBoolean(base + ".started"));
+        for (String lesson : LESSONS) out.addProperty(lesson, ledger.getBoolean(base + ".proof." + lesson));
+        return out;
     }
     void note(Player p, String lesson) {
         if (!LESSONS.contains(lesson) || p.getGameMode() == GameMode.SPECTATOR) return;
