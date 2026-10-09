@@ -103,6 +103,56 @@ def probe_neko_adapters(manifest_path=None):
     return report
 
 
+SOCIETY_BEDROCK_MANIFEST = {'udp': 28988, 'javaProxy': 28995, 'health': 28996,
+                          'compatGate': 28994, 'address': '192.168.3.163', 'upstream': '127.0.0.1:28994'}
+
+
+def probe_society_bedrock():
+    """Owned bridge and positive RakNet smoke; does not assert a real client login."""
+    import http.client
+    report = {'scope': 'LAN Bedrock bridge readiness, not mod UI/rendering parity',
+              'checks': {}, 'actualBedrockLoginVerified': False, 'ok': False}
+    try:
+        tools = Path(__file__).resolve().parents[3] / 'tools'
+        if str(tools) not in sys.path:
+            sys.path.insert(0, str(tools))
+        import maw_bedrock_service as bridge
+        connection = http.client.HTTPConnection('127.0.0.1', SOCIETY_BEDROCK_MANIFEST['health'], timeout=3)
+        try:
+            connection.request('GET', '/healthz')
+            response = connection.getresponse()
+            value = json.loads(response.read(65537))
+            if response.status != 200:
+                raise ValueError('Bridge reports unhealthy')
+        finally:
+            connection.close()
+        rows = {row['id']: row for row in value.get('services', [])}
+        row = rows.get('bedrock', {})
+        checks = report['checks']
+        checks['supervised-fresh'] = (value.get('healthy') is True and not value.get('paused')
+            and 0 <= time.time()-value.get('heartbeatEpoch', 0) <= 15)
+        checks['owned-java-and-bedrock'] = (set(rows) == {'compat_gate', 'bedrock'}
+            and row.get('port') == SOCIETY_BEDROCK_MANIFEST['javaProxy']
+            and all(item.get('listenHost') == '127.0.0.1' and item.get('ready') is True
+                and type(item.get('pid')) is int for item in rows.values())
+            and rows['compat_gate'].get('port') == SOCIETY_BEDROCK_MANIFEST['compatGate']
+            and isinstance(row.get('metrics', {}).get('bedrock'), dict))
+        pong = bridge.bedrock_probe()
+        checks['raknet-positive-smoke'] = pong['motd'] == 'My Agent World' and pong['maxPlayers'] == 4
+        checks['fixed-artifacts-config'] = bridge.load_config(bridge.ROOT/'services/bedrock.json')['gamePort'] == 28995
+        firewall = subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+            str(tools/'maw_lan_firewall.ps1'), '-Mode', 'Status', '-Bedrock'],
+            capture_output=True, text=True, encoding='utf-8', timeout=20)
+        firewall_state = json.loads(firewall.stdout)
+        checks['lan-firewall'] = firewall.returncode == 0 and firewall_state.get('ok') is True
+        report['lanAccessReady'] = all(checks.values())
+        report['state'] = {'pid': row.get('pid'), 'compatGatePid': rows['compat_gate'].get('pid'), 'bedrock': pong}
+        report['ok'] = all(checks.values())
+    except (OSError, ValueError, TypeError, KeyError, ImportError, subprocess.TimeoutExpired) as error:
+        report['error'] = type(error).__name__ + ': ' + str(error)
+    return report
+
+
 def probe_society_service():
     from uuid import UUID
     report = {'checked_at': datetime.now(timezone.utc).isoformat(), 'project': 'my-agent-world',
@@ -325,7 +375,13 @@ def probe_agent_frame():
         return {'ok': False, 'errorType': type(error).__name__}
 
 
-def probe_panel_smoke():
+def probe_panel_smoke(scope=None):
+    if scope == 'society-bedrock':
+        bedrock = probe_society_bedrock()
+        return {'ok': bedrock['ok'], 'society_bedrock': bedrock,
+                'scope': 'Bedrock LAN entrance only', 'modelRequests': 0, 'worldActions': 0}
+    if scope is not None:
+        raise ValueError('Unknown panel smoke scope')
     agent_observatory = probe_agent_observatory()
     runtime = probe_panel_http()
     management = probe_management()
@@ -364,7 +420,10 @@ def probe_panel_smoke():
     jev_intent = probe_jev_intent()
     skill_system = probe_skill_system()
     town_protection = probe_town_protection()
-    return {'ok': all(value['ok'] for value in (agent_observatory, runtime, management, visual, operations_view, eye_performance, observer_view, agent_frame, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent, system_one, pawapps, town_protection, skill_system, jev_intent)),
+    bedrock = (probe_society_bedrock() if sys.platform == 'win32'
+        and Path('E:/QiandengJiSocietyLab/services/bedrock.json').is_file() else None)
+    return {'ok': all(value['ok'] for value in (agent_observatory, runtime, management, visual, operations_view, eye_performance, observer_view, agent_frame, sources, player_commands, voice_commands, chanting_staff, voice_recording, voice_boundary_deployment, skillbar_editor, chanting_client, operations_team, game_qwenpaw, survivor, survivor_party, companion_ticking, navigation_sense, model_routing, world_team, maid_perception, survival_practice, embodied_agent, system_one, pawapps, town_protection, skill_system, jev_intent)) and (bedrock is None or bedrock['ok']),
+            'society_bedrock': bedrock,
             'agent_observatory': agent_observatory,
             'runtime': runtime, 'operations': runtime.get('operations'), 'visual': visual, 'sources': sources,
             'management': management, 'operations_view': operations_view, 'eye_performance': eye_performance, 'observer_view': observer_view,
@@ -1991,6 +2050,14 @@ def inventory_lock_failure(reason):
 
 
 def main():
+    if sys.argv[1:] == ['--society-bedrock-smoke']:
+        report = probe_panel_smoke(scope='society-bedrock')
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
+    if sys.argv[1:] == ['--society-bedrock']:
+        report = probe_society_bedrock()
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
     if sys.argv[1:] == ['--neko']:
         report = probe_neko_adapters()
         print(json.dumps(report, ensure_ascii=False, indent=2))

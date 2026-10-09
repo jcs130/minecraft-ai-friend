@@ -2,11 +2,13 @@ param(
     [ValidateSet('Plan', 'Register', 'Start', 'Unregister')][string]$Mode = 'Plan',
     [ValidateSet('Auto', 'S4U', 'Interactive', 'Run', 'Startup')][string]$StartupMethod = 'Auto',
     [Parameter(Mandatory=$true)][string]$Python,
-    [Parameter(Mandatory=$true)][string]$Config
+    [Parameter(Mandatory=$true)][string]$Config,
+    [switch]$Bedrock
 )
 
 $ErrorActionPreference = 'Stop'
 $scriptPath = Join-Path $PSScriptRoot 'maw_service.py'
+if ($Bedrock) { $scriptPath = Join-Path $PSScriptRoot 'maw_bedrock_service.py' }
 $pythonPath = (Resolve-Path -LiteralPath $Python -ErrorAction Stop).Path
 $configPath = (Resolve-Path -LiteralPath $Config -ErrorAction Stop).Path
 $pythonw = Join-Path (Split-Path -Parent $pythonPath) 'pythonw.exe'

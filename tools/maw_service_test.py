@@ -381,6 +381,7 @@ class LocalRequestTests(unittest.TestCase):
             supervisor = service.Supervisor.__new__(service.Supervisor)
             supervisor.directory = Path(tmp)
             supervisor.config = {"serverDir": tmp, "gamePort": 28976}
+            supervisor.validator = lambda: service.check_server(Path(tmp), 28976)
             supervisor.children = {"java": Mock(stopping=True)}
             supervisor.quit, supervisor.stop_requested = False, False
             supervisor.apply({"action": "stop", "reason": "maint"})
@@ -439,6 +440,8 @@ class ChildTests(unittest.TestCase):
             supervisor = service.Supervisor.__new__(service.Supervisor)
             supervisor.directory = Path(tmp)
             supervisor.config = {"serverDir": "fixture", "gamePort": 28976}
+            supervisor.roles = service.ROLES
+            supervisor.validator = lambda: service.check_server(Path('fixture'), 28976)
             supervisor.run_id, supervisor.fault = "fixture", None
             supervisor.quit, supervisor.stop_requested = False, False
             supervisor.requests = Mock()

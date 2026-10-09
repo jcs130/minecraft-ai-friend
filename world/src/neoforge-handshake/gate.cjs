@@ -42,6 +42,7 @@ const { loadBackendComponentProtocol, vanillaProjection, isItemPacket, disconnec
 const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE, process.env.GATE_PARTICLES_FILE,
   process.env.GATE_ENTITY_SERIALIZERS_FILE)
 const NativeViewer = require('./native-viewer-packet.cjs')
+const { BedrockProjection } = require('./bedrock-projection.cjs')
 const nativeViewerHash = process.env.GATE_NATIVE_VIEWER === '1'
   ? NativeViewer.registryHash(process.env.GATE_NATIVE_STATES_FILE) : null
 
@@ -237,6 +238,7 @@ const sessionCount = () => sessions.size
 
 function startSession (front, username) {
   const sess = { front, username, phase: 'config', retry: 0, closed: false, reconnecting: false, backReady: false, frontQueue: [], playQueue: [] }
+  if (process.env.GATE_BEDROCK_PROJECTION === '1') sess.bedrockProjection = new BedrockProjection()
   sessions.add(sess)
 
   // client 级 'packet' 事件：(params, metadata, buffer, fullBuffer)，不随换态被清
@@ -267,6 +269,7 @@ function closeSession (sess, reason) {
     if (DEBUG_MENUS) log(`census[${sess.username}] menus: ${b.filter(([k]) => /window|slot|container/.test(k)).map(([k, v]) => k + '=' + v).join(' ') || 'none'}`)
     // 【chunk 断流诊断 2026-08-29】chunk 计数随摘要打出（queue=排队期 play=开闸后）
     log(`census[${sess.username}] chunk: queue=${sess.queueChunkCount || 0} play=${sess.playChunkCount || 0}`)
+    if (sess.bedrockProjection) log(`bedrock-projection[${sess.username}] ${JSON.stringify(sess.bedrockProjection.stats)}`)
   } catch (err) {}
   try { sess.back?.end() } catch (e) {}
   try { if (!sess.front.ended) sess.front.end(reason) } catch (e) {}
@@ -605,6 +608,16 @@ function relayTo (sess, target, name, params, dir) {
     }
     if (componentProtocol && ['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'].includes(name)) params = vanillaProjection(params)
     if (REMAP.hasMap()) params = REMAP.remapOut(name, params) // 后端→前端: NeoForge号→原版号 ✓
+    if (sess.bedrockProjection) {
+      try {
+        const projected = sess.bedrockProjection.project(name, params)
+        if (projected === null) return
+        for (const packet of projected.before || []) target.write(packet.name, packet.params)
+        params = projected.params
+      } catch (error) {
+        kickFront(sess, '基岩兼容包尚未适配：' + name + ' / ' + error.message.slice(0, 120)); return
+      }
+    }
     sess.lastFrontWrite = name
     // 【时间包普查】前端方向也计数(与 backCensus 对照找丢包层)
     sess.frontCensus = sess.frontCensus || {}
@@ -644,6 +657,11 @@ function normalizeCustomPayload (params) {
 // ── NeoForge 新约拦截（与 probe.cjs 同逻辑，会话持久化版）────────
 // 返回 true = 已处置（自答或有意吞掉），不透传；false = 非新约通道，照常透传。
 function handleNeoForgePayload (sess, channel, data) {
+  if (sess.bedrockProjection && channel === P.CH.FROZEN_REGISTRY) {
+    try { sess.bedrockProjection.learn(data) } catch (error) {
+      kickFront(sess, '基岩注册表映射失败：' + error.message); return true
+    }
+  }
   const back = sess.back
   // vanilla 姿势:mod 通道任务负载一律吞掉不答——服务端已凭 brand 判 vanilla,
   // 不再等这些应答;原版通道(minecraft:brand/register 等)照常透传保真

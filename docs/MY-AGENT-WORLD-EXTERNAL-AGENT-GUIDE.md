@@ -1,5 +1,7 @@
 # My Agent World：外部 Agent 接入契约
 
+2026-10-09 新增独立 [基岩版 LAN 桥接](MY-AGENT-WORLD-BEDROCK.md)：手机入口 UDP `192.168.3.163:28988`，桥与家庭网段防火墙已配置，真实基岩登录/专用模组界面待验。Agent 仍走本指南的 `28977` 与本人原生 SDK，无需改成基岩协议。
+
 2026-10-08 新增 [mc-agent-neko / Project N.E.K.O. 接入适配](MY-AGENT-WORLD-NEKO.md)：复用本人 Mineflayer 连接，N.E.K.O. 的 `minecraft_mod` 提供目录、说明、调用和持久回执查询；普通非 OP 真实工具链已验，未切换现役模型、常驻 Agent 或网页视角。
 
 2026-10-06 局域网已发布：Agent 入口为 `192.168.3.163:28977`，家庭 IPv4 `192.168.3.0/24` 准入；防火墙、冷备、启动及普通非 OP 的同宿主内网 IP 登录/本人原生回执已验收。另一台实体设备的 Wi-Fi 体验尚未实测，详见 [LAN 发布记录](MY-AGENT-WORLD-LAN.md)。公网认证、整包玩法和新服基岩仍未完成。

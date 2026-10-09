@@ -1,5 +1,7 @@
 # My Agent World：常驻服运维与 Agent 操作指引
 
+2026-10-09 基岩桥增量：ViaProxy + Geyser 独立常驻，UDP `192.168.3.163:28988`、私有管理 `127.0.0.1:28996`；家庭网段防火墙已放行，5 项健康/冒烟通过。Java 26.2 转换入原世界和 RakNet 发现通过，真实基岩登录/模组界面尚未验收。见 [基岩桥接维护](MY-AGENT-WORLD-BEDROCK.md)，原世界和三服务没有重启。
+
 2026-10-09 图标/中文增量已发布：桥 `a672b1d2…47f8ec`、原资产 v15、原版及模组名称 Component 翻译、Domum 第一页十组原生图标。原暂停/未知动作、世界及其他 26 JAR 保留；当前维护与恢复边界见 [图标与中文维护](MY-AGENT-WORLD-VIEWER-LOCALIZATION.md)。
 
 2026-10-06：已按用户要求开放家庭 LAN，防火墙、冷备、持久配置与健康启动完成；同宿主 LAN IP 普通 Agent 登录/三项本人原生调用、网页与 SSE 已通过，另一台实体设备尚未实测。当前入口见下表和 [局域网部署](MY-AGENT-WORLD-LAN.md)。原 world-life 和 27 JAR 保留，主 Agent 的历史未知动作仍暂停。网络可达不代表全部模组、Java 完整画面或新服基岩已完成。
@@ -18,12 +20,13 @@
 | 原生网页资产 | `assets\native-20261009-v15-chinese-icons` | 保留 v14 原模型/贴图，新增官方 zh_cn；区块号表 SHA256 仍为 `039bd785956b452e7788a8a3a351477536fedf082b6724aceac0a64c580b5712`；当前范围见 [图标与汉化](MY-AGENT-WORLD-VIEWER-LOCALIZATION.md) |
 | Java 服务端 | `192.168.3.163:28976` | 家庭 LAN 模组后端；真人 Java 客户端须匹配模组包并单独验证 |
 | Agent 协议网关 | `192.168.3.163:28977` | Mineflayer 玩家从这里登录，完成 NeoForge 兼容与原生数据转发 |
+| 基岩版桥接 | `192.168.3.163:28988` UDP | 独立 Geyser-ViaProxy，家庭网段已放行；真实客户端与模组玩法另验 |
 | Agent 同连接网页 | `http://192.168.3.163:28984/` | 观察 MawExplorer 的真实行动与本人原生世界数据 |
 | Agent 网页健康 | `http://192.168.3.163:28984/healthz` | 网页/动作宿主的就绪检查 |
 | Supervisor 健康 | `http://127.0.0.1:28985/healthz` | 新服进程依赖、就绪与守护状态；暂停或故障时可以返回 503 |
 | 宿主 QwenPaw | `http://127.0.0.1:8088/api` | 已有宿主运行时，新角色使用它的原生持久会话 |
 
-Java/Agent/网页显式监听 IPv4 `0.0.0.0`，防火墙准入仅为家里 `192.168.3.0/24`；网关和网页另核对实际来源。服务器本机仍可用 `127.0.0.1`，Supervisor 与宿主 QwenPaw 保持回环。没有新增公网或基岩入口；基岩接入新模组服仍待验收。原 Paper 千灯纪的进程、存档、端口及路由映射属于原服务，不能用新服配置覆盖。
+Java/Agent/网页显式监听 IPv4 `0.0.0.0`，防火墙准入仅为家里 `192.168.3.0/24`；网关和网页另核对实际来源。服务器本机仍可用 `127.0.0.1`，Supervisor 与宿主 QwenPaw 保持回环。新增基岩桥只绑定 LAN IPv4，未新增公网映射；当前阶段和验收边界见本文首条增量。原 Paper 千灯纪的进程、存档、端口及路由映射属于原服务，不能用新服配置覆盖。
 
 当前 `server.properties` 使用 `level-name=world-life`、`difficulty=easy`、`gamemode=survival`、`server-ip=0.0.0.0`。生活世界设置死亡保留物品和一人睡觉跳过夜晚，分别对应 `keepInventory=true`、`playersSleepingPercentage=1`；维护后需要在**当前世界**读回确认。
 

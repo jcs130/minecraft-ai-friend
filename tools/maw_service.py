@@ -550,14 +550,18 @@ class Child:
 
 
 class Supervisor:
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, *, validator=None, child_factory=None):
         self.config = config
+        self.roles = tuple(row['id'] for row in config['services'])
+        self.validator = validator or (lambda: check_server(Path(self.config['serverDir']),
+            self.config['gamePort'], bind_host=self.config.get('networkExposure', {}).get('listenHost', '127.0.0.1')))
         self.directory = Path(config["runtimeDir"])
         for name in ("requests", "replies", "logs"):
             (self.directory / name).mkdir(parents=True, exist_ok=True)
         self.lock = InstanceLock(self.directory / "instance.lock")
         self.job = WindowsJob()
-        self.children = {row["id"]: Child(row, self.directory / "logs", self.job) for row in config["services"]}
+        factory = child_factory or Child
+        self.children = {row["id"]: factory(row, self.directory / "logs", self.job) for row in config["services"]}
         self.quit, self.stop_requested, self.snapshot, self.fault = False, False, {}, None
         self.run_id = uuid.uuid4().hex
         self.audit = logging.getLogger("maw.audit." + self.run_id)
@@ -582,7 +586,7 @@ class Supervisor:
                 self.quit = True
             return {"ok": True, "state": "requested", "action": action, "resultKnown": action == "pause"}
         if action == "resume":
-            check_server(Path(self.config["serverDir"]), self.config["gamePort"], bind_host=self.config.get("networkExposure", {}).get("listenHost", "127.0.0.1"))
+            self.validator()
             if any(child.stopping for child in self.children.values()):
                 raise RuntimeError("Wait for pending graceful stop before resuming")
             (self.directory / "paused.json").unlink(missing_ok=True)
@@ -630,7 +634,7 @@ class Supervisor:
     def tick(self):
         self.requests()
         try:
-            check_server(Path(self.config["serverDir"]), self.config["gamePort"], bind_host=self.config.get("networkExposure", {}).get("listenHost", "127.0.0.1"))
+            self.validator()
         except Exception as error:
             self.fault = str(error)
             self.pause("runtime configuration changed: " + self.fault)
@@ -643,19 +647,19 @@ class Supervisor:
                 child.ready = False
         # Close downstream processes before the server, and never start over a
         # dependency that is unhealthy, stopping, or owned by another process.
-        for role in reversed(ROLES):
+        for role in reversed(self.roles):
             child = self.children[role]
-            downstream = [self.children[name] for name in ROLES[ROLES.index(role) + 1:]]
+            downstream = [self.children[name] for name in self.roles[self.roles.index(role) + 1:]]
             dependency_bad = any(not self.children[name].ready for name in child.spec["dependsOn"])
             if (self.stop_requested or dependency_bad) and not any(item.process for item in downstream):
                 child.stop()
         if not self.paused() and not self.stop_requested:
-            for role in ROLES:
+            for role in self.roles:
                 child = self.children[role]
                 if (child.process is None and time.monotonic() >= child.next_start
                         and all(self.children[name].ready for name in child.spec["dependsOn"])):
                     child.start()
-        rows = [self.children[role].state() for role in ROLES]
+        rows = [self.children[role].state() for role in self.roles]
         healthy = not self.paused() and not self.fault and all(row["ready"] for row in rows)
         self.snapshot = {"schemaVersion": 1, "at": utc(), "heartbeatEpoch": time.time(),
             "runId": self.run_id, "supervisorPid": os.getpid(), "serverDir": self.config["serverDir"],
