@@ -49,7 +49,8 @@ function frozenRegistry (buffer) {
 }
 
 class BedrockProjection {
-  constructor () {
+  constructor (models = null) {
+    this.models = models
     this.registries = new Map(); this.hiddenEntities = new Set(); this.recipesSent = false
     this.stats = { registries: 0, tagEntriesOmitted: 0, attributesOmitted: 0, entitiesOmitted: 0 }
   }
@@ -67,6 +68,8 @@ class BedrockProjection {
 
   project (name, params) {
     if (params === null || typeof params !== 'object') return { params }
+    const model = this.models?.project(name, params, this.registries.get('minecraft:entity_type'))
+    if (model !== undefined) return model
     if (name === 'tags') {
       return { params: { ...params, tags: params.tags.map(row => vanilla[row.tagType] ? ({
         ...row, tags: row.tags.map(tag => ({ ...tag, entries: [...new Set(tag.entries.flatMap(id => {

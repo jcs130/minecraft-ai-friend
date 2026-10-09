@@ -1,6 +1,6 @@
 # My Agent World：基岩版局域网桥接
 
-2026-10-09：独立 ViaProxy + Geyser 桥常驻运行，家庭网段 UDP 防火墙放行已读回。首批 732 种模组静态物品的原始图标、名称与自定义映射已部署，7 项健康/冒烟检查通过；实际手机下载与显示未验收。详见 [资源适配范围与维护](MY-AGENT-WORLD-BEDROCK-RESOURCES.md)。不要把发现响应或 Java 转换测试当作完整基岩客户端游玩成功。
+2026-10-09：独立 ViaProxy + Geyser 桥常驻运行，家庭网段 UDP 防火墙放行已读回。732 种模组静态物品图标、车万女仆 241 个与 YSM 38 个模型/纹理变体已转换部署；Geyser 实际注册 279 个实体定义，两套模型包已在自动下载栈，8 项健康/冒烟通过。实际手机下载与显示未验收。详见 [资源适配范围与维护](MY-AGENT-WORLD-BEDROCK-RESOURCES.md)。不要把发现响应或 Java 转换测试当作完整基岩客户端游玩成功。
 
 ## 入口与链路
 
@@ -17,13 +17,13 @@
 
 新 UDP 监听只绑定 `192.168.3.163`，IPv6 不监听；显式防火墙规则仅允许 `192.168.3.0/24`，另阻止其他 IPv4 源。没有路由器映射或公网发布，不占用旧 Paper 的 19132/19140 或现有其他 UDP 服务。原 Java、网关和 worker 本轮均未重启。
 
-首批静态生成型物品采用原模组贴图及独立 Geyser 自定义物品定义；其他物品和世界方块仍使用原有兼容表示。网页的原始 NeoForge 贴图、模型和原生 GUI 适配不能自动变成基岩能力。模组特有界面、女仆/YSM 外观、Create 动态结构及法术效果需逐项适配；不能据入口可用宣称全部可玩。[Geyser 自定义物品文档](https://geysermc.org/wiki/geyser/custom-items/)要求另外提供相应映射和基岩资源包。Agent 仍用其本人 Mineflayer 连接和原生 SDK。
+首批静态生成型物品采用原模组贴图及独立 Geyser 自定义物品定义；女仆/YSM 现有模型包保留原骨骼、UV、PNG，按真实实体及本人 YSM 状态绑定。其余物品和世界方块仍使用原有兼容表示。网页原生 GUI 适配不能自动变成基岩能力。模组特有界面、Java 动画与装备层、Create 动态结构及法术效果需逐项适配；不能据入口可用宣称全部可玩。[Geyser 自定义物品文档](https://geysermc.org/wiki/geyser/custom-items/)要求另外提供相应映射和基岩资源包。Agent 仍用其本人 Mineflayer 连接和原生 SDK。
 
 28994 独有 `GATE_BEDROCK_PROJECTION=1`：按该连接收到的真实 NeoForge FrozenRegistrySnapshot 还原标签、属性和原版实体 ID，不把原始模组号交给 ViaVersion；没有基岩定义的模组实体暂不发送，其后续 metadata 也不发送，避免错读成其他生物。这意味着部分模组 NPC/敌人暂不可见，不能宣称模组战斗可用。原网关有意跳过的模组配方流未被伪造为已支持：向转换层声明空配方目录，配方书及实际合成必须另外验收；原 Agent 原生配方 SDK 保持。普通包转换异常仅结束该连接，不使网关进程退出。
 
 ## 入服自动下载资源
 
-已启用 `enable-integrated-pack=true`、`enable-custom-content=true` 和 `force-resource-packs=true`。除 Geyser 基础兼容资源外，现已部署 451,684 字节的 `maw-native-icons.mcpack`，提供 732 种物品原图及图标索引。真实手机的下载提示/完成尚未实测。连接时若提示资源下载，应选择“下载并加入”。
+已启用 `enable-integrated-pack=true`、`enable-custom-content=true` 和 `force-resource-packs=true`。除 Geyser 基础兼容资源外，现有 `maw-native-icons.mcpack`（451,684 字节）、`maw-touhou-models.mcpack`（2,869,354 字节）和 `maw-ysm-models.mcpack`（1,857,594 字节），均为 1.0.2。扩展启动时核对两套模型包实际在资源下发栈。真实手机的下载提示/完成尚未实测。连接时若提示资源下载，应选择“下载并加入”。
 
 玩家在其他服务器看到的自动下载通常是基岩资源包；基岩原生附加包还可以包含行为内容。Java 的 NeoForge JAR 不能交给基岩版直接运行。后续本服专属的贴图/模型/声音包放在 `bedrock/plugins/Geyser/packs/*.mcpack`，自定义物品映射放在 `custom_mappings/*.json`（或对应 Geyser 扩展），正常重启本桥后随登录发送，不必重启主世界。[官方资源包下发说明](https://geysermc.org/wiki/geyser/packs/)明确支持本地包并要求先转换为基岩格式。资源转换、物品/方块/实体映射和原生交互是三项独立验收；下载完成不能替代玩法验收。
 

@@ -148,6 +148,15 @@ def probe_society_bedrock():
         checks['geyser-native-items-registered'] = registration['nativeItems'] == resources['itemCount']
         report['resources'] = {'itemCount': resources['itemCount'], 'perNamespace': resources['perNamespace'],
                                'actualBedrockVisualVerified': False, 'registration': registration}
+        model_directory = bridge.ROOT/'bedrock/plugins/Geyser'
+        if (model_directory/'modpack-contract.json').exists():
+            import maw_bedrock_modpacks as model_builder
+            models = model_builder.validate(model_directory, deployed=True)
+            model_registration = model_builder.registered_models(bridge.ROOT/'bedrock/ops/logs/bedrock.log', models,
+                                        time.time()-row.get('uptimeSeconds', 0)-5)
+            checks['native-model-packs-registered'] = model_registration['registeredModels'] == models['modelCount']
+            report['resources']['models'] = {'count': models['modelCount'], 'packs': models['packs'],
+                                             'registration': model_registration, 'actualBedrockVisualVerified': False}
         firewall = subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
             str(tools/'maw_lan_firewall.ps1'), '-Mode', 'Status', '-Bedrock'],
             capture_output=True, text=True, encoding='utf-8', timeout=20)

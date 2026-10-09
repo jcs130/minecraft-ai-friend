@@ -161,6 +161,16 @@ def load_config(path: Path, *, root: Path = ROOT) -> dict:
         if hashlib.sha256(Path(gate_env['GATE_IDMAP_FILE']).read_bytes()).hexdigest() != contract['inputs']['idmapSha256']:
             raise ValueError('Bedrock resources do not match the native item projection')
         gate_env['GATE_BEDROCK_ITEMS_FILE'] = str(resources/resource_builder.CATALOG)
+    model_contract = None
+    if (resources/'modpack-contract.json').exists():
+        import maw_bedrock_modpacks as model_builder
+        model_contract = model_builder.validate(resources, deployed=True)
+        if model_contract['geyserJarSha256'] != ARTIFACTS['plugins/Geyser-ViaProxy.jar']:
+            raise ValueError('Native model extension does not match pinned Geyser')
+        expected_files[resources/model_builder.CONTRACT] = hashlib.sha256((resources/model_builder.CONTRACT).read_bytes()).hexdigest()
+        for name, meta in model_contract['files'].items():
+            expected_files[resources/meta['directory']/name] = meta['sha256']
+        gate_env['GATE_BEDROCK_MODELS_FILE'] = str(resources/model_builder.CATALOG)
     stat = path.stat()
     stamps = {path: (stat.st_size, stat.st_mtime_ns)}
     stat = main_path.stat(); stamps[main_path] = (stat.st_size, stat.st_mtime_ns)
@@ -191,6 +201,7 @@ def load_config(path: Path, *, root: Path = ROOT) -> dict:
             'readiness': 'minecraft', 'startupTimeoutSeconds': 150, 'stopMode': 'stdin', 'stopText': '{"kind":"shutdown"}'},
             {'id': 'bedrock', 'command': command, 'cwd': str(directory), 'env': {},
             'host': '127.0.0.1', 'listenHost': '127.0.0.1', 'port': TCP_PORT, 'dependsOn': ['compat_gate'],
+            'nativeModels': model_contract,
             'readiness': 'minecraft', 'startupTimeoutSeconds': 150, 'stopMode': 'stdin', 'stopText': 'stop'}]}
 
 
@@ -201,6 +212,10 @@ class BedrockChild(service.Child):
             try:
                 check_udp_owner(UDP_PORT, self.process.pid, LAN_ADDRESS)
                 self.metrics['bedrock'] = bedrock_probe()
+                if self.spec.get('nativeModels') and 'nativeModels' not in self.metrics:
+                    import maw_bedrock_modpacks as model_builder
+                    self.metrics['nativeModels'] = model_builder.registered_models(Path(self.handler.baseFilename),
+                        self.spec['nativeModels'], time.time()-(time.monotonic()-self.started)-5)
             except Exception as error:
                 self.ready = False
                 self.problem = 'bedrock_readiness_failed: ' + str(error)

@@ -242,7 +242,7 @@ const sessionCount = () => sessions.size
 function startSession (front, username) {
   const sess = { front, username, phase: 'config', retry: 0, closed: false, reconnecting: false, backReady: false, frontQueue: [], playQueue: [] }
   if (process.env.GATE_BEDROCK_PROJECTION === '1') {
-    sess.bedrockProjection = new BedrockProjection()
+    sess.bedrockProjection = new BedrockProjection(require('./bedrock-models.cjs').BedrockModels.load(process.env.GATE_BEDROCK_MODELS_FILE))
     sess.bedrockItems = BedrockItems.load(process.env.GATE_BEDROCK_ITEMS_FILE)
   }
   sessions.add(sess)
@@ -521,6 +521,18 @@ function onFrontPacket (sess, name, params) {
     sess.frontQueue.push({ name, params })
     return
   }
+  if (name === 'custom_payload' && params.channel === 'mawbedrock:ready' && sess.bedrockProjection?.models) {
+    if (sess.phase !== 'play') return
+    if (!Buffer.isBuffer(params.data) || params.data.length !== 1 || params.data[0] !== 1) {
+      kickFront(sess, '基岩模型握手格式错误'); return
+    }
+    // The Geyser observer is now attached. Replay only the latest retained
+    // display snapshots through the ordinary single-writer downstream queue.
+    // Never forward this bridge control message to the authoritative server.
+    sess.playQueue.push(...sess.bedrockProjection.models.activate())
+    drainPlay(sess)
+    return
+  }
 
   if (sess.phase === 'config') {
     switch (name) {
@@ -613,11 +625,8 @@ function relayTo (sess, target, name, params, dir) {
       }
       return
     }
-    if (sess.bedrockItems) {
-      try { params = sess.bedrockItems.outgoing(name, params) }
-      catch (error) { kickFront(sess, '基岩物品显示转换失败：' + error.message); return }
-    } else if (componentProtocol && ['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'].includes(name)) params = vanillaProjection(params)
-    if (REMAP.hasMap()) params = REMAP.remapOut(name, params) // 后端→前端: NeoForge号→原版号 ✓
+    // Retained model snapshots must stay native. Replaying a display-projected
+    // ItemStack would apply its connection token twice and lose native fields.
     if (sess.bedrockProjection) {
       try {
         const projected = sess.bedrockProjection.project(name, params)
@@ -628,6 +637,11 @@ function relayTo (sess, target, name, params, dir) {
         kickFront(sess, '基岩兼容包尚未适配：' + name + ' / ' + error.message.slice(0, 120)); return
       }
     }
+    if (sess.bedrockItems) {
+      try { params = sess.bedrockItems.outgoing(name, params) }
+      catch (error) { kickFront(sess, '基岩物品显示转换失败：' + error.message); return }
+    } else if (componentProtocol && ['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'].includes(name)) params = vanillaProjection(params)
+    if (REMAP.hasMap()) params = REMAP.remapOut(name, params) // 后端→前端: NeoForge号→原版号 ✓
     sess.lastFrontWrite = name
     // 【时间包普查】前端方向也计数(与 backCensus 对照找丢包层)
     sess.frontCensus = sess.frontCensus || {}
