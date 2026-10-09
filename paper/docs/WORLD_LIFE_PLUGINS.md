@@ -1,5 +1,7 @@
 # 村庄生活插件包（AgentFriend 0.3.99）
 
+**2026-10-09 08:27:20 最终复核：**原机 CortiEye 已自动回连，实际 `camera=online attached=true cameraNightVision=true`，目标为 CortiLan；本次重启前四个服务账号均恢复。下方“尚未回连/离线”是恢复前的检查时点，不能继续作为当前镜头状态。截图上传配置与原客户端保持。私有最终回执在 E/F `repairs/screenshot-photos-20261009/final-state.json`。
+
 入口是 `/mycli world list`，手柄打开技能罗盘→旅途指南→村庄新生活。Agent 客户端无须更新；文字回执只发给本人，已附身的 Eye 继续通过现有镜像接收。正式发布时间和备份以 [维护记录](OPERATIONS.md) 为准。
 
 ## 安装内容

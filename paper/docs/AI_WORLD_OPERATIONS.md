@@ -1,5 +1,7 @@
 # 千灯纪：Agent 团队维护、开发与运营手册
 
+**2026-10-09 08:27:20 最终复核：**原机 CortiEye 已自动回连，实际 `camera=online attached=true cameraNightVision=true`，目标为 CortiLan；本次重启前四个服务账号均恢复。下方“尚未回连/离线”是恢复前的检查时点，不能继续作为当前镜头状态。截图上传配置与原客户端保持。私有最终回执在 E/F `repairs/screenshot-photos-20261009/final-state.json`。
+
 **2026-10-09 08:16:03 当前配置：**AgentFriend仍为0.3.99，新增截图直接上传及 `/photohelp`。服务器只绑定LAN `192.168.3.163:8517`，原Agent/Eye客户端与全部插件JAR保持；截图来自现有工具，HTTP接受后还须验证真实地图，玩家串行创建。E/F `20261009-081417/.complete` 在替换前完整，Java PID26896，任务结果0；隔离22、脚本边界4、正式只读18项通过。普通/keepInventory、Goddess旁观者及AuraSkills当前启动验证通过。CortiLan/ag_NEKO/Goddess已回连，原机CortiEye当前offline/attached=false，配对/watcher保留，不能称镜头恢复；手机/Xbox画面待真机。详见[截图相册](SCREENSHOT_PHOTOS.md)、[维护记录](OPERATIONS.md)。下方旧发布时点为历史。
 
 **最新正式状态：**2026-10-09 01:09:41 正式部署及入口恢复完成，AgentFriend **0.3.99**（898509字节，SHA256 `59CCE54DE06261D53CF2068DEE5DF4BD6809062A12EB7666467D784E916F705D`），当前 Java PID **34088**。十个生活插件全部启用；新手实习、村民真实模型对话、故事、商店和三个正向定时活动已开放，图片可导入地图并挂墙，自动快门尚未接入。三个精英仅为管理员活动模板，普通试炼配怪保持。原 Agent 客户端程序未改。

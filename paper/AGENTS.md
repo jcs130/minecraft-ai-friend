@@ -1,5 +1,7 @@
 # 千灯纪 Paper 分支开发说明
 
+**2026-10-09 08:27:20 最终复核：**原机 CortiEye 已自动回连，实际 `camera=online attached=true cameraNightVision=true`，目标为 CortiLan；本次重启前四个服务账号均恢复。下方“尚未回连/离线”是恢复前的检查时点，不能继续作为当前镜头状态。截图上传配置与原客户端保持。私有最终回执在 E/F `repairs/screenshot-photos-20261009/final-state.json`。
+
 - **截图资料同步已验证：**玩家手册与现役女神资料箱SHA256均为 `CECB6D63D42CF1BD68CB073E6C302571FCB1F8BF4872B249836D2CAF0A627200`；另附截图指南及标准库上传脚本。两项原生只读任务真实读取后答复85/64字符，正确讲解临时链接、空地图、游戏成图和串行创建；没有主动游戏公告。回执在本次私有维护目录。
 
 - **截图相册配置已上线（0.3.99不换JAR）：**2026-10-09 08:16:03 正常备份重启后启用 ImageFrame 内置 LAN `192.168.3.163:8517` 上传；`/photohelp`、登录及 `/mycli world photos` 补充截图→本人临时链接→地图→原版展示框流程。Python标准库脚本见 `ops/imageframe-upload.py`。原Agent/Eye客户端未改，所有原插件JAR摘要保持。E/F `20261009-081417/.complete` 在两个配置替换前完成，任务结果0，Java PID26896。隔离照片22、脚本边界4、正式只读及规则18项通过；正式未发测试地图或导入照片。ImageFrame重写启动注释，YAML值全部与源相同。HTTP成功不代表成图，新请求取消本人此前等待，须串行创建。三维度普通/keepInventory=true、Goddess旁观者、AuraSkills本次启动验证、Java/LAN及基岩UDP入口通过。CortiLan/ag_NEKO/Goddess已回连；原机CortiEye重启后仍offline/attached=false，配对/watcher正常，不称镜头恢复；手机/Xbox照片画面待真机。规则/网络及回退见[截图相册](docs/SCREENSHOT_PHOTOS.md)、[维护记录](docs/OPERATIONS.md)，私有回执在E/F `repairs/screenshot-photos-20261009`。下方旧时点为历史。
