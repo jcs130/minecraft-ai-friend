@@ -20,3 +20,18 @@ test('bad/oversized task context is never sent and failure restores the original
   context = 'valid'; await assert.rejects(p.promptConvo([]), /provider failure/)
   assert.equal(p.profile.conversing, 'base')
 })
+
+test('memory summarization receives fresh verified context and restores its own template on failure', async () => {
+  const seen = [], p = { profile: { conversing: 'convo', saving_memory: 'memory $INVENTORY' },
+    async promptConvo () {}, async promptMemSaving (fail) { seen.push(this.profile.saving_memory); if (fail) throw Error('provider failure'); return 'summary' } }
+  let context = 'Verified: millstone crafted, not placed.'
+  attachTaskContext(p, () => context)
+  assert.equal(await p.promptMemSaving(false), 'summary')
+  context = 'Verified: millstone placed, native speed zero.'
+  await assert.rejects(p.promptMemSaving(true), /provider failure/)
+  assert.match(seen[0], /millstone crafted, not placed/)
+  assert.match(seen[1], /millstone placed, native speed zero/)
+  assert.match(seen[1], /missing observations do not mean empty inventory/)
+  assert.equal(p.profile.saving_memory, 'memory $INVENTORY')
+  assert.equal(p.profile.conversing, 'convo')
+})

@@ -69,6 +69,10 @@ def plan_neko(repo: Path) -> dict[str, tuple[str | None, str]]:
     # waiting, racing the next foreground request and losing task context.
     method = re.sub(r"(?<!await )this\.history\.add\(", "await this.history.add(", method)
     after = before[:start] + method + before[end:]
+    after = replace_once(after, "import { History } from './history.js';",
+                         "import { History } from './history.js';\nimport { nativeCommandGuidance } from '../integrations/maw_native.js';")
+    after = replace_once(after, "                let command_name = containsCommand(res);",
+                         "                const nativeHint = nativeCommandGuidance(this, res);\n                if (nativeHint) {\n                    await this.history.add(this.name, res);\n                    await this.history.add('system', nativeHint);\n                    continue; // Explanation only; no operation or argument repair.\n                }\n                let command_name = containsCommand(res);")
     # The upstream private-chat branch ignores chat_ingame. Long model thoughts
     # became dozens of /msg packets and triggered vanilla disconnect.spam.
     after = replace_once(after, "            for (let username of settings.only_chat_with) {\n                try { this.bot.whisper(username, message); }",
@@ -227,9 +231,9 @@ def main() -> None:
                   ROOT / "world/src/neoforge-handshake/construction-client.cjs",
                   ROOT / "world/src/neoforge-handshake/recipe-crafting-client.cjs",
                   ROOT / "world/src/neoforge-handshake/native-block-client.cjs", ROOT / "world/src/neoforge-handshake/native-crafting-client.cjs",
-                  SOURCE / "windmill-task.cjs", SOURCE / "food-chain-task.cjs", SOURCE / "task-navigation.cjs", SOURCE / "task-context.cjs", SOURCE / "task-attempts.cjs",
+                  SOURCE / "windmill-task.cjs", SOURCE / "food-chain-task.cjs", SOURCE / "shutdown-gate.cjs", SOURCE / "task-navigation.cjs", SOURCE / "task-context.cjs", SOURCE / "task-attempts.cjs",
                   ROOT / "world/src/society-agent/native-food.cjs", ROOT / "world/src/society-agent/native-inventory-delta.cjs",
-                  ROOT / "tools/run_neko_trial.mjs", ROOT / "tools/start_neko_trial.py", ROOT / "tools/audit_neko_native.mjs", ROOT / "tools/probe_neko_gui.py", ROOT / "world/src/society-agent/action-deadline.cjs"]
+                  ROOT / "tools/run_neko_trial.mjs", ROOT / "tools/start_neko_trial.py", ROOT / "tools/audit_neko_native.mjs", ROOT / "tools/audit_neko_model.mjs", ROOT / "tools/probe_neko_gui.py", ROOT / "world/src/society-agent/action-deadline.cjs"]
         record = {"schemaVersion": 1, "at": datetime.now(timezone.utc).isoformat(),
                   "mcAgentNekoRevision": NEKO_REV, "projectNekoRevision": PROJECT_REV,
                   "tool": "minecraft_mod", "operationCount": 58, "samePlayerConnection": True,

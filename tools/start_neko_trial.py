@@ -11,6 +11,17 @@ import subprocess
 import time
 
 
+def stop_owned_process(process):
+    """Report actual termination, rather than merely a watchdog stop request."""
+    try:
+        process.wait(timeout=15)
+        return False
+    except subprocess.TimeoutExpired:
+        process.terminate()
+        process.wait(timeout=10)
+        return True
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, type=Path)
@@ -51,23 +62,20 @@ def main():
             "startedAt": time.time(), "durationSeconds": config["durationSeconds"], "qwenpawConnected": False}, indent=2), encoding="utf-8")
         print(json.dumps({"pid": process.pid, "stateDirectory": str(root), "qwenpawConnected": False}), flush=True)
         began = time.monotonic()
-        stale = expired = False
+        stale = expired = forced = False
         while process.poll() is None:
             status = root / "status.json"
             stale = time.monotonic() - began > 120 and (not status.exists() or time.time() - status.stat().st_mtime > 45)
             expired = time.monotonic() - began > config["durationSeconds"] + 115
             if stale or expired:
                 (root / "stop.requested").write_text("supervisor: stale heartbeat" if stale else "supervisor: deadline", encoding="utf-8")
-                try:
-                    process.wait(timeout=15)
-                except subprocess.TimeoutExpired:
-                    # Owned Popen only; journals/locks remain for reconciliation.
-                    process.terminate()
-                    process.wait(timeout=10)
+                # Owned Popen only; journals/locks remain for reconciliation.
+                forced = stop_owned_process(process)
                 break
             time.sleep(1)
         (root / "process-exit.json").write_text(json.dumps({"pid": process.pid, "exitCode": process.returncode,
-            "at": time.time(), "forced": stale or expired}, indent=2), encoding="utf-8")
+            "at": time.time(), "forced": forced,
+            "watchdogReason": "stale_heartbeat" if stale else "deadline" if expired else None}, indent=2), encoding="utf-8")
         print(json.dumps({"pid": process.pid, "exitCode": process.returncode}), flush=True)
 
 

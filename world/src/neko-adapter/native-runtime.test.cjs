@@ -3,7 +3,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { EventEmitter } = require('node:events')
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path')
-const { attachNekoNative, handleNativeMessage, NativeLedger } = require('./native-runtime.cjs')
+const { attachNekoNative, handleNativeMessage, NativeLedger, nativeCommandGuidance } = require('./native-runtime.cjs')
 const { modOperationCatalog } = require('../neoforge-handshake/mod-call-client.cjs')
 const UUID = '11111111-1111-4111-8111-111111111111'
 function body (directory, invoke = async () => ({ ok: true, playerUuid: UUID })) {
@@ -39,6 +39,22 @@ test('discovery, native schemas, private identity and exact component values sur
   assert.equal(read.result.componentsSnbt, components)
   assert.equal(fs.existsSync(path.join(dir, 'nekoqa/native-actions.jsonl')), false)
   assert.equal(bot.listenerCount('respawn'), 1)
+})
+
+test('mistaken namespaced commands return registered syntax and schema without dispatch', t => {
+  const dir = fixture(t); let applied = 0
+  const { bot, runtime } = body(dir, async () => { applied++; return { ok: true } }); t.after(runtime.close)
+  const hint = JSON.parse(nativeCommandGuidance({ bot }, 'Open the table. !world.interact("invalid args")'))
+  assert.equal(hint.operationId, 'world.interact')
+  assert.equal(hint.noActionDispatched, true)
+  assert.equal(hint.explainCommand, '!modExplain("world.interact")')
+  assert.deepEqual(hint.requiredFields, ['position', 'expectedBlockId', 'expectedProperties', 'expectedHotbarSlot'])
+  assert.equal(applied, 0)
+  assert.equal(fs.existsSync(path.join(dir, 'nekoqa/native-actions.jsonl')), false)
+  for (const text of ['!modCall("world.interact", "{}")', '!world.notInstalled()', '!inventory()', '!world']) {
+    assert.equal(nativeCommandGuidance({ bot }, text), null)
+  }
+  assert.equal(nativeCommandGuidance({ bot: {} }, '!world.interact()'), null)
 })
 
 test('write intent/result are durable; same callId is returned without applying again', async t => {
@@ -104,6 +120,10 @@ test('busy body and invalid arguments never dispatch or leave an intent', async 
   runtime.bindAgent({ actions: { executing: true } })
   assert.equal((await runtime.request({ action: 'call', id: 'curios.open', callId: 'busy' })).code, 'native_body_busy')
   assert.equal((await runtime.request({ action: 'call', id: 'curios.open', callId: 'invalid', args: { readOnly: true } })).code, 'MOD_CALL_ARGUMENT_UNSUPPORTED')
+  const incomplete = await runtime.request({ action: 'call', id: 'world.dig', callId: 'missing-hand', args: {
+    position: { x: 1, y: 64, z: 2 }, expectedBlockId: 'create:andesite_casing', expectedProperties: {} } })
+  assert.deepEqual(incomplete.missingFields, ['expectedHotbarSlot', 'expectedHeldSnbt'])
+  assert.match(incomplete.hint, /no game action was dispatched/)
   runtime.bindAgent({ actions: { executing: false } }); bot._bodyOwner = { name: 'combat' }
   assert.equal((await runtime.request({ action: 'call', id: 'curios.open', callId: 'combat' })).code, 'native_body_busy')
   assert.equal(count, 0); assert.equal(fs.existsSync(path.join(dir, 'nekoqa/native-actions.jsonl')), false)

@@ -10,9 +10,30 @@ function append (file, value) {
   try { fs.writeSync(fd, JSON.stringify({ at: new Date().toISOString(), ...value }) + '\n'); fs.fsyncSync(fd) }
   finally { fs.closeSync(fd) }
 }
+function reviewedDiscardedResponses (lines) {
+  const released = new Set()
+  for (const audit of lines.filter(row => row.kind === 'operator_audit')) {
+    const intents = lines.filter(row => row.kind === 'intent' && row.requestId === audit.requestId)
+    const halts = lines.filter(row => row.kind === 'halt' && row.requestId === audit.requestId)
+    if (intents.length !== 1 || released.has(audit.requestId) ||
+        lines.some(row => row.kind === 'result' && row.requestId === audit.requestId) ||
+        halts.length > 1 || halts.length === 1 && (halts[0].code !== 'MODEL_TRANSPORT_UNKNOWN' ||
+          audit.originalHaltSha256 !== createHash('sha256').update(JSON.stringify(halts[0])).digest('hex')) ||
+        audit.disposition !== 'discard_unreturned_response_allow_new_requests' ||
+        audit.originalRecordSha256 !== createHash('sha256').update(JSON.stringify(intents[0])).digest('hex') ||
+        !path.isAbsolute(audit.evidencePath ?? '')) throw Error('NEKO_MODEL_AUDIT_INVALID')
+    const bytes = fs.readFileSync(audit.evidencePath)
+    if (bytes.length > 1048576 || createHash('sha256').update(bytes).digest('hex') !== audit.evidenceSha256) throw Error('NEKO_MODEL_AUDIT_EVIDENCE_INVALID')
+    const evidence = JSON.parse(bytes)
+    if (evidence.requestId !== audit.requestId || evidence.processExited !== true ||
+        evidence.gameCommandsAfterIntent !== 0 || evidence.scope !== 'model_text_discarded_never_executed') throw Error('NEKO_MODEL_AUDIT_EVIDENCE_INVALID')
+    released.add(audit.requestId)
+  }
+  return released
+}
 class CodingPlanBridge {
   constructor ({ journalPath, maxCalls = 24, minIntervalMs = 4000, apiKey, fetchImpl = globalThis.fetch, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
-    if (!path.isAbsolute(journalPath || '') || !apiKey || !Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > 1024 || minIntervalMs < 0) throw Error('NEKO_TRIAL_CONFIG_INVALID')
+    if (!path.isAbsolute(journalPath || '') || !apiKey || !Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > 1280 || minIntervalMs < 0) throw Error('NEKO_TRIAL_CONFIG_INVALID')
     this.file = journalPath; this.maxCalls = maxCalls; this.interval = minIntervalMs
     this.key = apiKey; this.fetch = fetchImpl; this.sleep = sleep; this.busy = false; this.last = 0
     this.tail = Promise.resolve(); this.pending = 0; this.closed = false
@@ -21,7 +42,9 @@ class CodingPlanBridge {
     const lines = fs.existsSync(journalPath) ? fs.readFileSync(journalPath, 'utf8').split('\n').filter(Boolean).map(JSON.parse) : []
     this.count = lines.filter(row => row.kind === 'intent').length
     const finished = new Set(lines.filter(row => row.kind === 'result').map(row => row.requestId))
-    this.blocked = lines.some(row => row.kind === 'intent' && !finished.has(row.requestId)) || lines.some(row => row.kind === 'halt')
+    const discarded = reviewedDiscardedResponses(lines)
+    this.blocked = lines.some(row => row.kind === 'intent' && !finished.has(row.requestId) && !discarded.has(row.requestId)) ||
+      lines.some(row => row.kind === 'halt' && !discarded.has(row.requestId))
   }
   status () { return { provider: 'aliyun-codingplan-direct', model: 'qwen3.7-plus', calls: this.count, maxCalls: this.maxCalls,
     inFlight: this.busy || this.pending > 0, queuedCalls: Math.max(0, this.pending - (this.busy ? 1 : 0)), blocked: this.blocked, closed: this.closed } }
@@ -101,4 +124,4 @@ function fromEnvironment () {
   }
   return shared
 }
-module.exports = { CodingPlanBridge, fromEnvironment }
+module.exports = { CodingPlanBridge, fromEnvironment, reviewedDiscardedResponses }

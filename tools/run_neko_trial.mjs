@@ -39,10 +39,11 @@ function persist () {
   fs.renameSync(path.join(root, 'status.json.tmp'), path.join(root, 'status.json'))
 }
 let modelBridge
-async function shutdown (reason, code = 0) {
+const shutdown = require('../world/src/neko-adapter/shutdown-gate.cjs').createShutdownGate(async (reason, code = 0) => {
   if (closing) return
-  closing = true; report.phase = 'stopping'; report.reason = reason; clearInterval(heartbeat)
+  closing = true; report.phase = 'stopping'; report.reason = reason
   modelBridge?.close()
+  persist()
   try { agent?.self_prompter?.stop(false); agent?.requestInterrupt(); agent?.bot?.pathfinder?.stop(); agent?.bot?.clearControlStates() } catch {}
   const waitEnd = Date.now() + 100000
   while (modelBridge?.status().inFlight && Date.now() < waitEnd) await new Promise(r => setTimeout(r, 200))
@@ -58,10 +59,11 @@ async function shutdown (reason, code = 0) {
   try { presentationObserver?.close() } catch {}
   try { stream?.detach?.() } catch {}
   try { bot?.mawNative?.close() } catch {}
+  clearInterval(heartbeat)
   report.phase = 'stopped'; report.endedAt = new Date().toISOString(); record('stopped', { reason, code }); persist()
   if (JSON.parse(fs.readFileSync(lock, 'utf8')).pid === process.pid) fs.unlinkSync(lock)
   process.exit(code)
-}
+})
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGBREAK']) process.on(signal, () => void shutdown(signal))
 process.on('uncaughtException', error => { report.errors.push({ kind: 'exception', message: String(error.message).slice(0, 240), stack: String(error.stack).slice(0, 2000) }); void shutdown('uncaught_exception', 1) })
 process.on('unhandledRejection', error => { report.errors.push({ kind: 'rejection', message: String(error?.message || error).slice(0, 240) }); void shutdown('unhandled_rejection', 1) })
@@ -160,6 +162,9 @@ agent.setupBotEventHandlers = bot => {
   bot.on('death', () => { report.deaths++; record('death'); void shutdown('trial_player_died', 1) })
   originalSetup(bot)
 }
+// Startup/death handlers may ask for a memory summary too. Track and close the
+// shared model connection before Agent.start, including while awaiting a task.
+modelBridge = require(config.modelBridgeFile).fromEnvironment()
 record('starting', { model: report.model, qwenpawConnected: false, mindPort: config.mindPort, wsPort: config.wsPort })
 await agent.start(false, null, 0)
 const originalRunAction = agent.actions.runAction.bind(agent.actions)
@@ -181,14 +186,13 @@ agent.actions.runAction = async (label, actionFn, options) => {
 // Retire all autonomous modes; health loss stops our own trial instead.
 for (const match of agent.bot.modes.getMiniDocs().matchAll(/^- ([a-z0-9_]+)\(/gm)) agent.bot.modes.setOn(match[1], false)
 agent.bot.on('health', () => {
-  if (report.initial && !closing && (config.task ? agent.bot.health < (config.minimumHealth ?? 8) : agent.bot.health < report.initial.health)) {
+  if (!closing && (config.task ? agent.bot.health < (config.minimumHealth ?? 8) : report.initial && agent.bot.health < report.initial.health)) {
     void shutdown(config.task ? 'task_low_health' : 'trial_health_loss', 1)
   }
 })
-modelBridge = require(config.modelBridgeFile).fromEnvironment()
 let previousPosition
 heartbeat = setInterval(() => {
-  if (closing) return
+  if (closing) { persist(); return } // A bounded slow model response is still a live cleanup.
   const current = snapshot()
   if (current.position && previousPosition) report.pathDistance += Math.hypot(current.position.x - previousPosition.x, current.position.y - previousPosition.y, current.position.z - previousPosition.z)
   previousPosition = current.position
@@ -203,7 +207,7 @@ while (!agent.bot.entity || !agent.vision_interpreter) {
   await new Promise(r => setTimeout(r, 250))
 }
 await new Promise(r => setTimeout(r, 2500))
-if (closing) process.exit(0)
+if (closing) await shutdown.wait()
 require('../world/src/neko-adapter/task-navigation.cjs').attachTaskNavigation(agent.bot)
 record('task_navigation_constrained', { canDig: false, scaffolding: false, installedAfterSpawn: true })
 if (config.task?.startAfterFile) {
@@ -211,7 +215,7 @@ if (config.task?.startAfterFile) {
   if (path.dirname(marker) !== root) throw Error('NEKO_TASK_START_MARKER_OUTSIDE_STATE')
   report.phase = 'awaiting_task_start'; persist(); record('awaiting_task_start')
   while (!fs.existsSync(marker) && !closing) await new Promise(r => setTimeout(r, 250))
-  if (closing) process.exit(0)
+  if (closing) await shutdown.wait()
 }
 if (config.task) {
   const Evidence = config.task.kind === 'create_food_chain' ? require('../world/src/neko-adapter/food-chain-task.cjs').FoodChainTaskEvidence : require('../world/src/neko-adapter/windmill-task.cjs').WindmillTaskEvidence
@@ -226,6 +230,11 @@ if (config.task) {
   }
 }
 report.phase = 'playing'; report.initial = snapshot(); report.modelLoopStarted = true
+// Upstream's 500-character memory must not assert an empty inventory merely
+// because the five oldest messages contain no inventory query. Ground each
+// summary in fresh own native state and summarize half the bounded history.
+agent.history.summary_chunk_size = Math.floor(agent.history.max_messages / 2)
+agent.prompter.profile.saving_memory += '\nFresh own state (authoritative over old memory):\n$STATS\n$INVENTORY\nKeep the summary within 450 characters. Prefer verified completed milestones and the latest obstacle. Omitted observations are unknown, not an empty inventory. Do not infer that a crafted or placed item was lost.'
 require('../world/src/neko-adapter/task-context.cjs').attachTaskContext(agent.prompter, () => {
   const feedbackPath = path.join(root, 'task-feedback.txt')
   const bytes = fs.existsSync(feedbackPath) ? fs.readFileSync(feedbackPath) : Buffer.alloc(0)

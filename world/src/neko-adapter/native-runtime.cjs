@@ -157,7 +157,9 @@ function attachNekoNative (bot, { ledgerDir, account = bot.username, attach = at
     }
     if (action !== 'call') return failure('native_action_invalid')
     const { id, args = {} } = message
-    try { validateModArguments(id, args) } catch (error) { return failure(error.code || error.message, { field: error.field ?? null }) }
+    try { validateModArguments(id, args) } catch (error) { return failure(error.code || error.message, {
+      field: error.field ?? null, ...(Array.isArray(error.missingFields) ? { missingFields: error.missingFields } : {}),
+      hint: 'Read !modExplain for this operation and supply its required fields; no game action was dispatched.' }) }
     const definition = sdk.operations(id).operation
     const playerUuid = identity(), observedEpoch = epoch
     if (ended || !playerUuid) return failure('native_player_not_ready')
@@ -235,4 +237,20 @@ async function handleNativeMessage (agent, socket, message) {
   return true
 }
 
-module.exports = { attachNekoNative, handleNativeMessage, NativeLedger, fingerprint }
+// Explain a mistaken SDK operation used as an upstream !command before its
+// parser truncates !world.interact to !world. Never dispatch or repair arguments.
+function nativeCommandGuidance (agent, text) {
+  const runtime = agent?.bot?.mawNative
+  if (!runtime || typeof text !== 'string') return null
+  const id = text.match(/(?:^|\s)!([a-z][a-z0-9_]*\.[a-zA-Z0-9_.:-]{1,64})\b/)?.[1]
+  if (!id) return null
+  const definition = runtime.sdk.operations(id)
+  if (!definition?.ok) return null
+  return JSON.stringify({ ok: false, code: 'native_operation_is_not_upstream_command', operationId: id,
+    noActionDispatched: true, retryAutomatically: false,
+    explainCommand: `!modExplain(${JSON.stringify(id)})`,
+    invocation: `!modCall(${JSON.stringify(id)}, "JSON-encoded argument object")`,
+    requiredFields: definition.operation.parameters.required ?? [],
+    hint: 'Use the registered !modCall command. The operation ID is its first argument, not a standalone command. Read modExplain for the actual schema.' })
+}
+module.exports = { attachNekoNative, handleNativeMessage, NativeLedger, fingerprint, nativeCommandGuidance }

@@ -1,5 +1,7 @@
 # My Agent World：Neko 接入与维护
 
+2026-10-09 后续更新：SDK 58 项/19 频道；同账号已实际制作机壳、齿轮箱、磨石并转换垂直齿轮箱，完整动力磨粉/烤面包仍按[实机任务记录](MY-AGENT-WORLD-CREATE-WINDMILL.md)逐段验证。模型仍直接线上 `qwen3.7-plus`，不接 QwenPaw。摘要除历史片段外读取本人当前原生库存与独立回执进度，要求 450 字内，压缩半份有界历史；缺少观测不能写成空库存或未做过。重新连接从累计原生回执恢复任务证据；当前测试启动使用 `Agent.start(false, ...)`，不自动加载旧聊天记忆，更不会重放旧动作。模型账本最大可配置 1280、默认 24，累计用量不重置。
+
 2026-10-08：已为 [mc-agent-neko](https://github.com/wehos/mc-agent-neko) 和 [Project N.E.K.O.](https://github.com/Project-N-E-K-O/N.E.K.O) 接通原生模组工具。mc-agent-neko 提供 Mineflayer 身体，N.E.K.O. 现有 Minecraft 插件增加 `minecraft_mod` 工具；后者是可选对话入口，普通 Agent 仍可直接使用框架无关的 [原生 SDK](MY-AGENT-WORLD-NATIVE-CALL-API.md)。
 
 已增加独立普通玩家 MawNeko 的限时实机测试：mc-agent-neko 直接调用阿里云 Coding Plan `qwen3.7-plus`，不连接 QwenPaw，也不启动 N.E.K.O. 对话平台。没有替换现役 MawExplorer、重启 Minecraft 或重生成世界；MawExplorer 的原自主暂停、旧未知导航和模型任务保持。前一阶段的两个 QA 已退出；本次账号与记录独立。
@@ -64,11 +66,21 @@ python tools/start_neko_trial.py --config E:\自己的部署目录\neko-trial.js
 
 新任务 `create_food_chain` 从现有八帆风车继续，提供小麦、煤、水桶、少量铁与安山岩；模型选择传动、磨石、面团合成及熔炉烤制。`FoodChainTaskEvidence` 只收集本人真实回执，分别要求实际机器放置消耗、磨粉配方及转速/计时推进、面粉入包、面团合成、绑定熔炉真实输入/产出、面包入包及一次进食后的饥饿值提高。任务证据不操作游戏，不以模型文字判成功；当前是否完成以本次实机记录为准。
 
+继续测试的本机累计模型上限为 1024，默认上限仍为 24；从 768 调整时已累计 746 次，包含前序界面、风车和多次维护，不清零、不代表供应商额度耗尽。原八帆风车保留，试跑角色在安全恢复后已实际制作/拾取安山机壳并合成齿轮箱；这些进展尚不能代替磨粉与面包全链验收。
+
 `inventory.food` 返回原生 FOOD 组件，`inventory.consume` 可处理模组食物，完整 SNBT 核对后移至空快捷栏并使用一次；回执包含 consumedCount、foodBefore/foodAfter 和库存变化。角色死亡、重生或断线使未核实消费保持 unknown。`menu.current` 的模型摘要保留本人 self/dataValues，避免丢失饥饿值与熔炉进度。
 
 放置前保守检查目标格与身体体积，重叠时返回 destination_overlaps_player，零 use 包，Agent 应先走开。这不提供任意原生碰撞形状或自动修正布局。请求格在客户端缓存为空气、且服务端射线未命中时，提示空气没有目标表面，应瞄准真实支撑方块；仍保留首个实际可见方块，不把缓存空气当服务端确认或继续七次无意义瞄准。inventory.select 的 JSON Schema 明确要求 expectedId 或 expectedSnbt，与实际验证规则一致。
 
+命令缺少必填参数时，Neko 的上层回执保留 `missingFields` 并提示读取 `!modExplain`，不会只留下没有解释的参数错误；这些拒绝不写游戏意图或派发动作。生产链进度识别真实合成回执的 `id/item` 字段，避免把任务状态中的 undefined 传入网页。面包领取以实际烤成时的本人库存为基线，原有应急面包不能替代新产物领取证据。
+
 有明确 unknown 时继续停止变更。若本账号进程已正常退出、无在途请求、无锁，操作者可只读核对服务端方块、完整物品快照和保存状态，保存证据 JSON 后使用 `tools/audit_neko_native.mjs` 离线审核。必须引用原 callId、fingerprint、本人 UUID 和实际结论，并显式传 `--release-new-actions-keep-unknown`。工具追加 operator_audit 与证据 SHA，不删除或覆盖原结果，不把原 unknown 改成功；原 callId 永远只读返回原结果，新动作才可恢复。它不在 Agent/WS 工具目录内，不允许审计尚无结果的 intent、重复审核或其它账号证据。旧 MawExplorer 导航 unknown 未审核、未解除。
+
+等待任务启动期间的死亡、低血和正常停止也必须等到同一个退出流程完成，再结束进程；不能先 `process.exit(0)` 而漏写死亡/最终状态或遗留锁。模型连接在 `Agent.start` 前初始化并纳入关闭等待，覆盖启动阶段的记忆摘要。2026-10-09 磨粉试跑曾在水下重连溺亡，旧运行器提前退出留下锁和一条未返回的摘要请求；实际物品由正常重生保留，没有以恢复存档抹掉这次死亡。相关锁只在核对所属 PID 已退出、实际账本无新增游戏变更后归档，保留原文件。
+
+丢失的模型文字与未知游戏写入分别审计。仅当本账号已停止、无锁且原请求后无游戏命令，操作者可用 `tools/audit_neko_model.mjs ABS_STATE ABS_EVIDENCE --discard-unreturned-text-keep-unknown` 追加离线处置。证据须有 requestId、processPid、processExited=true、gameCommandsAfterIntent=0、scope=model_text_discarded_never_executed；工具检查原 PID 已退出，绑定原意图与证据 SHA，拒绝已有结果、业务响应拒绝、重复/篡改审计。只有唯一的 MODEL_TRANSPORT_UNKNOWN 可连同原 halt SHA 一并审核，保留超时原记录；不能借此绕过拒绝或未知游戏动作。原请求保持 unknown、调用计数继续累计，只允许基于当前观察的新请求，不补造供应商回执或重放原请求。此工具不向 Agent 或 WebSocket 开放，也不解除原生动作的阻断。
+
+模型误写 `!world.interact` 等已注册原生操作 ID 时，先返回正确的 `!modCall` 调用方式、`!modExplain` 和真实必填字段，保留完整错误输入，不再先截成 `!world` 后只报未知命令；这是提示，不自动执行或补参数。普通未启用适配器的命令解析保持。一次真实请求等待 90 秒后报传输未知，经过前述离线审核后新的推理成功；未称供应商额度耗尽。退出等待仍持续刷新 stopping 心跳，看门狗的 forced 字段只在实际 terminate 时为 true，watchdogReason 单独记录触发原因。旧版本曾把请求正常停止也标为 forced；仅完整 stopped/operator_stop、退出码 0、已断开且模型空闲的旧格式可审核，保留原退出文件。
 
 ## 实际接入链
 

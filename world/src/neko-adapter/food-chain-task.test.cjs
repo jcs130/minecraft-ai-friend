@@ -23,15 +23,16 @@ function fixture () {
     for (const angle of [5, 10]) send('world.lookAt', { position: bearing, block: { windmill: {
       running: true, generatedSpeed: 1, stalled: false, contraptionUuid: uuid, angleDegrees: angle } } })
   }
-  const millRead = output => send('world.lookAt', { position: mill, block: { id: 'create:millstone', kinetic: { rpm: 1, overstressed: false },
+  const millRead = output => send('world.lookAt', { position: mill, block: { id: 'create:millstone', kinetic: { speed: 1, theoreticalSpeed: 1, overstressed: false },
     processing: { type: 'create:milling', recipeId: 'create:milling/wheat', advancing: !output,
       output: output ? [{ id: 'create:wheat_flour', count: 1, snbt: 'native-flour' }] : [] } } })
-  const bake = () => {
-    send('menu.current', menu('minecraft:inventory', 1)); send('native.craftRecipe', { outputId: 'create:dough' })
+  const bake = (existingBread = 0, collect = true) => {
+    send('menu.current', menu('minecraft:inventory', 1, existingBread)); send('native.craftRecipe', { code: 'crafted', id: 'create:dough', count: 1,
+      snbt: '{count:1,id:"create:dough"}', item: { id: 'create:dough', count: 1, snbt: '{count:1,id:"create:dough"}' }, recipeId: 'create:crafting/appliances/dough' })
     send('world.interact', {}, { position: furnace })
-    send('menu.current', menu('minecraft:furnace', 0, 0, { id: 'create:dough', count: 1 }))
-    send('menu.current', menu('minecraft:furnace', 0, 0, null, { id: 'minecraft:bread', count: 1 }))
-    send('menu.current', menu('minecraft:inventory', 0, 1))
+    send('menu.current', menu('minecraft:furnace', 0, existingBread, { id: 'create:dough', count: 1 }))
+    send('menu.current', menu('minecraft:furnace', 0, existingBread, null, { id: 'minecraft:bread', count: 1 }))
+    if (collect) send('menu.current', menu('minecraft:inventory', 0, existingBread + 1))
   }
   return { task, send, start, millRead, bake }
 }
@@ -40,6 +41,24 @@ test('only the observed powered milling, original dough cooking and hunger chain
   assert.equal(f.task.complete, false)
   f.send('inventory.consume', { itemId: 'minecraft:bread', consumedCount: 1, foodBefore: 12, foodAfter: 17 })
   assert.equal(f.task.complete, true); assert.equal(f.task.snapshot().progress.breadEaten.foodAfter, 17)
+})
+
+test('actual craft result id/item fields are retained and task status contains no undefined JSON members', () => {
+  const f = fixture()
+  f.send('native.craftRecipe', { code: 'crafted', id: 'create:cogwheel', count: 1, item: { id: 'create:cogwheel', count: 1 }, recipeId: 'create:crafting/kinetics/cogwheel' })
+  f.send('native.craft', { code: 'crafted', id: 'minecraft:oak_planks', count: 4 })
+  const snapshot = f.task.snapshot()
+  assert.deepEqual(snapshot.crafts.map(c => c.outputId), ['create:cogwheel', 'minecraft:oak_planks'])
+  assert.deepEqual(JSON.parse(JSON.stringify(snapshot)), snapshot)
+})
+test('emergency bread carried before baking does not substitute for collecting the produced output', () => {
+  const f = fixture(); f.start(); f.millRead(false); f.millRead(true); f.bake(16, false)
+  f.send('inventory.consume', { itemId: 'minecraft:bread', consumedCount: 1, foodBefore: 12, foodAfter: 17 })
+  assert.equal(f.task.snapshot().progress.breadAcquired, undefined)
+  assert.equal(f.task.complete, false)
+  f.send('menu.current', { menuType: 'minecraft:inventory', slots: Array.from({ length: 46 }, (_, i) => i === 10 ? { id: 'minecraft:bread', count: 17 } : null) })
+  f.send('inventory.consume', { itemId: 'minecraft:bread', consumedCount: 1, foodBefore: 12, foodAfter: 17 })
+  assert.equal(f.task.complete, true)
 })
 test('an existing unplaced machine, unknown or foreign receipt cannot establish the chain', () => {
   for (const change of [r => ({ ...r, playerUuid: 'foreign' }), r => ({ ...r, outcomeUnknown: true }),
@@ -53,6 +72,37 @@ test('output icons, dough crafting and an eaten preexisting bread cannot replace
   const f = fixture(); f.start(); f.millRead(true); f.bake()
   f.send('inventory.consume', { itemId: 'minecraft:bread', consumedCount: 1, foodBefore: 12, foodAfter: 17 })
   assert.equal(f.task.complete, false); assert.equal(f.task.snapshot().progress.flourOutput, undefined)
+})
+
+test('only actual native speed can establish powered milling, never theoretical speed or an invented rpm field', () => {
+  for (const kinetic of [{ speed: 0, theoreticalSpeed: 16, overstressed: false },
+    { speed: 16, theoreticalSpeed: 16, overstressed: true },
+    { rpm: 16, theoreticalSpeed: 16, overstressed: false }]) {
+    const f = fixture(); f.start()
+    f.send('world.lookAt', { position: mill, block: { id: 'create:millstone', kinetic,
+      processing: { type: 'create:milling', recipeId: 'create:milling/wheat', advancing: true } } })
+    assert.equal(f.task.snapshot().progress.poweredMilling, undefined)
+  }
+})
+
+test('confirmed removal retires a placed machine, while an unknown removal cannot establish its absence', () => {
+  const f = fixture(); f.start()
+  f.send('world.dig', { position: mill, code: 'native_dig_not_verified', outcomeKnown: false, outcomeUnknown: true })
+  assert.equal(f.task.snapshot().placedMachines.some(row => row.id === 'create:millstone'), true)
+  f.send('world.dig', { position: mill, code: 'native_block_removed', outcomeKnown: true, dropsCollected: false })
+  assert.equal(f.task.snapshot().placedMachines.some(row => row.id === 'create:millstone'), false)
+  f.millRead(false)
+  assert.equal(f.task.snapshot().progress.poweredMilling, undefined)
+})
+
+test('an owned millstone with actual power while waiting for input does not yet establish milling', () => {
+  const f = fixture()
+  f.send('world.place', { position: mill, nativePlacementVerified: true, nativeBlock: { id: 'create:millstone',
+    kinetic: { speed: 1, theoreticalSpeed: 1, overstressed: false },
+    processing: { type: 'create:milling', input: [], advancing: false, status: 'waiting_input' } } })
+  assert.equal(f.task.snapshot().progress.millstonePowered.rpm, 1)
+  assert.equal(f.task.snapshot().progress.poweredMilling, undefined)
+  assert.equal(f.task.complete, false)
 })
 test('consuming a whole stack or no hunger improvement cannot complete a successful production chain', () => {
   for (const consumption of [{ consumedCount: 2, foodBefore: 12, foodAfter: 17 }, { consumedCount: 1, foodBefore: 20, foodAfter: 20 }]) {

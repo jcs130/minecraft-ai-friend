@@ -28,6 +28,10 @@ export function assertNativeBodyAvailable(agent) {
     if (agent?.bot?.mawNative?.bodyBlocked()) throw Object.assign(new Error('native_body_reserved_or_unknown'), {code: 'native_body_reserved_or_unknown'});
 }
 
+export function nativeCommandGuidance(agent, text) {
+    return adapter?.nativeCommandGuidance(agent, text) ?? null;
+}
+
 async function perform(agent, action, id, argsJson) {
     const runtime = agent?.bot?.mawNative;
     if (!runtime) return JSON.stringify({ok: false, code: 'native_adapter_not_enabled'});
