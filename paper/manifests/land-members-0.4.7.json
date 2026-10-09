@@ -1,8 +1,8 @@
 {
   "version": "0.4.7",
-  "status": "candidate_not_deployed",
+  "status": "deployed",
   "verifiedOn": "2026-10-09",
-  "liveVersion": "0.4.5",
+  "liveVersion": "0.4.7",
   "artifact": {
     "name": "AgentFriend-0.4.7.jar",
     "bytes": 1061296,
@@ -14,7 +14,12 @@
     "goddessToolInputBoundaryTests": 5,
     "actualGoddessToolFunctionChecks": 6,
     "actualGoddessToolChecksIncludedInRestartIntegration": true,
-    "prior046EvidenceRewritten": false
+    "prior046EvidenceRewritten": false,
+    "productionReadOnly": 33,
+    "productionPreservation": 25,
+    "goddessKnowledgeReads": 2,
+    "maintenanceHelperFixtures": 6,
+    "noticePreparationChecks": 4
   },
   "authority": {
     "owner": "current_owner_uuid_and_not_observer",
@@ -41,18 +46,47 @@
     "newPeriodicTasks": 0,
     "missingSafeLocation": "pending_not_claimed_built",
     "originalThreePlotsSignedInIsolation": true,
-    "productionBoardsPlaced": false
+    "productionBoardsPlaced": true,
+    "productionPositions": {
+      "adventurers_guild": [
+        -489,
+        67,
+        -511
+      ],
+      "adventurers_guild_storage": [
+        -470,
+        69,
+        -492
+      ],
+      "sky_view_tower": [
+        -552,
+        64,
+        -575
+      ]
+    }
   },
   "goddessMcp": {
     "source": "paper/ops/goddess-mcp.py",
-    "newTools": ["land_members", "manage_land_member"],
+    "newTools": [
+      "land_members",
+      "manage_land_member"
+    ],
     "candidateRegisteredToolCount": 10,
     "testedSdk": "mcp 1.30.0, FastMCP 1.x API",
-    "allowedMutations": ["trust", "untrust"],
+    "allowedMutations": [
+      "trust",
+      "untrust"
+    ],
     "serverRequiresVerifiedOnlineGoddess": true,
     "freeFormCommandOrActorAccepted": false,
-    "productionSourceReplacedOrToolsRediscovered": false,
-    "actualLlmDecisionTested": false
+    "productionSourceReplacedOrToolsRediscovered": true,
+    "actualLlmDecisionTested": false,
+    "productionRegisteredAndEnabledToolCount": 10,
+    "sourceAccessPolicyPreserved": true,
+    "gameBridgeDefaultAllowedTools": [
+      "server_status"
+    ],
+    "actualLlmKnowledgeReadTested": true
   },
   "inherited046": {
     "sourceAndProtectionIncluded": true,
@@ -63,8 +97,27 @@
   "originalAgentClientsChanged": false,
   "controlledJavaEyeActuallyAttached": true,
   "bedrockPhysicalDeviceTested": false,
-  "productionRestarted": false,
-  "productionJarOrConfigurationReplaced": false,
+  "productionRestarted": true,
+  "productionJarOrConfigurationReplaced": true,
   "productionPermissionChanges": false,
-  "automaticDeploymentQueued": false
+  "automaticDeploymentQueued": false,
+  "releasedAt": "2026-10-09 18:07:17",
+  "productionOriginalEyeActuallyAttached": true,
+  "deployment": {
+    "method": "existing_guarded_backup_task_after_explicit_user_authorization",
+    "backupBefore": "20261009-175456",
+    "bothStoppedSnapshotsCompleteBeforeReplacement": true,
+    "taskResult": 0,
+    "javaPid": 27940,
+    "beforeNoticesSeconds": [
+      180,
+      60,
+      10
+    ],
+    "completionNoticeSent": true,
+    "sourceClientChanges": false,
+    "evidenceDirectory": "E/F repairs/land-release-20261009",
+    "priorFrozenCandidateEvidenceRewritten": false,
+    "knowledgeManualSha256": "2A1029BE49ED9476E844D95CB7E254CBA11AE1DA49A8C18D71247700DC9C81DA"
+  }
 }

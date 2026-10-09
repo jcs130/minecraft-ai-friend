@@ -1,6 +1,6 @@
 # 千灯纪：Agent 团队维护、开发与运营手册
 
-**2026-10-09 0.4.7候选未上线：**已增补主人/超管管理协作者、公开成员名单、原版公告牌与确认菜单。女神保留身份可在观战时跨领地授权，其他超管显式授予 `agentfriend.land.admin`；普通OP和成员不能转授权。候选女神MCP增加 `land_members/manage_land_member`，尚未部署/重新发现；正式仍0.4.5和原8工具。继续遵守“先不重启”，不安排自动发布。源边界与验收见 [领地](LANDS.md)、[维护](OPERATIONS.md)。
+**2026-10-09 18:07:17 0.4.7已上线：**服主已明确授权本次重启与维护公告，取代之前“先不重启”的限制。已发送3分钟、1分钟和10秒游戏预告；既有维护任务正常停启，E/F `20261009-175456/.complete` 在替换前完整，任务结果0，Java PID27940。领地主人/女神超管授权与撤权、公开协作者名单、三处原版公告牌及原生建筑保护/开门爬梯实练均已上线；原名单与客户端保持。正式只读33项、旧数据25项通过，MCP10工具重新发现且原来源策略保持。更新后已发简短说明，女神资料箱同步并实际读回，问答131/99字符；初答权限表述含混的失败保留，澄清后复验。原机CortiEye已实际回连附身并有夜视。手机/Xbox仍待真机。规则见 [领地](LANDS.md)、[建筑保护](STRUCTURE_PROTECTION.md)、[维护](OPERATIONS.md)。下方旧状态均为历史时点。
 
 **0.4.5收尾核验（2026-10-09 13:14:30）：**正式Java PID36952，维护任务结果0，当前在线CortiLan/ag_NEKO/Goddess；原机CortiEye仍offline/未附身，配对与Watcher正常，不称原镜头恢复。女神资料箱与源手册SHA256同为`5E2A5AE9609A93FAADFB850FF012017CF563867EDEF0E5A475B599719FB814E5`，专题SKILL_VISUALS亦同源；两项原生只读问答实际阅读后答复114/87字符，准确说明剑痕/冰火/治疗/羽翼风格、原资格/耗魔/冷却/范围和原客户端可用，以及配置热更新/多人限流/画面不表示实际范围，不主动游戏公告。下方旧状态均为各自历史时点。
 
@@ -53,7 +53,7 @@
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
-| 自然建筑保护与通行实练（0.4.6待发布） | `structure-protection.yml`、控制台 `structures reload/audit`、`world practice start/status/stop`；[规则](STRUCTURE_PROTECTION.md) | 已加载原生结构片段；本人玩家数据 PDC 中的真实开门穿越、连续爬梯证明 | 六个建筑包命名空间及明确结构 ID 可热配置；禁止拆建，保留原生通路、农耕和原有箱子权限。可选实练不代操作、不发奖、不表示长期掌握；原Agent客户端保持。用户要求暂不重启，正式服仍0.4.5，不能宣称已上线 |
+| 自然建筑保护与通行实练（0.4.7已上线） | `structure-protection.yml`、控制台 `structures reload/audit`、`world practice start/status/stop`；[规则](STRUCTURE_PROTECTION.md) | 已加载原生结构片段；本人PDC中的真实开门穿越、连续爬梯证明 | 六包命名空间及明确ID可热配置；禁止拆建，保留门梯、农耕和箱子权限。可选实练不代操作、不发奖；原Agent客户端保持 |
 | 村庄生活（0.3.99） | `world list/menu/npcs/talk/end/guide/events/photos`、`/photohelp`、罗盘旅途指南；[插件包](WORLD_LIFE_PLUGINS.md) | UUID实习账本、BetonQuest数据库、NPC持久数据、本人ImageFrame图片；既有QwenPaw原生任务 | 已开放三步真实操作实习、村民对话/故事、补给商和正向活动。NPC/任务/精英可编辑配置后隔离热加载。现有截图通过本人临时链接直接上传成地图并挂墙，原客户端无须更换；服务器不代按快门。 |
 | 组队救援（0.3.96已上线） | 4格内停留10秒自动救起，当前层/室清场自动复活；`arena status`、`dungeon status`；[救援规则及系统提示](TRIAL_RESCUE.md) | config.yml的trial-rescue、原塔检查点和地下城场次ID；保留原奖励和物品 | 服务器私发倒地坐标、救援方法与进度；Agent用原移动能力靠近并等待。全员倒地才失败，离线/正常重启保留，部分救援计时重置。普通塔恢复原配怪，强化仅用于冒险/末日 |
 | 玩家委托与分页箱（0.3.94） | 公会玩家委托、`commission list/mine/info/menu/publish/accept/claim/abandon/cancel`，`arena stash pages/page/list`；[玩法](MYCLI_AGENT_CLI.md) | config.yml的player-contracts.jobs/active、既有余额/待入箱队列和0–539槽位 | 已上线；玩家发布供货/同行无需代码或重启，每单一人、托管报酬、实物与真实探索返程验收。10页540格，待入箱队列1024组；客户端沿用现有协议 |
@@ -69,7 +69,7 @@
 | 村庄生活季（0.4.0） | `resident-contracts.yml`、`world-life.yml`、原市场和十个生活插件；[完整规则](VILLAGE_LIFE_SEASON.md) | 冻结任务、原格收割位置、本人新照片索引、调查收据与能力记录 | 九居民事务/三商人；服务器真实动作证明。`admin market reload`及`admin worldlife reload`热运营；Mythic精英仅增强模式，普通不改，客户端保持 |
 | 任务市场（0.4.0） | `task-market.yml` 原35张加 `resident-contracts.yml` 九张，合计44张；[任务市场](TASK_MARKET.md)、[探索委托](EXPLORATION_CONTRACTS.md) | `config.yml` 的工程账本/本人评估、`guild-players.<UUID>.active.market` 的冻结条件与探索去重状态 | 热更新职业/已学前置、近战/格挡/真实团队治疗/标记贡献目标、维度、结构/群系键、路线门槛、步骤与奖励；工程登记基准，探索读已加载自然生成元数据。每人一次远行履历、返程和重启续接已验证 |
 | 工程完工交接与公共地标（0.3.91） | BUILD 委托 handover；罗盘公共地标、`landmark list/mine/info/publish/update/unpublish/menu`、`goto landmark:<领地ID>`；[规则](PROJECT_LANDMARKS.md) | config.yml 完成与待交接收据、lands.yml 与 WorldGuard、landmarks.yml 公共点 | 热配置后验收完成者管理建筑，当前主人到场起名公开；访客传送 6 魔力，私产权限独立。已完工可凭原历史补交接不重发奖。当前 CortiLan 观景塔已交接，落点待主人登记；指定礼物箱公共，其他储物私有 |
-| 玩家领地与公会归属（0.3.90；0.4.7协作候选） | `LandManager.java`、现有 WorldGuard 与 `GuildStorageOwnership.java`；候选 `LandAccess.java/LandNoticeBoards.java`；[领地配置](LANDS.md)、[公会规则](GUILD_PROPERTY.md) | `plugins/AgentFriend/lands.yml`；WorldGuard `qd_land_*` 区域；实体私产 PDC；候选公告牌位置索引 `land-boards.json` | 控制台 `mycli admin land reload/audit` 在线新增、更换主人和授权/撤权。候选新增主人/超管 `land trust/untrust/manage`、公开members/board和女神窄工具，尚未部署。Agent收到 `MC_LAND_ACCESS` 或 `guild_owner_only` 应停止并查询/申请；公会公共箱与任务开放。实际部署状态见维护记录 |
+| 玩家领地与公会归属（0.4.7） | `LandManager/LandAccess/LandNoticeBoards`、现有WorldGuard和私产保护；[领地](LANDS.md) | `lands.yml`与`qd_land_*`区域是权限事实源；`land-boards.json`只索引原版牌位置；私产PDC保留 | 主人/女神/显式超管trust/untrust/manage；所有人members/board查名单和牌。控制台仍可reload/audit；女神两窄工具已重新发现，原来源策略保持。收到拒绝停止并查询/申请，公共箱与任务开放 |
 | 生活公会 | `LifeGuildManager.java` 的七类原版行动委托；`LifeGuildBuildings.java` 的四馆、入口台阶与七位导师；[生活公会规则](LIFE_GUILDS.md) | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `life-guild` 及四馆地基，另有四份 `life-building-*-mask.tsv` 结构保护快照 | 先扩展原版动作事件、任务 ID、原版菜单与 `/mycli life`；若要换任务目标，须保留在途任务迁移及防重复领奖逻辑；建筑/保护快照须随世界同组备份。四馆入口修复见 [建筑记录](LIFE_GUILD_BUILDINGS.md) |
 | 试炼塔、地下城与奖励（0.3.95） | trial-waves.yml前六层；dungeons.yml三个真实建筑；罗盘地点页、`dungeon list/info/travel/start/join/status/resume/leave/claim/menu`；[规则](DUNGEON_NETWORK.md) | config.yml的旧试炼波次快照、site-dungeons.runs/receipts/claimed/cooldowns，既有个人奖励；世界实体和建筑 | 控制台`trialwaves reload`/`dungeons reload`整体验证热更，活动期间拒绝换目录；新地点可指定已勘察付费entry。逐室原生战斗和实际返程，每处每日一次奖励。全服新地点48怪/128飞行物，不根据文字直接覆盖世界生成建筑 |
 | PvP 竞技场 | `PvpArenaManager.java` 的自愿匹配、同款装备和积分；[PvP 规则](PVP_ARENA.md) | `pvp-records`、`pvp-escrow.yml`、竞技场方块及 WorldGuard 区域 | 运营 Agent 可查看本人对局和排行榜；改地图或计分规则须隔离测试和完整备份，不可在有人对战时发布 |
@@ -184,7 +184,7 @@ CortiLan 的运行连接来自 `192.168.3.152`；该机的 Cortico 必须能把 
 
 1. 在 `qiandengji-personal-stash` 分支修改，记录内容 ID 和回退点；构建 AgentFriend 后用对应 `*-stage.mjs` 脚本验证。技能优先跑施法/界面/状态同步，任务跑 `guild-stage.mjs`，副本跑 `dungeon-flow-stage.mjs`、断线/重启/奖励持久化和新内容的专项脚本。
 2. 在隔离服用 Mineflayer 完成真实登录和至少一次完整操作；Java、基岩手柄、CortiEye 画面涉及的菜单、物品、标题、粒子与音效要做相应实机验收。自动状态包与基岩 Pong 只算入口探针。
-3. 发布前读 `Status`、在线名单和活动挑战，确认无人类玩家在场；完成 `manage-server.ps1 Backup`，核对 E/F 两处 `.complete`。有建筑施工时留施工前和施工后两份完整快照。
+3. 发布前读 `Status`、在线名单和活动挑战，计划维护先按 [维护公告](OPERATIONS.md#计划维护的提前提醒与更新说明) 发出倒计时，确认无人类玩家在场；完成 `manage-server.ps1 Backup`，核对 E/F 两处 `.complete`。有建筑施工时留施工前和施工后两份完整快照。
 4. 按 [维护与发布](OPERATIONS.md) 只启用一个版本的插件，正常停启；不使用 `/reload`。更新配置和 JAR 时核对版本与 SHA256，复查 Java、Agent 网关、基岩、Goddess、CortiEye、Watchdog 与 `mspt`。
 5. 观察上线后的挑战完成、奖励重复/缺失、玩家掉线、服务端错误、MSPT 和真实体验。问题只在代码/配置层时回退 JAR 或配置并保留玩家进度；问题改写世界时从同一完整快照恢复，并告知快照之后的进度会回退。保留事故现场副本。
 
@@ -193,7 +193,7 @@ CortiLan 的运行连接来自 `192.168.3.152`；该机的 Cortico 必须能把 
 1. 先核实运行服版本与实际生效的热配置，再更新玩家手册 [版本更新说明](SERVER_UPDATES.md) 的已上线内容、当前玩法和被取代的旧规则。构建成功、提交 Git 或尚未部署的提案不能写成已上线。
 2. 将手册原文同步到女神**现役**工作区 `D:\qwenpaw\home\workspaces\mc_godness\resource\SERVER_UPDATES.md`，核对源文件与资料箱副本 SHA256 相同。不要继续写入旧的 `C:\Users\lzl19\.qwenpaw\workspaces\mc_godness` 镜像。
 3. 工作区 `AGENTS.md` 保留“玩家问更新/玩法时先读取资料箱手册”的指引，`MEMORY.md` 首页保留当前资料入口；相关 `memory/` 设计笔记和 `E:\MC\ops` 手册首页同步适用版本。历史记录保留，并明确已被取代的结论。资料箱只放玩家说明，不放凭据、审计日志和玩家私密数据。
-4. 用女神实际对话入口询问本次变化，保留她读取资料文件的工具回执和答复；至少核对新入口及一项被修订的规则。游戏答复遵守桥接单条 140 字符上限，先回应所问主题，再按追问展开。玩家询问后回答，不因更新资料主动群发公告，不替玩家学习、花点或发物品。
+4. 用女神实际对话入口询问本次变化，保留她读取资料文件的工具回执和答复；至少核对新入口及一项被修订的规则。游戏答复遵守桥接单条 140 字符上限，先回应所问主题，再按追问展开。玩家询问后回答；仅同步资料不主动群发。服主已授权的计划维护按下节提醒/更新说明流程公告，不替玩家学习、花点或发物品。
 
 资料与指引的同步无需重启 Minecraft。2026-09-30 曾因知识同步缺失，女神沿用 0.3.19 笔记，错误声称正式服没有公会、只有六层且不能续关。旧笔记不能覆盖新资料；个人资格、物品和活动状态仍以本人当次查询为准。
 

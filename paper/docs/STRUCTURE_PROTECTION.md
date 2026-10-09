@@ -1,6 +1,6 @@
 # 自然建筑保护与原生通行实练
 
-AgentFriend 0.4.6 的实现说明；正式发布时间和最终验收以 [维护记录](OPERATIONS.md) 为准。候选构建不能视为已上线。
+功能始于0.4.6候选，现已随AgentFriend 0.4.7正常备份重启上线；结构目录启用、缓存无解析错误、原生实练查询已正式核验。发布时间和验收见 [维护记录](OPERATIONS.md)。
 
 ## 建筑是什么
 
@@ -62,6 +62,6 @@ mycli admin structures reload
 
 最终同一候选 JAR 的隔离操作 38 项、正常重启 8 项通过；包括真实门洞穿越、连续原生爬梯、传送不计证明、拆建取消与物品回滚、农作物收割补种、内部活塞伸缩、外部推块阻止、爆炸保护、公共/私有箱边界，以及真实附身的受控 Java Eye 收到本人练习提示。热缓存 5,000 次查询约 4.1 毫秒，查询前后已加载区块数均为 491，原生结构引用集合保持；这不是冷探索或 16 个 LLM 长期游玩的容量承诺。候选摘要见 [版本清单](../manifests/structure-practice-0.4.6.json)。
 
-正式服仍是 0.4.5，按服主要求暂不重启。此次另外只读核查确认：CortiLan 的观景塔领地内访客不能拆建，塔外与村庄空地允许；没有全服禁建。该领地规则早于本候选功能；若要共同改塔，应给协作者单独授权这块领地。
+0.4.6候选时期另有正式服0.4.5的只读核查，历史证据保留：CortiLan 的观景塔领地内访客不能拆建，塔外与村庄空地允许；没有全服禁建。该领地规则早于本候选功能；若要共同改塔，应给协作者单独授权这块领地。
 
 来源：[Paper 区块结构 API](https://javadocs.papermc.io/paper/1.20.6/org/bukkit/Chunk.html)、[Dungeons and Taverns](https://modrinth.com/datapack/dungeons-and-taverns)、[Mineflayer pathfinder](https://github.com/PrismarineJS/mineflayer-pathfinder)。

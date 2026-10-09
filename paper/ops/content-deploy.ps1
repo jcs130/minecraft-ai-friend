@@ -21,7 +21,7 @@ function Deploy-PendingContent {
         } elseif ($relative -match '^plugins/([A-Za-z0-9]+)/(.+)$' -and $allowed -contains $Matches[1]) {
             if ($relative -match '(^|/)\.\.(/|$)|:|\\' -or $relative -notmatch '\.(yml|yaml|json|dsc)$') { throw 'Unsafe plugin configuration path' }
             $target = Join-Path $serverDir $relative
-        } elseif ($relative -in @('ops/goddess-bridge.mjs','ops/npc-dialogue-adapter.mjs','ops/npc-adapter.private.json')) {
+        } elseif ($relative -in @('ops/goddess-bridge.mjs','ops/goddess-mcp.py','ops/maintenance-notice.mjs','ops/npc-dialogue-adapter.mjs','ops/npc-adapter.private.json')) {
             $target = Join-Path $opsDir $relative.Substring(4)
         } else { throw "Unexpected content target: $relative" }
         $source = [IO.Path]::GetFullPath([string]$file.source)
