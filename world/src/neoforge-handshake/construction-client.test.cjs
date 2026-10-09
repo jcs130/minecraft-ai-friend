@@ -2,6 +2,7 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const { Vec3 } = require('vec3')
+const { EventEmitter } = require('node:events')
 const { attachConstructionClient } = require('./construction-client.cjs')
 const owner = '11111111-2222-3333-8444-555555555555'
 const other = 'aaaaaaaa-bbbb-3ccc-8ddd-eeeeeeeeeeee'
@@ -10,8 +11,8 @@ function fixture () {
   const state = { playerUuid: owner, menuType: 'minecraft:inventory', selectedHotbarSlot: 0, carried: null, slots: Array(46).fill(null) }
   state.slots[36] = { id: 'create:white_sail', count: 2, snbt: '{id:"create:white_sail",count:2}' }
   let placed = false, consume = true
-  const bot = { entity: { position: new Vec3(2, 64, 0) }, setQuickBarSlot: () => {}, lookAt: async () => {}, waitForTicks: async () => {},
-    blockAt: pos => ({ position: pos, name: placed ? 'stone' : 'air' }),
+  const bot = Object.assign(new EventEmitter(), { entity: { position: new Vec3(3, 64, 0) }, setQuickBarSlot: () => {}, lookAt: async () => {}, waitForTicks: async () => {},
+    blockAt: pos => ({ position: pos, name: pos.equals(support) || placed ? 'stone' : 'air' }),
     _client: { uuid: owner, write (name, body) {
       packets.push({ name, body })
       if (name === 'held_item_slot') state.selectedHotbarSlot = body.slotId
@@ -19,7 +20,7 @@ function fixture () {
         placed = true
         if (consume) state.slots[36] = { id: 'create:white_sail', count: 1, snbt: '{id:"create:white_sail",count:1}' }
       }
-    } } }
+    } } })
   const world = { lookAtBlock: async block => ({ ok: true, position: block.position,
     block: block.position.y === 64 ? { id: 'minecraft:stone', properties: {} } : { id: 'create:white_sail', properties: { facing: 'south' } } }) }
   const menu = { current: () => state }
@@ -57,6 +58,18 @@ test('blocked surfaces stay unavailable and transport errors do not cause furthe
   calls = 0; f.world.lookAtBlock = async () => { calls++; throw Error('connection ended') }
   assert.equal((await f.client.lookAt({ position: f.args.referencePosition })).code, 'native_look_not_observed')
   assert.equal(calls, 1)
+})
+
+test('an empty requested voxel does not masquerade as an occluded solid target or trigger seven aim attempts', async () => {
+  const f = fixture(); let queries = 0
+  f.bot.blockAt = position => ({ position, name: 'air' })
+  f.world.lookAtBlock = async () => { queries++; return { ok: false, code: 'different_visible_block',
+    position: { x: 1, y: 63, z: 0 }, block: { id: 'minecraft:cobblestone' } } }
+  const receipt = await f.client.lookAt({ position: f.args.referencePosition })
+  assert.equal(queries, 1); assert.equal(receipt.ok, false)
+  assert.equal(receipt.block.id, 'minecraft:cobblestone'); assert.equal(receipt.position.y, 63)
+  assert.equal(receipt.requestedVoxel.nativeBlockVerified, false); assert.match(receipt.hint, /AIR.*no target surface/)
+  assert.equal(f.packets.length, 0)
 })
 test('placement rejects changed full native components before use', async () => {
   const f = fixture(); f.args.expectedSnbt = '{id:"create:white_sail",count:2,components:{test:1}}'

@@ -31,8 +31,8 @@ test('discovery, native schemas, private identity and exact component values sur
   const { bot, runtime } = body(dir, async () => ({ ok: true, playerUuid: UUID, componentsSnbt: components }))
   t.after(runtime.close)
   const list = await runtime.request({ action: 'list' })
-  assert.equal(list.playerUuid, UUID); assert.equal(list.operationCount, 56)
-  assert.equal(list.operations.filter(x => x.readOnly).length, 23)
+  assert.equal(list.playerUuid, UUID); assert.equal(list.operationCount, 58)
+  assert.equal(list.operations.filter(x => x.readOnly).length, 24)
   assert.equal((await runtime.request({ action: 'explain', id: 'colony.found' })).operation.parameters.required.includes('expectedSnbt'), true)
   assert.equal((await runtime.request({ action: 'explain' })).ok, false)
   const read = await runtime.request({ action: 'call', id: 'spell.list' })
@@ -132,6 +132,44 @@ test('crash intent, conflicting writer and truncated journal fail closed', t => 
   assert.equal(fs.existsSync(path.join(dir, 'nekoqa/writer.lock')), false)
 })
 
+test('offline operator audit releases only new actions while old unknown remains immutable and never replayed', async t => {
+  const dir = fixture(t); let applied = 0
+  let { runtime } = body(dir, async () => { applied++; return { ok: false, outcomeUnknown: true, outcomeKnown: false } })
+  const message = { action: 'call', id: 'curios.open', callId: 'audit-unknown' }
+  await runtime.request(message); runtime.close()
+  const originalBytes = fs.readFileSync(path.join(dir, 'nekoqa/native-actions.jsonl'))
+  const ledger = new NativeLedger(dir, 'NekoQA'), original = ledger.records.get(message.callId)
+  const evidencePath = path.join(dir, 'operator-evidence.json')
+  fs.writeFileSync(evidencePath, JSON.stringify({ playerUuid: UUID, callId: message.callId, fingerprint: original.fingerprint }))
+  ledger.auditRelease({ callId: message.callId, fingerprint: original.fingerprint, evidencePath, summary: 'Reviewed quiescent body and native state. No success attributed.' })
+  assert.deepEqual(ledger.records.get(message.callId), original)
+  assert.deepEqual(ledger.unresolved(), [])
+  assert.throws(() => ledger.auditRelease({ callId: message.callId, fingerprint: original.fingerprint, evidencePath, summary: 'duplicate' }), /AUDIT_INVALID/)
+  ledger.close()
+  ;({ runtime } = body(dir, async () => { applied++; return { ok: true } })); t.after(runtime.close)
+  assert.equal(runtime.status().mutationBlocked, false)
+  const old = await runtime.request(message)
+  assert.equal(old.outcomeUnknown, true); assert.equal(old.replayed, true); assert.equal(applied, 1)
+  const report = await runtime.request({ action: 'result', callId: message.callId })
+  assert.equal(report.outcomeUnknown, true); assert.equal(report.operatorAudit.disposition, 'release_new_actions_keep_unknown')
+  assert.equal((await runtime.request({ ...message, callId: 'new-independent-action' })).ok, true); assert.equal(applied, 2)
+  assert.deepEqual(fs.readFileSync(path.join(dir, 'nekoqa/native-actions.jsonl')).subarray(0, originalBytes.length), originalBytes)
+})
+
+test('operator audit cannot release an intent, foreign evidence, or tampered result hash', t => {
+  const dir = fixture(t), ledger = new NativeLedger(dir, 'NekoQA'); t.after(() => ledger.close())
+  const record = { kind: 'intent', callId: 'pending', id: 'curios.open', fingerprint: 'hash', playerUuid: UUID }
+  ledger.append(record)
+  const evidencePath = path.join(dir, 'evidence.json')
+  fs.writeFileSync(evidencePath, JSON.stringify({ playerUuid: UUID, callId: 'pending', fingerprint: 'hash' }))
+  assert.throws(() => ledger.auditRelease({ callId: 'pending', fingerprint: 'hash', evidencePath, summary: 'not settled' }), /AUDIT_INVALID/)
+  ledger.append({ ...record, kind: 'result', result: { outcomeUnknown: true } })
+  fs.writeFileSync(evidencePath, JSON.stringify({ playerUuid: '22222222-2222-4222-8222-222222222222', callId: 'pending', fingerprint: 'hash' }))
+  assert.throws(() => ledger.auditRelease({ callId: 'pending', fingerprint: 'hash', evidencePath, summary: 'foreign' }), /EVIDENCE_MISMATCH/)
+  assert.throws(() => ledger.validateAudit({ ...record, kind: 'operator_audit', originalRecordSha256: '0'.repeat(64) }), /AUDIT_INVALID/)
+  assert.equal(ledger.unresolved().length, 1)
+})
+
 test('WebSocket replies are requester-only, correlated and independent of chat', async t => {
   const dir = fixture(t), { bot, runtime } = body(dir); t.after(runtime.close)
   bot.chat = () => { throw Error('must not use game chat') }
@@ -142,7 +180,7 @@ test('WebSocket replies are requester-only, correlated and independent of chat',
   assert.equal(await handleNativeMessage(agent, socket, message), true)
   assert.equal(received[0].playerUuid, UUID); assert.equal(received[0].requestId, 'private-1')
   assert.equal(received[0].action, 'list'); assert.equal(received[0].id, null)
-  assert.equal(received[0].operationCount, 56); assert.equal(unrelated.length, 0)
+  assert.equal(received[0].operationCount, 58); assert.equal(unrelated.length, 0)
   await handleNativeMessage(agent, other, { ...message, schemaVersion: 99 })
   assert.equal(JSON.parse(unrelated[0]).code, 'native_schema_version_invalid')
 })

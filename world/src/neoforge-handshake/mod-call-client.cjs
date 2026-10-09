@@ -22,10 +22,15 @@ const domumSelection = { ...object({ selection: { type: 'string', enum: ['group'
 // Explicit bindings, not dynamic property traversal or a remote eval endpoint.
 // These are the actual low-level APIs. Maw's body-plan descriptors are separate.
 const definitions = [
+  ['inventory.food', true, '读取本人真实 FOOD 组件、可食用物品、完整 SNBT 和饥饿状态；不使用代理物品注册表。',
+    object(), c => c.construction.food()],
+  ['inventory.consume', false, '本人实际吃一份原生食物，自动移入空快捷栏并持有；核对完整组件、实际消耗数量和饥饿值。背包来源用当前 inventory 菜单槽 9–44。未知消费不得重试。',
+    object({ itemId: namespace, inventorySlot: integer(9, 44), expectedSnbt: snbt }, ['itemId']), (c, a) => c.construction.consume(a)],
   ['world.lookAt', false, '转动本人视角，读取绝对坐标处首个实际可见方块及原生机器状态；不移动、不穿墙读取。',
     object({ position, aimOffset }, ['position']), (c, a) => c.construction.lookAt(a)],
-  ['inventory.select', false, '选择本人快捷栏索引 0–8（原生菜单槽 36–44）。expectedId 为空手用 minecraft:air；可选 expectedSnbt 进一步限定组件。内部始终核对完整原生 SNBT。须关闭菜单、清空光标。',
-    object({ hotbarSlot: integer(0, 8), expectedId: namespace, expectedSnbt: { type: 'string', maxLength: 65536 } }, ['hotbarSlot']), (c, a) => c.construction.select(a)],
+  ['inventory.select', false, '选择本人快捷栏索引 0–8（原生菜单槽 36–44）。必须给 expectedId 或 expectedSnbt；空手 expectedId=minecraft:air。内部始终核对完整原生 SNBT。须关闭菜单、清空光标。',
+    { ...object({ hotbarSlot: integer(0, 8), expectedId: namespace, expectedSnbt: { type: 'string', maxLength: 65536 } }, ['hotbarSlot']),
+      anyOf: [{ required: ['expectedId'] }, { required: ['expectedSnbt'] }] }, (c, a) => c.construction.select(a)],
   ['inventory.equip', false, '将本人 inventory 菜单 sourceSlot 的整堆物品移动到空快捷栏 hotbarSlot(0–8)并持有。sourceSlot 是实际菜单槽号：1–4 合成输入、9–35 背包、36–44 快捷栏；绝不是快捷栏索引。以 expectedId 核对来源，内部逐次使用完整 SNBT CAS；不会扔掉/替换已有快捷栏物品。',
     object({ sourceSlot: integer(1, 44), hotbarSlot: integer(0, 8), expectedId: namespace, expectedSnbt: snbt }, ['sourceSlot', 'hotbarSlot', 'expectedId']), (c, a) => c.construction.equip(a)],
   ['native.craft', false, '在本人真实 2×2/工作台 3×3 网格合成一次，原生取放且核验产物完整组件。先查询 native.recipes，ingredients.slot 为网格 1–4/1–9；一次产物完整入背包。',

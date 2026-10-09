@@ -36,7 +36,7 @@ function nativeInventoryText (agent) {
 // tens of thousands of tokens. Preserve original indices, components and CAS.
 function compactNativeMenu (state) {
   if (!state || !Array.isArray(state.slots)) return state
-  const keys = ['schemaVersion', 'kind', 'playerUuid', 'windowId', 'stateId', 'menuType', 'title', 'selectedHotbarSlot', 'carried']
+  const keys = ['schemaVersion', 'kind', 'playerUuid', 'windowId', 'stateId', 'menuType', 'title', 'selectedHotbarSlot', 'carried', 'self', 'dataValues']
   const view = Object.fromEntries(keys.filter(k => Object.hasOwn(state, k)).map(k => [k, state[k]]))
   view.slotCount = state.slots.length
   view.slots = state.slots.flatMap((item, slot) => item ? [{ slot, ...item, mayPickup: state.mayPickup?.[slot] ?? null }] : [])

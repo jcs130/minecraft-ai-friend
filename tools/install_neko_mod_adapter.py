@@ -227,11 +227,12 @@ def main() -> None:
                   ROOT / "world/src/neoforge-handshake/construction-client.cjs",
                   ROOT / "world/src/neoforge-handshake/recipe-crafting-client.cjs",
                   ROOT / "world/src/neoforge-handshake/native-block-client.cjs", ROOT / "world/src/neoforge-handshake/native-crafting-client.cjs",
-                  SOURCE / "windmill-task.cjs", SOURCE / "task-navigation.cjs", SOURCE / "task-context.cjs", SOURCE / "task-attempts.cjs",
-                  ROOT / "tools/run_neko_trial.mjs", ROOT / "tools/start_neko_trial.py", ROOT / "tools/probe_neko_gui.py", ROOT / "world/src/society-agent/action-deadline.cjs"]
+                  SOURCE / "windmill-task.cjs", SOURCE / "food-chain-task.cjs", SOURCE / "task-navigation.cjs", SOURCE / "task-context.cjs", SOURCE / "task-attempts.cjs",
+                  ROOT / "world/src/society-agent/native-food.cjs", ROOT / "world/src/society-agent/native-inventory-delta.cjs",
+                  ROOT / "tools/run_neko_trial.mjs", ROOT / "tools/start_neko_trial.py", ROOT / "tools/audit_neko_native.mjs", ROOT / "tools/probe_neko_gui.py", ROOT / "world/src/society-agent/action-deadline.cjs"]
         record = {"schemaVersion": 1, "at": datetime.now(timezone.utc).isoformat(),
                   "mcAgentNekoRevision": NEKO_REV, "projectNekoRevision": PROJECT_REV,
-                  "tool": "minecraft_mod", "operationCount": 56, "samePlayerConnection": True,
+                  "tool": "minecraft_mod", "operationCount": 58, "samePlayerConnection": True,
                   "automaticReplay": False, "pluginMessageBroadcast": False,
                   "runtimeObservation": "not_checked", "allModsVerified": False, "publicAccessReady": False,
                   "files": [{"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for p in installed + owned]}

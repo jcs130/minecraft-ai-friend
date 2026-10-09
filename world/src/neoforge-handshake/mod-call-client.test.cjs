@@ -21,7 +21,7 @@ function fixture () {
   }
   clients.mods.world = { interact: clients.world.interact }
   clients.menu.current = () => { calls.push({id:'menu.current',args:[]}); return {ok:true,code:'native',playerUuid:owner,menuType:'minecraft:inventory',selectedHotbarSlot:0,slots:Array(46).fill(null),carried:null} }
-  clients.construction = { lookAt: clients.world.lookAt, select: clients.inventory.select, equip: clients.inventory.equip,
+  clients.construction = { food: clients.inventory.food, consume: clients.inventory.consume, lookAt: clients.world.lookAt, select: clients.inventory.select, equip: clients.inventory.equip,
     craft: clients.native.craft, craftRecipe: clients.native.craftRecipe, place: clients.world.place, dig: clients.world.dig }
   const api = attachModCallClient(bot, clients)
   return { bot, calls, clients, api }
@@ -30,6 +30,7 @@ const setting = { position: pos, expectedBlockId: 'create:brass_funnel', behavio
   expectedBehaviour: 'com.simibubi.create.foundation.blockEntity.behaviour.filtering.FilteringBehaviour',
   expectedHeldSnbt: '', expectedHotbarSlot: 0 }
 const args = {
+  'inventory.consume': { itemId: 'minecraft:bread', inventorySlot: 9 },
   'world.lookAt': { position: pos }, 'inventory.select': { hotbarSlot: 0, expectedSnbt: '' },
   'inventory.equip': { sourceSlot: 9, hotbarSlot: 1, expectedId: 'minecraft:crafting_table' },
   'native.craft': { ingredients: [{ slot: 1, id: 'minecraft:oak_log' }], outputId: 'minecraft:oak_planks', outputCount: 4 },
@@ -65,11 +66,11 @@ const args = {
   'domum.select': { selection: 'variant', groupId: 'domum_ornamentum:fpanel', variantIndex: 2, choiceSnbt: '{count:1}' },
   'collision.query': { position: pos, expectedBlockId: 'minecraft:stone', expectedProperties: {} }
 }
-test('all 56 declared operations dispatch to the exact native adapter with actual arguments', async () => {
+test('all 58 declared operations dispatch to the exact native adapter with actual arguments', async () => {
   const f = fixture()
   try {
     const list = f.api.operations()
-    assert.equal(list.operationCount, 56); assert.equal(list.remoteSupportVerified, false)
+    assert.equal(list.operationCount, 58); assert.equal(list.remoteSupportVerified, false)
     for (const row of list.operations) {
       const result = await f.api.call(row.id, args[row.id] || {})
       assert.equal(result.code, 'native'); assert.equal(f.calls.at(-1).id, row.id)

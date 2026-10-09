@@ -24,7 +24,7 @@ class NekoAdapterHealthTest(unittest.TestCase):
             manifest.write_text(json.dumps({"schemaVersion": 1, "files": files,
                 "mcAgentNekoRevision": "23f5971203e3f4d15ef416ff8e5cc67965845d82",
                 "projectNekoRevision": "fb2a2e731a8c954478d08678b0c8cf40e8145a54",
-                "tool": "minecraft_mod", "operationCount": 56, "samePlayerConnection": True,
+                "tool": "minecraft_mod", "operationCount": 58, "samePlayerConnection": True,
                 "automaticReplay": False, "pluginMessageBroadcast": False}), encoding="utf-8")
             report = health.probe_neko_adapters(manifest)
             self.assertTrue(report["ok"])

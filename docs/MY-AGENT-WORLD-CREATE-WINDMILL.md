@@ -6,17 +6,18 @@ Minecraft 1.21.1 / NeoForge 21.1.248 / Create 6.0.10；普通玩家 MawNeko 经�
 
 ## 通用操作
 
-SDK 56 项操作、19 个频道；任何普通玩家均按本人连接/UUID 使用，未特判 MawNeko。Neko 先 `!modList()` / `!modExplain("操作 ID")`，再 `!modCall("操作 ID", "转义的 JSON 字符串")`。操作 ID 不是独立的 !world.place 命令。Project N.E.K.O. 的 minecraft_mod 接受对象参数。
+SDK 58 项操作、19 个频道；任何普通玩家均按本人连接/UUID 使用，未特判 MawNeko。Neko 先 `!modList()` / `!modExplain("操作 ID")`，再 `!modCall("操作 ID", "转义的 JSON 字符串")`。操作 ID 不是独立的 !world.place 命令。Project N.E.K.O. 的 minecraft_mod 接受对象参数。
 
 | 操作 | 实际行为 |
 | --- | --- |
 | native.recipes | 查询服务端真实配方，普通合成过滤 minecraft:crafting，从结果选择 recipeId，不猜前缀。 |
 | native.craftRecipe | 将选定原生 shaped/shapeless 配方映射到当前 2×2 或已打开工作台的 3×3 网格，实际点击并合成一次。clearInputs:true 明确归还旧输入，输出核对完整 SNBT。不会自动生成或打开工作台。 |
 | native.craft | 手工网格合成一次。2×2 竖列是 1/3，3×3 竖列是 1/4/7；配方 ingredient index 不能直接当菜单槽号。 |
+| inventory.food / inventory.consume | 读取本人 FOOD 组件、完整 SNBT 与饥饿值，实际吃一份；不使用代理食物 ID。consume 可指定 inventory 菜单槽 9–44，背包来源需要空快捷栏。 |
 | inventory.equip | 从本人 inventory 菜单 sourceSlot 移整堆到空 hotbarSlot 并持有，expectedId 核对来源，逐次完整 SNBT CAS。 |
-| inventory.select | hotbarSlot 为 0–8，expectedId=minecraft:air 选空手，可显式 expectedSnbt；内部始终核对完整组件。 |
+| inventory.select | hotbarSlot 为 0–8，必须提供 expectedId 或 expectedSnbt；expectedId=minecraft:air 选空手，内部核对完整组件。 |
 | world.lookAt | 转动本人真实视角，读取绝对坐标处首个可见方块，不穿墙查询。 |
-| world.place | 真实物品放一格，核对支撑 ID/全部属性、手持完整组件、放置后原生方块及数量减少 1。不自动走路或重试。 |
+| world.place | 真实物品放一格，核对支撑 ID/全部属性、手持完整组件、放置后原生方块及数量减少 1。发包前保守检查身体与目标格重叠；不自动走路或重试。 |
 | world.interact | 原生 useItemOn。可省略 expectedHeldSnbt，由本人新鲜手持快照提供；空手是空字符串，不是空气物品。接受交互仍需验证效果。 |
 | world.dig | 可见近处单格，工具/方块完整校验及服务端移除证据；不声称已拾取掉落。 |
 

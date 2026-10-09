@@ -4,6 +4,7 @@ const { Vec3 } = require('vec3')
 const { craftNativeGrid } = require('./native-crafting-client.cjs')
 const { craftNativeRecipe } = require('./recipe-crafting-client.cjs')
 const { placeNativeHeld } = require('./native-block-client.cjs')
+const { nativeFoodOptions, consumeNativeFood } = require('../society-agent/native-food.cjs')
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 const known = (code, more = {}) => ({ ok: false, code, outcomeKnown: true, outcomeUnknown: false, retryAutomatically: false, ...more })
 const propertyKey = value => JSON.stringify(Object.fromEntries(Object.entries(value || {}).sort(([a], [b]) => a.localeCompare(b))))
@@ -11,7 +12,9 @@ const propertyKey = value => JSON.stringify(Object.fromEntries(Object.entries(va
 // Ordinary player construction, on the existing connection. All inventory work
 // uses native snapshots; the server still performs crafting, use and harvesting.
 function attachConstructionClient (bot, menu, world, native) {
-  let closed = false
+  let closed = false, generation = 0
+  const contextChanged = () => { generation++ }
+  for (const event of ['spawn', 'respawn', 'death']) bot.on(event, contextChanged)
   const own = () => String(bot._client.uuid || '').toLowerCase()
   function state () {
     const value = menu.current()
@@ -37,6 +40,11 @@ function attachConstructionClient (bot, menu, world, native) {
       for (let index = 0; index < offsets.length; index++) {
         if (index) await bot.waitForTicks(2) // Native world queries require two server ticks between requests.
         receipt = await world.lookAtBlock(block, offsets[index])
+        if (!receipt.ok && block.name === 'air' && ['different_visible_block', 'no_visible_block'].includes(receipt.code)) {
+          return result({ ...receipt, raycastAttempts: index + 1,
+            requestedVoxel: { cachedAir: true, source: 'client_chunk_projection', nativeBlockVerified: false },
+            hint: 'The requested voxel is AIR in the client cache; air has no target surface. The reply describes the first server-visible block. Aim at an existing support/reference block before placing into the empty destination. Repositioning cannot make air raycastable.' })
+        }
         if (receipt.ok || !['different_visible_block', 'no_visible_block'].includes(receipt.code)) {
           return result({ ...receipt, aimOffsetUsed: offsets[index], raycastAttempts: index + 1 })
         }
@@ -95,6 +103,33 @@ function attachConstructionClient (bot, menu, world, native) {
     if (!state()) return result(known('native_inventory_unavailable'))
     return result(await craftNativeRecipe(menu, native, own(), args))
   }
+  function food () {
+    const current = state()
+    return result({ ok: true, ...nativeFoodOptions(current, own()), self: current?.self ?? null })
+  }
+  async function consume ({ itemId, inventorySlot, expectedSnbt }) {
+    const uuid = own(), epoch = generation
+    const initial = state()
+    const selected = nativeFoodOptions(initial, uuid).items.find(item => item.id === itemId &&
+      (inventorySlot === undefined || item.slot === inventorySlot))
+    if (!selected || expectedSnbt !== undefined && selected.snbt !== expectedSnbt) return result(known('native_food_item_changed'))
+    let dispatched = false
+    const check = () => {
+      if (closed || own() !== uuid || generation !== epoch || bot.health <= 0) throw Error('native_food_context_changed')
+    }
+    const guardedMenu = { current: () => { check(); return menu.current() }, click: async (...args) => {
+      check(); dispatched = true; return menu.click(...args)
+    } }
+    try {
+      return result(await consumeNativeFood({ bot: {
+        activateItem () { check(); dispatched = true; bot.activateItem() },
+        deactivateItem () { bot.deactivateItem() }
+      }, menu: guardedMenu, uuid, itemId, inventorySlot: selected.slot, check, wait,
+      select: hotbarSlot => select({ hotbarSlot, expectedId: itemId, expectedSnbt: selected.snbt }) }))
+    } catch (error) {
+      return result({ ...known(error.message), outcomeKnown: !dispatched, outcomeUnknown: dispatched })
+    }
+  }
   async function place (args) {
     const before = state(), block = localBlock(args.referencePosition)
     if (before?.menuType !== 'minecraft:inventory' || before.carried) return result(known('close_menu_and_empty_cursor_first'))
@@ -142,6 +177,9 @@ function attachConstructionClient (bot, menu, world, native) {
         observed: after, outcomeKnown: absent, outcomeUnknown: !absent, dropsCollected: false })
     } catch (error) { return result({ ...known(error.code || error.message), outcomeKnown: false, outcomeUnknown: true }) }
   }
-  return { lookAt, select, equip, craft, craftRecipe, place, dig, detach () { closed = true } }
+  return { lookAt, select, equip, craft, craftRecipe, food, consume, place, dig, detach () {
+    closed = true
+    for (const event of ['spawn', 'respawn', 'death']) bot.off(event, contextChanged)
+  } }
 }
 module.exports = { attachConstructionClient }

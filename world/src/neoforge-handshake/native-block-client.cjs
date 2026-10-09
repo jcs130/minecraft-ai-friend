@@ -31,6 +31,16 @@ async function placeNativeHeld (bot, menu, world, { hotbarSlot, itemId, referenc
   const faceNumber = direction(face)
   const dest = referenceBlock.position.offset(face.x, face.y, face.z)
   if (bot.entity.position.distanceTo(dest.offset(0.5, 0.5, 0.5)) > 6) throw new Error('BLOCK_OUT_OF_REACH')
+  // Conservative player-volume preflight, before use is sent. In particular a
+  // thin shaft may still be rejected by the server when its voxel contains the
+  // builder. Do not turn this known, avoidable failure into an unknown write.
+  const p = bot.entity.position, halfWidth = (bot.entity.width || 0.6) / 2 + 0.001
+  if (p.x + halfWidth > dest.x && p.x - halfWidth < dest.x + 1 &&
+      p.z + halfWidth > dest.z && p.z - halfWidth < dest.z + 1 &&
+      p.y + (bot.entity.height || 1.8) > dest.y && p.y < dest.y + 1) {
+    return { ok: false, code: 'destination_overlaps_player', position: dest,
+      hint: 'Move your body clear of the destination voxel before placing; no use packet was sent.', retryAutomatically: false }
+  }
 
   bot.setQuickBarSlot(hotbarSlot)
   // setQuickBarSlot may suppress a packet when the client believes this slot

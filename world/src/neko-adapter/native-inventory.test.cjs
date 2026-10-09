@@ -49,3 +49,11 @@ test('compact crafting menus expose dense hotbar indices and null empty hands in
   const crafting = compactNativeMenu({ menuType: 'minecraft:crafting', slots })
   assert.equal(crafting.hotbar[0].menuSlot, 37); assert.equal(crafting.hotbar[0].item.snbt, book.snbt)
 })
+
+test('compact furnace observation preserves own hunger and native cooking progress', () => {
+  const self = { playerUuid: UUID, food: 14, saturation: 0 }, dataValues = [0, 1600, 121, 200]
+  const dough = { id: 'create:dough', count: 2, snbt: '{count:2,id:"create:dough"}' }
+  const view = compactNativeMenu({ playerUuid: UUID, menuType: 'minecraft:furnace', slots: [dough, null, null], self, dataValues })
+  assert.deepEqual(view.self, self); assert.deepEqual(view.dataValues, dataValues)
+  assert.equal(view.slots[0].snbt, dough.snbt); assert.equal(view.slots[0].slot, 0)
+})

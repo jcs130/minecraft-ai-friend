@@ -15,7 +15,7 @@ test('external frameworks attach ordinary distinct accounts without a model prov
   try {
     assert.equal(one.contract().playerUuid, uuidA); assert.equal(two.contract().playerUuid, uuidB)
     assert.equal(one.contract().allModsVerified, false); assert.equal(one.contract().publicAccessReady, false)
-    assert.equal(one.contract().directCallAvailable, true); assert.equal(one.contract().directOperationCount, 56)
+    assert.equal(one.contract().directCallAvailable, true); assert.equal(one.contract().directOperationCount, 58)
     assert.equal(a.writes.length, 0); assert.equal(b.writes.length, 0)
     const query = one.call('native.recipes', { recipeType: 'create:milling', limit: 1 })
     const id = JSON.parse(a.writes[0].body.data).requestId

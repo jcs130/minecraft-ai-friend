@@ -31,6 +31,7 @@ class NativeLedger {
     try { fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, nonce: this.nonce, account })); fs.fsyncSync(lock) } finally { fs.closeSync(lock) }
     this.file = path.join(this.directory, 'native-actions.jsonl')
     this.records = new Map()
+    this.audits = new Map()
     this.unresolvedById = new Map()
     this.broken = false
     this.playerUuid = null
@@ -41,11 +42,14 @@ class NativeLedger {
         if (text && !text.endsWith('\n')) throw Error('NEKO_NATIVE_LEDGER_INCOMPLETE')
         for (const line of text.split('\n').filter(Boolean)) {
           const record = JSON.parse(line)
-          if (!ID.test(record.callId || '') || !UUID.test(record.playerUuid || '') || !['intent', 'result'].includes(record.kind)) throw Error('NEKO_NATIVE_LEDGER_INVALID')
+          if (!ID.test(record.callId || '') || !UUID.test(record.playerUuid || '') || !['intent', 'result', 'operator_audit'].includes(record.kind)) throw Error('NEKO_NATIVE_LEDGER_INVALID')
           if (this.playerUuid && this.playerUuid !== record.playerUuid) throw Error('NEKO_NATIVE_LEDGER_IDENTITY_CHANGED')
           this.playerUuid = record.playerUuid
           const prev = this.records.get(record.callId)
-          if (record.kind === 'intent') {
+          if (record.kind === 'operator_audit') {
+            this.validateAudit(record)
+            this.audits.set(record.callId, record)
+          } else if (record.kind === 'intent') {
             if (prev) throw Error('NEKO_NATIVE_LEDGER_DUPLICATE_INTENT')
             this.records.set(record.callId, record)
           } else {
@@ -60,17 +64,43 @@ class NativeLedger {
 
   append (record) {
     try {
+      const persisted = { schemaVersion: 1, at: new Date().toISOString(), ...record }
       const fd = fs.openSync(this.file, 'a')
-      try { fs.writeFileSync(fd, JSON.stringify({ schemaVersion: 1, at: new Date().toISOString(), ...record }) + '\n'); fs.fsyncSync(fd) } finally { fs.closeSync(fd) }
-      this.records.set(record.callId, clone(record))
-      this.updateUnresolved(record)
+      try { fs.writeFileSync(fd, JSON.stringify(persisted) + '\n'); fs.fsyncSync(fd) } finally { fs.closeSync(fd) }
+      this.records.set(record.callId, clone(persisted))
+      this.updateUnresolved(persisted)
       this.playerUuid = record.playerUuid
     } catch (error) { this.broken = true; throw error }
   }
 
   updateUnresolved (record) {
-    if (record.kind === 'intent' || unknown(record.result)) this.unresolvedById.set(record.callId, { callId: record.callId, id: record.id, playerUuid: record.playerUuid })
+    if (!this.audits.has(record.callId) && (record.kind === 'intent' || unknown(record.result))) this.unresolvedById.set(record.callId, { callId: record.callId, id: record.id, playerUuid: record.playerUuid })
     else this.unresolvedById.delete(record.callId)
+  }
+  validateAudit (audit) {
+    const original = this.records.get(audit.callId)
+    if (this.audits.has(audit.callId) || original?.kind !== 'result' || !unknown(original.result) ||
+        audit.playerUuid !== original.playerUuid || audit.fingerprint !== original.fingerprint || audit.id !== original.id ||
+        audit.originalRecordSha256 !== crypto.createHash('sha256').update(JSON.stringify(original)).digest('hex') ||
+        audit.disposition !== 'release_new_actions_keep_unknown' || audit.retryAutomatically !== false ||
+        !path.isAbsolute(audit.evidencePath || '') || !/^[a-f0-9]{64}$/.test(audit.evidenceSha256 || '') ||
+        typeof audit.summary !== 'string' || !audit.summary.trim() || audit.summary.length > 2000) throw Error('NEKO_NATIVE_AUDIT_INVALID')
+  }
+  // Operator-only, offline entry point. Not exposed through Agent tools or WS.
+  // The original result remains unknown and every old callId remains cached.
+  auditRelease ({ callId, fingerprint, evidencePath, summary }) {
+    const original = this.records.get(callId), bytes = fs.readFileSync(evidencePath)
+    const evidence = JSON.parse(bytes.toString('utf8'))
+    if (evidence.playerUuid !== original?.playerUuid || evidence.callId !== callId || evidence.fingerprint !== fingerprint) throw Error('NEKO_NATIVE_AUDIT_EVIDENCE_MISMATCH')
+    const record = { schemaVersion: 1, at: new Date().toISOString(), kind: 'operator_audit', callId,
+      playerUuid: original.playerUuid, id: original.id, fingerprint, disposition: 'release_new_actions_keep_unknown',
+      originalRecordSha256: crypto.createHash('sha256').update(JSON.stringify(original)).digest('hex'),
+      evidencePath, evidenceSha256: crypto.createHash('sha256').update(bytes).digest('hex'), summary, retryAutomatically: false }
+    this.validateAudit(record)
+    const fd = fs.openSync(this.file, 'a')
+    try { fs.writeFileSync(fd, JSON.stringify(record) + '\n'); fs.fsyncSync(fd) } finally { fs.closeSync(fd) }
+    this.audits.set(callId, record); this.updateUnresolved(original)
+    return clone(record)
   }
   unresolved () { return clone([...this.unresolvedById.values()]) }
   close () {
@@ -123,7 +153,7 @@ function attachNekoNative (bot, { ledgerDir, account = bot.username, attach = at
       const record = ledger.records.get(message.callId)
       if (!record) return failure('native_call_not_found', metadata())
       return { ...metadata(), ok: record.kind === 'result', id: record.id, callId: record.callId,
-        fingerprint: record.fingerprint, result: clone(record.result), outcomeUnknown: record.kind === 'intent' || unknown(record.result) }
+        fingerprint: record.fingerprint, result: clone(record.result), operatorAudit: clone(ledger.audits.get(message.callId)), outcomeUnknown: record.kind === 'intent' || unknown(record.result) }
     }
     if (action !== 'call') return failure('native_action_invalid')
     const { id, args = {} } = message

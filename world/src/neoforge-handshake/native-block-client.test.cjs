@@ -5,6 +5,16 @@ const assert = require('node:assert/strict')
 const { placeNativeHeld } = require('./native-block-client.cjs')
 const { Vec3 } = require('vec3')
 
+test('destination containing the player is a known preflight rejection with no use or selection', async () => {
+  const packets = [], support = new Vec3(-394, 63, 415)
+  const bot = { entity: { position: new Vec3(-393.67, 64, 414.7), width: 0.6, height: 1.8 },
+    setQuickBarSlot: () => { throw Error('no hand mutation') }, _client: { write: (...args) => packets.push(args) } }
+  const result = await placeNativeHeld(bot, {}, {}, { hotbarSlot: 5, itemId: 'create:shaft', expectedBlockId: 'create:shaft',
+    referenceBlock: { position: support }, face: new Vec3(0, 1, 0) })
+  assert.equal(result.code, 'destination_overlaps_player'); assert.equal(packets.length, 0)
+  assert.equal(result.retryAutomatically, false)
+})
+
 test('a proxy item never authorizes placement of the wrong native item', async () => {
   const packets = []
   const pos = { offset: () => pos }

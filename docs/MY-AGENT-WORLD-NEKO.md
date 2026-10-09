@@ -60,6 +60,16 @@ python tools/start_neko_trial.py --config E:\自己的部署目录\neko-trial.js
 
 原生测试启用且 chat_ingame=false 时，同时关闭长段回复的私聊输出，修复上游 private 分支无视配置而触发实际 disconnect.spam 的问题。模型回复仍保留私有本机 WebSocket/账本，不调高服务端 spam 阈值。寻路约束改在真实 spawn 后安装，覆盖两个规划入口与执行时新建 movement，显式原生建造操作继续可用。
 
+## 生产链与未知动作审计（2026-10-09）
+
+新任务 `create_food_chain` 从现有八帆风车继续，提供小麦、煤、水桶、少量铁与安山岩；模型选择传动、磨石、面团合成及熔炉烤制。`FoodChainTaskEvidence` 只收集本人真实回执，分别要求实际机器放置消耗、磨粉配方及转速/计时推进、面粉入包、面团合成、绑定熔炉真实输入/产出、面包入包及一次进食后的饥饿值提高。任务证据不操作游戏，不以模型文字判成功；当前是否完成以本次实机记录为准。
+
+`inventory.food` 返回原生 FOOD 组件，`inventory.consume` 可处理模组食物，完整 SNBT 核对后移至空快捷栏并使用一次；回执包含 consumedCount、foodBefore/foodAfter 和库存变化。角色死亡、重生或断线使未核实消费保持 unknown。`menu.current` 的模型摘要保留本人 self/dataValues，避免丢失饥饿值与熔炉进度。
+
+放置前保守检查目标格与身体体积，重叠时返回 destination_overlaps_player，零 use 包，Agent 应先走开。这不提供任意原生碰撞形状或自动修正布局。请求格在客户端缓存为空气、且服务端射线未命中时，提示空气没有目标表面，应瞄准真实支撑方块；仍保留首个实际可见方块，不把缓存空气当服务端确认或继续七次无意义瞄准。inventory.select 的 JSON Schema 明确要求 expectedId 或 expectedSnbt，与实际验证规则一致。
+
+有明确 unknown 时继续停止变更。若本账号进程已正常退出、无在途请求、无锁，操作者可只读核对服务端方块、完整物品快照和保存状态，保存证据 JSON 后使用 `tools/audit_neko_native.mjs` 离线审核。必须引用原 callId、fingerprint、本人 UUID 和实际结论，并显式传 `--release-new-actions-keep-unknown`。工具追加 operator_audit 与证据 SHA，不删除或覆盖原结果，不把原 unknown 改成功；原 callId 永远只读返回原结果，新动作才可恢复。它不在 Agent/WS 工具目录内，不允许审计尚无结果的 intent、重复审核或其它账号证据。旧 MawExplorer 导航 unknown 未审核、未解除。
+
 ## 实际接入链
 
 ```text
@@ -74,7 +84,7 @@ Project N.E.K.O. 的 minecraft_mod(operation, id, args, callId)
 
 Neko 自己的模型也能使用 `!modList()`、`!modExplain("id")`、`!modCall("id", "参数JSON字符串")`、`!modStatus()`、`!modResult("callId")`。命令文档会自动包含这些入口，解析器支持转义的 JSON 字符串与完整 SNBT。普通移动、战斗和采集仍使用原 Neko 工具；模组身份、完整物品组件、窗口与 CAS 通过原生接口读取，不能拿代理 player_head 或代理方块 ID 当成实际模组内容。
 
-现有 56 项原生操作中 23 项只读、33 项变更（含 menu.close）；同一本人连接注册 19 个 SDK 频道。范围包括殖民地岗位/研究/供料、女仆任务/背包、Ars 学习/编书/选槽/施法、Create 设置/过滤/流体查询、Domum 切割与 Curios 饰品，并增加通用原生配方合成、选槽、装备、注视、放置和挖掘。目录存在不代表任意机器、原生 GUI 或完整自主生产链都已经适配，具体限制见 [模组操作指南](MY-AGENT-WORLD-MOD-OPERATIONS.md)及[风车任务](MY-AGENT-WORLD-CREATE-WINDMILL.md)。
+现有 58 项原生操作中 24 项只读、34 项变更（含 menu.close）；同一本人连接注册 19 个 SDK 频道。范围包括殖民地岗位/研究/供料、女仆任务/背包、Ars 学习/编书/选槽/施法、Create 设置/过滤/流体查询、Domum 切割与 Curios 饰品，并增加通用原生配方合成、选槽、装备、注视、放置和挖掘。目录存在不代表任意机器、原生 GUI 或完整自主生产链都已经适配，具体限制见 [模组操作指南](MY-AGENT-WORLD-MOD-OPERATIONS.md)及[风车任务](MY-AGENT-WORLD-CREATE-WINDMILL.md)。
 
 ## 安装与配置
 

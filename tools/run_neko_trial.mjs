@@ -10,7 +10,7 @@ if (!path.isAbsolute(config.stateDirectory) || !path.isAbsolute(config.nekoDirec
 const missionTurns = config.maxMissionTurns ?? 1, commandsPerTurn = config.commandsPerTurn ?? 24
 if (!Number.isInteger(missionTurns) || missionTurns < 1 || missionTurns > 32 ||
     !Number.isInteger(commandsPerTurn) || commandsPerTurn < 1 || commandsPerTurn > 24 ||
-    (config.task && config.task.kind !== 'create_windmill')) throw Error('NEKO_TRIAL_TASK_CONFIG_INVALID')
+    (config.task && !['create_windmill', 'create_food_chain'].includes(config.task.kind))) throw Error('NEKO_TRIAL_TASK_CONFIG_INVALID')
 const root = fs.realpathSync(config.stateDirectory)
 process.chdir(root)
 fs.mkdirSync('bots/_supervisor', { recursive: true })
@@ -112,7 +112,7 @@ for (const command of [...queries.queryList, ...actions.actionsList.filter(c => 
       try {
         const parsed = JSON.parse(result)
         if (command.name === '!modCall') attempts.observe(args[1], args[2], context, parsed)
-        if (command.name === '!modCall') taskEvidence?.observe(parsed)
+        if (command.name === '!modCall') taskEvidence?.observe(parsed, Date.now(), JSON.parse(args[2]))
         receipt = Object.fromEntries(['ok', 'code', 'outcomeKnown', 'outcomeUnknown'].filter(key => Object.hasOwn(parsed, key)).map(key => [key, parsed[key]]))
         if (command.name === '!modCall') {
           const native = parsed.result ?? {}, operation = { playerUuid: parsed.playerUuid, operation: parsed.id ?? args[1],
@@ -147,7 +147,7 @@ agent.setupBotEventHandlers = bot => {
   presentationObserver = attachNativeModPresentation(bot, sdk)
   viewer = prepared.attach({ bot, nativeStream: stream, expectedUsername: config.username, simplifyNBT: nbt.simplify,
     getAgentStatus: () => ({ ...snapshot(), mode: report.phase === 'playing' ? 'acting' : report.phase,
-      goal: config.task?.kind === 'create_windmill' ? '制作并启动机械动力风车' : config.mission, reason: report.reason ?? '',
+      goal: config.task?.kind === 'create_windmill' ? '制作并启动机械动力风车' : config.task?.kind === 'create_food_chain' ? '风车磨粉、制作面包并进食' : config.mission, reason: report.reason ?? '',
       receipts: report.modOperations.map(c => ({ at: c.at, action: { type: c.operation }, result: { ok: c.ok, code: c.code ?? (c.ok ? 'native_receipt_ok' : 'native_receipt_refused'), outcomeUnknown: c.outcomeUnknown } })) }),
     getPresentationState: () => createNativePlayerPresentation({ playerUuid: bot._client.uuid, menu: sdk.menu.current(),
       ...presentationObserver.current(), modOperations: report.modOperations }) })
@@ -213,15 +213,16 @@ if (config.task?.startAfterFile) {
   while (!fs.existsSync(marker) && !closing) await new Promise(r => setTimeout(r, 250))
   if (closing) process.exit(0)
 }
-if (config.task?.kind === 'create_windmill') {
-  taskEvidence = new (require('../world/src/neko-adapter/windmill-task.cjs').WindmillTaskEvidence)(agent.bot._client.uuid)
+if (config.task) {
+  const Evidence = config.task.kind === 'create_food_chain' ? require('../world/src/neko-adapter/food-chain-task.cjs').FoodChainTaskEvidence : require('../world/src/neko-adapter/windmill-task.cjs').WindmillTaskEvidence
+  taskEvidence = new Evidence(agent.bot._client.uuid, config.task)
   // Reconstruct objective ownership from our durable completed receipts, never
   // from model claims or merely encountering a preexisting machine after reconnect.
   const journal = path.join(root, 'command-results.jsonl')
   const since = Date.parse(config.task.startedAt ?? report.startedAt)
   if (fs.existsSync(journal)) for (const line of fs.readFileSync(journal, 'utf8').split('\n').filter(Boolean)) {
     const entry = JSON.parse(line)
-    if (entry.name === '!modCall' && Date.parse(entry.at) >= since) taskEvidence.observe(JSON.parse(entry.result), Date.parse(entry.at))
+    if (entry.name === '!modCall' && Date.parse(entry.at) >= since) taskEvidence.observe(JSON.parse(entry.result), Date.parse(entry.at), JSON.parse(entry.args[1]))
   }
 }
 report.phase = 'playing'; report.initial = snapshot(); report.modelLoopStarted = true
@@ -230,7 +231,7 @@ require('../world/src/neko-adapter/task-context.cjs').attachTaskContext(agent.pr
   const bytes = fs.existsSync(feedbackPath) ? fs.readFileSync(feedbackPath) : Buffer.alloc(0)
   if (bytes.length > 8192) throw Error('NEKO_TASK_FEEDBACK_BUDGET_EXCEEDED')
   const objective = taskEvidence?.snapshot()
-  const progress = objective ? { complete: objective.complete, placedBearings: objective.placedBearings,
+  const progress = objective ? { complete: objective.complete, progress: objective.progress, placedMachines: objective.placedMachines, placedBearings: objective.placedBearings,
     craftedOutputCounts: objective.crafts.reduce((map, row) => { map[row.outputId] = (map[row.outputId] ?? 0) + 1; return map }, {}),
     samples: objective.samples.slice(-2) } : null
   return config.mission + '\nVerified actual receipts (craft counts are calls, not item quantities): ' + JSON.stringify(progress) + '\nRecent known failed attempts (change approach, never retry unknown): ' + JSON.stringify(attempts.recent()) + '\nOperator clarification: ' + bytes.toString('utf8')

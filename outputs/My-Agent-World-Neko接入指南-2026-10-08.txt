@@ -1,4 +1,4 @@
-﻿My Agent World：Neko Agent 接入指南（2026-10-08）
+﻿My Agent World：Neko Agent 接入指南（更新于 2026-10-09）
 
 可以使用 mc-agent-neko 控制游戏角色，Project N.E.K.O. 负责对话并调用它。N.E.K.O. 是可选入口，其他 Agent 也能直接使用服务器提供的原生 SDK。
 
@@ -14,14 +14,14 @@ E:\minecraft-ai-friend-society-lab（服务器源码和接入适配）
 已经接通：
 1. 在 Neko 自己的 Mineflayer 连接上挂接原生 SDK。
 2. N.E.K.O. 的 Minecraft 插件增加 minecraft_mod 工具。
-3. 49 项原生操作（新增 menu.close 关闭本人模组界面）的目录、参数说明、真实调用和私有回执。
+3. 58 项原生操作（24 只读、34 变更；含合成建造、原生食物读取与进食）的目录、参数说明、真实调用和私有回执。
 4. 殖民地、女仆、Ars 法术、Create、Domum、Curios 的已适配功能。
 5. 同一写请求不会重复执行；结果未知时停止继续写入，先查询原回执。
 6. 网页显示同一账号的原生槽位、真实模组物品与光标变化；Curios 背包/饰品栏使用原贴图与布局。
 7. Neko 的 !inventory 和模型提示词库存已改用本人原生物品 ID、数量与槽位，不再把代理 paper 等当作真实模组物品。
 8. Ars 魔力/法术每 2 秒只读刷新；旧数据会标记陈旧，不使用默认魔力值。
 
-本次实际模型已把本人指南书从第 37 槽移到第 9 槽，网页和重新登录后的库存提示一致，光标为空。
+此前真实模型已把本人指南书从第 37 槽移到第 9 槽，网页和重新登录后的库存提示一致，光标为空。2026-10-09 已由普通非 OP MawNeko 从提供原料实际制作、放置并启动八帆 Create 风车，位置 (-395,64,415)，1 RPM，两次真实角度变化。磨粉、面团和烤面包生产链继续实机验证，不能据此称全部模组都可自主游玩。
 Domum 切割台基础原界面已移植并测试，但本次 Neko 会话尚未实机验收；部分模组按钮、Soul Spell 模型和默认 YSM 模型仍未支持。
 本机限时实测画面：http://127.0.0.1:28990/third/（进程退出后关闭）。当前没有接 QwenPaw，没有启动完整 N.E.K.O. 对话平台。
 
@@ -61,13 +61,13 @@ NODE_PATH=E:\QiandengJiSocietyLab\gateway\permanent\node\node_modules
 
 N.E.K.O. Minecraft 插件的 ws_url 填 ws://127.0.0.1:48909。
 Neko 设置使用上述游戏地址和版本，关闭 allow_insecure_coding，禁用 !newAction。
-模型配置由接入方配置；本机调试仍用 QwenPaw 与线上 qwen3.7-plus，不使用本地 27B。
+模型配置由接入方配置；本机当前由 Neko 直接调用线上 Coding Plan qwen3.7-plus，不接 QwenPaw API，也不使用本地 27B。
 完整安装、锁文件、账本对账与回滚说明：
 E:\minecraft-ai-friend-society-lab\docs\MY-AGENT-WORLD-NEKO.md
 
 当前实测边界：
 两个普通非 OP 测试账号已验证真实登录、Neko 命令、N.E.K.O. 插件工具及原生饰品栏打开；回执只返回请求连接，重复请求没有重复执行。
-本轮没有调用模型，没有启动 Neko 的长期自主循环或完整对话桌面端；测试账号已经退出。
+早期接口验证没有调用模型；随后已进行线上模型的限时风车任务，包含工具澄清及一次人工定位/治疗，不能称从零自然生存或长期无人干预验收。完整 N.E.K.O. 对话桌面端未启动。
 现有服务器、世界和 MawExplorer 保持，原自主暂停没有解除。
 现有网页 http://192.168.3.163:28984 仍是 MawExplorer 的画面，尚未切换成 Neko 画面。
 完整模组玩法、新服基岩与公网准入仍有待验证。Neko 同连接网页本次已接通，见后面的实机更新。
@@ -77,3 +77,10 @@ E:\minecraft-ai-friend-society-lab\docs\MY-AGENT-WORLD-NEKO.md
 这是限时测试，非长期自主托管；网页视角在测试存活时使用 http://127.0.0.1:28990/third/，仅当前电脑可访问。原服和原 MawExplorer 暂停状态保持。
 尚未完成自然采集、制造、施法命中、长期殖民地经营及全部视觉模型验收，不能称所有模组都已可自主游玩。
 独立启动入口：tools/start_neko_trial.py --config <绝对配置路径>，密钥通过 MAW_NEKO_CODINGPLAN_API_KEY 环境变量传入；不需要 QwenPaw 服务。每个账号固定账本目录，unknown 先核查，不能删账本重试。
+
+新增实用操作：
+!modCall("inventory.food", "{}") 查询实际可食用物品及饥饿值。
+!modCall("inventory.consume", "{\"itemId\":\"minecraft:bread\"}") 实际吃一份，核对完整组件和物品数量。
+inventory.select 必须提供 expectedId 或 expectedSnbt；选空手用 expectedId=minecraft:air。
+放置前先让身体离开目标格；destination_overlaps_player 表示未发出 use 包。空气格无法被射线击中，应瞄准真实支撑方块。
+未知写入继续保留原回执，不清账本、不换 ID 重放。离线人工审核工具只可追加证据并许可新动作，不将旧未知结果改成成功。
