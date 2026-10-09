@@ -1,0 +1,38 @@
+# Protect native generated pieces, without scanning or loading other chunks.
+# Console: mycli admin structures reload|audit. Invalid updates retain the last valid rules.
+schema-version: 1
+enabled: true
+namespaces: [nova_structures, explorify, ships, structory, structory_towers, mjstructure]
+structures:
+  - minecraft:village_plains
+  - minecraft:village_desert
+  - minecraft:village_savanna
+  - minecraft:village_snowy
+  - minecraft:village_taiga
+  - minecraft:pillager_outpost
+  - minecraft:ancient_city
+  - minecraft:ocean_ruin_cold
+  - minecraft:ocean_ruin_warm
+  - terralith:valley_lodge
+  - terralith:mage_tower_autumn
+  - terralith:mage_tower_spring
+  - terralith:mage_tower_summer
+  - terralith:mage_tower_winter
+  - terralith:mage_tower
+  - terralith:mage_complex
+  - terralith:glacial_hut
+  - terralith:igloo
+  - terralith:desert_outpost
+  - terralith:witch_hut
+  - terralith:underground_cabin
+  - terralith:underground/giant_bee_hive
+  - terralith:underground/oak_cabin
+  - terralith:underground/sunken_tower
+  - terralith:underground/frosted_dungeon
+  - terralith:underground/mining_outpost
+  - terralith:underground/old_refinery
+  - terralith:underground/witch_hut
+  - terralith:fortified_village
+  - terralith:fortified_desert_village
+# Terrain features such as Terralith rubble are deliberately outside this list.
+allow-crops: true

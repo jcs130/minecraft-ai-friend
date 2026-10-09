@@ -1,0 +1,47 @@
+{
+  "version": "0.4.6",
+  "status": "candidate_not_deployed",
+  "verifiedOn": "2026-10-09",
+  "liveVersion": "0.4.5",
+  "artifact": {
+    "name": "AgentFriend-0.4.6.jar",
+    "bytes": 1033915,
+    "sha256": "C2AEEE6263BDF0EC9C11FE629178604A64AD92B1A3D0C16FE533E191095BBEC1"
+  },
+  "checks": {
+    "isolationNativeOperations": 38,
+    "normalRestartAndActualAttachedEye": 8
+  },
+  "protection": {
+    "ruleNamespaces": 6,
+    "ruleStructureIds": 30,
+    "bounds": "inclusive_native_structure_pieces",
+    "loadPolicy": "loaded_only",
+    "chunkCacheLimit": 256,
+    "startCacheLimit": 128,
+    "newPeriodicTasks": 0
+  },
+  "warmQueryObservation": {
+    "calls": 5000,
+    "millisecondsApproximately": 4.1,
+    "loadedChunksBefore": 491,
+    "loadedChunksAfter": 491,
+    "nativeReferenceSetsUnchanged": true,
+    "capacityClaim": false
+  },
+  "practice": {
+    "optional": true,
+    "steps": ["door_passage", "ladder_ascent"],
+    "source": "server_observed_native_action",
+    "persistentAcrossRestart": true,
+    "awardsSkillsOrRewards": false,
+    "longTermMasteryClaim": false
+  },
+  "originalAgentClientsChanged": false,
+  "controlledJavaEyeActuallyAttached": true,
+  "bedrockPhysicalDeviceTested": false,
+  "productionRestarted": false,
+  "productionJarOrConfigurationReplaced": false,
+  "automaticDeploymentQueued": false,
+  "productionPermissionChanges": false
+}

@@ -1,5 +1,7 @@
 # 村庄生活插件包（AgentFriend 0.4.0）
 
+0.4.6 增加 `/mycli world practice start|status|stop` 和原27格生活菜单第15格梯子按钮，记录实际开门穿过与连续爬梯三格；原三项实习、奖励和生活任务保持。建筑保护和实练规则见 [自然建筑保护](STRUCTURE_PROTECTION.md)；当前部署状态以维护记录为准。
+
 **本次收尾复核：**原机CortiEye已实际恢复 `camera=online attached=true cameraNightVision=true`，目标CortiLan；Goddess/CortiLan/CortiEye/ag_NEKO四个原服务账号均已回连。女神资料箱与玩家手册SHA256同为 `F3947044583989863935E2DA693A6809597FFC441B503D0FBE5E4F075433C69D`，另附村庄生活季指南；两项原生只读问答实际读取两份资料后答复111/70字符，准确解释原格补种、普通配怪和本人照片保留，没有主动游戏公告。下方维护期间尚未回连的记录为历史。
 
 **当前0.4.0已上线：**九张居民事务、真实收购与远行商店、照片和遗迹调查形成完整验收；玩法、角色分工和可热配置目标见[村庄生活季](VILLAGE_LIFE_SEASON.md)。`/mycli world board` 与 `world shops` 是新增入口。下方早期发布/连接状态均为历史，最终状态见维护记录。

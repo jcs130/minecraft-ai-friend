@@ -89,6 +89,7 @@ final class WorldLifeManager implements Listener {
                 case "talk" -> talk(p, args);
                 case "end" -> end(p);
                 case "guide" -> guide(p, args.length > 2 ? args[2] : "status");
+                case "practice" -> plugin.traversalPractice().command(p, args.length > 2 ? args[2] : "status");
                 case "events" -> {
                     if (!enabled("WorldEvents")) { denied(p, "events_unavailable"); return; }
                     Bukkit.dispatchCommand(p, "wevent list");
@@ -122,6 +123,7 @@ final class WorldLifeManager implements Listener {
         }
         out.add("components", components);
         out.addProperty("guideCommand", "/mycli world guide start");
+        out.addProperty("practiceCommand", "/mycli world practice start");
         out.addProperty("npcCommand", "/mycli world npcs");
         out.addProperty("eventsCommand", "/mycli world events");
         out.addProperty("photosCommand", "/mycli world photos");
@@ -131,7 +133,7 @@ final class WorldLifeManager implements Listener {
         out.addProperty("shopCommand", "/mycli world shops");
         emit(p, "catalog", out);
         p.sendMessage(ChatColor.GREEN + "世界生活：新手实习、村民聊天、世界事件、村民商店、照片地图。");
-        p.sendMessage("/mycli world board | shops | guide start | npcs | talk <NPC ID> <话> | end | events | photos | menu");
+        p.sendMessage("/mycli world board | shops | guide start | practice start|status|stop | npcs | talk <NPC ID> <话> | end | events | photos | menu");
     }
     private void board(Player p, boolean open) {
         JsonObject out = new JsonObject(); JsonArray cards = new JsonArray(); java.util.ArrayList<String> ids = new java.util.ArrayList<>();
@@ -242,6 +244,7 @@ final class WorldLifeManager implements Listener {
         out.add("steps", steps); out.addProperty("completed", done == LESSONS.size()); out.addProperty("verifiedSteps", done);
         out.addProperty("rescueInstruction", "组队试炼队友倒地后，存活队友在同队倒地者4格内连续停留10秒可救起；清完本层/室也会救起；全队倒地才失败。");
         out.addProperty("travelInstruction", "技能学习/升级耗技能点；成功传送耗6魔力，支援传送耗8魔力；旧技能资格保留。");
+        out.addProperty("traversalInstruction", "结构建筑禁止拆建；走现有门、楼梯和梯井。/mycli world practice start 报名开门穿过与爬梯实练，status 查看服务器真实操作证明。");
         emit(p, "guide", out);
         p.sendMessage(ChatColor.AQUA + "新手实习 " + done + "/3；用 /mycli world guide status 随时复查。进度由真实服务器回执记录。");
     }
@@ -286,6 +289,7 @@ final class WorldLifeManager implements Listener {
         inv.setItem(12, item(Material.SUNFLOWER, "§6世界事件", "查看当前正在进行的活动", "/mycli world events"));
         inv.setItem(13, item(Material.FILLED_MAP, "§b照片相册", "查看已导入的照片地图；当前没有自动快门", "/mycli world photos"));
         inv.setItem(14, item(Material.EMERALD, "§a村民商店", "到村庄集市右键补给商人交易", "实际消耗原版物品；不会免费发放"));
+        inv.setItem(15, item(Material.LADDER, "§a开门与爬梯实练", "亲手开门穿过、沿现有梯子爬升3格", "不拆墙、不垫块，不代操作或授予技能", "/mycli world practice start"));
         inv.setItem(16, item(Material.OAK_DOOR, "§7结束聊天", "恢复普通公屏聊天"));
         inv.setItem(22, item(Material.BELL, "§6居民事务板", "农耕、集市、照片和遗迹调查", "/mycli world board"));
         p.openInventory(inv);
@@ -302,7 +306,7 @@ final class WorldLifeManager implements Listener {
         if (!(event.getView().getTopInventory().getHolder() instanceof MenuHolder holder)) return;
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p) || !holder.owner().equals(p.getUniqueId()) || event.getRawSlot() < 0 || event.getRawSlot() >= 27) return;
-        String action = switch (event.getRawSlot()) { case 10 -> "guide start"; case 11 -> "npcs"; case 12 -> "events"; case 13 -> "photos"; case 14 -> "shops"; case 16 -> "end"; case 22 -> "board menu"; default -> ""; };
+        String action = switch (event.getRawSlot()) { case 10 -> "guide start"; case 11 -> "npcs"; case 12 -> "events"; case 13 -> "photos"; case 14 -> "shops"; case 15 -> "practice start"; case 16 -> "end"; case 22 -> "board menu"; default -> ""; };
         if (!action.isEmpty()) { p.closeInventory(); command(p, ("world " + action).split(" ")); }
     }
     @EventHandler public void onDrag(InventoryDragEvent event) {

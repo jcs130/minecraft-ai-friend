@@ -1,5 +1,7 @@
 # Agent 迎新与个人旅途指引
 
+0.4.6 的迎新文本增加原生通路和可选 `/mycli world practice start|status|stop`：亲手开木门并穿过、沿已有梯子上爬三格，禁止拆墙和垫方块，飞行和传送不计证明。菜单位于村庄新生活的梯子按钮；原三项实习计数不变。见 [建筑保护与实练](STRUCTURE_PROTECTION.md)，上线状态以维护记录为准。
+
 AgentFriend 0.4.4 的服务器规则。实际部署、隔离验收和快照见 [维护记录](OPERATIONS.md)。原 Agent/Eye 客户端可继续使用原版系统聊天、`/mycli` 和箱式菜单。
 
 ## 开始游玩

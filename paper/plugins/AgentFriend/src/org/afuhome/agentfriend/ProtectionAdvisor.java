@@ -144,6 +144,7 @@ final class ProtectionAdvisor implements Listener {
                 case "unknown_out_of_range" -> "目标超过16格；先步行到目标16格内再查询，不要隔空操作。";
                 case "unknown_unloaded_chunk" -> "目标区块未加载；先沿安全道路靠近，再查询目标方块。";
                 case "unknown_not_container" -> "目标不是实体储物方块；核对箱子坐标，开机关请改用 protect use 查询。";
+                case "unknown_generated_structure_bounds" -> "此区块关联的建筑起点尚未载入或结构数据不可用；停止拆建，沿原有门、楼梯或梯井通行，恢复可读边界后重查；不要拆墙探路。";
                 default -> "保护服务暂不可用；停止拆建或取物，联系服主检查WorldGuard，恢复后再查询。";
             };
             data.addProperty("nextAction", hint); commands.add("/mycli help protect");
@@ -171,6 +172,7 @@ final class ProtectionAdvisor implements Listener {
             add(areas, plugin.arenaProtectionArea(at)); add(areas, plugin.pvpProtectionArea(at));
             add(areas, plugin.dungeon().protectionArea(at));
             if (plugin.siteDungeons() != null) add(areas, plugin.siteDungeons().protectionArea(at));
+            if (plugin.generatedStructures() != null) add(areas, plugin.generatedStructures().protectionArea(at));
         }
         if (action.equals("container") && at.getWorld().isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4))
             add(areas, plugin.lands().containerArea(player, at.getBlock()));
@@ -186,6 +188,10 @@ final class ProtectionAdvisor implements Listener {
         if (reason.equals("land_unavailable") || reason.equals("guild_owner_unavailable") || data.has("boundsIncomplete"))
             next = "权限数据未就绪；停止操作并联系服主恢复保护服务，再重新查询。";
         else if (tagged) next = "这件物品仍归原主人；移出保护区也不会解除归属，请取得主人授权。";
+        else if (List.of("generated_structure", "village_structure", "life_guild_building").contains(reason)) {
+            next = "不要拆建筑墙、门、梯子或垫方块；沿原有门、楼梯、梯井通行。木门用使用键/原有方块交互打开，铁门找按钮或拉杆；贴梯面向前移动或跳跃上爬。施工请另选上述结构片段范围外位置并重新查权限。";
+            commands.add("/mycli world practice start"); commands.add("/mycli protect use <门或机关x> <y> <z>");
+        }
         else if (guild && !edit && !action.equals("drop")) {
             next = "不要取放公会私产；需要物资装备请到门口公共箱，先用 /mycli guild shared 查看准确位置。";
             commands.add("/mycli guild shared");
@@ -322,6 +328,7 @@ final class ProtectionAdvisor implements Listener {
         if (plugin.dungeon().deniesEdit(block.getLocation())) return "dungeon";
         if (plugin.pvpProtectionArea(block.getLocation()) != null) return "pvp_arena";
         if (plugin.siteDungeons() != null && plugin.siteDungeons().protectionArea(block.getLocation()) != null) return "site_dungeon";
+        if (plugin.generatedStructures() != null && plugin.generatedStructures().deniesEdit(block)) return plugin.generatedStructures().reason(block.getLocation());
         try {
             boolean allowed = plugin.lands().stateAllows(player, action, block.getLocation());
             if (!allowed) return "worldguard";

@@ -1,0 +1,118 @@
+// Native operations in a disposable server copy; never connects to the live server.
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {readFileSync,writeFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {command} from 'file:///E:/MC/ops/rcon-client.mjs';
+import {fix1206PotionProtocol} from 'file:///E:/MC/ops/minecraft-1206-potion.mjs';
+const stage=process.argv[2],root=process.argv[3];
+assert.equal(stage,'E:/MC/staging/structure-practice-20261009');
+assert.equal(root,'E:/MC/ops/repairs/structure-practice-20261009');
+const req=createRequire('E:/MC/probe/package.json');fix1206PotionProtocol(req);
+const mf=req('mineflayer'),{Vec3}=req('vec3');
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const rc=q=>command(q,15000,{port:25591,properties:stage+'/server.properties'});
+const id=String(Date.now()).slice(-5),name='Traverse46'+id,bots=[];
+const report={passed:false,at:new Date().toISOString(),checks:[],messages:{},payloads:{},fixtures:'console positioning, supplies and disposable block arrangements only; proof uses client native operations'};
+report.jarSha256=createHash('sha256').update(readFileSync(stage+'/plugins/AgentFriend-0.4.6.jar')).digest('hex').toUpperCase();
+const config=stage+'/plugins/AgentFriend/structure-protection.yml',settings=readFileSync(config,'utf8');
+const check=(label,condition)=>{assert.ok(condition,label);report.checks.push(label);console.log('PASS '+label);};
+async function until(fn,label,ms=10000){const end=Date.now()+ms;while(Date.now()<end){if(await fn())return;await sleep(80);}throw Error(label+' timeout');}
+async function make(username){await rc('minecraft:whitelist add '+username);const b=mf.createBot({host:'127.0.0.1',port:25590,username,version:'1.20.6',auth:'offline'});bots.push(b);report.messages[username]=[];report.payloads[username]=[];
+ b.on('messagestr',s=>report.messages[username].push(s));b._client.on('custom_payload',p=>{if(p.channel==='mcagent:protection'){try{report.payloads[username].push(JSON.parse(p.data.toString('utf8')));}catch{}}});
+ b.on('error',e=>report.connectionError=String(e));
+ await Promise.race([new Promise((r,j)=>{b.once('spawn',r);b.once('error',j);b.once('kicked',j);}),sleep(20000).then(()=>{throw Error('spawn timeout');})]);return b;}
+async function chat(b,q,ms=300){const n=report.messages[b.username].length;b.chat(q);await sleep(ms);return report.messages[b.username].slice(n);}
+async function json(b,q,prefix,type){const lines=await chat(b,q,450),all=lines.filter(s=>s.startsWith(prefix)).map(s=>JSON.parse(s.slice(prefix.length)));const value=type?all.find(s=>s.type===type):all.at(-1);assert.ok(value,'reply '+q);return value;}
+async function tp(b,x,y,z){b.clearControlStates();b.physicsEnabled=false;await sleep(100);const moved=new Promise(r=>b.once('forcedMove',r));await rc(`minecraft:tp ${b.username} ${x} ${y} ${z}`);await Promise.race([moved,sleep(3000).then(()=>{throw Error('forcedMove timeout');})]);await until(()=>b.blockAt(new Vec3(x,y,z))!==null,'target chunk',5000);await sleep(450);b.entity.velocity.set(0,0,0);b.physicsEnabled=true;}
+const block=async(x,y,z)=>JSON.parse(await rc(`structureqa block ${x} ${y} ${z}`)).block;
+const protection=(b,action,x,y,z)=>json(b,`/mycli protect ${action} ${x} ${y} ${z}`,'MC_PROTECTION ');
+const status=b=>json(b,'/mycli world practice status','MC_WORLD ','practice');
+async function forward(b,target,condition,ms=9000){await b.lookAt(target,true);b.setControlState('forward',true);try{await until(condition,'native walk',ms);}finally{b.clearControlStates();}await sleep(250);}
+let actor,eye;
+try{
+ await until(async()=>{try{return(await rc('version AgentFriend')).includes('0.4.6');}catch{return false;}},'startup',150000);
+ check('final candidate enabled',(await rc('version AgentFriend')).includes('0.4.6'));
+ actor=await make(name);await rc('minecraft:gamemode survival '+name);
+ await rc(`minecraft:effect give ${name} minecraft:resistance 9999 4 true`);
+ await rc(`minecraft:effect give ${name} minecraft:night_vision 9999 0 true`);
+ await tp(actor,-1181.5,18,-1546.5);
+ const ready=await json(actor,'/mycli world practice start','MC_WORLD ','practice');
+ check('optional practice starts empty without issuing skills or rewards',ready.active&&ready.verifiedSteps===0&&ready.source==='server_observed_native_action');
+ const listing=await chat(actor,'/mycli explain world.practice');
+ check('existing CLI discovers native practice',listing.some(s=>s.includes('world.practice')&&s.includes('爬')));
+ const menu=await chat(actor,'/mycli world menu');await until(()=>actor.currentWindow,'native menu');
+ check('native menu retains 27 slots and exposes ladder practice',actor.currentWindow.inventoryStart===27&&actor.currentWindow.slots[15]?.name==='ladder');actor.closeWindow(actor.currentWindow);
+ const admin=await chat(actor,'/mycli admin structures reload');check('ordinary player cannot change structure rules',admin.some(s=>s.includes('控制台')));
+ const wall=new Vec3(-1184,18,-1547);
+ assert.equal(actor.blockAt(wall)?.name,'blast_furnace','native bunker original fabric');report.wall=wall;
+ const denied=await protection(actor,'break',wall.x,wall.y,wall.z);report.denial=denied;
+ check('actual generated piece denies breaking and supplies bounds plus correct next action',denied.reason==='generated_structure'&&!denied.allowed&&denied.boundaryInclusive&&denied.areas.some(a=>a.envelopeOnly)&&denied.nextAction.includes('梯')&&denied.nextCommands.includes('/mycli world practice start'));
+ const before=await block(wall.x,wall.y,wall.z);
+ await rc(`minecraft:give ${name} minecraft:diamond_pickaxe 1`);await sleep(250);await actor.equip(actor.inventory.items().find(i=>i.name==='diamond_pickaxe'),'hand');
+ report.digTime=actor.digTime(actor.blockAt(wall));await Promise.race([actor.dig(actor.blockAt(wall)).catch(()=>{}),sleep(report.digTime+500)]);actor.stopDigging();await sleep(300);
+ check('real native digging is cancelled and server wall remains',await block(wall.x,wall.y,wall.z)===before&&report.payloads[name].some(x=>x.reason==='generated_structure'&&x.x===wall.x&&x.y===wall.y&&x.z===wall.z));
+ await rc(`minecraft:give ${name} minecraft:dirt 5`);await sleep(250);await actor.equip(actor.inventory.items().find(i=>i.name==='dirt'),'hand');
+ const base=actor.blockAt(new Vec3(-1182,17,-1547));assert.ok(base&&base.boundingBox==='block','placement fixture floor');
+ const count=actor.inventory.items().filter(i=>i.name==='dirt').reduce((n,i)=>n+i.count,0);
+ await Promise.race([actor.placeBlock(base,new Vec3(0,1,0)).catch(()=>{}),sleep(1300)]);await sleep(350);
+ check('native block placement inside a piece is cancelled without spending stack',await block(-1182,18,-1547)==='minecraft:air'&&actor.inventory.items().filter(i=>i.name==='dirt').reduce((n,i)=>n+i.count,0)===count);
+ await actor.unequip('hand');
+ await tp(actor,-553.5,67,-429.5);
+ await rc('minecraft:execute positioned -554 67 -431 as @e[type=minecraft:villager,distance=..12] run data merge entity @s {NoAI:1b}');
+ await rc('structureqa closedoor -554 67 -431');await sleep(150);assert.ok((await block(-554,67,-431)).includes('open=false'),'fixture actually closed door');
+ const canUse=await protection(actor,'use',-554,67,-431);check('existing generated village wooden door remains usable',canUse.allowed===true);
+ await actor.activateBlock(actor.blockAt(new Vec3(-554,67,-431)));await sleep(200);
+ check('client native use opens actual village door',(await block(-554,67,-431)).includes('open=true'));
+ await tp(actor,-553.5,67,-432.5);check('teleporting through an opened door gives no practice proof',(await status(actor)).verifiedSteps===0);
+ await tp(actor,-553.5,67,-429.5);await rc('structureqa closedoor -554 67 -431');await sleep(150);assert.ok((await block(-554,67,-431)).includes('open=false'),'second fixture actually closed door');
+ await actor.activateBlock(actor.blockAt(new Vec3(-554,67,-431)));await sleep(200);
+ await forward(actor,new Vec3(-553.5,68,-433.5),()=>actor.entity.position.z< -431.3);
+ report.doorProof=await status(actor);report.doorState=await block(-554,67,-431);report.doorEnd=actor.entity.position.clone();report.doorEvents=JSON.parse(await rc('structureqa evidence 0 0 0'));check('actual opening plus walking through village door records native proof',report.doorProof.verifiedSteps===1&&report.doorProof.steps.find(x=>x.id==='door_passage').done);
+ const houseDoor=await protection(actor,'break',-554,67,-431);check('original house guard also teaches native door and ladder routes',houseDoor.allowed===false&&houseDoor.nextAction.includes('木门')&&houseDoor.nextCommands.includes('/mycli world practice start'));
+ for(const item of ['iron_axe','flint_and_steel']){await rc(`minecraft:give ${name} minecraft:${item} 1`);await sleep(200);await actor.equip(actor.inventory.items().find(i=>i.name===item),'hand');await rc('structureqa closedoor -554 67 -431');await sleep(150);await actor.activateBlock(actor.blockAt(new Vec3(-554,67,-431)));await sleep(150);check('native door remains usable while holding '+item,(await block(-554,67,-431)).includes('open=true'));}await actor.unequip('hand');
+ await tp(actor,-1175.5,50,-1554.5);await tp(actor,-1175.5,54,-1554.5);check('console relocation up actual ladder gives no ascent proof',!(await status(actor)).steps.find(x=>x.id==='ladder_ascent').done);
+ await tp(actor,-1175.5,50,-1554.5);await actor.lookAt(new Vec3(-1175.5,51,-1556.5),true);actor.setControlState('forward',true);actor.setControlState('jump',true);
+ try{await until(()=>actor.entity.position.y>=54,'native ladder ascent',10000);}finally{report.ladderEnd=actor.entity.position.clone();report.ladderClientBlock=actor.blockAt(actor.entity.position)?.name;actor.clearControlStates();}await sleep(250);
+ report.proof=await status(actor);report.ladderEnd=actor.entity.position;
+ check('real climbing on generated bunker ladder completes both steps',report.proof.completed&&!report.proof.active&&report.proof.steps.find(x=>x.id==='ladder_ascent').evidence.ascent>=3);
+ eye=await make('TravEye46'+id);await rc('minecraft:gamemode spectator '+eye.username);await tp(eye,actor.entity.position.x,actor.entity.position.y,actor.entity.position.z);
+ const noPractice=await chat(eye,'/mycli world practice start');check('spectator cannot enroll in physical practice',noPractice.some(s=>s.includes('观战'))&&(await status(eye)).verifiedSteps===0);
+ check('practice proofs remain private to their owner',!report.messages[eye.username].some(s=>s.includes('ladder_ascent')&&s.includes('"done":true')));
+ await tp(actor,-1181.5,18,-1546.5);
+ const measure=JSON.parse(await rc('structureqa measure -1182 18 -1547'));report.measure=measure;
+ check('5000 structure checks load no extra chunks and preserve native references',measure.reason==='generated_structure'&&measure.loadedBefore===measure.loadedAfter&&measure.nativeReferencesUnchanged);
+ writeFileSync(config,settings.replace('schema-version: 1','schema-version: 999'));
+ check('invalid reload retains last valid protection',(await rc('mycli admin structures reload')).includes('invalid_configuration')&&(await protection(actor,'break',wall.x,wall.y,wall.z)).reason==='generated_structure');
+ writeFileSync(config,settings);check('valid rules reload without server restart',(await rc('mycli admin structures reload')).includes('success'));
+ writeFileSync(config,settings.replace(/^namespaces:.*$/m,'namespaces: accidental_scalar'));check('accidental scalar rule list is rejected without losing protection',(await rc('mycli admin structures reload')).includes('invalid_configuration'));writeFileSync(config,settings);await rc('mycli admin structures reload');
+ await rc('minecraft:fill -1185 19 -1544 -1181 21 -1542 minecraft:air');await rc('minecraft:fill -1185 18 -1544 -1181 18 -1542 minecraft:stone');
+ await rc('minecraft:setblock -1184 19 -1544 minecraft:sticky_piston[facing=east]');await rc('minecraft:setblock -1183 19 -1544 minecraft:stone');
+ await rc('minecraft:setblock -1184 19 -1543 minecraft:lever[face=floor,facing=north,powered=false]');
+ await tp(actor,-1182.5,19,-1541.5);await actor.activateBlock(actor.blockAt(new Vec3(-1184,19,-1543)));await sleep(700);
+ check('native lever and original-style internal piston circuit can extend',(await block(-1184,19,-1544)).includes('extended=true')&&(await block(-1182,19,-1544))==='minecraft:stone');
+ await actor.activateBlock(actor.blockAt(new Vec3(-1184,19,-1543)));await sleep(700);
+ check('internal sticky piston can retract without being confused with facing',(await block(-1184,19,-1544)).includes('extended=false')&&(await block(-1183,19,-1544))==='minecraft:stone');
+ await rc('minecraft:setblock -1194 19 -1547 minecraft:air');
+ await rc('minecraft:fill -1194 20 -1547 -1185 21 -1547 minecraft:air');await rc('minecraft:setblock -1194 20 -1547 minecraft:piston[facing=east]');await rc('minecraft:fill -1193 20 -1547 -1186 20 -1547 minecraft:stone');
+ await rc('minecraft:setblock -1194 19 -1547 minecraft:redstone_block');await sleep(700);
+ check('outside piston cannot push a block chain into protected building',(await block(-1194,20,-1547)).includes('extended=false')&&await block(-1185,20,-1547)==='minecraft:air');
+ await rc('minecraft:setblock -1184 20 -1551 minecraft:stone');await rc('structureqa explode -1183 20 -1551');
+ check('actual explosion preserves protected fabric',await block(-1184,20,-1551)==='minecraft:stone');
+ await rc('minecraft:fill -1184 18 -1549 -1182 18 -1549 minecraft:stone');await rc('minecraft:setblock -1182 20 -1549 minecraft:glowstone');await rc('minecraft:setblock -1183 18 -1549 minecraft:farmland[moisture=7]');await rc('minecraft:setblock -1183 19 -1549 minecraft:wheat[age=7]');await tp(actor,-1181.5,19,-1548.5);
+ check('farm harvest remains allowed',(await protection(actor,'break',-1183,19,-1549)).allowed===true);
+ await actor.dig(actor.blockAt(new Vec3(-1183,19,-1549)));await sleep(250);check('actual crop can be harvested',await block(-1183,19,-1549)==='minecraft:air');
+ await rc(`minecraft:give ${name} minecraft:wheat_seeds 3`);await sleep(200);await actor.equip(actor.inventory.items().find(i=>i.name==='wheat_seeds'),'hand');await actor.placeBlock(actor.blockAt(new Vec3(-1183,18,-1549)),new Vec3(0,1,0));await sleep(250);
+ check('actual crop can be replanted without editing building foundation',(await block(-1183,19,-1549)).startsWith('minecraft:wheat'));
+ await rc('minecraft:setblock -1181 19 -1550 minecraft:barrel');await actor.unequip('hand');
+ check('structure guard keeps loot containers subject to existing rules',(await protection(actor,'container',-1181,19,-1550)).allowed===true);
+ const barrel=await actor.openContainer(actor.blockAt(new Vec3(-1181,19,-1550)));check('native container can still open',barrel.inventoryStart===27);barrel.close();
+ await rc('minecraft:fill -1232 91 -1582 -1228 91 -1578 minecraft:stone');await rc('minecraft:setblock -1231 92 -1581 minecraft:dirt');await tp(actor,-1230.5,92,-1580.5);await sleep(200);
+ check('unprotected outside building remains editable',(await protection(actor,'break',-1231,92,-1581)).allowed===true);
+ await actor.dig(actor.blockAt(new Vec3(-1231,92,-1581)));await sleep(250);check('real outside digging remains possible',await block(-1231,92,-1581)==='minecraft:air');
+ await chat(actor,'/mycli guild shared');check('shared storage discovery remains available',report.messages[name].some(s=>s.includes('MC_GUILD_SHARED id=')));
+ await tp(actor,-472.5,67,-497.5);check('existing guild public chest still permits visitors',(await protection(actor,'container',-473,67,-495)).allowed===true);const publicBox=await actor.openContainer(actor.blockAt(new Vec3(-473,67,-495)));check('real guild public double chest still opens',publicBox.inventoryStart===54);publicBox.close();
+ await tp(actor,-491.5,67,-502.5);const privateBox=await protection(actor,'container',-494,67,-505);check('guild private storage still denies visitor with public alternative',privateBox.allowed===false&&privateBox.reason==='guild_owner_only'&&privateBox.nextCommands.includes('/mycli guild shared'));
+ report.actor=name;report.proof=await status(actor);report.audit=await rc('mycli admin structures audit');report.mspt=await rc('mspt');report.passed=true;
+}catch(e){report.error=String(e.stack||e);console.error(e);process.exitCode=1;}
+finally{writeFileSync(config,settings);await rc('mycli admin structures reload').catch(()=>{});for(const b of bots){b.clearControlStates();b.quit();await rc('minecraft:whitelist remove '+b.username).catch(()=>{});}report.endedAt=new Date().toISOString();writeFileSync(root+'/practice-test-'+Date.now()+'.json',JSON.stringify(report,null,2));}

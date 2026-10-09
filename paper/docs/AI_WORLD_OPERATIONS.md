@@ -51,6 +51,7 @@
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
+| 自然建筑保护与通行实练（0.4.6待发布） | `structure-protection.yml`、控制台 `structures reload/audit`、`world practice start/status/stop`；[规则](STRUCTURE_PROTECTION.md) | 已加载原生结构片段；本人玩家数据 PDC 中的真实开门穿越、连续爬梯证明 | 六个建筑包命名空间及明确结构 ID 可热配置；禁止拆建，保留原生通路、农耕和原有箱子权限。可选实练不代操作、不发奖、不表示长期掌握；原Agent客户端保持。用户要求暂不重启，正式服仍0.4.5，不能宣称已上线 |
 | 村庄生活（0.3.99） | `world list/menu/npcs/talk/end/guide/events/photos`、`/photohelp`、罗盘旅途指南；[插件包](WORLD_LIFE_PLUGINS.md) | UUID实习账本、BetonQuest数据库、NPC持久数据、本人ImageFrame图片；既有QwenPaw原生任务 | 已开放三步真实操作实习、村民对话/故事、补给商和正向活动。NPC/任务/精英可编辑配置后隔离热加载。现有截图通过本人临时链接直接上传成地图并挂墙，原客户端无须更换；服务器不代按快门。 |
 | 组队救援（0.3.96已上线） | 4格内停留10秒自动救起，当前层/室清场自动复活；`arena status`、`dungeon status`；[救援规则及系统提示](TRIAL_RESCUE.md) | config.yml的trial-rescue、原塔检查点和地下城场次ID；保留原奖励和物品 | 服务器私发倒地坐标、救援方法与进度；Agent用原移动能力靠近并等待。全员倒地才失败，离线/正常重启保留，部分救援计时重置。普通塔恢复原配怪，强化仅用于冒险/末日 |
 | 玩家委托与分页箱（0.3.94） | 公会玩家委托、`commission list/mine/info/menu/publish/accept/claim/abandon/cancel`，`arena stash pages/page/list`；[玩法](MYCLI_AGENT_CLI.md) | config.yml的player-contracts.jobs/active、既有余额/待入箱队列和0–539槽位 | 已上线；玩家发布供货/同行无需代码或重启，每单一人、托管报酬、实物与真实探索返程验收。10页540格，待入箱队列1024组；客户端沿用现有协议 |

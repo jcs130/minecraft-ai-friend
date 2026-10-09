@@ -266,11 +266,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return soulboundGear != null && soulboundGear.owner(item) != null;
     }
     private SkillVisuals skillVisuals;
+    private GeneratedStructureProtection generatedStructures;
+    private NativeTraversalPractice traversalPractice;
     private final SpellPresentation spellPresentation = new SpellPresentation(this);
 
     @Override public void onEnable() {
         saveDefaultConfig();
         worldLife = new WorldLifeManager(this);
+        traversalPractice = new NativeTraversalPractice(this);
         goddessGifts = new GoddessGifts(this);
         arenaBuilt = getConfig().getBoolean("arena-built", false);
         lastRun = getConfig().getLong("last-run", 0L);
@@ -306,6 +309,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         lifeBuildings = new LifeGuildBuildings(this, lifeGuild);
         protectionAdvisor = new ProtectionAdvisor(this);
         lands = new LandManager(this);
+        generatedStructures = new GeneratedStructureProtection(this);
         guildShared = new GuildSharedStorage(this);
         guildStorage = new GuildStorageOwnership(this);
         waypoints = new WaypointManager(this);
@@ -394,6 +398,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     GuildSharedStorage guildShared() { return guildShared; }
     GuildStorageOwnership guildStorage() { return guildStorage; }
     ProtectionAdvisor protectionAdvisor() { return protectionAdvisor; }
+    GeneratedStructureProtection generatedStructures() { return generatedStructures; }
+    NativeTraversalPractice traversalPractice() { return traversalPractice; }
     LandManager lands() { return lands; }
     WaypointManager waypoints() { return waypoints; }
     LandmarkManager landmarks() { return landmarks; }
@@ -924,15 +930,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return true;
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("admin")
-                && Set.of("dungeons", "trialwaves", "worldlife").contains(args[1].toLowerCase(Locale.ROOT))) {
+                && Set.of("dungeons", "trialwaves", "worldlife", "structures").contains(args[1].toLowerCase(Locale.ROOT))) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
-                sender.sendMessage("只允许服务器控制台热更新地下城配置。"); return true;
+                sender.sendMessage("只允许服务器控制台审计或热更新世界内容配置；玩家请用 /mycli world list 查看玩法。"); return true;
             }
             if (!Set.of("reload", "audit").contains(args[2].toLowerCase(Locale.ROOT))) {
-                sender.sendMessage("用法：mycli admin dungeons|trialwaves reload|audit"); return true;
+                sender.sendMessage("用法：mycli admin dungeons|trialwaves|worldlife|structures reload|audit"); return true;
             }
             if (args[1].equalsIgnoreCase("dungeons")) siteDungeons.admin(sender, args[2].toLowerCase(Locale.ROOT));
             else if (args[1].equalsIgnoreCase("worldlife")) sender.sendMessage("World life content: " + worldLife.reload());
+            else if (args[1].equalsIgnoreCase("structures")) generatedStructures.admin(sender, args[2].toLowerCase(Locale.ROOT));
             else dungeon.waveConfig(sender, args[2].equalsIgnoreCase("reload"));
             return true;
         }

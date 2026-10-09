@@ -302,6 +302,7 @@ final class EngineeringSites implements Listener {
                 || plugin.villageProtection().deniesEdit(block) || plugin.lifeBuildings().deniesEdit(block)
                 || plugin.trialRoad().deniesBreak(block) || plugin.trialRoad().deniesPlace(block)
                 || plugin.deniesArenaEdit(block) || plugin.dungeon().deniesEdit(block.getLocation())
+                || plugin.generatedStructures() != null && plugin.generatedStructures().reason(block.getLocation()) != null
                 || !protection.testBuild(BukkitAdapter.adapt(block.getLocation()), PUBLIC_BUILDER, Flags.BLOCK_BREAK, Flags.BLOCK_PLACE);
     }
 
