@@ -98,6 +98,52 @@ test('a recipe with mismatched full output components cannot take or consume its
   assert.equal(menu.state.slots[1].id,'minecraft:oak_log')
 })
 
+test('compact native chest recipe consumes eight actual planks and preserves the empty centre', async () => {
+  const inputs = Object.fromEntries([1, 2, 3, 4, 6, 7, 8, 9].map(slot => [slot, 'minecraft:oak_planks']))
+  const output = item('minecraft:chest', 1)
+  const menu = nativeMenu({ type: 'minecraft:crafting', inputs, output, inventory: { 37: item('minecraft:oak_planks', 8) } })
+  const row = { recipeId: 'minecraft:chest', type: 'minecraft:crafting', serializer: 'minecraft:crafting_shaped', definitionAvailable: true,
+    ingredientEncoding: 'prior_index_references_v1', output, grid: { width: 3, height: 3 },
+    ingredients: Array.from({ length: 9 }, (_, index) => index === 4 ? { index, empty: true, requiredCount: 0, alternatives: [] } :
+      index === 0 ? { index, empty: false, requiredCount: 1, alternatives: [{ id: 'minecraft:birch_planks' }, { id: 'minecraft:oak_planks' }] } :
+        { index, empty: false, requiredCount: 1, alternativesFrom: 0 }) }
+  const query = { recipes: async () => ({ ok: true, playerUuid: menu.state.playerUuid, recipes: [row] }) }
+  const before = JSON.stringify(row)
+  const result = await craftNativeRecipe(menu, query, menu.state.playerUuid, { recipeId: 'minecraft:chest' })
+  assert.equal(result.ok, true); assert.equal(result.snbt, output.snbt)
+  assert.deepEqual(result.ingredients.map(value => value.slot), [1, 2, 3, 4, 6, 7, 8, 9])
+  assert.equal(menu.state.slots.filter(value => value?.id === 'minecraft:oak_planks').length, 0)
+  assert.equal(menu.state.carried, null); assert.equal(JSON.stringify(row), before)
+})
+
+test('unavailable native recipe preserves the actual server reason without consuming or moving ingredients', async () => {
+  const menu = nativeMenu({ inventory: { 36: item('minecraft:oak_planks', 8) } })
+  const query = { recipes: async () => ({ ok: true, playerUuid: menu.state.playerUuid,
+    recipes: [{ recipeId: 'minecraft:chest', type: 'minecraft:crafting', serializer: 'minecraft:crafting_shaped',
+      definitionAvailable: false, code: 'recipe_definition_too_large' }] }) }
+  const result = await craftNativeRecipe(menu, query, menu.state.playerUuid, { recipeId: 'minecraft:chest', clearInputs: true })
+  assert.equal(result.code, 'native_crafting_recipe_unavailable'); assert.equal(result.definitionCode, 'recipe_definition_too_large')
+  assert.equal(menu.clicks.length, 0); assert.equal(menu.state.slots[36].count, 8)
+})
+
+for (const [label, mutate] of [
+  ['forward reference', row => { row.ingredients[0] = { index: 0, empty: false, requiredCount: 1, alternativesFrom: 1 } }],
+  ['self reference', row => { row.ingredients[1] = { index: 1, empty: false, requiredCount: 1, alternativesFrom: 1 } }],
+  ['negative reference', row => { row.ingredients[1] = { index: 1, empty: false, requiredCount: 1, alternativesFrom: -1 } }],
+  ['mixed inline and reference', row => { row.ingredients[1].alternativesFrom = 0 }],
+  ['unknown encoding', row => { row.ingredientEncoding = 'unknown_v9' }],
+  ['unmarked reference', row => { delete row.ingredientEncoding; delete row.ingredients[1].alternatives; row.ingredients[1].alternativesFrom = 0 }],
+  ['duplicate index', row => { row.ingredients[1].index = 0 }]
+]) test(`invalid native recipe ${label} is rejected before recovering old grid inputs`, async () => {
+  const menu = nativeMenu({ inventory: { 36: item('minecraft:oak_log', 2) } })
+  menu.state.slots[3] = item('test:retained', 1, { owner: 'keep' })
+  const query = recipeQuery(menu, ['minecraft:oak_log', 'minecraft:oak_log'], { width: 2, height: 1 }, item('minecraft:oak_planks', 4))
+  const response = await query.recipes(); response.recipes[0].ingredientEncoding = 'prior_index_references_v1'; mutate(response.recipes[0])
+  const result = await craftNativeRecipe(menu, { recipes: async () => response }, menu.state.playerUuid, { recipeId: 'test:actual_recipe', clearInputs: true })
+  assert.equal(result.code, 'native_recipe_ingredients_invalid'); assert.equal(menu.clicks.length, 0)
+  assert.equal(menu.state.slots[3].id, 'test:retained'); assert.equal(menu.state.carried, null)
+})
+
 test('actual slot permission array overrides an item-shaped mayPickup hint', async () => {
   const menu = nativeMenu({ inventory: { 36: item('minecraft:oak_log', 4) } })
   menu.state.mayPickup[36] = false

@@ -1,5 +1,9 @@
 # My Agent World：Neko 接入与维护
 
+2026-10-09 配方实测修复：模组木板标签曾令箱子的原生配方超过大小限制，现通过 `ingredientEncoding=prior_index_references_v1` 与前序 `alternativesFrom` 保留完整候选/组件并压缩重复项。`native.craftRecipe` 自动展开，非法引用在所有菜单点击前拒绝；不可用定义返回实际原因，不误称缺材料。冷备并更新新服桥后，MawNeko 已实际从材料合成普通箱子和漏斗；磨粉及后续面包生产仍按实机记录逐段核验。原服、原 MawExplorer 暂停和旧未知记录保持，未接 QwenPaw API。
+
+09:57：漏斗尚未实际放置，模型重复选择空手而未装备漏斗，本次有限测试已正常停止，累计用量 1275 / 1280 保留，无在途或新未知。服务器持续运行；生产链未完成，不代表已可无人干预经营。下次继续须先核对现场/本人物品与原停止记录，不能清账本或重投旧未知。
+
 2026-10-09 后续更新：SDK 58 项/19 频道；同账号已实际制作机壳、齿轮箱、磨石并转换垂直齿轮箱，完整动力磨粉/烤面包仍按[实机任务记录](MY-AGENT-WORLD-CREATE-WINDMILL.md)逐段验证。模型仍直接线上 `qwen3.7-plus`，不接 QwenPaw。摘要除历史片段外读取本人当前原生库存与独立回执进度，要求 450 字内，压缩半份有界历史；缺少观测不能写成空库存或未做过。重新连接从累计原生回执恢复任务证据；当前测试启动使用 `Agent.start(false, ...)`，不自动加载旧聊天记忆，更不会重放旧动作。模型账本最大可配置 1280、默认 24，累计用量不重置。
 
 2026-10-08：已为 [mc-agent-neko](https://github.com/wehos/mc-agent-neko) 和 [Project N.E.K.O.](https://github.com/Project-N-E-K-O/N.E.K.O) 接通原生模组工具。mc-agent-neko 提供 Mineflayer 身体，N.E.K.O. 现有 Minecraft 插件增加 `minecraft_mod` 工具；后者是可选对话入口，普通 Agent 仍可直接使用框架无关的 [原生 SDK](MY-AGENT-WORLD-NATIVE-CALL-API.md)。

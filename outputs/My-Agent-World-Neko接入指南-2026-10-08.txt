@@ -1,5 +1,9 @@
 ﻿My Agent World：Neko Agent 接入指南（更新于 2026-10-09）
 
+最新兼容修复：箱子等配方的重复材料候选列表使用 alternativesFrom 引用此前 ingredient.index，标记为 ingredientEncoding=prior_index_references_v1，完整名称/组件不丢失。native.craftRecipe 会自动展开；直接读取 native.recipes 的客户端需要支持此编码。新服已冷备、更新并恢复；Agent 已真实合成箱子和漏斗，风车已给磨石提供 1 RPM 动力，实际磨粉/面团/烤面包仍在逐段验证。
+
+09:57 本次有限 Agent 测试已正常停止，服务器继续运行。模型在重复选择空手处停滞，漏斗放置和食物生产未完成；所有现场、失败回执与累计调用 1275/1280 保留。不能将接口测试通过等同于完全自主游玩。
+
 可以使用 mc-agent-neko 控制游戏角色，Project N.E.K.O. 负责对话并调用它。N.E.K.O. 是可选入口，其他 Agent 也能直接使用服务器提供的原生 SDK。
 
 游戏连接：192.168.3.163:28977

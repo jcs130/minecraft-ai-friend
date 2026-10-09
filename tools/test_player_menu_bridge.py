@@ -31,6 +31,16 @@ class PlayerMenuBridgeAudit(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr[-5000:])
         return result.stdout
 
+    def test_large_repeated_recipe_alternatives_remain_lossless_under_wire_budget(self):
+        with tempfile.TemporaryDirectory(prefix="recipe-ingredient-codec-") as temporary:
+            self.run_java([str(self.java.with_name("javac.exe")), "-proc:none", "--release", "21", "-encoding", "UTF-8",
+                           "-cp", self.cp, "-d", temporary,
+                           str(SOURCE / "dev/qiandeng/maw/RecipeIngredientEncoding.java"),
+                           str(REPO / "world/society-bridge-src/src/test/java/dev/qiandeng/maw/RecipeIngredientEncodingTest.java")])
+            output = self.run_java([str(self.java), "-cp", temporary + os.pathsep + self.cp,
+                                    "dev.qiandeng.maw.RecipeIngredientEncodingTest"])
+            self.assertRegex(output, r"RecipeIngredientEncoding 21 checks passed; rawBytes=39110; wireBytes=5461")
+
     def test_complete_menu_request_fingerprint_reservation_conflict_and_unknown_replay(self):
         with tempfile.TemporaryDirectory(prefix="menu-replay-contract-") as temporary:
             self.run_java([str(self.java.with_name("javac.exe")), "-proc:none", "--release", "21", "-encoding", "UTF-8",

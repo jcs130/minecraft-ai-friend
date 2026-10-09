@@ -122,7 +122,7 @@ const definitions = [
   ['menu.click', false, '原生 PICKUP，0 左键整堆、1 右键逐个；使用当前完整槽位/游标 CAS。',
     object({ slot: integer(0, 200), button: { ...integer(0, 1), default: 0 } }, ['slot']), (c, a) => c.menu.click(a.slot, a.button ?? 0)],
   ['world.look', true, '服务端读取本人准星首个可见方块及有限真实机器状态。', object(), c => c.world.look()],
-  ['native.recipes', true, '分页读取本服真实 RecipeManager；定义可读不代表机器已实现。',
+  ['native.recipes', true, '分页读取本服真实 RecipeManager；定义可读不代表机器已实现。ingredientEncoding=prior_index_references_v1 时 alternativesFrom 引用此前 ingredient.index 的完整候选列表；native.craftRecipe 自动展开，不能当作没有材料。',
     object({ recipeId: namespace, recipeType: namespace, outputId: namespace, offset: integer(0, 10000), limit: integer(1, 12) }), (c, a) => c.native.recipes(a)],
   ['native.entity', true, '读取本人已跟踪、可见实体的实际身份与关系。',
     object({ entityId: integer(0, Number.MAX_SAFE_INTEGER), expectedUuid: uuid }, ['entityId', 'expectedUuid']), (c, a) => c.native.entity(a)],

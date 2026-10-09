@@ -9,7 +9,7 @@ const descriptors = [
   ['select', '选择快捷栏并等待实际服务端确认；本地quickBarSlot不是成功证据。', { hotbarSlot: '整数0..8，对应规范背包槽36..44' }],
   ['place', '用真实已持有物品，向参照方块的一面放置；需要空目标。', { position: '参照方块绝对整数坐标', face: '一轴±1，另两轴0', hotbarSlot: '0..8', itemId: '真实原生物品ID', blockId: '期望原生方块ID', verificationOffset: '可选[0..1,0..1,0..1]' }],
   ['craft', '原生2x2/3x3网格合成；网格/游标先空，真实结果核验后取入空背包槽。', { ingredients: '[{slot:网格槽1..4或1..9,id:真实ID,count:1..64}]', outputId: '期望原生物品ID', outputCount: '预期数量' }],
-  ['recipes', '读取服务端真实RecipeManager，列出包括Create在内的实际recipeTypes；原生合成/烹饪和FD烹饪/切割可导出已确认定义，其他定义以实际definitionAvailable/code为准，false不可当成可执行配方。',
+  ['recipes', '读取服务端真实RecipeManager，列出包括Create在内的实际recipeTypes；原生合成/烹饪和FD烹饪/切割可导出已确认定义，其他定义以实际definitionAvailable/code为准，false不可当成可执行配方。ingredientEncoding=prior_index_references_v1时，ingredients的alternativesFrom引用此前index的完整alternatives；native.craftRecipe自动展开，不可当作没有材料。',
     { args: '{recipeId?,recipeType?,outputId?:严格namespaced ID,offset?:0..10000,limit?:1..12 默认6}' }, { type: 'recipes', args: { recipeType: 'create:milling', outputId: 'create:wheat_flour', limit: 1 } }],
   ['block_inspect', '本人准星可见单一方块；FD切菜板/炉灶、Create磨石会捕获绑定本人UUID/epoch/维度/绝对位置/原生ID的verificationId，最多32个、10分钟失效。可加真实recipeId确定原生产物；未知配方不猜。', { position: '绝对整数', aimOffset: '可选[0..1]^3；切菜板建议[.5,.03,.5]', expectedId: '可选原生方块ID', recipeId: '可选recipes已读取的实际ID' }, { type: 'block_inspect', position: { x: 0, y: 64, z: 0 }, aimOffset: [0.5, 0.03, 0.5] }],
   ['use_block', '一次原生右键，使用实际hit.face/cursor。原料/正确工具由本人选中槽决定；process仅用于切菜板且要求真实recipeId、匹配输入和服务器heldToolMatches。投入/加工/产出/拾取分开回执；权限拒绝或没变化返回not_observed，发送不算完成，不盲目重复。', { position: '绝对整数', aimOffset: '可选[0..1]^3；切菜板[.5,.03,.5]', expectedId: '可选原生方块ID', recipeId: '可选真实recipe ID；process必需', intent: 'interact默认|load|process|collect；不会自动选工具或搬料' }],

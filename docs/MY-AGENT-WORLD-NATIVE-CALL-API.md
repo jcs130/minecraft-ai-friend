@@ -26,6 +26,8 @@ bot.once('spawn', async () => {
 
 `operations()` 是实际适配器的 **58 项调用绑定**，`remoteSupportVerified=false`；目录存在不表示当前服务器、机器或角色满足条件。`operations(id)` 的未知 ID 返回 `mod_operation_not_found`。`call(id,args)` 严格核对目录参数；未知操作、额外玩家参数、非法坐标或槽位在发送前拒绝。
 
+2026-10-09 配方编码更新：模组扩展木板标签后，箱子的八处相同候选列表曾使单条定义超过 8192 字节。服务端现在无损复用重复列表：`ingredientEncoding="prior_index_references_v1"` 时，`ingredients[].alternativesFrom` 指向同一配方中更早的 `ingredient.index`，继承其完整 `alternatives`（包括名称、数量、SNBT），不是没有材料。首个列表与空格保留原样；不提高每行 8192 字节、整包 16 KiB 或候选数量限制。通用 `native.craftRecipe` 自动展开，非法前向、自引用、未知编码、重复索引或混合内联/引用在任何菜单点击前拒绝。其他客户端直接解析 `native.recipes` 时也须处理该标记；无法处理应明确拒绝，不能猜材料。定义仍不可用时，合成回执保留服务端 `definitionCode`，不能把它误当作缺少材料。
+
 | 命名空间 | 项数 | 范围 |
 | --- | --- | --- |
 | `menu` | 3 | 本人窗口缓存、真实左右键 PICKUP、关闭窗口 |

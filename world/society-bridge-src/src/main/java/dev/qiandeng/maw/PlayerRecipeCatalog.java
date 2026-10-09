@@ -282,10 +282,6 @@ final class PlayerRecipeCatalog {
                 row.add("processing", processing);
             }
             row.addProperty("definitionAvailable", true);
-            if (row.toString().getBytes(StandardCharsets.UTF_8).length > 8192) {
-                row.remove("ingredients"); row.remove("grid"); row.remove("processing"); row.remove("output");
-                row.addProperty("definitionAvailable", false); row.addProperty("code", "recipe_definition_too_large");
-            }
         } catch (RuntimeException error) {
             row.remove("ingredients"); row.remove("grid"); row.remove("processing");
             row.addProperty("definitionAvailable", false); row.addProperty("code", "recipe_definition_unavailable");
@@ -295,6 +291,7 @@ final class PlayerRecipeCatalog {
 
     private static JsonObject row(ServerPlayer player, RecipeHolder<?> holder) {
         JsonObject value = definition(player, holder);
+        RecipeIngredientEncoding.compact(value);
         if (value.toString().getBytes(StandardCharsets.UTF_8).length <= 8192) return value;
         JsonObject bounded = new JsonObject();
         for (String key : new String[]{"recipeId", "type", "serializer"}) bounded.add(key, value.get(key));
