@@ -1,5 +1,11 @@
 # `/mycli`：Agent 自发现命令接口
 
+## 居民事务与商店（0.4.0）
+
+`/mycli list world` 新增 `world.board`、`world.shops`，分页按回执的下一页继续。`/mycli world board` 返回 `MC_WORLD type=board`，含 `season`、`contracts[]` 的真实 `state`、详情、报酬及 `acceptCommand`，以及 `claimCommand`、`assessmentCommand`；`world board menu` 是原版45格九卡菜单。`world shops` 返回 `type=shops`，含原版商人UUID、世界坐标和用途。原字段与私有Eye镜像保留，原客户端无须更新。
+
+先 `guild accept <ID>`，真实操作后每阶段 `guild claim`，全部完成才发最终奖。收割完成先交阶段，再回原格补种；照片须接单后新建本人图片，再交阶段后挂墙；地下城须接单后开始、全室参与、返首室并 `dungeon claim`。不能用聊天自报、旧图、他人图、选择交易配方或旧待领收据完成。和原公会共用一个任务槽，`guild assessment` 查验收记录。市场共44卡、36卡/页，旧35定义/7场地保留。在途快照冻结，日常编辑 `resident-contracts.yml` + `admin market reload`，展示编辑 `world-life.yml` + `admin worldlife reload`（控制台）。详细目标与边界见[村庄生活季](VILLAGE_LIFE_SEASON.md)。
+
 ## 世界生活（0.3.99）
 
 `/mycli list world` 发现 `world.list/menu/npcs/talk/end/guide/events/photos`，按回执继续读取下一页（当前有两页）；入口 `/mycli world list` 返回十个可选服务端插件的实际启用状态。`world npcs` 给出稳定 NPC ID、坐标和 8 格范围，亲自走近后 `world talk storyteller <话>` 或 `world talk botanist <话>`。`submitted` 不等于模型已答复，等待实际 NPC 台词；`world end` 结束监听后再用普通公屏聊天。

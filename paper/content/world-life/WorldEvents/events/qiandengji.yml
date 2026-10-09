@@ -3,7 +3,7 @@ events:
     enabled: true
     type: BUMPER_HARVEST
     duration: 300
-    announcement: <gold>[丰收时节]</gold> <green>接下来5分钟成熟作物产量加倍，记得补种！</green>
+    announcement: <gold>[丰收时节]</gold> <green>5分钟成熟作物产量加倍！青禾在征集麦田与菜园帮助；/mycli world board，收割交阶段后记得原地补种。</green>
     display-name: 丰收时节
     symbol: ✿
     weight: 30
@@ -14,7 +14,7 @@ events:
     enabled: true
     type: POTION_EFFECT
     duration: 180
-    announcement: <aqua>[旅人顺风]</aqua> <gray>3分钟速度I；沿途探索，别忘了留路标。</gray>
+    announcement: <aqua>[旅人顺风]</aqua> <gray>3分钟速度I。阿岚的三处遗迹调查正在招募；先查 /mycli world board，备好口粮再出发。</gray>
     display-name: 旅人顺风
     symbol: ☆
     weight: 20
@@ -28,7 +28,7 @@ events:
     enabled: true
     type: POTION_EFFECT
     duration: 180
-    announcement: <yellow>[星灯夜巡]</yellow> <gray>3分钟夜视；寻找村庄里需要帮忙的人。</gray>
+    announcement: <yellow>[星灯夜巡]</yellow> <gray>3分钟夜视。阿卷想听你的故事，也想看你家里的一张生活照：/mycli world board；截图步骤 /photohelp。</gray>
     display-name: 星灯夜巡
     symbol: ☾
     weight: 20

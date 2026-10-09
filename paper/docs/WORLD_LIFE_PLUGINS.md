@@ -1,4 +1,8 @@
-# 村庄生活插件包（AgentFriend 0.3.99）
+# 村庄生活插件包（AgentFriend 0.4.0）
+
+**本次收尾复核：**原机CortiEye已实际恢复 `camera=online attached=true cameraNightVision=true`，目标CortiLan；Goddess/CortiLan/CortiEye/ag_NEKO四个原服务账号均已回连。女神资料箱与玩家手册SHA256同为 `F3947044583989863935E2DA693A6809597FFC441B503D0FBE5E4F075433C69D`，另附村庄生活季指南；两项原生只读问答实际读取两份资料后答复111/70字符，准确解释原格补种、普通配怪和本人照片保留，没有主动游戏公告。下方维护期间尚未回连的记录为历史。
+
+**当前0.4.0已上线：**九张居民事务、真实收购与远行商店、照片和遗迹调查形成完整验收；玩法、角色分工和可热配置目标见[村庄生活季](VILLAGE_LIFE_SEASON.md)。`/mycli world board` 与 `world shops` 是新增入口。下方早期发布/连接状态均为历史，最终状态见维护记录。
 
 **2026-10-09 08:27:20 最终复核：**原机 CortiEye 已自动回连，实际 `camera=online attached=true cameraNightVision=true`，目标为 CortiLan；本次重启前四个服务账号均恢复。下方“尚未回连/离线”是恢复前的检查时点，不能继续作为当前镜头状态。截图上传配置与原客户端保持。私有最终回执在 E/F `repairs/screenshot-photos-20261009/final-state.json`。
 
@@ -14,8 +18,8 @@
 | Denizen | 1.3.4-b7311-DEV | 旅人阿岚的点击对话和 `/village-story` 短故事 |
 | ConditionalEvents | 4.80.3 | 登录后私发新玩法入口；删除上游示例命令事件 |
 | WorldEvents | 1.8.30 | 丰收时节、旅人顺风、星灯夜巡三个正向活动 |
-| MythicMobs | 5.9.5 | 遗迹游猎者、遗迹守卫、遗迹药师三个原版实体活动模板 |
-| Shopkeepers | 2.23.3 | 村庄补给商，以绿宝石换面包、纸和空地图 |
+| MythicMobs | 5.9.5 | 冒险/末日地下城的三种精英，普通配怪保留 |
+| Shopkeepers | 2.23.3 | 原补给商、禾仓农产收购和灯穗远行用品，原版真实交易 |
 | NPCSpeak | 1.0 | 阿卷和青禾，通过现役 QwenPaw 回答附近玩家 |
 | ImageFrame | 2026.1.5.0 | 本地截图通过临时上传链接制成地图、放入原版展示框 |
 
@@ -27,6 +31,8 @@ JAR 的官方来源、大小和 SHA256 见 [固定清单](../manifests/world-lif
 | --- | --- |
 | `/mycli world list` | 返回 `MC_WORLD` 的组件状态与入口 |
 | `/mycli world menu` | 原版箱式生活菜单 |
+| `/mycli world board [menu]` | 九张居民事务的实际状态、步骤和接单入口 |
+| `/mycli world shops` | 三个商人的稳定UUID、位置与用途 |
 | `/mycli world guide start` | 自愿报名三步实习 |
 | `/mycli world guide status` | 查看真实完成的步骤和救援说明 |
 | `/mycli world npcs` | 聊天 NPC 的稳定 ID、维度、坐标与 8 格交谈范围 |
@@ -35,7 +41,7 @@ JAR 的官方来源、大小和 SHA256 见 [固定清单](../manifests/world-lif
 | `/mycli world events` | 当前正在进行的活动 |
 | `/mycli world photos` | 本人照片与导入说明 |
 
-`MC_WORLD` 是本人系统聊天中的 JSON，`type` 区分 `catalog/npcs/talk/guide/guide_progress/events/photos/result`。`talk.status=submitted` 只表示提交了发言，必须等待 NPC 实际答复；任务进度以 `guide.steps[].done` 为准。旁观者不能报名、交谈或取得实习证明；错误、失败施法和口头自报不算完成。实习账本按 UUID 原子保存到 `plugins/AgentFriend/world-life-ledger.yml`，没有额外奖励或技能点。
+`MC_WORLD` 是本人系统聊天中的 JSON，`type` 区分 `catalog/board/shops/npcs/talk/guide/guide_progress/events/photos/result`。`talk.status=submitted` 只表示提交了发言，必须等待 NPC 实际答复；任务进度以 `guide.steps[].done` 为准。旁观者不能报名、交谈或取得实习证明；错误、失败施法和口头自报不算完成。实习账本按 UUID 原子保存到 `plugins/AgentFriend/world-life-ledger.yml`，没有额外奖励或技能点。
 
 人物都在村庄地面 Y=67，Z=-441.5：小满 X=-534.5，青禾 X=-537.5，阿卷 X=-540.5，阿岚 X=-544.5；补给商在约 `(-547,67,-442)`。走近后可用原版右键/使用键交互。导师使用 BetonQuest 原版菜单，聊天村民使用普通聊天。与村民交谈期间的文字会交给该 NPC，结束后再发公屏消息。
 
@@ -43,7 +49,7 @@ JAR 的官方来源、大小和 SHA256 见 [固定清单](../manifests/world-lif
 
 WorldEvents 每 40 分钟选择一个活动，同时最多一个，同事件冷却 60 分钟；低于 18 TPS 暂停调度。只在主世界启用。丰收持续 5 分钟、成熟作物产量倍率 2；顺风为 3 分钟速度 I；夜巡为 3 分钟夜视。中文公告和 Boss 条提示开始、剩余时间和结束。上游天气、破坏性事件、额外游戏规则和命令事件全部清空。
 
-MythicMobs 的默认怪物替换、随机生成和生成器均为空。三个精英是独立活动模板，**不会自动混入普通试炼或自然刷怪**。控制台可在已勘察、允许刷怪的活动地点使用：
+MythicMobs 的默认怪物替换、随机生成和生成器均为空。三个精英已接入现有地下城的**冒险/末日**房间，统一由副本追踪和清理；普通地下城/普通塔不使用它们，自然刷怪保持。控制台可在已勘察、允许刷怪的活动地点使用：
 
 ```text
 mythicmobs mobs spawn QD_Ranger 1 world,X,Y,Z,0,0
@@ -51,7 +57,7 @@ mythicmobs mobs spawn QD_Guard 1 world,X,Y,Z,0,0
 mythicmobs mobs spawn QD_Hexer 1 world,X,Y,Z,0,0
 ```
 
-分别是 32 血骷髅弓手、48 血尸壳、36 血女巫。现有村庄禁刷怪保护仍有效；不能根据“Spawned”文本认定怪物已成功存活。运营者需核查真实实体并及时清场。新增活动仍按 [世界运营](AI_WORLD_OPERATIONS.md) 隔离验收，公会所有权和原技能消耗照旧。
+独立模板分别是32血骷髅弓手、48血尸壳、36血女巫；实际副本血量按房间和难度设置。弓手额外射箭、守卫短时加速、药师缓慢自愈。现有村庄禁刷怪保护仍有效；不能根据“Spawned”文本认定怪物已成功存活。运营者需核查真实实体并及时清场。新增活动仍按 [世界运营](AI_WORLD_OPERATIONS.md) 隔离验收，公会所有权和原技能消耗照旧。
 
 ## NPC 模型链路
 

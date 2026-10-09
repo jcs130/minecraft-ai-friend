@@ -14,16 +14,20 @@ conversations:
     first: welcome
     NPC_options:
       welcome:
-        text: 欢迎来到千灯纪！实习要亲自查技能、施法、交生活委托。你想先了解什么？
-        pointers: magic,life,rescue,bye
+        text: 我是小满。村庄生活季已经开张：技能实习、照料田地、集市供给、照片和遗迹调查。你想从哪里开始？
+        pointers: magic,life,season,rescue,bye
       magic:
-        text: 先用 /mycli world guide start 报名，再用 /mycli skills list common 查基础技能。学技能要技能点，施法有魔力与冷却。实际成功才记实习进度。
+        text: 先 world guide start，再 skills list common。tm_first_spell 是我的实操委托：真正施放一次本人技能，再到集市交易。旧技能资格保留，新学和升级花技能点；成功施法仍要资源与冷却。
         pointers: back,bye
       life:
-        text: 用 /mycli life board 选生活委托，亲自完成后交付。公共箱可用；萌萌公会内私产不能拿拆。
+        text: 青禾在world(-537.5,67,-441.5)，居民事务 world board；禾仓收农产，补给商卖口粮和空地图，灯穗卖火把、箭和展示框。world shops查位置。公共箱可用，萌萌私产不可拿拆。
         pointers: back,bye
       rescue:
         text: 组队试炼队友倒地后，同队存活者在4格内连续停留10秒就能扶起。清完本层或本室也能复活；全队倒地才失败。
+        pointers: back,bye
+      season:
+        text: 用 /mycli world board 看九件居民事务。先 guild accept 对应ID，亲自做每步，再 guild claim。收割后先交阶段再补种；照片先接单再成图；地下城要全程参与后返程结算。最终奖励入个人箱、能力记录进
+          guild assessment。
         pointers: back,bye
     player_options:
       magic:
@@ -40,6 +44,9 @@ conversations:
         pointers: welcome
       bye:
         text: 谢谢，我去实际试试！
+      season:
+        text: 大家最近在忙什么？
+        pointers: season
 package:
   version: 3.2.0-QUEST-2
 npcs:

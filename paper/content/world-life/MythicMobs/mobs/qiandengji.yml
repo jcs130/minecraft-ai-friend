@@ -13,6 +13,8 @@ QD_Ranger:
   Drops:
   - arrow 2-4 1
   - bone 1-2 1
+  Skills:
+  - shoot{type=ARROW;velocity=1;damage=2} @target ~onTimer:200
 QD_Guard:
   Type: HUSK
   Display: '&c遗迹守卫'
@@ -25,6 +27,8 @@ QD_Guard:
   Drops:
   - rotten_flesh 2-3 1
   - iron_nugget 1-3 0.5
+  Skills:
+  - potion{type=SPEED;duration=40;level=0} @self ~onTimer:200
 QD_Hexer:
   Type: WITCH
   Display: '&5遗迹药师'
@@ -36,3 +40,5 @@ QD_Hexer:
   Drops:
   - redstone 1-3 1
   - glowstone_dust 1-2 0.5
+  Skills:
+  - heal{amount=2} @self ~onTimer:200

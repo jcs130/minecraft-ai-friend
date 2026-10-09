@@ -280,6 +280,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         taskMarket = new TaskMarketManager(this);
         playerContracts = new PlayerContracts(this);
         siteDungeons = new SiteDungeonManager(this);
+        new WorldLifeActions(this);
         soulboundGear = new SoulboundGear(this);
         getServer().getPluginManager().registerEvents(soulboundGear, this);
         dungeonGearAura = new DungeonGearAura(this);
@@ -469,6 +470,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     void publishSkill(Player player, String spell, String body, Location position) {
         if (skillEventPublisher != null) skillEventPublisher.publish(player, spell, body, position);
         recordWorldLesson(player, "cast");
+        if (taskMarket != null) taskMarket.worldAction(player, GuildManager.Goal.SKILL_CAST,
+                spell, "cast:" + java.util.UUID.randomUUID(), System.currentTimeMillis());
     }
 
     private WorldLifeManager worldLife;
@@ -833,7 +836,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return true;
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("admin")
-                && Set.of("dungeons", "trialwaves").contains(args[1].toLowerCase(Locale.ROOT))) {
+                && Set.of("dungeons", "trialwaves", "worldlife").contains(args[1].toLowerCase(Locale.ROOT))) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
                 sender.sendMessage("只允许服务器控制台热更新地下城配置。"); return true;
             }
@@ -841,6 +844,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 sender.sendMessage("用法：mycli admin dungeons|trialwaves reload|audit"); return true;
             }
             if (args[1].equalsIgnoreCase("dungeons")) siteDungeons.admin(sender, args[2].toLowerCase(Locale.ROOT));
+            else if (args[1].equalsIgnoreCase("worldlife")) sender.sendMessage("World life content: " + worldLife.reload());
             else dungeon.waveConfig(sender, args[2].equalsIgnoreCase("reload"));
             return true;
         }

@@ -45,7 +45,9 @@ final class TaskMarketManager implements Listener {
             GuildManager.Goal.WITCH_KILLS, GuildManager.Goal.CLAIMS, GuildManager.Goal.EXPLORE,
             GuildManager.Goal.PEAK, GuildManager.Goal.DIMENSION, GuildManager.Goal.STRUCTURE,
             GuildManager.Goal.BIOME, GuildManager.Goal.RETURN, GuildManager.Goal.MELEE_KILLS,
-            GuildManager.Goal.PARRY, GuildManager.Goal.HEALING, GuildManager.Goal.MARK_KILLS, GuildManager.Goal.MAP_HUNT);
+            GuildManager.Goal.PARRY, GuildManager.Goal.HEALING, GuildManager.Goal.MARK_KILLS, GuildManager.Goal.MAP_HUNT,
+            GuildManager.Goal.HARVEST, GuildManager.Goal.REPLANT, GuildManager.Goal.TRADE,
+            GuildManager.Goal.PHOTO, GuildManager.Goal.PHOTO_HANG, GuildManager.Goal.SITE_CLEAR, GuildManager.Goal.SKILL_CAST);
     private static final Map<String, Integer> CHESTS = Map.of("weapons", 0, "armor", 1, "supplies", 2, "misc", 3);
     record Step(String title, String description, GuildManager.Goal goal, int target, int floor,
             String site, int chest, ExplorationObjectives.Target exploration, MapObjectives.Rules map) { }
@@ -58,10 +60,12 @@ final class TaskMarketManager implements Listener {
             return new GuildManager.Contract(id(), title + " · " + (index + 1) + "/" + steps.size() + " " + step.title,
                     step.description, icon, step.goal, step.target, step.floor, minRank, fame,
                     emeralds, bonus, bonusCount, step.site, EngineeringSites.GOALS.contains(step.goal) ? 2
-                    : step.goal == GuildManager.Goal.PARTY_FLOOR ? 3 : step.goal == GuildManager.Goal.EXPLORE
+                    : step.goal == GuildManager.Goal.PARTY_FLOOR || step.goal == GuildManager.Goal.TRADE ? 3
+                    : step.goal == GuildManager.Goal.REPLANT ? 5 : step.goal == GuildManager.Goal.EXPLORE
+                    || step.goal == GuildManager.Goal.PHOTO || step.goal == GuildManager.Goal.PHOTO_HANG
                     || step.goal == GuildManager.Goal.PEAK || step.map != null || ExplorationObjectives.GOALS.contains(step.goal) ? 0 : ACTIONS.contains(step.goal)
                     && Set.of(GuildManager.Goal.CRAFT, GuildManager.Goal.DONATE, GuildManager.Goal.FISH,
-                    GuildManager.Goal.LANTERNS).contains(step.goal) ? 2 : 1);
+                    GuildManager.Goal.LANTERNS, GuildManager.Goal.HARVEST).contains(step.goal) ? 2 : 1);
         }
         Set<String> sites() {
             Set<String> ids = new LinkedHashSet<>();
@@ -69,7 +73,7 @@ final class TaskMarketManager implements Listener {
             return ids;
         }
     }
-    private record Menu(Inventory inventory, List<String> ids) { }
+    private record Menu(Inventory inventory, List<String> ids, int page, int pages) { }
     private record Frozen(String definition, Task task) { }
     private final AgentFriendPlugin plugin;
     private final EngineeringSites engineering;
@@ -90,6 +94,7 @@ final class TaskMarketManager implements Listener {
         handovers = new ProjectHandovers(plugin, engineering);
         file = new File(plugin.getDataFolder(), "task-market.yml");
         if (!file.exists()) plugin.saveResource("task-market.yml", false);
+        if (!new File(plugin.getDataFolder(), "resident-contracts.yml").exists()) plugin.saveResource("resident-contracts.yml", false);
         reload(); Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, CHANNEL);
         registerStartupSites();
@@ -183,9 +188,16 @@ final class TaskMarketManager implements Listener {
         try {
             YamlConfiguration yaml = new YamlConfiguration(); yaml.load(file);
             if (yaml.getInt("schema-version") != 1) throw new IllegalArgumentException("schema-version");
+            YamlConfiguration residents = new YamlConfiguration(); residents.load(new File(plugin.getDataFolder(), "resident-contracts.yml"));
+            if (residents.getInt("schema-version") != 1 || residents.getConfigurationSection("tasks") == null)
+                throw new IllegalArgumentException("resident schema-version/tasks");
+            for (String key : residents.getConfigurationSection("tasks").getKeys(false)) {
+                if (yaml.contains("tasks." + key)) throw new IllegalArgumentException("duplicate resident contract " + key);
+                yaml.createSection("tasks." + key, residents.getConfigurationSection("tasks." + key).getValues(false));
+            }
             ConfigurationSection siteRows = yaml.getConfigurationSection("sites"), taskRows = yaml.getConfigurationSection("tasks");
-            if (siteRows == null || taskRows == null || taskRows.getKeys(false).size() > 36
-                    || siteRows.getKeys(false).size() > 32) throw new IllegalArgumentException("max 36 tasks / 32 sites");
+            if (siteRows == null || taskRows == null || taskRows.getKeys(false).size() > 64
+                    || siteRows.getKeys(false).size() > 32) throw new IllegalArgumentException("max 64 tasks / 32 sites");
             Map<String, EngineeringSites.Site> nextSites = new LinkedHashMap<>();
             for (String id : siteRows.getKeys(false)) {
                 EngineeringSites.Site site = EngineeringSites.parse(id, siteRows.getConfigurationSection(id));
@@ -249,6 +261,25 @@ final class TaskMarketManager implements Listener {
                     || Set.of(GuildManager.Goal.FLOOR, GuildManager.Goal.PARTY_FLOOR).contains(goal) && (floor < 1 || floor > 15))
                 throw new IllegalArgumentException(key + " step target/floor");
             String site = stepYaml.getString("site", "");
+            if (Set.of(GuildManager.Goal.HARVEST, GuildManager.Goal.REPLANT).contains(goal)) {
+                site = stepYaml.getString("crop", "WHEAT").toUpperCase(Locale.ROOT);
+                if (!Set.of("WHEAT", "CARROTS", "POTATOES", "BEETROOTS", "NETHER_WART").contains(site))
+                    throw new IllegalArgumentException(key + " crop");
+                String requiredCrop = site;
+                if (goal == GuildManager.Goal.REPLANT && steps.stream().filter(s -> s.goal == GuildManager.Goal.HARVEST && requiredCrop.equals(s.site)).mapToInt(Step::target).sum() < target)
+                    throw new IllegalArgumentException(key + " replant needs an earlier matching harvest");
+            }
+            if (goal == GuildManager.Goal.TRADE) {
+                site = stepYaml.getString("shop", "");
+                try { site = UUID.fromString(site).toString(); } catch (IllegalArgumentException e) { throw new IllegalArgumentException(key + " shop UUID"); }
+            }
+            if ((goal == GuildManager.Goal.PHOTO || goal == GuildManager.Goal.PHOTO_HANG) && target > 64
+                    || goal == GuildManager.Goal.PHOTO_HANG && steps.stream().filter(s -> s.goal == GuildManager.Goal.PHOTO).mapToInt(Step::target).sum() < target)
+                throw new IllegalArgumentException(key + " hanging needs enough earlier new photos (max 64)");
+            if (goal == GuildManager.Goal.SITE_CLEAR && !site.matches("[a-z0-9_]{2,40}"))
+                throw new IllegalArgumentException(key + " dungeon site");
+            if (goal == GuildManager.Goal.SKILL_CAST && !site.isEmpty() && !site.matches("[a-z0-9_]{1,40}"))
+                throw new IllegalArgumentException(key + " skill ID");
             if (EngineeringSites.GOALS.contains(goal) && (!scope.equals("project") || !site.matches("[a-z0-9_]{2,40}")))
                 throw new IllegalArgumentException(key + " engineering needs project scope + site");
             if (goal == GuildManager.Goal.DONATE || goal == GuildManager.Goal.CRAFT) site = item(stepYaml.getString("item", "")).name();
@@ -531,7 +562,44 @@ final class TaskMarketManager implements Listener {
     void afterComplete(Player player, String id) { handovers.apply(id, player); plugin.professions().recover(); }
 
     /** Verified combat/healing events only; identifiers prevent reusing a defeated entity within a step. */
+    long stepStarted(Player player) {
+        return frozen(player) == null ? Long.MAX_VALUE : plugin.getConfig().getLong(marketPath(player) + ".step-started-at", Long.MAX_VALUE);
+    }
+    String stepToken(Player player) { return frozen(player) == null ? "" : run(player) + ":" + index(player); }
+    /** Only native event adapters call this. No command or NPC/model text can submit proof. */
+    void worldAction(Player player, GuildManager.Goal goal, String subject, String evidence, long occurredAt) {
+        worldAction(player, goal, subject, evidence, occurredAt, true);
+    }
+    void worldAction(Player player, GuildManager.Goal goal, String subject, String evidence, long occurredAt, boolean persist) {
+        Task task = frozen(player);
+        if (task == null || occurredAt < stepStarted(player)) return;
+        Step step = task.steps.get(index(player));
+        if (step.goal != goal || step.site != null && !step.site.equals(subject)) return;
+        action(player, goal, 1, evidence, persist);
+    }
+    boolean harvest(Player player, String crop, String location) {
+        Task task = frozen(player);
+        if (task == null || player.getGameMode() != GameMode.SURVIVAL || player.isDead()) return false;
+        Step step = task.steps.get(index(player));
+        if (step.goal != GuildManager.Goal.HARVEST || !crop.equals(step.site)) return false;
+        String path = marketPath(player) + ".harvested";
+        List<String> harvested = new ArrayList<>(plugin.getConfig().getStringList(path));
+        String key = crop + ":" + location;
+        if (harvested.contains(key) || harvested.size() >= 4096) return false;
+        harvested.add(key); plugin.getConfig().set(path, harvested);
+        worldAction(player, GuildManager.Goal.HARVEST, crop, key, System.currentTimeMillis());
+        return true;
+    }
+    boolean harvested(Player player, String crop, String location) {
+        return frozen(player) != null && plugin.getConfig().getStringList(marketPath(player) + ".harvested").contains(crop + ":" + location);
+    }
+    boolean createdPhoto(Player player, String evidence) {
+        return frozen(player) != null && plugin.getConfig().getStringList(marketPath(player) + ".photos").contains(evidence);
+    }
     void professionAction(Player player, GuildManager.Goal goal, double amount, String evidenceId) {
+        action(player, goal, amount, evidenceId, true);
+    }
+    private void action(Player player, GuildManager.Goal goal, double amount, String evidenceId, boolean persist) {
         Task task = frozen(player);
         if (task == null || player.getGameMode() != GameMode.SURVIVAL || player.isDead()
                 || task.steps.get(index(player)).goal != goal || !Double.isFinite(amount) || amount <= 0) return;
@@ -543,11 +611,17 @@ final class TaskMarketManager implements Listener {
             evidence.add(evidenceId); plugin.getConfig().set(path + ".action-evidence", evidence);
         }
         int target = task.steps.get(index(player)).target;
+        if (goal == GuildManager.Goal.PHOTO && !evidenceId.isEmpty()) {
+            List<String> photos = new ArrayList<>(plugin.getConfig().getStringList(path + ".photos"));
+            if (!photos.contains(evidenceId) && photos.size() < 64) photos.add(evidenceId);
+            plugin.getConfig().set(path + ".photos", photos);
+        }
         double total = Math.min(target, plugin.getConfig().getDouble(path + ".action-amount", 0) + amount);
         int before = plugin.getConfig().getInt(activePath(player) + ".progress");
         plugin.getConfig().set(path + ".action-amount", total);
-        plugin.getConfig().set(activePath(player) + ".progress", (int) Math.floor(total + .0001)); plugin.saveConfig();
-        if (before < target && total >= target) player.sendMessage("§a本阶段实际行动已达成；/mycli guild claim 交付。");
+        plugin.getConfig().set(activePath(player) + ".progress", (int) Math.floor(total + .0001));
+        if (persist) plugin.saveConfig();
+        if (persist && before < target && total >= target) player.sendMessage("§a本阶段实际行动已达成；/mycli guild claim 交付。");
     }
     void abandoned(Player player) {
         Task task = frozen(player); if (task == null) return;
@@ -626,6 +700,15 @@ final class TaskMarketManager implements Listener {
         row.addProperty("repeat", task.project || task.repeatOnce ? "once" : task.repeatDestination ? "destination" : "daily");
         row.addProperty("stepCount", task.steps.size()); row.addProperty("fame", task.fame); row.addProperty("emeralds", task.emeralds);
         row.addProperty("minRank", task.minRank); return row;
+    }
+    JsonObject residentCard(Player player, String id) {
+        Task task = tasks.get(id);
+        if (task == null || !task.enabled) return null;
+        JsonObject row = summary(task); row.addProperty("state", state(task, player));
+        row.addProperty("beneficiary", task.beneficiary); row.addProperty("icon", task.icon.name());
+        row.addProperty("detailCommand", "/mycli guild market " + id);
+        row.addProperty("acceptCommand", "/mycli guild accept " + id);
+        return row;
     }
     private void detail(Player player, Task task) {
         JsonObject data = summary(task); JsonArray steps = new JsonArray();
@@ -748,8 +831,13 @@ final class TaskMarketManager implements Listener {
     }
 
     void openMenu(Player player) {
+        openMenu(player, 0);
+    }
+    private void openMenu(Player player, int page) {
         Inventory inventory = Bukkit.createInventory(null, 45, "任务市场 · 千灯纪委托");
-        List<String> ids = offers().stream().map(Task::id).toList();
+        List<String> all = offers().stream().map(Task::id).toList();
+        int pages = Math.max(1, (all.size() + 35) / 36); page = Math.max(0, Math.min(page, pages - 1));
+        List<String> ids = all.subList(page * 36, Math.min(all.size(), page * 36 + 36));
         for (int i = 0; i < ids.size(); i++) {
             Task task = tasks.get(ids.get(i)); ItemStack item = new ItemStack(task.icon);
             var meta = item.getItemMeta(); meta.setDisplayName("§e" + task.title);
@@ -764,8 +852,9 @@ final class TaskMarketManager implements Listener {
         menuItem(inventory, 40, Material.WRITABLE_BOOK, "§6我的能力记录", "已验收步骤、失败和耗时");
         menuItem(inventory,41,Material.WRITABLE_BOOK,"§6玩家委托","自行发布物资、讨伐与探索招募");
         menuItem(inventory,42,Material.CHEST,"§6个人箱分页","10页共540格，保留原槽位");
-        menuItem(inventory, 44, Material.ARROW, "§7返回公会", "返回公会看板");
-        player.openInventory(inventory); menus.put(player.getUniqueId(), new Menu(inventory, ids));
+        if (page + 1 < pages) menuItem(inventory, 43, Material.ARROW, "§e下一页", (page + 1) + "/" + pages);
+        menuItem(inventory, 44, Material.ARROW, page == 0 ? "§7返回公会" : "§e上一页", (page + 1) + "/" + pages);
+        player.openInventory(inventory); menus.put(player.getUniqueId(), new Menu(inventory, ids, page, pages));
     }
     private void menuItem(Inventory inventory, int slot, Material material, String title, String lore) {
         ItemStack item = new ItemStack(material); var meta = item.getItemMeta(); meta.setDisplayName(title); meta.setLore(List.of(lore));
@@ -787,7 +876,8 @@ final class TaskMarketManager implements Listener {
             case 40 -> assessment(player);
             case 41 -> Bukkit.getScheduler().runTask(plugin,()->plugin.playerContracts().open(player,1));
             case 42 -> Bukkit.getScheduler().runTask(plugin,()->plugin.dungeon().openStashPages(player));
-            case 44 -> Bukkit.getScheduler().runTask(plugin, () -> plugin.openGuildMenu(player));
+            case 43 -> { if (menu.page + 1 < menu.pages) Bukkit.getScheduler().runTask(plugin, () -> openMenu(player, menu.page + 1)); }
+            case 44 -> Bukkit.getScheduler().runTask(plugin, () -> { if (menu.page > 0) openMenu(player, menu.page - 1); else plugin.openGuildMenu(player); });
             default -> { }
         }
     }

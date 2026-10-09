@@ -222,8 +222,11 @@ final class SiteDungeonManager implements Listener {
         String chosen=id;var receipt=receipt(p.getUniqueId(),chosen);require(receipt!=null,"no_pending_reward");
         atomic(()->{
             require(plugin.dungeon().queueGuildRewards(p.getUniqueId(),receipt.getInt("emeralds"),Material.valueOf(receipt.getString("item")),receipt.getInt("count")),"personal_reward_queue_full");
+            // Proof and consumed receipt commit together; a crash cannot lose or duplicate the hand-in.
+            plugin.taskMarket().worldAction(p,GuildManager.Goal.SITE_CLEAR,chosen,"site:"+receipt.getString("run"),receipt.getLong("started-at",0),false);
             plugin.getConfig().set(ROOT+".claimed."+p.getUniqueId()+"."+chosen,receipt.getString("day"));plugin.getConfig().set(ROOT+".receipts."+p.getUniqueId()+"."+chosen,null);
-        });result(p,"claim",chosen,"success");p.sendMessage("§a地下城奖励已存入个人箱；用 arena rewards/stash 查看。重复领取不会再次发奖。");
+        });
+        result(p,"claim",chosen,"success");p.sendMessage("§a地下城奖励已存入个人箱；用 arena rewards/stash 查看。重复领取不会再次发奖。");
     }
     private void tick(){
         long timestamp=System.currentTimeMillis();
@@ -284,8 +287,11 @@ final class SiteDungeonManager implements Listener {
         try{
             for(int i=0;i<room.enemies.size();i++){
                 var spec=room.enemies.get(i);Location at=spots.get(i);Chunk chunk=at.getChunk();if(r.held.add(chunk))chunk.addPluginChunkTicket(plugin);
-                Mob mob=(Mob)w.spawnEntity(at,spec.type());mob.addScoreboardTag(TAG);mob.addScoreboardTag("afu_site_"+r.site.id);spec.equip(mob,r.mode.health*(1+Math.max(0,r.party.size()-1)*.2));
-                mob.setCustomName("§c"+r.site.name+" · "+(spec.name().isEmpty()?mob.getType().name():spec.name()));mob.setCustomNameVisible(true);
+                Mob mob=spec.spawn(at,r.mode!=Mode.NORMAL);
+                r.mobs.put(mob.getUniqueId(),spec);
+                mob.addScoreboardTag(TAG);mob.addScoreboardTag("afu_site_"+r.site.id);spec.equip(mob,r.mode.health*(1+Math.max(0,r.party.size()-1)*.2));
+                String enemyName=spec.name().isEmpty()?(mob.getCustomName()==null?mob.getType().name():ChatColor.stripColor(mob.getCustomName())):spec.name();
+                mob.setCustomName("§c"+r.site.name+" · "+enemyName);mob.setCustomNameVisible(true);
                 r.mobs.put(mob.getUniqueId(),spec);
             }
             r.phase="fighting";r.invalid=false;persist();tell(r,"§c"+room.name+"："+room.enemies.size()+"个标记敌人，优先处理女巫和远程怪。队员须在房间内共同清场。");
@@ -297,7 +303,7 @@ final class SiteDungeonManager implements Listener {
         for(Player p:eligible){
             UUID id=p.getUniqueId();String rewardDay=day();
             if(rewardDay.equals(plugin.getConfig().getString(ROOT+".claimed."+id+"."+r.site.id))||receipt(id,r.site.id)!=null)continue;
-            atomic(()->{String path=ROOT+".receipts."+id+"."+r.site.id;plugin.getConfig().createSection(path,Map.of("day",rewardDay,"run",r.id,"emeralds",r.site.emeralds*r.mode.reward,"item",r.site.bonus.name(),"count",r.site.bonusCount*r.mode.reward));});
+            atomic(()->{String path=ROOT+".receipts."+id+"."+r.site.id;plugin.getConfig().createSection(path,Map.of("day",rewardDay,"run",r.id,"started-at",r.started,"emeralds",r.site.emeralds*r.mode.reward,"item",r.site.bonus.name(),"count",r.site.bonusCount*r.mode.reward));});
             p.sendMessage("§6"+r.site.name+"已完成；dungeon claim "+r.site.id+"领取到个人箱，今日该处仅奖励一次。");
         }
         // Keep the return phase while any eligible online teammate is still walking back.

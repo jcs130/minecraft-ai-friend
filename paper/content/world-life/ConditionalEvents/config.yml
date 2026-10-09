@@ -33,20 +33,17 @@ Messages:
   debugEnabledPlayer: '&aDebug now enabled for event &7%event% &aand player &7%player%&a!'
   debugDisabledPlayer: '&aDebug disabled for event &7%event% &aand player &7%player%&a!'
   onlyPlayerCommand: '&cThis command can be only used by a player.'
-  playerHasNotPlayedRecentlyOrNoData: '&cThat player has not played recently or doesn''t
-    have any data.'
+  playerHasNotPlayedRecentlyOrNoData: '&cThat player has not played recently or doesn''t have any data.'
   seconds: s
   minutes: m
   hours: h
   days: d
   placeholderAPICooldownReady: Ready!
   placeholderAPICooldownNameError: No event with that name!
-  commandCallError: '&cUse &7/ce call <event> (optional)%variable1%=<value1>;%variableN%=<valueN>
-    (optional)player:<player>'
+  commandCallError: '&cUse &7/ce call <event> (optional)%variable1%=<value1>;%variableN%=<valueN> (optional)player:<player>'
   commandCallInvalidEvent: '&cYou can only execute a CALL event.'
   commandCallCorrect: '&aEvent &7%event% &asuccessfully executed.'
-  commandCallCorrectPlayer: '&aEvent &7%event% &asuccessfully executed for player
-    &7%player%&a.'
+  commandCallCorrectPlayer: '&aEvent &7%event% &asuccessfully executed for player &7%player%&a.'
   commandCallFailed: '&cEvent &7%event% &ccould not be executed. Maybe a format error?'
   playerNotOnline: '&cThat player is not online.'
   commandItemError: '&cUse &7/ce item <save/remove> <name>'
@@ -57,8 +54,7 @@ Messages:
   savedItemAdded: '&aItem &7%name% &asaved.'
   commandInterruptError: '&cUse &7/ce interrupt <event> (optional)<player>'
   commandInterruptCorrect: '&aActions of event &7%event% &ainterrupted.'
-  commandInterruptCorrectPlayer: '&aActions of event &7%event% &ainterrupted for player
-    &7%player%&a.'
+  commandInterruptCorrectPlayer: '&aActions of event &7%event% &ainterrupted for player &7%player%&a.'
 Events:
   qd_welcome:
     type: player_join
@@ -66,7 +62,7 @@ Events:
     actions:
       default:
       - 'wait: 7'
-      - 'message: &a[村庄生活] &f新手实习、村民聊天、丰收事件与照片地图：/mycli world list。手柄可打开旅途指南→村庄新生活。'
+      - 'message: &a[村庄生活季] &f青禾的农耕、集市供给、阿卷照片展、阿岚遗迹调查：/mycli world board；手柄用旅途指南→村庄新生活→居民事务板。'
       - 'message: &a[照片] &f现有视角截图可直接上传成地图，拍照步骤：/photohelp。'
   qd_photo_help:
     type: player_command

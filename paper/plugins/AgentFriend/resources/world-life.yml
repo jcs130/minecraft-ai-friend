@@ -1,0 +1,36 @@
+# Presentation only. Rewards and evidence rules live in resident-contracts.yml.
+# Reload: mycli admin worldlife reload (console); no server restart.
+schema-version: 1
+season: 村庄生活季 · 一起把日子过好
+contracts:
+  - tm_field_cycle
+  - tm_vegetable_cycle
+  - tm_village_breakfast
+  - tm_trail_supply
+  - tm_first_spell
+  - tm_photo_album
+  - tm_crypt_report
+  - tm_creeping_report
+  - tm_bunker_report
+shops:
+  - id: 0ca8e5d5-7ec0-48d6-94fc-5ec19c72e044
+    name: 村庄补给商
+    world: world
+    x: -547
+    y: 67
+    z: -442
+    description: 面包、纸、空地图；给旅人和照片创作准备补给。
+  - id: 4e2dc6c5-9128-4d0a-9c20-3caee63324d2
+    name: 田野收购商·禾仓
+    world: world
+    x: -547
+    y: 67
+    z: -445
+    description: 8小麦、16甘蔗、6南瓜、6西瓜块或32竹子换1绿宝石；先补种再卖自己的余粮。
+  - id: 5a218622-d736-48e9-899c-58bd390ea185
+    name: 远行货郎·灯穗
+    world: world
+    x: -544
+    y: 67
+    z: -445
+    description: 1绿宝石换16火把或16箭；2绿宝石换1展示框；3绿宝石换1盾牌；4绿宝石换1指南针。

@@ -16,8 +16,25 @@ final class DungeonWaveCatalog {
             EntityType.SKELETON,EntityType.STRAY,EntityType.WITHER_SKELETON,EntityType.SPIDER,
             EntityType.CAVE_SPIDER,EntityType.WITCH,EntityType.PILLAGER,EntityType.VINDICATOR,
             EntityType.BLAZE,EntityType.MAGMA_CUBE,EntityType.RAVAGER);
-    record Enemy(EntityType type,double health,String name) {
-        Map<String,Object> saved(){return Map.of("type",type.name(),"health",health,"name",name);}
+    record Enemy(EntityType type,double health,String name,String mythic) {
+        Enemy(EntityType type,double health,String name){this(type,health,name,"");}
+        Map<String,Object> saved(){return Map.of("type",type.name(),"health",health,"name",name,"mythic",mythic);}
+        Mob spawn(org.bukkit.Location at, boolean enhanced) {
+            if (!enhanced || mythic == null || mythic.isEmpty()) return (Mob) at.getWorld().spawnEntity(at, type);
+            var dependency = org.bukkit.Bukkit.getPluginManager().getPlugin("MythicMobs");
+            if (dependency == null || !dependency.isEnabled()) throw new IllegalStateException("mythic_unavailable");
+            Entity entity = null;
+            try {
+                Object api = dependency.getClass().getMethod("getAPIHelper").invoke(dependency);
+                entity = (Entity) api.getClass().getMethod("spawnMythicMob", String.class, org.bukkit.Location.class).invoke(api, mythic, at);
+                if (!(entity instanceof Mob mob) || !entity.isValid() || entity.getType() != type)
+                    throw new IllegalStateException("mythic_native_type_mismatch");
+                return mob;
+            } catch (ReflectiveOperationException | RuntimeException error) {
+                if (entity != null) entity.remove();
+                throw new IllegalStateException("mythic_spawn_failed:" + mythic, error);
+            }
+        }
         void equip(Mob mob,double scale) {
             mob.setPersistent(true);mob.setRemoveWhenFarAway(false);mob.setAI(true);
             if(mob instanceof Zombie zombie)zombie.setBaby(false);
@@ -60,13 +77,14 @@ final class DungeonWaveCatalog {
     static List<Enemy> parse(List<?> entries){
         if(entries==null||entries.isEmpty())throw new IllegalArgumentException("empty_wave");List<Enemy> result=new ArrayList<>();
         for(Object entry:entries){
-            String raw;double health=0;String name="";int count=1;
+            String raw;double health=0;String name="",mythic="";int count=1;
             if(entry instanceof String s)raw=s;
-            else if(entry instanceof Map<?,?> m){raw=Objects.toString(m.get("type"),"");if(m.containsKey("health"))health=Double.parseDouble(m.get("health").toString());if(m.containsKey("name"))name=m.get("name").toString();if(m.containsKey("count"))count=Integer.parseInt(m.get("count").toString());}
+            else if(entry instanceof Map<?,?> m){raw=Objects.toString(m.get("type"),"");if(m.containsKey("health"))health=Double.parseDouble(m.get("health").toString());if(m.containsKey("name"))name=m.get("name").toString();if(m.containsKey("count"))count=Integer.parseInt(m.get("count").toString());if(m.containsKey("mythic"))mythic=m.get("mythic").toString();}
             else throw new IllegalArgumentException("invalid_enemy");
             EntityType type=EntityType.valueOf(raw.toUpperCase(Locale.ROOT).replace("MINECRAFT:",""));
             if(!ALLOWED.contains(type)||!Double.isFinite(health)||health!=0&&(health<10||health>500)||name.length()>32||count<1||count>12)throw new IllegalArgumentException("invalid_enemy");
-            for(int i=0;i<count;i++)result.add(new Enemy(type,health,name));
+            if(!mythic.isEmpty()&&!mythic.matches("[A-Za-z][A-Za-z0-9_]{1,63}"))throw new IllegalArgumentException("invalid_mythic_id");
+            for(int i=0;i<count;i++)result.add(new Enemy(type,health,name,mythic));
         }
         if(result.size()>12)throw new IllegalArgumentException("wave_limit_12");return List.copyOf(result);
     }

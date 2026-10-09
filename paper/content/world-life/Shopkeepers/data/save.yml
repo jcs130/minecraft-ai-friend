@@ -47,3 +47,137 @@ data-version: 3|2|3839
         type: EMERALD
         amount: 2
   snapshots: []
+'2':
+  uniqueId: 4e2dc6c5-9128-4d0a-9c20-3caee63324d2
+  world: world
+  x: -547
+  y: 67
+  z: -445
+  yaw: 180.0
+  type: admin
+  name: 田野收购商·禾仓
+  object:
+    type: villager
+    baby: false
+    profession: minecraft:farmer
+    villagerType: minecraft:plains
+    villagerLevel: 1
+  recipes:
+    '1':
+      resultItem:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: EMERALD
+      item1:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: WHEAT
+        amount: 8
+    '2':
+      resultItem:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: EMERALD
+      item1:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: SUGAR_CANE
+        amount: 16
+    '3':
+      resultItem:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: EMERALD
+      item1:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: PUMPKIN
+        amount: 6
+    '4':
+      resultItem:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: EMERALD
+      item1:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: MELON
+        amount: 6
+    '5':
+      resultItem:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: EMERALD
+      item1:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: BAMBOO
+        amount: 32
+  snapshots: []
+'3':
+  uniqueId: 5a218622-d736-48e9-899c-58bd390ea185
+  world: world
+  x: -544
+  y: 67
+  z: -445
+  yaw: 180.0
+  type: admin
+  name: 远行货郎·灯穗
+  object:
+    type: villager
+    baby: false
+    profession: minecraft:toolsmith
+    villagerType: minecraft:plains
+    villagerLevel: 1
+  recipes:
+    '1':
+      resultItem:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: TORCH
+        amount: 16
+      item1:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: EMERALD
+    '2':
+      resultItem:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: ARROW
+        amount: 16
+      item1:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: EMERALD
+    '3':
+      resultItem:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: ITEM_FRAME
+      item1:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: EMERALD
+        amount: 2
+    '4':
+      resultItem:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: SHIELD
+      item1:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: EMERALD
+        amount: 3
+    '5':
+      resultItem:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: COMPASS
+      item1:
+        ==: org.bukkit.inventory.ItemStack
+        v: 3839
+        type: EMERALD
+        amount: 4
+  snapshots: []

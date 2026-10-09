@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $java = 'E:\MC\jdk\jdk-21.0.12.1+1\bin\javac.exe'
 $jar = 'E:\MC\jdk\jdk-21.0.12.1+1\bin\jar.exe'
@@ -12,7 +12,7 @@ $classpath = @(
     'E:\MC\server\plugins\ProtocolLib-5.3.0.jar'
     'E:\MC\server\versions\1.20.6\paper-1.20.6.jar'
 ) -join ';'
-$build = Join-Path $root 'build-0.3.99'
+$build = Join-Path $root 'build-0.4.0'
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 & $java -encoding UTF-8 -source 21 -target 21 -cp $classpath -d $build (Get-ChildItem -LiteralPath (Join-Path $root 'src\org\afuhome\agentfriend') -Filter '*.java' -File | ForEach-Object { $_.FullName })
 if ($LASTEXITCODE -ne 0) { throw 'javac failed' }
@@ -30,7 +30,9 @@ Copy-Item -LiteralPath (Join-Path $root 'resources\professions.yml') -Destinatio
 Copy-Item -LiteralPath (Join-Path $root 'resources\skills.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\skill-unlocks.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\skill-points.yml') -Destination $build -Force
-$out = Join-Path $root 'AgentFriend-0.3.99.jar'
+Copy-Item -LiteralPath (Join-Path $root 'resources\world-life.yml') -Destination $build -Force
+Copy-Item -LiteralPath (Join-Path $root 'resources\resident-contracts.yml') -Destination $build -Force
+$out = Join-Path $root 'AgentFriend-0.4.0.jar'
 & $jar --create --file $out -C $build .
 if ($LASTEXITCODE -ne 0) { throw 'jar failed' }
 Get-FileHash -LiteralPath $out -Algorithm SHA256 | Select-Object Path,Hash

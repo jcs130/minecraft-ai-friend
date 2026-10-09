@@ -1,5 +1,11 @@
 # 任务市场：远征、工程、生活与能力记录
 
+## 村庄生活季居民事务（0.4.0）
+
+主目录原35任务/7场地保留，追加独立 `plugins/AgentFriend/resident-contracts.yml` 九张居民事务，合计44卡。`mycli admin market reload` 整体验证两份目录，合计最多64卡；无效候选保留有效旧目录。在途定义冻结、同一任务槽、每日/一次领奖和能力记录沿用原规则，原版市场每页36卡。新增入口 `world board [menu]`、`world shops`，准确目标字段和完整示例见[村庄生活季](VILLAGE_LIFE_SEASON.md)及[居民模板](../plugins/AgentFriend/resources/resident-contracts.yml)。
+
+新增 `harvest`、`replant`（`crop`），`trade`（`shop` UUID），`photo`、`photo_hang`，`site_clear`（`site`地下城ID），`skill_cast`（可选`site`技能ID）。收割原位置/照片索引跨阶段保存；补种必须有前置同作物收割、挂墙必须有足量前置照片。真实动作由服务器观察，每阶段手动 `guild claim`。原材料交付、原生钓鱼、探索和技能协作目标可组合成1–8步；不以语言模型评价或玩家自报直接判完成。
+
 ## 复用原图的寻宝委托（0.3.98）
 
 「图上的远行」`tm_map_hunt` 直接读取玩家主手已有藏宝图/探险家/遗迹地图的目标，不替换、不消耗原图。真实开新天然藏宝箱或深入对应天然遗迹走查，再回接单点交回记录；地图和战利品留给玩家。默认四区域、二十四格新路线、十五秒有效行进及十六格返程范围。每人每个目的地一次，同日换新目的地可以继续；复制或改名地图不能重复领奖。规则、Agent回执、热配置和发布边界见 [原图寻宝](TREASURE_MAP_TASKS.md)。

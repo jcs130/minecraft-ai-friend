@@ -31,6 +31,8 @@ final class AgentCliCatalog {
         Map<String, Spec> specs = new LinkedHashMap<>();
         add(specs,"world","life","read","/mycli world list|menu|npcs|talk <ID> <话>|end|guide start|events|photos","世界生活内容入口：新手实习、村民聊天、世界事件、村民交易和照片展示","查询免费；聊天须在NPC八格内；当前照片仅导入/展示，没有自动快门","MC_WORLD JSON及NPC实际答复");
         add(specs,"world.list","life","read","/mycli world list","查看各内容插件实际启用状态和入口","查询免费，不执行技能","MC_WORLD type=catalog");
+        add(specs,"world.board","life","read","/mycli world board [menu]","居民事务：农耕集市、照片展与遗迹调查；查看真实步骤及本人状态","与公会共享任务槽；guild accept接单，每阶段guild claim；最终入个人箱","MC_WORLD type=board；可选45格原版菜单");
+        add(specs,"world.shops","life","read","/mycli world shops","查看真实集市商人的位置、农产收购与旅行补给","亲自到场交易，实际消耗原版物品；选中配方还不算成交","MC_WORLD type=shops");
         add(specs,"world.menu","life","gui","/mycli world menu","打开Java、基岩和Agent共用的原版生活菜单","在线玩家","27格原版菜单");
         add(specs,"world.npcs","life","read","/mycli world npcs","查看可聊天村民的ID、真实位置和是否在八格内","查询免费；先步行靠近，不自动传送","MC_WORLD type=npcs");
         add(specs,"world.talk","life","chat","/mycli world talk <NPC ID> <话>","与附近村民自然交谈，NPC有独立性格与对话记录","生存角色；NPC八格内；180字内；等待实际答复；对话不替代任务验收","MC_WORLD type=talk status=submitted或denied；NPC实际答复另到达");

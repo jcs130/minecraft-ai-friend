@@ -16,6 +16,7 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -32,17 +33,39 @@ final class WorldLifeManager implements Listener {
     private final AgentFriendPlugin plugin;
     private final File ledgerFile;
     private final YamlConfiguration ledger;
+    private final File contentFile;
+    private YamlConfiguration content;
     private static final List<String> DEPENDENCIES = List.of("BetonQuest", "FancyNpcs", "Citizens", "Denizen",
             "ConditionalEvents", "WorldEvents", "MythicMobs", "Shopkeepers", "NPCSpeak", "ImageFrame");
     private static final List<String> LESSONS = List.of("catalog", "cast", "life");
     private record MenuHolder(java.util.UUID owner) implements InventoryHolder {
         @Override public Inventory getInventory() { return null; }
     }
+    private record BoardHolder(java.util.UUID owner, List<String> ids) implements InventoryHolder {
+        @Override public Inventory getInventory() { return null; }
+    }
     WorldLifeManager(AgentFriendPlugin plugin) {
         this.plugin = plugin;
         ledgerFile = new File(plugin.getDataFolder(), "world-life-ledger.yml");
         ledger = YamlConfiguration.loadConfiguration(ledgerFile);
+        contentFile = new File(plugin.getDataFolder(), "world-life.yml");
+        if (!contentFile.exists()) plugin.saveResource("world-life.yml", false);
+        reload();
         Bukkit.getPluginManager().registerEvents(this, plugin);
+    }
+    String reload() {
+        try {
+            YamlConfiguration next = new YamlConfiguration(); next.load(contentFile);
+            if (next.getInt("schema-version") != 1 || next.getString("season", "").isBlank()
+                    || next.getStringList("contracts").size() > 36 || next.getMapList("shops").size() > 16)
+                throw new IllegalArgumentException("content_limits");
+            for (String id : next.getStringList("contracts")) if (!id.matches("tm_[a-z0-9_]{2,40}")) throw new IllegalArgumentException("contract_id");
+            content = next; return "success";
+        } catch (Exception error) {
+            if (content == null) content = new YamlConfiguration();
+            plugin.getLogger().warning("World life configuration retained: " + error.getClass().getSimpleName());
+            return "invalid_configuration";
+        }
     }
     private boolean enabled(String name) { return Bukkit.getPluginManager().isPluginEnabled(name); }
     private void emit(Player p, String type, JsonObject data) {
@@ -60,6 +83,8 @@ final class WorldLifeManager implements Listener {
             switch (sub) {
                 case "list", "status" -> list(p);
                 case "menu" -> menu(p);
+                case "board" -> board(p, args.length > 2 && args[2].equals("menu"));
+                case "shops" -> shops(p);
                 case "npcs" -> npcs(p);
                 case "talk" -> talk(p, args);
                 case "end" -> end(p);
@@ -76,7 +101,7 @@ final class WorldLifeManager implements Listener {
                     Bukkit.dispatchCommand(p, "imageframe list");
                     JsonObject out = new JsonObject(); out.addProperty("displayReady", true);
                     out.addProperty("automaticCaptureReady", false);
-                    out.addProperty("instruction", "已拍图片用 /imageframe create <名字> <图片URL> 1 1 导入；消耗空地图。/imageframe get <名字> 取回，挂到展示框。当前没有自动快门。");
+                    out.addProperty("instruction", "现有截图用 /imageframe create <名字> upload 1 1 取得本人临时上传链接；消耗空地图。等游戏创建成功后挂到自己的展示框。/photohelp 查看步骤。照片委托先接单再创建，旧图/复制图不算新创作；服务器不代按快门。");
                     emit(p, "photos", out);
                 }
                 default -> denied(p, "unknown_world_command");
@@ -101,9 +126,39 @@ final class WorldLifeManager implements Listener {
         out.addProperty("eventsCommand", "/mycli world events");
         out.addProperty("photosCommand", "/mycli world photos");
         out.addProperty("automaticPhotoCapture", false);
+        out.addProperty("season", content.getString("season", "村庄生活"));
+        out.addProperty("boardCommand", "/mycli world board");
+        out.addProperty("shopCommand", "/mycli world shops");
         emit(p, "catalog", out);
         p.sendMessage(ChatColor.GREEN + "世界生活：新手实习、村民聊天、世界事件、村民商店、照片地图。");
-        p.sendMessage("/mycli world guide start | npcs | talk <NPC ID> <话> | end | events | photos | menu");
+        p.sendMessage("/mycli world board | shops | guide start | npcs | talk <NPC ID> <话> | end | events | photos | menu");
+    }
+    private void board(Player p, boolean open) {
+        JsonObject out = new JsonObject(); JsonArray cards = new JsonArray(); java.util.ArrayList<String> ids = new java.util.ArrayList<>();
+        Inventory inv = open ? Bukkit.createInventory(new BoardHolder(p.getUniqueId(), ids), 45, "千灯纪 · 居民事务板") : null;
+        p.sendMessage("§6【" + content.getString("season", "村庄生活") + "】居民事务；与冒险公会共用一个任务槽。");
+        for (String id : content.getStringList("contracts")) {
+            JsonObject card = plugin.taskMarket().residentCard(p, id); if (card == null) continue;
+            cards.add(card); ids.add(id);
+            p.sendMessage("§e" + id + " §f" + card.get("title").getAsString() + " §7[" + card.get("state").getAsString() + "]");
+            if (inv != null) inv.setItem(ids.size() - 1, item(Material.valueOf(card.get("icon").getAsString()),
+                    "§e" + card.get("title").getAsString(), card.get("description").getAsString(),
+                    "委托人：" + card.get("beneficiary").getAsString(), "点击查看实际步骤和接单命令"));
+        }
+        out.addProperty("season", content.getString("season")); out.add("contracts", cards);
+        out.addProperty("claimCommand", "/mycli guild claim"); out.addProperty("assessmentCommand", "/mycli guild assessment");
+        out.addProperty("instruction", "查看详情→guild accept <ID>→亲自操作→每阶段guild claim；全部完成统一入个人箱。真实动作验收，不能用聊天声明完成。");
+        emit(p, "board", out); if (inv != null) p.openInventory(inv);
+    }
+    private void shops(Player p) {
+        JsonObject out = new JsonObject(); JsonArray shops = new JsonArray();
+        for (java.util.Map<?, ?> row : content.getMapList("shops")) {
+            JsonObject shop = new JsonObject(); row.forEach((k,v) -> shop.addProperty(k.toString(), v.toString())); shops.add(shop);
+            p.sendMessage("§a" + row.get("name") + " §f" + row.get("world") + " (" + row.get("x") + "," + row.get("y") + "," + row.get("z") + ") §7" + row.get("description"));
+        }
+        out.add("shops", shops); out.addProperty("enabled", enabled("Shopkeepers"));
+        out.addProperty("instruction", "亲自到场右键原版商人；Agent用商人窗口选择配方并提交真实物品。收购价不会返还成本；公共物资不能冒充私产倒卖。");
+        emit(p, "shops", out);
     }
     private Object manager() throws ReflectiveOperationException {
         Plugin npc = Bukkit.getPluginManager().getPlugin("NPCSpeak");
@@ -226,16 +281,26 @@ final class WorldLifeManager implements Listener {
         inv.setItem(13, item(Material.FILLED_MAP, "§b照片相册", "查看已导入的照片地图；当前没有自动快门", "/mycli world photos"));
         inv.setItem(14, item(Material.EMERALD, "§a村民商店", "到村庄集市右键补给商人交易", "实际消耗原版物品；不会免费发放"));
         inv.setItem(16, item(Material.OAK_DOOR, "§7结束聊天", "恢复普通公屏聊天"));
+        inv.setItem(22, item(Material.BELL, "§6居民事务板", "农耕、集市、照片和遗迹调查", "/mycli world board"));
         p.openInventory(inv);
     }
     @EventHandler public void onClick(InventoryClickEvent event) {
+        if (event.getView().getTopInventory().getHolder() instanceof BoardHolder holder) {
+            event.setCancelled(true);
+            if (event.getWhoClicked() instanceof Player p && holder.owner.equals(p.getUniqueId())
+                    && event.getRawSlot() >= 0 && event.getRawSlot() < holder.ids.size()) {
+                p.closeInventory(); plugin.taskMarket().command(p, new String[]{"guild", "market", holder.ids.get(event.getRawSlot())});
+            }
+            return;
+        }
         if (!(event.getView().getTopInventory().getHolder() instanceof MenuHolder holder)) return;
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p) || !holder.owner().equals(p.getUniqueId()) || event.getRawSlot() < 0 || event.getRawSlot() >= 27) return;
-        String action = switch (event.getRawSlot()) { case 10 -> "guide start"; case 11 -> "npcs"; case 12 -> "events"; case 13 -> "photos"; case 16 -> "end"; default -> ""; };
+        String action = switch (event.getRawSlot()) { case 10 -> "guide start"; case 11 -> "npcs"; case 12 -> "events"; case 13 -> "photos"; case 14 -> "shops"; case 16 -> "end"; case 22 -> "board menu"; default -> ""; };
         if (!action.isEmpty()) { p.closeInventory(); command(p, ("world " + action).split(" ")); }
     }
     @EventHandler public void onDrag(InventoryDragEvent event) {
-        if (event.getView().getTopInventory().getHolder() instanceof MenuHolder && event.getRawSlots().stream().anyMatch(slot -> slot < 27)) event.setCancelled(true);
+        if ((event.getView().getTopInventory().getHolder() instanceof MenuHolder || event.getView().getTopInventory().getHolder() instanceof BoardHolder)
+                && event.getRawSlots().stream().anyMatch(slot -> slot < event.getView().getTopInventory().getSize())) event.setCancelled(true);
     }
 }

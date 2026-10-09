@@ -1,6 +1,7 @@
 schema-version: 1
 # Existing Dungeons and Taverns 3.2 buildings in this world's seed; no generated replacement.
 # Inspect actual room floors before adding locations. Enemies spawn only on loaded, clear ground.
+# mythic entries apply only to adventure/apocalypse; normal uses the same native mobs and health.
 sites:
   undead_crypt:
     name: 亡灵墓穴·三室封印
@@ -15,21 +16,21 @@ sites:
         center: [-425, 4, 677]
         radius: 4
         mobs:
-          - {type: WITCH, count: 1, health: 34}
-          - {type: SKELETON, count: 2, health: 28}
+          - {type: WITCH, count: 1, health: 34, mythic: QD_Hexer}
+          - {type: SKELETON, count: 2, health: 28, mythic: QD_Ranger}
           - {type: ZOMBIE, count: 2, health: 32}
       - name: 霜骨侧殿
         center: [-420, 4, 649]
         radius: 4
         mobs:
-          - {type: WITCH, count: 2, health: 36}
+          - {type: WITCH, count: 2, health: 36, mythic: QD_Hexer}
           - {type: STRAY, count: 2, health: 30}
           - {type: WITHER_SKELETON, count: 1, health: 44}
       - name: 封印主墓
         center: [-425, 0, 663]
         radius: 6
         mobs:
-          - {type: WITCH, count: 2, health: 40}
+          - {type: WITCH, count: 2, health: 40, mythic: QD_Hexer}
           - {type: WITHER_SKELETON, count: 2, health: 42}
           - {type: VINDICATOR, count: 1, health: 80, name: 亡骸守墓者}
   creeping_crypt:
@@ -44,22 +45,22 @@ sites:
         center: [1159, 45, 209]
         radius: 6
         mobs:
-          - {type: WITCH, count: 2, health: 34}
+          - {type: WITCH, count: 2, health: 34, mythic: QD_Hexer}
           - {type: CAVE_SPIDER, count: 2, health: 20}
-          - {type: HUSK, count: 1, health: 36}
+          - {type: HUSK, count: 1, health: 36, mythic: QD_Guard}
       - name: 密林回廊
         center: [1147, 45, 223]
         radius: 6
         mobs:
-          - {type: WITCH, count: 3, health: 38}
-          - {type: SKELETON, count: 2, health: 32}
+          - {type: WITCH, count: 3, health: 38, mythic: QD_Hexer}
+          - {type: SKELETON, count: 2, health: 32, mythic: QD_Ranger}
           - {type: CAVE_SPIDER, count: 1, health: 24}
       - name: 女巫祭仪室
         center: [1164, 45, 246]
         radius: 6
         mobs:
-          - {type: WITCH, count: 1, health: 100, name: 蔓生大巫师}
-          - {type: WITCH, count: 2, health: 42}
+          - {type: WITCH, count: 1, health: 100, name: 蔓生大巫师, mythic: QD_Hexer}
+          - {type: WITCH, count: 2, health: 42, mythic: QD_Hexer}
           - {type: VINDICATOR, count: 2, health: 48}
   bunker:
     name: 地下堡垒·掠夺者战团
@@ -74,12 +75,12 @@ sites:
         radius: 3
         mobs:
           - {type: PILLAGER, count: 2, health: 34}
-          - {type: WITCH, count: 1, health: 36}
+          - {type: WITCH, count: 1, health: 36, mythic: QD_Hexer}
           - {type: VINDICATOR, count: 1, health: 44}
       - name: 弩手守备室
         center: [-1170, 18, -1553]
         radius: 3
         mobs:
           - {type: PILLAGER, count: 2, health: 38}
-          - {type: WITCH, count: 1, health: 40}
+          - {type: WITCH, count: 1, health: 40, mythic: QD_Hexer}
           - {type: VINDICATOR, count: 1, health: 90, name: 战团执斧长}
