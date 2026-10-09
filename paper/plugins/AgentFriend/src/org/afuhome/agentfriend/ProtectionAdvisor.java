@@ -187,6 +187,10 @@ final class ProtectionAdvisor implements Listener {
         String next;
         if (reason.equals("land_unavailable") || reason.equals("guild_owner_unavailable") || data.has("boundsIncomplete"))
             next = "权限数据未就绪；停止操作并联系服主恢复保护服务，再重新查询。";
+        else if (reason.equals("land_notice_board")) {
+            next = "领地公告牌及支撑方块受保护，不能拆改；右键查看主人和完整协作者名单，主人从公告页管理授权。位置调整请联系服主。";
+            commands.add("/mycli land here");
+        }
         else if (tagged) next = "这件物品仍归原主人；移出保护区也不会解除归属，请取得主人授权。";
         else if (List.of("generated_structure", "village_structure", "life_guild_building").contains(reason)) {
             next = "不要拆建筑墙、门、梯子或垫方块；沿原有门、楼梯、梯井通行。木门用使用键/原有方块交互打开，铁门找按钮或拉杆；贴梯面向前移动或跳跃上爬。施工请另选上述结构片段范围外位置并重新查权限。";
@@ -301,6 +305,10 @@ final class ProtectionAdvisor implements Listener {
             return "unknown_out_of_range";
         if (!player.getWorld().isChunkLoaded(x >> 4, z >> 4)) return "unknown_unloaded_chunk";
         Block block = player.getWorld().getBlockAt(x, y, z);
+        if (plugin.lands().access() != null) {
+            if (action.equals("use") && plugin.lands().access().isBoard(block)) return null;
+            if (!action.equals("use") && !action.equals("container") && plugin.lands().access().protectsBoard(block)) return "land_notice_board";
+        }
         if (!plugin.lands().allows(player, action, block.getLocation()))
             return plugin.guildHall().containsProperty(block.getLocation()) ? "guild_owner_only" : "land_permission_denied";
         if (action.equals("container")) {

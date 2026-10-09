@@ -55,12 +55,14 @@ final class LandManager implements Listener {
     private boolean ready;
     private byte[] activeSource;
     private Set<String> reservedIds = Set.of();
+    private LandAccess access;
     private final Map<UUID, Notice> notices = new HashMap<>();
+    private final Map<UUID, Long> memberChanges = new HashMap<>();
     private final Map<Inventory, Menu> menus = new IdentityHashMap<>();
     private record Notice(String key, long time) { }
     private record Menu(UUID viewer, int page, List<String> ids) { }
     private record Denial(Location at, Land land) { }
-    private record Land(String id, String title, World world, BlockVector3 min, BlockVector3 max,
+    record Land(String id, String title, World world, BlockVector3 min, BlockVector3 max,
                         UUID owner, Set<UUID> members, boolean visitorUse, boolean guild,
                         String projectTask, String projectRun, boolean landmark, Set<BlockVector3> publicContainers) { }
 
@@ -72,6 +74,7 @@ final class LandManager implements Listener {
         reload(Bukkit.getConsoleSender());
         Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, CHANNEL);
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        access = new LandAccess(plugin, this);
     }
 
     private RegionManager manager(World world) {
@@ -235,6 +238,7 @@ final class LandManager implements Listener {
             sender.sendMessage("MC_LAND_RELOAD " + result);
             activeSource = source;
             reservedIds = Set.copyOf(definitions.getKeys(false));
+            if (access != null) access.refreshBoards();
             return true;
         } catch (Exception | LinkageError error) {
             lands = previousLands; ready = previouslyReady;
@@ -273,6 +277,44 @@ final class LandManager implements Listener {
                 BlockVector3.at(at.getBlockX(), at.getBlockY(), at.getBlockZ()));
     }
     List<String> ids() { return lands.keySet().stream().sorted().toList(); }
+    Land definition(String id) { return ready ? lands.get(id) : null; }
+    List<Land> definitions() { return ready ? lands.values().stream().sorted(Comparator.comparing(Land::id)).toList() : List.of(); }
+    LandAccess access() { return access; }
+    String changeMember(Player actor, String id, UUID target, boolean add) {
+        Land land = definition(id);
+        if (land == null) return "land_unavailable";
+        boolean administrator = plugin.isLandAdministrator(actor);
+        if (plugin.isObserver(actor) && !administrator) return "observer_cannot_manage";
+        if (!land.owner().equals(actor.getUniqueId()) && !administrator) return "not_land_owner";
+        if (land.owner().equals(target)) return "target_is_owner";
+        String pending = projectConfigurationDenial();
+        if (pending != null) return pending;
+        if (land.members().contains(target) == add) return add ? "already_member" : "not_member";
+        if (add && land.members().size() >= 64) return "member_limit_reached";
+        long now = System.currentTimeMillis();
+        if (now - memberChanges.getOrDefault(actor.getUniqueId(), 0L) < 1000) return "change_rate_limited";
+        memberChanges.put(actor.getUniqueId(), now);
+        byte[] before = activeSource.clone(); boolean written = false;
+        try {
+            YamlConfiguration yaml = new YamlConfiguration(); yaml.loadFromString(new String(before, StandardCharsets.UTF_8));
+            Set<UUID> next = new HashSet<>(land.members());
+            if (add) next.add(target); else next.remove(target);
+            yaml.set("lands." + id + ".members", next.stream().map(UUID::toString).sorted().toList());
+            if (!Arrays.equals(before, Files.readAllBytes(file.toPath()))) return "land_config_pending_reload";
+            writeSource(yaml.saveToString().getBytes(StandardCharsets.UTF_8)); written = true;
+            if (reload(Bukkit.getConsoleSender())) {
+                plugin.getLogger().info("Land membership actor=" + actor.getUniqueId() + " authority="
+                        + (administrator ? "administrator" : "owner") + " land=" + id + " action="
+                        + (add ? "trust" : "untrust") + " target=" + target + " owner=" + land.owner());
+                return add ? "member_added" : "member_removed";
+            }
+            writeSource(before); return "land_configuration_rejected";
+        } catch (Exception failure) {
+            if (written) try { writeSource(before); } catch (Exception rollback) { plugin.getLogger().severe("Land member rollback failed: " + rollback); }
+            plugin.getLogger().warning("Land member change not committed: " + failure.getClass().getSimpleName());
+            return "land_save_failed";
+        }
+    }
     List<String> landmarkLands(Player player) {
         return lands.values().stream().filter(l -> l.landmark() && l.owner().equals(player.getUniqueId()))
                 .map(Land::id).sorted().toList();
@@ -491,6 +533,7 @@ final class LandManager implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST) public void onUse(PlayerInteractEvent e) {
         Block b = e.getClickedBlock();
         if (b == null || e.getAction() == Action.LEFT_CLICK_BLOCK) return;
+        if (access != null && access.isBoard(b)) return;
         if (b.getState() instanceof BlockInventoryHolder holder) {
             Denial denied = deniedInventory(e.getPlayer(), holder.getInventory());
             if (denied != null) { e.setCancelled(true); deny(e.getPlayer(), "container", denied.at(), denied.land()); return; }
@@ -522,7 +565,7 @@ final class LandManager implements Listener {
             if(slot==18)open(p,Math.max(1,menu.page()-1));
             else if(slot==25)open(p,menu.page()+1);
             else if(slot==4)command(p,new String[]{"land","here"});
-            else if(slot>=9 && slot<9+menu.ids().size())command(p,new String[]{"land","info",menu.ids().get(slot-9)});
+            else if(slot>=9 && slot<9+menu.ids().size()){String id=menu.ids().get(slot-9);command(p,new String[]{"land","info",id});access.openPublic(p,id);}
         });
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onDrag(InventoryDragEvent e) {
@@ -569,8 +612,8 @@ final class LandManager implements Listener {
     @EventHandler(priority=EventPriority.LOWEST) public void onHopper(InventoryMoveItemEvent e){if(!inventoryLands(e.getSource()).equals(inventoryLands(e.getDestination())))e.setCancelled(true);}
     @EventHandler(priority=EventPriority.LOWEST) public void onHopperPickup(InventoryPickupItemEvent e){Land tag=taggedLand(e.getItem());Land current=find(e.getItem().getLocation());Set<String> ids=tag!=null?Set.of(tag.id()):current!=null?Set.of(current.id()):Set.of();if(!ids.equals(inventoryLands(e.getInventory())))e.setCancelled(true);}
     @EventHandler public void onQuit(PlayerQuitEvent e){notices.remove(e.getPlayer().getUniqueId());}
-    void stop(){menus.clear();notices.clear();Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin,CHANNEL);}
-    private void machine(Player player,String prefix,JsonObject data){
+    void stop(){menus.clear();notices.clear();memberChanges.clear();if(access!=null)access.stop();Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin,CHANNEL);}
+    void machine(Player player,String prefix,JsonObject data){
         JsonObject wire=data.deepCopy();wire.addProperty("type",prefix);plugin.protectionAdvisor().send(player,wire,CHANNEL);
         // Queries are split into short lines for Agents whose chat history truncates long messages.
         JsonObject chat=data;
@@ -590,6 +633,7 @@ final class LandManager implements Listener {
         data.addProperty("visitorUse",land.visitorUse());data.addProperty("opBypass",false);
         data.addProperty("landmarkEnabled",land.landmark());
         data.addProperty("publicContainers",land.publicContainers().size());
+        data.addProperty("memberCount",land.members().size());
         if(!land.projectTask().isEmpty()) {
             data.addProperty("projectTask",land.projectTask());
             data.addProperty("projectRun",land.projectRun());
@@ -600,17 +644,19 @@ final class LandManager implements Listener {
     }
     void audit(CommandSender sender){JsonObject data=new JsonObject();data.addProperty("schemaVersion",1);data.addProperty("ready",ready);data.addProperty("count",lands.size());JsonArray entries=new JsonArray();lands.values().stream().sorted(Comparator.comparing(Land::id)).forEach(l->entries.add(info(l,null)));data.add("lands",entries);sender.sendMessage("MC_LAND_AUDIT "+data);}
     void command(Player player,String[] args){
+        if(access.command(player,args))return;
         String action=args.length>1?args[1].toLowerCase(Locale.ROOT):"here";
         if(action.equals("menu")){open(player,1);return;}
         JsonObject data=new JsonObject();data.addProperty("schemaVersion",1);data.addProperty("ready",ready);
         if(action.equals("list")){int page=1;try{if(args.length>2)page=Integer.parseInt(args[2]);}catch(NumberFormatException ignored){}List<Land> sorted=lands.values().stream().sorted(Comparator.comparing(Land::id)).toList();page=Math.max(1,Math.min(page,Math.max(1,(sorted.size()+8)/9)));JsonArray entries=new JsonArray();for(int i=(page-1)*9;i<Math.min(page*9,sorted.size());i++)entries.add(info(sorted.get(i),null));data.addProperty("page",page);data.addProperty("pages",Math.max(1,(sorted.size()+8)/9));data.add("lands",entries);JsonObject header=new JsonObject();header.addProperty("schemaVersion",1);header.addProperty("ready",ready);header.addProperty("page",page);header.addProperty("pages",Math.max(1,(sorted.size()+8)/9));header.addProperty("count",sorted.size());player.sendMessage("§6领地列表："+sorted.size()+" 处；/mycli land info <ID> 查看主人和权限。");machine(player,"MC_LAND_LIST",header);for(var entry:entries){JsonObject item=entry.getAsJsonObject();JsonObject summary=new JsonObject();for(String key:List.of("id","title","world","owner","ownerUuid"))summary.add(key,item.get(key));machine(player,"MC_LAND_ITEM",summary);}return;}
         Land land=action.equals("here")?find(player.getLocation()):action.equals("info") && args.length==3?lands.get(args[2]):null;
-        if(!action.equals("here") && !action.equals("info")){player.sendMessage("/mycli land here|list [页码]|info <ID>|menu");return;}
+        if(!action.equals("here") && !action.equals("info")){player.sendMessage("/mycli land here|list [页码]|info <ID>|menu；members <ID> 查协作者，主人用 trust|untrust <ID> <玩家名或UUID>");return;}
         data.addProperty("status",land==null?(action.equals("info")?"not_found":"unclaimed"):"claimed");
         if(land!=null){data.add("land",info(land,player));player.sendMessage("§6「"+land.title()+"」主人："+ownerName(land.owner())+"；你的身份："+(player.getUniqueId().equals(land.owner())?"主人":member(player,land)?"受信任玩家":"访客")+"。"+(land.guild()?"公共物资：/mycli guild shared":""));}else player.sendMessage("§7这里未登记私人领地；原有公共建筑和活动保护仍适用。");
         if(land==null){machine(player,"MC_LAND_INFO",data);return;}
         JsonObject details=data.getAsJsonObject("land");JsonObject header=new JsonObject();header.addProperty("schemaVersion",1);header.addProperty("ready",ready);header.addProperty("status","claimed");for(String key:List.of("id","title","owner","ownerUuid","role"))header.add(key,details.get(key));machine(player,"MC_LAND_INFO",header);
         JsonObject permissions=details.getAsJsonObject("permissions").deepCopy();for(String key:List.of("id","world","min","max"))permissions.add(key,details.get(key));machine(player,"MC_LAND_PERMISSIONS",permissions);
+        access.hint(player,land);
     }
     private ItemStack icon(Material material,String title,String... lore){ItemStack item=new ItemStack(material);ItemMeta meta=item.getItemMeta();meta.setDisplayName(title);meta.setLore(Arrays.asList(lore));item.setItemMeta(meta);return item;}
     void open(Player player,int page){List<Land> sorted=lands.values().stream().sorted(Comparator.comparing(Land::id)).toList();page=Math.max(1,Math.min(page,Math.max(1,(sorted.size()+8)/9)));Inventory inventory=Bukkit.createInventory(null,27,"领地归属 · 第 "+page+" 页");inventory.setItem(4,icon(Material.OAK_SIGN,"§6我所在的领地","§7查看主人和我的权限"));List<String> ids=new ArrayList<>();for(int i=(page-1)*9;i<Math.min(page*9,sorted.size());i++){Land land=sorted.get(i);ids.add(land.id());inventory.setItem(9+ids.size()-1,icon(Material.GRASS_BLOCK,"§a"+land.title(),"§7主人："+ownerName(land.owner()),"§7点击查看权限；不会传送"));}if(page>1)inventory.setItem(18,icon(Material.ARROW,"上一页"));if(page*9<sorted.size())inventory.setItem(25,icon(Material.ARROW,"下一页"));inventory.setItem(26,icon(Material.BARRIER,"关闭"));menus.put(inventory,new Menu(player.getUniqueId(),page,List.copyOf(ids)));player.openInventory(inventory);}

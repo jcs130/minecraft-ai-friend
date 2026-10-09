@@ -634,6 +634,18 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         });
     }
 
+    boolean isLandAdministrator(Player player) {
+        return player.hasPermission("agentfriend.land.admin")
+                || player.getUniqueId().equals(GODDESS_UUID) && player.isOp()
+                && player.getGameMode() == GameMode.SPECTATOR;
+    }
+
+    Player goddessLandAdministrator() {
+        Player player = Bukkit.getPlayer(GODDESS_UUID);
+        return player != null && player.isOnline() && player.isOp()
+                && player.getGameMode() == GameMode.SPECTATOR ? player : null;
+    }
+
     boolean floodgatePlayer(UUID uuid) {
         Plugin floodgate = Bukkit.getPluginManager().getPlugin("floodgate");
         if (floodgate == null || !floodgate.isEnabled()) return true; // fail closed for reserved OP identity
@@ -868,10 +880,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("land")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
-                sender.sendMessage("只允许服务器控制台管理领地；玩家可用 /mycli land 查询。"); return true;
+                sender.sendMessage("只允许服务器控制台更改领地配置；主人或领地超管用 /mycli land trust|untrust <ID> <玩家名或UUID> 管理协作者。"); return true;
             }
+            if (lands.access().adminCommand(sender, args)) return true;
             if (args.length == 3 && args[2].equalsIgnoreCase("reload")) lands.reload(sender);
             else if (args.length == 3 && args[2].equalsIgnoreCase("audit")) lands.audit(sender);
+            else if (args.length == 3 && args[2].equalsIgnoreCase("boards")) lands.access().auditBoards(sender);
             else sender.sendMessage("mycli admin land reload|audit；编辑 plugins/AgentFriend/lands.yml 后重载。");
             return true;
         }
@@ -1140,7 +1154,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli coach next|guide|menu|status|later|on|off  查看本人新手进度与下一步；暂停或关闭低频私聊提醒。");
         p.sendMessage("/mycli skills list [all|common|profession|warrior|mage|priest] [页] 查看基础/战法牧技能；skills info <ID> 查各级效果与学习条件；cast <ID> 施法");
         p.sendMessage("/mycli protect break|place|container|use <x> <y> <z>  查询附近方块/实体储物能否操作；拒绝则停止");
-        p.sendMessage("/mycli land here|list|info <ID>|menu 查看领地归属、主人与我的权限");
+        p.sendMessage("/mycli land here|list|info <ID>|menu 查看归属；members <ID> 查协作者；主人 trust|untrust <ID> <玩家名或UUID> 授权/撤权；board <ID> 查公告牌");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "造物术没有想要的物品时，会向女神提交申请；也可从罗盘选择更多造物。");
         p.sendMessage("/mycli compass  补领罗盘；/mycli book  补领命格书；/mycli menu  打开罗盘");
         p.sendMessage("/mycli guide [start|explore|magic|gear|guild|dungeon|team]  分步指引；手柄从罗盘选旅途指南");
@@ -2898,8 +2912,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return professions.roleIds();
         if (args.length == 2 && args[0].equalsIgnoreCase("skills")) return List.of("list", "explain", "mine", "menu", "learnmenu", "points", "learn", "upgrade", "prepare", "unprepare", "respec", "info");
         if (args.length == 3 && args[0].equalsIgnoreCase("skills")) return SpellGuide.entries().stream().map(SpellGuide.Entry::id).toList();
-        if (args.length == 2 && args[0].equalsIgnoreCase("land")) return List.of("here", "list", "info", "menu");
-        if (args.length == 3 && args[0].equalsIgnoreCase("land") && args[1].equalsIgnoreCase("info")) return lands.ids();
+        if (args.length == 2 && args[0].equalsIgnoreCase("land")) return List.of("here", "list", "info", "menu", "members", "trust", "untrust", "manage", "board");
+        if (args.length == 3 && args[0].equalsIgnoreCase("land") && List.of("info", "members", "trust", "untrust", "manage", "board").contains(args[1].toLowerCase(Locale.ROOT))) return lands.ids();
+        if (args.length == 4 && args[0].equalsIgnoreCase("land") && args[1].equalsIgnoreCase("trust")) return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList();
         if (args.length == 1) return AgentCliCatalog.roots();
         if (args.length == 2 && args[0].equalsIgnoreCase("list")) return AgentCliCatalog.filters();
         if (args.length == 2 && args[0].equalsIgnoreCase("spells")) return List.of("list", "explain");

@@ -188,5 +188,37 @@ def gift_receipt(request_id: str) -> str:
     return _rcon(f"mycli admin giftstatus {request_id}")
 
 
+def _land_id(land_id: str) -> str:
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", land_id):
+        raise ValueError("invalid stable land ID; read the existing land catalogue")
+    return land_id
+
+
+@mcp.tool()
+def land_members(land_id: str) -> str:
+    """Read a land's current owner and complete collaborator list; no container contents or changes."""
+    return _rcon(f"mycli admin land members {_land_id(land_id)}")
+
+
+@mcp.tool()
+def manage_land_member(land_id: str, player: str, action: str) -> str:
+    """As the verified online Goddess, trust or untrust one collaborator on one land.
+
+    Use only for a clear, authorized request naming this land and player. Membership allows
+    building and private storage access. Does not transfer ownership or bypass world protection.
+    Read land_members first. Only status=success/unchanged confirms the result; after an uncertain
+    reply, read the same land's members before deciding whether anything remains to do.
+    """
+    _land_id(land_id)
+    if action not in ("trust", "untrust"):
+        raise ValueError("action must be trust or untrust")
+    if not PLAYER.fullmatch(player) or len(player) > 32:
+        if not re.fullmatch(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}", player):
+            raise ValueError("use the complete verified account name or UUID")
+    reply = _rcon(f"mycli admin land member {action} {land_id} {player}")
+    _record("manage_land_member", {"land": land_id, "player": player, "action": action}, reply)
+    return reply
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")

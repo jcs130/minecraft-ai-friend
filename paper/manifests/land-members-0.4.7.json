@@ -1,0 +1,70 @@
+{
+  "version": "0.4.7",
+  "status": "candidate_not_deployed",
+  "verifiedOn": "2026-10-09",
+  "liveVersion": "0.4.5",
+  "artifact": {
+    "name": "AgentFriend-0.4.7.jar",
+    "bytes": 1061296,
+    "sha256": "84DEF1FED24CED9478D2375A4402602B0F88D3749ACB6C8E18F5A44B3C15CE2E"
+  },
+  "checks": {
+    "isolationNativeOperations": 50,
+    "normalRestartAndIntegration": 17,
+    "goddessToolInputBoundaryTests": 5,
+    "actualGoddessToolFunctionChecks": 6,
+    "actualGoddessToolChecksIncludedInRestartIntegration": true,
+    "prior046EvidenceRewritten": false
+  },
+  "authority": {
+    "owner": "current_owner_uuid_and_not_observer",
+    "administratorPermission": "agentfriend.land.admin",
+    "administratorPermissionDefault": false,
+    "goddess": "reserved_loopback_account_fixed_uuid_op_spectator",
+    "administratorCanManageWhileSpectating": true,
+    "ordinaryOpOrMemberCanDelegate": false,
+    "changesOwnerOrBounds": false,
+    "administratorPermissionBypassesPhysicalProtection": false,
+    "audit": "server_log_actor_authority_land_action_target_owner",
+    "memberLimit": 64,
+    "minimumActorChangeIntervalMilliseconds": 1000,
+    "revocationClosesUnauthorizedPrivateInventories": true
+  },
+  "boards": {
+    "representation": "native_double_sided_waxed_oak_sign",
+    "fullMemberList": "native_27_slot_paginated_inventory_or_cli",
+    "locationIndex": "plugins/AgentFriend/land-boards.json",
+    "authoritySource": "plugins/AgentFriend/lands.yml",
+    "horizontalPlacementHaloBlocks": 2,
+    "loadPolicy": "loaded_only",
+    "overwritesExistingBlocks": false,
+    "newPeriodicTasks": 0,
+    "missingSafeLocation": "pending_not_claimed_built",
+    "originalThreePlotsSignedInIsolation": true,
+    "productionBoardsPlaced": false
+  },
+  "goddessMcp": {
+    "source": "paper/ops/goddess-mcp.py",
+    "newTools": ["land_members", "manage_land_member"],
+    "candidateRegisteredToolCount": 10,
+    "testedSdk": "mcp 1.30.0, FastMCP 1.x API",
+    "allowedMutations": ["trust", "untrust"],
+    "serverRequiresVerifiedOnlineGoddess": true,
+    "freeFormCommandOrActorAccepted": false,
+    "productionSourceReplacedOrToolsRediscovered": false,
+    "actualLlmDecisionTested": false
+  },
+  "inherited046": {
+    "sourceAndProtectionIncluded": true,
+    "priorNativeDoorAndLadderEvidencePreserved": true,
+    "generatedStructureProtectionVerifiedAfterRestart": true,
+    "prior38OperationsNotCountedAs047Operations": true
+  },
+  "originalAgentClientsChanged": false,
+  "controlledJavaEyeActuallyAttached": true,
+  "bedrockPhysicalDeviceTested": false,
+  "productionRestarted": false,
+  "productionJarOrConfigurationReplaced": false,
+  "productionPermissionChanges": false,
+  "automaticDeploymentQueued": false
+}

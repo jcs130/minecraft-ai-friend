@@ -1,5 +1,41 @@
 # 玩家领地
 
+**0.4.7 候选待发布（2026-10-09）：**新增主人自主授权/撤权、公开协作者名单、原版管理菜单与实体公告牌。正式服仍为 0.4.5；按服主要求不重启，不将下列新入口说成已经上线。0.4.7 同时包含待发布的 0.4.6 自然建筑保护。
+
+## 主人管理协作者（0.4.7 候选）
+
+```text
+/mycli land members <领地ID> [页码]
+/mycli land trust <领地ID> <完整玩家名或UUID>
+/mycli land untrust <领地ID> <完整玩家名或UUID>
+/mycli land manage <领地ID>
+/mycli land board <领地ID>
+```
+
+**当前非观战领地主人**可管理自己的协作者；**领地超管**可跨领地授权/撤权，包括在观战状态下操作。女神沿用服务器已核实的固定 UUID、本机保留登录、OP 与观战身份，不按名字相似自动认定超管。其他管理员须显式获得 `agentfriend.land.admin`（默认 false）；普通 OP 和协作者没有转授权权。这些入口不改变主人、边界、其他地块或公共箱规则。成员可在该地块拆建、管理私有物品和箱子，原有公共建筑、自然结构和活动保护仍参与判定。授权是免费领地管理，不是魔法技能。
+
+目标必须是服务器已核实的在线或曾登录玩家；支持完整账号名（大小写不敏感）或完整 UUID，不按显示名、皮肤名、部分名字猜测身份，不联网查询陌生账号。基岩玩家使用实际 Floodgate 账号名/UUID。离线成员可撤权，成员 UUID 持久保存；重复授权或撤权返回 `unchanged`，不重复写入。每块最多64位协作者，同一操作者的实际名单修改至少间隔1秒。
+
+授权结果私发给操作者及其实际附身 Eye；女神 MCP 调用同时返回控制台回执。`MC_LAND_MEMBER_RESULT status=success` 才表示修改成功；`denied` 给出原因和下一步，`actorUuid/authority` 标明实际操作者和 owner/administrator/visitor 身份。更新沿用 `lands.yml` 与 WorldGuard，立即生效；撤权会关闭已失去权限的私有箱。管理员文件存在未加载修改或保存失败时拒绝本次操作，防止覆盖配置。成功修改在服务器日志记录操作者、动作、领地、目标 UUID 和当时主人。授权不会自动给协作者发私聊，主人可自行在游戏内告知。
+
+主人和超管首次登录时会收到一次说明；`land info/here`、`/mycli explain land.trust` 随时可重新读取。罗盘 → 领地归属 → 选择地块打开公告页；主人或超管点击“授权玩家”，选择在线玩家，阅读拆建/私有箱权限范围后确认。协作者名单中点击成员可确认撤权。每页9人，可翻页；所有人都能查看名单，访客页面不提供修改权限。确认时重新检查身份，打开旧菜单不保留已失去的主人或超管权限。
+
+### 超管与女神工具
+
+其他超管可由服主在现有 LuckPerms 中精确授权：`lp user <已核实账号或UUID> permission set agentfriend.land.admin true`，撤销用 `permission unset agentfriend.land.admin`。这项权限只管理协作者名单，不直接给予拆建、取物、转让领地或修改其他保护的权力。
+
+候选 `goddess-mcp.py` 增加 `land_members(land_id)` 和 `manage_land_member(land_id, player, action)` 两个工具。动作只有 `trust/untrust`，不接受任意命令；先读当前名单，对明确的授权请求操作，不因玩家被拒绝就自动放行。服务端控制台适配命令为 `mycli admin land members <ID>` 和 `mycli admin land member trust|untrust <ID> <玩家名或UUID>`，后者必须在线女神 OP 观战身份通过检查，仍走同一保存、撤权和审计事务。超时后先读同一地块名单，不盲目重发。候选尚未部署或重新发现工具，不表示女神已获得新版操作入口。
+
+### 实体公告牌
+
+每块领地使用原版双面上蜡木牌，牌面显示领地名、当前主人和协作者人数；右键打开27格公告页查看完整名单。`land board <ID>` 返回实际世界/坐标、`ready/pending/unverified` 和下一步。名牌没有传送或物资操作，基岩/Agent 不需要新客户端。
+
+公告牌优先寻找边界附近安全地面：水平最多离边界2格，兼容位于高层的仓库；垂直检查该地块底部附近和已加载地表。只放在有实心安全支撑、上下净空的空气格，避开门、梯、楼梯及其他领地，不替换已有方块，不强加载或生成区块。没有安全位置时保持 `pending`，不能声称每处已经建好；待原有区块加载或管理员修好位置后，执行 `mycli admin land reload` 重查。控制台 `mycli admin land boards` 审计全部位置与状态。
+
+公告牌及其一格支撑作为公共信息设施保护，主人也不能误拆；`protect break` 明确返回 `land_notice_board`，右键查看不受访客设施使用开关限制。成员变化或领地转让后立即更新文字，普通玩家不能编辑；保护爆炸、火、水流和活塞。位置索引 `land-boards.json` 只记录实体牌位置，归属和名单始终读当前领地数据；不要手改索引，异常时保留文件联系服主。没有增加定时世界扫描。
+
+源命令示例（新版本发布后才可用）：CortiLan 可用 `/mycli land trust sky_view_tower LittleFish0510` 授权小鱼，`/mycli land untrust sky_view_tower LittleFish0510` 撤权。这只是用法说明，本轮没有替他授权。
+
 0.3.91 支持 BUILD 委托完成后交接建筑，主人到场登记公共地标；显式 `public-containers` 可开放非公会地块的指定礼物箱，其他储物仍私有。配置与迁移见 [工程与公共地标](PROJECT_LANDMARKS.md)。
 
 AgentFriend 0.3.90 以现有 WorldGuard 7.0.10 执行领地权限。正式服的配置入口是 `E:\MC\server\plugins\AgentFriend\lands.yml`；新增地块、更换主人、授权和撤权可在线重载。首次安装新版本仍需正常备份重启。
