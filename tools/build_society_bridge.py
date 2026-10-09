@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,9 +18,9 @@ from society_lab import DEFAULT_JAVA, DEFAULT_ROOT, PORT, REPO, safe_root, sha25
 
 
 SOURCE = REPO / "world" / "society-bridge-src"
-NUMEN = REPO / "world" / "numen-src"
-NUMEN_JAR = NUMEN / "core" / "neoforge" / "build" / "libs" / "numen-neoforge-1.21.1-0.1.3.jar"
-API_JAR = NUMEN / "api" / "neoforge" / "build" / "libs" / "numen_api-neoforge-1.21.1-0.1.3.jar"
+NUMEN_NAME = "numen-neoforge-1.21.1-0.1.4.1.jar"
+NUMEN_SHA = "ed4a5936aa182b0d9ab685cb993da54f72514eafb0838bb9a64cd69962cb1226"
+API_SHA = "bbc481ea8324b56989627c1f9f9c867e5e82cfd7f35ae5ec2107fb7e34430da5"
 ARS_JAR = "ars_nouveau-1.21.1-5.13.2.jar"
 CREATE_JAR = "create-1.21.1-6.0.10.jar"
 PONDER_JAR = "ponder-neoforge-1.0.82+mc1.21.1.jar"
@@ -107,9 +108,23 @@ def main() -> None:
         raise ValueError("Server directory must stay inside the isolated root")
     mods = server / "mods"
     ensure_server_stopped(server)
-    if not javac.is_file() or not NUMEN_JAR.is_file() or not API_JAR.is_file():
-        raise ValueError("Java 21 and built Numen core/API are required")
-    installed_numen = mods / NUMEN_JAR.name
+    if not javac.is_file():
+        raise ValueError("Java 21 is required")
+    installed_numen = mods / NUMEN_NAME
+    if not installed_numen.is_file() or sha256(installed_numen) != NUMEN_SHA:
+        raise ValueError("Pinned official Numen 0.1.4.1 release is required")
+    # Compile against the API embedded in this exact official release. It is
+    # extracted only to the build cache, never installed as a duplicate mod.
+    api_jar = root / "build" / "numen-0.1.4.1" / "numen_api.jar"
+    with zipfile.ZipFile(installed_numen) as archive:
+        apis = [name for name in archive.namelist()
+                if name.startswith("META-INF/jarjar/") and "numen_api" in name and name.endswith(".jar")]
+        if len(apis) != 1:
+            raise ValueError("Expected one embedded Numen API")
+        api_jar.parent.mkdir(parents=True, exist_ok=True)
+        api_jar.write_bytes(archive.read(apis[0]))
+    if sha256(api_jar) != API_SHA:
+        raise ValueError("Official embedded Numen API hash mismatch")
     ars = mods / ARS_JAR
     create = mods / CREATE_JAR
     ponder = mods / PONDER_JAR
@@ -128,8 +143,6 @@ def main() -> None:
     ysm = mods / YSM_JAR
     if not ysm.is_file() or sha256(ysm) != "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb":
         raise ValueError("Pinned YSM 2.6.5 JAR is required for native model selection")
-    if not installed_numen.is_file() or sha256(installed_numen) != sha256(NUMEN_JAR):
-        raise ValueError("Lab Numen JAR does not match this worktree build")
     if not ars.is_file():
         raise ValueError("Pinned Ars Nouveau JAR is required for the spell bridge")
     if not create.is_file():
@@ -150,8 +163,8 @@ def main() -> None:
     helper = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(helper)
-    classpath = os.pathsep.join((helper.full_cp(server / "libraries"), str(API_JAR),
-                                 str(NUMEN_JAR), str(ars), str(create), str(ponder),
+    classpath = os.pathsep.join((helper.full_cp(server / "libraries"), str(api_jar),
+                                 str(installed_numen), str(ars), str(create), str(ponder),
                                  str(minecolonies), str(structurize), str(domum), str(blockui), str(maid), str(food), str(curios), str(gecko), str(ysm)))
     sources = sorted((SOURCE / "src" / "main" / "java").rglob("*.java"))
     resource = SOURCE / "src" / "main" / "resources" / "META-INF" / "neoforge.mods.toml"
@@ -183,7 +196,7 @@ def main() -> None:
                 raise ValueError("Bridge JAR failed CRC check")
         install_candidate(candidate, target, server)
     record = {"schemaVersion": 1, "jar": str(target), "sha256": sha256(target),
-              "numenSha256": sha256(NUMEN_JAR), "apiSha256": sha256(API_JAR),
+              "numenVersion": "0.1.4.1", "numenSha256": sha256(installed_numen), "apiSha256": sha256(api_jar),
               "arsSha256": sha256(ars),
               "createSha256": sha256(create),
               "ponderSha256": sha256(ponder),
@@ -198,8 +211,12 @@ def main() -> None:
               "ysmSha256": sha256(ysm),
               "sources": {str(path.relative_to(REPO)).replace("\\", "/"): sha256(path)
                           for path in (*sources, resource, Path(__file__))}}
-    (build / "build-record.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"ok": True, "jar": str(target), "sha256": record["sha256"]}))
+    record["serverDir"] = str(server)
+    record_name = "build-record.json" if server == (root / "server").resolve() else (
+        "build-record-" + hashlib.sha256(str(server).encode()).hexdigest()[:12] + ".json")
+    record_path = build / record_name
+    record_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({"ok": True, "jar": str(target), "sha256": record["sha256"], "record": str(record_path)}))
 
 
 if __name__ == "__main__":

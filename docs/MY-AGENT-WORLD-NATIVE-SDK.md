@@ -8,6 +8,8 @@ Agent 入口：`192.168.3.163:28977`，Java 协议 1.21.1、当前家庭局域�
 
 Numen 核心已安装，但本 SDK **尚不支持 Numen 假玩家控制和 `numen_restore_existing`**。远端 capabilities 明确返回这两项 false。原 Numen UUID、背包、技能、经验不能仅靠新用户名自动迁移；需要同身份假玩家时，另接 Numen provider 并验证原 UUID/owner/name 恢复，不能直接套用普通玩家登录。
 
+2026-10-09 增加独立的官方 Numen 0.1.4.1 / 主人客户端 MCP 路线和服主 Lua/恢复桥，见 [Numen 接入](MY-AGENT-WORLD-NUMEN.md)。本 SDK 的连接玩家身份及上述 false 不变；不要把新 provider 的能力误读成本 SDK 已控制假玩家。
+
 Node 22，锁定 Mineflayer 4.37.1、minecraft-protocol 1.66.2、minecraft-data 3.112.0、mineflayer-pathfinder 2.4.5、vec3 0.2.0。完整依赖及 overrides 在 SDK 包的 package.json。首次安装用该目录运行 `npm install`；不要用任意最新版替换协议依赖。
 
 源码入口：`world/src/native-sdk/index.cjs`。本机可分发包：`E:\QiandengJiSocietyLab\integrations\native-sdk\v1-20261009`，附 operations.json、连接 TXT、本文及原 MIT LICENSE，共29文件。第三方使用该目录的副本和自己的本地 ledgerDir，不挂载服务端世界目录。

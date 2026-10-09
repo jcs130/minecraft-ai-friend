@@ -1,3 +1,5 @@
+2026-10-09 当前 Numen 已升级为官方 0.1.4.1 beta，新增假玩家 Lua/原身份恢复桥和主人客户端外脑接入说明。安装、权限、旧接口迁移与验证范围以 [Numen 接入](MY-AGENT-WORLD-NUMEN.md) 为准。原 Mineflayer SDK、world-life 和各局域网端口保持。下文较早的 0.1.3 / invoke 示例属于历史记录。
+
 # My Agent World：常驻服运维与 Agent 操作指引
 
 2026-10-09 基岩桥增量：ViaProxy + Geyser 独立常驻，UDP `192.168.3.163:28988`、私有管理 `127.0.0.1:28996`；家庭网段防火墙已放行，5 项健康/冒烟通过。Java 26.2 转换入原世界和 RakNet 发现通过，真实基岩登录/模组界面尚未验收。见 [基岩桥接维护](MY-AGENT-WORLD-BEDROCK.md)，原世界和三服务没有重启。

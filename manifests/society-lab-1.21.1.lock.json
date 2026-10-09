@@ -6,14 +6,9 @@
   "javaMajor": 21,
   "builtArtifacts": [
     {
-      "name": "numen-neoforge-1.21.1-0.1.3.jar",
-      "source": "world/numen-src/core/neoforge/build/libs/numen-neoforge-1.21.1-0.1.3.jar",
-      "sha256": "60e48f9b37bd57e70cb1de0bf6703ca442514748d4da12c00f1ac0fa0e213a54"
-    },
-    {
       "name": "maw_agent_bridge-0.1.0.jar",
       "source": "tools/build_society_bridge.py",
-      "sha256": "b32a15cc6dafe8fb1b3eac12fce711331e2376cfced20f618109e466d904a477"
+      "sha256": "e743a8883f4397f7351b825cd108cb421e8ce6e7b5936f969a19de84e0bf89c8"
     }
   ],
   "artifacts": [
@@ -197,6 +192,16 @@
       "project": "https://modrinth.com/mod/yes-steve-model/version/HZWaR0LY",
       "url": "https://cdn.modrinth.com/data/86xjpqqS/versions/HZWaR0LY/ysm-2.6.5-neoforge%2Bmc1.21.1-release.jar",
       "sha256": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb"
+    },
+    {
+      "name": "numen-neoforge-1.21.1-0.1.4.1.jar",
+      "kind": "mod",
+      "project": "https://github.com/Dwinovo/minecraft-numen/releases/tag/v0.1.4.1-1.21.1-beta",
+      "url": "https://github.com/Dwinovo/minecraft-numen/releases/download/v0.1.4.1-1.21.1-beta/numen-neoforge-1.21.1-0.1.4.1.jar",
+      "sha256": "ed4a5936aa182b0d9ab685cb993da54f72514eafb0838bb9a64cd69962cb1226",
+      "sourceCommit": "2a5753cbde3edd342fb50e0b2a4d52dff4269d38",
+      "license": "LGPL-3.0-only",
+      "embeddedApiSha256": "bbc481ea8324b56989627c1f9f9c867e5e82cfd7f35ae5ec2107fb7e34430da5"
     }
   ]
 }

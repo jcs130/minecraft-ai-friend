@@ -150,13 +150,26 @@ def check_runtime(root: Path, lock: dict, with_agent: bool = True) -> None:
     if not props_path.is_file():
         raise ValueError("Missing lab server.properties")
     props = read_properties(props_path)
-    for key, expected in PROPERTIES.items():
+    expected_properties = dict(PROPERTIES)
+    service_config = root / "services" / "service.json"
+    if service_config.is_file():
+        # The running life world has explicitly approved LAN supervision. Read
+        # that contract instead of requiring the old isolated world-lab values.
+        from maw_service import load_config
+        owned = load_config(service_config, expected_root=root, expected_repo=REPO)
+        if Path(owned["serverDir"]).resolve() != server.resolve():
+            raise ValueError("Supervisor targets a different server")
+        expected_properties["server-ip"] = owned["networkExposure"]["listenHost"]
+        if props.get("level-name") not in ("world-lab", "world-life"):
+            raise ValueError("Only the existing lab or life world may be verified")
+        expected_properties["level-name"] = props["level-name"]
+    for key, expected in expected_properties.items():
         if props.get(key) != expected:
             raise ValueError(f"Lab setting {key} must be {expected!r}; found {props.get(key)!r}")
     if not (server / "eula.txt").is_file() or "eula=true" not in (server / "eula.txt").read_text(encoding="ascii"):
         raise ValueError("Lab EULA has not been accepted")
     expected_files = {path.relative_to(DATAPACK_SOURCE): path for path in DATAPACK_SOURCE.rglob("*") if path.is_file()}
-    installed = server / "world-lab" / "datapacks" / DATAPACK_NAME
+    installed = server / expected_properties["level-name"] / "datapacks" / DATAPACK_NAME
     actual_files = {path.relative_to(installed): path for path in installed.rglob("*") if path.is_file()}
     if not expected_files or set(actual_files) != set(expected_files):
         raise ValueError(f"Lab data pack differs: {installed}")
@@ -219,10 +232,14 @@ def prepare(root: Path, java: Path, lock: dict, accept_eula: bool) -> None:
 
 
 def install_numen(root: Path, lock: dict) -> None:
-    item = next(entry for entry in lock["builtArtifacts"] if entry["name"].startswith("numen-neoforge-"))
-    source = REPO / item["source"]
+    item = next(entry for entry in lock["artifacts"] if entry["name"].startswith("numen-neoforge-"))
+    source = root / "downloads" / item["name"]
+    fetch(item["url"], source, item["sha256"])
     check_artifact(source, item["sha256"])
     target = root / "server" / "mods" / item["name"]
+    others = [p for p in target.parent.glob("numen*.jar") if p.name != target.name]
+    if others:
+        raise ValueError("Back up and retire old Numen/core API JARs during stopped maintenance first")
     if target.exists():
         check_artifact(target, item["sha256"])
         return
@@ -316,300 +333,15 @@ def console_command(process: subprocess.Popen, log_path: Path, command: str) -> 
     raise TimeoutError(f"No bridge response to {command.split()[1]}: {log_path}")
 
 
-def check_modded_menu(process: subprocess.Popen, log_path: Path, body: str, position: dict) -> None:
-    """Prove that a Numen body can open and read a real Farmer's Delight menu."""
-    base_x, base_y, base_z = (int(position[axis] // 1) for axis in ("x", "y", "z"))
-    spot = None
-    for dx, dz in ((2, 0), (-2, 0), (0, 2), (0, -2), (1, 1), (-1, -1)):
-        x, y, z = base_x + dx, base_y, base_z + dz
-        args = json.dumps({"x": x, "y": y, "z": z}, separators=(",", ":"))
-        at = console_command(process, log_path, f"maw_agent invoke {body} inspect_block {args}")
-        below_args = json.dumps({"x": x, "y": y - 1, "z": z}, separators=(",", ":"))
-        below = console_command(process, log_path, f"maw_agent invoke {body} inspect_block {below_args}")
-        if (at.get("reply", {}).get("is_air") is True
-                and at["reply"].get("in_reach") is True
-                and below.get("reply", {}).get("is_solid") is True):
-            spot = (x, y, z)
-            break
-    if spot is None:
-        raise ValueError("No clear supported block next to Agent for Farmer's Delight menu test")
-
-    x, y, z = spot
-    assert process.stdin is not None
-    process.stdin.write(f"setblock {x} {y} {z} farmersdelight:cooking_pot keep\n")
-    process.stdin.flush()
-    try:
-        args = json.dumps({"x": x, "y": y, "z": z}, separators=(",", ":"))
-        placed = console_command(process, log_path, f"maw_agent invoke {body} inspect_block {args}")
-        if placed.get("reply", {}).get("block") != "farmersdelight:cooking_pot":
-            raise ValueError(f"Farmer's Delight pot did not appear for Agent: {placed}")
-        click = json.dumps({"button": "right", "x": x, "y": y, "z": z}, separators=(",", ":"))
-        issued = console_command(process, log_path, f"maw_agent invoke {body} interact_at {click}")
-        if issued.get("ok") is not True or not issued.get("callId"):
-            raise ValueError(f"Agent could not click the Farmer's Delight pot: {issued}")
-        deadline = time.monotonic() + 20
-        while not issued.get("finalKnown") and time.monotonic() < deadline:
-            time.sleep(0.2)
-            issued = console_command(process, log_path,
-                                     f"maw_agent receipt {body} {issued['callId']}")
-        if not issued.get("finalKnown"):
-            raise TimeoutError(f"Agent pot click did not finish: {issued}")
-        outcome = issued.get("outcome") or issued.get("reply") or {}
-        if (outcome.get("success") is not True
-                or "opened GUI: CookingPotMenu" not in outcome.get("message", "")):
-            raise ValueError(f"Agent click did not acknowledge opening the modded menu: {issued}")
-        gui = console_command(process, log_path, f"maw_agent invoke {body} inspect_gui {{}}")
-        reply = gui.get("reply") or {}
-        if (gui.get("ok") is not True or reply.get("success") is not True
-                or "CookingPotMenu" not in reply.get("message", "")
-                or "container slots:" not in reply.get("message", "")):
-            raise ValueError(f"Agent could not read Farmer's Delight cooking menu: {gui}")
-    finally:
-        console_command(process, log_path, f"maw_agent invoke {body} close_gui {{}}")
-        process.stdin.write(f"setblock {x} {y} {z} minecraft:air replace\n")
-        process.stdin.flush()
-        args = json.dumps({"x": x, "y": y, "z": z}, separators=(",", ":"))
-        cleared = console_command(process, log_path, f"maw_agent invoke {body} inspect_block {args}")
-        if cleared.get("reply", {}).get("is_air") is not True:
-            raise ValueError(f"Farmer's Delight test pot was not removed: {cleared}")
-
-
 def smoke(root: Path, java: Path, lock: dict) -> dict:
+    """Read-only supervised readiness; the old 0.1.3 raw-tool smoke is retired."""
     check_runtime(root, lock)
-    if not java.is_file():
-        raise ValueError(f"Java 21 not found: {java}")
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", PORT))
-    server = root / "server"
-    args = f"@libraries/net/neoforged/neoforge/{lock['neoforgeVersion']}/win_args.txt"
-    log_path = root / f"smoke-{int(time.time())}.log"
-    with log_path.open("w", encoding="utf-8") as output:
-        process = subprocess.Popen([str(java), "-Xms512M", "-Xmx3G", args, "nogui"],
-                                   cwd=server, stdin=subprocess.PIPE, stdout=output,
-                                   stderr=subprocess.STDOUT, text=True)
-        try:
-            deadline = time.monotonic() + 120
-            while time.monotonic() < deadline:
-                if process.poll() is not None:
-                    break
-                output.flush()
-                content = log_path.read_text(encoding="utf-8", errors="replace")
-                if "Done (" in content:
-                    break
-                time.sleep(1)
-            else:
-                raise TimeoutError(f"Lab startup timed out: {log_path}")
-            content = log_path.read_text(encoding="utf-8", errors="replace")
-            if "Done (" not in content:
-                raise RuntimeError(f"Lab server exited before ready: {log_path}")
-            time.sleep(2)
-            status = status_ping()
-            owners = (
-                ("11111111-1111-4111-8111-111111111111", "MawSmokeA"),
-                ("22222222-2222-4222-8222-222222222222", "MawSmokeB"),
-            )
-            bodies = []
-            for owner, name in owners:
-                receipt = console_command(process, log_path, f"maw_agent summon {owner} {name}")
-                if receipt.get("ok") is not True or receipt.get("ownerUuid") != owner:
-                    raise ValueError(f"Agent spawn failed: {receipt}")
-                bodies.append(receipt["bodyUuid"])
-            roster = console_command(process, log_path, "maw_agent list")
-            by_id = {body["bodyUuid"]: body for body in roster["bodies"]}
-            if any(body not in by_id for body in bodies) or bodies[0] == bodies[1]:
-                raise ValueError(f"Agent bodies are not independent: {roster}")
-            catalog = console_command(process, log_path, "maw_agent commands")
-            if (catalog.get("ok") is not True or catalog.get("legacyMycliParity") is not False
-                    or "maw_agent spell explain <bodyUuid> <spellId>" not in catalog.get("commands", [])):
-                raise ValueError(f"Agent CLI was not self-describing: {catalog}")
-            for body in bodies:
-                receipt = console_command(process, log_path, f"maw_agent invoke {body} task_status {{}}")
-                if (receipt.get("ok") is not True or receipt.get("bodyUuid") != body
-                        or receipt.get("resultKnown") is not True):
-                    raise ValueError(f"Agent status was routed incorrectly: {receipt}")
-            check_modded_menu(process, log_path, bodies[0], by_id[bodies[0]])
-            spell_list = console_command(process, log_path, f"maw_agent spell list {bodies[0]}")
-            if (spell_list.get("ok") is not True or spell_list.get("bodyUuid") != bodies[0]
-                    or spell_list.get("casterEquipped") is not False
-                    or not isinstance(spell_list.get("spells"), list)
-                    or not isinstance(spell_list.get("mana"), dict)):
-                raise ValueError(f"Agent's native Ars mana/book state was unavailable: {spell_list}")
-            no_book_cast = console_command(process, log_path,
-                                           f"maw_agent spell cast {bodies[0]} ars_nouveau:slot_0")
-            if no_book_cast.get("ok") is not False or no_book_cast.get("code") != "ars_spellbook_not_held":
-                raise ValueError(f"Agent cast without a real book was not rejected: {no_book_cast}")
-            no_book_explain = console_command(process, log_path,
-                                              f"maw_agent spell explain {bodies[0]} ars_nouveau:slot_0")
-            if no_book_explain.get("ok") is not False or no_book_explain.get("code") != "ars_spellbook_not_held":
-                raise ValueError(f"Agent explained a spell it did not own: {no_book_explain}")
-            assert process.stdin is not None
-            process.stdin.write("item replace entity MawSmokeA weapon.mainhand with ars_nouveau:novice_spell_book\n")
-            process.stdin.flush()
-            equipped = console_command(process, log_path, f"maw_agent spell list {bodies[0]}")
-            if (equipped.get("ok") is not True or equipped.get("casterEquipped") is not True
-                    or equipped.get("heldItem") != "ars_nouveau:novice_spell_book"):
-                raise ValueError(f"Agent could not inspect the held Ars spellbook: {equipped}")
-            wrong_spell = console_command(process, log_path,
-                                          f"maw_agent spell cast {bodies[0]} unrestricted_magic")
-            if wrong_spell.get("ok") is not False or wrong_spell.get("code") != "invalid_spell_id":
-                raise ValueError(f"Unlisted spell was not rejected: {wrong_spell}")
-            configured_book = (
-                'item replace entity MawSmokeA weapon.mainhand with '
-                'ars_nouveau:novice_spell_book[ars_nouveau:spell_caster='
-                '{current_slot:0,max_slots:10,spells:{"0":{name:"Smoke Heal",'
-                'color:{id:"ars_nouveau:constant",r:255,g:25,b:180},sound:{},'
-                'recipe:["ars_nouveau:glyph_self","ars_nouveau:glyph_heal"]}}}]'
-            )
-            process.stdin.write(configured_book + "\n")
-            process.stdin.flush()
-            learned = console_command(process, log_path, f"maw_agent spell list {bodies[0]}")
-            if (learned.get("ok") is not True or not any(
-                    spell.get("id") == "ars_nouveau:slot_0"
-                    and spell.get("glyphs") == ["ars_nouveau:glyph_self", "ars_nouveau:glyph_heal"]
-                    for spell in learned.get("spells", []))):
-                raise ValueError(f"Agent could not inspect configured Ars book: {learned}")
-            explained = console_command(process, log_path,
-                                        f"maw_agent spell explain {bodies[0]} ars_nouveau:slot_0")
-            if (explained.get("ok") is not True or explained.get("name") != "Smoke Heal"
-                    or explained.get("manaCost") != 60):
-                raise ValueError(f"Agent could not explain configured Ars spell: {explained}")
-            mana_deadline = time.monotonic() + 90
-            while learned["mana"]["current"] < explained["manaCost"] and time.monotonic() < mana_deadline:
-                time.sleep(2)
-                learned = console_command(process, log_path, f"maw_agent spell list {bodies[0]}")
-            if learned["mana"]["current"] < explained["manaCost"]:
-                raise ValueError(f"Ars mana did not recover enough for test cast: {learned}")
-            process.stdin.write("damage MawSmokeA 8\n")
-            process.stdin.flush()
-            injured_roster = console_command(process, log_path, "maw_agent list")
-            injured = next(row for row in injured_roster["bodies"] if row["bodyUuid"] == bodies[0])
-            if not injured["health"] < injured["maxHealth"] - 5:
-                raise ValueError(f"Smoke body could not be injured for healing test: {injured}")
-            actual_cast = console_command(process, log_path,
-                                          f"maw_agent spell cast {bodies[0]} ars_nouveau:slot_0")
-            time.sleep(1)
-            healed_roster = console_command(process, log_path, "maw_agent list")
-            healed = next(row for row in healed_roster["bodies"] if row["bodyUuid"] == bodies[0])
-            if (actual_cast.get("ok") is not True
-                    or actual_cast.get("manaAfter", 1000) >= actual_cast.get("manaBefore", 0)
-                    or healed["health"] <= injured["health"]):
-                raise ValueError(f"Configured Ars heal had no observed effect: {actual_cast}, {injured}, {healed}")
-            no_mana_cast = console_command(process, log_path,
-                                           f"maw_agent spell cast {bodies[0]} ars_nouveau:slot_0")
-            if (no_mana_cast.get("ok") is not False
-                    or no_mana_cast.get("code") != "ars_cast_not_confirmed"
-                    or no_mana_cast.get("manaSpent") != 0):
-                raise ValueError(f"Ars cast without enough mana was misreported: {no_mana_cast}")
-            for item in ("farmersdelight:cooking_pot", "create:shaft",
-                         "ars_nouveau:novice_spell_book", "mcwroofs:oak_roof",
-                         "mcwbridges:oak_bridge_pier"):
-                args_json = json.dumps({"item_id": item}, separators=(",", ":"))
-                receipt = console_command(process, log_path,
-                                          f"maw_agent invoke {bodies[0]} lookup_recipe {args_json}")
-                reply = receipt.get("reply") or {}
-                if (receipt.get("ok") is not True or receipt.get("resultKnown") is not True
-                        or reply.get("success") is not True
-                        or "recipe(s) for" not in reply.get("message", "")):
-                    raise ValueError(f"Agent could not read the {item} recipe: {receipt}")
-            locations = {}
-            for body, structure in zip(bodies, ("dungeoncrawl:dungeon",
-                                                "betterdungeons:skeleton_dungeon")):
-                args_json = json.dumps({"structure": structure}, separators=(",", ":"))
-                issued = console_command(process, log_path,
-                                         f"maw_agent invoke {body} locate_structure {args_json}")
-                if issued.get("ok") is not True or issued.get("bodyUuid") != body or not issued.get("callId"):
-                    raise ValueError(f"Agent dungeon search was not accepted: {issued}")
-                locations[body] = (structure, issued["callId"])
-            pending = set(locations)
-            deadline = time.monotonic() + 60
-            while pending and time.monotonic() < deadline:
-                for body in list(pending):
-                    structure, call_id = locations[body]
-                    receipt = console_command(process, log_path, f"maw_agent receipt {body} {call_id}")
-                    if receipt.get("ok") is not True or receipt.get("bodyUuid") != body:
-                        raise ValueError(f"Agent dungeon receipt was misrouted: {receipt}")
-                    if not receipt.get("finalKnown"):
-                        continue
-                    outcome = receipt.get("outcome") or {}
-                    data = outcome.get("data") or {}
-                    if (outcome.get("success") is not True or data.get("structure") != structure
-                            or data.get("found") is not True
-                            or not all(isinstance(data.get(axis), int) for axis in ("x", "y", "z"))):
-                        raise ValueError(f"Agent dungeon search returned no absolute location: {receipt}")
-                    pending.remove(body)
-                if pending:
-                    time.sleep(0.5)
-            if pending:
-                raise TimeoutError(f"Agent dungeon searches did not finish for {sorted(pending)}: {log_path}")
-            wrong_body = console_command(process, log_path,
-                                         f"maw_agent receipt {bodies[1]} {locations[bodies[0]][1]}")
-            if wrong_body.get("ok") is not False or wrong_body.get("code") != "unknown_or_expired_receipt":
-                raise ValueError(f"Dungeon receipt leaked to another body: {wrong_body}")
-            trial_args = json.dumps({"structure": "dungeoneer:cobblestone_dungeon"}, separators=(",", ":"))
-            issued = console_command(process, log_path,
-                                     f"maw_agent invoke {bodies[0]} locate_structure {trial_args}")
-            if issued.get("ok") is not True or not issued.get("callId"):
-                raise ValueError(f"Agent trial dungeon search was not accepted: {issued}")
-            trial_location = None
-            deadline = time.monotonic() + 60
-            while time.monotonic() < deadline:
-                trial_location = console_command(process, log_path,
-                                                 f"maw_agent receipt {bodies[0]} {issued['callId']}")
-                if trial_location.get("finalKnown"):
-                    break
-                time.sleep(0.5)
-            trial_outcome = (trial_location or {}).get("outcome") or {}
-            trial_data = trial_outcome.get("data") or {}
-            if (trial_outcome.get("success") is not True
-                    or trial_data.get("structure") != "dungeoneer:cobblestone_dungeon"
-                    or trial_data.get("found") is not True
-                    or not all(isinstance(trial_data.get(axis), int) for axis in ("x", "y", "z"))):
-                raise ValueError(f"Boss dungeon location was unavailable to the Agent: {trial_location}")
-            rejected = console_command(process, log_path,
-                                       f"maw_agent invoke {bodies[0]} nonexistent_tool {{}}")
-            if rejected.get("ok") is not False or rejected.get("code") != "unknown_tool":
-                raise ValueError(f"Unknown tool was not rejected: {rejected}")
-            for body in bodies:
-                receipt = console_command(process, log_path, f"maw_agent dismiss {body}")
-                if receipt.get("ok") is not True or receipt.get("bodyUuid") != body:
-                    raise ValueError(f"Agent cleanup failed: {receipt}")
-            roster = console_command(process, log_path, "maw_agent list")
-            if any(body in {row["bodyUuid"] for row in roster["bodies"]} for body in bodies):
-                raise ValueError("Test bodies remained online after dismissal")
-        finally:
-            if process.poll() is None:
-                try:
-                    assert process.stdin is not None
-                    process.stdin.write("stop\n")
-                    process.stdin.flush()
-                    process.wait(timeout=30)
-                except (BrokenPipeError, subprocess.TimeoutExpired):
-                    process.terminate()
-                    process.wait(timeout=10)
-    content = log_path.read_text(encoding="utf-8", errors="replace")
-    missing = [mod for mod in REQUIRED_MODS if f"({mod})" not in content]
-    # Authlib may fail to refresh Mojang's public key on this loopback-only,
-    # explicitly offline lab. Preserve that fact in the result without hiding
-    # server/mod errors, which still fail the smoke test.
-    key_fetch_errors = [line for line in content.splitlines()
-                        if "[Yggdrasil Key Fetcher/ERROR]" in line
-                        and "Failed to request yggdrasil public key" in line]
-    errors = [line for line in content.splitlines()
-              if ("/ERROR]" in line or "/FATAL]" in line) and line not in key_fetch_errors]
-    if process.returncode != 0 or missing or errors or "All dimensions are saved" not in content:
-        raise RuntimeError(f"Lab smoke failed (exit={process.returncode}, missing={missing}, "
-                           f"errors={errors[:3]}): {log_path}")
-    return {"ok": True, "exitCode": process.returncode, "port": PORT,
-            "minecraftVersion": status["version"]["name"], "displayName": "My Agent World",
-            "mods": list(REQUIRED_MODS), "agentChecks": ["two_owners", "two_bodies", "cli_commands", "per_body_status",
-                                                   "farmers_delight_menu_open_and_inspect",
-                                                   "native_ars_spell_catalog", "unearned_cast_rejected",
-                                                   "configured_ars_heal_effect", "no_mana_cast_rejected",
-                                                   "content_recipe_lookup", "dungeon_absolute_locations",
-                                                   "boss_trial_absolute_location",
-                                                   "receipt_body_isolation", "unknown_tool_rejected", "body_cleanup"],
-            "offlineKeyFetchWarnings": len(key_fetch_errors),
-            "log": str(log_path)}
+    from maw_numen_health import probe
+    result = probe(root)
+    result["gameplaySmoke"] = "tools/smoke_maw_numen.py requires a connected owner and explicit report"
+    if not result["ok"]:
+        raise ValueError("Numen install/supervision smoke failed: " + json.dumps(result))
+    return result
 
 
 def main() -> None:

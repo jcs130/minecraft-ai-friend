@@ -1,11 +1,8 @@
 package dev.qiandeng.maw;
 
-import com.dwinovo.numen.agent.tool.NumenTool;
-import com.dwinovo.numen.agent.tool.ToolRegistry;
 import com.dwinovo.numen.entity.CompanionRegistry;
 import com.dwinovo.numen.entity.Companions;
 import com.dwinovo.numen.entity.NumenPlayer;
-import com.dwinovo.numen.task.ExternalTaskResultSink;
 import com.hollingsworth.arsnouveau.api.mana.IManaCap;
 import com.hollingsworth.arsnouveau.api.registry.SpellCasterRegistry;
 import com.hollingsworth.arsnouveau.api.spell.AbstractCaster;
@@ -34,26 +31,11 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 import java.util.UUID;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /** Server-only, identity-neutral entry point for Numen bodies in My Agent World. */
 @Mod("maw_agent_bridge")
 public final class AgentBridge {
     private static final String PREFIX = "MAW_AGENT ";
-    private static final int MAX_RECEIPTS = 256;
-    private static final Map<String, Receipt> RECEIPTS = new LinkedHashMap<>();
-
-    private static final class Receipt {
-        final UUID bodyUuid;
-        String initial;
-        String outcome;
-
-        Receipt(UUID bodyUuid) {
-            this.bodyUuid = bodyUuid;
-        }
-    }
-
     public AgentBridge(IEventBus eventBus, ModContainer container) {
         TlmMinecoloniesBurningCompat.register(eventBus);
         NeoForge.EVENT_BUS.addListener(AgentBridge::register);
@@ -72,6 +54,10 @@ public final class AgentBridge {
                 .requires(source -> source.hasPermission(4))
                 .then(Commands.literal("commands").executes(AgentBridge::commands))
                 .then(Commands.literal("list").executes(AgentBridge::list))
+                .then(NumenBodyBridge.operationsNode())
+                .then(NumenBodyBridge.luaNode())
+                .then(NumenBodyBridge.restoreNode())
+                .then(NumenBodyBridge.dormantNode())
                 .then(Commands.literal("summon")
                         .then(Commands.argument("owner", StringArgumentType.word())
                                 .then(Commands.argument("name", StringArgumentType.string())
@@ -155,7 +141,10 @@ public final class AgentBridge {
         for (String usage : new String[]{
                 "maw_agent list",
                 "maw_agent summon <ownerUuid> <name>",
-                "maw_agent invoke <bodyUuid> <numenTool> <jsonObject>",
+                "maw_agent operations [group]",
+                "maw_agent lua <bodyUuid> <actionId> <luaProgram>",
+                "maw_agent restore <bodyUuid>",
+                "maw_agent dormant <bodyUuid>",
                 "maw_agent receipt <bodyUuid> <callId>",
                 "maw_agent spell list <bodyUuid>",
                 "maw_agent spell explain <bodyUuid> <spellId>",
@@ -181,11 +170,8 @@ public final class AgentBridge {
         } catch (IllegalArgumentException error) {
             return reject(source, "invalid_owner_uuid");
         }
-        for (Map.Entry<UUID, CompanionRegistry.Entry> row : CompanionRegistry.get(source.getServer()).all()) {
-            if (row.getValue().name().equals(name) && !row.getValue().owner().equals(owner)) {
-                return reject(source, "body_name_owned_by_another");
-            }
-        }
+        // The current official roster is keyed by (owner UUID, name); use body
+        // UUIDs for control so different owners never share a same-name body.
         var level = source.getServer().overworld();
         NumenPlayer body = Companions.summon(source.getServer(), owner, name,
                 level, Vec3.atCenterOf(level.getSharedSpawnPos()));
@@ -201,119 +187,11 @@ public final class AgentBridge {
     }
 
     private static int invoke(CommandContext<CommandSourceStack> context) {
-        CommandSourceStack source = context.getSource();
-        UUID bodyUuid;
-        try {
-            bodyUuid = UUID.fromString(StringArgumentType.getString(context, "bodyUuid"));
-        } catch (IllegalArgumentException error) {
-            return reject(source, "invalid_body_uuid");
-        }
-        String toolName = StringArgumentType.getString(context, "tool");
-        String rawArgs = StringArgumentType.getString(context, "args");
-        NumenPlayer body = find(source.getServer(), bodyUuid);
-        if (body == null) {
-            return reject(source, "body_offline");
-        }
-        NumenTool tool = ToolRegistry.get(toolName);
-        if (tool == null) {
-            return reject(source, "unknown_tool");
-        }
-        if (rawArgs.length() > 8192) {
-            return reject(source, "args_too_large");
-        }
-        JsonObject args;
-        try {
-            args = JsonParser.parseString(rawArgs).getAsJsonObject();
-        } catch (RuntimeException error) {
-            return reject(source, "invalid_json_object");
-        }
-        String callId = com.dwinovo.numen.task.TaskRecord.EXTERNAL_CALL_PREFIX + UUID.randomUUID();
-        if (RECEIPTS.size() >= MAX_RECEIPTS) {
-            String oldest = RECEIPTS.keySet().iterator().next();
-            RECEIPTS.remove(oldest);
-            ExternalTaskResultSink.unregister(oldest);
-        }
-        Receipt tracked = new Receipt(bodyUuid);
-        RECEIPTS.put(callId, tracked);
-        ExternalTaskResultSink.register(callId, outcome -> tracked.outcome = outcome.toJson());
-        String[] reply = new String[1];
-        try {
-            tool.onServerCall(callId, args, body, value -> reply[0] = value);
-        } catch (RuntimeException error) {
-            ExternalTaskResultSink.unregister(callId);
-            RECEIPTS.remove(callId);
-            return reject(source, "tool_rejected");
-        }
-        tracked.initial = reply[0];
-        if (reply[0] != null) {
-            try {
-                JsonObject initial = JsonParser.parseString(reply[0]).getAsJsonObject();
-                boolean async = initial.has("data") && initial.get("data").isJsonObject()
-                        && initial.getAsJsonObject("data").has("async")
-                        && initial.getAsJsonObject("data").get("async").getAsBoolean();
-                if (!async) {
-                    tracked.outcome = reply[0];
-                    ExternalTaskResultSink.unregister(callId);
-                }
-            } catch (RuntimeException error) {
-                tracked.outcome = reply[0];
-                ExternalTaskResultSink.unregister(callId);
-            }
-        }
-        JsonObject result = new JsonObject();
-        result.addProperty("ok", true);
-        result.addProperty("name", body.getGameProfile().getName());
-        result.addProperty("bodyUuid", body.getUUID().toString());
-        result.addProperty("tool", toolName);
-        result.addProperty("callId", callId);
-        result.addProperty("resultKnown", reply[0] != null);
-        result.addProperty("finalKnown", tracked.outcome != null);
-        result.addProperty("retryAutomatically", false);
-        if (reply[0] != null) {
-            try {
-                result.add("reply", JsonParser.parseString(reply[0]));
-            } catch (RuntimeException error) {
-                result.addProperty("reply", reply[0]);
-            }
-        }
-        return respond(source, result);
+        return reject(context.getSource(), "numen_0_1_3_tool_retired_use_lua_or_official_mcp");
     }
 
     private static int receipt(CommandContext<CommandSourceStack> context) {
-        CommandSourceStack source = context.getSource();
-        UUID bodyUuid;
-        try {
-            bodyUuid = UUID.fromString(StringArgumentType.getString(context, "bodyUuid"));
-        } catch (IllegalArgumentException error) {
-            return reject(source, "invalid_body_uuid");
-        }
-        String callId = StringArgumentType.getString(context, "callId");
-        Receipt tracked = RECEIPTS.get(callId);
-        if (tracked == null || !tracked.bodyUuid.equals(bodyUuid)) {
-            return reject(source, "unknown_or_expired_receipt");
-        }
-        JsonObject result = new JsonObject();
-        result.addProperty("ok", true);
-        result.addProperty("bodyUuid", bodyUuid.toString());
-        result.addProperty("callId", callId);
-        result.addProperty("finalKnown", tracked.outcome != null);
-        result.addProperty("phase", tracked.outcome == null ? "pending" : "terminal");
-        result.addProperty("retryAutomatically", false);
-        if (tracked.initial != null) {
-            result.add("initial", parseReply(tracked.initial));
-        }
-        if (tracked.outcome != null) {
-            result.add("outcome", parseReply(tracked.outcome));
-        }
-        return respond(source, result);
-    }
-
-    private static com.google.gson.JsonElement parseReply(String raw) {
-        try {
-            return JsonParser.parseString(raw);
-        } catch (RuntimeException error) {
-            return new com.google.gson.JsonPrimitive(raw);
-        }
+        return NumenBodyBridge.receipt(context);
     }
 
     private static NumenPlayer spellBody(CommandContext<CommandSourceStack> context) {

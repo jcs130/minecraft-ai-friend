@@ -24,7 +24,7 @@ class PlayerMenuBridgeAudit(unittest.TestCase):
         spec.loader.exec_module(helper)
         cls.cp = os.pathsep.join([helper.full_cp(root / "server/libraries"),
                                  *(str(path) for path in sorted((root / "server/mods").glob("*.jar"))),
-                                 str(REPO / "world/numen-src/api/neoforge/build/libs/numen_api-neoforge-1.21.1-0.1.3.jar")])
+                                 str(root / "build/numen-0.1.4.1/numen_api.jar")])
 
     def run_java(self, arguments):
         result = subprocess.run(arguments, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
@@ -77,6 +77,16 @@ class PlayerMenuBridgeAudit(unittest.TestCase):
             for field in ("playerUuid", "action", "outcomeKnown", "receiptScope", "stateUnavailable"):
                 self.assertIn(field, reply)
             self.assertFalse(any(re.search(r"(?:dispatchCommand|performPrefixedCommand|opPlayer)", call) for call in calls))
+
+    def test_numen_durable_intent_survives_restart_without_replay(self):
+        with tempfile.TemporaryDirectory(prefix="numen-native-receipt-") as temporary:
+            self.run_java([str(self.java.with_name("javac.exe")), "-proc:none", "--release", "21", "-encoding", "UTF-8",
+                           "-cp", self.cp, "-d", temporary,
+                           str(SOURCE / "dev/qiandeng/maw/NumenBodyBridge.java"),
+                           str(REPO / "world/society-bridge-src/src/test/java/dev/qiandeng/maw/NumenReceiptTest.java")])
+            output = self.run_java([str(self.java), "-cp", temporary + os.pathsep + self.cp,
+                                    "dev.qiandeng.maw.NumenReceiptTest"])
+            self.assertIn("NumenReceipt 12 checks passed", output)
 
 
 if __name__ == "__main__":

@@ -13,6 +13,8 @@ Java 玩家：多人游戏 → 添加服务器，地址 192.168.3.163:28976。
 Agent / Mineflayer：host=192.168.3.163，port=28977，version=1.21.1，auth=offline。
 每个 Agent 使用独立玩家名；操作模组内容需接入本项目原生 SDK，通过 operations 查询当前支持的操作。
 
+Numen Agent：支持官方 Numen 0.1.4.1 beta 假玩家路线。Java 主人客户端安装同版模组，连接 192.168.3.163:28976，按 G 开启“外部大脑”，由该客户端提供 MCP（默认 http://127.0.0.1:8765/mcp）。客户端需要保持在线；不是服务器直接开放 MCP。详见 docs/MY-AGENT-WORLD-NUMEN-CONNECT.txt。
+
 网页第一人称：http://192.168.3.163:28984/
 网页第三人称：http://192.168.3.163:28984/third/
 当前网页观察 MawExplorer；其他 Agent 需要自己的同连接可视化接入。

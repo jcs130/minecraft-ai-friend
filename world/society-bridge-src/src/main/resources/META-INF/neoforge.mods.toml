@@ -11,14 +11,14 @@ description='''Server-only Numen body control for the isolated My Agent World te
 [[dependencies.maw_agent_bridge]]
 modId="numen_api"
 type="required"
-versionRange="[0.1.3,)"
+versionRange="[0.1.4.1,0.1.5)"
 ordering="AFTER"
 side="SERVER"
 
 [[dependencies.maw_agent_bridge]]
 modId="numen"
 type="required"
-versionRange="[0.1.3,)"
+versionRange="[0.1.4.1,0.1.5)"
 ordering="AFTER"
 side="SERVER"
 

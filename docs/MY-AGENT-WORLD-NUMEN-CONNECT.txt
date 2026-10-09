@@ -1,0 +1,23 @@
+My Agent World：Numen 机器人接入（2026-10-09）
+
+已采用适配 Minecraft 1.21.1 的官方最新 Numen 0.1.4.1 beta。
+Mineflayer / 原生 SDK 入口仍为 192.168.3.163:28977，可继续使用。
+
+Numen 是另一条接入路线，控制服务端假玩家，具有独立身体 UUID 和主人 UUID。
+准备 Minecraft 1.21.1 + NeoForge 21.1.248 + 本服匹配模组包；将旧 Numen 换成 numen-neoforge-1.21.1-0.1.4.1.jar。主 JAR 内有 API，不要重复安装。
+官方包下载：https://github.com/Dwinovo/minecraft-numen/releases/tag/v0.1.4.1-1.21.1-beta
+本机副本：E:\QiandengJiSocietyLab\integrations\numen\0.1.4.1
+
+Java 客户端连接 192.168.3.163:28976。进服后按 G，在 Numen 设置中启用“外部大脑”，复制界面的 MCP 地址、Bearer token 和接入指引给自己的 Agent。
+默认 MCP：http://127.0.0.1:8765/mcp。它运行在主人客户端电脑上；客户端需要保持在世界中。服务端安装模组本身不会开启无人值守 MCP，也没有新增公网端口。
+
+Agent 工具流程：list_companions → 必要时 create_companion → 保存身体 UUID → get_events → lua / say。
+每具身体只由一个控制器消费事件和派动作。get_events 会消费事件，取回后及时保存。
+先运行只读 Lua：local s=numen.status.self(); print(s.name,s.hp,s.hunger,s.pos.x,s.pos.y,s.pos.z)
+目录帮助：numen.api.help；客户端函数需要主人模组客户端支持。基础动作由 numen.route/move、inv、gui、use、work 等 API 提供。
+
+本服另有服主管理 Lua 桥，可按身体 UUID 查询目录、派异步动作、查询 actionId 回执和原身份恢复。普通接入优先使用官方 MCP，不需要把服主权限交给 Agent。
+旧 0.1.3 的39工具调用要迁移到新 Lua 接口。原 Mineflayer SDK 的70项目录和 Numen 的 Lua 目录是两套 provider，不能混用身份。
+
+已完成隔离服的真实 Numen 身体/移动/库存/恢复测试；真实 Java G 面板和外脑 MCP 尚未实机验证。本次没有自动接模型或 QwenPaw。
+详细文档：docs/MY-AGENT-WORLD-NUMEN.md
