@@ -1,0 +1,34 @@
+{
+  "release": "backpack-loss-20261010",
+  "version": "0.4.7",
+  "configOnly": true,
+  "verifiedAt": "2026-10-10T02:31:39.095Z",
+  "backupBefore": "20261010-102818",
+  "files": [
+    {
+      "target": "commands.yml",
+      "sha256": "CB9641EEC940AABA44062499E7EFF69D214DFC0A5D66E2F1CB00467123867A93",
+      "beforeSha256": "22BA92CFFD0C5798BEF7D019F1BB0D356E280490977CA5708F8A4FEE5C7986F3"
+    },
+    {
+      "target": "plugins/BetonQuest/lang/zh-CN.yml",
+      "sha256": "B588EAD5BF9D7E91AF6FD2F2548F8677B8CA0B33966E9D9DFEE8E91DECB1DAAB",
+      "beforeSha256": "30ACC0811D42570989722E7045C22FFC1ADB0FD88A3EDD63BBF24A4F369A37B9"
+    }
+  ],
+  "aliases": {
+    "backpack": "minepacks:backpack $1-",
+    "bp": "minepacks:backpack $1-",
+    "questbag": "betonquest:backpack $1-"
+  },
+  "checks": {
+    "live": 20,
+    "preservation": 19,
+    "minepacksPreservation": 2,
+    "deploymentFixtures": 9
+  },
+  "allPluginJarsUnchanged": 30,
+  "bedrockPhysicalDeviceVerified": false,
+  "goddessHandbookReadVerified": true,
+  "goddessReplyCharacters": 125
+}

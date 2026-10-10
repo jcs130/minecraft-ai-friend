@@ -14,6 +14,11 @@ function Deploy-PendingContent {
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
         } elseif ($relative -eq 'libraries/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar') {
             $target = Join-Path $serverDir $relative
+        } elseif ($relative -eq 'commands.yml') {
+            # Explicit server aliases resolve Minepacks/BetonQuest's backpack collision.
+            # This one root file uses the same stopped E/F snapshots, pinned hashes,
+            # atomic replacement and rollback as plugin configuration below.
+            $target = Join-Path $serverDir $relative
         } elseif ($relative -in @('plugins/MagicSpells/general.yml','plugins/MagicSpells/spells-agentfriend.yml')) {
             # Only the two server-owned spell files are eligible; the same
             # pinned hashes, stopped snapshots and rollback apply below.

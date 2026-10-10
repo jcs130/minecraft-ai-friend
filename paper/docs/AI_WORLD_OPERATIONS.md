@@ -1,5 +1,13 @@
 # 千灯纪：Agent 团队维护、开发与运营手册
 
+**2026-10-10 大背包入口修复已上线（AgentFriend仍为0.4.7）：**2026-10-10 10:31:39正式复核。Minepacks快捷头颅内部调用的`backpack open`被BetonQuest同名命令接走，显示只有任务笔记的界面，隔离服已复现。根目录`commands.yml`明确路由`backpack`/`bp`到Minepacks、`questbag`到BetonQuest；后者中文标题改为「任务物品袋」，任务笔记注明奖励另领。普通储物54格、任务专用袋、公会/试炼个人奖励箱10页540格各自保存，奖励路径不变。
+
+已发3分钟、1分钟、10秒维护预告，确认无人处于试炼后依服主既有重启授权正常保存；E/F `20261010-102818/.complete` 完整后替换两份配置，任务结果0，Java PID21956，上线核验后已发更新说明。全部30个插件JAR和原Agent客户端保持。维护前内存导出、停服数据库、重启数据库逐项一致：原18份Minepacks库存完整，反馈玩家的18格77件完整；原540格个人箱及待领奖队列、BetonQuest任务物品行、技能资格/点数和领地规则保留，没有迁移或补发。
+
+隔离验证五种大背包入口的实际取放、任务袋拒收普通物品、真实公会交付奖励进个人箱，以及附魔书/药水正常重启后属性完整；正式20项、旧数据19项、Minepacks保存2项、部署夹具9项通过。Java/LAN及基岩UDP入口响应，手机/Xbox实际界面和玩家操作反馈仍须分别确认。Goddess/ag_NEKO/小鱼已回连；CortiLan与原机CortiEye维护前后均离线，不称镜头恢复。私有证据E/F `repairs/backpack-loss-20261010`。规则见[背包](BACKPACKS.md)，下方旧记录为各自历史时点。
+
+女神资料箱已与源玩家手册逐字一致，实际读取新版手册及BACKPACKS专题后答复125字符，正确区分三个入口及奖励去向；没有主动游戏聊天、发物或改变权限。
+
 **2026-10-09 18:07:17 0.4.7已上线：**服主已明确授权本次重启与维护公告，取代之前“先不重启”的限制。已发送3分钟、1分钟和10秒游戏预告；既有维护任务正常停启，E/F `20261009-175456/.complete` 在替换前完整，任务结果0，Java PID27940。领地主人/女神超管授权与撤权、公开协作者名单、三处原版公告牌及原生建筑保护/开门爬梯实练均已上线；原名单与客户端保持。正式只读33项、旧数据25项通过，MCP10工具重新发现且原来源策略保持。更新后已发简短说明，女神资料箱同步并实际读回，问答131/99字符；初答权限表述含混的失败保留，澄清后复验。原机CortiEye已实际回连附身并有夜视。手机/Xbox仍待真机。规则见 [领地](LANDS.md)、[建筑保护](STRUCTURE_PROTECTION.md)、[维护](OPERATIONS.md)。下方旧状态均为历史时点。
 
 **0.4.5收尾核验（2026-10-09 13:14:30）：**正式Java PID36952，维护任务结果0，当前在线CortiLan/ag_NEKO/Goddess；原机CortiEye仍offline/未附身，配对与Watcher正常，不称原镜头恢复。女神资料箱与源手册SHA256同为`5E2A5AE9609A93FAADFB850FF012017CF563867EDEF0E5A475B599719FB814E5`，专题SKILL_VISUALS亦同源；两项原生只读问答实际阅读后答复114/87字符，准确说明剑痕/冰火/治疗/羽翼风格、原资格/耗魔/冷却/范围和原客户端可用，以及配置热更新/多人限流/画面不表示实际范围，不主动游戏公告。下方旧状态均为各自历史时点。
@@ -69,6 +77,7 @@
 | 村庄生活季（0.4.0） | `resident-contracts.yml`、`world-life.yml`、原市场和十个生活插件；[完整规则](VILLAGE_LIFE_SEASON.md) | 冻结任务、原格收割位置、本人新照片索引、调查收据与能力记录 | 九居民事务/三商人；服务器真实动作证明。`admin market reload`及`admin worldlife reload`热运营；Mythic精英仅增强模式，普通不改，客户端保持 |
 | 任务市场（0.4.0） | `task-market.yml` 原35张加 `resident-contracts.yml` 九张，合计44张；[任务市场](TASK_MARKET.md)、[探索委托](EXPLORATION_CONTRACTS.md) | `config.yml` 的工程账本/本人评估、`guild-players.<UUID>.active.market` 的冻结条件与探索去重状态 | 热更新职业/已学前置、近战/格挡/真实团队治疗/标记贡献目标、维度、结构/群系键、路线门槛、步骤与奖励；工程登记基准，探索读已加载自然生成元数据。每人一次远行履历、返程和重启续接已验证 |
 | 工程完工交接与公共地标（0.3.91） | BUILD 委托 handover；罗盘公共地标、`landmark list/mine/info/publish/update/unpublish/menu`、`goto landmark:<领地ID>`；[规则](PROJECT_LANDMARKS.md) | config.yml 完成与待交接收据、lands.yml 与 WorldGuard、landmarks.yml 公共点 | 热配置后验收完成者管理建筑，当前主人到场起名公开；访客传送 6 魔力，私产权限独立。已完工可凭原历史补交接不重发奖。当前 CortiLan 观景塔已交接，落点待主人登记；指定礼物箱公共，其他储物私有 |
+| 大背包、任务物品袋与奖励箱（0.4.7配置修复） | `commands.yml`、Minepacks、BetonQuest与原个人箱；[规则](BACKPACKS.md) | Minepacks `backpack.db`；BetonQuest `database.db`；AgentFriend个人箱及奖励队列分别保存 | `backpack`/`bp`普通储物、`questbag`任务专用物品；公会/试炼仍入540格个人箱。别名正常重启加载；查当前缓存再核对数据库，不整库回滚或按猜测补发 |
 | 玩家领地与公会归属（0.4.7） | `LandManager/LandAccess/LandNoticeBoards`、现有WorldGuard和私产保护；[领地](LANDS.md) | `lands.yml`与`qd_land_*`区域是权限事实源；`land-boards.json`只索引原版牌位置；私产PDC保留 | 主人/女神/显式超管trust/untrust/manage；所有人members/board查名单和牌。控制台仍可reload/audit；女神两窄工具已重新发现，原来源策略保持。收到拒绝停止并查询/申请，公共箱与任务开放 |
 | 生活公会 | `LifeGuildManager.java` 的七类原版行动委托；`LifeGuildBuildings.java` 的四馆、入口台阶与七位导师；[生活公会规则](LIFE_GUILDS.md) | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `life-guild` 及四馆地基，另有四份 `life-building-*-mask.tsv` 结构保护快照 | 先扩展原版动作事件、任务 ID、原版菜单与 `/mycli life`；若要换任务目标，须保留在途任务迁移及防重复领奖逻辑；建筑/保护快照须随世界同组备份。四馆入口修复见 [建筑记录](LIFE_GUILD_BUILDINGS.md) |
 | 试炼塔、地下城与奖励（0.3.95） | trial-waves.yml前六层；dungeons.yml三个真实建筑；罗盘地点页、`dungeon list/info/travel/start/join/status/resume/leave/claim/menu`；[规则](DUNGEON_NETWORK.md) | config.yml的旧试炼波次快照、site-dungeons.runs/receipts/claimed/cooldowns，既有个人奖励；世界实体和建筑 | 控制台`trialwaves reload`/`dungeons reload`整体验证热更，活动期间拒绝换目录；新地点可指定已勘察付费entry。逐室原生战斗和实际返程，每处每日一次奖励。全服新地点48怪/128飞行物，不根据文字直接覆盖世界生成建筑 |
