@@ -1,3 +1,5 @@
+**2026-10-11 YSM桥接已上线：**服主授权先上线YSM，原维护任务正常停启、E/F `20261011-030654/.complete` 后发布五文件，结果0，Paper PID27844。Proxy0.3.0/Freesia2.5.1+2.4.1/YSM2.4.1 Worker及Geyser扩展0.1.0接入原网关、单实例维护、Watchdog和停服模型快照，新增四端口仅127.0.0.1。原AgentFriend0.4.13/CortiEyeMirror0.1.10、身份来源和Eye配对保持；三原账号同UUID重连。正式23项模型/资源协议、55项旧数据检查通过；隔离基岩14、生命周期及16连接14项保留，非16个自主LLM长期开荒验收。首次ANSI解析拒绝已修复显式UTF-8，旧版正常恢复及第二轮完整预告均留证。基岩本人模型分配、完整动画/装备、手机/Xbox真机及远端Web更新未完成；不自动为玩家分配模型。0.4.15住房/教学及0.1.11 OBS/live窗口候选仍未部署。当前规则见[YSM适配](YSM_ADAPTATION.md)，维护见[生命周期](YSM_LIFECYCLE.md)；私有回执E/F repairs/ysm-release-20261011。下方旧状态按历史时点阅读。 女神四份现役资料摘要一致，实际读回后117字符答复准确说明已上线、原客户端可用与远端Web状态未核对；首答对Web过度断言的记录保留。03:21:57原生getSpectatorTarget实读确认新ag_cormy_eye已附身ag_CorMy精确UUID，同world、同帧距离0。
+
 ## 2026-10-11：迎新热文案、验房候选与可米皮肤
 
 正式0.4.13欢迎修订4已热加载，介绍54格Minepacks大背包、任务袋/个人奖励箱区别、CLI发现和技能耗费。0.4.15候选新增七项现存房屋验收及六项自愿特色实练，规则见 [住房与实练](STARTER_HOUSE_TRAINING.md)；旧任务奖励、实习毕业与角色数据保留。服主要求本轮不重启，候选未部署、未排队发布。
@@ -109,6 +111,7 @@
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
+| YSM外观桥接（2026-10-11已上线） | `/appearance status/list`；[规则](YSM_ADAPTATION.md)、[维护](YSM_LIFECYCLE.md) | 独立Worker真实分配、原始模型目录及私有状态快照；不含正式游戏存档 | 可分发原始文件夹/ZIP自动稳定转换；服主本机控制台分配。原Agent无需更新，远端Web需更新重建；基岩本人分配/完整动画/真机仍待验 |
 | 职业进阶与能力认证（2026-10-11设计，待实现） | [高跃、御空、群体祝福及18阶考试方案](proposal-skill-certifications-20261011.md)；拟定命令和配置当前不可用 | 计划按UUID保存能力证书、冻结题目及晋级事务；现有大段和点数保留 | 当前可完善设计；新验收原语与考试引擎需要开发、隔离验证后维护发布。正式仍不能以飞行距离验收或参加新考试 |
 | 自然建筑保护与通行实练（0.4.7已上线） | `structure-protection.yml`、控制台 `structures reload/audit`、`world practice start/status/stop`；[规则](STRUCTURE_PROTECTION.md) | 已加载原生结构片段；本人PDC中的真实开门穿越、连续爬梯证明 | 六包命名空间及明确ID可热配置；禁止拆建，保留门梯、农耕和箱子权限。可选实练不代操作、不发奖；原Agent客户端保持 |
 | 村庄生活（0.3.99） | `world list/menu/npcs/talk/end/guide/events/photos`、`/photohelp`、罗盘旅途指南；[插件包](WORLD_LIFE_PLUGINS.md) | UUID实习账本、BetonQuest数据库、NPC持久数据、本人ImageFrame图片；既有QwenPaw原生任务 | 已开放三步真实操作实习、村民对话/故事、补给商和正向活动。NPC/任务/精英可编辑配置后隔离热加载。现有截图通过本人临时链接直接上传成地图并挂墙，原客户端无须更换；0.4.10新增女神相机自动拍摄，/mycli photo menu可选三个角度，无公网接口。 |

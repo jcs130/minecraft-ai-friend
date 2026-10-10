@@ -3,7 +3,9 @@ function Deploy-PendingContent {
     $planPath = Join-Path $opsDir 'content-plugins.pending.json'
     if (-not (Test-Path -LiteralPath $planPath)) { return }
     if (Listener) { throw 'Content deployment requires stopped Paper' }
-    $plan = Get-Content -LiteralPath $planPath -Raw | ConvertFrom-Json
+    # Scheduled Windows PowerShell uses the machine ANSI code page. Release
+    # notes are UTF-8, including Chinese punctuation next to JSON quotes.
+    $plan = Get-Content -LiteralPath $planPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($plan.schema -ne 1 -or $plan.id -notmatch '^[a-z0-9-]{8,80}$') { throw 'Invalid content deployment plan' }
     $allowed = @('AgentFriend','BetonQuest','FancyNpcs','Citizens','Denizen','ConditionalEvents','WorldEvents','MythicMobs','Shopkeepers','NPCSpeak','ImageFrame','FancyAnalytics')
     $entries = @(); $seen = @{}
@@ -19,14 +21,14 @@ function Deploy-PendingContent {
             # This one root file uses the same stopped E/F snapshots, pinned hashes,
             # atomic replacement and rollback as plugin configuration below.
             $target = Join-Path $serverDir $relative
-        } elseif ($relative -in @('plugins/MagicSpells/general.yml','plugins/MagicSpells/spells-agentfriend.yml','plugins/SpectatorPlus/config.yml')) {
+        } elseif ($relative -in @('plugins/MagicSpells/general.yml','plugins/MagicSpells/spells-agentfriend.yml','plugins/SpectatorPlus/config.yml','plugins/Geyser-Spigot/extensions/ysmbedrock/config.json','plugins/Geyser-Spigot/extensions/AgentAppearance-Bedrock-0.1.0.jar','plugins/Freesia-Backend-2.5.1+2.4.1-all.jar')) {
             # Only the two server-owned spell files are eligible; the same
             # pinned hashes, stopped snapshots and rollback apply below.
             $target = Join-Path $serverDir $relative
         } elseif ($relative -match '^plugins/([A-Za-z0-9]+)/(.+)$' -and $allowed -contains $Matches[1]) {
             if ($relative -match '(^|/)\.\.(/|$)|:|\\' -or $relative -notmatch '\.(yml|yaml|json|dsc)$') { throw 'Unsafe plugin configuration path' }
             $target = Join-Path $serverDir $relative
-        } elseif ($relative -in @('ops/goddess-bridge.mjs','ops/goddess-photo-camera.mjs','ops/goddess-photo-camera.json','ops/goddess-mcp.py','ops/maintenance-notice.mjs','ops/npc-dialogue-adapter.mjs','ops/npc-adapter.private.json','ops/agent-eye-names.mjs','ops/agent-eye-watcher.mjs','ops/agent-lan-gateway.mjs','ops/agent-gateway-access.json')) {
+        } elseif ($relative -in @('ops/ysm-services.json','ops/goddess-bridge.mjs','ops/goddess-photo-camera.mjs','ops/goddess-photo-camera.json','ops/goddess-mcp.py','ops/maintenance-notice.mjs','ops/npc-dialogue-adapter.mjs','ops/npc-adapter.private.json','ops/agent-eye-names.mjs','ops/agent-eye-watcher.mjs','ops/agent-lan-gateway.mjs','ops/agent-gateway-access.json')) {
             $target = Join-Path $opsDir $relative.Substring(4)
         } else { throw "Unexpected content target: $relative" }
         $source = [IO.Path]::GetFullPath([string]$file.source)

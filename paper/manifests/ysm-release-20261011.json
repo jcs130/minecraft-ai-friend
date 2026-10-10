@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "ysm-release-20261011",
+  "status": "deployed",
+  "paperVersion": "1.20.6",
+  "agentFriendVersion": "0.4.13",
+  "cortiEyeMirrorVersion": "0.1.10",
+  "components": [
+    {"name":"Freesia Backend","version":"2.5.1+2.4.1","sha256":"dc6ca39ef8bff9d609709aaadae6ba5ca3786b9d4529cfe633ba2990dd837576"},
+    {"name":"AgentAppearance Proxy","version":"0.3.0","sha256":"5a8f54fb43c0f516b7da624b71c4810d3476a0dde1e1721bb77d49f01d2355f8"},
+    {"name":"AgentAppearance Bedrock","version":"0.1.0","sha256":"7c710b8faadb991db613d79560424edb69bb52ea66b65b812c3f3e955caec1ce"},
+    {"name":"YSM Worker","version":"2.4.1","sha256":"ec51cfae84d219a45fac5098a31bfe980bcb7c2d8b413e8fffbd05a411a85680"}
+  ],
+  "lifecycle": {
+    "existingMaintenanceAndWatchdog": true,
+    "windowsJobContainsOnlyModelServices": true,
+    "stoppedModelBackup": true,
+    "newListeners": "loopback only",
+    "proxyHeapMiB": 512,
+    "workerHeapMiB": 768,
+    "workerViewDistance": 2,
+    "workerSimulationDistance": 2,
+    "workerNaturalMobSpawning": false
+  },
+  "verification": {
+    "isolatedBedrockProtocolChecks": 14,
+    "isolatedLifecycleAndControlledClientsChecks": 14,
+    "productionModelAndProtocolChecks": 23,
+    "productionPreservationChecks": 55,
+    "originalPlayersReconnectedWithOriginalUuids": true,
+    "productionTemporaryModelBundleBytes": 39828,
+    "productionTemporaryModelBundleSha256": "973d65fbdd9ca1af458371e083b050bd1043325971133406ed6d958d56c9816e",
+    "nativeClientPixelParity": false,
+    "completeAnimationAndEquipmentParity": false,
+    "authenticatedPhoneXboxVisuals": false,
+    "remoteWebDeploymentVerified": false,
+    "sixteenAutonomousAgentsLongTermVerified": false
+  }
+}

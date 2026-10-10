@@ -1,6 +1,6 @@
 # Optional YSM bridge for the Paper server
 
-Status (2026-10-10): isolated candidate. Production Paper and its entry points have **not** been changed. Web/camera original assets and automatic catalog conversion are tested in isolation. Proxy bridge 0.3.0 adds the private state handoff to the [Geyser Bedrock adapter](../geyser-ysm/README.md); real Bedrock protocol geometry/texture delivery is verified. Native Java pixel parity, full animation/equipment parity, and phone/Xbox device visuals remain unaccepted. See [adaptation status](../../docs/YSM_ADAPTATION.md).
+Status (2026-10-11): deployed behind the existing identity gateway, with the existing maintenance lock, Watchdog and stopped E/F backups. Proxy bridge 0.3.0 supplies Web/camera assets and private state to the [Geyser Bedrock adapter](../geyser-ysm/README.md). Production unmodified Mineflayer, original UUIDs and exact model bundle delivery are verified; Bedrock geometry/UV/texture delivery is verified in isolation. Remote Web hosts need their own update. Native Java pixel parity, full animation/equipment parity and phone/Xbox device visuals remain unaccepted. See [adaptation status](../../docs/YSM_ADAPTATION.md) and [lifecycle](../../docs/YSM_LIFECYCLE.md).
 
 ## Runtime
 
@@ -14,11 +14,11 @@ flowchart LR
     A -. public appearance metadata on Minecraft connection .-> H[Shared Web host observer]
 ```
 
-All new listeners in the lab bind to loopback. The Worker Minecraft and controller ports are internal services, not additional public interfaces. Keep the existing identity gateway, exact Agent source bindings, reserved Goddess identity and registered Eye pairs. Do not expose the offline Paper/Velocity backend directly.
+All new listeners bind to loopback. The Worker Minecraft and controller ports are internal services, not additional public interfaces. Keep the existing identity gateway, exact Agent source bindings, reserved Goddess identity and registered Eye pairs. Do not expose the offline Paper/Velocity backend directly.
 
 The candidate uses `kick_if_ysm_not_installed=false`. Vanilla Java, unmodified Mineflayer and Eye clients can continue playing without downloading model caches. A Java client that renders YSM needs the matching mod and loader; the tested protocol fixture uses Java 1.21.1. It is not an actual modded Java renderer.
 
-The current Geyser entry remains on Paper. Bedrock gameplay and ordinary player skins are the first-phase target; this bridge does not convert YSM into Bedrock player geometry. Geyser's experimental custom entity API documents a non-player spawn event and requires a Bedrock resource pack. It is not evidence of a working YSM player conversion.
+The Geyser entry remains on Paper. The deployed adapter converts supported original YSM geometry and textures into Bedrock player skins, bound to native UUID and Java entity ID. It lets Bedrock viewers see assigned Java/Agent models. Assigning a model to a Bedrock player and full native animation remain separate unfinished capabilities.
 
 ## Versions and sources
 
@@ -75,7 +75,7 @@ Assignment is deliberately limited to the verified bundled catalog. A request ac
 
 Poll once per second; send changes immediately and refresh unchanged state every five seconds. Maximum 40 online players. Metadata is public appearance, **not** proof that a recipient tracks that entity. The Web host must bind the UUID and entity ID against its own existing Mineflayer connection. It expires records after 15 seconds and resets on login, respawn and disconnect. It does not write native YSM packets or open another Minecraft account.
 
-The shared Web source is `mc-visual-console/packages/modern-viewer/renderer-src/host/viewer-appearance.mjs`. Current geometry support is explicitly `renderAvailable=false`, `PAPER_YSM_RENDERER_PENDING`, `completeEntityParityVerified=false`.
+The shared Web source is `mc-visual-console/packages/modern-viewer/renderer-src/host/viewer-appearance.mjs`. The renderer supports original geometry/UV/textures and bounded numeric animation tracks through the source bundles below. Unknown Molang/controllers/equipment are not complete native parity; `completeEntityParityVerified=false` remains explicit.
 
 ## Build
 

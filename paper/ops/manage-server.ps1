@@ -34,6 +34,7 @@ $auraCachePatchRequest = Join-Path $opsDir 'auraskills-cache-fix.requested.json'
 $auraCachePatchJar = Join-Path $opsDir 'instrumentation\auraskills-cache-patch.jar'
 $pendingContentDeploy = Join-Path $opsDir 'content-plugins.pending.json'
 . (Join-Path $PSScriptRoot 'content-deploy.ps1')
+. (Join-Path $PSScriptRoot 'ysm-services.ps1')
 
 function Log([string]$message) {
     $line = '{0} [{1}] {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Action, $message
@@ -127,8 +128,13 @@ function Start-Goddess {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $stdout = Join-Path $opsDir "goddess-bridge-$stamp.log"
     $stderr = Join-Path $opsDir "goddess-bridge-$stamp.error.log"
-    $proc = Start-Process -FilePath $node -ArgumentList $goddessScript -WorkingDirectory $opsDir `
-        -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+    $previousGamePort = $env:GODDESS_GAME_PORT
+    try {
+        $ysm = Ysm-Config
+        if ($ysm -and $ysm.enabled) { $env:GODDESS_GAME_PORT = [string]$ysm.proxy.port }
+        $proc = Start-Process -FilePath $node -ArgumentList $goddessScript -WorkingDirectory $opsDir `
+            -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+    } finally { $env:GODDESS_GAME_PORT = $previousGamePort }
     $deadline = (Get-Date).AddSeconds(10)
     while ((Get-Date) -lt $deadline) {
         $proc.Refresh()
@@ -176,6 +182,7 @@ function Assert-GatewayProcess([int]$processId) {
 }
 
 function Start-Gateway {
+    Start-YsmServices
     $listeners = @(GatewayListener)
     if ($listeners.Count -gt 0) {
         if ($listeners.Count -ne 1) { throw 'Agent LAN gateway has multiple listeners.' }
@@ -185,8 +192,13 @@ function Start-Gateway {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $stdout = Join-Path $opsDir "agent-lan-gateway-$stamp.log"
     $stderr = Join-Path $opsDir "agent-lan-gateway-$stamp.error.log"
-    $process = Start-Process -FilePath $node -ArgumentList $gatewayScript -WorkingDirectory $opsDir `
-        -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+    $previousBackend = $env:AGENT_GATEWAY_BACKEND_PORT
+    try {
+        $ysm = Ysm-Config
+        if ($ysm -and $ysm.enabled) { $env:AGENT_GATEWAY_BACKEND_PORT = [string]$ysm.proxy.port }
+        $process = Start-Process -FilePath $node -ArgumentList $gatewayScript -WorkingDirectory $opsDir `
+            -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+    } finally { $env:AGENT_GATEWAY_BACKEND_PORT = $previousBackend }
     $deadline = (Get-Date).AddSeconds(12)
     while ((Get-Date) -lt $deadline) {
         $process.Refresh()
@@ -468,6 +480,7 @@ function Stop-Server {
     Stop-SpectateWatcher
     Stop-Goddess
     Stop-Gateway
+    Stop-YsmServices
     if (-not (Listener)) { Log 'Already stopped'; return }
     $null = Probe  # Refuse to send stop to an unrelated listener.
     $null = Rcon 'save-all flush'
@@ -817,6 +830,7 @@ function Backup-Server {
         foreach ($name in @('mcstatus.mjs', 'bedrock-ping.mjs', 'start-mc.bat')) {
             Copy-Item -LiteralPath (Join-Path 'E:\MC' $name) -Destination (Join-Path $rootCopy $name) -Force
         }
+        Backup-YsmServices $dest
         foreach ($relative in @('server.jar','server.properties','ops.json','world\level.dat')) {
             $sourceFile = Join-Path $serverDir $relative
             $copyFile = Join-Path $copyDest $relative

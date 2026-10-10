@@ -1,0 +1,12 @@
+import net from 'node:net';
+import {readFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+const [action='status',service, ...words]=process.argv.slice(2);
+const c=JSON.parse(readFileSync(process.env.YSM_SERVICES_CONFIG||fileURLToPath(new URL('./ysm-services.json',import.meta.url)),'utf8').replace(/^\uFEFF/,''));
+const q={action,token:c.controlToken,...(service?{service}:{}),...(words.length?{command:words.join(' ')}:{})};
+const s=net.connect(c.controlPort,'127.0.0.1');let body='';
+s.setTimeout(95_000,()=>s.destroy(Error('YSM control timeout')));
+s.once('connect',()=>s.write(JSON.stringify(q)+'\n'));
+s.on('data',b=>{body+=b;if(body.length>16_384)s.destroy(Error('YSM control reply too large'));});
+s.on('end',()=>{try{const r=JSON.parse(body);if(r.error)throw Error(r.error);console.log(JSON.stringify(r));}catch(e){console.error(e.message);process.exitCode=1;}});
+s.on('error',e=>{console.error(e.message);process.exitCode=1;});
