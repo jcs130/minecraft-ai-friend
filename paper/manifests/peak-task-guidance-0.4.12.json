@@ -1,0 +1,33 @@
+{
+  "version": "0.4.12",
+  "status": "deployed",
+  "deployedAt": "2026-10-10T15:23:39.644Z",
+  "artifact": {
+    "path": "plugins/AgentFriend/AgentFriend-0.4.12.jar",
+    "sha256": "40B515616EC87DF3FE07765262461CE904D36CCF7F4B91ED9546C8140E5478FE",
+    "bytes": 1107219
+  },
+  "previousSha256": "AACFAF61F621279BC1D8F2AA1D80663B8084E1F54A0AD900170D4926F3C347F1",
+  "backupBefore": "20261010-232038",
+  "checks": {
+    "isolated": 8,
+    "normalRestart": 7,
+    "productionHealth": 10,
+    "preservation": 21
+  },
+  "scope": "high_peak description/icon and PEAK status/join guidance; no criteria or reward changes",
+  "bedrock": "vanilla chat through existing Geyser; phone/Xbox appearance not tested",
+  "rollback": "guarded maintenance; disable 0.4.12 and enable stopped-snapshot 0.4.11 JAR, preserving current worlds/config/player data",
+  "goddessKnowledge": {
+    "actualGuidesRead": true,
+    "userQuestionAnswerVerified": true,
+    "answerLength": 105,
+    "strictPromptAttemptsPassed": 0,
+    "strictPromptAttemptsFailed": 2
+  },
+  "eye": {
+    "originalClientReconnected": true,
+    "attached": true,
+    "verifiedAt": "2026-10-10T15:24:26.950Z"
+  }
+}

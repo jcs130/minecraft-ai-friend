@@ -113,7 +113,7 @@ tasks:
     icon: LEATHER_BOOTS
     reward: {fame: 6, emeralds: 2, bonus: APPLE, bonus-count: 2}
     steps:
-      - {title: 登高, description: 到达高度至少 120 的地方；服务器记录实际到达。, goal: peak, target: 1}
+      - {title: 登高, description: 到达 Y≥120 的高处，天然山峰或建筑均可；不要求积雪，到达后横向走过一格记录。, goal: peak, target: 1}
   companion_trial:
     scope: personal
     title: 结伴练习

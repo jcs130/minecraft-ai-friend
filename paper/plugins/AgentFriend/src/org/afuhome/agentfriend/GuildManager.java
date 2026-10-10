@@ -63,7 +63,7 @@ final class GuildManager implements Listener {
                     Goal.EXPLORE, 1, 0, 1, 12, 5, Material.IRON_SWORD, 1, "bunker"),
             new Contract("biome_border", "边界巡礼", "站上两种生物群系的交界地带", Material.MOSSY_COBBLESTONE,
                     Goal.BIOME_BORDER, 1, 0, 0, 6, 2, Material.OAK_SAPLING, 2, null, 0),
-            new Contract("high_peak", "制高点", "登上高度 120 以上的山峰极目远眺", Material.SNOW_BLOCK,
+            new Contract("high_peak", "制高点", "到达 Y≥120 的高处（天然山峰或建筑均可），不要求积雪；到达后走动一步。", Material.SPYGLASS,
                     Goal.PEAK, 1, 0, 0, 6, 2, Material.SNOWBALL, 8, null, 0),
             // —— 战斗执行（dim 1）——
             new Contract("first_step", "初探苔穴", "通关地下城第 1 层", Material.MOSS_BLOCK,
@@ -319,6 +319,7 @@ final class GuildManager implements Listener {
                 + quest.target() + "]" + (progress(player) >= quest.target() ? "；可交付领取" : ""));
         if (quest != null && plugin.taskMarket().engineering(quest))
             player.sendMessage(ChatColor.GRAY + "工程进度为上次验收快照；/mycli guild verify 重新验收实际结构。");
+        showPeakRequirement(player, quest);
         if (quest != null && (ExplorationObjectives.GOALS.contains(quest.goal()) || quest.goal() == Goal.MAP_HUNT)) plugin.taskMarket().surveyStatus(player);
     }
 
@@ -545,6 +546,14 @@ final class GuildManager implements Listener {
         if (member(player) && rankIndex(fame(player)) >= RANKS.length - 1
                 && plugin.getConfig().getInt(base(player.getUniqueId()) + ".rituals.certified", 0) >= RANKS.length - 1)
             player.setDisplayName("✦" + player.getName());
+        // Re-state the real criterion for already accepted contracts after a wording update.
+        showPeakRequirement(player, active(player));
+    }
+
+    private void showPeakRequirement(Player player, Contract quest) {
+        if (quest == null || quest.goal() != Goal.PEAK) return;
+        player.sendMessage(ChatColor.AQUA + "「" + quest.title() + "」验收：到达 Y≥120 即可，天然山峰、山上建筑、屋顶和高塔均可；不要求积雪或全程徒步。"
+                + "当前 Y=" + player.getLocation().getBlockY() + "；到达后横向走过一格记录，/mycli guild status 查进度，完成后 /mycli guild claim 领取。");
     }
 
     private String cheatWeapon(Player player) {
