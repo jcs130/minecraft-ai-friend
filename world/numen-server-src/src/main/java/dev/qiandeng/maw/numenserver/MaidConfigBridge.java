@@ -10,9 +10,15 @@ import com.github.tartaricacid.touhoulittlemaid.ai.service.llm.LLMSite;
 import com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.LLMOpenAISite;
 import com.github.tartaricacid.touhoulittlemaid.config.subconfig.AIConfig;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import com.github.tartaricacid.touhoulittlemaid.api.event.InteractMaidEvent;
+import com.github.tartaricacid.touhoulittlemaid.api.event.MaidTaskEnableEvent;
+import com.github.tartaricacid.touhoulittlemaid.init.InitTrigger;
 import com.github.tartaricacid.touhoulittlemaid.util.GameModeUtil;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.neoforged.neoforge.common.NeoForge;
 import java.nio.channels.FileChannel;
 import java.nio.file.*;
 import java.util.*;
@@ -26,6 +32,8 @@ final class MaidConfigBridge {
             case "maid.menu"->menu(player);
             case "maid.detail"->object("ok",true,"maid",state(own(player,args)));
             case "maid.settings"->settings(player,args);
+            case "maid.tasks"->tasks(player,args);
+            case "maid.controls"->controls(player,args);
             case "maid.site.save"->saveSite(player,args);
             default->throw new IllegalArgumentException("unknown_maid_ui_action");
         };
@@ -41,6 +49,10 @@ final class MaidConfigBridge {
     static boolean eligible(ServerPlayer player,EntityMaid maid){
         return maid.isAlive()&&!maid.isRemoved()&&maid.isTame()&&maid.isOwnedBy(player)&&maid.level()==player.level()&&player.distanceToSqr(maid)<=32*32;
     }
+    boolean canOpenFromInteraction(ServerPlayer player,Entity target){
+        return target instanceof EntityMaid maid && eligible(player,maid) &&
+            !NeoForge.EVENT_BUS.post(new InteractMaidEvent(player,maid,player.getMainHandItem())).isCanceled();
+    }
     EntityMaid own(ServerPlayer player,JsonObject args){
         var entity=player.serverLevel().getEntity(UUID.fromString(text(args,"maidUuid",36)));
         if(!(entity instanceof EntityMaid maid)||!eligible(player,maid))throw new IllegalArgumentException("maid_not_owned_nearby_alive");
@@ -52,7 +64,33 @@ final class MaidConfigBridge {
     }
     static JsonObject state(EntityMaid maid){
         MaidAIChatManager data=maid.getAiChatManager();LLMSite selected=data.getLLMSite();
-        return object("maidUuid",maid.getUUID(),"name",limit(maid.getName().getString(),80),"position",HeadlessRuntime.position(maid.position()),"health",maid.getHealth(),"maxHealth",maid.getMaxHealth(),"siteId",data.llmSite,"effectiveSiteId",selected==null?null:selected.id(),"model",data.llmModel,"effectiveModel",data.getLLMModel(),"customSetting",limit(data.customSetting,4000),"language",data.getChatLanguage(),"revision",revision(data));
+        return object("maidUuid",maid.getUUID(),"name",limit(maid.getName().getString(),80),"position",HeadlessRuntime.position(maid.position()),"health",maid.getHealth(),"maxHealth",maid.getMaxHealth(),"hunger",maid.getHunger(),"taskId",maid.getTask().getUid().toString(),"follow",!maid.isMaidInSittingPose()&&!maid.isHomeModeEnable(),"pickup",maid.isPickup(),"sleeping",maid.isSleeping(),"controlRevision",controlRevision(maid),"siteId",data.llmSite,"effectiveSiteId",selected==null?null:selected.id(),"model",data.llmModel,"effectiveModel",data.getLLMModel(),"customSetting",limit(data.customSetting,4000),"language",data.getChatLanguage(),"revision",revision(data));
+    }
+    static String controlRevision(EntityMaid maid){
+        return hash(fingerprint(object("taskId",maid.getTask().getUid(),"sitting",maid.isMaidInSittingPose(),"home",maid.isHomeModeEnable(),"pickup",maid.isPickup(),"sleeping",maid.isSleeping())));
+    }
+    JsonObject tasks(ServerPlayer player,JsonObject args){
+        EntityMaid maid=own(player,args);JsonArray tasks=new JsonArray();
+        for(var task:TaskManager.getNotHiddenTaskList(maid).stream().limit(32).toList())
+            tasks.add(object("id",task.getUid(),"name",limit(task.getName().getString(),80),"enabled",task.isEnable(maid)));
+        return object("ok",true,"maid",state(maid),"tasks",tasks);
+    }
+    JsonObject controls(ServerPlayer player,JsonObject args){
+        EntityMaid maid=own(player,args);
+        if(!equalsSecret(controlRevision(maid),text(args,"controlRevision",64)))throw new IllegalArgumentException("maid_controls_changed_refresh");
+        if(maid.isSleeping())throw new IllegalArgumentException("maid_sleeping");
+        ResourceLocation id=ResourceLocation.tryParse(text(args,"taskId",150));
+        var task=id==null?null:TaskManager.findTask(id).orElse(null);
+        if(task==null||task.isHidden(maid))throw new IllegalArgumentException("unknown_or_hidden_task");
+        boolean changed=task!=maid.getTask();
+        if(changed&&((task!=TaskManager.getIdleTask()&&NeoForge.EVENT_BUS.post(new MaidTaskEnableEvent(task,maid)).isCanceled())||!task.isEnable(maid)))throw new IllegalArgumentException("task_disabled");
+        if(!args.has("follow")||!args.get("follow").isJsonPrimitive()||!args.getAsJsonPrimitive("follow").isBoolean()||!args.has("pickup")||!args.get("pickup").isJsonPrimitive()||!args.getAsJsonPrimitive("pickup").isBoolean())throw new IllegalArgumentException("invalid_maid_controls");
+        boolean follow=args.get("follow").getAsBoolean(),pickup=args.get("pickup").getAsBoolean();
+        if(changed){maid.setTask(task);if(task!=TaskManager.getIdleTask())InitTrigger.MAID_EVENT.get().trigger(player,"switch_task");}
+        boolean following=!maid.isMaidInSittingPose()&&!maid.isHomeModeEnable();
+        if(follow!=following){if(follow)maid.setHomeModeEnable(false);maid.setInSittingPose(!follow);}
+        maid.setPickup(pickup);
+        return object("ok",true,"maid",state(maid),"modelRequests",0);
     }
     static String revision(LLMSite site){
         JsonObject data=object("id",site.id(),"url",site.url(),"enabled",site.enabled(),"apiType",site.getApiType(),"headersHash",hash(fingerprint(new Gson().toJsonTree(site.headers()))));

@@ -53,6 +53,7 @@ def run(root: Path, output: Path):
             time.sleep(.2)
         report['checks']['real_geyser_extension_and_command_registered'] = ready.is_set()
         report['checks']['real_native_maid_command_registered'] = any('MAW_MAID_FORMS ready nativeConfig=true permission=native_operator ownerOnly=true' in line for line in lines)
+        report['checks']['real_visual_interaction_registered'] = any('MAW_VISUAL_MENUS ready welcomeButtons=true ownEntityClick=true controls=true privateEvents=true' in line for line in lines)
         if ready.is_set():
             for _ in range(20):
                 try:
@@ -68,7 +69,7 @@ def run(root: Path, output: Path):
             process.stdin.write('stop\n'); process.stdin.flush(); process.wait(timeout=45)
         reader.join(timeout=5)
         report['exitCode'] = process.returncode
-        report['ok'] = len(report['checks'])==4 and all(report['checks'].values()) and process.returncode==0
+        report['ok'] = len(report['checks'])==5 and all(report['checks'].values()) and process.returncode==0
         (output/'acceptance.json').write_text(json.dumps(report,ensure_ascii=False,indent=2), encoding='utf-8')
     return report
 

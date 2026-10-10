@@ -220,6 +220,7 @@ def load_config(path: Path, *, root: Path = ROOT) -> dict:
             'nativeModels': model_contract,
             'nativeAgents': forms_contract.exists(),
             'nativeMaidConfig': forms_contract.exists() and contract.get('maidConfig') is True,
+            'nativeVisualInteraction': forms_contract.exists() and contract.get('visualInteraction') is True,
             'readiness': 'minecraft', 'startupTimeoutSeconds': 150, 'stopMode': 'stdin', 'stopText': 'stop'}]}
 
 
@@ -240,9 +241,13 @@ class BedrockChild(service.Child):
                         raise RuntimeError('Native companion forms did not register')
                     if self.spec.get('nativeMaidConfig') and 'MAW_MAID_FORMS ready nativeConfig=true permission=native_operator ownerOnly=true' not in log:
                         raise RuntimeError('Native maid configuration forms did not register')
+                    if self.spec.get('nativeVisualInteraction') and 'MAW_VISUAL_MENUS ready welcomeButtons=true ownEntityClick=true controls=true privateEvents=true' not in log:
+                        raise RuntimeError('Native visual interaction menus did not register')
                     self.metrics['nativeAgents'] = {'nativeForms': True, 'modelKeysRedacted': True, 'actualPhoneTested': False}
                     if self.spec.get('nativeMaidConfig'):
                         self.metrics['nativeAgents']['maidConfig'] = True
+                    if self.spec.get('nativeVisualInteraction'):
+                        self.metrics['nativeAgents']['visualInteraction'] = True
             except Exception as error:
                 self.ready = False
                 self.problem = 'bedrock_readiness_failed: ' + str(error)

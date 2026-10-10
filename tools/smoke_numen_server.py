@@ -154,10 +154,8 @@ def run(root, output, node, java, full_pack=False, maid_config=False):
         events=tool('get_events',{'companion':body});checks['events_non_consuming']=events['events']==tool('get_events',{'companion':body})['events'] and len(events['events'])>=2
         through=events['events'][-1]['sequence'];tool('ack_events',{'companion':body,'lease_id':lease,'through':through});checks['events_explicit_ack']=all(e['sequence']>through for e in tool('get_events',{'companion':body})['events'])
         # Expose the private UI only to a real, non-OP connected ordinary owner.
-        source=output/'owner.cjs';source.write_text("const mc=require('mineflayer'),fs=require('fs');const b=mc.createBot({host:'127.0.0.1',port:28978,username:'MawHeadQAOwner',auth:'offline',version:'1.21.1',physicsEnabled:false});b.once('spawn',()=>fs.writeFileSync(process.argv[2],JSON.stringify({uuid:b.player.uuid})));b.on('error',e=>{console.error(e);process.exitCode=1});b.on('kicked',r=>console.error('kicked',r));const t=setInterval(()=>{if(fs.existsSync(process.argv[3])){clearInterval(t);b.quit('QA done');setTimeout(()=>process.exit(),250);}},200);setTimeout(()=>{b.quit();process.exit(2)},90000);",encoding='utf-8')
-        if full_pack:source.write_text(source.read_text('utf-8').replace('port:28978','port:28979'),encoding='utf-8')
         env={**os.environ,'NODE_PATH':str(root/'gateway/permanent/node/node_modules')}
-        client=subprocess.Popen([str(node),str(source),str(output/'owner-ready.json'),str(output/'owner-release')],env=env,stdout=(output/'owner.log').open('w'),stderr=subprocess.STDOUT,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        client=subprocess.Popen([str(node),str(REPO/'tools/smoke_numen_owner.cjs'),str(28979 if full_pack else 28978),str(output)],env=env,stdout=(output/'owner.log').open('w'),stderr=subprocess.STDOUT,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         deadline=time.monotonic()+30
         while not (output/'owner-ready.json').exists() and client.poll() is None and time.monotonic()<deadline:time.sleep(.2)
         assert (output/'owner-ready.json').exists(),'ordinary owner login failed'
@@ -165,7 +163,7 @@ def run(root, output, node, java, full_pack=False, maid_config=False):
         if maid_config:
             if not full_pack:raise ValueError('Native maid checks require --full-pack')
             from smoke_maw_maid_config import checks as maid_checks
-            maid_checks(request,console,owner,bridge,server,lines,checks)
+            maid_checks(request,console,owner,bridge,server,lines,checks,body)
             checks['maid_configuration_no_model_requests']=not mock_calls
         ui('profile.save',{'profileId':'default','name':'QA model','provider':'openai','model':'qa-local','baseUrl':'http://127.0.0.1:28991/v1','apiKey':'qa-secret-not-real'})
         saved=ui('profile.save',{'profileId':'default','name':'QA model','provider':'openai','model':'qa-local','baseUrl':'http://127.0.0.1:28991/v1','apiKey':''})

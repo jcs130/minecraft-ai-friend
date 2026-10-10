@@ -39,6 +39,7 @@ public final class HeadlessRuntime {
     final Map<UUID,JsonObject> leases=new HashMap<>();
     HeadlessHttp http;
     final MaidConfigBridge maids;
+    final BedrockMenus bedrockMenus = new BedrockMenus(this);
     int ticks;
 
     static void start(MinecraftServer server) throws Exception {
@@ -81,7 +82,7 @@ public final class HeadlessRuntime {
         long until=System.nanoTime()+2_000_000;
         for(int n=0;n<8&&System.nanoTime()<until;n++) {Runnable job=r.requests.poll();if(job==null)break;job.run();}
         for(HeadlessBrain brain:List.copyOf(r.brains.values()))brain.tick();
-        if(++r.ticks%20==0)r.lifecycle();
+        if(++r.ticks%20==0){r.bedrockMenus.prune(System.currentTimeMillis());r.lifecycle();}
     }
     static void stop() {
         HeadlessRuntime r=INSTANCE;if(r==null)return;
@@ -339,6 +340,7 @@ public final class HeadlessRuntime {
     JsonObject ui(UUID owner,String playerName,String action,JsonObject args) {
         ServerPlayer player=server.getPlayerList().getPlayer(owner);
         if(player==null||player instanceof NumenPlayer||!player.getGameProfile().getName().equals(playerName))throw new IllegalArgumentException("owner_connection_not_online");
+        if(action.startsWith("bedrock."))return bedrockMenus.invoke(player,action,args);
         if(action.startsWith("maid.")){
             if(maids==null)throw new IllegalArgumentException("maid_mod_unavailable");
             return maids.invoke(player,action,args);

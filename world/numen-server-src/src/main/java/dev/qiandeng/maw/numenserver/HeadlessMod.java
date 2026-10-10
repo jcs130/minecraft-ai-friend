@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 public final class HeadlessMod {
     private static final org.slf4j.Logger LOG = LoggerFactory.getLogger("maw-numen-server");
     public HeadlessMod() {
+        NeoForge.EVENT_BUS.addListener(BedrockMenus::interact);
+        NeoForge.EVENT_BUS.addListener(BedrockMenus::interactSpecific);
         NeoForge.EVENT_BUS.addListener((ServerStartedEvent e) -> {
             try { HeadlessRuntime.start(e.getServer()); }
             catch (Exception failure) { LOG.error("Numen server endpoint not started: {}", failure.getClass().getSimpleName()); }

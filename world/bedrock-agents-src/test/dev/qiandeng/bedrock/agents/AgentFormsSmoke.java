@@ -35,6 +35,22 @@ public final class AgentFormsSmoke {
         check(sent.get().get("model").equals("qa-other"),"maid selected model");check(sent.get().get("language").equals("zh_cn"),"maid Chinese");
         check(sent.get().get("revision").equals("maid-cas")&&sent.get().get("maidUuid").equals("00000000-0000-0000-0000-000000000001"),"maid owner identity/CAS");
         check(sent.get().get("customSetting").equals("温柔的探险伙伴"),"maid persona callback");
+        AtomicReference<String> clicked=new AtomicReference<>();
+        SimpleForm welcome=MaidForms.welcome(()->clicked.set("companions"),()->clicked.set("maids"));
+        check(json(welcome).contains("无需输入命令")&&json(welcome).contains("交互键"),"controller entry instructions");
+        respond(welcome,"1");check("maids".equals(clicked.get()),"direct maid welcome button");
+        respond(welcome,"0");check("companions".equals(clicked.get()),"direct Numen welcome button");
+        Map<String,Object> maid=AgentForms.map("maidUuid","00000000-0000-0000-0000-000000000001","name","我的女仆","health",17.5,"maxHealth",20,"hunger",18,"taskId","touhou_little_maid:idle","follow",true,"pickup",false,"controlRevision","native-controls-cas");
+        SimpleForm panel=MaidForms.panel(maid,()->clicked.set("model"),()->clicked.set("controls"),()->clicked.set("back"));
+        check(json(panel).contains("17.5")&&json(panel).contains("空闲"),"actual health/native job in panel");
+        respond(panel,"0");check("model".equals(clicked.get()),"model graphical entry");respond(panel,"1");check("controls".equals(clicked.get()),"controls graphical entry");
+        List<Map<String,Object>> tasks=List.of(Map.of("id","touhou_little_maid:idle","enabled",true),Map.of("id","touhou_little_maid:farm","enabled",true),Map.of("id","test:disabled","enabled",false));
+        CustomForm controls=MaidForms.controls(maid,tasks,sent::set);String controlsJson=json(controls);
+        check(controlsJson.contains("种植与收获")&&!controlsJson.contains("test:disabled"),"localized available native task options");
+        respond(controls,"[null,1,false,true]");
+        check(sent.get().get("taskId").equals("touhou_little_maid:farm"),"real task id kept");
+        check(sent.get().get("follow").equals(false)&&sent.get().get("pickup").equals(true),"controller toggle callbacks");
+        check(sent.get().get("controlRevision").equals("native-controls-cas")&&sent.get().get("maidUuid").equals(maid.get("maidUuid")),"owner/control CAS kept");
         System.out.println("{\"ok\":true,\"checks\":"+checks+",\"actualPhoneTested\":false}");
     }
 }
