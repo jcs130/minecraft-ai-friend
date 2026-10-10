@@ -39,6 +39,7 @@ public final class HeadlessRuntime {
     final Map<UUID,JsonObject> leases=new HashMap<>();
     HeadlessHttp http;
     final MaidConfigBridge maids;
+    final NativeModBridge mods;
     final BedrockMenus bedrockMenus = new BedrockMenus(this);
     int ticks;
 
@@ -58,6 +59,7 @@ public final class HeadlessRuntime {
         this.directory=server.getWorldPath(LevelResource.ROOT).resolve("maw-numen-server");
         this.secrets=server.getServerDirectory().resolve("config/maw-numen-private");
         this.maids=net.neoforged.fml.ModList.get().isLoaded("touhou_little_maid")?new MaidConfigBridge(this):null;
+        this.mods=net.neoforged.fml.ModList.get().isLoaded("maw_agent_bridge")?new NativeModBridge():null;
         Files.createDirectories(directory.resolve("bodies"));Files.createDirectories(secrets);
         try(var paths=Files.list(directory.resolve("bodies"))) {
             for(Path path:paths.filter(p->p.getFileName().toString().matches("[a-f0-9-]{36}\\.json")).toList()) {
@@ -283,6 +285,11 @@ public final class HeadlessRuntime {
     JsonObject cancel(UUID body,String aid) {
         JsonObject record=action(body,aid);if(!record.has("phase"))return record;
         if(text(record,"phase",16).equals("unknown")||text(record,"phase",16).equals("terminal"))return record;
+        if(record.has("modOperation")) {
+            record.addProperty("phase","terminal");record.addProperty("ok",false);record.addProperty("completedAt",Instant.now().toString());
+            record.add("outcome",object("ok",false,"code","cancelled_before_dispatch","outcomeKnown",true,"changed",false));
+            write(actionFile(body,aid),record);bodies.get(body).remove("activeAction");save(body);return record;
+        }
         ServerPrograms.cutOff(body,aid,true);JsonObject o=ok("action_cancel");o.addProperty("action_id",aid);o.addProperty("phase","cancel_requested_query_terminal");return o;
     }
     void event(UUID id,String type,String text,boolean urgent,long at) {
@@ -305,11 +312,17 @@ public final class HeadlessRuntime {
     JsonObject invoke(UUID owner,String operation,JsonObject args) {
         try {
             if(operation.equals("operations"))return operations(args.has("group")?text(args,"group",80):null);
+            if(operation.equals("mod_operations")) {
+                if(mods==null)throw new IllegalArgumentException("native_mod_bridge_unavailable");
+                return mods.catalog(args.has("operation")?text(args,"operation",80):"");
+            }
             if(operation.equals("list_companions"))return list(owner);
             if(operation.equals("create_companion"))return create(owner,args);
             UUID id=own(owner,args);
             return switch(operation){
                 case "get_state"->snapshot(id,true);
+                case "mod_query"->{if(mods==null)throw new IllegalArgumentException("native_mod_bridge_unavailable");yield mods.invoke(live(id),text(args,"operation",80),modArguments(args),true,"mod_"+UUID.randomUUID().toString().replace("-",""));}
+                case "mod_action"->{requireLease(id,args);yield modAction(id,id(args,"action_id"),text(args,"operation",80),modArguments(args),null);}
                 case "claim_control"->claim(owner,id,args);
                 case "lua"->{requireLease(id,args);yield lua(id,id(args,"action_id"),text(args,"code",16384),null);}
                 case "action_status"->action(id,id(args,"action_id"));
@@ -323,6 +336,48 @@ public final class HeadlessRuntime {
                 default->throw new IllegalArgumentException("unknown_operation");
             };
         }catch(RuntimeException ex){return denied(operation,safeCode(ex));}
+    }
+    static JsonObject modArguments(JsonObject args) {
+        if(!args.has("arguments"))return new JsonObject();
+        if(!args.get("arguments").isJsonObject())throw new IllegalArgumentException("invalid_mod_arguments");
+        return args.getAsJsonObject("arguments").deepCopy();
+    }
+    static JsonElement canonical(JsonElement value) {
+        if(value.isJsonObject()){JsonObject sorted=new JsonObject();new TreeMap<>(value.getAsJsonObject().asMap()).forEach((k,v)->sorted.add(k,canonical(v)));return sorted;}
+        if(value.isJsonArray()){JsonArray rows=new JsonArray();for(var v:value.getAsJsonArray())rows.add(canonical(v));return rows;}
+        return value.deepCopy();
+    }
+    JsonObject modAction(UUID body,String aid,String operation,JsonObject arguments,Consumer<JsonObject> terminal) {
+        if(mods==null)throw new IllegalArgumentException("native_mod_bridge_unavailable");
+        String fingerprint=hash("native-mod-v1:"+operation+":"+canonical(arguments));Path file=actionFile(body,aid);
+        if(Files.isRegularFile(file)) {
+            JsonObject old=action(body,aid);if(!fingerprint.equals(text(old,"fingerprint",64)))throw new IllegalArgumentException("action_id_conflict");
+            old.addProperty("replayed",true);if(terminal!=null&&text(old,"phase",16).equals("terminal"))terminal.accept(old);return old;
+        }
+        var spec=mods.catalog(operation).getAsJsonObject("operation");
+        if(spec.get("readOnly").getAsBoolean())throw new IllegalArgumentException("use_mod_query_for_read_only");
+        JsonObject b=bodies.get(body);if(b.has("blocked"))throw new IllegalArgumentException("body_reconciliation_required");
+        NumenPlayer her=live(body);if(her.isDeadOrDying())throw new IllegalArgumentException("body_dead");
+        // Preserve Numen observe/owner-approval policies. Bypass still grants no OP.
+        if(Permission.modeOf(her)!=Mode.BYPASS)throw new IllegalArgumentException("numen_bypass_mode_required_for_mod_actions");
+        if(ServerPrograms.running(body)||b.has("activeAction"))throw new IllegalArgumentException("body_busy_query_current_action");
+        JsonObject out=ok("mod_action");out.addProperty("bodyId",body.toString());out.addProperty("action_id",aid);out.addProperty("modOperation",operation);out.addProperty("fingerprint",fingerprint);out.addProperty("session",session);out.addProperty("phase","accepted");out.add("arguments",arguments.deepCopy());
+        write(file,out);b.addProperty("activeAction",aid);save(body);
+        requests.add(()->{
+            JsonObject end=read(file);if(!text(end,"phase",16).equals("accepted")){if(terminal!=null)terminal.accept(end);return;}
+            JsonObject outcome;
+            try {
+                NumenPlayer actual=live(body);
+                if(Permission.modeOf(actual)!=Mode.BYPASS)throw new IllegalArgumentException("numen_bypass_mode_required_for_mod_actions");
+                outcome=mods.invoke(actual,operation,arguments,false,"mod_"+hash(aid).substring(0,32));
+            }catch(IllegalArgumentException failure){outcome=object("ok",false,"code",safeCode(failure),"outcomeKnown",true,"changed",false);}
+            catch(RuntimeException failure){outcome=object("ok",false,"code",safeCode(failure),"outcomeKnown",false,"retryAutomatically",false);}
+            boolean unknown=outcome.has("outcomeKnown")&&!outcome.get("outcomeKnown").getAsBoolean()||outcome.has("outcomeUnknown")&&outcome.get("outcomeUnknown").getAsBoolean()||outcome.has("outcome")&&outcome.get("outcome").isJsonPrimitive()&&outcome.get("outcome").getAsString().equals("unknown");
+            end.addProperty("phase",unknown?"unknown":"terminal");end.addProperty("completedAt",Instant.now().toString());end.addProperty("ok",!unknown&&outcome.has("ok")&&outcome.get("ok").getAsBoolean());end.add("outcome",outcome);
+            if(unknown)b.addProperty("blocked","previous_action_unknown_do_not_replay");else b.remove("activeAction");
+            write(file,end);save(body);event(body,"action_terminal","action_id="+aid+" native="+operation+" "+text(end,"phase",16),false,System.currentTimeMillis());
+            if(terminal!=null)terminal.accept(end.deepCopy());
+        });return out.deepCopy();
     }
     static String safeCode(Throwable error) {
         String msg=error.getMessage();return msg!=null&&msg.matches("[A-Za-z0-9_]{1,100}")?msg:"operation_failed_inspect_server_receipt";

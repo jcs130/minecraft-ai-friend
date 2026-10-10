@@ -65,6 +65,7 @@ def probe(root=DEFAULT_ROOT):
         checks['native_resident_endpoint']=h['ok'] and h['serverResident'] and not h['clientRequired']
         checks['native_maid_config_adapter']=h.get('maidConfigAvailable') is True
         checks['native_visual_interaction_adapter']=h.get('bedrockVisualMenus') is True
+        checks['native_mod_operations_adapter']=h.get('nativeModAccess') is True and h.get('nativeModOperationCount')==34
         main=json.load(urlopen('http://127.0.0.1:28985/healthz',timeout=5))
         checks['owned_java_and_worker_healthy']=main['healthy'] and not main['paused'] and time.time()-main['heartbeatEpoch']<20
         for name,build,installed in [('numen-server','numen-server',root/'server/mods/maw_numen_server-0.1.0.jar'),('bedrock-forms','bedrock-agents',root/'bedrock/plugins/Geyser/extensions/MawAgents.jar')]:
@@ -77,7 +78,7 @@ def probe(root=DEFAULT_ROOT):
         checks['native_maid_forms_loaded']='MAW_MAID_FORMS ready nativeConfig=true permission=native_operator ownerOnly=true' in log
         checks['native_visual_menus_loaded']='MAW_VISUAL_MENUS ready welcomeButtons=true ownEntityClick=true controls=true privateEvents=true' in log
     except Exception as error:report['error']=type(error).__name__
-    report['ok']=len(checks)==14 and all(checks.values());return report
+    report['ok']=len(checks)==15 and all(checks.values());return report
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=('initialize','provision','call','health'));p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--owner');p.add_argument('--label',default='external-agent');p.add_argument('--credentials',type=Path);p.add_argument('--operation');p.add_argument('--arguments',type=Path);a=p.parse_args()

@@ -78,6 +78,7 @@ final class ModOperationsBridge {
         });
     }
     private static void send(ServerPlayer player, String json) {
+        if (NativeModAccess.capture(player, json)) return;
         if (player.connection != null && player.connection.hasChannel(State.TYPE)) PacketDistributor.sendToPlayer(player, new State(json));
     }
     private static JsonObject base(ServerPlayer player, String id, String action) {
@@ -89,7 +90,14 @@ final class ModOperationsBridge {
     private static BlockHitResult visible(ServerPlayer player, JsonObject input, boolean mutation) {
         BlockPos p = ModRequest.position(input, "position");
         if (!player.level().isLoaded(p) || !player.canInteractWithBlock(p, 1)) ModRequest.fail("machine_not_reachable");
-        var hit = player.level().clip(new ClipContext(player.getEyePosition(), ModRequest.aim(input, p), ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
+        var eye = player.getEyePosition();
+        var aim = ModRequest.aim(input, p);
+        // A world.look cursor is exactly ON the outline surface. Minecraft's
+        // segment clip can exclude its endpoint (notably the 1/16-high FD board).
+        // Continue only 1e-4 blocks along the same ray; the FIRST hit must still
+        // be this loaded, reachable block, so an occluding block stays denied.
+        var end = aim.add(aim.subtract(eye).normalize().scale(0.0001));
+        var hit = player.level().clip(new ClipContext(eye, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
         if (hit.getType() != HitResult.Type.BLOCK || !hit.getBlockPos().equals(p)) ModRequest.fail("machine_not_visible");
         if (mutation) {
             ModRequest.active(player);
@@ -156,7 +164,7 @@ final class ModOperationsBridge {
         }
         return result;
     }
-    private static void handle(ServerPlayer player, String raw, boolean mutation) {
+    static void handle(ServerPlayer player, String raw, boolean mutation) {
         String id = "invalid", kind = "unknown"; JsonObject result = null; boolean started = false, reserved = false;
         try {
             var input = JsonParser.parseString(raw).getAsJsonObject();

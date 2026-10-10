@@ -79,6 +79,7 @@ class PlayerColonyBridgeAudit(unittest.TestCase):
         helper = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(helper)
         cls.cp = os.pathsep.join([helper.full_cp(cls.server / "libraries"),
+                                 os.environ.get("MAW_NATIVE_AUDIT_JAR", str(cls.mods / "maw_agent_bridge-0.1.0.jar")),
                                  *(str(cls.mods / name) for name in (
                                      "minecolonies-1.1.1319-1.21.1.jar", "structurize-1.0.832-1.21.1.jar",
                                      "domum-ornamentum-1.0.231-main.jar", "blockui-1.0.209-1.21.1.jar"))])
@@ -283,7 +284,7 @@ public final class ColonyCapabilitiesTest {
             result = self.run_java([str(self.java), "-cp", temporary + os.pathsep + self.cp, "dev.qiandeng.maw.ColonyCapabilitiesTest"])
             self.assertIn("native response branch passed", result)
             bytecode = self.run_java([str(self.java.with_name("javap.exe")), "-classpath", temporary, "-p", "-c", "dev.qiandeng.maw.PlayerColonyBridge"])
-            handler = bytecode.split("private static void handle(", 1)[1].split("\n  private static ", 1)[0]
+            handler = bytecode.split("static void handle(", 1)[1].split("\n  private static ", 1)[0]
             self.assertIn("// String capabilities", handler, "actual handler must accept the client query kind")
             self.assertIn("Method capabilitiesResult:", handler, "actual handler must dispatch the native response")
             early = handler.split("Method capabilitiesResult:", 1)[1].split("IColony.getCitizenManager:", 1)[0]
@@ -381,7 +382,7 @@ public final class ColonyResourcePageTest {
                 self.assertIn(native_read, resources)
             self.assertNotRegex(resources, r"(?:setItem|setCount|setBlock|dispatchCommand|performPrefixedCommand|addItemStack|setOwner|addPlayer)")
             self.assertIn("// String resource_builder_missing_or_wrong_colony", resources)
-            handler = text.split("private static void handle(", 1)[1].split("\n  private static ", 1)[0]
+            handler = text.split("static void handle(", 1)[1].split("\n  private static ", 1)[0]
             self.assertIn("Method handleResources:", handler)
 
     def test_stock_count_resources_and_status_read_actual_same_native_provider_slots(self):
@@ -405,7 +406,7 @@ public final class ColonyResourcePageTest {
             self.assertIn("// String providerSource", query)
             self.assertIn("Method stockCount:", query)
             self.assertLess(query.index("availableInBuildingProvider"), query.index("ColonyResourcePage.apply:"), "new fields participate in exact full packet budget")
-            status = text.split("private static void handle(", 1)[1].split("\n  private static ", 1)[0]
+            status = text.split("static void handle(", 1)[1].split("\n  private static ", 1)[0]
             self.assertIn("Method buildingProvider:", status)
             self.assertIn("IItemHandler.getStackInSlot:", status)
             self.assertIn("// String stockSource", status)

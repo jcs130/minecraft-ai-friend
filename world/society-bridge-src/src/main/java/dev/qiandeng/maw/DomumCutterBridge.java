@@ -218,9 +218,10 @@ final class DomumCutterBridge {
         return body.toString();
     }
     private static void send(ServerPlayer player, String text) {
+        if (NativeModAccess.capture(player, text)) return;
         if (player.connection != null && player.connection.hasChannel(State.TYPE)) PacketDistributor.sendToPlayer(player, new State(text));
     }
-    private static void query(ServerPlayer player, String text) {
+    static void query(ServerPlayer player, String text) {
         String id = "invalid", kind = "invalid";
         JsonObject result = base(player, id);
         try {
@@ -270,7 +271,7 @@ final class DomumCutterBridge {
         body.addProperty("returned", returned); body.addProperty("truncated", offset + returned < total);
         body.add("nextOffset", offset + returned < total ? new com.google.gson.JsonPrimitive(offset + returned) : JsonNull.INSTANCE);
     }
-    private static void select(ServerPlayer player, String text) {
+    static void select(ServerPlayer player, String text) {
         String id = "invalid"; boolean started = false; ColonyActionReplay ledger = null; JsonObject result = base(player, id);
         try {
             JsonObject input = JsonParser.parseString(text).getAsJsonObject(); id = DomumCutterRules.string(input, "requestId");

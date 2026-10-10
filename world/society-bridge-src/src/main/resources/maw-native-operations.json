@@ -1,0 +1,1891 @@
+{
+  "schemaVersion": 1,
+  "source": "same_player_native_handlers",
+  "operationCount": 34,
+  "operations": [
+    {
+      "id": "colony.status",
+      "readOnly": true,
+      "description": "本人可访问城镇、建筑、工单和居民请求。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.status",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "status",
+      "defaults": {}
+    },
+    {
+      "id": "colony.capabilities",
+      "readOnly": true,
+      "description": "读取原蓝图、hut 类型及原生权限/放置条件。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.capabilities",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "capabilities",
+      "defaults": {}
+    },
+    {
+      "id": "colony.resources",
+      "readOnly": true,
+      "description": "分页完整建筑需求与实际小屋/关联货架库存。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "buildingPosition": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24
+          }
+        },
+        "required": [
+          "buildingPosition"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.resources",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "resources",
+      "defaults": {}
+    },
+    {
+      "id": "colony.management",
+      "readOnly": true,
+      "description": "在小屋旁查询实际岗位/住房模块、居民及 CAS；需本城镇成员。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "buildingPosition": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          }
+        },
+        "required": [
+          "buildingPosition"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.management",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "management",
+      "defaults": {}
+    },
+    {
+      "id": "colony.research",
+      "readOnly": true,
+      "description": "大学旁分页查询原生研究、前置、实际成本与本人/大学资源是否足够。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "buildingPosition": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12
+          }
+        },
+        "required": [
+          "buildingPosition"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.research",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "research",
+      "defaults": {}
+    },
+    {
+      "id": "colony.found",
+      "readOnly": false,
+      "description": "消耗本人真实市政厅物品建立原生城镇。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inventorySlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 35
+          },
+          "expectedSnbt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 65536
+          },
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "position",
+          "name",
+          "inventorySlot",
+          "expectedSnbt"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.found",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "found",
+      "defaults": {}
+    },
+    {
+      "id": "colony.placeBuilder",
+      "readOnly": false,
+      "description": "消耗本人建筑工 hut 物品，登记原生建筑。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inventorySlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 35
+          },
+          "expectedSnbt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 65536
+          },
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          }
+        },
+        "required": [
+          "position",
+          "inventorySlot",
+          "expectedSnbt"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.placeBuilder",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "place_builder",
+      "defaults": {}
+    },
+    {
+      "id": "colony.placeHut",
+      "readOnly": false,
+      "description": "放置已支持的真实 hut；不会直接建成建筑。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inventorySlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 35
+          },
+          "expectedSnbt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 65536
+          },
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "hutType": {
+            "type": "string",
+            "enum": [
+              "builder",
+              "home",
+              "farmer",
+              "warehouse",
+              "blacksmith",
+              "cook",
+              "deliveryman",
+              "university"
+            ]
+          }
+        },
+        "required": [
+          "position",
+          "inventorySlot",
+          "expectedSnbt",
+          "hutType"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.placeHut",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "place_hut",
+      "defaults": {}
+    },
+    {
+      "id": "colony.requestBuild",
+      "readOnly": false,
+      "description": "在原生权限/距离规则下登记施工单。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "buildingPosition": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "builderPosition": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          }
+        },
+        "required": [
+          "buildingPosition",
+          "builderPosition"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.requestBuild",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "request_build",
+      "defaults": {}
+    },
+    {
+      "id": "colony.deliver",
+      "readOnly": false,
+      "description": "按真实居民请求 token、本人槽位完整 SNBT 交货。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inventorySlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 35
+          },
+          "expectedSnbt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 65536
+          },
+          "buildingPosition": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          },
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "inventorySlot",
+          "expectedSnbt",
+          "buildingPosition",
+          "quantity",
+          "token"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.deliver",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "deliver",
+      "defaults": {}
+    },
+    {
+      "id": "colony.stockResource",
+      "readOnly": false,
+      "description": "按完整组件和剩余需求，向实际建筑组合库存供料。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inventorySlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 35
+          },
+          "expectedSnbt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 65536
+          },
+          "buildingPosition": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          }
+        },
+        "required": [
+          "inventorySlot",
+          "expectedSnbt",
+          "buildingPosition",
+          "quantity"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.stockResource",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "stock_resource",
+      "defaults": {}
+    },
+    {
+      "id": "colony.assignCitizen",
+      "readOnly": false,
+      "description": "按模块完整居民列表 CAS 原生雇用/解雇或安排住房；跨建筑先解除原岗位。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "buildingPosition": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "moduleId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "expectedModuleKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "citizenId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "assign": {
+            "type": "boolean"
+          },
+          "expectedAssignedCitizenIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            },
+            "maxItems": 24,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "buildingPosition",
+          "moduleId",
+          "expectedModuleKey",
+          "citizenId",
+          "assign",
+          "expectedAssignedCitizenIds"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.assignCitizen",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "assign_citizen",
+      "defaults": {}
+    },
+    {
+      "id": "colony.setHiringMode",
+      "readOnly": false,
+      "description": "设置原生 default/auto/manual/locked 招聘模式；旧模式 CAS 与 MANAGE_HUTS 权限。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "buildingPosition": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "moduleId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "expectedModuleKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "default",
+              "auto",
+              "manual",
+              "locked"
+            ]
+          },
+          "expectedMode": {
+            "type": "string",
+            "enum": [
+              "default",
+              "auto",
+              "manual",
+              "locked"
+            ]
+          }
+        },
+        "required": [
+          "buildingPosition",
+          "moduleId",
+          "expectedModuleKey",
+          "mode",
+          "expectedMode"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.setHiringMode",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "hiring_mode",
+      "defaults": {}
+    },
+    {
+      "id": "colony.pauseCitizen",
+      "readOnly": false,
+      "description": "按居民原暂停状态 CAS 暂停/恢复工作。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "buildingPosition": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "citizenId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "paused": {
+            "type": "boolean"
+          },
+          "expectedPaused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "buildingPosition",
+          "citizenId",
+          "paused",
+          "expectedPaused"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.pauseCitizen",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "pause_citizen",
+      "defaults": {}
+    },
+    {
+      "id": "colony.startResearch",
+      "readOnly": false,
+      "description": "通过原生大学逻辑开始研究，核对前置并实际扣除材料；不跳过时间。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "buildingPosition": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "researchId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "buildingPosition",
+          "researchId"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "colony.startResearch",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "colony",
+      "kind": "start_research",
+      "defaults": {}
+    },
+    {
+      "id": "native.recipes",
+      "readOnly": true,
+      "description": "分页读取本服真实 RecipeManager；定义可读不代表机器已实现。ingredientEncoding=prior_index_references_v1 时 alternativesFrom 引用此前 ingredient.index 的完整候选列表；native.craftRecipe 自动展开，不能当作没有材料。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "recipeId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "recipeType": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "outputId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "native.recipes",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "world",
+      "kind": "recipes",
+      "defaults": {}
+    },
+    {
+      "id": "world.look",
+      "readOnly": true,
+      "description": "服务端读取本人准星首个可见方块及有限真实机器状态。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "world.look",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "world",
+      "kind": "look",
+      "defaults": {}
+    },
+    {
+      "id": "collision.query",
+      "readOnly": true,
+      "description": "本人可见方块的真实有界碰撞查询；不自动转头、不接入寻路。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "expectedBlockId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "expectedProperties": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
+          "dimension": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "position",
+          "expectedBlockId",
+          "expectedProperties"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "collision.query",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "world",
+      "kind": "collision",
+      "defaults": {}
+    },
+    {
+      "id": "world.interact",
+      "readOnly": false,
+      "description": "本身体原生主手右键近处可见方块；expectedHeldSnbt 必须来自最新 menu.snapshot。空手为空字符串；薄模型使用 world.look 的 hit.cursor 作为 aimOffset。接受交互仍须观察效果。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "aimOffset": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "expectedBlockId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "expectedProperties": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
+          "expectedHeldSnbt": {
+            "type": "string",
+            "maxLength": 60000
+          },
+          "expectedHotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          }
+        },
+        "required": [
+          "position",
+          "expectedBlockId",
+          "expectedProperties",
+          "expectedHotbarSlot",
+          "expectedHeldSnbt"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "world.interact",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "world_interact",
+      "defaults": {}
+    },
+    {
+      "id": "create.settings",
+      "readOnly": true,
+      "description": "查询本人近处可见机械原生数值/过滤设置、可编辑条件及 CAS。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "aimOffset": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        },
+        "required": [
+          "position"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "create.settings",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "create_settings",
+      "defaults": {}
+    },
+    {
+      "id": "create.fluids",
+      "readOnly": true,
+      "description": "读取近处可见机器当前面的真实流体罐；装卸仍用真实容器和原生方块交互。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "aimOffset": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        },
+        "required": [
+          "position"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "create.fluids",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "create_fluids",
+      "defaults": {}
+    },
+    {
+      "id": "create.setValue",
+      "readOnly": false,
+      "description": "修改原生机械面板数值；方块、行为、旧值及手中物品 CAS，保留扳手/权限要求。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "aimOffset": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "expectedBlockId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "behaviourIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "expectedBehaviour": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "expectedRow": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "expectedValue": {
+            "type": "integer",
+            "minimum": -1000000,
+            "maximum": 1000000
+          },
+          "row": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "expectedHeldSnbt": {
+            "type": "string",
+            "maxLength": 60000
+          },
+          "expectedHotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          }
+        },
+        "required": [
+          "position",
+          "expectedBlockId",
+          "behaviourIndex",
+          "expectedBehaviour",
+          "expectedRow",
+          "expectedValue",
+          "row",
+          "value",
+          "expectedHeldSnbt",
+          "expectedHotbarSlot"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "create.setValue",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "create_value",
+      "defaults": {}
+    },
+    {
+      "id": "create.setFilter",
+      "readOnly": false,
+      "description": "用实际手持物原生设置/清除过滤器；实际 FilterItem 会正常消耗/退还。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "aimOffset": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "expectedBlockId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "behaviourIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "expectedBehaviour": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "expectedFilterSnbt": {
+            "type": "string",
+            "maxLength": 60000
+          },
+          "expectedHeldSnbt": {
+            "type": "string",
+            "maxLength": 60000
+          },
+          "expectedHotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          }
+        },
+        "required": [
+          "position",
+          "expectedBlockId",
+          "behaviourIndex",
+          "expectedBehaviour",
+          "expectedFilterSnbt",
+          "expectedHeldSnbt",
+          "expectedHotbarSlot"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "create.setFilter",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "create_filter",
+      "defaults": {}
+    },
+    {
+      "id": "curios.state",
+      "readOnly": true,
+      "description": "查询本人真实饰品槽、完整组件和原生菜单槽位映射。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "curios.state",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "curios_state",
+      "defaults": {}
+    },
+    {
+      "id": "curios.open",
+      "readOnly": false,
+      "description": "打开本人原生饰品菜单；使用 menu.click 取放，原装备/诅咒/有效槽规则保留。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "curios.open",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "curios_open",
+      "defaults": {}
+    },
+    {
+      "id": "curios.page",
+      "readOnly": false,
+      "description": "切换当前本人饰品菜单页；容器/状态 CAS 且游标必须为空。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "expectedContainerId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "expectedStateId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 32767
+          }
+        },
+        "required": [
+          "page",
+          "expectedContainerId",
+          "expectedStateId"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "curios.page",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "curios_page",
+      "defaults": {}
+    },
+    {
+      "id": "ysm.catalog",
+      "readOnly": true,
+      "description": "分页列出本服原生 YSM 模型、真实纹理 ID、本人授权情况与当前外形；网页未支持的模型不会用其他模型替代。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "ysm.catalog",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "ysm_catalog",
+      "defaults": {
+        "offset": 0,
+        "limit": 12
+      }
+    },
+    {
+      "id": "ysm.select",
+      "readOnly": false,
+      "description": "通过 YSM 原生普通玩家接口切换本人模型/纹理；用 catalog.current 的四个 expected 字段 CAS，保留服主锁定和模型授权。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "modelId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "texture": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expectedModelId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expectedTexture": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expectedEnabled": {
+            "type": "boolean"
+          },
+          "expectedMandatory": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "modelId",
+          "texture",
+          "expectedModelId",
+          "expectedTexture",
+          "expectedEnabled",
+          "expectedMandatory"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "ysm.select",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "ysm_select",
+      "defaults": {}
+    },
+    {
+      "id": "domum.state",
+      "readOnly": true,
+      "description": "读取本人真实切割台输入/输出、材料组、变体及 CAS。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "domum.state",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "domum",
+      "kind": "state",
+      "defaults": {}
+    },
+    {
+      "id": "domum.choices",
+      "readOnly": true,
+      "description": "分页读取实际组的完整变体模板和材料规则。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24
+          }
+        },
+        "required": [
+          "groupId"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "domum.choices",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "domum",
+      "kind": "choices",
+      "defaults": {}
+    },
+    {
+      "id": "domum.select",
+      "readOnly": false,
+      "description": "调用原生 group/variant 按钮；输出仍须真实取出。 使用 domum.state 的完整窗口/材料/造型/游标 CAS；playerUuid 由服务端绑定，调用方不得指定。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "selection": {
+            "type": "string",
+            "enum": [
+              "group",
+              "variant"
+            ]
+          },
+          "groupId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "variantIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4095
+          },
+          "choiceSnbt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 65536
+          },
+          "windowId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "expectedStateId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "expectedPosition": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "expectedGroup": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 256
+          },
+          "expectedVariantSnbt": {
+            "type": "string",
+            "maxLength": 60000
+          },
+          "expectedInputsSnbt": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "items": {
+              "type": "string",
+              "maxLength": 60000
+            }
+          },
+          "expectedCarriedSnbt": {
+            "type": "string",
+            "maxLength": 60000
+          },
+          "expectedOutputSnbt": {
+            "type": "string",
+            "maxLength": 60000
+          }
+        },
+        "required": [
+          "selection",
+          "groupId",
+          "windowId",
+          "expectedStateId",
+          "expectedPosition",
+          "expectedGroup",
+          "expectedVariantSnbt",
+          "expectedInputsSnbt",
+          "expectedCarriedSnbt",
+          "expectedOutputSnbt"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "selection": {
+                  "const": "variant"
+                }
+              },
+              "required": [
+                "selection"
+              ]
+            },
+            "then": {
+              "required": [
+                "variantIndex",
+                "choiceSnbt"
+              ]
+            }
+          }
+        ]
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "domum.select",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "domum",
+      "kind": "select",
+      "defaults": {}
+    },
+    {
+      "id": "menu.snapshot",
+      "readOnly": true,
+      "description": "读取本身体实时原生菜单、真实槽位/组件/游标、料理锅加热及进度。不是网页缓存。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "route": "menu",
+      "kind": "snapshot",
+      "defaults": {}
+    },
+    {
+      "id": "menu.pickup",
+      "readOnly": false,
+      "description": "在本身体真实菜单执行一次左/右键 PICKUP。所有前置值来自最新 menu.snapshot，完整组件及窗口状态 CAS；不自动清空游标。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "windowId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "expectedStateId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "slot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "button": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "expectedItemId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$"
+          },
+          "expectedCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999
+          },
+          "expectedSnbt": {
+            "type": "string",
+            "maxLength": 60000
+          },
+          "expectedCarriedSnbt": {
+            "type": "string",
+            "maxLength": 60000
+          }
+        },
+        "required": [
+          "windowId",
+          "expectedStateId",
+          "slot",
+          "button",
+          "expectedItemId",
+          "expectedCount",
+          "expectedSnbt",
+          "expectedCarriedSnbt"
+        ],
+        "additionalProperties": false
+      },
+      "route": "menu",
+      "kind": "pickup",
+      "defaults": {}
+    },
+    {
+      "id": "menu.close",
+      "readOnly": false,
+      "description": "关闭本人菜单，要求窗口/stateId仍一致且游标为空。返回实际关闭后的菜单。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "windowId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "expectedStateId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 32767
+          }
+        },
+        "required": [
+          "windowId",
+          "expectedStateId"
+        ],
+        "additionalProperties": false
+      },
+      "route": "menu",
+      "kind": "close",
+      "defaults": {}
+    }
+  ]
+}

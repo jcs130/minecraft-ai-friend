@@ -229,7 +229,7 @@ final class PlayerWorldBridge {
     }
 
     private static void send(ServerPlayer player, JsonObject result) {
-        if (player.connection != null && player.connection.hasChannel(State.TYPE)) {
+        if (NativeModAccess.capturing(player) || player.connection != null && player.connection.hasChannel(State.TYPE)) {
             result.addProperty("playerUuid", player.getUUID().toString());
             String json = result.toString();
             int budget = result.has("query") && result.get("query").getAsString().equals("body_snapshot") ? MAX_STATE : 16384;
@@ -244,7 +244,7 @@ final class PlayerWorldBridge {
                 oversized.addProperty("maxBytes", budget);
                 json = oversized.toString();
             }
-            PacketDistributor.sendToPlayer(player, new State(json));
+            if (!NativeModAccess.capture(player, json)) PacketDistributor.sendToPlayer(player, new State(json));
         }
     }
 
@@ -348,7 +348,7 @@ final class PlayerWorldBridge {
         return processing;
     }
 
-    private static void handle(ServerPlayer player, String raw) {
+    static void handle(ServerPlayer player, String raw) {
         String requestId = "invalid";
         try {
             JsonObject input = JsonParser.parseString(raw).getAsJsonObject();

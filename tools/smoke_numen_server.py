@@ -25,7 +25,7 @@ def offline(name):
     value[8] = value[8] & 63 | 128
     return str(uuid.UUID(bytes=bytes(value)))
 
-def run(root, output, node, java, full_pack=False, maid_config=False):
+def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar=None):
     output = output.resolve()
     if (root/'research').resolve() not in output.parents or output.exists():
         raise ValueError('Use a new evidence directory inside runtime/research')
@@ -37,6 +37,10 @@ def run(root, output, node, java, full_pack=False, maid_config=False):
         if full_pack or p.name in (NUMEN_NAME,'maw_numen_compat-0.1.0.jar'):
             shutil.copyfile(p,mods/p.name)
     shutil.copyfile(root/'build/numen-server'/NAME,mods/NAME)
+    if bridge_jar:
+        if not full_pack or (root/'research').resolve() not in bridge_jar.resolve().parents:
+            raise ValueError('A bridge candidate must be an isolated full-pack artifact inside research')
+        shutil.copyfile(bridge_jar,mods/'maw_agent_bridge-0.1.0.jar')
     shutil.copyfile(root/'server/eula.txt',server/'eula.txt')
     props = {'server-ip':'127.0.0.1','server-port':'28978','online-mode':'false','enforce-secure-profile':'false','enable-rcon':'false','enable-query':'false','max-players':'12','spawn-protection':'0','view-distance':'3','simulation-distance':'3','difficulty':'peaceful','gamemode':'survival','level-name':'world-server-numen','level-type':'minecraft:flat','generator-settings':json.dumps({'layers':[{'block':'minecraft:bedrock','height':1},{'block':'minecraft:dirt','height':2},{'block':'minecraft:grass_block','height':1}],'biome':'minecraft:plains','features':False,'lakes':False,'structure_overrides':[]},separators=(',',':')),'level-seed':'1010','spawn-monsters':'false','motd':'Isolated headless Numen QA'}
     (server/'server.properties').write_text(''.join(f'{k}={v}\n' for k,v in props.items()),encoding='utf-8')
@@ -118,7 +122,7 @@ def run(root, output, node, java, full_pack=False, maid_config=False):
     try:
         start('first');checks['inside_java_http_no_owner_client']=request('/healthz')[1]['serverResident']
         checks['auth_and_origin']=request('/mcp',{})[0]==401 and request('/mcp',{}, {'Authorization':'Bearer '+bearer,'Origin':'https://example.com'})[0]==403
-        checks['mcp_initialize_tools']=rpc('initialize',{'protocolVersion':'2025-06-18'})['protocolVersion']=='2025-06-18' and len(rpc('tools/list')['tools'])==14
+        checks['mcp_initialize_tools']=rpc('initialize',{'protocolVersion':'2025-06-18'})['protocolVersion']=='2025-06-18' and len(rpc('tools/list')['tools'])==17
         ops=tool('operations');report['operations']=ops;checks['runtime_operations']=ops['totalFunctions']>=30 and any(g['id']=='numen.route' for g in ops['groups'])
         created=tool('create_companion',{'name':'MawHeadBody','action_id':'qa-create-01'});assert created.get('online'),created
         body=created['bodyId'];report['bodyId']=body
@@ -126,6 +130,20 @@ def run(root, output, node, java, full_pack=False, maid_config=False):
         checks['owner_isolation']=tool('get_state',{'companion':body},other_token)['code']=='body_not_owned'
         claim=tool('claim_control',{'companion':body,'controller_id':'qa-controller'});lease=claim['lease']['leaseId']
         checks['one_controller']=tool('claim_control',{'companion':body,'controller_id':'other-controller'})['code']=='controller_busy'
+        native=tool('mod_operations')
+        checks['optional_native_mod_discovery']=native.get('operationCount')==34 if full_pack else native.get('code')=='native_mod_bridge_unavailable'
+        if full_pack:
+            snapshot=tool('mod_query',{'companion':body,'operation':'menu.snapshot'})
+            checks['native_same_body_menu']=snapshot['ok'] and snapshot['state']['playerUuid']==body
+            checks['native_owner_isolation']=tool('mod_query',{'companion':body,'operation':'menu.snapshot'},other_token)['code']=='body_not_owned'
+            refused=tool('mod_action',{'companion':body,'lease_id':lease,'action_id':'qa-native-ask','operation':'curios.open'})
+            checks['native_numen_permission_gate']=refused['code']=='numen_bypass_mode_required_for_mod_actions'
+            tool('set_permission',{'companion':body,'lease_id':lease,'mode':'bypass'})
+            tool('mod_action',{'companion':body,'lease_id':lease,'action_id':'qa-native-open','operation':'curios.open'})
+            checks['native_async_terminal']=terminal('qa-native-open')['ok']
+            menu=tool('mod_query',{'companion':body,'operation':'menu.snapshot'})['state']
+            tool('mod_action',{'companion':body,'lease_id':lease,'action_id':'qa-native-close','operation':'menu.close','arguments':{'windowId':menu['windowId'],'expectedStateId':menu['stateId']}})
+            checks['native_menu_closed']=terminal('qa-native-close')['ok']
         code='local s=numen.status.self(); local p=numen.route.plan({to={x=math.floor(s.pos.x)+2,z=math.floor(s.pos.z)},costs={dig=false,place=false}}); if not p.ok then error(p.why) end; local m=numen.move.go(p); print(m.pos.x,m.pos.y,m.pos.z)'
         before=tool('get_state',{'companion':body});accepted=tool('lua',{'companion':body,'lease_id':lease,'action_id':'qa-walk-01','code':code});assert accepted['phase']=='accepted',accepted
         done=terminal('qa-walk-01');assert done['ok'],done
@@ -191,6 +209,10 @@ def run(root, output, node, java, full_pack=False, maid_config=False):
         stop();start('restored')
         restored=tool('get_state',{'companion':body});checks['restart_original_body_inventory']=restored.get('online') and restored['bodyId']==body and restored['inventory']==inventory
         checks['terminal_receipt_survives_restart']=tool('action_status',{'companion':body,'action_id':'qa-walk-01'})['phase']=='terminal'
+        if full_pack:
+            renewed=tool('claim_control',{'companion':body,'controller_id':'qa-controller'})['lease']['leaseId']
+            same=tool('mod_action',{'companion':body,'lease_id':renewed,'action_id':'qa-native-open','operation':'curios.open'})
+            checks['native_cross_restart_no_duplicate_menu_open']=same['replayed'] and same['phase']=='terminal' and tool('mod_query',{'companion':body,'operation':'menu.snapshot'})['state']['windowId']==0
         console('kill MawHeadBody');deadline=time.monotonic()+15;saw_dead=False
         while time.monotonic()<deadline:
             state=tool('get_state',{'companion':body});saw_dead|=state['status']=='dead'
@@ -217,7 +239,7 @@ def run(root, output, node, java, full_pack=False, maid_config=False):
     return report
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--output',type=Path,required=True);p.add_argument('--java',type=Path,default=DEFAULT_JAVA);p.add_argument('--node',type=Path,required=True);p.add_argument('--full-pack',action='store_true');p.add_argument('--maid-config',action='store_true');a=p.parse_args()
-    result=run(a.root,a.output,a.node,a.java,a.full_pack,a.maid_config);print(json.dumps(result,ensure_ascii=False));raise SystemExit(0 if result['ok'] else 1)
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--output',type=Path,required=True);p.add_argument('--java',type=Path,default=DEFAULT_JAVA);p.add_argument('--node',type=Path,required=True);p.add_argument('--full-pack',action='store_true');p.add_argument('--maid-config',action='store_true');p.add_argument('--bridge-jar',type=Path);a=p.parse_args()
+    result=run(a.root,a.output,a.node,a.java,a.full_pack,a.maid_config,a.bridge_jar);print(json.dumps({'ok':result['ok'],'checks':len(result['checks']),'output':str(a.output)},ensure_ascii=False));raise SystemExit(0 if result['ok'] else 1)
 
 if __name__=='__main__':main()

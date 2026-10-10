@@ -181,6 +181,10 @@ final class PlayerRecipeCatalog {
                 return !stack.isEmpty() && output.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
             });
         }
+        if (recipe instanceof CuttingBoardRecipe cutting) {
+            return cutting.getRollableResults().stream().anyMatch(value ->
+                    !value.stack().isEmpty() && output.equals(BuiltInRegistries.ITEM.getKey(value.stack().getItem()).toString()));
+        }
         ItemStack stack = recipe.getResultItem(player.registryAccess());
         return !stack.isEmpty() && output.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
     }
@@ -317,7 +321,7 @@ final class PlayerRecipeCatalog {
         }
         result.addProperty("ok", true); result.addProperty("query", "recipes");
         result.addProperty("source", "server_recipe_manager");
-        if (output != null) result.addProperty("outputFilterScope", "create_processing_declared_item_results_and_other_recipe_display_results");
+        if (output != null) result.addProperty("outputFilterScope", "create_and_cutting_board_declared_item_results_and_other_recipe_display_results");
         result.addProperty("matchedCount", matched.size()); result.addProperty("offset", offset);
         JsonArray recipeTypes = new JsonArray();
         types.entrySet().stream().limit(64).forEach(entry -> {

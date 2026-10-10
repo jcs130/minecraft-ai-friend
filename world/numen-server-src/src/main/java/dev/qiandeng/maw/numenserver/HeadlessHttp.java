@@ -53,7 +53,7 @@ final class HeadlessHttp {
             if(path.equals("/healthz")){
                 if(!x.getRemoteAddress().getAddress().isLoopbackAddress()){send(x,403,object("code","loopback_only"));return;}
                 if(!x.getRequestMethod().equals("GET")){send(x,405,object("code","get_required"));return;}
-                send(x,200,object("ok",true,"serverResident",true,"clientRequired",false,"numenVersion","0.1.4.1","maidConfigAvailable",runtime.maids!=null,"bedrockVisualMenus",true,"session",runtime.session));return;
+                send(x,200,object("ok",true,"serverResident",true,"clientRequired",false,"numenVersion","0.1.4.1","maidConfigAvailable",runtime.maids!=null,"bedrockVisualMenus",true,"nativeModAccess",runtime.mods!=null,"nativeModOperationCount",runtime.mods==null?0:runtime.mods.catalog("").get("operationCount"),"session",runtime.session));return;
             }
             if(!Set.of("/mcp","/ui").contains(path)){send(x,404,object("code","not_found"));return;}
             if(!x.getRequestMethod().equals("POST")){send(x,405,object("code","post_required"));return;}
@@ -114,23 +114,30 @@ final class HeadlessHttp {
         if(value==null){x.sendResponseHeaders(code,-1);return;}
         byte[] body=value.toString().getBytes(StandardCharsets.UTF_8);x.getResponseHeaders().set("Content-Type","application/json; charset=utf-8");x.sendResponseHeaders(code,body.length);x.getResponseBody().write(body);
     }
-    static Set<String> names(){return Set.of("operations","list_companions","create_companion","get_state","claim_control","release_control","lua","action_status","action_cancel","get_events","ack_events","restore_companion","dormant_companion","set_permission");}
+    static Set<String> names(){return Set.of("operations","mod_operations","mod_query","mod_action","list_companions","create_companion","get_state","claim_control","release_control","lua","action_status","action_cancel","get_events","ack_events","restore_companion","dormant_companion","set_permission");}
     static JsonObject property(String type,String description){return object("type",type,"description",description);}
     static JsonArray catalog() {
         JsonArray tools=new JsonArray();
         for(String name:new TreeSet<>(names())) {
             JsonObject props=new JsonObject();JsonArray required=new JsonArray();
-            if(!Set.of("operations","list_companions","create_companion").contains(name)){props.add("companion",property("string","Owned body UUID from list_companions, never a player name."));required.add("companion");}
+            if(!Set.of("operations","mod_operations","list_companions","create_companion").contains(name)){props.add("companion",property("string","Owned body UUID from list_companions, never a player name."));required.add("companion");}
             if(name.equals("operations"))props.add("group",property("string","Omit to list groups; then query the exact group for signatures and examples."));
+            if(Set.of("mod_operations","mod_query","mod_action").contains(name)) {
+                props.add("operation",property("string","Exact operation from mod_operations. Omit ONLY for catalog summaries; query one ID for its JSON Schema."));
+                if(!name.equals("mod_operations")){required.add("operation");props.add("arguments",object("type","object","description","Exact operation parameters. Absolute coordinates and full native components; no player/body selectors or requestId."));}
+            }
             if(name.equals("create_companion")){props.add("name",property("string","Unique ASCII Minecraft name, 1-16 letters, digits or underscore. Survival, no OP."));required.add("name");}
             if(name.equals("claim_control")){props.add("controller_id",property("string","Stable identity for this controller, 1-64 safe characters. Lease lasts 90s, renew by claiming or acting."));required.add("controller_id");}
-            if(Set.of("lua","action_cancel","ack_events","restore_companion","dormant_companion","release_control","set_permission").contains(name)){props.add("lease_id",property("string","Secret leaseId returned by claim_control for this body."));required.add("lease_id");}
+            if(Set.of("lua","mod_action","action_cancel","ack_events","restore_companion","dormant_companion","release_control","set_permission").contains(name)){props.add("lease_id",property("string","Secret leaseId returned by claim_control for this body."));required.add("lease_id");}
             if(name.equals("set_permission")){props.add("mode",property("string","Per-body Numen permission: ask (rules/owner approval), bypass (independent survival actions), observe (read-only). No OP is granted."));required.add("mode");}
-            if(Set.of("lua","create_companion","action_status","action_cancel").contains(name)){props.add("action_id",property("string","Unique 1-64 character identifier: letters, digits, dot, underscore, hyphen. Reuse only to reconcile the SAME action."));required.add("action_id");}
+            if(Set.of("lua","mod_action","create_companion","action_status","action_cancel").contains(name)){props.add("action_id",property("string","Unique 1-64 character identifier: letters, digits, dot, underscore, hyphen. Reuse only to reconcile the SAME action."));required.add("action_id");}
             if(name.equals("lua")){props.add("code",property("string","Native Numen Lua, <=16384 characters. Use operations to discover SERVER functions. Asynchronous: query action_status until terminal; unknown requires human review."));required.add("code");}
             if(name.equals("get_events"))props.add("after",property("integer","Read events with sequence greater than this cursor, without consuming. Default 0. Max 32 per response."));
             if(name.equals("ack_events")){props.add("through",property("integer","Explicitly acknowledge events through an observed sequence; do not acknowledge unseen events."));required.add("through");}
             String description=switch(name){case "get_state"->"Read actual body health, hunger, absolute position/dimension, full inventory components, open menu and active action, with timestamp.";case "lua"->"Execute native server-side Numen capabilities without an owner Minecraft client. Durable idempotent async action receipt.";case "create_companion"->"Create an owner-bound persistent Numen body. Retry identical action_id to read its result, never create a replacement on uncertainty.";case "get_events"->"Read this body's durable private events; non-consuming, reconnect-safe cursor, explicit dropped count.";case "restore_companion"->"Restore the ORIGINAL body UUID and saved inventory. Refuses unresolved actions or missing saves; never creates replacement.";default->name.replace('_',' ')+" for only the authenticated owner's companions.";};
+            if(name.equals("mod_operations"))description="Discover installed optional native mod handlers and exact parameter schemas, separate from official Numen Lua functions.";
+            if(name.equals("mod_query"))description="Read this body's MineColonies, native recipes, cooking/menu state and machine settings. Original native permissions; no player impersonation.";
+            if(name.equals("mod_action"))description="Execute one native mod mutation asynchronously, with lease, durable action_id and full component CAS. Requires Numen bypass mode (no OP). Query action_status; never replay unknown.";
             tools.add(object("name",name,"description",description,"inputSchema",object("type","object","properties",props,"required",required,"additionalProperties",false)));
         }return tools;
     }

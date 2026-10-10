@@ -8,7 +8,7 @@
     {
       "name": "maw_agent_bridge-0.1.0.jar",
       "source": "tools/build_society_bridge.py",
-      "sha256": "e743a8883f4397f7351b825cd108cb421e8ce6e7b5936f969a19de84e0bf89c8"
+      "sha256": "6a2847fc7d3d8fcd3b5892fa9e086e1efbe19f0291fa9a6d688d8c3841831ab8"
     },
     {
       "name": "maw_numen_compat-0.1.0.jar",
@@ -18,7 +18,7 @@
     {
       "name": "maw_numen_server-0.1.0.jar",
       "source": "tools/build_numen_server.py",
-      "sha256": "fcb4d1f3d98b52167d15d0e70d196c96fd5cb4ba8da63465e7ca8de789a9189d"
+      "sha256": "758379fd3e3ebf5bcc049bd6cadd324c6b2840c52c92103e2b8aca4776472323"
     }
   ],
   "artifacts": [

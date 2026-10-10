@@ -78,7 +78,8 @@ class CreateRecipeCatalogAudit(unittest.TestCase):
         helper = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(helper)
         mods = self.server / "mods"
-        cp = os.pathsep.join([helper.full_cp(self.server / "libraries"), str(self.jar),
+        cp = os.pathsep.join([helper.full_cp(self.server / "libraries"),
+                              os.environ.get("MAW_NATIVE_AUDIT_JAR", str(mods / "maw_agent_bridge-0.1.0.jar")), str(self.jar),
                               str(mods / "ponder-neoforge-1.0.82+mc1.21.1.jar"),
                               str(mods / "FarmersDelight-1.21.1-1.3.4.jar")])
         with tempfile.TemporaryDirectory(prefix="create-recipe-api-audit-") as temporary:

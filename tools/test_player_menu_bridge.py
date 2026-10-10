@@ -62,7 +62,7 @@ class PlayerMenuBridgeAudit(unittest.TestCase):
             self.run_java([str(self.java.with_name("javac.exe")), "@" + str(args)])
             bytecode = self.run_java([str(self.java.with_name("javap.exe")), "-classpath", temporary, "-p", "-c",
                                       "dev.qiandeng.maw.PlayerMenuBridge"])
-            handler = bytecode.split("private static void handleAction(", 1)[1].split("private static", 1)[0]
+            handler = bytecode.split("static void handleAction(", 1)[1].split("private static", 1)[0]
             calls = re.findall(r"// (?:InterfaceMethod|Method) ([^\r\n]+)", handler)
             reservation = next(i for i, call in enumerate(calls) if "MenuActionReplay.begin:" in call)
             click = next(i for i, call in enumerate(calls) if "AbstractContainerMenu.clicked:" in call)
@@ -72,7 +72,7 @@ class PlayerMenuBridgeAudit(unittest.TestCase):
             self.assertTrue(any("ItemStack.saveOptional:" in call for call in calls[:click]))
             self.assertTrue(any("AbstractContainerMenu.getStateId:" in call for call in calls[:click]))
             self.assertIn("action_outcome_unknown", handler)
-            reply = bytecode.split("private static void reply(", 1)[1].split("private static void handleAction(", 1)[0]
+            reply = bytecode.split("private static void reply(", 1)[1].split("static void handleAction(", 1)[0]
             self.assertLess(reply.index("MenuActionReplay.complete:"), reply.index("Method send:"))
             for field in ("playerUuid", "action", "outcomeKnown", "receiptScope", "stateUnavailable"):
                 self.assertIn(field, reply)

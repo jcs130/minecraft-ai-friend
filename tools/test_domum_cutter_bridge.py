@@ -29,7 +29,8 @@ class DomumCutterAudit(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("domum_audit_cp", REPO / "world/botgate-src/build.py")
         helper = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(helper)
-        cls.cp = os.pathsep.join([helper.full_cp(cls.server / "libraries"), *(str(cls.mods / name) for name in (
+        cls.cp = os.pathsep.join([helper.full_cp(cls.server / "libraries"),
+            os.environ.get("MAW_NATIVE_AUDIT_JAR", str(cls.mods / "maw_agent_bridge-0.1.0.jar")), *(str(cls.mods / name) for name in (
             "minecolonies-1.1.1319-1.21.1.jar", "structurize-1.0.832-1.21.1.jar",
             "domum-ornamentum-1.0.231-main.jar", "blockui-1.0.209-1.21.1.jar"))])
         for name, digest in (("domum-ornamentum-1.0.231-main.jar", DOMUM_SHA), ("minecolonies-1.1.1319-1.21.1.jar", COLONY_SHA)):
@@ -57,7 +58,7 @@ class DomumCutterAudit(unittest.TestCase):
             for forbidden in ("ItemStack.\"<init>\":", "ItemStack.applyComponents:", "ItemStack.set:", "SimpleContainer.setItem:",
                               "Slot.set:", "ArchitectsCutterRecipe.assemble:", "Inventory.add:", "ServerLevel.getChunk:"):
                 self.assertFalse(any(forbidden in call for call in calls), forbidden)
-            select = code.split("private static void select(", 1)[1]
+            select = code.split("static void select(", 1)[1]
             self.assertLess(select.index("ColonyActionReplay.begin:"), select.index("DomumCutterRules.check:"))
             self.assertLess(select.index("DomumCutterRules.check:"), select.index("ArchitectsCutterContainer.clickMenuButton:"))
 

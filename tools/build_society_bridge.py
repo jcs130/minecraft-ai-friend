@@ -163,7 +163,10 @@ def main() -> None:
     helper = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(helper)
-    classpath = os.pathsep.join((helper.full_cp(server / "libraries"), str(api_jar),
+    libraries = server / "libraries"
+    if not libraries.is_dir() and (root / "research").resolve() in server.parents:
+        libraries = root / "server/libraries"  # shared, read-only pinned compile dependencies
+    classpath = os.pathsep.join((helper.full_cp(libraries), str(api_jar),
                                  str(installed_numen), str(ars), str(create), str(ponder),
                                  str(minecolonies), str(structurize), str(domum), str(blockui), str(maid), str(food), str(curios), str(gecko), str(ysm)))
     sources = sorted((SOURCE / "src" / "main" / "java").rglob("*.java"))
@@ -189,6 +192,7 @@ def main() -> None:
         candidate = build / (NAME + ".part")
         with zipfile.ZipFile(candidate, "w") as archive:
             add_bytes(archive, "META-INF/neoforge.mods.toml", resource.read_bytes())
+            add_bytes(archive, "maw-native-operations.json", (SOURCE / "src/main/resources/maw-native-operations.json").read_bytes())
             for path in sorted(classes.rglob("*.class")):
                 add_bytes(archive, path.relative_to(classes).as_posix(), path.read_bytes())
         with zipfile.ZipFile(candidate) as archive:
@@ -210,7 +214,7 @@ def main() -> None:
               "geckoSha256": sha256(gecko),
               "ysmSha256": sha256(ysm),
               "sources": {str(path.relative_to(REPO)).replace("\\", "/"): sha256(path)
-                          for path in (*sources, resource, Path(__file__))}}
+                          for path in (*sources, resource, SOURCE / "src/main/resources/maw-native-operations.json", Path(__file__))}}
     record["serverDir"] = str(server)
     record_name = "build-record.json" if server == (root / "server").resolve() else (
         "build-record-" + hashlib.sha256(str(server).encode()).hexdigest()[:12] + ".json")

@@ -36,19 +36,22 @@ final class HeadlessBrain {
         if(persisted.has("pendingRequest")){persisted.addProperty("phase","unknown");persisted.addProperty("code","model_result_unknown_no_automatic_retry");write(file,persisted);}
         log=ConvoLog.atFile(r.directory.resolve("conversations").resolve(body+".jsonl"));history=new ConvoState(msg->log.append(msg,null));history.preload(log.load(64));
         SerialCalls serial=new SerialCalls(new SerialCalls.Port(){
-            public boolean isProgram(LlmToolCall call){return call.name().equals("lua");}
-            public void interrupt(LlmToolCall call,String why){ServerPrograms.interrupt(body,actionId(call),why);}
-            public void cutOff(LlmToolCall call,boolean stopBody){ServerPrograms.cutOff(body,actionId(call),stopBody);}
+            public boolean isProgram(LlmToolCall call){return Set.of("lua","mod_action").contains(call.name());}
+            public void interrupt(LlmToolCall call,String why){if(call.name().equals("mod_action"))r.cancel(body,actionId(call));else ServerPrograms.interrupt(body,actionId(call),why);}
+            public void cutOff(LlmToolCall call,boolean stopBody){if(call.name().equals("mod_action"))r.cancel(body,actionId(call));else ServerPrograms.cutOff(body,actionId(call),stopBody);}
             public void invoke(LlmToolCall call,Consumer<SerialCalls.Settled> done){
                 try {
                     JsonObject args=JsonParser.parseString(call.arguments()).getAsJsonObject();args.addProperty("companion",body.toString());
                     if(call.name().equals("lua")) {
                         JsonObject accepted=r.lua(body,actionId(call),text(args,"code",16384),end->done.accept(SerialCalls.Settled.of(end.toString())));
                         if(!accepted.has("phase")||text(accepted,"phase",16).equals("unknown"))done.accept(SerialCalls.Settled.of(accepted.toString()));
+                    }else if(call.name().equals("mod_action")) {
+                        JsonObject accepted=r.modAction(body,actionId(call),text(args,"operation",80),HeadlessRuntime.modArguments(args),end->done.accept(SerialCalls.Settled.of(end.toString())));
+                        if(!accepted.has("phase")||text(accepted,"phase",16).equals("unknown"))done.accept(SerialCalls.Settled.of(accepted.toString()));
                     }else if(call.name().equals("finish")) {
                         armed=false;persisted.addProperty("phase","completed");lastReply=text(args,"summary",2000);persisted.addProperty("lastReply",lastReply);write(file,persisted);
                         r.event(body,"goal_completed",lastReply,false,System.currentTimeMillis());done.accept(SerialCalls.Settled.of(object("ok",true,"completed",true).toString()));
-                    }else if(Set.of("operations","get_state").contains(call.name()))done.accept(SerialCalls.Settled.of(r.invoke(owner,call.name(),args).toString()));
+                    }else if(Set.of("operations","mod_operations","mod_query","get_state").contains(call.name()))done.accept(SerialCalls.Settled.of(r.invoke(owner,call.name(),args).toString()));
                     else done.accept(SerialCalls.Settled.of(object("ok",false,"code","unknown_hosted_tool").toString()));
                 }catch(RuntimeException ex){done.accept(SerialCalls.Settled.of(object("ok",false,"code",HeadlessRuntime.safeCode(ex)).toString()));}
             }
@@ -167,9 +170,9 @@ final class HeadlessBrain {
     }
     List<IToolSpec> specs() {
         List<IToolSpec> list=new ArrayList<>();
-        for(var item:HeadlessHttp.catalog()){JsonObject tool=item.getAsJsonObject();if(!Set.of("operations","get_state","lua").contains(tool.get("name").getAsString()))continue;
+        for(var item:HeadlessHttp.catalog()){JsonObject tool=item.getAsJsonObject();if(!Set.of("operations","mod_operations","mod_query","mod_action","get_state","lua").contains(tool.get("name").getAsString())||r.mods==null&&tool.get("name").getAsString().startsWith("mod_"))continue;
             JsonObject schema=tool.getAsJsonObject("inputSchema").deepCopy();schema.getAsJsonObject("properties").remove("companion");schema.getAsJsonObject("properties").remove("lease_id");schema.getAsJsonObject("properties").remove("action_id");
-            JsonArray required=new JsonArray();if(tool.get("name").getAsString().equals("lua"))required.add("code");schema.add("required",required);list.add(spec(tool.get("name").getAsString(),tool.get("description").getAsString(),schema));
+            JsonArray required=new JsonArray();for(var k:schema.getAsJsonArray("required"))if(!Set.of("companion","lease_id","action_id").contains(k.getAsString()))required.add(k.deepCopy());schema.add("required",required);list.add(spec(tool.get("name").getAsString(),tool.get("description").getAsString(),schema));
         }
         list.add(spec("finish","Finish this goal once actual results are checked; explain outcome or what blocked progress.",object("type","object","properties",object("summary",HeadlessHttp.property("string","Concise result, based on observations.")),"required",new Gson().toJsonTree(List.of("summary")),"additionalProperties",false)));return list;
     }

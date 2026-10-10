@@ -140,7 +140,7 @@ final class PlayerColonyBridge {
     }
 
     private static void send(ServerPlayer player, JsonObject body) {
-        if (player.connection == null || !player.connection.hasChannel(State.TYPE)) return;
+        if (!NativeModAccess.capturing(player) && (player.connection == null || !player.connection.hasChannel(State.TYPE))) return;
         body.addProperty("playerUuid", player.getUUID().toString());
         if (body.toString().getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) {
             JsonObject error = base(body.get("requestId").getAsString());
@@ -149,7 +149,7 @@ final class PlayerColonyBridge {
             error.addProperty("playerUuid", player.getUUID().toString());
             body = error;
         }
-        PacketDistributor.sendToPlayer(player, new State(body.toString()));
+        if (!NativeModAccess.capture(player, body)) PacketDistributor.sendToPlayer(player, new State(body.toString()));
     }
 
     private static void reject(ServerPlayer player, String requestId, String code) {
@@ -395,7 +395,7 @@ final class PlayerColonyBridge {
         send(player, ColonyResourcePage.apply(result, rows, offset, limit));
     }
 
-    private static void handle(ServerPlayer player, String raw) {
+    static void handle(ServerPlayer player, String raw) {
         String requestId = "invalid";
         try {
             JsonObject query = JsonParser.parseString(raw).getAsJsonObject();
@@ -611,6 +611,7 @@ final class PlayerColonyBridge {
         String text = body.toString();
         var receipts = ACTION_RECEIPTS.get(player.getUUID());
         if (receipts != null) receipts.complete(body.get("requestId").getAsString(), text);
+        if (NativeModAccess.capture(player, body)) return;
         if (player.connection != null && player.connection.hasChannel(State.TYPE)) {
             PacketDistributor.sendToPlayer(player, new State(text));
         }
@@ -742,7 +743,7 @@ final class PlayerColonyBridge {
     }
 
     /** Mirrors MineColonies' own TransferItemsRequestMessage storage path with explicit player preconditions. */
-    private static void handleAction(ServerPlayer player, String raw) {
+    static void handleAction(ServerPlayer player, String raw) {
         String requestId = "invalid";
         String actionKind = "unknown";
         boolean receiptReserved = false;
@@ -755,6 +756,7 @@ final class PlayerColonyBridge {
             actionKind = kind;
             var replay = ACTION_RECEIPTS.computeIfAbsent(player.getUUID(), ignored -> new ColonyActionReplay()).begin(requestId, input);
             if (replay.outcome() == ColonyActionReplay.Outcome.REPLAY) {
+                if (NativeModAccess.capture(player, replay.response())) return;
                 if (player.connection != null && player.connection.hasChannel(State.TYPE)) {
                     PacketDistributor.sendToPlayer(player, new State(replay.response()));
                 }

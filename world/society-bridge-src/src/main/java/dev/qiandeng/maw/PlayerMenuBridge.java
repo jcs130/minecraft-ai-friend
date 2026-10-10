@@ -126,6 +126,7 @@ final class PlayerMenuBridge {
     }
 
     private static void send(ServerPlayer player, JsonObject body) {
+        if (NativeModAccess.capture(player, body)) return;
         if (canSend(player)) PacketDistributor.sendToPlayer(player, new State(body.toString()));
     }
 
@@ -260,6 +261,10 @@ final class PlayerMenuBridge {
             point.addProperty("slot", i);
             point.addProperty("x", menu.getSlot(i).x);
             point.addProperty("y", menu.getSlot(i).y);
+            // Read ownership from the real Slot container, rather than guessing
+            // an inventory suffix for modded menus with different slot orders.
+            point.addProperty("owner", menu.getSlot(i).container == player.getInventory() ? "player_inventory" : "container");
+            point.addProperty("inventoryIndex", menu.getSlot(i).getContainerSlot());
             layout.add(point);
         }
         state.add("slots", slots);
@@ -375,7 +380,7 @@ final class PlayerMenuBridge {
         send(player, result);
     }
 
-    private static void handleAction(ServerPlayer player, String text) {
+    static void handleAction(ServerPlayer player, String text) {
         String requestId = "invalid";
         MenuActionReplay reservation = null;
         boolean mutationStarted = false;
@@ -386,7 +391,7 @@ final class PlayerMenuBridge {
             MenuActionReplay ledger = RECEIPTS.computeIfAbsent(player.getUUID(), ignored -> new MenuActionReplay());
             var replay = ledger.begin(requestId, input);
             if (replay.outcome() == MenuActionReplay.Outcome.REPLAY) {
-                if (canSend(player)) PacketDistributor.sendToPlayer(player, new State(replay.response()));
+                send(player, JsonParser.parseString(replay.response()).getAsJsonObject());
                 return;
             }
             if (replay.outcome() == MenuActionReplay.Outcome.CONFLICT) {
