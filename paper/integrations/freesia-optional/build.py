@@ -33,10 +33,10 @@ with zipfile.ZipFile(args.dependencies/'Freesia-Velocity-2.5.1+2.4.1-all.jar') a
         dst.writestr(info,content)
     for name,data in updates.items():dst.writestr(name,data)
     dst.writestr('META-INF/agentfriend/MPL-2.0.txt',(ROOT/'LICENSE').read_bytes())
-bridge=out/'AgentAppearance-0.2.0.jar'
+bridge=out/'AgentAppearance-0.3.0.jar'
 with zipfile.ZipFile(bridge,'w',zipfile.ZIP_DEFLATED) as dst:
     for p in (classes/'org').rglob('*.class'):dst.writestr(p.relative_to(classes).as_posix(),p.read_bytes())
-    dst.writestr('velocity-plugin.json',json.dumps({'id':'agentappearance','name':'AgentAppearance','version':'0.2.0','main':'org.afuhome.appearance.AppearanceBridge','dependencies':[{'id':'freesia','optional':False},{'id':'packetevents','optional':False}]}))
+    dst.writestr('velocity-plugin.json',json.dumps({'id':'agentappearance','name':'AgentAppearance','version':'0.3.0','main':'org.afuhome.appearance.AppearanceBridge','dependencies':[{'id':'freesia','optional':False},{'id':'packetevents','optional':False}]}))
 worker=out/'Freesia-Worker-2.5.1+2.4.1-af1.jar'
 import io
 with zipfile.ZipFile(args.dependencies/'Freesia-Worker-2.5.1+2.4.1.jar') as src,zipfile.ZipFile(worker,'w',zipfile.ZIP_DEFLATED) as dst:

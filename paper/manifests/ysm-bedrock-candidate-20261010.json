@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-10",
+  "status": "isolated_candidate_not_deployed",
+  "baseCommit": "45e819ea3aa174a43f66fc1fb342451731483e97",
+  "production": {
+    "paper": "1.20.6",
+    "agentFriend": "0.4.11",
+    "unchangedThisRun": true,
+    "ysmProxyWorkerActive": false,
+    "clientChanges": false,
+    "newPublicEndpoints": false
+  },
+  "versions": {
+    "proxyBridge": "0.3.0",
+    "geyserExtension": "0.1.0",
+    "ysm": "2.4.1",
+    "ysmProtocol": "2.4.0",
+    "geyser": "2.11.3-b1249",
+    "geyserCommit": "f66329d9d21b3c836edc014fbb9d8312fbe34285"
+  },
+  "bedrock": {
+    "direction": "Bedrock viewers see Proxy-assigned Java/Agent models",
+    "testedProtocol": 2193,
+    "fixtureVersion": "1.26.51",
+    "fixturePackage": "bedrock-protocol@3.60.1",
+    "fixtureMicrosoftAuthenticated": false,
+    "phoneXboxVisualsVerified": false,
+    "bedrockOwnAssignmentImplemented": false,
+    "fullAnimationEquipmentParity": false
+  },
+  "build": {
+    "geyser": {
+      "dependencies": {
+        "geyser": "39d8a45eca9f2413080b9597c67d1b2bf3bc9b62e8577f46eb83c9c8abfc4499",
+        "gson": "4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593"
+      },
+      "sources": {
+        "geyser-ysm/src/org/afuhome/appearance/BedrockAppearance.java": "88524f4ffb253d3c19529675f5c57ecc2d5cac2d7ec360e3719c3c16aaa3a7c6",
+        "geyser-ysm/src/org/afuhome/appearance/BedrockModel.java": "271c35336740bd4d3e989904b1e2dc8c689986ce75ed64762b721128d3a31289",
+        "geyser-ysm/src/org/afuhome/appearance/BedrockState.java": "b99fa628242b61a13b2d91d29835ef603bbd3bdabe8d13a236d7014c409d4ec0",
+        "freesia-optional/bridge/org/afuhome/appearance/ModelCatalog.java": "6a307c052dd05d6e25c175ae78f31e29ff4c4d5e70b55ed1ec43da880a0bf5cc"
+      },
+      "outputs": {
+        "AgentAppearance-Bedrock-0.1.0.jar": "7c710b8faadb991db613d79560424edb69bb52ea66b65b812c3f3e955caec1ce"
+      }
+    },
+    "proxyBridgeOutput": {
+      "AgentAppearance-0.3.0.jar": "5a8f54fb43c0f516b7da624b71c4810d3476a0dde1e1721bb77d49f01d2355f8"
+    }
+  },
+  "verification": {
+    "originalAssetStateAndWireCodecChecks": 11,
+    "actualBedrockProtocolChecks": 14,
+    "normalColdRestartChecks": 6,
+    "textureProfileApplyRestoreChecks": 3,
+    "ordinaryAgentCliVerified": true,
+    "longTerm16AutonomousAgentsVerified": false,
+    "lastFiveSecondMspt": {
+      "average": 2.9,
+      "maximum": 7.5,
+      "scope": "two controlled clients; not a capacity benchmark"
+    }
+  },
+  "knownLimitations": [
+    "Original bind-pose geometry and supported original RGBA only; full YSM animations/controllers/equipment not implemented.",
+    "Phone/Xbox visuals and Microsoft-authenticated device login still require acceptance.",
+    "Actual texture-profile probe logs legacy item component PartialReadError; reproduced on direct isolated Paper route without Proxy or Bedrock session. No item writes or client changes.",
+    "Production lifecycle/Watchdog and original gateway route integration remains pending for the whole YSM topology."
+  ],
+  "evidence": {
+    "privateRoot": "E:/MC/research/bedrock-ysm-20261010",
+    "mirror": "F:/MC-backups/research/bedrock-ysm-20261010",
+    "rawReports": [
+      "model-tests-5.log",
+      "live-acceptance-2.json",
+      "cold-acceptance-2.json",
+      "profile-probe-4.json",
+      "profile-direct-baseline.log"
+    ],
+    "earlierFailedAttemptsRetained": true
+  },
+  "sourceFiles": {
+    "paper/integrations/geyser-ysm/build.py": "9c63bc69b567a8eab0d0210bfee9dcada97ab0b830c7e2c621b5fcab08c555c8",
+    "paper/integrations/geyser-ysm/README.md": "2904271d790a80be54a280ffeea93643b8963a9eb5de2a92a1443303d6887e05",
+    "paper/integrations/geyser-ysm/src/org/afuhome/appearance/BedrockAppearance.java": "88524f4ffb253d3c19529675f5c57ecc2d5cac2d7ec360e3719c3c16aaa3a7c6",
+    "paper/integrations/geyser-ysm/src/org/afuhome/appearance/BedrockModel.java": "271c35336740bd4d3e989904b1e2dc8c689986ce75ed64762b721128d3a31289",
+    "paper/integrations/geyser-ysm/src/org/afuhome/appearance/BedrockState.java": "b99fa628242b61a13b2d91d29835ef603bbd3bdabe8d13a236d7014c409d4ec0",
+    "paper/integrations/geyser-ysm/tests/org/afuhome/appearance/BedrockModelTest.java": "57c0a5b6d4e18a01d910d3190496eba1fa90a8f5b5bb62588eb1cf47da1e03bb"
+  }
+}

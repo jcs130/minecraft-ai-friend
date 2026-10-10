@@ -1,6 +1,6 @@
 # Optional YSM bridge for the Paper server
 
-Status (2026-10-10): isolated candidate. Production Paper and its entry points have **not** been changed. The second-phase Web/camera renderer and automatic public model catalog are implemented and tested in isolation. Native Java pixel parity and Bedrock custom player geometry remain unaccepted. See [automatic model resources](../../docs/YSM_ADAPTATION.md).
+Status (2026-10-10): isolated candidate. Production Paper and its entry points have **not** been changed. Web/camera original assets and automatic catalog conversion are tested in isolation. Proxy bridge 0.3.0 adds the private state handoff to the [Geyser Bedrock adapter](../geyser-ysm/README.md); real Bedrock protocol geometry/texture delivery is verified. Native Java pixel parity, full animation/equipment parity, and phone/Xbox device visuals remain unaccepted. See [adaptation status](../../docs/YSM_ADAPTATION.md).
 
 ## Runtime
 
@@ -89,7 +89,7 @@ Use a fresh output directory. The script verifies input JAR digests, records sou
 
 - `Freesia-Velocity-2.5.1+2.4.1-af1.jar`
 - `Freesia-Worker-2.5.1+2.4.1-af1.jar`
-- `AgentAppearance-0.2.0.jar`
+- `AgentAppearance-0.3.0.jar`
 - `AgentAppearance-WorkerCleanup-0.1.0.jar`
 - `build-manifest.json`
 
@@ -106,3 +106,7 @@ References: [Freesia architecture/configuration](https://yesstevemodel.github.io
 ## Public source catalog (0.2.0)
 
 Set private `plugins/agentappearance/models.json` `publicModelRoot` to the Worker’s actual `yes_steve_model/custom` absolute directory. Public spec2/free=true folder and ZIP changes stabilize over two scans and generate original-byte, per-file-hashed Web bundles; catalog changes trigger native YSM model reload once per source revision. Encrypted `.ysm` needs distributable source. Viewer subscribers request bounded bundles over `mcagent:ysm_asset`; no HTTP endpoint. See the source guide above for source rights, budgets, unsupported animation, and deployment boundaries.
+
+## Private Bedrock projection (0.3.0)
+
+Optional `bedrockStateFile` in the same private model configuration opts into an atomic local snapshot, written once per poll from actual Worker-confirmed state. It includes the proxy epoch, timestamp, native player UUID/entity ID, original model revision and pinned YSM profile; maximum 40 rows/96 KiB. The parent directory must exist. There is no listener or client-submitted assignment input. The Geyser extension expires the file after 15 seconds and uses its own tracked native entity to decide whether to apply or restore an appearance. See the extension README for its separate version pin and installation gates.

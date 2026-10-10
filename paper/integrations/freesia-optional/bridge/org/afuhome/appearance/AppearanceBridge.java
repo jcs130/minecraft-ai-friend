@@ -25,12 +25,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.nio.file.Path;
 
 /** Server-authoritative metadata; no client handshake emulation or gameplay action. */
-@Plugin(id="agentappearance", name="AgentAppearance", version="0.2.0",
+@Plugin(id="agentappearance", name="AgentAppearance", version="0.3.0",
     dependencies={@Dependency(id="freesia"), @Dependency(id="packetevents")})
 public final class AppearanceBridge {
     private static final MinecraftChannelIdentifier CHANNEL = MinecraftChannelIdentifier.from("mcagent:appearance");
     private static final MinecraftChannelIdentifier ASSETS = MinecraftChannelIdentifier.from("mcagent:ysm_asset");
     private final ModelCatalog models = new ModelCatalog(Path.of("plugins/agentappearance/models.json"));
+    private final BedrockProjection bedrock = new BedrockProjection(Path.of("plugins/agentappearance/models.json"));
     private final Map<UUID,Transfer> transfers = new ConcurrentHashMap<>();
     private final Map<UUID,Long> requested = new ConcurrentHashMap<>();
     private record Transfer(ModelCatalog.Asset asset, String request, int index) { }
@@ -139,6 +140,9 @@ public final class AppearanceBridge {
         }
         Set<UUID> online=new HashSet<>();for(Player p:players)online.add(p.getUniqueId());
         states.keySet().removeIf(uuid->!online.contains(uuid));
+        // Geyser on the original Paper route consumes this private local projection.
+        // It still binds UUID and the actual Java entity ID on each Bedrock session.
+        try { bedrock.write(epoch,List.copyOf(states.values())); } catch(Exception ignored) { /* Geyser expires stale state. */ }
         for(Player recipient:players) {
             Set<UUID> sent=delivered.computeIfAbsent(recipient.getUniqueId(),uuid->ConcurrentHashMap.newKeySet());
             for(UUID uuid:Set.copyOf(sent)) if(!online.contains(uuid) || server.getPlayer(uuid).filter(owner->sameBackend(owner,recipient)).isEmpty()) {
