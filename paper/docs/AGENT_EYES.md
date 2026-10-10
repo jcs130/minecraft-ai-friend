@@ -2,7 +2,7 @@
 
 2026-10-06 服主明确确认 `feiyu_bot` 是 bot，已加入维护脚本的已核实服务账号例外。该身份确认只适用于这个精确账号。其可信来源 IP 尚未核实，本轮新增配对已撤销，恢复发布前接入规则；Agent/Eye 配对须同时完成可信来源登记。09:09 正常重启更新 AgentFriend 0.3.84 后，CortiLan/Goddess/CortiEye 已恢复，`cortieye` 读回 camera=online、attached=true；feiyu_bot 原客户端也已回连，重启前四个账号均恢复。
 
-Goddess 是独立观察者，不附身于任何玩家。`ops/agent-eye-pairs.json` 登记 Agent/Eye 对；`ops/agent-eye-watcher.mjs` 每 20 秒通过本机 RCON 检查一次，把已登记的 Eye 维持为原版观战模式，并在两端在线时执行原版 `minecraft:spectate <Agent> <Eye>`。Agent 离线时 Eye 仍保持观战模式。未登记的 `eye` 名字没有镜头权限，公网 Java 网关在登录前拒绝这种名字。
+Goddess 平时是独立观察者，不参加Agent/Eye配对巡检。0.4.10候选的[女神相机](SERVER_PHOTOGRAPHY.md)可为本人请求串行临时附身拍照，完成即恢复观察位置；已有人工附身会话不被抢占。`ops/agent-eye-pairs.json` 登记 Agent/Eye 对；`ops/agent-eye-watcher.mjs` 每 20 秒通过本机 RCON 检查一次，把已登记的 Eye 维持为原版观战模式，并在两端在线时执行原版 `minecraft:spectate <Agent> <Eye>`。Agent 离线时 Eye 仍保持观战模式。未登记的 `eye` 名字没有镜头权限，公网 Java 网关在登录前拒绝这种名字。
 
 每个配对写一个 Agent 名；省略 `eye` 时自动使用 `<agent>_eye`，例如 `fulumu → fulumu_eye`。命名不同的配对明确写 `eye`，目前为 `CortiLan → CortiEye`。配置在下一次巡检时生效；撤销配对会停止附身。每次巡检也检查镜头与 Agent 的位置，发现脱离就重新附身；即使位置接近，最多两分钟也会重新附身。
 

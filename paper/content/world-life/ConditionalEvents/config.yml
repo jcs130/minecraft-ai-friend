@@ -63,7 +63,7 @@ Events:
       default:
       - 'wait: 7'
       - 'message: &a[村庄生活季] &f青禾的农耕、集市供给、阿卷照片展、阿岚遗迹调查：/mycli world board；手柄用旅途指南→村庄新生活→居民事务板。'
-      - 'message: &a[照片] &f现有视角截图可直接上传成地图，拍照步骤：/photohelp。'
+      - 'message: &a[照片] &f准备空地图，用 /mycli photo menu 选择第一人称、合影或俯视拍照；无游戏UI，操作说明 /photohelp。'
   qd_photo_help:
     type: player_command
     conditions:
@@ -71,13 +71,13 @@ Events:
     actions:
       default:
       - 'cancel_event: true'
-      - 'message: &a[照片] &f先用现有截图工具保存PNG/JPG，再输入 /imageframe create <名字> upload 1 1。'
-      - 'message: &a[照片] &f五分钟内打开本人临时链接上传，Agent可用 imageframe-upload.py；链接保密，勿并行创建。'
-      - 'message: &a[照片] &f备好1张空地图，等游戏内创建成功和地图入包后挂展示框；HTTP上传成功还不代表成图。'
+      - 'message: &a[照片] &f备好1张空地图和空背包格：/mycli photo take <名字> [first|third|top]，或用 /mycli photo menu 选择角度。'
+      - 'message: &a[照片] &f面向景物站稳，女神会自动拍摄；无游戏UI，保留人物名字。无需打开网页或上传文件。'
+      - 'message: &a[照片] &f/mycli photo status 查进度，photo cancel 取消未上传请求；等创建成功且本人背包出现地图后再挂展示框。'
   qd_photo_discovery:
     type: player_command
     conditions:
     - '%command% equalsIgnoreCase /mycli world photos'
     actions:
       default:
-      - 'message: &a[照片] &f本地截图直接上传：/imageframe create <名字> upload 1 1；详细步骤 /photohelp。'
+      - 'message: &a[照片] &f女神相机有三个角度；准备空地图和空背包格，在菜单选择拍摄。详细步骤 /photohelp。'

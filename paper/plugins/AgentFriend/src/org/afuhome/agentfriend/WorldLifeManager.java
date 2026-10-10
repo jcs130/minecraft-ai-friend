@@ -99,10 +99,11 @@ final class WorldLifeManager implements Listener {
                 }
                 case "photos" -> {
                     if (!enabled("ImageFrame")) { denied(p, "photos_unavailable"); return; }
-                    Bukkit.dispatchCommand(p, "imageframe list");
+                    plugin.photoCamera().menu(p);
                     JsonObject out = new JsonObject(); out.addProperty("displayReady", true);
-                    out.addProperty("automaticCaptureReady", false);
-                    out.addProperty("instruction", "现有截图用 /imageframe create <名字> upload 1 1 取得本人临时上传链接；消耗空地图。等游戏创建成功后挂到自己的展示框。/photohelp 查看步骤。照片委托先接单再创建，旧图/复制图不算新创作；服务器不代按快门。");
+                    out.addProperty("automaticCaptureReady", plugin.photoCamera() != null && plugin.photoCamera().ready());
+                    out.addProperty("captureCommand", "/mycli photo take <名字>");
+                    out.addProperty("instruction", "准备1张空地图和空背包格，用 /mycli photo take <名字> 拍本人视角，photo status 查进度；无需公网网页。成功后挂到有权限的展示框。照片委托先接单再拍，旧图/复制图不算新创作。现有本机截图仍可用 /imageframe create <名字> upload 1 1 导入。");
                     emit(p, "photos", out);
                 }
                 default -> denied(p, "unknown_world_command");
@@ -287,7 +288,7 @@ final class WorldLifeManager implements Listener {
         inv.setItem(10, item(Material.WRITABLE_BOOK, "§a新手实习", "真实施法与生活委托教学", "/mycli world guide start"));
         inv.setItem(11, item(Material.VILLAGER_SPAWN_EGG, "§e村民聊天", "显示人物 ID 和位置；走近右键交谈", "/mycli world npcs"));
         inv.setItem(12, item(Material.SUNFLOWER, "§6世界事件", "查看当前正在进行的活动", "/mycli world events"));
-        inv.setItem(13, item(Material.FILLED_MAP, "§b照片相册", "查看已导入的照片地图；当前没有自动快门", "/mycli world photos"));
+        inv.setItem(13, item(Material.FILLED_MAP, "§b拍照与相册", "用女神相机拍本人视角，消耗1张空地图", "/mycli photo take；相册 /mycli world photos"));
         inv.setItem(14, item(Material.EMERALD, "§a村民商店", "到村庄集市右键补给商人交易", "实际消耗原版物品；不会免费发放"));
         inv.setItem(15, item(Material.LADDER, "§a开门与爬梯实练", "亲手开门穿过、沿现有梯子爬升3格", "不拆墙、不垫块，不代操作或授予技能", "/mycli world practice start"));
         inv.setItem(16, item(Material.OAK_DOOR, "§7结束聊天", "恢复普通公屏聊天"));

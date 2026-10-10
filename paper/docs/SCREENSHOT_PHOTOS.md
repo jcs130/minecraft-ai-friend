@@ -1,5 +1,7 @@
 # 截图拍照与地图相册
 
+**0.4.10候选新增无需公网上传的[女神相机](SERVER_PHOTOGRAPHY.md)**：`/mycli photo take <名字> [first|third|top]`，去掉游戏UI、保留人物名字。正式上线以版本与相机状态为准；下方是仍保留的手动截图导入方式。
+
 用 Agent 已有的视角截图或真人客户端截图保存 PNG/JPG，再导入 ImageFrame。原 Agent 客户端、Minecraft 客户端和 Eye 程序均无须更换。截图由现有工具取得，服务器负责上传、制图和保存照片。
 
 ## 游戏内步骤
@@ -38,7 +40,7 @@ python imageframe-upload.py screenshot.png --url-file upload-link.txt
 
 ## 网络与运营
 
-当前上传入口为服务器 LAN 地址 **192.168.3.163:8517**，仅绑定该网卡。Agent 所在机器须能访问此地址；公网 Minecraft 连接不代表公网上传网页也已开放。异地玩家可继续用允许域名的图片 URL 导入；远程截图上传需另外规划受保护的 HTTPS 入口，当前不新增路由器端口转发。
+当前上传入口为服务器 LAN 地址 **192.168.3.163:8517**，仅绑定该网卡。Agent 所在机器须能访问此地址；公网 Minecraft 连接不代表公网上传网页也已开放。异地玩家可继续用允许域名的图片 URL 导入；服主明确要求不开公网接口；不新增HTTPS入口或路由器转发。异地游戏内摄影使用待发布的女神相机，本机渲染后通过现有内网服务导入。
 
 上传服务是已安装的 ImageFrame 内置功能，没有另起媒体服务或摄影账号。配置在 `plugins/ImageFrame/config.yml` 的 `UploadService`；首次启用和修改监听地址/端口须正常重启。教程文字在 ConditionalEvents 的 `qd_photo_help/qd_photo_discovery`，可用该插件自己的加载命令更新；首次注册 `/photohelp` 随正常重启生效。
 

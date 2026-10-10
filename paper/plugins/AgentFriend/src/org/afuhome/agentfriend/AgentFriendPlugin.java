@@ -185,7 +185,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             new CompassButton(14, Material.WRITABLE_BOOK, "任务市场", "工程、探索、职业试炼与居民事务", "market"),
             new CompassButton(15, Material.BELL, "居民事务板", "农耕补种、真实交易、照片与遗迹调查", "world:board"),
             new CompassButton(16, Material.OAK_SAPLING, "村庄新生活", "居民聊天、新手实习、商店与世界活动", "world:menu"),
-            new CompassButton(17, Material.FILLED_MAP, "生活照片", "查看本人相册与现有截图导入步骤", "world:photos"),
+            new CompassButton(17, Material.FILLED_MAP, "生活照片", "第一人称、第三人称或俯视拍照与本人相册", "world:photos"),
             new CompassButton(18, Material.BLAZE_POWDER, "战斗法术", "星芒箭、霜环与焰浪；按原规则消耗魔力", "menu:combat"),
             new CompassButton(19, Material.ELYTRA, "探索法术", "跃空、飞行、傀儡、心眼与支援传送", "menu:utility"),
             new CompassButton(20, Material.SPYGLASS, "探矿术", "选择矿种，成功扫描才消耗魔力", "menu:prospect"),
@@ -256,6 +256,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private AgentCoach agentCoach;
     private PlayerNameTags playerNameTags;
     private TextBubbleManager textBubbles;
+    private PhotoCameraManager photoCamera;
     private SoulboundGear soulboundGear;
     private DungeonGearAura dungeonGearAura;
     private TravelMagic travelMagic;
@@ -320,6 +321,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         playerNameTags = new PlayerNameTags(this);
         playerNameTags.start();
         textBubbles = new TextBubbleManager(this);
+        photoCamera = new PhotoCameraManager(this);
         dailyBoard = new DailyBoardManager(this);
         taskMarket = new TaskMarketManager(this);
         playerContracts = new PlayerContracts(this);
@@ -350,6 +352,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (photoCamera != null) photoCamera.stop();
         if (siteDungeons != null) siteDungeons.shutdown();
         if (playerContracts != null) playerContracts.shutdown();
         if (skillVisuals != null) skillVisuals.stop();
@@ -411,6 +414,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     GuildManager guild() { return guild; }
     ProfessionManager professions() { return professions; }
     WorldLifeManager worldLife() { return worldLife; }
+    PhotoCameraManager photoCamera() { return photoCamera; }
     void npcSpeech(String id, org.bukkit.entity.LivingEntity npc, Player player, String text) {
         if (textBubbles != null) textBubbles.npc(id, npc, player, text);
     }
@@ -748,6 +752,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 sender.sendMessage("只允许服务器控制台维护气泡；/mycli bubbles 可查看状态，公开聊天或 /mycli say <话> 即可使用。"); return true;
             }
             textBubbles.admin(sender, args); return true;
+        }
+        if (args.length >= 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("photo")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("只允许服务器控制台维护相机；玩家用 /mycli photo status 查询。"); return true;
+            }
+            photoCamera.admin(sender, args); return true;
         }
         if (args.length >= 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("visuals")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
@@ -1130,6 +1140,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "visuals", "特效" -> skillVisuals.audit(player);
             case "bubbles", "气泡" -> textBubbles.audit(player);
             case "say", "说话" -> textBubbles.say(player, tail(args, 1));
+            case "photo", "拍照" -> photoCamera.command(player, args);
             case "profession", "职业" -> professions.command(player, args);
             case "mastery", "熟练度" -> spellMastery.report(player);
             case "skillbook", "技能书" -> SkillTome.command(player, args, spellMastery);
@@ -1166,6 +1177,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.GOLD + "千灯纪技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
         p.sendMessage("Agent：/mycli list [分类|命令] [页码] 发现能力；/mycli explain <ID> 或 /mycli help <ID> 查询准确用法，不会执行。");
         p.sendMessage("公开聊天或 /mycli say <话> 会显示8秒头顶气泡，附近24格可见；私聊不显示。/mycli bubbles 查看状态。");
+        p.sendMessage("/mycli photo take <名字> 本机女神相机拍本人视角，消耗1张空地图；photo status|cancel 查看或取消，不需要公网上传。");
         p.sendMessage("/mycli coach next|guide|menu|status|later|on|off  查看本人新手进度与下一步；暂停或关闭低频私聊提醒。");
         p.sendMessage("/mycli skills list [all|common|profession|warrior|mage|priest] [页] 查看基础/战法牧技能；skills info <ID> 查各级效果与学习条件；cast <ID> 施法");
         p.sendMessage("/mycli protect break|place|container|use <x> <y> <z>  查询附近方块/实体储物能否操作；拒绝则停止");

@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "status": "candidate-not-deployed",
+  "version": "0.4.10",
+  "minecraft": "Paper 1.20.6",
+  "artifact": {
+    "name": "AgentFriend-0.4.10.jar",
+    "bytes": 1104207,
+    "sha256": "d782070a01b7b736b6307bbc3062e8c1d6892f75a638168822f240845e27e71e"
+  },
+  "renderer": {
+    "repository": "https://github.com/jcs130/mc-visual-console",
+    "baseCommit": "c95ee32bf558ca002ffec9ab675b405fe1f536cb",
+    "preset": "qiandengji",
+    "bundleSha256": "702fbd0518aa7f442564285989d18b2332ddf6c6bb33772299b0e9d901163ffc",
+    "runtimeManifestSha256": "fbabe78d8aabb4e93023e542e16c48c60cd1c021d09bbe3f336f0bf01a6d585a"
+  },
+  "dependencies": {
+    "imageFrame": "2026.1.5.0",
+    "mineflayerTested": "4.37.1",
+    "nodeTested": "22.23.2",
+    "puppeteerCore": "25.13.0",
+    "packageLockSha256": "360bc98cf35d9ae04aa8468f69565062a4ec3c5b351ffb7a620faa3cc0c6fe94",
+    "browser": {
+      "name": "Chrome for Testing Headless Shell",
+      "version": "155.0.8059.39",
+      "source": "https://storage.googleapis.com/chrome-for-testing-public/155.0.8059.39/win64/chrome-headless-shell-win64.zip",
+      "executableSha256": "cb3e6c88734823d828042d9a153ca9c8f5989301456d4fcda76079a88c475791"
+    }
+  },
+  "checks": {
+    "native": 20,
+    "coldRestart": 5,
+    "focusedNode": 9,
+    "deploymentFixtures": 3,
+    "typecheck": true
+  },
+  "scope": "Isolated native clients, actual rendered PNG and ImageFrame delivery; no LLM calls. No new public interfaces. Bedrock device visuals and remote viewer updates not verified. YSM not installed."
+}

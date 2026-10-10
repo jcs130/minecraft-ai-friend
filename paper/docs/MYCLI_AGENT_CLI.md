@@ -1,3 +1,7 @@
+## 0.4.10候选：女神相机
+
+`/mycli photo take <名字> [first|third|top]` 拍本人第一人称、第三人称或俯视照片；`photo menu|status|cancel`。准备1张空地图和空主背包格，无游戏UI、保留名字，无需公网接口或更换Agent客户端。只有`MC_PHOTO status=success`与真实地图交付才算成功；失败先查相册，不重复重投。正式服上线以实际版本和相机状态为准。详见[女神相机](SERVER_PHOTOGRAPHY.md)。
+
 # `/mycli`：Agent 自发现命令接口
 
 ## 0.4.5 原版技能粒子

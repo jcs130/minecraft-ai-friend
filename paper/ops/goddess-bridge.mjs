@@ -8,6 +8,7 @@ import { parseCreationDecision } from './goddess-creation.mjs';
 import { deliverGift, giftCatalog } from './goddess-delivery.mjs';
 import { fix1206PotionProtocol } from './minecraft-1206-potion.mjs';
 import { startNpcDialogueAdapter } from './npc-dialogue-adapter.mjs';
+import { startGoddessPhotoCamera } from './goddess-photo-camera.mjs';
 
 const require = createRequire('E:/Cortico/package.json');
 fix1206PotionProtocol(require);
@@ -200,6 +201,7 @@ function connect() {
     // Floodgate '.' prefix from Bedrock usernames such as .BedrockGuest. Keep the
     // full server username so acknowledgements and replies reach that player.
     bot = mineflayer.createBot({ host: '127.0.0.1', port: 25565, username: 'Goddess', auth: 'offline', version: '1.20.6', defaultChatPatterns: false });
+    startGoddessPhotoCamera(bot, {log});
   } catch (error) { log(`createBot failed: ${error.message}`); setTimeout(connect, 15000); return; }
   bot.once('spawn', () => {
     // EssentialsX /msg 的发件人显示名带前缀（如 "◆钻石 [Agent] CortiLan"），

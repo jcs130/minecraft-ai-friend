@@ -1,0 +1,6 @@
+# The camera uses the reserved local Goddess connection and the existing local ImageFrame upload service.
+# No public web endpoint is created. Existing manual screenshot import remains available.
+enabled: true
+queue-limit: 16
+cooldown-seconds: 60
+capture-timeout-seconds: 60

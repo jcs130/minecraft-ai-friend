@@ -36,6 +36,14 @@ SkinsRestorer 将绑定写入 `plugins/SkinsRestorer/players/<实际UUID>.player
 
 这是原版角色皮肤与手臂形状，不是 YSM 自定义骨骼模型。Java、Mineflayer 和 Geyser 使用现有原版皮肤路径；本次未增加客户端安装要求。Agent 身份铭牌、Eye 配对和可信来源登记各自独立维护，见 [玩家铭牌](PLAYER_NAMETAGS.md) 与 [观战账号](AGENT_EYES.md)。
 
+## YSM 兼容性调研（2026-10-10，未安装）
+
+YSM 的完整功能需要匹配的 Java 客户端模组。现有 Paper 1.20.6 不能直接加载 Forge/Fabric/NeoForge 模组；YSM 文档介绍的第三方 [Freesia](https://yesstevemodel.github.io/wiki/freesia-plugin/) 可通过 Velocity、模型 Worker 和 Paper Backend 接入，并可设置 `kick_if_ysm_not_installed=false` 保留普通客户端。该方案需要隔离验证现有可信来源网关、转发身份和单实例运维，不能只放一个 YSM JAR 就视为完成。
+
+基岩/Xbox 不能运行 Java YSM，模型使用基岩格式也不表示能自动显示。[Geyser 安装文档](https://geysermc.org/wiki/geyser/setup/) 明确不支持依赖客户端模组的功能；完整模型需要另做资源与实体状态映射。[Hydraulic](https://github.com/GeyserMC/Hydraulic) 仍提示不用于生产，不能作为现成兼容保证。Mineflayer 接入与动作需独立实测，其 Web 模型显示还需要适配。
+
+共享 `mc-visual-console` 的另一套原生1.21.1集成已有部分 YSM 2.6.5 原模型支持，限 Alex/gsl、Steve/tartaric_acid 和 Boy/blue|red；未知模型、装备和第一人称等仍未完整验收。这不代表本 Paper 服或远程画面已安装。若后续接入，先采用可选 YSM 外观与普通原版皮肤兼容显示，并分别验收 Java、基岩、Mineflayer 和 Web；不得承诺各端完整一致。
+
 ## 验收与回退
 
 换装前，普通 1.20.6 观察客户端读到两位在线玩家均没有 `textures` 属性。换装后，**9 项检查通过**：两位实际 UUID、各自新增 CUSTOM 绑定、下发的纹理 value 与 signature 和预设逐字一致、原机 CortiEye 仍为 `camera=online attached=true`、两位原玩家继续在线。桐人的 slim 与 Corti 的 classic 元数据匹配素材。没有重连两位 Agent 或 Eye；手机和 Xbox 的最终画面仍需真实客户端观察，Java 纹理包不代替基岩真机画面验收。
