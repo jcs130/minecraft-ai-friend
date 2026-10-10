@@ -1,0 +1,25 @@
+{
+  "version": "0.4.13",
+  "status": "deployed",
+  "deployedAt": "2026-10-10T16:00:14.776Z",
+  "artifact": {
+    "target": "AgentFriend-0.4.13.jar",
+    "sha256": "ED772A459584F1DACA9BB12563536202F3D594476CC5CC1D4424B2E9240B8B36"
+  },
+  "config": {
+    "target": "plugins/AgentFriend/structure-protection.yml",
+    "sha256": "8D2F4B0BEDF045F3080E2CE04781F13C550A811E04DEE115FA3B58F2CBC8DDE3",
+    "beforeSha256": "F2BE9CDF0A9DCA9EB81053597803EC6E937A24282BF94DE0C98479B712481BE8"
+  },
+  "backupBefore": "20261010-235655",
+  "checks": {
+    "isolated": 29,
+    "normalRestart": 9,
+    "productionHealth": 11,
+    "productionRules": 9,
+    "preservation": 31
+  },
+  "scope": "exact primary settlement native-start exclusion; original house/road/guild/land masks remain; no generic village-type exemption",
+  "bedrock": "existing Geyser vanilla block/protection messages; phone/Xbox operation not tested",
+  "rollback": "normal guarded maintenance; restore stopped-snapshot 0.4.12 JAR and structure-protection.yml together, retaining current world/player data"
+}

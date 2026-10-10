@@ -2,6 +2,7 @@ package org.afuhome.agentfriend;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +51,7 @@ final class GeneratedStructureProtection implements Listener {
     private final Map<ChunkKey, Cached> chunks = new LinkedHashMap<>(32, .75f, true);
     private final Map<StartKey, Building> starts = new LinkedHashMap<>(32, .75f, true);
     private Set<String> namespaces = Set.of(), structures = Set.of();
+    private Set<StartKey> managedSettlements = Set.of();
     private boolean enabled = true, crops = true;
     private long reads, unresolved, errors, lastWarning;
 
@@ -72,7 +74,28 @@ final class GeneratedStructureProtection implements Listener {
                     || nextNamespaces.stream().anyMatch(s -> !s.matches("[a-z0-9_.-]+") || s.equals("minecraft"))
                     || nextStructures.stream().anyMatch(s -> !s.matches("[a-z0-9_.-]+:[a-z0-9_./-]+")))
                 throw new IllegalArgumentException("structure_rules");
+            Set<StartKey> nextManaged = new HashSet<>();
+            if (c.contains("managed-settlements")) {
+                if (!c.isList("managed-settlements") || c.getList("managed-settlements").size() > 64)
+                    throw new IllegalArgumentException("managed_settlements");
+                for (Object value : c.getList("managed-settlements")) {
+                    if (!(value instanceof Map<?, ?> entry)
+                            || !entry.keySet().equals(Set.of("world", "structure", "start-chunk"))
+                            || !(entry.get("world") instanceof String worldName)
+                            || !(entry.get("structure") instanceof String structure)
+                            || !structure.matches("[a-z0-9_.-]+:[a-z0-9_./-]+")
+                            || !(entry.get("start-chunk") instanceof List<?> origin) || origin.size() != 2
+                            || !(origin.get(0) instanceof Integer x) || !(origin.get(1) instanceof Integer z)
+                            || Math.abs((long) x) > 1875000 || Math.abs((long) z) > 1875000)
+                        throw new IllegalArgumentException("managed_settlement_entry");
+                    World managedWorld = Bukkit.getWorld(worldName);
+                    if (managedWorld == null || !nextManaged.add(new StartKey(
+                            new ChunkKey(managedWorld.getUID(), ChunkPos.asLong(x, z)), structure)))
+                        throw new IllegalArgumentException("managed_settlement_world_or_duplicate");
+                }
+            }
             namespaces = Set.copyOf(nextNamespaces); structures = Set.copyOf(nextStructures);
+            managedSettlements = Set.copyOf(nextManaged);
             enabled = c.getBoolean("enabled"); crops = c.getBoolean("allow-crops");
             chunks.clear(); starts.clear(); return "success";
         } catch (Exception error) {
@@ -83,6 +106,7 @@ final class GeneratedStructureProtection implements Listener {
     void admin(CommandSender sender, String action) {
         if (action.equals("reload")) sender.sendMessage("Structure rules: " + reload());
         sender.sendMessage("Generated structures enabled=" + enabled + " namespaces=" + namespaces + " ids=" + structures.size()
+                + " managedSettlements=" + managedSettlements.size()
                 + " chunkCache=" + chunks.size() + "/256 startCache=" + starts.size() + "/128 reads=" + reads
                 + " unresolved=" + unresolved + " errors=" + errors + " loadPolicy=loaded_only");
     }
@@ -123,6 +147,9 @@ final class GeneratedStructureProtection implements Listener {
             if (entry.getValue().size() > 64) throw new IllegalStateException("structure_reference_limit");
             for (long position : entry.getValue()) {
                 StartKey startKey = new StartKey(new ChunkKey(world.getUID(), position), key);
+                // A lived-in settlement uses its existing house masks, roads and land ownership.
+                // Match the exact world + structure + start chunk, never every village of that type.
+                if (managedSettlements.contains(startKey)) continue;
                 Building building = starts.get(startKey);
                 if (building == null) {
                     LevelChunk origin = level.getChunkSource().getChunkNow(ChunkPos.getX(position), ChunkPos.getZ(position));

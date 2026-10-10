@@ -36,3 +36,9 @@ structures:
   - terralith:fortified_desert_village
 # Terrain features such as Terralith rubble are deliberately outside this list.
 allow-crops: true
+# This settlement already has house, road, guild and private-land protection.
+# Other instances, even with the same structure ID, remain protected.
+managed-settlements:
+  - world: world
+    structure: minecraft:village_taiga
+    start-chunk: [-34, -28]

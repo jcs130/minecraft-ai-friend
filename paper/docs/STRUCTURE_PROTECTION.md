@@ -30,6 +30,23 @@
 
 结构起点还未加载或解析失败时，`unknown_generated_structure_bounds` 会暂缓相关区块拆建；门和梯子仍可使用。先沿原通路靠近、稍后重查；持续异常联系服主。不会为查边界强行加载或生成远处区块。缓存最多 256 个区块、128 个结构起点，未知记录最早一秒后重查，没有新增巡检计时器。
 
+## 主村庄生活区（0.4.13）
+
+主村庄的 Better Villages 片段把公共土地、农田和大片空位一起包进建筑范围，曾误拒绝除草、整地和放铁轨。主村庄现在按既有23座房屋的原建筑方块掩码保护，不再叠加这层片段封锁。公共草地、树木、农田与空地允许正常操作；房屋墙、木梁、门梯、原道路、公会私产和私人领地继续按各自规则保护。公共土地放置铁轨不等于获得私人领地权限。
+
+仅排除已核实的这一个自然结构起点，不按整个村庄类型放行：
+
+```yaml
+managed-settlements:
+  - world: world
+    structure: minecraft:village_taiga
+    start-chunk: [-34, -28]
+```
+
+匹配世界UUID、结构ID与起点区块；热加载拒绝无效世界、畸形坐标和重复项，并保留上一次有效配置。其他自然生成建筑仍按上面的片段规则保护；不能把别的村庄加入清单而不先建立其建筑保护。这个清单不是领地授权，也不会清除原建筑掩码。
+
+NEKO的采麦委托有4株真实采收记录，改保护不会补发奖励、修改任务进度或替她移动。新版上线后她已离开原卡点并继续移动；维护救援的位置守卫检测到已离开，因此没有发送传送。采收以成熟小麦为目标，按任务状态完成当前阶段后再原位补种。失败后应重新读取目标位置及权限；`allow_likely`只是允许尝试，实际操作事件仍是最终结果。
+
 ## 让 Agent 实际练习
 
 入口为 `/mycli world practice start`，或技能罗盘 → 旅途指南 → 村庄新生活 → 开门与爬梯实练。`/mycli explain world.practice` 可发现用法；`status` 查本人进度，`stop` 暂停。原来的三项新手实习及进度不变。
@@ -65,3 +82,5 @@ mycli admin structures reload
 0.4.6候选时期另有正式服0.4.5的只读核查，历史证据保留：CortiLan 的观景塔领地内访客不能拆建，塔外与村庄空地允许；没有全服禁建。该领地规则早于本候选功能；若要共同改塔，应给协作者单独授权这块领地。
 
 来源：[Paper 区块结构 API](https://javadocs.papermc.io/paper/1.20.6/org/bukkit/Chunk.html)、[Dungeons and Taverns](https://modrinth.com/datapack/dungeons-and-taverns)、[Mineflayer pathfinder](https://github.com/PrismarineJS/mineflayer-pathfinder)。
+
+主村庄排除配置回归脚本为 `plugins/AgentFriend/settlement-protection-stage.mjs`，使用独立端口25640/25641。设置 `SETTLEMENT_QA_STAGE` 为 `E:/MC/staging/` 下的可丢弃服务端副本，`SETTLEMENT_QA_OUTPUT` 为新建的未冻结输出目录；先运行 `initial`，隔离服正常重启后运行 `restart`。脚本拒绝已冻结证据、覆盖现存结果和正式服路径。实际发布29项/重启9项回执保留在本次私有证据目录。
