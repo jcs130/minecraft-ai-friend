@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-10",
+  "status": "isolated_candidate_not_deployed",
+  "paperVersion": "1.20.6",
+  "productionAgentFriendVersion": "0.4.10",
+  "freesiaTag": "v2.5.1+2.4.1",
+  "freesiaSourceCommit": "5ca1e0e7399ed6826fed160baad139e82e6a6242",
+  "ysmVersion": "2.4.1",
+  "ysmProtocol": "2.4.0",
+  "ysmSha256": "ec51cfae84d219a45fac5098a31bfe980bcb7c2d8b413e8fffbd05a411a85680",
+  "build": {
+    "dependencies": {
+      "annotations-24.1.0.jar": "27a770dc7ce50500918bb8c3c0660c98290630ec796b5e3cf6b90f403b3033c6",
+      "Freesia-Worker-2.5.1+2.4.1.jar": "931ec5d348f2988b2c2e9fb83722366cb841ae7bbfd898713a36cad8d6454736",
+      "Freesia-Velocity-2.5.1+2.4.1-all.jar": "1eaaeb97ba66d49ffb32acf84d3c349de1352c77c73e28a1d4ba96f96d92cae0",
+      "packetevents-velocity-2.8.0.jar": "1889f17e58030b33ef8c3c9f0d3321c6fb93c0fbd830d96c30af88b2c5eef7b4",
+      "velocity-3.4.0-SNAPSHOT-563.jar": "fe53021f3168322cb6cb68f78699866fd098df3c306e4359847a10b0d02689ef"
+    },
+    "workerCache": {
+      "server-intermediary.jar": "6deb4640c12ed9b39f60e76964b918d83fe28094bb8a87388f144c00e6e790cd",
+      "fabric-lifecycle-events-v1-2.5.0+01d9a51c19-c4bf2384ff49499e.jar": "2e3d34d241ac82b2036e62f19900f8bf35da14fb2b0053b3a125dbde7844aea4",
+      "fabric-api-base-0.4.42+6573ed8c19-9e05b1395452e503.jar": "d7aaab0036bf2e399861b2195915fe9cf4796bfa74974eaf0631eb7083525e10",
+      "fabric-loader-0.16.13.jar": "0305133e0ea8a072b75728205fc067f1afd08b2fe048f080465ed54240096e66"
+    },
+    "sources": {
+      "src/meow/kikir/freesia/velocity/Freesia.java": "6f88bd91810735b51b79e9899172ccc142cc17ef30afd913f0525ed628507e28",
+      "src/meow/kikir/freesia/common/communicating/NettySocketClient.java": "8c7a594aa71e717ee04e55879cb48b4cc40eaf037e757eb919c11d84c4aefa9d",
+      "src/meow/kikir/freesia/velocity/network/ysm/YsmMapperPayloadManager.java": "e1f7bb4617f6a7597c67f33177d3cc2c1f7259a0420fefb777537145fe181e0f",
+      "bridge/org/afuhome/appearance/AppearanceBridge.java": "d21d87fa8d55ffbaabb8ccc78a97cb9e4bc3a190323de8629d98c802842a7178",
+      "worker/org/afuhome/appearance/WorkerCleanup.java": "5807eb57d9e6cb0a811feb6660d0e8a150f836f63e88286a3f9d992de322d94c"
+    },
+    "outputs": {
+      "Freesia-Velocity-2.5.1+2.4.1-af1.jar": "cc9492cb3f75015811b470ce30bec43e7eae43e7c71b235728455fa4277aaf02",
+      "AgentAppearance-0.1.0.jar": "4a2f7081a4bef25c83282fe93601d11a6510b3a7315cec6d82b23a090a359779",
+      "Freesia-Worker-2.5.1+2.4.1-af1.jar": "f0375752f732615866473d3bac263bad1da748663e6766ac4ea180ad25973654",
+      "AgentAppearance-WorkerCleanup-0.1.0.jar": "7ce6984993e153d460e96b95ba60096db1c965df1018340880a5caabb4ff230e"
+    }
+  },
+  "webSourceCommit": "af892402f3aca4894fdc16340df318cda7a88d30",
+  "webBundleSha256": "953cc2942c3dbf10bcbaf36bb10d1dc81c53cd1ce4fcfbb5e3ade52771387367",
+  "verification": {
+    "functionalChecks": 29,
+    "coldRestartChecks": 6,
+    "relatedWebChecks": 26,
+    "configuredRootTypecheck": true,
+    "forcedHostTypecheck": {
+      "baselineErrors": 39,
+      "candidateErrors": 39,
+      "sameDiagnosticKinds": true
+    },
+    "allNewListenersLoopback": true,
+    "loadConnections": 20,
+    "loadAgents": 16,
+    "paperMsptRaw": "\u00a76Server tick times \u00a7e(\u00a77avg\u00a7e/\u00a77min\u00a7e/\u00a77max\u00a7e)\u00a76 from last 5s\u00a77,\u00a76 10s\u00a77,\u00a76 1m\u00a7e:\n\u00a76\u25f4 \u00a7a4.9\u00a77/\u00a7a2.9\u00a77/\u00a7a15.8\u00a7e, \u00a7a5.2\u00a77/\u00a7a2.9\u00a77/\u00a7a31.5\u00a7e, \u00a7a4.3\u00a77/\u00a7a0.8\u00a77/\u00a7c66.2\n",
+    "scope": "controlled protocol fixtures in loaded chunks; not autonomous LLM load"
+  },
+  "notVerified": [
+    "actual matched modded Java rendering",
+    "Bedrock authenticated login and YSM player rendering",
+    "Web YSM geometry, animation, equipment and scene parity",
+    "remote Web consumer deployment",
+    "production identity/watcher integration through new topology"
+  ],
+  "renderAvailable": false,
+  "completeEntityParityVerified": false
+}

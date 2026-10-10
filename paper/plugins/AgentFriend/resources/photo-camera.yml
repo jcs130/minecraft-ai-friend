@@ -3,4 +3,4 @@
 enabled: true
 queue-limit: 16
 cooldown-seconds: 60
-capture-timeout-seconds: 60
+capture-timeout-seconds: 90

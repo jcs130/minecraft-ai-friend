@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "status": "deployed",
+  "version": "0.4.11",
+  "builtAt": "2026-10-10T13:30:07.711213+00:00",
+  "pluginSha256": "aacfaf61f621279bc1d8f2aa1d80663b8084e1f54a0ad900170d4926f3c347f1",
+  "eyeMirror": {
+    "version": "0.1.10",
+    "sha256": "f861c73f6af068a76edeef820be22efebd240a7315edc7002686276e186b8d30"
+  },
+  "renderer": {
+    "sourceCommit": "1681f3cbea36b522639ab018a72f2d288f7109a2",
+    "bundleSha256": "f820848e86c8bb180ffd31b260720bfdd5347e973f456231d01f280f483c2b53",
+    "minecraftVersion": "1.20.6",
+    "preset": "qiandengji",
+    "resolution": 1536,
+    "chunkRadius": 6
+  },
+  "maps": {
+    "defaultTiles": 1,
+    "optionalTiles": 2,
+    "singleMapPixels": 128
+  },
+  "checks": {
+    "nativePhotoAndUpload": 17,
+    "anglesAndPinnedRuntime": 8,
+    "eyeAndColdRestart": 7,
+    "controlledAgents": 16,
+    "nodeOriginalAssets": 37,
+    "javaCatalog": 10,
+    "helper": 3,
+    "productionNative": 7,
+    "productionHealth": 10,
+    "preservation": 25,
+    "minepacksOriginalInventories": 19
+  },
+  "limits": [
+    "Bedrock custom player YSM geometry is not implemented",
+    "Complete Java YSM entity/animation/equipment parity remains false",
+    "Remote LAN viewer requires its own source update and rebuild",
+    "Production YSM Proxy/Worker is not installed"
+  ],
+  "deployedAt": "2026-10-10T13:48:10.525685+00:00",
+  "backupBefore": "20261010-213346",
+  "sourceCommit": "04aac3c",
+  "photoHelpHotUpdateSha256": "a4ccaf6d1e6ae42098d8b8cc91a9bb714ea9172a8705924550605db276d8e77a"
+}

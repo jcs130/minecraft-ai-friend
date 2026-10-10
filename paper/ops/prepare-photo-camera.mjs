@@ -7,7 +7,7 @@ const [viewerRoot,assetsRoot,outputRoot]=process.argv.slice(2);
 if (![viewerRoot,assetsRoot,outputRoot].every(value=>value&&path.isAbsolute(value))) throw Error('Usage: node prepare-photo-camera.mjs <absolute shared viewer repo> <absolute prepared assets> <absolute NEW private runtime root>');
 try {await access(outputRoot);throw Error('PHOTO_RUNTIME_ALREADY_EXISTS');} catch(error){if(error.code!=='ENOENT')throw error;}
 const dependencyRoot=fileURLToPath(new URL('./photo-camera/',import.meta.url));
-const modules=['packages/modern-viewer/src/viewer-stream.mts',...['viewer-photo-page','viewer-page-assets','viewer-content','text-display'].map(name=>'packages/modern-viewer/renderer-src/host/'+name+'.mjs')];
+const modules=['packages/modern-viewer/src/viewer-stream.mts',...['viewer-photo-page','viewer-page-assets','viewer-content','text-display','viewer-appearance','viewer-ysm-assets'].map(name=>'packages/modern-viewer/renderer-src/host/'+name+'.mjs')];
 await Promise.all([...modules.map(name=>access(path.join(viewerRoot,name))),access(path.join(assetsRoot,'dist/modern-viewer.js')),access(path.join(dependencyRoot,'node_modules/puppeteer-core/package.json'))]);
 await mkdir(outputRoot);
 for(const name of modules){const dest=path.join(outputRoot,name);await mkdir(path.dirname(dest),{recursive:true});await cp(path.join(viewerRoot,name),dest);}

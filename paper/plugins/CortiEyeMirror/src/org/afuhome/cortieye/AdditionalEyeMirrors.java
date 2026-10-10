@@ -118,6 +118,7 @@ final class AdditionalEyeMirrors implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
         protocol.addPacketListener(new PacketAdapter(plugin, ListenerPriority.HIGHEST, PRESENTATION) {
             @Override public void onPacketSending(PacketEvent event) {
+                if (event.isCancelled()) return;
                 PacketType type = event.getPacketType();
                 Player recipient = event.getPlayer();
                 String name = recipient.getName().toLowerCase(Locale.ROOT);
@@ -138,6 +139,7 @@ final class AdditionalEyeMirrors implements Listener {
                 }
                 UUID targetId = recipient.getUniqueId();
                 if (!attachedTargets.contains(targetId)) return;
+                if (CortiEyeMirrorPlugin.isPhotoReceipt(event.getPacket(), type)) return;
                 PacketContainer packet = event.getPacket().shallowClone();
                 String signature = isChat(type) ? signature(packet, type) : null;
                 Bukkit.getScheduler().runTaskLater(plugin,

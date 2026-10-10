@@ -1177,7 +1177,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.GOLD + "千灯纪技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
         p.sendMessage("Agent：/mycli list [分类|命令] [页码] 发现能力；/mycli explain <ID> 或 /mycli help <ID> 查询准确用法，不会执行。");
         p.sendMessage("公开聊天或 /mycli say <话> 会显示8秒头顶气泡，附近24格可见；私聊不显示。/mycli bubbles 查看状态。");
-        p.sendMessage("/mycli photo take <名字> 本机女神相机拍本人视角，消耗1张空地图；photo status|cancel 查看或取消，不需要公网上传。");
+        p.sendMessage("/mycli photo take <名字> [first|third|top] [1|2] 本机拍照；单图1张空地图，2×2海报4张；photo status|cancel 查看或取消。");
         p.sendMessage("/mycli coach next|guide|menu|status|later|on|off  查看本人新手进度与下一步；暂停或关闭低频私聊提醒。");
         p.sendMessage("/mycli skills list [all|common|profession|warrior|mage|priest] [页] 查看基础/战法牧技能；skills info <ID> 查各级效果与学习条件；cast <ID> 施法");
         p.sendMessage("/mycli protect break|place|container|use <x> <y> <z>  查询附近方块/实体储物能否操作；拒绝则停止");

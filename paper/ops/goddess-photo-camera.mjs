@@ -80,7 +80,7 @@ export function startGoddessPhotoCamera(bot, options = {}) {
 
   async function capture(state) {
     const {job,abort} = state;
-    const signal = AbortSignal.any([abort.signal,AbortSignal.timeout(options.captureTimeoutMs ?? 45_000)]);
+    const signal = AbortSignal.any([abort.signal,AbortSignal.timeout(options.captureTimeoutMs ?? 80_000)]);
     const guard = () => {
       signal.throwIfAborted();
       const target = bot.entities[job.entityId];
@@ -114,16 +114,20 @@ export function startGoddessPhotoCamera(bot, options = {}) {
     guard();
     const root = settings.viewerRoot;
     const moduleAt = relative => import(pathToFileURL(path.join(root, relative)).href);
-    const [{viewerPhotoPage},{createViewerChunkStream,createViewerEntityStream},{createViewerContentBridge}] = await Promise.all([
+    const [{viewerPhotoPage},{createViewerChunkStream,createViewerEntityStream},{createViewerContentBridge},{createViewerAppearanceBridge}] = await Promise.all([
       moduleAt('packages/modern-viewer/renderer-src/host/viewer-photo-page.mjs'),
       moduleAt('packages/modern-viewer/src/viewer-stream.mts'),
-      moduleAt('packages/modern-viewer/renderer-src/host/viewer-content.mjs')
+      moduleAt('packages/modern-viewer/renderer-src/host/viewer-content.mjs'),
+      moduleAt('packages/modern-viewer/renderer-src/host/viewer-appearance.mjs')
     ]);
     const require = createRequire(pathToFileURL(root + '/package.json'));
     const express = require('express'), {Server} = require('socket.io');
     const token = randomBytes(24).toString('hex'), app = express(), server = createServer(app);
     const sessions = new Set(); let origin, context;
     const bridge = createViewerContentBridge(bot);
+    const appearances = createViewerAppearanceBridge(bot);
+    const distance = Math.max(2,Math.min(8,Math.trunc(settings.renderDistance ?? 6)));
+    const resolution = Math.max(768,Math.min(2048,Math.trunc(settings.resolution ?? 1536)));
     const authenticated = req => req.headers.cookie?.split(';').some(s => s.trim() === `photo=${token}`);
     app.use((req,res,next) => {
       if (req.hostname !== '127.0.0.1') return res.sendStatus(403);
@@ -143,8 +147,8 @@ export function startGoddessPhotoCamera(bot, options = {}) {
     app.use(express.static(settings.assetsRoot + '/public'));
     const io = new Server(server,{serveClient:false,maxHttpBufferSize:2048,allowRequest:(req,done) => done(null,authenticated(req) && (!req.headers.origin || req.headers.origin === origin))});
     io.on('connection',socket => {
-      // Stream radius is exclusive; the renderer's distance=2 guard requires a full 5x5 footprint.
-      const chunks = createViewerChunkStream({bot,socket,viewDistance:3,emit:(name,value) => socket.emit(name,value)});
+      // Stream radius is exclusive. Use only columns already sent by the game server.
+      const chunks = createViewerChunkStream({bot,socket,viewDistance:distance+1,emit:(name,value) => socket.emit(name,value)});
       // Camera owner is hidden, and no observer inventory, chat, HUD, or gameplay controls are forwarded.
       const serialize = e => {
         if (e.id === bot.entity?.id || e.id === job.entityId && job.mode === 'first') return null;
@@ -154,6 +158,11 @@ export function startGoddessPhotoCamera(bot, options = {}) {
       };
       const entities = createViewerEntityStream({bot,socket,serialize}); bot.on('entityGone',entities.remove);
       socket.emit('version','1.20.6'); const off = bridge.subscribeSocket(socket);
+      const offAppearance = appearances.subscribeSocket({emit:(name,value)=>{
+        // First-person camera never renders the photographer's body or the Goddess observer.
+        if(name==='appearanceState' && (value.entityId===bot.entity?.id || value.entityId===job.entityId && job.mode==='first'))return;
+        socket.emit(name,value);
+      }});
       const sync = () => {
         try { guard(); } catch { abort.abort(); return; }
         socket.emit('position',{pos:{x:job.x,y:job.y,z:job.z},yaw:job.yaw,pitch:job.pitch});
@@ -163,7 +172,7 @@ export function startGoddessPhotoCamera(bot, options = {}) {
         for (const e of Object.values(bot.entities)) if (e.id !== bot.entity?.id && (e.id !== job.entityId || job.mode !== 'first')) entities.queue(e,true);
       };
       sync(); const timer = setInterval(sync,200);
-      const close = () => {clearInterval(timer);chunks.close();entities.close();bot.off('entityGone',entities.remove);off();sessions.delete(close);};
+      const close = () => {clearInterval(timer);chunks.close();entities.close();bot.off('entityGone',entities.remove);off();offAppearance();sessions.delete(close);};
       sessions.add(close); socket.once('disconnect',close);
     });
     const abortCapture = () => { void context?.close().catch(()=>{}); };
@@ -174,14 +183,15 @@ export function startGoddessPhotoCamera(bot, options = {}) {
       context = await browser.createBrowserContext(); const page = await context.newPage();
       const pageErrors = [];
       page.on('pageerror',e => pageErrors.push(String(e.message).replace(/https?:\/\/\S+/g,'[local asset]').slice(0,300)));
-      await page.setViewport({width:768,height:768,deviceScaleFactor:1});
+      await page.setViewport({width:resolution,height:resolution,deviceScaleFactor:1});
       await page.setRequestInterception(true);
       page.on('request',req => {const url=req.url(); if (url.startsWith(origin+'/') || url.startsWith('data:') || url.startsWith('blob:')) void req.continue(); else void req.abort();});
-      await page.goto(origin + '/?photo=1&distance=2&fov=70&token=' + token,{waitUntil:'domcontentloaded',timeout:20_000});
-      if (options.onPreview) await options.onPreview({url:origin + '/?photo=1&distance=2&fov=70&token=' + token,job:job.job});
-      try { await page.waitForFunction(() => globalThis.__photoReady?.() === true,{timeout:25_000}); }
+      const photoUrl=origin + '/?photo=1&quality=high&distance='+distance+'&fov=70&token=' + token;
+      await page.goto(photoUrl,{waitUntil:'domcontentloaded',timeout:20_000});
+      if (options.onPreview) await options.onPreview({url:photoUrl,job:job.job});
+      try { await page.waitForFunction(() => globalThis.__photoReady?.() === true,{timeout:65_000}); }
       catch (error) {
-        const diagnostics = await page.evaluate(() => ({chunks:globalThis.__lanternRenderer?.chunkLoading ?? null,boot:document.querySelector('.boot')?.textContent ?? null})).catch(()=>null);
+        const diagnostics = await page.evaluate(() => ({chunks:globalThis.__lanternRenderer?.chunkLoading ?? null,content:globalThis.cortiViewerContent?.stats?.(),boot:document.querySelector('.boot')?.textContent ?? null})).catch(()=>null);
         log(`photo job=${job.job} renderer=${JSON.stringify(diagnostics?.chunks ?? null)} errors=${pageErrors.length}`);
         if (options.onRenderFailure) await options.onRenderFailure({diagnostics,pageErrors,png:await page.screenshot({type:'png'})});
         throw error;
@@ -192,7 +202,7 @@ export function startGoddessPhotoCamera(bot, options = {}) {
       guard();
       const canvas = await page.$('#viewer-canvas');
       const png = Buffer.from(await canvas.screenshot({type:'png'}));
-      if (png.length < 1024 || png.length > 4 * 1024 * 1024) throw Error('PHOTO_IMAGE_SIZE_INVALID');
+      if (png.length < 1024 || png.length > 8 * 1024 * 1024) throw Error('PHOTO_IMAGE_SIZE_INVALID');
       guard();
       const body = new FormData(); body.append('image',new Blob([png],{type:'image/png'}),'photo.png');
       reply('uploading',job);
@@ -201,11 +211,11 @@ export function startGoddessPhotoCamera(bot, options = {}) {
       await response.arrayBuffer();
       reply('uploaded',job);
       log(`photo job=${job.job} uploaded bytes=${png.length} sha256=${createHash('sha256').update(png).digest('hex')}; game confirmation pending`);
-      if (options.onCapture) await options.onCapture({job:job.job,png});
+      if (options.onCapture) await options.onCapture({job:job.job,png,diagnostics:await page.evaluate(()=>({width:document.getElementById('viewer-canvas').width,height:document.getElementById('viewer-canvas').height,chunks:globalThis.__lanternRenderer?.chunkLoading,content:globalThis.cortiViewerContent?.stats?.()}))});
     } finally {
       signal.removeEventListener('abort',abortCapture);
       await context?.close().catch(()=>{}); for (const close of sessions) close();
-      bridge.dispose(); io.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
+      bridge.dispose();appearances.dispose(); io.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
     }
   }
 

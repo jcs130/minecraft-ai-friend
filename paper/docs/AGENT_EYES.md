@@ -1,12 +1,14 @@
 # Agent 观战账号
 
+0.1.10已上线：转发器尊重上游消息取消，并只向Agent本人保留 `MC_PHOTO` 机器回执；附身Eye仅显示相机开始/完成和实际错误，不重复上传链接或进度。隔离实际附身与四地图交付已验证。
+
 2026-10-06 服主明确确认 `feiyu_bot` 是 bot，已加入维护脚本的已核实服务账号例外。该身份确认只适用于这个精确账号。其可信来源 IP 尚未核实，本轮新增配对已撤销，恢复发布前接入规则；Agent/Eye 配对须同时完成可信来源登记。09:09 正常重启更新 AgentFriend 0.3.84 后，CortiLan/Goddess/CortiEye 已恢复，`cortieye` 读回 camera=online、attached=true；feiyu_bot 原客户端也已回连，重启前四个账号均恢复。
 
 Goddess 平时是独立观察者，不参加Agent/Eye配对巡检。0.4.10已上线的[女神相机](SERVER_PHOTOGRAPHY.md)可为本人请求串行临时附身拍照，完成即恢复观察位置；已有人工附身会话不被抢占。`ops/agent-eye-pairs.json` 登记 Agent/Eye 对；`ops/agent-eye-watcher.mjs` 每 20 秒通过本机 RCON 检查一次，把已登记的 Eye 维持为原版观战模式，并在两端在线时执行原版 `minecraft:spectate <Agent> <Eye>`。Agent 离线时 Eye 仍保持观战模式。未登记的 `eye` 名字没有镜头权限，公网 Java 网关在登录前拒绝这种名字。
 
 每个配对写一个 Agent 名；省略 `eye` 时自动使用 `<agent>_eye`，例如 `fulumu → fulumu_eye`。命名不同的配对明确写 `eye`，目前为 `CortiLan → CortiEye`。配置在下一次巡检时生效；撤销配对会停止附身。每次巡检也检查镜头与 Agent 的位置，发现脱离就重新附身；即使位置接近，最多两分钟也会重新附身。
 
-`ops/manage-server.ps1` 的现有 Watchdog 保证巡检进程单实例运行并在其退出后恢复。修改配对文件不需要重启 Paper。正式服 CortiEyeMirror 0.1.9 只向**已登记、正在附身对应 Agent 且处于同一世界的 Eye**转发目标的私聊、动作栏、标题、BossBar、状态效果、粒子与音效；跨组不转发私有消息，全服广播去重。登记表约每 5 秒重新读取，撤销后停止转发；附身巡检约每 20 秒重新读取。隔离服已通过两组配对、跨组隔离、未登记 Eye 隔离、广播去重、状态效果和热撤销测试。Mineflayer Eye 没有 SpectatorPlus 客户端模组，玩家背包画面未能完成同等验收。
+`ops/manage-server.ps1` 的现有 Watchdog 保证巡检进程单实例运行并在其退出后恢复。修改配对文件不需要重启 Paper。正式服 CortiEyeMirror 0.1.10 只向**已登记、正在附身对应 Agent 且处于同一世界的 Eye**转发目标的私聊、动作栏、标题、BossBar、状态效果、粒子与音效；跨组不转发私有消息，全服广播去重。登记表约每 5 秒重新读取，撤销后停止转发；附身巡检约每 20 秒重新读取。隔离服已通过两组配对、跨组隔离、未登记 Eye 隔离、广播去重、状态效果和热撤销测试。Mineflayer Eye 没有 SpectatorPlus 客户端模组，玩家背包画面未能完成同等验收。
 
 AgentFriend 0.3.80 的探敌术还把附近怪物的 Java 发光轮廓只发给施法者和登记表中当前确实附身的 Eye；撤销配对或脱离附身后即停止。普通旁观者和其他 Agent/Eye 看不到这项私有轮廓。轮廓 8 秒后恢复实体原状，不修改世界里的怪物发光状态。
 

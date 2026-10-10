@@ -1,3 +1,11 @@
+## 已上线0.4.11：清爽相机与清晰海报
+
+`/mycli photo take <名字> [first|third|top] [1|2]`；默认单图1张空地图，末尾2生成2×2海报，需要4张空地图及4个空主背包格。开始/完成两条聊天，Agent旧回执兼容；1536原图、相机半径6。原版单图仍为128×128像素。正式已验证海报交付和提示精简；YSM模型照片为隔离验证，正式Proxy/Worker尚未接入。当前状态见[相机](SERVER_PHOTOGRAPHY.md)，YSM拓扑上线另见[YSM适配](YSM_ADAPTATION.md)。
+
+## 开发候选：YSM（未部署）
+
+**YSM（2026-10-10，未部署）：**第一阶段私有 Freesia/Worker 候选完成原 Agent、显式 Eye、背包、16 连接与故障恢复隔离验证；网页接实际模型状态，原模型画面和基岩自定义玩家模型仍待适配。正式入口和 AgentFriend 版本保持。边界与后续见 [YSM 适配](YSM_ADAPTATION.md)。
+
 ## 已上线0.4.10：本机女神相机
 
 服主要求不开公网接口。现在提供`photo take <名字> [first|third|top]`与原版三角度菜单，去UI保留人名，实际空地图消耗和本人ImageFrame归属；真人/基岩/公网Agent共用。正式成片和地图交付已核验，当前可用性看`photo status`。维护与桥接见[女神相机](SERVER_PHOTOGRAPHY.md)。

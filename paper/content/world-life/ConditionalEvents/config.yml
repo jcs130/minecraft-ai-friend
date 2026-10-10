@@ -71,7 +71,7 @@ Events:
     actions:
       default:
       - 'cancel_event: true'
-      - 'message: &a[照片] &f备好1张空地图和空背包格：/mycli photo take <名字> [first|third|top]，或用 /mycli photo menu 选择角度。'
+      - 'message: &a[照片] &f拍照：/mycli photo take <名字> [first|third|top] [1|2]；单图1张空地图，2×2海报4张空地图/4个空格；也可 photo menu 选角度。'
       - 'message: &a[照片] &f面向景物站稳，女神会自动拍摄；无游戏UI，保留人物名字。无需打开网页或上传文件。'
       - 'message: &a[照片] &f/mycli photo status 查进度，photo cancel 取消未上传请求；等创建成功且本人背包出现地图后再挂展示框。'
   qd_photo_discovery:

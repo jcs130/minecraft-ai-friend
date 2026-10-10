@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "status": "isolated-candidate",
+  "profile": "Paper1.20.6 + Worker1.21.1/YSM2.4.1",
+  "bridge": {
+    "version": "0.2.0",
+    "sha256": "5180de41412570c9d7323c012193b97f4546bd78ccf621879ef5f8972bce8df9"
+  },
+  "web": {
+    "sourceCommit": "1681f3cbea36b522639ab018a72f2d288f7109a2",
+    "bundleSha256": "f820848e86c8bb180ffd31b260720bfdd5347e973f456231d01f280f483c2b53",
+    "minecraftVersion": "1.20.6",
+    "preset": "qiandengji",
+    "resolution": 1536,
+    "chunkRadius": 6
+  },
+  "upstreamYsmJarSha256": "ec51cfae84d219a45fac5098a31bfe980bcb7c2d8b413e8fffbd05a411a85680",
+  "catalog": {
+    "scanSeconds": 5,
+    "stableScans": 2,
+    "nativeReloadMinimumSeconds": 30,
+    "compressedBytes": 2097152,
+    "rawBytes": 8388608,
+    "publicSourceOnly": true
+  },
+  "protocol": [
+    "mcagent:appearance",
+    "mcagent:ysm_asset"
+  ],
+  "checks": {
+    "nativePhotoAndUpload": 17,
+    "anglesAndPinnedRuntime": 8,
+    "eyeAndColdRestart": 7,
+    "controlledAgents": 16,
+    "nodeOriginalAssets": 37,
+    "javaCatalog": 10,
+    "helper": 3
+  },
+  "limits": [
+    "Bedrock custom player YSM geometry is not implemented",
+    "Complete Java YSM entity/animation/equipment parity remains false",
+    "Remote LAN viewer requires its own source update and rebuild",
+    "Production YSM Proxy/Worker is not installed"
+  ]
+}

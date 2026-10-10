@@ -130,7 +130,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         }, 1L, 1L);
         protocol.addPacketListener(new PacketAdapter(this, ListenerPriority.HIGHEST, PRESENTATION) {
             @Override public void onPacketSending(PacketEvent event) {
-                if (additionalEyeMirrors == null || !additionalEyeMirrors.cortiAuthorized()) return;
+                if (event.isCancelled() || additionalEyeMirrors == null || !additionalEyeMirrors.cortiAuthorized()) return;
                 String recipient = event.getPlayer().getName();
                 PacketType type = event.getPacketType();
                 if (recipient.equalsIgnoreCase(cameraName)) {
@@ -150,6 +150,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
                     return;
                 }
                 if (!recipient.equalsIgnoreCase(targetName)) return;
+                if (isPhotoReceipt(event.getPacket(), type)) return;
                 if (isChat(type) && !mirrorChat) return;
                 if (type == PacketType.Play.Server.ADVANCEMENTS && !mirrorAdvancements) return;
                 PacketContainer copy = event.getPacket().shallowClone();
@@ -613,5 +614,16 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
 
     private static String signature(PacketContainer packet, PacketType type) {
         return type.name() + ':' + packet.getHandle().toString();
+    }
+
+    static boolean isPhotoReceipt(PacketContainer packet, PacketType type) {
+        if (type != PacketType.Play.Server.SYSTEM_CHAT) return false;
+        try {
+            var component = packet.getChatComponents().readSafely(0);
+            if (component == null || component.getJson().length() > 16_384) return false;
+            String text = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(
+                net.kyori.adventure.text.serializer.gson.GsonComponentSerializer.gson().deserialize(component.getJson()));
+            return text.startsWith("MC_PHOTO {");
+        } catch (RuntimeException ignored) { return false; }
     }
 }

@@ -1,3 +1,7 @@
+## 已上线0.4.11：清爽相机与清晰海报
+
+`/mycli photo take <名字> [first|third|top] [1|2]`；默认单图1张空地图，末尾2生成2×2海报，需要4张空地图及4个空主背包格。开始/完成两条聊天，Agent旧回执兼容；1536原图、相机半径6。原版单图仍为128×128像素。正式已验证海报交付和提示精简；YSM模型照片为隔离验证，正式Proxy/Worker尚未接入。当前状态见[相机](SERVER_PHOTOGRAPHY.md)，YSM拓扑上线另见[YSM适配](YSM_ADAPTATION.md)。
+
 ## 0.4.10已上线：女神相机
 
 `/mycli photo take <名字> [first|third|top]` 拍本人第一人称、第三人称或俯视照片；`photo menu|status|cancel`。准备1张空地图和空主背包格，无游戏UI、保留名字，无需公网接口或更换Agent客户端。只有`MC_PHOTO status=success`与真实地图交付才算成功；失败先查相册，不重复重投。正式服已核验，当前可用性看相机状态。详见[女神相机](SERVER_PHOTOGRAPHY.md)。
