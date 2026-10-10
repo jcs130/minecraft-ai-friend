@@ -1,0 +1,44 @@
+{
+  "version": "0.4.8",
+  "status": "deployed",
+  "verifiedOn": "2026-10-10",
+  "artifact": {
+    "name": "AgentFriend-0.4.8.jar",
+    "bytes": 1076159,
+    "sha256": "CC0C467742AFB66E6FAA87D3F63315ED83429F8A649825E009DAF943C42683AB"
+  },
+  "capabilities": [
+    "say",
+    "bubbles"
+  ],
+  "config": "plugins/AgentFriend/text-bubbles.yml",
+  "checks": {
+    "nativeProtocol": 26,
+    "simultaneousSpeakers": 16,
+    "actualAttachedEye": true,
+    "rendererErrors": 0,
+    "queuePendingAtLoadAudit": 0,
+    "activeAtLoadAudit": 16,
+    "peakFrameMicros": 5148,
+    "stageAverageTickMillisAtLoadAudit": 7.285128,
+    "production": 8,
+    "preservation": 22,
+    "minepacksInventories": 19,
+    "goddessActualGuideReads": 2,
+    "goddessReplyCharacters": 98
+  },
+  "limitations": [
+    "Phone and Xbox visuals require real-device confirmation.",
+    "Bedrock uses Geyser text-label translation; Java background/layout is not identical.",
+    "Speech audio is not implemented."
+  ],
+  "evidence": "Private E/F repairs/text-bubbles-20261010; failed fixture attempts retained.",
+  "liveVersion": "0.4.8",
+  "deployedAt": "2026-10-10T03:27:19.119Z",
+  "backupBefore": "20261010-112510",
+  "operations": {
+    "taskState": "Ready",
+    "taskResult": 0,
+    "javaPID": 24448
+  }
+}

@@ -47,6 +47,8 @@ final class AgentCliCatalog {
         add(specs,"profession.choose","magic","write","/mycli profession choose <ID>","选择职业方向，解锁入门技能的学习资格","生存模式；最多一个主战和两个生活职业；冷却不重置","MC_PROFESSION_RESULT");
         add(specs,"profession.leave","magic","write","/mycli profession leave <ID>","离开职业，取消其技能准备；学习历史保留","本人所选职业","MC_PROFESSION_RESULT");
         add(specs,"visuals","magic","read","/mycli visuals","查看原版技能粒子和播放预算；特效只在成功施法后出现","查询免费；不改变技能资格、耗魔、冷却和实际伤害范围","本人MC_VISUALS JSON；画面不作为命中或验收证据");
+        add(specs,"say","life","chat","/mycli say <公开发言>","公开说话并在角色头顶显示短暂文字气泡；普通聊天同样有效","沿用普通聊天的接收者和取消规则；非观战/隐身角色才有气泡；附近24格且视线可达；私聊不显示","原版聊天及TextDisplay；连续发言更新同一个气泡；超长内容气泡省略，完整正文仍在聊天栏");
+        add(specs,"bubbles","life","read","/mycli bubbles","查看文字气泡状态和多人预算","查询免费；Java、基岩及Agent沿用原客户端；基岩由Geyser转文字标签，外观可能不同","本人MC_BUBBLES JSON；语音功能尚未启用");
         add(specs,"skills","magic","read","/mycli skills list [分类] [页码]|info <ID>|mine|points|learn <ID>|upgrade <ID>","基础和战法牧技能图鉴；list profession 直接查看职业技艺，默认列表有多页","查询免费；学习与升级耗点，施法需要本人资格","MC_SPELL_*、MC_SKILL、MC_SKILL_POINTS、MC_SKILL_ASSESSMENT");
         add(specs,"skills.list","magic","read","/mycli skills list [all|common|profession|warrior|mage|priest] [页码]","分页发现基础和职业技能；如 list priest 查看抚愈、净化、高阶圣愈","查询免费；旧 list <页码> 保留；按 pages 和 MC_SPELL_NEXT 读后续页","MC_SPELL_LIST 含分类/总量/版本，MC_SPELL_ITEM 含效果摘要/职业/详情命令");
         add(specs,"skills.explain","magic","read","/mycli skills explain <ID>","读取法术图鉴说明；逐级数值、技能点和本人条件用 skills info <ID>","查询免费，不执行技能","MC_SPELL_DETAIL");

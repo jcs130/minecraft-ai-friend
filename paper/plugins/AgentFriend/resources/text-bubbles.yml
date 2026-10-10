@@ -1,0 +1,13 @@
+# Cosmetic public-chat captions. Reload: mycli admin bubbles reload (console only).
+schema-version: 1
+enabled: true
+view-distance: 24
+duration-seconds: 8
+max-active: 32
+max-pending: 64
+max-characters: 120
+line-columns: 36
+max-lines: 3
+update-ticks: 5
+replace-cooldown-ms: 650
+require-line-of-sight: true
