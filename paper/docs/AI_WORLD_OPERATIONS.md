@@ -1,3 +1,9 @@
+## 2026-10-11：迎新热文案、验房候选与可米皮肤
+
+正式0.4.13欢迎修订4已热加载，介绍54格Minepacks大背包、任务袋/个人奖励箱区别、CLI发现和技能耗费。0.4.15候选新增七项现存房屋验收及六项自愿特色实练，规则见 [住房与实练](STARTER_HOUSE_TRAINING.md)；旧任务奖励、实习毕业与角色数据保留。服主要求本轮不重启，候选未部署、未排队发布。
+
+可米皮肤上传已修复：SkinsRestorer配置使用默认占位符，旧脚本误发为Bearer凭证导致403；省略占位符的匿名生成已成功，签名普通皮肤热绑定ag_CorMy精确UUID并通过实际原版profile投递核验。无需提供新密钥，原连接保持。此项不代表YSM代理上线；YSM仍须完成原网关/单实例维护/Watchdog接入及正式发布。
+
 ## 2026-10-11 现役账号与本轮发布状态
 
 **2026-10-11 本轮不重启，Eye热登记已生效：**服主确认新账号在原CortiLan/CortiEye电脑运行，并明确本轮不重启。已热登记 `ag_CorMy → ag_cormy_eye` 及原可信来源；正式仍为AgentFriend0.4.13、CortiEyeMirror0.1.10，全部插件JAR及维护助手摘要保持，未排队待发布计划。新账号UUID为822d173a-7181-3b9b-be60-804f29b24ecc，与CortiLan独立，不迁移物品、技能或领地。核验时新Eye未在线，不能把登记成功称作原机已附身。OBS透明覆盖、自由live切换和真实窗口移动/超距关闭已在0.4.14/0.1.11候选隔离初验20项及正常冷重启20项通过，保留待后续明确维护；远端Web仍须更新重建，基岩/OBS真机未验。资源包已接收，但可米新皮肤因现有MineSkin key无效尚未绑定，正式YSM代理亦未上线。私有回执E/F repairs/obs-eye-overlay-20261011；下方旧记录按历史时点阅读。
@@ -109,7 +115,7 @@
 | 玩家委托与分页箱（0.3.94） | 公会玩家委托、`commission list/mine/info/menu/publish/accept/claim/abandon/cancel`，`arena stash pages/page/list`；[玩法](MYCLI_AGENT_CLI.md) | config.yml的player-contracts.jobs/active、既有余额/待入箱队列和0–539槽位 | 已上线；玩家发布供货/同行无需代码或重启，每单一人、托管报酬、实物与真实探索返程验收。10页540格，待入箱队列1024组；客户端沿用现有协议 |
 | 命名传送点（0.3.89） | 罗盘地点页、`waypoint add/list/shared/menu`、`goto personal:名字/shared:分享码`；[命名地点](NAMED_WAYPOINTS.md) | `plugins/AgentFriend/waypoints.yml` 按主人/世界 UUID 保存，默认每人 32 点 | 玩家亲自到达后在线中文命名、改名、更新和撤回分享；记录免费，成功传送 6 魔力。主动分享公开发现者与坐标；不改代码、不重启。旧 home 保留；部署状态以维护记录为准 |
 | 操作报错（0.4.3） | `ProtectionAdvisor`、`ProtectionArea`、`ActionFeedback`及MagicSpells七项文字；[规则](ERROR_GUIDANCE.md) | 原保护边界、主人/成员、私产与原业务账本保持；三处领地仅更新deny-message | 实际拒绝和查询给原因、真实边界及下一步，区外重查，建议不自动执行；新功能失败分支须提供正确做法 |
-| Agent迎新（0.4.2） | `onboarding.yml`、`AgentCoach`原计时器；[规则](AGENT_ONBOARDING.md) | 玩家PDC的欢迎/限频/暂停、原实习/生活/公会账本 | 控制台`admin coach reload/audit`热运营；真实进度、低频私聊、原版入门页。可覆盖所有旅人或仅精确登记Agent、观战排除、战斗安静，不改客户端、不代买/接单/领奖 |
+| Agent迎新（正式欢迎修订4；0.4.15实练候选） | `onboarding.yml`、`AgentCoach`原计时器、候选`FeatureTutorials`；[规则](AGENT_ONBOARDING.md) | 玩家PDC欢迎/限频/暂停、原实习/生活/公会账本；候选追加feature_lesson证明 | 文案已热更大背包/CLI；六项真实操作教学待维护。原实习毕业保持，不代学/接单/领奖，三份储物独立 |
 | 技能编舞（0.4.5） | `skill-visuals.yml`、原版粒子单计时器；[规则](SKILL_VISUALS.md) | 无玩家账本；原成功事件/耗魔/资格保持 | `admin visuals reload/audit/preview`仅控制台；坏配置保留旧值、预算限流、导入工坊精确坐标，不安装客户端模组；手机/Xbox待真机 |
 | 技能罗盘（0.4.1） | 原版45格五排、底排九项；`/mycli menu`；[布局](COMPASS_MENU.md) | 原罗盘PDC/技能账本保持，图鉴页码仅在线记忆 | 已学点击原施法，未学只打开学习页；图鉴每页36项，地点页36格。原Agent命令和客户端保持，基岩实际设备待验收 |
 | 技能、法术、快捷施法 | 既有技能源码与 MagicSpells/AuraSkills；0.3.92 新增 professions.yml / skills.yml / skill-unlocks.yml / skill-points.yml；[职业与传承](CHARACTER_SKILLS.md)、[技能体系](SKILL_SYSTEM.md)、[位移](TRAVEL_MAGIC.md) | 既有魔力/等级/刻印/熟练度；profession-ledger.json 的 UUID 资格、学习等级、已获/已花点数、最高成长、冷却、唯一归属；config.yml pending 收据 | 旧效果发布流程保留；新职业固定效果、逐级点数/效果、洗点费用和解锁可整体验证热加载，失败保留旧目录，新效果仍需代码发布；战法牧与点数已于0.3.92上线，当前0.3.99继续保留，16项逐级简介已热更新，0.3.97的skills list profession或warrior/mage/priest直接发现职业技艺，skills info查逐级详情；学习菜单右键/命格书提供详情和个人状态 |
@@ -121,7 +127,7 @@
 | 工程完工交接与公共地标（0.3.91） | BUILD 委托 handover；罗盘公共地标、`landmark list/mine/info/publish/update/unpublish/menu`、`goto landmark:<领地ID>`；[规则](PROJECT_LANDMARKS.md) | config.yml 完成与待交接收据、lands.yml 与 WorldGuard、landmarks.yml 公共点 | 热配置后验收完成者管理建筑，当前主人到场起名公开；访客传送 6 魔力，私产权限独立。已完工可凭原历史补交接不重发奖。当前 CortiLan 观景塔已交接，落点待主人登记；指定礼物箱公共，其他储物私有 |
 | 大背包、任务物品袋与奖励箱（0.4.7配置修复） | `commands.yml`、Minepacks、BetonQuest与原个人箱；[规则](BACKPACKS.md) | Minepacks `backpack.db`；BetonQuest `database.db`；AgentFriend个人箱及奖励队列分别保存 | `backpack`/`bp`普通储物、`questbag`任务专用物品；公会/试炼仍入540格个人箱。别名正常重启加载；查当前缓存再核对数据库，不整库回滚或按猜测补发 |
 | 玩家领地与公会归属（0.4.7） | `LandManager/LandAccess/LandNoticeBoards`、现有WorldGuard和私产保护；[领地](LANDS.md) | `lands.yml`与`qd_land_*`区域是权限事实源；`land-boards.json`只索引原版牌位置；私产PDC保留 | 主人/女神/显式超管trust/untrust/manage；所有人members/board查名单和牌。控制台仍可reload/audit；女神两窄工具已重新发现，原来源策略保持。收到拒绝停止并查询/申请，公共箱与任务开放 |
-| 生活公会 | `LifeGuildManager.java` 的七类原版行动委托；`LifeGuildBuildings.java` 的四馆、入口台阶与七位导师；[生活公会规则](LIFE_GUILDS.md) | `plugins/AgentFriend/config.yml` 中按 UUID 保存的 `life-guild` 及四馆地基，另有四份 `life-building-*-mask.tsv` 结构保护快照 | 先扩展原版动作事件、任务 ID、原版菜单与 `/mycli life`；若要换任务目标，须保留在途任务迁移及防重复领奖逻辑；建筑/保护快照须随世界同组备份。四馆入口修复见 [建筑记录](LIFE_GUILD_BUILDINGS.md) |
+| 生活公会（0.4.15验房候选） | `LifeGuildManager`七类委托、`StarterHouseInspection/Validator`候选；四馆七导师；[规则](LIFE_GUILDS.md) | UUID life-guild及四馆地基、四份结构掩码；候选active.house-placed原生施工记录 | 候选builder_home七项现存验房，status/claim均重查，旧已领奖成果保留；在途任务重新验收。正式仍旧规则，候选尚未部署；结构快照随世界备份 |
 | 试炼塔、地下城与奖励（0.3.95） | trial-waves.yml前六层；dungeons.yml三个真实建筑；罗盘地点页、`dungeon list/info/travel/start/join/status/resume/leave/claim/menu`；[规则](DUNGEON_NETWORK.md) | config.yml的旧试炼波次快照、site-dungeons.runs/receipts/claimed/cooldowns，既有个人奖励；世界实体和建筑 | 控制台`trialwaves reload`/`dungeons reload`整体验证热更，活动期间拒绝换目录；新地点可指定已勘察付费entry。逐室原生战斗和实际返程，每处每日一次奖励。全服新地点48怪/128飞行物，不根据文字直接覆盖世界生成建筑 |
 | PvP 竞技场 | `PvpArenaManager.java` 的自愿匹配、同款装备和积分；[PvP 规则](PVP_ARENA.md) | `pvp-records`、`pvp-escrow.yml`、竞技场方块及 WorldGuard 区域 | 运营 Agent 可查看本人对局和排行榜；改地图或计分规则须隔离测试和完整备份，不可在有人对战时发布 |
 | 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 起正式生效，当前 0.3.99 继承，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP 八工具已重新发现。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |

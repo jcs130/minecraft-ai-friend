@@ -111,6 +111,7 @@ final class AgentCoach implements Listener {
             case "status" -> status(player);
             case "next" -> onboarding.guide(player, false);
             case "guide" -> onboarding.guide(player, true);
+            case "lessons" -> plugin.featureTutorials().show(player);
             case "menu" -> onboarding.menu(player);
             case "later" -> { onboarding.pause(player); status(player); }
             case "on", "off" -> {

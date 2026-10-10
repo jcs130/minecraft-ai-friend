@@ -1,11 +1,11 @@
 name: AgentFriend
-version: '0.4.14'
+version: '0.4.15'
 main: org.afuhome.agentfriend.AgentFriendPlugin
 api-version: '1.20.6'
 description: Agent-friendly /mycli, Goddess skill path, vanilla compass, and village trial arena.
 author: AfuHome
 depend: [MagicSpells, AuraSkills, WorldGuard, ProtocolLib]
-softdepend: [Essentials, BetonQuest, FancyNpcs, Citizens, Denizen, ConditionalEvents, WorldEvents, MythicMobs, Shopkeepers, NPCSpeak, ImageFrame]
+softdepend: [Minepacks, Essentials, BetonQuest, FancyNpcs, Citizens, Denizen, ConditionalEvents, WorldEvents, MythicMobs, Shopkeepers, NPCSpeak, ImageFrame]
 permissions:
   agentfriend.land.admin:
     description: Manage collaborators on any land, including while spectating.

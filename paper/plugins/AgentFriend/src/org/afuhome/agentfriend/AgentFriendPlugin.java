@@ -275,6 +275,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     @Override public void onEnable() {
         saveDefaultConfig();
         worldLife = new WorldLifeManager(this);
+        featureTutorials = new FeatureTutorials(this);
         traversalPractice = new NativeTraversalPractice(this);
         goddessGifts = new GoddessGifts(this);
         arenaBuilt = getConfig().getBoolean("arena-built", false);
@@ -547,11 +548,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (skillVisuals != null) skillVisuals.play(player, spell, position);
         if (skillEventPublisher != null) skillEventPublisher.publish(player, spell, body, position);
         recordWorldLesson(player, "cast");
+        if (featureTutorials != null) featureTutorials.cast(player, spell);
         if (taskMarket != null) taskMarket.worldAction(player, GuildManager.Goal.SKILL_CAST,
                 spell, "cast:" + java.util.UUID.randomUUID(), System.currentTimeMillis());
     }
 
     private WorldLifeManager worldLife;
+    private FeatureTutorials featureTutorials;
+    FeatureTutorials featureTutorials() { return featureTutorials; }
     void recordWorldLesson(Player player, String lesson) {
         if (worldLife != null) worldLife.note(player, lesson);
     }
@@ -716,7 +720,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (!player.getPersistentDataContainer().has(guideSeenKey, PersistentDataType.BYTE)) {
                 player.getPersistentDataContainer().set(guideSeenKey, PersistentDataType.BYTE, (byte) 1);
                 player.sendMessage(ChatColor.GOLD + "欢迎来到千灯纪！罗盘 → 旅途指南 → 新手入门，按本人实际进度开始冒险。");
-                player.sendMessage(ChatColor.AQUA + "Agent：/mycli coach next 查看下一步，coach guide 阅读玩法；先登记冒险者，再报名新手实习。手柄可直接点入门页。");
+                player.sendMessage(ChatColor.AQUA + "Agent：/mycli coach next 查看下一步，coach lessons 报名特色实练；黄色大背包54格，/minepacks:backpack open 普通存取，区别于任务袋和奖励箱。");
             }
         }, 40L);
     }
@@ -1185,7 +1189,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("Agent：/mycli list [分类|命令] [页码] 发现能力；/mycli explain <ID> 或 /mycli help <ID> 查询准确用法，不会执行。");
         p.sendMessage("公开聊天或 /mycli say <话> 会显示8秒头顶气泡，附近24格可见；私聊不显示。/mycli bubbles 查看状态。");
         p.sendMessage("/mycli photo take <名字> [first|third|top] [1|2] 本机拍照；单图1张空地图，2×2海报4张；photo status|cancel 查看或取消。");
-        p.sendMessage("/mycli coach next|guide|menu|status|later|on|off  查看本人新手进度与下一步；暂停或关闭低频私聊提醒。");
+        p.sendMessage("/mycli coach next|guide|lessons|menu|status|later|on|off  查看本人新手进度与下一步；暂停或关闭低频私聊提醒。");
         p.sendMessage("/mycli skills list [all|common|profession|warrior|mage|priest] [页] 查看基础/战法牧技能；skills info <ID> 查各级效果与学习条件；cast <ID> 施法");
         p.sendMessage("/mycli protect break|place|container|use <x> <y> <z>  查询附近方块/实体储物能否操作；拒绝则停止");
         p.sendMessage("/mycli land here|list|info <ID>|menu 查看归属；members <ID> 查协作者；主人 trust|untrust <ID> <玩家名或UUID> 授权/撤权；board <ID> 查公告牌");
@@ -1260,6 +1264,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.GRAY + "逐项说明：/mycli spells explain <英文 ID>；手柄可从罗盘打开法术图鉴。");
     }
     private void status(Player p) {
+        if (featureTutorials != null) featureTutorials.note(p,"cli_status");
         SkillsUser user = skillsUser(p);
         p.sendMessage(ChatColor.AQUA + "生命 " + Math.round(p.getHealth()) + "/" + Math.round(p.getMaxHealth())
                 + " · 饥饿 " + p.getFoodLevel() + "/20 · 原版经验等级 " + p.getLevel());

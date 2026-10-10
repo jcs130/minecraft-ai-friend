@@ -1,5 +1,11 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 0.4.15候选：住房验收与特色实练
+
+`builder_home`按现存地面、墙、屋顶、外窗、完整通行门、完整床和本人施工七项验收，不能铺12块木板领奖；`life status/claim`均重查并说明怎么修。`coach lessons`提供大背包真实往返、CLI查询、感知、恢复、出行和通路六项自愿教学，原三证实习和毕业保留。无需修改Agent客户端。详见[规则](../../docs/STARTER_HOUSE_TRAINING.md)、纯结构测试`tests/org/afuhome/agentfriend/StarterHouseValidatorTest.java`及独立存档实操`starter-house-stage.mjs`。
+
+本轮按服主要求不重启，正式仍0.4.13；只有欢迎修订4的大背包/CLI文案已热加载。七项验房和新实练命令尚未上线。
+
 ## 0.3.80 心眼轮廓与探矿指向线
 
 `/mycli cast sense` 沿用原 ID、魔力、冷却和熟练度。8 秒内，施法者及其已登记且正在附身的 Eye 在 Java 客户端看到附近敌对怪物的私有透墙轮廓；其他玩家不会看到。基岩玩家通过持续粒子指向线、遮挡墙光框和 BossBar 坐标寻找最近目标。探矿术同样每半秒刷新一次从眼前到第一处墙面的私有粒子指向线，并保留 Java 矿块轮廓、基岩墙面光框和绝对坐标。粒子指向线只表示矿脉方位，不绕开障碍。隔离服 `sense-outline-stage.mjs` 覆盖 Eye 隔离、友方排除、8 秒恢复、Agent 坐标回执和探矿粒子持续刷新。

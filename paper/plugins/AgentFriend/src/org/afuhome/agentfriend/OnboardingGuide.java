@@ -195,6 +195,7 @@ final class OnboardingGuide implements Listener {
         milestone(checklist, "register", "冒险者登记", registered); milestone(checklist, "guide_start", "报名新手实习", enrolled);
         milestone(checklist, "catalog", "读取技能目录", catalog); milestone(checklist, "cast", "成功施放一次技能", cast);
         milestone(checklist, "life", "完成并交付生活委托", lived); milestone(checklist, "commission", "交付首张冒险委托", commissioned);
+        out.add("serverFeatures", plugin.featureTutorials().state(p));
         out.add("checklist", checklist); out.add("guide", guide); out.add("life", life); out.add("guild", guild);
         return out;
     }
@@ -211,6 +212,8 @@ final class OnboardingGuide implements Listener {
         result.addProperty("reason", "onboarding"); result.addProperty("source", "server_observed_state");
         result.addProperty("statusCommand", "/mycli coach next"); result.addProperty("menuCommand", "/mycli coach menu");
         result.addProperty("helpCommand", "/mycli help"); result.addProperty("listCommand", "/mycli list");
+        result.addProperty("featureLessonsCommand", "/mycli coach lessons");
+        result.addProperty("backpackCommand", "/minepacks:backpack open");
         result.addProperty("stateCommand", "/mycli status"); result.addProperty("skillsCommand", "/mycli skills list common");
         JsonObject tasks = new JsonObject(); tasks.addProperty("adventureBoard", "/mycli guild board");
         tasks.addProperty("adventureStatus", "/mycli guild status"); tasks.addProperty("lifeBoard", "/mycli life board");
@@ -256,6 +259,7 @@ final class OnboardingGuide implements Listener {
             inv.setItem(i, icon(done ? Material.LIME_DYE : Material.PAPER, (done ? "§a✓ " : "§7○ ") + value(milestone, "title"), "服务器实际进度；查看不会代完成"));
         }
         inv.setItem(13, icon(Material.COMPASS, "§b下一步：" + value(state, "title"), value(state, "message"), value(state, "nextCommand"), "点击只显示指引，不自动执行建议"));
+        inv.setItem(18, icon(Material.CHEST, "§e服务器特色实练与大背包", "报名六项可选实践；大背包54格，先存再取，不是任务袋"));
         inv.setItem(19, icon(Material.NAME_TAG, "§6冒险者登记", "点击登记；已登记时只查看状态，不花魔力"));
         inv.setItem(20, icon(Material.WRITABLE_BOOK, "§a报名新手实习", "点击自愿开始；不代学技能，不发完成奖励"));
         inv.setItem(21, icon(Material.BOOK, "§d读取基础技能目录", "只读目录；报名后记第一项实习证明"));
@@ -269,12 +273,13 @@ final class OnboardingGuide implements Listener {
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p) || !p.getUniqueId().equals(holder.owner) || holder.consumed
                 || event.isShiftClick() || event.getRawSlot() < 0 || event.getRawSlot() >= 27) return;
-        int slot = event.getRawSlot(); if (!List.of(13,19,20,21,22,23,24,26).contains(slot)) return;
+        int slot = event.getRawSlot(); if (!List.of(13,18,19,20,21,22,23,24,26).contains(slot)) return;
         holder.consumed = true; p.closeInventory();
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (!p.isOnline() || observer(p)) return;
             switch (slot) {
                 case 13 -> guide(p, false);
+                case 18 -> plugin.featureTutorials().show(p);
                 case 19 -> plugin.guild().command(p, new String[]{"guild", "join"});
                 case 20 -> plugin.worldLife().command(p, new String[]{"world", "guide", "start"});
                 case 21 -> p.performCommand("mycli skills list common");

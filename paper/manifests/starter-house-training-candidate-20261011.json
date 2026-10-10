@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "status": "isolated_candidate_not_deployed",
+  "version": "0.4.15",
+  "artifact": "AgentFriend-0.4.15.jar",
+  "sha256": "91F81E74C4DF6DEA1DF548348B04239C9B32654BFEE4CA4C5FC42CB87D6F10A1",
+  "size": 1141428,
+  "baseCommit": "499b76b0ce875a8dbf0837e639e2b41c9bac632e",
+  "verification": {
+    "pureStructure": 17,
+    "nativeProtocol": 20,
+    "normalRestart": 4,
+    "attachedEyeIsolation": 4
+  },
+  "production": {
+    "AgentFriend": "0.4.13",
+    "CortiEyeMirror": "0.1.10",
+    "welcomeRevision": 4,
+    "restarted": false,
+    "queued": false
+  },
+  "limits": [
+    "Phone/Xbox device visuals unverified",
+    "No autonomous Agent mastery claim",
+    "YSM topology not deployed"
+  ],
+  "docs": "../docs/STARTER_HOUSE_TRAINING.md"
+}

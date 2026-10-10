@@ -52,8 +52,8 @@ final class LifeGuildManager implements Listener {
                     Material.BREAD, 3, 3, 2, Material.HONEY_BOTTLE, 1),
             new Contract("angler_catch", "angler", "钓客公会", "河畔小憩", "用鱼竿钓起 3 条鱼",
                     Material.FISHING_ROD, 3, 3, 2, Material.CAMPFIRE, 1),
-            new Contract("builder_home", "builder", "建筑家公会", "搭一间小屋", "在可建造处放置 12 个不同位置的木板、砖、玻璃或灯",
-                    Material.CHERRY_PLANKS, 12, 4, 3, Material.FLOWER_POT, 2),
+            new Contract("builder_home", "builder", "建筑家公会", "搭一间小屋", "亲手建至少3×3室内小屋：完整地面、两格高墙、屋顶、外墙玻璃窗、可通行门和床；到床24格内验房",
+                    Material.CHERRY_PLANKS, 7, 4, 3, Material.FLOWER_POT, 2),
             new Contract("author_story", "author", "故事公会", "旅途的一页", "签署一本至少 40 字的原创游记；书留在自己手中",
                     Material.WRITABLE_BOOK, 1, 4, 2, Material.BOOKSHELF, 1),
             new Contract("tinkerer_light", "tinkerer", "机关工匠公会", "点亮第一盏灯", "亲手放置红石灯，再用附近拉杆点亮它",
@@ -63,10 +63,16 @@ final class LifeGuildManager implements Listener {
 
     private final AgentFriendPlugin plugin;
     private final DungeonManager dungeon;
+    private final Set<String> builders = new HashSet<>();
+    private final java.util.Map<java.util.UUID, StarterHouseValidator.Result> lastHomes = new java.util.HashMap<>();
+    private boolean houseSaveQueued;
 
     LifeGuildManager(AgentFriendPlugin plugin, DungeonManager dungeon) {
         this.plugin = plugin;
         this.dungeon = dungeon;
+        var section=plugin.getConfig().getConfigurationSection("life-guild");
+        if(section!=null) for(String id:section.getKeys(false))
+            if("builder_home".equals(section.getString(id+".active.id")))builders.add(id);
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, CHANNEL);
     }
@@ -86,6 +92,7 @@ final class LifeGuildManager implements Listener {
     }
     JsonObject onboardingState(Player player) {
         JsonObject out = new JsonObject(); Contract contract = active(player);
+        if (contract != null && contract.id().equals("builder_home")) refreshHouse(player);
         out.addProperty("activeId", contract == null ? "" : contract.id());
         out.addProperty("title", contract == null ? "" : contract.title());
         out.addProperty("instruction", contract == null ? "" : contract.description());
@@ -132,6 +139,7 @@ final class LifeGuildManager implements Listener {
     }
 
     private void status(Player player) {
+        if (active(player) != null && active(player).id().equals("builder_home")) refreshHouse(player);
         String base = base(player);
         Contract contract = active(player);
         player.sendMessage(ChatColor.AQUA + "生活公会：" + (contract == null ? "当前没有委托"
@@ -153,6 +161,10 @@ final class LifeGuildManager implements Listener {
         json.addProperty("target", contract == null ? 0 : contract.target());
         json.add("seenProfessions", seenProfessions(player));
         json.add("reputation", reputations);
+        if (contract != null && contract.id().equals("builder_home")) {
+            var r=lastHomes.get(player.getUniqueId());json.add("house",StarterHouseInspection.json(r));
+            player.sendMessage(ChatColor.YELLOW+StarterHouseInspection.hint(r));
+        }
         send(player, json);
         String[] dailyThoughts = {
                 "今日无委托也可：去钓一次鱼、看一场日落，都算过好了今天。",
@@ -181,6 +193,7 @@ final class LifeGuildManager implements Listener {
         plugin.getConfig().set(path + ".id", contract.id());
         plugin.getConfig().set(path + ".progress", 0);
         plugin.getConfig().set(path + ".seen", null);
+        if (id.equals("builder_home")) { builders.add(player.getUniqueId().toString()); plugin.getConfig().set(path+".house-rule",1); }
         plugin.saveConfig();
         player.sendMessage(ChatColor.GREEN + "已接「" + contract.title() + "」：" + contract.description());
         if (contract.id().equals("author_story")) starter(player, Material.WRITABLE_BOOK, "书与笔");
@@ -205,6 +218,7 @@ final class LifeGuildManager implements Listener {
         Contract contract = active(player);
         if (contract == null) { player.sendMessage(ChatColor.YELLOW + "没有在办的生活委托；/mycli life status 核对，想接单先 life board 查ID，再 life accept <ID>。"); return; }
         plugin.getConfig().set(base(player) + ".active", null);
+        builders.remove(player.getUniqueId().toString()); lastHomes.remove(player.getUniqueId());
         plugin.saveConfig();
         player.sendMessage(ChatColor.YELLOW + "已放弃「" + contract.title() + "」。");
         receipt(player, "abandon", contract, true, "abandoned");
@@ -213,6 +227,10 @@ final class LifeGuildManager implements Listener {
     private void claim(Player player) {
         Contract contract = active(player);
         if (contract == null) { player.sendMessage(ChatColor.YELLOW + "没有可交付的生活委托；/mycli life status 核对，先 life board 选单，accept 后按说明完成再 claim。"); return; }
+        if (contract.id().equals("builder_home") && !refreshHouse(player).ready()) {
+            player.sendMessage(ChatColor.YELLOW + StarterHouseInspection.hint(lastHomes.get(player.getUniqueId())));
+            receipt(player,"claim",contract,false,"house_incomplete"); return;
+        }
         if (progress(player) < contract.target()) {
             player.sendMessage(ChatColor.YELLOW + "当前进度 " + progress(player) + "/" + contract.target() + "；/mycli life status 核对目标，继续「" + contract.description() + "」，完成后 life claim。"); return;
         }
@@ -227,6 +245,7 @@ final class LifeGuildManager implements Listener {
         plugin.getConfig().set(base + ".reputation." + contract.guildId(), reputation);
         plugin.getConfig().set(base + ".done." + contract.id(), today());
         plugin.getConfig().set(base + ".active", null);
+        builders.remove(player.getUniqueId().toString());
         plugin.saveConfig();
         player.sendMessage(ChatColor.GREEN + contract.guild() + "委托完成！声望 +" + contract.reputation()
                 + "（" + rank(reputation) + "）；绿宝石与小礼物已进入个人试炼箱。");
@@ -305,11 +324,37 @@ final class LifeGuildManager implements Listener {
                 event.getPlayer().sendMessage(ChatColor.AQUA + "红石灯已登记；在 4 格内用拉杆点亮它。");
             }
         }
-        String name = type.name();
-        if (!(name.endsWith("_PLANKS") || name.endsWith("_BRICKS")
-                || name.endsWith("_GLASS") || type == Material.GLASS
-                || type == Material.LANTERN || type == Material.SOUL_LANTERN)) return;
-        advance(event.getPlayer(), "builder_home", position(event.getBlockPlaced().getLocation()));
+        java.util.List<org.bukkit.block.Block> blocks = event instanceof org.bukkit.event.block.BlockMultiPlaceEvent multi
+                ? multi.getReplacedBlockStates().stream().map(org.bukkit.block.BlockState::getBlock).toList()
+                : List.of(event.getBlockPlaced());
+        for (var block : blocks) invalidateHousePlacement(block);
+        Contract current=active(event.getPlayer());
+        if(current==null || !current.id().equals("builder_home"))return;
+        String path=base(event.getPlayer())+".active.house-placed";
+        var records=new java.util.ArrayList<>(plugin.getConfig().getStringList(path));
+        for(var block:blocks) if(records.size()<2048)records.add(StarterHouseInspection.record(block));
+        plugin.getConfig().set(path,records);saveHouseSoon();
+    }
+
+    private void saveHouseSoon() {
+        if(houseSaveQueued)return;houseSaveQueued=true;
+        Bukkit.getScheduler().runTaskLater(plugin,()->{houseSaveQueued=false;plugin.saveConfig();},20L);
+    }
+    private void invalidateHousePlacement(org.bukkit.block.Block block) {
+        String prefix=StarterHouseInspection.key(block)+"|";
+        for(String owner:builders) {
+            String path="life-guild."+owner+".active.house-placed";
+            var records=new java.util.ArrayList<>(plugin.getConfig().getStringList(path));
+            if(records.removeIf(v->v.startsWith(prefix))){plugin.getConfig().set(path,records);saveHouseSoon();}
+        }
+    }
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
+    public void onHouseBreak(BlockBreakEvent event) { invalidateHousePlacement(event.getBlock()); }
+    private StarterHouseValidator.Result refreshHouse(Player p) {
+        var result=StarterHouseInspection.inspect(p,plugin.getConfig().getStringList(base(p)+".active.house-placed"));
+        lastHomes.put(p.getUniqueId(),result);
+        if(progress(p)!=result.progress()){plugin.getConfig().set(base(p)+".active.progress",result.progress());saveHouseSoon();}
+        return result;
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -458,6 +503,7 @@ final class LifeGuildManager implements Listener {
         if (contract.id().equals("trader_supply"))
             json.addProperty("lastProfession", plugin.getConfig().getString(base(player) + ".active.lastProfession", ""));
         json.add("seenProfessions", seenProfessions(player));
+        if(contract.id().equals("builder_home") && lastHomes.containsKey(player.getUniqueId()))json.add("house",StarterHouseInspection.json(lastHomes.get(player.getUniqueId())));
         if (action.equals("claim") && success) {
             json.addProperty("emeralds", contract.emeralds());
             json.addProperty("gift", contract.gift().getKey().toString());

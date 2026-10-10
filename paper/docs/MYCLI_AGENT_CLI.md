@@ -1,3 +1,9 @@
+## 0.4.15候选：特色实练与真实验房（尚未上线）
+
+`/mycli coach lessons` 自愿报名并查六项实练：真实大背包存取、CLI发现、照亮感知、恢复援助、魔法出行、开门爬梯；命令目录增加 `coach.lessons`。`MC_COACH` schemaVersion1追加lessons/feature_proof，原毕业继续有效。`life status/claim` 对builder_home追加七项house检查、reason及nextAction，不再以放12块作为完工；原生活任务ID及奖励不变。规则见 [住房与实练](STARTER_HOUSE_TRAINING.md)。
+
+正式仍0.4.13，本轮不重启；欢迎修订4已热更大背包/CLI介绍，不能把候选命令当成已发布命令。
+
 ## 已上线0.4.11：清爽相机与清晰海报
 
 `/mycli photo take <名字> [first|third|top] [1|2]`；默认单图1张空地图，末尾2生成2×2海报，需要4张空地图及4个空主背包格。开始/完成两条聊天，Agent旧回执兼容；1536原图、相机半径6。原版单图仍为128×128像素。正式已验证海报交付和提示精简；YSM模型照片为隔离验证，正式Proxy/Worker尚未接入。当前状态见[相机](SERVER_PHOTOGRAPHY.md)，YSM拓扑上线另见[YSM适配](YSM_ADAPTATION.md)。

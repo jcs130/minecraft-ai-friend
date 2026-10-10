@@ -62,6 +62,7 @@ final class NativeTraversalPractice implements Listener {
         if (value == null) return null;
         try { return JsonParser.parseString(value).getAsJsonObject(); } catch (RuntimeException bad) { return null; }
     }
+    boolean verified(Player p, String id) { return proof(p, id.equals("door_passage") ? doorProof : ladderProof) != null; }
     void command(Player p, String action) {
         if (!List.of("start", "status", "stop").contains(action)) {
             p.sendMessage("§e用法：/mycli world practice start|status|stop；练习不代替你操作。"); return;

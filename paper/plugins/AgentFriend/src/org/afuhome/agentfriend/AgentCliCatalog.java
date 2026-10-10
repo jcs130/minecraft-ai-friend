@@ -65,7 +65,7 @@ final class AgentCliCatalog {
         add(specs,"help","info","read","/mycli help [ID]","查看玩家帮助；有 ID 时查看该命令详情","在线玩家","帮助或 MC_CLI_DETAIL");
         add(specs,"list","info","read","/mycli list [分类|命令|all] [页码]","分页发现命令；默认只列顶层命令","在线玩家","MC_CLI_LIST、MC_CLI_ITEM");
         add(specs,"explain","info","read","/mycli explain <ID|命令 子命令>","查询用法、前提、效果和回执；绝不执行目标命令","在线玩家","MC_CLI_DETAIL");
-        add(specs,"coach","info","read","/mycli coach status|next|guide|menu|later|on|off","按本人真实进度指引冒险者登记、新手实习与首张委托；低频私聊","自动迎新面向已登记的Agent；Java提醒默认开、基岩关；旁观者不参加","MC_COACH JSON；原status字段保留，增加onboarding");
+        add(specs,"coach","info","read","/mycli coach status|next|guide|lessons|menu|later|on|off","按本人真实进度指引冒险者登记、新手实习与首张委托；低频私聊","自动迎新面向已登记的Agent；Java提醒默认开、基岩关；旁观者不参加","MC_COACH JSON；原status字段保留，增加onboarding");
         add(specs,"guide","info","read","/mycli guide [start|explore|magic|gear|guild|dungeon|team]","分主题游玩指引；menu 打开手柄菜单","在线玩家","聊天指引或原版菜单");
         add(specs,"status","info","read","/mycli status","查看本人生命、魔力、公会及试炼状态","在线玩家","个人状态与 MC_DUNGEON 坐标");
         add(specs,"spells","magic","read","/mycli spells list [分类] [页码]|explain <技能ID>","基础及职业技能图鉴；profession/warrior/mage/priest 可直接查战法牧技能","在线玩家；查询不会施法","本人 MC_SPELL_LIST/ITEM/DETAIL JSON");
@@ -107,6 +107,7 @@ final class AgentCliCatalog {
         add(specs,"coach.status","info","read","/mycli coach status","查看本人提醒开关、触发门槛、暂停截止时间、真实入门清单与下一步","在线玩家；查询不代办任务","MC_COACH type=status，含onboarding");
         add(specs,"coach.next","info","read","/mycli coach next","按服务器实际登记、实习与委托账本给出当前一步和可执行命令","在线非观战玩家；不自动接单、学习、施法或领奖","MC_COACH type=next reason=onboarding");
         add(specs,"coach.guide","info","read","/mycli coach guide","阅读玩法介绍、六项入门清单、本人进度与下一步","在线非观战玩家；只读","MC_COACH type=guide reason=onboarding");
+        add(specs,"coach.lessons","life","write","/mycli coach lessons","自愿报名并查看大背包存取、CLI发现、感知、恢复、魔法出行、开门爬梯六项特色实练","真实服务器操作才记证明；不代学、不代花点、不自动存取；旧实习毕业保留","MC_COACH type=lessons|feature_proof");
         add(specs,"coach.menu","info","gui","/mycli coach menu","打开手柄友好的新手页，查看清单并自愿登记、报名或查询技能","点击相应动作才登记/报名；学习技能仍走原耗点确认","原版27格菜单");
         add(specs,"coach.later","info","write","/mycli coach later","暂停本人所有自动提醒，默认30分钟；跨重登保留","仍可主动查询；coach on 可提前恢复","MC_COACH type=status，onboarding.mutedUntil为Unix毫秒");
         add(specs,"coach.on","info","write","/mycli coach on","为本人启用提醒，跨重登保留","在线非旁观玩家","MC_COACH type=status enabled=true");
@@ -303,6 +304,7 @@ final class AgentCliCatalog {
             item.addProperty("summary", spec.summary());
             player.sendMessage("MC_CLI_ITEM " + item);
         }
+        org.bukkit.plugin.java.JavaPlugin.getPlugin(AgentFriendPlugin.class).featureTutorials().note(player,"cli_list");
         if (page < pages) player.sendMessage("MC_CLI_NEXT /mycli list " + filter + " " + (page + 1));
     }
 
@@ -330,6 +332,7 @@ final class AgentCliCatalog {
             if (spell != null) detail.add("spell", spell.json());
         }
         player.sendMessage("MC_CLI_DETAIL " + detail);
+        org.bukkit.plugin.java.JavaPlugin.getPlugin(AgentFriendPlugin.class).featureTutorials().note(player,"cli_detail");
     }
 
     private static void error(Player player, String code, String hint) {
