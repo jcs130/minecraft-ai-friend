@@ -26,7 +26,7 @@ def build(root=DEFAULT_ROOT,java=DEFAULT_JAVA):
         with zipfile.ZipFile(jar,'w') as z:
             add_bytes(z,'extension.yml',(source/'extension.yml').read_bytes())
             for p in sorted(classes.rglob('*.class')):add_bytes(z,p.relative_to(classes).as_posix(),p.read_bytes())
-    record={'schemaVersion':1,'jar':str(jar),'sha256':sha256(jar),'geyserSha256':GEYSER_SHA,'clientRequired':False,'nativeForms':True,'sourceFiles':{p.relative_to(REPO).as_posix():sha256(p) for p in (*sources,source/'extension.yml',Path(__file__))}}
+    record={'schemaVersion':1,'jar':str(jar),'sha256':sha256(jar),'geyserSha256':GEYSER_SHA,'clientRequired':False,'nativeForms':True,'maidConfig':True,'sourceFiles':{p.relative_to(REPO).as_posix():sha256(p) for p in (*sources,source/'extension.yml',Path(__file__))}}
     (output/'build-record.json').write_text(json.dumps(record,indent=2)+'\n',encoding='utf-8');return record
 
 def smoke(root=DEFAULT_ROOT,java=DEFAULT_JAVA):

@@ -53,7 +53,7 @@ final class HeadlessHttp {
             if(path.equals("/healthz")){
                 if(!x.getRemoteAddress().getAddress().isLoopbackAddress()){send(x,403,object("code","loopback_only"));return;}
                 if(!x.getRequestMethod().equals("GET")){send(x,405,object("code","get_required"));return;}
-                send(x,200,object("ok",true,"serverResident",true,"clientRequired",false,"numenVersion","0.1.4.1","session",runtime.session));return;
+                send(x,200,object("ok",true,"serverResident",true,"clientRequired",false,"numenVersion","0.1.4.1","maidConfigAvailable",runtime.maids!=null,"session",runtime.session));return;
             }
             if(!Set.of("/mcp","/ui").contains(path)){send(x,404,object("code","not_found"));return;}
             if(!x.getRequestMethod().equals("POST")){send(x,405,object("code","post_required"));return;}
@@ -103,6 +103,7 @@ final class HeadlessHttp {
         }catch(IllegalArgumentException|IllegalStateException ex){send(x,400,object("ok",false,"code",HeadlessRuntime.safeCode(ex)));}
         catch(Exception ex){
             Throwable cause=ex;while(cause.getCause()!=null)cause=cause.getCause();
+            if(cause instanceof IllegalArgumentException){send(x,400,object("ok",false,"code",HeadlessRuntime.safeCode(cause)));return;}
             org.slf4j.LoggerFactory.getLogger("maw-numen-server").error("MAW_NUMEN_HTTP failed class={} code={} frames={}",cause.getClass().getName(),HeadlessRuntime.safeCode(cause),Arrays.toString(Arrays.copyOf(cause.getStackTrace(),Math.min(5,cause.getStackTrace().length))));
             send(x,503,object("ok",false,"code",HeadlessRuntime.safeCode(cause)));
         }

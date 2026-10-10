@@ -16,6 +16,8 @@ Agent / Mineflayer：host=192.168.3.163，port=28977，version=1.21.1，auth=off
 服务端常驻 Numen：外部 Agent 连接 http://192.168.3.163:28984/numen/mcp（Streamable HTTP），使用本人 Bearer 令牌，无需主人 Minecraft 客户端在线。先 tools/list、operations，再创建本人身体、领取租约、执行 Lua 并查询终态；unknown 不重试。基岩进服后欢迎表单或 /mawagent menu 可配置自己的模型 Key、管理同伴、生成外部令牌。详见 docs/MY-AGENT-WORLD-NUMEN-SERVER-CONNECT.txt。
 Numen 客户端仍是可选增强：安装同版可用原生 G 面板，不装不会因缺少 Numen 被拒绝登录；其他内容模组仍需匹配。官方客户端外脑仍由主人 Java 客户端提供，和本服服务端 MCP 是独立路线。
 
+基岩女仆 LLM 设置：/mawagent maid，或在同伴菜单点“车万女仆”。OP 配置全服模型服务/Key；普通玩家靠近本人女仆选择模型和人格。保存不调用模型，已有 Key 不回显。详细说明见 docs/MY-AGENT-WORLD-MAID-BEDROCK-CONFIG.txt。
+
 网页第一人称：http://192.168.3.163:28984/
 网页第三人称：http://192.168.3.163:28984/third/
 当前网页观察 MawExplorer；其他 Agent 需要自己的同连接可视化接入。

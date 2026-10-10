@@ -38,6 +38,7 @@ public final class HeadlessRuntime {
     final ConcurrentLinkedQueue<Runnable> requests=new ConcurrentLinkedQueue<>();
     final Map<UUID,JsonObject> leases=new HashMap<>();
     HeadlessHttp http;
+    final MaidConfigBridge maids;
     int ticks;
 
     static void start(MinecraftServer server) throws Exception {
@@ -55,6 +56,7 @@ public final class HeadlessRuntime {
         this.server=server;this.config=config;
         this.directory=server.getWorldPath(LevelResource.ROOT).resolve("maw-numen-server");
         this.secrets=server.getServerDirectory().resolve("config/maw-numen-private");
+        this.maids=net.neoforged.fml.ModList.get().isLoaded("touhou_little_maid")?new MaidConfigBridge(this):null;
         Files.createDirectories(directory.resolve("bodies"));Files.createDirectories(secrets);
         try(var paths=Files.list(directory.resolve("bodies"))) {
             for(Path path:paths.filter(p->p.getFileName().toString().matches("[a-f0-9-]{36}\\.json")).toList()) {
@@ -337,6 +339,10 @@ public final class HeadlessRuntime {
     JsonObject ui(UUID owner,String playerName,String action,JsonObject args) {
         ServerPlayer player=server.getPlayerList().getPlayer(owner);
         if(player==null||player instanceof NumenPlayer||!player.getGameProfile().getName().equals(playerName))throw new IllegalArgumentException("owner_connection_not_online");
+        if(action.startsWith("maid.")){
+            if(maids==null)throw new IllegalArgumentException("maid_mod_unavailable");
+            return maids.invoke(player,action,args);
+        }
         if(action.equals("menu")){JsonObject out=list(owner);out.add("profiles",profiles(owner));out.addProperty("endpoint",text(config,"publicEndpoint",250));return out;}
         if(action.equals("profile.save")){
             String pid=text(args,"profileId",32);if(!pid.matches("[a-z0-9_-]{1,32}"))throw new IllegalArgumentException("invalid_profile_id");

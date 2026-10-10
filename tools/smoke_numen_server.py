@@ -25,7 +25,7 @@ def offline(name):
     value[8] = value[8] & 63 | 128
     return str(uuid.UUID(bytes=bytes(value)))
 
-def run(root, output, node, java, full_pack=False):
+def run(root, output, node, java, full_pack=False, maid_config=False):
     output = output.resolve()
     if (root/'research').resolve() not in output.parents or output.exists():
         raise ValueError('Use a new evidence directory inside runtime/research')
@@ -162,6 +162,11 @@ def run(root, output, node, java, full_pack=False):
         while not (output/'owner-ready.json').exists() and client.poll() is None and time.monotonic()<deadline:time.sleep(.2)
         assert (output/'owner-ready.json').exists(),'ordinary owner login failed'
         assert json.loads((output/'owner-ready.json').read_text())['uuid']==owner
+        if maid_config:
+            if not full_pack:raise ValueError('Native maid checks require --full-pack')
+            from smoke_maw_maid_config import checks as maid_checks
+            maid_checks(request,console,owner,bridge,server,lines,checks)
+            checks['maid_configuration_no_model_requests']=not mock_calls
         ui('profile.save',{'profileId':'default','name':'QA model','provider':'openai','model':'qa-local','baseUrl':'http://127.0.0.1:28991/v1','apiKey':'qa-secret-not-real'})
         saved=ui('profile.save',{'profileId':'default','name':'QA model','provider':'openai','model':'qa-local','baseUrl':'http://127.0.0.1:28991/v1','apiKey':''})
         checks['profile_blank_retains_no_key_echo']=saved['profile']['keyConfigured'] and 'apiKey' not in saved['profile'] and 'qa-secret-not-real' not in json.dumps(ui('menu'))
@@ -214,7 +219,7 @@ def run(root, output, node, java, full_pack=False):
     return report
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--output',type=Path,required=True);p.add_argument('--java',type=Path,default=DEFAULT_JAVA);p.add_argument('--node',type=Path,required=True);p.add_argument('--full-pack',action='store_true');a=p.parse_args()
-    result=run(a.root,a.output,a.node,a.java,a.full_pack);print(json.dumps(result,ensure_ascii=False));raise SystemExit(0 if result['ok'] else 1)
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--output',type=Path,required=True);p.add_argument('--java',type=Path,default=DEFAULT_JAVA);p.add_argument('--node',type=Path,required=True);p.add_argument('--full-pack',action='store_true');p.add_argument('--maid-config',action='store_true');a=p.parse_args()
+    result=run(a.root,a.output,a.node,a.java,a.full_pack,a.maid_config);print(json.dumps(result,ensure_ascii=False));raise SystemExit(0 if result['ok'] else 1)
 
 if __name__=='__main__':main()

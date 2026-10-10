@@ -14,6 +14,8 @@ from society_lab import DEFAULT_JAVA, DEFAULT_ROOT, REPO, safe_root, sha256
 
 NAME = 'maw_numen_server-0.1.0.jar'
 SOURCE = REPO / 'world/numen-server-src/src/main'
+MAID_NAME = 'touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar'
+MAID_SHA = 'f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27'
 
 def build(root: Path, java: Path) -> dict:
     original = root / 'server/mods' / NUMEN_NAME
@@ -32,7 +34,10 @@ def build(root: Path, java: Path) -> dict:
     spec = importlib.util.spec_from_file_location('numen_server_cp', REPO / 'world/botgate-src/build.py')
     helper = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(helper)
-    cp = os.pathsep.join((helper.full_cp(root / 'server/libraries'), str(api), str(original)))
+    maid = root / 'server/mods' / MAID_NAME
+    if sha256(maid) != MAID_SHA:
+        raise ValueError('Pinned Touhou Little Maid 1.5.3 is required to compile its optional adapter')
+    cp = os.pathsep.join((helper.full_cp(root / 'server/libraries'), str(api), str(original), str(maid)))
     sources = sorted((SOURCE / 'java').rglob('*.java'))
     resources = sorted(p for p in (SOURCE / 'resources').rglob('*') if p.is_file())
     with tempfile.TemporaryDirectory(prefix='compile-', dir=build_dir) as temp:

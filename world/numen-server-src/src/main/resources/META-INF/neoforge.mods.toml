@@ -32,6 +32,12 @@ type="required"
 versionRange="[21.1.248,)"
 side="SERVER"
 [[dependencies.maw_numen_server]]
+modId="touhou_little_maid"
+type="optional"
+versionRange="[1.5.3,1.5.4)"
+ordering="AFTER"
+side="SERVER"
+[[dependencies.maw_numen_server]]
 modId="minecraft"
 type="required"
 versionRange="[1.21.1,1.21.2)"

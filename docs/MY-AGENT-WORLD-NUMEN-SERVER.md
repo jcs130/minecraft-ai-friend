@@ -4,6 +4,8 @@
 
 实现为 `maw_numen_server-0.1.0.jar` 和独立 Geyser 扩展 `MawAgents.jar`。前者在受管 Java 进程内运行，后者随现有基岩桥启动。没有新增常驻服务、路由映射或对外端口。
 
+2026-10-10 增量：同一基岩菜单新增 `/mawagent maid`，适配车万女仆原生 LLM 服务和本人女仆的人格/模型。TLM 服务按原生规则由 OP 管理，和 Numen 每人私有模型分开；详见 [车万女仆基岩配置](MY-AGENT-WORLD-MAID-BEDROCK-CONFIG.md)。下面“首次部署”校验值保留为历史，当前构建以本机 `build-record.json`、构建锁及增量验收为准。
+
 ## 两种控制方式
 
 | 方式 | 模型在哪里 | Key 配在哪里 | 游戏身体 |

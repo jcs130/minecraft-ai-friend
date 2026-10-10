@@ -63,6 +63,7 @@ def probe(root=DEFAULT_ROOT):
         checks['existing_lan_gateway_no_new_ports']=config['publicEndpoint']==PUBLIC
         with urlopen(f'http://127.0.0.1:{PORT}/healthz',timeout=5) as response:h=json.load(response)
         checks['native_resident_endpoint']=h['ok'] and h['serverResident'] and not h['clientRequired']
+        checks['native_maid_config_adapter']=h.get('maidConfigAvailable') is True
         main=json.load(urlopen('http://127.0.0.1:28985/healthz',timeout=5))
         checks['owned_java_and_worker_healthy']=main['healthy'] and not main['paused'] and time.time()-main['heartbeatEpoch']<20
         for name,build,installed in [('numen-server','numen-server',root/'server/mods/maw_numen_server-0.1.0.jar'),('bedrock-forms','bedrock-agents',root/'bedrock/plugins/Geyser/extensions/MawAgents.jar')]:
@@ -72,8 +73,9 @@ def probe(root=DEFAULT_ROOT):
         checks['private_loopback_bridge_bound']=ui['endpoint']==f'http://127.0.0.1:{PORT}/ui' and secrets.compare_digest(bridge['secret'],ui['secret']) and len(bridge['secret'])==64
         bedrock=json.load(urlopen('http://127.0.0.1:28996/healthz',timeout=5));checks['owned_bedrock_healthy']=bedrock['healthy'] and not bedrock['paused'] and time.time()-bedrock['heartbeatEpoch']<20
         log=(root/'bedrock/ops/logs/bedrock.log').read_text('utf-8',errors='replace');checks['native_forms_loaded']='MAW_AGENTS ready nativeForms=true modelKeysRedacted=true' in log
+        checks['native_maid_forms_loaded']='MAW_MAID_FORMS ready nativeConfig=true permission=native_operator ownerOnly=true' in log
     except Exception as error:report['error']=type(error).__name__
-    report['ok']=len(checks)==10 and all(checks.values());return report
+    report['ok']=len(checks)==12 and all(checks.values());return report
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=('initialize','provision','call','health'));p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--owner');p.add_argument('--label',default='external-agent');p.add_argument('--credentials',type=Path);p.add_argument('--operation');p.add_argument('--arguments',type=Path);a=p.parse_args()
