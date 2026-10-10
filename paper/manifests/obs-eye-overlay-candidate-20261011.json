@@ -1,0 +1,42 @@
+{
+  "status": "candidate-deferred-by-owner",
+  "productionRestart": false,
+  "pendingDeploymentQueued": false,
+  "production": {
+    "AgentFriend": "0.4.13",
+    "CortiEyeMirror": "0.1.10"
+  },
+  "hotPair": {
+    "agent": "ag_CorMy",
+    "eye": "ag_cormy_eye",
+    "newUuid": "822d173a-7181-3b9b-be60-804f29b24ecc",
+    "migratePreviousIdentity": false
+  },
+  "candidate": {
+    "AgentFriend": {
+      "version": "0.4.14",
+      "sha256": "D57C2938B31001C5F9872F194972DFE06AD92DA491ED3E63D36CB7FEDCE8CCCD"
+    },
+    "CortiEyeMirror": {
+      "version": "0.1.11",
+      "sha256": "A1AC2BA97607B77790916D98016175EF438826734A66BF640B945C6F16B84790"
+    }
+  },
+  "tests": {
+    "nativeInitial": 20,
+    "nativeColdRestart": 20,
+    "sharedHost": 71,
+    "finalTargetedWeb": 20,
+    "gateway": 2,
+    "deploymentFixtures": 3,
+    "browser": "transparent actual source HUD accepted"
+  },
+  "limits": [
+    "Real new Eye not online during verification",
+    "Remote viewer not deployed here",
+    "OBS application and phone/Xbox not tested",
+    "New skin not bound: invalid existing MineSkin API key",
+    "Formal YSM Proxy/Worker not deployed"
+  ],
+  "privateEvidence": "E:/MC/ops/repairs/obs-eye-overlay-20261011; mirrored F:/MC-backups/repairs/obs-eye-overlay-20261011"
+}

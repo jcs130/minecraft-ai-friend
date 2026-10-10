@@ -262,7 +262,8 @@ function HumanPlayers {
     # feiyu_bot was explicitly confirmed as a bot by the owner on 2026-10-06.
     # ag_Kirito was explicitly identified as an Agent by the owner (verified 2026-10-08).
     # ag_NEKO explicitly confirmed by the owner as a reconnectable Agent on 2026-10-08.
-    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye', 'feiyu_bot', 'ag_Kirito', 'ag_NEKO')
+    # ag_CorMy is the replacement Agent account identified by the owner on 2026-10-11.
+    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye', 'feiyu_bot', 'ag_Kirito', 'ag_NEKO', 'ag_CorMy', 'ag_cormy_eye', 'ag_cormyeye', 'live')
     $roster = PlayerRoster
     @($roster.Names | Where-Object { $serviceNames -notcontains $_ })
 }

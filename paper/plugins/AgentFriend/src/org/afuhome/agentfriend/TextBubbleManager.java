@@ -175,8 +175,7 @@ final class TextBubbleManager implements Listener {
         if (text.isEmpty()) return;
         Session owner = sessions.get(recipient.getUniqueId());
         Map<UUID, Long> audience = new HashMap<>(); audience.put(recipient.getUniqueId(), owner.token);
-        Player eye = plugin.attachedEye(recipient);
-        if (eye != null) { refresh(eye); audience.put(eye.getUniqueId(), sessions.get(eye.getUniqueId()).token); }
+        for (Player eye : plugin.attachedEyes(recipient)) { refresh(eye); audience.put(eye.getUniqueId(), sessions.get(eye.getUniqueId()).token); }
         enqueue(new Speech(new Key(npc.getUniqueId(), recipient.getUniqueId()), new Session(npc.getWorld().getUID(),0,true),
                 Map.copyOf(audience), text, sequence.incrementAndGet(), System.nanoTime()));
     }
@@ -291,7 +290,7 @@ final class TextBubbleManager implements Listener {
     private boolean canView(Key key, Entity speaker, Bubble bubble, UUID id) {
         Player viewer = Bukkit.getPlayer(id); Session session = sessions.get(id); Long token = bubble.viewers.get(id);
         return viewer != null && session != null && token != null && session.token == token
-                && (key.recipient == null || id.equals(key.recipient) || plugin.attachedEye(Bukkit.getPlayer(key.recipient)) == viewer)
+                && (key.recipient == null || id.equals(key.recipient) || plugin.attachedEyes(Bukkit.getPlayer(key.recipient)).contains(viewer))
                 && viewer.getWorld() == speaker.getWorld() && viewer.canSee(speaker)
                 && viewer.getLocation().distanceSquared(speaker.getLocation()) <= limits.range * limits.range
                 && (!limits.sight || viewer == speaker || viewer.hasLineOfSight(speaker));

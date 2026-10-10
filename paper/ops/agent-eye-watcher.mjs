@@ -2,6 +2,7 @@
 // A missing eye property means <agent>_eye. Explicit names cover CortiEye.
 // This sidecar uses loopback RCON; Paper does not need to restart.
 import fs from 'node:fs';
+import { eyeRules } from './agent-eye-names.mjs';
 import { fileURLToPath } from 'node:url';
 import { command } from './rcon-client.mjs';
 
@@ -24,29 +25,14 @@ function log(message) {
   else fs.appendFileSync(logFile, `${line}\n`);
 }
 
-function loadPairs() {
+function loadPairs(online) {
   try {
-    const value = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-    if (value.schemaVersion !== 1 || !Array.isArray(value.pairs) || value.pairs.length > 16)
-      throw new Error('expected schemaVersion=1 and at most 16 pairs');
-    const seen = new Set();
-    const next = value.pairs.map(({ agent, eye: configuredEye }) => {
-      const eye = configuredEye ?? `${agent}_eye`;
-      if (!namePattern.test(agent) || !namePattern.test(eye) || agent.toLowerCase() === eye.toLowerCase())
-        throw new Error('invalid agent or eye name');
-      const key = eye.toLowerCase();
-      if (seen.has(key) || key === 'goddess' || agent.toLowerCase() === 'goddess')
-        throw new Error('duplicate or reserved name');
-      seen.add(key);
-      return { agent, eye, key };
-    });
-    pairs = next;
+    const rules = eyeRules(JSON.parse(fs.readFileSync(configFile, 'utf8')), [...online.values()].map(p => p.name));
+    pairs = rules.pairs;
     configError = '';
   } catch (error) {
     if (String(error.message) !== configError) log(`pair config rejected: ${error.message}`);
-    configError = String(error.message);
-    pairs = [];
-    hadError = true;
+    configError = String(error.message); pairs = []; hadError = true;
   }
 }
 
@@ -76,8 +62,8 @@ async function position(name) {
 }
 
 async function tick() {
-  loadPairs();
   const online = await roster();
+  loadPairs(online);
   const cameras = new Map(pairs.map(pair => [pair.key, pair]));
   for (const key of [...attached.keys()]) {
     if (cameras.has(key)) continue;
@@ -99,7 +85,7 @@ async function tick() {
   }
   for (const eye of online.values()) {
     const key = eye.name.toLowerCase();
-    if (key === 'goddess' || !key.includes('eye') || cameras.has(key)) continue;
+    if (key === 'goddess' || key === 'live' || !key.includes('eye') || cameras.has(key)) continue;
     if (!unregistered.has(key)) log(`unregistered Eye ${eye.name}; no camera privileges`);
     unregistered.add(key);
   }

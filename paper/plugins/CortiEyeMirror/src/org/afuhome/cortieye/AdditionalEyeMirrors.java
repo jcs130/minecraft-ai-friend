@@ -6,6 +6,7 @@ import com.comphenix.protocol.events.ListenerPriority;
 import com.comphenix.protocol.events.PacketAdapter;
 import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.events.PacketEvent;
+import org.afuhome.eye.EyePairs;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -98,10 +99,17 @@ final class AdditionalEyeMirrors implements Listener {
     private volatile Set<UUID> attachedTargets = Set.of();
     private volatile boolean cortiAuthorized;
     private int ticks;
+    private JsonObject eyeRules;
+    private List<EyePairs.Pair> allBindings = List.of();
+    private final Map<String, String> autoBindings = new HashMap<>();
+    private final Map<String, Long> autoAttachedAt = new HashMap<>();
+    private final EyeInventoryMirror inventories;
+    List<EyePairs.Pair> bindings() { return allBindings; }
 
     AdditionalEyeMirrors(CortiEyeMirrorPlugin plugin, ProtocolManager protocol,
             String cortiTarget, String cortiEye) {
         this.plugin = plugin;
+        inventories = new EyeInventoryMirror(plugin, protocol);
         this.protocol = protocol;
         this.cortiEyeName = cortiEye;
         this.cortiTargetName = cortiTarget;
@@ -153,6 +161,7 @@ final class AdditionalEyeMirrors implements Listener {
         for (UUID cameraId : new ArrayList<>(mirroredCrafting.keySet())) closeCrafting(cameraId);
         for (Session session : new ArrayList<>(sessions.values()))
             restoreEffects(Bukkit.getPlayer(session.cameraId), session);
+        inventories.stop();
         sessions.clear();
         cameraChat.clear();
         mirroredCrafting.clear();
@@ -166,45 +175,62 @@ final class AdditionalEyeMirrors implements Listener {
 
     private void loadPairs() {
         try {
-            JsonObject root = JsonParser.parseString(Files.readString(pairsFile, StandardCharsets.UTF_8))
-                    .getAsJsonObject();
-            if (root.get("schemaVersion").getAsInt() != 1) throw new IllegalArgumentException("schemaVersion");
-            JsonArray entries = root.getAsJsonArray("pairs");
-            if (entries == null || entries.size() > 16) throw new IllegalArgumentException("pairs");
-            List<Pair> next = new ArrayList<>();
-            Set<String> eyes = new HashSet<>();
-            boolean cortiPresent = false;
-            for (JsonElement element : entries) {
-                JsonObject pair = element.getAsJsonObject();
-                String agent = pair.get("agent").getAsString();
-                String eye = pair.has("eye") ? pair.get("eye").getAsString() : agent + "_eye";
-                String key = eye.toLowerCase(Locale.ROOT);
-                if (!agent.matches("[A-Za-z0-9_]{1,16}") || !eye.matches("[A-Za-z0-9_]{1,16}")
-                        || agent.equalsIgnoreCase(eye) || agent.equalsIgnoreCase("Goddess")
-                        || eye.equalsIgnoreCase("Goddess") || !eyes.add(key))
-                    throw new IllegalArgumentException("invalid pair");
-                if (key.equals(cortiEye))
-                    cortiPresent = agent.equalsIgnoreCase(cortiTarget);
-                else next.add(new Pair(agent, eye));
-            }
-            pairs = List.copyOf(next);
-            registeredEyes = next.stream().map(pair -> pair.eye().toLowerCase(Locale.ROOT))
-                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
-            cortiAuthorized = cortiPresent;
-            configError = "";
+            JsonObject root = JsonParser.parseString(Files.readString(pairsFile, StandardCharsets.UTF_8)).getAsJsonObject();
+            EyePairs.resolve(root, List.of()); // invalid configuration revokes every route
+            eyeRules = root; configError = "";
         } catch (Exception error) {
-            // A malformed or missing registry must revoke private forwarding.
-            pairs = List.of();
-            registeredEyes = Set.of();
-            cortiAuthorized = false;
+            eyeRules = null;
             String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
             if (!message.equals(configError)) plugin.getLogger().warning("Eye pairs rejected: " + message);
             configError = message;
         }
+        resolveBindings();
+    }
+
+    private void resolveBindings() {
+        List<EyePairs.Pair> resolved = eyeRules == null ? new ArrayList<>() : new ArrayList<>(EyePairs.resolve(eyeRules,
+                Bukkit.getOnlinePlayers().stream().map(Player::getName).toList()));
+        if (eyeRules != null) for (Player eye : Bukkit.getOnlinePlayers()) {
+            if (!EyePairs.freeObserver(eyeRules, eye.getName())) continue;
+            if (eye.getGameMode() != GameMode.SPECTATOR) eye.setGameMode(GameMode.SPECTATOR);
+            if (eye.getSpectatorTarget() instanceof Player target && target.getGameMode() != GameMode.SPECTATOR
+                    && !target.getName().equalsIgnoreCase("Goddess") && !EyePairs.freeObserver(eyeRules, target.getName()))
+                resolved.add(new EyePairs.Pair(target.getName(), eye.getName(), false));
+        }
+        allBindings = List.copyOf(resolved);
+        pairs = resolved.stream().filter(pair -> !pair.eye().equalsIgnoreCase(cortiEye))
+                .map(pair -> new Pair(pair.agent(), pair.eye())).toList();
+        registeredEyes = pairs.stream().map(pair -> pair.eye().toLowerCase(Locale.ROOT))
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        cortiAuthorized = resolved.stream().anyMatch(pair -> pair.eye().equalsIgnoreCase(cortiEye)
+                && pair.agent().equalsIgnoreCase(cortiTarget));
+        Set<String> keep = new HashSet<>();
+        for (var pair : resolved) {
+            String key = pair.eye().toLowerCase(Locale.ROOT); keep.add(key);
+            if (eyeRules != null && EyePairs.freeObserver(eyeRules, pair.eye())) continue;
+            Player camera = Bukkit.getPlayerExact(pair.eye()), target = Bukkit.getPlayerExact(pair.agent());
+            if (camera == null) continue;
+            if (camera.getGameMode() != GameMode.SPECTATOR) camera.setGameMode(GameMode.SPECTATOR);
+            if (target == null || target.getGameMode() == GameMode.SPECTATOR) { autoBindings.remove(key); continue; }
+            String identity = camera.getUniqueId() + ":" + target.getUniqueId() + ":" + target.getEntityId();
+            long now = System.currentTimeMillis();
+            if (!identity.equals(autoBindings.get(key)) || now - autoAttachedAt.getOrDefault(key, 0L) >= 120_000L) {
+                // Rejoin/respawn and first pairing attach promptly; manual detachment stops private forwarding
+                // until the same two-minute refresh used by the existing watcher.
+                if (!camera.getWorld().equals(target.getWorld())
+                        && !camera.teleport(target.getLocation(), PlayerTeleportEvent.TeleportCause.SPECTATE)) continue;
+                if (!CortiEyeMirrorPlugin.isAttached(target, camera)) camera.setSpectatorTarget(target);
+                if (!CortiEyeMirrorPlugin.isAttached(target, camera)) continue;
+                autoBindings.put(key, identity); autoAttachedAt.put(key, now); target.updateInventory();
+            }
+        }
+        autoBindings.keySet().removeIf(key -> !keep.contains(key)); autoAttachedAt.keySet().removeIf(key -> !keep.contains(key));
     }
 
     private void tick() {
         if (++ticks % 100 == 0) loadPairs();
+        else if (ticks % 5 == 0) resolveBindings();
+        if (ticks % 5 == 0) inventories.tick(allBindings);
         if (!cortiAuthorized) {
             Player camera = Bukkit.getPlayerExact(cortiEyeName);
             Player target = Bukkit.getPlayerExact(cortiTargetName);
@@ -244,7 +270,12 @@ final class AdditionalEyeMirrors implements Listener {
         for (String key : new ArrayList<>(sessions.keySet())) {
             if (seen.contains(key)) continue;
             Session previous = sessions.remove(key);
-            restoreEffects(Bukkit.getPlayer(previous.cameraId), previous);
+            Player camera = Bukkit.getPlayer(previous.cameraId);
+            restoreEffects(camera, previous);
+            if (!registeredEyes.contains(key) && camera != null && camera.getSpectatorTarget() != null
+                    && camera.getSpectatorTarget().getUniqueId().equals(previous.targetId)) {
+                camera.closeInventory(); camera.setSpectatorTarget(null);
+            }
         }
         attachedEyes = Set.copyOf(seen);
         attachedTargets = Set.copyOf(targets);

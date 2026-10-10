@@ -2,6 +2,7 @@
 // and Eye login names are bound to ingress IPs before private UI is mirrored.
 import net from 'node:net';
 import { readFileSync } from 'node:fs';
+import { eyeLoginAllowed } from './agent-eye-names.mjs';
 
 const listenHost = process.env.AGENT_GATEWAY_LISTEN_HOST || '192.168.3.163';
 const listenPort = Number(process.env.AGENT_GATEWAY_LISTEN_PORT || 25565);
@@ -29,28 +30,9 @@ function normalizedIp(address) {
 }
 
 function loginAllowed(name, address) {
-  const key = name.toLowerCase();
   const registry = JSON.parse(readFileSync(pairsFile, 'utf8'));
-  if (registry.schemaVersion !== 1 || !Array.isArray(registry.pairs)
-      || registry.pairs.length > 16) throw new Error('invalid Eye registry');
-  const protectedNames = new Set();
-  for (const pair of registry.pairs) {
-    const agent = pair.agent;
-    const eye = pair.eye ?? `${agent}_eye`;
-    if (![agent, eye].every(value => /^[A-Za-z0-9_]{1,16}$/.test(value)))
-      throw new Error('invalid Eye pair name');
-    protectedNames.add(agent.toLowerCase());
-    protectedNames.add(eye.toLowerCase());
-  }
-  if (key.includes('eye') && !protectedNames.has(key)) return false;
   const access = JSON.parse(readFileSync(accessFile, 'utf8'));
-  if (access.schemaVersion !== 1 || !Array.isArray(access.accounts))
-    throw new Error('invalid Agent access registry');
-  const entry = access.accounts.find(item => item.name?.toLowerCase() === key);
-  if (entry) return Array.isArray(entry.allowedIps)
-    && entry.allowedIps.includes(normalizedIp(address));
-  if (protectedNames.has(key)) return false;
-  return access.allowUnregisteredGuests === true;
+  return eyeLoginAllowed(registry, access, name, normalizedIp(address));
 }
 
 // Inspect the cleartext login name before forwarding an offline-mode connection.

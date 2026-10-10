@@ -285,8 +285,7 @@ final class UtilitySpells implements Listener {
     private void syncSenseOutlines(Player caster, Sense sense, List<Enemy> hostiles) {
         Map<UUID, Player> viewers = new HashMap<>();
         viewers.put(caster.getUniqueId(), caster);
-        Player eye = plugin.attachedEye(caster);
-        if (eye != null) viewers.put(eye.getUniqueId(), eye);
+        for (Player eye : plugin.attachedEyes(caster)) viewers.put(eye.getUniqueId(), eye);
         Set<UUID> targets = new HashSet<>();
         for (int i = 0; i < Math.min(MAX_SENSE_OUTLINES, hostiles.size()); i++)
             targets.add(((Entity) hostiles.get(i)).getUniqueId());

@@ -320,6 +320,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         agentCoach.start();
         playerNameTags = new PlayerNameTags(this);
         playerNameTags.start();
+        new WindowLifecycle(this);
         textBubbles = new TextBubbleManager(this);
         photoCamera = new PhotoCameraManager(this);
         dailyBoard = new DailyBoardManager(this);
@@ -434,6 +435,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     boolean isObserver(Player player) {
         return player.getGameMode() == GameMode.SPECTATOR || player.getName().equalsIgnoreCase("Goddess")
                 || playerNameTags != null && playerNameTags.isObserver(player);
+    }
+    java.util.List<Player> attachedEyes(Player player) {
+        return playerNameTags == null ? java.util.List.of() : playerNameTags.attachedEyes(player);
+    }
+    Player observedPlayer(Player player) {
+        return playerNameTags == null ? null : playerNameTags.observedPlayer(player);
     }
     Player attachedEye(Player player) {
         return playerNameTags == null ? null : playerNameTags.attachedEye(player);

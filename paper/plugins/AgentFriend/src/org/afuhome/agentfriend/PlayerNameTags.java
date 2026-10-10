@@ -1,5 +1,7 @@
 package org.afuhome.agentfriend;
 
+import org.afuhome.eye.EyePairs;
+import java.util.List;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -40,6 +42,7 @@ final class PlayerNameTags implements Listener {
     private final Set<UUID> agentUuids = new HashSet<>();
     private Set<String> registeredAgentNames = Set.of();
     private Map<String, String> registeredEyes = Map.of();
+    private JsonObject eyeRules;
     private Path pairsFile;
     private String pairsError = "";
     private int refreshTicks;
@@ -124,51 +127,43 @@ final class PlayerNameTags implements Listener {
     }
     boolean isObserver(Player player) {
         return player.getGameMode() == GameMode.SPECTATOR || player.getName().equalsIgnoreCase("Goddess")
-                || registeredEyes.values().stream().anyMatch(name -> name.equalsIgnoreCase(player.getName()));
+                || eyeRules != null && (EyePairs.freeObserver(eyeRules, player.getName())
+                || registeredEyes.containsKey(player.getName().toLowerCase(Locale.ROOT)));
+    }
+
+    Player observedPlayer(Player eye) {
+        if (eye == null || eyeRules == null || eye.getGameMode() != GameMode.SPECTATOR
+                || !(eye.getSpectatorTarget() instanceof Player target) || !target.isOnline()
+                || target.getWorld() != eye.getWorld() || isObserver(target)) return null;
+        String expected = registeredEyes.get(eye.getName().toLowerCase(Locale.ROOT));
+        return EyePairs.freeObserver(eyeRules, eye.getName())
+                || expected != null && target.getName().equalsIgnoreCase(expected) ? target : null;
+    }
+
+    List<Player> attachedEyes(Player agent) {
+        if (agent == null) return List.of();
+        return Bukkit.getOnlinePlayers().stream().filter(eye -> observedPlayer(eye) == agent)
+                .map(eye -> (Player) eye).toList();
     }
 
     Player attachedEye(Player agent) {
-        String eyeName = registeredEyes.get(agent.getName().toLowerCase(Locale.ROOT));
-        if (eyeName == null) return null;
-        // Paper 1.20.6's exact-name index is case insensitive; never use the
-        // partial-name getPlayer(String) lookup for private Eye forwarding.
-        Player eye = Bukkit.getPlayerExact(eyeName);
-        if (eye == null || !eye.getName().equalsIgnoreCase(eyeName)
-                || eye.getGameMode() != GameMode.SPECTATOR || eye.getWorld() != agent.getWorld()) return null;
-        org.bukkit.entity.Entity target = eye.getSpectatorTarget();
-        if (target != null && target.getUniqueId().equals(agent.getUniqueId())) return eye;
-        return null;
+        return attachedEyes(agent).stream().findFirst().orElse(null);
     }
 
     private void refreshAgentNames() {
         try {
             JsonObject root = JsonParser.parseString(Files.readString(pairsFile, StandardCharsets.UTF_8))
                     .getAsJsonObject();
-            if (root.get("schemaVersion").getAsInt() != 1) throw new IllegalArgumentException("schemaVersion");
-            JsonArray entries = root.getAsJsonArray("pairs");
-            if (entries == null || entries.size() > 16) throw new IllegalArgumentException("pairs");
-            Set<String> names = new HashSet<>();
-            Set<String> eyes = new HashSet<>();
-            Map<String, String> pairs = new HashMap<>();
-            for (JsonElement element : entries) {
-                JsonObject pair = element.getAsJsonObject();
-                String agent = pair.get("agent").getAsString();
-                String eye = pair.has("eye") ? pair.get("eye").getAsString() : agent + "_eye";
-                String name = agent.toLowerCase(Locale.ROOT);
-                String camera = eye.toLowerCase(Locale.ROOT);
-                if (!agent.matches("[A-Za-z0-9_]{1,16}") || !eye.matches("[A-Za-z0-9_]{1,16}")
-                        || name.equals(camera) || name.equals("goddess") || camera.equals("goddess")
-                        || !names.add(name) || !eyes.add(camera))
-                    throw new IllegalArgumentException("invalid pair");
-                pairs.put(name, eye);
+            var bindings = EyePairs.resolve(root, Bukkit.getOnlinePlayers().stream().map(Player::getName).toList());
+            Set<String> names = new HashSet<>(); Map<String, String> eyes = new HashMap<>();
+            for (var pair : bindings) {
+                names.add(pair.agent().toLowerCase(Locale.ROOT));
+                eyes.put(pair.eye().toLowerCase(Locale.ROOT), pair.agent());
             }
-            if (names.stream().anyMatch(eyes::contains)) throw new IllegalArgumentException("Agent is an Eye");
-            registeredAgentNames = Set.copyOf(names);
-            registeredEyes = Map.copyOf(pairs);
+            registeredAgentNames = Set.copyOf(names); registeredEyes = Map.copyOf(eyes); eyeRules = root;
             pairsError = "";
         } catch (Exception error) {
-            registeredAgentNames = Set.of();
-            registeredEyes = Map.of();
+            registeredAgentNames = Set.of(); registeredEyes = Map.of(); eyeRules = null;
             String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
             if (!message.equals(pairsError)) plugin.getLogger().warning("Agent pairs rejected: " + message);
             pairsError = message;
@@ -188,7 +183,7 @@ final class PlayerNameTags implements Listener {
     }
 
     private void reconcile() {
-        if (++refreshTicks % 3 == 0) refreshAgentNames();
+        ++refreshTicks; refreshAgentNames();
         var online = new ArrayList<>(Bukkit.getOnlinePlayers());
         Map<UUID, String> desiredTeams = new HashMap<>();
         Set<Scoreboard> boards = new HashSet<>();

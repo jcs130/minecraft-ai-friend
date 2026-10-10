@@ -113,7 +113,42 @@ final class ViewerStatePublisher implements Listener {
         if (!player.isOnline()) return;
         Set<String> listening = player.getListeningPluginChannels();
         if (!listening.contains(CHANNEL) && !listening.contains(LEGACY_CHANNEL)) return;
-        JsonObject root = buildState(player);
+        Player observed = plugin.observedPlayer(player);
+        boolean observer = plugin.isObserver(player);
+        Player subject = observer ? observed : player;
+        JsonObject root;
+        if (subject != null) root = buildState(subject);
+        else {
+            root = new JsonObject(); root.addProperty("schemaVersion", 1);
+            root.add("mana", JsonNull.INSTANCE); root.add("skills", new JsonArray());
+            root.add("abilities", new JsonArray());
+        }
+        JsonObject session = new JsonObject();
+        session.addProperty("recipientUuid", player.getUniqueId().toString());
+        session.addProperty("mode", observer ? "observer" : "self");
+        session.addProperty("attached", subject != null);
+        if (subject != null) {
+            session.addProperty("playerUuid", subject.getUniqueId().toString());
+            session.addProperty("playerName", subject.getName());
+            session.addProperty("entityId", subject.getEntityId());
+            session.addProperty("worldUuid", subject.getWorld().getUID().toString());
+            session.addProperty("dimension", subject.getWorld().getKey().toString());
+            session.addProperty("windowOpen", subject.getOpenInventory().getType() != org.bukkit.event.inventory.InventoryType.CRAFTING);
+            session.addProperty("windowId", ((org.bukkit.craftbukkit.entity.CraftPlayer) subject).getHandle().containerMenu.containerId);
+            JsonObject vitals = new JsonObject();
+            vitals.addProperty("health", subject.getHealth());
+            vitals.addProperty("maxHealth", subject.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH).getValue());
+            vitals.addProperty("absorption", subject.getAbsorptionAmount());
+            vitals.addProperty("food", subject.getFoodLevel());
+            vitals.addProperty("armor", subject.getAttribute(org.bukkit.attribute.Attribute.GENERIC_ARMOR).getValue());
+            vitals.addProperty("oxygen", Math.max(0, Math.min(20, subject.getRemainingAir() / 15.0)));
+            vitals.addProperty("inWater", subject.isInWater());
+            vitals.addProperty("experienceLevel", subject.getLevel());
+            vitals.addProperty("experienceProgress", subject.getExp());
+            vitals.addProperty("quickBarSlot", subject.getInventory().getHeldItemSlot());
+            root.add("vitals", vitals);
+        }
+        root.add("viewerSession", session);
         byte[] payload = encodeBounded(root);
         if (payload == null) return;
         String json = new String(payload, StandardCharsets.UTF_8);

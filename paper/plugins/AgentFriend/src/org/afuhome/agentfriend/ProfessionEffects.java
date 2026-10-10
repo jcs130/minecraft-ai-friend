@@ -377,7 +377,7 @@ final class ProfessionEffects implements Listener {
                 if (p == null || p.getWorld() != target.getWorld() || p.getLocation().distanceSquared(target.getLocation()) > 32 * 32) continue;
                 Location at = target.getLocation().add(0, 2.3, 0);
                 p.spawnParticle(Particle.END_ROD, at, 3, .15, .15, .15, 0);
-                Player eye = plugin.attachedEye(p); if (eye != null) eye.spawnParticle(Particle.END_ROD, at, 3, .15, .15, .15, 0);
+                for (Player eye : plugin.attachedEyes(p)) eye.spawnParticle(Particle.END_ROD, at, 3, .15, .15, .15, 0);
             }
         }
     }
