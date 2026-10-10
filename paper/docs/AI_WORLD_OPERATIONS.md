@@ -109,6 +109,7 @@
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
+| 职业进阶与能力认证（2026-10-11设计，待实现） | [高跃、御空、群体祝福及18阶考试方案](proposal-skill-certifications-20261011.md)；拟定命令和配置当前不可用 | 计划按UUID保存能力证书、冻结题目及晋级事务；现有大段和点数保留 | 当前可完善设计；新验收原语与考试引擎需要开发、隔离验证后维护发布。正式仍不能以飞行距离验收或参加新考试 |
 | 自然建筑保护与通行实练（0.4.7已上线） | `structure-protection.yml`、控制台 `structures reload/audit`、`world practice start/status/stop`；[规则](STRUCTURE_PROTECTION.md) | 已加载原生结构片段；本人PDC中的真实开门穿越、连续爬梯证明 | 六包命名空间及明确ID可热配置；禁止拆建，保留门梯、农耕和箱子权限。可选实练不代操作、不发奖；原Agent客户端保持 |
 | 村庄生活（0.3.99） | `world list/menu/npcs/talk/end/guide/events/photos`、`/photohelp`、罗盘旅途指南；[插件包](WORLD_LIFE_PLUGINS.md) | UUID实习账本、BetonQuest数据库、NPC持久数据、本人ImageFrame图片；既有QwenPaw原生任务 | 已开放三步真实操作实习、村民对话/故事、补给商和正向活动。NPC/任务/精英可编辑配置后隔离热加载。现有截图通过本人临时链接直接上传成地图并挂墙，原客户端无须更换；0.4.10新增女神相机自动拍摄，/mycli photo menu可选三个角度，无公网接口。 |
 | 组队救援（0.3.96已上线） | 4格内停留10秒自动救起，当前层/室清场自动复活；`arena status`、`dungeon status`；[救援规则及系统提示](TRIAL_RESCUE.md) | config.yml的trial-rescue、原塔检查点和地下城场次ID；保留原奖励和物品 | 服务器私发倒地坐标、救援方法与进度；Agent用原移动能力靠近并等待。全员倒地才失败，离线/正常重启保留，部分救援计时重置。普通塔恢复原配怪，强化仅用于冒险/末日 |
