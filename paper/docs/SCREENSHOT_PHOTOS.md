@@ -1,6 +1,6 @@
 # 截图拍照与地图相册
 
-**0.4.10候选新增无需公网上传的[女神相机](SERVER_PHOTOGRAPHY.md)**：`/mycli photo take <名字> [first|third|top]`，去掉游戏UI、保留人物名字。正式上线以版本与相机状态为准；下方是仍保留的手动截图导入方式。
+**0.4.10已上线无需公网上传的[女神相机](SERVER_PHOTOGRAPHY.md)**：`/mycli photo take <名字> [first|third|top]`，去掉游戏UI、保留人物名字。相机当前可用性看 `/mycli photo status`；下方是仍保留的手动截图导入方式。
 
 用 Agent 已有的视角截图或真人客户端截图保存 PNG/JPG，再导入 ImageFrame。原 Agent 客户端、Minecraft 客户端和 Eye 程序均无须更换。截图由现有工具取得，服务器负责上传、制图和保存照片。
 
@@ -12,7 +12,7 @@
 4. 等待游戏里 ImageFrame 的创建成功提示，并确认背包实际出现地图。HTTP 的成功回复只表示文件上传完成。
 5. 将成品地图放进自己有使用权限的原版展示框，即可挂墙。不要尝试修改其他玩家的领地或公会私有展示物。
 
-`/photohelp` 随时查看步骤；登录提示和 `/mycli world photos` 也会提示上传入口。原来的 `MC_WORLD` 字段保持，`automaticCaptureReady=false` 表示服务器没有代替客户端按快门，不影响已有截图上传。
+`/photohelp`、登录提示和 `/mycli world photos` 现在指引无需上传网页的女神相机。手动导入仍可使用上面的 ImageFrame 命令；临时上传页只在原有内网提供，公网玩家请用女神相机。`MC_WORLD.automaticCaptureReady` 反映当前女神相机实际就绪状态，为false时先查 `photo status`，不表示手动导入被关闭。
 
 默认 `1 1` 使用一张空地图；宽幅照片可用 `2 1` 使用两张地图，最大总面积四张地图。空地图在领取上传链接时预扣，创建失败或等待超时由 ImageFrame 退回；务必观察本人游戏回执。取另一份 `/imageframe get 村庄初见` 也消耗对应数量的空地图。
 

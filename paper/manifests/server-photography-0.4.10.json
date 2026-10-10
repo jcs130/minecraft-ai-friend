@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "status": "candidate-not-deployed",
+  "status": "deployed",
   "version": "0.4.10",
   "minecraft": "Paper 1.20.6",
   "artifact": {
@@ -13,7 +13,8 @@
     "baseCommit": "c95ee32bf558ca002ffec9ab675b405fe1f536cb",
     "preset": "qiandengji",
     "bundleSha256": "702fbd0518aa7f442564285989d18b2332ddf6c6bb33772299b0e9d901163ffc",
-    "runtimeManifestSha256": "fbabe78d8aabb4e93023e542e16c48c60cd1c021d09bbe3f336f0bf01a6d585a"
+    "runtimeManifestSha256": "fbabe78d8aabb4e93023e542e16c48c60cd1c021d09bbe3f336f0bf01a6d585a",
+    "sourceCommit": "18fcfe16228ecb8aa12b2890f2fed99d820b7f5e"
   },
   "dependencies": {
     "imageFrame": "2026.1.5.0",
@@ -33,7 +34,11 @@
     "coldRestart": 5,
     "focusedNode": 9,
     "deploymentFixtures": 3,
-    "typecheck": true
+    "typecheck": true,
+    "productionNative": 5,
+    "productionHealth": 10
   },
-  "scope": "Isolated native clients, actual rendered PNG and ImageFrame delivery; no LLM calls. No new public interfaces. Bedrock device visuals and remote viewer updates not verified. YSM not installed."
+  "scope": "Same pinned artifact passed isolated native and cold restart checks, plus an actual ordinary production client capture and map delivery. No original player was commanded or disconnected. No new public interfaces; Bedrock device visuals and remote viewer deployments not verified; YSM not installed.",
+  "deployedAt": "2026-10-10T11:21:12.660Z",
+  "backupBefore": "20261010-191651"
 }
