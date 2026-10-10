@@ -56,6 +56,9 @@ final class ProfessionEffects implements Listener {
             case "cleanse" -> cleanse(p, skill);
             case "haste", "warmth" -> buff(p, skill);
             case "growth" -> growth(p, skill);
+            case "sky_leap" -> skyLeap(p, skill);
+            case "soar" -> soar(p, skill);
+            case "blessing" -> blessing(p, skill);
             default -> manager.result(p, "cast", "unknown_effect", skill.id());
         }
     }
@@ -298,6 +301,7 @@ final class ProfessionEffects implements Listener {
         if (caster == null || caster == target || !manager.learnedEffect(caster.getUniqueId(), "mend") || effective <= 0) return;
         plugin.taskMarket().professionAction(caster, GuildManager.Goal.HEALING, effective, "");
         manager.metric(caster, "combatHealing", effective); contribute(wound.raid, caster, "healing", effective);
+        if(plugin.skillAssessments()!=null)plugin.skillAssessments().supportEvidence(caster,target,effective,"monster_wound_healing");
     }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void recovered(EntityRegainHealthEvent event) {
@@ -332,6 +336,61 @@ final class ProfessionEffects implements Listener {
         if (!manager.begin(p, skill)) return;
         if (!p.addPotionEffect(new PotionEffect(type, skill.ticks(), 0, false, true))) { manager.refund(p, skill, "protected_target"); return; }
         manager.succeeded(p, skill, "获得 " + skill.ticks() / 20 + " 秒状态；原版挖掘和领地保护照常生效");
+    }
+    private void skyLeap(Player p, ProfessionCatalog.Skill skill) {
+        if (!p.isOnGround() || p.isFlying() || p.isInsideVehicle() || p.isGliding()) {
+            manager.result(p, "cast", "unsafe_path", skill.id());
+            p.sendMessage("§e请站在有支撑的地面、确认上方开阔，再施放凌空跃击；不能在飞行或载具中叠加。"); return;
+        }
+        if (!manager.begin(p, skill)) return;
+        Vector velocity = p.getVelocity().clone(); velocity.setY(SkillMotion.jumpVelocity(skill.power())); p.setVelocity(velocity);
+        p.setFallDistance(0); p.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, skill.ticks(), 0, false, true));
+        p.getWorld().spawnParticle(Particle.CLOUD, p.getLocation(), 24, .45, .15, .45, .06);
+        p.getWorld().playSound(p.getLocation(), Sound.ENTITY_BREEZE_JUMP, .8f, 1f);
+        manager.succeeded(p, skill, "目标跃高约 " + skill.power() + " 格，碰撞照常；请自行控制水平移动并安全落地，不附带伤害");
+    }
+    private void soar(Player p, ProfessionCatalog.Skill skill) {
+        String reason = plugin.flightLeases().denial(p);
+        if (!reason.equals("ready")) { manager.result(p, "cast", reason, skill.id()); return; }
+        if (!manager.begin(p, skill)) return;
+        if (!plugin.flightLeases().start(p, skill.id(), manager.level(p, skill.id()), skill.ticks() / 20)) {
+            manager.refund(p, skill, "unsafe_path"); return;
+        }
+        p.getWorld().spawnParticle(Particle.END_ROD, p.getLocation().add(0, 1, 0), 24, .4, .7, .4, .03);
+        manager.succeeded(p, skill, "御空 " + skill.ticks() / 20 + " 秒；实际升降和前后移动由你操作，到期缓降；不能叠加基础飞行");
+    }
+    private boolean improves(Player p, PotionEffectType type, int ticks) {
+        PotionEffect old = p.getPotionEffect(type);
+        return old == null || old.getAmplifier() == 0 && old.getDuration() < ticks;
+    }
+    private void blessing(Player p, ProfessionCatalog.Skill skill) {
+        List<PotionEffectType> types = new ArrayList<>(List.of(PotionEffectType.SPEED, PotionEffectType.RESISTANCE));
+        if (manager.level(p, skill.id()) >= 3) types.add(PotionEffectType.STRENGTH);
+        List<Player> targets = allies(p, skill.range(), 40, false, "").stream()
+                .filter(ally -> types.stream().anyMatch(type -> improves(ally, type, skill.ticks())))
+                .limit(skill.targets()).toList();
+        if (targets.isEmpty()) { manager.result(p, "cast", "already_effective", skill.id()); return; }
+        if (!manager.begin(p, skill)) return;
+        List<Player> beneficiaries = new ArrayList<>();
+        Map<UUID,Set<PotionEffectType>> applied=new HashMap<>();
+        for (Player target : targets) {
+            boolean changed = false;
+            for (PotionEffectType type : types) if (improves(target, type, skill.ticks())) {
+                PotionEffect before = target.getPotionEffect(type);
+                target.addPotionEffect(new PotionEffect(type, skill.ticks(), 0, false, true));
+                PotionEffect after = target.getPotionEffect(type);
+                if (after != null && after.getAmplifier() == 0 && (before == null || after.getDuration() > before.getDuration())) {
+                    changed = true;applied.computeIfAbsent(target.getUniqueId(),ignored->new HashSet<>()).add(type);
+                }
+            }
+            if (changed) {
+                beneficiaries.add(target);
+                target.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, target.getLocation().add(0, 1, 0), 8, .3, .5, .3, .01);
+            }
+        }
+        if (beneficiaries.isEmpty()) { manager.refund(p, skill, "protected_target"); return; }
+        manager.succeeded(p, skill, "祝福实际作用于 " + beneficiaries.size() + " 人（含本人），持续 " + skill.ticks() / 20 + " 秒；更强或更久的效果保持");
+        if (plugin.skillAssessments() != null) plugin.skillAssessments().blessed(p, skill, beneficiaries,applied);
     }
     private boolean growable(Player p, Block block) {
         if (!(block.getBlockData() instanceof Ageable age) || age.getAge() >= age.getMaximumAge()
@@ -422,6 +481,8 @@ final class ProfessionEffects implements Listener {
     void save(JsonObject data) { data.add("raids", raids.deepCopy()); }
     void saved() { dirty = false; }
     void clear(UUID player) {
+        plugin.flightLeases().end(player, true);
+        Player current=Bukkit.getPlayer(player);if(current!=null&&plugin.skillAssessments()!=null)plugin.skillAssessments().qualificationChanged(current);
         combos.remove(player);
         guards.entrySet().removeIf(entry -> entry.getKey().equals(player) || entry.getValue().caster.equals(player)); wounds.remove(player);
         immunities.entrySet().removeIf(entry -> entry.getKey().equals(player) || entry.getValue().caster.equals(player));
@@ -430,6 +491,6 @@ final class ProfessionEffects implements Listener {
     @EventHandler public void quit(PlayerQuitEvent event) { clear(event.getPlayer().getUniqueId()); }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true) public void teleport(PlayerTeleportEvent event) { clear(event.getPlayer().getUniqueId()); }
     @EventHandler public void death(PlayerDeathEvent event) { clear(event.getEntity().getUniqueId()); }
-    @EventHandler(ignoreCancelled = true) public void mode(PlayerGameModeChangeEvent event) { clear(event.getPlayer().getUniqueId()); }
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true) public void mode(PlayerGameModeChangeEvent event) { clear(event.getPlayer().getUniqueId()); }
     void shutdown() { guards.clear(); immunities.clear(); reductions.clear(); marks.clear(); wounds.clear(); melee.clear(); combos.clear(); }
 }

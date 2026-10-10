@@ -186,6 +186,7 @@ final class ViewerStatePublisher implements Listener {
         }
         root.add("abilities", abilities(player, user != null && user.isLoaded() ? user : null));
         if (plugin.professions() != null) root.add("profession", plugin.professions().state(player));
+        if (plugin.skillAssessments() != null) root.add("academy",plugin.skillAssessments().summary(player));
         root.add("equipmentEffects", DungeonGearAura.effects(player));
         return root;
     }

@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "status": "isolated_candidate_not_deployed",
+  "verifiedAt": "2026-10-10T21:31:12.310088+00:00",
+  "version": "0.4.16",
+  "artifact": "AgentFriend-0.4.16.jar",
+  "sha256": "0f4debb5e4b39b06b530a2dc6482d7d3176efd3754f81936ba0c8e23f6aabe57",
+  "size": 1201462,
+  "baseCommit": "f143f4fbd37c78df9d6821b7b407b2d9201ecc0b",
+  "production": {
+    "AgentFriend": "0.4.13",
+    "CortiEyeMirror": "0.1.10",
+    "YSM": "already_deployed_separately",
+    "changedByCandidateTests": false,
+    "restartQueued": false
+  },
+  "stage": {
+    "host": "127.0.0.1",
+    "javaPort": 25648,
+    "rconPort": 25649,
+    "bedrockPort": 19158,
+    "formalWorldEdited": false,
+    "newPublicPorts": false,
+    "CortiEyeMirror": {
+      "version": "0.1.11",
+      "sha256": "a1ac2ba97607b77790916d98016175ef438826734a66bf640b945c6f16b84790",
+      "size": 46186
+    },
+    "Geyser": {
+      "version": "2.11.3-b1249",
+      "sha256": "39d8a45eca9f2413080b9597c67d1b2bf3bc9b62e8577f46eb83c9c8abfc4499",
+      "size": 47170037
+    }
+  },
+  "verification": {
+    "nativeAndActualEye": {
+      "passed": 43,
+      "receipt": "native-26.json",
+      "receiptSha256": "9a75f0a3e54bee13bff069e61817934af59d81dd0a2830ab68356559b04883a9"
+    },
+    "advancedAndFrozenMarket": {
+      "passed": 31,
+      "receipt": "compat-26.json",
+      "receiptSha256": "11892d5006ad5b6c04ab6965cca55f744496f1d169c075b8a04bf88fd8d845be"
+    },
+    "protectedEffectRefund": {
+      "passed": 8,
+      "receipt": "refund-26.json",
+      "receiptSha256": "ad23b36518bd03c405bdb6328fd9a7f804a0f82ee47a21a2b6b9e482b992f60a"
+    },
+    "promotionAndRealNativeLessons": {
+      "passed": 13,
+      "receipt": "promotion-27.json",
+      "receiptSha256": "ab541e2b85152a7a3e245582432d91f2f3b99cb1ab270736af65b8eaaf505f25"
+    },
+    "normalColdRestart": {
+      "passed": 4,
+      "receipt": "promotion-27-restart.json",
+      "receiptSha256": "025998393e3efedc18964b9d631926f9215d9b7e4d877733bb1b5803fc1e5059"
+    },
+    "bedrockWire": {
+      "passed": 6,
+      "receipt": "bedrock-31.json",
+      "receiptSha256": "74cffb5ff6835fb39ed4d6fae51827d3d8be2410c0262e08bd7a67d0b61a824f"
+    },
+    "sixteenControlledNativeClients": {
+      "passed": 39,
+      "receipt": "load-29.json",
+      "receiptSha256": "9ac06bb55b3ccf812fd1e1b023d56b12122431b66a99f5074fce9502787da863"
+    },
+    "pureTrajectoryAndCatalog": {
+      "passed": 29,
+      "receipt": "pure-tests-attempt6.log",
+      "receiptSha256": "5e06b276fef71e15a208cc2d4316ba82759a5bf190b24e453e82b021a0734027"
+    }
+  },
+  "sixteenClientSampling": {
+    "checkpointAudit": "Assessment catalog=10 ledger=true active=16 sampleMs=7.654 peakMs=19.433\n",
+    "expiryAndLandingGraceAudit": "Assessment catalog=10 ledger=true active=0 sampleMs=6.657 peakMs=19.433\n",
+    "mspt": "§6Server tick times §e(§7avg§e/§7min§e/§7max§e)§6 from last 5s§7,§6 10s§7,§6 1m§e:\n§6◴ §a2.8§7/§a1.2§7/§a9.8§e, §a2.7§7/§a1.2§7/§a11.7§e, §a3.0§7/§a1.1§7/§e40.5\n",
+    "scope": "controlled native clients, not autonomous LLM agents or long-duration capacity acceptance"
+  },
+  "sourcePreservation": {
+    "skills.yml": {
+      "allOldValuesAndListPrefixesPreserved": true,
+      "sha256": "4c0ef9f944d12bcb7b4f41b5a09c75f0a55f1b0b0baae45151fc26c58b56b0f5"
+    },
+    "skill-points.yml": {
+      "allOldValuesAndListPrefixesPreserved": true,
+      "sha256": "6c46fc50a94b892867b552c8a85e1dff821b57dd145b0072d0ec5bdec553a912"
+    },
+    "professions.yml": {
+      "allOldValuesAndListPrefixesPreserved": true,
+      "sha256": "c3ef9aa183c2a0318ea1bb3bd5a2c1308801cb9ba0fd23c682b4999ddca52f46"
+    },
+    "skill-visuals.yml": {
+      "allOldValuesAndListPrefixesPreserved": true,
+      "sha256": "ce3fb135fb809983cf02e328fe3a04710416fa098d595a9669c99e96f93af86a"
+    },
+    "skillPointPoolUnchanged": true
+  },
+  "configurations": {
+    "skills.yml": {
+      "sha256": "4c0ef9f944d12bcb7b4f41b5a09c75f0a55f1b0b0baae45151fc26c58b56b0f5",
+      "size": 9719
+    },
+    "skill-points.yml": {
+      "sha256": "6c46fc50a94b892867b552c8a85e1dff821b57dd145b0072d0ec5bdec553a912",
+      "size": 9587
+    },
+    "professions.yml": {
+      "sha256": "c3ef9aa183c2a0318ea1bb3bd5a2c1308801cb9ba0fd23c682b4999ddca52f46",
+      "size": 491
+    },
+    "skill-visuals.yml": {
+      "sha256": "ce3fb135fb809983cf02e328fe3a04710416fa098d595a9669c99e96f93af86a",
+      "size": 23206
+    },
+    "skill-assessments.yml": {
+      "sha256": "1c9280dd120597267b13219bde7bd92470e063d923e1d3e60c116d1db0296e32",
+      "size": 4978
+    },
+    "adventurer-grades.yml": {
+      "sha256": "b01872cf0be677254cada9565fab9d3c046f7a736b3a796d02278f9d3d7b36d9",
+      "size": 11410
+    }
+  },
+  "isolatedQAConfigurations": {
+    "skill-assessments.yml": {
+      "sha256": "adf314b4ed7750ef898d7c13780417d44374ea7b504cc4282b44113c5faaace2",
+      "size": 7365
+    },
+    "adventurer-grades.yml": {
+      "sha256": "b01872cf0be677254cada9565fab9d3c046f7a736b3a796d02278f9d3d7b36d9",
+      "size": 11410
+    },
+    "task-market.yml": {
+      "sha256": "19ccdfb61ab9651b8c04d41997d287ced570ee964d249dbbc6508ecf69d15d62",
+      "size": 38160
+    }
+  },
+  "privateEvidenceRoots": [
+    "E:\\MC\\ops\\repairs\\skill-certifications-20261011",
+    "F:/MC-backups/repairs/skill-certifications-20261011"
+  ],
+  "productionReadOnlyFinal": {
+    "receipt": "production-readonly-final.json",
+    "receiptSha256": "71b486b7a06557e8c5df8017f5878d1aade34be189c45d914d78f960b839b869"
+  },
+  "limits": [
+    "Movement examinations disabled until actual formal-world courses are surveyed and registered; isolated coordinates must not be copied.",
+    "Higher grades currently combine prior certificates with one fresh practical; full fresh multi-stage comprehensive exams, independent cold-resumable stages and BossBar remain future work.",
+    "Bedrock 1.26.51 protocol 2193 used an isolated self-signed Floodgate fixture; no phone or Xbox visual acceptance.",
+    "Skills stage used direct Paper/Geyser with the stage YSM extension disabled; this is not acceptance of the combined 0.4.16 plus YSM topology.",
+    "Native flight PDC recovery and normal logout/restart were tested; no forced power-loss test.",
+    "Java probes reuse existing 1.20.6 potion/food component decoder fixes inside the probe process only; installed Agent clients were not altered.",
+    "Web state bridge forwards the additive academy summary; no dedicated academy panel or remote Web deployment.",
+    "Original Agent clients, formal inventories, rewards, skill eligibility, skill-point pool and public entry ports were not modified."
+  ],
+  "docs": "../docs/SKILL_CERTIFICATIONS.md"
+}

@@ -243,6 +243,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private CombatSpells combatSpells;
     private ProspectingSpell prospectingSpell;
     private UtilitySpells utilitySpells;
+    private FlightLeases flightLeases;
+    private SkillAssessments skillAssessments;
     private SpellMastery spellMastery;
     private ProfessionManager professions;
     private TrialRescueManager trialRescue;
@@ -305,8 +307,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         spellMastery = new SpellMastery(this);
         combatSpells = new CombatSpells(this);
         prospectingSpell = new ProspectingSpell(this);
+        flightLeases = new FlightLeases(this);
         utilitySpells = new UtilitySpells(this);
         professions = new ProfessionManager(this);
+        skillAssessments = new SkillAssessments(this);
         skillVisuals = new SkillVisuals(this);
         villageStructureProtection = new VillageStructureProtection(this);
         lifeBuildings = new LifeGuildBuildings(this, lifeGuild);
@@ -358,6 +362,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (siteDungeons != null) siteDungeons.shutdown();
         if (playerContracts != null) playerContracts.shutdown();
         if (skillVisuals != null) skillVisuals.stop();
+        if (skillAssessments != null) skillAssessments.shutdown();
         if (professions != null) professions.shutdown();
         if (lands != null) lands.stop();
         if (waypoints != null) waypoints.shutdown();
@@ -398,6 +403,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (combatSpells != null) combatSpells.clear();
         if (prospectingSpell != null) prospectingSpell.clear();
         if (utilitySpells != null) utilitySpells.clear();
+        if (flightLeases != null) flightLeases.shutdown();
     }
 
     private World world() { return Bukkit.getWorld("world"); }
@@ -415,6 +421,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     TaskMarketManager taskMarket() { return taskMarket; }
     GuildManager guild() { return guild; }
     ProfessionManager professions() { return professions; }
+    FlightLeases flightLeases() { return flightLeases; }
+    SkillAssessments skillAssessments() { return skillAssessments; }
     WorldLifeManager worldLife() { return worldLife; }
     PhotoCameraManager photoCamera() { return photoCamera; }
     void npcSpeech(String id, org.bukkit.entity.LivingEntity npc, Player player, String text) {
@@ -475,6 +483,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     boolean deniesArenaEdit(Block block) { return arenaBuilt && inBuild(block.getLocation()); }
     void guildMobDefeated(Player player, org.bukkit.entity.EntityType type) { if (guild != null) guild.onDungeonMobDefeated(player, type); }
     void guildFloorCleared(Player player, int floor, int partySize) {
+        if(partySize>=2&&skillAssessments!=null)skillAssessments.proof(player,"party_clear","trial_floor:"+floor+":"+System.currentTimeMillis());
         if (guild != null) guild.onDungeonFloorCleared(player, floor, partySize);
         if (dailyBoard != null) dailyBoard.onFloorCleared(player, floor);
     }
@@ -545,6 +554,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     TravelMagic travelMagic() { return travelMagic; }
 
     void publishSkill(Player player, String spell, String body, Location position) {
+        if (skillAssessments != null) skillAssessments.cast(player, spell);
         if (skillVisuals != null) skillVisuals.play(player, spell, position);
         if (skillEventPublisher != null) skillEventPublisher.publish(player, spell, body, position);
         recordWorldLesson(player, "cast");
@@ -781,6 +791,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 sender.sendMessage("只允许服务器控制台维护迎新指引。"); return true;
             }
             agentCoach.admin(sender, args); return true;
+        }
+        if(args.length>=2&&args[0].equalsIgnoreCase("admin")&&args[1].equalsIgnoreCase("assessments")) {
+            if(!(sender instanceof ConsoleCommandSender)&&!(sender instanceof RemoteConsoleCommandSender)){sender.sendMessage("只允许控制台维护考试场地与题库。");return true;}
+            skillAssessments.admin(sender,args);return true;
         }
         if (args.length >= 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("professions")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {

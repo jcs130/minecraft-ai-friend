@@ -122,7 +122,9 @@ final class ProfessionManager implements Listener {
         int level = level(p,id); return level >= maxLevel(id) ? 0 : catalog.progression.ranks.get(id).get(level).cost();
     }
     private boolean unlocked(Player p, String id) {
-        return SpellGuide.baseIds().contains(id) || ledger.profile(p.getUniqueId()).getAsJsonObject("unlocked").has(id) || learned(p.getUniqueId(),id);
+        ProfessionCatalog.Skill s=skill(id);
+        return SpellGuide.baseIds().contains(id) || ledger.profile(p.getUniqueId()).getAsJsonObject("unlocked").has(id) || learned(p.getUniqueId(),id)
+                || s!=null && selected(p.getUniqueId(),s.role()) && catalog.roles.get(s.role()).starters().contains(id);
     }
     private boolean syncPoints(Player p) {
         if (!available() || !ledger.data().has("legacyInitialized")) return false;
@@ -205,6 +207,8 @@ final class ProfessionManager implements Listener {
         ProfessionCatalog.Skill skill = skill(id);
         if (skill != null && !selected(p.getUniqueId(),skill.role())) return "profession_required";
         if (!unlocked(p,id)) return "locked";
+        String certificate=upgradeCertificate(id,current+1);
+        if(!certificate.isEmpty()&&(plugin.skillAssessments()==null||!plugin.skillAssessments().hasCertificate(p,certificate)))return "certificate_required";
         if ((id.equals("feather") || id.equals("night")) && !plugin.canLearnGoddess(p)) return "prerequisite";
         int price = nextCost(p,id);
         JsonObject balance = ledger.profile(p.getUniqueId()).getAsJsonObject("points");
@@ -213,7 +217,7 @@ final class ProfessionManager implements Listener {
             JsonObject profile = ProfessionLedger.profile(data,p.getUniqueId()), points = profile.getAsJsonObject("points");
             points.addProperty("spent", points.get("spent").getAsInt() + price);
             JsonObject records = profile.getAsJsonObject(skill == null ? "basicLearned" : "learned");
-            JsonObject record = records.has(id) ? records.getAsJsonObject(id) : skill == null ? new JsonObject() : profile.getAsJsonObject("unlocked").getAsJsonObject(id).deepCopy();
+            JsonObject record = records.has(id) ? records.getAsJsonObject(id) : skill == null || !profile.getAsJsonObject("unlocked").has(id) ? new JsonObject() : profile.getAsJsonObject("unlocked").getAsJsonObject(id).deepCopy();
             record.addProperty("source", record.has("source") ? record.get("source").getAsString() : "skill_points");
             record.addProperty("level", current+1); record.addProperty("pointsSpent", (record.has("pointsSpent") ? record.get("pointsSpent").getAsInt() : 0) + price);
             record.addProperty("at",System.currentTimeMillis()); if (skill != null) record.addProperty("identity",identity(skill)); records.add(id,record); autoPrepare(profile);
@@ -229,6 +233,7 @@ final class ProfessionManager implements Listener {
         JsonArray levels = new JsonArray();
         if (catalog != null) for (var r : catalog.progression.ranks.get(id)) {
             JsonObject value = new JsonObject(); value.addProperty("level",levels.size()+1); value.addProperty("pointCost",r.cost());
+            value.addProperty("certificateRequired",upgradeCertificate(id,levels.size()+1));
             if (r.effect()!=null) { var effect=r.effect(); value.addProperty("mana",effect.mana()); value.addProperty("power",effect.power());
                 value.addProperty("range",effect.range()); value.addProperty("targets",effect.targets()); value.addProperty("durationMs",effect.ticks()*50);
                 value.addProperty("wardMs",r.wardTicks()*50); value.addProperty("wardCap",r.wardCap()); value.addProperty("immunityMs",r.immuneTicks()*50); }
@@ -243,8 +248,15 @@ final class ProfessionManager implements Listener {
         if (level(p,id)>=maxLevel(id)) return "已学满";
         if (!unlocked(p,id)) return "未解锁：" + (skill(id)==null ? "基础技艺" : skill(id).origin());
         if (skill(id)!=null && !selected(p.getUniqueId(),skill(id).role())) return "需选择 " + catalog.roles.get(skill(id).role()).title();
+        String certificate=upgradeCertificate(id,level(p,id)+1);
+        if(!certificate.isEmpty()&&(plugin.skillAssessments()==null||!plugin.skillAssessments().hasCertificate(p,certificate)))return "下一级需能力证书 "+certificate+"；/mycli guild exam info "+certificate;
         if (id.equals("feather") || id.equals("night")) return "基础技艺；仍需原版经验5级或炼金2级";
         return "已具学习资格；下级需要 " + nextCost(p,id) + " 技能点";
+    }
+    private String upgradeCertificate(String id,int level) {
+        if(level<2||level>3)return "";
+        String prefix=switch(id){case "warrior_sky_leap"->"leap";case "mage_soar"->"flight";case "priest_blessing"->"support";default->"";};
+        return prefix.isEmpty()?"":prefix+(level==2?"_basic":"_advanced");
     }
     private List<String> learningIds() {
         List<String> ids = new ArrayList<>(new TreeSet<>(SpellGuide.baseIds())); ids.addAll(ids()); return ids;
@@ -255,6 +267,7 @@ final class ProfessionManager implements Listener {
         List<String> pages = new ArrayList<>();
         pages.add("§d命格 · 技能点§r\n\n职业：" + title + "\n" + pointSummary(p) + "\n\n初始" + points.get("initial").getAsInt()
                 + "点；AuraSkills累计成长每" + points.get("auraLevelsPerPoint").getAsInt() + "级增加1点。\n三方向共用余额，切换职业不退点。\n洗点退回已花点数，需"+points.get("respecMana").getAsInt()+"魔力；冷却"+points.get("respecCooldownMs").getAsLong()/1000+"秒，剩余"+(points.get("respecRemainingMs").getAsLong()+999)/1000+"秒。\n\n罗盘→职业与传承→技能学习与升级");
+        if(plugin.skillAssessments()!=null)pages.add(plugin.skillAssessments().bookPage(p));
         List<String> lines = new ArrayList<>();
         for (String id : learningIds()) {
             var s=skill(id); if (s!=null && !selected(p.getUniqueId(),s.role()) && !learned(p.getUniqueId(),id) && !unlocked(p,id)) continue;
@@ -487,6 +500,7 @@ final class ProfessionManager implements Listener {
         return state;
     }
     void result(Player p, String action, String reason, String id) {
+        if(reason.equals("certificate_required"))p.sendMessage("§e升级需要 "+upgradeCertificate(id,level(p,id)+1)+"；/mycli guild exam list 查看实操考试，取得证书后再主动花点升级。");
         JsonObject data = new JsonObject(); data.addProperty("action", action); data.addProperty("reason", reason);
         data.addProperty("skill", id); data.addProperty("success", reason.equals("success"));
         if (action.equals("cast")) data.addProperty("cooldownRemainingMs", remaining(p, id));

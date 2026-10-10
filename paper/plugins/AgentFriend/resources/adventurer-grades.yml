@@ -1,0 +1,464 @@
+# Old min-rank fields remain 0..5. gradeIndex is 0..17; each promotion is explicit and gives no additional fame.
+{
+  "schema-version": 1,
+  "enabled": true,
+  "grades": [
+    {
+      "fame": 0,
+      "requires-any": [],
+      "fresh-any": [],
+      "description": "登记成为青铜III；旧大段迁移同段III，旧资历保留。"
+    },
+    {
+      "fame": 4,
+      "requires-any": [],
+      "fresh-any": [
+        "inventory_basic"
+      ],
+      "description": "行囊、查询与通行入门；保留已经实际完成的原教学证明。"
+    },
+    {
+      "fame": 7,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_basic",
+        "leap_basic",
+        "support_basic",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "准备补给并现场完成一项专长；证书是前置履历，本场专长需要新证据。"
+    },
+    {
+      "fame": 10,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_basic",
+          "leap_basic",
+          "support_basic",
+          "shelter_basic",
+          "survey_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_basic",
+        "leap_basic",
+        "support_basic",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "准备补给并现场完成一项专长；证书是前置履历，本场专长需要新证据。"
+    },
+    {
+      "fame": 17,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_basic",
+          "leap_basic",
+          "support_basic",
+          "shelter_basic",
+          "survey_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "准备补给并现场完成一项专长；证书是前置履历，本场专长需要新证据。"
+    },
+    {
+      "fame": 24,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_basic",
+          "leap_basic",
+          "support_basic",
+          "shelter_basic",
+          "survey_basic"
+        ],
+        [
+          "survey_basic",
+          "shelter_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "资源管理、专长与施工或调查的组合履历；本场重新完成一项进阶或生活实操。"
+    },
+    {
+      "fame": 30,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_basic",
+          "leap_basic",
+          "support_basic",
+          "shelter_basic",
+          "survey_basic"
+        ],
+        [
+          "survey_basic",
+          "shelter_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "资源管理、专长与施工或调查的组合履历；本场重新完成一项进阶或生活实操。"
+    },
+    {
+      "fame": 44,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_basic",
+          "leap_basic",
+          "support_basic",
+          "shelter_basic",
+          "survey_basic"
+        ],
+        [
+          "survey_basic",
+          "shelter_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "资源管理、专长与施工或调查的组合履历；本场重新完成一项进阶或生活实操。"
+    },
+    {
+      "fame": 57,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_advanced",
+          "leap_advanced",
+          "support_advanced",
+          "shelter_basic",
+          "survey_basic"
+        ],
+        [
+          "survey_basic",
+          "shelter_basic"
+        ],
+        [
+          "cooperation_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "资源、进阶专长、建造或调查、真实协作四项不同证书；现场重考一项，保留本大段原履历要求。"
+    },
+    {
+      "fame": 70,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_advanced",
+          "leap_advanced",
+          "support_advanced",
+          "shelter_basic",
+          "survey_basic"
+        ],
+        [
+          "survey_basic",
+          "shelter_basic"
+        ],
+        [
+          "cooperation_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "资源、进阶专长、建造或调查、真实协作四项不同证书；现场重考一项，保留本大段原履历要求。"
+    },
+    {
+      "fame": 97,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_advanced",
+          "leap_advanced",
+          "support_advanced",
+          "shelter_basic",
+          "survey_basic"
+        ],
+        [
+          "survey_basic",
+          "shelter_basic"
+        ],
+        [
+          "cooperation_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "资源、进阶专长、建造或调查、真实协作四项不同证书；现场重考一项，保留本大段原履历要求。"
+    },
+    {
+      "fame": 124,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_advanced",
+          "leap_advanced",
+          "support_advanced",
+          "shelter_basic",
+          "survey_basic"
+        ],
+        [
+          "survey_basic",
+          "shelter_basic"
+        ],
+        [
+          "cooperation_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "资源、进阶专长、建造或调查、真实协作四项不同证书；现场重考一项，保留本大段原履历要求。"
+    },
+    {
+      "fame": 150,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_advanced",
+          "leap_advanced",
+          "support_advanced",
+          "shelter_basic",
+          "survey_basic"
+        ],
+        [
+          "survey_basic",
+          "shelter_basic"
+        ],
+        [
+          "cooperation_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "资源、进阶专长、建造或调查、真实协作四项不同证书；现场重考一项，保留本大段原履历要求。"
+    },
+    {
+      "fame": 217,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_advanced",
+          "leap_advanced",
+          "support_advanced",
+          "shelter_basic",
+          "survey_basic"
+        ],
+        [
+          "survey_basic",
+          "shelter_basic"
+        ],
+        [
+          "cooperation_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "资源、进阶专长、建造或调查、真实协作四项不同证书；现场重考一项，保留本大段原履历要求。"
+    },
+    {
+      "fame": 284,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_advanced",
+          "leap_advanced",
+          "support_advanced",
+          "shelter_basic",
+          "survey_basic"
+        ],
+        [
+          "survey_basic",
+          "shelter_basic"
+        ],
+        [
+          "cooperation_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "资源、进阶专长、建造或调查、真实协作四项不同证书；现场重考一项，保留本大段原履历要求。"
+    },
+    {
+      "fame": 350,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_advanced",
+          "leap_advanced",
+          "support_advanced",
+          "shelter_basic",
+          "survey_basic"
+        ],
+        [
+          "survey_basic",
+          "shelter_basic"
+        ],
+        [
+          "cooperation_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "资源、进阶专长、建造或调查、真实协作四项不同证书；现场重考一项，保留本大段原履历要求。"
+    },
+    {
+      "fame": 450,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_advanced",
+          "leap_advanced",
+          "support_advanced",
+          "shelter_basic",
+          "survey_basic"
+        ],
+        [
+          "survey_basic",
+          "shelter_basic"
+        ],
+        [
+          "cooperation_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "资源、进阶专长、建造或调查、真实协作四项不同证书；现场重考一项，保留本大段原履历要求。"
+    },
+    {
+      "fame": 550,
+      "requires-any": [
+        [
+          "inventory_basic"
+        ],
+        [
+          "flight_advanced",
+          "leap_advanced",
+          "support_advanced",
+          "shelter_basic",
+          "survey_basic"
+        ],
+        [
+          "survey_basic",
+          "shelter_basic"
+        ],
+        [
+          "cooperation_basic"
+        ]
+      ],
+      "fresh-any": [
+        "flight_advanced",
+        "leap_advanced",
+        "support_advanced",
+        "shelter_basic",
+        "survey_basic"
+      ],
+      "description": "资源、进阶专长、建造或调查、真实协作四项不同证书；现场重考一项，保留本大段原履历要求。"
+    }
+  ]
+}

@@ -199,6 +199,7 @@ effects:
   heal:
     skills:
     - heal
+    - priest_blessing
     anchor: caster
     duration-ticks: 24
     interval-ticks: 3
@@ -416,6 +417,7 @@ effects:
   leap:
     skills:
     - leap
+    - warrior_sky_leap
     anchor: caster
     duration-ticks: 18
     interval-ticks: 3
@@ -447,6 +449,7 @@ effects:
   flight:
     skills:
     - flight
+    - mage_soar
     anchor: caster
     duration-ticks: 36
     interval-ticks: 3

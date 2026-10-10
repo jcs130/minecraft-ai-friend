@@ -47,10 +47,10 @@ final class TaskMarketManager implements Listener {
             GuildManager.Goal.BIOME, GuildManager.Goal.RETURN, GuildManager.Goal.MELEE_KILLS,
             GuildManager.Goal.PARRY, GuildManager.Goal.HEALING, GuildManager.Goal.MARK_KILLS, GuildManager.Goal.MAP_HUNT,
             GuildManager.Goal.HARVEST, GuildManager.Goal.REPLANT, GuildManager.Goal.TRADE,
-            GuildManager.Goal.PHOTO, GuildManager.Goal.PHOTO_HANG, GuildManager.Goal.SITE_CLEAR, GuildManager.Goal.SKILL_CAST);
+            GuildManager.Goal.PHOTO, GuildManager.Goal.PHOTO_HANG, GuildManager.Goal.SITE_CLEAR, GuildManager.Goal.SKILL_CAST, GuildManager.Goal.SKILL_ASSESSMENT);
     private static final Map<String, Integer> CHESTS = Map.of("weapons", 0, "armor", 1, "supplies", 2, "misc", 3);
     record Step(String title, String description, GuildManager.Goal goal, int target, int floor,
-            String site, int chest, ExplorationObjectives.Target exploration, MapObjectives.Rules map) { }
+            String site, int chest, ExplorationObjectives.Target exploration, MapObjectives.Rules map, AssessmentCatalog.Definition assessment) { }
     record Task(String key, String title, String description, String beneficiary, Material icon,
             boolean enabled, boolean project, boolean repeatOnce, boolean repeatDestination, int minRank, int fame, int emeralds,
             Material bonus, int bonusCount, List<Step> steps, ProjectHandovers.Grant grant, String definition) {
@@ -184,7 +184,7 @@ final class TaskMarketManager implements Listener {
     private int index(Player player) { return plugin.getConfig().getInt(marketPath(player) + ".step", 0); }
     private String run(Player player) { return plugin.getConfig().getString(marketPath(player) + ".run", ""); }
 
-    private boolean reload() {
+    boolean reload() {
         try {
             YamlConfiguration yaml = new YamlConfiguration(); yaml.load(file);
             if (yaml.getInt("schema-version") != 1) throw new IllegalArgumentException("schema-version");
@@ -251,7 +251,7 @@ final class TaskMarketManager implements Listener {
         Material icon = item(row.getString("icon", "")), bonus = item(row.getString("reward.bonus", ""));
         if (rank < 0 || rank > 5 || fame < 1 || fame > 100 || emeralds < 1 || emeralds > 64
                 || bonusCount < 1 || bonusCount > 64) throw new IllegalArgumentException(key + " reward/rank");
-        List<Step> steps = new ArrayList<>();
+        List<Step> steps = new ArrayList<>();List<Map<String,Object>> frozenSteps=new ArrayList<>();
         for (Map<?, ?> raw : row.getMapList("steps")) {
             YamlConfiguration stepYaml = new YamlConfiguration(); raw.forEach((k, v) -> stepYaml.set(String.valueOf(k), v));
             GuildManager.Goal goal = GuildManager.Goal.valueOf(stepYaml.getString("goal", "").toUpperCase(Locale.ROOT));
@@ -280,6 +280,14 @@ final class TaskMarketManager implements Listener {
                 throw new IllegalArgumentException(key + " dungeon site");
             if (goal == GuildManager.Goal.SKILL_CAST && !site.isEmpty() && !site.matches("[a-z0-9_]{1,40}"))
                 throw new IllegalArgumentException(key + " skill ID");
+            AssessmentCatalog.Definition assessment=null;
+            if(goal==GuildManager.Goal.SKILL_ASSESSMENT) {
+                site=stepYaml.getString("assessment","");
+                assessment=stepYaml.contains("assessment-definition")?AssessmentCatalog.frozen(stepYaml.getString("assessment-definition"))
+                        :plugin.skillAssessments().definition(site);
+                if(assessment==null||!assessment.id().equals(site)||target!=1||!scope.equals("personal"))throw new IllegalArgumentException(key+" assessment needs known ID, personal scope and target 1");
+                stepYaml.set("assessment-definition",AssessmentCatalog.snapshot(assessment));
+            }
             if (EngineeringSites.GOALS.contains(goal) && (!scope.equals("project") || !site.matches("[a-z0-9_]{2,40}")))
                 throw new IllegalArgumentException(key + " engineering needs project scope + site");
             if (goal == GuildManager.Goal.DONATE || goal == GuildManager.Goal.CRAFT) site = item(stepYaml.getString("item", "")).name();
@@ -299,7 +307,8 @@ final class TaskMarketManager implements Listener {
                     || steps.getLast().exploration.dimension().equals(survey.dimension())))
                 throw new IllegalArgumentException(key + " return must follow exploration in another dimension");
             steps.add(new Step(text(stepYaml, "title", 50), text(stepYaml, "description", 180), goal, target, floor,
-                    site == null || site.isBlank() ? null : site, chest, survey, map));
+                    site == null || site.isBlank() ? null : site, chest, survey, map,assessment));
+            frozenSteps.add(stepYaml.getValues(false));
         }
         if (steps.isEmpty() || steps.size() > 8 || scope.equals("project") && steps.stream().noneMatch(s -> EngineeringSites.GOALS.contains(s.goal)))
             throw new IllegalArgumentException(key + " steps (1..8; project must contain engineering)");
@@ -307,6 +316,7 @@ final class TaskMarketManager implements Listener {
         if (mapSteps > 1 || mapSteps == 1 && (scope.equals("project") || steps.getLast().map == null)
                 || repeat.equals("destination") && mapSteps != 1)
             throw new IllegalArgumentException(key + " map_hunt must be the last personal step; destination repeat requires it");
+        row.set("steps",frozenSteps);
         YamlConfiguration frozen = new YamlConfiguration(); frozen.set("task", row.getValues(false));
         return new Task(key, title, description, beneficiary, icon, row.getBoolean("enabled", true), scope.equals("project"), repeat.equals("once"), repeat.equals("destination"),
                 rank, fame, emeralds, bonus, bonusCount, List.copyOf(steps), ProjectHandovers.parse(row, scope.equals("project"), steps), frozen.saveToString());
@@ -337,6 +347,12 @@ final class TaskMarketManager implements Listener {
     }
     GuildManager.Contract offered(String id) { Task task = tasks.get(id); return task == null || !task.enabled ? null : task.contract(0); }
     GuildManager.Contract active(Player player) { Task task = frozen(player); return task == null ? null : task.contract(index(player)); }
+    AssessmentCatalog.Definition activeAssessment(Player player) {Task task=frozen(player);return task==null?null:task.steps.get(index(player)).assessment;}
+    boolean suppliesAssessmentProof(String id,List<String> proofs) {
+        Task task=tasks.get(id);if(task==null||task.steps.stream().anyMatch(s->s.assessment!=null))return false;
+        return proofs.contains("survey")&&task.steps.stream().anyMatch(s->s.exploration!=null||s.map!=null)
+                ||proofs.contains("project")&&task.project||proofs.contains("supply")&&task.steps.stream().anyMatch(s->s.goal==GuildManager.Goal.DONATE);
+    }
     List<Task> offers() { return tasks.values().stream().filter(Task::enabled).toList(); }
     boolean onceCompleted(String id) {
         return plugin.getConfig().getBoolean(ROOT + ".projects." + id + ".completed", false);
@@ -537,6 +553,11 @@ final class TaskMarketManager implements Listener {
     void completed(Player player) {
         Task task = frozen(player); if (task == null) return;
         if (task.steps.get(index(player)).map != null) maps.completed(player);
+        if(plugin.skillAssessments()!=null) {
+            if(task.steps.stream().anyMatch(s->s.exploration!=null||s.map!=null))plugin.skillAssessments().proof(player,"survey","market:"+task.id()+":"+run(player));
+            if(task.project)plugin.skillAssessments().proof(player,"project","market:"+task.id()+":"+run(player));
+            if(task.steps.stream().anyMatch(s->s.goal==GuildManager.Goal.DONATE))plugin.skillAssessments().proof(player,"supply","market:"+task.id()+":"+run(player));
+        }
         recordStep(player, task, index(player));
         finishRun(player, task, "completed");
         plugin.professions().queue(player.getUniqueId(), "guild_contract:" + task.id(), run(player),

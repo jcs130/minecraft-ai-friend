@@ -1,6 +1,39 @@
 schema-version: 1
 # Effects are bounded native server primitives. Learning uses skill points; each cast additionally uses AuraSkills mana.
 skills:
+  warrior_sky_leap:
+    title: 凌空跃击
+    profession: warrior
+    icon: RABBIT_FOOT
+    effect: sky_leap
+    equipment: none
+    mana: 6
+    cooldown-seconds: 20
+    limits: {range: 1, targets: 1, power: 8, duration-seconds: 20}
+    description: "从地面真实起跳，一/二/三级开阔地目标跃高约8/12/16格；魔力6/8/10；自行控制横移，缓降20秒，不附带伤害，不穿过屋顶。"
+    origin: "选择战士可花2点学习；二/三级分别需高跃基础/进阶证书，再花3/5点升级。"
+  mage_soar:
+    title: 御空术
+    profession: mage
+    icon: FEATHER
+    effect: soar
+    equipment: none
+    mana: 8
+    cooldown-seconds: 90
+    limits: {range: 1, targets: 1, power: 1, duration-seconds: 20}
+    description: "一/二/三级御空20/30/40秒，魔力8/10/12；自行升降和前后移动，到期缓降；不能与基础飞行叠加，传送/洗点/离线清理临时权限。"
+    origin: "选择法师可花3点学习；二/三级分别需飞行基础/进阶证书，再花4/6点升级。"
+  priest_blessing:
+    title: 同行祝福
+    profession: priest
+    icon: GLOW_BERRIES
+    effect: blessing
+    equipment: none
+    mana: 8
+    cooldown-seconds: 30
+    limits: {range: 8, targets: 2, power: 1, duration-seconds: 8}
+    description: "8格内可见友军含自己，一/二/三级最多2/3/4人，迅捷I+抗性I持续8/12/16秒；三级加力量I；魔力8/10/12，不覆盖更强效果。"
+    origin: "选择牧师可花3点学习；二/三级分别需支援基础/进阶证书，再花4/6点升级。"
   sword_thrust:
     title: 突刺
     profession: warrior

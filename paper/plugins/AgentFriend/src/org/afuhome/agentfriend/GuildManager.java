@@ -30,7 +30,7 @@ final class GuildManager implements Listener {
             LANTERNS, ERUDITE, PRAYER_ROAD, PILGRIMAGE, FAST_FLOOR, NO_DEATH,
             LIGHT_FLOOR, STONE_FLOOR, WITCH_KILLS, BRIDGE, ROAD, BUILD, REDSTONE,
             MELEE_KILLS, PARRY, HEALING, MARK_KILLS, MAP_HUNT,
-            HARVEST, REPLANT, TRADE, PHOTO, PHOTO_HANG, SITE_CLEAR, SKILL_CAST }
+            HARVEST, REPLANT, TRADE, PHOTO, PHOTO_HANG, SITE_CLEAR, SKILL_CAST, SKILL_ASSESSMENT }
     /** 智能考核维度：0感知探索 1战斗执行 2长程规划 3社会协作 4语言理解 5约束遵守。 */
     private static final String[] DIMS = {"感知", "战斗", "规划", "协作", "语言", "约束"};
     record Contract(String id, String title, String description, Material icon,
@@ -153,13 +153,21 @@ final class GuildManager implements Listener {
         return out;
     }
     private int fame(Player p) { return plugin.getConfig().getInt(base(p.getUniqueId()) + ".fame", 0); }
+    int reputation(Player p) {return fame(p);}
+    int legacyRank(Player p) {return Math.min(rankIndex(fame(p)),certified(p));}
+    boolean promotionHistoryMet(int rank,Player p) {return certRequirementMet(rank,p);}
+    String promotionHistoryAdvice(int rank) {return rank==1?"声望达标并通过首次综合考试":certRequirementText(rank);}
+    void mirrorPromotion(Player p,int rank) {
+        String path=base(p.getUniqueId())+".rituals.certified";
+        if(rank>plugin.getConfig().getInt(path,0)){plugin.getConfig().set(path,rank);plugin.saveConfig();}
+    }
     private int rankIndex(int fame) {
         int rank = 0;
         for (int i = 1; i < THRESHOLDS.length; i++) if (fame >= THRESHOLDS[i]) rank = i;
         return rank;
     }
     int adventurerRank(Player player) { return effectiveRank(player); }
-    String adventurerRankName(Player player) { return RANKS[adventurerRank(player)]; }
+    String adventurerRankName(Player player) { return plugin.skillAssessments()!=null&&plugin.skillAssessments().promotionsEnabled()?plugin.skillAssessments().gradeName(player):RANKS[adventurerRank(player)]; }
     private Contract contract(String id) {
         for (Contract quest : CONTRACTS) if (quest.id().equals(id)) return quest;
         Contract market = plugin.taskMarket() == null ? null : plugin.taskMarket().offered(id);
@@ -222,6 +230,8 @@ final class GuildManager implements Listener {
             case "menu", "菜单" -> plugin.openGuildMenu(player);
             case "join", "register", "注册" -> join(player);
             case "status", "rank", "状态", "等级" -> status(player);
+            case "exam", "考试", "训练" -> plugin.skillAssessments().command(player,args);
+            case "certificates", "证书" -> plugin.skillAssessments().certificates(player);
             case "engineering", "market", "projects", "任务市场" -> plugin.taskMarket().command(player, args);
             case "map", "treasure", "藏宝图" -> plugin.taskMarket().mapInfo(player);
             case "commission", "commissions", "玩家委托" -> plugin.playerContracts().command(player,java.util.Arrays.copyOfRange(args,1,args.length));
@@ -311,7 +321,8 @@ final class GuildManager implements Listener {
                 next.append("，并完成认证：").append(certRequirementText(rank + 1));
             }
         } else next.append("；已达最高认证");
-        player.sendMessage(ChatColor.GOLD + "冒险者认证：" + RANKS[rank] + " · 声望 " + fame
+        if(plugin.skillAssessments()!=null&&plugin.skillAssessments().promotionsEnabled()){next.setLength(0);next.append("；/mycli guild exam promotion 查看下一阶考试与缺项");}
+        player.sendMessage(ChatColor.GOLD + "冒险者认证：" + adventurerRankName(player) + " · 声望 " + fame
                 + " · 已完成 " + completed + " 单" + next);
         Contract quest = active(player);
         player.sendMessage(quest == null ? ChatColor.GRAY + "当前没有在办的委托。"
@@ -324,6 +335,7 @@ final class GuildManager implements Listener {
     }
 
     private void accept(Player player, String id) {
+        if(plugin.skillAssessments()!=null&&plugin.skillAssessments().busy(player)&&!plugin.skillAssessments().canAttachContract(player,id)){player.sendMessage("§e已有在办考试；/mycli guild exam status 查看。现场委托题只可接题目对应的走查、工程或供货单；其他题需先submit或cancel。");return;}
         Contract quest = contract(id);
         if (quest == null) { player.sendMessage(ChatColor.RED + "没有这个任务 ID；/mycli guild board 查看精确名称。"); return; }
         if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能接单；请使用生存角色，/mycli guild board 查看委托。"); return; }
@@ -667,7 +679,9 @@ final class GuildManager implements Listener {
     /** 主插件联动入口：当前有效等级（0青铜…5钻石）。 */
     int rankOf(Player player) { return effectiveRank(player); }
 
-    private int effectiveRank(Player player) { return Math.min(rankIndex(fame(player)), certified(player)); }
+    private int effectiveRank(Player player) {
+        return plugin.skillAssessments()!=null&&plugin.skillAssessments().promotionsEnabled()?plugin.skillAssessments().grade(player)/3:legacyRank(player);
+    }
 
     private boolean everDone(Player player, Contract quest) {
         return plugin.getConfig().contains(base(player.getUniqueId()) + ".everDone." + quest.id());
@@ -713,6 +727,9 @@ final class GuildManager implements Listener {
     }
 
     private void checkCertify(Player player) {
+        if(plugin.skillAssessments()!=null&&plugin.skillAssessments().promotionsEnabled()) {
+            player.sendMessage("§6声望已增长；/mycli guild exam promotion 查看晋级资格。达到门槛后主动参加考试，旧资历保持。");return;
+        }
         int fameRank = rankIndex(fame(player));
         int certifiedNow = certified(player);
         for (int rank = certifiedNow + 1; rank <= Math.min(fameRank, RANKS.length - 1); rank++) {
@@ -821,6 +838,7 @@ final class GuildManager implements Listener {
         if (doneToday(player, quest)) {
             player.sendMessage(ChatColor.RED + "今日奖励已结算；请联系服主核对异常记录。"); return;
         }
+        if(quest.goal()==Goal.SKILL_ASSESSMENT&&!plugin.skillAssessments().submitMarket(player))return;
         ItemStack[] playerBefore = null;
         GuildSharedStorage.Receipt delivery = null;
         int deliveryCategory = -1;
@@ -949,6 +967,7 @@ final class GuildManager implements Listener {
         inventory.setItem(0, icon(Material.BOOK, "§6冒险者档案", "等级：" + RANKS[rank],
                 "声望：" + fame(player), member(player) ? "点击查看当前任务" : "点击注册入会"));
         inventory.setItem(7, icon(Material.CLOCK, "§6今日动态委托", "每日 05:00 更新", "下方是常驻委托"));
+        inventory.setItem(6,icon(Material.WRITABLE_BOOK,"§b训练与晋级考试",adventurerRankName(player),"实操证书、技能升级资格与分段晋级"));
         inventory.setItem(8, icon(Material.BRICKS, "§6任务市场 · 千灯纪委托", "远征探索、工程、红石与多阶段生活任务", "点击查看任务与本人能力记录"));
         inventory.setItem(9,icon(Material.WRITABLE_BOOK,"§6玩家委托","收购、结伴讨伐与探索；报酬先托管"));
         List<DailyBoardManager.Card> dynamic = plugin.dailyBoard().cards();
@@ -991,6 +1010,7 @@ final class GuildManager implements Listener {
         if (slot == 0) { if (member(player)) status(player); else join(player); }
         else if (slot == 8) plugin.taskMarket().openMenu(player);
         else if (slot == 9) plugin.playerContracts().open(player,1);
+        else if(slot==6)plugin.skillAssessments().command(player,new String[]{"guild","exam","menu"});
         else if (slot >= 1 && slot <= plugin.dailyBoard().cards().size())
             accept(player, plugin.dailyBoard().cards().get(slot - 1).id());
         else if (slot >= 10 && slot < 10 + CONTRACTS.size()) accept(player, CONTRACTS.get(slot - 10).id());
@@ -1003,7 +1023,7 @@ final class GuildManager implements Listener {
         if (!member(player)) return "§6冒险者公会§r\n\n尚未注册。\n\n在技能罗盘打开公会看板，或输入 /mycli guild join 加入。";
         int reputation = fame(player), rank = effectiveRank(player);
         Contract quest = active(player);
-        return "§6冒险者公会§r\n\n等级：" + RANKS[rank] + "\n声望：" + reputation
+        return "§6冒险者公会§r\n\n等级：" + adventurerRankName(player) + "\n声望：" + reputation
                 + "\n完成：" + plugin.getConfig().getInt(base(player.getUniqueId()) + ".completed", 0)
                 + " 单（六维考核制）\n\n当前任务：" + (quest == null ? "无"
                 : quest.title() + " " + progress(player) + "/" + quest.target())

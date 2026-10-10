@@ -261,6 +261,9 @@ final class TrialRescueManager implements Listener {
             recoveries.put(id, new Recovery(d.exit, d.team, false)); remove(id); persist(); return;
         }
         remove(id); restoreHealth(p); persist();
+        if(reason.equals("nearby_teammate")&&d.rescuer!=null&&plugin.skillAssessments()!=null) {
+            Player rescuer=Bukkit.getPlayer(d.rescuer);if(rescuer!=null)plugin.skillAssessments().proof(rescuer,"rescue","revived:"+id+":"+System.currentTimeMillis());
+        }
         p.sendTitle("§a已复活", reason.equals("room_cleared") ? "§e队友已清场" : "§e队友救援完成", 5, 45, 10);
         p.sendMessage("MC_TRIAL_RESCUE status=revived reason=" + reason + " health=" + p.getHealth());
         Team team = team(id); if (team != null) tell(team, "§a" + p.getName() + " 已复活，可继续并肩战斗。");

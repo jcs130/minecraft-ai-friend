@@ -51,12 +51,10 @@ final class UtilitySpells implements Listener {
     private final AgentFriendPlugin plugin;
     private final ProtocolManager protocol;
     private final Map<String, Long> cooldowns = new HashMap<>();
-    private final Map<UUID, Flight> flights = new HashMap<>();
     private final Map<UUID, Guardian> guardians = new HashMap<>();
     private final Map<UUID, Sense> senses = new HashMap<>();
     private BukkitTask task;
 
-    private record Flight(boolean allowed, boolean flying, float speed, long expiresAt) { }
     private record Guardian(UUID entityId, long expiresAt) { }
     private record Sense(BossBar bar, long expiresAt, Map<UUID, Set<UUID>> outlined) { }
 
@@ -135,22 +133,18 @@ final class UtilitySpells implements Listener {
 
     private void flight(Player player) {
         if (!ready(player, "flight")) return;
-        if (player.getGameMode() == GameMode.CREATIVE) {
-            player.sendMessage(ChatColor.YELLOW + "创造模式本来就能飞行。");
-            return;
-        }
-        if (flights.containsKey(player.getUniqueId())) {
-            player.sendMessage(ChatColor.YELLOW + "飞行术仍在生效。");
+        if (!plugin.flightLeases().denial(player).equals("ready")) {
+            player.sendMessage(ChatColor.YELLOW + "请以生存角色离开载具、停止鞘翅滑翔；已有飞行时请等结束并落地，再施放飞行术或御空术。");
             return;
         }
         if (!begin(player, "flight", 10)) return;
         int seconds = 15 + (plugin.mastery().rank(player, "flight") - 1) * 3;
-        flights.put(player.getUniqueId(), new Flight(player.getAllowFlight(), player.isFlying(),
-                player.getFlySpeed(), System.currentTimeMillis() + seconds * 1000L));
-        player.setAllowFlight(true);
-        player.setFlySpeed(0.07f);
-        player.setFlying(true);
-        player.setFallDistance(0);
+        if (!plugin.flightLeases().start(player, "flight", plugin.mastery().rank(player, "flight"), seconds)) {
+            var user = dev.aurelium.auraskills.api.AuraSkillsApi.get().getUser(player.getUniqueId());
+            if (user != null && user.isLoaded()) user.setMana(Math.min(user.getMaxMana(), user.getMana() + 10));
+            cooldowns.remove(player.getUniqueId() + ":flight");
+            player.sendMessage("§e飞行未开始，魔力和冷却已退回；请落地后重试。"); return;
+        }
         player.getWorld().spawnParticle(Particle.END_ROD, player.getLocation().add(0, 1, 0),
                 24, 0.4, 0.7, 0.4, 0.03);
         plugin.mastery().successfulCast(player, "flight");
@@ -324,12 +318,6 @@ final class UtilitySpells implements Listener {
 
     private void tick() {
         long now = System.currentTimeMillis();
-        for (UUID id : new ArrayList<>(flights.keySet())) {
-            Player player = Bukkit.getPlayer(id);
-            Flight flight = flights.get(id);
-            if (player == null || !player.isOnline() || player.isDead() || now >= flight.expiresAt())
-                endFlight(id, true);
-        }
         for (UUID id : new ArrayList<>(guardians.keySet())) {
             Guardian guard = guardians.get(id);
             Player owner = Bukkit.getPlayer(id);
@@ -363,24 +351,6 @@ final class UtilitySpells implements Listener {
         }
     }
 
-    private void endFlight(UUID id, boolean slowFall) {
-        endFlight(id, Bukkit.getPlayer(id), slowFall);
-    }
-
-    private void endFlight(UUID id, Player player, boolean slowFall) {
-        Flight saved = flights.remove(id);
-        if (saved == null) return;
-        if (player == null) return;
-        player.setFlySpeed(saved.speed());
-        if (player.getGameMode() != GameMode.CREATIVE && player.getGameMode() != GameMode.SPECTATOR) {
-            player.setFlying(saved.flying() && saved.allowed());
-            player.setAllowFlight(saved.allowed());
-            player.setFallDistance(0);
-            if (slowFall && !player.isDead())
-                player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 160, 0, false, true));
-        }
-    }
-
     private void removeGuardian(UUID id) {
         Guardian guard = guardians.remove(id);
         if (guard == null) return;
@@ -402,21 +372,18 @@ final class UtilitySpells implements Listener {
 
     @EventHandler public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
-        endFlight(id, event.getPlayer(), false);
         removeGuardian(id);
         removeSense(id);
     }
 
     @EventHandler public void onDeath(PlayerDeathEvent event) {
         UUID id = event.getEntity().getUniqueId();
-        endFlight(id, event.getEntity(), false);
         removeGuardian(id);
         removeSense(id);
     }
 
     @EventHandler public void onGameModeChange(PlayerGameModeChangeEvent event) {
         UUID id = event.getPlayer().getUniqueId();
-        if (flights.containsKey(id)) Bukkit.getScheduler().runTask(plugin, () -> endFlight(id, true));
         if (event.getNewGameMode() == GameMode.SPECTATOR) removeSense(id);
     }
 
@@ -433,7 +400,6 @@ final class UtilitySpells implements Listener {
 
     void clear() {
         if (task != null) task.cancel();
-        for (UUID id : new ArrayList<>(flights.keySet())) endFlight(id, true);
         for (UUID id : new ArrayList<>(guardians.keySet())) removeGuardian(id);
         for (UUID id : new ArrayList<>(senses.keySet())) removeSense(id);
         cooldowns.clear();

@@ -20,10 +20,12 @@ final class FeatureTutorials implements Listener {
     FeatureTutorials(AgentFriendPlugin p) {plugin=p;Bukkit.getPluginManager().registerEvents(this,p);}
     private NamespacedKey key(String id) {return new NamespacedKey(plugin,"feature_lesson_"+id);}
     private boolean has(Player p,String id) {return p.getPersistentDataContainer().has(key(id),PersistentDataType.BYTE);}
+    boolean verified(Player p,String id) {return has(p,id);}
     boolean enrolled(Player p) {return has(p,"enrolled") && !plugin.isObserver(p);}
     void note(Player p,String id) {
         if(!enrolled(p) || has(p,id))return;
         p.getPersistentDataContainer().set(key(id),PersistentDataType.BYTE,(byte)1);
+        if(plugin.skillAssessments()!=null)plugin.skillAssessments().proof(p,id,"feature_training:"+System.currentTimeMillis());
         JsonObject r=new JsonObject();r.addProperty("schemaVersion",1);r.addProperty("type","feature_proof");r.addProperty("lesson",id);r.addProperty("source","server_observed_action");
         p.sendMessage("MC_COACH "+r);p.sendMessage("§a[特色实练] 已记录实际操作："+id+"；/mycli coach lessons 查下一步。没有代发物品或技能点。");
     }

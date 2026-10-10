@@ -111,6 +111,7 @@ final class NativeTraversalPractice implements Listener {
         evidence.add("from", from); evidence.add("to", to);
         if (height > 0) evidence.addProperty("ascent", height);
         p.getPersistentDataContainer().set(key, PersistentDataType.STRING, evidence.toString());
+        if(plugin.skillAssessments()!=null)plugin.skillAssessments().proof(p,id,"native_traversal:"+System.currentTimeMillis());
         JsonObject out = new JsonObject(); out.addProperty("type", "practice_progress"); out.addProperty("lesson", id);
         out.addProperty("status", "verified"); out.add("evidence", evidence);
         p.sendMessage("MC_WORLD " + out); status(p);

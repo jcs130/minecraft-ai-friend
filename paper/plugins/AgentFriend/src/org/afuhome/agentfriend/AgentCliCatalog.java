@@ -215,6 +215,13 @@ final class AgentCliCatalog {
         add(specs,"guild.map","adventure","read","/mycli guild map","读取主手目标地图或在途寻宝地图的真实标记与返程坐标","藏宝图/探险家/遗迹地图；普通地图无目标则明确拒绝；读取不消耗地图","MC_TREASURE_MAP / MC_TREASURE_TARGET / MC_TREASURE_RETURN；只提供原图X/Z，不揭示藏宝深度，不传送");
         add(specs,"guild.verify","adventure","read","/mycli guild verify","验收本人市场阶段的真实工程、动作、探索或地图寻宝证据","已接单；寻宝需真实探索/新开天然藏宝箱并返接单点；传送不增加路线","MC_MARKET_CHECK 的 ready/progress/reason/evidence；未通过不领奖");
         add(specs,"guild.assessment","adventure","read","/mycli guild assessment","读取本人各类任务的已验收步骤、失败检查和最近任务证据","只读本人记录；耗时含离线","MC_MARKET_ASSESSMENT；不把任务记录当作未测能力");
+        add(specs,"guild.exam.list","adventure","read","/mycli guild exam list","查看实操题库、场地开放情况与下一阶晋级缺项","生存角色；先guild join登记","MC_GUILD_EXAM；声望不自动跳段");
+        add(specs,"guild.exam.info","adventure","read","/mycli guild exam info <ID>","查看题目、技能与资源准备、航点和验收要求","查询免费；自然前往已勘察起点","MC_GUILD_EXAM，含冻结版本与绝对目标");
+        add(specs,"guild.exam.start","adventure","write","/mycli guild exam start <ID>","主动开始一项能力考试；start promotion <ID>参加下一阶晋级","一人一场；学习准备施法由本人操作；只收技能本身魔力","MC_GUILD_EXAM；市场SKILL_ASSESSMENT使用guild claim交付");
+        add(specs,"guild.exam.status","adventure","read","/mycli guild exam status","查本人考试轨迹、受益队友与下一步","只接收本人或当前实际附身对象的私有数据","MC_GUILD_EXAM；mcagent:exam；academy状态摘要");
+        add(specs,"guild.exam.submit","adventure","write","/mycli guild exam submit","复核并交付本场实操，授予证书或下一阶","实际条件齐全；固定场次结算去重；失败不降级","MC_GUILD_EXAM；不额外赠声望、技能点或物品");
+        add(specs,"guild.exam.cancel","adventure","write","/mycli guild exam cancel","主动取消独立考试；市场阶段中断后用exam retry从本阶段重试","已花技能魔力/冷却保留；市场放弃用guild abandon","MC_GUILD_EXAM；旧证书保持");
+        add(specs,"guild.certificates","adventure","read","/mycli guild certificates","列出本人已通过的能力证书与18阶冒险者认证","只显示服务器实际验收；未认证不表示不会","MC_GUILD_CERTIFICATES；职业高跃/御空/祝福二三级需要对应基础/进阶证书");
         add(specs,"guild.menu","adventure","gui","/mycli guild menu","打开原版公会任务面板","在线玩家","原版菜单");
         add(specs,"guild.join","adventure","write","/mycli guild join","注册冒险者公会","非旁观者；已入会时显示状态","入会回执");
         add(specs,"guild.status","adventure","read","/mycli guild status","查看本人公会等级、声望与活动任务","在线玩家","个人状态");

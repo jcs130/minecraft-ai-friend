@@ -1,6 +1,6 @@
 schema-version: 1
 # UUID assignments live in profession-ledger.json, never in player-name permissions.
 professions:
-  warrior: {title: 战士, kind: combat, icon: IRON_SWORD, starter-skills: [sword_thrust, sword_parry]}
-  mage: {title: 法师, kind: combat, icon: BLAZE_ROD, starter-skills: [mage_bolt, mage_frost, scout_mark]}
-  priest: {title: 牧师, kind: combat, icon: GLISTERING_MELON_SLICE, starter-skills: [healer_mend, healer_cleanse]}
+  warrior: {title: 战士, kind: combat, icon: IRON_SWORD, starter-skills: [sword_thrust, sword_parry, warrior_sky_leap]}
+  mage: {title: 法师, kind: combat, icon: BLAZE_ROD, starter-skills: [mage_bolt, mage_frost, scout_mark, mage_soar]}
+  priest: {title: 牧师, kind: combat, icon: GLISTERING_MELON_SLICE, starter-skills: [healer_mend, healer_cleanse, priest_blessing]}

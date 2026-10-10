@@ -1,0 +1,146 @@
+# Course UUIDs and coordinates must be surveyed before enabling movement exams. No automatic world generation.
+{
+  "schema-version": 1,
+  "courses": {},
+  "assessments": {
+    "flight_basic": {
+      "title": "云间送信",
+      "description": "施放有效飞行，按顺序经过航点，完成水平移动、升降、转向和面朝前方后退，稳定落地2秒。",
+      "primitive": "flight_route",
+      "enabled": false,
+      "course": "",
+      "allowed-skills": [
+        "flight",
+        "mage_soar"
+      ],
+      "horizontal-distance": 24,
+      "ascent": 3,
+      "turn-degrees": 60,
+      "backwards-distance": 4,
+      "checkpoint-radius": 1.5,
+      "landing-stable-seconds": 2,
+      "timeout-seconds": 45,
+      "prerequisite": ""
+    },
+    "leap_basic": {
+      "title": "高台取旗",
+      "description": "本人从地面施放凌空跃击；每次真实升高至少6格，按顺序落到指定平台，稳定2秒后继续。",
+      "primitive": "leap_route",
+      "enabled": false,
+      "course": "",
+      "allowed-skills": [
+        "warrior_sky_leap"
+      ],
+      "ascent": 6,
+      "horizontal-distance": 2,
+      "jumps": 1,
+      "timeout-seconds": 120,
+      "prerequisite": ""
+    },
+    "support_basic": {
+      "title": "同行护持",
+      "description": "同一次祝福实际作用于队友；队友在效果时限内实际行进4格。自己不算协作队友。",
+      "primitive": "support_route",
+      "allowed-skills": [
+        "priest_blessing"
+      ],
+      "other-allies": 1,
+      "ally-movement": 4,
+      "combat-support": false,
+      "timeout-seconds": 120,
+      "prerequisite": ""
+    },
+    "flight_advanced": {
+      "title": "峡谷巡航",
+      "description": "施放有效飞行，按顺序经过航点，完成水平移动、升降、转向和面朝前方后退，稳定落地2秒。",
+      "primitive": "flight_route",
+      "enabled": false,
+      "course": "",
+      "allowed-skills": [
+        "flight",
+        "mage_soar"
+      ],
+      "horizontal-distance": 48,
+      "ascent": 6,
+      "turn-degrees": 60,
+      "backwards-distance": 6,
+      "checkpoint-radius": 1.5,
+      "landing-stable-seconds": 2,
+      "timeout-seconds": 60,
+      "prerequisite": "flight_basic"
+    },
+    "leap_advanced": {
+      "title": "连台穿越",
+      "description": "本人从地面施放凌空跃击；每次真实升高至少6格，按顺序落到指定平台，稳定2秒后继续。",
+      "primitive": "leap_route",
+      "enabled": false,
+      "course": "",
+      "allowed-skills": [
+        "warrior_sky_leap"
+      ],
+      "ascent": 6,
+      "horizontal-distance": 5,
+      "jumps": 2,
+      "timeout-seconds": 120,
+      "prerequisite": "leap_basic"
+    },
+    "support_advanced": {
+      "title": "守望相助",
+      "description": "同一次祝福实际作用于队友；队友在效果时限内实际行进4格。还需真实怪物攻击减伤或治疗怪物伤量。",
+      "primitive": "support_route",
+      "allowed-skills": [
+        "priest_blessing"
+      ],
+      "other-allies": 2,
+      "ally-movement": 4,
+      "combat-support": true,
+      "timeout-seconds": 120,
+      "prerequisite": "support_basic"
+    },
+    "inventory_basic": {
+      "title": "行囊与补给",
+      "description": "查list/explain/status；本人普通大背包真实存入、重开取回并保持物品总量；沿合法现有木门和梯井通行。旧实练证明保留。",
+      "primitive": "native_lesson",
+      "proofs": [
+        "cli_list",
+        "cli_detail",
+        "cli_status",
+        "backpack_retrieve",
+        "door_passage",
+        "ladder_ascent"
+      ],
+      "all-proofs": true,
+      "reuse-training": true,
+      "timeout-seconds": 600
+    },
+    "shelter_basic": {
+      "title": "小屋安居",
+      "description": "开考后交付builder_home；本人施工且现存地面、墙、屋顶、外窗、通行门、床均合格，旧简易木板记录不能替代。",
+      "primitive": "contract_record",
+      "proofs": [
+        "shelter"
+      ],
+      "timeout-seconds": 7200
+    },
+    "survey_basic": {
+      "title": "遗迹调查",
+      "description": "开考后接取一张含真实走查的市场探索或原图寻宝任务，调查多个区段、返程交付；单纯到坐标不足以通过。",
+      "primitive": "contract_record",
+      "proofs": [
+        "survey"
+      ],
+      "timeout-seconds": 86400
+    },
+    "cooperation_basic": {
+      "title": "守约协作",
+      "description": "开考后真实救起一名倒地队友，或与至少一名队友共同通关一层试炼；自己回复生命或单人过关不算。",
+      "primitive": "contract_record",
+      "proofs": [
+        "rescue",
+        "party_clear"
+      ],
+      "all-proofs": false,
+      "timeout-seconds": 7200
+    }
+  }
+}

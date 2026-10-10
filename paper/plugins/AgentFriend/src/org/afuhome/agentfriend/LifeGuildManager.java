@@ -251,6 +251,7 @@ final class LifeGuildManager implements Listener {
                 + "（" + rank(reputation) + "）；绿宝石与小礼物已进入个人试炼箱。");
         receipt(player, "claim", contract, true, "claimed");
         plugin.recordWorldLesson(player, "life");
+        if(contract.id().equals("builder_home")&&plugin.skillAssessments()!=null)plugin.skillAssessments().proof(player,"shelter","housing_v1:"+System.currentTimeMillis());
         plugin.getLogger().info("Life guild claim: player=" + player.getUniqueId() + ", id=" + contract.id());
     }
 

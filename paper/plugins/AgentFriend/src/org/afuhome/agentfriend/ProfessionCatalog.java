@@ -21,7 +21,8 @@ final class ProfessionCatalog {
     }
     record Unlock(String id, String source, String sourceId, List<String> skills) { }
     static final Set<String> EFFECTS = Set.of("sword_thrust", "sword_parry", "sword_cone", "sword_step",
-            "sword_beam", "sword_combo", "arcane_bolt", "frost_cone", "flame_cone", "ward", "mark", "mend", "cleanse", "haste", "growth", "warmth");
+            "sword_beam", "sword_combo", "arcane_bolt", "frost_cone", "flame_cone", "ward", "mark", "mend", "cleanse", "haste", "growth", "warmth",
+            "sky_leap", "soar", "blessing");
     final Map<String, Role> roles;
     final Map<String, Skill> skills;
     final List<Unlock> unlocks;
@@ -40,7 +41,7 @@ final class ProfessionCatalog {
             id(id); ConfigurationSection row = section(rows, id, 10);
             String kind = row.getString("kind");
             if (!Set.of("combat", "life").contains(kind)) throw new IllegalArgumentException(id + " kind");
-            List<String> starters = strings(row, "starter-skills", 3);
+            List<String> starters = strings(row, "starter-skills", 4);
             roles.put(id, new Role(id, text(row, "title", 24), kind.equals("combat"), icon(row), starters));
         }
         // The old guide keeps its original slots. At most 20 additions fit its vanilla 54-slot menu.
@@ -95,6 +96,10 @@ final class ProfessionCatalog {
             || effect.equals("frost_cone") && (range > 5 || targets > 3 || power > 3 || duration > 3)
             || effect.equals("flame_cone") && (range > 4 || targets > 3 || power > 4))
         throw new IllegalArgumentException(skill.id() + " exceeds elemental safety limits");
+    if (effect.equals("sky_leap") && (targets != 1 || power < 6 || power > 16 || duration > 20)
+            || effect.equals("soar") && (targets != 1 || duration > 40)
+            || effect.equals("blessing") && (range > 8 || duration > 16 || power > 1))
+        throw new IllegalArgumentException(skill.id() + " exceeds mobility/support safety limits");
     }
     List<String> rewards(String source, String id) {
         LinkedHashSet<String> result = new LinkedHashSet<>();
