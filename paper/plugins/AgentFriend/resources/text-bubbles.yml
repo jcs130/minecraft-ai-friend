@@ -1,4 +1,4 @@
-# Cosmetic public-chat captions. Reload: mycli admin bubbles reload (console only).
+# Cosmetic chat and addressed NPC captions. Reload: mycli admin bubbles reload (console only).
 schema-version: 1
 enabled: true
 view-distance: 24
@@ -11,3 +11,6 @@ max-lines: 3
 update-ticks: 5
 replace-cooldown-ms: 650
 require-line-of-sight: true
+npc-enabled: true
+# NPCSpeak stable IDs; two reserved IDs enable the built-in receptionist and seven life mentors.
+npc-speakers: [storyteller, botanist, guild-receptionist, life-mentors]

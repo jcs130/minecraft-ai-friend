@@ -411,6 +411,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     GuildManager guild() { return guild; }
     ProfessionManager professions() { return professions; }
     WorldLifeManager worldLife() { return worldLife; }
+    void npcSpeech(String id, org.bukkit.entity.LivingEntity npc, Player player, String text) {
+        if (textBubbles != null) textBubbles.npc(id, npc, player, text);
+    }
     LifeGuildManager lifeGuild() { return lifeGuild; }
     TrialRescueManager trialRescue() { return trialRescue; }
     boolean isDowned(Player p) { return trialRescue != null && trialRescue.downed(p); }

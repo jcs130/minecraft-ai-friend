@@ -596,6 +596,11 @@ final class LifeGuildBuildings implements Listener {
         if (contract == null) return;
         event.setCancelled(true);
         openHostMenu(event.getPlayer(), contract);
+        if (event.getRightClicked() instanceof Villager npc && contract.equals(menus.get(event.getPlayer().getOpenInventory().getTopInventory()))) {
+            String speech = "欢迎来实习！先看委托，再接取 " + contract + "，亲自完成后交付。也可用 /mycli life board 查看；想交易就选「与导师交易」。";
+            event.getPlayer().sendMessage("§6[" + ChatColor.stripColor(npc.getCustomName()) + "] §f" + speech);
+            plugin.npcSpeech("life-mentors", npc, event.getPlayer(), speech);
+        }
     }
     @EventHandler public void onHostClick(InventoryClickEvent event) {
         String contract = menus.get(event.getView().getTopInventory());

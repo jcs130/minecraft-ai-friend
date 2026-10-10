@@ -1,0 +1,52 @@
+{
+  "version": "0.4.9",
+  "status": "deployed",
+  "verifiedOn": "2026-10-10",
+  "artifact": {
+    "name": "AgentFriend-0.4.9.jar",
+    "bytes": 1085577,
+    "sha256": "0378675B22F7DCF8032D363BC53DF47435378018388A2D5FE5FD167434A1288B"
+  },
+  "capabilities": [
+    "say",
+    "bubbles",
+    "npc-private-dialogue"
+  ],
+  "config": "plugins/AgentFriend/text-bubbles.yml",
+  "npcSpeakers": [
+    "storyteller",
+    "botanist",
+    "guild-receptionist",
+    "life-mentors"
+  ],
+  "checks": {
+    "nativeProtocol": 26,
+    "npcProtocol": 18,
+    "normalRestartAndRealBackend": 4,
+    "simultaneousSpeakers": 16,
+    "actualAttachedEye": true,
+    "rendererErrors": 0,
+    "peakFrameMicros": 2673,
+    "stageAverageTickMillisAtLoadAudit": 7.414689,
+    "production": 9,
+    "preservation": 22,
+    "minepacksInventories": 19,
+    "goddessActualGuideReads": 2,
+    "goddessReplyCharacters": 129
+  },
+  "limitations": [
+    "Phone and Xbox visuals require real-device confirmation.",
+    "Geyser translates TextDisplay to text labels; Java background and layout differ.",
+    "Other NPC providers are not yet connected.",
+    "Speech audio is not implemented."
+  ],
+  "evidence": "Private E/F repairs/npc-text-bubbles-20261010; failed fixture attempts retained.",
+  "liveVersion": "0.4.9",
+  "deployedAt": "2026-10-10T04:25:57.695Z",
+  "backupBefore": "20261010-122344",
+  "operations": {
+    "taskState": "Ready",
+    "taskResult": 0,
+    "javaPID": 9504
+  }
+}

@@ -27,6 +27,10 @@
 
 JAR 的官方来源、大小和 SHA256 见 [固定清单](../manifests/world-life-plugins.lock.json)，配置模板见 [world-life](../content/world-life/README.md)。不提交第三方 JAR、模型凭据、测试地图或玩家数据。
 
+## NPC文字气泡
+
+0.4.9为阿卷、青禾的实际问候/答复，以及接待员和七位生活导师的交互指引添加头顶文字；默认8秒，仅对话者和其当前附身Eye可见。多人交谈各自独立，完整对白留在聊天栏。原客户端、对话/任务/交易入口保持；配置及限制见 [文字气泡](TEXT_BUBBLES.md)。实际部署状态以 SERVER_UPDATES.md 为准。
+
 ## 玩家与 Agent 用法
 
 | 命令 | 用途 |

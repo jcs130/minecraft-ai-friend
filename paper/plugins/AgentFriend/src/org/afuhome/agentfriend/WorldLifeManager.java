@@ -193,7 +193,7 @@ final class WorldLifeManager implements Listener {
             item.addProperty("command", "/mycli world talk " + id + " 你好"); entries.add(item);
         }
         JsonObject out = new JsonObject(); out.add("npcs", entries); out.addProperty("talkRange", 8);
-        out.addProperty("instruction", "亲自走到 NPC 8 格内，用 talk 发问；右键村民也可开始对话。/mycli world end 结束，普通聊天恢复公屏。");
+        out.addProperty("instruction", "亲自走到 NPC 8 格内，用 talk 发问；右键村民也可开始对话。答复可显示头顶8秒气泡，仅本人及当前附身Eye可见，完整对白在聊天栏。/mycli world end 结束，普通聊天恢复公屏。");
         emit(p, "npcs", out);
     }
     private void talk(Player p, String[] args) throws ReflectiveOperationException {

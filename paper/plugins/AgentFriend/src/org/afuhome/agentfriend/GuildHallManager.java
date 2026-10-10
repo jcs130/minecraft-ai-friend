@@ -560,6 +560,11 @@ final class GuildHallManager implements Listener {
         if (!event.getRightClicked().getPersistentDataContainer().has(receptionistKey, PersistentDataType.BYTE)) return;
         event.setCancelled(true);
         openReceptionMenu(event.getPlayer());
+        if (event.getRightClicked() instanceof Villager npc) {
+            String speech = "欢迎来到冒险者公会！先看委托，接单后亲自完成再交付。需要物资可用门口公共箱；馆内私产请先获授权。";
+            event.getPlayer().sendMessage("§6[接待员阿莉娅] §f" + speech);
+            plugin.npcSpeech("guild-receptionist", npc, event.getPlayer(), speech);
+        }
     }
     @EventHandler public void onReceptionClick(InventoryClickEvent event) {
         UUID owner = receptionMenus.get(event.getView().getTopInventory());
