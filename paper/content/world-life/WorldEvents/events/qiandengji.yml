@@ -28,7 +28,7 @@ events:
     enabled: true
     type: POTION_EFFECT
     duration: 180
-    announcement: <yellow>[星灯夜巡]</yellow> <gray>3分钟夜视。阿卷想听你的故事，也想看你家里的一张生活照：/mycli world board；截图步骤 /photohelp。</gray>
+    announcement: <yellow>[星灯夜巡]</yellow> <gray>3分钟夜视。阿卷想听你的故事，也想看你家里的一张生活照：/mycli world board；自动拍照 /photohelp。</gray>
     display-name: 星灯夜巡
     symbol: ☾
     weight: 20

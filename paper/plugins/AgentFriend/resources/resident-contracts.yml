@@ -14,7 +14,7 @@ tasks:
     steps:
       - {title: 收割成熟小麦, description: 亲手收割八个不同位置的成熟小麦；未熟、受保护、创作模式都不算。先交本阶段再补种。, goal: harvest, crop: WHEAT, target: 8}
       - {title: 给田地留明天, description: 在刚才亲手收割的八格原地种下小麦种子；别处种植或反复拔插同一格不算。, goal: replant, crop: WHEAT, target: 8}
-      - {title: 把余粮带到集市, description: 到 world(-547,67,-445)向禾仓完成一次农产品出售；需真实支付物品，打开窗口不算。, goal: trade, shop: 4e2dc6c5-9128-4d0a-9c20-3caee63324d2, target: 1}
+      - {title: 把余粮带到集市, description: "到 world(-547,67,-445)向禾仓完成一次农产品出售；需真实支付物品，打开窗口不算。", goal: trade, shop: 4e2dc6c5-9128-4d0a-9c20-3caee63324d2, target: 1}
   vegetable_cycle:
     scope: personal
     repeat: daily
@@ -47,7 +47,7 @@ tasks:
     icon: BREAD
     reward: {fame: 3, emeralds: 1, bonus: ARROW, bonus-count: 8}
     steps:
-      - {title: 集市的真实交易, description: 到村庄补给商 world(-547,67,-442)完成一次购买；真实扣款与交货后才算。, goal: trade, shop: 0ca8e5d5-7ec0-48d6-94fc-5ec19c72e044, target: 1}
+      - {title: 集市的真实交易, description: "到村庄补给商 world(-547,67,-442)完成一次购买；真实扣款与交货后才算。", goal: trade, shop: 0ca8e5d5-7ec0-48d6-94fc-5ec19c72e044, target: 1}
       - {title: 留下四块面包, description: 交付四块面包到公共补给库存；别拿萌萌的私产凑单。, goal: donate, item: BREAD, target: 4, chest: supplies}
   first_spell:
     scope: personal
@@ -59,17 +59,17 @@ tasks:
     reward: {fame: 6, emeralds: 2, bonus: MAP, bonus-count: 1}
     steps:
       - {title: 法术真正生效, description: 接单后成功使用一次本人已学技能；正常耗费资源与冷却，失败、查询、聊天声明不算。, goal: skill_cast, target: 1}
-      - {title: 认识补给商, description: 到 world(-547,67,-442)补给商完成一次真实交易。下一步可以接阿卷的照片委托。, goal: trade, shop: 0ca8e5d5-7ec0-48d6-94fc-5ec19c72e044, target: 1}
+      - {title: 认识补给商, description: "到 world(-547,67,-442)补给商完成一次真实交易。下一步可以接阿卷的照片委托。", goal: trade, shop: 0ca8e5d5-7ec0-48d6-94fc-5ec19c72e044, target: 1}
   photo_album:
     scope: personal
     repeat: once
     title: 阿卷的第一张生活照
-    description: 为自己的家或领地做一张照片展品。用现有截图上传，成图后亲手挂上展示框；照片与展品由本人保留。
+    description: 为自己的家或领地做一张照片展品。用女神相机自动拍照，成图后亲手挂上展示框；照片与展品由本人保留。
     beneficiary: 村庄说书人·阿卷
     icon: ITEM_FRAME
     reward: {fame: 6, emeralds: 2, bonus: PAPER, bonus-count: 4}
     steps:
-      - {title: 新建本人照片, description: 接单后用 /imageframe create <名字> upload 1 1 上传现有截图，等服务器真正创建成图。旧图、复制图、只有HTTP成功都不算。, goal: photo, target: 1}
+      - {title: 新建本人照片, description: 接单后准备1张空地图和空主背包格，用 /mycli photo take <名字> 拍照；站稳等地图入包，photo status查进度。无需截图或上传；旧图和复制图不算。, goal: photo, target: 1}
       - {title: 把这一刻挂起来, description: 在本人或获准位置把本次新建的照片亲手放进空展示框；原版地图或别人的照片不算。, goal: photo_hang, target: 1}
   crypt_report:
     scope: personal
@@ -92,7 +92,7 @@ tasks:
     reward: {fame: 15, emeralds: 5, bonus: COMPASS, bonus-count: 1}
     steps:
       - {title: 蔓生地窖全程返程, description: 接单后清完 creeping_crypt 全部房间、返第一间并 dungeon claim creeping_crypt；亲自参与，难度自选。, goal: site_clear, site: creeping_crypt, target: 1}
-      - {title: 归来后的新照片, description: 本阶段再创建一张本人照片地图，截图上传流程 /photohelp；不要求照片画面自动识别遗迹。, goal: photo, target: 1}
+      - {title: 归来后的新照片, description: 本阶段用 /mycli photo take <名字> 再拍一张本人照片；备好空地图和空主背包格，站稳等地图入包。无需截图上传；不验证照片画面中的遗迹。, goal: photo, target: 1}
       - {title: 本人旅途小展, description: 把本次新建照片亲手挂入自己或获准的空展示框，展品保留。, goal: photo_hang, target: 1}
   bunker_report:
     scope: personal

@@ -1,120 +1,17 @@
-**2026-10-11 YSM桥接已上线：**服主授权先上线YSM，原维护任务正常停启、E/F `20261011-030654/.complete` 后发布五文件，结果0，Paper PID27844。Proxy0.3.0/Freesia2.5.1+2.4.1/YSM2.4.1 Worker及Geyser扩展0.1.0接入原网关、单实例维护、Watchdog和停服模型快照，新增四端口仅127.0.0.1。原AgentFriend0.4.13/CortiEyeMirror0.1.10、身份来源和Eye配对保持；三原账号同UUID重连。正式23项模型/资源协议、55项旧数据检查通过；隔离基岩14、生命周期及16连接14项保留，非16个自主LLM长期开荒验收。首次ANSI解析拒绝已修复显式UTF-8，旧版正常恢复及第二轮完整预告均留证。基岩本人模型分配、完整动画/装备、手机/Xbox真机及远端Web更新未完成；不自动为玩家分配模型。0.4.15住房/教学及0.1.11 OBS/live窗口候选仍未部署。当前规则见[YSM适配](YSM_ADAPTATION.md)，维护见[生命周期](YSM_LIFECYCLE.md)；私有回执E/F repairs/ysm-release-20261011。下方旧状态按历史时点阅读。 女神四份现役资料摘要一致，实际读回后117字符答复准确说明已上线、原客户端可用与远端Web状态未核对；首答对Web过度断言的记录保留。03:21:57原生getSpectatorTarget实读确认新ag_cormy_eye已附身ag_CorMy精确UUID，同world、同帧距离0。
-
-## 2026-10-11：迎新热文案、验房候选与可米皮肤
-
-正式0.4.13欢迎修订4已热加载，介绍54格Minepacks大背包、任务袋/个人奖励箱区别、CLI发现和技能耗费。0.4.15候选新增七项现存房屋验收及六项自愿特色实练，规则见 [住房与实练](STARTER_HOUSE_TRAINING.md)；旧任务奖励、实习毕业与角色数据保留。服主要求本轮不重启，候选未部署、未排队发布。
-
-可米皮肤上传已修复：SkinsRestorer配置使用默认占位符，旧脚本误发为Bearer凭证导致403；省略占位符的匿名生成已成功，签名普通皮肤热绑定ag_CorMy精确UUID并通过实际原版profile投递核验。无需提供新密钥，原连接保持。此项不代表YSM代理上线；YSM仍须完成原网关/单实例维护/Watchdog接入及正式发布。
-
-## 2026-10-11 现役账号与本轮发布状态
-
-**2026-10-11 本轮不重启，Eye热登记已生效：**服主确认新账号在原CortiLan/CortiEye电脑运行，并明确本轮不重启。已热登记 `ag_CorMy → ag_cormy_eye` 及原可信来源；正式仍为AgentFriend0.4.13、CortiEyeMirror0.1.10，全部插件JAR及维护助手摘要保持，未排队待发布计划。新账号UUID为822d173a-7181-3b9b-be60-804f29b24ecc，与CortiLan独立，不迁移物品、技能或领地。核验时新Eye未在线，不能把登记成功称作原机已附身。OBS透明覆盖、自由live切换和真实窗口移动/超距关闭已在0.4.14/0.1.11候选隔离初验20项及正常冷重启20项通过，保留待后续明确维护；远端Web仍须更新重建，基岩/OBS真机未验。资源包已接收，但可米新皮肤因现有MineSkin key无效尚未绑定，正式YSM代理亦未上线。私有回执E/F repairs/obs-eye-overlay-20261011；下方旧记录按历史时点阅读。
-
-## 已上线0.4.13：主村庄公共土地不套用整片建筑封锁
-
-主村庄公共草地、树木、农田和空位恢复生活操作，原23屋建筑掩码、道路、公会私产及私人领地保护保持。精确排除world的minecraft:village_taiga起点区块[-34,-28]，不豁免其他村庄或遗迹。详见STRUCTURE_PROTECTION.md；到目标附近重新查询/mycli protect。此段发布时可米使用CortiLan；2026-10-11新账号ag_CorMy独立接入，旧领地仍按CortiLan原UUID管理，禁止自动迁移。NEKO已有4株真实采收证据，禁止代改进度或补发；缺成熟麦时可以先在合法耕地种麦、等待成熟，再做任务采收。原生半砖坑需要原生开路或按既有消耗施放闪现/归乡，不把维护操作计为自主掌握。
-
-## 已上线0.4.12：制高点按实际高度验收
-
-`high_peak`到达Y≥120即可，天然山峰、山上建筑、屋顶和高塔均可，不要求积雪或全程徒步。到达后横向走过一格记录，`guild status`查进度、`guild claim`领取。状态/重登提示同步实际条件；旧任务ID、进度、阈值与奖励保持。源码市场模板同步澄清，已有市场在途快照保持。
-
-## 已上线0.4.11：清爽相机与清晰海报
-
-`/mycli photo take <名字> [first|third|top] [1|2]`；默认单图1张空地图，末尾2生成2×2海报，需要4张空地图及4个空主背包格。开始/完成两条聊天，Agent旧回执兼容；1536原图、相机半径6。原版单图仍为128×128像素。正式已验证海报交付和提示精简；YSM模型照片为隔离验证，正式Proxy/Worker尚未接入。当前状态见[相机](SERVER_PHOTOGRAPHY.md)，YSM拓扑上线另见[YSM适配](YSM_ADAPTATION.md)。
-
-## 开发候选：YSM（未部署）
-
-**YSM（2026-10-10，未部署）：**私有 Freesia/Worker 候选已完成原 Agent、显式 Eye、背包、16 连接与故障恢复隔离验证；可分发原模型自动转为网页/相机资源，新增基岩玩家原几何/UV/PNG皮肤包转换，实际基岩协议2193联调14项、冷重启6项通过。基岩方向用于看见Proxy上的Agent/Java角色；基岩本人分配入口、完整原生动画/装备与手机/Xbox真机显示仍未验。正式整个YSM拓扑尚未接入单实例维护/Watchdog；当前正式AgentFriend为0.4.12。边界与后续见 [YSM 适配](YSM_ADAPTATION.md)。
-
-## 已上线0.4.10：本机女神相机
-
-服主要求不开公网接口。现在提供`photo take <名字> [first|third|top]`与原版三角度菜单，去UI保留人名，实际空地图消耗和本人ImageFrame归属；真人/基岩/公网Agent共用。正式成片和地图交付已核验，当前可用性看`photo status`。维护与桥接见[女神相机](SERVER_PHOTOGRAPHY.md)。
-
-# 千灯纪：Agent 团队维护、开发与运营手册
-
-## 2026-10-10：NPC文字气泡（0.4.9已上线）
-
-女神资料箱已同步并实际读回两份手册；NPC范围、本人及当前附身Eye可见、基岩待真机和语音未启用均正确。
-
-2026-10-10T04:25:57.695Z正常维护后正式核验，任务结果0、Java PID9504，E/F停服快照20261010-122344完整，预告和更新说明按本次回执执行。阿卷/青禾真实问候答复、阿莉娅与七位生活导师交互指引支持头顶气泡；NPC实体UUID＋对话者UUID区分私有并发，仅对话者及本次已登记且当前实际附身Eye可见。超时/隐藏/卸载/移除/跨维度/下线清理，与玩家共享32/64预算和单任务；正常公开玩家气泡保持。现有NPCSpeak可按稳定ID热配置，第三方JAR/推理后端及原客户端保持。原版协议26项玩家回归、18项NPC检查通过；基岩外观待真机、语音未上线。见[文字气泡](TEXT_BUBBLES.md)、[产物清单](../manifests/npc-text-bubbles-0.4.9.json)。下方0.4.8记录为历史。
-
-## 2026-10-10：头顶文字气泡（0.4.8已上线）
-
-女神资料箱已同步，实际读回两份手册并以98字符答复；公开气泡/私聊隔离/基岩待真机/语音未启用均正确。
-
-2026-10-10T03:27:19.119Z正式版本、启动、Java/LAN/基岩UDP及旧数据核验通过；正常维护前E/F快照20261010-112510完整，任务结果0，Java PID24448。游戏预告与更新说明按本次私有发布回执执行。
-
-公开聊天和稳定ID `say`（`/mycli say <话>`）使用相同聊天事件；`bubbles` 返回 schemaVersion=1 的 `MC_BUBBLES` 状态。默认8秒、24格、三行正文，角色移动时跟随；每人一个显示实体与一条待发消息，最多32/64，单个5tick任务。独立 `text-bubbles.yml` 严格热配置，控制台 `mycli admin bubbles reload|audit`，错误保留上份配置，关闭即时清理。
-
-私聊/命令和被取消输入不生成气泡，接收者不能超出原公开聊天名单；同维度、距离、视线和隐藏规则再次过滤。女神/观战Eye/隐身角色不生成自己的气泡；实际附身Eye可看其他角色的公开气泡，无重复身体。原角色铭牌、技能账本和Agent客户端保持。Geyser现役转换器支持文字标签，手机/Xbox外观待真机；语音仍是调研阶段。
-
-同包原版协议26项及16人同时发言通过，实际附身Eye、私聊/取消/受限接收者/隐藏/遮挡、跨维度、热重载和清理已测。负载审核16个气泡、pending=0、errors=0，平均tick7.285ms，气泡管理任务单帧峰值5.148ms；这些是隔离受控发言数据，不是16个LLM自主游玩的全场景压测。隔离服正常重启后复验并正常停止。规则及夹具见 [文字气泡](TEXT_BUBBLES.md)，固定产物见 [清单](../manifests/text-bubbles-0.4.8.json)。发布按维护预告、E/F停服快照、同摘要替换、入口与旧数据核验、更新说明及女神实际读回流程执行。旧回执保留。
-
-**2026-10-10 大背包入口修复已上线（AgentFriend仍为0.4.7）：**2026-10-10 10:31:39正式复核。Minepacks快捷头颅内部调用的`backpack open`被BetonQuest同名命令接走，显示只有任务笔记的界面，隔离服已复现。根目录`commands.yml`明确路由`backpack`/`bp`到Minepacks、`questbag`到BetonQuest；后者中文标题改为「任务物品袋」，任务笔记注明奖励另领。普通储物54格、任务专用袋、公会/试炼个人奖励箱10页540格各自保存，奖励路径不变。
-
-已发3分钟、1分钟、10秒维护预告，确认无人处于试炼后依服主既有重启授权正常保存；E/F `20261010-102818/.complete` 完整后替换两份配置，任务结果0，Java PID21956，上线核验后已发更新说明。全部30个插件JAR和原Agent客户端保持。维护前内存导出、停服数据库、重启数据库逐项一致：原18份Minepacks库存完整，反馈玩家的18格77件完整；原540格个人箱及待领奖队列、BetonQuest任务物品行、技能资格/点数和领地规则保留，没有迁移或补发。
-
-隔离验证五种大背包入口的实际取放、任务袋拒收普通物品、真实公会交付奖励进个人箱，以及附魔书/药水正常重启后属性完整；正式20项、旧数据19项、Minepacks保存2项、部署夹具9项通过。Java/LAN及基岩UDP入口响应，手机/Xbox实际界面和玩家操作反馈仍须分别确认。Goddess/ag_NEKO/小鱼已回连；CortiLan与原机CortiEye维护前后均离线，不称镜头恢复。私有证据E/F `repairs/backpack-loss-20261010`。规则见[背包](BACKPACKS.md)，下方旧记录为各自历史时点。
-
-女神资料箱已与源玩家手册逐字一致，实际读取新版手册及BACKPACKS专题后答复125字符，正确区分三个入口及奖励去向；没有主动游戏聊天、发物或改变权限。
-
-**2026-10-09 18:07:17 0.4.7已上线：**服主已明确授权本次重启与维护公告，取代之前“先不重启”的限制。已发送3分钟、1分钟和10秒游戏预告；既有维护任务正常停启，E/F `20261009-175456/.complete` 在替换前完整，任务结果0，Java PID27940。领地主人/女神超管授权与撤权、公开协作者名单、三处原版公告牌及原生建筑保护/开门爬梯实练均已上线；原名单与客户端保持。正式只读33项、旧数据25项通过，MCP10工具重新发现且原来源策略保持。更新后已发简短说明，女神资料箱同步并实际读回，问答131/99字符；初答权限表述含混的失败保留，澄清后复验。原机CortiEye已实际回连附身并有夜视。手机/Xbox仍待真机。规则见 [领地](LANDS.md)、[建筑保护](STRUCTURE_PROTECTION.md)、[维护](OPERATIONS.md)。下方旧状态均为历史时点。
-
-**0.4.5收尾核验（2026-10-09 13:14:30）：**正式Java PID36952，维护任务结果0，当前在线CortiLan/ag_NEKO/Goddess；原机CortiEye仍offline/未附身，配对与Watcher正常，不称原镜头恢复。女神资料箱与源手册SHA256同为`5E2A5AE9609A93FAADFB850FF012017CF563867EDEF0E5A475B599719FB814E5`，专题SKILL_VISUALS亦同源；两项原生只读问答实际阅读后答复114/87字符，准确说明剑痕/冰火/治疗/羽翼风格、原资格/耗魔/冷却/范围和原客户端可用，以及配置热更新/多人限流/画面不表示实际范围，不主动游戏公告。下方旧状态均为各自历史时点。
-
-**2026-10-09 13:12:27 技能粒子已上线：**AgentFriend **0.4.5**（1007993字节，SHA256 `6FEE45DC334BA608734E7CE738024E090FC6D8D83F05223A0DFDB9AC140785A4`），正常维护任务结果0，替换前E/F `20261009-130919/.complete` 完整。36种视觉绑定，剑痕、冰晶、火浪、治疗莲阵、羽翼和星环；星尘实际导入用户指定粒子工坊固定提交的六芒星。原技能ID、资格、点数、耗魔、冷却和实际范围保持；原Agent/Eye客户端不改。新增特效配置可热加载，单计时器/每人和全服投递限流，实际Eye直接收一份。隔离56、正常重启10、正式原版协议19、旧数据22项通过；16受控Agent+真实附身Eye验证播放预算，不等同16个LLM长期游玩。基岩原版粒子映射已核对，手机/Xbox实际画面待真机。见[技能特效](SKILL_VISUALS.md)，原机Eye状态以收尾复核为准；下方旧记录为历史。
-
-**0.4.4收尾核验（2026-10-09 12:41:29）：**正式Java PID35480，维护任务结果0，当前在线ag_NEKO/Goddess/CortiLan；原机CortiEye仍offline/未附身，配对与Watcher正常，不称原镜头恢复。女神资料箱与源手册SHA256同为`DA398C1C67BB959F554A4784AE38CDD6CA00DA200A9053E2C20A103A44E963EC`，另附试炼入口和迎新指南；两项原生只读问答实际阅读后答复128/131字符，准确说明三个实体按钮、确认开场与发起者决定全队难度，以及help/下一步、接单行动交付和个人暂停，不主动游戏公告。下方旧状态均为各自历史时点。
-
-**2026-10-09 12:38:09 三难度实体按钮与登录引导已上线：**AgentFriend **0.4.4**（988378字节，SHA256 `18E70E0C5B005FB1973A75CEA07FE9C856294250B5EE51A710D06D30C3E9E050`），Java PID35480。既有任务正常停启，E/F施工前`20261009-123208`、施工后`20261009-123451`均完整。正式大厅三个石按钮：普通绿`(-596,92,-313)`、冒险橙`(-596,92,-310)`、末日紫`(-596,92,-307)`，双面上蜡牌；按按钮选定，再在菜单确认开场，发起者决定全队档位。新Agent默认2秒迎新，明确help/list/status、技能目录、任务accept→真实完成→claim、登记和实习，菜单安全后及时补发。提醒仅私有，不代办，原客户端保持。最终同包隔离46、正常重启10、正式原版协议29、旧数据22项通过；实际手机/Xbox排版待真机。原机Eye与女神阅读以收尾复核为准。规则见[试炼入口](TRIAL_ENTRANCE_BUTTONS.md)、[Agent迎新](AGENT_ONBOARDING.md)。私有回执E/F `repairs/trial-buttons-onboarding-20261009`；下方为历史。
-
-**0.4.3收尾核验（2026-10-09 12:04:14）：**正式Java PID33488、维护任务结果0，当前在线ag_NEKO/Goddess/CortiLan。截至12:04:14原机CortiEye未附身，实际状态见本次回执；配对及Watcher正常，不称镜头恢复。女神资料箱与玩家手册SHA256同为 `5A2EA1BF9CF087A962BBA5EEF8A99D96F204A822E0F8322AA694729959777FCE`，另附报错指引；两项原生只读问答实际读取后答复134/95字符，准确解释公会真实边界与含两端、公共箱、区外重查及可能还有保护，点数/魔力/报价/保存异常的正确做法，提示不自动消费，没有主动游戏公告。下方旧连接状态与手册摘要为各历史时点。
-
-
-**2026-10-09 11:56:50 操作报错指引已上线：**AgentFriend **0.4.3**（977798字节，SHA256 `4193CF034079F4524D44480E010A929D7BC6FD0F721BFC4DB68F25FCD1FA16F4`），Java PID33488。既有维护任务正常停启，E/F `20261009-115357/.complete` 在替换前完整；替换AgentFriend及两份MagicSpells提示配置。建筑拒绝显示动作、目标世界/坐标、保护区真实边界和下一步；边界含两端，村屋/道路掩码标注外包范围，区外仍须靠近重查，公会私产引导门口公共箱。技能/委托/地下城/传送/经济/居民等失败说明正确做法，原原因码/schema、权限和耗费保持，原Agent/Eye客户端无须更新。规则见[操作报错指引](ERROR_GUIDANCE.md)。同包隔离49、正常重启11、正式只读27、旧数据19项通过，维护文件夹具15项通过；手机/Xbox实际文字显示待设备，基岩Pong仅算入口。原机Eye回连与女神实际阅读见收尾复核。私有回执E/F `repairs/protection-guidance-20261009`，下方旧版本为历史。
-
-
-
-**0.4.2收尾核验（2026-10-09 11:01:28）：**正式Java PID39120、维护任务结果0，当前在线ag_NEKO/Goddess/CortiLan/CortiEye。原机CortiEye已实际回连附身，camera=online/attached=true并有夜视。女神资料箱与玩家手册SHA256同为 `2CF9E0A0E1E5B379C2EFAA6A328CAA6913F931CC1A93F81E4C09C6A0DAE3BBCB`，另附迎新指南；两项原生只读问答实际读取后答复117/127字符，准确解释登记/三项实习、不会自动花点接单、每分钟巡检/同阶段10分钟、暂停30分钟与关闭、战斗安静和观战排除，没有主动游戏公告。下方旧连接状态与手册摘要为各历史时点。
-
-**2026-10-09 10:51:12 Agent迎新已上线：**AgentFriend **0.4.2**（938722字节，SHA256 `9B374DE395CA940D7C1D5297A45BEB8BF3319ADE37377AD10AC7BBC821CDA061`），Java PID39120，既有维护任务正常备份重启，E/F `20261009-104845/.complete` 在替换前完整。登录私聊与真实进度引导覆盖登记、三项实习、生活交付和首张冒险委托；每分钟检查，同阶段10分钟最多一次，完成后1小时最多一次。观战者排除，战斗/副本期间安静，个人可暂停30分钟或关闭，跨重登保留。原Agent/Eye客户端、技能价格、任务验收、箱子和权限保持。热配置与原版27格入门页见[Agent迎新](AGENT_ONBOARDING.md)。隔离完整流程36、正常重启及旧死亡提醒10、正式只读25项及迎新范围热调整5项、旧数据17项通过；手机/Xbox真机操作待设备，入口响应不算实机验收。原机Eye状态以收尾复核为准。私有回执E/F `repairs/agent-onboarding-20261009`。下方旧版本为各发布时点。
-
-**0.4.1收尾核验（2026-10-09 10:11:21）：**正式Java PID39240、维护任务结果0，当前在线ag_NEKO/Goddess/CortiLan/CortiEye。原机CortiEye已实际回连附身，camera=online/attached=true并有夜视。女神资料箱与玩家手册SHA256同为 `D7EF3DE5957ED511124C52200591EC0EE4C2B48B663005989D189701AEEA30B3`，另附技能罗盘指南；两项原生只读问答实际读取后答复63/58字符，准确解释底排前四技能、未学不自动花点、右上关闭、每页36项和原耗魔冷却，没有主动游戏公告。下方旧连接状态与手册摘要为各历史时点。
-
-
-
-**2026-10-09 10:03:42 技能罗盘整理已上线：**AgentFriend **0.4.1**（919465字节，SHA256 `2800C7771120115B64FA84D9306ADE308172FCEF398D4DE2B8031241E4B44EB3`），Java PID39240，既有维护任务正常备份重启。E/F `20261009-100203/.complete` 均在替换前完整，仅替换AgentFriend JAR。主菜单45格五排，最底九格为夜视、圣愈、闪现、飞行、范围治疗、羽落、饱食、探敌、归乡；关闭移至右上角。未学点击只打开学习页，不自动花点；原资格、魔力、冷却和安全规则保留。图鉴每页36项、详情返回原页；地点页扩36格，恢复被关闭按钮覆盖的地下城入口。原Agent/Eye客户端程序与29个其他插件JAR保持。隔离57项、正式普通协议30项、旧数据17项通过。基岩入口已响应，手机/Xbox实际画面和手柄点击待设备验收。原机Eye实际回连情况见最终核验，不把watcher在线当作镜头恢复。规则见[技能罗盘](COMPASS_MENU.md)，下方旧版本为各发布时点。私有回执在E/F `repairs/compass-menu-20261009`。
-
-**本次收尾复核：**原机CortiEye已实际恢复 `camera=online attached=true cameraNightVision=true`，目标CortiLan；Goddess/CortiLan/CortiEye/ag_NEKO四个原服务账号均已回连。女神资料箱与玩家手册SHA256同为 `F3947044583989863935E2DA693A6809597FFC441B503D0FBE5E4F075433C69D`，另附村庄生活季指南；两项原生只读问答实际读取两份资料后答复111/70字符，准确解释原格补种、普通配怪和本人照片保留，没有主动游戏公告。下方维护期间尚未回连的记录为历史。
-
-**2026-10-09 09:25:57 村庄生活季已上线：**AgentFriend **0.4.0**（916350字节，SHA256 `F2C32D62254007F3577D05605FC6B84E9643322B432A4C7798D31125829A8AF9`），Java PID39068，正常维护任务结果0。E/F `20261009-092349/.complete` 均在替换前完整。九张居民事务把农耕、原格补种、原版交易、公共补给、本人新照片挂墙、真实施法和三处遗迹调查接入现有公会验收与能力记录；原35张任务/7场地保留，共44张。新增禾仓和灯穗两个真实商人，居民对话、故事和活动指向可接任务；Mythic精英只接入冒险/末日地下城，普通配怪保留。原Agent/Eye客户端未改。规则与热运营见[村庄生活季](VILLAGE_LIFE_SEASON.md)。隔离完整流程34、地下城30、热更新/真实NPC答复10、正常重启/16受控Agent加1附身Eye11项通过；正式只读27、旧数据18项通过。基岩入口已响应，手机/Xbox实际画面待设备；这不是16个LLM长期自主游玩的性能承诺。09:30:35原机CortiEye实际回连附身并有夜视；随后四个原服务账号全部回连。下方旧版本和旧连接状态均为各自发布时点。私有回执在E/F `repairs/world-life-season-20261009`。
-
-**2026-10-09 08:27:20 最终复核：**原机 CortiEye 已自动回连，实际 `camera=online attached=true cameraNightVision=true`，目标为 CortiLan；本次重启前四个服务账号均恢复。下方“尚未回连/离线”是恢复前的检查时点，不能继续作为当前镜头状态。截图上传配置与原客户端保持。私有最终回执在 E/F `repairs/screenshot-photos-20261009/final-state.json`。
-
-**2026-10-09 08:16:03 当前配置：**AgentFriend仍为0.3.99，新增截图直接上传及 `/photohelp`。服务器只绑定LAN `192.168.3.163:8517`，原Agent/Eye客户端与全部插件JAR保持；截图来自现有工具，HTTP接受后还须验证真实地图，玩家串行创建。E/F `20261009-081417/.complete` 在替换前完整，Java PID26896，任务结果0；隔离22、脚本边界4、正式只读18项通过。普通/keepInventory、Goddess旁观者及AuraSkills当前启动验证通过。CortiLan/ag_NEKO/Goddess已回连，原机CortiEye当前offline/attached=false，配对/watcher保留，不能称镜头恢复；手机/Xbox画面待真机。详见[截图相册](SCREENSHOT_PHOTOS.md)、[维护记录](OPERATIONS.md)。下方旧发布时点为历史。
-
-**最新正式状态：**2026-10-09 01:09:41 正式部署及入口恢复完成，AgentFriend **0.3.99**（898509字节，SHA256 `59CCE54DE06261D53CF2068DEE5DF4BD6809062A12EB7666467D784E916F705D`），当前 Java PID **34088**。十个生活插件全部启用；新手实习、村民真实模型对话、故事、商店和三个正向定时活动已开放，图片可导入地图并挂墙，自动快门尚未接入。三个精英仅为管理员活动模板，普通试炼配怪保持。原 Agent 客户端程序未改。
-
-原8位玩家152个占用槽位在完整540格范围逐项保留元数据，114个旧技能资格、35张市场任务/7场地、49个WorldGuard区域、原11份地图数据和十九个既有第三方插件JAR保留。三维度普通/keepInventory=true，Goddess旁观者和AuraSkills当前startup-verified通过。CortiLan、ag_NEKO、Goddess已回连；原机CortiEye当前offline/attached=false，配对及watcher正常，不能说原直播镜头已恢复。 Java/LAN及正式基岩UDP入口已实际复核。基岩玩法均用原版实体、聊天、箱式菜单、地图和展示框；隔离无Xbox认证探针未成功登录，手机/Xbox真实画面和操作仍待设备验收，不能把Pong算完整兼容验收。
-
-女神资料箱已同步新版手册，实际读取与简短答疑两项通过；入口及照片边界按[当前玩家说明](SERVER_UPDATES.md)回答。
-
-**2026-10-08 23:24:01 历史发布记录：**已正式发布 AgentFriend **0.3.98**（886121字节，SHA256 `EFF8C9B52576DBC016092E3C2C2D4FCDD06E8EEFA959186EB78497EFB25CF6CC`），Java PID **25800**。E/F `20261008-232258/.complete` 均在替换前完整，正常维护任务结果0。直接复用玩家已有藏宝图、原版探险家地图与遗迹地图；接单只读原图目标，不替换、不改写、不消耗。天然藏宝箱须亲自新开，遗迹须实际走查，完成后返接单点交回记录；地图和战利品保留。每人每个目的地一次，同日换新目的地可继续，复制图或同建筑偏移标记不能重复领奖。文字、奖励和路线条件可热更新，在途约定冻结，Agent客户端程序未改。 同一最终JAR隔离完整流程/正常重启/真实附身Eye/正式只读分别41、10、4、11项通过。原11份地图数据文件摘要保持；原34任务和7场地完全保留，仅追加通用寻宝任务，市场共35张。8位玩家152个占用槽位在540格范围保留元数据，114旧资格、49个区域及公共箱规则保持。四个原维护账号已回连，原机CortiEye实际attached=true；三维度普通/keepInventory=true、AuraSkills当前启动验证和其他插件JAR摘要通过。
-
 本文是 `qiandengji-personal-stash` 分支的长期工作约定。目标是让 Agent 团队持续提出、制作、验证和运营新内容，同时让六岁玩家、手柄玩家、Java 玩家、基岩玩家和 Mineflayer Agent 在同一世界里获得可理解、可完成的体验。当前正式服的启停、备份、发布命令仍以 [维护与发布](OPERATIONS.md) 为准；本手册说明内容如何从想法进入这个流程。
 
 ## 先认清现状
 
-2026-10-07 13:50 已正式发布 **0.3.87** 任务市场：`task-market.yml` 配置 1–8 步工程/生活委托，桥、路、建筑、红石实际验收，按本人保存完成/放弃/失败及耗时证据。六工程+六生活任务启用、六场地自动登记；`guild engineering|verify|assessment` 和原版菜单可发现内容。E/F `20261007-135006/.complete` 完整，正式普通客户端 17 项只读检查通过；原机 CortiEye 待重连，基岩画面待真机。验收与回退见 [任务市场](TASK_MARKET.md)、[维护与发布](OPERATIONS.md)。
+**2026-10-11 玩法指引修复0.4.17已上线：**正式AgentFriend0.4.17、CortiEyeMirror0.1.10，YSM桥接保持。高处任务Y≥120可用建筑，摄影委托/NPC/CLI默认自动拍照，旧冻结任务显示正确步骤；修复相机就绪目录和三项交易坐标截断。住房/教学0.4.15、职业认证0.4.16与OBS/live候选仍未部署。当前答疑见[规则](GODDESS_CURRENT_RULES.md)，修复与复现见[审计](CURRENT_GUIDANCE_AUDIT.md)；下方有日期的发布记录仅作历史。
 
-2026-10-07 发布前已在线处理普通村民滞留地下和集合钟不可达：24 位原村民回到地面，公共集合钟在 `(-542,67,-452)`；救援时已加载成年村民 44 位，当时版本为 0.3.86。普通玩家用 `/mycli village villagers` 找附近职业村民；固定服务 NPC 不纳入普通村民救援。证据、维护边界与回退见 [村民地面巡检](VILLAGE_RESIDENTS.md)。
+实时版本、本人任务进度和相机就绪以服务器本次回执为准。高处和摄影的操作顺序见当前规则；不得把有日期的旧启动检查当成实时状态。
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
 | YSM外观桥接（2026-10-11已上线） | `/appearance status/list`；[规则](YSM_ADAPTATION.md)、[维护](YSM_LIFECYCLE.md) | 独立Worker真实分配、原始模型目录及私有状态快照；不含正式游戏存档 | 可分发原始文件夹/ZIP自动稳定转换；服主本机控制台分配。原Agent无需更新，远端Web需更新重建；基岩本人分配/完整动画/真机仍待验 |
-| 职业进阶与能力认证（0.4.16开发候选，未部署） | [三项职业技能、十种实操及18阶入口](SKILL_CERTIFICATIONS.md)；skill-assessments.yml、adventurer-grades.yml、SKILL_ASSESSMENT市场目标 | profession-ledger.json内按UUID的academy：冻结题目、原子证书/晋级、旧大段迁移；旧点数/任务奖励保持 | 控制台assessments reload/audit；热改不覆盖在途条件，异常配置保留有效目录，5tick限量采样。正式移动考场尚未登记，完整多阶段综合题库及真机验收后续；正式0.4.13仍无这些新入口 |
+| 职业进阶与能力认证（0.4.16开发候选，未部署） | [三项职业技能、十种实操及18阶入口](SKILL_CERTIFICATIONS.md)；skill-assessments.yml、adventurer-grades.yml、SKILL_ASSESSMENT市场目标 | profession-ledger.json内按UUID的academy：冻结题目、原子证书/晋级、旧大段迁移；旧点数/任务奖励保持 | 控制台assessments reload/audit；热改不覆盖在途条件，异常配置保留有效目录，5tick限量采样。正式移动考场尚未登记，完整多阶段综合题库及真机验收后续；正式0.4.17仍无这些候选新入口 |
 | 自然建筑保护与通行实练（0.4.7已上线） | `structure-protection.yml`、控制台 `structures reload/audit`、`world practice start/status/stop`；[规则](STRUCTURE_PROTECTION.md) | 已加载原生结构片段；本人PDC中的真实开门穿越、连续爬梯证明 | 六包命名空间及明确ID可热配置；禁止拆建，保留门梯、农耕和箱子权限。可选实练不代操作、不发奖；原Agent客户端保持 |
-| 村庄生活（0.3.99） | `world list/menu/npcs/talk/end/guide/events/photos`、`/photohelp`、罗盘旅途指南；[插件包](WORLD_LIFE_PLUGINS.md) | UUID实习账本、BetonQuest数据库、NPC持久数据、本人ImageFrame图片；既有QwenPaw原生任务 | 已开放三步真实操作实习、村民对话/故事、补给商和正向活动。NPC/任务/精英可编辑配置后隔离热加载。现有截图通过本人临时链接直接上传成地图并挂墙，原客户端无须更换；0.4.10新增女神相机自动拍摄，/mycli photo menu可选三个角度，无公网接口。 |
+| 村庄生活（0.3.99） | `world list/menu/npcs/talk/end/guide/events/photos`、`/photohelp`、罗盘旅途指南；[插件包](WORLD_LIFE_PLUGINS.md) | UUID实习账本、BetonQuest数据库、NPC持久数据、本人ImageFrame图片；既有QwenPaw原生任务 | 已开放三步真实操作实习、村民对话/故事、补给商和正向活动。NPC/任务/精英可编辑配置后隔离热加载。默认女神相机自动拍摄，/mycli photo menu可选三个角度和海报，无需截图上传或公网接口；准备空地图、站稳等待交付。已有图片的内网导入仅为备用。 |
 | 组队救援（0.3.96已上线） | 4格内停留10秒自动救起，当前层/室清场自动复活；`arena status`、`dungeon status`；[救援规则及系统提示](TRIAL_RESCUE.md) | config.yml的trial-rescue、原塔检查点和地下城场次ID；保留原奖励和物品 | 服务器私发倒地坐标、救援方法与进度；Agent用原移动能力靠近并等待。全员倒地才失败，离线/正常重启保留，部分救援计时重置。普通塔恢复原配怪，强化仅用于冒险/末日 |
 | 玩家委托与分页箱（0.3.94） | 公会玩家委托、`commission list/mine/info/menu/publish/accept/claim/abandon/cancel`，`arena stash pages/page/list`；[玩法](MYCLI_AGENT_CLI.md) | config.yml的player-contracts.jobs/active、既有余额/待入箱队列和0–539槽位 | 已上线；玩家发布供货/同行无需代码或重启，每单一人、托管报酬、实物与真实探索返程验收。10页540格，待入箱队列1024组；客户端沿用现有协议 |
 | 命名传送点（0.3.89） | 罗盘地点页、`waypoint add/list/shared/menu`、`goto personal:名字/shared:分享码`；[命名地点](NAMED_WAYPOINTS.md) | `plugins/AgentFriend/waypoints.yml` 按主人/世界 UUID 保存，默认每人 32 点 | 玩家亲自到达后在线中文命名、改名、更新和撤回分享；记录免费，成功传送 6 魔力。主动分享公开发现者与坐标；不改代码、不重启。旧 home 保留；部署状态以维护记录为准 |
@@ -122,7 +19,7 @@
 | Agent迎新（正式欢迎修订4；0.4.15实练候选） | `onboarding.yml`、`AgentCoach`原计时器、候选`FeatureTutorials`；[规则](AGENT_ONBOARDING.md) | 玩家PDC欢迎/限频/暂停、原实习/生活/公会账本；候选追加feature_lesson证明 | 文案已热更大背包/CLI；六项真实操作教学待维护。原实习毕业保持，不代学/接单/领奖，三份储物独立 |
 | 技能编舞（0.4.5） | `skill-visuals.yml`、原版粒子单计时器；[规则](SKILL_VISUALS.md) | 无玩家账本；原成功事件/耗魔/资格保持 | `admin visuals reload/audit/preview`仅控制台；坏配置保留旧值、预算限流、导入工坊精确坐标，不安装客户端模组；手机/Xbox待真机 |
 | 技能罗盘（0.4.1） | 原版45格五排、底排九项；`/mycli menu`；[布局](COMPASS_MENU.md) | 原罗盘PDC/技能账本保持，图鉴页码仅在线记忆 | 已学点击原施法，未学只打开学习页；图鉴每页36项，地点页36格。原Agent命令和客户端保持，基岩实际设备待验收 |
-| 技能、法术、快捷施法 | 既有技能源码与 MagicSpells/AuraSkills；0.3.92 新增 professions.yml / skills.yml / skill-unlocks.yml / skill-points.yml；[职业与传承](CHARACTER_SKILLS.md)、[技能体系](SKILL_SYSTEM.md)、[位移](TRAVEL_MAGIC.md) | 既有魔力/等级/刻印/熟练度；profession-ledger.json 的 UUID 资格、学习等级、已获/已花点数、最高成长、冷却、唯一归属；config.yml pending 收据 | 旧效果发布流程保留；新职业固定效果、逐级点数/效果、洗点费用和解锁可整体验证热加载，失败保留旧目录，新效果仍需代码发布；战法牧与点数已于0.3.92上线，当前0.3.99继续保留，16项逐级简介已热更新，0.3.97的skills list profession或warrior/mage/priest直接发现职业技艺，skills info查逐级详情；学习菜单右键/命格书提供详情和个人状态 |
+| 技能、法术、快捷施法 | 既有技能源码与 MagicSpells/AuraSkills；0.3.92 新增 professions.yml / skills.yml / skill-unlocks.yml / skill-points.yml；[职业与传承](CHARACTER_SKILLS.md)、[技能体系](SKILL_SYSTEM.md)、[位移](TRAVEL_MAGIC.md) | 既有魔力/等级/刻印/熟练度；profession-ledger.json 的 UUID 资格、学习等级、已获/已花点数、最高成长、冷却、唯一归属；config.yml pending 收据 | 旧效果发布流程保留；新职业固定效果、逐级点数/效果、洗点费用和解锁可整体验证热加载，失败保留旧目录，新效果仍需代码发布；战法牧与点数已于0.3.92上线，现役版本继续保留，16项逐级简介已热更新，0.3.97的skills list profession或warrior/mage/priest直接发现职业技艺，skills info查逐级详情；学习菜单右键/命格书提供详情和个人状态 |
 | 公会公共仓库（0.3.95） | 十二组原版双箱、648格；`guild shared`；[公共仓库](GUILD_SHARED_STORAGE.md) | 原版世界实体箱；`lands.yml`公共例外；`guild-shared-chests.yml` | 已启用供货跨同类箱、拒绝回退并合计库存；后续已建实体双箱登记用`land reload`和`sharedstorage reload`热更新，无需改代码或重启 |
 | 公会任务与等级 | 静态 37 张仍在 `GuildManager.java`；0.3.78 起的动态卡模板在 `plugins/AgentFriend/dynamic-board.yml`；遗迹入口在 `DungeonExpeditions.java` | `plugins/AgentFriend/config.yml` 中的 `guild-players` 和 `dynamic-board.today`；动态模板文件 | 已支持的供货与日常目标可改 YAML 后用 `mycli admin board reload`、`replace` 或 `regenerate` 热更新；新判定类型仍需开发。正式服 0.3.86 已包含此功能，详见 [动态看板](DYNAMIC_BOARD.md) |
 | 原图寻宝（0.3.98） | 任务市场`tm_map_hunt`、`guild map/verify/claim`；[规则](TREASURE_MAP_TASKS.md) | 在途原图目标/返程/自然开箱证明、原探索去重状态、本人目的地及建筑结算账本 | 直接复用现有原版/遗迹地图，不修改地图；实际探索后返程交记录，换新目的地可继续。文字、路线门槛和奖励可热配置；不调用locate、不自动生成目标区块，不改Agent客户端 |
@@ -134,8 +31,8 @@
 | 生活公会（0.4.15验房候选） | `LifeGuildManager`七类委托、`StarterHouseInspection/Validator`候选；四馆七导师；[规则](LIFE_GUILDS.md) | UUID life-guild及四馆地基、四份结构掩码；候选active.house-placed原生施工记录 | 候选builder_home七项现存验房，status/claim均重查，旧已领奖成果保留；在途任务重新验收。正式仍旧规则，候选尚未部署；结构快照随世界备份 |
 | 试炼塔、地下城与奖励（0.3.95） | trial-waves.yml前六层；dungeons.yml三个真实建筑；罗盘地点页、`dungeon list/info/travel/start/join/status/resume/leave/claim/menu`；[规则](DUNGEON_NETWORK.md) | config.yml的旧试炼波次快照、site-dungeons.runs/receipts/claimed/cooldowns，既有个人奖励；世界实体和建筑 | 控制台`trialwaves reload`/`dungeons reload`整体验证热更，活动期间拒绝换目录；新地点可指定已勘察付费entry。逐室原生战斗和实际返程，每处每日一次奖励。全服新地点48怪/128飞行物，不根据文字直接覆盖世界生成建筑 |
 | PvP 竞技场 | `PvpArenaManager.java` 的自愿匹配、同款装备和积分；[PvP 规则](PVP_ARENA.md) | `pvp-records`、`pvp-escrow.yml`、竞技场方块及 WorldGuard 区域 | 运营 Agent 可查看本人对局和排行榜；改地图或计分规则须隔离测试和完整备份，不可在有人对战时发布 |
-| 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 起正式生效，当前 0.3.99 继承，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP 八工具已重新发现。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |
-| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在正式重启自动激活；0.3.99/0.1.9 及 40 连接已发布，容量与边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) | 可检查、构建、测试、备份和发布；先完成 E/F 校验镜像，再替换 JAR；源码提交不会自动改变正式服 |
+| 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 起正式生效，现役版本继承，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP 八工具已重新发现。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |
+| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在正式重启自动激活；正式0.4.17/0.1.10及40连接，容量与边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) | 可检查、构建、测试、备份和发布；先完成 E/F 校验镜像，再替换 JAR；源码提交不会自动改变正式服 |
 
 2026-10-06 已修复女神附魔书字段错误和现存确认损坏的 1 本，并正式发布 0.3.84 校验入口：书必须使用 `stored_enchantments`，装备使用 `enchantments`。私聊与造物都使用同一受校验入口；女神只选礼物，服务器生成属性并核对实际库存。不要依据闪光认定铁砧可用，也不要把字段错误归咎于刻印保护。现状见 [女神附魔书](GODDESS_BOOKS.md)、[礼物校验](GODDESS_GIFTS.md)。
 
@@ -253,7 +150,7 @@ CortiLan 的运行连接来自 `192.168.3.152`；该机的 Cortico 必须能把 
 
 1. 先核实运行服版本与实际生效的热配置，再更新玩家手册 [版本更新说明](SERVER_UPDATES.md) 的已上线内容、当前玩法和被取代的旧规则。构建成功、提交 Git 或尚未部署的提案不能写成已上线。
 2. 将手册原文同步到女神**现役**工作区 `D:\qwenpaw\home\workspaces\mc_godness\resource\SERVER_UPDATES.md`，核对源文件与资料箱副本 SHA256 相同。不要继续写入旧的 `C:\Users\lzl19\.qwenpaw\workspaces\mc_godness` 镜像。
-3. 工作区 `AGENTS.md` 保留“玩家问更新/玩法时先读取资料箱手册”的指引，`MEMORY.md` 首页保留当前资料入口；相关 `memory/` 设计笔记和 `E:\MC\ops` 手册首页同步适用版本。历史记录保留，并明确已被取代的结论。资料箱只放玩家说明，不放凭据、审计日志和玩家私密数据。
+3. 工作区 `AGENTS.md` 的受管理区整体更新为[当前答疑规则](GODDESS_CURRENT_RULES.md)，`MEMORY.md` 首页保留当前资料入口与核心长期记忆；旧部署摘要完整归档到私有`memory/archive/`，不反复前插互相冲突的“当前版本”。`E:\MC\ops`手册同步现役规则并指向历史归档。资料箱只放玩家说明，不放凭据、审计日志和玩家私密数据。
 4. 用女神实际对话入口询问本次变化，保留她读取资料文件的工具回执和答复；至少核对新入口及一项被修订的规则。游戏答复遵守桥接单条 140 字符上限，先回应所问主题，再按追问展开。玩家询问后回答；仅同步资料不主动群发。服主已授权的计划维护按下节提醒/更新说明流程公告，不替玩家学习、花点或发物品。
 
 资料与指引的同步无需重启 Minecraft。2026-09-30 曾因知识同步缺失，女神沿用 0.3.19 笔记，错误声称正式服没有公会、只有六层且不能续关。旧笔记不能覆盖新资料；个人资格、物品和活动状态仍以本人当次查询为准。
@@ -279,3 +176,8 @@ node E:\MC\bedrock-ping.mjs 192.168.3.163 19132
 4. **运营观测与迭代。** 按匿名内容 ID 汇总接受/完成/失败/领奖次数、掉线与性能指标，让女神和运营 Agent 发现卡点；保护玩家隐私，不把聊天或私聊直接作为公开报表。验收是一次迭代能用数据与玩家反馈解释为什么调整难度或奖励。
 
 每一阶段完成后在本手册更新“现状”表与发布步骤，再向运营 Agent 开放相应的配置入口。内容定义只是输入；施工、发奖、进度迁移和账号权限仍由服务端进行验证。这样 Agent 团队才能持续创造内容，同时让已经在世界里游玩的人的进度保持可信。
+
+
+## 历史与现役资料
+
+以前堆在首页的[发布摘要](history/AI_WORLD_OPERATIONS-before-guidance-20261011.md)完整保留作追溯。玩家答疑读当前规则及对应专题，勿从历史摘要提取旧默认流程。

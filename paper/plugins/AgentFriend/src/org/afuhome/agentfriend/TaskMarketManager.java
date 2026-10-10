@@ -58,7 +58,7 @@ final class TaskMarketManager implements Listener {
         GuildManager.Contract contract(int index) {
             Step step = steps.get(index);
             return new GuildManager.Contract(id(), title + " · " + (index + 1) + "/" + steps.size() + " " + step.title,
-                    step.description, icon, step.goal, step.target, step.floor, minRank, fame,
+                    TaskGuidance.step(step.goal, step.description), icon, step.goal, step.target, step.floor, minRank, fame,
                     emeralds, bonus, bonusCount, step.site, EngineeringSites.GOALS.contains(step.goal) ? 2
                     : step.goal == GuildManager.Goal.PARTY_FLOOR || step.goal == GuildManager.Goal.TRADE ? 3
                     : step.goal == GuildManager.Goal.REPLANT ? 5 : step.goal == GuildManager.Goal.EXPLORE
@@ -209,6 +209,7 @@ final class TaskMarketManager implements Listener {
             Set<String> landIds = new LinkedHashSet<>();
             for (String key : taskRows.getKeys(false)) {
                 ConfigurationSection row = taskRows.getConfigurationSection(key);
+                for (Map<?, ?> step : row.getMapList("steps")) TaskGuidance.validateStep(step);
                 Task task = parse(key, row);
                 if (task.grant != null && !landIds.add(task.grant.landId())) throw new IllegalArgumentException("duplicate handover land ID");
                 if (task.enabled) for (Step step : task.steps) if (EngineeringSites.GOALS.contains(step.goal)) {
@@ -306,7 +307,7 @@ final class TaskMarketManager implements Listener {
                     || steps.getLast().exploration.goal() == GuildManager.Goal.RETURN
                     || steps.getLast().exploration.dimension().equals(survey.dimension())))
                 throw new IllegalArgumentException(key + " return must follow exploration in another dimension");
-            steps.add(new Step(text(stepYaml, "title", 50), text(stepYaml, "description", 180), goal, target, floor,
+            steps.add(new Step(text(stepYaml, "title", 50), TaskGuidance.legacyDescription(text(stepYaml, "description", 180), raw), goal, target, floor,
                     site == null || site.isBlank() ? null : site, chest, survey, map,assessment));
             frozenSteps.add(stepYaml.getValues(false));
         }
@@ -699,7 +700,7 @@ final class TaskMarketManager implements Listener {
     }
     void list(Player player) {
         player.sendMessage("§6【任务市场 · 千灯纪委托】工程、远征与生活；探索履历每人一次，日常按任务说明。");
-        for (Task task : offers()) player.sendMessage("§e" + task.id() + " §f" + task.title + " · " + task.description
+        for (Task task : offers()) player.sendMessage("§e" + task.id() + " §f" + task.title + " · " + TaskGuidance.description(task.description)
                 + " §7[" + state(task, player) + "] · 声望+" + task.fame + " / 绿宝石×" + task.emeralds);
         player.sendMessage("§7/mycli guild engineering <ID> 看步骤与坐标；guild accept <ID> 接单；guild verify 验收；guild claim 交付。");
         publish(player);
@@ -721,7 +722,7 @@ final class TaskMarketManager implements Listener {
     }
     private JsonObject summary(Task task) {
         JsonObject row = new JsonObject(); row.addProperty("id", task.id()); row.addProperty("title", task.title);
-        row.addProperty("description", task.description); row.addProperty("scope", task.project ? "project" : "personal");
+        row.addProperty("description", TaskGuidance.description(task.description)); row.addProperty("scope", task.project ? "project" : "personal");
         row.addProperty("repeat", task.project || task.repeatOnce ? "once" : task.repeatDestination ? "destination" : "daily");
         row.addProperty("stepCount", task.steps.size()); row.addProperty("fame", task.fame); row.addProperty("emeralds", task.emeralds);
         row.addProperty("minRank", task.minRank); return row;
@@ -749,7 +750,7 @@ final class TaskMarketManager implements Listener {
         }
         for (int i = 0; i < task.steps.size(); i++) {
             Step step = task.steps.get(i); JsonObject row = new JsonObject();
-            row.addProperty("index", i + 1); row.addProperty("title", step.title); row.addProperty("description", step.description);
+            row.addProperty("index", i + 1); row.addProperty("title", step.title); row.addProperty("description", TaskGuidance.step(step.goal, step.description));
             row.addProperty("goal", step.goal.name().toLowerCase(Locale.ROOT)); row.addProperty("target", step.target);
             row.addProperty("floor", step.floor); row.addProperty("site", step.site == null ? "" : step.site);
             row.addProperty("chest", step.chest);
@@ -763,7 +764,7 @@ final class TaskMarketManager implements Listener {
                 row.add("exploration", step.exploration.json());
                 player.sendMessage("§7探索验收：" + step.exploration.conditions(step.target));
             }
-            player.sendMessage("§b" + (i + 1) + ". " + step.title + "：" + step.description + "（" + step.target + "）");
+            player.sendMessage("§b" + (i + 1) + ". " + step.title + "：" + TaskGuidance.step(step.goal, step.description) + "（" + step.target + "）");
             player.sendMessage("§7条件：goal=" + step.goal.name().toLowerCase(Locale.ROOT) + " target=" + step.target
                     + (step.site == null ? "" : " itemOrSite=" + step.site) + (step.floor > 0 ? " floor=" + step.floor : "")
                     + (step.chest >= 0 ? " publicChest=" + step.chest : ""));
@@ -870,7 +871,7 @@ final class TaskMarketManager implements Listener {
         for (int i = 0; i < ids.size(); i++) {
             Task task = tasks.get(ids.get(i)); ItemStack item = new ItemStack(task.icon);
             var meta = item.getItemMeta(); meta.setDisplayName("§e" + task.title);
-            meta.setLore(List.of(task.description, task.steps.size() + " 个阶段 · " + (task.project ? "公共工程仅结算一次" : task.repeatOnce ? "本人远行履历仅一次" : task.repeatDestination ? "每个新目的地一次，换图可继续" : "本人每日一次"),
+            meta.setLore(List.of(TaskGuidance.description(task.description), task.steps.size() + " 个阶段 · " + (task.project ? "公共工程仅结算一次" : task.repeatOnce ? "本人远行履历仅一次" : task.repeatDestination ? "每个新目的地一次，换图可继续" : "本人每日一次"),
                     "声望 +" + task.fame + " / 绿宝石 ×" + task.emeralds, "状态：" + state(task, player), "左键接单，右键看步骤"));
             item.setItemMeta(meta); inventory.setItem(i, item);
         }

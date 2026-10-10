@@ -40,8 +40,8 @@ final class AgentCliCatalog {
         add(specs,"world.guide","life","write","/mycli world guide start|status","新手实习：查看技能目录、真正成功施法、完成生活委托；服务器记录证据","主动开始；失败施法/自称完成不计进度；不代学、不代花点","MC_WORLD type=guide/guide_progress");
         add(specs,"world.practice","life","write","/mycli world practice start|status|stop","通行实练：亲手打开木门并穿过、沿现有梯子连续爬升3格；不拆墙、不垫方块","自愿报名；生存或冒险模式；本人原生交互与移动；飞行、传送、自称完成不算；没有额外奖励或代操作","MC_WORLD type=practice/practice_progress；真实坐标、时间及原生操作证明；一次通过不表示长期掌握");
         add(specs,"world.events","life","read","/mycli world events","查看正在进行的世界生活事件","查询免费；活动公告另发；活动不自动完成任务","MC_WORLD type=events与WorldEvents当前列表");
-        add(specs,"photo","life","write","/mycli photo take <名字> [first|third|top]；menu|status|cancel","女神临时观察本人视角，由本机现代化渲染器拍照并交付本人地图","准备1张空地图和空主背包格；每人60秒，串行排队；无需公网接口","MC_PHOTO status=queued|preparing|success|stopped|denied；success才表示实际地图已交付");
-        add(specs,"world.photos","life","read","/mycli world photos","查看个人照片地图及导入方法，可挂展示框","ImageFrame已启用；本机相机状态以automaticCaptureReady为准","MC_WORLD type=photos automaticCaptureReady与个人相册列表");
+        add(specs,"photo","life","write","/mycli photo take <名字> [first|third|top] [1|2]；menu|status|cancel","女神自动拍照，站稳等待地图入包；无需截图或上传文件","单图1张空地图和1个空主背包格；2×2海报4张地图和4个空格；每人60秒，串行排队","MC_PHOTO status=queued|preparing|success|stopped|denied；success才表示实际地图已交付");
+        add(specs,"world.photos","life","read","/mycli world photos","打开女神相机与本人相册菜单，可将照片挂展示框","ImageFrame已启用；automaticCaptureReady表示相机当次是否就绪，false时用photo status查询","MC_WORLD type=photos；相机菜单及当前就绪状态");
         add(specs,"profession","magic","read","/mycli profession status|list|menu|choose <ID>|leave <ID>","选择一个主战职业；list 查看当前开放路线；保留旧技能和成长","生存模式选择；UUID 学习账本；不改背包","MC_PROFESSION / MC_PROFESSION_RESULT");
         add(specs,"profession.status","magic","read","/mycli profession status","查看本人当前职业和准备槽","查询免费","MC_PROFESSION");
         add(specs,"profession.menu","magic","gui","/mycli profession menu","打开原版职业和技能菜单","Java、基岩手柄和 Mineflayer 共用","54 格原版菜单");

@@ -103,7 +103,7 @@ final class WorldLifeManager implements Listener {
                     JsonObject out = new JsonObject(); out.addProperty("displayReady", true);
                     out.addProperty("automaticCaptureReady", plugin.photoCamera() != null && plugin.photoCamera().ready());
                     out.addProperty("captureCommand", "/mycli photo take <名字>");
-                    out.addProperty("instruction", "准备1张空地图和空背包格，用 /mycli photo take <名字> 拍本人视角，photo status 查进度；无需公网网页。成功后挂到有权限的展示框。照片委托先接单再拍，旧图/复制图不算新创作。现有本机截图仍可用 /imageframe create <名字> upload 1 1 导入。");
+                    out.addProperty("instruction", TaskGuidance.photo());
                     emit(p, "photos", out);
                 }
                 default -> denied(p, "unknown_world_command");
@@ -128,7 +128,11 @@ final class WorldLifeManager implements Listener {
         out.addProperty("npcCommand", "/mycli world npcs");
         out.addProperty("eventsCommand", "/mycli world events");
         out.addProperty("photosCommand", "/mycli world photos");
-        out.addProperty("automaticPhotoCapture", false);
+        boolean cameraReady = plugin.photoCamera() != null && plugin.photoCamera().ready();
+        out.addProperty("automaticPhotoCapture", cameraReady);
+        out.addProperty("automaticCaptureReady", cameraReady);
+        out.addProperty("captureCommand", "/mycli photo take <名字> [first|third|top] [1|2]");
+        out.addProperty("photoStatusCommand", "/mycli photo status");
         out.addProperty("season", content.getString("season", "村庄生活"));
         out.addProperty("boardCommand", "/mycli world board");
         out.addProperty("shopCommand", "/mycli world shops");

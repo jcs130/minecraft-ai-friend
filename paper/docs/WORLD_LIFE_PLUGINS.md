@@ -81,7 +81,7 @@ NPCSpeak 只访问 `127.0.0.1:25579` 的本地适配器，由现有 Goddess 桥�
 
 每人最多 64 张图片，单图文件上限 4 MiB、地图尺寸上限按插件 MaxSize=4，后台处理单并发，地图发送限速每 tick 8 包。默认只授权本人图片的创建、获取、改名、删除和分享；不授予覆盖任意原图或管理员绕过权限。已有藏宝图和遗迹地图继续使用原始数据。
 
-当前采用用户选择的现有截图导入方案，无须额外摄影客户端或账号。ImageFrame 不代替截图工具按快门；`automaticCaptureReady=false` 保留这一含义，截图上传和照片保存已可用。
+当前默认采用已上线的女神相机：`/mycli photo take <名字> [first|third|top] [1|2]`，无需截图、网页或上传文件。准备空地图及空主背包格，站稳等地图入包；`photo status`查进度。`automaticPhotoCapture`/`automaticCaptureReady`反映当次就绪状态，false时查状态再试。已有图片的内网手动导入是备用功能。
 
 ## 后续运营与回退
 

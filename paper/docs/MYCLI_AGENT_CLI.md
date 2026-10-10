@@ -6,7 +6,7 @@
 
 ## 已上线0.4.11：清爽相机与清晰海报
 
-`/mycli photo take <名字> [first|third|top] [1|2]`；默认单图1张空地图，末尾2生成2×2海报，需要4张空地图及4个空主背包格。开始/完成两条聊天，Agent旧回执兼容；1536原图、相机半径6。原版单图仍为128×128像素。正式已验证海报交付和提示精简；YSM模型照片为隔离验证，正式Proxy/Worker尚未接入。当前状态见[相机](SERVER_PHOTOGRAPHY.md)，YSM拓扑上线另见[YSM适配](YSM_ADAPTATION.md)。
+`/mycli photo take <名字> [first|third|top] [1|2]`；默认单图1张空地图，末尾2生成2×2海报，需要4张空地图及4个空主背包格。开始/完成两条聊天，Agent旧回执兼容；1536原图、相机半径6。原版单图仍为128×128像素。正式已验证海报交付和提示精简；正式YSM Proxy/Worker已接入相机；支持的已分配模型随原游戏连接传输，完整动作/装备与真机外观仍待验。当前状态见[相机](SERVER_PHOTOGRAPHY.md)，YSM拓扑上线另见[YSM适配](YSM_ADAPTATION.md)。
 
 ## 0.4.10已上线：女神相机
 
@@ -50,7 +50,7 @@
 
 `world guide start` 自愿报名，`guide status` 查看三步：有效读取技能目录、真正成功施法、实际完成并领取生活委托。服务器成功回执才写 `steps[].done`；失败尝试和自报不算。`MC_WORLD` 是本人系统聊天 JSON，`type=guide_progress` 的 `source=server_observed_success` 才是新证明；不额外发奖或加技能点。
 
-`world menu` 为原版箱式菜单，手柄也可从旅途指南进入。`world events` 查看活动，`world photos` 查看照片并补充本地截图上传入口。`/photohelp` 给步骤；`/imageframe create <名字> upload 1 1` 返回本人五分钟临时链接，用网页或 [imageframe-upload.py](../ops/imageframe-upload.py) 上传现有 PNG/JPG，等游戏内创建成功及真实地图入包后挂展示框。空地图在领取链接时预扣，新请求取消本人此前等待，须串行创建；HTTP 成功不等于成图。原 JSON 的 `automaticCaptureReady=false` 仍指没有服务器自动快门。流程与网络范围见[截图相册](SCREENSHOT_PHOTOS.md)。Agent 客户端程序与原 schema 无需更换；已附身 Eye 沿用私有消息镜像。
+`world menu` 是原版箱式菜单。`world events` 查看活动，`world photos` 打开女神相机和本人相册；`/photohelp` 同样指向自动拍照。准备空地图与空主背包格，用 `/mycli photo take <名字> [first|third|top] [1|2]`，站稳等地图入包，`photo status` 查进度。无需截图、网页或上传文件。`MC_WORLD` 的 `automaticPhotoCapture` 与 `automaticCaptureReady` 均来自相机当次就绪状态；false时查询状态、稍后再试，不能推断服务器没有自动拍照。照片委托先接单，再创作和交阶段。确实要导入已有本地图片时，另看[内网手动导入](SCREENSHOT_PHOTOS.md)。原Agent客户端与私有Eye镜像继续可用。
 
 ## 原图寻宝（0.3.98）
 

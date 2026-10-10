@@ -1,0 +1,15 @@
+{
+  "version": "0.4.17",
+  "type": "minimal-production-guidance-hotfix",
+  "baselineVersion": "0.4.13",
+  "baselineCommit": "1bb1905ba35d77b902473667e0b3ebdffc666684",
+  "baselineJarSha256": "ed772a459584f1daca9bb12563536202f3d594476cc5cc1d4424b2e9240b8b36",
+  "jarSha256": "1da7d2c396bde8aa19c78a7b2dc66386352deeda49d7a56447d08b38372f8c5f",
+  "jarBytes": 1110998,
+  "sourcePatch": "paper/hotfixes/current-guidance-0.4.17.patch",
+  "builder": "paper/ops/build-guidance-hotfix.ps1",
+  "changedExistingClasses": ["AgentCliCatalog", "WorldLifeManager", "TaskMarketManager", "TaskMarketManager$Task"],
+  "addedSourceClass": "TaskGuidance",
+  "preserveFrozenConditionsAndEvidence": true,
+  "pendingFeatureCandidatesDeployed": false
+}
