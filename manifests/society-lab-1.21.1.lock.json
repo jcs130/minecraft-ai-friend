@@ -14,6 +14,11 @@
       "name": "maw_numen_compat-0.1.0.jar",
       "source": "tools/build_numen_optional_client.py",
       "sha256": "1f1ad2a47f7bbdbfab456735bc131f8650e87a9f3ca6fee6c9a5fdee08e0f6f0"
+    },
+    {
+      "name": "maw_numen_server-0.1.0.jar",
+      "source": "tools/build_numen_server.py",
+      "sha256": "8d60868a36eb41ee0c8a03aa2782ffecaa06fb84546c863c9bd8222ac1068a5c"
     }
   ],
   "artifacts": [

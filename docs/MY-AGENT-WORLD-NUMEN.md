@@ -2,6 +2,8 @@
 
 本服保留 Mineflayer / 原生 SDK，同时增加官方 Numen 假玩家路线。2026-10-09 核对官方 release 列表，适配 Minecraft 1.21.1 的最新发布是 **Numen 0.1.4.1 beta**，不是旧版 0.1.3，也不是开发分支。
 
+2026-10-10 新增独立服务端宿主，外部 Agent 现在优先使用 LAN MCP `http://192.168.3.163:28984/numen/mcp`，不需要主人游戏客户端在线。基岩原生 `/mawagent menu` 可管理本人模型 Key、同伴和目标。详见 [服务端接入与运维](MY-AGENT-WORLD-NUMEN-SERVER.md) 和 [纯文字指引](MY-AGENT-WORLD-NUMEN-SERVER-CONNECT.txt)。下文官方客户端 MCP、运维桥仍是独立路线。
+
 - Minecraft 1.21.1、NeoForge 21.1.248、Java 21。
 - [官方发布](https://github.com/Dwinovo/minecraft-numen/releases/tag/v0.1.4.1-1.21.1-beta)，源码固定 `2a5753cbde3edd342fb50e0b2a4d52dff4269d38`。
 - 安装 `numen-neoforge-1.21.1-0.1.4.1.jar`，SHA-256 `ed4a5936aa182b0d9ab685cb993da54f72514eafb0838bb9a64cd69962cb1226`。
@@ -18,7 +20,7 @@
 
 兼容层只作用于 Numen 的 NeoForge 网络注册和发送，不把其他模组通道全局改为可选。实际客户端没有 `ClientCall` 通道时，纯客户端函数立即失败并返回 `client_capability_unavailable`，不会等待一个永远不来的答复。服务端 Lua 函数、原有身体权限和真实物理执行继续有效。
 
-这与“无人值守外脑”是两个独立问题。**本次客户端可选不等于已完成服务端常驻 MCP**：官方 MCP 仍在客户端，服务端常驻控制、事件确认、开服恢复及离线主人死亡复活仍须继续接入。原运维 Lua 桥和 Mineflayer SDK 可先使用。
+客户端可选与无人值守外脑是两个独立功能。官方 MCP 仍在客户端；本服通过独立 `maw_numen_server` 增加服务端认证 MCP、私有事件确认、开服恢复及离线主人死亡复活，原官方 core/API 不变。依赖客户端的函数在服务端宿主中明确不可用。
 
 构建命令：`python tools/build_numen_optional_client.py`，只编译；加 `--install` 会拒绝向仍在监听的目标服安装。服务器兼容 JAR 不需要发给真人客户端。撤回兼容层必须正常停服再移走该唯一 JAR；撤回后官方 Numen 的必需通道规则会恢复。
 
@@ -33,12 +35,14 @@
 | 方式 | 游戏身体 | 控制入口 | 需要 Java 主人客户端 |
 |---|---|---|---|
 | 原 Mineflayer / Native SDK | 该连接登录的玩家，UUID 为 bodyId | LAN `192.168.3.163:28977`、SDK operations | 不需要 |
+| 本服服务端 Numen MCP | 按主人 UUID 归属的持久假玩家 | LAN `192.168.3.163:28984/numen/mcp`、本人令牌 | 不需要 |
+| 本服托管 Numen 同伴 | 同一持久假玩家 | 基岩 `/mawagent menu` 配置模型、下达目标 | 不需要持续在线 |
 | 官方 Numen 外部大脑 | 服务端 Numen 假玩家，有独立 UUID 和 owner UUID | 主人客户端提供的 MCP | 需要保持在线 |
 | 运维 Numen Lua 桥 | 同一 Numen 假玩家 | 现有受管控制台 `/maw_agent`，权限 4 | 纯服务端函数可由运维验证；客户端函数仍需主人客户端 |
 
 原 Native SDK 的 `numenFakePlayerControl=false` 保持准确：它的 70 个 operation 控制登录玩家。新增 Numen 是独立 provider，不能拿两个 provider 的 UUID、动作 ID 或记忆相互替代。
 
-官方 MCP 位于**主人 Minecraft 客户端进程**，不是专用服务器 HTTP 服务。安装服务端模组不会自动开出一个无人值守 MCP。内置推理、外部 Agent 的模型与记忆也不会自动迁移；本次集成没有接 QwenPaw、调用模型或启动自主推理循环。
+官方 MCP 位于**主人 Minecraft 客户端进程**。本服独立服务端宿主另行提供无人值守 MCP；外部 Agent 保留自己的模型和记忆，托管路线仅在本人配置模型并明确下达目标后推理。没有接入 QwenPaw，也没有迁移旧角色记忆或自动启用旧自主任务。
 
 ## 官方 MCP 使用
 

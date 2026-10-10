@@ -394,6 +394,15 @@ def probe_agent_frame():
 
 
 def probe_panel_smoke(scope=None):
+    if scope == 'society-numen-server':
+        tools_path = str(PROJECT/'tools')
+        if tools_path not in sys.path:
+            sys.path.insert(0, tools_path)
+        spec = importlib.util.spec_from_file_location('maw_numen_server', PROJECT/'tools/maw_numen_server.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        native = module.probe()
+        return {'ok': native['ok'], 'society_numen_server': native, 'modelRequests': 0, 'worldActions': 0}
     if scope == 'society-numen':
         spec = importlib.util.spec_from_file_location('maw_numen_health', PROJECT/'tools/maw_numen_health.py')
         module = importlib.util.module_from_spec(spec)
@@ -2080,6 +2089,10 @@ def inventory_lock_failure(reason):
 
 
 def main():
+    if sys.argv[1:] == ['--society-numen-server-smoke']:
+        report = probe_panel_smoke(scope='society-numen-server')
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
     if sys.argv[1:] == ['--society-numen-smoke']:
         report = probe_panel_smoke(scope='society-numen')
         print(json.dumps(report, ensure_ascii=False, indent=2))

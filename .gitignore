@@ -20,6 +20,8 @@ vendor/chanting-items-cache/
 **/rcon-secret.txt
 **/credentials.yaml
 **/credentials.json
+**/maw-numen-private/
+**/maw-agents-private.json
 **/*.log
 **/*.class
 world/botgate-src/botgate.jar

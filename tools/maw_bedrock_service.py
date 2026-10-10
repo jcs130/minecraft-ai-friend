@@ -10,6 +10,7 @@ import ctypes
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import socket
 import struct
@@ -171,6 +172,21 @@ def load_config(path: Path, *, root: Path = ROOT) -> dict:
         for name, meta in model_contract['files'].items():
             expected_files[resources/meta['directory']/name] = meta['sha256']
         gate_env['GATE_BEDROCK_MODELS_FILE'] = str(resources/model_builder.CATALOG)
+    forms_contract = resources/'agents-contract.json'
+    if forms_contract.exists():
+        import build_bedrock_agents as agent_builder
+        contract = service.read_json(forms_contract)
+        forms_jar = resources/'extensions'/agent_builder.NAME
+        private_bridge = resources/'maw-agents-private.json'
+        if (contract.get('schemaVersion') != 1 or contract.get('geyserSha256') != ARTIFACTS['plugins/Geyser-ViaProxy.jar']
+                or contract.get('sha256') != hashlib.sha256(forms_jar.read_bytes()).hexdigest()):
+            raise ValueError('Native companion forms do not match the pinned build')
+        private = service.read_json(private_bridge)
+        if (private.get('endpoint') != 'http://127.0.0.1:28989/ui'
+                or not isinstance(private.get('secret'), str) or not re.fullmatch('[a-f0-9]{64}', private['secret'])):
+            raise ValueError('Native companion form bridge must stay private loopback')
+        for file in (forms_contract, forms_jar, private_bridge):
+            expected_files[file] = hashlib.sha256(file.read_bytes()).hexdigest()
     stat = path.stat()
     stamps = {path: (stat.st_size, stat.st_mtime_ns)}
     stat = main_path.stat(); stamps[main_path] = (stat.st_size, stat.st_mtime_ns)
@@ -202,6 +218,7 @@ def load_config(path: Path, *, root: Path = ROOT) -> dict:
             {'id': 'bedrock', 'command': command, 'cwd': str(directory), 'env': {},
             'host': '127.0.0.1', 'listenHost': '127.0.0.1', 'port': TCP_PORT, 'dependsOn': ['compat_gate'],
             'nativeModels': model_contract,
+            'nativeAgents': forms_contract.exists(),
             'readiness': 'minecraft', 'startupTimeoutSeconds': 150, 'stopMode': 'stdin', 'stopText': 'stop'}]}
 
 
@@ -216,6 +233,11 @@ class BedrockChild(service.Child):
                     import maw_bedrock_modpacks as model_builder
                     self.metrics['nativeModels'] = model_builder.registered_models(Path(self.handler.baseFilename),
                         self.spec['nativeModels'], time.time()-(time.monotonic()-self.started)-5)
+                if self.spec.get('nativeAgents') and not self.metrics.get('nativeAgents'):
+                    log = Path(self.handler.baseFilename).read_text('utf-8', errors='replace')
+                    if 'MAW_AGENTS ready nativeForms=true modelKeysRedacted=true' not in log:
+                        raise RuntimeError('Native companion forms did not register')
+                    self.metrics['nativeAgents'] = {'nativeForms': True, 'modelKeysRedacted': True, 'actualPhoneTested': False}
             except Exception as error:
                 self.ready = False
                 self.problem = 'bedrock_readiness_failed: ' + str(error)

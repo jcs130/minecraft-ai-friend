@@ -29,6 +29,7 @@ const { boundModReceipt, verifyMaidOutcome, verifyEntityInteraction } = require(
 const { nativeBlockInteractionPacket, readNativeBlockBeforeAction } = require('./native-block-interaction.cjs')
 const { createNativeRecipeDiscovery } = require('./native-recipe-discovery.cjs')
 const { createNativeMachineVerifier } = require('./native-machine-verification.cjs')
+const { attachNumenMcpGateway } = require('./numen-mcp-gateway.cjs')
 const { performNativeBlockAction } = require('./native-machine-actions.cjs')
 const mineflayer = require('mineflayer'), nbt = require('prismarine-nbt')
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
@@ -130,6 +131,11 @@ bot.on('spawn', clearSpellPresentation); bot.on('end', clearSpellPresentation)
 const viewer = prepared.attach({ bot, expectedUsername: config.username, nativeStream: stream, simplifyNBT: nbt.simplify,
   getPresentationState: () => createNativePlayerPresentation({ playerUuid: bot._client.uuid, menu: menu.current(), spellState: spell.current(), spellCatalog, spellObservedAt }),
   getAgentStatus: () => JSON.parse(gameJSON({ ...status, receipts: receiptSummaries(), health: bot.health ?? null, food: bot.food ?? null, position: bot.entity?.position || null, native: stream.health(), modelTask: qwen.status?.() || null })) })
+// The Java addon owns bodies/keys/actions. This route only forwards authenticated
+// MCP traffic on the already-managed LAN listener, without touching viewer code.
+const detachNumenGateway = attachNumenMcpGateway({ server: viewer.server,
+  lanAddress: process.env.MAW_VIEWER_LAN_ADDRESS ?? null })
+viewer.server.once('close', detachNumenGateway)
 await viewer.listen()
 bot.loadPlugin(pathfinder)
 let closing = false, epoch = 0, activeActionScope = null, nativeBlockUseSequence = 0

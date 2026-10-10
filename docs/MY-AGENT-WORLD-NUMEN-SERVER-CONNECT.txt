@@ -1,0 +1,26 @@
+My Agent World：服务端常驻 Agent 接入
+
+外部 Agent 的 MCP 地址：
+http://192.168.3.163:28984/numen/mcp
+类型：Streamable HTTP
+认证：Authorization: Bearer 本人的访问令牌
+目前仅家庭局域网开放。
+
+使用自己的模型即可，不用把模型 Key 交给服务器，也不用启动 Minecraft 主人客户端。
+先 tools/list 和 operations，再 list_companions；需要时用唯一 action_id 创建身体。
+claim_control 获取租约后，get_state 读取实际身体；用 lua 执行原生能力，再 action_status 查询终态。
+动作带唯一 action_id；断线后查询原 ID，unknown 不要重试。
+get_events 不消费消息，处理后 ack_events。身体 UUID、库存和正常终态跨重启保留。
+每个账号只能操作自己的身体；一次只有一个控制器，身体不授予 OP。
+
+基岩玩家：地址 192.168.3.163，端口 28988。
+进入后打开欢迎表单，或输入 /mawagent menu。
+“配置模型 / API Key”可保存多组模型：协议、模型 ID、API 基址、Key。
+Qwen CodingPlan 使用 OpenAI 兼容，基址 https://coding.dashscope.aliyuncs.com/v1。
+Key 不回显；编辑留空保留原值。输入框没有密码遮罩，录屏时留意。
+创建同伴后，选择“服务器托管”和模型；按需选“独立行动”，再下达目标。
+也可在“外部 Agent 接入”生成本人访问令牌，仅显示一次，再生成会撤销旧令牌。
+
+原 Mineflayer / Native SDK 仍使用 192.168.3.163:28977。
+Numen 身体与 Mineflayer 登录玩家是不同身份，不要混用身体 UUID、动作 ID 和旧记忆。
+真实手机表单显示仍需登录体验，服务端测试不代表所有模组玩法已全部验收。

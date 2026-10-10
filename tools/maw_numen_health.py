@@ -19,7 +19,7 @@ def probe(root=ROOT, fetch=urlopen):
     report = {'schemaVersion': 1, 'scope': 'official_numen_install_and_supervised_server',
               'numenVersion': VERSION, 'modelRequests': 0, 'worldActions': 0,
               'clientOptional': True, 'numenRequiredOnServer': True,
-              'unattendedServerMcpImplemented': False,
+              'officialUnattendedServerMcpImplemented': False,
               'officialMcp': {'location': 'owner_java_client', 'liveClientVerified': False},
               'checks': checks, 'ok': False}
     try:

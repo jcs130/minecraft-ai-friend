@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "dev.qiandeng.maw.numenserver.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "server": ["EventDeliveryMixin", "ProgramOwnershipMixin", "TaskRestoreMixin"],
+  "injectors": {"defaultRequire": 1}
+}
