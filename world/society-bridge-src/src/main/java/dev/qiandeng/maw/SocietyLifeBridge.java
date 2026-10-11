@@ -47,6 +47,7 @@ final class SocietyLifeBridge {
         NeoForge.EVENT_BUS.addListener(SocietyLifeBridge::commands);
         NeoForge.EVENT_BUS.addListener(SocietyLifeBridge::npc);
         NeoForge.EVENT_BUS.addListener(SocietyLifeBridge::useGuide);
+        NeoForge.EVENT_BUS.addListener(SocietyLifeBridge::useGuideOnBlock);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) -> {
             if (event.getServer().getTickCount() % 20 != 0) return;
             for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
@@ -223,7 +224,20 @@ final class SocietyLifeBridge {
     private static void useGuide(PlayerInteractEvent.RightClickItem event) {
         if (event.getHand() != InteractionHand.MAIN_HAND || !(event.getEntity() instanceof ServerPlayer player) || !isGuide(event.getItemStack())) return;
         event.setCanceled(true); event.setCancellationResult(InteractionResult.SUCCESS);
-        if (PlayerAuthBridge.authenticated(player) && player.getUUID().toString().equals(event.getItemStack().get(DataComponents.CUSTOM_DATA).copyTag().getString("ownerUuid"))) open(player, "guide");
+        activateGuide(player,event.getItemStack());
+    }
+    private static void useGuideOnBlock(PlayerInteractEvent.RightClickBlock event) {
+        if(event.getHand()!=InteractionHand.MAIN_HAND||!(event.getEntity() instanceof ServerPlayer p)||!isGuide(event.getItemStack()))return;
+        event.setCanceled(true);event.setCancellationResult(InteractionResult.SUCCESS);activateGuide(p,event.getItemStack());
+    }
+    private static void activateGuide(ServerPlayer p,ItemStack stack) {
+        if(!PlayerAuthBridge.authenticated(p)||!p.getUUID().toString().equals(stack.get(DataComponents.CUSTOM_DATA).copyTag().getString("ownerUuid")))return;
+        if(!bedrockMenu(p,"guide"))open(p,"guide");
+    }
+    private static boolean bedrockMenu(ServerPlayer p,String kind) {
+        try {return (Boolean)Class.forName("dev.qiandeng.maw.numenserver.BedrockMenus").getMethod("openMenu",ServerPlayer.class,String.class).invoke(null,p,kind);}
+        catch(ClassNotFoundException absent){return false;}
+        catch(ReflectiveOperationException e){throw new IllegalStateException("bedrock_menu_bridge_unavailable",e);}
     }
     private static void npc(PlayerInteractEvent.EntityInteract event) {
         if (event.getHand() != InteractionHand.MAIN_HAND || !(event.getEntity() instanceof ServerPlayer player) || !event.getTarget().getTags().contains("maw_guild_npc")) return;

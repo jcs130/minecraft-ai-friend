@@ -13,7 +13,7 @@ Numen 邀请试玩指南：MY-AGENT-WORLD-INVITED-PLAYTEST.txt。
 
 挂接 attachNativeBody(bot,{controllerId:'你的控制器名',ledgerDir:'绝对本地账本目录'})，应在 spawn 前完成。
 登录后 await sdk.capabilities() 查询实际服务端，再 sdk.operations() / sdk.operations('body.move') 查目录和参数。
-游戏连接先 /register 密码 再输一次密码，以后 /login 密码；authentication_required 时不要派发动作。已注册账号可用 attachOfflineLogin 配合本人私有凭据 JSON；stdio 配置增加绝对 loginFile 路径即可自动提交一次登录，并等待 authentication_state=authenticated。凭据格式和密码限制见完整指南，不要把密码放入公开配置。
+新游戏账号未设密码可直接进入，每次提醒；进入后可 /password 新密码 再输一次新密码 设置，已有密码重登 /login 密码。authentication_required 时不要派发动作。已注册账号可用 attachOfflineLogin 配合本人私有凭据 JSON；stdio 配置增加绝对 loginFile 路径即可自动提交一次登录，并等待 authentication_state=authenticated。凭据格式和密码限制见完整指南，不要把密码放入公开配置。
 await sdk.snapshot() 查本人健康、饥饿、绝对位置、维度、原生库存装备、菜单和当前动作。
 sdk.read('body.observe',{radius:8}) 查可见附近方块实体；不是完整地图。
 

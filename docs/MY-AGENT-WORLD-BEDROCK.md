@@ -1,5 +1,7 @@
 # My Agent World：基岩版局域网桥接
 
+2026-10-12 登录与道具补齐：正版 Xbox 验证后免密码，已设离线密码的旧账号首次绑定需验证原密码，规则见[混合登录](MY-AGENT-WORLD-LOGIN.md)。冒险指南针点击空气或方块均可重开指南，再进入自己的模型 Key 配置。魂符点实心方块上表面召唤原生女仆，对空气使用打开女仆面板；女仆指南和新生魔艺旧笔记可以反复打开原模组中文文字目录并进入同伴配置。实际 UDP 验证已覆盖这些持物交互；书中配方图和 3D 页面仍需适配，真实手机 Xbox 免密仍待玩家确认。
+
 2026-10-12：独立 ViaProxy + Geyser 桥沿用原家庭网段入口，增加 739 种原生物品映射、67 种手持模型、53 个生活/机械方块状态和五页图文指南；原 241 个女仆及 38 个 YSM 模型变体保持。真实基岩 UDP 测试客户端下载五包及菜单/场景消息通过，实际手机画面仍待确认。当前范围与发布流程见 [生活场景、手持模型和冒险指南](MY-AGENT-WORLD-BEDROCK-LIVING-VISUALS.md)，原有资源映射原理见 [资源适配](MY-AGENT-WORLD-BEDROCK-RESOURCES.md)。
 
 ## 入口与链路
@@ -23,7 +25,7 @@ UDP 监听只绑定 `192.168.3.163`，IPv6 不监听；显式防火墙规则仅�
 
 ## 入服自动下载资源
 
-已启用 `enable-integrated-pack=true`、`enable-custom-content=true` 和 `force-resource-packs=true`。除 Geyser 兼容资源外，当前四个本服包为 `maw-native-icons.mcpack` 1.1.0、`maw-world-visuals.mcpack` 1.0.0、原女仆/YSM 两包 1.0.2。扩展核对模型及场景包已加载；实际 UDP 测试客户端完整下载及 SHA 校验通过。手机连接时选择“下载并加入”，认证后可点欢迎菜单中的“冒险指南”，以后用 `/mawagent guide` 再打开。
+已启用 `enable-integrated-pack=true`、`enable-custom-content=true` 和 `force-resource-packs=true`。除 Geyser 兼容资源外，当前四个本服包为 `maw-native-icons.mcpack` 1.1.0、`maw-world-visuals.mcpack` 1.0.0、原女仆/YSM 两包 1.0.2。扩展核对模型及场景包已加载；实际 UDP 测试客户端完整下载及 SHA 校验通过。手机连接时选择“下载并加入”，认证后可点欢迎菜单中的“冒险指南”，以后使用冒险指南针或 `/mawagent guide` 再打开；`/mawagent menu` 直达同伴及模型配置。
 
 玩家在其他服务器看到的自动下载通常是基岩资源包；基岩原生附加包还可以包含行为内容。Java 的 NeoForge JAR 不能交给基岩版直接运行。后续本服专属的贴图/模型/声音包放在 `bedrock/plugins/Geyser/packs/*.mcpack`，自定义物品映射放在 `custom_mappings/*.json`（或对应 Geyser 扩展），正常重启本桥后随登录发送，不必重启主世界。[官方资源包下发说明](https://geysermc.org/wiki/geyser/packs/)明确支持本地包并要求先转换为基岩格式。资源转换、物品/方块/实体映射和原生交互是三项独立验收；下载完成不能替代玩法验收。
 

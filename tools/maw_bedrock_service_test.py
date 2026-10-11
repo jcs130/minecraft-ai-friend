@@ -67,6 +67,8 @@ class ConfigurationTests(unittest.TestCase):
                 self.assertEqual(value['services'][1]['command'][-1],'NONE')
                 self.assertEqual(value['services'][0]['env']['GATE_BEDROCK_PROJECTION'],'1')
                 self.assertEqual(value['services'][0]['env']['GATE_NATIVE_VIEWER'],'0')
+                self.assertIn('maw_agent:auth_state',value['services'][0]['env']['GATE_EXTRA_PLAY_CHANNELS'].split(','))
+                self.assertIn('validate-bedrock-login: true',bridge.geyser_config())
                 file.write_text(bridge.geyser_config()+'# edited','utf-8')
                 with self.assertRaises(ValueError):value['validator']()
                 with self.assertRaises(ValueError):bridge.load_config(config,root=root)
@@ -115,6 +117,8 @@ class HealthSmokeTests(unittest.TestCase):
                 patch('maw_bedrock_resources.registered_items',return_value={'nativeItems':1}), \
                 patch('maw_bedrock_modpacks.validate',return_value={'modelCount':1,'packs':[{}]}), \
                 patch('maw_bedrock_modpacks.registered_models',return_value={'registeredModels':1,'packsLoaded':1}), \
+                patch('maw_bedrock_visuals.validate',return_value={'blockCount':1,'partCount':1,'entityCount':1,'foodCount':1,'heldModelCount':1,'actualPhoneTested':False}), \
+                patch('maw_bedrock_visuals.registered',return_value={'blocks':1}), \
                 patch.object(health.subprocess,'run',return_value=firewall), \
                 patch.object(health,'probe_agent_observatory',side_effect=AssertionError('legacy probe called')):
             report=health.probe_panel_smoke(scope='society-bedrock')

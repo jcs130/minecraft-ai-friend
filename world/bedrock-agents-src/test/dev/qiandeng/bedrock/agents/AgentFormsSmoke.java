@@ -58,6 +58,14 @@ public final class AgentFormsSmoke {
         check(sent.get().get("taskId").equals("touhou_little_maid:farm"),"real task id kept");
         check(sent.get().get("follow").equals(false)&&sent.get().get("pickup").equals(true),"controller toggle callbacks");
         check(sent.get().get("controlRevision").equals("native-controls-cas")&&sent.get().get("maidUuid").equals(maid.get("maidUuid")),"owner/control CAS kept");
+        Map<String,Object> book=Map.of("title","原生中文书","entries",List.of(Map.of("id","intro","name","入门")),"offset",16,"total",51,"hasMore",true);
+        SimpleForm nativeBook=NativeBookForms.index(book,clicked::set,n->page.set(n),()->clicked.set("models"),()->clicked.set("guide"));
+        respond(nativeBook,"0");check("intro".equals(clicked.get()),"real handbook entry id");
+        respond(nativeBook,"1");check(page.get()==32,"handbook next page");
+        respond(nativeBook,"2");check(page.get()==0,"handbook previous page");
+        respond(nativeBook,"3");check("models".equals(clicked.get()),"repeated model configuration entry");
+        SimpleForm entry=NativeBookForms.entry(Map.of("entry",Map.of("name","原书章节","text","原生中文内容")),()->clicked.set("back"),()->clicked.set("models"));
+        check(json(entry).contains("原生中文内容"),"native handbook body kept");respond(entry,"0");check("back".equals(clicked.get()),"handbook return to index");
         System.out.println("{\"ok\":true,\"checks\":"+checks+",\"actualPhoneTested\":false}");
     }
 }

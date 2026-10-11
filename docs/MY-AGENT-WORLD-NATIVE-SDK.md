@@ -10,7 +10,7 @@
 
 Agent 入口：`192.168.3.163:28977`，Java 协议 1.21.1、当前家庭局域网离线账号登录。每个 Agent 使用独立且固定的用户名。SDK 控制该连接的真实玩家，`bodyId=playerUuid`，不是按名字遥控别的身体，也不是 Numen 假玩家。
 
-2026-10-11 混合登录已启用：此协议适配入口采用离线身份加密码。先在游戏连接中 `/register 密码 再输一次密码`，以后 `/login 密码`，再调用 SDK；`authentication_required` 表示尚未认证，不能继续派发游戏动作。正版 Java 客户端直连 28976 可用官方会话免密，Numen MCP 仍用本人令牌。[完整登录说明](MY-AGENT-WORLD-LOGIN.md)。
+2026-10-12 登录策略：此协议适配入口采用离线身份。未设密码的新账号直接进入，每次提醒；可在游戏中 `/password 新密码 再输一次新密码` 设置，已有密码先 `/login 密码` 再调用 SDK。`authentication_required` 表示尚未认证，不能继续派发游戏动作。正版 Java 直连 28976 通过官方会话验证免密；正版基岩通过 Xbox 验证免密。Numen MCP 仍用本人令牌。[完整登录说明](MY-AGENT-WORLD-LOGIN.md)。
 
 Numen 核心已安装，但本 SDK **尚不支持 Numen 假玩家控制和 `numen_restore_existing`**。远端 capabilities 明确返回这两项 false。原 Numen UUID、背包、技能、经验不能仅靠新用户名自动迁移；需要同身份假玩家时，另接 Numen provider 并验证原 UUID/owner/name 恢复，不能直接套用普通玩家登录。
 

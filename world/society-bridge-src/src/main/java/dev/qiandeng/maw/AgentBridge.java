@@ -37,8 +37,9 @@ import java.util.UUID;
 public final class AgentBridge {
     private static final String PREFIX = "MAW_AGENT ";
     public AgentBridge(IEventBus eventBus, ModContainer container) {
-        PlayerAuthBridge.register();
+        PlayerAuthBridge.register(eventBus);
         SocietyLifeBridge.register();
+        BedrockBookBridge.register();
         NativeControlAccess.register();
         PlayerSceneBridge.register(eventBus);
         TlmMinecoloniesBurningCompat.register(eventBus);

@@ -39,6 +39,8 @@ public final class MawAgentsExtension implements Extension {
         boolean welcomed;
         String acknowledged="",displayed="";
         int failures;
+        String nonce="";
+        boolean identityAccepted,identityInFlight;
     }
     @Subscribe public void commands(GeyserDefineCommandsEvent event) {
         event.register(Command.<CommandSource>builder(this).source(CommandSource.class).name("guide").description("冒险指南：农场、厨房、魔法与风车").permission("mawagent.guide",TriState.TRUE).suggestedOpOnly(false).executableOnConsole(false).playerOnly(true).bedrockOnly(true).executor((source,command,args)->{if(source.connection()!=null)guide(source.connection());}).build());
@@ -55,9 +57,14 @@ public final class MawAgentsExtension implements Extension {
             session.scheduleInEventLoop(()->pollUi(session,state),1,TimeUnit.SECONDS);
             if(session.getDownstream()!=null)session.getDownstream().getSession().addListener(new SessionAdapter(){
                 @Override public void packetReceived(Session downstream,Packet packet){
-                    if(!(packet instanceof ClientboundCustomPayloadPacket p)||!p.getChannel().asString().equals("maw_agent:menu_state")||p.getData().length>65536)return;
+                    if(!(packet instanceof ClientboundCustomPayloadPacket p)||!Set.of("maw_agent:menu_state","maw_agent:auth_state").contains(p.getChannel().asString())||p.getData().length>65536)return;
                     try{var body=parse(new String(p.getData(),StandardCharsets.UTF_8));
                         if(!session.playerEntity().uuid().toString().equals(body.get("playerUuid")))return;
+                        if(p.getChannel().asString().equals("maw_agent:auth_state")){
+                            String nonce=Objects.toString(body.get("nonce"),"");
+                            if(nonce.matches("[a-f0-9]{64}"))session.executeInEventLoop(()->{if(sessions.get(session)==state)state.nonce=nonce;});
+                            return;
+                        }
                         session.executeInEventLoop(()->{if(!state.welcomed&&sessions.get(session)==state&&!session.isClosed()){
                             state.welcomed=true;show(session,MaidForms.welcome(()->menu(session),()->maidMenu(session),()->guide(session)));
                         }});
@@ -69,6 +76,15 @@ public final class MawAgentsExtension implements Extension {
     @Subscribe public void disconnect(SessionDisconnectEvent event){sessions.remove(event.connection());inFlight.remove(event.connection());}
     private void pollUi(GeyserSession session,UiSession state){
         if(session.isClosed()||sessions.get(session)!=state)return;
+        if(!state.identityAccepted&&!state.identityInFlight&&!state.nonce.isEmpty()&&session.getGeyser().config().advanced().bedrock().validateBedrockLogin()&&session.xuid()!=null&&session.xuid().matches("[1-9][0-9]{5,19}")){
+            state.identityInFlight=true;
+            exchange(session,"bedrock.authenticate",map("nonce",state.nonce,"xuid",session.xuid()),(result,error)->{
+                state.identityInFlight=false;
+                if(error==null)state.identityAccepted=true;
+                else {state.failures++;logger().warning("MAW_BEDROCK_AUTH declined code="+error);}
+                session.scheduleInEventLoop(()->pollUi(session,state),error==null?0:5,TimeUnit.SECONDS);
+            });return;
+        }
         Map<String,Object> args=map("sessionId",state.id);
         if(state.bound&&!state.acknowledged.isEmpty())args.put("ackEventId",state.acknowledged);
         String action=state.bound?"bedrock.poll":"bedrock.bind";
@@ -88,6 +104,10 @@ public final class MawAgentsExtension implements Extension {
                             state.displayed=id;
                             if(event.get("kind").equals("maid"))maidPanel(session,target.toString());
                             else if(event.get("kind").equals("companion"))companionPanel(session,target.toString());
+                            else if(event.get("kind").equals("guide"))guide(session);
+                            else if(event.get("kind").equals("menu"))menu(session);
+                            else if(event.get("kind").equals("maid_menu"))maidMenu(session);
+                            else if(Set.of("book_maid","book_ars").contains(event.get("kind")))book(session,0);
                         }
                     }catch(RuntimeException ignored){/* Never show untrusted or another owner's event. */}
                 }
@@ -99,6 +119,7 @@ public final class MawAgentsExtension implements Extension {
     private void guide(GeyserConnection c){show(c,GuideForms.index(n->guidePage(c,n),()->menu(c),()->maidMenu(c),()->nativeMenu(c,"mycli guide"),()->nativeMenu(c,"mycli market")));}
     private void nativeMenu(GeyserConnection c,String command){if(c instanceof GeyserSession session)session.executeInEventLoop(()->{if(!session.isClosed())session.sendCommand(command);});}
     private void guidePage(GeyserConnection c,int n){show(c,GuideForms.page(n,next->guidePage(c,next),()->guide(c)));}
+    private void book(GeyserConnection c,int offset){request(c,"book.read",map("offset",offset),data->show(c,NativeBookForms.index(data,id->request(c,"book.read",map("entryId",id),page->show(c,NativeBookForms.entry(page,()->book(c,offset),()->menu(c)))),next->book(c,next),()->menu(c),()->guide(c))));}
     private void request(GeyserConnection c,String action,Map<String,Object> args,Consumer<Map<String,Object>> done) {
         long now=System.currentTimeMillis();synchronized(inFlight){if(inFlight.getOrDefault(c,0L)>now)return;inFlight.put(c,now+15000);}
         exchange(c,action,args,(result,error)->{
@@ -136,7 +157,7 @@ public final class MawAgentsExtension implements Extension {
     });}
     private void maidMenu(GeyserConnection c){request(c,"maid.menu",Map.of(),data->{
         boolean admin=Boolean.TRUE.equals(data.get("canEditSites"));List<Map<String,Object>> maids=rows(data.get("maids")),sites=rows(data.get("sites"));
-        var form=SimpleForm.builder().title("我的车万女仆").content("空手对自己的女仆按交互键，也能打开面板。\n附近 32 格内的女仆会显示在这里。\n"+(Boolean.TRUE.equals(data.get("llmEnabled"))?"智能聊天已启用。":"服主已关闭智能聊天。")+"\n"+(admin?"你可以管理全服模型服务。":"模型服务和 API Key 由服主管理。")+(maids.isEmpty()?"\n未发现自己的女仆，请先靠近已驯服的女仆。":""));
+        var form=SimpleForm.builder().title("我的车万女仆").content("魂符：对实心方块的上表面使用，召唤原生女仆；对空气使用重开此面板。\n空手对自己的女仆按交互键，配置她的工作与模型。\n附近 32 格内的女仆会显示在这里。\n"+(Boolean.TRUE.equals(data.get("llmEnabled"))?"智能聊天已启用。":"服主已关闭智能聊天。")+"\n"+(admin?"你可以管理全服模型服务。":"女仆的全服模型服务和 API Key 由服主管理；Agent 同伴可单独配置自己的 Key。")+(maids.isEmpty()?"\n未发现自己的女仆，请先召唤或靠近已驯服的女仆。":""));
         if(admin)form.button("管理全服 LLM 服务 / API Key");for(var maid:maids)form.button(Objects.toString(maid.get("name"))+" · "+Objects.toString(maid.get("effectiveModel"),"未配置"));form.button("返回同伴菜单");
         show(c,form.validResultHandler(r->{int i=r.clickedButtonId();if(admin&&i==0){maidSites(c,sites);return;}int index=i-(admin?1:0);if(index>=0&&index<maids.size())maidPanel(c,Objects.toString(maids.get(index).get("maidUuid")));else menu(c);}).build());
     });}

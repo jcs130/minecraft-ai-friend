@@ -12,7 +12,7 @@ import java.util.*;
 /** Owner-scoped, ephemeral UI events over the existing authenticated local bridge.
  * All methods run on the server thread; no polling thread, new port or model call.
  */
-final class BedrockMenus {
+public final class BedrockMenus {
     private static final long SESSION_MS = 20_000, EVENT_MS = 5_000;
     private final HeadlessRuntime runtime;
     private final Map<UUID, Binding> bindings = new HashMap<>();
@@ -58,6 +58,20 @@ final class BedrockMenus {
     void prune(long now) {
         bindings.entrySet().removeIf(e -> now-e.getValue().seen > SESSION_MS ||
             runtime.server.getPlayerList().getPlayer(e.getKey()) != e.getValue().player);
+    }
+
+    /** Bound to an authenticated, still-online Geyser session. Java players keep
+     * their native UI. The event carries no keys and performs no gameplay action. */
+    public static boolean openMenu(ServerPlayer player,String kind) {
+        if(!Set.of("guide","menu","maid_menu","book_maid","book_ars").contains(kind))return false;
+        HeadlessRuntime r=HeadlessRuntime.INSTANCE;if(r==null)return false;
+        HeadlessAuth.requireAuthenticated(player);
+        Binding binding=r.bedrockMenus.bindings.get(player.getUUID());long now=System.currentTimeMillis();
+        if(binding==null||binding.player!=player||now-binding.seen>SESSION_MS)return false;
+        if(now-binding.clicked<750)return true;
+        binding.clicked=now;binding.eventAt=now;
+        binding.pending=object("schemaVersion",1,"eventId",UUID.randomUUID(),"ownerUuid",player.getUUID(),"kind",kind,"targetUuid",player.getUUID());
+        return true;
     }
 
     static void interact(PlayerInteractEvent.EntityInteract event) {

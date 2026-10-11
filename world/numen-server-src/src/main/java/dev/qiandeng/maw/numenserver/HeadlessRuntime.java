@@ -422,7 +422,17 @@ public final class HeadlessRuntime {
     JsonObject ui(UUID owner,String playerName,String action,JsonObject args) {
         ServerPlayer player=server.getPlayerList().getPlayer(owner);
         if(player==null||player instanceof NumenPlayer||!player.getGameProfile().getName().equals(playerName))throw new IllegalArgumentException("owner_connection_not_online");
+        if(action.equals("bedrock.authenticate")){
+            try {return (JsonObject)Class.forName("dev.qiandeng.maw.PlayerAuthBridge").getMethod("authenticateBedrock",ServerPlayer.class,JsonObject.class).invoke(null,player,args);}
+            catch(java.lang.reflect.InvocationTargetException e){if(e.getCause() instanceof RuntimeException r)throw r;throw new IllegalStateException("bedrock_authentication_unavailable",e);}
+            catch(ReflectiveOperationException e){throw new IllegalStateException("bedrock_authentication_unavailable",e);}
+        }
         HeadlessAuth.requireAuthenticated(player);
+        if(action.equals("book.read")){
+            try {return (JsonObject)Class.forName("dev.qiandeng.maw.BedrockBookBridge").getMethod("read",ServerPlayer.class,JsonObject.class).invoke(null,player,args);}
+            catch(java.lang.reflect.InvocationTargetException e){if(e.getCause() instanceof RuntimeException r)throw r;throw new IllegalStateException("native_book_resource_unavailable",e);}
+            catch(ReflectiveOperationException e){throw new IllegalStateException("native_book_bridge_unavailable",e);}
+        }
         if(action.startsWith("bedrock."))return bedrockMenus.invoke(player,action,args);
         if(action.startsWith("maid.")){
             if(maids==null)throw new IllegalArgumentException("maid_mod_unavailable");
