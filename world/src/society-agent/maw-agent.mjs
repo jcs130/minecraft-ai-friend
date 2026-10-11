@@ -20,6 +20,7 @@ const { nearbyNativeEntities, validateNativeEntityTarget, validateNativeAttackTa
 const { nativeInventorySnapshot, nativeDigResult, summarizeNativeInventoryReceipt } = require('./native-inventory-delta.cjs')
 const { selectNativeHotbar } = require('./native-hotbar-selection.cjs')
 const { attachNativeWorldQuery } = require('./native-world-query.cjs')
+const { attachOfflineLogin } = require('./offline-login.cjs')
 const { agentToolCatalog } = require('./tool-catalog.cjs')
 const { runModToolAction } = require('./mod-tool.cjs')
 const { attachModOperationsClient } = require('../neoforge-handshake/mod-operations-client.cjs')
@@ -30,6 +31,7 @@ const { nativeBlockInteractionPacket, readNativeBlockBeforeAction } = require('.
 const { createNativeRecipeDiscovery } = require('./native-recipe-discovery.cjs')
 const { createNativeMachineVerifier } = require('./native-machine-verification.cjs')
 const { attachNumenMcpGateway } = require('./numen-mcp-gateway.cjs')
+const { attachNumenViewerGateway } = await import('./numen-viewer-gateway.mjs')
 const { performNativeBlockAction } = require('./native-machine-actions.cjs')
 const mineflayer = require('mineflayer'), nbt = require('prismarine-nbt')
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
@@ -114,6 +116,8 @@ const stream = attachNativeViewerPackets(bot, prepared.registrySha256)
 const menu = attachMenuClient(bot), query = attachWorldClient(bot), maid = attachMaidClient(bot), colony = attachColonyClient(bot), spell = attachSpellClient(bot)
 const domum = attachDomumClient(bot), collision = attachCollisionClient(bot)
 const nativeQuery = attachNativeWorldQuery(bot)
+const gameLogin = attachOfflineLogin(bot, { credentialPath: path.join(root, 'game-login.json'), username: config.username,
+  query: () => nativeQuery.capabilities(), onState: value => { status.authentication = value; persist() } })
 const mods = attachModOperationsClient(bot)
 const modCalls = attachModCallClient(bot, { menu, world: query, native: nativeQuery, maid, colony, spell, domum, collision, mods }, () => closing)
 const recipeDiscovery = createNativeRecipeDiscovery(nativeQuery)
@@ -133,9 +137,13 @@ const viewer = prepared.attach({ bot, expectedUsername: config.username, nativeS
   getAgentStatus: () => JSON.parse(gameJSON({ ...status, receipts: receiptSummaries(), health: bot.health ?? null, food: bot.food ?? null, position: bot.entity?.position || null, native: stream.health(), modelTask: qwen.status?.() || null })) })
 // The Java addon owns bodies/keys/actions. This route only forwards authenticated
 // MCP traffic on the already-managed LAN listener, without touching viewer code.
+const numenViewer = attachNumenViewerGateway({ server: viewer.server, prepared, assetDirectory: config.assetDirectory,
+  registryDirectory: path.resolve(config.stateDirectory, '../../gateway/permanent/registry'), createPresentation: createNativePlayerPresentation,
+  simplifyNBT: tag => tag?.type ? nbt.simplify(tag) : tag, lanAddress: process.env.MAW_VIEWER_LAN_ADDRESS ?? null })
 const detachNumenGateway = attachNumenMcpGateway({ server: viewer.server,
   lanAddress: process.env.MAW_VIEWER_LAN_ADDRESS ?? null })
 viewer.server.once('close', detachNumenGateway)
+viewer.server.once('close', () => numenViewer.close())
 await viewer.listen()
 bot.loadPlugin(pathfinder)
 let closing = false, epoch = 0, activeActionScope = null, nativeBlockUseSequence = 0
@@ -386,7 +394,7 @@ async function loop () {
     // Removing a marker is not reconciliation of a timed-out body's closures.
     // A fenced worker requires an explicit owned restart after ledger review.
     if (actionFence.status().blocked) { status.mode = 'paused_unknown'; persist(); await wait(1000); continue }
-    if (!status.online || !menu.current() || bot.health <= 0) { status.mode = 'waiting_for_player'; persist(); await wait(1000); continue }
+    if (!status.online || !gameLogin.ready() || !menu.current() || bot.health <= 0) { status.mode = 'waiting_for_player'; persist(); await wait(1000); continue }
     if (fs.existsSync(paused)) { status.mode = 'paused'; persist(); await wait(1000); continue }
     // A restart cannot shorten this persisted cooldown. The gate precedes
     // inspection/submission and stays responsive to maintenance/shutdown.

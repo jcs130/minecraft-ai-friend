@@ -395,6 +395,7 @@ public final class HeadlessRuntime {
     JsonObject ui(UUID owner,String playerName,String action,JsonObject args) {
         ServerPlayer player=server.getPlayerList().getPlayer(owner);
         if(player==null||player instanceof NumenPlayer||!player.getGameProfile().getName().equals(playerName))throw new IllegalArgumentException("owner_connection_not_online");
+        HeadlessAuth.requireAuthenticated(player);
         if(action.startsWith("bedrock."))return bedrockMenus.invoke(player,action,args);
         if(action.startsWith("maid.")){
             if(maids==null)throw new IllegalArgumentException("maid_mod_unavailable");

@@ -394,6 +394,23 @@ def probe_agent_frame():
 
 
 def probe_panel_smoke(scope=None):
+    if scope == 'society-mixed-auth':
+        tools_path = str(PROJECT/'tools')
+        if tools_path not in sys.path:
+            sys.path.insert(0, tools_path)
+        spec = importlib.util.spec_from_file_location('maw_mixed_auth_health', PROJECT/'tools/maw_mixed_auth_health.py')
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        auth = module.probe()
+        return {'ok': auth['ok'], 'society_mixed_auth': auth, 'modelRequests': 0, 'worldActions': 0}
+    if scope == 'society-numen-viewer':
+        tools_path = str(PROJECT/'tools')
+        if tools_path not in sys.path:
+            sys.path.insert(0, tools_path)
+        spec = importlib.util.spec_from_file_location('maw_numen_viewer_health', PROJECT/'tools/maw_numen_viewer_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        viewer = module.probe()
+        return {'ok': viewer['ok'], 'society_numen_viewer': viewer, 'modelRequests': 0, 'worldActions': 0}
     if scope == 'society-numen-server':
         tools_path = str(PROJECT/'tools')
         if tools_path not in sys.path:
@@ -2089,6 +2106,14 @@ def inventory_lock_failure(reason):
 
 
 def main():
+    if sys.argv[1:] == ['--society-mixed-auth-smoke']:
+        report = probe_panel_smoke(scope='society-mixed-auth')
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        raise SystemExit(0 if report['ok'] else 1)
+    if sys.argv[1:] == ['--society-numen-viewer-smoke']:
+        report = probe_panel_smoke(scope='society-numen-viewer')
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
     if sys.argv[1:] == ['--society-numen-server-smoke']:
         report = probe_panel_smoke(scope='society-numen-server')
         print(json.dumps(report, ensure_ascii=False, indent=2))

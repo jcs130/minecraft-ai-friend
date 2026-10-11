@@ -222,6 +222,8 @@ final class DomumCutterBridge {
         if (player.connection != null && player.connection.hasChannel(State.TYPE)) PacketDistributor.sendToPlayer(player, new State(text));
     }
     static void query(ServerPlayer player, String text) {
+        var authDenied = PlayerAuthBridge.denial(player, text, "domum_receipt");
+        if (authDenied != null) { send(player, authDenied.toString()); return; }
         String id = "invalid", kind = "invalid";
         JsonObject result = base(player, id);
         try {
@@ -272,6 +274,8 @@ final class DomumCutterBridge {
         body.add("nextOffset", offset + returned < total ? new com.google.gson.JsonPrimitive(offset + returned) : JsonNull.INSTANCE);
     }
     static void select(ServerPlayer player, String text) {
+        var authDenied = PlayerAuthBridge.denial(player, text, "domum_receipt");
+        if (authDenied != null) { send(player, authDenied.toString()); return; }
         String id = "invalid"; boolean started = false; ColonyActionReplay ledger = null; JsonObject result = base(player, id);
         try {
             JsonObject input = JsonParser.parseString(text).getAsJsonObject(); id = DomumCutterRules.string(input, "requestId");

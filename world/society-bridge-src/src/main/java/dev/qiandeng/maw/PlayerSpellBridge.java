@@ -193,6 +193,8 @@ final class PlayerSpellBridge {
     }
 
     static void handle(ServerPlayer player, String raw, boolean mutation) {
+        var denied = PlayerAuthBridge.denial(player, raw, "spell_receipt");
+        if (denied != null) { send(player, denied.toString()); return; }
         String requestId = "invalid";
         String action = mutation ? "cast" : "query";
         String fingerprint = null;

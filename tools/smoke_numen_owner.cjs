@@ -10,7 +10,15 @@ bot._client.on('packet', (packet, meta) => {
   if (meta.name === 'open_window') windows++
   if (meta.name === 'custom_payload' && packet.channel === 'neoforge:advanced_open_screen') nativeScreens++
 })
-bot.once('spawn', () => fs.writeFileSync(path.join(directory, 'owner-ready.json'), JSON.stringify({uuid: bot.player.uuid})))
+const loginFile = path.join(directory, 'owner-login.json')
+if (fs.existsSync(loginFile)) {
+  const { attachNativeWorldQuery } = require('../world/src/society-agent/native-world-query.cjs')
+  const { attachOfflineLogin } = require('../world/src/society-agent/offline-login.cjs')
+  const query = attachNativeWorldQuery(bot)
+  attachOfflineLogin(bot, { credentialPath: loginFile, username: 'MawHeadQAOwner', query: () => query.capabilities(), onState: state => {
+    if (state.phase === 'authenticated') fs.writeFileSync(path.join(directory, 'owner-ready.json'), JSON.stringify({uuid: bot.player.uuid, authenticated: true}))
+  } })
+} else bot.once('spawn', () => fs.writeFileSync(path.join(directory, 'owner-ready.json'), JSON.stringify({uuid: bot.player.uuid})))
 bot.on('error', error => { console.error(error); process.exitCode = 1 })
 bot.on('kicked', reason => console.error('kicked', reason))
 const timer = setInterval(async () => {

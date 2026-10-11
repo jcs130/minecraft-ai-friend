@@ -2,7 +2,7 @@
 // Optional owned connection for Python/other runtimes. JSONL is private IPC,
 // never Minecraft chat. The parent Agent process owns/supervises this child.
 const fs = require('node:fs'), path = require('node:path'), readline = require('node:readline')
-const { attachNativeBody } = require('./index.cjs')
+const { attachNativeBody, attachOfflineLogin } = require('./index.cjs')
 const ID = /^[A-Za-z0-9_.:-]{1,96}$/
 async function dispatch (sdk, message) {
   if (!message || !ID.test(message.request_id || '') || typeof message.method !== 'string') throw Error('SDK_RPC_REQUEST_INVALID')
@@ -30,10 +30,17 @@ async function main (configFile) {
   try { sdk = attachNativeBody(bot, { ...config, account: config.username }) } catch (error) { bot.quit('Native SDK initialization rejected'); throw error }
   const input = readline.createInterface({ input: process.stdin, crlfDelay: Infinity })
   const reply = body => process.stdout.write(JSON.stringify(body)+'\n')
+  let login
+  if (config.loginFile) {
+    if (!path.isAbsolute(config.loginFile)) throw Error('SDK_LOGIN_FILE_MUST_BE_ABSOLUTE')
+    login = attachOfflineLogin(bot, { credentialPath: config.loginFile, username: config.username,
+      query: () => sdk.capabilities(), onState: state => reply({ event: 'authentication_state', ...state }) })
+  }
   let closing = false
   function shutdown () {
     if (closing) return
-    closing = true; input.close(); sdk.close(); bot.quit('Native SDK parent stopping')
+    closing = true; input.close(); process.stdin.pause(); process.stdin.unref?.()
+    login?.close(); sdk.close(); bot.quit('Native SDK parent stopping')
   }
   input.on('line', async line => {
     let request
@@ -44,6 +51,7 @@ async function main (configFile) {
         if (!ID.test(request.request_id || '')) throw Error('SDK_RPC_REQUEST_INVALID')
         reply({ request_id: request.request_id, ok: true, result: { closing: true } }); shutdown(); return
       }
+      if (login && !login.ready() && ['submit', 'read', 'snapshot'].includes(request.method)) throw Error('authentication_required')
       const result = await dispatch(sdk, request)
       reply({ request_id: request.request_id, ok: true, result })
     } catch (error) { reply({ request_id: ID.test(request?.request_id || '') ? request.request_id : null,

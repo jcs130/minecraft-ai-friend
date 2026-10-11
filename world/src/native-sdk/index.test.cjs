@@ -2,7 +2,7 @@
 const test = require('node:test'), assert = require('node:assert/strict')
 const { EventEmitter } = require('node:events')
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path')
-const { attachNativeBody } = require('./index.cjs')
+const { attachNativeBody, attachOfflineLogin } = require('./index.cjs')
 const { operationCatalog } = require('./catalog.cjs')
 const { modOperationCatalog } = require('../neoforge-handshake/mod-call-client.cjs')
 const UUID = '11111111-1111-4111-8111-111111111111'
@@ -176,4 +176,24 @@ test('raw client mutations outside the SDK are fenced while keepalive and reads 
   runtime.close()
   assert.equal(bot._client.write('held_item_slot', { slotId: 2 }), false)
   assert.throws(() => attachNativeBody(bot, { ledgerDir: dir, controllerId: 'new' }), /ALREADY_CONTROLLED/)
+})
+
+test('private offline login permits only its exact command and keeps all game mutations fenced', async t => {
+  const dir = fixture(t), { runtime, bot } = body(dir); t.after(runtime.close)
+  const credentialPath = path.join(dir, 'private-login.json')
+  fs.writeFileSync(credentialPath, JSON.stringify({ username: bot.username, playerUuid: UUID, password: 'a'.repeat(32) }))
+  const commands = []; let probes = 0
+  bot.chat = command => {
+    assert.equal(bot._client.write('block_dig', {}), false)
+    assert.equal(bot._client.write('chat_command', { command: 'give @s diamond' }), false)
+    assert.equal(bot._client.write('chat_command', { command: command.slice(1) }), true)
+    commands.push('login_command_without_password')
+  }
+  const login = attachOfflineLogin(bot, { credentialPath, username: bot.username,
+    query: async () => ++probes === 1 ? { ok: false, code: 'authentication_required' } : { ok: true, playerUuid: UUID } })
+  t.after(login.close); bot.emit('spawn'); await pause(1450)
+  assert.equal(login.ready(), true); assert.equal(commands.length, 1)
+  assert.equal(bot._client.write('chat_command', { command: 'login ' + 'a'.repeat(32) }), false)
+  bot.emit('spawn'); await pause(350); assert.equal(commands.length, 1)
+  runtime.close(); bot.emit('spawn'); await pause(350); assert.equal(commands.length, 1)
 })

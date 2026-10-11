@@ -19,10 +19,22 @@ async function run (config) {
     bot = mineflayer.createBot({ host: config.host, port: config.port, username: config.username, version: '1.21.1', auth: 'offline', hideErrors: false })
     ended = false; bot.once('end', () => { ended = true }); bot.on('error', error => { report.connectionError = error.message })
     sdk = attach(bot, { ledgerDir: config.ledgerDir, controllerId: 'sdk-bounded-smoke', expectedUuid, account: config.username })
+    let login
+    if (config.loginFile) {
+      const { attachOfflineLogin } = require(config.sdkModule || '../world/src/native-sdk/index.cjs')
+      login = attachOfflineLogin(bot, { credentialPath: config.loginFile, username: config.username, query: () => sdk.capabilities() })
+    }
     let timer
     try { await Promise.race([once(bot, 'spawn'), new Promise((_resolve, reject) => { timer = setTimeout(() => reject(Error('SDK_SMOKE_LOGIN_TIMEOUT')), 30000) })]) }
     finally { clearTimeout(timer) }
     await sleep(750)
+    if (login) {
+      const deadline = Date.now() + 32000
+      while (!login.ready() && !ended && Date.now() < deadline) await sleep(200)
+      assert.equal(login.ready(), true, 'Private offline login was not confirmed')
+      report.checks.offlineAuthenticated = true
+      report.commandsSent++
+    }
   }
   const disconnect = async () => {
     if (bot && !ended) { const done = once(bot, 'end'); sdk?.close(); bot.quit('Native SDK bounded smoke complete');

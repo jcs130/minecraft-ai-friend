@@ -167,6 +167,7 @@ final class PlayerMenuBridge {
     static JsonObject nativeItem(ServerPlayer player, ItemStack stack) { return item(player, stack); }
 
     static JsonObject snapshot(ServerPlayer player) {
+        PlayerAuthBridge.requireAuthenticated(player);
         AbstractContainerMenu menu = player.containerMenu;
         JsonObject state = new JsonObject();
         state.addProperty("schemaVersion", 1);
@@ -302,7 +303,7 @@ final class PlayerMenuBridge {
     }
 
     private static void publishIfChanged(ServerPlayer player) {
-        if (!canSend(player)) return;
+        if (!canSend(player) || !PlayerAuthBridge.authenticated(player)) return;
         JsonObject state = snapshot(player);
         String json = state.toString();
         if (json.equals(LAST_STATE.get(player.getUUID()))) return;
@@ -381,6 +382,8 @@ final class PlayerMenuBridge {
     }
 
     static void handleAction(ServerPlayer player, String text) {
+        var denied = PlayerAuthBridge.denial(player, text, "action_receipt");
+        if (denied != null) { send(player, denied); return; }
         String requestId = "invalid";
         MenuActionReplay reservation = null;
         boolean mutationStarted = false;

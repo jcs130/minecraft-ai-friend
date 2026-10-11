@@ -165,6 +165,8 @@ final class ModOperationsBridge {
         return result;
     }
     static void handle(ServerPlayer player, String raw, boolean mutation) {
+        var denied = PlayerAuthBridge.denial(player, raw, "mod_receipt");
+        if (denied != null) { send(player, denied.toString()); return; }
         String id = "invalid", kind = "unknown"; JsonObject result = null; boolean started = false, reserved = false;
         try {
             var input = JsonParser.parseString(raw).getAsJsonObject();

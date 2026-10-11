@@ -44,7 +44,7 @@ def install(destination: Path) -> dict:
     source_files = sorted(set(dependencies(SOURCE/'native-sdk/index.cjs') + dependencies(SOURCE/'native-sdk/stdio.cjs')))
     files = {p.relative_to(SOURCE).as_posix(): p.read_bytes() for p in source_files}
     package = json.loads((SOURCE/'society-agent/package.json').read_text('utf-8'))
-    package.update(name='@my-agent-world/native-sdk', version='0.2.0', main='native-sdk/index.cjs',
+    package.update(name='@my-agent-world/native-sdk', version='0.2.1', main='native-sdk/index.cjs',
                    description='Model-neutral My Agent World native body SDK', private=True, license='MIT')
     files['package.json'] = (json.dumps(package, indent=2)+'\n').encode()
     files['LICENSE'] = (REPO/'LICENSE').read_bytes()
@@ -53,7 +53,7 @@ def install(destination: Path) -> dict:
     catalog = json.loads(result.stdout)
     assert catalog['operationCount'] == 70 and not catalog['remoteSupportVerified']
     files['operations.json'] = (result.stdout+'\n').encode()
-    for name in ('MY-AGENT-WORLD-NATIVE-SDK.md', 'MY-AGENT-WORLD-NATIVE-SDK-CONNECT.txt'):
+    for name in ('MY-AGENT-WORLD-NATIVE-SDK.md', 'MY-AGENT-WORLD-NATIVE-SDK-CONNECT.txt', 'MY-AGENT-WORLD-LOGIN.md', 'MY-AGENT-WORLD-LOGIN.txt'):
         files[name] = (REPO/'docs'/name).read_bytes()
     for name, content in files.items():
         target = destination/name

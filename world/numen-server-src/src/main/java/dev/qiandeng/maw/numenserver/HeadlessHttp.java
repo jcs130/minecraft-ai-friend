@@ -16,6 +16,7 @@ final class HeadlessHttp {
     final HttpServer server;
     final ExecutorService executor;
     final Map<UUID,long[]> rates=new ConcurrentHashMap<>();
+    final Map<UUID,long[]> viewerRates=new ConcurrentHashMap<>();
     static final Set<String> VERSIONS=Set.of("2025-06-18","2025-03-26","2025-11-25");
     HeadlessHttp(HeadlessRuntime r) throws IOException {
         runtime=r;
@@ -53,9 +54,9 @@ final class HeadlessHttp {
             if(path.equals("/healthz")){
                 if(!x.getRemoteAddress().getAddress().isLoopbackAddress()){send(x,403,object("code","loopback_only"));return;}
                 if(!x.getRequestMethod().equals("GET")){send(x,405,object("code","get_required"));return;}
-                send(x,200,object("ok",true,"serverResident",true,"clientRequired",false,"numenVersion","0.1.4.1","maidConfigAvailable",runtime.maids!=null,"bedrockVisualMenus",true,"nativeModAccess",runtime.mods!=null,"nativeModOperationCount",runtime.mods==null?0:runtime.mods.catalog("").get("operationCount"),"session",runtime.session));return;
+                send(x,200,object("ok",true,"serverResident",true,"clientRequired",false,"numenVersion","0.1.4.1","maidConfigAvailable",runtime.maids!=null,"bedrockVisualMenus",true,"nativeModAccess",runtime.mods!=null,"nativeViewerAvailable",runtime.mods!=null,"nativeModOperationCount",runtime.mods==null?0:runtime.mods.catalog("").get("operationCount"),"session",runtime.session));return;
             }
-            if(!Set.of("/mcp","/ui").contains(path)){send(x,404,object("code","not_found"));return;}
+            if(!Set.of("/mcp","/ui","/viewer").contains(path)){send(x,404,object("code","not_found"));return;}
             if(!x.getRequestMethod().equals("POST")){send(x,405,object("code","post_required"));return;}
             String ct=x.getRequestHeaders().getFirst("Content-Type");
             if(ct==null||!ct.toLowerCase(Locale.ROOT).startsWith("application/json")){send(x,415,object("code","json_required"));return;}
@@ -64,13 +65,30 @@ final class HeadlessHttp {
                 if(!x.getRemoteAddress().getAddress().isLoopbackAddress()||!equalsSecret(Objects.toString(x.getRequestHeaders().getFirst("X-Maw-Bridge"),""),text(read(runtime.secrets.resolve("bridge.json")),"secret",64))){send(x,403,object("code","trusted_bedrock_bridge_required"));return;}
             }else {
                 owner=authenticate(x);if(owner==null){x.getResponseHeaders().set("WWW-Authenticate","Bearer");send(x,401,object("code","invalid_bearer"));return;}
-                if(!rate(owner)){send(x,429,object("code","request_rate_limited"));return;}
+                if(path.equals("/viewer")) {
+                    long now=System.currentTimeMillis();long[] window=viewerRates.computeIfAbsent(owner,k->new long[]{now,0});
+                    synchronized(window){if(now-window[0]>=1000){window[0]=now;window[1]=0;}if(++window[1]>12){send(x,429,object("code","viewer_rate_limited"));return;}}
+                } else if(!rate(owner)){send(x,429,object("code","request_rate_limited"));return;}
                 String version=x.getRequestHeaders().getFirst("MCP-Protocol-Version");
                 if(version!=null&&!VERSIONS.contains(version)){send(x,400,object("code","unsupported_protocol_version"));return;}
             }
             byte[] bytes=x.getRequestBody().readNBytes(65537);
             if(bytes.length>65536){send(x,413,object("code","request_too_large"));return;}
             JsonObject in=JsonParser.parseString(new String(bytes,StandardCharsets.UTF_8)).getAsJsonObject();
+            if(path.equals("/viewer")) {
+                UUID authorized=owner;
+                JsonObject result=runtime.onMain(()->{
+                    if(!Set.of("companion","initialize","columns").containsAll(in.keySet()))throw new IllegalArgumentException("unsupported_viewer_argument");
+                    UUID body=runtime.own(authorized,in);
+                    if(runtime.mods==null)throw new IllegalArgumentException("native_viewer_bridge_unavailable");
+                    JsonObject args=in.deepCopy();args.remove("companion");
+                    JsonObject frame=runtime.mods.viewer(runtime.live(body),args);
+                    var stored=runtime.bodies.get(body);
+                    frame.add("controller",object("driver",stored.get("driver"),"activeAction",stored.has("activeAction")?stored.get("activeAction"):JsonNull.INSTANCE));
+                    return frame;
+                });
+                send(x,200,result);return;
+            }
             if(path.equals("/ui")) {
                 UUID actual=UUID.fromString(text(in,"ownerUuid",36));String name=text(in,"playerName",16),action=text(in,"action",40);
                 JsonObject args=in.has("arguments")?in.getAsJsonObject("arguments"):new JsonObject();

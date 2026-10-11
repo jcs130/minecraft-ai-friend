@@ -25,7 +25,7 @@ def offline(name):
     value[8] = value[8] & 63 | 128
     return str(uuid.UUID(bytes=bytes(value)))
 
-def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar=None):
+def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar=None, viewer=False, viewer_visual=False, mixauth_jar=None):
     output = output.resolve()
     if (root/'research').resolve() not in output.parents or output.exists():
         raise ValueError('Use a new evidence directory inside runtime/research')
@@ -44,6 +44,12 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
     shutil.copyfile(root/'server/eula.txt',server/'eula.txt')
     props = {'server-ip':'127.0.0.1','server-port':'28978','online-mode':'false','enforce-secure-profile':'false','enable-rcon':'false','enable-query':'false','max-players':'12','spawn-protection':'0','view-distance':'3','simulation-distance':'3','difficulty':'peaceful','gamemode':'survival','level-name':'world-server-numen','level-type':'minecraft:flat','generator-settings':json.dumps({'layers':[{'block':'minecraft:bedrock','height':1},{'block':'minecraft:dirt','height':2},{'block':'minecraft:grass_block','height':1}],'biome':'minecraft:plains','features':False,'lakes':False,'structure_overrides':[]},separators=(',',':')),'level-seed':'1010','spawn-monsters':'false','motd':'Isolated headless Numen QA'}
     (server/'server.properties').write_text(''.join(f'{k}={v}\n' for k,v in props.items()),encoding='utf-8')
+    if mixauth_jar:
+        if not full_pack: raise ValueError('Mixed-auth QA requires --full-pack')
+        from mixed_auth_support import verify, configure, provision, NAME as AUTH_NAME
+        shutil.copyfile(verify(mixauth_jar), mods/AUTH_NAME)
+        configure(server, 'world-server-numen')
+        provision(server, output/'owner-login.json', 'MawHeadQAOwner', mixauth_jar, java, output/'auth-provision')
     args=(root/'server/libraries/net/neoforged/neoforge/21.1.248/win_args.txt').read_text('utf-8')
     args=args.replace('libraries/',(root/'server/libraries').as_posix()+'/').replace('-DlibraryDirectory=libraries','-DlibraryDirectory='+(root/'server/libraries').as_posix())
     (server/'qa-args.txt').write_text(args,encoding='utf-8')
@@ -126,6 +132,19 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
         ops=tool('operations');report['operations']=ops;checks['runtime_operations']=ops['totalFunctions']>=30 and any(g['id']=='numen.route' for g in ops['groups'])
         created=tool('create_companion',{'name':'MawHeadBody','action_id':'qa-create-01'});assert created.get('online'),created
         body=created['bodyId'];report['bodyId']=body
+        if mixauth_jar:
+            env={**os.environ,'NODE_PATH':str(root/'gateway/permanent/node/node_modules')}
+            auth_test=subprocess.run([str(node),str(REPO/'tools/smoke_mixed_auth.cjs'),str(output)],env=env,capture_output=True,text=True,encoding='utf-8',timeout=150)
+            (output/'auth-client.log').write_text(auth_test.stdout+auth_test.stderr,encoding='utf-8')
+            assert auth_test.returncode==0,'Mixed-auth client verification failed; inspect auth-client.log'
+            auth_report=json.loads((output/'auth-acceptance.json').read_text('utf-8'))
+            checks.update({'auth-'+k:v for k,v in auth_report['checks'].items()})
+            report['officialAccountLoginTested']=False
+        if viewer:
+            if not full_pack:raise ValueError('Viewer smoke requires the complete installed pack')
+            from smoke_numen_viewer import run as viewer_smoke
+            view=viewer_smoke(root,output,node,body,bearer,other_token,request,tool,console,terminal,viewer_visual)
+            checks.update({'viewer-'+k:v for k,v in view['checks'].items()});checks['viewer-child-normal-exit']=view['webChildExitCode']==0
         if full_pack:
             from maw_numen_client import Client
             report['externalClient']=Client('http://127.0.0.1:28990/mcp',bearer,owner_uuid=owner).smoke()
@@ -245,7 +264,7 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
     return report
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--output',type=Path,required=True);p.add_argument('--java',type=Path,default=DEFAULT_JAVA);p.add_argument('--node',type=Path,required=True);p.add_argument('--full-pack',action='store_true');p.add_argument('--maid-config',action='store_true');p.add_argument('--bridge-jar',type=Path);a=p.parse_args()
-    result=run(a.root,a.output,a.node,a.java,a.full_pack,a.maid_config,a.bridge_jar);print(json.dumps({'ok':result['ok'],'checks':len(result['checks']),'output':str(a.output)},ensure_ascii=False));raise SystemExit(0 if result['ok'] else 1)
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--output',type=Path,required=True);p.add_argument('--java',type=Path,default=DEFAULT_JAVA);p.add_argument('--node',type=Path,required=True);p.add_argument('--full-pack',action='store_true');p.add_argument('--maid-config',action='store_true');p.add_argument('--bridge-jar',type=Path);p.add_argument('--viewer',action='store_true');p.add_argument('--viewer-visual',action='store_true');p.add_argument('--mixauth-jar',type=Path);a=p.parse_args()
+    result=run(a.root,a.output,a.node,a.java,a.full_pack,a.maid_config,a.bridge_jar,a.viewer,a.viewer_visual,a.mixauth_jar);print(json.dumps({'ok':result['ok'],'checks':len(result['checks']),'output':str(a.output)},ensure_ascii=False));raise SystemExit(0 if result['ok'] else 1)
 
 if __name__=='__main__':main()

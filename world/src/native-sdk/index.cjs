@@ -10,6 +10,7 @@ const { runActionWithDeadline, outboundGameMutation } = require('../society-agen
 const { nativeInventorySnapshot, nativeInventoryDelta } = require('../society-agent/native-inventory-delta.cjs')
 const { nativeNavigationResult } = require('../society-agent/native-navigation-result.cjs')
 const OWNER = Symbol.for('maw.nativeBody.owner')
+const OFFLINE_LOGIN = Symbol.for('maw.nativeBody.offlineLogin')
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const ID = /^[A-Za-z0-9_.:-]{1,96}$/
 const copy = value => value === undefined ? null : structuredClone(value)
@@ -31,7 +32,7 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
   let sdk
   try { sdk = attach(bot) } catch (error) { ledger.close(); bot.setMaxListeners(originalLimit); throw error }
   const scopes = new AsyncLocalStorage(), token = {}, originalWrite = bot._client.write
-  let ended = false, closing = false, epoch = 0, active = null, lastUuid = null, remote = null, queryChain = Promise.resolve(), lastQuery = 0
+  let ended = false, closing = false, epoch = 0, active = null, lastUuid = null, remote = null, queryChain = Promise.resolve(), lastQuery = 0, loginCommand = null
   bot[OWNER] = token
   const uuid = () => UUID.test(bot._client.uuid || '') ? bot._client.uuid.toLowerCase() : lastUuid
   const identity = () => ({ schemaVersion: 1, bodyId: uuid(), playerUuid: uuid(), account,
@@ -53,6 +54,8 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
   const gameMutation = (name, data) => outboundGameMutation(name, data) ||
     (name === 'custom_payload' && /^maw_agent:.*_action$/.test(data?.channel || ''))
   function guardedWrite (name, data) {
+    if (loginCommand && !ended && !closing && bindingValid() && !active &&
+        ['chat_command', 'chat_command_signed'].includes(name) && data?.command === loginCommand) return originalWrite.call(this, name, data)
     if (gameMutation(name, data)) {
       const frame = scopes.getStore()
       if (!active || frame !== active || frame.closed || blocked() || ended || closing || frame.epoch !== epoch) return false
@@ -61,6 +64,11 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
     return originalWrite.call(this, name, data)
   }
   bot._client.write = guardedWrite
+  bot[OFFLINE_LOGIN] = password => {
+    if (ended || closing || active || !bindingValid() || !/^[A-Za-z0-9_-]{20,72}$/.test(password)) throw Error('SDK_LOGIN_NOT_AVAILABLE')
+    loginCommand = 'login ' + password
+    try { bot.chat('/' + loginCommand) } finally { loginCommand = null }
+  }
   const contextChanged = () => { epoch++; lastUuid = uuid(); remote = null; active?.scope?.abort('context'); stop() }
   const died = () => { epoch++; active?.scope?.abort('context'); stop() }
   const onEnd = () => { ended = true; close() }
@@ -251,4 +259,8 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
       mutationBlocked: blocked(), unresolved: ledger.unresolved(), ledgerScope: 'local_account_directory', modelRequests: 0 }),
     close }
 }
-module.exports = { attachNativeBody }
+function attachOfflineLogin (bot, options) {
+  const sendLogin = bot[OFFLINE_LOGIN]
+  return require('../society-agent/offline-login.cjs').attachOfflineLogin(bot, { ...options, ...(sendLogin ? { sendLogin } : {}) })
+}
+module.exports = { attachNativeBody, attachOfflineLogin }

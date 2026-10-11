@@ -227,6 +227,8 @@ final class PlayerMaidBridge {
     }
 
     static void handle(ServerPlayer player, String raw, boolean mutation) {
+        var denied = PlayerAuthBridge.denial(player, raw, "maid_receipt");
+        if (denied != null) { send(player, denied); return; }
         if (!canSend(player)) return; // Do not execute a mutation without a private receipt channel.
         String requestId = "invalid";
         String fingerprint = null;

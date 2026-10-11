@@ -349,6 +349,8 @@ final class PlayerWorldBridge {
     }
 
     static void handle(ServerPlayer player, String raw) {
+        var denied = PlayerAuthBridge.denial(player, raw, "world_receipt");
+        if (denied != null) { send(player, denied); return; }
         String requestId = "invalid";
         try {
             JsonObject input = JsonParser.parseString(raw).getAsJsonObject();

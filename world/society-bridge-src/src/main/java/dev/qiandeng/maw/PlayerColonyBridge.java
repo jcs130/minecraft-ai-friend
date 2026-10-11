@@ -396,6 +396,8 @@ final class PlayerColonyBridge {
     }
 
     static void handle(ServerPlayer player, String raw) {
+        var denied = PlayerAuthBridge.denial(player, raw, "colony_receipt");
+        if (denied != null) { send(player, denied); return; }
         String requestId = "invalid";
         try {
             JsonObject query = JsonParser.parseString(raw).getAsJsonObject();
@@ -744,6 +746,8 @@ final class PlayerColonyBridge {
 
     /** Mirrors MineColonies' own TransferItemsRequestMessage storage path with explicit player preconditions. */
     static void handleAction(ServerPlayer player, String raw) {
+        var denied = PlayerAuthBridge.denial(player, raw, "colony_receipt");
+        if (denied != null) { send(player, denied); return; }
         String requestId = "invalid";
         String actionKind = "unknown";
         boolean receiptReserved = false;

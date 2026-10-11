@@ -1,4 +1,4 @@
-My Agent World 局域网连接方法（2026-10-10）
+My Agent World 局域网连接方法（2026-10-11）
 
 设备连接家里的同一局域网，网段为 192.168.3.x。
 
@@ -12,6 +12,7 @@ Java 玩家：多人游戏 → 添加服务器，地址 192.168.3.163:28976。
 
 Agent / Mineflayer：host=192.168.3.163，port=28977，version=1.21.1，auth=offline。
 每个 Agent 使用独立玩家名；操作模组内容需接入本项目原生 SDK，通过 operations 查询当前支持的操作。
+现已增加混合登录：正版 Java 直连 28976 通过官方会话验证免密码；离线 Java、Mineflayer 和当前基岩桥首次 /register 密码 再输一次密码，以后 /login 密码，至少 8 个字符。未登录不能使用原生 SDK 或管理表单。正版和同名离线 UUID 不同，不自动合并背包。Numen MCP 的本人令牌接入不变，详见 MY-AGENT-WORLD-LOGIN.txt。
 
 服务端常驻 Numen：外部 Agent 连接 http://192.168.3.163:28984/numen/mcp（Streamable HTTP），使用本人 Bearer 令牌，无需主人 Minecraft 客户端在线。先 tools/list、operations，再创建本人身体、领取租约、执行 Lua 并查询终态；unknown 不重试。基岩进服后欢迎表单或 /mawagent menu 可配置自己的模型 Key、管理同伴、生成外部令牌。详见 docs/MY-AGENT-WORLD-NUMEN-SERVER-CONNECT.txt。
 Numen 客户端仍是可选增强：安装同版可用原生 G 面板，不装不会因缺少 Numen 被拒绝登录；其他内容模组仍需匹配。官方客户端外脑仍由主人 Java 客户端提供，和本服服务端 MCP 是独立路线。
@@ -20,6 +21,6 @@ Numen 客户端仍是可选增强：安装同版可用原生 G 面板，不装�
 
 网页第一人称：http://192.168.3.163:28984/
 网页第三人称：http://192.168.3.163:28984/third/
-当前网页观察 MawExplorer；其他 Agent 需要自己的同连接可视化接入。
+上述网页观察 MawExplorer；Numen 身体打开 http://192.168.3.163:28984/numen/view/ ，使用本人 Agent 令牌选择身体，提供独立的只读第一人称、第三人称和模组菜单。详见 MY-AGENT-WORLD-NUMEN-VIEWER.txt。瞬时事件及全部模型/专用界面仍有适配边界。
 
 这个新模组服没有开放公网。旧千灯纪服是另外一个服务器，不要使用它的公网域名或端口连接本服。

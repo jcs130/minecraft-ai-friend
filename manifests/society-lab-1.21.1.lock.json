@@ -8,7 +8,7 @@
     {
       "name": "maw_agent_bridge-0.1.0.jar",
       "source": "tools/build_society_bridge.py",
-      "sha256": "baa79d7d4273da8ec18235e280ade5fbc13a24963fdff2a5193993aee3c3f53b"
+      "sha256": "1849f64a38f1d5c6218f42436efe74bc1105397deb8c98e79b3f150366ca1a4d"
     },
     {
       "name": "maw_numen_compat-0.1.0.jar",
@@ -18,10 +18,21 @@
     {
       "name": "maw_numen_server-0.1.0.jar",
       "source": "tools/build_numen_server.py",
-      "sha256": "758379fd3e3ebf5bcc049bd6cadd324c6b2840c52c92103e2b8aca4776472323"
+      "sha256": "bfbc1af0eb95051d877373e0ea5ef2c7e520dfe647ef09e71a3f16a21279c798"
     }
   ],
   "artifacts": [
+    {
+      "name": "mixauth-1.21.1-1.3.3.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/mod/mixauth",
+      "source": "https://github.com/truscdo/MixAuth",
+      "license": "LGPL-3.0",
+      "side": "server",
+      "url": "https://cdn.modrinth.com/data/GzSiVPHb/versions/nkxiqfJq/mixauth-1.21.1-1.3.3.jar",
+      "sha256": "c57bd2c5ce9f911f8935102aa5beb77b3df147071d669ff5e1f8696e4f98bc3d",
+      "sha512": "4cf7c48d5b38bba5440d318f45bdc47481179f4f98245de628164e39c0d6343f0590573be6f258753431214e88fa58e5c405ea81bb03bf7656f571aa4b14eda8"
+    },
     {
       "name": "neoforge-21.1.248-installer.jar",
       "kind": "installer",

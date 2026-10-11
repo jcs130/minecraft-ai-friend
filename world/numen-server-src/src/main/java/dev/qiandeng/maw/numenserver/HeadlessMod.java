@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 public final class HeadlessMod {
     private static final org.slf4j.Logger LOG = LoggerFactory.getLogger("maw-numen-server");
     public HeadlessMod() {
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, HeadlessAuth::join);
         NeoForge.EVENT_BUS.addListener(BedrockMenus::interact);
         NeoForge.EVENT_BUS.addListener(BedrockMenus::interactSpecific);
         NeoForge.EVENT_BUS.addListener((ServerStartedEvent e) -> {

@@ -53,6 +53,7 @@ public final class NativeModAccess {
     }
     static boolean capture(ServerPlayer player,String text) {return capturing(player)&&capture(player,JsonParser.parseString(text).getAsJsonObject());}
     public static JsonObject invoke(ServerPlayer player,String operation,JsonObject arguments,boolean readOnly,String requestId) {
+        PlayerAuthBridge.requireAuthenticated(player);
         if(player.getServer()==null||!player.getServer().isSameThread())throw new IllegalStateException("minecraft_thread_required");
         if(player.isDeadOrDying())throw new IllegalArgumentException("body_dead");
         if(CURRENT.get()!=null)throw new IllegalStateException("native_mod_call_nested");

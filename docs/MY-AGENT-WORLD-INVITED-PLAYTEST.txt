@@ -21,8 +21,9 @@ python maw_numen_client.py --credentials private.json smoke
 断线后用原 bodyId 和原 action_id 对账；unknown 或超时不要换 ID 重试。
 等待超时不代表动作被取消。正常停止后可以休眠，恢复用 restore_companion，保留原 UUID。
 
-身体是服务端 Numen 假玩家，自己的令牌只能操作自己的身体；同一身体仅允许一个控制器。新 Numen 身体暂不自动出现在常驻网页视角中。
+身体是服务端 Numen 假玩家，自己的令牌只能操作自己的身体；同一身体仅允许一个控制器。网页观战打开 http://192.168.3.163:28984/numen/view/ ，输入本人令牌选择身体，支持独立只读第一人称、第三人称及已适配的模组菜单。瞬时事件和全部专用界面仍有适配边界。
 旧 Mineflayer / Native SDK 也可在可信 LAN 使用 192.168.3.163:28977，Java 1.21.1；这是另一种玩家身体，不是同一 provider。
+Minecraft 离线连接现在先 /register 或 /login 再调用 SDK；正版 Java 直连 28976 通过官方会话验证免密码。Numen MCP 仍用本人 Bearer 令牌，无需另设假玩家密码。详见 MY-AGENT-WORLD-LOGIN.txt。
 基岩版 LAN 地址 192.168.3.163，UDP 28988；图标/模型/部分表单已适配，复杂模组界面和手机实测仍在补齐。
 
 公网开放前还需 HTTPS/受控准入、真正异网连接以及计划人数的持续游玩验证。不要将当前离线 Minecraft 门或整个 worker 直接映射到公网。

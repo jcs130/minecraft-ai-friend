@@ -6,6 +6,8 @@
 
 Agent 入口：`192.168.3.163:28977`，Java 协议 1.21.1、当前家庭局域网离线账号登录。每个 Agent 使用独立且固定的用户名。SDK 控制该连接的真实玩家，`bodyId=playerUuid`，不是按名字遥控别的身体，也不是 Numen 假玩家。
 
+2026-10-11 混合登录已启用：此协议适配入口采用离线身份加密码。先在游戏连接中 `/register 密码 再输一次密码`，以后 `/login 密码`，再调用 SDK；`authentication_required` 表示尚未认证，不能继续派发游戏动作。正版 Java 客户端直连 28976 可用官方会话免密，Numen MCP 仍用本人令牌。[完整登录说明](MY-AGENT-WORLD-LOGIN.md)。
+
 Numen 核心已安装，但本 SDK **尚不支持 Numen 假玩家控制和 `numen_restore_existing`**。远端 capabilities 明确返回这两项 false。原 Numen UUID、背包、技能、经验不能仅靠新用户名自动迁移；需要同身份假玩家时，另接 Numen provider 并验证原 UUID/owner/name 恢复，不能直接套用普通玩家登录。
 
 2026-10-11：另有已部署的[纯服务端 Numen MCP provider](MY-AGENT-WORLD-NUMEN-SERVER.md)，支持持久身体、原 UUID 恢复和 48 项原生模组操作；[邀请试玩指南](MY-AGENT-WORLD-INVITED-PLAYTEST.md)包含独立 Python 客户端与准入方式。本 SDK 的连接玩家身份及上述 false 不变，两个 provider 分别控制自己的身体。
@@ -14,7 +16,7 @@ Numen 核心已安装，但本 SDK **尚不支持 Numen 假玩家控制和 `nume
 
 Node 22，锁定 Mineflayer 4.37.1、minecraft-protocol 1.66.2、minecraft-data 3.112.0、mineflayer-pathfinder 2.4.5、vec3 0.2.0。完整依赖及 overrides 在 SDK 包的 package.json。首次安装用该目录运行 `npm install`；不要用任意最新版替换协议依赖。
 
-源码入口：`world/src/native-sdk/index.cjs`。本机可分发包：`E:\QiandengJiSocietyLab\integrations\native-sdk\v1-20261009`，附 operations.json、连接 TXT、本文及原 MIT LICENSE，共29文件。第三方使用该目录的副本和自己的本地 ledgerDir，不挂载服务端世界目录。
+源码入口：`world/src/native-sdk/index.cjs`。本机可分发包：`E:\QiandengJiSocietyLab\integrations\native-sdk\v1-20261011-login`，附 operations.json、登录/连接指南及原 MIT LICENSE。第三方使用该目录的副本和自己的本地 ledgerDir，不挂载服务端世界目录。
 
 ```js
 const mineflayer = require('mineflayer')
@@ -26,6 +28,7 @@ const sdk = attachNativeBody(bot, {controllerId:'my-agent-controller',
   ledgerDir:'D:/my-agent/native-ledger'})
 bot.once('spawn', async () => {
   const remote = await sdk.capabilities()
+  if (!remote.ok) return // authentication_required: 先完成本人账号密码登录。
   const catalog = sdk.operations()
   const state = await sdk.snapshot()
   // 按真实地形选择附近可走位置，所有坐标都是绝对坐标。
@@ -33,6 +36,8 @@ bot.once('spawn', async () => {
 ```
 
 同一连接只允许一个 SDK 控制器；每账号的持久账本有排他 writer.lock。同一账号只能使用同一份受控账本，不得通过更换 ledgerDir 绕过未知结果。Minecraft 登录连接并不构成跨主机身份授权系统；不要在公网直接开放当前离线模式。
+
+已注册的账号可通过导出的 `attachOfflineLogin(bot,{credentialPath,username,query:()=>sdk.capabilities()})` 自动登录。私有 JSON 包含 `username`、本人离线 `playerUuid` 和 `password`；辅助器限定随机风格的 20–72 位英文字母、数字、下划线或连字符密码，避免命令注入；普通人工密码仍按 MixAuth 的原生规则使用。辅助器只提交一次 `/login`，按 UUID 验证原生回执，`ready()` 为 true 后再操作，不自动注册、覆盖密码或重试失败口令。Python/其他运行时的 stdio 私有配置支持绝对 `loginFile` 路径，输出不含口令的 `authentication_state` 事件。
 
 ## operations、权限与状态
 
