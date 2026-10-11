@@ -1,3 +1,5 @@
+**2026-10-11 罗盘追踪0.4.20候选，尚未部署：**修正左右/斜向箭头及多圈旋转角度；隔离60项真实Mineflayer/附身Eye和12,882项方向/边界通过，早期夹具失败保留。正式仍0.4.19/0.1.12，服主明确本轮不重启；未替换JAR或排队重启。见[罗盘](docs/COMPASS_MENU.md)、[维护](docs/OPERATIONS.md)，E/F repairs/compass-tracking-20261011。
+
 **2026-10-11 私聊别名已热修：**可米47次Essentials拒绝全部为`/w`，原账号已有正常私聊权限。新增Denizen `qd_private_chat.dsc`，将w/tell/whisper转原版minecraft:msg，保留玩家自身权限及Mineflayer whisper。隔离权限/回退/冷启动和正式21项检查通过，15:05只重载Denizen，Paper/网关/YSM与原客户端保持；版本仍0.4.19/0.1.12。见[规则](docs/PRIVATE_CHAT.md)，E/F repairs/cormy-command-permissions-20261011。
 
 **2026-10-11 Eye默认配对不再匹配IP，已上线：**服主明确要求不要严格限制来源，覆盖此前同来源默认规则及下方逐组登记的旧要求。本体成功在线后，名字_eye或名字eye按名字配对，内网/公网混用无需报IP；专用限制、别名/live/Goddess规则优先。原Watchdog只重连网关，Paper/YSM代理未重启，原客户端保持。6项隔离测试通过，含跨来源成功与实际登录拒绝原因；远端原机Eye状态另查回执。见[规则](docs/AGENT_EYES.md)；E/F repairs/eye-default-pair-20261011。

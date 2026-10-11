@@ -1911,14 +1911,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private static String direction(float yaw, double dx, double dz) {
         if (dx * dx + dz * dz < 9) return "●";
         double targetYaw = Math.toDegrees(Math.atan2(-dx, dz));
-        double relative = ((targetYaw - yaw + 540) % 360) - 180;
+        // Bukkit yaw increases when turning right; normalize even after multiple full turns.
+        double relative = Math.IEEEremainder(targetYaw - yaw, 360.0);
         if (relative >= -22.5 && relative < 22.5) return "↑";
-        if (relative >= 22.5 && relative < 67.5) return "↖";
-        if (relative >= 67.5 && relative < 112.5) return "←";
-        if (relative >= 112.5 && relative < 157.5) return "↙";
-        if (relative >= -67.5 && relative < -22.5) return "↗";
-        if (relative >= -112.5 && relative < -67.5) return "→";
-        if (relative >= -157.5 && relative < -112.5) return "↘";
+        if (relative >= 22.5 && relative < 67.5) return "↗";
+        if (relative >= 67.5 && relative < 112.5) return "→";
+        if (relative >= 112.5 && relative < 157.5) return "↘";
+        if (relative >= -67.5 && relative < -22.5) return "↖";
+        if (relative >= -112.5 && relative < -67.5) return "←";
+        if (relative >= -157.5 && relative < -112.5) return "↙";
         return "↓";
     }
     private void arenaCommand(Player p, String[] args) {

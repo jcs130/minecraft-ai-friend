@@ -1,3 +1,11 @@
+## 2026-10-11 罗盘追踪0.4.20候选，尚未部署
+
+修正`AgentFriendPlugin.direction`的六个左右/斜向映射，并以`Math.IEEEremainder`规范负角度及多圈旋转。唯一新产物AgentFriend-0.4.20.jar，SHA256 `2B8BB8D962DA2B429A8896EFAF707AF509095A0460E70845A872F1FA838F4193`；正式AgentFriend仍0.4.19、CortiEyeMirror仍0.1.12。服主明确本轮不重启；未替换正式JAR、未排队自动部署或重启。
+
+隔离`compass-tracking-20261011`的真实原版/Mineflayer及附身Eye检查60项通过，含48组朝向/移动目标、自动罗盘、近距阈值、跨维度、停止与原版目标坐标；纯方向12,882项通过，旧实现10,444项失败复现。前两轮分别因先建BossBar后登录Eye的夹具、以及`execute`嵌套传送被现有魔法规则取消而失败，原记录保留；修正夹具后通过，未绕过正式权限。隔离存档缺少建筑掩码和相机服务的启动告警与本次箭头验证无关，不能声称全插件无告警。手机/Xbox实际画面未验。可复验`paper/probe/compass-tracking-stage.mjs`，仅允许指定回环隔离服；私有回执E/F repairs/compass-tracking-20261011。
+
+上线沿原维护任务：先查询在线玩家和活动挑战，真人退出后提前180/60/10秒提醒，E/F完整停服快照后仅更换AgentFriend；复查版本、连接、箭头、原数据、私聊热修及YSM，发实际更新说明并同步女神资料。不要用`/reload`或在线替换类。回退仅正常停服切回0.4.19，不覆盖玩家的新进度。
+
 ## 2026-10-11 私聊别名已热修
 
 可米当日47次 Essentials 命令拒绝全部对应 `/w`，其原版私聊节点为true、OP为false。E/F脚本前像核验后，于15:05添加 `Denizen/scripts/qd_private_chat.dsc` 并仅重载 Denizen 脚本：`w/tell/whisper` 转原版 `minecraft:msg`。隔离私聊、权限、命令预处理取消、回退及正常冷启动通过；正式普通账号21项收发/权限检查通过。AgentFriend仍0.4.19、CortiEyeMirror仍0.1.12，Paper/网关/YSM未重启，31个插件JAR及现有权限/配对配置保持。源码入口、复验和只移走该文件的回退见[私聊与权限](PRIVATE_CHAT.md)；私有证据E/F `repairs/cormy-command-permissions-20261011`。
