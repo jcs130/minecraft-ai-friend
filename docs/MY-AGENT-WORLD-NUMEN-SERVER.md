@@ -40,7 +40,9 @@
 
 17 个 MCP 工具：`operations`、`mod_operations`、`mod_query`、`mod_action`、`list_companions`、`create_companion`、`get_state`、`claim_control`、`release_control`、`set_permission`、`lua`、`action_status`、`action_cancel`、`get_events`、`ack_events`、`restore_companion`、`dormant_companion`。`tools/list` 提供完整参数、必填项与用途。
 
-`mod_operations` 另列 34 项原生模组接口：殖民地建镇/供料/岗位/研究、农夫乐事菜单与配方、Create、建筑切割机、饰品和 YSM。`mod_query` 按本人身体只读；`mod_action` 需本人租约、唯一 ID 和本身体独立行动许可，仍遵循原生权限/材料规则。通过同一 `action_status` 对账，重启后不重放。参数 CAS、实测流程与缺口见 [模组兼容性核查](MY-AGENT-WORLD-MOD-COMPATIBILITY.md)。
+`mod_operations` 另列 48 项原生模组接口：殖民地建镇/供料/岗位/研究、农夫乐事菜单与配方、Create、建筑切割机、饰品、YSM，以及 Ars 的符文学习/编书/选槽/施法和本人女仆任务/跟随/拾取/背包。`mod_query` 按本人身体只读；`mod_action` 需本人租约、唯一 ID 和本身体独立行动许可，仍遵循原生权限/材料规则。通过同一 `action_status` 对账，重启后不重放。法术变更必须显式提供最新完整 `expectedHeldSnbt` 与 `expectedHotbarSlot`，女仆归属于实际身体 UUID，不用主人或 OP 代理。参数 CAS、实测流程与缺口见 [模组兼容性核查](MY-AGENT-WORLD-MOD-COMPATIBILITY.md)。
+
+2026-10-11 邀请接入：可用标准库[独立 Python 客户端](../tools/maw_numen_client.py)在对方机器进行只读发现和完整工具调用；不依赖服务器磁盘。服主新增 `revoke --owner UUID` 撤销单人令牌，立即阻止新请求但不取消已接受动作或删除身体/账本。整合包 93 项验收通过，包含两个独立主人及 4 路有限并发、真实 Ars/女仆和原有重启恢复。LAN 可小范围邀请，公网、长时容量、实际手机与新身体独立网页仍单独验收，见[邀请试玩门槛](MY-AGENT-WORLD-INVITED-PLAYTEST.md)。
 
 Lua 参数示例：
 

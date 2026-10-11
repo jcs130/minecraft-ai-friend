@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "source": "same_player_native_handlers",
-  "operationCount": 34,
+  "operationCount": 48,
   "operations": [
     {
       "id": "colony.status",
@@ -1782,6 +1782,435 @@
       },
       "route": "domum",
       "kind": "select",
+      "defaults": {}
+    },
+    {
+      "id": "spell.list",
+      "readOnly": true,
+      "description": "读取本人当前法术书已配置槽位及魔力。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "spell.list",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "spell",
+      "kind": "list",
+      "defaults": {}
+    },
+    {
+      "id": "spell.explain",
+      "readOnly": true,
+      "description": "读取真实配置槽的 glyph、费用和效果定义。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "spellId": {
+            "type": "string",
+            "pattern": "^ars_nouveau:slot_(0|[1-9][0-9]?)$"
+          }
+        },
+        "required": [
+          "spellId"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "spell.explain",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "spell",
+      "kind": "explain",
+      "defaults": {}
+    },
+    {
+      "id": "spell.glyphs",
+      "readOnly": true,
+      "description": "分页发现 Ars 符文、本人是否已学、配置是否启用及等级。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "spell.glyphs",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "spell",
+      "kind": "glyphs",
+      "defaults": {}
+    },
+    {
+      "id": "spell.learnGlyph",
+      "readOnly": false,
+      "description": "右键学习本人手中真实符文；原生消耗一件并同步已学和魔力上限。 完整书/符文 SNBT 与快捷栏槽位必须来自本身体最新 menu.snapshot；施法接受不等于命中。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "expectedHeldSnbt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 65536
+          },
+          "expectedHotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          }
+        },
+        "required": [
+          "expectedHeldSnbt",
+          "expectedHotbarSlot"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "spell.learnGlyph",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "spell",
+      "kind": "learn_glyph",
+      "defaults": {}
+    },
+    {
+      "id": "spell.configure",
+      "readOnly": false,
+      "description": "配置手中真实法术书的槽位；检查已学/启用符文、书等级、长度与原生组合规则。 完整书/符文 SNBT 与快捷栏槽位必须来自本身体最新 menu.snapshot；施法接受不等于命中。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "slot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "glyphs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+              "maxLength": 256
+            },
+            "minItems": 1,
+            "maxItems": 32
+          },
+          "expectedHeldSnbt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 65536
+          },
+          "expectedHotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          }
+        },
+        "required": [
+          "slot",
+          "name",
+          "glyphs",
+          "expectedHeldSnbt",
+          "expectedHotbarSlot"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "spell.configure",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "spell",
+      "kind": "configure",
+      "defaults": {}
+    },
+    {
+      "id": "spell.select",
+      "readOnly": false,
+      "description": "按手中书完整 SNBT CAS 选择一个已配置的实际槽位。 完整书/符文 SNBT 与快捷栏槽位必须来自本身体最新 menu.snapshot；施法接受不等于命中。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "slot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99
+          },
+          "expectedHeldSnbt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 65536
+          },
+          "expectedHotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          }
+        },
+        "required": [
+          "slot",
+          "expectedHeldSnbt",
+          "expectedHotbarSlot"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "spell.select",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "spell",
+      "kind": "select",
+      "defaults": {}
+    },
+    {
+      "id": "spell.cast",
+      "readOnly": false,
+      "description": "按本人当前真实书及魔力调用原生施法；确认不等于已命中。 完整书/符文 SNBT 与快捷栏槽位必须来自本身体最新 menu.snapshot；施法接受不等于命中。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "spellId": {
+            "type": "string",
+            "pattern": "^ars_nouveau:slot_(0|[1-9][0-9]?)$"
+          },
+          "expectedHeldSnbt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 65536
+          },
+          "expectedHotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          }
+        },
+        "required": [
+          "spellId",
+          "expectedHeldSnbt",
+          "expectedHotbarSlot"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "spell.cast",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "spell",
+      "kind": "cast",
+      "defaults": {}
+    },
+    {
+      "id": "maid.list",
+      "readOnly": true,
+      "description": "列出本人附近已拥有的女仆。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "maid.list",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "maid",
+      "kind": "list",
+      "defaults": {}
+    },
+    {
+      "id": "maid.status",
+      "readOnly": true,
+      "description": "读取本人伙伴状态和实际库存摘要。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "maidUuid": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        },
+        "required": [
+          "maidUuid"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "maid.status",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "maid",
+      "kind": "status",
+      "defaults": {}
+    },
+    {
+      "id": "maid.tasks",
+      "readOnly": true,
+      "description": "读取女仆实际可用任务及原生启用条件。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "maidUuid": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        },
+        "required": [
+          "maidUuid"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "maid.tasks",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "maid",
+      "kind": "tasks",
+      "defaults": {}
+    },
+    {
+      "id": "maid.setTask",
+      "readOnly": false,
+      "description": "设置本人女仆的原生任务，不代做劳动。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "maidUuid": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "taskId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "maidUuid",
+          "taskId"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "maid.setTask",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "maid",
+      "kind": "task_set",
+      "defaults": {}
+    },
+    {
+      "id": "maid.setFollow",
+      "readOnly": false,
+      "description": "设置并核验本人女仆跟随。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "maidUuid": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "follow": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "maidUuid",
+          "follow"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "maid.setFollow",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "maid",
+      "kind": "follow_set",
+      "defaults": {}
+    },
+    {
+      "id": "maid.setPickup",
+      "readOnly": false,
+      "description": "设置并核验本人女仆拾取。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "maidUuid": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "pickup": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "maidUuid",
+          "pickup"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "maid.setPickup",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "maid",
+      "kind": "pickup_set",
+      "defaults": {}
+    },
+    {
+      "id": "maid.openBag",
+      "readOnly": false,
+      "description": "打开本人女仆的真实菜单，再用 menu.click 操作。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "maidUuid": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        },
+        "required": [
+          "maidUuid"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "maid.openBag",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "maid",
+      "kind": "open_bag",
       "defaults": {}
     },
     {

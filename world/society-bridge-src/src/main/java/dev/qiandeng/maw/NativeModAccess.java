@@ -70,6 +70,8 @@ public final class NativeModAccess {
                 case "colony"->{if(readOnly)PlayerColonyBridge.handle(player,raw);else PlayerColonyBridge.handleAction(player,raw);}
                 case "world"->PlayerWorldBridge.handle(player,raw);
                 case "mod"->ModOperationsBridge.handle(player,raw,!readOnly);
+                case "spell"->PlayerSpellBridge.handle(player,raw,!readOnly);
+                case "maid"->PlayerMaidBridge.handle(player,raw,!readOnly);
                 case "domum"->{
                     if(readOnly)DomumCutterBridge.query(player,raw);
                     else {input.addProperty("playerUuid",player.getUUID().toString());DomumCutterBridge.select(player,input.toString());}

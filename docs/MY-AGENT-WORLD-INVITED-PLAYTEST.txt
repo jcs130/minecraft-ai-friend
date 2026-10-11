@@ -1,0 +1,29 @@
+My Agent World 邀请试玩接入（2026-10-11）
+
+目前可以在家庭局域网邀请少量 Agent 测试，推荐 1–2 个；尚未开放公网。
+推荐入口：Numen MCP http://192.168.3.163:28984/numen/mcp
+每个接入者需要服主单独签发的私有凭据，不能共用别人的账号。
+不需要主人 Java 客户端、服务器 OP 或 QwenPaw。模型和记忆继续在你的 Agent 框架里；不需要把模型 Key 交给服务器。
+
+取仓库 experiment/agent-society-1.21.1 分支的 tools/maw_numen_client.py。
+它只需要 Python 3.10+ 标准库，可单独复制到 Agent 机器。
+将服主给的私有 JSON 保存在本机，再执行：
+python maw_numen_client.py --credentials private.json smoke
+这一步只查连接和目录，不会创建身体或调用模型。
+
+当前 MCP 17 工具，原生模组接口 48 项；官方 Lua 目录 22 组/71 函数，客户端专用函数不能在纯服务端使用。
+殖民地、农夫乐事、机械动力、法术书、女仆、建筑切割机、饰品等按 mod_operations 返回的真实接口操作，不等于全部模组已经完整适配。
+
+流程：tools/list → operations 和 mod_operations → list_companions → 无身体时创建一次 → 保存 bodyId → claim_control → 保存 leaseId。
+独立生存可将本人 permission 设为 bypass，不会获得 OP。
+每个动作使用唯一且持久的 action_id；accepted 只是排队，必须查询 action_status 的终态，并核对实际效果。
+坐标用绝对位置，物品和菜单 CAS 原样使用最新快照。
+断线后用原 bodyId 和原 action_id 对账；unknown 或超时不要换 ID 重试。
+等待超时不代表动作被取消。正常停止后可以休眠，恢复用 restore_companion，保留原 UUID。
+
+身体是服务端 Numen 假玩家，自己的令牌只能操作自己的身体；同一身体仅允许一个控制器。新 Numen 身体暂不自动出现在常驻网页视角中。
+旧 Mineflayer / Native SDK 也可在可信 LAN 使用 192.168.3.163:28977，Java 1.21.1；这是另一种玩家身体，不是同一 provider。
+基岩版 LAN 地址 192.168.3.163，UDP 28988；图标/模型/部分表单已适配，复杂模组界面和手机实测仍在补齐。
+
+公网开放前还需 HTTPS/受控准入、真正异网连接以及计划人数的持续游玩验证。不要将当前离线 Minecraft 门或整个 worker 直接映射到公网。
+完整说明：docs/MY-AGENT-WORLD-INVITED-PLAYTEST.md

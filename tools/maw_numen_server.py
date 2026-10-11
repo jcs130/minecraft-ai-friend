@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 import uuid
+import zipfile
 from urllib.request import Request,urlopen
 from society_lab import DEFAULT_ROOT,REPO,sha256
 from maw_service import atomic_json
@@ -48,6 +49,16 @@ def provision(owner,label,root=DEFAULT_ROOT):
     credentials=private/'credentials'/f'{owner}.json';atomic_json(credentials,{'ownerUuid':owner,'endpoint':PUBLIC,'token':token})
     return {'ok':True,'ownerUuid':owner,'credentialsFile':str(credentials),'tokenPrinted':False}
 
+def revoke(owner,root=DEFAULT_ROOT):
+    """Revoke only this owner's bearer. Keep bodies, receipts and private files."""
+    owner=str(uuid.UUID(owner));path=root/'server/config/maw-numen-private/accounts.json'
+    config=json.loads(path.read_text('utf-8'));previous=config['accounts']
+    config['accounts']=[account for account in previous if account['ownerUuid']!=owner]
+    changed=len(config['accounts'])!=len(previous)
+    if changed:atomic_json(path,config)
+    return {'ok':True,'ownerUuid':owner,'revoked':changed,'newRequestsAllowed':False,
+            'acceptedActionsAutomaticallyCancelled':False,'bodyAndLedgerPreserved':True,'tokenPrinted':False}
+
 def call(credentials,operation,arguments):
     c=json.loads(credentials.read_text('utf-8'));data={'jsonrpc':'2.0','id':str(uuid.uuid4()),'method':'tools/call','params':{'name':operation,'arguments':arguments}}
     req=Request(c['endpoint'],json.dumps(data).encode(),headers={'Authorization':'Bearer '+c['token'],'Content-Type':'application/json','Accept':'application/json, text/event-stream','MCP-Protocol-Version':'2025-06-18'})
@@ -65,7 +76,12 @@ def probe(root=DEFAULT_ROOT):
         checks['native_resident_endpoint']=h['ok'] and h['serverResident'] and not h['clientRequired']
         checks['native_maid_config_adapter']=h.get('maidConfigAvailable') is True
         checks['native_visual_interaction_adapter']=h.get('bedrockVisualMenus') is True
-        checks['native_mod_operations_adapter']=h.get('nativeModAccess') is True and h.get('nativeModOperationCount')==34
+        with zipfile.ZipFile(root/'server/mods/maw_agent_bridge-0.1.0.jar') as jar:
+            native=json.loads(jar.read('maw-native-operations.json'))
+        ids={row['id'] for row in native['operations']}
+        required={'spell.list','spell.explain','spell.glyphs','spell.learnGlyph','spell.configure','spell.select','spell.cast',
+                  'maid.list','maid.status','maid.tasks','maid.setTask','maid.setFollow','maid.setPickup','maid.openBag'}
+        checks['native_mod_operations_adapter']=h.get('nativeModAccess') is True and h.get('nativeModOperationCount')==native['operationCount']==len(ids)==48 and required<=ids
         main=json.load(urlopen('http://127.0.0.1:28985/healthz',timeout=5))
         checks['owned_java_and_worker_healthy']=main['healthy'] and not main['paused'] and time.time()-main['heartbeatEpoch']<20
         for name,build,installed in [('numen-server','numen-server',root/'server/mods/maw_numen_server-0.1.0.jar'),('bedrock-forms','bedrock-agents',root/'bedrock/plugins/Geyser/extensions/MawAgents.jar')]:
@@ -81,9 +97,10 @@ def probe(root=DEFAULT_ROOT):
     report['ok']=len(checks)==15 and all(checks.values());return report
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=('initialize','provision','call','health'));p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--owner');p.add_argument('--label',default='external-agent');p.add_argument('--credentials',type=Path);p.add_argument('--operation');p.add_argument('--arguments',type=Path);a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('action',choices=('initialize','provision','revoke','call','health'));p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--owner');p.add_argument('--label',default='external-agent');p.add_argument('--credentials',type=Path);p.add_argument('--operation');p.add_argument('--arguments',type=Path);a=p.parse_args()
     if a.action=='initialize':result=initialize(a.root);restrict_private(a.root)
     elif a.action=='provision':result=provision(a.owner,a.label,a.root)
+    elif a.action=='revoke':result=revoke(a.owner,a.root)
     elif a.action=='call':result=call(a.credentials,a.operation,json.loads(a.arguments.read_text('utf-8')) if a.arguments else {})
     else:result=probe(a.root)
     print(json.dumps(result,ensure_ascii=False,indent=2));return 0 if result.get('ok',True) else 1

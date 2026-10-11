@@ -11,8 +11,8 @@ public final class NativeModAccessTest {
         check(valid==accepted);
     }
     public static void main(String[] args)throws Exception {
-        check(NativeModAccess.catalog("").get("operationCount").getAsInt()==34);
-        check(NativeModAccess.catalog("").getAsJsonArray("operations").size()==34);
+        check(NativeModAccess.catalog("").get("operationCount").getAsInt()==48);
+        check(NativeModAccess.catalog("").getAsJsonArray("operations").size()==48);
         validate("menu.snapshot","{}",true);
         validate("menu.snapshot","{\"playerUuid\":\"other\"}",false);
         validate("menu.snapshot","[]",false);
@@ -33,6 +33,14 @@ public final class NativeModAccessTest {
         validate("domum.select",cutter.replace("\"selection\":\"group\"","\"playerUuid\":\"other\",\"selection\":\"group\""),false);
         validate("colony.setHiringMode","{\"buildingPosition\":{\"x\":600,\"y\":64,\"z\":600},\"moduleId\":1,\"expectedModuleKey\":\"a\",\"mode\":\"auto\",\"expectedMode\":\"manual\"}",true);
         validate("colony.setHiringMode","{\"buildingPosition\":{\"x\":600,\"y\":64,\"z\":600},\"moduleId\":1,\"expectedModuleKey\":\"a\",\"mode\":\"administrator\",\"expectedMode\":\"manual\"}",false);
+        validate("spell.cast","{\"spellId\":\"ars_nouveau:slot_0\",\"expectedHeldSnbt\":\"real-components\",\"expectedHotbarSlot\":0}",true);
+        validate("spell.cast","{\"spellId\":\"ars_nouveau:slot_0\"}",false);
+        validate("spell.learnGlyph","{}",false);
+        validate("spell.configure","{\"slot\":0,\"name\":\"test\",\"glyphs\":[\"ars_nouveau:glyph_self\"],\"expectedHeldSnbt\":\"book\",\"expectedHotbarSlot\":0}",true);
+        validate("maid.setFollow","{\"maidUuid\":\"00000000-0000-4000-8000-000000000001\",\"follow\":true}",true);
+        validate("maid.setFollow","{\"maidUuid\":\"00000000-0000-4000-8000-000000000001\",\"follow\":\"true\"}",false);
+        validate("maid.status","{\"maidUuid\":\"00000000-0000-4000-8000-000000000001\",\"ownerUuid\":\"other\"}",false);
+        validate("maid.openBag","{\"maidUuid\":\"../private\"}",false);
         try{NativeModAccess.catalog("native.eval");throw new AssertionError();}catch(IllegalArgumentException expected){checks++;}
         System.out.println("NativeModAccess "+checks+" checks passed");
     }

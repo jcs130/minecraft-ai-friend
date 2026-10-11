@@ -20,6 +20,6 @@ class NativeModAccessAudit(unittest.TestCase):
             compiled=subprocess.run([str(java.with_name('javac.exe')),'-proc:none','--release','21','-encoding','UTF-8','-cp',cp,'-d',temp,str(src)],capture_output=True,text=True,encoding='utf-8',timeout=90)
             self.assertEqual(compiled.returncode,0,compiled.stderr[-4000:])
             result=subprocess.run([str(java),'-cp',temp+os.pathsep+cp,'dev.qiandeng.maw.NativeModAccessTest'],capture_output=True,text=True,encoding='utf-8',timeout=30)
-            self.assertEqual(result.returncode,0,result.stderr[-4000:]);self.assertIn('NativeModAccess 21 checks passed',result.stdout)
+            self.assertEqual(result.returncode,0,result.stderr[-4000:]);self.assertIn('NativeModAccess 29 checks passed',result.stdout)
 
 if __name__=='__main__':unittest.main()

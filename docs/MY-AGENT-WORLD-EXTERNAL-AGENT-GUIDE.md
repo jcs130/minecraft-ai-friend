@@ -1,5 +1,7 @@
 # My Agent World：外部 Agent 接入契约
 
+2026-10-11：可在可信 LAN 小范围邀请独立 Agent。新增 [邀请试玩指引](MY-AGENT-WORLD-INVITED-PLAYTEST.md)、[可转发 TXT](MY-AGENT-WORLD-INVITED-PLAYTEST.txt) 和[独立 Python MCP 客户端](../tools/maw_numen_client.py)。纯服务端 Numen 已可控制原身份身体、用 48 项原生模组接口（含法术书/女仆）与实际官方 Lua 目录；下文“Numen 尚未接入/新服基岩仍未完成”等早期状态以最新分入口说明为准。Mineflayer 自己的身体 SDK 与 Numen MCP 是两个 provider，不共用同一身体；公网及全模组/全端体验仍未验收。
+
 2026-10-09 新增独立 [基岩版 LAN 桥接](MY-AGENT-WORLD-BEDROCK.md)：手机入口 UDP `192.168.3.163:28988`，桥与家庭网段防火墙已配置，真实基岩登录/专用模组界面待验。Agent 仍走本指南的 `28977` 与本人原生 SDK，无需改成基岩协议。
 
 2026-10-08 新增 [mc-agent-neko / Project N.E.K.O. 接入适配](MY-AGENT-WORLD-NEKO.md)：复用本人 Mineflayer 连接，N.E.K.O. 的 `minecraft_mod` 提供目录、说明、调用和持久回执查询；普通非 OP 真实工具链已验，未切换现役模型、常驻 Agent 或网页视角。

@@ -8,7 +8,7 @@
     {
       "name": "maw_agent_bridge-0.1.0.jar",
       "source": "tools/build_society_bridge.py",
-      "sha256": "6a2847fc7d3d8fcd3b5892fa9e086e1efbe19f0291fa9a6d688d8c3841831ab8"
+      "sha256": "baa79d7d4273da8ec18235e280ade5fbc13a24963fdff2a5193993aee3c3f53b"
     },
     {
       "name": "maw_numen_compat-0.1.0.jar",

@@ -1,6 +1,6 @@
 # My Agent World：Agent 模组操作指南
 
-2026-10-10 已另为服务端 Numen 接入 34 项同身体原生模组操作，新增切菜配方次产物过滤、薄切菜板交互修复和菜单槽位归属。Mineflayer 的 60 项目录保留。当前 Agent / 网页 / 基岩各自范围见 [模组兼容性核查](MY-AGENT-WORLD-MOD-COMPATIBILITY.md)，不要以本文早期日期的基岩状态或数量代替当前结论。
+2026-10-11：服务端 Numen 同身体原生模组目录已增至 48 项，新增 Ars 与女仆共 14 项，原 Mineflayer 的 60 项目录保留。真实双主人/并发/法术/女仆/撤销令牌等 93 项整合包验收通过；可信 LAN 可小范围邀请，公网尚未开放。接入见[邀请试玩](MY-AGENT-WORLD-INVITED-PLAYTEST.md)，各端支持边界见[模组兼容性核查](MY-AGENT-WORLD-MOD-COMPATIBILITY.md)。下文早期日期的数量、基岩和专用接口状态属于阶段记录。
 
 2026-10-09 当前 SDK 为 60 项（25 只读、35 变更）/19 频道，新增原生 `ysm.catalog/select`；[YSM](MY-AGENT-WORLD-YSM.md) 与 [Domum 制板](MY-AGENT-WORLD-DOMUM-CUTTER.md) 有普通玩家实际调用及浏览器验收记录。下方早期数量和未验项目为对应日期记录，最新目录始终以 `sdk.operations()` 为准。
 

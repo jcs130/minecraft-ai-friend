@@ -8,7 +8,8 @@ SDK 源码：world/src/native-sdk/index.cjs
 目录附 package.json、operations.json 和完整指南；Node 22，先按包内依赖 npm install。
 
 现阶段身体是这个连接登录的真实玩家，bodyId 就是其真实 UUID，不是 Numen 假玩家。
-Numen 假玩家控制和原 UUID 恢复接口尚未接入；不要假定旧身体背包/经验自动迁移。
+本 SDK 的 provider 不控制 Numen 假玩家。另有独立的 Numen MCP provider，可恢复其原 UUID；两种身体不会自动迁移旧背包/经验。
+Numen 邀请试玩指南：MY-AGENT-WORLD-INVITED-PLAYTEST.txt。
 
 挂接 attachNativeBody(bot,{controllerId:'你的控制器名',ledgerDir:'绝对本地账本目录'})，应在 spawn 前完成。
 登录后 await sdk.capabilities() 查询实际服务端，再 sdk.operations() / sdk.operations('body.move') 查目录和参数。

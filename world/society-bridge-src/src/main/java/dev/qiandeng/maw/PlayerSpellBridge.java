@@ -123,6 +123,7 @@ final class PlayerSpellBridge {
         return result;
     }
     private static void send(ServerPlayer player, String json) {
+        if (NativeModAccess.capture(player, json)) return;
         if (player.connection != null && player.connection.hasChannel(State.TYPE))
             PacketDistributor.sendToPlayer(player, new State(json));
     }
@@ -191,7 +192,7 @@ final class PlayerSpellBridge {
         while (rows.size() > MAX_RECEIPTS) rows.remove(rows.keySet().iterator().next());
     }
 
-    private static void handle(ServerPlayer player, String raw, boolean mutation) {
+    static void handle(ServerPlayer player, String raw, boolean mutation) {
         String requestId = "invalid";
         String action = mutation ? "cast" : "query";
         String fingerprint = null;

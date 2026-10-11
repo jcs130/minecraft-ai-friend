@@ -46,4 +46,18 @@ class PrivateConfigurationTests(unittest.TestCase):
             self.assertEqual(Path(result['credentialsFile']).read_bytes(),first)
             with self.assertRaises(ValueError):service.provision('../traversal','unsafe',root)
 
+    def test_revoke_affects_one_owner_and_preserves_credentials_body_and_ledger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);service.initialize(root);one=str(uuid.uuid4());two=str(uuid.uuid4())
+            a=service.provision(one,'first',root);service.provision(two,'other',root)
+            credentials=Path(a['credentialsFile']).read_bytes()
+            body=root/'server/world/maw-numen-server/bodies/original.json';body.parent.mkdir(parents=True);body.write_bytes(b'original-body-and-actions')
+            account_path=root/'server/config/maw-numen-private/accounts.json'
+            survivor=json.loads(account_path.read_text())['accounts'][1]
+            result=service.revoke(one,root)
+            self.assertTrue(result['revoked']);self.assertFalse(result['acceptedActionsAutomaticallyCancelled'])
+            self.assertEqual(json.loads(account_path.read_text())['accounts'],[survivor])
+            self.assertEqual(Path(a['credentialsFile']).read_bytes(),credentials);self.assertEqual(body.read_bytes(),b'original-body-and-actions')
+            before=account_path.read_bytes();self.assertFalse(service.revoke(one,root)['revoked']);self.assertEqual(account_path.read_bytes(),before)
+
 if __name__=='__main__':unittest.main()

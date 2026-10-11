@@ -113,7 +113,7 @@ final class PlayerMaidBridge {
     }
 
     private static boolean canSend(ServerPlayer player) {
-        return player.connection != null && player.connection.hasChannel(State.TYPE);
+        return NativeModAccess.capturing(player) || player.connection != null && player.connection.hasChannel(State.TYPE);
     }
 
     private static void send(ServerPlayer player, JsonObject body) {
@@ -123,7 +123,7 @@ final class PlayerMaidBridge {
             error.addProperty("outcome", body.has("outcome") ? body.get("outcome").getAsString() : "not_applied");
             body = error;
         }
-        PacketDistributor.sendToPlayer(player, new State(body.toString()));
+        if (!NativeModAccess.capture(player, body)) PacketDistributor.sendToPlayer(player, new State(body.toString()));
     }
 
     private static JsonElement canonical(JsonElement value) {
@@ -226,7 +226,7 @@ final class PlayerMaidBridge {
         return row;
     }
 
-    private static void handle(ServerPlayer player, String raw, boolean mutation) {
+    static void handle(ServerPlayer player, String raw, boolean mutation) {
         if (!canSend(player)) return; // Do not execute a mutation without a private receipt channel.
         String requestId = "invalid";
         String fingerprint = null;

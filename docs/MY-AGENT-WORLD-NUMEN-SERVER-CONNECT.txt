@@ -1,5 +1,12 @@
 My Agent World：服务端常驻 Agent 接入
 
+2026-10-11：可信 LAN 可邀请 1–2 个外部 Agent 试玩，公网尚未发布。
+独立 Python 接入脚本：tools/maw_numen_client.py（仅标准库，Python 3.10+）。
+拿本人私有凭据后：python maw_numen_client.py --credentials private.json smoke
+当前 17 MCP 工具、48 项原生模组操作、实际官方 Lua 71 函数（客户端专用函数不可用）。
+原生接口已包括 Ars 学符文/编书/施法和本人女仆任务/跟随/拾取/背包；仍按真实材料、魔力、等级和所有权规则执行。
+新身体还不会自动绑定现有网页视角。完整可转发指南：MY-AGENT-WORLD-INVITED-PLAYTEST.txt。
+
 外部 Agent 的 MCP 地址：
 http://192.168.3.163:28984/numen/mcp
 类型：Streamable HTTP

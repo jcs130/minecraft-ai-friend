@@ -1,5 +1,7 @@
 # My Agent World：外部 Agent 接入就绪审计
 
+2026-10-11 当前结论：**可信家庭 LAN 可开始 1–2 个外部 Agent 的独立令牌邀请试玩，公网开放仍未验收。** Numen 已有 17 MCP 工具/48 项同身体原生模组操作，补齐 Ars 7 项与女仆 7 项；真实双主人隔离、并发菜单、完整法术/女仆操作、撤销令牌、重启对账等整合包 93 项通过。4 路/12 次查询本轮 p95/max 约 62 ms，只代表有限并发。下面较早的 `readiness=false`、回环网络/旧版本清单是历史阶段记录；最新的分入口判定与公网剩余门槛见 [邀请试玩](MY-AGENT-WORLD-INVITED-PLAYTEST.md)。没有把全模组、基岩全功能、每个新 Numen 身体网页或长期负载标记完成。
+
 2026-10-09 增量：普通账号 `ysm.catalog/select` 真实换模与重连通过；网页增加原 Steve、Alex、Boy 的有限展示。Domum 原 Cutter 制作圆石 panel、完整组件/库存重连和第一页款式预览/面板动态材质图标已实机验证。SDK 60 项/19 频道，尚未通过的全部模型/装备/第一人称、滚动 GUI、公开准入、复杂生产及整包验收继续保留 false。详见 [YSM](MY-AGENT-WORLD-YSM.md) 和 [制板](MY-AGENT-WORLD-DOMUM-CUTTER.md)；下方旧日期的能力表是阶段记录。
 
 2026-10-06 网络发布补充：家庭 LAN 已配置，Java/Agent/网页为 `192.168.3.163:28976/28977/28984`，管理 28985 仍回环；正规提权重试、冷备、健康启动、普通非 OP 的同宿主 LAN IP 登录和原生调用/网页 SSE 已验收，另一台实体设备未实测。详见 [LAN 记录](MY-AGENT-WORLD-LAN.md)。不改变下文 `readiness/allModsVerified/publicAccessReady=false`，LAN 可达与完整玩法就绪分别验收。

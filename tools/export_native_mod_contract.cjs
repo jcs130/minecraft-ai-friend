@@ -22,7 +22,14 @@ const routes = {
   'curios.state': ['mod', 'curios_state'], 'curios.open': ['mod', 'curios_open'], 'curios.page': ['mod', 'curios_page'],
   'ysm.catalog': ['mod', 'ysm_catalog'], 'ysm.select': ['mod', 'ysm_select'],
   'domum.state': ['domum', 'state'], 'domum.choices': ['domum', 'choices'],
-  'domum.select': ['domum', 'select']
+  'domum.select': ['domum', 'select'],
+  'spell.list': ['spell', 'list'], 'spell.explain': ['spell', 'explain'],
+  'spell.glyphs': ['spell', 'glyphs'], 'spell.learnGlyph': ['spell', 'learn_glyph'],
+  'spell.configure': ['spell', 'configure'], 'spell.select': ['spell', 'select'],
+  'spell.cast': ['spell', 'cast'],
+  'maid.list': ['maid', 'list'], 'maid.status': ['maid', 'status'], 'maid.tasks': ['maid', 'tasks'],
+  'maid.setTask': ['maid', 'task_set'], 'maid.setFollow': ['maid', 'follow_set'],
+  'maid.setPickup': ['maid', 'pickup_set'], 'maid.openBag': ['maid', 'open_bag']
 }
 const existing = new Map(modOperationCatalog().operations.map(o => [o.id, o]))
 const operations = Object.entries(routes).map(([id, [route, kind]]) => {
@@ -40,6 +47,10 @@ const params = properties => ({ type: 'object', properties, required: Object.key
 const interaction = operations.find(o => o.id === 'world.interact')
 interaction.parameters.required.push('expectedHeldSnbt')
 interaction.description = '本身体原生主手右键近处可见方块；expectedHeldSnbt 必须来自最新 menu.snapshot。空手为空字符串；薄模型使用 world.look 的 hit.cursor 作为 aimOffset。接受交互仍须观察效果。'
+for (const operation of operations.filter(o => o.route === 'spell' && !o.readOnly)) {
+  operation.parameters.required = [...new Set([...operation.parameters.required, 'expectedHeldSnbt', 'expectedHotbarSlot'])]
+  operation.description += ' 完整书/符文 SNBT 与快捷栏槽位必须来自本身体最新 menu.snapshot；施法接受不等于命中。'
+}
 // Unlike the SDK's local wrapper, the remote facade requires the full snapshot
 // CAS explicitly. Actor identity is injected from the owned server body.
 const domum = operations.find(o => o.id === 'domum.select')

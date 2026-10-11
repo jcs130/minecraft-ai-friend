@@ -126,12 +126,16 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
         ops=tool('operations');report['operations']=ops;checks['runtime_operations']=ops['totalFunctions']>=30 and any(g['id']=='numen.route' for g in ops['groups'])
         created=tool('create_companion',{'name':'MawHeadBody','action_id':'qa-create-01'});assert created.get('online'),created
         body=created['bodyId'];report['bodyId']=body
+        if full_pack:
+            from maw_numen_client import Client
+            report['externalClient']=Client('http://127.0.0.1:28990/mcp',bearer,owner_uuid=owner).smoke()
+            checks['standalone_external_client_read_only']=report['externalClient']['ok'] and report['externalClient']['nativeModOperations']==48 and report['externalClient']['onlineBodies']==1
         again=tool('create_companion',{'name':'MawHeadBody','action_id':'qa-create-01'});checks['create_idempotent_original_uuid']=again['bodyId']==body and again['replayed']
         checks['owner_isolation']=tool('get_state',{'companion':body},other_token)['code']=='body_not_owned'
         claim=tool('claim_control',{'companion':body,'controller_id':'qa-controller'});lease=claim['lease']['leaseId']
         checks['one_controller']=tool('claim_control',{'companion':body,'controller_id':'other-controller'})['code']=='controller_busy'
         native=tool('mod_operations')
-        checks['optional_native_mod_discovery']=native.get('operationCount')==34 if full_pack else native.get('code')=='native_mod_bridge_unavailable'
+        checks['optional_native_mod_discovery']=native.get('operationCount')==48 if full_pack else native.get('code')=='native_mod_bridge_unavailable'
         if full_pack:
             snapshot=tool('mod_query',{'companion':body,'operation':'menu.snapshot'})
             checks['native_same_body_menu']=snapshot['ok'] and snapshot['state']['playerUuid']==body
@@ -144,6 +148,8 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
             menu=tool('mod_query',{'companion':body,'operation':'menu.snapshot'})['state']
             tool('mod_action',{'companion':body,'lease_id':lease,'action_id':'qa-native-close','operation':'menu.close','arguments':{'windowId':menu['windowId'],'expectedStateId':menu['stateId']}})
             checks['native_menu_closed']=terminal('qa-native-close')['ok']
+            from smoke_maw_numen_guest import checks as guest_checks
+            guest_checks(tool,request,console,owner,other,other_token,body,lease,server,checks,report)
         code='local s=numen.status.self(); local p=numen.route.plan({to={x=math.floor(s.pos.x)+2,z=math.floor(s.pos.z)},costs={dig=false,place=false}}); if not p.ok then error(p.why) end; local m=numen.move.go(p); print(m.pos.x,m.pos.y,m.pos.z)'
         before=tool('get_state',{'companion':body});accepted=tool('lua',{'companion':body,'lease_id':lease,'action_id':'qa-walk-01','code':code});assert accepted['phase']=='accepted',accepted
         done=terminal('qa-walk-01');assert done['ok'],done
