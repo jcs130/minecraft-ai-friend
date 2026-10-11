@@ -37,6 +37,7 @@ public final class HeadlessRuntime {
     final Map<UUID,Consumer<JsonObject>> listeners=new HashMap<>();
     final ConcurrentLinkedQueue<Runnable> requests=new ConcurrentLinkedQueue<>();
     final Map<UUID,JsonObject> leases=new HashMap<>();
+    final Map<UUID,Runnable> nativeControls=new HashMap<>();
     HeadlessHttp http;
     final MaidConfigBridge maids;
     final NativeModBridge mods;
@@ -83,6 +84,7 @@ public final class HeadlessRuntime {
         HeadlessRuntime r=INSTANCE;if(r==null||r.server!=server)return;
         long until=System.nanoTime()+2_000_000;
         for(int n=0;n<8&&System.nanoTime()<until;n++) {Runnable job=r.requests.poll();if(job==null)break;job.run();}
+        for(Runnable job:List.copyOf(r.nativeControls.values()))job.run();
         for(HeadlessBrain brain:List.copyOf(r.brains.values()))brain.tick();
         if(++r.ticks%20==0){r.bedrockMenus.prune(System.currentTimeMillis());r.lifecycle();}
     }
@@ -224,6 +226,13 @@ public final class HeadlessRuntime {
             JsonArray slots=new JsonArray();for(int slot=0;slot<body.getInventory().getContainerSize();slot++)slots.add(stack(body.getInventory().getItem(slot),slot));o.add("inventory",slots);
             JsonArray menu=new JsonArray();for(int slot=0;slot<Math.min(128,body.containerMenu.slots.size());slot++)menu.add(stack(body.containerMenu.slots.get(slot).getItem(),slot));
             o.add("menu",object("containerId",body.containerMenu.containerId,"slotCount",body.containerMenu.slots.size(),"slots",menu,"cursor",stack(body.containerMenu.getCarried(),-1)));
+            if(mods!=null) {
+                JsonObject nativeState=mods.bodySnapshot(body);
+                if(nativeState!=null) {
+                    nativeState.addProperty("currentActionSource","owned_numen_server_ledger");
+                    o.add("nativeState",nativeState);
+                }
+            }
         }return o;
     }
     JsonObject stack(ItemStack s,int slot) {
@@ -236,7 +245,7 @@ public final class HeadlessRuntime {
         String controller=id(args,"controller_id");JsonObject old=leases.get(id);long now=System.currentTimeMillis();
         if(bodies.get(id).has("blocked"))throw new IllegalArgumentException("body_reconciliation_required");
         if(old!=null&&old.get("expiresAt").getAsLong()>now&&!controller.equals(text(old,"controllerId",64)))throw new IllegalArgumentException("controller_busy");
-        if(old!=null&&!controller.equals(text(old,"controllerId",64))&&ServerPrograms.running(id))throw new IllegalArgumentException("previous_action_still_running");
+        if(old!=null&&!controller.equals(text(old,"controllerId",64))&&(ServerPrograms.running(id)||bodies.get(id).has("activeAction")))throw new IllegalArgumentException("previous_action_still_running");
         HeadlessBrain brain=brains.get(id);if(brain!=null&&brain.busy())throw new IllegalArgumentException("hosted_brain_active_stop_first");
         JsonObject lease=old!=null&&controller.equals(text(old,"controllerId",64))?old:object("controllerId",controller,"leaseId",token());
         lease.addProperty("expiresAt",now+90_000);leases.put(id,lease);bodies.get(id).addProperty("driver","external");save(id);
@@ -286,6 +295,10 @@ public final class HeadlessRuntime {
         JsonObject record=action(body,aid);if(!record.has("phase"))return record;
         if(text(record,"phase",16).equals("unknown")||text(record,"phase",16).equals("terminal"))return record;
         if(record.has("modOperation")) {
+            if(record.has("controlTicket")) {
+                JsonObject outcome=mods.invoke(live(body),"control.cancel",object("ticket",text(record,"controlTicket",64)),false,"cancel_"+hash(aid).substring(0,32));
+                nativeControls.remove(body);return finishMod(body,aid,outcome,null);
+            }
             record.addProperty("phase","terminal");record.addProperty("ok",false);record.addProperty("completedAt",Instant.now().toString());
             record.add("outcome",object("ok",false,"code","cancelled_before_dispatch","outcomeKnown",true,"changed",false));
             write(actionFile(body,aid),record);bodies.get(body).remove("activeAction");save(body);return record;
@@ -330,9 +343,9 @@ public final class HeadlessRuntime {
                 case "get_events"->events(id,args.has("after")?args.get("after").getAsLong():0,null);
                 case "ack_events"->{requireLease(id,args);yield events(id,0,args.get("through").getAsLong());}
                 case "restore_companion"->{requireLease(id,args);bodies.get(id).addProperty("wantOnline",true);restore(id);save(id);yield snapshot(id,true);}
-                case "dormant_companion"->{requireLease(id,args);if(ServerPrograms.running(id))throw new IllegalArgumentException("stop_action_before_dormant");bodies.get(id).addProperty("wantOnline",false);save(id);NumenPlayer body=NumenPlayer.findByUuid(server,id);if(body!=null)Companions.dormant(server,body);yield snapshot(id,false);}
-                case "release_control"->{requireLease(id,args);if(ServerPrograms.running(id))throw new IllegalArgumentException("stop_action_before_release");leases.remove(id);yield ok(operation);}
-                case "set_permission"->{requireLease(id,args);if(ServerPrograms.running(id))throw new IllegalArgumentException("stop_action_before_reconfigure");String mode=text(args,"mode",16);if(!Set.of("ask","bypass","observe").contains(mode))throw new IllegalArgumentException("invalid_permission_mode");Permission.setMode(live(id),Mode.byName(mode));yield snapshot(id,false);}
+                case "dormant_companion"->{requireLease(id,args);if(ServerPrograms.running(id)||bodies.get(id).has("activeAction"))throw new IllegalArgumentException("stop_action_before_dormant");bodies.get(id).addProperty("wantOnline",false);save(id);NumenPlayer body=NumenPlayer.findByUuid(server,id);if(body!=null)Companions.dormant(server,body);yield snapshot(id,false);}
+                case "release_control"->{requireLease(id,args);if(ServerPrograms.running(id)||bodies.get(id).has("activeAction"))throw new IllegalArgumentException("stop_action_before_release");leases.remove(id);yield ok(operation);}
+                case "set_permission"->{requireLease(id,args);if(ServerPrograms.running(id)||bodies.get(id).has("activeAction"))throw new IllegalArgumentException("stop_action_before_reconfigure");String mode=text(args,"mode",16);if(!Set.of("ask","bypass","observe").contains(mode))throw new IllegalArgumentException("invalid_permission_mode");Permission.setMode(live(id),Mode.byName(mode));yield snapshot(id,false);}
                 default->throw new IllegalArgumentException("unknown_operation");
             };
         }catch(RuntimeException ex){return denied(operation,safeCode(ex));}
@@ -362,7 +375,7 @@ public final class HeadlessRuntime {
         if(Permission.modeOf(her)!=Mode.BYPASS)throw new IllegalArgumentException("numen_bypass_mode_required_for_mod_actions");
         if(ServerPrograms.running(body)||b.has("activeAction"))throw new IllegalArgumentException("body_busy_query_current_action");
         JsonObject out=ok("mod_action");out.addProperty("bodyId",body.toString());out.addProperty("action_id",aid);out.addProperty("modOperation",operation);out.addProperty("fingerprint",fingerprint);out.addProperty("session",session);out.addProperty("phase","accepted");out.add("arguments",arguments.deepCopy());
-        write(file,out);b.addProperty("activeAction",aid);save(body);
+        out.add("before",snapshot(body,true));write(file,out);b.addProperty("activeAction",aid);save(body);
         requests.add(()->{
             JsonObject end=read(file);if(!text(end,"phase",16).equals("accepted")){if(terminal!=null)terminal.accept(end);return;}
             JsonObject outcome;
@@ -372,12 +385,26 @@ public final class HeadlessRuntime {
                 outcome=mods.invoke(actual,operation,arguments,false,"mod_"+hash(aid).substring(0,32));
             }catch(IllegalArgumentException failure){outcome=object("ok",false,"code",safeCode(failure),"outcomeKnown",true,"changed",false);}
             catch(RuntimeException failure){outcome=object("ok",false,"code",safeCode(failure),"outcomeKnown",false,"retryAutomatically",false);}
-            boolean unknown=outcome.has("outcomeKnown")&&!outcome.get("outcomeKnown").getAsBoolean()||outcome.has("outcomeUnknown")&&outcome.get("outcomeUnknown").getAsBoolean()||outcome.has("outcome")&&outcome.get("outcome").isJsonPrimitive()&&outcome.get("outcome").getAsString().equals("unknown");
-            end.addProperty("phase",unknown?"unknown":"terminal");end.addProperty("completedAt",Instant.now().toString());end.addProperty("ok",!unknown&&outcome.has("ok")&&outcome.get("ok").getAsBoolean());end.add("outcome",outcome);
-            if(unknown)b.addProperty("blocked","previous_action_unknown_do_not_replay");else b.remove("activeAction");
-            write(file,end);save(body);event(body,"action_terminal","action_id="+aid+" native="+operation+" "+text(end,"phase",16),false,System.currentTimeMillis());
-            if(terminal!=null)terminal.accept(end.deepCopy());
+            if(outcome.has("pending")&&outcome.get("pending").getAsBoolean()) {
+                String ticket=text(outcome,"ticket",64);end.addProperty("controlTicket",ticket);end.addProperty("phase","running");write(file,end);
+                nativeControls.put(body,()->{
+                    JsonObject state;
+                    try{state=mods.invoke(live(body),"control.actionStatus",object("ticket",ticket),true,"poll_"+hash(aid).substring(0,32));}
+                    catch(RuntimeException error){state=object("ok",false,"code",safeCode(error),"outcomeKnown",false,"terminal",true);}
+                    if(state.has("terminal")&&state.get("terminal").getAsBoolean()){nativeControls.remove(body);finishMod(body,aid,state,terminal);}
+                });return;
+            }
+            finishMod(body,aid,outcome,terminal);
         });return out.deepCopy();
+    }
+    private JsonObject finishMod(UUID body,String aid,JsonObject outcome,Consumer<JsonObject> terminal) {
+        JsonObject b=bodies.get(body),end=read(actionFile(body,aid));
+        boolean unknown=outcome.has("outcomeKnown")&&!outcome.get("outcomeKnown").getAsBoolean()||outcome.has("outcomeUnknown")&&outcome.get("outcomeUnknown").getAsBoolean();
+        end.addProperty("phase",unknown?"unknown":"terminal");end.addProperty("completedAt",Instant.now().toString());end.addProperty("ok",!unknown&&outcome.has("ok")&&outcome.get("ok").getAsBoolean());end.add("outcome",outcome);
+        try{end.add("after",snapshot(body,true));}catch(RuntimeException error){end.addProperty("afterUnavailable",true);}
+        if(unknown)b.addProperty("blocked","previous_action_unknown_do_not_replay");else b.remove("activeAction");
+        write(actionFile(body,aid),end);save(body);event(body,"action_terminal","action_id="+aid+" native="+text(end,"modOperation",80)+" "+text(end,"phase",16),false,System.currentTimeMillis());
+        if(terminal!=null)terminal.accept(end.deepCopy());return end;
     }
     static String safeCode(Throwable error) {
         String msg=error.getMessage();return msg!=null&&msg.matches("[A-Za-z0-9_]{1,100}")?msg:"operation_failed_inspect_server_receipt";

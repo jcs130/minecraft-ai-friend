@@ -1,0 +1,102 @@
+My Agent World：完整身体控制 API（2026-10-11）
+
+用途
+外部 Agent 可以直接控制游戏身体的按键、视角、鼠标、物品和原生菜单，再组合成采集、战斗、建造或模组技能。模型、记忆、计划继续在 Agent 端运行。JavaScript 可以直接调用；其它语言使用 JSONL 或 Numen MCP HTTP。现有女仆、殖民地、农夫乐事菜单、机械动力、饰品、YSM 和 Ars 法术接口保留。
+
+连接入口
+Mineflayer：192.168.3.163:28977。用自己原有账号、真实 UUID、离线登录密码和原账本目录；不要为绕过 unknown 更换身份或账本。
+Numen HTTP MCP：http://192.168.3.163:28984/numen/mcp。Authorization: Bearer 本人的邀请令牌。令牌绑定 ownerUuid，通过 companion/bodyId 指定自己已拥有的原身体。客户端无需安装 Numen。
+普通 Java：192.168.3.163:28976。基岩桥：192.168.3.163:28988 UDP。
+这些是现有局域网入口；本次没有新增公网端口。MCP 已对外提供原生 API，不需要开放 RCON 或控制台。
+
+SDK
+发布目录：E:\QiandengJiSocietyLab\integrations\world-adapter\v2-control-20261011
+复制整个包到 Agent 主机，使用 Node 22，执行 npm ci。配置中明确 provider=mineflayer 或 numen。不要同时通过另一个客户端、Lua 程序或控制器操纵同一个身体。
+JavaScript：const { connect } = require('./world-adapter/index.cjs')
+const world = await connect(require('D:/agent/private/world.json'))
+await world.claimControl()
+const catalog = await world.operations()
+const spec = await world.operations('body.input')
+const state = await world.snapshot()
+
+Numen 列目录不批量拉取所有参数；需要时通过 operations(id) 查询一项，SDK 缓存真实 schema。Numen 使用自己的官方 Controls/Physics 输入；Mineflayer 使用自己的客户端物理，两者控制的都是绑定账号的真实身体。
+
+统一动作格式
+const request = {action_id:'walk-001',operation:'body.input',args:{keys:['forward','sprint'],durationMs:500,yaw:0,pitch:0}}
+const accepted = await world.submit(request)
+if (accepted.accepted) {
+  const done = await world.wait(request.action_id,{timeoutMs:15000})
+  // 检查 status、outcomeKnown、result、actualPosition、inventoryDelta。
+}
+action_id 为 1–64 位英文字母、数字、点、下划线或连字符。同 ID 同参数只读原结果；同 ID 改参数拒绝。
+耗时动作立即返回 accepted，按 ID 查询进度、终态或取消。wait 超时仅表示还没等到，不会自动取消，更不会重做。
+world.actionStatus(action_id)：查询；world.cancel(action_id)：取消；world.stop()：停止当前动作。
+终态为 succeeded / failed / cancelled / unknown。unknown 时只对账原 ID，不能换 ID 重复消费。重连恢复同账号、同 UUID、同账本；不会自动造新身体。
+
+坐标与角度
+位置全部是绝对世界坐标，包含 dimension。角度为 Minecraft 度，不是弧度：yaw=0 朝南（+Z），+90 朝西（-X），-90 朝东；pitch 正值向下，范围 -90 到 +90。SDK 会转换 Mineflayer 的弧度/方向约定。
+durationMs 是毫秒；Numen 按 50ms 的游戏 tick 向上取整，卡顿时实际墙钟时间可能更长，15 秒硬期限兜底。一次持续按键或使用最多 10000ms，结束或取消会释放。
+
+通用控制操作（两种 provider 都提供同一份参数）
+body.controls：只读，真实 yaw/pitch、地面/水中/使用物品/乘骑/疾跑/潜行/飞行许可及速度。只读结果不是施法成功证明。
+body.target：只读，原生交互距离内准星首先命中的 block/entity/air，绝对命中点、方块/实体类型、UUID 和 targetToken。不扫描墙后实体或矿物。
+body.input：keys 数组 + durationMs，可选 yaw/pitch。keys 支持 forward、back、left、right、jump、sprint、sneak。空数组可作为有界等待；不会替你寻路。
+body.look：yaw、pitch，可选 relative=true；否则绝对角度。
+body.mouse：button=left/right、expectedTargetToken、hand=main/off、expectedHotbarSlot、expectedHeldSnbt、durationMs。先读取 body.target；左键攻击准星实体或按原生速度挖方块，右键交互方块/实体或使用手持物。挖掘使用主手。长按结束不保证硬方块已破坏，要检查 actualBlockId 或重新观察。
+body.attack：entityId、expectedUuid、hand、expectedHotbarSlot、expectedHeldSnbt。原生近战距离和视线检查、PVP/模组规则仍有效。普通攻击使用主手。
+body.interactEntity：同上；原生右键交易、坐骑或模组伙伴，实际菜单另行查询。
+body.swing：hand=main/off，挥动动画；没有伪造伤害。
+body.dismount：无参数，下坐骑。
+body.flight：flying=true/false；只有原身体允许飞行时才能切换，不能授予飞行或创造权限。飞行、特殊载具等细节受各 provider 的实际物理支持限制，不能把目录存在当作全玩法验收。
+inventory.selectHotbar：hotbarSlot=0–8、expectedSnbt，切换快捷栏。
+inventory.swapHands：expectedHotbarSlot、expectedMainSnbt、expectedOffSnbt，原生交换主副手。
+inventory.drop：hand、expectedHotbarSlot、expectedHeldSnbt、all=true/false；丢一件或整堆，保留原生绑定/丢弃事件。
+inventory.useHeld：hand、expectedHotbarSlot、expectedHeldSnbt、durationMs；吃喝、拉弓、盾牌及模组物品的有界长按。确认派发与结束，不把未知模组效果假报成成功。
+menu.nativeClick：windowId、expectedStateId、expectedControlHash、slot、button、clickType。完整窗口/所有槽位组件/游标 CAS。
+menu.button：同样的窗口 CAS + buttonId；调用真实菜单按钮，按钮含义由具体原生菜单决定。
+body.command：command 字符串，不带开头 /，不能有换行。以玩家自己的权限执行 /mycli 等游戏命令；派发成功不代表命令业务成功，不切换成控制台身份。
+control.actionStatus：ticket；查询原生持续控制的内部进度。通常由 SDK 自动使用，Agent 应以外层 action_id 对账。
+control.cancel：ticket；只释放本身体的该项持续控制，不回滚效果。通常使用 world.cancel(action_id)。
+原生 ticket 是进程内最多保留 10 分钟、每身体最近 64 项的短期缓存；SDK/Numen 的持久 action_id 才是断线、重启后的正式对账依据。
+
+状态采集
+当前 Numen get_state 一次返回同一服务器 tick 的身体、原生菜单、完整物品组件和真实 Ars 魔力，SDK 标记 sampling=same_server_tick，附 capturedAt/capturedTick；终态 before/after 也保存这些数据。旧宿主的多次读取明确标记 separate_body_menu_and_mana_reads。控制快照不携带网页专用的大型几何数据，网页继续使用原观战接口。
+
+完整物品与菜单 CAS
+expectedHeldSnbt、expectedSnbt 来自本人最新 menu 快照，包含完整组件和数量，不要只用物品名称。空物品用空字符串。expectedHotbarSlot 是 0–8。
+玩家背包的原生菜单槽为 0–45，快捷栏对应 36–44，副手 45；打开箱子或模组菜单后的 slot 必须用该菜单实际槽号。
+expectedControlHash 直接取 menu.controlHash，必须与 windowId/stateId 一起使用，任何槽位、附魔、耐久、数量或游标变化都会让旧摘要失效。不要自己用物品 ID 拼接代替。
+PICKUP：button 0 左键、1 右键。
+QUICK_MOVE：button 0/1，Shift 快速移动。
+SWAP：button 0–8 对应快捷栏数字键，40 对应副手。
+THROW：button 0 丢一个、1 丢整堆。
+PICKUP_ALL：button 0/1，原生双击收集。
+QUICK_CRAFT：原生拖拽三阶段。button=0/4/8 开始，1/5/9 添加槽，2/6/10 结束；8/9/10 仅创造模式。每一步重新读菜单摘要；开始/结束用 slot=-999。
+CLONE：button=2，必须原角色是创造模式。
+只有 PICKUP 和 QUICK_CRAFT 接受 slot=-999 的窗口外操作；这是可能丢物的原生操作，先检查游标。
+menu.button 不代表任意纯客户端绘制按钮都能操作；没有原生服务端按钮的模组页面仍使用已适配的专用模组 API。
+
+JSONL（Python 等语言）
+node world-adapter/stdio.cjs D:/agent/private/world.json
+每行一个 JSON 请求，例如：
+{"request_id":"q1","method":"operations","operation":"body.input"}
+{"request_id":"q2","method":"read","operation":"body.target","args":{}}
+{"request_id":"a1","method":"submit","action_id":"walk-001","operation":"body.input","args":{"keys":["forward"],"durationMs":500}}
+{"request_id":"q3","method":"result","action_id":"walk-001"}
+{"request_id":"c1","method":"cancel","action_id":"walk-001"}
+stderr 为诊断，stdout 只输出 JSONL。不要把 key/令牌放进聊天、共享文档或模型提示词。
+
+直接 Numen HTTP MCP
+POST 上述 MCP URL，Content-Type: application/json，Authorization: Bearer 本人令牌。
+查询目录：{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"mod_operations","arguments":{"operation":"body.input"}}}
+身体列表：tools/call 的 name=list_companions，arguments={}。
+申请控制：name=claim_control，arguments={"companion":"原bodyId","controller_id":"my-agent"}。私有回执含 lease.leaseId，不写入模型日志。租约不会授予 Numen 的独立行动许可；必须由所属玩家/服主原界面明确启用。
+提交：name=mod_action，arguments={"companion":"原bodyId","lease_id":"私有租约","action_id":"walk-001","operation":"body.input","arguments":{"keys":["forward"],"durationMs":500}}。
+只读：name=mod_query，arguments={"companion":"原bodyId","operation":"body.target","arguments":{}}。
+终态：name=action_status，arguments={"companion":"原bodyId","action_id":"walk-001"}。
+取消：name=action_cancel，arguments={"companion":"原bodyId","lease_id":"私有租约","action_id":"walk-001"}。
+MCP structuredContent.phase 为 accepted/running/terminal/unknown；持久终态含 outcome、before/after、实际位置和库存。控制权到期后同控制器重新 claim，不允许另一个控制器在旧动作仍运行时接管。持续动作不阻塞 HTTP 或服务器 tick。
+
+范围说明
+新增 19 项通用控制；Mineflayer SDK 总计 89 项，Numen 目录 72 项（其中 body.observe 明确不可用），另可发现 71 个原生 Lua 函数。Numen 的世界探索/采集/放置/合成等继续复用原生 Lua，模组直接操作按实际 operations 发现。
+接口完整性与“所有模组全部玩法已经验证”是两件事。返回的 allGameplayVerified 仍为 false。没有原生能力或渲染映射的内容明确返回 unavailable/unknown，不用近似世界或虚假成功替代。

@@ -38,6 +38,7 @@ public final class AgentBridge {
     private static final String PREFIX = "MAW_AGENT ";
     public AgentBridge(IEventBus eventBus, ModContainer container) {
         PlayerAuthBridge.register();
+        NativeControlAccess.register();
         TlmMinecoloniesBurningCompat.register(eventBus);
         NeoForge.EVENT_BUS.addListener(AgentBridge::register);
         PlayerMenuBridge.register(eventBus);

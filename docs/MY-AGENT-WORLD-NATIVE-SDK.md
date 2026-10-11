@@ -1,5 +1,7 @@
 # 旧千灯纪接入 My Agent World 原生身体 SDK
 
+当前分发：Native SDK 0.3.0，`E:\QiandengJiSocietyLab\integrations\native-sdk\v2-control-20261011`。新增19项底层控制、完整菜单组件CAS、真实动作位置/库存回执；[完整控制API和HTTP调用](MY-AGENT-WORLD-CONTROL-API.txt)。下方历史验收记录保留当时数量。
+
 2026-10-11：现有 SDK 可由 [统一身体接口](MY-AGENT-WORLD-WORLD-ADAPTER.md) 包装，与 Numen 使用共同的状态、动作和对账方法。本文仍描述 Mineflayer provider；原有能力标记和账本继续有效。
 
 基线：`jcs130/minecraft-ai-friend` 的 `main@5cee660` 是旧 Agent 参考；新服代码继续在 `experiment/agent-society-1.21.1`。Minecraft 1.21.1 / NeoForge 21.1.248，模型、规划、记忆和技能程序仍在接入方运行。
@@ -12,13 +14,13 @@ Agent 入口：`192.168.3.163:28977`，Java 协议 1.21.1、当前家庭局域�
 
 Numen 核心已安装，但本 SDK **尚不支持 Numen 假玩家控制和 `numen_restore_existing`**。远端 capabilities 明确返回这两项 false。原 Numen UUID、背包、技能、经验不能仅靠新用户名自动迁移；需要同身份假玩家时，另接 Numen provider 并验证原 UUID/owner/name 恢复，不能直接套用普通玩家登录。
 
-2026-10-11：另有已部署的[纯服务端 Numen MCP provider](MY-AGENT-WORLD-NUMEN-SERVER.md)，支持持久身体、原 UUID 恢复和 48 项原生模组操作；[邀请试玩指南](MY-AGENT-WORLD-INVITED-PLAYTEST.md)包含独立 Python 客户端与准入方式。本 SDK 的连接玩家身份及上述 false 不变，两个 provider 分别控制自己的身体。
+2026-10-11：另有已部署的[纯服务端 Numen MCP provider](MY-AGENT-WORLD-NUMEN-SERVER.md)，支持持久身体、原 UUID 恢复和 67 项原生操作；[邀请试玩指南](MY-AGENT-WORLD-INVITED-PLAYTEST.md)包含独立 Python 客户端与准入方式。本 SDK 的连接玩家身份及上述 false 不变，两个 provider 分别控制自己的身体。
 
 2026-10-09 历史路线为官方 Numen 0.1.4.1 / 主人客户端 MCP 和服主 Lua/恢复桥，见 [Numen 接入](MY-AGENT-WORLD-NUMEN.md)。不要把新 provider 的能力误读成本 SDK 已控制假玩家。
 
-Node 22，锁定 Mineflayer 4.37.1、minecraft-protocol 1.66.2、minecraft-data 3.112.0、mineflayer-pathfinder 2.4.5、vec3 0.2.0。完整依赖及 overrides 在 SDK 包的 package.json。首次安装用该目录运行 `npm install`；不要用任意最新版替换协议依赖。
+Node 22，锁定 Mineflayer 4.37.1、minecraft-protocol 1.66.2、minecraft-data 3.112.0、mineflayer-pathfinder 2.4.5、vec3 0.2.0。完整依赖及 overrides 在 SDK 包的 package.json 和 package-lock.json。首次安装用该目录运行 `npm ci`；不要用任意最新版替换协议依赖。
 
-源码入口：`world/src/native-sdk/index.cjs`。本机可分发包：`E:\QiandengJiSocietyLab\integrations\native-sdk\v1-20261011-login`，附 operations.json、登录/连接指南及原 MIT LICENSE。第三方使用该目录的副本和自己的本地 ledgerDir，不挂载服务端世界目录。
+源码入口：`world/src/native-sdk/index.cjs`。本机可分发包：`E:\QiandengJiSocietyLab\integrations\native-sdk\v2-control-20261011`，附 operations.json、登录/连接指南及原 MIT LICENSE。第三方使用该目录的副本和自己的本地 ledgerDir，不挂载服务端世界目录；已有账号沿用原账本。
 
 ```js
 const mineflayer = require('mineflayer')
@@ -43,7 +45,7 @@ bot.once('spawn', async () => {
 
 ## operations、权限与状态
 
-`await sdk.capabilities()` 查询实际远端桥，返回当前 bodyId、采集时间、桥协议、60 项原生绑定和假玩家支持标志。`sdk.operations()` 返回 **70 项**：原60项模组调用，加10项身体/控制入口；`sdk.operations('world.dig')` 返回一项完整 JSON schema、说明、权限、执行形式、调用方式和回执约定。目录存在和服务器声明绑定均不表示所有玩法已经验收，`allGameplayVerified` 保持 false。
+`await sdk.capabilities()` 查询实际远端桥，返回当前 bodyId、采集时间、桥协议、79 项原生绑定和假玩家支持标志。`sdk.operations()` 返回 **89 项**：原60项模组调用、新增19项底层控制，加10项身体/控制入口；`sdk.operations('world.dig')` 返回一项完整 JSON schema、说明、权限、执行形式、调用方式和回执约定。目录存在和服务器声明绑定均不表示所有玩法已经验收，`allGameplayVerified` 保持 false。
 
 新增入口：`sdk.capabilities`、`body.identity`、`body.snapshot`、`body.observe`、`body.move`、`inventory.equipSlot`、`inventory.use`、`action.status`、`action.cancel`、`body.stop`。动作状态、取消及停止使用专门方法；不能作为普通排队变更提交。
 

@@ -20,6 +20,7 @@ function fixture () {
     }
   }
   clients.mods.world = { interact: clients.world.interact }
+  clients.mods.control = (id, data, readOnly) => { calls.push({ id, args: [data, readOnly] }); return Promise.resolve({ ok: true, playerUuid: owner, code: 'native' }) }
   clients.menu.current = () => { calls.push({id:'menu.current',args:[]}); return {ok:true,code:'native',playerUuid:owner,menuType:'minecraft:inventory',selectedHotbarSlot:0,slots:Array(46).fill(null),carried:null} }
   clients.construction = { food: clients.inventory.food, consume: clients.inventory.consume, lookAt: clients.world.lookAt, select: clients.inventory.select, equip: clients.inventory.equip,
     craft: clients.native.craft, craftRecipe: clients.native.craftRecipe, place: clients.world.place, dig: clients.world.dig }
@@ -67,11 +68,23 @@ const args = {
   'domum.select': { selection: 'variant', groupId: 'domum_ornamentum:fpanel', variantIndex: 2, choiceSnbt: '{count:1}' },
   'collision.query': { position: pos, expectedBlockId: 'minecraft:stone', expectedProperties: {} }
 }
-test('all 60 declared operations dispatch to the exact native adapter with actual arguments', async () => {
+const held = { hand: 'main', expectedHotbarSlot: 0, expectedHeldSnbt: '' }
+const menuCas = { windowId: 0, expectedStateId: 1, expectedControlHash: 'a'.repeat(64) }
+Object.assign(args, {
+  'body.input': { keys: ['forward', 'jump'], durationMs: 50 }, 'body.look': { yaw: 90, pitch: 0 },
+  'body.mouse': { button: 'right', ...held, expectedTargetToken: 'a'.repeat(64), durationMs: 50 },
+  'body.attack': { ...held, entityId: 7, expectedUuid: other }, 'body.interactEntity': { ...held, entityId: 7, expectedUuid: other },
+  'body.swing': { hand: 'off' }, 'body.flight': { flying: false },
+  'inventory.selectHotbar': { hotbarSlot: 0, expectedSnbt: '' }, 'inventory.swapHands': { expectedHotbarSlot: 0, expectedMainSnbt: '', expectedOffSnbt: '' },
+  'inventory.drop': { ...held, all: false }, 'inventory.useHeld': { ...held, durationMs: 50 },
+  'menu.nativeClick': { ...menuCas, slot: 9, button: 0, clickType: 'QUICK_MOVE' }, 'menu.button': { ...menuCas, buttonId: 0 },
+  'body.command': { command: 'help' }, 'control.actionStatus': { ticket: 'a-ticket' }, 'control.cancel': { ticket: 'a-ticket' }
+})
+test('all 79 declared operations dispatch to the exact native adapter with actual arguments', async () => {
   const f = fixture()
   try {
     const list = f.api.operations()
-    assert.equal(list.operationCount, 60); assert.equal(list.remoteSupportVerified, false)
+    assert.equal(list.operationCount, 79); assert.equal(list.remoteSupportVerified, false)
     for (const row of list.operations) {
       const result = await f.api.call(row.id, args[row.id] || {})
       assert.equal(result.code, 'native'); assert.equal(f.calls.at(-1).id, row.id)

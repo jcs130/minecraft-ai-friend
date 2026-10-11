@@ -167,6 +167,14 @@ final class PlayerMenuBridge {
     static JsonObject nativeItem(ServerPlayer player, ItemStack stack) { return item(player, stack); }
 
     static JsonObject snapshot(ServerPlayer player) {
+        return snapshot(player, true);
+    }
+
+    static JsonObject controlSnapshot(ServerPlayer player) {
+        return snapshot(player, false);
+    }
+
+    private static JsonObject snapshot(ServerPlayer player, boolean render) {
         PlayerAuthBridge.requireAuthenticated(player);
         AbstractContainerMenu menu = player.containerMenu;
         JsonObject state = new JsonObject();
@@ -175,6 +183,7 @@ final class PlayerMenuBridge {
         state.addProperty("playerUuid", player.getUUID().toString());
         state.addProperty("windowId", menu.containerId);
         state.addProperty("stateId", menu.getStateId());
+        state.addProperty("controlHash", NativeControlAccess.menuHash(player));
         state.addProperty("selectedHotbarSlot", player.getInventory().selected);
         if (renderRegistryData == null) {
             renderRegistryData = new JsonObject();
@@ -198,7 +207,7 @@ final class PlayerMenuBridge {
         }
         JsonObject registries = renderRegistryData.deepCopy();
         registries.addProperty("playerUuid", player.getUUID().toString());
-        state.add("renderRegistries", registries);
+        if (render) state.add("renderRegistries", registries);
         // Snapshot the requesting body's actual values. These remain bound to
         // its connection, including while a mod container is open. Never use
         // a proxy item/attribute registry or default HUD health/armor values.
@@ -206,6 +215,7 @@ final class PlayerMenuBridge {
         self.addProperty("playerUuid", player.getUUID().toString());
         self.addProperty("health", player.getHealth());
         self.addProperty("maxHealth", player.getMaxHealth());
+        self.add("mana", PlayerSpellBridge.manaState(player));
         self.addProperty("absorption", player.getAbsorptionAmount());
         self.addProperty("armor", player.getArmorValue());
         self.addProperty("food", player.getFoodData().getFoodLevel());
@@ -237,8 +247,10 @@ final class PlayerMenuBridge {
         self.add("ysm", PlayerYsmState.snapshot(player));
         self.add("motion", PlayerRenderMotion.snapshot(player));
         state.add("self", self);
-        state.add("entityRenderStates", PlayerWorldBridge.maidRenderStates(player));
-        state.add("contraptionRenderStates", PlayerWorldBridge.contraptionRenderStates(player));
+        if (render) {
+            state.add("entityRenderStates", PlayerWorldBridge.maidRenderStates(player));
+            state.add("contraptionRenderStates", PlayerWorldBridge.contraptionRenderStates(player));
+        }
         String menuType;
         int menuTypeId;
         try {
@@ -302,7 +314,7 @@ final class PlayerMenuBridge {
         return state;
     }
 
-    private static void publishIfChanged(ServerPlayer player) {
+    static void publishIfChanged(ServerPlayer player) {
         if (!canSend(player) || !PlayerAuthBridge.authenticated(player)) return;
         JsonObject state = snapshot(player);
         String json = state.toString();

@@ -1,6 +1,7 @@
 package dev.qiandeng.maw;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -155,15 +156,18 @@ final class PlayerSpellBridge {
         state.addProperty("health", player.getHealth());
         state.addProperty("maxHealth", player.getMaxHealth());
         state.add("cooldown", cooldown(player, held));
+        state.add("mana", manaState(player));
+        return state;
+    }
+    static JsonElement manaState(ServerPlayer player) {
         IManaCap mana = CapabilityRegistry.getMana(player);
-        if (mana == null) state.add("mana", JsonNull.INSTANCE);
+        if (mana == null) return JsonNull.INSTANCE;
         else {
             JsonObject amount = new JsonObject();
             amount.addProperty("current", mana.getCurrentMana());
             amount.addProperty("max", mana.getMaxMana());
-            state.add("mana", amount);
+            return amount;
         }
-        return state;
     }
     private static JsonObject spellInfo(AbstractCaster<?> caster, int slot, Spell spell) {
         JsonObject result = new JsonObject();

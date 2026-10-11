@@ -24,7 +24,7 @@ const permission = id => id.startsWith('colony.') ? 'own_connection_and_native_c
   id.startsWith('ysm.') ? 'own_connection_and_native_model_authorization' : 'own_connection_normal_game_rules'
 function operationCatalog (id, remote) {
   const rows = [...modOperationCatalog().operations, ...local].map(row => ({ ...structuredClone(row),
-    executor: row.executor || 'native_adapter', permission: permission(row.id),
+    executor: row.executor || ({ 'body.input': 'client_physics', 'body.look': 'client_aim' }[row.id]) || 'native_adapter', permission: permission(row.id),
     execution: row.readOnly ? 'awaitable_read' : row.executor === 'control' ? 'immediate_control' : 'asynchronous_action',
     invocation: row.executor === 'control' ? 'sdk.cancel(action_id) / sdk.stop()' : row.readOnly ? 'sdk.read(id, args)' : 'sdk.submit({action_id, operation:id, args})',
     returns: row.readOnly ? 'own_body_structured_result_or_explicit_unavailable' : row.executor === 'control' ? 'cancellation_request_not_rollback' : 'accepted_then_action_status_with_result_actual_position_inventory_delta',

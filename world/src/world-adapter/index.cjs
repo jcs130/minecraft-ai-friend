@@ -13,6 +13,7 @@ const ACTION = /^[A-Za-z0-9_.-]{1,64}$/
 const copy = value => value === undefined ? null : structuredClone(value)
 const canonical = v => Array.isArray(v) ? v.map(canonical) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, canonical(v[k])])) : v
 const fingerprint = (operation, args) => crypto.createHash('sha256').update(JSON.stringify([operation, canonical(args)])).digest('hex')
+const controls = new Set(require('../neoforge-handshake/control-contract.cjs').controlOperations.map(row => row.id))
 const fail = (code, extra = {}) => ({ ok: false, code, outcomeKnown: true, outcomeUnknown: false, retryAutomatically: false, ...extra })
 const unknown = (code, extra = {}) => fail(code, { terminal: true, status: 'unknown', outcomeKnown: false, outcomeUnknown: true, ...extra })
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -52,14 +53,14 @@ function withMineflayer (sdk, { controllerId, viewerUrl = null } = {}) {
     identity: () => decorate(sdk.identity()),
     operations (id) {
       const catalog = sdk.operations()
-      const rows = catalog.operations.map(row => ({ ...row, provider: 'mineflayer', available: row.serverBindingAdvertised !== false }))
+      const rows = catalog.operations.map(row => ({ ...row, provider: 'mineflayer', common: controls.has(row.id) || core.some(c => c.id === row.id), available: row.serverBindingAdvertised !== false }))
       for (const row of core) { const index = rows.findIndex(r => r.id === row.id); rows[index] = { ...rows[index], ...copy(row), available: true, provider: 'mineflayer', common: true } }
       return id === undefined ? { ...catalog, provider: 'mineflayer', operations: rows } : copy(rows.find(r => r.id === id))
     },
     capabilities: async () => decorate(await sdk.capabilities()),
     async snapshot () {
       const value = normalizedState(base(), await sdk.snapshot())
-      if (value.ok) {
+      if (value.ok && !Object.hasOwn(value.self || {}, 'mana')) {
         try { const spells = await sdk.read('spell.list', {}); if (spells.ok) value.mana = copy(spells.state?.mana) } catch { value.mana = null }
       }
       return value
@@ -98,6 +99,16 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
   const decorate = value => ({ ...copy(value), ...base })
   const bound = (name, args = {}) => client.call(name, { ...args, companion: bodyId })
   const safe = async task => { try { return await task() } catch (error) { return decorate(unknown(error.code || 'numen_transport_unconfirmed')) } }
+  function canonicalState (value) {
+    if (!value.nativeState) return null
+    const native = value.nativeState
+    if (value.bodyId !== bodyId || value.ownerUuid !== ownerUuid || native.bodyId !== bodyId || native.menu?.playerUuid !== bodyId ||
+        native.self?.playerUuid !== bodyId) throw Error('numen_state_identity_mismatch')
+    const result = { ...normalizedState(base, { ...value, self: native.self, capturedAt: native.capturedAt }, native.menu),
+      account: body.name, capturedTick: native.capturedTick, sampling: 'same_server_tick', menuError: null }
+    delete result.nativeState
+    return result
+  }
   async function snapshot () {
     if (closed) return decorate({ ...fail('adapter_closed'), status: 'offline' })
     const value = await bound('get_state')
@@ -105,6 +116,8 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
       if (value.ok === false && !value.bodyId) return decorate({ ...fail(value.code || 'body_state_unavailable'), status: 'unavailable' })
       throw Error('numen_state_identity_mismatch')
     }
+    const canonical = canonicalState(value)
+    if (canonical) return canonical
     let menu = null, menuError = null
     if (value.ok) {
       const result = await bound('mod_query', { operation: 'menu.snapshot' })
@@ -144,7 +157,7 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
       nativeNavigationResult({ requestedPosition: record.args.position, position: raw.after.position, exact: true }), { proofSource: 'owned_numen_server_position' })
     const ok = raw.ok === true && result.ok !== false
     return decorate({ ok, action_id: id, operation, accepted: !terminal, terminal,
-      status: terminal ? (ok ? 'succeeded' : raw.outcome?.code === 'cancelled_before_dispatch' ? 'cancelled' : 'failed') : raw.phase === 'accepted' ? 'accepted' : 'running',
+      status: terminal ? (ok ? 'succeeded' : raw.outcome?.cancelled || raw.outcome?.code === 'cancelled_before_dispatch' ? 'cancelled' : 'failed') : raw.phase === 'accepted' ? 'accepted' : 'running',
       outcomeKnown: terminal, outcomeUnknown: false, capturedAt: raw.sampledAt || raw.completedAt || null,
       actualPosition: copy(result.actualPosition), result: terminal ? result : null, replayed: raw.replayed === true })
   }
@@ -157,7 +170,9 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
       const raw = await bound('action_status', { action_id: id }), value = receipt(raw, record, id)
       if (record && value.terminal && value.outcomeKnown) {
         try {
-          const after = await snapshot()
+          // Current hosts persist the actual terminal-tick menu/inventory in
+          // the action receipt. Do not make three more HTTP reads per action.
+          const after = canonicalState(raw.after || {}) || await snapshot()
           if (after.ok) {
             value.actualPosition = copy(value.actualPosition || after.position)
             value.result = { ...value.result, actualPosition: copy(value.actualPosition), dimension: value.result?.dimension || after.dimension,
@@ -176,7 +191,7 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
     if (!native.ok || !Array.isArray(native.operations)) throw Error('numen_native_operations_unavailable')
     // List is cheap. Explain fetches one actual signature on demand; reconnect
     // must not spend 48 requests or guess the Mineflayer parameter contract.
-    rows = native.operations.map(row => ({ ...copy(row), parameters: null, provider: 'numen', available: true,
+    rows = native.operations.map(row => ({ ...copy(row), parameters: null, provider: 'numen', common: controls.has(row.id), available: true,
       permission: 'owned_body_lease_and_native_rules', execution: row.readOnly ? 'awaitable_read' : 'asynchronous_action' }))
     rows.push(...core.map(row => ({ ...copy(row), provider: 'numen', available: true, common: true, execution: row.readOnly ? 'awaitable_read' : 'asynchronous_action' })),
       { id: 'numen.lua', readOnly: false, available: true, provider: 'numen', execution: 'asynchronous_action',

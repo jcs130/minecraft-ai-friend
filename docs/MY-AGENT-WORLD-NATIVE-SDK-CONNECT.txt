@@ -4,7 +4,7 @@ My Agent World 原生 SDK 接入（旧千灯纪 Agent）
 每个 Agent 一个固定用户名；不要借用 MawExplorer 或其他在线账号。
 
 SDK 源码：world/src/native-sdk/index.cjs
-本机分发目录：E:\QiandengJiSocietyLab\integrations\native-sdk\v1-20261011-login
+本机分发目录：E:\QiandengJiSocietyLab\integrations\native-sdk\v2-control-20261011
 目录附 package.json、operations.json 和完整指南；Node 22，先按包内依赖 npm install。
 
 现阶段身体是这个连接登录的真实玩家，bodyId 就是其真实 UUID，不是 Numen 假玩家。
@@ -22,7 +22,7 @@ sdk.read('body.observe',{radius:8}) 查可见附近方块实体；不是完整�
 重连必须同账号、同 UUID、同一 ledgerDir；重复同 ID 返回缓存，绝不重复执行。
 unknown 不能自动重试；wait 超时也不代表动作取消。
 
-原60项模组调用加10项身体/控制接口，共70项；魔法、女仆、机械、殖民地、饰品等复用原生权限。
+原60项模组调用、新增19项底层控制，加10项身体/控制接口，共89项；完整按键/鼠标/菜单/HTTP参数见 MY-AGENT-WORLD-CONTROL-API.txt；魔法、女仆、机械、殖民地、饰品等复用原生权限。
 移动、挖掘、放置、装备、进食、合成、菜单操作均按说明使用真实原生ID及完整SNBT。
 
 旧 Python 控制器可启动：node native-sdk/stdio.cjs 私有配置.json

@@ -65,10 +65,87 @@ async function run (configFile, output, reconcile = false) {
       assert.ok(Math.hypot(after.position.x-terminalPosition.x,after.position.y-terminalPosition.y,after.position.z-terminalPosition.z)<1.5)
       checks.absolute_walk_actual_endpoint = true
       checks.actual_terminal_position = !!done.actualPosition || !!done.result?.actualPosition
+      // Actual client physics and native fake-player inputs must both move the
+      // owned body, and release their keys without a second control channel.
+      const perform = async (operation,args) => {
+        const action = { action_id: 'control-' + crypto.randomUUID(), operation, args }
+        assert.equal((await adapter.submit(action)).accepted,true)
+        const end = await adapter.wait(action.action_id,{ timeoutMs: 30000 })
+        assert.equal(end.status,'succeeded',JSON.stringify(end));actions.push(action);return end
+      }
+      const look = await perform('body.look',{yaw:90,pitch:0})
+      const aim = await adapter.read('body.controls',{})
+      assert.ok(Math.abs(aim.yaw-90)<1&&Math.abs(aim.pitch)<1,JSON.stringify(aim));checks.native_degree_aim=true
+      const inputBefore=(await adapter.snapshot()).position
+      const moved=await perform('body.input',{keys:['forward'],durationMs:500})
+      const movedPos=moved.actualPosition||moved.result?.actualPosition
+      assert.ok(Math.hypot(movedPos.x-inputBefore.x,movedPos.z-inputBefore.z)>.3,JSON.stringify({inputBefore,movedPos,moved}));checks.raw_input_actual_movement=true
+      await new Promise(resolve=>setTimeout(resolve,400));const settled=(await adapter.snapshot()).position
+      await new Promise(resolve=>setTimeout(resolve,400));const still=(await adapter.snapshot()).position
+      assert.ok(Math.hypot(still.x-settled.x,still.z-settled.z)<.25,JSON.stringify({settled,still}));checks.raw_input_automatically_released=true
+      const cancel={action_id:'control-cancel-'+crypto.randomUUID(),operation:'body.input',args:{keys:['back'],durationMs:10000}}
+      assert.equal((await adapter.submit(cancel)).accepted,true);await new Promise(resolve=>setTimeout(resolve,350))
+      await adapter.cancel(cancel.action_id);const cancelled=await adapter.wait(cancel.action_id,{timeoutMs:10000})
+      assert.equal(cancelled.status,'cancelled',JSON.stringify(cancelled));assert.equal(cancelled.outcomeKnown,true);checks.raw_input_cancel_known_partial_result=true
+      const cancelledReplay=await adapter.submit(cancel);assert.equal(cancelledReplay.replayed,true);assert.equal(cancelledReplay.dispatched,false);checks.raw_input_cancel_never_replays=true
+      await new Promise(resolve=>setTimeout(resolve,350));const ground=(await adapter.snapshot()).position
+      const jumped=await perform('body.input',{keys:['jump'],durationMs:200})
+      assert.ok((jumped.actualPosition||jumped.result.actualPosition).y>ground.y+.1,JSON.stringify({ground,jumped}));checks.native_jump_actual_height=true
+      await new Promise(resolve=>setTimeout(resolve,900))
+      const emptyMenu=(await adapter.snapshot()).menu
+      const emptyHotbar=Array.from({length:9},(_,i)=>i).find(i=>!emptyMenu.slots[36+i])
+      assert.notEqual(emptyHotbar,undefined)
+      await perform('inventory.selectHotbar',{hotbarSlot:emptyHotbar,expectedSnbt:''});checks.native_hotbar_selection=true
+      await perform('body.look',{yaw:90,pitch:85})
+      const targetBlock=await adapter.read('body.target',{});assert.equal(targetBlock.type,'block',JSON.stringify(targetBlock))
+      const mined=await perform('body.mouse',{button:'left',hand:'main',expectedHotbarSlot:emptyHotbar,expectedHeldSnbt:'',expectedTargetToken:targetBlock.targetToken,durationMs:5000})
+      assert.equal(mined.result.actualBlockId,'minecraft:air',JSON.stringify(mined));checks.native_mouse_mining_actual_block=true
+      report.mouseMining={target:targetBlock,result:mined.result}
+      await new Promise(resolve=>setTimeout(resolve,900))
+      if(config.qaInventoryFixtureFile)fs.writeFileSync(config.qaInventoryFixtureFile,'ready')
+      let dirtMenu
+      for(let n=0;n<30;n++){
+        dirtMenu=(await adapter.snapshot()).menu
+        if(dirtMenu.slots.some(item=>item?.id==='minecraft:dirt'))break
+        await new Promise(resolve=>setTimeout(resolve,150))
+      }
+      const dirtSlot=dirtMenu.slots.findIndex((item,i)=>i>=9&&i<=44&&item?.id==='minecraft:dirt')
+      assert.ok(dirtSlot>=9,'mined dirt must really be in inventory')
+      const shift=await perform('menu.nativeClick',{windowId:0,expectedStateId:dirtMenu.stateId,expectedControlHash:dirtMenu.controlHash,slot:dirtSlot,button:0,clickType:'QUICK_MOVE'})
+      const shifted=(await adapter.snapshot()).menu
+      assert.equal(shifted.slots[dirtSlot],null);assert.ok(shift.result.inventoryDelta.available);checks.native_shift_click_real_inventory=true
+      const newDirt=shifted.slots.findIndex((item,i)=>i>=9&&i<=44&&item?.id==='minecraft:dirt')
+      const swap=await perform('menu.nativeClick',{windowId:0,expectedStateId:shifted.stateId,expectedControlHash:shifted.controlHash,slot:newDirt,button:7,clickType:'SWAP'})
+      const swapped=(await adapter.snapshot()).menu;assert.equal(swapped.slots[43].id,'minecraft:dirt');checks.native_number_key_swap_real_inventory=true
+      await perform('inventory.selectHotbar',{hotbarSlot:7,expectedSnbt:swapped.slots[43].snbt})
+      const beforeHands=(await adapter.snapshot()).menu
+      await perform('inventory.swapHands',{expectedHotbarSlot:7,expectedMainSnbt:beforeHands.slots[43]?.snbt||'',expectedOffSnbt:beforeHands.slots[45]?.snbt||''})
+      const hands=(await adapter.snapshot()).menu;assert.equal(hands.slots[45].id,'minecraft:dirt');checks.native_main_offhand_swap=true
+      await perform('inventory.swapHands',{expectedHotbarSlot:7,expectedMainSnbt:hands.slots[43]?.snbt||'',expectedOffSnbt:hands.slots[45]?.snbt||''})
+      if(config.qaInventoryFixtureFile){
+        const bowMenu=(await adapter.snapshot()).menu,bowSlot=bowMenu.slots.findIndex(item=>item?.id==='minecraft:bow')
+        assert.ok(bowSlot>=9)
+        await perform('menu.nativeClick',{windowId:0,expectedStateId:bowMenu.stateId,expectedControlHash:bowMenu.controlHash,slot:bowSlot,button:6,clickType:'SWAP'})
+        const equipped=(await adapter.snapshot()).menu
+        await perform('inventory.selectHotbar',{hotbarSlot:6,expectedSnbt:equipped.slots[42].snbt})
+        await perform('body.look',{yaw:0,pitch:-45})
+        const readyBow=(await adapter.snapshot()).menu
+        const arrowsBefore=readyBow.slots.reduce((n,item)=>n+(item?.id==='minecraft:arrow'?item.count:0),0)
+        const shot=await perform('inventory.useHeld',{hand:'main',expectedHotbarSlot:6,expectedHeldSnbt:readyBow.slots[42].snbt,durationMs:1200})
+        const afterShot=(await adapter.snapshot()).menu
+        assert.equal(afterShot.slots.reduce((n,item)=>n+(item?.id==='minecraft:arrow'?item.count:0),0),arrowsBefore-1,JSON.stringify(shot));checks.native_long_use_consumes_exactly_one_arrow=true
+        report.bowUse={before:arrowsBefore,result:shot.result}
+      }
+      const stateMenu=(await adapter.snapshot()).menu
+      assert.match(stateMenu.controlHash,/^[a-f0-9]{64}$/);checks.complete_menu_component_cas_available=true
+      const invalid={action_id:'control-stale-'+crypto.randomUUID(),operation:'menu.nativeClick',args:{windowId:0,expectedStateId:stateMenu.stateId,expectedControlHash:'0'.repeat(64),slot:9,button:0,clickType:'PICKUP'}}
+      assert.equal((await adapter.submit(invalid)).accepted,true);const denied=await adapter.wait(invalid.action_id,{timeoutMs:10000})
+      assert.equal(denied.status,'failed',JSON.stringify(denied));assert.equal(denied.outcomeKnown,true);checks.stale_full_menu_cas_rejected=true
       const open = { action_id: 'unified-curios-' + crypto.randomUUID(), operation: 'curios.open', args: {} }
       actions.push(open); assert.equal((await adapter.submit(open)).ok, true)
       const opened = await adapter.wait(open.action_id, { timeoutMs: 30000 }); assert.equal(opened.status, 'succeeded', JSON.stringify(opened))
-      const menu = (await adapter.snapshot()).menu; assert.notEqual(menu.windowId, 0)
+      const openedState = await adapter.snapshot(); assert.equal(openedState.ok, true, JSON.stringify(openedState))
+      const menu = openedState.menu; assert.ok(menu, JSON.stringify(openedState)); assert.notEqual(menu.windowId, 0)
       checks.native_mod_menu_real_open = true
       const close = { action_id: 'unified-close-' + crypto.randomUUID(), operation: 'menu.close', args: config.provider === 'numen' ? { windowId: menu.windowId, expectedStateId: menu.stateId } : {} }
       actions.push(close); assert.equal((await adapter.submit(close)).ok, true)

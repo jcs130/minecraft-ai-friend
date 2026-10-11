@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "source": "same_player_native_handlers",
-  "operationCount": 48,
+  "operationCount": 67,
   "operations": [
     {
       "id": "colony.status",
@@ -2314,6 +2314,724 @@
       },
       "route": "menu",
       "kind": "close",
+      "defaults": {}
+    },
+    {
+      "id": "body.controls",
+      "readOnly": true,
+      "description": "本人真实视角、地面/水中/乘骑/使用物品/飞行状态；角度单位为 Minecraft 度。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "body.controls",
+      "defaults": {}
+    },
+    {
+      "id": "body.target",
+      "readOnly": true,
+      "description": "本人准星交互距离内的首个原生方块/实体命中点、绝对坐标和 targetToken；不透视。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "body.target",
+      "defaults": {}
+    },
+    {
+      "id": "body.input",
+      "readOnly": false,
+      "description": "组合前后左右、跳跃、疾跑、潜行按键；持续 50–10000ms 后自动释放，可取消。不会寻路/传送/授予飞行。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "forward",
+                "back",
+                "left",
+                "right",
+                "jump",
+                "sprint",
+                "sneak"
+              ]
+            },
+            "maxItems": 7,
+            "uniqueItems": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 50,
+            "maximum": 10000
+          },
+          "yaw": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "pitch": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          }
+        },
+        "required": [
+          "keys",
+          "durationMs"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "body.input",
+      "defaults": {}
+    },
+    {
+      "id": "body.look",
+      "readOnly": false,
+      "description": "转动本人视角；Minecraft 度，yaw 0=南/+90=西，pitch 正值朝下；relative=true 为增量。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "yaw": {
+            "type": "number",
+            "minimum": -360,
+            "maximum": 360
+          },
+          "pitch": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "relative": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "yaw",
+          "pitch"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "body.look",
+      "defaults": {}
+    },
+    {
+      "id": "body.mouse",
+      "readOnly": false,
+      "description": "原生左右键准星操作：左键攻击实体/持续挖掘方块，右键交互方块/实体或使用手持物；先读取 body.target 的 targetToken。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "button": {
+            "type": "string",
+            "enum": [
+              "left",
+              "right"
+            ]
+          },
+          "expectedTargetToken": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "hand": {
+            "type": "string",
+            "enum": [
+              "main",
+              "off"
+            ]
+          },
+          "expectedHotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "expectedHeldSnbt": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 60000
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 50,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "button",
+          "expectedTargetToken",
+          "hand",
+          "expectedHotbarSlot",
+          "expectedHeldSnbt",
+          "durationMs"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "body.mouse",
+      "defaults": {}
+    },
+    {
+      "id": "body.attack",
+      "readOnly": false,
+      "description": "主手普通玩家近战攻击一个仍可见、在原生触及距离内的准确实体 UUID；保留 PVP/友伤/模组事件规则。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "expectedUuid": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "hand": {
+            "type": "string",
+            "enum": [
+              "main"
+            ]
+          },
+          "expectedHotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "expectedHeldSnbt": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 60000
+          }
+        },
+        "required": [
+          "entityId",
+          "expectedUuid",
+          "hand",
+          "expectedHotbarSlot",
+          "expectedHeldSnbt"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "body.attack",
+      "defaults": {}
+    },
+    {
+      "id": "body.interactEntity",
+      "readOnly": false,
+      "description": "以指定手原生右键一个可见可触及实体；可打开交易/模组菜单，保留游戏权限。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "expectedUuid": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "hand": {
+            "type": "string",
+            "enum": [
+              "main",
+              "off"
+            ]
+          },
+          "expectedHotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "expectedHeldSnbt": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 60000
+          }
+        },
+        "required": [
+          "entityId",
+          "expectedUuid",
+          "hand",
+          "expectedHotbarSlot",
+          "expectedHeldSnbt"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "body.interactEntity",
+      "defaults": {}
+    },
+    {
+      "id": "body.swing",
+      "readOnly": false,
+      "description": "指定手挥动动画，不假报伤害或命中。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "hand": {
+            "type": "string",
+            "enum": [
+              "main",
+              "off"
+            ]
+          }
+        },
+        "required": [
+          "hand"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "body.swing",
+      "defaults": {}
+    },
+    {
+      "id": "body.dismount",
+      "readOnly": false,
+      "description": "本人离开当前坐骑，保留原生事件与可下骑条件。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "body.dismount",
+      "defaults": {}
+    },
+    {
+      "id": "body.flight",
+      "readOnly": false,
+      "description": "仅在本人原本允许飞行时开关飞行；不授予创造模式或权限。上下运动仍受身体/物理实现限制。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "flying": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "flying"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "body.flight",
+      "defaults": {}
+    },
+    {
+      "id": "inventory.selectHotbar",
+      "readOnly": false,
+      "description": "选择本人快捷栏 0–8；要求目标物品完整 SNBT 一致，空槽为空字符串。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "hotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "expectedSnbt": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 60000
+          }
+        },
+        "required": [
+          "hotbarSlot",
+          "expectedSnbt"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "inventory.selectHotbar",
+      "defaults": {}
+    },
+    {
+      "id": "inventory.swapHands",
+      "readOnly": false,
+      "description": "原生菜单 SWAP 交换主副手，双方完整 SNBT 与当前快捷栏 CAS；不复制物品。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "expectedHotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "expectedMainSnbt": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 60000
+          },
+          "expectedOffSnbt": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 60000
+          }
+        },
+        "required": [
+          "expectedHotbarSlot",
+          "expectedMainSnbt",
+          "expectedOffSnbt"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "inventory.swapHands",
+      "defaults": {}
+    },
+    {
+      "id": "inventory.drop",
+      "readOnly": false,
+      "description": "从指定手丢出一件或整堆真实物品；完整 SNBT CAS，保留原生绑定/丢弃事件。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "hand": {
+            "type": "string",
+            "enum": [
+              "main",
+              "off"
+            ]
+          },
+          "expectedHotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "expectedHeldSnbt": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 60000
+          },
+          "all": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "hand",
+          "expectedHotbarSlot",
+          "expectedHeldSnbt",
+          "all"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "inventory.drop",
+      "defaults": {}
+    },
+    {
+      "id": "inventory.useHeld",
+      "readOnly": false,
+      "description": "原生长按使用指定手物品，50–10000ms 后释放；用于吃饭、喝药、拉弓、盾牌和模组物品，须再观察实际效果。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "hand": {
+            "type": "string",
+            "enum": [
+              "main",
+              "off"
+            ]
+          },
+          "expectedHotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "expectedHeldSnbt": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 60000
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 50,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "hand",
+          "expectedHotbarSlot",
+          "expectedHeldSnbt",
+          "durationMs"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "inventory.useHeld",
+      "defaults": {}
+    },
+    {
+      "id": "menu.nativeClick",
+      "readOnly": false,
+      "description": "完整原生菜单鼠标操作：PICKUP/QUICK_MOVE/SWAP/THROW/PICKUP_ALL/QUICK_CRAFT/CLONE；窗口、状态和所有槽位/游标摘要 CAS，CLONE 要创造模式。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "windowId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "expectedStateId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "expectedControlHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "slot": {
+            "type": "integer",
+            "minimum": -999,
+            "maximum": 511
+          },
+          "button": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 40
+          },
+          "clickType": {
+            "type": "string",
+            "enum": [
+              "PICKUP",
+              "QUICK_MOVE",
+              "SWAP",
+              "THROW",
+              "PICKUP_ALL",
+              "QUICK_CRAFT",
+              "CLONE"
+            ]
+          }
+        },
+        "required": [
+          "windowId",
+          "expectedStateId",
+          "expectedControlHash",
+          "slot",
+          "button",
+          "clickType"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "menu.nativeClick",
+      "defaults": {}
+    },
+    {
+      "id": "menu.button",
+      "readOnly": false,
+      "description": "调用本人当前原生菜单按钮（交易选择/模组按钮等），完整菜单 CAS；保留原生按钮规则。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "windowId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "expectedStateId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "expectedControlHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "buttonId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        },
+        "required": [
+          "windowId",
+          "expectedStateId",
+          "expectedControlHash",
+          "buttonId"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "menu.button",
+      "defaults": {}
+    },
+    {
+      "id": "body.command",
+      "readOnly": false,
+      "description": "以本玩家原有权限执行一条游戏命令（无前导 /）；不会切换控制台/OP 身份。回执只证明派发，实际效果另行查询。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "body.command",
+      "defaults": {}
+    },
+    {
+      "id": "control.actionStatus",
+      "readOnly": true,
+      "description": "查询本身体一个持续控制 ticket 的真实进度/终态，旧进程或未知 ticket 明确返回 unknown。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "ticket": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "ticket"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "control.actionStatus",
+      "defaults": {}
+    },
+    {
+      "id": "control.cancel",
+      "readOnly": false,
+      "description": "释放本身体指定 ticket 的持续按键/挖掘/使用；返回取消后的实际终态，不回滚已发生效果。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "ticket": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "ticket"
+        ],
+        "additionalProperties": false
+      },
+      "units": {
+        "angles": "minecraft_degrees",
+        "duration": "milliseconds",
+        "position": "absolute_world_blocks"
+      },
+      "route": "control",
+      "kind": "control.cancel",
       "defaults": {}
     }
   ]

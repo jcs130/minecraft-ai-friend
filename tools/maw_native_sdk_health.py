@@ -23,14 +23,15 @@ def probe(root: Path = ROOT) -> dict:
             hashlib.sha256((directory/name).read_bytes()).hexdigest() == digest for name, digest in files.items())
         catalog = json.loads((directory/'operations.json').read_text('utf-8'))
         rows = catalog['operations']
-        checks['70-explicit-operations'] = len(rows) == len({row['id'] for row in rows}) == manifest['operationCount'] == 70
+        checks['explicit-operations'] = len(rows) == len({row['id'] for row in rows}) == manifest['operationCount'] and len(rows) in (70,89)
         checks['machine-readable-contracts'] = all(row.get('parameters') and row.get('permission') and row.get('execution') and row.get('returns') for row in rows)
         checks['no-fake-player-claim'] = catalog['numenFakePlayerControl'] is False and catalog['numenRestoreExisting'] is False
         jar = root/'server/mods/maw_agent_bridge-0.1.0.jar'
         build = json.loads((root/'build/society-bridge/build-record.json').read_text('utf-8'))
         checks['exact-compiled-bridge'] = hashlib.sha256(jar.read_bytes()).hexdigest() == build['sha256']
         with zipfile.ZipFile(jar) as archive:
-            checks['body-queries-compiled'] = 'dev/qiandeng/maw/PlayerBodyState.class' in archive.namelist()
+            checks['body-queries-compiled'] = 'dev/qiandeng/maw/PlayerBodyState.class' in archive.namelist() and (len(rows)==70 or
+                'dev/qiandeng/maw/NativeControlAccess.class' in archive.namelist())
         owner = json.load(urlopen('http://127.0.0.1:28985/healthz', timeout=5))
         checks['fresh-owned-service'] = owner['healthy'] is True and 0 <= time.time()-owner['heartbeatEpoch'] < 20
         checks['native-entrance-ready'] = any(row['id'] == 'gate' and row['port'] == 28977 and row['ready'] is True for row in owner['services'])

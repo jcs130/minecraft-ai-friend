@@ -176,6 +176,8 @@ const definitions = [
     object({ position, expectedBlockId: namespace, expectedProperties: { type: 'object', properties: {}, additionalProperties: { type: 'string', maxLength: 256 } },
       dimension: namespace, requestId }, ['position', 'expectedBlockId', 'expectedProperties']), (c, a) => c.collision.query(a)]
 ].map(([id, readOnly, description, parameters, invoke]) => ({ id, readOnly, description, parameters, invoke }))
+definitions.push(...require('./control-contract.cjs').controlOperations.map(row => ({ ...row,
+  invoke: (c, args) => c.mods.control(row.id, args, row.readOnly) })))
 const byId = new Map(definitions.map(d => [d.id, d]))
 
 function failure (code, details = {}) {

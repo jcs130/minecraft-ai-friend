@@ -11,8 +11,8 @@ public final class NativeModAccessTest {
         check(valid==accepted);
     }
     public static void main(String[] args)throws Exception {
-        check(NativeModAccess.catalog("").get("operationCount").getAsInt()==48);
-        check(NativeModAccess.catalog("").getAsJsonArray("operations").size()==48);
+        check(NativeModAccess.catalog("").get("operationCount").getAsInt()==67);
+        check(NativeModAccess.catalog("").getAsJsonArray("operations").size()==67);
         validate("menu.snapshot","{}",true);
         validate("menu.snapshot","{\"playerUuid\":\"other\"}",false);
         validate("menu.snapshot","[]",false);
@@ -41,6 +41,17 @@ public final class NativeModAccessTest {
         validate("maid.setFollow","{\"maidUuid\":\"00000000-0000-4000-8000-000000000001\",\"follow\":\"true\"}",false);
         validate("maid.status","{\"maidUuid\":\"00000000-0000-4000-8000-000000000001\",\"ownerUuid\":\"other\"}",false);
         validate("maid.openBag","{\"maidUuid\":\"../private\"}",false);
+        validate("body.input","{\"keys\":[\"forward\",\"jump\"],\"durationMs\":500}",true);
+        validate("body.input","{\"keys\":[\"teleport\"],\"durationMs\":500}",false);
+        validate("body.input","{\"keys\":[],\"durationMs\":10001}",false);
+        validate("body.input","{\"keys\":[],\"durationMs\":0}",false);
+        validate("body.look","{\"yaw\":90,\"pitch\":-45,\"relative\":true}",true);
+        validate("inventory.useHeld","{\"hand\":\"main\",\"expectedHotbarSlot\":0,\"expectedHeldSnbt\":\"\",\"durationMs\":1200}",true);
+        String attack="{\"entityId\":1,\"expectedUuid\":\"00000000-0000-4000-8000-000000000001\",\"hand\":\"main\",\"expectedHotbarSlot\":0,\"expectedHeldSnbt\":\"\"}";
+        validate("body.attack",attack,true);
+        validate("body.attack",attack.replace("\"main\"","\"off\""),false);
+        validate("body.attack",attack.replace("00000000-0000-4000-8000-000000000001","------------------------------------"),false);
+        validate("menu.nativeClick","{\"windowId\":0,\"expectedStateId\":0,\"expectedControlHash\":\"bad\",\"slot\":9,\"button\":0,\"clickType\":\"PICKUP\"}",false);
         try{NativeModAccess.catalog("native.eval");throw new AssertionError();}catch(IllegalArgumentException expected){checks++;}
         System.out.println("NativeModAccess "+checks+" checks passed");
     }

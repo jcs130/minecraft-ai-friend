@@ -67,6 +67,7 @@ operations.push(
   { id: 'menu.pickup', readOnly: false, description: '在本身体真实菜单执行一次左/右键 PICKUP。所有前置值来自最新 menu.snapshot，完整组件及窗口状态 CAS；不自动清空游标。', parameters: params({ ...context, slot: integer(0, 127), button: integer(0, 1), expectedItemId: { type: 'string', pattern: '^[a-z0-9_.-]+:[a-z0-9_./-]+$' }, expectedCount: integer(0, 999), expectedSnbt: str, expectedCarriedSnbt: str }), route: 'menu', kind: 'pickup', defaults: {} },
   { id: 'menu.close', readOnly: false, description: '关闭本人菜单，要求窗口/stateId仍一致且游标为空。返回实际关闭后的菜单。', parameters: params(context), route: 'menu', kind: 'close', defaults: {} }
 )
+operations.push(...require('../world/src/neoforge-handshake/control-contract.cjs').controlOperations.map(o => ({ ...structuredClone(o), route: 'control', kind: o.id, defaults: {} })))
 const output = { schemaVersion: 1, source: 'same_player_native_handlers', operationCount: operations.length, operations }
 const target = path.resolve(__dirname, '../world/society-bridge-src/src/main/resources/maw-native-operations.json')
 const bytes = JSON.stringify(output, null, 2) + '\n'

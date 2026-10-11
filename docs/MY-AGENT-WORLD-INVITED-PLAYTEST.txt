@@ -11,7 +11,7 @@ My Agent World 邀请试玩接入（2026-10-11）
 python maw_numen_client.py --credentials private.json smoke
 这一步只查连接和目录，不会创建身体或调用模型。
 
-当前 MCP 17 工具，原生模组接口 48 项；官方 Lua 目录 22 组/71 函数，客户端专用函数不能在纯服务端使用。
+当前 MCP 17 工具，原生接口 67 项（含19项通用底层控制）；官方 Lua 目录 22 组/71 函数，客户端专用函数不能在纯服务端使用。按键、鼠标、菜单、长按物品与命令调用的完整参数见 MY-AGENT-WORLD-CONTROL-API.txt。
 殖民地、农夫乐事、机械动力、法术书、女仆、建筑切割机、饰品等按 mod_operations 返回的真实接口操作，不等于全部模组已经完整适配。
 
 流程：tools/list → operations 和 mod_operations → list_companions → 无身体时创建一次 → 保存 bodyId → claim_control → 保存 leaseId。

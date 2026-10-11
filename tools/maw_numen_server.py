@@ -80,8 +80,11 @@ def probe(root=DEFAULT_ROOT):
             native=json.loads(jar.read('maw-native-operations.json'))
         ids={row['id'] for row in native['operations']}
         required={'spell.list','spell.explain','spell.glyphs','spell.learnGlyph','spell.configure','spell.select','spell.cast',
-                  'maid.list','maid.status','maid.tasks','maid.setTask','maid.setFollow','maid.setPickup','maid.openBag'}
-        checks['native_mod_operations_adapter']=h.get('nativeModAccess') is True and h.get('nativeModOperationCount')==native['operationCount']==len(ids)==48 and required<=ids
+                  'maid.list','maid.status','maid.tasks','maid.setTask','maid.setFollow','maid.setPickup','maid.openBag',
+                  'body.controls','body.target','body.input','body.look','body.mouse','body.attack','body.interactEntity',
+                  'body.swing','body.dismount','body.flight','inventory.selectHotbar','inventory.swapHands','inventory.drop',
+                  'inventory.useHeld','menu.nativeClick','menu.button','body.command','control.actionStatus','control.cancel'}
+        checks['native_mod_operations_adapter']=h.get('nativeModAccess') is True and h.get('nativeModOperationCount')==native['operationCount']==len(ids)==67 and required<=ids
         main=json.load(urlopen('http://127.0.0.1:28985/healthz',timeout=5))
         checks['owned_java_and_worker_healthy']=main['healthy'] and not main['paused'] and time.time()-main['heartbeatEpoch']<20
         for name,build,installed in [('numen-server','numen-server',root/'server/mods/maw_numen_server-0.1.0.jar'),('bedrock-forms','bedrock-agents',root/'bedrock/plugins/Geyser/extensions/MawAgents.jar')]:

@@ -4,8 +4,8 @@ const { randomUUID } = require('node:crypto')
 const { EventEmitter } = require('node:events')
 const { TextDecoder } = require('node:util')
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const reads = new Set(['create_settings', 'create_fluids', 'curios_state', 'ysm_catalog'])
-const writes = new Set(['create_value', 'create_filter', 'curios_open', 'curios_page', 'world_interact', 'ysm_select'])
+const reads = new Set(['create_settings', 'create_fluids', 'curios_state', 'ysm_catalog', 'control_query'])
+const writes = new Set(['create_value', 'create_filter', 'curios_open', 'curios_page', 'world_interact', 'ysm_select', 'control_action'])
 const utf8 = new TextDecoder('utf-8', { fatal: true })
 const error = (code, requestId, dispatched = false, mutation = false) => Object.assign(new Error(code), {
   code, requestId, dispatched, outcomeKnown: !(mutation && dispatched), outcomeUnknown: mutation && dispatched,
@@ -71,6 +71,10 @@ function attachModOperationsClient (bot, { timeoutMs = 4000 } = {}) {
   }
   return {
     events,
+    control: async (operation, args, readOnly) => {
+      const receipt = await request(readOnly ? 'control_query' : 'control_action', { operation, arguments: args })
+      return receipt.control || receipt
+    },
     world: { interact: args => request('world_interact', args) },
     create: { settings: args => request('create_settings', args), fluids: args => request('create_fluids', args),
       setValue: args => request('create_value', args), setFilter: args => request('create_filter', args) },

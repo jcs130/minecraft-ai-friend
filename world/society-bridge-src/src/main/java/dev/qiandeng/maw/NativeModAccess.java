@@ -36,11 +36,18 @@ public final class NativeModAccess {
         return out;
     }
     private static JsonObject publicRow(JsonObject row,boolean schema) {
-        JsonObject out=new JsonObject();for(String k:List.of("id","readOnly","description"))out.add(k,row.get(k).deepCopy());
+        JsonObject out=new JsonObject();for(String k:List.of("id","readOnly","description","units"))if(row.has(k))out.add(k,row.get(k).deepCopy());
         if(schema)out.add("parameters",row.get("parameters").deepCopy());
         out.addProperty("availableWithoutClient",true);out.addProperty("permissions","same_body_native_rules");return out;
     }
     static boolean capturing(ServerPlayer player) {var c=CURRENT.get();return c!=null&&c.player.equals(player.getUUID());}
+    public static JsonObject bodySnapshot(ServerPlayer player) {
+        PlayerAuthBridge.requireAuthenticated(player);
+        if(player.getServer()==null||!player.getServer().isSameThread())throw new IllegalStateException("minecraft_thread_required");
+        JsonObject input=new JsonObject();input.addProperty("kind","body_snapshot");
+        return PlayerBodyState.query(player,input,new JsonObject());
+    }
+    static boolean controlOperation(String id) {var row=OPERATIONS.get(id);return row!=null&&row.get("route").getAsString().equals("control");}
     static boolean capture(ServerPlayer player, JsonObject body) {
         var c=CURRENT.get();if(c==null||!c.player.equals(player.getUUID()))return false;
         // A menu-open event can synchronously publish an unrelated snapshot.
@@ -55,7 +62,7 @@ public final class NativeModAccess {
     public static JsonObject invoke(ServerPlayer player,String operation,JsonObject arguments,boolean readOnly,String requestId) {
         PlayerAuthBridge.requireAuthenticated(player);
         if(player.getServer()==null||!player.getServer().isSameThread())throw new IllegalStateException("minecraft_thread_required");
-        if(player.isDeadOrDying())throw new IllegalArgumentException("body_dead");
+        if(player.isDeadOrDying()&&!Set.of("control.actionStatus","control.cancel").contains(operation))throw new IllegalArgumentException("body_dead");
         if(CURRENT.get()!=null)throw new IllegalStateException("native_mod_call_nested");
         var row=OPERATIONS.get(operation);if(row==null)throw new IllegalArgumentException("mod_operation_not_found");
         if(readOnly!=row.get("readOnly").getAsBoolean())throw new IllegalArgumentException("mod_read_write_mismatch");
@@ -68,6 +75,7 @@ public final class NativeModAccess {
         try {
             String raw=input.toString();
             switch(row.get("route").getAsString()) {
+                case "control"->c.result=NativeControlAccess.invoke(player,operation,arguments,requestId);
                 case "colony"->{if(readOnly)PlayerColonyBridge.handle(player,raw);else PlayerColonyBridge.handleAction(player,raw);}
                 case "world"->PlayerWorldBridge.handle(player,raw);
                 case "mod"->ModOperationsBridge.handle(player,raw,!readOnly);
@@ -99,7 +107,7 @@ public final class NativeModAccess {
     }
     private static JsonObject menuState(ServerPlayer player,String id) {
         JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("requestId",id);out.addProperty("ok",true);
-        out.addProperty("playerUuid",player.getUUID().toString());out.add("state",PlayerMenuBridge.snapshot(player));return out;
+        out.addProperty("playerUuid",player.getUUID().toString());out.add("state",PlayerMenuBridge.controlSnapshot(player));return out;
     }
     private static boolean valid(JsonElement value,JsonObject schema,int depth) {try{validate(value,schema,depth);return true;}catch(IllegalArgumentException e){return false;}}
     private static void validate(JsonElement value,JsonObject schema,int depth) {

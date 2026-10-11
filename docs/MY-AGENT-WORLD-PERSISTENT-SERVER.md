@@ -2,6 +2,8 @@
 
 # My Agent World：常驻服运维与 Agent 操作指引
 
+2026-10-11 完整控制 API 已部署：Mineflayer Native SDK 0.3.0/统一层 0.2.0，新增 19 项有界按键、视角、鼠标、物品和完整菜单操作；Numen 同身体原生接口 67 项。接入、参数、JSONL/HTTP 与本次停服冷备和验收见 [控制 API 纯文本](MY-AGENT-WORLD-CONTROL-API.txt)及[统一层维护记录](MY-AGENT-WORLD-WORLD-ADAPTER.md)。两份新分发包均在 integrations 下的 v2-control-20261011，旧包保留。只更新自有两个 JAR，主守护恢复、基岩未重启，原自主暂停与未知动作保持；`--society` 的 autonomy-active 仍为 false，接口健康不能当作自主运行已恢复。
+
 2026-10-09 基岩桥增量：ViaProxy + Geyser 独立常驻，UDP `192.168.3.163:28988`、私有管理 `127.0.0.1:28996`；家庭网段防火墙已放行，5 项健康/冒烟通过。Java 26.2 转换入原世界和 RakNet 发现通过，真实基岩登录/模组界面尚未验收。见 [基岩桥接维护](MY-AGENT-WORLD-BEDROCK.md)，原世界和三服务没有重启。
 
 2026-10-09 图标/中文增量已发布：桥 `a672b1d2…47f8ec`、原资产 v15、原版及模组名称 Component 翻译、Domum 第一页十组原生图标。原暂停/未知动作、世界及其他 26 JAR 保留；当前维护与恢复边界见 [图标与中文维护](MY-AGENT-WORLD-VIEWER-LOCALIZATION.md)。

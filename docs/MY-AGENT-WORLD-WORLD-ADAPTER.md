@@ -1,15 +1,15 @@
 # My Agent World 统一身体接口
 
-2026-10-11，第一版 `@my-agent-world/world-adapter` 0.1.0。上层 Agent 的规划、记忆、模型和调度保持原样，通过一套 JS 或 JSONL 接口选择 `mineflayer` 或 `numen` 身体。这里只提供游戏工具，不启动自主模型循环。
+2026-10-11，`@my-agent-world/world-adapter` 0.2.0。上层 Agent 的规划、记忆、模型和调度保持原样，通过一套 JS 或 JSONL 接口选择 `mineflayer` 或 `numen` 身体。新增 19 项通用底层控制 API；参数和直接 HTTP 调用见 [控制 API 纯文本指南](MY-AGENT-WORLD-CONTROL-API.txt)。
 
-源码：`world/src/world-adapter/`。可分发目录：`E:\QiandengJiSocietyLab\integrations\world-adapter\v1-20261011`；复制整个目录到 Agent 主机，用 Node 22 在该目录执行 `npm ci`。包附运行环境原始传递依赖锁，沿用锁定 Mineflayer / 协议依赖，不任意升级。新版包与原 Native SDK 包并存，不覆盖原 Agent 或其账本。
+源码：`world/src/world-adapter/`。可分发目录：`E:\QiandengJiSocietyLab\integrations\world-adapter\v2-control-20261011`；复制整个目录到 Agent 主机，用 Node 22 在该目录执行 `npm ci`。包附运行环境原始传递依赖锁，沿用锁定 Mineflayer / 协议依赖，不任意升级。新版包与原 Native SDK 包并存，不覆盖原 Agent 或其账本。
 
 ## 明确选择身体
 
 | provider | 登录与身体 | 执行方式 | 恢复与账本 |
 |---|---|---|---|
 | mineflayer | `192.168.3.163:28977`，原账号、原 UUID；离线密码认证 | 复用现有 Native SDK、Mineflayer 物理和寻路、原生模组通道 | 同账号、同 expectedUuid、同一原 SDK ledgerDir 重新连接 |
-| numen | `http://192.168.3.163:28984/numen/mcp`，本人令牌绑定已有 bodyId | 服务端 Numen 原生 Lua / 48 项同身体模组 API | 服务端原 UUID 存档与动作账本，加本机独立 shadow ledger |
+| numen | `http://192.168.3.163:28984/numen/mcp`，本人令牌绑定已有 bodyId | 服务端 Numen 原生 Lua / 67 项同身体原生 API | 服务端原 UUID 存档与动作账本，加本机独立 shadow ledger |
 
 每个实例固定 provider 和 bodyId。接口不会按名字寻找替身、自动创建身体、复制背包/技能、换 UUID 或回退另一种接入方式。新身体先按原 Numen 管理流程显式创建；统一层只接已登记的身体。跨 provider 切换是上层选择不同身体，**不是同一身体无损迁移**。
 
@@ -54,17 +54,17 @@ if (accepted.accepted) {
 await world.close()
 ```
 
-共同方法：`identity`、`operations(id?)`、`capabilities`、`snapshot`、`read`、`submit`、`actionStatus`、`wait`、`cancel`、`stop`、`claimControl`、`releaseControl`、`restore`、`health`、`viewer`。返回值统一用 `await`。Numen 先列目录，再用 `await operations(id)` 按需获取一项实际参数并缓存；list 中 `parametersAvailable=false` 表示尚未查询签名。提交动作前也会核对真实 schema，避免每次重连花 48 次请求耗尽限流。Numen 另有 `luaOperations(group?)` 查询原生 71 函数的分组/签名，以及 `numen.lua` 动作执行代码。
+共同方法：`identity`、`operations(id?)`、`capabilities`、`snapshot`、`read`、`submit`、`actionStatus`、`wait`、`cancel`、`stop`、`claimControl`、`releaseControl`、`restore`、`health`、`viewer`。返回值统一用 `await`。Numen 先列目录，再用 `await operations(id)` 按需获取一项实际参数并缓存；list 中 `parametersAvailable=false` 表示尚未查询签名。提交动作前也会核对真实 schema，避免每次重连批量查询耗尽限流。Numen 另有 `luaOperations(group?)` 查询原生 71 函数的分组/签名，以及 `numen.lua` 动作执行代码。
 
 公共操作有 `body.identity`、`body.snapshot`、`body.move`。移动使用整数绝对方块坐标，目标最多距当前身体 16 格，禁止自动挖路/搭桥；Numen 生成固定原生路线代码，Mineflayer 使用原寻路器，按真实终点核验。`wait` 的期限只是等待期限，不承诺停止原动作。
 
 模组 API 共用服务端处理器，但两条路线的完整目录和部分参数不同，**须以当前 provider 的 operations 为准**。例如 `curios.open` 两边都接受空参数；Numen 用 `menu.snapshot`/`menu.pickup` 和完整窗口/组件 CAS，Mineflayer 原入口为 `menu.current`/`menu.click`；Numen `menu.close` 必须传实时 windowId/expectedStateId，Mineflayer `menu.close` 使用空参数。不要只凭操作名猜等价性。
 
-本版 Mineflayer 原目录 70 项；Numen 目录 53 项（48 模组 + 3 公共 + Lua + 1 明确不可用占位），可用 52 项。Numen 的公共 `body.observe` 尚未映射，返回 unavailable；其周边扫描/采集/合成等通过发现后的原生 Lua 能力使用。没有把 Mineflayer 寻路器直接装进 Numen 身体，也不声明全模组、长期自主生活已经验收。
+本版 Mineflayer 目录 89 项；Numen 目录 72 项（67 原生 + 3 公共 + Lua + 1 明确不可用占位），可用 71 项。新增 19 项共同底层控制，包含有界按键、角度、左右键、战斗、物品、完整菜单操作和本人权限的游戏命令；Numen 使用当前官方 Controls/Physics，持续操作逐 tick 执行，成功或取消后释放，不阻塞 HTTP。Numen 的公共 `body.observe` 尚未映射，返回 unavailable；其周边扫描/采集/合成等通过发现后的原生 Lua 能力使用。没有把 Mineflayer 寻路器直接装进 Numen 身体，也不声明全模组、长期自主生活已经验收。
 
 ## 真实状态与动作对账
 
-`snapshot` 始终带 provider、bodyKind、bodyId、ownerUuid、controllerId、采集时间、存活状态、绝对 position、dimension、血量、饥饿、原生魔力（无法读取为 null）、装备、菜单及库存。Numen 的身体/菜单/魔力分别采样，标为 `sampling=separate_body_menu_and_mana_reads`，不是原子快照。
+`snapshot` 始终带 provider、bodyKind、bodyId、ownerUuid、controllerId、采集时间、存活状态、绝对 position、dimension、血量、饥饿、原生魔力（无法读取为 null）、装备、菜单及库存。当前 Numen 宿主在同一服务器 tick 读取身体、原生菜单和魔力，标为 `sampling=same_server_tick` 并附 `capturedTick`；一次 HTTP 请求即可获取。终态回执保留实际完成时的同类快照，SDK 从中核对库存变化。连接旧宿主时才回退到分别读取，明确标为 `separate_body_menu_and_mana_reads`。
 
 共同库存是 `inventory.slotNamespace=player_menu_46`，与现有 Native SDK 一致，排除 0 号合成预览；物品保留完整 snbt，快捷栏是 36–44。Numen 原生 Java Inventory 的 0–40 索引不会被混成这套槽位。殖民地供料等接口自己的 `inventorySlot` 仍按该接口 schema 解释。菜单槽号和玩家背包槽号不可混用。
 
@@ -96,11 +96,17 @@ stdin/stdout 为私有 UTF-8 JSONL；先等 `world_adapter_ready`。请求示例
 
 ## 部署、验收与维护
 
+2026-10-11 完整控制增量已部署：Native SDK 0.3.0 和统一层 0.2.0 各 35 个受管文件，均附锁文件、91 个依赖及纯文本控制指南。498 项 Node 测试、25 项 Python 测试（包含锁定 JAR 的 39 项原生参数断言）、完整 30 模组隔离服 143 项检查通过；实际验证两种身体的角度、组合按键、释放、取消、跳跃、原生挖掘、Shift/数字键菜单操作、主副手交换和拉弓只消耗一支箭，以及真正重启后的原 ID 去重。正式 LAN 分发包 17 项只读检查通过。没有付费模型调用。
+
+本次正常停服、三维存档后冷备 1144 文件、288471587 字节，全部 CRC/SHA 校验通过；仅替换自有 bridge/Numen 宿主两个 JAR，原 28 个其它 JAR、存档、认证凭据、基岩模型、旧 SDK 和 MawExplorer 人工暂停保留。主服务由原守护恢复，基岩守护没有重启。备份 `backups/full-control-api-20261011`；私有证据 `research/full-control-api-20261011`，失败 QA 也保留。维护已结束，不能重放部署/固定验收动作。
+
+SDK 9 项、统一层 8 项、Numen 宿主 15 项健康检查通过，基岩/观战/认证冒烟通过。主服务的 Java、网关、worker 与本人原生流均正常；综合 `--society` 中 `autonomy-active=false` 是原人工暂停，仍按原样报告，不能为消除红项唤醒 Agent 或重投旧 unknown。
+
 2026-10-11 首版已安装：33 个受管文件及原锁 91 个依赖包；不依赖全局 NODE_PATH 即可读取正式服。36 项 Node 单测、完整 30 模组隔离服 115 项检查通过，两条路线均实际步行、开关 Curios 菜单、重启后查原 action_id 且不重复执行。正式服分发包 11 项只读验收、8 项接入健康检查通过，未申请正式 Numen 身体控制或唤醒休眠身体，付费模型调用 0。
 
 正式主服务和基岩服务保持原 runId，30 个 JAR、保护配置、凭据、模型资源、原 SDK 及 MawExplorer 人工暂停保持；其动作账本原前缀完整。20:45–20:46 巡检发现原暂停角色被僵尸击杀 4 次并由原循环重生，新增仅 death/spawn 记录，未派发新动作或重放旧 unknown；该既有游玩风险保留在私有运行证据中，未以改账本掩盖。
 
-安装：`python tools/install_maw_world_adapter.py --destination E:/QiandengJiSocietyLab/integrations/world-adapter/v1-20261011`，只允许新的受管目录，或安装记录所属且全部 SHA 校验通过的原目录；拒绝覆盖外部改动，保留旧 SDK。健康：`python world/ops/health/health_mon.py --society-world-adapter-smoke`，验证包/源码 SHA、已同步文档、两个入口和现有 supervisor；不会登录、申请控制、唤醒身体或调用模型。
+安装：`python tools/install_maw_world_adapter.py --destination E:/QiandengJiSocietyLab/integrations/world-adapter/v2-control-20261011`，只允许新的受管目录，或安装记录所属且全部 SHA 校验通过的原目录；拒绝覆盖外部改动，保留旧 SDK。健康：`python world/ops/health/health_mon.py --society-world-adapter-smoke`，验证包/源码 SHA、已同步文档、两个入口和现有 supervisor；不会登录、申请控制、唤醒身体或调用模型。
 
 实机工具 `tools/smoke_maw_world_adapter.cjs` 只对专用 QA 账号：查询 → 原生库存 → 短步行 → 实际位置 → Curios 开关 → 同 ID去重 → 正常关闭 → JSONL 原生读取/关闭。`smoke_numen_server.py --full-pack --mixauth-jar <官方已校验JAR> --world-adapter ...` 在独立存档和端口测试两条路线，并重启后再次对账。不得对正在被其他控制器使用的生产账号重跑；付费模型调用为 0。
 

@@ -76,6 +76,22 @@ test('owner mismatch rejected before acquiring writer lock', async t => {
   const s = server(); s.flags.wrongOwner = true
   await assert.rejects(withNumen(s.client, options(temp(t))), /not_owned/)
 })
+
+test('atomic Numen state and terminal receipt avoid redundant HTTP reads and retain actual mana/inventory', async t => {
+  const { adapter, state, menu, calls, records } = await fixture(t)
+  state.nativeState = { bodyId: BODY, capturedAt: state.sampledAt, capturedTick: 120, self: { ...menu.self, playerUuid: BODY }, menu }
+  const before = calls.length, sampled = await adapter.snapshot()
+  assert.deepEqual(calls.slice(before).map(c => c.name), ['get_state'])
+  assert.equal(sampled.sampling, 'same_server_tick'); assert.equal(sampled.capturedTick, 120)
+  assert.deepEqual(sampled.mana, { current: 42, max: 80 }); assert.equal(sampled.inventory.items[0].slot, 36)
+  await adapter.claimControl(); await adapter.submit({ action_id: 'atomic-receipt', operation: 'curios.open' })
+  records.get('atomic-receipt').after = structuredClone(state)
+  const start = calls.length, done = await adapter.actionStatus('atomic-receipt')
+  assert.equal(done.status, 'succeeded'); assert.equal(done.result.inventoryDelta.available, true)
+  assert.deepEqual(calls.slice(start).map(c => c.name), ['action_status'])
+  state.nativeState.menu = { ...menu, playerUuid: OTHER }
+  assert.equal((await adapter.snapshot()).ok, false)
+})
 test('second local controller is excluded and an existing different body cannot reuse the ledger', async t => {
   const { client, dir, adapter, state } = await fixture(t)
   await assert.rejects(withNumen(client, options(dir)), /EEXIST/)

@@ -21,12 +21,15 @@ function body (directory, { call, snapshot, account = 'BodySdkQA', uuid = UUID, 
   bot.username = account; client.uuid = uuid; bot._client = client; bot.entity = { position: { x: 1, y: 64, z: 2 } }; bot.health = 20
   if (beforeSpawn) { client.username = account; delete bot.username }
   client.write = (name, data) => { sent.push({ name, data }); return true }
-  bot.clearControlStates = () => {}; bot.stopDigging = () => {}; bot.deactivateItem = () => {}
+  bot.controlStates = {}; bot.setControlState = (key, pressed) => { bot.controlStates[key] = pressed }
+  bot.clearControlStates = () => { for (const key in bot.controlStates) bot.controlStates[key] = false }; bot.stopDigging = () => {}; bot.deactivateItem = () => {}
+  const aim = { yaw: 0, pitch: 0 }
+  bot.look = async (yaw, pitch) => { aim.yaw = 180 - yaw * 180 / Math.PI; aim.pitch = -pitch * 180 / Math.PI }
   const menu = { schemaVersion: 1, kind: 'menu_state', playerUuid: uuid, windowId: 0, stateId: 1, slots, carried: null,
     self: { playerUuid: uuid, health: 20, food: 17, equipment: {} } }
   const state = () => ({ ok: true, bodyKind: 'connected_player', bodyId: uuid, playerUuid: uuid,
     capturedAt: new Date().toISOString(), status: 'alive', position: { ...bot.entity.position }, dimension: 'minecraft:overworld', menu, self: menu.self })
-  const sdk = { call: call || (async () => ({ ok: true, outcomeKnown: true })), callStatus: () => ({ mutationBlocked: false }), detach () {},
+  const sdk = { call: call || (async id => ({ ok: true, outcomeKnown: true, ...(id === 'body.controls' ? aim : {}) })), callStatus: () => ({ mutationBlocked: false }), detach () {},
     menu: { current: () => menu, click: async slot => {
       if (menu.carried && !menu.slots[slot]) { menu.slots[slot] = menu.carried; menu.carried = null } else {
         menu.carried = menu.slots[slot]; menu.slots[slot] = null
@@ -41,10 +44,63 @@ function body (directory, { call, snapshot, account = 'BodySdkQA', uuid = UUID, 
 }
 const message = (action_id, operation = 'curios.open', args = {}) => ({ action_id, operation, args })
 
-test('70 operations include strict params, permissions, async and advertised vs verified distinctions', async t => {
+test('bounded WASD uses Minecraft degree aim, releases keys and never executes a duplicate', async t => {
+  const { runtime, bot } = body(fixture(t)); t.after(runtime.close)
+  const action = message('raw-input', 'body.input', { keys: ['forward', 'left', 'sprint'], durationMs: 80, yaw: 90, pitch: 15 })
+  assert.equal(runtime.submit(action).accepted, true)
+  await pause(40); assert.equal(bot.controlStates.forward, true); assert.equal(bot.controlStates.left, true)
+  const done = await runtime.wait(action.action_id)
+  assert.equal(done.status, 'succeeded'); assert.equal(done.result.keysReleased, true)
+  assert.equal(Object.values(bot.controlStates).some(Boolean), false)
+  assert.equal(done.result.yaw, 90); assert.ok(Math.abs(done.result.pitch - 15) < .001)
+  assert.equal(runtime.submit(action).replayed, true); assert.equal(bot.controlStates.forward, false)
+})
+
+test('cancelling a raw hold releases every key, settles partial movement and permits the next action', async t => {
+  const { runtime, bot } = body(fixture(t)); t.after(runtime.close)
+  const action = message('cancel-input', 'body.input', { keys: ['forward', 'jump', 'sneak'], durationMs: 10000 })
+  runtime.submit(action); await pause(40); assert.equal(bot.controlStates.forward, true)
+  assert.equal(runtime.cancel(action.action_id).cancelRequested, true)
+  assert.equal(Object.values(bot.controlStates).some(Boolean), false)
+  const end = await runtime.wait(action.action_id); assert.equal(end.status, 'cancelled'); assert.equal(end.outcomeKnown, true)
+  await pause(120); assert.equal(Object.values(bot.controlStates).some(Boolean), false)
+  assert.equal(runtime.submit(message('after-cancel', 'body.look', { yaw: -90, pitch: 0 })).accepted, true)
+  assert.equal((await runtime.wait('after-cancel')).status, 'succeeded')
+})
+
+test('invalid input durations/keys and malformed inventory CAS never dispatch', t => {
+  const { runtime, sent } = body(fixture(t)); t.after(runtime.close)
+  for (const args of [{ keys: ['forward'], durationMs: 0 }, { keys: ['forward'], durationMs: 10001 },
+    { keys: ['forward', 'forward'], durationMs: 50 }, { keys: ['teleport'], durationMs: 50 },
+    { keys: [], durationMs: 50, targetUuid: OTHER }]) assert.equal(runtime.submit(message('bad-input', 'body.input', args)).ok, false)
+  assert.equal(runtime.submit(message('drop-without-components', 'inventory.drop', { all: true })).ok, false)
+  assert.equal(sent.length, 0)
+})
+
+test('native hold cancellation has a ticket-specific cleanup fence, never a generic late-write exception', async t => {
+  const dir = fixture(t); let running = false
+  const { runtime, sdk, bot, sent } = body(dir, { call: async id => {
+    if (id === 'inventory.useHeld') { running = true; bot._client.write('custom_payload', { channel: 'maw_agent:mod_action', data: Buffer.from('{}') }); return { ok: true, pending: true, ticket: 'hold-ticket' } }
+    return { ok: true, pending: true, terminal: false }
+  } }); t.after(runtime.close)
+  sdk.mods = { control: (operation, args) => {
+    bot._client.write('custom_payload', { channel: 'maw_agent:mod_action', data: Buffer.from(JSON.stringify({ kind: 'control_action', operation, arguments: args })) })
+    // The narrow release allowance must not permit a different ticket or action.
+    bot._client.write('custom_payload', { channel: 'maw_agent:mod_action', data: Buffer.from(JSON.stringify({ kind: 'control_action', operation: 'body.command', arguments: { command: 'say forbidden' } })) })
+    return Promise.resolve({ ok: false, terminal: true, outcomeKnown: true, bodyId: UUID, code: 'control_cancelled' })
+  } }
+  runtime.submit(message('native-hold', 'inventory.useHeld', { hand: 'main', expectedHotbarSlot: 0, expectedHeldSnbt: '', durationMs: 10000 }))
+  for (let n=0;!running&&n<30;n++) await pause(10)
+  runtime.cancel('native-hold'); const end = await runtime.wait('native-hold')
+  assert.equal(end.status, 'cancelled'); assert.equal(end.outcomeKnown, true)
+  assert.equal(sent.length, 2)
+  const release = JSON.parse(sent[1].data.data); assert.equal(release.operation, 'control.cancel'); assert.equal(release.arguments.ticket, 'hold-ticket')
+})
+
+test('89 operations include strict params, permissions, async and advertised vs verified distinctions', async t => {
   const dir = fixture(t), { runtime } = body(dir); t.after(runtime.close)
   const catalog = runtime.operations()
-  assert.equal(catalog.operationCount, 70); assert.equal(catalog.remoteSupportVerified, false)
+  assert.equal(catalog.operationCount, 89); assert.equal(catalog.remoteSupportVerified, false)
   assert.equal(catalog.operations.every(row => row.parameters && row.permission && row.returns && row.execution), true)
   assert.equal(runtime.operations('body.move').execution, 'asynchronous_action')
   assert.equal(runtime.operations('action.cancel').execution, 'immediate_control')

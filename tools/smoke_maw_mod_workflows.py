@@ -19,7 +19,7 @@ def workflows(a):
         return a.mutation('world.interact',{'position':l['position'],'aimOffset':[l['hit']['cursor'][k] for k in ('x','y','z')],'expectedBlockId':l['block']['id'],'expectedProperties':l['block']['properties'],'expectedHotbarSlot':s['selectedHotbarSlot'],'expectedHeldSnbt':s['self']['equipment']['mainhand']['snbt'] if s['self']['equipment']['mainhand'] else ''},aid)
     def total(s,item):return sum(x['count'] for x in s['slots'] if x and x['id']==item)
     c('gamerule doDaylightCycle false');c('time set day');c('gamerule doWeatherCycle false');c('weather clear');c('setworldspawn 0 64 0');c('gamerule keepInventory true')
-    catalog=a.rpc('mod_operations');a.check('native_contract_48_real_handlers',catalog['operationCount']==48 and len(catalog['operations'])==48)
+    catalog=a.rpc('mod_operations');a.check('native_contract_67_real_handlers',catalog['operationCount']==67 and len(catalog['operations'])==67)
     a.check('exact_operation_schema',a.rpc('mod_operations',{'operation':'colony.stockResource'})['operation']['parameters']['additionalProperties'] is False)
     made=a.rpc('create_companion',{'name':'MawModBody','action_id':'mod-audit-create-01'});a.body=made['bodyId'];assert made['online'],made
     lease=a.rpc('claim_control',{'companion':a.body,'controller_id':'isolated-mod-audit'});a.lease=lease['lease']['leaseId']

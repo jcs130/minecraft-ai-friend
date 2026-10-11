@@ -32,7 +32,7 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
   let sdk
   try { sdk = attach(bot) } catch (error) { ledger.close(); bot.setMaxListeners(originalLimit); throw error }
   const scopes = new AsyncLocalStorage(), token = {}, originalWrite = bot._client.write
-  let ended = false, closing = false, epoch = 0, active = null, lastUuid = null, remote = null, queryChain = Promise.resolve(), lastQuery = 0, loginCommand = null
+  let ended = false, closing = false, epoch = 0, active = null, lastUuid = null, remote = null, queryChain = Promise.resolve(), lastQuery = 0, loginCommand = null, cleanupTicket = null
   bot[OWNER] = token
   const uuid = () => UUID.test(bot._client.uuid || '') ? bot._client.uuid.toLowerCase() : lastUuid
   const identity = () => ({ schemaVersion: 1, bodyId: uuid(), playerUuid: uuid(), account,
@@ -46,6 +46,7 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
   }
   const stop = () => {
     let ok = true
+    if (active?.ticket) releaseNativeControl(active)
     for (const fn of [() => bot.pathfinder?.setGoal(null), () => bot.clearControlStates?.(), () => bot.stopDigging?.(), () => bot.deactivateItem?.()]) {
       try { fn() } catch { ok = false }
     }
@@ -57,6 +58,15 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
     if (loginCommand && !ended && !closing && bindingValid() && !active &&
         ['chat_command', 'chat_command_signed'].includes(name) && data?.command === loginCommand) return originalWrite.call(this, name, data)
     if (gameMutation(name, data)) {
+      // A closed action may release ONLY its own already accepted native hold.
+      // No caller-controlled generic packet or other mutation gets this path.
+      if (cleanupTicket && name === 'custom_payload' && data?.channel === 'maw_agent:mod_action') {
+        try {
+          const m = JSON.parse(Buffer.from(data.data).toString('utf8'))
+          if (m.kind === 'control_action' && m.operation === 'control.cancel' &&
+              m.arguments?.ticket === cleanupTicket && Object.keys(m.arguments).length === 1) return originalWrite.call(this, name, data)
+        } catch {}
+      }
       const frame = scopes.getStore()
       if (!active || frame !== active || frame.closed || blocked() || ended || closing || frame.epoch !== epoch) return false
       frame.scope?.mutationDispatched()
@@ -138,6 +148,26 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
   }
   async function execute (operation, args, frame, scope) {
     scope.check(); frame.phase = 'executing'
+    if (operation === 'body.input' || operation === 'body.look') {
+      const state = await sdk.call('body.controls', {}); scope.check()
+      if (!state.ok) return state
+      if (operation === 'body.look' || args.yaw !== undefined || args.pitch !== undefined) {
+        const relative = operation === 'body.look' && args.relative === true
+        const yaw = relative ? state.yaw + args.yaw : args.yaw ?? state.yaw
+        const pitch = Math.max(-90, Math.min(90, relative ? state.pitch + args.pitch : args.pitch ?? state.pitch))
+        scope.mutationDispatched()
+        await bot.look((180 - yaw) * Math.PI / 180, -pitch * Math.PI / 180, true); scope.check()
+      }
+      if (operation === 'body.input') {
+        scope.mutationDispatched(); frame.phase = 'holding_controls'
+        try {
+          for (const key of args.keys) { scope.check(); bot.setControlState(key, true) }
+          await scope.wait(args.durationMs); scope.check()
+        } finally { bot.clearControlStates() }
+      }
+      const controls = await sdk.call('body.controls', {}); scope.check()
+      return { ...controls, code: operation === 'body.input' ? 'bounded_input_released' : 'look_sampled', keysReleased: true }
+    }
     if (operation === 'body.move') {
       const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
       const { Vec3 } = require('vec3')
@@ -175,7 +205,23 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
       bot.activateItem(); await scope.wait(300); bot.deactivateItem(); scope.check()
       return { ok: true, code: 'item_use_dispatched_inspect_effect', effectVerified: false, outcomeKnown: true, outcomeUnknown: false }
     }
-    return sdk.call(operation, args)
+    const result = await sdk.call(operation, args)
+    if (result?.pending && result.ticket) {
+      frame.ticket = result.ticket; frame.phase = 'native_control_running'
+      for (;;) {
+        scope.check(); await scope.wait(100); scope.check()
+        const state = await sdk.call('control.actionStatus', { ticket: frame.ticket }); scope.check()
+        if (state.terminal) { frame.ticket = null; return state }
+      }
+    }
+    return result
+  }
+  function releaseNativeControl (frame) {
+    if (frame.cleanupPromise || !frame.ticket) return frame.cleanupPromise
+    cleanupTicket = frame.ticket
+    try { frame.cleanupPromise = sdk.mods.control('control.cancel', { ticket: frame.ticket }, false).catch(() => null) }
+    finally { cleanupTicket = null }
+    return frame.cleanupPromise
   }
   async function perform (frame, args) {
     let result, before = null, after = null
@@ -193,7 +239,16 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
       if (frame.cancelRequested) result = { ...result, cancelled: true }
     }
     frame.closed = true; frame.phase = 'verifying'
+    if (frame.ticket) await releaseNativeControl(frame)
     try { after = await snapshot() } catch {}
+    if (frame.cancelRequested && after?.ok && epoch === frame.epoch && uuid() === frame.uuid) {
+      if (frame.operation === 'body.input') result = { ok: false, code: 'bounded_input_cancelled', cancelled: true,
+        outcomeKnown: true, outcomeUnknown: false, keysReleased: !Object.values(bot.controlStates || {}).some(Boolean) }
+      else if (frame.cleanupPromise) {
+        const released = await frame.cleanupPromise
+        if (released?.terminal && released.outcomeKnown === true && released.bodyId === frame.uuid) result = { ...released, ok: false, cancelled: true }
+      }
+    }
     if (!result || typeof result.ok !== 'boolean') result = fail('action_result_invalid', { outcomeKnown: false, outcomeUnknown: true })
     result = { ...copy(result), bodyId: frame.uuid, action_id: frame.id, operation: frame.operation,
       completedAt: new Date().toISOString(), actualPosition: after?.ok ? after.position : null,

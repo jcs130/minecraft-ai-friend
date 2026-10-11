@@ -150,13 +150,13 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
         if full_pack:
             from maw_numen_client import Client
             report['externalClient']=Client('http://127.0.0.1:28990/mcp',bearer,owner_uuid=owner).smoke()
-            checks['standalone_external_client_read_only']=report['externalClient']['ok'] and report['externalClient']['nativeModOperations']==48 and report['externalClient']['onlineBodies']==1
+            checks['standalone_external_client_read_only']=report['externalClient']['ok'] and report['externalClient']['nativeModOperations']==67 and report['externalClient']['onlineBodies']==1
         again=tool('create_companion',{'name':'MawHeadBody','action_id':'qa-create-01'});checks['create_idempotent_original_uuid']=again['bodyId']==body and again['replayed']
         checks['owner_isolation']=tool('get_state',{'companion':body},other_token)['code']=='body_not_owned'
         claim=tool('claim_control',{'companion':body,'controller_id':'qa-controller'});lease=claim['lease']['leaseId']
         checks['one_controller']=tool('claim_control',{'companion':body,'controller_id':'other-controller'})['code']=='controller_busy'
         native=tool('mod_operations')
-        checks['optional_native_mod_discovery']=native.get('operationCount')==48 if full_pack else native.get('code')=='native_mod_bridge_unavailable'
+        checks['optional_native_mod_discovery']=native.get('operationCount')==67 if full_pack else native.get('code')=='native_mod_bridge_unavailable'
         if full_pack:
             snapshot=tool('mod_query',{'companion':body,'operation':'menu.snapshot'})
             checks['native_same_body_menu']=snapshot['ok'] and snapshot['state']['playerUuid']==body
@@ -185,11 +185,27 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
                 }
                 def unified_smoke(reconcile=False):
                     for provider,config in configs.items():
+                        fixture=output/('control-fixture-'+provider+'.ready')
+                        if not reconcile:config['qaInventoryFixtureFile']=str(fixture)
                         cfg_file=output/('unified-'+provider+'-config.json');cfg_file.write_text(json.dumps(config),encoding='utf-8')
                         receipt=output/('unified-'+provider+'.json')
                         command=[str(node),str(REPO/'tools/smoke_maw_world_adapter.cjs'),str(cfg_file),str(receipt)]
                         if reconcile: command.append('--reconcile')
-                        process_result=subprocess.run(command,env={**os.environ,'NODE_PATH':str(root/'gateway/permanent/node/node_modules')},capture_output=True,text=True,encoding='utf-8',timeout=150)
+                        fixture_stop=threading.Event()
+                        def inventory_fixture():
+                            while not fixture_stop.wait(.1):
+                                if fixture.is_file():
+                                    actor='MawHeadQAOwner' if provider=='mineflayer' else 'MawUnifiedBody'
+                                    # Test-only real inventory, supplied by this isolated console.
+                                    for item in ('minecraft:dirt 8','minecraft:bow 1','minecraft:arrow 8'):
+                                        console('give '+actor+' '+item)
+                                    return
+                        fixture_thread=None
+                        if not reconcile:fixture_thread=threading.Thread(target=inventory_fixture,daemon=True);fixture_thread.start()
+                        try:process_result=subprocess.run(command,env={**os.environ,'NODE_PATH':str(root/'gateway/permanent/node/node_modules')},capture_output=True,text=True,encoding='utf-8',timeout=150)
+                        finally:
+                            fixture_stop.set()
+                            if fixture_thread:fixture_thread.join(timeout=2)
                         (output/('unified-'+provider+('-reconnect' if reconcile else '')+'.log')).write_text(process_result.stdout+process_result.stderr,encoding='utf-8')
                         assert process_result.returncode==0,'Unified '+provider+' probe failed; inspect private report'
                         actual_receipt=receipt.with_name(receipt.stem+'-reconnect.json') if reconcile else receipt
