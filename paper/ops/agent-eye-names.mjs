@@ -1,4 +1,4 @@
-/** Names pair cameras; only the gateway's trusted ingress list authenticates them. */
+/** Names pair cameras; access grants and confirmed same-source sessions gate login. */
 const namePattern = /^[A-Za-z0-9_]{1,16}$/;
 export function eyeBaseName(name) {
   if (!namePattern.test(name)) return null;
@@ -28,7 +28,7 @@ export function eyeRules(value, online = []) {
   }
   return { pairs, free, autoNameEyes: value.autoNameEyes !== false };
 }
-export function eyeLoginAllowed(registry, access, name, address) {
+export function eyeLoginAllowed(registry, access, name, address, sessions = []) {
   const key = name.toLowerCase(), rules = eyeRules(registry, [name]);
   if (access.schemaVersion !== 1 || !Array.isArray(access.accounts)) throw Error('invalid access registry');
   const allowed = entry => Array.isArray(entry?.allowedIps) && entry.allowedIps.includes(address);
@@ -36,7 +36,13 @@ export function eyeLoginAllowed(registry, access, name, address) {
   if (entry) return allowed(entry);
   if (rules.free.has(key)) return false;
   const binding = rules.pairs.find(pair => pair.key === key);
-  if (binding?.automatic) return allowed(access.accounts.find(item => item.name?.toLowerCase() === binding.agent.toLowerCase()));
+  if (binding?.automatic) {
+    const agentEntry = access.accounts.find(item => item.name?.toLowerCase() === binding.agent.toLowerCase());
+    // Explicit restrictions, including an empty address list, always win.
+    if (agentEntry) return allowed(agentEntry);
+    return registry.autoSameSourceEyes !== false && sessions.some(session =>
+      session.name?.toLowerCase() === binding.agent.toLowerCase() && session.address === address);
+  }
   if (binding || rules.pairs.some(pair => pair.agent.toLowerCase() === key) || /eye/i.test(key)) return false;
   return access.allowUnregisteredGuests === true;
 }

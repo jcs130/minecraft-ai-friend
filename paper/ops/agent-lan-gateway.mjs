@@ -1,8 +1,9 @@
-// Offline Mineflayer entry. Paper itself stays on loopback. Registered Agent
-// and Eye login names are bound to ingress IPs before private UI is mirrored.
+// Offline Mineflayer entry. Paper itself stays on loopback. Explicit source
+// grants take priority; automatic Eyes may follow a confirmed same-source Agent.
 import net from 'node:net';
 import { readFileSync } from 'node:fs';
-import { eyeLoginAllowed } from './agent-eye-names.mjs';
+import { eyeLoginAllowed, eyeRules } from './agent-eye-names.mjs';
+import { watchLoginSuccess } from './agent-gateway-login.mjs';
 
 const listenHost = process.env.AGENT_GATEWAY_LISTEN_HOST || '192.168.3.163';
 const listenPort = Number(process.env.AGENT_GATEWAY_LISTEN_PORT || 25565);
@@ -16,6 +17,7 @@ let identityRejected = 0;
 const opsFile = process.env.AGENT_GATEWAY_OPS_FILE || 'E:/MC/server/ops.json';
 const pairsFile = process.env.AGENT_GATEWAY_PAIRS_FILE || 'E:/MC/ops/agent-eye-pairs.json';
 const accessFile = process.env.AGENT_GATEWAY_ACCESS_FILE || 'E:/MC/ops/agent-gateway-access.json';
+const sessions = new Map(); // Key by socket so old disconnects cannot erase a new login.
 
 function reservedName(name) {
   if (name.toLowerCase() === 'goddess' || name.startsWith('.')) return true;
@@ -32,7 +34,13 @@ function normalizedIp(address) {
 function loginAllowed(name, address) {
   const registry = JSON.parse(readFileSync(pairsFile, 'utf8'));
   const access = JSON.parse(readFileSync(accessFile, 'utf8'));
-  return eyeLoginAllowed(registry, access, name, normalizedIp(address));
+  return eyeLoginAllowed(registry, access, name, normalizedIp(address), [...sessions.values()]);
+}
+
+function observerName(name) {
+  const rules = eyeRules(JSON.parse(readFileSync(pairsFile, 'utf8')), [name]);
+  const key = name.toLowerCase();
+  return rules.free.has(key) || rules.pairs.some(pair => pair.key === key);
 }
 
 // Inspect the cleartext login name before forwarding an offline-mode connection.
@@ -67,7 +75,7 @@ function string(bytes, at, end, max) {
 
 function decision(bytes, address) {
   // Old status ping (0xfe) has no modern handshake.
-  if (bytes[0] === 0xfe) return 'allow';
+  if (bytes[0] === 0xfe) return { kind: 'allow' };
   const handshake = packet(bytes, 0);
   if (!handshake) return null;
   let field = varInt(bytes, handshake.at);
@@ -78,7 +86,7 @@ function decision(bytes, address) {
   if (host.at + 2 > handshake.end) throw new Error('missing port');
   const state = varInt(bytes, host.at + 2);
   if (!state || state.at !== handshake.end) throw new Error('invalid handshake state');
-  if (state.value === 1) return 'allow';
+  if (state.value === 1) return { kind: 'allow' };
   if (state.value !== 2) throw new Error('unsupported handshake state');
 
   const login = packet(bytes, handshake.end);
@@ -86,9 +94,9 @@ function decision(bytes, address) {
   const id = varInt(bytes, login.at);
   if (!id || id.value !== 0) throw new Error('expected login start');
   const name = string(bytes, id.at, login.end, 16);
-  if (reservedName(name.value)) return 'reject-reserved';
-  if (!loginAllowed(name.value, address)) return 'reject-identity';
-  return 'allow';
+  if (reservedName(name.value)) return { kind: 'reject-reserved' };
+  if (!loginAllowed(name.value, address)) return { kind: 'reject-identity' };
+  return { kind: 'allow', name: name.value };
 }
 
 function allowed(address) {
@@ -119,17 +127,32 @@ const gateway = net.createServer({ pauseOnConnect: true }, client => {
     clearTimeout(timer);
     client.pause();
     client.off('data', inspect);
-    if (result === 'reject-reserved') {
+    if (result.kind === 'reject-reserved') {
       reservedRejected++;
       client.destroy();
       return;
     }
-    if (result === 'reject-identity') {
+    if (result.kind === 'reject-identity') {
       identityRejected++;
       client.destroy();
       return;
     }
     const backend = net.connect({ host: backendHost, port: backendPort });
+    if (result.name) {
+      const observeLogin = watchLoginSuccess(() => {
+        try {
+          if (!client.destroyed && !backend.destroyed) {
+            const observer = observerName(result.name);
+            if (!observer) sessions.set(client, { name: result.name, address: normalizedIp(client.remoteAddress) });
+            console.log(`Confirmed ${observer ? 'observer' : 'player'} login: ${result.name}`);
+          }
+        } catch { /* Invalid hot registry cannot grant an automatic Eye. */ }
+      });
+      const inspectBackend = chunk => {
+        if (observeLogin(chunk)) backend.off('data', inspectBackend);
+      };
+      backend.on('data', inspectBackend);
+    }
     backend.setTimeout(30_000, () => backend.destroy());
     backend.once('connect', () => {
       backend.setTimeout(0);
@@ -140,8 +163,8 @@ const gateway = net.createServer({ pauseOnConnect: true }, client => {
     });
     backend.on('error', () => client.destroy());
     client.on('error', () => backend.destroy());
-    backend.on('close', () => client.destroy());
-    client.on('close', () => backend.destroy());
+    backend.on('close', () => { sessions.delete(client); client.destroy(); });
+    client.on('close', () => { sessions.delete(client); backend.destroy(); });
   };
   client.on('data', inspect);
   client.on('error', () => {});

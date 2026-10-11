@@ -23,3 +23,23 @@ test('derived Eyes inherit only their exact target trusted ingress; live require
   assert.equal(eyeLoginAllowed(registry, access, 'LIVE', '192.0.2.10'), true);
   assert.equal(eyeLoginAllowed(registry, access, 'LIVE', '192.0.2.11'), false);
 });
+test('automatic Eyes default to the confirmed Agent source, with explicit grants taking priority', () => {
+  const access = { schemaVersion: 1, allowUnregisteredGuests: true, accounts: [] };
+  const sessions = [{ name: 'ag_NEKO', address: '192.0.2.10' }];
+  assert.equal(eyeLoginAllowed(registry, access, 'ag_neko_eye', '192.0.2.10', sessions), true);
+  assert.equal(eyeLoginAllowed(registry, access, 'ag_NEKOeye', '192.0.2.10', sessions), true);
+  assert.equal(eyeLoginAllowed(registry, access, 'ag_neko_eye', '192.0.2.11', sessions), false);
+  assert.equal(eyeLoginAllowed(registry, access, 'ag_neko_eye', '192.0.2.10'), false);
+  assert.equal(eyeLoginAllowed(registry, access, 'OtherEye', '192.0.2.10', sessions), false);
+  assert.equal(eyeLoginAllowed(registry, access, 'live', '192.0.2.10', sessions), false);
+  assert.equal(eyeLoginAllowed(registry, access, 'CortiEye', '192.0.2.10', [{ name: 'CortiLan', address: '192.0.2.10' }]), false);
+  assert.equal(eyeLoginAllowed({ ...registry, autoSameSourceEyes: false }, access, 'ag_neko_eye', '192.0.2.10', sessions), false);
+  assert.equal(eyeLoginAllowed({ ...registry, autoNameEyes: false }, access, 'ag_neko_eye', '192.0.2.10', sessions), false);
+  access.accounts.push({ name: 'ag_NEKO', allowedIps: [] });
+  assert.equal(eyeLoginAllowed(registry, access, 'ag_neko_eye', '192.0.2.10', sessions), false);
+  access.accounts[0].allowedIps = ['192.0.2.11'];
+  assert.equal(eyeLoginAllowed(registry, access, 'ag_neko_eye', '192.0.2.10', sessions), false);
+  assert.equal(eyeLoginAllowed(registry, access, 'ag_neko_eye', '192.0.2.11', sessions), true);
+  access.accounts.push({ name: 'ag_neko_eye', allowedIps: [] });
+  assert.equal(eyeLoginAllowed(registry, access, 'ag_neko_eye', '192.0.2.11', sessions), false);
+});

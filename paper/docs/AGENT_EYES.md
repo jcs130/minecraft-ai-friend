@@ -1,14 +1,22 @@
 # Agent 观战账号
 
+## 默认同来源配对（2026-10-11 已上线）
+
+先登录 Agent，再连接 `<名字>_eye` 或 `<名字>eye`，大小写不限。Agent 与 Eye 从网关看到的同一 IP 接入时，默认自动配对，无需逐个登记 IP 或新增 pairs。例如 `ag_NEKO → ag_neko_eye`。原附身巡检约20秒处理在线镜头；Agent先上线，Eye后连接或重试即可。
+
+网关只沿用后端已返回登录成功、且连接仍有效的普通角色来源；状态查询、失败登录、未完成登录、Eye和live不能提供来源。Agent断开就清除该连接，重连重新识别，不保存动态地址白名单。已有Eye独立来源条目、Agent来源限制（含空列表拒绝）、显式别名和live规则优先；自动继承不会绕过它们。两端来源不同仍可明确登记Eye自己的来源。`autoSameSourceEyes: false` 可热关闭动态继承，`autoNameEyes: false` 关闭自动后缀配对。
+
+同来源指网关实际看到的IP，共享公网出口不能区分物理电脑；当前离线用户名本身不是强身份认证。Goddess、OP名和Floodgate身份仍由原规则保护。此次通过原Watchdog只重启连接网关，Paper及YSM代理未重启，原接入清单和客户端保持；私有前像与6项测试回执在E/F `repairs/eye-same-source-20261011`。测试包含真实1.20.6登录/配置协议、不同来源拒绝、旧连接关闭、热限制与失败登录；不能替代远端原机Eye附身的实际回执。
+
 ## 0.4.18 / 0.1.12 已上线：自动命名、live 与窗口生命周期
 
-自动后缀配对、live按实际附身对象同步、移动/超距关闭真实窗口已正式上线。当前JAR在完整YSM隔离拓扑经原版协议20项及冷重启20项验证，正式按原维护流程发布。`ag_CorMy → ag_cormy_eye`保留原来源；服主确认live也在同一台电脑，已单独登记相同可信来源。新CorMy UUID仍不继承CortiLan物品、技能或领地。原机Eye上线状态以本次实际连接为准，不能拿本地同名探针代替。
+自动后缀配对、live按实际附身对象同步、移动/超距关闭真实窗口已正式上线。当前JAR在完整YSM隔离拓扑经原版协议20项及冷重启20项验证，正式按原维护流程发布。`ag_CorMy → ag_cormy_eye`保留原来源；服主确认live也在同一台电脑，已单独登记相同可信来源。CorMy的物品、技能保持独立；CortiLan原领地已按服主另行转给ag_CorMy，见[领地规则](LANDS.md)。原机Eye上线状态以本次实际连接为准，不能拿本地同名探针代替。
 
 新版支持 `<名字>eye` 和 `<名字>_eye`，不区分大小写，如 `ag_cormy_eye` 和 `ag_cormyeye` 都对应 `ag_CorMy`。显式别名优先，保留 `CortiLan → CortiEye`；非末尾出现eye不会变成观战者，Goddess保持独立。`autoNameEyes: false` 可停用自动命名；`freeObservers` 默认 `["live"]`，最多4个自由镜头，设为空数组可停用。自动/显式配对总计最多16组，错误或缺失登记表停止转发。
 
 `live` 是有可信入口的自由观战账号。按原版观战界面选择玩家后，只接收实际附身对象的原生背包、快捷栏、生命/饥饿/经验、魔力/技能及私有展示；换人或脱离立即清除旧数据。Watcher不替live选人。只复制客户端展示，不更改Eye自身的服务器背包、技能或物品。交易镜像只读，不能通过镜像拿物品或代交易。
 
-登录仍由私有 `agent-gateway-access.json` 校验来源。自动命名Eye没有独立条目时，只继承其精确Agent账号的可信地址；显式别名和live需要独立条目。未登记来源的Eye不能因名字相像而进入。访问清单和地址不进Git。
+私有 `agent-gateway-access.json` 中已有来源限制继续优先。自动命名Eye没有独立条目时，先继承对应Agent的明确来源；Agent也没有条目时，默认沿用其当前成功登录连接的来源。显式别名和live仍需独立条目。自动来源规则见本页顶部；访问清单和地址不进Git。
 
 玩家打开交易/容器/虚拟菜单后，累计水平移动超过0.35格或垂直超过0.5格会关闭真实服务器窗口；转头和小抖动不关。物理容器/村民离开6.5格使用范围也关闭，远程个人箱等无物理来源菜单不按距离关闭。Web同时处理服务器关闭、相机切换、断流和移动，清除残留窗口。
 
@@ -18,7 +26,7 @@ Web使用原页面加 `?obs=1`（兼容 `?overlay=1`），背景透明、不启�
 
 2026-10-06 服主明确确认 `feiyu_bot` 是 bot，已加入维护脚本的已核实服务账号例外。该身份确认只适用于这个精确账号。其可信来源 IP 尚未核实，本轮新增配对已撤销，恢复发布前接入规则；Agent/Eye 配对须同时完成可信来源登记。09:09 正常重启更新 AgentFriend 0.3.84 后，CortiLan/Goddess/CortiEye 已恢复，`cortieye` 读回 camera=online、attached=true；feiyu_bot 原客户端也已回连，重启前四个账号均恢复。
 
-Goddess 平时是独立观察者，不参加Agent/Eye配对巡检。0.4.10已上线的[女神相机](SERVER_PHOTOGRAPHY.md)可为本人请求串行临时附身拍照，完成即恢复观察位置；已有人工附身会话不被抢占。`ops/agent-eye-pairs.json` 登记 Agent/Eye 对；`ops/agent-eye-watcher.mjs` 每 20 秒通过本机 RCON 检查一次，把已登记的 Eye 维持为原版观战模式，并在两端在线时执行原版 `minecraft:spectate <Agent> <Eye>`。Agent 离线时 Eye 仍保持观战模式。未登记的 `eye` 名字没有镜头权限，公网 Java 网关在登录前拒绝这种名字。
+Goddess 平时是独立观察者，不参加Agent/Eye配对巡检。0.4.10已上线的[女神相机](SERVER_PHOTOGRAPHY.md)可为本人请求串行临时附身拍照，完成即恢复观察位置；已有人工附身会话不被抢占。`ops/agent-eye-pairs.json` 登记显式Agent/Eye对，也默认支持自动后缀配对；`ops/agent-eye-watcher.mjs` 每20秒通过本机RCON检查一次，把匹配的Eye维持为原版观战模式，并在两端在线时执行 `minecraft:spectate <Agent> <Eye>`。Agent离线时已连接Eye仍保持观战模式；再次登录按本页顶部的当前接入规则处理。
 
 每个配对写一个 Agent 名；省略 `eye` 时自动使用 `<agent>_eye`，例如 `fulumu → fulumu_eye`。命名不同的配对明确写 `eye`，目前为 `CortiLan → CortiEye`。配置在下一次巡检时生效；撤销配对会停止附身。每次巡检也检查镜头与 Agent 的位置，发现脱离就重新附身；即使位置接近，最多两分钟也会重新附身。
 
@@ -55,6 +63,6 @@ AgentFriend 0.3.80 的探敌术还把附近怪物的 Java 发光轮廓只发给�
 
 报告保存在运行机私有修复目录 `E:\MC\ops\repairs\performance-scale-20261005\`，不提交运行数据。前两条回归的文件为 `eye-dimension-primary-after.json` 与 `eye-dimension-after.json`，对应未加预热的 `D4D2C851…` 候选；最终预热版的完整重新回归为 `eye-dimension-primary-prewarm.json` 与 `eye-dimension-prewarm.json`，对应正式发布的 `C278F809…`，两份均无失败、登记表与玩家数据恢复、在线人数归零。此前多 Agent 负载窗口仍对应 `D4D2C851…`，不修改旧报告的哈希。旧主配对测试的单家查询副作用及错误断言以历史失败摘要保留。此次为 Java 协议验收，基岩视觉画面与 SpectatorPlus 背包画面仍需实测。
 
-新增 Agent 时，在 `ops/agent-eye-pairs.json` 写配对，并在运行机私有 `E:\MC\ops\agent-gateway-access.json` 分别为 Agent 与 Eye 登记可信来源 IP。访问清单含私人地址，不提交仓库，结构示例见 `ops/agent-gateway-access.example.json`。网关按每次登录读取，修改两份清单不用重启。AgentFriend 0.3.77 也约每 6 秒读取配对表：登记的非旁观 Agent 自动显示 `[Agent]`，并接收 Agent 路径的村庄紧急私聊；`fulumu` 已按这条规则识别。原有 `nametags.agent-uuids` 名单仍兼容，调整它需要正常重启。公会日常委托按玩家 UUID 和上海日期刷新，与 Agent 标记无关。
+新增Agent默认先登录本体，再从同来源连接名字后缀Eye，无需写入两份清单。别名、跨来源或需固定限制时，在 `ops/agent-eye-pairs.json` 和运行机私有 `E:\MC\ops\agent-gateway-access.json` 配置；访问清单不提交仓库，结构示例见 `ops/agent-gateway-access.example.json`。网关每次登录读取，清单与开关可热改。网关代码更新需沿现有 `agent-lan-gateway.reload.requested` / Watchdog流程重连，部署时同时复制 `agent-lan-gateway.mjs`、`agent-eye-names.mjs`、`agent-gateway-login.mjs`，不必重启Paper。AgentFriend约每6秒读取显式及在线自动配对；原有铭牌UUID名单仍兼容。公会日常委托按玩家UUID和上海日期刷新，与Agent标记无关。
 
-当前仍允许未登记的普通 Java 名字进入，**这些名字在离线模式下不能防冒用**；正式向更多 Java 玩家开放前，应选定正版登录或逐账号的可信接入方式。用户名和离线 UUID 本身不是身份验证。Goddess、OP 名和未登记 Eye 名字由公网网关在登录前拒绝。Watchdog 的“真人在线时不自动重启”保护只把已核实的服务账号列入例外。
+当前仍允许未登记的普通Java名字进入，**这些名字在离线模式下不能防冒用**；用户名和离线UUID本身不是身份验证。Goddess、OP名和既无来源许可又无同来源对应Agent的Eye仍在登录前拒绝。Watchdog的“真人在线时不自动重启”保护只把已核实的服务账号列入例外，自动Eye配对不扩大该例外名单。
