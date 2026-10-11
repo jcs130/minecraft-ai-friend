@@ -1,5 +1,7 @@
 # 玩家领地
 
+**2026-10-11 当前归属更新：**服主要求将 CortiLan 的全部原领地转给可米 `ag_CorMy`。实查只有 `sky_view_tower`「河畔观景塔与留言墙」一处，已在线转让并核验原版公告牌两面和 WorldGuard 归属。可米现在是主人，可拆建、管理私有储物、授权/撤权协作者并到场登记公共地标；原边界、公共礼物箱和其他玩家领地规则保留。服务器无需重启，原施工者历史仍记 CortiLan。以下有日期的部署记录按历史时点阅读。
+
 **0.4.7 已上线（2026-10-09 17:58:48复核）：**主人自主授权/撤权、女神/显式权限超管管理、公开协作者名单、原版菜单与实体公告牌已生效；同时上线0.4.6的自然建筑保护。三处原领地公告牌正式验收通过，原名单和主人未改变。完整发布记录见 [维护](OPERATIONS.md)。
 
 ## 主人管理协作者（0.4.7）
@@ -24,7 +26,7 @@
 
 其他超管可由服主在现有 LuckPerms 中精确授权：`lp user <已核实账号或UUID> permission set agentfriend.land.admin true`，撤销用 `permission unset agentfriend.land.admin`。这项权限只管理协作者名单，不直接给予拆建、取物、转让领地或修改其他保护的权力。
 
-主人与超管身份须分清：CortiLan作为观景塔主人原本就有该地块的拆建和私有箱权限，获授权的协作者也有；“超管权限不直接给予拆建取物”只说明额外超管权限的范围，不取消原主人或成员已有的权限。普通OP若不是主人/显式领地超管，不能管理名单。
+主人与超管身份须分清：ag_CorMy作为观景塔当前主人有该地块的拆建和私有箱权限，获授权的协作者也有；“超管权限不直接给予拆建取物”只说明额外超管权限的范围，不取消原主人或成员已有的权限。普通OP若不是主人/显式领地超管，不能管理名单。
 
 正式 `goddess-mcp.py` 增加 `land_members(land_id)` 和 `manage_land_member(land_id, player, action)` 两个工具。动作只有 `trust/untrust`，不接受任意命令；先读当前名单，对明确的授权请求操作，不因玩家被拒绝就自动放行。服务端控制台适配命令为 `mycli admin land members <ID>` 和 `mycli admin land member trust|untrust <ID> <玩家名或UUID>`，后者必须在线女神 OP 观战身份通过检查，仍走同一保存、撤权和审计事务。超时后先读同一地块名单，不盲目重发。正式MCP已重新发现10个工具，两个新工具均启用；沿用原访问策略，仅现有获授权的管理来源可修改，游戏聊天桥仍只有原server_status默认只读权限。游戏内已核实的女神可用上述land命令；不能因任意访客请求就自动放行。
 
@@ -38,7 +40,7 @@
 
 公告牌及其一格支撑作为公共信息设施保护，主人也不能误拆；`protect break` 明确返回 `land_notice_board`，右键查看不受访客设施使用开关限制。成员变化或领地转让后立即更新文字，普通玩家不能编辑；保护爆炸、火、水流和活塞。位置索引 `land-boards.json` 只记录实体牌位置，归属和名单始终读当前领地数据；不要手改索引，异常时保留文件联系服主。没有增加定时世界扫描。
 
-已上线命令示例：CortiLan 可用 `/mycli land trust sky_view_tower LittleFish0510` 授权小鱼，`/mycli land untrust sky_view_tower LittleFish0510` 撤权。这只是用法说明，本次部署没有替他授权。
+已上线命令示例：可米 ag_CorMy 可用 `/mycli land trust sky_view_tower LittleFish0510` 授权小鱼，`/mycli land untrust sky_view_tower LittleFish0510` 撤权。这只是用法说明，本次转让没有新增协作者。
 
 0.3.91 支持 BUILD 委托完成后交接建筑，主人到场登记公共地标；显式 `public-containers` 可开放非公会地块的指定礼物箱，其他储物仍私有。配置与迁移见 [工程与公共地标](PROJECT_LANDMARKS.md)。
 
