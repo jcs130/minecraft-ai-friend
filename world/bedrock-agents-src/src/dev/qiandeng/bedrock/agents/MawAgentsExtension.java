@@ -21,6 +21,10 @@ import org.geysermc.geyser.api.event.bedrock.SessionDisconnectEvent;
 import org.geysermc.geyser.api.extension.Extension;
 import org.geysermc.geyser.session.GeyserSession;
 import org.geysermc.cumulus.form.*;
+import org.geysermc.mcprotocollib.network.Session;
+import org.geysermc.mcprotocollib.network.event.session.SessionAdapter;
+import org.geysermc.mcprotocollib.network.packet.Packet;
+import org.geysermc.mcprotocollib.protocol.packet.common.clientbound.ClientboundCustomPayloadPacket;
 import org.jose4j.json.internal.json_simple.JSONValue;
 import org.jose4j.json.internal.json_simple.parser.JSONParser;
 
@@ -32,23 +36,34 @@ public final class MawAgentsExtension implements Extension {
     private static final class UiSession {
         final String id=UUID.randomUUID().toString();
         boolean bound;
+        boolean welcomed;
         String acknowledged="",displayed="";
         int failures;
     }
     @Subscribe public void commands(GeyserDefineCommandsEvent event) {
+        event.register(Command.<CommandSource>builder(this).source(CommandSource.class).name("guide").description("冒险指南：农场、厨房、魔法与风车").permission("mawagent.guide",TriState.TRUE).suggestedOpOnly(false).executableOnConsole(false).playerOnly(true).bedrockOnly(true).executor((source,command,args)->{if(source.connection()!=null)guide(source.connection());}).build());
         event.register(Command.<CommandSource>builder(this).source(CommandSource.class).name("menu").description("我的 Agent 同伴：模型配置与目标").permission("mawagent.menu",TriState.TRUE).suggestedOpOnly(false).executableOnConsole(false).playerOnly(true).bedrockOnly(true).executor((source,command,args)->{if(source.connection()!=null)menu(source.connection());}).build());
         event.register(Command.<CommandSource>builder(this).source(CommandSource.class).name("maid").description("车万女仆：原生 LLM 服务与人格配置").permission("mawagent.maid",TriState.TRUE).suggestedOpOnly(false).executableOnConsole(false).playerOnly(true).bedrockOnly(true).executor((source,command,args)->{if(source.connection()!=null)maidMenu(source.connection());}).build());
         logger().info("MAW_AGENTS ready nativeForms=true modelKeysRedacted=true clientRequired=false command=/mawagent menu");
         logger().info("MAW_MAID_FORMS ready nativeConfig=true permission=native_operator ownerOnly=true command=/mawagent maid");
         logger().info("MAW_VISUAL_MENUS ready welcomeButtons=true ownEntityClick=true controls=true privateEvents=true");
+        logger().info("MAW_GUIDE ready pages=5 icons=true authenticatedWelcome=true command=/mawagent guide");
     }
     @Subscribe public void join(SessionJoinEvent event) {
         if(event.connection() instanceof GeyserSession session){
             UiSession state=new UiSession();sessions.put(session,state);
             session.scheduleInEventLoop(()->pollUi(session,state),1,TimeUnit.SECONDS);
-            session.scheduleInEventLoop(()->{
-                if(!session.isClosed())show(session,MaidForms.welcome(()->menu(session),()->maidMenu(session)));
-            },4,TimeUnit.SECONDS);
+            if(session.getDownstream()!=null)session.getDownstream().getSession().addListener(new SessionAdapter(){
+                @Override public void packetReceived(Session downstream,Packet packet){
+                    if(!(packet instanceof ClientboundCustomPayloadPacket p)||!p.getChannel().asString().equals("maw_agent:menu_state")||p.getData().length>65536)return;
+                    try{var body=parse(new String(p.getData(),StandardCharsets.UTF_8));
+                        if(!session.playerEntity().uuid().toString().equals(body.get("playerUuid")))return;
+                        session.executeInEventLoop(()->{if(!state.welcomed&&sessions.get(session)==state&&!session.isClosed()){
+                            state.welcomed=true;show(session,MaidForms.welcome(()->menu(session),()->maidMenu(session),()->guide(session)));
+                        }});
+                    }catch(Exception ignored){}
+                }
+            });
         }
     }
     @Subscribe public void disconnect(SessionDisconnectEvent event){sessions.remove(event.connection());inFlight.remove(event.connection());}
@@ -81,6 +96,8 @@ public final class MawAgentsExtension implements Extension {
         });
     }
     private static void show(GeyserConnection c,Form form){if(c instanceof GeyserSession session)session.executeInEventLoop(()->{if(!session.isClosed())session.sendForm(form);});else c.sendForm(form);}
+    private void guide(GeyserConnection c){show(c,GuideForms.index(n->guidePage(c,n),()->menu(c),()->maidMenu(c)));}
+    private void guidePage(GeyserConnection c,int n){show(c,GuideForms.page(n,next->guidePage(c,next),()->guide(c)));}
     private void request(GeyserConnection c,String action,Map<String,Object> args,Consumer<Map<String,Object>> done) {
         long now=System.currentTimeMillis();synchronized(inFlight){if(inFlight.getOrDefault(c,0L)>now)return;inFlight.put(c,now+15000);}
         exchange(c,action,args,(result,error)->{

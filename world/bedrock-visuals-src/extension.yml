@@ -1,0 +1,6 @@
+id: mawvisuals
+name: MawVisuals
+main: dev.qiandeng.bedrock.visuals.MawVisualsExtension
+api: 2.9.0
+version: 1.0.0
+authors: [MyAgentWorld]

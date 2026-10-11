@@ -5,6 +5,7 @@ const crypto = require('node:crypto')
 const v8 = require('node:v8')
 const { vanillaProjection } = require('./component-protocol.cjs')
 const KEY = 'maw_bedrock_view'
+const COLORS = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black']
 const PACKETS = new Set(['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'])
 const clone = value => Buffer.isBuffer(value) ? Buffer.from(value)
   : Array.isArray(value) ? value.map(clone)
@@ -18,11 +19,20 @@ class BedrockItems {
     if (catalog.schemaVersion !== 1 || !Array.isArray(catalog.items)) throw Error('INVALID_BEDROCK_ITEM_CATALOG')
     this.items = new Map(); this.tokens = new Map(); this.variants = new Map()
     this.stats = { nativeItemsProjected: 0, exactStacksRestored: 0, registryVerified: false }
+    const markers = new Set()
     for (const row of catalog.items) {
       if (!Number.isInteger(row.nativeId) || this.items.has(row.nativeId) ||
           !Number.isInteger(row.customModelData) || row.customModelData < 8000000 || row.customModelData >= 2 ** 24 ||
           !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(row.nativeItem) || typeof row.displayName !== 'string') {
         throw Error('INVALID_BEDROCK_ITEM_DEFINITION')
+      }
+      const definitions = row.variants ? Object.values(row.variants) : [row]
+      if (row.variants && (row.variantComponent !== 'base_color' || !COLORS.includes(row.variantDefault) ||
+          Object.keys(row.variants).length !== 16 || COLORS.some(color => !row.variants[color]))) throw Error('INVALID_BEDROCK_ITEM_VARIANTS')
+      for (const definition of definitions) {
+        if (!Number.isInteger(definition.customModelData) || definition.customModelData < 8000000 || definition.customModelData >= 2 ** 24 ||
+            markers.has(definition.customModelData)) throw Error('INVALID_BEDROCK_ITEM_VARIANT_MARKER')
+        markers.add(definition.customModelData)
       }
       this.items.set(row.nativeId, row)
     }
@@ -65,7 +75,13 @@ class BedrockItems {
           throw Error('BEDROCK_STACK_TOKEN_NAMESPACE_CONFLICT')
         }
         custom.data.value[KEY] = { type: 'string', value: token }
-        const item = this.items.get(value.itemId)
+        let item = this.items.get(value.itemId)
+        if (item?.variants) {
+          const actual = components.find(c => c.type === item.variantComponent)?.data
+          const choice = actual === undefined ? item.variantDefault : Number.isInteger(actual) ? COLORS[actual] : actual
+          if (typeof choice !== 'string' || !item.variants[choice]) throw Error('BEDROCK_ITEM_VARIANT_UNSUPPORTED')
+          item = { ...item, ...item.variants[choice] }
+        }
         if (item) {
           const index = components.findIndex(c => c.type === 'custom_model_data')
           if (index >= 0) components.splice(index, 1)

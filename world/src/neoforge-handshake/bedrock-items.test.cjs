@@ -9,6 +9,24 @@ const catalog = { schemaVersion: 1, items: [{ nativeId: 4500, nativeItem: 'examp
 const item = (components = []) => ({ itemCount: 3, itemId: 4500, components,
   addedComponentCount: components.length, removeComponents: [], removedComponentCount: 0 })
 
+test('native dye-color varints select every book variant and survive the inventory round trip', () => {
+  const colors = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black']
+  const row = { ...catalog.items[0], variantComponent: 'base_color', variantDefault: 'purple',
+    variants: Object.fromEntries(colors.map((color, i) => [color, { customModelData: 9000000 + i }])) }
+  const adapter = new BedrockItems({ schemaVersion: 1, items: [row] })
+  for (const [n, color] of colors.entries()) {
+    const original = item([{ type: 'base_color', data: n }, { type: 'ars_nouveau:spell_book', data: { recipe: 'original' } }])
+    const out = adapter.outgoing('set_slot', { item: original }).item
+    assert.equal(out.components.find(c => c.type === 'custom_model_data').data, row.variants[color].customModelData)
+    assert.deepEqual(adapter.incoming('window_click', { cursorItem: out }).cursorItem, original)
+  }
+  assert.equal(adapter.outgoing('set_slot', { item: item() }).item.components.find(c => c.type === 'custom_model_data').data, row.variants.purple.customModelData)
+  assert.throws(() => adapter.outgoing('set_slot', { item: item([{ type: 'base_color', data: 16 }]) }), /VARIANT_UNSUPPORTED/)
+  assert.throws(() => new BedrockItems({ schemaVersion: 1, items: [{ ...row, variantDefault: 'ultraviolet' }] }), /VARIANTS/)
+  const invalid = structuredClone(row); invalid.variants.black.customModelData = invalid.variants.red.customModelData
+  assert.throws(() => new BedrockItems({ schemaVersion: 1, items: [invalid] }), /VARIANT_MARKER/)
+})
+
 test('the resource catalog must match this connection actual frozen registry, not only a stale ID map', () => {
   const adapter = new BedrockItems(catalog)
   assert.throws(() => adapter.verifyRegistry(new Map([[4500, 'another:meal']])), /REGISTRY_MISMATCH/)

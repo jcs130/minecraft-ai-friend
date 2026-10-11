@@ -220,7 +220,7 @@ def validate(directory: Path, *, deployed=False):
         raise ValueError('Resource catalog count mismatch')
     mappings = json.loads(destinations[MAPPINGS].read_bytes())
     defs = {r['bedrock_identifier']: (base, r) for base, rows in mappings['items'].items() for r in rows}
-    if mappings['format_version'] != 2 or len(defs) != len(catalog):
+    if mappings['format_version'] != 2 or len(defs) != contract.get('definitionCount', len(catalog)):
         raise ValueError('Geyser definitions mismatch')
     with zipfile.ZipFile(destinations[PACK]) as z:
         if z.testzip() is not None or len(set(z.namelist())) != len(z.namelist()):
@@ -234,6 +234,16 @@ def validate(directory: Path, *, deployed=False):
                 raise ValueError('Marker mapping mismatch')
             if atlas[r['icon']]['textures']+'.png' != r['png'] or sha(z.read(r['png'])) != r['pngSha256']:
                 raise ValueError('Missing/incorrect native texture')
+            if r.get('variants'):
+                colors={'white','orange','magenta','light_blue','yellow','lime','pink','gray','light_gray','cyan','purple','blue','brown','green','red','black'}
+                if r.get('variantComponent') != 'base_color' or set(r['variants']) != colors or r.get('variantDefault') not in r['variants']:
+                    raise ValueError('Invalid native item variant selector')
+                for variant in r['variants'].values():
+                    actual = defs.get(variant['bedrockIdentifier'])
+                    if not actual or actual[0] != r['baseItem'] or actual[1]['custom_model_data'] != variant['customModelData']:
+                        raise ValueError('Invalid native item variant mapping')
+                    if atlas[variant['icon']]['textures']+'.png' != variant['png'] or sha(z.read(variant['png'])) != variant['pngSha256']:
+                        raise ValueError('Invalid native item variant texture')
     return contract
 
 
@@ -248,7 +258,7 @@ def registered_items(log: Path, contract: dict, started_after: float):
     stamp, count = matches[-1]
     at = datetime.datetime.strptime(stamp, '%Y-%m-%d %H:%M:%S,%f').timestamp()
     # One built-in item is registered by this pinned Geyser distribution.
-    if at < started_after or int(count) != contract['itemCount']+1:
+    if at < started_after or int(count) != contract.get('definitionCount', contract['itemCount'])+1:
         raise ValueError('Stale or incomplete Geyser item registration')
     return {'registeredCustomItems': int(count), 'nativeItems': contract['itemCount'], 'atEpoch': at}
 

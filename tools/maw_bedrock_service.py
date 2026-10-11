@@ -1,7 +1,8 @@
 """Own the LAN Bedrock bridge independently of the existing world supervisor.
 
-Geyser-ViaProxy -> ViaVersion -> a dedicated compatibility gate. This provides
-protocol access, not native mod rendering or specialized mod UI support.
+Geyser-ViaProxy -> ViaVersion -> a dedicated compatibility gate. Optional,
+hash-verified packs/extensions add selected native models and private forms;
+the bridge does not imply support for every mod renderer or specialized UI.
 """
 from __future__ import annotations
 
@@ -172,6 +173,16 @@ def load_config(path: Path, *, root: Path = ROOT) -> dict:
         for name, meta in model_contract['files'].items():
             expected_files[resources/meta['directory']/name] = meta['sha256']
         gate_env['GATE_BEDROCK_MODELS_FILE'] = str(resources/model_builder.CATALOG)
+    visual_contract = None
+    if (resources/'visual-contract.json').exists():
+        import maw_bedrock_visuals as visual_builder
+        visual_contract = visual_builder.validate(resources, deployed=True)
+        gate_env['GATE_EXTRA_PLAY_CHANNELS'] = ','.join(dict.fromkeys(filter(None, [
+            *gate_env.get('GATE_EXTRA_PLAY_CHANNELS', '').split(','),
+            'maw_agent:scene_state', 'maw_agent:scene_subscribe'])))
+        expected_files[resources/visual_builder.CONTRACT] = hashlib.sha256((resources/visual_builder.CONTRACT).read_bytes()).hexdigest()
+        for name, meta in visual_contract['files'].items():
+            expected_files[resources/meta['directory']/name] = meta['sha256']
     forms_contract = resources/'agents-contract.json'
     if forms_contract.exists():
         import build_bedrock_agents as agent_builder
@@ -218,9 +229,11 @@ def load_config(path: Path, *, root: Path = ROOT) -> dict:
             {'id': 'bedrock', 'command': command, 'cwd': str(directory), 'env': {},
             'host': '127.0.0.1', 'listenHost': '127.0.0.1', 'port': TCP_PORT, 'dependsOn': ['compat_gate'],
             'nativeModels': model_contract,
+            'nativeScene': visual_contract,
             'nativeAgents': forms_contract.exists(),
             'nativeMaidConfig': forms_contract.exists() and contract.get('maidConfig') is True,
             'nativeVisualInteraction': forms_contract.exists() and contract.get('visualInteraction') is True,
+            'nativeGuide': forms_contract.exists() and contract.get('guide') is True,
             'readiness': 'minecraft', 'startupTimeoutSeconds': 150, 'stopMode': 'stdin', 'stopText': 'stop'}]}
 
 
@@ -231,6 +244,10 @@ class BedrockChild(service.Child):
             try:
                 check_udp_owner(UDP_PORT, self.process.pid, LAN_ADDRESS)
                 self.metrics['bedrock'] = bedrock_probe()
+                if self.spec.get('nativeScene') and 'nativeScene' not in self.metrics:
+                    import maw_bedrock_visuals as visual_builder
+                    self.metrics['nativeScene'] = visual_builder.registered(Path(self.handler.baseFilename),
+                        self.spec['nativeScene'], time.time()-(time.monotonic()-self.started)-5)
                 if self.spec.get('nativeModels') and 'nativeModels' not in self.metrics:
                     import maw_bedrock_modpacks as model_builder
                     self.metrics['nativeModels'] = model_builder.registered_models(Path(self.handler.baseFilename),
@@ -243,11 +260,15 @@ class BedrockChild(service.Child):
                         raise RuntimeError('Native maid configuration forms did not register')
                     if self.spec.get('nativeVisualInteraction') and 'MAW_VISUAL_MENUS ready welcomeButtons=true ownEntityClick=true controls=true privateEvents=true' not in log:
                         raise RuntimeError('Native visual interaction menus did not register')
+                    if self.spec.get('nativeGuide') and 'MAW_GUIDE ready pages=5 icons=true authenticatedWelcome=true' not in log:
+                        raise RuntimeError('Bedrock adventure guide did not register')
                     self.metrics['nativeAgents'] = {'nativeForms': True, 'modelKeysRedacted': True, 'actualPhoneTested': False}
                     if self.spec.get('nativeMaidConfig'):
                         self.metrics['nativeAgents']['maidConfig'] = True
                     if self.spec.get('nativeVisualInteraction'):
                         self.metrics['nativeAgents']['visualInteraction'] = True
+                    if self.spec.get('nativeGuide'):
+                        self.metrics['nativeAgents']['guide'] = True
             except Exception as error:
                 self.ready = False
                 self.problem = 'bedrock_readiness_failed: ' + str(error)

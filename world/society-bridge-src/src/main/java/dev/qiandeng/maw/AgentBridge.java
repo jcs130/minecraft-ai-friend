@@ -39,6 +39,7 @@ public final class AgentBridge {
     public AgentBridge(IEventBus eventBus, ModContainer container) {
         PlayerAuthBridge.register();
         NativeControlAccess.register();
+        PlayerSceneBridge.register(eventBus);
         TlmMinecoloniesBurningCompat.register(eventBus);
         NeoForge.EVENT_BUS.addListener(AgentBridge::register);
         PlayerMenuBridge.register(eventBus);

@@ -9,10 +9,13 @@ import org.geysermc.cumulus.form.SimpleForm;
 /** Bedrock views of TLM's native site and per-maid fields, never copies a stored key. */
 public final class MaidForms {
     public static SimpleForm welcome(Runnable companions,Runnable maids){
+        return welcome(companions,maids,()->{});
+    }
+    public static SimpleForm welcome(Runnable companions,Runnable maids,Runnable guide){
         return SimpleForm.builder().title("My Agent World · 同伴面板")
             .content("用按钮管理自己的同伴，无需输入命令。\n\n平时空手对自己的女仆或 Agent 同伴按交互键，可以再次打开面板。手机点交互，手柄用交互键。")
-            .button("我的 Agent 同伴").button("我的车万女仆").button("开始游玩")
-            .validResultHandler(r->{if(r.clickedButtonId()==0)companions.run();else if(r.clickedButtonId()==1)maids.run();}).build();
+            .button("我的 Agent 同伴").button("我的车万女仆").button("新手冒险指南").button("开始游玩")
+            .validResultHandler(r->{if(r.clickedButtonId()==0)companions.run();else if(r.clickedButtonId()==1)maids.run();else if(r.clickedButtonId()==2)guide.run();}).build();
     }
     public static SimpleForm panel(Map<String,Object> maid,Runnable model,Runnable controls,Runnable back){
         String content="生命："+number(maid.get("health"))+" / "+number(maid.get("maxHealth"))+"    饱食："+number(maid.get("hunger"))+

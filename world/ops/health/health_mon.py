@@ -150,6 +150,13 @@ def probe_society_bedrock():
         report['resources'] = {'itemCount': resources['itemCount'], 'perNamespace': resources['perNamespace'],
                                'actualBedrockVisualVerified': False, 'registration': registration}
         model_directory = bridge.ROOT/'bedrock/plugins/Geyser'
+        if (model_directory/'visual-contract.json').exists():
+            import maw_bedrock_visuals as visual_builder
+            visuals = visual_builder.validate(model_directory, deployed=True)
+            visual_registration = visual_builder.registered(bridge.ROOT/'bedrock/ops/logs/bedrock.log', visuals,
+                                        time.time()-row.get('uptimeSeconds', 0)-5)
+            checks['native-scene-resources-and-registration'] = visual_registration['blocks'] == visuals['blockCount']
+            report['resources']['scene'] = {k: visuals[k] for k in ('blockCount','partCount','entityCount','foodCount','heldModelCount','actualPhoneTested')}
         if (model_directory/'modpack-contract.json').exists():
             import maw_bedrock_modpacks as model_builder
             models = model_builder.validate(model_directory, deployed=True)

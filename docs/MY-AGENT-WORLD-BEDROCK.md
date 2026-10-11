@@ -1,6 +1,6 @@
 # My Agent World：基岩版局域网桥接
 
-2026-10-09：独立 ViaProxy + Geyser 桥常驻运行，家庭网段 UDP 防火墙放行已读回。732 种模组静态物品图标、车万女仆 241 个与 YSM 38 个模型/纹理变体已转换部署；Geyser 实际注册 279 个实体定义，两套模型包已在自动下载栈，8 项健康/冒烟通过。实际手机下载与显示未验收。详见 [资源适配范围与维护](MY-AGENT-WORLD-BEDROCK-RESOURCES.md)。不要把发现响应或 Java 转换测试当作完整基岩客户端游玩成功。
+2026-10-12：独立 ViaProxy + Geyser 桥沿用原家庭网段入口，增加 739 种原生物品映射、67 种手持模型、53 个生活/机械方块状态和五页图文指南；原 241 个女仆及 38 个 YSM 模型变体保持。真实基岩 UDP 测试客户端下载五包及菜单/场景消息通过，实际手机画面仍待确认。当前范围与发布流程见 [生活场景、手持模型和冒险指南](MY-AGENT-WORLD-BEDROCK-LIVING-VISUALS.md)，原有资源映射原理见 [资源适配](MY-AGENT-WORLD-BEDROCK-RESOURCES.md)。
 
 ## 入口与链路
 
@@ -15,15 +15,15 @@
 
 链路：基岩 RakNet → Geyser-ViaProxy → ViaVersion 的 Java 版本转换 → 独立 28994 兼容网关的 NeoForge 握手与号表映射 → 原 `world-life`。该网关复用原代码和同一套锁定号表，使用自己的协商缓存，不改变 Agent 的 28977 原生通道。Mineflayer 兼容的是 Java 协议，因此基岩端仍需要 Geyser。[官方支持版本说明](https://geysermc.org/wiki/geyser/supported-versions/)与 [ViaProxy 部署说明](https://geysermc.org/wiki/geyser/setup/self/viaproxy/)提供该组合的依据。
 
-新 UDP 监听只绑定 `192.168.3.163`，IPv6 不监听；显式防火墙规则仅允许 `192.168.3.0/24`，另阻止其他 IPv4 源。没有路由器映射或公网发布，不占用旧 Paper 的 19132/19140 或现有其他 UDP 服务。原 Java、网关和 worker 本轮均未重启。
+UDP 监听只绑定 `192.168.3.163`，IPv6 不监听；显式防火墙规则仅允许 `192.168.3.0/24`，另阻止其他 IPv4 源。没有路由器映射或公网发布，不占用旧 Paper 的 19132/19140 或现有其他 UDP 服务。本次原生场景桥发布正常重启本项目主服及基岩桥；原世界和自主暂停保留。
 
-首批静态生成型物品采用原模组贴图及独立 Geyser 自定义物品定义；女仆/YSM 现有模型包保留原骨骼、UV、PNG，按真实实体及本人 YSM 状态绑定。其余物品和世界方块仍使用原有兼容表示。网页原生 GUI 适配不能自动变成基岩能力。模组特有界面、Java 动画与装备层、Create 动态结构及法术效果需逐项适配；不能据入口可用宣称全部可玩。[Geyser 自定义物品文档](https://geysermc.org/wiki/geyser/custom-items/)要求另外提供相应映射和基岩资源包。Agent 仍用其本人 Mineflayer 连接和原生 SDK。
+静态物品和新增手持/场景模型采用原模组资源及独立 Geyser 定义；女仆/YSM 包保留原骨骼、UV、PNG，按真实实体及本人 YSM 状态绑定。选定灶台、机械及风车已接原生状态，其余世界方块仍使用原兼容表示。网页原生 GUI 适配不能自动变成基岩能力。全部模组特有界面、Java 动画/装备层、任意 Create 动态结构及法术效果仍需逐项适配。[Geyser 自定义物品文档](https://geysermc.org/wiki/geyser/custom-items/)要求另外提供相应映射和基岩资源包。Agent 仍用其本人 Mineflayer 连接和原生 SDK。
 
 28994 独有 `GATE_BEDROCK_PROJECTION=1`：按该连接收到的真实 NeoForge FrozenRegistrySnapshot 还原标签、属性和原版实体 ID，不把原始模组号交给 ViaVersion；没有基岩定义的模组实体暂不发送，其后续 metadata 也不发送，避免错读成其他生物。这意味着部分模组 NPC/敌人暂不可见，不能宣称模组战斗可用。原网关有意跳过的模组配方流未被伪造为已支持：向转换层声明空配方目录，配方书及实际合成必须另外验收；原 Agent 原生配方 SDK 保持。普通包转换异常仅结束该连接，不使网关进程退出。
 
 ## 入服自动下载资源
 
-已启用 `enable-integrated-pack=true`、`enable-custom-content=true` 和 `force-resource-packs=true`。除 Geyser 基础兼容资源外，现有 `maw-native-icons.mcpack`（451,684 字节）、`maw-touhou-models.mcpack`（2,869,354 字节）和 `maw-ysm-models.mcpack`（1,857,594 字节），均为 1.0.2。扩展启动时核对两套模型包实际在资源下发栈。真实手机的下载提示/完成尚未实测。连接时若提示资源下载，应选择“下载并加入”。
+已启用 `enable-integrated-pack=true`、`enable-custom-content=true` 和 `force-resource-packs=true`。除 Geyser 兼容资源外，当前四个本服包为 `maw-native-icons.mcpack` 1.1.0、`maw-world-visuals.mcpack` 1.0.0、原女仆/YSM 两包 1.0.2。扩展核对模型及场景包已加载；实际 UDP 测试客户端完整下载及 SHA 校验通过。手机连接时选择“下载并加入”，认证后可点欢迎菜单中的“冒险指南”，以后用 `/mawagent guide` 再打开。
 
 玩家在其他服务器看到的自动下载通常是基岩资源包；基岩原生附加包还可以包含行为内容。Java 的 NeoForge JAR 不能交给基岩版直接运行。后续本服专属的贴图/模型/声音包放在 `bedrock/plugins/Geyser/packs/*.mcpack`，自定义物品映射放在 `custom_mappings/*.json`（或对应 Geyser 扩展），正常重启本桥后随登录发送，不必重启主世界。[官方资源包下发说明](https://geysermc.org/wiki/geyser/packs/)明确支持本地包并要求先转换为基岩格式。资源转换、物品/方块/实体映射和原生交互是三项独立验收；下载完成不能替代玩法验收。
 
