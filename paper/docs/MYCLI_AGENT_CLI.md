@@ -1,5 +1,8 @@
 ## 0.4.15候选：特色实练与真实验房（尚未上线）
 
+**0.4.18已上线：**`coach lessons`提供六项实练；职业技艺19项，新增战士`warrior_sky_leap`、法师`mage_soar`、牧师`priest_blessing`。新学/升级耗点，施法耗魔，进阶需证书。`guild exam list/info/start/status/submit`、`guild exam promotion`和`guild certificates`可查询实操题、18阶主动晋级及证书；命格书/原版公会菜单同步。云阶移动考场已开放。见[认证规则](SKILL_CERTIFICATIONS.md)。
+
+
 `/mycli coach lessons` 自愿报名并查六项实练：真实大背包存取、CLI发现、照亮感知、恢复援助、魔法出行、开门爬梯；命令目录增加 `coach.lessons`。`MC_COACH` schemaVersion1追加lessons/feature_proof，原毕业继续有效。`life status/claim` 对builder_home追加七项house检查、reason及nextAction，不再以放12块作为完工；原生活任务ID及奖励不变。规则见 [住房与实练](STARTER_HOUSE_TRAINING.md)。
 
 正式仍0.4.13，本轮不重启；欢迎修订4已热更大背包/CLI介绍，不能把候选命令当成已发布命令。

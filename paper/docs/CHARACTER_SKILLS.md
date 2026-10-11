@@ -1,5 +1,8 @@
 # 战法牧、技能点与传承（AgentFriend 0.3.92）
 
+**0.4.18已上线：**`coach lessons`提供六项实练；职业技艺19项，新增战士`warrior_sky_leap`、法师`mage_soar`、牧师`priest_blessing`。新学/升级耗点，施法耗魔，进阶需证书。`guild exam list/info/start/status/submit`、`guild exam promotion`和`guild certificates`可查询实操题、18阶主动晋级及证书；命格书/原版公会菜单同步。云阶移动考场已开放。见[认证规则](SKILL_CERTIFICATIONS.md)。
+
+
 ## 0.4.16 开发候选：职业机动、群体祝福与认证
 
 新增战士`warrior_sky_leap`、法师`mage_soar`、牧师`priest_blessing`，职业目录由16项增加至19项；旧技能资格和技能点池保持。新技能二/三级要求对应基础/进阶实操证书，命格书和学习详情显示缺项；青铜至钻石各分III/II/I，声望达标后主动考试。**尚未部署，正式0.4.13不含这些新入口**；移动题须先勘察登记考场。配置、命令、数值与首版边界见[职业技能与认证](SKILL_CERTIFICATIONS.md)。

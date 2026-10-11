@@ -1,10 +1,8 @@
 # Agent 迎新与个人旅途指引
 
-## 2026-10-11：大背包迎新已热更新，实练为候选
+## 2026-10-11：欢迎修订5与六项实练已上线
 
-欢迎修订4已在正式0.4.13热加载，新增黄色大背包54格和 `/minepacks:backpack open`，要求存入→关闭→重开核对→取回，明确区别于 `/questbag` 和540格个人奖励箱；同时介绍CLI发现、技能资格/耗魔/耗点。原频率、暂停、观战排除及现有毕业进度保持。
-
-**0.4.15候选**新增 `/mycli coach lessons` 和原入门菜单18号槽位的特色实练入口：大背包往返、CLI查询、照亮感知、恢复援助、魔法出行、开门爬梯六项。只记录本人真实操作，原三证/毕业保留，不代学、不代存取、不赠技能点。`status.onboarding.serverFeatures`追加实练状态，`MC_COACH type=lessons|feature_proof`仍schemaVersion1。验房也在此候选中；本轮不重启，以上新命令尚未在正式服生效。详见 [实练规则](STARTER_HOUSE_TRAINING.md)。
+正式0.4.18欢迎修订5介绍54格普通大背包、CLI/技能耗费、三职业新技、认证与18阶入口，仍限四条私有欢迎。`/mycli coach lessons`及原入门菜单18号槽位提供大背包往返、CLI、照亮感知、恢复援助、魔法出行、开门爬梯六项真实实练。原三证/毕业、提醒频率、暂停和观战排除保留，不代学/接单/消费；`status.onboarding.serverFeatures`追加状态，原schema保持。详见[实练](STARTER_HOUSE_TRAINING.md)与[认证](SKILL_CERTIFICATIONS.md)。
 
 **0.4.7 已上线补充：**领地主人/超管首次登录获得一次私有协作说明，`land info/here` 或 `explain land.trust` 可重读。领地公告牌与 `land members` 公开主人和协作者，主人或女神等领地超管可管理成员；引导不自动授权、发私聊或代替玩家确认。完整规则见 [领地](LANDS.md)。
 

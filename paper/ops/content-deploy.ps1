@@ -12,7 +12,7 @@ function Deploy-PendingContent {
     foreach ($file in @($plan.files)) {
         $relative = [string]$file.target
         if ($relative -match '^[A-Za-z0-9][A-Za-z0-9_.-]*\.jar$') {
-            if ($relative -notmatch '^(AgentFriend|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame)-') { throw 'Unexpected plugin JAR' }
+            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame)-') { throw 'Unexpected plugin JAR' }
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
         } elseif ($relative -eq 'libraries/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar') {
             $target = Join-Path $serverDir $relative
@@ -21,14 +21,14 @@ function Deploy-PendingContent {
             # This one root file uses the same stopped E/F snapshots, pinned hashes,
             # atomic replacement and rollback as plugin configuration below.
             $target = Join-Path $serverDir $relative
-        } elseif ($relative -in @('plugins/MagicSpells/general.yml','plugins/MagicSpells/spells-agentfriend.yml','plugins/SpectatorPlus/config.yml','plugins/Geyser-Spigot/extensions/ysmbedrock/config.json','plugins/Geyser-Spigot/extensions/AgentAppearance-Bedrock-0.1.0.jar','plugins/Freesia-Backend-2.5.1+2.4.1-all.jar')) {
+        } elseif ($relative -in @('plugins/CortiEyeMirror/config.yml','plugins/WorldGuard/worlds/world/regions.yml','plugins/MagicSpells/general.yml','plugins/MagicSpells/spells-agentfriend.yml','plugins/SpectatorPlus/config.yml','plugins/Geyser-Spigot/extensions/ysmbedrock/config.json','plugins/Geyser-Spigot/extensions/AgentAppearance-Bedrock-0.1.0.jar','plugins/Freesia-Backend-2.5.1+2.4.1-all.jar')) {
             # Only the two server-owned spell files are eligible; the same
             # pinned hashes, stopped snapshots and rollback apply below.
             $target = Join-Path $serverDir $relative
         } elseif ($relative -match '^plugins/([A-Za-z0-9]+)/(.+)$' -and $allowed -contains $Matches[1]) {
             if ($relative -match '(^|/)\.\.(/|$)|:|\\' -or $relative -notmatch '\.(yml|yaml|json|dsc)$') { throw 'Unsafe plugin configuration path' }
             $target = Join-Path $serverDir $relative
-        } elseif ($relative -in @('ops/ysm-services.json','ops/goddess-bridge.mjs','ops/goddess-photo-camera.mjs','ops/goddess-photo-camera.json','ops/goddess-mcp.py','ops/maintenance-notice.mjs','ops/npc-dialogue-adapter.mjs','ops/npc-adapter.private.json','ops/agent-eye-names.mjs','ops/agent-eye-watcher.mjs','ops/agent-lan-gateway.mjs','ops/agent-gateway-access.json')) {
+        } elseif ($relative -in @('ops/ysm-services.json','ops/goddess-bridge.mjs','ops/goddess-photo-camera.mjs','ops/goddess-photo-camera.json','ops/goddess-mcp.py','ops/maintenance-notice.mjs','ops/npc-dialogue-adapter.mjs','ops/npc-adapter.private.json','ops/agent-eye-names.mjs','ops/agent-eye-pairs.json','ops/agent-eye-watcher.mjs','ops/agent-lan-gateway.mjs','ops/agent-gateway-access.json')) {
             $target = Join-Path $opsDir $relative.Substring(4)
         } else { throw "Unexpected content target: $relative" }
         $source = [IO.Path]::GetFullPath([string]$file.source)
@@ -42,7 +42,7 @@ function Deploy-PendingContent {
         $entries += @{Source=$source;Target=$target;Hash=$file.sha256;Before=[bool]$file.beforeSha256}
     }
     foreach ($file in @($plan.removeJars)) {
-        if ($file.name -notmatch '^AgentFriend-[0-9.]+\.jar$') { throw 'Only previous AgentFriend JAR may be removed' }
+        if ($file.name -notmatch '^(AgentFriend|CortiEyeMirror)-[0-9]+\.[0-9]+\.[0-9]+\.jar$') { throw 'Only previous first-party plugin JAR may be removed' }
         $target = Join-Path (Join-Path $serverDir 'plugins') $file.name
         if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $file.sha256) { throw 'Previous AgentFriend changed' }
         $entries += @{Source=$null;Target=$target;Before=$true}

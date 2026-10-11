@@ -1,0 +1,55 @@
+schema-version: 1
+welcome-revision: 5
+enabled: true
+agents-only: false
+poll-seconds: 60
+welcome-delay-seconds: 2
+welcome-cooldown-seconds: 21600
+session-grace-seconds: 60
+reminder-seconds: 600
+progress-delay-seconds: 20
+min-gap-seconds: 60
+combat-quiet-seconds: 30
+complete-reminder-seconds: 3600
+pause-seconds: 1800
+welcome:
+- 欢迎来到千灯纪！你有54格普通储物大背包：右键黄色大背包或 /minepacks:backpack open。存入后关闭，再重开核对、取回；不是/questbag任务物品袋，也不是540格个人奖励箱。
+- Agent先用 /mycli help、list、explain skills、status 查玩法与状态，coach next 看下一步，coach lessons
+  做大背包/CLI/感知/恢复/出行/开门爬梯六项实练。手柄从罗盘→旅途指南→新手入门进入。
+- 先 /mycli guild join 登记，world guide start 报名；skills list common/profession 查技能，info
+  <ID> 查条件。战士凌空跃击、法师御空、牧师同行祝福可主动花点学习；guild exam list 查认证、exam promotion 查晋级，施法出行耗魔。
+- 任务先life board或guild board查条件，accept <ID>接单，真实完成，status复查，claim交付。开门爬梯用world practice
+  start实练；保护拒绝就换获准位置，缺物资用guild shared公共箱。提醒私发本人，coach later暂停、off关闭。
+steps:
+  register:
+    title: 先登记为冒险者
+    message: 用 /mycli guild join 免费登记。接待员与门口公共物资可用 guild trader/shared 查询；登记不会替你接任务。
+  guide_start:
+    title: 报名小满的新手实习
+    message: 用 /mycli world guide start 自愿报名。三项证明是报名后读技能目录、成功施法、完成并交付生活委托；只说完成不会计数。
+  catalog:
+    title: 看看自己能学什么
+    message: 用 /mycli skills list common 读取基础技能；按 MC_SPELL_NEXT 继续翻页。skills info <ID>
+      查条件，skills points 查点数；查询免费，不会代学。
+  cast:
+    title: 亲手成功施放一次技能
+    message: 先看本人魔力、学习资格和冷却，再选一个适合当前场景的技能；失败不会完成实习。
+  life_accept:
+    title: 选择第一项生活实践
+    message: 用 /mycli life board 查看七类生活委托，选喜欢的接单。完成后一定 life claim，真实领奖成功才算实习证明。
+  life_progress:
+    title: 继续当前生活委托
+    message: 按自己已接的任务真实行动；只计算合规的原版操作。保护拒绝时停止，换获准位置；别为了提醒放弃在途任务。
+  life_claim:
+    title: 生活委托已达标，记得交付
+    message: 用 /mycli life claim 结算当前委托。奖励进入个人奖励箱或待入箱队列，空间不足不等于奖励丢失。
+  guild_accept:
+    title: 接取第一张冒险委托
+    message: 新手实习已经完成，挑一张冒险者公会委托试试。先接单再操作，和居民事务共用一个任务槽。
+  guild_progress:
+    title: 完成当前冒险委托并交付
+    message: 用 /mycli guild status 复查真实步骤；每阶段达标后 guild claim，全部完成才发最终奖。不根据聊天自报或到达一次就判探索完成。
+  complete:
+    title: 入门已完成，选择自己的生活
+    message: 生活、探索、照片和地下城都可继续；coach lessons 做六项特色实练，skills list profession 看19项职业技艺。guild
+      exam list查证书，exam promotion查下一阶条件；学习升级耗点，考试不赠点，按本人选择行动。

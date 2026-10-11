@@ -1,0 +1,108 @@
+{
+  "version": "0.4.18",
+  "eyeVersion": "0.1.12",
+  "status": "deployed",
+  "verifiedAt": "2026-10-11T01:36:09.931803+00:00",
+  "artifacts": [
+    {
+      "name": "AgentFriend-0.4.18.jar",
+      "bytes": 1204460,
+      "sha256": "c47199d1b508f617425c90c37c9347232db8bb0d7e10667b468e80993a087353"
+    },
+    {
+      "name": "CortiEyeMirror-0.1.12.jar",
+      "bytes": 46190,
+      "sha256": "e5827336cac83aa031267cdd866ac33f1799d704ebf2f5b2d827d93d415758bf"
+    }
+  ],
+  "isolatedChecks": {
+    "native-41.json": 43,
+    "compat-41.json": 31,
+    "refund-44.json": 8,
+    "native-initial.json": 20,
+    "native-restart.json": 4,
+    "obs-before-cold.json": 20,
+    "obs-after-cold.json": 20,
+    "bedrock-46.json": 6,
+    "load-43.json": 39,
+    "real-course-49.json": 17,
+    "promotion-47.json": 13,
+    "promotion-47-restart.json": 4
+  },
+  "pureJavaChecks": {
+    "house": 17,
+    "trajectory": 29
+  },
+  "deploymentHelperChecks": 17,
+  "eyeNamingUnitChecks": 2,
+  "formalReadOnlyChecks": [
+    "version AgentFriend",
+    "version CortiEyeMirror",
+    "minecraft:difficulty",
+    "minecraft:execute in minecraft:overworld run gamerule keepInventory",
+    "minecraft:execute in minecraft:the_nether run gamerule keepInventory",
+    "minecraft:execute in minecraft:the_end run gamerule keepInventory",
+    "fixed released JAR hash",
+    "fixed released Eye JAR hash",
+    "live inherits only human-confirmed original Eye computer source",
+    "automatic suffix Eyes and live are enabled with original pair retained",
+    "original player reconnected ag_NEKO",
+    "original player reconnected Goddess",
+    "original player reconnected ag_CorMy",
+    "actual automatic camera ready",
+    "existing YSM proxy and worker alive",
+    "no pending maintenance content-plugins.pending.json",
+    "no pending maintenance agentfriend-deploy.pending.json",
+    "no pending maintenance cortieye-deploy.pending.json",
+    "no pending maintenance geyser-deploy.pending.json",
+    "no pending maintenance server-settings.pending.json",
+    "no pending maintenance auto-start.paused"
+  ],
+  "preservationChecks": 73,
+  "controlledConcurrency": {
+    "clients": 16,
+    "throughYsmProxy": true,
+    "samplerIncludingWritesPeakMs": 7.312,
+    "fiveSecondMeanTickMs": 2.9,
+    "autonomousLlmLongDuration": false
+  },
+  "course": {
+    "world": "overworld",
+    "start": [
+      -671.5,
+      101,
+      -423.5
+    ],
+    "entry": [
+      -676,
+      64,
+      -424
+    ],
+    "blocks": 163,
+    "movementExams": [
+      "flight_basic",
+      "flight_advanced",
+      "leap_basic",
+      "leap_advanced"
+    ],
+    "protection": "sky facility, narrow ladder column and base floor; nearby ground remains usable"
+  },
+  "backup": "20261011-092612",
+  "notVerified": [
+    "phone/Xbox actual input and visuals",
+    "remote Web deployment",
+    "full multi-stage on-site promotion/BossBar",
+    "autonomous LLM mastery"
+  ],
+  "failedAttemptsRetained": true,
+  "privateEvidence": "E/F repairs/gameplay-release-20261011",
+  "formalNativeDiscoveryChecks": 32,
+  "formalCourseInstallationChecks": 7,
+  "knowledge": {
+    "manuals": 15,
+    "nativeReadbackPassed": true,
+    "answerCharacters": 139,
+    "personalMemoryUnchanged": true
+  },
+  "originalEyeOnlineAtVerification": false
+}

@@ -1,3 +1,7 @@
+## 2026-10-11 0.4.18整合玩法正式发布
+
+AgentFriend0.4.18、CortiEyeMirror0.1.12，按原计划任务、180/60/10秒预告及E/F停服快照上线；任务结果与原机重连以新发布清单为准。七项验房、六项教学、三项职业新技、十种认证、18阶主动晋级、云阶考场、自动Eye/live和窗口关闭已生效。YSM与0.4.17指引保持；普通难度、三维度keepInventory=true和旧数据复核通过。规则、摘要、实际验证与回退见[新玩法](GAMEPLAY_RELEASE_0.4.18.md)、[清单](../manifests/gameplay-release-0.4.18.json)。以下有日期记录为历史。
+
 **2026-10-11 玩法指引修复0.4.17已上线：**正式AgentFriend0.4.17、CortiEyeMirror0.1.10，YSM桥接保持。高处任务Y≥120可用建筑，摄影委托/NPC/CLI默认自动拍照，旧冻结任务显示正确步骤；修复相机就绪目录和三项交易坐标截断。住房/教学0.4.15、职业认证0.4.16与OBS/live候选仍未部署。当前答疑见[规则](GODDESS_CURRENT_RULES.md)，修复与复现见[审计](CURRENT_GUIDANCE_AUDIT.md)；下方有日期的发布记录仅作历史。
 
 正常维护预告180/60/10秒后，既有Afu-MC-DailyBackup完成E/F `20261011-060415/.complete` 停服快照，发布最小修复六文件并移除旧自研JAR，任务结果0，Paper PID35288。JAR 1110998字节，SHA256 `1DA7D2C396BDE8AA19C78A7B2DC66386352DEEDA49D7A56447D08B38372F8C5F`；基于正式0.4.13源码，只有四个原有Java类及新增TaskGuidance变化。其他插件、旧任务/奖励/背包/技能资格/点数/领地保持，60项旧数据核对、隔离20项及正常冷重启19项、正式普通Mineflayer13项通过。阿卷通过本插件prompt编辑命令热更新，原实体UUID和位置保持，实际模型答复复核两次交阶段顺序；首次RCON长包超时和过严测试断言留存。没有新公网端口；基岩手机/Xbox实际显示仍待设备验收。私有逐项回执E/F repairs/current-guidance-20261011。
