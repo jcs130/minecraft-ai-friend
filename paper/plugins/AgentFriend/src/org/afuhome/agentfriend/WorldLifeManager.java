@@ -157,6 +157,11 @@ final class WorldLifeManager implements Listener {
         out.addProperty("instruction", "查看详情→guild accept <ID>→亲自操作→每阶段guild claim；全部完成统一入个人箱。真实动作验收，不能用聊天声明完成。");
         emit(p, "board", out); if (inv != null) p.openInventory(inv);
     }
+    JsonArray observationPlaces() {
+        JsonArray out=new JsonArray();for(java.util.Map<?,?> row:content.getMapList("shops")){JsonObject j=new JsonObject();for(String k:List.of("name","world","x","y","z")){Object value=row.get(k);if(value instanceof Number n)j.addProperty(k,n);else if(value!=null)j.addProperty(k,value.toString());}j.addProperty("kind","registered_shop");out.add(j);}
+        try{int count=0;for(Object npc:(Collection<?>)property(manager(),"getAll")){if(++count>32)break;Location at=(Location)property(npc,"getSpawnLocation");if(at==null||at.getWorld()==null)continue;JsonObject j=new JsonObject();j.addProperty("id",String.valueOf(property(npc,"getId")));j.addProperty("name",String.valueOf(property(npc,"getDisplayName")));j.addProperty("kind","registered_npc");j.addProperty("world",at.getWorld().getKey().toString());j.addProperty("x",at.getX());j.addProperty("y",at.getY());j.addProperty("z",at.getZ());out.add(j);}}catch(ReflectiveOperationException|RuntimeException unavailable){ /* Registered shops remain available when NPCSpeak is not ready. */ }
+        return out;
+    }
     private void shops(Player p) {
         JsonObject out = new JsonObject(); JsonArray shops = new JsonArray();
         for (java.util.Map<?, ?> row : content.getMapList("shops")) {

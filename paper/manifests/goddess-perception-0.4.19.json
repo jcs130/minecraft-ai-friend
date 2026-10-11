@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "version": "0.4.19",
+  "agentFriendSha256": "74ad02bce98b9dccfcd0c5846dbfab02a8c8096e5855fd9eadfe7457fff99ee6",
+  "eyeVersion": "0.1.12",
+  "mcpTools": 19,
+  "newReadOnlyTools": 9,
+  "cameraBundleSha256": "6214acd9c22111efb2474a5b316c1004a42b8c0be3312f78bdcd71fb8e9c0de4",
+  "rendererSource": {
+    "sourceSha256": "6d6c0e0ace366aec3b35169f977bdcee629b81ccef09d951958a048663ed6c54",
+    "sourceFiles": 181,
+    "scope": "renderer_source_and_mineflayer_host_adapters"
+  },
+  "minecraftVersion": "1.20.6",
+  "preset": "qiandengji",
+  "limits": {
+    "blockVolume": 8192,
+    "blockReads": 12000,
+    "routeNodes": 768,
+    "routeHorizontalPerAxis": 24,
+    "routeVertical": 8,
+    "photoDefaultAgeSeconds": 300,
+    "photoMaxAgeSeconds": 900
+  },
+  "unverified": [
+    "current_question_model_pixel_understanding",
+    "remote_web_deployment",
+    "phone_xbox_visual_parity"
+  ],
+  "webSourceCommit": "70f40af0dd0d20d6ecd75abf37d8282b32818fa1",
+  "runtimeModules": {
+    "goddess-mcp.py": "d4a01c0b39d5c380ae4a9d802e8eca5ff2943faeb751cb7774f0dc6185d03fb5",
+    "goddess-bridge.mjs": "ebe423db444c74c6df58d0f078b450b1309f4d82c1b6c92d6f662567e52ce23a",
+    "goddess-photo-camera.mjs": "35d4002dbf3aa98db229fa21a8f1910cee9c9037b03cb076bd3f4613ac717f5e",
+    "goddess-perception.mjs": "43f31afe62a4e5b891bb1bb9d2022c766cb2097e500407bf86a374fa5314f7d7"
+  },
+  "backup": "20261011-104047",
+  "answerValidation": [
+    "structured_final_only",
+    "bounded_140_characters",
+    "signed_integer_coordinate_receipts",
+    "known_dimension_receipts",
+    "native_mcp_process_reload"
+  ],
+  "maintenanceTaskResult": 0,
+  "paperPid": 34908,
+  "initialDataChecks": 77,
+  "liveProgressAuditChecks": 386,
+  "nativeHealthChecks": 23,
+  "nativeGameQuestionChecks": 12,
+  "knowledge": {
+    "manuals": 16,
+    "nativeReadbackPassed": true,
+    "answerCharacters": 133,
+    "coreMemoryUnchanged": true
+  },
+  "actualGoddess": {
+    "uuid": "b2f9ceb0-8271-3470-b99f-e1c3ffe4edbd",
+    "gameMode": "SPECTATOR",
+    "opRetained": true
+  },
+  "privateEvidence": "E/F repairs/goddess-perception-20261011",
+  "failedAttemptsRetained": true
+}

@@ -211,7 +211,7 @@ export function startGoddessPhotoCamera(bot, options = {}) {
       await response.arrayBuffer();
       reply('uploaded',job);
       log(`photo job=${job.job} uploaded bytes=${png.length} sha256=${createHash('sha256').update(png).digest('hex')}; game confirmation pending`);
-      if (options.onCapture) await options.onCapture({job:job.job,png,diagnostics:await page.evaluate(()=>({width:document.getElementById('viewer-canvas').width,height:document.getElementById('viewer-canvas').height,chunks:globalThis.__lanternRenderer?.chunkLoading,content:globalThis.cortiViewerContent?.stats?.()}))});
+      if (options.onCapture) await options.onCapture({job:job.job,owner:job.owner,world:job.world,mode:job.mode,anchor:{x:job.anchorX,y:job.anchorY,z:job.anchorZ},png,diagnostics:await page.evaluate(()=>({width:document.getElementById('viewer-canvas').width,height:document.getElementById('viewer-canvas').height,chunks:globalThis.__lanternRenderer?.chunkLoading,content:globalThis.cortiViewerContent?.stats?.()}))});
     } finally {
       signal.removeEventListener('abort',abortCapture);
       await context?.close().catch(()=>{}); for (const close of sessions) close();

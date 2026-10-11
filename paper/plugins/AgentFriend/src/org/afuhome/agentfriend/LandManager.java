@@ -450,6 +450,12 @@ final class LandManager implements Listener {
         return denial == null ? null : protectionArea(denial.land());
     }
 
+    JsonArray observationPlaces() {
+        JsonArray out=new JsonArray();for(Land land:lands.values()){
+            if(land.guild()||land.landmark()){JsonObject j=new JsonObject();j.addProperty("id",land.id());j.addProperty("name",land.title());j.addProperty("kind","public_land_bounds");j.addProperty("world",land.world().getKey().toString());j.addProperty("minX",land.min().x());j.addProperty("minY",land.min().y());j.addProperty("minZ",land.min().z());j.addProperty("maxX",land.max().x());j.addProperty("maxY",land.max().y());j.addProperty("maxZ",land.max().z());out.add(j);}
+            for(var p:land.publicContainers()){JsonObject j=new JsonObject();j.addProperty("id",land.id()+"_public_"+p.x()+"_"+p.y()+"_"+p.z());j.addProperty("name",land.title()+"公共箱");j.addProperty("kind","public_container");j.addProperty("world",land.world().getKey().toString());j.addProperty("x",p.x());j.addProperty("y",p.y());j.addProperty("z",p.z());out.add(j);if(out.size()>=128)return out;}
+        }return out;
+    }
     void fields(JsonObject data, Location at) {
         Land land = find(at);
         if (land == null) return;

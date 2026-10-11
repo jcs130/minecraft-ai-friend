@@ -2,6 +2,8 @@
 
 ## 先认清现状
 
+**2026-10-11 女神世界观察0.4.19已上线：**正式AgentFriend0.4.19、CortiEyeMirror0.1.12。游戏问答自动附当前玩家位置/脚下方块；九项只读MCP查询真实地形、自定义群系、方块/生物/掉落物、公开地点、局部步行/门/梯路线、实际玩家保护规则及本人近期照片。Goddess保留房管OP旁观者身份，原管理工具保留，游戏聊天身份只增具名只读许可。相机同步最新Web渲染源码并核验实际bundle；远端Web仍须更新重建，视觉模型像素理解和手机/Xbox画面未验。沿原维护预告及E/F停服快照发布，原客户端与玩法数据保持。问答实际核验见收尾记录；规则见[女神世界观察](GODDESS_PERCEPTION.md)，私有回执E/F repairs/goddess-perception-20261011。下方日期记录按历史时点阅读。
+
 **2026-10-11 新玩法0.4.18已上线：**正式AgentFriend0.4.18、CortiEyeMirror0.1.12，沿原维护任务完成180/60/10秒预告及E/F停服快照。七项验房、六项特色实练、跃击/御空/同行祝福、十种能力题与18阶主动晋级生效；云阶考场四项移动题已实建开放。Eye后缀自动配对、live按实际附身对象同步、移动/超距关闭真实窗口生效；live沿服主确认的可米电脑可信来源。原任务奖励、技能资格/点数池、背包与领地保持；YSM及0.4.17自动拍照/高处指引继续有效。远端Web仍须拉取重建，手机/Xbox真机及完整多阶段综合考试未验/未完成。见[发布规则](GAMEPLAY_RELEASE_0.4.18.md)及[清单](../manifests/gameplay-release-0.4.18.json)。下方有日期记录为历史。
 
 实时版本、本人任务进度和相机就绪以服务器本次回执为准。高处和摄影的操作顺序见当前规则；不得把有日期的旧启动检查当成实时状态。
@@ -31,7 +33,7 @@
 | 生活公会（0.4.18验房已上线） | `LifeGuildManager`七类委托、`StarterHouseInspection/Validator`；四馆七导师；[验房规则](STARTER_HOUSE_TRAINING.md) | UUID life-guild及四馆地基、四份结构掩码；active.house-placed原生施工记录 | builder_home七项现存验房，status/claim均重查，旧已领奖成果保留；在途任务保留ID及进度，按新要求验收。结构快照随世界备份 |
 | 试炼塔、地下城与奖励（0.3.95） | trial-waves.yml前六层；dungeons.yml三个真实建筑；罗盘地点页、`dungeon list/info/travel/start/join/status/resume/leave/claim/menu`；[规则](DUNGEON_NETWORK.md) | config.yml的旧试炼波次快照、site-dungeons.runs/receipts/claimed/cooldowns，既有个人奖励；世界实体和建筑 | 控制台`trialwaves reload`/`dungeons reload`整体验证热更，活动期间拒绝换目录；新地点可指定已勘察付费entry。逐室原生战斗和实际返程，每处每日一次奖励。全服新地点48怪/128飞行物，不根据文字直接覆盖世界生成建筑 |
 | PvP 竞技场 | `PvpArenaManager.java` 的自愿匹配、同款装备和积分；[PvP 规则](PVP_ARENA.md) | `pvp-records`、`pvp-escrow.yml`、竞技场方块及 WorldGuard 区域 | 运营 Agent 可查看本人对局和排行榜；改地图或计分规则须隔离测试和完整备份，不可在有人对战时发布 |
-| 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 起正式生效，现役版本继承，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP 八工具已重新发现。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |
+| 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 起正式生效，现役版本继承，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP现共19项，新增九项世界观察工具；只读聊天身份具名许可和房管管理身份分开，见[世界观察](GODDESS_PERCEPTION.md)。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |
 | 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在正式重启自动激活；正式0.4.18/0.1.12及40连接上限，容量与边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) | 可检查、构建、测试、备份和发布；先完成 E/F 校验镜像，再替换 JAR；源码提交不会自动改变正式服 |
 
 2026-10-06 已修复女神附魔书字段错误和现存确认损坏的 1 本，并正式发布 0.3.84 校验入口：书必须使用 `stored_enchantments`，装备使用 `enchantments`。私聊与造物都使用同一受校验入口；女神只选礼物，服务器生成属性并核对实际库存。不要依据闪光认定铁砧可用，也不要把字段错误归咎于刻印保护。现状见 [女神附魔书](GODDESS_BOOKS.md)、[礼物校验](GODDESS_GIFTS.md)。

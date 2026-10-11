@@ -339,6 +339,9 @@ final class WaypointManager implements Listener {
             plugin.getLogger().warning("Waypoint chunk request failed: " + error);
         }
     }
+    JsonArray observationShares() {
+        JsonArray out=new JsonArray();points.values().stream().filter(v->v.share!=null&&!v.share.isEmpty()).limit(128).forEach(v->{JsonObject j=json(v,true);j.addProperty("kind","public_waypoint");out.add(j);});return out;
+    }
     private JsonObject json(Point v, boolean shared) {
         JsonObject j = new JsonObject(); j.addProperty("id", v.id.toString()); j.addProperty("name", v.name);
         j.addProperty("owner", v.owner.toString()); j.addProperty("ownerName", v.ownerName);

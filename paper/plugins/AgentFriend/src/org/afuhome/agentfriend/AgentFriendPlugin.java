@@ -255,6 +255,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private AgentStatePublisher agentStatePublisher;
     private SkillEventPublisher skillEventPublisher;
     private ProtectionAdvisor protectionAdvisor;
+    private GoddessObservation goddessObservation;
     private AgentCoach agentCoach;
     private PlayerNameTags playerNameTags;
     private TextBubbleManager textBubbles;
@@ -768,6 +769,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if(args.length>=2&&args[0].equalsIgnoreCase("admin")&&args[1].equalsIgnoreCase("observe")) {
+            if(!(sender instanceof ConsoleCommandSender)&&!(sender instanceof RemoteConsoleCommandSender)){sender.sendMessage("地形观测仅供女神的只读服务使用；玩家可用 /mycli protect 查询身边权限、/mycli waypoint 查看公开地点。");return true;}
+            if(goddessObservation==null)goddessObservation=new GoddessObservation(this);
+            goddessObservation.command(sender,args);return true;
+        }
         if (args.length >= 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("bubbles")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
                 sender.sendMessage("只允许服务器控制台维护气泡；/mycli bubbles 可查看状态，公开聊天或 /mycli say <话> 即可使用。"); return true;

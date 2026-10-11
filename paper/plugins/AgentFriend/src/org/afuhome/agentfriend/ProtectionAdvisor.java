@@ -292,11 +292,20 @@ final class ProtectionAdvisor implements Listener {
             cancelled(e.getPlayer(), plugin.guildStorage().physicalContainer(e.getClickedBlock()) ? "container" : "use", e.getClickedBlock());
     }
 
+    JsonObject observe(Player player,String action,int x,int y,int z) {
+        JsonObject data=new JsonObject();data.addProperty("action",action);data.addProperty("world",player.getWorld().getKey().toString());data.addProperty("x",x);data.addProperty("y",y);data.addProperty("z",z);
+        String reason=inspect(player,action,x,y,z);data.addProperty("reason",reason==null?"no_known_protection":reason);data.addProperty("status",reason==null?"allow_likely":reason.startsWith("unknown_")?"unknown":"deny");
+        if(reason==null)data.addProperty("allowed",true);else if(reason.startsWith("unknown_"))data.add("allowed",com.google.gson.JsonNull.INSTANCE);else data.addProperty("allowed",false);
+        plugin.lands().fields(data,new Location(player.getWorld(),x,y,z));if(reason!=null&&!reason.startsWith("unknown_"))enrich(player,data,new Location(player.getWorld(),x,y,z));return data;
+    }
     private String check(Player player, String action, int x, int y, int z) {
         long now = System.currentTimeMillis();
         long previous = lastQuery.getOrDefault(player.getUniqueId(), 0L);
         if (now - previous < MIN_INTERVAL_MS) return "unknown_rate_limited";
         lastQuery.put(player.getUniqueId(), now);
+        return inspect(player,action,x,y,z);
+    }
+    private String inspect(Player player,String action,int x,int y,int z) {
         if (y < player.getWorld().getMinHeight() || y >= player.getWorld().getMaxHeight())
             return "unknown_invalid_y";
         Location eye = player.getEyeLocation();
