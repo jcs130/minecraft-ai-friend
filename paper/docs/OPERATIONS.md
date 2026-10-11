@@ -1,3 +1,9 @@
+## 2026-10-11 私聊别名已热修
+
+可米当日47次 Essentials 命令拒绝全部对应 `/w`，其原版私聊节点为true、OP为false。E/F脚本前像核验后，于15:05添加 `Denizen/scripts/qd_private_chat.dsc` 并仅重载 Denizen 脚本：`w/tell/whisper` 转原版 `minecraft:msg`。隔离私聊、权限、命令预处理取消、回退及正常冷启动通过；正式普通账号21项收发/权限检查通过。AgentFriend仍0.4.19、CortiEyeMirror仍0.1.12，Paper/网关/YSM未重启，31个插件JAR及现有权限/配对配置保持。源码入口、复验和只移走该文件的回退见[私聊与权限](PRIVATE_CHAT.md)；私有证据E/F `repairs/cormy-command-permissions-20261011`。
+
+女神五份现役资料已同步；实际只读三份后，正确答复了原因、私聊入口、无需重启及保护仍生效。没有主动游戏消息或变更玩家权限；42项原配置/JAR及源码部署摘要核对通过，临时协议测试账号已退出。
+
 ## 2026-10-11 Eye默认配对不再匹配IP，已上线
 
 先登录Agent，再连接`名字_eye`或`名字eye`，大小写不限，默认按在线本体名字配对，**不匹配IP**。Agent走公网、Eye走内网也可以，无需逐个报IP。例：`ag_NEKO → ag_neko_eye`。本体须先成功进入服务器且保持连接；Eye先启动失败时，等本体上线再重试，原巡检约20秒附身。已有的专用接入限制、显式别名和live仍按原配置优先处理；Goddess、OP及Floodgate身份保护保持。完成180/60/10秒预告与E/F脚本前像后，原Watchdog完成网关重连，网关PID3420；PaperPID34908及YSM代理PID23664保持。6项隔离测试通过，包含跨来源成功、失败/断开不授权、热限制和客户端收到明确断开原因。私有清单、31个插件JAR和客户端保持。原机NEKO Eye的实际连接/附身另查回执。记录E/F `repairs/eye-default-pair-20261011`；[接入及回退开关](AGENT_EYES.md)。下方同来源规则为此前部署的历史。

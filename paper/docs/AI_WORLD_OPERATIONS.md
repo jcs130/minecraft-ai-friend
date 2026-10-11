@@ -12,6 +12,7 @@
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
+| 原版私聊别名（2026-10-11热修） | `/msg`、`/w`、`/tell`、`/whisper`；[规则](PRIVATE_CHAT.md) | 新增 Denizen `qd_private_chat.dsc`，不迁移玩家数据 | 修复 Essentials 禁用却占用别名导致的误拒绝；使用发信玩家自身权限和原版 whisper，保留命令预处理。只更新此脚本并重载 Denizen；不授 OP、不重启 Paper |
 | YSM外观桥接（2026-10-11已上线） | `/appearance status/list`；[规则](YSM_ADAPTATION.md)、[维护](YSM_LIFECYCLE.md) | 独立Worker真实分配、原始模型目录及私有状态快照；不含正式游戏存档 | 可分发原始文件夹/ZIP自动稳定转换；服主本机控制台分配。原Agent无需更新，远端Web需更新重建；基岩本人分配/完整动画/真机仍待验 |
 | 职业进阶与能力认证（0.4.18已上线） | [三项职业技能、十种实操及18阶入口](SKILL_CERTIFICATIONS.md)；skill-assessments.yml、adventurer-grades.yml、SKILL_ASSESSMENT市场目标 | profession-ledger.json内按UUID的academy：冻结题目、原子证书/晋级、旧大段迁移；旧点数/任务奖励保持 | 控制台assessments reload/audit；热改不覆盖在途条件，异常配置保留有效目录，5tick限量采样。正式云阶考场四题开放；完整多阶段综合题库及真机验收后续 |
 | 自然建筑保护与通行实练（0.4.7已上线） | `structure-protection.yml`、控制台 `structures reload/audit`、`world practice start/status/stop`；[规则](STRUCTURE_PROTECTION.md) | 已加载原生结构片段；本人PDC中的真实开门穿越、连续爬梯证明 | 六包命名空间及明确ID可热配置；禁止拆建，保留门梯、农耕和箱子权限。可选实练不代操作、不发奖；原Agent客户端保持 |

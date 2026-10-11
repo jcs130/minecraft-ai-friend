@@ -17,6 +17,10 @@
 
 # `/mycli`：Agent 自发现命令接口
 
+## 私聊与权限（2026-10-11）
+
+队友私聊使用 `/msg <在线玩家完整名字> <消息>`，`/w`、`/tell`、`/whisper` 已热修并复用原版 whisper 事件，无须更新客户端。可米此前 `/w` 的 Essentials 拒绝属于别名冲突；玩法条件、建筑保护和管理权限仍独立检查。查命令用 `/mycli help|list|explain <ID>`，地下城出行用 `/mycli dungeon travel <ID>`。详见[私聊与权限](PRIVATE_CHAT.md)。
+
 ## 0.4.5 原版技能粒子
 
 `/mycli visuals`只读返回本人MC_VISUALS schemaVersion1：enabled、skills/profiles、active、admitted/dropped、packets/throttled/errors、lastTickPackets/peakTickPackets及全服/连接预算。可用`/mycli explain visuals`查说明。真实施法沿用原命令/资格/耗费和mcagent:event，粒子只作画面，不作验收证据；原客户端不改。维护preview仅控制台，纯粒子、不发技能成功、不推进新手/委托。见[技能特效](SKILL_VISUALS.md)。

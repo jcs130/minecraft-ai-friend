@@ -1,5 +1,7 @@
 # 世界生活配置模板
 
+2026-10-11 私聊别名修复是可单独更新的例外：已有服只添加 `Denizen/scripts/qd_private_chat.dsc` 并重载 Denizen 脚本，不覆盖本目录其他模板或运行存档。`w/tell/whisper` 转交原版私聊，普通玩家权限和 Agent 的 whisper 事件保持；见[私聊与权限](../../docs/PRIVATE_CHAT.md)。
+
 这是 Paper 1.20.6 的 0.4.0 村庄生活季初始内容，完整用法、版本、验收和回退见 [玩法说明](../../docs/WORLD_LIFE_PLUGINS.md) 与 [固定清单](../../manifests/world-life-plugins.lock.json)。
 
 - 只部署到首次安装的新插件目录；不要覆盖既有玩家照片、任务数据库或 NPC 管理数据。

@@ -1,3 +1,5 @@
+**2026-10-11 私聊别名已热修：**可米47次Essentials拒绝全部为`/w`，原账号已有正常私聊权限。新增Denizen `qd_private_chat.dsc`，将w/tell/whisper转原版minecraft:msg，保留玩家自身权限及Mineflayer whisper。隔离权限/回退/冷启动和正式21项检查通过，15:05只重载Denizen，Paper/网关/YSM与原客户端保持；版本仍0.4.19/0.1.12。见[规则](paper/docs/PRIVATE_CHAT.md)，E/F repairs/cormy-command-permissions-20261011。
+
 **2026-10-11 Eye默认配对不再匹配IP，已上线：**服主明确要求不要严格限制来源，覆盖此前同来源默认规则及下方逐组登记的旧要求。本体成功在线后，名字_eye或名字eye按名字配对，内网/公网混用无需报IP；专用限制、别名/live/Goddess规则优先。原Watchdog只重连网关，Paper/YSM代理未重启，原客户端保持。6项隔离测试通过，含跨来源成功与实际登录拒绝原因；远端原机Eye状态另查回执。见[规则](paper/docs/AGENT_EYES.md)；E/F repairs/eye-default-pair-20261011。
 
 **2026-10-11 女神世界观察0.4.19已上线：**正式AgentFriend0.4.19、CortiEyeMirror0.1.12。游戏问答自动附当前玩家位置/脚下方块；九项只读MCP查询真实地形、自定义群系、方块/生物/掉落物、公开地点、局部步行/门/梯路线、实际玩家保护规则及本人近期照片。Goddess保留房管OP旁观者身份，原管理工具保留，游戏聊天身份只增具名只读许可。相机同步最新Web渲染源码并核验实际bundle；远端Web仍须更新重建，视觉模型像素理解和手机/Xbox画面未验。沿原维护预告及E/F停服快照发布，原客户端与玩法数据保持。问答实际核验见收尾记录；规则见[女神世界观察](paper/docs/GODDESS_PERCEPTION.md)，私有回执E/F repairs/goddess-perception-20261011。下方日期记录按历史时点阅读。 正式原生QwenPaw重新发现19项工具；实际读回现役规则并查询真实方块/地形/公共箱，133字符答复通过；原版普通客户端私聊12项验证通过。首次超长答复、负号范围、MCP包装校验和过早重连检查的失败记录均保留。上线初期77项旧数据检查通过；随后386项固定时点审计保留可米自行建屋、设点、学传送和交付委托的正常进度，不回滚玩家活动。

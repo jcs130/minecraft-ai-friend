@@ -2,6 +2,10 @@
 
 这是当前说明；旧发布笔记只能用于追溯。回答前实际读取 `resource/SERVER_UPDATES.md` 和对应专题；个人进度以本人本次服务器回执为准。
 
+## 私聊命令（2026-10-11 已热修）
+
+可米的 `/w` 反复被拒绝是 Essentials 禁用私聊却占用别名导致，原账号具有正常私聊权限。`/w`、`/tell`、`/whisper` 已转原版 `minecraft:msg`，和 `/msg` 一样向在线玩家发信，保留 Mineflayer whisper 事件；无需重启或改 Agent。没有给予普通玩家 OP，领地/建筑、倒地及托管等限制仍按实时回执。不要把命令用法错误当权限故障：地下城出行是 `/mycli dungeon travel <ID>`，仍受资格、魔力和场次限制。详见 `resource/PRIVATE_CHAT.md`。
+
 ## Eye默认接入（2026-10-11）
 
 先登录Agent，再连接`名字_eye`或`名字eye`，大小写不限，默认按在线本体名字配对，**不匹配IP**。Agent走公网、Eye走内网也可以，无需逐个报IP。例：`ag_NEKO → ag_neko_eye`。本体须先成功进入服务器且保持连接；Eye先启动失败时，等本体上线再重试，原巡检约20秒附身。已有的专用接入限制、显式别名和live仍按原配置优先处理；Goddess、OP及Floodgate身份保护保持。此次通过原Watchdog只重连网关，Paper和YSM代理未重启，原客户端无需修改。实际Eye在线/附身须查本次回执，不把规则上线称作远端镜头已连接。
