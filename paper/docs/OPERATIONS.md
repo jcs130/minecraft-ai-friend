@@ -1,3 +1,7 @@
+## 2026-10-11 晚间待发布准备
+
+服主最新回复保留真人在线、先准备。三个固定摘要候选0.4.22/0.1.13/0.3.1，联合原生14、基岩协议14、Windows PowerShell5.1部署7及维护账号5项均通过；准备计划在私有证据目录，未放入正式pending位置，运行助手未替换，Paper未重启。可米原模型已另行热绑定并核对保存，512贴图的基岩限制明确保留。第三方客户端兼容补丁13项及7项实连通过，需接入方采纳。当前版本和后续实际维护顺序见[发布准备](PENDING_FIXES_RELEASE_20261011.md)、[客户端补丁](MINEFLAYER_CLIENT_COMPAT.md)；下方记录按历史时点阅读。
+
 ## 2026-10-11 中文提示热更与0.4.22/0.1.13候选
 
 欢迎修订6和Essentials中文/加入离开消息已在线重载。LuckPerms默认组仅追加`minecraft.admin.command_feedback=false`及`bukkit.broadcast.admin=false`，原18节点和其他组/用户/track读回一致，Goddess房管能力保留。三维度`announceAdvancements=false`已热更，本人原生成就数据保留；`sendCommandFeedback=true`、`logAdminCommands=true`、普通难度及`keepInventory=true`保持。正式仍0.4.19/0.1.12，原Paper/网关/YSM进程与JAR摘要保持，本轮没有重启、替换或排队部署。

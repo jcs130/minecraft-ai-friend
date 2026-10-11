@@ -1,4 +1,16 @@
 # Loaded by manage-server.ps1. This is executed only after both stopped snapshots.
+function Content-YsmProxyTarget([string]$name) {
+    if ($name -notmatch '^AgentAppearance-[0-9]+\.[0-9]+\.[0-9]+\.jar$') { throw 'Unexpected YSM bridge JAR' }
+    $config = Ysm-Config
+    if (-not $config -or -not $config.enabled) { throw 'YSM bridge deployment requires the existing enabled lifecycle' }
+    foreach ($port in @($config.controlPort,$config.proxy.port,$config.worker.port,$config.workerControllerPort)) {
+        if (Get-NetTCPConnection -LocalAddress '127.0.0.1' -LocalPort $port -State Listen -ErrorAction SilentlyContinue) {
+            throw 'YSM bridge deployment requires stopped Proxy and Worker'
+        }
+    }
+    return (Join-Path $config.root ("proxy/plugins/" + $name))
+}
+
 function Deploy-PendingContent {
     $planPath = Join-Path $opsDir 'content-plugins.pending.json'
     if (-not (Test-Path -LiteralPath $planPath)) { return }
@@ -14,6 +26,8 @@ function Deploy-PendingContent {
         if ($relative -match '^[A-Za-z0-9][A-Za-z0-9_.-]*\.jar$') {
             if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame)-') { throw 'Unexpected plugin JAR' }
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
+        } elseif ($relative -match '^ysm-proxy/(AgentAppearance-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
+            $target = Content-YsmProxyTarget $Matches[1]
         } elseif ($relative -eq 'libraries/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar') {
             $target = Join-Path $serverDir $relative
         } elseif ($relative -eq 'commands.yml') {
@@ -42,8 +56,13 @@ function Deploy-PendingContent {
         $entries += @{Source=$source;Target=$target;Hash=$file.sha256;Before=[bool]$file.beforeSha256}
     }
     foreach ($file in @($plan.removeJars)) {
-        if ($file.name -notmatch '^(AgentFriend|CortiEyeMirror)-[0-9]+\.[0-9]+\.[0-9]+\.jar$') { throw 'Only previous first-party plugin JAR may be removed' }
-        $target = Join-Path (Join-Path $serverDir 'plugins') $file.name
+        if ($file.name -match '^ysm-proxy/(AgentAppearance-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
+            $target = Content-YsmProxyTarget $Matches[1]
+        } elseif ($file.name -match '^(AgentFriend|CortiEyeMirror)-[0-9]+\.[0-9]+\.[0-9]+\.jar$') {
+            $target = Join-Path (Join-Path $serverDir 'plugins') $file.name
+        } else { throw 'Only previous first-party plugin JAR may be removed' }
+        if ($seen.ContainsKey($target.ToLowerInvariant())) { throw 'Duplicate content target' }
+        $seen[$target.ToLowerInvariant()] = $true
         if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $file.sha256) { throw 'Previous AgentFriend changed' }
         $entries += @{Source=$null;Target=$target;Before=$true}
     }

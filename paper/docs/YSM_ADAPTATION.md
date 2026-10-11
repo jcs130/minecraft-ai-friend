@@ -6,9 +6,13 @@
 
 ## 模型状态诊断（2026-10-11晚间）
 
+**可米随后已热绑定：**服主明确要求分配原模型后，`ag_CorMy`（822d173a-7181-3b9b-be60-804f29b24ecc）已由受认证本机控制台执行 `appearance admin set ag_CorMy cormy cormy`。实际Worker确认modelId=cormy、texture=cormy、mandatory=true；原生保存流程随后将相同值写入原UUID的Freesia NBT。34份旧保存配置核对，除可米这三个字段外均保持。原模型包SHA256为`1b51e7da424fdf1a640f55aa3eb79e199b9b6bb8088c5dc974505159f0223806`，6块66691字节网页/相机资源SHA256为`0172677d20487635ca16a13a08242b8188ad5f619a0c135bc58a7d441403d5b2`，4份投递原文件摘要全部与原包一致。旧绑定及配置有E/F前像，未重启Paper/Proxy/Worker或改NEKO。远端实际页面需独立核验，不把资源完整送达称作画面已完成。
+
+**这套可米模型的基岩限制：**原PNG是512×512，现有Geyser转换仅支持64×32/64×64/128×64/128×128，正式状态明确给出`YSM_BEDROCK_SKIN_DIMENSIONS_UNSUPPORTED`。当前基岩继续使用原皮肤；不能说这套模型已在手机/Xbox显示，也没有缩图或替换原骨骼。原尺寸Web/相机资源保持有效。证据见E/F `repairs/pending-fixes-release-20261011/cormy`。
+
 `YSM_WORKER_STATE_UNAVAILABLE` 只说明桥接尚未取得这个角色的原生模型状态，不能单凭此码认定Worker故障。未绑定自定义模型的默认外观也会出现此状态。需分别核对控制器连接、实际角色分配和资源传输。
 
-本次正式实查：Proxy/Worker保持原进程；可米ag_CorMy、ag_NEKO及Goddess已保存的YSM配置均为default/default、mandatory=false。可米此前绑定的是普通皮肤，并不等于绑定YSM。旧测试账号原有default_boy/blue模型仍在，本次以原UUID重连即收到Worker确认的模型、实际Paper实体ID；完整下载4块39828字节资源，压缩包及5个原始文件SHA256均匹配，故不是全局模型服务中断。当前目录有模型不代表角色已选择它。
+分配前的实查：Proxy/Worker保持原进程；可米ag_CorMy、ag_NEKO及Goddess当时已保存的YSM配置均为default/default、mandatory=false。可米此前绑定的是普通皮肤，并不等于绑定YSM。旧测试账号原有default_boy/blue模型仍在，本次以原UUID重连即收到Worker确认的模型、实际Paper实体ID；完整下载4块39828字节资源，压缩包及5个原始文件SHA256均匹配，故不是全局模型服务中断。可米的当前绑定以本节新增记录为准。
 
 AgentAppearance **0.3.1候选尚未部署**：保留原`available`、原因码和协议版本，新增`workerConnected`（仅控制器连接）、`stateStatus`和中文`message`，区分等待本角色状态、控制器离线、确认成功和不支持。既不把等待状态宣称为默认模型已确认，也不据存档伪造实时模型。`/appearance status`先给中文说明，再保留机器回执。Web观察适配保留这些诊断，且未确认模型时不再误报为资产仍在下载。
 

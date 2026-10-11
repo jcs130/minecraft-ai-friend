@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-11",
+  "status": "prepared_only_owner_deferred_restart",
+  "formalVersions": {
+    "AgentFriend": "0.4.19",
+    "CortiEyeMirror": "0.1.12",
+    "AgentAppearance": "0.3.0"
+  },
+  "files": [
+    {
+      "target": "AgentFriend-0.4.22.jar",
+      "sha256": "54ba303f9d3d34f9396d4bd9551ad8bd9939d5104de8cecb7241873c8fec5635"
+    },
+    {
+      "target": "CortiEyeMirror-0.1.13.jar",
+      "sha256": "4725ae3072e2a790e638b765bbc1b45f897068086c05da1b98ec65941ace6fca"
+    },
+    {
+      "target": "ysm-proxy/AgentAppearance-0.3.1.jar",
+      "sha256": "428367a4e135d13ef2fc86a37de17c5039a3326a8fac4e4c4e27deb7674c1478"
+    }
+  ],
+  "removePreviousJars": [
+    {
+      "name": "AgentFriend-0.4.19.jar",
+      "sha256": "74ad02bce98b9dccfcd0c5846dbfab02a8c8096e5855fd9eadfe7457fff99ee6"
+    },
+    {
+      "name": "CortiEyeMirror-0.1.12.jar",
+      "sha256": "e5827336cac83aa031267cdd866ac33f1799d704ebf2f5b2d827d93d415758bf"
+    },
+    {
+      "name": "ysm-proxy/AgentAppearance-0.3.0.jar",
+      "sha256": "5a8f54fb43c0f516b7da624b71c4810d3476a0dde1e1721bb77d49f01d2355f8"
+    }
+  ],
+  "helperCandidates": [
+    {
+      "name": "content-deploy.ps1",
+      "sha256": "5be1b90bef9248c690271781cb2bad6cb7b1d151a1ec17c1e7441932e8522d10",
+      "deployed": false
+    },
+    {
+      "name": "manage-server.ps1",
+      "sha256": "a8c0ee56e39d827da3cccc604512858d8171e68e220de37b37948421fd3dd195",
+      "deployed": false
+    }
+  ],
+  "checks": {
+    "combinedNative": 14,
+    "bedrockProtocol2193": 14,
+    "windowsPowerShell51Deployment": 7,
+    "maintenanceAccounts": 5,
+    "portableClientUnit": 13,
+    "portableClientNative": 7
+  },
+  "nativeOriginalClientModified": false,
+  "pendingDeploymentQueued": false,
+  "mobileXboxVisualsVerified": false,
+  "remoteViewerPixelsVerified": false,
+  "evidence": "E/F repairs/pending-fixes-release-20261011",
+  "corMyHotBinding": {
+    "modelId": "cormy",
+    "texture": "cormy",
+    "mandatory": true,
+    "savedNativeBindingVerified": true,
+    "existingSavedBindingsChecked": 34,
+    "assetSha256": "0172677d20487635ca16a13a08242b8188ad5f619a0c135bc58a7d441403d5b2",
+    "assetBytes": 66691,
+    "assetChunks": 6,
+    "bedrockAvailable": false,
+    "bedrockReason": "YSM_BEDROCK_SKIN_DIMENSIONS_UNSUPPORTED",
+    "sourceTextureSize": [
+      512,
+      512
+    ]
+  }
+}
