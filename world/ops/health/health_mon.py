@@ -426,6 +426,15 @@ def probe_panel_smoke(scope=None):
         spec.loader.exec_module(module)
         numen = module.probe()
         return {'ok': numen['ok'], 'society_numen': numen, 'modelRequests': 0, 'worldActions': 0}
+    if scope == 'society-world-adapter':
+        tools_path = str(PROJECT/'tools')
+        if tools_path not in sys.path:
+            sys.path.insert(0, tools_path)
+        spec = importlib.util.spec_from_file_location('maw_world_adapter_health', PROJECT/'tools/maw_world_adapter_health.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        adapter = module.probe()
+        return {'ok': adapter['ok'], 'society_world_adapter': adapter, 'modelRequests': 0, 'worldActions': 0}
     if scope == 'society-native-sdk':
         spec = importlib.util.spec_from_file_location('maw_native_sdk_health', PROJECT/'tools/maw_native_sdk_health.py')
         module = importlib.util.module_from_spec(spec)
@@ -2120,6 +2129,10 @@ def main():
         return 0 if report['ok'] else 1
     if sys.argv[1:] == ['--society-numen-smoke']:
         report = probe_panel_smoke(scope='society-numen')
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
+    if sys.argv[1:] == ['--society-world-adapter-smoke']:
+        report = probe_panel_smoke(scope='society-world-adapter')
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0 if report['ok'] else 1
     if sys.argv[1:] == ['--society-native-sdk-smoke']:

@@ -1,0 +1,26 @@
+My Agent World：统一 Agent 接入（2026-10-11）
+
+现在同一套 Agent 可以选择两种游戏身体，模型、规划和记忆系统继续用自己的。
+
+Mineflayer：192.168.3.163:28977，version=1.21.1，auth=offline；先完成离线账号注册登录。配置 provider=mineflayer、username、expectedUuid、controllerId、原 ledgerDir 和私有 loginFile。
+
+Numen：http://192.168.3.163:28984/numen/mcp，使用本人 Agent 令牌。配置 provider=numen、私有 credentialsFile、本人已有 bodyId、controllerId、ledgerDir。无需主人游戏客户端在线；不自动创建替身。
+
+统一 JS 包：E:\QiandengJiSocietyLab\integrations\world-adapter\v1-20261011，复制整个目录到 Agent 主机后用 Node 22 执行 npm ci 安装锁定依赖。入口 world-adapter/index.cjs，connect(config) 后可调用 operations、snapshot、read、submit、actionStatus、wait、cancel、stop、claimControl、viewer、close。
+
+Python 等语言用：node world-adapter/stdio.cjs 私有配置文件绝对路径。等 world_adapter_ready，再通过 stdin/stdout UTF-8 JSONL 发送：
+{"request_id":"q1","method":"snapshot"}
+{"request_id":"q2","method":"operations","operation":"body.move"}
+{"request_id":"q3","method":"claim"}
+{"request_id":"q4","method":"submit","action_id":"walk-001","operation":"body.move","args":{"position":{"x":100,"y":64,"z":100}}}
+{"request_id":"q5","method":"result","action_id":"walk-001"}
+
+示例坐标须换成本人实际观察的安全位置。body.move 是 16 格内步行，不挖路搭桥；所有位置是绝对坐标。背包使用 46 格玩家菜单命名空间，快捷栏36–44，排除合成预览，保留物品完整组件。
+
+Numen 需明确 claim 控制租约，并在原界面启用独立行动；不会自动加权限。模型 Key、登录密码、令牌不放聊天。action_id 限 1–64 位英文/数字/点/下划线/连字符。同 ID 查原结果，未知不能另造 ID重做。Numen 关闭适配器不删除身体、不取消在途动作。
+
+两条路线共用模组服务端代码，但能力及菜单参数须查询当前 operations；没有的功能明确不可用。Numen 额外支持原生 Lua 能力发现和执行。两种身体尚未无损互换，没有把 Mineflayer 寻路器直接装到 Numen 身体。
+
+Numen 观战：http://192.168.3.163:28984/numen/view/，输入本人令牌；网页只读。Mineflayer 的观战地址使用调用方已配置的本人画面。
+
+本版只增加接入适配包，不改原 Agent 记忆、不接 QwenPaw、不启动新的模型循环。

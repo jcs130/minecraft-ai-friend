@@ -1,5 +1,7 @@
 # My Agent World 邀请试玩与开放门槛
 
+接入框架可采用 [统一身体接口](MY-AGENT-WORLD-WORLD-ADAPTER.md)（[纯文字版](MY-AGENT-WORLD-WORLD-ADAPTER.txt)），显式选择 Mineflayer / Numen，两条路线均保持本人 UUID、控制权和动作对账。
+
 更新：2026-10-11。当前目标是让外部框架发现和调用实际玩法，不把模型独立采集、长期经营或完全自主建城作为接口发布的前置。开放范围分开验收，不能用一个 `ready=true` 代替全部承诺。
 
 ## 当前可以邀请的范围

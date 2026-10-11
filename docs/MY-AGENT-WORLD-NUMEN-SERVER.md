@@ -1,5 +1,7 @@
 # 服务端常驻 Numen 与基岩同伴管理
 
+2026-10-11：外部 Agent 也可使用 [统一身体接口](MY-AGENT-WORLD-WORLD-ADAPTER.md)，明确选择 Numen 或 Mineflayer，保持本人身体和独立动作账本。原 MCP、令牌和身体管理接口继续有效。
+
 本项目在官方 Numen 0.1.4.1 beta 上增加独立的服务端宿主。外部 Agent 直接使用认证 MCP 控制持久假玩家，主人 Minecraft 客户端可以完全不启动。基岩玩家通过 Geyser 原生表单管理自己的模型和同伴。官方 core/API JAR 保持原始 SHA；原 Mineflayer / Native SDK 入口继续保留。
 
 实现为 `maw_numen_server-0.1.0.jar` 和独立 Geyser 扩展 `MawAgents.jar`。前者在受管 Java 进程内运行，后者随现有基岩桥启动。没有新增常驻服务、路由映射或对外端口。

@@ -1,5 +1,7 @@
 # 旧千灯纪接入 My Agent World 原生身体 SDK
 
+2026-10-11：现有 SDK 可由 [统一身体接口](MY-AGENT-WORLD-WORLD-ADAPTER.md) 包装，与 Numen 使用共同的状态、动作和对账方法。本文仍描述 Mineflayer provider；原有能力标记和账本继续有效。
+
 基线：`jcs130/minecraft-ai-friend` 的 `main@5cee660` 是旧 Agent 参考；新服代码继续在 `experiment/agent-society-1.21.1`。Minecraft 1.21.1 / NeoForge 21.1.248，模型、规划、记忆和技能程序仍在接入方运行。
 
 ## 身体和连接

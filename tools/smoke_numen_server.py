@@ -25,7 +25,7 @@ def offline(name):
     value[8] = value[8] & 63 | 128
     return str(uuid.UUID(bytes=bytes(value)))
 
-def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar=None, viewer=False, viewer_visual=False, mixauth_jar=None):
+def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar=None, viewer=False, viewer_visual=False, mixauth_jar=None, world_adapter=False):
     output = output.resolve()
     if (root/'research').resolve() not in output.parents or output.exists():
         raise ValueError('Use a new evidence directory inside runtime/research')
@@ -55,7 +55,9 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
     (server/'qa-args.txt').write_text(args,encoding='utf-8')
     owner,other=offline('MawHeadQAOwner'),offline('MawHeadQAOther');bearer,other_token,bridge=secrets.token_hex(32),secrets.token_hex(32),secrets.token_hex(32)
     private=server/'config/maw-numen-private';private.mkdir(parents=True)
-    (private/'accounts.json').write_text(json.dumps({'accounts':[{'ownerUuid':o,'tokenHash':hashlib.sha256(t.encode()).hexdigest()} for o,t in ((owner,bearer),(other,other_token))]}),encoding='utf-8')
+    unified_owner,unified_token=offline('MawUnifiedOwner'),secrets.token_hex(32)
+    identities=[(owner,bearer),(other,other_token)] + ([(unified_owner,unified_token)] if world_adapter else [])
+    (private/'accounts.json').write_text(json.dumps({'accounts':[{'ownerUuid':o,'tokenHash':hashlib.sha256(t.encode()).hexdigest()} for o,t in identities]}),encoding='utf-8')
     (private/'bridge.json').write_text(json.dumps({'secret':bridge}),encoding='utf-8')
     cfg={'enabled':True,'bind':'127.0.0.1','port':28990,'allowedHosts':['127.0.0.1:28990'],'publicEndpoint':'http://127.0.0.1:28990/mcp','allowedModelHosts':[],'testOnlyAllowLoopbackModels':True,'dailyModelCallsPerBody':12}
     (server/'config/maw-numen-server.json').write_text(json.dumps(cfg),encoding='utf-8')
@@ -169,6 +171,31 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
             checks['native_menu_closed']=terminal('qa-native-close')['ok']
             from smoke_maw_numen_guest import checks as guest_checks
             guest_checks(tool,request,console,owner,other,other_token,body,lease,server,checks,report)
+            if world_adapter:
+                if not mixauth_jar: raise ValueError('World-adapter QA requires mixed auth to test the deployed connection flow')
+                unified_body=tool('create_companion',{'name':'MawUnifiedBody','action_id':'unified-create-body'},unified_token)['bodyId']
+                setup_lease=tool('claim_control',{'companion':unified_body,'controller_id':'unified-setup'},unified_token)['lease']['leaseId']
+                permission=tool('set_permission',{'companion':unified_body,'lease_id':setup_lease,'mode':'bypass'},unified_token);assert permission['ok'],permission
+                released=tool('release_control',{'companion':unified_body,'lease_id':setup_lease},unified_token);assert released['ok'],released
+                auth_file=output/'unified-numen-credentials.json'
+                auth_file.write_text(json.dumps({'endpoint':'http://127.0.0.1:28990/mcp','token':unified_token,'ownerUuid':unified_owner}),encoding='utf-8')
+                configs={
+                    'mineflayer':{'provider':'mineflayer','host':'127.0.0.1','port':28979,'username':'MawHeadQAOwner','expectedUuid':owner,'loginFile':str(output/'owner-login.json'),'controllerId':'unified-qa-mf','ledgerDir':str(output/'unified-mf-ledger')},
+                    'numen':{'provider':'numen','credentialsFile':str(auth_file),'bodyId':unified_body,'controllerId':'unified-qa-numen','ledgerDir':str(output/'unified-numen-ledger')}
+                }
+                def unified_smoke(reconcile=False):
+                    for provider,config in configs.items():
+                        cfg_file=output/('unified-'+provider+'-config.json');cfg_file.write_text(json.dumps(config),encoding='utf-8')
+                        receipt=output/('unified-'+provider+'.json')
+                        command=[str(node),str(REPO/'tools/smoke_maw_world_adapter.cjs'),str(cfg_file),str(receipt)]
+                        if reconcile: command.append('--reconcile')
+                        process_result=subprocess.run(command,env={**os.environ,'NODE_PATH':str(root/'gateway/permanent/node/node_modules')},capture_output=True,text=True,encoding='utf-8',timeout=150)
+                        (output/('unified-'+provider+('-reconnect' if reconcile else '')+'.log')).write_text(process_result.stdout+process_result.stderr,encoding='utf-8')
+                        assert process_result.returncode==0,'Unified '+provider+' probe failed; inspect private report'
+                        actual_receipt=receipt.with_name(receipt.stem+'-reconnect.json') if reconcile else receipt
+                        value=json.loads(actual_receipt.read_text('utf-8'));assert value['ok'],value
+                        checks.update({('unified-reconnect-' if reconcile else 'unified-')+provider+'-'+k:v for k,v in value['checks'].items()})
+                unified_smoke()
         code='local s=numen.status.self(); local p=numen.route.plan({to={x=math.floor(s.pos.x)+2,z=math.floor(s.pos.z)},costs={dig=false,place=false}}); if not p.ok then error(p.why) end; local m=numen.move.go(p); print(m.pos.x,m.pos.y,m.pos.z)'
         before=tool('get_state',{'companion':body});accepted=tool('lua',{'companion':body,'lease_id':lease,'action_id':'qa-walk-01','code':code});assert accepted['phase']=='accepted',accepted
         done=terminal('qa-walk-01');assert done['ok'],done
@@ -234,6 +261,7 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
         stop();start('restored')
         restored=tool('get_state',{'companion':body});checks['restart_original_body_inventory']=restored.get('online') and restored['bodyId']==body and restored['inventory']==inventory
         checks['terminal_receipt_survives_restart']=tool('action_status',{'companion':body,'action_id':'qa-walk-01'})['phase']=='terminal'
+        if world_adapter: unified_smoke(reconcile=True)
         if full_pack:
             renewed=tool('claim_control',{'companion':body,'controller_id':'qa-controller'})['lease']['leaseId']
             same=tool('mod_action',{'companion':body,'lease_id':renewed,'action_id':'qa-native-open','operation':'curios.open'})
@@ -264,7 +292,7 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
     return report
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--output',type=Path,required=True);p.add_argument('--java',type=Path,default=DEFAULT_JAVA);p.add_argument('--node',type=Path,required=True);p.add_argument('--full-pack',action='store_true');p.add_argument('--maid-config',action='store_true');p.add_argument('--bridge-jar',type=Path);p.add_argument('--viewer',action='store_true');p.add_argument('--viewer-visual',action='store_true');p.add_argument('--mixauth-jar',type=Path);a=p.parse_args()
-    result=run(a.root,a.output,a.node,a.java,a.full_pack,a.maid_config,a.bridge_jar,a.viewer,a.viewer_visual,a.mixauth_jar);print(json.dumps({'ok':result['ok'],'checks':len(result['checks']),'output':str(a.output)},ensure_ascii=False));raise SystemExit(0 if result['ok'] else 1)
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--output',type=Path,required=True);p.add_argument('--java',type=Path,default=DEFAULT_JAVA);p.add_argument('--node',type=Path,required=True);p.add_argument('--full-pack',action='store_true');p.add_argument('--maid-config',action='store_true');p.add_argument('--bridge-jar',type=Path);p.add_argument('--viewer',action='store_true');p.add_argument('--viewer-visual',action='store_true');p.add_argument('--mixauth-jar',type=Path);p.add_argument('--world-adapter',action='store_true');a=p.parse_args()
+    result=run(a.root,a.output,a.node,a.java,a.full_pack,a.maid_config,a.bridge_jar,a.viewer,a.viewer_visual,a.mixauth_jar,a.world_adapter);print(json.dumps({'ok':result['ok'],'checks':len(result['checks']),'output':str(a.output)},ensure_ascii=False));raise SystemExit(0 if result['ok'] else 1)
 
 if __name__=='__main__':main()
