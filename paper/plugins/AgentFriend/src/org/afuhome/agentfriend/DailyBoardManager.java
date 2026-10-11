@@ -441,6 +441,6 @@ final class DailyBoardManager implements Listener {
         if (boardDate().equals(plugin.getConfig().getString(key, ""))) return;
         plugin.getConfig().set(key, boardDate());
         plugin.saveConfig();
-        Bukkit.broadcastMessage("§6✦ 今日村报：" + player.getName() + text + "！大家为这一步鼓掌。");
+        Bukkit.broadcastMessage("§6【世界公告·" + player.getName() + "】" + text + "！这是该冒险者的成就记录。");
     }
 }

@@ -469,6 +469,7 @@ final class DungeonManager implements Listener {
 
     void command(Player player, String[] args) {
         String sub = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
+        if (sub.equals("status")) player.sendMessage("§6【试炼塔】地面入口选难度，按层战斗、清层后自动下楼；进度和操作用 /mycli arena。奖励逐层存入个人奖励箱，/mycli arena rewards 查看，/mycli arena stash 取出。");
         switch (sub) {
             case "status" -> {
                 boolean participant = active && participants.contains(player.getUniqueId());
@@ -504,6 +505,7 @@ final class DungeonManager implements Listener {
                 player.sendMessage("MC_DUNGEON status participant=" + participant
                         + " selfState=" + (participant ? "participating" : "not_participating")
                         + " globalActive=" + active + " globalState=" + globalState
+                        + " activityType=trial_tower activityLabel=试炼塔"
                         + " globalDifficulty=" + (active ? difficulty.id : "none")
                         + " selectedDifficulty=" + chosenDifficulty(player).id
                         + " difficultyMode=" + difficultyMode(player)
@@ -660,7 +662,7 @@ final class DungeonManager implements Listener {
         participants.clear(); mobs.clear();
         difficulty = chosenDifficulty(starter);
         if (enterFloor(1, group) == 0) {
-            starter.sendMessage(ChatColor.RED + "地下城入口传送失败，试炼未启动；/mycli status 查魔力，/mycli arena status 核对入口；站在安全处再试，持续失败联系服主。"); return;
+            starter.sendMessage(ChatColor.RED + "【试炼塔】入口传送失败，本场未启动；/mycli status 查魔力，/mycli arena status 核对入口；站在安全处再试，持续失败联系服主。"); return;
         }
         active = true;
         runStartedAt = now;
@@ -965,7 +967,7 @@ final class DungeonManager implements Listener {
             boolean advancedWhileAway = floorAt(player.getLocation()) > 0
                     && floorAt(player.getLocation()) != floor;
             if (!inFloor(player.getLocation(), floor) && !player.teleport(center(floor))) {
-                player.sendMessage(ChatColor.RED + "地下城重连传送失败；请联系服主，试炼仍保留到宽限期结束。");
+                player.sendMessage(ChatColor.RED + "【试炼塔】重连传送失败；请联系服主，本场仍保留到宽限期结束。");
                 return;
             }
             if (advancedWhileAway && !plugin.isDowned(player)) player.setHealth(player.getMaxHealth());
@@ -1481,7 +1483,7 @@ final class DungeonManager implements Listener {
         // Termination must reach participants who are outside the narrow floor volume.
         for (UUID id : participants) {
             Player player = Bukkit.getPlayer(id);
-            if (player != null && player.isOnline()) player.sendMessage((won ? ChatColor.GREEN : ChatColor.YELLOW) + message);
+            if (player != null && player.isOnline()) player.sendMessage((won ? ChatColor.GREEN : ChatColor.YELLOW) + "【试炼塔·结算】" + message);
         }
         cleanupMobs();
         active = false;
@@ -1510,7 +1512,10 @@ final class DungeonManager implements Listener {
     }
 
     private void announce(String message) {
-        for (Player p : Bukkit.getOnlinePlayers()) if (inFloor(p.getLocation(), floor)) p.sendMessage(message);
+        for (UUID id : participants) {
+            Player p = Bukkit.getPlayer(id);
+            if (p != null && p.isOnline()) p.sendMessage("§6【试炼塔·第" + floor + "层】§r " + message);
+        }
     }
 
     private String rewardPath(UUID id, Material material) {

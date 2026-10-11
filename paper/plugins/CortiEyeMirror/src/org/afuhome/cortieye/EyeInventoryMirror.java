@@ -18,11 +18,11 @@ import org.bukkit.inventory.*;
 
 /** Native client-only inventory snapshots also work without the SpectatorPlus client mod. */
 final class EyeInventoryMirror implements Listener {
-    private record State(UUID target, int entityId, UUID world, int signature) {}
+    private record State(UUID target, int entityId, UUID world, int inventorySignature, int vitalsSignature) {}
     private final ProtocolManager protocol;
     private final CortiEyeMirrorPlugin plugin;
     private final Map<UUID, State> states = new HashMap<>();
-    private record Replica(UUID target, int sourceId, Inventory inventory) {}
+    private record Replica(UUID target, int sourceId, Inventory inventory, int stateId, int offersSignature) {}
     private final Map<UUID, Replica> merchants = new HashMap<>();
     private final Set<UUID> openingMerchants = new HashSet<>();
     private volatile Set<UUID> attached = Set.of();
@@ -35,6 +35,7 @@ final class EyeInventoryMirror implements Listener {
                 PacketType.Play.Server.UPDATE_HEALTH, PacketType.Play.Server.EXPERIENCE,
                 PacketType.Play.Server.HELD_ITEM_SLOT, PacketType.Play.Server.OPEN_WINDOW_MERCHANT) {
             @Override public void onPacketSending(PacketEvent event) {
+                if (event.isCancelled() || event.isPlayerTemporary() || event.getPlayer() == null) return;
                 if (event.getPacketType() == PacketType.Play.Server.OPEN_WINDOW_MERCHANT) {
                     if (openingMerchants.contains(event.getPlayer().getUniqueId()) || replica(event.getPlayer())) event.setCancelled(true);
                     return;
@@ -63,16 +64,19 @@ final class EyeInventoryMirror implements Listener {
         for (var entry : subjects.entrySet()) {
             Player eye = Bukkit.getPlayer(entry.getKey()), target = entry.getValue();
             var handle = ((CraftPlayer) target).getHandle();
-            int signature = Objects.hash(Arrays.hashCode(target.getInventory().getContents()),
-                    target.getHealth(), target.getFoodLevel(), target.getSaturation(), target.getExp(),
-                    target.getTotalExperience(), target.getLevel(), target.getInventory().getHeldItemSlot());
-            State next = new State(target.getUniqueId(), target.getEntityId(), target.getWorld().getUID(), signature);
+            int inventorySignature = Objects.hash(Arrays.hashCode(target.getInventory().getContents()), target.getInventory().getHeldItemSlot());
+            int vitalsSignature = Objects.hash(target.getHealth(), target.getFoodLevel(), target.getSaturation(), target.getExp(),
+                    target.getTotalExperience(), target.getLevel());
+            State next = new State(target.getUniqueId(), target.getEntityId(), target.getWorld().getUID(), inventorySignature, vitalsSignature);
             State previous = states.put(entry.getKey(), next);
             if (previous != null && (!previous.target.equals(next.target) || !previous.world.equals(next.world)))
                 eye.closeInventory();
             mirrorMerchant(eye, target);
             if (next.equals(previous)) continue;
-            snapshot(eye, target);
+            boolean changedSubject = previous == null || !previous.target.equals(next.target) || !previous.world.equals(next.world)
+                    || previous.entityId != next.entityId;
+            snapshot(eye, target, changedSubject || previous.inventorySignature != next.inventorySignature,
+                    changedSubject || previous.vitalsSignature != next.vitalsSignature);
             if (previous == null || !previous.target.equals(next.target) || !previous.world.equals(next.world)) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     if (!CortiEyeMirrorPlugin.isAttached(target, eye)
@@ -95,18 +99,27 @@ final class EyeInventoryMirror implements Listener {
             Merchant merchant = Bukkit.createMerchant(target.getOpenInventory().getTitle());
             openingMerchants.add(id);
             try { eye.openMerchant(merchant, true); } finally { openingMerchants.remove(id); }
-            previous = new Replica(target.getUniqueId(), source.containerId, eye.getOpenInventory().getTopInventory());
+            previous = new Replica(target.getUniqueId(), source.containerId, eye.getOpenInventory().getTopInventory(), -1, 0);
             merchants.put(id, previous);
         }
         // Closing the observer's replica manually does not reopen it until the subject opens a new window.
         if (eye.getOpenInventory().getTopInventory() != previous.inventory) return;
         var replica = ((CraftPlayer) eye).getHandle().containerMenu;
         if (replica.getItems().size() != source.getItems().size()) return;
+        int offersSignature = inventory.getMerchant().getRecipes().stream().mapToInt(r -> Objects.hash(r.getResult(),
+                r.getIngredients(), r.getUses(), r.getMaxUses(), r.getSpecialPrice(), r.getDemand(), r.getPriceMultiplier()))
+                .reduce(1, (a, b) -> 31 * a + b);
         if (source instanceof net.minecraft.world.inventory.MerchantMenu menu)
-            send(eye, PacketType.Play.Server.OPEN_WINDOW_MERCHANT, new ClientboundMerchantOffersPacket(
-                    replica.containerId, menu.getOffers(), menu.getTraderLevel(), menu.getTraderXp(), menu.showProgressBar(), menu.canRestock()));
-        send(eye, PacketType.Play.Server.WINDOW_ITEMS, new ClientboundContainerSetContentPacket(
-                replica.containerId, replica.getStateId(), source.getItems(), source.getCarried()));
+            offersSignature = Objects.hash(offersSignature, menu.getTraderLevel(), menu.getTraderXp(), menu.showProgressBar(), menu.canRestock());
+        if (previous.stateId == -1 || offersSignature != previous.offersSignature) {
+            if (source instanceof net.minecraft.world.inventory.MerchantMenu menu)
+                send(eye, PacketType.Play.Server.OPEN_WINDOW_MERCHANT, new ClientboundMerchantOffersPacket(
+                        replica.containerId, menu.getOffers(), menu.getTraderLevel(), menu.getTraderXp(), menu.showProgressBar(), menu.canRestock()));
+        }
+        if (previous.stateId != source.getStateId())
+            send(eye, PacketType.Play.Server.WINDOW_ITEMS, new ClientboundContainerSetContentPacket(
+                    replica.containerId, replica.getStateId(), source.getItems(), source.getCarried()));
+        merchants.put(id, new Replica(previous.target, previous.sourceId, previous.inventory, source.getStateId(), offersSignature));
     }
     private boolean replica(Player player) {
         Replica replica = merchants.get(player.getUniqueId());
@@ -125,20 +138,27 @@ final class EyeInventoryMirror implements Listener {
         protocol.sendServerPacket(eye, new PacketContainer(type, packet), false);
     }
     private void snapshot(Player eye, Player target) {
+        snapshot(eye, target, true, true);
+    }
+    private void snapshot(Player eye, Player target, boolean inventoryChanged, boolean vitalsChanged) {
         var handle = ((CraftPlayer) target).getHandle();
+        if (inventoryChanged) {
         send(eye, PacketType.Play.Server.WINDOW_ITEMS, new ClientboundContainerSetContentPacket(
                 0, handle.inventoryMenu.getStateId(), handle.inventoryMenu.getItems(), handle.inventoryMenu.getCarried()));
         send(eye, PacketType.Play.Server.HELD_ITEM_SLOT,
                 new ClientboundSetCarriedItemPacket(target.getInventory().getHeldItemSlot()));
-        send(eye, PacketType.Play.Server.UPDATE_HEALTH,
-                new ClientboundSetHealthPacket((float) target.getHealth(), target.getFoodLevel(), target.getSaturation()));
-        send(eye, PacketType.Play.Server.EXPERIENCE,
-                new ClientboundSetExperiencePacket(target.getExp(), target.getTotalExperience(), target.getLevel()));
         List<Pair<EquipmentSlot, ItemStack>> equipment = new ArrayList<>();
         for (EquipmentSlot slot : EquipmentSlot.values())
             if (slot != EquipmentSlot.BODY) equipment.add(Pair.of(slot, handle.getItemBySlot(slot).copy()));
         send(eye, PacketType.Play.Server.ENTITY_EQUIPMENT,
                 new ClientboundSetEquipmentPacket(eye.getEntityId(), equipment));
+        }
+        if (vitalsChanged) {
+            send(eye, PacketType.Play.Server.UPDATE_HEALTH,
+                    new ClientboundSetHealthPacket((float) target.getHealth(), target.getFoodLevel(), target.getSaturation()));
+            send(eye, PacketType.Play.Server.EXPERIENCE,
+                    new ClientboundSetExperiencePacket(target.getExp(), target.getTotalExperience(), target.getLevel()));
+        }
     }
     void stop() {
         attached = Set.of();

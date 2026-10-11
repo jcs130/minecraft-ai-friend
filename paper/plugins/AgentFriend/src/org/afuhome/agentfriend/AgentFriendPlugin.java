@@ -185,14 +185,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             new CompassButton(14, Material.WRITABLE_BOOK, "任务市场", "工程、探索、职业试炼与居民事务", "market"),
             new CompassButton(15, Material.BELL, "居民事务板", "农耕补种、真实交易、照片与遗迹调查", "world:board"),
             new CompassButton(16, Material.OAK_SAPLING, "村庄新生活", "居民聊天、新手实习、商店与世界活动", "world:menu"),
-            new CompassButton(17, Material.FILLED_MAP, "生活照片", "第一人称、第三人称或俯视拍照与本人相册", "world:photos"),
+            new CompassButton(17, Material.SPYGLASS, "女神相机 · 拍照", "点击选择第一人称、第三人称、俯视或清晰海报；照片进入本人背包", "photo"),
             new CompassButton(18, Material.BLAZE_POWDER, "战斗法术", "星芒箭、霜环与焰浪；按原规则消耗魔力", "menu:combat"),
             new CompassButton(19, Material.ELYTRA, "探索法术", "跃空、飞行、傀儡、心眼与支援传送", "menu:utility"),
             new CompassButton(20, Material.SPYGLASS, "探矿术", "选择矿种，成功扫描才消耗魔力", "menu:prospect"),
             new CompassButton(21, Material.CRAFTING_TABLE, "造物术", "固定生活物资；成功造物消耗魔力", "menu:conjure"),
             new CompassButton(22, Material.FIREWORK_ROCKET, "观赏法术", "烟花与星尘；均有魔力与冷却要求", "menu:cosmetic"),
-            new CompassButton(23, Material.IRON_SWORD, "试炼场", "传送至入口；6魔力，挑战仍需确认", "arena"),
-            new CompassButton(24, Material.WITHER_SKELETON_SKULL, "遗迹地下城", "查看三个地点、路线、组队与个人领奖", "dungeons"),
+            new CompassButton(23, Material.IRON_SWORD, "试炼塔 · 按层挑战", "地面入口选难度；逐层自动下楼；arena 命令；入口传送6魔力", "arena"),
+            new CompassButton(24, Material.WITHER_SKELETON_SKULL, "遗迹地下城 · 逐室探索", "各地遗迹步行探索；末室清怪后返回首室结算；dungeon 命令", "dungeons"),
             new CompassButton(25, Material.DIAMOND_SWORD, "PvP竞技场", "双方自愿匹配，同款装备对战", "menu:pvp"),
             new CompassButton(26, Material.LEATHER_CHESTPLATE, "换装皮肤", "打开皮肤画廊，手柄可直接选择", "skins"));
     // The entire final row is casting. Keep close/navigation outside these nine slots.
@@ -260,6 +260,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private PlayerNameTags playerNameTags;
     private TextBubbleManager textBubbles;
     private PhotoCameraManager photoCamera;
+    private InventoryFeedback inventoryFeedback;
     private SoulboundGear soulboundGear;
     private DungeonGearAura dungeonGearAura;
     private TravelMagic travelMagic;
@@ -327,6 +328,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         playerNameTags = new PlayerNameTags(this);
         playerNameTags.start();
         new WindowLifecycle(this);
+        inventoryFeedback = new InventoryFeedback(this);
         textBubbles = new TextBubbleManager(this);
         photoCamera = new PhotoCameraManager(this);
         dailyBoard = new DailyBoardManager(this);
@@ -1156,6 +1158,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "list" -> AgentCliCatalog.list(player, args);
             case "explain" -> AgentCliCatalog.explain(player, args, 1);
             case "coach" -> agentCoach.command(player, args);
+            case "inventory", "背包" -> inventoryFeedback.command(player, args);
             case "menu", "compassmenu", "罗盘" -> openMenu(player, "skills");
             case "compass", "指南针" -> giveCompass(player);
             case "focus", "法杖" -> focusCommand(player, args);
@@ -1208,7 +1211,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.GOLD + "千灯纪技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
         p.sendMessage("Agent：/mycli list [分类|命令] [页码] 发现能力；/mycli explain <ID> 或 /mycli help <ID> 查询准确用法，不会执行。");
         p.sendMessage("公开聊天或 /mycli say <话> 会显示8秒头顶气泡，附近24格可见；私聊不显示。/mycli bubbles 查看状态。");
-        p.sendMessage("/mycli photo take <名字> [first|third|top] [1|2] 本机拍照；单图1张空地图，2×2海报4张；photo status|cancel 查看或取消。");
+        p.sendMessage("拍照：技能罗盘→女神相机，或 /mycli photo menu 选择视角；单图1张空地图，清晰海报4张。照片自动放入本人背包，无需截图上传。/mycli photo status 查进度，/mycli photo cancel 取消。");
+        p.sendMessage("物品显示：/mycli inventory 查服务器随身背包和快捷栏；/mycli inventory refresh 重新同步。54格大背包、任务物品袋和个人奖励箱各自独立。");
+        p.sendMessage("挑战区别：/mycli arena 是按层挑战的试炼塔；/mycli dungeon 是逐室探索的遗迹地下城。系统操作回执只发本人及对应观战者，世界公告标明当事人。");
         p.sendMessage("/mycli coach next|guide|lessons|menu|status|later|on|off  查看本人新手进度与下一步；暂停或关闭低频私聊提醒。");
         p.sendMessage("/mycli skills list [all|common|profession|warrior|mage|priest] [页] 查看基础/战法牧技能；skills info <ID> 查各级效果与学习条件；cast <ID> 施法");
         p.sendMessage("/mycli protect break|place|container|use <x> <y> <z>  查询附近方块/实体储物能否操作；拒绝则停止");
@@ -2222,6 +2227,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         else if (action.startsWith("profession:")) professions.open(p, action.substring(11));
         else if (action.startsWith("world:")) worldLife.command(p, new String[]{"world", action.substring(6), "menu"});
         else switch (action) {
+            case "photo" -> photoCamera.menu(p);
             case "book" -> p.openBook(statusBook(p));
             case "lands" -> lands.open(p, 1);
             case "market" -> taskMarket.openMenu(p);
@@ -2964,6 +2970,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) event.blockList().removeIf(b -> inBuild(b.getLocation()));
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (args.length == 2 && args[0].equalsIgnoreCase("inventory")) return List.of("status", "refresh");
         if (args.length == 2 && args[0].equalsIgnoreCase("dungeon")) return List.of("list", "info", "travel", "start", "join", "status", "resume", "leave", "claim", "menu");
         if (args.length == 3 && args[0].equalsIgnoreCase("dungeon")) return siteDungeons.ids();
         if (args.length == 4 && args[0].equalsIgnoreCase("dungeon") && args[1].equalsIgnoreCase("start")) return List.of("normal", "adventure", "apocalypse");

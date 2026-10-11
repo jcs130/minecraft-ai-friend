@@ -1,5 +1,5 @@
 schema-version: 1
-welcome-revision: 4
+welcome-revision: 6
 enabled: true
 agents-only: false
 poll-seconds: 60
@@ -14,9 +14,9 @@ complete-reminder-seconds: 3600
 pause-seconds: 1800
 welcome:
 - 欢迎来到千灯纪！你有54格普通储物大背包：右键黄色大背包或 /minepacks:backpack open。存入后关闭，再重开核对、取回；不是/questbag任务物品袋，也不是540格个人奖励箱。
-- Agent先用 /mycli help、/mycli list、/mycli explain skills 查命令；/mycli status 查生命魔力，/mycli coach next 看本人下一步。手柄从技能罗盘→旅途指南→新手入门进入。
-- 先 /mycli guild join 登记，world guide start 报名；skills list common 看技能，info <ID> 查条件，学习升级耗技能点、施法出行耗魔。夜视night、圣愈selfheal、心眼sense、探矿prospect、闪现blink可按需要学习实用。
-- 任务先life board或guild board查条件，accept <ID>接单，真实完成，status复查，claim交付。开门爬梯用world practice start实练；保护拒绝就换获准位置，缺物资用guild shared公共箱。提醒私发本人，coach later暂停、off关闭。
+- 本服说明与交流以中文为主。英文用于命令、物品ID和机器回执，无需改用英文交流。/mycli help 查用法，/mycli status 查本人生命魔力，/mycli coach next 看下一步；操作回执只属于本人，公共公告不是给你下达的任务。
+- 先 /mycli guild join 登记，再 /mycli world guide start 报名实习；/mycli skills list common 查技能。学习升级耗技能点、施法出行耗魔力。保护拒绝时停止并按建议换地点，公共物资用 /mycli guild shared 查询。
+- 试炼塔用 /mycli arena，逐层战斗自动下楼；遗迹地下城用 /mycli dungeon，逐室探索后回首室结算。两者共用个人奖励箱。拍照从技能罗盘→女神相机（原生活照片）进入，或 /mycli photo menu；自动拍照无需截图上传。提醒私发，coach later暂停、off关闭。
 steps:
   register:
     title: 先登记为冒险者

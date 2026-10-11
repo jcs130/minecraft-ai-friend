@@ -1,3 +1,9 @@
+## 2026-10-11 中文提示热更与0.4.22/0.1.13候选
+
+欢迎修订6和Essentials中文/加入离开消息已在线重载。LuckPerms默认组仅追加`minecraft.admin.command_feedback=false`及`bukkit.broadcast.admin=false`，原18节点和其他组/用户/track读回一致，Goddess房管能力保留。三维度`announceAdvancements=false`已热更，本人原生成就数据保留；`sendCommandFeedback=true`、`logAdminCommands=true`、普通难度及`keepInventory=true`保持。正式仍0.4.19/0.1.12，原Paper/网关/YSM进程与JAR摘要保持，本轮没有重启、替换或排队部署。
+
+候选0.4.22/0.1.13的挑战标签/通知范围、相机原生菜单、交物确认/背包查询及Eye同步优化已通过同摘要33项隔离检查，包含此前箭头与参战结算修复。隔离服测试后正常停止，玩家正式库存未改。最新规则、摘要、测试边界及局部回退见[提示与同步](AGENT_FEEDBACK_AND_SYNC.md)，E/F repairs/agent-ui-network-20261011。后续维护仍需原授权/真人/活动门禁、提前提醒及E/F停服快照；禁止全服reload或在线换类。
+
 ## 2026-10-11 地下城参战与结算0.4.21候选，尚未部署
 
 **2026-10-11 地下城参战/结算0.4.21候选，尚未部署：**累计本室参战与实际远程/援助，记录缺席、重刷及结束/奖励原因，保留原CLI字段与奖励原子提交；含0.4.20箭头修正。49项隔离真实客户端通过，冷启动回执另见私有证据。正式仍0.4.19/0.1.12，本轮不重启、不换JAR、不排队部署；旧场次原因不可恢复，不改玩家物品。窗口自动关闭已在正式版；Web分类回看候选已构建，远端须更新重建。见[参战修复](DUNGEON_PARTICIPATION.md)，E/F repairs/dungeon-participation-20261011。

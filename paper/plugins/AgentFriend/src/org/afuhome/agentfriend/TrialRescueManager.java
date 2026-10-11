@@ -303,7 +303,7 @@ final class TrialRescueManager implements Listener {
     JsonObject state(Player p) {
         JsonObject state = new JsonObject(); state.addProperty("schema", 1); state.addProperty("downed", downed(p));
         state.addProperty("radius", RADIUS); state.addProperty("seconds", RESCUE_MS / 1000);
-        state.addProperty("instruction", "组队试炼倒地不退出。存活队友走到倒地坐标4格内，连续停留10秒自动救起，无需点击/命令；离开范围重计。清完本层/本室自动复活队友；全队倒下才失败撤离。");
+        state.addProperty("instruction", "试炼塔/遗迹地下城组队挑战倒地不退出。存活队友走到倒地坐标4格内，连续停留10秒自动救起，无需点击/命令；离开范围重计。清完本层/本室自动复活队友；全队倒下才失败撤离。");
         Team team = team(p.getUniqueId()); JsonArray teammates = new JsonArray();
         if (team != null) for (UUID id : team.members) {
             Down d = downs.get(id); if (d == null) continue;

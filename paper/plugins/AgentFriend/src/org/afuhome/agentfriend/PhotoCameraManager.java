@@ -59,13 +59,15 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
     boolean ready() { return enabled && pendingUploads != null && System.currentTimeMillis() - heartbeat < 15_000 && plugin.goddessLandAdministrator() != null; }
 
     void command(Player p, String[] args) {
-        String action = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "help";
+        String action = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "menu";
+        action = switch (action) { case "菜单" -> "menu"; case "拍照" -> "take"; case "状态" -> "status"; case "取消" -> "cancel"; default -> action; };
         if (action.equals("menu")) { menu(p); return; }
         if (action.equals("take")) {
             String name = args.length > 2 ? args[2] : "生活_" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("MMdd_HHmmss"));
             String mode = args.length > 3 ? args[3].toLowerCase(Locale.ROOT) : "first";
+            mode = switch (mode) { case "第一人称" -> "first"; case "第三人称" -> "third"; case "俯视" -> "top"; default -> mode; };
             int tiles = args.length > 4 && args[4].equals("2") ? 2 : 1;
-            if (!name.matches("[\\p{L}\\p{N}_-]{1,32}") || args.length > 5 || args.length > 4 && !Set.of("1", "2").contains(args[4]) || !Set.of("first", "third", "top").contains(mode)) { deny(p, "用法：/mycli photo take <名字> [first|third|top] [1|2]；1为单张地图，2为2×2清晰海报（4张空地图）。"); return; }
+            if (!name.matches("[\\p{L}\\p{N}_-]{1,32}") || args.length > 5 || args.length > 4 && !Set.of("1", "2").contains(args[4]) || !Set.of("first", "third", "top").contains(mode)) { deny(p, "从技能罗盘→女神相机或 /mycli photo menu 点击拍照；命令：/mycli photo take <名字> [第一人称|第三人称|俯视] [1|2]。1为单张地图，2为2×2清晰海报（4张空地图）。原first/third/top参数继续可用。"); return; }
             if (plugin.isObserver(p) || p.isDead()) { deny(p, "请用正常存活角色拍照；观察账号不能代领照片。"); return; }
             if (!ready()) { deny(p, "女神相机暂未就绪，请稍后用 /mycli photo status 查询；无需访问网页或上传公网文件。"); return; }
             if (owns(p.getUniqueId())) { deny(p, "你已有拍照请求。用 /mycli photo status 查看，或 photo cancel 取消尚未上传的请求。"); return; }
@@ -85,10 +87,10 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
                 if (uploadSent) { deny(p, "照片已上传，正在等待相册确认，请用 photo status 查看，勿重复创建。"); return; }
                 finish(false, "已取消；若已预扣空地图，由 ImageFrame 原流程退回。");
             } else if (queue.removeIf(j -> j.owner.equals(p.getUniqueId()))) notice(p, "cancelled", "已取消排队，未消耗空地图。");
-            else deny(p, "你没有待处理照片；用 /mycli photo take <名字> 拍照。");
+            else deny(p, "你没有待处理照片；从技能罗盘→女神相机或 /mycli photo menu 点击拍照。");
         } else {
             String state = active != null && active.owner.equals(p.getUniqueId()) ? phase : owns(p.getUniqueId()) ? "queued" : "idle";
-            notice(p, state, "相机" + (ready() ? "可用" : "暂未就绪") + "。/mycli photo take <名字> [first|third|top] [1|2]；1为单图，2为2×2海报（4张空地图、4个空格）。photo status 查进度，photo cancel 取消。无游戏UI，保留人名，照片归本人。");
+            notice(p, state, "相机" + (ready() ? "可用" : "暂未就绪") + "，你的请求：" + statusLabel(state) + "。技能罗盘→女神相机，或 /mycli photo menu 选择视角。单图需1张空地图，清晰海报需4张；自动拍摄并放入本人背包，无需截图上传。/mycli photo cancel 取消。");
         }
     }
 
@@ -277,15 +279,24 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
     private void notice(Player p, String status, String message) {
         p.sendMessage(ChatColor.AQUA + "[女神相机] " + message);
         JsonObject out = new JsonObject(); out.addProperty("status", status); out.addProperty("instruction", message);
+        out.addProperty("statusLabel", statusLabel(status)); out.addProperty("language", "zh-CN"); out.addProperty("recipient", p.getName());
         send(p, out);
         if (plugin.isRegisteredAgent(p)) p.sendMessage("MC_PHOTO " + out);
+    }
+    private static String statusLabel(String status) {
+        return switch (status) {
+            case "idle" -> "没有待拍照片"; case "queued" -> "排队中"; case "preparing" -> "准备拍摄";
+            case "rendering" -> "正在拍摄"; case "importing" -> "正在制作照片地图"; case "confirming" -> "确认放入背包";
+            case "success" -> "拍照完成"; case "cancelled" -> "已取消"; case "expired" -> "排队已过期";
+            case "denied" -> "暂时不能拍摄"; case "stopped" -> "拍摄已停止"; default -> "请查看说明";
+        };
     }
     private static final class Menu implements InventoryHolder {
         final UUID owner; Inventory inventory; Menu(UUID owner) { this.owner = owner; }
         @Override public Inventory getInventory() { return inventory; }
     }
     void menu(Player p) {
-        Menu holder = new Menu(p.getUniqueId()); holder.inventory = Bukkit.createInventory(holder, 27, "女神相机 · 无UI照片");
+        Menu holder = new Menu(p.getUniqueId()); holder.inventory = Bukkit.createInventory(holder, 27, "女神相机 · 点击拍照");
         menuItem(holder.inventory, 10, Material.SPYGLASS, "§b第一人称拍照", "拍你正在看的景物");
         menuItem(holder.inventory, 12, Material.ARMOR_STAND, "§b第三人称拍照", "从身后拍你与风景；保留人物名字");
         menuItem(holder.inventory, 14, Material.FEATHER, "§b俯视拍照", "从上方拍摄；请在开阔处使用");
@@ -294,6 +305,9 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
         menuItem(holder.inventory, 19, Material.PAINTING, "§b清晰海报 · 第一人称", "2×2地图，消耗4张空地图、需要4个空格");
         menuItem(holder.inventory, 21, Material.PAINTING, "§b清晰海报 · 第三人称", "2×2地图，消耗4张空地图、需要4个空格");
         menuItem(holder.inventory, 23, Material.PAINTING, "§b清晰海报 · 俯视", "2×2地图，消耗4张空地图、需要4个空格");
+        menuItem(holder.inventory, 18, Material.COMPASS, "§e返回技能罗盘", "自动拍照，无需网页、截图或手动上传");
+        menuItem(holder.inventory, 24, Material.BARRIER, "§c取消本人拍照请求", "只取消本人请求；已经导入的照片保留");
+        menuItem(holder.inventory, 26, Material.BARRIER, "§7关闭", "照片不带游戏界面，保留人物名字");
         p.openInventory(holder.inventory);
     }
     private void menuItem(Inventory inventory, int slot, Material material, String name, String lore) {
@@ -307,6 +321,9 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
         if (!mode.isEmpty()) { p.closeInventory(); command(p, new String[]{"photo", "take", "生活_" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("MMdd_HHmmss")), mode, event.getRawSlot() >= 19 ? "2" : "1"}); }
         else if (event.getRawSlot() == 16) { p.closeInventory(); Bukkit.dispatchCommand(p, "imageframe list"); }
         else if (event.getRawSlot() == 22) command(p, new String[]{"photo", "status"});
+        else if (event.getRawSlot() == 18) { p.closeInventory(); p.performCommand("mycli menu"); }
+        else if (event.getRawSlot() == 24) { p.closeInventory(); command(p, new String[]{"photo", "cancel"}); }
+        else if (event.getRawSlot() == 26) p.closeInventory();
     }
     @EventHandler public void onDrag(InventoryDragEvent event) { if (event.getView().getTopInventory().getHolder() instanceof Menu) event.setCancelled(true); }
     void stop() { if (task != null) task.cancel(); finish(false, "服务器维护，停止拍照；上线后请检查相册。"); messages.close(); queue.clear(); Bukkit.getMessenger().unregisterIncomingPluginChannel(plugin, CHANNEL, this); Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin, CHANNEL); }

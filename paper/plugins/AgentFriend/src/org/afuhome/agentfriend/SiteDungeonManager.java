@@ -109,7 +109,7 @@ final class SiteDungeonManager implements Listener {
     }
     private boolean playing(Player p){return p!=null&&p.isOnline()&&!p.isDead()&&p.getGameMode()==GameMode.SURVIVAL;}
     private List<Player> present(Run r){return r.party.stream().map(Bukkit::getPlayer).filter(this::playing).filter(p->r.site.contains(p.getLocation())).toList();}
-    private void send(Player p,String prefix,Map<String,?> fields){Map<String,Object> data=new LinkedHashMap<>();data.put("schemaVersion",1);data.putAll(fields);p.sendMessage(prefix+" "+JSON.toJson(data));}
+    private void send(Player p,String prefix,Map<String,?> fields){Map<String,Object> data=new LinkedHashMap<>();data.put("schemaVersion",1);data.put("activityType","site_dungeon");data.put("activityLabel","遗迹地下城");data.put("commandRoot","/mycli dungeon");data.put("language","zh-CN");data.put("recipient",p.getName());data.putAll(fields);p.sendMessage(prefix+" "+JSON.toJson(data));}
     private void result(Player p,String action,String site,String reason){
         Map<String,Object> data=new LinkedHashMap<>();data.put("action",action);data.put("id",site);
         data.put("success",reason.equals("success"));data.put("reason",reason);
@@ -117,7 +117,7 @@ final class SiteDungeonManager implements Listener {
         if(advice!=null){data.put("errorMessage",advice.message());data.put("nextAction",advice.next());data.put("nextCommands",advice.commands());}
         send(p,"MC_SITE_DUNGEON_RESULT",data);if(advice!=null)advice.send(p);
     }
-    private void tell(Run r,String message){for(UUID id:r.party){Player p=Bukkit.getPlayer(id);if(p!=null)p.sendMessage(message);}}
+    private void tell(Run r,String message){for(UUID id:r.party){Player p=Bukkit.getPlayer(id);if(p!=null)p.sendMessage("§6【遗迹地下城·"+r.site.name+"】§r "+message);}}
     private void notice(Run r,String message){
         tell(r,message);
         for(UUID id:r.party){Player p=Bukkit.getPlayer(id);if(p!=null)p.sendActionBar(net.kyori.adventure.text.Component.text(ChatColor.stripColor(message)));}
@@ -188,7 +188,7 @@ final class SiteDungeonManager implements Listener {
     private void explainOutcome(Player p,Map<String,Object> data){
         String reward=Objects.toString(data.get("rewardStatus"),"run_incomplete");
         String detail=switch(reward){case "ready"->"已生成待领奖凭据";case "claimed"->"本轮奖励已领取到个人箱";case "daily_limit"->"今日该处已经领奖，重复挑战不再发奖";case "missing_participation"->"参战登记不足，未生成凭据";case "not_returned"->"未完成返程登记，未生成凭据";default->"本轮未完成，未生成新凭据";};
-        p.sendMessage("§e【地下城结算】"+Objects.toString(data.get("name"),data.get("id").toString())+"："+endLabel(Objects.toString(data.get("reason")))+"；"+detail+"（参战 "+data.get("attendance")+"/"+data.get("requiredRooms")+"）。");
+        p.sendMessage("§e【遗迹地下城·结算】"+Objects.toString(data.get("name"),data.get("id").toString())+"："+endLabel(Objects.toString(data.get("reason")))+"；"+detail+"（参战 "+data.get("attendance")+"/"+data.get("requiredRooms")+"）。");
         if(data.get("missingRooms") instanceof List<?> missing&&!missing.isEmpty())p.sendMessage("§e缺席房间："+String.join("、",missing.stream().map(Object::toString).toList())+"。");
         p.sendMessage("§a下一步："+data.get("nextAction"));
     }
@@ -238,6 +238,7 @@ final class SiteDungeonManager implements Listener {
     }
     void command(Player p,String[] args){
         String action=args.length>1?args[1].toLowerCase(Locale.ROOT):"list",id=args.length>2?args[2]:"";
+        if(Set.of("list","info","status").contains(action))p.sendMessage("§6【遗迹地下城】各地遗迹逐室探索；清完返回首室，再 /mycli dungeon claim 结算。查询、组队和进度用 /mycli dungeon；奖励仍共用个人奖励箱。");
         try{
             require(ready,"configuration_unavailable");
             switch(action){
@@ -257,7 +258,7 @@ final class SiteDungeonManager implements Listener {
     }
     private void info(Player p,Site s){
         Room first=s.rooms.getFirst();send(p,"MC_SITE_DUNGEON_INFO",Map.of("id",s.id,"name",s.name,"world",s.world,"start",List.of(first.x,first.y,first.z),"rooms",s.rooms.stream().map(r->Map.of("name",r.name,"center",List.of(r.x,r.y,r.z),"radius",r.radius,"enemies",r.enemies.size())).toList(),"hint",s.hint,"dailyRewardPerSite",1,"approachMana",8));
-        p.sendMessage("§6"+s.name+"："+s.hint+"。先 travel "+s.id+"（8魔力）"+(s.entry.isEmpty()?"到外围，步行深入首室":"到已勘察的墓穴入口")+"；start 自己参赛，队友10秒内 join。各室清怪后步行到下一室，最后返回首室；claim 奖励进个人箱。普通/冒险/末日可选，每处每日一次奖励。");
+        p.sendMessage("§6【遗迹地下城·"+s.name+"】"+s.hint+"。/mycli dungeon travel "+s.id+"（8魔力）"+(s.entry.isEmpty()?"到外围，步行深入首室":"到已勘察的墓穴入口")+"；/mycli dungeon start "+s.id+" 开场，队友10秒内用 /mycli dungeon join "+s.id+" 加入。清怪后步行到下一室，最后返回首室，/mycli dungeon claim "+s.id+" 领奖。每处每日一次奖励。");
     }
     private void travel(Player p,Site s){
         require(playing(p)&&own(p)==null&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
@@ -306,7 +307,7 @@ final class SiteDungeonManager implements Listener {
             Map<String,Object> outcome=lastOutcome(p.getUniqueId(),id);fields.put("lastOutcome",outcome);fields.put("outcomeKnown",!outcome.isEmpty());
             send(p,"MC_SITE_DUNGEON_STATE",fields);
             if(!outcome.isEmpty())explainOutcome(p,outcome);
-            else p.sendMessage("§e【地下城】当前没有你的活动记录；旧版未保存结束原因，不能据此确认通关或补发。用 /mycli dungeon list 选地点，info 查看规则。");
+            else p.sendMessage("§e【遗迹地下城】当前没有你的活动记录；旧版未保存结束原因，不能据此确认通关或补发。用 /mycli dungeon list 选地点，info 查看规则。");
             return;
         }
         Room target=r.stage>=r.site.rooms.size()?r.site.rooms.getFirst():r.room();
@@ -317,7 +318,7 @@ final class SiteDungeonManager implements Listener {
         if(!r.party.contains(p.getUniqueId())){fields.put("lastOutcome",previousOutcome);fields.put("outcomeKnown",!previousOutcome.isEmpty());}
         send(p,"MC_SITE_DUNGEON_STATE",fields);
         if(r.party.contains(p.getUniqueId())){
-            p.sendMessage("§b【地下城】"+r.site.name+" · "+target.name+"；参战登记 "+r.attendance.getOrDefault(p.getUniqueId(),0)+"/"+r.site.rooms.size()+"，"+(r.phase.equals("returning")?"请返回首室结算":"本室"+(r.roomParticipants.contains(p.getUniqueId())?"已记录":"尚未记录"))+"。"+(r.pausedAt>0?"暂停："+pauseLabel(r.pauseReason)+"；5分钟内回场，未清房间重刷。":""));
+            p.sendMessage("§b【遗迹地下城】"+r.site.name+" · "+target.name+"；参战登记 "+r.attendance.getOrDefault(p.getUniqueId(),0)+"/"+r.site.rooms.size()+"，"+(r.phase.equals("returning")?"请返回首室结算":"本室"+(r.roomParticipants.contains(p.getUniqueId())?"已记录":"尚未记录"))+"。"+(r.pausedAt>0?"暂停："+pauseLabel(r.pauseReason)+"；5分钟内回场，未清房间重刷。":""));
             if(!missingRooms(r,p.getUniqueId()).isEmpty())p.sendMessage("§e缺席房间："+String.join("、",missingRooms(r,p.getUniqueId()))+"；本轮不能领取完整奖励，可继续练习或正常退出后重新挑战。");
             if(!unverifiedRooms(r).isEmpty())p.sendMessage("§7旧版房间明细未保存，保留原登记数量，不推断缺席房间。本人当前总数以回执 attendance 为准。");
         }else if(!previousOutcome.isEmpty()){p.sendMessage("§7该地点有其他队伍正在挑战；以下是你本人最近一次结果。");explainOutcome(p,previousOutcome);}
@@ -368,7 +369,7 @@ final class SiteDungeonManager implements Listener {
                 if(r.pausedAt==0){
                     r.pausedAt=now;r.pauseReason=present.isEmpty()?(r.party.stream().noneMatch(id->playing(Bukkit.getPlayer(id)))?"all_offline":"all_outside_site"):"waiting_for_teammate";
                     if(r.phase.equals("fighting")){r.resets++;r.lastResetReason=r.pauseReason;r.lastResetAt=now;r.phase="moving";}
-                    clean(r);persist();notice(r,"§e【地下城暂停】"+pauseLabel(r.pauseReason)+"；5分钟内回场。已清房间保留，未清房间重刷，本次未完成的参战记录不计入结算。");
+                    clean(r);persist();notice(r,"§e【遗迹地下城·暂停】"+pauseLabel(r.pauseReason)+"；5分钟内回场。已清房间保留，未清房间重刷，本次未完成的参战记录不计入结算。");
                 }
                 else if(now-r.pausedAt>REJOIN_MS)end(r,"return_grace_expired");
                 continue;
@@ -396,7 +397,7 @@ final class SiteDungeonManager implements Listener {
                 r.roomAttendance.put(r.stage,Set.copyOf(credited));
                 for(UUID id:credited)r.attendance.merge(id,1,Integer::sum);
                 String roomName=r.room().name;clean(r);r.stage++;r.attempt=0;r.phase=r.stage==r.site.rooms.size()?"returning":"moving";persist();
-                for(UUID id:r.party){Player p=Bukkit.getPlayer(id);if(p!=null)p.sendMessage((credited.contains(id)?"§a":"§e")+"【参战登记】"+roomName+"："+(credited.contains(id)?"已记录本室参战":"本室缺席，未登记")+"；累计 "+r.attendance.getOrDefault(id,0)+"/"+r.site.rooms.size()+"。"+(credited.contains(id)?"":"继续可练习，完整奖励需重新组队挑战。"));}
+                for(UUID id:r.party){Player p=Bukkit.getPlayer(id);if(p!=null)p.sendMessage((credited.contains(id)?"§a":"§e")+"【遗迹地下城·参战登记】"+roomName+"："+(credited.contains(id)?"已记录本室参战":"本室缺席，未登记")+"；累计 "+r.attendance.getOrDefault(id,0)+"/"+r.site.rooms.size()+"。"+(credited.contains(id)?"":"继续可练习，完整奖励需重新组队挑战。"));}
                 notice(r,"§a战斗室已清理；"+(r.phase.equals("returning")?"返回首室完成本次探索并登记奖励。":"步行前往下一室："+r.room().name+" "+r.room().x+","+r.room().y+","+r.room().z));
             }
         }catch(RuntimeException e){plugin.getLogger().warning("Site dungeon paused for explicit retry: "+r.site.id+" "+e.getMessage());clean(r);r.stage=previousStage;r.attendance.clear();r.attendance.putAll(previousAttendance);r.roomAttendance.clear();r.roomAttendance.putAll(previousRoomAttendance);r.phase=previousPhase.equals("fighting")?"moving":previousPhase;r.pausedAt=System.currentTimeMillis();r.pauseReason="runtime_error";if(previousPhase.equals("fighting")){r.resets++;r.lastResetReason="runtime_error";r.lastResetAt=r.pausedAt;}r.fault=Objects.toString(e.getMessage(),"runtime_error");try{persist();}catch(RuntimeException save){plugin.getLogger().warning("Site dungeon fault checkpoint not saved: "+r.site.id);}notice(r,"§c地下城已暂停："+r.fault+"。本室未结算；解决问题后 /mycli dungeon resume 重试，或 /mycli dungeon leave 退出。");}

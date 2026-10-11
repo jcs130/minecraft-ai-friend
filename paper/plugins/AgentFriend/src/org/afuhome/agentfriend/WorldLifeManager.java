@@ -297,7 +297,7 @@ final class WorldLifeManager implements Listener {
         inv.setItem(10, item(Material.WRITABLE_BOOK, "§a新手实习", "真实施法与生活委托教学", "/mycli world guide start"));
         inv.setItem(11, item(Material.VILLAGER_SPAWN_EGG, "§e村民聊天", "显示人物 ID 和位置；走近右键交谈", "/mycli world npcs"));
         inv.setItem(12, item(Material.SUNFLOWER, "§6世界事件", "查看当前正在进行的活动", "/mycli world events"));
-        inv.setItem(13, item(Material.FILLED_MAP, "§b拍照与相册", "用女神相机拍本人视角，消耗1张空地图", "/mycli photo take；相册 /mycli world photos"));
+        inv.setItem(13, item(Material.SPYGLASS, "§b女神相机 · 拍照与相册", "点击选择拍照视角，单图消耗1张空地图", "/mycli photo menu；自动拍摄，无需截图上传"));
         inv.setItem(14, item(Material.EMERALD, "§a村民商店", "到村庄集市右键补给商人交易", "实际消耗原版物品；不会免费发放"));
         inv.setItem(15, item(Material.LADDER, "§a开门与爬梯实练", "亲手开门穿过、沿现有梯子爬升3格", "不拆墙、不垫块，不代操作或授予技能", "/mycli world practice start"));
         inv.setItem(16, item(Material.OAK_DOOR, "§7结束聊天", "恢复普通公屏聊天"));

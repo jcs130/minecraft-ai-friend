@@ -11,6 +11,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 /** Console-only fixtures for the named loopback laboratory. Never deploy to production. */
 public final class DungeonParticipationQA extends JavaPlugin implements org.bukkit.event.Listener {
     private JavaPlugin friend;
+    private boolean rejectTestPickups;
     @Override public void onEnable() {
         if(!Bukkit.getMotd().equals("Dungeon participation isolated check")
                 ||!Bukkit.getIp().equals("127.0.0.1")||Bukkit.getPort()!=25567) {
@@ -24,6 +25,10 @@ public final class DungeonParticipationQA extends JavaPlugin implements org.bukk
     public void damage(org.bukkit.event.entity.EntityDamageByEntityEvent event) {
         if(event.getEntity().getScoreboardTags().contains("afu_site_dungeon")&&event.getDamager() instanceof Arrow arrow)
             getLogger().info("QA_ARROW_DAMAGE cancelled="+event.isCancelled()+" final="+event.getFinalDamage()+" shooter="+arrow.getShooter());
+    }
+    @org.bukkit.event.EventHandler(priority=org.bukkit.event.EventPriority.HIGHEST)
+    public void pickup(org.bukkit.event.entity.EntityPickupItemEvent event) {
+        if(rejectTestPickups&&event.getEntity() instanceof Player player&&player.getName().equals("RoomQA"))event.setCancelled(true);
     }
     private static Object field(Object obj,String name)throws Exception {
         Field field=obj.getClass().getDeclaredField(name);field.setAccessible(true);return field.get(obj);
@@ -42,6 +47,32 @@ public final class DungeonParticipationQA extends JavaPlugin implements org.bukk
             Map<String,Object> runs=(Map<String,Object>)field(manager,"runs");
             Object run=runs.get("audit_rooms");
             switch(args[0]) {
+                case "reject_pickup" -> rejectTestPickups=Boolean.parseBoolean(args[1]);
+                case "shortcut" -> {
+                    Object tower=field(friend,"dungeon");
+                    Class<?> migration=Class.forName("org.afuhome.agentfriend.BackpackShortcutMigration",true,friend.getClass().getClassLoader());
+                    Method method=migration.getDeclaredMethod("restoreMissing",Player.class,tower.getClass());method.setAccessible(true);
+                    method.invoke(null,Objects.requireNonNull(Bukkit.getPlayerExact(args[1])),tower);
+                }
+                case "tower_status" -> invoke(field(friend,"dungeon"),"command",new Class<?>[]{Player.class,String[].class},
+                        Objects.requireNonNull(Bukkit.getPlayerExact("RoomQA")),new String[]{"arena","status"});
+                case "health" -> {
+                    Player player=Objects.requireNonNull(Bukkit.getPlayerExact(args[1]));
+                    player.setHealth(Math.clamp(Double.parseDouble(args[2]),1,player.getMaxHealth()));
+                }
+                case "tower_notice" -> {
+                    Object tower=field(friend,"dungeon");
+                    Set<UUID> members=(Set<UUID>)field(tower,"participants");
+                    members.clear();members.add(Objects.requireNonNull(Bukkit.getPlayerExact("RoomQA")).getUniqueId());
+                    invoke(tower,"announce",new Class<?>[]{String.class},"隔离消息归属检查");
+                    members.clear();
+                }
+                case "full_inventory" -> {
+                    Player player=Objects.requireNonNull(Bukkit.getPlayerExact("RoomQA"));
+                    for(int slot=0;slot<36;slot++)player.getInventory().setItem(slot,new ItemStack(Material.COBBLESTONE,64));
+                    player.getInventory().setItem(0,new ItemStack(Material.BREAD,63));
+                    player.updateInventory();
+                }
                 case "fixtures" -> {
                     World world=Bukkit.getWorld("world");
                     for(int x=88;x<=180;x++)for(int z=90;z<=110;z++) {

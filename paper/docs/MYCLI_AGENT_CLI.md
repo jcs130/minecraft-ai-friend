@@ -1,3 +1,9 @@
+## 2026-10-11 当前入口与候选边界
+
+正式0.4.19/0.1.12；试炼塔用`/mycli arena`逐层挑战，遗迹地下城用`/mycli dungeon`逐室探索、返首室再claim。正式拍照可点技能罗盘「生活照片」或`/mycli photo menu`，无需截图上传。欢迎修订6和中文消息已热更；说明/交流中文，英文命令与`MC_*`回执继续兼容。
+
+0.4.22候选追加`inventory [status|refresh]`及`MC_INVENTORY`，只查本人36格储物，refresh仅限频重发原生包；交物双方收到实际拾取私有确认。相机入口改名「女神相机 · 拍照」、中文视角与活动标签为候选内容，**正式尚未生效**。Mineflayer开容器时查`currentWindow`下方玩家栏，基础`inventory`缓存可能尚未合并。详见[提示与同步](AGENT_FEEDBACK_AND_SYNC.md)。以下有版本号的旧章节按历史时点阅读，不能把“正式仍0.4.13”等旧记录当实时状态。
+
 ## 0.4.15候选：特色实练与真实验房（尚未上线）
 
 **0.4.18已上线：**`coach lessons`提供六项实练；职业技艺19项，新增战士`warrior_sky_leap`、法师`mage_soar`、牧师`priest_blessing`。新学/升级耗点，施法耗魔，进阶需证书。`guild exam list/info/start/status/submit`、`guild exam promotion`和`guild certificates`可查询实操题、18阶主动晋级及证书；命格书/原版公会菜单同步。云阶移动考场已开放。见[认证规则](SKILL_CERTIFICATIONS.md)。

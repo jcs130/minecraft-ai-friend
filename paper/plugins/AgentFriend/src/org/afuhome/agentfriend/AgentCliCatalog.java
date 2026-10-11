@@ -29,6 +29,7 @@ final class AgentCliCatalog {
 
     private static Map<String, Spec> createSpecs() {
         Map<String, Spec> specs = new LinkedHashMap<>();
+        add(specs,"inventory","info","read","/mycli inventory [status|refresh]","读取服务器本人随身背包与快捷栏，显示不一致可重新同步原版物品栏","仅本人；不含54格大背包、任务物品袋或个人奖励箱；刷新显示不移动或增减物品","私有 MC_INVENTORY，含物品ID、数量、随身槽位和原版窗口槽位");
         add(specs,"world","life","read","/mycli world list|menu|npcs|talk <ID> <话>|end|guide start|practice start|status|stop|events|photos","世界生活内容入口：新手实习、开门爬梯实练、村民聊天、世界事件、村民交易和照片展示","查询免费；聊天须在NPC八格内；照片可由本机女神相机拍摄，消耗1张空地图","MC_WORLD JSON及NPC实际答复");
         add(specs,"world.list","life","read","/mycli world list","查看各内容插件实际启用状态和入口","查询免费，不执行技能","MC_WORLD type=catalog");
         add(specs,"world.board","life","read","/mycli world board [menu]","居民事务：农耕集市、照片展与遗迹调查；查看真实步骤及本人状态","与公会共享任务槽；guild accept接单，每阶段guild claim；最终入个人箱","MC_WORLD type=board；可选45格原版菜单");
@@ -40,7 +41,7 @@ final class AgentCliCatalog {
         add(specs,"world.guide","life","write","/mycli world guide start|status","新手实习：查看技能目录、真正成功施法、完成生活委托；服务器记录证据","主动开始；失败施法/自称完成不计进度；不代学、不代花点","MC_WORLD type=guide/guide_progress");
         add(specs,"world.practice","life","write","/mycli world practice start|status|stop","通行实练：亲手打开木门并穿过、沿现有梯子连续爬升3格；不拆墙、不垫方块","自愿报名；生存或冒险模式；本人原生交互与移动；飞行、传送、自称完成不算；没有额外奖励或代操作","MC_WORLD type=practice/practice_progress；真实坐标、时间及原生操作证明；一次通过不表示长期掌握");
         add(specs,"world.events","life","read","/mycli world events","查看正在进行的世界生活事件","查询免费；活动公告另发；活动不自动完成任务","MC_WORLD type=events与WorldEvents当前列表");
-        add(specs,"photo","life","write","/mycli photo take <名字> [first|third|top] [1|2]；menu|status|cancel","女神自动拍照，站稳等待地图入包；无需截图或上传文件","单图1张空地图和1个空主背包格；2×2海报4张地图和4个空格；每人60秒，串行排队","MC_PHOTO status=queued|preparing|success|stopped|denied；success才表示实际地图已交付");
+        add(specs,"photo","life","write","/mycli photo menu；take <名字> [第一人称|第三人称|俯视] [1|2]；status|cancel","技能罗盘→女神相机点击拍照，站稳等待地图入包；无需截图或上传文件；原first/third/top参数继续可用","单图1张空地图和1个空主背包格；2×2海报4张地图和4个空格；每人60秒，串行排队","MC_PHOTO 含中文statusLabel；success才表示实际地图已交付");
         add(specs,"world.photos","life","read","/mycli world photos","打开女神相机与本人相册菜单，可将照片挂展示框","ImageFrame已启用；automaticCaptureReady表示相机当次是否就绪，false时用photo status查询","MC_WORLD type=photos；相机菜单及当前就绪状态");
         add(specs,"profession","magic","read","/mycli profession status|list|menu|choose <ID>|leave <ID>","选择一个主战职业；list 查看当前开放路线；保留旧技能和成长","生存模式选择；UUID 学习账本；不改背包","MC_PROFESSION / MC_PROFESSION_RESULT");
         add(specs,"profession.status","magic","read","/mycli profession status","查看本人当前职业和准备槽","查询免费","MC_PROFESSION");
@@ -82,7 +83,7 @@ final class AgentCliCatalog {
         add(specs,"goto","travel","teleport","/mycli goto <公共地点ID|arena|guild|personal:名字|shared:分享码>","传送术前往公共、本人或分享地点","安全落点；6 魔力；个人名支持 1–24 位中文字母数字_-；不在活动中","命名地点先返回 MC_WAYPOINT_RESULT status=pending，最终 success/denied；成功 MC_TRAVEL；失败不扣费");
         add(specs,"waypoint","travel","read","/mycli waypoint","只读列出公共、本人命名地点和旧 home","在线玩家；不移动、不扣费","MC_WAYPOINT 绝对坐标和 MC_WAYPOINT_LIST JSON");
         add(specs,"locate","team","read","/mycli locate list|nearest|玩家名|off|tp <玩家名|nearest>","查在线队友绝对坐标、追踪或安全传送","目标在线且非旁观者","MC_PLAYER 绝对坐标或追踪/传送结果");
-        add(specs,"arena","adventure","read","/mycli arena status|start|rest|next|shop|rewards|stash|leave","试炼塔挑战、商店与本人奖励箱","玩法动作受位置、队伍、冷却检查","MC_DUNGEON、MC_REWARD、MC_STASH 或菜单");
+        add(specs,"arena","adventure","read","/mycli arena status|start|rest|next|shop|rewards|stash|leave","试炼塔按层挑战、商店与本人奖励箱；逐室探索的遗迹地下城另用 /mycli dungeon","玩法动作受位置、队伍、冷却检查","MC_DUNGEON、MC_REWARD、MC_STASH 或菜单");
         add(specs,"pvp","adventure","read","/mycli pvp status|join|leave|lobby|board|menu","自愿参加同款装备一对一竞技场","非旁观者、未在试炼中；两人入队自动开赛","本人 MC_PVP JSON 与 MC_PVP_RESULT");
         add(specs,"guild","adventure","read","/mycli guild board|join|status|accept <ID>|claim|travel <遗迹ID>","公会任务、声望和遗迹远征","本人角色；接单需满足等级与每日限制","个人任务/声望或传送结果");
         add(specs,"life","life","read","/mycli life board|menu|status|locations|accept <ID>|claim|abandon|write <书名>|<正文>","生活公会：种田、烹饪、钓鱼、建筑、写书、红石机关和村民收购","本人非旁观者；每日每任务一次","个人提示和 mcagent:life JSON");

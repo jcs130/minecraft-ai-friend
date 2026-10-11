@@ -2,6 +2,8 @@
 
 ## 先认清现状
 
+**2026-10-11 中文提示已热更、0.4.22/0.1.13未部署：**欢迎修订6、Essentials中文、管理员广播接收限制及三维度原版成就公屏关闭已生效。候选区分试炼塔/遗迹地下城、相机直接入口、交物私有确认/背包查询及Eye减少重复物品包；继承0.4.20箭头和0.4.21参战结算，33项真实协议隔离通过。正式仍0.4.19/0.1.12，本轮不重启、不排队部署；未改原客户端或独立模型服务。见[提示与同步](AGENT_FEEDBACK_AND_SYNC.md)。
+
 **2026-10-11 罗盘追踪0.4.20候选，尚未部署：**左右/斜向箭头及多圈角度已修正，60项真实Mineflayer/附身Eye与12,882项方向检查通过。正式仍0.4.19/0.1.12；服主明确本轮不重启，未排队或部署。玩法见[技能罗盘](COMPASS_MENU.md)，上线沿[维护规则](OPERATIONS.md)。
 
 **2026-10-11 Eye默认配对不再匹配IP，已上线：**服主明确要求不要严格限制来源，覆盖此前同来源默认规则及下方逐组登记的旧要求。本体成功在线后，名字_eye或名字eye按名字配对，内网/公网混用无需报IP；专用限制、别名/live/Goddess规则优先。原Watchdog只重连网关，Paper/YSM代理未重启，原客户端保持。6项隔离测试通过，含跨来源成功与实际登录拒绝原因；远端原机Eye状态另查回执。见[观战接入](AGENT_EYES.md)；E/F repairs/eye-default-pair-20261011。
@@ -23,7 +25,7 @@
 | 玩家委托与分页箱（0.3.94） | 公会玩家委托、`commission list/mine/info/menu/publish/accept/claim/abandon/cancel`，`arena stash pages/page/list`；[玩法](MYCLI_AGENT_CLI.md) | config.yml的player-contracts.jobs/active、既有余额/待入箱队列和0–539槽位 | 已上线；玩家发布供货/同行无需代码或重启，每单一人、托管报酬、实物与真实探索返程验收。10页540格，待入箱队列1024组；客户端沿用现有协议 |
 | 命名传送点（0.3.89） | 罗盘地点页、`waypoint add/list/shared/menu`、`goto personal:名字/shared:分享码`；[命名地点](NAMED_WAYPOINTS.md) | `plugins/AgentFriend/waypoints.yml` 按主人/世界 UUID 保存，默认每人 32 点 | 玩家亲自到达后在线中文命名、改名、更新和撤回分享；记录免费，成功传送 6 魔力。主动分享公开发现者与坐标；不改代码、不重启。旧 home 保留；部署状态以维护记录为准 |
 | 操作报错（0.4.3） | `ProtectionAdvisor`、`ProtectionArea`、`ActionFeedback`及MagicSpells七项文字；[规则](ERROR_GUIDANCE.md) | 原保护边界、主人/成员、私产与原业务账本保持；三处领地仅更新deny-message | 实际拒绝和查询给原因、真实边界及下一步，区外重查，建议不自动执行；新功能失败分支须提供正确做法 |
-| Agent迎新（0.4.18欢迎修订5及实练已上线） | `onboarding.yml`、`AgentCoach`原计时器、`FeatureTutorials`；[规则](AGENT_ONBOARDING.md) | 玩家PDC欢迎/限频/暂停、原实习/生活/公会账本；追加feature_lesson证明 | 文案介绍大背包/CLI、职业新技与认证；六项真实操作教学已开放。原实习毕业保持，不代学/接单/领奖，三份储物独立 |
+| Agent迎新（欢迎修订6及实练已上线） | `onboarding.yml`、`AgentCoach`原计时器、`FeatureTutorials`；[规则](AGENT_ONBOARDING.md) | 玩家PDC欢迎/限频/暂停、原实习/生活/公会账本；追加feature_lesson证明 | 文案介绍大背包/CLI、职业新技与认证；六项真实操作教学已开放。原实习毕业保持，不代学/接单/领奖，三份储物独立 |
 | 技能编舞（0.4.5） | `skill-visuals.yml`、原版粒子单计时器；[规则](SKILL_VISUALS.md) | 无玩家账本；原成功事件/耗魔/资格保持 | `admin visuals reload/audit/preview`仅控制台；坏配置保留旧值、预算限流、导入工坊精确坐标，不安装客户端模组；手机/Xbox待真机 |
 | 技能罗盘（0.4.1） | 原版45格五排、底排九项；`/mycli menu`；[布局](COMPASS_MENU.md) | 原罗盘PDC/技能账本保持，图鉴页码仅在线记忆 | 已学点击原施法，未学只打开学习页；图鉴每页36项，地点页36格。原Agent命令和客户端保持，基岩实际设备待验收 |
 | 技能、法术、快捷施法 | 既有技能源码与 MagicSpells/AuraSkills；0.3.92 新增 professions.yml / skills.yml / skill-unlocks.yml / skill-points.yml；[职业与传承](CHARACTER_SKILLS.md)、[技能体系](SKILL_SYSTEM.md)、[位移](TRAVEL_MAGIC.md) | 既有魔力/等级/刻印/熟练度；profession-ledger.json 的 UUID 资格、学习等级、已获/已花点数、最高成长、冷却、唯一归属；config.yml pending 收据 | 旧效果发布流程保留；新职业固定效果、逐级点数/效果、洗点费用和解锁可整体验证热加载，失败保留旧目录，新效果仍需代码发布；战法牧与点数已于0.3.92上线，现役版本继续保留，原16项逐级简介保持，现增三项共19项，0.3.97的skills list profession或warrior/mage/priest直接发现职业技艺，skills info查逐级详情；学习菜单右键/命格书提供详情和个人状态 |
@@ -39,7 +41,7 @@
 | 试炼塔、地下城与奖励（0.3.95） | trial-waves.yml前六层；dungeons.yml三个真实建筑；罗盘地点页、`dungeon list/info/travel/start/join/status/resume/leave/claim/menu`；[规则](DUNGEON_NETWORK.md) | config.yml的旧试炼波次快照、site-dungeons.runs/receipts/claimed/cooldowns，既有个人奖励；世界实体和建筑 | 控制台`trialwaves reload`/`dungeons reload`整体验证热更，活动期间拒绝换目录；新地点可指定已勘察付费entry。逐室原生战斗和实际返程，每处每日一次奖励。全服新地点48怪/128飞行物，不根据文字直接覆盖世界生成建筑 |
 | PvP 竞技场 | `PvpArenaManager.java` 的自愿匹配、同款装备和积分；[PvP 规则](PVP_ARENA.md) | `pvp-records`、`pvp-escrow.yml`、竞技场方块及 WorldGuard 区域 | 运营 Agent 可查看本人对局和排行榜；改地图或计分规则须隔离测试和完整备份，不可在有人对战时发布 |
 | 女神运营 | QwenPaw `mc_godness`、游戏内 `Goddess` OP 旁观者、`ops/goddess-bridge.mjs` 与 `ops/goddess-mcp.py` | 女神会话、审核和审计记录留在主机；0.3.84 的 `goddess-gifts.jsonl` 持久发放账本 | 0.3.84 起正式生效，现役版本继承，可热更新附魔书/药水目录，真实库存核验后才报成功，超时查原回执不补发；MCP现共19项，新增九项世界观察工具；只读聊天身份具名许可和房管管理身份分开，见[世界观察](GODDESS_PERCEPTION.md)。验证与边界见 [礼物校验](GODDESS_GIFTS.md)。MCP 范围不代表 Agent 全部文件/开发权限 |
-| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在正式重启自动激活；正式0.4.18/0.1.12及40连接上限，容量与边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) | 可检查、构建、测试、备份和发布；先完成 E/F 校验镜像，再替换 JAR；源码提交不会自动改变正式服 |
+| 运维与发布 | `ops/manage-server.ps1`、Watchdog、E/F 双盘完整快照、隔离服测试脚本；AuraSkills 缓存修复见 [性能记录](PERFORMANCE.md) | 正式世界、白名单、密钥、日志和备份都在运行主机；缓存补丁已在正式重启自动激活；正式0.4.19/0.1.12及40连接上限，容量与边界见 [多 Agent 性能验收](MULTI_AGENT_PERFORMANCE.md) | 可检查、构建、测试、备份和发布；先完成 E/F 校验镜像，再替换 JAR；源码提交不会自动改变正式服 |
 
 2026-10-06 已修复女神附魔书字段错误和现存确认损坏的 1 本，并正式发布 0.3.84 校验入口：书必须使用 `stored_enchantments`，装备使用 `enchantments`。私聊与造物都使用同一受校验入口；女神只选礼物，服务器生成属性并核对实际库存。不要依据闪光认定铁砧可用，也不要把字段错误归咎于刻印保护。现状见 [女神附魔书](GODDESS_BOOKS.md)、[礼物校验](GODDESS_GIFTS.md)。
 

@@ -130,7 +130,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         }, 1L, 1L);
         protocol.addPacketListener(new PacketAdapter(this, ListenerPriority.HIGHEST, PRESENTATION) {
             @Override public void onPacketSending(PacketEvent event) {
-                if (event.isCancelled() || additionalEyeMirrors == null || !additionalEyeMirrors.cortiAuthorized()) return;
+                if (event.isCancelled() || event.isPlayerTemporary() || event.getPlayer() == null || additionalEyeMirrors == null || !additionalEyeMirrors.cortiAuthorized()) return;
                 String recipient = event.getPlayer().getName();
                 PacketType type = event.getPacketType();
                 if (recipient.equalsIgnoreCase(cameraName)) {
@@ -165,7 +165,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         protocol.addPacketListener(new PacketAdapter(this, ListenerPriority.HIGHEST,
                 PacketType.Play.Server.WINDOW_ITEMS, PacketType.Play.Server.SET_SLOT) {
             @Override public void onPacketSending(PacketEvent event) {
-                if (!captureHotbarSlot36.get() || !event.getPlayer().getName().equalsIgnoreCase(targetName)) return;
+                if (event.isCancelled() || event.isPlayerTemporary() || event.getPlayer() == null || !captureHotbarSlot36.get() || !event.getPlayer().getName().equalsIgnoreCase(targetName)) return;
                 Object handle = event.getPacket().getHandle();
                 ItemStack item;
                 String packet;
@@ -409,7 +409,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
     }
 
     private boolean onStatusCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!sender.isOp()) { sender.sendMessage("No permission."); return true; }
+        if (!sender.isOp()) { sender.sendMessage("这是房管观战诊断入口；普通角色请用 /mycli status 查看本人状态。"); return true; }
         Player target = Bukkit.getPlayerExact(targetName);
         Player camera = Bukkit.getPlayerExact(cameraName);
         if (target == null) { sender.sendMessage("Target " + targetName + " offline; camera="

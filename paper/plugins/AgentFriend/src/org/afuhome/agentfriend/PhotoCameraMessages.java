@@ -17,6 +17,7 @@ final class PhotoCameraMessages {
     PhotoCameraMessages(AgentFriendPlugin plugin) {
         listener = new PacketAdapter(plugin, ListenerPriority.HIGH, PacketType.Play.Server.SYSTEM_CHAT) {
             @Override public void onPacketSending(PacketEvent event) {
+                if (event.isCancelled() || event.isPlayerTemporary() || event.getPlayer() == null) return;
                 Lease lease=leases.get(event.getPlayer().getUniqueId());
                 if (event.isCancelled() || lease==null || lease.expires < System.currentTimeMillis()) return;
                 try {

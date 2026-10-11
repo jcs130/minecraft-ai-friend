@@ -126,7 +126,7 @@ final class AdditionalEyeMirrors implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
         protocol.addPacketListener(new PacketAdapter(plugin, ListenerPriority.HIGHEST, PRESENTATION) {
             @Override public void onPacketSending(PacketEvent event) {
-                if (event.isCancelled()) return;
+                if (event.isCancelled() || event.isPlayerTemporary() || event.getPlayer() == null) return;
                 PacketType type = event.getPacketType();
                 Player recipient = event.getPlayer();
                 String name = recipient.getName().toLowerCase(Locale.ROOT);
