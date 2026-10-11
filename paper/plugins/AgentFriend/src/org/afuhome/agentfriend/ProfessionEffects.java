@@ -293,6 +293,7 @@ final class ProfessionEffects implements Listener {
     }
     void recordHealing(Player caster, Player target, double amount) {
         if (amount <= 0) return;
+        if(caster!=null&&plugin.siteDungeons()!=null)plugin.siteDungeons().support(caster,target);
         Wound wound = wounds.get(target.getUniqueId());
         if (caster != null) manager.metric(caster, "healedDamage", amount);
         if (wound == null || wound.until <= System.currentTimeMillis()) return;
@@ -385,6 +386,7 @@ final class ProfessionEffects implements Listener {
             }
             if (changed) {
                 beneficiaries.add(target);
+                if(plugin.siteDungeons()!=null)plugin.siteDungeons().support(p,target);
                 target.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, target.getLocation().add(0, 1, 0), 8, .3, .5, .3, .01);
             }
         }

@@ -261,6 +261,8 @@ final class TrialRescueManager implements Listener {
             recoveries.put(id, new Recovery(d.exit, d.team, false)); remove(id); persist(); return;
         }
         remove(id); restoreHealth(p); persist();
+        if(reason.equals("nearby_teammate")&&d.rescuer!=null&&plugin.siteDungeons()!=null)
+            plugin.siteDungeons().support(Bukkit.getPlayer(d.rescuer),p);
         if(reason.equals("nearby_teammate")&&d.rescuer!=null&&plugin.skillAssessments()!=null) {
             Player rescuer=Bukkit.getPlayer(d.rescuer);if(rescuer!=null)plugin.skillAssessments().proof(rescuer,"rescue","revived:"+id+":"+System.currentTimeMillis());
         }

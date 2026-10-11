@@ -1,3 +1,5 @@
+**2026-10-11 地下城参战/结算0.4.21候选，尚未部署：**累计本室参战与实际远程/援助，记录缺席、重刷及结束/奖励原因，保留原CLI字段与奖励原子提交；含0.4.20箭头修正。50项隔离真实客户端通过，冷启动记录恢复与重复领奖11项通过，回执另见私有证据。正式仍0.4.19/0.1.12，本轮不重启、不换JAR、不排队部署；旧场次原因不可恢复，不改玩家物品。窗口自动关闭已在正式版；Web分类回看候选已构建，远端须更新重建。见[参战修复](docs/DUNGEON_PARTICIPATION.md)，E/F repairs/dungeon-participation-20261011。
+
 **2026-10-11 罗盘追踪0.4.20候选，尚未部署：**修正左右/斜向箭头及多圈旋转角度；隔离60项真实Mineflayer/附身Eye和12,882项方向/边界通过，早期夹具失败保留。正式仍0.4.19/0.1.12，服主明确本轮不重启；未替换JAR或排队重启。见[罗盘](docs/COMPASS_MENU.md)、[维护](docs/OPERATIONS.md)，E/F repairs/compass-tracking-20261011。
 
 **2026-10-11 私聊别名已热修：**可米47次Essentials拒绝全部为`/w`，原账号已有正常私聊权限。新增Denizen `qd_private_chat.dsc`，将w/tell/whisper转原版minecraft:msg，保留玩家自身权限及Mineflayer whisper。隔离权限/回退/冷启动和正式21项检查通过，15:05只重载Denizen，Paper/网关/YSM与原客户端保持；版本仍0.4.19/0.1.12。见[规则](docs/PRIVATE_CHAT.md)，E/F repairs/cormy-command-permissions-20261011。

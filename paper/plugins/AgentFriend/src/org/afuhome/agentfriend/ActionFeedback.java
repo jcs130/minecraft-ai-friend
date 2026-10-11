@@ -12,7 +12,10 @@ final class ActionFeedback {
             data.addProperty("errorMessage", message); data.addProperty("nextAction", next);
             JsonArray values = new JsonArray(); commands.forEach(values::add); data.add("nextCommands", values);
         }
-        void send(Player p) { p.sendMessage("§e【操作未完成】" + message); p.sendMessage("§a【正确做法】" + next); }
+        void send(Player p) {
+            p.sendMessage("§e【操作未完成】" + message); p.sendMessage("§a【正确做法】" + next);
+            p.sendActionBar(net.kyori.adventure.text.Component.text("操作未完成 · " + message));
+        }
     }
     private static Advice a(String message, String next, String... commands) { return new Advice(message, next, List.of(commands)); }
     static Advice advice(String scope, String reason, String rawId) {
