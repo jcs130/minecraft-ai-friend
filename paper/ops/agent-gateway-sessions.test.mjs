@@ -8,7 +8,7 @@ import { once } from 'node:events';
 import { spawn } from 'node:child_process';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve, sep, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const probe = createRequire(process.env.AGENT_GATEWAY_PROBE_PACKAGE || 'E:/MC/probe/package.json');
@@ -24,7 +24,7 @@ async function freePort() {
   return port;
 }
 
-test('confirmed same-source Agent admits its Eye; failures, disconnects, other sources and hot restrictions do not', { timeout: 30000 }, async t => {
+test('confirmed online Agent admits cross-source Eyes; failed/offline targets and explicit restrictions explain rejection', { timeout: 30000 }, async t => {
   const folder = await mkdtemp(join(tmpdir(), 'agent-eye-sessions-'));
   const clients = new Set();
   const server = protocol.createServer({ host: '127.0.0.1', port: await freePort(), version: '1.20.6', 'online-mode': false,
@@ -34,6 +34,7 @@ test('confirmed same-source Agent admits its Eye; failures, disconnects, other s
     for (const client of clients) client.socket?.destroy();
     if (gateway && gateway.exitCode === null) { gateway.kill(); await once(gateway, 'exit'); }
     server.close();
+    assert.ok(resolve(folder).startsWith(resolve(tmpdir()) + sep) && basename(folder).startsWith('agent-eye-sessions-'));
     await rm(folder, { recursive: true, force: true });
   });
   server.on('error', () => {});
@@ -62,20 +63,23 @@ test('confirmed same-source Agent admits its Eye; failures, disconnects, other s
       connect(c) { c.setSocket(net.connect({ host: '127.0.0.1', port, localAddress: address })); } });
     clients.add(client);
     client.on('error', () => {});
+    let rejection = '';
+    client.once('disconnect', packet => { rejection = JSON.parse(packet.reason).text; });
     const joined = await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`${name} timed out`)), 5000);
       client.once('playerJoin', () => { clearTimeout(timer); resolve(true); });
       client.once('end', () => { clearTimeout(timer); resolve(false); });
     });
-    return { client, joined };
+    return { client, joined, rejection };
   }
-  async function expectLogin(name, expected, address) {
+  async function expectLogin(name, expected, address, reason) {
     const result = await attempt(name, address);
     assert.equal(result.joined, expected, `${name} from ${address || 'same source'}`);
+    if (!expected) assert.match(result.rejection, reason || /请/, `${name} received actionable login disconnect`);
     if (result.joined) result.client.end('test finished');
     await delay(30);
   }
-  await expectLogin('ag_neko_eye', false);
+  await expectLogin('ag_neko_eye', false, undefined, /请先登录本体/);
   const failed = await attempt('BrokenAgent');
   assert.equal(failed.joined, false, 'backend closed before login success');
   await expectLogin('BrokenAgent_eye', false);
@@ -83,7 +87,10 @@ test('confirmed same-source Agent admits its Eye; failures, disconnects, other s
   assert.equal(agent.joined, true);
   await expectLogin('ag_neko_eye', true);
   await expectLogin('ag_NEKOeye', true);
-  await expectLogin('ag_neko_eye', false, '127.0.0.2');
+  await expectLogin('ag_neko_eye', true, '127.0.0.2');
+  await writeFile(opsFile, JSON.stringify([{ name: 'AdminAgent' }, { name: 'ag_NEKO' }]));
+  await expectLogin('ag_neko_eye', false, '127.0.0.2', /房管账号/);
+  await writeFile(opsFile, JSON.stringify([{ name: 'AdminAgent' }]));
   await expectLogin('OtherEye', false);
   await expectLogin('live', false);
   await expectLogin('Goddess', false);
@@ -95,6 +102,10 @@ test('confirmed same-source Agent admits its Eye; failures, disconnects, other s
   access.accounts.length = 0;
   await writeFile(accessFile, JSON.stringify(access));
   await writeFile(pairsFile, JSON.stringify({ ...pairs, autoSameSourceEyes: false }));
+  await expectLogin('ag_neko_eye', false);
+  await writeFile(pairsFile, JSON.stringify({ ...pairs, autoOnlineAgentEyes: false }));
+  await expectLogin('ag_neko_eye', false, '127.0.0.2', /关闭默认观战接入/);
+  await writeFile(pairsFile, JSON.stringify({ ...pairs, autoNameEyes: false }));
   await expectLogin('ag_neko_eye', false);
   await writeFile(pairsFile, JSON.stringify(pairs));
   await expectLogin('ag_neko_eye', true);

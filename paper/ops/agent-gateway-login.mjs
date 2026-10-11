@@ -1,5 +1,18 @@
 import { inflateSync } from 'node:zlib';
 
+// Login rejection happens before backend compression/configuration. Protocols
+// supported by this gateway use packet 0 with a JSON chat string in LOGIN.
+export function loginDisconnect(reason) {
+  const bytes = Buffer.from(JSON.stringify({ text: String(reason), color: 'red' }), 'utf8');
+  const vi = value => {
+    const result = [];
+    do { result.push((value & 127) | (value > 127 ? 128 : 0)); value >>>= 7; } while (value);
+    return Buffer.from(result);
+  };
+  const payload = Buffer.concat([Buffer.from([0]), vi(bytes.length), bytes]);
+  return Buffer.concat([vi(payload.length), payload]);
+}
+
 const maxFrame = 1024 * 1024;
 
 function varInt(bytes, offset = 0) {

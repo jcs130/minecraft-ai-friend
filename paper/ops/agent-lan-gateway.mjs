@@ -1,9 +1,9 @@
 // Offline Mineflayer entry. Paper itself stays on loopback. Explicit source
-// grants take priority; automatic Eyes may follow a confirmed same-source Agent.
+// grants take priority; automatic Eyes may follow a confirmed online Agent.
 import net from 'node:net';
 import { readFileSync } from 'node:fs';
-import { eyeLoginAllowed, eyeRules } from './agent-eye-names.mjs';
-import { watchLoginSuccess } from './agent-gateway-login.mjs';
+import { eyeLoginDecision, eyeRules } from './agent-eye-names.mjs';
+import { watchLoginSuccess, loginDisconnect } from './agent-gateway-login.mjs';
 
 const listenHost = process.env.AGENT_GATEWAY_LISTEN_HOST || '192.168.3.163';
 const listenPort = Number(process.env.AGENT_GATEWAY_LISTEN_PORT || 25565);
@@ -31,10 +31,13 @@ function normalizedIp(address) {
   return address?.startsWith('::ffff:') ? address.slice(7) : address;
 }
 
-function loginAllowed(name, address) {
+function loginDecision(name, address) {
   const registry = JSON.parse(readFileSync(pairsFile, 'utf8'));
   const access = JSON.parse(readFileSync(accessFile, 'utf8'));
-  return eyeLoginAllowed(registry, access, name, normalizedIp(address), [...sessions.values()]);
+  const binding = eyeRules(registry, [name]).pairs.find(pair => pair.key === name.toLowerCase());
+  if (binding?.automatic && reservedName(binding.agent))
+    return { allowed: false, reason: '房管账号不能通过默认Eye配对观察。请使用自己的角色名_eye，或让房管登记专用观战入口。' };
+  return eyeLoginDecision(registry, access, name, normalizedIp(address), [...sessions.values()]);
 }
 
 function observerName(name) {
@@ -94,8 +97,10 @@ function decision(bytes, address) {
   const id = varInt(bytes, login.at);
   if (!id || id.value !== 0) throw new Error('expected login start');
   const name = string(bytes, id.at, login.end, 16);
-  if (reservedName(name.value)) return { kind: 'reject-reserved' };
-  if (!loginAllowed(name.value, address)) return { kind: 'reject-identity' };
+  if (reservedName(name.value)) return { kind: 'reject-reserved', name: name.value,
+    reason: '该名字属于房管或受保护账号，不能从普通Java入口登录。请使用自己的角色名；基岩玩家请使用基岩入口。' };
+  const policy = loginDecision(name.value, address);
+  if (!policy.allowed) return { kind: 'reject-identity', name: name.value, reason: policy.reason };
   return { kind: 'allow', name: name.value };
 }
 
@@ -129,12 +134,16 @@ const gateway = net.createServer({ pauseOnConnect: true }, client => {
     client.off('data', inspect);
     if (result.kind === 'reject-reserved') {
       reservedRejected++;
-      client.destroy();
+      client.end(loginDisconnect(result.reason));
+      client.resume();
+      client.setTimeout(3000, () => client.destroy());
       return;
     }
     if (result.kind === 'reject-identity') {
       identityRejected++;
-      client.destroy();
+      client.end(loginDisconnect(result.reason));
+      client.resume();
+      client.setTimeout(3000, () => client.destroy());
       return;
     }
     const backend = net.connect({ host: backendHost, port: backendPort });
@@ -143,7 +152,7 @@ const gateway = net.createServer({ pauseOnConnect: true }, client => {
         try {
           if (!client.destroyed && !backend.destroyed) {
             const observer = observerName(result.name);
-            if (!observer) sessions.set(client, { name: result.name, address: normalizedIp(client.remoteAddress) });
+            if (!observer) sessions.set(client, { name: result.name });
             console.log(`Confirmed ${observer ? 'observer' : 'player'} login: ${result.name}`);
           }
         } catch { /* Invalid hot registry cannot grant an automatic Eye. */ }
