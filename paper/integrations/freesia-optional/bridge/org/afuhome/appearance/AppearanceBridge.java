@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.nio.file.Path;
 
 /** Server-authoritative metadata; no client handshake emulation or gameplay action. */
-@Plugin(id="agentappearance", name="AgentAppearance", version="0.3.0",
+@Plugin(id="agentappearance", name="AgentAppearance", version="0.3.1",
     dependencies={@Dependency(id="freesia"), @Dependency(id="packetevents")})
 public final class AppearanceBridge {
     private static final MinecraftChannelIdentifier CHANNEL = MinecraftChannelIdentifier.from("mcagent:appearance");
@@ -111,6 +111,7 @@ public final class AppearanceBridge {
         if (Freesia.mapperManager==null) return;
         Collection<Player> players=server.getAllPlayers();
         if (players.size()>40) return; // Matches the existing game connection budget.
+        boolean workerConnected=!Freesia.registedWorkers.isEmpty();
         for (Player owner:players) {
             AppearanceState nativeState=Freesia.mapperManager.appearanceState(owner);
             Map<String,Object> row=new LinkedHashMap<>();
@@ -134,6 +135,11 @@ public final class AppearanceBridge {
                     } else row.put("webReason",asset==null?"YSM_SOURCE_NOT_REGISTERED":asset.reason()==null?"YSM_TEXTURE_NOT_REGISTERED":asset.reason());
                 }
             } else row.put("reason","YSM_WORKER_STATE_UNAVAILABLE");
+            row.put("workerConnected",workerConnected);
+            row.put("stateStatus",Boolean.TRUE.equals(row.get("available"))?"confirmed":
+                "YSM_WORKER_STATE_UNSUPPORTED".equals(row.get("reason"))?"unsupported":
+                workerConnected?"awaiting_model_state":"worker_offline");
+            row.put("message",stateMessage(row));
             states.put(owner.getUniqueId(),row);
             String serial=JSON.toJson(row);
             if(!serial.equals(last.put(owner.getUniqueId(),serial))) for(Set<UUID> set:delivered.values()) set.remove(owner.getUniqueId());
@@ -162,6 +168,17 @@ public final class AppearanceBridge {
             }
         }
     }
+    private static String stateMessage(Map<String,Object> state) {
+        return switch(String.valueOf(state.get("stateStatus"))) {
+            case "worker_offline" -> "模型服务尚未连接；等待恢复后查询 /appearance status。";
+            case "awaiting_model_state" -> "模型服务已连接，尚未收到本角色的模型状态；默认外观也可能如此。用 /appearance list 查看模型，请服主核对绑定。";
+            case "unsupported" -> "模型状态超出支持范围；请联系服主检查模型和贴图。";
+            case "confirmed" -> Boolean.TRUE.equals(state.get("webAvailable"))?
+                "模型已确认；网页需收到对应资源后才能显示。":
+                "模型已确认，但网页资源尚未就绪；请联系服主检查模型源文件。";
+            default -> "正在确认本角色的模型状态；稍后查询 /appearance status。";
+        };
+    }
     private boolean sameBackend(Player a,Player b) {
         return a.getCurrentServer().isPresent() && b.getCurrentServer().isPresent() &&
             a.getCurrentServer().get().getServerInfo().equals(b.getCurrentServer().get().getServerInfo());
@@ -176,8 +193,11 @@ public final class AppearanceBridge {
             CommandSource source=invocation.source();String[] args=invocation.arguments();
             if(args.length==1 && args[0].equals("list")) { tell(source,"MC_APPEARANCE_CATALOG "+JSON.toJson(models.catalog()));return; }
             if(args.length==0 || args.length==1 && args[0].equals("status")) {
-                if(!(source instanceof Player player)) { tell(source,"MC_APPEARANCE_STATUS players="+states.size()+" worker="+!Freesia.registedWorkers.isEmpty());return; }
-                Map<String,Object> state=states.get(player.getUniqueId());tell(source,"MC_APPEARANCE_STATUS "+JSON.toJson(state==null?Map.of("available",false,"reason","等待模型 Worker 状态；稍后重试 /appearance status"):state));return;
+                if(!(source instanceof Player player)) { tell(source,"MC_APPEARANCE_STATUS players="+states.size()+" worker="+!Freesia.registedWorkers.isEmpty()+" confirmed="+states.values().stream().filter(s->Boolean.TRUE.equals(s.get("available"))).count());return; }
+                Map<String,Object> state=states.get(player.getUniqueId());
+                if(state==null)state=Map.of("available",false,"reason","YSM_WORKER_STATE_UNAVAILABLE","stateStatus","awaiting_initial_poll");
+                tell(source,stateMessage(state));
+                tell(source,"MC_APPEARANCE_STATUS "+JSON.toJson(state));return;
             }
             if(args.length==5 && args[0].equals("admin") && args[1].equals("set")) {
                 if(source!=server.getConsoleCommandSource()) { tell(source,"仅服务器控制台可分配模型。请联系服主；查看本人状态用 /appearance status。");return; }

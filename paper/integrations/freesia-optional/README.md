@@ -2,6 +2,8 @@
 
 Status (2026-10-11): deployed behind the existing identity gateway, with the existing maintenance lock, Watchdog and stopped E/F backups. Proxy bridge 0.3.0 supplies Web/camera assets and private state to the [Geyser Bedrock adapter](../geyser-ysm/README.md). Production unmodified Mineflayer, original UUIDs and exact model bundle delivery are verified; Bedrock geometry/UV/texture delivery is verified in isolation. Remote Web hosts need their own update. Native Java pixel parity, full animation/equipment parity and phone/Xbox device visuals remain unaccepted. See [adaptation status](../../docs/YSM_ADAPTATION.md) and [lifecycle](../../docs/YSM_LIFECYCLE.md).
 
+Source candidate 0.3.1 adds bounded Chinese diagnostics; it is not deployed in production. A missing per-player state also occurs with an unassigned default appearance. `YSM_WORKER_STATE_UNAVAILABLE` alone is not a Worker health check.
+
 ## Runtime
 
 ```mermaid
@@ -71,6 +73,7 @@ Assignment is deliberately limited to the verified bundled catalog. A request ac
 - `playerUuid`, public `playerName`, pinned `ysmVersion`, `protocolVersion`, `jarSha256`;
 - `available`, and when available the actual Paper `entityId`, `modelId`, `texture`, `mandatory`, `animation`;
 - unavailable reason `YSM_WORKER_STATE_UNAVAILABLE` (also covers a model state not yet received), or `YSM_WORKER_STATE_UNSUPPORTED` for a state outside the bounded projection;
+- candidate 0.3.1 adds `workerConnected` (controller registration only), `stateStatus=confirmed|awaiting_model_state|worker_offline|unsupported`, and a short Chinese `message`; initial command reads may say `awaiting_initial_poll`. These fields never make an unavailable model renderable. Legacy consumers can ignore them;
 - `type=remove` when a previously delivered owner leaves or changes backend.
 
 Poll once per second; send changes immediately and refresh unchanged state every five seconds. Maximum 40 online players. Metadata is public appearance, **not** proof that a recipient tracks that entity. The Web host must bind the UUID and entity ID against its own existing Mineflayer connection. It expires records after 15 seconds and resets on login, respawn and disconnect. It does not write native YSM packets or open another Minecraft account.
@@ -89,7 +92,7 @@ Use a fresh output directory. The script verifies input JAR digests, records sou
 
 - `Freesia-Velocity-2.5.1+2.4.1-af1.jar`
 - `Freesia-Worker-2.5.1+2.4.1-af1.jar`
-- `AgentAppearance-0.3.0.jar`
+- `AgentAppearance-0.3.1.jar` (candidate; production remains 0.3.0)
 - `AgentAppearance-WorkerCleanup-0.1.0.jar`
 - `build-manifest.json`
 
@@ -97,7 +100,7 @@ The script does not install, download, restart or modify a production server. Ke
 
 ## Deployment and rollback
 
-This module is not wired into the production maintenance task. Before deployment, add the private Proxy/Worker to the existing single-instance supervisor and Watchdog, validate the original identity and Geyser routes, and perform the normal E/F backups and restart announcement. Preserve all original UUIDs, inventories, skills, ownership rules, ledgers and worlds. No `/reload` or server-core replacement.
+The deployed 0.3.0 module is wired into the production maintenance task. Update the candidate through that same single-instance supervisor and Watchdog, validate the original identity and Geyser routes, and perform the normal E/F backups and restart announcement. Preserve all original UUIDs, inventories, skills, ownership rules, ledgers and worlds. No `/reload` or server-core replacement. This round prohibits a gameplay/proxy restart; do not replace the live JAR or queue an automatic deployment.
 
 Rollback restores the prior gateway backend route and removes only the newly added bridge services/plugin; preserve the existing Paper data and retain YSM assignments as separate appearance data. Rebuild and verify the matching Web consumer independently. Publishing source alone never updates a remote Agent's Web view.
 

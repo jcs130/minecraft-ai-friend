@@ -1,3 +1,5 @@
+**2026-10-11 YSM状态诊断0.3.1候选，尚未部署：**正式Proxy/Worker正常；已绑定QA原UUID重连收到真实模型及4块39828字节资源、5文件摘要全匹配。可米/NEKO已保存YSM仍默认外观；普通皮肤不等于YSM分配，旧UNAVAILABLE码不能单独断定服务故障。候选补控制器连接/角色状态/中文说明，Web保留诊断并修正未确认状态误报资源等待；编译及8项协议/资源检查通过。正式仍AgentAppearance0.3.0、AgentFriend0.4.19/CortiEyeMirror0.1.12，本轮不重启、不换JAR、不排队；远端Web未更新，实际玩家未分配新模型。见[YSM适配](paper/docs/YSM_ADAPTATION.md)，私有回执E/F repairs/ysm-worker-state-20261011。
+
 **2026-10-11 地下城参战/结算0.4.21候选，尚未部署：**累计本室参战与实际远程/援助，记录缺席、重刷及结束/奖励原因，保留原CLI字段与奖励原子提交；含0.4.20箭头修正。50项隔离真实客户端通过，冷启动记录恢复与重复领奖11项通过，回执另见私有证据。正式仍0.4.19/0.1.12，本轮不重启、不换JAR、不排队部署；旧场次原因不可恢复，不改玩家物品。窗口自动关闭已在正式版；Web分类回看候选已构建，远端须更新重建。见[参战修复](paper/docs/DUNGEON_PARTICIPATION.md)，E/F repairs/dungeon-participation-20261011。
 
 **2026-10-11 罗盘追踪0.4.20候选，尚未部署：**修正左右/斜向箭头及多圈旋转角度；隔离60项真实Mineflayer/附身Eye和12,882项方向/边界通过，早期夹具失败保留。正式仍0.4.19/0.1.12，服主明确本轮不重启；未替换JAR或排队重启。见[罗盘](paper/docs/COMPASS_MENU.md)、[维护](paper/docs/OPERATIONS.md)，E/F repairs/compass-tracking-20261011。
