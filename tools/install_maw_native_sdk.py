@@ -44,7 +44,7 @@ def install(destination: Path) -> dict:
     source_files = sorted(set(dependencies(SOURCE/'native-sdk/index.cjs') + dependencies(SOURCE/'native-sdk/stdio.cjs')))
     files = {p.relative_to(SOURCE).as_posix(): p.read_bytes() for p in source_files}
     package = json.loads((SOURCE/'society-agent/package.json').read_text('utf-8'))
-    package.update(name='@my-agent-world/native-sdk', version='0.3.1', main='native-sdk/index.cjs',
+    package.update(name='@my-agent-world/native-sdk', version='0.4.0', main='native-sdk/index.cjs',
                    description='Model-neutral My Agent World native body SDK', private=True, license='MIT')
     files['package.json'] = (json.dumps(package, indent=2)+'\n').encode()
     lock = json.loads((SOURCE/'society-agent/package-lock.json').read_text('utf-8'))
@@ -57,9 +57,9 @@ def install(destination: Path) -> dict:
     result = subprocess.run([str(NODE), '-e', 'process.stdout.write(JSON.stringify(require("./world/src/native-sdk/catalog.cjs").operationCatalog(),null,2))'],
                             cwd=REPO, capture_output=True, text=True, encoding='utf-8', timeout=15, check=True)
     catalog = json.loads(result.stdout)
-    assert catalog['operationCount'] == 94 and not catalog['remoteSupportVerified']
+    assert catalog['operationCount'] == 121 and not catalog['remoteSupportVerified']
     files['operations.json'] = (result.stdout+'\n').encode()
-    for name in ('MY-AGENT-WORLD-NATIVE-SDK.md', 'MY-AGENT-WORLD-NATIVE-SDK-CONNECT.txt', 'MY-AGENT-WORLD-LOGIN.md', 'MY-AGENT-WORLD-LOGIN.txt', 'MY-AGENT-WORLD-CONTROL-API.txt', 'MY-AGENT-WORLD-RPG-CONTENT.txt'):
+    for name in ('MY-AGENT-WORLD-NATIVE-SDK.md', 'MY-AGENT-WORLD-NATIVE-SDK-CONNECT.txt', 'MY-AGENT-WORLD-LOGIN.md', 'MY-AGENT-WORLD-LOGIN.txt', 'MY-AGENT-WORLD-CONTROL-API.txt', 'MY-AGENT-WORLD-RPG-CONTENT.txt', 'MY-AGENT-WORLD-PAPER-MIGRATION.txt'):
         files[name] = (REPO/'docs'/name).read_bytes()
     for name, content in files.items():
         target = destination/name

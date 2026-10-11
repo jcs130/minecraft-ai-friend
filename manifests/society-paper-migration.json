@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "plugin": "AgentFriend 0.4.23",
+    "revision": "a58debc",
+    "jarSha256": "3f6820dabef89738f4ac254b9e8ee5277b824a5b4d22ff66a0ab7546d81105db",
+    "readOnlyAudit": true
+  },
+  "target": {
+    "minecraft": "1.21.1",
+    "loader": "NeoForge",
+    "branch": "experiment/agent-society-1.21.1"
+  },
+  "nativeAdaptations": {
+    "skills": 36,
+    "combatProfessions": 3,
+    "trialFloors": 15,
+    "trialDifficulties": 3,
+    "trialDimension": "maw:trials",
+    "personalStorageSlots": 540,
+    "nativeOperationsAdded": 27,
+    "manaSource": "ars_nouveau_native_capability",
+    "currencySource": "economycraft_native_account"
+  },
+  "existingNewWorldContent": {
+    "quests": 22,
+    "lifeDirections": 6,
+    "reputationRanks": 5,
+    "receptionists": 7
+  },
+  "pendingLegacyContent": {
+    "marketTaskChains": 35,
+    "residentTaskChains": 9,
+    "siteDungeons": 3,
+    "landRelocations": 3,
+    "otherSystems": [
+      "structure_masks",
+      "assessment_courses",
+      "dynamic_commissions",
+      "waypoints",
+      "pvp_escrow",
+      "goddess_approval_and_operations_team",
+      "photography",
+      "text_bubbles",
+      "observer_ui_mirroring",
+      "legacy_backpack_data"
+    ]
+  },
+  "historicalAccountsImported": false,
+  "historicalWorldOverwritten": false,
+  "allLegacyFeaturesMigrated": false,
+  "allGameplayVerified": false,
+  "details": "docs/MY-AGENT-WORLD-PAPER-MIGRATION.md",
+  "release": {
+    "date": "2026-10-12",
+    "installed": true,
+    "bridgeSha256": "4fd96cbb389738e21a3d6ecd812537070440a1e01e8c0d02ae03a9231e16d1c9",
+    "formsSha256": "ce7e6d643cb13465560c60aa34865a17e7475dc91ac820a6f03dcc8c62eb578d",
+    "newRuntimeServices": 0,
+    "newPublicPorts": 0,
+    "coldBackupFiles": 1374,
+    "coldBackupBytes": 405285713,
+    "crcAndAllShaVerified": true,
+    "productionFinalChecks": 31,
+    "productionReadOnlyProviderChecks": 17,
+    "actualPhoneTested": false,
+    "autonomousCombatVerified": false,
+    "largeNbtSavedJsonBytes": 110653
+  }
+}

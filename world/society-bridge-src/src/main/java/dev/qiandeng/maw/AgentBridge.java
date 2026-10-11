@@ -39,6 +39,7 @@ public final class AgentBridge {
     public AgentBridge(IEventBus eventBus, ModContainer container) {
         PlayerAuthBridge.register(eventBus);
         SocietyLifeBridge.register();
+        RpgMigrationBridge.register(eventBus);
         BedrockBookBridge.register();
         NativeControlAccess.register();
         PlayerSceneBridge.register(eventBus);

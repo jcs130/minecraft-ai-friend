@@ -11,8 +11,24 @@ public final class NativeModAccessTest {
         check(valid==accepted);
     }
     public static void main(String[] args)throws Exception {
-        check(NativeModAccess.catalog("").get("operationCount").getAsInt()==72);
-        check(NativeModAccess.catalog("").getAsJsonArray("operations").size()==72);
+        check(NativeModAccess.catalog("").get("operationCount").getAsInt()==99);
+        check(NativeModAccess.catalog("").getAsJsonArray("operations").size()==99);
+        validate("rpg.state","{}",true);
+        validate("rpg.state","{\"ownerUuid\":\"other\"}",false);
+        validate("skill.cast","{\"skillId\":\"starbolt\"}",true);
+        validate("skill.cast","{\"skillId\":\"../accounts\"}",false);
+        validate("land.trust","{\"landId\":\"camp_1\",\"targetUuid\":\"00000000-0000-4000-8000-000000000001\"}",true);
+        validate("land.trust","{\"landId\":\"camp_1\",\"targetUuid\":\"other\"}",false);
+        validate("protection.query","{\"action\":\"break\",\"position\":{\"x\":1,\"y\":64,\"z\":2}}",true);
+        validate("protection.query","{\"action\":\"break\",\"position\":{\"x\":1.5,\"y\":64,\"z\":2}}",false);
+        validate("arena.recycle.quote","{\"source\":\"chest\",\"slot\":539,\"count\":1}",true);
+        validate("arena.recycle.quote","{\"source\":\"chest\",\"slot\":540,\"count\":1}",false);
+        validate("arena.start","{\"difficulty\":\"apocalypse\"}",true);
+        validate("arena.start","{\"difficulty\":\"administrator\"}",false);
+        validate("stash.open","{\"page\":10}",true);
+        validate("stash.open","{\"page\":11}",false);
+        validate("rpg.open","{\"menu\":\"guide\",\"page\":1}",true);
+        validate("rpg.open","{\"menu\":\"other_player\",\"page\":1}",false);
         validate("society.state","{}",true);
         validate("society.state","{\"playerUuid\":\"other\"}",false);
         validate("society.accept","{\"questId\":\"maw:wheat_delivery\"}",true);

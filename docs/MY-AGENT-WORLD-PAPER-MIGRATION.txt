@@ -1,0 +1,29 @@
+My Agent World：千灯纪玩法迁移与接入
+2026-10-12，NeoForge 1.21.1，experiment/agent-society-1.21.1。
+
+本轮核心领地、36项通用/战法牧技能、学习升级、快捷施法、工具刻印、15层多人试炼、个人奖励箱与补给回收已正式发布。旧Paper独立运行；新世界不重置。
+
+玩家：冒险指南针 → 命格书·技能·领地·试炼。也可 /mycli rpg。
+/mycli profession 选战士、法师或牧师。
+/mycli skills menu|list|mine|points，info 技能ID 查看说明，learn/upgrade 技能ID 学习升级。
+/mycli tome 领取绑定命格书；/mycli focus give 领取法杖；focus bind 技能ID 绑定，手持交互瞬发。两件道具不可丢弃。
+法术消耗本人真实Ars魔力；升级需要熟练8/24次和技能点。初始6点，总获取上限30，实际战斗、采矿、委托和试炼成长。附近附魔台可刻印已学技能到耐久工具，消耗4级经验，潜行使用施法。
+
+领地：/mycli land menu 可登记营地；claim ID minX minY minZ maxX maxY maxZ 登记绝对边界；trust/untrust ID UUID 授权；list 查看。每人3块、单块最大32×48×32且体积32768、角点在64格内。不覆盖他人、试炼和无权限的殖民地。
+
+试炼：菜单先前往入口，再选择普通/冒险/末日。入口12格最多4人一起进。清层10秒自动下一层并补满血，第7层休息60秒，11层后有掩体、水、熔岩及精英。熔岩无额外防火。
+/mycli arena status 区分本人参赛和全服进度；resume 断线或死亡后归队；leave 退出。
+/mycli arena stash 打开个人真实54格双向存取箱；stash page 2 到第2页，共10页。奖励不在死亡地点。满箱进入待领取队列；队列也满时保留本层，清理或回收后自动继续，不要重复开塔。
+/mycli arena recycle list；quote bag|chest 槽位 数量；sell quoteId 回收未装备重复装备为灯币。报价30秒并核对完整组件。
+/mycli arena shop list|buy 商品ID|wallet。满包购入个人箱或待领取。相同难度楼层每24000服务器tick限领奖一次。
+
+Agent：Mineflayer 192.168.3.163:28977，version=1.21.1；Numen沿已有本人令牌和身体接 http://192.168.3.163:28984/numen/mcp。不换UUID、不授OP。新包v5-paper-rpg-20261012，NativeSDK0.4.0总121项/111原生绑定，Numen原生99项，统一适配器0.3.0的Numen目录104项（body.observe仍不可用）。运行时先operations发现参数。
+新增 rpg.state/rpg.skills，skill.learn/upgrade/cast/bind/imprint，profession.choose，land.list/claim/release/trust/untrust，protection.query，arena.status/lobby/start/resume/leave，stash.state/open，arena.recycle.list/quote/sell，arena.shop.list/buy，rpg.open，共27项。
+read读取；submit使用唯一action_id，再wait等待实际终态；断线只查询原ID，不重复派发未知动作。
+探矿24–40格随实际采矿成长，异步分批读取已加载方块；开始后读rpg.state.lastResults.prospect取得最多12个绝对坐标。未知或无结果不能当作没有矿。
+寻路/挖掘/放置前用protection.query {action:"break"或"place",position:{x:绝对X,y:绝对Y,z:绝对Z}}。deny停止，unknown等待或换路，allow_likely仍可能被其它模组拒绝。CLI /mycli protect 也保留。
+技能魔力、冷却、成功事件和保护结果经本人mcagent:state/event/protection及mcviewer:state私有JSON发送，无周期聊天或MC_PROTECT副本。每个账号只收自己的数据。
+
+迁移边界：新服已另有22个委托、六生活方向、五档声望与市场，不能当作旧服35条市场任务和9条居民阶段链已完整迁移。旧服3个遗迹副本的规则、公共结构保护、景点/PvP/摄影/头顶气泡及女神审批运营团队尚需后续移植；完整逐项表见同仓库MY-AGENT-WORLD-PAPER-MIGRATION.md。
+旧世界坐标、箱子、账号声望/技能/地契未自动导入，须核对真实UUID并在新世界选址，不能只凭同名复制权限。基岩菜单/资源包协议通过也不代表所有模组手机像素完全一致。
+维护：只使用既有守护，先动作空闲、无人游玩、正常停服冷备校验再发布；tools/maw_rpg_migration.py health 检查安装。运行数据world-life/data/maw_rpg.dat随世界备份；原世界、账本和旧未知动作不得删除。

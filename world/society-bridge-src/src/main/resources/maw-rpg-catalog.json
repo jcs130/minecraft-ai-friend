@@ -1,0 +1,2073 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "server": "Paper 1.20.6",
+    "plugin": "AgentFriend 0.4.23",
+    "revision": "a58debc"
+  },
+  "professions": {
+    "warrior": {
+      "title": "战士",
+      "kind": "combat",
+      "icon": "IRON_SWORD",
+      "starter-skills": [
+        "sword_thrust",
+        "sword_parry",
+        "warrior_sky_leap"
+      ]
+    },
+    "mage": {
+      "title": "法师",
+      "kind": "combat",
+      "icon": "BLAZE_ROD",
+      "starter-skills": [
+        "mage_bolt",
+        "mage_frost",
+        "scout_mark",
+        "mage_soar"
+      ]
+    },
+    "priest": {
+      "title": "牧师",
+      "kind": "combat",
+      "icon": "GLISTERING_MELON_SLICE",
+      "starter-skills": [
+        "healer_mend",
+        "healer_cleanse",
+        "priest_blessing"
+      ]
+    }
+  },
+  "skills": {
+    "sword_thrust": {
+      "title": "突刺",
+      "profession": "warrior",
+      "icon": "IRON_SWORD",
+      "effect": "sword_thrust",
+      "equipment": "sword",
+      "mana": 4,
+      "cooldown-seconds": 8,
+      "limits": {
+        "range": 3,
+        "targets": 1,
+        "power": 8,
+        "duration-seconds": 1
+      },
+      "description": "前方可见敌对目标的单次突刺伤害；须按装备要求持剑。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "选择战士解锁学习资格；随后完成剑路初试解锁弧光斩。",
+      "paperDescription": "持剑突刺3格内一名可见敌人；一/二/三级基础伤害4.0/6.0/8点，魔力4/5/6；不破坏方块。"
+    },
+    "sword_parry": {
+      "title": "架势格挡",
+      "profession": "warrior",
+      "icon": "SHIELD",
+      "effect": "sword_parry",
+      "equipment": "sword",
+      "mana": 4,
+      "cooldown-seconds": 12,
+      "limits": {
+        "range": 3,
+        "targets": 1,
+        "power": 6,
+        "duration-seconds": 2
+      },
+      "description": "短时抵挡下一次来自面前敌怪的部分伤害，最多减免一半且不超过等级上限。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "选择战士解锁学习资格；实际挡住攻击才能计入格挡试炼。",
+      "paperDescription": "持剑准备2秒，抵挡一次正面怪物近战并减半伤害；一/二/三级减免上限2/4/6点，魔力4/5/6；准备成功即收费。"
+    },
+    "sword_arc": {
+      "title": "弧光斩",
+      "profession": "warrior",
+      "icon": "DIAMOND_SWORD",
+      "effect": "sword_cone",
+      "equipment": "sword",
+      "mana": 7,
+      "cooldown-seconds": 12,
+      "limits": {
+        "range": 3,
+        "targets": 3,
+        "power": 4,
+        "duration-seconds": 1
+      },
+      "description": "前方锥形范围内的可见敌对目标伤害。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "完成任务 tm_sword_arc_trial，验收持剑近战击杀和有效格挡。",
+      "paperDescription": "挥斩正面3格扇形内可见敌人；一/二/三级最多1/2/3名，每名基础伤害2.0/3.0/4点，魔力7/8/9；不破坏方块。"
+    },
+    "sword_step": {
+      "title": "步法斩",
+      "profession": "warrior",
+      "icon": "RABBIT_FOOT",
+      "effect": "sword_step",
+      "equipment": "sword",
+      "mana": 6,
+      "cooldown-seconds": 15,
+      "limits": {
+        "range": 3,
+        "targets": 1,
+        "power": 5,
+        "duration-seconds": 1
+      },
+      "description": "沿无碰撞的路径闪到前方敌人附近，检查安全落脚后结算伤害。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "学会弧光斩后完成任务 tm_sword_road_trial。",
+      "paperDescription": "沿安全路径前进3格后挥斩一名敌人；一/二/三级基础伤害3/4/6点，魔力6/7/8；墙、岩浆、悬空和禁止进入处拒绝。"
+    },
+    "sword_beam": {
+      "title": "剑气",
+      "profession": "warrior",
+      "icon": "AMETHYST_SHARD",
+      "effect": "sword_beam",
+      "equipment": "sword",
+      "mana": 8,
+      "cooldown-seconds": 16,
+      "limits": {
+        "range": 10,
+        "targets": 1,
+        "power": 6,
+        "duration-seconds": 1
+      },
+      "description": "前方较远的可见敌对目标伤害。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "完成任务 tm_sword_road_trial，与步法斩一并获得。",
+      "paperDescription": "向准星方向释放10格内单目标剑气；一/二/三级基础伤害3.0/4.5/6点，魔力8/9/10；目标须可见，墙体阻挡。"
+    },
+    "twin_legacy": {
+      "title": "双剑觉醒·星流连斩",
+      "profession": "warrior",
+      "icon": "NETHERITE_SWORD",
+      "effect": "sword_combo",
+      "equipment": "two_swords",
+      "legacy": true,
+      "world-limit": 0,
+      "mana": 14,
+      "cooldown-seconds": 90,
+      "limits": {
+        "range": 3,
+        "targets": 1,
+        "power": 16,
+        "duration-seconds": 2
+      },
+      "description": "双剑秘技：按等级参数结算一次总伤害，须满足主副手装备；目前并非四次独立攻击动画。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "完成传承任务 tm_twin_legacy_trial，需格挡、组队深层和两处首领层履历。",
+      "paperDescription": "主副手各持剑，对同一敌人进行四段连斩；一/二/三级总基础伤害上限8.0/12.0/16点，魔力14/15/16；每段重查装备、视线、距离和资格。"
+    },
+    "guardian_ward": {
+      "title": "守护阵",
+      "profession": "warrior",
+      "icon": "SHIELD",
+      "effect": "ward",
+      "equipment": "shield",
+      "mana": 7,
+      "cooldown-seconds": 20,
+      "limits": {
+        "range": 5,
+        "targets": 4,
+        "power": 4,
+        "duration-seconds": 6
+      },
+      "description": "为范围内队友赋予一次正面减伤，实际范围、人数、持续和减免上限见等级参数。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "实际参与原版袭击并获胜后，与村庄誓约一同获得。",
+      "paperDescription": "持盾为5格内生存玩家准备护阵；一/二/三级最多2/3/4人，持续4/6/8秒，各抵挡一次怪物攻击并减半伤害，上限2/4/6点，魔力7/8/9。"
+    },
+    "guardian_oath": {
+      "title": "传承·村庄誓约",
+      "profession": "warrior",
+      "icon": "BELL",
+      "effect": "ward",
+      "equipment": "shield",
+      "legacy": true,
+      "world-limit": 0,
+      "mana": 12,
+      "cooldown-seconds": 90,
+      "limits": {
+        "range": 8,
+        "targets": 4,
+        "power": 6,
+        "duration-seconds": 8
+      },
+      "description": "为范围内队友赋予一次正面减伤，实际范围、人数、持续和减免上限见等级参数。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "参与原版袭击并获胜，实际造成十点伤害、为队友治疗八点怪物伤量或减免四点伤害之一。",
+      "paperDescription": "持盾为8格内生存玩家准备誓约护阵；一/二/三级最多2/3/4人，持续4/6/8秒，各抵挡一次怪物攻击并减半伤害，上限2/4/6点，魔力12/13/14。"
+    },
+    "scout_mark": {
+      "title": "秘法标记",
+      "profession": "mage",
+      "icon": "ENDER_EYE",
+      "effect": "mark",
+      "equipment": "none",
+      "mana": 3,
+      "cooldown-seconds": 10,
+      "limits": {
+        "range": 12,
+        "targets": 1,
+        "power": 1,
+        "duration-seconds": 8
+      },
+      "description": "侦察并短时标记可见敌对目标，返回类型、UUID及绝对坐标；不穿墙读取。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "选择法师解锁学习资格；本人或近旁队友击败仍有效的标记者才计入法师试炼。",
+      "paperDescription": "标记前方12格内一名可见敌人；一/二/三级持续8/12/16秒，魔力3/4/5；给出绝对坐标和私有原版粒子。"
+    },
+    "scout_watch": {
+      "title": "秘法巡望",
+      "profession": "mage",
+      "icon": "SPYGLASS",
+      "effect": "mark",
+      "equipment": "none",
+      "mana": 6,
+      "cooldown-seconds": 20,
+      "limits": {
+        "range": 12,
+        "targets": 3,
+        "power": 1,
+        "duration-seconds": 12
+      },
+      "description": "侦察并短时标记可见敌对目标，返回类型、UUID及绝对坐标；不穿墙读取。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "完成任务 tm_mage_trial，包含标记后的击杀、下界实地调查和返程。",
+      "paperDescription": "标记前方12格内可见敌人；一/二/三级最多1/2/3名，持续8/12/16秒，魔力6/7/8；私有粒子供本人及实际附身的Eye查看。"
+    },
+    "healer_mend": {
+      "title": "抚愈",
+      "profession": "priest",
+      "icon": "GLISTERING_MELON_SLICE",
+      "effect": "mend",
+      "equipment": "none",
+      "mana": 4,
+      "cooldown-seconds": 8,
+      "limits": {
+        "range": 8,
+        "targets": 1,
+        "power": 6,
+        "duration-seconds": 1
+      },
+      "description": "治疗范围内受伤的自己及非敌对队友，优先治疗低生命比例者；不需点选队友。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "选择牧师解锁学习资格；只有为其他玩家恢复真实怪物伤量才计入治疗试炼。",
+      "paperDescription": "治疗8格内受伤生存玩家；一/二/三级最多1/2/3人，每人最多恢复6/8/10HP，魔力4/6/8；指定玩家名时只治疗该人，旁观者无效。"
+    },
+    "healer_cleanse": {
+      "title": "净化",
+      "profession": "priest",
+      "icon": "HONEY_BOTTLE",
+      "effect": "cleanse",
+      "equipment": "none",
+      "mana": 4,
+      "cooldown-seconds": 16,
+      "limits": {
+        "range": 1,
+        "targets": 1,
+        "power": 1,
+        "duration-seconds": 1
+      },
+      "description": "移除自己身上的中毒与凋零；没有这些效果时不收费。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "选择牧师解锁学习资格。",
+      "paperDescription": "一级技能：解除自身中毒与凋零；消耗4魔力，冷却16秒；没有这些状态时不扣费，不进入冷却。"
+    },
+    "healer_beacon": {
+      "title": "高阶圣愈术",
+      "profession": "priest",
+      "icon": "BEACON",
+      "effect": "mend",
+      "equipment": "none",
+      "mana": 10,
+      "cooldown-seconds": 24,
+      "limits": {
+        "range": 8,
+        "targets": 4,
+        "power": 8,
+        "duration-seconds": 1
+      },
+      "description": "治疗范围内受伤的自己及非敌对队友，优先治疗低生命比例者；不需点选队友。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "完成任务 tm_healer_trial，需实际队友怪物伤量二十四点和组队试炼第三层。",
+      "paperDescription": "8格群疗：一/二/三级最多2/3/4人，各恢复至多8/10/12HP，魔力10/14/18。二/三级附4/6秒一次怪物攻击减伤50%，上限4/6HP；三级另有1.5秒怪物攻击护佑。保护仅给予本次实际回血者，不免环境、虚空或PvP伤害。"
+    },
+    "mage_bolt": {
+      "title": "奥术飞矢",
+      "profession": "mage",
+      "icon": "AMETHYST_SHARD",
+      "effect": "arcane_bolt",
+      "equipment": "none",
+      "mana": 6,
+      "cooldown-seconds": 5,
+      "limits": {
+        "range": 12,
+        "targets": 1,
+        "power": 6,
+        "duration-seconds": 1
+      },
+      "description": "自动锁定前方可见敌对生物；无前方目标时可在近处锁敌，排除友方。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "选择法师解锁学习资格；可直接施法、绑定原法杖或刻印原版工具。",
+      "paperDescription": "攻击准星前方12格内一名可见敌人；一/二/三级基础伤害3.0/4.5/6点，魔力6/7/8；墙体阻挡，不破坏方块。"
+    },
+    "mage_frost": {
+      "title": "霜寒束缚",
+      "profession": "mage",
+      "icon": "PACKED_ICE",
+      "effect": "frost_cone",
+      "equipment": "none",
+      "mana": 8,
+      "cooldown-seconds": 14,
+      "limits": {
+        "range": 5,
+        "targets": 3,
+        "power": 3,
+        "duration-seconds": 3
+      },
+      "description": "前方可见敌对生物受到伤害与减速。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "选择法师解锁学习资格；为战士接敌或牧师救援争取时间。",
+      "paperDescription": "攻击正面5格扇形内可见敌人；一/二/三级最多1/2/3名，每名基础伤害1.5/2.5/3点并附1/2/3秒缓慢一，魔力8/9/10；不伤玩家或村民。"
+    },
+    "mage_flame": {
+      "title": "炎流",
+      "profession": "mage",
+      "icon": "BLAZE_POWDER",
+      "effect": "flame_cone",
+      "equipment": "none",
+      "mana": 9,
+      "cooldown-seconds": 18,
+      "limits": {
+        "range": 4,
+        "targets": 3,
+        "power": 4,
+        "duration-seconds": 1
+      },
+      "description": "前方可见敌对生物受到伤害；通用焰浪另附短时燃烧。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "完成任务 tm_mage_trial，实际协战、调查下界并返回。",
+      "paperDescription": "攻击正面4格扇形内可见敌人；一/二/三级最多1/2/3名，每名基础伤害2.0/3.0/4点，魔力9/10/11；不点燃实体或建筑。"
+    },
+    "warrior_sky_leap": {
+      "title": "凌空跃击",
+      "profession": "warrior",
+      "icon": "RABBIT_FOOT",
+      "effect": "sky_leap",
+      "equipment": "none",
+      "mana": 6,
+      "cooldown-seconds": 20,
+      "limits": {
+        "range": 1,
+        "targets": 1,
+        "power": 8,
+        "duration-seconds": 20
+      },
+      "description": "从地面跃起，成功后附羽落保护；高度随技能熟练等级提升。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "选择战士可花2点学习；二/三级分别需高跃基础/进阶证书，再花3/5点升级。",
+      "paperDescription": "从地面真实起跳，一/二/三级开阔地目标跃高约8/12/16格；魔力6/8/10；自行控制横移，缓降20秒，不附带伤害，不穿过屋顶。"
+    },
+    "mage_soar": {
+      "title": "御空术",
+      "profession": "mage",
+      "icon": "FEATHER",
+      "effect": "soar",
+      "equipment": "none",
+      "mana": 8,
+      "cooldown-seconds": 90,
+      "limits": {
+        "range": 1,
+        "targets": 1,
+        "power": 1,
+        "duration-seconds": 20
+      },
+      "description": "临时开放飞行能力20/30/40秒；使用客户端飞行操作，结束、离线或换维度时回收权限。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "选择法师可花3点学习；二/三级分别需飞行基础/进阶证书，再花4/6点升级。",
+      "paperDescription": "一/二/三级御空20/30/40秒，魔力8/10/12；自行升降和前后移动，到期缓降；不能与基础飞行叠加，传送/洗点/离线清理临时权限。"
+    },
+    "priest_blessing": {
+      "title": "同行祝福",
+      "profession": "priest",
+      "icon": "GLOW_BERRIES",
+      "effect": "blessing",
+      "equipment": "none",
+      "mana": 8,
+      "cooldown-seconds": 30,
+      "limits": {
+        "range": 8,
+        "targets": 2,
+        "power": 1,
+        "duration-seconds": 8
+      },
+      "description": "范围内队友获得短时速度与抗性；按等级限制人数和持续时间。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "选择牧师可花3点学习；二/三级分别需支援基础/进阶证书，再花4/6点升级。",
+      "paperDescription": "8格内可见友军含自己，一/二/三级最多2/3/4人，迅捷I+抗性I持续8/12/16秒；三级加力量I；魔力8/10/12，不覆盖更强效果。"
+    },
+    "selfheal": {
+      "title": "圣愈术",
+      "profession": "common",
+      "icon": "GOLDEN_APPLE",
+      "effect": "selfheal",
+      "equipment": "none",
+      "mana": 6,
+      "cooldown-seconds": 15,
+      "limits": {
+        "range": 1,
+        "targets": 1,
+        "power": 8,
+        "duration-seconds": 1
+      },
+      "description": "治疗受伤的自己；满血时不收费、不进入冷却。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "回复自己 8 点生命（4 颗心）。"
+    },
+    "heal": {
+      "title": "范围治疗",
+      "profession": "common",
+      "icon": "GLISTERING_MELON_SLICE",
+      "effect": "mend",
+      "equipment": "none",
+      "mana": 6,
+      "cooldown-seconds": 12,
+      "limits": {
+        "range": 8,
+        "targets": 24,
+        "power": 6,
+        "duration-seconds": 1
+      },
+      "description": "治疗范围内受伤的自己及非敌对队友，优先治疗低生命比例者；不需点选队友。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "治疗 8 格内所有受伤玩家，每人最多回复 6 点生命（3 颗心）。"
+    },
+    "food": {
+      "title": "饱食术",
+      "profession": "common",
+      "icon": "BREAD",
+      "effect": "food",
+      "equipment": "none",
+      "mana": 3,
+      "cooldown-seconds": 30,
+      "limits": {
+        "range": 1,
+        "targets": 1,
+        "power": 4,
+        "duration-seconds": 1
+      },
+      "description": "为自己补充4点饥饿和相应饱和度；饥饿已满时不收费。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "恢复 4 点饥饿值和 2.5 点饱和度。"
+    },
+    "home": {
+      "title": "归乡术",
+      "profession": "common",
+      "icon": "RED_BED",
+      "effect": "home",
+      "equipment": "none",
+      "mana": 6,
+      "cooldown-seconds": 1,
+      "limits": {
+        "range": 1,
+        "targets": 1,
+        "power": 1,
+        "duration-seconds": 1
+      },
+      "description": "同主世界内返回世界出生点附近的安全落脚点；不在试炼中强行离队。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "传送回出生村庄的安全落点。"
+    },
+    "blink": {
+      "title": "闪现术",
+      "profession": "common",
+      "icon": "ENDER_PEARL",
+      "effect": "blink",
+      "equipment": "none",
+      "mana": 4,
+      "cooldown-seconds": 8,
+      "limits": {
+        "range": 25,
+        "targets": 1,
+        "power": 1,
+        "duration-seconds": 1
+      },
+      "description": "沿视线闪现到已加载且可站立的位置；不会穿过实体方块或闯入禁入领地。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "沿视线短距闪现，最远约 25 格；不能穿越封闭天花板。"
+    },
+    "fireworks": {
+      "title": "烟花术",
+      "profession": "common",
+      "icon": "FIREWORK_ROCKET",
+      "effect": "fireworks",
+      "equipment": "none",
+      "mana": 1,
+      "cooldown-seconds": 10,
+      "limits": {
+        "range": 1,
+        "targets": 1,
+        "power": 1,
+        "duration-seconds": 1
+      },
+      "description": "播放烟花粒子、声音与标题，不生成会爆炸的火箭实体。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "在身边播放烟花粒子和声音；没有伤害。"
+    },
+    "starlight": {
+      "title": "星尘术",
+      "profession": "common",
+      "icon": "GLOWSTONE_DUST",
+      "effect": "starlight",
+      "equipment": "none",
+      "mana": 1,
+      "cooldown-seconds": 10,
+      "limits": {
+        "range": 1,
+        "targets": 1,
+        "power": 1,
+        "duration-seconds": 1
+      },
+      "description": "播放星尘粒子、声音与标题。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "在身边播放星光粒子和声音；没有真实照明或伤害。"
+    },
+    "starbolt": {
+      "title": "星芒箭",
+      "profession": "common",
+      "icon": "AMETHYST_SHARD",
+      "effect": "arcane_bolt",
+      "equipment": "none",
+      "mana": 4,
+      "cooldown-seconds": 3,
+      "limits": {
+        "range": 18,
+        "targets": 1,
+        "power": 5,
+        "duration-seconds": 1
+      },
+      "description": "自动锁定前方可见敌对生物；无前方目标时可在近处锁敌，排除友方。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "优先命中准星 18 格内敌对怪物，否则锁定 12 格内最近可见怪物；基础伤害 5。"
+    },
+    "frostnova": {
+      "title": "霜环",
+      "profession": "common",
+      "icon": "SNOWBALL",
+      "effect": "frost_ring",
+      "equipment": "none",
+      "mana": 7,
+      "cooldown-seconds": 14,
+      "limits": {
+        "range": 5.5,
+        "targets": 4,
+        "power": 2,
+        "duration-seconds": 4
+      },
+      "description": "周围可见敌对生物受到伤害与减速。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "伤害并减速身边 5.5 格内最多 4 只可见怪物；基础伤害 2、减速 4 秒。"
+    },
+    "flamewave": {
+      "title": "焰浪",
+      "profession": "common",
+      "icon": "BLAZE_POWDER",
+      "effect": "flame_cone",
+      "equipment": "none",
+      "mana": 8,
+      "cooldown-seconds": 10,
+      "limits": {
+        "range": 9,
+        "targets": 4,
+        "power": 4,
+        "duration-seconds": 3
+      },
+      "description": "前方可见敌对生物受到伤害；通用焰浪另附短时燃烧。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "伤害并点燃前方 9 格内最多 4 只可见怪物；基础伤害 4、燃烧 3 秒。"
+    },
+    "prospect": {
+      "title": "探矿术",
+      "profession": "common",
+      "icon": "SPYGLASS",
+      "effect": "prospect",
+      "equipment": "none",
+      "mana": 6,
+      "cooldown-seconds": 30,
+      "limits": {
+        "range": 24,
+        "targets": 12,
+        "power": 1,
+        "duration-seconds": 12
+      },
+      "description": "有界扫描已加载方块；半径24至40格随采矿实践成长，最多12处矿物绝对坐标和私有粒子。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "扫描已加载区域，返回最近矿块的绝对坐标；持续显示粒子指向线和遮挡墙光框，Java 另见矿块轮廓。"
+    },
+    "leap": {
+      "title": "跃空术",
+      "profession": "common",
+      "icon": "RABBIT_FOOT",
+      "effect": "sky_leap",
+      "equipment": "none",
+      "mana": 6,
+      "cooldown-seconds": 20,
+      "limits": {
+        "range": 1,
+        "targets": 1,
+        "power": 8,
+        "duration-seconds": 20
+      },
+      "description": "从地面跃起，成功后附羽落保护；高度随技能熟练等级提升。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "高高跳起并获得缓降，避免落地伤害。"
+    },
+    "flight": {
+      "title": "飞行术",
+      "profession": "common",
+      "icon": "FEATHER",
+      "effect": "soar",
+      "equipment": "none",
+      "mana": 8,
+      "cooldown-seconds": 90,
+      "limits": {
+        "range": 1,
+        "targets": 1,
+        "power": 1,
+        "duration-seconds": 20
+      },
+      "description": "临时开放飞行能力20/30/40秒；使用客户端飞行操作，结束、离线或换维度时回收权限。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "生存模式自由飞行，到期回收飞行权限并缓降。"
+    },
+    "sense": {
+      "title": "寻敌术",
+      "profession": "common",
+      "icon": "ENDER_EYE",
+      "effect": "sense",
+      "equipment": "none",
+      "mana": 4,
+      "cooldown-seconds": 20,
+      "limits": {
+        "range": 32,
+        "targets": 12,
+        "power": 1,
+        "duration-seconds": 8
+      },
+      "description": "探查周围可见敌对目标，返回类型、UUID及绝对坐标；不穿墙读取。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "探查附近已加载的敌对怪物，持续 8 秒显示方位、坐标与墙面指引；Java 轮廓仅对本人和附身 Eye 可见。"
+    },
+    "golem": {
+      "title": "召唤铁卫",
+      "profession": "common",
+      "icon": "IRON_BLOCK",
+      "effect": "golem",
+      "equipment": "none",
+      "mana": 12,
+      "cooldown-seconds": 90,
+      "limits": {
+        "range": 16,
+        "targets": 1,
+        "power": 1,
+        "duration-seconds": 45
+      },
+      "description": "在前方空位召唤一个本人铁傀儡助手，最多一个，45秒后消失。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "在身边召唤临时铁傀儡，只协助攻击敌对怪物。"
+    },
+    "feather": {
+      "title": "羽落术",
+      "profession": "common",
+      "icon": "FEATHER",
+      "effect": "feather",
+      "equipment": "none",
+      "mana": 3,
+      "cooldown-seconds": 20,
+      "limits": {
+        "range": 1,
+        "targets": 1,
+        "power": 1,
+        "duration-seconds": 30
+      },
+      "description": "为自己施加缓降，持续时间以等级参数为准。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "获得 45 秒缓降效果。"
+    },
+    "night": {
+      "title": "夜视术",
+      "profession": "common",
+      "icon": "GOLDEN_CARROT",
+      "effect": "night",
+      "equipment": "none",
+      "mana": 3,
+      "cooldown-seconds": 30,
+      "limits": {
+        "range": 1,
+        "targets": 1,
+        "power": 1,
+        "duration-seconds": 120
+      },
+      "description": "为自己施加夜视，持续时间以等级参数为准。 魔力、冷却、伤害/治疗量、范围及人数以本人 actualLimits/manaCost 为准。",
+      "origin": "基础技能花1点学习；熟练8/24次并花点升级；新世界按本人实际事件成长。",
+      "paperDescription": "获得 120 秒夜视效果；不会改变世界光照。"
+    }
+  },
+  "points": {
+    "schema-version": 1,
+    "pool": {
+      "initial": 6,
+      "cap": 30,
+      "aura-levels-per-point": 5,
+      "respec-mana": 10,
+      "respec-cooldown-seconds": 300
+    },
+    "basic-cost": 1,
+    "ranks": {
+      "sword_thrust": [
+        {
+          "cost": 2,
+          "mana": 4,
+          "range": 3,
+          "targets": 1,
+          "power": 4.0,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 3,
+          "mana": 5,
+          "range": 3,
+          "targets": 1,
+          "power": 6.0,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 5,
+          "mana": 6,
+          "range": 3,
+          "targets": 1,
+          "power": 8,
+          "duration-seconds": 1
+        }
+      ],
+      "sword_parry": [
+        {
+          "cost": 2,
+          "mana": 4,
+          "range": 3,
+          "targets": 1,
+          "power": 2,
+          "duration-seconds": 2
+        },
+        {
+          "cost": 3,
+          "mana": 5,
+          "range": 3,
+          "targets": 1,
+          "power": 4,
+          "duration-seconds": 2
+        },
+        {
+          "cost": 5,
+          "mana": 6,
+          "range": 3,
+          "targets": 1,
+          "power": 6,
+          "duration-seconds": 2
+        }
+      ],
+      "sword_arc": [
+        {
+          "cost": 2,
+          "mana": 7,
+          "range": 3,
+          "targets": 1,
+          "power": 2.0,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 3,
+          "mana": 8,
+          "range": 3,
+          "targets": 2,
+          "power": 3.0,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 5,
+          "mana": 9,
+          "range": 3,
+          "targets": 3,
+          "power": 4,
+          "duration-seconds": 1
+        }
+      ],
+      "sword_step": [
+        {
+          "cost": 2,
+          "mana": 6,
+          "range": 3,
+          "targets": 1,
+          "power": 3,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 3,
+          "mana": 7,
+          "range": 3,
+          "targets": 1,
+          "power": 4,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 5,
+          "mana": 8,
+          "range": 3,
+          "targets": 1,
+          "power": 6,
+          "duration-seconds": 1
+        }
+      ],
+      "sword_beam": [
+        {
+          "cost": 2,
+          "mana": 8,
+          "range": 10,
+          "targets": 1,
+          "power": 3.0,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 3,
+          "mana": 9,
+          "range": 10,
+          "targets": 1,
+          "power": 4.5,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 5,
+          "mana": 10,
+          "range": 10,
+          "targets": 1,
+          "power": 6,
+          "duration-seconds": 1
+        }
+      ],
+      "twin_legacy": [
+        {
+          "cost": 5,
+          "mana": 14,
+          "range": 3,
+          "targets": 1,
+          "power": 8.0,
+          "duration-seconds": 2
+        },
+        {
+          "cost": 6,
+          "mana": 15,
+          "range": 3,
+          "targets": 1,
+          "power": 12.0,
+          "duration-seconds": 2
+        },
+        {
+          "cost": 8,
+          "mana": 16,
+          "range": 3,
+          "targets": 1,
+          "power": 16,
+          "duration-seconds": 2
+        }
+      ],
+      "guardian_ward": [
+        {
+          "cost": 2,
+          "mana": 7,
+          "range": 5,
+          "targets": 2,
+          "power": 2,
+          "duration-seconds": 4
+        },
+        {
+          "cost": 3,
+          "mana": 8,
+          "range": 5,
+          "targets": 3,
+          "power": 4,
+          "duration-seconds": 6
+        },
+        {
+          "cost": 5,
+          "mana": 9,
+          "range": 5,
+          "targets": 4,
+          "power": 6,
+          "duration-seconds": 8
+        }
+      ],
+      "guardian_oath": [
+        {
+          "cost": 5,
+          "mana": 12,
+          "range": 8,
+          "targets": 2,
+          "power": 2,
+          "duration-seconds": 4
+        },
+        {
+          "cost": 6,
+          "mana": 13,
+          "range": 8,
+          "targets": 3,
+          "power": 4,
+          "duration-seconds": 6
+        },
+        {
+          "cost": 8,
+          "mana": 14,
+          "range": 8,
+          "targets": 4,
+          "power": 6,
+          "duration-seconds": 8
+        }
+      ],
+      "scout_mark": [
+        {
+          "cost": 2,
+          "mana": 3,
+          "range": 12,
+          "targets": 1,
+          "power": 1,
+          "duration-seconds": 8
+        },
+        {
+          "cost": 3,
+          "mana": 4,
+          "range": 12,
+          "targets": 1,
+          "power": 1,
+          "duration-seconds": 12
+        },
+        {
+          "cost": 5,
+          "mana": 5,
+          "range": 12,
+          "targets": 1,
+          "power": 1,
+          "duration-seconds": 16
+        }
+      ],
+      "scout_watch": [
+        {
+          "cost": 2,
+          "mana": 6,
+          "range": 12,
+          "targets": 1,
+          "power": 1,
+          "duration-seconds": 8
+        },
+        {
+          "cost": 3,
+          "mana": 7,
+          "range": 12,
+          "targets": 2,
+          "power": 1,
+          "duration-seconds": 12
+        },
+        {
+          "cost": 5,
+          "mana": 8,
+          "range": 12,
+          "targets": 3,
+          "power": 1,
+          "duration-seconds": 16
+        }
+      ],
+      "healer_mend": [
+        {
+          "cost": 2,
+          "mana": 4,
+          "range": 8,
+          "targets": 1,
+          "power": 6,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 3,
+          "mana": 6,
+          "range": 8,
+          "targets": 2,
+          "power": 8,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 5,
+          "mana": 8,
+          "range": 8,
+          "targets": 3,
+          "power": 10,
+          "duration-seconds": 1
+        }
+      ],
+      "healer_cleanse": [
+        {
+          "cost": 2,
+          "mana": 4,
+          "range": 1,
+          "targets": 1,
+          "power": 1,
+          "duration-seconds": 1
+        }
+      ],
+      "healer_beacon": [
+        {
+          "cost": 4,
+          "mana": 10,
+          "range": 8,
+          "targets": 2,
+          "power": 8,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 5,
+          "mana": 14,
+          "range": 8,
+          "targets": 3,
+          "power": 10,
+          "duration-seconds": 1,
+          "ward-seconds": 4,
+          "ward-cap": 4
+        },
+        {
+          "cost": 8,
+          "mana": 18,
+          "range": 8,
+          "targets": 4,
+          "power": 12,
+          "duration-seconds": 1,
+          "ward-seconds": 6,
+          "ward-cap": 6,
+          "immunity-seconds": 1.5
+        }
+      ],
+      "mage_bolt": [
+        {
+          "cost": 2,
+          "mana": 6,
+          "range": 12,
+          "targets": 1,
+          "power": 3.0,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 3,
+          "mana": 7,
+          "range": 12,
+          "targets": 1,
+          "power": 4.5,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 5,
+          "mana": 8,
+          "range": 12,
+          "targets": 1,
+          "power": 6,
+          "duration-seconds": 1
+        }
+      ],
+      "mage_frost": [
+        {
+          "cost": 2,
+          "mana": 8,
+          "range": 5,
+          "targets": 1,
+          "power": 1.5,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 3,
+          "mana": 9,
+          "range": 5,
+          "targets": 2,
+          "power": 2.5,
+          "duration-seconds": 2
+        },
+        {
+          "cost": 5,
+          "mana": 10,
+          "range": 5,
+          "targets": 3,
+          "power": 3,
+          "duration-seconds": 3
+        }
+      ],
+      "mage_flame": [
+        {
+          "cost": 2,
+          "mana": 9,
+          "range": 4,
+          "targets": 1,
+          "power": 2.0,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 3,
+          "mana": 10,
+          "range": 4,
+          "targets": 2,
+          "power": 3.0,
+          "duration-seconds": 1
+        },
+        {
+          "cost": 5,
+          "mana": 11,
+          "range": 4,
+          "targets": 3,
+          "power": 4,
+          "duration-seconds": 1
+        }
+      ],
+      "warrior_sky_leap": [
+        {
+          "cost": 2,
+          "mana": 6,
+          "range": 1,
+          "targets": 1,
+          "power": 8,
+          "duration-seconds": 20
+        },
+        {
+          "cost": 3,
+          "mana": 8,
+          "range": 1,
+          "targets": 1,
+          "power": 12,
+          "duration-seconds": 20
+        },
+        {
+          "cost": 5,
+          "mana": 10,
+          "range": 1,
+          "targets": 1,
+          "power": 16,
+          "duration-seconds": 20
+        }
+      ],
+      "mage_soar": [
+        {
+          "cost": 3,
+          "mana": 8,
+          "range": 1,
+          "targets": 1,
+          "power": 1,
+          "duration-seconds": 20
+        },
+        {
+          "cost": 4,
+          "mana": 10,
+          "range": 1,
+          "targets": 1,
+          "power": 1,
+          "duration-seconds": 30
+        },
+        {
+          "cost": 6,
+          "mana": 12,
+          "range": 1,
+          "targets": 1,
+          "power": 1,
+          "duration-seconds": 40
+        }
+      ],
+      "priest_blessing": [
+        {
+          "cost": 3,
+          "mana": 8,
+          "range": 8,
+          "targets": 2,
+          "power": 1,
+          "duration-seconds": 8
+        },
+        {
+          "cost": 4,
+          "mana": 10,
+          "range": 8,
+          "targets": 3,
+          "power": 1,
+          "duration-seconds": 12
+        },
+        {
+          "cost": 6,
+          "mana": 12,
+          "range": 8,
+          "targets": 4,
+          "power": 1,
+          "duration-seconds": 16
+        }
+      ]
+    }
+  },
+  "unlocks": {
+    "sword_arc_trial": {
+      "source": "guild_contract",
+      "source-id": "tm_sword_arc_trial",
+      "skills": [
+        "sword_arc"
+      ],
+      "repeat": "once_per_player"
+    },
+    "sword_road_trial": {
+      "source": "guild_contract",
+      "source-id": "tm_sword_road_trial",
+      "skills": [
+        "sword_step",
+        "sword_beam"
+      ],
+      "repeat": "once_per_player"
+    },
+    "twin_legacy_trial": {
+      "source": "guild_contract",
+      "source-id": "tm_twin_legacy_trial",
+      "skills": [
+        "twin_legacy"
+      ],
+      "repeat": "once_per_player"
+    },
+    "healer_trial": {
+      "source": "guild_contract",
+      "source-id": "tm_healer_trial",
+      "skills": [
+        "healer_beacon"
+      ],
+      "repeat": "once_per_player"
+    },
+    "mage_trial": {
+      "source": "guild_contract",
+      "source-id": "tm_mage_trial",
+      "skills": [
+        "mage_flame",
+        "scout_watch"
+      ],
+      "repeat": "once_per_player"
+    },
+    "village_oath": {
+      "source": "raid_victory",
+      "source-id": "village_defense",
+      "skills": [
+        "guardian_ward",
+        "guardian_oath"
+      ],
+      "repeat": "once_per_player"
+    }
+  },
+  "floors": [
+    {
+      "floor": 1,
+      "name": "苔藓洞穴",
+      "floorBlock": "minecraft:moss_block",
+      "wallBlock": "minecraft:mossy_stone_bricks",
+      "pillarBlock": "minecraft:oak_log",
+      "enemies": [
+        {
+          "type": "minecraft:zombie"
+        },
+        {
+          "type": "minecraft:zombie"
+        },
+        {
+          "type": "minecraft:zombie"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:copper_ingot",
+          "count": 2
+        },
+        {
+          "item": "minecraft:bread",
+          "count": 2
+        },
+        {
+          "item": "minecraft:experience_bottle",
+          "count": 1
+        }
+      ],
+      "enhancedEnemies": [
+        {
+          "type": "minecraft:witch",
+          "health": 30
+        },
+        {
+          "type": "minecraft:witch",
+          "health": 30
+        },
+        {
+          "type": "minecraft:skeleton",
+          "health": 24
+        },
+        {
+          "type": "minecraft:skeleton",
+          "health": 24
+        },
+        {
+          "type": "minecraft:zombie",
+          "health": 28
+        },
+        {
+          "type": "minecraft:zombie",
+          "health": 28
+        }
+      ]
+    },
+    {
+      "floor": 2,
+      "name": "沙漠遗迹",
+      "floorBlock": "minecraft:sandstone",
+      "wallBlock": "minecraft:chiseled_sandstone",
+      "pillarBlock": "minecraft:cut_sandstone",
+      "enemies": [
+        {
+          "type": "minecraft:husk"
+        },
+        {
+          "type": "minecraft:husk"
+        },
+        {
+          "type": "minecraft:spider"
+        },
+        {
+          "type": "minecraft:spider"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:emerald",
+          "count": 1
+        },
+        {
+          "item": "minecraft:copper_ingot",
+          "count": 2
+        },
+        {
+          "item": "minecraft:bread",
+          "count": 2
+        },
+        {
+          "item": "minecraft:experience_bottle",
+          "count": 1
+        }
+      ],
+      "enhancedEnemies": [
+        {
+          "type": "minecraft:witch",
+          "health": 34
+        },
+        {
+          "type": "minecraft:witch",
+          "health": 34
+        },
+        {
+          "type": "minecraft:pillager",
+          "health": 30
+        },
+        {
+          "type": "minecraft:pillager",
+          "health": 30
+        },
+        {
+          "type": "minecraft:husk",
+          "health": 32
+        },
+        {
+          "type": "minecraft:husk",
+          "health": 32
+        },
+        {
+          "type": "minecraft:cave_spider",
+          "health": 20
+        }
+      ]
+    },
+    {
+      "floor": 3,
+      "name": "冰雪洞窟",
+      "floorBlock": "minecraft:packed_ice",
+      "wallBlock": "minecraft:snow_block",
+      "pillarBlock": "minecraft:blue_ice",
+      "enemies": [
+        {
+          "type": "minecraft:stray"
+        },
+        {
+          "type": "minecraft:stray"
+        },
+        {
+          "type": "minecraft:zombie"
+        },
+        {
+          "type": "minecraft:spider"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:emerald",
+          "count": 1
+        },
+        {
+          "item": "minecraft:iron_ingot",
+          "count": 2
+        },
+        {
+          "item": "minecraft:experience_bottle",
+          "count": 2
+        }
+      ],
+      "enhancedEnemies": [
+        {
+          "type": "minecraft:witch",
+          "health": 36
+        },
+        {
+          "type": "minecraft:witch",
+          "health": 36
+        },
+        {
+          "type": "minecraft:stray",
+          "health": 30
+        },
+        {
+          "type": "minecraft:stray",
+          "health": 30
+        },
+        {
+          "type": "minecraft:stray",
+          "health": 30
+        },
+        {
+          "type": "minecraft:vindicator",
+          "health": 48,
+          "name": "霜墓执斧者"
+        },
+        {
+          "type": "minecraft:wither_skeleton",
+          "health": 36
+        }
+      ]
+    },
+    {
+      "floor": 4,
+      "name": "赤焰堡垒",
+      "floorBlock": "minecraft:nether_bricks",
+      "wallBlock": "minecraft:red_nether_bricks",
+      "pillarBlock": "minecraft:blackstone",
+      "enemies": [
+        {
+          "type": "minecraft:magma_cube"
+        },
+        {
+          "type": "minecraft:magma_cube"
+        },
+        {
+          "type": "minecraft:husk"
+        },
+        {
+          "type": "minecraft:husk"
+        },
+        {
+          "type": "minecraft:blaze"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:emerald",
+          "count": 2
+        },
+        {
+          "item": "minecraft:lapis_lazuli",
+          "count": 3
+        },
+        {
+          "item": "minecraft:arrow",
+          "count": 8
+        },
+        {
+          "item": "minecraft:experience_bottle",
+          "count": 2
+        }
+      ],
+      "enhancedEnemies": [
+        {
+          "type": "minecraft:witch",
+          "health": 38
+        },
+        {
+          "type": "minecraft:witch",
+          "health": 38
+        },
+        {
+          "type": "minecraft:blaze",
+          "health": 32
+        },
+        {
+          "type": "minecraft:blaze",
+          "health": 32
+        },
+        {
+          "type": "minecraft:blaze",
+          "health": 32
+        },
+        {
+          "type": "minecraft:wither_skeleton",
+          "health": 40
+        },
+        {
+          "type": "minecraft:wither_skeleton",
+          "health": 40
+        },
+        {
+          "type": "minecraft:magma_cube",
+          "health": 16
+        }
+      ]
+    },
+    {
+      "floor": 5,
+      "name": "海晶遗迹",
+      "floorBlock": "minecraft:prismarine_bricks",
+      "wallBlock": "minecraft:dark_prismarine",
+      "pillarBlock": "minecraft:prismarine",
+      "enemies": [
+        {
+          "type": "minecraft:drowned"
+        },
+        {
+          "type": "minecraft:drowned"
+        },
+        {
+          "type": "minecraft:drowned"
+        },
+        {
+          "type": "minecraft:skeleton"
+        },
+        {
+          "type": "minecraft:skeleton"
+        },
+        {
+          "type": "minecraft:spider"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:emerald",
+          "count": 2
+        },
+        {
+          "item": "minecraft:iron_ingot",
+          "count": 2
+        },
+        {
+          "item": "minecraft:golden_apple",
+          "count": 1
+        },
+        {
+          "item": "minecraft:experience_bottle",
+          "count": 3
+        }
+      ],
+      "enhancedEnemies": [
+        {
+          "type": "minecraft:witch",
+          "health": 40
+        },
+        {
+          "type": "minecraft:witch",
+          "health": 40
+        },
+        {
+          "type": "minecraft:witch",
+          "health": 40
+        },
+        {
+          "type": "minecraft:drowned",
+          "health": 36
+        },
+        {
+          "type": "minecraft:drowned",
+          "health": 36
+        },
+        {
+          "type": "minecraft:stray",
+          "health": 34
+        },
+        {
+          "type": "minecraft:stray",
+          "health": 34
+        },
+        {
+          "type": "minecraft:vindicator",
+          "health": 56,
+          "name": "海晶守门人"
+        }
+      ]
+    },
+    {
+      "floor": 6,
+      "name": "深层宝库",
+      "floorBlock": "minecraft:deepslate_bricks",
+      "wallBlock": "minecraft:polished_blackstone_bricks",
+      "pillarBlock": "minecraft:chiseled_deepslate",
+      "enemies": [
+        {
+          "type": "minecraft:zombie"
+        },
+        {
+          "type": "minecraft:zombie"
+        },
+        {
+          "type": "minecraft:husk"
+        },
+        {
+          "type": "minecraft:husk"
+        },
+        {
+          "type": "minecraft:skeleton"
+        },
+        {
+          "type": "minecraft:skeleton"
+        },
+        {
+          "type": "minecraft:witch"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:copper_ingot",
+          "count": 5
+        },
+        {
+          "item": "minecraft:emerald",
+          "count": 3
+        },
+        {
+          "item": "minecraft:golden_apple",
+          "count": 1
+        },
+        {
+          "item": "minecraft:experience_bottle",
+          "count": 4
+        }
+      ],
+      "enhancedEnemies": [
+        {
+          "type": "minecraft:witch",
+          "health": 42
+        },
+        {
+          "type": "minecraft:witch",
+          "health": 42
+        },
+        {
+          "type": "minecraft:witch",
+          "health": 42
+        },
+        {
+          "type": "minecraft:pillager",
+          "health": 36
+        },
+        {
+          "type": "minecraft:pillager",
+          "health": 36
+        },
+        {
+          "type": "minecraft:wither_skeleton",
+          "health": 44
+        },
+        {
+          "type": "minecraft:wither_skeleton",
+          "health": 44
+        },
+        {
+          "type": "minecraft:ravager",
+          "health": 110,
+          "name": "宝库破阵兽"
+        }
+      ]
+    },
+    {
+      "floor": 7,
+      "name": "灯火驿站",
+      "floorBlock": "minecraft:cherry_planks",
+      "wallBlock": "minecraft:polished_deepslate",
+      "pillarBlock": "minecraft:cherry_log",
+      "enemies": [],
+      "supplies": [],
+      "enhancedEnemies": []
+    },
+    {
+      "floor": 8,
+      "name": "幽荧矿井",
+      "floorBlock": "minecraft:tuff_bricks",
+      "wallBlock": "minecraft:deepslate_tiles",
+      "pillarBlock": "minecraft:copper_block",
+      "enemies": [
+        {
+          "type": "minecraft:zombie"
+        },
+        {
+          "type": "minecraft:zombie"
+        },
+        {
+          "type": "minecraft:skeleton"
+        },
+        {
+          "type": "minecraft:skeleton"
+        },
+        {
+          "type": "minecraft:cave_spider"
+        },
+        {
+          "type": "minecraft:cave_spider"
+        },
+        {
+          "type": "minecraft:husk"
+        },
+        {
+          "type": "minecraft:husk"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:emerald",
+          "count": 3
+        },
+        {
+          "item": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "item": "minecraft:golden_apple",
+          "count": 1
+        },
+        {
+          "item": "minecraft:experience_bottle",
+          "count": 5
+        }
+      ],
+      "enhancedEnemies": []
+    },
+    {
+      "floor": 9,
+      "name": "星辉秘殿",
+      "floorBlock": "minecraft:amethyst_block",
+      "wallBlock": "minecraft:purpur_block",
+      "pillarBlock": "minecraft:calcite",
+      "enemies": [
+        {
+          "type": "minecraft:pillager"
+        },
+        {
+          "type": "minecraft:pillager"
+        },
+        {
+          "type": "minecraft:vindicator"
+        },
+        {
+          "type": "minecraft:skeleton"
+        },
+        {
+          "type": "minecraft:skeleton"
+        },
+        {
+          "type": "minecraft:witch"
+        },
+        {
+          "type": "minecraft:zombie"
+        },
+        {
+          "type": "minecraft:zombie"
+        },
+        {
+          "type": "minecraft:spider"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:emerald",
+          "count": 4
+        },
+        {
+          "item": "minecraft:copper_ingot",
+          "count": 6
+        },
+        {
+          "item": "minecraft:golden_apple",
+          "count": 1
+        },
+        {
+          "item": "minecraft:experience_bottle",
+          "count": 6
+        }
+      ],
+      "enhancedEnemies": []
+    },
+    {
+      "floor": 10,
+      "name": "深渊守卫之殿",
+      "floorBlock": "minecraft:polished_blackstone_bricks",
+      "wallBlock": "minecraft:crying_obsidian",
+      "pillarBlock": "minecraft:gilded_blackstone",
+      "enemies": [
+        {
+          "type": "minecraft:ravager"
+        },
+        {
+          "type": "minecraft:pillager"
+        },
+        {
+          "type": "minecraft:pillager"
+        },
+        {
+          "type": "minecraft:zombie"
+        },
+        {
+          "type": "minecraft:zombie"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:emerald",
+          "count": 5
+        },
+        {
+          "item": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "item": "minecraft:golden_apple",
+          "count": 1
+        },
+        {
+          "item": "minecraft:experience_bottle",
+          "count": 8
+        }
+      ],
+      "enhancedEnemies": []
+    },
+    {
+      "floor": 11,
+      "name": "断桥要塞",
+      "floorBlock": "minecraft:stone_bricks",
+      "wallBlock": "minecraft:mossy_stone_bricks",
+      "pillarBlock": "minecraft:polished_andesite",
+      "enemies": [
+        {
+          "type": "minecraft:pillager"
+        },
+        {
+          "type": "minecraft:pillager"
+        },
+        {
+          "type": "minecraft:vindicator"
+        },
+        {
+          "type": "minecraft:vindicator"
+        },
+        {
+          "type": "minecraft:zombie"
+        },
+        {
+          "type": "minecraft:zombie"
+        },
+        {
+          "type": "minecraft:spider"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:emerald",
+          "count": 3
+        },
+        {
+          "item": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "item": "minecraft:arrow",
+          "count": 16
+        }
+      ],
+      "enhancedEnemies": []
+    },
+    {
+      "floor": 12,
+      "name": "沉潮书库",
+      "floorBlock": "minecraft:prismarine_bricks",
+      "wallBlock": "minecraft:dark_prismarine",
+      "pillarBlock": "minecraft:sea_lantern",
+      "enemies": [
+        {
+          "type": "minecraft:drowned"
+        },
+        {
+          "type": "minecraft:drowned"
+        },
+        {
+          "type": "minecraft:drowned"
+        },
+        {
+          "type": "minecraft:skeleton"
+        },
+        {
+          "type": "minecraft:skeleton"
+        },
+        {
+          "type": "minecraft:witch"
+        },
+        {
+          "type": "minecraft:spider"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:emerald",
+          "count": 4
+        },
+        {
+          "item": "minecraft:copper_ingot",
+          "count": 5
+        },
+        {
+          "item": "minecraft:golden_apple",
+          "count": 1
+        }
+      ],
+      "enhancedEnemies": []
+    },
+    {
+      "floor": 13,
+      "name": "赤铜熔炉",
+      "floorBlock": "minecraft:polished_blackstone",
+      "wallBlock": "minecraft:tuff_bricks",
+      "pillarBlock": "minecraft:copper_block",
+      "enemies": [
+        {
+          "type": "minecraft:blaze"
+        },
+        {
+          "type": "minecraft:blaze"
+        },
+        {
+          "type": "minecraft:magma_cube"
+        },
+        {
+          "type": "minecraft:magma_cube"
+        },
+        {
+          "type": "minecraft:vindicator"
+        },
+        {
+          "type": "minecraft:zombie"
+        },
+        {
+          "type": "minecraft:zombie"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:emerald",
+          "count": 4
+        },
+        {
+          "item": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "item": "minecraft:golden_apple",
+          "count": 1
+        }
+      ],
+      "enhancedEnemies": []
+    },
+    {
+      "floor": 14,
+      "name": "机关回廊",
+      "floorBlock": "minecraft:chiseled_stone_bricks",
+      "wallBlock": "minecraft:deepslate_tiles",
+      "pillarBlock": "minecraft:iron_block",
+      "enemies": [
+        {
+          "type": "minecraft:pillager"
+        },
+        {
+          "type": "minecraft:pillager"
+        },
+        {
+          "type": "minecraft:stray"
+        },
+        {
+          "type": "minecraft:stray"
+        },
+        {
+          "type": "minecraft:vindicator"
+        },
+        {
+          "type": "minecraft:vindicator"
+        },
+        {
+          "type": "minecraft:witch"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:emerald",
+          "count": 5
+        },
+        {
+          "item": "minecraft:copper_ingot",
+          "count": 6
+        },
+        {
+          "item": "minecraft:experience_bottle",
+          "count": 6
+        }
+      ],
+      "enhancedEnemies": []
+    },
+    {
+      "floor": 15,
+      "name": "星灯主宰之庭",
+      "floorBlock": "minecraft:purpur_block",
+      "wallBlock": "minecraft:polished_blackstone_bricks",
+      "pillarBlock": "minecraft:amethyst_block",
+      "enemies": [
+        {
+          "type": "minecraft:ravager"
+        },
+        {
+          "type": "minecraft:witch"
+        },
+        {
+          "type": "minecraft:pillager"
+        },
+        {
+          "type": "minecraft:pillager"
+        },
+        {
+          "type": "minecraft:vindicator"
+        },
+        {
+          "type": "minecraft:vindicator"
+        }
+      ],
+      "supplies": [
+        {
+          "item": "minecraft:emerald",
+          "count": 6
+        },
+        {
+          "item": "minecraft:diamond",
+          "count": 1
+        },
+        {
+          "item": "minecraft:golden_apple",
+          "count": 1
+        },
+        {
+          "item": "minecraft:experience_bottle",
+          "count": 8
+        }
+      ],
+      "enhancedEnemies": []
+    }
+  ],
+  "relocationRequired": [
+    "lands",
+    "structure_masks",
+    "waypoints",
+    "site_dungeons",
+    "guild_buildings",
+    "assessment_courses"
+  ],
+  "historicalDataImported": false
+}

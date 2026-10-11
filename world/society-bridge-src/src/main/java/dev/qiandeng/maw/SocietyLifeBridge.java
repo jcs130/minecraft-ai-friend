@@ -135,7 +135,7 @@ final class SocietyLifeBridge {
             }
             row.add("progress", tasks); rows.add(row);
         }
-        result.add("quests", rows); result.addProperty("reputation", reputation);
+        int completed=0;for(JsonElement row:rows)completed+=row.getAsJsonObject().get("completed").getAsInt();JsonObject evidence=RpgStore.object(RpgStore.player(player),"evidence");if(RpgStore.integer(evidence,"questCompletions")!=completed){evidence.addProperty("questCompletions",completed);RpgStore.dirty(player);}result.add("quests", rows); result.addProperty("reputation", reputation);
         result.add("guilds", CONTENT.get("guilds").deepCopy());
         String rank = "木牌见习";
         for (JsonElement value : CONTENT.getAsJsonArray("ranks")) if (reputation >= value.getAsJsonObject().get("reputation").getAsInt()) rank = value.getAsJsonObject().get("name").getAsString();
@@ -318,6 +318,7 @@ final class SocietyLifeBridge {
         items.setItem(12, icon("minecraft:writable_book", "我的委托与进度", List.of("这里只显示本账号的任务"))); buttons.put(12, p -> open(p, "current"));
         items.setItem(14, icon("minecraft:gold_nugget", "交付当前委托", List.of("交付类任务会扣除真实物资", "制作/击杀/探索类按实际事件计进度"))); buttons.put(14, p -> {act(p, "society_submit", new JsonObject()); open(p, "current");});
         items.setItem(16, icon("minecraft:compass", "领取冒险指南针", List.of("手持交互可瞬间打开本指南", "每人一份，不可丢弃"))); buttons.put(16, SocietyLifeBridge::guideItem);
+        items.setItem(18, icon("minecraft:iron_sword", "技能 · 领地 · 十五层试炼", List.of("职业、加点、快捷施法与个人奖励箱", "兼容真人、基岩与两种 Agent 身体"))); buttons.put(18, p -> RpgMigrationBridge.open(p, "guide", 1));
         items.setItem(22, icon("minecraft:iron_ingot", s.get("rank").getAsString(), List.of("声望：" + s.get("reputation").getAsInt(), "声望随真实完成的委托累计", "可同时体验所有公会的生活方向")));
         items.setItem(24, icon("minecraft:name_tag", "登记成为公会旅人", List.of(s.get("joined").getAsBoolean() ? "已经登记" : "点击登记，无需费用"))); buttons.put(24, p -> {act(p, "society_join", new JsonObject()); openGuide(p);});
         board(player, "My Agent World · 冒险指南", items, buttons);

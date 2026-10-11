@@ -1,6 +1,6 @@
 # 旧千灯纪接入 My Agent World 原生身体 SDK
 
-当前分发：Native SDK 0.3.1，`E:\QiandengJiSocietyLab\integrations\native-sdk\v3-rpg-20261012`。新增19项底层控制、完整菜单组件CAS、真实动作位置/库存回执；[完整控制API和HTTP调用](MY-AGENT-WORLD-CONTROL-API.txt)。下方历史验收记录保留当时数量。
+当前分发：Native SDK 0.4.0，`E:\QiandengJiSocietyLab\integrations\native-sdk\v5-paper-rpg-20261012`。新增19项底层控制、完整菜单组件CAS、真实动作位置/库存回执；[完整控制API和HTTP调用](MY-AGENT-WORLD-CONTROL-API.txt)。下方历史验收记录保留当时数量。
 
 2026-10-11：现有 SDK 可由 [统一身体接口](MY-AGENT-WORLD-WORLD-ADAPTER.md) 包装，与 Numen 使用共同的状态、动作和对账方法。本文仍描述 Mineflayer provider；原有能力标记和账本继续有效。
 
@@ -14,7 +14,7 @@ Agent 入口：`192.168.3.163:28977`，Java 协议 1.21.1、当前家庭局域�
 
 Numen 核心已安装，但本 SDK **尚不支持 Numen 假玩家控制和 `numen_restore_existing`**。远端 capabilities 明确返回这两项 false。原 Numen UUID、背包、技能、经验不能仅靠新用户名自动迁移；需要同身份假玩家时，另接 Numen provider 并验证原 UUID/owner/name 恢复，不能直接套用普通玩家登录。
 
-2026-10-11：另有已部署的[纯服务端 Numen MCP provider](MY-AGENT-WORLD-NUMEN-SERVER.md)，支持持久身体、原 UUID 恢复和 72 项原生操作；[邀请试玩指南](MY-AGENT-WORLD-INVITED-PLAYTEST.md)包含独立 Python 客户端与准入方式。本 SDK 的连接玩家身份及上述 false 不变，两个 provider 分别控制自己的身体。
+2026-10-11：另有已部署的[纯服务端 Numen MCP provider](MY-AGENT-WORLD-NUMEN-SERVER.md)，支持持久身体、原 UUID 恢复和 99 项原生操作；[邀请试玩指南](MY-AGENT-WORLD-INVITED-PLAYTEST.md)包含独立 Python 客户端与准入方式。本 SDK 的连接玩家身份及上述 false 不变，两个 provider 分别控制自己的身体。
 
 2026-10-09 历史路线为官方 Numen 0.1.4.1 / 主人客户端 MCP 和服主 Lua/恢复桥，见 [Numen 接入](MY-AGENT-WORLD-NUMEN.md)。不要把新 provider 的能力误读成本 SDK 已控制假玩家。
 
@@ -45,7 +45,7 @@ bot.once('spawn', async () => {
 
 ## operations、权限与状态
 
-`await sdk.capabilities()` 查询实际远端桥，返回当前 bodyId、采集时间、桥协议、84 项原生绑定和假玩家支持标志。`sdk.operations()` 返回 **94 项**：原60项模组调用、19项底层控制、5项公会生活接口，加10项身体/控制入口；`sdk.operations('world.dig')` 返回一项完整 JSON schema、说明、权限、执行形式、调用方式和回执约定。目录存在和服务器声明绑定均不表示所有玩法已经验收，`allGameplayVerified` 保持 false。
+`await sdk.capabilities()` 查询实际远端桥，返回当前 bodyId、采集时间、桥协议、111 项原生绑定和假玩家支持标志。`sdk.operations()` 返回 **121 项**：原60项模组调用、19项底层控制、5项公会生活接口、27项领地/技能/试炼接口，加10项身体/控制入口；`sdk.operations('world.dig')` 返回一项完整 JSON schema、说明、权限、执行形式、调用方式和回执约定。目录存在和服务器声明绑定均不表示所有玩法已经验收，`allGameplayVerified` 保持 false。
 
 新增入口：`sdk.capabilities`、`body.identity`、`body.snapshot`、`body.observe`、`body.move`、`inventory.equipSlot`、`inventory.use`、`action.status`、`action.cancel`、`body.stop`。动作状态、取消及停止使用专门方法；不能作为普通排队变更提交。
 
@@ -116,3 +116,5 @@ Python经分发包JSONL入口实际登录、查询60项远端绑定/70项目录�
 服务端仍由原Windows supervisor守护，没有新增常驻模型/Agent服务。安装与面板冒烟：`python world/ops/health/health_mon.py --society-native-sdk-smoke`，范围为SDK文件SHA、70项契约、实际桥类和入口守护；不声称全模组玩法或自主Agent健康。私有完整回包和账本在 `E:\QiandengJiSocietyLab\research\native-sdk-integration-20261009`，不公开上传；隔离owner已正常shutdown，测试前的QA属性/mods已恢复。main维护stop/resume已完成，勿重放旧请求。
 
 2026-10-12 新增公会/委托/市场：society.state、society.join、society.accept、society.submit、society.open。先读本人真实状态，再用唯一 action_id 执行；完整玩法与维护见 MY-AGENT-WORLD-RPG-CONTENT.txt。
+
+本轮领地、技能与试炼迁移的边界和接入：[Paper 迁移与维护](MY-AGENT-WORLD-PAPER-MIGRATION.md)。

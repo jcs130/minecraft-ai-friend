@@ -84,7 +84,7 @@ def probe(root=DEFAULT_ROOT):
                   'body.controls','body.target','body.input','body.look','body.mouse','body.attack','body.interactEntity',
                   'body.swing','body.dismount','body.flight','inventory.selectHotbar','inventory.swapHands','inventory.drop',
                   'inventory.useHeld','menu.nativeClick','menu.button','body.command','control.actionStatus','control.cancel'}
-        checks['native_mod_operations_adapter']=h.get('nativeModAccess') is True and h.get('nativeModOperationCount')==native['operationCount']==len(ids)==72 and required|{'society.state','society.accept','society.submit','society.open','society.join'}<=ids
+        checks['native_mod_operations_adapter']=h.get('nativeModAccess') is True and h.get('nativeModOperationCount')==native['operationCount']==len(ids)==99 and required|{'society.state','society.accept','society.submit','society.open','society.join','rpg.state','skill.cast','protection.query','arena.start','stash.open'}<=ids
         main=json.load(urlopen('http://127.0.0.1:28985/healthz',timeout=5))
         checks['owned_java_and_worker_healthy']=main['healthy'] and not main['paused'] and time.time()-main['heartbeatEpoch']<20
         for name,build,installed in [('numen-server','numen-server',root/'server/mods/maw_numen_server-0.1.0.jar'),('bedrock-forms','bedrock-agents',root/'bedrock/plugins/Geyser/extensions/MawAgents.jar')]:

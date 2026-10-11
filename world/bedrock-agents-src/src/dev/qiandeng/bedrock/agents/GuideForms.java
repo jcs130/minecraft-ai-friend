@@ -19,10 +19,13 @@ public final class GuideForms {
         return index(select,companions,maids,()->{},()->{});
     }
     public static SimpleForm index(Consumer<Integer> select,Runnable companions,Runnable maids,Runnable guild,Runnable market){
+        return index(select,companions,maids,guild,market,()->{});
+    }
+    public static SimpleForm index(Consumer<Integer> select,Runnable companions,Runnable maids,Runnable guild,Runnable market,Runnable rpg){
         var form=SimpleForm.builder().title("My Agent World · 冒险指南").content("人类与 Agent 一起探索、耕种、做饭和建造。\n选择一张卡片开始，无需输入命令。");
         for(int i=0;i<TITLES.length;i++)form.button(TITLES[i],FormImage.Type.PATH,"textures/guide/"+ICONS[i]);
-        return form.button("我的 Agent 同伴").button("我的车万女仆").button("公会 · 委托 · 声望").button("市场 · 买卖 · 玩家订单").button("开始游玩")
-            .validResultHandler(r->{int n=r.clickedButtonId();if(n>=0&&n<TITLES.length)select.accept(n);else if(n==5)companions.run();else if(n==6)maids.run();else if(n==7)guild.run();else if(n==8)market.run();}).build();
+        return form.button("我的 Agent 同伴").button("我的车万女仆").button("公会 · 委托 · 声望").button("市场 · 买卖 · 玩家订单").button("开始游玩").button("命格书 · 技能 · 领地 · 试炼")
+            .validResultHandler(r->{int n=r.clickedButtonId();if(n>=0&&n<TITLES.length)select.accept(n);else if(n==5)companions.run();else if(n==6)maids.run();else if(n==7)guild.run();else if(n==8)market.run();else if(n==10)rpg.run();}).build();
     }
     public static SimpleForm page(int index,Consumer<Integer> select,Runnable back){
         if(index<0||index>=PAGES.length)throw new IllegalArgumentException("guide_page");

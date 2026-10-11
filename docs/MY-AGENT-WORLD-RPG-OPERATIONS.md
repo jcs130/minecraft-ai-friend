@@ -25,7 +25,7 @@ Settlement Roads 当前 NeoForge 版本需要 Fabric 兼容层，未引入；Bou
 
 `/mycli guide`、`guild join|list|current|submit`、`status`、`market` 为本人操作，不授 OP、不广播状态。首次认证登录发绑定指南针，手持交互打开；普通丢弃取消并返还，满包退款失败时保留补领标记。
 
-两种身体共用五个原生操作：`society.state`、`society.join`、`society.accept`、`society.submit`、`society.open`。`state` 返回本人 UUID、采样时间、余额、声望、等级、全部任务的原生进度和可接状态。写操作在原有单控制器、持久 action_id 框架内执行；未知结果先对账，不换 ID 重放。Mineflayer SDK 总目录 94，Numen mod_operations 原生目录 72，统一适配器 Numen 目录 77（含一个明确不可用的 body.observe）。运行时仍应先查询 operations。
+两种身体共用五个原生操作：`society.state`、`society.join`、`society.accept`、`society.submit`、`society.open`。`state` 返回本人 UUID、采样时间、余额、声望、等级、全部任务的原生进度和可接状态。写操作在原有单控制器、持久 action_id 框架内执行；未知结果先对账，不换 ID 重放。Mineflayer SDK 总目录 121，Numen mod_operations 原生目录 99，统一适配器 Numen 目录 104（含一个明确不可用的 body.observe）。运行时仍应先查询 operations。
 
 基岩欢迎指南新增“公会 · 委托 · 声望”和“市场 · 买卖 · 玩家订单”按钮，使用普通玩家自身连接发命令打开原生箱子菜单。桥内直接用 Brigadier dispatcher 执行原生经济命令并保留其权限；避免 performPrefixedCommand 在 /mycli 嵌套上下文排队而误报菜单未打开。所有个人数据按 UUID 分离，原有五个资源包不更换。
 
@@ -38,7 +38,7 @@ Settlement Roads 当前 NeoForge 版本需要 Fabric 兼容层，未引入；Bou
 5. 同步主构建锁、桥构建记录、基岩扩展契约和分发包；`society_lab.check_runtime` 在主锁包含道路模组后同步检查 RPG 内容。恢复原 supervisor，等待真实健康与端口探测成功；保留 Agent 的暂停标记和原 unknown。
 6. 回滚必须使用此次成套冷备恢复数据包、JAR、配置和对应构建锁。已经生成的新建筑/附魔与经济账户不可只回滚一个 JAR；先在副本验证恢复。
 
-不要清空玩家进度、账户、动作账本或现有 world-life。旧 Paper 千灯纪独立维护，本次没有迁移其技能、波次试炼塔和历史公会存档。新驿站、酒馆、道路和遗迹仅在新生成区块出现；自然地下城与旧试炼塔的波次规则不同。
+不要清空玩家进度、账户、动作账本或现有 world-life。旧 Paper 千灯纪独立维护；后续本轮已移植核心技能、领地和波次试炼塔，详见 MY-AGENT-WORLD-PAPER-MIGRATION.md。历史公会存档仍未跨服导入。新驿站、酒馆、道路和遗迹仅在新生成区块出现；自然地下城与旧试炼塔的波次规则不同。
 
 ## 验收边界
 
@@ -57,3 +57,5 @@ Settlement Roads 当前 NeoForge 版本需要 Fabric 兼容层，未引入；Bou
 真实 Bedrock UDP 客户端分别通过指南打开公会和市场，下载并校验五个原资源包且收到原生物品栏。正式服复测 Mineflayer 94 项目录、84 项远端绑定、本人 22 项任务；认证 MCP 返回 72 项原生操作和五项 society.*，既有离线身体仍保持离线。Native SDK 9 项、Numen/基岩 15 项健康检查通过，正式启动零 ERROR。真实手机像素效果仍未验。
 
 Native SDK 0.3.1 与 World Adapter 0.2.1 分发至各自 v3-rpg-20261012 目录，各 36 个自有文件并安装锁定的 91 个依赖；原 v2 逐 SHA 不变。私有 QA 凭据、日志、冷备和动作回执留在运行目录，不提交 Git。
+
+本轮领地、技能与试炼迁移的边界和接入：[Paper 迁移与维护](MY-AGENT-WORLD-PAPER-MIGRATION.md)。

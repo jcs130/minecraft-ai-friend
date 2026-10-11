@@ -3,10 +3,13 @@
 const { randomUUID } = require('node:crypto')
 const { EventEmitter } = require('node:events')
 const { TextDecoder } = require('node:util')
+const transition = require('./rpg-transition.cjs')
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const reads = new Set(['create_settings', 'create_fluids', 'curios_state', 'ysm_catalog', 'control_query', 'society_state'])
 const writes = new Set(['create_value', 'create_filter', 'curios_open', 'curios_page', 'world_interact', 'ysm_select', 'control_action', 'society_join', 'society_accept', 'society_submit', 'society_open'])
 const utf8 = new TextDecoder('utf-8', { fatal: true })
+const rpgReads = new Set(['state', 'skills', 'protect', 'lands', 'arena_status', 'stash_state', 'recycle_list', 'recycle_quote', 'shop_list'].map(k => `rpg_${k}`))
+const rpgWrites = new Set(['skill_learn', 'skill_upgrade', 'skill_cast', 'skill_bind', 'skill_imprint', 'profession_choose', 'land_claim', 'land_release', 'land_trust', 'land_untrust', 'arena_lobby', 'arena_start', 'arena_resume', 'arena_leave', 'stash_open', 'recycle_sell', 'shop_buy', 'open'].map(k => `rpg_${k}`))
 const error = (code, requestId, dispatched = false, mutation = false) => Object.assign(new Error(code), {
   code, requestId, dispatched, outcomeKnown: !(mutation && dispatched), outcomeUnknown: mutation && dispatched,
   knownNotApplied: !dispatched, retryAutomatically: false
@@ -41,20 +44,26 @@ function attachModOperationsClient (bot, { timeoutMs = 4000 } = {}) {
   function reset () {
     epoch++
     for (const [id, request] of pending) {
+      if (!closed && transition.expectedKind(request.kind) && request.uuid === identity() &&
+          (request.transfers || 0) < 2) {
+        request.epoch = epoch; request.transfers = (request.transfers || 0) + 1
+        continue
+      }
       clearTimeout(request.timer)
+      pending.delete(id)
       request.reject(error(request.mutation ? 'MOD_ACTION_OUTCOME_UNKNOWN' : 'MOD_READ_CONTEXT_CHANGED', id, true, request.mutation))
     }
-    pending.clear()
   }
   function end () { closed = true; reset() }
   bot._client.on('custom_payload', payload); bot.on('spawn', reset); bot.on('respawn', reset); bot.on('end', end)
   function request (kind, fields = {}) {
-    const mutation = writes.has(kind)
-    if (!mutation && !reads.has(kind)) throw error('UNSUPPORTED_MOD_ACTION')
+    const mutation = writes.has(kind) || rpgWrites.has(kind)
+    if (!mutation && !reads.has(kind) && !rpgReads.has(kind)) throw error('UNSUPPORTED_MOD_ACTION')
     const { requestId = randomUUID(), ...args } = fields
     if (closed || !identity()) return Promise.reject(error('MOD_CONNECTION_UNAVAILABLE', requestId))
     if (typeof requestId !== 'string' || !/^[A-Za-z0-9:_-]{1,64}$/.test(requestId)) throw error('INVALID_MOD_REQUEST_ID')
-    if (Object.keys(args).some(k => ['kind', 'schemaVersion', 'playerUuid', 'targetUuid', '__proto__'].includes(k))) throw error('INVALID_MOD_ARGUMENT')
+    if (Object.keys(args).some(k => ['kind', 'schemaVersion', 'playerUuid', '__proto__'].includes(k) ||
+        (k === 'targetUuid' && !['rpg_land_trust', 'rpg_land_untrust'].includes(kind)))) throw error('INVALID_MOD_ARGUMENT')
     if (pending.has(requestId) || issued.has(requestId)) throw error('MOD_REQUEST_ALREADY_ISSUED', requestId)
     const data = Buffer.from(JSON.stringify({ ...args, schemaVersion: 1, kind, requestId }), 'utf8')
     if (data.length > 65536) throw error('MOD_REQUEST_TOO_LARGE', requestId)
@@ -71,6 +80,7 @@ function attachModOperationsClient (bot, { timeoutMs = 4000 } = {}) {
   }
   return {
     events,
+    rpg: { request },
     control: async (operation, args, readOnly) => {
       const receipt = await request(readOnly ? 'control_query' : 'control_action', { operation, arguments: args })
       return receipt.control || receipt

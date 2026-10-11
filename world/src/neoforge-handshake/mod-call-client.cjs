@@ -1,6 +1,7 @@
 'use strict'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const transition = require('./rpg-transition.cjs')
 const namespace = { type: 'string', pattern: '^[a-z0-9_.-]+:[a-z0-9_./-]+$', maxLength: 256 }
 const uuid = { type: 'string', pattern: UUID.source }
 const requestId = { type: 'string', pattern: '^[A-Za-z0-9:_-]{1,64}$' }
@@ -22,6 +23,29 @@ const domumSelection = { ...object({ selection: { type: 'string', enum: ['group'
 // Explicit bindings, not dynamic property traversal or a remote eval endpoint.
 // These are the actual low-level APIs. Maw's body-plan descriptors are separate.
 const definitions = [
+  ...[
+    ['rpg.state', true, '本人原生魔力、职业/技能点/实际熟练、试炼参赛状态、账户及异步探矿绝对坐标结果。', object(), 'state'],
+    ['rpg.skills', true, '36项基础与战法牧技能：说明、资格、等级、熟练、真实总/剩余冷却；先发现再施放。', object(), 'skills'],
+    ['protection.query', true, '查询绝对坐标处 break/place/use 的本人领地、试炼与殖民地权限；未知不等于许可。只读，不加载区块。', object({ action: { type: 'string', enum: ['break', 'place', 'use'] }, position }, ['action', 'position']), 'protect'],
+    ['land.list', true, '当前新世界领地的实际主人、协作者、维度与绝对边界；殖民地沿原生权限。', object(), 'lands'],
+    ['arena.status', true, '严格区分本人participant/floor与worldFloor；本层怪物UUID、类型、实际位置、持武器、AI/目标和异常。', object(), 'arena_status'],
+    ['stash.state', true, '本人540格个人箱的指定54格页，槽号0–539、完整SNBT及待领取；没有功能图标。', object({ page: integer(1, 10) }, ['page']), 'stash_state'],
+    ['arena.recycle.list', true, '本人未装备背包及奖励箱的可回收重复铁/皮/锁链装备；绑定物品排除。', object(), 'recycle_list'],
+    ['arena.recycle.quote', true, '精确槽位/完整组件/数量/耐久/30秒quoteId；未装备物品。', object({ source: { type: 'string', enum: ['bag', 'chest'] }, slot: integer(0, 539), count: integer(1, 64) }, ['source', 'slot', 'count']), 'recycle_quote'],
+    ['arena.shop.list', true, '本人灯币余额及补给商品，复用现有EconomyCraft账户，无第二钱包。', object(), 'shop_list'],
+    ...['learn', 'upgrade', 'cast', 'bind'].map(action => [`skill.${action}`, false, { learn: '本人花技能点学习，职业/实战资格检查。', upgrade: '本人真实使用8/24次后花点升级，保留冷却。', cast: '本人原生施法，失败不扣魔力、不发成功事件；探矿是异步扫描，通过rpg.state读取终态。', bind: '绑定本人灵纹法杖的瞬发技能，仍遵守学习/魔力/冷却。' }[action], object({ skillId: { type: 'string', pattern: '^[a-z0-9_]{1,64}$' }, requestId }, ['skillId']), `skill_${action}`]),
+    ['skill.imprint', false, '附近获准附魔台，核对手持完整SNBT，消耗4级经验刻印已学技能；潜行使用。', object({ skillId: { type: 'string', pattern: '^[a-z0-9_]{1,64}$' }, expectedSnbt: snbt, requestId }, ['skillId', 'expectedSnbt']), 'skill_imprint'],
+    ['profession.choose', false, '选择战士/法师/牧师；仅开放学习资格，历史与技能点/冷却不重置。', object({ profession: { type: 'string', enum: ['warrior', 'mage', 'priest'] }, requestId }, ['profession']), 'profession_choose'],
+    ['land.claim', false, '在本人64格内登记最多32×48×32、32768格营地；每人3块，不覆盖已占地/殖民地或未加载区块。', object({ landId: { type: 'string', pattern: '^[a-z0-9_]{1,32}$' }, min: position, max: position, requestId }, ['landId', 'min', 'max']), 'land_claim'],
+    ['land.release', false, '仅本人释放本人的领地，建筑原样保留。', object({ landId: { type: 'string', pattern: '^[a-z0-9_]{1,32}$' }, requestId }, ['landId']), 'land_release'],
+    ...['trust', 'untrust'].map(action => [`land.${action}`, false, '仅领地主人按已核实UUID管理协作者；成员不能转授权。', object({ landId: { type: 'string', pattern: '^[a-z0-9_]{1,32}$' }, targetUuid: uuid, requestId }, ['landId', 'targetUuid']), `land_${action}`]),
+    ...['lobby', 'resume', 'leave'].map(action => [`arena.${action}`, false, '试炼本人操作：前往新入口/断线后同UUID归队/退出；不替他人控制身体。', object({ requestId }), `arena_${action}`]),
+    ['arena.start', false, '入口12格内最多4人同队，普通/冒险/末日；实际武器、原生AI与个人逐层奖励。清层10秒自动续层，第7层60秒休息。', object({ difficulty: { type: 'string', enum: ['normal', 'adventure', 'apocalypse'] }, requestId }, ['difficulty']), 'arena_start'],
+    ['stash.open', false, '打开本人标准54格真箱子；双向存取及Shift/普通菜单操作，1–10页。', object({ page: integer(1, 10), requestId }, ['page']), 'stash_open'],
+    ['arena.recycle.sell', false, '消费30秒quoteId，重新核对完整组件与数量，收益入灯币账户；同action_id对账防重。', object({ quoteId: uuid, requestId }, ['quoteId']), 'recycle_sell'],
+    ['arena.shop.buy', false, '按商品ID购买真实补给，满包进入个人箱或待领取，不扔地上。', object({ offerId: { type: 'string', pattern: '^[a-z0-9_]{1,32}$' }, requestId }, ['offerId']), 'shop_buy'],
+    ['rpg.open', false, '本人手柄友好的中文原版界面：命格书、技能、职业、领地、试炼、补给和回收。', object({ menu: { type: 'string', enum: ['guide', 'skills', 'professions', 'lands', 'arena', 'shop', 'recycle'] }, page: integer(1, 10), requestId }, ['menu', 'page']), 'open']
+  ].map(([id, readOnly, description, parameters, kind]) => [id, readOnly, description, parameters, (c, a) => c.mods.rpg.request(`rpg_${kind}`, a)]),
   ['society.state', true, '查询本人公会登记、真实委托/进度/可接原因、累计声望等级和 EconomyCraft 灯币余额；不读取其他玩家。',
     object(), c => c.mods.society.state()],
   ['society.join', false, '登记成为公会旅人，免费、幂等；可以同时体验各分会，无职业锁定。',
@@ -276,7 +300,8 @@ function attachModCallClient (bot, clients, isClosed = () => false) {
     if (!definition.readOnly) inFlight = id
     try {
       const receipt = await definition.invoke(clients, immutableArgs)
-      if (closed || isClosed() || epoch !== observedEpoch || identity() !== uuid) {
+      if (closed || isClosed() || identity() !== uuid ||
+          (epoch !== observedEpoch && !transition.confirmed(id, receipt, uuid))) {
         if (definition.readOnly) throw failure('MOD_CALL_READ_CONTEXT_CHANGED')
         throw Object.assign(new Error('MOD_CALL_MUTATION_CONTEXT_CHANGED'), { code: 'MOD_CALL_MUTATION_CONTEXT_CHANGED',
           outcomeKnown: false, outcomeUnknown: true, retryAutomatically: false, receipt })

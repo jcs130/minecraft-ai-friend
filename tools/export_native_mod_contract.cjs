@@ -8,6 +8,12 @@ const path = require('node:path')
 const { modOperationCatalog } = require('../world/src/neoforge-handshake/mod-call-client.cjs')
 const routes = {
   'society.state': ['mod', 'society_state'], 'society.join': ['mod', 'society_join'],
+  ...Object.fromEntries(Object.entries({ 'rpg.state': 'state', 'rpg.skills': 'skills', 'protection.query': 'protect', 'land.list': 'lands',
+    'arena.status': 'arena_status', 'stash.state': 'stash_state', 'arena.recycle.list': 'recycle_list', 'arena.recycle.quote': 'recycle_quote', 'arena.shop.list': 'shop_list',
+    'skill.learn': 'skill_learn', 'skill.upgrade': 'skill_upgrade', 'skill.cast': 'skill_cast', 'skill.bind': 'skill_bind', 'skill.imprint': 'skill_imprint',
+    'profession.choose': 'profession_choose', 'land.claim': 'land_claim', 'land.release': 'land_release', 'land.trust': 'land_trust', 'land.untrust': 'land_untrust',
+    'arena.lobby': 'arena_lobby', 'arena.start': 'arena_start', 'arena.resume': 'arena_resume', 'arena.leave': 'arena_leave', 'stash.open': 'stash_open',
+    'arena.recycle.sell': 'recycle_sell', 'arena.shop.buy': 'shop_buy', 'rpg.open': 'open' }).map(([id, kind]) => [id, ['mod', `rpg_${kind}`]])),
   'society.accept': ['mod', 'society_accept'], 'society.submit': ['mod', 'society_submit'], 'society.open': ['mod', 'society_open'],
   'colony.status': ['colony', 'status'], 'colony.capabilities': ['colony', 'capabilities'],
   'colony.resources': ['colony', 'resources'], 'colony.management': ['colony', 'management'],

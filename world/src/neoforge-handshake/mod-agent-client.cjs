@@ -17,6 +17,9 @@ const { attachConstructionClient } = require('./construction-client.cjs')
 function attachModAgentClient (bot) {
   if (!bot?._client || typeof bot._client.on !== 'function' || typeof bot._client.write !== 'function' ||
       typeof bot.on !== 'function' || typeof bot.off !== 'function') throw Error('MOD_AGENT_CONNECTION_INVALID')
+  const originalLimit = bot._client.getMaxListeners?.()
+  const ownedLimit = originalLimit === 0 ? 0 : (originalLimit || 10) + 16
+  bot._client.setMaxListeners?.(ownedLimit)
   const clients = { menu: attachMenuClient(bot), world: attachWorldClient(bot),
     native: attachNativeWorldQuery(bot), maid: attachMaidClient(bot),
     colony: attachColonyClient(bot), spell: attachSpellClient(bot),
@@ -32,6 +35,7 @@ function attachModAgentClient (bot) {
     bot.off('end', detach)
     calls.detach()
     for (const client of Object.values(clients)) client.detach()
+    if (bot._client.getMaxListeners?.() === ownedLimit) bot._client.setMaxListeners?.(originalLimit)
   }
   bot.on('end', detach)
   return {

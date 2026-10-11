@@ -9,6 +9,7 @@ const { operationCatalog, validateArguments } = require('./catalog.cjs')
 const { runActionWithDeadline, outboundGameMutation } = require('../society-agent/action-deadline.cjs')
 const { nativeInventorySnapshot, nativeInventoryDelta } = require('../society-agent/native-inventory-delta.cjs')
 const { nativeNavigationResult } = require('../society-agent/native-navigation-result.cjs')
+const transition = require('../neoforge-handshake/rpg-transition.cjs')
 const OWNER = Symbol.for('maw.nativeBody.owner')
 const OFFLINE_LOGIN = Symbol.for('maw.nativeBody.offlineLogin')
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -79,7 +80,14 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
     loginCommand = 'login ' + password
     try { bot.chat('/' + loginCommand) } finally { loginCommand = null }
   }
-  const contextChanged = () => { epoch++; lastUuid = uuid(); remote = null; active?.scope?.abort('context'); stop() }
+  const contextChanged = () => {
+    epoch++; lastUuid = uuid(); remote = null
+    if (active && transition.expectedOperation(active.operation) && active.uuid === uuid() &&
+        (active.dimensionTransfers || 0) < 2) {
+      active.epoch = epoch; active.dimensionTransfers = (active.dimensionTransfers || 0) + 1
+    } else active?.scope?.abort('context')
+    stop()
+  }
   const died = () => { epoch++; active?.scope?.abort('context'); stop() }
   const onEnd = () => { ended = true; close() }
   bot.on('spawn', contextChanged); bot.on('respawn', contextChanged); bot.on('death', died); bot.on('end', onEnd)
@@ -206,6 +214,11 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
       return { ok: true, code: 'item_use_dispatched_inspect_effect', effectVerified: false, outcomeKnown: true, outcomeUnknown: false }
     }
     const result = await sdk.call(operation, args)
+    if (transition.expectedOperation(operation) && result?.ok === true) {
+      // Locked Mineflayer delays its first respawn position response by
+      // 1500ms. Finish it before another intentional arena teleport starts.
+      await scope.wait(1700)
+    }
     if (result?.pending && result.ticket) {
       frame.ticket = result.ticket; frame.phase = 'native_control_running'
       for (;;) {
@@ -250,6 +263,9 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
       }
     }
     if (!result || typeof result.ok !== 'boolean') result = fail('action_result_invalid', { outcomeKnown: false, outcomeUnknown: true })
+    if (frame.dimensionTransfers && !transition.confirmed(frame.operation, result, frame.uuid)) {
+      result = fail('dimension_transfer_receipt_not_confirmed', { outcomeKnown: false, outcomeUnknown: true })
+    }
     result = { ...copy(result), bodyId: frame.uuid, action_id: frame.id, operation: frame.operation,
       completedAt: new Date().toISOString(), actualPosition: after?.ok ? after.position : null,
       dimension: after?.ok ? after.dimension : null,

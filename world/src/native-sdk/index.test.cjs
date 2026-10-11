@@ -97,10 +97,10 @@ test('native hold cancellation has a ticket-specific cleanup fence, never a gene
   const release = JSON.parse(sent[1].data.data); assert.equal(release.operation, 'control.cancel'); assert.equal(release.arguments.ticket, 'hold-ticket')
 })
 
-test('94 operations include strict params, permissions, async and advertised vs verified distinctions', async t => {
+test('121 operations include strict params, permissions, async and advertised vs verified distinctions', async t => {
   const dir = fixture(t), { runtime } = body(dir); t.after(runtime.close)
   const catalog = runtime.operations()
-  assert.equal(catalog.operationCount, 94); assert.equal(catalog.remoteSupportVerified, false)
+  assert.equal(catalog.operationCount, 121); assert.equal(catalog.remoteSupportVerified, false)
   assert.equal(catalog.operations.every(row => row.parameters && row.permission && row.returns && row.execution), true)
   assert.equal(runtime.operations('body.move').execution, 'asynchronous_action')
   assert.equal(runtime.operations('action.cancel').execution, 'immediate_control')
@@ -110,12 +110,23 @@ test('94 operations include strict params, permissions, async and advertised vs 
   assert.equal(runtime.operations().allGameplayVerified, false)
   assert.equal(runtime.operations().numenRestoreExisting, false)
   const java = fs.readFileSync(path.resolve(__dirname, '../../society-bridge-src/src/main/java/dev/qiandeng/maw/PlayerBodyState.java'), 'utf8')
-  assert.deepEqual(java.match(/NATIVE_OPERATIONS = "([^"]+)"/)[1].split(' '), modOperationCatalog().operations.map(row => row.id))
+  assert.deepEqual(java.match(/NATIVE_OPERATIONS = "([^"]+)"/)[1].split(' ').sort(), modOperationCatalog().operations.map(row => row.id).sort())
 })
 test('body and filesystem ownership reject a second controller', t => {
   const dir = fixture(t), { bot, runtime } = body(dir); t.after(runtime.close)
   assert.throws(() => attachNativeBody(bot, { ledgerDir: dir, controllerId: 'other' }), /ALREADY_CONTROLLED/)
   assert.throws(() => body(dir), /EEXIST/)
+})
+
+test('explicit same-body arena transfer waits for native destination and remains reconcilable', async t => {
+  let bot
+  const f=body(fixture(t),{call:async id=>{if(id==='arena.lobby'){bot.emit('respawn');bot.emit('spawn');return {ok:true,playerUuid:UUID,actorAlive:true,actorDimension:'maw:trials',outcomeKnown:true}}return {ok:true}}})
+  bot=f.bot;t.after(f.runtime.close)
+  const action=message('arena-transfer','arena.lobby')
+  assert.equal(f.runtime.submit(action).accepted,true)
+  const done=await f.runtime.wait(action.action_id)
+  assert.equal(done.status,'succeeded');assert.equal(done.outcomeKnown,true)
+  assert.equal(f.runtime.submit(action).replayed,true)
 })
 test('attach before spawn uses the login connection name and restores its finite listener budget', t => {
   const dir = fixture(t), { bot, runtime } = body(dir, { beforeSpawn: true })

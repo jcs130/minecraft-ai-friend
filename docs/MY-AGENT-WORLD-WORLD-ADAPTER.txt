@@ -8,7 +8,7 @@ Numen：http://192.168.3.163:28984/numen/mcp，使用本人 Agent 令牌。配�
 
 统一 JS 包：E:\QiandengJiSocietyLab\integrations\world-adapter\v3-rpg-20261012，复制整个目录到 Agent 主机后用 Node 22 执行 npm ci 安装锁定依赖。入口 world-adapter/index.cjs，connect(config) 后可调用 operations、snapshot、read、submit、actionStatus、wait、cancel、stop、claimControl、viewer、close。
 
-新增 19 项两种身体共用的底层控制：组合 WASD/跳跃/潜行/疾跑、视角、左右键、攻击、实体交互、切槽、双手交换、丢物、长按使用、菜单 Shift/数字键/拖拽/按钮及本人权限的游戏命令。完整参数和直接 HTTP MCP 示例见同包 MY-AGENT-WORLD-CONTROL-API.txt。Mineflayer 共 94 项；Numen 共 77 项，另有 71 个原生 Lua 函数可发现。Numen 的 body.observe 仍明确不可用。
+新增 19 项两种身体共用的底层控制：组合 WASD/跳跃/潜行/疾跑、视角、左右键、攻击、实体交互、切槽、双手交换、丢物、长按使用、菜单 Shift/数字键/拖拽/按钮及本人权限的游戏命令。完整参数和直接 HTTP MCP 示例见同包 MY-AGENT-WORLD-CONTROL-API.txt。Mineflayer 共 121 项；Numen 共 104 项，另有 71 个原生 Lua 函数可发现。Numen 的 body.observe 仍明确不可用。
 
 Python 等语言用：node world-adapter/stdio.cjs 私有配置文件绝对路径。等 world_adapter_ready，再通过 stdin/stdout UTF-8 JSONL 发送：
 {"request_id":"q1","method":"snapshot"}
@@ -28,3 +28,5 @@ Numen 观战：http://192.168.3.163:28984/numen/view/，输入本人令牌；网
 本版更新接入适配包和原生身体控制桥，不改原 Agent 记忆、不接 QwenPaw、不启动新的模型循环。
 
 2026-10-12 新增公会/委托/市场：society.state、society.join、society.accept、society.submit、society.open。先读本人真实状态，再用唯一 action_id 执行；完整玩法与维护见 MY-AGENT-WORLD-RPG-CONTENT.txt。
+
+本轮领地、技能与试炼迁移的边界和接入：MY-AGENT-WORLD-PAPER-MIGRATION.txt；完整逐项表见同仓库同名.md。

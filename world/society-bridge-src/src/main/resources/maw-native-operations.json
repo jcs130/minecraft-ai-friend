@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "source": "same_player_native_handlers",
-  "operationCount": 72,
+  "operationCount": 99,
   "operations": [
     {
       "id": "society.state",
@@ -39,6 +39,785 @@
       },
       "route": "mod",
       "kind": "society_join",
+      "defaults": {}
+    },
+    {
+      "id": "rpg.state",
+      "readOnly": true,
+      "description": "本人原生魔力、职业/技能点/实际熟练、试炼参赛状态、账户及异步探矿绝对坐标结果。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "rpg.state",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_state",
+      "defaults": {}
+    },
+    {
+      "id": "rpg.skills",
+      "readOnly": true,
+      "description": "36项基础与战法牧技能：说明、资格、等级、熟练、真实总/剩余冷却；先发现再施放。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "rpg.skills",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_skills",
+      "defaults": {}
+    },
+    {
+      "id": "protection.query",
+      "readOnly": true,
+      "description": "查询绝对坐标处 break/place/use 的本人领地、试炼与殖民地权限；未知不等于许可。只读，不加载区块。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "break",
+              "place",
+              "use"
+            ]
+          },
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          }
+        },
+        "required": [
+          "action",
+          "position"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "protection.query",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_protect",
+      "defaults": {}
+    },
+    {
+      "id": "land.list",
+      "readOnly": true,
+      "description": "当前新世界领地的实际主人、协作者、维度与绝对边界；殖民地沿原生权限。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "land.list",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_lands",
+      "defaults": {}
+    },
+    {
+      "id": "arena.status",
+      "readOnly": true,
+      "description": "严格区分本人participant/floor与worldFloor；本层怪物UUID、类型、实际位置、持武器、AI/目标和异常。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "arena.status",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_arena_status",
+      "defaults": {}
+    },
+    {
+      "id": "stash.state",
+      "readOnly": true,
+      "description": "本人540格个人箱的指定54格页，槽号0–539、完整SNBT及待领取；没有功能图标。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "page"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "stash.state",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_stash_state",
+      "defaults": {}
+    },
+    {
+      "id": "arena.recycle.list",
+      "readOnly": true,
+      "description": "本人未装备背包及奖励箱的可回收重复铁/皮/锁链装备；绑定物品排除。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "arena.recycle.list",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_recycle_list",
+      "defaults": {}
+    },
+    {
+      "id": "arena.recycle.quote",
+      "readOnly": true,
+      "description": "精确槽位/完整组件/数量/耐久/30秒quoteId；未装备物品。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "bag",
+              "chest"
+            ]
+          },
+          "slot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 539
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          }
+        },
+        "required": [
+          "source",
+          "slot",
+          "count"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "arena.recycle.quote",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_recycle_quote",
+      "defaults": {}
+    },
+    {
+      "id": "arena.shop.list",
+      "readOnly": true,
+      "description": "本人灯币余额及补给商品，复用现有EconomyCraft账户，无第二钱包。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "arena.shop.list",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_shop_list",
+      "defaults": {}
+    },
+    {
+      "id": "skill.learn",
+      "readOnly": false,
+      "description": "本人花技能点学习，职业/实战资格检查。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "skillId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,64}$"
+          }
+        },
+        "required": [
+          "skillId"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "skill.learn",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_skill_learn",
+      "defaults": {}
+    },
+    {
+      "id": "skill.upgrade",
+      "readOnly": false,
+      "description": "本人真实使用8/24次后花点升级，保留冷却。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "skillId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,64}$"
+          }
+        },
+        "required": [
+          "skillId"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "skill.upgrade",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_skill_upgrade",
+      "defaults": {}
+    },
+    {
+      "id": "skill.cast",
+      "readOnly": false,
+      "description": "本人原生施法，失败不扣魔力、不发成功事件；探矿是异步扫描，通过rpg.state读取终态。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "skillId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,64}$"
+          }
+        },
+        "required": [
+          "skillId"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "skill.cast",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_skill_cast",
+      "defaults": {}
+    },
+    {
+      "id": "skill.bind",
+      "readOnly": false,
+      "description": "绑定本人灵纹法杖的瞬发技能，仍遵守学习/魔力/冷却。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "skillId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,64}$"
+          }
+        },
+        "required": [
+          "skillId"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "skill.bind",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_skill_bind",
+      "defaults": {}
+    },
+    {
+      "id": "skill.imprint",
+      "readOnly": false,
+      "description": "附近获准附魔台，核对手持完整SNBT，消耗4级经验刻印已学技能；潜行使用。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "skillId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,64}$"
+          },
+          "expectedSnbt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 65536
+          }
+        },
+        "required": [
+          "skillId",
+          "expectedSnbt"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "skill.imprint",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_skill_imprint",
+      "defaults": {}
+    },
+    {
+      "id": "profession.choose",
+      "readOnly": false,
+      "description": "选择战士/法师/牧师；仅开放学习资格，历史与技能点/冷却不重置。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "profession": {
+            "type": "string",
+            "enum": [
+              "warrior",
+              "mage",
+              "priest"
+            ]
+          }
+        },
+        "required": [
+          "profession"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "profession.choose",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_profession_choose",
+      "defaults": {}
+    },
+    {
+      "id": "land.claim",
+      "readOnly": false,
+      "description": "在本人64格内登记最多32×48×32、32768格营地；每人3块，不覆盖已占地/殖民地或未加载区块。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "landId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,32}$"
+          },
+          "min": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "max": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          }
+        },
+        "required": [
+          "landId",
+          "min",
+          "max"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "land.claim",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_land_claim",
+      "defaults": {}
+    },
+    {
+      "id": "land.release",
+      "readOnly": false,
+      "description": "仅本人释放本人的领地，建筑原样保留。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "landId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,32}$"
+          }
+        },
+        "required": [
+          "landId"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "land.release",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_land_release",
+      "defaults": {}
+    },
+    {
+      "id": "land.trust",
+      "readOnly": false,
+      "description": "仅领地主人按已核实UUID管理协作者；成员不能转授权。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "landId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,32}$"
+          },
+          "targetUuid": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        },
+        "required": [
+          "landId",
+          "targetUuid"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "land.trust",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_land_trust",
+      "defaults": {}
+    },
+    {
+      "id": "land.untrust",
+      "readOnly": false,
+      "description": "仅领地主人按已核实UUID管理协作者；成员不能转授权。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "landId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,32}$"
+          },
+          "targetUuid": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        },
+        "required": [
+          "landId",
+          "targetUuid"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "land.untrust",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_land_untrust",
+      "defaults": {}
+    },
+    {
+      "id": "arena.lobby",
+      "readOnly": false,
+      "description": "试炼本人操作：前往新入口/断线后同UUID归队/退出；不替他人控制身体。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "arena.lobby",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_arena_lobby",
+      "defaults": {}
+    },
+    {
+      "id": "arena.start",
+      "readOnly": false,
+      "description": "入口12格内最多4人同队，普通/冒险/末日；实际武器、原生AI与个人逐层奖励。清层10秒自动续层，第7层60秒休息。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "difficulty": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "adventure",
+              "apocalypse"
+            ]
+          }
+        },
+        "required": [
+          "difficulty"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "arena.start",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_arena_start",
+      "defaults": {}
+    },
+    {
+      "id": "arena.resume",
+      "readOnly": false,
+      "description": "试炼本人操作：前往新入口/断线后同UUID归队/退出；不替他人控制身体。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "arena.resume",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_arena_resume",
+      "defaults": {}
+    },
+    {
+      "id": "arena.leave",
+      "readOnly": false,
+      "description": "试炼本人操作：前往新入口/断线后同UUID归队/退出；不替他人控制身体。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "arena.leave",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_arena_leave",
+      "defaults": {}
+    },
+    {
+      "id": "stash.open",
+      "readOnly": false,
+      "description": "打开本人标准54格真箱子；双向存取及Shift/普通菜单操作，1–10页。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "page"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "stash.open",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_stash_open",
+      "defaults": {}
+    },
+    {
+      "id": "arena.recycle.sell",
+      "readOnly": false,
+      "description": "消费30秒quoteId，重新核对完整组件与数量，收益入灯币账户；同action_id对账防重。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "quoteId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        },
+        "required": [
+          "quoteId"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "arena.recycle.sell",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_recycle_sell",
+      "defaults": {}
+    },
+    {
+      "id": "arena.shop.buy",
+      "readOnly": false,
+      "description": "按商品ID购买真实补给，满包进入个人箱或待领取，不扔地上。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "offerId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,32}$"
+          }
+        },
+        "required": [
+          "offerId"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "arena.shop.buy",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_shop_buy",
+      "defaults": {}
+    },
+    {
+      "id": "rpg.open",
+      "readOnly": false,
+      "description": "本人手柄友好的中文原版界面：命格书、技能、职业、领地、试炼、补给和回收。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "menu": {
+            "type": "string",
+            "enum": [
+              "guide",
+              "skills",
+              "professions",
+              "lands",
+              "arena",
+              "shop",
+              "recycle"
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "menu",
+          "page"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "rpg.open",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "rpg_open",
       "defaults": {}
     },
     {

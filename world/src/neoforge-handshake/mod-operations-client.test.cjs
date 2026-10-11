@@ -69,3 +69,26 @@ test('timeouts preserve read/write outcome distinction and transport exceptions 
     f.bot.emit('end'); await assert.rejects(f.client.curios.open(), e => e.knownNotApplied)
   } finally { f.client.detach() }
 })
+
+test('explicit arena transfer awaits the same UUID receipt across its dimension respawn', async () => {
+  const f = fixture()
+  try {
+    const pending = f.client.rpg.request('rpg_arena_lobby', {})
+    f.bot.emit('respawn'); f.bot.emit('spawn')
+    f.reply({ actorDimension: 'maw:trials', actorAlive: true })
+    assert.equal((await pending).ok, true)
+  } finally { f.client.detach() }
+})
+
+test('disconnect still makes an arena transfer unknown; three respawns exceed its bound', async () => {
+  for (const event of ['end', 'third_respawn']) {
+    const f = fixture()
+    try {
+      const pending = f.client.rpg.request('rpg_arena_lobby', {})
+      const rejected = assert.rejects(pending, error => error.outcomeUnknown === true)
+      if (event === 'end') f.bot.emit('end')
+      else { f.bot.emit('respawn'); f.bot.emit('spawn'); f.bot.emit('respawn') }
+      await rejected
+    } finally { f.client.detach() }
+  }
+})

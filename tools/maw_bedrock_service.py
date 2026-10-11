@@ -153,7 +153,8 @@ def load_config(path: Path, *, root: Path = ROOT) -> dict:
     # This challenge travels through the player's actual connection; the
     # authenticated local form bridge returns it only after Xbox validation.
     gate_env['GATE_EXTRA_PLAY_CHANNELS'] = ','.join(dict.fromkeys(
-        [*gate_env.get('GATE_EXTRA_PLAY_CHANNELS', '').split(','), 'maw_agent:auth_state']))
+        [*gate_env.get('GATE_EXTRA_PLAY_CHANNELS', '').split(','), 'maw_agent:auth_state',
+         'mcagent:state', 'mcagent:event', 'mcagent:protection', 'mcviewer:state']))
     expected_files = {directory / name: sha for name, sha in ARTIFACTS.items()}
     expected_files[directory / 'plugins/Geyser/config.yml'] = hashlib.sha256(geyser_config().encode()).hexdigest()
     resources = directory/'plugins/Geyser'

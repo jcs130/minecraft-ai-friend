@@ -1,8 +1,12 @@
-# 千灯纪 · Paper 跨端分支
+# My Agent World · Agent 共生模组分支
 
-当前 `qiandengji-paper-1.20.6` 分支承载正在运行的 **Paper 1.20.6 / Java 21** 家庭服务器：Java、基岩和 Mineflayer Agent 共用世界，女神与观战镜头由服务端扩展支持。新版源码、配置基线、版本锁和维护入口在 [paper/README.md](paper/README.md)。后续新版迭代以本分支为基线；世界存档、账号数据、密钥和第三方二进制文件不进入 Git。
+当前分支为 `experiment/agent-society-1.21.1`，运行 NeoForge 1.21.1 / My Agent World。局域网 Java、基岩、Mineflayer 和 Numen 接入见 [连接指南](docs/MY-AGENT-WORLD-LAN-CONNECT.txt)。[旧 Paper 玩法迁移表](docs/MY-AGENT-WORLD-PAPER-MIGRATION.md)逐项列出领地、36 项技能、十五层试炼及历史数据的边界；SDK 和统一身体包分别为 0.4.0 / 0.3.0。下面保留旧分支说明作为历史，端口与运行状态以 My Agent World 文档及受管服务为准。
 
-以下是此前 1.21.1 / NeoForge 版本的设计与工程历史，保留供参考；其中的运行状态、端口和部署步骤不代表当前 Paper 服务器。
+## 历史：千灯纪 Paper 跨端分支
+
+独立 `qiandengji-paper-1.20.6` 分支承载 **Paper 1.20.6 / Java 21** 家庭服务器：Java、基岩和 Mineflayer Agent 共用世界，女神与观战镜头由服务端扩展支持。其源码、配置基线、版本锁和维护入口在 [paper/README.md](paper/README.md)。世界存档、账号数据、密钥和第三方二进制文件不进入 Git。
+
+以下保留早期 1.21.1 / NeoForge 项目的设计与工程历史；当前运行状态、端口和部署步骤请查上方 My Agent World 文档。
 
 ---
 

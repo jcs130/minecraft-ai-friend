@@ -19,6 +19,8 @@ function fixture () {
       return Promise.resolve({ schemaVersion: 1, playerUuid: owner, ok: true, requestId: 'native-id', code: 'native', nested: { unchanged: 3 } })
     }
   }
+  const rpgKinds = Object.fromEntries(require('../../society-bridge-src/src/main/resources/maw-native-operations.json').operations.filter(r=>r.kind.startsWith('rpg_')).map(r=>[r.kind,r.id]))
+  clients.mods.rpg = {request:(kind,args)=>{calls.push({id:rpgKinds[kind],args:[args]});return Promise.resolve({ok:true,playerUuid:owner,code:'native'})}}
   clients.mods.world = { interact: clients.world.interact }
   clients.mods.control = (id, data, readOnly) => { calls.push({ id, args: [data, readOnly] }); return Promise.resolve({ ok: true, playerUuid: owner, code: 'native' }) }
   clients.menu.current = () => { calls.push({id:'menu.current',args:[]}); return {ok:true,code:'native',playerUuid:owner,menuType:'minecraft:inventory',selectedHotbarSlot:0,slots:Array(46).fill(null),carried:null} }
@@ -69,6 +71,16 @@ const args = {
   'domum.select': { selection: 'variant', groupId: 'domum_ornamentum:fpanel', variantIndex: 2, choiceSnbt: '{count:1}' },
   'collision.query': { position: pos, expectedBlockId: 'minecraft:stone', expectedProperties: {} }
 }
+Object.assign(args, {
+  'protection.query':{action:'break',position:pos}, 'stash.state':{page:1},
+  'arena.recycle.quote':{source:'chest',slot:0,count:1},
+  ...Object.fromEntries(['learn','upgrade','cast','bind'].map(a=>['skill.'+a,{skillId:'starbolt'}])),
+  'skill.imprint':{skillId:'prospect',expectedSnbt:'{count:1}'},'profession.choose':{profession:'mage'},
+  'land.claim':{landId:'camp',min:pos,max:pos},'land.release':{landId:'camp'},
+  'land.trust':{landId:'camp',targetUuid:other},'land.untrust':{landId:'camp',targetUuid:other},
+  'arena.start':{difficulty:'normal'},'stash.open':{page:1},
+  'arena.recycle.sell':{quoteId:other},'arena.shop.buy':{offerId:'bread'},'rpg.open':{menu:'guide',page:1}
+})
 const held = { hand: 'main', expectedHotbarSlot: 0, expectedHeldSnbt: '' }
 const menuCas = { windowId: 0, expectedStateId: 1, expectedControlHash: 'a'.repeat(64) }
 Object.assign(args, {
@@ -81,11 +93,11 @@ Object.assign(args, {
   'menu.nativeClick': { ...menuCas, slot: 9, button: 0, clickType: 'QUICK_MOVE' }, 'menu.button': { ...menuCas, buttonId: 0 },
   'body.command': { command: 'help' }, 'control.actionStatus': { ticket: 'a-ticket' }, 'control.cancel': { ticket: 'a-ticket' }
 })
-test('all 84 declared operations dispatch to the exact native adapter with actual arguments', async () => {
+test('all 111 declared operations dispatch to the exact native adapter with actual arguments', async () => {
   const f = fixture()
   try {
     const list = f.api.operations()
-    assert.equal(list.operationCount, 84); assert.equal(list.remoteSupportVerified, false)
+    assert.equal(list.operationCount, 111); assert.equal(list.remoteSupportVerified, false)
     for (const row of list.operations) {
       const result = await f.api.call(row.id, args[row.id] || {})
       assert.equal(result.code, 'native'); assert.equal(f.calls.at(-1).id, row.id)

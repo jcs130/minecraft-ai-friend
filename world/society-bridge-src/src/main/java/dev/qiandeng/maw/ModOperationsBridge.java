@@ -172,14 +172,21 @@ final class ModOperationsBridge {
             var input = JsonParser.parseString(raw).getAsJsonObject();
             id = ModRequest.text(input, "requestId", 64); if (!id.matches("[A-Za-z0-9:_-]{1,64}")) return;
             kind = ModRequest.text(input, "kind", 64); result = base(player, id, kind);
-            if (!(mutation ? WRITES : READS).contains(kind)) ModRequest.fail("unsupported_mod_operation");
+            if (!(mutation ? WRITES : READS).contains(kind) && !(mutation ? RpgMigrationBridge.WRITES : RpgMigrationBridge.READS).contains(kind)) ModRequest.fail("unsupported_mod_operation");
             if (mutation) {
                 var replay = RECEIPTS.computeIfAbsent(player.getUUID(), ignored -> new ColonyActionReplay()).begin(id, input);
                 if (replay.outcome() == ColonyActionReplay.Outcome.REPLAY) { send(player, replay.response()); return; }
                 if (replay.outcome() != ColonyActionReplay.Outcome.NEW) ModRequest.fail(replay.outcome() == ColonyActionReplay.Outcome.CONFLICT ? "request_id_conflict" : "request_outcome_unknown_check_world");
                 reserved = true; ModRequest.active(player);
             }
-            if (kind.startsWith("society_")) {
+            if (kind.startsWith("rpg_")) {
+                RpgMigrationBridge.fields(input, kind);
+                started = mutation;
+                JsonObject outcome;
+                try { outcome = RpgMigrationBridge.invoke(player, kind, input); }
+                catch (IllegalArgumentException precondition) { started = false; ModRequest.fail(precondition.getMessage()); return; }
+                result.add("state", outcome); result.addProperty("ok", outcome.get("ok").getAsBoolean());
+            } else if (kind.startsWith("society_")) {
                 if (kind.equals("society_state")) {ModRequest.fields(input); result.add("state", SocietyLifeBridge.state(player)); result.addProperty("ok", true);}
                 else {
                     if (kind.equals("society_accept")) ModRequest.fields(input, "questId");
@@ -300,6 +307,11 @@ final class ModOperationsBridge {
             result.addProperty("ok", false); result.addProperty("code", started ? "mod_operation_outcome_unknown" : "invalid_mod_request"); result.addProperty("outcomeKnown", !started);
         }
         if (result == null) return;
+        if (kind != null && kind.startsWith("rpg_")) {
+            result.addProperty("actorDimension", player.level().dimension().location().toString());
+            result.addProperty("actorAlive", player.isAlive());
+            result.add("actorPosition", ModRequest.position(player.blockPosition()));
+        }
         if (result.toString().getBytes(StandardCharsets.UTF_8).length > 60000) {
             result.remove("state"); result.remove("before"); result.remove("after");
             result.addProperty("stateUnavailable", true);

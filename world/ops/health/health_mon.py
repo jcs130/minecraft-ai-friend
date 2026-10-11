@@ -2122,6 +2122,12 @@ def inventory_lock_failure(reason):
 
 
 def main():
+    if sys.argv[1:] == ['--society-rpg-migration']:
+        sys.path.insert(0, str(PROJECT/'tools'))
+        from maw_rpg_migration import probe
+        report = probe()
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
     if sys.argv[1:] == ['--society-mixed-auth-smoke']:
         report = probe_panel_smoke(scope='society-mixed-auth')
         print(json.dumps(report, ensure_ascii=False, indent=2))

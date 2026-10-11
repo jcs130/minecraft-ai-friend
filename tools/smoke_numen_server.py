@@ -150,13 +150,13 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
         if full_pack:
             from maw_numen_client import Client
             report['externalClient']=Client('http://127.0.0.1:28990/mcp',bearer,owner_uuid=owner).smoke()
-            checks['standalone_external_client_read_only']=report['externalClient']['ok'] and report['externalClient']['nativeModOperations']==72 and report['externalClient']['onlineBodies']==1
+            checks['standalone_external_client_read_only']=report['externalClient']['ok'] and report['externalClient']['nativeModOperations']==99 and report['externalClient']['onlineBodies']==1
         again=tool('create_companion',{'name':'MawHeadBody','action_id':'qa-create-01'});checks['create_idempotent_original_uuid']=again['bodyId']==body and again['replayed']
         checks['owner_isolation']=tool('get_state',{'companion':body},other_token)['code']=='body_not_owned'
         claim=tool('claim_control',{'companion':body,'controller_id':'qa-controller'});lease=claim['lease']['leaseId']
         checks['one_controller']=tool('claim_control',{'companion':body,'controller_id':'other-controller'})['code']=='controller_busy'
         native=tool('mod_operations')
-        checks['optional_native_mod_discovery']=native.get('operationCount')==72 if full_pack else native.get('code')=='native_mod_bridge_unavailable'
+        checks['optional_native_mod_discovery']=native.get('operationCount')==99 if full_pack else native.get('code')=='native_mod_bridge_unavailable'
         if full_pack:
             snapshot=tool('mod_query',{'companion':body,'operation':'menu.snapshot'})
             checks['native_same_body_menu']=snapshot['ok'] and snapshot['state']['playerUuid']==body
