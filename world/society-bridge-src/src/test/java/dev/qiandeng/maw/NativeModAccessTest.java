@@ -11,8 +11,14 @@ public final class NativeModAccessTest {
         check(valid==accepted);
     }
     public static void main(String[] args)throws Exception {
-        check(NativeModAccess.catalog("").get("operationCount").getAsInt()==67);
-        check(NativeModAccess.catalog("").getAsJsonArray("operations").size()==67);
+        check(NativeModAccess.catalog("").get("operationCount").getAsInt()==72);
+        check(NativeModAccess.catalog("").getAsJsonArray("operations").size()==72);
+        validate("society.state","{}",true);
+        validate("society.state","{\"playerUuid\":\"other\"}",false);
+        validate("society.accept","{\"questId\":\"maw:wheat_delivery\"}",true);
+        validate("society.accept","{\"questId\":\"../accounts\"}",false);
+        validate("society.open","{\"menu\":\"market\"}",true);
+        validate("society.open","{\"menu\":\"op\"}",false);
         validate("menu.snapshot","{}",true);
         validate("menu.snapshot","{\"playerUuid\":\"other\"}",false);
         validate("menu.snapshot","[]",false);

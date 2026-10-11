@@ -1,0 +1,12 @@
+{
+  "name": "冒险者公会",
+  "description": [
+    "沿道路寻找村镇、酒馆和地下城；进入遗迹前准备食物、护甲和火把。"
+  ],
+  "icon": "minecraft:iron_sword",
+  "sorting_id": 1,
+  "max_concurrent_quests": 5,
+  "only_same_category": false,
+  "is_visible": true,
+  "is_silent": false
+}

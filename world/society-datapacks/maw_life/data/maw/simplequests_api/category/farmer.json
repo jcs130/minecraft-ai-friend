@@ -1,0 +1,12 @@
+{
+  "name": "田园公会",
+  "description": [
+    "种植、捕鱼和采收，为其他居民提供真实物资。"
+  ],
+  "icon": "minecraft:wheat",
+  "sorting_id": 2,
+  "max_concurrent_quests": 5,
+  "only_same_category": false,
+  "is_visible": true,
+  "is_silent": false
+}

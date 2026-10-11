@@ -8,7 +8,7 @@
     {
       "name": "maw_agent_bridge-0.1.0.jar",
       "source": "tools/build_society_bridge.py",
-      "sha256": "57964bc46a303feb97a5c9ed639a106a5228bc6f6b98b17b304fba4283b85597"
+      "sha256": "f12b7c165346f10c6eb4623d34bb3fccc6b3956d1b010f1a9496ea11590d13bd"
     },
     {
       "name": "maw_numen_compat-0.1.0.jar",
@@ -223,6 +223,30 @@
       "sourceCommit": "2a5753cbde3edd342fb50e0b2a4d52dff4269d38",
       "license": "LGPL-3.0-only",
       "embeddedApiSha256": "bbc481ea8324b56989627c1f9f9c867e5e82cfd7f35ae5ec2107fb7e34430da5"
+    },
+    {
+      "name": "MoogsPaths-neoforge-1.21.1-1.1.1.jar",
+      "url": "https://cdn.modrinth.com/data/HDB8pnki/versions/NpIdtuc3/MoogsPaths-neoforge-1.21.1-1.1.1.jar",
+      "sha256": "6021a85b53c695bc2765e102e33f9248650f73a86e462204fa9959a7c3901972",
+      "kind": "mod"
+    },
+    {
+      "name": "simplequests-1.21.1-2.2.0-neoforge.jar",
+      "url": "https://cdn.modrinth.com/data/HriwQx5q/versions/kxJMT5fC/simplequests-1.21.1-2.2.0-neoforge.jar",
+      "sha256": "afb0de145e318ea27e8c8bf098c107e2972dfe8fea2512b77d6bf6812f3da20d",
+      "kind": "mod"
+    },
+    {
+      "name": "economycraft-neoforge-1.10.0_1.21.1.jar",
+      "url": "https://cdn.modrinth.com/data/H4o5bO7g/versions/6lpLdNFA/economycraft-neoforge-1.10.0_1.21.1.jar",
+      "sha256": "a1b722300f0f52f118cba6532e37532b06fb5da00d6c9c1f115ea2c0e17db1e2",
+      "kind": "mod"
+    },
+    {
+      "name": "architectury-13.0.11-neoforge.jar",
+      "url": "https://cdn.modrinth.com/data/lhGA9TYQ/versions/1IiqEQGl/architectury-13.0.11-neoforge.jar",
+      "sha256": "9cc92f2c09533fc5482c60f993bd891c655a0e32b637037cdcb7c2b23adedeeb",
+      "kind": "mod"
     }
   ]
 }

@@ -96,7 +96,8 @@ public final class MawAgentsExtension implements Extension {
         });
     }
     private static void show(GeyserConnection c,Form form){if(c instanceof GeyserSession session)session.executeInEventLoop(()->{if(!session.isClosed())session.sendForm(form);});else c.sendForm(form);}
-    private void guide(GeyserConnection c){show(c,GuideForms.index(n->guidePage(c,n),()->menu(c),()->maidMenu(c)));}
+    private void guide(GeyserConnection c){show(c,GuideForms.index(n->guidePage(c,n),()->menu(c),()->maidMenu(c),()->nativeMenu(c,"mycli guide"),()->nativeMenu(c,"mycli market")));}
+    private void nativeMenu(GeyserConnection c,String command){if(c instanceof GeyserSession session)session.executeInEventLoop(()->{if(!session.isClosed())session.sendCommand(command);});}
     private void guidePage(GeyserConnection c,int n){show(c,GuideForms.page(n,next->guidePage(c,next),()->guide(c)));}
     private void request(GeyserConnection c,String action,Map<String,Object> args,Consumer<Map<String,Object>> done) {
         long now=System.currentTimeMillis();synchronized(inFlight){if(inFlight.getOrDefault(c,0L)>now)return;inFlight.put(c,now+15000);}

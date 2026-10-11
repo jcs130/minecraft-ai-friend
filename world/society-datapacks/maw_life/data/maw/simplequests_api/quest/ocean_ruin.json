@@ -1,0 +1,33 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "沉没遗迹的来信",
+  "category": "maw:adventure",
+  "icon": "minecraft:map",
+  "description": [
+    "接取后进入一处寒冷海洋废墟。水下探索前准备呼吸药水或安全换气点。",
+    "奖励：28 灯币 / 20 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 20,
+  "repeat_delay": -1,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/ocean_ruin",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:predicates",
+      "description": "接取后进入一处寒冷海洋废墟。水下探索前准备呼吸药水或安全换气点。",
+      "predicates": [
+        {
+          "value": {
+            "location": {
+              "structures": "minecraft:ocean_ruin_cold"
+            }
+          },
+          "description": "接取后进入一处寒冷海洋废墟。水下探索前准备呼吸药水或安全换气点。"
+        }
+      ],
+      "submit": false
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "清晨垂钓",
+  "category": "maw:farmer",
+  "icon": "minecraft:cod",
+  "description": [
+    "接取后用鱼竿钓起三条鳕鱼。购买或捡到的鱼不计垂钓进度。",
+    "奖励：12 灯币 / 8 声望",
+    "完成后经过 24000 服务器 tick 可再接取；跳夜不缩短冷却。"
+  ],
+  "sorting_id": 5,
+  "repeat_delay": 24000,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/fresh_fish",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:fishing",
+      "description": "接取后用鱼竿钓起三条鳕鱼。购买或捡到的鱼不计垂钓进度。",
+      "item_predicates": [
+        {
+          "value": {
+            "items": "minecraft:cod"
+          }
+        }
+      ],
+      "amount": 3.0
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "亲手做第一顿饭",
+  "category": "maw:guide",
+  "icon": "minecraft:bread",
+  "description": [
+    "接取后制作面包。先种植或购买小麦。",
+    "奖励：8 灯币 / 5 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 2,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:first_workbench"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/first_bread",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:crafting",
+      "description": "接取后制作面包。先种植或购买小麦。",
+      "item_predicates": [
+        {
+          "value": {
+            "items": "minecraft:bread"
+          }
+        }
+      ],
+      "amount": 1.0
+    }
+  }
+}

@@ -16,10 +16,13 @@ public final class GuideForms {
         "让同伴陪你生活\n\n空手对自己的女仆或 Agent 同伴按交互键，打开管理面板。女仆可以选择工作、跟随和拾取，需要准备真实工具和材料。\n\nAgent 可由外部程序接入，也可配置自己的模型服务。保存配置不会自动开始调用模型；先确认设置，再下达目标。"
     };
     public static SimpleForm index(Consumer<Integer> select,Runnable companions,Runnable maids){
+        return index(select,companions,maids,()->{},()->{});
+    }
+    public static SimpleForm index(Consumer<Integer> select,Runnable companions,Runnable maids,Runnable guild,Runnable market){
         var form=SimpleForm.builder().title("My Agent World · 冒险指南").content("人类与 Agent 一起探索、耕种、做饭和建造。\n选择一张卡片开始，无需输入命令。");
         for(int i=0;i<TITLES.length;i++)form.button(TITLES[i],FormImage.Type.PATH,"textures/guide/"+ICONS[i]);
-        return form.button("我的 Agent 同伴").button("我的车万女仆").button("开始游玩")
-            .validResultHandler(r->{int n=r.clickedButtonId();if(n>=0&&n<TITLES.length)select.accept(n);else if(n==5)companions.run();else if(n==6)maids.run();}).build();
+        return form.button("我的 Agent 同伴").button("我的车万女仆").button("公会 · 委托 · 声望").button("市场 · 买卖 · 玩家订单").button("开始游玩")
+            .validResultHandler(r->{int n=r.clickedButtonId();if(n>=0&&n<TITLES.length)select.accept(n);else if(n==5)companions.run();else if(n==6)maids.run();else if(n==7)guild.run();else if(n==8)market.run();}).build();
     }
     public static SimpleForm page(int index,Consumer<Integer> select,Runnable back){
         if(index<0||index>=PAGES.length)throw new IllegalArgumentException("guide_page");

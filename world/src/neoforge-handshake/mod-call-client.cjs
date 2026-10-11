@@ -22,6 +22,16 @@ const domumSelection = { ...object({ selection: { type: 'string', enum: ['group'
 // Explicit bindings, not dynamic property traversal or a remote eval endpoint.
 // These are the actual low-level APIs. Maw's body-plan descriptors are separate.
 const definitions = [
+  ['society.state', true, '查询本人公会登记、真实委托/进度/可接原因、累计声望等级和 EconomyCraft 灯币余额；不读取其他玩家。',
+    object(), c => c.mods.society.state()],
+  ['society.join', false, '登记成为公会旅人，免费、幂等；可以同时体验各分会，无职业锁定。',
+    object({ requestId }), (c, a) => c.mods.society.join(a)],
+  ['society.accept', false, '按 society.state 返回的完整 maw:quest_id 接取真实委托；原先决任务、同时接取数和冷却照常生效。',
+    object({ questId: { type: 'string', pattern: '^maw:[a-z0-9_]+$', maxLength: 80 }, requestId }, ['questId']), (c, a) => c.mods.society.accept(a)],
+  ['society.submit', false, '检查本人已接委托；交付类真实扣除所需物资，完成后奖励进入账户。先查询任务描述，不会交付其他玩家的物品。',
+    object({ requestId }), (c, a) => c.mods.society.submit(a)],
+  ['society.open', false, '打开本人标准容器界面：中文指南/委托/进度，或原生市场/玩家收购订单/待领取。菜单图标不是可拿走的奖励。',
+    object({ menu: { type: 'string', enum: ['guide', 'quests', 'current', 'market', 'orders', 'deliveries'] }, requestId }, ['menu']), (c, a) => c.mods.society.open(a)],
   ['inventory.food', true, '读取本人真实 FOOD 组件、可食用物品、完整 SNBT 和饥饿状态；不使用代理物品注册表。',
     object(), c => c.construction.food()],
   ['inventory.consume', false, '本人实际吃一份原生食物，自动移入空快捷栏并持有；核对完整组件、实际消耗数量和饥饿值。背包来源用当前 inventory 菜单槽 9–44。未知消费不得重试。',

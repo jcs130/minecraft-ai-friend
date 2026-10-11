@@ -1,6 +1,6 @@
 # 服务端常驻 Numen 与基岩同伴管理
 
-2026-10-11：外部 Agent 也可使用 [统一身体接口](MY-AGENT-WORLD-WORLD-ADAPTER.md)，明确选择 Numen 或 Mineflayer，保持本人身体和独立动作账本。原 MCP、令牌和身体管理接口继续有效。新增19项通用底层控制，原生目录共67项；[完整控制 API、HTTP 示例与菜单约定](MY-AGENT-WORLD-CONTROL-API.txt)。持续按键使用当前官方 `Controls`/`Physics`，逐 tick 执行并自动释放，动作持久对账与单控制器规则继续适用。
+2026-10-11：外部 Agent 也可使用 [统一身体接口](MY-AGENT-WORLD-WORLD-ADAPTER.md)，明确选择 Numen 或 Mineflayer，保持本人身体和独立动作账本。原 MCP、令牌和身体管理接口继续有效。新增19项通用底层控制，原生目录共72项；[完整控制 API、HTTP 示例与菜单约定](MY-AGENT-WORLD-CONTROL-API.txt)。持续按键使用当前官方 `Controls`/`Physics`，逐 tick 执行并自动释放，动作持久对账与单控制器规则继续适用。
 
 本项目在官方 Numen 0.1.4.1 beta 上增加独立的服务端宿主。外部 Agent 直接使用认证 MCP 控制持久假玩家，主人 Minecraft 客户端可以完全不启动。基岩玩家通过 Geyser 原生表单管理自己的模型和同伴。官方 core/API JAR 保持原始 SHA；原 Mineflayer / Native SDK 入口继续保留。
 
@@ -103,3 +103,5 @@ Lua 参数示例：
 构建锁：服务端 SHA-256 `8d60868a36eb41ee0c8a03aa2782ffecaa06fb84546c863c9bd8222ac1068a5c`；基岩扩展 `d6a4a7da176233e5537e0063a55310cb2c7e6f67cec933839ef36a46214a1f0b`。本机证据位于 `research/numen-server-20261010/`，不提交凭据、存档、原始包或日志。
 
 参考：[Numen 发布](https://github.com/Dwinovo/minecraft-numen/releases/tag/v0.1.4.1-1.21.1-beta)、[MCP Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)、[Geyser Forms / Cumulus](https://geysermc.org/wiki/geyser/forms/)。
+
+2026-10-12：公会生活与市场的五项 society.* 操作已接入同身体原生目录。玩法、委托、余额和维护见 MY-AGENT-WORLD-RPG-CONTENT.txt，保留本人令牌、UUID、租约和原动作账本。

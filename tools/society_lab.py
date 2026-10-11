@@ -177,6 +177,12 @@ def check_runtime(root: Path, lock: dict, with_agent: bool = True) -> None:
         if sha256(source) != sha256(actual_files[relative]):
             raise ValueError(f"Lab data pack file differs: {installed / relative}")
 
+    # RPG generation and native quests are part of the same immutable release.
+    # Old installations remain valid until their mod lock opts into the content.
+    if any(row.get("name", "").startswith("MoogsPaths-") for row in lock["artifacts"]):
+        from society_content import verify as verify_content
+        verify_content(server, expected_properties["level-name"])
+
 
 def install_datapack(server: Path) -> None:
     target = server / "world-lab" / "datapacks" / DATAPACK_NAME

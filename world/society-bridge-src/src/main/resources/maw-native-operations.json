@@ -1,8 +1,125 @@
 {
   "schemaVersion": 1,
   "source": "same_player_native_handlers",
-  "operationCount": 67,
+  "operationCount": 72,
   "operations": [
+    {
+      "id": "society.state",
+      "readOnly": true,
+      "description": "查询本人公会登记、真实委托/进度/可接原因、累计声望等级和 EconomyCraft 灯币余额；不读取其他玩家。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "society.state",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "society_state",
+      "defaults": {}
+    },
+    {
+      "id": "society.join",
+      "readOnly": false,
+      "description": "登记成为公会旅人，免费、幂等；可以同时体验各分会，无职业锁定。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "society.join",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "society_join",
+      "defaults": {}
+    },
+    {
+      "id": "society.accept",
+      "readOnly": false,
+      "description": "按 society.state 返回的完整 maw:quest_id 接取真实委托；原先决任务、同时接取数和冷却照常生效。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "questId": {
+            "type": "string",
+            "pattern": "^maw:[a-z0-9_]+$",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "questId"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "society.accept",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "society_accept",
+      "defaults": {}
+    },
+    {
+      "id": "society.submit",
+      "readOnly": false,
+      "description": "检查本人已接委托；交付类真实扣除所需物资，完成后奖励进入账户。先查询任务描述，不会交付其他玩家的物品。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "society.submit",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "society_submit",
+      "defaults": {}
+    },
+    {
+      "id": "society.open",
+      "readOnly": false,
+      "description": "打开本人标准容器界面：中文指南/委托/进度，或原生市场/玩家收购订单/待领取。菜单图标不是可拿走的奖励。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "menu": {
+            "type": "string",
+            "enum": [
+              "guide",
+              "quests",
+              "current",
+              "market",
+              "orders",
+              "deliveries"
+            ]
+          }
+        },
+        "required": [
+          "menu"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "society.open",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "society_open",
+      "defaults": {}
+    },
     {
       "id": "colony.status",
       "readOnly": true,

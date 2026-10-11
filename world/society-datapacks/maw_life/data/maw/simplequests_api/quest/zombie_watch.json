@@ -1,0 +1,30 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "夜间巡逻",
+  "category": "maw:adventure",
+  "icon": "minecraft:iron_sword",
+  "description": [
+    "接取后击败五只僵尸；只计算本人参与击杀，不需要伤害村民或动物。",
+    "奖励：20 灯币 / 12 声望",
+    "完成后经过 24000 服务器 tick 可再接取；跳夜不缩短冷却。"
+  ],
+  "sorting_id": 18,
+  "repeat_delay": 24000,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/zombie_watch",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:kill",
+      "description": "接取后击败五只僵尸；只计算本人参与击杀，不需要伤害村民或动物。",
+      "predicates": [
+        {
+          "value": {
+            "type": "minecraft:zombie"
+          }
+        }
+      ],
+      "amount": 5.0
+    }
+  }
+}

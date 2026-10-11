@@ -13,7 +13,7 @@ function fixture () {
   for (const row of modOperationCatalog().operations) {
     const [group, method] = row.id.split('.')
     clients[group] ||= {}
-    if (['create', 'curios', 'ysm'].includes(group)) { clients.mods ||= {}; clients.mods[group] = clients[group] }
+    if (['create', 'curios', 'ysm', 'society'].includes(group)) { clients.mods ||= {}; clients.mods[group] = clients[group] }
     clients[group][method] = (...args) => {
       calls.push({ id: row.id, args })
       return Promise.resolve({ schemaVersion: 1, playerUuid: owner, ok: true, requestId: 'native-id', code: 'native', nested: { unchanged: 3 } })
@@ -31,6 +31,7 @@ const setting = { position: pos, expectedBlockId: 'create:brass_funnel', behavio
   expectedBehaviour: 'com.simibubi.create.foundation.blockEntity.behaviour.filtering.FilteringBehaviour',
   expectedHeldSnbt: '', expectedHotbarSlot: 0 }
 const args = {
+  'society.accept': { questId: 'maw:wheat_delivery' }, 'society.open': { menu: 'market' },
   'inventory.consume': { itemId: 'minecraft:bread', inventorySlot: 9 },
   'world.lookAt': { position: pos }, 'inventory.select': { hotbarSlot: 0, expectedSnbt: '' },
   'inventory.equip': { sourceSlot: 9, hotbarSlot: 1, expectedId: 'minecraft:crafting_table' },
@@ -80,11 +81,11 @@ Object.assign(args, {
   'menu.nativeClick': { ...menuCas, slot: 9, button: 0, clickType: 'QUICK_MOVE' }, 'menu.button': { ...menuCas, buttonId: 0 },
   'body.command': { command: 'help' }, 'control.actionStatus': { ticket: 'a-ticket' }, 'control.cancel': { ticket: 'a-ticket' }
 })
-test('all 79 declared operations dispatch to the exact native adapter with actual arguments', async () => {
+test('all 84 declared operations dispatch to the exact native adapter with actual arguments', async () => {
   const f = fixture()
   try {
     const list = f.api.operations()
-    assert.equal(list.operationCount, 79); assert.equal(list.remoteSupportVerified, false)
+    assert.equal(list.operationCount, 84); assert.equal(list.remoteSupportVerified, false)
     for (const row of list.operations) {
       const result = await f.api.call(row.id, args[row.id] || {})
       assert.equal(result.code, 'native'); assert.equal(f.calls.at(-1).id, row.id)

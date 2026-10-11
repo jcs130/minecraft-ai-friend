@@ -72,6 +72,20 @@ function recipeQuery(menu, ingredients, grid, output) {
     output,grid:{...grid,ordering:'row_major'},ingredients:ingredients.map((id,index)=>({index,empty:false,requiredCount:1,alternatives:[{id,count:1}]}))
   }]})}
 }
+
+test('a body snapshot read limit may delay recipe inspection but never repeats crafting clicks', async () => {
+  const menu = nativeMenu({ inventory: { 36: item('minecraft:oak_log', 1) } })
+  const actual = recipeQuery(menu, ['minecraft:oak_log'], { width: 1, height: 1 }, item('minecraft:oak_planks', 4))
+  let reads = 0
+  const result = await craftNativeRecipe(menu, { recipes: async () => {
+    reads++
+    if (reads === 1) { assert.equal(menu.clicks.length, 0); return { ok: false, code: 'rate_limited' } }
+    return actual.recipes()
+  } }, menu.state.playerUuid, { recipeId: 'test:actual_recipe' })
+  assert.equal(reads, 2); assert.equal(result.ok, true)
+  assert.equal(menu.clicks.filter(c => c.slot === 0).length, 1)
+  assert.equal(menu.state.slots.filter(i => i?.id === 'minecraft:oak_log').length, 0)
+})
 test('native recipe mapping preserves vertical patterns in both original menu widths',async()=>{
   for(const[type,lower,source]of[['minecraft:inventory',3,36],['minecraft:crafting',4,37]]){
     const output=item('create:shaft',8),menu=nativeMenu({type,inputs:{1:'create:andesite_alloy',[lower]:'create:andesite_alloy'},output,inventory:{[source]:item('create:andesite_alloy',2)}})

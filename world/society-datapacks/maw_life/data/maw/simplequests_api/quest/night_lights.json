@@ -1,0 +1,32 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "点亮旅途",
+  "category": "maw:guide",
+  "icon": "minecraft:torch",
+  "description": [
+    "接取后制作八支火把，准备探索黑暗遗迹。",
+    "奖励：8 灯币 / 5 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 3,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:first_workbench"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/night_lights",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:crafting",
+      "description": "接取后制作八支火把，准备探索黑暗遗迹。",
+      "item_predicates": [
+        {
+          "value": {
+            "items": "minecraft:torch"
+          }
+        }
+      ],
+      "amount": 8.0
+    }
+  }
+}

@@ -7,6 +7,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { modOperationCatalog } = require('../world/src/neoforge-handshake/mod-call-client.cjs')
 const routes = {
+  'society.state': ['mod', 'society_state'], 'society.join': ['mod', 'society_join'],
+  'society.accept': ['mod', 'society_accept'], 'society.submit': ['mod', 'society_submit'], 'society.open': ['mod', 'society_open'],
   'colony.status': ['colony', 'status'], 'colony.capabilities': ['colony', 'capabilities'],
   'colony.resources': ['colony', 'resources'], 'colony.management': ['colony', 'management'],
   'colony.research': ['colony', 'research'], 'colony.found': ['colony', 'found'],

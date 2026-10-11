@@ -1,0 +1,12 @@
+{
+  "name": "秘法公会",
+  "description": [
+    "学习新生魔艺，读懂法术书、魔力和符文。"
+  ],
+  "icon": "ars_nouveau:novice_spell_book",
+  "sorting_id": 6,
+  "max_concurrent_quests": 5,
+  "only_same_category": false,
+  "is_visible": true,
+  "is_silent": false
+}

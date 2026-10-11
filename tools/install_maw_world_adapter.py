@@ -22,7 +22,7 @@ def install(destination: Path):
     source = sorted(set(dependencies(SOURCE/'world-adapter/index.cjs') + dependencies(SOURCE/'world-adapter/stdio.cjs')))
     files = {p.relative_to(SOURCE).as_posix(): p.read_bytes() for p in source}
     package = json.loads((SOURCE/'society-agent/package.json').read_text('utf-8'))
-    package.update(name='@my-agent-world/world-adapter', version='0.2.0', main='world-adapter/index.cjs',
+    package.update(name='@my-agent-world/world-adapter', version='0.2.1', main='world-adapter/index.cjs',
                    private=True, license='MIT', description='Explicit Mineflayer / Numen world body adapter')
     files['package.json'] = (json.dumps(package, indent=2)+'\n').encode()
     lock = json.loads((SOURCE/'society-agent/package-lock.json').read_text('utf-8'))
@@ -32,11 +32,11 @@ def install(destination: Path):
     lock['packages'][''].update(name=package['name'], version=package['version'], license='MIT')
     files['package-lock.json'] = (json.dumps(lock, indent=2)+'\n').encode()
     files['LICENSE'] = (REPO/'LICENSE').read_bytes()
-    for name in ('MY-AGENT-WORLD-WORLD-ADAPTER.md', 'MY-AGENT-WORLD-WORLD-ADAPTER.txt', 'MY-AGENT-WORLD-LOGIN.txt', 'MY-AGENT-WORLD-CONTROL-API.txt'):
+    for name in ('MY-AGENT-WORLD-WORLD-ADAPTER.md', 'MY-AGENT-WORLD-WORLD-ADAPTER.txt', 'MY-AGENT-WORLD-LOGIN.txt', 'MY-AGENT-WORLD-CONTROL-API.txt', 'MY-AGENT-WORLD-RPG-CONTENT.txt'):
         files[name] = (REPO/'docs'/name).read_bytes()
     for name, content in files.items():
         p = destination/name; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(content)
-    manifest = {'schemaVersion': 1, 'version': '0.2.0', 'directory': str(destination),
+    manifest = {'schemaVersion': 1, 'version': '0.2.1', 'directory': str(destination),
                 'providers': ['mineflayer', 'numen'], 'modelRequests': 0, 'newServices': 0,
                 'files': {name: hashlib.sha256(content).hexdigest() for name,content in sorted(files.items())},
                 'sourceFiles': {p.relative_to(SOURCE).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in source}}

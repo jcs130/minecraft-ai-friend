@@ -1,0 +1,12 @@
+{
+  "name": "工匠公会",
+  "description": [
+    "从传动杆开始，逐步建起真实风车和生产线。"
+  ],
+  "icon": "create:cogwheel",
+  "sorting_id": 5,
+  "max_concurrent_quests": 5,
+  "only_same_category": false,
+  "is_visible": true,
+  "is_silent": false
+}

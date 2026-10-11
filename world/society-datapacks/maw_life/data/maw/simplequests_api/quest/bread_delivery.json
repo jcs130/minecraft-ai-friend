@@ -1,0 +1,31 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "旅人的干粮",
+  "category": "maw:chef",
+  "icon": "minecraft:bread",
+  "description": [
+    "交付八个面包。提交会扣除物品，不需要拿在手上。",
+    "奖励：15 灯币 / 10 声望",
+    "完成后经过 24000 服务器 tick 可再接取；跳夜不缩短冷却。"
+  ],
+  "sorting_id": 7,
+  "repeat_delay": 24000,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/bread_delivery",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:item",
+      "description": "交付八个面包。提交会扣除物品，不需要拿在手上。",
+      "predicates": [
+        {
+          "value": {
+            "items": "minecraft:bread"
+          }
+        }
+      ],
+      "amount": 8.0,
+      "consume_items": true
+    }
+  }
+}

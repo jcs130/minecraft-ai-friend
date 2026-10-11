@@ -1,0 +1,30 @@
+{
+  "path_chance": {
+    "moogs_paths:badlands_canyon": 35,
+    "moogs_paths:brick_road": 35,
+    "moogs_paths:cherry_grove": 35,
+    "moogs_paths:desert_highway": 35,
+    "moogs_paths:dirt_road": 35,
+    "moogs_paths:jungle_path": 35,
+    "moogs_paths:jungle_temple_road": 35,
+    "moogs_paths:mountain_road": 35,
+    "moogs_paths:mushroom_path": 35,
+    "moogs_paths:mvs_desert_house": 35,
+    "moogs_paths:mvs_house": 35,
+    "moogs_paths:mvs_swamp_house": 35,
+    "moogs_paths:mvs_tall_house": 35,
+    "moogs_paths:overworld_trail": 35,
+    "moogs_paths:plains_trail": 35,
+    "moogs_paths:savanna_path": 35,
+    "moogs_paths:snowy_trail": 35,
+    "moogs_paths:swamp_path": 35,
+    "moogs_paths:village_road_desert": 100,
+    "moogs_paths:village_road_plains": 100,
+    "moogs_paths:village_road_savanna": 100,
+    "moogs_paths:village_road_snowy": 100,
+    "moogs_paths:village_road_taiga": 100,
+    "moogs_paths:wildlands_trail": 35,
+    "moogs_paths:windswept_trail": 35,
+    "moogs_paths:witch_hut_trail": 35
+  }
+}

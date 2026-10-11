@@ -29,11 +29,19 @@ function recipeIngredients (row) {
 // General original-recipe translation, never a windmill/building script. The
 // model selects one recipe; ordinary menu clicks consume and produce all items.
 async function craftNativeRecipe (menu, native, playerUuid, { recipeId, clearInputs = false }) {
-  const query = await native.recipes({ recipeId, recipeType: 'minecraft:crafting', limit: 1 }), row = query?.recipes?.[0]
+  // The SDK's pre-action body snapshot shares the server's two-tick read limit.
+  // Only retry an explicit read-only rejection, before moving any ingredient.
+  let query
+  for (let attempt = 0; attempt < 3; attempt++) {
+    query = await native.recipes({ recipeId, recipeType: 'minecraft:crafting', limit: 1 })
+    if (query?.code !== 'rate_limited') break
+    if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 150))
+  }
+  const row = query?.recipes?.[0]
   if (!query?.ok || query.playerUuid !== playerUuid || query.recipes?.length !== 1 || row?.recipeId !== recipeId ||
       row.type !== 'minecraft:crafting' || row.definitionAvailable !== true || !row.output?.snbt ||
       !['minecraft:crafting_shaped', 'minecraft:crafting_shapeless'].includes(row.serializer)) return known('native_crafting_recipe_unavailable', {
-        recipeId, definitionCode: row?.code ?? null, definitionAvailable: row?.definitionAvailable ?? false,
+        recipeId, definitionCode: row?.code ?? query?.code ?? null, definitionAvailable: row?.definitionAvailable ?? false,
         hint: 'The server recipe definition is unavailable or unsupported; this is not evidence of missing materials. Inspect native.recipes. No menu click was dispatched.' })
   const decodedIngredients = recipeIngredients(row)
   if (!decodedIngredients) return known('native_recipe_ingredients_invalid')

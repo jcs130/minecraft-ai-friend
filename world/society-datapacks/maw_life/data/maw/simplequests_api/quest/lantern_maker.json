@@ -1,0 +1,30 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "道路灯匠",
+  "category": "maw:builder",
+  "icon": "minecraft:lantern",
+  "description": [
+    "接取后制作四盏灯笼。完成任务不会收走灯笼，可以用于建设。",
+    "奖励：16 灯币 / 10 声望",
+    "完成后经过 24000 服务器 tick 可再接取；跳夜不缩短冷却。"
+  ],
+  "sorting_id": 11,
+  "repeat_delay": 24000,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/lantern_maker",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:crafting",
+      "description": "接取后制作四盏灯笼。完成任务不会收走灯笼，可以用于建设。",
+      "item_predicates": [
+        {
+          "value": {
+            "items": "minecraft:lantern"
+          }
+        }
+      ],
+      "amount": 4.0
+    }
+  }
+}

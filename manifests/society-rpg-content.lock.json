@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "minecraftVersion": "1.21.1",
+  "neoforgeVersion": "21.1.248",
+  "artifacts": [
+    {
+      "name": "t_and_t-datapack-1.21.1.zip",
+      "kind": "datapack",
+      "modrinthProject": "DjLobEOy",
+      "modrinthVersion": "cyBYEaKz",
+      "version": "1.21.1-datapack",
+      "minecraftVersion": "1.21.1",
+      "loaders": [
+        "datapack"
+      ],
+      "source": "https://modrinth.com/project/towns-and-towers",
+      "url": "https://cdn.modrinth.com/data/DjLobEOy/versions/cyBYEaKz/t_and_t-datapack-1.21.1.zip",
+      "sha256": "93e1706c4896bb3dfcf249db37a6643902e20429c03aa67682bc161f2b5ab992",
+      "sha512": "afd66a2d5a93958b6fd54b8ab80d9c5e5b340f374f29ae0faec7c23ea21bb8f73b7a812b4ad213a6759b9da3ef25e3e5b4e5faf35544910c920893ef743a1f6c",
+      "license": "CC-BY-NC-SA-4.0",
+      "clientRequired": false,
+      "newItemOrBlockRegistries": false,
+      "side": "server"
+    },
+    {
+      "name": "Dungeons and Taverns v4.4.4.zip",
+      "kind": "datapack",
+      "modrinthProject": "tpehi7ww",
+      "modrinthVersion": "9Dw6hgJA",
+      "version": "v4.4.4",
+      "minecraftVersion": "1.21.1",
+      "loaders": [
+        "datapack"
+      ],
+      "source": "https://modrinth.com/project/dungeons-and-taverns",
+      "url": "https://cdn.modrinth.com/data/tpehi7ww/versions/9Dw6hgJA/Dungeons%20and%20Taverns%20v4.4.4.zip",
+      "sha256": "f00a4fcc83fb827bed3b4165865f6c29bd4328e4ed458e5d458bf700013e751e",
+      "sha512": "3d312d4d8cd0bfe4771c6e21bfdb20c14582e7eb4210349780e72827e0f4b12dce6c11499e9d7ab82a0e4d6f39396869dc2a61ba3095c8e0f625234d7bb41424",
+      "license": "LicenseRef-All-Rights-Reserved",
+      "clientRequired": false,
+      "newItemOrBlockRegistries": false,
+      "side": "server",
+      "dynamicEnchantmentRegistries": true
+    },
+    {
+      "name": "Explorify v1.6.5.dp.zip",
+      "kind": "datapack",
+      "modrinthProject": "HSfsxuTo",
+      "modrinthVersion": "BKKKBD2V",
+      "version": "v1.6.5",
+      "minecraftVersion": "1.21.1",
+      "loaders": [
+        "datapack"
+      ],
+      "source": "https://modrinth.com/project/explorify",
+      "url": "https://cdn.modrinth.com/data/HSfsxuTo/versions/BKKKBD2V/Explorify%20v1.6.5.dp.zip",
+      "sha256": "09dea87923b8dc021a6694f7c6487725b1a666e255e122bce55fdd2dc3377d4f",
+      "sha512": "9ca01672759e9a84a14e3424f1a779bde3fdaad3bf77b853961e0a5902c4bbee0ab970adf5638e1e6934e0a70d926221caa8d89f29e6f88d56b73aad9ae4fb6b",
+      "license": "LicenseRef-All-Rights-Reserved",
+      "clientRequired": false,
+      "newItemOrBlockRegistries": false,
+      "side": "server"
+    },
+    {
+      "name": "MoogsPaths-neoforge-1.21.1-1.1.1.jar",
+      "kind": "mod",
+      "modrinthProject": "HDB8pnki",
+      "modrinthVersion": "NpIdtuc3",
+      "version": "1.1.1-neoforge-1.21.1",
+      "minecraftVersion": "1.21.1",
+      "loaders": [
+        "neoforge"
+      ],
+      "source": "https://modrinth.com/project/mp-moogs-paths",
+      "url": "https://cdn.modrinth.com/data/HDB8pnki/versions/NpIdtuc3/MoogsPaths-neoforge-1.21.1-1.1.1.jar",
+      "sha256": "6021a85b53c695bc2765e102e33f9248650f73a86e462204fa9959a7c3901972",
+      "sha512": "bff5a28ef4dfc45a471592bb05c305e552b942cd04f68764f203be5be8e0d7867c745422e8e3fbd35efc29ce3f114130082fbe85397b88978f2b880cf8d0e56b",
+      "license": "CC0-1.0",
+      "clientRequired": false,
+      "newItemOrBlockRegistries": false,
+      "side": "server"
+    },
+    {
+      "name": "simplequests-1.21.1-2.2.0-neoforge.jar",
+      "kind": "mod",
+      "modrinthProject": "HriwQx5q",
+      "modrinthVersion": "kxJMT5fC",
+      "version": "1.21.1-2.2.0-neoforge",
+      "minecraftVersion": "1.21.1",
+      "loaders": [
+        "neoforge"
+      ],
+      "source": "https://modrinth.com/project/simple-quests",
+      "url": "https://cdn.modrinth.com/data/HriwQx5q/versions/kxJMT5fC/simplequests-1.21.1-2.2.0-neoforge.jar",
+      "sha256": "afb0de145e318ea27e8c8bf098c107e2972dfe8fea2512b77d6bf6812f3da20d",
+      "sha512": "f2d71980e917805073861d04ed0a4b41968551c14a717c4ec8e24bc3caf853dfcf2e4dc5da3053bb35721753eb87c1e00fd974897c022f4b2948ca0aa7ab0c3e",
+      "license": "LicenseRef-All-Rights-Reserved",
+      "clientRequired": false,
+      "newItemOrBlockRegistries": false,
+      "side": "server"
+    },
+    {
+      "name": "economycraft-neoforge-1.10.0_1.21.1.jar",
+      "kind": "mod",
+      "modrinthProject": "H4o5bO7g",
+      "modrinthVersion": "6lpLdNFA",
+      "version": "1.10.0",
+      "minecraftVersion": "1.21.1",
+      "loaders": [
+        "neoforge"
+      ],
+      "source": "https://modrinth.com/project/economycraft",
+      "url": "https://cdn.modrinth.com/data/H4o5bO7g/versions/6lpLdNFA/economycraft-neoforge-1.10.0_1.21.1.jar",
+      "sha256": "a1b722300f0f52f118cba6532e37532b06fb5da00d6c9c1f115ea2c0e17db1e2",
+      "sha512": "d7b3e094e295f7bc3ad0475ce0e36a7d26c578532a3acf2b97a5bff3d19982a445793135121dc5a7d26666473241313f8e767c4a8edfa0619599ba8c196485ad",
+      "license": "GPL-3.0-only",
+      "clientRequired": false,
+      "newItemOrBlockRegistries": false,
+      "side": "server"
+    },
+    {
+      "name": "architectury-13.0.11-neoforge.jar",
+      "kind": "mod",
+      "modrinthProject": "lhGA9TYQ",
+      "modrinthVersion": "1IiqEQGl",
+      "version": "13.0.11+neoforge",
+      "minecraftVersion": "1.21.1",
+      "loaders": [
+        "neoforge"
+      ],
+      "source": "https://modrinth.com/project/architectury-api",
+      "url": "https://cdn.modrinth.com/data/lhGA9TYQ/versions/1IiqEQGl/architectury-13.0.11-neoforge.jar",
+      "sha256": "9cc92f2c09533fc5482c60f993bd891c655a0e32b637037cdcb7c2b23adedeeb",
+      "sha512": "d9f7c3bb8162577dfb461ffdf04bd6a3563c7586934a0e2a744c14421beffb8286f0d88d4c758317003f20f99fe8072a39b9d675af061e036970d36db36027f0",
+      "license": "LGPL-3.0-only",
+      "clientRequired": false,
+      "newItemOrBlockRegistries": false,
+      "side": "server"
+    }
+  ]
+}

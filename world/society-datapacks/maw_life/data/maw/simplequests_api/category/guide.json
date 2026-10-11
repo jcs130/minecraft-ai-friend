@@ -1,0 +1,12 @@
+{
+  "name": "新手旅程",
+  "description": [
+    "先学会照顾自己，再决定生活方向。"
+  ],
+  "icon": "minecraft:compass",
+  "sorting_id": 0,
+  "max_concurrent_quests": 5,
+  "only_same_category": false,
+  "is_visible": true,
+  "is_silent": false
+}

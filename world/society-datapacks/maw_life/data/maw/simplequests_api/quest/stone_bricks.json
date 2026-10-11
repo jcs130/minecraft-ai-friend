@@ -1,0 +1,31 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "新驿站的建材",
+  "category": "maw:builder",
+  "icon": "minecraft:stone_bricks",
+  "description": [
+    "交付三十二块石砖，为世界建设提供材料。",
+    "奖励：16 灯币 / 10 声望",
+    "完成后经过 24000 服务器 tick 可再接取；跳夜不缩短冷却。"
+  ],
+  "sorting_id": 10,
+  "repeat_delay": 24000,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/stone_bricks",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:item",
+      "description": "交付三十二块石砖，为世界建设提供材料。",
+      "predicates": [
+        {
+          "value": {
+            "items": "minecraft:stone_bricks"
+          }
+        }
+      ],
+      "amount": 32.0,
+      "consume_items": true
+    }
+  }
+}

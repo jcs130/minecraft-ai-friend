@@ -1,0 +1,30 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "第一张工作台",
+  "category": "maw:guide",
+  "icon": "minecraft:crafting_table",
+  "description": [
+    "接取后制作一张工作台。已有工作台不算新的制作。",
+    "奖励：8 灯币 / 5 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 0,
+  "repeat_delay": -1,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/first_workbench",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:crafting",
+      "description": "接取后制作一张工作台。已有工作台不算新的制作。",
+      "item_predicates": [
+        {
+          "value": {
+            "items": "minecraft:crafting_table"
+          }
+        }
+      ],
+      "amount": 1.0
+    }
+  }
+}

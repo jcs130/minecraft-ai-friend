@@ -1,0 +1,31 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "紫晶研究",
+  "category": "maw:arcane",
+  "icon": "minecraft:amethyst_shard",
+  "description": [
+    "交付八片紫水晶碎片。保护晶芽，留下可持续采收的矿源。",
+    "奖励：18 灯币 / 12 声望",
+    "完成后经过 24000 服务器 tick 可再接取；跳夜不缩短冷却。"
+  ],
+  "sorting_id": 17,
+  "repeat_delay": 24000,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/amethyst_supply",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:item",
+      "description": "交付八片紫水晶碎片。保护晶芽，留下可持续采收的矿源。",
+      "predicates": [
+        {
+          "value": {
+            "items": "minecraft:amethyst_shard"
+          }
+        }
+      ],
+      "amount": 8.0,
+      "consume_items": true
+    }
+  }
+}

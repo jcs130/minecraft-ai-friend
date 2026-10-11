@@ -1,0 +1,85 @@
+My Agent World · 异世界生活与冒险
+适用：Minecraft 1.21.1 / NeoForge 21.1.248，2026-10-12
+
+一、怎样开始
+登录后领取冒险指南针，手持它按交互键即可打开中文指南，手柄也能点选。
+也可以输入 /mycli guide；指南针暂存或背包已满时，整理出一格后 /mycli guideitem。
+新手旅程从“自己的第一张工作台”开始：先接任务，再亲手制作。
+公会允许同时体验所有生活方向，不需要锁定一种职业。
+登记：/mycli guild join
+委托板：/mycli guild list
+自己的任务：/mycli guild current
+交付检查：/mycli guild submit
+本人等级、声望、余额：/mycli status
+市场：/mycli market
+所有这些玩家回执均只发给本人；不会周期广播状态。
+
+二、六个公会方向与 22 项委托
+冒险者：僵尸巡逻、蜘蛛清理、海底遗迹、公会驿站探索。
+田园：小麦交付、真正的钓鱼、农夫乐事洋葱补给。
+料理：面包、烤鱼、农夫乐事蔬菜汤。
+营造：石砖材料与灯笼制作。
+工匠：传动杆、风车轴承、安山合金，连接机械动力的生产成长。
+秘法：检查新手法术书、魔源石、紫水晶补给。
+另外有四项新手任务，带制作工作台、石工具、面包和火把的前置关系。
+制作/钓鱼/击杀只计算接取后的原生事件，购买成品不会冒充亲手制作。
+交付任务会扣除所需物资；法术书任务只检查持有，不会收走法术书。
+完成任务增加灯币和累计声望。灯币存在个人账户，不占背包。
+木牌见习 0 → 铜牌旅人 30 → 铁牌冒险者 100 → 银牌先驱 250 → 金牌领航者 500。
+首次任务只做一次；生活循环任务完成后等待 24000 服务器 tick 才能重接，跳夜不会缩短。
+这是公会生活方向与委托声望，不是旧 Paper 千灯纪公会、技能或试炼塔存档的迁移。
+
+三、村镇、道路、驿站与地下城
+Towns and Towers：更多风格的村镇、塔楼和船只。
+Dungeons and Taverns：酒馆、地表遗迹与地下探险结构。
+Explorify：沿途小遗迹、营地等探索内容。
+Moog's Paths：根据群系生成道路、桥面和路边装饰，也支持部分村庄结构的道路起点。
+公会驿站：原版方块的木梁大厅、工作台、七名公会/市场接待员、两处共享箱和市场摊位。
+接待员按交互键打开委托或市场；共享箱是真箱子，可以正常存取。
+原有 Dungeon Crawl、YUNG's Better Dungeons 和 Dungeoneer 保留。Dungeoneer 旧模板的缺失走廊池通过自有数据包重定向到同模组真实池。
+新增建筑和道路主要出现在尚未生成的区块，现有世界、风车、殖民地不重置。
+道路是生成网络，并不保证任意两个村庄之间一定有直接道路。
+遗迹保留自然怪物与战利品；不是旧试炼塔那种逐层波次、自动续关和个人奖励箱。
+
+四、市场与玩家协作
+市场提供固定商店、物资回收、玩家拍卖、收购订单、待领取物品。
+初始 40 灯币；每日签到不发钱。回收上限每日 300，交易税率 3%。
+起步商店主要卖粮食、材料、火把、弓箭、铁工具及少量模组材料。
+钻石/下界合金顶级装备不作为常规廉价供给。
+注意查看每个菜单的实际价格和确认步骤；菜单里的玻璃、书、金币等功能图标不能作为战利品拿走。
+原生 EconomyCraft 部分标题和说明仍为英文，公会与新手入口使用中文。
+收购订单和拍卖使用 EconomyCraft 原生物品保存机制；本轮验证商店买卖、满包待领取与收购订单创建，未遍历所有附魔交易。不应出售独有的角色绑定道具。
+
+五、Agent 接口
+沿用本人 Mineflayer SDK 或 Numen 身体，连接方式、认证、UUID 和控制租约不变。
+查询 operations("society.state") 等接口说明；不要从聊天猜任务进度。
+society.state：本人全部 22 项任务的 active、completed、acceptStatus、progress，声望、等级、余额和采样时间。
+society.join：免费登记。
+society.accept：参数 {"questId":"maw:wheat_delivery"}，按实际可接状态接任务。
+society.submit：检查本人当前任务，真实结算；动作必须使用唯一 action_id。
+society.open：参数 {"menu":"guide"}，可选 guide、quests、current、market、orders、deliveries。
+打开后的菜单用 menu.current / menu.snapshot 读取实际槽位，再用对应 provider 的原生点击接口操作。
+Mineflayer SDK：94 项总目录（84 项原生适配 + 10 项 SDK 控制）。
+Numen mod_operations：72 项原生操作，参数以该接口查询结果为准。
+同一 action_id 重复提交只能对账，不得重复发放奖励。未知结果禁止换 ID 自动重试。
+每个连接只查询自己的数据。加入公会不授予 OP、其它玩家管理权或额外模型权限。
+交易确认、完整组件核对和库存满时的领取行为以原生菜单/回执为准；不要盲点相同槽位循环购买。
+
+六、维护
+内容定义：config/maw-life-content.json；修改后运行 tools/build_maw_life_content.py。
+任务数据：world/society-datapacks/maw_life；公会建筑模板由同一工具确定性生成。
+第三方来源、精确版本和 SHA：manifests/society-rpg-content.lock.json。
+tools/society_content.py install --world world-life：只在目标服正常停止后安装，不重生成世界，不覆盖已有经济设置和玩家进度。
+tools/society_content.py verify --world world-life：校验版本和自有内容；经济价格/余额可由运营维护，不进行强制回写。
+更新任务、商店、地形包前，备份世界、config/economycraft/data、认证库及 Agent 动作账本。
+不要运行旧 Paper 的 /mycli 命令或复制旧技能数据到此服；两套环境分别维护。
+不要为了新结构删除玩家已有区块；先在隔离服测试正常世界生成和多端交互，再安排正式维护。
+实际手机视觉、所有遗迹逐个通关和长期经济平衡仍需要后续游玩验收。
+
+官方资料
+https://modrinth.com/datapack/towns-and-towers
+https://modrinth.com/datapack/dungeons-and-taverns
+https://modrinth.com/datapack/explorify
+https://modrinth.com/project/mp-moogs-paths
+https://github.com/Flemmli97/SimpleQuests/wiki
+https://github.com/PhilipB06/EconomyCraft

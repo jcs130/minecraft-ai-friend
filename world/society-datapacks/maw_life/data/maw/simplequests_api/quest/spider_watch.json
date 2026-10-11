@@ -1,0 +1,30 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "遗迹清道夫",
+  "category": "maw:adventure",
+  "icon": "minecraft:shield",
+  "description": [
+    "接取后击败三只蜘蛛。准备盾牌、食物和退路。",
+    "奖励：18 灯币 / 12 声望",
+    "完成后经过 24000 服务器 tick 可再接取；跳夜不缩短冷却。"
+  ],
+  "sorting_id": 19,
+  "repeat_delay": 24000,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/spider_watch",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:kill",
+      "description": "接取后击败三只蜘蛛。准备盾牌、食物和退路。",
+      "predicates": [
+        {
+          "value": {
+            "type": "minecraft:spider"
+          }
+        }
+      ],
+      "amount": 3.0
+    }
+  }
+}

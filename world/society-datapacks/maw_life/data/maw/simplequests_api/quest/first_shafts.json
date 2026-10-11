@@ -1,0 +1,32 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "传动的第一步",
+  "category": "maw:engineer",
+  "icon": "create:shaft",
+  "description": [
+    "接取后制作八根机械动力传动杆。物品保留在自己背包。",
+    "奖励：16 灯币 / 10 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 12,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:stone_tools"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/first_shafts",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:crafting",
+      "description": "接取后制作八根机械动力传动杆。物品保留在自己背包。",
+      "item_predicates": [
+        {
+          "value": {
+            "items": "create:shaft"
+          }
+        }
+      ],
+      "amount": 8.0
+    }
+  }
+}

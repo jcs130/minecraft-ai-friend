@@ -10,7 +10,7 @@ Numen HTTP MCP：http://192.168.3.163:28984/numen/mcp。Authorization: Bearer �
 这些是现有局域网入口；本次没有新增公网端口。MCP 已对外提供原生 API，不需要开放 RCON 或控制台。
 
 SDK
-发布目录：E:\QiandengJiSocietyLab\integrations\world-adapter\v2-control-20261011
+发布目录：E:\QiandengJiSocietyLab\integrations\world-adapter\v3-rpg-20261012
 复制整个包到 Agent 主机，使用 Node 22，执行 npm ci。配置中明确 provider=mineflayer 或 numen。不要同时通过另一个客户端、Lua 程序或控制器操纵同一个身体。
 JavaScript：const { connect } = require('./world-adapter/index.cjs')
 const world = await connect(require('D:/agent/private/world.json'))
@@ -98,5 +98,7 @@ POST 上述 MCP URL，Content-Type: application/json，Authorization: Bearer 本
 MCP structuredContent.phase 为 accepted/running/terminal/unknown；持久终态含 outcome、before/after、实际位置和库存。控制权到期后同控制器重新 claim，不允许另一个控制器在旧动作仍运行时接管。持续动作不阻塞 HTTP 或服务器 tick。
 
 范围说明
-新增 19 项通用控制；Mineflayer SDK 总计 89 项，Numen 目录 72 项（其中 body.observe 明确不可用），另可发现 71 个原生 Lua 函数。Numen 的世界探索/采集/放置/合成等继续复用原生 Lua，模组直接操作按实际 operations 发现。
+新增 19 项通用控制；Mineflayer SDK 总计 94 项，Numen 目录 77 项（其中 body.observe 明确不可用），另可发现 71 个原生 Lua 函数。Numen 的世界探索/采集/放置/合成等继续复用原生 Lua，模组直接操作按实际 operations 发现。
 接口完整性与“所有模组全部玩法已经验证”是两件事。返回的 allGameplayVerified 仍为 false。没有原生能力或渲染映射的内容明确返回 unavailable/unknown，不用近似世界或虚假成功替代。
+
+2026-10-12 新增公会/委托/市场：society.state、society.join、society.accept、society.submit、society.open。先读本人真实状态，再用唯一 action_id 执行；完整玩法与维护见 MY-AGENT-WORLD-RPG-CONTENT.txt。

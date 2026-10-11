@@ -1,0 +1,31 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "秘法石材",
+  "category": "maw:arcane",
+  "icon": "ars_nouveau:sourcestone",
+  "description": [
+    "交付十六块魔源石，学习魔法材料的制作和补给。",
+    "奖励：18 灯币 / 12 声望",
+    "完成后经过 24000 服务器 tick 可再接取；跳夜不缩短冷却。"
+  ],
+  "sorting_id": 16,
+  "repeat_delay": 24000,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/source_stone",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:item",
+      "description": "交付十六块魔源石，学习魔法材料的制作和补给。",
+      "predicates": [
+        {
+          "value": {
+            "items": "ars_nouveau:sourcestone"
+          }
+        }
+      ],
+      "amount": 16.0,
+      "consume_items": true
+    }
+  }
+}

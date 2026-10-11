@@ -23,7 +23,7 @@ def probe(root: Path = ROOT) -> dict:
             hashlib.sha256((directory/name).read_bytes()).hexdigest() == digest for name, digest in files.items())
         catalog = json.loads((directory/'operations.json').read_text('utf-8'))
         rows = catalog['operations']
-        checks['explicit-operations'] = len(rows) == len({row['id'] for row in rows}) == manifest['operationCount'] and len(rows) in (70,89)
+        checks['explicit-operations'] = len(rows) == len({row['id'] for row in rows}) == manifest['operationCount'] and len(rows) in (70,89,94)
         checks['machine-readable-contracts'] = all(row.get('parameters') and row.get('permission') and row.get('execution') and row.get('returns') for row in rows)
         checks['no-fake-player-claim'] = catalog['numenFakePlayerControl'] is False and catalog['numenRestoreExisting'] is False
         jar = root/'server/mods/maw_agent_bridge-0.1.0.jar'

@@ -1,0 +1,31 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "工坊合金补给",
+  "category": "maw:engineer",
+  "icon": "create:andesite_alloy",
+  "description": [
+    "交付八份安山合金。原材料要自己采集、合成或从市场购买。",
+    "奖励：24 灯币 / 15 声望",
+    "完成后经过 24000 服务器 tick 可再接取；跳夜不缩短冷却。"
+  ],
+  "sorting_id": 14,
+  "repeat_delay": 24000,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/andesite_supply",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:item",
+      "description": "交付八份安山合金。原材料要自己采集、合成或从市场购买。",
+      "predicates": [
+        {
+          "value": {
+            "items": "create:andesite_alloy"
+          }
+        }
+      ],
+      "amount": 8.0,
+      "consume_items": true
+    }
+  }
+}

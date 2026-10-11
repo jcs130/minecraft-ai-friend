@@ -1,0 +1,7 @@
+{
+  "criteria": {
+    "compatibility_root": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

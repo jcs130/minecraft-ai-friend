@@ -1,0 +1,31 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "热汤暖人心",
+  "category": "maw:chef",
+  "icon": "farmersdelight:vegetable_soup",
+  "description": [
+    "用农夫乐事烹饪锅煮好三碗蔬菜汤，再提交。",
+    "奖励：24 灯币 / 15 声望",
+    "完成后经过 24000 服务器 tick 可再接取；跳夜不缩短冷却。"
+  ],
+  "sorting_id": 9,
+  "repeat_delay": 24000,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/vegetable_soup",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:item",
+      "description": "用农夫乐事烹饪锅煮好三碗蔬菜汤，再提交。",
+      "predicates": [
+        {
+          "value": {
+            "items": "farmersdelight:vegetable_soup"
+          }
+        }
+      ],
+      "amount": 3.0,
+      "consume_items": true
+    }
+  }
+}

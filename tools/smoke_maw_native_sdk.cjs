@@ -46,7 +46,7 @@ async function run (config) {
     await connect()
     const caps = await sdk.capabilities(); report.capabilities = caps
     assert.equal(caps.ok, true); assert.equal(caps.bodyKind, 'connected_player')
-    assert.equal(caps.nativeOperations.length, 79); assert.equal(caps.operations.operationCount, 89)
+    assert.equal(caps.nativeOperations.length, 84); assert.equal(caps.operations.operationCount, 94)
     report.checks.remoteOperations = true
     const before = await sdk.snapshot(); report.before = before
     assert.equal(before.ok, true); assert.equal(before.status, 'alive'); assert.equal(before.inventory.available, true)

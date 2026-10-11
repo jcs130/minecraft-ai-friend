@@ -1,0 +1,31 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "村庄粮仓委托",
+  "category": "maw:farmer",
+  "icon": "minecraft:wheat",
+  "description": [
+    "交付十六份小麦。提交会实际扣除这些小麦。",
+    "奖励：12 灯币 / 8 声望",
+    "完成后经过 24000 服务器 tick 可再接取；跳夜不缩短冷却。"
+  ],
+  "sorting_id": 4,
+  "repeat_delay": 24000,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/wheat_delivery",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:item",
+      "description": "交付十六份小麦。提交会实际扣除这些小麦。",
+      "predicates": [
+        {
+          "value": {
+            "items": "minecraft:wheat"
+          }
+        }
+      ],
+      "amount": 16.0,
+      "consume_items": true
+    }
+  }
+}

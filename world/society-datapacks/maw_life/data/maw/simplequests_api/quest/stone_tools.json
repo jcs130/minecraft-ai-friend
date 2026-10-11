@@ -1,0 +1,32 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "石器时代的伙伴",
+  "category": "maw:guide",
+  "icon": "minecraft:stone_pickaxe",
+  "description": [
+    "接取后制作石镐，为探矿做好准备。",
+    "奖励：8 灯币 / 5 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 1,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:first_workbench"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/stone_tools",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:crafting",
+      "description": "接取后制作石镐，为探矿做好准备。",
+      "item_predicates": [
+        {
+          "value": {
+            "items": "minecraft:stone_pickaxe"
+          }
+        }
+      ],
+      "amount": 1.0
+    }
+  }
+}

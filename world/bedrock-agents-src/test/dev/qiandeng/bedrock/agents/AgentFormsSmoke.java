@@ -45,6 +45,8 @@ public final class AgentFormsSmoke {
         check(json(guide).contains("textures/guide/food")&&json(guide).contains("textures/guide/machine"),"guide original image paths");
         for(int n=0;n<5;n++){respond(guide,Integer.toString(n));check(page.get()==n,"guide page route");SimpleForm step=GuideForms.page(n,page::set,()->clicked.set("back"));check(!json(step).contains("apiKey"),"guide no credential");if(n<4){respond(step,"0");check(page.get()==n+1,"guide next button");}respond(step,n<4?"1":"0");check("back".equals(clicked.get()),"guide back");}
         respond(guide,"5");check("companions".equals(clicked.get()),"guide companion entry");respond(guide,"6");check("maids".equals(clicked.get()),"guide maid entry");
+        SimpleForm society=GuideForms.index(page::set,()->{},()->{},()->clicked.set("guild"),()->clicked.set("market"));
+        respond(society,"7");check("guild".equals(clicked.get()),"controller guild entry");respond(society,"8");check("market".equals(clicked.get()),"controller market entry");
         Map<String,Object> maid=AgentForms.map("maidUuid","00000000-0000-0000-0000-000000000001","name","我的女仆","health",17.5,"maxHealth",20,"hunger",18,"taskId","touhou_little_maid:idle","follow",true,"pickup",false,"controlRevision","native-controls-cas");
         SimpleForm panel=MaidForms.panel(maid,()->clicked.set("model"),()->clicked.set("controls"),()->clicked.set("back"));
         check(json(panel).contains("17.5")&&json(panel).contains("空闲"),"actual health/native job in panel");

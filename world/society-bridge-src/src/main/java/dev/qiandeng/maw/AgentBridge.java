@@ -38,6 +38,7 @@ public final class AgentBridge {
     private static final String PREFIX = "MAW_AGENT ";
     public AgentBridge(IEventBus eventBus, ModContainer container) {
         PlayerAuthBridge.register();
+        SocietyLifeBridge.register();
         NativeControlAccess.register();
         PlayerSceneBridge.register(eventBus);
         TlmMinecoloniesBurningCompat.register(eventBus);

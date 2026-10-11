@@ -1,0 +1,31 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "酒馆烤鱼",
+  "category": "maw:chef",
+  "icon": "minecraft:cooked_cod",
+  "description": [
+    "用熔炉、营火或厨房做熟鳕鱼，再交付六份。",
+    "奖励：15 灯币 / 10 声望",
+    "完成后经过 24000 服务器 tick 可再接取；跳夜不缩短冷却。"
+  ],
+  "sorting_id": 8,
+  "repeat_delay": 24000,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/cooked_fish",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:item",
+      "description": "用熔炉、营火或厨房做熟鳕鱼，再交付六份。",
+      "predicates": [
+        {
+          "value": {
+            "items": "minecraft:cooked_cod"
+          }
+        }
+      ],
+      "amount": 6.0,
+      "consume_items": true
+    }
+  }
+}

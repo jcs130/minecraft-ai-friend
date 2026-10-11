@@ -1,0 +1,12 @@
+{
+  "name": "营造公会",
+  "description": [
+    "制作建材、灯具和公共补给；可继续发展殖民地。"
+  ],
+  "icon": "minecraft:bricks",
+  "sorting_id": 4,
+  "max_concurrent_quests": 5,
+  "only_same_category": false,
+  "is_visible": true,
+  "is_silent": false
+}

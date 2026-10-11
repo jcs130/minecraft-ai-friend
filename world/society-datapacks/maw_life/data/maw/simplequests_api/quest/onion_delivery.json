@@ -1,0 +1,31 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "厨房的洋葱订单",
+  "category": "maw:farmer",
+  "icon": "farmersdelight:onion",
+  "description": [
+    "向厨房交付十二个洋葱；农夫乐事作物也能成为生活收入。",
+    "奖励：12 灯币 / 8 声望",
+    "完成后经过 24000 服务器 tick 可再接取；跳夜不缩短冷却。"
+  ],
+  "sorting_id": 6,
+  "repeat_delay": 24000,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/onion_delivery",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:item",
+      "description": "向厨房交付十二个洋葱；农夫乐事作物也能成为生活收入。",
+      "predicates": [
+        {
+          "value": {
+            "items": "farmersdelight:onion"
+          }
+        }
+      ],
+      "amount": 12.0,
+      "consume_items": true
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "风之工坊",
+  "category": "maw:engineer",
+  "icon": "create:windmill_bearing",
+  "description": [
+    "接取后制作一个风车轴承。后续用风帆和传动装置搭建真正的风车。",
+    "奖励：30 灯币 / 20 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 13,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:first_shafts"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/windmill_bearing",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:crafting",
+      "description": "接取后制作一个风车轴承。后续用风帆和传动装置搭建真正的风车。",
+      "item_predicates": [
+        {
+          "value": {
+            "items": "create:windmill_bearing"
+          }
+        }
+      ],
+      "amount": 1.0
+    }
+  }
+}

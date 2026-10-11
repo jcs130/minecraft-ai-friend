@@ -1,0 +1,12 @@
+{
+  "name": "料理公会",
+  "description": [
+    "使用农夫乐事的厨房，把普通食材变成美食。"
+  ],
+  "icon": "farmersdelight:cooking_pot",
+  "sorting_id": 3,
+  "max_concurrent_quests": 5,
+  "only_same_category": false,
+  "is_visible": true,
+  "is_silent": false
+}

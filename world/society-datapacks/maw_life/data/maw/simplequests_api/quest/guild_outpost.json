@@ -1,0 +1,33 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "找到冒险者驿站",
+  "category": "maw:adventure",
+  "icon": "minecraft:compass",
+  "description": [
+    "沿道路探索并进入新生成的公会驿站。大厅有接待员、市场和共享箱子。",
+    "奖励：24 灯币 / 20 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 21,
+  "repeat_delay": -1,
+  "parent_id": [],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/guild_outpost",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:predicates",
+      "description": "沿道路探索并进入新生成的公会驿站。大厅有接待员、市场和共享箱子。",
+      "predicates": [
+        {
+          "value": {
+            "location": {
+              "structures": "maw:guild_hall"
+            }
+          },
+          "description": "沿道路探索并进入新生成的公会驿站。大厅有接待员、市场和共享箱子。"
+        }
+      ],
+      "submit": false
+    }
+  }
+}
