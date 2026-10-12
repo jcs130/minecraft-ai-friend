@@ -2,6 +2,8 @@
 
 测试使用 Minecraft 1.21.1 / NeoForge 的完整现役模组集、官方 Numen 0.1.4.1、服务端 `NumenPlayer` 和官方 `AgentLoop` / `SerialCalls`。线上模型为 CodingPlan `qwen3.7-plus`。Mineflayer 普通账号仅用于建立主人会话和提交配置，不负责测试身体的规划或动作。没有连接 QwenPaw Agent。
 
+长期常驻 Agent 的分工与新桐人方案见 [常驻桐人设计](MY-AGENT-WORLD-RESIDENT-KIRITO.md)。该设计尚未部署；本文的七类独立目标验收不代表目标自动续接、长期记忆整理或全天自主生活已经完成。
+
 ## 两种验收
 
 默认合同测试不调用付费模型：
