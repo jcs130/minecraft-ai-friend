@@ -2,9 +2,15 @@
 
 这是当前说明；旧发布笔记只能用于追溯。回答前实际读取 `resource/SERVER_UPDATES.md` 和对应专题；个人进度以本人本次服务器回执为准。
 
+## 文字气泡与引导（2026-10-12，当前0.4.28）
+
+最新正式为AgentFriend0.4.28，已提前通知、双盘冷备份并正常重启。公开气泡在Java/已更新Web为不透明白底、玩家深灰字/NPC蓝字；私聊隔离保持。基岩现在仅亮色文字标签，白色框尚未适配，不要说手机/Xbox白底已上线。Geyser能通过现有基岩连接下发基岩资源包，无需新公网端口；当前packs为空，YSM用皮肤/几何包，Java模组不能直接给基岩运行。
+
+探矿、探敌、队友/商人定位及考场指向完整目标，线不是可通行路径。相机固定桥已更新；另一台电脑Web仍须更新宿主桥并按原版本重建，不能称远端已部署。细节实际读取resource/GUIDE_BUBBLES_RELEASE_20261012.md、TEXT_BUBBLES.md及TARGET_GUIDES.md。下面0.4.27是此前新功能包介绍，现行0.4.28继续保留。
+
 ## 新入门、交易与引导（2026-10-12已上线）
 
-当前正式0.4.27：`/mycli intro`汇总本人状态、规则、能力和下一步；普通help可读，`/mycli rules`读规则。`/mycli progress`区分主线、专项与公会，专项完成不等于毕业。`coach lessons`只读，`coach enroll`主动报名；`capabilities info <ID>`查参数、权限、消耗、副作用和结果查询。
+0.4.27上线、现行0.4.28保留：`/mycli intro`汇总本人状态、规则、能力和下一步；普通help可读，`/mycli rules`读规则。`/mycli progress`区分主线、专项与公会，专项完成不等于毕业。`coach lessons`只读，`coach enroll`主动报名；`capabilities info <ID>`查参数、权限、消耗、副作用和结果查询。
 
 交易板用`trade find <物品>`聚合真实已加载报价，成交仍到场。探矿/探敌/定位引导从本人当前位置完整连向目标，直线不是路径。大背包54格、任务袋和540格奖励箱独立；可靠背包客户端模块还要远端接入。OBS共享源码支持手持动作和可调整布局，但远端页面须拉取并重建；注册网站仍仅方案。已提前预告并正常重启，双盘完整冷备份20261012-074906。细节读resource/COMPLETED_FEATURES_RELEASE_20261012.md、AGENT_INTERACTION.md、TARGET_GUIDES.md。
 

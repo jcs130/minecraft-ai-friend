@@ -1,7 +1,7 @@
 // Real 1.20.6 particles and attached Eyes; this can only run on the loopback test world.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {readFileSync, writeFileSync} from 'node:fs';
+import {readFileSync, writeFileSync, existsSync} from 'node:fs';
 import {fix1206PotionProtocol} from '../ops/minecraft-1206-potion.mjs';
 import {installRecipePacketBypass} from '../ops/mineflayer-client-compat.mjs';
 import {command} from 'file:///E:/MC/ops/rcon-client.mjs';
@@ -16,7 +16,9 @@ const {createBot}=require('mineflayer');
 const rcon=q=>command(q,15000,{properties:stage+'/server.properties',port:25645});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const report={at:new Date().toISOString(),checks:[],errors:[],samples:{}},clients=[];
-const out=process.env.GUIDE_REPORT??'E:/MC/ops/repairs/target-guides-20261012/java-1.json';
+const out=process.env.GUIDE_REPORT;
+assert(out && !existsSync(out), 'Set GUIDE_REPORT to a fresh private evidence file');
+const version=process.env.GUIDE_VERSION??'0.4.28';
 let closing=false;
 function check(name,ok,detail){report.checks.push({name,pass:!!ok,detail});assert.ok(ok,name);console.log('PASS',name);}
 async function until(fn,name,ms=25000){const end=Date.now()+ms;while(Date.now()<end){const v=fn();if(v)return v;await sleep(75);}throw Error('Timeout '+name);}
@@ -49,7 +51,7 @@ function fullFrame(name,c,start,end){const points=frame(c,start,end);check(name,
  const dx=end.x-start.x,dy=end.y-start.y,dz=end.z-start.z;
  check(name+' collinear',points.every((p,i)=>{const t=i/(points.length-1);return close(p,pos(start.x+dx*t,start.y+dy*t,start.z+dz*t));}));return points;}
 try{
- check('candidate 0.4.26',(await rcon('version AgentFriend')).includes('0.4.26'));
+ check('candidate '+version,(await rcon('version AgentFriend')).includes(version));
  await rcon('minecraft:gamerule doMobSpawning false');await rcon('minecraft:forceload add 96 94 164 112');
  await rcon('minecraft:fill 96 200 94 164 200 112 minecraft:stone');
  await rcon('minecraft:fill 105 201 99 107 209 102 minecraft:stone');
@@ -91,6 +93,7 @@ try{
  await sleep(3200);await ask(caster,'/mycli trade locate '+trader.uuid);await sleep(600);fullFrame('merchant tracking uses complete bearing',caster,pos(100.5,202.2,102.5),pos(117.5,202.2,96.5));
  await ask(caster,'/mycli trade stop');await sleep(400);clear();await sleep(900);check('stop merchant tracking stops line',caster.points.length===0);
  }
+ if(process.env.GUIDE_PHASE!=='features') {
  const pairs=[{body:caster,eye}];
  for(let i=0;i<15;i++){
   const name='GuideQ'+String(i).padStart(2,'0'),body=await join(name),camera=await join(name+'_eye');
@@ -104,6 +107,7 @@ try{
   check('16-pair complete line '+pair.body.name,!!frame(pair.body,s,e)&&!!frame(pair.eye,s,e),{bodyPackets:pair.body.points.length,eyePackets:pair.eye.points.length});
  }
  check('stranger has no other players guide lines',other.points.length===0,other.points.length);
+ }
  report.samples.particle=caster.points[0];report.samples.mspt=await rcon('mspt');
  report.samples.cortieye=await rcon('cortieye');check('no client transport errors',report.errors.length===0,report.errors);
  report.passed=report.checks.length;

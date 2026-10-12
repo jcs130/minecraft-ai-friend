@@ -1,5 +1,13 @@
 package org.afuhome.agentfriend;
 
+import com.comphenix.protocol.PacketType;
+import com.comphenix.protocol.ProtocolLibrary;
+import com.comphenix.protocol.events.ListenerPriority;
+import com.comphenix.protocol.events.PacketAdapter;
+import com.comphenix.protocol.events.PacketEvent;
+import com.comphenix.protocol.wrappers.WrappedChatComponent;
+import com.comphenix.protocol.wrappers.WrappedDataValue;
+import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import com.google.gson.JsonObject;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import java.io.File;
@@ -14,7 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
@@ -40,7 +48,9 @@ import org.bukkit.scheduler.BukkitTask;
 final class TextBubbleManager implements Listener {
     private record Limits(boolean enabled, double range, int seconds, int active, int pending,
                           int characters, int columns, int lines, int ticks, int cooldown, boolean sight,
-                          boolean npcs, Set<String> speakers) {}
+                          boolean npcs, Set<String> speakers, Palette palette) {}
+    private record Palette(int background, int player, int npc, int pointer) {}
+    private static final Palette DEFAULT_PALETTE = new Palette(0xffffff, 0x1f2937, 0x1d4ed8, 0x64748b);
     // A private NPC conversation gets its own key; concurrent recipients cannot overwrite each other.
     private record Key(UUID speaker, UUID recipient) {}
     private record Session(UUID world, long token, boolean speaker) {}
@@ -60,12 +70,16 @@ final class TextBubbleManager implements Listener {
     private final AgentFriendPlugin plugin;
     private final File file;
     private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
+    // Immutable caption handles and identity snapshots only; packet callbacks may run off-thread.
+    private final Set<UUID> bedrockViewers = ConcurrentHashMap.newKeySet();
+    private final Map<Integer, Object> bedrockCaptions = new ConcurrentHashMap<>();
+    private PacketAdapter bedrockPalette;
     // Only these immutable snapshots cross the chat thread boundary. No entity/world calls there.
     private final Map<Key, Speech> pending = new LinkedHashMap<>();
     private final Map<Key, Bubble> active = new HashMap<>();
     private final AtomicLong sequence = new AtomicLong(), rejected = new AtomicLong();
     private static final Set<String> DEFAULT_NPCS = Set.of("storyteller", "botanist", "guild-receptionist", "life-mentors");
-    private volatile Limits limits = new Limits(true,24,8,32,64,120,36,3,5,650,true,true,DEFAULT_NPCS);
+    private volatile Limits limits = new Limits(true,24,8,32,64,120,36,3,5,650,true,true,DEFAULT_NPCS,DEFAULT_PALETTE);
     private BukkitTask task;
     private final NpcBubbleBridge npcBridge;
     private long admitted, replaced, expired, errors, frames, peakMicros;
@@ -76,6 +90,28 @@ final class TextBubbleManager implements Listener {
         reload();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         for (Player player : Bukkit.getOnlinePlayers()) refresh(player);
+        // Geyser currently translates TextDisplay into a nametag and discards its
+        // white background. Recolor only our own captions for Floodgate viewers;
+        // otherwise dark text would become unreadable on Bedrock's dark label.
+        // Keep one native display, the original audience, and all other metadata.
+        bedrockPalette = new PacketAdapter(plugin, ListenerPriority.HIGH, PacketType.Play.Server.ENTITY_METADATA) {
+            @Override public void onPacketSending(PacketEvent event) {
+                if (event.isCancelled() || !bedrockViewers.contains(event.getPlayer().getUniqueId())) return;
+                Object text = bedrockCaptions.get(event.getPacket().getIntegers().read(0));
+                if (text == null) return;
+                var original = event.getPacket().getDataValueCollectionModifier().readSafely(0);
+                if (original == null) return;
+                var values = new ArrayList<WrappedDataValue>(original.size()); boolean changed = false;
+                for (WrappedDataValue value : original) {
+                    if (value.getIndex() == 23) { values.add(new WrappedDataValue(23, value.getSerializer(), text)); changed = true; }
+                    else values.add(value);
+                }
+                if (!changed) return;
+                var packet = event.getPacket().shallowClone(); packet.getDataValueCollectionModifier().write(0, values);
+                event.setPacket(packet);
+            }
+        };
+        ProtocolLibrary.getProtocolManager().addPacketListener(bedrockPalette);
         npcBridge = new NpcBubbleBridge(plugin, this);
         startTask();
     }
@@ -93,7 +129,11 @@ final class TextBubbleManager implements Listener {
                     integer(c,"max-pending",1,64), integer(c,"max-characters",16,160),
                     integer(c,"line-columns",16,48), integer(c,"max-lines",1,3),
                     integer(c,"update-ticks",4,20), integer(c,"replace-cooldown-ms",500,5000),
-                    bool(c,"require-line-of-sight"), optionalBool(c,"npc-enabled",true), speakers(c));
+                    bool(c,"require-line-of-sight"), optionalBool(c,"npc-enabled",true), speakers(c),
+                    new Palette(color(c,"background-color",DEFAULT_PALETTE.background),
+                            color(c,"player-text-color",DEFAULT_PALETTE.player),
+                            color(c,"npc-text-color",DEFAULT_PALETTE.npc),
+                            color(c,"pointer-color",DEFAULT_PALETTE.pointer)));
             limits = next;
             clear(); // Existing messages never acquire a new audience after configuration changes.
             if (task != null) startTask();
@@ -116,6 +156,12 @@ final class TextBubbleManager implements Listener {
     private static boolean optionalBool(YamlConfiguration c, String key, boolean fallback) {
         return c.contains(key) ? bool(c, key) : fallback;
     }
+    private static int color(YamlConfiguration c, String key, int fallback) {
+        if (!c.contains(key)) return fallback; // Preserve old configuration while applying the new appearance defaults.
+        Object raw = c.get(key);
+        if (!(raw instanceof String hex) || !hex.matches("#[0-9a-fA-F]{6}")) throw new IllegalArgumentException(key);
+        return Integer.parseInt(hex.substring(1), 16);
+    }
     private static Set<String> speakers(YamlConfiguration c) {
         if (!c.contains("npc-speakers")) return DEFAULT_NPCS;
         Object raw = c.get("npc-speakers");
@@ -137,6 +183,7 @@ final class TextBubbleManager implements Listener {
         if (before == null || !before.world.equals(world) || before.speaker != speaker) {
             forget(id);
             sessions.put(id, new Session(world, sequence.incrementAndGet(), speaker));
+            if (Bukkit.getPluginManager().isPluginEnabled("floodgate") && plugin.floodgatePlayer(id)) bedrockViewers.add(id);
         }
     }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -194,17 +241,24 @@ final class TextBubbleManager implements Listener {
         return out.toString();
     }
     private String wrap(String text) {
-        Limits l = limits; StringBuilder out = new StringBuilder(); int width = 0, line = 1;
+        Limits l = limits; StringBuilder out = new StringBuilder("\n  "); int width = 0, line = 1;
         for (int i = 0; i < text.length();) {
             int cp = text.codePointAt(i); i += Character.charCount(cp);
             int size = cp <= 0xFF ? 1 : 2;
             if (width + size > l.columns) {
                 if (line == l.lines) { out.append('…'); break; }
-                out.append('\n'); line++; width = 0;
+                out.append("  \n  "); line++; width = 0;
             }
             out.appendCodePoint(cp); width += size;
         }
-        return out.append("\n▼").toString();
+        return out.append("  ").toString();
+    }
+    private Component caption(Speech speech, boolean bedrock) {
+        Palette palette = limits.palette;
+        int body = bedrock ? (speech.key.recipient == null ? 0xffffff : 0x55ffff)
+                : speech.key.recipient == null ? palette.player : palette.npc;
+        return Component.text(wrap(speech.text), TextColor.color(body))
+                .append(Component.text("\n▼", TextColor.color(bedrock ? 0xaaaaaa : palette.pointer)));
     }
     private Location anchor(Entity player) {
         Location at = player.getLocation().add(0, player.getHeight() + 0.35, 0);
@@ -262,18 +316,21 @@ final class TextBubbleManager implements Listener {
                 display.setPersistent(false); display.setGravity(false); display.setInvulnerable(true);
                 display.addScoreboardTag("af_text_bubble"); display.setBillboard(Display.Billboard.CENTER);
                 display.setTeleportDuration(Math.min(10, limits.ticks)); display.setViewRange(1);
-                display.setShadowed(true); display.setSeeThrough(false); display.setAlignment(TextDisplay.TextAlignment.CENTER);
-                display.setDefaultBackground(false); display.setBackgroundColor(Color.fromARGB(175,22,29,40));
+                display.setShadowed(false); display.setSeeThrough(false); display.setAlignment(TextDisplay.TextAlignment.CENTER);
+                display.setDefaultBackground(false); display.setBackgroundColor(Color.fromRGB(limits.palette.background));
+                display.setTextOpacity((byte) -1);
                 display.setLineWidth(320); display.setBrightness(new Display.Brightness(15,15));
-                display.text(Component.text(wrap(speech.text), NamedTextColor.WHITE));
+                display.text(caption(speech, false));
             });
+            bedrockCaptions.put(entity.getEntityId(), WrappedChatComponent.fromJson(GsonComponentSerializer.gson().serialize(caption(speech, true))).getHandle());
             bubble = new Bubble(entity, speech, speech.created + limits.seconds * 1_000_000_000L, now);
             active.put(speech.key, bubble); admitted++;
         } else {
             // Revoke previous recipients before changing text, even for another restricted chat audience.
             bubble.viewers = speech.viewers;
             for (UUID id : new HashSet<>(bubble.shown)) if (!canView(speech.key, speaker, bubble, id)) hide(bubble, id);
-            bubble.entity.text(Component.text(wrap(speech.text), NamedTextColor.WHITE));
+            bedrockCaptions.put(bubble.entity.getEntityId(), WrappedChatComponent.fromJson(GsonComponentSerializer.gson().serialize(caption(speech, true))).getHandle());
+            bubble.entity.text(caption(speech, false));
             bubble.expires = speech.created + limits.seconds * 1_000_000_000L; bubble.replaced = now; replaced++;
         }
     }
@@ -303,14 +360,16 @@ final class TextBubbleManager implements Listener {
         errors++; remove(id);
         if (errors <= 3) plugin.getLogger().warning("Text bubble stopped: " + e.getClass().getSimpleName());
     }
-    private void remove(Key id) { Bubble bubble = active.remove(id); if (bubble != null) bubble.entity.remove(); }
+    private void remove(Key id) { Bubble bubble = active.remove(id); if (bubble != null) { bubble.entity.remove(); bedrockCaptions.remove(bubble.entity.getEntityId()); } }
     private void forget(UUID id) {
         sessions.remove(id);
+        bedrockViewers.remove(id);
         synchronized (pending) { pending.keySet().removeIf(key -> key.speaker.equals(id) || id.equals(key.recipient)); }
         for (Key key : new ArrayList<>(active.keySet())) if (key.speaker.equals(id) || id.equals(key.recipient)) remove(key);
     }
     private void clear() { synchronized (pending) { pending.clear(); } for (Key id : new ArrayList<>(active.keySet())) remove(id); }
-    void stop() { npcBridge.stop(); if (task != null) task.cancel(); clear(); sessions.clear(); }
+    void stop() { npcBridge.stop(); if (task != null) task.cancel(); clear(); sessions.clear(); bedrockViewers.clear(); bedrockCaptions.clear();
+        if (bedrockPalette != null) ProtocolLibrary.getProtocolManager().removePacketListener(bedrockPalette); }
     @EventHandler public void join(PlayerJoinEvent e) { refresh(e.getPlayer()); }
     @EventHandler public void quit(PlayerQuitEvent e) { forget(e.getPlayer().getUniqueId()); }
     @EventHandler public void world(PlayerChangedWorldEvent e) { forget(e.getPlayer().getUniqueId()); refresh(e.getPlayer()); }
@@ -336,6 +395,11 @@ final class TextBubbleManager implements Listener {
         o.addProperty("npcAudience","recipient-and-current-attached-eye");
         o.addProperty("npcActive",active.keySet().stream().filter(key -> key.recipient != null).count());
         o.addProperty("npcSpeakHook",npcBridge.ready());
+        o.addProperty("backgroundColor",String.format("#%06x",limits.palette.background));
+        o.addProperty("backgroundOpacity",255); o.addProperty("textShadow",false);
+        o.addProperty("playerTextColor",String.format("#%06x",limits.palette.player));
+        o.addProperty("npcTextColor",String.format("#%06x",limits.palette.npc));
+        o.addProperty("bedrockAppearance","native-label-bright-text; background-unavailable");
         sender.sendMessage("MC_BUBBLES " + o);
     }
     void admin(CommandSender sender, String[] args) {

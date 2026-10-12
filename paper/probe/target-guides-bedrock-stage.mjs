@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {randomUUID,createHash} from 'node:crypto';
-import {readFileSync,writeFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {command} from 'file:///E:/MC/ops/rcon-client.mjs';
 const stage='E:/MC/staging/ysm-release-20261011/paper';
 const properties=readFileSync(stage+'/server.properties','utf8');
@@ -22,8 +22,11 @@ assert.ok(clientEventLabel);
 const rc=q=>command(q,15000,{properties:stage+'/server.properties',port:25645});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const report={at:new Date().toISOString(),scope:'isolated Bedrock 2193 wire, not phone/Xbox visuals',checks:[],errors:[],texts:[],samples:[],raw:[]};
-const out=process.env.GUIDE_REPORT??'E:/MC/ops/repairs/target-guides-20261012/bedrock-1.json';
+const out=process.env.GUIDE_REPORT;
+assert(out && !existsSync(out), 'Set GUIDE_REPORT to a fresh private evidence file');
+const version=process.env.GUIDE_VERSION??'0.4.28';
 let client,spawned=false,closing=false;const points=[],name='.GuideBE01';
+const labels=[];
 const close=(p,q)=>Math.abs(p.x-q.x)<1e-4&&Math.abs(p.y-q.y)<1e-4&&Math.abs(p.z-q.z)<1e-4;
 function check(name,pass,detail){report.checks.push({name,pass:!!pass,detail});assert.ok(pass,name);console.log('PASS',name);}
 async function until(fn,label,ms=30000){const end=Date.now()+ms;while(Date.now()<end){if(fn())return;await sleep(90);}throw Error('Timeout '+label);}
@@ -34,18 +37,24 @@ function complete(label,start,end){const last=points.findIndex(p=>close(p,end));
  check(label+' straight',frame.every((p,i)=>{const t=i/(frame.length-1);return close(p,{x:start.x+(end.x-start.x)*t,y:start.y+(end.y-start.y)*t,z:start.z+(end.z-start.z)*t});}));report.samples.push(frame);
 }
 try{
- check('candidate 0.4.26',(await rc('version AgentFriend')).includes('0.4.26'));
+ check('candidate '+version,(await rc('version AgentFriend')).includes(version));
  await rc('minecraft:setblock 122 205 100 minecraft:diamond_ore');await rc('minecraft:kill @e[tag=guide_enemy_qa]');
  client=be.createClient({host:'127.0.0.1',port:19155,version:'1.26.51',offline:true,username:'GuideBE01',raknetBackend:'raknet-native',useRaknetWorkers:false,connectTimeout:15000});
  client.on('session',p=>{p.xuid='9000000987654';}); // Self-signed identity only on this isolated listener.
  client.on('spawn',()=>spawned=true);client.on('error',e=>report.errors.push(e.message));client.on('disconnect',p=>{if(!closing)report.errors.push(JSON.stringify(p));});
  client.on('text',p=>report.texts.push(p.message.replace(/§[0-9a-fk-or]/gi,'')));
+ for(const event of ['add_entity','set_entity_data'])client.on(event,p=>{
+   for(const entry of p.metadata??[])if(typeof entry.value==='string')labels.push({event,id:String(p.runtime_entity_id),text:entry.value});
+ });
  report.codecMap={...mapEvidence,diagnosticClientLabel:clientEventLabel};
  client.on('level_event',p=>{if(report.raw.length<100)report.raw.push({kind:'level_event',...p});if(p.event===clientEventLabel)points.push(p.position);});
  client.on('spawn_particle_effect',p=>{if(report.raw.length<100)report.raw.push({kind:'spawn_particle_effect',...p});});
  await until(()=>spawned,'Bedrock spawn');await sleep(1700);
  check('Bedrock player actually on Paper',(await rc('minecraft:list')).includes(name));
  await rc('minecraft:gamemode survival '+name);await rc('minecraft:tp '+name+' 100.5 201 100.5');
+ // This fixture's mana persists across runs. Refill only its isolated QA identity;
+ // otherwise a legitimate low-mana denial is mistaken for a missing particle packet.
+ report.fixtureMana=await rc('skills manaability resetcooldown '+name+' replenish true');
  await ask('/mycli skills learn prospect');await ask('/mycli skills learn sense');points.length=0;
  await ask('/mycli cast prospect diamond');await until(()=>report.texts.some(s=>s.includes('探矿术找到钻石矿')),'Bedrock ore cast');await sleep(600);
  complete('Bedrock complete ore line from caster to target',{x:100.5,y:202.2,z:100.5},{x:122.5,y:205.5,z:100.5});
@@ -58,6 +67,11 @@ try{
  points.length=0;await rc('minecraft:tp @e[tag=guide_enemy_qa,limit=1] 118.5 204 108.5');await sleep(1100);
  complete('Bedrock line follows enemy',{x:100.5,y:202.2,z:102.5},{x:118.5,y:205.17,z:108.5});
  await rc('minecraft:kill @e[tag=guide_enemy_qa]');await sleep(1100);points.length=0;await sleep(900);check('Bedrock dead enemy stops line',points.length===0,points.length);
+ send('/mycli say 基岩气泡可读性检查');
+ await until(()=>labels.some(p=>p.text.includes('基岩气泡可读性检查')),'Bedrock actual bubble nametag');
+ const caption=labels.find(p=>p.text.includes('基岩气泡可读性检查'));report.bubbleCaption=caption;
+ check('Bedrock receives the actual caption and pointer',caption.text.includes('▼'));
+ check('Bedrock fallback retains bright text when Geyser discards background',/§f/.test(caption.text)&&!/§[08]/.test(caption.text));
  check('no Bedrock transport errors',report.errors.length===0,report.errors);report.passed=report.checks.length;
 }catch(error){report.failure=error.stack;process.exitCode=1;console.error(error);}
 finally{closing=true;report.receivedPoints=points.slice(0,80);client?.close();writeFileSync(out,JSON.stringify(report,(_,v)=>typeof v==='bigint'?v.toString():v,2));await sleep(500);}

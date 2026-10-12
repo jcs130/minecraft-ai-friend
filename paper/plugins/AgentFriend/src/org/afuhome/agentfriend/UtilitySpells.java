@@ -257,10 +257,12 @@ final class UtilitySpells implements Listener {
         Enemy nearest = hostiles.get(0);
         Location at = player.getLocation(), target = ((Entity) nearest).getLocation();
         double dx = target.getX() - at.getX(), dz = target.getZ() - at.getZ();
-        double yaw = Math.toDegrees(Math.atan2(-dx, dz));
-        double delta = ((yaw - at.getYaw() + 540) % 360) - 180;
-        String[] sectors = {"前 ↑", "右前 ↗", "右 →", "右后 ↘", "后 ↓", "左后 ↙", "左 ←", "左前 ↖"};
-        String direction = sectors[Math.floorMod((int) Math.round(delta / 45), 8)];
+        // Use the same multi-turn-safe bearing as player and merchant tracking.
+        String direction = switch (AgentFriendPlugin.direction(at.getYaw(), dx, dz)) {
+            case "↑" -> "前 ↑"; case "↗" -> "右前 ↗"; case "→" -> "右 →"; case "↘" -> "右后 ↘";
+            case "↓" -> "后 ↓"; case "↙" -> "左后 ↙"; case "←" -> "左 ←"; case "↖" -> "左前 ↖";
+            default -> "附近 ●";
+        };
         int dy = target.getBlockY() - at.getBlockY();
         String height = Math.abs(dy) <= 1 ? "同层" : (dy > 0 ? "上" : "下") + Math.abs(dy) + "格";
         sense.bar().setTitle("§b✦ 探敌 " + hostiles.size() + "只 · 最近" + enemyName(nearest)

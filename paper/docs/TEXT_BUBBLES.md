@@ -2,11 +2,13 @@
 
 0.4.9 已于2026-10-10正式上线，包含0.4.8玩家气泡与NPC对白；发布状态见 SERVER_UPDATES.md。这是文字功能，语音尚未接入。
 
+**2026-10-12 外观0.4.28已上线：**Java与共享Web使用不透明白底、玩家深灰字、NPC蓝字和灰色指示符，取消文字阴影，增加顶端及两侧留白。保留原版矩形背景，不宣称原版协议提供圆角边框。基岩现役Geyser丢弃TextDisplay背景，仅对实际Floodgate接收者把正文改为亮白/青色以保留可读性；白底框仍需要专门的基岩渲染适配。女神相机已使用新固定桥，远端Web仍须更新实际运行副本；正式备份与验证见[发布记录](GUIDE_BUBBLES_RELEASE_20261012.md)。下文候选测试为发布前记录，最终JAR相同。
+
 ## 玩家和 Agent
 
 - 正常公开聊天即可；Agent 也可调用 `/mycli say 大家好，准备出发了`，沿用普通聊天的取消、接收者及 NPC 输入规则。
 - 默认在角色头顶显示 8 秒，跟随移动；附近 24 格、同维度、有视线且收到该条公开聊天的在线玩家可见。
-- 气泡最多三行正文加向下指示符。连续发言更新同一个气泡，过长内容省略；完整公开正文仍在聊天栏。
+- 气泡最多三行正文加向下指示符；0.4.28候选增加顶端空行与两侧留白。连续发言更新同一个气泡，过长内容省略；完整公开正文仍在聊天栏。
 - 玩家私聊、命令、任务回执、传送点/地标命名等被取消的输入不生成玩家气泡。隐身角色、女神和观战 Eye 不生成自己的气泡；Eye 可观看其他有实体角色的公开气泡。
 - `/mycli bubbles` 查看 `MC_BUBBLES` 状态；`/mycli explain say` 与 `/mycli explain bubbles` 查询准确入口。普通说话不属于魔法，不耗技能点或魔力。
 
@@ -42,12 +44,20 @@ NPC 和玩家共用一个5tick刷新任务、32个显示实体和64条待发上�
 | require-line-of-sight | true | 布尔值 |
 | npc-enabled | true | 布尔值 |
 | npc-speakers | storyteller、botanist、guild-receptionist、life-mentors | 最多16个不重复稳定ID；空列表停用NPC气泡 |
+| background-color | `"#ffffff"` | 带引号的六位RGB颜色；背景固定全不透明 |
+| player-text-color | `"#1f2937"` | 带引号的六位RGB颜色 |
+| npc-text-color | `"#1d4ed8"` | 带引号的六位RGB颜色 |
+| pointer-color | `"#64748b"` | 带引号的六位RGB颜色 |
+
+颜色字段为0.4.28候选新增。旧配置没有这些字段时直接使用新默认值，无需覆盖原运营参数。错误颜色使整份重载失败，保留上一份有效配置；基岩亮色兼容回退不采用这些深色正文值。
 
 中文/非拉丁字符按两列换行；实际可见字数还受三行上限约束。格式码、控制符和文本方向控制符不会带入气泡。多人限流只影响气泡，不取消正常聊天。
 
 单个主线程任务负责所有气泡；聊天线程只提交有界不可变快照，每位玩家及每个NPC私有对话最多一条待显示发言、一个显示实体。会话/世界变化使旧输入失效；下线、死亡、观战、隐身、超时、停用和插件关闭都清理实体。显示实体不持久化、不强制加载区块、不替代角色铭牌。默认隐藏后才按接收者显式显示；更换受限聊天接收者时先撤销旧接收者再更新正文。
 
 `MC_BUBBLES` schemaVersion=1：enabled、viewDistance、durationSeconds、active/pending、maxActive/maxPending、admitted/replaced/expired/throttled/errors、frames/peakFrameMicros、publicChatOnly、clientModRequired；0.4.9新增 playerPublicChatOnly、npcEnabled、npcAudience、npcActive、npcSpeakHook。publicChatOnly=false 表示还支持明确寻址的NPC对白；玩家输入仍仅接受公开聊天。峰值耗时包含帧内全部跟随/可见性工作，不代表持续平均 CPU。
+
+0.4.28候选新增只读外观字段：backgroundColor、backgroundOpacity、textShadow、playerTextColor、npcTextColor、bedrockAppearance。基岩兼容处理只改本插件既有气泡实体、既有接收者的数据包文字颜色；不扩大对白接收者，不额外生成显示实体，不增加轮询任务。
 
 回退：先设 `enabled: false` 并 reload。需要回退版本时，按 OPERATIONS.md 正常停服，用本次维护回退目录恢复旧自研 JAR；不要回放世界或其他玩家数据。
 
@@ -56,5 +66,15 @@ NPC 和玩家共用一个5tick刷新任务、32个显示实体和64条待发上�
 原版协议夹具：`plugins/AgentFriend/text-bubbles-stage.mjs`，只允许固定回环隔离服及专用 QA 身份。覆盖实际显示/移动/替换/到期、附身 Eye、距离/遮挡/隐藏/受限接收者、私聊与取消输入、CLI 命令注入拒绝、目录发现、配置拒绝/热停用、维度/下线，以及 16 人同时发言。私有原始回执位于 E/F `repairs/text-bubbles-20261010`；实际通过项与耗时以发布回执为准。隔离 QA 插件不能部署正式服。
 
 NPC夹具：`plugins/AgentFriend/npc-text-bubbles-stage.mjs`，验证实际NPCSpeak问候/答复、原菜单与导师接待、并发私有对话、Eye脱离、系统前缀伪造拒绝、NPC隐藏/移除、对话者跨维度及独立停用；模拟后端只存在于固定回环隔离QA插件。证据位于 E/F `repairs/npc-text-bubbles-20261010`。
+
+0.4.28候选：`paper/probe/guide-bubbles-completion-stage.mjs`原生30项通过，包含真实TextDisplay白底/颜色/留白、实际附身Eye、玩家私聊隔离、真实公会接待员蓝字与私有接收者、有效/无效配色重载、多圈方向及考场引导。共享Web以原1.20.6字体验证真实ARGB/RGB绘制；`paper/probe/target-guides-bedrock-stage.mjs`实际基岩协议15项通过，含文字与指示符、亮色兼容、完整引导及移动/清理。最终JAR SHA256为 `3e7b32283e04111ff7375b5c93f621557ea82ae09e29070488e3fea8ae26cbf4`。证据位于 E/F `repairs/guide-bubbles-completion-20261012`，未宣称手机/Xbox白底外观已验。
+
+## 基岩资源包自动下发
+
+2026-10-12实查正式 `Geyser-Spigot/config.yml`：`enable-custom-content: true`、`force-resource-packs: true`，`packs`目录目前为空。Geyser支持把兼容基岩的 `.mcpack`/`.zip` 放入 `plugins/Geyser-Spigot/packs`，维护重载/重启后，玩家下次连接即可通过现有基岩连接下载，无需开放新HTTP端口。新内容须先在固定回环Geyser验证包清单、下载摘要及实际渲染，再依原维护流程上线；仅设置开关不等于已经下发了资源。
+
+现有YSM基岩扩展使用皮肤/几何数据包，不是该目录中的资源包。Java模组JAR与Java资源包不能直接作为基岩模组下发执行。Geyser需要基岩格式素材及相应的服务端映射/扩展；它也不直接支持行为包。依据：[Geyser资源包](https://geysermc.org/wiki/geyser/packs/)、[自定义实体API](https://geysermc.org/wiki/geyser/custom-entities/)。
+
+专用白底气泡可沿「资源包提供外观＋Geyser扩展传递气泡实体/布局/文字状态」继续实现。现装Geyser的[固定版本TextDisplay转换](https://github.com/GeyserMC/Geyser/blob/f66329d9d21b3c836edc014fbb9d8312fbe34285/core/src/main/java/org/geysermc/geyser/entity/type/TextDisplayEntity.java)只转换文字标签；仅下发白色贴图不会保留Java的动态背景色或自动生成中文字形。当前候选清楚返回背景不可用及亮色正文状态，不把资源包开关当成白底渲染完成。
 
 协议依据：[Paper TextDisplay API](https://jd.papermc.io/paper/1.20.6/org/bukkit/entity/TextDisplay.html)、[Paper AsyncChatEvent](https://jd.papermc.io/paper/1.20.6/io/papermc/paper/event/player/AsyncChatEvent.html)、[Geyser TextDisplay 转换](https://github.com/GeyserMC/Geyser/blob/master/core/src/main/java/org/geysermc/geyser/entity/type/TextDisplayEntity.java)。后续语音方案见 [近距离语音调研](PROXIMITY_VOICE_RESEARCH.md)。
