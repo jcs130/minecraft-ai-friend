@@ -53,6 +53,7 @@ final class PlayerSceneBridge {
         public Type<State> type(){return TYPE;}
     }
     static void register(IEventBus bus){
+        PlayerActorVisuals.register();
         bus.addListener(PlayerSceneBridge::payloads);
         NeoForge.EVENT_BUS.addListener(PlayerSceneBridge::tick);
         NeoForge.EVENT_BUS.addListener(PlayerSceneBridge::logout);
@@ -71,6 +72,12 @@ final class PlayerSceneBridge {
         if(event.getServer().getTickCount()%5!=0)return;
         for(var player:event.getServer().getPlayerList().getPlayers())if(SUBSCRIBED.contains(player.getUUID())&&PlayerAuthBridge.authenticated(player)&&player.connection.hasChannel(State.TYPE)){
             var scene=snapshot(player);String json=scene.toString();
+            // Existing contraption payloads retain priority under the packet
+            // budget. Trim farthest display actors rather than dropping a frame.
+            var actors=scene.getAsJsonArray("actors");
+            while(json.getBytes(StandardCharsets.UTF_8).length>MAX&&!actors.isEmpty()){
+                actors.remove(actors.size()-1);scene.addProperty("actorsTruncated",true);json=scene.toString();
+            }
             if(json.getBytes(StandardCharsets.UTF_8).length<=MAX)PacketDistributor.sendToPlayer(player,new State(json));
         }
     }
@@ -136,9 +143,20 @@ final class PlayerSceneBridge {
         }
         out.add("blocks",blocks);out.addProperty("truncated",candidates.size()>24);
         out.add("contraptions",player.isDeadOrDying()?new JsonArray():PlayerWorldBridge.contraptionRenderStates(player));
+        out.add("actors",PlayerActorVisuals.snapshot(player));out.addProperty("actorVisualVersion",1);
         return out;
     }
     private static void commands(RegisterCommandsEvent event){
+        event.getDispatcher().register(Commands.literal("maw_scene").requires(s->s.hasPermission(4))
+            .then(Commands.literal("bubble").then(Commands.argument("maid",net.minecraft.commands.arguments.UuidArgument.uuid())
+                .then(Commands.argument("text",com.mojang.brigadier.arguments.StringArgumentType.greedyString()).executes(c->{
+                    var uuid=net.minecraft.commands.arguments.UuidArgument.getUuid(c,"maid");
+                    var entity=c.getSource().getLevel().getEntity(uuid);
+                    if(!(entity instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid))return 0;
+                    String text=PlayerActorVisuals.clean(com.mojang.brigadier.arguments.StringArgumentType.getString(c,"text"),160);
+                    if(text.isBlank())return 0;maid.getChatBubbleManager().addTextChatBubble(text);
+                    c.getSource().sendSuccess(()->Component.literal("MAW_SCENE bubble_added "+uuid),false);return 1;
+                })))));
         event.getDispatcher().register(Commands.literal("maw_scene").requires(s->s.hasPermission(4)).then(Commands.literal("export_shapes").executes(c->{
             JsonArray rows=new JsonArray();var level=c.getSource().getServer().overworld();BlockPos pos=level.getSharedSpawnPos();
             for(String name:BLOCKS.stream().sorted().toList())for(var state:BuiltInRegistries.BLOCK.get(ResourceLocation.parse(name)).getStateDefinition().getPossibleStates()){

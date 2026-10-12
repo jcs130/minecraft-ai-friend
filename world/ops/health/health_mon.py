@@ -165,6 +165,11 @@ def probe_society_bedrock():
             checks['native-model-packs-registered'] = model_registration['registeredModels'] == models['modelCount']
             report['resources']['models'] = {'count': models['modelCount'], 'packs': models['packs'],
                                              'registration': model_registration, 'actualBedrockVisualVerified': False}
+            if models.get('animationVersion') == 1:
+                import maw_bedrock_actors_health
+                actors=maw_bedrock_actors_health.health()
+                checks['native-actor-animations-and-bubbles']=actors['ok']
+                report['resources']['actors']=actors
         firewall = subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
             str(tools/'maw_lan_firewall.ps1'), '-Mode', 'Status', '-Bedrock'],
             capture_output=True, text=True, encoding='utf-8', timeout=20)

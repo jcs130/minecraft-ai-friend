@@ -34,17 +34,26 @@ import org.jose4j.json.internal.json_simple.parser.JSONParser;
  * observes only this connection's clientbound payloads; it sends no game action.
  */
 public final class MawModelsExtension implements Extension {
-    private record Model(CustomEntityDefinition definition, float scale, SkinData skin) {}
+    private record Model(CustomEntityDefinition definition, float scale, SkinData skin, Map<String,String> animations) {}
     private record Binding(UUID uuid, String identifier) {}
     private static final class State {
         final Map<Integer, Binding> bindings = new ConcurrentHashMap<>();
         final Map<UUID, SkinData> originalSkins = new ConcurrentHashMap<>();
-        String selectedSkin = "";
+        final Map<Integer, Binding> active = new ConcurrentHashMap<>();
+        final Map<UUID,String> selected = new ConcurrentHashMap<>();
+        ActorPresentation presentation;
+        volatile String selectedSkin = "";
     }
     private final Map<String, Model> definitions = new HashMap<>();
     private final Map<String, Model> skins = new HashMap<>();
     private final Map<GeyserConnection, State> states = Collections.synchronizedMap(new WeakHashMap<>());
     private static final Identifier ARMOR_STAND = Identifier.of("minecraft:armor_stand");
+    private static void sendSkin(GeyserSession session,UUID uuid,SkinData desired){
+        // The pinned public helper looks only in EntityCache's other-player
+        // map. The session player is kept separately in this Geyser build.
+        if(uuid.equals(session.getPlayerEntity().uuid()))org.geysermc.geyser.skin.SkinManager.sendSkinPacket(session,session.getPlayerEntity(),desired);
+        else session.sendSkin(uuid,desired);
+    }
 
     @Subscribe
     public void packs(GeyserDefineResourcePacksEvent event) {
@@ -112,12 +121,15 @@ public final class MawModelsExtension implements Extension {
                 }
                 float scale = ((Number) row.get("scale")).floatValue();
                 if (!Float.isFinite(scale) || scale <= 0 || scale > 8) throw new IllegalArgumentException("Invalid native scale");
-                var model = new Model(definition, scale, skin);
+                Map<String,String> animations=new HashMap<>();
+                if(row.get("animations") instanceof Map<?,?>)object(row.get("animations")).forEach((k,v)->animations.put(k,(String)v));
+                var model = new Model(definition, scale, skin, Map.copyOf(animations));
                 if (definitions.put(identifier, model) != null) throw new IllegalArgumentException("Duplicate native entity ID");
                 if (skin != null) skins.put(text(row, "modelId")+"\n"+text(row, "textureId"), model);
                 event.register(definition);
             }
             logger().info("MAW_MODELS registered="+definitions.size()+" ysmSkins="+skins.size());
+            logger().info("MAW_ACTORS animationVersion=1 actors=24 sceneHz=4 nativeBubbles=true");
         } catch (Exception error) { throw new IllegalStateException("Native Bedrock model resources rejected", error); }
     }
 
@@ -126,11 +138,25 @@ public final class MawModelsExtension implements Extension {
         if (!(event.connection() instanceof GeyserSession session) || session.getDownstream() == null)
             throw new IllegalStateException("Pinned Geyser downstream unavailable");
         State state = states.computeIfAbsent(event.connection(), ignored -> new State());
+        state.presentation=new ActorPresentation(session,(id,uuid,actor)->{
+            Binding b=state.active.get(id);Model model=b!=null&&b.uuid().equals(uuid)?definitions.get(b.identifier()):null;
+            if("minecraft:player".equals(actor.get("type"))&&actor.get("ysm") instanceof Map<?,?>){
+                var ysm=object(actor.get("ysm"));
+                if(uuid.toString().equals(ysm.get("playerUuid"))&&Boolean.TRUE.equals(ysm.get("available"))&&
+                    (!Boolean.TRUE.equals(ysm.get("enabled"))||("2.6.5".equals(ysm.get("ysmVersion"))&&
+                      "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb".equals(ysm.get("jarSha256"))))){
+                    String key=Boolean.TRUE.equals(ysm.get("enabled"))?text(ysm,"modelId")+"\n"+text(ysm,"texture"):"";
+                    model=skins.get(key);SkinData desired=model==null?(key.isEmpty()?state.originalSkins.get(uuid):null):model.skin();
+                    if(desired!=null&&!key.equals(state.selected.get(uuid))){state.selected.put(uuid,key);sendSkin(session,uuid,desired);}
+                }
+            }
+            return model==null?null:model.animations();
+        });
         session.getDownstream().getSession().addListener(new SessionAdapter() {
             @Override public void packetReceived(Session downstream, Packet packet) {
                 try {
                     if (packet instanceof ClientboundRemoveEntitiesPacket removed) {
-                        for (int id : removed.getEntityIds()) state.bindings.remove(id);
+                        for (int id : removed.getEntityIds()){state.bindings.remove(id);state.active.remove(id);session.executeInEventLoop(()->state.presentation.remove(id));}
                     } else if (packet instanceof ClientboundCustomPayloadPacket payload && payload.getData().length <= 65536) {
                         String channel = payload.getChannel().asString();
                         if (channel.equals("mawbedrock:entity")) {
@@ -140,6 +166,10 @@ public final class MawModelsExtension implements Extension {
                             String identifier = text(body, "identifier");
                             if (!definitions.containsKey(identifier) || state.bindings.size() >= 4096) return;
                             state.bindings.put(id, new Binding(UUID.fromString(text(body, "uuid")), identifier));
+                        } else if (channel.equals("maw_agent:scene_state")) {
+                            var body=json(payload.getData());
+                            if(Long.valueOf(1).equals(body.get("schemaVersion"))&&session.playerEntity().uuid().toString().equals(body.get("playerUuid")))
+                                session.executeInEventLoop(()->{try{state.presentation.frame(body);}catch(RuntimeException e){state.presentation.clear();logger().warning("Native actors rejected: "+e.getClass().getSimpleName());}});
                         } else if (channel.equals("maw_agent:menu_state")) {
                             var body = json(payload.getData());
                             if (!Long.valueOf(1).equals(body.get("schemaVersion")) || !(body.get("self") instanceof Map<?, ?>)) return;
@@ -153,10 +183,11 @@ public final class MawModelsExtension implements Extension {
                                   "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb".equals(ysm.get("jarSha256")))) return;
                             String key = Boolean.TRUE.equals(ysm.get("enabled")) ? text(ysm,"modelId")+"\n"+text(ysm,"texture") : "";
                             Model model = skins.get(key);
-                            SkinData desired = model == null ? state.originalSkins.get(uuid) : model.skin();
+                            SkinData desired = model == null ? (key.isEmpty()?state.originalSkins.get(uuid):null) : model.skin();
                             if (desired == null || key.equals(state.selectedSkin)) return;
                             state.selectedSkin = key;
-                            session.executeInEventLoop(() -> session.sendSkin(uuid, desired));
+                            state.selected.put(uuid,key);
+                            session.executeInEventLoop(() -> sendSkin(session,uuid, desired));
                         }
                     }
                 } catch (Exception error) { logger().warning("Native model payload rejected: "+error.getClass().getSimpleName()); }
@@ -170,8 +201,11 @@ public final class MawModelsExtension implements Extension {
     @Subscribe
     public void skin(SessionSkinApplyEvent event) {
         State state = states.computeIfAbsent(event.connection(), ignored -> new State());
-        // Never replace another player's skin with this connection's self state.
-        if (event.uuid().equals(event.connection().playerEntity().uuid())) state.originalSkins.putIfAbsent(event.uuid(), event.originalSkin());
+        // Public appearance is subsequently bound by each actor's exact UUID,
+        // never by the viewing player's own model or by account name.
+        state.originalSkins.putIfAbsent(event.uuid(), event.originalSkin());
+        Model selected=skins.get(state.selected.getOrDefault(event.uuid(),""));
+        if(selected!=null){event.skin(selected.skin().skin());event.cape(selected.skin().cape());event.geometry(selected.skin().geometry());}
     }
 
     @Subscribe
@@ -182,6 +216,7 @@ public final class MawModelsExtension implements Extension {
         if (binding == null || !binding.uuid().equals(event.uuid())) return;
         Model model = definitions.get(binding.identifier());
         if (model == null) return;
+        state.active.put(event.entityId(),binding);
         event.definition(model.definition());
         event.preSpawnConsumer(entity -> {
             entity.override(GeyserEntityDataTypes.SCALE, model.scale());
@@ -192,5 +227,5 @@ public final class MawModelsExtension implements Extension {
     }
 
     @Subscribe
-    public void leave(SessionDisconnectEvent event) { states.remove(event.connection()); }
+    public void leave(SessionDisconnectEvent event) { State state=states.remove(event.connection());if(state!=null&&state.presentation!=null&&event.connection() instanceof GeyserSession session&&!session.isClosed())state.presentation.clear(); }
 }

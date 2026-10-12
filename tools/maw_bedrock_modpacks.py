@@ -1,7 +1,7 @@
 """Convert locked TLM/YSM model packs, preserving original geometry and PNGs.
 
-This is a resource adapter, not a port of Java animation controllers or mod GUI.
-The paired pinned Geyser extension binds tracked maids and this account's skin.
+The paired pinned Geyser extension applies real tracked actor state, animations,
+nameplates and expiring native maid chat bubbles. No gameplay AI is replaced.
 """
 from __future__ import annotations
 import argparse
@@ -17,11 +17,12 @@ import uuid
 import zipfile
 from PIL import Image
 from maw_bedrock_resources import Assets, encoded, sha
+from maw_bedrock_animations import adapt
 
 CATALOG = 'modpack-catalog.json'
 CONTRACT = 'modpack-contract.json'
 EXTENSION = 'MawModels.jar'
-VERSION = [1, 0, 2]
+VERSION = [1, 1, 0]
 TLM_SHA = 'f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27'
 YSM_SHA = 'b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb'
 RESOURCE = re.compile(r'^[a-z0-9_.-]+:[a-z0-9_./-]+$')
@@ -99,7 +100,7 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path):
     entries = {kind: {} for kind in ['touhou', 'ysm']}
     ids = set()
 
-    def add(kind, model_id, texture_id, model_key, texture_key, definition, scale=1.0, metadata=None):
+    def add(kind, model_id, texture_id, model_key, texture_key, definition, scale=1.0, metadata=None, animation_key=None):
         relative(model_key); relative(texture_key)
         raw_model, png = assets.read(model_key), assets.read(texture_key)
         original_hash = sha(raw_model)
@@ -115,13 +116,20 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path):
         model_path = 'models/entity/maw/'+original_hash[:24]+'.geo.json'
         texture_path = 'textures/entity/maw/'+sha(png)[:32]+'.png'
         entity_path = 'entity/maw/'+fingerprint+'.entity.json'
+        animation_path = 'animations/maw/'+fingerprint+'.json'
+        controller_path = 'animation_controllers/maw/'+fingerprint+'.json'
+        source_clips = assets.json(animation_key).get('animations', {}) if animation_key else None
+        bones=converted['minecraft:geometry'][0]['bones']
+        animation = adapt([b['name'] for b in bones], fingerprint, source_clips, [b['name'] for b in bones if not b.get('parent')])
+        entries[kind][animation_path] = encoded({'format_version': '1.8.0', 'animations': animation['clips']})
+        entries[kind][controller_path] = encoded({'format_version': '1.10.0', 'animation_controllers': animation['controller']})
         entries[kind][model_path] = encoded(converted)
         if texture_path in entries[kind] and entries[kind][texture_path] != png: raise ValueError('texture_hash_prefix_collision')
         entries[kind][texture_path] = png
         entries[kind][entity_path] = encoded({'format_version': '1.10.0', 'minecraft:client_entity': {
             'description': {'identifier': identifier, 'materials': {'default': 'entity_alphatest'},
             'textures': {'default': texture_path[:-4]}, 'geometry': {'default': geo_id},
-            'render_controllers': ['controller.render.maw_native']}}})
+            'render_controllers': ['controller.render.maw_native'], **animation['descriptor']}}})
         source_definition = assets.read(definition)
         entries[kind]['credits/'+sha(source_definition)[:24]+'.json'] = source_definition
         rows.append({'kind': kind, 'modelId': model_id, 'textureId': texture_id,
@@ -129,7 +137,11 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path):
                      'geometry': model_path, 'texture': texture_path, 'geometryIdentifier': geo_id,
                      'scale': scale, 'sourceDefinition': definition, 'sourceModel': model_key,
                      'sourceTexture': texture_key, 'sourcePngSha256': sha(png),
-                     'metadata': metadata or {}, 'javaAnimationControllersAdapted': False})
+                     'metadata': metadata or {}, 'javaAnimationControllersAdapted': False,
+                     'animations': animation['ids'], 'animationFile': animation_path, 'controllerFile': controller_path,
+                     'nativeClips': animation['nativeClips'], 'unsupportedNativeClips': animation['unsupportedNativeClips'],
+                     'movingAnimationAvailable': animation['moving'], 'sourceAnimation': animation_key,
+                     'animationClockParityVerified': False})
         rows[-1]['playerSkinEligible'] = kind == 'ysm' and im.size in [(64, 32), (64, 64), (128, 128)]
 
     for key in sorted(assets.manifest['assets']):
@@ -165,7 +177,8 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path):
                     texture_id = PurePosixPath(texture).stem
                     add('ysm', model_id, texture_id, model, prefix+relative(texture).as_posix(), key,
                         metadata={'license': definition.get('metadata', {}).get('license', {}),
-                                  'properties': definition.get('properties', {})})
+                                  'properties': definition.get('properties', {})},
+                        animation_key=prefix+relative(player['animation']['main']).as_posix() if player.get('animation',{}).get('main') else None)
             except (ValueError, FileNotFoundError, KeyError) as error:
                 excluded.append({'kind': 'ysm', 'modelId': key, 'reason': str(error)})
     if not rows: raise ValueError('No verified native models')
@@ -176,7 +189,7 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path):
         pack_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, 'https://github.com/jcs130/minecraft-ai-friend/bedrock/'+kind))
         content['manifest.json'] = encoded({'format_version': 2, 'header': {
             'name': 'My Agent World · '+('车万女仆专属模型' if kind == 'touhou' else 'YSM 专属模型'),
-            'description': '原骨骼、UV、贴图转换；Java 动画脚本与装备层另行适配。',
+            'description': '原模型贴图、行走与动作、名字和女仆对话气泡。',
             'uuid': pack_uuid, 'version': VERSION, 'min_engine_version': [1, 21, 0]},
             'modules': [{'type': 'resources', 'uuid': str(uuid.uuid5(uuid.UUID(pack_uuid), 'resources')), 'version': VERSION}]})
         content['render_controllers/maw.json'] = encoded({'format_version': '1.8.0', 'render_controllers': {
@@ -196,8 +209,13 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path):
     files[EXTENSION] = {'sha256': sha(raw), 'bytes': len(raw), 'directory': 'extensions'}
     contract = {'schemaVersion': 1, 'files': files, 'packs': packs, 'modelCount': len(rows),
         'geyserJarSha256': sha(geyser.read_bytes()), 'inputs': {'assetsManifestSha256': sha(assets.manifest_bytes),
-            'usedNativeAssets': assets.used}, 'excluded': excluded, 'actualBedrockVisualVerified': False,
-        'limitations': ['Java JS/Gecko/YSM animation controllers, equipment/backpack layers, mod GUI and moving world blocks are not ported.']}
+            'usedNativeAssets': assets.used, 'actorBridgeSources': {p.relative_to(Path(__file__).resolve().parents[1]).as_posix():sha(p.read_bytes())
+                for p in [Path(__file__).resolve().parents[1]/'world/society-bridge-src/src/main/java/dev/qiandeng/maw'/n for n in ('PlayerActorVisuals.java','PlayerSceneBridge.java')]}}, 'excluded': excluded, 'actualBedrockVisualVerified': False,
+        'animationVersion': 1, 'animatedModelCount': sum(r['movingAnimationAvailable'] for r in rows),
+        'nativeClipCount': sum(len(r['nativeClips']) for r in rows),
+        'actorProtocol': {'channel': 'maw_agent:scene_state', 'hz': 4, 'maxActors': 24, 'radius': 32,
+                          'nativeMaidBubbles': True, 'playerPublicChat': True, 'privateChatBubbles': False},
+        'limitations': ['Java-only procedural/parallel controllers and clock parity, equipment/backpack layers and first-person arms are not fully ported. Unsupported source clips are listed per model.']}
     (output/CONTRACT).write_bytes(encoded(contract)); validate(output)
     return contract
 
@@ -229,6 +247,14 @@ def validate(directory: Path, *, deployed=False):
                 geo = json.loads(z.read(row['geometry']))['minecraft:geometry'][0]
                 if geo['description']['identifier'] != row['geometryIdentifier'] or sha(z.read(row['texture'])) != row['sourcePngSha256']:
                     raise ValueError('Modpack original geometry/texture mismatch')
+                if contract.get('animationVersion') == 1:
+                    animations = json.loads(z.read(row['animationFile']))['animations']
+                    controllers = json.loads(z.read(row['controllerFile']))['animation_controllers']
+                    if not set(row['animations'].values()) <= set(animations) or len(controllers) != 1:
+                        raise ValueError('Modpack animations incomplete')
+    if contract.get('animationVersion') == 1:
+        if contract['animatedModelCount'] != sum(r['movingAnimationAvailable'] for r in catalog['models']):
+            raise ValueError('Modpack animated model count mismatch')
     return contract
 
 
@@ -245,6 +271,11 @@ def registered_models(log: Path, contract: dict, started_after: float):
         at = datetime.datetime.strptime(stamp, '%Y-%m-%d %H:%M:%S,%f').timestamp()
         if at < started_after or int(count) != expected: raise ValueError('Stale/incomplete model registration: '+key)
         results[key] = int(count)
+    if contract.get('animationVersion')==1:
+        matches=re.findall(r'(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3}).*MAW_ACTORS animationVersion=1 actors=24 sceneHz=4 nativeBubbles=true',text)
+        if not matches or datetime.datetime.strptime(matches[-1],'%Y-%m-%d %H:%M:%S,%f').timestamp()<started_after:
+            raise ValueError('Native actor animation/bubble registration missing or stale')
+        results['actorAnimationVersion']=1
     return results
 
 
