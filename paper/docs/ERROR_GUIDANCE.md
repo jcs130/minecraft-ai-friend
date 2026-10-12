@@ -1,6 +1,6 @@
 # 操作失败后的正确做法
 
-0.4.32 候选（尚未部署）将自动保护拒绝压成至多三条中文；完整范围、重叠区域与做法可用提示里的 `protect` 命令查询。真人不再自动收到 `MC_PROTECTION/MC_GUILD_ACCESS/MC_LAND_ACCESS` JSON，Agent 原聊天回执与私有频道保持；显式 `protect … --json` 可读取完整 JSON，观战副本不显示机器回执。详见 [保护聊天修复](PROTECTION_CHAT_20261012.md)。
+0.4.32 已上线将自动保护拒绝压成至多三条中文；完整范围、重叠区域与做法可用提示里的 `protect` 命令查询。真人不再自动收到 `MC_PROTECTION/MC_GUILD_ACCESS/MC_LAND_ACCESS` JSON，Agent 原聊天回执与私有频道保持；显式 `protect … --json` 可读取完整 JSON，观战副本不显示机器回执。详见 [保护聊天修复](PROTECTION_CHAT_20261012.md)。
 
 AgentFriend 0.4.3 的玩家提示遵循“哪里出错 → 为什么 → 下一步”。适用于原版聊天、Agent 命令回执，以及实际附身的配对 Eye；Agent 客户端不用更新。原原因码、成功判断、耗费和权限规则保持。
 

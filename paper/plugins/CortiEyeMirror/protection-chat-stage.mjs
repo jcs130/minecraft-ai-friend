@@ -6,6 +6,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {pathToFileURL} from 'node:url';
+import {messages as maintenanceNotices} from '../../ops/maintenance-notice.mjs';
 const stage=process.env.MC_STAGE_PAPER,root=process.env.MC_TEST_REPORT_DIR;
 assert(stage&&root&&path.resolve(stage).toLowerCase().includes('staging'));
 const props=fs.readFileSync(path.join(stage,'server.properties'),'utf8');
@@ -44,7 +45,7 @@ async function query(b,suffix=''){
 }
 async function tell(b,text){await rc('minecraft:tellraw '+b.username+' '+JSON.stringify({text}));await sleep(400);}
 try{
- check('candidate versions loaded',(await rc('version AgentFriend')).includes('0.4.32')&&(await rc('version CortiEyeMirror')).includes('0.1.14'));
+ check('candidate versions loaded',(await rc('version AgentFriend')).includes('0.4.32')&&(await rc('version CortiEyeMirror')).includes('0.1.15'));
  const agent=await join('ag_ProtectQA'),eye=await join('ag_ProtectQA_eye'),human=await join('ProtectHuman');
  const legacy=await join('CortiLan'),legacyEye=await join('CortiEye'),live=await join('live'),stranger=await join('ProtectOther');
  for(const b of [agent,human,legacy,stranger])await rc('minecraft:gamemode survival '+b.username);
@@ -70,6 +71,26 @@ try{
  check('explicit --json works without losing full explanation',matches(human,'MC_PROTECTION').length===1&&human.lines.slice(detailAt).some(s=>s.includes('铁门找按钮')));
  await query(legacy);
  check('legacy registered Agent keeps chat JSON',matches(legacy,'MC_PROTECTION').length===1&&matches(legacyEye,'MC_PROTECTION').length===0);
+ // Queries and command outcomes belong to the actor, never another Agent's
+ // task context. Test both registered legacy and generic ag_ connections.
+ for(const [q,prefix] of [['/mycli status --json','MC_STATUS'],['/mycli progress all 1','MC_PAGE'],['/mycli skills status all 1','MC_PAGE']]){
+  await sleep(1200);const starts=new Map(bots.map(b=>[b,b.lines.length]));agent.chat(q);
+  await until(()=>agent.lines.slice(starts.get(agent)).some(s=>s.startsWith(prefix+' ')),q);await sleep(400);
+  check(q+' result is private and absent from Eye chat',bots.filter(b=>b!==agent).every(b=>!b.lines.slice(starts.get(b)).some(s=>s.startsWith(prefix+' '))));
+ }
+ const noticePlan={id:'chat-audience-stage-20261012',version:'0.4.32',releaseNotes:['聊天回执范围已修复。']};
+ const starts=new Map(bots.map(b=>[b,b.lines.length]));
+ for(const q of maintenanceNotices(noticePlan,'before',180))await rc(q);
+ await sleep(500);
+ check('real maintenance broadcast is concise Chinese without machine JSON',bots.every(b=>b.lines.slice(starts.get(b)).some(s=>s.includes('[维护预告]'))&&!b.lines.slice(starts.get(b)).some(s=>s.startsWith('MC_MAINTENANCE '))));
+ // Existing LuckPerms denials suppress vanilla admin copies while retaining
+ // the command actor's own result and console audit. Do not disable feedback.
+ await rc('minecraft:op '+agent.username);await rc('minecraft:op '+stranger.username);await sleep(500);
+ const adminStart=new Map(bots.map(b=>[b,b.lines.length]));agent.chat('/minecraft:time set 1000');
+ await until(()=>agent.lines.slice(adminStart.get(agent)).some(s=>s.includes('1000')),'actor native command feedback');await sleep(400);
+ check('native admin command result stays with actor',!stranger.lines.slice(adminStart.get(stranger)).some(s=>s.includes('1000')));
+ check('own native feedback and console audit remain enabled',/true/.test(await rc('minecraft:gamerule sendCommandFeedback'))&&/true/.test(await rc('minecraft:gamerule logAdminCommands')));
+ await rc('minecraft:deop '+agent.username);await rc('minecraft:deop '+stranger.username);
  // Trigger a real cancelled block action, not only a preflight command.
  await sleep(1600);await rc('minecraft:gamemode creative '+agent.username);await sleep(200);for(const b of bots)b.lines=[];
  const target=new Vec3(-504,68,-437);await until(()=>agent.blockAt(target)!=null,'loaded protected block');
@@ -95,6 +116,11 @@ try{
   const ae=eye.lines.length,le=live.lines.length,ab=agent.lines.length;await tell(agent,text);
   check(prefix+' JSON reaches body but no spectator copy',agent.lines.slice(ab).includes(text)&&!eye.lines.slice(ae).includes(text)&&!live.lines.slice(le).includes(text));
  }
+ for(const text of ['MC_DUNGEON floor=2 active=true','MC_PLAYER name=ag_CorMy x=-504','MC_TRAVEL id=arena status=success']){
+  const ab=agent.lines.length,ae=eye.lines.length,al=live.lines.length,ll=legacyEye.lines.length;
+  await tell(agent,text);await tell(legacy,text);
+  check('legacy machine fields stay private: '+text.split(' ')[0],agent.lines.slice(ab).includes(text)&&!eye.lines.slice(ae).includes(text)&&!live.lines.slice(al).includes(text)&&!legacyEye.lines.slice(ll).includes(text));
+ }
  for(const text of ['普通私有提示：请沿门和梯子通行。','MC_PROTECTION {broken','MC_PROTECTION 这是一句普通说明','引用 MC_PROTECTION {"allowed":false}']){
   await tell(agent,text);check('ordinary or invalid text preserved: '+text.slice(0,28),eye.lines.includes(text)&&live.lines.includes(text));
  }
@@ -105,6 +131,7 @@ try{
  check('all connections have no protocol errors',report.errors.length===0);
 }catch(e){report.errors.push(e.stack??String(e));}
 finally{
+ for(const name of ['ag_ProtectQA','ProtectOther'])try{await rc('minecraft:deop '+name);}catch(e){report.errors.push('fixture deop: '+e.message);}
  finishing=true;for(const b of bots)b.quit('isolated protection presentation QA complete');await sleep(500);
  const run=process.env.MC_TEST_RUN_LABEL??'1';assert.match(run,/^[a-z0-9-]{1,16}$/);
  report.success=report.errors.length===0;fs.writeFileSync(path.join(root,'protection-native-'+run+'.json'),JSON.stringify(report,null,2)+'\n',{flag:'wx'});

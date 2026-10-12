@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "releasedAt": "2026-10-12T13:19:47.478Z",
+  "minecraft": "1.20.6",
+  "agentFriend": "0.4.32",
+  "cortiEyeMirror": "0.1.15",
+  "coldBackup": "20261012-211001",
+  "files": [
+    {
+      "target": "AgentFriend-0.4.32.jar",
+      "sha256": "e1dd62710e50330060fdaa02326597a71ccd5b09d17b6f2b66d80525442c430a"
+    },
+    {
+      "target": "CortiEyeMirror-0.1.15.jar",
+      "sha256": "58b8337887b26cff72f569bee50913c3aa829d1ff89d2791abecd17464022615"
+    },
+    {
+      "target": "ops/maintenance-notice.mjs",
+      "sha256": "7e003c0ad8578b9da021d0a7d7e7ab70364df9f487fd6033606dd9d5ff5dd4a6"
+    }
+  ],
+  "verification": {
+    "isolatedNative": 40,
+    "bedrockProtocol": 8,
+    "matcherAssertions": 25,
+    "notices": 7,
+    "web": 4,
+    "productionLive": 17,
+    "productionState": 29
+  },
+  "rollback": "Use normal guarded maintenance to restore AgentFriend0.4.31, CortiEyeMirror0.1.13 and ops/maintenance-notice.mjs from the stopped E/F snapshot; no player data migration"
+}

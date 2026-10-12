@@ -2,9 +2,15 @@
 
 这是当前说明；旧发布笔记只能用于追溯。回答前实际读取 `resource/SERVER_UPDATES.md` 和对应专题；个人进度以本人本次服务器回执为准。
 
-## 当前CLI与文字气泡（2026-10-12，0.4.31已上线）
+## 当前聊天范围（2026-10-12，0.4.32 / Eye0.1.15已上线）
 
-当前正式AgentFriend0.4.31 / LoginGuard0.1.1，已提前提醒、E/F冷备份20261012-184302后正常停启。`/mycli status`默认只读MC_STATUS；原详细输出及实练证明改用`status full`。`progress all 1`分页分开主线/专项/公会，专项完成不等于毕业，只认mainlineGraduated或主线graduated。`skills status`查真实资格/魔力/冷却；`skills learn night --help`只查说明，不消费。`--json`仅支持status/progress/skills status/page/capabilities。复制MC_PAGE.nextCommand续读本连接冻结快照，重连丢旧会话；结果未知先查，不能自动重复消费或存取。
+AgentFriend 0.4.32 / CortiEyeMirror 0.1.15 已正式上线。提前180/60/10秒通知、真人和活动副本门禁通过，原维护任务正常停启，E/F完整冷备份 `20261012-211001` 均在替换前完成。正式认证/背包/观战联机17项、备份/身份/服务状态29项通过；登录、原UUID、保护权限、普通难度与三维度keepInventory保持。yubeen重连到代理但未/login，已登录超时；远端须使用既有密码完成登录，未重置密码，不宣称所有客户端已恢复。
+
+自动保护拒绝最多三条中文，包含原因、范围和下一步；真人默认不显示保护JSON，Agent本体完整回执和私有数据保留。Eye/live隐藏机器JSON及旧key=value回执，正常聊天和中文反馈保持。维护脚本仅广播中文预告/更新摘要，机器状态写私有日志。状态、进度和技能查询只交付操作者；原版管理广播两条权限限制继续生效，本人反馈和控制台审计保持。截图中MC_PROTECTION原来是本人消息被Eye镜像，不能说成所有玩家都收到。protect break|place|container|use <x> <y> <z> --json现已可用；其他JSON格式规则沿CLI说明。只在本人最终回执确认动作完成。详读resource/CHAT_AUDIENCE.md和AGENT_PROTECTION.md。
+
+## CLI与文字气泡（0.4.31时点；现行0.4.32保留）
+
+0.4.31版CLI更新 / LoginGuard0.1.1，已提前提醒、E/F冷备份20261012-184302后正常停启。`/mycli status`默认只读MC_STATUS；原详细输出及实练证明改用`status full`。`progress all 1`分页分开主线/专项/公会，专项完成不等于毕业，只认mainlineGraduated或主线graduated。`skills status`查真实资格/魔力/冷却；`skills learn night --help`只查说明，不消费。`--json`支持status/progress/skills status/page/capabilities/protect；按各命令说明使用。复制MC_PAGE.nextCommand续读本连接冻结快照，重连丢旧会话；结果未知先查，不能自动重复消费或存取。
 
 `/authstatus`查看当前代理认证；Paper本机真实心跳观察已接通，unknown/null只是未能确认，不等于登录失败或成功，不能借查询授予资格。等本人MC_AUTH_SUCCESS后行动，既有密码/正版/Eye规则保留。
 
@@ -12,7 +18,7 @@ Java/已更新Web气泡为半透明白底（180/255）与不透明深色文字�
 
 ## 新入门、交易与引导（2026-10-12已上线）
 
-0.4.27上线、现行0.4.31保留：`/mycli intro`汇总本人状态、规则、能力和下一步；普通help可读，`/mycli rules`读规则。`/mycli progress`区分主线、专项与公会，专项完成不等于毕业。`coach lessons`只读，`coach enroll`主动报名；`capabilities info <ID>`查参数、权限、消耗、副作用和结果查询。
+0.4.27上线、现行0.4.32保留：`/mycli intro`汇总本人状态、规则、能力和下一步；普通help可读，`/mycli rules`读规则。`/mycli progress`区分主线、专项与公会，专项完成不等于毕业。`coach lessons`只读，`coach enroll`主动报名；`capabilities info <ID>`查参数、权限、消耗、副作用和结果查询。
 
 交易板用`trade find <物品>`聚合真实已加载报价，成交仍到场。探矿/探敌/定位引导从本人当前位置完整连向目标，直线不是路径。大背包54格、任务袋和540格奖励箱独立；可靠背包客户端模块还要远端接入。OBS共享源码支持手持动作和可调整布局，但远端页面须拉取并重建；注册网站仍仅方案。已提前预告并正常重启，双盘完整冷备份20261012-074906。细节读resource/COMPLETED_FEATURES_RELEASE_20261012.md、AGENT_INTERACTION.md、TARGET_GUIDES.md。
 

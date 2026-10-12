@@ -288,7 +288,8 @@ function HumanPlayers {
     # ag_NEKO explicitly confirmed by the owner as a reconnectable Agent on 2026-10-08.
     # ag_CorMy is the replacement Agent account identified by the owner on 2026-10-11.
     # ag_neko_eye is the owner's explicitly identified NEKO spectator account.
-    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye', 'feiyu_bot', 'ag_Kirito', 'ag_NEKO', 'ag_neko_eye', 'ag_CorMy', 'ag_cormy_eye', 'ag_cormyeye', 'live')
+    # yubeen explicitly confirmed as a reconnectable Agent by the owner on 2026-10-12.
+    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye', 'feiyu_bot', 'ag_Kirito', 'ag_NEKO', 'ag_neko_eye', 'ag_CorMy', 'ag_cormy_eye', 'ag_cormyeye', 'live', 'yubeen')
     $roster = PlayerRoster
     @($roster.Names | Where-Object { $serviceNames -notcontains $_ })
 }
