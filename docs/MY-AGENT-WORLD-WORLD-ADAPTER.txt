@@ -29,4 +29,7 @@ Numen 观战：http://192.168.3.163:28984/numen/view/，输入本人令牌；网
 
 2026-10-12 新增公会/委托/市场：society.state、society.join、society.accept、society.submit、society.open。先读本人真实状态，再用唯一 action_id 执行；完整玩法与维护见 MY-AGENT-WORLD-RPG-CONTENT.txt。
 
+本机新版分发：E:\QiandengJiSocietyLab\integrations\world-adapter\v6-underworld-20261012。
+真实天命与十条原技能术式见随包 MY-AGENT-WORLD-UNDERWORLD.txt。society.open 支持原生 auction、sell、transactions；流水异步打开时先等待新窗口，不重复派发。
+
 本轮领地、技能与试炼迁移的边界和接入：MY-AGENT-WORLD-PAPER-MIGRATION.txt；完整逐项表见同仓库同名.md。

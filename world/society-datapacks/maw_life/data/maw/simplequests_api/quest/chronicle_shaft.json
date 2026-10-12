@@ -1,0 +1,32 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "工匠 · 理解传动",
+  "category": "maw:chronicle",
+  "icon": "create:shaft",
+  "description": [
+    "接取后制作八根传动杆，学习机械动力的第一步；制成物保留。",
+    "奖励：12 灯币 / 8 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 28,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:stone_tools"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/chronicle_shaft",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:crafting",
+      "description": "接取后制作八根传动杆，学习机械动力的第一步；制成物保留。",
+      "item_predicates": [
+        {
+          "value": {
+            "items": "create:shaft"
+          }
+        }
+      ],
+      "amount": 8.0
+    }
+  }
+}

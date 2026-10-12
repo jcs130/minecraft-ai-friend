@@ -1,0 +1,12 @@
+{
+  "name": "异界开拓纪",
+  "description": [
+    "来自异界的旅人：选择生产、建造、魔法与探索之路，靠真实行动在世界中立足。章节是原创游戏改编，不复制其他服务器的地图或剧情资产。"
+  ],
+  "icon": "minecraft:written_book",
+  "sorting_id": 7,
+  "max_concurrent_quests": 5,
+  "only_same_category": false,
+  "is_visible": true,
+  "is_silent": false
+}

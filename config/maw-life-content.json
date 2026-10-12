@@ -1,38 +1,595 @@
 {
   "schemaVersion": 1,
   "worldName": "My Agent World",
-  "ranks": [{"name":"木牌见习","reputation":0},{"name":"铜牌旅人","reputation":30},{"name":"铁牌冒险者","reputation":100},{"name":"银牌先驱","reputation":250},{"name":"金牌领航者","reputation":500}],
+  "ranks": [
+    {
+      "name": "木牌见习",
+      "reputation": 0
+    },
+    {
+      "name": "铜牌旅人",
+      "reputation": 30
+    },
+    {
+      "name": "铁牌冒险者",
+      "reputation": 100
+    },
+    {
+      "name": "银牌先驱",
+      "reputation": 250
+    },
+    {
+      "name": "金牌领航者",
+      "reputation": 500
+    }
+  ],
   "guilds": [
-    {"id":"guide","name":"新手旅程","icon":"minecraft:compass","description":"先学会照顾自己，再决定生活方向。"},
-    {"id":"adventure","name":"冒险者公会","icon":"minecraft:iron_sword","description":"沿道路寻找村镇、酒馆和地下城；进入遗迹前准备食物、护甲和火把。"},
-    {"id":"farmer","name":"田园公会","icon":"minecraft:wheat","description":"种植、捕鱼和采收，为其他居民提供真实物资。"},
-    {"id":"chef","name":"料理公会","icon":"farmersdelight:cooking_pot","description":"使用农夫乐事的厨房，把普通食材变成美食。"},
-    {"id":"builder","name":"营造公会","icon":"minecraft:bricks","description":"制作建材、灯具和公共补给；可继续发展殖民地。"},
-    {"id":"engineer","name":"工匠公会","icon":"create:cogwheel","description":"从传动杆开始，逐步建起真实风车和生产线。"},
-    {"id":"arcane","name":"秘法公会","icon":"ars_nouveau:novice_spell_book","description":"学习新生魔艺，读懂法术书、魔力和符文。"}
+    {
+      "id": "guide",
+      "name": "新手旅程",
+      "icon": "minecraft:compass",
+      "description": "先学会照顾自己，再决定生活方向。"
+    },
+    {
+      "id": "adventure",
+      "name": "冒险者公会",
+      "icon": "minecraft:iron_sword",
+      "description": "沿道路寻找村镇、酒馆和地下城；进入遗迹前准备食物、护甲和火把。"
+    },
+    {
+      "id": "farmer",
+      "name": "田园公会",
+      "icon": "minecraft:wheat",
+      "description": "种植、捕鱼和采收，为其他居民提供真实物资。"
+    },
+    {
+      "id": "chef",
+      "name": "料理公会",
+      "icon": "farmersdelight:cooking_pot",
+      "description": "使用农夫乐事的厨房，把普通食材变成美食。"
+    },
+    {
+      "id": "builder",
+      "name": "营造公会",
+      "icon": "minecraft:bricks",
+      "description": "制作建材、灯具和公共补给；可继续发展殖民地。"
+    },
+    {
+      "id": "engineer",
+      "name": "工匠公会",
+      "icon": "create:cogwheel",
+      "description": "从传动杆开始，逐步建起真实风车和生产线。"
+    },
+    {
+      "id": "arcane",
+      "name": "秘法公会",
+      "icon": "ars_nouveau:novice_spell_book",
+      "description": "学习新生魔艺，读懂法术书、魔力和符文。"
+    },
+    {
+      "id": "chronicle",
+      "name": "异界开拓纪",
+      "icon": "minecraft:written_book",
+      "description": "来自异界的旅人：选择生产、建造、魔法与探索之路，靠真实行动在世界中立足。章节是原创游戏改编，不复制其他服务器的地图或剧情资产。"
+    }
   ],
   "quests": [
-    {"id":"first_workbench","guild":"guide","name":"第一张工作台","kind":"crafting","item":"minecraft:crafting_table","amount":1,"description":"接取后制作一张工作台。已有工作台不算新的制作。","money":8,"reputation":5,"repeatTicks":-1},
-    {"id":"stone_tools","guild":"guide","name":"石器时代的伙伴","kind":"crafting","item":"minecraft:stone_pickaxe","amount":1,"description":"接取后制作石镐，为探矿做好准备。","money":8,"reputation":5,"repeatTicks":-1,"parents":["first_workbench"]},
-    {"id":"first_bread","guild":"guide","name":"亲手做第一顿饭","kind":"crafting","item":"minecraft:bread","amount":1,"description":"接取后制作面包。先种植或购买小麦。","money":8,"reputation":5,"repeatTicks":-1,"parents":["first_workbench"]},
-    {"id":"night_lights","guild":"guide","name":"点亮旅途","kind":"crafting","item":"minecraft:torch","amount":8,"description":"接取后制作八支火把，准备探索黑暗遗迹。","money":8,"reputation":5,"repeatTicks":-1,"parents":["first_workbench"]},
-    {"id":"wheat_delivery","guild":"farmer","name":"村庄粮仓委托","kind":"item","item":"minecraft:wheat","amount":16,"description":"交付十六份小麦。提交会实际扣除这些小麦。","money":12,"reputation":8,"repeatTicks":24000},
-    {"id":"fresh_fish","guild":"farmer","name":"清晨垂钓","kind":"fishing","item":"minecraft:cod","amount":3,"description":"接取后用鱼竿钓起三条鳕鱼。购买或捡到的鱼不计垂钓进度。","money":12,"reputation":8,"repeatTicks":24000},
-    {"id":"onion_delivery","guild":"farmer","name":"厨房的洋葱订单","kind":"item","item":"farmersdelight:onion","amount":12,"description":"向厨房交付十二个洋葱；农夫乐事作物也能成为生活收入。","money":12,"reputation":8,"repeatTicks":24000},
-    {"id":"bread_delivery","guild":"chef","name":"旅人的干粮","kind":"item","item":"minecraft:bread","amount":8,"description":"交付八个面包。提交会扣除物品，不需要拿在手上。","money":15,"reputation":10,"repeatTicks":24000},
-    {"id":"cooked_fish","guild":"chef","name":"酒馆烤鱼","kind":"item","item":"minecraft:cooked_cod","amount":6,"description":"用熔炉、营火或厨房做熟鳕鱼，再交付六份。","money":15,"reputation":10,"repeatTicks":24000},
-    {"id":"vegetable_soup","guild":"chef","name":"热汤暖人心","kind":"item","item":"farmersdelight:vegetable_soup","amount":3,"description":"用农夫乐事烹饪锅煮好三碗蔬菜汤，再提交。","money":24,"reputation":15,"repeatTicks":24000},
-    {"id":"stone_bricks","guild":"builder","name":"新驿站的建材","kind":"item","item":"minecraft:stone_bricks","amount":32,"description":"交付三十二块石砖，为世界建设提供材料。","money":16,"reputation":10,"repeatTicks":24000},
-    {"id":"lantern_maker","guild":"builder","name":"道路灯匠","kind":"crafting","item":"minecraft:lantern","amount":4,"description":"接取后制作四盏灯笼。完成任务不会收走灯笼，可以用于建设。","money":16,"reputation":10,"repeatTicks":24000},
-    {"id":"first_shafts","guild":"engineer","name":"传动的第一步","kind":"crafting","item":"create:shaft","amount":8,"description":"接取后制作八根机械动力传动杆。物品保留在自己背包。","money":16,"reputation":10,"repeatTicks":-1,"parents":["stone_tools"]},
-    {"id":"windmill_bearing","guild":"engineer","name":"风之工坊","kind":"crafting","item":"create:windmill_bearing","amount":1,"description":"接取后制作一个风车轴承。后续用风帆和传动装置搭建真正的风车。","money":30,"reputation":20,"repeatTicks":-1,"parents":["first_shafts"]},
-    {"id":"andesite_supply","guild":"engineer","name":"工坊合金补给","kind":"item","item":"create:andesite_alloy","amount":8,"description":"交付八份安山合金。原材料要自己采集、合成或从市场购买。","money":24,"reputation":15,"repeatTicks":24000},
-    {"id":"novice_book","guild":"arcane","name":"翻开法术书","kind":"inspect","item":"ars_nouveau:novice_spell_book","amount":1,"description":"准备一本新手法术书后提交检查。只检查持有，不收走法术书。","money":20,"reputation":15,"repeatTicks":-1},
-    {"id":"source_stone","guild":"arcane","name":"秘法石材","kind":"item","item":"ars_nouveau:sourcestone","amount":16,"description":"交付十六块魔源石，学习魔法材料的制作和补给。","money":18,"reputation":12,"repeatTicks":24000},
-    {"id":"amethyst_supply","guild":"arcane","name":"紫晶研究","kind":"item","item":"minecraft:amethyst_shard","amount":8,"description":"交付八片紫水晶碎片。保护晶芽，留下可持续采收的矿源。","money":18,"reputation":12,"repeatTicks":24000},
-    {"id":"zombie_watch","guild":"adventure","name":"夜间巡逻","kind":"kill","entity":"minecraft:zombie","item":"minecraft:iron_sword","amount":5,"description":"接取后击败五只僵尸；只计算本人参与击杀，不需要伤害村民或动物。","money":20,"reputation":12,"repeatTicks":24000},
-    {"id":"spider_watch","guild":"adventure","name":"遗迹清道夫","kind":"kill","entity":"minecraft:spider","item":"minecraft:shield","amount":3,"description":"接取后击败三只蜘蛛。准备盾牌、食物和退路。","money":18,"reputation":12,"repeatTicks":24000},
-    {"id":"ocean_ruin","guild":"adventure","name":"沉没遗迹的来信","kind":"structure","structure":"minecraft:ocean_ruin_cold","item":"minecraft:map","amount":1,"description":"接取后进入一处寒冷海洋废墟。水下探索前准备呼吸药水或安全换气点。","money":28,"reputation":20,"repeatTicks":-1},
-    {"id":"guild_outpost","guild":"adventure","name":"找到冒险者驿站","kind":"structure","structure":"maw:guild_hall","item":"minecraft:compass","amount":1,"description":"沿道路探索并进入新生成的公会驿站。大厅有接待员、市场和共享箱子。","money":24,"reputation":20,"repeatTicks":-1}
-  ]
+    {
+      "id": "first_workbench",
+      "guild": "guide",
+      "name": "第一张工作台",
+      "kind": "crafting",
+      "item": "minecraft:crafting_table",
+      "amount": 1,
+      "description": "接取后制作一张工作台。已有工作台不算新的制作。",
+      "money": 8,
+      "reputation": 5,
+      "repeatTicks": -1
+    },
+    {
+      "id": "stone_tools",
+      "guild": "guide",
+      "name": "石器时代的伙伴",
+      "kind": "crafting",
+      "item": "minecraft:stone_pickaxe",
+      "amount": 1,
+      "description": "接取后制作石镐，为探矿做好准备。",
+      "money": 8,
+      "reputation": 5,
+      "repeatTicks": -1,
+      "parents": [
+        "first_workbench"
+      ]
+    },
+    {
+      "id": "first_bread",
+      "guild": "guide",
+      "name": "亲手做第一顿饭",
+      "kind": "crafting",
+      "item": "minecraft:bread",
+      "amount": 1,
+      "description": "接取后制作面包。先种植或购买小麦。",
+      "money": 8,
+      "reputation": 5,
+      "repeatTicks": -1,
+      "parents": [
+        "first_workbench"
+      ]
+    },
+    {
+      "id": "night_lights",
+      "guild": "guide",
+      "name": "点亮旅途",
+      "kind": "crafting",
+      "item": "minecraft:torch",
+      "amount": 8,
+      "description": "接取后制作八支火把，准备探索黑暗遗迹。",
+      "money": 8,
+      "reputation": 5,
+      "repeatTicks": -1,
+      "parents": [
+        "first_workbench"
+      ]
+    },
+    {
+      "id": "wheat_delivery",
+      "guild": "farmer",
+      "name": "村庄粮仓委托",
+      "kind": "item",
+      "item": "minecraft:wheat",
+      "amount": 16,
+      "description": "交付十六份小麦。提交会实际扣除这些小麦。",
+      "money": 12,
+      "reputation": 8,
+      "repeatTicks": 24000
+    },
+    {
+      "id": "fresh_fish",
+      "guild": "farmer",
+      "name": "清晨垂钓",
+      "kind": "fishing",
+      "item": "minecraft:cod",
+      "amount": 3,
+      "description": "接取后用鱼竿钓起三条鳕鱼。购买或捡到的鱼不计垂钓进度。",
+      "money": 12,
+      "reputation": 8,
+      "repeatTicks": 24000
+    },
+    {
+      "id": "onion_delivery",
+      "guild": "farmer",
+      "name": "厨房的洋葱订单",
+      "kind": "item",
+      "item": "farmersdelight:onion",
+      "amount": 12,
+      "description": "向厨房交付十二个洋葱；农夫乐事作物也能成为生活收入。",
+      "money": 12,
+      "reputation": 8,
+      "repeatTicks": 24000
+    },
+    {
+      "id": "bread_delivery",
+      "guild": "chef",
+      "name": "旅人的干粮",
+      "kind": "item",
+      "item": "minecraft:bread",
+      "amount": 8,
+      "description": "交付八个面包。提交会扣除物品，不需要拿在手上。",
+      "money": 15,
+      "reputation": 10,
+      "repeatTicks": 24000
+    },
+    {
+      "id": "cooked_fish",
+      "guild": "chef",
+      "name": "酒馆烤鱼",
+      "kind": "item",
+      "item": "minecraft:cooked_cod",
+      "amount": 6,
+      "description": "用熔炉、营火或厨房做熟鳕鱼，再交付六份。",
+      "money": 15,
+      "reputation": 10,
+      "repeatTicks": 24000
+    },
+    {
+      "id": "vegetable_soup",
+      "guild": "chef",
+      "name": "热汤暖人心",
+      "kind": "item",
+      "item": "farmersdelight:vegetable_soup",
+      "amount": 3,
+      "description": "用农夫乐事烹饪锅煮好三碗蔬菜汤，再提交。",
+      "money": 24,
+      "reputation": 15,
+      "repeatTicks": 24000
+    },
+    {
+      "id": "stone_bricks",
+      "guild": "builder",
+      "name": "新驿站的建材",
+      "kind": "item",
+      "item": "minecraft:stone_bricks",
+      "amount": 32,
+      "description": "交付三十二块石砖，为世界建设提供材料。",
+      "money": 16,
+      "reputation": 10,
+      "repeatTicks": 24000
+    },
+    {
+      "id": "lantern_maker",
+      "guild": "builder",
+      "name": "道路灯匠",
+      "kind": "crafting",
+      "item": "minecraft:lantern",
+      "amount": 4,
+      "description": "接取后制作四盏灯笼。完成任务不会收走灯笼，可以用于建设。",
+      "money": 16,
+      "reputation": 10,
+      "repeatTicks": 24000
+    },
+    {
+      "id": "first_shafts",
+      "guild": "engineer",
+      "name": "传动的第一步",
+      "kind": "crafting",
+      "item": "create:shaft",
+      "amount": 8,
+      "description": "接取后制作八根机械动力传动杆。物品保留在自己背包。",
+      "money": 16,
+      "reputation": 10,
+      "repeatTicks": -1,
+      "parents": [
+        "stone_tools"
+      ]
+    },
+    {
+      "id": "windmill_bearing",
+      "guild": "engineer",
+      "name": "风之工坊",
+      "kind": "crafting",
+      "item": "create:windmill_bearing",
+      "amount": 1,
+      "description": "接取后制作一个风车轴承。后续用风帆和传动装置搭建真正的风车。",
+      "money": 30,
+      "reputation": 20,
+      "repeatTicks": -1,
+      "parents": [
+        "first_shafts"
+      ]
+    },
+    {
+      "id": "andesite_supply",
+      "guild": "engineer",
+      "name": "工坊合金补给",
+      "kind": "item",
+      "item": "create:andesite_alloy",
+      "amount": 8,
+      "description": "交付八份安山合金。原材料要自己采集、合成或从市场购买。",
+      "money": 24,
+      "reputation": 15,
+      "repeatTicks": 24000
+    },
+    {
+      "id": "novice_book",
+      "guild": "arcane",
+      "name": "翻开法术书",
+      "kind": "inspect",
+      "item": "ars_nouveau:novice_spell_book",
+      "amount": 1,
+      "description": "准备一本新手法术书后提交检查。只检查持有，不收走法术书。",
+      "money": 20,
+      "reputation": 15,
+      "repeatTicks": -1
+    },
+    {
+      "id": "source_stone",
+      "guild": "arcane",
+      "name": "秘法石材",
+      "kind": "item",
+      "item": "ars_nouveau:sourcestone",
+      "amount": 16,
+      "description": "交付十六块魔源石，学习魔法材料的制作和补给。",
+      "money": 18,
+      "reputation": 12,
+      "repeatTicks": 24000
+    },
+    {
+      "id": "amethyst_supply",
+      "guild": "arcane",
+      "name": "紫晶研究",
+      "kind": "item",
+      "item": "minecraft:amethyst_shard",
+      "amount": 8,
+      "description": "交付八片紫水晶碎片。保护晶芽，留下可持续采收的矿源。",
+      "money": 18,
+      "reputation": 12,
+      "repeatTicks": 24000
+    },
+    {
+      "id": "zombie_watch",
+      "guild": "adventure",
+      "name": "夜间巡逻",
+      "kind": "kill",
+      "entity": "minecraft:zombie",
+      "item": "minecraft:iron_sword",
+      "amount": 5,
+      "description": "接取后击败五只僵尸；只计算本人参与击杀，不需要伤害村民或动物。",
+      "money": 20,
+      "reputation": 12,
+      "repeatTicks": 24000
+    },
+    {
+      "id": "spider_watch",
+      "guild": "adventure",
+      "name": "遗迹清道夫",
+      "kind": "kill",
+      "entity": "minecraft:spider",
+      "item": "minecraft:shield",
+      "amount": 3,
+      "description": "接取后击败三只蜘蛛。准备盾牌、食物和退路。",
+      "money": 18,
+      "reputation": 12,
+      "repeatTicks": 24000
+    },
+    {
+      "id": "ocean_ruin",
+      "guild": "adventure",
+      "name": "沉没遗迹的来信",
+      "kind": "structure",
+      "structure": "minecraft:ocean_ruin_cold",
+      "item": "minecraft:map",
+      "amount": 1,
+      "description": "接取后进入一处寒冷海洋废墟。水下探索前准备呼吸药水或安全换气点。",
+      "money": 28,
+      "reputation": 20,
+      "repeatTicks": -1
+    },
+    {
+      "id": "guild_outpost",
+      "guild": "adventure",
+      "name": "找到冒险者驿站",
+      "kind": "structure",
+      "structure": "maw:guild_hall",
+      "item": "minecraft:compass",
+      "amount": 1,
+      "description": "沿道路探索并进入新生成的公会驿站。大厅有接待员、市场和共享箱子。",
+      "money": 24,
+      "reputation": 20,
+      "repeatTicks": -1
+    },
+    {
+      "id": "chronicle_rations",
+      "guild": "chronicle",
+      "name": "初醒 · 为远行备粮",
+      "kind": "item",
+      "item": "minecraft:bread",
+      "amount": 6,
+      "description": "先完成亲手做第一顿饭，再交付六个面包给开拓驿站。提交会扣除真实面包。",
+      "money": 10,
+      "reputation": 6,
+      "repeatTicks": -1,
+      "parents": [
+        "first_bread"
+      ],
+      "nextHint": "没有食物时，先种小麦或到原生市场购买。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_lamps",
+      "guild": "chronicle",
+      "name": "初醒 · 点亮公共道路",
+      "kind": "crafting",
+      "item": "minecraft:lantern",
+      "amount": 2,
+      "description": "接取后制作两盏灯笼。任务只验证制作，灯笼留给你；放置位置请先查保护。",
+      "money": 10,
+      "reputation": 6,
+      "repeatTicks": -1,
+      "parents": [
+        "night_lights"
+      ],
+      "nextHint": "学习 protection.query，再选择允许建设的位置。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_farm",
+      "guild": "chronicle",
+      "name": "田园 · 第一批收成",
+      "kind": "item",
+      "item": "minecraft:wheat",
+      "amount": 16,
+      "description": "为驿站交付十六份小麦。可以自己耕种或通过玩家订单协作；提交扣除物品。",
+      "money": 12,
+      "reputation": 8,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_rations"
+      ],
+      "nextHint": "后续可以向 EconomyCraft 市场挂收购或出售富余物资。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_kitchen",
+      "guild": "chronicle",
+      "name": "料理 · 建起炊事所",
+      "kind": "crafting",
+      "item": "farmersdelight:cooking_pot",
+      "amount": 1,
+      "description": "接取后制作一口农夫乐事烹饪锅。此步验证合成，不冒充已经做完厨房或菜肴。",
+      "money": 16,
+      "reputation": 10,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_rations"
+      ],
+      "nextHint": "下一步准备蔬菜汤；用原生 cooking 菜单观察火源与进度。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_soup",
+      "guild": "chronicle",
+      "name": "料理 · 热汤与同行者",
+      "kind": "item",
+      "item": "farmersdelight:vegetable_soup",
+      "amount": 2,
+      "description": "交付两碗蔬菜汤，让远行的同伴吃上热食；提交扣除真实汤。",
+      "money": 18,
+      "reputation": 12,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_kitchen"
+      ],
+      "nextHint": "料理分会有可重复的真实物资委托。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_bricks",
+      "guild": "chronicle",
+      "name": "营造 · 驿站备料",
+      "kind": "item",
+      "item": "minecraft:stone_bricks",
+      "amount": 32,
+      "description": "交付三十二块石砖，作为公共设施材料。任务不要求破坏已保护的建筑。",
+      "money": 12,
+      "reputation": 8,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_lamps"
+      ],
+      "nextHint": "准备灯具、工作台，再按本人领地权限建造。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_shaft",
+      "guild": "chronicle",
+      "name": "工匠 · 理解传动",
+      "kind": "crafting",
+      "item": "create:shaft",
+      "amount": 8,
+      "description": "接取后制作八根传动杆，学习机械动力的第一步；制成物保留。",
+      "money": 12,
+      "reputation": 8,
+      "repeatTicks": -1,
+      "parents": [
+        "stone_tools"
+      ],
+      "nextHint": "先查 create.state 和配方，再选择传动布局。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_bearing",
+      "guild": "chronicle",
+      "name": "工匠 · 风的起点",
+      "kind": "crafting",
+      "item": "create:windmill_bearing",
+      "amount": 1,
+      "description": "接取后制作风车轴承。这只代表备件完成；真正发电要继续搭风帆并验证实际转速。",
+      "money": 24,
+      "reputation": 15,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_shaft"
+      ],
+      "nextHint": "风车运行以 create.state 的实际 RPM 为证，不以任务名冒充完工。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_sacred_book",
+      "guild": "chronicle",
+      "name": "秘法 · 神圣术入门",
+      "kind": "inspect",
+      "item": "ars_nouveau:novice_spell_book",
+      "amount": 1,
+      "description": "准备一本新手法术书后提交检查，不收走书。命格书中可查看神圣术目录；学习仍需技能点。",
+      "money": 14,
+      "reputation": 10,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_rations"
+      ],
+      "nextHint": "rpg.skills 查询 System Call、实际资格和冷却，skill.cast 施放。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_crystal",
+      "guild": "chronicle",
+      "name": "秘法 · 紫晶补给",
+      "kind": "item",
+      "item": "minecraft:amethyst_shard",
+      "amount": 8,
+      "description": "交付八片紫水晶碎片；保护晶芽以便持续采收。探矿结果有维度及绝对坐标。",
+      "money": 14,
+      "reputation": 10,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_sacred_book"
+      ],
+      "nextHint": "探矿是异步技能，读 lastResults.prospect 后再决定移动。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_watch",
+      "guild": "chronicle",
+      "name": "守望 · 夜巡的约定",
+      "kind": "kill",
+      "item": "minecraft:shield",
+      "amount": 3,
+      "description": "接取后由本人击败三只僵尸，为居民守望。不要攻击村民、宠物或同行者。",
+      "money": 16,
+      "reputation": 10,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_rations"
+      ],
+      "nextHint": "战斗前查看实际生命、魔力、技能说明和剩余冷却。",
+      "chapter": 1,
+      "entity": "minecraft:zombie"
+    },
+    {
+      "id": "chronicle_outpost",
+      "guild": "chronicle",
+      "name": "远行 · 寻找下一盏灯",
+      "kind": "structure",
+      "item": "minecraft:compass",
+      "amount": 1,
+      "description": "接取后实际进入新生成的公会驿站。沿道路寻找；这不是传送指令，也不预先透露未发现地形。",
+      "money": 22,
+      "reputation": 15,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_lamps"
+      ],
+      "nextHint": "驿站接待员、原生市场与共享箱支持长期生活。",
+      "chapter": 1,
+      "structure": "maw:guild_hall"
+    }
+  ],
+  "story": {
+    "id": "underworld_pioneers",
+    "title": "异界开拓纪 · 灯火初醒",
+    "chapter": 1,
+    "description": "醒来后，先学会生存。六条生活道路都能积累声望；战斗不是唯一的成长方式。",
+    "gameAdaptation": true,
+    "questIds": [
+      "maw:chronicle_rations",
+      "maw:chronicle_lamps",
+      "maw:chronicle_farm",
+      "maw:chronicle_kitchen",
+      "maw:chronicle_soup",
+      "maw:chronicle_bricks",
+      "maw:chronicle_shaft",
+      "maw:chronicle_bearing",
+      "maw:chronicle_sacred_book",
+      "maw:chronicle_crystal",
+      "maw:chronicle_watch",
+      "maw:chronicle_outpost"
+    ],
+    "economyProvider": "economycraft",
+    "questProvider": "simplequests",
+    "plannedSystems": [
+      "branching_memory_labyrinth",
+      "seasonal_commissions",
+      "world_resource_modifiers"
+    ]
+  }
 }

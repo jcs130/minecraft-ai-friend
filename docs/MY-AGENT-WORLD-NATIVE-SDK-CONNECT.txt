@@ -4,7 +4,7 @@ My Agent World 原生 SDK 接入（旧千灯纪 Agent）
 每个 Agent 一个固定用户名；不要借用 MawExplorer 或其他在线账号。
 
 SDK 源码：world/src/native-sdk/index.cjs
-本机当前分发目录：E:\QiandengJiSocietyLab\integrations\native-sdk\v5-paper-rpg-20261012
+本机当前分发目录：E:\QiandengJiSocietyLab\integrations\native-sdk\v6-underworld-20261012
 目录附 package.json、operations.json 和完整指南；Node 22，先按包内依赖 npm install。
 
 现阶段身体是这个连接登录的真实玩家，bodyId 就是其真实 UUID，不是 Numen 假玩家。
@@ -33,5 +33,7 @@ stdin/stdout UTF-8 JSONL 私有通信，method 支持 operations、capabilities�
 完整对照、参数、权限、返回格式、限制和验收见 MY-AGENT-WORLD-NATIVE-SDK.md。
 
 2026-10-12 新增公会/委托/市场：society.state、society.join、society.accept、society.submit、society.open。先读本人真实状态，再用唯一 action_id 执行；完整玩法与维护见 MY-AGENT-WORLD-RPG-CONTENT.txt。
+
+异界开拓纪：rpg.state.stacia 为本人真实生命、魔力、绝对坐标与装备耐久；rpg.skills.systemCalls 提供十条复用原技能的术式。rpg.open 新增 stacia、systemcall，society.open 新增原生 auction、sell、transactions。交易流水可能异步打开，等待新的真实窗口再点击。详见随包 MY-AGENT-WORLD-UNDERWORLD.txt。
 
 本轮领地、技能与试炼迁移的边界和接入：MY-AGENT-WORLD-PAPER-MIGRATION.txt；完整逐项表见同仓库同名.md。

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "gameAdaptation": true,
+  "description": "My Agent World 的有界咏唱入口；术式映射现有技能，共用学习、熟练、冷却与 Ars 魔力。此目录是游戏改编，不是原著完整神圣术语法。",
+  "formulas": [
+    {"id":"luminous_arrow","skillId":"starbolt","chant":"System Call. Generate Luminous Element. Form Element. Arrow Shape. Discharge.","description":"星芒箭：自动选择视线内合法敌对怪物。无目标时不扣魔力；不能攻击玩家、村民或宠物。"},
+    {"id":"thermal_wave","skillId":"flamewave","chant":"System Call. Generate Thermal Element. Form Element. Wave Shape. Discharge.","description":"焰浪：前方范围灼烧敌对怪物，不点燃或拆毁世界建筑。"},
+    {"id":"cryogenic_ring","skillId":"frostnova","chant":"System Call. Generate Cryogenic Element. Form Element. Ring Shape. Discharge.","description":"霜环：近身范围伤害与减速，适合被怪物包围时使用。"},
+    {"id":"vital_mend","skillId":"heal","chant":"System Call. Generate Vital Element. Form Element. Circle Shape. Discharge.","description":"范围治疗：恢复自己和范围内可治疗的玩家；满血且没有可治疗目标时不收费。"},
+    {"id":"aerial_leap","skillId":"leap","chant":"System Call. Generate Aerial Element. Form Element. Lift Shape. Discharge.","description":"跃空术：实际向上跃起并短时缓降，落点仍需自行选择。"},
+    {"id":"aerial_soar","skillId":"flight","chant":"System Call. Generate Aerial Element. Form Element. Wing Shape. Discharge.","description":"飞行术：短时允许本人飞行，结束后回收权限；不永久授予创造或 OP。"},
+    {"id":"luminous_sight","skillId":"night","chant":"System Call. Generate Luminous Element. Form Element. Sight Shape. Discharge.","description":"夜视术：只增强自己的夜间视野，不改变天气或昼夜。"},
+    {"id":"metal_search","skillId":"prospect","chant":"System Call. Search Metal Material. Reveal Position. Discharge.","description":"探矿术：按真实采矿成长扫描已加载区域；结果为维度与绝对坐标，异步终态从 rpg.state.lastResults.prospect 读取。"},
+    {"id":"hostile_search","skillId":"sense","chant":"System Call. Search Hostile Entity. Reveal Position. Discharge.","description":"寻敌术：报告附近合法敌对怪物的实际绝对坐标，不把友方当目标。"},
+    {"id":"home_return","skillId":"home","chant":"System Call. Recall Home Position. Transfer Self. Discharge.","description":"归乡术：使用现有归乡规则回到出生点；试炼与领地规则继续生效。"}
+  ]
+}

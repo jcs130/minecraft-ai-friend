@@ -24,7 +24,7 @@ const domumSelection = { ...object({ selection: { type: 'string', enum: ['group'
 // These are the actual low-level APIs. Maw's body-plan descriptors are separate.
 const definitions = [
   ...[
-    ['rpg.state', true, '本人原生魔力、职业/技能点/实际熟练、试炼参赛状态、账户及异步探矿绝对坐标结果。', object(), 'state'],
+    ['rpg.state', true, '本人原生魔力、职业/技能点/熟练、Stacia天命/装备耐久、System Call目录、试炼状态、账户及异步探矿绝对坐标结果。', object(), 'state'],
     ['rpg.skills', true, '36项基础与战法牧技能：说明、资格、等级、熟练、真实总/剩余冷却；先发现再施放。', object(), 'skills'],
     ['protection.query', true, '查询绝对坐标处 break/place/use 的本人领地、试炼与殖民地权限；未知不等于许可。只读，不加载区块。', object({ action: { type: 'string', enum: ['break', 'place', 'use'] }, position }, ['action', 'position']), 'protect'],
     ['land.list', true, '当前新世界领地的实际主人、协作者、维度与绝对边界；殖民地沿原生权限。', object(), 'lands'],
@@ -44,7 +44,7 @@ const definitions = [
     ['stash.open', false, '打开本人标准54格真箱子；双向存取及Shift/普通菜单操作，1–10页。', object({ page: integer(1, 10), requestId }, ['page']), 'stash_open'],
     ['arena.recycle.sell', false, '消费30秒quoteId，重新核对完整组件与数量，收益入灯币账户；同action_id对账防重。', object({ quoteId: uuid, requestId }, ['quoteId']), 'recycle_sell'],
     ['arena.shop.buy', false, '按商品ID购买真实补给，满包进入个人箱或待领取，不扔地上。', object({ offerId: { type: 'string', pattern: '^[a-z0-9_]{1,32}$' }, requestId }, ['offerId']), 'shop_buy'],
-    ['rpg.open', false, '本人手柄友好的中文原版界面：命格书、技能、职业、领地、试炼、补给和回收。', object({ menu: { type: 'string', enum: ['guide', 'skills', 'professions', 'lands', 'arena', 'shop', 'recycle'] }, page: integer(1, 10), requestId }, ['menu', 'page']), 'open']
+    ['rpg.open', false, '本人手柄友好的中文原版界面：命格书、技能、职业、领地、试炼、补给、回收、Stacia天命与System Call。', object({ menu: { type: 'string', enum: ['guide', 'skills', 'professions', 'lands', 'arena', 'shop', 'recycle', 'stacia', 'systemcall'] }, page: integer(1, 10), requestId }, ['menu', 'page']), 'open']
   ].map(([id, readOnly, description, parameters, kind]) => [id, readOnly, description, parameters, (c, a) => c.mods.rpg.request(`rpg_${kind}`, a)]),
   ['society.state', true, '查询本人公会登记、真实委托/进度/可接原因、累计声望等级和 EconomyCraft 灯币余额；不读取其他玩家。',
     object(), c => c.mods.society.state()],
@@ -54,8 +54,8 @@ const definitions = [
     object({ questId: { type: 'string', pattern: '^maw:[a-z0-9_]+$', maxLength: 80 }, requestId }, ['questId']), (c, a) => c.mods.society.accept(a)],
   ['society.submit', false, '检查本人已接委托；交付类真实扣除所需物资，完成后奖励进入账户。先查询任务描述，不会交付其他玩家的物品。',
     object({ requestId }), (c, a) => c.mods.society.submit(a)],
-  ['society.open', false, '打开本人标准容器界面：中文指南/委托/进度，或原生市场/玩家收购订单/待领取。菜单图标不是可拿走的奖励。',
-    object({ menu: { type: 'string', enum: ['guide', 'quests', 'current', 'market', 'orders', 'deliveries'] }, requestId }, ['menu']), (c, a) => c.mods.society.open(a)],
+  ['society.open', false, '打开本人标准容器界面：指南/委托/进度，或EconomyCraft原生市场/收购订单/待领取/拍卖/出售/交易流水。菜单图标不是可拿走的奖励。',
+    object({ menu: { type: 'string', enum: ['guide', 'quests', 'current', 'market', 'orders', 'deliveries', 'auction', 'sell', 'transactions'] }, requestId }, ['menu']), (c, a) => c.mods.society.open(a)],
   ['inventory.food', true, '读取本人真实 FOOD 组件、可食用物品、完整 SNBT 和饥饿状态；不使用代理物品注册表。',
     object(), c => c.construction.food()],
   ['inventory.consume', false, '本人实际吃一份原生食物，自动移入空快捷栏并持有；核对完整组件、实际消耗数量和饥饿值。背包来源用当前 inventory 菜单槽 9–44。未知消费不得重试。',

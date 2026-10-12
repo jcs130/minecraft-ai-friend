@@ -1,0 +1,33 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "秘法 · 紫晶补给",
+  "category": "maw:chronicle",
+  "icon": "minecraft:amethyst_shard",
+  "description": [
+    "交付八片紫水晶碎片；保护晶芽以便持续采收。探矿结果有维度及绝对坐标。",
+    "奖励：14 灯币 / 10 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 31,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:chronicle_sacred_book"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/chronicle_crystal",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:item",
+      "description": "交付八片紫水晶碎片；保护晶芽以便持续采收。探矿结果有维度及绝对坐标。",
+      "predicates": [
+        {
+          "value": {
+            "items": "minecraft:amethyst_shard"
+          }
+        }
+      ],
+      "amount": 8.0,
+      "consume_items": true
+    }
+  }
+}

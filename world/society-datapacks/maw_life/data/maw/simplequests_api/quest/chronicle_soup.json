@@ -1,0 +1,33 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "料理 · 热汤与同行者",
+  "category": "maw:chronicle",
+  "icon": "farmersdelight:vegetable_soup",
+  "description": [
+    "交付两碗蔬菜汤，让远行的同伴吃上热食；提交扣除真实汤。",
+    "奖励：18 灯币 / 12 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 26,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:chronicle_kitchen"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/chronicle_soup",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:item",
+      "description": "交付两碗蔬菜汤，让远行的同伴吃上热食；提交扣除真实汤。",
+      "predicates": [
+        {
+          "value": {
+            "items": "farmersdelight:vegetable_soup"
+          }
+        }
+      ],
+      "amount": 2.0,
+      "consume_items": true
+    }
+  }
+}

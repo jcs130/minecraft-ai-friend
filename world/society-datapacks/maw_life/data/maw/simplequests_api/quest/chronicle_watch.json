@@ -1,0 +1,32 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "守望 · 夜巡的约定",
+  "category": "maw:chronicle",
+  "icon": "minecraft:shield",
+  "description": [
+    "接取后由本人击败三只僵尸，为居民守望。不要攻击村民、宠物或同行者。",
+    "奖励：16 灯币 / 10 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 32,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:chronicle_rations"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/chronicle_watch",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:kill",
+      "description": "接取后由本人击败三只僵尸，为居民守望。不要攻击村民、宠物或同行者。",
+      "predicates": [
+        {
+          "value": {
+            "type": "minecraft:zombie"
+          }
+        }
+      ],
+      "amount": 3.0
+    }
+  }
+}

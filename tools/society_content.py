@@ -36,7 +36,7 @@ def verify(server: Path, world: str) -> dict:
     # Economy settings are operator-editable; do not hash-lock balances or price edits.
     for name in ("config/economycraft/config.json", "config/economycraft/prices.json", "config/moogs_paths.json"):
         json.loads((server / name).read_text(encoding="utf-8"))
-    return {"ok": True, "thirdPartyArtifacts": 7, "quests": 22, "world": world}
+    return {"ok": True, "thirdPartyArtifacts": 7, "quests": len(json.loads((REPO / "config/maw-life-content.json").read_text(encoding="utf-8"))["quests"]), "world": world}
 
 
 def install(root: Path, server: Path, world: str, cache: Path) -> dict:

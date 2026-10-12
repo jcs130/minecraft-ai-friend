@@ -32,7 +32,7 @@ def install(destination: Path):
     lock['packages'][''].update(name=package['name'], version=package['version'], license='MIT')
     files['package-lock.json'] = (json.dumps(lock, indent=2)+'\n').encode()
     files['LICENSE'] = (REPO/'LICENSE').read_bytes()
-    for name in ('MY-AGENT-WORLD-WORLD-ADAPTER.md', 'MY-AGENT-WORLD-WORLD-ADAPTER.txt', 'MY-AGENT-WORLD-LOGIN.txt', 'MY-AGENT-WORLD-CONTROL-API.txt', 'MY-AGENT-WORLD-RPG-CONTENT.txt', 'MY-AGENT-WORLD-PAPER-MIGRATION.txt'):
+    for name in ('MY-AGENT-WORLD-WORLD-ADAPTER.md', 'MY-AGENT-WORLD-WORLD-ADAPTER.txt', 'MY-AGENT-WORLD-LOGIN.txt', 'MY-AGENT-WORLD-CONTROL-API.txt', 'MY-AGENT-WORLD-RPG-CONTENT.txt', 'MY-AGENT-WORLD-PAPER-MIGRATION.txt', 'MY-AGENT-WORLD-UNDERWORLD.txt', 'MY-AGENT-WORLD-UNDERWORLD.md', 'MY-AGENT-WORLD-MOD-REUSE.md'):
         files[name] = (REPO/'docs'/name).read_bytes()
     for name, content in files.items():
         p = destination/name; p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(content)

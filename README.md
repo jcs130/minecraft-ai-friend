@@ -2,6 +2,8 @@
 
 当前分支为 `experiment/agent-society-1.21.1`，运行 NeoForge 1.21.1 / My Agent World。局域网 Java、基岩、Mineflayer 和 Numen 接入见 [连接指南](docs/MY-AGENT-WORLD-LAN-CONNECT.txt)。[旧 Paper 玩法迁移表](docs/MY-AGENT-WORLD-PAPER-MIGRATION.md)逐项列出领地、36 项技能、十五层试炼及历史数据的边界；SDK 和统一身体包分别为 0.4.0 / 0.3.0。下面保留旧分支说明作为历史，端口与运行状态以 My Agent World 文档及受管服务为准。
 
+已发布[异界开拓纪](docs/MY-AGENT-WORLD-UNDERWORLD.md)：真实天命、十条原技能术式、十二项章节委托，以及 EconomyCraft 原生拍卖/出售/流水入口。经济和其他玩法优先复用现成模组，见[模组复用调研](docs/MY-AGENT-WORLD-MOD-REUSE.md)。
+
 ## 历史：千灯纪 Paper 跨端分支
 
 独立 `qiandengji-paper-1.20.6` 分支承载 **Paper 1.20.6 / Java 21** 家庭服务器：Java、基岩和 Mineflayer Agent 共用世界，女神与观战镜头由服务端扩展支持。其源码、配置基线、版本锁和维护入口在 [paper/README.md](paper/README.md)。世界存档、账号数据、密钥和第三方二进制文件不进入 Git。

@@ -1,0 +1,33 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "田园 · 第一批收成",
+  "category": "maw:chronicle",
+  "icon": "minecraft:wheat",
+  "description": [
+    "为驿站交付十六份小麦。可以自己耕种或通过玩家订单协作；提交扣除物品。",
+    "奖励：12 灯币 / 8 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 24,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:chronicle_rations"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/chronicle_farm",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:item",
+      "description": "为驿站交付十六份小麦。可以自己耕种或通过玩家订单协作；提交扣除物品。",
+      "predicates": [
+        {
+          "value": {
+            "items": "minecraft:wheat"
+          }
+        }
+      ],
+      "amount": 16.0,
+      "consume_items": true
+    }
+  }
+}

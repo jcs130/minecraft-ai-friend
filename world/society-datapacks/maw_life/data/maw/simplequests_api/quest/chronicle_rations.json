@@ -1,0 +1,33 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "初醒 · 为远行备粮",
+  "category": "maw:chronicle",
+  "icon": "minecraft:bread",
+  "description": [
+    "先完成亲手做第一顿饭，再交付六个面包给开拓驿站。提交会扣除真实面包。",
+    "奖励：10 灯币 / 6 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 22,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:first_bread"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/chronicle_rations",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:item",
+      "description": "先完成亲手做第一顿饭，再交付六个面包给开拓驿站。提交会扣除真实面包。",
+      "predicates": [
+        {
+          "value": {
+            "items": "minecraft:bread"
+          }
+        }
+      ],
+      "amount": 6.0,
+      "consume_items": true
+    }
+  }
+}

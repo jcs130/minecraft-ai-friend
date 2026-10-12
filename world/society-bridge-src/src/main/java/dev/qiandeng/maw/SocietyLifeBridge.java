@@ -40,7 +40,7 @@ final class SocietyLifeBridge {
     private static final String QUEST_DATA = "io.github.flemmli97.simplequests.data.PlayerData";
     private static final String QUEST_MANAGER = "io.github.flemmli97.simplequests_api.datapack.QuestsManager";
     private static final String QUEST_BASE = "io.github.flemmli97.simplequests_api.quest.QuestBase";
-    private static final Set<String> MENUS = Set.of("guide", "quests", "current", "market", "orders", "deliveries");
+    private static final Set<String> MENUS = Set.of("guide", "quests", "current", "market", "orders", "deliveries", "auction", "sell", "transactions");
     private SocietyLifeBridge() {}
 
     static void register() {
@@ -137,6 +137,8 @@ final class SocietyLifeBridge {
         }
         int completed=0;for(JsonElement row:rows)completed+=row.getAsJsonObject().get("completed").getAsInt();JsonObject evidence=RpgStore.object(RpgStore.player(player),"evidence");if(RpgStore.integer(evidence,"questCompletions")!=completed){evidence.addProperty("questCompletions",completed);RpgStore.dirty(player);}result.add("quests", rows); result.addProperty("reputation", reputation);
         result.add("guilds", CONTENT.get("guilds").deepCopy());
+        if (CONTENT.has("story")) result.add("story", CONTENT.get("story").deepCopy());
+        result.addProperty("economyProvider", "economycraft");
         String rank = "木牌见习";
         for (JsonElement value : CONTENT.getAsJsonArray("ranks")) if (reputation >= value.getAsJsonObject().get("reputation").getAsInt()) rank = value.getAsJsonObject().get("name").getAsString();
         result.addProperty("rank", rank); return result;
@@ -158,7 +160,14 @@ final class SocietyLifeBridge {
                 result.addProperty("ok", true); result.add("completion", completion);
                 result.addProperty("code", completion.isEmpty() ? "no_quest_completed_check_requirements" : "quest_submission_settled");
             }
-            case "society_open" -> { open(player, input.get("menu").getAsString()); result.addProperty("ok", true); }
+            case "society_open" -> {
+                int previous = player.containerMenu.containerId;
+                String menu = input.get("menu").getAsString(); open(player, menu);
+                result.addProperty("ok", true); result.addProperty("menu", menu);
+                result.addProperty("menuOpened", player.containerMenu.containerId != previous);
+                result.addProperty("menuPending", menu.equals("transactions") && player.containerMenu.containerId == previous);
+                result.addProperty("code", result.get("menuPending").getAsBoolean() ? "vendor_menu_requested_wait_for_window" : "menu_opened");
+            }
             default -> throw new IllegalArgumentException("unsupported_society_operation");
         }
         result.add("state", state(player)); return result;
@@ -253,19 +262,23 @@ final class SocietyLifeBridge {
         PlayerAuthBridge.requireAuthenticated(player);
         if (!MENUS.contains(menu)) throw new IllegalArgumentException("unknown_society_menu");
         if (!player.containerMenu.getCarried().isEmpty()) throw new IllegalArgumentException("clear_cursor_before_society_menu");
-        if (Set.of("market", "orders", "deliveries").contains(menu)) {
+        if (Set.of("market", "orders", "deliveries", "auction", "sell", "transactions").contains(menu)) {
             int previous = player.containerMenu.containerId;
             // Brigadier executes immediately and checks the vendor command's own requirements.
             // performPrefixedCommand queues nested commands while /mycli is already executing,
             // so checking the new menu there races its still-pending command context.
             try {
                 player.getServer().getCommands().getDispatcher().execute(
-                    switch (menu) {case "market" -> "eco menu"; case "orders" -> "eco orders"; default -> "eco deliveries";},
+                    switch (menu) {case "market" -> "eco menu"; case "orders" -> "eco orders"; case "auction" -> "eco ah"; case "sell" -> "eco sell"; case "transactions" -> "eco transactions"; default -> "eco deliveries";},
                     player.createCommandSourceStack());
             } catch (com.mojang.brigadier.exceptions.CommandSyntaxException failure) {
                 throw new IllegalArgumentException("society_market_command_denied", failure);
             }
-            if (player.containerMenu.containerId == previous) throw new IllegalStateException("society_market_menu_not_opened");
+            // The vendor reads history asynchronously and opens its original menu
+            // on a later server tick. Report the request honestly; never block a tick
+            // or classify a successful deferred open as an unknown money operation.
+            if (player.containerMenu.containerId == previous && !menu.equals("transactions"))
+                throw new IllegalStateException("society_market_menu_not_opened");
         } else if (menu.equals("guide")) openGuide(player);
         else openQuests(player, "", menu.equals("current"));
     }
@@ -321,20 +334,34 @@ final class SocietyLifeBridge {
         items.setItem(18, icon("minecraft:iron_sword", "技能 · 领地 · 十五层试炼", List.of("职业、加点、快捷施法与个人奖励箱", "兼容真人、基岩与两种 Agent 身体"))); buttons.put(18, p -> RpgMigrationBridge.open(p, "guide", 1));
         items.setItem(22, icon("minecraft:iron_ingot", s.get("rank").getAsString(), List.of("声望：" + s.get("reputation").getAsInt(), "声望随真实完成的委托累计", "可同时体验所有公会的生活方向")));
         items.setItem(24, icon("minecraft:name_tag", "登记成为公会旅人", List.of(s.get("joined").getAsBoolean() ? "已经登记" : "点击登记，无需费用"))); buttons.put(24, p -> {act(p, "society_join", new JsonObject()); openGuide(p);});
+        items.setItem(19, icon("minecraft:chest", "拍卖行 · 玩家寄售", List.of("EconomyCraft 原生菜单；完整物品组件与交易由模组处理"))); buttons.put(19, p -> open(p, "auction"));
+        items.setItem(20, icon("minecraft:hopper", "出售多余物资", List.of("原生确认出售菜单；未定价物品不会出售"))); buttons.put(20, p -> open(p, "sell"));
+        items.setItem(21, icon("minecraft:paper", "我的交易流水", List.of("查看原生账户收支记录"))); buttons.put(21, p -> open(p, "transactions"));
         board(player, "My Agent World · 冒险指南", items, buttons);
     }
     private static void openQuests(ServerPlayer player, String category, boolean current) {
-        JsonObject state = state(player); SimpleContainer items = new SimpleContainer(27); Map<Integer, Consumer<ServerPlayer>> buttons = new HashMap<>(); int slot = 0;
-        for (JsonElement element : state.getAsJsonArray("quests")) {
-            JsonObject row = element.getAsJsonObject(); if (!category.isEmpty() && !category.equals(row.get("guild").getAsString()) || current && !row.get("active").getAsBoolean()) continue;
-            String id = row.get("id").getAsString();
-            items.setItem(slot, icon(row.get("item").getAsString(), row.get("name").getAsString(), List.of(row.get("description").getAsString(),
-                "状态：" + (row.get("active").getAsBoolean() ? "进行中" : acceptLabel(row.get("acceptStatus").getAsString())), "点击查看详情 / 接取")));
+        openQuests(player, category, current, 1);
+    }
+    private static void openQuests(ServerPlayer player, String category, boolean current, int page) {
+        JsonObject state = state(player); SimpleContainer items = new SimpleContainer(27); Map<Integer, Consumer<ServerPlayer>> buttons = new HashMap<>();
+        List<JsonObject> rows = state.getAsJsonArray("quests").asList().stream().map(JsonElement::getAsJsonObject)
+            .filter(row -> (category.isEmpty() || category.equals(row.get("guild").getAsString())) && (!current || row.get("active").getAsBoolean())).toList();
+        int lastPage = Math.max(1, (rows.size() + 20) / 21);
+        if (page < 1 || page > lastPage) throw new IllegalArgumentException("quest_page_out_of_range");
+        int slot = 0;
+        for (int index = (page - 1) * 21; index < Math.min(rows.size(), page * 21); index++) {
+            JsonObject row = rows.get(index); String id = row.get("id").getAsString();
+            List<String> lore = new ArrayList<>(List.of(row.get("description").getAsString(),
+                "状态：" + (row.get("active").getAsBoolean() ? "进行中" : acceptLabel(row.get("acceptStatus").getAsString())), "点击查看详情 / 接取"));
+            if (row.has("nextHint")) lore.add(row.get("nextHint").getAsString());
+            items.setItem(slot, icon(row.get("item").getAsString(), row.get("name").getAsString(), lore));
             buttons.put(slot++, p -> detail(p, id));
         }
+        if (page > 1) { items.setItem(21, icon("minecraft:arrow", "上一页", List.of())); buttons.put(21, p -> openQuests(p, category, current, page - 1)); }
+        if (page < lastPage) { items.setItem(22, icon("minecraft:arrow", "下一页", List.of())); buttons.put(22, p -> openQuests(p, category, current, page + 1)); }
         items.setItem(24, icon("minecraft:gold_nugget", "提交物资 / 检查完成", List.of("会实际扣除交付类任务所需物资"))); buttons.put(24, p -> {act(p, "society_submit", new JsonObject()); openQuests(p, category, current);});
         items.setItem(26, icon("minecraft:compass", "返回指南", List.of())); buttons.put(26, SocietyLifeBridge::openGuide);
-        board(player, current ? "我的公会委托" : "公会委托板", items, buttons);
+        board(player, (current ? "我的公会委托" : "公会委托板") + " · " + page + "/" + lastPage, items, buttons);
     }
     private static void detail(ServerPlayer player, String id) {
         JsonObject q = definition(id); SimpleContainer items = new SimpleContainer(27); Map<Integer, Consumer<ServerPlayer>> buttons = new HashMap<>();

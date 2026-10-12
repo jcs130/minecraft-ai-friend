@@ -75,6 +75,9 @@ SOCIETY_SERVICE_MANIFEST = {
 # it must not report an autonomous Neko/dialogue runtime as healthy from a file.
 NEKO_ADAPTER_MANIFEST = Path('E:/QiandengJiSocietyLab/integrations/neko/installation.json')
 SOCIETY_NATIVE_SDK_MANIFEST = Path('E:/QiandengJiSocietyLab/integrations/native-sdk/installation.json')
+SOCIETY_UNDERWORLD_MANIFEST = {'probe': 'tools/maw_underworld_health.py',
+    'managedBy': 'existing-native-java-supervisor', 'questProvider': 'simplequests',
+    'economyProvider': 'economycraft', 'scope': 'installed_content_and_menu_contract'}
 
 
 def probe_neko_adapters(manifest_path=None):
@@ -429,6 +432,12 @@ def probe_agent_frame():
 
 
 def probe_panel_smoke(scope=None):
+    if scope == 'society-underworld':
+        sys.path.insert(0, str(PROJECT/'tools'))
+        from maw_underworld_health import probe
+        content = probe()
+        return {'ok': content['ok'], 'society_underworld': content,
+                'manifest': SOCIETY_UNDERWORLD_MANIFEST, 'modelRequests': 0, 'worldActions': 0}
     if scope == 'society-voice':
         voice = probe_society_voice()
         return {'ok': voice['ok'], 'society_voice': voice, 'modelRequests': 0, 'worldActions': 0}
@@ -2153,6 +2162,10 @@ def inventory_lock_failure(reason):
 
 
 def main():
+    if sys.argv[1:] in (['--society-underworld'], ['--society-underworld-smoke']):
+        report = probe_panel_smoke(scope='society-underworld')
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
     if sys.argv[1:] == ['--society-voice']:
         report = probe_society_voice()
         print(json.dumps(report, ensure_ascii=False, indent=2))

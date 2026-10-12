@@ -59,7 +59,7 @@ def install(destination: Path) -> dict:
     catalog = json.loads(result.stdout)
     assert catalog['operationCount'] == 121 and not catalog['remoteSupportVerified']
     files['operations.json'] = (result.stdout+'\n').encode()
-    for name in ('MY-AGENT-WORLD-NATIVE-SDK.md', 'MY-AGENT-WORLD-NATIVE-SDK-CONNECT.txt', 'MY-AGENT-WORLD-LOGIN.md', 'MY-AGENT-WORLD-LOGIN.txt', 'MY-AGENT-WORLD-CONTROL-API.txt', 'MY-AGENT-WORLD-RPG-CONTENT.txt', 'MY-AGENT-WORLD-PAPER-MIGRATION.txt'):
+    for name in ('MY-AGENT-WORLD-NATIVE-SDK.md', 'MY-AGENT-WORLD-NATIVE-SDK-CONNECT.txt', 'MY-AGENT-WORLD-LOGIN.md', 'MY-AGENT-WORLD-LOGIN.txt', 'MY-AGENT-WORLD-CONTROL-API.txt', 'MY-AGENT-WORLD-RPG-CONTENT.txt', 'MY-AGENT-WORLD-PAPER-MIGRATION.txt', 'MY-AGENT-WORLD-UNDERWORLD.txt', 'MY-AGENT-WORLD-UNDERWORLD.md', 'MY-AGENT-WORLD-MOD-REUSE.md'):
         files[name] = (REPO/'docs'/name).read_bytes()
     for name, content in files.items():
         target = destination/name

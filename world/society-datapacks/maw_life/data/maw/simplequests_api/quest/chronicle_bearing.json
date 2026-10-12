@@ -1,0 +1,32 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "工匠 · 风的起点",
+  "category": "maw:chronicle",
+  "icon": "create:windmill_bearing",
+  "description": [
+    "接取后制作风车轴承。这只代表备件完成；真正发电要继续搭风帆并验证实际转速。",
+    "奖励：24 灯币 / 15 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 29,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:chronicle_shaft"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/chronicle_bearing",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:crafting",
+      "description": "接取后制作风车轴承。这只代表备件完成；真正发电要继续搭风帆并验证实际转速。",
+      "item_predicates": [
+        {
+          "value": {
+            "items": "create:windmill_bearing"
+          }
+        }
+      ],
+      "amount": 1.0
+    }
+  }
+}

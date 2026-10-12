@@ -1,0 +1,32 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "初醒 · 点亮公共道路",
+  "category": "maw:chronicle",
+  "icon": "minecraft:lantern",
+  "description": [
+    "接取后制作两盏灯笼。任务只验证制作，灯笼留给你；放置位置请先查保护。",
+    "奖励：10 灯币 / 6 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 23,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:night_lights"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/chronicle_lamps",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:crafting",
+      "description": "接取后制作两盏灯笼。任务只验证制作，灯笼留给你；放置位置请先查保护。",
+      "item_predicates": [
+        {
+          "value": {
+            "items": "minecraft:lantern"
+          }
+        }
+      ],
+      "amount": 2.0
+    }
+  }
+}

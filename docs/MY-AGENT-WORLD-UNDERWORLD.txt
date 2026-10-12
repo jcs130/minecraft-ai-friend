@@ -1,0 +1,20 @@
+My Agent World · 异界开拓纪
+
+原公会增加“异界开拓纪”分类：十二项首次章节任务，连到料理、建筑、机械、魔法、护卫与探索。先接任务，再完成实际行动；交付物资会扣除，检查法术书不扣书。奖励进入原 EconomyCraft 灯币账户，不增加新货币。
+
+手柄玩家：冒险指南针打开公会；命格书里点“查看天命”或“System Call”。目录内可学习、绑定、施放原有技能，使用同一魔力、等级和冷却。
+/mycli stacia：本人实际生命、魔力、位置与装备耐久，点击刷新。
+/mycli systemcall：术式菜单。
+/mycli systemcall list 或 explain vital_mend：目录与说明。
+/mycli systemcall check vital_mend：只读语法与本人前提检查，不保证目标存在。
+/mycli systemcall cast vital_mend：按原治疗术规则施放。
+
+Agent：先读 rpg.skills.systemCalls.formulas，使用返回的 castOperation/castArgs。也可 skill.learn、skill.bind 使用术式 ID；不必往聊天写英文。rpg.state.stacia 返回本人 UUID、采样时间、绝对坐标、真实生命和六槽装备耐久；未实现的神圣术排名返回 null。
+新 rpg.open 菜单：stacia、systemcall，参数 page=1。
+新 society.open 菜单：auction、sell、transactions。原 market、orders、deliveries 保持。
+市场买卖、拍卖、订单、托管和流水由已安装 EconomyCraft 处理。
+流水界面可能异步打开，menuPending=true 时等待真实新窗口，再读取槽位与点击，不重复发送打开请求。
+Mineflayer 读 menu.current；Numen 读 menu.snapshot，使用各自发现的点击参数。根据实际物品及完整组件操作，功能图标不是商品。
+所有变更使用持久唯一 action_id，等终态后核对实际效果。unknown 禁止自动换 ID 重试。
+
+保留既有世界和身份；记忆迷宫、季节任务仍在后续计划中。完整发布与验收状态见 MY-AGENT-WORLD-UNDERWORLD.md。

@@ -2,7 +2,7 @@
 
 2026-10-12，`@my-agent-world/world-adapter` 0.3.0。上层 Agent 的规划、记忆、模型和调度保持原样，通过一套 JS 或 JSONL 接口选择 `mineflayer` 或 `numen` 身体。新增 19 项通用底层控制 API；参数和直接 HTTP 调用见 [控制 API 纯文本指南](MY-AGENT-WORLD-CONTROL-API.txt)。
 
-源码：`world/src/world-adapter/`。可分发目录：`E:\QiandengJiSocietyLab\integrations\world-adapter\v5-paper-rpg-20261012`；复制整个目录到 Agent 主机，用 Node 22 在该目录执行 `npm ci`。包附运行环境原始传递依赖锁，沿用锁定 Mineflayer / 协议依赖，不任意升级。新版包与原 Native SDK 包并存，不覆盖原 Agent 或其账本。
+源码：`world/src/world-adapter/`。可分发目录：`E:\QiandengJiSocietyLab\integrations\world-adapter\v6-underworld-20261012`；复制整个目录到 Agent 主机，用 Node 22 在该目录执行 `npm ci`。包附运行环境原始传递依赖锁，沿用锁定 Mineflayer / 协议依赖，不任意升级。新版包与原 Native SDK 包并存，不覆盖原 Agent 或其账本。
 
 ## 明确选择身体
 
@@ -113,5 +113,7 @@ SDK 9 项、统一层 8 项、Numen 宿主 15 项健康检查通过，基岩/观
 原千灯纪 world_adapter.py / numen_gateway.py 的规划、记忆与技能可以在 Agent 侧逐项映射到此接口；本版未改旧 Agent 的身份、记忆存档和自主循环。
 
 2026-10-12 新增公会/委托/市场：society.state、society.join、society.accept、society.submit、society.open。先读本人真实状态，再用唯一 action_id 执行；完整玩法与维护见 MY-AGENT-WORLD-RPG-CONTENT.txt。
+
+异界开拓纪的真实天命、术式与 EconomyCraft 原生菜单通过同一接口开放，见 [玩法与接口](MY-AGENT-WORLD-UNDERWORLD.md)。`society.open` 的 `transactions` 可能返回 `menuPending=true`；等实际新窗口后再点击，不因异步打开而重复提交。
 
 本轮领地、技能与试炼迁移的边界和接入：[Paper 迁移与维护](MY-AGENT-WORLD-PAPER-MIGRATION.md)。

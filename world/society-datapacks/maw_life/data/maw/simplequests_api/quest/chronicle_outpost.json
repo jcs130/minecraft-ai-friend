@@ -1,0 +1,35 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "远行 · 寻找下一盏灯",
+  "category": "maw:chronicle",
+  "icon": "minecraft:compass",
+  "description": [
+    "接取后实际进入新生成的公会驿站。沿道路寻找；这不是传送指令，也不预先透露未发现地形。",
+    "奖励：22 灯币 / 15 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 33,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:chronicle_lamps"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/chronicle_outpost",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:predicates",
+      "description": "接取后实际进入新生成的公会驿站。沿道路寻找；这不是传送指令，也不预先透露未发现地形。",
+      "predicates": [
+        {
+          "value": {
+            "location": {
+              "structures": "maw:guild_hall"
+            }
+          },
+          "description": "接取后实际进入新生成的公会驿站。沿道路寻找；这不是传送指令，也不预先透露未发现地形。"
+        }
+      ],
+      "submit": false
+    }
+  }
+}

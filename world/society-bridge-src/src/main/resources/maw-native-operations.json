@@ -44,7 +44,7 @@
     {
       "id": "rpg.state",
       "readOnly": true,
-      "description": "本人原生魔力、职业/技能点/实际熟练、试炼参赛状态、账户及异步探矿绝对坐标结果。",
+      "description": "本人原生魔力、职业/技能点/熟练、Stacia天命/装备耐久、System Call目录、试炼状态、账户及异步探矿绝对坐标结果。",
       "parameters": {
         "type": "object",
         "properties": {},
@@ -783,7 +783,7 @@
     {
       "id": "rpg.open",
       "readOnly": false,
-      "description": "本人手柄友好的中文原版界面：命格书、技能、职业、领地、试炼、补给和回收。",
+      "description": "本人手柄友好的中文原版界面：命格书、技能、职业、领地、试炼、补给、回收、Stacia天命与System Call。",
       "parameters": {
         "type": "object",
         "properties": {
@@ -796,7 +796,9 @@
               "lands",
               "arena",
               "shop",
-              "recycle"
+              "recycle",
+              "stacia",
+              "systemcall"
             ]
           },
           "page": {
@@ -869,7 +871,7 @@
     {
       "id": "society.open",
       "readOnly": false,
-      "description": "打开本人标准容器界面：中文指南/委托/进度，或原生市场/玩家收购订单/待领取。菜单图标不是可拿走的奖励。",
+      "description": "打开本人标准容器界面：指南/委托/进度，或EconomyCraft原生市场/收购订单/待领取/拍卖/出售/交易流水。菜单图标不是可拿走的奖励。",
       "parameters": {
         "type": "object",
         "properties": {
@@ -881,7 +883,10 @@
               "current",
               "market",
               "orders",
-              "deliveries"
+              "deliveries",
+              "auction",
+              "sell",
+              "transactions"
             ]
           }
         },

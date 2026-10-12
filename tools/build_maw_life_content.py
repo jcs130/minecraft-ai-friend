@@ -7,6 +7,7 @@ from __future__ import annotations
 import gzip
 import json
 from pathlib import Path
+import re
 import struct
 
 REPO = Path(__file__).resolve().parents[1]
@@ -183,9 +184,36 @@ def build_hall():
 
 
 
+def validate_content(content):
+    quests = content['quests']
+    ids = {q['id'] for q in quests}
+    guilds = {g['id'] for g in content['guilds']}
+    if not 1 <= len(quests) <= 64 or len(ids) != len(quests):
+        raise ValueError('Expected 1..64 uniquely identified quests; boards are paged')
+    parents = {}
+    for q in quests:
+        if not re.fullmatch(r'[a-z0-9_]{1,64}', q['id']) or q['guild'] not in guilds:
+            raise ValueError('Invalid quest ID or unknown guild')
+        if q['kind'] not in {'item', 'inspect', 'crafting', 'fishing', 'kill', 'structure'}:
+            raise ValueError('Unsupported native quest task')
+        parents[q['id']] = q.get('parents', [])
+        if any(p not in ids for p in parents[q['id']]):
+            raise ValueError('Unknown parent quest')
+    seen, visiting = set(), set()
+    def visit(id):
+        if id in visiting:
+            raise ValueError('Cyclic quest prerequisites')
+        if id in seen:
+            return
+        visiting.add(id)
+        for parent in parents[id]: visit(parent)
+        visiting.remove(id); seen.add(id)
+    for id in ids: visit(id)
+
+
 def main():
     content = json.loads((REPO / 'config/maw-life-content.json').read_text('utf8'))
-    assert len(content['quests']) <= 24 and len({q['id'] for q in content['quests']}) == len(content['quests'])
+    validate_content(content)
     build_quests(content); build_hall()
     print(json.dumps({'ok': True, 'quests': len(content['quests']), 'guilds': len(content['guilds']) - 1, 'pack': str(PACK)}))
 

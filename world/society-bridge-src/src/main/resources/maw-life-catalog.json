@@ -65,6 +65,12 @@
       "name": "秘法公会",
       "icon": "ars_nouveau:novice_spell_book",
       "description": "学习新生魔艺，读懂法术书、魔力和符文。"
+    },
+    {
+      "id": "chronicle",
+      "name": "异界开拓纪",
+      "icon": "minecraft:written_book",
+      "description": "来自异界的旅人：选择生产、建造、魔法与探索之路，靠真实行动在世界中立足。章节是原创游戏改编，不复制其他服务器的地图或剧情资产。"
     }
   ],
   "quests": [
@@ -350,6 +356,240 @@
       "money": 24,
       "reputation": 20,
       "repeatTicks": -1
+    },
+    {
+      "id": "chronicle_rations",
+      "guild": "chronicle",
+      "name": "初醒 · 为远行备粮",
+      "kind": "item",
+      "item": "minecraft:bread",
+      "amount": 6,
+      "description": "先完成亲手做第一顿饭，再交付六个面包给开拓驿站。提交会扣除真实面包。",
+      "money": 10,
+      "reputation": 6,
+      "repeatTicks": -1,
+      "parents": [
+        "first_bread"
+      ],
+      "nextHint": "没有食物时，先种小麦或到原生市场购买。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_lamps",
+      "guild": "chronicle",
+      "name": "初醒 · 点亮公共道路",
+      "kind": "crafting",
+      "item": "minecraft:lantern",
+      "amount": 2,
+      "description": "接取后制作两盏灯笼。任务只验证制作，灯笼留给你；放置位置请先查保护。",
+      "money": 10,
+      "reputation": 6,
+      "repeatTicks": -1,
+      "parents": [
+        "night_lights"
+      ],
+      "nextHint": "学习 protection.query，再选择允许建设的位置。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_farm",
+      "guild": "chronicle",
+      "name": "田园 · 第一批收成",
+      "kind": "item",
+      "item": "minecraft:wheat",
+      "amount": 16,
+      "description": "为驿站交付十六份小麦。可以自己耕种或通过玩家订单协作；提交扣除物品。",
+      "money": 12,
+      "reputation": 8,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_rations"
+      ],
+      "nextHint": "后续可以向 EconomyCraft 市场挂收购或出售富余物资。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_kitchen",
+      "guild": "chronicle",
+      "name": "料理 · 建起炊事所",
+      "kind": "crafting",
+      "item": "farmersdelight:cooking_pot",
+      "amount": 1,
+      "description": "接取后制作一口农夫乐事烹饪锅。此步验证合成，不冒充已经做完厨房或菜肴。",
+      "money": 16,
+      "reputation": 10,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_rations"
+      ],
+      "nextHint": "下一步准备蔬菜汤；用原生 cooking 菜单观察火源与进度。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_soup",
+      "guild": "chronicle",
+      "name": "料理 · 热汤与同行者",
+      "kind": "item",
+      "item": "farmersdelight:vegetable_soup",
+      "amount": 2,
+      "description": "交付两碗蔬菜汤，让远行的同伴吃上热食；提交扣除真实汤。",
+      "money": 18,
+      "reputation": 12,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_kitchen"
+      ],
+      "nextHint": "料理分会有可重复的真实物资委托。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_bricks",
+      "guild": "chronicle",
+      "name": "营造 · 驿站备料",
+      "kind": "item",
+      "item": "minecraft:stone_bricks",
+      "amount": 32,
+      "description": "交付三十二块石砖，作为公共设施材料。任务不要求破坏已保护的建筑。",
+      "money": 12,
+      "reputation": 8,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_lamps"
+      ],
+      "nextHint": "准备灯具、工作台，再按本人领地权限建造。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_shaft",
+      "guild": "chronicle",
+      "name": "工匠 · 理解传动",
+      "kind": "crafting",
+      "item": "create:shaft",
+      "amount": 8,
+      "description": "接取后制作八根传动杆，学习机械动力的第一步；制成物保留。",
+      "money": 12,
+      "reputation": 8,
+      "repeatTicks": -1,
+      "parents": [
+        "stone_tools"
+      ],
+      "nextHint": "先查 create.state 和配方，再选择传动布局。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_bearing",
+      "guild": "chronicle",
+      "name": "工匠 · 风的起点",
+      "kind": "crafting",
+      "item": "create:windmill_bearing",
+      "amount": 1,
+      "description": "接取后制作风车轴承。这只代表备件完成；真正发电要继续搭风帆并验证实际转速。",
+      "money": 24,
+      "reputation": 15,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_shaft"
+      ],
+      "nextHint": "风车运行以 create.state 的实际 RPM 为证，不以任务名冒充完工。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_sacred_book",
+      "guild": "chronicle",
+      "name": "秘法 · 神圣术入门",
+      "kind": "inspect",
+      "item": "ars_nouveau:novice_spell_book",
+      "amount": 1,
+      "description": "准备一本新手法术书后提交检查，不收走书。命格书中可查看神圣术目录；学习仍需技能点。",
+      "money": 14,
+      "reputation": 10,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_rations"
+      ],
+      "nextHint": "rpg.skills 查询 System Call、实际资格和冷却，skill.cast 施放。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_crystal",
+      "guild": "chronicle",
+      "name": "秘法 · 紫晶补给",
+      "kind": "item",
+      "item": "minecraft:amethyst_shard",
+      "amount": 8,
+      "description": "交付八片紫水晶碎片；保护晶芽以便持续采收。探矿结果有维度及绝对坐标。",
+      "money": 14,
+      "reputation": 10,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_sacred_book"
+      ],
+      "nextHint": "探矿是异步技能，读 lastResults.prospect 后再决定移动。",
+      "chapter": 1
+    },
+    {
+      "id": "chronicle_watch",
+      "guild": "chronicle",
+      "name": "守望 · 夜巡的约定",
+      "kind": "kill",
+      "item": "minecraft:shield",
+      "amount": 3,
+      "description": "接取后由本人击败三只僵尸，为居民守望。不要攻击村民、宠物或同行者。",
+      "money": 16,
+      "reputation": 10,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_rations"
+      ],
+      "nextHint": "战斗前查看实际生命、魔力、技能说明和剩余冷却。",
+      "chapter": 1,
+      "entity": "minecraft:zombie"
+    },
+    {
+      "id": "chronicle_outpost",
+      "guild": "chronicle",
+      "name": "远行 · 寻找下一盏灯",
+      "kind": "structure",
+      "item": "minecraft:compass",
+      "amount": 1,
+      "description": "接取后实际进入新生成的公会驿站。沿道路寻找；这不是传送指令，也不预先透露未发现地形。",
+      "money": 22,
+      "reputation": 15,
+      "repeatTicks": -1,
+      "parents": [
+        "chronicle_lamps"
+      ],
+      "nextHint": "驿站接待员、原生市场与共享箱支持长期生活。",
+      "chapter": 1,
+      "structure": "maw:guild_hall"
     }
-  ]
+  ],
+  "story": {
+    "id": "underworld_pioneers",
+    "title": "异界开拓纪 · 灯火初醒",
+    "chapter": 1,
+    "description": "醒来后，先学会生存。六条生活道路都能积累声望；战斗不是唯一的成长方式。",
+    "gameAdaptation": true,
+    "questIds": [
+      "maw:chronicle_rations",
+      "maw:chronicle_lamps",
+      "maw:chronicle_farm",
+      "maw:chronicle_kitchen",
+      "maw:chronicle_soup",
+      "maw:chronicle_bricks",
+      "maw:chronicle_shaft",
+      "maw:chronicle_bearing",
+      "maw:chronicle_sacred_book",
+      "maw:chronicle_crystal",
+      "maw:chronicle_watch",
+      "maw:chronicle_outpost"
+    ],
+    "economyProvider": "economycraft",
+    "questProvider": "simplequests",
+    "plannedSystems": [
+      "branching_memory_labyrinth",
+      "seasonal_commissions",
+      "world_resource_modifiers"
+    ]
+  }
 }

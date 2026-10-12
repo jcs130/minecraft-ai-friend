@@ -1,0 +1,32 @@
+{
+  "type": "simplequests_api:quest",
+  "name": "料理 · 建起炊事所",
+  "category": "maw:chronicle",
+  "icon": "farmersdelight:cooking_pot",
+  "description": [
+    "接取后制作一口农夫乐事烹饪锅。此步验证合成，不冒充已经做完厨房或菜肴。",
+    "奖励：16 灯币 / 10 声望",
+    "首次任务，只可完成一次。"
+  ],
+  "sorting_id": 25,
+  "repeat_delay": -1,
+  "parent_id": [
+    "maw:chronicle_rations"
+  ],
+  "loot_table": "minecraft:empty",
+  "command": "function maw:rewards/chronicle_kitchen",
+  "tasks": {
+    "objective": {
+      "id": "simplequests_api:crafting",
+      "description": "接取后制作一口农夫乐事烹饪锅。此步验证合成，不冒充已经做完厨房或菜肴。",
+      "item_predicates": [
+        {
+          "value": {
+            "items": "farmersdelight:cooking_pot"
+          }
+        }
+      ],
+      "amount": 1.0
+    }
+  }
+}
