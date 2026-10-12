@@ -1,0 +1,30 @@
+{
+  "status": "verified_candidate_not_deployed",
+  "date": "2026-10-12",
+  "plugin": "AgentFriend",
+  "version": "0.4.25",
+  "sha256": "8647929232de76a634c0987f34df95f64964fcaf53b32fa9844e51e8d6ddc66d",
+  "productionVersion": "0.4.23",
+  "productionSha256": "3f6820dabef89738f4ac254b9e8ee5277b824a5b4d22ff66a0ab7546d81105db",
+  "includes": ["0.4.24 merchant trade directory", "named server-item identity and private usage explanations"],
+  "commands": ["/mycli inventory [status|refresh]", "/mycli inventory item <0-35|hand>"],
+  "identityKinds": ["server_item", "named_item", "vanilla"],
+  "knownItems": ["minepacks:backpack_shortcut", "agentfriend:skill_compass", "agentfriend:status_book", "agentfriend:skill_tome", "agentfriend:spell_focus"],
+  "testResults": [
+    {"receipt": "item-identity-java-final.json", "passed": 24, "errors": 0, "mineflayer": "4.39.0", "prismarineItem": "1.18.0"},
+    {"receipt": "item-identity-bedrock-2.json", "passed": 6, "errors": 0, "bedrockProtocolVersion": "1.26.51"},
+    {"receipt": "item-identity-java-440.json", "passed": 23, "errors": 0, "scope": "repeat after normal isolated restart without optional labels file"},
+    {"receipt": "trade-live-tail.json", "passed": 20, "errors": 0, "scope": "merged trade-board regression"},
+    {"receipt": "trade-bedrock-merged.json", "passed": 8, "errors": 0, "scope": "merged Bedrock trade-board regression"}
+  ],
+  "boundaries": [
+    "Standard custom_name/profile components retained; no registry-ID spoofing or item mutation",
+    "Actual Minepacks shortcut requires matching name and texture; an ordinary or same-name fake head is not a backpack",
+    "MC_INVENTORY schemaVersion 1 retains legacy fields and adds complete pages; consumers must collect all pages",
+    "No new client name patch, authentication rule, public port, model call or periodic world scanner",
+    "A remote tool that ignores all native custom-name components and server messages still needs to read the proper field",
+    "No production inventory, data or JAR changed; no restart queued; fresh explicit Paper approval required",
+    "Bedrock protocol verified; no physical phone/Xbox or remote Web deployment claim"
+  ],
+  "rollback": "Normal shutdown and restore AgentFriend 0.4.23 JAR; no player-data migration or world rollback required"
+}

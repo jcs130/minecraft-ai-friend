@@ -1,0 +1,40 @@
+{
+  "status": "verified_candidate_not_deployed",
+  "date": "2026-10-12",
+  "plugin": "AgentFriend",
+  "version": "0.4.24",
+  "sha256": "2210dbf29f2b6668ef4e6f67e65e256cdcb1079cb36eadacc0eb338d0ae90400",
+  "productionVersion": "0.4.23",
+  "productionSha256": "3f6820dabef89738f4ac254b9e8ee5277b824a5b4d22ff66a0ab7546d81105db",
+  "entryPoints": [
+    "existing harbor guild sign",
+    "existing trader_supply host menu slot 4",
+    "compass world-life menu slot 14",
+    "/mycli trade menu|list|find|buy|sell|info|locate|stop|hall"
+  ],
+  "quoteSources": ["loaded native merchants", "active public Shopkeepers admin shops, per viewer"],
+  "testResults": [
+    {"receipt": "trade-live-final.json", "passed": 34, "errors": 0},
+    {"receipt": "trade-bedrock-final.json", "passed": 8, "errors": 0},
+    {"receipt": "trade-cold-tail.json", "passed": 23, "errors": 0, "scope": "repeat after normal isolated restart"}
+  ],
+  "limits": {
+    "entityIndexTtlMillis": 3000,
+    "perViewerQuoteTtlMillis": 3000,
+    "merchants": 128,
+    "recipesPerMerchant": 32,
+    "offers": 2048,
+    "guiPageOffers": 36,
+    "chatPageMaxOffers": 4,
+    "chatPageSerializedRowBudget": 3000
+  },
+  "boundaries": [
+    "No remote trade, free teleport, stock change or recipe mutation",
+    "No forced chunk loading, model call, public port or Agent client change",
+    "Native personal discounts are final at physical trading window",
+    "Eye private quote and locator verified; generic container mirrors follow existing SpectatorPlus client-mod policy",
+    "Bedrock protocol verified; phone/Xbox physical display and remote Web deployment not claimed",
+    "Production JAR and data unchanged; no restart queued; fresh explicit approval required for Paper release"
+  ],
+  "rollback": "Normal shutdown and restore AgentFriend 0.4.23 JAR; no player-data migration or world rollback required"
+}

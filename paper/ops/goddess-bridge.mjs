@@ -10,6 +10,9 @@ import { fix1206PotionProtocol } from './minecraft-1206-potion.mjs';
 import { startNpcDialogueAdapter } from './npc-dialogue-adapter.mjs';
 import { startGoddessPhotoCamera } from './goddess-photo-camera.mjs';
 import { collectPlayerObservation, buildGoddessChatPrompt, parseGoddessChatAnswer, cacheObservedPhoto } from './goddess-perception.mjs';
+import { installLoginGate } from './mineflayer-login-gate.mjs';
+import { localProxyConnect } from './auth-proxy.mjs';
+import { installRecipePacketBypass } from './mineflayer-client-compat.mjs';
 
 const require = createRequire('E:/Cortico/package.json');
 fix1206PotionProtocol(require);
@@ -198,14 +201,21 @@ function receive(player, message) {
 function connect() {
   if (stopping) return;
   connected = false;
+  let login;
   try {
     // Mineflayer's default whisper regex captures only \w+, stripping the
     // Floodgate '.' prefix from Bedrock usernames such as .BedrockGuest. Keep the
     // full server username so acknowledgements and replies reach that player.
-    bot = mineflayer.createBot({ host: '127.0.0.1', port: Number(process.env.GODDESS_GAME_PORT || 25565), username: 'Goddess', auth: 'offline', version: '1.20.6', defaultChatPatterns: false });
-    startGoddessPhotoCamera(bot, {log,onCapture:info=>cacheObservedPhoto(info).catch(error=>log(`observation cache failed=${error.code??error.name}`))});
+    const port=Number(process.env.GODDESS_GAME_PORT || 25565);
+    const protectedLogin=process.env.GODDESS_AUTH_REQUIRED==='1';
+    if(protectedLogin && !process.env.MC_LOGIN_PASSWORD) throw Error('AUTH_PASSWORD_MISSING');
+    bot = mineflayer.createBot({ host: '127.0.0.1', port, username: 'Goddess', auth: 'offline', version: '1.20.6', defaultChatPatterns: false,
+      ...(protectedLogin?{connect:localProxyConnect(port)}:{}) });
+    installRecipePacketBypass(bot._client,{enabled:process.env.MC_RECIPE_BYPASS!=='0'});
+    login=protectedLogin?installLoginGate(bot,{password:process.env.MC_LOGIN_PASSWORD,log}):{ready:new Promise(resolve=>bot.once('spawn',resolve))};
   } catch (error) { log(`createBot failed: ${error.message}`); setTimeout(connect, 15000); return; }
-  bot.once('spawn', () => {
+  login.ready.then(() => {
+    startGoddessPhotoCamera(bot, {log,onCapture:info=>cacheObservedPhoto(info).catch(error=>log(`observation cache failed=${error.code??error.name}`))});
     // EssentialsX /msg 的发件人显示名带前缀（如 "◆钻石 [Agent] CortiLan"），
     // mineflayer 的 ^用户名 锚定匹配失败 → 改为在 messagestr 上自行解析，
     // 玩家名取 whisper 标记前最后一个用户名 token（兼容 Floodgate 点前缀）。
@@ -233,7 +243,7 @@ function connect() {
     bot.addChatPattern('chat', /^<([A-Za-z0-9_.-]{1,32})> (.*)$/, { deprecated: true });
     connected = true;
     log('Goddess joined Paper; server enforces OP identity and spectator mode');
-  });
+  }).catch(error=>{log(`login gate: ${error.message}`); shutdown();});
   bot.on('message', msg => {
     const s = String(msg?.toString?.() ?? msg).replace(/\s+/g, ' ').trim();
     if (s) log(`chat-dump: ${JSON.stringify(s)}`);

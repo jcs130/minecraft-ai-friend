@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "id": "authenticated-release-20261011",
+  "status": "deployed",
+  "date": "2026-10-11",
+  "artifacts": [
+    {
+      "target": "AgentFriend-0.4.22.jar",
+      "sha256": "54ba303f9d3d34f9396d4bd9551ad8bd9939d5104de8cecb7241873c8fec5635"
+    },
+    {
+      "target": "CortiEyeMirror-0.1.13.jar",
+      "sha256": "4725ae3072e2a790e638b765bbc1b45f897068086c05da1b98ec65941ace6fca"
+    },
+    {
+      "target": "ysm-proxy/AgentAppearance-0.3.1.jar",
+      "sha256": "428367a4e135d13ef2fc86a37de17c5039a3326a8fac4e4c4e27deb7674c1478"
+    },
+    {
+      "target": "ysm-proxy/LibreLogin-0.24.0.jar",
+      "sha256": "3df848d4058e63f37cf9fe997542fd49c84374440d116a34ac4052278aa77e4f"
+    },
+    {
+      "target": "ysm-proxy/NanoLimboPlugin-velocity-1.0.11.jar",
+      "sha256": "db24cb3db365bcb565e3cafc0c2c0984a20461cedaa4a26b5d9be910f0ebf272"
+    },
+    {
+      "target": "ysm-proxy/LoginGuard-0.1.0.jar",
+      "sha256": "be672b111aea3ce171b18ccffe65b7fe1b615a753b6ffc27b46ebffa5397be36"
+    }
+  ],
+  "snapshot": "20261011-211820",
+  "paperPid": 36640,
+  "goddessPid": 42720,
+  "paperRestarts": 1,
+  "seededAccounts": 23,
+  "administratorAccounts": 5,
+  "existingBackpacksPreserved": 23,
+  "liveChecks": 8,
+  "dataChecks": 307,
+  "totpEnabled": false,
+  "remoteClientsModified": false,
+  "realPremiumSuccessVerified": false,
+  "realBedrockDeviceVerified": false,
+  "notes": "Initial plan and failures retained; synchronized startup guard hotfix applied after separate E/F recovery copies.",
+  "loopbackOnly": true,
+  "guardConcurrencyRegressionPassed": true,
+  "wildcardEndpointRejected": true
+}

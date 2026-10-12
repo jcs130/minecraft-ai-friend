@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-12",
+  "status": "tested_candidate_not_deployed",
+  "sharedViewerCommit": "08292cb17ee5dd521b91a5dfc185e51a1f2664c0",
+  "profile": {
+    "minecraft": "1.20.6",
+    "preset": "qiandengji",
+    "ysm": "2.4.1",
+    "protocol": "2.4.0"
+  },
+  "artifacts": {
+    "agentAppearance": {
+      "version": "0.3.2",
+      "sha256": "aac38843e34bab6a649314500cc096a484fb42cb6e12a8fe6d024a10fd053477",
+      "candidate": "E:/MC/ops/repairs/ysm-web-actions-20261012/build-1/AgentAppearance-0.3.2.jar",
+      "previousSha256": "428367a4e135d13ef2fc86a37de17c5039a3326a8fac4e4c4e27deb7674c1478"
+    },
+    "browserBundle": {
+      "sha256": "99f410ad0329a8fdba81793ca7054a917d90a32bd0068bbfb78ec4f6c2c3d01f",
+      "runtimeRoot": "E:/MC/ops/photo-camera-ysm-actions-candidate-20261012",
+      "previousAssetsRoot": "E:/MC/ops/photo-camera-0.4.19/assets"
+    },
+    "runtimeManifest": {
+      "sha256": "d963f6fd0a9fbe246d8e4c8b3592c76a31562bc2d2b70f86342607a8353c0079",
+      "files": 8893
+    }
+  },
+  "modelCalibration": [
+    {
+      "modelId": "cormy",
+      "oldScale": 0.7,
+      "newScale": 0.82,
+      "oldDefinitionSha256": "88395235b0305cfa3e78d835d59ad5d9c18a1cb9fffcbe21d4e36097bcd68dbf",
+      "newDefinitionSha256": "68b0fdff3911b0bb5a40cc1e65369e9eeb8cc14dd67f448f1bd6fa50c25f42b2"
+    },
+    {
+      "modelId": "neko_yui",
+      "oldScale": 0.9,
+      "newScale": 1,
+      "oldDefinitionSha256": "3d3a820530319531619f8f8a6ef9ef4484b9b412f1ebbd9cb283e7788f06aa68",
+      "newDefinitionSha256": "b72eb8d5e038b29ce76c6839451159ab3cb9df910c2fff434f948c43aef6a0f4"
+    }
+  ],
+  "sourceBundles": {
+    "cormy": "7006d1345eef594954eb4703c4e73131151e92285a8056cc033a29341473ec2e",
+    "neko_yui": "8618c89d475fbf187006b0b84d0a6756d0d7f04d2e906448d210ce2dcb083b1f"
+  },
+  "verification": {
+    "appearanceTests": {
+      "passed": 23,
+      "skipped": 0
+    },
+    "separateNativeRegression": {
+      "passed": 41,
+      "skipped": 0,
+      "fixture": "original native1.21.1 verified v15 assets"
+    },
+    "sourceBundleChecks": {
+      "passed": 8
+    },
+    "actualBrowser": {
+      "checks": 12,
+      "passed": true,
+      "fixture": "three controlled Mineflayer4.39 connections via isolated Proxy/Worker, actual original Cormy/NEKO sources, final frozen photo runtime, loopback-only browser",
+      "captures": [
+        "web-7-idle.png",
+        "web-7-walk.png",
+        "web-7-attack.png",
+        "web-7-block.png",
+        "web-7-actions.webm"
+      ],
+      "report": "web-live-7.json"
+    },
+    "failedAttemptsRetained": true
+  },
+  "release": {
+    "requiresUserApproval": true,
+    "changes": [
+      "Replace only AgentAppearance proxy plugin0.3.1 with0.3.2",
+      "Switch private camera to fresh pinned runtime",
+      "Update only cormy/neko_yui width_scale and height_scale; reload original model service"
+    ],
+    "paperRestartRequired": false,
+    "proxyAndModelServiceRestartRequired": true,
+    "agentReconnectRequired": true,
+    "remoteLanViewer": "Pull shared main, copy new viewer-ysm-motion host module, rebuild original1.20.6/qiandengji assets and restart that host; remote runtime not accessed or verified",
+    "pendingPaperCandidate": "AgentFriend0.4.25 remains separate and undeployed",
+    "maintenance": "Use the approved managed maintenance lock and E/F stopped backup workflow; no automatic restart is queued"
+  },
+  "rollback": [
+    "Use stopped E/F maintenance backups to restore original proxy0.3.1 plugin and camera configuration",
+    "Restore only the two pre-change ysm.json definitions and reload original model catalog",
+    "Restart the prior proxy/model/camera processes through their managed lifecycle; leave Paper worlds, authentication and player bindings intact"
+  ],
+  "limits": [
+    "Full native Java pixel/material/animation parity remains unaccepted",
+    "Unknown Molang/physical functions and custom animation controllers are explicit unavailable layers",
+    "Dynamic custom-head/model, potion/tint visuals and special builtin/effect item renderers are not complete equipment parity",
+    "Bedrock full animation/first-person and phone/Xbox device rendering remain unaccepted",
+    "This is controlled QA, not sixteen autonomous LLM agents playing long term"
+  ],
+  "evidenceRoot": "E:/MC/ops/repairs/ysm-web-actions-20261012",
+  "evidenceMirror": "F:/MC-backups/repairs/ysm-web-actions-20261012",
+  "sharedViewerTestedLocalCommit": "637ea6581b6d1b96a4e61a2ff689a289b5bd4e4e",
+  "sharedViewerTree": "eb26ec38c7c4273d426f06c0bf14ec5d6df19b48",
+  "sharedViewerPublished": true
+}

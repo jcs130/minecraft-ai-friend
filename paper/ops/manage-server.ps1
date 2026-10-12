@@ -129,12 +129,24 @@ function Start-Goddess {
     $stdout = Join-Path $opsDir "goddess-bridge-$stamp.log"
     $stderr = Join-Path $opsDir "goddess-bridge-$stamp.error.log"
     $previousGamePort = $env:GODDESS_GAME_PORT
+    $previousAuth = $env:GODDESS_AUTH_REQUIRED
+    $previousPassword = $env:MC_LOGIN_PASSWORD
     try {
         $ysm = Ysm-Config
         if ($ysm -and $ysm.enabled) { $env:GODDESS_GAME_PORT = [string]$ysm.proxy.port }
+        if (Test-Path -LiteralPath (Join-Path $opsDir 'agent-auth.json')) {
+            $credential = [IO.File]::ReadAllText((Join-Path $opsDir 'auth-credentials/Goddess.env')).Trim()
+            if ($credential -notmatch '^MC_LOGIN_PASSWORD=([^\s]{16,72})$') { throw 'Goddess authentication credential is missing or invalid' }
+            $env:MC_LOGIN_PASSWORD = $Matches[1]
+            $env:GODDESS_AUTH_REQUIRED = '1'
+        }
         $proc = Start-Process -FilePath $node -ArgumentList $goddessScript -WorkingDirectory $opsDir `
             -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
-    } finally { $env:GODDESS_GAME_PORT = $previousGamePort }
+    } finally {
+        $env:GODDESS_GAME_PORT = $previousGamePort
+        $env:GODDESS_AUTH_REQUIRED = $previousAuth
+        $env:MC_LOGIN_PASSWORD = $previousPassword
+    }
     $deadline = (Get-Date).AddSeconds(10)
     while ((Get-Date) -lt $deadline) {
         $proc.Refresh()

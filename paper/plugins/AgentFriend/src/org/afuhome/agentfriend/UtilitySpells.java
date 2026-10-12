@@ -226,8 +226,8 @@ final class UtilitySpells implements Listener {
         plugin.publishSkill(player, "sense", "发现 " + hostiles.size() + " 只怪物",
                 ((Entity) hostiles.get(0)).getLocation());
         String visual = plugin.floodgatePlayer(player.getUniqueId())
-                ? "粒子指向线、墙面光框和顶部方向提示"
-                : "心眼轮廓、粒子指向线和顶部方向提示";
+                ? "从当前位置连向最近敌人的粒子引导线和顶部方向提示"
+                : "心眼轮廓、从当前位置连向最近敌人的粒子引导线和顶部方向提示";
         player.sendMessage(ChatColor.AQUA + "✦ 探敌术发现附近 " + hostiles.size()
                 + " 只怪物；" + visual + "持续 8 秒（3 魔力；15 秒冷却）。");
         for (int i = 0; i < Math.min(5, hostiles.size()); i++) {
@@ -250,6 +250,7 @@ final class UtilitySpells implements Listener {
     private void updateSense(Player player, Sense sense, List<Enemy> hostiles) {
         syncSenseOutlines(player, sense, hostiles);
         if (hostiles.isEmpty()) {
+            plugin.targetGuides().remove(player.getUniqueId(), "sense");
             sense.bar().setTitle("§b✦ 探敌：周围暂时没有怪物");
             return;
         }
@@ -267,12 +268,7 @@ final class UtilitySpells implements Listener {
                 + " · " + LocationOutput.shortForm(target));
         sense.bar().setProgress(Math.max(0, Math.min(1,
                 (sense.expiresAt() - System.currentTimeMillis()) / 8000.0)));
-        Vector toward = target.toVector().subtract(player.getEyeLocation().toVector());
-        if (toward.lengthSquared() > 0.01) {
-            Location hint = player.getEyeLocation().add(toward.normalize().multiply(1.5));
-            player.spawnParticle(Particle.END_ROD, hint, 4, 0.12, 0.12, 0.12, 0.01);
-        }
-        WallTraceParticles.guide(player, target.clone().add(0, ((LivingEntity) nearest).getHeight() * 0.6, 0), false);
+        plugin.targetGuides().show(player, "sense", target.clone().add(0, ((LivingEntity) nearest).getHeight() * 0.6, 0));
     }
 
     /** Metadata is sent only to the caster and their currently attached registered Eye. */
@@ -359,6 +355,7 @@ final class UtilitySpells implements Listener {
     }
 
     private void removeSense(UUID id) {
+        plugin.targetGuides().remove(id, "sense");
         Sense sense = senses.remove(id);
         if (sense == null) return;
         for (Map.Entry<UUID, Set<UUID>> entry : sense.outlined().entrySet()) {

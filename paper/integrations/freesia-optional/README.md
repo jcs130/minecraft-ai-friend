@@ -2,7 +2,7 @@
 
 Status (2026-10-11): deployed behind the existing identity gateway, with the existing maintenance lock, Watchdog and stopped E/F backups. Proxy bridge 0.3.0 supplies Web/camera assets and private state to the [Geyser Bedrock adapter](../geyser-ysm/README.md). Production unmodified Mineflayer, original UUIDs and exact model bundle delivery are verified; Bedrock geometry/UV/texture delivery is verified in isolation. Remote Web hosts need their own update. Native Java pixel parity, full animation/equipment parity and phone/Xbox device visuals remain unaccepted. See [adaptation status](../../docs/YSM_ADAPTATION.md) and [lifecycle](../../docs/YSM_LIFECYCLE.md).
 
-Source candidate 0.3.1 adds bounded Chinese diagnostics; it is not deployed in production. A missing per-player state also occurs with an unassigned default appearance. `YSM_WORKER_STATE_UNAVAILABLE` alone is not a Worker health check.
+Production now uses0.3.1 with bounded Chinese diagnostics. Candidate0.3.2 adds the previously omitted original arm/extra/fp_arm animation files and declared controller sources to hash-verified Web/camera bundles. The shared renderer now observes actual motion/equipment on the same connection and plays supported original layers/held geometry. This candidate is not deployed; see the current section of [adaptation status](../../docs/YSM_ADAPTATION.md). A missing per-player state also occurs with an unassigned default appearance. `YSM_WORKER_STATE_UNAVAILABLE` alone is not a Worker health check.
 
 ## Runtime
 
@@ -92,7 +92,7 @@ Use a fresh output directory. The script verifies input JAR digests, records sou
 
 - `Freesia-Velocity-2.5.1+2.4.1-af1.jar`
 - `Freesia-Worker-2.5.1+2.4.1-af1.jar`
-- `AgentAppearance-0.3.1.jar` (candidate; production remains 0.3.0)
+- `AgentAppearance-0.3.2.jar` (candidate; production remains 0.3.1)
 - `AgentAppearance-WorkerCleanup-0.1.0.jar`
 - `build-manifest.json`
 

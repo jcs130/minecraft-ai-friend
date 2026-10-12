@@ -236,9 +236,15 @@ final class WaypointManager implements Listener {
         json.add("points", entries); p.sendMessage("MC_WAYPOINT_LIST " + json);
     }
     private String actor(Player p) {
+        return actor(p, true);
+    }
+    private String actor(Player p, boolean recording) {
         if (p.isDead() || p.getGameMode() == GameMode.SPECTATOR) return "spectator_or_dead";
-        if (plugin.namedTravelBlocked(p) || plugin.dungeon().deniesEdit(p.getLocation())
-                || plugin.namedTravelActivityArea(p.getLocation())) return "in_activity";
+        if (plugin.namedTravelBlocked(p)) return "in_activity";
+        // A protected lobby is not a live run. Visitors may depart for a safe
+        // existing point; recording activity destinations stays forbidden.
+        if (recording && (plugin.dungeon().deniesEdit(p.getLocation())
+                || plugin.namedTravelActivityArea(p.getLocation()))) return "activity_area";
         if (p.isInsideVehicle() || p.isGliding() || p.isFlying()) return "not_standing";
         return null;
     }
@@ -293,7 +299,7 @@ final class WaypointManager implements Listener {
     record Outcome(boolean success, String reason) { }
     /** Personal points and landmarks share one pending-request gate and the same paid, safe travel. */
     void travel(Player p, String raw, String title, Location at, BooleanSupplier stillValid, Consumer<Outcome> reply) {
-        String denied = actor(p);
+        String denied = actor(p, false);
         if (denied != null) { reply.accept(new Outcome(false, denied)); return; }
         if (requests.containsKey(p.getUniqueId())) { reply.accept(new Outcome(false, "busy")); return; }
         if (at == null) { reply.accept(new Outcome(false, "world_unavailable")); return; }
@@ -312,7 +318,7 @@ final class WaypointManager implements Listener {
                 if (online == null) return;
                 boolean ticket = chunk != null && chunk.addPluginChunkTicket(plugin);
                 try {
-                    String reason = actor(online);
+                    String reason = actor(online, false);
                     if (reason == null && !stillValid.getAsBoolean()) reason = "point_changed";
                     if (reason == null && (online.getWorld() != origin.getWorld() || online.getLocation().distanceSquared(origin) > 4)) reason = "moved";
                     if (reason == null && (error != null || chunk == null)) reason = "chunk_unavailable";
@@ -375,7 +381,10 @@ final class WaypointManager implements Listener {
             case "limit_reached" -> "个人传送点已达到 " + limit() + " 个，请先删除不用的地点。";
             case "not_found", "share_unavailable" -> "地点不存在、尚未分享或分享已撤回。旧 home 仍可用原指令管理。";
             case "spectator_or_dead" -> "旁观者或倒下的角色不能记录、使用传送点。";
-            case "in_activity", "activity_area" -> "试炼或 PvP 活动区域不能记录、使用自定义传送点，请先正常离场。";
+            case "in_activity" -> "你正在参战，不能使用自定义传送点；先查询 arena status／dungeon status／pvp status，再自行决定正常离场。";
+            case "activity_area" -> action.equals("teleport")
+                    ? "目的地属于试炼或地下城等活动场地，不能直接传入；请改用对应的官方入口。"
+                    : "这里是活动场地，不能登记为自定义传送点；未参战访客可传送到已有安全地点，走出场地后再新建点。";
             case "not_standing" -> "请先离开载具、停止滑翔或飞行，站在安全平地。";
             case "unsafe_landing", "unsafe_height" -> "落点受阻或不安全；请站在安全平地记录，传送不会挖开方块。";
             case "world_border" -> "地点已在世界边界之外。";

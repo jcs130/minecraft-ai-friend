@@ -130,7 +130,7 @@ final class ProspectingSpell {
                 + " ore=" + oreMaterial.getKey() + "（方块坐标）。");
         player.sendMessage(ChatColor.GRAY + "范围 " + range + " 格，挖矿等级 " + miningLevel
                 + (imprintedTool ? "，刻印工具 +8" : "")
-                + "；轮廓/墙面光框和粒子指向线持续 " + (durationTicks / 20)
+                + "；从你当前位置连向矿块的粒子引导线持续 " + (durationTicks / 20)
                 + " 秒；消耗 6 魔力，冷却 30 秒。");
         update(player, traces.get(player.getUniqueId()), now);
     }
@@ -156,8 +156,9 @@ final class ProspectingSpell {
         for (UUID id : new java.util.ArrayList<>(traces.keySet())) {
             Player player = Bukkit.getPlayer(id);
             Trace trace = traces.get(id);
-            if (player == null || trace == null || !player.isOnline() || now >= trace.expiresAt()
+            if (player == null || trace == null || !player.isOnline() || player.isDead() || now >= trace.expiresAt()
                     || player.getWorld() != trace.ore().getWorld()
+                    || !player.getWorld().isChunkLoaded(trace.ore().getBlockX() >> 4, trace.ore().getBlockZ() >> 4)
                     || !ORES.containsKey(trace.ore().getBlock().getType())) {
                 remove(id);
                 continue;
@@ -168,7 +169,7 @@ final class ProspectingSpell {
 
     private void update(Player player, Trace trace, long now) {
         trace.bar().setProgress(Math.max(0.0, Math.min(1.0, (trace.expiresAt() - now) / (double) trace.durationMs())));
-        WallTraceParticles.guide(player, trace.ore(), true);
+        plugin.targetGuides().show(player, "prospect", trace.ore());
     }
 
     /** Enumerate each shell's surface in the original dx/dz/dy order, never loading chunks. */
@@ -199,6 +200,7 @@ final class ProspectingSpell {
     }
 
     private void remove(UUID id) {
+        plugin.targetGuides().remove(id, "prospect");
         Trace trace = traces.remove(id);
         if (trace != null) {
             trace.bar().removeAll();

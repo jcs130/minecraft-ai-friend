@@ -112,6 +112,8 @@ final class AgentCoach implements Listener {
             case "next" -> onboarding.guide(player, false);
             case "guide" -> onboarding.guide(player, true);
             case "lessons" -> plugin.featureTutorials().show(player);
+            case "enroll" -> plugin.featureTutorials().enroll(player);
+            case "cancel" -> plugin.featureTutorials().cancel(player);
             case "menu" -> onboarding.menu(player);
             case "later" -> { onboarding.pause(player); status(player); }
             case "on", "off" -> {
@@ -139,7 +141,7 @@ final class AgentCoach implements Listener {
         JsonObject error = new JsonObject();
         error.addProperty("schemaVersion", 1);
         error.addProperty("code", code);
-        error.addProperty("usage", "/mycli coach status|next|guide|menu|later|on|off");
+        error.addProperty("usage", "/mycli coach status|next|guide|lessons|enroll|cancel|menu|later|on|off");
         player.sendMessage("MC_COACH_ERROR " + error);
     }
 
@@ -173,6 +175,7 @@ final class AgentCoach implements Listener {
         onboarding.forget(event.getPlayer());
     }
     void guide(Player p, boolean full) { onboarding.guide(p, full); }
+    JsonObject entryState(Player p) { return onboarding.state(p); }
     void menu(Player p) { onboarding.menu(p); }
     void admin(org.bukkit.command.CommandSender sender, String[] args) { onboarding.admin(sender, args); }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

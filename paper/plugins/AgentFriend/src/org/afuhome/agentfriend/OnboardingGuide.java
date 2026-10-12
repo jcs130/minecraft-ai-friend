@@ -39,6 +39,7 @@ final class OnboardingGuide implements Listener {
         long nextCheck;
         String pendingStep = "";
         long changedAt;
+        boolean entrySent;
         Session(long now, long delay) { joined = now; nextCheck = now + delay; }
     }
     private static final class Holder implements InventoryHolder {
@@ -133,6 +134,7 @@ final class OnboardingGuide implements Listener {
         // This only checks a player's safety/PDC; ledgers are read after the checks pass.
         session.nextCheck = now + (welcomeDue ? 1000L : ms("poll-seconds"));
         if (!safe(p, now, quietUntil) || !gapReady(p, now)) return false;
+        if(!session.entrySent){session.entrySent=true;plugin.agentEntry().intro(p);}
         session.nextCheck = now + ms("poll-seconds");
         JsonObject state = state(p); String current = state.get("step").getAsString();
         String stored = p.getPersistentDataContainer().getOrDefault(lastStep, PersistentDataType.STRING, "");
@@ -215,6 +217,8 @@ final class OnboardingGuide implements Listener {
         result.addProperty("featureLessonsCommand", "/mycli coach lessons");
         result.addProperty("backpackCommand", "/minepacks:backpack open");
         result.addProperty("stateCommand", "/mycli status"); result.addProperty("skillsCommand", "/mycli skills list common");
+        result.addProperty("entryCommand", "/mycli intro"); result.addProperty("rulesCommand", "/mycli rules");
+        result.addProperty("progressCommand", "/mycli progress"); result.addProperty("capabilitiesCommand", "/mycli capabilities");
         JsonObject tasks = new JsonObject(); tasks.addProperty("adventureBoard", "/mycli guild board");
         tasks.addProperty("adventureStatus", "/mycli guild status"); tasks.addProperty("lifeBoard", "/mycli life board");
         tasks.addProperty("lifeStatus", "/mycli life status"); tasks.addProperty("tutorial", "/mycli world guide start");
@@ -259,7 +263,9 @@ final class OnboardingGuide implements Listener {
             inv.setItem(i, icon(done ? Material.LIME_DYE : Material.PAPER, (done ? "§a✓ " : "§7○ ") + value(milestone, "title"), "服务器实际进度；查看不会代完成"));
         }
         inv.setItem(13, icon(Material.COMPASS, "§b下一步：" + value(state, "title"), value(state, "message"), value(state, "nextCommand"), "点击只显示指引，不自动执行建议"));
-        inv.setItem(18, icon(Material.CHEST, "§e服务器特色实练与大背包", "报名六项可选实践；大背包54格，先存再取，不是任务袋"));
+        inv.setItem(16, icon(Material.LIME_DYE, "§a报名特色实练", "主动报名；保留旧证明，不代执行，免费", "/mycli coach enroll"));
+        inv.setItem(17, icon(Material.GRAY_DYE, "§7取消特色实练报名", "停止新证明；已有证明保留，免费", "/mycli coach cancel"));
+        inv.setItem(18, icon(Material.CHEST, "§e查看特色实练与大背包", "只读查看，不报名；大背包54格，先存再取，不是任务袋"));
         inv.setItem(19, icon(Material.NAME_TAG, "§6冒险者登记", "点击登记；已登记时只查看状态，不花魔力"));
         inv.setItem(20, icon(Material.WRITABLE_BOOK, "§a报名新手实习", "点击自愿开始；不代学技能，不发完成奖励"));
         inv.setItem(21, icon(Material.BOOK, "§d读取基础技能目录", "只读目录；报名后记第一项实习证明"));
@@ -273,12 +279,14 @@ final class OnboardingGuide implements Listener {
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p) || !p.getUniqueId().equals(holder.owner) || holder.consumed
                 || event.isShiftClick() || event.getRawSlot() < 0 || event.getRawSlot() >= 27) return;
-        int slot = event.getRawSlot(); if (!List.of(13,18,19,20,21,22,23,24,26).contains(slot)) return;
+        int slot = event.getRawSlot(); if (!List.of(13,16,17,18,19,20,21,22,23,24,26).contains(slot)) return;
         holder.consumed = true; p.closeInventory();
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (!p.isOnline() || observer(p)) return;
             switch (slot) {
                 case 13 -> guide(p, false);
+                case 16 -> plugin.featureTutorials().enroll(p);
+                case 17 -> plugin.featureTutorials().cancel(p);
                 case 18 -> plugin.featureTutorials().show(p);
                 case 19 -> plugin.guild().command(p, new String[]{"guild", "join"});
                 case 20 -> plugin.worldLife().command(p, new String[]{"world", "guide", "start"});

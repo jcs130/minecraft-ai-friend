@@ -24,6 +24,10 @@ final class ActionFeedback {
         String contract = id.isEmpty() ? "/mycli commission mine" : "/mycli commission info " + id;
         String dungeon = id.isEmpty() ? "/mycli dungeon list" : "/mycli dungeon info " + id;
         String market = id.isEmpty() ? "/mycli guild status" : "/mycli guild market " + id;
+        if (scope.equals("waypoint") && reason.equals("activity_area"))
+            return a("该地点属于试炼、遗迹地下城或竞技场的固定场地。",
+                    "这里不能登记或用作自定义传送落点；未参战访客可返回已有安全地点，走出场地后再新建点；进入挑战请用对应官方入口。",
+                    "/mycli waypoint list", "/mycli arena status", "/mycli dungeon list");
         Advice common = switch (reason) {
             case "survival_required", "survival_only", "spectator", "spectator_or_dead", "already_in_activity_or_not_survival" ->
                 a("当前角色状态不允许此操作。", "先用 /mycli status 检查角色和活动；倒地请等队友在4格内停留10秒或清完本层，活动请正常退出；观战者请使用对应的生存角色。", "/mycli status");

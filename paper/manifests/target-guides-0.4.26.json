@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "date": "2026-10-12",
+  "plugin": "AgentFriend",
+  "version": "0.4.26",
+  "status": "tested_candidate_not_deployed",
+  "sha256": "c7f30b8768c864913fdab589724b738eeee45fe24d2b418f35970b806015d09a",
+  "bytes": 1288210,
+  "minecraft": "1.20.6",
+  "stableProtocolIds": true,
+  "playerDataMigration": false,
+  "includedPendingFeatures": [
+    "trade_directory_0.4.24",
+    "custom_item_identity_0.4.25"
+  ],
+  "guideKinds": [
+    "prospect",
+    "sense",
+    "player",
+    "trade",
+    "assessment"
+  ],
+  "guideBudget": {
+    "pointsPerFrame": 64,
+    "packetsPerTick": 256,
+    "packetsPerViewerPerTick": 128,
+    "maximumGuides": 128,
+    "maximumViewersPerGuide": 4
+  },
+  "web": {
+    "sourceCommit": "25252d8b26f217a461fa07b101d9f76f2c0cc269",
+    "particleBatch": 256,
+    "activeParticles": 2048,
+    "bundleSha256": "a53c68a7ed8400d27a8090b3251063018a48a4ddd1e3f76c0fe281b8553e5f89",
+    "remoteDeploymentVerified": false
+  },
+  "verification": {
+    "geometryAssertions": 331,
+    "javaProtocol": 47,
+    "bedrockProtocol": 13,
+    "webBridgeGpu": 15,
+    "controlledAgentBodies": 16,
+    "controlledAttachedEyes": 16,
+    "nativeDeviceVisualsVerified": false,
+    "notAutonomousLlmLoad": true
+  },
+  "production": {
+    "observedAgentFriendVersion": "0.4.23",
+    "productionChanged": false,
+    "restartQueued": false,
+    "requiresFreshMaintenanceApproval": true
+  },
+  "limitations": [
+    "Native particles obey terrain depth testing; the bearing is not a walkable route.",
+    "Bedrock verification used a pinned Geyser 2193 protocol client, not a phone or Xbox.",
+    "Existing shared Web particle physics remain partial."
+  ],
+  "evidenceDirectory": "repairs/target-guides-20261012"
+}

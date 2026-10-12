@@ -92,13 +92,18 @@ final class LifeGuildManager implements Listener {
     }
     JsonObject onboardingState(Player player) {
         JsonObject out = new JsonObject(); Contract contract = active(player);
-        if (contract != null && contract.id().equals("builder_home")) refreshHouse(player);
+        // Aggregation is a read: inspect the present house without updating the
+        // ledger/cache. Explicit legacy status/claim keeps its refresh behavior.
+        var house = contract != null && contract.id().equals("builder_home")
+                ? StarterHouseInspection.inspect(player,plugin.getConfig().getStringList(base(player)+".active.house-placed")) : null;
+        int observedProgress = house == null ? progress(player) : house.progress();
         out.addProperty("activeId", contract == null ? "" : contract.id());
         out.addProperty("title", contract == null ? "" : contract.title());
         out.addProperty("instruction", contract == null ? "" : contract.description());
-        out.addProperty("progress", contract == null ? 0 : progress(player));
+        out.addProperty("progress", contract == null ? 0 : observedProgress);
         out.addProperty("target", contract == null ? 0 : contract.target());
-        out.addProperty("ready", contract != null && progress(player) >= contract.target());
+        out.addProperty("ready", contract != null && observedProgress >= contract.target());
+        if(house!=null) out.addProperty("missingAdvice",StarterHouseInspection.hint(house));
         out.addProperty("availableId", CONTRACTS.stream().filter(c -> !completedToday(player,c)).map(Contract::id).findFirst().orElse(""));
         return out;
     }

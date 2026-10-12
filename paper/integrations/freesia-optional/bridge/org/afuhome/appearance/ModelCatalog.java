@@ -109,6 +109,22 @@ final class ModelCatalog {
         String model=player.getAsJsonObject("model").get("main").getAsString();
         String animation=player.getAsJsonObject("animation").get("main").getAsString();
         Map<String,byte[]> selected=new TreeMap<>();selected.put("ysm.json",definition);selected.put(model,require(files,model));selected.put(animation,require(files,animation));
+        // Native YSM's automatic movement and equipment controllers are not
+        // sent as the player's custom-animation name. Browsers need the exact
+        // arm/extra tracks too; omitting them made all uploads appear static.
+        Map<String,String> animations=new TreeMap<>();animations.put("main",animation);
+        JsonObject animationFiles=player.getAsJsonObject("animation");
+        for(String kind:List.of("arm","extra","fp_arm"))if(animationFiles.has(kind)) {
+            String path=animationFiles.get(kind).getAsString();selected.put(path,require(files,path));animations.put(kind,path);
+        }
+        if(player.getAsJsonObject("model").has("arm")) {
+            String path=player.getAsJsonObject("model").get("arm").getAsString();selected.put(path,require(files,path));
+        }
+        List<String> controllers=new ArrayList<>();
+        if(player.has("animation_controllers"))for(JsonElement entry:player.getAsJsonArray("animation_controllers")) {
+            if(controllers.size()>=8)throw new IOException("YSM_CONTROLLER_COUNT_BUDGET");
+            String path=entry.getAsString();selected.put(path,require(files,path));controllers.add(path);
+        }
         JsonArray textures=player.getAsJsonArray("texture");if(textures.size()<1 || textures.size()>16)throw new IOException("YSM_TEXTURE_COUNT_BUDGET");
         Map<String,String> texturePaths=new TreeMap<>();
         for(JsonElement element:textures){String texture=element.getAsString();byte[] png=require(files,texture);
@@ -120,7 +136,8 @@ final class ModelCatalog {
         }
         JsonObject bundle=new JsonObject();bundle.addProperty("schemaVersion",1);bundle.addProperty("modelId",id);bundle.addProperty("ysmVersion","2.4.1");
         bundle.addProperty("format","ysm-bedrock-original");bundle.addProperty("sourceSha256",digest(files));bundle.addProperty("model",model);bundle.addProperty("animation",animation);
-        bundle.add("textures",JSON.toJsonTree(texturePaths));JsonObject entries=new JsonObject();
+        bundle.add("textures",JSON.toJsonTree(texturePaths));bundle.add("animations",JSON.toJsonTree(animations));
+        bundle.add("controllers",JSON.toJsonTree(controllers));JsonObject entries=new JsonObject();
         for(var entry:selected.entrySet()){JsonObject data=new JsonObject();data.addProperty("sha256",sha(entry.getValue()));data.addProperty("bytes",entry.getValue().length);data.addProperty("base64",Base64.getEncoder().encodeToString(entry.getValue()));entries.add(entry.getKey(),data);}
         bundle.add("files",entries);byte[] raw=JSON.toJson(bundle).getBytes(java.nio.charset.StandardCharsets.UTF_8);if(raw.length>RAW_LIMIT)throw new IOException("YSM_BUNDLE_BYTE_BUDGET");
         ByteArrayOutputStream out=new ByteArrayOutputStream();try(var gzip=new GZIPOutputStream(out)){gzip.write(raw);}byte[] compressed=out.toByteArray();

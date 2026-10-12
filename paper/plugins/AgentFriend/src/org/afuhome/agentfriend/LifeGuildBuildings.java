@@ -48,6 +48,8 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.block.Action;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -360,8 +362,8 @@ final class LifeGuildBuildings implements Listener {
         if (block.getState() instanceof Sign state) {
             state.setLine(0, "§6千灯纪生活公会");
             state.setLine(1, "§e" + hall.name());
-            state.setLine(2, "§a找馆内导师接单");
-            state.setLine(3, "§b交易 · 交付");
+            state.setLine(2, hall.id().equals("harbor") ? "§a商旅公会交易板" : "§a找馆内导师接单");
+            state.setLine(3, hall.id().equals("harbor") ? "§b右键查出售/收购" : "§b交易 · 交付");
             state.update(true, false);
         }
         fabric.put(key(block), Material.OAK_SIGN);
@@ -584,6 +586,7 @@ final class LifeGuildBuildings implements Listener {
         Inventory menu = Bukkit.createInventory(null, 9, host.name() + " · " + hall.name());
         menu.setItem(1, icon(Material.BOOK, "§e看看委托", "§7查看任务说明与本人进度"));
         menu.setItem(3, icon(Material.WRITABLE_BOOK, "§a接取委托", "§7" + contract));
+        if (contract.equals("trader_supply")) menu.setItem(4, icon(Material.OAK_SIGN, "§6商旅公会交易板", "§7查看谁出售/收购什么，再定位商人"));
         menu.setItem(5, icon(Material.EMERALD, "§b交付当前委托", "§7进度达成后领取本人奖励"));
         menu.setItem(7, icon(Material.EMERALD_BLOCK, "§6与导师交易", "§7打开原版村民交易界面"));
         menus.put(menu, contract);
@@ -597,7 +600,9 @@ final class LifeGuildBuildings implements Listener {
         event.setCancelled(true);
         openHostMenu(event.getPlayer(), contract);
         if (event.getRightClicked() instanceof Villager npc && contract.equals(menus.get(event.getPlayer().getOpenInventory().getTopInventory()))) {
-            String speech = "欢迎来实习！先看委托，再接取 " + contract + "，亲自完成后交付。也可用 /mycli life board 查看；想交易就选「与导师交易」。";
+            String speech = contract.equals("trader_supply")
+                    ? "欢迎来商旅公会！选「交易板」查询已加载村民和集市商店的出售、收购与位置，点击报价定位，到场交易。也能先看委托再报名实习。"
+                    : "欢迎来实习！先看委托，再接取 " + contract + "，亲自完成后交付。也可用 /mycli life board 查看；想交易就选「与导师交易」。";
             event.getPlayer().sendMessage("§6[" + ChatColor.stripColor(npc.getCustomName()) + "] §f" + speech);
             plugin.npcSpeech("life-mentors", npc, event.getPlayer(), speech);
         }
@@ -615,6 +620,7 @@ final class LifeGuildBuildings implements Listener {
             switch (slot) {
                 case 1 -> lifeGuild.command(player, new String[]{"life", "board"});
                 case 3 -> lifeGuild.command(player, new String[]{"life", "accept", contract});
+                case 4 -> { if (contract.equals("trader_supply")) plugin.tradeDirectory().open(player, "all", "", 1, false); }
                 case 5 -> lifeGuild.command(player, new String[]{"life", "claim"});
                 case 7 -> {
                     Villager host = findHost(contract);
@@ -631,6 +637,18 @@ final class LifeGuildBuildings implements Listener {
     }
     @EventHandler public void onHostClose(InventoryCloseEvent event) {
         menus.remove(event.getInventory());
+    }
+
+    Location tradeHall() {
+        Plot plot = plots.get("harbor");
+        return plot == null || world == null ? null : new Location(world, plot.x() + 3, plot.y() + 2, plot.z() + 5);
+    }
+    @EventHandler(priority = EventPriority.HIGHEST) public void onTradeSign(PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND || event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+        Location at = tradeHall(); Block block = event.getClickedBlock();
+        if (at == null || block == null || !block.getLocation().equals(at) || !(block.getState() instanceof Sign)) return;
+        event.setCancelled(true);
+        plugin.tradeDirectory().open(event.getPlayer(), "all", "", 1, false);
     }
 
     private boolean inBuiltPlot(Block b) {

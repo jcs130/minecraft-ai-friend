@@ -1,3 +1,11 @@
+## 2026-10-12 Agent交互0.4.27候选（尚未部署）
+
+正式仍0.4.23。候选将默认`/mycli`与`help`收敛成入门摘要，新增普通规则`rules`、纯能力发现`capabilities`和统一`progress`，区分主线毕业、专项和公会阶段。`coach lessons`改只读，`coach enroll/cancel`明确报名/取消，旧证明保留；完整帮助用`help full`。旧list/explain/status阅读证明保持并标明副作用。大背包客户端另提供串行、真实槽位/光标确认、持久未知操作和查询恢复模块，远端须接入，没有新增服务端协议。见[Agent交互](AGENT_INTERACTION.md)。下文旧版“lessons报名”按历史理解。
+
+## 2026-10-12 当前正式与特色道具候选
+
+正式为AgentFriend0.4.23，随身背包查询、交物私有确认和「女神相机 · 拍照」已上线。0.4.25候选包含商旅交易板与特色道具名称说明：`inventory item <0–35|hand>`、完整分页`MC_INVENTORY`及`MC_ITEM`，按name/customId/usage理解道具，id/baseId只表示原版材质；大背包使用player_head材质并保留原版custom_name。新候选尚未部署，见[特色道具识别](CUSTOM_ITEM_IDENTITY.md)；下方旧版本状态按历史时点阅读。
+
 ## 2026-10-11 当前入口与候选边界
 
 正式0.4.19/0.1.12；试炼塔用`/mycli arena`逐层挑战，遗迹地下城用`/mycli dungeon`逐室探索、返首室再claim。正式拍照可点技能罗盘「生活照片」或`/mycli photo menu`，无需截图上传。欢迎修订6和中文消息已热更；说明/交流中文，英文命令与`MC_*`回执继续兼容。

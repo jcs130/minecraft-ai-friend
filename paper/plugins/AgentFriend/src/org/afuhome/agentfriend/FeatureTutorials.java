@@ -99,10 +99,43 @@ final class FeatureTutorials implements Listener {
         out.add("lessons",lessons);out.addProperty("completed",lessons.asList().stream().allMatch(x->x.getAsJsonObject().get("done").getAsBoolean()));
         out.addProperty("scope","自愿的服务器特色实练；旧实习三证/毕业保留，不自动学习、不改物品、不赠技能点。");return out;
     }
-    void show(Player p) {
+    void enroll(Player p) {
         if(plugin.isObserver(p)){p.sendMessage("§7观战账号不参加特色实练；请由对应生存角色学习。");return;}
         p.getPersistentDataContainer().set(key("enrolled"),PersistentDataType.BYTE,(byte)1);
+        p.sendMessage("MC_COACH {\"schemaVersion\":1,\"type\":\"feature_enrollment\",\"action\":\"enroll\",\"status\":\"success\",\"enrolled\":true}");
+        p.sendMessage("§a[特色实练] 已报名；后续真实操作会记入专项证明。它不等于主线毕业，不会替你学习、施法或领取物品。");
+        show(p);
+    }
+    void cancel(Player p) {
+        p.getPersistentDataContainer().remove(key("enrolled"));
+        p.sendMessage("MC_COACH {\"schemaVersion\":1,\"type\":\"feature_enrollment\",\"action\":\"cancel\",\"status\":\"success\",\"enrolled\":false}");
+        p.sendMessage("§7[特色实练] 已停止记录新的专项证明；已有证明保留。再次参加用 /mycli coach enroll。");
+        show(p);
+    }
+    JsonObject progressState(Player p) {
+        JsonObject out=state(p);
+        for(var element:out.getAsJsonArray("lessons")) {
+            JsonObject lesson=element.getAsJsonObject();String id=lesson.get("id").getAsString();
+            JsonArray missing=new JsonArray();
+            switch(id) {
+                case "backpack" -> {for(String proof:List.of("backpack_open","backpack_deposit","backpack_reopen","backpack_retrieve"))if(!has(p,proof))missing.add(switch(proof){case "backpack_open"->"打开本人54格大背包";case "backpack_deposit"->"存入普通物品并关闭";case "backpack_reopen"->"重开核对";default->"取回并关闭，服务器确认数量守恒";});}
+                case "cli" -> {for(String proof:List.of("cli_list","cli_detail","cli_status"))if(!has(p,proof))missing.add(switch(proof){case "cli_list"->"报名后实际读取 /mycli list";case "cli_detail"->"报名后实际读取 /mycli explain skills";default->"报名后实际读取 /mycli status";});}
+                case "traversal" -> {if(!plugin.traversalPractice().verified(p,"door_passage"))missing.add("打开合法木门并穿过");if(!plugin.traversalPractice().verified(p,"ladder_ascent"))missing.add("沿同一现有梯井连续爬升3格");}
+                default -> {if(!lesson.get("done").getAsBoolean())missing.add(lesson.get("instruction").getAsString());}
+            }
+            boolean done=lesson.get("done").getAsBoolean();
+            if(done)missing=new JsonArray();
+            lesson.addProperty("stage",done?"completed":!enrolled(p)?"not_enrolled":"practicing");
+            lesson.add("missingConditions",missing);
+            lesson.addProperty("nextCommand",done?"/mycli progress":!enrolled(p)?"/mycli coach enroll":lesson.get("command").getAsString());
+        }
+        return out;
+    }
+    void show(Player p) {
+        // Viewing never enrolls. Existing enrollment and all earned proofs remain.
+        if(plugin.isObserver(p)){p.sendMessage("§7观战账号不参加特色实练；请由对应生存角色学习。");return;}
         JsonObject out=state(p);out.addProperty("schemaVersion",1);out.addProperty("type","lessons");p.sendMessage("MC_COACH "+out);
+        p.sendMessage("§b[特色实练·只读] "+(enrolled(p)?"已报名":"尚未报名；/mycli coach enroll 自愿报名")+"；/mycli progress 区分主线、专项和委托。查询不会替你报名。");
         for(var e:out.getAsJsonArray("lessons")){var o=e.getAsJsonObject();p.sendMessage((o.get("done").getAsBoolean()?"§a✓ ":"§e○ ")+o.get("title").getAsString()+"："+o.get("instruction").getAsString()+" "+o.get("command").getAsString());}
     }
 }

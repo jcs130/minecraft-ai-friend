@@ -1,14 +1,15 @@
 // Private optional YSM lifecycle. The existing maintenance lock owns this process.
 import net from 'node:net';
 import {spawn} from 'node:child_process';
-import {readFileSync,existsSync,createWriteStream,mkdirSync,writeFileSync,renameSync} from 'node:fs';
-import {resolve,relative,isAbsolute,join} from 'node:path';
+import {readFileSync,existsSync,createWriteStream,mkdirSync,writeFileSync,renameSync,unlinkSync} from 'node:fs';
+import {resolve,relative,isAbsolute,join,basename} from 'node:path';
 import {createHash,timingSafeEqual} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 
 export function validateConfig(c) {
   if(c?.schemaVersion!==1 || typeof c.enabled!=='boolean' || !isAbsolute(c.root||'') || !isAbsolute(c.java||'')) throw Error('Invalid YSM configuration');
   if(!/^[a-f0-9]{64}$/.test(c.controlToken||'')) throw Error('Invalid YSM control credential');
+  if(c.authHeartbeat!==undefined && (!isAbsolute(c.authHeartbeat)||basename(c.authHeartbeat)!=='auth-heartbeat.json')) throw Error('Invalid auth heartbeat path');
   const ports=new Set();
   for(const port of [c.controlPort,c.proxy?.port,c.worker?.port,c.workerControllerPort]) {
     if(!Number.isInteger(port)||port<1024||port>65535||ports.has(port))throw Error('Invalid YSM ports');ports.add(port);
@@ -48,6 +49,8 @@ export async function supervise(configPath) {
     const jar=join(spec.directory,spec.jar);
     if(!existsSync(jar)||createHash('sha256').update(readFileSync(jar)).digest('hex')!==spec.sha256) {s.error='YSM_JAR_HASH_MISMATCH';s.retryAt=Date.now()+60_000;return;}
     const log=createWriteStream(join(logs,`${name}-${Date.now()}.log`),{flags:'wx'});
+    // Never inherit a crashed proxy's readiness when spawning a new JVM.
+    if(name==='proxy' && c.authHeartbeat && existsSync(c.authHeartbeat)) unlinkSync(c.authHeartbeat);
     const child=spawn(c.java,['-Xms128M',`-Xmx${spec.heapMiB}M`,'-XX:ActiveProcessorCount=4','-Dfile.encoding=UTF-8','-jar',jar,'nogui'],{cwd:spec.directory,stdio:['pipe','pipe','pipe'],windowsHide:true});
     s.child=child;s.starts++;s.startedAt=Date.now();s.error=null;
     child.stdout.pipe(log,{end:false});child.stderr.pipe(log,{end:false});child.stdin.on('error',()=>{});

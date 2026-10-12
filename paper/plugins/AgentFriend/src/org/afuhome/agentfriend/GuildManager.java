@@ -152,6 +152,38 @@ final class GuildManager implements Listener {
         out.addProperty("activeId", plugin.getConfig().getString(base(p.getUniqueId()) + ".active.id", ""));
         return out;
     }
+    com.google.gson.JsonObject progressState(Player p) {
+        // Never call active()/status() here: old expired daily contracts may be
+        // released by those legacy paths. A progress query must retain the slot.
+        var out=onboardingState(p);String id=out.get("activeId").getAsString();
+        out.addProperty("kind","adventure");out.addProperty("title","冒险者公会委托");
+        out.addProperty("status",id.isEmpty()?"none":"active");
+        out.addProperty("nextCommand",id.isEmpty()?"/mycli guild board":"/mycli guild status");
+        var missing=new com.google.gson.JsonArray();out.add("missingConditions",missing);
+        if(id.isEmpty())return out;
+        Contract quest=null;
+        if(plugin.taskMarket().isMarket(id)) {
+            var market=plugin.taskMarket().progressState(p);out.add("market",market);
+            if(market.get("available").getAsBoolean())quest=plugin.taskMarket().active(p);
+        } else if(id.startsWith("db_")) {
+            var saved=snapshot(p);
+            if(saved!=null)try{quest=plugin.dailyBoard().savedCard(saved).contract();}catch(IllegalArgumentException ignored){ }
+        } else for(Contract candidate:CONTRACTS)if(candidate.id().equals(id)){quest=candidate;break;}
+        if(quest==null){out.addProperty("status","unavailable");missing.add("在途定义缺失或已过期；本查询保留原任务，联系服主核对");return out;}
+        int current=plugin.getConfig().getInt(base(p.getUniqueId())+".active.progress",0);
+        if(quest.goal()==Goal.DONATE){Material material=Material.matchMaterial(quest.siteId()==null?"":quest.siteId());current=material==null?0:Math.min(quest.target(),countPlainStorage(p,material));}
+        boolean verify=EngineeringSites.GOALS.contains(quest.goal());
+        out.addProperty("title",quest.title());out.addProperty("condition",TaskGuidance.step(quest.goal(),quest.description()));
+        out.addProperty("progress",current);out.addProperty("target",quest.target());
+        out.addProperty("progressSource",quest.goal()==Goal.DONATE?"current_player_inventory":"server_action_ledger");
+        out.addProperty("requiresVerification",verify);
+        out.addProperty("status",verify?"needs_verification":current>=quest.target()?"ready_to_submit":"active");
+        out.addProperty("nextCommand",verify?"/mycli guild verify":current>=quest.target()?"/mycli guild claim":"/mycli guild status");
+        if(current<quest.target())missing.add("当前阶段还缺 "+(quest.target()-current)+" / "+quest.target()+"；"+out.get("condition").getAsString());
+        if(verify)missing.add("工程需要显式 guild verify 验收，再 guild claim；查询不触发验收或结算");
+        else if(current>=quest.target())missing.add("尚需 guild claim 交付本阶段；多阶段全部交付后才算整单完成");
+        return out;
+    }
     private int fame(Player p) { return plugin.getConfig().getInt(base(p.getUniqueId()) + ".fame", 0); }
     int reputation(Player p) {return fame(p);}
     int legacyRank(Player p) {return Math.min(rankIndex(fame(p)),certified(p));}

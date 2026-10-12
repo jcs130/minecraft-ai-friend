@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.nio.file.Path;
 
 /** Server-authoritative metadata; no client handshake emulation or gameplay action. */
-@Plugin(id="agentappearance", name="AgentAppearance", version="0.3.1",
+@Plugin(id="agentappearance", name="AgentAppearance", version="0.3.2",
     dependencies={@Dependency(id="freesia"), @Dependency(id="packetevents")})
 public final class AppearanceBridge {
     private static final MinecraftChannelIdentifier CHANNEL = MinecraftChannelIdentifier.from("mcagent:appearance");

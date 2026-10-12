@@ -99,7 +99,6 @@ final class NativeTraversalPractice implements Listener {
         out.addProperty("scope", "一次实际操作证明，不代表长期掌握；没有额外奖励、技能资格或自动操作。");
         p.sendMessage("MC_WORLD " + out);
         p.sendMessage("§b通行实练 " + done + "/2：打开木门并穿过；沿现有梯子连续爬升3格。/mycli world practice status 查进度，stop 暂停。");
-        if (done == 2) { p.getPersistentDataContainer().remove(active); sessions.remove(p.getUniqueId()); }
     }
     private void record(Player p, NamespacedKey key, String id, Location start, Location end, double height) {
         if (proof(p, key) != null) return;
@@ -114,7 +113,9 @@ final class NativeTraversalPractice implements Listener {
         if(plugin.skillAssessments()!=null)plugin.skillAssessments().proof(p,id,"native_traversal:"+System.currentTimeMillis());
         JsonObject out = new JsonObject(); out.addProperty("type", "practice_progress"); out.addProperty("lesson", id);
         out.addProperty("status", "verified"); out.add("evidence", evidence);
-        p.sendMessage("MC_WORLD " + out); status(p);
+        p.sendMessage("MC_WORLD " + out);
+        if(verified(p,"door_passage")&&verified(p,"ladder_ascent")){p.getPersistentDataContainer().remove(active);sessions.remove(p.getUniqueId());}
+        status(p);
     }
     private static double side(Location p, Location door, BlockFace normal) {
         return (p.getX() - door.getX() - .5) * normal.getModX() + (p.getZ() - door.getZ() - .5) * normal.getModZ();

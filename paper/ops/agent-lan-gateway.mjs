@@ -1,7 +1,8 @@
 // Offline Mineflayer entry. Paper itself stays on loopback. Explicit source
 // grants take priority; automatic Eyes may follow a confirmed online Agent.
 import net from 'node:net';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { authState, proxyHeader } from './auth-proxy.mjs';
 import { eyeLoginDecision, eyeRules } from './agent-eye-names.mjs';
 import { watchLoginSuccess, loginDisconnect } from './agent-gateway-login.mjs';
 
@@ -18,6 +19,13 @@ const opsFile = process.env.AGENT_GATEWAY_OPS_FILE || 'E:/MC/server/ops.json';
 const pairsFile = process.env.AGENT_GATEWAY_PAIRS_FILE || 'E:/MC/ops/agent-eye-pairs.json';
 const accessFile = process.env.AGENT_GATEWAY_ACCESS_FILE || 'E:/MC/ops/agent-gateway-access.json';
 const sessions = new Map(); // Key by socket so old disconnects cannot erase a new login.
+const authFile=process.env.AGENT_GATEWAY_AUTH_FILE || 'E:/MC/ops/agent-auth.json';
+function authConfig() {
+  if(!existsSync(authFile)) return null;
+  const c=JSON.parse(readFileSync(authFile,'utf8'));
+  if(c.enabled!==true || typeof c.heartbeat!=='string') throw Error('Invalid authentication configuration');
+  return c;
+}
 
 function reservedName(name) {
   if (name.toLowerCase() === 'goddess' || name.startsWith('.')) return true;
@@ -31,13 +39,14 @@ function normalizedIp(address) {
   return address?.startsWith('::ffff:') ? address.slice(7) : address;
 }
 
-function loginDecision(name, address) {
+function loginDecision(name, address, authentication) {
   const registry = JSON.parse(readFileSync(pairsFile, 'utf8'));
   const access = JSON.parse(readFileSync(accessFile, 'utf8'));
   const binding = eyeRules(registry, [name]).pairs.find(pair => pair.key === name.toLowerCase());
   if (binding?.automatic && reservedName(binding.agent))
     return { allowed: false, reason: '房管账号不能通过默认Eye配对观察。请使用自己的角色名_eye，或让房管登记专用观战入口。' };
-  return eyeLoginDecision(registry, access, name, normalizedIp(address), [...sessions.values()]);
+  const online=[...sessions.values()].filter(s=>!authentication || authentication.authorizedNames.some(n=>n.toLowerCase()===s.name.toLowerCase()));
+  return eyeLoginDecision(registry, access, name, normalizedIp(address), online);
 }
 
 function observerName(name) {
@@ -97,9 +106,11 @@ function decision(bytes, address) {
   const id = varInt(bytes, login.at);
   if (!id || id.value !== 0) throw new Error('expected login start');
   const name = string(bytes, id.at, login.end, 16);
-  if (reservedName(name.value)) return { kind: 'reject-reserved', name: name.value,
+  const auth=authConfig(), authentication=auth?authState(auth.heartbeat):null;
+  if(auth && !authentication) return {kind:'reject-identity',name:name.value,reason:'登录保护准备中，请稍后重试。[MC_AUTH_UNAVAILABLE]'};
+  if (name.value.startsWith('.') || (!auth && reservedName(name.value))) return { kind: 'reject-reserved', name: name.value,
     reason: '该名字属于房管或受保护账号，不能从普通Java入口登录。请使用自己的角色名；基岩玩家请使用基岩入口。' };
-  const policy = loginDecision(name.value, address);
+  const policy = auth && reservedName(name.value) ? {allowed:true} : loginDecision(name.value, address, authentication);
   if (!policy.allowed) return { kind: 'reject-identity', name: name.value, reason: policy.reason };
   return { kind: 'allow', name: name.value };
 }
@@ -165,6 +176,7 @@ const gateway = net.createServer({ pauseOnConnect: true }, client => {
     backend.setTimeout(30_000, () => backend.destroy());
     backend.once('connect', () => {
       backend.setTimeout(0);
+      if(authConfig()) backend.write(proxyHeader(client.remoteAddress,client.remotePort,backendHost,backendPort));
       backend.write(pending);
       client.pipe(backend);
       backend.pipe(client);

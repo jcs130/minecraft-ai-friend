@@ -1,0 +1,251 @@
+{
+  "status": "deployed",
+  "automaticDeployment": false,
+  "paper": "1.20.6-151",
+  "artifacts": [
+    {
+      "name": "ViaVersion-5.12.1.jar",
+      "sha256": "b8033807e7182c35003a45962352dd642c1e91880ca281da3a43cb6f481a95a2"
+    },
+    {
+      "name": "ViaBackwards-5.12.1.jar",
+      "sha256": "29d94d3a26c85c8a327574b2322db4078992ae457f0173325431a12aac384911"
+    },
+    {
+      "name": "packetevents-velocity-2.14.0.jar",
+      "sha256": "0772f64b51aaf79132c76bb1503707ea0d35433713d5312e67401eaa599d271b"
+    },
+    {
+      "name": "viaversion-config.yml",
+      "sha256": "27482c50d9a44a4c5b2b577581a579318c2dac6fee3c3f4ef1ea37a9cf3e615e"
+    }
+  ],
+  "versionTests": [
+    {
+      "version": "1.9.4",
+      "login": true,
+      "chunks": 16,
+      "entities": 28,
+      "inventoryCommand": true
+    },
+    {
+      "version": "1.12.2",
+      "login": true,
+      "chunks": 13,
+      "entities": 15,
+      "inventoryCommand": true
+    },
+    {
+      "version": "1.16.5",
+      "login": true,
+      "chunks": 17,
+      "entities": 36,
+      "inventoryCommand": true
+    },
+    {
+      "version": "1.20.1",
+      "login": true,
+      "chunks": 20,
+      "entities": 55,
+      "inventoryCommand": true
+    },
+    {
+      "version": "1.20.6",
+      "login": true,
+      "chunks": 17,
+      "entities": 36,
+      "inventoryCommand": true
+    },
+    {
+      "version": "1.21.1",
+      "login": true,
+      "chunks": 20,
+      "entities": 55,
+      "inventoryCommand": true
+    },
+    {
+      "version": "1.21.4",
+      "login": true,
+      "chunks": 17,
+      "entities": 36,
+      "inventoryCommand": true
+    },
+    {
+      "version": "1.21.11",
+      "login": true,
+      "chunks": 24,
+      "entities": 60,
+      "inventoryCommand": true
+    }
+  ],
+  "serviceChecks": 8,
+  "authenticationChecks": 2,
+  "limits": [
+    "Passive protocol clients; not visual acceptance of physical Java devices",
+    "Native Mineflayer agents remain on 1.20.6; fixture disables its physics plugin during server reconfiguration",
+    "Versions below 1.9 and newer than Velocity 1.21.11 are outside this candidate",
+    "Paper was not restarted; proxy/Worker were restarted under the original maintenance lock; no pending deployment"
+  ],
+  "deployedAt": "2026-10-11T14:49:53Z",
+  "installed": {
+    "ViaVersion": "5.12.1",
+    "ViaBackwards": "5.12.1",
+    "PacketEventsVelocity": "2.14.0"
+  },
+  "paperRestarted": false,
+  "paperPid": 36640,
+  "productionTests": [
+    {
+      "version": "1.9.4",
+      "at": "2026-10-11T15:14:46.424Z",
+      "passiveClient": true,
+      "loginPrompt": true,
+      "authenticated": true,
+      "chunks": 32,
+      "entities": 93,
+      "inventoryReply": true,
+      "errors": [],
+      "decodedWorld": true,
+      "position": {
+        "x": -543.5,
+        "y": 66,
+        "z": -439.5
+      },
+      "floorBlock": "cobblestone",
+      "success": true
+    },
+    {
+      "version": "1.12.2",
+      "at": "2026-10-11T15:14:50.633Z",
+      "passiveClient": true,
+      "loginPrompt": true,
+      "authenticated": true,
+      "chunks": 16,
+      "entities": 30,
+      "inventoryReply": true,
+      "errors": [],
+      "decodedWorld": true,
+      "position": {
+        "x": -543.5,
+        "y": 66,
+        "z": -439.5
+      },
+      "floorBlock": "cobblestone",
+      "success": true
+    },
+    {
+      "version": "1.16.5",
+      "at": "2026-10-11T15:14:52.853Z",
+      "passiveClient": true,
+      "loginPrompt": true,
+      "authenticated": true,
+      "chunks": 20,
+      "entities": 50,
+      "inventoryReply": true,
+      "errors": [],
+      "decodedWorld": true,
+      "position": {
+        "x": -543.5,
+        "y": 66,
+        "z": -439.5
+      },
+      "floorBlock": "cobblestone",
+      "success": true
+    },
+    {
+      "version": "1.20.1",
+      "at": "2026-10-11T15:14:55.184Z",
+      "passiveClient": true,
+      "loginPrompt": true,
+      "authenticated": true,
+      "chunks": 27,
+      "entities": 90,
+      "inventoryReply": true,
+      "errors": [],
+      "decodedWorld": true,
+      "position": {
+        "x": -543.5,
+        "y": 66,
+        "z": -439.5
+      },
+      "floorBlock": "cobblestone",
+      "success": true
+    },
+    {
+      "version": "1.20.6",
+      "at": "2026-10-11T15:14:57.682Z",
+      "passiveClient": true,
+      "loginPrompt": true,
+      "authenticated": true,
+      "chunks": 17,
+      "entities": 33,
+      "inventoryReply": true,
+      "errors": [],
+      "decodedWorld": true,
+      "position": {
+        "x": -543.5,
+        "y": 66,
+        "z": -439.5
+      },
+      "floorBlock": "cobblestone",
+      "success": true
+    },
+    {
+      "version": "1.21.1",
+      "at": "2026-10-11T15:15:00.687Z",
+      "passiveClient": true,
+      "loginPrompt": true,
+      "authenticated": true,
+      "chunks": 16,
+      "entities": 31,
+      "inventoryReply": true,
+      "errors": [],
+      "decodedWorld": true,
+      "position": {
+        "x": -543.5,
+        "y": 66,
+        "z": -439.5
+      },
+      "floorBlock": "cobblestone",
+      "success": true
+    },
+    {
+      "version": "1.21.4",
+      "at": "2026-10-11T15:15:06.537Z",
+      "passiveClient": true,
+      "loginPrompt": true,
+      "authenticated": true,
+      "chunks": 16,
+      "entities": 35,
+      "inventoryReply": true,
+      "errors": [],
+      "decodedWorld": true,
+      "position": {
+        "x": -543.5,
+        "y": 66,
+        "z": -439.5
+      },
+      "floorBlock": "cobblestone",
+      "success": true
+    },
+    {
+      "version": "1.21.11",
+      "at": "2026-10-11T15:15:09.453Z",
+      "passiveClient": true,
+      "loginPrompt": true,
+      "authenticated": true,
+      "chunks": 16,
+      "entities": 34,
+      "inventoryReply": true,
+      "errors": [],
+      "decodedWorld": true,
+      "position": {
+        "x": -543.5,
+        "y": 66,
+        "z": -439.5
+      },
+      "floorBlock": "cobblestone",
+      "success": true
+    }
+  ]
+}

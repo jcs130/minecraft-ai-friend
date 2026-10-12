@@ -29,11 +29,19 @@ final class AgentCliCatalog {
 
     private static Map<String, Spec> createSpecs() {
         Map<String, Spec> specs = new LinkedHashMap<>();
-        add(specs,"inventory","info","read","/mycli inventory [status|refresh]","读取服务器本人随身背包与快捷栏，显示不一致可重新同步原版物品栏","仅本人；不含54格大背包、任务物品袋或个人奖励箱；刷新显示不移动或增减物品","私有 MC_INVENTORY，含物品ID、数量、随身槽位和原版窗口槽位");
+        add(specs,"intro","info","read","/mycli intro","一屏入门：规则、本人状态、能力目录、我的进度和安全下一步","已登录普通玩家可用；只读，不报名、不接单","MC_INTRO；可用 /mycli 或 /mycli help 进入");
+        add(specs,"rules","info","read","/mycli rules [页码]","普通玩家可读的中文服务器规则","已登录玩家，无OP要求，查询免费","MC_RULES page/pages/rules/nextCommand");
+        add(specs,"progress","info","read","/mycli progress [all|main|training|guild]","统一分项查看主线、专项实练、公会委托和认证；缺少条件及下一步","只读，不报名、刷新账本、验收或领奖；主线graduated与专项done独立","MC_PROGRESS：同snapshotId的完整分页，按pages收齐");
+        add(specs,"capabilities","info","read","/mycli capabilities [list [分类|命令|all] [页码]|info <ID>]","零副作用的能力发现；保留旧list/explain兼容入口","目录查询本身不会执行目标命令，也不记学习证明","MC_CLI_LIST、MC_CLI_ITEM、MC_CLI_DETAIL；discoveryReadOnly=true");
+        add(specs,"inventory","info","read","/mycli inventory [status|refresh|item <0–35|hand>]","读取服务器本人随身背包与快捷栏，按准确物品名称识别特色道具，refresh同步原版物品栏","仅本人；不含54格大背包、任务物品袋或个人奖励箱；读取全部分页。player_head可能是大背包，须看name/customId/usage","私有 MC_INVENTORY分页，id/baseId是基础材质，name为展示名；MC_ITEM含单件物品名称、服务器标识、用法与说明");
         add(specs,"world","life","read","/mycli world list|menu|npcs|talk <ID> <话>|end|guide start|practice start|status|stop|events|photos","世界生活内容入口：新手实习、开门爬梯实练、村民聊天、世界事件、村民交易和照片展示","查询免费；聊天须在NPC八格内；照片可由本机女神相机拍摄，消耗1张空地图","MC_WORLD JSON及NPC实际答复");
         add(specs,"world.list","life","read","/mycli world list","查看各内容插件实际启用状态和入口","查询免费，不执行技能","MC_WORLD type=catalog");
         add(specs,"world.board","life","read","/mycli world board [menu]","居民事务：农耕集市、照片展与遗迹调查；查看真实步骤及本人状态","与公会共享任务槽；guild accept接单，每阶段guild claim；最终入个人箱","MC_WORLD type=board；可选45格原版菜单");
         add(specs,"world.shops","life","read","/mycli world shops","查看真实集市商人的位置、农产收购与旅行补给","亲自到场交易，实际消耗原版物品；选中配方还不算成交","MC_WORLD type=shops");
+        add(specs,"trade","life","read","/mycli trade menu|list [页]|find <物品> [页]|buy|sell [物品] [页]|info|locate <商人ID>|stop|hall","商旅公会交易板：聚合真实村民/集市商店报价与位置；可查询谁出售或收购物品","只读，查询免费；只含已加载商人，不强制加载区块；报价最多缓存3秒，实际成交窗口为准","私有 MC_TRADE schema=1；原版45格分页菜单；点击报价定位，不远程交易");
+        add(specs,"trade.find","life","read","/mycli trade find <中文物品名或ID或附魔名> [页]","搜索交易两侧，包含真实附魔书的附魔等级与物物交换","按消息长度分页，每页最多4条，返回商人ID、成本、结果、位置、售罄状态；缺结果不等于全世界无人出售","MC_TRADE type=offers；buy仅买入物品，sell仅卖出物品，均从玩家视角");
+        add(specs,"trade.info","life","read","/mycli trade info <商人ID> [页]","查看指定已加载商人的全部可见交易，最多32项，按消息长度分页","ID来自trade查询；村民显示当前配方参考价，个人折扣以现场窗口为准；Shopkeepers按本人权限读取","MC_TRADE type=offers mode=merchant；costs可能包含两种物品");
+        add(specs,"trade.locate","life","read","/mycli trade locate <商人ID>；trade stop；trade hall","定位商人：罗盘和顶部方向每秒跟随位置，步行到场右键成交；hall显示溪畔商栈门牌","不传送、不代购；离开加载范围或死亡会结束定位；会替换本人队友追踪，可重新locate队友","MC_TRADE type=locate|hall；失效给出中文原因与下一步");
         add(specs,"world.menu","life","gui","/mycli world menu","打开Java、基岩和Agent共用的原版生活菜单","在线玩家","27格原版菜单");
         add(specs,"world.npcs","life","read","/mycli world npcs","查看可聊天村民的ID、真实位置和是否在八格内","查询免费；先步行靠近，不自动传送","MC_WORLD type=npcs");
         add(specs,"world.talk","life","chat","/mycli world talk <NPC ID> <话>","与附近村民自然交谈，NPC有独立性格与对话记录","生存角色；NPC八格内；180字内；等待实际答复；对话不替代任务验收","MC_WORLD type=talk status=submitted或denied；NPC实际答复另到达");
@@ -66,7 +74,7 @@ final class AgentCliCatalog {
         add(specs,"help","info","read","/mycli help [ID]","查看玩家帮助；有 ID 时查看该命令详情","在线玩家","帮助或 MC_CLI_DETAIL");
         add(specs,"list","info","read","/mycli list [分类|命令|all] [页码]","分页发现命令；默认只列顶层命令","在线玩家","MC_CLI_LIST、MC_CLI_ITEM");
         add(specs,"explain","info","read","/mycli explain <ID|命令 子命令>","查询用法、前提、效果和回执；绝不执行目标命令","在线玩家","MC_CLI_DETAIL");
-        add(specs,"coach","info","read","/mycli coach status|next|guide|lessons|menu|later|on|off","按本人真实进度指引冒险者登记、新手实习与首张委托；低频私聊","自动迎新面向已登记的Agent；Java提醒默认开、基岩关；旁观者不参加","MC_COACH JSON；原status字段保留，增加onboarding");
+        add(specs,"coach","info","read","/mycli coach status|next|guide|lessons|enroll|cancel|menu|later|on|off","本人新手进度；lessons只读，enroll报名特色实练，cancel停止新证明","自动迎新和低频提醒按本人设置；旁观者不参加；暂停提醒不等于取消实练","MC_COACH JSON；原status字段保留，增加onboarding");
         add(specs,"guide","info","read","/mycli guide [start|explore|magic|gear|guild|dungeon|team]","分主题游玩指引；menu 打开手柄菜单","在线玩家","聊天指引或原版菜单");
         add(specs,"status","info","read","/mycli status","查看本人生命、魔力、公会及试炼状态","在线玩家","个人状态与 MC_DUNGEON 坐标");
         add(specs,"spells","magic","read","/mycli spells list [分类] [页码]|explain <技能ID>","基础及职业技能图鉴；profession/warrior/mage/priest 可直接查战法牧技能","在线玩家；查询不会施法","本人 MC_SPELL_LIST/ITEM/DETAIL JSON");
@@ -108,7 +116,9 @@ final class AgentCliCatalog {
         add(specs,"coach.status","info","read","/mycli coach status","查看本人提醒开关、触发门槛、暂停截止时间、真实入门清单与下一步","在线玩家；查询不代办任务","MC_COACH type=status，含onboarding");
         add(specs,"coach.next","info","read","/mycli coach next","按服务器实际登记、实习与委托账本给出当前一步和可执行命令","在线非观战玩家；不自动接单、学习、施法或领奖","MC_COACH type=next reason=onboarding");
         add(specs,"coach.guide","info","read","/mycli coach guide","阅读玩法介绍、六项入门清单、本人进度与下一步","在线非观战玩家；只读","MC_COACH type=guide reason=onboarding");
-        add(specs,"coach.lessons","life","write","/mycli coach lessons","自愿报名并查看大背包存取、CLI发现、感知、恢复、魔法出行、开门爬梯六项特色实练","真实服务器操作才记证明；不代学、不代花点、不自动存取；旧实习毕业保留","MC_COACH type=lessons|feature_proof");
+        add(specs,"coach.lessons","life","read","/mycli coach lessons","只读查看六项特色实练；查看不再顺便报名","旧报名和证明保留；新报名用coach enroll，停止记录用coach cancel；与主线毕业独立","MC_COACH type=lessons；统一进度用 /mycli progress training");
+        add(specs,"coach.enroll","life","write","/mycli coach enroll","主动报名六项特色实练，随后实际操作才记证明","非观战角色；免费；不代学、不自动存取、不重置旧证明","报名文字回执及MC_COACH enrolled=true；/mycli progress training 复查");
+        add(specs,"coach.cancel","life","write","/mycli coach cancel","主动停止新的特色实练记录，保留旧证明","本人免费；与暂停提醒coach later和关闭提醒coach off不同","MC_COACH enrolled=false；/mycli progress training 复查");
         add(specs,"coach.menu","info","gui","/mycli coach menu","打开手柄友好的新手页，查看清单并自愿登记、报名或查询技能","点击相应动作才登记/报名；学习技能仍走原耗点确认","原版27格菜单");
         add(specs,"coach.later","info","write","/mycli coach later","暂停本人所有自动提醒，默认30分钟；跨重登保留","仍可主动查询；coach on 可提前恢复","MC_COACH type=status，onboarding.mutedUntil为Unix毫秒");
         add(specs,"coach.on","info","write","/mycli coach on","为本人启用提醒，跨重登保留","在线非旁观玩家","MC_COACH type=status enabled=true");
@@ -129,11 +139,11 @@ final class AgentCliCatalog {
         add(specs,"cast.starbolt","magic","cast","/mycli cast starbolt","自动锁定怪物；基础 5 伤害，4 魔力、3 秒冷却","非旁观者；射程内有目标","私有命中提示含名称、中文实体类型和 minecraft 实体 ID；粒子");
         add(specs,"cast.frostnova","magic","cast","/mycli cast frostnova","范围冰霜减速；基础 2 伤害，7 魔力、14 秒冷却","非旁观者；魔力与冷却检查","施法结果与粒子");
         add(specs,"cast.flamewave","magic","cast","/mycli cast flamewave","范围火焰；基础 4 伤害，8 魔力、10 秒冷却","非旁观者；魔力与冷却检查","施法结果与粒子");
-        add(specs,"cast.prospect","magic","cast","/mycli cast prospect [all|coal|iron|copper|gold|gems|diamond|redstone|ancient]","探查真实矿物；范围随挖矿等级增长","非旁观者；6 魔力、30 秒冷却，附近有矿才扣费","聊天 dimension/X/Y/Z 绝对矿块坐标、持续粒子指向线、轮廓或无矿结果");
+        add(specs,"cast.prospect","magic","cast","/mycli cast prospect [all|coal|iron|copper|gold|gems|diamond|redstone|ancient]","探查真实矿物；范围随挖矿等级增长","非旁观者；6 魔力、30 秒冷却，附近有矿才扣费","聊天 dimension/X/Y/Z 绝对矿块坐标、从当前位置完整连向矿块且随移动更新的粒子方位线、轮廓或无矿结果；直线不是安全路径");
         add(specs,"cast.leap","magic","cast","/mycli cast leap","跃空并缓降；4 魔力、8 秒冷却","非旁观者；站在地面","位移与视觉提示");
         add(specs,"cast.flight","magic","cast","/mycli cast flight","生存飞行 15 秒；10 魔力、90 秒冷却","非旁观者；技能可用","飞行状态与到期提示");
         add(specs,"cast.golem","magic","cast","/mycli cast golem","召唤守护铁傀儡 45 秒；12 魔力、75 秒冷却","非旁观者；附近有安全落点","召唤结果");
-        add(specs,"cast.sense","magic","cast","/mycli cast sense","探敌术（心眼）；探测 24 格已加载怪物；3 魔力、15 秒冷却","非旁观者；无怪时不扣魔力","怪物方向、坐标、墙面粒子指引；Java 私有轮廓持续 8 秒");
+        add(specs,"cast.sense","magic","cast","/mycli cast sense","探敌术（心眼）；探测 24 格已加载怪物；3 魔力、15 秒冷却","非旁观者；无怪时不扣魔力","怪物方向、坐标、从当前位置连向最近活敌人的动态粒子方位线；Java私有轮廓持续8秒；直线不是安全路径");
         add(specs,"cast.support","magic","cast","/mycli cast support","支援传送术；与 village support、罗盘共享入口","8魔力、20秒冷却；已确认敌情和安全落点","MC_VILLAGE_SUPPORT 与 MC_TRAVEL id=support；敌人 UUID/坐标");
         add(specs,"cast.feather","magic","cast","/mycli cast feather","羽落 45 秒","已学习；非旁观者；冷却检查","效果与提示");
         add(specs,"cast.night","magic","cast","/mycli cast night","夜视 120 秒","已学习；非旁观者；冷却检查","效果与提示");
@@ -249,6 +259,11 @@ final class AgentCliCatalog {
         add(specs,"goddess.skills","goddess","read","/mycli goddess skills","查看女神技能和学习条件","在线玩家","技能文字列表");
         add(specs,"goddess.learn","goddess","write","/mycli goddess learn feather|night","学习羽落或夜视","非旁观者；5 级经验或炼金等级满足免费条件","学习结果");
         add(specs,"goddess.pray","goddess","message","/mycli goddess pray <1–100字>","把祈愿私聊给女神 Agent","女神在线；本人 30 秒冷却","明确送达或未送达");
+        add(specs,"world.guide.start","life","write","/mycli world guide start","主动报名新手三证实习","非观战角色；免费；不代学、不施法、不接单","MC_WORLD type=guide；/mycli progress main 复查");
+        add(specs,"world.guide.status","life","read","/mycli world guide status","只读查看新手三证实习","查询不报名；三证实习与整条主线毕业独立","MC_WORLD type=guide；/mycli progress main 可统一查询");
+        add(specs,"world.practice.start","life","write","/mycli world practice start","主动报名开门和爬梯的实际通行练习","落地、生存或冒险模式；免费；已有证明保留","MC_WORLD type=practice，实际完成另有practice_progress");
+        add(specs,"world.practice.status","life","read","/mycli world practice status","只读查看门、梯子的实际操作证明","查询免费，不报名、不清除证明","MC_WORLD type=practice；/mycli progress training 统一查询");
+        add(specs,"world.practice.stop","life","write","/mycli world practice stop","主动停止通行实练，保留已有证明","本人免费","MC_WORLD type=practice active=false");
         return Map.copyOf(specs);
     }
 
@@ -277,6 +292,9 @@ final class AgentCliCatalog {
     static List<String> ids() { return catalogSpecs().keySet().stream().sorted().toList(); }
 
     static void list(Player player, String[] args) {
+        list(player,args,true);
+    }
+    static void list(Player player, String[] args,boolean recordEvidence) {
         if (args.length > 3) { error(player, "INVALID_ARGUMENT", "用法：/mycli list [分类|命令|all] [页码]"); return; }
         String filter = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "roots";
         if (!filter.equals("roots") && !filters().contains(filter)) {
@@ -302,6 +320,7 @@ final class AgentCliCatalog {
         head.addProperty("pages", pages);
         head.addProperty("total", matches.size());
         head.addProperty("pageSize", PAGE_SIZE);
+        head.addProperty("discoveryReadOnly",!recordEvidence);
         player.sendMessage("MC_CLI_LIST " + head);
         for (int index = (page - 1) * PAGE_SIZE; index < Math.min(page * PAGE_SIZE, matches.size()); index++) {
             Spec spec = matches.get(index);
@@ -310,13 +329,17 @@ final class AgentCliCatalog {
             item.addProperty("category", spec.category());
             item.addProperty("mode", spec.mode());
             item.addProperty("summary", spec.summary());
+            item.addProperty("operation",semantics(spec).get("operation").getAsString());
             player.sendMessage("MC_CLI_ITEM " + item);
         }
-        org.bukkit.plugin.java.JavaPlugin.getPlugin(AgentFriendPlugin.class).featureTutorials().note(player,"cli_list");
-        if (page < pages) player.sendMessage("MC_CLI_NEXT /mycli list " + filter + " " + (page + 1));
+        if(recordEvidence)org.bukkit.plugin.java.JavaPlugin.getPlugin(AgentFriendPlugin.class).featureTutorials().note(player,"cli_list");
+        if (page < pages) player.sendMessage("MC_CLI_NEXT /mycli "+(recordEvidence?"list":"capabilities list")+" " + filter + " " + (page + 1));
     }
 
     static void explain(Player player, String[] args, int from) {
+        explain(player,args,from,true);
+    }
+    static void explain(Player player, String[] args, int from,boolean recordEvidence) {
         if (args.length <= from) { error(player, "MISSING_ID", "用法：/mycli explain <ID>；先用 /mycli list"); return; }
         String id = String.join(".", java.util.Arrays.copyOfRange(args, from, args.length))
                 .toLowerCase(Locale.ROOT);
@@ -335,12 +358,39 @@ final class AgentCliCatalog {
         detail.addProperty("summary", spec.summary());
         detail.addProperty("requires", spec.requires());
         detail.addProperty("returns", spec.returns());
+        detail.addProperty("discoveryReadOnly",!recordEvidence);
+        detail.add("semantics",semantics(spec));
         if (id.startsWith("cast.")) {
             SpellGuide.Entry spell = SpellGuide.find(id);
             if (spell != null) detail.add("spell", spell.json());
         }
         player.sendMessage("MC_CLI_DETAIL " + detail);
-        org.bukkit.plugin.java.JavaPlugin.getPlugin(AgentFriendPlugin.class).featureTutorials().note(player,"cli_detail");
+        if(recordEvidence)org.bukkit.plugin.java.JavaPlugin.getPlugin(AgentFriendPlugin.class).featureTutorials().note(player,"cli_detail");
+    }
+
+    private static JsonObject semantics(Spec spec) {
+        String id=spec.id();boolean mixed=(spec.root()&&Set.of("world","photo","profession","skills","spells","coach","arena","guild","life","land","landmark","waypoint","locate","commission","goddess","focus","imprint","trade","village","pvp","skillbook").contains(id))
+                ||Set.of("world.guide","world.practice","guild.exam","guild.stash","guild.rewards","arena.rewards","arena.shop","arena.recycle").contains(id);
+        boolean evidence=Set.of("help","list","explain","status","skills.list","spells.list","skills.explain","spells.explain").contains(id);
+        boolean legacyRefresh=Set.of("guild.board","guild.status","life.status","guild.exam.list","guild.exam.status").contains(id);
+        boolean enroll=Set.of("coach.enroll","world.guide.start","world.practice.start","guild.exam.start").contains(id)||id.endsWith(".accept")||id.endsWith(".join");
+        boolean cancel=id.endsWith(".cancel")||id.endsWith(".abandon")||id.endsWith(".stop")||id.endsWith(".leave");
+        boolean action=Set.of("guild.verify","trade.locate","arena.recycle.quote","world.photos","skills.learnmenu").contains(id);
+        String operation=mixed?"group":enroll?"enroll":cancel?"cancel":action?"execute":spec.mode().equals("read")?"query":"execute";
+        boolean readOnly=operation.equals("query")&&!evidence&&!legacyRefresh&&!spec.usage().contains("menu");
+        JsonObject out=new JsonObject();out.addProperty("operation",operation);out.addProperty("readOnly",readOnly);
+        var effects=new com.google.gson.JsonArray();
+        effects.add(mixed?"命令组含查询和动作；先查具体子命令，不能把mode=read理解成所有子动作只读":evidence?"旧阅读入口：已报名时可记录阅读/状态实练证明；不自动报名、学习或施法；纯发现用capabilities":legacyRefresh?"旧入口可能刷新验收进度、迁移认证或释放过期任务；纯查询请用 /mycli progress":readOnly?"只读取与发送本人信息，不改变报名、任务、物品或资源":id.equals("guild.verify")?"主动验收并更新本人任务的阶段证据；不直接领奖":id.equals("trade.locate")?"启动/停止本人商人导航或查询大厅；导航会替换当前队友追踪":id.equals("arena.recycle.quote")?"生成短期报价ID并替换本人旧报价；不消耗物品，sell才成交":spec.mode().equals("gui")||spec.mode().equals("menu")||spec.usage().contains("menu")||Set.of("world.photos","skills.learnmenu").contains(id)?"打开或切换原版界面；点击动作按对应权限和资源结算":"主动改变本人状态、物品、技能、位置或消息；按requires和实际结果回执判断");
+        out.add("sideEffects",effects);
+        out.addProperty("permission",id.startsWith("admin.")?"仅控制台/RCON；普通玩家不可调用；其他身份条件见requirements":id.startsWith("land.trust")||id.startsWith("land.untrust")||id.equals("land.manage")?"当前领地主人或显式领地超管；普通协作者不能转授权":"已登录玩家本人；无通用OP要求，具体角色/模式/资格/区域条件见requirements");
+        out.addProperty("requirements",spec.requires());
+        out.addProperty("consumption",operation.equals("query")?"无游戏内资源消耗":mixed?"按子动作分别结算；先查对应ID":id.equals("skills.learn")||id.equals("skills.upgrade")?"花对应技能等级的技能点；/mycli skills info <ID> 返回本人当前价格，余额用skills points":Set.of("coach.enroll","coach.cancel","world.guide.start","world.practice.start","world.practice.stop","guild.join","guild.verify","trade.locate","arena.recycle.quote").contains(id)?"无物品、魔力或技能点消耗":spec.requires());
+        var parameters=new com.google.gson.JsonArray();var matcher=java.util.regex.Pattern.compile("<([^<>]+)>|\\[([^\\[\\]]+)\\]").matcher(spec.usage());
+        while(matcher.find()){JsonObject parameter=new JsonObject();parameter.addProperty("syntax",matcher.group());parameter.addProperty("name",matcher.group(1)!=null?matcher.group(1):matcher.group(2));parameter.addProperty("required",matcher.group(1)!=null);parameters.add(parameter);}
+        out.add("parameters",parameters);
+        String query=id.startsWith("skills.")||id.startsWith("cast.")||id.startsWith("profession")?"/mycli status；/mycli skills info <ID>；/mycli skills points":id.startsWith("photo")?"/mycli photo status":id.startsWith("inventory")?"/mycli inventory；重新打开对应容器核对":id.startsWith("arena.stash")||id.startsWith("guild.stash")||id.endsWith(".rewards")?"/mycli arena stash list；/mycli arena rewards list；关闭重开容器核对":id.startsWith("arena.recycle")||id.startsWith("arena.shop")||id.equals("arena.wallet")?"/mycli arena wallet；/mycli arena stash list；/mycli inventory":id.startsWith("arena")?"/mycli arena status；/mycli arena loot":id.startsWith("dungeon")?"/mycli dungeon status <ID>":id.startsWith("landmark")?"/mycli landmark info <领地ID>":id.startsWith("land.")||id.startsWith("admin.land")?"/mycli land info <ID>；/mycli land members <ID>":id.startsWith("waypoint")||id.equals("goto")?"/mycli waypoint list；本人最终 MC_TRAVEL/MC_WAYPOINT_RESULT":id.startsWith("trade")?"/mycli trade info <商人ID>":id.startsWith("commission")?"/mycli commission mine":id.startsWith("pvp")?"/mycli pvp status":id.startsWith("village")?"/mycli village threat":"/mycli progress";
+        out.addProperty("resultQuery",query);out.addProperty("completionPolicy","命令发出或pending不等于完成；以本人最终回执和实际状态为准。超时/断线结果未知，先查询，不自动重放。");
+        return out;
     }
 
     private static void error(Player player, String code, String hint) {

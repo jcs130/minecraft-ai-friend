@@ -242,6 +242,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private TrialRoadManager trialRoad;
     private CombatSpells combatSpells;
     private ProspectingSpell prospectingSpell;
+    private TargetGuideParticles targetGuides;
+
+    TargetGuideParticles targetGuides() { return targetGuides; }
     private UtilitySpells utilitySpells;
     private FlightLeases flightLeases;
     private SkillAssessments skillAssessments;
@@ -251,12 +254,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private PlayerContracts playerContracts;
     private VillageStructureProtection villageStructureProtection;
     private VillageTrades villageTrades;
+    private TradeDirectory tradeDirectory;
     private ViewerStatePublisher viewerStatePublisher;
     private AgentStatePublisher agentStatePublisher;
     private SkillEventPublisher skillEventPublisher;
     private ProtectionAdvisor protectionAdvisor;
     private GoddessObservation goddessObservation;
     private AgentCoach agentCoach;
+    private AgentEntry agentEntry;
     private PlayerNameTags playerNameTags;
     private TextBubbleManager textBubbles;
     private PhotoCameraManager photoCamera;
@@ -308,6 +313,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         trialRoad = new TrialRoadManager(this);
         spellMastery = new SpellMastery(this);
         combatSpells = new CombatSpells(this);
+        targetGuides = new TargetGuideParticles(this);
         prospectingSpell = new ProspectingSpell(this);
         flightLeases = new FlightLeases(this);
         utilitySpells = new UtilitySpells(this);
@@ -323,6 +329,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         guildStorage = new GuildStorageOwnership(this);
         waypoints = new WaypointManager(this);
         landmarks = new LandmarkManager(this);
+        agentEntry = new AgentEntry(this);
         agentCoach = new AgentCoach(this);
         agentCoach.start();
         playerNameTags = new PlayerNameTags(this);
@@ -341,6 +348,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         dungeonGearAura = new DungeonGearAura(this);
         dungeonGearAura.start();
         villageTrades = new VillageTrades(this);
+        tradeDirectory = new TradeDirectory(this);
         trialRescue = new TrialRescueManager(this);
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
@@ -350,7 +358,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         skillEventPublisher.start();
         if (arenaBuilt) cleanupMobs();
         Bukkit.getScheduler().runTaskTimer(this, this::tickArena, 20L, 20L);
-        Bukkit.getScheduler().runTaskTimer(this, this::tickPlayerTracking, 20L, 20L);
+        Bukkit.getScheduler().runTaskTimer(this, this::tickPlayerTracking, 10L, 10L);
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 if (player.getGameMode() != GameMode.SPECTATOR)
@@ -361,6 +369,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (tradeDirectory != null) tradeDirectory.shutdown();
+        if (targetGuides != null) targetGuides.stop();
         if (photoCamera != null) photoCamera.stop();
         if (siteDungeons != null) siteDungeons.shutdown();
         if (playerContracts != null) playerContracts.shutdown();
@@ -426,7 +436,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     ProfessionManager professions() { return professions; }
     FlightLeases flightLeases() { return flightLeases; }
     SkillAssessments skillAssessments() { return skillAssessments; }
+    AgentEntry agentEntry() { return agentEntry; }
+    AgentCoach agentCoach() { return agentCoach; }
     WorldLifeManager worldLife() { return worldLife; }
+    TradeDirectory tradeDirectory() { return tradeDirectory; }
     PhotoCameraManager photoCamera() { return photoCamera; }
     void npcSpeech(String id, org.bukkit.entity.LivingEntity npc, Player player, String text) {
         if (textBubbles != null) textBubbles.npc(id, npc, player, text);
@@ -733,12 +746,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (!player.getPersistentDataContainer().has(guideSeenKey, PersistentDataType.BYTE)) {
                 player.getPersistentDataContainer().set(guideSeenKey, PersistentDataType.BYTE, (byte) 1);
                 player.sendMessage(ChatColor.GOLD + "欢迎来到千灯纪！罗盘 → 旅途指南 → 新手入门，按本人实际进度开始冒险。");
-                player.sendMessage(ChatColor.AQUA + "Agent：/mycli coach next 查看下一步，coach lessons 报名特色实练；黄色大背包54格，/minepacks:backpack open 普通存取，区别于任务袋和奖励箱。");
+                player.sendMessage(ChatColor.AQUA + "Agent：/mycli intro 查看入门，/mycli rules 规则，/mycli progress 本人进度；coach lessons 只读查看，coach enroll 自愿报名。黄色大背包54格，/minepacks:backpack open 普通存取，区别于任务袋和奖励箱。");
             }
         }, 40L);
     }
 
     @EventHandler public void onPlayerQuit(PlayerQuitEvent event) {
+        targetGuides.remove(event.getPlayer().getUniqueId());
+        if (tradeDirectory != null) tradeDirectory.stop(event.getPlayer(), false);
         if (protectionAdvisor != null) protectionAdvisor.forget(event.getPlayer());
         UUID id = event.getPlayer().getUniqueId();
         trackedPlayers.remove(id);
@@ -1150,11 +1165,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 0) { help(player); return true; }
         if (args[0].equalsIgnoreCase("help")) {
             if (args.length == 1) help(player);
+            else if(args.length==2&&args[1].equalsIgnoreCase("full")) helpFull(player);
             else AgentCliCatalog.explain(player, args, 1);
             return true;
         }
         String action = args[0].toLowerCase(Locale.ROOT);
         switch (action) {
+            case "intro", "入门状态" -> agentEntry.intro(player);
+            case "rules", "规则" -> agentEntry.rules(player,args);
+            case "progress", "进度" -> agentEntry.progress(player,args);
+            case "capabilities", "能力目录" -> agentEntry.capabilities(player,args);
             case "list" -> AgentCliCatalog.list(player, args);
             case "explain" -> AgentCliCatalog.explain(player, args, 1);
             case "coach" -> agentCoach.command(player, args);
@@ -1196,6 +1216,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "commission", "commissions", "玩家委托" -> playerContracts.command(player,args);
             case "life", "生活" -> lifeGuild.command(player, args);
             case "world", "世界生活" -> worldLife.command(player, args);
+            case "trade", "交易", "商旅" -> tradeDirectory.command(player, args);
             case "village", "村庄" -> villageWatch.command(player, args);
             case "goddess", "女神" -> goddess(player, args);
             default -> player.sendMessage(ChatColor.RED + "未知子命令。先用 /mycli list 发现命令，再用 /mycli explain <ID> 查看用法；不会猜测并执行其他命令。");
@@ -1208,13 +1229,17 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return String.join(" ", java.util.Arrays.copyOfRange(args, from, args.length)).trim();
     }
     private void help(Player p) {
+        agentEntry.intro(p);
+        p.sendMessage("§7/mycli capabilities info <ID> 查参数、权限、消耗与结果查询；/mycli help full 保留完整旧帮助。查询不等于执行。");
+    }
+    private void helpFull(Player p) {
         p.sendMessage(ChatColor.GOLD + "千灯纪技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
         p.sendMessage("Agent：/mycli list [分类|命令] [页码] 发现能力；/mycli explain <ID> 或 /mycli help <ID> 查询准确用法，不会执行。");
         p.sendMessage("公开聊天或 /mycli say <话> 会显示8秒头顶气泡，附近24格可见；私聊不显示。/mycli bubbles 查看状态。");
         p.sendMessage("拍照：技能罗盘→女神相机，或 /mycli photo menu 选择视角；单图1张空地图，清晰海报4张。照片自动放入本人背包，无需截图上传。/mycli photo status 查进度，/mycli photo cancel 取消。");
         p.sendMessage("物品显示：/mycli inventory 查服务器随身背包和快捷栏；/mycli inventory refresh 重新同步。54格大背包、任务物品袋和个人奖励箱各自独立。");
         p.sendMessage("挑战区别：/mycli arena 是按层挑战的试炼塔；/mycli dungeon 是逐室探索的遗迹地下城。系统操作回执只发本人及对应观战者，世界公告标明当事人。");
-        p.sendMessage("/mycli coach next|guide|lessons|menu|status|later|on|off  查看本人新手进度与下一步；暂停或关闭低频私聊提醒。");
+        p.sendMessage("/mycli coach next|guide|lessons|enroll|cancel|menu|status|later|on|off  lessons只读；enroll报名，cancel停止特色实练，已有证明保留。");
         p.sendMessage("/mycli skills list [all|common|profession|warrior|mage|priest] [页] 查看基础/战法牧技能；skills info <ID> 查各级效果与学习条件；cast <ID> 施法");
         p.sendMessage("/mycli protect break|place|container|use <x> <y> <z>  查询附近方块/实体储物能否操作；拒绝则停止");
         p.sendMessage("/mycli land here|list|info <ID>|menu 查看归属；members <ID> 查协作者；主人 trust|untrust <ID> <玩家名或UUID> 授权/撤权；board <ID> 查公告牌");
@@ -1238,6 +1263,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli life board|menu|status|accept <ID>|claim|write <书名>|<正文>  生活公会");
         p.sendMessage("/mycli world list|menu|npcs|talk <NPC ID> <话>|guide start|events|photos  世界生活与新手实习");
         p.sendMessage("/mycli village threat|support [事件ID]|villagers  查实时敌情、支援传送术（8魔力）、村民收购报价");
+        p.sendMessage("/mycli trade menu|find <物品>|buy|sell|info|locate <商人ID>|hall  商旅公会交易板：查真实出售/收购、价格与位置");
         p.sendMessage("/mycli pvp status|join|leave|lobby|board|menu  同款装备一对一竞技场；罗盘可用");
         p.sendMessage("/mycli goddess skills|learn <技能>|pray <话>  女神技艺与祈愿");
     }
@@ -1790,12 +1816,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             viewer.sendMessage(ChatColor.YELLOW + "队友已离线或暂时不可定位，请重新打开罗盘。");
             return;
         }
+        tradeDirectory.stop(viewer, false);
         trackedPlayers.put(viewer.getUniqueId(), targetId);
         automaticCompassTargets.remove(viewer.getUniqueId());
         compassAutoPaused.remove(viewer.getUniqueId());
         ensureTrackingBar(viewer);
         viewer.sendMessage(ChatColor.GREEN + "正在追踪 " + target.getName()
-                + "；手持技能罗盘时指针会指向她。罗盘菜单中可停止追踪。");
+                + "；粒子线从你当前位置连向队友，手持技能罗盘时指针也会指向她。直线不代表可通行，罗盘菜单中可停止追踪。");
         viewer.sendMessage("MC_PLAYER name=" + target.getName() + " " + LocationOutput.fields(target.getLocation()));
         showTracking(viewer, target);
         syncCompass(viewer, target.getLocation());
@@ -1811,11 +1838,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     private void removeTrackingBar(UUID viewerId) {
+        targetGuides.remove(viewerId, "player");
         BossBar bar = trackingBars.remove(viewerId);
         if (bar != null) bar.removeAll();
     }
 
     private void stopTracking(Player viewer) {
+        tradeDirectory.stop(viewer, false);
         trackedPlayers.remove(viewer.getUniqueId());
         automaticCompassTargets.remove(viewer.getUniqueId());
         compassAutoPaused.add(viewer.getUniqueId());
@@ -1844,7 +1873,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         tickCompassTargets();
     }
 
-    private void syncCompass(Player viewer, Location target) {
+    void beginTradeTracking(Player viewer) {
+        trackedPlayers.remove(viewer.getUniqueId());
+        automaticCompassTargets.remove(viewer.getUniqueId());
+        compassAutoPaused.add(viewer.getUniqueId());
+        removeTrackingBar(viewer.getUniqueId());
+        restoreCompass(viewer);
+    }
+
+    void syncCompass(Player viewer, Location target) {
         if (target.getWorld() == null || !target.getWorld().equals(viewer.getWorld())) {
             restoreCompass(viewer);
             return;
@@ -1858,7 +1895,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
     }
 
-    private void restoreCompass(Player viewer) {
+    void restoreCompass(Player viewer) {
         Location old = savedCompassTargets.remove(viewer.getUniqueId());
         if (old != null && old.getWorld() != null) viewer.setCompassTarget(old);
     }
@@ -1866,6 +1903,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private void tickCompassTargets() {
         for (Player viewer : Bukkit.getOnlinePlayers()) {
             UUID id = viewer.getUniqueId();
+            if (tradeDirectory.tracking(viewer)) continue;
             UUID selected = trackedPlayers.get(id);
             if (selected != null) {
                 Player target = Bukkit.getPlayer(selected);
@@ -1901,6 +1939,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         BossBar bar = trackingBars.get(viewer.getUniqueId());
         if (bar == null) return;
         if (!here.getWorld().equals(there.getWorld())) {
+            targetGuides.remove(viewer.getUniqueId(), "player");
             bar.setTitle("§b追踪 " + target.getName() + " §7· " + worldLabel(there.getWorld())
                     + "（不同维度） · " + LocationOutput.shortForm(there));
             return;
@@ -1911,9 +1950,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         String vertical = Math.abs(height) <= 2 ? "同一高度" : (height > 0 ? "高 " + height + " 格" : "低 " + -height + " 格");
         bar.setTitle("§b追踪 " + target.getName() + " §e" + direction(here.getYaw(), dx, dz)
                 + " " + distance + " 格 §7· " + vertical + " · " + LocationOutput.shortForm(there));
+        targetGuides.show(viewer, "player", there.clone().add(0, Math.min(1.2, target.getEyeHeight() * .8), 0));
     }
 
-    private static String direction(float yaw, double dx, double dz) {
+    static String direction(float yaw, double dx, double dz) {
         if (dx * dx + dz * dz < 9) return "●";
         double targetYaw = Math.toDegrees(Math.atan2(-dx, dz));
         // Bukkit yaw increases when turning right; normalize even after multiple full turns.
@@ -2970,7 +3010,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (arenaBuilt) event.blockList().removeIf(b -> inBuild(b.getLocation()));
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 2 && args[0].equalsIgnoreCase("inventory")) return List.of("status", "refresh");
+        if (args.length == 2 && args[0].equalsIgnoreCase("inventory")) return List.of("status", "refresh", "item");
         if (args.length == 2 && args[0].equalsIgnoreCase("dungeon")) return List.of("list", "info", "travel", "start", "join", "status", "resume", "leave", "claim", "menu");
         if (args.length == 3 && args[0].equalsIgnoreCase("dungeon")) return siteDungeons.ids();
         if (args.length == 4 && args[0].equalsIgnoreCase("dungeon") && args[1].equalsIgnoreCase("start")) return List.of("normal", "adventure", "apocalypse");
@@ -2987,7 +3027,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 2 && args[0].equalsIgnoreCase("spells")) return List.of("list", "explain");
         if (args.length == 3 && args[0].equalsIgnoreCase("spells") && args[1].equalsIgnoreCase("explain"))
             return SpellGuide.entries().stream().map(SpellGuide.Entry::id).toList();
-        if (args.length == 2 && args[0].equalsIgnoreCase("coach")) return List.of("status", "next", "guide", "menu", "later", "on", "off");
+        if (args.length == 2 && args[0].equalsIgnoreCase("coach")) return List.of("status", "next", "guide", "lessons", "enroll", "cancel", "menu", "later", "on", "off");
+        if (args.length == 2 && args[0].equalsIgnoreCase("progress")) return List.of("all", "main", "training", "guild");
+        if (args.length == 2 && args[0].equalsIgnoreCase("capabilities")) return List.of("list", "info");
+        if (args.length == 3 && args[0].equalsIgnoreCase("capabilities") && args[1].equalsIgnoreCase("info")) return AgentCliCatalog.ids();
         if (args.length == 2 && args[0].equalsIgnoreCase("pvp"))
             return List.of("status", "join", "leave", "lobby", "board", "menu");
         if (args.length == 2 && args[0].equalsIgnoreCase("skillbook")) return List.of("list", "use");
@@ -3052,6 +3095,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return List.of("harvest", "harbor", "workshop", "library");
         if (args.length == 2 && args[0].equalsIgnoreCase("village"))
             return List.of("threat", "support", "villagers");
+        if (args.length == 2 && args[0].equalsIgnoreCase("trade"))
+            return List.of("menu", "list", "find", "buy", "sell", "info", "locate", "stop", "hall");
         if (args.length == 3 && args[0].equalsIgnoreCase("life") && args[1].equalsIgnoreCase("accept"))
             return List.of("farmer_harvest", "gourmet_bread", "angler_catch", "builder_home", "author_story", "tinkerer_light", "trader_supply");
         if (args.length == 3 && args[0].equalsIgnoreCase("guild") && args[1].equalsIgnoreCase("accept"))

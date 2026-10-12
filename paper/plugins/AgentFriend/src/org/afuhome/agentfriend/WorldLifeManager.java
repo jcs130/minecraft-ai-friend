@@ -85,6 +85,7 @@ final class WorldLifeManager implements Listener {
                 case "menu" -> menu(p);
                 case "board" -> board(p, args.length > 2 && args[2].equals("menu"));
                 case "shops" -> shops(p);
+                case "trades" -> plugin.tradeDirectory().command(p, new String[]{"trade", "menu"});
                 case "npcs" -> npcs(p);
                 case "talk" -> talk(p, args);
                 case "end" -> end(p);
@@ -136,6 +137,7 @@ final class WorldLifeManager implements Listener {
         out.addProperty("season", content.getString("season", "村庄生活"));
         out.addProperty("boardCommand", "/mycli world board");
         out.addProperty("shopCommand", "/mycli world shops");
+        out.addProperty("tradeCommand", "/mycli trade menu");
         emit(p, "catalog", out);
         p.sendMessage(ChatColor.GREEN + "世界生活：新手实习、村民聊天、世界事件、村民商店、照片地图。");
         p.sendMessage("/mycli world board | shops | guide start | practice start|status|stop | npcs | talk <NPC ID> <话> | end | events | photos | menu");
@@ -298,7 +300,7 @@ final class WorldLifeManager implements Listener {
         inv.setItem(11, item(Material.VILLAGER_SPAWN_EGG, "§e村民聊天", "显示人物 ID 和位置；走近右键交谈", "/mycli world npcs"));
         inv.setItem(12, item(Material.SUNFLOWER, "§6世界事件", "查看当前正在进行的活动", "/mycli world events"));
         inv.setItem(13, item(Material.SPYGLASS, "§b女神相机 · 拍照与相册", "点击选择拍照视角，单图消耗1张空地图", "/mycli photo menu；自动拍摄，无需截图上传"));
-        inv.setItem(14, item(Material.EMERALD, "§a村民商店", "到村庄集市右键补给商人交易", "实际消耗原版物品；不会免费发放"));
+        inv.setItem(14, item(Material.EMERALD, "§a商旅公会 · 交易信息板", "汇总已加载村民与集市商店的出售/收购", "查询报价、售罄状态，点击定位商人", "/mycli trade menu；成交需亲自到场"));
         inv.setItem(15, item(Material.LADDER, "§a开门与爬梯实练", "亲手开门穿过、沿现有梯子爬升3格", "不拆墙、不垫块，不代操作或授予技能", "/mycli world practice start"));
         inv.setItem(16, item(Material.OAK_DOOR, "§7结束聊天", "恢复普通公屏聊天"));
         inv.setItem(22, item(Material.BELL, "§6居民事务板", "农耕、集市、照片和遗迹调查", "/mycli world board"));
@@ -316,7 +318,7 @@ final class WorldLifeManager implements Listener {
         if (!(event.getView().getTopInventory().getHolder() instanceof MenuHolder holder)) return;
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p) || !holder.owner().equals(p.getUniqueId()) || event.getRawSlot() < 0 || event.getRawSlot() >= 27) return;
-        String action = switch (event.getRawSlot()) { case 10 -> "guide start"; case 11 -> "npcs"; case 12 -> "events"; case 13 -> "photos"; case 14 -> "shops"; case 15 -> "practice start"; case 16 -> "end"; case 22 -> "board menu"; default -> ""; };
+        String action = switch (event.getRawSlot()) { case 10 -> "guide start"; case 11 -> "npcs"; case 12 -> "events"; case 13 -> "photos"; case 14 -> "trades"; case 15 -> "practice start"; case 16 -> "end"; case 22 -> "board menu"; default -> ""; };
         if (!action.isEmpty()) { p.closeInventory(); command(p, ("world " + action).split(" ")); }
     }
     @EventHandler public void onDrag(InventoryDragEvent event) {

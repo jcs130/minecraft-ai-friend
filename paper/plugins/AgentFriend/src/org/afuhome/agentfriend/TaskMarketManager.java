@@ -348,6 +348,17 @@ final class TaskMarketManager implements Listener {
     }
     GuildManager.Contract offered(String id) { Task task = tasks.get(id); return task == null || !task.enabled ? null : task.contract(0); }
     GuildManager.Contract active(Player player) { Task task = frozen(player); return task == null ? null : task.contract(index(player)); }
+    JsonObject progressState(Player player) {
+        Task task=frozen(player); JsonObject out=new JsonObject();
+        if(task==null){out.addProperty("available",false);return out;}
+        int stage=index(player); Step step=task.steps().get(stage);
+        out.addProperty("available",true);out.addProperty("stage",stage+1);out.addProperty("stages",task.steps().size());
+        out.addProperty("title",task.title());out.addProperty("stageTitle",step.title());
+        out.addProperty("condition",TaskGuidance.step(step.goal(),step.description()));
+        out.addProperty("goal",step.goal().name());out.addProperty("target",step.target());
+        out.addProperty("requiresVerification",EngineeringSites.GOALS.contains(step.goal()));
+        return out;
+    }
     AssessmentCatalog.Definition activeAssessment(Player player) {Task task=frozen(player);return task==null?null:task.steps.get(index(player)).assessment;}
     boolean suppliesAssessmentProof(String id,List<String> proofs) {
         Task task=tasks.get(id);if(task==null||task.steps.stream().anyMatch(s->s.assessment!=null))return false;

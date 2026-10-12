@@ -97,7 +97,12 @@ final class SkillAssessments implements Listener {
             row.addProperty("migrationRank",legacy);row.addProperty("migratedAt",System.currentTimeMillis());}))return legacy*3;
         return academy(p.getUniqueId()).get("grade").getAsInt();
     }
-    String gradeName(Player p) {int g=grade(p);return RANKS[g/3]+" "+DIVISIONS[g%3];}
+    private int readGrade(Player p) {
+        int legacy=plugin.guild().legacyRank(p);
+        if(!available()||!promotionsEnabled()||!plugin.guild().hasJoined(p)||plugin.isObserver(p))return legacy*3;
+        JsonObject a=academy(p.getUniqueId());return a.has("grade")?a.get("grade").getAsInt():legacy*3;
+    }
+    String gradeName(Player p) {int g=readGrade(p);return RANKS[g/3]+" "+DIVISIONS[g%3];}
     boolean busy(Player p) {Run r=runs.get(p.getUniqueId());return r!=null&&r.market.isEmpty()&&Set.of("active","ready").contains(r.state);}
     boolean canAttachContract(Player p,String id) {
         Run r=runs.get(p.getUniqueId());return r!=null&&r.state.equals("active")&&r.definition.primitive().equals("contract_record")
@@ -139,7 +144,7 @@ final class SkillAssessments implements Listener {
         Run r=newRun(d,"");r.grade=g;
         if(!save(p,r)){reply(p,"data_unavailable",d);return;}
         runs.put(p.getUniqueId(),r);
-        if(d.primitive().equals("native_lesson")) {plugin.featureTutorials().show(p);plugin.traversalPractice().command(p,"start");reuseTraining(p,r);}
+        if(d.primitive().equals("native_lesson")) {plugin.featureTutorials().enroll(p);plugin.traversalPractice().command(p,"start");reuseTraining(p,r);}
         show(p);p.sendMessage("§a考试已开始："+d.title()+"。"+d.description()+"；技能需本人主动准备、施放并实际操作，查询不收费。");
     }
     private Run newRun(AssessmentCatalog.Definition d,String market) {
@@ -164,7 +169,7 @@ final class SkillAssessments implements Listener {
             String deny=eligibility(p,d);if(!deny.equals("ready"))return null;
             r=newRun(d,token);if(!save(p,r))return null;runs.put(p.getUniqueId(),r);
             p.sendMessage("§b能力阶段已开始："+d.title()+"；/mycli guild exam status 查看当前目标。技能须在本阶段开始后施放。");
-            if(d.primitive().equals("native_lesson")){plugin.featureTutorials().show(p);plugin.traversalPractice().command(p,"start");reuseTraining(p,r);}
+            if(d.primitive().equals("native_lesson")){plugin.featureTutorials().enroll(p);plugin.traversalPractice().command(p,"start");reuseTraining(p,r);}
         }
         return r;
     }
@@ -310,10 +315,11 @@ final class SkillAssessments implements Listener {
         if(r.castAt==0)return c.start();int next=r.trajectory==null?r.checkpoint:r.trajectory.checkpoint();return next<c.checkpoints().size()?c.checkpoints().get(next):c.landing();
     }
     private void waypoint(Player p,Run r) {
-        AssessmentCatalog.Point target=target(r);if(target==null||!p.getWorld().getUID().equals(r.definition.course().world()))return;
+        AssessmentCatalog.Point target=target(r);if(target==null||!p.getWorld().getUID().equals(r.definition.course().world())){plugin.targetGuides().remove(p.getUniqueId(),"assessment");return;}
         Location at=new Location(p.getWorld(),target.x(),target.y()+.1,target.z());
         if(p.getWorld().isChunkLoaded(at.getBlockX()>>4,at.getBlockZ()>>4)&&p.getLocation().distanceSquared(at)<64*64)
-            p.spawnParticle(Particle.END_ROD,at,4,.4,.2,.4,.01);
+            plugin.targetGuides().show(p,"assessment",at);
+        else plugin.targetGuides().remove(p.getUniqueId(),"assessment");
     }
     private void ready(Player p,Run r) {
         if(!r.state.equals("active"))return;r.state="ready";r.reason="ready";
@@ -411,7 +417,7 @@ final class SkillAssessments implements Listener {
         o.addProperty("combatSupport",r.combatSupport);return o;
     }
     JsonObject summary(Player p) {
-        JsonObject out=new JsonObject();out.addProperty("available",available());out.addProperty("gradeIndex",grade(p));out.addProperty("division",3-grade(p)%3);
+        JsonObject out=new JsonObject();out.addProperty("available",available());out.addProperty("gradeIndex",readGrade(p));out.addProperty("division",3-readGrade(p)%3);
         out.addProperty("gradeName",gradeName(p));Run r=runs.get(p.getUniqueId());
         if(r!=null){out.addProperty("examId",r.definition.id());out.addProperty("runId",r.id.toString());out.addProperty("state",r.state);out.addProperty("reason",r.reason);out.addProperty("nextAction",next(r));}
         JsonObject a=academy(p.getUniqueId());out.addProperty("certificateCount",a.has("certificates")?a.getAsJsonObject("certificates").size():0);return out;

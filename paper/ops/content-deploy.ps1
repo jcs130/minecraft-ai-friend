@@ -1,6 +1,6 @@
 # Loaded by manage-server.ps1. This is executed only after both stopped snapshots.
 function Content-YsmProxyTarget([string]$name) {
-    if ($name -notmatch '^AgentAppearance-[0-9]+\.[0-9]+\.[0-9]+\.jar$') { throw 'Unexpected YSM bridge JAR' }
+    if ($name -notmatch '^(AgentAppearance|LibreLogin|LoginGuard|NanoLimboPlugin-velocity)-[0-9]+\.[0-9]+\.[0-9]+\.jar$') { throw 'Unexpected proxy plugin JAR' }
     $config = Ysm-Config
     if (-not $config -or -not $config.enabled) { throw 'YSM bridge deployment requires the existing enabled lifecycle' }
     foreach ($port in @($config.controlPort,$config.proxy.port,$config.worker.port,$config.workerControllerPort)) {
@@ -9,6 +9,16 @@ function Content-YsmProxyTarget([string]$name) {
         }
     }
     return (Join-Path $config.root ("proxy/plugins/" + $name))
+}
+
+function Content-AuthTarget([string]$relative) {
+    # Reuse the stopped service gate for every login config/database/library.
+    $null = Content-YsmProxyTarget 'LoginGuard-0.1.0.jar'
+    $config = Ysm-Config
+    if ($relative -eq 'ysm-auth/velocity.toml') { return (Join-Path $config.root 'proxy/velocity.toml') }
+    $path = $relative.Substring(9)
+    if ($path -notmatch '^(librelogin/(config\.conf|messages\.conf|user-data\.db|forbidden-passwords\.txt)|login-guard/config\.properties|nanolimbovelocity/(config\.yml|auth/settings\.yml)|librelogin/lib/[A-Za-z0-9/._+-]+\.jar)$' -or $path -match '(^|/)\.\.(/|$)') { throw 'Unexpected authentication target' }
+    return (Join-Path $config.root ('proxy/plugins/' + $path))
 }
 
 function Deploy-PendingContent {
@@ -26,8 +36,19 @@ function Deploy-PendingContent {
         if ($relative -match '^[A-Za-z0-9][A-Za-z0-9_.-]*\.jar$') {
             if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame)-') { throw 'Unexpected plugin JAR' }
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
-        } elseif ($relative -match '^ysm-proxy/(AgentAppearance-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
+        } elseif ($relative -match '^ysm-proxy/((AgentAppearance|LibreLogin|LoginGuard|NanoLimboPlugin-velocity)-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
             $target = Content-YsmProxyTarget $Matches[1]
+        } elseif ($relative -match '^ysm-model/(cormy|neko_yui)/ysm\.json$') {
+            $modelId = $Matches[1]
+            # These two approved size corrections share the stopped services,
+            # complete E/F backup, digest and atomic rollback gates above.
+            $null = Content-YsmProxyTarget 'AgentAppearance-0.3.2.jar'
+            $target = Join-Path (Ysm-Config).root ("worker/config/yes_steve_model/custom/$modelId/ysm.json")
+        } elseif ($relative.StartsWith('ysm-auth/')) {
+            $target = Content-AuthTarget $relative
+        } elseif ($relative -match '^ops/auth-credentials/[A-Za-z0-9_]{1,16}\.env$') {
+            $null = Content-YsmProxyTarget 'LoginGuard-0.1.0.jar'
+            $target = Join-Path $opsDir $relative.Substring(4)
         } elseif ($relative -eq 'libraries/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar') {
             $target = Join-Path $serverDir $relative
         } elseif ($relative -eq 'commands.yml') {
@@ -42,7 +63,7 @@ function Deploy-PendingContent {
         } elseif ($relative -match '^plugins/([A-Za-z0-9]+)/(.+)$' -and $allowed -contains $Matches[1]) {
             if ($relative -match '(^|/)\.\.(/|$)|:|\\' -or $relative -notmatch '\.(yml|yaml|json|dsc)$') { throw 'Unsafe plugin configuration path' }
             $target = Join-Path $serverDir $relative
-        } elseif ($relative -in @('ops/ysm-services.json','ops/goddess-bridge.mjs','ops/goddess-photo-camera.mjs','ops/goddess-photo-camera.json','ops/goddess-mcp.py','ops/goddess-perception.mjs','ops/maintenance-notice.mjs','ops/npc-dialogue-adapter.mjs','ops/npc-adapter.private.json','ops/agent-eye-names.mjs','ops/agent-eye-pairs.json','ops/agent-eye-watcher.mjs','ops/agent-lan-gateway.mjs','ops/agent-gateway-access.json')) {
+        } elseif ($relative -in @('ops/agent-auth.json','ops/auth-proxy.mjs','ops/mineflayer-login-gate.mjs','ops/mineflayer-client-compat.mjs','ops/manage-server.ps1','ops/content-deploy.ps1','ops/ysm-services.mjs','ops/ysm-services.json','ops/goddess-bridge.mjs','ops/goddess-photo-camera.mjs','ops/goddess-photo-camera.json','ops/goddess-mcp.py','ops/goddess-perception.mjs','ops/maintenance-notice.mjs','ops/npc-dialogue-adapter.mjs','ops/npc-adapter.private.json','ops/agent-eye-names.mjs','ops/agent-eye-pairs.json','ops/agent-eye-watcher.mjs','ops/agent-lan-gateway.mjs','ops/agent-gateway-access.json')) {
             $target = Join-Path $opsDir $relative.Substring(4)
         } else { throw "Unexpected content target: $relative" }
         $source = [IO.Path]::GetFullPath([string]$file.source)
@@ -87,7 +108,10 @@ function Deploy-PendingContent {
             $applied += $entry
             $index++
         }
-        $entries | Select-Object Target,Hash,Before,Backup | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $rollback 'applied.json') -Encoding UTF8
+        # Windows PowerShell 5 Select-Object reads the hashtable's CLR properties,
+        # not its keys. Emit actual recovery paths rather than null journal rows.
+        $entries | ForEach-Object { [pscustomobject]@{Target=$_.Target;Hash=$_.Hash;Before=$_.Before;Backup=$_.Backup} } |
+            ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $rollback 'applied.json') -Encoding UTF8
         Move-Item -LiteralPath $planPath -Destination (Join-Path $rollback 'consumed-plan.json')
         Log "Content plugins deployed: $($plan.id), $($entries.Count) verified files"
     } catch {
