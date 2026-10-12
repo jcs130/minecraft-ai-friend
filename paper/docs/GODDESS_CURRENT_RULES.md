@@ -2,15 +2,17 @@
 
 这是当前说明；旧发布笔记只能用于追溯。回答前实际读取 `resource/SERVER_UPDATES.md` 和对应专题；个人进度以本人本次服务器回执为准。
 
-## 文字气泡与引导（2026-10-12，当前0.4.28）
+## 当前CLI与文字气泡（2026-10-12，0.4.31已上线）
 
-最新正式为AgentFriend0.4.28，已提前通知、双盘冷备份并正常重启。公开气泡在Java/已更新Web为不透明白底、玩家深灰字/NPC蓝字；私聊隔离保持。基岩现在仅亮色文字标签，白色框尚未适配，不要说手机/Xbox白底已上线。Geyser能通过现有基岩连接下发基岩资源包，无需新公网端口；当前packs为空，YSM用皮肤/几何包，Java模组不能直接给基岩运行。
+当前正式AgentFriend0.4.31 / LoginGuard0.1.1，已提前提醒、E/F冷备份20261012-184302后正常停启。`/mycli status`默认只读MC_STATUS；原详细输出及实练证明改用`status full`。`progress all 1`分页分开主线/专项/公会，专项完成不等于毕业，只认mainlineGraduated或主线graduated。`skills status`查真实资格/魔力/冷却；`skills learn night --help`只查说明，不消费。`--json`仅支持status/progress/skills status/page/capabilities。复制MC_PAGE.nextCommand续读本连接冻结快照，重连丢旧会话；结果未知先查，不能自动重复消费或存取。
 
-探矿、探敌、队友/商人定位及考场指向完整目标，线不是可通行路径。相机固定桥已更新；另一台电脑Web仍须更新宿主桥并按原版本重建，不能称远端已部署。细节实际读取resource/GUIDE_BUBBLES_RELEASE_20261012.md、TEXT_BUBBLES.md及TARGET_GUIDES.md。下面0.4.27是此前新功能包介绍，现行0.4.28继续保留。
+`/authstatus`查看当前代理认证；Paper本机真实心跳观察已接通，unknown/null只是未能确认，不等于登录失败或成功，不能借查询授予资格。等本人MC_AUTH_SUCCESS后行动，既有密码/正版/Eye规则保留。
+
+Java/已更新Web气泡为半透明白底（180/255）与不透明深色文字；基岩仍亮色标签、没有背景框，手机/Xbox未真机验收。Geyser可沿现有基岩连接下发资源包，无需新公网端口；packs现为空，Java模组不能直接给基岩运行。另一台电脑Web须运行端更新重建，未确认其页面已更新。直线引导表示方向，不保证可通行。细节读resource/CLI_RELEASE_20261012.md、AGENT_CLI_OBSERVATIONS.md、TEXT_BUBBLES.md。
 
 ## 新入门、交易与引导（2026-10-12已上线）
 
-0.4.27上线、现行0.4.28保留：`/mycli intro`汇总本人状态、规则、能力和下一步；普通help可读，`/mycli rules`读规则。`/mycli progress`区分主线、专项与公会，专项完成不等于毕业。`coach lessons`只读，`coach enroll`主动报名；`capabilities info <ID>`查参数、权限、消耗、副作用和结果查询。
+0.4.27上线、现行0.4.31保留：`/mycli intro`汇总本人状态、规则、能力和下一步；普通help可读，`/mycli rules`读规则。`/mycli progress`区分主线、专项与公会，专项完成不等于毕业。`coach lessons`只读，`coach enroll`主动报名；`capabilities info <ID>`查参数、权限、消耗、副作用和结果查询。
 
 交易板用`trade find <物品>`聚合真实已加载报价，成交仍到场。探矿/探敌/定位引导从本人当前位置完整连向目标，直线不是路径。大背包54格、任务袋和540格奖励箱独立；可靠背包客户端模块还要远端接入。OBS共享源码支持手持动作和可调整布局，但远端页面须拉取并重建；注册网站仍仅方案。已提前预告并正常重启，双盘完整冷备份20261012-074906。细节读resource/COMPLETED_FEATURES_RELEASE_20261012.md、AGENT_INTERACTION.md、TARGET_GUIDES.md。
 
@@ -30,7 +32,7 @@ Java 既有八版本桥接保持；Agent 推荐 1.20.6，老客户端缺登录 U
 
 ## 中文提示与交物显示（2026-10-11）
 
-欢迎修订7、Essentials中文、加入/离开消息、管理员命令广播接收限制及三维度原版成就公屏关闭已在线生效。本人操作结果、原生成就进度、控制台审计和Goddess房管权限保留。普通玩家原本也不是默认接收所有管理员回显；不要编造全员拥有管理员权限。说明和交流用中文，英文命令/物品ID/机器回执保持兼容，公共公告不是其他Agent的任务。
+欢迎修订8、Essentials中文、加入/离开消息、管理员命令广播接收限制及三维度原版成就公屏关闭已在线生效。本人操作结果、原生成就进度、控制台审计和Goddess房管权限保留。普通玩家原本也不是默认接收所有管理员回显；不要编造全员拥有管理员权限。说明和交流用中文，英文命令/物品ID/机器回执保持兼容，公共公告不是其他Agent的任务。
 
 试炼塔（原试炼场）用`/mycli arena`，按层战斗、清层自动下楼，逐层奖励保存在个人箱；遗迹地下城用`/mycli dungeon`，逐室探索后回首室并`claim`结算。进度独立，共用540格个人奖励箱。不要把遗迹返程领奖要求套用到试炼塔。
 
@@ -48,7 +50,7 @@ Java 既有八版本桥接保持；Agent 推荐 1.20.6，老客户端缺登录 U
 
 ## 正式版本与边界
 
-正式 AgentFriend 0.4.27、CortiEyeMirror 0.1.13、AgentAppearance 0.3.2；YSM Proxy/Worker正常恢复，原手部和额外动画资源已接入新版女神相机。可米/NEKO原模型比例修正，绑定、碰撞箱和原玩家数据保持。远端 Web 须自行更新桥接并重建，完整Java/基岩动作等价及手机/Xbox外观待验。
+正式 AgentFriend 0.4.31 / LoginGuard0.1.1、CortiEyeMirror 0.1.13、AgentAppearance 0.3.2；YSM Proxy/Worker正常恢复，原手部和额外动画资源已接入新版女神相机。可米/NEKO原模型比例修正，绑定、碰撞箱和原玩家数据保持。远端 Web 须自行更新桥接并重建，完整Java/基岩动作等价及手机/Xbox外观待验。
 
 YSM的`YSM_WORKER_STATE_UNAVAILABLE`表示尚未收到这个角色的模型状态，默认外观也可能出现，不能说服务一定停了。普通皮肤、已上传模型源和角色实际绑定是三件事；先查`/appearance status`与`/appearance list`，由服主按实际模型选择绑定，已有模型可热生效。2026-10-11晚间，可米ag_CorMy已热绑定原始cormy/cormy，实际Worker及原UUID存档确认，网页/相机资源完整送达；NEKO原配置保持。可米原贴图512×512超出现有基岩64/128转换范围，基岩仍原皮肤，远端网页画面也需单独核验。中文模型诊断0.3.1已上线，当前没有排队重启。答实时情况仍须查本次回执，详见`resource/YSM_ADAPTATION.md`。
 

@@ -18,8 +18,9 @@ const rcon=q=>command(q,15000,{properties:stage+'/server.properties',port:Number
 const require=createRequire(process.env.MF_REQUIRE_FROM??'E:/MC/research/mineflayer-client-fixes-20261011/package.json');
 fix1206PotionProtocol(require);const mf=require('mineflayer');
 const label=process.argv[2]??'a';assert.match(label,/^[a-z0-9]{1,4}$/);
-const report={at:new Date().toISOString(),scope:'isolated real Paper 0.4.29, MF 4.39; auth file fixtures; no LLM/device acceptance',checks:[],receipts:[],errors:[]};
-report.candidateSha256=createHash('sha256').update(fs.readFileSync(stage+'/plugins/AgentFriend-0.4.29.jar')).digest('hex');
+const version=process.env.MC_TEST_AGENTFRIEND_VERSION??'0.4.31';assert.match(version,/^0\.4\.\d+$/);
+const report={at:new Date().toISOString(),scope:'isolated real Paper '+version+', MF 4.39; auth file fixtures; no LLM/device acceptance',checks:[],receipts:[],errors:[]};
+report.candidateSha256=createHash('sha256').update(fs.readFileSync(stage+'/plugins/AgentFriend-'+version+'.jar')).digest('hex');
 const clients=[];let closing=false;
 const check=(name,value)=>{report.checks.push({name,pass:!!value});assert(value,name);console.log('PASS '+name);};
 const hash=p=>createHash('sha256').update(fs.readFileSync(p)).digest('hex');
@@ -41,7 +42,7 @@ const paged=async(c,q)=>{let page=await ask(c,q,'MC_PAGE');const pages=[page],id
   check('paged '+q+' has complete totals and stable snapshot',rows.length===pages[0].total&&pages.length===pages[0].pages);return {rows,pages};
 };
 try{
-  check('candidate version active only in isolated server',(await rcon('version AgentFriend')).includes('0.4.29'));
+  check('candidate version active only in isolated server',(await rcon('version AgentFriend')).includes(version));
   const c=await join('ag_Cli29'+label.toUpperCase());await rcon('minecraft:effect give '+c.name+' minecraft:regeneration 120 10 true');
   check('automatic guidance is one short guide plus one current state',c.lines.filter(s=>s.startsWith('MC_GUIDE ')).length===1&&c.lines.filter(s=>s.startsWith('MC_STATUS ')).length===1&&!c.lines.some(s=>/^MC_INTRO |^MC_COACH .*"type":"welcome"/.test(s)));
   const state=await ask(c,'/mycli status','MC_STATUS');report.sessionId=state.sessionId;
@@ -50,6 +51,10 @@ try{
   const json=await ask(c,'/mycli status --json','MC_STATUS');check('json status keeps session and increases sequence',json.sessionId===state.sessionId&&json.sequence>state.sequence);
   const detail=await ask(c,'/mycli skills learn fireworks --help','MC_CLI_DETAIL');check('standard help exposes intended action without performing it',detail.id==='skills.learn'&&detail.discoveryReadOnly);
   const invalid=await ask(c,'/mycli cast fireworks --json','MC_QUERY_ERROR');check('unsupported json format never silently dispatches action',invalid.errorCode==='UNSUPPORTED_FORMAT'&&!invalid.retryable);
+  const unknownCooldown=await paged(c,'/mycli skills status give');
+  check('unselected give recipe preserves unknown cooldown without unboxing null',unknownCooldown.rows.length===1&&unknownCooldown.rows[0].id==='give'&&unknownCooldown.rows[0].cooldownRemainingMs===null);
+  const allSkills=await paged(c,'/mycli skills status all 1');
+  check('all-skills pagination includes nullable base cooldown and profession skills',allSkills.rows.some(s=>s.id==='give'&&s.cooldownRemainingMs===null)&&allSkills.rows.some(s=>s.id==='sword_thrust')&&allSkills.pages.every(p=>p.readOnly));
   const skill=await paged(c,'/mycli skills status fireworks');check('supported unlocked and learned are distinct',skill.rows[0].supported&&skill.rows[0].unlocked&&!skill.rows[0].learned&&skill.rows[0].canUseNow===false);
   const pdc=await rcon('minecraft:data get entity '+c.name+' BukkitValues');
   const ledgers=['config.yml','profession-ledger.json','world-life-ledger.yml'];const before=ledgers.map(n=>hash(stage+'/plugins/AgentFriend/'+n));

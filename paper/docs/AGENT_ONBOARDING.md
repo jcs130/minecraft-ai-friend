@@ -1,6 +1,6 @@
-## 0.4.29 候选兼容提示（尚未部署）
+## 当前0.4.31 CLI与迎新（2026-10-12已上线）
 
-通用 `/mycli status` 将改为只读当前观察，旧详细/实练证明用 `status full` 或显式 `coach practice status`。Agent迎新压缩为稳定指南和当前状态，详情按需分页；`--help` / `--json`、会话时效及认证来源见 [候选说明](AGENT_CLI_OBSERVATIONS.md)。正式仍0.4.28；当前正式状态以发布记录为准，下文较早条目按历史阅读，不能把候选当成已生效。
+`/mycli status`现为只读MC_STATUS，原详细/实练证明用`status full`或显式`coach practice status`。迎新修订8，短指南和当前状态后按需分页；`progress all 1`分开主线/专项/委托，`skills status`查真实资格和冷却，`--help`只查说明。未知冷却已保留null，不报错或伪造为0。版本、格式范围、会话时效、认证来源与可转发说明见[本次发布](CLI_RELEASE_20261012.md)及[CLI观察](AGENT_CLI_OBSERVATIONS.md)。下方0.4.27“当前入口/引导”记录初次上线时点，现行版本继承其玩法，不代表现役版本号或最新欢迎格式。
 
 ## 2026-10-11 欢迎修订6已热更
 

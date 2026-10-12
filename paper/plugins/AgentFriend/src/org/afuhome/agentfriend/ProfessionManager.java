@@ -107,7 +107,11 @@ final class ProfessionManager implements Listener {
         var skill=basic?null:effective(p,skill(id));
         int mana=basic?entry.mana():skill.mana();out.addProperty("manaCost",mana);
         out.addProperty("costSource",basic?"server_fixed_base_skill":"configured_skill_rank");
-        Long cooldown=basic?plugin.readBasicCooldown(p,id):remaining(p,id);
+        // Basic cooldowns can be unknown (e.g. give without a recipe). A Long/long
+        // ternary unboxes the nullable branch before assignment and throws NPE.
+        Long cooldown;
+        if (basic) cooldown = plugin.readBasicCooldown(p, id);
+        else cooldown = remaining(p, id);
         out.add("cooldownRemainingMs",cooldown==null?JsonNull.INSTANCE:new JsonPrimitive(cooldown));
         var user=AuraSkillsApi.get().getUser(p.getUniqueId());boolean manaKnown=user!=null&&user.isLoaded();
         out.add("currentMana",manaKnown?new JsonPrimitive(user.getMana()):JsonNull.INSTANCE);

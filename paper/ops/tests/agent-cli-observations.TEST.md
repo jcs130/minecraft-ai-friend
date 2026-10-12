@@ -1,5 +1,28 @@
 # Agent CLI 0.4.29 候选测试
 
+## 2026-10-12：0.4.31 未知冷却回归
+
+0.4.30 正式入口检查发现：`skills status all 1` 枚举未选择配方的 `give` 时，
+`Long/long` 条件表达式先将未知的 `null` 自动拆箱，导致异常。0.4.31 改为显式分支，
+保留未知值，不伪造为零。真实联机脚本增加 `give` 的未知冷却与完整技能目录续页验收；
+仍验证只读账本、实际正冷却、物品守恒和重连隔离。脚本支持
+`MC_TEST_AGENTFRIEND_VERSION`，默认0.4.31；重跑历史0.4.29需明确设置版本。
+
+本轮D测试使用最终0.4.31 JAR通过39项，随后隔离服正常停止并还原原JAR与认证夹具。
+每轮使用新的短标签和独立报告目录，失败结果保留；生产部署仍走维护门禁。
+本次原始记录在仓库外 `E:/MC/ops/repairs/cli-cooldown-fix-20261012`，
+候选SHA256为 `793707fc352bc2add5747766b05bfe18987ad5e7930fdab418c5e0ef904ad13d`。
+
+```powershell
+$env:MC_TEST_AGENTFRIEND_VERSION='0.4.31'
+$env:MC_STAGE_PAPER='E:/MC/staging/agent-cli-20261012/paper'
+$env:MC_TEST_REPORT_DIR='E:/MC/ops/repairs/cli-cooldown-fix-20261012'
+# 使用未用过的标签，不能覆盖已有回执或假定同一账号尚未学习。
+node paper/ops/tests/agent-cli-observations.integration.mjs e
+```
+
+以下为0.4.29的原始历史验证。
+
 仅隔离环境；生产部署、重启另行批准。参考 CLI-Anything 的探查命令、机器输出与真实后端验收方法；不导入其运行时代码。
 
 ## 计划

@@ -1,8 +1,8 @@
 # Agent CLI：短引导、当前状态与按需详情
 
-2026-10-12：**AgentFriend 0.4.29 / LoginGuard 0.1.1 已完成隔离验证，尚未部署。**正式服仍为 AgentFriend 0.4.28 / LoginGuard 0.1.0。本轮没有修改正式账号、物品或世界，没有排队重启。
+2026-10-12：**AgentFriend0.4.31 / LoginGuard0.1.1已正式上线。**原0.4.29 CLI候选合入0.4.31半透明气泡版本。已提前提醒、正常停启 Paper/登录代理/模型服务；E/F 完整冷备份 `20261012-184302` 均在替换前完成。正式联机13项和备份/配置/身份/服务状态22项通过；Goddess、可米、NEKO原UUID回连。普通难度、三维度死亡保留物品、既有密码与背包保持。首轮E/F `20261012-182554` 保存更新前0.4.28/Guard0.1.0；本轮快照保存修正前0.4.30/Guard0.1.1，完整回退CLI时优先使用首轮稳定原件。可转发说明与回退见[本次发布](CLI_RELEASE_20261012.md)。
 
-后续发布准备：CLI候选已合入半透明气泡0.4.30。服主已批准更新；真实回环Velocity→LibreLogin→Paper组合新增15项联机检查通过，包括首次设置密码、已注册账号登录、真实认证心跳、重连会话、大背包与Eye随本体上下线。维护助手追加仅允许移除旧LoginGuard精确文件名，5项通过，覆盖错误摘要、第三方JAR、Paper/代理未停时拒绝。正式真人仍在线时不排队停服；发布状态见SERVER_UPDATES，不能把候选证明当成已上线。私有回执位于E/F `repairs/cli-bubbles-release-20261012`。
+发布前真实Velocity→LibreLogin→Paper组合15项通过，包括首次设置密码、已注册登录、真实心跳、重连、大背包及Eye生命周期。实际部署助手在PowerShell5.1另过5项；0.4.30正式验证发现的未知冷却拆箱异常已用显式分支修正，give与完整技能分页新增回归，修正版隔离39项通过；两轮失败证据保留。私有回执E/F `repairs/cli-cooldown-fix-20261012`。下方0.4.29候选测试是历史验证，不是另一个现役版本。
 
 既有入门、规则、能力目录、分项进度和可靠大背包客户端适配已经随 0.4.27 上线，并保留于 0.4.28；这次统一查询语义、减少迎新上下文并补齐观测时效。前一轮见 [Agent 交互](AGENT_INTERACTION.md)。
 
@@ -53,6 +53,8 @@
 
 `--json` 仅支持 `status`、`progress`、`skills status`、`page`、`capabilities`。其他命令带该标志返回 `UNSUPPORTED_FORMAT`，本次不执行动作。尚未支持的旧入口继续沿用各自回执，不能假定所有服务器命令已经支持这个标志。
 
+能力目录的 `--json` 保留 `MC_CLI_LIST` / `MC_CLI_ITEM`，通过 `MC_CLI_NEXT` 续页；不会自动变成 `MC_PAGE`。调用方须按实际消息类型分派。
+
 ## 如何判断信息是否是当前的
 
 新观察有 `schemaVersion`、`kind`、`scope`、`playerUuid`、`sessionId`、`sequence`、`observedAt` 和 `readOnly`：
@@ -89,7 +91,7 @@
 
 LoginGuard 0.1.1 向现有原子心跳追加 `sessionStates`，保留 `ready`、`at`、`authorizedNames`。每行有本人 UUID、每连接 `authSessionId`、`observedAt`、真实 `status` / `authorized`、认证方式和 `passwordSet`，不含密码或哈希。代理连接切换时另发 `MC_AUTH_STATE`；原 `[MC_AUTH_SUCCESS] 登录成功，可以开始游戏。` 原文保留，既有客户端登录门禁无需改认这个标志。
 
-Paper 的 `plugins/AgentFriend/agent-guide.yml` 增加可选设置，**候选默认空路径，未改正式配置**：
+Paper 的 `plugins/AgentFriend/agent-guide.yml` 增加可选设置，**默认空路径；正式服本次已配置真实本机心跳路径**：
 
 ```yaml
 auth-observation-file: 'E:/MC/ops/auth-heartbeat.json'
@@ -126,6 +128,6 @@ auth-observation-file: 'E:/MC/ops/auth-heartbeat.json'
 
 ## 发布与回退
 
-生产部署另行获得本次确认，按 [OPERATIONS](OPERATIONS.md) 提前通知、检查真人/活动副本、双盘完整备份后正常维护。Paper 和 LoginGuard 候选分别替换，不覆盖现役 LibreLogin 双监听器补丁；认证文件路径应指向实际心跳，不能用测试夹具。原有正版、离线密码、管理员和 Eye 规则保持。
+本次已获服主确认并部署，按 [OPERATIONS](OPERATIONS.md) 提前通知、检查真人/活动副本、双盘完整备份后正常维护。Paper 和 LoginGuard 候选分别替换，不覆盖现役 LibreLogin 双监听器补丁；认证文件路径应指向实际心跳，不能用测试夹具。原有正版、离线密码、管理员和 Eye 规则保持。
 
 回退到已验证的 AgentFriend 0.4.28 / LoginGuard 0.1.0 及发布前配置即可；本轮观察只存内存，未做新玩家数据迁移。保留维护期间玩家正常产生的物品/任务进度，不整体回滚世界或账本。回退后新 `MC_STATUS` / `MC_PAGE` / `/authstatus` 不存在，客户端按版本使用旧入口。
