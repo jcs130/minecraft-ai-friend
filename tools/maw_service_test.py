@@ -242,6 +242,42 @@ class ConfigTests(unittest.TestCase):
                 service.check_server(layout.server, 28976)
             self.assertEqual(service.check_server(layout.server, 28976, bind_host="0.0.0.0"), 28976)
 
+    def test_optional_voice_belongs_only_to_main_java(self):
+        import maw_voice
+        with tempfile.TemporaryDirectory() as tmp:
+            layout = Layout(tmp)
+            raw = {**self.lan(layout), "voiceChat": {"host": maw_voice.HOST, "port": maw_voice.PORT}}
+            with patch.object(maw_voice, "validate") as validate:
+                config = layout.load(raw)
+                validate.assert_called_once_with(layout.server)
+            self.assertEqual(config["services"][0]["voiceChat"], raw["voiceChat"])
+            self.assertTrue(all("voiceChat" not in row for row in config["services"][1:]))
+            for invalid in (None, {}, {"host": "0.0.0.0", "port": 28989},
+                    {"host": maw_voice.HOST, "port": 24454}, {**raw["voiceChat"], "force": True}):
+                with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                    layout.load({**raw, "voiceChat": invalid})
+            extra = copy.deepcopy(raw)
+            extra["services"][1]["voiceChat"] = raw["voiceChat"]
+            with patch.object(maw_voice, "validate"), self.assertRaisesRegex(ValueError, "top level"):
+                layout.load(extra)
+            with patch.object(maw_voice, "validate", side_effect=ValueError("artifact mismatch")), \
+                    self.assertRaisesRegex(ValueError, "artifact mismatch"):
+                layout.load(raw)
+
+    def test_voice_drift_uses_existing_supervisor_stop_fence(self):
+        import maw_voice
+        with tempfile.TemporaryDirectory() as tmp:
+            layout = Layout(tmp)
+            raw = {**self.lan(layout), "voiceChat": {"host": maw_voice.HOST, "port": maw_voice.PORT}}
+            with patch.object(maw_voice, "validate"):
+                config = layout.load(raw)
+            supervisor = service.Supervisor.__new__(service.Supervisor)
+            supervisor.config = config
+            with patch.object(maw_voice, "validate", side_effect=ValueError("voice configuration changed")) as validate, \
+                    self.assertRaisesRegex(ValueError, "configuration changed"):
+                supervisor.validate_runtime()
+            validate.assert_called_once_with(layout.server, **raw["voiceChat"], check_jar=False)
+
     def test_lan_refuses_public_broad_unknown_and_mismatched_interface_settings(self):
         with tempfile.TemporaryDirectory() as tmp:
             layout = Layout(tmp)
@@ -435,6 +471,30 @@ class ChildTests(unittest.TestCase):
             self.assertIn("restart_budget", child.problem)
             child.handler.close()
 
+    def test_voice_packet_loss_is_debounced_but_persistent_failure_recovers(self):
+        import maw_voice
+        with tempfile.TemporaryDirectory() as tmp:
+            child = self.child(tmp)
+            child.spec['voiceChat'] = {'host': maw_voice.HOST, 'port': maw_voice.PORT}
+            child.process = Mock(); child.process.poll.return_value = None
+            child.started = time.monotonic() - 1000; child.ready = True
+            child.stop = Mock()
+            with patch.object(service, 'probe_service', side_effect=maw_voice.VoiceUnavailable('UDP unavailable')):
+                child.tick(); child.tick()
+                self.assertTrue(child.ready)
+                self.assertFalse(child.metrics['voiceChat']['ready'])
+                child.stop.assert_not_called()
+            with patch.object(service, 'probe_service', return_value={'voiceChat': {'ready': True}}), \
+                    patch.object(service, 'check_owned_listener'):
+                child.tick()
+                self.assertEqual(child.voice_failures, 0)
+                self.assertIsNone(child.problem)
+            with patch.object(service, 'probe_service', side_effect=maw_voice.VoiceUnavailable('UDP unavailable')):
+                child.tick(); child.tick(); child.tick()
+            self.assertFalse(child.ready)
+            child.stop.assert_called_once()
+            child.handler.close()
+
     def test_failed_java_stops_worker_then_gate_without_deadlock(self):
         with tempfile.TemporaryDirectory() as tmp:
             supervisor = service.Supervisor.__new__(service.Supervisor)
@@ -505,6 +565,26 @@ class KernelOwnershipTests(unittest.TestCase):
 
 
 class WorkerHealthTests(unittest.TestCase):
+    def test_voice_failure_does_not_report_java_ready(self):
+        import maw_voice
+        spec = {"readiness": "minecraft", "port": 28976,
+            "voiceChat": {"host": maw_voice.HOST, "port": maw_voice.PORT}}
+        with patch.object(service, "minecraft_probe", return_value={"latencyMs": 1}), \
+                patch.object(maw_voice, "udp_probe", side_effect=TimeoutError("voice unavailable")):
+            with self.assertRaises(maw_voice.VoiceUnavailable):
+                service.probe_service(spec)
+        with patch.object(service, "minecraft_probe", return_value={"latencyMs": 1}), \
+                patch.object(maw_voice, "udp_probe", return_value={"protocol": "svc-ping-v1"}) as ping:
+            self.assertEqual(service.probe_service(spec)["voiceChat"]["protocol"], "svc-ping-v1")
+            ping.assert_called_once_with(host=maw_voice.HOST, port=maw_voice.PORT, timeout=.5)
+
+    def test_servers_without_voice_do_not_probe_new_port(self):
+        import maw_voice
+        with patch.object(service, "minecraft_probe", return_value={"latencyMs": 1}), \
+                patch.object(maw_voice, "udp_probe") as ping:
+            self.assertEqual(service.probe_service({"readiness": "minecraft", "port": 28978}), {"latencyMs": 1})
+            ping.assert_not_called()
+
     def test_http_200_without_ready_true_is_not_healthy(self):
         import http.client
         for payload in ({"ready": False}, {"ok": True}, {"ready": True, "healthy": False}):

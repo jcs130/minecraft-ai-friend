@@ -1,9 +1,11 @@
 param(
     [ValidateSet('Plan', 'Apply', 'Status', 'Rollback')][string]$Mode = 'Plan',
     [string]$ReceiptPath,
-    [switch]$Bedrock
+    [switch]$Bedrock,
+    [switch]$Voice
 )
 $ErrorActionPreference = 'Stop'
+if ($Bedrock -and $Voice) { throw 'Select only one LAN service' }
 $group = 'My Agent World LAN 28976'
 $ports = @('28976', '28977', '28984')
 $description = 'ManagedBy=maw_lan_firewall.ps1; home LAN only; no router changes'
@@ -21,6 +23,15 @@ if ($Bedrock) {
     $description = 'ManagedBy=maw_lan_firewall.ps1; Bedrock home LAN only; no router changes'
     $definitions[0].Name = 'MyAgentWorld.BedrockLAN.AllowIPv4'
     $definitions[1].Name = 'MyAgentWorld.BedrockLAN.DenyOtherIPv4'
+}
+if ($Voice) {
+    $group = 'My Agent World Voice LAN 28989'
+    $ports = @('28989')
+    $protocol = 'UDP'
+    $protocolNumbers = @('UDP','17')
+    $description = 'ManagedBy=maw_lan_firewall.ps1; Java voice home LAN only; no router changes'
+    $definitions[0].Name = 'MyAgentWorld.VoiceLAN.AllowIPv4'
+    $definitions[1].Name = 'MyAgentWorld.VoiceLAN.DenyOtherIPv4'
 }
 function Read-OwnedRules {
     $rows = @()

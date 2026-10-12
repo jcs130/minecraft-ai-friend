@@ -106,6 +106,22 @@ def probe_neko_adapters(manifest_path=None):
 
 SOCIETY_BEDROCK_MANIFEST = {'udp': 28988, 'javaProxy': 28995, 'health': 28996,
                           'compatGate': 28994, 'address': '192.168.3.163', 'upstream': '127.0.0.1:28994'}
+SOCIETY_VOICE_MANIFEST = {'udp': 28989, 'address': '192.168.3.163',
+    'managedBy': 'native-java-supervisor', 'clientOptional': True}
+
+
+def probe_society_voice():
+    tools_path = str(PROJECT/'tools')
+    if tools_path not in sys.path:
+        sys.path.insert(0, tools_path)
+    from maw_voice import health
+    report = health()
+    report['manifest'] = SOCIETY_VOICE_MANIFEST
+    endpoint = report.get('configuration', {})
+    report['checks']['manifest-endpoint'] = (endpoint.get('host') == SOCIETY_VOICE_MANIFEST['address']
+        and endpoint.get('port') == SOCIETY_VOICE_MANIFEST['udp'])
+    report['ok'] = report['ok'] and report['checks']['manifest-endpoint']
+    return report
 
 
 def probe_society_bedrock():
@@ -409,6 +425,9 @@ def probe_agent_frame():
 
 
 def probe_panel_smoke(scope=None):
+    if scope == 'society-voice':
+        voice = probe_society_voice()
+        return {'ok': voice['ok'], 'society_voice': voice, 'modelRequests': 0, 'worldActions': 0}
     if scope == 'society-mixed-auth':
         tools_path = str(PROJECT/'tools')
         if tools_path not in sys.path:
@@ -2130,6 +2149,14 @@ def inventory_lock_failure(reason):
 
 
 def main():
+    if sys.argv[1:] == ['--society-voice']:
+        report = probe_society_voice()
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
+    if sys.argv[1:] == ['--society-voice-smoke']:
+        report = probe_panel_smoke(scope='society-voice')
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
     if sys.argv[1:] == ['--society-rpg-migration']:
         sys.path.insert(0, str(PROJECT/'tools'))
         from maw_rpg_migration import probe

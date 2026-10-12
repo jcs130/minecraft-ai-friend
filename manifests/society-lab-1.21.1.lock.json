@@ -23,6 +23,17 @@
   ],
   "artifacts": [
     {
+      "name": "voicechat-neoforge-1.21.1-2.6.22.jar",
+      "kind": "mod",
+      "project": "https://modrinth.com/plugin/simple-voice-chat/version/2s7zUspF",
+      "source": "https://github.com/henkelmax/simple-voice-chat",
+      "license": "ARR; author permits modpack inclusion with credit",
+      "side": "both-optional-client",
+      "url": "https://cdn.modrinth.com/data/9eGKb6K1/versions/2s7zUspF/voicechat-neoforge-1.21.1-2.6.22.jar",
+      "sha256": "63116a4d21bd57221482d971dd85822f7c723c210b60411670cdb0aa26873cac",
+      "sha512": "309e3b18e299b2bccf9128dbb05c2603a9860f7cd68858d23f8fdb8265ea85ec7fb1655c95b87c0a9522ae1fd6380b26e4a4c31207f9c7af80870fcc6207abad"
+    },
+    {
       "name": "mixauth-1.21.1-1.3.3.jar",
       "kind": "mod",
       "project": "https://modrinth.com/mod/mixauth",

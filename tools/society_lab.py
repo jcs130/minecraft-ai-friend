@@ -228,6 +228,15 @@ def prepare(root: Path, java: Path, lock: dict, accept_eula: bool) -> None:
     if not props.exists():
         props.write_text("\n".join(f"{key}={value}" for key, value in INITIAL_PROPERTIES.items()) + "\n",
                          encoding="ascii")
+    # A fresh private lab must not start SVC on its default wildcard UDP port.
+    # Production LAN activation replaces this during stopped maintenance and
+    # opts the Java supervisor into its explicit voiceChat readiness probe.
+    if any(item["name"].startswith("voicechat-neoforge-") for item in lock["artifacts"]):
+        from maw_voice import render_config
+        voice_config = server / "config/voicechat/voicechat-server.properties"
+        if not voice_config.exists():
+            voice_config.parent.mkdir(parents=True, exist_ok=True)
+            voice_config.write_text(render_config("127.0.0.1", 28980), encoding="utf-8")
     eula = server / "eula.txt"
     if not eula.exists():
         if not accept_eula:

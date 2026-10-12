@@ -13,6 +13,18 @@ spec.loader.exec_module(health)
 
 
 class SocietyHealthTests(unittest.TestCase):
+    def test_voice_panel_checks_declared_endpoint_and_keeps_failures(self):
+        import maw_voice
+        for initial, host, expected in ((True, '192.168.3.163', True),
+                (False, '192.168.3.163', False), (True, '0.0.0.0', False)):
+            fixture = {'ok': initial, 'checks': {}, 'configuration': {'host': host, 'port': 28989}}
+            with self.subTest(host=host, initial=initial), patch.object(maw_voice, 'health', return_value=fixture):
+                result = health.probe_panel_smoke(scope='society-voice')
+            self.assertEqual(result['ok'], expected)
+            self.assertEqual(result['worldActions'], 0)
+            self.assertEqual(result['modelRequests'], 0)
+            self.assertEqual(result['society_voice']['manifest']['managedBy'], 'native-java-supervisor')
+
     def values(self):
         # Shape recorded by native-world-preview-host's /healthz projection;
         # ordinary non-default vitals prove the probe does not assume 20 HP.

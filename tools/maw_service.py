@@ -135,8 +135,18 @@ def load_config(path: Path, *, expected_root: Path = ROOT, expected_repo: Path =
     rows = raw.get("services")
     if not isinstance(rows, list) or [row.get("id") for row in rows] != list(ROLES):
         raise ValueError("services must be ordered java, gate, worker")
+    voice = raw.get("voiceChat")
+    if "voiceChat" in raw:
+        import maw_voice
+        expected_voice = {"host": maw_voice.HOST, "port": maw_voice.PORT}
+        if (server != root / "server" or exposure["mode"] != "lan"
+                or exposure["address"] != maw_voice.HOST or voice != expected_voice):
+            raise ValueError("Voice is only supported at its explicit main LAN endpoint")
+        maw_voice.validate(server)
     services = []
     for row, port, dependencies in zip(rows, (game_port, gate_port, worker_port), ([], ["java"], ["gate"])):
+        if "voiceChat" in row:
+            raise ValueError("Voice must be configured once at top level, for the Java owner")
         command, env = row.get("command"), row.get("env", {})
         cwd = Path(row.get("cwd", "")).resolve()
         if not cwd.is_dir() or not contained(cwd, (root, repo)):
@@ -179,7 +189,8 @@ def load_config(path: Path, *, expected_root: Path = ROOT, expected_repo: Path =
         startup = row.get("startupTimeoutSeconds", 180 if row["id"] == "java" else 60)
         if not isinstance(startup, (int, float)) or not 10 <= startup <= 600:
             raise ValueError("startupTimeoutSeconds must be 10..600")
-        services.append({**row, "command": command, "cwd": str(cwd), "env": env,
+        services.append({**row, **({"voiceChat": voice} if voice and row["id"] == "java" else {}),
+            "command": command, "cwd": str(cwd), "env": env,
             "port": port, "listenHost": exposure["listenHost"], "dependsOn": dependencies, "readiness": readiness,
             "healthUrl": health_url, "stopMode": stop_mode, "stopText": stop_text,
             "startupTimeoutSeconds": startup})
@@ -277,7 +288,14 @@ def minecraft_probe(port: int) -> dict:
 
 def probe_service(spec: dict) -> dict:
     if spec["readiness"] == "minecraft":
-        return minecraft_probe(spec["port"])
+        result = minecraft_probe(spec["port"])
+        if spec.get("voiceChat"):
+            import maw_voice
+            try:
+                result["voiceChat"] = {**maw_voice.udp_probe(**spec["voiceChat"], timeout=.5), "ready": True}
+            except (OSError, ValueError) as error:
+                raise maw_voice.VoiceUnavailable(str(error)) from error
+        return result
     if spec["readiness"] == "tcp":
         with socket.create_connection(("127.0.0.1", spec["port"]), timeout=1):
             return {"tcpReady": True}
@@ -436,6 +454,7 @@ class Child:
         self.started = self.next_start = self.stop_started = 0.0
         self.ready, self.stopping = False, False
         self.failures, self.error_count, self.warning_count = 0, 0, 0
+        self.voice_failures = 0
         self.problem, self.last_exit, self.metrics = None, None, {}
         self.starts = []
         self.job = job
@@ -469,6 +488,7 @@ class Child:
                 self.process.wait(timeout=10)
                 raise
             self.started, self.ready, self.stopping = now, False, False
+            self.voice_failures = 0
             self.stop_started, self.problem, self.metrics = 0, None, {}
             threading.Thread(target=self._output, args=(self.process,), daemon=True).start()
         except Exception as error:
@@ -511,9 +531,21 @@ class Child:
             self.metrics = probe_service(self.spec)
             check_owned_listener(self.spec["port"], self.process.pid, expected_host=self.spec.get("listenHost", "127.0.0.1"))
             self.ready, self.problem = True, None
+            self.voice_failures = 0
             if now - self.started > 600:
                 self.failures = 0
         except Exception as error:
+            if self.spec.get("voiceChat"):
+                import maw_voice
+                if isinstance(error, maw_voice.VoiceUnavailable):
+                    self.voice_failures += 1
+                    self.metrics["voiceChat"] = {"ready": False, "consecutiveFailures": self.voice_failures}
+                    if self.ready and self.voice_failures < 3:
+                        # A lost UDP health packet must not disconnect players.
+                        # Voice health is degraded immediately; an established
+                        # game only restarts after three consecutive failures.
+                        self.problem = "voice_probe_retry_pending"
+                        return
             self.ready = False
             self.problem = f"readiness_failed: {type(error).__name__}: {error}"
             if now - self.started > self.spec["startupTimeoutSeconds"]:
@@ -553,8 +585,7 @@ class Supervisor:
     def __init__(self, config: dict, *, validator=None, child_factory=None):
         self.config = config
         self.roles = tuple(row['id'] for row in config['services'])
-        self.validator = validator or (lambda: check_server(Path(self.config['serverDir']),
-            self.config['gamePort'], bind_host=self.config.get('networkExposure', {}).get('listenHost', '127.0.0.1')))
+        self.validator = validator or self.validate_runtime
         self.directory = Path(config["runtimeDir"])
         for name in ("requests", "replies", "logs"):
             (self.directory / name).mkdir(parents=True, exist_ok=True)
@@ -569,6 +600,15 @@ class Supervisor:
         self.audit.propagate = False
         handler = RotatingFileHandler(self.directory / "logs" / "operations.jsonl", maxBytes=2 * 1024 * 1024, backupCount=4, encoding="utf-8")
         self.audit.addHandler(handler)
+
+    def validate_runtime(self):
+        server = Path(self.config['serverDir'])
+        check_server(server, self.config['gamePort'],
+            bind_host=self.config.get('networkExposure', {}).get('listenHost', '127.0.0.1'))
+        voice = next((row['voiceChat'] for row in self.config['services'] if row.get('voiceChat')), None)
+        if voice:
+            import maw_voice
+            maw_voice.validate(server, **voice, check_jar=False)
 
     def paused(self):
         return (self.directory / "paused.json").exists()
