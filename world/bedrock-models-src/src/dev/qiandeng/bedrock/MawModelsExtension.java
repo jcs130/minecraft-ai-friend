@@ -42,10 +42,12 @@ public final class MawModelsExtension implements Extension {
         final Map<Integer, Binding> active = new ConcurrentHashMap<>();
         final Map<UUID,String> selected = new ConcurrentHashMap<>();
         ActorPresentation presentation;
+        MaidVoicePresentation voice;
         volatile String selectedSkin = "";
     }
     private final Map<String, Model> definitions = new HashMap<>();
     private final Map<String, Model> skins = new HashMap<>();
+    private final Map<String, Map<String,String>> voicePacks = new HashMap<>();
     private final Map<GeyserConnection, State> states = Collections.synchronizedMap(new WeakHashMap<>());
     private static final Identifier ARMOR_STAND = Identifier.of("minecraft:armor_stand");
     private static void sendSkin(GeyserSession session,UUID uuid,SkinData desired){
@@ -97,6 +99,27 @@ public final class MawModelsExtension implements Extension {
         try {
             var catalog = json(Files.readAllBytes(root.resolve("modpack-catalog.json")));
             if (!Long.valueOf(1).equals(catalog.get("schemaVersion"))) throw new IllegalArgumentException("Invalid catalog schema");
+            if (catalog.get("voices") instanceof Map<?,?>) {
+                var voices = json(Files.readAllBytes(root.resolve("maid-voices.json")));
+                if (!Long.valueOf(1).equals(voices.get("schemaVersion")) ||
+                    !"f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27".equals(voices.get("maidJarSha256")))
+                    throw new IllegalArgumentException("Unpinned maid voice codec");
+                int count = 0;
+                for (Object raw : (List<?>)voices.get("packs")) {
+                    var row = object(raw); Map<String,String> events = new HashMap<>();
+                    for (var entry : object(row.get("events")).entrySet()) {
+                        String sound = text(object(entry.getValue()), "sound");
+                        if (!sound.matches("maw_maid\\.[a-f0-9]{32}") ||
+                                !entry.getKey().matches("touhou_little_maid:maid\\.[a-z0-9_.]+"))
+                            throw new IllegalArgumentException("Invalid native voice event binding");
+                        events.put(entry.getKey(), sound); count++;
+                    }
+                    if (voicePacks.put(text(row,"id"), Map.copyOf(events)) != null)
+                        throw new IllegalArgumentException("Duplicate maid voice pack");
+                }
+                if (count != ((Number)voices.get("eventCount")).intValue()) throw new IllegalArgumentException("Incomplete maid voice events");
+                logger().info("MAW_MAID_VOICES version=1 packs="+voicePacks.size()+" recordings="+voices.get("recordingCount")+" events="+count);
+            }
             for (Object raw : (List<?>) catalog.get("models")) {
                 var row = object(raw); String identifier = text(row, "bedrockIdentifier");
                 var definition = CustomEntityDefinition.of(identifier);
@@ -138,6 +161,7 @@ public final class MawModelsExtension implements Extension {
         if (!(event.connection() instanceof GeyserSession session) || session.getDownstream() == null)
             throw new IllegalStateException("Pinned Geyser downstream unavailable");
         State state = states.computeIfAbsent(event.connection(), ignored -> new State());
+        state.voice = new MaidVoicePresentation(session, Map.copyOf(voicePacks));
         state.presentation=new ActorPresentation(session,(id,uuid,actor)->{
             Binding b=state.active.get(id);Model model=b!=null&&b.uuid().equals(uuid)?definitions.get(b.identifier()):null;
             if("minecraft:player".equals(actor.get("type"))&&actor.get("ysm") instanceof Map<?,?>){
@@ -156,10 +180,19 @@ public final class MawModelsExtension implements Extension {
             @Override public void packetReceived(Session downstream, Packet packet) {
                 try {
                     if (packet instanceof ClientboundRemoveEntitiesPacket removed) {
-                        for (int id : removed.getEntityIds()){state.bindings.remove(id);state.active.remove(id);session.executeInEventLoop(()->state.presentation.remove(id));}
+                        for (int id : removed.getEntityIds()){state.bindings.remove(id);state.active.remove(id);session.executeInEventLoop(()->{state.presentation.remove(id);state.voice.remove(id);});}
+                    } else if (packet instanceof org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundRespawnPacket) {
+                        state.bindings.clear(); state.active.clear();
+                        session.executeInEventLoop(()->{state.presentation.clear();state.voice.clear();});
                     } else if (packet instanceof ClientboundCustomPayloadPacket payload && payload.getData().length <= 65536) {
                         String channel = payload.getChannel().asString();
-                        if (channel.equals("mawbedrock:entity")) {
+                        if (channel.equals("mawbedrock:voice_config")) {
+                            var body = json(payload.getData());
+                            session.executeInEventLoop(()->{try{state.voice.configure(body);}catch(RuntimeException e){logger().warning("Native maid voice metadata rejected: "+e.getClass().getSimpleName());}});
+                        } else if (channel.equals("touhou_little_maid:play_maid_sound") || channel.equals("touhou_little_maid:play_maid_sound_at_pos")) {
+                            var cue = MaidVoicePresentation.decode(channel, payload.getData());
+                            session.executeInEventLoop(()->state.voice.play(cue));
+                        } else if (channel.equals("mawbedrock:entity")) {
                             var body = json(payload.getData());
                             if (!Long.valueOf(1).equals(body.get("schemaVersion"))) return;
                             int id = ((Number)body.get("entityId")).intValue();

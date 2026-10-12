@@ -14,6 +14,9 @@ class BedrockModels {
       catalog.maidMetadata.ysmModel !== 20 || catalog.maidMetadata.ysmTexture !== 21 ||
       catalog.maidMetadata.defaultModel !== 'touhou_little_maid:hakurei_reimu') throw Error('BEDROCK_MAID_METADATA_NOT_LOCKED')
     this.models = new Map(); this.entities = new Map(); this.ready = false; this.selfState = null
+    this.voices = Boolean(catalog.voices)
+    this.globalVoiceFrequency = Number(process.env.GATE_MAID_SOUND_FREQUENCY ?? 1)
+    if (!Number.isFinite(this.globalVoiceFrequency) || this.globalVoiceFrequency < 0 || this.globalVoiceFrequency > 1) throw Error('INVALID_GLOBAL_MAID_FREQUENCY')
     this.stats = { modelsBound: 0, modelsUnavailable: 0 }
     for (const row of catalog.models) {
       const key = row.kind + '\n' + row.modelId + (row.kind === 'ysm' ? '\n' + row.textureId : '')
@@ -38,7 +41,7 @@ class BedrockModels {
   metadata (state, key, type, fallback) {
     const row = state.metadata.get(key)
     if (!row) return fallback
-    if (row.type !== type && row.type !== ({ string: 4, boolean: 8 })[type]) throw Error('BEDROCK_MAID_METADATA_TYPE_MISMATCH')
+    if (row.type !== type && row.type !== ({ string: 4, boolean: 8, number: 3 })[type] && !(type === 'number' && row.type === 'float')) throw Error('BEDROCK_MAID_METADATA_TYPE_MISMATCH')
     if (typeof row.value !== type) throw Error('BEDROCK_MAID_METADATA_VALUE_MISMATCH')
     return row.value
   }
@@ -81,11 +84,23 @@ class BedrockModels {
         return before.length ? { before, params: { ...packet, metadata: [] } } : null
       }
       if (selected.bedrockIdentifier !== state.shown) {
+        state.voiceConfig = null // The remove/spawn below replaces the extension's per-entity cache.
         if (state.shown) before.push({ name: 'entity_destroy', params: { entityIds: [packet.entityId] } })
         before.push({ name: 'custom_payload', params: { channel: CHANNEL, data: Buffer.from(JSON.stringify({
           schemaVersion: 1, entityId: packet.entityId, uuid: state.spawn.objectUUID, identifier: selected.bedrockIdentifier
         }), 'utf8') } }, { name: 'spawn_entity', params: { ...state.spawn, type: data.entitiesByName.armor_stand.id, objectData: 0 } })
         state.shown = selected.bedrockIdentifier; this.stats.modelsBound++
+      }
+      if (this.voices) {
+        const frequency = this.metadata(state, 50, 'number', 1)
+        if (!Number.isFinite(frequency) || frequency < 0 || frequency > 1) throw Error('INVALID_MAID_VOICE_FREQUENCY')
+        const config = JSON.stringify({ schemaVersion: 1, entityId: packet.entityId, uuid: state.spawn.objectUUID,
+          pack: this.metadata(state, 24, 'string', null),
+          frequency: frequency * this.globalVoiceFrequency, silent: this.metadata(state, 4, 'boolean', false) })
+        if (config !== state.voiceConfig) {
+          before.push({ name: 'custom_payload', params: { channel: 'mawbedrock:voice_config', data: Buffer.from(config) } })
+          state.voiceConfig = config
+        }
       }
       // Entity + LivingEntity fields share the locked inheritance layout.
       // Never let TLM serializer IDs be interpreted as armor-stand fields.

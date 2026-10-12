@@ -178,6 +178,16 @@ def load_config(path: Path, *, root: Path = ROOT) -> dict:
         for name, meta in model_contract['files'].items():
             expected_files[resources/meta['directory']/name] = meta['sha256']
         gate_env['GATE_BEDROCK_MODELS_FILE'] = str(resources/model_builder.CATALOG)
+        if model_contract.get('voiceVersion') == 1:
+            import maw_bedrock_voices as voice_builder
+            gate_env['GATE_EXTRA_PLAY_CHANNELS'] = ','.join(dict.fromkeys(filter(None, [
+                *gate_env.get('GATE_EXTRA_PLAY_CHANNELS', '').split(','), *voice_builder.CHANNELS])))
+            maid_config = root/'server/config/touhou_little_maid-common.toml'
+            frequency = re.findall(r'^\s*GlobalMaidSoundFrequency\s*=\s*(\d+)\s*$', maid_config.read_text('utf-8'), re.M)
+            if len(frequency) != 1 or not 0 <= int(frequency[0]) <= 100:
+                raise ValueError('Invalid native global maid sound frequency')
+            gate_env['GATE_MAID_SOUND_FREQUENCY'] = str(int(frequency[0])/100)
+            expected_files[maid_config] = hashlib.sha256(maid_config.read_bytes()).hexdigest()
     visual_contract = None
     if (resources/'visual-contract.json').exists():
         import maw_bedrock_visuals as visual_builder

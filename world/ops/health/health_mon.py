@@ -170,6 +170,9 @@ def probe_society_bedrock():
                 actors=maw_bedrock_actors_health.health()
                 checks['native-actor-animations-and-bubbles']=actors['ok']
                 report['resources']['actors']=actors
+                if models.get('voiceVersion') == 1:
+                    checks['original-maid-voice-resources-and-registration']=actors['checks'].get('original-maid-voices-registered') is True
+                    report['resources']['voices']=actors.get('voices')
         firewall = subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
             str(tools/'maw_lan_firewall.ps1'), '-Mode', 'Status', '-Bedrock'],
             capture_output=True, text=True, encoding='utf-8', timeout=20)

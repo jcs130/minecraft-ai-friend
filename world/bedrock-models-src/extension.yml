@@ -2,5 +2,5 @@ id: mawmodels
 name: MawModels
 main: dev.qiandeng.bedrock.MawModelsExtension
 api: 2.11.0
-version: 1.1.0
+version: 1.2.0
 authors: [jcs130]

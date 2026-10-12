@@ -22,7 +22,7 @@ from maw_bedrock_animations import adapt
 CATALOG = 'modpack-catalog.json'
 CONTRACT = 'modpack-contract.json'
 EXTENSION = 'MawModels.jar'
-VERSION = [1, 1, 0]
+VERSION = [1, 2, 0]
 TLM_SHA = 'f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27'
 YSM_SHA = 'b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb'
 RESOURCE = re.compile(r'^[a-z0-9_.-]+:[a-z0-9_./-]+$')
@@ -92,7 +92,7 @@ def compile_extension(geyser: Path, java_bin: Path, output: Path):
     (output/EXTENSION).write_bytes(archive(files))
 
 
-def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path):
+def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path, maid_jar: Path | None = None):
     assets = Assets(asset_root)
     source_hashes = {row['sha256'] for row in assets.manifest.get('sources', [])}
     if not {TLM_SHA, YSM_SHA} <= source_hashes: raise ValueError('Model metadata adapter needs the locked TLM/YSM source JARs')
@@ -182,6 +182,11 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path):
             except (ValueError, FileNotFoundError, KeyError) as error:
                 excluded.append({'kind': 'ysm', 'modelId': key, 'reason': str(error)})
     if not rows: raise ValueError('No verified native models')
+    voices = None
+    if maid_jar is not None:
+        import maw_bedrock_voices as voice_builder
+        voice_entries, voices = voice_builder.convert(maid_jar)
+        entries['touhou'].update(voice_entries)
     output.mkdir(parents=True, exist_ok=True)
     files, packs = {}, []
     for kind, content in entries.items():
@@ -189,7 +194,7 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path):
         pack_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, 'https://github.com/jcs130/minecraft-ai-friend/bedrock/'+kind))
         content['manifest.json'] = encoded({'format_version': 2, 'header': {
             'name': 'My Agent World · '+('车万女仆专属模型' if kind == 'touhou' else 'YSM 专属模型'),
-            'description': '原模型贴图、行走与动作、名字和女仆对话气泡。',
+            'description': '原模型贴图、动作、对话气泡'+('与女仆原生语音包。' if kind == 'touhou' and voices else '。'),
             'uuid': pack_uuid, 'version': VERSION, 'min_engine_version': [1, 21, 0]},
             'modules': [{'type': 'resources', 'uuid': str(uuid.uuid5(uuid.UUID(pack_uuid), 'resources')), 'version': VERSION}]})
         content['render_controllers/maw.json'] = encoded({'format_version': '1.8.0', 'render_controllers': {
@@ -203,6 +208,11 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path):
                'sourceManifestSha256': sha(assets.manifest_bytes), 'maidMetadata': {
                    'version': '1.5.3', 'jarSha256': TLM_SHA, 'isYsm': 19, 'ysmModel': 20,
                    'ysmTexture': 21, 'model': 23, 'defaultModel': 'touhou_little_maid:hakurei_reimu'}}
+    if voices:
+        voice_data = encoded(voices); (output/voice_builder.CATALOG).write_bytes(voice_data)
+        files[voice_builder.CATALOG] = {'sha256': sha(voice_data), 'bytes': len(voice_data), 'directory': ''}
+        catalog['voices'] = {'catalog': voice_builder.CATALOG, 'recordings': voices['recordingCount'],
+                             'events': voices['eventCount'], 'packs': len(voices['packs'])}
     data = encoded(catalog); (output/CATALOG).write_bytes(data)
     files[CATALOG] = {'sha256': sha(data), 'bytes': len(data), 'directory': ''}
     raw = extension.read_bytes(); (output/EXTENSION).write_bytes(raw)
@@ -216,6 +226,13 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path):
         'actorProtocol': {'channel': 'maw_agent:scene_state', 'hz': 4, 'maxActors': 24, 'radius': 32,
                           'nativeMaidBubbles': True, 'playerPublicChat': True, 'privateChatBubbles': False},
         'limitations': ['Java-only procedural/parallel controllers and clock parity, equipment/backpack layers and first-person arms are not fully ported. Unsupported source clips are listed per model.']}
+    if voices:
+        contract['voiceVersion'] = 1
+        contract['voices'] = catalog['voices']
+        contract['voiceProtocol'] = {'channels': voice_builder.CHANNELS, 'configChannel': 'mawbedrock:voice_config',
+            'maidMetadata': {'soundPack': 24, 'soundFrequency': 50, 'silent': 4},
+            'originalAudience': True, 'synthesizedSpeech': False}
+        contract['limitations'].append('Prerecorded voice is spatial at its start position; continuous moving audio and dynamic AI TTS are not adapted.')
     (output/CONTRACT).write_bytes(encoded(contract)); validate(output)
     return contract
 
@@ -243,6 +260,9 @@ def validate(directory: Path, *, deployed=False):
             manifest = json.loads(z.read('manifest.json'))
             if manifest['header']['uuid'] != pack['uuid'] or manifest['header']['version'] != pack['version']:
                 raise ValueError('Modpack manifest mismatch')
+            if contract.get('voiceVersion') == 1 and pack['file'] == 'maw-touhou-models.mcpack':
+                import maw_bedrock_voices as voice_builder
+                voice_builder.validate(json.loads(paths[voice_builder.CATALOG].read_bytes()), z)
             for row in (r for r in catalog['models'] if r['pack'] == pack['file']):
                 geo = json.loads(z.read(row['geometry']))['minecraft:geometry'][0]
                 if geo['description']['identifier'] != row['geometryIdentifier'] or sha(z.read(row['texture'])) != row['sourcePngSha256']:
@@ -276,6 +296,17 @@ def registered_models(log: Path, contract: dict, started_after: float):
         if not matches or datetime.datetime.strptime(matches[-1],'%Y-%m-%d %H:%M:%S,%f').timestamp()<started_after:
             raise ValueError('Native actor animation/bubble registration missing or stale')
         results['actorAnimationVersion']=1
+    if contract.get('voiceVersion') == 1:
+        voice = contract['voices']
+        pattern = r'(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3}).*MAW_MAID_VOICES version=1 packs=(\d+) recordings=(\d+) events=(\d+)'
+        matches = re.findall(pattern, text)
+        if not matches:
+            raise ValueError('Native maid voices not registered')
+        stamp, packs, clips, events = matches[-1]
+        if (datetime.datetime.strptime(stamp, '%Y-%m-%d %H:%M:%S,%f').timestamp() < started_after
+                or list(map(int, (packs, clips, events))) != [voice['packs'], voice['recordings'], voice['events']]):
+            raise ValueError('Native maid voice registration stale/incomplete')
+        results['voiceVersion'] = 1
     return results
 
 
@@ -283,7 +314,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--assets', type=Path, required=True); parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--geyser', type=Path, required=True); parser.add_argument('--java-bin', type=Path, required=True)
+    parser.add_argument('--maid-jar', type=Path, required=True, help='Hash-locked installed TLM JAR for original voice recordings')
     args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
     compile_extension(args.geyser, args.java_bin, args.output)
-    value = build(args.assets, args.output, extension=args.output/EXTENSION, geyser=args.geyser)
+    value = build(args.assets, args.output, extension=args.output/EXTENSION, geyser=args.geyser, maid_jar=args.maid_jar)
     print(json.dumps({'modelCount': value['modelCount'], 'packs': value['packs'], 'excluded': len(value['excluded'])}, ensure_ascii=False))

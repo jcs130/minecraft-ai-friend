@@ -14,7 +14,7 @@ const digest = raw => crypto.createHash('sha256').update(raw).digest('hex')
 const metaName = p => (p.metadata || []).find(e => e.key === 4 || e.key === 'name' || e.key === 'nametag')?.value
 const resourceUuid = value => { const b = Buffer.from(value.replaceAll('-', ''), 'hex'); b.subarray(0, 8).reverse(); b.subarray(8, 16).reverse(); const s = b.toString('hex'); return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}` }
 let client, peer, send, spawned = false, caught, readyAuth = false
-const packData = new Map(), completed = new Set(), packs = []
+const packData = new Map(), completed = new Set(), packs = [], playerIdentities = new Map()
 async function wait (predicate, ms = 20000) { const end = Date.now() + ms; while (Date.now() < end && !caught && !predicate()) await delay(100); if (caught) throw Error(caught); assert.ok(predicate(), 'wait_expired') }
 const say = message => send('text', { type: 'chat', category: 'authored', needs_translation: false, source_name: login.username, message, xuid: '', platform_chat_id: '', has_filtered_message: false })
 async function main () {
@@ -41,14 +41,21 @@ async function main () {
   client.on('animate_entity', p => { if (report.animations.length < 100) report.animations.push(p) })
   const skin = (uuid, s) => { if (s) report.skins.push({ uuid: resourceUuid(uuid), geometry: typeof s.geometry_data === 'string' ? digest(Buffer.from(s.geometry_data)) : null, id: s.skin_id, textureBytes: s.skin_data?.data?.length || s.skin_data?.length || 0 }) }
   client.on('player_skin', p => skin(p.uuid, p.skin))
-  client.on('player_list', p => { for (const r of (p.records?.records || p.records || [])) if (r.uuid && r.skin_data) skin(r.uuid, r.skin_data) })
+  client.on('player_list', p => { for (const r of (p.records?.records || p.records || [])) if (r.uuid && r.skin_data) {
+    skin(r.uuid, r.skin_data)
+    if (r.username) playerIdentities.set(r.username, resourceUuid(r.uuid))
+  } })
   client.on('remove_entity', p => report.removals.push({ at: Date.now(), id: String(p.entity_id_self || p.entity_id || p.unique_entity_id) }))
   client.on('move_entity', p => { if (report.moves.length < 500) report.moves.push({ at: Date.now(), id: String(p.runtime_entity_id), position: p.position, rotation: p.rotation }) })
   await wait(() => spawned && completed.size === packs.length, 65000)
   peer = mineflayer.createBot({ host: '127.0.0.1', port: 28979, username: 'MawMotionPeer', version: '1.21.1', auth: 'offline' })
   peer.on('error', e => { caught = e.message }); await new Promise((resolve, reject) => { peer.once('spawn', resolve); peer.once('kicked', () => reject(Error('peer_kicked'))) })
   await delay(1500)
-  const hash = crypto.createHash('md5').update('OfflinePlayer:' + login.username).digest(); hash[6] = (hash[6] & 15) | 48; hash[8] = (hash[8] & 63) | 128
+  // Mixed authentication may restore a registered UUID. Use the native
+  // server's PlayerList identity rather than inventing an offline UUID.
+  await wait(() => peer.players[login.username]?.uuid)
+  const selfUuid = peer.players[login.username].uuid
+  const hash = Buffer.from(selfUuid.replaceAll('-', ''), 'hex')
   const owner = '[I;' + Array.from({ length: 4 }, (_, i) => hash.readInt32BE(i * 4)).join(',') + ']'
   const uid = crypto.randomUUID(); const yuid = crypto.randomUUID()
   const ints = uuid => '[I;' + Array.from({ length: 4 }, (_, i) => Buffer.from(uuid.replaceAll('-', ''), 'hex').readInt32BE(i * 4)).join(',') + ']'
@@ -81,7 +88,17 @@ async function main () {
   report.checks.private_chat_not_in_bubbles = !names.some(n => n.includes('PRIVATE_MAW'))
   report.checks.player_ysm_animation_packets = report.animations.some(p => String(p.animation).startsWith('animation.maw_native.'))
   const selectedSkins = report.skins.filter(s => s.id?.startsWith('maw_native:ysm_'))
-  report.checks.separate_ysm_player_appearances = new Set(selectedSkins.map(s => s.uuid)).size === 2 && new Set(selectedSkins.map(s => s.id)).size === 2
+  // A valid native default can appear before the explicit QA selection. Check
+  // each UUID's final skin against the requested original texture, not a count
+  // that incorrectly treats intermediate native appearances as extra players.
+  const finalSkins = new Map(selectedSkins.map(s => [s.uuid, s.id]))
+  const nativeCatalog = JSON.parse(fs.readFileSync(path.join(directory, '../packs/modpack-catalog.json')))
+  const expectedSkin = texture => nativeCatalog.models.find(m => m.kind === 'ysm' && m.modelId === 'misc/3_default_boy' && m.textureId === texture)?.bedrockIdentifier
+  // Read the actual Bedrock PlayerList identity too: Geyser's self entry can
+  // differ from the Java body identity used for maid ownership.
+  const selfBedrockUuid = playerIdentities.get(login.username)
+  report.ysmFinalBindings = { selfJavaUuid: selfUuid, selfBedrockUuid, peerUuid: peer._client.uuid, names: Object.fromEntries(playerIdentities), actual: Object.fromEntries(finalSkins), expectedSelf: expectedSkin('red'), expectedPeer: expectedSkin('blue') }
+  report.checks.separate_ysm_player_appearances = finalSkins.get(selfBedrockUuid) === expectedSkin('red') && finalSkins.get(peer._client.uuid) === expectedSkin('blue') && expectedSkin('red') !== expectedSkin('blue')
   report.checks.pose_variants_sent = report.metadata.some(r => r.metadata.some(m => (m.key === 2 || m.key === 'variant') && m.value === 4))
   report.checks.walk_to_idle_states = [0, 1].every(v => report.metadata.some(r => r.metadata.some(m => m.key === 'variant' && m.value === v)))
   report.checks.bubbles_follow_positions = report.moves.some(r => BigInt(r.id || 0) >= (1n << 51n))

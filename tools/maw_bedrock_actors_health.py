@@ -19,6 +19,15 @@ def health(root=ROOT):
         checks['installed-native-bridge-matches-build']=hashlib.sha256((root/'server/mods/maw_agent_bridge-0.1.0.jar').read_bytes()).hexdigest()==native['sha256']
         checks['locked-maid-api']=native['maidSha256']==models.TLM_SHA
         checks['public-display-only-budget']=contract.get('actorProtocol')=={'channel':'maw_agent:scene_state','hz':4,'maxActors':24,'radius':32,'nativeMaidBubbles':True,'playerPublicChat':True,'privateChatBubbles':False}
+        if contract.get('voiceVersion') == 1:
+            import maw_bedrock_voices as voices
+            checks['original-maid-voices-registered']=registered.get('voiceVersion')==1
+            checks['native-voice-audience-and-codec']=contract.get('voiceProtocol')=={
+                'channels':voices.CHANNELS,'configChannel':'mawbedrock:voice_config',
+                'maidMetadata':{'soundPack':24,'soundFrequency':50,'silent':4},
+                'originalAudience':True,'synthesizedSpeech':False}
+            checks['voice-source-matches-installed-maid']=hashlib.sha256((root/'server/mods/touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar').read_bytes()).hexdigest()==voices.TLM_SHA
+            report['voices']=contract['voices']
         report['counts']={k:contract[k] for k in ('modelCount','animatedModelCount','nativeClipCount')};report['ok']=all(checks.values())
     except Exception as e:report['reason']=f'{type(e).__name__}: {e}'
     return report

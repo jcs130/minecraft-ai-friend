@@ -122,3 +122,37 @@ test('real downstream pipeline retains native stacks until readiness and still f
   assert.equal(attributes.params.properties.length, 0)
   assert.equal(projection.stats.attributesOmitted, 1)
 })
+
+test('native voice metadata follows selection, frequency and silence without leaking TLM serializers', () => {
+  const adapter = new BedrockModels({ ...catalog(), voices: { catalog: 'maid-voices.json' } })
+  adapter.project('spawn_entity', spawn(), registry); adapter.activate()
+  const packet = meta(ID)
+  packet.metadata.push({ key: 24, type: 'string', value: 'littlemaid_peco' },
+    { key: 50, type: 'float', value: 0.25 }, { key: 4, type: 'boolean', value: true })
+  const projected = adapter.project('entity_metadata', packet, registry)
+  const config = projected.before.find(p => p.params.channel === 'mawbedrock:voice_config')
+  assert.deepEqual(JSON.parse(config.params.data), { schemaVersion: 1, entityId: 47, uuid: UID,
+    pack: 'littlemaid_peco', frequency: 0.25, silent: true })
+  assert.ok(projected.params.metadata.every(r => r.key <= 14))
+  assert.equal(adapter.project('entity_metadata', packet, registry).before.length, 0)
+  const changed = adapter.project('entity_metadata', { entityId: 47, metadata: [
+    { key: 24, type: 'string', value: 'touhou_little_maid' }, { key: 50, type: 'float', value: 0 },
+    { key: 4, type: 'boolean', value: false }] }, registry)
+  assert.equal(JSON.parse(changed.before[0].params.data).frequency, 0)
+  // A model refresh despawns the old carrier; its voice configuration must be
+  // resent as well, even when the voice pack itself has not changed.
+  const refresh = adapter.project('entity_metadata', meta('touhou_little_maid:hakurei_reimu'), registry)
+  assert.ok(refresh.before.some(p => p.params.channel === 'mawbedrock:voice_config'))
+  adapter.project('entity_destroy', { entityIds: [47] }, registry)
+  assert.equal(adapter.entities.size, 0)
+})
+
+test('invalid native frequency fails explicitly; ordinary Agent projection remains unchanged', () => {
+  const adapter = new BedrockModels({ ...catalog(), voices: {} })
+  adapter.project('spawn_entity', spawn(), registry); adapter.activate()
+  const packet = meta(ID); packet.metadata.push({ key: 50, type: 'float', value: NaN })
+  assert.throws(() => adapter.project('entity_metadata', packet, registry), /INVALID_MAID_VOICE_FREQUENCY/)
+  const ordinary = new BedrockModels(catalog())
+  ordinary.project('spawn_entity', spawn(), registry); ordinary.activate()
+  assert.equal(ordinary.project('entity_metadata', meta(ID), registry).before.length, 2)
+})

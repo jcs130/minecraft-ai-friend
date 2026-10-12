@@ -48,6 +48,35 @@ class ProtocolTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_original_voice_channels_and_global_frequency_are_bound_to_native_config(self):
+        import maw_bedrock_modpacks as models
+        import maw_bedrock_voices as voices
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);directory=root/'bedrock';resources=directory/'plugins/Geyser'
+            resources.mkdir(parents=True)
+            artifacts={'ViaProxy-3.4.14.jar':b'proxy fixture','plugins/Geyser-ViaProxy.jar':b'geyser fixture'}
+            for name,data in artifacts.items():(directory/name).write_bytes(data)
+            hashes={name:hashlib.sha256(data).hexdigest() for name,data in artifacts.items()}
+            (resources/'config.yml').write_bytes(bridge.geyser_config().encode('utf8'))
+            (resources/models.CONTRACT).write_text('{}','utf8')
+            (root/'services').mkdir()
+            config=root/'services/bedrock.json';config.write_text(json.dumps({'schemaVersion':1,'lanAddress':bridge.LAN_ADDRESS,'udpPort':bridge.UDP_PORT}),'utf8')
+            (root/'services/service.json').write_text(json.dumps({'services':[{'id':'gate','port':28977,
+                'command':['node','gate.cjs','28977','127.0.0.1','28976'],'cwd':tmp,'env':{}}]}),'utf8')
+            native=root/'server/config/touhou_little_maid-common.toml';native.parent.mkdir(parents=True)
+            native.write_text('GlobalMaidSoundFrequency = 25\n','utf8')
+            contract={'voiceVersion':1,'files':{},'geyserJarSha256':hashes['plugins/Geyser-ViaProxy.jar']}
+            with patch.object(bridge,'ARTIFACTS',hashes),patch.object(models,'validate',return_value=contract):
+                value=bridge.load_config(config,root=root);value['validator']()
+                env=value['services'][0]['env']
+                self.assertEqual(env['GATE_MAID_SOUND_FREQUENCY'],'0.25')
+                self.assertTrue(set(voices.CHANNELS)<=set(env['GATE_EXTRA_PLAY_CHANNELS'].split(',')))
+                native.write_text('GlobalMaidSoundFrequency = 0\n','utf8')
+                with self.assertRaises(ValueError):value['validator']()
+                self.assertEqual(bridge.load_config(config,root=root)['services'][0]['env']['GATE_MAID_SOUND_FREQUENCY'],'0.0')
+                native.write_text('GlobalMaidSoundFrequency = 101\n','utf8')
+                with self.assertRaisesRegex(ValueError,'global maid sound frequency'):bridge.load_config(config,root=root)
+
     def test_hashes_and_live_changes_are_checked(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);directory=root/'bedrock';(directory/'plugins/Geyser').mkdir(parents=True)
