@@ -48,7 +48,12 @@ def atomic_json(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
     try:
-        temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        # Atomic rename alone can expose zero-filled cached data after a host
+        # power loss. Flush the payload before publishing the replacement.
+        with temporary.open("w", encoding="utf-8") as stream:
+            stream.write(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
         # Windows readers without FILE_SHARE_DELETE briefly block replacement.
         # Retry the same fully written file, never regenerate a payload or hide
         # persistent permission/disk/configuration failures.

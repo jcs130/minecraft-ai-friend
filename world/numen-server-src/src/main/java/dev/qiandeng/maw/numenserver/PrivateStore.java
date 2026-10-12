@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.*;
+import java.io.IOException;
 
 /** Durable writes before dispatch; filenames are validated identities, never URLs or user paths. */
 final class PrivateStore {
@@ -26,8 +27,24 @@ final class PrivateStore {
                 while(bytes.hasRemaining()) file.write(bytes);
                 file.force(true);
             }
-            Files.move(tmp,path,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
-        } catch(java.io.IOException ex) { throw new IllegalStateException("private_record_write_failed"); }
+            try {
+                publish(tmp,path,(from,to)->Files.move(from,to,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING),System.getProperty("os.name","").startsWith("Windows"));
+            }finally {Files.deleteIfExists(tmp);}
+        } catch(java.io.IOException ex) { throw new IllegalStateException("private_record_write_failed",ex); }
+    }
+    @FunctionalInterface interface Move {void apply(Path from,Path to) throws IOException;}
+    static void publish(Path from,Path to,Move move,boolean windows) throws IOException {
+        for(int attempt=0;;attempt++) {
+            try {move.apply(from,to);return;}
+            catch(AccessDeniedException conflict) {
+                // Windows readers without FILE_SHARE_DELETE can briefly hold
+                // the old file. Retry the same fsynced payload, at most 31 ms;
+                // never downgrade atomic replacement or retry world actions.
+                if(!windows||attempt>=5)throw conflict;
+                try {Thread.sleep(1L<<attempt);}
+                catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw new IOException("private_record_publish_interrupted",interrupted);}
+            }
+        }
     }
     static String hash(String value) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }

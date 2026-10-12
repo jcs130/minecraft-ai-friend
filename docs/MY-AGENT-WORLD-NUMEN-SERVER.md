@@ -1,5 +1,7 @@
 # 服务端常驻 Numen 与基岩同伴管理
 
+服务器托管模型的真实自主测试、上下文控制、返回值说明与停止原因见 [Numen 自主运行验收与排障](MY-AGENT-WORLD-NUMEN-AUTONOMY.md)。外部 MCP 与完整动作账本继续保留原始状态；模型的精简视图不改变外部接口。
+
 2026-10-11：外部 Agent 也可使用 [统一身体接口](MY-AGENT-WORLD-WORLD-ADAPTER.md)，明确选择 Numen 或 Mineflayer，保持本人身体和独立动作账本。原 MCP、令牌和身体管理接口继续有效。新增19项通用底层控制，原生目录共72项；[完整控制 API、HTTP 示例与菜单约定](MY-AGENT-WORLD-CONTROL-API.txt)。持续按键使用当前官方 `Controls`/`Physics`，逐 tick 执行并自动释放，动作持久对账与单控制器规则继续适用。
 
 本项目在官方 Numen 0.1.4.1 beta 上增加独立的服务端宿主。外部 Agent 直接使用认证 MCP 控制持久假玩家，主人 Minecraft 客户端可以完全不启动。基岩玩家通过 Geyser 原生表单管理自己的模型和同伴。官方 core/API JAR 保持原始 SHA；原 Mineflayer / Native SDK 入口继续保留。

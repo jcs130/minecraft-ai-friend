@@ -53,4 +53,6 @@ const timer = setInterval(async () => {
   fs.writeFileSync(path.join(directory, 'owner-result.json'), JSON.stringify(result))
   processing = false
 }, 50)
-setTimeout(() => { bot.quit('QA timeout'); process.exit(2) }, 180000).unref()
+const ownerTimeout = Number(process.env.NUMEN_OWNER_TIMEOUT_MS || 180000)
+if (!Number.isSafeInteger(ownerTimeout) || ownerTimeout < 180000 || ownerTimeout > 3600000) throw Error('Invalid isolated owner timeout')
+setTimeout(() => { bot.quit('QA timeout'); process.exit(2) }, ownerTimeout).unref()

@@ -14,14 +14,15 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 let live
 async function connect () {
   const bot = mineflayer.createBot({ host: '127.0.0.1', port: 28979, username: 'MawAuthQA', version: '1.21.1', auth: 'offline', physicsEnabled: false })
-  live = bot; const world = attachNativeWorldQuery(bot)
+  live = bot; const world = attachNativeWorldQuery(bot), messages = []
+  bot.on('messagestr', message => messages.push(message))
   bot.on('error', () => {}); bot.on('kicked', () => {})
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('offline_spawn_timeout')), 20000)
     bot.once('spawn', () => { clearTimeout(timer); resolve() })
     bot.once('end', () => { clearTimeout(timer); reject(Error('offline_spawn_disconnected')) })
   })
-  await delay(250); return { bot, world }
+  await delay(250); return { bot, world, messages }
 }
 async function disconnect (bot) { bot.quit('mixed auth QA done'); await delay(300); if (live === bot) live = null }
 async function authenticated (world) {
@@ -74,17 +75,22 @@ async function premiumForgery () {
 }
 async function main () {
   const password = crypto.randomBytes(24).toString('base64url')
-  let { bot, world } = await connect()
-  const before = await world.bodySnapshot(); assert.equal(before.code, 'authentication_required')
+  let { bot, world, messages } = await connect()
+  await authenticated(world)
+  await delay(150) // Respect the native query channel's two-tick rate budget.
+  const before = await world.bodySnapshot()
+  checks.unregistered_guest_can_play = before.ok === true
+  checks.unregistered_guest_gets_password_reminder = messages.some(message => message.includes('尚未设置登录密码'))
+  bot.chat('/password ' + password + ' ' + password)
+  for (let i = 0; i < 60 && !messages.some(message => message.includes('登录密码已保存')); i++) await delay(100)
+  checks.guest_can_set_password_in_game = messages.some(message => message.includes('登录密码已保存'))
+  const uuid = bot._client.uuid; await disconnect(bot)
+  ;({ bot, world } = await connect())
+  checks.same_ip_still_requires_password = (await world.bodySnapshot()).code === 'authentication_required'
   await deniedChannels(bot)
   const response = await fetch('http://127.0.0.1:28990/ui', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Maw-Bridge': bridge },
     body: JSON.stringify({ ownerUuid: bot._client.uuid, playerName: 'MawAuthQA', action: 'menu', arguments: {} }) })
   const denied = await response.json(); checks.prelogin_private_management_denied = JSON.stringify(denied).includes('authentication_required')
-  bot.chat('/register ' + password + ' ' + password)
-  const state = await authenticated(world); checks.offline_register_unlocks_native_sdk = state.ok && state.playerUuid === bot._client.uuid
-  const uuid = bot._client.uuid; await disconnect(bot)
-  ;({ bot, world } = await connect())
-  checks.same_ip_still_requires_password = (await world.bodySnapshot()).code === 'authentication_required'
   bot.chat('/login definitely_wrong_password'); await delay(600)
   checks.wrong_password_remains_locked = (await world.bodySnapshot()).code === 'authentication_required'
   bot.chat('/login ' + password); await authenticated(world)

@@ -64,11 +64,11 @@ status.subgoal = status.goal
 if (fs.existsSync(ledger)) {
   const { retire, pending } = reconcileInterruptedActions(fs.readFileSync(ledger, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line)))
   for (const retirement of retire) record('action_read_retired', retirement)
-  if (pending.length && !fs.existsSync(paused)) fs.writeFileSync(paused, JSON.stringify({ reason: 'interrupted_action_outcome', actionIds: pending.map(intent => intent.actionId), at: new Date().toISOString() }))
+  if (pending.length && !fs.existsSync(paused)) fs.writeFileSync(paused, JSON.stringify({ reason: 'interrupted_action_outcome', actionIds: pending.map(intent => intent.actionId), at: new Date().toISOString() }), { flush: true })
 }
 function persist () {
   status.updatedAt = new Date().toISOString()
-  fs.writeFileSync(stateFile + '.tmp', gameJSON(status, 2)); fs.renameSync(stateFile + '.tmp', stateFile)
+  fs.writeFileSync(stateFile + '.tmp', gameJSON(status, 2), { flush: true }); fs.renameSync(stateFile + '.tmp', stateFile)
 }
 function record (kind, body) {
   const event = { schemaVersion: 1, at: new Date().toISOString(), kind, ...body }
@@ -428,7 +428,7 @@ async function loop () {
           record('action_result', { actionId, action, result })
           if (unknownOutcome(result)) {
             actionFence.block(); try { stopMovement() } catch {}
-            if (!fs.existsSync(paused)) fs.writeFileSync(paused, JSON.stringify({ reason: 'unknown_action_outcome', actionId, action, at: new Date().toISOString() }))
+            if (!fs.existsSync(paused)) fs.writeFileSync(paused, JSON.stringify({ reason: 'unknown_action_outcome', actionId, action, at: new Date().toISOString() }), { flush: true })
             status.mode = 'paused_unknown'; break
           }
           if (result?.ok === false && !['inspect', 'maid', 'colony', 'spell'].includes(action.type)) break
@@ -436,7 +436,7 @@ async function loop () {
           const unknown = actionErrorIsUnknown(error)
           if (unknown) { actionFence.block(); try { stopMovement() } catch {} }
           record('action_result', { actionId, action, result: error.result || { ok: false, code: error.message, outcome: unknown ? 'unknown' : 'known_rejection', retryAutomatically: false } })
-          if (unknown) { if (!fs.existsSync(paused)) fs.writeFileSync(paused, JSON.stringify({ reason: 'unknown_action_outcome', actionId, action, at: new Date().toISOString() })); status.mode = 'paused_unknown' }
+          if (unknown) { if (!fs.existsSync(paused)) fs.writeFileSync(paused, JSON.stringify({ reason: 'unknown_action_outcome', actionId, action, at: new Date().toISOString() }), { flush: true }); status.mode = 'paused_unknown' }
           break
         } finally { activeActionScope = null; activeActionId = null }
       }
@@ -445,7 +445,7 @@ async function loop () {
       status.lastError = error.message; record('decision_error', { error: error.message })
       const policy = classifyModelFailure(error)
       if (policy.action === 'pause_unknown' || policy.action === 'pause_model') {
-        fs.writeFileSync(paused, JSON.stringify({ reason: policy.pauseReason, reasonCode: policy.reasonCode, error: error.message })); status.mode = policy.action === 'pause_unknown' ? 'paused_unknown' : 'paused_model'
+        fs.writeFileSync(paused, JSON.stringify({ reason: policy.pauseReason, reasonCode: policy.reasonCode, error: error.message }), { flush: true }); status.mode = policy.action === 'pause_unknown' ? 'paused_unknown' : 'paused_model'
       } else if (policy.action === 'rate_backoff') {
         status.modelBackoff = nextModelBackoff(status.modelBackoff, policy)
         status.mode = 'model_rate_backoff'; record('model_rate_backoff', status.modelBackoff)

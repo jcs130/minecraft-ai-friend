@@ -28,6 +28,20 @@ def sharing_error(code=32, error_type=PermissionError):
 
 
 class AtomicJsonTests(unittest.TestCase):
+    def test_flush_failure_preserves_previous_state_and_never_publishes_new_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "state.json"
+            original = b'{"paused":true,"unknownAction":"keep"}'
+            target.write_bytes(original)
+            error = OSError(5, "fixture disk flush failure")
+            with patch.object(service.os, "fsync", side_effect=error), patch.object(service.os, "replace") as replace:
+                with self.assertRaises(OSError) as failure:
+                    service.atomic_json(target, {"paused": False})
+                self.assertIs(failure.exception, error)
+                replace.assert_not_called()
+            self.assertEqual(target.read_bytes(), original)
+            self.assertEqual(list(Path(tmp).glob("*.tmp")), [])
+
     def test_transient_windows_conflict_retries_same_file_and_original_payload(self):
         for code in (32, 33, 5):
             with self.subTest(winerror=code), tempfile.TemporaryDirectory() as tmp:

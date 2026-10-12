@@ -169,11 +169,18 @@ public final class HeadlessRuntime {
             for(var g:ApiRegistry.groups())rows.add(object("id",g.fullName(),"description",g.summary(),"count",g.functions().size()));
             o.add("groups",rows);o.addProperty("totalFunctions",ApiRegistry.functions().size());
         }else{
-            var g=ApiRegistry.group(group);if(g==null)throw new IllegalArgumentException("unknown_group");
-            for(var f:g.functions()) {
+            var g=ApiRegistry.group(group);var function=ApiRegistry.function(group);
+            if(g==null&&function==null)throw new IllegalArgumentException("unknown_group_or_function");
+            for(var f:g!=null?g.functions():List.of(function)) {
                 JsonObject row=object("id",f.fullName(),"description",f.summary(),"side",f.side().name().toLowerCase(),"execution",f.kind().toString(),"returns",f.returns().type().toString(),"availableWithoutClient",f.side().name().equalsIgnoreCase("SERVER"));
                 JsonArray params=new JsonArray();for(var p:f.params())params.add(object("name",p.name(),"role",p.role().name().toLowerCase(),"type",p.type().toString(),"description",p.explained()));
-                JsonArray examples=new JsonArray();f.examples().stream().limit(3).forEach(examples::add);row.add("parameters",params);row.add("examples",examples);rows.add(row);
+                JsonArray examples=new JsonArray();f.examples().stream().limit(3).forEach(examples::add);row.add("parameters",params);row.add("examples",examples);
+                JsonArray notes=new JsonArray();f.notes().stream().limit(4).forEach(notes::add);row.add("notes",notes);
+                JsonArray seeAlso=new JsonArray();f.seeAlso().stream().limit(6).forEach(seeAlso::add);row.add("seeAlso",seeAlso);
+                JsonArray types=new JsonArray();for(var type:NativeReturnContracts.types(f.returns())) {
+                    JsonArray fields=new JsonArray();for(var field:type.fields())fields.add(object("name",field.name(),"type",field.type().toString(),"optional",field.optional(),"description",field.doc()));
+                    types.add(object("name",type.name(),"description",type.doc(),"parent",type.parent(),"fields",fields,"items",type.items()==null?null:type.items().toString()));
+                }row.add("returnTypes",types);rows.add(row);
             }o.add("functions",rows);
         }return o;
     }

@@ -139,7 +139,7 @@ final class HeadlessHttp {
         for(String name:new TreeSet<>(names())) {
             JsonObject props=new JsonObject();JsonArray required=new JsonArray();
             if(!Set.of("operations","mod_operations","list_companions","create_companion").contains(name)){props.add("companion",property("string","Owned body UUID from list_companions, never a player name."));required.add("companion");}
-            if(name.equals("operations"))props.add("group",property("string","Omit to list groups; then query the exact group for signatures and examples."));
+            if(name.equals("operations"))props.add("group",property("string","Omit to list groups; query an exact group or function ID for parameters, returnTypes, notes and examples. Read return fields instead of guessing."));
             if(Set.of("mod_operations","mod_query","mod_action").contains(name)) {
                 props.add("operation",property("string","Exact operation from mod_operations. Omit ONLY for catalog summaries; query one ID for its JSON Schema."));
                 if(!name.equals("mod_operations")){required.add("operation");props.add("arguments",object("type","object","description","Exact operation parameters. Absolute coordinates and full native components; no player/body selectors or requestId."));}

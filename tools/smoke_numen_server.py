@@ -1,4 +1,8 @@
-"""Finite isolated real-NeoForge server-only Numen contract test; zero paid model requests."""
+"""Finite isolated real-NeoForge Numen contract test.
+
+Default checks use a local mock model. --live-autonomy explicitly opts into
+bounded online CodingPlan model requests in the isolated world.
+"""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -25,7 +29,7 @@ def offline(name):
     value[8] = value[8] & 63 | 128
     return str(uuid.UUID(bytes=bytes(value)))
 
-def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar=None, viewer=False, viewer_visual=False, mixauth_jar=None, world_adapter=False):
+def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar=None, viewer=False, viewer_visual=False, mixauth_jar=None, world_adapter=False, live_autonomy=False, credential_file=None, autonomy_goals=None, goal_model_budget=24):
     output = output.resolve()
     if (root/'research').resolve() not in output.parents or output.exists():
         raise ValueError('Use a new evidence directory inside runtime/research')
@@ -42,6 +46,10 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
             raise ValueError('A bridge candidate must be an isolated full-pack artifact inside research')
         shutil.copyfile(bridge_jar,mods/'maw_agent_bridge-0.1.0.jar')
     shutil.copyfile(root/'server/eula.txt',server/'eula.txt')
+    if full_pack:
+        voice = server/'config/voicechat/voicechat-server.properties'
+        voice.parent.mkdir(parents=True, exist_ok=True)
+        voice.write_text('port=28980\nbind_address=127.0.0.1\nvoice_host=127.0.0.1:28980\nforce_voice_chat=false\n', encoding='utf-8')
     props = {'server-ip':'127.0.0.1','server-port':'28978','online-mode':'false','enforce-secure-profile':'false','enable-rcon':'false','enable-query':'false','max-players':'12','spawn-protection':'0','view-distance':'3','simulation-distance':'3','difficulty':'peaceful','gamemode':'survival','level-name':'world-server-numen','level-type':'minecraft:flat','generator-settings':json.dumps({'layers':[{'block':'minecraft:bedrock','height':1},{'block':'minecraft:dirt','height':2},{'block':'minecraft:grass_block','height':1}],'biome':'minecraft:plains','features':False,'lakes':False,'structure_overrides':[]},separators=(',',':')),'level-seed':'1010','spawn-monsters':'false','motd':'Isolated headless Numen QA'}
     (server/'server.properties').write_text(''.join(f'{k}={v}\n' for k,v in props.items()),encoding='utf-8')
     if mixauth_jar:
@@ -60,6 +68,13 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
     (private/'accounts.json').write_text(json.dumps({'accounts':[{'ownerUuid':o,'tokenHash':hashlib.sha256(t.encode()).hexdigest()} for o,t in identities]}),encoding='utf-8')
     (private/'bridge.json').write_text(json.dumps({'secret':bridge}),encoding='utf-8')
     cfg={'enabled':True,'bind':'127.0.0.1','port':28990,'allowedHosts':['127.0.0.1:28990'],'publicEndpoint':'http://127.0.0.1:28990/mcp','allowedModelHosts':[],'testOnlyAllowLoopbackModels':True,'dailyModelCallsPerBody':12}
+    if live_autonomy:
+        if not full_pack or not credential_file:
+            raise ValueError('Live autonomy requires --full-pack and a private --credential-file')
+        cfg['allowedModelHosts'] = ['coding.dashscope.aliyuncs.com']
+        cfg['dailyModelCallsPerBody'] = 100
+        if not 1 <= goal_model_budget <= 100: raise ValueError('Goal model budget must be 1..100')
+        cfg['modelCallsPerGoal'] = goal_model_budget
     (server/'config/maw-numen-server.json').write_text(json.dumps(cfg),encoding='utf-8')
     report={'schemaVersion':1,'fullPack':full_pack,'productionWorldActions':0,'paidModelRequests':0,'actualPhoneTested':False,'checks':{},'serverExitCodes':[],'ok':False};checks=report['checks']
     process=None;reader=None;client=None;gate=None;lines=[];mock_calls=[]
@@ -121,8 +136,8 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
         def log_message(self,*args):pass
         def do_POST(self):
             payload=json.loads(self.rfile.read(int(self.headers['Content-Length'])));mock_calls.append({'model':payload.get('model'),'hasAuth':self.headers.get('Authorization')=='Bearer qa-secret-not-real','tools':[t['function']['name'] for t in payload.get('tools',[])]})
-            if self.path.startswith('/fail/'):
-                raw=b'{"error":{"message":"qa-secret-not-real"}}';self.send_response(503);self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
+            if self.path.startswith(('/fail/', '/rate/')):
+                raw=b'{"error":{"message":"qa-secret-not-real"}}';self.send_response(429 if self.path.startswith('/rate/') else 503);self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
             n=len(mock_calls);name,args=('get_state',{}) if n==1 else ('lua',{'code':'local s=numen.status.self(); local p=numen.route.plan({to={x=math.floor(s.pos.x)+2,z=math.floor(s.pos.z)},costs={dig=false,place=false}}); if not p.ok then error(p.why) end; local m=numen.move.go(p); print(m.pos.x,m.pos.y,m.pos.z)'}) if n==2 else ('finish',{'summary':'已完成真实移动并核对回执。'})
             response={'id':'mock-'+str(n),'object':'chat.completion','choices':[{'index':0,'message':{'role':'assistant','content':'','tool_calls':[{'id':'mock-call-'+str(n),'type':'function','function':{'name':name,'arguments':json.dumps(args)}}]},'finish_reason':'tool_calls'}],'usage':{'prompt_tokens':10,'completion_tokens':5,'total_tokens':15}}
             raw=json.dumps(response).encode();self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
@@ -132,6 +147,8 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
         checks['auth_and_origin']=request('/mcp',{})[0]==401 and request('/mcp',{}, {'Authorization':'Bearer '+bearer,'Origin':'https://example.com'})[0]==403
         checks['mcp_initialize_tools']=rpc('initialize',{'protocolVersion':'2025-06-18'})['protocolVersion']=='2025-06-18' and len(rpc('tools/list')['tools'])==17
         ops=tool('operations');report['operations']=ops;checks['runtime_operations']=ops['totalFunctions']>=30 and any(g['id']=='numen.route' for g in ops['groups'])
+        typed=tool('operations',{'group':'numen.inv.craft'})
+        checks['single_function_return_contract']=len(typed['functions'])==1 and typed['functions'][0]['id']=='numen.inv.craft' and 'returnTypes' in typed['functions'][0] and 'notes' in typed['functions'][0]
         created=tool('create_companion',{'name':'MawHeadBody','action_id':'qa-create-01'});assert created.get('online'),created
         body=created['bodyId'];report['bodyId']=body
         if mixauth_jar:
@@ -232,6 +249,17 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
         report['duplicate']={'before':duplicate_before['position'],'after':duplicate_after['position'],'maxDisplacement':drift,'durableReceiptUnchanged':unchanged,'sameTerminalReceipt':same_receipt}
         checks['reconnect_duplicate_does_not_execute']=replay['replayed'] and replay['phase']=='terminal' and unchanged and same_receipt and drift<.1 and not duplicate_after['programRunning']
         checks['fingerprint_conflict']=tool('lua',{'companion':body,'lease_id':lease,'action_id':'qa-walk-01','code':'print("different")'})['code']=='action_id_conflict'
+        # Pinned Numen 0.1.4.1 declared use.item as Clicked even when the real
+        # interaction returns an opened Window. Reproduce that server-crashing
+        # path through the public SDK, not a synthetic successful receipt.
+        pos=duplicate_after['position'];cx,cy,cz=(int(pos[a]//1) for a in ('x','y','z'))
+        console(f'setblock {cx+1} {cy} {cz} minecraft:chest');time.sleep(.2)
+        code=f'numen.use.block({{x={cx+1},y={cy},z={cz}}}); local r=numen.use.item(); print(r.menu); numen.gui.close()'
+        tool('lua',{'companion':body,'lease_id':lease,'action_id':'qa-item-use-menu','code':code})
+        menu_return=terminal('qa-item-use-menu');report['itemUseMenuReturn']=menu_return
+        checks['item_use_open_menu_no_server_crash']=menu_return.get('ok',False) and tool('get_state',{'companion':body}).get('online',False)
+        declared=tool('operations',{'group':'numen.use.item'})['functions'][0]
+        checks['item_use_menu_return_in_discovery']=any(t['name'].endswith('Window') and any(f['name']=='slots' for f in t['fields']) for t in declared['returnTypes'])
         tool('lua',{'companion':body,'lease_id':lease,'action_id':'qa-client-only','code':'print(numen.api.help("numen.status"))'})
         unsupported=terminal('qa-client-only');checks['client_only_explicit_failure']=unsupported['phase']=='terminal' and not unsupported['ok'] and 'server_only_function_unavailable' in json.dumps(unsupported['outcome'])
         tool('lua',{'companion':body,'lease_id':lease,'action_id':'qa-cancel','code':'numen.time.wait(30); print("WAIT_SHOULD_NOT_COMPLETE")'})
@@ -241,6 +269,7 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
         through=events['events'][-1]['sequence'];tool('ack_events',{'companion':body,'lease_id':lease,'through':through});checks['events_explicit_ack']=all(e['sequence']>through for e in tool('get_events',{'companion':body})['events'])
         # Expose the private UI only to a real, non-OP connected ordinary owner.
         env={**os.environ,'NODE_PATH':str(root/'gateway/permanent/node/node_modules')}
+        if live_autonomy: env['NUMEN_OWNER_TIMEOUT_MS'] = '2400000'
         client=subprocess.Popen([str(node),str(REPO/'tools/smoke_numen_owner.cjs'),str(28979 if full_pack else 28978),str(output)],env=env,stdout=(output/'owner.log').open('w'),stderr=subprocess.STDOUT,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         deadline=time.monotonic()+30
         while not (output/'owner-ready.json').exists() and client.poll() is None and time.monotonic()<deadline:time.sleep(.2)
@@ -263,9 +292,36 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
             time.sleep(.3)
         checks['hosted_native_loop_real_move_mock_model']=state.get('brain',{}).get('phase')=='completed' and len(mock_calls)==3 and abs(state['position']['x']-before_brain['x'])>.5
         report['mockModelCalls']=mock_calls
+        if live_autonomy:
+            from smoke_numen_autonomy import run as autonomy_checks
+            autonomy_checks(tool, ui, console, server, output, owner, credential_file, report, autonomy_goals, goal_model_budget)
         ui('profile.save',{'profileId':'default','name':'QA failure','provider':'openai','model':'qa-local','baseUrl':'http://127.0.0.1:28991/fail/v1','apiKey':''})
         count=len(mock_calls);ui('task',{'companion':body,'text':'验证失败后停止，不重试。'});time.sleep(1.5)
-        failed=tool('get_state',{'companion':body});checks['model_failure_pauses_no_retry']=failed['brain']['phase']=='unknown' and len(mock_calls)==count+1
+        failed=tool('get_state',{'companion':body})
+        brain_record=json.loads((server/'world-server-numen/maw-numen-server/brains'/f'{body}.json').read_text('utf-8'))
+        checks['model_failure_pauses_no_retry']=failed['brain']['phase']=='paused' and len(mock_calls)==count+1 and brain_record['code']=='model_http_503_no_automatic_retry' and 'pendingRequest' not in brain_record
+        ui('profile.save',{'profileId':'default','name':'QA rate response','provider':'openai','model':'qa-local','baseUrl':'http://127.0.0.1:28991/rate/v1','apiKey':''})
+        count=len(mock_calls);ui('task',{'companion':body,'text':'验证429只记录状态码，不猜额度，不重试。'});time.sleep(1.5)
+        rate=tool('get_state',{'companion':body})
+        brain_record=json.loads((server/'world-server-numen/maw-numen-server/brains'/f'{body}.json').read_text('utf-8'))
+        checks['http_429_no_quota_guess_no_automatic_retry']=rate['brain']['phase']=='paused' and len(mock_calls)==count+1 and brain_record['code']=='model_http_429_no_automatic_retry' and 'pendingRequest' not in brain_record
+        # Refuse a goal before HTTP dispatch if its durable state cannot be
+        # published. Keep the old record and the rest of the server available.
+        brain_file=server/'world-server-numen/maw-numen-server/brains'/f'{body}.json'
+        archived=output/'brain-before-storage-fault.json';original=brain_file.read_bytes()
+        os.replace(brain_file,archived);brain_file.mkdir();count=len(mock_calls)
+        try:
+            try:ui('task',{'companion':body,'text':'Storage failure fixture; must not execute.'})
+            except AssertionError as failure:checks['storage_fault_goal_rejected']='brain_state_persistence_failed_goal_not_started' in str(failure)
+            else:checks['storage_fault_goal_rejected']=False
+            fault=tool('get_state',{'companion':body})
+            checks['storage_fault_pauses_only_body']=fault.get('online') and fault['brain']['phase']=='paused' and fault['brain']['code']=='brain_state_persistence_failed_no_automatic_retry'
+            checks['storage_fault_no_model_dispatch']=len(mock_calls)==count and archived.read_bytes()==original
+        finally:
+            brain_file.rmdir();shutil.copyfile(archived,brain_file)
+        try:ui('task',{'companion':body,'text':'Do not automatically resume after a storage failure.'})
+        except AssertionError as failure:checks['storage_fault_requires_review']='brain_state_persistence_failed_review_before_new_goal' in str(failure)
+        else:checks['storage_fault_requires_review']=False
         checks['key_not_in_server_log']=not any('qa-secret-not-real' in line for line in lines)
         ui('settings',{'companion':body,'driver':'external','profileId':'default','permissionMode':'ask'})
         claim=tool('claim_control',{'companion':body,'controller_id':'qa-controller'});lease=claim['lease']['leaseId']
@@ -308,7 +364,7 @@ def run(root, output, node, java, full_pack=False, maid_config=False, bridge_jar
     return report
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--output',type=Path,required=True);p.add_argument('--java',type=Path,default=DEFAULT_JAVA);p.add_argument('--node',type=Path,required=True);p.add_argument('--full-pack',action='store_true');p.add_argument('--maid-config',action='store_true');p.add_argument('--bridge-jar',type=Path);p.add_argument('--viewer',action='store_true');p.add_argument('--viewer-visual',action='store_true');p.add_argument('--mixauth-jar',type=Path);p.add_argument('--world-adapter',action='store_true');a=p.parse_args()
-    result=run(a.root,a.output,a.node,a.java,a.full_pack,a.maid_config,a.bridge_jar,a.viewer,a.viewer_visual,a.mixauth_jar,a.world_adapter);print(json.dumps({'ok':result['ok'],'checks':len(result['checks']),'output':str(a.output)},ensure_ascii=False));raise SystemExit(0 if result['ok'] else 1)
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--output',type=Path,required=True);p.add_argument('--java',type=Path,default=DEFAULT_JAVA);p.add_argument('--node',type=Path,required=True);p.add_argument('--full-pack',action='store_true');p.add_argument('--maid-config',action='store_true');p.add_argument('--bridge-jar',type=Path);p.add_argument('--viewer',action='store_true');p.add_argument('--viewer-visual',action='store_true');p.add_argument('--mixauth-jar',type=Path);p.add_argument('--world-adapter',action='store_true');p.add_argument('--live-autonomy',action='store_true',help='Explicitly run bounded paid CodingPlan goals in the isolated world');p.add_argument('--credential-file',type=Path);p.add_argument('--autonomy-goals',help='Optional comma-separated live goal IDs; omitted runs all seven');p.add_argument('--goal-model-budget',type=int,default=24,help='Explicit finite live goal request budget, 1..100; default 24');a=p.parse_args()
+    result=run(a.root,a.output,a.node,a.java,a.full_pack,a.maid_config,a.bridge_jar,a.viewer,a.viewer_visual,a.mixauth_jar,a.world_adapter,a.live_autonomy,a.credential_file,a.autonomy_goals.split(',') if a.autonomy_goals else None,a.goal_model_budget);print(json.dumps({'ok':result['ok'],'checks':len(result['checks']),'output':str(a.output)},ensure_ascii=False));raise SystemExit(0 if result['ok'] else 1)
 
 if __name__=='__main__':main()
