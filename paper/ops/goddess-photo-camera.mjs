@@ -114,11 +114,12 @@ export function startGoddessPhotoCamera(bot, options = {}) {
     guard();
     const root = settings.viewerRoot;
     const moduleAt = relative => import(pathToFileURL(path.join(root, relative)).href);
-    const [{viewerPhotoPage},{createViewerChunkStream,createViewerEntityStream},{createViewerContentBridge},{createViewerAppearanceBridge}] = await Promise.all([
+    const [{viewerPhotoPage},{createViewerChunkStream,createViewerEntityStream},{createViewerContentBridge},{createViewerAppearanceBridge},{createViewerHeadTextures}] = await Promise.all([
       moduleAt('packages/modern-viewer/renderer-src/host/viewer-photo-page.mjs'),
       moduleAt('packages/modern-viewer/src/viewer-stream.mts'),
       moduleAt('packages/modern-viewer/renderer-src/host/viewer-content.mjs'),
-      moduleAt('packages/modern-viewer/renderer-src/host/viewer-appearance.mjs')
+      moduleAt('packages/modern-viewer/renderer-src/host/viewer-appearance.mjs'),
+      moduleAt('packages/modern-viewer/renderer-src/host/viewer-head-textures.mjs')
     ]);
     const require = createRequire(pathToFileURL(root + '/package.json'));
     const express = require('express'), {Server} = require('socket.io');
@@ -126,6 +127,7 @@ export function startGoddessPhotoCamera(bot, options = {}) {
     const sessions = new Set(); let origin, context;
     const bridge = createViewerContentBridge(bot);
     const appearances = createViewerAppearanceBridge(bot);
+    const headTextures = createViewerHeadTextures();
     const distance = Math.max(2,Math.min(8,Math.trunc(settings.renderDistance ?? 6)));
     const resolution = Math.max(768,Math.min(2048,Math.trunc(settings.resolution ?? 1536)));
     const authenticated = req => req.headers.cookie?.split(';').some(s => s.trim() === `photo=${token}`);
@@ -138,9 +140,9 @@ export function startGoddessPhotoCamera(bot, options = {}) {
     });
     app.get('/',async (_req,res) => {try {res.type('html').send(await viewerPhotoPage(settings.assetsRoot));} catch {res.sendStatus(503);} });
     app.get('/index.js',(_req,res) => res.sendFile(settings.assetsRoot + '/dist/modern-viewer.js'));
-    app.get('/head-texture/:file',(req,res) => {
+    app.get('/head-texture/:file',async (req,res) => {
       const hash=/^([0-9a-f]{40,64})\.png$/.exec(req.params.file)?.[1], png=skinImages.get(hash);
-      if (!png) return res.sendStatus(404);
+      if (!png) return headTextures.serve(req,res,req.path,bot);
       res.type('png').send(png);
     });
     app.use('/textures',express.static(settings.assetsRoot + '/public/textures/1.20.6'));
