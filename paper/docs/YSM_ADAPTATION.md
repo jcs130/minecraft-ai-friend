@@ -1,5 +1,15 @@
 # YSM 外观桥接（2026-10-11已上线）
 
+## 2026-10-13：可米奶油酒狐模型已热绑定
+
+`ag_CorMy` 原UUID `822d173a-7181-3b9b-be60-804f29b24ecc` 已由原生控制台选择 `cormy-winefox-cream` / `cormy-cream`，保留 `mandatory=true`。实际Worker状态与原生NBT保存一致；真实Mineflayer连接收到62块、758175字节资源，SHA256 `71b860e7c3fac6a29d9270bed0bfc52291e4a26994e31799cfd61cc6e276927c`，投递几何、主/手部/额外动画和2048原PNG逐文件核对。43份原绑定仅可米授权外观字段改变，142份旧模型文件保持；本次未重启Paper、Proxy、Worker或可米主程序，绑定期间可米/Eye/女神原认证会话保持。远端网页实际画面和原生Java客户端像素尚未验收，资源送达不代表画面已完成。
+
+定稿源ZIP为 `CorMy-WineFox-Cream-1.2.0-preview.zip`，1305004字节，SHA256 `8e70b0c8d4ab151cf0982c17ab3fff3916c579e74f4ef0151ecb90d4bdef5fb3`，原16文件留存不改。安装副本仅有两项兼容处理：将仅含 `uv` 的贴图对象规范化为等义路径字符串（现役网页桥接器仅接受字符串）；原生YSM2.4.1首次热载拒绝WebP作者头像，因此保留原WebP、新增像素相同的128×128 PNG并更新头像引用。两种贴图声明均为[官方spec 2格式](https://yesstevemodel.github.io/wiki/struct/)；不能对带normal/specular的PBR对象无条件抹去字段。角色几何、UV、动画、2048贴图、0.8比例、署名和CC BY-NC-SA 4.0许可保留，模型源自酒狐二创。
+
+基岩仍未支持本模型：离线转换器明确拒绝2048贴图 `YSM_BEDROCK_SKIN_DIMENSIONS_UNSUPPORTED`，现役扩展另返回源版本不可用，未降采样或宣称手机/Xbox显示。旧 `cormy/cormy` 保留；需要回退时在线通过受认证控制台 `appearance admin set ag_CorMy cormy cormy`，不要覆盖正在使用的NBT。私有E/F `repairs/cormy-winefox-cream-live-20261013` 保存安装前原绑定/模型源、首次加载失败、兼容差异、真实投递和最终保存核对；此前 `cormy-winefox-cream-20261013` 是未安装的准备快照，保持冻结。
+
+---
+
 2026-10-12：原手部/额外动作资源与模型比例修正已正式部署，AgentAppearance **0.3.2**，女神相机同步当前共享资源；见[联合发布](COMPLETED_FEATURES_RELEASE_20261012.md)。远端Web仍须更新宿主桥和重建；完整Java/基岩动画等价仍未验。下方候选状态是此前测试时点。
 
 ## 2026-10-12：Web 动作、持物与比例修复候选
