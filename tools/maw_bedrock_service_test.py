@@ -87,11 +87,15 @@ class ConfigurationTests(unittest.TestCase):
                 'lanAddress':bridge.LAN_ADDRESS,'udpPort':bridge.UDP_PORT}),'utf-8')
             (root/'services').mkdir()
             (root/'services/service.json').write_text(json.dumps({'services':[{'id':'gate','port':28977,
-                'command':['node','gate.cjs','28977','127.0.0.1','28976'],'cwd':tmp,'env':{}}]}),'utf-8')
+                'command':['node','gate.cjs','28977','127.0.0.1','28976'],'cwd':tmp,
+                'env':{'GATE_LAN_SUBNET':'192.168.3.0/24','GATE_PUBLIC_GAME_ACCESS':'1'}}]}),'utf-8')
             hashes={name:hashlib.sha256(data).hexdigest() for name,data in artifacts.items()}
             with patch.object(bridge,'ARTIFACTS',hashes):
                 value=bridge.load_config(config,root=root);value['validator']()
                 self.assertEqual(value['services'][0]['listenHost'],'127.0.0.1')
+                self.assertEqual(value['services'][0]['env']['GATE_LISTEN_HOST'],'127.0.0.1')
+                self.assertNotIn('GATE_PUBLIC_GAME_ACCESS',value['services'][0]['env'])
+                self.assertNotIn('GATE_LAN_SUBNET',value['services'][0]['env'])
                 self.assertIn('127.0.0.1:28994',value['services'][1]['command'])
                 self.assertEqual(value['services'][1]['command'][-1],'NONE')
                 self.assertEqual(value['services'][0]['env']['GATE_BEDROCK_PROJECTION'],'1')

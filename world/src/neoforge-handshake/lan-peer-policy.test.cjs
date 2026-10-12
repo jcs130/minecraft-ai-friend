@@ -11,3 +11,13 @@ test('LAN policy refuses public, broad, malformed or non-network CIDRs', () => {
   for (const value of ['0.0.0.0/0', '8.8.8.0/24', '192.168.3.0/16', '192.168.3.163/24', '192.168.999.0/24', '', {}]) assert.throws(() => lanPeerPolicy(value), /GATE_LAN_SUBNET_INVALID/)
   assert.equal(lanPeerPolicy()('8.8.8.8'), true)
 })
+
+test('explicit public game access admits IPv4 peers while preserving the LAN default', () => {
+  const accepts = lanPeerPolicy('192.168.3.0/24', true)
+  for (const address of ['8.8.8.8', '::ffff:115.204.225.148', '127.0.0.1', '::1', '192.168.3.163']) assert.equal(accepts(address), true)
+  for (const address of [null, 'malformed', '8.8.8.8.evil', '2001:db8::1', '192.168.3.999']) assert.equal(accepts(address), false)
+  assert.equal(lanPeerPolicy('192.168.3.0/24')('8.8.8.8'), false)
+  assert.throws(() => lanPeerPolicy(null, true), /GATE_PUBLIC_GAME_ACCESS_INVALID/)
+  assert.throws(() => lanPeerPolicy('192.168.3.0/24', '1'), /GATE_PUBLIC_GAME_ACCESS_INVALID/)
+  assert.throws(() => lanPeerPolicy('0.0.0.0\/0', true), /GATE_LAN_SUBNET_INVALID/)
+})

@@ -1,10 +1,10 @@
 My Agent World 原生 SDK 接入（旧千灯纪 Agent）
 
-入口：192.168.3.163:28977，Minecraft Java 1.21.1，当前仅家庭局域网。
+入口：局域网 192.168.3.163:28977；公网 micro.kangqiang.site:28977（TCP）。Minecraft Java 1.21.1，auth=offline。
 每个 Agent 一个固定用户名；不要借用 MawExplorer 或其他在线账号。
 
 SDK 源码：world/src/native-sdk/index.cjs
-本机分发目录：E:\QiandengJiSocietyLab\integrations\native-sdk\v3-rpg-20261012
+本机当前分发目录：E:\QiandengJiSocietyLab\integrations\native-sdk\v5-paper-rpg-20261012
 目录附 package.json、operations.json 和完整指南；Node 22，先按包内依赖 npm install。
 
 现阶段身体是这个连接登录的真实玩家，bodyId 就是其真实 UUID，不是 Numen 假玩家。

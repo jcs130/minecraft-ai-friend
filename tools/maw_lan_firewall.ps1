@@ -2,7 +2,8 @@ param(
     [ValidateSet('Plan', 'Apply', 'Status', 'Rollback')][string]$Mode = 'Plan',
     [string]$ReceiptPath,
     [switch]$Bedrock,
-    [switch]$Voice
+    [switch]$Voice,
+    [switch]$PublicGameAccess
 )
 $ErrorActionPreference = 'Stop'
 if ($Bedrock -and $Voice) { throw 'Select only one LAN service' }
@@ -33,15 +34,28 @@ if ($Voice) {
     $definitions[0].Name = 'MyAgentWorld.VoiceLAN.AllowIPv4'
     $definitions[1].Name = 'MyAgentWorld.VoiceLAN.DenyOtherIPv4'
 }
+if ($PublicGameAccess) {
+    # Inspect the separately authorized public policy. This mode never writes rules.
+    $description = 'Read-only inspection of public game access; management remains local'
+    if ($Bedrock -or $Voice) {
+        $definitions[0].RemoteAddress = @('Any')
+        $definitions[1].Enabled = 'False'
+    } else {
+        $ports = @('28984')
+        $definitions[0].RemoteAddress = @('LocalSubnet')
+        $definitions += @{ Name='MyAgentWorld.WAN.Java.Allow'; Action='Allow'; LocalAddress=@('Any'); RemoteAddress=@('Any'); Ports=@('28976','28977'); ByDisplayName=$true }
+    }
+}
 function Read-OwnedRules {
     $rows = @()
     foreach ($definition in $definitions) {
-        $rule = Get-NetFirewallRule -Name $definition.Name -ErrorAction SilentlyContinue
+        $rule = if ($definition.ByDisplayName) { Get-NetFirewallRule -DisplayName $definition.Name -ErrorAction SilentlyContinue } else { Get-NetFirewallRule -Name $definition.Name -ErrorAction SilentlyContinue }
         if ($null -eq $rule) { continue }
-        if ($rule.Group -ne $group -or $rule.Description -ne $description) { throw ('Rule name belongs to another configuration: '+$definition.Name) }
+        if (@($rule).Count -ne 1) { throw ('Ambiguous firewall rule: '+$definition.Name) }
+        if (-not $PublicGameAccess -and ($rule.Group -ne $group -or $rule.Description -ne $description)) { throw ('Rule name belongs to another configuration: '+$definition.Name) }
         $address = $rule | Get-NetFirewallAddressFilter
         $port = $rule | Get-NetFirewallPortFilter
-        $rows += [ordered]@{Name=$rule.Name;Enabled=[string]$rule.Enabled;Direction=[string]$rule.Direction;Action=[string]$rule.Action;Profile=[string]$rule.Profile;Protocol=[string]$port.Protocol;LocalPort=@($port.LocalPort);LocalAddress=@($address.LocalAddress);RemoteAddress=@($address.RemoteAddress)}
+        $rows += [ordered]@{Name=$definition.Name;RuleId=$rule.Name;Enabled=[string]$rule.Enabled;Direction=[string]$rule.Direction;Action=[string]$rule.Action;Profile=[string]$rule.Profile;Protocol=[string]$port.Protocol;LocalPort=@($port.LocalPort);LocalAddress=@($address.LocalAddress);RemoteAddress=@($address.RemoteAddress)}
     }
     return $rows
 }
@@ -51,6 +65,7 @@ function Save-Receipt($receipt) {
     Write-Output $json
 }
 try {
+    if ($PublicGameAccess -and $Mode -ne 'Status') { throw 'PublicGameAccess is read-only; use Mode Status' }
     if ($Mode -eq 'Plan') {
         Save-Receipt ([ordered]@{ok=$true;mode=$Mode;protocol=$protocol;localAddress='192.168.3.163';subnet='192.168.3.0/24';ports=$ports;definitions=$definitions;routerChanged=$false})
         exit 0
@@ -73,17 +88,19 @@ try {
     }
     $rows=@(Read-OwnedRules)
     if ($Mode -in @('Apply','Status')) {
-        if ($rows.Count -ne 2) { throw 'Firewall readback count mismatch' }
+        if ($rows.Count -ne $definitions.Count) { throw 'Firewall readback count mismatch' }
         foreach ($definition in $definitions) {
             $row=$rows|Where-Object {$_.Name -eq $definition.Name}
-            if ($row.Enabled -ne 'True' -or $row.Direction -ne 'Inbound' -or $row.Profile -ne 'Any' -or $row.Action -ne $definition.Action -or $row.Protocol -notin $protocolNumbers -or (@($row.LocalPort|Sort-Object)-join ',') -ne (@($ports|Sort-Object)-join ',')) { throw 'Firewall enabled/action/port readback mismatch' }
+            $expectedEnabled = if ($definition.Enabled) { $definition.Enabled } else { 'True' }
+            $expectedPorts = if ($definition.Ports) { $definition.Ports } else { $ports }
+            if ($row.Enabled -ne $expectedEnabled -or $row.Direction -ne 'Inbound' -or $row.Profile -ne 'Any' -or $row.Action -ne $definition.Action -or $row.Protocol -notin $protocolNumbers -or (@($row.LocalPort|Sort-Object)-join ',') -ne (@($expectedPorts|Sort-Object)-join ',')) { throw 'Firewall enabled/action/port readback mismatch' }
             if (($row.LocalAddress -join ',') -ne ($definition.LocalAddress -join ',')) { throw 'Firewall local-address readback mismatch' }
             # Windows may report a CIDR as its equivalent dotted mask.
             $actual=@($row.RemoteAddress|ForEach-Object {$_ -replace '/255\.255\.255\.0$','/24'}|Sort-Object)
             if (($actual -join ',') -ne (@($definition.RemoteAddress|Sort-Object)-join ',')) { throw 'Firewall remote-address readback mismatch' }
         }
     }
-    Save-Receipt ([ordered]@{ok=$true;mode=$Mode;rules=$rows;routerChanged=$false;at=[DateTime]::UtcNow.ToString('o')})
+    Save-Receipt ([ordered]@{ok=$true;mode=$Mode;publicGameAccess=[bool]$PublicGameAccess;rules=$rows;routerChanged=$false;at=[DateTime]::UtcNow.ToString('o')})
 } catch {
     Save-Receipt ([ordered]@{ok=$false;mode=$Mode;reason=$_.Exception.Message;routerChanged=$false;at=[DateTime]::UtcNow.ToString('o')})
     exit 1

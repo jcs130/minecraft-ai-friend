@@ -189,11 +189,15 @@ def probe_society_bedrock():
                 if models.get('voiceVersion') == 1:
                     checks['original-maid-voice-resources-and-registration']=actors['checks'].get('original-maid-voices-registered') is True
                     report['resources']['voices']=actors.get('voices')
-        firewall = subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
-            str(tools/'maw_lan_firewall.ps1'), '-Mode', 'Status', '-Bedrock'],
+        firewall_command = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+            str(tools/'maw_lan_firewall.ps1'), '-Mode', 'Status', '-Bedrock']
+        main_config = json.loads((bridge.ROOT/'services/service.json').read_text(encoding='utf-8-sig'))
+        if main_config.get('networkExposure', {}).get('publicGameAccess') is True:
+            firewall_command.append('-PublicGameAccess')
+        firewall = subprocess.run(firewall_command,
             capture_output=True, text=True, encoding='utf-8', timeout=20)
         firewall_state = json.loads(firewall.stdout)
-        checks['lan-firewall'] = firewall.returncode == 0 and firewall_state.get('ok') is True
+        checks['bedrock-firewall'] = firewall.returncode == 0 and firewall_state.get('ok') is True
         report['lanAccessReady'] = all(checks.values())
         report['state'] = {'pid': row.get('pid'), 'compatGatePid': rows['compat_gate'].get('pid'), 'bedrock': pong}
         report['ok'] = all(checks.values())

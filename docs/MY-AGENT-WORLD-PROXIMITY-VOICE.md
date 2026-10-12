@@ -1,5 +1,7 @@
 # My Agent World：Java 距离语音
 
+2026-10-12 公网增量：UDP 监听仍为 `192.168.3.163:28989`，广播地址已改为 `micro.kangqiang.site:28989`，守护通过显式 `advertisedHost` 校验。路由及公网防火墙已读回，本机挑战通过；公网真人语音尚未验。当前策略见 [公网维护](MY-AGENT-WORLD-PUBLIC-ACCESS.md)，下文 LAN-only 配置属于此前发布记录。
+
 2026-10-12；Minecraft 1.21.1 / NeoForge 21.1.248；分支 `experiment/agent-society-1.21.1`。
 
 采用 Max Henkel 的 **Simple Voice Chat 2.6.22**，与旧项目已有的语音接口一致。普通说话范围 32 格，悄悄话 8 格，客户端按距离和方向播放。关闭跨距离小组通话。此次只开放家庭局域网 Java 实时语音；用户决定基岩实时语音暂缓。

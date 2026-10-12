@@ -323,6 +323,55 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 layout.load(raw)
 
+    def test_public_game_access_is_explicit_and_keeps_admin_and_viewer_local(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            layout = Layout(tmp)
+            raw = self.lan(layout)
+            raw["networkExposure"]["publicGameAccess"] = True
+            raw["services"][1]["env"]["GATE_PUBLIC_GAME_ACCESS"] = "1"
+            config = layout.load(raw)
+            self.assertTrue(config["networkExposure"]["publicGameAccess"])
+            self.assertEqual(config["healthPort"], 28985)
+            self.assertEqual(config["services"][2]["healthUrl"], "http://127.0.0.1:28984/healthz")
+            self.assertEqual(config["services"][2]["env"]["MAW_VIEWER_LAN_ADDRESS"], "192.168.3.163")
+            for flag in ("true", 1, None):
+                changed = copy.deepcopy(raw)
+                changed["networkExposure"]["publicGameAccess"] = flag
+                with self.subTest(flag=flag), self.assertRaises(ValueError):
+                    layout.load(changed)
+            for flag, env in ((False, "1"), (True, "0"), (True, "true")):
+                changed = copy.deepcopy(raw)
+                changed["networkExposure"]["publicGameAccess"] = flag
+                changed["services"][1]["env"]["GATE_PUBLIC_GAME_ACCESS"] = env
+                with self.assertRaisesRegex(ValueError, "public game access"):
+                    layout.load(changed)
+
+    def test_public_voice_advertisement_is_configured_and_retains_runtime_guard(self):
+        import maw_voice
+        with tempfile.TemporaryDirectory() as tmp:
+            layout = Layout(tmp)
+            raw = self.lan(layout)
+            raw["networkExposure"]["publicGameAccess"] = True
+            raw["services"][1]["env"]["GATE_PUBLIC_GAME_ACCESS"] = "1"
+            advertised = "micro.kangqiang.site:28989"
+            raw["voiceChat"] = {"host": maw_voice.HOST, "port": maw_voice.PORT, "advertisedHost": advertised}
+            with patch.object(maw_voice, "validate") as validate:
+                config = layout.load(raw)
+                validate.assert_called_once_with(layout.server, advertised_host=advertised)
+            java = config["services"][0]
+            self.assertEqual(java["voiceChat"], {"host": maw_voice.HOST, "port": maw_voice.PORT})
+            self.assertEqual(java["voiceAdvertisedHost"], advertised)
+            supervisor = service.Supervisor.__new__(service.Supervisor)
+            supervisor.config = config
+            with patch.object(maw_voice, "validate", side_effect=ValueError("advertisement drift")) as validate:
+                with self.assertRaisesRegex(ValueError, "advertisement drift"):
+                    supervisor.validate_runtime()
+                validate.assert_called_once_with(layout.server, **java["voiceChat"], advertised_host=advertised, check_jar=False)
+            changed = copy.deepcopy(raw)
+            changed["networkExposure"]["publicGameAccess"] = False
+            with self.assertRaisesRegex(ValueError, "advertisement requires"):
+                layout.load(changed)
+
     def test_real_port_and_dependencies_and_no_env_projection(self):
         with tempfile.TemporaryDirectory() as tmp:
             layout = Layout(tmp)

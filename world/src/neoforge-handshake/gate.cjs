@@ -36,7 +36,9 @@ const { decodeNeoForgeTime } = require('./time-payload.cjs')
 const { cookingPotWindow } = require('./advanced-open-screen.cjs')
 const { createNativeMenuProxyGuard } = require('./native-menu-proxy-guard.cjs')
 const { lanPeerPolicy } = require('./lan-peer-policy.cjs')
-const acceptsPeer = lanPeerPolicy(process.env.GATE_LAN_SUBNET ?? null)
+const publicGameAccess = process.env.GATE_PUBLIC_GAME_ACCESS ?? '0'
+if (!['0', '1'].includes(publicGameAccess)) throw Error('GATE_PUBLIC_GAME_ACCESS_INVALID')
+const acceptsPeer = lanPeerPolicy(process.env.GATE_LAN_SUBNET ?? null, publicGameAccess === '1')
 const vanillaMenuParserWindows = require('prismarine-windows')('1.21.1').windows
 const { loadBackendComponentProtocol, vanillaProjection, isItemPacket, disconnectComponent } = require('./component-protocol.cjs')
 const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE, process.env.GATE_PARTICLES_FILE,

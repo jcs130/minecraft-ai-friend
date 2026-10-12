@@ -1,5 +1,7 @@
 My Agent World 局域网连接方法（2026-10-12）
 
+新增公网游戏入口：micro.kangqiang.site，Java 28976 / Agent 28977 / 基岩 UDP 28988 / Java 语音 UDP 28989。完整见 MY-AGENT-WORLD-PUBLIC-CONNECT.txt；网页和 Numen MCP 仍限内网。
+
 设备连接家里的同一局域网，网段为 192.168.3.x。
 
 基岩版（手机、平板、Windows 国际版）：添加服务器，名称 My Agent World，地址 192.168.3.163，端口 28988（UDP）。

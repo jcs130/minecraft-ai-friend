@@ -64,6 +64,32 @@ class VoiceHealthTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "locked stable"):
                 voice.validate(root)
 
+    def test_public_advertisement_keeps_local_socket_and_detects_drift(self):
+        advertised = "micro.kangqiang.site:28989"
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            path = root / "config/voicechat/voicechat-server.properties"
+            path.parent.mkdir(parents=True)
+            path.write_text(voice.render_config(advertised_host=advertised), encoding="utf-8")
+            result = voice.validate(root, advertised_host=advertised, check_jar=False)
+            self.assertEqual(result["host"], voice.HOST)
+            self.assertEqual(result["advertisedHost"], advertised)
+            with self.assertRaisesRegex(ValueError, "voice_host"):
+                voice.validate(root, check_jar=False)
+            path.write_text(voice.render_config(advertised_host=advertised).replace(
+                "bind_address=192.168.3.163", "bind_address=0.0.0.0"), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "bind_address"):
+                voice.validate(root, advertised_host=advertised, check_jar=False)
+
+    def test_public_advertisement_refuses_malformed_hosts_and_research(self):
+        for advertised in ("micro.kangqiang.site:24454", "https://micro.kangqiang.site:28989",
+                "micro.kangqiang.site:28989\nforce_voice_chat=true", "-bad.example:28989",
+                "foo..example:28989", "0.0.0.0:28989", "localhost:28989", {}, "a" * 64 + ".example:28989"):
+            with self.subTest(advertised=advertised), self.assertRaises(ValueError):
+                voice.settings(advertised_host=advertised)
+        with self.assertRaises(ValueError):
+            voice.settings("127.0.0.1", 28980, advertised_host="micro.kangqiang.site:28989")
+
     def test_research_and_production_endpoints_not_interchangeable(self):
         self.assertEqual(voice.settings("127.0.0.1", 28980)["voice_host"], "127.0.0.1:28980")
         for endpoint in (("0.0.0.0", voice.PORT), (voice.HOST, 24454), ("127.0.0.1", voice.PORT)):

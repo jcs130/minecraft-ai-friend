@@ -122,7 +122,9 @@ def load_config(path: Path, *, expected_root: Path = ROOT, expected_repo: Path =
     exposure = {"mode": "loopback", "listenHost": "127.0.0.1", "address": None, "subnet": None}
     if "networkExposure" in raw:
         requested = raw["networkExposure"]
-        if (not isinstance(requested, dict) or set(requested) != {"mode", "address"}
+        if (not isinstance(requested, dict) or not {"mode", "address"} <= set(requested)
+                or set(requested) - {"mode", "address", "publicGameAccess"}
+                or type(requested.get("publicGameAccess", False)) is not bool
                 or requested["mode"] != "lan" or not isinstance(requested["address"], str) or server != root / "server"):
             raise ValueError("Only the main server supports an explicit LAN mode/address")
         address = ipaddress.IPv4Address(requested["address"])
@@ -130,7 +132,8 @@ def load_config(path: Path, *, expected_root: Path = ROOT, expected_repo: Path =
         if not any(address in ipaddress.IPv4Network(network) for network in private) or int(address) % 256 in (0, 255):
             raise ValueError("LAN address must be a private IPv4 host in its /24 subnet")
         exposure = {"mode": "lan", "listenHost": "0.0.0.0", "address": str(address),
-                    "subnet": str(ipaddress.IPv4Network(f"{address}/24", strict=False))}
+                    "subnet": str(ipaddress.IPv4Network(f"{address}/24", strict=False)),
+                    "publicGameAccess": requested.get("publicGameAccess", False)}
     game_port = check_server(server, bind_host=exposure["listenHost"])
     if exposure["mode"] == "lan" and game_port != 28976:
         raise ValueError("Research ports remain loopback-only")
@@ -141,16 +144,26 @@ def load_config(path: Path, *, expected_root: Path = ROOT, expected_repo: Path =
     if not isinstance(rows, list) or [row.get("id") for row in rows] != list(ROLES):
         raise ValueError("services must be ordered java, gate, worker")
     voice = raw.get("voiceChat")
+    voice_advertisement = None
     if "voiceChat" in raw:
         import maw_voice
         expected_voice = {"host": maw_voice.HOST, "port": maw_voice.PORT}
         if (server != root / "server" or exposure["mode"] != "lan"
-                or exposure["address"] != maw_voice.HOST or voice != expected_voice):
+                or exposure["address"] != maw_voice.HOST or not isinstance(voice, dict)
+                or set(voice) - {"host", "port", "advertisedHost"}
+                or {key: voice.get(key) for key in expected_voice} != expected_voice):
             raise ValueError("Voice is only supported at its explicit main LAN endpoint")
-        maw_voice.validate(server)
+        if "advertisedHost" in voice:
+            voice_advertisement = voice["advertisedHost"]
+            if not exposure.get("publicGameAccess") or voice_advertisement is None:
+                raise ValueError("Voice advertisement requires explicit public game access")
+            maw_voice.validate(server, advertised_host=voice_advertisement)
+        else:
+            maw_voice.validate(server)
+        voice = expected_voice
     services = []
     for row, port, dependencies in zip(rows, (game_port, gate_port, worker_port), ([], ["java"], ["gate"])):
-        if "voiceChat" in row:
+        if "voiceChat" in row or "voiceAdvertisedHost" in row:
             raise ValueError("Voice must be configured once at top level, for the Java owner")
         command, env = row.get("command"), row.get("env", {})
         cwd = Path(row.get("cwd", "")).resolve()
@@ -168,6 +181,8 @@ def load_config(path: Path, *, expected_root: Path = ROOT, expected_repo: Path =
         if (not isinstance(env, dict) or any(not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", key)
                 or not isinstance(value, str) or "\0" in value for key, value in env.items())):
             raise ValueError("env must contain valid string environment entries")
+        if row["id"] == "gate" and env.get("GATE_PUBLIC_GAME_ACCESS", "0") != ("1" if exposure.get("publicGameAccess") else "0"):
+            raise ValueError("Gate public game access must match the explicit network configuration")
         if exposure["mode"] == "lan":
             if row["id"] == "java" and command[1] != "-Djava.net.preferIPv4Stack=true":
                 raise ValueError("LAN Java must keep IPv6 closed with its first JVM argument")
@@ -195,6 +210,7 @@ def load_config(path: Path, *, expected_root: Path = ROOT, expected_repo: Path =
         if not isinstance(startup, (int, float)) or not 10 <= startup <= 600:
             raise ValueError("startupTimeoutSeconds must be 10..600")
         services.append({**row, **({"voiceChat": voice} if voice and row["id"] == "java" else {}),
+            **({"voiceAdvertisedHost": voice_advertisement} if voice_advertisement and row["id"] == "java" else {}),
             "command": command, "cwd": str(cwd), "env": env,
             "port": port, "listenHost": exposure["listenHost"], "dependsOn": dependencies, "readiness": readiness,
             "healthUrl": health_url, "stopMode": stop_mode, "stopText": stop_text,
@@ -610,10 +626,11 @@ class Supervisor:
         server = Path(self.config['serverDir'])
         check_server(server, self.config['gamePort'],
             bind_host=self.config.get('networkExposure', {}).get('listenHost', '127.0.0.1'))
-        voice = next((row['voiceChat'] for row in self.config['services'] if row.get('voiceChat')), None)
-        if voice:
+        java = next((row for row in self.config['services'] if row.get('voiceChat')), None)
+        if java:
             import maw_voice
-            maw_voice.validate(server, **voice, check_jar=False)
+            extra = {"advertised_host": java["voiceAdvertisedHost"]} if java.get("voiceAdvertisedHost") else {}
+            maw_voice.validate(server, **java["voiceChat"], **extra, check_jar=False)
 
     def paused(self):
         return (self.directory / "paused.json").exists()

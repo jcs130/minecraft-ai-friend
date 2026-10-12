@@ -150,6 +150,9 @@ def load_config(path: Path, *, root: Path = ROOT) -> dict:
         'GATE_CACHE_FILE': str(directory/'knowledge.json'),
         'GATE_FAILURE_CAPTURE_FILE': str(directory/'protocol-failures.jsonl')}
     gate_env.pop('GATE_LAN_SUBNET', None)
+    # This internal transport only accepts the local ViaProxy; do not inherit
+    # public game admission from the separate external Agent gateway.
+    gate_env.pop('GATE_PUBLIC_GAME_ACCESS', None)
     # This challenge travels through the player's actual connection; the
     # authenticated local form bridge returns it only after Xbox validation.
     gate_env['GATE_EXTRA_PLAY_CHANNELS'] = ','.join(dict.fromkeys(

@@ -11,6 +11,7 @@ import ipaddress
 import json
 import os
 from pathlib import Path
+import re
 import socket
 import struct
 import subprocess
@@ -33,11 +34,22 @@ class VoiceUnavailable(RuntimeError):
     """A failed UDP challenge; debounce separately from game/config failures."""
 
 
-def settings(host=HOST, port=PORT):
-    # Research runs remain local; the production voice endpoint is LAN only.
+def settings(host=HOST, port=PORT, *, advertised_host=None):
+    # The UDP socket stays on its fixed interface. NAT advertisement is separate.
     if (host, port) not in ((HOST, PORT), ("127.0.0.1", 28980)):
         raise ValueError("Unexpected voice endpoint")
-    return {"port": str(port), "bind_address": host, "voice_host": f"{host}:{port}",
+    advertised = f"{host}:{port}"
+    if advertised_host is not None:
+        if (host, port) != (HOST, PORT) or not isinstance(advertised_host, str):
+            raise ValueError("Public voice advertisement is only supported for the main endpoint")
+        name, separator, advertised_port = advertised_host.rpartition(":")
+        labels = name.split(".")
+        if (separator != ":" or advertised_port != str(port) or len(name) > 253
+                or len(labels) < 2 or not any(c.isalpha() for c in name)
+                or any(not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label) for label in labels)):
+            raise ValueError("Voice advertisedHost must be a DNS hostname with the fixed voice port")
+        advertised = advertised_host
+    return {"port": str(port), "bind_address": host, "voice_host": advertised,
         "max_voice_distance": "32.0", "whisper_distance": "8.0", "codec": "VOIP",
         "mtu_size": "1275", "tcp_rate_limit": "16", "keep_alive": "1000",
         "enable_groups": "false", "allow_recording": "true",
@@ -47,21 +59,21 @@ def settings(host=HOST, port=PORT):
         "threaded_server_support": "false"}
 
 
-def render_config(host=HOST, port=PORT):
+def render_config(host=HOST, port=PORT, *, advertised_host=None):
     return ("# My Agent World: optional Java proximity voice; no automatic recording\n"
-        + "\n".join(f"{key}={value}" for key, value in settings(host, port).items()) + "\n")
+        + "\n".join(f"{key}={value}" for key, value in settings(host, port, advertised_host=advertised_host).items()) + "\n")
 
 
-def validate(server: Path, host=HOST, port=PORT, *, check_jar=True):
+def validate(server: Path, host=HOST, port=PORT, *, advertised_host=None, check_jar=True):
     from maw_service import properties
-    expected = settings(host, port)
+    expected = settings(host, port, advertised_host=advertised_host)
     actual = properties(server / "config/voicechat/voicechat-server.properties")
     for key, value in expected.items():
         if actual.get(key) != value:
             raise ValueError(f"Voice configuration changed: {key}")
     if check_jar and hashlib.sha256((server / "mods" / NAME).read_bytes()).hexdigest() != SHA256:
         raise ValueError("Voice JAR differs from the locked stable release")
-    return {"host": host, "port": port, "maxDistance": 32, "whisperDistance": 8,
+    return {"host": host, "port": port, "advertisedHost": expected["voice_host"], "maxDistance": 32, "whisperDistance": 8,
         "clientRequiredForGame": False, "groupsEnabled": False}
 
 
@@ -114,10 +126,10 @@ def health(*, check_firewall=True):
         "bedrockVoiceSupported": False, "agentSpeechRecognitionEnabled": False}
     try:
         checks = report["checks"]
-        report["configuration"] = validate(ROOT / "server")
-        checks["locked-stable-artifact-and-config"] = True
         spec = load_config(ROOT / "services/service.json")
         java_spec = next(row for row in spec["services"] if row["id"] == "java")
+        report["configuration"] = validate(ROOT / "server", advertised_host=java_spec.get("voiceAdvertisedHost"))
+        checks["locked-stable-artifact-and-config"] = True
         checks["voice-supervised-with-java"] = java_spec.get("voiceChat") == {"host": HOST, "port": PORT}
         gate_spec = next(row for row in spec["services"] if row["id"] == "gate")
         checks["optional-voice-channels"] = set(CHANNELS) <= set(gate_spec["env"].get("GATE_EXTRA_PLAY_CHANNELS", "").split(","))
@@ -139,10 +151,13 @@ def health(*, check_firewall=True):
         voice_metrics = java.get("metrics", {}).get("voiceChat", {})
         checks["supervisor-voice-ping"] = voice_metrics.get("protocol") == "svc-ping-v1" and voice_metrics.get("ready") is True
         if check_firewall:
-            result = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-                str(REPO / "tools/maw_lan_firewall.ps1"), "-Voice", "-Mode", "Status"],
+            command = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                str(REPO / "tools/maw_lan_firewall.ps1"), "-Voice", "-Mode", "Status"]
+            if spec["networkExposure"].get("publicGameAccess"):
+                command.append("-PublicGameAccess")
+            result = subprocess.run(command,
                 capture_output=True, text=True, encoding="utf-8", timeout=20)
-            checks["lan-firewall"] = result.returncode == 0 and json.loads(result.stdout).get("ok") is True
+            checks["voice-firewall"] = result.returncode == 0 and json.loads(result.stdout).get("ok") is True
         report["javaPid"] = java["pid"]
         report["ok"] = all(checks.values())
     except (OSError, ValueError, KeyError, TypeError, StopIteration, subprocess.TimeoutExpired) as error:

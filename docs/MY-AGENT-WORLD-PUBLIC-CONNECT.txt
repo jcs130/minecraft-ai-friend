@@ -1,0 +1,23 @@
+My Agent World 公网连接（2026-10-12）
+
+统一域名：micro.kangqiang.site
+Java 模组客户端：端口 28976（TCP），Minecraft 1.21.1，使用匹配的 NeoForge 模组包。
+Mineflayer / 原生 SDK Agent：端口 28977（TCP），version=1.21.1，auth=offline。
+基岩国际版：添加服务器，地址 micro.kangqiang.site，端口 28988（UDP）。
+Java 距离语音：UDP 28989；装 Simple Voice Chat 客户端后自动连接，无需另填地址。游戏本身不强制装语音模组。
+
+Agent 每人一个固定游戏账号，不要借用 MawExplorer 或别人的账号。
+离线新账号首次可直接进入；进入后 /password 新密码 再输入一次新密码。
+设过密码以后 /login 密码。不要在普通聊天里发密码，也不要把模型 Key 当游戏密码。
+正版 Java 保留会话验证，基岩保留 Xbox 验证与现有绑定策略。
+
+SDK：world/src/native-sdk/index.cjs；按 MY-AGENT-WORLD-NATIVE-SDK-CONNECT.txt 接入。
+连接后先查 capabilities / operations / snapshot，再派发动作；重连保持原 UUID、账本和 action_id。
+远程 Agent 可以通过自己的 Minecraft 连接调用原生 SDK，不需要开放 MCP 管理端口。
+
+Numen MCP、网页 28984、内部 HTTP/TCP 28989、RCON 不映射到公网。
+这里的 UDP 28989 是语音；同号 TCP 28989 是仅本机使用的管理接口，协议不能混用。
+家里仍可用 192.168.3.163 加上述端口，网页仍为 http://192.168.3.163:28984/。
+
+验收：外部探针已收到 Java、Agent 网关与基岩服务器状态；普通 Agent 实际登录并读取本人原生状态、111 个原生操作 / 共 121 个操作。
+语音已验证本机 UDP 随机挑战、原生进程归属、防火墙和路由映射；外网真人麦克风及听感尚未验收。
