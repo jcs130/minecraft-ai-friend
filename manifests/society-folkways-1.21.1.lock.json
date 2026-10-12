@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "minecraftVersion": "1.21.1",
+  "neoforgeVersion": "21.1.248",
+  "artifacts": [
+    {
+      "name": "ldlib2-neoforge-1.21.1-2.2.42-all.jar",
+      "kind": "mod",
+      "profile": "folkways",
+      "project": "https://modrinth.com/mod/ldlib",
+      "version": "mc1.21.1-2.2.42-neoforge",
+      "versionId": "aEbn4hye",
+      "url": "https://cdn.modrinth.com/data/B1CBVXHX/versions/aEbn4hye/ldlib2-neoforge-1.21.1-2.2.42-all.jar",
+      "sha256": "e98758b5089d40ca5ae5c8d928b9057feddff10b000bc37c0e3a480e1e19911b",
+      "sha512": "09823f2676e5d9b2c4e5cc01edfb6e1b04f5aec5e5b0da8cebb7f5f557dcead239cef6b5cf4d00cd484a2ebb05f5d39fdce3a61f80f41b27e03cfca2acc1379b",
+      "dependencies": [
+        {
+          "version_id": null,
+          "project_id": "u6dRKJwZ",
+          "file_name": null,
+          "dependency_type": "optional"
+        }
+      ]
+    },
+    {
+      "name": "folkways-neoforge-1.21.1-0.1.0.jar",
+      "kind": "mod",
+      "profile": "folkways",
+      "project": "https://github.com/IzakyL/folkways",
+      "version": "0.1.0-nightly",
+      "commit": "5567e84e872a674b1e5a3c764d226bcab348d63b",
+      "url": "https://github.com/IzakyL/folkways/releases/download/nightly/folkways-neoforge-1.21.1-0.1.0.jar",
+      "sha256": "ceb91a62c9542a2f42dddd6d3c52b720e5214c1a04d6b0cb7f41b43c8ad8d44f",
+      "upstreamStatus": "untested_prerelease"
+    }
+  ],
+  "profile": "folkways",
+  "deploymentStatus": "isolated_only",
+  "productionDeployed": false,
+  "sourceRepository": "https://github.com/IzakyL/folkways",
+  "sourceReviewedCommit": "5567e84e872a674b1e5a3c764d226bcab348d63b",
+  "channel": "upstream-nightly-prerelease",
+  "prerequisiteProfile": "performance"
+}

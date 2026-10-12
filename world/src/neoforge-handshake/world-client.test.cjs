@@ -47,7 +47,7 @@ test('native raycast waits until forced rotation has reached the physics tick', 
   await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(operations, [
     { kind: 'look', point: target.position.offset(0.5, 0.5, 0.5), force: true },
-    { kind: 'tick', ticks: 1 }
+    { kind: 'tick', ticks: 2 }
   ])
   assert.equal(sent, null, 'query must not overtake the outgoing rotation')
   finishTick()
@@ -93,6 +93,28 @@ function nativeReplyBot () {
     })
   }
 }
+
+test('explicit read throttles repeat only bounded observation packets', async () => {
+  const f = nativeReplyBot(), world = attachWorldClient(f.bot)
+  let reads = 0
+  f.bot._client.write = (name, packet) => {
+    reads++
+    const requestId = JSON.parse(packet.data.toString('utf8')).requestId
+    queueMicrotask(() => f.bot._client.emit('custom_payload', { channel: 'maw_agent:world_state',
+      data: Buffer.from(JSON.stringify({ schemaVersion: 1, kind: 'world_receipt', playerUuid: UUID_A,
+        requestId, ok: false, code: 'rate_limited' })) }))
+    assert.equal(name, 'custom_payload'); assert.equal(packet.channel, 'maw_agent:world_query')
+  }
+  assert.equal((await world.lookAtBlock({ position: new Vec3(0, 64, 0) })).code, 'rate_limited')
+  assert.equal(reads, 4); world.detach()
+})
+
+test('respawn while waiting for rotation cannot inspect a new dimension with the old target', async () => {
+  const f = nativeReplyBot(), world = attachWorldClient(f.bot)
+  f.bot.waitForTicks = async () => { f.bot.emit('respawn') }
+  await assert.rejects(world.lookAtBlock({ position: new Vec3(0, 64, 0) }), /WORLD_CONTEXT_CHANGED/)
+  assert.equal(f.sent(), undefined); world.detach()
+})
 
 test('visible millstone reply retains native input, complete components and real processing values', async () => {
   const fixture = nativeReplyBot()

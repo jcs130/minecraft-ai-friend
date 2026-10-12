@@ -24,6 +24,19 @@ const domumSelection = { ...object({ selection: { type: 'string', enum: ['group'
 // These are the actual low-level APIs. Maw's body-plan descriptors are separate.
 const definitions = [
   ...[
+    ['state', true, '查询手持已绑定殖民书对应的 Folkways 居民、仓库与区域，坐标均为当前维度绝对坐标；未安装明确返回不可用。', object()],
+    ['catalog', true, '列出当前 Folkways 实际注册的工作区域类型和大小限制；本版区域使用原生默认设置。', object()],
+    ['orders', true, '查询本人持书管理的 Folkways 原生委托、绝对目的地、所需物品、数量和配送剩余数；NPC实际生产与交货，不生成物品。', object()],
+    ['rail', true, '查询本殖民地实际接管的 Create 列车、站点、时刻表错误、列车长和乘客座位；不会枚举其他聚落列车。', object()],
+    ['logistics', true, '读取近处可见且本人有原生管理权限的 Create 包裹网络、供应、蛙港、柜台座位及链条停转/断开等故障。', object({ position, aimOffset }, ['position'])],
+    ['found', false, '用本人手上未绑定的真实殖民书建立 Folkways 殖民地；已绑定时返回原殖民地，不另建。', object({ requestId })],
+    ['hire', false, '按 Folkways 原生移民队列招募居民；保留床位、食物和等待时间要求。缺少条件返回原生原因，不强制生成NPC。', object({ residentKind: namespace, requestId }, ['residentKind'])],
+    ['order', false, '对本聚落近处真实容器发布一次deliver、持续maintain或withdraw委托；实际居民负责生产与配送。low/count为库存阈值/目标，rank=-2优先至2。', object({ position, expectedBlockId: namespace, mode: { type: 'string', enum: ['deliver', 'maintain', 'withdraw'] }, itemId: namespace, low: integer(1, 9999), count: integer(1, 9999), rank: integer(-2, 2), aimOffset, requestId }, ['position', 'expectedBlockId', 'mode', 'itemId', 'low', 'count', 'rank'])],
+    ['logisticsLink', false, '将近处 Create 包裹网络按期望joined交给本聚落/交回。原生检查网络归属、同维度加载、打包机-蛙港-同一转动链网，故障不强制接管。', object({ position, expectedBlockId: namespace, joined: { type: 'boolean' }, aimOffset, requestId }, ['position', 'expectedBlockId', 'joined'])],
+    ['member', false, '将近处可见的箱子或工作站加入/移出本人持书管理的 Folkways 殖民地；joined 为期望状态，不是无条件切换。', object({ position, expectedBlockId: namespace, joined: { type: 'boolean' }, requestId }, ['position', 'expectedBlockId', 'joined'])],
+    ['zone', false, '按 catalog 返回的 Volume 工作类型划区，使用原生默认设置。最多4096格、两端32格内、须已加载并有建设权限；不能越过领地保护。', object({ delegation: namespace, min: position, max: position, requestId }, ['delegation', 'min', 'max'])]
+  ].map(([kind, readOnly, description, parameters]) => ['folkways.' + kind, readOnly, description, parameters, (c, a) => c.mods.folkways.request(kind === 'logisticsLink' ? 'logistics_link' : kind, a)]),
+  ...[
     ['rpg.state', true, '本人原生魔力、职业/技能点/熟练、Stacia天命/装备耐久、System Call目录、试炼状态、账户及异步探矿绝对坐标结果。', object(), 'state'],
     ['rpg.skills', true, '36项基础与战法牧技能：说明、资格、等级、熟练、真实总/剩余冷却；先发现再施放。', object(), 'skills'],
     ['protection.query', true, '查询绝对坐标处 break/place/use 的本人领地、试炼与殖民地权限；未知不等于许可。只读，不加载区块。', object({ action: { type: 'string', enum: ['break', 'place', 'use'] }, position }, ['action', 'position']), 'protect'],

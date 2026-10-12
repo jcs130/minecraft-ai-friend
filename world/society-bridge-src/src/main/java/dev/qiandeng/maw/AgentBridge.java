@@ -37,6 +37,9 @@ import java.util.UUID;
 public final class AgentBridge {
     private static final String PREFIX = "MAW_AGENT ";
     public AgentBridge(IEventBus eventBus, ModContainer container) {
+        ServerPerformance.register();
+        NativeRegistryDump.register();
+        FolkwaysUiCompat.register(eventBus);
         PlayerAuthBridge.register(eventBus);
         SocietyLifeBridge.register();
         RpgMigrationBridge.register(eventBus);

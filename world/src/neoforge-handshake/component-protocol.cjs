@@ -17,6 +17,11 @@ const { domumNativeTypes } = require('./native-domum-codec.cjs')
 const MOD_CODECS = {
   'touhou_little_maid:init_maid_owner': 'UUID',
   'patchouli:book': 'string',
+  // Folkways 5567e84: UUIDUtil.STREAM_CODEC, enum idMapper, ResourceLocation.
+  // Resolve IDs from the running mod set; adding mods can reorder registries.
+  'folkways:colony_id': 'UUID',
+  'folkways:book_gesture': 'varint',
+  'folkways:filter_tag': 'string',
   'ars_nouveau:spell_caster': 'MawArsSpellCaster',
   'domum_ornamentum:texture_data': 'MawDomumTextureData'
 }

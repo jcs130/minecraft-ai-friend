@@ -1,8 +1,492 @@
 {
   "schemaVersion": 1,
   "source": "same_player_native_handlers",
-  "operationCount": 99,
+  "operationCount": 110,
   "operations": [
+    {
+      "id": "folkways.state",
+      "readOnly": true,
+      "description": "查询手持已绑定殖民书对应的 Folkways 居民、仓库与区域，坐标均为当前维度绝对坐标；未安装明确返回不可用。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "folkways.state",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "folkways_state",
+      "defaults": {}
+    },
+    {
+      "id": "folkways.catalog",
+      "readOnly": true,
+      "description": "列出当前 Folkways 实际注册的工作区域类型和大小限制；本版区域使用原生默认设置。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "folkways.catalog",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "folkways_catalog",
+      "defaults": {}
+    },
+    {
+      "id": "folkways.found",
+      "readOnly": false,
+      "description": "用本人手上未绑定的真实殖民书建立 Folkways 殖民地；已绑定时返回原殖民地，不另建。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "folkways.found",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "folkways_found",
+      "defaults": {}
+    },
+    {
+      "id": "folkways.member",
+      "readOnly": false,
+      "description": "将近处可见的箱子或工作站加入/移出本人持书管理的 Folkways 殖民地；joined 为期望状态，不是无条件切换。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "expectedBlockId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "joined": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "position",
+          "expectedBlockId",
+          "joined"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "folkways.member",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "folkways_member",
+      "defaults": {}
+    },
+    {
+      "id": "folkways.zone",
+      "readOnly": false,
+      "description": "按 catalog 返回的 Volume 工作类型划区，使用原生默认设置。最多4096格、两端32格内、须已加载并有建设权限；不能越过领地保护。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "delegation": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "min": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "max": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          }
+        },
+        "required": [
+          "delegation",
+          "min",
+          "max"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "folkways.zone",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "folkways_zone",
+      "defaults": {}
+    },
+    {
+      "id": "folkways.orders",
+      "readOnly": true,
+      "description": "查询本人持书管理的 Folkways 原生委托、绝对目的地、所需物品、数量和配送剩余数；NPC实际生产与交货，不生成物品。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "folkways.orders",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "folkways_orders",
+      "defaults": {}
+    },
+    {
+      "id": "folkways.order",
+      "readOnly": false,
+      "description": "对本聚落近处真实容器发布一次deliver、持续maintain或withdraw委托；实际居民负责生产与配送。low/count为库存阈值/目标，rank=-2优先至2。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "expectedBlockId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "deliver",
+              "maintain",
+              "withdraw"
+            ]
+          },
+          "itemId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "low": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9999
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9999
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": -2,
+            "maximum": 2
+          },
+          "aimOffset": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        },
+        "required": [
+          "position",
+          "expectedBlockId",
+          "mode",
+          "itemId",
+          "low",
+          "count",
+          "rank"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "folkways.order",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "folkways_order",
+      "defaults": {}
+    },
+    {
+      "id": "folkways.hire",
+      "readOnly": false,
+      "description": "按 Folkways 原生移民队列招募居民；保留床位、食物和等待时间要求。缺少条件返回原生原因，不强制生成NPC。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "residentKind": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "residentKind"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "folkways.hire",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "folkways_hire",
+      "defaults": {}
+    },
+    {
+      "id": "folkways.logistics",
+      "readOnly": true,
+      "description": "读取近处可见且本人有原生管理权限的 Create 包裹网络、供应、蛙港、柜台座位及链条停转/断开等故障。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "aimOffset": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        },
+        "required": [
+          "position"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "folkways.logistics",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "folkways_logistics",
+      "defaults": {}
+    },
+    {
+      "id": "folkways.rail",
+      "readOnly": true,
+      "description": "查询本殖民地实际接管的 Create 列车、站点、时刻表错误、列车长和乘客座位；不会枚举其他聚落列车。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "folkways.rail",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "folkways_rail",
+      "defaults": {}
+    },
+    {
+      "id": "folkways.logisticsLink",
+      "readOnly": false,
+      "description": "将近处 Create 包裹网络按期望joined交给本聚落/交回。原生检查网络归属、同维度加载、打包机-蛙港-同一转动链网，故障不强制接管。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "expectedBlockId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$",
+            "maxLength": 256
+          },
+          "joined": {
+            "type": "boolean"
+          },
+          "aimOffset": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        },
+        "required": [
+          "position",
+          "expectedBlockId",
+          "joined"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "folkways.logisticsLink",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "folkways_logistics_link",
+      "defaults": {}
+    },
     {
       "id": "society.state",
       "readOnly": true,

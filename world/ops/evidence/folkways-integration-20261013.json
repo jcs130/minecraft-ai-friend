@@ -1,0 +1,629 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-13",
+  "scope": "isolated_acceptance_only",
+  "productionDeployed": false,
+  "paidModelCalls": 0,
+  "productionWorldActions": 0,
+  "server": "NeoForge 21.1.248 / Minecraft 1.21.1 / Java 21",
+  "sourceReviewedCommit": "5567e84e872a674b1e5a3c764d226bcab348d63b",
+  "bridgeSha256": "ee34efff4bac7e68579666141d6fa782b20c74aced536d82ef067c2fc0f9eba8",
+  "suites": {
+    "baseline": {
+      "ok": true,
+      "checks": [
+        {
+          "name": "authentication",
+          "ok": true
+        },
+        {
+          "name": "native bindings",
+          "ok": true
+        },
+        {
+          "name": "real body",
+          "ok": true
+        },
+        {
+          "name": "body.observe read",
+          "ok": true
+        },
+        {
+          "name": "body.move accepted",
+          "ok": true
+        },
+        {
+          "name": "body.move terminal",
+          "ok": true
+        },
+        {
+          "name": "server confirmed move",
+          "ok": true
+        },
+        {
+          "name": "same action no replay",
+          "ok": true
+        },
+        {
+          "name": "society.state read",
+          "ok": true
+        },
+        {
+          "name": "rpg.skills read",
+          "ok": true
+        },
+        {
+          "name": "society.open accepted",
+          "ok": true
+        },
+        {
+          "name": "society.open terminal",
+          "ok": true
+        },
+        {
+          "name": "menu.current read",
+          "ok": true
+        },
+        {
+          "name": "market real container",
+          "ok": true
+        },
+        {
+          "name": "menu.close accepted",
+          "ok": true
+        },
+        {
+          "name": "menu.close terminal",
+          "ok": true
+        },
+        {
+          "name": "native.craftRecipe accepted",
+          "ok": true
+        },
+        {
+          "name": "native.craftRecipe terminal",
+          "ok": true
+        },
+        {
+          "name": "craft actual item",
+          "ok": true
+        }
+      ],
+      "reportSha256": "0a290c297c18c8862ff941d38a43a191d3f2b8835e8e1f06a865846811d31ee7"
+    },
+    "performanceExactModset": {
+      "ok": true,
+      "checks": [
+        {
+          "name": "authentication",
+          "ok": true
+        },
+        {
+          "name": "native bindings",
+          "ok": true
+        },
+        {
+          "name": "real body",
+          "ok": true
+        },
+        {
+          "name": "body.observe read",
+          "ok": true
+        },
+        {
+          "name": "body.move accepted",
+          "ok": true
+        },
+        {
+          "name": "body.move terminal",
+          "ok": true
+        },
+        {
+          "name": "server confirmed move",
+          "ok": true
+        },
+        {
+          "name": "same action no replay",
+          "ok": true
+        },
+        {
+          "name": "society.state read",
+          "ok": true
+        },
+        {
+          "name": "rpg.skills read",
+          "ok": true
+        },
+        {
+          "name": "society.open accepted",
+          "ok": true
+        },
+        {
+          "name": "society.open terminal",
+          "ok": true
+        },
+        {
+          "name": "menu.current read",
+          "ok": true
+        },
+        {
+          "name": "market real container",
+          "ok": true
+        },
+        {
+          "name": "menu.close accepted",
+          "ok": true
+        },
+        {
+          "name": "menu.close terminal",
+          "ok": true
+        },
+        {
+          "name": "native.craftRecipe accepted",
+          "ok": true
+        },
+        {
+          "name": "native.craftRecipe terminal",
+          "ok": true
+        },
+        {
+          "name": "craft actual item",
+          "ok": true
+        }
+      ],
+      "reportSha256": "fa2926d585007fd2ebc8b6ba930d83857da9ddccca3662db4f7bf2e81677f3a6"
+    },
+    "folkwaysAuthorityAndZones": {
+      "ok": true,
+      "checks": [
+        {
+          "name": "MawModQA authentication",
+          "ok": true
+        },
+        {
+          "name": "optional native bindings advertised",
+          "ok": true
+        },
+        {
+          "name": "folkways.catalog query",
+          "ok": true
+        },
+        {
+          "name": "folkways.state query",
+          "ok": true
+        },
+        {
+          "name": "real unbound book",
+          "ok": true
+        },
+        {
+          "name": "folkways.found accepted",
+          "ok": true
+        },
+        {
+          "name": "folkways.found terminal",
+          "ok": true
+        },
+        {
+          "name": "colony UUID",
+          "ok": true
+        },
+        {
+          "name": "folkways.found accepted",
+          "ok": true
+        },
+        {
+          "name": "folkways.found terminal",
+          "ok": true
+        },
+        {
+          "name": "found idempotent bound book",
+          "ok": true
+        },
+        {
+          "name": "folkways.member accepted",
+          "ok": true
+        },
+        {
+          "name": "folkways.member terminal",
+          "ok": true
+        },
+        {
+          "name": "folkways.state query",
+          "ok": true
+        },
+        {
+          "name": "real native store",
+          "ok": true
+        },
+        {
+          "name": "actual volume declaration",
+          "ok": true
+        },
+        {
+          "name": "folkways.zone accepted",
+          "ok": true
+        },
+        {
+          "name": "folkways.zone terminal",
+          "ok": true
+        },
+        {
+          "name": "folkways.state query",
+          "ok": true
+        },
+        {
+          "name": "native zone persisted",
+          "ok": true
+        },
+        {
+          "name": "no duplicate action",
+          "ok": true
+        },
+        {
+          "name": "MawFolkOther authentication",
+          "ok": true
+        },
+        {
+          "name": "folkways.state query",
+          "ok": true
+        },
+        {
+          "name": "second account does not enumerate first colony",
+          "ok": true
+        }
+      ],
+      "reportSha256": "6b9c1158215aa0b1c40426ca86d77d0a5223dd6918fdd83a9e00f3c11c3c094e"
+    },
+    "folkwaysResidentAndOrders": {
+      "ok": true,
+      "checks": [
+        {
+          "name": "authenticated",
+          "ok": true
+        },
+        {
+          "name": "folkways.state",
+          "ok": true
+        },
+        {
+          "name": "colony persisted between connections",
+          "ok": true
+        },
+        {
+          "name": "folkways.member accepted",
+          "ok": true
+        },
+        {
+          "name": "folkways.member known terminal",
+          "ok": true
+        },
+        {
+          "name": "folkways.member applied",
+          "ok": true
+        },
+        {
+          "name": "folkways.member accepted",
+          "ok": true
+        },
+        {
+          "name": "folkways.member known terminal",
+          "ok": true
+        },
+        {
+          "name": "folkways.member applied",
+          "ok": true
+        },
+        {
+          "name": "folkways.member accepted",
+          "ok": true
+        },
+        {
+          "name": "folkways.member known terminal",
+          "ok": true
+        },
+        {
+          "name": "folkways.member applied",
+          "ok": true
+        },
+        {
+          "name": "folkways.hire accepted",
+          "ok": true
+        },
+        {
+          "name": "folkways.hire known terminal",
+          "ok": true
+        },
+        {
+          "name": "folkways.hire applied",
+          "ok": true
+        },
+        {
+          "name": "folkways.state",
+          "ok": true
+        },
+        {
+          "name": "native immigrant actual entity",
+          "ok": true
+        },
+        {
+          "name": "folkways.rail",
+          "ok": true
+        },
+        {
+          "name": "Create transit provider real and no invented train",
+          "ok": true
+        },
+        {
+          "name": "folkways.order accepted",
+          "ok": true
+        },
+        {
+          "name": "folkways.order known terminal",
+          "ok": true
+        },
+        {
+          "name": "folkways.order applied",
+          "ok": true
+        },
+        {
+          "name": "folkways.orders",
+          "ok": true
+        },
+        {
+          "name": "actual native order saved",
+          "ok": true
+        },
+        {
+          "name": "folkways.orders",
+          "ok": true
+        },
+        {
+          "name": "folkways.orders",
+          "ok": true
+        },
+        {
+          "name": "folkways.orders",
+          "ok": true
+        },
+        {
+          "name": "folkways.orders",
+          "ok": true
+        },
+        {
+          "name": "folkways.orders",
+          "ok": true
+        },
+        {
+          "name": "folkways.orders",
+          "ok": true
+        },
+        {
+          "name": "folkways.orders",
+          "ok": true
+        },
+        {
+          "name": "folkways.orders",
+          "ok": true
+        },
+        {
+          "name": "menu.current",
+          "ok": true
+        },
+        {
+          "name": "world.interact accepted",
+          "ok": true
+        },
+        {
+          "name": "world.interact known terminal",
+          "ok": true
+        },
+        {
+          "name": "menu.current",
+          "ok": true
+        },
+        {
+          "name": "folkways.state",
+          "ok": true
+        }
+      ],
+      "reportSha256": "774a794336cafd90a2c622f0bb17bea24f41f8ac9b7bfe4cbd6e77be9c924785"
+    },
+    "actualDeliveryAndPlayerFarming": {
+      "ok": true,
+      "checks": [
+        {
+          "name": "authenticated",
+          "ok": true
+        },
+        {
+          "name": "menu.current",
+          "ok": true
+        },
+        {
+          "name": "empty actual hotbar slot exists",
+          "ok": true
+        },
+        {
+          "name": "inventory.select accepted",
+          "ok": true
+        },
+        {
+          "name": "inventory.select completed",
+          "ok": true
+        },
+        {
+          "name": "world.interact accepted",
+          "ok": true
+        },
+        {
+          "name": "world.interact completed",
+          "ok": true
+        },
+        {
+          "name": "menu.current",
+          "ok": true
+        },
+        {
+          "name": "NPC delivered eight real planks into destination chest",
+          "ok": true
+        },
+        {
+          "name": "menu.close accepted",
+          "ok": true
+        },
+        {
+          "name": "menu.close completed",
+          "ok": true
+        },
+        {
+          "name": "body.move accepted",
+          "ok": true
+        },
+        {
+          "name": "body.move completed",
+          "ok": true
+        },
+        {
+          "name": "world.lookAt accepted",
+          "ok": true
+        },
+        {
+          "name": "world.lookAt completed",
+          "ok": true
+        },
+        {
+          "name": "native wheat age one is not mature",
+          "ok": true
+        },
+        {
+          "name": "menu.current",
+          "ok": true
+        },
+        {
+          "name": "planner refuses immature harvest",
+          "ok": true
+        },
+        {
+          "name": "world.lookAt accepted",
+          "ok": true
+        },
+        {
+          "name": "world.lookAt completed",
+          "ok": true
+        },
+        {
+          "name": "menu.current",
+          "ok": true
+        },
+        {
+          "name": "native mature crop and actual seed recognized",
+          "ok": true
+        },
+        {
+          "name": "world.dig accepted",
+          "ok": true
+        },
+        {
+          "name": "world.dig completed",
+          "ok": true
+        },
+        {
+          "name": "world.lookAt accepted",
+          "ok": true
+        },
+        {
+          "name": "world.lookAt completed",
+          "ok": true
+        },
+        {
+          "name": "exposed native farmland after harvesting",
+          "ok": true
+        },
+        {
+          "name": "menu.current",
+          "ok": true
+        },
+        {
+          "name": "reserved real seed still exists",
+          "ok": true
+        },
+        {
+          "name": "inventory.select accepted",
+          "ok": true
+        },
+        {
+          "name": "inventory.select completed",
+          "ok": true
+        },
+        {
+          "name": "menu.current",
+          "ok": true
+        },
+        {
+          "name": "world.place accepted",
+          "ok": true
+        },
+        {
+          "name": "world.place completed",
+          "ok": true
+        },
+        {
+          "name": "world.lookAt accepted",
+          "ok": true
+        },
+        {
+          "name": "world.lookAt completed",
+          "ok": true
+        },
+        {
+          "name": "real wheat replanted at age zero",
+          "ok": true
+        }
+      ],
+      "reportSha256": "f1b7dffb0de396c8f5f38cad4ec207e5a8a2c789a2a2dfba590732e1c3c0a015"
+    }
+  },
+  "limitations": [
+    "No live release",
+    "No full NPC seasonal farm",
+    "No physical Create frogport delivery or train commute",
+    "No Folkways Web/Bedrock native GUI or actor pixel-parity acceptance",
+    "Performance samples are not a matched-load benchmark"
+  ],
+  "physicalEvidence": {
+    "deliveredToRealChest": [
+      {
+        "id": "minecraft:oak_planks",
+        "count": 8
+      }
+    ],
+    "immatureCrop": {
+      "source": "native_crop_block",
+      "mature": false,
+      "maxAge": 7,
+      "seedItemId": "minecraft:wheat_seeds",
+      "seedPlacesThisCrop": true
+    },
+    "replantedProperties": {
+      "age": "0"
+    },
+    "placementConsumedOne": true
+  },
+  "registryChanges": {
+    "performanceVsLive": {
+      "items": 3404,
+      "blocks": 2899,
+      "additionalContentIds": 0
+    },
+    "requiresFinalModsetRegistryExport": true,
+    "extraDiagnosticModUsedForFinalExport": false
+  },
+  "regression": {
+    "nodePassed": 90,
+    "nodeFailed": 0,
+    "nodeSkipped": 0,
+    "pythonPerformancePassed": 7,
+    "java21Compilation": true
+  }
+}

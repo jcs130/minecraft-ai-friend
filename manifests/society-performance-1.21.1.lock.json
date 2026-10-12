@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "minecraftVersion": "1.21.1",
+  "neoforgeVersion": "21.1.248",
+  "artifacts": [
+    {
+      "name": "ferritecore-7.0.3-neoforge.jar",
+      "kind": "mod",
+      "profile": "performance",
+      "project": "https://modrinth.com/mod/ferrite-core",
+      "version": "7.0.3-neoforge",
+      "versionId": "x7kQWVju",
+      "url": "https://cdn.modrinth.com/data/uXXizFIs/versions/x7kQWVju/ferritecore-7.0.3-neoforge.jar",
+      "sha256": "d87ea28262715ebff45b8a82d493e6b468e7a4521bc021df5d88302196d030a8",
+      "sha512": "19af89a2075bb10a63884fa853ebf84b02c79dc3242430ecdad056fd764fdcde367a7303276b329df01b0736e2ef264c5d80c7dc92c6aebd244f556a230bb417",
+      "dependencies": []
+    },
+    {
+      "name": "modernfix-neoforge-5.27.26+mc1.21.1.jar",
+      "kind": "mod",
+      "profile": "performance",
+      "project": "https://modrinth.com/mod/modernfix",
+      "version": "5.27.26+mc1.21.1",
+      "versionId": "7Jy58lnT",
+      "url": "https://cdn.modrinth.com/data/nmDcB62a/versions/7Jy58lnT/modernfix-neoforge-5.27.26%2Bmc1.21.1.jar",
+      "sha256": "09f6842c63d14b3f1707f1f4a6f4602052f237f7efa9be135e41d3d97acf2a13",
+      "sha512": "37c76fc5bc72cfc1035260f891ffeb45b4f32651d2e490c5eb8c60f3b5686deca3145b32d4fab9036f65f5277b0ac66f4ad3855e52cd973e791b09e9c4b896d8",
+      "dependencies": []
+    },
+    {
+      "name": "lithium-neoforge-0.15.4+mc1.21.1.jar",
+      "kind": "mod",
+      "profile": "performance",
+      "project": "https://modrinth.com/mod/lithium",
+      "version": "mc1.21.1-0.15.4-neoforge",
+      "versionId": "DDUrRVCA",
+      "url": "https://cdn.modrinth.com/data/gvQqBUqZ/versions/DDUrRVCA/lithium-neoforge-0.15.4%2Bmc1.21.1.jar",
+      "sha256": "488f33216030c1cb0baa33e59de3d657d08d5795a6c2080c8c8bbbc133fc8757",
+      "sha512": "2735da2088b88a8bdcd4ad02a2b6fffbfd3925557cefd4fa54b5477dfb9e582ea7f521300c060f57dff1325dd21bff276b7333363ad3371ed6893e3de9eca9cd",
+      "dependencies": []
+    },
+    {
+      "name": "spark-1.10.124-neoforge.jar",
+      "kind": "mod",
+      "profile": "performance",
+      "project": "https://modrinth.com/mod/spark",
+      "version": "1.10.124-neoforge-1.21.1",
+      "versionId": "v5qtqRQi",
+      "url": "https://cdn.modrinth.com/data/l6YH9Als/versions/v5qtqRQi/spark-1.10.124-neoforge.jar",
+      "sha256": "647e8a81afbe414dba1df4ba15fd06c5d32d4cb544e68828405e8e074c2e16db",
+      "sha512": "f86ce34f2759c69df82578c397ff55b666c84626229a98f598458b960c21b38c95d6bfef4772af7f963c4f4868e5e2d9aef6b99c1d51bab55bf45e0e6e6b5ed4",
+      "dependencies": []
+    }
+  ],
+  "profile": "performance",
+  "deploymentStatus": "isolated_only",
+  "productionDeployed": false
+}

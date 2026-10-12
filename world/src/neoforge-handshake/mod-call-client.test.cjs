@@ -21,6 +21,7 @@ function fixture () {
   }
   const rpgKinds = Object.fromEntries(require('../../society-bridge-src/src/main/resources/maw-native-operations.json').operations.filter(r=>r.kind.startsWith('rpg_')).map(r=>[r.kind,r.id]))
   clients.mods.rpg = {request:(kind,args)=>{calls.push({id:rpgKinds[kind],args:[args]});return Promise.resolve({ok:true,playerUuid:owner,code:'native'})}}
+  clients.mods.folkways = { request: (kind, args) => { calls.push({ id: 'folkways.' + (kind === 'logistics_link' ? 'logisticsLink' : kind), args: [args] }); return Promise.resolve({ ok: true, playerUuid: owner, code: 'native' }) } }
   clients.mods.world = { interact: clients.world.interact }
   clients.mods.control = (id, data, readOnly) => { calls.push({ id, args: [data, readOnly] }); return Promise.resolve({ ok: true, playerUuid: owner, code: 'native' }) }
   clients.menu.current = () => { calls.push({id:'menu.current',args:[]}); return {ok:true,code:'native',playerUuid:owner,menuType:'minecraft:inventory',selectedHotbarSlot:0,slots:Array(46).fill(null),carried:null} }
@@ -72,6 +73,12 @@ const args = {
   'collision.query': { position: pos, expectedBlockId: 'minecraft:stone', expectedProperties: {} }
 }
 Object.assign(args, {
+  'folkways.member': { position: pos, expectedBlockId: 'minecraft:chest', joined: true },
+  'folkways.zone': { delegation: 'folkways:field', min: pos, max: pos },
+  'folkways.order': { position: pos, expectedBlockId: 'minecraft:chest', mode: 'maintain', itemId: 'minecraft:wheat', low: 8, count: 32, rank: 0 },
+  'folkways.hire': { residentKind: 'folkways:resident' },
+  'folkways.logistics': { position: pos },
+  'folkways.logisticsLink': { position: pos, expectedBlockId: 'create:stock_ticker', joined: true },
   'protection.query':{action:'break',position:pos}, 'stash.state':{page:1},
   'arena.recycle.quote':{source:'chest',slot:0,count:1},
   ...Object.fromEntries(['learn','upgrade','cast','bind'].map(a=>['skill.'+a,{skillId:'starbolt'}])),
@@ -93,11 +100,11 @@ Object.assign(args, {
   'menu.nativeClick': { ...menuCas, slot: 9, button: 0, clickType: 'QUICK_MOVE' }, 'menu.button': { ...menuCas, buttonId: 0 },
   'body.command': { command: 'help' }, 'control.actionStatus': { ticket: 'a-ticket' }, 'control.cancel': { ticket: 'a-ticket' }
 })
-test('all 111 declared operations dispatch to the exact native adapter with actual arguments', async () => {
+test('all 122 declared operations dispatch to the exact native adapter with actual arguments', async () => {
   const f = fixture()
   try {
     const list = f.api.operations()
-    assert.equal(list.operationCount, 111); assert.equal(list.remoteSupportVerified, false)
+    assert.equal(list.operationCount, 122); assert.equal(list.remoteSupportVerified, false)
     for (const row of list.operations) {
       const result = await f.api.call(row.id, args[row.id] || {})
       assert.equal(result.code, 'native'); assert.equal(f.calls.at(-1).id, row.id)

@@ -412,6 +412,19 @@ final class PlayerWorldBridge {
             JsonObject properties = new JsonObject();
             state.getValues().forEach((property, value) -> properties.addProperty(property.getName(), NativeCollisionFacts.propertyValue(property, value)));
             block.add("properties", properties);
+            // Same visible ray hit only; never scans hidden crops or chunks.
+            if (state.getBlock() instanceof net.minecraft.world.level.block.CropBlock crop) {
+                JsonObject farming = new JsonObject();
+                farming.addProperty("source", "native_crop_block");
+                farming.addProperty("mature", crop.isMaxAge(state));
+                farming.addProperty("maxAge", crop.getMaxAge());
+                ItemStack seed = crop.getCloneItemStack(player.level(), pos, crop.defaultBlockState());
+                if (!seed.isEmpty()) farming.addProperty("seedItemId", BuiltInRegistries.ITEM.getKey(seed.getItem()).toString());
+                else farming.add("seedItemId", JsonNull.INSTANCE);
+                farming.addProperty("seedPlacesThisCrop", seed.getItem() instanceof net.minecraft.world.item.BlockItem item
+                        && item.getBlock() == crop);
+                block.add("crop", farming);
+            }
             block.addProperty("requiresCorrectToolForDrops", state.requiresCorrectToolForDrops());
             block.addProperty("canHarvestWithMainHand", state.canHarvestBlock(player.level(), pos, player));
             block.addProperty("destroySpeed", state.getDestroySpeed(player.level(), pos));

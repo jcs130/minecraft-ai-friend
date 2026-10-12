@@ -39,10 +39,11 @@ import java.util.UUID;
 
 /** Only allowlisted native UI operations, always on the requesting player's connection. */
 final class ModOperationsBridge {
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("maw-native-operations");
     private static final int MAX_BYTES = 65536;
     private static final Map<UUID, ColonyActionReplay> RECEIPTS = new HashMap<>();
-    private static final Set<String> READS = Set.of("create_settings", "create_fluids", "curios_state", "ysm_catalog", "control_query", "society_state");
-    private static final Set<String> WRITES = Set.of("create_value", "create_filter", "curios_open", "curios_page", "world_interact", "ysm_select", "control_action", "society_join", "society_accept", "society_submit", "society_open");
+    private static final Set<String> READS = Set.of("create_settings", "create_fluids", "curios_state", "ysm_catalog", "control_query", "society_state", "folkways_state", "folkways_catalog", "folkways_orders", "folkways_logistics", "folkways_rail");
+    private static final Set<String> WRITES = Set.of("create_value", "create_filter", "curios_open", "curios_page", "world_interact", "ysm_select", "control_action", "society_join", "society_accept", "society_submit", "society_open", "folkways_found", "folkways_member", "folkways_zone", "folkways_order", "folkways_hire", "folkways_logistics_link");
     private record Query(String json) implements CustomPacketPayload {
         static final Type<Query> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("maw_agent", "mod_query"));
         static final StreamCodec<RegistryFriendlyByteBuf, Query> CODEC = StreamCodec.of((b, p) -> write(b, p.json), b -> new Query(read(b)));
@@ -87,7 +88,7 @@ final class ModOperationsBridge {
         r.addProperty("outcomeKnown", true); r.addProperty("retryAutomatically", false);
         r.addProperty("receiptScope", "server_process_recent_32_per_player"); return r;
     }
-    private static BlockHitResult visible(ServerPlayer player, JsonObject input, boolean mutation) {
+    static BlockHitResult visible(ServerPlayer player, JsonObject input, boolean mutation) {
         BlockPos p = ModRequest.position(input, "position");
         if (!player.level().isLoaded(p) || !player.canInteractWithBlock(p, 1)) ModRequest.fail("machine_not_reachable");
         var eye = player.getEyePosition();
@@ -186,6 +187,14 @@ final class ModOperationsBridge {
                 try { outcome = RpgMigrationBridge.invoke(player, kind, input); }
                 catch (IllegalArgumentException precondition) { started = false; ModRequest.fail(precondition.getMessage()); return; }
                 result.add("state", outcome); result.addProperty("ok", outcome.get("ok").getAsBoolean());
+            } else if (kind.startsWith("folkways_")) {
+                if (!mutation) {result.add("state",FolkwaysAccess.query(player,kind,input));result.addProperty("ok",true);}
+                else {
+                    var prepared=FolkwaysAccess.prepare(player,kind,input);started=true;
+                    JsonObject state=prepared.get();result.add("state",state);
+                    result.addProperty("ok",!state.has("applied")||state.get("applied").getAsBoolean());
+                    if(state.has("applied")&&!state.get("applied").getAsBoolean())result.addProperty("code","folkways_native_refused");
+                }
             } else if (kind.startsWith("society_")) {
                 if (kind.equals("society_state")) {ModRequest.fields(input); result.add("state", SocietyLifeBridge.state(player)); result.addProperty("ok", true);}
                 else {
@@ -303,6 +312,9 @@ final class ModOperationsBridge {
             }
         } catch (ModRequest.Invalid e) { if (result != null) { result.addProperty("ok", false); result.addProperty("code", e.getMessage()); } }
         catch (RuntimeException e) {
+            // Local diagnostics retain the cause without echoing request JSON,
+            // item components or credentials to clients or public chat.
+            LOGGER.warn("Native operation failed: kind={} requestId={} playerUuid={} started={}", kind, id, player.getUUID(), started, e);
             if (result == null) result = base(player, id, kind);
             result.addProperty("ok", false); result.addProperty("code", started ? "mod_operation_outcome_unknown" : "invalid_mod_request"); result.addProperty("outcomeKnown", !started);
         }

@@ -28,17 +28,20 @@ public final class NativeModAccess {
     }
     public static JsonObject catalog(String operation) {
         JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("ok",true);
-        out.addProperty("source","same_player_native_handlers");out.addProperty("operationCount",OPERATIONS.size());
+        out.addProperty("source","same_player_native_handlers");out.addProperty("operationCount",OPERATIONS.values().stream().filter(NativeModAccess::available).count());
         if(operation!=null&&!operation.isBlank()) {
-            var row=OPERATIONS.get(operation);if(row==null)throw new IllegalArgumentException("mod_operation_not_found");
+            var row=OPERATIONS.get(operation);if(row==null||!available(row))throw new IllegalArgumentException("mod_operation_not_available");
             out.add("operation",publicRow(row,true));
-        }else {JsonArray rows=new JsonArray();OPERATIONS.values().forEach(r->rows.add(publicRow(r,false)));out.add("operations",rows);}
+        }else {JsonArray rows=new JsonArray();OPERATIONS.values().stream().filter(NativeModAccess::available).forEach(r->rows.add(publicRow(r,false)));out.add("operations",rows);}
         return out;
     }
     private static JsonObject publicRow(JsonObject row,boolean schema) {
         JsonObject out=new JsonObject();for(String k:List.of("id","readOnly","description","units"))if(row.has(k))out.add(k,row.get(k).deepCopy());
         if(schema)out.add("parameters",row.get("parameters").deepCopy());
         out.addProperty("availableWithoutClient",true);out.addProperty("permissions","same_body_native_rules");return out;
+    }
+    private static boolean available(JsonObject row) {
+        return !row.get("id").getAsString().startsWith("folkways.")||net.neoforged.fml.ModList.get().isLoaded("folkways");
     }
     static boolean capturing(ServerPlayer player) {var c=CURRENT.get();return c!=null&&c.player.equals(player.getUUID());}
     public static JsonObject bodySnapshot(ServerPlayer player) {

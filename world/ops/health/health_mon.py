@@ -111,6 +111,9 @@ SOCIETY_BEDROCK_MANIFEST = {'udp': 28988, 'javaProxy': 28995, 'health': 28996,
                           'compatGate': 28994, 'address': '192.168.3.163', 'upstream': '127.0.0.1:28994'}
 SOCIETY_VOICE_MANIFEST = {'udp': 28989, 'address': '192.168.3.163',
     'managedBy': 'native-java-supervisor', 'clientOptional': True}
+SOCIETY_PERFORMANCE_MANIFEST = {'snapshot': 'server/ops/maw-performance/metrics.json',
+    'managedBy': 'native-java-supervisor', 'sampleSeconds': 5, 'maxAgeSeconds': 20,
+    'privateLocalDiagnostics': True, 'automaticRestartOnPressure': False}
 
 
 def probe_society_voice():
@@ -432,6 +435,12 @@ def probe_agent_frame():
 
 
 def probe_panel_smoke(scope=None):
+    if scope == 'society-performance':
+        sys.path.insert(0, str(PROJECT/'tools'))
+        from maw_performance_health import probe
+        performance = probe()
+        return {'ok': performance['ok'], 'society_performance': performance,
+                'manifest': SOCIETY_PERFORMANCE_MANIFEST, 'modelRequests': 0, 'worldActions': 0}
     if scope == 'society-underworld':
         sys.path.insert(0, str(PROJECT/'tools'))
         from maw_underworld_health import probe
@@ -2162,6 +2171,10 @@ def inventory_lock_failure(reason):
 
 
 def main():
+    if sys.argv[1:] in (['--society-performance'], ['--society-performance-smoke']):
+        report = probe_panel_smoke(scope='society-performance')
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        sys.exit(0 if report['ok'] else 1)
     if sys.argv[1:] in (['--society-underworld'], ['--society-underworld-smoke']):
         report = probe_panel_smoke(scope='society-underworld')
         print(json.dumps(report, ensure_ascii=False, indent=2))

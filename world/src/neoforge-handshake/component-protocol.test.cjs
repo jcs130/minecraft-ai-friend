@@ -63,6 +63,31 @@ test('an unsupported native codec explicitly fails instead of consuming a neighb
   assert.throws(() => protocol.parsePacketBuffer('packet', buffer), /UNSUPPORTED_NATIVE_ITEM_COMPONENT/)
 })
 
+test('Folkways colony book components follow exported IDs and preserve following stacks', () => {
+  const reordered = new Map(registry)
+  reordered.set('folkways:colony_id', 167)
+  reordered.set('folkways:book_gesture', 168)
+  reordered.set('folkways:filter_tag', 169)
+  reordered.set('patchouli:book', 170)
+  const native = createBackendComponentProtocol(reordered)
+  const colonyBook = stack(2370, [
+    { type: 'folkways:colony_id', data: owner },
+    { type: 'folkways:book_gesture', data: 2 },
+    { type: 'folkways:filter_tag', data: 'minecraft:logs' },
+    { type: 'custom_name', data: { type: 'string', value: '聚落手册' } }
+  ])
+  const packet = { name: 'window_items', params: { windowId: 0, stateId: 13, items: [colonyBook, book, maid, empty], carriedItem: empty } }
+  const raw = native.createPacketBuffer('packet', packet)
+  const decoded = native.parsePacketBuffer('packet', raw)
+  assert.equal(decoded.metadata.size, raw.length)
+  assert.deepEqual(decoded.data.params.items, packet.params.items)
+  assert.deepEqual(native.createPacketBuffer('packet', decoded.data), raw)
+  assert.deepEqual(vanillaProjection(decoded.data).params.items[0].components,
+    [{ type: 'custom_name', data: { type: 'string', value: '聚落手册' } }])
+  assert.equal(reordered.get('patchouli:book'), 170)
+  assert.equal(registry.get('patchouli:book'), 88)
+})
+
 test('does not route mod command trees or regular keepalive packets through the item decoder', () => {
   assert.equal(isItemPacket(Buffer.from([0x11])), false)
   assert.equal(isItemPacket(Buffer.from([0x26])), false)
