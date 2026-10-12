@@ -1,0 +1,20 @@
+{
+  "dataDir": "./kirito-data",
+  "timezone": "Asia/Shanghai",
+  "acceptsImages": false,
+  "metricsPort": 0,
+  "consolePort": 0,
+  "world": {
+    "host": "127.0.0.1",
+    "port": 28977,
+    "username": "MawKirito",
+    "auth": "offline",
+    "version": "1.21.1",
+    "viewerPort": 0,
+    "local": { "serverDir": "", "startWithWorld": false, "cheats": false },
+    "client": { "enabled": false },
+    "player": { "enabled": false },
+    "combat": { "enabled": false },
+    "idle": { "enabled": false }
+  }
+}

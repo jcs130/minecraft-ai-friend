@@ -2,6 +2,8 @@
 
 研究日期：2026-10-12。适用于 My Agent World 的 Minecraft 1.21.1 / NeoForge 环境。
 
+2026-10-13 路线更新：用户指定新的解耦项目 `jcs130/cortico-world-qiandengji`，并明确 Mineflayer 远程连接无需 MCP。当前采用其 `agent-mc-world/client` **直接 SDK → Mineflayer → 现有游戏网关**作为新整合路线；模型/记忆宿主可替换，不强制依赖 Cortico 或 Numen。已完成安装和隔离服直接连接/走动/事件/重连验证，发现模组物品仍是协议占位物，需要接同一连接的原生模组适配。详见 [Agent MC World 整合](MY-AGENT-WORLD-AGENT-MC-WORLD.md)。下文 Cortico→Numen 是此前方案及可选身体路线，不能当作新角色已上线或当前强制结构。
+
 ## 决定与交付状态
 
 采用用户的 Cortico fork 创建一位新的桐人：独立部署、独立记忆、独立游戏身体。仅复用框架、通用 Persona 机制和经过验证的工具设计，不导入 Cormy 的个人档案、会话、观众关系或游戏经历，也不接管旧桐人的身体和账本。
