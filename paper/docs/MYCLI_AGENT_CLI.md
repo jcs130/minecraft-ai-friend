@@ -1,3 +1,7 @@
+## 0.4.29 候选兼容提示（尚未部署）
+
+通用 `/mycli status` 将改为只读当前观察，旧详细/实练证明用 `status full` 或显式 `coach practice status`。Agent迎新压缩为稳定指南和当前状态，详情按需分页；`--help` / `--json`、会话时效及认证来源见 [候选说明](AGENT_CLI_OBSERVATIONS.md)。正式仍0.4.28；当前正式状态以发布记录为准，下文较早条目按历史阅读，不能把候选当成已生效。
+
 ## 2026-10-12 Agent交互0.4.27候选（尚未部署）
 
 正式仍0.4.23。候选将默认`/mycli`与`help`收敛成入门摘要，新增普通规则`rules`、纯能力发现`capabilities`和统一`progress`，区分主线毕业、专项和公会阶段。`coach lessons`改只读，`coach enroll/cancel`明确报名/取消，旧证明保留；完整帮助用`help full`。旧list/explain/status阅读证明保持并标明副作用。大背包客户端另提供串行、真实槽位/光标确认、持久未知操作和查询恢复模块，远端须接入，没有新增服务端协议。见[Agent交互](AGENT_INTERACTION.md)。下文旧版“lessons报名”按历史理解。

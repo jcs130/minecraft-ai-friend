@@ -85,6 +85,45 @@ final class ProfessionManager implements Listener {
         }
     }
     private boolean available() { return catalog != null && ledger.ready(); }
+    JsonObject readProfession(Player p) {
+        JsonObject out=new JsonObject();out.addProperty("available",available());
+        if(!available()){out.add("combat",JsonNull.INSTANCE);out.add("life",JsonNull.INSTANCE);out.add("prepared",JsonNull.INSTANCE);return out;}
+        JsonObject profile=ledger.profile(p.getUniqueId());
+        for(String key:List.of("combat","life","prepared"))out.add(key,profile.get(key).deepCopy());return out;
+    }
+    /** A pure observation, unlike legacy reports which synchronize earned points/metrics.
+     * Ready preconditions do not prove there is a valid target, route or unprotected landing. */
+    JsonObject readSkillState(Player p,String id) {
+        SpellGuide.Entry entry=SpellGuide.find(id);id=entry.id();
+        JsonObject out=new JsonObject();out.addProperty("id",id);out.addProperty("name",entry.name());out.addProperty("supported",true);
+        out.addProperty("detailCommand","/mycli skills info "+id);out.addProperty("statusCommand","/mycli skills status "+id);
+        out.addProperty("command",entry.command());out.addProperty("requirements",entry.requires());
+        if(!available()) {
+            for(String key:List.of("unlocked","learned","level","manaCost","cooldownRemainingMs","preflightReady","canUseNow"))out.add(key,JsonNull.INSTANCE);
+            out.addProperty("reason","data_unavailable");out.addProperty("nextCommand","/mycli status");return out;
+        }
+        boolean basic=SpellGuide.baseIds().contains(id);int level=level(p,id);
+        out.addProperty("unlocked",unlocked(p,id));out.addProperty("learned",level>0);out.addProperty("level",level);
+        var skill=basic?null:effective(p,skill(id));
+        int mana=basic?entry.mana():skill.mana();out.addProperty("manaCost",mana);
+        out.addProperty("costSource",basic?"server_fixed_base_skill":"configured_skill_rank");
+        Long cooldown=basic?plugin.readBasicCooldown(p,id):remaining(p,id);
+        out.add("cooldownRemainingMs",cooldown==null?JsonNull.INSTANCE:new JsonPrimitive(cooldown));
+        var user=AuraSkillsApi.get().getUser(p.getUniqueId());boolean manaKnown=user!=null&&user.isLoaded();
+        out.add("currentMana",manaKnown?new JsonPrimitive(user.getMana()):JsonNull.INSTANCE);
+        String reason=plugin.isDowned(p)?"downed":plugin.isObserver(p)||p.isDead()?"survival_required":level==0?"not_learned":basic?"ready":denial(p,skill,true);
+        if(reason.equals("ready")&&cooldown!=null&&cooldown>0)reason="cooldown";
+        if(reason.equals("ready")&&manaKnown&&user.getMana()<mana)reason="insufficient_mana";
+        if(reason.equals("ready")&&(!manaKnown||cooldown==null))reason="observation_incomplete";
+        boolean blocked=!Set.of("ready","observation_incomplete").contains(reason);
+        out.add("preflightReady",reason.equals("observation_incomplete")?JsonNull.INSTANCE:new JsonPrimitive(!blocked));
+        boolean selfCosmetic=basic&&Set.of("fireworks","starlight").contains(id);
+        out.add("canUseNow",blocked?new JsonPrimitive(false):selfCosmetic&&reason.equals("ready")?new JsonPrimitive(true):JsonNull.INSTANCE);
+        out.addProperty("reason",reason.equals("ready")&&!selfCosmetic?"target_or_context_not_checked":reason);
+        out.addProperty("nextCommand",reason.equals("not_learned")?"/mycli skills info "+id:reason.equals("not_prepared")?"/mycli skills prepare "+id:
+                reason.equals("ready")&&selfCosmetic?entry.command():"/mycli skills status "+id);
+        return out;
+    }
     private void initializeLegacy() {
         if (!available() || ledger.data().has("legacyInitialized")) return;
         Set<UUID> old = new HashSet<>();

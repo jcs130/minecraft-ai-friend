@@ -105,6 +105,10 @@ final class AgentCoach implements Listener {
     }
 
     void command(Player player, String[] args) {
+        if(args.length==3 && args[1].equalsIgnoreCase("practice") && args[2].equalsIgnoreCase("status")) {
+            if(!plugin.featureTutorials().enrolled(player)) {commandError(player,"NOT_ENROLLED");return;}
+            plugin.communication().state(player);plugin.featureTutorials().note(player,"cli_status");return;
+        }
         if (args.length > 2) { commandError(player, "INVALID_ARGUMENT"); return; }
         String action = args.length > 1 ? args[1].toLowerCase(java.util.Locale.ROOT) : "status";
         switch (action) {
@@ -141,7 +145,9 @@ final class AgentCoach implements Listener {
         JsonObject error = new JsonObject();
         error.addProperty("schemaVersion", 1);
         error.addProperty("code", code);
-        error.addProperty("usage", "/mycli coach status|next|guide|lessons|enroll|cancel|menu|later|on|off");
+        error.addProperty("usage", "/mycli coach status|next|guide|lessons|enroll|cancel|menu|later|on|off；/mycli coach practice status");
+        error.addProperty("nextCommand",code.equals("NOT_ENROLLED")?"/mycli coach enroll":"/mycli help coach");
+        error.addProperty("retryable",false);error.addProperty("errorCode",code);
         player.sendMessage("MC_COACH_ERROR " + error);
     }
 

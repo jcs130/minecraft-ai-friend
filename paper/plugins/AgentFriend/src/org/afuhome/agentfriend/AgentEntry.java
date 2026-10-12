@@ -44,17 +44,17 @@ final class AgentEntry {
         p.sendMessage("§b【本人】"+p.getName()+" · "+self.get("adventurerRank").getAsString()+" · 生命 "+Math.round(p.getHealth())+" · 饱食 "+p.getFoodLevel()
                 +(flag(self,"manaLoaded")?" · 魔力 "+Math.round(mana.getMana())+"/"+Math.round(mana.getMaxMana()):" · 魔力尚未加载，等候后再查"));
         p.sendMessage("§e【建议下一步】"+out.get("nextAdvice").getAsString()+" "+out.get("nextCommand").getAsString());
-        p.sendMessage("MC_INTRO "+out);
+        plugin.communication().stamp(p,out);p.sendMessage("MC_INTRO "+out);
     }
     void rules(Player p,String[] args) {
         int page=1,pages=(rules.size()+3)/4;
         try{if(args.length>2)throw new NumberFormatException();if(args.length==2)page=Integer.parseInt(args[1]);if(page<1||page>pages)throw new NumberFormatException();}
         catch(NumberFormatException e){p.sendMessage("§e用 /mycli rules [页码] 阅读规则；页码 1–"+pages+"，所有已登录玩家可读。");return;}
-        JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("readOnly",true);out.addProperty("page",page);out.addProperty("pages",pages);
+        JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("readOnly",true);out.addProperty("page",page);out.addProperty("pages",pages);out.addProperty("total",rules.size());
         JsonArray rows=new JsonArray();
         for(int i=(page-1)*4;i<Math.min(page*4,rules.size());i++){rows.add(rules.get(i));p.sendMessage("§f"+(i+1)+". "+rules.get(i));}
         out.add("rules",rows);if(page<pages)out.addProperty("nextCommand","/mycli rules "+(page+1));
-        p.sendMessage("MC_RULES "+out);
+        plugin.communication().stamp(p,out);p.sendMessage("MC_RULES "+out);
     }
     void capabilities(Player p,String[] args) {
         if(args.length>1&&Set.of("info","explain").contains(args[1].toLowerCase(Locale.ROOT))) {
@@ -66,8 +66,32 @@ final class AgentEntry {
     }
     void progress(Player p,String[] args) {
         String filter=args.length>1?args[1].toLowerCase(Locale.ROOT):"all";
-        if(args.length>2||!Set.of("all","main","training","guild").contains(filter)){p.sendMessage("§e/mycli progress [all|main|training|guild]：只读查询主线、专项实练和公会委托。");return;}
-        if(plugin.isObserver(p)){p.sendMessage("MC_PROGRESS {\"schemaVersion\":1,\"scope\":\"self\",\"eligible\":false,\"reason\":\"observer\",\"nextCommand\":\"/mycli intro\"}");return;}
+        if(args.length>3||!Set.of("all","main","training","guild").contains(filter)){plugin.communication().error(p,"INVALID_ARGUMENT","/mycli progress [all|main|training|guild] [页码]：第三个参数启用按需分页；查询不接单、不领奖。",false,"/mycli progress all 1");return;}
+        List<JsonObject> rows=progressRows(p,filter);
+        if(args.length==3) {
+            try{plugin.communication().list(p,"progress","/mycli progress "+filter+" 1",rows,Integer.parseInt(args[2]));}
+            catch(NumberFormatException invalid){plugin.communication().error(p,"INVALID_PAGE","页码必须是整数。",false,"/mycli progress "+filter+" 1");}
+            return;
+        }
+        // Preserve the old MC_PROGRESS stream. Explicit paging opts into MC_PAGE.
+        String snapshot=UUID.randomUUID().toString();long at=System.currentTimeMillis();
+        for(int i=0;i<rows.size();i++) {
+            JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("snapshotId",snapshot);
+            out.addProperty("scope","self");out.addProperty("playerUuid",p.getUniqueId().toString());out.addProperty("readOnly",true);
+            out.addProperty("page",i+1);out.addProperty("pages",rows.size());out.addProperty("total",rows.size());out.add("progress",rows.get(i));
+            plugin.communication().stamp(p,out);
+            out.addProperty("observedAt",at);
+            if(out.toString().length()>3000) {
+                out.remove("progress");out.addProperty("status","detail_available");out.addProperty("reason","progress_row_requires_pages");
+                try{String detail=plugin.communication().store(p,"progress","/mycli progress "+filter+" 1",List.of(rows.get(i)));
+                    out.addProperty("nextCommand","/mycli page "+detail+" 1");}
+                catch(IllegalArgumentException tooLarge){out.addProperty("status","too_large");out.addProperty("nextCommand","/mycli progress "+filter+" 1");}
+            }
+            p.sendMessage("MC_PROGRESS "+out);
+        }
+    }
+    List<JsonObject> progressRows(Player p,String filter) {
+        if(plugin.isObserver(p)){JsonObject row=new JsonObject();row.addProperty("eligible",false);row.addProperty("reason","observer");row.addProperty("nextCommand","/mycli intro");return List.of(row);}
         JsonObject state=plugin.agentCoach().entryState(p),features=plugin.featureTutorials().progressState(p);
         var rows=new ArrayList<JsonObject>();
         if(filter.equals("all")||filter.equals("main")) {
@@ -79,14 +103,12 @@ final class AgentEntry {
             main.add("missingConditions",missing);var internship=state.getAsJsonObject("guide").deepCopy();
             internship.addProperty("completed",flag(internship,"catalog")&&flag(internship,"cast")&&flag(internship,"life"));main.add("internship",internship);
             main.addProperty("meaning","专项实练、三证实习和整条主线分别验收；只有graduated=true才表示入门主线完成。");rows.add(main);
-            p.sendMessage("§b【主线】"+(flag(state,"completed")?"已毕业":state.get("title").getAsString())+"；下一步 "+state.get("nextCommand").getAsString());
         }
         if(filter.equals("all")||filter.equals("training")) {
             int done=0;for(var element:features.getAsJsonArray("lessons")) {
                 JsonObject row=element.getAsJsonObject().deepCopy();row.addProperty("section","training");row.addProperty("enrolled",flag(features,"enrolled"));
                 if(flag(row,"done"))done++;rows.add(row);
             }
-            p.sendMessage("§b【专项实练】"+done+"/6项完成 · "+(flag(features,"enrolled")?"已报名":"未报名，coach enroll 自愿参加")+"；专项完成不等于主线毕业。");
         }
         if(filter.equals("all")||filter.equals("guild")) {
             JsonObject adventure=plugin.guild().progressState(p);adventure.addProperty("section","guild");rows.add(adventure);
@@ -98,16 +120,7 @@ final class AgentEntry {
             life.add("missingConditions",missing);rows.add(life);
             JsonObject academy=plugin.skillAssessments().summary(p);academy.addProperty("section","guild");academy.addProperty("kind","assessment");academy.addProperty("title","能力认证与晋级考试");
             academy.addProperty("nextCommand","/mycli guild exam status");academy.add("missingConditions",academy.has("nextAction")?commands(academy.get("nextAction").getAsString()):new JsonArray());rows.add(academy);
-            p.sendMessage("§b【公会委托】冒险："+label(adventure.get("status").getAsString())+"，生活："+label(life.get("status").getAsString())+"；每阶段需主动交付，查询不领奖。");
         }
-        String snapshot=UUID.randomUUID().toString();long at=System.currentTimeMillis();
-        for(int i=0;i<rows.size();i++) {
-            JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("snapshotId",snapshot);out.addProperty("observedAt",at);
-            out.addProperty("scope","self");out.addProperty("playerUuid",p.getUniqueId().toString());out.addProperty("readOnly",true);
-            out.addProperty("page",i+1);out.addProperty("pages",rows.size());out.add("progress",rows.get(i));
-            // Preserve full machine rows within Prismarine-chat's 4096-char bound.
-            if(out.toString().length()>3500){out.remove("progress");out.addProperty("status","detail_unavailable");out.addProperty("reason","progress_row_too_large");out.addProperty("nextCommand","/mycli progress "+filter);}
-            p.sendMessage("MC_PROGRESS "+out);
-        }
+        return rows;
     }
 }

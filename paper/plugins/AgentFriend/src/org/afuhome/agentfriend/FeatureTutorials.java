@@ -91,7 +91,7 @@ final class FeatureTutorials implements Listener {
     JsonObject state(Player p) {
         JsonObject out=new JsonObject();out.addProperty("enrolled",enrolled(p));out.addProperty("eligible",!plugin.isObserver(p));JsonArray lessons=new JsonArray();
         lesson(lessons,p,"backpack","大背包存取实练",has(p,"backpack_retrieve"),"/minepacks:backpack open","54格普通储物：打开黄色大背包，存一件普通物品，关闭，再重开取回并关闭；认本人Minepacks真实存取。不是/questbag，也不是540格奖励箱。当前阶段："+(has(p,"backpack_retrieve")?"已取回":has(p,"backpack_reopen")?"请取回再关闭":has(p,"backpack_deposit")?"请重开取回":has(p,"backpack_open")?"请存入再关闭":"请打开"));
-        lesson(lessons,p,"cli","会查命令与本人状态",has(p,"cli_list")&&has(p,"cli_detail")&&has(p,"cli_status"),"/mycli list","实际成功查询/mycli list、/mycli explain skills和/mycli status；按页码继续读，报错不算，自称读过不算。查询免费。");
+        lesson(lessons,p,"cli","会查命令与本人状态",has(p,"cli_list")&&has(p,"cli_detail")&&has(p,"cli_status"),!has(p,"cli_list")?"/mycli list":!has(p,"cli_detail")?"/mycli explain skills":"/mycli coach practice status","报名后读取/mycli list、/mycli explain skills，再用/mycli coach practice status主动完成状态实练；普通status保持只读。旧status full也兼容原实练证明。");
         lesson(lessons,p,"vision","照亮与感知",has(p,"vision"),"/mycli skills info night","先读night夜视、prospect探矿或sense心眼详情，选已学且适合场景的一项成功施放；探矿线是方位，不保证可走。不代花技能点。");
         lesson(lessons,p,"recovery","恢复与援助",has(p,"recovery"),"/mycli skills info selfheal","需要恢复时选择已学的圣愈、范围治疗、牧师治疗或饱食，真实成功施放才算；无须故意受伤，不为教程伤害队友，缺资格可稍后再做。");
         lesson(lessons,p,"travel","安全魔法出行",has(p,"travel"),"/mycli skills info blink","选已学的闪现、归乡、传送点、支援、跃空或飞行，先查安全落点、资格、魔力及冷却，真实成功才算；地图标记/地点查询不算传送。");
@@ -119,7 +119,7 @@ final class FeatureTutorials implements Listener {
             JsonArray missing=new JsonArray();
             switch(id) {
                 case "backpack" -> {for(String proof:List.of("backpack_open","backpack_deposit","backpack_reopen","backpack_retrieve"))if(!has(p,proof))missing.add(switch(proof){case "backpack_open"->"打开本人54格大背包";case "backpack_deposit"->"存入普通物品并关闭";case "backpack_reopen"->"重开核对";default->"取回并关闭，服务器确认数量守恒";});}
-                case "cli" -> {for(String proof:List.of("cli_list","cli_detail","cli_status"))if(!has(p,proof))missing.add(switch(proof){case "cli_list"->"报名后实际读取 /mycli list";case "cli_detail"->"报名后实际读取 /mycli explain skills";default->"报名后实际读取 /mycli status";});}
+                case "cli" -> {for(String proof:List.of("cli_list","cli_detail","cli_status"))if(!has(p,proof))missing.add(switch(proof){case "cli_list"->"报名后实际读取 /mycli list";case "cli_detail"->"报名后实际读取 /mycli explain skills";default->"报名后主动执行 /mycli coach practice status";});}
                 case "traversal" -> {if(!plugin.traversalPractice().verified(p,"door_passage"))missing.add("打开合法木门并穿过");if(!plugin.traversalPractice().verified(p,"ladder_ascent"))missing.add("沿同一现有梯井连续爬升3格");}
                 default -> {if(!lesson.get("done").getAsBoolean())missing.add(lesson.get("instruction").getAsString());}
             }

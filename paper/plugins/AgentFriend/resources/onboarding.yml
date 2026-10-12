@@ -1,5 +1,5 @@
 schema-version: 1
-welcome-revision: 7
+welcome-revision: 8
 enabled: true
 agents-only: false
 poll-seconds: 60

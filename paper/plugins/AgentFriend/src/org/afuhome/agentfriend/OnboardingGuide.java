@@ -134,12 +134,14 @@ final class OnboardingGuide implements Listener {
         // This only checks a player's safety/PDC; ledgers are read after the checks pass.
         session.nextCheck = now + (welcomeDue ? 1000L : ms("poll-seconds"));
         if (!safe(p, now, quietUntil) || !gapReady(p, now)) return false;
-        if(!session.entrySent){session.entrySent=true;plugin.agentEntry().intro(p);}
+        boolean compact=plugin.communication().compact(p), justEntered=!session.entrySent;
+        if(justEntered){session.entrySent=true;if(compact)plugin.communication().welcome(p);else plugin.agentEntry().intro(p);}
         session.nextCheck = now + ms("poll-seconds");
         JsonObject state = state(p); String current = state.get("step").getAsString();
         String stored = p.getPersistentDataContainer().getOrDefault(lastStep, PersistentDataType.STRING, "");
         if (welcomeDue) {
-            show(p, state, "welcome", true);
+            if(!compact)show(p, state, "welcome", true);
+            else if(!justEntered)plugin.communication().reminder(p,state,"welcome");
             p.getPersistentDataContainer().set(welcomeRevision, PersistentDataType.INTEGER, revision());
             p.getPersistentDataContainer().set(welcomeAt, PersistentDataType.LONG, now);
         } else {
@@ -148,7 +150,7 @@ final class OnboardingGuide implements Listener {
                 if (!session.pendingStep.equals(current)) { session.pendingStep = current; session.changedAt = now; return false; }
                 if (now - session.changedAt < ms("progress-delay-seconds")) return false;
             } else if (now - time(p, reminderAt) < ms(current.equals("complete") ? "complete-reminder-seconds" : "reminder-seconds")) return false;
-            show(p, state, "reminder", false);
+            if(compact)plugin.communication().reminder(p,state,"reminder");else show(p, state, "reminder", false);
         }
         p.getPersistentDataContainer().set(lastStep, PersistentDataType.STRING, current);
         p.getPersistentDataContainer().set(reminderAt, PersistentDataType.LONG, now);

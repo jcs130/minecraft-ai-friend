@@ -2,6 +2,7 @@ package org.afuhome.auth;
 
 import com.google.inject.Inject;
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.velocitypowered.api.event.PostOrder;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
@@ -44,7 +45,7 @@ import xyz.kyngs.librelogin.api.event.events.AuthenticatedEvent.AuthenticationRe
 public final class LoginGuard {
     private final ProxyServer server;
     private final Logger logger;
-    private final Gson gson = new Gson();
+    private final Gson gson = new com.google.gson.GsonBuilder().serializeNulls().create();
     private LibreLoginPlugin<Player, RegisteredServer> libre;
     private Path heartbeat, attemptsFile, opsFile, eyesFile;
     private volatile EyePolicy eyes;
@@ -59,6 +60,8 @@ public final class LoginGuard {
     private final Set<Player> firstPasswordSessions=ConcurrentHashMap.newKeySet();
     private final Set<UUID> passwordWrites=ConcurrentHashMap.newKeySet();
     private final Map<Player,Long> passwordReminders=new ConcurrentHashMap<>();
+    private final Map<Player,String> observationSessions=new ConcurrentHashMap<>();
+    private final Map<Player,String> authenticationMethods=new ConcurrentHashMap<>();
 
     @Inject public LoginGuard(ProxyServer server, Logger logger) { this.server=server; this.logger=logger; }
     private static String key(String name) { return name.toLowerCase(Locale.ROOT); }
@@ -146,7 +149,7 @@ public final class LoginGuard {
                             p.disconnect(text("房管请使用已验证正版账号，或本人独立密码登录。"));return;
                         }
                     }
-                    authenticated.add(p);
+                    authenticated.add(p);authenticationMethods.put(p,e.getReason().name().toLowerCase(Locale.ROOT));
                 });
                 libre.getEventProvider().subscribe(libre.getEventProvider().getTypes().wrongPassword,e->{
                     if(e.getPlayer()!=null) wrong(e.getPlayer());
@@ -161,9 +164,27 @@ public final class LoginGuard {
         if(heartbeat!=null) try {
             var names=server.getAllPlayers().stream().filter(this::authorized).map(Player::getUsername).toList();
             var tmp=Path.of(heartbeat+".tmp"); Files.createDirectories(heartbeat.getParent());
-            Files.writeString(tmp,gson.toJson(Map.of("ready",ready,"at",System.currentTimeMillis(),"authorizedNames",names)));
+            var observations=server.getAllPlayers().stream().map(this::authenticationState).toList();
+            Files.writeString(tmp,gson.toJson(Map.of("ready",ready,"at",System.currentTimeMillis(),"authorizedNames",names,"sessionStates",observations)));
             Files.move(tmp,heartbeat,StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);
         } catch(Exception e) { ready=false; }
+    }
+    JsonObject authenticationState(Player p) {
+        JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("source","login_guard");
+        out.addProperty("playerUuid",p.getUniqueId().toString());
+        out.addProperty("authSessionId",observationSessions.computeIfAbsent(p,ignored->UUID.randomUUID().toString()));
+        out.addProperty("observedAt",System.currentTimeMillis());out.addProperty("readOnly",true);
+        boolean granted=authorized(p);out.addProperty("status",!ready?"unavailable":granted?"authenticated":"pending");
+        out.add("authorized",ready?new com.google.gson.JsonPrimitive(granted):com.google.gson.JsonNull.INSTANCE);out.addProperty("method",authenticationMethods.getOrDefault(p,"unknown"));
+        try{var user=libre.getDatabaseProvider().getByName(p.getUsername());
+            out.add("passwordSet",user==null?com.google.gson.JsonNull.INSTANCE:new com.google.gson.JsonPrimitive(user.isRegistered()));}
+        catch(Exception unavailable){out.add("passwordSet",com.google.gson.JsonNull.INSTANCE);}
+        out.addProperty("nextCommand",granted?"/mycli status":"/authstatus");return out;
+    }
+    private void publishAuthentication(Player p) {
+        if(!p.isActive())return;
+        JsonObject out=authenticationState(p);
+        p.sendMessage(text("MC_AUTH_STATE "+out));
     }
     private static boolean inPaper(Player p) {
         return p.getCurrentServer().filter(c->c.getServerInfo().getName().equals("paper")).isPresent();
@@ -321,10 +342,12 @@ public final class LoginGuard {
     @Subscribe(order=PostOrder.LAST) public void joined(ServerPostConnectEvent e) {
         if(e.getPlayer().getCurrentServer().filter(s->!s.getServerInfo().getName().equals("auth")).isPresent() && authorized(e.getPlayer()))
             e.getPlayer().sendMessage(text("[MC_AUTH_SUCCESS] 登录成功，可以开始游戏。"));
+        publishAuthentication(e.getPlayer());
     }
     @Subscribe(order=PostOrder.LAST) public void command(CommandExecuteEvent e) {
         if(!(e.getCommandSource() instanceof Player p)) return;
         String[] parts=e.getCommand().trim().split("\\s+"); String cmd=key(parts[0]);
+        if(cmd.equals("authstatus")) {e.setResult(CommandExecuteEvent.CommandResult.denied());publishAuthentication(p);return;}
         boolean admin=reserved.contains(key(p.getUsername()));
         boolean eye=eyes!=null && eyes.body(p.getUsername(),reserved)!=null;
         if(!eye && ready && authorized(p) && Set.of("register","reg","setpassword").contains(cmd)) {
@@ -357,6 +380,7 @@ public final class LoginGuard {
     @Subscribe public void disconnected(DisconnectEvent e) {
         authenticated.remove(e.getPlayer());verifiedAdminPassword.remove(e.getPlayer());eyeSessions.remove(e.getPlayer());premiumProofs.remove(e.getPlayer().getRemoteAddress());
         firstPasswordSessions.remove(e.getPlayer());passwordReminders.remove(e.getPlayer());
+        observationSessions.remove(e.getPlayer());authenticationMethods.remove(e.getPlayer());
     }
     @Subscribe public void stop(ProxyShutdownEvent event) {
         ready=false; try { if(heartbeat!=null) Files.deleteIfExists(heartbeat); } catch(Exception ignored) { }

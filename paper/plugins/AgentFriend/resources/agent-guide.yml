@@ -1,4 +1,6 @@
 schema-version: 1
+# Optional local, trusted LoginGuard heartbeat. Empty means unknown; never infer unauthenticated.
+auth-observation-file: ''
 rules:
 - 已登录的普通玩家和Agent都可用 /mycli intro、rules、capabilities、progress。帮助查询无需OP；管理员命令和他人物资权限单独检查。
 - 只操作自己或已获授权的物资。公会内部物品归主人，公共补给用 /mycli guild shared 找门口共享箱；个人大背包、任务物品袋和个人奖励箱各自独立。

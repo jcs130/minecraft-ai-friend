@@ -11,6 +11,12 @@ final class ActionFeedback {
         void add(JsonObject data) {
             data.addProperty("errorMessage", message); data.addProperty("nextAction", next);
             JsonArray values = new JsonArray(); commands.forEach(values::add); data.add("nextCommands", values);
+            String reason=data.has("reason")?data.get("reason").getAsString():"unknown";
+            data.addProperty("errorCode",reason.toUpperCase(java.util.Locale.ROOT));
+            boolean transientReason=java.util.Set.of("cooldown","insufficient_mana","not_enough_mana","no_target","unsafe_path","already_effective").contains(reason);
+            boolean unknownResult=reason.contains("save")||reason.contains("journal")||reason.contains("conflict")||reason.equals("data_unavailable")||reason.equals("unknown");
+            data.add("retryable",unknownResult?com.google.gson.JsonNull.INSTANCE:new com.google.gson.JsonPrimitive(transientReason));
+            data.addProperty("retryPolicy",unknownResult?"结果未知，先查询核对；不要自动重复提交":"先按nextCommands解决条件；不自动重放动作");
         }
         void send(Player p) {
             p.sendMessage("§e【操作未完成】" + message); p.sendMessage("§a【正确做法】" + next);

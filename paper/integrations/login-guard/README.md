@@ -1,7 +1,8 @@
 # LoginGuard 0.1.0
 
-2026-10-12 同名双登录与首次自设密码候选见 `../../docs/SELF_SERVICE_LOGIN.md`，
-尚未部署。新增本人设密码/已验证正版找回入口，现有密码和管理员保护保持。
+2026-10-12：现役为0.1.0；**0.1.1认证观察候选尚未部署**，说明与测试见 [Agent CLI观察](../../docs/AGENT_CLI_OBSERVATIONS.md)。新 `/authstatus` 返回本人连接的 `MC_AUTH_STATE`，现有原子心跳追加 `sessionStates`，不会授权或重置密码；保留原 `[MC_AUTH_SUCCESS] 登录成功，可以开始游戏。` 客户端成功标志。不可用时显式序列化 `authorized:null`，不让缺字段被误认成允许或拒绝。Paper只读指定本机文件，无新端口。
+
+同名双登录与首次自设密码**已随0.1.0部署**，见 `../../docs/SELF_SERVICE_LOGIN.md`。本人设密码/已验证正版找回入口、现有密码和管理员保护保持。
 须与 `../librelogin-dual/` 一起发布；不能单独替换 Guard。
 
 Velocity 上的 LibreLogin 补充保护：认证失败关闭入口、已认证账号心跳、官方正版会话校验、离线管理员强制密码、在线本体的Eye自动观战、跨重连错密锁定，以及 Mineflayer 在 NanoLimbo → Paper 1.20.6 配置切换期间的两个已复现协议兼容问题。
@@ -9,6 +10,8 @@ Velocity 上的 LibreLogin 补充保护：认证失败关闭入口、已认证�
 详细接入、密码交付、验证边界与回滚见 `../../docs/LOGIN_PROTECTION.md`。
 
 构建使用 `build.py --proxy <隔离代理目录> --jdk <JDK目录> --output <新的构建目录>`，从实际测试过的官方 JAR/缓存读取依赖；输出目录必须不存在，且置于仓库之外。构建清单记录源文件及依赖 SHA256。
+
+现役LibreLogin是已审计的双监听器补丁，不能被官方原版覆盖。构建0.1.1时可传 `--libre <官方LibreLogin-0.24.0.jar路径>` 作为严格核验摘要的编译API依赖；实际运行继续保留现役补丁。观察回归为 `org.afuhome.auth.AuthObservationTest`，其余首次密码、正版/Eye与并发回归一并执行。
 
 本实现锁定现役 Velocity JAR（SHA256 `fe53021f3168322cb6cb68f78699866fd098df3c306e4359847a10b0d02689ef`）、LibreLogin 0.24.0 与 PacketEvents 2.8.0/2.14.0已核验摘要。CONFIG 兼容处理访问了 Velocity 内部 API，升级代理或协议后必须重新构建并做真实跨服务登录验证，不能直接沿用旧 JAR。
 

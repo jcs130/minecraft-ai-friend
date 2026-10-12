@@ -262,6 +262,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private GoddessObservation goddessObservation;
     private AgentCoach agentCoach;
     private AgentEntry agentEntry;
+    private AgentCommunication communication;
     private PlayerNameTags playerNameTags;
     private TextBubbleManager textBubbles;
     private PhotoCameraManager photoCamera;
@@ -331,6 +332,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         landmarks = new LandmarkManager(this);
         agentEntry = new AgentEntry(this);
         agentCoach = new AgentCoach(this);
+        communication = new AgentCommunication(this);
         agentCoach.start();
         playerNameTags = new PlayerNameTags(this);
         playerNameTags.start();
@@ -437,6 +439,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     FlightLeases flightLeases() { return flightLeases; }
     SkillAssessments skillAssessments() { return skillAssessments; }
     AgentEntry agentEntry() { return agentEntry; }
+    AgentCommunication communication() { return communication; }
     AgentCoach agentCoach() { return agentCoach; }
     WorldLifeManager worldLife() { return worldLife; }
     TradeDirectory tradeDirectory() { return tradeDirectory; }
@@ -605,6 +608,23 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return Math.max(0L, until - System.currentTimeMillis());
     }
 
+    /** Read existing cooldown owners; do not cast, spend resources or manufacture zero for unknown data. */
+    Long readBasicCooldown(Player player, String id) {
+        return switch (id) {
+            case "home", "travel" -> 0L;
+            case "fireworks", "starlight", "heal", "feather", "night" -> remainingBuiltinCooldownMs(player,id);
+            case "leap", "flight", "golem", "sense" -> utilitySpells.remainingCooldownMs(player,id);
+            case "starbolt", "frostnova", "flamewave" -> combatSpells.remainingCooldownMs(player,id);
+            case "prospect" -> prospectingSpell.remainingCooldownMs(player);
+            case "support" -> villageWatch.remainingSupportCooldownMs(player);
+            case "blink", "food", "selfheal" -> {
+                var spell=com.nisovin.magicspells.MagicSpells.getSpellByName(id);
+                yield spell==null?null:Math.max(0L,(long)Math.ceil(spell.getCooldown(player)*1000));
+            }
+            default -> null; // e.g. give needs a concrete recipe, whose cooldown is separate.
+        };
+    }
+
     boolean hasLearnedSkill(Player player, String spell) {
         NamespacedKey key = skillKey(spell);
         return key != null && learned(player, key);
@@ -731,13 +751,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
 
     @EventHandler public void onStarterJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
+        communication.joined(player);
         Bukkit.getScheduler().runTaskLater(this, () -> {
             if (!player.isOnline()) return;
             int backpackChanges = BackpackShortcutMigration.migrate(player);
             if (backpackChanges > 0) getLogger().info("Updated Minepacks shortcut for "
                     + player.getUniqueId() + "; slots=" + backpackChanges);
             if (isObserver(player)) return;
-            SpellGuide.discoveryHint(player);
+            if (!communication.compact(player)) SpellGuide.discoveryHint(player);
             soulboundGear.bindMengmengKit(player);
             BackpackShortcutMigration.restoreMissing(player, dungeon);
             if (!hasCompass(player)) giveCompass(player);
@@ -745,13 +766,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (!hasFocus(player)) giveFocus(player);
             if (!player.getPersistentDataContainer().has(guideSeenKey, PersistentDataType.BYTE)) {
                 player.getPersistentDataContainer().set(guideSeenKey, PersistentDataType.BYTE, (byte) 1);
-                player.sendMessage(ChatColor.GOLD + "欢迎来到千灯纪！罗盘 → 旅途指南 → 新手入门，按本人实际进度开始冒险。");
-                player.sendMessage(ChatColor.AQUA + "Agent：/mycli intro 查看入门，/mycli rules 规则，/mycli progress 本人进度；coach lessons 只读查看，coach enroll 自愿报名。黄色大背包54格，/minepacks:backpack open 普通存取，区别于任务袋和奖励箱。");
+                if (!communication.compact(player)) {
+                    player.sendMessage(ChatColor.GOLD + "欢迎来到千灯纪！罗盘 → 旅途指南 → 新手入门，按本人实际进度开始冒险。");
+                    player.sendMessage(ChatColor.AQUA + "Agent：/mycli intro 查看入门，/mycli rules 规则，/mycli progress 本人进度；coach lessons 只读查看，coach enroll 自愿报名。黄色大背包54格，/minepacks:backpack open 普通存取，区别于任务袋和奖励箱。");
+                }
             }
         }, 40L);
     }
 
     @EventHandler public void onPlayerQuit(PlayerQuitEvent event) {
+        communication.forget(event.getPlayer());
         targetGuides.remove(event.getPlayer().getUniqueId());
         if (tradeDirectory != null) tradeDirectory.stop(event.getPlayer(), false);
         if (protectionAdvisor != null) protectionAdvisor.forget(event.getPlayer());
@@ -786,6 +810,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if(sender instanceof Player p && java.util.Arrays.stream(args).anyMatch(s->s.equals("--help")||s.equals("-h"))) {
+            AgentCliCatalog.commandHelp(p,args);return true;
+        }
+        if(sender instanceof Player p && java.util.Arrays.asList(args).contains("--json")) {
+            communication.jsonCommand(p,args);return true;
+        }
         if(args.length>=2&&args[0].equalsIgnoreCase("admin")&&args[1].equalsIgnoreCase("observe")) {
             if(!(sender instanceof ConsoleCommandSender)&&!(sender instanceof RemoteConsoleCommandSender)){sender.sendMessage("地形观测仅供女神的只读服务使用；玩家可用 /mycli protect 查询身边权限、/mycli waypoint 查看公开地点。");return true;}
             if(goddessObservation==null)goddessObservation=new GoddessObservation(this);
@@ -1174,6 +1204,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "intro", "入门状态" -> agentEntry.intro(player);
             case "rules", "规则" -> agentEntry.rules(player,args);
             case "progress", "进度" -> agentEntry.progress(player,args);
+            case "page", "续读" -> communication.pageCommand(player,args);
             case "capabilities", "能力目录" -> agentEntry.capabilities(player,args);
             case "list" -> AgentCliCatalog.list(player, args);
             case "explain" -> AgentCliCatalog.explain(player, args, 1);
@@ -1187,7 +1218,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "book", "命格书" -> giveStatusBook(player);
             case "kit", "入门" -> { giveCompass(player); giveStatusBook(player); }
             case "spells", "skills", "技能" -> {
-                if (args.length > 1 && Set.of("mine", "prepare", "unprepare", "menu", "learnmenu", "points", "learn", "upgrade", "info", "respec").contains(args[1].toLowerCase(Locale.ROOT)))
+                if (args.length > 1 && args[1].equalsIgnoreCase("status")) communication.skills(player,args);
+                else if (args.length > 1 && Set.of("mine", "prepare", "unprepare", "menu", "learnmenu", "points", "learn", "upgrade", "info", "respec").contains(args[1].toLowerCase(Locale.ROOT)))
                     professions.command(player, args);
                 else SpellGuide.command(player, args);
             }
@@ -1198,7 +1230,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "profession", "职业" -> professions.command(player, args);
             case "mastery", "熟练度" -> spellMastery.report(player);
             case "skillbook", "技能书" -> SkillTome.command(player, args, spellMastery);
-            case "status", "状态" -> status(player);
+            case "status", "状态" -> {
+                if (args.length == 1) communication.state(player);
+                else if (args.length == 2 && args[1].equalsIgnoreCase("full")) status(player);
+                else communication.error(player,"INVALID_ARGUMENT","用 /mycli status 查看本人当前状态；status full 保留旧版详细输出与实练记录。",false,"/mycli status");
+            }
             case "protect", "保护" -> protectionAdvisor.command(player, args);
             case "land", "领地" -> lands.command(player, args);
             case "cast", "咏唱", "施法" -> cast(player, tail(args, 1));
@@ -3017,7 +3053,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 2 && args[0].equalsIgnoreCase("profession")) return List.of("status", "list", "menu", "choose", "leave");
         if (args.length == 3 && args[0].equalsIgnoreCase("profession") && Set.of("choose", "leave").contains(args[1]))
             return professions.roleIds();
-        if (args.length == 2 && args[0].equalsIgnoreCase("skills")) return List.of("list", "explain", "mine", "menu", "learnmenu", "points", "learn", "upgrade", "prepare", "unprepare", "respec", "info");
+        if (args.length == 2 && args[0].equalsIgnoreCase("status")) return List.of("full");
+        if (args.length == 2 && args[0].equalsIgnoreCase("skills")) return List.of("status", "list", "explain", "mine", "menu", "learnmenu", "points", "learn", "upgrade", "prepare", "unprepare", "respec", "info");
+        if (args.length == 3 && args[0].equalsIgnoreCase("skills") && args[1].equalsIgnoreCase("status")) {
+            List<String> choices=new ArrayList<>(List.of("mine","all"));choices.addAll(SpellGuide.entries().stream().map(SpellGuide.Entry::id).toList());return choices;
+        }
         if (args.length == 3 && args[0].equalsIgnoreCase("skills")) return SpellGuide.entries().stream().map(SpellGuide.Entry::id).toList();
         if (args.length == 2 && args[0].equalsIgnoreCase("land")) return List.of("here", "list", "info", "menu", "members", "trust", "untrust", "manage", "board");
         if (args.length == 3 && args[0].equalsIgnoreCase("land") && List.of("info", "members", "trust", "untrust", "manage", "board").contains(args[1].toLowerCase(Locale.ROOT))) return lands.ids();
