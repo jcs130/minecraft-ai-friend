@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "minecraftVersion": "1.20.6",
+  "packVersion": [1, 0, 0],
+  "namespace": "qiandengji",
+  "items": [
+    {"id":"frost_sword","name":"寒霜剑","baseId":"minecraft:iron_sword","modelData":731001,"match":{"kind":"imprint","spell":"frostnova","name":"寒霜剑"},"model":"models/frost_sword.json"},
+    {"id":"blink_dagger","name":"赤铜柄·闪现匕首","baseId":"minecraft:iron_sword","modelData":731002,"match":{"kind":"imprint","spell":"blink","name":"赤铜柄·闪现匕首"},"model":"models/blink_dagger.json"},
+    {"id":"mechanical_crossbow","name":"机关弩","baseId":"minecraft:crossbow","modelData":731003,"match":{"kind":"dungeon_loot","name":"机关弩","enchants":{"quick_charge":2,"unbreaking":2}},"model":"models/mechanical_crossbow.json"},
+    {"id":"focus_wand","name":"灵纹法杖","baseId":"minecraft:blaze_rod","modelData":731004,"match":{"kind":"focus"},"model":"models/focus_wand.json"},
+    {"id":"abyss_verdict","name":"深渊裁决","baseId":"minecraft:iron_sword","modelData":731005,"match":{"kind":"dungeon_loot","name":"深渊裁决","enchants":{"sharpness":3,"unbreaking":2}},"model":"models/abyss_verdict.json"}
+  ]
+}

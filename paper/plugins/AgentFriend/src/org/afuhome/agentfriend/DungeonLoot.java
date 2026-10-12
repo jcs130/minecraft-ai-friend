@@ -337,7 +337,7 @@ final class DungeonLoot {
         meta.setLore(List.of(ChatColor.GRAY + "千灯纪试炼战利品", ChatColor.DARK_PURPLE + "✦ 法术刻印："
                 + spellName, ChatColor.GRAY + use));
         item.setItemMeta(meta);
-        return item;
+        return ItemAppearances.decorate(item);
     }
 
     private static ItemStack named(Material material, String name,
@@ -349,7 +349,7 @@ final class DungeonLoot {
         enchant(meta, first, firstLevel);
         enchant(meta, second, secondLevel);
         item.setItemMeta(meta);
-        return item;
+        return ItemAppearances.decorate(item);
     }
 
     private static ItemStack extra(ItemStack item, String enchantment, int level) {

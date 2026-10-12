@@ -267,6 +267,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private TextBubbleManager textBubbles;
     private PhotoCameraManager photoCamera;
     private InventoryFeedback inventoryFeedback;
+    private ItemAppearances itemAppearances;
     private SoulboundGear soulboundGear;
     private DungeonGearAura dungeonGearAura;
     private TravelMagic travelMagic;
@@ -337,6 +338,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         playerNameTags = new PlayerNameTags(this);
         playerNameTags.start();
         new WindowLifecycle(this);
+        itemAppearances = new ItemAppearances(this);
         inventoryFeedback = new InventoryFeedback(this);
         textBubbles = new TextBubbleManager(this);
         photoCamera = new PhotoCameraManager(this);
@@ -371,6 +373,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (itemAppearances != null) itemAppearances.stop();
         if (tradeDirectory != null) tradeDirectory.shutdown();
         if (targetGuides != null) targetGuides.stop();
         if (photoCamera != null) photoCamera.stop();
@@ -2116,7 +2119,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         meta.getPersistentDataContainer().set(focusKey, PersistentDataType.BYTE, (byte) 1);
         meta.getPersistentDataContainer().set(focusSpellKey, PersistentDataType.STRING, spell.id());
         stack.setItemMeta(meta);
-        return stack;
+        return ItemAppearances.decorate(stack);
     }
     private void giveFocus(Player p) {
         if (hasFocus(p)) { p.sendMessage(ChatColor.YELLOW + "灵纹法杖已在背包；手持潜行使用可切换技能。"); return; }

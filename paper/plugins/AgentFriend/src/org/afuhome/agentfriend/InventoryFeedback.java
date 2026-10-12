@@ -46,7 +46,7 @@ final class InventoryFeedback implements Listener {
             JsonObject row = new JsonObject(); row.addProperty("slot", slot); row.addProperty("windowSlot", slot < 9 ? 36 + slot : slot);
             row.addProperty("location", slot < 9 ? "快捷栏第" + (slot + 1) + "格" : "随身背包第" + (slot - 8) + "格");
             row.addProperty("id", item.getType().getKey().toString()); row.addProperty("amount", item.getAmount());
-            identity.describe(item).append(row, false); rows.add(row);
+            identity.describe(item).append(row, false); ItemAppearances.appendDescription(item, row); rows.add(row);
         }
         p.sendMessage("§b【服务器随身背包】" + rows.size() + "格有物品，" + empty + "格空位；含快捷栏，不含54格大背包、任务物品袋和个人奖励箱。显示不一致用 /mycli inventory refresh；收到装备也请查看快捷栏。");
         // Prismarine-chat messagestr is limited to 4096 characters. Send complete
@@ -81,6 +81,7 @@ final class InventoryFeedback implements Listener {
         } else {
             var description = identity.describe(item);
             out.addProperty("status", "ok"); out.addProperty("id", description.baseId()); out.addProperty("amount", item.getAmount()); description.append(out, true);
+            ItemAppearances.appendDescription(item, out);
             p.sendMessage("§b【物品说明】槽位" + slot + "：" + description.name() + " ×" + item.getAmount()
                     + (description.serverItem() ? "；" + description.usage() : description.lore().isEmpty() ? "" : "；" + String.join("；", description.lore())));
             p.sendMessage("§7物品名称为「" + description.name() + "」；基础材质ID " + description.baseId() + " 用于协议识别。识别特色道具请读名称、说明和服务器标识。");

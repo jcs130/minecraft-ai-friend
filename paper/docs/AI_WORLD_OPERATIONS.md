@@ -28,6 +28,7 @@
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
+| 特色装备外观（0.4.33候选，未部署） | 五件原战利品／法杖、原私有物品查询；[构建与兼容](ITEM_APPEARANCES.md) | 原物品只追加外观 PDC 与原版 CustomModelData，保持耐久／附魔／刻印／归属；开容器时延后补标记 | 同一原创源生成 Java／基岩／Web；原生44、重启4、基岩下载／映射16、实际浏览器17、Web回归61、构建6、发布20项通过。Java资源包暂手动安装，外机Web须更新，手机Xbox姿势未验；生产上线另确认 |
 | Agent确定性交互（当前0.4.32已上线） | intro/rules/capabilities/progress、coach lessons/enroll/cancel、status/skills status/page；[规则与接入](AGENT_INTERACTION.md)、[观察兼容](AGENT_CLI_OBSERVATIONS.md) | 原主线/专项/任务账本及客户端UUID独立未知操作journal保持；候选只读观察有连接ID/时间、完整分页、本机认证来源 | 现役普通帮助、分项进度与明确报名已开放；客户端串行核对真实槽位/光标。status已为纯查询，status full保留旧详细及证明；远端须按协议接入 |
 | 动态粒子引导（0.4.26候选，未部署） | 探矿、探敌、队友/商人定位、考场下一点；[规则](TARGET_GUIDES.md) | 内存短时指引，无新账本；原魔力/冷却/权限保持 | 完整动态方位线，整帧预算和实际Eye私有单播；原生47、基岩协议13、Web桥接/GPU15项通过。远端Web须更新重建，手机/Xbox画面未验，发布需本次Paper维护批准 |
 | 特色道具识别（0.4.25候选，未部署） | 普通私有道具提示、inventory status/refresh/item；[规则](CUSTOM_ITEM_IDENTITY.md) | 只读原物品名称/纹理/PDC；id/baseId是材质，name/customId/usage是展示与用途 | 识别五类真实道具，同名仿制头颅不认作大背包；完整JSON分页防截断。4.39原生24、基岩6、正常重启复验23项；合并交易板复验20/8项通过。等待本次Paper重启批准，原客户端不新增改名补丁 |

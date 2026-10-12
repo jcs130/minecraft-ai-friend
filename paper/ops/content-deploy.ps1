@@ -60,6 +60,10 @@ function Deploy-PendingContent {
             # Only the two server-owned spell files are eligible; the same
             # pinned hashes, stopped snapshots and rollback apply below.
             $target = Join-Path $serverDir $relative
+        } elseif ($relative -in @('plugins/Geyser-Spigot/packs/qiandengji-items-bedrock.mcpack','plugins/Geyser-Spigot/custom_mappings/qiandengji-items.geyser.json')) {
+            # Only this authored item pack and its exact mapping can be deployed.
+            # Preserve stopped-server, dual-snapshot, digest and rollback gates.
+            $target = Join-Path $serverDir $relative
         } elseif ($relative -match '^plugins/([A-Za-z0-9]+)/(.+)$' -and $allowed -contains $Matches[1]) {
             if ($relative -match '(^|/)\.\.(/|$)|:|\\' -or $relative -notmatch '\.(yml|yaml|json|dsc)$') { throw 'Unsafe plugin configuration path' }
             $target = Join-Path $serverDir $relative

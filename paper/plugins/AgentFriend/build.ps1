@@ -12,13 +12,14 @@ $classpath = @(
     'E:\MC\server\plugins\ProtocolLib-5.3.0.jar'
     'E:\MC\server\versions\1.20.6\paper-1.20.6.jar'
 ) -join ';'
-$build = Join-Path $root 'build-0.4.32'
+$build = Join-Path $root 'build-0.4.33'
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 & $java -encoding UTF-8 -source 21 -target 21 -cp $classpath -d $build (Get-Item -LiteralPath (Join-Path $root '..\shared\src\org\afuhome\eye\EyePairs.java')).FullName `
     (Get-ChildItem -LiteralPath (Join-Path $root 'src\org\afuhome\agentfriend') -Filter '*.java' -File | ForEach-Object { $_.FullName })
 if ($LASTEXITCODE -ne 0) { throw 'javac failed' }
 Copy-Item -LiteralPath (Join-Path $root 'resources\plugin.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\config.yml') -Destination $build -Force
+Copy-Item -LiteralPath (Join-Path $root '..\..\item-appearances\catalog.json') -Destination (Join-Path $build 'item-appearances.json') -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\trial-road.tsv') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\dynamic-board.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\goddess-gifts.yml') -Destination $build -Force
@@ -42,7 +43,7 @@ Copy-Item -LiteralPath (Join-Path $root 'resources\skill-visuals.yml') -Destinat
 Copy-Item -LiteralPath (Join-Path $root 'resources\structure-protection.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\text-bubbles.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\photo-camera.yml') -Destination $build -Force
-$out = Join-Path $root 'AgentFriend-0.4.32.jar'
+$out = Join-Path $root 'AgentFriend-0.4.33.jar'
 & $jar --create --file $out -C $build .
 if ($LASTEXITCODE -ne 0) { throw 'jar failed' }
 Get-FileHash -LiteralPath $out -Algorithm SHA256 | Select-Object Path,Hash
