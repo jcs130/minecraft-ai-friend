@@ -44,12 +44,13 @@ NPC 和玩家共用一个5tick刷新任务、32个显示实体和64条待发上�
 | require-line-of-sight | true | 布尔值 |
 | npc-enabled | true | 布尔值 |
 | npc-speakers | storyteller、botanist、guild-receptionist、life-mentors | 最多16个不重复稳定ID；空列表停用NPC气泡 |
-| background-color | `"#ffffff"` | 带引号的六位RGB颜色；背景固定全不透明 |
+| background-color | `"#ffffff"` | 带引号的六位RGB颜色 |
+| background-opacity | `180` | 整数0–255，0完全透明、255完全不透明；仅背景，文字仍不透明 |
 | player-text-color | `"#1f2937"` | 带引号的六位RGB颜色 |
 | npc-text-color | `"#1d4ed8"` | 带引号的六位RGB颜色 |
 | pointer-color | `"#64748b"` | 带引号的六位RGB颜色 |
 
-颜色字段为0.4.28候选新增。旧配置没有这些字段时直接使用新默认值，无需覆盖原运营参数。错误颜色使整份重载失败，保留上一份有效配置；基岩亮色兼容回退不采用这些深色正文值。
+颜色字段于0.4.28上线。0.4.30候选将默认白底改为约71%不透明，新增可热更新的 `background-opacity`；旧配置没有该字段也采用180，无需覆盖原运营参数。错误颜色或非整数/越界透明度使整份重载失败，保留上一份有效配置。`MC_BUBBLES.backgroundOpacity` 返回实际配置值。Web沿原生ARGB呈现相同透明度，不统一降低文字和整块实体的 opacity。基岩亮色兼容回退不采用这些深色正文值；现役Geyser仍不传背景框。
 
 中文/非拉丁字符按两列换行；实际可见字数还受三行上限约束。格式码、控制符和文本方向控制符不会带入气泡。多人限流只影响气泡，不取消正常聊天。
 
@@ -68,6 +69,8 @@ NPC 和玩家共用一个5tick刷新任务、32个显示实体和64条待发上�
 NPC夹具：`plugins/AgentFriend/npc-text-bubbles-stage.mjs`，验证实际NPCSpeak问候/答复、原菜单与导师接待、并发私有对话、Eye脱离、系统前缀伪造拒绝、NPC隐藏/移除、对话者跨维度及独立停用；模拟后端只存在于固定回环隔离QA插件。证据位于 E/F `repairs/npc-text-bubbles-20261010`。
 
 0.4.28候选：`paper/probe/guide-bubbles-completion-stage.mjs`原生30项通过，包含真实TextDisplay白底/颜色/留白、实际附身Eye、玩家私聊隔离、真实公会接待员蓝字与私有接收者、有效/无效配色重载、多圈方向及考场引导。共享Web以原1.20.6字体验证真实ARGB/RGB绘制；`paper/probe/target-guides-bedrock-stage.mjs`实际基岩协议15项通过，含文字与指示符、亮色兼容、完整引导及移动/清理。最终JAR SHA256为 `3e7b32283e04111ff7375b5c93f621557ea82ae09e29070488e3fea8ae26cbf4`。证据位于 E/F `repairs/guide-bubbles-completion-20261012`，未宣称手机/Xbox白底外观已验。
+
+2026-10-12半透明候选0.4.30：`paper/probe/text-bubble-opacity-stage.mjs`在固定回环Paper 1.20.6通过28项实际连接检查，覆盖旧配置默认180、原生ARGB与Web桥、真实附身Eye、0/128/255边界、非法值整份拒绝并保留外观、真实接待员与私有对白隔离。Web `npm run test:text-displays` 8项通过，检查独立背景alpha和完全不透明字形。属于协议与绘制调用验证，未宣称浏览器截图或手机/Xbox背景框验收。候选JAR SHA256为 `b2cffee4495005f5eae067fdde8ca5735d6296ce127a4430b50eb4011a1a549b`；私有证据位于 E/F `repairs/bubble-transparency-20261012`。候选继承尚未上线的0.4.29 CLI改进，正式服仍为0.4.28，尚未重启替换。首次上线需要按OPERATIONS正常停服；上线后可单独热调透明度，设255可恢复不透明背景。
 
 ## 基岩资源包自动下发
 

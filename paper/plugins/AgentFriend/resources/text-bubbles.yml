@@ -14,9 +14,11 @@ require-line-of-sight: true
 npc-enabled: true
 # NPCSpeak stable IDs; two reserved IDs enable the built-in receptionist and seven life mentors.
 npc-speakers: [storyteller, botanist, guild-receptionist, life-mentors]
-# 不透明背景与高对比文字；旧配置缺少这些字段时也使用此默认配色。
+# 半透明白底与高对比文字；旧配置缺少这些字段时也使用此默认配色。
 # 只接受带引号的 #RRGGBB，热重载可调整，聊天格式码不会覆盖这里的颜色。
 background-color: '#ffffff'
+# 0=完全透明，255=完全不透明；只调整背景，正文始终清晰不透明。
+background-opacity: 180
 player-text-color: '#1f2937'
 npc-text-color: '#1d4ed8'
 pointer-color: '#64748b'

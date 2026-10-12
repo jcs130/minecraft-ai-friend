@@ -49,8 +49,8 @@ final class TextBubbleManager implements Listener {
     private record Limits(boolean enabled, double range, int seconds, int active, int pending,
                           int characters, int columns, int lines, int ticks, int cooldown, boolean sight,
                           boolean npcs, Set<String> speakers, Palette palette) {}
-    private record Palette(int background, int player, int npc, int pointer) {}
-    private static final Palette DEFAULT_PALETTE = new Palette(0xffffff, 0x1f2937, 0x1d4ed8, 0x64748b);
+    private record Palette(int background, int opacity, int player, int npc, int pointer) {}
+    private static final Palette DEFAULT_PALETTE = new Palette(0xffffff, 180, 0x1f2937, 0x1d4ed8, 0x64748b);
     // A private NPC conversation gets its own key; concurrent recipients cannot overwrite each other.
     private record Key(UUID speaker, UUID recipient) {}
     private record Session(UUID world, long token, boolean speaker) {}
@@ -131,6 +131,7 @@ final class TextBubbleManager implements Listener {
                     integer(c,"update-ticks",4,20), integer(c,"replace-cooldown-ms",500,5000),
                     bool(c,"require-line-of-sight"), optionalBool(c,"npc-enabled",true), speakers(c),
                     new Palette(color(c,"background-color",DEFAULT_PALETTE.background),
+                            c.contains("background-opacity") ? integer(c,"background-opacity",0,255) : DEFAULT_PALETTE.opacity,
                             color(c,"player-text-color",DEFAULT_PALETTE.player),
                             color(c,"npc-text-color",DEFAULT_PALETTE.npc),
                             color(c,"pointer-color",DEFAULT_PALETTE.pointer)));
@@ -317,7 +318,11 @@ final class TextBubbleManager implements Listener {
                 display.addScoreboardTag("af_text_bubble"); display.setBillboard(Display.Billboard.CENTER);
                 display.setTeleportDuration(Math.min(10, limits.ticks)); display.setViewRange(1);
                 display.setShadowed(false); display.setSeeThrough(false); display.setAlignment(TextDisplay.TextAlignment.CENTER);
-                display.setDefaultBackground(false); display.setBackgroundColor(Color.fromRGB(limits.palette.background));
+                // Background alpha is independent of glyph opacity. Keep text
+                // opaque so translucent scenery does not wash out the caption.
+                int rgb = limits.palette.background;
+                display.setDefaultBackground(false);
+                display.setBackgroundColor(Color.fromARGB(limits.palette.opacity, rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255));
                 display.setTextOpacity((byte) -1);
                 display.setLineWidth(320); display.setBrightness(new Display.Brightness(15,15));
                 display.text(caption(speech, false));
@@ -396,7 +401,7 @@ final class TextBubbleManager implements Listener {
         o.addProperty("npcActive",active.keySet().stream().filter(key -> key.recipient != null).count());
         o.addProperty("npcSpeakHook",npcBridge.ready());
         o.addProperty("backgroundColor",String.format("#%06x",limits.palette.background));
-        o.addProperty("backgroundOpacity",255); o.addProperty("textShadow",false);
+        o.addProperty("backgroundOpacity",limits.palette.opacity); o.addProperty("textShadow",false);
         o.addProperty("playerTextColor",String.format("#%06x",limits.palette.player));
         o.addProperty("npcTextColor",String.format("#%06x",limits.palette.npc));
         o.addProperty("bedrockAppearance","native-label-bright-text; background-unavailable");
