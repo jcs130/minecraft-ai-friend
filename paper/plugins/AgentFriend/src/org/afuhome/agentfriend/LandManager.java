@@ -628,7 +628,8 @@ final class LandManager implements Listener {
             for(String key:List.of("status","allowed","reason","action","landId","ownerUuid","world","x","y","z"))
                 if(data.has(key))chat.add(key,data.get(key));
         }
-        player.sendMessage(prefix+" "+chat);
+        if (prefix.equals("MC_LAND_ACCESS")) plugin.protectionAdvisor().chatReceipt(player, prefix, chat);
+        else player.sendMessage(prefix+" "+chat);
     }
 
     private JsonObject info(Land land, Player viewer) {

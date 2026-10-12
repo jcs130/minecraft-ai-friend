@@ -1,5 +1,7 @@
 # Agent 魔力与技能冷却状态频道
 
+观战聊天补充：CortiEyeMirror 0.1.14 候选（尚未部署）不镜像合法 `MC_* {…}` 系统回执，保留普通私聊/中文提示；Agent 本体和私有状态频道不变。真人保护提示和显式 `protect --json` 见 [保护查询](AGENT_PROTECTION.md)。下文“镜像系统聊天”不表示向全服广播，也不表示候选会显示机器 JSON。
+
 0.3.96 增加可选 `trialRescue`，schemaVersion 仍为 1。字段为 `downed/radius/seconds/instruction/downedTeammates[]`，后者含 UUID、姓名、世界、x/y/z、按秒更新的 `progressMs`。系统提示明确：同队存活队员在倒地者 4 格内连续停留 10 秒自动救起，清完当前层/室也会自动复活，全队倒下才失败撤离。倒地者停止移动、攻击和施法，等待恢复回执。规则见[组队救援](TRIAL_RESCUE.md)。
 
 0.3.85 起，`abilities[]` 增加 `mycli:support`「支援传送术」，`cooldownMs=20000`，成功施放后立即更新本人实时冷却。是否有可支援敌人另看 `mcagent:village.supportAvailable/supportCommand`，不能仅凭冷却为 0 判断可传送；8 魔力、事件新鲜度及落点仍由服务端施法时验证。状态 schemaVersion 继续为 1。玩法与拒绝回执见 [村庄守望](VILLAGE_SUPPORT.md)。

@@ -147,7 +147,7 @@ final class AdditionalEyeMirrors implements Listener {
                 }
                 UUID targetId = recipient.getUniqueId();
                 if (!attachedTargets.contains(targetId)) return;
-                if (CortiEyeMirrorPlugin.isPhotoReceipt(event.getPacket(), type)) return;
+                if (CortiEyeMirrorPlugin.isMachineReceipt(event.getPacket(), type)) return;
                 PacketContainer packet = event.getPacket().shallowClone();
                 String signature = isChat(type) ? signature(packet, type) : null;
                 Bukkit.getScheduler().runTaskLater(plugin,

@@ -8,7 +8,7 @@ $libraries = Get-ChildItem -LiteralPath 'E:\MC\server\libraries' -Recurse -Filte
     ForEach-Object { $_.FullName }
 $classpath = (@('E:\MC\server\versions\1.20.6\paper-1.20.6.jar', $protocol, 'E:\MC\server\plugins\AuraSkills-2.4.0.jar',
     'E:\MC\server\plugins\spectatorplus-paper-1.2.0.jar') + $libraries) -join ';'
-$build = Join-Path $root 'build'
+$build = Join-Path $root 'build-0.1.14'
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 & $java -proc:none -encoding UTF-8 -source 21 -target 21 -cp $classpath -d $build `
     (Get-Item -LiteralPath (Join-Path $root '..\shared\src\org\afuhome\eye\EyePairs.java')).FullName `
@@ -17,7 +17,7 @@ New-Item -ItemType Directory -Path $build -Force | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'javac failed' }
 Copy-Item -LiteralPath (Join-Path $root 'resources\plugin.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\config.yml') -Destination $build -Force
-$out = Join-Path $root 'CortiEyeMirror-0.1.13.jar'
+$out = Join-Path $root 'CortiEyeMirror-0.1.14.jar'
 & $jar --create --file $out -C $build .
 if ($LASTEXITCODE -ne 0) { throw 'jar failed' }
 Get-FileHash -LiteralPath $out -Algorithm SHA256 | Select-Object Path,Hash

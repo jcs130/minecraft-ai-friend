@@ -58,8 +58,9 @@ final class ProtectionAdvisor implements Listener {
     void forget(Player player) { lastQuery.remove(player.getUniqueId()); notices.remove(player.getUniqueId()); }
 
     void command(Player player, String[] args) {
-        if (args.length != 5 || !(args[1].equalsIgnoreCase("break") || args[1].equalsIgnoreCase("place") || args[1].equalsIgnoreCase("container") || args[1].equalsIgnoreCase("use"))) {
-            player.sendMessage("用法：/mycli protect break|place|container|use <x> <y> <z>；只查询自己附近已加载的方块。");
+        boolean json = args.length == 6 && args[5].equalsIgnoreCase("--json");
+        if ((args.length != 5 && !json) || !(args[1].equalsIgnoreCase("break") || args[1].equalsIgnoreCase("place") || args[1].equalsIgnoreCase("container") || args[1].equalsIgnoreCase("use"))) {
+            player.sendMessage("用法：/mycli protect break|place|container|use <x> <y> <z> [--json]；只查询自己附近已加载的方块。");
             return;
         }
         String action = args[1].toLowerCase(java.util.Locale.ROOT);
@@ -98,10 +99,25 @@ final class ProtectionAdvisor implements Listener {
         plugin.lands().fields(result, new Location(player.getWorld(), x, y, z));
         if (reason != null) {
             enrich(player, result, new Location(player.getWorld(), x, y, z));
-            explain(player, result);
+            explain(player, result, true);
+        } else {
+            player.sendMessage("§a【保护查询】目标 (" + x + "," + y + "," + z + ") 按当前已知规则可尝试操作；最终以实际操作结果为准。");
         }
         send(player, result);
-        player.sendMessage("MC_PROTECTION " + result);
+        chatReceipt(player, "MC_PROTECTION", result, json);
+    }
+
+    /** Chat-only Agents retain their complete receipt. Humans use the Chinese
+     * explanation, or explicitly request --json; the private payload is always
+     * sent unchanged. Never truncate JSON: that would break the Agent parser. */
+    void chatReceipt(Player player, String prefix, JsonObject data) {
+        chatReceipt(player, prefix, data, false);
+    }
+
+    private void chatReceipt(Player player, String prefix, JsonObject data, boolean explicit) {
+        boolean agent = !plugin.isObserver(player) && (plugin.isRegisteredAgent(player)
+                || player.getName().toLowerCase(java.util.Locale.ROOT).startsWith("ag_"));
+        if (explicit || agent) player.sendMessage(prefix + " " + data);
     }
 
     void send(Player player, JsonObject result) {
@@ -248,10 +264,18 @@ final class ProtectionAdvisor implements Listener {
     }
 
     boolean explain(Player player, JsonObject data) {
+        return explain(player, data, false);
+    }
+
+    private boolean explain(Player player, JsonObject data, boolean detailed) {
         String key = data.get("action").getAsString() + ":" + data.get("world").getAsString() + ":" + data.get("x") + ":" + data.get("y") + ":" + data.get("z");
         long now = System.currentTimeMillis(); Notice last = notices.get(player.getUniqueId());
-        if (last != null && last.key().equals(key) && now - last.at() < 1500) return false;
+        if (!detailed && last != null && last.key().equals(key) && now - last.at() < 1500) return false;
         notices.put(player.getUniqueId(), new Notice(key, now));
+        if (!detailed) {
+            for (String line : ProtectionChat.summary(data)) player.sendMessage(line);
+            return true;
+        }
         player.sendMessage("§c【操作未执行】" + data.get("actionLabel").getAsString()
                 + (data.get("reason").getAsString().startsWith("unknown_") ? "尚未确认权限；目标 " : "被保护规则拒绝；目标 ") + data.get("world").getAsString()
                 + " (" + data.get("x") + "," + data.get("y") + "," + data.get("z") + ")。"
@@ -274,7 +298,7 @@ final class ProtectionAdvisor implements Listener {
         data.addProperty("x", at.getBlockX()); data.addProperty("y", at.getBlockY()); data.addProperty("z", at.getBlockZ());
         plugin.lands().fields(data, at); enrich(player, data, at, forced);
         if (!explain(player, data)) return;
-        send(player, data); player.sendMessage("MC_PROTECTION " + data);
+        send(player, data); chatReceipt(player, "MC_PROTECTION", data);
     }
 
     // Includes WorldGuard-only denials (bells, extra regions). Never cancel or un-cancel an event here.

@@ -168,6 +168,10 @@ final class AgentCommunication {
     void jsonCommand(Player p,String[] raw) {
         String[] args=Arrays.stream(raw).filter(s->!s.equals("--json")).toArray(String[]::new);
         String root=args.length==0?"status":args[0].toLowerCase(Locale.ROOT);
+        if(root.equals("protect")||root.equals("保护")) {
+            String[] query=Arrays.copyOf(args,args.length+1);query[args.length]="--json";
+            plugin.protectionAdvisor().command(p,query);return;
+        }
         if(root.equals("status")&&args.length<=1) {state(p,true);return;}
         if(root.equals("progress")&&args.length<=3) {
             plugin.agentEntry().progress(p,args.length==1?new String[]{"progress","all","1"}:args.length==2?new String[]{"progress",args[1],"1"}:args);return;
@@ -175,6 +179,6 @@ final class AgentCommunication {
         if(root.equals("skills")&&args.length>1&&args[1].equalsIgnoreCase("status")) {skills(p,args);return;}
         if(root.equals("page")) {pageCommand(p,args);return;}
         if(root.equals("capabilities")) {plugin.agentEntry().capabilities(p,args);return;}
-        error(p,"UNSUPPORTED_FORMAT","--json目前支持status、progress、skills status、page和capabilities；本次没有执行任何动作。其他入口保留原回执。",false,"/mycli status --json");
+        error(p,"UNSUPPORTED_FORMAT","--json目前支持status、progress、skills status、page、capabilities和protect；本次没有执行任何动作。其他入口保留原回执。",false,"/mycli status --json");
     }
 }

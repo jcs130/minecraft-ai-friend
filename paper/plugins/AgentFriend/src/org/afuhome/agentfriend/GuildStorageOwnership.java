@@ -142,7 +142,7 @@ final class GuildStorageOwnership implements Listener {
         plugin.protectionAdvisor().enrich(player, data, at, plugin.guildHall().propertyArea());
         if (!plugin.protectionAdvisor().explain(player, data)) return;
         plugin.protectionAdvisor().send(player, data);
-        player.sendMessage("MC_GUILD_ACCESS " + data);
+        plugin.protectionAdvisor().chatReceipt(player, "MC_GUILD_ACCESS", data);
     }
 
     boolean handleInteract(PlayerInteractEvent event) {

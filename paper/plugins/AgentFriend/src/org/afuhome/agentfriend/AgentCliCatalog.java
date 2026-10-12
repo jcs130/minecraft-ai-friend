@@ -91,7 +91,7 @@ final class AgentCliCatalog {
         add(specs,"book","item","item","/mycli book","补领命格书","背包有空位；已有时不重复发放","领取结果");
         add(specs,"kit","item","item","/mycli kit","补领罗盘和命格书","背包有空位","领取结果");
         add(specs,"menu","item","gui","/mycli menu","打开技能罗盘原版箱子界面","在线玩家","原版菜单");
-        add(specs,"protect","safety","read","/mycli protect break|place|container|use <x> <y> <z>","拆建/开箱/开门或机关前查询保护与物品归属；坐标必须是绝对整数","同维度已加载方块，距玩家不超过 16 格","mcagent:protection JSON；deny 不操作，unknown 暂缓；areas 含世界/含边界坐标与形状，nextAction/nextCommands 给正确做法，区外目标仍须重新查询");
+        add(specs,"protect","safety","read","/mycli protect break|place|container|use <x> <y> <z> [--json]","拆建/开箱/开门或机关前查询保护与物品归属；坐标必须是绝对整数","同维度已加载方块，距玩家不超过 16 格","私有 mcagent:protection JSON；真人默认中文，Agent保留聊天JSON，其他客户端可显式--json；deny 不操作，unknown 暂缓；areas/nextAction/nextCommands 给边界及下一步，区外目标仍须重查");
         add(specs,"goto","travel","teleport","/mycli goto <公共地点ID|arena|guild|personal:名字|shared:分享码>","传送术前往公共、本人或分享地点","安全落点；6 魔力；个人名支持 1–24 位中文字母数字_-；不在活动中","命名地点先返回 MC_WAYPOINT_RESULT status=pending，最终 success/denied；成功 MC_TRAVEL；失败不扣费");
         add(specs,"waypoint","travel","read","/mycli waypoint","只读列出公共、本人命名地点和旧 home","在线玩家；不移动、不扣费","MC_WAYPOINT 绝对坐标和 MC_WAYPOINT_LIST JSON");
         add(specs,"locate","team","read","/mycli locate list|nearest|玩家名|off|tp <玩家名|nearest>","查在线队友绝对坐标、追踪或安全传送","目标在线且非旁观者","MC_PLAYER 绝对坐标或追踪/传送结果");
@@ -102,9 +102,9 @@ final class AgentCliCatalog {
         add(specs,"village","safety","query_or_cast","/mycli village threat|support [事件ID]|villagers","查实时敌情、施放支援传送术、查村民收购报价","查询免费；支援8魔力、20秒冷却，须有已确认的活敌人","本人 mcagent:village JSON；支援返回 MC_VILLAGE_SUPPORT");
         add(specs,"goddess","goddess","read","/mycli goddess skills|learn feather|night|pray <话>","女神技艺和祈愿","学习需满足条件；祈愿需女神在线","技能列表、学习或送达结果");
 
-        add(specs,"protect.break","safety","read","/mycli protect break <x> <y> <z>","预判能否挖掘该绝对坐标方块","整数坐标；同维度、16 格内、区块已加载","mcagent:protection status=deny|unknown|allow_likely");
-        add(specs,"protect.container","safety","read","/mycli protect container <x> <y> <z>","开箱前查询领地与实体储物权限；公会门内归领地主人","整数坐标；同维度、16格内、已加载；门口公共箱可存取","MC_PROTECTION 与 mcagent:protection；拒绝则停止，按 publicCommand 找公共箱");
-        add(specs,"protect.use","safety","read","/mycli protect use <x> <y> <z>","使用门、按钮、工作台前查询领地权限","整数坐标；同维度、16格内、已加载","MC_PROTECTION；deny 则停止，unknown 暂缓");
+        add(specs,"protect.break","safety","read","/mycli protect break <x> <y> <z> [--json]","预判能否挖掘该绝对坐标方块","整数坐标；同维度、16 格内、区块已加载","mcagent:protection status=deny|unknown|allow_likely；真人默认中文，显式--json查看聊天回执");
+        add(specs,"protect.container","safety","read","/mycli protect container <x> <y> <z> [--json]","开箱前查询领地与实体储物权限；公会门内归领地主人","整数坐标；同维度、16格内、已加载；门口公共箱可存取","私有mcagent:protection；Agent或显式--json另收MC_PROTECTION；拒绝则停止，按 publicCommand 找公共箱");
+        add(specs,"protect.use","safety","read","/mycli protect use <x> <y> <z> [--json]","使用门、按钮、工作台前查询领地权限","整数坐标；同维度、16格内、已加载","私有mcagent:protection；Agent或显式--json另收MC_PROTECTION；deny 则停止，unknown 暂缓");
         add(specs,"land","safety","query_or_manage","/mycli land here|list|info <ID>|menu；members <ID> [页码]；trust|untrust <ID> <玩家名或UUID>；board <ID>","查看归属、协作者与实体公告牌；主人管理协作者","仅当前主人能授权/撤权；成员不能转授权；其他公共建筑保护仍适用","MC_LAND_INFO/LIST/MEMBERS/GUIDE/MEMBER_RESULT/BOARD");
         add(specs,"land.here","safety","read","/mycli land here","查看当前位置的领地归属和本人可做的操作","在线玩家","MC_LAND_INFO；unclaimed 仍须遵守公共建筑和活动保护");
         add(specs,"land.list","safety","read","/mycli land list [页码]","分页查看已登记领地","每页最多 9 项","MC_LAND_LIST");
@@ -127,7 +127,7 @@ final class AgentCliCatalog {
         add(specs,"coach.later","info","write","/mycli coach later","暂停本人所有自动提醒，默认30分钟；跨重登保留","仍可主动查询；coach on 可提前恢复","MC_COACH type=status，onboarding.mutedUntil为Unix毫秒");
         add(specs,"coach.on","info","write","/mycli coach on","为本人启用提醒，跨重登保留","在线非旁观玩家","MC_COACH type=status enabled=true");
         add(specs,"coach.off","info","write","/mycli coach off","为本人关闭提醒，跨重登保留","在线玩家","MC_COACH type=status enabled=false");
-        add(specs,"protect.place","safety","read","/mycli protect place <x> <y> <z>","预判能否在绝对坐标放置方块","整数坐标；同维度、16 格内、区块已加载","mcagent:protection status=deny|unknown|allow_likely");
+        add(specs,"protect.place","safety","read","/mycli protect place <x> <y> <z> [--json]","预判能否在绝对坐标放置方块","整数坐标；同维度、16 格内、区块已加载","mcagent:protection status=deny|unknown|allow_likely；真人默认中文，显式--json查看聊天回执");
         add(specs,"cast.selfheal","magic","cast","/mycli cast selfheal","治疗自己；圣愈术","非旁观者；MagicSpells 魔力与冷却检查","治疗结果与视觉提示");
         add(specs,"spells.list","magic","read","/mycli spells list [分类] [页码]","skills list 的兼容别名；profession/warrior/mage/priest 可直接查职业技能","查询免费；默认 all 多页，旧 list <页码> 保留","MC_SPELL_LIST/ITEM/NEXT");
         add(specs,"spells.explain","magic","read","/mycli spells explain <ID>","skills explain 的兼容别名；各级价格和条件用 skills info <ID>","查询免费，不执行技能","MC_SPELL_DETAIL");

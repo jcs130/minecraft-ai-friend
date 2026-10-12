@@ -150,7 +150,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
                     return;
                 }
                 if (!recipient.equalsIgnoreCase(targetName)) return;
-                if (isPhotoReceipt(event.getPacket(), type)) return;
+                if (isMachineReceipt(event.getPacket(), type)) return;
                 if (isChat(type) && !mirrorChat) return;
                 if (type == PacketType.Play.Server.ADVANCEMENTS && !mirrorAdvancements) return;
                 PacketContainer copy = event.getPacket().shallowClone();
@@ -616,14 +616,16 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         return type.name() + ':' + packet.getHandle().toString();
     }
 
-    static boolean isPhotoReceipt(PacketContainer packet, PacketType type) {
+    static boolean isMachineReceipt(PacketContainer packet, PacketType type) {
         if (type != PacketType.Play.Server.SYSTEM_CHAT) return false;
         try {
             var component = packet.getChatComponents().readSafely(0);
-            if (component == null || component.getJson().length() > 16_384) return false;
+            if (component == null) return false;
             String text = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(
                 net.kyori.adventure.text.serializer.gson.GsonComponentSerializer.gson().deserialize(component.getJson()));
-            return text.startsWith("MC_PHOTO {");
+            // Only omit the spectator copy. The Agent's original chat receipt
+            // and private custom payload remain intact for existing clients.
+            return MachineChatReceipts.matches(text);
         } catch (RuntimeException ignored) { return false; }
     }
 }
