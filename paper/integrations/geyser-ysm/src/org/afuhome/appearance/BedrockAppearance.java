@@ -10,6 +10,11 @@ import org.geysermc.event.subscribe.Subscribe;
 import org.geysermc.geyser.GeyserImpl;
 import org.geysermc.geyser.api.command.*;
 import org.geysermc.geyser.api.event.bedrock.SessionSkinApplyEvent;
+import org.geysermc.geyser.api.event.bedrock.SessionLoadResourcePacksEvent;
+import org.geysermc.geyser.api.event.bedrock.SessionJoinEvent;
+import org.geysermc.geyser.api.event.bedrock.SessionDisconnectEvent;
+import org.geysermc.geyser.api.entity.property.type.GeyserIntEntityProperty;
+import org.geysermc.geyser.api.util.Identifier;
 import org.geysermc.geyser.api.event.lifecycle.*;
 import org.geysermc.geyser.api.extension.Extension;
 import org.geysermc.geyser.api.skin.*;
@@ -33,11 +38,21 @@ public final class BedrockAppearance implements Extension {
     private final AtomicInteger packetBudget=new AtomicInteger();
     private ScheduledExecutorService scheduler;
     private ModelCatalog models;
+    private BedrockPackDelivery packs;
+    private GeyserIntEntityProperty modelProperty,extraProperty;
     private Path stateFile;
     private volatile boolean enabled;
     private volatile String reason="YSM_BEDROCK_DISABLED";
     private final AtomicLong applied=new AtomicLong(),restored=new AtomicLong();
     private long scanned;
+
+    @Subscribe public void properties(GeyserDefineEntityPropertiesEvent event) {
+        modelProperty=event.registerIntegerProperty(Identifier.of("minecraft:player"),Identifier.of(BedrockPack.SLOT),0,BedrockPack.MAX_VARIANTS,0);
+        extraProperty=event.registerIntegerProperty(Identifier.of("minecraft:player"),Identifier.of(BedrockPack.EXTRA),0,16,0);
+    }
+    @Subscribe public void resourcePacks(SessionLoadResourcePacksEvent event){if(enabled && packs!=null)packs.load(event);}
+    @Subscribe public void joined(SessionJoinEvent event){if(packs!=null && event.connection() instanceof GeyserSession s)packs.join(s);}
+    @Subscribe public void disconnected(SessionDisconnectEvent event){if(packs!=null && event.connection() instanceof GeyserSession s)packs.drop(s);}
 
     @Subscribe public void start(GeyserPostInitializeEvent event) {
         try {
@@ -50,6 +65,11 @@ public final class BedrockAppearance implements Extension {
             Path modelConfig=Path.of(options.get("modelsConfig").getAsString());stateFile=Path.of(options.get("stateFile").getAsString());
             if(!modelConfig.isAbsolute() || !stateFile.isAbsolute())throw new IllegalStateException("YSM_BEDROCK_ABSOLUTE_PATH_REQUIRED");
             models=new ModelCatalog(modelConfig);
+            if(options.has("delivery") && !Set.of("skin","resource_pack").contains(options.get("delivery").getAsString()))throw new IllegalStateException("YSM_BEDROCK_DELIVERY_INVALID");
+            if(options.has("delivery") && "resource_pack".equals(options.get("delivery").getAsString())) {
+                if(!GeyserImpl.getInstance().config().gameplay().forceResourcePacks())throw new IllegalStateException("YSM_BEDROCK_PACK_ACCEPTANCE_REQUIRED");
+                packs=new BedrockPackDelivery(Path.of(options.get("vanillaPlayerTemplate").getAsString()),dataFolder().resolve("generated-packs").toAbsolutePath(),modelProperty,extraProperty);
+            }
             scheduler=Executors.newSingleThreadScheduledExecutor(r->{Thread thread=new Thread(r,"ysm-bedrock-assets");thread.setDaemon(true);return thread;});
             scheduler.scheduleWithFixedDelay(this::poll,0,1,TimeUnit.SECONDS);
             logger().info("Original YSM player geometry adapter enabled; device visuals and native animations require separate acceptance.");
@@ -64,7 +84,7 @@ public final class BedrockAppearance implements Extension {
         enabled=false;ready=Map.of();if(scheduler!=null)scheduler.shutdownNow();tracked.clear();requested.clear();queued.clear();bindings.clear();
     }
     @Subscribe(postOrder=PostOrder.LAST) public void skin(SessionSkinApplyEvent event) {
-        if(!enabled || !(event.connection() instanceof GeyserSession session))return;
+        if(!enabled || packs!=null || !(event.connection() instanceof GeyserSession session))return;
         AvatarEntity entity=entity(session,event.uuid());if(entity==null)return;
         Ready target=select(ready.get(event.uuid()),entity.uuid(),entity.getEntityId());
         SkinData original=event.skinData();
@@ -82,6 +102,10 @@ public final class BedrockAppearance implements Extension {
         try {
             long now=System.currentTimeMillis();if(now-scanned>=5000) {scanned=now;models.scan();}
             Map<UUID,BedrockState.Entry> states=BedrockState.read(stateFile,now);
+            if(packs!=null) {
+                packs.scan(models,states);
+                ready=Map.of();reason="";
+            } else {
             Map<UUID,Ready> next=new HashMap<>();Map<String,String> failed=new TreeMap<>();
             Set<String> used=new HashSet<>();long usedBytes=0;
             for(var state:states.values()) {
@@ -101,10 +125,12 @@ public final class BedrockAppearance implements Extension {
             while(cache.size()>32 || cache.values().stream().mapToLong(m->m.skin().skinData().length+m.geometry().geometryData().length()*2L).sum()>32*1024*1024)cache.remove(cache.keySet().iterator().next());
             if(rejected.size()>64)rejected.clear();
             ready=Map.copyOf(next);unavailable=Map.copyOf(failed);reason="";
-        } catch(Exception error) {ready=Map.of();reason=message(error);}
+            }
+        } catch(Exception error) {ready=Map.of();reason=message(error);if(packs!=null)packs.unavailable(reason);}
         try {
             var sessions=geyserApi().onlineConnections().stream().filter(GeyserSession.class::isInstance).map(GeyserSession.class::cast).toList();
             tracked.keySet().retainAll(sessions);requested.keySet().retainAll(sessions);bindings.keySet().retainAll(sessions);
+            if(packs!=null)packs.retain(sessions);
             // One bounded sweep per second, mutations stay on each Geyser session event loop.
             packetBudget.set(32);
             for(GeyserSession session:sessions)if(!session.isClosed() && queued.add(session))session.executeInEventLoop(()->{try{refresh(session);}finally{queued.remove(session);}});
@@ -116,6 +142,7 @@ public final class BedrockAppearance implements Extension {
         List<Map<String,Object>> observed=new ArrayList<>();
         session.getEntityCache().forEachPlayerEntity(player->{if(observed.size()<40)observed.add(Map.of("uuid",player.uuid().toString(),"entityId",player.getEntityId(),"valid",player.isValid(),"name",player.getUsername()));});
         bindings.put(session,List.copyOf(observed));
+        if(packs!=null){packs.refresh(session,packetBudget);return;}
         Map<UUID,Tracked> seen=tracked.computeIfAbsent(session,s->new ConcurrentHashMap<>());
         Set<UUID> candidates=new HashSet<>(seen.keySet());candidates.addAll(ready.keySet());int sent=0;
         for(UUID uuid:candidates) {
@@ -144,7 +171,8 @@ public final class BedrockAppearance implements Extension {
     private Map<String,Object> status() {
         Map<String,Object> status=new LinkedHashMap<>();status.putAll(Map.of("schemaVersion",1,"enabled",enabled,"readyPlayers",ready.size(),"sessions",tracked.size(),"applied",applied.get(),"restored",restored.get(),
             "reason",reason,"unavailable",unavailable,"fullAnimationParity",false,"deviceVisualsVerified",false));
-        status.put("bindings",List.copyOf(bindings.values()));status.put("projected",ready.values().stream().map(r->Map.of("uuid",r.state.uuid().toString(),"entityId",r.state.entityId(),"model",r.state.modelId())).toList());return status;
+        if(packs!=null)status.putAll(packs.status());
+        status.put("bindings",List.copyOf(bindings.values()));status.put("projected",packs!=null?packs.projected():ready.values().stream().map(r->Map.of("uuid",r.state.uuid().toString(),"entityId",r.state.entityId(),"model",r.state.modelId())).toList());return status;
     }
     private void writeStatus() throws Exception {
         Path target=dataFolder().resolve("status.json"),pending=Files.createTempFile(dataFolder(),".status-",".tmp");

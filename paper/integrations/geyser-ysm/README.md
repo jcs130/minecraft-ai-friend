@@ -1,5 +1,7 @@
 # YSM 原模型到基岩玩家外观
 
+2026-10-13：新增 **0.2.0 高清资源包隔离候选**，尚未安装正式服。原玩家实体属性选择模型，保留可米 2048 原 PNG/骨骼，接入动作与装备；上传后自动构建不可变资源包，每连接固定版本，更新后重连下载。配置、预算、协议 2193 原型边界、真机验收与回退见 [高清资源包方案](../../docs/YSM_BEDROCK_RESOURCE_PACK.md)。默认仍走下述旧皮肤路径；不要将候选或协议收包说成手机/Xbox画面验收。
+
 状态（2026-10-11）：**正式已启用扩展0.1.0**，随私有Proxy/Worker桥接发布。生产加载和原认证入口核验通过；实际基岩协议几何/UV/RGBA验证来自隔离服。完整YSM动画、控制器、装备与手机/Xbox真机画面尚未验收。见 [当前状态](../../docs/YSM_ADAPTATION.md) 和 [维护](../../docs/YSM_LIFECYCLE.md)。
 
 ## 链路
@@ -36,7 +38,7 @@ flowchart LR
 python build.py --geyser <Geyser-Spigot.jar> --gson <gson-2.10.1.jar> --jdk <jdk-21> --output <新的仓库外目录>
 ```
 
-脚本校验依赖摘要，输出 `AgentAppearance-Bedrock-0.1.0.jar` 和源码/产物清单，不执行安装或重启。配套 Proxy 桥版本为 **AgentAppearance 0.3.0**。
+脚本校验依赖摘要，当前输出 `AgentAppearance-Bedrock-0.2.0.jar` 和源码/产物清单，不执行安装或重启。新资源包路径配套现役 Proxy 桥版本为 **AgentAppearance 0.3.2**；下方为旧 0.1.0 皮肤路径及历史隔离结果。
 
 1. 在私有 Proxy 的 `plugins/agentappearance/models.json` 追加 `bedrockStateFile`：绝对本地文件路径，父目录已存在；保留原 `publicModelRoot`。两端同机，以原文件权限限制写入。
 2. 把扩展 JAR 放入 `plugins/Geyser-Spigot/extensions/`。首次启动默认禁用。
@@ -62,6 +64,6 @@ python build.py --geyser <Geyser-Spigot.jar> --gson <gson-2.10.1.jar> --jdk <jdk
 
 原始回执、失败尝试和正常冷重启检查在私有 `E:/MC/research/bedrock-ysm-20261010`。早期事件路径失败、测试把重复原模型复制成新模型后原生拒绝，以及重载完成前分配失败均保留。候选摘要见 [清单](../../manifests/ysm-bedrock-candidate-20261010.json)。
 
-正式服整个 Proxy/Worker 拓扑仍未启用。发布须先接入原单实例维护、Watchdog 和双盘快照，核验原身份网关及 Floodgate 路由，再按 [维护流程](../../docs/OPERATIONS.md) 预告重启；不要只放 JAR 就声称 YSM 上线。回退恢复旧入口与扩展前外观路径，不回滚玩家物资/世界。正式服务未变动，本轮无需重启正式服。
+上述联机记录属于 2026-10-10 的 0.1.0 隔离验收。原 Proxy/Worker 与 0.1.0 扩展已于 2026-10-11 正式上线；本轮 0.2.0 高清资源包仍是隔离候选。发布新扩展须沿用原单实例维护、Watchdog、双盘快照及 [维护流程](../../docs/OPERATIONS.md)；回退只恢复扩展和配置，不回滚玩家物资/世界。
 
 来源：[Geyser 扩展](https://geysermc.org/wiki/geyser/extensions/)、[锁定版换肤事件](https://github.com/GeyserMC/Geyser/blob/f66329d9d21b3c836edc014fbb9d8312fbe34285/api/src/main/java/org/geysermc/geyser/api/event/bedrock/SessionSkinApplyEvent.java)、[原生皮肤发包](https://github.com/GeyserMC/Geyser/blob/f66329d9d21b3c836edc014fbb9d8312fbe34285/core/src/main/java/org/geysermc/geyser/skin/SkinManager.java)。

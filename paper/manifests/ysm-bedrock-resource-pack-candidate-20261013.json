@@ -1,0 +1,40 @@
+{
+  "status": "isolated_candidate_not_deployed",
+  "version": "0.2.0",
+  "candidate": {
+    "AgentAppearance-Bedrock-0.2.0.jar": "781625fd37ebf615a17da2048fa964769151e67743f041c7a73a55fa0246c9b0"
+  },
+  "dependencies": {
+    "geyser": "39d8a45eca9f2413080b9597c67d1b2bf3bc9b62e8577f46eb83c9c8abfc4499",
+    "gson": "4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593"
+  },
+  "javaSources": {
+    "geyser-ysm\\src\\org\\afuhome\\appearance\\BedrockAppearance.java": "5df9e1fe9d136603b9a992b7a0a135b5261b5fa49932881fb9e06a6214598206",
+    "geyser-ysm\\src\\org\\afuhome\\appearance\\BedrockModel.java": "271c35336740bd4d3e989904b1e2dc8c689986ce75ed64762b721128d3a31289",
+    "geyser-ysm\\src\\org\\afuhome\\appearance\\BedrockPack.java": "a295de6f767f9ee1caa30afd3fba48e673e7d264e4a0784381b4ad221b5bf69d",
+    "geyser-ysm\\src\\org\\afuhome\\appearance\\BedrockPackDelivery.java": "42e4b21ba39926a8e86d9f45b98077a641e97c079cff294ad34ec5923c5d0a76",
+    "geyser-ysm\\src\\org\\afuhome\\appearance\\BedrockState.java": "972e088f1dacee340bb8beb948e469eecd0062efe65bdb64f308e76dc2c6adf3",
+    "freesia-optional\\bridge\\org\\afuhome\\appearance\\ModelCatalog.java": "5238a05f147b09d592c70e0fb90b35f08175e93562e29d29d9e952ed102e3d68"
+  },
+  "template": {
+    "repository": "Mojang/bedrock-samples",
+    "revision": "46ba6ea985fb5a92d79a9419198f10dda14c199d",
+    "sha256": "7e520d872fc72be266223b3db2883c2818742a9a450330753a6de4d2ad813608"
+  },
+  "scope": {
+    "geyser": "2.11.3-b1249/git-master-f66329d",
+    "bedrockProtocols": [
+      2193
+    ],
+    "deviceVisualsVerified": false,
+    "fullAnimationParity": false,
+    "newPublicPorts": false
+  },
+  "checks": {
+    "unitAndCodec": 30,
+    "isolatedNative": 15,
+    "nativeReport": "integration-7.json"
+  },
+  "privateEvidence": "E/F MC/repairs/bedrock-ysm-resource-pack-20261013",
+  "documentation": "docs/YSM_BEDROCK_RESOURCE_PACK.md"
+}
