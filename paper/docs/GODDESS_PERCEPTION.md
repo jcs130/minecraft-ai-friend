@@ -6,6 +6,8 @@
 
 连接链路：游戏聊天 → `goddess-bridge.mjs` / `goddess-perception.mjs` → QwenPaw `mc_godness` → stdio `goddess-mcp.py` → 本机 RCON → AgentFriend 控制台观察入口。观察接口不能由游戏玩家或 OP 游戏账号调用。
 
+2026-10-12补充：女神本人的历史运营使用原生记忆检索、操作日记和真实回执，见[操作记忆](GODDESS_MEMORY.md)。当前世界快照不包含过去做过的全部工作；不能因快照或检索无结果就否认曾经代笔、建造或上架。历史证据与本次空间观察分别核对。
+
 ## 九项只读工具
 
 | 工具 | 返回什么 | 范围与限制 |
