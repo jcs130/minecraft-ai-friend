@@ -41,7 +41,11 @@ public final class NativeModAccess {
         out.addProperty("availableWithoutClient",true);out.addProperty("permissions","same_body_native_rules");return out;
     }
     private static boolean available(JsonObject row) {
-        return !row.get("id").getAsString().startsWith("folkways.")||net.neoforged.fml.ModList.get().isLoaded("folkways");
+        String id = row.get("id").getAsString();
+        if (id.startsWith("folkways.")) return net.neoforged.fml.ModList.get().isLoaded("folkways");
+        if (id.startsWith("wandscape.")) return net.neoforged.fml.ModList.get().getModContainerById("wandscape")
+                .map(mod -> WandscapeAccess.VERSION.equals(mod.getModInfo().getVersion().toString())).orElse(false);
+        return true;
     }
     static boolean capturing(ServerPlayer player) {var c=CURRENT.get();return c!=null&&c.player.equals(player.getUUID());}
     public static JsonObject bodySnapshot(ServerPlayer player) {
@@ -63,10 +67,18 @@ public final class NativeModAccess {
     }
     static boolean capture(ServerPlayer player,String text) {return capturing(player)&&capture(player,JsonParser.parseString(text).getAsJsonObject());}
     public static JsonObject invoke(ServerPlayer player,String operation,JsonObject arguments,boolean readOnly,String requestId) {
+        return invokeScoped(player,operation,arguments,readOnly,requestId,false);
+    }
+    /** Trusted menu callbacks may invoke one same-body child while the parent captures its own receipt. */
+    static JsonObject invokeMenuChild(ServerPlayer player,String operation,JsonObject arguments,boolean readOnly,String requestId) {
+        return invokeScoped(player,operation,arguments,readOnly,requestId,true);
+    }
+    private static JsonObject invokeScoped(ServerPlayer player,String operation,JsonObject arguments,boolean readOnly,String requestId,boolean menuChild) {
         PlayerAuthBridge.requireAuthenticated(player);
         if(player.getServer()==null||!player.getServer().isSameThread())throw new IllegalStateException("minecraft_thread_required");
         if(player.isDeadOrDying()&&!Set.of("control.actionStatus","control.cancel").contains(operation))throw new IllegalArgumentException("body_dead");
-        if(CURRENT.get()!=null)throw new IllegalStateException("native_mod_call_nested");
+        Capture previous=CURRENT.get();
+        if(previous!=null&&(!menuChild||!previous.player.equals(player.getUUID())))throw new IllegalStateException("native_mod_call_nested");
         var row=OPERATIONS.get(operation);if(row==null)throw new IllegalArgumentException("mod_operation_not_found");
         if(readOnly!=row.get("readOnly").getAsBoolean())throw new IllegalArgumentException("mod_read_write_mismatch");
         if(!requestId.matches("[A-Za-z0-9:_-]{1,64}"))throw new IllegalArgumentException("invalid_mod_request_id");
@@ -106,7 +118,7 @@ public final class NativeModAccess {
             if(c.result.toString().getBytes(StandardCharsets.UTF_8).length>65536)throw new IllegalStateException("native_mod_receipt_over_budget");
             c.result.addProperty("bodyId",player.getUUID().toString());c.result.addProperty("sampledAt",Instant.now().toString());
             return c.result;
-        }finally{CURRENT.remove();}
+        }finally{if(previous==null)CURRENT.remove();else CURRENT.set(previous);}
     }
     private static JsonObject menuState(ServerPlayer player,String id) {
         JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("requestId",id);out.addProperty("ok",true);

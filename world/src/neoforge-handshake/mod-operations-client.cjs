@@ -5,8 +5,8 @@ const { EventEmitter } = require('node:events')
 const { TextDecoder } = require('node:util')
 const transition = require('./rpg-transition.cjs')
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const reads = new Set(['create_settings', 'create_fluids', 'curios_state', 'ysm_catalog', 'control_query', 'society_state', 'folkways_state', 'folkways_catalog', 'folkways_orders', 'folkways_logistics', 'folkways_rail'])
-const writes = new Set(['create_value', 'create_filter', 'curios_open', 'curios_page', 'world_interact', 'ysm_select', 'control_action', 'society_join', 'society_accept', 'society_submit', 'society_open', 'folkways_found', 'folkways_member', 'folkways_zone', 'folkways_order', 'folkways_hire', 'folkways_logistics_link'])
+const reads = new Set(['create_settings', 'create_fluids', 'curios_state', 'ysm_catalog', 'control_query', 'society_state', 'folkways_state', 'folkways_catalog', 'folkways_orders', 'folkways_logistics', 'folkways_rail', 'wandscape_state', 'wandscape_catalog'])
+const writes = new Set(['create_value', 'create_filter', 'curios_open', 'curios_page', 'world_interact', 'ysm_select', 'control_action', 'society_join', 'society_accept', 'society_submit', 'society_open', 'folkways_found', 'folkways_member', 'folkways_zone', 'folkways_order', 'folkways_hire', 'folkways_logistics_link', 'wandscape_found', 'wandscape_build', 'wandscape_recruit', 'wandscape_strategy', 'wandscape_deposit', 'wandscape_withdraw'])
 const utf8 = new TextDecoder('utf-8', { fatal: true })
 const rpgReads = new Set(['state', 'skills', 'protect', 'lands', 'arena_status', 'stash_state', 'recycle_list', 'recycle_quote', 'shop_list'].map(k => `rpg_${k}`))
 const rpgWrites = new Set(['skill_learn', 'skill_upgrade', 'skill_cast', 'skill_bind', 'skill_imprint', 'profession_choose', 'land_claim', 'land_release', 'land_trust', 'land_untrust', 'arena_lobby', 'arena_start', 'arena_resume', 'arena_leave', 'stash_open', 'recycle_sell', 'shop_buy', 'open'].map(k => `rpg_${k}`))
@@ -82,6 +82,7 @@ function attachModOperationsClient (bot, { timeoutMs = 4000 } = {}) {
     events,
     rpg: { request },
     folkways: { request: (kind, args) => request('folkways_' + kind, args) },
+    wandscape: { request: (kind, args) => request('wandscape_' + kind, args) },
     control: async (operation, args, readOnly) => {
       const receipt = await request(readOnly ? 'control_query' : 'control_action', { operation, arguments: args })
       return receipt.control || receipt

@@ -22,7 +22,7 @@ MAPPINGS = 'maw-native-icons.json'
 CATALOG = 'maw-native-items.json'
 CONTRACT = 'resource-contract.json'
 MARKER_BASE = 8_000_000  # exact in both Java int and post-1.21.4 float component
-PACK_VERSION = [1, 0, 2]
+PACK_VERSION = [1, 0, 3]
 
 
 def sha(data: bytes) -> str:
@@ -183,6 +183,8 @@ def build(assets_root: Path, registry: Path, idmap: Path, output: Path):
     for lang in ['zh_CN', 'en_US']:
         entries['texts/'+lang+'.lang'] = ('\n'.join('item.'+r['bedrockIdentifier']+'.name='+r['displayName']
                                                    for r in catalog)+'\n').encode('utf-8')
+    if any(row['nativeItem'].startswith('wandscape:') for row in catalog):
+        entries['credits/Wandscape-LICENSE.txt']=(Path(__file__).resolve().parents[1]/'world/compat/wandscape/LICENSE').read_bytes()
     pack_buffer = io.BytesIO()
     with zipfile.ZipFile(pack_buffer, 'w', zipfile.ZIP_DEFLATED) as z:
         for key, raw in sorted(entries.items()):

@@ -35,7 +35,7 @@ import org.jose4j.json.internal.json_simple.parser.JSONParser;
  */
 public final class MawModelsExtension implements Extension {
     private record Model(CustomEntityDefinition definition, float scale, SkinData skin, Map<String,String> animations) {}
-    private record Binding(UUID uuid, String identifier) {}
+    private record Binding(UUID uuid, String identifier, int hatColor) {}
     private static final class State {
         final Map<Integer, Binding> bindings = new ConcurrentHashMap<>();
         final Map<UUID, SkinData> originalSkins = new ConcurrentHashMap<>();
@@ -50,6 +50,7 @@ public final class MawModelsExtension implements Extension {
     private final Map<String, Map<String,String>> voicePacks = new HashMap<>();
     private final Map<GeyserConnection, State> states = Collections.synchronizedMap(new WeakHashMap<>());
     private static final Identifier ARMOR_STAND = Identifier.of("minecraft:armor_stand");
+    private static final Identifier IRON_GOLEM = Identifier.of("minecraft:iron_golem");
     private static void sendSkin(GeyserSession session,UUID uuid,SkinData desired){
         // The pinned public helper looks only in EntityCache's other-player
         // map. The session player is kept separately in this Geyser build.
@@ -198,7 +199,9 @@ public final class MawModelsExtension implements Extension {
                             int id = ((Number)body.get("entityId")).intValue();
                             String identifier = text(body, "identifier");
                             if (!definitions.containsKey(identifier) || state.bindings.size() >= 4096) return;
-                            state.bindings.put(id, new Binding(UUID.fromString(text(body, "uuid")), identifier));
+                            int color=body.get("hatColor") instanceof Number n?n.intValue():0;
+                            if(color<0||color>0xffffff)throw new IllegalArgumentException("model_hat_color");
+                            state.bindings.put(id, new Binding(UUID.fromString(text(body, "uuid")), identifier, color));
                         } else if (channel.equals("maw_agent:scene_state")) {
                             var body=json(payload.getData());
                             if(Long.valueOf(1).equals(body.get("schemaVersion"))&&session.playerEntity().uuid().toString().equals(body.get("playerUuid")))
@@ -244,9 +247,11 @@ public final class MawModelsExtension implements Extension {
     @Subscribe
     public void spawn(ServerSpawnEntityEvent event) {
         State state = states.get(event.connection());
-        if (state == null || !event.entityType().is(ARMOR_STAND)) return;
+        if (state == null) return;
         Binding binding = state.bindings.remove(event.entityId());
         if (binding == null || !binding.uuid().equals(event.uuid())) return;
+        boolean wizard=binding.identifier().startsWith("maw_native:wandscape_");
+        if (!event.entityType().is(wizard?IRON_GOLEM:ARMOR_STAND)) return;
         Model model = definitions.get(binding.identifier());
         if (model == null) return;
         state.active.put(event.entityId(),binding);
@@ -256,6 +261,8 @@ public final class MawModelsExtension implements Extension {
             entity.override(GeyserEntityDataTypes.VERTICAL_OFFSET, 0f);
             entity.override(GeyserEntityDataTypes.WIDTH, .6f);
             entity.override(GeyserEntityDataTypes.HEIGHT, 1.8f);
+            if(binding.identifier().startsWith("maw_native:wandscape_") && entity instanceof org.geysermc.geyser.entity.type.Entity nativeEntity)
+                nativeEntity.getMetadata().put(org.cloudburstmc.protocol.bedrock.data.entity.EntityDataTypes.MARK_VARIANT, binding.hatColor());
         });
     }
 

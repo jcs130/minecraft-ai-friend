@@ -25,7 +25,8 @@ PACK='maw-world-visuals.mcpack'
 CATALOG='visual-catalog.json'
 CONTRACT='visual-contract.json'
 EXTENSION='MawVisuals.jar'
-VERSION=[1,0,0]
+VERSION=[1,1,0]
+ICON_VERSION=[1,2,0]
 GEYSER_SHA='b3b39ada8f56a44f018d5e405874cbb2152527fab0240603309831e89e5e95c7'
 BLOCKS={'farmersdelight:stove','farmersdelight:cutting_board','create:cogwheel',
         'create:large_cogwheel','create:shaft','create:millstone','create:windmill_bearing','create:white_sail','create:sail_frame'}
@@ -362,12 +363,12 @@ def build(asset_root,registry,states,shapes,icons,output,*,geyser,extension):
         add_item(key,geo,png,model.get('display',{}))
     icon_entries['animations/held.json']=encoded({'format_version':'1.8.0','animations':held_animations})
     icon_entries['textures/item_texture.json']=encoded(atlas)
-    im=json.loads(icon_entries['manifest.json']);im['header']['version']=[1,1,0];im['header']['description']='原生图标与魔艺法术书 / 机械工具模型；实际组件身份保留。';im['modules'][0]['version']=[1,1,0];icon_entries['manifest.json']=encoded(im)
+    im=json.loads(icon_entries['manifest.json']);im['header']['version']=ICON_VERSION;im['header']['description']='原生图标与魔艺法术书 / 机械工具模型；实际组件身份保留。';im['modules'][0]['version']=ICON_VERSION;icon_entries['manifest.json']=encoded(im)
     # Keep language names complete for new definitions as well as existing ones.
     for locale in ('zh_CN','en_US'):
         icon_entries['texts/'+locale+'.lang']+=('\n'+'\n'.join('item.'+d['bedrock_identifier']+'.name='+d['display_name'] for rows in mapping['items'].values() for d in rows)+'\n').encode('utf-8')
     icon_artifacts={'maw-native-icons.mcpack':archive(icon_entries),'maw-native-items.json':encoded(item_catalog),'maw-native-icons.json':encoded(mapping)}
-    old=json.loads((icons/'resource-contract.json').read_bytes());old.update({'packVersion':[1,1,0],'itemCount':len(item_catalog['items']),
+    old=json.loads((icons/'resource-contract.json').read_bytes());old.update({'packVersion':ICON_VERSION,'itemCount':len(item_catalog['items']),
         'definitionCount':sum(map(len,mapping['items'].values())),'scope':'Static original sprites plus explicit native 3D held models and original spell-book color variants',
         'files':{n:{'sha256':sha(raw),'bytes':len(raw)} for n,raw in icon_artifacts.items()}})
     old['perNamespace']={ns:sum(r['nativeItem'].startswith(ns+':') for r in item_catalog['items']) for ns in sorted(set(r['nativeItem'].split(':')[0] for r in item_catalog['items']))}

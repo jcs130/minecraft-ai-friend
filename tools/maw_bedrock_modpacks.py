@@ -22,7 +22,7 @@ from maw_bedrock_animations import adapt
 CATALOG = 'modpack-catalog.json'
 CONTRACT = 'modpack-contract.json'
 EXTENSION = 'MawModels.jar'
-VERSION = [1, 2, 0]
+VERSION = [1, 3, 0]
 TLM_SHA = 'f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27'
 YSM_SHA = 'b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb'
 RESOURCE = re.compile(r'^[a-z0-9_.-]+:[a-z0-9_./-]+$')
@@ -182,6 +182,8 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path, maid
             except (ValueError, FileNotFoundError, KeyError) as error:
                 excluded.append({'kind': 'ysm', 'modelId': key, 'reason': str(error)})
     if not rows: raise ValueError('No verified native models')
+    from maw_wandscape_models import extend as extend_wandscape
+    wandscape = extend_wandscape(assets, entries, rows)
     voices = None
     if maid_jar is not None:
         import maw_bedrock_voices as voice_builder
@@ -193,7 +195,7 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path, maid
         if not content: continue
         pack_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, 'https://github.com/jcs130/minecraft-ai-friend/bedrock/'+kind))
         content['manifest.json'] = encoded({'format_version': 2, 'header': {
-            'name': 'My Agent World · '+('车万女仆专属模型' if kind == 'touhou' else 'YSM 专属模型'),
+            'name': 'My Agent World · '+{'touhou':'车万女仆专属模型','ysm':'YSM 专属模型','wandscape':'魔法小镇原生法师'}[kind],
             'description': '原模型贴图、动作、对话气泡'+('与女仆原生语音包。' if kind == 'touhou' and voices else '。'),
             'uuid': pack_uuid, 'version': VERSION, 'min_engine_version': [1, 21, 0]},
             'modules': [{'type': 'resources', 'uuid': str(uuid.uuid5(uuid.UUID(pack_uuid), 'resources')), 'version': VERSION}]})
@@ -208,6 +210,7 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path, maid
                'sourceManifestSha256': sha(assets.manifest_bytes), 'maidMetadata': {
                    'version': '1.5.3', 'jarSha256': TLM_SHA, 'isYsm': 19, 'ysmModel': 20,
                    'ysmTexture': 21, 'model': 23, 'defaultModel': 'touhou_little_maid:hakurei_reimu'}}
+    if wandscape: catalog['wandscapeMetadata'] = wandscape
     if voices:
         voice_data = encoded(voices); (output/voice_builder.CATALOG).write_bytes(voice_data)
         files[voice_builder.CATALOG] = {'sha256': sha(voice_data), 'bytes': len(voice_data), 'directory': ''}

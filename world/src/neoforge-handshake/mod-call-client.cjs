@@ -24,6 +24,16 @@ const domumSelection = { ...object({ selection: { type: 'string', enum: ['group'
 // These are the actual low-level APIs. Maw's body-plan descriptors are separate.
 const definitions = [
   ...[
+    ['state', true, '查询本人 Wandscape 小镇、法师真实状态、施工队列、七元素与完整组件仓储物资。绝对坐标；其他玩家的小镇不会枚举。', object()],
+    ['catalog', true, '分页查询实际已加载且非弃用的魔法小镇建筑定义、解锁状态、首次免费规则及法师策略预设。', object({ offset: integer(0, 10000), limit: integer(1, 24) })],
+    ['found', false, '按原生市政厅放置与命名流程建立本人小镇，保留原生初始法师和首次免费规则。已有小镇返回原身份；施工异步，之后查询state验收。', object({ position, name: { type: 'string', minLength: 1, maxLength: 30 }, rotationSteps: integer(0, 3), requestId }, ['position', 'name', 'rotationSteps'])],
+    ['build', false, '给本人魔法小镇排入原生建筑施工任务；保留解锁、材料需求与首次免费规则。48格内、完整占地区域必须已加载且有建设权限，不清空包围盒；排队成功不代表竣工。', object({ position, typeId: { type: 'string', minLength: 1, maxLength: 256 }, rotationSteps: integer(0, 3), requestId }, ['position', 'typeId', 'rotationSteps'])],
+    ['recruit', false, '在8格内本人已竣工的酒馆按原生费用招募法师；资金不足不生成NPC、不免费改造属性。', object({ position, requestId }, ['position'])],
+    ['strategy', false, '修改本人法师的均衡、进攻、支援、防御预设，保留已有真实装备魔法，不凭空教新法术。', object({ npcUuid: uuid, preset: { type: 'string', enum: ['BALANCED', 'OFFENSIVE', 'SUPPORT', 'DEFENSIVE'] }, requestId }, ['npcUuid', 'preset'])],
+    ['deposit', false, '在8格内本人已竣工市政厅将本人背包指定数量真实物资存入原生仓库。完整SNBT来自最新menu.snapshot；绑定道具拒绝转出，仓满不扣物。', object({ position, inventorySlot: integer(0, 35), expectedSnbt: snbt, quantity: integer(1, 64), requestId }, ['position', 'inventorySlot', 'expectedSnbt', 'quantity'])],
+    ['withdraw', false, '从8格内本人已竣工市政厅仓库取出真实物品到主背包；itemSnbt和expectedAvailable来自最新wandscape.state，保留全部组件，满包时不丢地上。', object({ position, itemSnbt: snbt, expectedAvailable: integer(1, 2147483647), quantity: integer(1, 64), requestId }, ['position', 'itemSnbt', 'expectedAvailable', 'quantity'])]
+  ].map(([kind, readOnly, description, parameters]) => ['wandscape.' + kind, readOnly, description, parameters, (c, a) => c.mods.wandscape.request(kind, a)]),
+  ...[
     ['state', true, '查询手持已绑定殖民书对应的 Folkways 居民、仓库与区域，坐标均为当前维度绝对坐标；未安装明确返回不可用。', object()],
     ['catalog', true, '列出当前 Folkways 实际注册的工作区域类型和大小限制；本版区域使用原生默认设置。', object()],
     ['orders', true, '查询本人持书管理的 Folkways 原生委托、绝对目的地、所需物品、数量和配送剩余数；NPC实际生产与交货，不生成物品。', object()],
@@ -57,7 +67,7 @@ const definitions = [
     ['stash.open', false, '打开本人标准54格真箱子；双向存取及Shift/普通菜单操作，1–10页。', object({ page: integer(1, 10), requestId }, ['page']), 'stash_open'],
     ['arena.recycle.sell', false, '消费30秒quoteId，重新核对完整组件与数量，收益入灯币账户；同action_id对账防重。', object({ quoteId: uuid, requestId }, ['quoteId']), 'recycle_sell'],
     ['arena.shop.buy', false, '按商品ID购买真实补给，满包进入个人箱或待领取，不扔地上。', object({ offerId: { type: 'string', pattern: '^[a-z0-9_]{1,32}$' }, requestId }, ['offerId']), 'shop_buy'],
-    ['rpg.open', false, '本人手柄友好的中文原版界面：命格书、技能、职业、领地、试炼、补给、回收、Stacia天命与System Call。', object({ menu: { type: 'string', enum: ['guide', 'skills', 'professions', 'lands', 'arena', 'shop', 'recycle', 'stacia', 'systemcall'] }, page: integer(1, 10), requestId }, ['menu', 'page']), 'open']
+    ['rpg.open', false, '本人手柄友好的中文原版界面：命格书、技能、职业、领地、试炼、补给、回收、Stacia天命、System Call和魔法小镇。', object({ menu: { type: 'string', enum: ['guide', 'skills', 'professions', 'lands', 'arena', 'shop', 'recycle', 'stacia', 'systemcall', 'town'] }, page: integer(1, 10), requestId }, ['menu', 'page']), 'open']
   ].map(([id, readOnly, description, parameters, kind]) => [id, readOnly, description, parameters, (c, a) => c.mods.rpg.request(`rpg_${kind}`, a)]),
   ['society.state', true, '查询本人公会登记、真实委托/进度/可接原因、累计声望等级和 EconomyCraft 灯币余额；不读取其他玩家。',
     object(), c => c.mods.society.state()],

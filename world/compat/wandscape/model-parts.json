@@ -1,0 +1,442 @@
+{
+  "schemaVersion": 1,
+  "modVersion": "2.1.3-1211",
+  "sourceJarSha256": "b9ff4debb039f1fbcac006fd8b53d306e49f8042611b9eb385f292f8c75f0788",
+  "sourceCommit": "a93cca08452f16b1100a0328cdc0962aa708c05b",
+  "license": "MIT",
+  "geometrySource": [
+    "Minecraft 1.21.1 PlayerModel.createMesh(CubeDeformation.NONE,false)",
+    "Wandscape WizardHatModel.createLayer"
+  ],
+  "layers": {
+    "body": {
+      "parts": [
+        {
+          "name": "head",
+          "pivot": [
+            0,
+            0,
+            0
+          ],
+          "cubes": [
+            {
+              "uv": [
+                0,
+                0
+              ],
+              "origin": [
+                -4,
+                -8,
+                -4
+              ],
+              "size": [
+                8,
+                8,
+                8
+              ],
+              "dilation": 0
+            }
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "hat",
+          "pivot": [
+            0,
+            0,
+            0
+          ],
+          "cubes": [
+            {
+              "uv": [
+                32,
+                0
+              ],
+              "origin": [
+                -4,
+                -8,
+                -4
+              ],
+              "size": [
+                8,
+                8,
+                8
+              ],
+              "dilation": 0.5
+            }
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "body",
+          "pivot": [
+            0,
+            0,
+            0
+          ],
+          "cubes": [
+            {
+              "uv": [
+                16,
+                16
+              ],
+              "origin": [
+                -4,
+                0,
+                -2
+              ],
+              "size": [
+                8,
+                12,
+                4
+              ],
+              "dilation": 0
+            }
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "right_arm",
+          "pivot": [
+            -5,
+            2,
+            0
+          ],
+          "cubes": [
+            {
+              "uv": [
+                40,
+                16
+              ],
+              "origin": [
+                -3,
+                -2,
+                -2
+              ],
+              "size": [
+                4,
+                12,
+                4
+              ],
+              "dilation": 0
+            }
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "left_arm",
+          "pivot": [
+            5,
+            2,
+            0
+          ],
+          "cubes": [
+            {
+              "uv": [
+                32,
+                48
+              ],
+              "origin": [
+                -1,
+                -2,
+                -2
+              ],
+              "size": [
+                4,
+                12,
+                4
+              ],
+              "dilation": 0
+            }
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "right_leg",
+          "pivot": [
+            -1.9,
+            12,
+            0
+          ],
+          "cubes": [
+            {
+              "uv": [
+                0,
+                16
+              ],
+              "origin": [
+                -2,
+                0,
+                -2
+              ],
+              "size": [
+                4,
+                12,
+                4
+              ],
+              "dilation": 0
+            }
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "left_leg",
+          "pivot": [
+            1.9,
+            12,
+            0
+          ],
+          "cubes": [
+            {
+              "uv": [
+                16,
+                48
+              ],
+              "origin": [
+                -2,
+                0,
+                -2
+              ],
+              "size": [
+                4,
+                12,
+                4
+              ],
+              "dilation": 0
+            }
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    "edge": {
+      "parts": [
+        {
+          "name": "head",
+          "pivot": [
+            0,
+            0,
+            0
+          ],
+          "cubes": [],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "hat_brim_edge",
+          "pivot": [
+            0,
+            0,
+            0
+          ],
+          "cubes": [
+            {
+              "uv": [
+                0,
+                0
+              ],
+              "origin": [
+                -5.5,
+                -9,
+                -5.5
+              ],
+              "size": [
+                11,
+                1,
+                11
+              ],
+              "dilation": 0
+            }
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "parent": "head"
+        }
+      ]
+    },
+    "tint": {
+      "parts": [
+        {
+          "name": "head",
+          "pivot": [
+            0,
+            0,
+            0
+          ],
+          "cubes": [],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "hat_brim_inner",
+          "pivot": [
+            0,
+            0,
+            0
+          ],
+          "cubes": [
+            {
+              "uv": [
+                0,
+                44
+              ],
+              "origin": [
+                -4.5,
+                -9,
+                -4.5
+              ],
+              "size": [
+                9,
+                1,
+                9
+              ],
+              "dilation": 0.01
+            }
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "parent": "head"
+        },
+        {
+          "name": "hat_body",
+          "pivot": [
+            0,
+            -9,
+            0
+          ],
+          "cubes": [
+            {
+              "uv": [
+                0,
+                12
+              ],
+              "origin": [
+                -3.5,
+                -5,
+                -3.5
+              ],
+              "size": [
+                7,
+                5,
+                7
+              ],
+              "dilation": 0
+            }
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "parent": "head"
+        },
+        {
+          "name": "hat_layer2",
+          "pivot": [
+            0,
+            -5,
+            0
+          ],
+          "cubes": [
+            {
+              "uv": [
+                0,
+                24
+              ],
+              "origin": [
+                -2,
+                -4,
+                -2
+              ],
+              "size": [
+                4,
+                4,
+                4
+              ],
+              "dilation": 0
+            }
+          ],
+          "rotation": [
+            -0.06,
+            0,
+            0.03
+          ],
+          "parent": "hat_body"
+        },
+        {
+          "name": "hat_tip",
+          "pivot": [
+            0,
+            -4,
+            0
+          ],
+          "cubes": [
+            {
+              "uv": [
+                0,
+                32
+              ],
+              "origin": [
+                -1,
+                -3,
+                -1
+              ],
+              "size": [
+                2,
+                3,
+                2
+              ],
+              "dilation": 0.2
+            }
+          ],
+          "rotation": [
+            -0.1,
+            0,
+            0.06
+          ],
+          "parent": "hat_layer2"
+        }
+      ]
+    }
+  }
+}

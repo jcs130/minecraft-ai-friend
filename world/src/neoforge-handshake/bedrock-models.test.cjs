@@ -19,6 +19,27 @@ const registry = new Map([[131, 'touhou_little_maid:maid'], [52, 'minecraft:pig'
 const spawn = () => ({ entityId: 47, objectUUID: UID, type: 131, x: 11, y: 65, z: 22, yaw: 0, pitch: 0, objectData: 0 })
 const meta = value => ({ entityId: 47, metadata: [{ key: 23, type: 'string', value }, { key: 9, type: 'float', value: 20 }] })
 
+test('optional Wandscape keeps native int skin and dyed hat RGB, identity and current position', () => {
+  const c = catalog()
+  c.wandscapeMetadata = { jarSha256: 'b9ff4debb039f1fbcac006fd8b53d306e49f8042611b9eb385f292f8c75f0788', skinVariant: 16, hatColor: 17, skinCount: 3 }
+  c.models.push(...[0, 1, 2].map(i => ({ kind: 'wandscape', modelId: 'wizard_' + i, bedrockIdentifier: 'maw_native:wandscape_' + i })))
+  const r = new Map([[205, 'wandscape:wandscape_npc']]), a = new BedrockModels(c)
+  a.activate(); a.project('spawn_entity', { ...spawn(), type: 205 }, r)
+  const first = a.project('entity_metadata', { entityId: 47, metadata: [{ key: 16, type: 'int', value: 2 }, { key: 17, type: 'int', value: -65536 }, { key: 9, type: 'float', value: 30 }] }, r)
+  assert.deepEqual(JSON.parse(first.before[0].params.data), { schemaVersion: 1, entityId: 47, uuid: UID, identifier: 'maw_native:wandscape_2', hatColor: 0xff0000 })
+  assert.equal(first.before[1].params.type, mc.entitiesByName.iron_golem.id)
+  assert.deepEqual(first.params.metadata, [{ key: 9, type: 'float', value: 30 }])
+  a.project('entity_teleport', { entityId: 47, x: 18, y: 70, z: 29, yaw: 12, pitch: 4 }, r)
+  const changed = a.project('entity_metadata', { entityId: 47, metadata: [{ key: 17, type: 1, value: 0xff00ff }] }, r)
+  assert.equal(changed.before[0].name, 'entity_destroy')
+  assert.equal(JSON.parse(changed.before[1].params.data).hatColor, 0xff00ff)
+  assert.equal(changed.before[2].params.x, 18); assert.equal(changed.before[2].params.objectUUID, UID)
+  assert.throws(() => a.project('entity_metadata', { entityId: 47, metadata: [{ key: 16, type: 'float', value: 2 }] }, r), /WANDSCAPE_METADATA_INVALID/)
+  assert.throws(() => new BedrockModels({ ...c, wandscapeMetadata: { ...c.wandscapeMetadata, jarSha256: '0'.repeat(64) } }), /WANDSCAPE_METADATA_NOT_LOCKED/)
+  const absent = new BedrockModels(catalog())
+  assert.equal(absent.project('spawn_entity', { ...spawn(), type: 205 }, r), undefined)
+})
+
 test('actual texture suffix is retained, identity survives and native metadata never reaches an armor-stand decoder', () => {
   const adapter = new BedrockModels(catalog()); const input = spawn()
   adapter.activate()

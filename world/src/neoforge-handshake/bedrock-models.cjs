@@ -2,11 +2,12 @@
 const fs = require('node:fs')
 const data = require('minecraft-data')('1.21.1')
 const TLM_SHA = 'f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27'
+const WANDSCAPE_SHA = 'b9ff4debb039f1fbcac006fd8b53d306e49f8042611b9eb385f292f8c75f0788'
 const CHANNEL = 'mawbedrock:entity'
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 
 // Only the Bedrock bridge uses these display carriers. Original entity UUID,
-// entity ID, movement, interactions and authoritative TLM AI remain unchanged.
+// entity ID, movement, interactions and authoritative native AI remain unchanged.
 class BedrockModels {
   constructor (catalog) {
     if (catalog.schemaVersion !== 1 || catalog.maidMetadata?.jarSha256 !== TLM_SHA ||
@@ -14,6 +15,8 @@ class BedrockModels {
       catalog.maidMetadata.ysmModel !== 20 || catalog.maidMetadata.ysmTexture !== 21 ||
       catalog.maidMetadata.defaultModel !== 'touhou_little_maid:hakurei_reimu') throw Error('BEDROCK_MAID_METADATA_NOT_LOCKED')
     this.models = new Map(); this.entities = new Map(); this.ready = false; this.selfState = null
+    this.wandscape = catalog.wandscapeMetadata
+    if (this.wandscape && (this.wandscape.jarSha256 !== WANDSCAPE_SHA || this.wandscape.skinVariant !== 16 || this.wandscape.hatColor !== 17 || !Number.isInteger(this.wandscape.skinCount) || this.wandscape.skinCount < 1)) throw Error('BEDROCK_WANDSCAPE_METADATA_NOT_LOCKED')
     this.voices = Boolean(catalog.voices)
     this.globalVoiceFrequency = Number(process.env.GATE_MAID_SOUND_FREQUENCY ?? 1)
     if (!Number.isFinite(this.globalVoiceFrequency) || this.globalVoiceFrequency < 0 || this.globalVoiceFrequency > 1) throw Error('INVALID_GLOBAL_MAID_FREQUENCY')
@@ -47,10 +50,21 @@ class BedrockModels {
   }
 
   selected (state) {
+    if (state.kind === 'wandscape') {
+      const skin = this.wizardInt(state, 16, -1)
+      return this.models.get('wandscape\nwizard_' + (skin >= 0 && skin < this.wandscape.skinCount ? skin : 0))
+    }
     if (this.metadata(state, 19, 'boolean', false)) {
       return this.models.get('ysm\n' + this.metadata(state, 20, 'string', '') + '\n' + this.metadata(state, 21, 'string', ''))
     }
     return this.models.get('touhou\n' + this.metadata(state, 23, 'string', 'touhou_little_maid:hakurei_reimu'))
+  }
+
+  wizardInt (state, key, fallback) {
+    const row = state.metadata.get(key)
+    if (!row) return fallback
+    if (!['int', 1].includes(row.type) || !Number.isInteger(row.value) || row.value < -2147483648 || row.value > 2147483647) throw Error('BEDROCK_WANDSCAPE_METADATA_INVALID')
+    return row.value
   }
 
   project (name, packet, registry) {
@@ -63,9 +77,9 @@ class BedrockModels {
       for (const id of packet.entityIds) this.entities.delete(id)
       return undefined
     }
-    if (name === 'spawn_entity' && registry?.get(packet.type) === 'touhou_little_maid:maid') {
+    if (name === 'spawn_entity' && (registry?.get(packet.type) === 'touhou_little_maid:maid' || this.wandscape && registry?.get(packet.type) === 'wandscape:wandscape_npc')) {
       if (this.entities.size >= 4096 || !uuid.test(packet.objectUUID || '')) throw Error('INVALID_BEDROCK_MAID_SPAWN')
-      this.entities.set(packet.entityId, { spawn: structuredClone(packet), metadata: new Map(), shown: null })
+      this.entities.set(packet.entityId, { spawn: structuredClone(packet), metadata: new Map(), shown: null, kind: registry.get(packet.type) === 'wandscape:wandscape_npc' ? 'wandscape' : 'touhou' })
       // Wait for authoritative metadata, including the actual texture suffix.
       return null
     }
@@ -76,6 +90,7 @@ class BedrockModels {
       for (const row of packet.metadata) state.metadata.set(row.key, structuredClone(row))
       if (!this.ready) return null
       const selected = this.selected(state)
+      const hatColor = state.kind === 'wandscape' ? (this.wizardInt(state, 17, 0) || 0xff5030a0) & 0xffffff : 0
       const before = []
       if (!selected) {
         this.stats.modelsUnavailable++
@@ -83,15 +98,21 @@ class BedrockModels {
         state.shown = null
         return before.length ? { before, params: { ...packet, metadata: [] } } : null
       }
-      if (selected.bedrockIdentifier !== state.shown) {
+      if (selected.bedrockIdentifier !== state.shown || state.hatColor !== hatColor) {
         state.voiceConfig = null // The remove/spawn below replaces the extension's per-entity cache.
         if (state.shown) before.push({ name: 'entity_destroy', params: { entityIds: [packet.entityId] } })
         before.push({ name: 'custom_payload', params: { channel: CHANNEL, data: Buffer.from(JSON.stringify({
-          schemaVersion: 1, entityId: packet.entityId, uuid: state.spawn.objectUUID, identifier: selected.bedrockIdentifier
-        }), 'utf8') } }, { name: 'spawn_entity', params: { ...state.spawn, type: data.entitiesByName.armor_stand.id, objectData: 0 } })
+          schemaVersion: 1, entityId: packet.entityId, uuid: state.spawn.objectUUID, identifier: selected.bedrockIdentifier, ...(state.kind === 'wandscape' ? { hatColor } : {})
+        }), 'utf8') } }, { name: 'spawn_entity', params: { ...state.spawn,
+          // ViaVersion supplies default armor-stand head poses. Geyser packs
+          // them into MARK_VARIANT, which would overwrite the native hat RGB.
+          // The pinned golem translator leaves that field unused. This is only
+          // a display carrier: the original UUID, hit target and server AI stay.
+          type: data.entitiesByName[state.kind === 'wandscape' ? 'iron_golem' : 'armor_stand'].id, objectData: 0 } })
         state.shown = selected.bedrockIdentifier; this.stats.modelsBound++
+        state.hatColor = hatColor
       }
-      if (this.voices) {
+      if (this.voices && state.kind !== 'wandscape') {
         const frequency = this.metadata(state, 50, 'number', 1)
         if (!Number.isFinite(frequency) || frequency < 0 || frequency > 1) throw Error('INVALID_MAID_VOICE_FREQUENCY')
         const config = JSON.stringify({ schemaVersion: 1, entityId: packet.entityId, uuid: state.spawn.objectUUID,

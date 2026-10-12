@@ -1,5 +1,7 @@
 # 旧千灯纪接入 My Agent World 原生身体 SDK
 
+2026-10-13 待发布源码新增八项 [Wandscape 魔法小镇操作](MY-AGENT-WORLD-WANDSCAPE.md)，支持本人原生城镇、法师施工、仓库与策略，并通过隔离联机验证。正式服及现有分发包尚未更新；以远端 capabilities 为准。
+
 当前分发：Native SDK 0.4.0，`E:\QiandengJiSocietyLab\integrations\native-sdk\v6-underworld-20261012`。包含19项底层控制、完整菜单组件CAS、真实动作位置/库存回执；[完整控制API和HTTP调用](MY-AGENT-WORLD-CONTROL-API.txt)。异界开拓纪新增真实天命、十条原技能术式和原生经济菜单，操作总数不变，见[玩法与接口](MY-AGENT-WORLD-UNDERWORLD.md)。下方历史验收记录保留当时数量。
 
 2026-10-11：现有 SDK 可由 [统一身体接口](MY-AGENT-WORLD-WORLD-ADAPTER.md) 包装，与 Numen 使用共同的状态、动作和对账方法。本文仍描述 Mineflayer provider；原有能力标记和账本继续有效。

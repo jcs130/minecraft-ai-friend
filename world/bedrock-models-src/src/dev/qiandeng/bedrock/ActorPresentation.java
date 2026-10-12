@@ -79,7 +79,7 @@ final class ActorPresentation {
             Actor a=actors.get(id);if(a!=null&&!a.uuid.equals(uuid)){remove(id);a=null;}if(a==null){a=new Actor();a.uuid=uuid;actors.put(id,a);}seen.add(id);
             Map<String,String> animations=models.animations(id,uuid,row);String model=animations==null?"":animations.getOrDefault("idle","");
             boolean changed=pose!=a.pose||!model.equals(a.model);if(changed)e.getMetadata().put(EntityDataTypes.VARIANT,pose);
-            if("touhou_little_maid:maid".equals(row.get("type"))){
+            if("touhou_little_maid:maid".equals(row.get("type"))||"wandscape:wandscape_npc".equals(row.get("type"))){
                 float body=(float)number(row,"bodyYaw"),head=(float)number(row,"headYaw"),pitch=(float)number(row,"pitch");
                 if(Float.isNaN(a.bodyYaw)||Math.abs(body-a.bodyYaw)>.5f||Math.abs(head-a.headYaw)>.5f||Math.abs(pitch-a.pitch)>.5f){
                     e.setYaw(body);e.setHeadYaw(head);e.setPitch(pitch);

@@ -97,10 +97,10 @@ test('native hold cancellation has a ticket-specific cleanup fence, never a gene
   const release = JSON.parse(sent[1].data.data); assert.equal(release.operation, 'control.cancel'); assert.equal(release.arguments.ticket, 'hold-ticket')
 })
 
-test('132 operations include strict params, permissions, async and advertised vs verified distinctions', async t => {
+test('140 operations include strict params, permissions, async and advertised vs verified distinctions', async t => {
   const dir = fixture(t), { runtime } = body(dir); t.after(runtime.close)
   const catalog = runtime.operations()
-  assert.equal(catalog.operationCount, 132); assert.equal(catalog.remoteSupportVerified, false)
+  assert.equal(catalog.operationCount, 140); assert.equal(catalog.remoteSupportVerified, false)
   assert.equal(catalog.operations.every(row => row.parameters && row.permission && row.returns && row.execution), true)
   assert.equal(runtime.operations('body.move').execution, 'asynchronous_action')
   assert.equal(runtime.operations('action.cancel').execution, 'immediate_control')

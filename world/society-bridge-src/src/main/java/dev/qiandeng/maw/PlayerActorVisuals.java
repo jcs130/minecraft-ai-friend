@@ -79,7 +79,7 @@ final class PlayerActorVisuals {
     static JsonArray snapshot(ServerPlayer viewer){
         JsonArray rows=new JsonArray();if(viewer.isDeadOrDying())return rows;
         var entities=viewer.serverLevel().getEntitiesOfClass(LivingEntity.class,viewer.getBoundingBox().inflate(32),
-            e->e.isAlive()&&!e.isInvisibleTo(viewer)&&(e instanceof EntityMaid||e instanceof ServerPlayer||e instanceof Villager));
+            e->e.isAlive()&&!e.isInvisibleTo(viewer)&&(e instanceof EntityMaid||e instanceof ServerPlayer||e instanceof Villager||WandscapeAccess.wizard(e)));
         entities.sort(Comparator.comparingDouble(e->e.distanceToSqr(viewer)));
         for(var e:entities){
             if(rows.size()>=24)break;if(e.distanceToSqr(viewer)>1024)continue;
@@ -92,6 +92,9 @@ final class PlayerActorVisuals {
             r.addProperty("name",clean(name,40));JsonArray bs=new JsonArray();
             if(e instanceof EntityMaid maid){
                 bs=bubbles(maid);r.addProperty("role","女仆");
+            }else if(WandscapeAccess.wizard(e)){
+                JsonObject visual=WandscapeAccess.visual(e);r.add("wandscape",visual);r.addProperty("name",clean(visual.get("name").getAsString(),40));r.addProperty("role","小镇法师");
+                String text=clean(visual.get("status").getAsString(),160);if(!text.isBlank()){JsonObject b=new JsonObject();b.addProperty("id","wandscape-status");b.addProperty("text",text);b.addProperty("kind","status");b.addProperty("remainingMs",1500);b.addProperty("priority",0);bs.add(b);}
             }else if(e instanceof ServerPlayer player){
                 r.add("ysm",PlayerYsmState.snapshot(player));var speech=SPEECH.get(player.getUUID());
                 if(speech!=null&&speech.until>System.currentTimeMillis()){

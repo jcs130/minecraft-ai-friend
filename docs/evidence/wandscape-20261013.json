@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-13",
+  "scope": "source_and_isolated_native_integration",
+  "productionDeployed": false,
+  "productionActions": 0,
+  "paidModelCalls": 0,
+  "artifact": {
+    "version": "2.1.3-1211",
+    "jarSha256": "b9ff4debb039f1fbcac006fd8b53d306e49f8042611b9eb385f292f8c75f0788",
+    "sourceCommit": "a93cca08452f16b1100a0328cdc0962aa708c05b",
+    "candidateBridgeSha256": "f2fec88b7d8e9e3bfc23b0c079bdcfc992766af7227bf3a650693b914d1f521d"
+  },
+  "automatedRegression": {
+    "nativeSdkAndProtocol": {"passed": 42, "failed": 0, "skipped": 0},
+    "bedrockBuildersAndService": {"passed": 31, "failed": 0, "skipped": 0},
+    "sharedNativeRendererWithActualAssets": {"passed": 38, "failed": 0, "skipped": 0}
+  },
+  "actualNativeGameplay": {
+    "ordinaryPlayerOwnTown": true,
+    "threeNativeInitialMages": true,
+    "townHallAndTavernConstructionCompletedByNativeAi": true,
+    "realWarehouseDepositAndWithdraw": true,
+    "realInventoryDelta": true,
+    "fourthMageRecruitedByNativeRules": true,
+    "nativeStrategyChange": true,
+    "foreignTownWriteDenied": true,
+    "duplicateActionNotReplayed": true,
+    "ordinaryChestMenus": true,
+    "numenOriginalBodyAndTownRestored": true,
+    "numenPreRestartActionReconciledWithoutReplay": true,
+    "numenNestedNativeMenuInteraction": true,
+    "sameConnectionNativeSkinAndRgbMetadata": true
+  },
+  "bedrockProtocol": {
+    "realUdpClient": true,
+    "sixRequiredPacksDownloadedWithExactSha256": true,
+    "nativeWizardCustomEntity": true,
+    "dynamicSkinAndHatRgb": true,
+    "rgbPreservedAfterGeyserMetadata": true,
+    "nativeEntityMovement": true,
+    "townAndGuideChestMenus": true,
+    "wizardTextureVariants": 21,
+    "existingMaidAndYsmModelsPreserved": 279,
+    "actualPhoneTested": false,
+    "visualPixelParityVerified": false
+  },
+  "nativeAssets": {
+    "files": 40446,
+    "blocks": 3978,
+    "states": 107908,
+    "jsonModelSourcesVerified": 2909,
+    "assetIntegrityVerified": true,
+    "ambiguousOverrides": 10,
+    "renderParityVerified": false,
+    "complete": false
+  },
+  "webTransport": {
+    "authenticatedOwnerAndForeignBodyFence": true,
+    "originalNumenBodyWithoutCameraAccount": true,
+    "actualNativePacketsAndChunks": true,
+    "originalWizardPngShaVerified": true,
+    "fingerprintedBundleServed": true,
+    "logoutRevokesView": true,
+    "actualBrowserVisualVerified": false,
+    "blockedReason": "Desktop automatic approval could not determine the Windows browser URL reliably. No alternative UI automation was attempted."
+  },
+  "preservation": {
+    "production35ModsUnchanged": true,
+    "protected13ConfigsUnchanged": true,
+    "existingSdkBundlesPreserved": true,
+    "originalAgentPausedAndUnknownNotReplayed": true,
+    "originalLedgerPrefixPreserved": true,
+    "originalServiceOwnersHealthy": true,
+    "oldPaperUnchanged": true,
+    "qaChildrenExitedNormally": true,
+    "qaPortsClosed": true,
+    "temporaryQaCredentialRemoved": true
+  }
+}

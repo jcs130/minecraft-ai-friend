@@ -7,6 +7,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { modOperationCatalog } = require('../world/src/neoforge-handshake/mod-call-client.cjs')
 const routes = {
+  ...Object.fromEntries(['state', 'catalog', 'found', 'build', 'recruit', 'strategy', 'deposit', 'withdraw'].map(k => ['wandscape.' + k, ['mod', 'wandscape_' + k]])),
   ...Object.fromEntries(['state', 'catalog', 'found', 'member', 'zone', 'orders', 'order', 'hire', 'logistics', 'rail'].map(k => ['folkways.' + k, ['mod', 'folkways_' + k]])),
   'folkways.logisticsLink': ['mod', 'folkways_logistics_link'],
   'society.state': ['mod', 'society_state'], 'society.join': ['mod', 'society_join'],

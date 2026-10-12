@@ -1,8 +1,393 @@
 {
   "schemaVersion": 1,
   "source": "same_player_native_handlers",
-  "operationCount": 110,
+  "operationCount": 118,
   "operations": [
+    {
+      "id": "wandscape.state",
+      "readOnly": true,
+      "description": "查询本人 Wandscape 小镇、法师真实状态、施工队列、七元素与完整组件仓储物资。绝对坐标；其他玩家的小镇不会枚举。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "wandscape.state",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "wandscape_state",
+      "defaults": {}
+    },
+    {
+      "id": "wandscape.catalog",
+      "readOnly": true,
+      "description": "分页查询实际已加载且非弃用的魔法小镇建筑定义、解锁状态、首次免费规则及法师策略预设。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "wandscape.catalog",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "wandscape_catalog",
+      "defaults": {}
+    },
+    {
+      "id": "wandscape.found",
+      "readOnly": false,
+      "description": "按原生市政厅放置与命名流程建立本人小镇，保留原生初始法师和首次免费规则。已有小镇返回原身份；施工异步，之后查询state验收。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30
+          },
+          "rotationSteps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          }
+        },
+        "required": [
+          "position",
+          "name",
+          "rotationSteps"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "wandscape.found",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "wandscape_found",
+      "defaults": {}
+    },
+    {
+      "id": "wandscape.build",
+      "readOnly": false,
+      "description": "给本人魔法小镇排入原生建筑施工任务；保留解锁、材料需求与首次免费规则。48格内、完整占地区域必须已加载且有建设权限，不清空包围盒；排队成功不代表竣工。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "typeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "rotationSteps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          }
+        },
+        "required": [
+          "position",
+          "typeId",
+          "rotationSteps"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "wandscape.build",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "wandscape_build",
+      "defaults": {}
+    },
+    {
+      "id": "wandscape.recruit",
+      "readOnly": false,
+      "description": "在8格内本人已竣工的酒馆按原生费用招募法师；资金不足不生成NPC、不免费改造属性。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          }
+        },
+        "required": [
+          "position"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "wandscape.recruit",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "wandscape_recruit",
+      "defaults": {}
+    },
+    {
+      "id": "wandscape.strategy",
+      "readOnly": false,
+      "description": "修改本人法师的均衡、进攻、支援、防御预设，保留已有真实装备魔法，不凭空教新法术。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "npcUuid": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "preset": {
+            "type": "string",
+            "enum": [
+              "BALANCED",
+              "OFFENSIVE",
+              "SUPPORT",
+              "DEFENSIVE"
+            ]
+          }
+        },
+        "required": [
+          "npcUuid",
+          "preset"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "wandscape.strategy",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "wandscape_strategy",
+      "defaults": {}
+    },
+    {
+      "id": "wandscape.deposit",
+      "readOnly": false,
+      "description": "在8格内本人已竣工市政厅将本人背包指定数量真实物资存入原生仓库。完整SNBT来自最新menu.snapshot；绑定道具拒绝转出，仓满不扣物。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "inventorySlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 35
+          },
+          "expectedSnbt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 65536
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          }
+        },
+        "required": [
+          "position",
+          "inventorySlot",
+          "expectedSnbt",
+          "quantity"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "wandscape.deposit",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "wandscape_deposit",
+      "defaults": {}
+    },
+    {
+      "id": "wandscape.withdraw",
+      "readOnly": false,
+      "description": "从8格内本人已竣工市政厅仓库取出真实物品到主背包；itemSnbt和expectedAvailable来自最新wandscape.state，保留全部组件，满包时不丢地上。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              }
+            }
+          },
+          "itemSnbt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 65536
+          },
+          "expectedAvailable": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          }
+        },
+        "required": [
+          "position",
+          "itemSnbt",
+          "expectedAvailable",
+          "quantity"
+        ],
+        "additionalProperties": false
+      },
+      "invocation": {
+        "command": "!modCall",
+        "idArgument": "wandscape.withdraw",
+        "argsArgument": "JSON-encoded string matching parameters; operation IDs are not !commands"
+      },
+      "route": "mod",
+      "kind": "wandscape_withdraw",
+      "defaults": {}
+    },
     {
       "id": "folkways.state",
       "readOnly": true,
@@ -1267,7 +1652,7 @@
     {
       "id": "rpg.open",
       "readOnly": false,
-      "description": "本人手柄友好的中文原版界面：命格书、技能、职业、领地、试炼、补给、回收、Stacia天命与System Call。",
+      "description": "本人手柄友好的中文原版界面：命格书、技能、职业、领地、试炼、补给、回收、Stacia天命、System Call和魔法小镇。",
       "parameters": {
         "type": "object",
         "properties": {
@@ -1282,7 +1667,8 @@
               "shop",
               "recycle",
               "stacia",
-              "systemcall"
+              "systemcall",
+              "town"
             ]
           },
           "page": {
