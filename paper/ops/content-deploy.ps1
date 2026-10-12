@@ -77,7 +77,7 @@ function Deploy-PendingContent {
         $entries += @{Source=$source;Target=$target;Hash=$file.sha256;Before=[bool]$file.beforeSha256}
     }
     foreach ($file in @($plan.removeJars)) {
-        if ($file.name -match '^ysm-proxy/(AgentAppearance-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
+        if ($file.name -match '^ysm-proxy/((?:AgentAppearance|LoginGuard)-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
             $target = Content-YsmProxyTarget $Matches[1]
         } elseif ($file.name -match '^(AgentFriend|CortiEyeMirror)-[0-9]+\.[0-9]+\.[0-9]+\.jar$') {
             $target = Join-Path (Join-Path $serverDir 'plugins') $file.name
