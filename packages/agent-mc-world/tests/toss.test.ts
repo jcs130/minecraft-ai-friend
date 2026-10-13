@@ -2,20 +2,24 @@ import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import { Vec3 } from 'vec3';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { planTossThrow, skillToss, TOSS_PITCH } from '../core/skills-container.ts';
+import { planTossThrow, skillToss, skillPickup, isRecentDiscard, reacquiredTossNote, TOSS_PITCH } from '../core/skills-container.ts';
 const req = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 const registry = req('prismarine-registry')('1.20.6');
 const ctx = { aborted: () => false } as any;
-afterEach(() => vi.useRealTimers());
+const clocks: ReturnType<typeof setInterval>[] = [];
+afterEach(() => { for (const timer of clocks.splice(0)) clearInterval(timer); vi.useRealTimers(); });
 function rig(blocked = false) {
   let count = 32;
   const bot: any = Object.assign(new EventEmitter(), { registry, entities: {},
     entity: { id: 1, position: new Vec3(.5, 64, .5), yaw: 0, pitch: 0, eyeHeight: 1.62 },
     inventory: { items: () => count ? [{ name: 'cobblestone', count, type: registry.itemsByName.cobblestone.id, metadata: 0 }] : [] },
     blockAt: () => ({ name: blocked ? 'stone' : 'air', boundingBox: blocked ? 'block' : 'empty', shapes: blocked ? [[0,0,0,1,1,1]] : [] }),
-    look: vi.fn(async () => {}), lookAt: vi.fn(async () => {}), toss: vi.fn(async (_t, _m, n) => { count -= n; }),
+    look: vi.fn(async (yaw, pitch) => { bot.entity.yaw = yaw; bot.entity.pitch = pitch; }),
+    lookAt: vi.fn(async () => {}), toss: vi.fn(async (_t, _m, n) => { count -= n; }),
   });
-  return { bot, count: (n: number) => { count = n; } };
+  const clock = setInterval(() => { bot.emit('physicsTick'); bot.sentYaw = bot.entity.yaw; bot.sentPitch = bot.entity.pitch; }, 50);
+  clocks.push(clock);
+  return { bot, clock, count: (n: number) => { count = n; } };
 }
 describe('toss receipt and aim', () => {
   it('uses positive Mineflayer pitch and refuses a measured enclosed scene without dropping', async () => {
@@ -29,7 +33,8 @@ describe('toss receipt and aim', () => {
     const task = skillToss(r.bot, { skill: 'toss', item: 'cobblestone', count: 32 }, ctx);
     const checked = expect(task).rejects.toThrow('没有净减少');
     await vi.advanceTimersByTimeAsync(2000); r.count(32);
-    await vi.advanceTimersByTimeAsync(2001); await checked;
+    await vi.advanceTimersByTimeAsync(2100); await checked;
+    expect(reacquiredTossNote(r.bot, 'cobblestone')).toContain('又回到背包');
     expect(r.bot.listenerCount('playerCollect')).toBe(0);
   });
   it('does not toss toward unknown/occluded players or its own feet', async () => {
@@ -42,7 +47,7 @@ describe('toss receipt and aim', () => {
     vi.useFakeTimers(); const { bot } = rig();
     bot.entities[2] = { id: 2, username: 'Friend', height: 1.8, position: new Vec3(.5,64,-2.5) };
     const task = skillToss(bot, { skill: 'toss', item: 'cobblestone', count: 8, target: 'Friend' }, ctx);
-    await vi.advanceTimersByTimeAsync(4001);
+    await vi.advanceTimersByTimeAsync(4100);
     expect(await task).toContain('领取未确认'); expect(bot.lookAt).toHaveBeenCalledWith(new Vec3(.5,65.2,-2.5), true);
     expect(bot.listenerCount('entitySpawn')).toBe(0);
   });
@@ -57,10 +62,54 @@ describe('toss receipt and aim', () => {
     vi.useFakeTimers(); const { bot } = rig();
     const friend = bot.entities[2] = { id: 2, username: 'Friend', height: 1.8, position: new Vec3(.5,64,-2.5) };
     const task = skillToss(bot, { skill: 'toss', item: 'cobblestone', count: 8, target: 'Friend' }, ctx);
-    await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(51);
     const drop = { id: 3, name: 'item', position: new Vec3(.5,65,-.5), getDroppedItem: () => ({ name: 'cobblestone', count: 2 }) };
     bot.emit('entitySpawn', drop); bot.emit('playerCollect', friend, drop);
     await vi.advanceTimersByTimeAsync(4000);
     expect(await task).toContain('本次交付数量未确认');
+  });
+  it('sends the aimed rotation before the inventory drop, even though forced look already resolved', async () => {
+    vi.useFakeTimers(); const { bot } = rig(); let atDrop: number | undefined;
+    bot.toss.mockImplementation(async () => { atDrop = bot.sentPitch; });
+    const result = skillToss(bot, { skill: 'toss', item: 'cobblestone', count: 8 }, ctx);
+    const checked = expect(result).rejects.toThrow('没扔出去');
+    await vi.advanceTimersByTimeAsync(49);
+    expect(bot.toss).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1); await checked;
+    expect(atDrop).toBe(TOSS_PITCH);
+    expect(bot.listenerCount('physicsTick')).toBe(0);
+  });
+  it('fails closed if physics never sends the aim and releases listeners on cancellation', async () => {
+    vi.useFakeTimers(); const r = rig(); clearInterval(r.clock);
+    let aborted = false;
+    const result = skillToss(r.bot, { skill: 'toss', item: 'cobblestone', count: 8 }, { aborted: () => aborted } as any);
+    const checked = expect(result).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(20); aborted = true;
+    await vi.advanceTimersByTimeAsync(50); await checked;
+    expect(r.bot.toss).not.toHaveBeenCalled(); expect(r.bot.listenerCount('physicsTick')).toBe(0);
+    expect(r.bot.listenerCount('entityUpdate')).toBe(0);
+  });
+  it('remembers late drop metadata across calls without confusing reused entity ids', async () => {
+    vi.useFakeTimers(); const { bot } = rig();
+    const task = skillToss(bot, { skill: 'toss', item: 'cobblestone', count: 8 }, ctx);
+    await vi.advanceTimersByTimeAsync(51);
+    const drop: any = { id: 3, name: 'item', position: new Vec3(.5,65,-.5), getDroppedItem: () => null };
+    bot.entities[3] = drop; bot.emit('entitySpawn', drop);
+    drop.getDroppedItem = () => ({ name: 'cobblestone', count: 8 }); bot.emit('entityUpdate', drop);
+    await vi.advanceTimersByTimeAsync(4000); await task;
+    expect(isRecentDiscard(bot, drop)).toBe(true);
+    expect(isRecentDiscard(bot, { ...drop })).toBe(false);
+    const sweep = skillPickup(bot, ctx); const checked = expect(sweep).rejects.toThrow('附近没有');
+    await vi.advanceTimersByTimeAsync(501); await checked;
+    await vi.advanceTimersByTimeAsync(120000); expect(isRecentDiscard(bot, drop)).toBe(false);
+  });
+  it('checks the first fractional metre instead of skipping a nearby wall', () => {
+    const { bot } = rig(); bot.entity.position = new Vec3(.05,64,.05);
+    const walls = new Set(['0,-1', '-1,0', '-1,-1']);
+    bot.blockAt = p => ({ name: walls.has(`${Math.floor(p.x)},${Math.floor(p.z)}`) ? 'stone' : 'air',
+      boundingBox: walls.has(`${Math.floor(p.x)},${Math.floor(p.z)}`) ? 'block' : 'empty' });
+    const plan = planTossThrow(bot)!;
+    expect(plan).not.toBeNull(); expect(Math.sin(plan.yaw)).toBeLessThan(0);
+    expect(Math.cos(plan.yaw)).toBeLessThan(0);
   });
 });

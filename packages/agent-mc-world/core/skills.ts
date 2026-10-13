@@ -1649,7 +1649,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   {
     name: 'pickup',
     doc: '{"skill":"pickup","item":"cobblestone"}          拾取附近掉落物;item 可选,不写就近扫;按目标物品实际入包验收,靠近后零入包报受阻',
-    fields: [{ key: 'item', kind: 'string', doc: '不写就近扫' }],
+    fields: [{ key: 'item', kind: 'string', doc: '不写就近扫并避开2分钟内刚主动丢弃的已识别掉落物；明确写物品可取回' }],
   },
   {
     name: 'toss',
