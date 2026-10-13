@@ -11,9 +11,10 @@ from pathlib import Path
 from .bridge import json_content, outcome, text_content
 from .context import assemble, encode
 from .fast import FastPolicy, focus_state, rule_focus
-from .observations import spatial_text
+from .observations import receipt_view, spatial_text, tool_failure_view
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .planner import PlannerResponseError
+from .tool_schema import argument_error
 
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
@@ -70,9 +71,20 @@ def model_tools(catalogue):
             schema["properties"]["action"] = {"enum": sorted(READ_PROTOCOL)}
         if tool["name"] in {"mc_do", "mc_scout"}:
             schema.setdefault("properties", {})["queue"] = {"enum": ["append", "afterCheckpoint", "now"]}
+            step = schema["properties"].get("steps", {}).get("items", {})
+            properties = step.get("properties", {})
+            if isinstance(properties.get("skill"), dict) and "enum" in properties["skill"]:
+                # Native steps use one large flat union across unrelated skills.
+                # Keep the stable envelope; mc_help supplies the selected skill's
+                # full fields/examples. Dispatch still validates the ORIGINAL.
+                kept = {"skill", "needs", "expect", *step.get("required", [])}
+                step["properties"] = {key: value for key, value in properties.items() if key in kept}
+                step["additionalProperties"] = True
+                step["description"] = ("Flat step: skill plus its native parameters (not nested arguments). "
+                                       "Read mc_help for the selected skill's exact fields and examples before using unfamiliar skills.")
         description = tool.get("description", "")[:450]
         if tool["name"] == "mc_do":
-            description = "Execute real Minecraft actions: movement, collect, craft, eat, attack, build, etc. Steps run in order on the native body queue. Use mc_help for the selected skill's parameters. Default queue is append; afterCheckpoint inserts safely, now interrupts. A returned task ID means accepted, not completed."
+            description = "Execute real Minecraft actions: movement, collect, craft, eat, attack, build, etc. Steps run in order on the native body queue. Read mc_help for the selected skill's exact parameters/examples, then submit flat step objects. Default queue is append; afterCheckpoint inserts safely, now interrupts. A returned task ID means accepted, not completed."
         elif tool["name"] == "mc_scout":
             description = "Read-only observations or dry-run trials. Only the skills in steps.skill.enum are allowed. Does not collect, craft, eat, move the player or build anything. Use mc_do for real actions."
         tools.append({"type": "function", "function": {"name": tool["name"], "description": description, "parameters": schema}})
@@ -198,6 +210,7 @@ class Controller:
         self.tool_failure = None
         self.rejected_calls = {}
         self.invalid_tool_calls = 0
+        self.unactioned_replies = 0
         self.read_activity = {}
         self.state_path = data / "host-state.json"
         self.fast_policy = fast_policy or FastPolicy(settings.fast)
@@ -209,6 +222,14 @@ class Controller:
         temporary = self.state_path.with_suffix(".tmp")
         temporary.write_text(encode({**previous, **changes}), encoding="utf-8")
         temporary.replace(self.state_path)
+
+    def record_tool_failure(self, name, arguments, result, request_id=None):
+        self.tool_failure = failure_context(self.bridge.tools, name, arguments, result)
+        self.tool_failure["receipt"] = {"request_id": request_id, "turn_id": self.turn,
+                                        "archive": "receipts.jsonl" if request_id else "decisions.jsonl"}
+        # The planner's full diagnostic stays local. Other hosts receive the
+        # same actual error plus a reference, without private arguments/schema.
+        self.publish(tool_failure=tool_failure_view(self.tool_failure))
 
     def receipt(self, value):
         if uncertain(value):
@@ -260,8 +281,9 @@ class Controller:
         original = encode(result)
         with (self.data / "receipts.jsonl").open("a", encoding="utf-8") as output:
             output.write(encode({"requestId": request_id, "turnId": self.turn, "tool": name, "result": result}) + "\n")
+        view = receipt_view(result)
         if len(original.encode("utf-8")) <= 6000:
-            return original
+            return encode(view)
         # Chunks remain queryable through the existing artifact tool. JavaScript
         # measures maxLength in UTF-16; 16000 Python characters fit even with emoji.
         refs = []
@@ -272,7 +294,7 @@ class Controller:
         # help pages must not become a 10 KiB preview that evicts its own reply.
         preview = spatial_text(result.get("text", "")).encode("utf-8")[:2800].decode("utf-8", errors="ignore")
         return encode({"text": preview, "failed": result.get("failed"),
-                       "control": result.get("control"), "execution": result.get("execution"),
+                       "execution": view.get("execution"),
                        "original_chunks": refs, "retrieve": "mc_original(handle,offset,limit), chunks in order"})
 
     async def original_page(self, arguments):
@@ -312,6 +334,10 @@ class Controller:
             await asyncio.gather(task, return_exceptions=True)
 
     async def dispatch(self, name, arguments, request_id):
+        if error := argument_error(self.bridge.tools, name, arguments):
+            result = {"protocol": PROTOCOL, "failed": True, "execution": None,
+                      "dispatched": False, "origin": "controller_validation", "text": error}
+            return result, await self.archive_receipt(request_id, name, result)
         if name == "goal_report" and not self.active_goal:
             # A report about the standing goal is a local planning error, not a
             # failed game connection or an uncertain mutation. Preserve the reply
@@ -403,18 +429,24 @@ class Controller:
                                      for key, owner in self.action_owners.items()}
             self.active_goal = self.commands.active_goal()
             self.feedback_pending = not self.active_goal.get("queue_policy_consumed")
+            self.planner_retry_at = 0.0
+            self.unactioned_replies = 0
+            self.planner_notice = None
             self.groups = []
             self.last_decision = 0
-            self.publish(current_goal=self.active_goal)
+            self.publish(current_goal=self.active_goal, unactioned_replies=0, planner_retry_seconds=0)
             return True
         if command["kind"] == "goal":
             if self.decide is None:
                 self.commands.report_goal(command["id"], {"outcome": "blocked", "reason": "planner_unavailable", "verified": False})
             else:
                 self.active_goal = {"id": command["id"], **command["payload"]}
+                self.planner_retry_at = 0.0
+                self.unactioned_replies = 0
+                self.planner_notice = None
                 self.groups = []  # Keep original receipts on disk; discard old-goal context.
                 self.last_decision = 0
-                self.publish(current_goal=self.active_goal)
+                self.publish(current_goal=self.active_goal, unactioned_replies=0, planner_retry_seconds=0)
             return True
         self.turn = str(uuid.uuid4())
         await self.protocol("begin_turn", id=self.turn)
@@ -458,6 +490,9 @@ class Controller:
             name, arguments = target, arguments["arguments"]
         if name == "mc_protocol" and arguments.get("action") not in sorted(READ_PROTOCOL):
             raise ModelCallRejected("The host owns turn boundaries and cancellation; only task, facts, archive and archive_runs are exposed.")
+        if error := argument_error(self.bridge.tools, name, arguments):
+            self.record_tool_failure(name, arguments, {"text": error})
+            raise ModelCallRejected(error)
         if self.feedback_pending:
             tags = next((t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])
             if name != "mc_do" and {"act", "write", "speak"}.intersection(tags):
@@ -493,6 +528,7 @@ class Controller:
             # A known pre-dispatch rejection cannot be replayed by a later batch.
             self.planner_notice = "The exact same call already failed argument validation. It was NOT dispatched again. Consult mc_help/mc_tool_help and change the invalid parameters."
             self.tool_failure = self.rejected_calls[rejected_key]
+            self.publish(tool_failure=tool_failure_view(self.tool_failure))
             self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
             self.continuation_needed = True
             self.publish(planner_error="repeated_invalid_tool_call", rejected_tool=name)
@@ -510,9 +546,11 @@ class Controller:
             elif result.get("execution") and (name == "mc_do" or "act" in next(
                     (t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])):
                 self.read_activity.clear()
+                self.unactioned_replies = 0
+                self.publish(unactioned_replies=0)
             self.publish(read_activity=dict(self.read_activity))
         if result.get("failed"):
-            self.tool_failure = failure_context(self.bridge.tools, name, arguments, result)
+            self.record_tool_failure(name, arguments, result, request_id)
             failure = str(result.get("text", ""))
             parse_rejected = name in {"mc_do", "mc_scout"} and failure.startswith(f"[{name} 失败]") and "。你写的是 " in failure
             if not result.get("execution") and (failure.startswith("Invalid arguments:") or parse_rejected):
@@ -521,6 +559,7 @@ class Controller:
                 self.rejected_calls[rejected_key] = self.tool_failure
         elif result.get("execution"):
             self.tool_failure = None
+            self.publish(tool_failure=None)
         control = result.get("control") or {}
         boundary = bool(control.get("endTurnRequested") or result.get("endsTurn") or (self.current_work() and not self.feedback_pending))
         return result, compact, boundary
@@ -626,7 +665,17 @@ class Controller:
                     # unchanged world the same request on every idle wakeup.
                     self.groups.append([{"role": "assistant", "content": response.get("content")}])
                     self.groups = self.groups[-8:]
-                    self.planner_notice = "The previous reply had no tool calls; no game action was dispatched from it. Use the current native queue and facts to decide whether to act or keep waiting."
+                    # Text is not a native task or a completed standing goal.
+                    # Revisit it even when an idle world never emits a change,
+                    # with a growing pause instead of an inference busy-loop.
+                    if model_status.get("route") != "unavailable":
+                        self.unactioned_replies += 1
+                        delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
+                                    * 2 ** min(6, self.unactioned_replies - 1))
+                        self.planner_retry_at = time.monotonic() + delay
+                        self.continuation_needed = True
+                        self.publish(planner_retry_seconds=delay, unactioned_replies=self.unactioned_replies)
+                    self.planner_notice = f"{self.unactioned_replies} replies without a subsequent accepted game action. The previous reply had no tool calls; no game action was dispatched from it. The standing goal remains active. Use current facts and receipts to choose useful next work; if waiting, explain the condition preventing action."
                     return
                 try:
                     prepared = self.prepare_calls(calls, tools)
@@ -704,6 +753,10 @@ class Controller:
                 event_wake, event_urgent, more = await self.events()
                 wake |= event_wake
                 urgent |= event_urgent
+                if event_urgent:
+                    # Fresh danger may interrupt a planning pause. Ordinary
+                    # observation completions must not bypass its backoff.
+                    self.planner_retry_at = 0.0
                 if more:
                     await asyncio.sleep(0)
                     continue

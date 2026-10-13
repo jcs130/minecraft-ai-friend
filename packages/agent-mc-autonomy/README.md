@@ -70,6 +70,41 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.13: preserve room for observations and validate before dispatch
+
+The resident `mc_do`/`mc_scout` schemas retain the native queue/array envelope,
+skill names and dependency controls. Their large cross-skill parameter union is
+available through `mc_tool_help`; `mc_help` supplies selected skills' exact fields,
+examples and conditions. Steps remain flat objects, never JSON strings. This
+progressive disclosure leaves room for fresh facts and complete recent exchanges
+without increasing the context limit. The byte counter remains a conservative
+fallback, not an exact tokenizer or a measured cache-hit rate.
+
+All model calls in a response are checked against the original discovered native
+schemas before dispatching any of them. Mailbox actions also validate before an
+uncertain-dispatch journal is written. Invalid parameters receive a correction
+notice and bounded retry; no implicit coercion or action replay occurs. Genuine
+unstructured mutation outcomes still block and require receipt reconciliation.
+
+### 0.1.12: revisit unexecuted plans without requiring an unrelated event
+
+A text-only reply submits no game action and cannot end the standing goal. The
+controller keeps it in history and revisits fresh facts after the configured idle
+interval, backing off to at most five minutes for further unactioned replies.
+The next request says what was not dispatched; status and strategic reviews expose
+the reply count and scheduled delay. Native work still takes precedence. New user
+goals, feedback and urgent body events bypass the planning pause; stop remains
+immediate. No game command is inferred or fabricated from the plain text.
+
+### 0.1.11: keep actionable surroundings in planner and strategic reviews
+
+Nearby life, terrain and visible structures precede lengthy task geometry in the
+context budget. The planner's receipt copy omits transport metadata and exact
+duplicate receipt text; control processing and the original journal are unchanged.
+Strategic reviews include these surroundings, both ends of bounded terminal results
+and original handles. Hosts are asked to ground stages in this world's evidence and
+the standing/user goal, rather than importing objectives from unrelated memories.
+
 ### 0.1.10: retain JSON-rich action outcomes under tight context budgets
 
 Terminal fact previews are fitted against the complete serialized request, including
@@ -188,6 +223,13 @@ reject late decisions after new user feedback. Two delivery attempts per review
 and backoff bound unanswered requests. A lost acknowledgement is reconciled with
 the durable goal mailbox. Optional review storage failure cannot kill gameplay.
 The strategic port is disabled by default and never starts a stopped runtime.
+
+Since 0.1.14, strategic review evidence also includes the current unresolved
+tool error and its request/turn journal reference. A successful help lookup or
+model response does not clear an execution failure. The diagnostic clears when
+the planner obtains an accepted native execution, without claiming goal success.
+Argument/schema dumps stay out of the host envelope; error text is bounded and
+the original receipt or rejected decision remains available for investigation.
 
 Viewer assembly uses the body's public extension ports and an explicitly
 installed `mc-visual-console` checkout/catalog. Rendering code and assets remain

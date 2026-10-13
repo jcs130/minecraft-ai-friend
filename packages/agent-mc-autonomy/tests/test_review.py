@@ -63,6 +63,59 @@ def test_review_summary_keeps_tools_and_material_stagnation_visible(runtime):
     assert len(review["summary"].encode("utf-8")) < 1800
 
 
+def test_review_keeps_observed_structures_and_terminal_outcome(runtime):
+    port, clock, publish = runtime
+    facts = snapshot(clock[0])["facts"]
+    facts["parts"].extend([
+        {"key": "structure", "text": "crafting_table at (-73,71,302)"},
+        {"key": "terrain", "text": "east is loaded and level"},
+        {"key": "lastTask", "text": "task ended: " + "geometry " * 500 + "\nplacement failed: occupied", "original": "log:terminal"}])
+    publish(facts=facts)
+    review = port.offer()["review"]
+    inspected = port.decide(review["id"], "inspect")
+    assert inspected["facts"]["structure"] == "crafting_table at (-73,71,302)"
+    assert inspected["facts"]["terrain"] == "east is loaded and level"
+    assert "task ended" in inspected["facts"]["lastTask"] and "placement failed: occupied" in inspected["facts"]["lastTask"]
+    assert inspected["fact_originals"]["lastTask"] == "log:terminal"
+    assert len(inspected["facts"]["lastTask"].encode("utf-8")) <= 1000
+    assert "standing goal" in inspected["next"] and "fresh evidence" in inspected["next"]
+
+
+def test_review_transports_exact_unresolved_tool_error_with_bounded_receipt_reference(runtime):
+    port, clock, publish = runtime
+    failure = {"tool": "mc_scout", "error": "pitch must be within -90..90; yaw within -180..180",
+               "next_step": "Read the skill documentation and correct the arguments.",
+               "receipt": {"request_id": "native-rejected-1", "turn_id": "turn-1", "archive": "receipts.jsonl"}}
+    publish(tool_failure=failure, planner_error="repeated_invalid_tool_call")
+    first = port.offer()["review"]
+    inspection = port.decide(first["id"], "inspect")
+    assert inspection["tool_failure"] == failure
+    assert "mc_scout" in first["summary"] and "pitch" in first["summary"]
+    port.decide(first["id"], "continue", "Read the referenced failure before choosing an alternate plan.")
+    clock[0] += 180
+    publish(tool_failure=failure, planner_error=None, read_activity={"mc_help": 3})
+    second = port.offer()["review"]
+    assert second["evidence"]["tool_failure"] == failure  # A successful model/help reply did not repair it.
+    port.decide(second["id"], "continue", "Still awaiting a corrected plan.")
+    clock[0] += 180
+    publish(tool_failure=None)
+    cleared = port.offer()["review"]
+    assert cleared["evidence"]["tool_failure"] is None
+    assert "pitch" not in cleared["summary"]
+
+
+def test_review_limits_tool_diagnostic_without_transporting_arguments_or_unrelated_fields(runtime):
+    port, _, publish = runtime
+    publish(tool_failure={"tool": "mc_scout", "error": "错" * 9000, "next_step": "修订" * 9000,
+                          "arguments": "not for the host", "receipt": {"request_id": "r", "turn_id": "t", "archive": "receipts.jsonl", "extra": "private"}})
+    first = port.offer()["review"]
+    diagnostic = first["evidence"]["tool_failure"]
+    assert set(diagnostic) == {"tool", "error", "next_step", "receipt"}
+    assert len(diagnostic["error"].encode()) <= 900 and len(diagnostic["next_step"].encode()) <= 400
+    assert set(diagnostic["receipt"]) == {"request_id", "turn_id", "archive"}
+    assert len(first["summary"].encode()) < 2000
+
+
 @pytest.mark.parametrize("changes", [
     {"updated_at": datetime.fromtimestamp(9900, timezone.utc).isoformat()},
     {"updated_at": datetime.fromtimestamp(10031, timezone.utc).isoformat()},

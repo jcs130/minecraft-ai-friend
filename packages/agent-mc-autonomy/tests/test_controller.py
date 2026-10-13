@@ -59,6 +59,8 @@ class Bridge:
             return {"structuredContent": value}
         if name == "mc_help":
             return {"structuredContent": {"protocol": "agent-mc/v1", "text": "Read the next section"}}
+        if name in {"mc_queue", "mc_bag"}:
+            return packed({"text": "Idle"})
         raise AssertionError(name)
 
 
@@ -124,7 +126,43 @@ def test_read_activity_survives_pruned_history_until_a_body_action_is_accepted(f
     assert "read_activity" not in seen[-1]
 
 
-def test_plain_plan_is_retained_without_dispatching_or_forcing_another_turn(framework_module, tmp_path, run_async):
+def test_failed_tool_evidence_reaches_host_review_and_read_success_cannot_clear_it(framework_module, tmp_path, run_async):
+    module, bridge, controller = setup(framework_module, tmp_path, None)
+    published = {}
+    controller.publish = lambda **values: published.update(values)
+    controller.turn = "failed-turn"
+    bridge.result = {"protocol": "agent-mc/v1", "failed": True, "execution": None,
+                     "text": "Invalid arguments: pitch must be within -90..90"}
+    run_async(controller.execute_model_call("mc_do", {"steps": [{"skill": "observe", "rays": [[120, 0, 32]]}]}))
+    diagnostic = published["tool_failure"]
+    assert diagnostic["tool"] == "mc_do" and "pitch" in diagnostic["error"]
+    receipt = json.loads((tmp_path / "receipts.jsonl").read_text())
+    assert diagnostic["receipt"] == {"request_id": receipt["requestId"], "turn_id": "failed-turn", "archive": "receipts.jsonl"}
+    assert "arguments" not in diagnostic and "parameter_help" not in diagnostic
+    run_async(controller.execute_model_call("mc_help", {}))
+    assert published["tool_failure"] == diagnostic  # Reading help is not a repaired action.
+    run_async(controller.execute_model_call("mc_do", {"steps": [{"skill": "observe", "rays": [[120, 0, 32]]}]}))
+    assert published["tool_failure"]["receipt"] == diagnostic["receipt"]  # No invented second body receipt.
+    bridge.result = {"protocol": "agent-mc/v1", "text": "accepted", "execution": action()}
+    run_async(controller.execute_model_call("mc_do", {"steps": [{"skill": "observe", "rays": [[0, 120, 32]]}]}))
+    assert published["tool_failure"] is None
+
+
+def test_predispatch_rejection_publishes_decision_reference_without_fake_receipt(framework_module, tmp_path):
+    module, bridge, controller = setup(framework_module, tmp_path, None)
+    published = {}
+    controller.publish = lambda **values: published.update(values)
+    controller.turn = "invalid-batch"
+    bridge.tools[0]["inputSchema"] = {"type": "object", "properties": {"steps": {"type": "array"}}}
+    call = choose()["tool_calls"]
+    call[0]["function"]["arguments"] = '{"steps":"invalid"}'
+    with pytest.raises(module.ModelCallRejected):
+        controller.prepare_calls(call, module.model_tools(bridge.tools))
+    assert published["tool_failure"]["receipt"] == {"request_id": None, "turn_id": "invalid-batch", "archive": "decisions.jsonl"}
+    assert bridge.calls == [] and not (tmp_path / "receipts.jsonl").exists()
+
+
+def test_plain_plan_is_retained_and_revisited_with_bounded_backoff(framework_module, tmp_path, run_async):
     seen = []
     plan = "已有工作台和工具，接下来寻找食物并准备庇护所。"
 
@@ -135,7 +173,8 @@ def test_plain_plan_is_retained_without_dispatching_or_forcing_another_turn(fram
     module, bridge, controller = setup(framework_module, tmp_path, decide)
     tools = module.model_tools(bridge.tools)
     run_async(controller.turn_once("survive", "prefix", tools))
-    assert not controller.continuation_needed
+    assert controller.continuation_needed
+    assert controller.settings.idle_decision_seconds - 1 <= controller.planner_retry_at - module.time.monotonic() <= 300
     assert not controller.pending
     run_async(controller.turn_once("survive", "prefix", tools))
     assert {"role": "assistant", "content": plan} in seen[-1]
@@ -144,8 +183,66 @@ def test_plain_plan_is_retained_without_dispatching_or_forcing_another_turn(fram
     for _ in range(10):
         run_async(controller.turn_once("survive", "prefix", tools))
     assert len(controller.groups) == 8
+    assert 299 <= controller.planner_retry_at - module.time.monotonic() <= 300
     journal = [json.loads(line) for line in (tmp_path / "decisions.jsonl").read_text(encoding="utf-8").splitlines()]
     assert all(row["response"]["content"] == plan for row in journal)
+
+    async def act(*_):
+        return choose()
+
+    controller.decide = act
+    run_async(controller.turn_once("survive", "prefix", tools))
+    assert controller.unactioned_replies == 0 and controller.planner_retry_at == 0
+
+
+@pytest.mark.parametrize("interrupt", ["none", "user_goal", "user_feedback", "danger", "stop"])
+def test_unacted_plan_timer_keeps_event_and_user_priority(framework_module, tmp_path, run_async, monkeypatch, interrupt):
+    clock, decisions, stopped = [1000], [], [False]
+
+    async def decide(messages, _):
+        decisions.append((clock[0], messages[1]["content"]))
+        return {"content": "Next I will gather food.", "tool_calls": []}
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide, lambda: stopped[0])
+    controller.settings = dataclasses.replace(controller.settings, min_decision_seconds=1, idle_decision_seconds=60)
+    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    original_sleep = asyncio.sleep
+
+    async def tick(_):
+        clock[0] += 1
+        stopped[0] = clock[0] >= (1005 if interrupt == "stop" else 1100)
+        await original_sleep(0)
+
+    monkeypatch.setattr(module.asyncio, "sleep", tick)
+    if interrupt in {"user_goal", "user_feedback"}:
+        from agent_mc_autonomy.mailbox import Mailbox
+        controller.commands = Mailbox(tmp_path)
+
+        def feedback():
+            if clock[0] == 1004:
+                kind = "feedback" if interrupt == "user_feedback" else "goal"
+                payload = {"goal": "Return to shelter", **({"mode": "insert"} if kind == "feedback" else {})}
+                controller.commands.submit(kind, payload, "a6e8b876-9720-4a84-a049-74f3fb4e3b28")
+
+        bridge.on_poll = feedback
+    elif interrupt == "danger":
+        def danger():
+            if clock[0] == 1004:
+                bridge.event_pages.append([{"cursor": 1, "trigger": "interrupt", "text": "Health dropped"}])
+
+        bridge.on_poll = danger
+    run_async(controller.run("survive"))
+    assert decisions[0][0] == 1000
+    if interrupt == "stop":
+        assert len(decisions) == 1
+    elif interrupt == "none":
+        assert [time for time, _ in decisions] == [1000, 1060]
+    else:
+        assert 1004 <= decisions[1][0] < 1060
+        if interrupt in {"user_goal", "user_feedback"}:
+            assert "Return to shelter" in decisions[1][1]
+    assert not any(name == "mc_do" for name, _, _ in bridge.calls)
+    assert bridge.closed
 
 
 def test_rejected_body_action_does_not_erase_read_activity(framework_module, tmp_path, run_async):
@@ -192,6 +289,8 @@ def test_rejected_tool_exposes_exact_parameter_help_in_next_request(framework_mo
         return await original_call(name, args, **kwargs)
 
     bridge.call = call
+    run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    assert not any(name == "mc_scout" for name, *_ in bridge.calls)
     run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
     tail = json.loads(seen[1][-1]["content"])
     recovery = tail["tool_failure"]
@@ -339,6 +438,59 @@ def test_invalid_model_call_is_not_dispatched_and_can_recover(framework_module, 
     assert "No tool was dispatched" in seen[1][-1]["content"]
     assert len([row for row in bridge.calls if row[0] == "mc_do"]) == 1
     assert controller.pending[("task", "body-1")]["terminal"] is False
+
+
+@pytest.mark.parametrize("steps", ['[{"skill":"craft","item":"oak_planks"}', [], [{"skill": "craft", "count": True}]])
+def test_native_schema_rejection_precedes_batch_dispatch_and_uncertainty(framework_module, tmp_path, run_async, steps):
+    response = {"content": None, "tool_calls": [
+        {"id": "read", "type": "function", "function": {"name": "mc_bag", "arguments": "{}"}},
+        {"id": "action", "type": "function", "function": {"name": "mc_do", "arguments": json.dumps({"steps": steps})}},
+    ]}
+
+    async def decide(*_):
+        return response
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    bridge.tools[0]["inputSchema"] = {"type": "object", "properties": {
+        "steps": {"type": "array", "minItems": 1, "items": {"type": "object", "properties": {
+            "skill": {"enum": ["craft"]}, "count": {"type": "integer", "minimum": 1}}, "required": ["skill"]}}}, "required": ["steps"]}
+    bridge.tools.append({"name": "mc_bag", "inputSchema": {"type": "object"}})
+    controller.persist(stopped=False)
+    run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    assert not any(name in {"mc_do", "mc_bag"} for name, *_ in bridge.calls)
+    assert controller.inflight_request is None
+    assert not json.loads(controller.state_path.read_text()).get("uncertain")
+    assert controller.continuation_needed and "steps" in controller.planner_notice
+    assert "No tool was dispatched" in controller.planner_notice
+
+
+def test_advanced_arguments_use_native_schema_before_dispatch(framework_module, tmp_path):
+    module, bridge, controller = setup(framework_module, tmp_path, None)
+    bridge.tools.append({"name": "mc_script", "inputSchema": {"type": "object", "properties": {
+        "timeoutMs": {"type": "integer", "maximum": 120000}}}})
+    call = {"id": "advanced", "type": "function", "function": {"name": "mc_invoke", "arguments":
+        json.dumps({"name": "mc_script", "arguments": {"timeoutMs": 120001}})}}
+    with pytest.raises(module.ModelCallRejected, match="timeoutMs"):
+        controller.prepare_calls([call], module.model_tools(bridge.tools))
+    assert bridge.calls == [] and not controller.state_path.exists()
+
+
+def test_mailbox_dispatch_rejects_schema_error_without_uncertain_journal(framework_module, tmp_path, run_async):
+    _, bridge, controller = setup(framework_module, tmp_path, None)
+    bridge.tools[0]["inputSchema"] = {"type": "object", "properties": {"steps": {"type": "array"}}, "required": ["steps"]}
+    result, _ = run_async(controller.dispatch("mc_do", {"steps": "[]"}, "invalid-mailbox"))
+    assert result["failed"] and result["dispatched"] is False and result["execution"] is None
+    assert not bridge.calls and controller.inflight_request is None and not controller.state_path.exists()
+    assert json.loads((tmp_path / "receipts.jsonl").read_text())["result"] == result
+
+
+def test_native_schema_refs_are_local_only(framework_module):
+    from agent_mc_autonomy.tool_schema import argument_error
+
+    schema = {"$defs": {"step": {"type": "array"}}, "$ref": "#/$defs/step"}
+    assert argument_error([{"name": "local", "inputSchema": schema}], "local", []) is None
+    remote = {"$ref": "https://example.invalid/schema.json"}
+    assert "locally" in argument_error([{"name": "remote", "inputSchema": remote}], "remote", {})
 
 
 @pytest.mark.parametrize("last_tool", ["mc_do", "mc_scout"])
@@ -584,9 +736,33 @@ def test_action_and_observation_tools_keep_distinct_semantics(framework_module):
     assert "Execute real" in tools["mc_do"]["description"]
     assert "Read-only" in tools["mc_scout"]["description"]
     assert tools["mc_scout"]["parameters"]["properties"]["queue"] == {"enum": ["append", "afterCheckpoint", "now"]}
-    assert tools["mc_do"]["parameters"]["properties"]["steps"]["items"]["properties"]["block"] == props["block"]
+    assert "block" not in tools["mc_do"]["parameters"]["properties"]["steps"]["items"]["properties"]
+    original_step = json.loads(module.tool_help(catalog, {"name": "mc_do", "path": "/inputSchema/properties/steps/items"})["text"])
+    assert original_step["properties"]["block"] == props["block"]
     failure = module.failure_context(catalog, "mc_scout", {"steps": [{"skill": "craft"}, {"skill": "collect"}]}, {"text": "Invalid arguments"})
     assert "collect, craft belongs to mc_do" in failure["next_step"]
+
+
+def test_step_projection_preserves_envelope_and_full_native_constraints(framework_module, tmp_path):
+    from agent_mc_autonomy.tool_schema import argument_error
+
+    module, _, _ = setup(framework_module, tmp_path, None)
+    schema = {"type": "object", "properties": {"steps": {"type": "array", "minItems": 1, "maxItems": 16,
+        "items": {"type": "object", "properties": {
+            "skill": {"type": "string", "enum": ["craft", "eat"]},
+            "needs": {"type": "array", "items": {"type": "integer"}, "description": "Earlier step numbers, starting at one."},
+            "item": {"type": "string", "description": "原生物品参数完整语义" * 60},
+            "count": {"type": "integer", "minimum": 1}}, "required": ["skill"]}}}, "required": ["steps"]}
+    original = {"name": "mc_do", "inputSchema": schema}
+    before = json.dumps(original)
+    projected = module.model_tools([original])[0]["function"]["parameters"]["properties"]["steps"]
+    assert projected["type"] == "array" and projected["minItems"] == 1 and projected["maxItems"] == 16
+    assert projected["items"]["properties"] == {k: schema["properties"]["steps"]["items"]["properties"][k] for k in ["skill", "needs"]}
+    assert projected["items"]["additionalProperties"] is True and "mc_help" in projected["items"]["description"]
+    assert json.loads(module.tool_help([original], {"name": "mc_do", "path": "/inputSchema"})["text"]) == schema
+    assert json.dumps(original) == before
+    assert "minimum=1" in argument_error([original], "mc_do", {"steps": [{"skill": "craft", "count": 0}]})
+    assert argument_error([original], "mc_do", {"steps": [{"skill": "craft", "item": "oak_planks", "count": 1}]}) is None
 
 
 def test_forbidden_queue_policy_is_rejected_locally_then_planner_can_correct(framework_module, tmp_path, run_async):
@@ -688,6 +864,23 @@ def test_large_chinese_receipt_has_bounded_preview_and_lossless_originals(framew
     assert len(json.dumps(compact, ensure_ascii=False).encode("utf-8")) < 4000
     assert json.loads("".join(bridge.artifacts)) == result
     assert json.loads((tmp_path / "receipts.jsonl").read_text(encoding="utf-8"))["result"] == result
+
+
+def test_planner_receipt_omits_transport_ids_and_exact_duplicate_text_only(framework_module, tmp_path, run_async):
+    module, bridge, controller = setup(framework_module, tmp_path, None)
+    result = {"text": "task accepted, not completed", "failed": False, "protocol": "agent-mc/v1",
+              "control": {"requestId": "req", "turnId": "turn", "barrierAfter": True},
+              "execution": {**action(), "evidence": {"receipt": "task accepted, not completed", "outcomeKnown": True}},
+              "events": [{"type": "chat", "text": "help"}], "blobs": []}
+    compact = json.loads(run_async(controller.archive_receipt("req", "mc_do", result)))
+    assert "control" not in compact and "protocol" not in compact
+    assert compact["text"] == result["text"]
+    assert compact["execution"] == {**action(), "evidence": {"outcomeKnown": True}}
+    assert compact["events"] == result["events"]  # Nonempty external evidence is not transport noise.
+    assert json.loads((tmp_path / "receipts.jsonl").read_text())["result"] == result
+    result["execution"]["evidence"]["receipt"] = "different native evidence"
+    other = json.loads(run_async(controller.archive_receipt("req-2", "mc_do", result)))
+    assert other["execution"]["evidence"]["receipt"] == "different native evidence"
 
 
 def test_realclock_alone_does_not_trigger_another_decision(framework_module):

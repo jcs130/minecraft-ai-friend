@@ -165,3 +165,40 @@ def test_budget_reports_omissions_even_when_original_handle_cannot_fit(framework
     assert not json.loads(messages[-1]["content"])["current_facts"]
     assert budget["omitted"] == ["chat"]
     assert budget["total"] <= base["total"] + 5
+
+
+def test_large_task_geometry_does_not_hide_nearby_food_terrain_or_existing_workbench(framework_module):
+    context = importlib.import_module("agent_mc_autonomy.context")
+    facts = {"parts": [{"key": "body", "text": "health 20/20"},
+                       {"key": "lastTask", "text": "completed: " + "geometry " * 1000, "original": "log:task"},
+                       {"key": "life", "text": "cow at (12,64,7)"},
+                       {"key": "terrain", "text": "east is level; south is loaded uphill"},
+                       {"key": "structure", "text": "crafting_table at (1,64,2)"}]}
+    _, base = context.assemble("stable", [], "survive", {"parts": []}, [], [],
+                               context_tokens=32768, reserved_output=1024)
+    messages, budget = context.assemble("stable", [], "survive", facts, [], [],
+                                       context_tokens=base["total"] + 2000, reserved_output=1024)
+    fresh = {f["key"]: f for f in json.loads(messages[-1]["content"])["current_facts"]}
+    assert set(fresh) == {"body", "lastTask", "life", "terrain", "structure"}
+    assert fresh["life"]["text"] == "cow at (12,64,7)"
+    assert fresh["lastTask"]["abridged"] and fresh["lastTask"]["original"] == "log:task"
+    assert budget["total"] <= base["total"] + 2000
+
+
+def test_full_facts_can_share_archive_lookup_to_keep_terminal_evidence(framework_module):
+    context = importlib.import_module("agent_mc_autonomy.context")
+    facts = {"parts": [{"key": key, "text": "observed " + key, "original": "log:" + "a" * 64}
+                       for key in ("body", "place", "gear", "foodReserve", "queue", "life", "terrain", "structure")]}
+    facts["parts"].append({"key": "lastTask", "text": "completed: " + "observed geometry " * 300, "original": "log:task"})
+    original = json.dumps(facts)
+    _, base = context.assemble("stable", [], "survive", {"parts": []}, [], [],
+                               context_tokens=32768, reserved_output=1024)
+    messages, budget = context.assemble("stable", [], "survive", facts, [], [],
+                                       context_tokens=base["total"] + 1600, reserved_output=1024)
+    tail = json.loads(messages[-1]["content"])
+    fresh = {f["key"]: f for f in tail["current_facts"]}
+    assert set(fresh) == {f["key"] for f in facts["parts"]}
+    assert fresh["lastTask"]["original"] == "log:task" and fresh["lastTask"]["abridged"]
+    assert "mc_protocol" in tail["originals"] and "facts/archive" in tail["originals"]
+    assert fresh["gear"]["text"] == "observed gear" and json.dumps(facts) == original
+    assert budget["total"] <= base["total"] + 1600
