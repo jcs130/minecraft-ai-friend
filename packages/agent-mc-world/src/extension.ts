@@ -34,3 +34,5 @@ export type { PlayerObservation } from '../core/player-observation.ts';
 export type { Bot as MinecraftBot } from 'mineflayer';
 export type { DetectionEvidence } from '../core/perception-tools.ts';
 export { observedEntity } from '../core/perception-sight.ts';
+export { createMinecraftChoiceTool } from './client/choice.ts';
+export { minecraftLifeTool } from './client/life.ts';

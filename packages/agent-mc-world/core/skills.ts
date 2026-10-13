@@ -128,7 +128,7 @@ export type SkillCall = StepBounds & (
   | { skill: 'attack'; target: string; mode?: AttackMode }
   | { skill: 'equip'; item?: string; pick?: string; hand?: 'main' | 'off' }
   | { skill: 'pickup'; item?: string }
-  | { skill: 'toss'; item: string; count: number; at?: Anchor; pick?: string }
+  | { skill: 'toss'; item: string; count: number; at?: Anchor; target?: string; pick?: string }
   | { skill: 'stow'; item: string; count: number; pick?: string; at?: Anchor; into?: 'open' }
   | { skill: 'compact' }
   | { skill: 'take'; item?: string; count?: number; at?: Anchor; all?: true; pick?: string; from?: 'open' }
@@ -1656,7 +1656,10 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
 {"skill":"toss","item":"gold_ingot","at":[12,32,10]}
                                                  **朝那一格扔**:以物易物把金锭扔到猪灵脚边、
                                                  把东西放到指定的地方。最远约 8 格,远了先走近。
-                                                 抛物线的落点由服务端算,回执只说朝哪儿扔的`,
+                                                 抛物线的落点由服务端算,回执只说朝哪儿扔的。
+{"skill":"toss","item":"cobblestone","count":8,"target":"玩家名"}
+                                                 赠物点名当前可见玩家，距离2–4格；与at互斥。领取须拾取事件确认，未知不重投。
+                                                 无开阔方向或目标在自己2格内会拒绝，不再丢脚下。不代表放置矿车/方块。`,
     fields: [
       { key: 'item', kind: 'string', required: true, hint: '物品英文 id' },
       { key: 'count', kind: 'int', lo: 1, hi: 64, def: 1 },
@@ -1665,6 +1668,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
         doc: '朝那一格扔;不写 = 自己挑一个开阔方向',
       },
       { key: 'pick', kind: 'string' },
+      { key: 'target', kind: 'string', doc: '可见玩家的完整名字；与at互斥' },
     ],
   },
   {
