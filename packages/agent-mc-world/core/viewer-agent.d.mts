@@ -7,4 +7,5 @@ export interface ViewerAgentBridge {
 }
 export function createViewerAgentBridge(bot: unknown, options?: {
   getViewerSession?: () => unknown;
+  getFlightState?: () => unknown;
 }): ViewerAgentBridge;

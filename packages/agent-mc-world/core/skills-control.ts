@@ -77,13 +77,16 @@ export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: '
     }
     assertActive();
     if (call.mode === 'flight') {
-      const forward = Number(call.keys.includes('forward')) - Number(call.keys.includes('back'));
-      const left = Number(call.keys.includes('left')) - Number(call.keys.includes('right'));
-      const up = Number(call.keys.includes('jump')) - Number(call.keys.includes('sneak'));
-      const yaw = bot.entity.yaw;
-      const direction = new Vec3(-Math.sin(yaw) * forward - Math.cos(yaw) * left, up,
-        -Math.cos(yaw) * forward + Math.sin(yaw) * left);
-      await flyWithInput(bot, direction, call.durationMs, interrupted, sample);
+      await flyWithInput(bot, call.durationMs, interrupted, sample, () => {
+        assertActive();
+        lease.keys = call.keys;
+        for (const key of lease.keys) bot.setControlState(key, true);
+        return () => {
+          if (inputs.get(bot) !== lease) return;
+          for (const key of lease.keys) bot.setControlState(key, false);
+          lease.keys = [];
+        };
+      });
     } else {
       lease.keys = call.keys;
       for (const key of lease.keys) bot.setControlState(key, true);
