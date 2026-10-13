@@ -130,6 +130,52 @@ test('reconnect settles an uncertain original action from server without replayi
   assert.equal((await restored.submit(action)).replayed, true)
   assert.equal(calls.filter(row => row.name === 'mod_action').length, 1)
 })
+test('overlapping terminal polls and waits persist once and reconnect without replay', async t => {
+  const { adapter, client, flags, calls, dir } = await fixture(t)
+  await adapter.claimControl(); flags.finish = false
+  const action = { action_id: 'concurrent-terminal', operation: 'curios.open' }
+  await adapter.submit(action); flags.finish = true
+  const original = client.call.bind(client)
+  let release, statusRequests = 0
+  const barrier = new Promise(resolve => { release = resolve })
+  client.call = async (name, args) => {
+    if (name === 'action_status') { statusRequests++; await barrier }
+    return original(name, args)
+  }
+  const pending = [adapter.actionStatus(action.action_id), adapter.actionStatus(action.action_id), adapter.wait(action.action_id, { timeoutMs: 1000 })]
+  assert.equal(statusRequests, 1)
+  release()
+  const results = await Promise.all(pending)
+  assert(results.every(value => value.status === 'succeeded'))
+  assert.notStrictEqual(results[0], results[1])
+  const rows = fs.readFileSync(path.join(dir, 'numen/unifiedbody/native-actions.jsonl'), 'utf8').trim().split('\n').map(JSON.parse)
+  assert.equal(rows.filter(row => row.kind === 'result' && row.callId === action.action_id).length, 1)
+  await adapter.close()
+  const restored = await withNumen(client, options(dir)); t.after(() => restored.close())
+  assert.equal((await restored.actionStatus(action.action_id)).status, 'succeeded')
+  assert.equal((await restored.submit(action)).replayed, true)
+  assert.equal(calls.filter(row => row.name === 'mod_action').length, 1)
+})
+
+test('close holds the writer lock until an in-flight terminal receipt is durable', async t => {
+  const { adapter, client, flags, dir } = await fixture(t)
+  await adapter.claimControl(); flags.finish = false
+  await adapter.submit({ action_id: 'closing-terminal', operation: 'curios.open' }); flags.finish = true
+  const original = client.call.bind(client)
+  let release
+  const barrier = new Promise(resolve => { release = resolve })
+  client.call = async (name, args) => { if (name === 'action_status') await barrier; return original(name, args) }
+  const pending = adapter.actionStatus('closing-terminal')
+  const closing = adapter.close()
+  assert.equal(fs.existsSync(path.join(dir, 'numen/unifiedbody/writer.lock')), true)
+  await assert.rejects(withNumen(client, options(dir)), /EEXIST/)
+  release()
+  assert.equal((await pending).status, 'succeeded')
+  assert.equal((await closing).actionsCancelled, false)
+  const restored = await withNumen(client, options(dir)); t.after(() => restored.close())
+  assert.equal((await restored.actionStatus('closing-terminal')).status, 'succeeded')
+})
+
 test('unknown remote ID remains unknown and is never automatically resubmitted', async t => {
   const { adapter, flags, records, calls } = await fixture(t); await adapter.claimControl(); flags.timeoutAfterAccept = true
   await adapter.submit({ action_id: 'uncertain', operation: 'curios.open' }); records.delete('uncertain')

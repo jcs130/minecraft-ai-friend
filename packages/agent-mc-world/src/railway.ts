@@ -1,6 +1,7 @@
 /** Read-only rail topology from loaded block states; no route design or construction policy. */
 import { Vec3 } from 'vec3';
 import type { Bot } from 'mineflayer';
+import { partitionSpatialBox } from '../core/spatial-slices.ts';
 
 type Point = [number, number, number];
 type Box = [number, number, number, number, number, number];
@@ -39,17 +40,51 @@ function point(value: unknown, size: number, name: string): number[] {
 function inside(at: Point, b: Box): boolean { return at.every((v, i) => v >= b[i] && v <= b[i + 3]); }
 const key = (p: Point) => p.join(',');
 
+class RailwayInputError extends Error {
+  constructor(readonly recovery: Record<string, unknown>) {
+    super(`查询未执行。相同参数不会自行恢复；按建议修改后再查。${JSON.stringify(recovery)}`);
+  }
+}
+
+/** Suggestions are read-only alternatives, never silently executed or used as connectivity proof. */
+function boundsRecovery(b: Box, start: Point | null, end: Point | null): Record<string, unknown> {
+  const ordered = [0, 1, 2].map(i => Math.min(b[i], b[i + 3]))
+    .concat([0, 1, 2].map(i => Math.max(b[i], b[i + 3]))) as Box;
+  const plan = partitionSpatialBox(ordered, RAILWAY_LIMITS.cells);
+  const chunkSizes = plan.chunkSizes.map(n => Math.min(RAILWAY_LIMITS.axis, n));
+  const chunks = plan.sizes.reduce((n, size, i) => n * Math.ceil(size / chunkSizes[i]), 1);
+  const queries: Array<Record<string, unknown>> = [];
+  if (start && end) {
+    const corridor = [0, 1, 2].map(i => Math.min(start[i], end[i]) - 1)
+      .concat([0, 1, 2].map(i => Math.max(start[i], end[i]) + 1)) as Box;
+    const sizes = [0, 1, 2].map(i => corridor[i + 3] - corridor[i] + 1);
+    if (sizes.every(n => n <= RAILWAY_LIMITS.axis) && sizes.reduce((a, n) => a * n, 1) <= RAILWAY_LIMITS.cells) {
+      queries.push({ purpose: '只检查两端点附近的较窄走廊；不是原范围的完整替代',
+        arguments: { bounds: corridor, start, end, detail: false } });
+    }
+  }
+  queries.push({ purpose: '原范围分段读取的第一块，不推断跨分段连通性', arguments: {
+    bounds: ordered.slice(0, 3).concat(chunkSizes.map((n, i) => ordered[i] + n - 1)), detail: false,
+  } });
+  return { protocol: 'agent-mc/v1', kind: 'query-recovery', code: 'railway-invalid-bounds',
+    readExecuted: false, retrySameArguments: false, requestedBounds: b,
+    orderedBounds: ordered, sizes: plan.sizes, cells: plan.cells,
+    limits: { cells: RAILWAY_LIMITS.cells, axis: RAILWAY_LIMITS.axis },
+    endpointsOutsideBounds: [start, end].filter(p => p && !inside(p, b)),
+    partition: { chunkSizes, chunks, rule: '各轴从 orderedBounds 下界按 chunkSizes 分段到上界，取区间组合；末段止于上界' },
+    suggestedQueries: queries, evidenceBoundary: 'No blocks were read. Smaller samples may omit a detour; disconnected samples do not prove global disconnection.' };
+}
+
 /** Accepts live native block readings. Tests use real prismarine-block states. */
 export function observeRailway(read: Reader, args: Record<string, unknown>, dimension: string | null = null) {
   if (Object.keys(args).some(k => !['bounds', 'start', 'end', 'detail'].includes(k))) throw new Error('不支持的铁路查询字段');
   const b = point(args.bounds, 6, 'bounds') as Box;
   const size = [0, 1, 2].map(i => b[i + 3] - b[i] + 1);
-  if (size.some(n => n <= 0 || n > RAILWAY_LIMITS.axis) || size.reduce((a, n) => a * n, 1) > RAILWAY_LIMITS.cells)
-    throw new Error(`bounds 须有序；每轴最多 ${RAILWAY_LIMITS.axis} 格、总体积最多 ${RAILWAY_LIMITS.cells} 格`);
   if ((args.start === undefined) !== (args.end === undefined)) throw new Error('start 与 end 须一起提供');
   const start = args.start === undefined ? null : point(args.start, 3, 'start') as Point;
   const end = args.end === undefined ? null : point(args.end, 3, 'end') as Point;
-  if ([start, end].some(p => p && !inside(p, b))) throw new Error('start/end 须在 bounds 内');
+  if (size.some(n => n <= 0 || n > RAILWAY_LIMITS.axis) || size.reduce((a, n) => a * n, 1) > RAILWAY_LIMITS.cells
+      || [start, end].some(p => p && !inside(p, b))) throw new RailwayInputError(boundsRecovery(b, start, end));
   if (args.detail !== undefined && typeof args.detail !== 'boolean') throw new Error('detail 须为布尔值');
   const observedAt = new Date().toISOString();
   type Rail = { at: Point; name: string; shape: string | null; powered: boolean | null; ports: readonly Port[] | null };
@@ -196,5 +231,6 @@ export function railwayReadout(bot: Bot | null, args: Record<string, unknown>) {
       if (shown === 0) throw new Error('铁路路径超过回执上限；缩小 bounds 与 start/end 分段读取。本次未返回截断路径');
       shown = Math.floor(shown / 2);
     }
-  } catch (error) { return { text: `[mc_railway 失败] ${String(error)}`, failed: true as const }; }
+  } catch (error) { return { text: `[mc_railway 失败] ${String(error)}`, failed: true as const,
+    ...(error instanceof RailwayInputError ? { meta: { queryRecovery: error.recovery } } : {}) }; }
 }

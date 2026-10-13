@@ -28,6 +28,20 @@ function visualSubject(v) {
   return v && UUID.test(v.playerUuid ?? "") && /^[\w.]{1,32}$/.test(v.playerName ?? "") && Number.isSafeInteger(v.entityId) ? { playerUuid: v.playerUuid.toLowerCase(), playerName: v.playerName, entityId: v.entityId } : null;
 }
 var sameVisualSubject = (a, b) => !!a && !!b && a.playerUuid.toLowerCase() === b.playerUuid.toLowerCase() && a.entityId === b.entityId;
+function normalizeVisualFlight(v) {
+  if (!v || typeof v.allowed !== "boolean" || typeof v.flying !== "boolean") return null;
+  const flying = v.allowed && v.flying;
+  const mode = flying ? ["hover", "input", "route"].includes(v.mode) ? v.mode : "hover" : "ground";
+  const d = v.direction;
+  return {
+    allowed: v.allowed,
+    flying,
+    mode,
+    serverFlying: v.serverFlying === true,
+    direction: flying && ["input", "route"].includes(mode) && d && [d.x, d.y, d.z].every((n) => finite(n, -100, 100)) ? { x: d.x, y: d.y, z: d.z } : null,
+    remainingMs: finite(v.remainingMs, 0, 864e5) ? v.remainingMs : null
+  };
+}
 function visualPoint(v, space = "world") {
   if (space === "screen") return v && finite(v.x, 0, 1) && finite(v.y, 0, 1) ? { x: v.x, y: v.y } : null;
   return v && finite(v.x, -3e7, 3e7) && finite(v.y, -4096, 4096) && finite(v.z, -3e7, 3e7) ? { x: v.x, y: v.y, z: v.z } : null;
@@ -250,6 +264,7 @@ function createViewerAgentBridge(bot, {
   hub = viewerAgentHub,
   getViewerSession = () => null,
   authorizePublish = null,
+  getFlightState = () => null,
   now = Date.now,
   intervalMs = 100,
   timers = true
@@ -410,9 +425,19 @@ function createViewerAgentBridge(bot, {
       r.trail = r.trail.slice(-64);
     }
     if (r.route?.source === "pathfinder" && r.route.status === "moving" && bot.pathfinder?.isMoving?.() === true) r.route.until = time + 1e4;
+    let flight = null;
+    try {
+      const value = getFlightState();
+      flight = normalizeVisualFlight(value && {
+        ...value,
+        remainingMs: Number.isFinite(value.expiresAtMs) ? Math.max(0, value.expiresAtMs - time) : null
+      });
+    } catch {
+    }
     r.input = {
       controls: controls.filter((key) => bot.controlState?.[key] === true),
       position,
+      flight,
       yaw: Number.isFinite(bot.entity.yaw) ? bot.entity.yaw : null,
       pitch: Number.isFinite(bot.entity.pitch) ? bot.entity.pitch : null
     };

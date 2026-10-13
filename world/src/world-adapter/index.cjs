@@ -95,7 +95,8 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
   if (!body || !/^[A-Za-z0-9_]{1,16}$/.test(body.name || '')) throw Error('numen_body_not_owned')
   const ledger = new NativeLedger(path.join(ledgerDir, 'numen'), body.name)
   if (ledger.playerUuid && ledger.playerUuid !== bodyId) { ledger.close(); throw Error('numen_ledger_body_mismatch') }
-  let closed = false, lease = null, active = null, submitting = false, rows = []
+  let closed = false, lease = null, active = null, submitting = false, rows = [], closing = null
+  const statusReads = new Map()
   const decorate = value => ({ ...copy(value), ...base })
   const bound = (name, args = {}) => client.call(name, { ...args, companion: bodyId })
   const safe = async task => { try { return await task() } catch (error) { return decorate(unknown(error.code || 'numen_transport_unconfirmed')) } }
@@ -166,7 +167,10 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
     const record = ledger.records.get(id)
     if (record?.kind === 'result') return decorate(copy(record.result))
     if (closed) return decorate(unknown('adapter_closed', { action_id: id }))
-    return safe(async () => {
+    // A waiter and a host terminal-event poll can overlap. They must share
+    // one read/commit, otherwise two results invalidate the durable journal.
+    if (statusReads.has(id)) return copy(await statusReads.get(id))
+    const pending = safe(async () => {
       const raw = await bound('action_status', { action_id: id }), value = receipt(raw, record, id)
       if (record && value.terminal && value.outcomeKnown) {
         try {
@@ -185,6 +189,8 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
       if (active === id && value.terminal) active = null
       return value
     })
+    statusReads.set(id, pending)
+    try { return copy(await pending) } finally { if (statusReads.get(id) === pending) statusReads.delete(id) }
   }
   async function discover () {
     const native = await client.call('mod_operations')
@@ -321,7 +327,18 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
         inFlight: active, mutationBlocked: ledger.broken || ledger.unresolvedById.size > (active ? 1 : 0), unresolved: ledger.unresolved(), ledgerScope: 'local_shadow_and_server_body_journal', modelRequests: 0 })
     },
     viewer: () => decorate({ ok: !!viewerUrl, url: viewerUrl, readOnly: true, requiresOwnerToken: true }),
-    async close () { closed = true; ledger.close(); lease = null; return decorate({ ok: true, closed: true, actionsCancelled: false, bodyRemoved: false }) }
+    close () {
+      if (!closing) {
+        closed = true
+        // Keep this writer's lock until already-issued status reads have
+        // persisted their terminal evidence. No new remote work is started.
+        closing = Promise.allSettled([...statusReads.values()]).then(() => {
+          ledger.close(); lease = null
+          return decorate({ ok: true, closed: true, actionsCancelled: false, bodyRemoved: false })
+        })
+      }
+      return closing
+    }
   }
 }
 async function connect (config) {

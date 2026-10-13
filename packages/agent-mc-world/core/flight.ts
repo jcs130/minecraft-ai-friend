@@ -16,6 +16,9 @@ interface FlightControl {
   physicsEnabled: boolean;
   gravity: number;
   interrupted?: string;
+  mode?: 'input' | 'route';
+  direction?: { x: number; y: number; z: number };
+  releaseInput?: () => void;
 }
 export interface FlightState {
   allowed: boolean;
@@ -25,6 +28,10 @@ export interface FlightState {
   observedAtMs?: number;
   expiresAtMs?: number;
   lastStop?: { reason: string; atMs: number };
+  mode: 'ground' | 'hover' | 'input' | 'route';
+  direction: { x: number; y: number; z: number } | null;
+  abilitySpeed: number | null;
+  speedSource: 'server' | 'default';
 }
 export interface FlightMoveOptions {
   /** End flight on a safe supporting surface. Otherwise retain flight for the next action. */
@@ -97,11 +104,13 @@ export function watchFlightAbilities(bot: Bot): () => void {
   bot._client.on('abilities', onAbilities);
   bot.on('forcedMove', forcedMove);
   bot.on('respawn', reset);
+  bot.on('death', reset);
   bot.on('end', reset);
   return () => {
     bot._client.off('abilities', onAbilities);
     bot.off('forcedMove', forcedMove);
     bot.off('respawn', reset);
+    bot.off('death', reset);
     bot.off('end', reset);
     reset();
   };
@@ -133,11 +142,15 @@ export function flightFlags(bot: Bot, now = Date.now()): number {
 export function flightState(bot: Bot, now = Date.now()): FlightState {
   const state = abilities.get(bot);
   const allowed = !!(flightFlags(bot, now) & 4);
+  const flying = allowed && (state?.requestedFlying ?? !!(flightFlags(bot, now) & 2));
+  const control = controls.get(bot);
   return {
-    allowed, flying: allowed && (state?.requestedFlying ?? !!(flightFlags(bot, now) & 2)),
+    allowed, flying,
     serverFlying: !!(state?.flags && state.flags & 2),
     controlActive: controls.has(bot), lastStop: state?.lastStop,
     observedAtMs: state?.observedAtMs, expiresAtMs: state?.expiresAtMs,
+    mode: flying ? control?.mode ?? 'hover' : 'ground', direction: control?.direction ?? null,
+    abilitySpeed: state?.flyingSpeed ?? null, speedSource: state?.speedObserved ? 'server' : 'default',
   };
 }
 
@@ -145,6 +158,8 @@ function releaseFlight(bot: Bot, reason: string, send: boolean): void {
   const control = controls.get(bot);
   if (!control) return;
   control.interrupted = reason;
+  control.releaseInput?.();
+  control.releaseInput = undefined;
   controls.delete(bot);
   bot.physics.gravity = control.gravity;
   bot.physicsEnabled = control.physicsEnabled;
@@ -191,38 +206,66 @@ function beginFlight(bot: Bot): FlightControl {
   return control;
 }
 
-/** Direction is a world-space input vector. Each tick starts at the current observed position. */
-export async function flyWithInput(bot: Bot, direction: Vec3, durationMs: number,
-  aborted: () => boolean, sample: () => void): Promise<void> {
+/** Bounded creative-style input; horizontal axes and vertical input are independent.
+ * Uses the existing conservative flight speed, not a full vanilla inertia simulation.
+ * Keys are real controller inputs, held only after permission and released by the owner. */
+export async function flyWithInput(bot: Bot, durationMs: number,
+  aborted: () => boolean, sample: () => void, startInput: () => () => void): Promise<void> {
   if (!bot.entity?.position) throw new SkillBlocked('还没进入世界，不能飞行');
   if (moving.has(bot)) throw new SkillBlocked('另一段飞行移动尚未结束');
   moving.add(bot);
+  let control: FlightControl | undefined;
   try {
     await awaitFlightPermission(bot, aborted);
-    const control = beginFlight(bot);
+    control = beginFlight(bot);
+    if (aborted()) throw new SkillBlocked('飞行控制已中断');
+    control.releaseInput = startInput();
+    control.mode = 'input';
     const until = Date.now() + durationMs;
     while (Date.now() < until) {
       if (aborted()) throw new SkillBlocked('飞行控制已中断，保持当前悬停位置');
       if (control.interrupted) throw new SkillBlocked(control.interrupted, [], 'server');
       if (!(flightFlags(bot) & 4)) throw new SkillBlocked('服务端飞行许可已结束', [], 'server');
       const tickMs = Math.min(FLIGHT_TICK_MS, until - Date.now());
+      if (tickMs <= 0) break;
       const step = Math.min(0.3, abilities.get(bot)!.flyingSpeed * 3) * tickMs / FLIGHT_TICK_MS;
-      const offset = direction.norm() > 0 ? direction.scaled(step / direction.norm()) : new Vec3(0, 0, 0);
-      const next = bot.entity.position.plus(offset);
-      const obstruction = spaceObstruction(bot, next);
-      if (obstruction) throw new SkillBlocked(`直接飞行受阻：${obstruction}；已停止移动并悬停`);
+      const key = (name: 'forward' | 'back' | 'left' | 'right' | 'jump' | 'sneak' | 'sprint') => Number(bot.controlState[name] === true);
+      const forward = key('forward') - key('back'), left = key('left') - key('right');
+      const up = key('jump') - key('sneak'), yaw = bot.entity.yaw;
+      const horizontal = Math.max(1, Math.hypot(forward, left));
+      const boost = key('sprint') && forward > 0 ? 2 : 1;
+      const offset = new Vec3((-Math.sin(yaw) * forward - Math.cos(yaw) * left) / horizontal * step * boost,
+        up * step, (-Math.cos(yaw) * forward + Math.sin(yaw) * left) / horizontal * step * boost);
+      control.direction = { x: offset.x / tickMs * 1000, y: offset.y / tickMs * 1000, z: offset.z / tickMs * 1000 };
+      // Sweep every small interval: sprint must not tunnel through thin shapes.
+      const from = bot.entity.position.clone(), segments = Math.max(1, Math.ceil(offset.norm() / 0.1));
+      for (let i = 1; i <= segments; i++) {
+        const next = from.plus(offset.scaled(i / segments));
+        const obstruction = spaceObstruction(bot, next);
+        if (obstruction) throw new SkillBlocked(`直接飞行受阻：${obstruction}；已停止移动并悬停`);
+      }
       bot.entity.velocity = new Vec3(0, 0, 0);
       bot.entity.onGround = false;
-      bot.entity.position = next;
+      bot.entity.position = from.plus(offset);
       await sleep(tickMs);
       sample();
     }
+    control.releaseInput?.();
+    control.releaseInput = undefined;
+    control.mode = undefined;
+    control.direction = undefined;
     await sleep(150);
     sample();
     if (aborted()) throw new SkillBlocked('飞行控制已中断');
     if (control.interrupted) throw new SkillBlocked(control.interrupted, [], 'server');
     if (!(flightFlags(bot) & 4)) throw new SkillBlocked('服务端飞行许可已结束', [], 'server');
   } finally {
+    if (control) {
+      control.releaseInput?.();
+      control.releaseInput = undefined;
+      control.mode = undefined;
+      control.direction = undefined;
+    }
     moving.delete(bot);
   }
 }
@@ -290,7 +333,7 @@ function flightPositions(start: Vec3, waypoints: Vec3[], step: number): Vec3[] {
 }
 
 function flightRoute(bot: Bot, start: Vec3, target: Vec3): Vec3[] {
-  // Vanilla's non-sprinting creative speed is three times its ability speed per tick.
+  // Preserve the client's conservative rate; this is not full vanilla inertia physics.
   const step = Math.min(0.3, (abilities.get(bot)?.flyingSpeed ?? DEFAULT_FLYING_SPEED) * 3);
   const direct = flightPositions(start, [target], step);
   let obstruction = routeObstruction(bot, direct);
@@ -392,6 +435,7 @@ export async function flyToPosition(bot: Bot, targetAt: { x: number; y: number; 
     }
     if (aborted()) throw new SkillBlocked('飞行任务已取消');
     control = beginFlight(bot);
+    control.mode = 'route';
     timingEpoch = timingEpochs.get(bot);
     for (const pos of route) {
       const tickAtMs = Date.now();
@@ -402,12 +446,16 @@ export async function flyToPosition(bot: Bot, targetAt: { x: number; y: number; 
       if (obstruction) throw new SkillBlocked(`途中空间发生变化：${obstruction}；已停止移动并悬停`);
       bot.entity.velocity = new Vec3(0, 0, 0);
       bot.entity.onGround = false;
+      const delta = pos.minus(bot.entity.position);
+      control.direction = { x: delta.x * 20, y: delta.y * 20, z: delta.z * 20 };
       bot.entity.position = pos;
       await sleep(FLIGHT_TICK_MS);
       elapsedTickMs += Date.now() - tickAtMs;
       ticks++;
     }
     // Position packets continue through Mineflayer with local gravity simulation disabled.
+    control.mode = undefined;
+    control.direction = undefined;
     await sleep(150);
     if (control.interrupted) throw new SkillBlocked(control.interrupted, [], 'server');
     if (!(flightFlags(bot) & 4)) throw new SkillBlocked('服务端飞行许可已结束', [], 'server');
@@ -422,6 +470,7 @@ export async function flyToPosition(bot: Bot, targetAt: { x: number; y: number; 
     // Excludes permission waits, model latency and settling. Completed ticks from
     // an interrupted leg still measure the scheduler; an unstarted leg does not.
     if (timingEpoch && timingEpoch === timingEpochs.get(bot)) recordFlightTiming(bot, elapsedTickMs, ticks);
+    if (control && controls.get(bot) === control) { control.mode = undefined; control.direction = undefined; }
     moving.delete(bot);
   }
 }

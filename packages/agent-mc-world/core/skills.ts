@@ -401,7 +401,6 @@ function parseControl(c: Record<string, unknown>, at: string): ParseResult {
   }
   const mode = c.mode ?? 'ground';
   if (mode !== 'ground' && mode !== 'flight') return { error: `${at} control 的 mode 要 ground 或 flight` };
-  if (mode === 'flight' && keys.includes('sprint')) return { error: `${at} flight 控制不支持 sprint；速度取服务端飞行能力读数` };
   for (const [field, limit] of [['yawDeg', 180], ['pitchDeg', 90]] as const) {
     const value = c[field];
     if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > limit)) {
@@ -1058,8 +1057,9 @@ const SKILLS: readonly SkillSpec[] = [
     name: 'control',
     doc: `{"skill":"control","keys":["forward","jump"],"durationMs":500,"mode":"ground"} 短时直接按键，不计算寻路、不挖方块。每步 50–2000 毫秒，结束或中断松开按键；跳跃、服务端跃空的冲量由普通游戏物理处理。
 {"skill":"control","keys":["forward","jump"],"durationMs":1000,"mode":"flight","yawDeg":30} 先相对当前视角左转 30 度，再向前上方斜飞。飞行必须已有服务端许可，可与授予许可的 chat 同单用 needs 连接；最多等待许可 2 秒。
-keys: forward/back/left/right/jump/sneak/sprint；相反方向不能同按。flight 中 jump 上升、sneak 下降，方向按视角水平朝向，pitch 不改变升降；不支持 sprint。yawDeg 正数左转、pitchDeg 正数抬头；单位度。空 keys 配转角可原地转头。
+keys: forward/back/left/right/jump/sneak/sprint；相反方向不能同按。flight 中 WASD 水平移动，jump 上升、sneak 下降，可边平移边升降；forward+sprint 水平加速，升降速度不翻倍。方向按当前视角水平朝向，pitch 不改变升降。受控短时飞行使用服务端能力速度及保守步长，不复刻完整创造模式惯性。yawDeg 正数左转、pitchDeg 正数抬头；单位度。空 keys 配转角可原地转头。
 ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight 检查身位碰撞和区块加载，遇遮挡停止；不会绕路。位置修正、死亡、断线或身体被其他任务接管时结束本步，不从旧坐标继续移动。
+施法仅授予许可，不会自动按键起飞。先用 state 的 flight 检查许可/期限，再 control(mode:flight) 起飞。已知路线优先施法前 flight_plan，再把施法与移动/作业用 needs 成批提交；模型等待也会消耗许可时间，预留落地余量。坐标 flight 是路线控制，网页不应伪装成 WASD 按键。
 回执给实际起终点、位移和中断原因；按完键不证明到达目的地。已知连续步骤可同单排队，needs 串联、expect 检查实际终态；被打断的 control 不自动重放，重新观察后再排。`,
     fields: [
       { key: 'keys', kind: 'opaque', required: true, schema: { type: 'array', items: { type: 'string', enum: [...CONTROL_KEYS] } } },

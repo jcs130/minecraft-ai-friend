@@ -151,7 +151,7 @@ export const GOAL_PLAN_SCHEMA = {
     properties: {
       do: { type: 'string', description: '这一步要实施什么。' },
       verify: {
-        type: ['object', 'array'],
+        type: ['object', 'array', 'null'],
         description: '直接证明本步成果的读数，或最多 8 个读数组成的 AND 数组。无关状态不能代替成果；健康、饱食或位置符合不能证明已经读懂信息、交付物品或完成对话。没有对应读数时用 judgment。',
         properties: GOAL_PROBE_SCHEMA.properties,
         required: ['source'],
@@ -160,7 +160,7 @@ export const GOAL_PLAN_SCHEMA = {
         maxItems: GOAL_PLAN_MAX_PROBES_PER_STEP,
       },
       judgment: {
-        type: 'string',
+        type: ['string', 'null'],
         description: '说明需要核对的成果与证据来源；完成时用 milestone 引用实际观察、对方回复或服务端回执。缺少机械字段时可以用它，不必填一个无关的 verify。',
       },
     },
@@ -326,8 +326,10 @@ export function parseGoalPlan(value: unknown): GoalPlan | { error: string } {
     if (extras.length > 0) return { error: `${path} 有未知字段: ${extras.join(', ')}` };
     const action = text(body.do);
     if (!action) return { error: `${path}.do 不能空` };
-    const hasVerify = body.verify !== undefined;
-    const hasJudgment = body.judgment !== undefined;
+    // Public snapshots represent the unused branch as null. Accept that exact
+    // round-trip without accepting two real criteria or weakening verification.
+    const hasVerify = body.verify != null;
+    const hasJudgment = body.judgment != null;
     if (hasVerify === hasJudgment) return { error: `${path} 要恰好给 verify 或 judgment` };
     if (hasJudgment) {
       const judgment = text(body.judgment);

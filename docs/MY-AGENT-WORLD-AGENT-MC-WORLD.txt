@@ -1,6 +1,6 @@
 My Agent World 接入新版独立 agent-mc-world（2026-10-13）
 
-核心来自 minecraft-ai-friend/main@baac5cf，agent-mc-world 0.4.0。
+核心来自 minecraft-ai-friend/main@edd0179，agent-mc-world 0.4.0。
 适配源码：world/src/agent-mc-host。它使用核心公开 /client、/contracts、/mcp 接口，不把服务端规则写回通用核心。
 
 连接关系：宿主的模型/规划/记忆 → agent-mc/v1 回合、事件、回执 → My Agent World 原生身体适配器 → Mineflayer 游戏连接，或 Numen 原身体。
@@ -44,9 +44,9 @@ MCP 仅是宿主侧可选 stdio 入口：node agent-mc-host/mcp.mjs D:/agents/yo
 适配器安装与重启现役 Agent 是两件事。安装不会替换 MawExplorer、Numen 模型配置、原人物记忆或账本；现役暂停及旧 unknown 保持。
 生产服务不需要因安装这个宿主包而重启。运行一个新的自主角色仍需由宿主明确指定模型、预算、目标和身份。
 
-当前可用分发目录：E:\QiandengJiSocietyLab\integrations\agent-mc-world\v2-20261013，宿主包 @my-agent-world/agent-mc-host 0.1.0，独立核心 0.4.0。把整个目录作为受控 SDK 工件分发；重新安装依赖使用该目录内 package-lock.json 执行 npm ci --ignore-scripts --no-audit --no-fund，要求 Node 22。它不是已经在 npm 发布的包。
+当前可用分发目录：E:\QiandengJiSocietyLab\integrations\agent-mc-world\v4-20261013，宿主包 @my-agent-world/agent-mc-host 0.1.0，独立核心 0.4.0。把整个目录作为受控 SDK 工件分发；重新安装依赖使用该目录内 package-lock.json 执行 npm ci --ignore-scripts --no-audit --no-fund，要求 Node 22。它不是已经在 npm 发布的包。
 
-2026-10-13 验证：两种 provider 各16项真实隔离服检查通过，包括2格移动、原生技能/女仆查询、公会登记、Curios界面开关、原UUID重连及同action_id零重复移动；无殖民地时明确报告不存在，未声称已经完成殖民地建设。适配器16项测试、打包消费者类型检查和本机stdio初始化通过；核心284项测试通过，1项Windows DPAPI凭据测试因系统拒绝加解密未通过。本适配器沿用现有私有文件登录，隔离服实际认证已通过。
+2026-10-13 验证：两种 provider 各16项真实隔离服检查通过，包括2格移动、原生技能/女仆查询、公会登记、Curios界面开关、原UUID重连及同action_id零重复移动；无殖民地时明确报告不存在，未声称已经完成殖民地建设。适配器16项测试、打包消费者类型检查和本机stdio初始化通过；核心308项测试通过，1项Windows DPAPI凭据测试因系统拒绝加解密未通过。本适配器沿用现有私有文件登录，隔离服实际认证已通过。
 
 尚未迁移核心默认引擎的完整脚本、闲时聊天/死亡/受伤订阅与生存反射。宿主应显式查询mc_state并消费动作回执；这里不代表长时间自主生存或所有模组完整流程已验收。Wandscape仍保持之前的待发布状态。
 

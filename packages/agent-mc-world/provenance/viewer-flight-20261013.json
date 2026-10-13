@@ -1,0 +1,17 @@
+{
+  "repository": "https://github.com/jcs130/mc-visual-console",
+  "commit": "54f1114972ad4562bd2f00f8d0eb85626a779e4c",
+  "sources": [
+    {
+      "file": "packages/modern-viewer/renderer-src/host/viewer-agent.mjs",
+      "sha256": "6fb491ab0c30190bf147f9196be6f8fa3926297ed70d9910fd460853108f1662"
+    },
+    {
+      "file": "packages/modern-viewer/renderer-src/src/modern-viewer/agent-visual-protocol.js",
+      "sha256": "04005d6cd88f75331599bca0272f2e12e5499f740013aa74b86964ef0302ed97"
+    }
+  ],
+  "output": "core/viewer-agent.mjs",
+  "sha256": "28ce4df0514477245523caaaae1583156f2912c42a670b7df3ae1a592ad0bfff",
+  "import": "Explicit esbuild host bundle; regular core build consumes owned files and never reads another checkout."
+}

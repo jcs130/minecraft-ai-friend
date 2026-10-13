@@ -30,6 +30,7 @@ import { observeViewerFishingCatch, viewerDroppedItem } from './viewer-fishing.t
 import { viewerPageCss, viewerPageHtml } from './viewer-page-assets.ts';
 import { serveViewerAsset } from './viewer-asset-server.ts';
 import { createViewerAgentBridge } from './viewer-agent.mjs';
+import { flightState } from './flight.ts';
 import { createViewerContentBridge } from './viewer-content.mjs';
 import { viewerPhotoPage } from './viewer-photo-page.mjs';
 import { minecraftTextComponent } from './text-component.ts';
@@ -461,7 +462,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
   const speechRelay = options.relay;
   const content = bot.version === '1.20.6' ? createViewerContentBridge(bot) : null;
   const appearance = serverProtocol?.createAppearance?.(bot) ?? null;
-  const agentVisuals = createViewerAgentBridge(bot);
+  const agentVisuals = createViewerAgentBridge(bot, { getFlightState: () => flightState(bot) });
   // Container serialization is already supplied by this host; preserve its richer trade/property state.
   const observer = serverProtocol?.createObserver?.(bot) ?? null;
 

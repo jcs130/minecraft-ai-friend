@@ -2,20 +2,20 @@
   "schemaVersion": 1,
   "date": "2026-10-13",
   "scope": "independent_core_native_host_optional_bundle",
-  "upstreamMain": "baac5cf41430168846a4b91410c150c85991d406",
+  "upstreamMain": "edd0179be7bb8a24f9011f50c1163175fd428326",
   "coreVersion": "0.4.0",
   "hostVersion": "0.1.0",
-  "coreArchiveSha256": "07abf0296f7feb489cb49e7a445529941f8b219817ec999fd4fa8d01e70f8aef",
+  "coreArchiveSha256": "09dc52c987ab48f8b8ecaee625f03a90531f96274e3822ad396230e81b3d4393",
   "viewerInput": {
-    "commit": "f2cda1096fc8c3c9a37cd92c1ca0aded2d1a7e30",
-    "sha256": "3397ee5fafbaf486d6a9acb5a5f4e568627273bd6550d27f59ff61b28153c2da",
+    "commit": "54f1114972ad4562bd2f00f8d0eb85626a779e4c",
+    "sha256": "ea001101ec5981da2bd5f34e7a725c176eec89edc32d0aa7aae813b897d2a16a",
     "originalArchiveObtained": false,
     "explicitRebuildAndRelock": true,
     "liveAssetsChanged": false
   },
   "tests": {
     "core": {
-      "passed": 284,
+      "passed": 308,
       "failed": 1,
       "skipped": 0,
       "failure": "Windows DPAPI Protect access denied; unchanged test retained"
@@ -28,7 +28,18 @@
     "coreTypesAndBuild": true,
     "packedConsumerTypecheck": true,
     "packedStdioConsumer": true,
-    "installedHealthChecks": 10
+    "installedHealthChecks": 10,
+    "nativeBodyAndLedger": {
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0,
+      "newConcurrentReceiptAndCloseCases": 2,
+      "staleNekoCatalogAssertionsUpdated": {
+        "operations": 130,
+        "readOnly": 45
+      }
+    },
+    "publicHostPackageImport": true
   },
   "providers": {
     "mineflayer": {
@@ -94,5 +105,25 @@
     "No default vanilla engine/scripts/reflexes or idle life-event subscription",
     "No new WebGL acceptance",
     "Wandscape remains gated and not deployed"
-  ]
+  ],
+  "distribution": "v4-20261013",
+  "numenConcurrency": {
+    "realFailureRetained": true,
+    "duplicateTerminalResultsObserved": 2,
+    "statusReadsCoalesced": true,
+    "closeDrainsIssuedReadsBeforeUnlock": true,
+    "strictJournalValidationRetained": true,
+    "failedJournalDeletedOrBypassedForSameBody": false,
+    "finalNewWorldBothProvidersPassed": true
+  },
+  "dpapiDisplayOnRetest": {
+    "passed": 7,
+    "failed": 1,
+    "currentUserRoundTrip": false,
+    "localMachineRoundTrip": true,
+    "currentUserHresult": "0x80070005",
+    "cryptographicService": "Running",
+    "productionCredentialStorageChanged": false,
+    "rootCauseDetermined": false
+  }
 }
