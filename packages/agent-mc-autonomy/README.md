@@ -70,6 +70,16 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.1: invalid tool calls keep the body connected
+
+Malformed arguments, unadvertised tool names, multiple simultaneous calls and
+attempts to cross the controller's turn boundary are rejected before dispatch.
+The exact model reply and a `dispatched: false` diagnostic remain in the private
+decision journal. A correction notice goes at the next request's dynamic tail;
+repeated invalid calls back off up to 60 seconds. The controller does not silently
+reroute an unadvertised call or disconnect the player for this planning error.
+Unknown native outcomes still block replay and require receipt reconciliation.
+
 The optional strategic loop belongs here as well:
 
 ```python

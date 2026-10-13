@@ -224,6 +224,62 @@ def test_incomplete_inference_recovery_is_bounded(framework_module, tmp_path, ru
     assert [args["action"] for name, args, _ in bridge.calls if name == "mc_protocol"].count("end_turn") == 3
 
 
+@pytest.mark.parametrize("bad_call", [
+    {"name": "mc_goal", "arguments": '{"arguments":{"action":"set","goal":"get food"},"name":"mc_goal"}'},
+    {"name": "mc_do", "arguments": "[]"},
+    {"name": "mc_do", "arguments": "{"},
+    {"name": "mc_invoke", "arguments": '{"name":"mc_connection","arguments":{"action":"disconnect"}}'},
+    {"name": "mc_protocol", "arguments": '{"action":"ack_barrier","id":"foreign"}'},
+])
+def test_invalid_model_call_is_not_dispatched_and_can_recover(framework_module, tmp_path, run_async, bad_call):
+    seen = []
+    invalid = choose()
+    invalid["tool_calls"][0]["function"] = bad_call
+
+    async def decide(messages, _):
+        seen.append(messages)
+        return invalid if len(seen) == 1 else choose()
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    bridge.tools.extend([
+        {"name": "mc_goal", "inputSchema": {"type": "object"}},
+        {"name": "mc_protocol", "inputSchema": {"type": "object", "properties": {}}},
+    ])
+    controller.persist(stopped=False)
+    tools = module.model_tools(bridge.tools)
+    run_async(controller.turn_once("survive", "prefix", tools))
+    assert controller.continuation_needed and controller.planner_retry_at > module.time.monotonic()
+    assert not bridge.closed and controller.inflight_request is None
+    assert not json.loads(controller.state_path.read_text()).get("uncertain")
+    assert all(name == "mc_protocol" and args["action"] in {"begin_turn", "facts", "end_turn"}
+               for name, args, _ in bridge.calls)
+    records = [json.loads(line) for line in (tmp_path / "decisions.jsonl").read_text().splitlines()]
+    assert records[0]["response"] == invalid
+    assert records[-1]["dispatched"] is False
+    run_async(controller.turn_once("survive", "prefix", tools))
+    assert "No tool was dispatched" in seen[1][-1]["content"]
+    assert len([row for row in bridge.calls if row[0] == "mc_do"]) == 1
+    assert controller.pending[("task", "body-1")]["terminal"] is False
+
+
+def test_multiple_model_calls_are_rejected_as_a_whole_and_rate_limited(framework_module, tmp_path, run_async):
+    async def decide(*_):
+        result = choose()
+        result["tool_calls"] += [{**result["tool_calls"][0], "id": "call-2"}]
+        return result
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    tools = module.model_tools(bridge.tools)
+    delays = []
+    for _ in range(5):
+        run_async(controller.turn_once("survive", "prefix", tools))
+        delays.append(controller.planner_retry_at - module.time.monotonic())
+    assert all(delay > 0 for delay in delays)
+    assert delays[-1] >= 59 and delays[-1] <= 60
+    assert not any(row[0] == "mc_do" for row in bridge.calls)
+    assert controller.inflight_request is None and not bridge.closed
+
+
 def test_running_actions_do_not_cause_idle_or_snapshot_replanning(framework_module, tmp_path, run_async, monkeypatch):
     decisions, polls, stopped = [], [], False
 
@@ -416,8 +472,8 @@ def test_advanced_router_cannot_invoke_host_connection(framework_module, tmp_pat
         return result
     module, bridge, controller = setup(framework_module, tmp_path, decide)
     bridge.tools.append({"name": "mc_goal", "inputSchema": {"type": "object"}})
-    with pytest.raises(ValueError, match="unavailable advanced tool"):
-        run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    assert controller.continuation_needed and "Unavailable advanced tool" in controller.planner_notice
     assert not any(row[0] in {"mc_do", "mc_connection"} for row in bridge.calls)
 
 

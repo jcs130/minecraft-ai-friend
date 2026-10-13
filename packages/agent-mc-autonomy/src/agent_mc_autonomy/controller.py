@@ -21,6 +21,10 @@ HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_visu
 DIRECT_TOOLS = {"mc_help", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape"}
 
 
+class ModelCallRejected(ValueError):
+    """Known local rejection before any dispatch or uncertainty journal."""
+
+
 def fact_fingerprint(facts):
     # The sample timestamp is useful context, but is not a decision trigger.
     return encode([(p["key"], p["text"]) for p in facts.get("parts", []) if p["key"] not in {"sample", "realclock"}])
@@ -191,6 +195,7 @@ class Controller:
         self.planner_notice = None
         self.tool_failure = None
         self.rejected_calls = {}
+        self.invalid_tool_calls = 0
         self.state_path = data / "host-state.json"
         self.fast_policy = fast_policy or FastPolicy(settings.fast)
         self.frame = None
@@ -417,6 +422,50 @@ class Controller:
         self.publish(native_queue=outcome(await self.bridge.call("mc_queue", {})),
                      facts=await self.protocol("facts"), pending=list(self.pending.values()))
 
+    def prepare_call(self, calls, tools):
+        if not isinstance(calls, list) or len(calls) != 1:
+            raise ModelCallRejected("Return one tool call at a time to honor native barriers.")
+        call = calls[0]
+        if not isinstance(call, dict) or not isinstance(call.get("id"), str) or not call["id"]:
+            raise ModelCallRejected("A tool call needs a non-empty string id.")
+        function = call.get("function")
+        if not isinstance(function, dict) or not isinstance(function.get("name"), str):
+            raise ModelCallRejected("A tool call needs a function name.")
+        name = function["name"]
+        if name not in {tool["function"]["name"] for tool in tools}:
+            raise ModelCallRejected("Unavailable Minecraft tool. Use mc_tool_help, then mc_invoke(name,arguments) for advanced capabilities; never call their names directly.")
+        try:
+            arguments = json.loads(function.get("arguments", ""))
+        except (ValueError, TypeError):
+            raise ModelCallRejected("Tool arguments must be one complete JSON object.") from None
+        if not isinstance(arguments, dict):
+            raise ModelCallRejected("Tool arguments must be a JSON object.")
+        available = {t["name"] for t in self.bridge.tools} - HIDDEN_TOOLS
+        if name == "mc_invoke":
+            target = arguments.get("name")
+            if not isinstance(target, str) or target not in available - DIRECT_TOOLS or not isinstance(arguments.get("arguments"), dict):
+                raise ModelCallRejected("Unavailable advanced tool. Read mc_tool_help and use only the advertised advanced names.")
+            name, arguments = target, arguments["arguments"]
+        if name == "mc_protocol" and arguments.get("action") not in sorted(READ_PROTOCOL):
+            raise ModelCallRejected("The host owns turn boundaries and cancellation; only task, facts, archive and archive_runs are exposed.")
+        if self.feedback_pending:
+            tags = next((t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])
+            if name != "mc_do" and {"act", "write", "speak"}.intersection(tags):
+                raise ModelCallRejected("Pending feedback must submit its body plan through mc_do.")
+        return call, name, arguments
+
+    def reject_model_call(self, error):
+        # Validation is not an uncertain action. Keep the exact response above,
+        # let the next bounded decision correct it, and leave the body connected.
+        self.invalid_tool_calls += 1
+        self.planner_notice = "No tool was dispatched. " + str(error)
+        with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
+            output.write(encode({"turnId": self.turn, "rejected": str(error), "dispatched": False}) + "\n")
+        delay = min(60, max(1, self.settings.min_decision_seconds) * 2 ** min(6, self.invalid_tool_calls - 1))
+        self.planner_retry_at = time.monotonic() + delay
+        self.continuation_needed = True
+        self.publish(planner_error="invalid_model_tool_call", invalid_tool_calls=self.invalid_tool_calls)
+
     async def turn_once(self, goal, prefix, tools):
         self.preempted = False
         self.deferred_wake = False
@@ -498,25 +547,14 @@ class Controller:
                 calls = response.get("tool_calls") or []
                 self.publish(last_message=(response.get("content") or "")[:1200])
                 if not calls:
+                    self.invalid_tool_calls = 0
                     return
-                if len(calls) != 1:
-                    raise ValueError("Model must return one tool call at a time to honor runtime barriers")
-                call = calls[0]
-                name = call["function"]["name"]
-                arguments = json.loads(call["function"]["arguments"])
-                if name not in {tool["function"]["name"] for tool in tools} or not isinstance(arguments, dict):
-                    raise ValueError("Model selected an unavailable Minecraft tool")
-                available = {t["name"] for t in self.bridge.tools} - HIDDEN_TOOLS
-                if name == "mc_invoke":
-                    if arguments.get("name") not in available - DIRECT_TOOLS or not isinstance(arguments.get("arguments"), dict):
-                        raise ValueError("Model selected an unavailable advanced tool")
-                    name, arguments = arguments["name"], arguments["arguments"]
-                if name == "mc_protocol" and arguments.get("action") not in READ_PROTOCOL:
-                    raise ValueError("The host owns turn boundaries and cancellation")
-                if self.feedback_pending:
-                    tags = next((t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])
-                    if name != "mc_do" and {"act", "write", "speak"}.intersection(tags):
-                        raise ValueError("Pending feedback must submit its body plan through mc_do")
+                try:
+                    call, name, arguments = self.prepare_call(calls, tools)
+                except ModelCallRejected as error:
+                    self.reject_model_call(error)
+                    return
+                self.invalid_tool_calls = 0
                 queue_error = None
                 if name in {"mc_do", "mc_scout"}:
                     if arguments.get("queue", "append") not in {"append", "afterCheckpoint", "now"}:
