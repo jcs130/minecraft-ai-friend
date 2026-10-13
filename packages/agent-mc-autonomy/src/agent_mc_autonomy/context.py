@@ -101,6 +101,9 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
     unique = {part["key"]: part for part in facts.get("parts", [])}
     priority = {key: rank for rank, key in enumerate(("body", "health", "place", "gear", "foodReserve", "queue", "lastTask", "structure"))}
     for key, fact in sorted(unique.items(), key=lambda item: priority.get(item[0], len(priority))):
+        # The internal change-detection hash is not gameplay evidence. Repeating
+        # it beside every original handle can evict the actual action outcome.
+        fact = {name: value for name, value in fact.items() if name != "revision"}
         if key == "lastTask":
             fact = {**fact, "text": spatial_text(fact.get("text", ""))}
         tail["current_facts"].append(fact)

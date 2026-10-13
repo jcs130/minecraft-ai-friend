@@ -70,6 +70,12 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.3: keep evidence instead of internal fact hashes
+
+Model-visible facts omit internal revision hashes so they cannot crowd out the
+latest action result. Original handles and full persisted observations remain
+unchanged; stable instructions still precede the fresh state at the request tail.
+
 ### 0.1.2: preserve orientation and the standing objective
 
 Ray previews retain the eye frame, measured world direction and native geometry

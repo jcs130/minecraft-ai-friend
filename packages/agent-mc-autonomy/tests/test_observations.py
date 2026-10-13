@@ -110,3 +110,21 @@ def test_current_inventory_receipt_is_not_replaced_by_an_older_scout_fact(framew
                                        context_tokens=base["total"] + 2700, reserved_output=1024)
     assert any(message.get("role") == "tool" and message.get("content") == receipt for message in messages)
     assert budget["total"] <= base["total"] + 2700
+
+
+def test_internal_fact_hashes_cannot_evict_the_action_result(framework_module):
+    context = importlib.import_module("agent_mc_autonomy.context")
+    facts = {"parts": [{"key": key, "text": "observed " + key, "revision": "a" * 64, "original": "log:" + "b" * 64}
+                       for key in ("body", "place", "gear", "foodReserve", "queue")]}
+    facts["parts"].append({"key": "lastTask", "text": "placement failed: occupied by grass_block; empty at (1,65,2)",
+                           "revision": "c" * 64, "original": "log:" + "d" * 64})
+    _, base = context.assemble("stable", [], "survive", {"parts": []}, [], [], context_tokens=32768, reserved_output=1024)
+    messages, budget = context.assemble("stable", [], "survive", facts, [], [],
+                                       context_tokens=base["total"] + 1150, reserved_output=1024)
+    tail = json.loads(messages[-1]["content"])
+    task = next(f for f in tail["current_facts"] if f["key"] == "lastTask")
+    assert "empty at (1,65,2)" in task["text"]
+    assert task["original"] == facts["parts"][-1]["original"]
+    assert not any("revision" in f for f in tail["current_facts"])
+    assert facts["parts"][0]["revision"] == "a" * 64
+    assert budget["total"] <= base["total"] + 1150
