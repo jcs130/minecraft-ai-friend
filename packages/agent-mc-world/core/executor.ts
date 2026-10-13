@@ -154,7 +154,7 @@ import { fmtDur } from './receipt.ts';
 import {
   FLEE_DEADLINE_MS, clearEscapeGoalOwner, digBackoffScene, digBlock, dropGoal, escapeIntent,
   findEntity, fmtDist, gotoGoal, holdTreadWater, onEscapeGoal, goalOwnerKind, levelTravelGoal, nextLongTravelLeg, matchBlockIds, readStamp, releaseBody,
-  renderRouteMenu, routeNote, setOwnedGoal, travelGoalReached, type DistanceMetric, walkOnlyPath, withRouteScene,
+  renderRouteMenu, routeNote, setOwnedGoal, travelGoalReached, type DistanceMetric, walkOnlyPath, withRouteScene, underwaterRouteNote,
 } from './travel.ts';
 import {
   HOSTILE, MELEE_CHASE, MELEE_REACH,
@@ -687,9 +687,10 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
         const startDist = call.groundY
           ? Math.hypot(me.x - target.x, me.z - target.z)
           : Math.hypot(me.x - target.x, me.y - target.y, me.z - target.z);
-        return renderRouteMenu(probes, target, {
-          startDist, diag: call.groundY ? null : ctx.probeTarget?.(target) ?? null,
-        });
+        const waterNote = underwaterRouteNote(bot, target, finalGoal);
+        return [waterNote, renderRouteMenu(probes, target, {
+          startDist, diag: call.groundY || waterNote ? null : ctx.probeTarget?.(target) ?? null,
+        })].filter(Boolean).join('\n');
       }
       const note = routeNote(bot, travelContext, target, call.groundY || call.exact ? finalGoal : undefined);
       const startedAt = Date.now();

@@ -85,7 +85,7 @@ export type AttackMode = 'auto' | 'melee' | 'ranged' | 'kite';
 export type SkillCall = StepBounds & (
   | { skill: 'goto'; at: Anchor; dimension?: string; groundY?: true; exact?: boolean; walkOnly?: boolean; dryRun?: boolean }
   | { skill: 'look'; at: Anchor }
-  | { skill: 'control'; keys: ControlKey[]; durationMs: number; mode: 'ground' | 'flight'; yawDeg?: number; pitchDeg?: number }
+  | { skill: 'control'; keys: ControlKey[]; durationMs: number; mode: 'ground' | 'water' | 'flight'; yawDeg?: number; pitchDeg?: number }
   | { skill: 'transit'; at: Anchor }
   | { skill: 'goto_player'; name: string }
   | { skill: 'follow'; name: string }
@@ -400,14 +400,14 @@ function parseControl(c: Record<string, unknown>, at: string): ParseResult {
     return { error: `${at} control 的 durationMs 要 ${CONTROL_DURATION.minMs}–${CONTROL_DURATION.maxMs} 之间的整数毫秒` };
   }
   const mode = c.mode ?? 'ground';
-  if (mode !== 'ground' && mode !== 'flight') return { error: `${at} control 的 mode 要 ground 或 flight` };
+  if (mode !== 'ground' && mode !== 'water' && mode !== 'flight') return { error: `${at} control 的 mode 要 ground、water 或 flight` };
   for (const [field, limit] of [['yawDeg', 180], ['pitchDeg', 90]] as const) {
     const value = c[field];
     if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > limit)) {
       return { error: `${at} control 的 ${field} 要 -${limit}–${limit} 之间的有限角度` };
     }
   }
-  if (!keys.length && !c.yawDeg && !c.pitchDeg) return { error: `${at} control 至少提供一个按键或非零转角` };
+  if (!keys.length && !c.yawDeg && !c.pitchDeg && mode !== 'water') return { error: `${at} control 至少提供一个按键或非零转角（水中 mode:water 可空 keys 自然下沉）` };
   return { step: { skill: 'control', keys, durationMs, mode,
     ...(c.yawDeg === undefined ? {} : { yawDeg: c.yawDeg as number }),
     ...(c.pitchDeg === undefined ? {} : { pitchDeg: c.pitchDeg as number }) } };
@@ -1056,6 +1056,7 @@ const SKILLS: readonly SkillSpec[] = [
   {
     name: 'control',
     doc: `{"skill":"control","keys":["forward","jump"],"durationMs":500,"mode":"ground"} 短时直接按键，不计算寻路、不挖方块。每步 50–2000 毫秒，结束或中断松开按键；跳跃、服务端跃空的冲量由普通游戏物理处理。
+{"skill":"control","mode":"water","keys":[],"durationMs":1000} 已在水中时暂停自动踩水，松开上浮键自然下沉；jump 上浮、WASD 水平游动。仍用原有物理和碰撞，不改坐标/速度；当前物理不支持俯仰驱动潜泳或 sneak 加速下潜。结束恢复踩水，低氧/环境自救仍可接管；回执核对实际高度、头部浸水与氧气，未知不算满氧。不能替代水下绕障寻路。
 {"skill":"control","keys":["forward","jump"],"durationMs":1000,"mode":"flight","yawDeg":30} 先相对当前视角左转 30 度，再向前上方斜飞。飞行必须已有服务端许可，可与授予许可的 chat 同单用 needs 连接；最多等待许可 2 秒。
 keys: forward/back/left/right/jump/sneak/sprint；相反方向不能同按。flight 中 WASD 水平移动，jump 上升、sneak 下降，可边平移边升降；forward+sprint 水平加速，升降速度不翻倍。方向按当前视角水平朝向，pitch 不改变升降。受控短时飞行使用服务端能力速度及保守步长，不复刻完整创造模式惯性。yawDeg 正数左转、pitchDeg 正数抬头；单位度。空 keys 配转角可原地转头。
 ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight 检查身位碰撞和区块加载，遇遮挡停止；不会绕路。位置修正、死亡、断线或身体被其他任务接管时结束本步，不从旧坐标继续移动。
@@ -1064,7 +1065,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     fields: [
       { key: 'keys', kind: 'opaque', required: true, schema: { type: 'array', items: { type: 'string', enum: [...CONTROL_KEYS] } } },
       { key: 'durationMs', kind: 'int', lo: CONTROL_DURATION.minMs, hi: CONTROL_DURATION.maxMs, def: CONTROL_DURATION.defaultMs, unit: '毫秒' },
-      { key: 'mode', kind: 'enum', values: ['ground', 'flight'], error: 'control 的 mode 要 ground 或 flight' },
+      { key: 'mode', kind: 'enum', values: ['ground', 'water', 'flight'], error: 'control 的 mode 要 ground、water 或 flight' },
       { key: 'yawDeg', kind: 'opaque', schema: { type: 'number', minimum: -180, maximum: 180 }, doc: '相对视角，正数左转，单位度' },
       { key: 'pitchDeg', kind: 'opaque', schema: { type: 'number', minimum: -90, maximum: 90 }, doc: '相对视角，正数抬头，单位度' },
     ],
@@ -1083,6 +1084,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     doc: `{"skill":"goto","at":[100,-20],"dimension":"overworld"} 去坐标。dimension 是当前维度前置条件,不符就不动。
                                                  **只写 [x,z] = 按水平距离到那儿附近**，高度不进到达判据，也不保证站上陆地；长途按近处航段推进，不必猜未加载终点的高度。途中受阻会报告实际位置。
                                                  要指定楼层或高度,请给完整 [x,y,z]。
+                                                 水路按水面通行；当前不规划主动下潜，填水下 Y 不能补齐这项能力。已入水可用 control(mode:water) 短步游动/下沉，核验高度与氧气；surface 换气。
                                                  完整坐标的到达判定允许离目标格 1 格，回执给出实际落脚格；到门旁不代表已经进屋。
                                                  exact:true 要完整 [x,y,z]，脚下必须到该格；用于穿过门洞或精确站位，不会把门外邻格当作进屋。
                                                  dryRun 只计算路线，不移动身体。穿过门洞要选择门另一侧的可站立空气格，并核对实际位置。

@@ -19,7 +19,7 @@ import { type Cell } from './geometry.ts';
 import { probabilisticDropsOf } from './inventory.ts';
 import { PLACE_REACH } from './cell-facts.ts';
 import { flightState } from './flight.ts';
-import { cancelControlInput } from './skills-control.ts';
+import { cancelControlInput, waterControlActive } from './skills-control.ts';
 
 export const { goals } = pathfinderPkg;
 
@@ -91,6 +91,12 @@ export function installTreadWater(bot: Bot): void {
   bot.on('path_reset', () => { path = []; });
   bot.on('physicsTick', () => {
     if (!bot.entity) return;
+    if (waterControlActive(bot)) {
+      // Do not clear jump here: it may be an explicit ascent or a rescue input.
+      // The input lease releases the former; emergency body ownership stays intact.
+      treading = false;
+      return;
+    }
     const wet = bodyInWater(bot);
     const next = path[0];
     const walking = bot.pathfinder?.isMoving() && next !== undefined
@@ -241,6 +247,16 @@ export function whereFromMe(bot: Bot, target: { x: number; y: number; z: number 
   return `${dir ? DIRECTION_ZH[dir] + '边' : '就在脚边'}约 ${away} 格${height}`;
 }
 
+/** Capability boundary, not a claim that the measured water cell is unreachable. */
+export function underwaterRouteNote(bot: Bot, target: Cell,
+  goal?: InstanceType<typeof goals.Goal>): string | null {
+  if (goal instanceof goals.GoalNearXZ || target.y >= Math.floor(bot.entity.position.y)) return null;
+  const feet = bot.blockAt(new Vec3(target.x, target.y, target.z));
+  const head = bot.blockAt(new Vec3(target.x, target.y + 1, target.z));
+  if (!feet || !head || !WATER_BLOCKS.has(feet.name) || !WATER_BLOCKS.has(head.name)) return null;
+  return '目标需要下潜：当前 goto 不规划水下下降路线，寻路失败不代表目标不可达；已入水可用 control(mode:water) 短步下沉并核验高度/氧气，surface 换气';
+}
+
 /**
  * 受阻回执附位置、目标高差和三种路线试算；行动选择留给 agent。
  * 目标格分诊结论优先呈现，A* 超时信息随后。
@@ -256,10 +272,12 @@ export function withRouteScene(
   // 目标格分诊问的是"那一格站不站得进人",只对精确坐标目标成立。水平行军的 target.y
   // 是脚下高度凑出来的、根本不是目标的一部分,拿它去分诊会凭空造出「站不进人」。
   const probes = ctx.probeRoutes?.(target, goal);
-  const diag = goal || probes?.some((probe) => probe.status === 'complete')
+  const waterNote = underwaterRouteNote(bot, target, goal);
+  const diag = waterNote || goal || probes?.some((probe) => probe.status === 'complete')
     ? null : ctx.probeTarget?.(target) ?? null;
   const scene = [
     ...extra,
+    ...(waterNote && !extra.some(line => line.includes(waterNote)) ? [waterNote] : []),
     `我在 (${Math.round(me.x)}, ${Math.round(me.y)}, ${Math.round(me.z)}),目标在${whereFromMe(bot, target)}`,
   ];
   if (probes && probes.length > 0) {
@@ -305,19 +323,20 @@ export function routeCostly(p: RouteProbe, startDist: number): boolean {
 export function routeNote(bot: Bot, ctx: SkillContext, target: { x: number; y: number; z: number },
   goal?: InstanceType<typeof goals.Goal>): string | null {
   const probes = ctx.probeRoutes?.(target, goal);
-  if (!probes || probes.length === 0) return null;
+  const waterNote = underwaterRouteNote(bot, target, goal);
+  if (!probes || probes.length === 0) return waterNote;
   const style = probes.find((p) => p.profile === 'style') ?? probes[0];
   const me = bot.entity.position;
   const startDist = goal instanceof goals.GoalNearXZ
     ? Math.hypot(me.x - target.x, me.z - target.z)
     : Math.hypot(me.x - target.x, me.y - target.y, me.z - target.z);
-  const diag = !goal && !probes.some((probe) => probe.status === 'complete')
+  const diag = !waterNote && !goal && !probes.some((probe) => probe.status === 'complete')
     ? ctx.probeTarget?.(target) ?? null : null;
   if (diag && diag.kind !== 'open') {
     throw new SkillBlocked(renderRouteMenu(probes, target, { startDist, diag }));
   }
-  if (!routeCostly(style, startDist)) return null;
-  return renderRouteMenu(probes, target, { startDist, diag, head: '出发前按三种走法的试算:' });
+  if (!routeCostly(style, startDist)) return waterNote;
+  return [waterNote, renderRouteMenu(probes, target, { startDist, diag, head: '出发前按三种走法的试算:' })].filter(Boolean).join('\n');
 }
 
 export interface PathSupportFailure {
