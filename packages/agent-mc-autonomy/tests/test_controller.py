@@ -341,7 +341,60 @@ def test_invalid_model_call_is_not_dispatched_and_can_recover(framework_module, 
     assert controller.pending[("task", "body-1")]["terminal"] is False
 
 
-def test_multiple_model_calls_are_rejected_as_a_whole_and_rate_limited(framework_module, tmp_path, run_async):
+@pytest.mark.parametrize("last_tool", ["mc_do", "mc_scout"])
+@pytest.mark.parametrize("read_boundary", ["none", "end", "failed", "stop"])
+def test_read_batch_runs_in_order_and_obeys_native_boundary(framework_module, tmp_path, run_async, last_tool, read_boundary):
+    planner = importlib.import_module("agent_mc_autonomy.planner")
+    calls = [{"id": "bag", "type": "function", "function": {"name": "mc_bag", "arguments": "{}"}},
+             {"id": "next", "type": "function", "function": {"name": last_tool, "arguments": '{"steps":[]}'}}]
+
+    async def decide(*_):
+        return planner.decision({"content": "Read inventory, then submit the selected task", "tool_calls": calls})
+
+    stopped = False
+    module, bridge, controller = setup(framework_module, tmp_path, decide, lambda: stopped)
+    bridge.tools.extend([{"name": name, "inputSchema": {"type": "object"}} for name in ("mc_bag", "mc_scout")])
+    original_call = bridge.call
+
+    async def call(name, args, **kwargs):
+        nonlocal stopped
+        if name == "mc_bag":
+            bridge.calls.append((name, args, kwargs))
+            stopped = read_boundary == "stop"
+            return {"structuredContent": {"protocol": "agent-mc/v1", "text": "wood=34",
+                                          "endsTurn": read_boundary == "end", "failed": read_boundary == "failed"}}
+        return await original_call("mc_do" if name == "mc_scout" else name, args, **kwargs)
+
+    bridge.call = call
+    run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    relevant = [name for name, *_ in bridge.calls if name in {"mc_bag", "mc_do"}]
+    assert relevant == (["mc_bag", "mc_do"] if read_boundary == "none" else ["mc_bag"])
+    exchange = controller.groups[-1]
+    assert exchange[0]["tool_calls"] == calls
+    assert [row["tool_call_id"] for row in exchange[1:]] == ["bag", "next"]
+    if read_boundary != "none":
+        skipped = json.loads(exchange[-1]["content"])
+        assert skipped["dispatched"] is False and skipped["origin"] == "controller_boundary"
+        assert not controller.pending
+    else:
+        assert controller.pending[("task", "body-1")]["terminal"] is False
+
+
+def test_invalid_later_call_rejects_whole_batch_before_reading(framework_module, tmp_path, run_async):
+    async def decide(*_):
+        response = choose()
+        response["tool_calls"].insert(0, {"id": "read", "type": "function", "function": {"name": "mc_help", "arguments": "{}"}})
+        response["tool_calls"][1]["function"]["arguments"] = "{"
+        return response
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    bridge.tools.append({"name": "mc_help", "inputSchema": {"type": "object"}})
+    run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    assert not any(name in {"mc_help", "mc_do"} for name, *_ in bridge.calls)
+    assert "JSON" in controller.planner_notice
+
+
+def test_multiple_mutating_calls_are_rejected_as_a_whole_and_rate_limited(framework_module, tmp_path, run_async):
     async def decide(*_):
         result = choose()
         result["tool_calls"] += [{**result["tool_calls"][0], "id": "call-2"}]

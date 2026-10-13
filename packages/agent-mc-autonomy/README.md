@@ -70,6 +70,15 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.8: accept bounded sequential read batches
+
+Providers may return multiple calls even when parallel calling is disabled. The
+controller validates the complete response before dispatch, runs immediate reads
+in order, and allows only one queued or acting tool as the final call. A failure,
+stop request or native turn boundary leaves remaining calls explicitly marked as
+not dispatched in model history. Native work still owns completion and queueing;
+unknown outcomes still block replay.
+
 ### 0.1.7: keep the body connected during invalid planner replies
 
 Repeated incomplete/malformed model replies have dispatched no native action.

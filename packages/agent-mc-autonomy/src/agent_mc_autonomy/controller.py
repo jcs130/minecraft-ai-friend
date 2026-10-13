@@ -20,6 +20,7 @@ READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
 HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_visual"}
 DIRECT_TOOLS = {"mc_help", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape"}
 READ_ACTIVITY_TOOLS = {"mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original"}
+IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout"}
 
 
 class ModelCallRejected(ValueError):
@@ -456,6 +457,67 @@ class Controller:
                 raise ModelCallRejected("Pending feedback must submit its body plan through mc_do.")
         return call, name, arguments
 
+    def prepare_calls(self, calls, tools):
+        if not isinstance(calls, list) or not 1 <= len(calls) <= 8:
+            raise ModelCallRejected("Return at most eight calls, with any queued or acting tool last.")
+        prepared = [self.prepare_call([call], tools) for call in calls]
+        if len({call["id"] for call, _, _ in prepared}) != len(prepared):
+            raise ModelCallRejected("Tool call ids must be unique within a response.")
+        if any(name not in IMMEDIATE_READ_TOOLS for _, name, _ in prepared[:-1]):
+            raise ModelCallRejected("Only immediate read tools may precede the final call. Submit one queued or acting tool last, then wait for its receipt.")
+        return prepared
+
+    async def execute_model_call(self, name, arguments):
+        """Dispatch one validated call; return its result and native turn boundary."""
+        queue_error = None
+        if name in {"mc_do", "mc_scout"}:
+            if arguments.get("queue", "append") not in {"append", "afterCheckpoint", "now"}:
+                queue_error = {"failed": True, "execution": None, "origin": "controller_validation",
+                    "text": "Invalid arguments: queue must be append, afterCheckpoint or now. Replacement is unavailable; no Minecraft action was dispatched. Correct the policy explicitly."}
+            else:
+                arguments = {**arguments, "queue": arguments.get("queue", "append")}
+                if name == "mc_do" and self.active_goal and self.active_goal.get("mode") == "insert":
+                    arguments["queue"] = "afterCheckpoint"
+                elif name == "mc_do" and self.feedback_pending:
+                    arguments["queue"] = "append"
+        request_id = str(uuid.uuid4())
+        rejected_key = json.dumps([name, arguments], sort_keys=True, ensure_ascii=False)
+        if rejected_key in self.rejected_calls:
+            # A known pre-dispatch rejection cannot be replayed by a later batch.
+            self.planner_notice = "The exact same call already failed argument validation. It was NOT dispatched again. Consult mc_help/mc_tool_help and change the invalid parameters."
+            self.tool_failure = self.rejected_calls[rejected_key]
+            self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
+            self.continuation_needed = True
+            self.publish(planner_error="repeated_invalid_tool_call", rejected_tool=name)
+            result = {"failed": True, "dispatched": False, "origin": "controller_validation", "text": self.planner_notice,
+                      "previous_failure": self.tool_failure}
+            return result, encode(result), True
+        if queue_error:
+            result = queue_error
+            compact = await self.archive_receipt(request_id, name, result)
+        else:
+            result, compact = await self.dispatch(name, arguments, request_id)
+        if not result.get("failed"):
+            if name in READ_ACTIVITY_TOOLS:
+                self.read_activity[name] = min(999, self.read_activity.get(name, 0) + 1)
+            elif result.get("execution") and (name == "mc_do" or "act" in next(
+                    (t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])):
+                self.read_activity.clear()
+            self.publish(read_activity=dict(self.read_activity))
+        if result.get("failed"):
+            self.tool_failure = failure_context(self.bridge.tools, name, arguments, result)
+            failure = str(result.get("text", ""))
+            parse_rejected = name in {"mc_do", "mc_scout"} and failure.startswith(f"[{name} 失败]") and "。你写的是 " in failure
+            if not result.get("execution") and (failure.startswith("Invalid arguments:") or parse_rejected):
+                if len(self.rejected_calls) >= 16:
+                    self.rejected_calls.clear()
+                self.rejected_calls[rejected_key] = self.tool_failure
+        elif result.get("execution"):
+            self.tool_failure = None
+        control = result.get("control") or {}
+        boundary = bool(control.get("endTurnRequested") or result.get("endsTurn") or (self.current_work() and not self.feedback_pending))
+        return result, compact, boundary
+
     def reject_model_call(self, error):
         # Validation is not an uncertain action. Keep the exact response above,
         # let the next bounded decision correct it, and leave the body connected.
@@ -560,64 +622,30 @@ class Controller:
                     self.planner_notice = "The previous reply had no tool calls; no game action was dispatched from it. Use the current native queue and facts to decide whether to act or keep waiting."
                     return
                 try:
-                    call, name, arguments = self.prepare_call(calls, tools)
+                    prepared = self.prepare_calls(calls, tools)
                 except ModelCallRejected as error:
                     self.reject_model_call(error)
                     return
                 self.invalid_tool_calls = 0
-                queue_error = None
-                if name in {"mc_do", "mc_scout"}:
-                    if arguments.get("queue", "append") not in {"append", "afterCheckpoint", "now"}:
-                        queue_error = {"failed": True, "execution": None, "origin": "controller_validation",
-                            "text": "Invalid arguments: queue must be append, afterCheckpoint or now. Replacement is unavailable; no Minecraft action was dispatched. Correct the policy explicitly."}
+                exchange = [{"role": "assistant", "content": response.get("content"), "tool_calls": calls}]
+                boundary = False
+                for call, name, arguments in prepared:
+                    if boundary or self.stop_requested():
+                        boundary = True
+                        result = {"failed": True, "dispatched": False, "origin": "controller_boundary",
+                                  "text": "Not dispatched: an earlier result ended the turn, failed, started native work, or stop was requested. Replan from current receipts."}
+                        compact = encode(result)
                     else:
-                        arguments = {**arguments, "queue": arguments.get("queue", "append")}
-                        if name == "mc_do" and self.active_goal and self.active_goal.get("mode") == "insert":
-                            arguments["queue"] = "afterCheckpoint"
-                        elif name == "mc_do" and self.feedback_pending:
-                            arguments["queue"] = "append"
-                request_id = str(uuid.uuid4())
-                rejected_key = json.dumps([name, arguments], sort_keys=True, ensure_ascii=False)
-                if rejected_key in self.rejected_calls:
-                    # Only known pre-dispatch schema rejections enter this set.
-                    # No action is replayed or silently rewritten on the user's behalf.
-                    self.planner_notice = "The exact same call already failed argument validation. It was NOT dispatched again. Consult mc_help/mc_tool_help and change the invalid parameters."
-                    self.tool_failure = self.rejected_calls[rejected_key]
-                    self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
-                    self.continuation_needed = True
-                    self.publish(planner_error="repeated_invalid_tool_call", rejected_tool=name)
-                    return
-                if queue_error:
-                    result = queue_error
-                    compact = await self.archive_receipt(request_id, name, result)
-                else:
-                    result, compact = await self.dispatch(name, arguments, request_id)
-                if not result.get("failed"):
-                    if name in READ_ACTIVITY_TOOLS:
-                        # Bounded activity evidence survives history eviction. It
-                        # does not decide that a scan is useless or block one.
-                        self.read_activity[name] = min(999, self.read_activity.get(name, 0) + 1)
-                    elif result.get("execution") and (name == "mc_do" or "act" in next(
-                            (t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])):
-                        self.read_activity.clear()
-                    self.publish(read_activity=dict(self.read_activity))
-                if result.get("failed"):
-                    self.tool_failure = failure_context(self.bridge.tools, name, arguments, result)
-                    failure = str(result.get("text", ""))
-                    # Pinned core enqueueTool returns this exact parse-error form
-                    # before admission or dispatch. Runtime/unknown errors do not.
-                    parse_rejected = name in {"mc_do", "mc_scout"} and failure.startswith(f"[{name} 失败]") and "。你写的是 " in failure
-                    if not result.get("execution") and (failure.startswith("Invalid arguments:") or parse_rejected):
-                        if len(self.rejected_calls) >= 16:
-                            self.rejected_calls.clear()
-                        self.rejected_calls[rejected_key] = self.tool_failure
-                elif result.get("execution"):
-                    self.tool_failure = None
-                self.groups.append([{"role": "assistant", "content": response.get("content"), "tool_calls": calls},
-                                    {"role": "tool", "tool_call_id": call["id"], "content": compact}])
+                        result, compact, boundary = await self.execute_model_call(name, arguments)
+                        if len(prepared) > 1 and result.get("failed"):
+                            boundary = True
+                            self.continuation_needed = True
+                    # Every advertised call gets a result, including the skipped
+                    # suffix. Never silently drop calls or cross native barriers.
+                    exchange.append({"role": "tool", "tool_call_id": call["id"], "content": compact})
+                self.groups.append(exchange)
                 self.groups = self.groups[-8:]
-                control = result.get("control") or {}
-                if control.get("endTurnRequested") or result.get("endsTurn") or (self.current_work() and not self.feedback_pending):
+                if boundary:
                     return
             # A bounded documentation/read chain can continue in a fresh turn;
             # waiting for an unrelated world change here would strand the goal.

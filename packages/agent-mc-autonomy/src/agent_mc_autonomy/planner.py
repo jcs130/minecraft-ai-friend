@@ -31,7 +31,7 @@ def decision(message: dict) -> dict:
     if not isinstance(message, dict) or not isinstance(message.get("content"), (str, type(None))):
         raise ValueError("brain_response_invalid")
     calls = message.get("tool_calls") or []
-    if not isinstance(calls, list) or len(calls) > 1:
+    if not isinstance(calls, list) or len(calls) > 8:
         raise ValueError("brain_response_invalid")
     if not calls and not (message.get("content") or "").strip():
         raise ValueError("brain_response_empty")
@@ -43,6 +43,8 @@ def decision(message: dict) -> dict:
                 or not isinstance(function, dict) or not isinstance(function.get("name"), str)
                 or not function["name"] or not isinstance(function.get("arguments"), str)):
             raise ValueError("brain_response_invalid")
+    if len({call["id"] for call in calls}) != len(calls):
+        raise ValueError("brain_response_duplicate_call_id")
     return {"content": message.get("content"), "tool_calls": calls}
 
 
