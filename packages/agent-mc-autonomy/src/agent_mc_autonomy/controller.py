@@ -550,6 +550,11 @@ class Controller:
                 self.publish(last_message=(response.get("content") or "")[:1200])
                 if not calls:
                     self.invalid_tool_calls = 0
+                    # A plain plan is still model history. Dropping it gives an
+                    # unchanged world the same request on every idle wakeup.
+                    self.groups.append([{"role": "assistant", "content": response.get("content")}])
+                    self.groups = self.groups[-8:]
+                    self.planner_notice = "The previous reply had no tool calls; no game action was dispatched from it. Use the current native queue and facts to decide whether to act or keep waiting."
                     return
                 try:
                     call, name, arguments = self.prepare_call(calls, tools)

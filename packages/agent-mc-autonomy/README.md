@@ -70,6 +70,14 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.5: retain plans that did not submit work
+
+Plain replies stay in bounded assistant history. The next dynamic tail records
+that no action was dispatched from that reply, so an idle wakeup is not an
+unexplained repeat of the same request. This does not force another inference,
+submit a guessed action, or interrupt useful native work. The exact response
+remains in the private decision journal.
+
 ### 0.1.4: retain bounded read activity across short history windows
 
 The dynamic request tail includes successful read-call counts since the last

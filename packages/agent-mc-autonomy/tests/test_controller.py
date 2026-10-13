@@ -124,6 +124,30 @@ def test_read_activity_survives_pruned_history_until_a_body_action_is_accepted(f
     assert "read_activity" not in seen[-1]
 
 
+def test_plain_plan_is_retained_without_dispatching_or_forcing_another_turn(framework_module, tmp_path, run_async):
+    seen = []
+    plan = "已有工作台和工具，接下来寻找食物并准备庇护所。"
+
+    async def decide(messages, _):
+        seen.append(messages)
+        return {"content": plan, "tool_calls": []}
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    tools = module.model_tools(bridge.tools)
+    run_async(controller.turn_once("survive", "prefix", tools))
+    assert not controller.continuation_needed
+    assert not controller.pending
+    run_async(controller.turn_once("survive", "prefix", tools))
+    assert {"role": "assistant", "content": plan} in seen[-1]
+    assert "no game action was dispatched" in json.loads(seen[-1][-1]["content"])["planner_notice"]
+    assert not any(name == "mc_do" for name, _, _ in bridge.calls)
+    for _ in range(10):
+        run_async(controller.turn_once("survive", "prefix", tools))
+    assert len(controller.groups) == 8
+    journal = [json.loads(line) for line in (tmp_path / "decisions.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert all(row["response"]["content"] == plan for row in journal)
+
+
 def test_rejected_body_action_does_not_erase_read_activity(framework_module, tmp_path, run_async):
     choices = iter(["mc_help", "mc_do", "mc_help"])
     seen = []
