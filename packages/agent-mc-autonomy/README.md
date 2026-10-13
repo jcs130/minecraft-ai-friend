@@ -70,6 +70,15 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.7: keep the body connected during invalid planner replies
+
+Repeated incomplete/malformed model replies have dispatched no native action.
+They back off exponentially up to five minutes instead of disconnecting the
+Minecraft client after the third rejection. Normal event/stop handling and
+native reflexes stay alive; the next valid response clears the backoff. Exact
+rejections remain in the private journal. Unknown native outcomes still stop
+execution and require reconciliation rather than replay.
+
 ### 0.1.6: keep useful evidence in strategic reviews
 
 The bounded main-brain summary retains more of the objective and inventory,

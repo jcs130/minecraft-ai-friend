@@ -522,9 +522,12 @@ class Controller:
                     self.planner_failures += 1
                     self.planner_notice = "The previous model response was invalid or incomplete. No tool from it was dispatched. Return one concise, complete tool call or a short reply; split large plans into small batches."
                     self.publish(planner_error=str(error), planner_failures=self.planner_failures)
-                    if self.planner_failures >= 3:
-                        raise
-                    self.planner_retry_at = time.monotonic() + min(60, self.settings.min_decision_seconds * 2 ** (self.planner_failures - 1))
+                    # This response has not dispatched a tool. Keep the native
+                    # connection/reflexes alive while the planner backs off;
+                    # an invalid model reply is not an unknown body outcome.
+                    delay = min(300, max(5, self.settings.min_decision_seconds) * 2 ** min(self.planner_failures - 1, 6))
+                    self.planner_retry_at = time.monotonic() + delay
+                    self.publish(planner_retry_seconds=delay)
                     self.continuation_needed = True
                     return
                 if self.stop_requested() or response is None:
@@ -532,7 +535,7 @@ class Controller:
                 self.planner_failures = 0
                 self.planner_retry_at = 0.0
                 self.planner_notice = None
-                self.publish(planner_error=None, planner_failures=0)
+                self.publish(planner_error=None, planner_failures=0, planner_retry_seconds=0)
                 model_status = response.get("model_status", {})
                 if model_status:
                     self.publish(model_status=model_status, autonomy_running=model_status.get("route") != "unavailable")

@@ -276,22 +276,31 @@ def test_rejected_inference_keeps_body_and_latest_receipt_then_recovers(framewor
     assert records[1]["response"] == choose()
 
 
-def test_incomplete_inference_recovery_is_bounded(framework_module, tmp_path, run_async):
+def test_repeated_incomplete_inference_backs_off_without_disconnecting_body(framework_module, tmp_path, run_async):
     planner = importlib.import_module("agent_mc_autonomy.planner")
+    recovered = [False]
 
     async def decide(*_):
+        if recovered[0]:
+            return choose()
         raise planner.PlannerResponseError({"choice": {"finish_reason": "length"}})
 
     module, bridge, controller = setup(framework_module, tmp_path, decide)
     controller.persist(stopped=False)
     tools = module.model_tools(bridge.tools)
-    for _ in range(2):
+    for _ in range(10):
         run_async(controller.turn_once("survive", "prefix", tools))
-    with pytest.raises(planner.PlannerResponseError):
-        run_async(controller.turn_once("survive", "prefix", tools))
-    assert controller.planner_failures == 3 and controller.inflight_request is None
+        assert 0 < controller.planner_retry_at - module.time.monotonic() <= 300
+    assert controller.planner_failures == 10 and controller.inflight_request is None
+    assert controller.planner_retry_at - module.time.monotonic() >= 299
+    assert controller.continuation_needed and not bridge.closed
+    assert not json.loads(controller.state_path.read_text())["stopped"]
     assert not any(name == "mc_do" for name, *_ in bridge.calls)
-    assert [args["action"] for name, args, _ in bridge.calls if name == "mc_protocol"].count("end_turn") == 3
+    assert [args["action"] for name, args, _ in bridge.calls if name == "mc_protocol"].count("end_turn") == 10
+    recovered[0] = True
+    run_async(controller.turn_once("survive", "prefix", tools))
+    assert controller.planner_failures == 0 and controller.planner_retry_at == 0
+    assert len([name for name, *_ in bridge.calls if name == "mc_do"]) == 1
 
 
 @pytest.mark.parametrize("bad_call", [
