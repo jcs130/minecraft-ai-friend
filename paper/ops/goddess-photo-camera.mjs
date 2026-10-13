@@ -6,6 +6,7 @@ import {readFile, access} from 'node:fs/promises';
 import {randomBytes, createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import path from 'node:path';
+import {photoImageQuality} from './photo-image-quality.mjs';
 
 const CHANNEL = 'mcagent:photo';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -36,7 +37,7 @@ export function startGoddessPhotoCamera(bot, options = {}) {
   let settings, browser, active, cameraId, heartbeat, stopped = false, available = false;
   const reply = (type, job) => {
     if (bot._client.state !== 'play') return;
-    bot._client.write('custom_payload', {channel:CHANNEL, data:Buffer.from(JSON.stringify({type, ...(type === 'ready' ? {idle:active == null} : {}), ...(job ? {job:job.job,nonce:job.nonce,...(job.reason ? {reason:job.reason} : {})} : {})}))});
+    bot._client.write('custom_payload', {channel:CHANNEL, data:Buffer.from(JSON.stringify({type, ...(type === 'ready' ? {idle:active == null} : {}), ...(job ? {job:job.job,nonce:job.nonce,...(job.reason ? {reason:job.reason} : {}),...(job.image?{image:job.image}:{})} : {})}))});
   };
   const stopJob = () => { active?.abort.abort(); };
   const onCamera = p => { cameraId = p.cameraId; if (active && cameraId !== active.job.entityId) stopJob(); };
@@ -205,13 +206,21 @@ export function startGoddessPhotoCamera(bot, options = {}) {
       const canvas = await page.$('#viewer-canvas');
       const png = Buffer.from(await canvas.screenshot({type:'png'}));
       if (png.length < 1024 || png.length > 8 * 1024 * 1024) throw Error('PHOTO_IMAGE_SIZE_INVALID');
+      // Inspect the very PNG that is uploaded, not a differently-sized preview or client claim.
+      const pixels=await page.evaluate(async base64=>{
+        const source=new Image();source.src='data:image/png;base64,'+base64;await source.decode();
+        const sample=document.createElement('canvas');sample.width=96;sample.height=96;
+        const ctx=sample.getContext('2d',{willReadFrequently:true});ctx.drawImage(source,0,0,96,96);
+        return {width:source.naturalWidth,height:source.naturalHeight,data:Array.from(ctx.getImageData(0,0,96,96).data)};
+      },png.toString('base64'));
+      const image={...photoImageQuality({width:96,height:96,data:pixels.data}),width:pixels.width,height:pixels.height,sha256:createHash('sha256').update(png).digest('hex')};
       guard();
       const body = new FormData(); body.append('image',new Blob([png],{type:'image/png'}),'photo.png');
-      reply('uploading',job);
+      reply('uploading',{...job,image});
       const response = await fetch(job.uploadBase + '/upload?id=' + job.uploadId,{method:'POST',body,redirect:'error',signal});
       if (!response.ok) throw Error('PHOTO_IMPORT_REJECTED');
       await response.arrayBuffer();
-      reply('uploaded',job);
+      reply('uploaded',{...job,image});
       log(`photo job=${job.job} uploaded bytes=${png.length} sha256=${createHash('sha256').update(png).digest('hex')}; game confirmation pending`);
       if (options.onCapture) await options.onCapture({job:job.job,owner:job.owner,world:job.world,mode:job.mode,anchor:{x:job.anchorX,y:job.anchorY,z:job.anchorZ},png,diagnostics:await page.evaluate(()=>({width:document.getElementById('viewer-canvas').width,height:document.getElementById('viewer-canvas').height,chunks:globalThis.__lanternRenderer?.chunkLoading,content:globalThis.cortiViewerContent?.stats?.()}))});
     } finally {

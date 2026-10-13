@@ -61,7 +61,7 @@ final class GuildManager implements Listener {
                     Goal.EXPLORE, 1, 0, 0, 8, 4, Material.EXPERIENCE_BOTTLE, 3, "ruin_town"),
             new Contract("bunker_explorer", "地下堡垒", "找到堡垒入口，深入地下探索", Material.STONE_BRICKS,
                     Goal.EXPLORE, 1, 0, 1, 12, 5, Material.IRON_SWORD, 1, "bunker"),
-            new Contract("biome_border", "边界巡礼", "站上两种生物群系的交界地带", Material.MOSSY_COBBLESTONE,
+            new Contract("biome_border", "边界巡礼", "在同一世界实际移动跨过两种群系的交界，支持自定义群系；不限制离接单地点多远，传送本身不计", Material.MOSSY_COBBLESTONE,
                     Goal.BIOME_BORDER, 1, 0, 0, 6, 2, Material.OAK_SAPLING, 2, null, 0),
             new Contract("high_peak", "制高点", "到达 Y≥120 的高处（天然山峰或建筑均可），不要求积雪；到达后走动一步。", Material.SPYGLASS,
                     Goal.PEAK, 1, 0, 0, 6, 2, Material.SNOWBALL, 8, null, 0),
@@ -179,6 +179,7 @@ final class GuildManager implements Listener {
         out.addProperty("requiresVerification",verify);
         out.addProperty("status",verify?"needs_verification":current>=quest.target()?"ready_to_submit":"active");
         out.addProperty("nextCommand",verify?"/mycli guild verify":current>=quest.target()?"/mycli guild claim":"/mycli guild status");
+        if (quest.goal() == Goal.BIOME_BORDER) out.add("biomeBorder", biomeBorderState(p));
         if(current<quest.target())missing.add("当前阶段还缺 "+(quest.target()-current)+" / "+quest.target()+"；"+out.get("condition").getAsString());
         if(verify)missing.add("工程需要显式 guild verify 验收，再 guild claim；查询不触发验收或结算");
         else if(current>=quest.target())missing.add("尚需 guild claim 交付本阶段；多阶段全部交付后才算整单完成");
@@ -363,6 +364,7 @@ final class GuildManager implements Listener {
         if (quest != null && plugin.taskMarket().engineering(quest))
             player.sendMessage(ChatColor.GRAY + "工程进度为上次验收快照；/mycli guild verify 重新验收实际结构。");
         showPeakRequirement(player, quest);
+        showBiomeBorderRequirement(player, quest);
         if (quest != null && (ExplorationObjectives.GOALS.contains(quest.goal()) || quest.goal() == Goal.MAP_HUNT)) plugin.taskMarket().surveyStatus(player);
     }
 
@@ -425,6 +427,7 @@ final class GuildManager implements Listener {
         plugin.saveConfig();
         player.sendMessage(ChatColor.GREEN + "已接公会委托：" + quest.title() + "。" + quest.description()
                 + "；完成后用 /mycli guild claim 领取声望与箱中物资。");
+        showBiomeBorderRequirement(player, quest);
         if (quest.siteId() != null && quest.goal() == Goal.EXPLORE) player.sendMessage(ChatColor.AQUA
                 + "用传送罗盘选择「" + DungeonExpeditions.site(quest.siteId()).name()
                 + "」或输入 /mycli guild travel " + quest.siteId() + "；落点在遗迹外约 70 格。");
@@ -504,7 +507,9 @@ final class GuildManager implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onExplore(PlayerMoveEvent event) {
-        if (event.getTo() == null || event.getFrom().getBlockX() == event.getTo().getBlockX()
+        if (event instanceof PlayerTeleportEvent || event.getTo() == null
+                || event.getFrom().getBlockX() == event.getTo().getBlockX()
+                && event.getFrom().getBlockY() == event.getTo().getBlockY()
                 && event.getFrom().getBlockZ() == event.getTo().getBlockZ()) return;
         checkExplore(event.getPlayer(), event.getFrom(), event.getTo());
     }
@@ -514,6 +519,7 @@ final class GuildManager implements Listener {
         if (event.getTo() == null) return;
         Player player = event.getPlayer();
         Contract quest = active(player);
+        if (quest != null && quest.goal() == Goal.BIOME_BORDER) return;
         if (quest != null && quest.goal() == Goal.PILGRIMAGE) {
             plugin.getConfig().set(base(player.getUniqueId()) + ".active.far", 0);
             plugin.saveConfig();
@@ -592,6 +598,7 @@ final class GuildManager implements Listener {
             player.setDisplayName("✦" + player.getName());
         // Re-state the real criterion for already accepted contracts after a wording update.
         showPeakRequirement(player, active(player));
+        showBiomeBorderRequirement(player, active(player));
     }
 
     private void showPeakRequirement(Player player, Contract quest) {
@@ -633,7 +640,7 @@ final class GuildManager implements Listener {
                 if (quest.siteId() != null && DungeonExpeditions.reached(to, quest.siteId())) advance(player, quest);
             }
             case PEAK -> { if (to.getBlockY() >= 120) advance(player, quest); }
-            case BIOME_BORDER -> checkBiomeBorder(player, to);
+            case BIOME_BORDER -> checkBiomeBorder(player, from, to);
             case PRAYER_ROAD -> {
                 String path = base(player.getUniqueId());
                 if (!today().equals(plugin.getConfig().getString(path + ".prayDate", ""))) return;
@@ -645,22 +652,44 @@ final class GuildManager implements Listener {
             case PILGRIMAGE -> checkPilgrimage(player, to);
             default -> { }
         }
-        // 顺手：from 未用，保留签名以兼容 move 事件两端比较
     }
 
-    private void checkBiomeBorder(Player player, org.bukkit.Location to) {
+    private com.google.gson.JsonObject biomeBorderState(Player player) {
         String path = base(player.getUniqueId()) + ".active";
-        String biome = to.getBlock().getBiome().name();
-        if (plugin.getConfig().getString(path + ".biome1", "").isEmpty()) {
-            plugin.getConfig().set(path + ".biome1", biome);
-            plugin.getConfig().set(path + ".biomeAt", to.getBlockX() + "," + to.getBlockY() + "," + to.getBlockZ());
-            plugin.saveConfig();
-            return;
-        }
-        String first = plugin.getConfig().getString(path + ".biome1", "");
-        if (first.isEmpty() || first.equals(biome)) return;
-        org.bukkit.Location firstAt = parseLoc(player.getWorld(), plugin.getConfig().getString(path + ".biomeAt", ""));
-        if (firstAt != null && horizontal(firstAt, to) <= 32) advance(player, contract("biome_border"));
+        var state = new com.google.gson.JsonObject();
+        state.addProperty("currentBiome", WorldBiomes.at(player.getLocation()));
+        state.addProperty("recordedFrom", plugin.getConfig().getString(path + ".border.fromBiome", ""));
+        state.addProperty("recordedTo", plugin.getConfig().getString(path + ".border.toBiome", ""));
+        state.addProperty("nextAction", progress(player) >= 1 ? "/mycli guild claim 交付"
+                : "在同一世界实际移动，跨到另一种群系；支持 Terralith，不要求回到接单位置，传送本身不计。用 /mycli guild status 查看当前群系。");
+        return state;
+    }
+
+    private void showBiomeBorderRequirement(Player player, Contract quest) {
+        if (quest == null || quest.goal() != Goal.BIOME_BORDER) return;
+        var state = biomeBorderState(player);
+        player.sendMessage(ChatColor.AQUA + "边界巡礼：当前群系 " + state.get("currentBiome").getAsString()
+                + "；" + state.get("nextAction").getAsString());
+        if (!state.get("recordedFrom").getAsString().isEmpty()) player.sendMessage(ChatColor.GRAY
+                + "服务器已记录跨界：" + state.get("recordedFrom").getAsString() + " → " + state.get("recordedTo").getAsString());
+    }
+
+    private void checkBiomeBorder(Player player, org.bukkit.Location from, org.bukkit.Location to) {
+        if (progress(player) >= 1 || (player.getGameMode() != GameMode.SURVIVAL
+                && player.getGameMode() != GameMode.ADVENTURE)) return;
+        var start = new BiomeBorder.Point(from.getWorld().getUID().toString(), from.getX(), from.getY(), from.getZ(), WorldBiomes.at(from));
+        var end = new BiomeBorder.Point(to.getWorld().getUID().toString(), to.getX(), to.getY(), to.getZ(), WorldBiomes.at(to));
+        if (!BiomeBorder.crossed(start, end, false)) return;
+        String path = base(player.getUniqueId()) + ".active.border";
+        plugin.getConfig().set(path + ".world", start.world());
+        plugin.getConfig().set(path + ".fromBiome", start.biome());
+        plugin.getConfig().set(path + ".toBiome", end.biome());
+        plugin.getConfig().set(path + ".from", from.getBlockX() + "," + from.getBlockY() + "," + from.getBlockZ());
+        plugin.getConfig().set(path + ".to", to.getBlockX() + "," + to.getBlockY() + "," + to.getBlockZ());
+        // advance saves evidence and progress together, once. Old biome1/biomeAt
+        // are retained as history and cannot complete or block this new crossing.
+        advance(player, contract("biome_border"));
+        player.sendMessage(ChatColor.GREEN + "已实际跨过群系边界：" + start.biome() + " → " + end.biome());
     }
 
     private void checkPilgrimage(Player player, org.bukkit.Location to) {

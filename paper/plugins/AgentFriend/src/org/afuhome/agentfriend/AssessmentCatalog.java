@@ -12,7 +12,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 final class AssessmentCatalog {
     static final Gson JSON = new Gson();
     static final Set<String> PROOFS = Set.of("cli_list", "cli_detail", "cli_status", "backpack_retrieve",
-            "door_passage", "ladder_ascent", "shelter", "survey", "rescue", "party_clear", "project", "supply");
+            "door_passage", "ladder_ascent", "shelter", "survey", "survey_photo", "rescue", "party_clear", "project", "supply");
     record Point(double x, double y, double z) {
         double distance(Point b) { return Math.sqrt(Math.pow(x-b.x,2)+Math.pow(y-b.y,2)+Math.pow(z-b.z,2)); }
     }
@@ -111,6 +111,7 @@ final class AssessmentCatalog {
         if(d.skills==null||d.skills.size()>4||new HashSet<>(d.skills).size()!=d.skills.size()||d.proofs==null||d.proofs.size()>8
                 ||!PROOFS.containsAll(d.proofs)||new HashSet<>(d.proofs).size()!=d.proofs.size()||d.prerequisite==null)throw new IllegalArgumentException("assessment lists");
         if(!d.prerequisite.isEmpty())id(d.prerequisite);
+        if(d.proofs.contains("survey_photo")&&(!d.proofs.contains("survey")||!d.allProofs||!d.primitive.equals("contract_record")))throw new IllegalArgumentException("survey_photo requires survey and all-proofs on contract_record");
         bound(d.timeout,15,maxTimeout(d.primitive));bound(d.horizontal,0,512);bound(d.ascent,0,64);bound(d.turn,0,180);bound(d.backwards,0,32);
         bound(d.radius,.5,3);bound(d.stableSeconds,2,5);bound(d.jumps,1,3);bound(d.allies,1,3);bound(d.allyMovement,2,32);
         if(d.course!=null)validate(d.course);

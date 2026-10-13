@@ -109,6 +109,8 @@ final class SkillAssessments implements Listener {
                 &&plugin.taskMarket().suppliesAssessmentProof(id,r.definition.proofs());
     }
     AssessmentCatalog.Definition definition(String id) {return catalog==null?null:catalog.definitions.get(id);}
+    String photoExam(Player p) {Run r=runs.get(p.getUniqueId());return r!=null&&r.state.equals("active")&&r.definition.proofs().contains("survey_photo")?r.id.toString():"";}
+    long photoStarted(Player p) {Run r=runs.get(p.getUniqueId());return r==null?Long.MAX_VALUE:r.started;}
     private String eligibility(Player p,AssessmentCatalog.Definition d) {
         if(!available())return "data_unavailable";
         if(p.getGameMode()!=GameMode.SURVIVAL||p.isDead()||plugin.isObserver(p)||plugin.isDowned(p))return "survival_required";
@@ -338,7 +340,9 @@ final class SkillAssessments implements Listener {
         Run r=runs.get(p.getUniqueId());if(r!=null&&r.state.equals("active")&&r.castAt>0)interrupt(p,r,"skill_qualification_changed");
     }
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void teleport(PlayerTeleportEvent e) {
-        Run r=runs.get(e.getPlayer().getUniqueId());if(r!=null)interrupt(e.getPlayer(),r,"teleport");
+        // Exploration contracts include portals and a return journey. Their own survey resets
+        // movement on teleport; interrupt only exams whose uninterrupted movement is the proof.
+        Run r=runs.get(e.getPlayer().getUniqueId());if(r!=null&&!r.definition.proofs().contains("survey"))interrupt(e.getPlayer(),r,"teleport");
         for(var entry:runs.entrySet())if(entry.getValue().allies.remove(e.getPlayer().getUniqueId())!=null) {
             Player caster=Bukkit.getPlayer(entry.getKey());if(caster!=null)save(caster,entry.getValue());
         }
@@ -433,6 +437,10 @@ final class SkillAssessments implements Listener {
     void show(Player p) {
         Run r=current(p);JsonObject out=summary(p);out.addProperty("type","status");out.addProperty("schemaVersion",1);out.addProperty("subjectUuid",p.getUniqueId().toString());out.addProperty("scope","self");
         if(r!=null){out.addProperty("version",r.definition.version());out.add("requirements",AssessmentCatalog.JSON.toJsonTree(r.definition));out.add("measured",measurements(r));
+            if(r.definition.proofs().contains("survey_photo")) {
+                out.add("photography",plugin.taskMarket().photoStatus(p));
+                p.sendMessage("§b摄影实考：每个探索阶段至少1张合格实地照片；要求多种群系时，每种各拍一张。走查、返程照常；好构图额外纪念荣誉，不影响晋级。/mycli photo menu");
+            }
             AssessmentCatalog.Point target=target(r);if(target!=null){JsonObject at=AssessmentCatalog.JSON.toJsonTree(target).getAsJsonObject();at.addProperty("worldUuid",r.definition.course().world().toString());out.add("target",at);}
             p.sendMessage("§b"+r.definition.title()+"："+r.state+"；"+next(r));
             if(target!=null)p.sendMessage("§e当前目标 "+r.definition.course().world()+" X="+target.x()+" Y="+target.y()+" Z="+target.z()+"，距离 "+Math.round(point(p).distance(target))+"格；测量 "+measurements(r));

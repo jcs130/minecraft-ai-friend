@@ -2,6 +2,9 @@ package org.afuhome.agentfriend;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import java.util.HashSet;
 import io.netty.buffer.Unpooled;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -103,6 +106,41 @@ final class TaskMarketManager implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, exploration::flush, 600L, 600L);
     }
     void shutdown() { exploration.flush(); }
+    private static boolean photoStep(Step step){return step.map!=null||step.exploration!=null&&step.goal!=GuildManager.Goal.RETURN;}
+    /** Capture-time native location, independent of cached/completed survey success. */
+    JsonObject photoContext(Player p) {
+        String exam=plugin.skillAssessments().photoExam(p);Task task=frozen(p);if(exam.isEmpty()||task==null)return null;
+        Step step=task.steps.get(index(p));if(!photoStep(step))return null;
+        JsonObject context=step.map!=null?maps.photoPlace(p,step.map,run(p)):ExplorationObjectives.photoPlace(p.getLocation(),step.exploration);
+        if(context==null)return null;
+        context.addProperty("examRun",exam);context.addProperty("marketRun",run(p));context.addProperty("task",task.id());
+        context.addProperty("step",index(p));context.addProperty("title",step.title);return context;
+    }
+    private JsonObject photoStepStatus(Player p,Task task,int step,JsonObject evidence) {
+        JsonObject out=new JsonObject();Step target=task.steps.get(step);int required=target.exploration==null?1:target.exploration.minBiomes();
+        JsonArray rows=plugin.photoCamera().journal().matching(p,plugin.skillAssessments().photoExam(p),run(p),step,plugin.skillAssessments().photoStarted(p));
+        Set<String> biomes=new HashSet<>();JsonArray ids=new JsonArray();
+        String instance=evidence.has("structureInstance")?evidence.get("structureInstance").getAsString():"";
+        for(JsonElement value:rows){JsonObject row=value.getAsJsonObject(),context=row.getAsJsonObject("context");
+            if(!instance.isEmpty()&&evidence.has("structure")&&!evidence.get("structure").getAsString().isEmpty()
+                    &&(!context.has("structureInstance")||!context.get("structureInstance").getAsString().equals(instance)))continue;
+            biomes.add(row.get("biome").getAsString());ids.add(row.get("id"));
+        }
+        out.addProperty("step",step+1);out.addProperty("title",target.title);out.addProperty("requiredRegions",required);out.addProperty("photographedRegions",biomes.size());
+        out.addProperty("ready",biomes.size()>=required);out.add("photoIds",ids);
+        out.addProperty("nextAction",biomes.size()>=required?"照片已齐；继续原来的走查、返程和交付":"在本阶段目标地点用 /mycli photo take 旅行纪念 first 1 拍清楚当地景物；多群系时换群系并换照片名，再用 photo album 看检查结果");return out;
+    }
+    private JsonObject savedSurvey(Player p,int step) {
+        String raw=step==index(p)?plugin.getConfig().getString(marketPath(p)+".last-evidence","{}"):"{}";
+        if(step!=index(p))for(Map<?,?> row:plugin.getConfig().getMapList(marketPath(p)+".verified-steps"))if(row.get("step") instanceof Number n&&n.intValue()==step+1)raw=String.valueOf(row.get("evidence"));
+        try{return JsonParser.parseString(raw).getAsJsonObject();}catch(RuntimeException e){return new JsonObject();}
+    }
+    JsonObject photoStatus(Player p) {
+        JsonObject out=new JsonObject();JsonArray stages=new JsonArray();Task task=frozen(p);boolean required=!plugin.skillAssessments().photoExam(p).isEmpty();
+        out.addProperty("required",required);out.addProperty("nextCommand","/mycli photo menu");
+        if(required&&task!=null)for(int i=0;i<task.steps.size();i++)if(photoStep(task.steps.get(i)))stages.add(photoStepStatus(p,task,i,savedSurvey(p,i)));
+        out.add("stages",stages);return out;
+    }
     void surveyStatus(Player player) {
         Task task = frozen(player);
         if (task == null) return;
@@ -503,6 +541,17 @@ final class TaskMarketManager implements Listener {
     private void checked(Player player, Task task, String run, int step, EngineeringSites.Result result, Consumer<Boolean> finish) {
         checking.remove(player.getUniqueId());
         if (!run.equals(run(player)) || step != index(player) || !player.isOnline()) return;
+        if(!plugin.skillAssessments().photoExam(player).isEmpty()) {
+            JsonArray photos=new JsonArray();boolean complete=true;
+            for(int i=0;i<task.steps.size();i++)if(photoStep(task.steps.get(i))&&(i==step||step==task.steps.size()-1)) {
+                JsonObject status=photoStepStatus(player,task,i,i==step?result.evidence():savedSurvey(player,i));photos.add(status);complete&=status.get("ready").getAsBoolean();
+            }
+            result.evidence().add("photography",photos);
+            if(!complete&&result.ready()) {
+                player.sendMessage("§e探索记录保留，还缺本次实地照片。先在目标地用 /mycli photo menu 拍景物；photo album 看检查与重拍建议，guild exam status 看各阶段数量。");
+                result=new EngineeringSites.Result(false,result.progress(),"exploration_photo_required",result.evidence());
+            }
+        }
         String path = marketPath(player);
         if (engineering(task.contract(step))) plugin.getConfig().set(activePath(player) + ".progress", result.progress());
         plugin.getConfig().set(path + ".last-evidence", result.evidence().toString());
@@ -566,6 +615,10 @@ final class TaskMarketManager implements Listener {
         Task task = frozen(player); if (task == null) return;
         if (task.steps.get(index(player)).map != null) maps.completed(player);
         if(plugin.skillAssessments()!=null) {
+            if(!plugin.skillAssessments().photoExam(player).isEmpty()) {
+                JsonArray stages=photoStatus(player).getAsJsonArray("stages");
+                if(!stages.isEmpty()&&stages.asList().stream().allMatch(s->s.getAsJsonObject().get("ready").getAsBoolean()))plugin.skillAssessments().proof(player,"survey_photo","photos:"+run(player));
+            }
             if(task.steps.stream().anyMatch(s->s.exploration!=null||s.map!=null))plugin.skillAssessments().proof(player,"survey","market:"+task.id()+":"+run(player));
             if(task.project)plugin.skillAssessments().proof(player,"project","market:"+task.id()+":"+run(player));
             if(task.steps.stream().anyMatch(s->s.goal==GuildManager.Goal.DONATE))plugin.skillAssessments().proof(player,"supply","market:"+task.id()+":"+run(player));

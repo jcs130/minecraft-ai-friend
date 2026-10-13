@@ -124,10 +124,11 @@
     },
     "survey_basic": {
       "title": "遗迹调查",
-      "description": "开考后接取一张含真实走查的市场探索或原图寻宝任务，调查多个区段、返程交付；单纯到坐标不足以通过。",
+      "description": "开考后接真实走查或原图寻宝委托；各探索阶段在当地拍清楚景物，多群系每种各一张，完成走查和返程。photo menu拍照，photo album查合格与故事；好构图另记荣誉。",
       "primitive": "contract_record",
       "proofs": [
-        "survey"
+        "survey",
+        "survey_photo"
       ],
       "timeout-seconds": 86400
     },

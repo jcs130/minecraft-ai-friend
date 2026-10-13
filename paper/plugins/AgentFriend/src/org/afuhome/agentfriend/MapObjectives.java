@@ -172,6 +172,19 @@ final class MapObjectives implements Listener {
         j.addProperty("verifyCommand", "/mycli guild verify"); j.addProperty("claimCommand", "/mycli guild claim");
         j.addProperty("mapsConsumed", false); return j;
     }
+    JsonObject photoPlace(Player p,Rules rules,String run) {
+        State s=state(p);if(!current(p,s)||!s.run.equals(run)||!p.getWorld().getUID().equals(s.marker.world))return null;
+        Location at=p.getLocation();
+        if(s.mode.equals("treasure")) {
+            if(Math.hypot(at.getX()-s.marker.x,at.getZ()-s.marker.z)>rules.treasureRadius)return null;
+            JsonObject out=new JsonObject();out.addProperty("targetX",s.marker.x);out.addProperty("targetZ",s.marker.z);
+            out.addProperty("radius",rules.treasureRadius);out.addProperty("biome",WorldBiomes.at(at));return out;
+        }
+        var place=ExplorationObjectives.mapPlace(at,s.marker.x,s.marker.z);
+        if(place==null||!s.instance.isEmpty()&&!s.instance.equals(place.instance()))return null;
+        JsonObject out=new JsonObject();out.addProperty("bounds",place.bounds());out.addProperty("structureInstance",place.instance());
+        out.addProperty("structure",place.key());out.addProperty("biome",WorldBiomes.at(at));return out;
+    }
     EngineeringSites.Result observe(Player p, Rules rules, int count, String run) {
         State s = state(p);
         if (!current(p, s) || !s.run.equals(run)) return unavailable("map_binding_missing_or_invalid", count);

@@ -64,6 +64,10 @@ function Deploy-PendingContent {
             # Only this authored item pack and its exact mapping can be deployed.
             # Preserve stopped-server, dual-snapshot, digest and rollback gates.
             $target = Join-Path $serverDir $relative
+        } elseif ($relative -eq 'ops/photo-image-quality.mjs') {
+            # Pure screenshot metrics imported by the existing local camera.
+            # Same stopped-server, E/F backup and pinned-hash gates as the worker.
+            $target = Join-Path $opsDir 'photo-image-quality.mjs'
         } elseif ($relative -match '^plugins/([A-Za-z0-9]+)/(.+)$' -and $allowed -contains $Matches[1]) {
             if ($relative -match '(^|/)\.\.(/|$)|:|\\' -or $relative -notmatch '\.(yml|yaml|json|dsc)$') { throw 'Unsafe plugin configuration path' }
             $target = Join-Path $serverDir $relative

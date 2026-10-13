@@ -32,6 +32,10 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
     private BukkitTask task;
     private Class<?> imageFrame;
     private PhotoCameraMessages messages;
+    private final PhotoJournal journal;
+    private JsonObject capturedContext,capturedScene,capturedImage;
+    private Location capturedAt;
+    private long capturedTime;
     private record Job(UUID id, String nonce, UUID owner, String name, String mode, int tiles, UUID world, long queued) {
         private Job(Player p, String name, String mode, int tiles) { this(UUID.randomUUID(), UUID.randomUUID().toString(), p.getUniqueId(), name, mode, tiles, p.getWorld().getUID(), System.currentTimeMillis()); }
     }
@@ -53,14 +57,17 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
         Bukkit.getMessenger().registerIncomingPluginChannel(plugin, CHANNEL, this);
         try { connectImageFrame(); } catch (Exception e) { plugin.getLogger().warning("Photo camera unavailable: " + e.getClass().getSimpleName()); }
         messages = new PhotoCameraMessages(plugin);
+        journal = new PhotoJournal(plugin,this);
         task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 10L, 10L);
     }
 
     boolean ready() { return enabled && pendingUploads != null && System.currentTimeMillis() - heartbeat < 15_000 && plugin.goddessLandAdministrator() != null; }
+    PhotoJournal journal(){return journal;}
 
     void command(Player p, String[] args) {
         String action = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "menu";
         action = switch (action) { case "菜单" -> "menu"; case "拍照" -> "take"; case "状态" -> "status"; case "取消" -> "cancel"; default -> action; };
+        if(Set.of("album","gallery","info","title","story","exhibit","withdraw").contains(action)){journal.command(p,args);return;}
         if (action.equals("menu")) { menu(p); return; }
         if (action.equals("take")) {
             String name = args.length > 2 ? args[2] : "生活_" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("MMdd_HHmmss"));
@@ -199,6 +206,9 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
             }
             out.addProperty("x", eye.getX()); out.addProperty("y", eye.getY() - 1.62); out.addProperty("z", eye.getZ());
             out.addProperty("yaw", Math.PI - Math.toRadians(pos.getYaw())); out.addProperty("pitch", pitch);
+            capturedAt=pos.clone();capturedTime=System.currentTimeMillis();capturedImage=null;
+            capturedContext=plugin.taskMarket().photoContext(owner);
+            capturedScene=PhotoScene.inspect(eye,pitch,capturedContext);
             send(camera, out); phase = "rendering";
         } catch (Exception e) { finish(false, "无法启动本机相机，请稍后重试。"); }
     }
@@ -210,8 +220,8 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
             String type = data.get("type").getAsString();
             if (type.equals("ready")) { heartbeat = System.currentTimeMillis(); workerIdle = data.has("idle") && data.get("idle").getAsBoolean(); return; }
             if (active == null || !active.id.toString().equals(data.get("job").getAsString()) || !active.nonce.equals(data.get("nonce").getAsString())) return;
-            if (type.equals("uploading")) { uploadSent = true; phase = "importing"; }
-            else if (type.equals("uploaded")) { uploadSent = true; phase = "confirming"; }
+            if (type.equals("uploading")) { if(data.has("image"))capturedImage=PhotoEvidence.image(data.getAsJsonObject("image"));uploadSent = true; phase = "importing"; }
+            else if (type.equals("uploaded")) { if(data.has("image"))capturedImage=PhotoEvidence.image(data.getAsJsonObject("image"));uploadSent = true; phase = "confirming"; }
             else if (type.equals("failed")) {
                 String reason = data.has("reason") ? data.get("reason").getAsString() : "";
                 String next = reason.equals("PHOTO_CAMERA_LEASE_LOST") ? "角色移动或观察镜头改变，请站稳后再拍。"
@@ -229,6 +239,15 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
         Object manager = imageFrame.getField("imageMapManager").get(null);
         return manager.getClass().getMethod("getFromCreator", UUID.class, String.class).invoke(manager, owner, name);
     }
+    boolean originalExists(JsonObject row) {
+        try {
+            Object original=map(UUID.fromString(row.get("owner").getAsString()),row.get("name").getAsString());
+            if(original==null||!(boolean)original.getClass().getMethod("isValid").invoke(original)
+                    ||((Number)original.getClass().getMethod("getImageIndex").invoke(original)).intValue()!=row.get("imageIndex").getAsInt())return false;
+            List<?> ids=(List<?>)original.getClass().getMethod("getMapIds").invoke(original);
+            return ids.equals(row.getAsJsonArray("mapIds").asList().stream().map(JsonElement::getAsInt).toList());
+        }catch(Exception e){return false;}
+    }
     private boolean delivered(Player p, Object map) throws Exception {
         if (p == null || !p.isOnline()) return false;
         var ids = (List<?>) map.getClass().getMethod("getMapIds").invoke(map);
@@ -240,6 +259,10 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
     private void finish(boolean success, String message) {
         Job previous = active; if (previous == null) return;
         Player camera = plugin.goddessLandAdministrator(), owner = Bukkit.getPlayer(previous.owner);
+        // Photo delivery is authoritative even if a separate journal write fails. Never resend maps.
+        if(success&&owner!=null&&capturedAt!=null)try {
+            journal.delivered(owner,previous.id,previous.name,previous.mode,capturedTime,capturedAt,capturedContext,capturedScene,capturedImage,map(previous.owner,previous.name));
+        }catch(Exception e){owner.sendMessage("§e照片已入包，纪念册未完成记录；请联系管理员核对，不要重复领图。");plugin.getLogger().warning("Photo journal job="+previous.id+" failed="+e.getClass().getSimpleName());}
         if (camera != null) {
             send(camera, envelope(previous, "cancel"));
             if (camera.getSpectatorTarget() != null && camera.getSpectatorTarget().getUniqueId().equals(previous.owner)) {
@@ -252,11 +275,16 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
                 uploads.getClass().getMethod("invalidatePendingUploads", UUID.class).invoke(uploads, previous.owner);
         } catch (Exception ignored) { }
         active = null; phase = "idle"; origin = null;
+        capturedAt=null;capturedContext=null;capturedScene=null;capturedImage=null;capturedTime=0;
         messages.end(previous.owner);
         if (owner != null) notice(owner, success ? "success" : "stopped", message);
         plugin.getLogger().info("Photo camera job=" + previous.id + " owner=" + previous.owner + " result=" + (success ? "success" : "stopped"));
     }
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true) public void onCommand(PlayerCommandPreprocessEvent event) {
+        String[] words=event.getMessage().split("\\s+");
+        if(words.length>=3&&words[0].matches("(?i)/(?:imageframe:)?imageframe")&&Set.of("refresh","delete").contains(words[1].toLowerCase(Locale.ROOT))&&journal.locked(event.getPlayer().getUniqueId(),words[2])) {
+            event.setCancelled(true);deny(event.getPlayer(),"纪念册原片用于考试与署名，不能覆盖或删除；请换新名字拍照。撤展用 /mycli photo withdraw "+words[2]+"，需归档请联系管理员。");return;
+        }
         if (owns(event.getPlayer().getUniqueId()) && event.getMessage().matches("(?i)^/(?:imageframe:)?imageframe\\s+(?:create|clone|delete|refresh)\\b.*")) {
             event.setCancelled(true); deny(event.getPlayer(), "拍照处理中，请等 photo status 完成，或 photo cancel 后再操作相册。");
         }
@@ -265,6 +293,7 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
     private void deny(Player p, String message) { notice(p, "denied", message); }
     void admin(org.bukkit.command.CommandSender sender, String[] args) {
         String action = args.length > 2 ? args[2].toLowerCase(Locale.ROOT) : "status";
+        if(action.startsWith("gallery-")){journal.admin(sender,args);return;}
         if (action.equals("pause")) {
             enabled = false;
             for (Job job : queue) { Player p = Bukkit.getPlayer(job.owner); if (p != null) notice(p, "cancelled", "相机维护，取消排队；未消耗地图。"); }
@@ -301,6 +330,8 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
         menuItem(holder.inventory, 12, Material.ARMOR_STAND, "§b第三人称拍照", "从身后拍你与风景；保留人物名字");
         menuItem(holder.inventory, 14, Material.FEATHER, "§b俯视拍照", "从上方拍摄；请在开阔处使用");
         menuItem(holder.inventory, 16, Material.FILLED_MAP, "§a本人相册", "查看已完成的照片地图");
+        menuItem(holder.inventory, 15, Material.BOOK, "§b旅行纪念册", "作品题目、故事与考试照片检查");
+        menuItem(holder.inventory, 17, Material.PAINTING, "§d艺术厅摄影展", "查看作者署名和旅行故事；本人自愿投稿");
         menuItem(holder.inventory, 22, Material.CLOCK, "§e查看进度", "准备1张空地图和空主背包格；排队处理");
         menuItem(holder.inventory, 19, Material.PAINTING, "§b清晰海报 · 第一人称", "2×2地图，消耗4张空地图、需要4个空格");
         menuItem(holder.inventory, 21, Material.PAINTING, "§b清晰海报 · 第三人称", "2×2地图，消耗4张空地图、需要4个空格");
@@ -320,6 +351,7 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
         String mode = switch (event.getRawSlot()) { case 10, 19 -> "first"; case 12, 21 -> "third"; case 14, 23 -> "top"; default -> ""; };
         if (!mode.isEmpty()) { p.closeInventory(); command(p, new String[]{"photo", "take", "生活_" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("MMdd_HHmmss")), mode, event.getRawSlot() >= 19 ? "2" : "1"}); }
         else if (event.getRawSlot() == 16) { p.closeInventory(); Bukkit.dispatchCommand(p, "imageframe list"); }
+        else if(event.getRawSlot()==15||event.getRawSlot()==17){p.closeInventory();journal.command(p,new String[]{"photo",event.getRawSlot()==15?"album":"gallery"});}
         else if (event.getRawSlot() == 22) command(p, new String[]{"photo", "status"});
         else if (event.getRawSlot() == 18) { p.closeInventory(); p.performCommand("mycli menu"); }
         else if (event.getRawSlot() == 24) { p.closeInventory(); command(p, new String[]{"photo", "cancel"}); }

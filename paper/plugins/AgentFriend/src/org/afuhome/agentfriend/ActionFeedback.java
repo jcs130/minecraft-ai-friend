@@ -135,6 +135,7 @@ final class ActionFeedback {
                 default -> fallback(reason, "/mycli world list");
             };
             case "market" -> switch (reason.split(":", 2)[0]) {
+                case "exploration_photo_required" -> a("本次探索的合格实地照片还未齐全。","用 /mycli guild exam status 查看缺照片的阶段；回到该目标，面向当地景物 photo menu 拍摄，多群系分别拍。photo album 查看合格检查与重拍建议；已有走查进度保留。","/mycli guild exam status","/mycli photo menu","/mycli photo album");
                 case "profession_required" -> a("此委托需要指定职业。", "用 " + market + " 核对要求的职业，再 /mycli profession list 查看方向，自己决定是否切换职业。", market, "/mycli profession list");
                 case "skill_required" -> a("此委托需要尚未学会的技能。", "用 " + market + " 查所需技能ID，再 skills info <ID> 核对学习条件和费用，学习后接单。", market, "/mycli skills list");
                 case "project_completed", "project_reserved", "site_unavailable" -> a("工程已完工、被占用或场地尚未开放。", "用 /mycli guild engineering 查看场地；从 /mycli guild board 另选开放委托，不覆盖他人的工程。", "/mycli guild engineering", "/mycli guild board");

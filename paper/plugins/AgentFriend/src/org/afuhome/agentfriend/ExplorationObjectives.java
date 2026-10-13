@@ -57,7 +57,8 @@ final class ExplorationObjectives {
             if (input.isEmpty() || input.size() > 8) throw new IllegalArgumentException("exploration keys (1..8)");
             for (String raw : input) {
                 NamespacedKey key = NamespacedKey.fromString(raw);
-                if (key == null || (goal == GuildManager.Goal.STRUCTURE ? Registry.STRUCTURE.get(key) : Registry.BIOME.get(key)) == null)
+                if (key == null || (goal == GuildManager.Goal.STRUCTURE
+                        ? Registry.STRUCTURE.get(key) == null : !WorldBiomes.registered(key.toString())))
                     throw new IllegalArgumentException("unknown " + field + " " + raw);
                 if (!keys.contains(key.toString())) keys.add(key.toString());
             }
@@ -83,6 +84,19 @@ final class ExplorationObjectives {
         return switch (world.getEnvironment()) { case NETHER -> "nether"; case THE_END -> "end"; default -> "overworld"; };
     }
     private record Place(String instance, String key, List<String> parts, String bounds) { }
+    /** Read-only capture context; unlike a completed survey, it checks the current location again. */
+    static JsonObject photoPlace(Location at,Target target) {
+        if(target.goal==GuildManager.Goal.RETURN||!target.dimension.equals(dimension(at.getWorld()))
+                ||!at.getWorld().isChunkLoaded(at.getBlockX()>>4,at.getBlockZ()>>4))return null;
+        String biome=WorldBiomes.at(at);
+        if(!BiomeBorder.known(biome))return null;
+        if(target.goal==GuildManager.Goal.BIOME&&!target.keys.contains(biome))return null;
+        Place place=target.goal==GuildManager.Goal.STRUCTURE?structure(at,target):null;
+        if(target.goal==GuildManager.Goal.STRUCTURE&&place==null)return null;
+        JsonObject out=new JsonObject();out.addProperty("biome",biome);out.addProperty("dimension",target.dimension);
+        if(place!=null){out.addProperty("bounds",place.bounds);out.addProperty("structureInstance",place.instance);out.addProperty("structure",place.key);}
+        return out;
+    }
     record MapPlace(String instance, String key, String bounds) { }
     /** Identify only loaded natural structure metadata; a map icon is not a structure type. */
     static MapPlace mapPlace(Location at, int x, int z) {
@@ -162,6 +176,9 @@ final class ExplorationObjectives {
             }
             instance = j.get("instance").getAsString(); structure = j.get("structure").getAsString(); bounds = j.get("bounds").getAsString();
             distance = j.get("distance").getAsDouble(); movingMs = j.get("movingMs").getAsDouble(); ready = j.get("ready").getAsBoolean();
+            // Preserve completed surveys. In unfinished surveys CUSTOM was an
+            // ambiguous placeholder, not an extra real biome toward the target.
+            if (!ready) biomes.removeIf(key -> !BiomeBorder.known(key));
             position = j.getAsJsonObject("position");
             minY = j.get("minY").getAsInt(); maxY = j.get("maxY").getAsInt();
         }
@@ -221,7 +238,10 @@ final class ExplorationObjectives {
                 s.previous = null; return result(s, target, required, "different_map_structure");
             }
         }
-        String biome = at.getWorld().getBiome(at).getKey().toString();
+        String biome = WorldBiomes.at(at);
+        if (!BiomeBorder.known(biome)) {
+            s.previous = null; return result(s, target, required, "current_chunk_unloaded");
+        }
         if (target.goal == GuildManager.Goal.BIOME && !target.keys.contains(biome)) {
             s.previous = null; return result(s, target, required, "outside_survey_biome");
         }

@@ -51,7 +51,12 @@ final class AgentCliCatalog {
         add(specs,"world.practice","life","write","/mycli world practice start|status|stop","通行实练：亲手打开木门并穿过、沿现有梯子连续爬升3格；不拆墙、不垫方块","自愿报名；生存或冒险模式；本人原生交互与移动；飞行、传送、自称完成不算；没有额外奖励或代操作","MC_WORLD type=practice/practice_progress；真实坐标、时间及原生操作证明；一次通过不表示长期掌握");
         add(specs,"world.events","life","read","/mycli world events","查看正在进行的世界生活事件","查询免费；活动公告另发；活动不自动完成任务","MC_WORLD type=events与WorldEvents当前列表");
         add(specs,"photo","life","write","/mycli photo menu；take <名字> [第一人称|第三人称|俯视] [1|2]；status|cancel","技能罗盘→女神相机点击拍照，站稳等待地图入包；无需截图或上传文件；原first/third/top参数继续可用","单图1张空地图和1个空主背包格；2×2海报4张地图和4个空格；每人60秒，串行排队","MC_PHOTO 含中文statusLabel；success才表示实际地图已交付");
-        add(specs,"world.photos","life","read","/mycli world photos","打开女神相机与本人相册菜单，可将照片挂展示框","ImageFrame已启用；automaticCaptureReady表示相机当次是否就绪，false时用photo status查询","MC_WORLD type=photos；相机菜单及当前就绪状态");
+        add(specs,"photo.album","life","read","/mycli photo album [页]；photo info <本人照片名|公开作品ID>","旅行纪念册：查询实地照片是否合格、重拍建议、署名与故事","只读，不自动报名或投稿；旧相册仍用 /imageframe list","私有 MC_PHOTO_ALBUM、MC_PHOTO_RECORD；照片质量不能代替走查与返程");
+        add(specs,"photo.gallery","life","read","/mycli photo gallery [页]","艺术厅摄影展：查看公开作品、摄影者、地点和作者故事","原版地图菜单及成书，Java/基岩/Agent可读；故事为作者自述","MC_PHOTO_ALBUM、MC_PHOTO_RECORD；slot为空表示等待适合的实体展位");
+        add(specs,"photo.title","life","write","/mycli photo title <本人照片名> <题目>","为自己的旅行照片起标题","1至64字普通文字；作者UUID、实际地点和原片不能更改；已投稿作品同步展签","photo info <照片名> 核对结果");
+        add(specs,"photo.story","life","write","/mycli photo story <本人照片名> <当地经历>","为自己的照片写下旅行故事","1至400字普通文字；作者自述，不作为考试证明；已投稿作品的故事公开","photo info <照片名> 核对结果");
+        add(specs,"photo.exhibit","life","write","/mycli photo exhibit <本人照片名>；photo withdraw <本人照片名>","主动投稿或撤下艺术厅展览，有合适空位自动挂墙","需要本人的合格原片与故事；投稿公开署名、地点和故事，不消耗原地图；展位满进入目录等待","photo info 查询published与slot；withdraw仅撤展，不删除原片和考试证据");
+        add(specs,"world.photos","life","read","/mycli world photos","打开女神相机、旅行纪念册与艺术厅摄影展","ImageFrame已启用；automaticCaptureReady表示相机当次是否就绪，false时用photo status查询","MC_WORLD type=photos；相机菜单及当前就绪状态");
         add(specs,"profession","magic","read","/mycli profession status|list|menu|choose <ID>|leave <ID>","选择一个主战职业；list 查看当前开放路线；保留旧技能和成长","生存模式选择；UUID 学习账本；不改背包","MC_PROFESSION / MC_PROFESSION_RESULT");
         add(specs,"profession.status","magic","read","/mycli profession status","查看本人当前职业和准备槽","查询免费","MC_PROFESSION");
         add(specs,"profession.menu","magic","gui","/mycli profession menu","打开原版职业和技能菜单","Java、基岩手柄和 Mineflayer 共用","54 格原版菜单");
