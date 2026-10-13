@@ -47,6 +47,30 @@ Every response carries source, observation time, dimension and actual position.
 Do not treat an older result as current after movement, construction or reconnect.
 The helper caches only within this call; it never edits blocks or moves the body.
 
+## Coordinate overhead photograph
+
+Use `mc_visual` when the host accepts images and the matched modern viewer is
+available. It photographs the **actual loaded renderer scene** without moving
+the body, issuing camera controls to the game, or loading remote terrain:
+
+```json
+{"mode":"overview","overview":{"center":[103,-31],"span":32,"grid":4,"markers":[{"at":[103,64,-31],"label":"landing"}]}}
+```
+
+Omit `overview` to center on the current player. `span` is image width in blocks
+(8–96); depth follows image aspect ratio. North is -Z, right is +X. Grid lines
+are absolute integer block boundaries. Up to eight XYZ pins (labels ≤24 chars)
+use the same orthographic projection as the scene; their Y is supplied by you,
+**not measured surface height**. Grid 0 hides lines. This mode has no game HUD.
+Unmeshed columns are hatched, not assumed empty. Roofs/bridges hide lower layers;
+use `observe sites`, voxels or slices for support, headroom and vertical layers.
+Unknown/missing image support returns an explicitly labeled data fallback.
+
+One image helps compare rail layout, paths, structures and relative positions;
+it does not prove route reachability, permission or movement. Query only the
+few uncertain cells, then confirm task terminals and world changes. Keep image
+and detailed receipts on demand rather than repeating them every model turn.
+
 ## Keep feedback small and useful
 
 Feed back task identity, terminal state, measured change, supported cause and the

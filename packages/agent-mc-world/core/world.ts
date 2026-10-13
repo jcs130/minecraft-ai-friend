@@ -27,6 +27,7 @@ import { nowIso } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
 import { Bridge } from './bridge.ts';
 import { captureMinecraftView, closeMinecraftViewCapture, warmMinecraftViewCapture } from './visual-capture.ts';
+import { OVERVIEW_SCHEMA, overviewArgumentError, type OverviewOptions } from './visual-overview.ts';
 import { PlayerObservations, playerObservationMeta, renderPlayerObservation, type PlayerObservation } from './player-observation.ts';
 import { precheckEmptyUseTarget } from './precheck.ts';
 import { blockAtCell, resolveAt } from './cell-facts.ts';
@@ -2290,9 +2291,10 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       type: 'object',
       properties: {
         mode: {
-          type: 'string', enum: ['first', 'third', 'dungeon'],
-          description: 'Camera view. first follows what is in front of you; third shows the surroundings and avatar; dungeon offers an overview. Default third.',
+          type: 'string', enum: ['first', 'third', 'dungeon', 'overview'],
+          description: 'Default third. first=front, third=surroundings/avatar, dungeon=angled view, overview=north-up coordinate photograph of loaded terrain.',
         },
+        overview: OVERVIEW_SCHEMA,
         focus: {
           type: 'string', maxLength: 160,
           description: 'What you want to inspect: an entrance, nearby player, combat result, menu, item or building. This labels the observation; it does not move the camera.',
@@ -4409,9 +4411,11 @@ export class MinecraftWorld implements World {
   protected visualArgumentFailure(args: Record<string, unknown>): ToolOutcome | undefined {
     const name = 'mc_visual';
     const mode = args.mode === undefined ? 'third' : args.mode;
-    if (mode !== 'first' && mode !== 'third' && mode !== 'dungeon') {
-      return { text: this.toolLog(name, args, '[mc_visual 失败] mode 只能是 first、third 或 dungeon'), failed: true };
+    if (!['first', 'third', 'dungeon', 'overview'].includes(mode as string)) {
+      return { text: this.toolLog(name, args, '[mc_visual 失败] mode 只能是 first、third、dungeon 或 overview'), failed: true };
     }
+    const overviewError = overviewArgumentError(mode, args.overview, args.include_hud);
+    if (overviewError) return { text: this.toolLog(name, args, `[mc_visual 失败] ${overviewError}`), failed: true };
     if (args.include_hud !== undefined && typeof args.include_hud !== 'boolean') {
       return { text: this.toolLog(name, args, '[mc_visual 失败] include_hud 只能是 boolean'), failed: true };
     }
@@ -4512,7 +4516,7 @@ export class MinecraftWorld implements World {
     const name = 'mc_visual';
     const invalid = this.visualArgumentFailure(args);
     if (invalid) return invalid;
-    const mode = (args.mode ?? 'third') as 'first' | 'third' | 'dungeon';
+    const mode = (args.mode ?? 'third') as 'first' | 'third' | 'dungeon' | 'overview';
     const focus = typeof args.focus === 'string' ? args.focus.replace(/\s+/g, ' ').trim().slice(0, 160) : '';
     const bot = this.bridge?.bot;
     const viewerUrl = this.bridge?.viewerUrl;
@@ -4531,7 +4535,7 @@ export class MinecraftWorld implements World {
       && this.bridge?.bot === bot && !!bot.entity && this.bridge?.viewerUrl === viewerUrl
       && String(bot.game.dimension ?? 'unknown') === dimension;
     try {
-      const capture = await captureMinecraftView({ viewerUrl, mode, includeHud: args.include_hud === true,
+      const capture = await captureMinecraftView({ viewerUrl, mode, overview: args.overview as OverviewOptions | undefined, includeHud: args.include_hud === true,
         timeoutMs: 25_000, signal: ctx.signal });
       this.diag.write({ lane: 'world', event: 'visual-capture', msg: capture.mode,
         data: { ...capture.timings, capturedAt: capture.capturedAt, width: capture.width, height: capture.height } });
@@ -4554,7 +4558,15 @@ export class MinecraftWorld implements World {
         : '头脚所在格未读到水';
       const oxygen = headWet && Number.isFinite(bot.oxygenLevel)
         ? `；氧气 ${Math.max(0, Math.min(20, bot.oxygenLevel))}/20` : '';
-      const description = [
+      const coord = (n: number) => String(Math.round(n * 1000) / 1000);
+      const description = capture.overview ? [
+        `[mc_visual overview] ${capture.capturedAt} ${dimension} ${capture.width}×${capture.height}；北=-Z，右=+X。`,
+        `范围 X[${coord(capture.overview.bounds.minX)},${coord(capture.overview.bounds.maxX)}] Z[${coord(capture.overview.bounds.minZ)},${coord(capture.overview.bounds.maxZ)}]；网格=${capture.overview.grid}；已渲染区块 ${capture.overview.coverage.meshed}/${capture.overview.coverage.total}。`,
+        `本人 XYZ=${capture.overview.player.at.map(coord).join(',')}（${capture.overview.player.inFrame ? '图中 SELF' : '画面外'}）；像素左上为原点，X/Z 按范围线性映射。标记高度为输入，非测量。仅俯视可见面，斜线区未加载；桥下/屋内、支撑净空用 mc_scout 核对。`,
+        capture.overview.pins.some(pin => !pin.inFrame) ? `画面外标记：${capture.overview.pins.filter(pin => !pin.inFrame).map(pin => pin.id).join(',')}` : '',
+        focus ? `关注：${focus}` : '',
+        moved > 2 ? `拍摄期间本人移动约 ${moved.toFixed(1)} 格；图中坐标以拍摄时刻为准。` : '',
+      ].filter(Boolean).join('\n') : [
         `[mc_visual] ${capture.capturedAt} 网页实景截图，${capture.mode} 视角，${capture.width}×${capture.height}，`
           + `${dimension}，截图完成后玩家位置 (${location})。`,
         `维度：${dimension}；生物群系：${biomeAt(bot, after)}。生物群系与维度不是同一字段，不能据群系名称判断是否已经出洞或到达地表。`,
