@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "cortico-chat-filter",
+  "version": "1.0.0",
+  "name": "Cortico Chat Filter",
+  "description": "Hides structured MC_* machine receipts from the native game HUD.",
+  "environment": "client",
+  "entrypoints": { "client": ["org.cortico.minecraft.CorticoChatFilter"] },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "fabric-message-api-v1": "*",
+    "minecraft": "1.20.6",
+    "java": ">=21"
+  }
+}

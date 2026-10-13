@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-13",
+  "scope": "independent_core_native_host_optional_bundle",
+  "upstreamMain": "baac5cf41430168846a4b91410c150c85991d406",
+  "coreVersion": "0.4.0",
+  "hostVersion": "0.1.0",
+  "coreArchiveSha256": "07abf0296f7feb489cb49e7a445529941f8b219817ec999fd4fa8d01e70f8aef",
+  "viewerInput": {
+    "commit": "f2cda1096fc8c3c9a37cd92c1ca0aded2d1a7e30",
+    "sha256": "3397ee5fafbaf486d6a9acb5a5f4e568627273bd6550d27f59ff61b28153c2da",
+    "originalArchiveObtained": false,
+    "explicitRebuildAndRelock": true,
+    "liveAssetsChanged": false
+  },
+  "tests": {
+    "core": {
+      "passed": 284,
+      "failed": 1,
+      "skipped": 0,
+      "failure": "Windows DPAPI Protect access denied; unchanged test retained"
+    },
+    "adapter": {
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0
+    },
+    "coreTypesAndBuild": true,
+    "packedConsumerTypecheck": true,
+    "packedStdioConsumer": true,
+    "installedHealthChecks": 10
+  },
+  "providers": {
+    "mineflayer": {
+      "checks": {
+        "real_identity_and_absolute_state": true,
+        "real_inventory_components": true,
+        "actual_operation_schema": true,
+        "unpublished_optional_mod_is_unavailable": true,
+        "walk_actual_position_verified": true,
+        "action_terminal_has_position": true,
+        "spell.list": true,
+        "maid.list": true,
+        "colony_absence_reported_without_fabrication": true,
+        "society.state": true,
+        "actual_guild_registration": true,
+        "real_native_menu_open": true,
+        "real_native_menu_close": true,
+        "terminal_event_delivered_without_goal_claim": true,
+        "reconnect_same_body_and_original_terminal": true,
+        "same_id_replay_does_not_move_again": true
+      },
+      "allChecksPassed": true
+    },
+    "numen": {
+      "checks": {
+        "real_identity_and_absolute_state": true,
+        "real_inventory_components": true,
+        "actual_operation_schema": true,
+        "unpublished_optional_mod_is_unavailable": true,
+        "walk_actual_position_verified": true,
+        "action_terminal_has_position": true,
+        "spell.list": true,
+        "maid.list": true,
+        "colony_absence_reported_without_fabrication": true,
+        "society.state": true,
+        "actual_guild_registration": true,
+        "real_native_menu_open": true,
+        "real_native_menu_close": true,
+        "terminal_event_delivered_without_goal_claim": true,
+        "reconnect_same_body_and_original_terminal": true,
+        "same_id_replay_does_not_move_again": true
+      },
+      "allChecksPassed": true
+    }
+  },
+  "preservation": {
+    "production_35_mods_unchanged": true,
+    "protected_configs_and_agent_pause_unchanged": true,
+    "agent_round_remains_464": true,
+    "original_action_ledger_prefix_preserved": true,
+    "owner_28985_unchanged_and_healthy": true,
+    "owner_28996_unchanged_and_healthy": true,
+    "isolated_children_exit_zero": true
+  },
+  "isolatedNetworkListenersAfterShutdown": 0,
+  "productionRestarted": false,
+  "productionGameActions": 0,
+  "modelRequests": 0,
+  "existingAgentMigrated": false,
+  "boundaries": [
+    "No long-running autonomous model test",
+    "No colony construction test this turn",
+    "No default vanilla engine/scripts/reflexes or idle life-event subscription",
+    "No new WebGL acceptance",
+    "Wandscape remains gated and not deployed"
+  ]
+}

@@ -4,6 +4,8 @@
 
 已发布[异界开拓纪](docs/MY-AGENT-WORLD-UNDERWORLD.md)：真实天命、十条原技能术式、十二项章节委托，以及 EconomyCraft 原生拍卖/出售/流水入口。经济和其他玩法优先复用现成模组，见[模组复用调研](docs/MY-AGENT-WORLD-MOD-REUSE.md)。
 
+独立 `agent-mc-world 0.4.0` 现可通过[原生宿主适配器](docs/MY-AGENT-WORLD-AGENT-MC-WORLD.md)接入本分支，统一管理真实回合、事件与动作回执，身体复用 Mineflayer 或 Numen，模组界面继续走现有 1.21.1 可视化。[纯文字接入说明](docs/MY-AGENT-WORLD-AGENT-MC-WORLD.txt)附 SDK、可选本机 stdio 用法；已在隔离服验证两种身体，未迁移现役 Agent。
+
 ## 历史：千灯纪 Paper 跨端分支
 
 独立 `qiandengji-paper-1.20.6` 分支承载 **Paper 1.20.6 / Java 21** 家庭服务器：Java、基岩和 Mineflayer Agent 共用世界，女神与观战镜头由服务端扩展支持。其源码、配置基线、版本锁和维护入口在 [paper/README.md](paper/README.md)。世界存档、账号数据、密钥和第三方二进制文件不进入 Git。
@@ -13,6 +15,11 @@
 ---
 
 # 异世界千灯纪 · 本地整合项目
+
+## 通用 Minecraft Agent 核心
+
+独立客户端核心位于 [packages/agent-mc-world](packages/agent-mc-world)。Cortico World、DSH 与服务器资料包通过版本化 SDK/MCP 引用同一份核心。它拥有独立构建、公开类型和离线测试，不启动主模型循环，也不要求运行本仓库的服务器服务。
+
 
 一个运行在本机的 **Minecraft 多 Agent 共生服务器**：真人玩家、房主女神、运营 Agent 团队、自主生存
 Agent 与女仆妖精 Agent 共享同一个世界，各自有独立职责与入口。

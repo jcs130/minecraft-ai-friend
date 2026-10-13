@@ -1,0 +1,11 @@
+{
+  "schema": "agent-mc-shared-source/v1",
+  "repository": "https://github.com/jcs130/mc-visual-console",
+  "baseCommit": "8536b285",
+  "path": "packages/modern-viewer/renderer-src/host/viewer-performance-relay.mjs",
+  "localCopy": "bridges/performance/relay.mjs",
+  "sha256": "3e79bdfabd12aebb3c9171391170ae5d9774769adecc9c6927a3578e25b2491e",
+  "status": "committed shared source",
+  "declaration": "bridges/performance/relay.d.mts",
+  "commit": "941e8160817b60df0a4fab981ea9e9e2ebe054b6"
+}

@@ -1,0 +1,24 @@
+{
+  "dataDir": "./private-minecraft-data",
+  "timezone": "UTC",
+  "acceptsImages": false,
+  "consolePort": 7796,
+  "metricsPort": 0,
+  "world": {
+    "host": "example.test",
+    "port": 25565,
+    "username": "my-agent-account",
+    "auth": "microsoft",
+    "version": "auto",
+    "viewerPort": 7798,
+    "client": {
+      "enabled": false,
+      "username": "my-observer-account",
+      "auth": "microsoft",
+      "autoSpectate": false,
+      "gameDir": "",
+      "versionId": "",
+      "javaPath": ""
+    }
+  }
+}

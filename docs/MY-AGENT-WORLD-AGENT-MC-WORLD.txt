@@ -1,0 +1,53 @@
+My Agent World 接入新版独立 agent-mc-world（2026-10-13）
+
+核心来自 minecraft-ai-friend/main@baac5cf，agent-mc-world 0.4.0。
+适配源码：world/src/agent-mc-host。它使用核心公开 /client、/contracts、/mcp 接口，不把服务端规则写回通用核心。
+
+连接关系：宿主的模型/规划/记忆 → agent-mc/v1 回合、事件、回执 → My Agent World 原生身体适配器 → Mineflayer 游戏连接，或 Numen 原身体。
+每个实例显式选一个 provider。没有额外模型循环，不接 QwenPaw，不自动创建/迁移角色，也不启动第二个 Mineflayer 控制器或观战替身。
+
+Mineflayer 游戏入口：192.168.3.163:28977。公网沿既有游戏映射；无需为 Mineflayer 暴露 MCP。
+Numen 复用本人令牌及现有 /numen/mcp 入口。令牌、登录密码留在私有文件，不放进URL、提示词和Git。
+
+私有配置示例（把 UUID、路径和账号换成本人的实际值）：
+{"provider":"mineflayer","username":"YourAgent","host":"192.168.3.163","port":28977,"expectedUuid":"本人实际UUID","controllerId":"your-agent-controller","ledgerDir":"D:/agents/your-agent/original-native-ledger","dataDir":"D:/agents/your-agent/harness","loginFile":"D:/agents/your-agent/private/login.json","viewerUrl":"http://192.168.3.163:28984/"}
+
+Numen 配置示例：
+{"provider":"numen","username":"YourNumenBody","bodyId":"本人已有身体UUID","controllerId":"your-agent-controller","credentialsFile":"D:/agents/your-agent/private/numen.json","ledgerDir":"D:/agents/your-agent/original-world-ledger","dataDir":"D:/agents/your-agent/harness"}
+
+dataDir 是新的 Harness 事件/制品目录；ledgerDir 必须沿用该身体原 SDK 账本，两个目录不能相互包含。不得用新目录绕过旧 unknown。Numen 需要真实账号名与 bodyId 对应，连接不会自动上线休眠身体或授OP。
+
+JS SDK：安装分发包后 import {createMyAgentWorldClient} from '@my-agent-world/agent-mc-host'。
+const client = createMyAgentWorldClient(config);
+await client.connect();
+await client.beginTurn('decision-001');
+await client.call('mc_operations', {prefix:'spell.'});
+await client.call('mc_help', {operation:'body.move'});
+await client.call('mc_state', {});
+// 根据实际位置选择目标；Numen 先 mc_control {action:'claim'}。
+await client.call('mc_do', {action_id:'walk-001',operation:'body.move',args:{position:{x:实际X,y:实际Y,z:实际Z}}});
+await client.call('mc_result', {action_id:'walk-001'});
+// 持续消费 client.events；受理不等于完成，完成不等于目标成功。
+await client.endTurn('decision-001');
+await client.disconnect();
+
+MCP 仅是宿主侧可选 stdio 入口：node agent-mc-host/mcp.mjs D:/agents/your-agent/private/world.json。
+它不另开网络监听、不暴露服务端管理权限，也不要求远端 Mineflayer 使用 MCP。
+工具：mc_operations、mc_help、mc_state、mc_read、mc_do、mc_result、mc_wait、mc_cancel、mc_control、mc_lua_operations、mc_viewer，加核心原有 mc_connection/mc_events/mc_protocol/mc_artifact/mc_metrics/mc_trace。
+
+本适配器的 mc_do 接收一个原生 operation，不接收通用 vanilla steps。
+技能、女仆、殖民地、农夫乐事、机械、YSM、市场、公会等由现有原生 operations 发现与调用；未安装或未发布的模组明确 unavailable。不要照另一个 provider 的槽位、菜单参数猜测调用。
+仅在有在途动作时查询终态并产生私有事件；不向游戏聊天广播，不自动续租、不自动重投动作。断线重连后沿原 action_id 对账。未知结果阻止 SDK 后续变更，保留日志供人工核查。
+
+可视化继续用现有1.21.1原生资源、注册表和界面服务。核心附带的1.20.6画面仅用于通用客户端，不给模组服作近似渲染。mc_viewer 返回本人显式入口，不会自动把未配置的 Mineflayer 身体接到别人的画面；Numen 仍按原令牌看本人。
+
+适配器安装与重启现役 Agent 是两件事。安装不会替换 MawExplorer、Numen 模型配置、原人物记忆或账本；现役暂停及旧 unknown 保持。
+生产服务不需要因安装这个宿主包而重启。运行一个新的自主角色仍需由宿主明确指定模型、预算、目标和身份。
+
+当前可用分发目录：E:\QiandengJiSocietyLab\integrations\agent-mc-world\v2-20261013，宿主包 @my-agent-world/agent-mc-host 0.1.0，独立核心 0.4.0。把整个目录作为受控 SDK 工件分发；重新安装依赖使用该目录内 package-lock.json 执行 npm ci --ignore-scripts --no-audit --no-fund，要求 Node 22。它不是已经在 npm 发布的包。
+
+2026-10-13 验证：两种 provider 各16项真实隔离服检查通过，包括2格移动、原生技能/女仆查询、公会登记、Curios界面开关、原UUID重连及同action_id零重复移动；无殖民地时明确报告不存在，未声称已经完成殖民地建设。适配器16项测试、打包消费者类型检查和本机stdio初始化通过；核心284项测试通过，1项Windows DPAPI凭据测试因系统拒绝加解密未通过。本适配器沿用现有私有文件登录，隔离服实际认证已通过。
+
+尚未迁移核心默认引擎的完整脚本、闲时聊天/死亡/受伤订阅与生存反射。宿主应显式查询mc_state并消费动作回执；这里不代表长时间自主生存或所有模组完整流程已验收。Wandscape仍保持之前的待发布状态。
+
+维护健康检查：在源码目录运行 python world/ops/health/health_mon.py --society-agent-mc-world-smoke。它只检查包、来源哈希、依赖版本和现有守护健康，不连接角色或调用模型。测试服已正常退出，临时端口关闭；正式35个JAR、两服务owner、配置、MawExplorer暂停/原账本保持不变。

@@ -1,0 +1,231 @@
+{
+  "repository": "https://github.com/jcs130/Cortico",
+  "commit": "8c00fbb022ea82fc9725301fde0437ccc00fdcc9",
+  "patches": [
+    {
+      "file": "patches/minecraft-item-names.patch",
+      "sha256": "91548610bf20bf72543c4f927cc939dcfe8e82b4409ab40cbc2162f143b831ff"
+    },
+    {
+      "file": "patches/minecraft-viewer-content.patch",
+      "sha256": "b451f86f1a1da7a91ab2503ffb9bc5c2b3bc92cc90d7cd9bbdcb918b0189a65f"
+    },
+    {
+      "file": "patches/minecraft-viewer-appearance.patch",
+      "sha256": "9e584da64106fa0dc514ad7845c6b1f7ce7b89fade79ff5789332fc9b71200ae"
+    },
+    {
+      "file": "patches/minecraft-spatial-budget.patch",
+      "sha256": "b191f4abffcf8f6b8f7376ac1c105a1916a314506aba5e8939e356633d5caa45"
+    },
+    {
+      "file": "patches/minecraft-recipe-protocol.patch",
+      "sha256": "e6634cfb433584989afb6cad88ab8f2ad1ef73b08dbb3c2f2d83489e9bc8bbed"
+    },
+    {
+      "file": "patches/minecraft-route-diagnostics.patch",
+      "sha256": "9a75c9810b87c5ebf50222d80df96a9e03f21453aedaf0798eb79806cd8e99d5"
+    },
+    {
+      "file": "patches/minecraft-flight-timing.patch",
+      "sha256": "ee3f3432a0084e6a948088ccf2a914c1559e3761d1507cd85b2dfd88e8ac252f"
+    },
+    {
+      "file": "patches/minecraft-tool-trace.patch",
+      "sha256": "126839dfdcd5dab9c0f7e55791271cedde1187ed9684ddf3a7f3892318a3e486"
+    },
+    {
+      "file": "patches/minecraft-probe-coverage.patch",
+      "sha256": "a593cb744acda8ddef2c17f95e29fab82ebdde02f4274d62748d926e168b937c"
+    },
+    {
+      "file": "patches/minecraft-hand-equipment.patch",
+      "sha256": "f98d60bee859645a2612f0d1b41df1d094889cd5b6bdcf4221c13cb0f0f27576"
+    },
+    {
+      "file": "patches/minecraft-idle-context.patch",
+      "sha256": "0cafdfb6bed5d65bbb42b6605d55e9b136627e5fd9858116dee69a969743a5a5"
+    },
+    {
+      "file": "patches/minecraft-storage-correction.patch",
+      "sha256": "02b3183de01f26b7422896e7a64ca31a198174d4d66887f7f62e9714fde7be14"
+    },
+    {
+      "file": "patches/minecraft-inventory-recovery.patch",
+      "sha256": "21446711b4383280993f72f7b4b3b9e58b3ca02a3ee5dcaab03545d5dede5927"
+    },
+    {
+      "file": "patches/minecraft-combat-decision.patch",
+      "sha256": "fc84099f6bd4d07c0ebcb94cde46117c32e94998a8f41613dd12783e943699bd"
+    },
+    {
+      "file": "patches/minecraft-combat-program.patch",
+      "sha256": "601074a2c5b22bd968a459b100357aa527bdfe4e4077d99aab5dd1324ab1f13d"
+    },
+    {
+      "file": "patches/minecraft-own-identity.patch",
+      "sha256": "10b9f20dfcbcb354f4f2279f949540eba18ec593734da96d9b3231bc05000919"
+    },
+    {
+      "file": "patches/minecraft-combat-eligibility.patch",
+      "sha256": "ce2dfa8b375e91191bfe0b2dcd0b4332ecf164da5fd7962cb9c179138b58b8e6"
+    },
+    {
+      "file": "patches/minecraft-combat-program-budget.patch",
+      "sha256": "124436ee64a7cb0e07cf70fc5057cace450d0fbe3d30b536ac2ed3542c9fbd13"
+    },
+    {
+      "file": "patches/minecraft-native-methods.patch",
+      "sha256": "2dff80a98001433012ceea14eadef043cc233cd41e3a2eae956f7ec91de8b528"
+    },
+    {
+      "file": "patches/minecraft-server-login.patch",
+      "sha256": "fd04b802c709e908b1ab29963c9ac87c119a8d5402049bbff68e4cabab9ea8e2"
+    },
+    {
+      "file": "patches/minecraft-procedures.patch",
+      "sha256": "0bdd44de77c4e1f4d426e1376d0d3fda36b13160482f8f5af7db2b0a074dfdce"
+    },
+    {
+      "file": "patches/minecraft-chat-provenance.patch",
+      "sha256": "35a880fb5c2627de877097f801c59aaacc29812a296aa1024beb64fbc57c9224"
+    },
+    {
+      "file": "patches/minecraft-mounted-look.patch",
+      "sha256": "0a93e431d9d5f579ccafddfc2db21bac8792920d6fc614bd83e1b9557ba77628"
+    },
+    {
+      "file": "patches/minecraft-railway-observation.patch",
+      "sha256": "fc5cb8c082f39cb0b789fb48ad337bb0e0b141cbc4f2e668d3656dbd1f7af5fb"
+    },
+    {
+      "file": "patches/minecraft-vehicle-state.patch",
+      "sha256": "ef24a65bab1e94736e4da7de8eaec04e39e44a8dea689894338b41f9cd3a54ba"
+    },
+    {
+      "file": "patches/minecraft-collect-target-contract.patch",
+      "sha256": "8471ccc49399b1e569dd565665f01e4a9ac2dd9eff2d40db4e7c749c2bbac0a9"
+    },
+    {
+      "file": "patches/minecraft-collect-step-state.patch",
+      "sha256": "cfcab0c8f3f4b1e382d87cb75ee7ae74aa1d6c9eefdf812f7e31a0ab85c24f5b"
+    },
+    {
+      "file": "patches/minecraft-placement-state-evidence.patch",
+      "sha256": "8df9ceb15f52e8f45413f0684abb8be69a3ee4c3ac6225e5305ed6d79320625e"
+    },
+    {
+      "file": "patches/minecraft-crop-placement.patch",
+      "sha256": "b794c1bb60496a4c40c3cf0f28353790c52b4068a15dc28de8cafbd3fbbfeaa8"
+    },
+    {
+      "file": "patches/minecraft-goal-metrics.patch",
+      "sha256": "3e74938d49a3de01e353f76dfe405245d1ad328ce6e7e3530dbdff8fdf452452"
+    },
+    {
+      "file": "patches/minecraft-goal-closure.patch",
+      "sha256": "95e99ad2c65bc1acdc51754ec0c01e4299fd84416147fb820765ef0e852841ac"
+    },
+    {
+      "file": "patches/minecraft-method-await.patch",
+      "sha256": "c5764ee370bef7ecb0fa9814ba3901204ca9fd7d1d6d66191afaf10f6015a7f1"
+    },
+    {
+      "file": "patches/minecraft-viewer-observer.patch",
+      "sha256": "da16513cc6f886a245189574a4ce77c9447df675e2d805bf0550289341dbaa70"
+    },
+    {
+      "file": "patches/minecraft-online-client.patch",
+      "sha256": "53dd5608f9e970420e826213ab2153d830d5d080632969e95db804e43941b1da"
+    },
+    {
+      "file": "patches/minecraft-blueprint-rail-review.patch",
+      "sha256": "610eb0237b8080288c673259762667f0546f7403823bbdc708602b09e068d855"
+    }
+  ],
+  "hostRuntime": [
+    {
+      "file": "runtime.mjs",
+      "sha256": "607f14d6a0655b23d917d6b09e9bd539897fd77babc01f8120e455b9318a8342"
+    },
+    {
+      "file": "runtime.d.mts",
+      "sha256": "8c1b400e5fa0c7a7f94e77a824150a0cec9b18094ee671eba239ed1d0a378f13"
+    },
+    {
+      "file": "child-process.ts",
+      "sha256": "fd024917d535b023a889a5009c6b9715e7b7b1f491f806fa4f557e420fe3f322"
+    },
+    {
+      "file": "host-contract.ts",
+      "sha256": "f7928ebb9df8ac5633c178e62ad5551027bd6e95e3d59b89512aa47f63e57266"
+    }
+  ],
+  "viewerContent": {
+    "commit": "8536b28516e99ae78a0d11d74f9cef329242c10b",
+    "files": [
+      {
+        "file": "viewer-content.mjs",
+        "sha256": "2fa06dd5cf4fde0dcd3dcd6f9a1fb68b93af054a5929daa9e9bfd475f68deabc"
+      },
+      {
+        "file": "viewer-content.d.mts",
+        "sha256": "c9f952dd570e6ef172273405a752bfa7797db837625c01ec04c745002905dea0"
+      },
+      {
+        "file": "text-display.mjs",
+        "sha256": "b9bcedcb4c140068e887400123c889b7d5b124ba1243d44afd5c4895f11bd8a0"
+      },
+      {
+        "file": "viewer-appearance.mjs",
+        "sha256": "58d1e29900c22a936d4c0a2945bf3e9517f2a9a8191c3e6ca5159707f211bfb6"
+      },
+      {
+        "file": "viewer-appearance.d.mts",
+        "sha256": "3329eaa51e4ab1dc3eeffef291287cab1b9263bb0f53e5bdba13a8c67317a5c7"
+      },
+      {
+        "file": "viewer-ysm-assets.mjs",
+        "sha256": "236e1491afad6ac19136cd5b19d1c550a522d07a7649535db1eab2d5ea8a9382"
+      },
+      {
+        "file": "viewer-ysm-motion.mjs",
+        "sha256": "e4935066bea0fd85c769658c8cb7c84dcca2f3475dcfde74b4f425054fe97977"
+      },
+      {
+        "file": "viewer-observer.mjs",
+        "sha256": "670d39371cfa6d280432dcc3ebe86151a2aa766547eb5ca46ded57848c14920e"
+      },
+      {
+        "file": "viewer-observer.d.mts",
+        "sha256": "f056519d8dc5a5fc335701b95e12081734cc3330d49eabbe91fb7ed134932705"
+      },
+      {
+        "file": "viewer-photo-page.mjs",
+        "sha256": "b1460faf0869b75884c79d0d2afd16a53c4597ea935e5dfe471a8075a315e659"
+      },
+      {
+        "file": "viewer-page-assets.mjs",
+        "sha256": "f961e0b65f3408ff03fd9400861c87674b9d0ee8249577724871a9dfee1f0b99"
+      },
+      {
+        "file": "viewer-agent.mjs",
+        "sha256": "19a480f8dde21fabd8f1f7b5c286d56696d682383c9551373cb5aee0e9a6dea0"
+      },
+      {
+        "file": "viewer-agent.d.mts",
+        "sha256": "2c9e06042f7688ae4ca18fad0ed2d03d53074b9fe05b6968d5ff40098669e3c7"
+      }
+    ],
+    "agentSources": [
+      {
+        "file": "packages/modern-viewer/renderer-src/src/modern-viewer/agent-visual-protocol.js",
+        "sha256": "6b8daab1f4949b343c345dffbc2a12e2e21f1f2228a27d6e80a3428d181f9c29"
+      },
+      {
+        "file": "packages/modern-viewer/renderer-src/host/viewer-agent.mjs",
+        "sha256": "31fb836387b26d692d3e259a82972cfc00b37addf8cf6b80dd6f3d7dc2f77a3d"
+      }
+    ]
+  }
+}
