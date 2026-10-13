@@ -117,9 +117,13 @@ function createIpcLogger(send, area = "") {
   };
 }
 function emitLogNote(root, note, timezone) {
-  const target = note.area ? root.child(note.area) : root;
+  const target = note.area && typeof root.child === 'function' ? root.child(note.area) : root;
   const { kind: _kind, level, area: _area, msg, atMs, ...rest } = note;
-  target.emit(level, msg, { ...rest, ts: nowIso(timezone, new Date(atMs)) });
+  writeLog(target, level, msg, { ...rest, ts: nowIso(timezone, new Date(atMs)) });
+}
+function writeLog(target, level, msg, fields) {
+  if (typeof target?.emit === 'function') target.emit(level, msg, fields);
+  else if (typeof target?.[level] === 'function') target[level](msg, fields);
 }
 function logLines(stream, log, level, event) {
   if (!stream) return;
@@ -130,17 +134,17 @@ function logLines(stream, log, level, event) {
     carry = lines.pop() ?? "";
     for (const line of lines) {
       const trimmed = line.trim();
-      if (trimmed) log.emit(level, trimmed, { event });
+      if (trimmed) writeLog(log, level, trimmed, { event });
     }
   });
   stream.on("end", () => {
     const trimmed = carry.trim();
     carry = "";
-    if (trimmed) log.emit(level, trimmed, { event });
+    if (trimmed) writeLog(log, level, trimmed, { event });
   });
 }
 function logChildStdio(child, log) {
-  const stdio = log.child("stdio");
+  const stdio = typeof log.child === 'function' ? log.child("stdio") : log;
   logLines(child.stdout, stdio, "debug", "stdout");
   logLines(child.stderr, stdio, "warn", "stderr");
 }

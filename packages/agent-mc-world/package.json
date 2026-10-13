@@ -84,6 +84,7 @@
     "release-sources.json",
     "bridges",
     "scripts/build.mjs",
+    "scripts/viewer-input.mjs",
     "scripts/build-types.mjs",
     "scripts/verify-build.mjs",
     "vendor",
@@ -99,8 +100,8 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs && node scripts/build-types.mjs && node scripts/verify-build.mjs",
-    "build:engine": "node scripts/build.mjs",
-    "build:viewer": "node scripts/build.mjs",
+    "build:engine": "node scripts/build.mjs --without-viewer && node scripts/build-types.mjs && node scripts/verify-build.mjs",
+    "build:viewer": "node scripts/build.mjs --require-viewer && node scripts/build-types.mjs && node scripts/verify-build.mjs",
     "build:client-login": "node scripts/build-client-login.mjs",
     "start:mcp": "node bin/minecraft-agent-mcp.mjs",
     "start:minecraft": "node bin/minecraft-agent-client.mjs",

@@ -288,7 +288,7 @@ export class MinecraftWorldProxy implements World {
         /** shutdown RPC 超时后终止子进程。 */
       }
       await waitExit(child, 5000);
-      if (child.exitCode === null && !child.killed) child.kill();
+      if (child.exitCode === null && !child.killed) child.kill('SIGKILL');
     }
     this.teardownChild();
     this.host = null;
@@ -306,7 +306,7 @@ export class MinecraftWorldProxy implements World {
     this.child = child;
     if (this.host) logChildStdio(child, this.host.log);
     child.on('message', (msg) => { if (this.child === child) this.onMessage(msg as ChildToMain); });
-    child.on('exit', (code) => { if (this.child === child) this.onExit(code); });
+    child.on('exit', (code, signal) => { if (this.child === child) this.onExit(code, signal); });
     child.on('error', (err) => this.host?.log.error('Minecraft 引擎子进程出错', { err: String(err) }));
     this.lastConfigJson = JSON.stringify(this.opts.cfg);
     await this.rpc(
@@ -347,12 +347,12 @@ export class MinecraftWorldProxy implements World {
     this.pending.clear();
   }
 
-  private onExit(code: number | null): void {
+  private onExit(code: number | null, signal?: string | null): void {
     const wasStopping = this.stopping;
     this.teardownChild();
     if (wasStopping) return;
-    if (code === CONSOLE_KILL_EXIT_CODE) {
-      this.host?.log.warn('Minecraft 引擎子进程收到 0xC000013A 退出状态，宿主退出');
+    if (code === CONSOLE_KILL_EXIT_CODE || signal === 'SIGINT' || signal === 'SIGTERM') {
+      this.host?.log.warn(`Minecraft 引擎子进程收到中断（${signal ?? '0xC000013A'}），等待宿主关闭或明确重连`);
       this.stopping = true; // A child interrupt must not terminate its host or restart the game.
       this.host?.pushEvent({ts:nowIso(this.opts.timezone ?? 'UTC'),source:this.id,type:'minecraft.lifecycle',text:'Engine interrupted; reconnect explicitly.'},{trigger:'flush'}).catch(()=>{});
       return;

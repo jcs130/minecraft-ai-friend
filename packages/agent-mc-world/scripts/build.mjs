@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { transform } from 'esbuild';
+import { readViewerInput } from './viewer-input.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = join(root, 'dist/runtime');
@@ -39,7 +40,10 @@ for (const path of inputs) {
 }
 const lock = JSON.parse(await readFile(join(root, 'release-sources.json'), 'utf8'));
 const archive = join(root, lock.viewer.artifact);
-if (digest(await readFile(archive)) !== lock.viewer.sha256) throw new Error('Viewer artifact hash mismatch');
+const viewerInput = await readViewerInput(archive, lock.viewer.sha256, {
+  required: process.argv.includes('--require-viewer'), disabled: process.argv.includes('--without-viewer'),
+});
+if (!viewerInput.included) console.warn('Viewer skipped: ' + viewerInput.reason + '. Engine and SDK remain available.');
 await mkdir(join(root, 'dist'), { recursive: true });
 // Only generated asset trees: stale monitor captures and bytecode are never release inputs.
 for (const name of ['viewer', 'client-console', 'monitor']) {
@@ -47,6 +51,7 @@ for (const name of ['viewer', 'client-console', 'monitor']) {
   if (generated !== join(root, 'dist', name)) throw new Error('Invalid asset output path');
   await rm(generated, { recursive: true, force: true });
 }
+if (viewerInput.included) {
 execFileSync('tar', ['-xzf', archive, '-C', join(root, 'dist'),
   '--exclude=__pycache__', '--exclude=*.pyc', '--exclude=monitor/outputs',
   '--exclude=.gitignore', '--exclude=.npmignore'], { stdio: 'inherit' });
@@ -55,6 +60,7 @@ await cp(join(root, 'dist/viewer'), join(output, 'dist/viewer'), { recursive: tr
 await cp(join(root, 'dist/client-console'), join(output, 'dist/client-console'), { recursive: true });
 for (const directory of ['dist/viewer','dist/client-console','dist/monitor','dist/runtime/dist/viewer','dist/runtime/dist/client-console'])
   for (const path of await walk(join(root,directory))) files.push({file:relative(root,path).replaceAll('\\','/'),sha256:digest(await readFile(path))});
+}
 await writeFile(join(root, 'dist/build.json'), JSON.stringify({ schema: 'agent-mc-build/v1', protocol: 'agent-mc/v1',
-  core: 'owned-source', sourceFiles, files, viewer: lock.viewer }, null, 2) + '\n');
+  core: 'owned-source', sourceFiles, files, viewer: { ...lock.viewer, ...viewerInput } }, null, 2) + '\n');
 console.log(`Independent runtime: ${files.length} files. No framework checkout, patch step or network used.`);

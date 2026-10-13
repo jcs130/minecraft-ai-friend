@@ -18,6 +18,15 @@ import {MinecraftWorldProxy} from '../core/proxy.ts';
 import {MINECRAFT_CLIENT_DEFAULTS} from '../src/client/config.ts';
 import {FakeHost} from './method-host.ts';
 afterEach(()=>{vi.useRealTimers();state.children.length=0;});
+it.each(['SIGINT','SIGTERM'])('does not auto-restart an interrupted child (%s)',async signal=>{
+  vi.useFakeTimers();
+  const proxy=new MinecraftWorldProxy({cfg:structuredClone(MINECRAFT_CLIENT_DEFAULTS)}),host=new FakeHost();
+  const started=proxy.start(host),child=state.children[0],init=child.sent.find((m:any)=>m.req?.kind==='init');
+  child.emit('message',{t:'rep',id:init.id,ok:true,value:null});await started;
+  child.emit('exit',null,signal);
+  await vi.advanceTimersByTimeAsync(10000);expect(state.children).toHaveLength(1);
+  expect(host.events.some(e=>e.text.includes('崩了'))).toBe(false);await proxy.stop();
+});
 it('revokes a pending startup and ignores late IPC and exits from an older child',async()=>{
   const proxy=new MinecraftWorldProxy({cfg:structuredClone(MINECRAFT_CLIENT_DEFAULTS)});
   const host=new FakeHost(),starting=proxy.start(host);

@@ -13,6 +13,8 @@ export const MINECRAFT_DEFAULTS = {
   profilesFolder: '',
   /** Private scoped account file; only encrypted credential references are read by the client. */
   loginConfigFile: '',
+  /** Maximum gap between server keepalive packets; not an action retry budget. */
+  keepAliveTimeoutMs: 60_000,
   /**
    * 全链路的版本约定:服务器(Paper)、观察者客户端(Fabric+SpectatorPlus)、
    * mineflayer 协议必须使用同一版本。1.20.6 是 SpectatorPlus(观察者附身时补渲
@@ -197,6 +199,8 @@ export interface MinecraftConfigSection {
   auth?: 'offline' | 'microsoft';
   profilesFolder?: string;
   loginConfigFile: string;
+  /** Keepalive packet timeout in milliseconds, default 60 seconds. */
+  keepAliveTimeoutMs?: number;
   version: string;
   viewerPort: number;
   viewerAssetsDir: string;

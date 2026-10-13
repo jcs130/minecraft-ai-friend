@@ -47,6 +47,7 @@ export interface BridgeOptions {
   port: number;
   username: string;
   version: string;
+  keepAliveTimeoutMs?: number;
   authentication?: MinecraftAuthentication;
   /** Private account configuration, reread for every network connection. Empty disables automatic login. */
   loginConfigFile?: () => string;
@@ -447,6 +448,7 @@ export class Bridge {
     try {
       bot = mineflayer.createBot({ host, port, username, version: protocolVersion(version) || undefined,
         ...(this.opts.authentication?.botOptions() ?? { auth: 'offline' as const }),
+        checkTimeoutInterval: this.opts.keepAliveTimeoutMs ?? 60_000,
         logErrors: false });
     } catch (err) {
       log.warn(`createBot 失败: ${(err as Error).message}`);
@@ -473,6 +475,13 @@ export class Bridge {
       report: status => {
         log.info(`minecraft authentication ${status.status}`, { username, server: `${host}:${port}`, reason: status.reason });
         if (status.status === 'confirmed') activate();
+        if (status.status === 'blocked') queueMicrotask(() => {
+          // A wrong password/2FA/timeout needs operator attention. Reconnecting
+          // here would repeatedly submit the same failed credential.
+          if (this._bot !== bot || this.generation !== gen) return;
+          this.stopped = true;
+          bot.quit('服务器登录未通过，请检查账号配置后明确重连');
+        });
       } });
     this.serverLogin = login;
     this.bagFor(gen).register('server-login', login.stop);

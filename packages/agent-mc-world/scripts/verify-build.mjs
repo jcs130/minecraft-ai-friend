@@ -9,7 +9,11 @@ for (const entry of [...manifest.sourceFiles, ...manifest.files]) {
   if (hash(await readFile(new URL(entry.file, root))) !== entry.sha256) throw new Error('Build differs from source: ' + entry.file);
 }
 const sources=JSON.parse(await readFile(new URL('release-sources.json',root),'utf8'));
-if(hash(await readFile(new URL(sources.viewer.artifact,root)))!==sources.viewer.sha256)throw new Error('Viewer input hash mismatch');
+if (manifest.viewer.included !== false) {
+  if(hash(await readFile(new URL(sources.viewer.artifact,root)))!==sources.viewer.sha256)throw new Error('Viewer input hash mismatch');
+} else if (manifest.files.some(entry => /^dist\/(?:runtime\/dist\/)?(?:viewer|client-console|monitor)\//.test(entry.file))) {
+  throw new Error('Viewer assets leaked into an engine-only build');
+}
 const pkg = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
 if (pkg.dependencies?.cortico || pkg.devDependencies?.cortico || pkg.cortico) throw new Error('Default package must be host-independent');
 if (Object.keys(pkg.exports).some(key => /cortico/i.test(key)) || manifest.files.some(entry => /adapters\/(?:cortico|minecraft)/i.test(entry.file)))

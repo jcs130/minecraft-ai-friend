@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { io, type Socket } from 'socket.io-client';
@@ -7,7 +8,10 @@ import { startModernViewer } from '../core/modern-viewer.ts';
 import { MINECRAFT_CLIENT_DEFAULTS } from '../src/client/config.ts';
 import { bubbleEntity, freeViewerPort, viewerBot } from './fixtures/viewer-bot.ts';
 
-describe('packaged viewer content', () => {
+// Build first. An explicit engine-only manifest has no viewer to exercise.
+// A missing manifest or broken included bundle still fails normally.
+const engineOnly = JSON.parse(readFileSync(new URL('../dist/build.json', import.meta.url), 'utf8')).viewer.included === false;
+describe.skipIf(engineOnly)('packaged viewer content (requires locked optional viewer assets)', () => {
   it('serves original fonts and relays current text, maps and particles to both socket paths without replaying deleted dialogue', async () => {
     const { bot, protocol, registry } = viewerBot();
     const port = await freeViewerPort();

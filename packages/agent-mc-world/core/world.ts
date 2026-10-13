@@ -104,6 +104,7 @@ import {
 } from './policy.ts';
 import { markShowWindowClosed, type ShowTempo } from './show.ts';
 import { MinecraftLog, type MinecraftLogEntry } from './log.ts';
+import { observeInitialScene } from './initial-scene.ts';
 import {
   BodyLeaseArbiter,
   type BodyLeaseEvent,
@@ -2186,6 +2187,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_script',
     tags: ['act'],
     description: 'Run an agent-authored JavaScript async function body with params and a restricted mc SDK. '
+      + 'When supplying code (including validate:true), name is required: 1–80 characters. It is not required for index, api, runId or stop queries. '
       + 'mc.state() returns {sampledAt,connectionGeneration,snapshot,flight,queue,combatActive,combat,method}. '
       + 'Read position, dimension, health, food, inventory and equipment under snapshot, which can be null. '
       + 'snapshot.entities is a bounded array of {entityId?,name,kind,distance,direction,dy,visible}; snapshot.entitiesOmitted reports truncation. '
@@ -2261,7 +2263,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_scout',
     tags: ['read'],
     description:
-      'Queue read-only observations and independent trials: probe, observe (compact site geometry, voxels or collision rays), plus goto/flight/build/excavate/tunnel (always dry-run). Each trial uses the actual current position and world, without projecting an earlier trial destination or materials. needs gates on prior trial outcomes only, not hypothetical execution. Flight checks one segment before permission is granted; use mc_flight_plan for a projected multi-leg flight. Same queue and task events; does not change the world.',
+      'Queue read-only observations in steps:[{skill,...}]. For probe, shape is required: line/rect/triangle/arc/box, together with that shape’s coordinates; use mc_help skill:probe for its exact signature. For a simple nearby scene use mc_visual or observe. Also supports observe (compact site geometry, voxels or collision rays), plus goto/flight/build/excavate/tunnel (always dry-run). Each trial uses the actual current position and world, without projecting an earlier trial destination or materials. needs gates on prior trial outcomes only, not hypothetical execution. Flight checks one segment before permission is granted; use mc_flight_plan for a projected multi-leg flight. Same queue and task events; does not change the world.',
     parameters: {
       type: 'object',
       properties: {
@@ -3342,17 +3344,26 @@ export class MinecraftWorld implements World {
 
   /** 已有快照及最近执行终态；只读已有状态，不扫描、不推进增量基线。 */
   requestFacts(): WorldRequestFacts | null {
-    if (!this.bridge?.connected || !this.requestFactsCache) return null;
+    if (!this.bridge?.connected) return null;
+    // SDK hosts need not drain deferred event renders. Sample cheap live
+    // state here, independently of that delivery cache; no 16-block scan.
+    const snap = this.snapshot({ scanBlocks: false });
+    if (!snap) return null;
+    const parts = [{ key: 'sample', text: `[Minecraft 当前读数；采样 ${snap.realTime}]` },
+      ...narrateWorldSegments(snap, this.nearMarkNote(snap.position)).map(({ key, text }) => ({ key, text })),
+      { key: 'queue', text: renderQueue(this.executor?.status() ?? { running: null, waiting: [] }) }];
     const last = this.lastFinishedTask;
     // 终态可能刚投递，而下一拍快照尚未发生。读取最新原文，避免只有受理回执
     // 留在历史里时重做已经完成或受阻的单；日期也保留，不能当成当前队列。
     const outcome = renderLastTaskReadout(last
       ? { at: nowIso(this.timezone, new Date(last.at)), kind: last.kind, text: last.text }
       : null);
-    return { ...this.requestFactsCache, text: `${this.requestFactsCache.text}\n${outcome}`,
-      parts: [...(this.requestFactsCache.parts ?? []).map(part => ({ ...part })), { key: 'lastTask', text: outcome }],
-      snapshotTypes: [...this.requestFactsCache.snapshotTypes] };
+    parts.push({ key: 'lastTask', text: outcome });
+    return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts,
+      snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue'] };
   }
+
+  private initialSceneStop: (() => void) | null = null;
 
   console(): WorldConsoleDecl {
     const connected = this.bridge?.connected ?? false;
@@ -4064,6 +4075,7 @@ export class MinecraftWorld implements World {
       port: this.cfg.port,
       username: this.cfg.username || this.botName,
       version: this.cfg.version,
+      keepAliveTimeoutMs: this.cfg.keepAliveTimeoutMs,
       authentication: this.accountAuth.agent,
       loginConfigFile: () => this.cfg.loginConfigFile,
       viewerPort: this.cfg.viewerPort,
@@ -4153,6 +4165,7 @@ export class MinecraftWorld implements World {
   }
 
   async stop(): Promise<void> {
+    this.initialSceneStop?.(); this.initialSceneStop = null;
     this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
     this.shuttingDown = true;
     for (const auth of Object.values(this.accountAuth)) auth.stop();
@@ -6079,7 +6092,12 @@ export class MinecraftWorld implements World {
       && (!only.text.startsWith('/') || /^\/(?:msg|tell|w)[ \t]+[\p{L}\p{N}_.-]+[ \t]+\S[^\r\n]*$/u.test(only.text))
       && args.queue == null && only.needs === undefined && only.expect === undefined) {
       const bot = this.bridge?.bot;
-      if (!bot) return { text: this.toolLog(name, args, `[${name} 失败] 当前没有连接服务器，聊天未发送`), failed: true };
+      if (!bot) {
+        const connection = this.bridge?.connectionState;
+        const reason = connection && connection.protocolState !== 'closed' && !connection.ready
+          ? '正在等待服务器登录或出生点就绪' : '当前没有连接服务器';
+        return { text: this.toolLog(name, args, `[${name} 失败] ${reason}，聊天未发送`), failed: true };
+      }
       try {
         this.interruptIdle('outgoing-chat');
         sendChat(bot, only.text);
@@ -6214,6 +6232,7 @@ export class MinecraftWorld implements World {
   }
 
   protected onSpawn(): void {
+    this.initialSceneStop?.();
     const bot = this.bridge?.bot;
     if (!bot) return;
     this.hearingDetach?.();this.hearingDetach=attachHearing(bot,this.cfg.viewerAssetsDir??'');this.attention.reset();
@@ -6259,7 +6278,7 @@ export class MinecraftWorld implements World {
       'minecraft.event',
       [
         `[Minecraft] 已连入服务器 ${this.cfg.host}:${this.cfg.port},身份 ${this.chatName()}。`,
-        snap ? narrateWorld(snap, this.nearMarkNote(snap.position)) : '',
+        '正在接收出生点区块和在线名单；附近地形与人数稍后核实。',
         // 五格落盘跨重启活着:上一场设下的规矩必须有一句话说出来,且点明是上一场的
         renderPolicyEnv(this.policy.get(), this.policy.restored(), this.blueprintHeldScaffold()),
         // 第六格(fight)不跨重启。回弹是静默发生的,而她会按「我设过了」行事 ——
@@ -6273,6 +6292,11 @@ export class MinecraftWorld implements World {
       true,
     );
     // 服务端起来时回读到的难度:挂到这一刻才送得到她眼前(见 onServerDifficulty)
+    this.initialSceneStop = observeInitialScene(bot, () => this.bridge?.bot === bot, () => {
+      const loaded = this.snapshot();
+      if (loaded) this.emit('minecraft.world', '[Minecraft 出生点读数已更新]\n'
+        + narrateWorld(loaded, this.nearMarkNote(loaded.position)), false);
+    });
     this.flushDifficultyFact();
     // 重连换了实体,摄像机的附身会掉
     this.syncSpectator('bot 连入');
@@ -6729,16 +6753,9 @@ export class MinecraftWorld implements World {
       this.emit('minecraft.chat', `[MC] ${username}: ${message}`, mentionedInChat(message),
         { meta: { uname: username, socialScope: 'minecraft-server', ...identity } }, username);
     });
-    bot.on('whisper', (username: string, message: string, _translate: string, jsonMsg: unknown) => {
-      const identity = chatProvenance.identify(username, jsonMsg, bot.players);
-      if (!identity) return;
-      if (markMatched(jsonMsg)) return;
-      if (jsonMsg && typeof jsonMsg === 'object') this.chatClaimed.add(jsonMsg);
-      if (username === this.chatName()) return;
-      this.interruptIdle('whisper');
-      this.emit('minecraft.chat', `[MC 私聊] ${username}: ${message}`, true,
-        { meta: { uname: username, socialScope: 'minecraft-server', ...identity } }, username);
-    });
+    // Private identity is parsed from the raw component below. Mineflayer's
+    // default whisper regex can mistake a rank/tag (or a public quote) for a
+    // sender, so its high-level whisper event is deliberately not consumed.
     bot.on('title', (text: unknown) => {
       const t = minecraftTextComponent(text);
       if (t) this.emit('minecraft.event', `[Minecraft] 屏幕大字:${t}`, false);
@@ -6759,6 +6776,16 @@ export class MinecraftWorld implements World {
         return;
       }
       if (position !== 'chat' && position !== 'system') return;
+      const whisper = chatProvenance.incomingWhisper(jsonMsg, bot.players);
+      if (whisper) {
+        // Claim this component before the default regex can mistake a tag for a name.
+        markMatched(jsonMsg); this.chatClaimed.add(jsonMsg);
+        if (whisper.username === this.chatName()) return;
+        this.interruptIdle('whisper');
+        this.emit('minecraft.chat', `[MC 私聊] ${whisper.username}: ${whisper.message}`, true,
+          { meta: { uname: whisper.username, socialScope: 'minecraft-server', ...whisper.identity } }, whisper.username);
+        return;
+      }
       let unchangedQueryFeedback = false;
       if (position === 'system') {
         const reply = jsonMsg.toString().trim();
@@ -6796,9 +6823,7 @@ export class MinecraftWorld implements World {
         const text = jsonMsg.toString().trim();
         if (!text) return;
         if (unchangedQueryFeedback) return;
-        const privateMessage = key === 'commands.message.display.incoming'
-          || /^\S+ whispers(?: to you)?:? /i.test(text)
-          || /^\[[^\]]+ -> [^\]]+\] /.test(text);
+        const privateMessage = key === 'commands.message.display.incoming';
         if (key === 'commands.message.display.outgoing') {
           this.emit('minecraft.chat', `[MC 私聊发出] ${text}`, false);
           return;

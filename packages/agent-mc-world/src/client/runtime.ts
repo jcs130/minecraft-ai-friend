@@ -21,6 +21,8 @@ export interface MinecraftClientOptions {
   agentName?: string;
   modelFacts?: ModelFacts;
   decisions?: WorldHost['decisions'];
+  /** Explicit script mode; releases a barrier only after its call has settled. */
+  autoAcknowledgeBarriers?: boolean;
   log: Logger;
 }
 
@@ -247,10 +249,11 @@ export class MinecraftAgentClient {
     if (prior) { if (prior.signature !== signature) throw new Error('Request id reused with different arguments'); return prior.promise; }
     const replay = this.requests.read(callId, signature);
     if (replay) return replay;
-    if (this.closingTurn) throw new Error('Decision turn is ending');
+    const stopping = name === `${this.toolPrefix}_stop`;
+    if (this.closingTurn && !stopping) throw new Error('Decision turn is ending');
     if (turnId && this.turn?.id !== turnId) throw new Error('Unknown decision turn');
-    if (this.barrier) throw new Error(`Acknowledge tool barrier ${this.barrier} before the next call`);
-    if (this.turn && this.endRequested) throw new Error('Host must end the current decision turn before submitting more calls');
+    if (this.barrier && !stopping) throw new Error(`Acknowledge tool barrier ${this.barrier} before the next call`);
+    if (this.turn && this.endRequested && !stopping) throw new Error('Host must end the current decision turn before submitting more calls');
     const tool = this.tools().find(candidate => candidate.name === name);
     if (!tool) throw new Error(`Unknown game tool: ${name}`);
     if (signal?.aborted) throw new Error('Tool call cancelled before submission.');
@@ -289,6 +292,7 @@ export class MinecraftAgentClient {
       throw error;
     } finally {
       state.pending = false;
+      if (this.options.autoAcknowledgeBarriers && this.barrier === callId) this.acknowledgeBarrier(callId);
       if (this.calls.size > 1024) for (const [id, call] of this.calls) {
         if (!call.pending && id !== this.barrier) this.calls.delete(id);
         if (this.calls.size <= 512) break;

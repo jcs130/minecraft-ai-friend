@@ -486,7 +486,7 @@ export function narrateWorldSegments(
               .map((b) => `${whereIs(b.direction, b.distance, b.dy)}是${zhName(b.name)}${blockSuffix(b)}${blockCoordinateSuffix(b)}`)
               .join('、') +
             '。'
-        : '16 格内露出来的只有天然地形。',
+        : '当前已读且可见区域未见可报告的人工方块；未加载或被遮挡区域仍未知。',
     );
   }
   const structCmp = s.nearbyBlocks.map((b) =>
@@ -521,7 +521,7 @@ export function narrateWorldSegments(
     const covered = new Set(s.terrain.map((t) => t.direction));
     const flat = (Object.keys(DIRECTIONS) as Direction[]).filter((d) => !covered.has(d));
     if (flat.length > 0) tails.push(`${flat.map((d) => DIRECTION_ZH[d]).join('、')}边读到了，是平的`);
-    terrainText = `地形：${seg.join('、')}${tails.length > 0 ? `；${tails.join('；')}` : ''}。`;
+    terrainText = `地形：${[seg.join('、'), ...tails].filter(Boolean).join('；')}。`;
   }
   segs.push({ key: 'terrain', text: terrainText, cmp: '地形只随全量锚发' });
 
@@ -529,7 +529,7 @@ export function narrateWorldSegments(
   const others = s.players.filter(Boolean);
   segs.push({
     key: 'players',
-    text: others.length > 0 ? `服务器上还有：${others.join('、')}。` : '服务器上只有我一个人。',
+    text: others.length > 0 ? `当前收到的在线名单还有：${others.join('、')}。` : '当前名单尚未收到其他玩家；不能据此确认服务器只有我。',
     cmp: [...others].sort().join('、'),
   });
   return segs;

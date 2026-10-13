@@ -13,6 +13,33 @@ afterEach(async () => {
 });
 
 describe('login readiness', () => {
+  it('stops after rejected authentication instead of reconnecting and resending a bad password', async () => {
+    vi.useFakeTimers();
+    const dir = mkdtempSync(join(tmpdir(), 'login-failed-')), configFile = join(dir, 'accounts.json');
+    writeFileSync(configFile, JSON.stringify({ enabled: true, accounts: [{ server: 'localhost:25565', username: 'tester',
+      credentialEnv: 'UNUSED_TEST_CREDENTIAL', command: 'login' }] }));
+    const bot = Object.assign(new EventEmitter(), { _client: new EventEmitter(), loadPlugin() {}, quit: vi.fn(() => bot.emit('end', 'auth failed')) });
+    const create = vi.spyOn(mineflayer, 'createBot').mockReturnValue(bot as never), onDisconnect = vi.fn();
+    const log = { info() {}, warn() {}, error() {}, debug() {}, trace() {}, emit() {}, child() { return this; } };
+    const bridge = new Bridge({ host: 'localhost', port: 25565, username: 'tester', version: '1.20.6', viewerPort: 0,
+      loginConfigFile: () => configFile, log: log as never, onSpawn() {}, onDisconnect });
+    bridges.push(bridge);
+    try {
+      bridge.start(); bot.emit('message', { toString: () => 'MC_AUTH_FAILED wrong password' }, 'system');
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(bot.quit).toHaveBeenCalledOnce(); expect(onDisconnect).toHaveBeenCalledWith('auth failed', false, 0);
+      expect(create).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); rmSync(dir, { recursive: true, force: true }); }
+  });
+  it.each([undefined, 90_000])('passes the keepalive timeout to the protocol client (%s)', keepAliveTimeoutMs => {
+    const bot = Object.assign(new EventEmitter(), { _client: new EventEmitter(), loadPlugin() {}, quit() {} });
+    const create = vi.spyOn(mineflayer, 'createBot').mockReturnValue(bot as never);
+    const log = { info() {}, warn() {}, error() {}, debug() {}, trace() {}, emit() {}, child() { return this; } };
+    const bridge = new Bridge({ host: 'localhost', port: 25565, username: 'tester', version: '1.20.6',
+      viewerPort: 0, keepAliveTimeoutMs, log: log as never, onSpawn() {}, onDisconnect() {} });
+    bridges.push(bridge); bridge.start();
+    expect(create.mock.calls[0]![0]).toMatchObject({ checkTimeoutInterval: keepAliveTimeoutMs ?? 60_000 });
+  });
   it.each(['spawn-first', 'auth-first'])('requires both real spawn and configured authentication: %s', async order => {
     const dir = mkdtempSync(join(tmpdir(), 'login-ready-'));
     const configFile = join(dir, 'accounts.json');

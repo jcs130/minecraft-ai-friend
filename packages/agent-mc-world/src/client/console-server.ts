@@ -17,8 +17,16 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
   const token = randomBytes(32).toString('hex');
   const operations = new Map<string, { status: 'running' | 'completed' | 'failed'; at: string; error?: string }>();
   const pending = new Set<Promise<void>>();
-  const files = new Map(await Promise.all(['index.html', 'console.css', 'console.js', 'metrics.html', 'metrics.css', 'metrics.js'].map(async name =>
-    ['/' + (name === 'index.html' ? '' : name === 'metrics.html' ? 'metrics' : name), await readFile(join(assets, name))] as const)));
+  let files: Map<string, Buffer>;
+  try {
+    files = new Map(await Promise.all(['index.html', 'console.css', 'console.js', 'metrics.html', 'metrics.css', 'metrics.js'].map(async name =>
+      ['/' + (name === 'index.html' ? '' : name === 'metrics.html' ? 'metrics' : name), await readFile(join(assets, name))] as const)));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    // Engine/SDK builds may omit the optional UI. Keep local control APIs
+    // available, without pretending an incomplete asset bundle is a viewer.
+    files = new Map();
+  }
   let closing = false;
   const server = createServer(async (request, response) => {
     const address = server.address();
@@ -33,9 +41,12 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
       || request.headers['sec-fetch-site'] === 'cross-site') { json(403, { error: 'Local operator access only.' }); return; }
     try {
       if (request.method === 'GET') {
-        if (request.url === '/api/client') { json(200, { ...await runtime.operatorState() as object, controlToken: token, operations: Object.fromEntries(operations) }); return; }
+        if (request.url === '/api/client') { json(200, { ...await runtime.operatorState() as object, webConsoleAvailable: files.has('/'), controlToken: token, operations: Object.fromEntries(operations) }); return; }
         if (request.url === '/api/harness/metrics') { json(200, runtime.metrics.snapshot(runtime.status().phase)); return; }
         const file = files.get(request.url ?? '');
+        if (!file && (request.url === '/' || request.url === '/metrics')) {
+          json(503, { error: '本构建未包含网页控制台；SDK/MCP 仍可用。准备匹配的 viewer 资源包后重新构建可启用网页。' }); return;
+        }
         if (!file) { json(404, { error: 'Not found.' }); return; }
         response.writeHead(200, { 'content-type': request.url === '/' || request.url === '/metrics' ? 'text/html; charset=utf-8'
           : request.url?.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8',

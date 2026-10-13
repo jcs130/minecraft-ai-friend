@@ -13,6 +13,8 @@
 
 MCP ListTools 的 `_meta["agent-mc/v1"]` 公开 tags、barrierAfter、endsTurn、interruptible。CallTool 的 structuredContent 保留 execution、events、control、endsTurn、failed 与制品引用；content 同时保留可读文本和真实图片。
 
+脚本宿主可在 SDK 构造选项启用 `autoAcknowledgeBarriers:true`，仅在当前调用结算后自动确认。默认保持显式确认。`mc_stop` 和 `disconnect()` 可越过屏障用于停止。SDK 的确认入口为 `acknowledgeBarrier(requestId)`，不在游戏 `tools()` 中；MCP `tools/list` 包含 `mc_protocol`，以 `action:"ack_barrier", id:requestId` 确认。详见 [客户端兼容修订](client-fixes-20261013.md)。
+
 ## 受理、终态和取消
 
 execution 包含 kind、跨引擎生命周期唯一的 id、phase、terminal、goalCompleted、evidence。phase 可为 accepted、running、suspended、validated、completed、partial、blocked、cancelled、superseded、rejected。accepted/running/suspended 不终结；validated 只表示校验结束。goalCompleted 恒为 false，宿主自行作出目标判断。

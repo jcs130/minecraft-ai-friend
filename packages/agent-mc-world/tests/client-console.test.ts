@@ -12,10 +12,10 @@ import { startMcpStdio } from '../src/mcp/stdio.ts';
 
 const cleanups: Array<() => Promise<void> | void> = [];
 afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close(); });
-async function setup(action: (name: string) => Promise<void> = async () => {}) {
+async function setup(action: (name: string) => Promise<void> = async () => {}, withAssets = true) {
   const assets = mkdtempSync(join(tmpdir(), 'mc-console-test-'));
   cleanups.push(() => rmSync(assets, { recursive: true, force: true }));
-  for (const file of ['index.html', 'console.js', 'console.css', 'metrics.html', 'metrics.js', 'metrics.css']) writeFileSync(join(assets, file), 'fixture');
+  if (withAssets) for (const file of ['index.html', 'console.js', 'console.css', 'metrics.html', 'metrics.js', 'metrics.css']) writeFileSync(join(assets, file), 'fixture');
   const runtime = { operatorState: async () => ({ schema: 'minecraft-client-console/v1', runtime: { phase: 'disconnected' },
     connection: { accounts: { agent: { mode: 'microsoft', phase: 'awaiting-user', challenge: { userCode: 'FIXTURE-1234' } } } } }),
     operatorAction: vi.fn(action), metrics: { snapshot: () => ({ schema: 'metrics', phase: 'disconnected' }) }, status: () => ({ phase: 'disconnected' }) };
@@ -33,6 +33,16 @@ it('serves the operator UI and private challenge separately from read-only model
   expect(JSON.stringify(metrics)).not.toMatch(/FIXTURE|controlToken/);
   expect((await fetch(app.url + 'auth/agent')).status).toBe(404);
   expect((await fetch(app.url + 'metrics')).headers.get('content-type')).toContain('text/html');
+});
+it('keeps the local control API usable without optional viewer assets', async () => {
+  const app = await setup(undefined, false);
+  const page = await fetch(app.url);
+  expect(page.status).toBe(503);
+  expect(await page.text()).toContain('未包含网页控制台');
+  expect((await fetch(app.url + 'metrics')).status).toBe(503);
+  expect(await (await fetch(app.url + 'api/client')).json()).toMatchObject({ webConsoleAvailable: false });
+  expect((await app.post('{"action":"disconnect"}')).status).toBe(202);
+  expect(app.runtime.operatorAction).toHaveBeenCalledWith('disconnect');
 });
 it('requires local Host/Origin and the process nonce; GET cannot execute game or launcher actions', async () => {
   const app = await setup();
