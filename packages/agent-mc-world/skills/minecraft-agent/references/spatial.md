@@ -54,14 +54,28 @@ available. It photographs the **actual loaded renderer scene** without moving
 the body, issuing camera controls to the game, or loading remote terrain:
 
 ```json
-{"mode":"overview","overview":{"center":[103,-31],"span":32,"grid":4,"markers":[{"at":[103,64,-31],"label":"landing"}]}}
+{"mode":"overview","overview":{"center":[103.5,-30.5],"span":32,"markers":[{"at":[103,64,-31],"label":"landing"},{"at":[105.2,64,-28.7],"anchor":"position","label":"exact"}]}}
 ```
 
 Omit `overview` to center on the current player. `span` is image width in blocks
-(8–96); depth follows image aspect ratio. North is -Z, right is +X. Grid lines
-are absolute integer block boundaries. Up to eight XYZ pins (labels ≤24 chars)
-use the same orthographic projection as the scene; their Y is supplied by you,
-**not measured surface height**. Grid 0 hides lines. This mode has no game HUD.
+(8–2048); depth follows image aspect ratio. Up to 128 XYZ pins are accepted
+(names ≤24 chars). North is -Z, right is +X. Grid lines are block boundaries.
+
+- A pin defaults to `anchor:"block"`: integer `at:[x,y,z]` identifies a cell;
+  it is drawn at **[x+0.5,y+0.5,z+0.5]**, including negative coordinates.
+  The label keeps the original block indices in square brackets.
+- `anchor:"position"` draws the exact continuous XYZ without offset, even if
+  its values are integers. SELF always uses the actual continuous position.
+  `center:[x,z]` also remains an exact camera coordinate.
+- `grid:"auto"` (default) scales spacing with scene width; numeric 1–2048
+  selects an interval, 0 hides lines. `labels:"auto"` switches dense scenes to
+  IDs; `full` asks for coordinates, `ids` asks for short IDs. P1, P2, ... follow
+  input order. Colliding labels may be hidden with a count; points stay drawn.
+- For a regional view, e.g. `span:512,grid:32,labels:"ids"`, enlarge the view
+  only over terrain already received. This does not request distant chunks.
+
+Pins use the same projection as the terrain; their Y is supplied by you,
+**not measured surface height**. This mode has no game HUD.
 Unmeshed columns are hatched, not assumed empty. Roofs/bridges hide lower layers;
 use `observe sites`, voxels or slices for support, headroom and vertical layers.
 Unknown/missing image support returns an explicitly labeled data fallback.

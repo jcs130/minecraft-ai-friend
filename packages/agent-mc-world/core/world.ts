@@ -4562,8 +4562,9 @@ export class MinecraftWorld implements World {
       const description = capture.overview ? [
         `[mc_visual overview] ${capture.capturedAt} ${dimension} ${capture.width}×${capture.height}；北=-Z，右=+X。`,
         `范围 X[${coord(capture.overview.bounds.minX)},${coord(capture.overview.bounds.maxX)}] Z[${coord(capture.overview.bounds.minZ)},${coord(capture.overview.bounds.maxZ)}]；网格=${capture.overview.grid}；已渲染区块 ${capture.overview.coverage.meshed}/${capture.overview.coverage.total}。`,
-        `本人 XYZ=${capture.overview.player.at.map(coord).join(',')}（${capture.overview.player.inFrame ? '图中 SELF' : '画面外'}）；像素左上为原点，X/Z 按范围线性映射。标记高度为输入，非测量。仅俯视可见面，斜线区未加载；桥下/屋内、支撑净空用 mc_scout 核对。`,
-        capture.overview.pins.some(pin => !pin.inFrame) ? `画面外标记：${capture.overview.pins.filter(pin => !pin.inFrame).map(pin => pin.id).join(',')}` : '',
+        `本人 XYZ=${capture.overview.player.at.map(coord).join(',')}（${capture.overview.player.inFrame ? '图中 SELF' : '画面外'}）；像素原点在左上。block 标记加0.5落格中心，position/SELF 保留原值；P序号对应输入顺序，高度非测量。仅俯视可见面，斜线区未加载；支撑净空用 mc_scout 核对。`,
+        capture.overview.labels?.hidden ? `${capture.overview.labels.hidden} 个标签因重叠隐藏，点位仍在。` : '',
+        capture.overview.pins.some(pin => !pin.inFrame) ? `画面外标记 ${capture.overview.pins.filter(pin => !pin.inFrame).length} 个：${capture.overview.pins.filter(pin => !pin.inFrame).slice(0, 8).map(pin => pin.id).join(',')}${capture.overview.pins.filter(pin => !pin.inFrame).length > 8 ? '…' : ''}` : '',
         focus ? `关注：${focus}` : '',
         moved > 2 ? `拍摄期间本人移动约 ${moved.toFixed(1)} 格；图中坐标以拍摄时刻为准。` : '',
       ].filter(Boolean).join('\n') : [
