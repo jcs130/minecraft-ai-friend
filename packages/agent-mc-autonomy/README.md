@@ -70,6 +70,15 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.11: keep actionable surroundings in planner and strategic reviews
+
+Nearby life, terrain and visible structures precede lengthy task geometry in the
+context budget. The planner's receipt copy omits transport metadata and exact
+duplicate receipt text; control processing and the original journal are unchanged.
+Strategic reviews include these surroundings, both ends of bounded terminal results
+and original handles. Hosts are asked to ground stages in this world's evidence and
+the standing/user goal, rather than importing objectives from unrelated memories.
+
 ### 0.1.10: retain JSON-rich action outcomes under tight context budgets
 
 Terminal fact previews are fitted against the complete serialized request, including

@@ -63,6 +63,24 @@ def test_review_summary_keeps_tools_and_material_stagnation_visible(runtime):
     assert len(review["summary"].encode("utf-8")) < 1800
 
 
+def test_review_keeps_observed_structures_and_terminal_outcome(runtime):
+    port, clock, publish = runtime
+    facts = snapshot(clock[0])["facts"]
+    facts["parts"].extend([
+        {"key": "structure", "text": "crafting_table at (-73,71,302)"},
+        {"key": "terrain", "text": "east is loaded and level"},
+        {"key": "lastTask", "text": "task ended: " + "geometry " * 500 + "\nplacement failed: occupied", "original": "log:terminal"}])
+    publish(facts=facts)
+    review = port.offer()["review"]
+    inspected = port.decide(review["id"], "inspect")
+    assert inspected["facts"]["structure"] == "crafting_table at (-73,71,302)"
+    assert inspected["facts"]["terrain"] == "east is loaded and level"
+    assert "task ended" in inspected["facts"]["lastTask"] and "placement failed: occupied" in inspected["facts"]["lastTask"]
+    assert inspected["fact_originals"]["lastTask"] == "log:terminal"
+    assert len(inspected["facts"]["lastTask"].encode("utf-8")) <= 1000
+    assert "standing goal" in inspected["next"] and "fresh evidence" in inspected["next"]
+
+
 @pytest.mark.parametrize("changes", [
     {"updated_at": datetime.fromtimestamp(9900, timezone.utc).isoformat()},
     {"updated_at": datetime.fromtimestamp(10031, timezone.utc).isoformat()},

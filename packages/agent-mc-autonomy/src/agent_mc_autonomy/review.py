@@ -12,6 +12,7 @@ from datetime import datetime
 
 from .configuration import _boolean, _integer
 from .mailbox import Mailbox, observation
+from .observations import fact_preview, spatial_text
 
 
 @dataclass(frozen=True)
@@ -48,7 +49,8 @@ def review_observation(status, now):
     pending = [{key: task.get(key) for key in ("kind", "id", "phase", "terminal")} for task in snapshot.get("pending", [])[:16]]
     useful = {key: facts.get(key, "")[:size] for key, size in (
         ("body", 180), ("gear", 420), ("foodReserve", 160), ("life", 250), ("place", 180),
-        ("clock", 80), ("queue", 350), ("lastTask", 300))}
+        ("clock", 80), ("queue", 350), ("structure", 300), ("terrain", 250))}
+    useful["lastTask"] = fact_preview(spatial_text(facts.get("lastTask", "")), 1000)
     reads = snapshot.get("read_activity") or {}
     reads = {key: min(999, reads[key]) for key in (
         "mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original")
@@ -57,12 +59,15 @@ def review_observation(status, now):
     evidence = {"sampled_at": snapshot["updated_at"], "phase": snapshot["phase"], "connected": snapshot.get("game_connected") is True,
                 "standing_goal": str(snapshot.get("standing_goal", ""))[:600],
                 "current_goal": {key: active.get(key) for key in ("id", "goal", "mode")}, "pending": pending,
-                "facts": useful, "planner_error": snapshot.get("planner_error"),
+                "facts": useful,
+                "fact_originals": {part["key"]: part["original"] for part in snapshot.get("facts", {}).get("parts", [])
+                                   if part.get("key") in useful and part.get("original")},
+                "planner_error": snapshot.get("planner_error"),
                 "planner_failures": snapshot.get("planner_failures", 0), "runtime_error": snapshot.get("error"), "read_activity": reads}
     # Clocks, sight direction, repeated observation task IDs and positional chatter are not urgent changes.
     material = {key: useful[key] for key in ("body", "gear", "foodReserve")}
     terminal = useful["lastTask"]
-    if re.search(r'"skill"\s*:\s*"observe"', terminal) and "完成" in terminal:
+    if re.search(r'"skill"\s*:\s*"observe"', facts.get("lastTask", "")) and "完成" in facts.get("lastTask", ""):
         terminal = ""  # Repeated successful look-only tasks are not new survival progress.
     urgent = "runtime_failed" if snapshot["phase"] == "failed" else (
         "death" if re.search(r"生命\s*0(?:\.0)?\s*/", useful["body"]) else None)
@@ -253,7 +258,7 @@ class ReviewPort:
             stage = {"request_id": previous["request_id"], "delivery": previous["delivery"], "can_revise": can_revise} if previous else None
             if decision == "inspect":
                 return {"heartbeat_id": review_id, "stage_delivery": stage,
-                        "next": "Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending.",
+                        "next": "Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending. Keep stages within the standing goal and user intent; server-specific quests, exams or capabilities need fresh evidence from this world, not unrelated conversation memories.",
                         "last_decision": state.get("last_decision"), **review["evidence"]}
             request_id = self.request_id(review_id)
             existing = self.mailbox.get(request_id)

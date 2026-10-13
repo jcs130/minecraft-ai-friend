@@ -690,6 +690,23 @@ def test_large_chinese_receipt_has_bounded_preview_and_lossless_originals(framew
     assert json.loads((tmp_path / "receipts.jsonl").read_text(encoding="utf-8"))["result"] == result
 
 
+def test_planner_receipt_omits_transport_ids_and_exact_duplicate_text_only(framework_module, tmp_path, run_async):
+    module, bridge, controller = setup(framework_module, tmp_path, None)
+    result = {"text": "task accepted, not completed", "failed": False, "protocol": "agent-mc/v1",
+              "control": {"requestId": "req", "turnId": "turn", "barrierAfter": True},
+              "execution": {**action(), "evidence": {"receipt": "task accepted, not completed", "outcomeKnown": True}},
+              "events": [{"type": "chat", "text": "help"}], "blobs": []}
+    compact = json.loads(run_async(controller.archive_receipt("req", "mc_do", result)))
+    assert "control" not in compact and "protocol" not in compact
+    assert compact["text"] == result["text"]
+    assert compact["execution"] == {**action(), "evidence": {"outcomeKnown": True}}
+    assert compact["events"] == result["events"]  # Nonempty external evidence is not transport noise.
+    assert json.loads((tmp_path / "receipts.jsonl").read_text())["result"] == result
+    result["execution"]["evidence"]["receipt"] = "different native evidence"
+    other = json.loads(run_async(controller.archive_receipt("req-2", "mc_do", result)))
+    assert other["execution"]["evidence"]["receipt"] == "different native evidence"
+
+
 def test_realclock_alone_does_not_trigger_another_decision(framework_module):
     module = importlib.import_module("agent_mc_autonomy.controller")
     parts = [{"key": "body", "text": "health 20/20"}]

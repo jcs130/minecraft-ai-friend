@@ -5,6 +5,18 @@ import re
 from collections import Counter
 
 
+def receipt_view(value):
+    """Remove transport-only fields and exact repeats from the planner's copy."""
+    result = {k: v for k, v in value.items() if k not in {"protocol", "control"}
+              and not (k in {"events", "blobs"} and not v)}
+    execution = value.get("execution")
+    if isinstance(execution, dict) and isinstance(execution.get("evidence"), dict):
+        evidence = execution["evidence"]
+        if isinstance(value.get("text"), str) and evidence.get("receipt") == value["text"]:
+            result["execution"] = {**execution, "evidence": {k: v for k, v in evidence.items() if k != "receipt"}}
+    return result
+
+
 def spatial_summary(value):
     result = {k: value[k] for k in ("source", "observedAt", "dimension", "kind", "bounds", "unknownCells") if k in value}
     result["feet"] = value.get("frame", {}).get("feet")

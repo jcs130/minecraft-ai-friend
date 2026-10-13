@@ -11,7 +11,7 @@ from pathlib import Path
 from .bridge import json_content, outcome, text_content
 from .context import assemble, encode
 from .fast import FastPolicy, focus_state, rule_focus
-from .observations import spatial_text
+from .observations import receipt_view, spatial_text
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .planner import PlannerResponseError
 
@@ -260,8 +260,9 @@ class Controller:
         original = encode(result)
         with (self.data / "receipts.jsonl").open("a", encoding="utf-8") as output:
             output.write(encode({"requestId": request_id, "turnId": self.turn, "tool": name, "result": result}) + "\n")
+        view = receipt_view(result)
         if len(original.encode("utf-8")) <= 6000:
-            return original
+            return encode(view)
         # Chunks remain queryable through the existing artifact tool. JavaScript
         # measures maxLength in UTF-16; 16000 Python characters fit even with emoji.
         refs = []
@@ -272,7 +273,7 @@ class Controller:
         # help pages must not become a 10 KiB preview that evicts its own reply.
         preview = spatial_text(result.get("text", "")).encode("utf-8")[:2800].decode("utf-8", errors="ignore")
         return encode({"text": preview, "failed": result.get("failed"),
-                       "control": result.get("control"), "execution": result.get("execution"),
+                       "execution": view.get("execution"),
                        "original_chunks": refs, "retrieve": "mc_original(handle,offset,limit), chunks in order"})
 
     async def original_page(self, arguments):

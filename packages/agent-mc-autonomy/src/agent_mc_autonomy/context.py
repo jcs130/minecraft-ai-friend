@@ -102,7 +102,7 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
         raise ValueError("context_budget_exceeded: stable rules, goal, tool schemas and output reserve do not fit")
     # Current state replaces by key; omit old keys that are absent in this sample.
     unique = {part["key"]: part for part in facts.get("parts", [])}
-    priority = {key: rank for rank, key in enumerate(("body", "health", "place", "gear", "foodReserve", "queue", "lastTask", "structure"))}
+    priority = {key: rank for rank, key in enumerate(("body", "health", "place", "gear", "foodReserve", "queue", "life", "terrain", "structure", "lastTask"))}
     omitted = []
     for key, fact in sorted(unique.items(), key=lambda item: priority.get(item[0], len(priority))):
         # The internal change-detection hash is not gameplay evidence. Repeating
@@ -115,16 +115,26 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
             # Native JSON is escaped again inside the request. Subtracting its
             # serialized excess from raw text bytes can wrongly declare that no
             # preview fits. Measure each candidate as part of the actual request.
-            lower, upper, best = 700, min(2400, len(fact.get("text", "").encode("utf-8"))), fact
-            while lower <= upper:
-                allowance = (lower + upper) // 2
-                candidate = {**fact, "text": fact_preview(fact["text"], allowance), "abridged": True}
-                tail["current_facts"][-1] = candidate
+            for trim_handles in (False, True):
+                if trim_handles:
+                    # Fully shown facts need no second copy of their long opaque
+                    # archive IDs. The existing facts/archive query recovers them;
+                    # an abridged task always retains its direct original handle.
+                    for previous in tail["current_facts"][:-1]:
+                        if not previous.get("abridged"):
+                            previous.pop("original", None)
+                lower, upper, best = 700, min(2400, len(fact.get("text", "").encode("utf-8"))), fact
+                while lower <= upper:
+                    allowance = (lower + upper) // 2
+                    candidate = {**fact, "text": fact_preview(fact["text"], allowance), "abridged": True}
+                    tail["current_facts"][-1] = candidate
+                    if cost() <= context_tokens:
+                        best, lower = candidate, allowance + 1
+                    else:
+                        upper = allowance - 1
+                tail["current_facts"][-1] = best
                 if cost() <= context_tokens:
-                    best, lower = candidate, allowance + 1
-                else:
-                    upper = allowance - 1
-            tail["current_facts"][-1] = best
+                    break
         if cost() > context_tokens:
             tail["current_facts"].pop()
             omitted.append(key)
