@@ -1,5 +1,10 @@
 # 异世界千灯纪 · 本地整合项目
 
+## 通用 Minecraft Agent 核心
+
+独立客户端核心位于 [packages/agent-mc-world](packages/agent-mc-world)。Cortico World、DSH 与服务器资料包通过版本化 SDK/MCP 引用同一份核心。它拥有独立构建、公开类型和离线测试，不启动主模型循环，也不要求运行本仓库的服务器服务。
+
+
 一个运行在本机的 **Minecraft 多 Agent 共生服务器**：真人玩家、房主女神、运营 Agent 团队、自主生存
 Agent 与女仆妖精 Agent 共享同一个世界，各自有独立职责与入口。
 

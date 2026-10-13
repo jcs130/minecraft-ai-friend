@@ -1,0 +1,19 @@
+{
+  "repository": "https://github.com/jcs130/mc-visual-console",
+  "commit": "941e8160817b60df0a4fab981ea9e9e2ebe054b6",
+  "changes": "Only relative import relocation; declarations are local host types.",
+  "files": [
+    {
+      "source": "packages/modern-viewer/renderer-src/src/modern-viewer/item-profile.js",
+      "local": "core/viewer-item-profile.mjs",
+      "sourceSha256": "454c14b0fab9ee4355e954052cd74b0e238e53f3ed9d7252f758b5bc22974d7c",
+      "sha256": "454c14b0fab9ee4355e954052cd74b0e238e53f3ed9d7252f758b5bc22974d7c"
+    },
+    {
+      "source": "packages/modern-viewer/renderer-src/host/viewer-head-textures.mjs",
+      "local": "core/viewer-head-textures.mjs",
+      "sourceSha256": "4b0b095ae5a31b9c17413a2e682f69ca99d39b7c7006423f2909f6dc90adc47f",
+      "sha256": "be5fc6d730f306c2d003879c6957585d68aefd9e403a64d5d9be088fc415b764"
+    }
+  ]
+}

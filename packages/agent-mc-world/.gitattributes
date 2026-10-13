@@ -1,0 +1,6 @@
+# These audited dependency declarations carry exact byte hashes. Preserve the
+# original bytes across Windows checkouts and git archive.
+vendor/native-types/** -text whitespace=-trailing-space,-space-before-tab,cr-at-eol
+
+# Preserve the imported implementation's existing EOF spacing during this move.
+core/** whitespace=-blank-at-eof

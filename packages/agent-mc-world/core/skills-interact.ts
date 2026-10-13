@@ -1,0 +1,2123 @@
+/**
+ * 右键这个世界:use 及其各种形态(点格子、对活物、写告示牌、上船、与猪灵交易),
+ * 以及 ride、lead、anvil、grindstone。
+ *
+ * 右键的结果一律回读世界或背包再报,不按客户端预测说话。
+ */
+import { Vec3 } from 'vec3';
+import type { Bot } from 'mineflayer';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { isDeepStrictEqual } from 'node:util';
+import pathfinderPkg from 'mineflayer-pathfinder';
+import { BLOCK_FACES, cellOnFace, type BlockFace, type Cell } from './geometry.ts';
+import {
+  AIR_NAMES, FACE_ZH, LIQUIDS, blockAtCell, blockProp, cellText, dimensionOf, feetOf, resolveAt,
+} from './cell-facts.ts';
+import { zhDimension, zhEntity, zhName } from './names.ts';
+import { SIGN_RE, contentsText, signLinesText, zhThing } from './receipt.ts';
+import { Aborted, SkillBlocked, SkillNoop, checkAbort, sleep, type SkillContext } from './skill-context.ts';
+import {
+  FEED_ITEMS, TAME_ITEMS, TRUST_ITEMS, animalStateNote, dyeColorOf, isKnownTarget, readHorseTamed, readSaddled, readSheepColor,
+  unknownUseTargetText,
+} from './entity-facts.ts';
+import { HOE_TILLED, SHOVEL_PATH } from './blueprint-registry.ts';
+import {
+  askedLabel, invCount, invGains, invItemNamed, invLosses, invSnapshot, itemAsked, noSuchItem, type InvPred,
+} from './inventory.ts';
+import { SEED_CROP, noteTilled, noteWork } from './placed-ledger.ts';
+import { isBabyPiglin } from './piglin.ts';
+import { DIRECTION_ZH, bearing, canSeeEntity, droppedStackOf } from './terrain.ts';
+import { findEntity, gotoGoal, reachCell } from './travel.ts';
+import { type SkillCall } from './skills.ts';
+import { skillTrade } from './skills-gather.ts';
+import { consumeHeldFood, equipNamed } from './skills-craft.ts';
+import { matchItemName } from './chests.ts';
+import {
+  ANVIL_BLOCKS, STATION_FIND_R, WINDOW_SETTLE_MS, findStationCell, openStationWindow,
+  containerStacks, putIntoStation, rememberWindow, stationItemFacts, type StationWindow,
+} from './containers.ts';
+import { isSpawnAnchorBlock } from './policy.ts';
+import { DRINKABLES, maxDurabilityOf } from './item-facts.ts';
+import { nearestBoat } from './placement.ts';
+import { itemMatchesPick } from './item-pick.ts';
+import { itemCustomName } from './item-display.ts';
+import { windowSnapshot } from './viewer-state.ts';
+import { consumesOpenWindow, selectionMenuTitle, storageWindow } from './window-semantics.ts';
+import { clearHandForBlockInteraction, needsBareHandToInteract, withPreparedInteractionHand } from './hand-interaction.ts';
+import { farmingClickCell, floodedCropSpace } from './farming-target.ts';
+import { cellTarget, type BowShotResult } from './ranged.ts';
+import { rangedBlockedText } from './melee.ts';
+
+const { goals } = pathfinderPkg;
+
+type UseHand = { name: string; type: number; metadata: number; customName: string | null;
+  nbt: unknown; components: unknown } | null;
+type UsePacket = { kind: 'block'; position: Vec3 } | { kind: 'entity'; id: number } | { kind: 'item' };
+type UseDispatch = { bot: Bot; hand: UseHand; ctx: SkillContext; packet: UsePacket };
+const useDispatch = new AsyncLocalStorage<UseDispatch>();
+const guardedUseClients = new WeakSet<object>();
+
+function useHandOf(item: Bot['heldItem']): UseHand {
+  if (!item) return null;
+  const durable = maxDurabilityOf(item.name) !== null;
+  const nbt = structuredClone(item.nbt ?? null) as { value?: Record<string, unknown> } | null;
+  if (durable && nbt?.value) delete nbt.value.Damage;
+  const components = (item as unknown as { components?: Array<{ type?: string }> }).components;
+  return structuredClone({ name: item.name, type: item.type, metadata: durable ? 0 : item.metadata,
+    customName: itemCustomName(item),
+    nbt: durable && nbt?.value && Object.keys(nbt.value).length === 0 ? null : nbt,
+    components: components?.filter((component) => !durable
+      || !['damage', 'minecraft:damage'].includes(component.type ?? '')) ?? [] });
+}
+
+function assertUseHand(bot: Bot, hand: UseHand, ctx: SkillContext): void {
+  checkAbort(ctx);
+  if (!isDeepStrictEqual(useHandOf(bot.heldItem), hand)) {
+    throw new SkillBlocked(`右键发送前主手已改变，需要${hand ? hand.customName ?? zhName(hand.name) : '空手'}；没有发送这次使用`,
+      [], 'local', 'use-hand-changed');
+  }
+}
+
+async function prepareUseHand(bot: Bot, hand: UseHand, ctx: SkillContext): Promise<void> {
+  checkAbort(ctx);
+  if (!isDeepStrictEqual(useHandOf(bot.heldItem), hand)) {
+    if (!hand) await clearHandForBlockInteraction(bot, true);
+    else {
+      const item = bot.inventory.items().find((candidate) => isDeepStrictEqual(useHandOf(candidate), hand));
+      if (!item) throw new SkillBlocked(`右键前包里已没有本次选定的${hand.customName ?? zhName(hand.name)}；没有发送使用`);
+      await bot.equip(item, 'hand');
+    }
+  }
+  assertUseHand(bot, hand, ctx);
+}
+
+/** Native 激活内部会等待转头；只在该调用自己的发送上下文核验主手和取消状态。 */
+function installUseDispatchGuard(bot: Bot): void {
+  const client = bot._client as unknown as { write(name: string, params?: Record<string, unknown>): unknown };
+  if (guardedUseClients.has(client)) return;
+  const original = client.write;
+  client.write = function (name, params) {
+    const owner = useDispatch.getStore();
+    if (owner && owner.bot._client === client && params?.hand !== 1) {
+      const packet = owner.packet;
+      const location = params?.location as { x?: number; y?: number; z?: number } | undefined;
+      const matches = packet.kind === 'block'
+        ? name === 'block_place' && location?.x === packet.position.x
+          && location?.y === packet.position.y && location?.z === packet.position.z
+        : packet.kind === 'entity'
+          ? name === 'use_entity' && params?.target === packet.id && params?.mouse !== 1
+          : name === 'use_item' || (name === 'block_place' && params?.direction === -1);
+      if (matches) assertUseHand(owner.bot, owner.hand, owner.ctx);
+    }
+    return original.call(this, name, params);
+  };
+  guardedUseClients.add(client);
+}
+
+async function dispatchUse<T>(bot: Bot, hand: UseHand, ctx: SkillContext, packet: UsePacket,
+  action: () => T | Promise<T>): Promise<T> {
+  await prepareUseHand(bot, hand, ctx);
+  assertUseHand(bot, hand, ctx);
+  installUseDispatchGuard(bot);
+  return useDispatch.run({ bot, hand, ctx, packet }, action);
+}
+
+/**
+ * 投掷类:朝 at 看一眼然后甩出去,不是往那一格放东西。
+ * 末影之眼不在这里:它右键框架是放进去,右键别处才是扔,见 useOnce 的 ENDER_EYE 分支。
+ */
+export const THROWN = new Set([
+  'splash_potion', 'lingering_potion', 'ender_pearl', 'snowball', 'egg',
+  'experience_bottle', 'trident',
+]);
+
+/** 末影之眼:物品 id 是 ender_eye,扔出去飞的那个实体叫 eye_of_ender,两边名字不同 */
+export const ENDER_EYE_ITEM = 'ender_eye';
+export const ENDER_EYE_ENTITY = 'eye_of_ender';
+
+export function isThrown(name: string): boolean {
+  return THROWN.has(name) || name.startsWith('splash_') || name.startsWith('lingering_');
+}
+
+/** 船与竹筏(含带箱版):所有木种一个后缀就认全,新木种不必回来加名字 */
+export function isBoat(name: string): boolean {
+  return name.endsWith('_boat') || name.endsWith('_raft');
+}
+
+/** 不写 at 放船时,按视线找落点面的射线上限(原版 BoatItem 的射线约 5 格) */
+export const BOAT_CURSOR_RANGE = 5;
+
+/** activateBlock 缺省点击顶面；效果表以此面计算外侧一格的位置。 */
+export const USE_FACE: BlockFace = 'up';
+
+/** 面名 → activateBlock 收的方向向量。 */
+export function faceVector(face: BlockFace): Vec3 {
+  const [x, y, z] = BLOCK_FACES[face];
+  return new Vec3(x, y, z);
+}
+
+/** 瞄准所选面实际形状的中心；部分高度方块的顶面不在格顶。 */
+export function bucketAimPoint(
+  cell: Cell, face: BlockFace, shapes: readonly (readonly number[])[] = [],
+): Vec3 {
+  const direction = BLOCK_FACES[face];
+  const axis = direction.findIndex((n) => n !== 0);
+  const edgeIndex = axis + (direction[axis] > 0 ? 3 : 0);
+  const boxes = shapes.length ? shapes : [[0, 0, 0, 1, 1, 1]];
+  const edge = direction[axis] > 0
+    ? Math.max(...boxes.map((box) => box[edgeIndex]))
+    : Math.min(...boxes.map((box) => box[edgeIndex]));
+  const area = (box: readonly number[]): number => box.slice(0, 3).reduce(
+    (size, min, i) => i === axis ? size : size * (box[i + 3] - min), 1,
+  );
+  const surface = boxes.filter((box) => box[edgeIndex] === edge)
+    .reduce((largest, box) => area(box) > area(largest) ? box : largest);
+  const point = [cell.x, cell.y, cell.z].map((origin, i) =>
+    origin + (i === axis ? edge : (surface[i] + surface[i + 3]) / 2));
+  return new Vec3(point[0], point[1], point[2]);
+}
+
+/**
+ * 往一块告示牌上写字。原版这件事分两步:**先右键把编辑框打开**(服务端由此记住
+ * "现在是谁在编辑这块牌子"),客户端再把四行字发回去;跳过第一步的 update_sign
+ * 服务端一律丢掉。上蜡的牌子编辑不了,原版连编辑框都不开——先说清楚,别发一个
+ * 注定被丢掉的包。
+ *
+ * 验收读的是写完之后服务端回灌的方块实体:`getSignText()` 给 [正面, 背面]。
+ * 读回来的那一份原样进回执 —— 这是她第一次能确认"观众看到的是这几个字"。
+ */
+export async function writeSign(
+  bot: Bot, cell: Cell, target: NonNullable<ReturnType<Bot['blockAt']>>, text: string, back: boolean,
+  activate?: () => Promise<void>, ctx?: SkillContext,
+): Promise<string> {
+  const where = `${cellText(cell)} 的${zhName(target.name)}`;
+  if (!SIGN_RE.test(target.name)) {
+    throw new SkillBlocked(`${where}不是告示牌,写不了字(text 只对告示牌有用)`);
+  }
+  // 上蜡记在方块实体的 is_waxed 里(不是 block state),读不到就当没上过——这一层不猜
+  const entityNbt = (target as unknown as { blockEntity?: Record<string, unknown> }).blockEntity;
+  if (entityNbt?.is_waxed === 1 || entityNbt?.is_waxed === true) {
+    throw new SkillBlocked(`${where}上过蜡,原版不让再编辑;先拿斧子右键把蜡刮掉`);
+  }
+  const side = back ? '背面' : '正面';
+  const readSide = (b: ReturnType<Bot['blockAt']>): string | null => {
+    const sign = b as unknown as { getSignText?: () => Array<string | undefined> } | null;
+    if (!sign || typeof sign.getSignText !== 'function') return null;
+    const both = sign.getSignText();
+    const one = back ? both[1] : both[0];
+    return typeof one === 'string' ? one.replace(/\s+$/, '') : null;
+  };
+  // 第一步:打开编辑框。空手右键才是"编辑",手上拿着染料/荧光墨囊/蜂巢时原版做的
+  // 是别的事(改色/发光/上蜡),那几件当场拦下来,不然写不进去还看不出为什么。
+  const held = bot.heldItem?.name ?? null;
+  if (held && (dyeColorOf(held) !== null || held === 'glow_ink_sac' || held === 'ink_sac' || held === 'honeycomb')) {
+    throw new SkillBlocked(
+      `手上拿着${zhName(held)}时右键牌子做的是改色/发光/上蜡,不是打开编辑框;先 {"skill":"equip"} 空手再来写`,
+    );
+  }
+  if (activate) await activate();
+  else await bot.activateBlock(target);
+  await sleep(USE_SETTLE_MS);
+  if (ctx) checkAbort(ctx);
+  bot.updateSign(target, text, back);
+  await sleep(USE_SETTLE_MS);
+  if (ctx) checkAbort(ctx);
+  let now = readSide(bot.blockAt(new Vec3(cell.x, cell.y, cell.z)));
+  if (now === null || now !== text.replace(/\s+$/, '')) {
+    await sleep(USE_SETTLE_MS);
+    now = readSide(bot.blockAt(new Vec3(cell.x, cell.y, cell.z)));
+  }
+  const wrote = signLinesText(text);
+  if (now === null) {
+    return `往${where}${side}写了 ${wrote};读不回牌子上的字(这个版本的方块实体没给),写没写上核不了`;
+  }
+  if (now !== text.replace(/\s+$/, '')) {
+    throw new SkillBlocked(
+      `往${where}${side}写了 ${wrote},读回来是${now === '' ? '(空的)' : ` ${signLinesText(now)}`}`,
+      ['要看到的是:牌子上的字与写进去的一致'],
+      'server',
+    );
+  }
+  return `${where}${side}现在写着 ${signLinesText(now)}`;
+}
+
+/** 右键之后给服务端回话的时间;第一次没读到就再等一拍(睡着、上鞍要一个来回) */
+export const USE_SETTLE_MS = 400;
+
+/** 右键之后世界该变成什么样;`want` 与实测读数成对进回执 */
+export interface UseProbe {
+  /** 期望读到什么 */
+  want: string;
+  /** 右键之后读一次:办成了没有,以及实测读到的是什么 */
+  read(): { met: boolean; actual: string };
+}
+
+/**
+ * 锄地要求正上方 isAir，空碰撞形状的草、火把等也会阻挡。
+ * rooted_dirt 不要求头顶空气；farmland 已是目标状态，两者放行。
+ */
+export function hoeCoverBlocked(bot: Bot, cell: Cell, target: string): string | null {
+  if (HOE_TILLED[target] === undefined || target === 'rooted_dirt' || target === 'farmland') return null;
+  const above = blockAtCell(bot, { x: cell.x, y: cell.y + 1, z: cell.z });
+  if (!above || AIR_NAMES.has(above.name)) return null;
+  return `${cellText(cell)} 头上盖着${zhName(above.name)},锄不动;先把它清掉`;
+}
+
+/** 空桶舀哪一格出哪一桶;流动的水舀不起来,读数自己会说(把握:确定) */
+export const BUCKET_FILL: Record<string, string> = {
+  water: 'water_bucket',
+  lava: 'lava_bucket',
+  powder_snow: 'powder_snow_bucket',
+};
+
+/** 满桶倒出去就变回空桶(把握:确定) */
+export const FULL_BUCKETS = new Set(['water_bucket', 'lava_bucket', 'powder_snow_bucket']);
+
+/** 打火石点上去是自身 lit 翻牌、而不是外面出火的那几种(把握:比较确定) */
+export const LIT_BY_FIRE = /^(soul_)?campfire$|candle(_cake)?$/;
+
+/** 点着之后外面那一格是什么:一般出火,灵魂沙族出灵魂火,黑曜石框里当场成传送门(把握:确定) */
+export const FIRE_BLOCKS = new Set(['fire', 'soul_fire', 'nether_portal']);
+
+/**
+ * 右键就翻牌的开关族与它翻的那个属性。**判据是"翻了没有"而不是"翻成了哪一面"**——
+ * 翻牌不需要知道她想要开还是想要关,而铁门/铁活板门空手翻不动,正是要判出来的那一类。
+ * 按钮不在表里:它按下去自己会弹回来(石按钮 1 秒),读数是赛跑,判不了(把握:确定)。
+ */
+export const TOGGLES: ReadonlyArray<{ re: RegExp; prop: string }> = [
+  { re: /(^|_)door$/, prop: 'open' },
+  { re: /(^|_)trapdoor$/, prop: 'open' },
+  { re: /_fence_gate$/, prop: 'open' },
+  { re: /^lever$/, prop: 'powered' },
+];
+
+/** 挤得出奶的(把握:牛/哞菇确定,山羊比较确定) */
+export const MILKABLE = new Set(['cow', 'mooshroom', 'goat']);
+
+/** 上得了鞍的。**没驯服的马驴上不了**,鞍留在包里,读数自己会说(把握:比较确定) */
+export const SADDLEABLE = new Set(['horse', 'donkey', 'mule', 'pig', 'strider', 'camel']);
+
+/**
+ * 读一格变成了什么;本来就是那样也算办成(与 build「本来就是火把」同一条)。
+ * `where` 是读数在回执里怎么称呼这一格:被点的那一格叫「那一格」(回执头一句已经
+ * 报过坐标),读外面一格的那几条要报出坐标,否则看不出读的是 y+1。
+ */
+export function probeCell(
+  bot: Bot,
+  cell: Cell,
+  accept: (name: string) => boolean,
+  want: string,
+  where = '那一格',
+): UseProbe {
+  const was = blockAtCell(bot, cell)?.name ?? null;
+  return {
+    want,
+    read: () => {
+      const b = blockAtCell(bot, cell);
+      if (!b) return { met: false, actual: `${cellText(cell)} 那里区块没加载` };
+      const met = accept(b.name);
+      const verb = b.name !== was ? '现在是' : met ? '本来就是' : '还是';
+      return { met, actual: `${where}${verb}${zhName(b.name)}` };
+    },
+  };
+}
+
+/** 表外方块物品只报告点击格与面外格的回读；方块属性变化也保留在读数中。 */
+function blockUseReadback(bot: Bot, cell: Cell, face: BlockFace,
+  note = '这是点击附近的读数，放置目标用 build 的 anchors 指定并核验'): () => string {
+  const cells = [cell, cellOnFace(cell, face)];
+  const read = (at: Cell): string => {
+    const block = blockAtCell(bot, at);
+    if (!block) return '区块未加载，未知';
+    const props = Object.entries(block.getProperties()).map(([key, value]) => `${key}=${value}`);
+    return `${zhName(block.name)}${props.length ? `[${props.join(',')}]` : ''}`;
+  };
+  const before = cells.map(read);
+  return () => `；点击${FACE_ZH[face]}面，回读：` + cells.map((at, i) =>
+    `${i === 0 ? '点击格' : '面外相邻格'} ${cellText(at)} ${before[i]} → ${read(at)}`,
+  ).join('；') + `。${note}`;
+}
+
+/** 读包:某一类东西的净增(gain)或净减 */
+export function probeInv(
+  bot: Bot,
+  pred: (name: string) => boolean,
+  gain: boolean,
+  label: string,
+  want: string,
+): UseProbe {
+  const was = invCount(bot, pred);
+  return {
+    want,
+    read: () => {
+      const now = invCount(bot, pred);
+      return { met: gain ? now > was : now < was, actual: `包里${label} ${was} → ${now} 个` };
+    },
+  };
+}
+
+/** 读被点那一格的方块状态属性(原版属性名直给);属性读不到就整条判不了,由调用方退回现状 */
+export function probeProp(
+  bot: Bot,
+  cell: Cell,
+  key: string,
+  met: (was: string, now: string | null) => boolean,
+  want: string,
+): UseProbe | null {
+  const was = blockProp(blockAtCell(bot, cell), key);
+  if (was === null) return null;
+  return {
+    want,
+    read: () => {
+      const now = blockProp(blockAtCell(bot, cell), key);
+      return { met: met(was, now), actual: `${key} ${was} → ${now ?? '(读不到)'}` };
+    },
+  };
+}
+
+/** Doors keep the authoritative open property on their lower half. */
+function openStateCell(bot: Bot, cell: Cell): Cell {
+  const block = blockAtCell(bot, cell);
+  return block?.name.endsWith('_door') && blockProp(block, 'half') === 'upper'
+    ? { ...cell, y: cell.y - 1 } : cell;
+}
+
+function desiredOpenProbe(bot: Bot, cell: Cell, target: string, open: boolean): UseProbe {
+  if (!TOGGLES.some(toggle => toggle.prop === 'open' && toggle.re.test(target))) {
+    throw new SkillBlocked(`${cellText(cell)} 的${zhName(target)}不支持 open；只有门、活板门和栅栏门可指定开关状态`);
+  }
+  const stateCell = openStateCell(bot, cell);
+  const probe = probeProp(bot, stateCell, 'open', (_was, now) => now === String(open), `open=${open}`);
+  if (!probe) throw new SkillBlocked(`${cellText(stateCell)} 的开关状态读不到，未点击`);
+  return probe;
+}
+
+function satisfiedOpenNote(cell: Cell, target: string, open: boolean, probe: UseProbe): string | null {
+  const result = probe.read();
+  return result.met
+    ? `${cellText(cell)} 的${zhName(target)}已经${open ? '打开' : '关闭'}，保持状态，未点击；${result.actual}`
+    : null;
+}
+
+/**
+ * 按物品与目标确定右键效果的观测位置：床读 sleeping，种子读耕地上方。
+ * 无法确定时返回 null，仅报告事实并记 debug。
+ */
+export function useProbeAt(
+  bot: Bot, item: string | null, cell: Cell, target: string, ctx?: SkillContext, face: BlockFace = USE_FACE,
+): UseProbe | null {
+  const out = cellOnFace(cell, face);
+
+  // 床、门、拉杆这几条与手上拿什么无关:原版里非潜行右键交互方块一律走交互
+  if (/(^|_)bed$/.test(target)) {
+    return {
+      want: '躺下睡着',
+      read: () => {
+        if (bot.isSleeping === true) return { met: true, actual: '躺下了' };
+        // startSleepInBed 先设置重生点，再判断能否睡眠；白天也可能改点但未入睡。
+        const spawn = ctx?.spawnNote?.() ?? null;
+        return {
+          met: false,
+          actual: `没躺下(现在 dayTime ${Math.round(bot.time?.timeOfDay ?? 0)})${spawn ? `,${spawn}` : ''}`,
+        };
+      },
+    };
+  }
+  for (const t of TOGGLES) {
+    if (t.re.test(target)) {
+      return probeProp(bot, cell, t.prop, (was, now) => now !== null && now !== was, `${t.prop} 翻个面`);
+    }
+  }
+
+  if (item === null) return null;
+  if (item.endsWith('_hoe')) {
+    const tilled = HOE_TILLED[target];
+    return tilled ? probeCell(bot, cell, (n) => n === tilled, `${cellText(cell)} 变成${zhName(tilled)}`) : null;
+  }
+  if (item.endsWith('_shovel')) {
+    const path = SHOVEL_PATH[target];
+    return path ? probeCell(bot, cell, (n) => n === path, `${cellText(cell)} 变成${zhName(path)}`) : null;
+  }
+  const crop = SEED_CROP[item];
+  if (crop !== undefined) {
+    return target === 'farmland'
+      ? probeCell(bot, out, (n) => n === crop, `${cellText(out)} 长出${zhName(crop)}`, `${cellText(out)} `)
+      : null;
+  }
+  if (item === 'nether_wart') {
+    return target === 'soul_sand'
+      ? probeCell(bot, out, (n) => n === 'nether_wart', `${cellText(out)} 长出下界疣`, `${cellText(out)} `)
+      : null;
+  }
+  if (item === 'bucket') {
+    const filled = BUCKET_FILL[target];
+    return filled
+      ? probeInv(bot, (n) => n === filled, true, zhName(filled), `包里多一个${zhName(filled)}`)
+      : null;
+  }
+  // 玻璃瓶只从水源装得到水;装满出来的物品 id 是 potion(水瓶与药水同名,靠内容区分)
+  if (item === 'glass_bottle') {
+    return target === 'water'
+      ? probeInv(bot, (n) => n === 'potion', true, '水瓶', '包里多一个水瓶(物品 id 是 potion)')
+      : null;
+  }
+  if (FULL_BUCKETS.has(item)) {
+    return probeInv(bot, (n) => n === 'bucket', true, '空桶', '手上那桶倒出去,包里多一个空桶');
+  }
+  if (item === 'flint_and_steel' || item === 'fire_charge') {
+    // 打火石点的是一个方块的面,空气与液体没有面可点
+    if (AIR_NAMES.has(target) || LIQUIDS.has(target)) return null;
+    if (target === 'tnt') return probeCell(bot, cell, (n) => AIR_NAMES.has(n), 'TNT 点着飞出去,那一格空出来');
+    if (LIT_BY_FIRE.test(target)) return probeProp(bot, cell, 'lit', (_was, now) => now === 'true', 'lit 变 true');
+    return probeCell(bot, out, (n) => FIRE_BLOCKS.has(n), `${cellText(out)} 烧起来`, `${cellText(out)} `);
+  }
+  if (item === 'ender_eye' && target === 'end_portal_frame') {
+    return probeProp(bot, cell, 'eye', (_was, now) => now === 'true', 'eye 变 true(眼放进框里)');
+  }
+  if (item === 'bone_meal') {
+    // 满龄的作物再撒骨粉原版什么都不发生、骨粉也不消耗,所以 age 没往上走就是没催动
+    return probeProp(bot, cell, 'age', (was, now) => now !== null && Number(now) > Number(was), 'age 往上走一档');
+  }
+  // 唱片放进唱片机:方块自己的 has_record 翻牌,比"包里少了一张唱片"更靠近观众听见的那件事
+  if (item !== null && item.startsWith('music_disc_') && target === 'jukebox') {
+    return probeProp(bot, cell, 'has_record', (_was, now) => now === 'true', 'has_record 变 true(开始放了)');
+  }
+  // 篝火烤东西:原版一次只收一件,烤不下(四个位置满了/这东西不能烤)时**不消耗**
+  if (item !== null && CAMPFIRES.has(target) && (bot.registry?.foodsByName as Record<string, unknown> | undefined)?.[item]) {
+    return probeInv(bot, (n) => n === item, false, zhName(item), `${zhName(item)}被放上篝火(包里少一个)`);
+  }
+  // 展示框与画不是方块,是贴在某一面上的实体:世界侧读不到,读"包里少了一个"
+  if (item !== null && WALL_ENTITY_ITEMS.has(item)) {
+    return probeInv(bot, (n) => n === item, false, zhName(item), `${zhName(item)}挂上去(包里少一个)`);
+  }
+  return null;
+}
+
+/** 烤东西的那两种火堆(把握:确定) */
+export const CAMPFIRES = new Set(['campfire', 'soul_campfire']);
+
+/** 画只允许侧面，展示框允许六面；此类物品需明确放置面。 */
+export const WALL_ENTITY_ITEMS = new Set(['item_frame', 'glow_item_frame', 'painting']);
+
+/** (手上这样东西 × 右键的那只活物)→ 右键之后该读哪儿;判不了返回 null */
+export function useProbeOn(bot: Bot, item: string | null, target: string, entity?: unknown): UseProbe | null {
+  if (item === 'shears' && target === 'sheep') {
+    return probeInv(bot, (n) => n.endsWith('_wool'), true, '羊毛', '包里多出羊毛');
+  }
+  if (item === 'bucket' && MILKABLE.has(target)) {
+    return probeInv(bot, (n) => n === 'milk_bucket', true, '奶桶', '包里多一桶奶');
+  }
+  if (item === 'saddle' && SADDLEABLE.has(target)) {
+    return probeInv(bot, (n) => n === 'saddle', false, '鞍', '鞍从包里装到它身上');
+  }
+  // 染羊:原版只在"颜色真的变了"时才消耗染料,所以读回它现在的颜色是精确判据
+  const dye = dyeColorOf(item);
+  if (dye !== null && target === 'sheep') {
+    return {
+      want: `这只羊身上变成${zhName(`${dye}_wool`)}`,
+      read: () => {
+        const now = readSheepColor(bot as never, (entity ?? {}) as never);
+        if (now === null) return { met: false, actual: '读不到它身上的羊毛颜色' };
+        return { met: now === dye, actual: `它现在身上是${zhName(`${now}_wool`)}` };
+      },
+    };
+  }
+  return null;
+}
+
+/** 库存变化和动物状态分别回报；道具消耗不证明驯服或幼体出生。 */
+export function useNoteOn(bot: Bot, item: string | null, target: string, entity: unknown): string {
+  const state = animalStateNote(bot as never, entity as never);
+  if (!item) {
+    return state ? `;${state}` : '';
+  }
+  if ((TRUST_ITEMS[target] ?? []).includes(item)) {
+    return `;${state || '信任状态不可读'}；豹猫的信任不等于拥有主人或成为宠物`;
+  }
+  if ((TAME_ITEMS[target] ?? []).includes(item) || (FEED_ITEMS[target] ?? []).includes(item)) {
+    return `;${state || '动物状态不可读'}；道具是否消耗见库存变化，是否驯服、生长或繁殖须核对状态和后续观察`;
+  }
+  return state ? `;${state}` : '';
+}
+
+/** 指定 ID 失效时不改点另一只同类动物。 */
+export function useEntityOf(bot: Bot, target: string, entityId?: number): NonNullable<Bot['entities'][string]> {
+  const entity = findEntity(bot, target, 32, (candidate) =>
+    candidate.isValid !== false && (entityId === undefined || candidate.id === entityId));
+  if (!entity) {
+    if (entityId !== undefined) throw new SkillBlocked(`当前连接 32 格内没有 ${target} entityId=${entityId}；未改点其他实体，重新观察`);
+    throw new SkillNoop(`附近 32 格内没有${zhEntity(target)}`);
+  }
+  if (entityId !== undefined && !canSeeEntity(bot, entity)) {
+    throw new SkillBlocked(`${target} entityId=${entityId} 被遮挡，未发送交互；先靠近或绕行`);
+  }
+  return entity;
+}
+
+export function rideHelp(name: string): string {
+  return (RIDE_STEP[name] === undefined ? '这类坐骑目前只支持上车与下车，尚不支持驾驶；'
+    : '驾着走用 {"skill":"ride","to":[x,y,z]}；')
+    + '下来用 {"skill":"ride","off":true}';
+}
+
+/** 右键骑乘后报告当前坐骑并说明 ride 用法，不自动下车。 */
+export function leaveVehicle(bot: Bot, target: string): string {
+  const vehicle = (bot as unknown as { vehicle?: { name?: string } | null }).vehicle;
+  if (!vehicle) return '';
+  return `;人已经骑在${zhEntity(target)}身上了:${rideHelp(vehicle.name ?? target)}`;
+}
+
+/**
+ * 落在效果表外的那一对记一条。**这张表要长出来只能靠它**:下一场直接按
+ * `use-off-table` 就数得出还缺哪些对,不必再从全场回执里反推。
+ */
+export function noteOffTable(ctx: SkillContext, item: string | null, target: string): void {
+  ctx.diag?.write({
+    lane: 'skill', event: 'use-off-table', taskId: ctx.taskId,
+    msg: `${item ? zhName(item) : '空手'}右键${zhThing(target)}:效果表里没这一对,只报事实`,
+    data: { item, target },
+  });
+}
+
+/**
+ * 睡着之后等到醒。上限按一个游戏夜给足余量:原版躺下被受理后 101 tick(约 5 秒)
+ * 就天亮,60 秒是它的十几倍;真卡在这上限里(别人不睡、被打断)就自己起来,
+ * 不能把整条队列拖在床上。
+ */
+export const BED_WAKE_MS = 60_000;
+export const BED_WAKE_POLL_MS = 250;
+
+/**
+ * 躺下之后不返回,等到醒 —— 这一步还没结束,后面那一步的寻路就动不了身。
+ * 被抢占(战斗/mc_stop/World 停机)当场收工:那些抢占本来就该把人从床上叫起来。
+ * 返回回执里的那半句(等了多久、是自己醒的还是到点起的)。
+ */
+export async function waitForWake(bot: Bot, ctx: SkillContext): Promise<string> {
+  if (bot.isSleeping !== true) return '';
+  const from = Date.now();
+  // 周期进度事件在这段时间里要换一句话说:人不动是因为在睡,不是卡住了
+  ctx.sleeping = true;
+  try {
+    while (bot.isSleeping === true && Date.now() - from < BED_WAKE_MS && !ctx.aborted()) {
+      await sleep(BED_WAKE_POLL_MS);
+    }
+  } finally {
+    ctx.sleeping = false;
+  }
+  const secs = Math.round((Date.now() - from) / 1000);
+  if (bot.isSleeping !== true) return `,一直躺到醒(${secs}s,这段时间没动身)`;
+  try {
+    await bot.wake();
+  } catch {
+    /* 已经不在床上了 */
+  }
+  return `,躺了 ${secs}s 还没到天亮,自己起来了`;
+}
+
+/** 读一次;没读到就再等一拍读第二次(服务端回话可能落在第一次读之后) */
+export async function settleProbe(probe: UseProbe): Promise<{ met: boolean; actual: string }> {
+  const first = probe.read();
+  if (first.met) return first;
+  await sleep(USE_SETTLE_MS);
+  return probe.read();
+}
+
+/** 观察区间的背包净变化；单凭差量不能确认它由本次使用造成。 */
+export function useInvNote(before: Map<string, number>, bot: Bot): string {
+  const parts: string[] = [];
+  const gains = invGains(before, bot);
+  const losses = invLosses(before, bot);
+  if (gains.length > 0) parts.push(`背包净增:${gains.join('、')}`);
+  if (losses.length > 0) parts.push(`背包净减:${losses.join('、')}`);
+  return parts.join(';');
+}
+
+export const PIGLIN_ACCEPT_MS = 1_500;
+export const PIGLIN_GIFT_MS = 10_000;
+
+export function adultPiglins(bot: Bot, radius: number): Array<NonNullable<Bot['entities'][string]>> {
+  const me = bot.entity.position;
+  return Object.values(bot.entities)
+    .filter((e): e is NonNullable<Bot['entities'][string]> => Boolean(
+      e?.isValid && e.name === 'piglin' && e.position
+      && e.position.distanceTo(me) <= radius && !isBabyPiglin(bot, e),
+    ))
+    .sort((a, b) => a.position.distanceTo(me) - b.position.distanceTo(me));
+}
+
+export function piglinDrops(
+  bot: Bot,
+  beforeIds: ReadonlySet<number>,
+  near: { x: number; y: number; z: number },
+): Array<{ id: number; name: string; count: number; x: number; y: number; z: number }> {
+  const out: Array<{ id: number; name: string; count: number; x: number; y: number; z: number }> = [];
+  const center = new Vec3(near.x, near.y, near.z);
+  for (const e of Object.values(bot.entities)) {
+    if (!e?.isValid || typeof e.id !== 'number' || beforeIds.has(e.id) || !e.position) continue;
+    const stack = droppedStackOf(e);
+    if (!stack || e.position.distanceTo(center) > 5) continue;
+    out.push({ id: e.id, name: stack.name, count: stack.count, x: e.position.x, y: e.position.y, z: e.position.z });
+  }
+  return out;
+}
+
+/** 给金后的数秒延迟属于这次交互的一部分；看到实际回礼或明确超时才结束。 */
+export async function barterPiglinOnce(bot: Bot, ctx: SkillContext,
+  interact?: (entity: NonNullable<Bot['entities'][string]>) => Promise<void>): Promise<string> {
+  const adults = adultPiglins(bot, 32);
+  if (adults.length === 0) {
+    const babies = Object.values(bot.entities).filter((e) =>
+      e?.isValid && e.name === 'piglin' && e.position.distanceTo(bot.entity.position) <= 32
+      && isBabyPiglin(bot, e));
+    if (babies.length > 0) throw new SkillBlocked('附近只有幼年猪灵;它不会以物易物,金锭没有交出去');
+    throw new SkillNoop('附近 32 格内没有成年猪灵');
+  }
+  const piglin = adults[0];
+  await gotoGoal(bot, new goals.GoalFollow(piglin, 2), ctx).catch(() => undefined);
+  checkAbort(ctx);
+  if (!piglin.isValid) throw new SkillBlocked('走到跟前时成年猪灵已经走了');
+  await bot.lookAt(piglin.position.offset(0, (piglin.height ?? 1) * 0.5, 0));
+
+  const beforeInv = invSnapshot(bot);
+  const beforeGold = invCount(bot, (name) => name === 'gold_ingot');
+  const beforeIds = new Set(Object.values(bot.entities)
+    .map((e) => e?.id)
+    .filter((id): id is number => typeof id === 'number'));
+  const clickAt = { x: piglin.position.x, y: piglin.position.y, z: piglin.position.z };
+  if (interact) await interact(piglin);
+  else await bot.useOn(piglin);
+
+  const acceptedUntil = Date.now() + PIGLIN_ACCEPT_MS;
+  while (Date.now() < acceptedUntil && invCount(bot, (name) => name === 'gold_ingot') >= beforeGold) {
+    checkAbort(ctx);
+    await sleep(100);
+  }
+  const afterGold = invCount(bot, (name) => name === 'gold_ingot');
+  if (afterGold >= beforeGold) {
+    throw new SkillBlocked('成年猪灵没有收下金锭:包里的金锭数量没变,这次没有成交', [], 'server');
+  }
+
+  const giftUntil = Date.now() + PIGLIN_GIFT_MS;
+  while (Date.now() < giftUntil) {
+    checkAbort(ctx);
+    const gains = invGains(beforeInv, bot);
+    if (gains.length > 0) {
+      return `成年猪灵收了金锭×${beforeGold - afterGold},回礼已经进包:${gains.join('、')}`;
+    }
+    const drops = piglinDrops(bot, beforeIds, piglin.isValid ? piglin.position : clickAt);
+    if (drops.length > 0) {
+      await sleep(300);
+      const settled = piglinDrops(bot, beforeIds, piglin.isValid ? piglin.position : clickAt);
+      const seen = settled.length > 0 ? settled : drops;
+      return `成年猪灵收了金锭×${beforeGold - afterGold},回礼落在地上:`
+        + seen.map((d) => `${zhName(d.name)}×${d.count} (${Math.round(d.x)}, ${Math.round(d.y)}, ${Math.round(d.z)})`).join('、')
+        + '。这一步没有替你捡';
+    }
+    await sleep(100);
+  }
+  throw new SkillBlocked(
+    `成年猪灵已经收走金锭×${beforeGold - afterGold},但 ${Math.round(PIGLIN_GIFT_MS / 1000)} 秒内没观察到回礼;金锭已消耗,结果未知`,
+    [],
+    'server',
+  );
+}
+
+/** 未被效果表识别的空气或液体交互按受阻回报；桶类使用由专门分支处理。 */
+export function nothingThere(bot: Bot, cell: Cell, name: string, label: string): SkillBlocked {
+  const below = { x: cell.x, y: cell.y - 1, z: cell.z };
+  const b = blockAtCell(bot, below);
+  return new SkillBlocked(
+    `${cellText(cell)} 那一格是${AIR_NAMES.has(name) ? '空气' : zhName(name)},${label}右键它不产生任何动作`,
+    [`下面一格 ${cellText(below)} 是${b ? zhName(b.name) : '(区块没加载)'}`],
+  );
+}
+
+/**
+ * 右键 `times` 次(缺省 1)。每次都重新拿一次手上那样东西,所以东西中途用完
+ * 就停在那一次:做成几次是事实,报出来;一次都没做成才是受阻(与 build
+ * 「一块都没放上就是受阻」同一条)。
+ */
+export async function skillUse(bot: Bot, call: Extract<SkillCall, { skill: 'use' }>, ctx: SkillContext): Promise<string> {
+  // 商人的"右键"开出来的是报价窗口,交易两段式走自己那条路(times 在那边是成交几次)
+  if (call.target === 'villager' || call.target === 'wandering_trader') {
+    return skillTrade(bot, { ...call, target: call.target }, ctx);
+  }
+  const times = call.times ?? 1;
+  let last = '';
+  let done = 0;
+  const receipts: string[] = [];
+  // times > 1 时同时回报整段库存净差与最后一次现场读数。
+  const beforeSpan = invSnapshot(bot);
+  const spanNote = () => {
+    const net = useInvNote(beforeSpan, bot);
+    return `这 ${done} 次合计${net ? `(${net})` : '包里一样没动'}`;
+  };
+  for (let i = 0; i < times; i += 1) {
+    try {
+      last = await useOnce(bot, call, ctx);
+      receipts.push(last);
+      done += 1;
+    } catch (err) {
+      if (err instanceof Aborted || done === 0) throw err;
+      if (call.target === 'piglin' && call.item === 'gold_ingot') {
+        ctx.partial?.(`第 ${done + 1} 次交易没有得到可确认的回礼:${(err as Error).message}`);
+      }
+      const finished = call.target === 'piglin' && call.item === 'gold_ingot'
+        ? `已完成:${receipts.join('；')}`
+        : `${spanNote()}。最后一次:${last}`;
+      return `右键了 ${done}/${times} 次,第 ${done + 1} 次停下:${(err as Error).message}。${finished}`;
+    }
+  }
+  if (times === 1) return last;
+  return call.target === 'piglin' && call.item === 'gold_ingot'
+    ? `交易了 ${done}/${times} 次:${receipts.join('；')}`
+    : `右键了 ${done}/${times} 次,${spanNote()}。最后一次:${last}`;
+}
+
+/** Existing item/block prerequisites, read both before travel and again immediately before use. */
+function farmingUseBlockedFact(
+  bot: Bot, held: string | null, cell: Cell, target: string,
+  ctx: SkillContext, face?: BlockFace, writingSign = false,
+): string | null {
+  if (held?.endsWith('_hoe')) {
+    if (HOE_TILLED[target] === undefined) {
+      return `${cellText(cell)} 是${zhName(target)}，不是锄头能翻的土格；没有发送使用。先探查目标土格及其上方空间`;
+    }
+    return hoeCoverBlocked(bot, cell, target);
+  }
+  const plantingOn = held === 'nether_wart' ? 'soul_sand' : held && SEED_CROP[held] ? 'farmland' : null;
+  // Writing a sign is a separate explicit operation; beds/doors may have their own use effect.
+  if (!plantingOn || writingSign) return null;
+  if (target === plantingOn) return floodedCropSpace(bot, cell, held!);
+  if (useProbeAt(bot, held, cell, target, ctx, face)) return null;
+  return `${cellText(cell)} 是${zhName(target)}，${zhName(held!)}要对${zhName(plantingOn)}使用；没有发送使用。先探查目标土格及其上方空间`;
+}
+
+/** 一次右键:三种宾语(某一格 / 某只活物 / 手上这样东西本身) */
+export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' }>, ctx: SkillContext): Promise<string> {
+  const bareBlockUse = call.at !== undefined && !call.item;
+  const selected = call.item ? invItemNamed(bot, call.item) : bot.heldItem;
+  let held: string | null;
+  if (call.item) {
+    try {
+      held = await equipNamed(bot, call.item);
+    } catch (err) {
+      // 点名物品缺货而 at 格本身就是该物品时，回执提示直接右键该格的写法。
+      if (err instanceof SkillBlocked && call.at) {
+        const cell = resolveAt(bot, call.at);
+        const b = blockAtCell(bot, cell);
+        if (b && matchItemName(call.item, b.name, bot?.registry)) {
+          throw new SkillBlocked(
+            `${err.message};不过 ${cellText(cell)} 那一格本身就是${zhName(b.name)}——` +
+            `要右键它不用带 item,写 {"skill":"use","at":[${cell.x},${cell.y},${cell.z}]} 空手点它就行`,
+          );
+        }
+      }
+      if (err instanceof SkillBlocked && !selected) {
+        throw new SkillBlocked(`${err.message};item 指背包里拿在手上使用的物品，不是世界里的点击对象。点击已有方块用现场确认的 at，不填同名 item；缺货不代表附近没有该方块`);
+      }
+      throw err;
+    }
+  } else {
+    held = bareBlockUse ? null : bot.heldItem?.name ?? null;
+  }
+  let label = bareBlockUse ? '空手'
+    : selected ? itemCustomName(selected) ?? zhName(held ?? selected.name) : held ? zhName(held) : '空手';
+  let hand = useHandOf(bareBlockUse ? null : selected ?? null);
+  const activateBlock = (block: NonNullable<ReturnType<Bot['blockAt']>>, direction?: Vec3): Promise<void> =>
+    dispatchUse(bot, hand, ctx, { kind: 'block', position: block.position },
+      () => withPreparedInteractionHand(bot, () => bot.activateBlock(block, direction)));
+  const activateItem = (): Promise<void> =>
+    dispatchUse(bot, hand, ctx, { kind: 'item' }, () => bot.activateItem());
+  const useOn = (entity: NonNullable<Bot['entities'][string]>): Promise<void> =>
+    dispatchUse(bot, hand, ctx, { kind: 'entity', id: entity.id }, () => bot.useOn(entity));
+
+  if (call.target === 'piglin_brute' && held === 'gold_ingot') {
+    throw new SkillBlocked('猪灵蛮兵不接受以物易物,金锭没有交出去');
+  }
+  if (call.target === 'piglin' && held === 'gold_ingot') return barterPiglinOnce(bot, ctx, useOn);
+
+  if (call.target) {
+    if (!isKnownTarget(bot, call.target)) throw new SkillBlocked(unknownUseTargetText(bot, call.target));
+    const entity = useEntityOf(bot, call.target, call.entityId);
+    await gotoGoal(bot, new goals.GoalFollow(entity, 2), ctx).catch(() => undefined);
+    checkAbort(ctx);
+    if (!entity.isValid) throw new SkillBlocked(`${zhEntity(call.target)}走了`);
+    if (call.entityId !== undefined && bot.entities[call.entityId] !== entity) {
+      throw new SkillBlocked(`entityId=${call.entityId} 已失效，未发送交互；重新观察`);
+    }
+    if (entity.position.distanceTo(bot.entity.position) > 3.5) {
+      throw new SkillBlocked(`走不到${zhEntity(call.target)}身边，距离 ${entity.position.distanceTo(bot.entity.position).toFixed(1)} 格；未发送交互`);
+    }
+    if (call.entityId !== undefined && !canSeeEntity(bot, entity)) {
+      throw new SkillBlocked(`entityId=${call.entityId} 已被遮挡，未发送交互；重新观察`);
+    }
+    await bot.lookAt(entity.position.offset(0, (entity.height ?? 1) * 0.5, 0));
+    const beforeInv = invSnapshot(bot);
+    const probe = useProbeOn(bot, held, call.target, entity);
+    await useOn(entity);
+    await sleep(USE_SETTLE_MS);
+    checkAbort(ctx);
+    const head = `${label}右键了${zhEntity(call.target)}`;
+    // 运输矿车、漏斗矿车右键开出的是箱子类窗口:读一遍内容再关,东西要用 take 取
+    const win = bot.currentWindow;
+    const boxNote = win && /^minecraft:(generic_9x\d|hopper)$/.test(String(win.type))
+      ? `。开出了它的箱子窗口,里面:${contentsText(containerStacks(win as never, bot.registry as never).items)};`
+        + '窗口已关,要取东西用 take'
+      : '';
+    if (boxNote) bot.closeWindow(win!);
+    const note = useInvNote(beforeInv, bot);
+    const facts = useNoteOn(bot, held, call.target, entity) + leaveVehicle(bot, call.target) + boxNote;
+    if (!probe) {
+      noteOffTable(ctx, held, call.target);
+      return `${head}。${note || '包里一样没动'}${facts}`;
+    }
+    const v = await settleProbe(probe);
+    if (!v.met) throw new SkillBlocked(`${head},${v.actual}${facts}`, [`要看到的是:${probe.want}`], 'server');
+    return `${head},${v.actual}${note ? `。${note}` : ''}${facts}`;
+  }
+
+  // 放船未指定 at 时使用当前视线命中的方块；无命中则受阻。
+  if (held && isBoat(held) && !call.at) {
+    const cur = bot.blockAtCursor?.(BOAT_CURSOR_RANGE);
+    if (!cur) {
+      throw new SkillBlocked(
+        `手上是${label}而没给 at,视线 ${BOAT_CURSOR_RANGE} 格内又没有方块;放船要么看着水面/地面,要么给 at 指一格落点`,
+      );
+    }
+    return await useBoat(bot, { x: cur.position.x, y: cur.position.y, z: cur.position.z }, held, label, activateItem);
+  }
+
+  if (call.at) {
+    const requestedCell = resolveAt(bot, call.at);
+    const alignedCell = held ? farmingClickCell(bot, requestedCell, held, call.face) : null;
+    const cell = alignedCell ?? requestedCell;
+    const alignmentNote = alignedCell
+      ? `（请求的 ${cellText(requestedCell)} 是空气，实际对准下方 ${cellText(cell)}）` : '';
+    // 末影之眼只有点末地传送门框架是放进去;at 指别的格照样扔,它自己朝要塞飞,不往 at 去
+    if (held === ENDER_EYE_ITEM && blockAtCell(bot, cell)?.name !== 'end_portal_frame') {
+      return throwEnderEye(bot, ctx, activateItem);
+    }
+    if (held === 'bow') return shootBowAt(bot, cell, ctx);
+    // 投掷物的 at 是落点方向,不是要改的那一格
+    if (held && isThrown(held)) {
+      const before = invCount(bot, (n) => n === held);
+      await aimThenUse(bot, new Vec3(cell.x + 0.5, cell.y + 0.5, cell.z + 0.5), activateItem);
+      if (held === 'trident') {
+        await bot.waitForTicks(TRIDENT_CHARGE_TICKS);
+        bot.deactivateItem();
+      }
+      await sleep(300);
+      return `朝 ${cellText(cell)} 扔了${label};包里还有 ${invCount(bot, (n) => n === held)} 个(扔前 ${before})`;
+    }
+    const beforeTravel = blockAtCell(bot, cell);
+    const blockedBeforeTravel = beforeTravel
+      ? farmingUseBlockedFact(bot, held, cell, beforeTravel.name, ctx, call.face, call.text !== undefined) : null;
+    if (blockedBeforeTravel) {
+      throw new SkillBlocked(
+        `输入 at=${JSON.stringify(call.at)} 解析为 ${cellText(requestedCell)}${alignmentNote}；`
+        + `${blockedBeforeTravel}；尚未导航。坐标分量中的数字（含不带~的数字字符串）是绝对坐标，`
+        + '只有带~才是脚下偏移，例如Y分量"~-1"表示脚下1格',
+      );
+    }
+    if (beforeTravel && call.open !== undefined) {
+      checkAbort(ctx);
+      const satisfied = satisfiedOpenNote(cell, beforeTravel.name, call.open,
+        desiredOpenProbe(bot, cell, beforeTravel.name, call.open));
+      if (satisfied) return satisfied;
+    }
+    await reachCell(bot, cell, ctx);
+    checkAbort(ctx);
+    // 路上寻路器垫方块会把主手换成垫脚块;点名的东西不在手上就再拿一次,不然右键的是圆石
+    if (call.item && held && bot.heldItem?.name !== held) held = await equipNamed(bot, call.item);
+    const target = blockAtCell(bot, cell);
+    if (!target) throw new SkillBlocked(`${cellText(cell)} 所在区块没加载`);
+    const desiredProbe = call.open !== undefined ? desiredOpenProbe(bot, cell, target.name, call.open) : null;
+    if (desiredProbe && call.open !== undefined) {
+      const satisfied = satisfiedOpenNote(cell, target.name, call.open, desiredProbe);
+      if (satisfied) return satisfied;
+    }
+    // 「开门→赶路」是通行意图。门已经打开时再次 use 会把它关上，
+    // 下一步寻路便在门框处撞住；保留开门事实并直接走下一步。
+    const nextStep = ctx.batch?.steps[(ctx.batch.index ?? 0) + 1];
+    if (call.open === undefined && !call.item && nextStep?.skill === 'goto'
+      && (target.name.endsWith('_door') || target.name.endsWith('_fence_gate'))
+      && blockProp(target, 'open') === 'true') {
+      return `${cellText(cell)} 的${zhName(target.name)}已经打开，保持开启，继续赶路`;
+    }
+    if (bareBlockUse) {
+      await clearHandForBlockInteraction(bot, !needsBareHandToInteract(target.name));
+      hand = useHandOf(bot.heldItem);
+      held = null;
+      label = hand ? hand.customName ?? zhName(hand.name) : '空手';
+    }
+    // 船由 BoatItem 的 use 沿玩家视线生成，不能通过 use_item_on 放置。
+    if (held && isBoat(held)) return await useBoat(bot, cell, held, label, activateItem);
+    const blockedNow = farmingUseBlockedFact(bot, held, cell, target.name, ctx, call.face, call.text !== undefined);
+    if (blockedNow) throw new SkillBlocked(blockedNow);
+    const bucketFluid = held === 'bucket' && (target.name === 'water' || target.name === 'lava');
+    const fluidLevel = bucketFluid ? blockProp(target, 'level') : null;
+    const fluidSource = bucketFluid ? fluidLevel === '0' : false;
+    const fluidFact = bucketFluid
+      ? `level=${fluidLevel ?? '(读不到)'}, source=${fluidSource ? 'true' : 'false'}`
+      : '';
+    // 空桶只舀原版源方块。先读 block state 再发 use 包，流动液体不会消耗一次无效右键。
+    if (bucketFluid && !fluidSource) {
+      throw new SkillBlocked(
+        `${cellText(cell)} 的${zhName(target.name)}是流动液体或来源状态不可读(${fluidFact});空桶只舀 level=0 的源方块`,
+      );
+    }
+    // 写牌子先走独立牌面验收，不进入通用效果表的表外记录。
+    if (call.text !== undefined) return await writeSign(bot, cell, target, call.text, call.back === true,
+      () => activateBlock(target), ctx);
+    // 空手右键告示牌打开 open_sign_editor；它不是窗口包，rememberWindow 无法观察。
+    if (!held && SIGN_RE.test(target.name)) {
+      await activateBlock(target);
+      await sleep(USE_SETTLE_MS);
+      checkAbort(ctx);
+      return `空手右键了 ${cellText(cell)} 的${zhName(target.name)}:这一下把编辑框打开了,没写字;要写字就在同一条 use 里给 text`;
+    }
+    // (item, 目标方块) 表决定去哪儿读;表外那一对退回「报事实不下结论」
+    const probe = desiredProbe ?? useProbeAt(bot, held, cell, target.name, ctx, call.face);
+    const placementReadback = !probe && held && bot.registry?.blocksByName?.[held]
+      ? blockUseReadback(bot, cell, call.face ?? USE_FACE) : null;
+    if (!probe) {
+      // 空桶没有“对任意方块试一下”的安全泛型语义。粉雪、水源和岩浆源都在效果表里；
+      // 其余方块若无明确 handler，库存不变不能再被记作 done。
+      if (held === 'bucket') {
+        const aboveCell = { x: cell.x, y: cell.y + 1, z: cell.z };
+        const above = blockAtCell(bot, aboveCell);
+        const fluidAbove = above && (above.name === 'water' || above.name === 'lava')
+          ? `；上方 ${cellText(aboveCell)} 是${zhName(above.name)}[level=${blockProp(above, 'level') ?? '(读不到)'}]，`
+            + '空桶须点液体的源方块坐标本身，不能点下方土格；先核对源方块再改 at'
+          : '';
+        throw new SkillBlocked(`${cellText(cell)} 的${zhName(target.name)}没有空桶可执行的明确操作,没有使用${fluidAbove}`);
+      }
+      if (AIR_NAMES.has(target.name) || LIQUIDS.has(target.name)) {
+        throw nothingThere(bot, cell, target.name, label);
+      }
+      noteOffTable(ctx, held, target.name);
+    }
+    // BucketItem 使用 use_item，由服务端沿视线选液源或放置点；activateBlock 仅发
+    // use_item_on，不能完成桶类操作。满桶可倒入空气或实心面的外侧，空桶须满足液源条件。
+    const pouring = held !== null && FULL_BUCKETS.has(held);
+    // 粉雪没有液体 level，单独走粉雪桶 handler；玻璃瓶装水不使用空桶的源方块契约。
+    const scoopingPowderSnow = held === 'bucket' && target.name === 'powder_snow';
+    const fillingBottle = held === 'glass_bottle' && target.name === 'water';
+    const filling = bucketFluid || scoopingPowderSnow || fillingBottle;
+    if (filling || pouring) {
+      const beforeScoop = invSnapshot(bot);
+      const solidHere = !AIR_NAMES.has(target.name) && !LIQUIDS.has(target.name);
+      const face = call.face ?? USE_FACE;
+      const pourReadback = pouring ? blockUseReadback(bot, cell, face,
+        '桶倒空只证明库存变化；服务端沿视线选择落点，水源位置与灌溉范围须按现场读数核对') : null;
+      await aimThenUse(
+        bot,
+        solidHere
+          ? bucketAimPoint(cell, face, target.shapes)
+          : new Vec3(cell.x + 0.5, cell.y + 0.5, cell.z + 0.5),
+        activateItem,
+      );
+      await sleep(USE_SETTLE_MS);
+      const scoopHead = `${label}右键了 ${cellText(cell)} 的${zhName(target.name)}`
+        + `${fluidFact ? `(${fluidFact})` : ''}`;
+      const scoopNote = useInvNote(beforeScoop, bot);
+      // 桶倒空了、水却一格都不留:下界的水放出来当场蒸发。如实说,不拦
+      const vapor = held === 'water_bucket' && dimensionOf(bot).includes('nether')
+        ? ';水在下界会立刻蒸发,那一格不会留下水'
+        : '';
+      if (probe) {
+        const v = await settleProbe(probe);
+        // 失败路径同样带上背包增减:少了这一句,25 次倒水失败她只看得见「空桶 0 → 0」,
+        // 看不见「水桶 1 → 1、还在包里」这个把病因指出来的事实
+        if (!v.met) {
+          throw new SkillBlocked(
+            `${scoopHead},${v.actual}${scoopNote ? `。${scoopNote}` : ''}${vapor}${pourReadback?.() ?? ''}`,
+            [`要看到的是:${probe.want}`],
+            'server',
+          );
+        }
+        return `${scoopHead},${v.actual}${scoopNote ? `。${scoopNote}` : ''}${vapor}${pourReadback?.() ?? ''}`;
+      }
+      return `${scoopHead}。${scoopNote || '包里一样没动'}${vapor}${pourReadback?.() ?? ''}`;
+    }
+    const beforeInv = invSnapshot(bot);
+    const beforeWindow = bot.currentWindow;
+    const beforeDimension = dimensionOf(bot);
+    const interactionStartedAt = Date.now();
+    await activateBlock(target, call.face ? faceVector(call.face) : undefined);
+    const keepWindow = (call.times ?? 1) === 1 && consumesOpenWindow(nextStep);
+    if (keepWindow && bot.currentWindow !== beforeWindow && storageWindow(bot.currentWindow)) {
+      ctx.holdWindow?.(bot.currentWindow!);
+    }
+    await sleep(USE_SETTLE_MS);
+    const frameNote = target.name === 'end_portal_frame' ? endFrameNote(bot, cell) : '';
+    checkAbort(ctx);
+    // 先记下真实窗口。下一步要使用当前窗口时，把同一扇窗口交给它；
+    // 否则这一步只负责查看，仍在回执前关窗。
+    let seen = '';
+    if (bot.currentWindow && bot.currentWindow !== beforeWindow) {
+      seen = rememberWindow(bot, ctx, cell, target.name, bot.currentWindow);
+      const next = ctx.batch?.steps[(ctx.batch.index ?? 0) + 1];
+      const consumesWindow = (call.times ?? 1) === 1 && consumesOpenWindow(next);
+      if (consumesWindow && storageWindow(bot.currentWindow)) ctx.holdWindow?.(bot.currentWindow);
+      if (!consumesWindow || selectionMenuTitle(bot.currentWindow.title)) {
+        bot.closeWindow(bot.currentWindow);
+      }
+    }
+    // 床只在主世界能睡:下界与末地点它当场爆炸。不拦她(打龙就是拿这个当伤害手段),
+    // 只把这件事说清 —— 现有回执只有「躺下了/没躺下」,读不出人是被自己炸的
+    const bedBoom = target.name.endsWith('_bed') && !dimensionOf(bot).includes('overworld')
+      ? `;床在${zhDimension(dimensionOf(bot))}这个维度会爆炸,不会躺下`
+      : '';
+    const head = `${label}右键了 ${cellText(cell)} 的${zhName(target.name)}${alignmentNote}${bedBoom}`;
+    const note = useInvNote(beforeInv, bot);
+    if (!probe) {
+      // 右键箱子是开一下看看、按钮按下去自己弹回来:原版里这些本来就没有"成没成"
+      const after = blockAtCell(bot, cell);
+      const changed = after && after.stateId !== target.stateId ? `,那一格现在是${zhName(after.name)}` : '';
+      const portalNote = target.name === 'nether_portal'
+        ? dimensionOf(bot) === beforeDimension
+          ? `；实测维度仍为${zhDimension(beforeDimension)}，未确认穿门。原版右键不会穿过下界传送门，`
+            + `要踏入并等待维度切换，用 {"skill":"transit","at":[${cell.x},${cell.y},${cell.z}]}`
+          : `；实测维度从${zhDimension(beforeDimension)}变为${zhDimension(dimensionOf(bot))}，后续坐标须按当前维度核对`
+        : '';
+      const climbNote = target.name === 'ladder' || target.name === 'vine' || target.name === 'scaffolding'
+        ? `；本次只右键，没有执行攀爬；实测脚格 ${cellText(feetOf(bot))}。攀爬需进入可攀爬方块并移动，`
+          + '先用 probe 核对下端、连续性、朝向与出口；右键回执不证明登高'
+        : '';
+      return `${head}${changed}。${note || '包里一样没动'}${placementReadback?.() ?? ''}${seen}${portalNote}${frameNote}${climbNote}`;
+    }
+    const v = await settleProbe(probe);
+    // 失败路径与成功路径报同一份背包增减:存量事实往往就是病因所在
+    if (!v.met) {
+      const serverFeedback = ctx.serverFeedbackSince?.(interactionStartedAt);
+      throw new SkillBlocked(
+        `${head},${v.actual}${serverFeedback ? `;服务端提示:${serverFeedback}` : ''}${note ? `。${note}` : ''}${frameNote}`,
+        [`要看到的是:${probe.want}`],
+        'server',
+      );
+    }
+    // 入睡后等待醒来再结束本步，避免后续寻路在睡眠期间取得身体。
+    const slept = isSpawnAnchorBlock(target.name) ? await waitForWake(bot, ctx) : '';
+    // 锄成耕地的那一格记一笔;再锄同一格说明它被踩回去过(见 tilledOf)
+    const retilled = held?.endsWith('_hoe') && target.name !== 'farmland' && HOE_TILLED[target.name] === 'farmland'
+      ? noteTilled(bot, cell)
+      : '';
+    noteWork(bot, ctx, held, cell, target.name);
+    return `${head},${v.actual}${slept}${note ? `。${note}` : ''}${seen}${retilled}${frameNote}`;
+  }
+
+  if (!held) throw new SkillBlocked('空手又没给 at/target');
+  if (held === ENDER_EYE_ITEM) return throwEnderEye(bot, ctx, activateItem);
+  // 手上是吃的/喝的就走真进食通道:通用兜底按一下 1.2 秒就松手,喝完一桶奶要 1.61 秒,
+  // 从那条路走的奶永远喝不下去(只会回一句「这样东西没有登记的使用效果」)
+  if ((bot.registry?.foodsByName as Record<string, unknown> | undefined)?.[held] || DRINKABLES[held]) {
+    return dispatchUse(bot, hand, ctx, { kind: 'item' }, () => consumeHeldFood(bot, held));
+  }
+  // 通用使用按整包前后差值回报；无变化时明确无法确认效果。
+  const beforeInv = invSnapshot(bot);
+  const beforeWindow = bot.currentWindow;
+  await activateItem();
+  if (bot.currentWindow !== beforeWindow && consumesOpenWindow(ctx.batch?.steps[ctx.batch.index + 1])
+    && storageWindow(bot.currentWindow)) {
+    ctx.holdWindow?.(bot.currentWindow!);
+  }
+  await sleep(1_200);
+  assertUseHand(bot, hand, ctx);
+  bot.deactivateItem();
+  await sleep(200);
+  checkAbort(ctx);
+  const note = useInvNote(beforeInv, bot);
+  if (bot.currentWindow && bot.currentWindow !== beforeWindow) {
+    const opened = windowSnapshot(bot.currentWindow as unknown as Parameters<typeof windowSnapshot>[0]);
+    const menu = selectionMenuTitle(bot.currentWindow.title);
+    const occupied = opened?.slots.slice(0, opened.containerCount)
+      .filter((item): item is NonNullable<typeof item> => item !== null) ?? [];
+    const contents = occupied
+      .map((item) => {
+        const found = item as { displayName?: string; name?: string; count?: number };
+        return `${found.displayName ?? found.name ?? '物品'}×${found.count ?? 1}`;
+      }).slice(0, 8);
+    const omitted = occupied.length > contents.length ? `（另 ${occupied.length - contents.length} 个非空槽位未列出）` : '';
+    if (menu) {
+      return `用了${label};打开了${menu}选择菜单。槽位里的图标是菜单选项，不是箱内物品，不能用 take from:"open" 取走；当前工具没有菜单槽位点击步骤，可查询服务端文字命令`
+        + `${contents.length > 0 ? `;看到选项:${contents.join('、')}${omitted}` : ''}${note ? `;${note}` : ''}`;
+    }
+    const capacity = opened ? `，占用 ${occupied.length}/${opened.containerCount} 格，空 ${opened.containerCount - occupied.length} 格` : '';
+    return `用了${label};打开了${opened?.title ?? '交互窗口'}${capacity}${contents.length > 0 ? `,里面有:${contents.join('、')}${omitted}` : ',里面暂时是空的'}${note ? `;${note}` : ''}`;
+  }
+  return note
+    ? `拿着${label}发送了使用请求;${note};没有登记的使用效果，背包变化不能单独证明本次使用生效`
+    : `拿着${label}按了一下使用;包里一样没动,这样东西没有登记的使用效果,光凭库存读不出有没有发生什么`;
+}
+
+/**
+ * 扔一颗末影之眼,盯着它飞。原版:它朝要塞方向飞出去再落下,20% 概率碎掉。
+ * 现有 `use` 只报「包里少了一个」,而她要的那个读数在飞行途中 —— 飞向哪边、飞多远。
+ * 纯观测:一个「往那边走」都不说。
+ */
+/**
+ * lookAt 先改本地朝向；等待物理 tick 发出朝向包后再发送 use_item。
+ * 1.20.6 的 use_item 仅含 hand/sequence，1.21.2 才加入朝向字段。
+ * physicsTick 与 updatePosition 同步执行，waitForTicks 续体在整次 tick 结束后恢复。
+ */
+export async function aimThenUse(bot: Bot, point: Vec3, activate?: () => Promise<void>): Promise<void> {
+  await bot.lookAt(point, true);
+  await bot.waitForTicks(1);
+  if (activate) await activate();
+  else await bot.activateItem();
+}
+
+/**
+ * 原版三叉戟松手时蓄力满 10 刻才掷出。服务端按自己收到按下与松开两个包之间的刻数算,
+ * 与客户端刻差一两刻,按住 12 刻再松。
+ */
+const TRIDENT_CHARGE_TICKS = 12;
+
+/** 原版箭的位置每 20 刻同步一次;超过一次同步间隔再加 10 刻网络抖动没动过,就是插住了 */
+const ARROW_SETTLED_MS = 1_500;
+/** 满弓竖直上射落回出手高度要 104 刻(5.2 秒),再加一次 20 刻的位置同步 */
+const ARROW_WATCH_MS = 6_200;
+/** 刚放出的箭在身边这么近的水平距离内生成;更远的是别处早先射的 */
+const ARROW_SPAWN_RADIUS = 3;
+
+/**
+ * 满弓朝那一格的格心射一支普通箭,盯到箭插住、不见或超时。
+ * 回执报落点、那一格射前射后的方块,以及包里普通箭的增减(带无限附魔时不减)。
+ */
+async function shootBowAt(bot: Bot, cell: Cell, ctx: SkillContext): Promise<string> {
+  const ranged = ctx.attack.ranged;
+  if (!ranged) throw new SkillBlocked('远程控制器现在不可用');
+  const before = blockAtCell(bot, cell);
+  const arrowsBefore = invCount(bot, (n) => n === 'arrow');
+  const known = new Set(Object.values(bot.entities).filter((e) => e?.name === 'arrow').map((e) => e.id));
+  const lease = ctx.attack.acquire(-1);
+  let shot: BowShotResult;
+  try {
+    shot = await ranged.shoot(cellTarget(cell), lease.token);
+  } finally {
+    ctx.attack.release(lease);
+  }
+  checkAbort(ctx);
+  if (shot.kind !== 'released') throw new SkillBlocked(`朝 ${cellText(cell)} 没射出去:${rangedBlockedText(shot)}`);
+
+  const from = bot.entity.position.clone();
+  const deadline = Date.now() + ARROW_WATCH_MS;
+  let arrowId: number | null = null;
+  let last: Vec3 | null = null;
+  let movedAt = Date.now();
+  let settled = false;
+  while (Date.now() < deadline) {
+    checkAbort(ctx);
+    const arrow: (typeof bot.entities)[number] | undefined = arrowId !== null
+      ? bot.entities[arrowId]
+      : Object.values(bot.entities).find((e) => e?.name === 'arrow' && e.position && !known.has(e.id)
+        && Math.hypot(e.position.x - from.x, e.position.z - from.z) <= ARROW_SPAWN_RADIUS);
+    if (arrow?.position) {
+      arrowId = arrow.id;
+      if (!last || !arrow.position.equals(last)) {
+        last = arrow.position.clone();
+        movedAt = Date.now();
+      } else if (Date.now() - movedAt >= ARROW_SETTLED_MS) {
+        settled = true;
+        break;
+      }
+    } else if (arrowId !== null) break;
+    await sleep(100);
+  }
+
+  const at = (p: Vec3): string => `(${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)})`;
+  const center = new Vec3(cell.x + 0.5, cell.y + 0.5, cell.z + 0.5);
+  const flight = !last
+    ? '一路没看见这支箭'
+    : settled
+      ? `箭插在 ${at(last)},离那一格中心 ${last.distanceTo(center).toFixed(1)} 格`
+      : arrowId !== null && !bot.entities[arrowId]
+        ? `箭在 ${at(last)} 之后不见了`
+        : `盯了 ${ARROW_WATCH_MS / 1000} 秒箭还在动,最后看见在 ${at(last)}`;
+  const after = blockAtCell(bot, cell);
+  const cellNote = !before || !after || after.stateId === before.stateId
+    ? ''
+    : after.name === before.name
+      ? `;那一格的${zhName(after.name)}状态变了`
+      : `;那一格从${zhName(before.name)}变成了${zhName(after.name)}`;
+  return `朝 ${cellText(cell)} 满弓放了一箭,${flight}${cellNote}。`
+    + `包里普通箭 ${arrowsBefore} → ${invCount(bot, (n) => n === 'arrow')} 支`;
+}
+
+/** 原版末影之眼飞 80 刻(4 秒)后落下或碎掉,盯 6 秒足够,盯不到就说盯不到 */
+export const ENDER_EYE_WATCH_MS = 6_000;
+/** 刚扔出的眼在身边这么近的距离内生成;更远的是别处早先扔的,不认 */
+const ENDER_EYE_SPAWN_RADIUS = 3;
+
+/**
+ * 罗盘方位角:正北(-z)0°、正东(+x)90°,顺时针。三角定位要的是这个角,八方位差 22.5° 太粗。
+ */
+export function compassDegrees(dx: number, dz: number): number {
+  const deg = Math.atan2(dx, -dz) * (180 / Math.PI);
+  return Math.round(((deg % 360) + 360) % 360);
+}
+
+export async function throwEnderEye(bot: Bot, ctx: SkillContext, activate?: () => Promise<void>): Promise<string> {
+  const from = { x: bot.entity.position.x, y: bot.entity.position.y, z: bot.entity.position.z };
+  const before = invCount(bot, (n) => n === ENDER_EYE_ITEM);
+  const known = new Set(Object.values(bot.entities).filter((e) => e?.name === ENDER_EYE_ENTITY).map((e) => e.id));
+  if (activate) await activate();
+  else await bot.activateItem();
+  const deadline = Date.now() + ENDER_EYE_WATCH_MS;
+  let eyeId: number | null = null;
+  let first: { x: number; y: number; z: number } | null = null;
+  let last: { x: number; y: number; z: number } | null = null;
+  while (Date.now() < deadline) {
+    checkAbort(ctx);
+    const eye: (typeof bot.entities)[number] | undefined = eyeId !== null
+      ? bot.entities[eyeId]
+      : Object.values(bot.entities).find((e) => e?.name === ENDER_EYE_ENTITY && e.position && !known.has(e.id)
+        && Math.hypot(e.position.x - from.x, e.position.z - from.z) <= ENDER_EYE_SPAWN_RADIUS);
+    if (eye?.position) {
+      eyeId = eye.id;
+      last = { x: eye.position.x, y: eye.position.y, z: eye.position.z };
+      first ??= last;
+    } else if (eyeId !== null) break;
+    await sleep(100);
+  }
+  const after = invCount(bot, (n) => n === ENDER_EYE_ITEM);
+  const origin = `从 (${Math.round(from.x)}, ${Math.round(from.y)}, ${Math.round(from.z)}) 扔出`;
+  if (!last || !first) return `${origin},但一路没看见那颗末影之眼(包里 ${before} → ${after} 个)`;
+  const dist = Math.round(Math.hypot(last.x - from.x, last.z - from.z));
+  const dir = bearing(last.x - from.x, last.z - from.z);
+  const dy = Math.round(last.y - from.y);
+  // 原版:离要塞 12 格以内时眼直接飞到要塞正上方悬停,水平位移就会很短
+  const heading = dist >= 1
+    ? `,方位角 ${compassDegrees(last.x - from.x, last.z - from.z)}°(正北 0°、正东 90°,顺时针)`
+    : '';
+  const drop = Object.values(bot.entities).some(
+    (e) => e?.name === 'item' && e.position
+      && Math.hypot(e.position.x - last!.x, e.position.y - last!.y, e.position.z - last!.z) <= 4,
+  );
+  const fell = drop
+    ? '落地了,地上有掉落物'
+    : '没看见它落地(20% 概率会碎,也可能落在视野外)';
+  return `${origin},末影之眼朝${dir ? DIRECTION_ZH[dir] : '正上下'}飞了 ${dist} 格${heading}`
+    + `${dy === 0 ? '' : `,${dy > 0 ? '升' : '降'}了 ${Math.abs(dy)} 格`}`
+    + `,最后看见它在 (${last.x.toFixed(1)}, ${last.y.toFixed(1)}, ${last.z.toFixed(1)});${fell}。`
+    + `包里 ${before} → ${after} 个`;
+}
+
+/** 框架那一圈在被点的框架周围多大范围里找:原版 12 个框围成 5×5 去掉四角的一圈,中间 3×3 是门;对边的框离被点的那一格 4 格 */
+const END_FRAME_SCAN = 4;
+
+/**
+ * 右键末地传送门框架之后,把这一圈的现状念出来:几个框、几个放了眼、门开没开。
+ * 原版框架的 eye 属性就是「放了眼没有」,门方块和框在同一层。
+ */
+export function endFrameNote(bot: Bot, cell: Cell, name = 'end_portal_frame'): string {
+  if (name !== 'end_portal_frame') return '';
+  let frames = 0;
+  let eyes = 0;
+  let portal = 0;
+  for (let dx = -END_FRAME_SCAN; dx <= END_FRAME_SCAN; dx++) {
+    for (let dz = -END_FRAME_SCAN; dz <= END_FRAME_SCAN; dz++) {
+      const b = blockAtCell(bot, { x: cell.x + dx, y: cell.y, z: cell.z + dz });
+      if (b?.name === 'end_portal_frame') {
+        frames++;
+        if (blockProp(b, 'eye') === 'true') eyes++;
+      } else if (b?.name === 'end_portal') {
+        portal++;
+      }
+    }
+  }
+  return `。周围 ${END_FRAME_SCAN * 2 + 1}×${END_FRAME_SCAN * 2 + 1} 内框架 ${frames} 个,放了眼的 ${eyes} 个`
+    + (portal > 0 ? `;框中间已经有末地传送门方块 ${portal} 格,门开了` : ';还没有传送门方块');
+}
+
+/**
+ * 放一条船:瞄准托住它的那个面按「使用物品」,再按包里少没少、附近多没多出一条船来报。
+ *
+ * `at` 给空气格就瞄它脚下那格的顶面(船落进 `at` 这一格),给实心格就瞄这一格自己的
+ * 顶面(船落在它上面)。两种写法都成立,回执报船最后落在哪儿,不必她先猜对哪一格。
+ */
+export async function useBoat(bot: Bot, cell: Cell, held: string, label: string,
+  activate?: () => Promise<void>): Promise<string> {
+  const here = blockAtCell(bot, cell);
+  const solidHere = here !== null && !AIR_NAMES.has(here.name) && !LIQUIDS.has(here.name);
+  const face = { x: cell.x, y: solidHere ? cell.y + 1 : cell.y, z: cell.z };
+  const under = blockAtCell(bot, { x: face.x, y: face.y - 1, z: face.z });
+  if (!under || AIR_NAMES.has(under.name)) {
+    throw new SkillBlocked(
+      `${cellText(face)} 底下是${under ? zhName(under.name) : '(区块没加载)'},没有能托住船的面`,
+    );
+  }
+  const before = invCount(bot, (n) => n === held);
+  await aimThenUse(bot, new Vec3(face.x + 0.5, face.y, face.z + 0.5), activate);
+  await sleep(USE_SETTLE_MS);
+  const after = invCount(bot, (n) => n === held);
+  if (after >= before) {
+    throw new SkillBlocked(
+      `朝 ${cellText(face)} 放${label},船没出来:包里还是 ${after} 条`,
+      [`瞄的是 ${cellText({ x: face.x, y: face.y - 1, z: face.z })} 的${zhName(under.name)}顶面`],
+      'server',
+    );
+  }
+  const boat = nearestBoat(bot, face);
+  if (boat) return `${label}放在 ${cellText(boat)};包里 ${before} → ${after} 条`;
+  // 不做「包里少了=放成了」的二级软假设:两个读数分开说,落点没读到就是没读到
+  return `朝 ${cellText(face)} 放${label}:包里 ${before} → ${after} 条,但附近 4 格内没扫到船的实体,船落在哪儿没读到`;
+}
+
+// ======================== ride:上/驾/下坐骑 ========================
+
+/** ride 找坐骑的半径,与 use 的活物半径一致 */
+export const RIDE_FIND_R = 32;
+/** 驾驭:到点判定(水平距离) */
+export const RIDE_ARRIVE_R = 2.5;
+/** 驾驭:这么久推进不足 1 格就按卡死收场(下车+如实回执) */
+export const RIDE_STALL_MS = 20_000;
+/** 驾驭:发包节拍(与游戏 tick 同步) */
+export const RIDE_TICK_MS = 50;
+/**
+ * 支持驾驭的载具及每物理 tick 的步长，单位为格。
+ * 马的位置包受服务端纠偏，暂不支持驾驭；仍支持骑乘和下车。
+ */
+export const RIDE_STEP: Readonly<Record<string, number>> = {
+  pig: 0.12, strider: 0.12, boat: 0.3, chest_boat: 0.3,
+};
+export const RIDE_STEP_DEFAULT = 0.12;
+/** 贴墙滑时某一轴剩下的分量短于这个就不算一种走法(只为跳过零长度那一轴) */
+export const RIDE_MIN_SLIDE = 0.001;
+/** 坐骑实体没带宽高读数时的包围盒边长(猪的宽高) */
+export const RIDE_HULL_DEFAULT = 0.9;
+/** 驾驭这一种要手持的道具(服务端认「受控」的前提;拿掉它坐骑就不听使唤) */
+export const RIDE_CONTROL_ITEM: Readonly<Record<string, string>> = {
+  pig: 'carrot_on_a_stick', strider: 'warped_fungus_on_a_stick',
+};
+
+export interface VehicleEntity { name?: string; position: Vec3; height?: number; width?: number }
+export interface RideClient {
+  write(name: string, data: Record<string, unknown>): void;
+  on(name: string, fn: (p: { x: number; y: number; z: number }) => void): void;
+  removeListener(name: string, fn: (p: { x: number; y: number; z: number }) => void): void;
+}
+
+export function vehicleOf(bot: Bot): VehicleEntity | null {
+  return (bot as unknown as { vehicle?: VehicleEntity | null }).vehicle ?? null;
+}
+
+export async function skillRide(bot: Bot, call: Extract<SkillCall, { skill: 'ride' }>, ctx: SkillContext): Promise<string> {
+  if (call.off) {
+    const v = vehicleOf(bot);
+    if (!v) throw new SkillNoop('没骑着任何东西');
+    const name = zhEntity(v.name ?? '坐骑');
+    bot.dismount();
+    const t0 = Date.now();
+    while (vehicleOf(bot) && Date.now() - t0 < 3000) await sleep(100);
+    if (vehicleOf(bot)) throw new SkillBlocked(`从${name}上下不来:发了下坐骑的包,3 秒后人还在上面`, [], 'server');
+    await sleep(300); // 等服务端把人摆到下车点
+    return `从${name}上下来了,人在 ${cellText(feetOf(bot))}`;
+  }
+
+  if (call.target) {
+    const riding = vehicleOf(bot);
+    if (riding) {
+      if ((riding.name ?? '') !== call.target) {
+        throw new SkillBlocked(`人还骑在${zhEntity(riding.name ?? '坐骑')}上;先 {"skill":"ride","off":true} 下来再骑别的`);
+      }
+    } else {
+      if (!isKnownTarget(bot, call.target)) throw new SkillBlocked(unknownUseTargetText(bot, call.target));
+      const entity = findEntity(bot, call.target, RIDE_FIND_R);
+      if (!entity) throw new SkillNoop(`附近 ${RIDE_FIND_R} 格内没有${zhEntity(call.target)}`);
+      await gotoGoal(bot, new goals.GoalFollow(entity, 2), ctx).catch(() => undefined);
+      checkAbort(ctx);
+      if (!entity.isValid) throw new SkillBlocked(`${zhEntity(call.target)}走了`);
+      // 手上拿着食物/鞍右键会变成喂食/上鞍,空手骑最稳;驾驭用的钓竿骑上之后再拿
+      try { await bot.unequip('hand'); } catch { /* 本来就空手 */ }
+      await bot.lookAt(entity.position.offset(0, (entity.height ?? 1) * 0.5, 0));
+      bot.mount(entity as never);
+      const t0 = Date.now();
+      while (!vehicleOf(bot) && Date.now() - t0 < 3000) await sleep(100);
+      if (!vehicleOf(bot)) {
+        const saddled = readSaddled(bot as never, entity as never);
+        const tamed = readHorseTamed(bot as never, entity as never);
+        const facts: string[] = [];
+        if (saddled !== null) facts.push(`它身上${saddled ? '有' : '没有'}鞍`);
+        if (tamed !== null) facts.push(`${tamed ? '驯服过' : '还没驯服(没驯服的马会把人颠下来)'}`);
+        throw new SkillBlocked(`右键了${zhEntity(call.target)},3 秒内没坐上去${facts.length > 0 ? `。${facts.join(',')}` : ''}`, [], 'server');
+      }
+    }
+  }
+
+  const vehicle = vehicleOf(bot);
+  if (!vehicle) {
+    throw new SkillBlocked('要驾着走得先骑上:同一步给 target,或先来一步 {"skill":"ride","target":"..."}');
+  }
+  if (!call.to) {
+    const animalNote = animalStateNote(bot as never, vehicle as never);
+    const saddleNote = readSaddled(bot as never, vehicle as never) === false && RIDE_CONTROL_ITEM[vehicle.name ?? '']
+      ? ';它没上鞍,原版没鞍驾驭不了'
+      : '';
+    return `骑上${zhEntity(vehicle.name ?? '坐骑')}了(它在 ${cellText(cellOfVec(vehicle.position))})${saddleNote}${animalNote ? `；${animalNote}` : ''};`
+      + rideHelp(vehicle.name ?? '');
+  }
+  return await rideDrive(bot, ctx, resolveAt(bot, call.to));
+}
+
+export function cellOfVec(p: Vec3): Cell {
+  return { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
+}
+
+/** 拴绳那件物品的英文 id;与 needs 闸共用同一个常量,不在两处各写一遍字面量 */
+export const LEAD_ITEM = 'lead';
+export const LEAD_FIND_R = 32;
+/** 右键之后等服务端认拴上的窗口 */
+export const LEAD_ATTACH_MS = 3_000;
+/**
+ * 一段牵多远。整段直接交给寻路器会把人拉出绳长:原版超 10 格绳就断,而寻路器
+ * 一口气能跑几十格。分段走 + 每段等它跟上,才是「稳定牵到」而不是「走到了但它掉在半路」。
+ */
+export const LEAD_HOP = 8;
+/** 原版绳绷断的距离;超过这个数就当断了去核实,不再往前走 */
+export const LEAD_SNAP = 10;
+/** 一段走完之后它离我多远就停下等 */
+export const LEAD_FOLLOW_R = 6;
+/**
+ * 人自己要走到离终点多近。**不是 tolerance** —— tolerance 是「它到了没有」的验收圈,
+ * 人停在那个圈边上,拖在身后一两格的它就永远差着那一两格进不来。人走到终点上,
+ * 它跟到身后,才落进圈里。
+ */
+export const LEAD_ARRIVE_R = 1;
+/** 等它跟上的上限 */
+export const LEAD_CATCHUP_MS = 8_000;
+/** 整段牵引的上限 */
+export const LEAD_DRAG_MS = 150_000;
+
+/**
+ * 我正牵着的那只。
+ *
+ * 上游把 `attach_entity` 记进了 `entity.vehicle`(见 mineflayer entities.js)——名字是
+ * 历史遗留:1.9 起载具走 `set_passengers`,这个包**只用于拴绳**。所以「它的 vehicle 是我」
+ * 就是「它被我牵着」,这是我们唯一拿得到的服务端拴绳信号。反过来我骑东西时是
+ * `bot.entity.vehicle = 坐骑`,方向相反,不会误判。
+ */
+export function leashedByMe(bot: Bot): NonNullable<Bot['entities'][string]> | null {
+  const meId = bot.entity?.id;
+  if (meId === undefined) return null;
+  for (const id of Object.keys(bot.entities)) {
+    const e = bot.entities[id];
+    if (!e || e === bot.entity || !e.position) continue;
+    const v = (e as { vehicle?: { id?: number } | null }).vehicle;
+    if (v && v.id === meId) return e;
+  }
+  return null;
+}
+
+export function stillLeashed(bot: Bot, e: { id?: number } | null): boolean {
+  const held = leashedByMe(bot);
+  return Boolean(held && e && held.id === e.id);
+}
+
+export function leadCount(bot: Bot): number {
+  return invCount(bot, (n) => n === LEAD_ITEM);
+}
+
+export function distTo(bot: Bot, p: Vec3 | Cell): number {
+  const me = bot.entity.position;
+  return Math.hypot(me.x - (p as Vec3).x, me.y - (p as Vec3).y, me.z - (p as Vec3).z);
+}
+
+/** 栅栏能系绳,栅栏门不能;墙(wall)也不行。名字判据照原版的 fence 族。 */
+export function isLeashableFence(name: string): boolean {
+  return name.endsWith('_fence') || name === 'nether_brick_fence';
+}
+
+/** 拴上:走到跟前、右键、等服务端认。两条独立证据(拴绳少一根 / 它的 vehicle 是我)。 */
+export async function leadAttach(bot: Bot, target: string, ctx: SkillContext): Promise<{
+  entity: NonNullable<Bot['entities'][string]>;
+  text: string;
+}> {
+  if (!isKnownTarget(bot, target)) throw new SkillBlocked(unknownUseTargetText(bot, target));
+  if (leadCount(bot) === 0) throw new SkillBlocked('包里没有拴绳(lead):四根线加一颗黏液球搓一根');
+  const entity = findEntity(bot, target, LEAD_FIND_R);
+  if (!entity) throw new SkillNoop(`附近 ${LEAD_FIND_R} 格内没有${zhEntity(target)}`);
+  const already = (entity as { vehicle?: { id?: number } | null }).vehicle;
+  if (already && already.id !== bot.entity?.id) {
+    throw new SkillBlocked(`${zhEntity(target)}身上已经拴着别人的绳了,拴不上第二根`);
+  }
+  await gotoGoal(bot, new goals.GoalFollow(entity, 2), ctx).catch(() => undefined);
+  checkAbort(ctx);
+  if (!entity.isValid) throw new SkillBlocked(`走到跟前时${zhEntity(target)}已经走了`);
+
+  await equipNamed(bot, LEAD_ITEM);
+  const beforeLeads = leadCount(bot);
+  await bot.lookAt(entity.position.offset(0, (entity.height ?? 1) * 0.5, 0));
+  await bot.useOn(entity);
+
+  const until = Date.now() + LEAD_ATTACH_MS;
+  while (Date.now() < until) {
+    checkAbort(ctx);
+    if (stillLeashed(bot, entity)) break;
+    await sleep(100);
+  }
+  const spent = beforeLeads - leadCount(bot);
+  if (!stillLeashed(bot, entity)) {
+    // 绳少了一根但没收到 attach 包 = 服务端接了、我们没看见;绳没少 = 它根本拴不上
+    if (spent > 0) {
+      throw new SkillBlocked(
+        `拴绳少了 ${spent} 根,但 ${LEAD_ATTACH_MS / 1000} 秒内没收到「拴上了」的确认;`
+        + `${zhEntity(target)}现在在 ${cellText(cellOfVec(entity.position))},状态未知`,
+        [], 'server',
+      );
+    }
+    throw new SkillBlocked(
+      `右键了${zhEntity(target)},绳一根没少,没拴上——原版拴不住的有村民、大部分敌对生物、`
+      + '还有已经被别人牵着的',
+      [], 'server',
+    );
+  }
+  return {
+    entity,
+    text: `拴上${zhEntity(target)}了(它在 ${cellText(cellOfVec(entity.position))},拴绳还剩 ${leadCount(bot)} 根)`,
+  };
+}
+
+/** 分段牵着走。每段之后核两件事:绳还在不在、它跟上了没有。 */
+export async function leadDrag(
+  bot: Bot,
+  entity: NonNullable<Bot['entities'][string]>,
+  to: Cell,
+  tolerance: number,
+  ctx: SkillContext,
+): Promise<string> {
+  const who = zhEntity(entity.name ?? '它');
+  const goalVec = new Vec3(to.x + 0.5, to.y, to.z + 0.5);
+  const petDist = (): number => (entity.isValid ? entity.position.distanceTo(goalVec) : Infinity);
+  const deadline = Date.now() + LEAD_DRAG_MS;
+  let hops = 0;
+
+  for (;;) {
+    checkAbort(ctx);
+    if (!stillLeashed(bot, entity)) {
+      const where = entity.isValid ? cellText(cellOfVec(entity.position)) : '看不见了';
+      throw new SkillBlocked(
+        `牵到一半绳脱开了(走了 ${hops} 段):${who}在 ${where},我在 ${cellText(feetOf(bot))};`
+        + '绳会掉在脱开的地方,用 pickup 捡回来',
+        [], 'server',
+      );
+    }
+    if (petDist() <= tolerance) break;
+    if (Date.now() > deadline) {
+      throw new SkillBlocked(
+        `牵了 ${hops} 段、${Math.round(LEAD_DRAG_MS / 1000)} 秒还没到:`
+        + `${who}离 ${cellText(to)} 还有 ${petDist().toFixed(1)} 格,我在 ${cellText(feetOf(bot))}`,
+      );
+    }
+
+    const meLeft = distTo(bot, goalVec);
+    if (meLeft > LEAD_ARRIVE_R) {
+      // 一段 = 让寻路器把我带到「离终点还剩 (现在的距离 − LEAD_HOP)」的那个圈上,
+      // 到不了终点就停在半路。不自己造中途路点,免得点落在山体/空中
+      const ring = Math.max(LEAD_ARRIVE_R, Math.ceil(meLeft) - LEAD_HOP);
+      await gotoGoal(bot, new goals.GoalNear(to.x, to.y, to.z, ring), ctx).catch(() => undefined);
+      hops++;
+      checkAbort(ctx);
+
+      // 等它跟上。绳是软的,人站着不动它自己会走过来
+      const wait = Date.now() + LEAD_CATCHUP_MS;
+      while (Date.now() < wait) {
+        checkAbort(ctx);
+        if (!stillLeashed(bot, entity)) break;
+        const gap = entity.position.distanceTo(bot.entity.position);
+        if (gap <= LEAD_FOLLOW_R) break;
+        if (gap > LEAD_SNAP) break; // 已经超过原版绳长,下一轮的脱开判据会说清
+        await sleep(200);
+      }
+
+      // 这一段一步没推进 —— 路被堵死,再走多少段也是同一个结果
+      if (meLeft - distTo(bot, goalVec) < 0.5) {
+        const gap = entity.isValid ? entity.position.distanceTo(bot.entity.position).toFixed(1) : '?';
+        throw new SkillBlocked(
+          `牵不动了(走了 ${hops} 段,这一段一步没推进):我在 ${cellText(feetOf(bot))}、`
+          + `${who}在我 ${gap} 格外,离 ${cellText(to)} 还有 ${petDist().toFixed(1)} 格`,
+        );
+      }
+      continue;
+    }
+
+    // 人已经站在终点上了,只差它。这一段把等待走满,它还进不来就是它不肯再近
+    const wait = Date.now() + LEAD_CATCHUP_MS;
+    while (Date.now() < wait && stillLeashed(bot, entity) && petDist() > tolerance) {
+      checkAbort(ctx);
+      await sleep(200);
+    }
+    if (stillLeashed(bot, entity) && petDist() > tolerance) {
+      const gap = entity.position.distanceTo(bot.entity.position).toFixed(1);
+      throw new SkillBlocked(
+        `我已经站在 ${cellText(to)} 了,${who}跟到我 ${gap} 格外就不再近,`
+        + `离目标还有 ${petDist().toFixed(1)} 格、超出 tolerance ${tolerance} 格;`
+        + '把 tolerance 放宽,或者直接给 tie 系到旁边的栅栏上',
+      );
+    }
+  }
+  return `把${who}牵到 ${cellText(to)} 了(它现在离目标 ${petDist().toFixed(1)} 格,${tolerance} 格内算到),走了 ${hops} 段`;
+}
+
+/** 松开:空手右键它。绳会掉在地上,照实说要捡。 */
+export async function leadRelease(bot: Bot, entity: NonNullable<Bot['entities'][string]>, ctx: SkillContext): Promise<string> {
+  const who = zhEntity(entity.name ?? '它');
+  try { await bot.unequip('hand'); } catch { /* 本来就空手 */ }
+  checkAbort(ctx);
+  await bot.lookAt(entity.position.offset(0, (entity.height ?? 1) * 0.5, 0));
+  await bot.useOn(entity);
+  const until = Date.now() + LEAD_ATTACH_MS;
+  while (Date.now() < until && stillLeashed(bot, entity)) {
+    checkAbort(ctx);
+    await sleep(100);
+  }
+  if (stillLeashed(bot, entity)) {
+    throw new SkillBlocked(`空手右键了${who},${LEAD_ATTACH_MS / 1000} 秒后绳还牵着`, [], 'server');
+  }
+  return `松开${who}了,它留在 ${cellText(cellOfVec(entity.position))};绳掉在那儿,用 {"skill":"pickup","item":"lead"} 捡`;
+}
+
+/** 系到栅栏上:走到栅栏边右键它。系上之后它的绳头就不在我手里了。 */
+export async function leadTie(
+  bot: Bot,
+  entity: NonNullable<Bot['entities'][string]>,
+  tie: Cell,
+  ctx: SkillContext,
+): Promise<string> {
+  const who = zhEntity(entity.name ?? '它');
+  const fence = blockAtCell(bot, tie);
+  if (!fence) throw new SkillBlocked(`${cellText(tie)} 区块没加载,看不到那儿是什么`);
+  if (!isLeashableFence(fence.name)) {
+    throw new SkillBlocked(
+      `${cellText(tie)} 是${zhName(fence.name)},绳系不上去——原版只有栅栏能系(栅栏门也不行)`,
+    );
+  }
+  await gotoGoal(bot, new goals.GoalNear(tie.x, tie.y, tie.z, 2), ctx).catch(() => undefined);
+  checkAbort(ctx);
+  if (!stillLeashed(bot, entity)) {
+    throw new SkillBlocked(`走到栅栏边时绳已经脱开了,${who}没系上`, [], 'server');
+  }
+  await bot.lookAt(new Vec3(tie.x + 0.5, tie.y + 0.5, tie.z + 0.5));
+  await bot.activateBlock(fence);
+  const until = Date.now() + LEAD_ATTACH_MS;
+  while (Date.now() < until && stillLeashed(bot, entity)) {
+    checkAbort(ctx);
+    await sleep(100);
+  }
+  if (stillLeashed(bot, entity)) {
+    throw new SkillBlocked(
+      `右键了 ${cellText(tie)} 的${zhName(fence.name)},${LEAD_ATTACH_MS / 1000} 秒后绳头还在我手里,没系上`,
+      [], 'server',
+    );
+  }
+  const where = entity.isValid ? cellText(cellOfVec(entity.position)) : '看不见了';
+  return `把${who}系到 ${cellText(tie)} 的${zhName(fence.name)}上了,它现在在 ${where},跑不远了`;
+}
+
+/**
+ * 拴绳:拴上 → 分段牵到 → 松开/系栅栏。三段各自可单独成立(她可以分步下单)。
+ *
+ * 为什么要分段走:原版绳超 10 格就断,而寻路器一口气跑几十格。整段丢给 goto 的结果
+ * 是「人到了、它断在半路」——那正是这个技能要解决的事,所以分段与等它跟上是本体,
+ * 不是保守起见的额外保护。
+ */
+export async function skillLead(bot: Bot, call: Extract<SkillCall, { skill: 'lead' }>, ctx: SkillContext): Promise<string> {
+  if (call.off) {
+    const held = leashedByMe(bot);
+    if (!held) throw new SkillNoop('现在没牵着任何活物');
+    return await leadRelease(bot, held, ctx);
+  }
+
+  const parts: string[] = [];
+  let entity = leashedByMe(bot);
+  if (call.target) {
+    if (entity && (entity.name ?? '') !== call.target) {
+      throw new SkillBlocked(
+        `手里还牵着${zhEntity(entity.name ?? '一只活物')};先 {"skill":"lead","off":true} 松开再拴别的`,
+      );
+    }
+    if (!entity) {
+      const got = await leadAttach(bot, call.target, ctx);
+      entity = got.entity;
+      parts.push(got.text);
+    }
+  }
+  if (!entity) {
+    throw new SkillBlocked('手里没牵着东西:同一步给 target,或先来一步 {"skill":"lead","target":"..."}');
+  }
+
+  if (call.to) {
+    parts.push(await leadDrag(bot, entity, resolveAt(bot, call.to), call.tolerance ?? 3, ctx));
+  }
+  if (call.tie) {
+    parts.push(await leadTie(bot, entity, resolveAt(bot, call.tie), ctx));
+  } else if (call.to && !call.keep) {
+    parts.push(await leadRelease(bot, entity, ctx));
+  }
+  return parts.join(';');
+}
+
+/**
+ * 落地那一格的 y:从当前高度 +1 往下扫到 -3,找「脚下实心、本格与头上非实心」。
+ * 找不到(区块没加载/前面是墙或深坑)返回 null,由调用方按停滞收场。
+ */
+export function rideGroundY(bot: Bot, x: number, yNow: number, z: number): number | null {
+  const fx = Math.floor(x);
+  const fz = Math.floor(z);
+  const yBase = Math.floor(yNow);
+  for (let dy = 1; dy >= -3; dy -= 1) {
+    const yy = yBase + dy;
+    const here = blockAtCell(bot, { x: fx, y: yy, z: fz });
+    const below = blockAtCell(bot, { x: fx, y: yy - 1, z: fz });
+    if (!here || !below) return null;
+    const standable = !AIR_NAMES.has(below.name) && !LIQUIDS.has(below.name);
+    if (AIR_NAMES.has(here.name) && standable) return yy;
+    // 船浮在水格上沿；已在水面时沿用当前高度，从岸上入水时使用水面上沿高度。
+    if (AIR_NAMES.has(here.name) && below.name === 'water') return Math.min(yNow, yy);
+    if (here.name === 'water') return yy + 1;
+  }
+  return null;
+}
+
+/** 骑手脚底比坐骑 y 高出的量;骑手位置跟着坐骑写,埋头判定读的也是这个位置 */
+export const RIDER_OVER_VEHICLE = 0.6;
+/** 玩家眼高;原版窒息按眼睛那一点所在的方块判 */
+export const PLAYER_EYE = 1.62;
+/**
+ * 坐骑包围盒各面收进的量,只为让恰好贴着方块面的位置不算重叠。
+ * 原版源码验碰撞前收进 1/16,但台架上的 Paper 1.20.6 对整盒重叠 0.06 格的落点照样拽回,
+ * 所以按整盒算。
+ */
+export const VEHICLE_HULL_EPS = 1e-6;
+
+export interface RideObstacle {
+  cell: Cell;
+  name: string;
+  /** hull=坐骑身子撞上;head=坐骑过得去、骑手的头会在这一格里 */
+  kind: 'hull' | 'head';
+}
+
+function shapeBoxes(b: NonNullable<ReturnType<Bot['blockAt']>>): number[][] {
+  const shapes = (b as unknown as { shapes?: number[][] }).shapes;
+  if (Array.isArray(shapes)) return shapes;
+  return b.boundingBox === 'block' ? [[0, 0, 0, 1, 1, 1]] : [];
+}
+
+/**
+ * 坐骑落到 (x,y,z) 这一步挡不挡:身子按实体宽高的整盒碰方块碰撞箱,
+ * 骑手眼睛所在那一格是整格实心就算头挡——原版船钻得进一格高的缝,人在里面窒息掉血。
+ * 区块没加载的格按挡住报,不当空气。
+ */
+export function rideObstacle(
+  bot: Bot, x: number, y: number, z: number, hull: { width: number; height: number },
+): RideObstacle | null {
+  const hw = hull.width / 2 - VEHICLE_HULL_EPS;
+  const x0 = x - hw; const x1 = x + hw;
+  const z0 = z - hw; const z1 = z + hw;
+  const y0 = y + VEHICLE_HULL_EPS; const y1 = y + hull.height - VEHICLE_HULL_EPS;
+  for (let cy = Math.floor(y0); cy <= Math.floor(y1); cy += 1) {
+    for (let cx = Math.floor(x0); cx <= Math.floor(x1); cx += 1) {
+      for (let cz = Math.floor(z0); cz <= Math.floor(z1); cz += 1) {
+        const cell = { x: cx, y: cy, z: cz };
+        const b = blockAtCell(bot, cell);
+        if (!b) return { cell, name: '(区块没加载)', kind: 'hull' };
+        const hit = shapeBoxes(b).some(([sx0, sy0, sz0, sx1, sy1, sz1]) => cx + sx0 < x1 && cx + sx1 > x0
+          && cy + sy0 < y1 && cy + sy1 > y0 && cz + sz0 < z1 && cz + sz1 > z0);
+        if (hit) return { cell, name: b.name, kind: 'hull' };
+      }
+    }
+  }
+  const eye = { x: Math.floor(x), y: Math.floor(y + RIDER_OVER_VEHICLE + PLAYER_EYE), z: Math.floor(z) };
+  const head = blockAtCell(bot, eye);
+  if (head && head.boundingBox === 'block') return { cell: eye, name: head.name, kind: 'head' };
+  return null;
+}
+
+/** 直走、贴墙滑几种走法各自撞上的那一格,同一格只说一次 */
+export function rideObstacleText(hits: readonly RideObstacle[], zhV: string): string {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const o of hits) {
+    const key = `${o.cell.x},${o.cell.y},${o.cell.z}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    parts.push(o.kind === 'head'
+      ? `${cellText(o.cell)} 是${zhName(o.name)},在人头的高度(${zhV}钻得过去,人头会闷在里面掉血)`
+      : `${cellText(o.cell)} 是${zhName(o.name)},挡着${zhV}的身子`);
+  }
+  return `直走和贴墙滑都过不去:${parts.join(';')}`;
+}
+
+/**
+ * 玩家控制的载具由骑手客户端发送 vehicle_move 绝对坐标，服务端做碰撞和纠偏。
+ * Mineflayer 无载具物理，此处每 tick 小步移动并转向；仅转头不能驱动载具。
+ *
+ * 服务端对「落点和方块重叠」的包不记日志,只回一个 vehicle_move 把坐骑拽回原处。
+ */
+export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<string> {
+  const vehicle = vehicleOf(bot);
+  if (!vehicle) throw new SkillBlocked('人不在坐骑上');
+  const vname = vehicle.name ?? '';
+  const zhV = zhEntity(vname || '坐骑');
+  if (RIDE_STEP[vname] === undefined) {
+    throw new SkillBlocked(
+      `${zhV}骑得上,但驾着走这版还不支持(位置协议在测试服务器上没验过关);`
+      + '能驾的是猪(要鞍+胡萝卜钓竿)、炽足兽(要鞍+诡异菌钓竿)和船;下来用 {"skill":"ride","off":true}',
+    );
+  }
+  const control = RIDE_CONTROL_ITEM[vname];
+  if (control) {
+    try {
+      await equipNamed(bot, control);
+    } catch (err) {
+      throw new SkillBlocked(`驾${zhV}要手持${zhName(control)}:${(err as Error).message};不拿它${zhV}不听使唤`);
+    }
+    if (readSaddled(bot as never, vehicle as never) === false) {
+      throw new SkillBlocked(`这只${zhV}没上鞍,原版没鞍驾驭不了;先 {"skill":"use","item":"saddle","target":"${vname}"} 上鞍`);
+    }
+  }
+  const step = RIDE_STEP[vname] ?? RIDE_STEP_DEFAULT;
+  const hull = { width: vehicle.width ?? RIDE_HULL_DEFAULT, height: vehicle.height ?? RIDE_HULL_DEFAULT };
+  const client = (bot as unknown as { _client: RideClient })._client;
+  const pos = vehicle.position.clone();
+  const start = { x: pos.x, z: pos.z };
+  let corrections = 0;
+  const onCorrect = (p: { x: number; y: number; z: number }): void => {
+    corrections += 1;
+    pos.set(p.x, p.y, p.z);
+  };
+  client.on('vehicle_move', onCorrect);
+  const startedAt = Date.now();
+  const startDist = Math.hypot(to.x + 0.5 - pos.x, to.z + 0.5 - pos.z);
+  // 3 倍标称速度余量 + 15s 底;驾驭不该比走路更能耗时间
+  const capMs = 15_000 + (startDist / (step * 20)) * 3_000;
+  let mark = { x: pos.x, z: pos.z, at: startedAt };
+  let stalledWhy: string | null = null;
+  try {
+    for (;;) {
+      checkAbort(ctx);
+      if (!vehicleOf(bot)) { stalledWhy = '人从坐骑上掉下来了(服务端把人卸了下来)'; break; }
+      const dx = to.x + 0.5 - pos.x;
+      const dz = to.z + 0.5 - pos.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist <= RIDE_ARRIVE_R) break;
+      if (Date.now() - startedAt > capMs) {
+        stalledWhy = `跑满了时限(${Math.round(capMs / 1000)}s)还没到`;
+        break;
+      }
+      if (Date.now() - mark.at >= RIDE_STALL_MS) {
+        const moved = Math.hypot(pos.x - mark.x, pos.z - mark.z);
+        if (moved < 1) {
+          stalledWhy = `${Math.round(RIDE_STALL_MS / 1000)} 秒只挪了 ${moved.toFixed(1)} 格(前面多半有墙/深坑)`;
+          break;
+        }
+        mark = { x: pos.x, z: pos.z, at: Date.now() };
+      }
+      const along = Math.min(step, dist);
+      const tries = [
+        { mx: (dx / dist) * along, mz: (dz / dist) * along },
+        { mx: Math.sign(dx) * Math.min(step, Math.abs(dx)), mz: 0 },
+        { mx: 0, mz: Math.sign(dz) * Math.min(step, Math.abs(dz)) },
+      ];
+      let move: { nx: number; ny: number; nz: number; ux: number; uz: number } | null = null;
+      const blocked: RideObstacle[] = [];
+      for (const t of tries) {
+        const len = Math.hypot(t.mx, t.mz);
+        if (len < RIDE_MIN_SLIDE) continue;
+        const nx = pos.x + t.mx;
+        const nz = pos.z + t.mz;
+        const ny = rideGroundY(bot, nx, pos.y, nz);
+        if (ny === null) continue;
+        const hit = rideObstacle(bot, nx, ny, nz, hull);
+        // 原版只在「原处不重叠」时才拒重叠的落点;已经嵌着的身子往哪挪服务端都收
+        const wedged = hit?.kind === 'hull' && rideObstacle(bot, pos.x, pos.y, pos.z, hull)?.kind === 'hull';
+        if (hit && !wedged) { blocked.push(hit); continue; }
+        move = { nx, ny, nz, ux: t.mx / len, uz: t.mz / len };
+        break;
+      }
+      if (!move) {
+        stalledWhy = blocked.length > 0
+          ? rideObstacleText(blocked, zhV)
+          : '前面那一格落不了脚(悬崖/墙/区块没加载)';
+        break;
+      }
+      const { nx, ny, nz, ux, uz } = move;
+      // notchian yaw:0=+Z,-90=+X
+      const yaw = -Math.atan2(ux, uz) * (180 / Math.PI);
+      client.write('look', { yaw, pitch: 0, onGround: false });
+      client.write('vehicle_move', { x: nx, y: ny, z: nz, yaw, pitch: 0 });
+      pos.set(nx, ny, nz);
+      vehicle.position.set(nx, ny, nz);
+      // 骑手位置跟着坐骑走:别的读数(距离、快照)不该停在上马那一格
+      bot.entity.position.set(nx, ny + RIDER_OVER_VEHICLE, nz);
+      await sleep(RIDE_TICK_MS);
+    }
+  } finally {
+    client.removeListener('vehicle_move', onCorrect);
+  }
+  const ridden = Math.round(Math.hypot(pos.x - start.x, pos.z - start.z));
+  const secs = Math.round((Date.now() - startedAt) / 1000);
+  const where = cellText(cellOfVec(pos));
+  const left = Math.round(Math.hypot(to.x + 0.5 - pos.x, to.z + 0.5 - pos.z));
+  const fixNote = corrections > 0 ? `;路上服务端纠了 ${corrections} 次位置` : '';
+  if (stalledWhy) {
+    try { bot.dismount(); } catch { /* 已不在坐骑上 */ }
+    await sleep(500);
+    throw new SkillBlocked(
+      `骑着${zhV}走了 ${ridden} 格停在 ${where},离目标还 ${left} 格:${stalledWhy};已经下来了${fixNote}`,
+      [], 'server',
+    );
+  }
+  return `骑着${zhV}到了 ${where}(走了 ${ridden} 格、${secs}s,离目标 ${left} 格),人还骑着;下来用 {"skill":"ride","off":true}${fixNote}`;
+}
+
+// ======================== anvil / grindstone:通用窗口协议 ========================
+
+/**
+ * shift 点产出槽(2 号格)把产物取进包,返回它落进的那一格;窗口背包段里没有哪格
+ * 多出这样东西时返回 null。包里可能还有别的同名件,产物只认这一格。
+ */
+async function shiftTakeOutput(bot: Bot, win: StationWindow, outName: string): Promise<{ name: string } | null> {
+  const bagBefore = win.slots.slice(win.inventoryStart, win.inventoryEnd);
+  await (bot as unknown as { clickWindow(s: number, b: number, m: number): Promise<void> }).clickWindow(2, 0, 1);
+  await sleep(WINDOW_SETTLE_MS);
+  return win.slots.slice(win.inventoryStart, win.inventoryEnd).find((s, i) => {
+    const prev = bagBefore[i];
+    return s !== null && s.name === outName && (prev === null || prev.name !== s.name || s.count > prev.count);
+  }) ?? null;
+}
+
+export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'anvil' }>, ctx: SkillContext): Promise<string> {
+  const cell = call.at ? resolveAt(bot, call.at) : findStationCell(bot, ANVIL_BLOCKS);
+  if (!cell) throw new SkillBlocked(`附近 ${STATION_FIND_R} 格内没有铁砧;放一个再来,或用 at 指一格`);
+  const reg = bot.registry as never;
+  const mainPred: InvPred = (n, it) => n === call.item && itemMatchesPick(call.pick, it, reg);
+  const withPred: InvPred = (n, it) => n === call.with && itemMatchesPick(call.withPick, it, reg);
+  const main = bot.inventory.items().find((i) => mainPred(i.name, i));
+  if (!main) {
+    throw noSuchItem(bot, call.item, call.pick, bot.inventory.items().filter((i) => i.name === call.item));
+  }
+  const withOne = call.with === undefined
+    ? null
+    : bot.inventory.items().find((i) => withPred(i.name, i)) ?? null;
+  if (call.op !== 'rename') {
+    // 两件同种合修:左右两格不能是同一件,所以要两件都符合
+    const twoOfAKind = call.with === call.item && call.pick === call.withPick;
+    const matched = bot.inventory.items().filter((i) => withPred(i.name, i)).length;
+    if (matched < (twoOfAKind ? 2 : 1)) {
+      throw twoOfAKind
+        ? new SkillBlocked(`包里只有一件${itemAsked(call.item, call.pick)},两件同种才能合`)
+        : noSuchItem(bot, call.with!, call.withPick, bot.inventory.items().filter((i) => i.name === call.with));
+    }
+  }
+  const lvl0 = bot.experience.level;
+  const before = invSnapshot(bot);
+  // 这一单要几级:铁砧窗口的 property 0(craft_progress_bar 包)
+  let costShown: number | null = null;
+  const client = (bot as unknown as { _client: RideClient })._client;
+  const onProp = (p: { property?: number; value?: number } & { x: number; y: number; z: number }): void => {
+    if (p.property === 0 && typeof p.value === 'number' && p.value > 0) costShown = p.value;
+  };
+  (client as unknown as { on(n: string, f: unknown): void }).on('craft_progress_bar', onProp);
+  const { win, blockName } = await openStationWindow(bot, ctx, cell, ANVIL_BLOCKS, '铁砧');
+  let out: { name: string } | null = null;
+  /** shift 取出后产物落进的那一格(窗口里玩家背包段);没看到落格时为 null */
+  let landed: { name: string } | null = null;
+  try {
+    await putIntoStation(bot, win, mainPred, 0, itemAsked(call.item, call.pick));
+    await sleep(300);
+    if (call.op !== 'rename') {
+      await putIntoStation(bot, win, withPred, 1, itemAsked(call.with!, call.withPick));
+    } else {
+      // 原版改名:客户端敲字发 name_item,服务端据此填产出槽
+      client.write('name_item', { name: call.name ?? '' });
+    }
+    await sleep(WINDOW_SETTLE_MS);
+    out = win.slots[2] as { name: string } | null;
+    if (!out) {
+      throw new SkillBlocked(
+        call.op === 'rename'
+          ? `铁砧不认这个名字:产出槽没出东西(写的是「${call.name}」)`
+          : `铁砧的产出槽没出东西:${askedLabel(bot, call.item, call.pick, main)}`
+            + `+${askedLabel(bot, call.with!, call.withPick, withOne)} 这一对按原版做不出结果`,
+        [], 'server',
+      );
+    }
+    landed = await shiftTakeOutput(bot, win, out.name);
+  } finally {
+    (client as unknown as { removeListener(n: string, f: unknown): void }).removeListener('craft_progress_bar', onProp);
+    try { bot.closeWindow(win as never); } catch { /* 已关 */ }
+  }
+  await sleep(400);
+  const lvl1 = bot.experience.level;
+  const spent = lvl0 - lvl1;
+  if (spent <= 0) {
+    const gate = costShown !== null ? `这一单显示要 ${costShown} 级,你现在 ${lvl1} 级` : `你现在 ${lvl1} 级`;
+    const changed = invGains(before, bot).length > 0 || invLosses(before, bot).length > 0;
+    if (!changed) {
+      throw new SkillBlocked(`铁砧的产出没拿到手:经验一级没扣、包里一样没动(${gate};等级不够时原版不给取)`, [], 'server');
+    }
+  }
+  const product = landed
+    ? `${itemCustomName(landed) ?? zhName(landed.name)}(${stationItemFacts(bot, landed)})`
+    : `${itemCustomName(out) ?? zhName(out.name)}(${stationItemFacts(bot, out)};这是取出前产出槽的读数,没看到它落进包里哪一格)`;
+  const anvilNow = blockAtCell(bot, cell)?.name ?? null;
+  const wear = anvilNow === blockName
+    ? ''
+    : anvilNow && (ANVIL_BLOCKS as readonly string[]).includes(anvilNow)
+      ? `;铁砧磨损了一级(现在是${zhName(anvilNow)})`
+      : ';铁砧这一下用碎了,那一格已经空了';
+  const head = call.op === 'rename'
+    ? `在 ${cellText(cell)} 的${zhName(blockName)}上把${askedLabel(bot, call.item, call.pick, main)}改名成「${call.name}」`
+    : `在 ${cellText(cell)} 的${zhName(blockName)}上把${askedLabel(bot, call.item, call.pick, main)}`
+      + `和${askedLabel(bot, call.with!, call.withPick, withOne)}合了`;
+  return `${head}:产物${product};`
+    + `花了 ${Math.max(spent, 0)} 级经验(${lvl0} → ${lvl1})${wear}`;
+}
+
+export async function skillGrindstone(bot: Bot, call: Extract<SkillCall, { skill: 'grindstone' }>, ctx: SkillContext): Promise<string> {
+  const cell = call.at ? resolveAt(bot, call.at) : findStationCell(bot, ['grindstone']);
+  if (!cell) throw new SkillBlocked(`附近 ${STATION_FIND_R} 格内没有砂轮;放一个再来,或用 at 指一格`);
+  const reg = bot.registry as never;
+  const mainPred: InvPred = (n, it) => n === call.item && itemMatchesPick(call.pick, it, reg);
+  const withPred: InvPred = (n, it) => n === call.with && itemMatchesPick(call.withPick, it, reg);
+  const main = bot.inventory.items().find((i) => mainPred(i.name, i));
+  if (!main) {
+    throw noSuchItem(bot, call.item, call.pick, bot.inventory.items().filter((i) => i.name === call.item));
+  }
+  const beforeFacts = stationItemFacts(bot, main);
+  const pts0 = bot.experience.points;
+  const { win } = await openStationWindow(bot, ctx, cell, ['grindstone'], '砂轮');
+  let out: { name: string } | null = null;
+  let landed: { name: string } | null = null;
+  try {
+    await putIntoStation(bot, win, mainPred, 0, itemAsked(call.item, call.pick));
+    if (call.with) {
+      await sleep(200);
+      await putIntoStation(bot, win, withPred, 1, itemAsked(call.with, call.withPick));
+    }
+    await sleep(WINDOW_SETTLE_MS);
+    out = win.slots[2] as { name: string } | null;
+    if (!out) {
+      throw new SkillBlocked(
+        call.with
+          ? `砂轮的产出槽没出东西:${askedLabel(bot, call.item, call.pick, main)}`
+            + `+${itemAsked(call.with, call.withPick)} 这一对按原版磨不出结果(两件得是同种工具)`
+          : `砂轮的产出槽没出东西:${askedLabel(bot, call.item, call.pick, main)}按原版磨不出结果`,
+        [], 'server',
+      );
+    }
+    landed = await shiftTakeOutput(bot, win, out.name);
+  } finally {
+    try { bot.closeWindow(win as never); } catch { /* 已关 */ }
+  }
+  await sleep(400); // 经验球飞过来要一拍
+  const result = landed ? stationItemFacts(bot, landed) : `${stationItemFacts(bot, out)};这是取出前产出槽的读数,没看到它落进包里哪一格`;
+  const gained = bot.experience.points - pts0;
+  const xpNote = gained > 0 ? `;返还了 ${gained} 点经验(附魔按原版比例折算)` : ';没有经验返还';
+  return `在 ${cellText(cell)} 的砂轮上磨了${askedLabel(bot, call.item, call.pick, main)}`
+    + `${call.with ? `+${itemAsked(call.with, call.withPick)}` : ''}:`
+    + `磨之前(${beforeFacts}),磨完(${result})${xpNote}`;
+}

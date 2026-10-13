@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+.env
+*.log
+*.tgz
+scratch/
+!vendor/native-types/
+!vendor/native-types/**

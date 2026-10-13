@@ -1,0 +1,34 @@
+/** Versioned server-extension surface. Plugins depend on this port; the core never loads a server implicitly. */
+export { metaOf } from '../core/animal-state.ts';
+export { publishViewerCastCommand, observeViewerCastCommands } from '../core/command-events.ts';
+export { BREAK_ACL_CHANNEL } from '../core/break-permissions.ts';
+export { Bridge, type BridgeOptions } from '../core/bridge.ts';
+export { type CombatResult, type CombatScene } from '../core/combat-observation.ts';
+export { MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_CONFIG_GROUP, MINECRAFT_DEFAULTS, MINECRAFT_PLAYER_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP, type MinecraftConfigSection } from '../core/config.ts';
+export { setFlightExpiry } from '../core/flight.ts';
+export { corridorSafe, loadedSight } from '../core/idle-actions.ts';
+export { HOSTILE } from '../core/melee.ts';
+export { piglinIsHostile } from '../core/piglin.ts';
+export { type ProtectReply } from '../core/protection-port.ts';
+export { MinecraftWorldProxy } from '../core/proxy.ts';
+export { chatInputError } from '../core/skills.ts';
+export { renderTemplate } from '../core/support/runtime.mjs';
+export { canSeeEntity } from '../core/terrain.ts';
+export { type ViewerServerProtocol } from '../core/viewer-extension.ts';
+export { type ViewerCustomEvent } from '../core/viewer-presentation.ts';
+export { type ViewerSkills } from '../core/viewer-state.ts';
+export { MINECRAFT_PANEL_DECLS, MINECRAFT_TOOL_DECLS, MinecraftWorld, type MinecraftWorldOptions } from '../core/world.ts';
+export { loadPrivateClientConfig } from './client/config-file.ts';
+export { observeVisual, acceptsImages, visualArgumentError, structuredVisual } from './client/visual.ts';
+export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady } from './client/config.ts';
+export { MinecraftClientWorld } from './client/world.ts';
+export { itemCustomName } from '../core/item-display.ts';
+export { zhName } from '../core/names.ts';
+export { invCount, itemPredOf, invItemNamed } from '../core/inventory.ts';
+export { matchItemName, CONTAINER_FIND } from '../core/chests.ts';
+export { resolveAt } from '../core/cell-facts.ts';
+export type { SkillCall } from '../core/skills.ts';
+export { parseTypedChoice } from '../core/support/typed-decision.ts';
+export type { PlayerObservation } from '../core/player-observation.ts';
+/** Use this declaration identity when implementing extension ports. */
+export type { Bot as MinecraftBot } from 'mineflayer';

@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/client/**/*.ts",
+    "src/contracts/**/*.ts",
+    "src/runtime/**/*.ts",
+    "src/mcp/server.ts",
+    "src/mcp/stdio.ts",
+    "src/index.ts",
+    "core/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "core/console"
+  ]
+}

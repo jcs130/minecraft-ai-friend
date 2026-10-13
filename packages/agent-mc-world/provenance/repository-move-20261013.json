@@ -1,0 +1,1898 @@
+{
+  "schema": "agent-mc-source-move/v1",
+  "repository": "https://github.com/jcs130/cortico-world-qiandengji",
+  "commit": "54fd7b2e9c09ac2d0305dace2ee9e8ef3e0f1735",
+  "destination": "packages/agent-mc-world",
+  "originalFiles": [
+    {
+      "file": ".gitattributes",
+      "sha256": "d6cf152548f34d8c78d05f2bf381caf6c40e474118ed65b61e69413303bb9a89"
+    },
+    {
+      "file": "LICENSE",
+      "sha256": "cd3a95327fdc6356a4a7400b885e12d54c5a226ef82fd10ae8db17b1c9df7e82"
+    },
+    {
+      "file": "bin/minecraft-agent-client.mjs",
+      "sha256": "4e865aa046f4b5b76c41d223d7941c4831a286c72439bf71da5c527ec3f90090"
+    },
+    {
+      "file": "bin/minecraft-agent-mcp.mjs",
+      "sha256": "7abbae93eb6045a0968f7d7096cb41b30a50ba70ee524909b4556d362168c394"
+    },
+    {
+      "file": "bridges/performance/relay.d.mts",
+      "sha256": "53654178968bf571c04f08c0fd82ce590d83a10ddd34b59db5533d2c0a9365e0"
+    },
+    {
+      "file": "bridges/performance/relay.mjs",
+      "sha256": "3e79bdfabd12aebb3c9171391170ae5d9774769adecc9c6927a3578e25b2491e"
+    },
+    {
+      "file": "client-login/CorticoClientLogin.java",
+      "sha256": "108eb67749b137203b7867c4ad533d0ad080ce0555e46c9a902250c255af56df"
+    },
+    {
+      "file": "client-login/LoginSession.java",
+      "sha256": "8a6fe954f0eba66fb15b7f7b99f99b12437ded8136a94f93d2afc69a265abbfd"
+    },
+    {
+      "file": "client-login/LoginSessionCheck.java",
+      "sha256": "2a80d709753a1ba6d28af1d78c660f0af1bf86cc4aff68d963dc92a74643a01a"
+    },
+    {
+      "file": "client-login/README.md",
+      "sha256": "844c887c807e57acba299ba62ab886384daecfba0a4755260e86c60daa5cb630"
+    },
+    {
+      "file": "client-login/ReconnectSession.java",
+      "sha256": "93ed2be67d1fc3f14737f4daa4e77fe5d7301586508472bc5c425b558895bebd"
+    },
+    {
+      "file": "client-login/ReconnectSessionCheck.java",
+      "sha256": "422bfee6b6e5034a44b636ac5f00da196dcd32a5a19e2522062d9b868584c6c5"
+    },
+    {
+      "file": "client-login/fabric.mod.json",
+      "sha256": "0b9a46d86dcdb3128265aa943b00fb76fe6cd37b5d62bcbb2ec94ba6f66f9f81"
+    },
+    {
+      "file": "core/ADAPT.md",
+      "sha256": "ae13c967b591bf924df3ba7576532c0e671049e50fa11d942ed3140ff3b62ae4"
+    },
+    {
+      "file": "core/BREAK_ACL_PROTOCOL.md",
+      "sha256": "d94da4370037b032a1f6f4032c08c3c1faaaae43fd33cdd056ffe02bca9f2ca1"
+    },
+    {
+      "file": "core/ENV_PROMPT.md",
+      "sha256": "16a9ed0442c52648680d4564b183b3e9597d939cf4e7e1257ee3694ad1e82289"
+    },
+    {
+      "file": "core/ENV_PROMPT_CAMERA.md",
+      "sha256": "66879907b6ce76ebd8e9f5fd03b8e06354203975e1bc30541c91c479f17d0c3e"
+    },
+    {
+      "file": "core/LICENSE-Cortico.txt",
+      "sha256": "b8b2d2aa3b247cd0862b19df2030545859223934a5cad7321fe6ec97eaea725d"
+    },
+    {
+      "file": "core/LICENSE-mineflayer-pathfinder.txt",
+      "sha256": "2a2466277547229364c4b6b44a2df11d49c5b816f094a26c53fe1e5f65aba974"
+    },
+    {
+      "file": "core/README.md",
+      "sha256": "8312c83049eade7c3d7a61152979c132552a50ee18bddbe22b2bf17dd9e74b26"
+    },
+    {
+      "file": "core/animal-state.ts",
+      "sha256": "443c1d1a5d5fad534d45aa6353db83ad97a5a85087f8f134838dc2142b7bc5ae"
+    },
+    {
+      "file": "core/blueprint-plan.ts",
+      "sha256": "ed27ff43c36cbd1d65b4350b64a186297c0069e8d65175eac3aad52dcb761748"
+    },
+    {
+      "file": "core/blueprint-registry.ts",
+      "sha256": "55c825548230f7544f2de3c4d2d9a8047af378319b8f0015c94604c22bec89e2"
+    },
+    {
+      "file": "core/blueprint-repair.ts",
+      "sha256": "cf88cd87cd29e088abf81653c7f8dc0ef12430278f0738b0cd92d8b173149fc2"
+    },
+    {
+      "file": "core/blueprint-resource.ts",
+      "sha256": "32d4cf1a73e309611f17ff844f30c5b96ae38439b5b51ec4684821f01defcabb"
+    },
+    {
+      "file": "core/blueprint.ts",
+      "sha256": "704d509a95a61efeae7fa56fd1e4a696828ca7e6b7ffb7a289d038f095fbe9f1"
+    },
+    {
+      "file": "core/body-lease.ts",
+      "sha256": "6b04245a4da0ffa53125908360781585a7746988fc6e379120e500ae8407008b"
+    },
+    {
+      "file": "core/boss-bar.ts",
+      "sha256": "e4c832300ed585ad5630f39b54a5d8dde6a72251089efff409fcae946f95ed69"
+    },
+    {
+      "file": "core/break-permissions.ts",
+      "sha256": "ffebeafe3a31980d96f968871f9e671059a6f239e71a53a45d5b710308f21e08"
+    },
+    {
+      "file": "core/bridge.ts",
+      "sha256": "9bbb18fe109381f92a04080dbf53bdbb3ebe7e7671795c7cbdde72a5f447c988"
+    },
+    {
+      "file": "core/cell-facts.ts",
+      "sha256": "3dbe1fbdeb08773ede97c7091178988d018a6fdf304a91d7eafcc91f41f05dc1"
+    },
+    {
+      "file": "core/check.ts",
+      "sha256": "bf850234f1bf62b5e4f7c63420517ae8a53f86282138245e3a00fa16e14c3760"
+    },
+    {
+      "file": "core/chests.ts",
+      "sha256": "70c9329ae5b3fd9a627c9aa417242ff0b061f10fd12978008ab0e29850aab642"
+    },
+    {
+      "file": "core/client-launch.ts",
+      "sha256": "22e3687fdc2e73afc80ce3f9db400bb359ccdf42ab88381e0e189b95759b7115"
+    },
+    {
+      "file": "core/client-options.ts",
+      "sha256": "be8a076d36717e21072503d217db3535ed38823f91465c472b1b43feae3b8114"
+    },
+    {
+      "file": "core/client-skins.ts",
+      "sha256": "7ec2177baee9eca1140008f2e597043159463c57c5a81429a8ce4e6c646d63ad"
+    },
+    {
+      "file": "core/client-window.ps1",
+      "sha256": "5384eadca9342f5a9ba1f22d7e48edeb18010ce2fb4ff87a3be590399eb937c9"
+    },
+    {
+      "file": "core/client.ts",
+      "sha256": "dfd6db510e27e585c741b170344b2b1e00188566c20c0f7b9009845a9fd608c6"
+    },
+    {
+      "file": "core/combat-context.ts",
+      "sha256": "be3cf874aa0a5c7b41173f6bdb68e13381e1dbaab275e88f07980da8e2922adc"
+    },
+    {
+      "file": "core/combat-observation.ts",
+      "sha256": "6627884ac9d1bb561066dbff5730cfb08b988db84d09c8e1fcc8d6500b035f85"
+    },
+    {
+      "file": "core/combat.ts",
+      "sha256": "abb56dafbe1f209ad0d028fc6687fd01a10c0a403990c616b46068e3a0ff6c4a"
+    },
+    {
+      "file": "core/command-events.ts",
+      "sha256": "51dfd752e0f4c0ca38aecae0654fcd75f172b853879e9488cce0763c89db7c29"
+    },
+    {
+      "file": "core/config.ts",
+      "sha256": "672a11a9f699db82e4cbde743fcb26bc1369ed1a29cc48234a3cc5ce34604ae4"
+    },
+    {
+      "file": "core/container-window-ownership.ts",
+      "sha256": "54ab87b8718b19dc9fe60b6851502820f3b53387be1df39cdcd9372722131dae"
+    },
+    {
+      "file": "core/container-withdraw.ts",
+      "sha256": "b715cc0837bde8ba2b5555a3ee47a7df7dc5c6a1c0b0679c1a2da6f453bc8b0b"
+    },
+    {
+      "file": "core/containers.ts",
+      "sha256": "1ac54c8b6b633f276384dbcf785fbce7995421d7aff53113af52f0abdf16a9c7"
+    },
+    {
+      "file": "core/damage-evidence.ts",
+      "sha256": "2c3e9e7918b50252e1b2cc870f4f0c200123a4c10b44a4988d280d7e5783ca06"
+    },
+    {
+      "file": "core/damage-source.ts",
+      "sha256": "bd6b5e60449c01aea85ca2427facb342584ebba11c088b7d43d09ac4343fbfc6"
+    },
+    {
+      "file": "core/data/crafting-tags-1.20.6.json",
+      "sha256": "5ed4ea67f27b95c6b2037d889e845290b50e4805625e1f742e48bb145eb72a11"
+    },
+    {
+      "file": "core/deaths.ts",
+      "sha256": "00904a3207377ecd37bedea8817a31e044f0ef4e16a90991a99cb51a527464c6"
+    },
+    {
+      "file": "core/deferred-renders.ts",
+      "sha256": "a72b140ac75cb605c9de662cf95b116fd584de9c49a4d615c74717307609c67a"
+    },
+    {
+      "file": "core/dependency-patches.ts",
+      "sha256": "ed8ae093e02e9b592753363f618006614fe5d68b41ebf655bd625247635244a1"
+    },
+    {
+      "file": "core/directional-sweeps.ts",
+      "sha256": "07b53ab887dd09b675bd657af873d7d7c720ed2ca30122cb68dab80f230823a7"
+    },
+    {
+      "file": "core/engine-blobs.ts",
+      "sha256": "45a7d40d5f57c4f5f830ecc304742e34dcdb6de9e42b87fe8feaab8235e4258c"
+    },
+    {
+      "file": "core/engine-child.ts",
+      "sha256": "e7f717c096e976beb10f4e14274560a141f24811ec862f950d1b5c1d59d132e7"
+    },
+    {
+      "file": "core/engine-ipc.ts",
+      "sha256": "8db834351a679588ee5b15532f0f0114decbcde54743758bd317a55467acb3fe"
+    },
+    {
+      "file": "core/entity-facts.ts",
+      "sha256": "a420da02380d18cd188a4702eb83f2ea635a5924dc6f9344fd389d9f137686fd"
+    },
+    {
+      "file": "core/equipment.ts",
+      "sha256": "82df24e9d7870b682298273066a2a4155d30528aef3b280500d3c91f5053f22a"
+    },
+    {
+      "file": "core/escape.ts",
+      "sha256": "0deac20d4492c6df9358702f6bde09f6575ff360d83f0204afc1f5200a00c0b0"
+    },
+    {
+      "file": "core/executor.ts",
+      "sha256": "69fd942b3034ff1802f18fe44d86b4d621733551ba92ee699c8614d42b67381a"
+    },
+    {
+      "file": "core/explored.ts",
+      "sha256": "a84136f7bb463b0cc84e58f0f8a8cb8244c527b32aa6b84d51143119acf421f2"
+    },
+    {
+      "file": "core/farming-target.ts",
+      "sha256": "f846b112410075a2138686c1788c221e117534df8e610961306f25a5731a9a41"
+    },
+    {
+      "file": "core/fishing.ts",
+      "sha256": "f438688e0151d7303c482582e4140814e2f1530856f157a4857aee12daae46bf"
+    },
+    {
+      "file": "core/flight-preview.ts",
+      "sha256": "1c027d533234d7ac8aad3e9927c455d79851189900e988625d7ae93404fe2809"
+    },
+    {
+      "file": "core/flight.ts",
+      "sha256": "0add2b47b7c9b1cd46f1648cb3ec99151179e448877f35846f5bbd9e0fdd6b37"
+    },
+    {
+      "file": "core/geometry.ts",
+      "sha256": "9dd56e6284d9109832ff2e196aa63cb06897fcf5578eddaca65ddeadf85f163e"
+    },
+    {
+      "file": "core/goal-metrics.ts",
+      "sha256": "2c9109dd09456393110f3b5a15957506e42aa6c15de7e0737c327dd34c989225"
+    },
+    {
+      "file": "core/goal-plan.ts",
+      "sha256": "b26608286c85c92dabe0373e1b9cea7430484bfa2f0abe9a4081bed93f9efa2c"
+    },
+    {
+      "file": "core/hand-interaction.ts",
+      "sha256": "2f69b2ec9e6e4f49d37fe50d7635687b446b974d2eb2ba80ce46924980082836"
+    },
+    {
+      "file": "core/hazard-geometry.ts",
+      "sha256": "4a0b34141f8795712458b1e73707da83f434dae7f2d67b8f1fef8a8b43a7c8fb"
+    },
+    {
+      "file": "core/idle-actions.ts",
+      "sha256": "71f16cafc20c8353ccb5af576dd5503a88ae6fe018a1897df26fa28e012fe773"
+    },
+    {
+      "file": "core/idle-behavior.ts",
+      "sha256": "27a2a841d1b5f15b9a5090591a025d7fe2ca08588e794e9938dfbd217bb3f7cb"
+    },
+    {
+      "file": "core/inspection-guard.ts",
+      "sha256": "62b20e590ee193cb78dad69eef520f1545753e0037c4b90553e226c766ceb0b2"
+    },
+    {
+      "file": "core/inventory-click-sync.ts",
+      "sha256": "a0807e4c1c7df5cf394f398b3f2b26fb5bc6210d0ae6bc56d62f97fcdee4942d"
+    },
+    {
+      "file": "core/inventory-window-sync.ts",
+      "sha256": "3ee458e0681b896facf76bffded6387ae8c82a9fb8ae8d997a02160bd3388bae"
+    },
+    {
+      "file": "core/inventory.ts",
+      "sha256": "5da2ae39de6e086d189a82d17367071b10b224908eba128e90e233012f2ec38a"
+    },
+    {
+      "file": "core/item-break.ts",
+      "sha256": "27d3937b87b89b9b81f9b52c9e3e9fb2fac5f5bc9bdea593e30f7bbbc154fd61"
+    },
+    {
+      "file": "core/item-display.ts",
+      "sha256": "5670664d0c0d1d37bf0e76b5c88d1569696517840a1ada6dd0e28f21fe30d79e"
+    },
+    {
+      "file": "core/item-facts.ts",
+      "sha256": "97a79ffd73dc47f32571a39d9eb036826cca554fb79711f0f5f03bf4b7f9d0ea"
+    },
+    {
+      "file": "core/item-pick.ts",
+      "sha256": "63fbb06ecb6d00f4da15ed93e192a1bf246d768a79ae6e9547fdc240f716369a"
+    },
+    {
+      "file": "core/level-dat.ts",
+      "sha256": "b3d3b458e7353cee3a0af90111da6f8203ba4c09582f60c334d58b2e79aca389"
+    },
+    {
+      "file": "core/log.ts",
+      "sha256": "9e9aff139f969d548e201734a8c662e5c7b4b51de26da476100a331124abb480"
+    },
+    {
+      "file": "core/map-view.ts",
+      "sha256": "d1bcb1e11ba9fc4fb7fed40299ef985f9b126f6dd75966798c9aa53138857737"
+    },
+    {
+      "file": "core/melee.ts",
+      "sha256": "231cd543544a5e0519155fb24592043493646f548fd6a6efc05352570bc44ff0"
+    },
+    {
+      "file": "core/method-api.ts",
+      "sha256": "bd9a32e88e0132aeb10b538c3e7c10f54d10d8ee00c649d9e513d05f05c17d28"
+    },
+    {
+      "file": "core/method-mineflayer.ts",
+      "sha256": "3dfa788ad00e04851ab5e1a56f926a04b588456681577e8757d72517c5aa5b12"
+    },
+    {
+      "file": "core/method-runner.ts",
+      "sha256": "de5cc7a9398478dd53501eb0eeeb545e14fccb3ceefd92dba69d31c54dc4181b"
+    },
+    {
+      "file": "core/method-worker.mjs",
+      "sha256": "31c1169b79eeea932551ca71055f99143d8bd4a2aff0afc832efaf6c38e0eb40"
+    },
+    {
+      "file": "core/mineflayer-fixes.ts",
+      "sha256": "ca5cbed12536ab82c38456fad9842370a73cde30db1e39ecd448b32b245e640d"
+    },
+    {
+      "file": "core/modern-viewer.ts",
+      "sha256": "dce46d45719f1648043d37dea4867bc6cd95db9c9651ed67f17ee1acfebb49aa"
+    },
+    {
+      "file": "core/names.ts",
+      "sha256": "d29d7680a93f1fce3263cbf9d568c66e9cdc1745f38679446a1afcb9cd9b94af"
+    },
+    {
+      "file": "core/native-chat-filter/CorticoChatFilter.java",
+      "sha256": "8aec47038cf36c1e7552a05f5000ff4f017de888e7b817c26af384526a46c307"
+    },
+    {
+      "file": "core/native-chat-filter/README.md",
+      "sha256": "4f1d8f1c44b182acfd9e8583e1e0063eba36f625db3d9d8b16f720ac957d098e"
+    },
+    {
+      "file": "core/native-chat-filter/fabric.mod.json",
+      "sha256": "214438e7eff749ddebef0133d525de5dd00b96e43bf31f4658acfc86665e2f77"
+    },
+    {
+      "file": "core/nutrition.ts",
+      "sha256": "338b4ec38f7683dabe81e32be206a9b5e7dfc9e19d3dfc753e4cd94dd72b3c62"
+    },
+    {
+      "file": "core/path-waypoints.ts",
+      "sha256": "5fdb5c6d5988c90615a766421dbb0a0ba7db73a52e72aba7f3ecc2dd7fffc49f"
+    },
+    {
+      "file": "core/pathfinder-lib.d.ts",
+      "sha256": "bfa24fa9ec5948aca175c955a37fc04feb226f5d16f2b6f95b69c8a15db14b07"
+    },
+    {
+      "file": "core/pathfinder-perf.ts",
+      "sha256": "0aa588260b43207f95b09065b52e4534f4e78caa99a4cb4ad5e388496c769e6d"
+    },
+    {
+      "file": "core/pathfinder-start.ts",
+      "sha256": "073c450faf0a3776be7a2c43d14a7f67a42909eaa9a3c84164f3732b175c390e"
+    },
+    {
+      "file": "core/piglin.ts",
+      "sha256": "f7e0dcf88ecc98b1c812559c35a8a18f8e3a7219bb80d425ceedefb354e2f55c"
+    },
+    {
+      "file": "core/placed-ledger.ts",
+      "sha256": "42d745ae2bc2e9c6cc5db992750ef3f036526465c965e835ba51ecccde476bcc"
+    },
+    {
+      "file": "core/placement-miss-state.ts",
+      "sha256": "f5c253b5e11d38542f8b716d00461a566e549a679750228383cdfc890a63845f"
+    },
+    {
+      "file": "core/placement.ts",
+      "sha256": "420f63fbfa6b2f598b088966733bc1b782b8f61797841ae3916de7d346103938"
+    },
+    {
+      "file": "core/player-observation.ts",
+      "sha256": "4b3883161ffd497d0f9614561b0ab9840c475ce1882bbe2ad208136e6374c42f"
+    },
+    {
+      "file": "core/policy.ts",
+      "sha256": "b0aecf07757f0ee3dacfd60db59e25330958d0866a68d05ac80f672c3b00f06e"
+    },
+    {
+      "file": "core/precheck.ts",
+      "sha256": "9cd116488f175eb20b27cf24f71ff616ffdeca44f2b1e294efcdcc3c241122b7"
+    },
+    {
+      "file": "core/protection-port.ts",
+      "sha256": "92a319c7ac4b8af29e2dd4abf43a1429178db2b20749aafff6d7800bf3777a1b"
+    },
+    {
+      "file": "core/proxy.ts",
+      "sha256": "55b7ee190dc399bd4235a5684f7e2bee384b85b47f621d6cdb8eb09c3cf3764f"
+    },
+    {
+      "file": "core/ranged.ts",
+      "sha256": "e94ea6d8af4b19aacb2cab38c820aa70f187ae67db095c5e4357ae7e2efe50d4"
+    },
+    {
+      "file": "core/readouts.ts",
+      "sha256": "569a9bd30374b2d8ce91bc4eb3df527d99cb4442361fff960df080ec7bd8d2ca"
+    },
+    {
+      "file": "core/receipt.ts",
+      "sha256": "69739a174259903628ecc7195c548d12eb7aef005f9fb4a2ed017af2cc74353b"
+    },
+    {
+      "file": "core/rejected-route-ledger.ts",
+      "sha256": "c1454de127e46ec51fe7669682169341c3918e8dd97da919cb87fea4b30c869a"
+    },
+    {
+      "file": "core/relay-port.ts",
+      "sha256": "61aa1de0789b2ca4e944f0b9dc77318619e2e116edbb3bf644f5cab348cd206c"
+    },
+    {
+      "file": "core/round.ts",
+      "sha256": "5468bbb7df2cb92a6ea4102ef399110a79ffc31dd41efe5b3909eebe28603403"
+    },
+    {
+      "file": "core/scaffold-material.ts",
+      "sha256": "282b2defc470f3c7f41d84f9a9326ea594a229f791d3f715a636ffc731398316"
+    },
+    {
+      "file": "core/search-observation.ts",
+      "sha256": "d2604b356c1e19de1fc51da14b6564eebad609d8548e9dffd88c3ba16e72ab37"
+    },
+    {
+      "file": "core/server-action-wait.ts",
+      "sha256": "4598071ccb7be5764b96ae9a88f200f174580d721c86ea5f44fed619d12ec9a4"
+    },
+    {
+      "file": "core/server-config.ts",
+      "sha256": "8af9da8e33981ff27d20babf104c85f934457534e8db8a2c8bd73e85efb66cb4"
+    },
+    {
+      "file": "core/server-login.d.mts",
+      "sha256": "1b4ad3b8260a84f3199b075e9109b00910e9d2d0461f05dba6e8e99b1a608b5b"
+    },
+    {
+      "file": "core/server-login.mjs",
+      "sha256": "cbc46c6a6039746c16f23d88a36c1107029dd8658d8ebbc3544b97efc42a89cc"
+    },
+    {
+      "file": "core/server.ts",
+      "sha256": "3b1d874061b40a4841ad0ecec7653582f277513413d05f1977e34b24ea415de6"
+    },
+    {
+      "file": "core/show.ts",
+      "sha256": "fb65259075db54de18240d152ee08c940c32b0fb6e77357f2a080abc65682de7"
+    },
+    {
+      "file": "core/skill-context.ts",
+      "sha256": "8794abb3905c8866697d6f85ff1ae3eff70aa9ade4fac9e29c80c9971bd38961"
+    },
+    {
+      "file": "core/skills-build.ts",
+      "sha256": "bc2019c49f632a88c8c3f5152cacb05ea83738079bca877b1fb7ba3c6e764e4b"
+    },
+    {
+      "file": "core/skills-container.ts",
+      "sha256": "6883fdb205846ae81e1b8c25306b7bac3ba438c5712aa5115f0817ee87991d8d"
+    },
+    {
+      "file": "core/skills-control.ts",
+      "sha256": "8ea28bedb82ba2cb6181f346b707635577d72cd1f8cf54a9b33a5c0fc7da9758"
+    },
+    {
+      "file": "core/skills-craft.ts",
+      "sha256": "4184ba5fabafb76605c185897fc93d23c20dd8fdbb1ee2a4cdc8c337382ec35b"
+    },
+    {
+      "file": "core/skills-dig.ts",
+      "sha256": "89d72dd6e5c83ad87e72606e6eae8bdbca8a0c33f4ef0bc6777dadff8892beff"
+    },
+    {
+      "file": "core/skills-gather.ts",
+      "sha256": "3236f66eba7a616e91bbf8c5378f9ebdad26ee54c5783394dcf5bd67baca84ff"
+    },
+    {
+      "file": "core/skills-interact.ts",
+      "sha256": "d4937424e4e95bd8586c9bd5c6ae1890534316559f8a3eae2313a0ce67506e27"
+    },
+    {
+      "file": "core/skills-look.ts",
+      "sha256": "7513eceaa89226f3e7671e4693eaed733b33e24919d5ed7f8c9bb5f7992d690a"
+    },
+    {
+      "file": "core/skills-social.ts",
+      "sha256": "51ab77a3584f6df272076ba3792c7c136061acd38b922f1e23a5fdad58273bea"
+    },
+    {
+      "file": "core/skills.ts",
+      "sha256": "a2b5d9bd987378bce616d836d7edc0b96387a757e52ba5bdf481eba6082fadaa"
+    },
+    {
+      "file": "core/spatial-observation.ts",
+      "sha256": "fdab53ac4f558344be362d3f482c6c73e480508d447247214d2081748622f2f8"
+    },
+    {
+      "file": "core/spatial-slices.ts",
+      "sha256": "f23cd29eca8d3790fbc86f7ee508a79623ed653f466dcf15cb5624ee741fe8f9"
+    },
+    {
+      "file": "core/speech-bubble-client.js",
+      "sha256": "ae84580aa46de0d595661c4d25e511c6ce6ed0a9d5d018103a30291192993ee6"
+    },
+    {
+      "file": "core/status-effects.ts",
+      "sha256": "f42c680169b157e81e5ba38e4ada8fec15e446c465e23e910009e6dfc1d773e3"
+    },
+    {
+      "file": "core/support/child-process.ts",
+      "sha256": "fd024917d535b023a889a5009c6b9715e7b7b1f491f806fa4f557e420fe3f322"
+    },
+    {
+      "file": "core/support/host-contract.ts",
+      "sha256": "bd56f7ab831429a654ef7ee5ab5c6297d6ef9bc16a245adec6c594523efe28aa"
+    },
+    {
+      "file": "core/support/procedure-program.d.mts",
+      "sha256": "d626fc55247ef72ea8a6d8482e62b98da70e998cb2d0e798a74e812b1c30fe4d"
+    },
+    {
+      "file": "core/support/procedure-program.mjs",
+      "sha256": "9890f4fc8664af00d843a4d93328c99a134974d0ead25fde9d71bf7efb6d4d6c"
+    },
+    {
+      "file": "core/support/procedure.ts",
+      "sha256": "f52b9ccb81bf2e32ff32aa98e0fcf8fa0f136af8bb0ec9bd108237567f178e02"
+    },
+    {
+      "file": "core/support/runtime.d.mts",
+      "sha256": "8c1b400e5fa0c7a7f94e77a824150a0cec9b18094ee671eba239ed1d0a378f13"
+    },
+    {
+      "file": "core/support/runtime.mjs",
+      "sha256": "42c6a75bd3ae46d5f2ca6eb7e51f392ddaa491abe2de20e1c0a3f583af687bbb"
+    },
+    {
+      "file": "core/support/typed-decision.ts",
+      "sha256": "e3e53bebd209b3e9106da452d335fa27b1ba7e8027484b41080c0b1dcc555cff"
+    },
+    {
+      "file": "core/tagged-crafting.ts",
+      "sha256": "1b5ab42cd50096c72eb1cb6796768eecca3e5e59fe1b998c54950b05d14dd8cc"
+    },
+    {
+      "file": "core/temporary-scaffold.ts",
+      "sha256": "42184b93632f5df7e9224c02b02efec6097107f58ff4e13f6b161eb843dec4c6"
+    },
+    {
+      "file": "core/terrain.ts",
+      "sha256": "9abc4361d7ee91c17ad645df8b87b5672dbcd631147baeb9dcedfacc71d9251a"
+    },
+    {
+      "file": "core/text-component.ts",
+      "sha256": "2a6981e8925a787a308ce52721fcdf785e1d3138fbd669cb972fa3fb7948ef8b"
+    },
+    {
+      "file": "core/text-display.mjs",
+      "sha256": "b9bcedcb4c140068e887400123c889b7d5b124ba1243d44afd5c4895f11bd8a0"
+    },
+    {
+      "file": "core/tools.ts",
+      "sha256": "1c5ce7e4853b31a9cf765a4d71ad07f28f874d5958cda58a8eec500cc4539f20"
+    },
+    {
+      "file": "core/travel.ts",
+      "sha256": "0c7e023512e667d10ebdaffe6e8a8cfe719f1a22d77ee78dcb355c3d5d982035"
+    },
+    {
+      "file": "core/until.ts",
+      "sha256": "f7e562d8b709374b91f3cef81e770d41fac19750af59af8e3aa859ba09b54bcf"
+    },
+    {
+      "file": "core/viewer-advancements.ts",
+      "sha256": "0b52dba63a241b8ca5c4be6bfa0e64a692097ba3a011f789fda39589a852d88f"
+    },
+    {
+      "file": "core/viewer-agent.d.mts",
+      "sha256": "2c9e06042f7688ae4ca18fad0ed2d03d53074b9fe05b6968d5ff40098669e3c7"
+    },
+    {
+      "file": "core/viewer-agent.mjs",
+      "sha256": "19a480f8dde21fabd8f1f7b5c286d56696d682383c9551373cb5aee0e9a6dea0"
+    },
+    {
+      "file": "core/viewer-asset-server.ts",
+      "sha256": "6a23e84b28f370ed83d34a0ab7f251495b1b32db8fbd27a78f03fa4c981ad97e"
+    },
+    {
+      "file": "core/viewer-biome.ts",
+      "sha256": "fe4fc0377e8d5cebfce51d1c5807ff3519282442c6bf39494c048b1a1b300f45"
+    },
+    {
+      "file": "core/viewer-block-entities.ts",
+      "sha256": "bcd56fe9f2905b638e208ee6d3699f55f397cf8cb0349f36216aafc435eaefa8"
+    },
+    {
+      "file": "core/viewer-boss-bars.ts",
+      "sha256": "18142ac910290b0d826d16e522410b0b32e54d1e6b87c5d268b33101262aee32"
+    },
+    {
+      "file": "core/viewer-capture-lease.ts",
+      "sha256": "f553da6c3e3c6188e6666f9fcae4e4f96d87ff68fc9b141b064f354330f937f8"
+    },
+    {
+      "file": "core/viewer-combat.ts",
+      "sha256": "25f283baf8ec48cb2667d8fb0d7a6ceaa6a51aae8a8f34760f09cda79ac99c5d"
+    },
+    {
+      "file": "core/viewer-content.d.mts",
+      "sha256": "c9f952dd570e6ef172273405a752bfa7797db837625c01ec04c745002905dea0"
+    },
+    {
+      "file": "core/viewer-content.mjs",
+      "sha256": "2fa06dd5cf4fde0dcd3dcd6f9a1fb68b93af054a5929daa9e9bfd475f68deabc"
+    },
+    {
+      "file": "core/viewer-entity-state.ts",
+      "sha256": "4870865eee111594debfefea534dd7541d4fcf860a515205fd96824b57ca2360"
+    },
+    {
+      "file": "core/viewer-extension.ts",
+      "sha256": "974b197238cc85678e9e9f5ce7c1ccac606332d36e6223c810362f54086090e2"
+    },
+    {
+      "file": "core/viewer-fishing.ts",
+      "sha256": "c33fb6e34d498329496605f0df6f3c4f4cad7de787b9c9f236b1a88320478118"
+    },
+    {
+      "file": "core/viewer-head-textures.d.mts",
+      "sha256": "dcba525df72104cdd209a29abaaef34ce737e3a28f506477d1acff8ddc4873ce"
+    },
+    {
+      "file": "core/viewer-head-textures.mjs",
+      "sha256": "be5fc6d730f306c2d003879c6957585d68aefd9e403a64d5d9be088fc415b764"
+    },
+    {
+      "file": "core/viewer-item-profile.d.mts",
+      "sha256": "017b015e2c80cc528690526df16d25eac8a088ecbb540b433284d523186641f0"
+    },
+    {
+      "file": "core/viewer-item-profile.mjs",
+      "sha256": "454c14b0fab9ee4355e954052cd74b0e238e53f3ed9d7252f758b5bc22974d7c"
+    },
+    {
+      "file": "core/viewer-light.ts",
+      "sha256": "f9c719df9f2af97b81eb4d770b25e828e234d5372b626a50d26ce431ae42e410"
+    },
+    {
+      "file": "core/viewer-minimap.ts",
+      "sha256": "6eb57ce7c3a8005bf23e323f58db98a34df8c3fbe5893abdf3e18649733b6187"
+    },
+    {
+      "file": "core/viewer-page-assets.mjs",
+      "sha256": "f961e0b65f3408ff03fd9400861c87674b9d0ee8249577724871a9dfee1f0b99"
+    },
+    {
+      "file": "core/viewer-page-assets.ts",
+      "sha256": "b528daba5e6fba9fa95c382a3b896d17f3f75ea9be3901f63a1359d89585261c"
+    },
+    {
+      "file": "core/viewer-photo-page.d.mts",
+      "sha256": "983e06f73834dee6258274e185264bc3c0977d28d9d10ffd34927e859d4deeea"
+    },
+    {
+      "file": "core/viewer-photo-page.mjs",
+      "sha256": "b1460faf0869b75884c79d0d2afd16a53c4597ea935e5dfe471a8075a315e659"
+    },
+    {
+      "file": "core/viewer-player-skin.ts",
+      "sha256": "241a6d119088824a6301dcd0ec1a28e3955edf2d25e67978d2d695c2e6983855"
+    },
+    {
+      "file": "core/viewer-presentation.ts",
+      "sha256": "f6c41ae4c79f35eef5b411797652335040edc8f7f242e34d48967839a83ffa76"
+    },
+    {
+      "file": "core/viewer-render-metadata.ts",
+      "sha256": "6f4ae8f240c0ba0645d0f667dc9878939211366f9558072a22af7f7eb831b77b"
+    },
+    {
+      "file": "core/viewer-session-slots.ts",
+      "sha256": "03cf42ab01721eacea801f4cb95e59a748eee954ea1874cd3a3b2387ebdaa1e8"
+    },
+    {
+      "file": "core/viewer-sound-packets.ts",
+      "sha256": "d18486290c3a4ab28138e447207c63c992f3c21d35de1bff3147c4173953e207"
+    },
+    {
+      "file": "core/viewer-sound-registry.ts",
+      "sha256": "fbced3d2d8105865676d93b8d908a980bde364c6850555cf104f881c55a0c19e"
+    },
+    {
+      "file": "core/viewer-state.ts",
+      "sha256": "85324fbefb3cd1091bee0af2b0c981df540d0c16f092b3e3f225c2314aa43d85"
+    },
+    {
+      "file": "core/viewer-tactics.ts",
+      "sha256": "df4c3deaeaeb8a7e59c9d68b49b95a993ae194932ddb33e2c7406bbea73b4401"
+    },
+    {
+      "file": "core/visual-capture.ts",
+      "sha256": "83d12b29734b20a32c6e9dac6f6b93f15ec22a1900f49c817b4808779efcf7f6"
+    },
+    {
+      "file": "core/window-semantics.ts",
+      "sha256": "6275ee8b2f87de8387da3d7ffafcc68e9dfd52980601e624a7d42583a5ade02c"
+    },
+    {
+      "file": "core/window.ts",
+      "sha256": "b2d133b24542cf5f258e959025751b41ba2e96497774d3b47a115d273ed598bd"
+    },
+    {
+      "file": "core/works.ts",
+      "sha256": "394f14d5a28dfaa22c3936e7958621cb012adf811dd1df6c0438e35072ce87cd"
+    },
+    {
+      "file": "core/world.ts",
+      "sha256": "2e6cacc7fcef7a4519e5fd29e804870cd2c5b21ab70cb875f80be61ce1120a8c"
+    },
+    {
+      "file": "docs/harness.md",
+      "sha256": "49fd5b74e632563f66604ca481a494cc0e85100cef82b66527b05d391de8ffe6"
+    },
+    {
+      "file": "docs/minecraft-client.md",
+      "sha256": "de78f02a21e789b31179d26f8812bfbaa88fda2134fbf8accdf7842f8ea05651"
+    },
+    {
+      "file": "docs/online-accounts.md",
+      "sha256": "b510229902b203e5d616b91065ef5ee0c63a95d769c402a2e79121a012d17c73"
+    },
+    {
+      "file": "docs/protocol-v1.md",
+      "sha256": "1d96075888f466a945aa80fb40bf2eaac3ca7d1a4caba98120f33ff05f6cfaaa"
+    },
+    {
+      "file": "examples/minecraft-agent.json",
+      "sha256": "01a5629d1651f3385a3cc85ff6c63ef2faeafb127f6d988bfa07dabbb106b0a1"
+    },
+    {
+      "file": "examples/minecraft-client.ts",
+      "sha256": "c3130065ef68a34c9c6d526560cf97de6b0c6b6b7cd2cd4f0dfe7cfe36b183bd"
+    },
+    {
+      "file": "examples/minecraft-online.json",
+      "sha256": "e1c3a914ab23ba610cc777e959fe6ae94e3c0e6d59a035488ed65cb873fdc63f"
+    },
+    {
+      "file": "pnpm-lock.yaml",
+      "sha256": "1883e5066322d59bb647f6436a8ccd6ff8125ac62d5b58fc28a83310c54b0ab7"
+    },
+    {
+      "file": "pnpm-workspace.yaml",
+      "sha256": "c7da21dd1ade082b3999b0e6e753efe27f63e6d8a8176f26fc0414a0cdd82ba9"
+    },
+    {
+      "file": "provenance/acceptance-20261013.json",
+      "sha256": "36f254ec6e20bf387af3af39f8e8aae0046a80561bdcc13fee9fa08978554599"
+    },
+    {
+      "file": "provenance/build-host-runtime.ts.txt",
+      "sha256": "3780d89ccd700053f73dca60022c04c0792f54f9c4afcc276db235b84936956b"
+    },
+    {
+      "file": "provenance/build-release.ts.txt",
+      "sha256": "9e2b3abf02d0468e6cbabcae5b39c0eb86dfad7ebccb366907b753c529212e6f"
+    },
+    {
+      "file": "provenance/import-20261013.json",
+      "sha256": "696d89347df31c2c60eec376b752aa970f4232e0d054f108c76b400d02675605"
+    },
+    {
+      "file": "provenance/import-files.json",
+      "sha256": "e2e480ce205e491df317cf5676b749d89f99deeb85472fac6571b422fa415bcf"
+    },
+    {
+      "file": "provenance/legacy-build-sources.json",
+      "sha256": "c00fd79111af0594961ce7984e9d05859035fc4323d1c972e83f65edfc5fda94"
+    },
+    {
+      "file": "provenance/legacy-model-config.txt",
+      "sha256": "289c0f1534f2b4c9fcd36e5aba8fcf1c3067d0618de6e880902c4028affff7b4"
+    },
+    {
+      "file": "provenance/performance-bridge.json",
+      "sha256": "f82c5c4b44309429748c480df10d9b14c7a0652629ba42b69752deb4e8e7103f"
+    },
+    {
+      "file": "provenance/server-combat-report.txt",
+      "sha256": "0827abb964ec24ecab0a9570af1f10e3fec1a8efcad448b8feaa01ce93465892"
+    },
+    {
+      "file": "provenance/source-audit-20261013.json",
+      "sha256": "bbf2b6cdf9e1c48938b40f035e86ba9da371580c9141798693982f473b433401"
+    },
+    {
+      "file": "provenance/verify-release.mjs.txt",
+      "sha256": "4c3f419268d963bbb858b59d0b4516c1d122dbd0f23a3e7aff869aee65433f46"
+    },
+    {
+      "file": "provenance/viewer-heads.json",
+      "sha256": "95b1127798920118c18b17ffb58cf21e90076960d4954792a09c69bd788306b8"
+    },
+    {
+      "file": "release-sources.json",
+      "sha256": "50cc1729a4f04f67bce37668f0a222063fecead69aae7cf1c71f2fa255f22930"
+    },
+    {
+      "file": "scripts/build-client-login.mjs",
+      "sha256": "23af73d9a229f939e95b710b396bd975019a2ee4583f414d5a6961b3891c4ccb"
+    },
+    {
+      "file": "scripts/build-types.mjs",
+      "sha256": "835e881c60d2bb6d41bf5e095f7708b712dff3e9b4e4108ec8f6e548890e1691"
+    },
+    {
+      "file": "scripts/build.mjs",
+      "sha256": "0edd3bff5312aa1220fefbb66ef97f15d23d71ff8850c63155153e7d5980f28f"
+    },
+    {
+      "file": "scripts/verify-build.mjs",
+      "sha256": "f1341b2413855dd8a94822b4cf1f77efcd0223a38a2181e6e31fb0085cf113b8"
+    },
+    {
+      "file": "skills/minecraft-agent/SKILL.md",
+      "sha256": "11018d077671ea29b3a8260419cb8e0657a4318ec014a2876d49a44b088bfa24"
+    },
+    {
+      "file": "skills/minecraft-agent/references/connection.md",
+      "sha256": "2d0dadc4ecfa2e7c57011b087c9fc8019810140db8c8c79a80cb48265b4c950e"
+    },
+    {
+      "file": "src/blueprint-railway.ts",
+      "sha256": "a3fb22a3472a77f00e4925666ddedcf54fd8624e5d887b9b3fd20ecf8aac755d"
+    },
+    {
+      "file": "src/chat-provenance.ts",
+      "sha256": "6339cc55e5793a284a2a54008a5f1f55092f803b4d82f9de65a3b2088f7ee11a"
+    },
+    {
+      "file": "src/client/ENV_PROMPT.md",
+      "sha256": "e947577ee0442c390b24c1adc34aae2119ea1cd07f3bef8d0623d9858d5ef12b"
+    },
+    {
+      "file": "src/client/authentication.ts",
+      "sha256": "f4ca6a2207b2024345b92b671013d28bb940fe609103444c8facd75294f9e610"
+    },
+    {
+      "file": "src/client/cli.ts",
+      "sha256": "4eea3cddf0173d33b07babb6938be2d1108a77492d782afda0bcd9f51afebca3"
+    },
+    {
+      "file": "src/client/config-file.ts",
+      "sha256": "6c8b35e6b51c0925c43c5259ab657acda27cb2760b4ee068528d9e9f29a606e5"
+    },
+    {
+      "file": "src/client/config.ts",
+      "sha256": "e0d95ef184d04809926bb5e3959dfeb908f407daa581b38c00642181f733ddf5"
+    },
+    {
+      "file": "src/client/connection-lease.ts",
+      "sha256": "f6ef547be9dcf14be47ef78fb1f6bee2c6836d0ac9a66ddc158d3df8a2dc0441"
+    },
+    {
+      "file": "src/client/console-server.ts",
+      "sha256": "2dec3582a637ba9414516425d8ec511ae9e1ef88d758f1ef4022c8cb28dba058"
+    },
+    {
+      "file": "src/client/context.ts",
+      "sha256": "1f1c6bf23232dabef4fb88a6ecfb9db0c3101967f2b425be3adc81ebcae43c9f"
+    },
+    {
+      "file": "src/client/contracts.ts",
+      "sha256": "c834302d47fd087db07c00ae5cfe5c9249374dfbb9ff72deddf8235f74cb12f0"
+    },
+    {
+      "file": "src/client/goal-closure.ts",
+      "sha256": "94d4ead21d74488b6dadbb7968d74fd707998b3b71b0eb8322bb364ccaf9d1f2"
+    },
+    {
+      "file": "src/client/index.ts",
+      "sha256": "6779faf1851409ceb19d17d3cc4e51bb860c3f2b6023f0c9f47dd933a5764e49"
+    },
+    {
+      "file": "src/client/journal.ts",
+      "sha256": "2f3e37a88aea962a7cbeda2ca6537119e5f9bb1eb16e0cb6d3b3b20580714bf8"
+    },
+    {
+      "file": "src/client/metrics.ts",
+      "sha256": "880a680c1bb00d8b844bc500a10b9d6d6b5c0d6dc02974de48483e68cf273aa8"
+    },
+    {
+      "file": "src/client/migration.ts",
+      "sha256": "f0d18c540ca2cc435a1cd398b5d5e71e71624335d760e4e7df7d9a6b2f4d68ea"
+    },
+    {
+      "file": "src/client/request-ledger.ts",
+      "sha256": "4461475cf7ddff4c304439539779e4c32f510b624342641af069de78059675a8"
+    },
+    {
+      "file": "src/client/runtime.ts",
+      "sha256": "c59080c861e40bc799b04e62ef7da26d10a0138f15c28c816208ae1d82d64754"
+    },
+    {
+      "file": "src/client/visual.ts",
+      "sha256": "330e41246c1ec2db49cf1b615aefd7bea020f9b37271bce355bf463b16dfe09a"
+    },
+    {
+      "file": "src/client/world.ts",
+      "sha256": "71c00116b00e32240d16c080799f97e0a9a0fe31bdc44722235bcbfea830cd93"
+    },
+    {
+      "file": "src/collect-contract.ts",
+      "sha256": "8eb2779498797f1beed83ed52b5e104db73353665edef616efe1ea142bb0a7b5"
+    },
+    {
+      "file": "src/contracts/host.ts",
+      "sha256": "d7e723552e573a946e53e0cd8c4aeb133704fc54604623957fc34e62d51320e0"
+    },
+    {
+      "file": "src/contracts/index.ts",
+      "sha256": "ee86c5105b19d3759bccf1d5138511b19c9486cd3d6757d63f9b2eb0c0ad0b1f"
+    },
+    {
+      "file": "src/contracts/protocol.ts",
+      "sha256": "9d2419e4f47b1e633e46350ea6c118a30ff709d6f6fd6a85cef0ed8644fac845"
+    },
+    {
+      "file": "src/extension.ts",
+      "sha256": "022bd622f3893b128b5bb08403371ed8f32b25372d7bc0c2ffa5797af53d29c1"
+    },
+    {
+      "file": "src/index.ts",
+      "sha256": "8173bcf9b3ceb5f88a0de90b2e58fb92b035f83534858db85dc049827f237b35"
+    },
+    {
+      "file": "src/mcp/server.ts",
+      "sha256": "4a42b1f201aa1fdc98d029e443f3ee07264410a14fccf2a124cef30416bc3ddb"
+    },
+    {
+      "file": "src/mcp/stdio.ts",
+      "sha256": "38add7a94d8787724ccae811abee522c0f5e33256b0a0747bc4e66dc1630fa19"
+    },
+    {
+      "file": "src/mounted-look.ts",
+      "sha256": "2ca2dbcd0e3f80193cad989c47c0974ac632d583120b416ffae0f1e3221fe97d"
+    },
+    {
+      "file": "src/railway.ts",
+      "sha256": "25d0ce66a7a6082590cdf6b11598c70325b1efef23d0cff4b2f83810c2269303"
+    },
+    {
+      "file": "src/runtime/child-process.ts",
+      "sha256": "93a59c1906a5bdeae5c84c51004ad7d4f48da0d8d6e65c7ee1e7b9284bc6ecc6"
+    },
+    {
+      "file": "src/runtime/host-runtime.d.mts",
+      "sha256": "7f5ab96278778dffefb43ff0c562d8004d48540c08e7c7220921d172358029e5"
+    },
+    {
+      "file": "src/vehicle-state.ts",
+      "sha256": "6f28b7f276ad7a8eebdefbb008fbd4b3a5f7d5a516c6e1faae59f37bb999875d"
+    },
+    {
+      "file": "tests/action-contract.test.ts",
+      "sha256": "271532f7541e9b707a35712973715c8e07c222dd6962268ebd2a7d34dbc9845f"
+    },
+    {
+      "file": "tests/agent-metrics.test.ts",
+      "sha256": "afbdcd63b509d09aad86ccf9858970138157d45d9f0d9b460360fff28278f065"
+    },
+    {
+      "file": "tests/blueprint-railway.test.ts",
+      "sha256": "cd557531614f2ee319f29f6847a7e5a0d8f9d0af4c925e4e52db5dc80101857a"
+    },
+    {
+      "file": "tests/client-console.test.ts",
+      "sha256": "f64982242f38d764418e2c2b02ad75214a28201fb5ce0b230d1dea127276df60"
+    },
+    {
+      "file": "tests/client-login.test.ts",
+      "sha256": "2342239a987b82832f0068b68464149d29da1912bbcc4b408917b43644d3973d"
+    },
+    {
+      "file": "tests/collect-step-state.test.ts",
+      "sha256": "ca19cff294098fc6d986e2dd5d1134221dc77ea49d15a5be36918600d367e564"
+    },
+    {
+      "file": "tests/combat.test.ts",
+      "sha256": "d61ab42cb79d4d0d786ae024465e6fa8894b32125555ea8d5e2420ed7c030904"
+    },
+    {
+      "file": "tests/crop-placement.test.ts",
+      "sha256": "f35b03c272a07d21bc5da2831445f3bf7ebfb70cf6d64dd96de0ed64913a2484"
+    },
+    {
+      "file": "tests/equipment.test.ts",
+      "sha256": "90703cc3f8015a34b88a494d8f122119cc9a63bad2d7bf919273b6c5b99cb620"
+    },
+    {
+      "file": "tests/fixtures/deny-cortico-loader.mjs",
+      "sha256": "94946ad84e51630b9b3b1795e7eb73e02d1a9549394a25eea5ebd5757de80353"
+    },
+    {
+      "file": "tests/fixtures/deny-cortico.mjs",
+      "sha256": "b2012061356a642eae2fb22a4eb44a2813f558d6e24c554da46273531da7460c"
+    },
+    {
+      "file": "tests/fixtures/deny-network.mjs",
+      "sha256": "40d12c163cfab218a85906a1aa89cbe5709752805eec3210c54758f5bd0eebfa"
+    },
+    {
+      "file": "tests/fixtures/host-prompt.ts",
+      "sha256": "67deadc87a64d56a8b8318ffa78b0234957eaa7ed1c4e4619a58e5763956f25c"
+    },
+    {
+      "file": "tests/fixtures/protocol-engine.mjs",
+      "sha256": "442865e1897a06e58be5293f426c97438e21e25b61d2a3e72f6b79ea51c6eaaf"
+    },
+    {
+      "file": "tests/fixtures/server-guide-baseline.md",
+      "sha256": "ebe1f82aa398fabd0eb0d36c2c0b8032b96665b78d5ef4d865aba3b40411152c"
+    },
+    {
+      "file": "tests/fixtures/viewer-bot.ts",
+      "sha256": "b63f76d22f9def366e59f3c6cbc9420f44c96cf901587f16e188070e4a2e3a47"
+    },
+    {
+      "file": "tests/flight-timing.test.ts",
+      "sha256": "19c4d08a5762e445d032dd9ad6c069be14054efd330983c6bfa76f65731a74e7"
+    },
+    {
+      "file": "tests/goal-closure.test.ts",
+      "sha256": "4d0ee92206f32302af8ec744d4ae8a25e03f131d8ecbb491e647c59f79143710"
+    },
+    {
+      "file": "tests/goal-metrics.test.ts",
+      "sha256": "6ed7231266d2a241f6076ad725df2b9bb3c2b5065c59ac30c7d988f143c851db"
+    },
+    {
+      "file": "tests/goal-revision.test.ts",
+      "sha256": "91558029e6c8095a141e01f7a15f9e519a233b8701ac9e9ed4ef8c7b58e83b74"
+    },
+    {
+      "file": "tests/hand-equipment.test.ts",
+      "sha256": "f4911a7001932f386efe87ff408a386ec43868e218f43d50a9671910a00d93e3"
+    },
+    {
+      "file": "tests/item-display.test.ts",
+      "sha256": "792461b57ab7976c72f69ac4ccc2373601c6da11bcbd14f516f96d091140b961"
+    },
+    {
+      "file": "tests/login-readiness.test.ts",
+      "sha256": "5cb751a2caf7fc27dc05178ada13b9e7d51c52a1a0b98b515e0e6410cbc34ad0"
+    },
+    {
+      "file": "tests/method-await.test.ts",
+      "sha256": "bd91b226aee2317d71afe55de58f03cf69d368224fb9cfe1713eadb4398029d9"
+    },
+    {
+      "file": "tests/method-harness.ts",
+      "sha256": "6ea18e2cd379f9c3b5322c2ca5ab7b3821b5c778c3b1f9ab841a6af90a216e2f"
+    },
+    {
+      "file": "tests/method-host.ts",
+      "sha256": "a94386a39bc9b6afe7e630345d7228bba3e0c7663b5fbe5872f2fb1d41b34d22"
+    },
+    {
+      "file": "tests/method-mineflayer.test.ts",
+      "sha256": "fb79d2b320a4a8ea2b312a5bf1d74966934d98d841f786cf5987c0300572d311"
+    },
+    {
+      "file": "tests/method-result-contract.test.ts",
+      "sha256": "2b3ba58e9cd28ef38ec3e574bf6137645d9851444719f9ddd59e4c2506fec879"
+    },
+    {
+      "file": "tests/migration.test.ts",
+      "sha256": "3efd6ca3691e9f25d179a73d8a4f67e78a50b9d2c71f02796004a5fbf3b80d49"
+    },
+    {
+      "file": "tests/minecraft-client.test.ts",
+      "sha256": "9f1e2d24a3b2e4aea954da57e58988e0120e85045206d579d5cedf0e67aca9c4"
+    },
+    {
+      "file": "tests/mining-tool-trace.test.ts",
+      "sha256": "334ece408b661df58226fdaa8f15ac2a3dbb43b94365d21f7ad125208ee73c2a"
+    },
+    {
+      "file": "tests/mounted-look.test.ts",
+      "sha256": "282c8fd734741e6eeb91c28ca35140c0c7997069908591df2825a78704e106e7"
+    },
+    {
+      "file": "tests/network-boundary.test.ts",
+      "sha256": "bb024c55d2e5c8cd32dc995ca42b1d19faf53eb7fa650eca1c3b7767859d7a35"
+    },
+    {
+      "file": "tests/neutral-protocol.test.ts",
+      "sha256": "59c1d8c511ccfa5b3d804337fd126e88cc955d3952de769f0a60f71be13eb126"
+    },
+    {
+      "file": "tests/online-accounts.test.ts",
+      "sha256": "14789655269eacd46a25b50ca26314fd143af5964030ad09ea336aaf34750954"
+    },
+    {
+      "file": "tests/placement-miss-state.test.ts",
+      "sha256": "4523d5d7a9a3eacc0a5e44add2dfc0734aaa00eb721b7c49cb25dee7c3b83442"
+    },
+    {
+      "file": "tests/probe-coverage.test.ts",
+      "sha256": "4d2804f68d398685d2ef35f7ab38fade85afa497843d4985c6bf0f0d6faf4433"
+    },
+    {
+      "file": "tests/procedure-fixture.ts",
+      "sha256": "75faa065a76d53bb777ffdccce233e3a950e717035bc65d94e31f8423b2ccbe5"
+    },
+    {
+      "file": "tests/procedure-ipc.test.ts",
+      "sha256": "b8770ee6a015cc7dc3314c1bb7969f81eab5efbf10cca1f007d093119503a5f6"
+    },
+    {
+      "file": "tests/procedure-methods.test.ts",
+      "sha256": "9499c22f37f6c49aca5f4de3860aec4f2ab5d71c8b619415d8cc2c32d82ac6ba"
+    },
+    {
+      "file": "tests/procedure.test.ts",
+      "sha256": "1dce2c26d5093e603c3156eefa871c9628a4a9afd9335e26a91958a54b3e7b51"
+    },
+    {
+      "file": "tests/protocol-ipc.test.ts",
+      "sha256": "2a9e8ef6b32ccc7d038b91cb5a7bdba5f1f32d1bb0257f3a95f07ac66ffd02c6"
+    },
+    {
+      "file": "tests/protocol-version.test.ts",
+      "sha256": "41013e95e9b5079c88e49aaf26c2da67f2188b89d340624274649a4054379707"
+    },
+    {
+      "file": "tests/proxy-lifecycle.test.ts",
+      "sha256": "ed2d9275b9be4beb775883c5bbebdb8c7f96a9d84fa40e727f8ee10ff8c59aa1"
+    },
+    {
+      "file": "tests/recipe-protocol.test.ts",
+      "sha256": "6a4ad551891c53e2a9082e1e2c39700b7cd3c82068d87f39a820a64de5e74adc"
+    },
+    {
+      "file": "tests/route-diagnostics.test.ts",
+      "sha256": "96dff5cc294328be8845ace2d956f7f53f69f02f9c307626573815d452923895"
+    },
+    {
+      "file": "tests/server-login.test.ts",
+      "sha256": "40f8b44b5cb6835f7c0d1ae427f610a852efd29f060264be290ce2db1cef82b9"
+    },
+    {
+      "file": "tests/spatial-budget.test.ts",
+      "sha256": "0d38493db2d034786f89dce33e49799fb8578790e2b1653434abdd21c8fbc888"
+    },
+    {
+      "file": "tests/storage-correction.test.ts",
+      "sha256": "4fdb8e4d5d4aa829e6dbd5c111227d0d6de89b413514692e7e076a4cf6eba78e"
+    },
+    {
+      "file": "tests/vehicle-state.test.ts",
+      "sha256": "0f89872e95a2ba67fbb3b21ae3f2ff4468f3ce180d8d457d0d5cd3b1b39c7f3f"
+    },
+    {
+      "file": "tests/viewer-content.test.ts",
+      "sha256": "993ebd6f6196cfdd0d7f7ab41986a7ca82f7c6834b9fe58bfd9599d8b176be5d"
+    },
+    {
+      "file": "tsconfig.core.json",
+      "sha256": "7781a0d57af7a8090d4dfae560488ba7e553c501b760ccf1f55261729d4d1217"
+    },
+    {
+      "file": "tsconfig.json",
+      "sha256": "77cbc2eefed26c676777ffe66971ac9930770305995b3123220a892c65b17c93"
+    },
+    {
+      "file": "vendor/native-types/@socket.io+component-emitter@3.1.2/@socket.io/component-emitter/LICENSE",
+      "sha256": "0f0b408b8b871d983e767528c6dc51e0ad7efaa022890c449fe2b2e1ee24dbb7"
+    },
+    {
+      "file": "vendor/native-types/@socket.io+component-emitter@3.1.2/@socket.io/component-emitter/SOURCE-PACKAGE.json",
+      "sha256": "e27384033330a18408e0f2dd764278c75ed169229bde709d29e753159b04848a"
+    },
+    {
+      "file": "vendor/native-types/@socket.io+component-emitter@3.1.2/@socket.io/component-emitter/lib/cjs/index.d.ts",
+      "sha256": "14ecfc29e0c44ad4c5e50f9b597492cd8f45a2a635db8b5fe911a5da83e26cf8"
+    },
+    {
+      "file": "vendor/native-types/@socket.io+component-emitter@3.1.2/@socket.io/component-emitter/lib/cjs/package.json",
+      "sha256": "7d38de102f9d211b8a221ab5943610473c4b23aeee36e9a9cf0e22848e04b9d4"
+    },
+    {
+      "file": "vendor/native-types/@socket.io+component-emitter@3.1.2/@socket.io/component-emitter/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/@types+cors@2.8.19/@types/cors/LICENSE",
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+    },
+    {
+      "file": "vendor/native-types/@types+cors@2.8.19/@types/cors/SOURCE-PACKAGE.json",
+      "sha256": "668eaf9685f07c43881b376ddf4fccf6d1896c0e46e528b0a32c383e15237271"
+    },
+    {
+      "file": "vendor/native-types/@types+cors@2.8.19/@types/cors/index.d.ts",
+      "sha256": "25be1eb939c9c63242c7a45446edb20c40541da967f43f1aa6a00ed53c0552db"
+    },
+    {
+      "file": "vendor/native-types/@types+cors@2.8.19/@types/cors/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/@types+node-rsa@1.1.4/@types/node-rsa/LICENSE",
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+    },
+    {
+      "file": "vendor/native-types/@types+node-rsa@1.1.4/@types/node-rsa/SOURCE-PACKAGE.json",
+      "sha256": "86e07db9e590edf93454fdcf963d7075fabead67a44ce02548251858e67245df"
+    },
+    {
+      "file": "vendor/native-types/@types+node-rsa@1.1.4/@types/node-rsa/index.d.ts",
+      "sha256": "bd49120d99b780ef9cc89a1fcd9039cfe4416a4160c38a28b7732da82d3d612e"
+    },
+    {
+      "file": "vendor/native-types/@types+node-rsa@1.1.4/@types/node-rsa/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/@types+readable-stream@4.0.25/@types/readable-stream/LICENSE",
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+    },
+    {
+      "file": "vendor/native-types/@types+readable-stream@4.0.25/@types/readable-stream/SOURCE-PACKAGE.json",
+      "sha256": "779a8aee8ea7d338729c34a766bba1b96839846d105affe150dc9755c9f48d17"
+    },
+    {
+      "file": "vendor/native-types/@types+readable-stream@4.0.25/@types/readable-stream/index.d.ts",
+      "sha256": "c342e68cde0c3b415467b0070b681cb67fca0ccbd4f0a7254a30a041f861e3a5"
+    },
+    {
+      "file": "vendor/native-types/@types+readable-stream@4.0.25/@types/readable-stream/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/@types+ws@8.18.2/@types/ws/LICENSE",
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+    },
+    {
+      "file": "vendor/native-types/@types+ws@8.18.2/@types/ws/SOURCE-PACKAGE.json",
+      "sha256": "f5b7223923b24d17ae264da95d3e35f72c57bc951c63a31c7c5fbd1490fbf94a"
+    },
+    {
+      "file": "vendor/native-types/@types+ws@8.18.2/@types/ws/index.d.ts",
+      "sha256": "0143cefdb56a076f7f6cc2520a60469e0b349452f7882c5c2688f69032a8424c"
+    },
+    {
+      "file": "vendor/native-types/@types+ws@8.18.2/@types/ws/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/CORRECTIONS.md",
+      "sha256": "f673121aee110f77af6c0e76cc1225a8c6f4eeafd7cb17d0779c58bae9425b96"
+    },
+    {
+      "file": "vendor/native-types/README.md",
+      "sha256": "06133515a5c7d8e2ec3b0ebbd1cbb860ed40b52d4a1f9f50d320a111c1f02436"
+    },
+    {
+      "file": "vendor/native-types/buffer@6.0.3/buffer/LICENSE",
+      "sha256": "06bafa45fdad2579ba0e43b0c9b2c6290287c99c4203c300254a462b38a307f6"
+    },
+    {
+      "file": "vendor/native-types/buffer@6.0.3/buffer/SOURCE-PACKAGE.json",
+      "sha256": "5b105ac0abbf5985cbe62ad28a34032d85c7ef623e0eb01f39441b0feb419004"
+    },
+    {
+      "file": "vendor/native-types/buffer@6.0.3/buffer/index.d.ts",
+      "sha256": "4967529644e391115ca5592184d4b63980569adf60ee685f968fd59ab1557188"
+    },
+    {
+      "file": "vendor/native-types/buffer@6.0.3/buffer/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/engine.io-parser@5.2.3/engine.io-parser/LICENSE",
+      "sha256": "d96e657000a00ad35280309c8a3d66db9c575efaa652720b82e619185581c835"
+    },
+    {
+      "file": "vendor/native-types/engine.io-parser@5.2.3/engine.io-parser/SOURCE-PACKAGE.json",
+      "sha256": "1424a9e48ed5141c78bfc5e1316fc482c9c9f3975665152cbf081c39d8d0255c"
+    },
+    {
+      "file": "vendor/native-types/engine.io-parser@5.2.3/engine.io-parser/build/cjs/commons.d.ts",
+      "sha256": "569e762cf47aafdad508360a443c6c757e56c61db3b652b65458a7d168d139c4"
+    },
+    {
+      "file": "vendor/native-types/engine.io-parser@5.2.3/engine.io-parser/build/cjs/decodePacket.d.ts",
+      "sha256": "4b84373e192b7e0f8569b65eb16857098a6ee279b75d49223db2a751fdd7efde"
+    },
+    {
+      "file": "vendor/native-types/engine.io-parser@5.2.3/engine.io-parser/build/cjs/encodePacket.d.ts",
+      "sha256": "02ed2766d79a00719ac3cc77851d54bd7197c1b12085ea12126bc2a65068223e"
+    },
+    {
+      "file": "vendor/native-types/engine.io-parser@5.2.3/engine.io-parser/build/cjs/index.d.ts",
+      "sha256": "5aeea312cd1d3cc5d72fc8a9c964439d771bdf41d9cce46667471b896b997473"
+    },
+    {
+      "file": "vendor/native-types/engine.io-parser@5.2.3/engine.io-parser/build/cjs/package.json",
+      "sha256": "7d38de102f9d211b8a221ab5943610473c4b23aeee36e9a9cf0e22848e04b9d4"
+    },
+    {
+      "file": "vendor/native-types/engine.io-parser@5.2.3/engine.io-parser/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/LICENSE",
+      "sha256": "b263a81f99a73ce7e0ad869a396ece7416b2e99f514e08e39dd24f326047a698"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/SOURCE-PACKAGE.json",
+      "sha256": "1a976237e26c189e9ad635600aa8ce694c40b0877a3270e2133230034d83270d"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/build/contrib/types.cookie.d.ts",
+      "sha256": "08c2bb524b8ed271f194e1c7cc6ad0bcc773f596c41f68a207d0ec02c9727060"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/build/engine.io.d.ts",
+      "sha256": "a6b40d7f440a3f31320fc026201586e129bd4f19ffedaaee9a616ab2b69b3873"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/build/parser-v3/index.d.ts",
+      "sha256": "49be2608713680ffd9d7d01586a735ceb8f852560b6bcfd70ab6a78b87b72366"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/build/server.d.ts",
+      "sha256": "ed7a6f5c9d09fa2b97358b02ed744296800f1071f0fd3867a8e168cdda8e6b7a"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/build/socket.d.ts",
+      "sha256": "a3b10cee3f00ee1654c725ceab02a8250968280a1c4c0734b048f943ab0cbb18"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/build/transport.d.ts",
+      "sha256": "d37e062d3350b49ea8a8a03d93430f7fd3125e53f941ae22ce88b6324c2a3000"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/build/transports/index.d.ts",
+      "sha256": "2cab968f65ff5bb879ba07ed693b2292e92ac2708bd40bb45b0afabce4c4d6da"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/build/transports/polling.d.ts",
+      "sha256": "2bccc73253366a50e28010ec4a08a9d0f698de0a1ea1961bcb001acde7f16362"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/build/transports/websocket.d.ts",
+      "sha256": "598819100bbfe44ced44662b21e0b81eb40cc8d81cca4d129e3ad6aded491727"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/build/transports/webtransport.d.ts",
+      "sha256": "54cecf455317cce43a1838b67c9587727bd30d14f89cf2c6a10b8032663158b1"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/build/userver.d.ts",
+      "sha256": "a179f581cf544d11fda1c0776dde6f4ebb93aaf8f172df852bc1733e4a10e1fc"
+    },
+    {
+      "file": "vendor/native-types/engine.io@6.6.11/engine.io/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/manifest.json",
+      "sha256": "fe6fd41b43dca28fe4e011efc02f2db9d1d5222361c284fde04eed9296a1a7a6"
+    },
+    {
+      "file": "vendor/native-types/minecraft-data@3.117.0/minecraft-data/SOURCE-PACKAGE.json",
+      "sha256": "80a56aae4008d52d962b8b0ca16cbc68ae11691860542bd9b879fd9e6506ff4f"
+    },
+    {
+      "file": "vendor/native-types/minecraft-data@3.117.0/minecraft-data/index.d.ts",
+      "sha256": "7245b6c0bc965602cf0d2b53639094c2bd1de074499cac13778b0ee164fb80ca"
+    },
+    {
+      "file": "vendor/native-types/minecraft-data@3.117.0/minecraft-data/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/minecraft-protocol@1.68.0/minecraft-protocol/LICENSE",
+      "sha256": "3f84a67ea56cef4814d995359b930046d83b9ee53400551665da1eaa8f6565b5"
+    },
+    {
+      "file": "vendor/native-types/minecraft-protocol@1.68.0/minecraft-protocol/SOURCE-PACKAGE.json",
+      "sha256": "be0ec981835085977446bf11748443118a8cb3d1b76138c25dafa7175cd8f749"
+    },
+    {
+      "file": "vendor/native-types/minecraft-protocol@1.68.0/minecraft-protocol/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/minecraft-protocol@1.68.0/minecraft-protocol/src/index.d.ts",
+      "sha256": "ae93611d296f53cf8db5935bcfb90f639696906398f76656d760be7d9808bfa7"
+    },
+    {
+      "file": "vendor/native-types/mineflayer-pathfinder@2.4.5_prismarine-registry@1.12.0/mineflayer-pathfinder/LICENSE",
+      "sha256": "2a2466277547229364c4b6b44a2df11d49c5b816f094a26c53fe1e5f65aba974"
+    },
+    {
+      "file": "vendor/native-types/mineflayer-pathfinder@2.4.5_prismarine-registry@1.12.0/mineflayer-pathfinder/SOURCE-PACKAGE.json",
+      "sha256": "e4ef57b918908fda31a2053022ba8bc9bbe95c6cd1398c06348c4afc7ee27409"
+    },
+    {
+      "file": "vendor/native-types/mineflayer-pathfinder@2.4.5_prismarine-registry@1.12.0/mineflayer-pathfinder/index.d.ts",
+      "sha256": "0b7e372088090908dee83cc153cc38a03d0b880cf0dd01d0168a2c57497550dc"
+    },
+    {
+      "file": "vendor/native-types/mineflayer-pathfinder@2.4.5_prismarine-registry@1.12.0/mineflayer-pathfinder/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/mineflayer@4.37.1/mineflayer/LICENSE",
+      "sha256": "52529d607ea0fb18663bb9f3704d26a7f49f9dba637c16a1becc35e79ab21476"
+    },
+    {
+      "file": "vendor/native-types/mineflayer@4.37.1/mineflayer/SOURCE-PACKAGE.json",
+      "sha256": "ad16518b7c0681a011bab1ae86bffb4c77079b33ac96dc371410bc7a8ea8f1c2"
+    },
+    {
+      "file": "vendor/native-types/mineflayer@4.37.1/mineflayer/index.d.ts",
+      "sha256": "567ebbb7006ff08f233251fae8da91a2113307be1c6f9741244330c9b4ffa313"
+    },
+    {
+      "file": "vendor/native-types/mineflayer@4.37.1/mineflayer/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-auth@3.1.1/prismarine-auth/LICENSE",
+      "sha256": "2bd8d8d734c5e4186c01918a2539111fe22474615680d31a9a2f820d9136cea4"
+    },
+    {
+      "file": "vendor/native-types/prismarine-auth@3.1.1/prismarine-auth/SOURCE-PACKAGE.json",
+      "sha256": "e8a64956c9d397d418400d14061f82268d6048ad24e6be2628d288b098533f1a"
+    },
+    {
+      "file": "vendor/native-types/prismarine-auth@3.1.1/prismarine-auth/index.d.ts",
+      "sha256": "8b1c4070ceb2dfb39e61b8fe5de5008da79125ee5ce39879c93a589d3d629481"
+    },
+    {
+      "file": "vendor/native-types/prismarine-auth@3.1.1/prismarine-auth/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-biome@1.4.0_prismarine-registry@1.12.0/prismarine-biome/SOURCE-PACKAGE.json",
+      "sha256": "d9a1069920218287cfc59da8104bc53b44b87394eaf0687f045da18ddc0e8bdd"
+    },
+    {
+      "file": "vendor/native-types/prismarine-biome@1.4.0_prismarine-registry@1.12.0/prismarine-biome/index.d.ts",
+      "sha256": "a57a30dde760d35b5ec91e1ef5c6d428cae8eafd4e11d3d9a82e4211b2f7e606"
+    },
+    {
+      "file": "vendor/native-types/prismarine-biome@1.4.0_prismarine-registry@1.12.0/prismarine-biome/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-block@1.23.0_prismarine-registry@1.12.0/prismarine-block/SOURCE-PACKAGE.json",
+      "sha256": "3650bd8ec9eb34cd1c01f27ef27251a0e70f2b8869767959b3ac687e3362b1db"
+    },
+    {
+      "file": "vendor/native-types/prismarine-block@1.23.0_prismarine-registry@1.12.0/prismarine-block/index.d.ts",
+      "sha256": "040584bbabcaa97b7674ddc991610d00bcbc843228e890c579645bd85abdbe57"
+    },
+    {
+      "file": "vendor/native-types/prismarine-block@1.23.0_prismarine-registry@1.12.0/prismarine-block/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-chat@1.13.0/prismarine-chat/LICENSE",
+      "sha256": "2bd8d8d734c5e4186c01918a2539111fe22474615680d31a9a2f820d9136cea4"
+    },
+    {
+      "file": "vendor/native-types/prismarine-chat@1.13.0/prismarine-chat/SOURCE-PACKAGE.json",
+      "sha256": "e706b6be22a7a462d89da61f6d86fb83bae310a36b806142bc2be3e21604cc03"
+    },
+    {
+      "file": "vendor/native-types/prismarine-chat@1.13.0/prismarine-chat/index.d.ts",
+      "sha256": "9331ba92a25a73a8f98479960d593654819938eab2308d9fcff5c872badab1f5"
+    },
+    {
+      "file": "vendor/native-types/prismarine-chat@1.13.0/prismarine-chat/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-chunk@1.41.0/prismarine-chunk/LICENSE",
+      "sha256": "b795715bae742fa0a19944bdc1b17b334e91f195827a5261c908a8d1d980247f"
+    },
+    {
+      "file": "vendor/native-types/prismarine-chunk@1.41.0/prismarine-chunk/SOURCE-PACKAGE.json",
+      "sha256": "73845b3e9443d5c27d32d1dedcef4c03aca3727c516d34a5f0388cecd49dd38a"
+    },
+    {
+      "file": "vendor/native-types/prismarine-chunk@1.41.0/prismarine-chunk/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-chunk@1.41.0/prismarine-chunk/types/index.d.ts",
+      "sha256": "9d14be5086ea5850ab1560c8e787c0eef09c4c495fc19e8ec2e0581c4b1dd543"
+    },
+    {
+      "file": "vendor/native-types/prismarine-chunk@1.41.0/prismarine-chunk/types/section.d.ts",
+      "sha256": "2ed374260d55b56616ed38deb72fd6199efec748f8979f0c7254f3b71b78cbd6"
+    },
+    {
+      "file": "vendor/native-types/prismarine-entity@2.6.0/prismarine-entity/SOURCE-PACKAGE.json",
+      "sha256": "f9491cc47346825f668956725f0c3d1e73b03d1d2244b781d59786cc28364566"
+    },
+    {
+      "file": "vendor/native-types/prismarine-entity@2.6.0/prismarine-entity/index.d.ts",
+      "sha256": "37351fe12a2235320f4db0b3e41da30dd2fa58c91902bae08d34dec1110b68ad"
+    },
+    {
+      "file": "vendor/native-types/prismarine-entity@2.6.0/prismarine-entity/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-item@1.18.0/prismarine-item/SOURCE-PACKAGE.json",
+      "sha256": "67056a24bea1cc6a065ca20c708273146d7d53d2074042584b1009dffe8d1db8"
+    },
+    {
+      "file": "vendor/native-types/prismarine-item@1.18.0/prismarine-item/index.d.ts",
+      "sha256": "9c8adaef800020738870991428400c7ffd08ed1faaa690c1731dad256857e143"
+    },
+    {
+      "file": "vendor/native-types/prismarine-item@1.18.0/prismarine-item/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-nbt@2.8.0/prismarine-nbt/SOURCE-PACKAGE.json",
+      "sha256": "9966461749200e3547fb4f4d62676132da9880223ab6c41ff2a6fdc77c452e5f"
+    },
+    {
+      "file": "vendor/native-types/prismarine-nbt@2.8.0/prismarine-nbt/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-nbt@2.8.0/prismarine-nbt/typings/index.d.ts",
+      "sha256": "5ddc74148af22b38bce9f1015c6e0d667361ee76135c30104f42ddceb7c5ed98"
+    },
+    {
+      "file": "vendor/native-types/prismarine-realms@1.6.0/prismarine-realms/LICENSE",
+      "sha256": "2bd8d8d734c5e4186c01918a2539111fe22474615680d31a9a2f820d9136cea4"
+    },
+    {
+      "file": "vendor/native-types/prismarine-realms@1.6.0/prismarine-realms/SOURCE-PACKAGE.json",
+      "sha256": "ad44c5e40e91d9b94875af66693f9937974fa7e1d8bfc151a3d642170a815b7c"
+    },
+    {
+      "file": "vendor/native-types/prismarine-realms@1.6.0/prismarine-realms/index.d.ts",
+      "sha256": "3a077ca7ee370c58ecfea3bfbb3118d0afddba2907b33d0c1eaac4dcde385a38"
+    },
+    {
+      "file": "vendor/native-types/prismarine-realms@1.6.0/prismarine-realms/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-recipe@1.5.0_prismarine-registry@1.12.0/prismarine-recipe/SOURCE-PACKAGE.json",
+      "sha256": "ec63d25d8462547631bf047e7c1c7e1e25324cb04ae065e43fb461a1a3c72126"
+    },
+    {
+      "file": "vendor/native-types/prismarine-recipe@1.5.0_prismarine-registry@1.12.0/prismarine-recipe/index.d.ts",
+      "sha256": "fd64fe16b2bfb588c2a2e5d0d912463d780728b014014abfca562362e65783ef"
+    },
+    {
+      "file": "vendor/native-types/prismarine-recipe@1.5.0_prismarine-registry@1.12.0/prismarine-recipe/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-registry@1.12.0/prismarine-registry/LICENSE",
+      "sha256": "2bd8d8d734c5e4186c01918a2539111fe22474615680d31a9a2f820d9136cea4"
+    },
+    {
+      "file": "vendor/native-types/prismarine-registry@1.12.0/prismarine-registry/SOURCE-PACKAGE.json",
+      "sha256": "edb84e4e372d02a74349aa4533221ff9e7e50491fa3912766981a634892b4f24"
+    },
+    {
+      "file": "vendor/native-types/prismarine-registry@1.12.0/prismarine-registry/lib/index.d.ts",
+      "sha256": "8b1e802072f1217ba9f3872eb7b3750523df8f1bb8148a6ea1d19977678e4227"
+    },
+    {
+      "file": "vendor/native-types/prismarine-registry@1.12.0/prismarine-registry/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-windows@2.10.0/prismarine-windows/SOURCE-PACKAGE.json",
+      "sha256": "349be3957f703825c51ef5b1f320265a0688f257e6f8fcb2445276a819ac6efa"
+    },
+    {
+      "file": "vendor/native-types/prismarine-windows@2.10.0/prismarine-windows/index.d.ts",
+      "sha256": "e581771dba4118cd8c5af551cd37e993f74f851f8ef6bea6156be3baf716a8c2"
+    },
+    {
+      "file": "vendor/native-types/prismarine-windows@2.10.0/prismarine-windows/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-world@3.7.0/prismarine-world/SOURCE-PACKAGE.json",
+      "sha256": "8468a3874bcff20fba00aabc5df9563821323fd2a66ee09367cc149b61809b32"
+    },
+    {
+      "file": "vendor/native-types/prismarine-world@3.7.0/prismarine-world/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/prismarine-world@3.7.0/prismarine-world/types/index.d.ts",
+      "sha256": "33bcccdb3a68dbe9b2d3b1cae82f78ae4ca588fcbeea4f821fcc2a25ed250c79"
+    },
+    {
+      "file": "vendor/native-types/prismarine-world@3.7.0/prismarine-world/types/iterators.d.ts",
+      "sha256": "94ab149caa0f312c2eb0be17b343a0a741a844e62df676fbf66fba5d0db872e1"
+    },
+    {
+      "file": "vendor/native-types/prismarine-world@3.7.0/prismarine-world/types/world.d.ts",
+      "sha256": "61fda8ae91b0fca63d809623d1627137063a98184937c3067fc9ff7e058de566"
+    },
+    {
+      "file": "vendor/native-types/protodef@1.19.0/protodef/LICENSE",
+      "sha256": "3ab72f51c6e2538552532afb2eba779442c0a131ef7b15df1aabcd5d4233097c"
+    },
+    {
+      "file": "vendor/native-types/protodef@1.19.0/protodef/SOURCE-PACKAGE.json",
+      "sha256": "c0858db530f3a514b63c4f4629b4bc1677e3bb4454deeee23a42bbc8a722d0ee"
+    },
+    {
+      "file": "vendor/native-types/protodef@1.19.0/protodef/index.d.ts",
+      "sha256": "e25c7da33fd241027e5d76cff02c7a9ecf12fb5f61497b03fb575254b1772da5"
+    },
+    {
+      "file": "vendor/native-types/protodef@1.19.0/protodef/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/socket.io-adapter@2.5.8/socket.io-adapter/LICENSE",
+      "sha256": "7fcf6b69636551493328a8cd9a5241843d7b246b3c42ed7b06c777fc5f044b86"
+    },
+    {
+      "file": "vendor/native-types/socket.io-adapter@2.5.8/socket.io-adapter/SOURCE-PACKAGE.json",
+      "sha256": "d54f9b0107949be4d36eedd82ab32264fd789f305b0d82b7b3e1f8a1702f35ac"
+    },
+    {
+      "file": "vendor/native-types/socket.io-adapter@2.5.8/socket.io-adapter/dist/cluster-adapter.d.ts",
+      "sha256": "059df47f018dcbcee92d4581ec2a6dbecffc145815888827b4fffaede9f88d3d"
+    },
+    {
+      "file": "vendor/native-types/socket.io-adapter@2.5.8/socket.io-adapter/dist/in-memory-adapter.d.ts",
+      "sha256": "198ae766bb698feb66d3188cfce59fb33696c951b10f901aa3fc3db4847ce76a"
+    },
+    {
+      "file": "vendor/native-types/socket.io-adapter@2.5.8/socket.io-adapter/dist/index.d.ts",
+      "sha256": "bcdd6398ffb07f1a48be5e5a3e2ba47da6814354aa35e6d97b450a51312378f8"
+    },
+    {
+      "file": "vendor/native-types/socket.io-adapter@2.5.8/socket.io-adapter/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/socket.io-parser@4.2.7/socket.io-parser/LICENSE",
+      "sha256": "7fcf6b69636551493328a8cd9a5241843d7b246b3c42ed7b06c777fc5f044b86"
+    },
+    {
+      "file": "vendor/native-types/socket.io-parser@4.2.7/socket.io-parser/SOURCE-PACKAGE.json",
+      "sha256": "26c2d96afa88fafe2a7fba00d73ed6c04a2dc11026a44fab27b6c84b4563a119"
+    },
+    {
+      "file": "vendor/native-types/socket.io-parser@4.2.7/socket.io-parser/build/cjs/index.d.ts",
+      "sha256": "1a3cca60f395ea644d0a07379ef8ef0a978466a9ee716450d08811acb28473e6"
+    },
+    {
+      "file": "vendor/native-types/socket.io-parser@4.2.7/socket.io-parser/build/cjs/package.json",
+      "sha256": "7d38de102f9d211b8a221ab5943610473c4b23aeee36e9a9cf0e22848e04b9d4"
+    },
+    {
+      "file": "vendor/native-types/socket.io-parser@4.2.7/socket.io-parser/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/socket.io@4.8.3/socket.io/LICENSE",
+      "sha256": "70aebb46c7195354683546b0ffebd5989cb18e726e715d9ba71d964f929f0075"
+    },
+    {
+      "file": "vendor/native-types/socket.io@4.8.3/socket.io/SOURCE-PACKAGE.json",
+      "sha256": "1508f8ace1f6faf56a5ed767fe22e8af6026e1c4244ae7a8438f6a04e8c93f7e"
+    },
+    {
+      "file": "vendor/native-types/socket.io@4.8.3/socket.io/dist/broadcast-operator.d.ts",
+      "sha256": "456fc8f9a2f0132649c511bf762707a87d614d037ad60e26b6861d3e1e46198a"
+    },
+    {
+      "file": "vendor/native-types/socket.io@4.8.3/socket.io/dist/client.d.ts",
+      "sha256": "7b3fff263a489c147e984835d6c39ff9969d38cf5d147dcd36bffa1f919d5314"
+    },
+    {
+      "file": "vendor/native-types/socket.io@4.8.3/socket.io/dist/index.d.ts",
+      "sha256": "b0014236a0b771c3af786924737eb4288fda328649620398d3f8b8c6e4e35088"
+    },
+    {
+      "file": "vendor/native-types/socket.io@4.8.3/socket.io/dist/namespace.d.ts",
+      "sha256": "cbdecf9130418816584f5daf0bd8a84388a150dddb6607ac0ed410530e6b1e52"
+    },
+    {
+      "file": "vendor/native-types/socket.io@4.8.3/socket.io/dist/socket-types.d.ts",
+      "sha256": "70da4bfde55d1ec74e3aa7635eae741f81ced44d3c344e2d299e677404570ca9"
+    },
+    {
+      "file": "vendor/native-types/socket.io@4.8.3/socket.io/dist/socket.d.ts",
+      "sha256": "801e72b1e3431943b8625d016c8afb5928da012350c5a4f7d9ba68c33e10b5c0"
+    },
+    {
+      "file": "vendor/native-types/socket.io@4.8.3/socket.io/dist/typed-events.d.ts",
+      "sha256": "c2f041fe0e7ae2d5a19c477d19e8ec13de3d65ef45e442fa081cf6098cdcbe2d"
+    },
+    {
+      "file": "vendor/native-types/socket.io@4.8.3/socket.io/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/typed-emitter@1.4.0/typed-emitter/LICENSE",
+      "sha256": "dfab9450d2bf4112af202be012c098a06e91248156961c2d45fd1fd1894ae2ff"
+    },
+    {
+      "file": "vendor/native-types/typed-emitter@1.4.0/typed-emitter/SOURCE-PACKAGE.json",
+      "sha256": "137a5d8cf92187089f7937e85d77a30c6533db6aee837f10852fb9e55900f738"
+    },
+    {
+      "file": "vendor/native-types/typed-emitter@1.4.0/typed-emitter/index.d.ts",
+      "sha256": "05a88db495057a6c3b1a0897fb40d7462f54d41a7d034b6bf8535f05e2aa534d"
+    },
+    {
+      "file": "vendor/native-types/typed-emitter@1.4.0/typed-emitter/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/typed-emitter@2.1.0/typed-emitter/LICENSE",
+      "sha256": "dfab9450d2bf4112af202be012c098a06e91248156961c2d45fd1fd1894ae2ff"
+    },
+    {
+      "file": "vendor/native-types/typed-emitter@2.1.0/typed-emitter/SOURCE-PACKAGE.json",
+      "sha256": "14fde7b5a35da1b3928a1116892da0175aca3bc2e09179bf0fb8223197a461b4"
+    },
+    {
+      "file": "vendor/native-types/typed-emitter@2.1.0/typed-emitter/index.d.ts",
+      "sha256": "6c27d4b5ba01295ef334456d9af4366aca789f228eee70fcb874b903a59b0e5b"
+    },
+    {
+      "file": "vendor/native-types/typed-emitter@2.1.0/typed-emitter/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vendor/native-types/vec3@0.2.0/vec3/SOURCE-PACKAGE.json",
+      "sha256": "4b62d843af514efe839385b863f1a839994648e17803c2e2b808b87680469444"
+    },
+    {
+      "file": "vendor/native-types/vec3@0.2.0/vec3/index.d.ts",
+      "sha256": "f124a1cdb16829dc445c99a9d0bbd32d9fc2187e7e1cf9d548632abac6a58574"
+    },
+    {
+      "file": "vendor/native-types/vec3@0.2.0/vec3/package.json",
+      "sha256": "297db58ba72aa5817cb25b1e6e30dc60ad725ebe31e79a06a074e58a9084aa26"
+    },
+    {
+      "file": "vitest.config.ts",
+      "sha256": "2c8c7edc88606b92688de92185d8d25302701ecf2394d104ce9847927caa7d79"
+    }
+  ],
+  "coreTests": [
+    "action-contract.test.ts",
+    "agent-metrics.test.ts",
+    "blueprint-railway.test.ts",
+    "client-console.test.ts",
+    "client-login.test.ts",
+    "collect-step-state.test.ts",
+    "combat.test.ts",
+    "crop-placement.test.ts",
+    "equipment.test.ts",
+    "flight-timing.test.ts",
+    "goal-closure.test.ts",
+    "goal-metrics.test.ts",
+    "goal-revision.test.ts",
+    "hand-equipment.test.ts",
+    "item-display.test.ts",
+    "login-readiness.test.ts",
+    "method-await.test.ts",
+    "method-mineflayer.test.ts",
+    "method-result-contract.test.ts",
+    "migration.test.ts",
+    "minecraft-client.test.ts",
+    "mining-tool-trace.test.ts",
+    "mounted-look.test.ts",
+    "network-boundary.test.ts",
+    "neutral-protocol.test.ts",
+    "online-accounts.test.ts",
+    "placement-miss-state.test.ts",
+    "probe-coverage.test.ts",
+    "procedure-ipc.test.ts",
+    "procedure-methods.test.ts",
+    "procedure.test.ts",
+    "protocol-ipc.test.ts",
+    "protocol-version.test.ts",
+    "proxy-lifecycle.test.ts",
+    "recipe-protocol.test.ts",
+    "route-diagnostics.test.ts",
+    "server-login.test.ts",
+    "spatial-budget.test.ts",
+    "storage-correction.test.ts",
+    "vehicle-state.test.ts",
+    "viewer-content.test.ts",
+    "client-types.test.ts"
+  ],
+  "testImportChanges": {
+    "combat.test.ts": [
+      [
+        "../integrations/qiandengji/engine/combat-tactics.ts",
+        "../core/combat-observation.ts"
+      ]
+    ],
+    "storage-correction.test.ts": [
+      [
+        "MYMC_DEFAULTS",
+        "MINECRAFT_CLIENT_DEFAULTS"
+      ],
+      [
+        "../src/config.ts",
+        "../src/client/config.ts"
+      ]
+    ],
+    "viewer-content.test.ts": [
+      [
+        "MYMC_DEFAULTS",
+        "MINECRAFT_CLIENT_DEFAULTS"
+      ],
+      [
+        "../src/config.ts",
+        "../src/client/config.ts"
+      ]
+    ],
+    "agent-metrics.test.ts": [
+      [
+        "../src/agent/metrics.ts",
+        "../src/client/metrics.ts"
+      ]
+    ]
+  }
+}
