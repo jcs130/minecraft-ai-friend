@@ -70,6 +70,16 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.9: revise a delivered strategic stage without stacking goals
+
+The review port distinguishes an undelivered goal from an active planning stage.
+`inspect` returns its delivery state and whether the reviewing host may `revise`
+its own active stage. A revision receives a durable UUID and links to the old
+stage; it preserves running native work and the paused user-goal stack. Old
+payloads and receipts remain intact. This is a strategy change, not a success
+report or a native cancellation. Queued, paused, finished or user-owned stages
+cannot be revised by the review port; fresh user intent fences stale reviews.
+
 ### 0.1.8: accept bounded sequential read batches
 
 Providers may return multiple calls even when parallel calling is disabled. The
@@ -154,6 +164,7 @@ if envelope["offered"]:
     reviews.decide(review["id"], "inspect")
     reviews.decide(review["id"], "continue", reason="Current native work is progressing")
     # Or insert one concrete stage goal. Never automatically replace ongoing work.
+    # revise updates only this review port's already-delivered active stage.
 ```
 
 Only runtime publication creates reviews. Material changes and terminal task

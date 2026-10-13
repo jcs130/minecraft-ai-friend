@@ -308,6 +308,71 @@ def test_explicit_replacement_archives_native_stop_then_adopts_new_goal(framewor
     assert [args for name, args, _ in bridge.calls if name == "mc_do"] == [{"steps": [], "queue": "append"}]
 
 
+def test_stage_revision_preserves_running_body_and_resumes_original_goal(framework_module, tmp_path, run_async):
+    _, mail, _, _, module = modules(framework_module)
+    box = mail.Mailbox(tmp_path)
+    original, first, revised = (str(uuid.uuid4()) for _ in range(3))
+    async def decide(*_):
+        return choose()
+    bridge = Bridge()
+    controller = module.Controller(bridge, decide, framework_module.Settings(), tmp_path, lambda **_: None, lambda: False, box)
+    box.submit("goal", {"goal": "长期生存"}, original)
+    run_async(controller.external_command())
+    box.submit("feedback", {"goal": "准备工具", "mode": "insert"}, first)
+    run_async(controller.external_command())
+    run_async(controller.turn_once("准备工具", "prefix", module.model_tools(bridge.tools)))
+    assert controller.active_goal["queue_policy_consumed"]
+    calls = list(bridge.calls)
+    box.submit("feedback", {"goal": "完成当前工具后找食物", "mode": "insert", "revision_of": first}, revised)
+    run_async(controller.external_command())
+    assert bridge.calls == calls  # No cancellation, replay or extra native queue.
+    assert controller.current_work() and not controller.feedback_pending
+    assert controller.action_owners[("task", "body-1")] == revised
+    assert box.get(first)["delivery"] == "revised"
+    assert box.get(original)["delivery"] == "paused"
+    assert box.active_goal()["queue_policy_consumed"]
+    bridge.event_pages.append([{"execution": {**bridge.result["execution"], "terminal": True, "phase": "completed"}}])
+    run_async(controller.events())
+    run_async(controller.dispatch("goal_report", {"outcome": "reported_done", "evidence": "observed food"}, str(uuid.uuid4())))
+    assert controller.active_goal["id"] == original
+    assert box.get(revised)["planner_report"]["verified"] is False
+
+
+def test_stale_revision_cannot_resurrect_a_finished_stage(framework_module, tmp_path, run_async):
+    _, mail, _, _, module = modules(framework_module)
+    box = mail.Mailbox(tmp_path)
+    first, revised = str(uuid.uuid4()), str(uuid.uuid4())
+    async def decide(*_):
+        return choose()
+    bridge = Bridge()
+    controller = module.Controller(bridge, decide, framework_module.Settings(), tmp_path, lambda **_: None, lambda: False, box)
+    box.submit("feedback", {"goal": "准备工具", "mode": "insert"}, first)
+    run_async(controller.external_command())
+    box.submit("feedback", {"goal": "找食物", "mode": "insert", "revision_of": first}, revised)
+    run_async(controller.dispatch("goal_report", {"outcome": "blocked", "evidence": "cannot continue"}, str(uuid.uuid4())))
+    calls = list(bridge.calls)
+    run_async(controller.external_command())
+    assert bridge.calls == calls and controller.active_goal is None
+    assert box.get(revised)["planner_report"]["reason"] == "revision_target_not_active"
+
+
+def test_unplanned_revision_retains_safe_checkpoint_policy(framework_module, tmp_path, run_async):
+    _, mail, _, _, module = modules(framework_module)
+    box = mail.Mailbox(tmp_path)
+    first, revised = str(uuid.uuid4()), str(uuid.uuid4())
+    async def decide(*_):
+        return choose()
+    bridge = Bridge()
+    controller = module.Controller(bridge, decide, framework_module.Settings(), tmp_path, lambda **_: None, lambda: False, box)
+    box.submit("feedback", {"goal": "工具", "mode": "insert"}, first)
+    run_async(controller.external_command())
+    box.submit("feedback", {"goal": "食物", "mode": "insert", "revision_of": first}, revised)
+    run_async(controller.external_command())
+    assert controller.feedback_pending
+    run_async(controller.turn_once("食物", "prefix", module.model_tools(bridge.tools)))
+    assert [args["queue"] for name, args, _ in bridge.calls if name == "mc_do"] == ["afterCheckpoint"]
+
+
 def test_queue_only_mode_does_not_pretend_it_can_plan_natural_goals(framework_module, tmp_path, run_async):
     _, mail, _, _, module = modules(framework_module)
     box = mail.Mailbox(tmp_path)

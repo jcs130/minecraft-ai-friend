@@ -194,3 +194,63 @@ def test_failed_game_can_be_reported_but_not_restarted_by_review(runtime):
     assert port.decide(review_id, "inspect")["runtime_error"] == "connection_lost"
     assert port.decide(review_id, "insert", "尝试", "重连")["error"] == "game_not_running"
     assert port.decide(review_id, "continue", "报告断连")["acknowledged"]
+
+
+def activate_review_stage(port, clock, publish):
+    publish()
+    first = port.decide(port.offer()["review"]["id"], "insert", "需要工具", "制作工具再找食物")
+    port.mailbox.activate_feedback(port.mailbox.claim())
+    clock[0] += 180
+    publish(current_goal=port.mailbox.active_goal(), read_activity={"mc_bag": 18})
+    return first, port.offer()["review"]
+
+
+def test_delivered_stage_can_be_revised_without_stacking_or_claiming_success(runtime):
+    port, clock, publish = runtime
+    first, review = activate_review_stage(port, clock, publish)
+    inspected = port.decide(review["id"], "inspect")
+    assert inspected["stage_delivery"]["delivery"] == "planning"
+    assert inspected["stage_delivery"]["can_revise"]
+    args = (review["id"], "revise", "木剑已完成，队列空闲但反复查询", "寻找食物并按回执推进")
+    revised = port.decide(*args)
+    assert revised == port.decide(*args) and revised["verified"] is False
+    command = port.mailbox.claim()
+    assert command["payload"]["revision_of"] == first["request_id"]
+    assert port.mailbox.activate_feedback(command)
+    assert port.mailbox.get(first["request_id"])["delivery"] == "revised"
+    assert port.mailbox.active_goal()["id"] == revised["request_id"]
+    with port.mailbox.connection() as db:
+        assert db.execute("SELECT count(*) FROM commands WHERE state='paused'").fetchone()[0] == 0
+
+
+def test_review_revision_cannot_amend_a_new_user_stage_or_override_new_feedback(runtime):
+    port, clock, publish = runtime
+    _, review = activate_review_stage(port, clock, publish)
+    user = str(uuid.uuid4())
+    port.mailbox.submit("feedback", {"goal": "用户要求原地等候", "mode": "insert"}, user)
+    assert port.decide(review["id"], "revise", "想采集", "去远方")["error"] == "intent_revision_changed"
+    port.mailbox.activate_feedback(port.mailbox.claim())
+    clock[0] += 180
+    publish(current_goal=port.mailbox.active_goal())
+    latest = port.offer()["review"]
+    assert not port.decide(latest["id"], "inspect")["stage_delivery"]["can_revise"]
+    assert port.decide(latest["id"], "revise", "想采集", "去远方")["error"] == "no_active_review_stage"
+
+
+def test_review_revision_recovers_after_lost_confirmation(runtime, monkeypatch):
+    port, clock, publish = runtime
+    _, review = activate_review_stage(port, clock, publish)
+    original = port.mailbox.submit
+
+    def lost(*args, **kwargs):
+        original(*args, **kwargs)
+        raise RuntimeError("lost confirmation")
+
+    monkeypatch.setattr(port.mailbox, "submit", lost)
+    args = (review["id"], "revise", "工具已有", "寻找食物")
+    with pytest.raises(RuntimeError, match="lost confirmation"):
+        port.decide(*args)
+    recovered = ReviewPort(port.directory, now=lambda: clock[0])
+    result = recovered.decide(*args)
+    assert result["decision"] == "revise" and result["recovered"]
+    assert result["dispatched"] and not result["verified"]

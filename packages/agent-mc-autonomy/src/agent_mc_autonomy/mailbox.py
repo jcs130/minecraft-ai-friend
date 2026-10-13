@@ -49,9 +49,16 @@ class Mailbox:
         if kind == "goal" and (set(payload) != {"goal"} or not isinstance(payload["goal"], str)
                 or not payload["goal"].strip() or len(payload["goal"]) > 4000):
             raise ValueError("goal_must_contain_1_to_4000_characters")
-        if kind == "feedback" and (set(payload) != {"goal", "mode"} or not isinstance(payload["goal"], str)
+        if kind == "feedback" and (set(payload) not in ({"goal", "mode"}, {"goal", "mode", "revision_of"}) or not isinstance(payload["goal"], str)
                 or not payload["goal"].strip() or len(payload["goal"]) > 4000 or payload["mode"] not in {"insert", "replace"}):
             raise ValueError("feedback_requires_goal_and_explicit_insert_or_replace_mode")
+        if kind == "feedback" and "revision_of" in payload:
+            try:
+                uuid.UUID(payload["revision_of"])
+            except (ValueError, TypeError, AttributeError):
+                raise ValueError("revision_target_must_be_uuid") from None
+            if payload["mode"] != "insert":
+                raise ValueError("revision_preserves_native_work; use insert mode")
         if kind == "steps" and (set(payload) != {"steps", "queue"}
                 or not isinstance(payload["steps"], list) or not 1 <= len(payload["steps"]) <= 32
                 or not all(isinstance(step, dict) for step in payload["steps"])
@@ -124,11 +131,27 @@ class Mailbox:
 
     def activate_feedback(self, command):
         with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            revised = command["payload"].get("revision_of")
+            if revised:
+                row = db.execute("SELECT * FROM commands WHERE id=? AND state='planning'", (revised,)).fetchone()
+                if not row or json.loads(row["payload"]).get("mode") != "insert":
+                    db.execute("UPDATE commands SET state='delivered', receipt=? WHERE id=? AND state='dispatching'",
+                               ('{"failed":true,"reason":"revision_target_not_active","verified":false}', command["id"]))
+                    return False
+                # New UUID and immutable old payload/receipt preserve the audit.
+                # This changes one stage, not the paused user-goal stack or body.
+                receipt = json.loads(row["receipt"]) if row["receipt"] else {}
+                db.execute("UPDATE commands SET state='revised' WHERE id=?", (revised,))
+                db.execute("UPDATE commands SET state='planning', receipt=? WHERE id=? AND state='dispatching'",
+                           (json.dumps({"queue_policy_consumed": bool(receipt.get("queue_policy_consumed"))}), command["id"]))
+                return True
             state = "paused" if command["payload"]["mode"] == "insert" else "superseded"
             db.execute("UPDATE commands SET state=? WHERE state='planning'", (state,))
             if state == "superseded":
                 db.execute("UPDATE commands SET state='superseded' WHERE state='paused'")
             db.execute("UPDATE commands SET state='planning' WHERE id=? AND state='dispatching'", (command["id"],))
+            return True
 
     def consume_queue_policy(self, request_id):
         with self.connection() as db:

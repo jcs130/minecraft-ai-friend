@@ -359,6 +359,8 @@ class Controller:
         if name == "mc_do" and self.feedback_pending and result.get("execution") and not result.get("failed"):
             self.feedback_pending = False
             self.commands.consume_queue_policy(self.active_goal["id"])
+            self.active_goal["queue_policy_consumed"] = True
+            self.publish(current_goal=self.active_goal)
         self.inflight_request = None
         self.persist(inflight_request=None, uncertain=False)
         control = result.get("control") or {}
@@ -393,9 +395,14 @@ class Controller:
                     if not self.inflight_request:
                         await self.protocol("end_turn", id=self.turn)
                         self.turn = None
-            self.commands.activate_feedback(command)
+            if not self.commands.activate_feedback(command):
+                return True
+            revised = command["payload"].get("revision_of")
+            if revised:
+                self.action_owners = {key: command["id"] if owner == revised else owner
+                                     for key, owner in self.action_owners.items()}
             self.active_goal = self.commands.active_goal()
-            self.feedback_pending = True
+            self.feedback_pending = not self.active_goal.get("queue_policy_consumed")
             self.groups = []
             self.last_decision = 0
             self.publish(current_goal=self.active_goal)

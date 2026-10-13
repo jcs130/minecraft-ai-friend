@@ -116,9 +116,10 @@ class ReviewPort:
         with self.mailbox.connection() as db:
             row = db.execute("SELECT payload FROM commands WHERE id=?", (request_id,)).fetchone()
             payload = json.loads(row[0])
-        choice = {"decision": "insert", "goal": payload["goal"], "reason": "recovered_mailbox_receipt"}
+        decision = "revise" if payload.get("revision_of") else "insert"
+        choice = {"decision": decision, "goal": payload["goal"], "reason": "recovered_mailbox_receipt"}
         review.update(choice=choice, recovered=True, result={"acknowledged": True, "dispatched": True,
-                      "decision": "insert", "verified": False, "request_id": request_id,
+                      "decision": decision, "verified": False, "request_id": request_id,
                       "delivery": receipt["delivery"], "recovered": True})
         state["last_request_id"] = request_id
         state["last_decision"] = {**choice, "at": self.now(), "heartbeat_id": review["id"], "request_id": request_id}
@@ -226,9 +227,9 @@ class ReviewPort:
                     state["submitted_at"] = self.now()
 
     def decide(self, review_id, decision, reason="", goal=""):
-        if decision not in {"inspect", "continue", "insert"} or not all(isinstance(v, str) for v in (review_id, reason, goal)):
+        if decision not in {"inspect", "continue", "insert", "revise"} or not all(isinstance(v, str) for v in (review_id, reason, goal)):
             return {"is_error": True, "error": "invalid_review"}
-        if len(reason) > 600 or len(goal) > 2000 or (decision != "inspect" and not reason.strip()) or (decision == "insert" and not goal.strip()):
+        if len(reason) > 600 or len(goal) > 2000 or (decision != "inspect" and not reason.strip()) or (decision in {"insert", "revise"} and not goal.strip()):
             return {"is_error": True, "error": "reason_and_stage_goal_required"}
         current = review_observation(observation(self.directory), self.now())
         choice = {"decision": decision, "reason": reason.strip(), "goal": goal.strip()}
@@ -246,33 +247,43 @@ class ReviewPort:
                 return review["result"]
             if not current or current["session"] != review["session"] or not 0 <= self.now() - review["created_at"] <= 180:
                 return {"is_error": True, "error": "review_expired_or_game_unavailable"}
+            previous = self.mailbox.get(state.get("last_request_id", ""))
+            can_revise = bool(previous and previous["delivery"] == "planning"
+                and previous["request_id"] == current["evidence"]["current_goal"].get("id"))
+            stage = {"request_id": previous["request_id"], "delivery": previous["delivery"], "can_revise": can_revise} if previous else None
             if decision == "inspect":
-                return {"heartbeat_id": review_id, "next": "choose continue or insert; do not wait for audience approval",
+                return {"heartbeat_id": review_id, "stage_delivery": stage,
+                        "next": "Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending.",
                         "last_decision": state.get("last_decision"), **review["evidence"]}
             request_id = self.request_id(review_id)
             existing = self.mailbox.get(request_id)
             if not existing and (self.mailbox.intent_revision() != review["revision"] or current["intent"] != review["intent"]):
                 return {"is_error": True, "error": "intent_revision_changed"}
-            if decision == "insert" and not existing:
+            if decision in {"insert", "revise"} and not existing:
                 if current["evidence"]["phase"] != "running" or not current["evidence"]["connected"]:
                     return {"is_error": True, "error": "game_not_running"}
-                previous = self.mailbox.get(state.get("last_request_id", ""))
-                if previous and previous["delivery"] in {"queued", "dispatching", "planning", "paused"}:
+                if decision == "revise" and not can_revise:
+                    return {"is_error": True, "error": "no_active_review_stage"}
+                if decision == "insert" and previous and previous["delivery"] in {"queued", "dispatching", "planning", "paused"}:
                     return {"is_error": True, "error": "previous_intent_pending", "request_id": previous["request_id"],
-                            "next": "continue existing goal; explicit user feedback uses the regular intent mailbox"}
+                            "stage_delivery": stage, "next": "Use revise to adjust your delivered active stage; queued/paused stages must wait. Explicit user feedback uses the regular intent mailbox."}
                 if goal.strip() == (current["evidence"]["current_goal"].get("goal") or current["evidence"]["standing_goal"]):
                     return {"is_error": True, "error": "goal_already_active"}
             result = {"acknowledged": True, "dispatched": False, "decision": decision, "verified": False,
                       "reply": "已记录主脑判断，未新增任务；现在可简短说明情况和打算。"}
-            if decision == "insert":
+            if decision in {"insert", "revise"}:
                 try:
-                    receipt = self.mailbox.submit("feedback", {"goal": goal.strip(), "mode": "insert"}, request_id,
+                    payload = {"goal": goal.strip(), "mode": "insert"}
+                    if decision == "revise":
+                        payload["revision_of"] = previous["request_id"]
+                    receipt = self.mailbox.submit("feedback", payload, request_id,
                                                   expected_revision=review["revision"])
                 except ValueError as error:
                     return {"is_error": True, "error": str(error)}
                 state["last_request_id"] = request_id
                 result.update(dispatched=True, request_id=request_id, delivery=receipt["delivery"],
-                              reply="阶段目标已投递，原生队列在安全检查点插入；尚未证明完成。现在可简短说明打算。")
+                              reply=("阶段目标修订已投递，保留现有身体动作与先前用户目标；尚未证明完成。" if decision == "revise" else
+                                     "阶段目标已投递，原生队列在安全检查点插入；尚未证明完成。现在可简短说明打算。"))
             review.update(choice=choice, result=result)
             state["last_decision"] = {**choice, "at": self.now(), "heartbeat_id": review_id, "request_id": result.get("request_id")}
             return result
