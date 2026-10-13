@@ -70,6 +70,16 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.12: revisit unexecuted plans without requiring an unrelated event
+
+A text-only reply submits no game action and cannot end the standing goal. The
+controller keeps it in history and revisits fresh facts after the configured idle
+interval, backing off to at most five minutes for further unactioned replies.
+The next request says what was not dispatched; status and strategic reviews expose
+the reply count and scheduled delay. Native work still takes precedence. New user
+goals, feedback and urgent body events bypass the planning pause; stop remains
+immediate. No game command is inferred or fabricated from the plain text.
+
 ### 0.1.11: keep actionable surroundings in planner and strategic reviews
 
 Nearby life, terrain and visible structures precede lengthy task geometry in the

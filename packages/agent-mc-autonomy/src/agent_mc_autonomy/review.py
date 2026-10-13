@@ -63,7 +63,9 @@ def review_observation(status, now):
                 "fact_originals": {part["key"]: part["original"] for part in snapshot.get("facts", {}).get("parts", [])
                                    if part.get("key") in useful and part.get("original")},
                 "planner_error": snapshot.get("planner_error"),
-                "planner_failures": snapshot.get("planner_failures", 0), "runtime_error": snapshot.get("error"), "read_activity": reads}
+                "planner_failures": snapshot.get("planner_failures", 0), "runtime_error": snapshot.get("error"), "read_activity": reads,
+                "unactioned_replies": snapshot.get("unactioned_replies", 0),
+                "planner_retry_seconds": snapshot.get("planner_retry_seconds", 0)}
     # Clocks, sight direction, repeated observation task IDs and positional chatter are not urgent changes.
     material = {key: useful[key] for key in ("body", "gear", "foodReserve")}
     terminal = useful["lastTask"]

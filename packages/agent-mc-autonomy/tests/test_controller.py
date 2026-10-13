@@ -59,6 +59,8 @@ class Bridge:
             return {"structuredContent": value}
         if name == "mc_help":
             return {"structuredContent": {"protocol": "agent-mc/v1", "text": "Read the next section"}}
+        if name == "mc_queue":
+            return packed({"text": "Idle"})
         raise AssertionError(name)
 
 
@@ -124,7 +126,7 @@ def test_read_activity_survives_pruned_history_until_a_body_action_is_accepted(f
     assert "read_activity" not in seen[-1]
 
 
-def test_plain_plan_is_retained_without_dispatching_or_forcing_another_turn(framework_module, tmp_path, run_async):
+def test_plain_plan_is_retained_and_revisited_with_bounded_backoff(framework_module, tmp_path, run_async):
     seen = []
     plan = "已有工作台和工具，接下来寻找食物并准备庇护所。"
 
@@ -135,7 +137,8 @@ def test_plain_plan_is_retained_without_dispatching_or_forcing_another_turn(fram
     module, bridge, controller = setup(framework_module, tmp_path, decide)
     tools = module.model_tools(bridge.tools)
     run_async(controller.turn_once("survive", "prefix", tools))
-    assert not controller.continuation_needed
+    assert controller.continuation_needed
+    assert controller.settings.idle_decision_seconds - 1 <= controller.planner_retry_at - module.time.monotonic() <= 300
     assert not controller.pending
     run_async(controller.turn_once("survive", "prefix", tools))
     assert {"role": "assistant", "content": plan} in seen[-1]
@@ -144,8 +147,66 @@ def test_plain_plan_is_retained_without_dispatching_or_forcing_another_turn(fram
     for _ in range(10):
         run_async(controller.turn_once("survive", "prefix", tools))
     assert len(controller.groups) == 8
+    assert 299 <= controller.planner_retry_at - module.time.monotonic() <= 300
     journal = [json.loads(line) for line in (tmp_path / "decisions.jsonl").read_text(encoding="utf-8").splitlines()]
     assert all(row["response"]["content"] == plan for row in journal)
+
+    async def act(*_):
+        return choose()
+
+    controller.decide = act
+    run_async(controller.turn_once("survive", "prefix", tools))
+    assert controller.unactioned_replies == 0 and controller.planner_retry_at == 0
+
+
+@pytest.mark.parametrize("interrupt", ["none", "user_goal", "user_feedback", "danger", "stop"])
+def test_unacted_plan_timer_keeps_event_and_user_priority(framework_module, tmp_path, run_async, monkeypatch, interrupt):
+    clock, decisions, stopped = [1000], [], [False]
+
+    async def decide(messages, _):
+        decisions.append((clock[0], messages[1]["content"]))
+        return {"content": "Next I will gather food.", "tool_calls": []}
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide, lambda: stopped[0])
+    controller.settings = dataclasses.replace(controller.settings, min_decision_seconds=1, idle_decision_seconds=60)
+    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    original_sleep = asyncio.sleep
+
+    async def tick(_):
+        clock[0] += 1
+        stopped[0] = clock[0] >= (1005 if interrupt == "stop" else 1100)
+        await original_sleep(0)
+
+    monkeypatch.setattr(module.asyncio, "sleep", tick)
+    if interrupt in {"user_goal", "user_feedback"}:
+        from agent_mc_autonomy.mailbox import Mailbox
+        controller.commands = Mailbox(tmp_path)
+
+        def feedback():
+            if clock[0] == 1004:
+                kind = "feedback" if interrupt == "user_feedback" else "goal"
+                payload = {"goal": "Return to shelter", **({"mode": "insert"} if kind == "feedback" else {})}
+                controller.commands.submit(kind, payload, "a6e8b876-9720-4a84-a049-74f3fb4e3b28")
+
+        bridge.on_poll = feedback
+    elif interrupt == "danger":
+        def danger():
+            if clock[0] == 1004:
+                bridge.event_pages.append([{"cursor": 1, "trigger": "interrupt", "text": "Health dropped"}])
+
+        bridge.on_poll = danger
+    run_async(controller.run("survive"))
+    assert decisions[0][0] == 1000
+    if interrupt == "stop":
+        assert len(decisions) == 1
+    elif interrupt == "none":
+        assert [time for time, _ in decisions] == [1000, 1060]
+    else:
+        assert 1004 <= decisions[1][0] < 1060
+        if interrupt in {"user_goal", "user_feedback"}:
+            assert "Return to shelter" in decisions[1][1]
+    assert not any(name == "mc_do" for name, _, _ in bridge.calls)
+    assert bridge.closed
 
 
 def test_rejected_body_action_does_not_erase_read_activity(framework_module, tmp_path, run_async):

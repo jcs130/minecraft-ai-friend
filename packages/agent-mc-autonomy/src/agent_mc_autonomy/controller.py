@@ -198,6 +198,7 @@ class Controller:
         self.tool_failure = None
         self.rejected_calls = {}
         self.invalid_tool_calls = 0
+        self.unactioned_replies = 0
         self.read_activity = {}
         self.state_path = data / "host-state.json"
         self.fast_policy = fast_policy or FastPolicy(settings.fast)
@@ -404,18 +405,24 @@ class Controller:
                                      for key, owner in self.action_owners.items()}
             self.active_goal = self.commands.active_goal()
             self.feedback_pending = not self.active_goal.get("queue_policy_consumed")
+            self.planner_retry_at = 0.0
+            self.unactioned_replies = 0
+            self.planner_notice = None
             self.groups = []
             self.last_decision = 0
-            self.publish(current_goal=self.active_goal)
+            self.publish(current_goal=self.active_goal, unactioned_replies=0, planner_retry_seconds=0)
             return True
         if command["kind"] == "goal":
             if self.decide is None:
                 self.commands.report_goal(command["id"], {"outcome": "blocked", "reason": "planner_unavailable", "verified": False})
             else:
                 self.active_goal = {"id": command["id"], **command["payload"]}
+                self.planner_retry_at = 0.0
+                self.unactioned_replies = 0
+                self.planner_notice = None
                 self.groups = []  # Keep original receipts on disk; discard old-goal context.
                 self.last_decision = 0
-                self.publish(current_goal=self.active_goal)
+                self.publish(current_goal=self.active_goal, unactioned_replies=0, planner_retry_seconds=0)
             return True
         self.turn = str(uuid.uuid4())
         await self.protocol("begin_turn", id=self.turn)
@@ -511,6 +518,8 @@ class Controller:
             elif result.get("execution") and (name == "mc_do" or "act" in next(
                     (t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])):
                 self.read_activity.clear()
+                self.unactioned_replies = 0
+                self.publish(unactioned_replies=0)
             self.publish(read_activity=dict(self.read_activity))
         if result.get("failed"):
             self.tool_failure = failure_context(self.bridge.tools, name, arguments, result)
@@ -627,7 +636,17 @@ class Controller:
                     # unchanged world the same request on every idle wakeup.
                     self.groups.append([{"role": "assistant", "content": response.get("content")}])
                     self.groups = self.groups[-8:]
-                    self.planner_notice = "The previous reply had no tool calls; no game action was dispatched from it. Use the current native queue and facts to decide whether to act or keep waiting."
+                    # Text is not a native task or a completed standing goal.
+                    # Revisit it even when an idle world never emits a change,
+                    # with a growing pause instead of an inference busy-loop.
+                    if model_status.get("route") != "unavailable":
+                        self.unactioned_replies += 1
+                        delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
+                                    * 2 ** min(6, self.unactioned_replies - 1))
+                        self.planner_retry_at = time.monotonic() + delay
+                        self.continuation_needed = True
+                        self.publish(planner_retry_seconds=delay, unactioned_replies=self.unactioned_replies)
+                    self.planner_notice = f"{self.unactioned_replies} replies without a subsequent accepted game action. The previous reply had no tool calls; no game action was dispatched from it. The standing goal remains active. Use current facts and receipts to choose useful next work; if waiting, explain the condition preventing action."
                     return
                 try:
                     prepared = self.prepare_calls(calls, tools)
@@ -705,6 +724,10 @@ class Controller:
                 event_wake, event_urgent, more = await self.events()
                 wake |= event_wake
                 urgent |= event_urgent
+                if event_urgent:
+                    # Fresh danger may interrupt a planning pause. Ordinary
+                    # observation completions must not bypass its backoff.
+                    self.planner_retry_at = 0.0
                 if more:
                     await asyncio.sleep(0)
                     continue
