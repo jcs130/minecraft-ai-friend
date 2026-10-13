@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { contractOf, recentWithin, boundedHistory, readArtifact, projectHistory } from './context.mjs'
+import { contractOf, recentWithin, boundedHistory, readArtifact, projectHistory, replanCheckpoint } from './context.mjs'
 
 test('learned contracts preserve actual schemas and discard unrelated world text', () => {
   const schema = { type: 'object', required: ['expectedSnbt'] }
@@ -30,6 +30,10 @@ test('large native artifacts can be read by range with exact Unicode, null and c
   assert.equal(readArtifact(artifacts, { handle: 'full', path: ['slots', 0, 'snbt'] }), '{components:{}}')
   assert.equal(readArtifact(artifacts, { handle: 'full', path: ['__proto__'] }).code, 'artifact_path_invalid')
   assert.equal(readArtifact(artifacts, { handle: 'full', path: ['absent'] }).code, 'artifact_field_not_found')
+  const fields = readArtifact(artifacts, { handle: 'full', offset: 1, limit: 1 })
+  assert.equal(fields.type, 'object'); assert.deepEqual(fields.data, { slots: [{ snbt: '{components:{}}' }, null] })
+  assert.equal(fields.total, 2); assert.equal(fields.nextOffset, null)
+  assert.equal(readArtifact(artifacts, { handle: 'full', path: ['slots', 1], offset: 0, limit: 1 }).code, 'artifact_range_requires_collection')
 })
 
 test('rejected model examples are compacted in context without erasing source history or successful receipts', () => {
@@ -48,4 +52,22 @@ test('new task context omits stale executable examples but keeps its evidence su
     { role: 'assistant', content: 'new action' }, { role: 'user', content: 'fresh result' }]
   const before = JSON.stringify(history)
   assert.deepEqual(projectHistory(history), history.slice(2)); assert.equal(JSON.stringify(history), before)
+})
+
+test('stagnation resets the working view with evidence, without erasing history or choosing gameplay', () => {
+  const record = { id: 'task', spec: { startedAtRound: 30, objective: 'make a tool', criteria: { type: 'owned_item' } },
+    metrics: { noProgressRounds: 8 }, events: [{ kind: 'tool_result', round: 37, operation: 'body.move', ok: false, code: 'blocked' }] }
+  assert.equal(replanCheckpoint(record, 38, 35), null)
+  const checkpoint = replanCheckpoint(record, 38)
+  assert.equal(checkpoint.recent[0].code, 'blocked'); assert.deepEqual(checkpoint.criteria, record.spec.criteria)
+  const history = [{ role: 'user', content: 'HOST TASK BOUNDARY: original' }, { role: 'assistant', content: 'old action' },
+    { role: 'user', content: 'HOST REPLAN BOUNDARY: ' + JSON.stringify(checkpoint) }]
+  assert.deepEqual(projectHistory(history), history.slice(2)); assert.equal(history.length, 3)
+  const receipts = [{ role: 'assistant', content: 'stale action' },
+    { role: 'user', content: 'TOOL RESULT host_act: {"menu":"shop","slots":[{"slot":2,"name":"wood"}]}' }]
+  const retained = JSON.stringify(receipts)
+  assert.deepEqual(replanCheckpoint(record, 38, 30, receipts).recentToolEvidence, [receipts[1].content])
+  assert.equal(JSON.stringify(receipts), retained)
+  record.metrics.noProgressRounds = 1
+  assert.equal(replanCheckpoint(record, 46, 38), null)
 })

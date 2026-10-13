@@ -1,6 +1,6 @@
 # 独立 Minecraft 核心的原生模组服接入
 
-2026-10-13：合入 `main@edd0179be7bb8a24f9011f50c1163175fd428326` 的 `agent-mc-world 0.4.0`，在 `experiment/agent-society-1.21.1` 添加可选宿主包 `@my-agent-world/agent-mc-host 0.1.0`。当前安装在 `E:\QiandengJiSocietyLab\integrations\agent-mc-world\v7-task-feedback-20261013`，原v4/v5/v6包保留。最新包补齐普通寻路失败的实际停点回执，并导出任务验收和监控模块；没有替换现役 Agent、模型、记忆、账本或服务器 JAR，没有生产重启。
+2026-10-13：合入 `main@edd0179be7bb8a24f9011f50c1163175fd428326` 的 `agent-mc-world 0.4.0`，在 `experiment/agent-society-1.21.1` 添加可选宿主包 `@my-agent-world/agent-mc-host 0.1.0`。当前安装在 `E:\QiandengJiSocietyLab\integrations\agent-mc-world\v10-task-context-20261013`，原v4至v9包保留。最新包另导出真实动作位移反馈，任务监控区分接口失败和没有位移；宿主从原始回执检索历史产物经验。电脑重启后通过原登记守护恢复主服务和基岩桥，配置、35个JAR、身份及原账本保持；没有为了升级此SDK重启游戏服务。
 
 任务成功率、模型轮次、纠错和停滞反馈见 [任务评测与迭代](MY-AGENT-WORLD-TASK-EVALUATION.md)。`TaskMonitor` 是宿主通用接口，按本人实际快照验收，失败和取消均保留；没有把模型自评当作成功。
 

@@ -61,7 +61,7 @@ export function evaluateTask(criteria, observations, { bodyId, now = Date.now(),
 }
 
 function summarize(records) {
-  const groups = new Map(), failureCounts = new Map()
+  const groups = new Map(), failureCounts = new Map(), ineffectiveCounts = new Map()
   for (const record of records) {
     const revisions = [...new Set(record.events.filter(e => e.kind === 'harness_revision').map(e => e.harnessVersion))]
     const version = revisions.length ? 'mixed:' + hash([record.spec.harnessVersion, ...revisions]) : record.spec.harnessVersion
@@ -71,6 +71,10 @@ function summarize(records) {
     for (const event of record.events) if (event.ok === false && event.kind !== 'backend_call') {
       const key = (event.operation || event.kind) + ':' + (event.code || 'unspecified')
       failureCounts.set(key, (failureCounts.get(key) || 0) + 1)
+    }
+    for (const event of record.events) if (event.kind === 'tool_result' && event.effectFeedback?.noDisplacement === true) {
+      const key = event.operation + ':no_displacement_observed'
+      ineffectiveCounts.set(key, (ineffectiveCounts.get(key) || 0) + 1)
     }
   }
   const aggregate = rows => {
@@ -82,11 +86,14 @@ function summarize(records) {
       successRate: completed ? succeeded / completed : null, evaluableSuccessRate: succeeded + failed ? succeeded / (succeeded + failed) : null,
       successfulModelCallsMedian: rounds.length ? rounds[Math.floor((rounds.length - 1) / 2)] : null,
       successfulModelCallsP95: rounds.length ? rounds[Math.ceil(rounds.length * 0.95) - 1] : null,
-      totalModelCalls: rows.reduce((n, r) => n + r.metrics.modelCalls, 0), backendCalls: rows.reduce((n, r) => n + r.metrics.backendCalls, 0) }
+      totalModelCalls: rows.reduce((n, r) => n + r.metrics.modelCalls, 0), backendCalls: rows.reduce((n, r) => n + r.metrics.backendCalls, 0),
+      noDisplacementRounds: rows.reduce((n, r) => n + (r.metrics.noDisplacementRounds || 0), 0),
+      effectObservedRounds: rows.reduce((n, r) => n + (r.metrics.effectObservedRounds || 0), 0) }
   }
   return { schemaVersion: 1, ...aggregate(records), denominator: 'all closed attempts, including inconclusive and cancelled; running shown separately',
     groups: [...groups.values()].map(({ records: rows, ...group }) => ({ ...group, ...aggregate(rows), initialStateFingerprints: [...new Set(rows.map(r => r.spec.initialStateFingerprint))] })),
     failureHotspots: [...failureCounts].sort((a, b) => b[1] - a[1]).map(([signature, count]) => ({ signature, count })),
+    ineffectiveHotspots: [...ineffectiveCounts].sort((a, b) => b[1] - a[1]).map(([signature, count]) => ({ signature, count })),
     iterationCandidates: [...failureCounts].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([signature, count]) => ({ signature, count, ...improvement(signature), applied: false })),
     comparisonNote: 'Different criteria, scenario versions or initial conditions are not a controlled before/after comparison. Never loosen a verifier to improve the rate.' }
 }
@@ -161,7 +168,9 @@ export class TaskMonitor {
       failedResponseRounds: new Set(failures.map(f => f.round)).size, backendCalls: record.events.filter(e => e.kind === 'backend_call').length,
       nativeSubmissions: record.events.filter(e => e.kind === 'backend_call' && e.name === 'mc_do').length,
       elapsedMs: this.clock() - Date.parse(record.startedAt), noProgressRounds: counters.round - lastProgressRound,
-      progressAlert: counters.round - lastProgressRound >= 8 ? 'Review the plan: successful reads/turning do not imply task progress. Inspect actual preconditions, failures and alternative available operations.' : null, recovery }
+      progressAlert: counters.round - lastProgressRound >= 8 ? 'Review the plan: successful reads/turning do not imply task progress. Inspect actual preconditions, failures and alternative available operations.' : null,
+      noDisplacementRounds: new Set(record.events.filter(e => e.kind === 'tool_result' && e.effectFeedback?.noDisplacement === true).map(e => e.round)).size,
+      effectObservedRounds: new Set(record.events.filter(e => e.kind === 'tool_result' && e.effectFeedback?.available === true).map(e => e.round)).size, recovery }
     this.append({ id, kind: 'progress', verification, metrics, progressFingerprint: fingerprint, lastProgressRound }); return this.get(id)
   }
   finish(id, { observations, counters, reason, cancelled = false, outcomeUnknown = false }) {

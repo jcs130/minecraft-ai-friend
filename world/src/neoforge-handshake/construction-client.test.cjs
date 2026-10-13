@@ -21,7 +21,7 @@ function fixture () {
         if (consume) state.slots[36] = { id: 'create:white_sail', count: 1, snbt: '{id:"create:white_sail",count:1}' }
       }
     } } })
-  const world = { lookAtBlock: async block => ({ ok: true, position: block.position,
+  const world = { lookAtBlock: async block => ({ ok: true, position: block.position, hit: { face: 1 },
     block: block.position.y === 64 ? { id: 'minecraft:stone', properties: {} } : { id: 'create:white_sail', properties: { facing: 'south' } } }) }
   const menu = { current: () => state }
   const client = attachConstructionClient(bot, menu, world)
@@ -87,6 +87,38 @@ test('successful native placement requires both world and consumption evidence',
   const f = fixture(), result = await f.client.place(f.args)
   assert.equal(result.ok, true); assert.equal(result.nativePlacementVerified, true)
   assert.equal(result.itemCountBefore, 2); assert.equal(result.itemCountAfter, 1)
+  assert.equal(f.packets.filter(p => p.name === 'block_place').length, 1)
+})
+
+test('a visible support side does not authorize its hidden top face', async () => {
+  const f = fixture(), original = f.world.lookAtBlock
+  f.world.lookAtBlock = async block => ({ ...await original(block), hit: { face: 3 } })
+  const result = await f.client.place(f.args)
+  assert.equal(result.code, 'native_placement_face_not_visible'); assert.equal(result.outcomeKnown, true)
+  assert.equal(result.visibleFace, 3); assert.equal(result.requestedFace, 1)
+  assert.equal(f.state.slots[36].count, 2)
+  assert.equal(f.packets.filter(p => p.name === 'block_place').length, 0)
+})
+
+test('placement verifies another visible surface after the centre is blocked without a second use', async () => {
+  const f = fixture(), original = f.world.lookAtBlock, aims = []
+  f.world.lookAtBlock = async (block, offset) => {
+    if (block.position.y === 64) return original(block)
+    aims.push(offset)
+    return offset[1] === 0.1 ? original(block) : { ok: false, code: 'different_visible_block' }
+  }
+  const result = await f.client.place(f.args)
+  assert.equal(result.ok, true); assert.equal(result.nativePlacementVerified, true)
+  assert.deepEqual(aims, [[0.5, 0.5, 0.5], [0.5, 0.1, 0.5]])
+  assert.equal(f.packets.filter(p => p.name === 'block_place').length, 1)
+})
+
+test('the same native block type at a different position cannot verify placement', async () => {
+  const f = fixture(), original = f.world.lookAtBlock
+  f.world.lookAtBlock = async block => block.position.y === 64 ? original(block) :
+    { ...await original(block), position: block.position.offset(1, 0, 0) }
+  const result = await f.client.place(f.args)
+  assert.equal(result.ok, false); assert.equal(result.outcomeUnknown, true)
   assert.equal(f.packets.filter(p => p.name === 'block_place').length, 1)
 })
 test('apparent world success without consumption is unknown and never repeated', async () => {

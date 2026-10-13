@@ -49,5 +49,10 @@ export function modelView(value, artifact, path = []) {
     if (value.food) item.food = modelView(value.food, artifact, [...path, 'food'])
     return item
   }
-  return Object.fromEntries(Object.entries(value).filter(([key]) => !rendering.has(key)).map(([key, entry]) => [key, modelView(entry, artifact, [...path, key])]))
+  const projected = Object.fromEntries(Object.entries(value).filter(([key]) => !rendering.has(key)).map(([key, entry]) => [key, modelView(entry, artifact, [...path, key])]))
+  if (value.source === 'server_first_hit_rays_and_tracked_visible_entities') projected.observationCoverage = {
+    orientationIndependent: true, rayCount: 48, complete: false,
+    note: '以眼睛位置为起点的全方向固定48条首命中射线，受方块遮挡；不随yaw/pitch改变。同地点反复转头再观察不会扫到墙后的物体。可见方块坐标是方块本身，不是可以直接站立的空气坐标。'
+  }
+  return projected
 }

@@ -59,6 +59,10 @@ node agent-mc-host/task-report.mjs --directory D:/agents/kirito/private/task-mon
 
 另外，库存/装备、整格位置、生命/饥饿、公会进度连续8轮不变时，产生 `noProgressRounds` 和 `progressAlert`，给模型重新规划的反馈；只转头和重复读取不清掉提醒。该提醒不证明玩家绝对没做有用的事，也不会自动取消动作。格式错误的纠正统计到下一次合法成功工具回执，其他操作错误统计同操作恢复。
 
+v8 增加 `describeActionEffect({operation,args,before,after,receipt})`：比较同身体、同维度的动作前后原生坐标。只对明确请求位移的 `body.move` 和移动/跳跃按键标记 `noDisplacement`；不把原地转头、潜行或点菜单误判成失败。小于0.05格的净位移记为没有可测位移，不代表过程中绝对静止（可能走出后又回来）。跨维度、不同身体、陈旧/缺失末状态或未知动作明确不可判断。它不会改原动作回执、自动重试或判任务完成。
+
+宿主将反馈放入 `tool_result.effectFeedback`，监控另列 `noDisplacementRounds`、`effectObservedRounds`、`ineffectiveHotspots`，与接口失败分开。旧事件没有该字段时视为未采集，不倒填成“已测且正常”；比较不同版本时应同时看覆盖轮数。
+
 ## 接入现有桐人宿主
 
 有限宿主 `world/src/agent-mc-runner/trial.mjs` 已接入该模块。私有配置可加入：
@@ -77,6 +81,10 @@ node agent-mc-host/task-report.mjs --directory D:/agents/kirito/private/task-mon
 
 给模型的菜单视图直接保留槽位、名称和说明/价格，完整SNBT及渲染数据保存在带哈希的原始制品。新任务上下文从任务边界开始，带入前次验收摘要和失败热点，避免照抄旧任务的过期指令；完整历史、个人记忆及原始账本没有删除。
 
+有限宿主还会从本人原始 `mc_do`/终态回执提取最多16项历史产物经验，包含原操作、菜单上下文、库存增减、时间及原 `actionId`。只接受同UUID、已确认的成功终态；这是动作期间观察到的变化，不证明唯一因果，更不证明现在仍有那些材料。模型需重新读当前库存/菜单，不能重放历史ID。
+
+持续停滞时，每8轮最多建立一次 `HOST REPLAN BOUNDARY` 工作上下文，携带原任务标准、最近12条操作结果和实际位移，并保留最近3条真实工具回执（包括菜单与制品引用）；原对话和制品完整保留。H轮实测发现只保留操作名会丢失刚打开的商店内容，最终版已补回这些证据。这不增加额外模型请求、不自动选游戏路线、不限制工具，只避免重复的失败动作示例占满当前计划。`context_replan` 事件可审计。`body.observe` 的模型视图明确说明：固定全方向48条首命中射线不随转头改变，受遮挡且不是完整地图；可见方块坐标不是可站立位置。
+
 原试玩健康检查在启用任务时增加3项：任务监控健康、当前尝试存在、任务成本未超过原累计账本。它与原有进程心跳/看门狗共同覆盖任务和进程状态；未启用任务时保持原10项检查。
 
 ## 迭代闭环
@@ -88,4 +96,12 @@ node agent-mc-host/task-report.mjs --directory D:/agents/kirito/private/task-mon
 
 不同初始资源、地形、任务条件或模型配置的结果不能直接计算“优化了百分之多少”。中途改宿主版本会标记为混合版本，不冒充完整单版本基准。候选建议是供开发/运营 Agent 使用的结构化输入，不会自动改验收标准、替换生产代码、改变权限或清除失败记录。
 
+宿主版本指纹也包含实际模型、JSON模式、推理开关、推理/输出长度及模型桥源码，避免改变模型配置后与旧样本混成同版本。CodingPlan桥可显式配置 `enableThinking`、`thinkingBudget`、`maxOutputTokens`；默认保持原非思考模式，实验配置单独启用。每次请求把这些参数、实际usage和是否收到推理字段写入原调用账本；不保存/显示推理正文，不更换模型、不自动降级或重投失败请求。参数依据[百炼深度思考文档](https://help.aliyun.com/zh/model-studio/deep-thinking)和[官方Coding Plan示例](https://help.aliyun.com/zh/model-studio/qwen-code)核对，qwen3.7-plus同时支持[JSON输出](https://help.aliyun.com/zh/model-studio/qwen-structured-output)。
+
+最终v10实验还把实际SDK安装清单中的核心归档和原生源码哈希加入宿主指纹，SDK升级不会与旧版混算。大制品的分页支持数组、Unicode文本和对象字段；参数拒绝后的位移报告也不会因非数组按键参数再次崩溃。
+
+本次框架复盘还修正了原生放置验证：看到支撑方块不等于看到了指定点击面。`world.place` 在消费物品前核对实际命中面；不匹配返回 `native_placement_face_not_visible`、实际面和原始观察，保持已知失败。默认放置后最多7次在不同表面取原生射线证据，必须确认目标绝对坐标、真实方块ID及物品消耗；薄模组方块的显式 `verificationOffset` 保留。不会靠代理材质断言成功，也不重发放置包。旧 `kirito-486` 已消耗工作台但被遮挡的回执继续保留unknown；仅在原进程退出、本人三次稳定只读状态、控制台只读方块检查确认后审计放行独立新动作。这份人工核对不计为Agent自主验收成功。
+
 线上实测及缺口持续记在 [CORE-LIVE-TRIAL](MY-AGENT-WORLD-CORE-LIVE-TRIAL.md)。当前仍是小样本、有界测试；报告支持后续批量场景和回归评测，不把一次成功当作全模组可自主运营的证明。
+
+电脑重启后先核对原进程已退出、原生账本没有新未决动作、原身份/目录和累计计数保持，再启动原登记的游戏守护。生产基准内的守护 `runId` 会随合法新进程改变：应先保存旧基准与冷态健康记录，核验配置、JAR和账本前缀，再记录新旧owner映射；不能为了健康检查通过而盲目覆盖基准。已结束的任务用新ID继续，不能重开原任务抹去失败。

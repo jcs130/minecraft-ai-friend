@@ -144,7 +144,7 @@ function attachConstructionClient (bot, menu, world, native) {
         hotbarSlot: args.hotbarSlot, itemId: args.itemId, expectedItemSnbt: held.snbt,
         expectedBlockId: args.blockId, referenceBlock: block, face: new Vec3(args.face.x, args.face.y, args.face.z),
         expectedReference: { id: args.referenceBlockId, properties: args.referenceProperties },
-        verificationOffset: args.verificationOffset ?? [0.5, 0.5, 0.5],
+        verificationOffset: args.verificationOffset,
         onDispatch: () => { dispatched = true }
       })
       const verified = value.ok === true && value.itemCountAfter === value.itemCountBefore - 1

@@ -4,6 +4,23 @@ const fs = require('node:fs'), os = require('node:os'), path = require('node:pat
 const { CodingPlanBridge } = require('./codingplan-bridge.cjs')
 const config = () => ({ journalPath: path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'maw-neko-model-')), 'calls.jsonl'), apiKey: 'unit-test-only', maxCalls: 1, minIntervalMs: 0 })
 
+test('optional reasoning keeps model identity and logs profile/usage without exposing hidden reasoning', async () => {
+  const cfg = config()
+  assert.equal(new CodingPlanBridge(config()).status().enableThinking, false)
+  assert.throws(() => new CodingPlanBridge({ ...cfg, enableThinking: true, maxOutputTokens: 1400 }), /CONFIG_INVALID/)
+  const bridge = new CodingPlanBridge({ ...cfg, enableThinking: true, thinkingBudget: 2048, responseFormat: 'json_object', fetchImpl: async (_url, options) => {
+    const pack = JSON.parse(options.body)
+    assert.equal(pack.enable_thinking, true); assert.equal(pack.thinking_budget, 2048)
+    assert.equal(pack.max_tokens, 8192); assert.equal(pack.model, 'qwen3.7-plus')
+    return new Response(JSON.stringify({ model: 'qwen3.7-plus', usage: { total_tokens: 20 },
+      choices: [{ finish_reason: 'stop', message: { content: '{"tool":"mc_state","arguments":{}}', reasoning_content: 'private internal reasoning' } }] }))
+  } })
+  assert.equal(JSON.parse(await bridge.request([], 'Return JSON')).tool, 'mc_state')
+  const journal = fs.readFileSync(cfg.journalPath, 'utf8'), rows = journal.trim().split('\n').map(JSON.parse)
+  assert.equal(rows[0].enableThinking, true); assert.equal(rows[1].reasoningPresent, true)
+  assert.doesNotMatch(journal, /private internal reasoning/)
+})
+
 test('structured response mode is explicit, sent unchanged and durably recorded without changing the default', async () => {
   const cfg = config()
   assert.equal(new CodingPlanBridge(config()).status().responseFormat, 'text')

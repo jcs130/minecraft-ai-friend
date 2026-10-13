@@ -16,6 +16,22 @@ function fixture(t) {
   t.after(() => { monitor.close(); assert.ok(path.resolve(directory).startsWith(path.resolve(os.tmpdir()) + path.sep + 'maw-task-test-')); fs.rmSync(directory, { recursive: true, force: true }) })
   return { directory, monitor }
 }
+
+test('no-displacement feedback is retained independently of action failure and old samples remain unmeasured', t => {
+  const { directory, monitor } = fixture(t)
+  monitor.start(spec())
+  monitor.record(spec().id, { kind: 'tool_result', round: 207, operation: 'body.input', ok: true,
+    effectFeedback: { available: true, noDisplacement: true } })
+  monitor.record(spec().id, { kind: 'tool_result', round: 208, operation: 'body.input', ok: true,
+    effectFeedback: { available: true, noDisplacement: false } })
+  monitor.record(spec().id, { kind: 'tool_result', round: 209, operation: 'body.look', ok: true })
+  const record = monitor.finish(spec().id, { observations: { body: body() }, counters: { calls: 209, round: 209 }, reason: 'test' })
+  assert.equal(record.metrics.failedResponseRounds, 0)
+  assert.equal(record.metrics.noDisplacementRounds, 1); assert.equal(record.metrics.effectObservedRounds, 2)
+  const report = new TaskMonitor({ directory, readOnly: true }).report()
+  assert.equal(report.noDisplacementRounds, 1)
+  assert.equal(report.ineffectiveHotspots[0].signature, 'body.input:no_displacement_observed')
+})
 test('independent verifier rejects model claims, stale/foreign bodies and unavailable inventory', () => {
   assert.equal(evaluateTask(criteria, { body: body() }, { bodyId, now }).verified, false)
   assert.equal(evaluateTask(criteria, { body: body(true) }, { bodyId, now }).verified, true)

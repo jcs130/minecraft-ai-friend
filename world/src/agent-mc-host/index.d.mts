@@ -52,3 +52,5 @@ export class TaskMonitor {
   report(): Record<string, any>; close(): void;
 }
 export function evaluateTask(criteria: TaskCriterion, observations: { body: any; society?: any }, options: { bodyId: string; now?: number; maxAgeMs?: number }): Record<string, any>;
+/** Displacement evidence, not action replay or a task-success verdict. */
+export function describeActionEffect(options: { operation: string; args?: Record<string, any>; before: any; after: any; receipt: any; now?: number }): Record<string, any>;

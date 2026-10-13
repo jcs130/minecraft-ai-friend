@@ -18,3 +18,13 @@ test('lore projection handles escaped SNBT strings, Unicode and malformed lists 
   assert.deepEqual(loreFromSnbt('{"minecraft:lore":[unquoted]}'), [])
   assert.deepEqual(loreFromSnbt('{other:1}'), [])
 })
+
+test('fixed server rays explain observation coverage without inventing unseen blocks', () => {
+  const observed = { source: 'server_first_hit_rays_and_tracked_visible_entities', blocks: [{ id: 'minecraft:dirt', position: { x: 0, y: 64, z: 0 } }], complete: false }
+  const before = JSON.stringify(observed), view = modelView(observed, 'evidence')
+  assert.equal(view.observationCoverage.orientationIndependent, true)
+  assert.equal(view.observationCoverage.complete, false)
+  assert.deepEqual(view.blocks, observed.blocks)
+  assert.equal(JSON.stringify(observed), before)
+  assert.equal(modelView({ source: 'different_provider' }, 'evidence').observationCoverage, undefined)
+})

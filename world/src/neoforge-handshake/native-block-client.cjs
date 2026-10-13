@@ -14,17 +14,20 @@ const direction = face => {
 }
 
 const sequenceByBot = new WeakMap()
+const surfaceOffsets = [[0.5, 0.5, 0.5], [0.5, 0.1, 0.5], [0.5, 0.9, 0.5],
+  [0.1, 0.5, 0.5], [0.9, 0.5, 0.5], [0.5, 0.5, 0.1], [0.5, 0.5, 0.9]]
+const samePosition = (a, b) => a && b && ['x', 'y', 'z'].every(key => a[key] === b[key])
 
 // Mineflayer's vanilla heldItem may be undefined for a real NeoForge item.
 // Trust the server's private inventory snapshot, then send vanilla use-on-block
 // under this player's connection. Never retry an unknown placement automatically.
 async function placeNativeHeld (bot, menu, world, { hotbarSlot, itemId, referenceBlock, face, expectedBlockId,
-  verificationOffset = [0.5, 0.5, 0.5], expectedItemSnbt, expectedReference, onDispatch = () => {} }) {
+  verificationOffset, expectedItemSnbt, expectedReference, onDispatch = () => {} }) {
   if (!Number.isInteger(hotbarSlot) || hotbarSlot < 0 || hotbarSlot > 8) throw new Error('INVALID_HOTBAR_SLOT')
   if (!/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(itemId) ||
       !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(expectedBlockId)) throw new Error('INVALID_REGISTRY_ID')
-  if (!Array.isArray(verificationOffset) || verificationOffset.length !== 3 ||
-      verificationOffset.some(value => !Number.isFinite(value) || value < 0 || value > 1)) {
+  if (verificationOffset !== undefined && (!Array.isArray(verificationOffset) || verificationOffset.length !== 3 ||
+      verificationOffset.some(value => !Number.isFinite(value) || value < 0 || value > 1))) {
     throw new Error('INVALID_VERIFICATION_OFFSET')
   }
   if (!referenceBlock?.position || !bot.entity?.position) throw new Error('BLOCK_OR_POSITION_UNAVAILABLE')
@@ -71,8 +74,17 @@ async function placeNativeHeld (bot, menu, world, { hotbarSlot, itemId, referenc
   if (expectedReference) {
     const actual = await world.lookAtBlock(referenceBlock, [dx, dy, dz])
     const properties = value => JSON.stringify(Object.fromEntries(Object.entries(value || {}).sort(([a], [b]) => a.localeCompare(b))))
-    if (!actual.ok || actual.block?.id !== expectedReference.id || properties(actual.block.properties) !== properties(expectedReference.properties)) {
+    if (!actual.ok || !samePosition(actual.position, referenceBlock.position) || actual.block?.id !== expectedReference.id || properties(actual.block.properties) !== properties(expectedReference.properties)) {
       return { ok: false, code: 'native_placement_reference_changed', observed: actual, retryAutomatically: false }
+    }
+    // A visible block is not proof that the requested face is visible. Sending
+    // its hidden top face can place and consume an item behind that same block,
+    // where the postcondition cannot be observed from this body.
+    if (actual.hit?.face !== faceNumber) {
+      return { ok: false, code: 'native_placement_face_not_visible', observed: actual,
+        requestedFace: faceNumber, visibleFace: actual.hit?.face ?? null,
+        hint: 'Reposition to see the requested face, or choose the observed face with an empty destination. No placement was sent.',
+        retryAutomatically: false }
     }
     const held = menu.current()?.slots?.[36 + hotbarSlot]
     if (held?.snbt !== selected.snbt || menu.current()?.selectedHotbarSlot !== hotbarSlot) {
@@ -87,7 +99,8 @@ async function placeNativeHeld (bot, menu, world, { hotbarSlot, itemId, referenc
     hand: 0, cursorX: dx, cursorY: dy, cursorZ: dz, insideBlock: false, sequence })
 
   let observed = null
-  for (let i = 0; i < 6; i++) {
+  const offsets = verificationOffset === undefined ? surfaceOffsets : Array(6).fill(verificationOffset)
+  for (const offset of offsets) {
     await wait(250)
     const menuState = menu.current()
     if (menuState?.menuType !== 'minecraft:inventory') {
@@ -96,10 +109,12 @@ async function placeNativeHeld (bot, menu, world, { hotbarSlot, itemId, referenc
     }
     const proxy = bot.blockAt(dest)
     if (!proxy) continue
-    // A slab-like mod block may not intersect its voxel centre. Callers can
-    // supply a point on the actual native shape; no shape is guessed here.
-    observed = await world.lookAtBlock(proxy, verificationOffset)
-    if (observed.ok && observed.block?.id === expectedBlockId) {
+    // Try bounded visible surfaces when the centre is occluded. These are only
+    // ray targets: success still requires the server's native block identity
+    // at the exact destination, never the translated proxy. Explicit offsets
+    // for thin mod shapes stay explicit. The use packet is never repeated.
+    observed = await world.lookAtBlock(proxy, offset)
+    if (observed.ok && samePosition(observed.position, dest) && observed.block?.id === expectedBlockId) {
       const after = menu.current()?.slots?.[36 + hotbarSlot]
       return { ok: true, position: observed.position, nativeBlock: observed.block,
         itemCountBefore: selected.count, itemCountAfter: after?.count || 0, retryAutomatically: false }

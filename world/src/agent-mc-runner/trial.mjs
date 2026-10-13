@@ -7,12 +7,14 @@ import { createHash, randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { rejectedRead } from './read-recovery.mjs'
-import { contractOf, recentWithin, boundedHistory, readArtifact, projectHistory } from './context.mjs'
+import { contractOf, recentWithin, boundedHistory, readArtifact, projectHistory, replanCheckpoint } from './context.mjs'
 import { modelPlan } from './plan.mjs'
 import { finalObservations } from './observations.mjs'
 import { modelView } from './model-view.mjs'
 import { prepareAction } from './prepare-action.mjs'
 import { TaskMonitor } from '../agent-mc-host/task-monitor.mjs'
+import { describeActionEffect } from '../agent-mc-host/action-effect.mjs'
+import { successfulExperiences } from './experience.mjs'
 const require = createRequire(import.meta.url)
 const { CodingPlanBridge } = require('../neko-adapter/codingplan-bridge.cjs')
 const configFile = process.argv[2]
@@ -31,14 +33,16 @@ const state = { schemaVersion: 1, pid: process.pid, username: config.username, p
   provider: 'mineflayer', model: 'qwen3.7-plus', framework: 'explicit finite host + agent-mc/v1 + native SDK',
   round: previous?.round ?? 0, startedAt: new Date().toISOString(), receipts: [], qwenpawConnected: false }
 let client, model, stopping = false, current, initial, initialSociety, lastSociety, finishClaim, connected = false
-let taskRecord, monitor, taskVerified = false, objectiveRevision
+let taskRecord, monitor, taskVerified = false, objectiveRevision, lastReplanRound
 const sha = value => createHash('sha256').update(value).digest('hex')
 if (config.task && !/^[a-z0-9][a-z0-9_.-]{0,79}$/.test(config.task.id || '')) throw Error('trial_task_id_invalid')
 const artifacts = new Map(), history = [{ role: 'user', content: '请开始实际游玩，自主选择一个现在能够执行的工具；以真实世界变化和回执记录进展。' }]
 const contracts = new Map(), priorOperations = new Set()
+const retainedToolRows = []
 const notes = fs.existsSync(path.join(root, 'memory.jsonl')) ? fs.readFileSync(path.join(root, 'memory.jsonl'), 'utf8').split('\n').filter(Boolean).map(JSON.parse) : []
 if (fs.existsSync(path.join(root, 'tool-results.jsonl'))) for (const line of fs.readFileSync(path.join(root, 'tool-results.jsonl'), 'utf8').split('\n').filter(Boolean)) {
   const record = JSON.parse(line)
+  retainedToolRows.push(record)
   if (record.name === 'mc_help' && contractOf(record.value)) priorOperations.add(record.value.id)
 }
 const conversationFile = path.join(root, 'conversation.json')
@@ -116,6 +120,7 @@ const call = async (name, args = {}) => {
     if (!value) throw error
   }
   append('tool-results.jsonl', { name, args, value, execution: outcome?.execution ?? null })
+  retainedToolRows.push({ at: new Date().toISOString(), name, args, value })
   if (taskRecord) monitor.record(config.task.id, { kind: 'backend_call', round: state.round, name,
     operation: args.operation, actionId: args.action_id, ok: value.ok !== false, code: value.code ?? value.result?.code ?? null })
   if (name === 'mc_help' || name === 'mc_operations' && args.operation) {
@@ -187,15 +192,19 @@ try {
   if (config.task) {
     monitor = new TaskMonitor({ directory: path.join(root, 'task-monitor') })
     const previousTask = monitor.get(config.task.id)
-    const versionFiles = ['trial.mjs', 'prepare-action.mjs', 'model-view.mjs', 'plan.mjs', 'context.mjs', '../agent-mc-host/task-monitor.mjs']
-    const harnessVersion = sha(versionFiles.map(file => fs.readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n'))
+    const versionFiles = ['trial.mjs', 'prepare-action.mjs', 'model-view.mjs', 'plan.mjs', 'context.mjs', 'experience.mjs', 'read-recovery.mjs', 'observations.mjs', '../agent-mc-host/task-monitor.mjs', '../agent-mc-host/action-effect.mjs', '../neko-adapter/codingplan-bridge.cjs']
+    const modelProfile = Object.fromEntries(['model', 'responseFormat', 'enableThinking', 'thinkingBudget', 'maxOutputTokens'].map(k => [k, model.status()[k]]))
+    const installation = JSON.parse(fs.readFileSync(path.resolve(path.dirname(config.worldPackageFile), '../installation.json'), 'utf8'))
+    const environmentVersion = { coreArchiveSha256: installation.coreArchiveSha256, sourceFiles: installation.sourceFiles }
+    const harnessVersion = sha(versionFiles.map(file => fs.readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n') + JSON.stringify({ modelProfile, environmentVersion }))
     const { id: taskId, ...criteria } = config.task
     const spec = previousTask?.spec ?? { id: taskId, criteria, bodyId: connectedState.bodyId,
       objective: config.objective, scenarioId: config.scenarioId || config.task.type, scenarioVersion: config.scenarioVersion || '1',
-      harnessVersion, initialStateFingerprint: sha(JSON.stringify(brief(connectedState))),
+      harnessVersion, modelProfile, initialStateFingerprint: sha(JSON.stringify(brief(connectedState))),
       startedAtCall: model.status().calls, startedAtRound: state.round }
     if (spec.bodyId !== connectedState.bodyId || spec.objective !== config.objective || JSON.stringify(spec.criteria) !== JSON.stringify(criteria)) throw Error('trial_task_identity_mismatch')
     taskRecord = monitor.start(spec)
+    lastReplanRound = taskRecord.events.findLast(e => e.kind === 'context_replan')?.round ?? spec.startedAtRound
     if (spec.harnessVersion !== harnessVersion) monitor.record(config.task.id, { kind: 'harness_revision', harnessVersion })
     if (!previousTask) {
       history.push({ role: 'user', content: 'HOST TASK BOUNDARY: ' + JSON.stringify({ taskId, objective: config.objective, criteria,
@@ -216,7 +225,7 @@ try {
   for (const operation of priorOperations) await call('mc_help', { operation })
   // One model-facing action entry, while the public SDK retains mc_do unchanged.
   const tools = client.tools().filter(tool => tool.name !== 'mc_do').map(({ name, description, parameters }) => ({ name, description, parameters }))
-  tools.push({ name: 'host_artifact', description: 'Read one retained full result by handle and field path; offset/limit paginate arrays or Unicode text.',
+  tools.push({ name: 'host_artifact', description: 'Read one retained full result by handle and field path; offset/limit paginate arrays, object fields or Unicode text.',
     parameters: { type: 'object', properties: { handle: { type: 'string' }, path: { type: 'array', items: { type: ['string', 'integer'] } }, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 16000 } }, required: ['handle'], additionalProperties: false } },
   { name: 'host_memory', description: 'Persist your own goals, lessons and evidence references across context trimming and reconnects. Notes are plans/claims, not verified success.',
     parameters: { type: 'object', properties: { text: { type: 'string', minLength: 1, maxLength: 6000 } }, required: ['text'], additionalProperties: false } },
@@ -230,6 +239,13 @@ try {
     if (!current.ok || current.status !== 'alive') throw Error('trial_body_unavailable')
     updateTask(current)
     if (state.task?.completed) { taskVerified = true; break }
+    const checkpoint = replanCheckpoint(taskRecord, state.round, lastReplanRound, history)
+    if (checkpoint) {
+      lastReplanRound = state.round
+      history.push({ role: 'user', content: 'HOST REPLAN BOUNDARY: ' + JSON.stringify(checkpoint) })
+      taskEvent({ kind: 'context_replan', noProgressRounds: checkpoint.noProgressRounds })
+      saveConversation()
+    }
     state.phase = 'deciding'; state.round++; save()
     const turnId = 'decision-' + state.round
     await client.beginTurn(turnId)
@@ -243,12 +259,14 @@ try {
         '可用host_artifact读取完整的大结果，完整SNBT不能编造。遇到能力缺失应记录并改选真实可行目标。' +
         '已学接口签名会持续保留；可用host_memory记下自己的计划和经验。上下文按字节裁剪，完整历史和回执均保留。' +
         '完成或确实卡住时用host_finish，如实说明，观察或受理不等于任务成功。\n' +
+        '动作反馈的noDisplacement=true表示确实没有位移，不能宣称探索了新区域；反复相同观察不能证明没有其他办法。遇到障碍请结合真实失败和以前成功经验换策略，仍由你选择做法。\n' +
         '任务实际验收条件：' + JSON.stringify(config.task ?? null) + '\n' +
         '任务监控反馈：' + JSON.stringify(state.task && { calls: state.task.modelCalls, errors: state.task.failedResponseRounds,
           noProgressRounds: state.task.noProgressRounds, alert: state.task.progressAlert }) + '\n' +
         '当前真实状态：' + present(brief(current)) + '\n当前实际操作索引：' + JSON.stringify(operationIndex) + '\n工具签名：' + JSON.stringify(tools) +
         '\n从当前provider读取的已学接口：' + JSON.stringify(recentWithin(contracts.values(), 48000)) +
         '\n本人公会状态（带采集时间）：' + JSON.stringify(societyBrief(lastSociety)) +
+        '\n本人历史可核实的产物经验（不是当前物资，不可重放旧ID；需重新查看菜单、材料和条件）：' + JSON.stringify(successfulExperiences(retainedToolRows, current.bodyId)) +
         '\n你自己留下的记忆（不等于已验收事实）：' + JSON.stringify(recentWithin(notes, 16000))
       const text = await model.request(boundedHistory(projectHistory(history), system), system)
       const proposal = modelPlan(text, tools)
@@ -269,6 +287,7 @@ try {
         history.push({ role: 'assistant', content: text }, { role: 'user', content: 'HOST FINISH RECORDED: ' + JSON.stringify({ ...finishClaim, claimNotVerified: true }) })
         saveConversation(); break
       }
+      const beforeAction = current
       let value, wasMutation = ['mc_do', 'host_act'].includes(plan.tool)
       if (plan.tool === 'host_artifact') {
         value = readArtifact(artifacts, plan.arguments)
@@ -292,8 +311,15 @@ try {
           value = { ...value, help: await call('mc_help', { operation: plan.arguments.operation }) }
         }
       }
+      let effectFeedback = null
+      if (wasMutation) {
+        const after = await call('mc_state')
+        effectFeedback = describeActionEffect({ operation: plan.arguments.operation, args: plan.arguments.args,
+          before: beforeAction, after, receipt: value })
+        value = { ...value, effectFeedback }
+      }
       taskEvent({ kind: 'tool_result', tool: plan.tool, operation: plan.arguments.operation,
-        mutation: wasMutation, ok: value?.ok !== false, code: value?.code ?? value?.result?.code ?? null })
+        mutation: wasMutation, ok: value?.ok !== false, code: value?.code ?? value?.result?.code ?? null, effectFeedback })
       history.push({ role: 'assistant', content: text }, { role: 'user', content: 'TOOL RESULT ' + plan.tool + ': ' + present(value) })
       saveConversation()
     } finally { await client.endTurn(turnId) }
