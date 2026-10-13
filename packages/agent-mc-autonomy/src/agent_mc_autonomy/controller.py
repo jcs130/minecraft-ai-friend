@@ -19,6 +19,7 @@ PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
 HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_visual"}
 DIRECT_TOOLS = {"mc_help", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape"}
+READ_ACTIVITY_TOOLS = {"mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original"}
 
 
 class ModelCallRejected(ValueError):
@@ -196,6 +197,7 @@ class Controller:
         self.tool_failure = None
         self.rejected_calls = {}
         self.invalid_tool_calls = 0
+        self.read_activity = {}
         self.state_path = data / "host-state.json"
         self.fast_policy = fast_policy or FastPolicy(settings.fast)
         self.frame = None
@@ -500,14 +502,14 @@ class Controller:
                 try:
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
-                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure)
+                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity)
                 except ValueError:
                     if not reserve:
                         raise
                     reserve = 0
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
-                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure)
+                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity)
                 if reserve:
                     messages, _ = attach_frame(messages, frame)
                 budget.update(image_reserve=reserve, total=budget["total"] + reserve, limit=self.settings.context_tokens)
@@ -582,6 +584,15 @@ class Controller:
                     compact = await self.archive_receipt(request_id, name, result)
                 else:
                     result, compact = await self.dispatch(name, arguments, request_id)
+                if not result.get("failed"):
+                    if name in READ_ACTIVITY_TOOLS:
+                        # Bounded activity evidence survives history eviction. It
+                        # does not decide that a scan is useless or block one.
+                        self.read_activity[name] = min(999, self.read_activity.get(name, 0) + 1)
+                    elif result.get("execution") and (name == "mc_do" or "act" in next(
+                            (t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])):
+                        self.read_activity.clear()
+                    self.publish(read_activity=dict(self.read_activity))
                 if result.get("failed"):
                     self.tool_failure = failure_context(self.bridge.tools, name, arguments, result)
                     failure = str(result.get("text", ""))

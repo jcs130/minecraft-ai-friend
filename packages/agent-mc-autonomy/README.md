@@ -70,6 +70,14 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.4: retain bounded read activity across short history windows
+
+The dynamic request tail includes successful read-call counts since the last
+accepted body action in this runtime. Evicting old exchanges no longer hides a
+long sequence of observations. Counts are bounded, do not establish a stall or
+goal success, and do not block reads or script actions. Rejected actions do not
+reset them. The planner still selects work from current evidence.
+
 ### 0.1.3: keep evidence instead of internal fact hashes
 
 Model-visible facts omit internal revision hashes so they cannot crowd out the

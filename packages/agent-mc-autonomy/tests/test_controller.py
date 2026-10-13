@@ -97,6 +97,52 @@ def test_bounded_read_round_can_continue_without_unrelated_world_change(framewor
     assert len(controller.groups) == 1
 
 
+def test_read_activity_survives_pruned_history_until_a_body_action_is_accepted(framework_module, tmp_path, run_async):
+    seen = []
+    selected = ["mc_help"]
+
+    async def decide(messages, _):
+        seen.append(json.loads(messages[-1]["content"]))
+        response = choose()
+        response["tool_calls"][0]["function"] = {"name": selected[0], "arguments": "{}"}
+        return response
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    controller.settings = dataclasses.replace(controller.settings, max_tool_rounds=1)
+    bridge.tools.append({"name": "mc_help", "inputSchema": {"type": "object"}})
+    tools = module.model_tools(bridge.tools)
+    for _ in range(10):
+        run_async(controller.turn_once("survive", "prefix", tools))
+        controller.groups.clear()  # Reproduce a tight context evicting older reads.
+    assert seen[-1]["read_activity"]["calls_since_body_action"] == {"mc_help": 9}
+    assert seen[-1]["read_activity"]["action_progress_verified"] is False
+    selected[0] = "mc_do"
+    run_async(controller.turn_once("survive", "prefix", tools))
+    controller.receipt({"execution": action(terminal=True)})
+    selected[0] = "mc_help"
+    run_async(controller.turn_once("survive", "prefix", tools))
+    assert "read_activity" not in seen[-1]
+
+
+def test_rejected_body_action_does_not_erase_read_activity(framework_module, tmp_path, run_async):
+    choices = iter(["mc_help", "mc_do", "mc_help"])
+    seen = []
+
+    async def decide(messages, _):
+        seen.append(json.loads(messages[-1]["content"]))
+        response = choose()
+        response["tool_calls"][0]["function"] = {"name": next(choices), "arguments": "{}"}
+        return response
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    controller.settings = dataclasses.replace(controller.settings, max_tool_rounds=1)
+    bridge.tools.append({"name": "mc_help", "inputSchema": {"type": "object"}})
+    bridge.result = {"protocol": "agent-mc/v1", "text": "Invalid arguments: unknown skill", "failed": True, "execution": None}
+    for _ in range(3):
+        run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    assert seen[-1]["read_activity"]["calls_since_body_action"] == {"mc_help": 1}
+
+
 def test_rejected_tool_exposes_exact_parameter_help_in_next_request(framework_module, tmp_path, run_async):
     seen = []
 

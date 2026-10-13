@@ -7,7 +7,7 @@ from .observations import fact_preview, spatial_text
 RULES = """You are an autonomous Minecraft player. Pursue the user's goal through observed world changes.
 Minecraft Java protocol is 1.21.1. Discover needed commands with mc_help; do not assume server mods or permissions.
 Tool schemas retain parameter constraints. Use mc_tool_help(name,path) for full descriptions and defaults.
-Use targeted observations; once facts answer the next action's needs, act instead of repeatedly scanning.
+read_activity counts reads since the last accepted action, not progress. Query unresolved facts; use mc_do when facts suffice.
 Advanced capabilities use mc_invoke(name,arguments) after reading that tool's schema; the backend validates it.
 Only call functions advertised in this request. Other tool names in core guides are capabilities to route through mc_invoke.
 Keep a useful running action. Acceptance, validation and terminal completion do not prove goal success.
@@ -33,7 +33,7 @@ def encode(value) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None):
+def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None):
     """UTF-8 bytes are a conservative bound, not a model-specific tokenizer.
 
     Account for the entire messages/tools JSON plus an explicit framing reserve.
@@ -48,6 +48,8 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
         tail["planner_notice"] = planner_notice
     if fast_focus:
         tail["fast_focus"] = fast_focus
+    if read_activity:
+        tail["read_activity"] = {"calls_since_body_action": read_activity, "action_progress_verified": False}
     if events:
         tail["recent_events_archive"] = {"run": events[0].get("run"), "after": max(0, events[0].get("cursor", 1) - 1)}
 
