@@ -113,7 +113,8 @@ export function describeSkill(c: SkillCall, heldItem?: string | null): string {
         `${c.until && c.until.length > 0 ? `(${untilText(c.until).replace(/^,/, '')})` : ''}${tool}`;
     }
     case 'probe': return `探查${fillText(c)}${SHAPE_ZH[c.shape]} ${anchorsText(c.anchors)}`;
-    case 'observe': return c.mode === 'voxels' ? `读取局部体素 [${c.bounds.join(',')}]` : `读取 ${c.rays.length} 条空间射线`;
+    case 'observe': return c.mode === 'sites' ? `检查落点 ${anchorsText(c.sites)}`
+      : c.mode === 'voxels' ? `读取局部体素 [${c.bounds.join(',')}]` : `读取 ${c.rays.length} 条空间射线`;
     case 'use': {
       const what = c.item ? `用${zhName(c.item)}` : c.at ? '空手' : heldItem ? `用${zhName(heldItem)}` : '空手';
       const n = (c.times ?? 1) > 1 ? ` ${c.times} 次` : '';

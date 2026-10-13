@@ -4,22 +4,34 @@ import { Vec3 } from 'vec3';
 import { AIR_NAMES, LIQUIDS } from './cell-facts.ts';
 import { SkillBlocked } from './skill-context.ts';
 import { spatialBoxBudgetNote } from './spatial-slices.ts';
+import { spatialSites } from './spatial-site.ts';
 
 type Point = [number, number, number];
 type Box = [number, number, number, number, number, number];
 export type SpatialRay = [pitchDeg: number, yawDeg: number, range: number];
 export type SpatialObserveInput =
   | { mode: 'voxels'; bounds: Box }
-  | { mode: 'rays'; rays: SpatialRay[] };
+  | { mode: 'rays'; rays: SpatialRay[] }
+  | { mode: 'sites'; sites: Point[] };
 
 export const SPATIAL_OBSERVATION_LIMITS = {
-  cells: 512, offset: 16, rays: 64, range: 64, reads: 16_384, entities: 512, text: 24_000,
+  cells: 512, offset: 16, rays: 64, range: 64, reads: 16_384, entities: 512, text: 24_000, sites: 4,
 } as const;
 export const DEFAULT_VOXEL_BOUNDS: Box = [-1, -1, -1, 1, 2, 1];
 export const DEFAULT_SPATIAL_RAYS: SpatialRay[] = [-15, 0, 15].flatMap(pitch =>
   [-30, -15, 0, 15, 30].map(yaw => [pitch, yaw, 24] as SpatialRay));
 
 export function parseSpatialObservation(c: Record<string, unknown>): SpatialObserveInput | { error: string } {
+  if (c.mode === 'sites') {
+    if (c.bounds != null || c.rays != null) return { error: 'sites 不收 bounds/rays；sites 是绝对方块坐标' };
+    if (!Array.isArray(c.sites) || !c.sites.length || c.sites.length > SPATIAL_OBSERVATION_LIMITS.sites
+      || c.sites.some(p => !Array.isArray(p) || p.length !== 3 || p.some(n => !Number.isSafeInteger(n) || Math.abs(n) > 30_000_000))) {
+      return { error: `sites 要 1-${SPATIAL_OBSERVATION_LIMITS.sites} 组绝对整数坐标 [x,y,z]（每项 ±30000000）；每格分别检查，不投影前一步改造` };
+    }
+    if (new Set(c.sites.map(p => p.join(','))).size !== c.sites.length) return { error: 'sites 含重复坐标；同一格只查一次' };
+    return { mode: 'sites', sites: c.sites.map(p => [...p] as Point) };
+  }
+  if (c.sites != null) return { error: 'sites 只用于 mode:sites' };
   if (c.mode === 'voxels') {
     if (c.rays !== undefined) return { error: 'voxels 不收 rays' };
     const b = c.bounds ?? DEFAULT_VOXEL_BOUNDS;
@@ -45,7 +57,7 @@ export function parseSpatialObservation(c: Record<string, unknown>): SpatialObse
     }
     return { mode: 'rays', rays: rays.map(r => [...r] as SpatialRay) };
   }
-  return { error: 'observe 的 mode 要 voxels/rays' };
+  return { error: 'observe 的 mode 要 sites/voxels/rays' };
 }
 
 interface Material {
@@ -140,13 +152,6 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
   const eye: Point = [position[0], position[1] + (eyeHeight ?? 1.62), position[2]];
   const frame = { position, feet, eye, eyeHeightSource: eyeHeight === undefined ? 'standing-default' : 'client',
     yawDeg: round(bot.entity.yaw * 180 / Math.PI), pitchDeg: round(bot.entity.pitch * 180 / Math.PI) };
-  const entities: EntityObservation[] = Object.values(bot.entities).filter(e => e !== bot.entity && e.id !== bot.entity.id).map(e => {
-    const p = pointOf(e.position);
-    const bounds: Box | null = Number.isFinite(e.width) && e.width > 0 && Number.isFinite(e.height) && e.height > 0
-      ? [p[0] - e.width / 2, p[1], p[2] - e.width / 2, p[0] + e.width / 2, p[1] + e.height, p[2] + e.width / 2] : null;
-    return { id: e.id, name: e.username ?? e.name ?? e.type, position: p, bounds };
-  }).sort((a, b) => a.id - b.id);
-  if (entities.length > SPATIAL_OBSERVATION_LIMITS.entities) throw new SkillBlocked(`当前实体超过 ${SPATIAL_OBSERVATION_LIMITS.entities} 个，未返回不完整射线观测`);
   const common = { source: 'client-loaded-world' as const, observedAt: new Date().toISOString(), dimension: bot.game?.dimension ?? null, frame };
   const cache = new Map<string, Sample>();
   const read = (cell: Point): Sample => {
@@ -163,6 +168,18 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
     cache.set(key, sample);
     return sample;
   };
+  if (input.mode === 'sites') return {
+    source: common.source, observedAt: common.observedAt, dimension: common.dimension, position,
+    kind: 'sites' as const, sites: spatialSites(read, input.sites), blockReads: cache.size,
+    geometry: 'absolute cells; faces: ref+face=target, boundary area 0..1 (0 omitted, null unknown); body=0.6x1.8 centered, block collisions + 1-cell collar, first 3 hits/count, fluids by cell; not reachability, placement permission or safe footing',
+  };
+  const entities: EntityObservation[] = Object.values(bot.entities).filter(e => e !== bot.entity && e.id !== bot.entity.id).map(e => {
+    const p = pointOf(e.position);
+    const bounds: Box | null = Number.isFinite(e.width) && e.width > 0 && Number.isFinite(e.height) && e.height > 0
+      ? [p[0] - e.width / 2, p[1], p[2] - e.width / 2, p[0] + e.width / 2, p[1] + e.height, p[2] + e.width / 2] : null;
+    return { id: e.id, name: e.username ?? e.name ?? e.type, position: p, bounds };
+  }).sort((a, b) => a.id - b.id);
+  if (entities.length > SPATIAL_OBSERVATION_LIMITS.entities) throw new SkillBlocked(`当前实体超过 ${SPATIAL_OBSERVATION_LIMITS.entities} 个，未返回不完整射线观测`);
   if (input.mode === 'voxels') {
     const bounds = input.bounds.map((n, i) => n + feet[i % 3]) as Box;
     const palette: Material[] = [], paletteIds = new Map<string, number>(), cells: number[] = [];
@@ -205,6 +222,6 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
 
 export function spatialObservationText(bot: Bot, input: SpatialObserveInput): string {
   const text = JSON.stringify(observeSpatial(bot, input));
-  if (text.length > SPATIAL_OBSERVATION_LIMITS.text) throw new SkillBlocked(`空间观测超过 ${SPATIAL_OBSERVATION_LIMITS.text} 字符，未返回截断数据；请缩小 bounds 或减少 rays`);
+  if (text.length > SPATIAL_OBSERVATION_LIMITS.text) throw new SkillBlocked(`空间观测超过 ${SPATIAL_OBSERVATION_LIMITS.text} 字符，未返回截断数据；请减少 sites/rays 或缩小 bounds`);
   return text;
 }

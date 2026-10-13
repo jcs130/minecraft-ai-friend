@@ -21,6 +21,16 @@ Consumers depend on the package, never on another host's checkout:
 The modern visualization remains maintained in `jcs130/mc-visual-console`.
 Server packs and performance services require explicit configuration.
 
+## Spatial observations
+
+The same SDK/MCP action interface offers compact site diagnostics, local 3D voxels,
+collision rays, terrain slices and actual viewer captures. `mc_scout` with
+`{"steps":[{"skill":"observe","mode":"sites","sites":[[103,64,-31]]}]}`
+reads target occupancy, support height, adjacent collision faces and standing
+clearance without moving or building. Results retain unknowns and sampling time;
+geometry is not proof of reachability or server placement permission.
+See the [on-demand spatial guide](skills/minecraft-agent/references/spatial.md).
+
 ## Build and verification
 
 Run commands in this package directory. Node >=22 is required.

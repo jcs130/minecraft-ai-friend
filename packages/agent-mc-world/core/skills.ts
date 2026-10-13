@@ -1368,7 +1368,12 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   },
   {
     name: 'observe',
-    doc: `{"skill":"observe","mode":"voxels","bounds":[-2,-1,-2,2,3,2]}
+    doc: `{"skill":"observe","mode":"sites","sites":[[103,64,-31],[104,65,-31]]}
+                                                 施工/落脚前的短诊断，1-${SPATIAL_OBSERVATION_LIMITS.sites} 个绝对整数格：target 实际占用，below.topY 下格最高碰撞面，topArea 在目标底面的面积比。
+                                                 faces 是邻格碰撞面：ref+face方向=目标格；area 为格边界上的面积比，0 省略，null 未知。几何面积不代替物品放置规则或权限。
+                                                 body 是以目标格水平中心为脚点的 0.6×1.8 净空；计入邻格延伸形状，clear:null 表示未知。blockers/fluids 为总数，hits/fluidHits 各最多3项；液体按格另报，实体不在此检查。
+                                                 不试走、不试放、不验证支撑稳定性；每格检查当前实况，不投影先前施工。需要原始形状再查 voxels，长距离遮挡用 rays，地形剖面用 probe.slice，外观用 mc_visual。
+{"skill":"observe","mode":"voxels","bounds":[-2,-1,-2,2,3,2]}
                                                  按 MineDojo 的局部体素观测方式，直接读当前连接已加载方块，不需图像估深。
                                                  bounds 是相对执行时脚下格的 [xmin,ymin,zmin,xmax,ymax,zmax]，含端点；省略为 [-1,-1,-1,1,2,1]。
                                                  每项 ±${SPATIAL_OBSERVATION_LIMITS.offset}；体积=(xmax-xmin+1)(ymax-ymin+1)(zmax-zmin+1)≤${SPATIAL_OBSERVATION_LIMITS.cells}，不是每个轴都可铺满。返回绝对坐标范围、读取时间、维度、眼位、朝向。
@@ -1378,13 +1383,16 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  最多 ${SPATIAL_OBSERVATION_LIMITS.rays} 条，每条 ≤${SPATIAL_OBSERVATION_LIMITS.range} 格；省略 rays 为三行五列、24 格的扇面。
                                                  terrain 报首个方块碰撞或未知，entity 报本连接已知实体的最近包围箱交点，first 比较两者；未知区不能当无遮挡。
                                                  计入相邻格延伸的碰撞形状，邻格未知也停止确认；液体和纹理不遮挡碰撞射线，实体箱不是皮肤模型深度。
-                                                 两种模式均只读，按需缩小范围；数据只在本次调用复用，不常驻全量地图。`,
+                                                 所有模式均只读，按需缩小范围；数据只在本次调用复用，不常驻全量地图。`,
     parse: (c, at) => {
       const parsed = parseSpatialObservation(c);
       return 'error' in parsed ? { error: `${at} ${parsed.error}` } : { step: { skill: 'observe', ...parsed } };
     },
     fields: [
-      { key: 'mode', kind: 'enum', values: ['voxels', 'rays'], required: true, error: 'mode 要 voxels/rays' },
+      { key: 'mode', kind: 'enum', values: ['sites', 'voxels', 'rays'], required: true, error: 'mode 要 sites/voxels/rays' },
+      { key: 'sites', kind: 'opaque', schema: { type: 'array', minItems: 1, maxItems: SPATIAL_OBSERVATION_LIMITS.sites,
+        items: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'integer', minimum: -30_000_000, maximum: 30_000_000 } } },
+        doc: 'sites：绝对格 [x,y,z] 列表，短报占用/支撑高度/邻接面/0.6×1.8方块净空；非可达或放置许可' },
       { key: 'bounds', kind: 'opaque', schema: { type: 'array', minItems: 6, maxItems: 6,
         items: { type: 'integer', minimum: -SPATIAL_OBSERVATION_LIMITS.offset, maximum: SPATIAL_OBSERVATION_LIMITS.offset } }, doc: `voxels 相对脚下格 [xmin,ymin,zmin,xmax,ymax,zmax]，含端点；三轴长度相乘≤${SPATIAL_OBSERVATION_LIMITS.cells}` },
       { key: 'rays', kind: 'opaque', schema: { type: 'array', minItems: 1, maxItems: SPATIAL_OBSERVATION_LIMITS.rays,
