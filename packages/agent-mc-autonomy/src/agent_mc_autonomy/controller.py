@@ -666,7 +666,9 @@ class Controller:
                     wake |= fact_fingerprint(await self.protocol("facts")) != self.last_facts
                 if (self.decide and wake and (not self.current_work() or urgent) and elapsed >= self.settings.min_decision_seconds
                         and time.monotonic() >= self.planner_retry_at):
-                    current_goal = ("Submitted goal: " + self.active_goal["goal"] if self.active_goal
+                    current_goal = ("Standing goal: " + goal + "\nSubmitted goal (current priority): " + self.active_goal["goal"]
+                                    + "\nWhen observed facts satisfy this stage, use goal_report after native work ends to resume the standing goal; do not keep repeating a satisfied stage."
+                                    if self.active_goal
                                     else "Standing goal: " + goal + "\nContinue this goal; goal_report is unavailable without a submitted goal.")
                     if self.feedback_pending:
                         current_goal += "\nCurrent user feedback takes priority. Plan through mc_do; the framework applies the requested native queue policy."

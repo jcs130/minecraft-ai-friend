@@ -2,6 +2,24 @@ import importlib
 import json
 
 
+def test_ray_preview_preserves_the_view_frame_and_actual_world_direction(framework_module):
+    module = importlib.import_module("agent_mc_autonomy.observations")
+    # After collecting overhead wood, local pitch=0 points up, not horizontally.
+    observation = {"source": "client-loaded-world", "kind": "rays",
+        "frame": {"feet": [-64, 72, 318], "eye": [-63.5, 73.62, 318.5], "yawDeg": -180, "pitchDeg": 90},
+        "geometry": "eye-origin collision rays; offsets are degrees; unknown collar stops verification",
+        "rays": [{"pitchDeg": 0, "yawDeg": yaw, "range": 24, "direction": [0, 1, 0], "first": "block",
+                  "terrain": {"kind": "block", "cell": [-64, 75, 318], "distance": 1.38, "material": {"name": "oak_log"}}}
+                 for yaw in (0, 90, 180, -90, 45)]}
+    original = json.dumps(observation)
+    preview = json.loads(module.spatial_text(original))
+    assert preview["frame"] == observation["frame"]
+    assert preview["geometry"] == observation["geometry"]
+    assert all(ray["direction"] == [0, 1, 0] for ray in preview["rays"])
+    assert preview["rays_omitted"] == 1
+    assert json.dumps(observation) == original
+
+
 def test_voxel_receipt_keeps_real_material_coordinates_and_original(framework_module):
     context = importlib.import_module("agent_mc_autonomy.context")
     observation = {"source": "client-loaded-world", "observedAt": "now", "kind": "voxels", "dimension": "overworld",

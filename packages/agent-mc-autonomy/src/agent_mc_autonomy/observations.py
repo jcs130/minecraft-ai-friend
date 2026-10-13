@@ -38,10 +38,17 @@ def spatial_summary(value):
         result["materials_omitted"] = max(0, len(counts) - 24)
         result["entities"] = value.get("entities", [])[:6]
     elif value.get("kind") == "rays" and isinstance(value.get("rays"), list):
+        # Ray angles are relative to the current eye frame. Keeping the offsets
+        # without that frame turns an upward scan after mining into an apparent
+        # horizontal scan. Preserve the measured direction, never infer it.
+        result.pop("feet", None)
+        result["frame"] = {k: value.get("frame", {})[k] for k in ("feet", "eye", "yawDeg", "pitchDeg") if k in value.get("frame", {})}
+        if "geometry" in value:
+            result["geometry"] = value["geometry"]
         result["rays"] = []
         for ray in value["rays"][:4]:
             terrain = ray.get("terrain") or {}
-            item = {k: ray[k] for k in ("pitchDeg", "yawDeg", "range", "first") if k in ray}
+            item = {k: ray[k] for k in ("pitchDeg", "yawDeg", "range", "direction", "first") if k in ray}
             item["terrain"] = {k: terrain[k] for k in ("kind", "cell", "distance") if k in terrain}
             if terrain.get("material"):
                 item["terrain"]["name"] = terrain["material"].get("name")

@@ -70,6 +70,15 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.2: preserve orientation and the standing objective
+
+Ray previews retain the eye frame, measured world direction and native geometry
+semantics. Relative pitch/yaw alone cannot describe where the player looked,
+especially after mining overhead. Full receipts remain available by handle.
+A submitted stage retains the standing objective as context while explicitly
+keeping the stage's priority. The planner reports observed stage completion to
+resume the standing goal; this remains an unverified report, not auto-completion.
+
 ### 0.1.1: invalid tool calls keep the body connected
 
 Malformed arguments, unadvertised tool names, multiple simultaneous calls and

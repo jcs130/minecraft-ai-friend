@@ -337,6 +337,23 @@ def test_stop_during_model_wait_blocks_late_action(framework_module, tmp_path, r
     run_async(exercise())
 
 
+def test_submitted_stage_keeps_standing_goal_context_without_losing_priority(framework_module, tmp_path, run_async):
+    seen = []
+
+    async def decide(messages, _):
+        seen.append(messages)
+        return {"content": "Check the stage evidence before continuing survival", "tool_calls": []}
+
+    _, _, controller = setup(framework_module, tmp_path, decide)
+    controller.settings = dataclasses.replace(controller.settings, max_decisions=1)
+    controller.active_goal = {"id": "stage", "goal": "Gather a few logs and craft a workbench", "mode": "insert"}
+    run_async(controller.run("Survive, establish food reserves and shelter"))
+    prompt = "\n".join(m.get("content") or "" for m in seen[0])
+    assert "Standing goal: Survive, establish food reserves and shelter" in prompt
+    assert "Submitted goal (current priority): Gather a few logs and craft a workbench" in prompt
+    assert "goal_report" in prompt and "observed" in prompt
+
+
 def test_unknown_outcome_blocks_restart_without_replay(framework_module, tmp_path, run_async):
     async def decide(*_):
         return choose()
