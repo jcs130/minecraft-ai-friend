@@ -70,6 +70,14 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.10: retain JSON-rich action outcomes under tight context budgets
+
+Terminal fact previews are fitted against the complete serialized request, including
+nested JSON escaping. A large native observation can now keep its outcome, bounded
+preview and original handle alongside the latest inventory result. Budget diagnostics
+also report facts omitted when even their handles cannot fit. Full originals remain
+unchanged; this fix does not increase model calls or the configured context limit.
+
 ### 0.1.9: revise a delivered strategic stage without stacking goals
 
 The review port distinguishes an undelivered goal from an active planning stage.

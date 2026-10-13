@@ -128,3 +128,40 @@ def test_internal_fact_hashes_cannot_evict_the_action_result(framework_module):
     assert not any("revision" in f for f in tail["current_facts"])
     assert facts["parts"][0]["revision"] == "a" * 64
     assert budget["total"] <= base["total"] + 1150
+
+
+def test_json_rich_terminal_fits_by_serialized_cost_with_latest_bag_result(framework_module):
+    context = importlib.import_module("agent_mc_autonomy.context")
+    receipt = 'CURRENT INVENTORY: {"wooden_sword":1,"food":0}'
+    history = [[{"role": "assistant", "content": None, "tool_calls": [{"id": "bag", "type": "function",
+        "function": {"name": "mc_bag", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": "bag", "content": receipt}]]
+    # Native observations are JSON inside text inside the messages JSON. Their
+    # escaping overhead disappears when shortened; raw byte subtraction is wrong.
+    text = "Task completed: " + json.dumps({"samples": [{"name": "oak_log", "at": [1, 64, 2]}] * 120}) + " END: food absent"
+    facts = {"parts": [{"key": "body", "text": "health 20/20"},
+                       {"key": "lastTask", "text": text, "original": "log:terminal"}]}
+    _, base = context.assemble("stable", [], "survive", {"parts": []}, [], history,
+                               context_tokens=32768, reserved_output=1024)
+    limit = base["total"] + 1800
+    messages, budget = context.assemble("stable", [], "survive", facts, [], history,
+                                       context_tokens=limit, reserved_output=1024)
+    tail = json.loads(messages[-1]["content"])
+    task = next(f for f in tail["current_facts"] if f["key"] == "lastTask")
+    assert task["abridged"] and task["original"] == "log:terminal"
+    assert "Task completed" in task["text"] and "END: food absent" in task["text"]
+    assert any(message.get("content") == receipt for message in messages)
+    assert len(task["text"].encode("utf-8")) >= 700 and budget["total"] <= limit
+    assert facts["parts"][-1]["text"] == text and history[0][1]["content"] == receipt
+
+
+def test_budget_reports_omissions_even_when_original_handle_cannot_fit(framework_module):
+    context = importlib.import_module("agent_mc_autonomy.context")
+    _, base = context.assemble("stable", [], "survive", {"parts": []}, [], [],
+                               context_tokens=32768, reserved_output=1024)
+    facts = {"parts": [{"key": "chat", "text": "word " * 1000, "original": "log:" + "a" * 64}]}
+    messages, budget = context.assemble("stable", [], "survive", facts, [], [],
+                                       context_tokens=base["total"] + 5, reserved_output=1024)
+    assert not json.loads(messages[-1]["content"])["current_facts"]
+    assert budget["omitted"] == ["chat"]
+    assert budget["total"] <= base["total"] + 5

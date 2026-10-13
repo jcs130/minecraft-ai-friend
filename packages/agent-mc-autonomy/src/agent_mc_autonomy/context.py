@@ -103,6 +103,7 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
     # Current state replaces by key; omit old keys that are absent in this sample.
     unique = {part["key"]: part for part in facts.get("parts", [])}
     priority = {key: rank for rank, key in enumerate(("body", "health", "place", "gear", "foodReserve", "queue", "lastTask", "structure"))}
+    omitted = []
     for key, fact in sorted(unique.items(), key=lambda item: priority.get(item[0], len(priority))):
         # The internal change-detection hash is not gameplay evidence. Repeating
         # it beside every original handle can evict the actual action outcome.
@@ -111,14 +112,22 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
             fact = {**fact, "text": spatial_text(fact.get("text", ""))}
         tail["current_facts"].append(fact)
         if cost() > context_tokens and key == "lastTask" and fact.get("original"):
-            # Completed scout results are often the only new world evidence.
-            # Never silently omit them and leave only the old acceptance message.
-            excess = cost() - context_tokens
-            allowance = min(2400, len(fact.get("text", "").encode("utf-8")) - excess - 80)
-            if allowance >= 700:
-                tail["current_facts"][-1] = {**fact, "text": fact_preview(fact["text"], allowance), "abridged": True}
+            # Native JSON is escaped again inside the request. Subtracting its
+            # serialized excess from raw text bytes can wrongly declare that no
+            # preview fits. Measure each candidate as part of the actual request.
+            lower, upper, best = 700, min(2400, len(fact.get("text", "").encode("utf-8"))), fact
+            while lower <= upper:
+                allowance = (lower + upper) // 2
+                candidate = {**fact, "text": fact_preview(fact["text"], allowance), "abridged": True}
+                tail["current_facts"][-1] = candidate
+                if cost() <= context_tokens:
+                    best, lower = candidate, allowance + 1
+                else:
+                    upper = allowance - 1
+            tail["current_facts"][-1] = best
         if cost() > context_tokens:
             tail["current_facts"].pop()
+            omitted.append(key)
             tail["omitted_facts"].append({"key": key, "original": fact.get("original")})
             if cost() > context_tokens:
                 tail["omitted_facts"].pop()
@@ -130,4 +139,4 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
         if cost() > context_tokens:
             tail["events"].pop(0)
     return messages(), {"counter": "utf8-byte-upper-bound+1024-framing", "total": cost(),
-                        "limit": context_tokens, "omitted": [p["key"] for p in tail["omitted_facts"]]}
+                        "limit": context_tokens, "omitted": omitted}
