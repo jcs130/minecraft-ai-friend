@@ -326,7 +326,7 @@ export class MinecraftViewCaptureManager {
         });
         assertNotAborted(signal);
         remaining(deadlineAtMs);
-        if (rendered.metadata?.schema !== 'mc-overview/v2')
+        if (rendered.metadata?.schema !== 'mc-overview/v3')
           throw new VisualCaptureError('renderer', '俯视图坐标协议版本不匹配；需要同版共享可视化资源');
         if (!rendered.png.startsWith('data:image/png;base64,') || rendered.png.length > MAX_PNG_BYTES * 1.4)
           throw new VisualCaptureError('renderer', '俯视图返回格式异常');

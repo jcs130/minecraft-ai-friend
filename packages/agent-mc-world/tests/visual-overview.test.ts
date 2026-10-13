@@ -31,6 +31,20 @@ describe('coordinate overview contract', () => {
     expect(called).toBe(false); expect(typeof result==='string'?result:result.text).toContain('没有图像分析结论');
   });
 
+  it('accepts explicit task attention and rejects ambiguous or invalid regions before capture', async () => {
+    const attention={regions:[{bounds:[-544,-430,-537,-423],label:'uncertain support'}],detail:1};
+    expect(visualArgumentError({mode:'overview',overview:{attention}})).toBeUndefined();
+    expect(visualArgumentError({mode:'overview',overview:{attention:{...attention,detail:0}}})).toBeUndefined();
+    for(const invalid of [null,[],{}, {regions:[]},{regions:Array(33).fill({bounds:[0,0,1,1]})},
+      {regions:[{bounds:[0,0,Infinity,1]}]},{regions:[{bounds:[0,0,0,1]}]},{regions:[{bounds:[0,0,2049,1]}]},
+      {regions:[{bounds:[0,0,1,1],weight:1}]},{...attention,detail:2},{...attention,detail:-1},{...attention,detail:1.5}])
+      expect(visualArgumentError({mode:'overview',overview:{attention:invalid}})?.failed).toBe(true);
+    let calls=0;
+    const manager=new MinecraftViewCaptureManager({fetcher:(()=>{calls++;throw new Error('network');}) as typeof fetch});
+    await expect(manager.capture({viewerUrl:'http://127.0.0.1:7793',mode:'overview',overview:{attention:{...attention,detail:2}} as never})).rejects.toThrow('attention');
+    expect(calls).toBe(0);
+  });
+
   it('capture API rejects bad coordinates without opening browser or reading health', async () => {
     let called=false;
     const manager=new MinecraftViewCaptureManager({fetcher:(()=>{called=true;throw new Error('network');}) as typeof fetch});
@@ -40,7 +54,7 @@ describe('coordinate overview contract', () => {
 
   it('returns annotated image and aligned metadata, reusing a page with fresh camera arguments', async () => {
     const inputs: unknown[]=[];let opened=0,closed=0;let url='';
-    const metadata={schema:'mc-overview/v2',capturedAt:'2026-10-13T04:00:00.000Z',width:1280,height:720};
+    const metadata={schema:'mc-overview/v3',capturedAt:'2026-10-13T04:00:00.000Z',width:1280,height:720};
     const page={isClosed:()=>false,close:async()=>{closed++;},goto:async(value:string)=>{url=value;},addStyleTag:async()=>{},
       waitForFunction:async()=>({jsonValue:async()=>'ready',dispose:async()=>{}}),
       evaluate:async(_fn:unknown,input:unknown)=>{
@@ -50,12 +64,13 @@ describe('coordinate overview contract', () => {
     const manager=new MinecraftViewCaptureManager({fetcher:(async()=>new Response(JSON.stringify({ok:true,maxCaptureSessions:1,captureSessions:0}))) as typeof fetch,
       launchBrowser:async()=>({isConnected:()=>true,newPage:async()=>{opened++;return page;},close:async()=>{}}) as never});
     try {
-      for(const span of [16,48]) {
-        const result=await manager.capture({viewerUrl:'http://127.0.0.1:7793',mode:'overview',overview:{span}});
+      const requests=[{span:16},{span:48,attention:{regions:[{bounds:[-4,-4,4,4]}],detail:1}}];
+      for(const overview of requests) {
+        const result=await manager.capture({viewerUrl:'http://127.0.0.1:7793',mode:'overview',overview:overview as never});
         expect(result.png.subarray(1,4).toString()).toBe('PNG');
         expect(result.capturedAt).toBe(metadata.capturedAt);expect(result.overview).toEqual(metadata);
       }
-      expect(inputs).toEqual([{span:16},{span:48}]);expect(opened).toBe(1);expect(url).toBe('http://127.0.0.1:7793/third/?photo=1');
+      expect(inputs).toEqual(requests);expect(opened).toBe(1);expect(url).toBe('http://127.0.0.1:7793/third/?photo=1');
     } finally {await manager.stop();}
     expect(closed).toBe(1);
   });

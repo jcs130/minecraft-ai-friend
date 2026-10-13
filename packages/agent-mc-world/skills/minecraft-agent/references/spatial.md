@@ -58,7 +58,7 @@ the body, issuing camera controls to the game, or loading remote terrain:
 ```
 
 Omit `overview` to center on the current player. `span` is image width in blocks
-(8–2048); depth follows image aspect ratio. Up to 128 XYZ pins are accepted
+(8–2048); depth follows the overview panel's aspect ratio. Up to 128 XYZ pins are accepted
 (names ≤24 chars). North is -Z, right is +X. Grid lines are block boundaries.
 
 - A pin defaults to `anchor:"block"`: integer `at:[x,y,z]` identifies a cell;
@@ -84,6 +84,30 @@ One image helps compare rail layout, paths, structures and relative positions;
 it does not prove route reachability, permission or movement. Query only the
 few uncertain cells, then confirm task terminals and world changes. Keep image
 and detailed receipts on demand rather than repeating them every model turn.
+
+### Task attention: overview plus focused detail
+
+Select a region from the current goal, a failed action or an unresolved geometric
+question. This is a caller-selected region of interest, not neural attention
+weights or an automatic danger/reachability judgment:
+
+```json
+{"mode":"overview","focus":"Which cells near the failed landing need a support check?","overview":{"span":48,"attention":{"regions":[{"bounds":[100,-34,108,-26],"label":"failed landing"}],"detail":1}}}
+```
+
+`bounds` are exact `[minX,minZ,maxX,maxZ]` boundaries, without the pin's +0.5
+offset. Use 1–32 regions, each positive side at most 2048 blocks. A1, A2, ...
+follow input order. `detail` selects a 1-based region (default 1); 0 only
+highlights. The left overview keeps surrounding context dimmed; the right panel
+re-renders the selected area at a finer scale. Both fit in **one image**. Each
+panel has its own grid, bounds and coverage. Metadata pixels/rectangles refer to
+the final image; `viewport` identifies each panel. Outside/clipped regions and
+unmeshed detail remain explicit. Selecting an area never loads distant chunks.
+
+Use one overview to choose a few uncertain cells, then request `sites`, rays or
+slices only there. Retain the short measured change and receipt handle; request
+another image when new visual evidence matters. Highlighting by itself does not
+reduce image tokens, provide collision facts or prove faster/better decisions.
 
 ## Keep feedback small and useful
 

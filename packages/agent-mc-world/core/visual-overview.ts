@@ -5,18 +5,32 @@ export interface OverviewOptions {
   grid?: number | 'auto';
   labels?: 'auto' | 'full' | 'ids';
   markers?: Array<{ at: [number, number, number]; anchor?: 'block' | 'position'; label?: string }>;
+  attention?: {
+    regions: Array<{ bounds: [number, number, number, number]; label?: string }>;
+    detail?: number;
+  };
 }
 
-export interface OverviewMetadata {
-  schema: 'mc-overview/v2';
-  capturedAt: string;
-  dimension: string | null;
+interface OverviewRegion {
+  id: string; bounds: [number, number, number, number]; label?: string;
+  rect: { x: number; y: number; width: number; height: number };
+  inFrame: boolean; clipped: boolean;
+}
+interface OverviewPanel {
+  viewport: { x: number; y: number; width: number; height: number };
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
-  grid: number; north: '-Z'; right: '+X'; width: number; height: number;
+  grid: number;
   coverage: { meshed: number; total: number };
   player: { at: [number, number, number]; pixel: [number, number]; inFrame: boolean };
   pins: Array<{ id: string; at: [number, number, number]; anchor: 'block' | 'position'; world: [number, number, number]; pixel: [number, number]; inFrame: boolean; label?: string }>;
   labels: { mode: 'full' | 'ids'; shown: number; hidden: number };
+}
+export interface OverviewMetadata extends OverviewPanel {
+  schema: 'mc-overview/v3';
+  capturedAt: string;
+  dimension: string | null;
+  north: '-Z'; right: '+X'; width: number; height: number;
+  attention?: { source: 'caller-selected'; regions: OverviewRegion[]; detail?: OverviewPanel & { id: string; regions: OverviewRegion[] } };
   source: 'loaded-renderer-scene'; layers: 'top-visible-only';
 }
 
@@ -33,6 +47,13 @@ export const OVERVIEW_SCHEMA = {
       anchor: { type: 'string', enum: ['block', 'position'], description: 'Default block: integer XYZ cell, drawn at XYZ+0.5. position: exact continuous XYZ, no offset (including integer positions).' },
       label: { type: 'string', maxLength: 24 },
     } } },
+    attention: { type: 'object', additionalProperties: false, required: ['regions'], description: 'Caller-selected task regions: highlight relevant evidence, not inferred importance. One image; optional detail panel.', properties: {
+      regions: { type:'array', minItems:1, maxItems:32, items:{type:'object',additionalProperties:false,required:['bounds'],properties:{
+        bounds:{type:'array',minItems:4,maxItems:4,items:{type:'number',minimum:-30_000_000,maximum:30_000_000},description:'[minX,minZ,maxX,maxZ] exact boundaries; positive sides <=2048. A1,A2,... follow input order.'},
+        label:{type:'string',maxLength:24},
+      }}},
+      detail:{type:'integer',minimum:0,maximum:32,description:'1-based region to magnify on right; default 1, 0=highlight only. Must name an existing region.'},
+    } },
   },
 };
 
@@ -42,7 +63,7 @@ export function overviewArgumentError(mode: unknown, overview: unknown, includeH
   if (overview === undefined) return undefined;
   if (!overview || typeof overview !== 'object' || Array.isArray(overview)) return 'overview 必须是对象';
   const o = overview as Record<string, unknown>;
-  if (Object.keys(o).some(key => !['center', 'span', 'grid', 'labels', 'markers'].includes(key))) return 'overview 含未知字段';
+  if (Object.keys(o).some(key => !['center', 'span', 'grid', 'labels', 'markers', 'attention'].includes(key))) return 'overview 含未知字段';
   const tuple = (v: unknown, n: number) => Array.isArray(v) && v.length === n && v.every(x => typeof x === 'number' && Number.isFinite(x) && Math.abs(x) <= 30_000_000);
   if (o.center !== undefined && !tuple(o.center, 2)) return 'overview.center 必须是有限绝对坐标 [x,z]';
   if (o.span !== undefined && (typeof o.span !== 'number' || !Number.isFinite(o.span) || o.span < 8 || o.span > 2048)) return 'overview.span 范围 8..2048 格';
@@ -54,5 +75,16 @@ export function overviewArgumentError(mode: unknown, overview: unknown, includeH
     (m.anchor !== 'position' && !m.at.every(Number.isInteger)) ||
     (m.label !== undefined && (typeof m.label !== 'string' || m.label.length > 24 || /[\u0000-\u001f\u007f]/u.test(m.label))))))
     return 'overview.markers 最多 128 个；at:[x,y,z]，默认 anchor:block 需整数格坐标；精确位置用 anchor:position，label 最多24字';
+  if (o.attention !== undefined) {
+    if (!o.attention || typeof o.attention !== 'object' || Array.isArray(o.attention)) return 'overview.attention 必须是对象';
+    const a = o.attention as Record<string, unknown>;
+    if (Object.keys(a).some(key => !['regions', 'detail'].includes(key)) || !Array.isArray(a.regions) || !a.regions.length || a.regions.length > 32 ||
+      a.regions.some(r => !r || typeof r !== 'object' || Array.isArray(r) || Object.keys(r).some(k => !['bounds', 'label'].includes(k)) ||
+        !tuple(r.bounds, 4) || r.bounds[2] <= r.bounds[0] || r.bounds[3] <= r.bounds[1] ||
+        r.bounds[2] - r.bounds[0] > 2048 || r.bounds[3] - r.bounds[1] > 2048 ||
+        (r.label !== undefined && (typeof r.label !== 'string' || r.label.length > 24 || /[\u0000-\u001f\u007f]/u.test(r.label)))) ||
+      (a.detail !== undefined && (typeof a.detail !== 'number' || !Number.isInteger(a.detail) || a.detail < 0 || a.detail > a.regions.length)))
+      return 'overview.attention：regions 需1..32项，bounds=[minX,minZ,maxX,maxZ]，边长>0且≤2048；detail 为区域序号（从1起，0只高亮）';
+  }
   return undefined;
 }
