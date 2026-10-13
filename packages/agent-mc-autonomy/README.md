@@ -70,6 +70,14 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.6: keep useful evidence in strategic reviews
+
+The bounded main-brain summary retains more of the objective and inventory,
+including tools previously hidden after a 70-byte prefix. It reports how long
+health/inventory/food readings have been unchanged and the bounded read count.
+These are observations, not a stuck verdict or a new trigger for model calls;
+normal review intervals, queue ownership and optional host boundaries remain.
+
 ### 0.1.5: retain plans that did not submit work
 
 Plain replies stay in bounded assistant history. The next dynamic tail records

@@ -49,12 +49,16 @@ def review_observation(status, now):
     useful = {key: facts.get(key, "")[:size] for key, size in (
         ("body", 180), ("gear", 420), ("foodReserve", 160), ("life", 250), ("place", 180),
         ("clock", 80), ("queue", 350), ("lastTask", 300))}
+    reads = snapshot.get("read_activity") or {}
+    reads = {key: min(999, reads[key]) for key in (
+        "mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original")
+        if isinstance(reads, dict) and type(reads.get(key)) is int and reads[key] > 0}
     # Raw facts remain in the independent journal/status API; no accumulating prompt history here.
     evidence = {"sampled_at": snapshot["updated_at"], "phase": snapshot["phase"], "connected": snapshot.get("game_connected") is True,
                 "standing_goal": str(snapshot.get("standing_goal", ""))[:600],
                 "current_goal": {key: active.get(key) for key in ("id", "goal", "mode")}, "pending": pending,
                 "facts": useful, "planner_error": snapshot.get("planner_error"),
-                "planner_failures": snapshot.get("planner_failures", 0), "runtime_error": snapshot.get("error")}
+                "planner_failures": snapshot.get("planner_failures", 0), "runtime_error": snapshot.get("error"), "read_activity": reads}
     # Clocks, sight direction, repeated observation task IDs and positional chatter are not urgent changes.
     material = {key: useful[key] for key in ("body", "gear", "foodReserve")}
     terminal = useful["lastTask"]
@@ -77,8 +81,15 @@ def summary(evidence):
     facts = evidence["facts"]
     goal = evidence["current_goal"].get("goal") or evidence["standing_goal"]
     readings = "；".join(brief(facts[key], size) for key, size in (
-        ("body", 65), ("foodReserve", 60), ("gear", 70), ("queue", 65)))
-    return "目标:" + brief(goal, 70) + "；新鲜观测:" + readings
+        ("body", 120), ("foodReserve", 120), ("gear", 420), ("queue", 150)))
+    # A 70-byte inventory preview hid already-owned tools from the main brain.
+    # Bounded evidence still fits in one short review, without a summary model.
+    unchanged = evidence.get("material_unchanged_seconds", 0)
+    activity = f"；生命/物资读数连续{unchanged}秒未变"
+    reads = sum(evidence.get("read_activity", {}).values())
+    if reads:
+        activity += f"；连续查询{reads}次（查询不代表行动进展）"
+    return "目标:" + brief(goal, 360) + "；新鲜观测:" + readings + activity
 
 
 class ReviewPort:

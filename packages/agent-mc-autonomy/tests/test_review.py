@@ -45,6 +45,24 @@ def test_runtime_owns_creation_and_periodic_review_without_user_chat(runtime):
     assert port.offer()["review"]["trigger"] == "periodic_review"
 
 
+def test_review_summary_keeps_tools_and_material_stagnation_visible(runtime):
+    port, clock, publish = runtime
+    facts = snapshot(clock[0])["facts"]
+    facts["parts"][1]["text"] = "手里拿着木斧。包里有：橡木原木×34、橡木木板×8、木棍×8、泥土×3、工作台×1、木斧耐久14/59×1、木镐耐久59/59×1。"
+    goal = "在这个原版生存世界持续安全生存。先观察周围，采集少量原木，制作木板、工作台和基础工具，再逐步获取食物并准备庇护所。"
+    publish(facts=facts, standing_goal=goal)
+    port.decide(port.offer()["review"]["id"], "continue", "先按原目标观察")
+    clock[0] += 180
+    publish(facts=facts, standing_goal=goal, read_activity={"mc_bag": 9, "mc_scout": 5})
+    review = port.offer()["review"]
+    assert review["trigger"] == "periodic_review"  # No extra calls due to a counter.
+    assert "工作台×1" in review["summary"] and "木镐" in review["summary"]
+    assert "获取食物" in review["summary"] and "庇护所" in review["summary"]
+    assert "180秒" in review["summary"] and "查询14次" in review["summary"]
+    assert review["evidence"]["read_activity"] == {"mc_bag": 9, "mc_scout": 5}
+    assert len(review["summary"].encode("utf-8")) < 1800
+
+
 @pytest.mark.parametrize("changes", [
     {"updated_at": datetime.fromtimestamp(9900, timezone.utc).isoformat()},
     {"updated_at": datetime.fromtimestamp(10031, timezone.utc).isoformat()},
