@@ -1,0 +1,19 @@
+{
+  "repository": "https://github.com/jcs130/minecraft-ai-friend",
+  "source_revision": "7889ce261a2309d94400b739c6198468d8271d83",
+  "source_path": "packages/agent-mc-world",
+  "name": "agent-mc-world",
+  "version": "0.4.0",
+  "archive": "agent-mc-world-0.4.0.tgz",
+  "sha256": "a4fcfabf5f5a6c9582f33bc8217eb8247dbf9f6a4abc6971605756a810e704c9",
+  "build_profile": "neko-headless",
+  "upstream_release": false,
+  "minecraft_version": "1.21.1",
+  "viewer_assets": null,
+  "patches": [
+    {
+      "file": "patches/0001-independent-minecraft-core.patch",
+      "sha256": "463500b9ebff81278114fd051052a912294922b82c9335f1ee0a2c3d90d42c16"
+    }
+  ]
+}

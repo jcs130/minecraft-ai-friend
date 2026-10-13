@@ -20,6 +20,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 agent_mc_autonomy = ["integrations/*.mjs"]
+"agent_mc_autonomy.core_distribution" = ["*.mjs", "*.json", "*.md", "LICENSE*.txt", "patches/*.patch"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

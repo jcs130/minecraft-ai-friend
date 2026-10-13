@@ -33,6 +33,14 @@ an absolute shared data directory, `autonomy.enabled = true`, and an explicit
 OpenAI-compatible planner endpoint/model. Keep credentials in an environment
 variable named by `api_key_env`.
 
+For the already verified compatibility body pinned to `7889ce2`, this repository
+also owns its explicit build/install/verification tooling and patch set:
+`python -m agent_mc_autonomy.core_distribution.build --checkout <repo> --destination <empty-dir>`;
+then `python -m agent_mc_autonomy.core_distribution.install --destination <runtime-dir> --archive <tgz>`.
+These commands never run implicitly. The existing `nekoBuild`/`neko-headless`
+receipt field/file names remain readable for compatibility; they require no host
+SDK. Moving this tooling does not upgrade the live body's pinned source.
+
 ```sh
 agent-mc-autonomy check --config config.local.toml --entry /path/to/bin/minecraft-agent-mcp.mjs
 agent-mc-autonomy run --config config.local.toml --entry /path/to/bin/minecraft-agent-mcp.mjs --goal "Survive safely, obtain food and prepare shelter"
