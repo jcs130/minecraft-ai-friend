@@ -24,6 +24,7 @@ import { ViewerAdvancementTracker } from './viewer-advancements.ts';
 import { viewerRenderableMetadata } from './viewer-render-metadata.ts';
 import { ViewerSessionSlots } from './viewer-session-slots.ts';
 import { ViewerCaptureLease } from './viewer-capture-lease.ts';
+import { AgentViewGallery } from './viewer-agent-views.ts';
 import { observeViewerSounds } from './viewer-sound-packets.ts';
 import { loadViewerSoundRegistry } from './viewer-sound-registry.ts';
 import { observeViewerFishingCatch, viewerDroppedItem } from './viewer-fishing.ts';
@@ -90,6 +91,7 @@ interface WorldView {
 
 export interface ModernViewerHandle {
   url: string;
+  agentViews: AgentViewGallery;
   close(): Promise<void>;
 }
 
@@ -706,6 +708,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
   let closed = false;
   const headTextures = createViewerHeadTextures();
   const captureLeases = new Map<string, ViewerCaptureLease>();
+  const agentViews = new AgentViewGallery();
   const server = createServer((req, res) => { void handleRequest(req, res); });
   async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
@@ -748,6 +751,20 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
         else lease.renew();
         res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
         res.end('{"ok":true}'); return;
+      }
+      if (pathname === '/agent-views' || pathname.startsWith('/agent-views/')) {
+        if ((req.headers.origin && req.headers.origin !== origin) || req.headers['sec-fetch-site'] === 'cross-site') {
+          res.writeHead(403).end(); return;
+        }
+        if (pathname === '/agent-views') {
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ schema: 'mc-agent-views/v1', images: agentViews.list() })); return;
+        }
+        const id = /^\/agent-views\/([a-f0-9-]{36})\.png$/.exec(pathname)?.[1];
+        const png = id ? agentViews.image(id) : undefined;
+        if (!png) { res.writeHead(404).end(); return; }
+        res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        res.end(png); return;
       }
       if (pathname === '/viewer-coverage') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
@@ -1314,9 +1331,11 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
 
   return {
     url: origin,
+    agentViews,
     async close() {
       if (closed) return;
       closed = true;
+      agentViews.clear();
       content?.dispose();
     agentVisuals.dispose();
       appearance?.dispose();

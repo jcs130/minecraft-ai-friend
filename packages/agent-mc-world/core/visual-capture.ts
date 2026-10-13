@@ -4,12 +4,14 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { overviewArgumentError, type OverviewOptions, type OverviewMetadata } from './visual-overview.ts';
+import { visualFov } from './visual-fov.ts';
 
 export type MinecraftViewMode = 'first' | 'third' | 'dungeon' | 'overview';
 
 export interface MinecraftViewCaptureOptions {
   viewerUrl: string;
   mode?: MinecraftViewMode;
+  fov?: number;
   overview?: OverviewOptions;
   width?: number;
   height?: number;
@@ -21,6 +23,7 @@ export interface MinecraftViewCaptureOptions {
 export interface MinecraftViewCapture {
   png: Buffer;
   mode: MinecraftViewMode;
+  fov?: number;
   width: number;
   height: number;
   capturedAt: string;
@@ -163,6 +166,7 @@ interface CaptureSession {
   browser: Browser;
   page?: Page;
   mode?: MinecraftViewMode;
+  fov?: number;
   width?: number;
   height?: number;
   openedAtMs?: number;
@@ -197,6 +201,7 @@ export class MinecraftViewCaptureManager {
     const origin = localViewerOrigin(options.viewerUrl);
     const mode = options.mode ?? 'third';
     if (!['first', 'third', 'dungeon', 'overview'].includes(mode)) throw new RangeError('invalid Minecraft view mode');
+    const fov = visualFov(mode, options.fov);
     const overviewError = overviewArgumentError(mode, options.overview, options.includeHud);
     if (overviewError) throw new RangeError(overviewError);
     const width = viewportDimension(options.width, DEFAULT_WIDTH, 640, 1920);
@@ -227,7 +232,7 @@ export class MinecraftViewCaptureManager {
         closePromise = undefined;
         session = undefined;
       }
-      if (session?.page && (session.page.isClosed() || session.mode !== mode || session.width !== width || session.height !== height
+      if (session?.page && (session.page.isClosed() || session.mode !== mode || session.fov !== fov || session.width !== width || session.height !== height
           || (!session.renewable && Date.now() - session.openedAtMs! >= LEGACY_SESSION_MS))) {
         await this.closePage(origin, session);
       }
@@ -276,9 +281,10 @@ export class MinecraftViewCaptureManager {
         session.leaseKey = randomUUID();
         session.page = await session.browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1,
           ...(captureLane ? { extraHTTPHeaders: { 'x-mc-viewer-capture': '1', 'x-mc-viewer-capture-key': session.leaseKey } } : {}) });
-        session.mode = mode; session.width = width; session.height = height;
+        session.mode = mode; session.fov = fov; session.width = width; session.height = height;
         session.captureLane = captureLane;
-        const pagePath = mode === 'overview' ? '/third/?photo=1' : mode === 'first' ? '/' : `/${mode}/`;
+        const pagePath = mode === 'overview' ? '/third/?photo=1' : fov === undefined ? `/${mode}/?photo=1`
+          : `${mode === 'first' ? '/' : '/third/'}?photo=1&fov=${fov}`;
         await session.page.goto(`${origin}${pagePath}`, { waitUntil: 'domcontentloaded', timeout: remaining(deadlineAtMs) });
         session.openedAtMs = Date.now();
         await session.page.addStyleTag({ content: 'body[data-cortico-capture-hide-hud="true"] *{visibility:hidden!important}body[data-cortico-capture-hide-hud="true"] canvas[data-cortico-capture-scene="true"]{visibility:visible!important}' });
@@ -294,6 +300,12 @@ export class MinecraftViewCaptureManager {
       timings.sceneMs = performance.now() - sceneStarted;
       if (typeof result === 'string' && result.startsWith('error:')) {
         throw new VisualCaptureError(result.includes('连接已满') ? 'busy' : 'renderer', result.slice(6) || 'viewer 渲染失败');
+      }
+      if (fov !== undefined) {
+        const actualFov = await page.evaluate(() =>
+          (globalThis as unknown as { world?: { camera?: { fov?: number } } }).world?.camera?.fov);
+        if (typeof actualFov !== 'number' || !Number.isFinite(actualFov) || Math.abs(actualFov - fov) > 0.1)
+          throw new VisualCaptureError('renderer', '当前 viewer 未应用所请求的视野角度；请更新匹配可视化资源');
       }
       if (captureLane && !session.renewable && await this.renewLease(origin, session)) {
         session.renewable = true;
@@ -339,7 +351,7 @@ export class MinecraftViewCaptureManager {
       timings.pngMs = performance.now() - pngStarted;
       if (png.length === 0 || png.length > MAX_PNG_BYTES) throw new VisualCaptureError('renderer', 'viewer 截图大小异常');
       if (!captureLane) await this.closePage(origin, session);
-      return { png, mode, width, height, capturedAt: overview?.capturedAt ?? new Date().toISOString(), viewerVersion: health.version,
+      return { png, mode, fov, width, height, capturedAt: overview?.capturedAt ?? new Date().toISOString(), viewerVersion: health.version,
         includesHud: options.includeHud === true, ...(overview ? { overview } : {}), timings };
     } catch (error) {
       await close();

@@ -1,5 +1,6 @@
 import type { ToolDef, ToolCallContext, ToolOutcome, WorldHost, WorldRequestFacts } from './contracts.ts';
 import { overviewArgumentError } from '../../core/visual-overview.ts';
+import { visualFovError } from '../../core/visual-fov.ts';
 
 /** A missing capability is unknown, not permission to send an image. */
 export function acceptsImages(host: WorldHost | null): boolean {
@@ -8,6 +9,8 @@ export function acceptsImages(host: WorldHost | null): boolean {
 }
 
 export function visualArgumentError(args: Record<string, unknown>, prefix = 'mc'): ToolOutcome | undefined {
+  const fovError = visualFovError(args.mode, args.fov);
+  if (fovError) return { text: `[${prefix}_visual 失败] ${fovError}`, failed: true };
   if (args.mode !== undefined && (typeof args.mode !== 'string' || !['first', 'third', 'dungeon', 'overview'].includes(args.mode)))
     return { text: `[${prefix}_visual 失败] mode 只能是 first、third、dungeon 或 overview`, failed: true };
   const overviewError = overviewArgumentError(args.mode, args.overview, args.include_hud);

@@ -251,7 +251,7 @@ export class Bridge {
   protected disposedThrough = -1;
   protected readonly bags = new Map<number, ResourceBag>();
   protected readonly disposing = new Set<Promise<void>>();
-  protected viewer: { gen: number; url: string; kind: 'modern' | 'basic' } | null = null;
+  protected viewer: { gen: number; url: string; kind: 'modern' | 'basic'; agentViews?: import('./viewer-agent-views.ts').AgentViewGallery } | null = null;
   protected _invSynced = false;
   protected scaffoldComplained = '';
   protected refusedStreak = 0;
@@ -336,6 +336,10 @@ export class Bridge {
 
   get viewerUrl(): string | null {
     return this.viewer !== null && this.viewer.gen === this.generation ? this.viewer.url : null;
+  }
+
+  get agentViews(): import('./viewer-agent-views.ts').AgentViewGallery | undefined {
+    return this.viewer?.gen === this.generation ? this.viewer.agentViews : undefined;
   }
 
   /** 已作废代次使用关闭状态的 ResourceBag，迟到资源登记时立即关闭。 */
@@ -1084,6 +1088,7 @@ export class Bridge {
           return;
         }
         let modernAssets = this.opts.viewerAssetsDir;
+        let agentViews: import('./viewer-agent-views.ts').AgentViewGallery | undefined;
         if (modernAssets) {
           const { readFile } = await import('node:fs/promises');
           const { join } = await import('node:path');
@@ -1107,6 +1112,7 @@ export class Bridge {
             agentMana: () => this.agentMana, serverProtocol: this.viewerServerProtocol(),
           }).catch(error => {relay?.close();throw error;});
           this.bagFor(gen).register('modern-viewer', () => this.releaseViewer(gen, port, handle.close));
+          agentViews = handle.agentViews;
         } else {
           const mod = await this.loadViewer();
           if (this.stopped || this._bot !== bot || this.generation !== gen || this.bagFor(gen).disposed) return;
@@ -1116,7 +1122,7 @@ export class Bridge {
           this.bagFor(gen).register('prismarine-viewer', () => this.releaseViewer(gen, port, close));
         }
         if (this.stopped || this.generation !== gen) return; // 旧代不得改新代状态
-        this.viewer = { gen, url: `http://127.0.0.1:${port}`, kind: modernAssets ? 'modern' : 'basic' };
+        this.viewer = { gen, url: `http://127.0.0.1:${port}`, kind: modernAssets ? 'modern' : 'basic', agentViews };
         this.opts.log.info(`minecraft viewer 已启动 http://127.0.0.1:${port}`);
       } catch (err) {
         this.opts.log.warn(`minecraft viewer 启动失败(不影响游玩): ${(err as Error).message}`);

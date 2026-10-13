@@ -29,6 +29,7 @@ import { observeStatusEffects } from './status-effects.ts';
 import { Bridge } from './bridge.ts';
 import { captureMinecraftView, closeMinecraftViewCapture, warmMinecraftViewCapture } from './visual-capture.ts';
 import { OVERVIEW_SCHEMA, overviewArgumentError, type OverviewOptions } from './visual-overview.ts';
+import { visualFovError } from './visual-fov.ts';
 import { PlayerObservations, playerObservationMeta, renderPlayerObservation, type PlayerObservation } from './player-observation.ts';
 import { precheckEmptyUseTarget } from './precheck.ts';
 import { blockAtCell, resolveAt } from './cell-facts.ts';
@@ -2299,6 +2300,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
           description: 'Default third. first=front, third=surroundings/avatar, dungeon=angled view, overview=north-up coordinate photograph of loaded terrain.',
         },
         overview: OVERVIEW_SCHEMA,
+        fov: { type: 'number', minimum: 30, maximum: 140, description: 'first/third vertical field of view in degrees; default 120. Does not change look direction or reveal occluded terrain.' },
         focus: {
           type: 'string', maxLength: 160,
           description: 'What you want to inspect: an entrance, nearby player, combat result, menu, item or building. This labels the observation; it does not move the camera.',
@@ -2684,6 +2686,7 @@ export class MinecraftWorld implements World {
   protected idleSceneCache: IdleBehaviorScene | null = null;
   protected visualWarmKey: string | null = null;
   protected visualInFlight: VisualObservationJob | null = null;
+  protected readonly visualFrames = new WeakMap<ToolOutcome, { id: string; gallery: import('./viewer-agent-views.ts').AgentViewGallery }>();
   protected static readonly VISUAL_BACKGROUND_WAIT_MS = 75_000;
   protected reflexes: Reflexes | null = null;
   protected combat: CombatSession | null = null;
@@ -4424,6 +4427,8 @@ export class MinecraftWorld implements World {
   protected visualArgumentFailure(args: Record<string, unknown>): ToolOutcome | undefined {
     const name = 'mc_visual';
     const mode = args.mode === undefined ? 'third' : args.mode;
+    const fovError = visualFovError(mode, args.fov);
+    if (fovError) return { text: this.toolLog(name, args, `[mc_visual 失败] ${fovError}`), failed: true };
     if (!['first', 'third', 'dungeon', 'overview'].includes(mode as string)) {
       return { text: this.toolLog(name, args, '[mc_visual 失败] mode 只能是 first、third、dungeon 或 overview'), failed: true };
     }
@@ -4473,7 +4478,11 @@ export class MinecraftWorld implements World {
     // Keep the capture slot until cancellation cleanup actually settles.
     const release = () => { if (this.visualInFlight === job) this.visualInFlight = null; };
     void work.then(release, release);
-    if (!background) return work;
+    if (!background) {
+      const outcome = await work;
+      this.markVisualFrame(outcome, 'tool-result');
+      return outcome;
+    }
     void this.deliverVisualObservation(job, work);
     return { text: this.toolLog('mc_visual', args,
       `[mc_visual 已受理] job_id:${job.id}；画面尚未完成，结果稍后通过 minecraft.visual 事件交回。`
@@ -4485,6 +4494,11 @@ export class MinecraftWorld implements World {
       && !!job.bot.entity && this.bridge?.viewerUrl === job.viewerUrl
       && this.connectionGeneration === job.generation
       && String(job.bot.game.dimension ?? 'unknown') === job.dimension;
+  }
+
+  protected markVisualFrame(outcome: ToolOutcome, status: import('./viewer-agent-views.ts').AgentViewDelivery): void {
+    const frame = this.visualFrames.get(outcome);
+    frame?.gallery.mark(frame.id, status);
   }
 
   protected async deliverVisualObservation(job: VisualObservationJob, work: Promise<ToolOutcome>): Promise<void> {
@@ -4499,15 +4513,17 @@ export class MinecraftWorld implements World {
       job.controller.abort(new Error('后台观察本地等待超过 75 秒；已取消拍摄等待，迟到画面将丢弃'));
     }, MinecraftWorld.VISUAL_BACKGROUND_WAIT_MS);
     timer.unref();
+    let outcome: ToolOutcome | undefined;
     try {
-      let outcome: ToolOutcome;
       try {
         outcome = await Promise.race([work, cancelled]);
       } catch (error) {
         if (!job.timedOut) return;
         outcome = { text: error instanceof Error ? error.message : String(error), failed: true };
       }
-      if (!this.visualJobIsCurrent(job) || (job.controller.signal.aborted && !job.timedOut)) return;
+      if (!this.visualJobIsCurrent(job) || (job.controller.signal.aborted && !job.timedOut)) {
+        this.markVisualFrame(outcome, 'discarded'); return;
+      }
       await job.host.pushEvent({
         origin: 'external', ts: nowIso(this.timezone), source: this.id, type: 'minecraft.visual',
         senderKey: 'minecraft.visual',
@@ -4516,7 +4532,9 @@ export class MinecraftWorld implements World {
         meta: { jobId: job.id, callId: job.callId, status: outcome.failed ? 'failed' : 'completed',
           dimension: job.dimension, connectionGeneration: job.generation },
       }, { trigger: 'debounce' });
+      this.markVisualFrame(outcome, 'host-event');
     } catch (error) {
+      if (outcome) this.markVisualFrame(outcome, 'failed');
       job.host.log.warn('mc_visual 后台事件投递失败', { err: error });
     } finally {
       clearTimeout(timer);
@@ -4548,7 +4566,7 @@ export class MinecraftWorld implements World {
       && this.bridge?.bot === bot && !!bot.entity && this.bridge?.viewerUrl === viewerUrl
       && String(bot.game.dimension ?? 'unknown') === dimension;
     try {
-      const capture = await captureMinecraftView({ viewerUrl, mode, overview: args.overview as OverviewOptions | undefined, includeHud: args.include_hud === true,
+      const capture = await captureMinecraftView({ viewerUrl, mode, fov: args.fov as number | undefined, overview: args.overview as OverviewOptions | undefined, includeHud: args.include_hud === true,
         timeoutMs: 25_000, signal: ctx.signal });
       this.diag.write({ lane: 'world', event: 'visual-capture', msg: capture.mode,
         data: { ...capture.timings, capturedAt: capture.capturedAt, width: capture.width, height: capture.height } });
@@ -4582,7 +4600,7 @@ export class MinecraftWorld implements World {
         focus ? `关注：${focus}` : '',
         moved > 2 ? `拍摄期间本人移动约 ${moved.toFixed(1)} 格；图中坐标以拍摄时刻为准。` : '',
       ].filter(Boolean).join('\n') : [
-        `[mc_visual] ${capture.capturedAt} 网页实景截图，${capture.mode} 视角，${capture.width}×${capture.height}，`
+        `[mc_visual] ${capture.capturedAt} 网页实景截图，${capture.mode} 视角${capture.fov === undefined ? '' : `，垂直视野 ${capture.fov}°`}，${capture.width}×${capture.height}，`
           + `${dimension}，截图完成后玩家位置 (${location})。`,
         `维度：${dimension}；生物群系：${biomeAt(bot, after)}。生物群系与维度不是同一字段，不能据群系名称判断是否已经出洞或到达地表。`,
         `[现场读数 ${observedAt}] 脚部格 ${feet?.name ?? '未加载，未知'}；头部格 ${head?.name ?? '未加载，未知'}；${waterState}${oxygen}。`,
@@ -4597,10 +4615,16 @@ export class MinecraftWorld implements World {
       const blobs = [{ bytes: capture.png, mime: 'image/png',
         name: `minecraft-${capture.mode}-${capture.capturedAt.replace(/[:.]/g, '-')}.png`,
         fallbackText: `Minecraft ${capture.mode} 视角现场截图；位置 (${location})，${dimension}，${capture.capturedAt}。` }];
-      return {
+      const outcome: ToolOutcome = {
         text: this.toolLog(name, args, `${description}`),
         blobs,
       };
+      const gallery = this.bridge?.agentViews;
+      const frameId = gallery?.add({ png: capture.png, capturedAt: capture.capturedAt, mode: capture.mode,
+        width: capture.width, height: capture.height, dimension, position: { x: after.x, y: after.y, z: after.z },
+        focus, callId: ctx.callId });
+      if (gallery && frameId) this.visualFrames.set(outcome, { id: frameId, gallery });
+      return outcome;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       return { text: this.toolLog(name, args, `[mc_visual 暂不可用] ${reason}`), failed: true,
