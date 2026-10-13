@@ -178,7 +178,7 @@ final class AgentCliCatalog {
         add(specs,"locate.off","team","write","/mycli locate off","停止追踪队友","在线玩家","停止结果");
         add(specs,"locate.tp","team","teleport","/mycli locate tp <玩家名|nearest>","安全传送到队友附近","队友在线可见；8 魔力、20 秒冷却；有安全落点","成功后 MC_TRAVEL 与绝对坐标；失败不扣费");
         add(specs,"arena.status","adventure","read","/mycli arena status","查看本人参赛身份、试炼进度、倒地队友坐标及救援进度","在线玩家；队友4格内停留10秒或本层清场可自动复活","MC_DUNGEON status 与 MC_TRIAL_RESCUE_STATE；downed 时等待救援，不自动退出");
-        add(specs,"dungeon.list","adventure","read","/mycli dungeon list|info <ID>|status [ID]","发现不同地点的建筑地下城、真实房间坐标与本人进度","只读免费；info 指明首室深度和逐室路线","私有 MC_SITE_DUNGEON_LIST/ITEM/INFO/STATE JSON，schemaVersion=1");
+        add(specs,"dungeon.list","adventure","read","/mycli dungeon list|info <ID>|status [ID]","发现不同地点的建筑地下城、真实房间坐标、本人进度及旧场次待领奖凭据","只读免费；info 指明首室深度和逐室路线；status 的 pendingRewards/pendingRewardDetails 给出真实领取命令，有凭据无需重打旧场次","私有 MC_SITE_DUNGEON_LIST/ITEM/INFO/STATE JSON，schemaVersion=1；查询不领取奖励或开场");
         add(specs,"dungeon.travel","adventure","teleport","/mycli dungeon travel <ID>","前往已勘察的入口或外围；沿建筑道路深入首室","8魔力、基础传送资格；不能在试炼/PvP/另一地下城内使用","沿用 MC_TRAVEL 成功回执；抵达入口不计完成");
         add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","在真实建筑首室发起挑战，其他地点可同时开队","生存角色亲自到首室，未参加其他活动；10秒集结、每队最多8人","MC_SITE_DUNGEON_RESULT；逐室清怪、返回首室才登记奖励；无自动免费位移");
         add(specs,"dungeon.join","adventure","write","/mycli dungeon join <ID>","主动加入该处正在集结的队伍","亲自站在首室，发起后10秒内加入，未参加其他活动","MC_SITE_DUNGEON_RESULT；每室清场须在场，最后返回首室");

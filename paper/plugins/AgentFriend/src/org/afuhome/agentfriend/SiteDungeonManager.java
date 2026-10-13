@@ -63,7 +63,7 @@ final class SiteDungeonManager implements Listener {
         Run(Site site,Mode mode){this.site=site;this.mode=mode;}
         Room room(){return site.rooms.get(Math.min(stage,site.rooms.size()-1));}
     }
-    private record Menu(String site){}
+    private record Menu(String site,boolean pendingReward){}
     private record Shot(Run run,long expires){}
     private final AgentFriendPlugin plugin;
     private Map<String,Site> sites=Map.of();
@@ -115,7 +115,10 @@ final class SiteDungeonManager implements Listener {
         data.put("success",reason.equals("success"));data.put("reason",reason);
         ActionFeedback.Advice advice=reason.equals("success")?null:ActionFeedback.advice("dungeon",reason,site);
         if(advice!=null){data.put("errorMessage",advice.message());data.put("nextAction",advice.next());data.put("nextCommands",advice.commands());}
+        if(reason.equals("claim_previous_reward_first"))data.put("pendingReward",pendingReward(p.getUniqueId(),site));
         send(p,"MC_SITE_DUNGEON_RESULT",data);if(advice!=null)advice.send(p);
+        if(reason.equals("claim_previous_reward_first"))explainPending(p,List.of(site));
+        else if(reason.equals("specify_dungeon_id"))explainPending(p,pendingSites(p.getUniqueId()));
     }
     private void tell(Run r,String message){for(UUID id:r.party){Player p=Bukkit.getPlayer(id);if(p!=null)p.sendMessage("§6【遗迹地下城·"+r.site.name+"】§r "+message);}}
     private void notice(Run r,String message){
@@ -303,20 +306,27 @@ final class SiteDungeonManager implements Listener {
         if(plugin.trialRescue()!=null)plugin.trialRescue().report(p);
         Run r=id.isEmpty()?own(p):runs.get(site(id).id);
         if(r==null){
-            Map<String,Object> fields=new LinkedHashMap<>();fields.put("active",false);fields.put("participant",false);fields.put("pendingRewards",pendingSites(p.getUniqueId()));
+            List<String> pending=pendingSites(p.getUniqueId());
+            Map<String,Object> fields=new LinkedHashMap<>();fields.put("active",false);fields.put("participant",false);fields.put("pendingRewards",pending);
+            fields.put("pendingRewardDetails",pending.stream().map(s->pendingReward(p.getUniqueId(),s)).toList());
             Map<String,Object> outcome=lastOutcome(p.getUniqueId(),id);fields.put("lastOutcome",outcome);fields.put("outcomeKnown",!outcome.isEmpty());
             send(p,"MC_SITE_DUNGEON_STATE",fields);
+            explainPending(p,pending);
             if(!outcome.isEmpty())explainOutcome(p,outcome);
-            else p.sendMessage("§e【遗迹地下城】当前没有你的活动记录；旧版未保存结束原因，不能据此确认通关或补发。用 /mycli dungeon list 选地点，info 查看规则。");
+            else if(!pending.isEmpty())p.sendMessage("§e【遗迹地下城】当前没有正在参与的挑战；以上是已保存的待领奖凭据，可直接领取，无需重打或返回首室。");
+            else p.sendMessage("§e【遗迹地下城】当前没有你的活动记录，也没有待领奖凭据；旧版未保存结束原因，不能据此确认通关或补发。用 /mycli dungeon list 选地点，info 查看规则。");
             return;
         }
         Room target=r.stage>=r.site.rooms.size()?r.site.rooms.getFirst():r.room();
         Map<String,Object> fields=new LinkedHashMap<>();fields.put("id",r.site.id);fields.put("run",r.id);fields.put("active",true);fields.put("participant",r.party.contains(p.getUniqueId()));fields.put("phase",r.phase);fields.put("stage",Math.min(r.stage+1,r.site.rooms.size()));fields.put("stages",r.site.rooms.size());fields.put("remainingMobs",r.mobs.size());fields.put("target",List.of(target.x,target.y,target.z));fields.put("difficulty",r.mode.id);fields.put("paused",r.pausedAt>0||!r.fault.isEmpty());fields.put("fault",r.fault);
         fields.putAll(attendanceState(r,p.getUniqueId()));fields.put("attempt",r.attempt);fields.put("resets",r.resets);fields.put("pauseReason",r.pauseReason);fields.put("lastResetReason",r.lastResetReason);fields.put("lastResetAt",r.lastResetAt);
+        List<String> pending=pendingSites(p.getUniqueId());fields.put("pendingRewards",pending);
+        fields.put("pendingRewardDetails",pending.stream().map(s->pendingReward(p.getUniqueId(),s)).toList());
         fields.put("combatBounds",Map.of("world",r.site.world,"min",List.of(target.x+.5-target.radius-2,target.y-3,target.z+.5-target.radius-2),"max",List.of(target.x+.5+target.radius+2,target.y+3,target.z+.5+target.radius+2)));
         Map<String,Object> previousOutcome=r.party.contains(p.getUniqueId())?Map.of():lastOutcome(p.getUniqueId(),r.site.id);
         if(!r.party.contains(p.getUniqueId())){fields.put("lastOutcome",previousOutcome);fields.put("outcomeKnown",!previousOutcome.isEmpty());}
         send(p,"MC_SITE_DUNGEON_STATE",fields);
+        explainPending(p,pending);
         if(r.party.contains(p.getUniqueId())){
             p.sendMessage("§b【遗迹地下城】"+r.site.name+" · "+target.name+"；参战登记 "+r.attendance.getOrDefault(p.getUniqueId(),0)+"/"+r.site.rooms.size()+"，"+(r.phase.equals("returning")?"请返回首室结算":"本室"+(r.roomParticipants.contains(p.getUniqueId())?"已记录":"尚未记录"))+"。"+(r.pausedAt>0?"暂停："+pauseLabel(r.pauseReason)+"；5分钟内回场，未清房间重刷。":""));
             if(!missingRooms(r,p.getUniqueId()).isEmpty())p.sendMessage("§e缺席房间："+String.join("、",missingRooms(r,p.getUniqueId()))+"；本轮不能领取完整奖励，可继续练习或正常退出后重新挑战。");
@@ -336,8 +346,23 @@ final class SiteDungeonManager implements Listener {
     private int receiptCount(){var c=plugin.getConfig().getConfigurationSection(ROOT+".receipts");if(c==null)return 0;int total=0;for(String owner:c.getKeys(false)){var section=c.getConfigurationSection(owner);if(section!=null)total+=section.getKeys(false).size();}return total;}
     private ConfigurationSection receipt(UUID id,String site){return plugin.getConfig().getConfigurationSection(ROOT+".receipts."+id+"."+site);}
     private List<String> pendingSites(UUID id){var c=plugin.getConfig().getConfigurationSection(ROOT+".receipts."+id);return c==null?List.of():new ArrayList<>(c.getKeys(false));}
+    private Map<String,Object> pendingReward(UUID owner,String id){
+        var saved=receipt(owner,id);if(saved==null)return Map.of();Site s=sites.get(id);
+        Map<String,Object> data=new LinkedHashMap<>();data.put("id",id);data.put("name",s==null?id:s.name);
+        data.put("status","ready");data.put("run",saved.getString("run",""));data.put("day",saved.getString("day",""));
+        data.put("emeralds",saved.getInt("emeralds"));data.put("item",saved.getString("item",""));data.put("count",saved.getInt("count"));
+        data.put("claimCommand","/mycli dungeon claim "+id);return data;
+    }
+    private void explainPending(Player p,List<String> pending){
+        for(String id:pending){
+            var saved=receipt(p.getUniqueId(),id);if(saved==null)continue;Site s=sites.get(id);
+            p.sendMessage("§6【地下城待领奖】"+(s==null?id:s.name)+"（"+saved.getString("day","日期未记录")+"）已完成，奖励尚未领取。");
+            p.sendMessage(net.kyori.adventure.text.Component.text("[点击领取到个人奖励箱] /mycli dungeon claim "+id,net.kyori.adventure.text.format.NamedTextColor.GREEN)
+                    .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli dungeon claim "+id)));
+        }
+    }
     private void claim(Player p,String id){
-        if(id.isEmpty()){var pending=pendingSites(p.getUniqueId());require(pending.size()==1,"specify_dungeon_id");id=pending.getFirst();}
+        if(id.isEmpty()){var pending=pendingSites(p.getUniqueId());require(!pending.isEmpty(),"no_pending_reward");require(pending.size()==1,"specify_dungeon_id");id=pending.getFirst();}
         String chosen=id;var receipt=receipt(p.getUniqueId(),chosen);
         if(receipt==null){Map<String,Object> outcome=lastOutcome(p.getUniqueId(),chosen);if(!outcome.isEmpty())explainOutcome(p,outcome);require(false,"no_pending_reward");}
         atomic(()->{
@@ -535,14 +560,35 @@ final class SiteDungeonManager implements Listener {
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnWild(CreatureSpawnEvent e){if(e.getSpawnReason()==CreatureSpawnEvent.SpawnReason.NATURAL&&runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
     private ItemStack icon(Material material,String name,String... lore){ItemStack item=new ItemStack(material);var meta=item.getItemMeta();meta.setDisplayName(name);meta.setLore(List.of(lore));item.setItemMeta(meta);return item;}
     private void open(Player p,String id){
-        Inventory inv=Bukkit.createInventory(null,54,id.isEmpty()?"遗迹地下城":"地下城 · "+site(id).name);menus.put(inv,new Menu(id));
+        Inventory inv=Bukkit.createInventory(null,54,id.isEmpty()?"遗迹地下城":"地下城 · "+site(id).name);menus.put(inv,new Menu(id,receipt(p.getUniqueId(),id)!=null));
         if(id.isEmpty()){int slot=10;for(Site s:sites.values())inv.setItem(slot++,icon(s.icon,"§6"+s.name,s.hint,"点击查看入口、组队、挑战与奖励"));}
         else{Site s=site(id);inv.setItem(10,icon(Material.ENDER_PEARL,s.entry.isEmpty()?"§b前往遗迹外围":"§b前往墓穴入口","8魔力；抵达后仍须主动开始、逐室清怪"));inv.setItem(12,icon(Material.IRON_SWORD,"§a开始普通挑战","须亲自站在首室；10秒组队集结"));inv.setItem(13,icon(Material.DIAMOND_SWORD,"§6开始冒险挑战","更强怪物；每日奖励二倍"));inv.setItem(14,icon(Material.NETHERITE_SWORD,"§5开始末日挑战","更强怪物；每日奖励三倍"));inv.setItem(16,icon(Material.SUNFLOWER,"§a加入正在集结的队伍","须站在首室；每队最多8人"));inv.setItem(22,icon(Material.BARRIER,"§c退出自己的挑战","留在原地；自行步行或使用传送技能"));inv.setItem(30,icon(Material.CHEST,"§6领取已完成奖励","存入个人箱；满队列时保留凭据"));inv.setItem(31,icon(Material.WRITTEN_BOOK,"§e路线与当前进度","清理每个标记房间并返回首室"));inv.setItem(49,icon(Material.ARROW,"§7返回地下城列表"));}
+        if(id.isEmpty()){
+            int slot=10;for(Site s:sites.values()){
+                if(receipt(p.getUniqueId(),s.id)!=null)inv.setItem(slot,icon(s.icon,"§e"+s.name+" · 有奖励待领取",s.hint,"点击打开，再点奖励箱领取上次奖励","领取后才可开始或加入这处的新挑战"));
+                slot++;
+            }
+        }else if(receipt(p.getUniqueId(),id)!=null){
+            var saved=receipt(p.getUniqueId(),id);
+            for(int slot:new int[]{12,13,14,16})inv.setItem(slot,icon(Material.GRAY_DYE,"§e先领取上次奖励","上次已完成，奖励保留中","请点下方「领取上次奖励」箱子","不会自动领取或替你开启新挑战"));
+            inv.setItem(30,icon(Material.ENDER_CHEST,"§a领取上次奖励",saved.getString("day","日期未记录")+"完成的挑战","点击领取到个人奖励箱，随后重新开场","满队列时保留凭据；无需重打旧场次"));
+        }
         p.openInventory(inv);
     }
     @EventHandler public void click(InventoryClickEvent e){
         Menu menu=menus.get(e.getView().getTopInventory());if(menu==null)return;e.setCancelled(true);if(!(e.getWhoClicked() instanceof Player p))return;int slot=e.getRawSlot();if(slot<0||slot>=54)return;
-        Bukkit.getScheduler().runTask(plugin,()->{if(!p.isOnline())return;if(menu.site.isEmpty()){List<Site> list=new ArrayList<>(sites.values());if(slot>=10&&slot<10+list.size())open(p,list.get(slot-10).id);return;}String action=switch(slot){case 10->"travel";case 12,13,14->"start";case 16->"join";case 22->"leave";case 30->"claim";case 31->"info";default->"";};if(slot==49){open(p,"");return;}if(action.isEmpty())return;p.closeInventory();command(p,new String[]{"dungeon",action,menu.site,slot==13?"adventure":slot==14?"apocalypse":"normal"});if(slot==31)command(p,new String[]{"dungeon","status",menu.site});});
+        Bukkit.getScheduler().runTask(plugin,()->{
+            if(!p.isOnline())return;
+            if(menu.site.isEmpty()){List<Site> list=new ArrayList<>(sites.values());if(slot>=10&&slot<10+list.size())open(p,list.get(slot-10).id);return;}
+            String action=switch(slot){case 10->"travel";case 12,13,14->"start";case 16->"join";case 22->"leave";case 30->"claim";case 31->"info";default->"";};
+            if(slot==49){open(p,"");return;}if(action.isEmpty())return;
+            if((action.equals("start")||action.equals("join"))&&(menu.pendingReward||receipt(p.getUniqueId(),menu.site)!=null)){
+                // Inspecting the blocker never implicitly claims or starts a challenge.
+                explainPending(p,List.of(menu.site));open(p,menu.site);return;
+            }
+            p.closeInventory();command(p,new String[]{"dungeon",action,menu.site,slot==13?"adventure":slot==14?"apocalypse":"normal"});
+            if(slot==31)command(p,new String[]{"dungeon","status",menu.site});
+        });
     }
     @EventHandler public void drag(InventoryDragEvent e){if(menus.containsKey(e.getView().getTopInventory()))e.setCancelled(true);}
     @EventHandler public void close(InventoryCloseEvent e){menus.remove(e.getInventory());}
