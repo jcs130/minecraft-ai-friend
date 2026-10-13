@@ -61,6 +61,7 @@ export interface WorldHost {
   store: EventStoreReader;
   drainPendingEvents(filter: (event: EventEnvelope) => boolean): Promise<EventEnvelope[]>;
   modelFacts: ModelFacts;
+  decisions?: import('./decision.ts').DecisionPort;
   blob(handle: string): { bytes: Uint8Array; mime: string } | null;
   reportUsage(usage: LLMUsage, options?: { model?: string; label?: string }): void;
   llmStalls?(withinMs: number): Promise<number>;

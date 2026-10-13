@@ -1,3 +1,4 @@
+import { observationView } from './perception-sight.ts';
 /**
  * 找东西与拿东西:collect、find、fish、trade、probe。
  *
@@ -1651,12 +1652,12 @@ export function probeWhereText(
   const miss = names.size === 0 && entityNames.length === 0 ? '(点名的这几样一个都认不出来)' : '';
   const ents = entityLines.length > 0 ? `;${entityLines.join(';')}` : '';
   const unknownNote = unknown.length > 0 ? `(where 里的 ${unknown.join('、')} 认不出来,这几样没算进去)` : '';
-  const tail = unloaded > 0 ? `。${unloaded} 格区块没加载,那几格没读到` : '';
+  const tail = unloaded > 0 ? `。${unloaded} 格未观察到（遮挡或未加载）` : '';
   const oreNote = lines.length === 0 && where.some((id) => /(?:^|:)\w+_ore$/.test(id))
     ? '；零命中只代表客户端收到的区块数据没有目标，服务器可能隐藏未暴露的矿石'
     : '';
   const fluid = probeFluidText(bot, pre.filter((e) => e.name !== null && names.has(e.name)));
-  return `${head}${miss}${body}${ents}${unknownNote}${fluid ? `。${fluid}` : ''}${tail}。这一档直接读区块,不受遮挡与视线限制${oreNote}`;
+  return `${head}${miss}${body}${ents}${unknownNote}${fluid ? `。${fluid}` : ''}${tail}。仅视线确认的格；遮挡或未加载为未知${oreNote}`;
 }
 
 /**
@@ -1664,6 +1665,7 @@ export function probeWhereText(
  * 同参重复探查且读数没变时只回「与上次相同」——差分记在执行器上,跨任务有效,重启清。
  */
 export async function skillProbe(bot: Bot, call: Extract<SkillCall, { skill: 'probe' }>, ctx: SkillContext): Promise<string> {
+  bot = observationView(bot);
   checkAbort(ctx);
   const locating = call.where !== undefined && call.where.length > 0;
   if (call.slice && (call.shape !== 'box' || (call.fill !== undefined && call.fill !== 'solid') || locating)) {
@@ -1726,7 +1728,7 @@ export async function skillProbe(bot: Bot, call: Extract<SkillCall, { skill: 'pr
     const listed = pre.filter((e) => e.name !== null && !AIR_NAMES.has(e.name));
     const airCells = pre.filter((e) => e.name !== null && AIR_NAMES.has(e.name)).map((e) => e.c);
     if (listed.length === 0) {
-      lines.push(`${head}: 全是空气。`);
+      lines.push(`${head}: ${unloaded ? '已观察部分未发现非空气方块；未知格不能当空气' : '全是空气'}。`);
     } else {
       const airTail = airCells.length > 0 ? call.shape === 'line'
         ? `;空气:${airCells.map(cellText).join('、')}` : `;其余 ${airCells.length} 格是空气` : '';
@@ -1739,7 +1741,7 @@ export async function skillProbe(bot: Bot, call: Extract<SkillCall, { skill: 'pr
     lines.push(`${head}: ${compositionText(reading, true)}。坐标是各材质的最近样本，样本上方空间仍需逐格核对。${fluid ? `${fluid}。` : ''}`);
     pushPocketLine(bot, lines, cells, reading.air);
   }
-  if (unloaded > 0) lines.push(`${unloaded} 格区块没加载,没读到。`);
+  if (unloaded > 0) lines.push(`${unloaded} 格未观察到（遮挡或未加载）。`);
   const text = lines.join('');
   remember(lines[0]);
   return text;

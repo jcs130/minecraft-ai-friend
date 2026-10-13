@@ -1,4 +1,5 @@
 import type { ToolDef, ToolCallContext, ToolOutcome, WorldHost, WorldRequestFacts } from './contracts.ts';
+import { overviewArgumentError } from '../../core/visual-overview.ts';
 
 /** A missing capability is unknown, not permission to send an image. */
 export function acceptsImages(host: WorldHost | null): boolean {
@@ -7,8 +8,10 @@ export function acceptsImages(host: WorldHost | null): boolean {
 }
 
 export function visualArgumentError(args: Record<string, unknown>, prefix = 'mc'): ToolOutcome | undefined {
-  if (args.mode !== undefined && (typeof args.mode !== 'string' || !['first', 'third', 'dungeon'].includes(args.mode)))
-    return { text: `[${prefix}_visual 失败] mode 只能是 first、third 或 dungeon`, failed: true };
+  if (args.mode !== undefined && (typeof args.mode !== 'string' || !['first', 'third', 'dungeon', 'overview'].includes(args.mode)))
+    return { text: `[${prefix}_visual 失败] mode 只能是 first、third、dungeon 或 overview`, failed: true };
+  const overviewError = overviewArgumentError(args.mode, args.overview, args.include_hud);
+  if (overviewError) return { text: `[${prefix}_visual 失败] ${overviewError}`, failed: true };
   for (const key of ['include_hud', 'raw', 'background']) {
     if (args[key] !== undefined && typeof args[key] !== 'boolean')
       return { text: `[${prefix}_visual 失败] ${key} 只能是 boolean`, failed: true };

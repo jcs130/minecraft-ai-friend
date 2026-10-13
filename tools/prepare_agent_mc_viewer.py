@@ -6,6 +6,7 @@ import gzip
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -15,7 +16,7 @@ REPO = Path(__file__).resolve().parents[1]
 CORE = REPO / 'packages/agent-mc-world'
 
 
-def prepare(shared: Path, workspace: Path, node: Path, update_lock: bool = False):
+def prepare(shared: Path, workspace: Path, node: Path, update_lock: bool = False, npm: Path | None = None):
     shared, workspace = shared.resolve(), workspace.resolve()
     if workspace.exists() or shared == workspace or shared in workspace.parents or workspace in shared.parents:
         raise ValueError('Use a fresh, separate viewer build directory')
@@ -36,12 +37,14 @@ def prepare(shared: Path, workspace: Path, node: Path, update_lock: bool = False
     with tarfile.open(archive) as handle:
         handle.extractall(source, filter='data')
     renderer = source / 'packages/modern-viewer/renderer-src'
-    # Reuse explicitly selected local build dependencies, never a running viewer.
-    dependencies = shared / 'packages/modern-viewer/renderer-src/node_modules'
-    if not dependencies.is_dir():
-        raise ValueError('Prepare the shared renderer build dependencies first')
-    subprocess.run([str(node), '-e', "require('node:fs').symlinkSync(process.argv[1],process.argv[2],'junction')",
-                    str(dependencies), str(renderer / 'node_modules')], check=True)
+    # The pinned source may need newer dependencies than the shared checkout.
+    # Install its own lock in this private build tree; never mutate shared/live node_modules.
+    npm = (npm or node.with_name('npm.cmd' if os.name == 'nt' else 'npm')).resolve()
+    if not npm.is_file():
+        raise ValueError('Provide --npm for the selected Node runtime')
+    env = {**os.environ, 'PATH': str(node.resolve().parent) + os.pathsep + os.environ.get('PATH', '')}
+    subprocess.run([str(npm), 'ci', '--ignore-scripts', '--no-audit', '--no-fund'],
+                   cwd=renderer, env=env, check=True)
     output = workspace / 'input'
     viewer = output / 'viewer'
     subprocess.run([str(node), str(source / 'tools/prepare-viewer-assets.mjs'),
@@ -79,7 +82,9 @@ def prepare(shared: Path, workspace: Path, node: Path, update_lock: bool = False
     digest = hashlib.sha256(packed.read_bytes()).hexdigest()
     report = {'schemaVersion': 1, 'sourceCommit': pinned, 'archive': str(packed), 'sha256': digest,
               'previousArchiveSha256': lock['viewer']['sha256'], 'liveAssetsChanged': False,
-              'sourceCheckoutChanged': False, 'lockUpdated': update_lock}
+              'sourceCheckoutChanged': False, 'lockUpdated': update_lock,
+              'dependencies': 'private npm ci --ignore-scripts',
+              'rendererLockSha256': hashlib.sha256((renderer / 'package-lock.json').read_bytes()).hexdigest()}
     if update_lock:
         lock['viewer']['sha256'] = digest
         lock_path.write_text(json.dumps(lock, indent=2) + '\n', encoding='utf-8')
@@ -92,6 +97,7 @@ if __name__ == '__main__':
     parser.add_argument('--shared-source', required=True, type=Path)
     parser.add_argument('--workspace', required=True, type=Path)
     parser.add_argument('--node', required=True, type=Path)
+    parser.add_argument('--npm', type=Path, help='Defaults to npm alongside --node; installs only in the fresh private build tree')
     parser.add_argument('--update-lock', action='store_true', help='Explicitly record the newly prepared archive SHA; never relax verification')
     args = parser.parse_args()
-    print(json.dumps(prepare(args.shared_source, args.workspace, args.node, args.update_lock), indent=2))
+    print(json.dumps(prepare(args.shared_source, args.workspace, args.node, args.update_lock, args.npm), indent=2))

@@ -3,12 +3,14 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { chromium, type Browser, type Page } from 'playwright-core';
+import { overviewArgumentError, type OverviewOptions, type OverviewMetadata } from './visual-overview.ts';
 
-export type MinecraftViewMode = 'first' | 'third' | 'dungeon';
+export type MinecraftViewMode = 'first' | 'third' | 'dungeon' | 'overview';
 
 export interface MinecraftViewCaptureOptions {
   viewerUrl: string;
   mode?: MinecraftViewMode;
+  overview?: OverviewOptions;
   width?: number;
   height?: number;
   includeHud?: boolean;
@@ -24,6 +26,7 @@ export interface MinecraftViewCapture {
   capturedAt: string;
   viewerVersion?: string;
   includesHud?: boolean;
+  overview?: OverviewMetadata;
   timings?: { warmupMs: number; healthMs: number; browserMs: number; pageMs: number; sceneMs: number; pngMs: number; reusedPage: boolean };
 }
 
@@ -193,7 +196,9 @@ export class MinecraftViewCaptureManager {
   async capture(options: MinecraftViewCaptureOptions): Promise<MinecraftViewCapture> {
     const origin = localViewerOrigin(options.viewerUrl);
     const mode = options.mode ?? 'third';
-    if (mode !== 'first' && mode !== 'third' && mode !== 'dungeon') throw new RangeError('invalid Minecraft view mode');
+    if (!['first', 'third', 'dungeon', 'overview'].includes(mode)) throw new RangeError('invalid Minecraft view mode');
+    const overviewError = overviewArgumentError(mode, options.overview, options.includeHud);
+    if (overviewError) throw new RangeError(overviewError);
     const width = viewportDimension(options.width, DEFAULT_WIDTH, 640, 1920);
     const height = viewportDimension(options.height, DEFAULT_HEIGHT, 360, 1080);
     const timeoutMs = viewportDimension(options.timeoutMs, DEFAULT_TIMEOUT_MS, 1_000, 60_000);
@@ -273,7 +278,7 @@ export class MinecraftViewCaptureManager {
           ...(captureLane ? { extraHTTPHeaders: { 'x-mc-viewer-capture': '1', 'x-mc-viewer-capture-key': session.leaseKey } } : {}) });
         session.mode = mode; session.width = width; session.height = height;
         session.captureLane = captureLane;
-        const pagePath = mode === 'first' ? '/' : `/${mode}/`;
+        const pagePath = mode === 'overview' ? '/third/?photo=1' : mode === 'first' ? '/' : `/${mode}/`;
         await session.page.goto(`${origin}${pagePath}`, { waitUntil: 'domcontentloaded', timeout: remaining(deadlineAtMs) });
         session.openedAtMs = Date.now();
         await session.page.addStyleTag({ content: 'body[data-cortico-capture-hide-hud="true"] *{visibility:hidden!important}body[data-cortico-capture-hide-hud="true"] canvas[data-cortico-capture-scene="true"]{visibility:visible!important}' });
@@ -309,13 +314,33 @@ export class MinecraftViewCaptureManager {
       }, !options.includeHud);
       const pngStarted = performance.now();
       const screenshotOptions = { type: 'png' as const, timeout: remaining(deadlineAtMs) };
-      const png = options.includeHud ? await page.screenshot(screenshotOptions)
-        : await page.locator('canvas[data-cortico-capture-scene="true"]').screenshot(screenshotOptions);
+      let png: Buffer;
+      let overview: OverviewMetadata | undefined;
+      if (mode === 'overview') {
+        const rendered = await page.evaluate((input: OverviewOptions) => {
+          const capture = (globalThis as unknown as { __mcOverviewCapture?: (input: OverviewOptions) => { png: string; metadata: OverviewMetadata } }).__mcOverviewCapture;
+          if (!capture) throw new Error('当前 viewer 未提供坐标俯视功能；需要匹配的共享可视化资源');
+          return capture(input);
+        }, options.overview ?? {}).catch(error => {
+          throw new VisualCaptureError('renderer', `俯视渲染失败：${error instanceof Error ? error.message.slice(0, 240) : '未知错误'}`, { cause: error });
+        });
+        assertNotAborted(signal);
+        remaining(deadlineAtMs);
+        if (rendered.metadata?.schema !== 'mc-overview/v3')
+          throw new VisualCaptureError('renderer', '俯视图坐标协议版本不匹配；需要同版共享可视化资源');
+        if (!rendered.png.startsWith('data:image/png;base64,') || rendered.png.length > MAX_PNG_BYTES * 1.4)
+          throw new VisualCaptureError('renderer', '俯视图返回格式异常');
+        png = Buffer.from(rendered.png.slice('data:image/png;base64,'.length), 'base64');
+        overview = rendered.metadata;
+      } else {
+        png = options.includeHud ? await page.screenshot(screenshotOptions)
+          : await page.locator('canvas[data-cortico-capture-scene="true"]').screenshot(screenshotOptions);
+      }
       timings.pngMs = performance.now() - pngStarted;
       if (png.length === 0 || png.length > MAX_PNG_BYTES) throw new VisualCaptureError('renderer', 'viewer 截图大小异常');
       if (!captureLane) await this.closePage(origin, session);
-      return { png, mode, width, height, capturedAt: new Date().toISOString(), viewerVersion: health.version,
-        includesHud: options.includeHud === true, timings };
+      return { png, mode, width, height, capturedAt: overview?.capturedAt ?? new Date().toISOString(), viewerVersion: health.version,
+        includesHud: options.includeHud === true, ...(overview ? { overview } : {}), timings };
     } catch (error) {
       await close();
       if (this.generation !== generation) throw new VisualCaptureError('cancelled', 'viewer 截图已取消', { cause: error });

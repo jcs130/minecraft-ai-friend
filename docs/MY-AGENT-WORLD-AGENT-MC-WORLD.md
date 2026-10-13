@@ -1,6 +1,10 @@
 # 独立 Minecraft 核心的原生模组服接入
 
-2026-10-13：合入 `main@edd0179be7bb8a24f9011f50c1163175fd428326` 的 `agent-mc-world 0.4.0`，在 `experiment/agent-society-1.21.1` 添加可选宿主包 `@my-agent-world/agent-mc-host 0.1.0`。当前安装在 `E:\QiandengJiSocietyLab\integrations\agent-mc-world\v10-task-context-20261013`，原v4至v9包保留。最新包另导出真实动作位移反馈，任务监控区分接口失败和没有位移；宿主从原始回执检索历史产物经验。电脑重启后通过原登记守护恢复主服务和基岩桥，配置、35个JAR、身份及原账本保持；没有为了升级此SDK重启游戏服务。
+2026-10-13：已继续合入 `main@5aeea112eee88523bac9bf65eb475a05f7857bc7`，保留 `agent-mc-world 0.4.0` 与可选宿主包 `@my-agent-world/agent-mc-host 0.1.0`。当前安装在 `E:\QiandengJiSocietyLab\integrations\agent-mc-world\v11-upstream-20261013`，原v4至v10包保留，分支仍为 `experiment/agent-society-1.21.1`。任务统计、动作位移反馈、原生 SDK 和模组操作保持。有限试玩角色仍使用原v10配置并已停止；安装v11不代表角色已重新上线或切换新版运行。
+
+这次上游7个提交增加默认客户端的可见几何感知、粗粒度听觉、空间诊断、任务区域俯视图、宿主决策接口和生活目标资料，并核对丢物品的真实领取证据。`mc_choose`/`mc_life` 加在默认 `MinecraftClientWorld`；本服使用独立原生环境，没有自动获得这两项工具。`DecisionPort`、`observedEntity` 等公开扩展可供后续显式接线。1.21.1的模组方块、视觉和操作仍走原生适配器；不能把默认1.20.6引擎的更新说成本服新增玩法已经实测。
+
+本次完整验证及保留审计见 [上游合并记录](evidence/agent-mc-world-upstream-20261013.json)。没有启动自主模型、连接生产身体或重启游戏服务。
 
 任务成功率、模型轮次、纠错和停滞反馈见 [任务评测与迭代](MY-AGENT-WORLD-TASK-EVALUATION.md)。`TaskMonitor` 是宿主通用接口，按本人实际快照验收，失败和取消均保留；没有把模型自评当作成功。
 
@@ -41,7 +45,7 @@
 
 Node 22、Java 21。核心按 `packages/agent-mc-world/AGENTS.md` 独立冻结依赖、测试、类型检查、构建并打包。消费者使用实际打包工件，不能靠源码工作区解析成功代替分发验收。
 
-核心锁定的共享 viewer 归档未能在现有环境取得原文件。本次从同一共享源码提交 `54f1114972ad4562bd2f00f8d0eb85626a779e4c` 显式重建，并更新 `release-sources.json` 的归档 SHA；没有假称取得原归档或放宽哈希验证。
+核心锁定的共享 viewer 归档未能在现有环境取得原文件。本次从新锁定的共享源码提交 `14b1afb563dadea8324021be6d41ea43709c5e0c` 显式重建，并更新 `release-sources.json` 的归档 SHA；没有假称取得原归档或放宽哈希验证。构建工具改用独立目录中的锁定 `npm ci --ignore-scripts`，不再链接共享工作区的旧依赖。本次首先发现共享依赖缺少新版 `camera-controls`，失败目录和日志保留；使用新锁文件后完成构建。
 
 ```powershell
 python tools/prepare_agent_mc_viewer.py --shared-source E:/mc-visual-console --workspace E:/private/fresh-viewer-input --node C:/path/to/node.exe --update-lock
@@ -49,7 +53,7 @@ python tools/prepare_agent_mc_viewer.py --shared-source E:/mc-visual-console --w
 
 在核心目录执行冻结安装、`node scripts/prepare-viewer.mjs <归档>`、`pnpm build` 和 `pnpm pack --out <工件>`；pack 输出应重定向到私有日志，避免11,000余个文件名刷屏。`--update-lock` 仅用于明确重新准备归档，后续构建照锁验证。
 
-当前 viewer 输入 SHA256：`ea001101ec5981da2bd5f34e7a725c176eec89edc32d0aa7aae813b897d2a16a`。核心打包 SHA256：`09dc52c987ab48f8b8ecaee625f03a90531f96274e3822ad396230e81b3d4393`。
+当前 viewer 输入 SHA256：`e7fa7aa69c19f176f3e05074ac6d86751e9c2a811225c71aa51d8bdf70f71609`。当前核心工件哈希见上游合并记录和v11的 `installation.json`。旧v10核心工件哈希 `09dc52c987ab48f8b8ecaee625f03a90531f96274e3822ad396230e81b3d4393` 仅用于旧包回溯。
 
 ```powershell
 python tools/install_maw_agent_mc_world.py --destination E:/QiandengJiSocietyLab/integrations/agent-mc-world/new-version --core-package E:/private/agent-mc-world-0.4.0.tgz --npm C:/path/to/npm.cmd
@@ -60,7 +64,7 @@ python world/ops/health/health_mon.py --society-agent-mc-world-smoke
 
 健康检查核对当前安装清单、源码、核心构建、协议依赖和现有主服务，10项通过。它是手动只读检查，没有新增常驻进程。回退到旧宿主仅需停止新增宿主并继续原 SDK；新目录和原账本保留，不能删除未知动作记录。
 
-## 本次证据与边界
+## 最初集成证据与边界（main@edd0179）
 
 脱敏汇总见 [agent-mc-world-20261013.json](evidence/agent-mc-world-20261013.json)。原始回包、日志、凭据、测试世界与分发工件在私有 `research/agent-mc-world-20261013/`、`integrations/agent-mc-world/`，不进入 Git。
 

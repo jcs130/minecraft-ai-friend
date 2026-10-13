@@ -20,6 +20,7 @@ export interface MinecraftClientOptions {
   timezone?: string;
   agentName?: string;
   modelFacts?: ModelFacts;
+  decisions?: WorldHost['decisions'];
   log: Logger;
 }
 
@@ -66,6 +67,7 @@ export class MinecraftAgentClient {
       store: this.journal.store,
       blob: handle => this.journal.blob(handle),
       modelFacts: options.modelFacts ?? { model: () => '', accepts: () => false, contextWindow: () => undefined },
+      decisions: options.decisions,
       reportUsage: (usage, metadata) => appendFileSync(join(options.dataDir, 'usage.jsonl'), JSON.stringify({
         at: new Date().toISOString(), run: this.journal.run, usage, metadata }) + '\n'),
       log: options.log,

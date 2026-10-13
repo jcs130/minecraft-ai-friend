@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-13",
+  "scope": "upstream_merge_and_optional_sdk_bundle",
+  "branch": "experiment/agent-society-1.21.1",
+  "previousHead": "7f95d99724e44edaf39562ecafd28103ec9194c2",
+  "previousUpstream": "edd0179be7bb8a24f9011f50c1163175fd428326",
+  "mergedUpstream": "5aeea112eee88523bac9bf65eb475a05f7857bc7",
+  "upstreamCommits": [
+    "7c0bdc56dec66eb0ba3cd49e8d1e3ac49267ebc3",
+    "2c759210172b3569ad490964a3f8831beeb58bdf",
+    "d6f81cb7e7bfabf550186696e0143101a1cadaf2",
+    "40eb7eea951e5569a68864feb8febfa48052c996",
+    "e69309492f8396ada78dd189df5f05c974cb153e",
+    "4ac05f7d4e272cd284933727b5e2d460504d527a",
+    "5aeea112eee88523bac9bf65eb475a05f7857bc7"
+  ],
+  "newDefaultClientFeatures": [
+    "visible_geometry_and_focused_perception",
+    "coarse_hearing",
+    "spatial_site_diagnostics",
+    "task_region_and_coordinate_overviews",
+    "host_owned_DecisionPort_and_mc_choose",
+    "mc_life_reference_stories",
+    "inventory_and_pickup_evidence_for_toss"
+  ],
+  "nativeAdapter": {
+    "sourceChanged": false,
+    "nativeToolsPreserved": true,
+    "taskMonitorPreserved": true,
+    "defaultClientToolsAutomaticallyEnabled": false,
+    "defaultPerceptionAutomaticallyApplied": false,
+    "moddedViewerReplaced": false,
+    "newGameplayVerified": false
+  },
+  "viewer": {
+    "sourceCommit": "14b1afb563dadea8324021be6d41ea43709c5e0c",
+    "upstreamArchiveSha256": "167f0a64ef40dde36e74620b235b315da000f92b86f4805aa7841af7019569f4",
+    "rebuiltArchiveSha256": "e7fa7aa69c19f176f3e05074ac6d86751e9c2a811225c71aa51d8bdf70f71609",
+    "rendererLockSha256": "379e5033ea7c2c722d6cda3f346b02eb37977fab193e2e9a3b02fa5ae707ecd8",
+    "dependencyInstall": "private npm ci --ignore-scripts",
+    "originalUpstreamArchiveObtained": false,
+    "lockExplicitlyUpdated": true,
+    "sharedCheckoutChanged": false,
+    "liveAssetsChanged": false,
+    "initialAttempt": "shared old dependencies missing camera-controls; failed build preserved"
+  },
+  "distribution": {
+    "bundle": "v11-upstream-20261013",
+    "version": "0.1.0",
+    "coreVersion": "0.4.0",
+    "coreArchiveSha256": "d6570284a778b7569205fecb3fdd8dda97532864cbb6f3521e1299f5e96a1aae",
+    "oldBundlesPreserved": true,
+    "trialConfigStillV10": true
+  },
+  "verification": {
+    "coreTests": {
+      "passed": 352,
+      "failed": 1,
+      "skipped": 0,
+      "remainingFailure": "Existing Windows CurrentUser DPAPI credential read unavailable; test not skipped or weakened",
+      "initialAttempt": "default JAVA_HOME selected Java 17; complete suite rerun with Java 21"
+    },
+    "frozenInstall": "pnpm 11.5.0 --frozen-lockfile --ignore-scripts",
+    "coreTypecheck": true,
+    "buildAndDeclarationsAndVerification": true,
+    "nativeHostAndTaskAndAdapterTests": {
+      "passed": 72,
+      "failed": 0,
+      "skipped": 0
+    },
+    "pythonTaskHealthRegression": {
+      "passed": 1,
+      "failed": 0
+    },
+    "externalTypes": true,
+    "publicExtensionImports": true,
+    "realStdioInitialization": true,
+    "distributionHealthChecks": 10,
+    "taskHealthChecks": 13
+  },
+  "preservation": {
+    "ok": true,
+    "checks": {
+      "mods_preserved": true,
+      "protected_configs_preserved": true,
+      "maw_explorer_still_round_464": true,
+      "healthy_same_owner_28985": true,
+      "healthy_same_owner_28996": true,
+      "private_journal_prefixes_preserved": true,
+      "shared_viewer_checkout_clean": true
+    },
+    "modCount": 35,
+    "privateFilesChecked": 3491,
+    "modelRequests": 0,
+    "productionBodyConnections": 0,
+    "productionRestarted": false
+  },
+  "productionRestarted": false,
+  "modelRequests": 0,
+  "productionBodyConnections": 0,
+  "newLiveVisualAcceptance": false,
+  "privateEvidence": "E:/QiandengJiSocietyLab/research/agent-mc-world-upstream-20261013",
+  "logs": {
+    "core-tests.log": "92f06de07f839b53584ba5c8de4abbcafb425cd3b230d193d36837335e51811f",
+    "core-tests-java21.log": "cd015c21bb61b7273e59a3fbd586461819efe2d419c158883f57d7a00b961b9e",
+    "core-build.log": "ebb787c0d76472cd59e0dfd5ab3e56ff30305cf954c92c863a470f13250512b2",
+    "core-pack.log": "0fb7f41319a80cc438677d0765e80863e165d09fbe8bd9811aa4ec207e9691e6",
+    "viewer-build.log": "633c9a2aac3136fef5a375cb3164e331ee5334c9ce485ab3eaa1d6b418ef2a8a",
+    "native-tests.log": "997bb002c680577716542d41c703c51c19408694a365e8f91f7fe776cbf3044b",
+    "install.log": "664419c9a46d55163b20e39c23d94b7ff1017233bdbf766a22779f8b9b508f87"
+  }
+}

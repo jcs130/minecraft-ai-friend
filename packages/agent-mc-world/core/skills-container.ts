@@ -39,6 +39,7 @@ import { consumesOpenWindow, selectionMenuTitle } from './window-semantics.ts';
 import { itemCustomName, itemProfileSkinHash } from './item-display.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { withdrawStack } from './container-withdraw.ts';
+import { observedEntity } from './perception-sight.ts';
 
 const { goals } = pathfinderPkg;
 
@@ -119,17 +120,15 @@ export async function skillPickup(bot: Bot, ctx: SkillContext, item?: string): P
  * 站着不动捡不回来。远端只用来在几个方向里挑更开阔的那个。
  */
 export const TOSS_RANGE = { min: 4, max: 8 } as const;
-/** 抛远的仰角(弧度)。mineflayer 的 pitch 是**负值朝上**,抬头 30–45° 取中间偏上的 40° */
-export const TOSS_PITCH = -(40 * Math.PI) / 180;
+/** Mineflayer lookAt uses atan2(delta.y, horizontal): positive pitch looks UP. */
+export const TOSS_PITCH = (40 * Math.PI) / 180;
 /** 找方向时按这个角度间隔扫一圈(度) */
 export const TOSS_YAW_STEP = 30;
 
 /** `toss` 带 at 时的瞄准上限:手扔的抛物线大致就到这儿,再远只是把东西丢在半路 */
 export const TOSS_AIM_MAX = 8;
 /** 等服务端结算掉落与紧接着的自动拾取后，再核对背包净变化 */
-const TOSS_SETTLE_MS = 1200;
-// 空位用途的整堆丢弃要等服务端掉落物拾取窗口过去；1.2 秒会把稍后自动捡回误报为腾格成功。
-const TOSS_FREE_SLOT_SETTLE_MS = 4000;
+const TOSS_SETTLE_MS = 4000;
 const recentTosses = new WeakMap<Bot, Map<string, { at: number; after: number; x: number; y: number; z: number }>>();
 
 /**
@@ -137,10 +136,10 @@ const recentTosses = new WeakMap<Bot, Map<string, { at: number; after: number; x
  * 纯读已加载格。先找抬头抛的方向:齐眼与头上一层从 1 格起连续为空;抬头抛的物品
  * 升到脚下约 2.4 格高,两格高的通道顶会挡住。没有就找平扔的方向:脚下与齐眼两层为空,
  * 平扔最高到脚下约 1.8 格,两格高的通道够用。连续畅通满 min 格才算合格,选最长的,
- * 同距取首。都没有返回 null,调用方就地丢弃;不寻路或修改方块。
+ * 同距取首。都没有返回 null,调用方拒绝抛出;不寻路或修改方块。
  */
 export function planTossThrow(bot: Bot): { yaw: number; pitch: number; distance: number } | null {
-  // 读不了方块、或转不了头(台架的裸 bot)= 没有合格方向可挑,退回就地扔
+  // Unknown geometry is not permission to drop at the player's feet.
   if (typeof bot.blockAt !== 'function' || typeof bot.look !== 'function') return null;
   const me = bot.entity.position;
   const feetY = Math.floor(me.y);
@@ -196,17 +195,23 @@ export async function skillToss(
   const have = invCount(bot, pred);
   if (have === 0) throw noSuchItem(bot, item, pick);
   const want = Math.min(count, have);
-  const freeingFullBagSlot = bot.inventory.items().length >= INVENTORY_SLOTS && want === have;
+  if (call.target && call.at !== undefined) throw new SkillBlocked('toss 的 target 与 at 只能选一个');
+  const recipient = call.target ? Object.values(bot.entities).find(entity =>
+    entity.username === call.target && entity !== bot.entity && observedEntity(bot, entity)) : null;
+  if (call.target && !recipient) throw new SkillBlocked(`当前看不见玩家 ${call.target}；先确认本人位置再交付`);
   let left = want;
   let tossed = 0;
   // 先转向再扔。两种瞄法:
   //   · 给了 at —— 朝那一格扔(以物易物把金锭扔到猪灵脚边就是这一形态)
   //   · 没给 —— 自己挑一个开阔方向;实际落点和是否会被捡回要等服务端结算
-  const aim = call.at === undefined ? null : resolveAt(bot, call.at);
+  const aim = recipient ? recipient.position : call.at === undefined ? null : resolveAt(bot, call.at);
   let where: string;
   if (aim) {
     const me = bot.entity.position;
-    const flat = Math.hypot(aim.x + 0.5 - me.x, aim.z + 0.5 - me.z);
+    const offset = recipient ? 0 : 0.5;
+    const flat = Math.hypot(aim.x + offset - me.x, aim.z + offset - me.z);
+    if (flat < 2) throw new SkillBlocked('抛物目标距自己不足2格，容易自己捡回；先拉开距离或用容器交接，尚未抛出');
+    if (recipient && flat > 4) throw new SkillBlocked('交付对象超过4格；先走近到2–4格并看向对方，尚未抛出');
     if (flat > TOSS_AIM_MAX) {
       throw new SkillBlocked(
         `${cellText(aim)} 离我 ${flat.toFixed(1)} 格,手扔够不着(最远约 ${TOSS_AIM_MAX} 格);先走近再扔`,
@@ -214,27 +219,37 @@ export async function skillToss(
     }
     if (typeof bot.lookAt === 'function') {
       checkAbort(ctx);
-      await bot.lookAt(new Vec3(aim.x + 0.5, aim.y + 0.5, aim.z + 0.5), true);
+      await bot.lookAt(new Vec3(aim.x + offset, aim.y + (recipient ? 1.2 : 0.5), aim.z + offset), true);
     }
     // 落点不承诺:抛物线的终点是服务端算的,这里只说得出朝哪儿扔的、隔多远
-    where = `,朝 ${cellText(aim)} 扔的(隔 ${flat.toFixed(1)} 格);东西按抛物线落在那个方向,不保证正好落在那一格`;
+    where = `朝${cellText(aim)}，相距${flat.toFixed(1)}格；落点未核验`;
   } else {
     const throwTo = planTossThrow(bot);
-    if (throwTo) {
-      checkAbort(ctx);
-      await bot.look(throwTo.yaw, throwTo.pitch, true);
-    }
-    const stand = cellText(feetOf(bot));
-    where = throwTo
-      ? `,站在 ${stand} 朝${yawCompass(throwTo.yaw)}${throwTo.pitch < 0 ? '抬头抛出去' : '平着扔出去'},`
-        + `那个方向 ${throwTo.distance} 格内是空的,预计落在约 3–4 格外(实际落点未核验)`
-      : `,周围没有连续 ${TOSS_RANGE.min} 格空着的方向,就在脚边扔的(站在 ${stand});`
-        + '扔出的东西 2 秒后就能被捡,人还站在这儿会马上收回包里';
+    if (!throwTo) throw new SkillBlocked('未测得连续4格的抛物空间，尚未抛出；赠物请用 target 点名可见玩家，腾格用 stow 或先换开阔位置');
+    checkAbort(ctx);
+    await bot.look(throwTo.yaw, throwTo.pitch, true);
+    where = `朝${yawCompass(throwTo.yaw)}${throwTo.pitch > 0 ? '抬头抛' : '平抛'}，已测${throwTo.distance}格空隙；落点未核验`;
   }
-  where += '。扔在地上的东西留 5 分钟(所在区块加载着才计时),这期间走到离它约 1 格内,服务端会自动收回包里';
+  const existing = new Set(Object.keys(bot.entities ?? {}).map(Number));
+  const collectors = new Set<number>();
+  const drops = new Set<number>();
+  const origin = bot.entity.position.clone();
+  const track = (entity: Bot['entity']) => {
+    const stack = droppedStackOf(entity);
+    if (!existing.has(entity.id) && stack?.name === registryName && entity.position.distanceTo(origin) <= 2.5) drops.add(entity.id);
+  };
+  const collect = (collector: Bot['entity'], entity: Bot['entity']) => { track(entity); if (drops.has(entity.id)) collectors.add(collector.id); };
+  bot.on('entitySpawn', track); bot.on('playerCollect', collect);
   const picked: PickTarget[] = [];
+  try {
   for (const it of bot.inventory.items().filter((i) => pred(i.name, i))) {
+    checkAbort(ctx);
     if (left <= 0) break;
+    if (recipient && (bot.entities[recipient.id] !== recipient || !observedEntity(bot, recipient)
+      || Math.hypot(recipient.position.x - bot.entity.position.x, recipient.position.z - bot.entity.position.z) < 2
+      || Math.hypot(recipient.position.x - bot.entity.position.x, recipient.position.z - bot.entity.position.z) > 4)) {
+      throw new SkillBlocked(`交付对象已移动或被遮挡；本次已尝试抛出${tossed}，其余未抛，先核对领取情况`);
+    }
     const n = Math.min(it.count, left);
     const before = invCount(bot, (name) => name === it.name);
     // 点名的那一件按槽位扔(bot.toss 按类型找槽,同 id 的几件在它眼里没分别)
@@ -247,7 +262,7 @@ export async function skillToss(
     if (pick !== undefined) picked.push(pickTargetOf(it, bot.registry as never));
   }
   if (tossed === 0) throw new SkillBlocked(`${zhName(item)}没扔出去`);
-  await sleep(freeingFullBagSlot ? TOSS_FREE_SLOT_SETTLE_MS : TOSS_SETTLE_MS);
+  await sleep(TOSS_SETTLE_MS);
   checkAbort(ctx);
   const netAway = have - invCount(bot, pred);
   if (netAway <= 0) {
@@ -255,10 +270,12 @@ export async function skillToss(
   }
   rememberToss(bot, registryName);
   const anchor = isSpawnAnchorBlock(item) ? anchorInHandNote(bot, ctx, [zhName(item)], '扔掉') : '';
-  // 往哪边扔的照实说;没找到开阔方向时说清是就地扔的(否则她会以为东西在几格外)
-  const netNote = `;稍等后背包同类物品净少${netAway}/${tossed}`;
-  const pickupNote = aim ? '' : ';之后走近仍可能自动捡回。要稳定腾背包格请用 stow 存入容器';
-  return `从背包抛出了${picked.length > 0 ? pickedText(picked) : zhName(item)}×${tossed}${where}${anchor}${netNote}${pickupNote}`;
+  // Vanilla collect packets identify entities, not the thrower's ownership. Nearby matching drops can merge.
+  const seenPickup = recipient && collectors.has(recipient.id);
+  const delivery = recipient ? (seenPickup ? `；${call.target}拾取过同类掉落物，本次交付数量未确认，不自动重投`
+    : '；对方领取未确认，先查回执/询问，不自动重投') : '；无人领取证据，走近仍可能捡回';
+  return `抛出${picked.length ? pickedText(picked) : zhName(item)}×${tossed}；4秒后净少${netAway}${delivery}${anchor}。${where}`;
+  } finally { bot.off('entitySpawn', track); bot.off('playerCollect', collect); }
 }
 
 /** 抛出后又自动捡回的同种物品，不能继续当作腾格手段。 */

@@ -1271,6 +1271,11 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     for (const socket of viewerSockets) if (socket.connected) socket.emit('worldSoundStop', event);
   };
   const resetSound = () => { fishingBobberOwners.clear(); publishSoundStop({}); };
+  const focusEvent=(event:{mode?:string})=>{
+    if(!closed && ['peaceful','explore','combat'].includes(event?.mode??''))
+      for(const socket of viewerSockets)if(socket.connected)socket.emit('perceptionFocus',{mode:event.mode});
+  };
+  (bot as unknown as EventEmitter).on('perceptionFocus',focusEvent);
   const stopSounds = observeViewerSounds(protocol as unknown as EventEmitter,
     soundRegistry.registry,
     id => id === bot.entity?.id ? bot.entity.position : bot.entities[id]?.position,
@@ -1347,6 +1352,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       bot.off('end', resetSound);
       publishSoundStop({});
       stopSounds();
+      (bot as unknown as EventEmitter).off('perceptionFocus',focusEvent);
       stopFishing();
       stopShieldUse();
       stopRangedUse();

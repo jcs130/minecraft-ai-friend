@@ -1,3 +1,4 @@
+import { observationView, observedEntity } from './perception-sight.ts';
 /**
  * MinecraftWorld — 实时游戏 World(worlds-minecraft),实时游戏 World 的范例实现。
  *
@@ -27,6 +28,7 @@ import { nowIso } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
 import { Bridge } from './bridge.ts';
 import { captureMinecraftView, closeMinecraftViewCapture, warmMinecraftViewCapture } from './visual-capture.ts';
+import { OVERVIEW_SCHEMA, overviewArgumentError, type OverviewOptions } from './visual-overview.ts';
 import { PlayerObservations, playerObservationMeta, renderPlayerObservation, type PlayerObservation } from './player-observation.ts';
 import { precheckEmptyUseTarget } from './precheck.ts';
 import { blockAtCell, resolveAt } from './cell-facts.ts';
@@ -37,6 +39,8 @@ import { resolveProcedure, procedureReference, PROCEDURE_RECEIPT_SCHEMA, PROCEDU
 import { MineflayerMethod, NATIVE_API } from './method-mineflayer.ts';
 import { methodApiHelp } from './method-api.ts';
 import { flightState } from './flight.ts';
+import { attachHearing, hearingReadout } from './perception-hearing.ts';
+import { AttentionReader, PERCEPTION_TOOLS, perceptionArgs, validDetection, type DetectionEvidence } from './perception-tools.ts';
 import { IdleBehaviorController, IdlePresentationContext, type IdleBehaviorScene } from './idle-behavior.ts';
 import { sampleIdleActions, executeIdleAction } from './idle-actions.ts';
 import { RejectedRouteLedger, sameRejectedRouteOrigin, type RejectedRouteScope } from './rejected-route-ledger.ts';
@@ -2157,6 +2161,7 @@ const MAP_ICON_ZH: Record<string, string> = {
 };
 
 export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
+  ...PERCEPTION_TOOLS,
   RAILWAY_TOOL_DECL,
   {
     name: 'mc_help',
@@ -2255,7 +2260,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_scout',
     tags: ['read'],
     description:
-      'Queue read-only observations and independent trials: probe, observe (native local voxels or collision rays), plus goto/flight/build/excavate/tunnel (always dry-run). Each trial uses the actual current position and world, without projecting an earlier trial destination or materials. needs gates on prior trial outcomes only, not hypothetical execution. Flight checks one segment before permission is granted; use mc_flight_plan for a projected multi-leg flight. Same queue and task events; does not change the world.',
+      'Queue read-only observations and independent trials: probe, observe (compact site geometry, voxels or collision rays), plus goto/flight/build/excavate/tunnel (always dry-run). Each trial uses the actual current position and world, without projecting an earlier trial destination or materials. needs gates on prior trial outcomes only, not hypothetical execution. Flight checks one segment before permission is granted; use mc_flight_plan for a projected multi-leg flight. Same queue and task events; does not change the world.',
     parameters: {
       type: 'object',
       properties: {
@@ -2290,9 +2295,10 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       type: 'object',
       properties: {
         mode: {
-          type: 'string', enum: ['first', 'third', 'dungeon'],
-          description: 'Camera view. first follows what is in front of you; third shows the surroundings and avatar; dungeon offers an overview. Default third.',
+          type: 'string', enum: ['first', 'third', 'dungeon', 'overview'],
+          description: 'Default third. first=front, third=surroundings/avatar, dungeon=angled view, overview=north-up coordinate photograph of loaded terrain.',
         },
+        overview: OVERVIEW_SCHEMA,
         focus: {
           type: 'string', maxLength: 160,
           description: 'What you want to inspect: an entrance, nearby player, combat result, menu, item or building. This labels the observation; it does not move the camera.',
@@ -2693,6 +2699,8 @@ export class MinecraftWorld implements World {
   /** 身上正在生效的状态效果名。服务端对同一效果每 30 秒重推一次 entity_effect,只有出现与消失才成文。 */
   protected readonly activeEffects = new Set<string>();
   protected hookedBots = new WeakSet<object>();
+  protected readonly attention = new AttentionReader();
+  protected hearingDetach: (() => void) | null = null;
   protected hookedMessageBots = new WeakSet<object>();
   /** 服务端同一条系统提示在短时间连发时只投递首条；原始重复次数进诊断。 */
   protected readonly recentSystemMessages = new Map<string, { at: number; repeats: number }>();
@@ -4079,6 +4087,7 @@ export class MinecraftWorld implements World {
       // 第一次掉线值得叫醒她(手上的事全废了);之后每一次重连没成只是同一件事的
       // 复述,压成不唤醒的一条,免得连不上的那半小时里每隔几十秒炸一次
       onDisconnect: (reason, willReconnect, attempt) => {
+        this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
         this.methods.stop('游戏连接已断开，原方法坐标和权限作废');
         this.visualInFlight?.controller.abort(new Error('游戏连接已断开'));
         this.interruptIdle('disconnect');
@@ -4141,6 +4150,7 @@ export class MinecraftWorld implements World {
   }
 
   async stop(): Promise<void> {
+    this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
     this.shuttingDown = true;
     for (const auth of Object.values(this.accountAuth)) auth.stop();
     this.disposeExtension();
@@ -4203,6 +4213,8 @@ export class MinecraftWorld implements World {
   }
 
   protected extensionTools(): ToolDef[] { return []; }
+  /** Optional authenticated server receipts. Cast acceptance never grants sight. */
+  protected extensionPerception(_bot: Bot): readonly DetectionEvidence[] { return []; }
   protected extensionState(): unknown { return null; }
   protected extensionCombatTuning(): Partial<import('./combat.ts').CombatTuning> { return {}; }
   protected extensionCombatReport(_result: unknown): void {}
@@ -4267,6 +4279,9 @@ export class MinecraftWorld implements World {
       // 路标表在受理这一刻取一次:at 写名字时按当刻登记解析
       mc_do: async (args) => this.enqueueTool('mc_do', args, (raw) => parseSteps(raw, this.markLookup())),
       mc_scout: async (args) => this.enqueueTool('mc_scout', args, (raw) => parseScoutSteps(raw, this.markLookup())),
+      mc_attention: async (args) => this.perceptionReadout('mc_attention',args),
+      mc_hear: async (args) => this.perceptionReadout('mc_hear',args),
+      mc_risk: async (args) => this.perceptionReadout('mc_risk',args),
       mc_flight_plan: async (args) => {
         const parsed = parseFlightPlan(args, this.markLookup());
         const bot = this.bridge?.bot;
@@ -4409,9 +4424,11 @@ export class MinecraftWorld implements World {
   protected visualArgumentFailure(args: Record<string, unknown>): ToolOutcome | undefined {
     const name = 'mc_visual';
     const mode = args.mode === undefined ? 'third' : args.mode;
-    if (mode !== 'first' && mode !== 'third' && mode !== 'dungeon') {
-      return { text: this.toolLog(name, args, '[mc_visual 失败] mode 只能是 first、third 或 dungeon'), failed: true };
+    if (!['first', 'third', 'dungeon', 'overview'].includes(mode as string)) {
+      return { text: this.toolLog(name, args, '[mc_visual 失败] mode 只能是 first、third、dungeon 或 overview'), failed: true };
     }
+    const overviewError = overviewArgumentError(mode, args.overview, args.include_hud);
+    if (overviewError) return { text: this.toolLog(name, args, `[mc_visual 失败] ${overviewError}`), failed: true };
     if (args.include_hud !== undefined && typeof args.include_hud !== 'boolean') {
       return { text: this.toolLog(name, args, '[mc_visual 失败] include_hud 只能是 boolean'), failed: true };
     }
@@ -4512,7 +4529,7 @@ export class MinecraftWorld implements World {
     const name = 'mc_visual';
     const invalid = this.visualArgumentFailure(args);
     if (invalid) return invalid;
-    const mode = (args.mode ?? 'third') as 'first' | 'third' | 'dungeon';
+    const mode = (args.mode ?? 'third') as 'first' | 'third' | 'dungeon' | 'overview';
     const focus = typeof args.focus === 'string' ? args.focus.replace(/\s+/g, ' ').trim().slice(0, 160) : '';
     const bot = this.bridge?.bot;
     const viewerUrl = this.bridge?.viewerUrl;
@@ -4531,7 +4548,7 @@ export class MinecraftWorld implements World {
       && this.bridge?.bot === bot && !!bot.entity && this.bridge?.viewerUrl === viewerUrl
       && String(bot.game.dimension ?? 'unknown') === dimension;
     try {
-      const capture = await captureMinecraftView({ viewerUrl, mode, includeHud: args.include_hud === true,
+      const capture = await captureMinecraftView({ viewerUrl, mode, overview: args.overview as OverviewOptions | undefined, includeHud: args.include_hud === true,
         timeoutMs: 25_000, signal: ctx.signal });
       this.diag.write({ lane: 'world', event: 'visual-capture', msg: capture.mode,
         data: { ...capture.timings, capturedAt: capture.capturedAt, width: capture.width, height: capture.height } });
@@ -4554,7 +4571,17 @@ export class MinecraftWorld implements World {
         : '头脚所在格未读到水';
       const oxygen = headWet && Number.isFinite(bot.oxygenLevel)
         ? `；氧气 ${Math.max(0, Math.min(20, bot.oxygenLevel))}/20` : '';
-      const description = [
+      const coord = (n: number) => String(Math.round(n * 1000) / 1000);
+      const description = capture.overview ? [
+        `[mc_visual overview] ${capture.capturedAt} ${dimension} ${capture.width}×${capture.height}；北=-Z，右=+X。`,
+        `范围 X[${coord(capture.overview.bounds.minX)},${coord(capture.overview.bounds.maxX)}] Z[${coord(capture.overview.bounds.minZ)},${coord(capture.overview.bounds.maxZ)}]；网格=${capture.overview.grid}；已渲染区块 ${capture.overview.coverage.meshed}/${capture.overview.coverage.total}。`,
+        `本人 XYZ=${capture.overview.player.at.map(coord).join(',')}（${capture.overview.player.inFrame ? '图中 SELF' : '画面外'}）；像素原点在左上。block 标记加0.5落格中心，position/SELF 保留原值；P序号对应输入顺序，高度非测量。仅俯视可见面，斜线区未加载；支撑净空用 mc_scout 核对。`,
+        capture.overview.labels?.hidden ? `${capture.overview.labels.hidden} 个标签因重叠隐藏，点位仍在。` : '',
+        capture.overview.attention ? `关注区由调用者选择：${capture.overview.attention.regions.length} 处，A序号对应输入；${capture.overview.attention.regions.filter(r => !r.inFrame).length} 处在总览外。${capture.overview.attention.detail ? `左=总览，右=${capture.overview.attention.detail.id} 独立放大，右图网格=${capture.overview.attention.detail.grid}，已渲染区块 ${capture.overview.attention.detail.coverage.meshed}/${capture.overview.attention.detail.coverage.total}。` : '仅高亮，无放大图。'}高亮不表示危险、可达或已完成。` : '',
+        capture.overview.pins.some(pin => !pin.inFrame) ? `总览外标记 ${capture.overview.pins.filter(pin => !pin.inFrame).length} 个：${capture.overview.pins.filter(pin => !pin.inFrame).slice(0, 8).map(pin => pin.id).join(',')}${capture.overview.pins.filter(pin => !pin.inFrame).length > 8 ? '…' : ''}` : '',
+        focus ? `关注：${focus}` : '',
+        moved > 2 ? `拍摄期间本人移动约 ${moved.toFixed(1)} 格；图中坐标以拍摄时刻为准。` : '',
+      ].filter(Boolean).join('\n') : [
         `[mc_visual] ${capture.capturedAt} 网页实景截图，${capture.mode} 视角，${capture.width}×${capture.height}，`
           + `${dimension}，截图完成后玩家位置 (${location})。`,
         `维度：${dimension}；生物群系：${biomeAt(bot, after)}。生物群系与维度不是同一字段，不能据群系名称判断是否已经出洞或到达地表。`,
@@ -4883,6 +4910,7 @@ export class MinecraftWorld implements World {
    * 取格心(+0.5)避免负坐标上的取整偏一格。
    */
   protected blockPeek(bot: NonNullable<Bridge['bot']>): BlockPeek {
+    bot=observationView(bot);
     return (p) => {
       try {
         return bot.blockAt(new Vec3(p[0] + 0.5, p[1] + 0.5, p[2] + 0.5))?.name ?? null;
@@ -4915,6 +4943,7 @@ export class MinecraftWorld implements World {
    * 不缓存也不预取。区块没加载在这里就是 `null`,一路传到回执上说成"没加载"。
    */
   protected checkWorld(bot: NonNullable<Bridge['bot']>): CheckWorld {
+    bot=observationView(bot);
     const registry = (bot.registry as { blocksByName?: Record<string, unknown> } | undefined)?.blocksByName;
     const peek = this.blockPeek(bot);
     return {
@@ -5044,13 +5073,13 @@ export class MinecraftWorld implements World {
         };
       },
       entities: () => Object.values(bot.entities)
-        .filter((entity) => entity !== bot.entity && entity?.isValid !== false && entity?.position && entity.name !== 'item')
+        .filter((entity) => entity !== bot.entity && entity?.isValid !== false && entity?.position && entity.name !== 'item' && observedEntity(bot,entity))
         .map((entity) => ({
           type: String(entity.name ?? entity.type ?? '').toLowerCase().replace(/^minecraft:/, ''),
           position: [Math.floor(entity.position.x), Math.floor(entity.position.y), Math.floor(entity.position.z)],
         })),
       items: () => Object.values(bot.entities).flatMap((entity) => {
-        if (entity?.isValid === false || !entity?.position) return [];
+        if (entity?.isValid === false || !entity?.position || !observedEntity(bot,entity)) return [];
         const stack = droppedStackOf(entity, bot.registry?.items);
         if (!stack) return [];
         return [{
@@ -6142,9 +6171,28 @@ export class MinecraftWorld implements World {
       : {failed:true, ...(rejection?.kind === 'correction' ? {} : {endsTurn:true})})};
   }
 
+  protected perceptionReadout(name:string,args:Record<string,unknown>):ToolOutcome {
+    const parsed=perceptionArgs(args,name),bot=this.bridge?.bot;
+    if('error' in parsed || !bot || !this.bridge?.connected)return {text:this.toolLog(name,args,
+      'error' in parsed?parsed.error:'尚未连接 Minecraft'),failed:true};
+    if(name==='mc_hear')return {text:this.toolLog(name,args,hearingReadout(bot,parsed.limit))};
+    if(parsed.mode){
+      this.attention.mode=parsed.mode;
+      (bot as unknown as EventEmitter).emit('perceptionFocus',{mode:parsed.mode});
+    }
+    const now=Date.now(),result=this.attention.read(bot,parsed.limit,now,name==='mc_risk',parsed.entityId);
+    const detected=this.extensionPerception(bot).filter(e=>validDetection(e,this.connectionGeneration,String(bot.game.dimension),now))
+      .slice(0,parsed.limit).map(e=>({source:e.source,receiptId:e.receiptId,observedAt:e.observedAt,expiresAt:e.expiresAt,
+        at:[e.position.x,e.position.y,e.position.z],label:e.label?.slice(0,60)??'技能探测',
+        attackRange:Number.isFinite(e.attackRange)&&e.attackRange!>=0?e.attackRange:null,
+        sightRange:Number.isFinite(e.sightRange)&&e.sightRange!>=0?e.sightRange:null}));
+    return {text:this.toolLog(name,args,JSON.stringify({...result,...(detected.length?{detected}:{}),connectionGeneration:this.connectionGeneration}))};
+  }
+
   protected onSpawn(): void {
     const bot = this.bridge?.bot;
     if (!bot) return;
+    this.hearingDetach?.();this.hearingDetach=attachHearing(bot,this.cfg.viewerAssetsDir??'');this.attention.reset();
     this.visualInFlight?.controller.abort(new Error('游戏连接代次已改变'));
     // 新连接还没有现场读数，不能沿用上一代连接的事实。
     this.requestFactsCache = null;
@@ -6212,6 +6260,7 @@ export class MinecraftWorld implements World {
    * 不重走 onSpawn：世界和连接未变，快照基线与暂态仍有效。
    */
   protected onRespawn(): void {
+    this.attention.reset();
     const now = Date.now();
     this.extensionRespawn();
     this.bodyLease.revive(now);
