@@ -126,6 +126,42 @@ def test_read_activity_survives_pruned_history_until_a_body_action_is_accepted(f
     assert "read_activity" not in seen[-1]
 
 
+def test_failed_tool_evidence_reaches_host_review_and_read_success_cannot_clear_it(framework_module, tmp_path, run_async):
+    module, bridge, controller = setup(framework_module, tmp_path, None)
+    published = {}
+    controller.publish = lambda **values: published.update(values)
+    controller.turn = "failed-turn"
+    bridge.result = {"protocol": "agent-mc/v1", "failed": True, "execution": None,
+                     "text": "Invalid arguments: pitch must be within -90..90"}
+    run_async(controller.execute_model_call("mc_do", {"steps": [{"skill": "observe", "rays": [[120, 0, 32]]}]}))
+    diagnostic = published["tool_failure"]
+    assert diagnostic["tool"] == "mc_do" and "pitch" in diagnostic["error"]
+    receipt = json.loads((tmp_path / "receipts.jsonl").read_text())
+    assert diagnostic["receipt"] == {"request_id": receipt["requestId"], "turn_id": "failed-turn", "archive": "receipts.jsonl"}
+    assert "arguments" not in diagnostic and "parameter_help" not in diagnostic
+    run_async(controller.execute_model_call("mc_help", {}))
+    assert published["tool_failure"] == diagnostic  # Reading help is not a repaired action.
+    run_async(controller.execute_model_call("mc_do", {"steps": [{"skill": "observe", "rays": [[120, 0, 32]]}]}))
+    assert published["tool_failure"]["receipt"] == diagnostic["receipt"]  # No invented second body receipt.
+    bridge.result = {"protocol": "agent-mc/v1", "text": "accepted", "execution": action()}
+    run_async(controller.execute_model_call("mc_do", {"steps": [{"skill": "observe", "rays": [[0, 120, 32]]}]}))
+    assert published["tool_failure"] is None
+
+
+def test_predispatch_rejection_publishes_decision_reference_without_fake_receipt(framework_module, tmp_path):
+    module, bridge, controller = setup(framework_module, tmp_path, None)
+    published = {}
+    controller.publish = lambda **values: published.update(values)
+    controller.turn = "invalid-batch"
+    bridge.tools[0]["inputSchema"] = {"type": "object", "properties": {"steps": {"type": "array"}}}
+    call = choose()["tool_calls"]
+    call[0]["function"]["arguments"] = '{"steps":"invalid"}'
+    with pytest.raises(module.ModelCallRejected):
+        controller.prepare_calls(call, module.model_tools(bridge.tools))
+    assert published["tool_failure"]["receipt"] == {"request_id": None, "turn_id": "invalid-batch", "archive": "decisions.jsonl"}
+    assert bridge.calls == [] and not (tmp_path / "receipts.jsonl").exists()
+
+
 def test_plain_plan_is_retained_and_revisited_with_bounded_backoff(framework_module, tmp_path, run_async):
     seen = []
     plan = "已有工作台和工具，接下来寻找食物并准备庇护所。"

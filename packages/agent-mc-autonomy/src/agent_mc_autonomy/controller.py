@@ -11,7 +11,7 @@ from pathlib import Path
 from .bridge import json_content, outcome, text_content
 from .context import assemble, encode
 from .fast import FastPolicy, focus_state, rule_focus
-from .observations import receipt_view, spatial_text
+from .observations import receipt_view, spatial_text, tool_failure_view
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .planner import PlannerResponseError
 from .tool_schema import argument_error
@@ -222,6 +222,14 @@ class Controller:
         temporary = self.state_path.with_suffix(".tmp")
         temporary.write_text(encode({**previous, **changes}), encoding="utf-8")
         temporary.replace(self.state_path)
+
+    def record_tool_failure(self, name, arguments, result, request_id=None):
+        self.tool_failure = failure_context(self.bridge.tools, name, arguments, result)
+        self.tool_failure["receipt"] = {"request_id": request_id, "turn_id": self.turn,
+                                        "archive": "receipts.jsonl" if request_id else "decisions.jsonl"}
+        # The planner's full diagnostic stays local. Other hosts receive the
+        # same actual error plus a reference, without private arguments/schema.
+        self.publish(tool_failure=tool_failure_view(self.tool_failure))
 
     def receipt(self, value):
         if uncertain(value):
@@ -483,7 +491,7 @@ class Controller:
         if name == "mc_protocol" and arguments.get("action") not in sorted(READ_PROTOCOL):
             raise ModelCallRejected("The host owns turn boundaries and cancellation; only task, facts, archive and archive_runs are exposed.")
         if error := argument_error(self.bridge.tools, name, arguments):
-            self.tool_failure = failure_context(self.bridge.tools, name, arguments, {"text": error})
+            self.record_tool_failure(name, arguments, {"text": error})
             raise ModelCallRejected(error)
         if self.feedback_pending:
             tags = next((t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])
@@ -520,6 +528,7 @@ class Controller:
             # A known pre-dispatch rejection cannot be replayed by a later batch.
             self.planner_notice = "The exact same call already failed argument validation. It was NOT dispatched again. Consult mc_help/mc_tool_help and change the invalid parameters."
             self.tool_failure = self.rejected_calls[rejected_key]
+            self.publish(tool_failure=tool_failure_view(self.tool_failure))
             self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
             self.continuation_needed = True
             self.publish(planner_error="repeated_invalid_tool_call", rejected_tool=name)
@@ -541,7 +550,7 @@ class Controller:
                 self.publish(unactioned_replies=0)
             self.publish(read_activity=dict(self.read_activity))
         if result.get("failed"):
-            self.tool_failure = failure_context(self.bridge.tools, name, arguments, result)
+            self.record_tool_failure(name, arguments, result, request_id)
             failure = str(result.get("text", ""))
             parse_rejected = name in {"mc_do", "mc_scout"} and failure.startswith(f"[{name} 失败]") and "。你写的是 " in failure
             if not result.get("execution") and (failure.startswith("Invalid arguments:") or parse_rejected):
@@ -550,6 +559,7 @@ class Controller:
                 self.rejected_calls[rejected_key] = self.tool_failure
         elif result.get("execution"):
             self.tool_failure = None
+            self.publish(tool_failure=None)
         control = result.get("control") or {}
         boundary = bool(control.get("endTurnRequested") or result.get("endsTurn") or (self.current_work() and not self.feedback_pending))
         return result, compact, boundary

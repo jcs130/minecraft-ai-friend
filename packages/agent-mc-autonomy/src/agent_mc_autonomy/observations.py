@@ -5,6 +5,22 @@ import re
 from collections import Counter
 
 
+def tool_failure_view(value):
+    """A bounded unresolved error for host reviews, with an original journal reference."""
+    if not isinstance(value, dict) or not isinstance(value.get("error"), str):
+        return None
+
+    def brief(text, limit):
+        raw = str(text).encode("utf-8")
+        return raw.decode() if len(raw) <= limit else raw[:limit - 3].decode("utf-8", errors="ignore") + "…"
+
+    receipt = value.get("receipt") if isinstance(value.get("receipt"), dict) else {}
+    return {"tool": brief(value.get("tool", ""), 80), "error": brief(value["error"], 900),
+            "next_step": brief(value.get("next_step", ""), 400),
+            "receipt": {key: brief(receipt[key], 256) if isinstance(receipt.get(key), str) else None
+                        for key in ("request_id", "turn_id", "archive")}}
+
+
 def receipt_view(value):
     """Remove transport-only fields and exact repeats from the planner's copy."""
     result = {k: v for k, v in value.items() if k not in {"protocol", "control"}

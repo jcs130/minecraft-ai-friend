@@ -224,6 +224,13 @@ and backoff bound unanswered requests. A lost acknowledgement is reconciled with
 the durable goal mailbox. Optional review storage failure cannot kill gameplay.
 The strategic port is disabled by default and never starts a stopped runtime.
 
+Since 0.1.14, strategic review evidence also includes the current unresolved
+tool error and its request/turn journal reference. A successful help lookup or
+model response does not clear an execution failure. The diagnostic clears when
+the planner obtains an accepted native execution, without claiming goal success.
+Argument/schema dumps stay out of the host envelope; error text is bounded and
+the original receipt or rejected decision remains available for investigation.
+
 Viewer assembly uses the body's public extension ports and an explicitly
 installed `mc-visual-console` checkout/catalog. Rendering code and assets remain
 in that separate project. No viewer, speech engine or server is bundled here.

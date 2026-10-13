@@ -12,7 +12,7 @@ from datetime import datetime
 
 from .configuration import _boolean, _integer
 from .mailbox import Mailbox, observation
-from .observations import fact_preview, spatial_text
+from .observations import fact_preview, spatial_text, tool_failure_view
 
 
 @dataclass(frozen=True)
@@ -63,6 +63,7 @@ def review_observation(status, now):
                 "fact_originals": {part["key"]: part["original"] for part in snapshot.get("facts", {}).get("parts", [])
                                    if part.get("key") in useful and part.get("original")},
                 "planner_error": snapshot.get("planner_error"),
+                "tool_failure": tool_failure_view(snapshot.get("tool_failure")),
                 "planner_failures": snapshot.get("planner_failures", 0), "runtime_error": snapshot.get("error"), "read_activity": reads,
                 "unactioned_replies": snapshot.get("unactioned_replies", 0),
                 "planner_retry_seconds": snapshot.get("planner_retry_seconds", 0)}
@@ -75,7 +76,8 @@ def review_observation(status, now):
         "death" if re.search(r"生命\s*0(?:\.0)?\s*/", useful["body"]) else None)
     return {"session": str(snapshot.get("owner_pid", "")) + ":" + str((snapshot.get("viewer") or {}).get("session", "")),
             "material": digest(material), "intent": digest([evidence["standing_goal"], active]),
-            "signal": digest([material, active, evidence["planner_error"], bool(pending), terminal]),
+            "signal": digest([material, active, evidence["planner_error"], bool(pending), terminal,
+                              {key: evidence["tool_failure"][key] for key in ("tool", "error")} if evidence["tool_failure"] else None]),
             "urgent": urgent, "evidence": evidence}
 
 
@@ -96,6 +98,8 @@ def summary(evidence):
     reads = sum(evidence.get("read_activity", {}).values())
     if reads:
         activity += f"；连续查询{reads}次（查询不代表行动进展）"
+    if failure := evidence.get("tool_failure"):
+        activity += "；最近未解工具错误:" + failure["tool"] + " " + brief(failure["error"], 210)
     return "目标:" + brief(goal, 360) + "；新鲜观测:" + readings + activity
 
 
