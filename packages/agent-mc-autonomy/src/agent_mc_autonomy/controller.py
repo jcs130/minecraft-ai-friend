@@ -14,6 +14,7 @@ from .fast import FastPolicy, focus_state, rule_focus
 from .observations import receipt_view, spatial_text
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .planner import PlannerResponseError
+from .tool_schema import argument_error
 
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
@@ -314,6 +315,10 @@ class Controller:
             await asyncio.gather(task, return_exceptions=True)
 
     async def dispatch(self, name, arguments, request_id):
+        if error := argument_error(self.bridge.tools, name, arguments):
+            result = {"protocol": PROTOCOL, "failed": True, "execution": None,
+                      "dispatched": False, "origin": "controller_validation", "text": error}
+            return result, await self.archive_receipt(request_id, name, result)
         if name == "goal_report" and not self.active_goal:
             # A report about the standing goal is a local planning error, not a
             # failed game connection or an uncertain mutation. Preserve the reply
@@ -466,6 +471,9 @@ class Controller:
             name, arguments = target, arguments["arguments"]
         if name == "mc_protocol" and arguments.get("action") not in sorted(READ_PROTOCOL):
             raise ModelCallRejected("The host owns turn boundaries and cancellation; only task, facts, archive and archive_runs are exposed.")
+        if error := argument_error(self.bridge.tools, name, arguments):
+            self.tool_failure = failure_context(self.bridge.tools, name, arguments, {"text": error})
+            raise ModelCallRejected(error)
         if self.feedback_pending:
             tags = next((t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])
             if name != "mc_do" and {"act", "write", "speak"}.intersection(tags):

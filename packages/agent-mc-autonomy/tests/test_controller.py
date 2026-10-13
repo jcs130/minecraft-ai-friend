@@ -59,7 +59,7 @@ class Bridge:
             return {"structuredContent": value}
         if name == "mc_help":
             return {"structuredContent": {"protocol": "agent-mc/v1", "text": "Read the next section"}}
-        if name == "mc_queue":
+        if name in {"mc_queue", "mc_bag"}:
             return packed({"text": "Idle"})
         raise AssertionError(name)
 
@@ -254,6 +254,8 @@ def test_rejected_tool_exposes_exact_parameter_help_in_next_request(framework_mo
 
     bridge.call = call
     run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    assert not any(name == "mc_scout" for name, *_ in bridge.calls)
+    run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
     tail = json.loads(seen[1][-1]["content"])
     recovery = tail["tool_failure"]
     assert recovery["tool"] == "mc_scout"
@@ -400,6 +402,59 @@ def test_invalid_model_call_is_not_dispatched_and_can_recover(framework_module, 
     assert "No tool was dispatched" in seen[1][-1]["content"]
     assert len([row for row in bridge.calls if row[0] == "mc_do"]) == 1
     assert controller.pending[("task", "body-1")]["terminal"] is False
+
+
+@pytest.mark.parametrize("steps", ['[{"skill":"craft","item":"oak_planks"}', [], [{"skill": "craft", "count": True}]])
+def test_native_schema_rejection_precedes_batch_dispatch_and_uncertainty(framework_module, tmp_path, run_async, steps):
+    response = {"content": None, "tool_calls": [
+        {"id": "read", "type": "function", "function": {"name": "mc_bag", "arguments": "{}"}},
+        {"id": "action", "type": "function", "function": {"name": "mc_do", "arguments": json.dumps({"steps": steps})}},
+    ]}
+
+    async def decide(*_):
+        return response
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    bridge.tools[0]["inputSchema"] = {"type": "object", "properties": {
+        "steps": {"type": "array", "minItems": 1, "items": {"type": "object", "properties": {
+            "skill": {"enum": ["craft"]}, "count": {"type": "integer", "minimum": 1}}, "required": ["skill"]}}}, "required": ["steps"]}
+    bridge.tools.append({"name": "mc_bag", "inputSchema": {"type": "object"}})
+    controller.persist(stopped=False)
+    run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    assert not any(name in {"mc_do", "mc_bag"} for name, *_ in bridge.calls)
+    assert controller.inflight_request is None
+    assert not json.loads(controller.state_path.read_text()).get("uncertain")
+    assert controller.continuation_needed and "steps" in controller.planner_notice
+    assert "No tool was dispatched" in controller.planner_notice
+
+
+def test_advanced_arguments_use_native_schema_before_dispatch(framework_module, tmp_path):
+    module, bridge, controller = setup(framework_module, tmp_path, None)
+    bridge.tools.append({"name": "mc_script", "inputSchema": {"type": "object", "properties": {
+        "timeoutMs": {"type": "integer", "maximum": 120000}}}})
+    call = {"id": "advanced", "type": "function", "function": {"name": "mc_invoke", "arguments":
+        json.dumps({"name": "mc_script", "arguments": {"timeoutMs": 120001}})}}
+    with pytest.raises(module.ModelCallRejected, match="timeoutMs"):
+        controller.prepare_calls([call], module.model_tools(bridge.tools))
+    assert bridge.calls == [] and not controller.state_path.exists()
+
+
+def test_mailbox_dispatch_rejects_schema_error_without_uncertain_journal(framework_module, tmp_path, run_async):
+    _, bridge, controller = setup(framework_module, tmp_path, None)
+    bridge.tools[0]["inputSchema"] = {"type": "object", "properties": {"steps": {"type": "array"}}, "required": ["steps"]}
+    result, _ = run_async(controller.dispatch("mc_do", {"steps": "[]"}, "invalid-mailbox"))
+    assert result["failed"] and result["dispatched"] is False and result["execution"] is None
+    assert not bridge.calls and controller.inflight_request is None and not controller.state_path.exists()
+    assert json.loads((tmp_path / "receipts.jsonl").read_text())["result"] == result
+
+
+def test_native_schema_refs_are_local_only(framework_module):
+    from agent_mc_autonomy.tool_schema import argument_error
+
+    schema = {"$defs": {"step": {"type": "array"}}, "$ref": "#/$defs/step"}
+    assert argument_error([{"name": "local", "inputSchema": schema}], "local", []) is None
+    remote = {"$ref": "https://example.invalid/schema.json"}
+    assert "locally" in argument_error([{"name": "remote", "inputSchema": remote}], "remote", {})
 
 
 @pytest.mark.parametrize("last_tool", ["mc_do", "mc_scout"])
