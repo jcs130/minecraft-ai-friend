@@ -282,6 +282,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private GeneratedStructureProtection generatedStructures;
     private NativeTraversalPractice traversalPractice;
     private final SpellPresentation spellPresentation = new SpellPresentation(this);
+    private PrivateChatNames privateChatNames;
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -301,6 +302,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         featherKey = new NamespacedKey(this, "learned_feather");
         nightKey = new NamespacedKey(this, "learned_night");
         getServer().getPluginManager().registerEvents(this, this);
+        privateChatNames = new PrivateChatNames(this);
         travelMagic = new TravelMagic(this);
         getServer().getPluginManager().registerEvents(travelMagic, this);
         getCommand("mycli").setExecutor(this);
@@ -373,6 +375,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (privateChatNames != null) privateChatNames.stop();
         if (itemAppearances != null) itemAppearances.stop();
         if (tradeDirectory != null) tradeDirectory.shutdown();
         if (targetGuides != null) targetGuides.stop();

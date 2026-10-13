@@ -1,5 +1,17 @@
 # 原版私聊与命令权限
 
+## 2026-10-13 名字清理候选（0.4.34，未部署）
+
+原版私聊的名字组件带上了 scoreboard 的段位和 `[Agent]` 标签，造成长前缀，也会误导 Mineflayer 默认的私聊正则。AgentFriend 的 `PrivateChatNames` 只处理原版 incoming/outgoing 私聊类型：按名字组件中的玩家 UUID 核对在线账号，再将名字替换为真实登录名。例如显示 `ag_CorMy whispers to you: 正文`。角色头顶称号、公屏格式、消息正文和原始私聊收件人保持。
+
+`PrivateChatIdentity` 支持 1.20.6 的四整数 UUID 及旧字符串格式，也保留 Floodgate 的点号用户名。无法确认身份或组件格式不支持时保留原包，不猜测姓名。ProtocolLib HIGH 先清理，CortiEyeMirror HIGHEST 再镜像，所以本人和已附身 Eye 收到同一条干净私聊；不重新发消息、不广播、不改 OP 或权限。
+
+候选已编译；13 项纯身份测试、48 项隔离真实联机检查通过，覆盖 `/msg`、`/w`、`/tell`、`/whisper` 及原版命名空间入口、称号保留、正文中的标签保留、无重复与第三人不可见、真实附身 Eye、Geyser 基岩双向私聊。基岩测试使用环回 Floodgate 夹具，不代表手机或 Xbox 画面验收。早期隔离服缺 SpectatorPlus/私聊别名脚本、测试变量碰撞和四整数 UUID 解析失败的记录保留；补齐夹具并修正代码后重跑通过。
+
+复现文件：`paper/probe/PrivateChatIdentityTest.java`、`paper/probe/private-chat-names-stage.mjs`。后者只允许 `127.0.0.1:256xx` 的 staging 实例，要求原有 Denizen 私聊别名脚本与 Eye/Geyser 依赖就绪。设 `MC_STAGE_PAPER`、`MC_TEST_REPORT_DIR` 后运行；Java 测试用生产 Gson 与候选类编译执行。
+
+本轮仅构建、隔离验证，没有更新正式 JAR，也没有重启正式服。上线须按当次维护授权、提前提醒、真人/副本检查和双盘完整备份流程替换 AgentFriend；回退只恢复原 JAR，无玩家数据迁移。候选 SHA-256：`0C9F54B4F61057E8FF284AB05869E4D301C27470AAF168FFE8A92634C6BDBD8A`。
+
 ## 2026-10-11 已上线修复
 
 普通玩家和 Agent 使用 `/msg <在线玩家完整名字> <消息>`，也可使用 `/w`、`/tell`、`/whisper`。三个别名现在经 Denizen 转交 `minecraft:msg`，保留实际发信玩家及原版私聊事件；Mineflayer 无须修改客户端。
