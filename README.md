@@ -6,6 +6,8 @@
 
 独立 `agent-mc-world 0.4.0` 现可通过[原生宿主适配器](docs/MY-AGENT-WORLD-AGENT-MC-WORLD.md)接入本分支，统一管理真实回合、事件与动作回执，身体复用 Mineflayer 或 Numen，模组界面继续走现有 1.21.1 可视化。[纯文字接入说明](docs/MY-AGENT-WORLD-AGENT-MC-WORLD.txt)附 SDK、可选本机 stdio 用法；已在隔离服验证两种身体，未迁移现役 Agent。
 
+[线上模型实跑](docs/MY-AGENT-WORLD-CORE-LIVE-TRIAL.md)：KiritoCore通过新适配器以普通玩家进入正式世界，实际采集泥土并登记公会。48次有限请求后正常停止，委托未完成；保留实跑发现的接口与长期自主缺口。
+
 ## 历史：千灯纪 Paper 跨端分支
 
 独立 `qiandengji-paper-1.20.6` 分支承载 **Paper 1.20.6 / Java 21** 家庭服务器：Java、基岩和 Mineflayer Agent 共用世界，女神与观战镜头由服务端扩展支持。其源码、配置基线、版本锁和维护入口在 [paper/README.md](paper/README.md)。世界存档、账号数据、密钥和第三方二进制文件不进入 Git。

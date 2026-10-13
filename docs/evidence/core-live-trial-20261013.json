@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-13",
+  "scope": "bounded_online_model_in_production_world",
+  "username": "KiritoCore",
+  "bodyProvider": "mineflayer",
+  "bodyId": "ada3c5d8-4a26-30fe-8501-e6b4e0d2ad4b",
+  "coreVersion": "0.4.0",
+  "hostDistribution": "v4-20261013",
+  "brain": "explicit finite host + agent-mc/v1 + native SDK",
+  "requestedModel": "qwen3.7-plus",
+  "returnedModels": [
+    "qwen3.7-plus"
+  ],
+  "modelIntentCount": 48,
+  "modelResultCount": 48,
+  "modelResponsesAllHttp200": true,
+  "accountingScope": "Local dispatch and returned-response records; not supplier billing",
+  "originalBudget": 24,
+  "finalCumulativeBudget": 48,
+  "stopReason": "model_budget",
+  "stopReasonOperatorDerived": true,
+  "rawPriorReasonPreserved": true,
+  "childExitCode": 0,
+  "initialPosition": {
+    "x": -439.5,
+    "y": 66,
+    "z": 410.5
+  },
+  "finalPosition": {
+    "x": -439.5,
+    "y": 65,
+    "z": 410.5
+  },
+  "acquiredItems": [
+    {
+      "id": "minecraft:dirt",
+      "count": 1
+    }
+  ],
+  "nativeAcceptedActions": 7,
+  "nativeTerminalSucceeded": 4,
+  "nativeKnownTerminalFailed": 3,
+  "guild": {
+    "joined": true,
+    "rank": "木牌见习",
+    "reputation": 0,
+    "balance": 40,
+    "visibleContracts": 34,
+    "completedContracts": 0
+  },
+  "modelGoalFinishClaim": false,
+  "completeLifeGoalVerified": false,
+  "horizontalNavigationVerified": false,
+  "craftingOrModProductionVerified": false,
+  "knownReadonlyInputFailures": [
+    {
+      "round": 22,
+      "code": "MOD_CALL_ARGUMENT_INVALID",
+      "rawArtifactsRetained": true
+    },
+    {
+      "round": 27,
+      "code": "MOD_CALL_ARGUMENT_UNSUPPORTED",
+      "rawArtifactsRetained": true
+    }
+  ],
+  "resumeUsedSameBodyAndLedger": true,
+  "modelCountWasNotReset": true,
+  "unknownNativeActionsAtExit": 0,
+  "originalServiceAndAgentChecks": {
+    "owned_state_directory": true,
+    "same_explicit_body": true,
+    "exact_model_no_qwenpaw": true,
+    "finite_model_budget": true,
+    "healthy_lifecycle": true,
+    "existing_service_configs_and_pause_preserved": true,
+    "original_agent_ledger_preserved": true,
+    "original_agent_remains_round_464": true,
+    "production_owner_28985_healthy": true,
+    "production_owner_28996_healthy": true
+  },
+  "opGranted": false,
+  "serverRestarted": false,
+  "qwenpawConnected": false,
+  "newServerPorts": 0,
+  "newViewerOrWebGLAcceptance": false,
+  "inputRecoveryRegressionTests": {
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0
+  },
+  "limits": [
+    "High interface-learning overhead",
+    "No completed commission",
+    "Finite trial ended, not an always-on resident",
+    "No fabrication of a complete survival or all-mods acceptance"
+  ]
+}

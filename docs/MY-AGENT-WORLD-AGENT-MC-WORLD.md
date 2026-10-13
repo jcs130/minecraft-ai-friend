@@ -2,6 +2,8 @@
 
 2026-10-13：合入 `main@edd0179be7bb8a24f9011f50c1163175fd428326` 的 `agent-mc-world 0.4.0`，在 `experiment/agent-society-1.21.1` 添加可选宿主包 `@my-agent-world/agent-mc-host 0.1.0`。当前安装在 `E:\QiandengJiSocietyLab\integrations\agent-mc-world\v4-20261013`。这次没有替换现役 Agent、模型、记忆、账本或服务器 JAR，没有生产重启。
 
+随后用户授权实际运行：新角色KiritoCore已通过线上qwen3.7-plus在正式世界有限试玩，采集泥土并入会；48次请求后正常停止，委托未完成。此后续阶段有模型及新角色的实际游戏动作，不能沿用下方集成验收的“0模型/0生产动作”描述。[完整实跑记录](MY-AGENT-WORLD-CORE-LIVE-TRIAL.md)。
+
 [纯文字接入指南](MY-AGENT-WORLD-AGENT-MC-WORLD.txt)包含配置与调用示例；已有接口仍以[统一身体适配器](MY-AGENT-WORLD-WORLD-ADAPTER.md)、[原生 SDK](MY-AGENT-WORLD-NATIVE-SDK.md)及实际 operations 为准。
 
 ## 分工
