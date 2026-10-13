@@ -2299,7 +2299,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       properties: {
         mode: {
           type: 'string', enum: ['first', 'third', 'dungeon', 'overview'],
-          description: 'Default third. first=front, third=surroundings/avatar, dungeon=angled view, overview=north-up coordinate photograph of loaded terrain.',
+          description: 'Default first: your eye position and look direction, without your own avatar in view. third=explicit external view of surroundings/avatar, dungeon=angled view, overview=north-up coordinate photograph of loaded terrain.',
         },
         overview: OVERVIEW_SCHEMA,
         fov: { type: 'number', minimum: 30, maximum: 140, description: 'first/third vertical field of view in degrees; default 120. Does not change look direction or reveal occluded terrain.' },
@@ -4439,7 +4439,7 @@ export class MinecraftWorld implements World {
 
   protected visualArgumentFailure(args: Record<string, unknown>): ToolOutcome | undefined {
     const name = 'mc_visual';
-    const mode = args.mode === undefined ? 'third' : args.mode;
+    const mode = args.mode === undefined ? 'first' : args.mode;
     const fovError = visualFovError(mode, args.fov);
     if (fovError) return { text: this.toolLog(name, args, `[mc_visual 失败] ${fovError}`), failed: true };
     if (!['first', 'third', 'dungeon', 'overview'].includes(mode as string)) {
@@ -4560,7 +4560,7 @@ export class MinecraftWorld implements World {
     const name = 'mc_visual';
     const invalid = this.visualArgumentFailure(args);
     if (invalid) return invalid;
-    const mode = (args.mode ?? 'third') as 'first' | 'third' | 'dungeon' | 'overview';
+    const mode = (args.mode ?? 'first') as 'first' | 'third' | 'dungeon' | 'overview';
     const focus = typeof args.focus === 'string' ? args.focus.replace(/\s+/g, ' ').trim().slice(0, 160) : '';
     const bot = this.bridge?.bot;
     const viewerUrl = this.bridge?.viewerUrl;

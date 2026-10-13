@@ -199,7 +199,7 @@ export class MinecraftViewCaptureManager {
 
   async capture(options: MinecraftViewCaptureOptions): Promise<MinecraftViewCapture> {
     const origin = localViewerOrigin(options.viewerUrl);
-    const mode = options.mode ?? 'third';
+    const mode = options.mode ?? 'first';
     if (!['first', 'third', 'dungeon', 'overview'].includes(mode)) throw new RangeError('invalid Minecraft view mode');
     const fov = visualFov(mode, options.fov);
     const overviewError = overviewArgumentError(mode, options.overview, options.includeHud);
@@ -372,7 +372,7 @@ export class MinecraftViewCaptureManager {
     const origin = localViewerOrigin(viewerUrl);
     const current = this.warming.get(origin);
     if (current) return current;
-    const pending = this.capture({ viewerUrl, mode: 'third', timeoutMs: 25_000 }).then(() => undefined).finally(() => {
+    const pending = this.capture({ viewerUrl, timeoutMs: 25_000 }).then(() => undefined).finally(() => {
       if (this.warming.get(origin) === pending) this.warming.delete(origin);
     });
     this.warming.set(origin, pending);
