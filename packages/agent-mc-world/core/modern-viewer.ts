@@ -1,4 +1,5 @@
 import { createViewerHeadTextures } from './viewer-head-textures.mjs';
+import { viewerBodyState } from './viewer-body-state.ts';
 /** Read-only modern Minecraft picture served from the current Mineflayer bot. */
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
@@ -237,6 +238,7 @@ export function ownEntity(bot: mineflayer.Bot): Record<string, unknown> {
   return { id: entity.id, name: 'player', type: 'player', pos: entity.position,
     width: entity.width, height: entity.height, yaw: entity.yaw, pitch: entity.pitch,
     username: bot.username, uuid, isSelf: true, equipment, skinUrl: null, skinModel: null,
+    bodyState: viewerBodyState(bot),
     ...viewerPlayerSkin(bot, bot.username, uuid),
     burning: Boolean((entity as unknown as { isOnFire?: boolean }).isOnFire) ||
       (Number((entity as unknown as { metadata?: unknown[] }).metadata?.[0]) & 1) !== 0 };

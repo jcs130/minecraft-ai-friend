@@ -142,6 +142,25 @@ async function drive(bot: EventEmitter, ms: number, stepMs = 50): Promise<void> 
 }
 
 describe('战斗补给', () => {
+  it('authoritative incapacitation stops attacks and movement without claiming a stuck route or resuming tasks', async () => {
+    const {bot,controls,attacks}=combatRigBot([foe(7,'zombie',3)]);
+    const {session,calls,combatReports,setEnvBusy}=rig(bot);
+    session.start(); session.onHurtBy(7,'zombie');
+    await drive(bot,500);
+    setEnvBusy(true); session.inhibit();
+    const count=attacks.length;
+    await drive(bot,2000);
+    expect(session.active).toBe(false);
+    expect(attacks).toHaveLength(count);
+    expect(Object.values(controls).every(value=>!value)).toBe(true);
+    expect(calls.resumed).toBe(0);
+    expect(combatReports.at(-1)?.reason).toBe('inhibited');
+    expect(session.react({kind:'engage',targetId:7})).toBe(false);
+    setEnvBusy(false);
+    expect(session.onHurtBy(7,'zombie')).toBe(true);
+    expect(session.active).toBe(true);
+    session.stop();
+  });
   it('副手空着时补备用图腾，已持盾时保留盾牌', async () => {
     const first = combatRigBot([foe(7, 'zombie', 3)]);
     const bag = [{ name: 'iron_sword', type: 1, count: 1 },

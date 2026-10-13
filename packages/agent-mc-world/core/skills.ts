@@ -1127,7 +1127,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   },
   {
     name: 'follow',
-    doc: '{"skill":"follow","name":"Alice"}                玩家叫你“跟我来”时持续跟随他,直到被新任务顶替',
+    doc: '{"skill":"follow","name":"Alice"}                持续跟随明确指定的同伴（约3格、不拆搭）；战斗临时接管后续跟，mc_stop或新任务可取消；跟随不等于确认队友关系',
     fields: [{ key: 'name', kind: 'string', required: true, hint: '在线玩家名' }],
   },
   {

@@ -1,4 +1,5 @@
 import { observationView, observedEntity } from './perception-sight.ts';
+import { setViewerBodyState } from './viewer-body-state.ts';
 /**
  * MinecraftWorld — 实时游戏 World(worlds-minecraft),实时游戏 World 的范例实现。
  *
@@ -89,11 +90,11 @@ import {
 import { MinecraftAuthentication } from '../src/client/authentication.ts';
 import { GameClient, type ClientState } from './client.ts';
 import {
-  Executor, Reflexes, parseNoteText, parseQueueMode, parseScoutSteps, parseSteps, sendChat,
+  Executor, Reflexes, releaseBody, parseNoteText, parseQueueMode, parseScoutSteps, parseSteps, sendChat,
   QUEUE_SCHEMA, renderQueue,
   SCOUT_SKILL_DOC, SCOUT_STEP_SCHEMA, SKILL_STEP_SCHEMA,
   type BlueprintDesk, type BlueprintSurvey, type MarkDesk, type MarkLookup,
-  type ParseNote, type ResourcePlacementPermit, type SkillCall, type TaskAdmissionDecision, type TaskAdmissionRejection, type TaskQueueTail, type TaskReport,
+  type ParseNote, type QueueHoldToken, type ResourcePlacementPermit, type SkillCall, type TaskAdmissionDecision, type TaskAdmissionRejection, type TaskQueueTail, type TaskReport,
 } from './executor.ts';
 import { Aborted, SkillBlocked, sleep, type BlueprintPlacementIntent } from './skill-context.ts';
 import { worldStateAt } from './skills-build.ts';
@@ -3353,6 +3354,7 @@ export class MinecraftWorld implements World {
       ...narrateWorldSegments(snap, this.nearMarkNote(snap.position)).map(({ key, text }) => ({ key, text })),
       { key: 'queue', text: renderQueue(this.executor?.status() ?? { running: null, waiting: [] }) }];
     const last = this.lastFinishedTask;
+    if (this.bodyInhibitReason) parts.push({ key: 'bodyRestriction', text: `身体当前受限：${this.bodyInhibitReason}；动作等待恢复回执，不能当作寻路失败。` });
     // 终态可能刚投递，而下一拍快照尚未发生。读取最新原文，避免只有受理回执
     // 留在历史里时重做已经完成或受阻的单；日期也保留，不能当成当前队列。
     const outcome = renderLastTaskReadout(last
@@ -3930,7 +3932,7 @@ export class MinecraftWorld implements World {
       probeTarget: (target) => this.bridge?.probeTarget(target) ?? null,
       digBackoffSince: (ts) => this.bridge?.digBackoffSince(ts) ?? [],
       // 战斗会话在场时队列闸住:受理照收,腾出手(resume)再跑
-      busyWith: () => (this.combat?.active ? '正在跟怪打' : null),
+      busyWith: () => this.bodyInhibitReason ?? (this.combat?.active ? '正在跟怪打' : null),
       // 零位移探针里执行器看不见的那两格;只读,不参与任何判据
       bodyState: () => ({
         combatActive: this.combat?.active ?? false,
@@ -3996,7 +3998,7 @@ export class MinecraftWorld implements World {
         fight: this.policy.get().fight,
       }),
       // 环境自保与任务逃生分别持有身体，战斗不重复接管。
-      envBusy: () => (this.reflexes?.envActive ?? false) || Date.now() < this.escapeHoldUntil,
+      envBusy: () => this.bodyInhibitReason !== null || (this.reflexes?.envActive ?? false) || Date.now() < this.escapeHoldUntil,
       taskEscaping: () => this.executor?.escaping ?? false,
       taskEating: () => this.executor?.eating ?? false,
       taskFighting: () => this.executor?.attacking ?? false,
@@ -4102,6 +4104,7 @@ export class MinecraftWorld implements World {
       // 第一次掉线值得叫醒她(手上的事全废了);之后每一次重连没成只是同一件事的
       // 复述,压成不唤醒的一条,免得连不上的那半小时里每隔几十秒炸一次
       onDisconnect: (reason, willReconnect, attempt) => {
+        this.bodyInhibitReason = null; this.bodyInhibitHold = null;
         this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
         this.methods.stop('游戏连接已断开，原方法坐标和权限作废');
         this.visualInFlight?.controller.abort(new Error('游戏连接已断开'));
@@ -4229,6 +4232,36 @@ export class MinecraftWorld implements World {
   }
 
   protected extensionTools(): ToolDef[] { return []; }
+  protected bodyInhibitReason: string | null = null;
+  private bodyInhibitHold: QueueHoldToken | null = null;
+
+  /** Optional server adapters translate authoritative incapacitation/recovery into this generic lifecycle. */
+  protected setBodyInhibited(reason: string | null, pose: 'downed' | null = null): void {
+    if (this.bridge?.bot) setViewerBodyState(this.bridge.bot, !!reason, pose);
+    if (reason === this.bodyInhibitReason) return;
+    const previous = this.bodyInhibitReason;
+    this.bodyInhibitReason = reason;
+    if (reason) {
+      this.bodyInhibitHold = this.executor?.pauseForExternal(reason) ?? null;
+      this.interruptIdle('body-inhibited');
+      this.methods.stop(reason);
+      this.reflexes?.inhibit();
+      this.combat?.inhibit();
+      releaseBody(this.bridge?.bot, reason, this.diag, 'link');
+    } else {
+      const hold = this.bodyInhibitHold;
+      this.bodyInhibitHold = null;
+      if (!this.shuttingDown && this.bridge?.connected) {
+        this.reflexes?.start();
+        if (hold) this.executor?.resumeAfterExternal(hold);
+      }
+    }
+    this.diag.write({ lane: 'body', event: reason ? 'inhibited' : 'recovered',
+      msg: reason ?? `身体恢复：${previous}`, data: { reason, previous, connectionGeneration: this.connectionGeneration } });
+    this.emit('minecraft.body', reason
+      ? `[身体受限] ${reason}；已收起无效动作，原任务保留，等待恢复回执。`
+      : '[身体恢复] 已收到恢复回执，保留的任务可继续；需重新核对现场。', true);
+  }
   /** Optional authenticated server receipts. Cast acceptance never grants sight. */
   protected extensionPerception(_bot: Bot): readonly DetectionEvidence[] { return []; }
   protected extensionState(): unknown { return null; }
@@ -4357,7 +4390,7 @@ export class MinecraftWorld implements World {
     return { sampledAt: new Date().toISOString(), connectionGeneration: this.connectionGeneration,
       method: this.methods.current,
       snapshot: this.snapshot({ scanBlocks: false }), flight: bot ? flightState(bot) : null,
-      queue: this.executor?.status() ?? null, combatActive: this.combat?.active ?? false,
+      queue: this.executor?.status() ?? null, bodyRestriction: this.bodyInhibitReason, combatActive: this.combat?.active ?? false,
       combat: this.extensionState() };
   }
 
@@ -6232,6 +6265,8 @@ export class MinecraftWorld implements World {
   }
 
   protected onSpawn(): void {
+    this.bodyInhibitReason = null; this.bodyInhibitHold = null;
+    this.reflexes?.start();
     this.initialSceneStop?.();
     const bot = this.bridge?.bot;
     if (!bot) return;
@@ -6308,6 +6343,7 @@ export class MinecraftWorld implements World {
    * 不重走 onSpawn：世界和连接未变，快照基线与暂态仍有效。
    */
   protected onRespawn(): void {
+    this.setBodyInhibited(null);
     this.attention.reset();
     const now = Date.now();
     this.extensionRespawn();

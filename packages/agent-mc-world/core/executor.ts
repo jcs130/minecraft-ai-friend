@@ -153,7 +153,7 @@ import { dimensionOf } from './cell-facts.ts';
 import { fmtDur } from './receipt.ts';
 import {
   FLEE_DEADLINE_MS, clearEscapeGoalOwner, digBackoffScene, digBlock, dropGoal, escapeIntent,
-  findEntity, fmtDist, gotoGoal, holdTreadWater, onEscapeGoal, goalOwnerKind, levelTravelGoal, nextLongTravelLeg, matchBlockIds, readStamp, releaseBody,
+  findEntity, fmtDist, gotoGoal, holdTreadWater, onEscapeGoal, goalOwnerKind, goalOwnerOf, levelTravelGoal, nextLongTravelLeg, matchBlockIds, readStamp, releaseBody,
   renderRouteMenu, routeNote, setOwnedGoal, travelGoalReached, type DistanceMetric, walkOnlyPath, withRouteScene, underwaterRouteNote,
 } from './travel.ts';
 import {
@@ -744,10 +744,16 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
       if (!isKnownTarget(bot, call.name)) throw new SkillBlocked(`${call.name} 不在线`);
       const e = findEntity(bot, call.name, 128);
       if (!e) throw new SkillBlocked(`${call.name} 在线但不在附近 128 格内`);
-      setOwnedGoal(bot, new goals.GoalFollow(e, 3), 'task', `跟着 ${call.name}`, { dynamic: true, diag: ctx.diag });
-      // 持续任务:挂着直到被顶替/叫停
-      while (!ctx.aborted() && e.isValid) await sleep(500);
-      dropGoal(bot, 'task', '跟随结束', ctx.diag);
+      const goal = new goals.GoalFollow(e, 3);
+      const releaseWalkOnly = walkOnlyPath(bot);
+      setOwnedGoal(bot, goal, 'task', `跟着 ${call.name}`, { dynamic: true, diag: ctx.diag });
+      try {
+        // 战斗会挂起本步并原样续做。旧实例醒来时不能撤掉新持有者的目标。
+        while (!ctx.aborted() && e.isValid) await sleep(100);
+      } finally {
+        if (goalOwnerOf(bot)?.goal === goal) dropGoal(bot, 'task', '跟随结束', ctx.diag);
+        releaseWalkOnly();
+      }
       if (!e.isValid) return `${call.name} 不见了,停止跟随`;
       throw new Aborted(ctx.abortedBy?.() ?? null);
     }
@@ -1105,7 +1111,7 @@ export type QueueFreezeOwner = 'combat' | 'queue';
  * environment/fall 各持自己的冻结令牌，各自释放并独立计时。
  * 两槽都空后才恢复队列。
  */
-type QueueHoldSlot = 'environment' | 'fall';
+type QueueHoldSlot = 'environment' | 'fall' | 'external';
 
 /**
  * 这一步被打断后能不能从头重跑。goto/collect/build/excavate 这类幂等(build 重放
@@ -1642,6 +1648,9 @@ export interface QueueStatus {
   /** elapsedMs 是**这一步**跑了多久;整条任务的那份另给 taskElapsedMs */
   running: {
     id: number; label: string; step: string; stepIndex: number; stepCount: number; elapsedMs: number;
+    /** Structured current intent; never infer control ownership by parsing the label. */
+    skill?: SkillCall['skill'];
+    followTarget?: string;
     /** 受理到现在。只看步骤耗时读不出「这一单已经磨了二十分钟」 */
     taskElapsedMs: number;
     count: { done: number; total: number } | null;
@@ -1809,7 +1818,7 @@ interface ExecutorOptions {
   searchContext?: () => { connectionGeneration: number; realm: string };
 }
 
-interface QueueHoldToken {
+export interface QueueHoldToken {
   readonly owner: symbol;
 }
 
@@ -1828,12 +1837,13 @@ export class Executor {
   private task: RunningTask | null = null;
   private queue: QueuedTask[] = [];
   /**
-   * 两个独立的冻结槽(见 QueueHoldSlot):环境危机一张、深坠一张,各自释放,
+   * 独立冻结槽(见 QueueHoldSlot):环境危机、深坠、外部身体限制，各自释放,
    * **都空了**队列才开闸。队列内容在冻结期间原样保留。
    */
   private readonly queueHolds: Record<QueueHoldSlot, { token: QueueHoldToken; reason: string } | null> = {
     environment: null,
     fall: null,
+    external: null,
   };
   private stopped = false;
   private executionEpoch = 0;
@@ -1975,6 +1985,9 @@ export class Executor {
             id: t.id,
             label: labelOf(t),
             step: t.program?.name ?? describeSkill(t.steps[Math.min(t.stepIndex, t.steps.length - 1)]),
+            ...(!t.program ? { skill: t.steps[t.stepIndex]?.skill,
+              ...(t.steps[t.stepIndex]?.skill === 'follow'
+                ? { followTarget: (t.steps[t.stepIndex] as Extract<SkillCall, {skill:'follow'}>).name } : {}) } : {}),
             stepIndex: t.stepIndex,
             stepCount: t.program ? 1 : t.steps.length,
             elapsedMs: Date.now() - t.stepStartedAt,
@@ -4433,17 +4446,18 @@ export class Executor {
     return true;
   }
 
-  /** 两槽合起来的一句冻结理由;都空着为 null。同时冻着就两条都说 */
+  /** 各槽合起来的一句冻结理由；都空着为 null。 */
   private holdReason(): string | null {
-    const bits = [this.queueHolds.environment?.reason, this.queueHolds.fall?.reason].filter(Boolean);
+    const bits = Object.values(this.queueHolds).map(hold => hold?.reason).filter(Boolean);
     return bits.length > 0 ? bits.join('、') : null;
   }
 
-  /** 两槽一起清空(mc_stop / 抢占 / 死亡 / 断线 / 停机):留哪一张都够把队列关死 */
+  /** 全部清空(mc_stop / 抢占 / 死亡 / 断线 / 停机)，旧令牌不能再恢复任务。 */
   private releaseAllHolds(): void {
-    const had = this.queueHolds.environment !== null || this.queueHolds.fall !== null;
+    const had = Object.values(this.queueHolds).some(Boolean);
     this.queueHolds.environment = null;
     this.queueHolds.fall = null;
+    this.queueHolds.external = null;
     // 回边:反射那边的令牌已经作废,别让它拿着旧票挡住这一轮危机的重新冻结
     if (had) this.opts.onHoldsReleased?.();
   }
@@ -4459,7 +4473,7 @@ export class Executor {
     if (other !== null) {
       this.opts.diag?.write({
         lane: 'task', event: 'hold-partial-release',
-        msg: `${slot === 'fall' ? '深坠' : '环境'}那一槽解了,另一槽还冻着(${other}),队列不开闸`,
+        msg: `${slot}那一槽解了,其他状态还冻着(${other}),队列不开闸`,
         data: { slot, stillHeld: other, frozenId: this.frozen?.id ?? null },
       });
       return { released: true, note: null, stillHeld: other };
@@ -4511,6 +4525,20 @@ export class Executor {
       data: { resumedTask: out.note !== null, stillHeld: this.holdReason() },
     });
     return out;
+  }
+
+  /** An explicit body restriction freezes even escape tasks; never replay an interrupted non-idempotent step. */
+  pauseForExternal(reason: string): QueueHoldToken {
+    const token: QueueHoldToken = { owner: Symbol('external-hold') };
+    this.queueHolds.external = { token, reason };
+    this.suspend(reason, 'queue');
+    // The combat controller cannot release a checkpoint while another body owner inhibits it.
+    if (this.frozen) this.frozen.frozenBy = 'queue';
+    return token;
+  }
+
+  resumeAfterExternal(token: QueueHoldToken): QueueResumeResult {
+    return this.releaseHold('external', token);
   }
 
   /** 坠落危险解除后继续仍在队列中的计划(除非环境那一槽还冻着)。 */
@@ -6122,8 +6150,17 @@ export class Reflexes {
   }
 
   start(): void {
+    if (this.timer) return;
     this.stopped = false;
     this.timer = setInterval(() => this.tick(), REFLEX_TICK_MS);
+  }
+
+  /** Called only after an external queue hold is installed, so releasing old reflex holds cannot resume work. */
+  inhibit(): void {
+    const environment = this.environmentHold, fall = this.fall?.hold;
+    this.stop();
+    if (environment) this.opts.resumeEnvironment(environment);
+    if (fall) this.opts.resumeAfterFall(fall);
   }
 
   stop(): void {
