@@ -71,9 +71,20 @@ def model_tools(catalogue):
             schema["properties"]["action"] = {"enum": sorted(READ_PROTOCOL)}
         if tool["name"] in {"mc_do", "mc_scout"}:
             schema.setdefault("properties", {})["queue"] = {"enum": ["append", "afterCheckpoint", "now"]}
+            step = schema["properties"].get("steps", {}).get("items", {})
+            properties = step.get("properties", {})
+            if isinstance(properties.get("skill"), dict) and "enum" in properties["skill"]:
+                # Native steps use one large flat union across unrelated skills.
+                # Keep the stable envelope; mc_help supplies the selected skill's
+                # full fields/examples. Dispatch still validates the ORIGINAL.
+                kept = {"skill", "needs", "expect", *step.get("required", [])}
+                step["properties"] = {key: value for key, value in properties.items() if key in kept}
+                step["additionalProperties"] = True
+                step["description"] = ("Flat step: skill plus its native parameters (not nested arguments). "
+                                       "Read mc_help for the selected skill's exact fields and examples before using unfamiliar skills.")
         description = tool.get("description", "")[:450]
         if tool["name"] == "mc_do":
-            description = "Execute real Minecraft actions: movement, collect, craft, eat, attack, build, etc. Steps run in order on the native body queue. Use mc_help for the selected skill's parameters. Default queue is append; afterCheckpoint inserts safely, now interrupts. A returned task ID means accepted, not completed."
+            description = "Execute real Minecraft actions: movement, collect, craft, eat, attack, build, etc. Steps run in order on the native body queue. Read mc_help for the selected skill's exact parameters/examples, then submit flat step objects. Default queue is append; afterCheckpoint inserts safely, now interrupts. A returned task ID means accepted, not completed."
         elif tool["name"] == "mc_scout":
             description = "Read-only observations or dry-run trials. Only the skills in steps.skill.enum are allowed. Does not collect, craft, eat, move the player or build anything. Use mc_do for real actions."
         tools.append({"type": "function", "function": {"name": tool["name"], "description": description, "parameters": schema}})

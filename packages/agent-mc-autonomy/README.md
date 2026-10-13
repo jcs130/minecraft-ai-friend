@@ -70,6 +70,22 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### 0.1.13: preserve room for observations and validate before dispatch
+
+The resident `mc_do`/`mc_scout` schemas retain the native queue/array envelope,
+skill names and dependency controls. Their large cross-skill parameter union is
+available through `mc_tool_help`; `mc_help` supplies selected skills' exact fields,
+examples and conditions. Steps remain flat objects, never JSON strings. This
+progressive disclosure leaves room for fresh facts and complete recent exchanges
+without increasing the context limit. The byte counter remains a conservative
+fallback, not an exact tokenizer or a measured cache-hit rate.
+
+All model calls in a response are checked against the original discovered native
+schemas before dispatching any of them. Mailbox actions also validate before an
+uncertain-dispatch journal is written. Invalid parameters receive a correction
+notice and bounded retry; no implicit coercion or action replay occurs. Genuine
+unstructured mutation outcomes still block and require receipt reconciliation.
+
 ### 0.1.12: revisit unexecuted plans without requiring an unrelated event
 
 A text-only reply submits no game action and cannot end the standing goal. The

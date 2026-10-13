@@ -700,9 +700,33 @@ def test_action_and_observation_tools_keep_distinct_semantics(framework_module):
     assert "Execute real" in tools["mc_do"]["description"]
     assert "Read-only" in tools["mc_scout"]["description"]
     assert tools["mc_scout"]["parameters"]["properties"]["queue"] == {"enum": ["append", "afterCheckpoint", "now"]}
-    assert tools["mc_do"]["parameters"]["properties"]["steps"]["items"]["properties"]["block"] == props["block"]
+    assert "block" not in tools["mc_do"]["parameters"]["properties"]["steps"]["items"]["properties"]
+    original_step = json.loads(module.tool_help(catalog, {"name": "mc_do", "path": "/inputSchema/properties/steps/items"})["text"])
+    assert original_step["properties"]["block"] == props["block"]
     failure = module.failure_context(catalog, "mc_scout", {"steps": [{"skill": "craft"}, {"skill": "collect"}]}, {"text": "Invalid arguments"})
     assert "collect, craft belongs to mc_do" in failure["next_step"]
+
+
+def test_step_projection_preserves_envelope_and_full_native_constraints(framework_module, tmp_path):
+    from agent_mc_autonomy.tool_schema import argument_error
+
+    module, _, _ = setup(framework_module, tmp_path, None)
+    schema = {"type": "object", "properties": {"steps": {"type": "array", "minItems": 1, "maxItems": 16,
+        "items": {"type": "object", "properties": {
+            "skill": {"type": "string", "enum": ["craft", "eat"]},
+            "needs": {"type": "array", "items": {"type": "integer"}, "description": "Earlier step numbers, starting at one."},
+            "item": {"type": "string", "description": "原生物品参数完整语义" * 60},
+            "count": {"type": "integer", "minimum": 1}}, "required": ["skill"]}}}, "required": ["steps"]}
+    original = {"name": "mc_do", "inputSchema": schema}
+    before = json.dumps(original)
+    projected = module.model_tools([original])[0]["function"]["parameters"]["properties"]["steps"]
+    assert projected["type"] == "array" and projected["minItems"] == 1 and projected["maxItems"] == 16
+    assert projected["items"]["properties"] == {k: schema["properties"]["steps"]["items"]["properties"][k] for k in ["skill", "needs"]}
+    assert projected["items"]["additionalProperties"] is True and "mc_help" in projected["items"]["description"]
+    assert json.loads(module.tool_help([original], {"name": "mc_do", "path": "/inputSchema"})["text"]) == schema
+    assert json.dumps(original) == before
+    assert "minimum=1" in argument_error([original], "mc_do", {"steps": [{"skill": "craft", "count": 0}]})
+    assert argument_error([original], "mc_do", {"steps": [{"skill": "craft", "item": "oak_planks", "count": 1}]}) is None
 
 
 def test_forbidden_queue_policy_is_rejected_locally_then_planner_can_correct(framework_module, tmp_path, run_async):
