@@ -1,0 +1,159 @@
+"""Local command delivery only; the native executor owns the actual work queue."""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+import time
+import uuid
+from contextlib import contextmanager
+from pathlib import Path
+
+
+class Mailbox:
+    def __init__(self, directory: Path):
+        self.path = directory / "commands.sqlite3"
+
+    @contextmanager
+    def connection(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(self.path, timeout=5)
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("""CREATE TABLE IF NOT EXISTS commands (
+                id TEXT PRIMARY KEY, kind TEXT NOT NULL, payload TEXT NOT NULL,
+                state TEXT NOT NULL, receipt TEXT, created REAL NOT NULL)""")
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _intent_revision(db):
+        return db.execute("SELECT coalesce(max(rowid),0) FROM commands WHERE kind IN ('goal','feedback','stop')").fetchone()[0]
+
+    def intent_revision(self):
+        """Monotonic intent generation, including queued user changes and stops."""
+        if not self.path.exists():
+            return 0
+        with self.connection() as db:
+            return self._intent_revision(db)
+
+    def submit(self, kind: str, payload: dict, request_id: str, *, expected_revision=None) -> dict:
+        try:
+            uuid.UUID(request_id)
+        except (ValueError, TypeError, AttributeError):
+            raise ValueError("request_id_must_be_uuid: reuse the same ID when confirmation is uncertain") from None
+        if kind not in {"steps", "stop", "goal", "feedback"} or not isinstance(payload, dict):
+            raise ValueError("command_invalid")
+        if kind == "goal" and (set(payload) != {"goal"} or not isinstance(payload["goal"], str)
+                or not payload["goal"].strip() or len(payload["goal"]) > 4000):
+            raise ValueError("goal_must_contain_1_to_4000_characters")
+        if kind == "feedback" and (set(payload) != {"goal", "mode"} or not isinstance(payload["goal"], str)
+                or not payload["goal"].strip() or len(payload["goal"]) > 4000 or payload["mode"] not in {"insert", "replace"}):
+            raise ValueError("feedback_requires_goal_and_explicit_insert_or_replace_mode")
+        if kind == "steps" and (set(payload) != {"steps", "queue"}
+                or not isinstance(payload["steps"], list) or not 1 <= len(payload["steps"]) <= 32
+                or not all(isinstance(step, dict) for step in payload["steps"])
+                or payload["queue"] not in {"append", "afterCheckpoint", "now"}):
+            raise ValueError("native_steps_or_queue_mode_invalid")
+        text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        if len(text.encode("utf-8")) > 24000:
+            raise ValueError("command_too_large")
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT * FROM commands WHERE id=?", (request_id,)).fetchone()
+            if row:
+                if row["kind"] != kind or row["payload"] != text:
+                    raise ValueError("request_id_conflict")
+                return self.result(row)
+            if expected_revision is not None and self._intent_revision(db) != expected_revision:
+                raise ValueError("intent_revision_changed")
+            if kind != "stop" and db.execute("SELECT count(*) FROM commands WHERE state IN ('queued','dispatching','planning','paused')").fetchone()[0] >= 64:
+                raise ValueError("command_inbox_full")
+            db.execute("INSERT INTO commands VALUES (?, ?, ?, 'queued', NULL, ?)", (request_id, kind, text, time.time()))
+            return self.result(db.execute("SELECT * FROM commands WHERE id=?", (request_id,)).fetchone())
+
+    @staticmethod
+    def result(row):
+        return {"request_id": row["id"], "kind": row["kind"], "delivery": row["state"],
+                "planner_report" if row["kind"] in {"goal", "feedback"} else "native_receipt": json.loads(row["receipt"]) if row["receipt"] else None}
+
+    def get(self, request_id):
+        if not self.path.exists():
+            return None
+        with self.connection() as db:
+            row = db.execute("SELECT * FROM commands WHERE id=?", (request_id,)).fetchone()
+            return self.result(row) if row else None
+
+    def ready(self, allow_goal=True):
+        if not self.path.exists():
+            return False
+        with self.connection() as db:
+            return db.execute("SELECT 1 FROM commands WHERE state='queued' AND (kind!='goal' OR ?) LIMIT 1", (allow_goal,)).fetchone() is not None
+
+    def check_uncertain(self):
+        if self.path.exists():
+            with self.connection() as db:
+                if db.execute("SELECT 1 FROM commands WHERE state='dispatching' LIMIT 1").fetchone():
+                    raise RuntimeError("outcome_unknown: inspect the dispatching command and original native receipts")
+
+    def claim(self, allow_goal=True):
+        if not self.path.exists():
+            return None
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT * FROM commands WHERE state='queued' AND (kind!='goal' OR ?) ORDER BY CASE kind WHEN 'stop' THEN 0 WHEN 'feedback' THEN 1 ELSE 2 END, rowid LIMIT 1", (allow_goal,)).fetchone()
+            if not row:
+                return None
+            db.execute("UPDATE commands SET state=? WHERE id=?", ("planning" if row["kind"] == "goal" else "dispatching", row["id"]))
+            return {"id": row["id"], "kind": row["kind"], "payload": json.loads(row["payload"])}
+
+    def finish(self, request_id, receipt):
+        with self.connection() as db:
+            db.execute("UPDATE commands SET state='delivered', receipt=? WHERE id=? AND state='dispatching'",
+                       (json.dumps(receipt, ensure_ascii=False), request_id))
+
+    def active_goal(self):
+        if not self.path.exists():
+            return None
+        with self.connection() as db:
+            row = db.execute("SELECT * FROM commands WHERE state='planning' ORDER BY rowid LIMIT 1").fetchone()
+            return {"id": row["id"], **json.loads(row["payload"]),
+                    "queue_policy_consumed": bool(row["receipt"] and json.loads(row["receipt"]).get("queue_policy_consumed"))} if row else None
+
+    def activate_feedback(self, command):
+        with self.connection() as db:
+            state = "paused" if command["payload"]["mode"] == "insert" else "superseded"
+            db.execute("UPDATE commands SET state=? WHERE state='planning'", (state,))
+            if state == "superseded":
+                db.execute("UPDATE commands SET state='superseded' WHERE state='paused'")
+            db.execute("UPDATE commands SET state='planning' WHERE id=? AND state='dispatching'", (command["id"],))
+
+    def consume_queue_policy(self, request_id):
+        with self.connection() as db:
+            db.execute("UPDATE commands SET receipt=? WHERE id=? AND state='planning'",
+                       ('{"queue_policy_consumed":true}', request_id))
+
+    def resume_goal(self):
+        with self.connection() as db:
+            db.execute("UPDATE commands SET state='planning' WHERE id=(SELECT id FROM commands WHERE state='paused' ORDER BY rowid DESC LIMIT 1)")
+        return self.active_goal()
+
+    def report_goal(self, request_id, report):
+        with self.connection() as db:
+            db.execute("UPDATE commands SET state=?, receipt=? WHERE id=? AND state='planning'",
+                       (report["outcome"], json.dumps(report, ensure_ascii=False), request_id))
+
+    def stop_queued(self):
+        # An explicit stop must not leave queued commands for an unexpected restart.
+        with self.connection() as db:
+            db.execute("UPDATE commands SET state='cancelled' WHERE state IN ('queued','planning','paused')")
+
+
+def observation(directory: Path):
+    path = directory / "status.json"
+    if not path.exists():
+        return {"phase": "not_observed", "live_verified": False}
+    # A persisted snapshot is never proof that its owner is still running.
+    return {**json.loads(path.read_text(encoding="utf-8")), "live_verified": False, "source": "last_observed_snapshot"}

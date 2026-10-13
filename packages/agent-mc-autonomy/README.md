@@ -1,0 +1,114 @@
+# Agent MC Autonomy
+
+`minecraft-ai-friend` owns the complete Minecraft autonomous runtime. This optional
+Python package composes the sibling `agent-mc-world` body through its public MCP
+protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
+package itself stays model-free; the planner is an explicitly configured port.
+
+```text
+Neko / Cortico / other Agent                 Explicit model endpoint
+  personality, high-level goals, voice         standalone planner
+                |                                     |
+       ReviewPort / Mailbox                    Planner protocol
+                +------------------+------------------+
+                                   |
+             agent-mc-autonomy (this package)
+      useful event reviews / context budget / goal scheduling
+             optional vision / rule or System One focus
+                                   |
+                   agent-mc-world public MCP
+        sole native work queue / skills / facts / original receipts
+                                   |
+             Minecraft 1.21.1 server (local or remote)
+```
+
+## Run independently
+
+Install with Python 3.11+ (`pip install ./packages/agent-mc-autonomy`). Install and
+build `packages/agent-mc-world` separately following its documentation; pass the
+actual built MCP entry explicitly. No private deployment or model is discovered.
+
+Copy `standalone.example.toml` to a private configuration. Set the server/account,
+an absolute shared data directory, `autonomy.enabled = true`, and an explicit
+OpenAI-compatible planner endpoint/model. Keep credentials in an environment
+variable named by `api_key_env`.
+
+```sh
+agent-mc-autonomy check --config config.local.toml --entry /path/to/bin/minecraft-agent-mcp.mjs
+agent-mc-autonomy run --config config.local.toml --entry /path/to/bin/minecraft-agent-mcp.mjs --goal "Survive safely, obtain food and prepare shelter"
+agent-mc-autonomy status --config config.local.toml
+agent-mc-autonomy feedback --config config.local.toml --mode insert --goal "Gather food, then resume" --request-id <uuid>
+agent-mc-autonomy stop --config config.local.toml --request-id <uuid>
+```
+
+`--queue-only` invokes no model: it executes explicitly submitted native steps,
+and does not pretend to plan natural-language goals. Optional image input is
+declared explicitly; absent/unsupported vision falls back to textual facts. Fast
+focus defaults to rules; `host` accepts an injected selector and `system_one`
+uses an explicit local/remote provider, with bounded fallback to rules.
+
+## Host adapter contract
+
+Embedded mode calls `run_session(settings, entry, data_root, planner, goal,
+publish, stopped)`. A planner implements `decide(messages, tools)` and `aclose()`;
+an optional `select_fast` provides fast focus. External mode leaves this process
+running and shares its account-scoped data directory with frontends. Closing a
+frontend must not stop an independently launched runtime.
+
+The native controller alone owns begin/end-turn, barriers, event cursors and
+action dispatch. A host posts natural goals to `Mailbox`, never starts another
+body controller for the same account. `insert` uses native safe checkpoints and
+resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
+uncertain dispatch blocks replay, and planner completion reports are never
+treated as verified gameplay completion.
+
+The optional strategic loop belongs here as well:
+
+```python
+from agent_mc_autonomy.review import ReviewPolicy, ReviewPort
+
+reviews = ReviewPort(account_host_directory)
+reviews.configure(ReviewPolicy(enabled=True))
+envelope = reviews.offer()  # transport this to a persona; never call observe here
+if envelope["offered"]:
+    review = envelope["review"]
+    # Send review['summary'] and its ID with your host's public API.
+    # Afterwards record transport acceptance, not decision/playback success:
+    reviews.delivered(review["id"], accepted=True)
+    # The actual host decision calls one of:
+    reviews.decide(review["id"], "inspect")
+    reviews.decide(review["id"], "continue", reason="Current native work is progressing")
+    # Or insert one concrete stage goal. Never automatically replace ongoing work.
+```
+
+Only runtime publication creates reviews. Material changes and terminal task
+results trigger bounded reviews, repeated successful looks do not count as
+progress, and periodic review continues without audience chat. Death/runtime
+failure can supersede an ordinary request. Current body/inventory/food/goal/queue
+and original-query access remain useful; no accumulating prompt transcript or
+separate summarizing model call is added. Stable planning instructions precede
+dynamic facts at the request tail.
+
+Review IDs, retries and results live in SQLite. Freshness/session/intent fences
+reject late decisions after new user feedback. Two delivery attempts per review
+and backoff bound unanswered requests. A lost acknowledgement is reconciled with
+the durable goal mailbox. Optional review storage failure cannot kill gameplay.
+The strategic port is disabled by default and never starts a stopped runtime.
+
+Viewer assembly uses the body's public extension ports and an explicitly
+installed `mc-visual-console` checkout/catalog. Rendering code and assets remain
+in that separate project. No viewer, speech engine or server is bundled here.
+
+## Verification and source
+
+Run `python -m pytest -q` here. Tests deny host SDK imports, network and service
+launches; the isolated process test exercises both a fake autonomous planner and
+queue-only operation. These tests do not prove live survival, actual model
+capability, voice playback or all possible host integrations. Cortico integration
+is supported by the neutral ports, not claimed as a shipped/tested adapter.
+
+The initial runtime was extracted from the user's autonomous plugin at
+`jcs130/n.e.k.o_plugin_minecraft_autonomous@581e65b`. Its Apache-2.0 license is
+preserved in this package. The sibling body retains its own license. The Neko
+plugin now consumes this package at a fixed commit; it must not carry a second
+copy of the controller, context policy or review scheduler.
