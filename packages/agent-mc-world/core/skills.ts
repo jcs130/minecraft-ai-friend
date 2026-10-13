@@ -1344,11 +1344,10 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
 {"skill":"probe","shape":"box","anchors":[["~-2","~","~-2"],["~2","~4","~2"]],"slice":"y"}
                                                  slice 保留每格位置：y=水平各层，z=各正截面，x=各侧截面；世界坐标轴，不随镜头转。
                                                  须用 box、fill:solid(可省略)，不与 where 同用，每次最多 ${PROBE_SLICE_CELL_CAP} 格；过长时缩小范围。
-                                                 附读取时间、维度、脚下坐标和碰撞箱；.. 是已读空气，?? 是未加载。直接读区块，不检查视线。
+                                                 附读取时间、维度、脚下坐标和碰撞箱；.. 是已读空气，?? 是未观察（遮挡、超距或未加载），不能当成空气。
 {"skill":"probe","shape":"box","anchors":[[-40,40,-120],[-8,60,-88]],"where":["spawner","#chests"]}
                                                  加 "where" = 只报这几样在这片里的坐标(按远近,每样最多 ${PROBE_WHERE_SHOWN} 处)。
-                                                 这一档直接读区块,不看视线也不管挡没挡着 —— 封在结构里的刷怪笼、
-                                                 埋着的箱子、矿脉走这条;find 只看得见明面上的东西。名单认 ${UNTIL_CATEGORY_DOC}`,
+                                                 同样受视线和观察距离约束；未见的箱子、矿脉等保持未知，不含特殊探测技能结果。名单认 ${UNTIL_CATEGORY_DOC}`,
     parse: parseShaped('probe'),
     fields: [
       {
@@ -1364,7 +1363,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
       { key: 'slice', kind: 'enum', values: SPATIAL_SLICE_AXES, error: 'slice 只认 x/y/z', doc: `box 空间切片；体积=(|dx|+1)(|dy|+1)(|dz|+1)≤${PROBE_SLICE_CELL_CAP}，不与 where 同用` },
       {
         key: 'where', kind: 'names', hint: `方块英文 id 或类别 ${UNTIL_CATEGORY_DOC};实体 id 按收到的实体表报`,
-        doc: '只报这几样在这片里的坐标(不看视线)',
+        doc: '只报这几样在这片里当前可见的坐标；遮挡、超距或未加载保持未知',
       },
     ],
   },
