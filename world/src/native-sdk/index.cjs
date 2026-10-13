@@ -8,7 +8,7 @@ const { NativeLedger } = require('../neko-adapter/native-runtime.cjs')
 const { operationCatalog, validateArguments } = require('./catalog.cjs')
 const { runActionWithDeadline, outboundGameMutation } = require('../society-agent/action-deadline.cjs')
 const { nativeInventorySnapshot, nativeInventoryDelta } = require('../society-agent/native-inventory-delta.cjs')
-const { nativeNavigationResult } = require('../society-agent/native-navigation-result.cjs')
+const { walkAndObserve } = require('./navigation.cjs')
 const transition = require('../neoforge-handshake/rpg-transition.cjs')
 const OWNER = Symbol.for('maw.nativeBody.owner')
 const OFFLINE_LOGIN = Symbol.for('maw.nativeBody.offlineLogin')
@@ -186,11 +186,8 @@ function attachNativeBody (bot, { ledgerDir, controllerId, expectedUuid, account
       movements.canDig = false; movements.allow1by1towers = false; movements.allowParkour = false
       movements.allowFreeMotion = false; movements.canOpenDoors = false; movements.maxDropDown = 2
       bot.pathfinder.setMovements(movements)
-      frame.phase = 'walking'; scope.mutationDispatched()
-      try { await bot.pathfinder.goto(new goals.GoalBlock(p.x, p.y, p.z)); scope.check() } finally { bot.clearControlStates() }
-      const after = await snapshot(); scope.check()
-      if (!after.ok) return fail('movement_position_unavailable', { outcomeKnown: false, outcomeUnknown: true })
-      return nativeNavigationResult({ requestedPosition: p, position: after.position, exact: true })
+      frame.phase = 'walking'
+      return walkAndObserve({ bot, goal: new goals.GoalBlock(p.x, p.y, p.z), position: p, scope, snapshot })
     }
     if (operation === 'inventory.equipSlot') {
       const menu = sdk.menu.current(), dest = { head: 5, chest: 6, legs: 7, feet: 8, offhand: 45 }[args.destination]

@@ -32,3 +32,23 @@ export function createMyAgentWorldClient(config: MyAgentWorldConfig, options?: {
   log?: Logger; modelFacts?: ModelFacts; connect?: (config: MyAgentWorldConfig) => Promise<BodyAdapter>;
 }): MinecraftAgentClient;
 export const HOST_INSTRUCTIONS: string;
+export type TaskCriterion = { type: 'owned_item'; itemId: string; countAtLeast: number; requireEquipped?: boolean }
+  | { type: 'reach_position'; position: { x: number; y: number; z: number }; dimension: string; radius: number }
+  | { type: 'quest_completed'; questId: string; countAtLeast: number }
+  | { type: 'all'; criteria: TaskCriterion[] };
+export interface TaskSpec {
+  id: string; criteria: TaskCriterion; bodyId: string; objective?: string;
+  scenarioId: string; scenarioVersion: string; harnessVersion: string; initialStateFingerprint: string;
+  startedAtCall: number; startedAtRound: number;
+}
+/** Host-controlled, immutable criteria and durable counters; model claims cannot mark success. */
+export class TaskMonitor {
+  constructor(options: { directory: string; clock?: () => number; readOnly?: boolean });
+  start(spec: TaskSpec): Record<string, any>;
+  record(id: string, event: Record<string, any>): void;
+  observe(id: string, observations: { body: any; society?: any }, counters: { calls: number; round: number }): Record<string, any>;
+  finish(id: string, options: { observations: { body: any; society?: any }; counters: { calls: number; round: number }; reason: string; cancelled?: boolean; outcomeUnknown?: boolean }): Record<string, any>;
+  get(id: string): Record<string, any> | null;
+  report(): Record<string, any>; close(): void;
+}
+export function evaluateTask(criteria: TaskCriterion, observations: { body: any; society?: any }, options: { bodyId: string; now?: number; maxAgeMs?: number }): Record<string, any>;

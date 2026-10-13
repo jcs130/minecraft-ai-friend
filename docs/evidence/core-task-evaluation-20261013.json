@@ -1,0 +1,688 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-13",
+  "body": "KiritoCore",
+  "provider": "mineflayer",
+  "model": "qwen3.7-plus",
+  "cumulativeModelCalls": 339,
+  "taskEvaluationModelCalls": 133,
+  "modelResponseHttp200": 133,
+  "report": {
+    "schemaVersion": 1,
+    "attempts": 5,
+    "running": 0,
+    "succeeded": 1,
+    "failed": 2,
+    "inconclusive": 0,
+    "cancelled": 2,
+    "closedAttempts": 5,
+    "successRate": 0.2,
+    "evaluableSuccessRate": 0.3333333333333333,
+    "successfulModelCallsMedian": 2,
+    "successfulModelCallsP95": 2,
+    "totalModelCalls": 133,
+    "backendCalls": 712,
+    "denominator": "all closed attempts, including inconclusive and cancelled; running shown separately",
+    "groups": [
+      {
+        "scenarioId": "wooden-pickaxe-equipped",
+        "scenarioVersion": "1",
+        "harnessVersion": "fe0f0836fabaaee7c9a45ac36d95ffdce5b7a1abab39f4d4d9fc617bec7a8c53",
+        "criteriaSha256": "544e6ea4efeae1a2a213470205907e5a0df307ac642ef3a575e6868a7e666b23",
+        "attempts": 1,
+        "running": 0,
+        "succeeded": 0,
+        "failed": 1,
+        "inconclusive": 0,
+        "cancelled": 0,
+        "closedAttempts": 1,
+        "successRate": 0,
+        "evaluableSuccessRate": 0,
+        "successfulModelCallsMedian": null,
+        "successfulModelCallsP95": null,
+        "totalModelCalls": 9,
+        "backendCalls": 50,
+        "initialStateFingerprints": [
+          "803eccff5313bdda1f198b9fc7294bf5a5a188205121bab242735f1d56226fc4"
+        ]
+      },
+      {
+        "scenarioId": "wooden-pickaxe-equipped",
+        "scenarioVersion": "1",
+        "harnessVersion": "e4b49ba3508410073f853d39f3825d563f5c859f6950a71b0d8b1ebc1b080419",
+        "criteriaSha256": "544e6ea4efeae1a2a213470205907e5a0df307ac642ef3a575e6868a7e666b23",
+        "attempts": 1,
+        "running": 0,
+        "succeeded": 0,
+        "failed": 0,
+        "inconclusive": 0,
+        "cancelled": 1,
+        "closedAttempts": 1,
+        "successRate": 0,
+        "evaluableSuccessRate": null,
+        "successfulModelCallsMedian": null,
+        "successfulModelCallsP95": null,
+        "totalModelCalls": 15,
+        "backendCalls": 46,
+        "initialStateFingerprints": [
+          "0d53242c4d70e73dbf70de0e3b190621de104da296204ec7b57090d565807990"
+        ]
+      },
+      {
+        "scenarioId": "wooden-pickaxe-equipped",
+        "scenarioVersion": "1",
+        "harnessVersion": "35574f24979a45e9f051f7d179866d73381ff8bd5c4e60f10379ad4d1e45ea66",
+        "criteriaSha256": "544e6ea4efeae1a2a213470205907e5a0df307ac642ef3a575e6868a7e666b23",
+        "attempts": 1,
+        "running": 0,
+        "succeeded": 0,
+        "failed": 0,
+        "inconclusive": 0,
+        "cancelled": 1,
+        "closedAttempts": 1,
+        "successRate": 0,
+        "evaluableSuccessRate": null,
+        "successfulModelCallsMedian": null,
+        "successfulModelCallsP95": null,
+        "totalModelCalls": 65,
+        "backendCalls": 339,
+        "initialStateFingerprints": [
+          "bae497b6006b9ab09b0581542fa33f2265a3e21bb62e2fa8f236ba78fb4008c6"
+        ]
+      },
+      {
+        "scenarioId": "wooden-pickaxe-equipped",
+        "scenarioVersion": "1",
+        "harnessVersion": "06b49bebdd9f3cf4ae544b9d4c442f7437e6a7c680ce46535d4c03f01200478c",
+        "criteriaSha256": "544e6ea4efeae1a2a213470205907e5a0df307ac642ef3a575e6868a7e666b23",
+        "attempts": 1,
+        "running": 0,
+        "succeeded": 0,
+        "failed": 1,
+        "inconclusive": 0,
+        "cancelled": 0,
+        "closedAttempts": 1,
+        "successRate": 0,
+        "evaluableSuccessRate": 0,
+        "successfulModelCallsMedian": null,
+        "successfulModelCallsP95": null,
+        "totalModelCalls": 42,
+        "backendCalls": 238,
+        "initialStateFingerprints": [
+          "1a3b76ee55acb4710b9ff7a80a1a9c3805d9fceec2e759aab60b5e7aeadb2e20"
+        ]
+      },
+      {
+        "scenarioId": "equip-owned-component-item",
+        "scenarioVersion": "1",
+        "harnessVersion": "81c078b8b1326188e926651ae50d3b9c745586de4a14ca4554b23ee5e90fc738",
+        "criteriaSha256": "fea803204ed8b5f6c277d930fa0f105a8df224196ef2c6bdd1ca3bf693afbd87",
+        "attempts": 1,
+        "running": 0,
+        "succeeded": 1,
+        "failed": 0,
+        "inconclusive": 0,
+        "cancelled": 0,
+        "closedAttempts": 1,
+        "successRate": 1,
+        "evaluableSuccessRate": 1,
+        "successfulModelCallsMedian": 2,
+        "successfulModelCallsP95": 2,
+        "totalModelCalls": 2,
+        "backendCalls": 39,
+        "initialStateFingerprints": [
+          "b2d8a622be4f154e5d23c3ddd0baa8a1ef3664b14ba5a9476690438aec3e79f0"
+        ]
+      }
+    ],
+    "failureHotspots": [
+      {
+        "signature": "body.move:navigation_target_not_reached",
+        "count": 9
+      },
+      {
+        "signature": "mc_operations:action_operation_unavailable",
+        "count": 4
+      },
+      {
+        "signature": "plan_error:trial_model_tool_arguments_invalid",
+        "count": 4
+      },
+      {
+        "signature": "world.dig:native_dig_block_changed",
+        "count": 3
+      },
+      {
+        "signature": "world.dig:native_dig_held_item_changed",
+        "count": 2
+      },
+      {
+        "signature": "native.recipes:action_operation_unavailable",
+        "count": 2
+      },
+      {
+        "signature": "mc_read:action_operation_unavailable",
+        "count": 2
+      },
+      {
+        "signature": "mc_help:action_operation_unavailable",
+        "count": 2
+      },
+      {
+        "signature": "world.interact:different_visible_block",
+        "count": 1
+      },
+      {
+        "signature": "native.craftRecipe:native_recipe_ingredients_unavailable",
+        "count": 1
+      },
+      {
+        "signature": "native.craftRecipe:native_recipe_requires_larger_crafting_grid",
+        "count": 1
+      },
+      {
+        "signature": "native.craftRecipe:MOD_CALL_ARGUMENT_INVALID",
+        "count": 1
+      },
+      {
+        "signature": "body.move:MOD_CALL_ARGUMENT_INVALID",
+        "count": 1
+      },
+      {
+        "signature": "body.input:MOD_CALL_ARGUMENT_INVALID",
+        "count": 1
+      },
+      {
+        "signature": "world.dig:native_target_out_of_reach_or_unloaded",
+        "count": 1
+      },
+      {
+        "signature": "world.lookAt:MOD_CALL_ARGUMENT_INVALID",
+        "count": 1
+      },
+      {
+        "signature": "world.lookAt:different_visible_block",
+        "count": 1
+      },
+      {
+        "signature": "body.observe:MOD_CALL_ARGUMENT_INVALID",
+        "count": 1
+      },
+      {
+        "signature": "inventory.equip:native_equip_hotbar_not_empty",
+        "count": 1
+      }
+    ],
+    "iterationCandidates": [
+      {
+        "signature": "body.move:navigation_target_not_reached",
+        "count": 9,
+        "category": "navigation_observation",
+        "recommendation": "Inspect actual stopping coordinates, visibility and reachable space; do not replay a known unsuccessful route unchanged.",
+        "applied": false
+      },
+      {
+        "signature": "mc_operations:action_operation_unavailable",
+        "count": 4,
+        "category": "review_evidence",
+        "recommendation": "Inspect the native receipt and reproduce the cause before changing the harness.",
+        "applied": false
+      },
+      {
+        "signature": "plan_error:trial_model_tool_arguments_invalid",
+        "count": 4,
+        "category": "interface",
+        "recommendation": "Discover and validate the real schema; return missing fields and accepted shape in the same response.",
+        "applied": false
+      },
+      {
+        "signature": "world.dig:native_dig_block_changed",
+        "count": 3,
+        "category": "state_comparison",
+        "recommendation": "Refresh the owned native state; fill opaque compare values mechanically and preserve explicit intent.",
+        "applied": false
+      },
+      {
+        "signature": "world.dig:native_dig_held_item_changed",
+        "count": 2,
+        "category": "state_comparison",
+        "recommendation": "Refresh the owned native state; fill opaque compare values mechanically and preserve explicit intent.",
+        "applied": false
+      },
+      {
+        "signature": "native.recipes:action_operation_unavailable",
+        "count": 2,
+        "category": "game_preconditions",
+        "recommendation": "Expose actual missing materials and required workstation before another consuming action.",
+        "applied": false
+      },
+      {
+        "signature": "mc_read:action_operation_unavailable",
+        "count": 2,
+        "category": "review_evidence",
+        "recommendation": "Inspect the native receipt and reproduce the cause before changing the harness.",
+        "applied": false
+      },
+      {
+        "signature": "mc_help:action_operation_unavailable",
+        "count": 2,
+        "category": "review_evidence",
+        "recommendation": "Inspect the native receipt and reproduce the cause before changing the harness.",
+        "applied": false
+      }
+    ],
+    "comparisonNote": "Different criteria, scenario versions or initial conditions are not a controlled before/after comparison. Never loosen a verifier to improve the rate.",
+    "generatedAt": "2026-10-13T05:52:28.144Z",
+    "health": {
+      "ok": true,
+      "stalledTaskIds": [],
+      "idleThresholdMs": 180000
+    }
+  },
+  "tasks": [
+    {
+      "id": "wood-pick-equipped-20261013-a",
+      "scenario": "wooden-pickaxe-equipped",
+      "harnessVersion": "fe0f0836fabaaee7c9a45ac36d95ffdce5b7a1abab39f4d4d9fc617bec7a8c53",
+      "startCall": 206,
+      "metrics": {
+        "modelCalls": 9,
+        "decisionRounds": 9,
+        "failedResponseRounds": 7,
+        "backendCalls": 50,
+        "nativeSubmissions": 7,
+        "elapsedMs": 47681,
+        "recovery": [
+          {
+            "failedRound": 207,
+            "operation": "world.interact",
+            "code": "different_visible_block",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 208,
+            "operation": "world.dig",
+            "code": "native_dig_block_changed",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 209,
+            "operation": "world.dig",
+            "code": "native_dig_held_item_changed",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 211,
+            "operation": "native.craftRecipe",
+            "code": "native_recipe_ingredients_unavailable",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 212,
+            "operation": "world.dig",
+            "code": "native_dig_block_changed",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 213,
+            "operation": "world.dig",
+            "code": "native_dig_held_item_changed",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 214,
+            "operation": "native.craftRecipe",
+            "code": "native_recipe_requires_larger_crafting_grid",
+            "roundsUntilSameOperationSucceeded": null
+          }
+        ]
+      },
+      "verification": {
+        "verified": false,
+        "conclusive": true,
+        "itemId": "minecraft:wooden_pickaxe",
+        "count": 0,
+        "equipped": false,
+        "bodyId": "ada3c5d8-4a26-30fe-8501-e6b4e0d2ad4b",
+        "capturedAt": "2026-10-13T05:29:43.125407100Z",
+        "evidenceSha256": "72858fe2e7dbb6028ad96cfc4f13105e1ec4e6ab1b49e07252b19294f501be78",
+        "verifierVersion": 1
+      },
+      "status": "failed",
+      "reason": "model_finished"
+    },
+    {
+      "id": "wood-pick-equipped-20261013-b",
+      "scenario": "wooden-pickaxe-equipped",
+      "harnessVersion": "e4b49ba3508410073f853d39f3825d563f5c859f6950a71b0d8b1ebc1b080419",
+      "startCall": 215,
+      "metrics": {
+        "modelCalls": 15,
+        "decisionRounds": 15,
+        "failedResponseRounds": 15,
+        "backendCalls": 46,
+        "nativeSubmissions": 0,
+        "elapsedMs": 58477,
+        "recovery": [
+          {
+            "failedRound": 216,
+            "operation": "native.recipes",
+            "code": "action_operation_unavailable",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 217,
+            "operation": "mc_read",
+            "code": "action_operation_unavailable",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 218,
+            "operation": "mc_read",
+            "code": "action_operation_unavailable",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 219,
+            "operation": "mc_operations",
+            "code": "action_operation_unavailable",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 220,
+            "operation": null,
+            "code": "trial_model_tool_arguments_invalid",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 221,
+            "operation": "mc_operations",
+            "code": "action_operation_unavailable",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 222,
+            "operation": null,
+            "code": "trial_model_tool_arguments_invalid",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 223,
+            "operation": "mc_operations",
+            "code": "action_operation_unavailable",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 224,
+            "operation": null,
+            "code": "trial_model_tool_arguments_invalid",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 225,
+            "operation": null,
+            "code": "trial_model_tool_arguments_invalid",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 226,
+            "operation": "mc_operations",
+            "code": "action_operation_unavailable",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 227,
+            "operation": "mc_help",
+            "code": "action_operation_unavailable",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 228,
+            "operation": "mc_help",
+            "code": "action_operation_unavailable",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 229,
+            "operation": "native.craftRecipe",
+            "code": "MOD_CALL_ARGUMENT_INVALID",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 230,
+            "operation": "native.recipes",
+            "code": "action_operation_unavailable",
+            "roundsUntilSameOperationSucceeded": null
+          }
+        ]
+      },
+      "verification": {
+        "verified": false,
+        "conclusive": true,
+        "itemId": "minecraft:wooden_pickaxe",
+        "count": 0,
+        "equipped": false,
+        "bodyId": "ada3c5d8-4a26-30fe-8501-e6b4e0d2ad4b",
+        "capturedAt": "2026-10-13T05:32:47.993168Z",
+        "evidenceSha256": "200b387c460d32208c32384b38f50694924000e3a828364b2078cddd8cbb797f",
+        "verifierVersion": 1
+      },
+      "status": "cancelled",
+      "reason": "operator_stop"
+    },
+    {
+      "id": "wood-pick-equipped-20261013-c",
+      "scenario": "wooden-pickaxe-equipped",
+      "harnessVersion": "35574f24979a45e9f051f7d179866d73381ff8bd5c4e60f10379ad4d1e45ea66",
+      "startCall": 230,
+      "metrics": {
+        "modelCalls": 65,
+        "decisionRounds": 65,
+        "failedResponseRounds": 8,
+        "backendCalls": 339,
+        "nativeSubmissions": 39,
+        "elapsedMs": 342078,
+        "recovery": [
+          {
+            "failedRound": 235,
+            "operation": "body.move",
+            "code": "MOD_CALL_ARGUMENT_INVALID",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 236,
+            "operation": "body.move",
+            "code": "navigation_target_not_reached",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 237,
+            "operation": "body.move",
+            "code": "navigation_target_not_reached",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 238,
+            "operation": "body.move",
+            "code": "navigation_target_not_reached",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 239,
+            "operation": "body.move",
+            "code": "navigation_target_not_reached",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 250,
+            "operation": "body.move",
+            "code": "navigation_target_not_reached",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 251,
+            "operation": "body.input",
+            "code": "MOD_CALL_ARGUMENT_INVALID",
+            "roundsUntilSameOperationSucceeded": 1
+          },
+          {
+            "failedRound": 269,
+            "operation": "world.dig",
+            "code": "native_target_out_of_reach_or_unloaded",
+            "roundsUntilSameOperationSucceeded": 1
+          }
+        ]
+      },
+      "verification": {
+        "verified": false,
+        "conclusive": true,
+        "itemId": "minecraft:wooden_pickaxe",
+        "count": 0,
+        "equipped": false,
+        "bodyId": "ada3c5d8-4a26-30fe-8501-e6b4e0d2ad4b",
+        "capturedAt": "2026-10-13T05:40:42.028422900Z",
+        "evidenceSha256": "d0d8a41ea70f8b56b043acf7b9fe9d28d486def13d64c9dd1ca55f81a1baa83c",
+        "verifierVersion": 1
+      },
+      "status": "cancelled",
+      "reason": "operator_stop"
+    },
+    {
+      "id": "wood-pick-equipped-20261013-d",
+      "scenario": "wooden-pickaxe-equipped",
+      "harnessVersion": "06b49bebdd9f3cf4ae544b9d4c442f7437e6a7c680ce46535d4c03f01200478c",
+      "startCall": 295,
+      "metrics": {
+        "modelCalls": 42,
+        "decisionRounds": 42,
+        "failedResponseRounds": 8,
+        "backendCalls": 238,
+        "nativeSubmissions": 28,
+        "elapsedMs": 192027,
+        "noProgressRounds": 42,
+        "progressAlert": "Review the plan: successful reads/turning do not imply task progress. Inspect actual preconditions, failures and alternative available operations.",
+        "recovery": [
+          {
+            "failedRound": 302,
+            "operation": "world.lookAt",
+            "code": "MOD_CALL_ARGUMENT_INVALID",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 303,
+            "operation": "world.lookAt",
+            "code": "different_visible_block",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 304,
+            "operation": "world.dig",
+            "code": "native_dig_block_changed",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 305,
+            "operation": "body.move",
+            "code": "navigation_target_not_reached",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 309,
+            "operation": "body.observe",
+            "code": "MOD_CALL_ARGUMENT_INVALID",
+            "roundsUntilSameOperationSucceeded": 1
+          },
+          {
+            "failedRound": 311,
+            "operation": "body.move",
+            "code": "navigation_target_not_reached",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 312,
+            "operation": "body.move",
+            "code": "navigation_target_not_reached",
+            "roundsUntilSameOperationSucceeded": null
+          },
+          {
+            "failedRound": 331,
+            "operation": "body.move",
+            "code": "navigation_target_not_reached",
+            "roundsUntilSameOperationSucceeded": null
+          }
+        ]
+      },
+      "verification": {
+        "verified": false,
+        "conclusive": true,
+        "itemId": "minecraft:wooden_pickaxe",
+        "count": 0,
+        "equipped": false,
+        "bodyId": "ada3c5d8-4a26-30fe-8501-e6b4e0d2ad4b",
+        "capturedAt": "2026-10-13T05:45:52.442527Z",
+        "evidenceSha256": "23a4e3f56410fac7346be95b6a6aeab73e4e79849eaf7b4c1bf72eae249661a4",
+        "verifierVersion": 1
+      },
+      "status": "failed",
+      "reason": "model_finished"
+    },
+    {
+      "id": "equip-owned-guide-20261013-a",
+      "scenario": "equip-owned-component-item",
+      "harnessVersion": "81c078b8b1326188e926651ae50d3b9c745586de4a14ca4554b23ee5e90fc738",
+      "startCall": 337,
+      "metrics": {
+        "modelCalls": 2,
+        "decisionRounds": 2,
+        "failedResponseRounds": 1,
+        "backendCalls": 39,
+        "nativeSubmissions": 2,
+        "elapsedMs": 7673,
+        "noProgressRounds": 0,
+        "progressAlert": null,
+        "recovery": [
+          {
+            "failedRound": 338,
+            "operation": "inventory.equip",
+            "code": "native_equip_hotbar_not_empty",
+            "roundsUntilSameOperationSucceeded": 1
+          }
+        ]
+      },
+      "verification": {
+        "verified": true,
+        "conclusive": true,
+        "itemId": "minecraft:compass",
+        "count": 1,
+        "equipped": true,
+        "bodyId": "ada3c5d8-4a26-30fe-8501-e6b4e0d2ad4b",
+        "capturedAt": "2026-10-13T05:47:53.447906Z",
+        "evidenceSha256": "8409112d969dc6731f0a97e4dcb2ba46764fab42c64365013f76f9bf85e782d7",
+        "verifierVersion": 1
+      },
+      "status": "succeeded",
+      "reason": "task_verified"
+    }
+  ],
+  "prefixesPreserved": true,
+  "finalPosition": {
+    "x": -438.3,
+    "y": 63,
+    "z": 421.3
+  },
+  "finalHealth": 20,
+  "normalProcessExit": true,
+  "modelFinishRequiredForSuccess": false,
+  "tests": {
+    "nodePassed": 101,
+    "nodeFailed": 0,
+    "pythonHealthRegressionPassed": 1,
+    "externalTypesPassed": true
+  },
+  "limitations": [
+    "Wooden-pickaxe objective did not complete: 2 failed and 2 operator-stopped attempts retained.",
+    "Guide equip is a different scenario, not evidence of wooden-pickaxe speedup.",
+    "Samples differ in harness versions and starting conditions; no controlled improvement percentage.",
+    "No new visual, full-mod, long-term autonomous survival or server load benchmark."
+  ]
+}

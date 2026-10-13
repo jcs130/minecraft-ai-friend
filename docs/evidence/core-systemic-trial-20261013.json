@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-13",
+  "stage": "expanded_systemic_live_trial",
+  "username": "KiritoCore",
+  "bodyId": "ada3c5d8-4a26-30fe-8501-e6b4e0d2ad4b",
+  "provider": "mineflayer",
+  "model": "qwen3.7-plus",
+  "qwenpawConnected": false,
+  "bundle": "v5-navigation-20261013",
+  "coreVersion": "0.4.0",
+  "modelRequests": {
+    "previous": 48,
+    "additional": 158,
+    "cumulative": 206,
+    "allReturnedHttp200": true,
+    "unreturnedRequests": 0,
+    "configuredCumulativeLimit": 256,
+    "lastRunCalls": 41,
+    "lastRunPlanErrors": 0,
+    "lastRunValidDecisions": 41,
+    "recordedPlanErrors": {
+      "trial_model_plan_not_json": 27,
+      "trial_model_tool_arguments_invalid": 34
+    },
+    "initialUnrecordedFormatRejectionRound": 104,
+    "latencyMs": {
+      "median": 3568.5,
+      "p95": 4802.0
+    },
+    "promptBytesMax": 218978,
+    "jsonObjectModeDispatched": 75
+  },
+  "nativeActions": {
+    "accepted": 79,
+    "outcomes": {
+      "succeeded": 42,
+      "failed": 36,
+      "unknown": 1
+    },
+    "operationCounts": {
+      "inventory.selectHotbar": 6,
+      "world.dig": 15,
+      "menu.close": 4,
+      "society.join": 2,
+      "society.accept": 3,
+      "body.move": 5,
+      "society.open": 2,
+      "menu.click": 9,
+      "native.craftRecipe": 11,
+      "inventory.equip": 5,
+      "world.place": 9,
+      "world.interact": 2,
+      "body.input": 6
+    },
+    "knownRouteFailures": 2,
+    "historicalUnknownPreserved": 1,
+    "offlineOperatorAudits": 1,
+    "unknownMoveId": "kirito-56-move-explore",
+    "unknownMoveIntentCount": 1,
+    "originalJournalPrefixesPreserved": true
+  },
+  "verifiedProgress": {
+    "craftedOakPlanks": true,
+    "craftedWorkbench": true,
+    "placedWorkbench": true,
+    "openedWorkbenchMenu": true,
+    "joined": true,
+    "balance": 36,
+    "reputation": 5,
+    "rank": "木牌见习",
+    "quests": [
+      {
+        "id": "maw:first_workbench",
+        "completed": 1,
+        "active": false
+      },
+      {
+        "id": "maw:stone_tools",
+        "completed": 0,
+        "active": true
+      }
+    ],
+    "economyTransactions": [
+      {
+        "time": "2026-10-13T04:30:23.262225200Z",
+        "type": "REMOVE",
+        "amount": -6,
+        "balance_before": 40,
+        "balance_after": 34,
+        "source": "economycraft:shop_purchase",
+        "detail": "Oak Log"
+      },
+      {
+        "time": "2026-10-13T04:30:55.004147Z",
+        "type": "ADD",
+        "amount": 8,
+        "balance_before": 34,
+        "balance_after": 42,
+        "source": "economycraft:admin_add"
+      },
+      {
+        "time": "2026-10-13T04:32:08.011303800Z",
+        "type": "REMOVE",
+        "amount": -6,
+        "balance_before": 42,
+        "balance_after": 36,
+        "source": "economycraft:shop_purchase",
+        "detail": "Oak Log"
+      }
+    ],
+    "rewardAttribution": "SimpleQuests first_workbench.mcfunction runs eco addmoney @s[type=minecraft:player] 8; vendor records source economycraft:admin_add, not an operator gift",
+    "verifiedReceiptIds": [
+      "kirito-68-craft-crafting-table",
+      "kirito-92-place-crafting-table",
+      "kirito-95-open-crafting-table"
+    ]
+  },
+  "ending": {
+    "phase": "stopped",
+    "stopReason": "model_finished",
+    "error": null,
+    "position": {
+      "x": -438.3,
+      "y": 63,
+      "z": 421.7
+    },
+    "health": 20,
+    "hunger": 20,
+    "modelFinishClaim": {
+      "summary": "尝试合成石镐以完成公会委托'maw:stone_tools'。已成功合成木板和木棍，并放置了工作台。但在挖掘石头获取圆石时被困在坑底（y=63），且因缺乏工具无法有效挖掘石头。多次尝试跳出坑洞或垫高失败，因位置重叠或导航受限。目前手持泥土，但无法在自身占据的方块上放置。需先解决脱困问题才能继续采集圆石并合成石镐。",
+      "missingCapabilities": [
+        "effective_mining_without_tool",
+        "navigation_out_of_confined_space"
+      ]
+    },
+    "finalObservation": {
+      "stateAvailable": true,
+      "societyAvailable": true,
+      "stateCapturedAt": "2026-10-13T04:48:45.896136400Z",
+      "societyCapturedAt": "2026-10-13T04:48:45.914Z"
+    },
+    "bodyAndJournalsRetained": true,
+    "opGranted": false,
+    "operatorRescue": false
+  },
+  "validation": {
+    "nodeTestsPassed": 88,
+    "nodeTestsFailed": 0,
+    "nodeTestsSkipped": 0,
+    "trialHealthChecks": 10,
+    "distributionHealthChecks": 10
+  },
+  "productionPreservation": {
+    "minecraftRestarted": false,
+    "bedrockRestarted": false,
+    "newPorts": 0,
+    "existingModJars": 35,
+    "mawExplorerPausedRound": 464
+  },
+  "remaining": [
+    "natural escape and tool/material planning",
+    "complete mod production chains",
+    "long-term multi-agent autonomy",
+    "DPAPI CurrentUser access denied remains unresolved"
+  ],
+  "allGameplayVerified": false,
+  "newVisualAcceptance": false,
+  "wandscapePublished": false
+}

@@ -6,6 +6,7 @@ import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger } from 'age
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+export { TaskMonitor, evaluateTask } from './task-monitor.mjs'
 const require = createRequire(import.meta.url)
 const { connect: connectBody } = require('../world-adapter/index.cjs')
 const { credentials } = require('../world-adapter/numen-client.cjs')

@@ -4,6 +4,19 @@ const fs = require('node:fs'), os = require('node:os'), path = require('node:pat
 const { CodingPlanBridge } = require('./codingplan-bridge.cjs')
 const config = () => ({ journalPath: path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'maw-neko-model-')), 'calls.jsonl'), apiKey: 'unit-test-only', maxCalls: 1, minIntervalMs: 0 })
 
+test('structured response mode is explicit, sent unchanged and durably recorded without changing the default', async () => {
+  const cfg = config()
+  assert.equal(new CodingPlanBridge(config()).status().responseFormat, 'text')
+  assert.throws(() => new CodingPlanBridge({ ...cfg, responseFormat: 'invented' }), /CONFIG_INVALID/)
+  const bridge = new CodingPlanBridge({ ...cfg, responseFormat: 'json_object', fetchImpl: async (_url, options) => {
+    assert.deepEqual(JSON.parse(options.body).response_format, { type: 'json_object' })
+    return new Response(JSON.stringify({ model: 'qwen3.7-plus', choices: [{ finish_reason: 'stop', message: { content: '{"tool":"mc_state","arguments":{}}' } }] }))
+  } })
+  assert.equal(JSON.parse(await bridge.request([], 'Return JSON')).tool, 'mc_state')
+  const intent = JSON.parse(fs.readFileSync(cfg.journalPath, 'utf8').split('\n')[0])
+  assert.equal(intent.responseFormat, 'json_object'); assert.equal(bridge.status().calls, 1)
+})
+
 test('offline reviewed discarded model text preserves the unknown request and cumulative usage', async () => {
   const cfg = config(), hash = value => require('node:crypto').createHash('sha256').update(value).digest('hex')
   const intent = { at: '2026-10-09T00:00:00Z', kind: 'intent', requestId: 'old-memory', model: 'qwen3.7-plus' }

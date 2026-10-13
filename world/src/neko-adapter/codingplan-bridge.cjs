@@ -32,10 +32,11 @@ function reviewedDiscardedResponses (lines) {
   return released
 }
 class CodingPlanBridge {
-  constructor ({ journalPath, maxCalls = 24, minIntervalMs = 4000, apiKey, fetchImpl = globalThis.fetch, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
-    if (!path.isAbsolute(journalPath || '') || !apiKey || !Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > 1280 || minIntervalMs < 0) throw Error('NEKO_TRIAL_CONFIG_INVALID')
+  constructor ({ journalPath, maxCalls = 24, minIntervalMs = 4000, responseFormat = 'text', apiKey, fetchImpl = globalThis.fetch, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
+    if (!path.isAbsolute(journalPath || '') || !apiKey || !Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > 1280 || minIntervalMs < 0 || !['text', 'json_object'].includes(responseFormat)) throw Error('NEKO_TRIAL_CONFIG_INVALID')
     this.file = journalPath; this.maxCalls = maxCalls; this.interval = minIntervalMs
     this.key = apiKey; this.fetch = fetchImpl; this.sleep = sleep; this.busy = false; this.last = 0
+    this.responseFormat = responseFormat
     this.tail = Promise.resolve(); this.pending = 0; this.closed = false
     fs.mkdirSync(path.dirname(journalPath), { recursive: true })
     if (fs.existsSync(journalPath) && fs.statSync(journalPath).size > 16 * 1024 * 1024) throw Error('NEKO_MODEL_JOURNAL_TOO_LARGE')
@@ -47,7 +48,7 @@ class CodingPlanBridge {
       lines.some(row => row.kind === 'halt' && !discarded.has(row.requestId))
   }
   status () { return { provider: 'aliyun-codingplan-direct', model: 'qwen3.7-plus', calls: this.count, maxCalls: this.maxCalls,
-    inFlight: this.busy || this.pending > 0, queuedCalls: Math.max(0, this.pending - (this.busy ? 1 : 0)), blocked: this.blocked, closed: this.closed } }
+    inFlight: this.busy || this.pending > 0, queuedCalls: Math.max(0, this.pending - (this.busy ? 1 : 0)), blocked: this.blocked, closed: this.closed, responseFormat: this.responseFormat } }
   close () { this.closed = true }
   async request (turns, systemMessage) {
     if (this.closed) throw Error('NEKO_MODEL_CONNECTION_CLOSED')
@@ -72,13 +73,14 @@ class CodingPlanBridge {
         { role: row.role === 'system' ? 'user' : row.role, content: row.role === 'system' ? 'GAME/TOOL CONTEXT: ' + row.content : row.content }
     })
     const pack = { model: 'qwen3.7-plus', messages, stream: false, enable_thinking: false, max_tokens: 1400 }
+    if (this.responseFormat === 'json_object') pack.response_format = { type: 'json_object' }
     const payload = JSON.stringify(pack)
     if (Buffer.byteLength(payload) > 262144) throw Error('NEKO_MODEL_PROMPT_TOO_LARGE')
     this.busy = true
     const requestId = randomUUID()
     try {
       await this.sleep(Math.max(0, this.interval - (Date.now() - this.last)))
-      append(this.file, { kind: 'intent', requestId, model: pack.model, promptBytes: Buffer.byteLength(payload), promptSha256: createHash('sha256').update(payload).digest('hex') })
+      append(this.file, { kind: 'intent', requestId, model: pack.model, responseFormat: this.responseFormat, promptBytes: Buffer.byteLength(payload), promptSha256: createHash('sha256').update(payload).digest('hex') })
       this.count++; this.last = Date.now()
       let response
       try {

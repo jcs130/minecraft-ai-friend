@@ -1,8 +1,10 @@
 # 独立 Minecraft 核心的原生模组服接入
 
-2026-10-13：合入 `main@edd0179be7bb8a24f9011f50c1163175fd428326` 的 `agent-mc-world 0.4.0`，在 `experiment/agent-society-1.21.1` 添加可选宿主包 `@my-agent-world/agent-mc-host 0.1.0`。当前安装在 `E:\QiandengJiSocietyLab\integrations\agent-mc-world\v4-20261013`。这次没有替换现役 Agent、模型、记忆、账本或服务器 JAR，没有生产重启。
+2026-10-13：合入 `main@edd0179be7bb8a24f9011f50c1163175fd428326` 的 `agent-mc-world 0.4.0`，在 `experiment/agent-society-1.21.1` 添加可选宿主包 `@my-agent-world/agent-mc-host 0.1.0`。当前安装在 `E:\QiandengJiSocietyLab\integrations\agent-mc-world\v7-task-feedback-20261013`，原v4/v5/v6包保留。最新包补齐普通寻路失败的实际停点回执，并导出任务验收和监控模块；没有替换现役 Agent、模型、记忆、账本或服务器 JAR，没有生产重启。
 
-随后用户授权实际运行：新角色KiritoCore已通过线上qwen3.7-plus在正式世界有限试玩，采集泥土并入会；48次请求后正常停止，委托未完成。此后续阶段有模型及新角色的实际游戏动作，不能沿用下方集成验收的“0模型/0生产动作”描述。[完整实跑记录](MY-AGENT-WORLD-CORE-LIVE-TRIAL.md)。
+任务成功率、模型轮次、纠错和停滞反馈见 [任务评测与迭代](MY-AGENT-WORLD-TASK-EVALUATION.md)。`TaskMonitor` 是宿主通用接口，按本人实际快照验收，失败和取消均保留；没有把模型自评当作成功。
+
+随后用户授权实际运行并扩大测试：新角色KiritoCore沿同身体、原账本累计206次线上qwen3.7-plus调用，已完成购买原木、合成和放置工作台、原生合成菜单及首个委托；末次41轮无格式拒绝。角色自行报告困在坑底并正常结束，长期模组生活尚未通过。此后续阶段有模型和真实游戏动作，不能沿用下方最初集成验收的“0模型/0生产动作”描述。[完整实跑记录](MY-AGENT-WORLD-CORE-LIVE-TRIAL.md)。
 
 [纯文字接入指南](MY-AGENT-WORLD-AGENT-MC-WORLD.txt)包含配置与调用示例；已有接口仍以[统一身体适配器](MY-AGENT-WORLD-WORLD-ADAPTER.md)、[原生 SDK](MY-AGENT-WORLD-NATIVE-SDK.md)及实际 operations 为准。
 

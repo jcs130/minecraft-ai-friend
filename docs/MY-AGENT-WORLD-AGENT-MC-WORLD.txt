@@ -44,10 +44,16 @@ MCP 仅是宿主侧可选 stdio 入口：node agent-mc-host/mcp.mjs D:/agents/yo
 适配器安装与重启现役 Agent 是两件事。安装不会替换 MawExplorer、Numen 模型配置、原人物记忆或账本；现役暂停及旧 unknown 保持。
 生产服务不需要因安装这个宿主包而重启。运行一个新的自主角色仍需由宿主明确指定模型、预算、目标和身份。
 
-当前可用分发目录：E:\QiandengJiSocietyLab\integrations\agent-mc-world\v4-20261013，宿主包 @my-agent-world/agent-mc-host 0.1.0，独立核心 0.4.0。把整个目录作为受控 SDK 工件分发；重新安装依赖使用该目录内 package-lock.json 执行 npm ci --ignore-scripts --no-audit --no-fund，要求 Node 22。它不是已经在 npm 发布的包。
+当前可用分发目录：E:\QiandengJiSocietyLab\integrations\agent-mc-world\v7-task-feedback-20261013，原v4/v5/v6保留；宿主包 @my-agent-world/agent-mc-host 0.1.0，独立核心 0.4.0。把整个目录作为受控 SDK 工件分发；重新安装依赖使用该目录内 package-lock.json 执行 npm ci --ignore-scripts --no-audit --no-fund，要求 Node 22。它不是已经在 npm 发布的包。普通寻路失败会停止按键、查询实际停点并明确报告未到达；真正的连接或身体状态未知仍需对账。
+
+框架新增 TaskMonitor/evaluateTask：为每个任务固定验收条件，记录实际成功/失败/证据不足/取消、模型轮次、纠错轮次、耗时及底层调用量。当前可验本人持有/装备、到达绝对位置、公会任务完成及这些条件的组合；复杂模组工程需补原生验收器。node agent-mc-host/task-report.mjs --directory <绝对任务监控目录> 可只读查询成功率、失败热点和迭代建议；不中断游戏、不另开端口。反复观察而目标状态不变会产生进展提醒。标准、计数和旧失败不随重启清零。详见 docs/MY-AGENT-WORLD-TASK-EVALUATION.md。
 
 2026-10-13 验证：两种 provider 各16项真实隔离服检查通过，包括2格移动、原生技能/女仆查询、公会登记、Curios界面开关、原UUID重连及同action_id零重复移动；无殖民地时明确报告不存在，未声称已经完成殖民地建设。适配器16项测试、打包消费者类型检查和本机stdio初始化通过；核心308项测试通过，1项Windows DPAPI凭据测试因系统拒绝加解密未通过。本适配器沿用现有私有文件登录，隔离服实际认证已通过。
 
 尚未迁移核心默认引擎的完整脚本、闲时聊天/死亡/受伤订阅与生存反射。宿主应显式查询mc_state并消费动作回执；这里不代表长时间自主生存或所有模组完整流程已验收。Wandscape仍保持之前的待发布状态。
 
 维护健康检查：在源码目录运行 python world/ops/health/health_mon.py --society-agent-mc-world-smoke。它只检查包、来源哈希、依赖版本和现有守护健康，不连接角色或调用模型。测试服已正常退出，临时端口关闭；正式35个JAR、两服务owner、配置、MawExplorer暂停/原账本保持不变。
+
+线上模型续测记录：KiritoCore同UUID、原记忆及账本累计206次调用，完成原木交易、制作和放置工作台、打开原生合成界面和首个委托。修复后最后41轮没有格式拒绝；角色自行报告被困坑中并正常结束，生命20/20，余额36、声望5。没有OP或运维救场，不代表全部模组生产链、长期自主生存或新增视觉验收通过。详见 docs/MY-AGENT-WORLD-CORE-LIVE-TRIAL.md。
+
+任务评测最新记录：累计339次调用。木镐任务4次尝试（9/15/65/42轮）未完成，包含2次为修复问题而人工中止，全部保留。另测“装备本人冒险指南针”2轮真实完成，首轮槽位被占，下一轮纠正；原生主手/库存验收后自动结束。两种场景分别统计，不宣称木镐任务提速或长期自主生活已成功。101项Node、1项Python健康回归、分发TypeScript消费者及13任务/10分发健康检查通过。
