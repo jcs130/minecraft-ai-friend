@@ -22,12 +22,14 @@ final class TrialRescueManager implements Listener {
                 BooleanSupplier roomCleared, Runnable wipe, Location exit) {}
     private record Recovery(Location exit, String team, boolean relocate) {}
     private static final class Down {
+        final UUID player;
         final String team;
         final Location anchor, exit;
         UUID rescuer;
         long since, lastTick;
         BossBar bar;
-        Down(String team, Location anchor, Location exit) {
+        Down(UUID player, String team, Location anchor, Location exit) {
+            this.player = player;
             this.team = team; this.anchor = anchor.clone(); this.exit = exit.clone();
         }
     }
@@ -36,6 +38,7 @@ final class TrialRescueManager implements Listener {
     private final Map<UUID, Recovery> recoveries = new LinkedHashMap<>();
     private final Set<UUID> internalTeleports = new HashSet<>();
     private final Map<UUID, Long> lastNotice = new HashMap<>();
+    private final TrialRescueVisuals visuals = new TrialRescueVisuals();
     private int ticks;
 
     TrialRescueManager(AgentFriendPlugin plugin) {
@@ -81,11 +84,12 @@ final class TrialRescueManager implements Listener {
         if (p.getInventory().getItemInMainHand().getType() == Material.TOTEM_OF_UNDYING
                 || p.getInventory().getItemInOffHand().getType() == Material.TOTEM_OF_UNDYING) return;
         e.setCancelled(true);
-        Down d = new Down(team.id, p.getLocation(), team.exit);
+        Down d = new Down(p.getUniqueId(), team.id, p.getLocation(), team.exit);
         downs.put(p.getUniqueId(), d);
         p.closeInventory(); p.setHealth(1); p.setFireTicks(0); p.setVelocity(new Vector());
         p.setFallDistance(0);
         persist();
+        audit(d, "downed", "lethal_damage");
         tell(team, "§c" + p.getName() + " 已倒地！队友靠近4格并停留10秒可自动救起；清完本层/本室也会自动复活。");
         for (UUID id : team.members) {
             Player member = Bukkit.getPlayer(id);
@@ -96,6 +100,7 @@ final class TrialRescueManager implements Listener {
                         + "救援离开范围会重新计时；也可清完本层/本室自动复活队友。arena status / dungeon status 可重新查询倒地坐标。");
         }
         p.sendTitle("§c倒地等待救援", "§e队友靠近10秒，或清场后自动复活", 5, 80, 10);
+        display(p, d, team, System.currentTimeMillis());
     }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void attack(EntityDamageByEntityEvent e) {
@@ -122,7 +127,7 @@ final class TrialRescueManager implements Listener {
                     || e.getFrom().getZ() != e.getTo().getZ()) e.setCancelled(true);
         }
         for (Down other : downs.values()) if (e.getPlayer().getUniqueId().equals(other.rescuer)
-                && !near(e.getTo(), other.anchor)) reset(other);
+                && !near(e.getTo(), other.anchor)) reset(other, "left_range");
     }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void teleport(PlayerTeleportEvent e) {
@@ -176,8 +181,8 @@ final class TrialRescueManager implements Listener {
     public void place(BlockPlaceEvent e) { if (downed(e.getPlayer())) e.setCancelled(true); }
     @EventHandler public void quit(PlayerQuitEvent e) {
         Down d = downs.get(e.getPlayer().getUniqueId());
-        if (d != null) { reset(d); if (d.bar != null) d.bar.removeAll(); }
-        for (Down other : downs.values()) if (e.getPlayer().getUniqueId().equals(other.rescuer)) reset(other);
+        if (d != null) { reset(d, "target_offline"); if (d.bar != null) d.bar.removeAll(); }
+        for (Down other : downs.values()) if (e.getPlayer().getUniqueId().equals(other.rescuer)) reset(other, "rescuer_offline");
         lastNotice.remove(e.getPlayer().getUniqueId());
     }
     @EventHandler public void join(PlayerJoinEvent e) {
@@ -191,12 +196,31 @@ final class TrialRescueManager implements Listener {
         Down d = downs.get(p.getUniqueId());
         if (d != null) {
             if (!same(team(p.getUniqueId()), d)) { recoveries.put(p.getUniqueId(), new Recovery(d.exit, d.team, true)); remove(p.getUniqueId()); persist(); }
-            else { teleport(p, d.anchor); p.setHealth(1); p.setFireTicks(0); reset(d); notice(p); }
+            else { teleport(p, d.anchor); p.setHealth(1); p.setFireTicks(0); reset(d, "rejoined"); notice(p); }
         }
         recover(p);
     }
     private boolean near(Location a, Location b) { return a != null && a.getWorld() == b.getWorld() && a.distanceSquared(b) <= RADIUS * RADIUS; }
-    private void reset(Down d) { d.rescuer = null; d.since = 0; }
+    private void reset(Down d, String reason) {
+        if (d.rescuer != null) {
+            audit(d, "interrupted", reason);
+            for (UUID id : Set.of(d.player, d.rescuer)) {
+                Player p = Bukkit.getPlayer(id);
+                if (p != null && p.isOnline()) {
+                    p.sendMessage("§e[队友救援] 救援已中断、进度归零。恢复后请同一位队友在4格内连续停留10秒；清场仍可自动复活。");
+                    p.sendMessage("MC_TRIAL_RESCUE status=interrupted target=" + d.player + " reason=" + reason + " progressMs=0 radius=4 seconds=10");
+                }
+            }
+        }
+        d.rescuer = null; d.since = 0;
+    }
+    private static long elapsed(Down d, long now) {
+        return d.since == 0 ? 0 : Math.max(0, Math.min(RESCUE_MS, now - d.since));
+    }
+    private void audit(Down d, String status, String reason) {
+        plugin.getLogger().info("Trial rescue: team=" + d.team + ", player=" + d.player
+                + ", status=" + status + ", rescuer=" + d.rescuer + ", reason=" + reason);
+    }
     private void tick() {
         ticks++;
         if (ticks % 4 == 0) for (UUID id : new ArrayList<>(recoveries.keySet())) {
@@ -215,42 +239,57 @@ final class TrialRescueManager implements Listener {
             }
             if (!downs.containsKey(id)) continue;
             Player p = Bukkit.getPlayer(id);
-            if (p == null || !p.isOnline() || p.isDead()) { reset(d); continue; }
+            if (p == null || !p.isOnline() || p.isDead()) { reset(d, "target_unavailable"); continue; }
             p.setVelocity(new Vector()); p.setFallDistance(0); p.setFireTicks(0);
             if (p.getWorld() != d.anchor.getWorld() || p.getLocation().distanceSquared(d.anchor) > .01) teleport(p, d.anchor);
-            if (team.paused) reset(d);
+            if (team.paused) reset(d, "paused");
             else {
                 Player rescuer = d.rescuer == null ? null : Bukkit.getPlayer(d.rescuer);
                 if (now - d.lastTick > 1000 || !standing(rescuer) || !team.members.contains(d.rescuer)
-                        || !team.contains.test(rescuer.getLocation()) || !near(rescuer.getLocation(), d.anchor)) reset(d);
+                        || !team.contains.test(rescuer.getLocation()) || !near(rescuer.getLocation(), d.anchor)) reset(d, "rescuer_unavailable");
                 if (d.rescuer == null) {
                     rescuer = team.members.stream().map(Bukkit::getPlayer).filter(this::standing)
                             .filter(member -> team.contains.test(member.getLocation()) && near(member.getLocation(), d.anchor))
                             .min(Comparator.comparing(member -> member.getUniqueId().toString())).orElse(null);
                     if (rescuer != null) {
                         d.rescuer = rescuer.getUniqueId(); d.since = now;
+                        audit(d, "rescuing", "nearby_teammate");
                         rescuer.sendMessage("§e[系统·队友救援] 正在救援 " + p.getName() + "，保持4格内10秒即可复活队友。");
                         rescuer.sendMessage("MC_TRIAL_RESCUE status=rescuing target=" + id + " radius=4 seconds=10");
+                        p.sendMessage("§a[队友救援] " + rescuer.getName() + " 正在救你，请看上方绿色救援进度条。");
                     }
                 }
                 if (d.rescuer != null && now - d.since >= RESCUE_MS) { revive(id, "nearby_teammate"); continue; }
             }
             d.lastTick = now;
-            if (ticks % 4 == 0) display(p, d, team, now);
+            display(p, d, team, now);
         }
+        visuals.flush(this::downed);
     }
     private void display(Player p, Down d, Team team, long now) {
         if (d.bar == null) d.bar = Bukkit.createBossBar("倒地等待救援", BarColor.YELLOW, BarStyle.SEGMENTED_10);
-        long elapsed = d.since == 0 ? 0 : Math.min(RESCUE_MS, now - d.since);
-        d.bar.setTitle("§e" + p.getName() + " 倒地 · " + (d.rescuer == null ? "队友靠近4格救援 / 清场复活" : "救援 " + elapsed / 1000 + "/10秒"));
-        d.bar.setProgress(elapsed / (double) RESCUE_MS);
-        d.bar.removeAll(); d.bar.addPlayer(p);
-        if (d.rescuer != null) { Player rescuer = Bukkit.getPlayer(d.rescuer); if (rescuer != null) d.bar.addPlayer(rescuer); }
+        long elapsed = elapsed(d, now);
+        int percent = (int) (elapsed * 100 / RESCUE_MS);
+        String remaining = String.format(Locale.ROOT, "%.1f", (RESCUE_MS - elapsed) / 1000.0);
+        Player rescuer = d.rescuer == null ? null : Bukkit.getPlayer(d.rescuer);
+        BarColor colour = team.paused ? BarColor.PURPLE : rescuer == null ? BarColor.YELLOW : BarColor.GREEN;
+        String title = team.paused ? "§d" + p.getName() + " 倒地 · 副本暂停，恢复后重新救援"
+                : rescuer == null ? "§e" + p.getName() + " 倒地 · 靠近金色圈内4格停留10秒 / 清场复活"
+                : "§a救援 " + p.getName() + " · " + percent + "% · 剩余 " + remaining + "秒 · " + rescuer.getName();
+        if (d.bar.getColor() != colour) d.bar.setColor(colour);
+        if (!d.bar.getTitle().equals(title)) d.bar.setTitle(title);
+        double progress = elapsed / (double) RESCUE_MS;
+        if (d.bar.getProgress() != progress) d.bar.setProgress(progress);
+        Set<Player> viewers = new HashSet<>();
         for (UUID id : team.members) {
             Player viewer = Bukkit.getPlayer(id);
-            if (viewer != null && viewer.getWorld() == p.getWorld())
-                viewer.spawnParticle(Particle.END_ROD, p.getLocation().add(0, 1, 0), 5, .3, .3, .3, 0);
+            if (viewer != null && viewer.isOnline() && viewer.getWorld() == p.getWorld() && viewer.canSee(p)) viewers.add(viewer);
         }
+        // Keep the native bar and audience; REMOVE+ADD used to recreate the UI every second.
+        Set<Player> current = new HashSet<>(d.bar.getPlayers());
+        for (Player old : current) if (!viewers.contains(old)) d.bar.removePlayer(old);
+        for (Player viewer : viewers) if (!current.contains(viewer)) d.bar.addPlayer(viewer);
+        if (ticks % 4 == 0) visuals.marker(p, team.members, elapsed / (double) RESCUE_MS, team.paused);
     }
     private void remove(UUID id) { Down d = downs.remove(id); if (d != null && d.bar != null) d.bar.removeAll(); }
     private void revive(UUID id, String reason) {
@@ -261,6 +300,7 @@ final class TrialRescueManager implements Listener {
             recoveries.put(id, new Recovery(d.exit, d.team, false)); remove(id); persist(); return;
         }
         remove(id); restoreHealth(p); persist();
+        audit(d, "revived", reason);
         if(reason.equals("nearby_teammate")&&d.rescuer!=null&&plugin.siteDungeons()!=null)
             plugin.siteDungeons().support(Bukkit.getPlayer(d.rescuer),p);
         if(reason.equals("nearby_teammate")&&d.rescuer!=null&&plugin.skillAssessments()!=null) {
@@ -268,7 +308,11 @@ final class TrialRescueManager implements Listener {
         }
         p.sendTitle("§a已复活", reason.equals("room_cleared") ? "§e队友已清场" : "§e队友救援完成", 5, 45, 10);
         p.sendMessage("MC_TRIAL_RESCUE status=revived reason=" + reason + " health=" + p.getHealth());
-        Team team = team(id); if (team != null) tell(team, "§a" + p.getName() + " 已复活，可继续并肩战斗。");
+        Team team = team(id);
+        if (team != null) {
+            visuals.revived(p, team.members);
+            tell(team, "§a" + p.getName() + " 已复活（" + (reason.equals("room_cleared") ? "清场复活" : "队友救援完成") + "），可继续并肩战斗。");
+        }
     }
     void reviveTeam(String team, String reason) {
         for (var entry : new ArrayList<>(downs.entrySet())) if (entry.getValue().team.equals(team)) revive(entry.getKey(), reason);
@@ -303,7 +347,7 @@ final class TrialRescueManager implements Listener {
     JsonObject state(Player p) {
         JsonObject state = new JsonObject(); state.addProperty("schema", 1); state.addProperty("downed", downed(p));
         state.addProperty("radius", RADIUS); state.addProperty("seconds", RESCUE_MS / 1000);
-        state.addProperty("instruction", "试炼塔/遗迹地下城组队挑战倒地不退出。存活队友走到倒地坐标4格内，连续停留10秒自动救起，无需点击/命令；离开范围重计。清完本层/本室自动复活队友；全队倒下才失败撤离。");
+        state.addProperty("instruction", "试炼塔/遗迹地下城组队挑战倒地不退出。存活队友走到倒地坐标4格内，连续停留10秒自动救起，无需点击/命令；上方显示进度与剩余秒数，离开范围重计。金色圈标记救援范围，绿色表示救援进度。清完本层/本室自动复活队友；全队倒下才失败撤离。");
         Team team = team(p.getUniqueId()); JsonArray teammates = new JsonArray();
         if (team != null) for (UUID id : team.members) {
             Down d = downs.get(id); if (d == null) continue;
@@ -311,7 +355,14 @@ final class TrialRescueManager implements Listener {
             Player member = Bukkit.getPlayer(id); target.addProperty("name", member == null ? "offline" : member.getName());
             target.addProperty("x", d.anchor.getX()); target.addProperty("y", d.anchor.getY()); target.addProperty("z", d.anchor.getZ());
             target.addProperty("world", d.anchor.getWorld().getName());
-            target.addProperty("progressMs", d.since == 0 ? 0 : Math.min(RESCUE_MS, (System.currentTimeMillis() - d.since) / 1000 * 1000));
+            long progress = team.paused ? 0 : elapsed(d, System.currentTimeMillis());
+            target.addProperty("progressMs", progress);
+            target.addProperty("progress", progress / (double) RESCUE_MS);
+            target.addProperty("remainingMs", RESCUE_MS - progress);
+            target.addProperty("phase", team.paused ? "paused" : d.rescuer == null ? "waiting" : "rescuing");
+            target.addProperty("rescuerUuid", d.rescuer == null ? "" : d.rescuer.toString());
+            Player rescuer = d.rescuer == null ? null : Bukkit.getPlayer(d.rescuer);
+            target.addProperty("rescuerName", rescuer == null ? "" : rescuer.getName());
             teammates.add(target);
         }
         state.add("downedTeammates", teammates); return state;
@@ -338,7 +389,7 @@ final class TrialRescueManager implements Listener {
         if (saved != null) for (String raw : saved.getKeys(false)) try {
             UUID id = UUID.fromString(raw); Location anchor = saved.getLocation(raw + ".anchor"), exit = saved.getLocation(raw + ".exit");
             if (anchor == null || exit == null) throw new IllegalArgumentException("missing_location");
-            Down d = new Down(saved.getString(raw + ".team", ""), anchor, exit);
+            Down d = new Down(id, saved.getString(raw + ".team", ""), anchor, exit);
             if (same(team(id), d)) downs.put(id, d); else recoveries.put(id, new Recovery(exit, d.team, true));
         } catch (RuntimeException e) { plugin.getLogger().warning("Invalid rescue checkpoint: " + raw); }
         var pending = plugin.getConfig().getConfigurationSection(ROOT + ".recoveries");
