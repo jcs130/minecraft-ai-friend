@@ -24,6 +24,7 @@ interface OverviewPanel {
   player: { at: [number, number, number]; pixel: [number, number]; inFrame: boolean };
   pins: Array<{ id: string; at: [number, number, number]; anchor: 'block' | 'position'; world: [number, number, number]; pixel: [number, number]; inFrame: boolean; label?: string }>;
   labels: { mode: 'full' | 'ids'; shown: number; hidden: number };
+  perception: { current: number; historical: number; source: string; history: string };
 }
 export interface OverviewMetadata extends OverviewPanel {
   schema: 'mc-overview/v3';
@@ -31,12 +32,12 @@ export interface OverviewMetadata extends OverviewPanel {
   dimension: string | null;
   north: '-Z'; right: '+X'; width: number; height: number;
   attention?: { source: 'caller-selected'; regions: OverviewRegion[]; detail?: OverviewPanel & { id: string; regions: OverviewRegion[] } };
-  source: 'loaded-renderer-scene'; layers: 'top-visible-only';
+  source: 'eye-visible-and-visual-history'; layers: 'seen-top-surfaces-only';
 }
 
 export const OVERVIEW_SCHEMA = {
   type: 'object', additionalProperties: false,
-  description: 'overview only. North-up image of loaded chunks; no movement or terrain loading. Defaults center=self, span=32, grid/labels=auto. Block pins use cell centers; position pins preserve exact XYZ. Heights are supplied, not measured.',
+  description: 'overview only. North-up image of eye-visible top surfaces and previously seen terrain; unseen is unknown, historical tiles marked not updated. No movement or terrain loading. Defaults center=self, span=32, grid/labels=auto. Block pins use cell centers; position pins preserve exact XYZ. Heights are supplied, not measured.',
   properties: {
     center: { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number', minimum: -30_000_000, maximum: 30_000_000 }, description: 'Absolute [x,z] at image center.' },
     span: { type: 'number', minimum: 8, maximum: 2048, description: 'Image width in blocks; height follows image aspect ratio. Unloaded terrain remains unknown.' },

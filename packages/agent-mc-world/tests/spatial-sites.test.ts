@@ -1,6 +1,8 @@
+// Geometry calculations are independent of the visibility gate, exercised in perception.test.ts.
+vi.mock('../core/perception-sight.ts', async (load) => ({ ...await load<typeof import('../core/perception-sight.ts')>(), observedBlock: () => true }));
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { observeSpatial, parseSpatialObservation, spatialObservationText } from '../core/spatial-observation.ts';
 import { parseScoutSteps } from '../core/skills.ts';
 import { describeSkill } from '../core/receipt.ts';

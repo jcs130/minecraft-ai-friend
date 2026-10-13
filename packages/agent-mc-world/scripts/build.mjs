@@ -41,7 +41,15 @@ const lock = JSON.parse(await readFile(join(root, 'release-sources.json'), 'utf8
 const archive = join(root, lock.viewer.artifact);
 if (digest(await readFile(archive)) !== lock.viewer.sha256) throw new Error('Viewer artifact hash mismatch');
 await mkdir(join(root, 'dist'), { recursive: true });
-execFileSync('tar', ['-xzf', archive, '-C', join(root, 'dist')], { stdio: 'inherit' });
+// Only generated asset trees: stale monitor captures and bytecode are never release inputs.
+for (const name of ['viewer', 'client-console', 'monitor']) {
+  const generated = resolve(root, 'dist', name);
+  if (generated !== join(root, 'dist', name)) throw new Error('Invalid asset output path');
+  await rm(generated, { recursive: true, force: true });
+}
+execFileSync('tar', ['-xzf', archive, '-C', join(root, 'dist'),
+  '--exclude=__pycache__', '--exclude=*.pyc', '--exclude=monitor/outputs',
+  '--exclude=.gitignore', '--exclude=.npmignore'], { stdio: 'inherit' });
 // Emitted config URLs remain valid when SDK and child processes run from dist/runtime.
 await cp(join(root, 'dist/viewer'), join(output, 'dist/viewer'), { recursive: true });
 await cp(join(root, 'dist/client-console'), join(output, 'dist/client-console'), { recursive: true });

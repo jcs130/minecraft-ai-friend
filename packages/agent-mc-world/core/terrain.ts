@@ -7,6 +7,7 @@
  * 渲染出口是 `narrateWorld`:一律中文、写成话,进世界快照事件与其余事件正文。
  */
 import { Vec3 } from 'vec3';
+import { observedEntity, observationView } from './perception-sight.ts';
 import { vehicleStateFromBot, vehicleFingerprint, narrateVehicleState, type VehicleReading } from '../src/vehicle-state.ts';
 import { nowIso } from './support/runtime.mjs';
 import {
@@ -89,11 +90,11 @@ interface EntityInfo {
   direction: Direction | null;
   /** 相对我的高度差,四舍五入到格 */
   dy: number;
-  /** 主视角射线可及(false = 只听得见动静,渲染时不给精确距离坐标) */
+  /** 当前视线确认；false 仅为旧快照兼容，不是听觉证据。 */
   visible: boolean;
   /** 掉落物实体上读到的物品;没有元数据时缺省 */
   item?: ItemStack;
-  /** 可见实体的身份与当前元数据读数；听声实体不带此字段。 */
+  /** 可见实体的身份与当前元数据读数。 */
   note?: string;
 }
 
@@ -445,7 +446,6 @@ export function narrateWorldSegments(
   segs.push({ key: 'equip', text: narrateEquip(s), cmp: equipCmp(s) });
 
   const seen = s.entities.filter((e) => e.visible);
-  const heard = s.entities.filter((e) => !e.visible);
   const seenMobs = seen.filter((e) => !isDroppedItem(e));
   const seenDrops = seen.filter((e) => isDroppedItem(e));
   const lifeLines: string[] = [];
@@ -454,7 +454,7 @@ export function narrateWorldSegments(
       '看得见的：' +
         seenMobs
           .map((e) => {
-            const notes = [e.kind === 'hostile' ? '会打我' : e.kind === 'player' ? '玩家' : '', e.note].filter(Boolean);
+            const notes = [e.kind === 'hostile' ? '敌对种类，攻击意图未确认' : e.kind === 'player' ? '玩家，关系未确认' : '', e.note].filter(Boolean);
             const tag = notes.length > 0 ? `（${notes.join('，')}）` : '';
             return `${whereIs(e.direction, e.distance, e.dy)}有${zhEntity(e.name)}${tag}`;
           })
@@ -464,19 +464,11 @@ export function narrateWorldSegments(
   }
   if (s.entitiesOmitted > 0) lifeLines.push(`另有 ${s.entitiesOmitted} 个更远的没列进来。`);
   lifeLines.push(...narrateDrops(seenDrops));
-  if (heard.length > 0) {
-    // 隔着方块只给方位不给距离坐标:听声辨位有这个精度,没有那个精度
-    const sounds = [...new Set(heard.map(
-      (e) => `${e.direction ? DIRECTION_ZH[e.direction] + '边' : '附近'}有${zhEntity(e.name)}的动静`,
-    ))];
-    lifeLines.push(`听得见动静的：${sounds.join('、')}。`);
-  }
   const lifeCmp = [
     ...seenMobs.map((e) => `见:${e.name}${e.note ? `(${e.note})` : ''}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
     ...seenDrops.map((e) =>
       `落:${e.item?.name ?? 'item'}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}|${e.item?.count ?? 1}`,
     ).sort(),
-    ...[...new Set(heard.map((e) => `闻:${e.name}|${e.direction ?? '附近'}`))].sort(),
   ].join(';');
   segs.push({ key: 'life', text: lifeLines.join('\n'), cmp: lifeCmp });
 
@@ -941,20 +933,8 @@ const CONTAINER_NEARBY_CAP = 4;
 /** 头部所在方块是不是水体(含气泡柱与自带水的水草/海带):溺水判定的前提 */
 export const WATER_BLOCKS = new Set(['water', 'bubble_column', 'kelp', 'kelp_plant', 'seagrass', 'tall_seagrass']);
 
-/** 感知半径(格):看得见的按视线算,看不见的按听觉算,这个距离外一律不存在于感知里 */
-const AUDIBLE_RANGE = 16;
-
-/**
- * `classifyEntity` 判成 animal、原版里却不发闲置音的水生动物:看不见时连"动静"都没有。
- *
- * 只列水生这一类,是因为其余"看不见就不该报"的实体已经被 `kind === 'other'` 那半条
- * 判据挡住了:mineflayer 的 `entity.type` 直接取 minecraft-data 的 `type`
- * (entities.js:163),展示框/发光展示框/画是 `other`、盔甲架是 `living`,三者都不在
- * `classifyEntity` 认的 animal/mob/water_creature 里,落到 `other`。
- */
-const SILENT_ENTITIES = new Set([
-  'squid', 'glow_squid', 'salmon', 'cod', 'tropical_fish', 'pufferfish', 'tadpole',
-]);
+/** 自动摘要的近景预算；听觉独立消费真实声音包。 */
+const SNAPSHOT_ENTITY_RANGE = 16;
 
 /**
  * 视线射线允许穿过各色普通玻璃、玻璃板与铁栏杆的碰撞箱。
@@ -1760,18 +1740,17 @@ export function snapshotFromBot(
     const e = bot.entities[id];
     if (!e || e === me || !e.position) continue;
     const d = e.position.distanceTo(pos);
-    // 距离闸只有 AUDIBLE_RANGE 这一道(旧的 24 格 entityRange 闸已并进来)
-    if (d > AUDIBLE_RANGE) continue;
+    if (d > SNAPSHOT_ENTITY_RANGE) continue;
     const name = e.type === 'player' ? (e.username ?? 'player') : (e.name ?? e.displayName ?? 'unknown');
     // 飞行中/插在地上的射弹:看得见也不报
     if (e.name && NOISE_ENTITIES.has(e.name)) continue;
     const kind = e.name === 'piglin' && piglinIsHostile(bot, e)
       ? 'hostile'
       : classifyEntity(e.type, e.name);
-    const visible = canSeeEntity(bot, e);
-    // 看不见的还得发得出声:落到 other 的(掉落物、经验球、矿车、展示框、盔甲架)
-    // 与不发闲置音的水生动物都不进
-    if (!visible && (kind === 'other' || SILENT_ENTITIES.has(name))) continue;
+    const visible = observedEntity(bot, e);
+    // Entity tracking is not evidence of sound. Actual packets are available
+    // separately through mc_hear, without hidden identities/distances/counts.
+    if (!visible) continue;
     const stack = droppedStackOf(e, bot.registry?.items);
     const note = visible ? entityObservationNote(bot, e) : null;
     entities.push({
@@ -1923,7 +1902,7 @@ export function snapshotFromBot(
     nearbyBlocks,
     blocksScanned: opts?.scanBlocks !== false,
     players: Object.keys(bot.players ?? {}),
-    terrain: opts?.scanBlocks === false ? [] : sampleTerrain(bot, pos),
+    terrain: opts?.scanBlocks === false ? [] : sampleTerrain(observationView(bot), pos),
     motion,
     speed,
     facing: facingOf(me.yaw ?? 0),

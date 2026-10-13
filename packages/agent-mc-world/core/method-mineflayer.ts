@@ -1,3 +1,4 @@
+import { observedBlock, observationView } from './perception-sight.ts';
 /** JSON transport for Mineflayer's public primitives; the executor owns the program's body. */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Bot, ControlState } from 'mineflayer';
@@ -15,7 +16,7 @@ const guarded = new WeakSet<object>();
 
 export const NATIVE_API = Object.freeze({
   read: 'read(path): JSON read of entity, health, food, game, heldItem, inventory.slots, or registry.itemsByName.<id>/blocksByName.<id>. No client, credentials or private fields.',
-  blockAt: 'blockAt(point, extraInfos=true): Block|null. Unloaded is null. Block.getProperties() synchronously reads this returned snapshot, preserving native string|number|boolean values. Numeric-looking enum properties may be strings (for example age:"7", level:"0"); inspect their types and explicitly convert only a property known to be numeric before a numeric comparison. Re-read blockAt for current values. A completed read-only program does not prove any block or inventory changed.',
+  blockAt: 'blockAt(point, extraInfos=true): Block|null. Occluded or unloaded is null; observation does not reveal hidden block state. Block.getProperties() synchronously reads this returned snapshot, preserving native string|number|boolean values. Numeric-looking enum properties may be strings (for example age:"7", level:"0"); inspect their types and explicitly convert only a property known to be numeric before a numeric comparison. Re-read blockAt for current values. A completed read-only program does not prove any block or inventory changed.',
   findBlocks: 'findBlocks({point?,matching,maxDistance?,count?,useExtraInfo?}): Vec3[]. matching is a numeric block id or array of ids; maxDistance 1..32 and count 1..64. Function predicates stay in the program: filter returned blocks there.',
   findBlock: 'findBlock(options): Block|null, with the same options and bounds as findBlocks.',
   canSeeBlock: 'canSeeBlock(block): boolean from Mineflayer visibility, using a fresh block at its position.',
@@ -59,7 +60,9 @@ function point(value: unknown): Vec3 {
 }
 function block(bot: Bot, value: unknown, fresh = false): NonNullable<ReturnType<Bot['blockAt']>> {
   const supplied = value as { position?: unknown; stateId?: number } | null;
-  const current = bot.blockAt(point(supplied?.position));
+  const at=point(supplied?.position);
+  if(!observedBlock(bot,at))throw new Error('目标格未观察到（遮挡或未加载）；先调整视角或位置');
+  const current = bot.blockAt(at);
   if (!current) throw new Error('目标区块未加载');
   if (fresh && supplied?.stateId !== current.stateId) throw new Error('方块状态已变化；先重新 blockAt 再决定');
   return current;
@@ -174,7 +177,7 @@ export class MineflayerMethod {
         if (!path) throw new Error('read 仅支持 api:"read" 列出的公开字段');
         return (bot.registry[path[1] as 'itemsByName' | 'blocksByName'] as Record<string, unknown>)[path[2]] ?? null;
       }
-      case 'blockAt': return packBlock(bot.blockAt(point(a), b === undefined ? true : Boolean(b)));
+      case 'blockAt': return packBlock(observationView(bot).blockAt(point(a), b === undefined ? true : Boolean(b)));
       case 'findBlock': case 'findBlocks': {
         const options = a as { point?: unknown; matching?: unknown; maxDistance?: number; count?: number; useExtraInfo?: boolean } | null;
         const matching = Array.isArray(options?.matching) ? options.matching : [options?.matching];
@@ -183,7 +186,8 @@ export class MineflayerMethod {
         if (!Number.isInteger(maxDistance) || maxDistance < 1 || maxDistance > 32 || !Number.isInteger(count) || count < 1 || count > 64) throw new Error('搜索范围或数量超出 api 契约');
         const query = { matching: matching as number[], maxDistance, count,
           ...(options?.point === undefined ? {} : { point: point(options.point) }), useExtraInfo: options?.useExtraInfo === true };
-        return name === 'findBlock' ? packBlock(bot.findBlock(query)) : bot.findBlocks(query);
+        const positions=observationView(bot).findBlocks(query);
+        return name === 'findBlock' ? packBlock(positions[0]?bot.blockAt(positions[0]):null) : positions;
       }
       case 'canSeeBlock': return bot.canSeeBlock(block(bot, a));
       case 'canDigBlock': return bot.canDigBlock(block(bot, a));

@@ -122,3 +122,6 @@ action. Keep original receipts retrievable by their task/event/artifact handle;
 request only the missing evidence. After a change, compare the affected cells or
 position with the prior observation. Saving a plan or a successful tool return
 alone does not prove a connected route, successful placement or learned method.
+# Observation boundary
+
+Read [focused observations](perception.md) for attention modes, real sound hints and risk estimates. Occluded or unloaded cells are unknown. Historical images are explicitly stale; neither images nor loaded chunks grant knowledge behind an obstruction.

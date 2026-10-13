@@ -1,3 +1,4 @@
+import { observedBlock, observedEntity } from './perception-sight.ts';
 /** Native, bounded voxel and collision-ray observations of the current connection. */
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
@@ -69,7 +70,7 @@ interface Material {
   /** Local boxes; null means the collision geometry was not supplied. */
   collision: Box[] | null;
 }
-type Sample = { material: Material } | { unknown: 'unloaded' | 'read-budget' };
+type Sample = { material: Material } | { unknown: 'unloaded' | 'read-budget' | 'occluded' };
 interface EntityObservation {
   id: number;
   name: string;
@@ -78,7 +79,7 @@ interface EntityObservation {
 }
 type BlockHit = { kind: 'block'; distance: number; point: Point; cell: Point; material: Material; bounds: Box };
 type EntityHit = { kind: 'entity'; distance: number; point: Point; entity: EntityObservation };
-type UnknownHit = { kind: 'unknown'; distance: number; cell: Point; reason: 'unloaded' | 'collision-unread' | 'read-budget' };
+type UnknownHit = { kind: 'unknown'; distance: number; cell: Point; reason: 'unloaded' | 'collision-unread' | 'read-budget' | 'occluded' };
 type ClearHit = { kind: 'clear'; distance: number };
 
 const EPSILON = 1e-8;
@@ -152,12 +153,13 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
   const eye: Point = [position[0], position[1] + (eyeHeight ?? 1.62), position[2]];
   const frame = { position, feet, eye, eyeHeightSource: eyeHeight === undefined ? 'standing-default' : 'client',
     yawDeg: round(bot.entity.yaw * 180 / Math.PI), pitchDeg: round(bot.entity.pitch * 180 / Math.PI) };
-  const common = { source: 'client-loaded-world' as const, observedAt: new Date().toISOString(), dimension: bot.game?.dimension ?? null, frame };
+  const common = { source: 'client-visible-world' as const, observedAt: new Date().toISOString(), dimension: bot.game?.dimension ?? null, frame };
   const cache = new Map<string, Sample>();
   const read = (cell: Point): Sample => {
     const key = cell.join(','), prior = cache.get(key);
     if (prior) return prior;
     if (cache.size >= SPATIAL_OBSERVATION_LIMITS.reads) return { unknown: 'read-budget' };
+    if (input.mode !== 'rays' && !observedBlock(bot,{x:cell[0],y:cell[1],z:cell[2]})) return {unknown:'occluded'};
     const block = bot.blockAt(new Vec3(...cell));
     const sample: Sample = block ? { material: {
       name: block.name, stateId: block.stateId,
@@ -173,7 +175,7 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
     kind: 'sites' as const, sites: spatialSites(read, input.sites), blockReads: cache.size,
     geometry: 'absolute cells; faces: ref+face=target, boundary area 0..1 (0 omitted, null unknown); body=0.6x1.8 centered, block collisions + 1-cell collar, first 3 hits/count, fluids by cell; not reachability, placement permission or safe footing',
   };
-  const entities: EntityObservation[] = Object.values(bot.entities).filter(e => e !== bot.entity && e.id !== bot.entity.id).map(e => {
+  const entities: EntityObservation[] = Object.values(bot.entities).filter(e => e !== bot.entity && e.id !== bot.entity.id && observedEntity(bot,e)).map(e => {
     const p = pointOf(e.position);
     const bounds: Box | null = Number.isFinite(e.width) && e.width > 0 && Number.isFinite(e.height) && e.height > 0
       ? [p[0] - e.width / 2, p[1], p[2] - e.width / 2, p[0] + e.width / 2, p[1] + e.height, p[2] + e.width / 2] : null;
@@ -209,6 +211,7 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
       const distance = e.bounds ? intersect(eye, direction, e.bounds, range) : null;
       if (distance !== null && (!entity || distance < entity.distance)) entity = { kind: 'entity', distance, point: atDistance(eye, direction, distance), entity: e };
     }
+    if (entity && (terrain.kind === 'unknown' || (terrain.kind !== 'clear' && entity.distance >= terrain.distance))) entity = null;
     if (entity) entity.distance = round(entity.distance);
     const entityBeforeTerrain = entity ? (entity.distance < terrain.distance || terrain.kind === 'clear' && entity.distance <= range
       ? true : terrain.kind === 'unknown' ? null : false) : null;

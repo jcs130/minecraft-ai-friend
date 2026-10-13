@@ -55,7 +55,7 @@ describe('line probe coverage', () => {
     const receipt = await skillProbe(bot, {
       skill: 'probe', shape: 'line', anchors: [[0, 120, 0], [2, 120, 0]], where: ['stone'],
     }, ctx);
-    expect(receipt).toContain('1 格区块没加载');
+    expect(receipt).toContain('未观察到（遮挡或未加载）');
     expect(receipt).toContain('(0, 120, 0)→(2, 120, 0)');
     expect(receipt).toContain('线外/线间未测');
   });

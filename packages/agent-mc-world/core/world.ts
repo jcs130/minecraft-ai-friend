@@ -1,3 +1,4 @@
+import { observationView, observedEntity } from './perception-sight.ts';
 /**
  * MinecraftWorld — 实时游戏 World(worlds-minecraft),实时游戏 World 的范例实现。
  *
@@ -38,6 +39,8 @@ import { resolveProcedure, procedureReference, PROCEDURE_RECEIPT_SCHEMA, PROCEDU
 import { MineflayerMethod, NATIVE_API } from './method-mineflayer.ts';
 import { methodApiHelp } from './method-api.ts';
 import { flightState } from './flight.ts';
+import { attachHearing, hearingReadout } from './perception-hearing.ts';
+import { AttentionReader, PERCEPTION_TOOLS, perceptionArgs, validDetection, type DetectionEvidence } from './perception-tools.ts';
 import { IdleBehaviorController, IdlePresentationContext, type IdleBehaviorScene } from './idle-behavior.ts';
 import { sampleIdleActions, executeIdleAction } from './idle-actions.ts';
 import { RejectedRouteLedger, sameRejectedRouteOrigin, type RejectedRouteScope } from './rejected-route-ledger.ts';
@@ -2158,6 +2161,7 @@ const MAP_ICON_ZH: Record<string, string> = {
 };
 
 export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
+  ...PERCEPTION_TOOLS,
   RAILWAY_TOOL_DECL,
   {
     name: 'mc_help',
@@ -2695,6 +2699,8 @@ export class MinecraftWorld implements World {
   /** 身上正在生效的状态效果名。服务端对同一效果每 30 秒重推一次 entity_effect,只有出现与消失才成文。 */
   protected readonly activeEffects = new Set<string>();
   protected hookedBots = new WeakSet<object>();
+  protected readonly attention = new AttentionReader();
+  protected hearingDetach: (() => void) | null = null;
   protected hookedMessageBots = new WeakSet<object>();
   /** 服务端同一条系统提示在短时间连发时只投递首条；原始重复次数进诊断。 */
   protected readonly recentSystemMessages = new Map<string, { at: number; repeats: number }>();
@@ -4081,6 +4087,7 @@ export class MinecraftWorld implements World {
       // 第一次掉线值得叫醒她(手上的事全废了);之后每一次重连没成只是同一件事的
       // 复述,压成不唤醒的一条,免得连不上的那半小时里每隔几十秒炸一次
       onDisconnect: (reason, willReconnect, attempt) => {
+        this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
         this.methods.stop('游戏连接已断开，原方法坐标和权限作废');
         this.visualInFlight?.controller.abort(new Error('游戏连接已断开'));
         this.interruptIdle('disconnect');
@@ -4143,6 +4150,7 @@ export class MinecraftWorld implements World {
   }
 
   async stop(): Promise<void> {
+    this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
     this.shuttingDown = true;
     for (const auth of Object.values(this.accountAuth)) auth.stop();
     this.disposeExtension();
@@ -4205,6 +4213,8 @@ export class MinecraftWorld implements World {
   }
 
   protected extensionTools(): ToolDef[] { return []; }
+  /** Optional authenticated server receipts. Cast acceptance never grants sight. */
+  protected extensionPerception(_bot: Bot): readonly DetectionEvidence[] { return []; }
   protected extensionState(): unknown { return null; }
   protected extensionCombatTuning(): Partial<import('./combat.ts').CombatTuning> { return {}; }
   protected extensionCombatReport(_result: unknown): void {}
@@ -4269,6 +4279,9 @@ export class MinecraftWorld implements World {
       // 路标表在受理这一刻取一次:at 写名字时按当刻登记解析
       mc_do: async (args) => this.enqueueTool('mc_do', args, (raw) => parseSteps(raw, this.markLookup())),
       mc_scout: async (args) => this.enqueueTool('mc_scout', args, (raw) => parseScoutSteps(raw, this.markLookup())),
+      mc_attention: async (args) => this.perceptionReadout('mc_attention',args),
+      mc_hear: async (args) => this.perceptionReadout('mc_hear',args),
+      mc_risk: async (args) => this.perceptionReadout('mc_risk',args),
       mc_flight_plan: async (args) => {
         const parsed = parseFlightPlan(args, this.markLookup());
         const bot = this.bridge?.bot;
@@ -4897,6 +4910,7 @@ export class MinecraftWorld implements World {
    * 取格心(+0.5)避免负坐标上的取整偏一格。
    */
   protected blockPeek(bot: NonNullable<Bridge['bot']>): BlockPeek {
+    bot=observationView(bot);
     return (p) => {
       try {
         return bot.blockAt(new Vec3(p[0] + 0.5, p[1] + 0.5, p[2] + 0.5))?.name ?? null;
@@ -4929,6 +4943,7 @@ export class MinecraftWorld implements World {
    * 不缓存也不预取。区块没加载在这里就是 `null`,一路传到回执上说成"没加载"。
    */
   protected checkWorld(bot: NonNullable<Bridge['bot']>): CheckWorld {
+    bot=observationView(bot);
     const registry = (bot.registry as { blocksByName?: Record<string, unknown> } | undefined)?.blocksByName;
     const peek = this.blockPeek(bot);
     return {
@@ -5058,13 +5073,13 @@ export class MinecraftWorld implements World {
         };
       },
       entities: () => Object.values(bot.entities)
-        .filter((entity) => entity !== bot.entity && entity?.isValid !== false && entity?.position && entity.name !== 'item')
+        .filter((entity) => entity !== bot.entity && entity?.isValid !== false && entity?.position && entity.name !== 'item' && observedEntity(bot,entity))
         .map((entity) => ({
           type: String(entity.name ?? entity.type ?? '').toLowerCase().replace(/^minecraft:/, ''),
           position: [Math.floor(entity.position.x), Math.floor(entity.position.y), Math.floor(entity.position.z)],
         })),
       items: () => Object.values(bot.entities).flatMap((entity) => {
-        if (entity?.isValid === false || !entity?.position) return [];
+        if (entity?.isValid === false || !entity?.position || !observedEntity(bot,entity)) return [];
         const stack = droppedStackOf(entity, bot.registry?.items);
         if (!stack) return [];
         return [{
@@ -6156,9 +6171,28 @@ export class MinecraftWorld implements World {
       : {failed:true, ...(rejection?.kind === 'correction' ? {} : {endsTurn:true})})};
   }
 
+  protected perceptionReadout(name:string,args:Record<string,unknown>):ToolOutcome {
+    const parsed=perceptionArgs(args,name),bot=this.bridge?.bot;
+    if('error' in parsed || !bot || !this.bridge?.connected)return {text:this.toolLog(name,args,
+      'error' in parsed?parsed.error:'尚未连接 Minecraft'),failed:true};
+    if(name==='mc_hear')return {text:this.toolLog(name,args,hearingReadout(bot,parsed.limit))};
+    if(parsed.mode){
+      this.attention.mode=parsed.mode;
+      (bot as unknown as EventEmitter).emit('perceptionFocus',{mode:parsed.mode});
+    }
+    const now=Date.now(),result=this.attention.read(bot,parsed.limit,now,name==='mc_risk',parsed.entityId);
+    const detected=this.extensionPerception(bot).filter(e=>validDetection(e,this.connectionGeneration,String(bot.game.dimension),now))
+      .slice(0,parsed.limit).map(e=>({source:e.source,receiptId:e.receiptId,observedAt:e.observedAt,expiresAt:e.expiresAt,
+        at:[e.position.x,e.position.y,e.position.z],label:e.label?.slice(0,60)??'技能探测',
+        attackRange:Number.isFinite(e.attackRange)&&e.attackRange!>=0?e.attackRange:null,
+        sightRange:Number.isFinite(e.sightRange)&&e.sightRange!>=0?e.sightRange:null}));
+    return {text:this.toolLog(name,args,JSON.stringify({...result,...(detected.length?{detected}:{}),connectionGeneration:this.connectionGeneration}))};
+  }
+
   protected onSpawn(): void {
     const bot = this.bridge?.bot;
     if (!bot) return;
+    this.hearingDetach?.();this.hearingDetach=attachHearing(bot,this.cfg.viewerAssetsDir??'');this.attention.reset();
     this.visualInFlight?.controller.abort(new Error('游戏连接代次已改变'));
     // 新连接还没有现场读数，不能沿用上一代连接的事实。
     this.requestFactsCache = null;
@@ -6226,6 +6260,7 @@ export class MinecraftWorld implements World {
    * 不重走 onSpawn：世界和连接未变，快照基线与暂态仍有效。
    */
   protected onRespawn(): void {
+    this.attention.reset();
     const now = Date.now();
     this.extensionRespawn();
     this.bodyLease.revive(now);
