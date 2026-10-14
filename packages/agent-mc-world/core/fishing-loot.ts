@@ -1,16 +1,24 @@
 import type { Bot } from 'mineflayer';
+import { Vec3 } from 'vec3';
+import pathfinderPkg from 'mineflayer-pathfinder';
 import { FISH_LOOT_WAIT_MS, lastFishingReel, type FishingReel } from './fishing.ts';
 import { INVENTORY_SLOTS, invSnapshot } from './inventory.ts';
 import { zhName } from './names.ts';
 import { checkAbort, sleep, SkillBlocked, type SkillContext } from './skill-context.ts';
+import { standableCell } from './placement.ts';
+import { dropGoal, gotoGoal, walkOnlyPath } from './travel.ts';
+
+const { goals } = pathfinderPkg;
 
 const STABLE_MS = 300;
+const RECOVERY_HAZARDS = new Set(['fire', 'soul_fire', 'powder_snow', 'cactus', 'magma_block', 'sweet_berry_bush', 'wither_rose']);
 
-/** Observe only: do not recast, walk towards an unverified drop or choose the next goal. */
+/** One cast's close-range collection, never a recast or a new objective. */
 export async function confirmFishingLoot(bot: Bot, ctx: SkillContext): Promise<string> {
   const reel = lastFishingReel(bot);
   if (!reel) throw new SkillBlocked('抛竿已返回，但没有本次浮标的收线证据；鱼获未确认', [], 'server', 'fishing-loot-unconfirmed');
   let stableKey = '', since = Date.now();
+  let recovered = false;
   const gained = () => [...invSnapshot(bot)].flatMap(([name, count]) => {
     const n = count - (reel.before.get(name) ?? 0);
     return n > 0 ? [{ name, count: n }] : [];
@@ -27,6 +35,15 @@ export async function confirmFishingLoot(bot: Bot, ctx: SkillContext): Promise<s
     const key = JSON.stringify(confirmed);
     if (key !== stableKey) { stableKey = key; since = Date.now(); }
     if (confirmed.length && Date.now() - since >= STABLE_MS) return confirmed.join('、');
+    if (!recovered && Date.now() - reel.at >= 1_200) {
+      const drop = [...reel.drops.values()].find(x => x.name !== 'item' && x.collectedBy === null
+        && bot.entities[x.entity.id] === x.entity && x.entity.position.distanceTo(bot.entity.position) <= 4);
+      if (drop) {
+        recovered = true;
+        await recoverFishingDrop(bot, ctx, reel, drop.entity);
+        checkAbort(ctx);
+      }
+    }
     await sleep(100);
   }
   checkAbort(ctx);
@@ -35,6 +52,54 @@ export async function confirmFishingLoot(bot: Bot, ctx: SkillContext): Promise<s
     ? `收线后背包净增${gains.map(x => `${zhName(x.name)}×${x.count}`).join('、')}，但未确认是本次浮标附近掉落物由本人拾取`
     : '已收到咬钩信号并收线，但未确认物品稳定入包';
   throw new SkillBlocked(`${reason}；已核对${FISH_LOOT_WAIT_MS / 1000}秒，本次鱼获未确认`, fishingLootScene(bot, reel), 'server', 'fishing-loot-unconfirmed');
+}
+
+/** Only a short, completely loaded dry path to this observed drop; never dig, place, dive or leave a vehicle. */
+async function recoverFishingDrop(bot: Bot, ctx: SkillContext, reel: FishingReel, entity: Bot['entity']): Promise<void> {
+  if (!bot.pathfinder?.getPathTo || !bot.pathfinder.movements || (bot as Bot & { vehicle?: unknown }).vehicle) return;
+  const end = Math.min(reel.at + FISH_LOOT_WAIT_MS - STABLE_MS, Date.now() + 2_500);
+  const release = walkOnlyPath(bot);
+  let stop: ReturnType<typeof setInterval> | undefined;
+  let stopped = false;
+  try {
+    const pos = entity.position;
+    const candidates: Vec3[] = [];
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (let dy = 0; dy <= 1; dy++) {
+      const c = new Vec3(Math.floor(pos.x) + dx, Math.floor(pos.y) + dy, Math.floor(pos.z) + dz);
+      if (standableCell(bot, c) && Math.abs(c.x + .5 - pos.x) <= 1.3 && Math.abs(c.z + .5 - pos.z) <= 1.3
+        && pos.y >= c.y - .4 && pos.y <= c.y + 2 && c.offset(.5, 0, .5).distanceTo(bot.entity.position) <= 4) candidates.push(c);
+    }
+    candidates.sort((a, b) => a.distanceTo(bot.entity.position) - b.distanceTo(bot.entity.position));
+    for (const cell of candidates.slice(0, 4)) {
+      checkAbort(ctx);
+      if (Date.now() >= end) return;
+      const goal = new goals.GoalBlock(cell.x, cell.y, cell.z);
+      const route = bot.pathfinder.getPathTo(bot.pathfinder.movements, goal, 75);
+      if (route.status !== 'success' || route.path.length > 8 || !route.path.every(node => {
+        const p = new Vec3(node.x, node.y, node.z).floored();
+        const feet = bot.blockAt(p), head = bot.blockAt(p.offset(0, 1, 0)), below = bot.blockAt(p.offset(0, -1, 0));
+        return standableCell(bot, p) && !node.toBreak.length && !node.toPlace.length
+          && [feet, head, below].every(b => b && !RECOVERY_HAZARDS.has(b.name));
+      })) continue;
+      const local = { ...ctx, aborted: () => ctx.aborted() || stopped
+        || !!bot.pathfinder.goal && bot.pathfinder.goal !== goal };
+      let finishWait!: () => void;
+      const cancelled = new Promise<void>(resolve => { finishWait = resolve; });
+      stop = setInterval(() => {
+        const foot = bot.blockAt(bot.entity.position.floored());
+        if (!ctx.aborted() && Date.now() < end && bot.entities[entity.id] === entity
+          && reel.drops.get(entity.id)?.collectedBy === null && foot
+          && !['water', 'lava'].includes(foot.name) && !RECOVERY_HAZARDS.has(foot.name)) return;
+        stopped = true;
+        // A reflex may already own a different goal. Only cancel our exact goal object.
+        if (bot.pathfinder.goal === goal) dropGoal(bot, 'task', '钓鱼近岸回收结束', ctx.diag);
+        finishWait();
+      }, 50);
+      try { await Promise.race([gotoGoal(bot, goal, local), cancelled]); }
+      catch { checkAbort(ctx); } // Keep the original harvest evidence if this optional route fails.
+      return;
+    }
+  } finally { if (stop) clearInterval(stop); release(); }
 }
 
 function fishingLootScene(bot: Bot, reel: FishingReel): string[] {

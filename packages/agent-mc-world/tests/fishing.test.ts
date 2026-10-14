@@ -159,4 +159,70 @@ describe('owned fishing and observable harvest', () => {
     await vi.advanceTimersByTimeAsync(1_100); await checked;
     expect(r.uses()).toBe(0); expect(r.bot.listenerCount('physicsTick')).toBe(0);
   });
+
+  function shorePath(r: ReturnType<typeof rig>, item: any, mode: 'pickup' | 'water' | 'stuck' = 'pickup') {
+    r.bot.blockAt = (p: Vec3) => {
+      const q = p.floored(); const name = q.y > 63 ? 'air' : q.x === 3 && q.z === 0 ? 'water' : 'stone';
+      return { name, position: q, boundingBox: name === 'stone' ? 'block' : 'empty' };
+    };
+    const moves = { canDig: true, scafoldingBlocks: [2] };
+    let reject: ((e: Error) => void) | undefined;
+    const pf: any = { movements: moves, goal: null,
+      getPathTo: vi.fn((_moves, goal) => ({ status: 'success', path: [
+        { x: mode === 'water' ? 3 : 1, y: 64, z: 0, toBreak: [], toPlace: [] },
+        { x: goal.x, y: goal.y, z: goal.z, toBreak: [], toPlace: [] },
+      ] })),
+      goto: vi.fn(async goal => {
+        expect(moves.canDig).toBe(false); expect(moves.scafoldingBlocks).toEqual([]);
+        pf.goal = goal;
+        if (mode === 'stuck') return new Promise<void>((_resolve, rej) => { reject = rej; });
+        r.bot.entity.position = new Vec3(goal.x + .5, goal.y, goal.z + .5);
+        r.collect(item); r.bag.set('cod', 1); pf.goal = null;
+      }),
+      setGoal: vi.fn(goal => { pf.goal = goal; reject?.(new Error('Stopped')); }),
+    };
+    r.bot.pathfinder = pf; return { pf, moves };
+  }
+
+  it('collects a stranded nearby catch through the real bounded travel wrapper without digging or recasting', async () => {
+    vi.useFakeTimers(); const r = rig(); const cast = r.bot.fish(); let item: any;
+    r.onReel(() => { item = r.drop(); }); r.bite(); await cast; const path = shorePath(r, item);
+    const task = confirmFishingLoot(r.bot, ctx); await vi.advanceTimersByTimeAsync(2_000);
+    expect(await task).toContain('生鳕鱼×1'); expect(path.pf.goto).toHaveBeenCalledTimes(1);
+    expect(path.moves.canDig).toBe(true); expect(path.moves.scafoldingBlocks).toEqual([2]); expect(r.uses()).toBe(2);
+  });
+
+  it('does not follow a supposedly complete recovery path through water', async () => {
+    vi.useFakeTimers(); const r = rig(); const cast = r.bot.fish(); let item: any;
+    r.onReel(() => { item = r.drop(); }); r.bite(); await cast; const path = shorePath(r, item, 'water');
+    const checked = expect(confirmFishingLoot(r.bot, ctx)).rejects.toMatchObject({ code: 'fishing-loot-unconfirmed' });
+    await vi.advanceTimersByTimeAsync(FISH_LOOT_WAIT_MS); await checked; expect(path.pf.goto).not.toHaveBeenCalled();
+    expect(path.moves.canDig).toBe(true);
+  });
+
+  it('stops its exact stalled recovery goal within budget and restores movement settings', async () => {
+    vi.useFakeTimers(); const r = rig(); const cast = r.bot.fish(); let item: any;
+    r.onReel(() => { item = r.drop(); }); r.bite(); await cast; const path = shorePath(r, item, 'stuck');
+    const checked = expect(confirmFishingLoot(r.bot, ctx)).rejects.toMatchObject({ code: 'fishing-loot-unconfirmed' });
+    await vi.advanceTimersByTimeAsync(FISH_LOOT_WAIT_MS); await checked;
+    expect(path.pf.setGoal).toHaveBeenCalledWith(null); expect(path.moves.canDig).toBe(true); expect(r.uses()).toBe(2);
+  });
+
+  it('cancels close recovery promptly when its parent action is cancelled', async () => {
+    vi.useFakeTimers(); const r = rig(); const cast = r.bot.fish(); let item: any, aborted = false;
+    r.onReel(() => { item = r.drop(); }); r.bite(); await cast; const path = shorePath(r, item, 'stuck');
+    const checked = expect(confirmFishingLoot(r.bot, { aborted: () => aborted } as any)).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(1_400); aborted = true; await vi.advanceTimersByTimeAsync(100); await checked;
+    expect(path.pf.goal).toBeNull(); expect(path.moves.canDig).toBe(true);
+  });
+
+  it('does not cancel a reflex goal that replaces the short recovery route', async () => {
+    vi.useFakeTimers(); const r = rig(); const cast = r.bot.fish(); let item: any;
+    r.onReel(() => { item = r.drop(); }); r.bite(); await cast; const path = shorePath(r, item, 'stuck');
+    const checked = expect(confirmFishingLoot(r.bot, ctx)).rejects.toMatchObject({ code: 'fishing-loot-unconfirmed' });
+    await vi.advanceTimersByTimeAsync(1_400); const reflex = { name: 'reflex-goal' }; path.pf.setGoal(reflex);
+    await vi.advanceTimersByTimeAsync(FISH_LOOT_WAIT_MS); await checked;
+    expect(path.pf.goal).toBe(reflex); expect(path.pf.setGoal).not.toHaveBeenCalledWith(null);
+    expect(path.moves.canDig).toBe(true);
+  });
 });
