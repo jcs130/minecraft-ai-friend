@@ -7,6 +7,8 @@ import { methodHarness } from './method-harness.ts';
 import { observeVisual } from '../src/client/visual.ts';
 import { emitLogNote, logChildStdio } from '../core/support/runtime.mjs';
 import { installChildSignalOwnership } from '../core/support/child-signals.ts';
+import { prepareTemporaryScaffoldPlacement, armTemporaryScaffoldPlacement, recordTemporaryScaffold,
+  promoteTemporaryScaffold } from '../core/temporary-scaffold.ts';
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 const players = { ag_CorMy: { username: 'ag_CorMy', uuid: 'uuid-cormy' }, Jojo: { username: 'Jojo', uuid: 'uuid-jojo' } };
@@ -61,6 +63,26 @@ describe('whisper identity from raw messages', () => {
 });
 
 describe('live readouts and honest startup', () => {
+  it('delivers freshly checked scaffold obligations to tool facts and scripts, then replaces cleared facts', () => {
+    const r = methodHarness();
+    try {
+      Object.assign((r.world as any).bridge, { connected: true });
+      const pos = new Vec3(2,64,0), bot = r.bot as any;
+      Object.assign(bot,{canDigBlock: (block: any) => bot.entity.position.distanceTo(block.position) < 5, canSeeBlock: () => true});
+      const proof = prepareTemporaryScaffoldPlacement(bot, r.bot.blockAt(pos));
+      armTemporaryScaffoldPlacement(bot, pos);
+      r.set(2,64,0,'dirt'); recordTemporaryScaffold(bot, proof, r.bot.blockAt(pos));
+      const fact = () => r.world.requestFacts()!.parts!.find(p => p.key === 'temporaryScaffolds')!.text;
+      expect(fact()).toContain('(2,64,0)');
+      expect(fact()).toContain('cleanup');
+      expect((r.world as any).methodState().temporaryScaffolds).toBe(fact());
+      const far = fact(); r.bot.entity.position.x = 50;
+      expect(fact()).not.toBe(far);
+      promoteTemporaryScaffold(bot,[pos]);
+      expect(fact()).toContain('没有待清理记录');
+      expect(fact()).toContain('不代表历史工地已清理');
+    } finally { r.close(); }
+  });
   it('reads fresh body, inventory and queue without a deferred snapshot or an image', async () => {
     const r = methodHarness();
     try {

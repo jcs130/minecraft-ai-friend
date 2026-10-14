@@ -1,6 +1,7 @@
 import { observationView, observedEntity } from './perception-sight.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
 import { GameMemoryService } from './game-memory-service.ts';
+import { temporaryScaffoldReadout } from './temporary-scaffold.ts';
 import { setViewerBodyState } from './viewer-body-state.ts';
 /**
  * MinecraftWorld — 实时游戏 World(worlds-minecraft),实时游戏 World 的范例实现。
@@ -38,6 +39,7 @@ import { precheckEmptyUseTarget } from './precheck.ts';
 import { blockAtCell, resolveAt } from './cell-facts.ts';
 import { FLIGHT_PLAN_MAX_POINTS, parseFlightPlan, previewFlightPlan } from './flight-preview.ts';
 import { MethodRunner, METHOD_LIMITS, METHOD_ADAPTER, type MethodOperation, type MethodRun } from './method-runner.ts';
+import { MethodLibrary, METHOD_LIBRARY_SCHEMA } from './method-library.ts';
 import { resolveProcedure, procedureReference, PROCEDURE_RECEIPT_SCHEMA, PROCEDURE_RECEIPT_MIME,
   type ProcedureReceipt } from './support/procedure.ts';
 import { MineflayerMethod, NATIVE_API } from './method-mineflayer.ts';
@@ -2211,9 +2213,13 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'Expand an SDK call to inspect its actual fields before interpreting results; compare the returned observations with the method objective before saving verified claims. '
       + 'Alternatively use {procedure:{handle,revision},params,validate?} to resolve and run a pinned agent-mc.procedure/v1 dependency graph (legacy cortico.procedure/v1 is also accepted) for adapter minecraft-method/v1. '
       + 'await methods.run(alias,params) composes only declared dependency versions; all share this program\'s budgets and body lease. Source is loaded directly from the selected blobs, without copying it through model context. '
-      + 'Procedure terminal events carry an execution UUID and persistent receipt for explicit goal review/adoption by the owning Persona; completion alone is not proof of improvement.',
+      + 'Procedure terminal events carry an execution UUID and persistent receipt for explicit goal review/adoption by the owning Persona; completion alone is not proof of improvement. '
+      + '{library:{op:"list"}} lists your scoped editable methods; read uses id and optional revision. '
+      + 'After a validated syntax run, save uses id, code, description, conditions, parent (null for new; current revision for edits), validationRunId. '
+      + 'Returns a pinned procedure reference; execution is explicit. Earlier revisions remain runnable for rollback. Library saves never edit engine files or claim verified improvement.',
     parameters: { type: 'object', properties: {
       name: { type: 'string', minLength: 1, maxLength: 80 },
+      library: METHOD_LIBRARY_SCHEMA,
       code: { type: 'string', minLength: 1, maxLength: METHOD_LIMITS.sourceChars },
       procedure: { type: 'object', properties: { handle: { type: 'string' }, revision: { type: 'string' } }, required: ['handle', 'revision'] },
       params: { type: 'object', additionalProperties: true },
@@ -2735,6 +2741,17 @@ export class MinecraftWorld implements World {
   protected readonly policy: PolicyBook;
   protected readonly gameMemory: GameMemoryBook;
   protected readonly gameMemoryService: GameMemoryService;
+  private readonly methodLibraries = new Map<string, MethodLibrary>();
+
+  private methodLibrary(): MethodLibrary {
+    const scope = createHash('sha256').update(JSON.stringify([this.realmKey(), this.cfg.auth ?? 'offline', this.cfg.username, this.botName])).digest('hex');
+    let library = this.methodLibraries.get(scope);
+    if (!library) {
+      library = new MethodLibrary(this.dataDir ? join(this.dataDir, 'minecraft-methods', scope) : null);
+      this.methodLibraries.set(scope, library);
+    }
+    return library;
+  }
   /** 按 realmKey 隔离的内存暂态表，不落盘。 */
   protected readonly pwsr = new PwsrTables();
   /**
@@ -3361,6 +3378,8 @@ export class MinecraftWorld implements World {
       ...narrateWorldSegments(snap, this.nearMarkNote(snap.position)).map(({ key, text }) => ({ key, text })),
       { key: 'queue', text: renderQueue(this.executor?.status() ?? { running: null, waiting: [] }) }];
     const last = this.lastFinishedTask;
+    const bot = this.bridge.bot;
+    if (bot) parts.push({ key: 'temporaryScaffolds', text: temporaryScaffoldReadout(bot) });
     if (this.bodyInhibitReason) parts.push({ key: 'bodyRestriction', text: `身体当前受限：${this.bodyInhibitReason}；动作等待恢复回执，不能当作寻路失败。` });
     // 终态可能刚投递，而下一拍快照尚未发生。读取最新原文，避免只有受理回执
     // 留在历史里时重做已经完成或受阻的单；日期也保留，不能当成当前队列。
@@ -4302,8 +4321,22 @@ export class MinecraftWorld implements World {
           : this.toolLog('mc_help', args, help.text);
       },
 
-      mc_script: async (args) => {
+      mc_script: async (args, ctx) => {
         try {
+          if (args.library !== undefined) {
+            if (Object.keys(args).some(key => key !== 'library')) throw new Error('library 须单独使用');
+            const input = args.library as Record<string, unknown>;
+            if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('library 须为对象');
+            const library = this.methodLibrary();
+            let result: unknown;
+            if (input.op === 'list') result = library.list(input);
+            else if (input.op === 'read') result = library.read(input.id as string, input.revision as string | undefined);
+            else if (input.op === 'save') {
+              if (!Number.isInteger(input.validationRunId) || Number(input.validationRunId) < 1) throw new Error('validationRunId 须为已完成的语法校验编号');
+              result = library.save(input, this.methods.read(Number(input.validationRunId))[0], ctx.role);
+            } else throw new Error('library.op 只认 list/read/save');
+            return this.toolLog('mc_script', args, JSON.stringify(result));
+          }
           if (args.api !== undefined) {
             if (typeof args.api !== 'string' || ['code', 'procedure', 'runId', 'call', 'stop', 'validate'].some(key => args[key] !== undefined)) throw new Error('api 须单独使用');
             return this.toolLog('mc_script', args, methodApiHelp(args.api));
@@ -4319,7 +4352,8 @@ export class MinecraftWorld implements World {
             if (args.code !== undefined && args.procedure !== undefined) throw new Error('code和procedure不能合用');
             if (args.validate !== true && (!this.executor || !this.bridge?.bot?.entity)) throw new Error('Minecraft尚未连接');
             const reference = args.procedure === undefined ? undefined : procedureReference(args.procedure);
-            const graph = reference ? resolveProcedure(reference, METHOD_ADAPTER, handle => this.host?.blob(handle) ?? null) : undefined;
+            const graph = reference ? resolveProcedure(reference, METHOD_ADAPTER, handle => handle.startsWith('mem:mc-method/')
+              ? this.methodLibrary().blob(handle) : this.host?.blob(handle) ?? null) : undefined;
             const root = graph?.versions[graph.root];
             const run = this.methods.start({ name: root?.id ?? args.name as string, code: root?.code ?? args.code as string,
               params: args.params as Record<string, unknown> | undefined,
@@ -4419,6 +4453,7 @@ export class MinecraftWorld implements World {
     return { sampledAt: new Date().toISOString(), connectionGeneration: this.connectionGeneration,
       method: this.methods.current,
       snapshot: this.snapshot({ scanBlocks: false }), flight: bot ? flightState(bot) : null,
+      temporaryScaffolds: bot ? temporaryScaffoldReadout(bot) : null,
       queue: this.executor?.status() ?? null, bodyRestriction: this.bodyInhibitReason, combatActive: this.combat?.active ?? false,
       combat: this.extensionState() };
   }
@@ -5930,7 +5965,7 @@ export class MinecraftWorld implements World {
         + '两种工地都要你审阅过冲突格、带 confirm:true 才清场)。'
         + `\n${BLUEPRINT_MATERIAL_NOTE}`
         + (design.plan.advisories.length > 0
-          ? `\n这几条得靠现场满足(编译期看不见工地):\n${renderBlueprintAdvisories(design.plan.advisories)}`
+          ? `\n设计复核与现场待验(蓝图不代表当前工地):\n${renderBlueprintAdvisories(design.plan.advisories)}`
           : '')
         + BLUEPRINT_OVERNIGHT_NOTE,
     };

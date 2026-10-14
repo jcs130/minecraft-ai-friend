@@ -37,6 +37,17 @@ clearance without moving or building. Results retain unknowns and sampling time;
 geometry is not proof of reachability or server placement permission.
 See the [on-demand spatial guide](skills/minecraft-agent/references/spatial.md).
 
+Construction also reports bounded blueprint proportions, exposed materials and known
+headroom problems. Temporary supports have provenance-based cleanup, fresh retained
+obligations and an explicit `cleanup` action. Agent-authored supports may use
+`build temporary:true`. The final ground waypoints are checked for unplanned rises
+outside the ordinary jump envelope before movement; this is not a complete route proof.
+
+`mc_script` includes a host-independent method library with scoped, immutable source
+versions, syntax-validation requirements, parent conflict checks and explicit execution
+or rollback. Saved source is not evaluated gameplay evidence. See
+[building and editable methods](skills/minecraft-agent/references/building-methods.md).
+
 ## Build and verification
 
 Run commands in this package directory. Node >=22 is required.

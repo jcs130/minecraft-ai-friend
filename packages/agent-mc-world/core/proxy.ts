@@ -126,7 +126,10 @@ export class MinecraftWorldProxy implements World {
         const selected = new Map<string, {handle: string; b64: string; mime: string}>();
         if (decl.name === 'mc_script' && args.procedure !== undefined) {
           try {
-            resolveProcedure(procedureReference(args.procedure), METHOD_ADAPTER, handle => {
+            const reference = procedureReference(args.procedure);
+            // Core-owned methods are resolved inside the engine's scoped library.
+            // Host artifacts retain the existing selective transfer contract.
+            if (!reference.handle.startsWith('mem:mc-method/')) resolveProcedure(reference, METHOD_ADAPTER, handle => {
               const got = this.host?.blob(handle);
               if (got) selected.set(handle, {handle, b64: Buffer.from(got.bytes).toString('base64'), mime: got.mime});
               return got ?? null;

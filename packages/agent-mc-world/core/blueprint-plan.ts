@@ -36,6 +36,7 @@ import {
 } from './blueprint-repair.ts';
 import type { Anchor } from './geometry.ts';
 import { reviewBlueprintRailway } from '../src/blueprint-railway.ts';
+import { reviewBlueprintDesign } from './blueprint-design.ts';
 
 /** palette 编码交稿的最大字符数；分批只改变传输方式，不改变这条总预算。 */
 export const BLUEPRINT_MAX_OUTPUT_CHARS = 131_072;
@@ -351,7 +352,7 @@ export function compileBlueprint(blueprint: NormalizedBlueprint): BlueprintPlan 
 
   const railway = reviewBlueprintRailway(blueprint);
   return { steps, checks, placeCells, failures: [...failures, ...railway.failures],
-    advisories: [...railway.advisories, ...supports.advisories] };
+    advisories: [...railway.advisories, ...reviewBlueprintDesign(blueprint), ...supports.advisories] };
 }
 
 /** 局部坐标 + 锚点 → 世界坐标。锚点是蓝图 [0,0,0] 落在世界的哪一格。 */

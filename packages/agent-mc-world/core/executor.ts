@@ -64,7 +64,7 @@ import { skillGesture } from './skills-social.ts';
 import { skillLook } from './skills-look.ts';
 import { skillControl } from './skills-control.ts';
 import { flyToLanding, flyToPosition, landFlight, flightState, previewFlight } from './flight.ts';
-import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold } from './temporary-scaffold.ts';
+import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold, temporaryScaffoldReadout, scaffoldCleanupCheckpoint } from './temporary-scaffold.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { assertInventoryClicksReady, isInventoryClickError } from './inventory-click-sync.ts';
 import { ContainerWindowOwnership } from './container-window-ownership.ts';
@@ -869,6 +869,12 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
     case 'tunnel': return skillTunnel(bot, call, ctx);
     case 'probe': return skillProbe(bot, call, ctx);
     case 'observe': return spatialObservationText(bot, call);
+    case 'cleanup': {
+      if (call.dryRun) return temporaryScaffoldReadout(bot, 12);
+      if (flightState(bot).flying) throw new SkillBlocked('清理垫脚前先安全落地');
+      const result = await reclaimPendingTemporaryScaffold(bot, ctx);
+      return result || temporaryScaffoldReadout(bot, 12);
+    }
     case 'use': return skillUse(bot, call, ctx);
     case 'ride': return skillRide(bot, call, ctx);
     case 'anvil': return skillAnvil(bot, call, ctx);
@@ -5487,10 +5493,7 @@ export class Executor {
           let skillResult = await runSkill(bot, run, ctx).finally(() => releaseTread?.());
           if (ctx.aborted()) return;
           promoteTemporaryScaffold(bot, intended);
-          if (i === steps.length - 1 && !bot.currentWindow && !flightState(bot).flying
-            && ['goto', 'find', 'surface', 'build', 'collect', 'land'].includes(call.skill)
-            && !(call.skill === 'goto' && call.walkOnly)
-            && !steps.some((step) => 'dryRun' in step && step.dryRun)) {
+          if (!bot.currentWindow && !flightState(bot).flying && scaffoldCleanupCheckpoint(steps, i)) {
             try {
               skillResult += await reclaimPendingTemporaryScaffold(bot, ctx);
             } catch (err) {

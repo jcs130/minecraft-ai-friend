@@ -94,10 +94,11 @@ export type SkillCall = StepBounds & (
   | { skill: 'surface' }
   | { skill: 'flight'; at: Anchor; land?: boolean; dryRun?: boolean }
   | { skill: 'land' }
+  | { skill: 'cleanup'; dryRun?: boolean }
   | { skill: 'collect'; block: string; count: number; buried?: boolean; mature?: boolean; tool?: string }
   | { skill: 'fish'; at?: Anchor }
-  | { skill: 'build'; on: PlaceOnFace[]; material: string; dryRun?: boolean }
-  | { skill: 'build'; anchors: Anchor[]; material: string; shape?: ShapeName; fill?: BoxFill; dryRun?: boolean }
+  | { skill: 'build'; on: PlaceOnFace[]; material: string; temporary?: boolean; dryRun?: boolean }
+  | { skill: 'build'; anchors: Anchor[]; material: string; shape?: ShapeName; fill?: BoxFill; temporary?: boolean; dryRun?: boolean }
   /**
    * 按已装载的蓝图施工(判别式的第三形态,判据是 `blueprint` 在不在)。
    * 形状与材料都在图里,所以这一形态一个 material 都不收;`at` 是蓝图 [0,0,0]
@@ -508,7 +509,7 @@ function parseBuildOnFaces(c: Record<string, unknown>, at: string): ParseResult 
       notes.push({ field: key, given, kind: 'dropped', why: '贴面放置是一处一处的,没有形状' });
     }
   }
-  const step: SkillCall = { skill: 'build', material, on, ...(c.dryRun === true ? { dryRun: true } : {}) };
+  const step: SkillCall = { skill: 'build', material, on, ...(c.temporary === true ? { temporary: true } : {}), ...(c.dryRun === true ? { dryRun: true } : {}) };
   return notes.length > 0 ? { step, notes } : { step };
 }
 
@@ -599,6 +600,12 @@ export const UNTIL_CATEGORY_DOC = Object.keys(UNTIL_CATEGORIES).map((k) => `#${k
 
 function parseShaped(skill: 'build' | 'excavate' | 'probe') {
   return (c: Record<string, unknown>, at: string, marks?: MarkLookup): ParseResult => {
+    if (skill === 'build' && c.temporary !== undefined && typeof c.temporary !== 'boolean') {
+      return { error: `${at} build.temporary 要布尔值；只对明确临时支撑写 true` };
+    }
+    if (skill === 'build' && c.blueprint != null && c.temporary === true) {
+      return { error: `${at} 蓝图是作品；临时支撑请另用 build material/on/anchors 并写 temporary:true` };
+    }
     // 判别式三形态,判据各是一个独占字段:blueprint(按图盖)→ on(贴面)→ anchors(点格子)
     if (skill === 'build' && c.blueprint !== undefined && c.blueprint !== null) {
       return parseBuildBlueprint(c, at);
@@ -645,7 +652,7 @@ function parseShaped(skill: 'build' | 'excavate' | 'probe') {
         step: {
           skill, anchors, material,
           ...(shape ? { shape: shape as ShapeName } : {}),
-          ...(fill ? { fill } : {}), ...(dryRun ? { dryRun } : {}),
+          ...(fill ? { fill } : {}), ...(dryRun ? { dryRun } : {}), ...(c.temporary === true ? { temporary: true } : {}),
         },
       };
     }
@@ -1189,6 +1196,10 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     ],
   },
   { name: 'land', doc: '{"skill":"land"}  从飞行悬停位置下降到下方已加载的安全地面，恢复普通地面动作。', fields: [] },
+  { name: 'cleanup',
+    doc: `{"skill":"cleanup","dryRun":true} 检查本连接确认由自己临时放置、尚未收尾的垫脚，给出坐标和保留原因。
+{"skill":"cleanup"} 从当前安全站位尝试拆除这些垫脚；不走路、不搭新块、不拆永久建筑。实体脚下、承重/依附、液体邻接、卸载或重连后无法确认来源的方块均保留。拆除与捡回分开回报；未全部清理不算工地收尾完成。`,
+    fields: [{ key: 'dryRun', kind: 'flag' }] },
   {
     name: 'collect',
     doc: `{"skill":"collect","block":"oak_log","count":3}  采集方块,只挖看得见的——埋在石头里的看不见,得先挖开或者找暴露的。
@@ -1253,6 +1264,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  outline 不清内部,原版 /fill 的 hollow 那个模式这里没有)。
                                                  一单最多 256 块;材料用完或贴不住就停在那。
                                                  dryRun 试算:要动几块、材料够不够
+                                                 临时支撑另加 temporary:true；只登记本次确认放成的实心方块，已有方块不接管。
+                                                 使用完移到稳定地面后 cleanup；仍承重、够不到或来源失效的保留并回报。
 {"skill":"build","blueprint":"home-v2","at":[100,64,-30]}
                                                  按 mc_blueprint 装载着的那张图施工。**at 是蓝图 [0,0,0] 落在世界的哪一格**,
                                                  第一次要给,续建省略(接着上次那个锚点往下施工)。
@@ -1304,6 +1317,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
       },
       // 三形态里两形态必填;蓝图形态一个都不收,由 parse 钩子裁决(required 只进文档)
       { key: 'material', kind: 'string', required: true, hint: '方块英文 id' },
+      { key: 'temporary', kind: 'flag', doc: '只用于材料/锚点或贴面形态；本次确认的临时支撑用完后 cleanup，已有方块不接管' },
       {
         key: 'at', kind: 'anchor',
         error: `build 的 at 要 [x,y,z](蓝图 [0,0,0] 落在世界的哪一格;${RELATIVE_HINT})`,
@@ -2067,6 +2081,7 @@ function asScoutStep(step: SkillCall): SkillCall {
     case 'build':
     case 'excavate':
     case 'tunnel':
+    case 'cleanup':
       return { ...step, dryRun: true };
     default:
       return step;

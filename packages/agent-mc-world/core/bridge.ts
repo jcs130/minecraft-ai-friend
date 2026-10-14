@@ -16,7 +16,7 @@ import { DEFAULT_BLUEPRINT_MC_VERSION, setBlueprintMcVersion } from './blueprint
 import { DIG_UNCONFIRMED_EVENT, installMineflayerFixes, installOffsetShapes, installPathfinderToolSelection } from './mineflayer-fixes.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { installNavigationBareHand } from './hand-interaction.ts';
-import { installDoorWaypointRepair } from './path-waypoints.ts';
+import { installDoorWaypointRepair, groundPathIssueOf } from './path-waypoints.ts';
 import {
   installPathfinderPerf, setDigBackoff, setNoPlaceCells, setProtectedCells, setProtectedPlaceCells,
   setSiteZones, type SiteZone,
@@ -1060,7 +1060,13 @@ export class Bridge {
       suppressed.set(key, 0);
       lastAt.set(key, now);
     };
+    let reportedGeometryIssue = 0;
     bot.on('path_update', (r) => {
+      const issue = groundPathIssueOf(bot);
+      if (issue && issue.sequence > reportedGeometryIssue) {
+        reportedGeometryIssue = issue.sequence;
+        write('geometry-rejected', 'geometry-rejected', issue.reason, { ...issue }, true);
+      }
       lastPath = r.path.slice(0, 8).map((mv) => ({
         at: [mv.x, mv.y, mv.z],
         break: (mv.toBreak ?? []).slice(0, 3).map((p) => [p.x, p.y, p.z]),

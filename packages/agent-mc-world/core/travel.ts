@@ -19,6 +19,7 @@ import { probabilisticDropsOf } from './inventory.ts';
 import { PLACE_REACH } from './cell-facts.ts';
 import { flightState } from './flight.ts';
 import { cancelControlInput, waterControlActive } from './skills-control.ts';
+import { groundPathIssueOf } from './path-waypoints.ts';
 
 export const { goals } = pathfinderPkg;
 
@@ -637,6 +638,11 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
   const stallError = (s: Stall): Error => (s.wedged ? new Wedged(s) : stallBlocked(bot, s));
   const deadline = Date.now() + GOTO_DEADLINE_MS;
   const supportSeq = pathSupportFailureOf(bot)?.seq ?? 0;
+  const geometrySeq = groundPathIssueOf(bot)?.sequence ?? 0;
+  const geometryBlocked = (): string | null => {
+    const issue = groundPathIssueOf(bot);
+    return issue && issue.sequence > geometrySeq ? issue.reason : null;
+  };
   const supportBlocked = (): PathSupportFailure | null => {
     const failure = pathSupportFailureOf(bot);
     return failure && failure.seq > supportSeq ? failure : null;
@@ -714,6 +720,7 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
     // 中止时目标可能已归抢占方；此处不撤目标，撤销由 abortTask/pump 负责。
     if (ctx.aborted()) throw new Aborted(ctx.abortedBy?.() ?? null);
     dropGoal(bot, 'task', '寻路报错,技能退出', ctx.diag);
+    if (geometryBlocked()) throw new SkillBlocked(geometryBlocked()!);
     const support = supportBlocked();
     if (support) {
       throw new SkillBlocked(
@@ -732,6 +739,10 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
   }
   checkAbort(ctx);
   const support = supportBlocked();
+  if (geometryBlocked()) {
+    dropGoal(bot, 'task', '路径内部几何校验未通过', ctx.diag);
+    throw new SkillBlocked(geometryBlocked()!);
+  }
   if (support) {
     dropGoal(bot, 'task', '搭路支撑未确认', ctx.diag);
     throw new SkillBlocked(

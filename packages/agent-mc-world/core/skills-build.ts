@@ -38,7 +38,8 @@ import {
   blockIdOf, normalizeBlockName, renderLayerMap, type NormalizedBlueprint, type PositionXYZ,
 } from './blueprint.ts';
 import { skillExcavate } from './skills-dig.ts';
-import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold } from './temporary-scaffold.ts';
+import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold, prepareTemporaryScaffoldPlacement,
+  recordTemporaryScaffold, closeTemporaryScaffoldPlacement } from './temporary-scaffold.ts';
 
 /** 陆上 surface 一次爬升的时限;到点如实报爬到哪 */
 export const SURFACE_CLIMB_MS = 90_000;
@@ -209,6 +210,11 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
     const stations = stationNotes(bot, ctx, cells);
     return `试算${what}: ${bits.join(';')}。${stations.join('')}没动工`;
   }
+  // Even an already-matching target becomes part of the intended work. Dry runs above never promote it.
+  if (!call.temporary) {
+    for (const c of cells) ctx.intended?.add(cellKeyOf(c));
+    promoteTemporaryScaffold(bot, cells);
+  }
   if (first.todo.length === 0) {
     if (first.already === cells.length) {
       return one ? `${cellText(cells[0])} 本来就是${label}` : `${spanText}已经都是${label}了`;
@@ -228,8 +234,6 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
   }
   if (stock() === 0) throw new SkillBlocked(`包里没有${label}`, [], 'local', 'resource-unavailable');
 
-  // 本单落点登记在案:这一趟寻路垫在落点之外的那些块是耗材,由执行器照报
-  for (const c of cells) ctx.intended?.add(cellKeyOf(c));
   const total = first.todo.length;
   const remaining = new Map(first.todo.map((s) => [cellKeyOf(s.cell), s]));
   /** 放成了的那些格:贴的是哪一面 */
@@ -326,9 +330,13 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
       if (!permit.ok) { halt = permit.reason; haltCode = 'resource-unavailable'; break; }
       tried.add(key);
       let landed: BlockFace | null = null;
+      const temporaryProof = call.temporary ? prepareTemporaryScaffoldPlacement(bot, blockAtCell(bot, c)) : null;
       try {
         landed = await placeIntoCell(bot, c, call.material, ctx, s.face ?? undefined);
+        const actual = landed && temporaryProof ? blockAtCell(bot, c) : null;
+        if (actual) recordTemporaryScaffold(bot, temporaryProof, actual);
       } finally {
+        closeTemporaryScaffoldPlacement(temporaryProof);
         await permit.finish(landed !== null);
       }
       if (landed) {
@@ -372,6 +380,7 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
       occupantOf(bot, s.cell);
   };
   const notes: string[] = [];
+  if (call.temporary) notes.push('临时支撑：只登记本次有放置证据的实心方块；用完移到稳定地面后 cleanup，已有方块不接管');
   if (first.already > 0) notes.push(`${first.already} 格本来就是${label},跳过`);
   if (first.occupied > 0) notes.push(`${first.occupied} 格被别的方块占着,跳过`);
   if (first.unloaded > 0) notes.push(`${first.unloaded} 格区块没加载`);
@@ -395,7 +404,7 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
   if (gap.length > 0) {
     ctx.partial?.(`${label}还差 ${gap.length} 处没放上(${gap.slice(0, 6).join('、')}${gap.length > 6 ? '…' : ''})`);
   }
-  if (listed) return `放上了 ${placed}/${cells.length} 处:${spotLines.join(';')}${where}`;
+  if (listed) return `放上了 ${placed}/${cells.length} 处:${spotLines.join(';')}${tail}`;
   const along = shape ? `沿${SHAPE_ZH[shape]}` : '';
   if (halt) return `${one ? '' : along}放了 ${placed}/${total} 块${label},停在:${halt}${tail}`;
   const how = stuck.get(cellKeyOf(cells[0]));
