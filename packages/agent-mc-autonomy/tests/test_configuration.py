@@ -7,6 +7,17 @@ from agent_mc_autonomy.configuration import Settings
 from agent_mc_autonomy.core_distribution import install as installer
 
 
+@pytest.mark.parametrize("memory", [{}, {"read_preference": "balanced"}])
+def test_default_memory_preference_keeps_existing_strict_body_config_compatible(tmp_path, memory):
+    settings = Settings.parse({"server": {"host": "fixture.test", "username": "Alice"}, "memory": memory})
+    forwarded = settings.client_config(tmp_path)["world"]["memory"]
+    # The deployed 0.4 body rejects keys absent from its own configuration.
+    # New bodies already default to balanced when this optional hint is omitted.
+    known = {"mode", "endpoint", "model", "apiKeyEnv", "timeoutMs", "provider", "libraryId",
+             "projectId", "scopeId", "searchMode", "learningEnabled"}
+    assert set(forwarded) <= known
+
+
 def test_remote_server_and_separate_viewer(tmp_path):
     settings = Settings.parse({"server": {"host": "play.example.org", "username": "Alice", "version": "1.21.1"},
                                "viewer": {"url": "https://viewer.example.org/dungeon/"}})

@@ -93,7 +93,11 @@ class MemorySettings:
     def client_config(self) -> dict:
         aliases = {"api_key_env": "apiKeyEnv", "timeout_ms": "timeoutMs", "library_id": "libraryId",
                    "project_id": "projectId", "scope_id": "scopeId", "search_mode": "searchMode", "learning_enabled": "learningEnabled", "read_preference": "readPreference"}
-        return {aliases.get(key, key): getattr(self, key) for key in self.__dataclass_fields__}
+        # This optional hint is also the new core's default. Omitting it keeps
+        # existing strict 0.4 configurations usable; explicit nondefault choices
+        # still require a core that implements the preference contract.
+        return {aliases.get(key, key): getattr(self, key) for key in self.__dataclass_fields__
+                if key != "read_preference" or self.read_preference != "balanced"}
 
     def environment(self) -> dict[str, str]:
         # MCP's child environment is allowlisted. Forward only this configured key, never all host credentials.
