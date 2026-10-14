@@ -35,8 +35,9 @@ import {
 } from './skills.ts';
 import { compositionText, zhErrorText, zhThing } from './receipt.ts';
 import { UNTIL_TRAVEL_RADIUS, type UntilHit, untilBlockIds, untilHit, untilUnknownNote } from './until.ts';
-import { PLAYER_SLOTS } from './precheck.ts';
-import { ownedFishingBobber } from './fishing.ts';
+import { cancelOwnedFishing, ownedFishingBobber } from './fishing.ts';
+import { confirmFishingLoot } from './fishing-loot.ts';
+import { flushActionAim } from './action-orientation.ts';
 import { minecraftTextComponent } from './text-component.ts';
 import { beginTemporaryScaffold, closeTemporaryScaffold, reclaimTemporaryScaffold,
   type TemporaryScaffoldScope } from './temporary-scaffold.ts';
@@ -884,8 +885,6 @@ export const FISH_WAIT_COVERED_MS = 60_000;
 export const FISH_SCAN_R = 12;
 /** 此直线距离内的水面免视线检查，允许岸壁上方向脚下水面投竿。 */
 export const FISH_NEAR_R = 4;
-/** 咬钩收线后战利品从浮标飞回入包的等待 */
-export const FISH_LOOT_SETTLE_MS = 1_500;
 
 /** 抛竿等待上限:浮标上方有遮盖就按原版的减半倒计时放宽 */
 export function fishWaitMs(covered: boolean): number {
@@ -1297,7 +1296,6 @@ export async function skillFish(bot: Bot, call: Extract<SkillCall, { skill: 'fis
   const here = bot.entity.position;
   const yaw = Math.atan2(-(water.x + 0.5 - here.x), -(water.z + 0.5 - here.z));
 
-  const before = invSnapshot(bot);
   let outcome = '';
   /** 最后一竿没进水时它落在哪 */
   let stray: Exclude<BobberLanding, { kind: 'water' }> | null = null;
@@ -1312,6 +1310,13 @@ export async function skillFish(bot: Bot, call: Extract<SkillCall, { skill: 'fis
     if (!hasFishingFooting(bot)) throw new SkillBlocked('抛竿前脚下已入水，先站到脚下有实心支撑、头在空气中的岸上');
     casts++;
     await bot.look(yaw, plan.elev, true);
+    const aimPosition = bot.entity.position.clone();
+    await flushActionAim(bot, ctx, '抛竿');
+    if (!hasFishingFooting(bot) || bot.entity.position.distanceTo(aimPosition) > 0.5
+      || Math.abs(Math.atan2(Math.sin(bot.entity.yaw - yaw), Math.cos(bot.entity.yaw - yaw))) > 0.02
+      || Math.abs(bot.entity.pitch - plan.elev) > 0.02) {
+      throw new SkillBlocked('抛竿前身体或朝向已改变；尚未抛竿，先核对站位与身体占用');
+    }
     const castAt = Date.now();
     let settled = false;
     const cast = bot.fish().then(() => 'caught' as const, (e: Error) => `失败:${e.message}`);
@@ -1320,9 +1325,16 @@ export async function skillFish(bot: Bot, call: Extract<SkillCall, { skill: 'fis
     // fish() 收场就开下一竿,新浮标不被登记,旧浮标的销毁包反倒取消掉新的一竿。
     // fish() 已收场或从没见到浮标时不挥竿:手上没有浮标时挥竿是再抛一竿。
     const reel = async (): Promise<void> => {
-      if (settled || !findBobber(bot)) return;
+      if (settled) return;
+      if (!findBobber(bot)) { cancelOwnedFishing(bot, 'Fishing cancelled: bobber unobserved'); await cast; return; }
+      if (bot.heldItem?.name !== 'fishing_rod') {
+        cancelOwnedFishing(bot, 'Fishing cancelled: hand changed'); await cast;
+        throw new SkillBlocked('收竿前手持物已改变；未挥动其他物品，浮标回收未确认', [], 'server', 'fishing-reel-unconfirmed');
+      }
       bot.activateItem();
-      await cast;
+      if (await Promise.race([cast.then(() => true), sleep(1_000).then(() => false)])) return;
+      cancelOwnedFishing(bot, 'Fishing cancelled: reel acknowledgement timed out'); await cast;
+      throw new SkillBlocked('收竿后1秒内未收到浮标结束确认；已结束本地等待，未再次抛竿，先核对连接与浮标', [], 'server', 'fishing-reel-unconfirmed');
     };
     let landing: BobberLanding | null = null;
     /** 正在看的那只浮标:何时第一次看到、上次读到的坐标、坐标最后一次变化的时刻 */
@@ -1389,15 +1401,15 @@ export async function skillFish(bot: Bot, call: Extract<SkillCall, { skill: 'fis
   }
   const notes = `${standNote}${covered ? ';这里浮标头顶看不到天,咬钩慢' : ''}${openNote}`;
   if (outcome === 'caught') {
-    await sleep(FISH_LOOT_SETTLE_MS);
-    const gains = invGains(before, bot);
-    if (gains.length > 0) return `钓上来${gains.join('、')}${notes}`;
-    const used = bot.inventory.items().length;
-    const space = used >= PLAYER_SLOTS ? `包满了(${PLAYER_SLOTS} 格全占着)` : `包里还有 ${PLAYER_SLOTS - used} 格空位`;
-    throw new SkillBlocked(`已收到咬钩信号并收线，但未观察到物品入包(${space});本次未确认收获，掉落去向未确认${notes}`, [], 'server');
+    try { return `钓上来${await confirmFishingLoot(bot, ctx)}；已核对本人拾取与背包稳定净增${notes}`; }
+    catch (error) {
+      if (error instanceof SkillBlocked) throw new SkillBlocked(`${error.message}${notes}`, error.scene, error.source, error.code);
+      throw error;
+    }
   }
   if (outcome === 'timeout') {
-    throw new SkillBlocked(`在 ${cellText(water)} 抛竿等了 ${Math.round(waitMs / 1000)} 秒没鱼咬钩,收竿了${unseen}${notes}`);
+    throw new SkillBlocked(`在 ${cellText(water)} 抛竿等了 ${Math.round(waitMs / 1000)} 秒没鱼咬钩,收竿了${unseen}${notes}`,
+      ['没有咬钩与收线后未入包是不同结果；本次没有观察到咬钩，不证明水域没有鱼'], 'server', 'fishing-no-bite');
   }
   throw new SkillBlocked(`这竿没钓成: ${zhErrorText(outcome.replace(/^失败:/, ''))}`);
 }

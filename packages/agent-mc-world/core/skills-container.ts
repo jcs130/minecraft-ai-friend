@@ -16,6 +16,7 @@ import { roman, zhDimension, zhEnchant, zhName } from './names.ts';
 import { Aborted, SkillBlocked, SkillNoop, checkAbort, sleep, type SkillContext } from './skill-context.ts';
 import { AIR_NAMES, LIQUIDS, blockAtCell, cellKeyOf, cellText, dimensionOf, feetOf, resolveAt } from './cell-facts.ts';
 import { droppedStackOf, type ItemStack } from './terrain.ts';
+import { flushActionAim } from './action-orientation.ts';
 import { CONTAINER_FIND, FURNACE_KINDS, matchItemName, matchMaterialName } from './chests.ts';
 import { dropGoal, gotoGoal } from './travel.ts';
 import { type SkillCall } from './skills.ts';
@@ -150,25 +151,6 @@ function rememberDiscard(bot: Bot, entity: Bot['entity']): void {
   while (records.size > 64) records.delete(records.keys().next().value!);
 }
 
-/** look(force=true) only updates local rotation. Mineflayer writes its movement
- * packet after physicsTick listeners return. Resume on the following microtask
- * before sending a non-idempotent inventory click; never guess a sleep duration. */
-async function flushTossAim(bot: Bot, ctx: SkillContext): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const finish = (error?: Error): void => {
-      clearInterval(poll); clearTimeout(timeout);
-      bot.off('physicsTick', tick); bot.off('end', ended);
-      if (error) reject(error); else resolve();
-    };
-    const tick = (): void => finish();
-    const ended = (): void => finish(new SkillBlocked('连接已结束，尚未抛出'));
-    const poll = setInterval(() => { try { checkAbort(ctx); } catch (error) { finish(error as Error); } }, 50);
-    const timeout = setTimeout(() => finish(new SkillBlocked('未等到朝向发送的物理刻，尚未抛出')), 1000);
-    bot.once('physicsTick', tick); bot.once('end', ended);
-  });
-  checkAbort(ctx);
-}
-
 /**
  * toss 按当前 yaw/pitch 给物品初速度，须预先转向。
  * 纯读已加载格。先找抬头抛的方向:齐眼与头上一层从 1 格起连续为空;抬头抛的物品
@@ -290,7 +272,7 @@ export async function skillToss(
     checkAbort(ctx);
     if (left <= 0) break;
     const aimedYaw = bot.entity.yaw, aimedPitch = bot.entity.pitch;
-    await flushTossAim(bot, ctx);
+    await flushActionAim(bot, ctx);
     if (Math.abs(Math.atan2(Math.sin(bot.entity.yaw - aimedYaw), Math.cos(bot.entity.yaw - aimedYaw))) > 0.02
       || Math.abs(bot.entity.pitch - aimedPitch) > 0.02 || bot.entity.position.distanceTo(origin) > 0.5) {
       throw new SkillBlocked(`抛物前身体或朝向已改变；本次已尝试抛出${tossed}，其余未抛，先核对现场`);
