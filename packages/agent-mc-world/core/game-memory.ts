@@ -33,6 +33,8 @@ const MAX_ENTRIES = 1000;
 const MAX_REVISIONS = 32;
 const HELP = `Game memory is a historical notebook, not current world state, permission or verified success.
 search returns at most 20 summaries; use get(id) for content or get(id,revision) for an older version.
+search tags matches any exact tag (case-insensitive), never partial names. Player notes use
+player:<account-name> and, when actually observed, player-uuid:<uuid>. Names are not cross-platform identity.
 remember needs kind, summary, content, source. source.kind is agent_note, user_report or hypothesis;
 user_report also needs speaker and reference. reference is a pointer, not verified evidence.
 capture records a fresh runtime observation with engine-owned provenance; disconnected capture fails.
@@ -43,7 +45,8 @@ search defaults to current dimension plus server-wide notes; dimension:"*" expli
 Every record is isolated by server, account and agent. Server addresses are weak identity: a reset/replaced
 remote world cannot be detected automatically. Use a new dataDir for a replacement world.
 Record conditions, counterexamples, task/run IDs and source hashes for methods. A saved method is not mastery.
-Old inventory, positions and relationships must be checked again before acting. No library is auto-injected.
+Old inventory, positions and relationships must be checked again before acting. On player interactions,
+up to three matching local relationship summaries may accompany the event; full notes stay on demand.
 Local mode makes no model or network calls. Configured vector/remote modes may index or search game notes.
 sync(id,expectedRevision) explicitly indexes one existing note with the selected retrieval provider.
 Optional service workflows: action:service,operation:help. Service-generated experience stays a candidate until human review.
@@ -102,7 +105,7 @@ export class GameMemoryBook {
   }): Record<string, unknown> {
     const action = args.action ?? 'help';
     const allowed: Record<string, string[]> = {
-      help: [], search: ['query', 'kind', 'dimension', 'limit', 'offset', 'includeArchived'], get: ['id', 'revision'],
+      help: [], search: ['query', 'tags', 'kind', 'dimension', 'limit', 'offset', 'includeArchived'], get: ['id', 'revision'],
       remember: ['kind', 'summary', 'content', 'source', 'tags', 'dimension', 'expiresAt'],
       capture: ['summary', 'tags', 'expiresAt'],
       revise: ['id', 'expectedRevision', 'kind', 'summary', 'content', 'source', 'tags', 'dimension', 'expiresAt'],
@@ -145,8 +148,11 @@ export class GameMemoryBook {
       if (args.includeArchived !== undefined && typeof args.includeArchived !== 'boolean') throw new Error('includeArchived must be boolean');
       if (args.query !== undefined && (typeof args.query !== 'string' || args.query.length > 200)) throw new Error('query exceeds 200 characters');
       const query = (args.query as string | undefined)?.trim().toLocaleLowerCase() ?? '', tokens = terms(query);
+      if (args.tags !== undefined && (!Array.isArray(args.tags) || !args.tags.length || args.tags.length > 12)) throw new Error('search tags: 1..12 exact tags');
+      const tagFilter = (args.tags as unknown[] | undefined)?.map(t => text(t, 'tag', 48).toLocaleLowerCase());
       const eligible = book.entries.map(e => ({ e, v: e.versions.at(-1)! })).filter(({ v }) =>
         (!v.archived || args.includeArchived === true) && (!kind || v.kind === kind)
+        && (!tagFilter || v.tags.some(t => tagFilter.includes(t.toLocaleLowerCase())))
         && (dimension === '*' || v.dimension === null || v.dimension === dimension));
       retrieval?.candidates?.(eligible.map(({ e, v }) => structuredClone({ id: e.id, ...v })));
       const matches = eligible.map(({ e, v }) => {

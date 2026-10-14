@@ -11,7 +11,15 @@ The caller retains personality, general memory and learning decisions. The Minec
 3. `mc_memory {"action":"get","id":"<returned id>"}` reads one full note.
 4. Re-observe the world before relying on old inventory, positions or relationships.
 
-Search has bounded results and pagination; no notebook is automatically injected into model requests. Chinese substrings and words are matched locally. Optional vector and remote modes combine the local ranking with semantic/service results using reciprocal rank fusion.
+Search has bounded results and pagination. Chinese substrings and words are matched locally. Optional vector and remote modes combine the local ranking with semantic/service results using reciprocal rank fusion.
+
+### Player encounters
+
+For an explicitly saved `relationship` note, use exact tags `player:<Minecraft-account-name>` and, only when observed, `player-uuid:<uuid>`. Search accepts `tags` with case-insensitive exact OR matching; nickname fragments never bind accounts. A conflicting UUID suppresses a same-name match; UUID-bound notes require a confirmed matching UUID. A UUID from an offline server is only that server's account identity, not proof of a real person or cross-platform ownership.
+
+Before a delivered chat, arrival or nearby-player observation, the engine can queue at most three recent, unexpired local relationship summaries in a separate `minecraft.memory` event. Movement-only repeats are limited to one recall per identity per 30 seconds; direct chat may refresh it. The original chat text and sender are unchanged. History carries note IDs, revisions, source timestamps and speakers; full content remains on demand. No match or a failed read never proves a stranger or a first meeting. The host should also consult its own existing profiles where applicable.
+
+This path is local, bounded and does not call an embedding/model/cloud service or write new memories. It is disabled without persistent storage. It does not import private host profiles into shared game memory. Whether a host actually supplies delivered history to its model still requires host-side verification.
 
 ## Writes and evidence
 
