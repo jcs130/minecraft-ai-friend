@@ -1,6 +1,6 @@
 /** Compile against the installed Fabric 1.20.6 client without starting a game. */
 import {spawnSync} from 'node:child_process';
-import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
 import {delimiter, dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -9,11 +9,19 @@ const args = process.argv.slice(2);
 const gameDir = args[0] && resolve(args[0]);
 const javaIndex = args.indexOf('--java-home');
 const javaDir = javaIndex >= 0 ? args[javaIndex + 1] : process.env.JAVA_HOME;
+const versionIndex = args.indexOf('--minecraft');
+const version = versionIndex >= 0 ? args[versionIndex + 1] : '1.20.6';
+if (!['1.20.6', '1.21.1'].includes(version)) throw new Error('Unsupported Minecraft build target');
 if (!gameDir || !existsSync(join(gameDir, '.fabric', 'remappedJars')))
-  throw new Error('Supply a previously launched Fabric 1.20.6 game directory');
-const work = join(root, 'scratch', 'client-login');
+  throw new Error('Supply a previously launched matching Fabric game directory');
+const work = join(root, 'scratch', 'client-login', version);
 const classes = join(work, 'classes');
 const deps = join(work, 'deps');
+for (const directory of [classes, deps]) {
+  if (!directory.startsWith(resolve(root, 'scratch', 'client-login') + pathSeparator())) throw new Error('Unsafe build directory');
+  rmSync(directory, {recursive:true, force:true});
+}
+function pathSeparator() { return process.platform === 'win32' ? '\\' : '/'; }
 mkdirSync(classes, {recursive:true});
 mkdirSync(deps, {recursive:true});
 function jars(directory) {
@@ -30,10 +38,10 @@ function run(name, argv, cwd = root) {
   if (result.status !== 0) throw new Error(`${name}: ${result.stdout}\n${result.stderr}`);
   if (result.stdout.trim()) process.stdout.write(result.stdout);
 }
-const api = jars(join(gameDir, 'mods')).find(file => /fabric-api-[^/\\]+\+1\.20\.6\.jar$/.test(file));
+const api = jars(join(gameDir, 'mods')).find(file => file.includes('fabric-api-') && file.endsWith('+' + version + '.jar'));
 const minecraft = jars(join(gameDir, '.fabric', 'remappedJars')).find(file =>
-  file.includes('minecraft-1.20.6-') && file.endsWith('client-intermediary.jar'));
-if (!api || !minecraft) throw new Error('Installed Fabric API and Minecraft 1.20.6 cache are required');
+  file.includes('minecraft-' + version + '-') && file.endsWith('client-intermediary.jar'));
+if (!api || !minecraft) throw new Error('Matching installed Fabric API and Minecraft cache are required');
 run('jar', ['--extract', '--file', api], deps);
 const classpath = [minecraft, ...jars(join(gameDir, 'libraries')), ...jars(join(deps, 'META-INF/jars'))].join(delimiter);
 const owner = join(root, 'client-login');
@@ -45,8 +53,10 @@ run('javac', ['@' + argFile]);
 run('java', ['-cp', classes + delimiter + classpath, 'LoginSessionCheck']);
 run('java', ['-cp', classes + delimiter + classpath, 'ReconnectSessionCheck']);
 const manifest = JSON.parse(readFileSync(join(owner, 'fabric.mod.json'), 'utf8'));
+manifest.depends.minecraft = version;
+writeFileSync(join(work, 'fabric.mod.json'), JSON.stringify(manifest, null, 2) + '\n');
 const output = join(work, `${manifest.id}-${manifest.version}.jar`);
-run('jar', ['--create','--file',output,'-C',classes,'org','-C',owner,'fabric.mod.json']);
+run('jar', ['--create','--file',output,'-C',classes,'org','-C',work,'fabric.mod.json']);
 if (args.includes('--install')) {
   const target = join(gameDir, 'mods', `${manifest.id}.jar`);
   copyFileSync(output, target);

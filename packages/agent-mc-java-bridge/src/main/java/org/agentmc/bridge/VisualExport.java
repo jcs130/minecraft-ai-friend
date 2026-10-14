@@ -36,7 +36,7 @@ public final class VisualExport {
     }
     private JsonObject base() {
         refresh(); JsonObject out = new JsonObject();
-        out.addProperty("protocol", "agent-mc-visual/v1"); out.addProperty("minecraftVersion", "1.20.6");
+        out.addProperty("protocol", "agent-mc-visual/v1"); out.addProperty("minecraftVersion", ClientBridge.MINECRAFT_VERSION);
         out.addProperty("epoch", epoch); out.addProperty("sequence", ++sequence); out.addProperty("sampledAt", System.currentTimeMillis());
         out.addProperty("uuid", client.field_1724.method_5667().toString());
         out.addProperty("server", client.method_1558() == null ? "" : client.method_1558().field_3761);

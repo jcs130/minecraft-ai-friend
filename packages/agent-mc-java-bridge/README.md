@@ -1,6 +1,6 @@
 # Agent MC Java Client Bridge
 
-A small client-only Fabric bridge for **Minecraft 1.20.6 / Java 21**. It supplies an alternative body for `agent-mc-world`; it has no personality, model, memory policy, launcher or reconnect loop. The server does not need this mod. Keep normal server authentication and permissions.
+A small client-only Fabric bridge for **Minecraft 1.20.6 or 1.21.1 / Java 21**. It supplies an alternative body for `agent-mc-world`; it has no personality, model, memory policy, launcher or reconnect loop. The server does not need this mod. Keep normal server authentication and permissions.
 
 This is our own `agent-mc-java/v1` implementation. It is **not wire compatible with `maw-client-bridge-0.3.0`**. Do not copy a different bridge's connection token into it. The native source and MIT license are maintained here independently of any Agent host.
 
@@ -10,9 +10,12 @@ Install the matching Minecraft/Fabric client and Fabric API normally first. The 
 
 ```sh
 node build.mjs /path/to/installed-fabric-1.20.6 /path/to/jdk-21
+node build.mjs /path/to/installed-fabric-1.21.1 /path/to/jdk-21 1.21.1
 ```
 
 The build compiles local Java source and runs the game-independent lease/ledger checks. It never downloads dependencies, extracts host framework source, connects to a server or starts a client. Output: `build/agent-mc-bridge-0.1.0-fabric-1.20.6.jar`. Put it and the matching Fabric API in a separate instance's `mods/` directory. Do not use it with NeoForge or another Minecraft version.
+
+For the explicit 1.21.1 target, both installed Minecraft and Fabric API inputs must be 1.21.1; the output suffix and packaged manifest declare exactly that version. Build dependencies/classes are isolated by target. Runtime observations report Fabric Loader's actual Minecraft version. Use the matching Minescript 4.0 artifact and preserve its configured Python interpreter, both action ledgers and private login configuration across migration. A compiled bridge still requires a real client launch, protocol and rendering acceptance.
 
 ## Body protocol
 

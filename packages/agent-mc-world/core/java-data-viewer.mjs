@@ -1,18 +1,15 @@
 // Generated from mc-visual-console by tools/build-java-data-host.mjs. Edit the shared source.
 
-// host/java-data-viewer.mjs
+// packages/modern-viewer/renderer-src/host/java-data-viewer.mjs
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path2 from "node:path";
 import { createHash } from "node:crypto";
 import { Server as SocketServer } from "socket.io";
 
-// host/java-visual-data.mjs
+// packages/modern-viewer/renderer-src/host/java-visual-data.mjs
 import { createRequire } from "node:module";
 var require2 = createRequire(import.meta.url);
-var mc = require2("minecraft-data")("1.20.6");
-var Block = require2("prismarine-block")("1.20.6");
-var Chunk = require2("prismarine-chunk")("1.20.6");
 var canonical = (props) => JSON.stringify(Object.entries(props).map(([k, v]) => [k, String(v)]).sort(([a], [b]) => a.localeCompare(b)));
 var identifier = /^minecraft:[a-z0-9_./-]+$/;
 var number = (v, min, max) => Number.isFinite(v) && v >= min && v <= max;
@@ -24,7 +21,12 @@ var requireValue = (ok, why) => {
 var javaYaw = (degrees) => Math.PI - degrees * Math.PI / 180;
 var javaPitch = (degrees) => -degrees * Math.PI / 180;
 var JavaVisualData = class {
-  constructor({ uuid, server, skinUrl = () => null }) {
+  constructor({ uuid, server, skinUrl = () => null, minecraftVersion = "1.20.6" }) {
+    requireValue(["1.20.6", "1.21.1"].includes(minecraftVersion), "VERSION_MISMATCH");
+    this.version = minecraftVersion;
+    this.mc = require2("minecraft-data")(minecraftVersion);
+    this.Block = require2("prismarine-block")(minecraftVersion);
+    this.Chunk = require2("prismarine-chunk")(minecraftVersion);
     this.uuid = uuid.toLowerCase();
     this.server = server.toLowerCase().replace(/:25565$/, "");
     this.skinUrl = skinUrl;
@@ -41,7 +43,7 @@ var JavaVisualData = class {
     this.frame = null;
   }
   verify(value, epoch = false) {
-    requireValue(value?.protocol === "agent-mc-visual/v1" && value.minecraftVersion === "1.20.6", "VERSION_MISMATCH");
+    requireValue(value?.protocol === "agent-mc-visual/v1" && value.minecraftVersion === this.version, "VERSION_MISMATCH");
     requireValue(value.uuid?.toLowerCase() === this.uuid && value.server?.toLowerCase().replace(/:25565$/, "") === this.server, "IDENTITY_MISMATCH");
     requireValue(typeof value.epoch === "string" && value.epoch.length < 128 && integer(value.sequence, 0, Number.MAX_SAFE_INTEGER) && number(value.sampledAt, 0, Number.MAX_SAFE_INTEGER), "ENVELOPE_INVALID");
     if (epoch) requireValue(value.epoch === this.epoch, "EPOCH_MISMATCH");
@@ -51,7 +53,7 @@ var JavaVisualData = class {
     const { blocks, biomes } = value.registry ?? {};
     requireValue(Array.isArray(blocks) && blocks.length > 0 && blocks.length <= 131072 && Array.isArray(biomes) && biomes.length <= 4096, "REGISTRY_INVALID");
     const states = /* @__PURE__ */ new Map(), biomeIds = /* @__PURE__ */ new Map(), nativeBiomes = /* @__PURE__ */ new Map(), vanillaStates = /* @__PURE__ */ new Map();
-    for (const block of mc.blocksArray) for (let id = block.minStateId; id <= block.maxStateId; id++) vanillaStates.set(block.name + canonical(Block.fromStateId(id, 0).getProperties()), id);
+    for (const block of this.mc.blocksArray) for (let id = block.minStateId; id <= block.maxStateId; id++) vanillaStates.set(block.name + canonical(this.Block.fromStateId(id, 0).getProperties()), id);
     for (const row of blocks) {
       requireValue(integer(row.id, 0, 131071) && typeof row.name === "string" && row.properties && !states.has(row.id), "STATE_INVALID");
       let target = null;
@@ -62,7 +64,7 @@ var JavaVisualData = class {
     }
     for (const row of biomes) {
       requireValue(integer(row.id, 0, 4095) && !biomeIds.has(row.id), "BIOME_INVALID");
-      let mapped = identifier.test(row.name) ? mc.biomesByName[row.name.slice(10)]?.id ?? null : null;
+      let mapped = identifier.test(row.name) ? this.mc.biomesByName[row.name.slice(10)]?.id ?? null : null;
       if (row.colors) {
         requireValue(typeof row.name === "string" && /^[a-z0-9_.-]+:[a-z0-9_./-]{1,128}$/.test(row.name) && ["grass", "foliage", "water"].every((k) => nativeRgb(row.colors[k]) !== null), "BIOME_COLORS_INVALID");
         mapped ??= 1024 + row.id;
@@ -80,7 +82,7 @@ var JavaVisualData = class {
     this.verify(value, true);
     requireValue(this.blocks && integer(value.x, -1875e3, 1875e3) && integer(value.z, -1875e3, 1875e3) && integer(value.minY, -2048, 2048) && value.minY % 16 === 0 && integer(value.height, 16, 1024) && value.height % 16 === 0 && typeof value.sections === "string" && value.sections.length <= 3 * 1024 * 1024, "CHUNK_INVALID");
     requireValue(Array.isArray(value.skyLight) && Array.isArray(value.blockLight) && value.skyLight.length === value.height / 16 && value.blockLight.length === value.height / 16, "LIGHT_INVALID");
-    const raw = new Chunk({ minY: value.minY, worldHeight: value.height });
+    const raw = new this.Chunk({ minY: value.minY, worldHeight: value.height });
     raw.maxBitsPerBlock = Math.ceil(Math.log2([...this.blocks.keys()].reduce((a, b) => Math.max(a, b), 0) + 1));
     raw.maxBitsPerBiome = Math.ceil(Math.log2([...this.biomes.keys()].reduce((a, b) => Math.max(a, b), 0) + 1));
     raw.load(Buffer.from(value.sections, "base64"));
@@ -134,7 +136,7 @@ var JavaVisualData = class {
     requireValue(integer(row.id, 0, 2147483647) && identifier.test(row.name) && Array.isArray(row.position) && row.position.length === 3 && row.position.every((v) => number(v, -3e7, 3e7)) && [row.yaw, row.pitch, row.headYaw].every((v) => number(v, -1e9, 1e9)), "ENTITY_INVALID");
     const equipment = (row.equipment ?? []).map((item) => {
       if (!item) return null;
-      const native = identifier.test(item.name) && mc.itemsByName[item.name.slice(10)];
+      const native = identifier.test(item.name) && this.mc.itemsByName[item.name.slice(10)];
       requireValue(native, "UNSUPPORTED_ITEM");
       return { name: native.name, type: native.id, itemId: native.id, count: item.count, displayName: item.displayName };
     });
@@ -226,7 +228,7 @@ var JavaVisualData = class {
   }
 };
 
-// host/viewer-asset-server.mjs
+// packages/modern-viewer/renderer-src/host/viewer-asset-server.mjs
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
@@ -294,21 +296,21 @@ async function serveViewerAsset(res, root, relative, cacheControl = "public, max
   return true;
 }
 
-// host/java-data-viewer.mjs
-async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expectedServer, radius = 2 }) {
+// packages/modern-viewer/renderer-src/host/java-data-viewer.mjs
+async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expectedServer, radius = 2, minecraftVersion = "1.20.6" }) {
   if (!Number.isInteger(port) || port < 0 || port > 65535 || !Number.isInteger(radius) || radius < 0 || radius > 4) throw Error("JAVA_VIEWER_CONFIG_INVALID");
   const root = path2.resolve(assetsDir), source = JSON.parse(await readFile(path2.join(root, "public/asset-source.json"), "utf8"));
-  if (source.minecraftVersion !== "1.20.6") throw Error("JAVA_VIEWER_ASSET_VERSION_MISMATCH");
+  if (!["1.20.6", "1.21.1"].includes(minecraftVersion) || source.minecraftVersion !== minecraftVersion) throw Error("JAVA_VIEWER_ASSET_VERSION_MISMATCH");
   const notice = '<div role="status" style="position:fixed;bottom:54px;left:12px;z-index:99999;background:#13242fe8;color:white;padding:8px;max-width:430px;font:13px sans-serif">\u539F\u751F\u6570\u636E\u9884\u89C8 \xB7 \u5DF2\u63A5\u5165\u5730\u5F62\u4E0E\u672C\u4EBA\u79FB\u52A8\u3002\u5176\u4ED6\u5B9E\u4F53\u3001\u5BB9\u5668\u3001YSM\u3001\u6A21\u7EC4\u6750\u8D28\u4E0E\u5149\u5F71\u5C1A\u672A\u63A5\u5165\uFF1B\u754C\u9762\u7A7A\u69FD\u4E0D\u4EE3\u8868\u5B9E\u9645\u80CC\u5305\u4E3A\u7A7A\u3002</div>';
   const pages = new Map(await Promise.all(["", "third/", "dungeon/"].map(async (route) => [route, (await readFile(path2.join(root, "public", route, "index.html"), "utf8")).replace("</body>", notice + "</body>")])));
   const css = await readFile(path2.join(root, "public/viewer.css"));
   const skins = /* @__PURE__ */ new Map(), skinBytes = /* @__PURE__ */ new Map();
-  const data = new JavaVisualData({ uuid, server: expectedServer, skinUrl: (resource) => skins.get(resource) ?? null });
+  const data = new JavaVisualData({ uuid, server: expectedServer, minecraftVersion, skinUrl: (resource) => skins.get(resource) ?? null });
   async function prepareSkin(resource) {
     if (skins.has(resource)) return;
     let bytes;
     if (/^minecraft:textures\/entity\/player\/(slim|wide)\/[a-z_]+\.png$/.test(resource ?? "")) {
-      bytes = await readFile(path2.join(root, "public/textures/1.20.6", resource.slice("minecraft:textures/".length)));
+      bytes = await readFile(path2.join(root, `public/textures/${minecraftVersion}`, resource.slice("minecraft:textures/".length)));
     } else {
       const value = await rpc("visual_skin", { resource });
       data.verify(value);
@@ -345,7 +347,7 @@ async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expect
     sampling: demanded() && !closed,
     source: "real-java-world-data",
     transport: "socket.io",
-    minecraftVersion: "1.20.6",
+    minecraftVersion,
     error,
     lastError,
     epoch: data.epoch,
@@ -404,7 +406,7 @@ async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expect
       }
       if (route === "index.js" && await serveViewerAsset(res, root, "dist/modern-viewer.js", "no-store")) return;
       if (await serveViewerAsset(res, path2.join(root, "public"), route)) return;
-      if (route.startsWith("textures/") && await serveViewerAsset(res, path2.join(root, "public"), `textures/1.20.6/${route.slice(9)}`)) return;
+      if (route.startsWith("textures/") && await serveViewerAsset(res, path2.join(root, "public"), `textures/${minecraftVersion}/${route.slice(9)}`)) return;
       res.writeHead(404).end();
     } catch {
       res.writeHead(503).end("Viewer resource unavailable");
@@ -499,7 +501,7 @@ async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expect
         return;
       }
       clients.add(socket);
-      socket.emit("version", "1.20.6");
+      socket.emit("version", minecraftVersion);
       const latest = data.frame, self = data.entity(latest.self, true);
       socket.emit("position", { pos: self.pos, yaw: self.yaw, pitch: self.pitch, teleport: true });
       socket.emit("playerEntity", self);
