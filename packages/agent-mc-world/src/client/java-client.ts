@@ -12,6 +12,7 @@ import { JAVA_LEGACY_HELP, translateJavaLegacy } from './java-legacy.ts';
 import { NativeEvidenceArchive, compactNativeState, compactItem, compactItems } from './native-evidence.ts';
 import { javaScriptHelp } from './java-script-help.ts';
 import { selectJavaViewer } from './java-viewer-selection.ts';
+import { nativeProbeInput, NATIVE_PROBE_PROGRAM } from './java-probe.ts';
 
 export const JAVA_CLIENT_ENVIRONMENT = `You control an actual rendered Minecraft Java client through agent-mc-java/v1. The host owns goals, personality, models and memory. The client bridge owns one actual body queue. It never launches a game, reconnects, simulates OS input or runs a model.
 Query mc_capabilities, mc_operations and mc_help before acting. Claim mc_control explicitly, then renew the lease before expiry. Disconnect releases your own lease and keys. Identity is the actual server-assigned UUID and exact server address; offline servers do not require Microsoft authentication. Never control a different player or server after an identity change.
@@ -22,6 +23,7 @@ mc_visual returns the real client framebuffer, original textures, current animat
 function uuid(value: string) { return value.replaceAll('-', '').toLowerCase(); }
 function address(value: string) { return value.toLowerCase().replace(/:25565$/, ''); }
 export function validateJavaClientConfiguration(cfg: Partial<JavaClientConfiguration> | undefined): asserts cfg is JavaClientConfiguration {
+  if (cfg?.actionWaitMs !== undefined && (!Number.isInteger(cfg.actionWaitMs) || cfg.actionWaitMs < 0 || cfg.actionWaitMs > 2000)) throw new Error('Java actionWaitMs must be 0..2000');
   if (cfg?.viewerMode !== undefined && !['auto', 'data', 'framebuffer'].includes(cfg.viewerMode)) throw new Error('Unknown Java viewer mode');
   if (!cfg || !/^(?:[a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i.test(cfg.expectedUuid ?? '')
     || !cfg.expectedServer?.trim() || !/^[A-Za-z0-9_.:-]{1,128}$/.test(cfg.controllerId ?? '')
@@ -85,6 +87,7 @@ export class JavaClientWorld implements World {
         syncId: state.syncId, revision: state.menuRevision, slots: summarizeItems(state.menuSlots), rawQuery: 'mc_bag' }) },
       { key: 'queue', text: JSON.stringify(state.actions.filter(action => ['accepted', 'running', 'unknown'].includes(action.phase))) },
       { key: 'notices', text: JSON.stringify({ lastSeq: state.messages.at(-1)?.seq ?? 0, retained: state.messages.length, rawQuery: 'mc_notices', observationOnly: true }) },
+      ...(this.cfg.javaClient?.minescriptEnabled ? [{ key:'executor',text:JSON.stringify({provider:'java-client',scriptEngine:'Minescript 4.0 Python',blockObservation:'mc_probe',scriptReference:'mc_script api:index / blocks / movement / interaction / inventory',blockReturn:'namespaced string, e.g. minecraft:carrots[age=7]',aim:'minescript.player_look_at(x,y,z)',wait:'Python time.sleep(seconds)',archiveQuery:'mc_evidence part:script',shortActionWaitMs:this.cfg.javaClient.actionWaitMs??1000}) }] : []),
     ];
     return { text: parts.map(part => part.text).join('\n'), parts, snapshotTypes: ['minecraft.client.snapshot'] };
   }
@@ -192,6 +195,20 @@ export class JavaClientWorld implements World {
         terminal: !['accepted', 'running', 'unknown'].includes(action.phase), goalCompleted: false,
         evidence: { protocol: JAVA_CLIENT_PROTOCOL, operation: action.operation, ...compact.evidence } } };
   }
+  private async settle(action: JavaClientAction, waitMs: number, signal?: AbortSignal): Promise<JavaClientAction> {
+    const until = Date.now() + waitMs;
+    const combined = AbortSignal.any([this.lifetime.signal, ...(signal ? [signal] : [])]);
+    while (['accepted','running'].includes(action.phase) && Date.now() < until) {
+      await new Promise<void>((resolve,reject) => {
+        const done = () => { clearTimeout(timer); combined.removeEventListener('abort', abort); };
+        const abort = () => { done(); reject(combined.reason); };
+        const timer = setTimeout(() => { done(); resolve(); }, Math.min(100, Math.max(0,until-Date.now())));
+        combined.addEventListener('abort',abort,{once:true}); if(combined.aborted)abort();
+      });
+      action = await this.rpc('result', { action_id: action.id }, combined) as JavaClientAction;
+    }
+    return action;
+  }
   private async poll(): Promise<void> {
     if (this.pollingEpoch === this.epoch || !this.host) return;
     const epoch = this.epoch, host = this.host; this.pollingEpoch = epoch;
@@ -211,7 +228,8 @@ export class JavaClientWorld implements World {
       for (const message of state.messages) if (message.seq > this.messageSeq) {
         this.messageSeq = message.seq;
         await host.pushEvent({ type: 'minecraft.client.message', source: 'minecraft', ts: message.at, text: message.text,
-          meta: { overlay: message.overlay, raw: true, generation: state.generation, kind: message.kind, sender: message.sender } }, { trigger: 'interrupt' });
+          meta: { overlay: message.overlay, raw: true, generation: state.generation, kind: message.kind, sender: message.sender } },
+          { trigger: message.overlay ? 'piggyback' : message.kind === 'player' ? 'preempt' : 'debounce' });
       }
       for (const action of state.actions) if (this.phases.get(action.id) !== action.phase) {
         this.phases.set(action.id, action.phase);
@@ -220,7 +238,7 @@ export class JavaClientWorld implements World {
         if (this.host !== host || this.epoch !== epoch) return;
         const receipt = this.receipt(full);
         await host.pushEvent({ type: 'minecraft.client.action', source: 'minecraft', ts: new Date(full.updatedAt).toISOString(),
-          text: receipt.text, execution: receipt.execution, meta: receipt.meta }, { trigger: 'interrupt' });
+          text: receipt.text, execution: receipt.execution, meta: receipt.meta }, { trigger: 'flush' });
       }
     } catch (error) {
       if (this.host === host && this.epoch === epoch && !this.lifetime.signal.aborted) {
@@ -242,7 +260,7 @@ export class JavaClientWorld implements World {
         const state = await this.rpc('state', {}, ctx.signal) as JavaClientState; this.verify(state); this.state = state;
         return { text: JSON.stringify({ ...compactNativeState(state), raw: this.evidence.save('state:' + state.sampledAt, state) }) };
       }),
-      tool('mc_evidence', 'Read original archived native JSON by raw.key and optional raw.sha256. Paginated text preserves full components, books, script results and terminal evidence without repeating them in normal replies.', parameters({ key: str, sha256: str, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 16000 } }, ['key']), async args => ({ text: JSON.stringify(this.evidence.read(String(args.key), args.sha256 as string | undefined, Number(args.offset ?? 0), Number(args.limit ?? 8000))) })),
+      tool('mc_evidence', 'Read original native evidence by raw.key and optional raw.sha256. part:script pages the program report directly without repeated inventory/books; default full preserves the entire original.', parameters({ key: str, sha256: str, part: {enum:['full','script']}, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 16000 } }, ['key']), async args => ({ text: JSON.stringify(this.evidence.read(String(args.key), args.sha256 as string | undefined, Number(args.offset ?? 0), Number(args.limit ?? 8000), args.part as 'full'|'script'|undefined)) })),
       tool('mc_operations', 'Discover exact real-client operations. Uninstalled Minescript/Baritone are unavailable.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify(await this.rpc('operations', {}, ctx.signal)) })),
       tool('mc_help', 'Read real-client operations, legacy compatibility and identity/control rules. Supply skill for one discovered operation and exact input fields.', parameters({ skill: str }), async (args, ctx) => {
         const operations = await this.rpc('operations', {}, ctx.signal);
@@ -271,15 +289,17 @@ export class JavaClientWorld implements World {
         const { nonce, ...publicLease } = lease; return { text: JSON.stringify(publicLease) };
       }, false, true),
       tool('mc_do', 'Submit ONE discovered operation/input or ONE supported legacy steps command, using stable action_id. Accepted is not completed. Read mc_help for compatibility; no navigation/script emulation.',
-        parameters({ action_id: str, operation: str, input: { type: 'object' }, steps: { type: 'array', minItems: 1, maxItems: 1, items: { type: 'object', properties: { skill: str }, required: ['skill'] } }, queue: { enum: ['append', 'now'] } }), async (args, ctx) => {
+        parameters({ action_id: str, operation: str, input: { type: 'object' }, waitMs: {type:'integer',minimum:0,maximum:2000}, steps: { type: 'array', minItems: 1, maxItems: 1, items: { type: 'object', properties: { skill: str }, required: ['skill'] } }, queue: { enum: ['append', 'now'] } }), async (args, ctx) => {
           if (args.steps !== undefined) {
             const state = await this.rpc('state', {}, ctx.signal) as JavaClientState; this.verify(state); this.state = state;
             args = translateJavaLegacy(args, state);
           }
           if (typeof args.operation !== 'string' || !args.input || typeof args.input !== 'object' || Array.isArray(args.input)) throw new Error('Supply operation/input OR one compatible legacy step');
           if (args.queue !== undefined && !['append', 'now'].includes(String(args.queue))) throw new Error('Native queue supports append/now only');
+          const waitMs = args.waitMs ?? this.cfg.javaClient?.actionWaitMs ?? 1000;
+          if (!Number.isInteger(waitMs) || Number(waitMs) < 0 || Number(waitMs) > 2000) throw new Error('waitMs must be 0..2000');
           const action = await this.rpc('do', { ...this.owner(), action_id: args.action_id ?? ctx.callId, operation: args.operation, input: args.input, queue: args.queue ?? 'append' }, ctx.signal);
-          this.phases.set(action.id, action.phase); return this.receipt(action);
+          this.phases.set(action.id, action.phase); return this.receipt(await this.settle(action,Number(waitMs),ctx.signal));
         }, true),
       tool('mc_result', 'Reconcile the original action ID, including uncertain dispatch and archived terminals.', parameters({ action_id: str }, ['action_id']), result),
       tool('mc_cancel', 'Cancel this controller action by its original ID and release held game inputs. A cancelled wait alone does not stop an action.', parameters({ action_id: str }, ['action_id']),
@@ -319,11 +339,18 @@ export class JavaClientWorld implements World {
       { ...PHOTO_TOOL, handler: (args, ctx) => this.photos.execute(args, ctx) },
     ];
     if (this.cfg.javaClient?.minescriptEnabled) tools.push(tool('mc_script', 'Run one explicitly selected Python Minescript program on the real body, with original action ID, timeout, cancellation and real terminal receipt. Python is the default language. Read api:index first. No extra model loop; trusted local code, not a sandbox. Old Mineflayer JavaScript is unsupported.', parameters({ api: str, language: { enum: ['python'], default: 'python' }, code: { type: 'string', minLength: 1, maxLength: 32768 }, input: {}, timeoutMs: { type: 'integer', minimum: 100, maximum: 30000 }, action_id: str }), async (args, ctx) => {
-      if (args.api && !args.code) return { text: javaScriptHelp(String(args.api)) };
+      if (args.api) return { text: javaScriptHelp(String(args.api)) + (args.code ? '\nAPI query only: supplied code was not executed. Omit api to run a program.' : '') };
       if ((args.language ?? 'python') !== 'python' || typeof args.code !== 'string') return { text: 'Use Python code, or api:index. Old JavaScript is not converted.', failed: true };
       const body = tools.find(tool => tool.name === 'mc_do')!;
       return body.handler({ action_id: args.action_id, operation: 'minescript.run', input: { code: args.code, input: args.input, timeoutMs: args.timeoutMs ?? 10000 } }, ctx);
     }, true));
+    if (this.cfg.javaClient?.minescriptEnabled) tools.push(tool('mc_probe', 'Observe nearby cached blocks through one bounded Minescript batch, without writing Python. Default radius 3, below 1, above 2; names optionally filters namespaced IDs. Or supply absolute integer positions. Queued read uses the same body lease and stable action_id, waits briefly for the real terminal, never moves or loads chunks. Read script.result; partial is a program report, not goal completion.', parameters({action_id:str,
+      positions:{type:'array',minItems:1,maxItems:512,items:{type:'array',minItems:3,maxItems:3,items:{type:'integer'}}},
+      radius:{type:'integer',minimum:0,maximum:6},below:{type:'integer',minimum:0,maximum:3},above:{type:'integer',minimum:0,maximum:3},
+      names:{type:'array',maxItems:16,items:{type:'string'}},limit:{type:'integer',minimum:1,maximum:32}}), async(args,ctx)=>{
+        const input=nativeProbeInput(args);
+        return tools.find(t=>t.name==='mc_do')!.handler({action_id:args.action_id,operation:'minescript.run',input:{code:NATIVE_PROBE_PROGRAM,input,timeoutMs:5000}},ctx);
+      },true));
     return tools;
   }
 }
