@@ -17,6 +17,7 @@ var canonical = (props) => JSON.stringify(Object.entries(props).map(([k, v]) => 
 var identifier = /^minecraft:[a-z0-9_./-]+$/;
 var number = (v, min, max) => Number.isFinite(v) && v >= min && v <= max;
 var integer = (v, min, max) => Number.isSafeInteger(v) && v >= min && v <= max;
+var nativeRgb = (v) => integer(v, 0, 16777215) ? v : integer(v, -16777216, -1) ? v & 16777215 : null;
 var requireValue = (ok, why) => {
   if (!ok) throw Error("JAVA_VISUAL_" + why);
 };
@@ -63,9 +64,9 @@ var JavaVisualData = class {
       requireValue(integer(row.id, 0, 4095) && !biomeIds.has(row.id), "BIOME_INVALID");
       let mapped = identifier.test(row.name) ? mc.biomesByName[row.name.slice(10)]?.id ?? null : null;
       if (row.colors) {
-        requireValue(typeof row.name === "string" && /^[a-z0-9_.-]+:[a-z0-9_./-]{1,128}$/.test(row.name) && ["grass", "foliage", "water"].every((k) => integer(row.colors[k], 0, 16777215)), "BIOME_COLORS_INVALID");
+        requireValue(typeof row.name === "string" && /^[a-z0-9_.-]+:[a-z0-9_./-]{1,128}$/.test(row.name) && ["grass", "foliage", "water"].every((k) => nativeRgb(row.colors[k]) !== null), "BIOME_COLORS_INVALID");
         mapped ??= 1024 + row.id;
-        nativeBiomes.set(mapped, { id: mapped, name: row.name, colors: row.colors });
+        nativeBiomes.set(mapped, { id: mapped, name: row.name, colors: Object.fromEntries(["grass", "foliage", "water"].map((k) => [k, nativeRgb(row.colors[k])])) });
       }
       biomeIds.set(row.id, mapped);
     }
