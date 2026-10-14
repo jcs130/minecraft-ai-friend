@@ -41,6 +41,7 @@ final class ProtectionAdvisor implements Listener {
     private final AgentFriendPlugin plugin;
     private final Map<UUID, Long> lastQuery = new HashMap<>();
     private final Map<UUID, Notice> notices = new HashMap<>();
+    private final ProtectionNotices groupedNotices = new ProtectionNotices();
     private record Notice(String key, long at) { }
 
     ProtectionAdvisor(AgentFriendPlugin plugin) {
@@ -53,33 +54,69 @@ final class ProtectionAdvisor implements Listener {
         Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin, CHANNEL);
         lastQuery.clear();
         notices.clear();
+        groupedNotices.clear();
     }
 
-    void forget(Player player) { lastQuery.remove(player.getUniqueId()); notices.remove(player.getUniqueId()); }
+    void forget(Player player) { lastQuery.remove(player.getUniqueId()); notices.remove(player.getUniqueId()); groupedNotices.forget(player.getUniqueId()); }
 
     void command(Player player, String[] args) {
-        boolean json = args.length == 6 && args[5].equalsIgnoreCase("--json");
-        if ((args.length != 5 && !json) || !(args[1].equalsIgnoreCase("break") || args[1].equalsIgnoreCase("place") || args[1].equalsIgnoreCase("container") || args[1].equalsIgnoreCase("use"))) {
-            player.sendMessage("用法：/mycli protect break|place|container|use <x> <y> <z> [--json]；只查询自己附近已加载的方块。");
-            return;
+        ProtectionQuery.Request query;
+        try { query = ProtectionQuery.parse(args); }
+        catch (IllegalArgumentException invalid) {
+            plugin.communication().error(player, "INVALID_ARGUMENT", invalid.getMessage(), false, "/mycli protect --help"); return;
         }
-        String action = args[1].toLowerCase(java.util.Locale.ROOT);
-        int x, y, z;
-        try {
-            x = Integer.parseInt(args[2]); y = Integer.parseInt(args[3]); z = Integer.parseInt(args[4]);
-        } catch (NumberFormatException invalid) {
-            player.sendMessage("坐标必须是整数：/mycli protect break|place|container|use <x> <y> <z>");
-            return;
+        long now = System.currentTimeMillis(), next = lastQuery.getOrDefault(player.getUniqueId(), 0L);
+        boolean limited = now < next;
+        // Charge the batch once, not once per block. Large requests also wait longer;
+        // no permission result is cached and duplicate coordinates cost only one check.
+        if (!limited) lastQuery.put(player.getUniqueId(), now + Math.max(MIN_INTERVAL_MS, query.points().size() * 15L));
+        if (query.batch()) {
+            if (limited) {
+                JsonObject error = new JsonObject(); error.addProperty("schemaVersion", 1); error.addProperty("kind", "protection_batch");
+                error.addProperty("action", query.action()); error.addProperty("world", player.getWorld().getKey().toString()); error.add("targets", query.targets());
+                error.addProperty("readOnly", true); error.addProperty("complete", false); error.addProperty("status", "unknown");
+                error.add("allowed", com.google.gson.JsonNull.INSTANCE); error.addProperty("reason", "unknown_rate_limited");
+                error.addProperty("retryAfterMs", next - now); error.addProperty("nextAction", "查询太快，等待retryAfterMs后再查询；没有执行任何方块操作。");
+                emitBatch(player, error, query.json(), false); return;
+            }
+            List<JsonObject> results = new ArrayList<>();
+            for (ProtectionQuery.Point point : query.points()) results.add(evaluate(player, query.action(), point.x(), point.y(), point.z(), null));
+            JsonObject result = ProtectionQuery.batch(query, player.getWorld().getKey().toString(), results);
+            plugin.communication().stamp(player, result);
+            // Unusual overlapping regions can make even 64 verdicts large. Reuse the
+            // existing lossless private page transport instead of cutting valid JSON.
+            if (result.toString().length() > 12_000) {
+                try {
+                    String snapshot = plugin.communication().store(player, "protection_batch", "/mycli " + String.join(" ", args), List.of(result.deepCopy()));
+                    result.remove("groups"); result.remove("areas"); result.addProperty("complete", false);
+                    result.addProperty("detailsPaged", true); result.addProperty("nextCommand", "/mycli page " + snapshot + " 1");
+                    result.addProperty("nextAction", "先读完整分页结果再按目标判断；摘要不代表任一方块已获许可。");
+                } catch (IllegalArgumentException tooLarge) {
+                    plugin.communication().error(player, "RESPONSE_TOO_LARGE", "保护重叠详情太多；请缩小查询范围，结果没有被截断。", false, "/mycli protect batch --help"); return;
+                }
+            }
+            emitBatch(player, result, query.json(), query.verbose()); return;
         }
+        ProtectionQuery.Point point = query.points().getFirst();
+        JsonObject result = evaluate(player, query.action(), point.x(), point.y(), point.z(), limited ? "unknown_rate_limited" : null);
+        if (limited) result.addProperty("retryAfterMs", next - now);
+        plugin.communication().stamp(player, result);
+        if (!machine(player, query.json())) queryText(player, result, query.verbose());
+        else for (Player eye : plugin.attachedEyes(player)) queryText(eye, result, false);
+        send(player, result); chatReceipt(player, "MC_PROTECTION", result, query.json(), query.verbose());
+    }
+
+    private JsonObject evaluate(Player player, String action, int x, int y, int z, String forcedReason) {
         JsonObject result = new JsonObject();
         result.addProperty("schemaVersion", 1);
+        result.addProperty("readOnly", true);
         result.addProperty("action", action);
         result.addProperty("world", player.getWorld().getKey().toString());
         result.addProperty("x", x);
         result.addProperty("y", y);
         result.addProperty("z", z);
         String reason;
-        try { reason = check(player, action, x, y, z); }
+        try { reason = forcedReason != null ? forcedReason : inspect(player, action, x, y, z); }
         catch (RuntimeException | LinkageError unavailable) { reason = "unknown_worldguard"; }
         if (reason == null) {
             result.addProperty("status", "allow_likely");
@@ -94,30 +131,65 @@ final class ProtectionAdvisor implements Listener {
             result.addProperty("allowed", false);
             result.addProperty("reason", reason);
         }
-        if ((reason != null && reason.startsWith("guild_owner")) || plugin.guildHall().containsProperty(new Location(player.getWorld(), x, y, z)))
-            plugin.guildStorage().ownershipFields(result);
-        plugin.lands().fields(result, new Location(player.getWorld(), x, y, z));
-        if (reason != null) {
-            enrich(player, result, new Location(player.getWorld(), x, y, z));
-            explain(player, result, true);
-        } else {
-            player.sendMessage("§a【保护查询】目标 (" + x + "," + y + "," + z + ") 按当前已知规则可尝试操作；最终以实际操作结果为准。");
+        if (reason == null || !reason.startsWith("unknown_")) {
+            if ((reason != null && reason.startsWith("guild_owner")) || plugin.guildHall().containsProperty(new Location(player.getWorld(), x, y, z)))
+                plugin.guildStorage().ownershipFields(result);
+            plugin.lands().fields(result, new Location(player.getWorld(), x, y, z));
         }
-        send(player, result);
-        chatReceipt(player, "MC_PROTECTION", result, json);
+        if (reason != null) enrich(player, result, new Location(player.getWorld(), x, y, z));
+        return result;
     }
 
-    /** Chat-only Agents retain their complete receipt. Humans use the Chinese
-     * explanation, or explicitly request --json; the private payload is always
-     * sent unchanged. Never truncate JSON: that would break the Agent parser. */
+    private boolean machine(Player player, boolean explicit) {
+        return explicit || !plugin.isObserver(player) && plugin.communication().compact(player);
+    }
+
+    private void emitBatch(Player player, JsonObject data, boolean explicit, boolean verbose) {
+        if (!data.has("observedAt")) plugin.communication().stamp(player, data);
+        send(player, data);
+        if (machine(player, explicit)) {
+            player.sendMessage("MC_PROTECTION_BATCH " + data);
+            for (Player eye : plugin.attachedEyes(player)) batchText(eye, data, false);
+        } else batchText(player, data, verbose);
+    }
+
+    private void batchText(Player player, JsonObject data, boolean verbose) {
+        if (!data.has("counts")) { player.sendMessage("§e【保护查询】" + data.get("nextAction").getAsString()); return; }
+        JsonObject counts = data.getAsJsonObject("counts");
+        player.sendMessage("§b【保护查询】共" + data.get("total") + "个目标：可尝试" + counts.get("allow_likely")
+                + "，拒绝" + counts.get("deny") + "，未知" + counts.get("unknown") + "。查询没有执行操作。");
+        if (data.has("groups")) {
+            int shown = 0;
+            for (var value : data.getAsJsonArray("groups")) {
+                if (!verbose && shown++ >= 3) break;
+                JsonObject group = value.getAsJsonObject();
+                player.sendMessage("§e" + group.get("count") + "个目标：" + (verbose && group.has("nextAction") ? group.get("nextAction").getAsString() : ProtectionQuery.nextAction(group)));
+            }
+        }
+        if (verbose && data.has("areas")) for (var value : data.getAsJsonArray("areas")) {
+            JsonObject area = value.getAsJsonObject();
+            player.sendMessage("§e【保护范围】" + area.get("name").getAsString() + " " + area.get("min") + " 至 " + area.get("max") + "，含边界"
+                    + (area.get("envelopeOnly").getAsBoolean() ? "；外包范围不等于内部全部受保护。" : "。"));
+        }
+        player.sendMessage("§7逐块结果：在原查询后加 --json；完整规则再加 --verbose。"
+                + (data.has("nextCommand") ? "详情：" + data.get("nextCommand").getAsString() : ""));
+    }
+
+    private void queryText(Player player, JsonObject data, boolean verbose) {
+        if (data.get("status").getAsString().equals("allow_likely")) {
+            player.sendMessage("§a【保护查询】目标 (" + data.get("x") + "," + data.get("y") + "," + data.get("z") + ") 可尝试操作；最终以实际操作结果为准。");
+        } else if (verbose) detailedText(player, data);
+        else for (String line : ProtectionChat.summary(data)) player.sendMessage(line.replace("【操作未执行】", "【保护查询】"));
+    }
+
+    /** Short chat receipt by default; --verbose and the native single-target
+     * payload retain full rules. --json changes format, not verbosity. */
     void chatReceipt(Player player, String prefix, JsonObject data) {
-        chatReceipt(player, prefix, data, false);
+        chatReceipt(player, prefix, data, false, false);
     }
 
-    private void chatReceipt(Player player, String prefix, JsonObject data, boolean explicit) {
-        boolean agent = !plugin.isObserver(player) && (plugin.isRegisteredAgent(player)
-                || player.getName().toLowerCase(java.util.Locale.ROOT).startsWith("ag_"));
-        if (explicit || agent) player.sendMessage(prefix + " " + data);
+    private void chatReceipt(Player player, String prefix, JsonObject data, boolean explicit, boolean verbose) {
+        if (machine(player, explicit)) player.sendMessage(prefix + " " + (verbose ? data : ProtectionQuery.compact(data)));
     }
 
     void send(Player player, JsonObject result) {
@@ -155,7 +227,7 @@ final class ProtectionAdvisor implements Listener {
         JsonArray commands = new JsonArray();
         if (reason.startsWith("unknown_")) {
             String hint = switch (reason) {
-                case "unknown_rate_limited" -> "查询太快；至少等0.1秒后再查询同一方块。";
+                case "unknown_rate_limited" -> "查询太快；等待retryAfterMs后再查询，可用 protect batch 合并多个目标。";
                 case "unknown_invalid_y" -> "Y坐标越界；使用 " + at.getWorld().getMinHeight() + " 至 " + (at.getWorld().getMaxHeight() - 1) + " 的整数Y坐标重新查询。";
                 case "unknown_out_of_range" -> "目标超过16格；先步行到目标16格内再查询，不要隔空操作。";
                 case "unknown_unloaded_chunk" -> "目标区块未加载；先沿安全道路靠近，再查询目标方块。";
@@ -163,7 +235,7 @@ final class ProtectionAdvisor implements Listener {
                 case "unknown_generated_structure_bounds" -> "此区块关联的建筑起点尚未载入或结构数据不可用；停止拆建，沿原有门、楼梯或梯井通行，恢复可读边界后重查；不要拆墙探路。";
                 default -> "保护服务暂不可用；停止拆建或取物，联系服主检查WorldGuard，恢复后再查询。";
             };
-            data.addProperty("nextAction", hint); commands.add("/mycli help protect");
+            data.addProperty("nextAction", hint); commands.add("/mycli protect --help");
             data.add("nextCommands", commands); return;
         }
         Map<String, ProtectionArea> areas = new LinkedHashMap<>();
@@ -264,18 +336,21 @@ final class ProtectionAdvisor implements Listener {
     }
 
     boolean explain(Player player, JsonObject data) {
-        return explain(player, data, false);
-    }
-
-    private boolean explain(Player player, JsonObject data, boolean detailed) {
         String key = data.get("action").getAsString() + ":" + data.get("world").getAsString() + ":" + data.get("x") + ":" + data.get("y") + ":" + data.get("z");
         long now = System.currentTimeMillis(); Notice last = notices.get(player.getUniqueId());
-        if (!detailed && last != null && last.key().equals(key) && now - last.at() < 1500) return false;
+        // MONITOR can observe the same cancelled event after a more specific
+        // guild/land handler has already explained it. Do not duplicate it.
+        if (data.get("reason").getAsString().equals("worldguard") && last != null && last.key().equals(key) && now - last.at() < 100) return false;
         notices.put(player.getUniqueId(), new Notice(key, now));
-        if (!detailed) {
+        if (!groupedNotices.allow(player.getUniqueId(), data, now)) return false;
+        if (!machine(player, false)) {
             for (String line : ProtectionChat.summary(data)) player.sendMessage(line);
-            return true;
-        }
+        } else for (Player eye : plugin.attachedEyes(player))
+            for (String line : ProtectionChat.summary(data)) eye.sendMessage(line);
+        return true;
+    }
+
+    private void detailedText(Player player, JsonObject data) {
         player.sendMessage("§c【操作未执行】" + data.get("actionLabel").getAsString()
                 + (data.get("reason").getAsString().startsWith("unknown_") ? "尚未确认权限；目标 " : "被保护规则拒绝；目标 ") + data.get("world").getAsString()
                 + " (" + data.get("x") + "," + data.get("y") + "," + data.get("z") + ")。"
@@ -288,7 +363,6 @@ final class ProtectionAdvisor implements Listener {
                     + (area.get("envelopeOnly").getAsBoolean() ? "这是外包范围，具体按原建筑方块/净空或区域形状保护。" : ""));
         }
         player.sendMessage("§a【正确做法】" + data.get("nextAction").getAsString());
-        return true;
     }
 
     void denied(Player player, String action, Location at, String reason, ProtectionArea... forced) {
@@ -317,17 +391,7 @@ final class ProtectionAdvisor implements Listener {
     }
 
     JsonObject observe(Player player,String action,int x,int y,int z) {
-        JsonObject data=new JsonObject();data.addProperty("action",action);data.addProperty("world",player.getWorld().getKey().toString());data.addProperty("x",x);data.addProperty("y",y);data.addProperty("z",z);
-        String reason=inspect(player,action,x,y,z);data.addProperty("reason",reason==null?"no_known_protection":reason);data.addProperty("status",reason==null?"allow_likely":reason.startsWith("unknown_")?"unknown":"deny");
-        if(reason==null)data.addProperty("allowed",true);else if(reason.startsWith("unknown_"))data.add("allowed",com.google.gson.JsonNull.INSTANCE);else data.addProperty("allowed",false);
-        plugin.lands().fields(data,new Location(player.getWorld(),x,y,z));if(reason!=null&&!reason.startsWith("unknown_"))enrich(player,data,new Location(player.getWorld(),x,y,z));return data;
-    }
-    private String check(Player player, String action, int x, int y, int z) {
-        long now = System.currentTimeMillis();
-        long previous = lastQuery.getOrDefault(player.getUniqueId(), 0L);
-        if (now - previous < MIN_INTERVAL_MS) return "unknown_rate_limited";
-        lastQuery.put(player.getUniqueId(), now);
-        return inspect(player,action,x,y,z);
+        return evaluate(player, action, x, y, z, null);
     }
     private String inspect(Player player,String action,int x,int y,int z) {
         if (y < player.getWorld().getMinHeight() || y >= player.getWorld().getMaxHeight())

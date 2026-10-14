@@ -3091,7 +3091,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 2 && args[0].equalsIgnoreCase("skillbook")) return List.of("list", "use");
         if (args.length == 2 && (args[0].equalsIgnoreCase("explain") || args[0].equalsIgnoreCase("help")))
             return AgentCliCatalog.ids();
-        if (args.length == 2 && args[0].equalsIgnoreCase("protect")) return List.of("break", "place", "container", "use");
+        if (args.length == 2 && args[0].equalsIgnoreCase("protect")) return List.of("break", "place", "container", "use", "batch", "--help");
+        if (args.length == 3 && args[0].equalsIgnoreCase("protect") && args[1].equalsIgnoreCase("batch")) return List.of("break", "place", "container", "use");
+        if (args.length == 4 && args[0].equalsIgnoreCase("protect") && args[1].equalsIgnoreCase("batch")) return List.of("--box");
         if (args.length == 2 && args[0].equalsIgnoreCase("guide"))
             return List.of("start", "next", "onboarding", "explore", "magic", "gear", "guild", "dungeon", "team", "menu");
         if (args.length == 2 && args[0].equalsIgnoreCase("imprint")) {

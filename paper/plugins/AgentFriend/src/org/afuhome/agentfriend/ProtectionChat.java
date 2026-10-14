@@ -4,8 +4,7 @@ import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.List;
 
-/** A short automatic notice; explicit protect queries retain every boundary
- * and the full nextAction. This only formats text and grants no permissions. */
+/** A short human notice; --verbose expands rules. Formatting grants no permissions. */
 final class ProtectionChat {
     private ProtectionChat() { }
 
@@ -56,7 +55,7 @@ final class ProtectionChat {
             default -> "break";
         };
         lines.add("§a【正确做法】" + next + "详情：/mycli protect " + action + " "
-                + data.get("x") + " " + data.get("y") + " " + data.get("z"));
+                + data.get("x") + " " + data.get("y") + " " + data.get("z") + " --verbose");
         return List.copyOf(lines);
     }
 }

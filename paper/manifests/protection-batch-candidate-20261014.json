@@ -1,0 +1,42 @@
+{
+  "status": "verified_candidate_not_deployed",
+  "date": "2026-10-14",
+  "plugin": "AgentFriend",
+  "version": "0.4.40",
+  "bytes": 1458182,
+  "sha256": "5cf98eda641357e79aec1514f635603d903e37e3b15115cf6993d48d2b5529ea",
+  "productionVersion": "0.4.37",
+  "supersedesCandidate": "0.4.39",
+  "commands": [
+    "/mycli protect --help",
+    "/mycli protect batch <action> <x,y,z> [x,y,z ...] [--verbose] [--json]",
+    "/mycli protect batch <action> --box <x1> <y1> <z1> <x2> <y2> <z2> [--verbose] [--json]"
+  ],
+  "limits": {"targets": 64, "distance": 16, "automaticNoticeWindowMs": 5000, "noticeGroupsPerPlayer": 16, "inlineCharacters": 12000},
+  "testResults": [
+    {"suite": "ProtectionQueryTest", "passed": 62, "scope": "strict grammar, overflow, deduplication, exact grouping, owners, masks, unknown, cooldown, lossless paging, help"},
+    {"suite": "AgentCliContractTest", "passed": 49, "scope": "common help and existing CLI contract regression"},
+    {"suite": "LifeChallengesTest", "passed": 64, "scope": "existing challenge rules, inventory and persistence regression"},
+    {"receipt": "native-1791969604802.json", "passed": 39, "errors": 0, "scope": "native Java/Mineflayer, actual attached Eye, real WorldGuard regions, per-block equality, permission changes, actual denied digging, server block preservation, private paging and inventory preservation"},
+    {"receipt": "bedrock-1791969643575.json", "passed": 10, "errors": 0, "scope": "actual Geyser/Floodgate protocol 2193 / 1.26.51, Chinese defaults, single and batch JSON, unknown and help"}
+  ],
+  "passedTotal": 224,
+  "observedCharacters": {"nativeSingleCompact": 439, "nativeSingleVerbose": 683, "synthetic64RepeatedRulesBefore": 46208, "synthetic64RepeatedRulesAfter": 741},
+  "failureEvidence": [
+    "native-1791969134916.json",
+    "native-1791969194012.json",
+    "native-1791969306679.json",
+    "native-1791969385003.json"
+  ],
+  "boundaries": [
+    "Explicit queries always inspect current permissions; notification coalescing does not cache or grant permission",
+    "Single-target native payload stays complete; chat consumers that need legacy areas/nextCommands explicitly request --verbose",
+    "Batch uses MC_PROTECTION_BATCH and kind=protection_batch on the existing private channel; consumers distinguish it from single-target replies",
+    "Partial or rate-limited results never imply permission; oversize data uses the existing private lossless page transport",
+    "Early survival dig probes stopped before completing stone destruction; the final test used real immediate creative-mode digs in the isolated copy",
+    "A client predicted air after a denied dig; authoritative server snapshots verified all four stone blocks remained. Protection was not relaxed",
+    "WorldGuard's own short denial messages are separate from this plugin's notice coalescing",
+    "No production files or player data changed; no restart queued; physical phone/Xbox visuals and 16 autonomous Agent performance are not verified"
+  ],
+  "rollback": "After separately approved normal maintenance, restore the previous AgentFriend JAR. This feature adds no persistent player data or permission changes; do not roll back worlds or inventories. Never deploy ProtectionBatchQA."
+}

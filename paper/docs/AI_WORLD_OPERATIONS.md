@@ -38,6 +38,7 @@
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
+| 保护查询聚合（0.4.40候选，未部署） | 原protect及protect batch；--help/--json/--verbose与通用page；[契约](PROTECTION_BATCH.md) | 不增加持久账本；每次读取本人实时权限，通知去重仅内存5秒 | 最多64目标逐块判定、规则/范围共用、重复坐标去重；Agent默认一份短JSON，实际Eye简短中文；未知不当允许，正式发布需另行确认 |
 | 特色装备外观（0.4.33已上线） | 五件原战利品／法杖、原私有物品查询；[构建与兼容](ITEM_APPEARANCES.md) | 原物品只追加外观PDC与CustomModelData，保持耐久／附魔／刻印／归属；开容器时延后 | Java／基岩／Web共用原创源；E/F冷备份后正式发布，基岩自动资源、Java1.20.6手动资源。外机Web须更新重建；手机Xbox姿势未验 |
 | Web HUD与大背包外形（源码已发布，相机已上线） | 共享可视化宿主/原profile纹理代理；[本次发布](ITEM_APPEARANCES.md) | 槽位与背包数据保持，按原profile展示 | 九格选中框、经验条和原蓝色背包菜单/手持/OBS/照片已验证；80项Node、27项浏览器、10项布局通过。女神相机已更新，外机宿主仍需重建 |
 | Agent确定性交互（当前0.4.32已上线） | intro/rules/capabilities/progress、coach lessons/enroll/cancel、status/skills status/page；[规则与接入](AGENT_INTERACTION.md)、[观察兼容](AGENT_CLI_OBSERVATIONS.md) | 原主线/专项/任务账本及客户端UUID独立未知操作journal保持；候选只读观察有连接ID/时间、完整分页、本机认证来源 | 现役普通帮助、分项进度与明确报名已开放；客户端串行核对真实槽位/光标。status已为纯查询，status full保留旧详细及证明；远端须按协议接入 |
