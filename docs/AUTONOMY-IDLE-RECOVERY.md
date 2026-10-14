@@ -52,6 +52,27 @@ The final boundary revision passed 395 framework tests and 69 tests against an
 isolated installed wheel, plus the offline autonomous/queue-only probe. No game,
 host service or model was called by these tests.
 
+## Live follow-up
+
+Deployed autonomy 0.1.32 through plugin 0.5.17, retaining the checked native core
+pin and the existing server, main host and local model processes. The explicit
+local required-tool option was validated against the provider's native prompt
+preparation: its nonthinking call prefix adds five tokens, included by the CPU
+counter. The observed input/context budgets stayed below the configured limit.
+
+The first 52 captured requests used required tool selection. Across 24 observed
+native acceptance turns, each turn accepted at most one nonterminal task. The
+player moved, picked up four logs and obtained/equipped a wooden pickaxe. One
+composite navigation/collection task was **blocked overall**: its requested
+navigation landing failed, while the later collection actually acquired four
+logs. That partial result is not reported as full navigation success.
+
+A Creeper death and server-selected respawn also occurred. Full health after
+respawn is not food recovery. Food acquisition, repeated unnecessary crafting
+and hazard handling remain unsuccessful parts of the survival trial; long-term
+autonomous survival has not passed acceptance. Raw native events and snapshots
+are retained privately, separate from these source/packaging results.
+
 When a batch is refused, the feedback explicitly says its earlier steps did not
 run. The planner can submit its next feasible action separately from a blocked
 optional search or an unverified crafting dependency. Native admission guards
