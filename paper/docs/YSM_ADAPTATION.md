@@ -1,5 +1,15 @@
 # YSM 外观桥接（2026-10-11已上线）
 
+## 2026-10-14：鸣人专属模型已热绑定
+
+`ag_NarutoPi` 原 UUID `3a0d9481-2a8f-3bdd-9f56-b5d57c7aafd0` 已原生选择 `qiandengji_naruto` / `skin`，`mandatory=true`。沿用旧千灯纪的“鸣人·木叶忍者”方块造型：黄色碎发、木叶头带、橙黑衣和忍具包；恢复原构建器与 CC0 的 YSM `misc/2_steve` 骨架，主体 67 骨骼/49 方块、第一人称手臂 14 骨骼/10 方块，比例 1。主体几何 SHA256 与旧清单一致（`f2d6c96ff3fa1e2ee8a6f6d78f9a695f74fad6ae5588067bc6745448acdcde8f`）。皮肤取自旧记录的 [Mojang 纹理地址](https://textures.minecraft.net/texture/e5fe33c4101093cbd1eb0b961b25b9c3990726f1b7f23f3578dc3f1b6e31b296)，64×64 PNG 原样复制；其编码字节与旧本地 PNG 不同，不冒称找回了旧 PNG 的相同字节。角色与皮肤权利仍归原权利人，不提交第三方模型或贴图。
+
+现役 Worker 2.4.1 已确认，Freesia 原生 NBT 保存读回通过；51 份既有绑定只有鸣人的三项授权外观字段改变，159 份旧模型文件保持。普通认证 Mineflayer 连接完成 9 项检查，实际收到 4 块、41671 字节网页资源，包含主体、手臂、主动画和原 PNG，SHA256 `f3dd67deb8ac8ce2c877ef3eabd151de4495cacb4b2355f8bfc8303a57e9bd62`。Paper、Proxy、Worker 均未重启，绑定期间原玩家认证会话保持。远端网页、原生 Java 和手机/Xbox 实际画面未验收。
+
+基岩离线转换器可保留全部 67 骨骼/49 方块与原 64×64 贴图；现役扩展仍返回 `YSM_BEDROCK_SOURCE_REVISION_UNAVAILABLE`，尚未完成实际下发，不能把离线转换通过称为基岩已支持。原始动作资源保留；完整原生攻击、吃喝等动画等价也未作本次验收。
+
+私有 E/F `repairs/naruto-ysm-live-20261014` 保存前像、构建来源、转换、真实资源投递及原生保存核验。回退时，玩家在线后在原 Worker 控制台执行 `ysm model set ag_NarutoPi "default" default false`，核对实际状态及保存；这也恢复原 `mandatory=false`，不要直接覆盖在线 NBT。旧模型文件无需删除。
+
 ## 2026-10-13：基岩高清资源包候选开发
 
 新增 Geyser 扩展 0.2.0 隔离候选，复用真实玩家实体属性，保留可米 2048 原 PNG/几何与比例，接入原动作和手部物品；明文模型上传/替换自动生成新资源包，原游戏连接下载，每连接固定摘要防止旧槽位串模。正式服未部署；协议 2193 原型与手机/Xbox实机、完整原生动画等价分开验收。配置、测试与回退见 [基岩高清外观](YSM_BEDROCK_RESOURCE_PACK.md)。下方可米模型正式绑定记录与此前基岩限制仍按对应正式版本阅读。
