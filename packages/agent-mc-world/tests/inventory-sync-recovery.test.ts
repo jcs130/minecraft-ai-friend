@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installInventoryWindowSyncGuard, inventoryReadConfirmed } from '../core/inventory-window-sync.ts';
 import { clickInventoryConfirmed, installInventoryClickSync, inventoryClickState,
   INVENTORY_CLICK_CONFIRM_MS } from '../core/inventory-click-sync.ts';
-import { snapshotFromBot, narrateWorld } from '../core/terrain.ts';
-import { renderBagReadout, renderStoredItemReadout } from '../core/readouts.ts';
+import { snapshotFromBot, narrateWorld, snapshotFingerprint } from '../core/terrain.ts';
+import { renderBagReadout, renderStoredItemReadout, bagStamp } from '../core/readouts.ts';
 import { methodHarness } from './method-harness.ts';
 
 const require = createRequire(import.meta.url);
@@ -199,5 +199,20 @@ describe('inventory synchronization readouts', () => {
       r.full(0, 46, { 9: r.raw('oak_log', 8) });
       expect(snapshotFromBot(r.bot, { scanBlocks: false }).invSynced).toBe(true);
     } finally { scene.close(); }
+  });
+
+  it('refreshes a previously read bag and scene when a pending click becomes quarantined', () => {
+    const r = methodHarness();
+    try {
+      const snapshot = snapshotFromBot(r.bot, { scanBlocks: false, invSynced: false });
+      snapshot.inventorySync = { phase: 'pending' };
+      const bag = bagStamp(snapshot), scene = snapshotFingerprint(snapshot);
+      snapshot.inventorySync = { phase: 'quarantined', reason: '确认超时' };
+      expect(bagStamp(snapshot)).not.toBe(bag);
+      expect(snapshotFingerprint(snapshot)).not.toBe(scene);
+      const failedBag = bagStamp(snapshot);
+      snapshot.inventorySync.reason = '连接结束';
+      expect(bagStamp(snapshot)).not.toBe(failedBag);
+    } finally { r.close(); }
   });
 });

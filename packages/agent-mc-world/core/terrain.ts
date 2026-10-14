@@ -356,7 +356,7 @@ export function snapshotFingerprint(s: WorldSnapshot): string {
     timePhrase(s.timeOfDay), isNight(s.timeOfDay) ? 'night' : 'day',
     s.raining ? 'rain' : 'clear',
     s.light === null ? 'l?' : `l${s.light}`,
-    s.invSynced ? 'inv' : 'nosync',
+    s.invSynced ? 'inv' : `nosync:${s.inventorySync?.phase ?? 'initial'}:${s.inventorySync?.reason ?? ''}`,
     `${s.heldItem ?? 'bare'}:${s.heldItemDisplayName ?? ''}`,
     s.inventory.map((i) => `${i.name}:${i.displayName ?? ''}x${i.count}`).sort().join(','),
     narrateCursor(s),

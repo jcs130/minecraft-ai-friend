@@ -135,7 +135,7 @@ export function renderStorageReadout(s: WorldSnapshot, records: readonly ChestRe
 /** 背包读数的指纹:一轮一答闸按它判「这一份读数变没变」(见 round.ts) */
 export function bagStamp(s: WorldSnapshot | null): string {
   if (!s) return 'nobot';
-  if (!s.invSynced) return 'nosync';
+  if (!s.invSynced) return `nosync:${s.inventorySync?.phase ?? 'initial'}:${s.inventorySync?.reason ?? ''}`;
   return [
     s.inventory.length,
     [...s.inventory].map((i) => `${i.name}:${i.displayName ?? ''}${enchantSuffix(i.enchantments)}`
