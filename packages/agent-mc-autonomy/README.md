@@ -44,7 +44,7 @@ official OpenAI/Google flows, with optional OS credential storage and rotating
 token refresh; Google ADC is also optional. Nothing signs in or calls a model
 automatically. See [configuration, parameter and OAuth guide](docs/model-providers.md).
 
-For the shared body pinned to `01e9991`, this repository owns explicit source-pin
+For the shared body pinned to `41fbc28`, this repository owns explicit source-pin
 and installation tooling around the canonical `agent-mc-world` build:
 `python -m agent_mc_autonomy.core_distribution.build --checkout <repo> --destination <empty-dir>`;
 then `python -m agent_mc_autonomy.core_distribution.install --destination <runtime-dir> --archive <tgz>`.
@@ -262,6 +262,13 @@ installed `mc-visual-console` checkout/catalog. Rendering code and assets remain
 in that separate project. No viewer, speech engine or server is bundled here.
 
 ## Verification and source
+
+Since 0.1.19, request assembly returns unused fresh-fact reserve to recent complete
+tool exchanges after measuring the final dynamic tail. Whole tool pairs remain in
+order and the existing serialized context bound still applies. Core spatial
+observations support both `client-loaded-world` and `client-visible-world` sources;
+the bounded projection retains unknown areas and original-query access. These
+context fixes do not independently establish successful gameplay.
 
 Run `python -m pytest -q` here. Tests deny host SDK imports, network and service
 launches; the isolated process test exercises both a fake autonomous planner and

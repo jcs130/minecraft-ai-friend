@@ -82,12 +82,13 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
                 del tail["tool_failure"]
     base_cost = cost()
     history = saved_history
+    evicted = []
     fact_reserve = min(context_tokens * 0.35, max(0, (context_tokens - base_cost) // 2))
     has_terminal_fact = any(p.get("key") == "lastTask" and p.get("text") for p in facts.get("parts", []))
     if has_terminal_fact:
         fact_reserve = min(context_tokens * 0.35, max(0, (context_tokens - base_cost) * 0.8))
     while len(history) > 1 and cost() > context_tokens - fact_reserve:
-        history.pop(0)
+        evicted.append(history.pop(0))
     if history and has_terminal_fact and cost() > context_tokens - fact_reserve:
         calls = history[-1][0].get("tool_calls") or []
         if calls and all(call.get("function", {}).get("name") == "mc_scout" for call in calls):
@@ -97,7 +98,7 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
             history.clear()
     # Keep the latest complete exchange whenever it fits; facts can be paged.
     while history and cost() > context_tokens:
-        history.pop(0)
+        evicted.append(history.pop(0))
     if cost() > context_tokens:
         raise ValueError("context_budget_exceeded: stable rules, goal, tool schemas and output reserve do not fit")
     # Current state replaces by key; omit old keys that are absent in this sample.
@@ -148,5 +149,13 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
         tail["events"].insert(0, item)
         if cost() > context_tokens:
             tail["events"].pop(0)
+    # The reserve protects fresh facts before their actual size is known. Return
+    # unused space to the newest complete exchanges after facts/events fit.
+    # Explicitly superseded scout acceptances were not added to this list.
+    for group in reversed(evicted):
+        history.insert(0, group)
+        if cost() > context_tokens:
+            history.pop(0)
+            break
     return messages(), {"counter": "utf8-byte-upper-bound+1024-framing", "total": cost(),
                         "limit": context_tokens, "omitted": omitted}
