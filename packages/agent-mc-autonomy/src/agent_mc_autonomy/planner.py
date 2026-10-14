@@ -28,6 +28,18 @@ class PlannerResponseError(ValueError):
         self.diagnostic = diagnostic
 
 
+class PlannerUnavailableError(RuntimeError):
+    """Transient inference failure; no response/tool was returned to dispatch."""
+
+    def __init__(self, protocol: str, status_code: int | None = None):
+        reason = "http_error" if status_code is not None else "transport_error"
+        super().__init__(f"brain_http_error_{status_code}" if status_code is not None else "brain_transport_error")
+        # Never retain URLs, provider response bodies, headers or exception text.
+        self.diagnostic = {"protocol": protocol, "reason": reason}
+        if status_code is not None:
+            self.diagnostic["status"] = status_code
+
+
 def decision(message: dict) -> dict:
     """Reject malformed provider output before the controller can dispatch it."""
     if not isinstance(message, dict) or not isinstance(message.get("content"), (str, type(None))):
@@ -108,9 +120,11 @@ class HttpPlanner:
                         "first_output_ms": round((first_output - started) * 1000) if first_output else None,
                         "usage": usage_metrics(self.config.protocol, usage)}}
         except httpx.HTTPStatusError as error:
+            if error.response.status_code in {408, 429, 500, 502, 503, 504}:
+                raise PlannerUnavailableError(self.config.protocol, error.response.status_code) from None
             raise RuntimeError(f"brain_http_error_{error.response.status_code}") from None
         except (httpx.HTTPError, TimeoutError):
-            raise RuntimeError("brain_transport_error") from None
+            raise PlannerUnavailableError(self.config.protocol) from None
         except (ValueError, TypeError, KeyError, IndexError, AttributeError):
             diagnostic = {"protocol": self.config.protocol, "reason": "invalid_or_incomplete_response"}
             if self.config.protocol == "chat" and isinstance(payload, dict):

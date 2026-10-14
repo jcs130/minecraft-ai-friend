@@ -14,7 +14,7 @@ from .fast import FastPolicy, focus_state, rule_focus
 from .observations import receipt_view, spatial_text, tool_failure_view
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .model_protocols import assistant_history
-from .planner import PlannerResponseError
+from .planner import PlannerResponseError, PlannerUnavailableError
 from .tool_schema import argument_error
 
 PROTOCOL = "agent-mc/v1"
@@ -679,15 +679,18 @@ class Controller:
                 self.publish(context=budget)
                 try:
                     response = await self.decide_with_events(messages, tools)
-                except PlannerResponseError as error:
+                except (PlannerResponseError, PlannerUnavailableError) as error:
                     with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
                         output.write(encode({"turnId": self.turn, "rejected": error.diagnostic, "dispatched": False}) + "\n")
                     self.planner_failures += 1
-                    self.planner_notice = "The previous model response was invalid or incomplete. No tool from it was dispatched. Return one concise, complete tool call or a short reply; split large plans into small batches."
+                    if isinstance(error, PlannerUnavailableError):
+                        self.planner_notice = "The previous planning request was temporarily unavailable. No tool from it was dispatched. Use the latest facts and original receipts to continue; do not assume an action ran or replay pending native work."
+                    else:
+                        self.planner_notice = "The previous model response was invalid or incomplete. No tool from it was dispatched. Return one concise, complete tool call or a short reply; split large plans into small batches."
                     self.publish(planner_error=str(error), planner_failures=self.planner_failures)
                     # This response has not dispatched a tool. Keep the native
                     # connection/reflexes alive while the planner backs off;
-                    # an invalid model reply is not an unknown body outcome.
+                    # a failed inference is not an unknown body outcome.
                     delay = min(300, max(5, self.settings.min_decision_seconds) * 2 ** min(self.planner_failures - 1, 6))
                     self.planner_retry_at = time.monotonic() + delay
                     self.publish(planner_retry_seconds=delay)
