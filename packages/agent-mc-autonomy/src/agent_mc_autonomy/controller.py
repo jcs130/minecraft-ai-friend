@@ -448,7 +448,10 @@ class Controller:
             self.planner_retry_at = 0.0
             self.unactioned_replies = 0
             self.planner_notice = None
-            self.groups = []
+            # A host's revision continues the same stage and still needs its
+            # exact help/failure exchanges. New intent discards old-goal context.
+            if not (revised and command["payload"].get("origin") == "host_review"):
+                self.groups = []
             self.last_decision = 0
             self.publish(current_goal=self.active_goal, unactioned_replies=0, planner_retry_seconds=0)
             return True

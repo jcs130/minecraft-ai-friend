@@ -293,6 +293,11 @@ This avoids hiding arguments that even basic skills need. The complete backend
 schema and help remain authoritative; no new conditional requirements or parameter
 aliases are invented. More structure can reduce history under a tight budget.
 
+Since 0.1.23, an accepted host review revision of the same stage preserves
+complete tool exchanges, including help and rejection results, for the next
+budgeted request. New goals, user feedback and unknown-source revisions still
+discard old-goal context. This does not cancel native work or change queue policy.
+
 Run `python -m pytest -q` here. Tests deny host SDK imports, network and service
 launches; the isolated process test exercises both a fake autonomous planner and
 queue-only operation. These tests do not prove live survival, actual model
