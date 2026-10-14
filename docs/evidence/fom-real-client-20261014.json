@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-14",
+  "scope": "independent FOM modpack real-client integration",
+  "pack": {
+    "name": "FOM",
+    "version": "2.42",
+    "source": "https://modrinth.com/modpack/fom",
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.248",
+    "java": 21
+  },
+  "clientBridge": {
+    "version": "0.3.1",
+    "sha256": "e97fb6fc3296bdec6196eaae8dda548e24d3b0c3c4bad4ac458e8374a08c397d",
+    "serverRequired": false,
+    "operationCount": 30
+  },
+  "installation": {
+    "manifestFilesVerified": 137,
+    "clientActiveJars": 124,
+    "authorDisabledFiles": 10,
+    "originalDedicatedServerJars": 94
+  },
+  "actualDedicatedQaChecks": {
+    "realMovement": true,
+    "realCreateBlockPlaced": true,
+    "realShaftConsumed": true,
+    "realCrafting": true,
+    "originalCreateMenu": true,
+    "realCreateFuelDeposit": true,
+    "realCreateFuelWithdraw": true,
+    "reconnectSameBody": true,
+    "completedActionDeduplicated": true,
+    "noDuplicateMovement": true
+  },
+  "retainedServerChecks": {
+    "nonOpMovement": true,
+    "originalCreateGui": true,
+    "originalFramebuffer": true,
+    "clientCleanExit": true
+  },
+  "crashRecovery": {
+    "observedFailure": "Java C2 compiler crash during Lithium VoxelShapeMatchesAnywhere::cuboidMatchesAnywhere",
+    "workaroundScope": "independent client, one-method JIT exclusion",
+    "upstreamRootCauseConfirmed": false,
+    "oldUnknownRetained": true,
+    "oldActionReplayed": false,
+    "operatorAuditVerifiedAtBothLedgers": true,
+    "newActionsAfterRecoverySucceeded": true,
+    "offlineClientLockRequired": true,
+    "auditNotInRpcOrAgentCatalog": true
+  },
+  "validation": {
+    "jvmAssertions": 36,
+    "nodeTestsPassed": 25,
+    "nodeSkipped": 0,
+    "packageHealthChecks": 10,
+    "registeredPanelSmokePassed": true
+  },
+  "lifecycle": {
+    "normalStopExitCode": 0,
+    "coldBackupFiles": 588,
+    "coldBackupBytes": 321178425,
+    "coldBackupPerFileSha256Verified": true,
+    "restartReady": true,
+    "idempotentStart": true
+  },
+  "productionOriginal35JarsAndProtectedConfigsPreserved": true,
+  "productionOwnersRestarted": false,
+  "paidModelCalls": 0,
+  "llmAutonomyTested": false,
+  "allModGameplayVerified": false,
+  "bedrockAdaptedForFom": false,
+  "network": {
+    "loopbackOnly": true,
+    "lanOpened": false,
+    "wanOpened": false
+  },
+  "hmclInstanceRegistered": true,
+  "hmclReopenVerified": false,
+  "knownLimitations": [
+    "Original pack emits optional compatibility warnings and errors; not a zero-error certification.",
+    "Long-term autonomous survival, aircraft construction and a complete automated factory remain unverified.",
+    "No continuous web video feed or old QiandengJi RPG migration into this FOM instance."
+  ]
+}

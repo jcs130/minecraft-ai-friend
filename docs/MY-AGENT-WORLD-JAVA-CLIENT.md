@@ -1,14 +1,14 @@
 # My Agent World 真实客户端接入
 
-2026-10-14：当前客户端桥 0.3.0 提供可选 Baritone、Minescript、统一导航与原始 PNG 的 MCP 回传；自主框架和游戏笔记接入见[统一接入指南](MY-AGENT-WORLD-UNIFIED-ACCESS.md)，有限 Python 执行见[Minescript 指南](MY-AGENT-WORLD-MINESCRIPT.md)。文末首版验收记录保留，新增接口以本轮安装包 operations 和统一指南为准。
+2026-10-14：客户端桥 0.3.1 补齐崩溃后离线人工审核恢复，原有 30 项 Agent 操作保持。可选 Baritone、Minescript、统一导航与原始 PNG 的 MCP 回传见[统一接入指南](MY-AGENT-WORLD-UNIFIED-ACCESS.md)，有限 Python 执行见[Minescript 指南](MY-AGENT-WORLD-MINESCRIPT.md)。文末首版验收记录保留。
 
-客户端桥 0.3.0 支持 Minecraft 1.21.1、NeoForge 21.1.248 和 Java 21。它控制启动器中已经登录的真实玩家，通过本机 SDK 读取状态和操作游戏。接入不需要服务器安装桥接模组，也不注册游戏自定义频道。
+客户端桥 0.3.1 支持 Minecraft 1.21.1、NeoForge 21.1.248 和 Java 21。它控制启动器中已经登录的真实玩家，通过本机 SDK 读取状态和操作游戏。接入不需要服务器安装桥接模组，也不注册游戏自定义频道。
 
 客户端仍需满足目标服务器的版本、整合包、账号和自动化规则。服务端未同步的机器内部数据、隐藏任务或保护规则无法由客户端桥直接查询；可通过真实界面、服务器命令或后续模组适配获取。
 
 ## 安装与连接
 
-把 `maw-client-bridge-0.3.0-neoforge-1.21.1.jar` 放进客户端整合包的 `mods`，通过正常启动器进入服务器。正版账号沿用启动器的官方认证；离线账号沿用目标服务器的登录方式。桥不会读取启动器令牌或创建另一个玩家。可选的原作者 Baritone JAR 也只装客户端，来源与哈希见统一指南。
+把 `maw-client-bridge-0.3.1-neoforge-1.21.1.jar` 放进客户端整合包的 `mods`，通过正常启动器进入服务器。正版账号沿用启动器的官方认证；离线账号沿用目标服务器的登录方式。桥不会读取启动器令牌或创建另一个玩家。可选的原作者 Baritone JAR 也只装客户端，来源与哈希见统一指南。
 
 客户端启动后，在游戏目录生成 `maw-client-bridge/connection.json`。文件含随机回环地址、令牌和本次客户端实例 ID，只交给本机 Agent。游戏服务器可以在远方；控制接口目前仅绑定本机 `127.0.0.1`，无需新增防火墙规则或公网端口。
 
@@ -109,5 +109,15 @@ python tools/java_client_bridge_health.py --config <本人SDK配置> --manifest 
 ```
 
 `tools/launch_java_client_bridge.py` 专供离线隔离 QA，只允许独立游戏目录和回环测试服务器。正式游玩使用正常启动器。
+
+### 崩溃后的人工对账
+
+客户端和 Agent SDK 各自保留账本。先查询原 `action_id`，未知结果保留为 `unknown`。若操作者核对真实状态后决定允许后续独立动作，需要分别审核两端；原 ID 始终返回原结果。
+
+0.3.1 提供 `tools/audit_java_client.py` 离线入口，参数为 `--java`、`--bridge-jar`、`--gson`、`--bridge-root`（游戏目录中的 `maw-client-bridge`）、`--body-id`、`--server`、`--action-id`、`--evidence`，并显式传 `--release-new-actions-keep-unknown`。证据 JSON 必须包含匹配原动作的 `bodyId`、`server`、`action_id`、`fingerprint` 和说明真实核查结论的 `summary`；路径必须绝对。
+
+工具与运行中的客户端争用同一 `instance.lock` 文件锁，客户端未关闭时拒绝审核。通过后在原动作旁追加 `operator-audits` 证明，绑定原文件 SHA256 和证据 SHA256；不覆盖原动作、不改成成功、不重放。SDK 端继续使用已有 NativeLedger 的离线 operator_audit 接口。此入口不在 HTTP RPC 或 Agent operations 中。
+
+安装测试分发时可用 `install_java_client_bridge.py --no-activate` 保留现役共享清单；健康探针支持显式 `--manifest` 指向新分发。实际游戏只更换目标独立客户端的桥接 JAR。
 
 首版验收覆盖未装服务端桥的农夫乐事测试服：真实登录、按键移动、A* 绕障碍、烹饪锅界面、12 个番茄双向存取、原帧截图、2×2 合成工作台、切铁镐、真实挖掘与放置、取消释放按键和动作去重。同世界重启客户端后保持 UUID、位置与原动作终态，重复动作不再移动。所有模组的语义接口、长期自主生活、F8 真人按键、基岩兼容和视频流各需另外验证；客户端桥不会自动完成基岩资源与界面的转换。

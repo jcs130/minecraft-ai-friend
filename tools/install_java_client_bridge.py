@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse,hashlib,json,shutil
 from install_maw_native_sdk import dependencies,REPO,SOURCE,RUNTIME
 
-def install(destination:Path,build_record:Path,baritone_jar:Path|None=None,minescript_jar:Path|None=None):
+def install(destination:Path,build_record:Path,baritone_jar:Path|None=None,minescript_jar:Path|None=None,*,activate=True):
     destination=destination.resolve();parent=(RUNTIME/'integrations/java-client-bridge').resolve()
     if parent not in destination.parents or destination.exists():raise ValueError('Use a fresh named client bridge bundle')
     record=json.loads(build_record.read_bytes());jar=Path(record['jar'])
@@ -19,6 +19,7 @@ def install(destination:Path,build_record:Path,baritone_jar:Path|None=None,mines
     lock.update(name=package['name'],version=package['version']);lock['packages'][''].update(name=package['name'],version=package['version'])
     files['package.json']=(json.dumps(package,indent=2)+'\n').encode();files['package-lock.json']=(json.dumps(lock,indent=2)+'\n').encode()
     files[jar.name]=jar.read_bytes();files['LICENSE']=(REPO/'LICENSE').read_bytes()
+    files['tools/audit_java_client.py']=(REPO/'tools/audit_java_client.py').read_bytes()
     for name in ('MY-AGENT-WORLD-JAVA-CLIENT.md','MY-AGENT-WORLD-JAVA-CLIENT.txt','MY-AGENT-WORLD-UNIFIED-ACCESS.md','MY-AGENT-WORLD-UNIFIED-ACCESS.txt'):files[name]=(REPO/'docs'/name).read_bytes()
     evidence=REPO/'docs/evidence/unified-access-20261014.json'
     if evidence.is_file():files['evidence/'+evidence.name]=evidence.read_bytes()
@@ -48,10 +49,11 @@ def install(destination:Path,build_record:Path,baritone_jar:Path|None=None,mines
         'operationCount':catalog['operationCount'],'modFiles':[jar.name]+([baritone_jar.name] if baritone_jar else [])+([minescript_jar.name] if minescript_jar else []),
         'optionalBaritone':{'version':'1.11.3','sha256':baritone_sha,'bundled':bool(baritone_jar)},'newServices':0,'modelRequests':0,'files':{name:hashlib.sha256(data).hexdigest() for name,data in sorted(files.items())}}
     manifest['optionalMinescript']={'version':'4.0','sha256':minescript_sha,'bundled':bool(minescript_jar),'managedBy':'owning_minecraft_client_and_finite_script_deadline'}
-    for target in (destination/'installation.json',parent/'installation.json'):target.write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
+    for target in [destination/'installation.json']+([parent/'installation.json'] if activate else []):target.write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
     return {k:manifest[k] for k in ['directory','jarSha256','operationCount','serverRequired']}
 if __name__=='__main__':
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--destination',type=Path,required=True);ap.add_argument('--build-record',type=Path,required=True)
     ap.add_argument('--baritone-jar',type=Path,help='Optional exact original 1.11.3 NeoForge API JAR; never installed into a server')
     ap.add_argument('--minescript-jar',type=Path,help='Optional exact original 4.0 NeoForge JAR; Python interpreter is configured explicitly in Minescript')
-    a=ap.parse_args();print(json.dumps(install(a.destination,a.build_record,a.baritone_jar,a.minescript_jar),indent=2))
+    ap.add_argument('--no-activate',action='store_true',help='Keep the current shared installation manifest unchanged')
+    a=ap.parse_args();print(json.dumps(install(a.destination,a.build_record,a.baritone_jar,a.minescript_jar,activate=not a.no_activate),indent=2))

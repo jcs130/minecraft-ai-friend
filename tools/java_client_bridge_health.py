@@ -1,6 +1,6 @@
 """Read-only client bridge/package probe. No login, lease, model or input actions."""
 from pathlib import Path
-import argparse,hashlib,json,time
+import argparse,hashlib,json,time,zipfile
 from urllib.parse import urlsplit
 from urllib.request import Request,urlopen
 DEFAULT_MANIFEST=Path('E:/QiandengJiSocietyLab/integrations/java-client-bridge/installation.json')
@@ -16,12 +16,14 @@ def probe(config_file=None,manifest_file=DEFAULT_MANIFEST):
         contract=json.loads((bundle/'operations.json').read_bytes())
         ids={row['id'] for row in contract['operations']}
         checks['operation_contract']=manifest['operationCount']==contract['operationCount']==len(ids) and {'body.move','screen.capture','world.dig','menu.click'}<=ids
-        if manifest['version'] in ('0.2.0','0.3.0'):
+        if manifest['version'] in ('0.2.0','0.3.0','0.3.1'):
             checks['optional_baritone_contract']={'baritone.state','baritone.goto','baritone.mine','baritone.follow','baritone.farm'}<=ids
             if manifest['optionalBaritone']['bundled']:checks['original_baritone_verified']=hashlib.sha256((bundle/'baritone-api-neoforge-1.11.3.jar').read_bytes()).hexdigest()==manifest['optionalBaritone']['sha256']
-        if manifest['version']=='0.3.0':
+        if manifest['version'] in ('0.3.0','0.3.1'):
             checks['optional_minescript_contract']={'minescript.state','minescript.run'}<=ids
             if manifest['optionalMinescript']['bundled']:checks['original_minescript_verified']=hashlib.sha256((bundle/'minescript-neoforge-1.21.1-4.0.jar').read_bytes()).hexdigest()==manifest['optionalMinescript']['sha256']
+        if manifest['version']=='0.3.1':
+            with zipfile.ZipFile(bundle/manifest['jar']) as jar:checks['offline_operator_recovery']= 'dev/maw/client/ActionStoreAudit.class' in jar.namelist()
         if config_file:
             config=json.loads(Path(config_file).read_bytes());auth=json.loads(Path(config['credentialsFile']).read_bytes());url=urlsplit(auth['endpoint'])
             checks['loopback_only']=url.scheme=='http' and url.hostname=='127.0.0.1' and url.path=='/rpc' and not url.query and not url.fragment and not url.username
