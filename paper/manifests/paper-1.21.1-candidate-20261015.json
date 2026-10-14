@@ -1,5 +1,5 @@
 {
-  "status": "validated_candidate_not_deployed",
+  "status": "deployed_and_verified",
   "date": "2026-10-15",
   "targetCore": "Paper 1.21.1 build 133",
   "nativeProtocol": 767,
@@ -8,14 +8,15 @@
   "agentFriendVersion": "0.4.41",
   "eyeVersion": "0.1.16",
   "loginGuardVersion": "0.1.2",
-  "restartAuthorized": false,
-  "productionModified": false,
+  "restartAuthorized": true,
+  "productionModified": true,
   "sourceBranch": "qiandengji-personal-stash",
   "production": {
-    "core": "1.20.6",
-    "agentFriend": "0.4.40",
-    "eye": "0.1.15",
-    "loginGuard": "0.1.1"
+    "core": "1.21.1",
+    "paperBuild": 133,
+    "agentFriend": "0.4.41",
+    "eye": "0.1.16",
+    "loginGuard": "0.1.2"
   },
   "files": [
     {
@@ -386,6 +387,40 @@
     "16 colocated controlled connections are not 16 autonomous LLM players or cold exploration",
     "All original failed attempts retained; publication and production cutover distinct"
   ],
-  "deployment": "One approved core plan through existing gated maintenance task, 180/60/10 notices, fresh verified complete E/F stopped snapshots, pinned static files and dynamic latest-data shield migration; no prequeued plan",
-  "rollback": "Before new-core startup, file transaction rollback. After 1.21.1 writes world data, normal stop, preserve incident state, obtain owner approval and restore the same complete pre-upgrade worlds/plugins/config/auth/YSM snapshot plus old maintenance code; later progress is lost."
+  "deployment": {
+    "at": "2026-10-14T19:07:33.110Z",
+    "sourceCommit": "9b0b6e29711b8025fb1201ec7001b20d76c4b738",
+    "backupStamp": "20261015-025618",
+    "completeColdCopies": [
+      "E:/MC/backups/scheduled/20261015-025618",
+      "F:/MC-backups/scheduled/20261015-025618"
+    ],
+    "worldDataVersion": 3955,
+    "worldWritten": true,
+    "checkCounts": {
+      "state": 36,
+      "clientProtocol1206": 31,
+      "clientProtocol1211": 31,
+      "inventoryProtocol1206": 11,
+      "inventoryProtocol1211": 11,
+      "savedData": 10
+    },
+    "originalBackpacksPreserved": 29,
+    "originalDatapacksEnabled": 9,
+    "nativeClientVersions": [
+      "1.20.6",
+      "1.21.1"
+    ],
+    "remoteWebModified": false,
+    "bedrockPongVerified": true,
+    "bedrockAuthenticatedDeviceVerified": false,
+    "knownUpstreamEssentialsPolicyNotice": true
+  },
+  "rollback": "Before new-core startup, file transaction rollback. After 1.21.1 writes world data, normal stop, preserve incident state, obtain owner approval and restore the same complete pre-upgrade worlds/plugins/config/auth/YSM snapshot plus old maintenance code; later progress is lost.",
+  "previousProduction": {
+    "core": "1.20.6",
+    "agentFriend": "0.4.40",
+    "eye": "0.1.15",
+    "loginGuard": "0.1.1"
+  }
 }
