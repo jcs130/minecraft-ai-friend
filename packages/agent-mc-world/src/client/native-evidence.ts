@@ -27,9 +27,20 @@ export function compactItem(value: any): unknown {
 }
 export function compactItems(value: any) { return Array.isArray(value) ? { size: value.length, occupied: value.filter(item => !item.empty).map(compactItem) } : value; }
 export function compactNativeState(state: Record<string, any>) {
-  const keys = ['protocol','sampledAt','generation','connected','server','uuid','username','dimension','position','health','food','yaw','pitch','onGround','selectedSlot','weather','time','screen','screenToken','screenTitle','syncId','menuRevision','buttons','actions'];
+  const keys = ['protocol','sampledAt','generation','connected','server','uuid','username','dimension','position','health','food','yaw','pitch','onGround','selectedSlot','weather','time','screen','screenToken','screenTitle','syncId','menuRevision','buttons'];
   const out: Record<string, unknown> = Object.fromEntries(keys.filter(key => key in state).map(key => [key, typeof state[key] === 'string' ? state[key].slice(0, 512) : state[key]]));
   out.inventory = compactItems(state.inventory); out.menuSlots = compactItems(state.menuSlots); out.cursor = compactItem(state.cursor);
   out.notices = { retained: state.messages?.length ?? 0, lastSeq: state.messages?.at(-1)?.seq ?? 0 };
+  if (Array.isArray(state.actions)) {
+    // Past actions remain in the raw archive, not repeated in every input receipt/frame.
+    // Keep pending work visible, with explicit counts for omitted/uncertain history.
+    const active = state.actions.filter((a: any) => ['accepted','running'].includes(a.phase));
+    const history = state.actions.filter((a: any) => !['accepted','running'].includes(a.phase))
+      .sort((a: any,b: any) => a.updatedAt-b.updatedAt);
+    const shown = [...active.slice(-17), ...history.slice(-4)];
+    out.actions = shown;
+    out.actionSummary = { retained: state.actions.length, shown: shown.length, omitted: state.actions.length-shown.length,
+      pending: active.length, unknown: state.actions.filter((a: any) => a.phase === 'unknown').length, rawQuery: 'mc_queue / mc_evidence' };
+  }
   return out;
 }

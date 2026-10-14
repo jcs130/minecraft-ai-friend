@@ -49,12 +49,45 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
       const manual=await r.runtime.call('mc_script',{api:'index'});expect(manual.text).toContain('trusted code');expect(r.calls.some(call=>call.method==='do')).toBe(false);
       await r.runtime.call('mc_control',{action:'claim'});
       const code='result = minescript.player_position()';
-      const accepted=await r.runtime.call('mc_script',{language:'python',code,input:{label:'fixture'},timeoutMs:2000,action_id:'program-original'});
+      const accepted=await r.runtime.call('mc_script',{code,input:{label:'fixture'},timeoutMs:2000,action_id:'program-original'});
       expect(accepted.execution).toMatchObject({id:'program-original',terminal:false,goalCompleted:false});
       expect(r.calls.find(call=>call.method==='do').params).toMatchObject({operation:'minescript.run',action_id:'program-original',input:{code,timeoutMs:2000,input:{label:'fixture'}}});
       expect((await r.runtime.call('mc_script',{language:'javascript',code:'old()'})).failed).toBe(true);
       await r.runtime.call('mc_cancel',{action_id:'program-original'});
       expect(r.calls.filter(call=>call.method==='do')).toHaveLength(1);
+    } finally {await r.runtime.disconnect();}
+  });
+  it('serves focused version-correct Python recipes through SDK/MCP without executing body operations', async()=>{
+    const r=rig(true),server=createMinecraftMcpServer(r.runtime,'script-help'),client=new Client({name:'script-help',version:'1'});
+    const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);await r.runtime.connect();
+    try {
+      for (const topic of ['blocks','movement','interaction','inventory']) {
+        const sdk=await r.runtime.call('mc_script',{api:topic});
+        const mcp=await client.callTool({name:'mc_script',arguments:{api:topic}});
+        expect((mcp.content as any[])[0].text).toBe(sdk.text);
+        expect(sdk.failed).not.toBe(true);
+      }
+      const blocks=await r.runtime.call('mc_script',{api:'blocks'});
+      expect(blocks.text).toContain('getblocklist');expect(blocks.text).toContain('math.floor');expect(blocks.text).toContain('age=7');
+      expect((await r.runtime.call('mc_script',{api:'nonexistent'})).failed).toBe(true);
+      expect(r.calls.some(call=>['do','claim','cancel'].includes(call.method))).toBe(false);
+      const help=await r.runtime.call('mc_help',{skill:'move'});
+      expect(help.text).toContain('native move');expect(help.text.length).toBeLessThan(800);
+      expect(help.text).not.toContain('Minescript');expect((await r.runtime.call('mc_help',{skill:'invented'})).failed).toBe(true);
+    } finally {await client.close();await server.close();await r.runtime.disconnect();}
+  });
+  it('bounds repeated terminal history while preserving pending work, uncertainty counts and the complete original',async()=>{
+    const r=rig();
+    r.state.actions=Array.from({length:100},(_,i)=>({id:`old-${i}`,phase:i===99?'unknown':'completed',updatedAt:i}));
+    r.state.actions.push({id:'currently-running',phase:'running',updatedAt:101});
+    await r.runtime.connect();
+    try {
+      const current=JSON.parse((await r.runtime.call('mc_state',{})).text);
+      expect(current.actions).toHaveLength(5);expect(current.actions).toContainEqual(expect.objectContaining({id:'currently-running'}));
+      expect(current.actionSummary).toMatchObject({retained:101,shown:5,omitted:96,pending:1,unknown:1});
+      const raw=JSON.parse((await r.runtime.call('mc_evidence',{key:current.raw.key,sha256:current.raw.sha256,limit:16000})).text);
+      expect(JSON.parse(raw.text).actions).toHaveLength(101);
+      expect(JSON.parse((await r.runtime.call('mc_queue',{})).text)).toHaveLength(101);
     } finally {await r.runtime.disconnect();}
   });
   it('discovers without credentials/network and defaults to the existing independent body',()=>{

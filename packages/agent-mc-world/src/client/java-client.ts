@@ -10,6 +10,7 @@ import { createJavaDataViewer, type JavaDataViewerHandle } from '../../core/java
 import type { Server } from 'node:http';
 import { JAVA_LEGACY_HELP, translateJavaLegacy } from './java-legacy.ts';
 import { NativeEvidenceArchive, compactNativeState, compactItem, compactItems } from './native-evidence.ts';
+import { javaScriptHelp } from './java-script-help.ts';
 
 export const JAVA_CLIENT_ENVIRONMENT = `You control an actual rendered Minecraft Java client through agent-mc-java/v1. The host owns goals, personality, models and memory. The client bridge owns one actual body queue. It never launches a game, reconnects, simulates OS input or runs a model.
 Query mc_capabilities, mc_operations and mc_help before acting. Claim mc_control explicitly, then renew the lease before expiry. Disconnect releases your own lease and keys. Identity is the actual server-assigned UUID and exact server address; offline servers do not require Microsoft authentication. Never control a different player or server after an identity change.
@@ -19,7 +20,6 @@ mc_visual returns the real client framebuffer, original textures, current animat
 
 function uuid(value: string) { return value.replaceAll('-', '').toLowerCase(); }
 function address(value: string) { return value.toLowerCase().replace(/:25565$/, ''); }
-const SCRIPT_HELP = `Optional mc_script executor: Minescript 4.0 Python, explicitly installed and enabled in this native bridge. Use {language:"python",code:"...",input:{...},timeoutMs:10000,action_id:"stable-id"}. Variables: minescript (module), input_data (JSON input), result (assign JSON result). Functions include player_position(), player_orientation(), entities(sort="nearest",limit=12), getblock(x,y,z), player_inventory(), player_inventory_select_slot(slot), player_inventory_slot_to_hotbar(slot), player_set_orientation(yaw,pitch), press_key_bind("key.forward",True/False), execute("/help"), flush(). Use try/finally to release keys. Python can access the local machine; it is trusted code, not the Numen Lua sandbox. No hidden model loop. The script runs as one original native action, with body lease, timeout, cancel and stop. Query mc_result/mc_wait by the same ID. Script termination and result are program reports; inspect actual state, inventory and server receipts. This does not translate old JavaScript or automatically implement navigation, crafting or digging. Full versioned API: https://github.com/maxuser0/minescript/blob/main/docs/v4.0/README.md`;
 export function validateJavaClientConfiguration(cfg: Partial<JavaClientConfiguration> | undefined): asserts cfg is JavaClientConfiguration {
   if (cfg?.viewerMode !== undefined && !['data', 'framebuffer'].includes(cfg.viewerMode)) throw new Error('Unknown Java viewer mode');
   if (!cfg || !/^(?:[a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i.test(cfg.expectedUuid ?? '')
@@ -240,7 +240,17 @@ export class JavaClientWorld implements World {
       }),
       tool('mc_evidence', 'Read original archived native JSON by raw.key and optional raw.sha256. Paginated text preserves full components, books, script results and terminal evidence without repeating them in normal replies.', parameters({ key: str, sha256: str, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 16000 } }, ['key']), async args => ({ text: JSON.stringify(this.evidence.read(String(args.key), args.sha256 as string | undefined, Number(args.offset ?? 0), Number(args.limit ?? 8000))) })),
       tool('mc_operations', 'Discover exact real-client operations. Uninstalled Minescript/Baritone are unavailable.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify(await this.rpc('operations', {}, ctx.signal)) })),
-      tool('mc_help', 'Read real-client operations, legacy compatibility and identity/control rules.', parameters({ skill: str }), async (_args, ctx) => ({ text: JAVA_CLIENT_ENVIRONMENT + '\n' + JAVA_LEGACY_HELP + (this.cfg.javaClient?.minescriptEnabled ? '\n' + SCRIPT_HELP : '') + '\n' + JSON.stringify(await this.rpc('operations', {}, ctx.signal)) })),
+      tool('mc_help', 'Read real-client operations, legacy compatibility and identity/control rules. Supply skill for one discovered operation and exact input fields.', parameters({ skill: str }), async (args, ctx) => {
+        const operations = await this.rpc('operations', {}, ctx.signal);
+        if (args.skill) {
+          const key = String(args.skill);
+          if (key === 'script' && this.cfg.javaClient?.minescriptEnabled) return { text: javaScriptHelp() };
+          if (!Object.hasOwn(operations.operations ?? {}, key)) return { text: `Unknown native operation ${key}. Available: ${Object.keys(operations.operations ?? {}).join(', ')}. Query mc_operations or omit skill for legacy compatibility.`, failed: true };
+          return { text: JSON.stringify({ operation: key, input: operations.operations[key] })
+            + '\nSubmit mc_do with operation/input and a stable action_id. Use mc_result/mc_wait for the actual terminal; acceptance/input dispatch is not goal completion. Inspect fresh state/GUI/inventory/server notices; do not replay unknown actions. Close an unintended GUI using its current screenToken before movement.' };
+        }
+        return { text: JAVA_CLIENT_ENVIRONMENT + '\n' + JAVA_LEGACY_HELP + (this.cfg.javaClient?.minescriptEnabled ? '\n' + javaScriptHelp() : '') + '\n' + JSON.stringify(operations) };
+      }),
       tool('mc_notices', 'Read recent original server guides/rules and player chat, including pre-attachment notices. This is an observation query, not a new inbox; do not replay old requests.',
         parameters({ after: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 50 } }), async (args, ctx) => {
           const state = await this.rpc('state', {}, ctx.signal) as JavaClientState; this.verify(state); this.state = state;
@@ -304,9 +314,9 @@ export class JavaClientWorld implements World {
       tool('mc_stop', 'Explicitly cancel this controller body queue and release held game inputs.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify(await this.rpc('stop', this.owner(), ctx.signal)) }), true),
       { ...PHOTO_TOOL, handler: (args, ctx) => this.photos.execute(args, ctx) },
     ];
-    if (this.cfg.javaClient?.minescriptEnabled) tools.push(tool('mc_script', 'Run one explicitly selected Python Minescript program on the real body, with original action ID, timeout, cancellation and real terminal receipt. Read api:index first. No extra model loop; trusted local code, not a sandbox. Old Mineflayer JavaScript is unsupported.', parameters({ api: str, language: { enum: ['python'] }, code: { type: 'string', minLength: 1, maxLength: 32768 }, input: {}, timeoutMs: { type: 'integer', minimum: 100, maximum: 30000 }, action_id: str }), async (args, ctx) => {
-      if (args.api && !args.code) return { text: SCRIPT_HELP };
-      if (args.language !== 'python' || typeof args.code !== 'string') return { text: 'Use language:python and code, or api:index. Old JavaScript is not converted.', failed: true };
+    if (this.cfg.javaClient?.minescriptEnabled) tools.push(tool('mc_script', 'Run one explicitly selected Python Minescript program on the real body, with original action ID, timeout, cancellation and real terminal receipt. Python is the default language. Read api:index first. No extra model loop; trusted local code, not a sandbox. Old Mineflayer JavaScript is unsupported.', parameters({ api: str, language: { enum: ['python'], default: 'python' }, code: { type: 'string', minLength: 1, maxLength: 32768 }, input: {}, timeoutMs: { type: 'integer', minimum: 100, maximum: 30000 }, action_id: str }), async (args, ctx) => {
+      if (args.api && !args.code) return { text: javaScriptHelp(String(args.api)) };
+      if ((args.language ?? 'python') !== 'python' || typeof args.code !== 'string') return { text: 'Use Python code, or api:index. Old JavaScript is not converted.', failed: true };
       const body = tools.find(tool => tool.name === 'mc_do')!;
       return body.handler({ action_id: args.action_id, operation: 'minescript.run', input: { code: args.code, input: args.input, timeoutMs: args.timeoutMs ?? 10000 } }, ctx);
     }, true));
