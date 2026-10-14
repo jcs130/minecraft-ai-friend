@@ -1,3 +1,5 @@
+2026-10-14 当前正式 **AgentFriend0.4.40 / Eye0.1.15**。服主批准后，180/60/10秒预告、原维护任务正常停启，E/F完整冷备份20261014-182425在安装前完成。AgentFriend **0.4.40** / CortiEyeMirror **0.1.15** 已上线。正式状态29项、真实认证Java/Agent/实际Eye联机27项、玩家保存8项通过。批量保护、短回执、通用CLI和三项自愿生活挑战生效。Goddess、ag_CorMy、ag_cormy_eye以原UUID恢复；普通难度及三维度死亡保留物品读回。手机/Xbox画面、远端Web和16个自主Agent未作本次验收。原0.4.38/0.4.39候选已随本版部署，后续新增CLI继续遵循CLI_CONTRACT.md。下方旧候选记录为各自时点。
+
 本文是 `qiandengji-personal-stash` 分支的长期工作约定。目标是让 Agent 团队持续提出、制作、验证和运营新内容，同时让六岁玩家、手柄玩家、Java 玩家、基岩玩家和 Mineflayer Agent 在同一世界里获得可理解、可完成的体验。当前正式服的启停、备份、发布命令仍以 [维护与发布](OPERATIONS.md) 为准；本手册说明内容如何从想法进入这个流程。
 
 ## 先认清现状
@@ -38,7 +40,7 @@
 
 | 系统 | 现在的内容入口 | 运行数据 | Agent 目前能怎样改 |
 | --- | --- | --- | --- |
-| 保护查询聚合（0.4.40候选，未部署） | 原protect及protect batch；--help/--json/--verbose与通用page；[契约](PROTECTION_BATCH.md) | 不增加持久账本；每次读取本人实时权限，通知去重仅内存5秒 | 最多64目标逐块判定、规则/范围共用、重复坐标去重；Agent默认一份短JSON，实际Eye简短中文；未知不当允许，正式发布需另行确认 |
+| 保护查询聚合（0.4.40已上线） | 原protect及protect batch；--help/--json/--verbose与通用page；[契约](PROTECTION_BATCH.md) | 不增加持久账本；每次读取本人实时权限，通知去重仅内存5秒 | 最多64目标逐块判定、规则/范围共用、重复坐标去重；Agent默认一份短JSON，实际Eye简短中文；未知不当允许，已按原维护流程上线 |
 | 特色装备外观（0.4.33已上线） | 五件原战利品／法杖、原私有物品查询；[构建与兼容](ITEM_APPEARANCES.md) | 原物品只追加外观PDC与CustomModelData，保持耐久／附魔／刻印／归属；开容器时延后 | Java／基岩／Web共用原创源；E/F冷备份后正式发布，基岩自动资源、Java1.20.6手动资源。外机Web须更新重建；手机Xbox姿势未验 |
 | Web HUD与大背包外形（源码已发布，相机已上线） | 共享可视化宿主/原profile纹理代理；[本次发布](ITEM_APPEARANCES.md) | 槽位与背包数据保持，按原profile展示 | 九格选中框、经验条和原蓝色背包菜单/手持/OBS/照片已验证；80项Node、27项浏览器、10项布局通过。女神相机已更新，外机宿主仍需重建 |
 | Agent确定性交互（当前0.4.32已上线） | intro/rules/capabilities/progress、coach lessons/enroll/cancel、status/skills status/page；[规则与接入](AGENT_INTERACTION.md)、[观察兼容](AGENT_CLI_OBSERVATIONS.md) | 原主线/专项/任务账本及客户端UUID独立未知操作journal保持；候选只读观察有连接ID/时间、完整分页、本机认证来源 | 现役普通帮助、分项进度与明确报名已开放；客户端串行核对真实槽位/光标。status已为纯查询，status full保留旧详细及证明；远端须按协议接入 |

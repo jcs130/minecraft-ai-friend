@@ -1,0 +1,54 @@
+{
+  "status": "deployed_verified",
+  "date": "2026-10-14",
+  "plugin": "AgentFriend",
+  "version": "0.4.40",
+  "previousVersion": "0.4.37",
+  "eyeVersion": "0.1.15",
+  "sha256": "5cf98eda641357e79aec1514f635603d903e37e3b15115cf6993d48d2b5529ea",
+  "sourceCommit": "6c918f42a117ea175012f74983b86d2ac736ddd2",
+  "restartAuthorized": true,
+  "maintenanceTask": "Afu-MC-DailyBackup",
+  "maintenanceTaskResult": 0,
+  "backupStamp": "20261014-182425",
+  "backupCopies": [
+    "E:/MC/backups/scheduled/20261014-182425",
+    "F:/MC-backups/scheduled/20261014-182425"
+  ],
+  "notices": [
+    180,
+    60,
+    10
+  ],
+  "productionChecks": {
+    "state": 29,
+    "authenticatedJavaAgentAndActualEye": 27,
+    "savedPlayerData": 8,
+    "total": 64,
+    "originalMinepacksBackpacks": 26
+  },
+  "candidateChecks": 224,
+  "goddessKnowledge": {
+    "syncedDocuments": 6,
+    "actualReadTool": "read_file",
+    "actualReadPath": "resource/PROTECTION_BATCH.md",
+    "answers": 3,
+    "maxAnswerCharacters": 103
+  },
+  "deployedFeatures": [
+    "64-target protection batches and shared rules",
+    "short default protection JSON and opt-in verbose details",
+    "same-rule automatic notice coalescing",
+    "common hierarchical CLI help and read-only status",
+    "three voluntary life challenges"
+  ],
+  "boundaries": [
+    "Normal difficulty and keepInventory verified in all three dimensions",
+    "Original Goddess/CorMy/Eye UUIDs reconnected; unrelated plugins and authentication unchanged",
+    "No physical phone/Xbox or remote Web visual acceptance in this deployment",
+    "Early readiness check preceded CorMy reconnect; passed after actual reconnect, first failure retained",
+    "Non-elevated CIM cannot read the watcher command line; startup PID remained alive, native Eye verification and scheduled Watchdog passed",
+    "Second parallel model QA received HTTP409 without a task ID; original intent retained, fresh read-only verification submitted after first task finished"
+  ],
+  "rollback": "Use the original maintenance gates and complete backups, restore previous AgentFriend 0.4.37 JAR. Preserve current worlds, inventories, life-challenges.yml and challenge-runs. Do not restore old player progress."
+}

@@ -1,6 +1,6 @@
 # /mycli 的统一交互约定
 
-2026-10-14，0.4.39 候选。正式服仍为 0.4.37；未经本次维护确认不部署。
+2026-10-14，统一CLI已随正式0.4.40上线；0.4.39隔离结果作为原始版本证据保留。
 
 参照 [CLI-Anything HARNESS 的 CLI Design](https://github.com/HKUDS/CLI-Anything/blob/main/cli-anything-plugin/HARNESS.md)：命令分组、`list/info/status` 自检、`--help`、所有新命令的 `--json`、可恢复错误及安全的重复调用。游戏聊天沿用原版协议和 `MC_` 前缀；不在 Paper 中模拟操作系统进程、退出码或另造 REPL。
 
@@ -27,7 +27,7 @@
 
 ## 本次实现
 
-后续0.4.40候选按同一约定改造保护查询：`protect batch`聚合最多64个目标，`--json`选格式、`--verbose`选详情；普通单点也默认短回执，超大结果复用通用`page`。不新增独立入门命令或预加载教程，详见[保护批量查询](PROTECTION_BATCH.md)。未部署，以下0.4.39验证记录仍对应其原始JAR。
+0.4.40已上线按同一约定改造保护查询：`protect batch`聚合最多64个目标，`--json`选格式、`--verbose`选详情；普通单点也默认短回执，超大结果复用通用`page`。不新增独立入门命令或预加载教程，详见[保护批量查询](PROTECTION_BATCH.md)。以下0.4.39验证记录仍对应其原始JAR。
 
 通用 `--help`、`-h`、裸 `/mycli`、`help` 复用同一目录，返回私有 `MC_CLI_HELP`。帮助按组分页；兼容别名不占默认目录。动态法术仍从真实技能目录发现。
 
