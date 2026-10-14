@@ -2,6 +2,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { LEARNING_OPERATIONS } from './game-memory-learning-contract.ts';
 import type { ToolDef } from './support/host-contract.ts';
 
 const KINDS = ['place', 'resource', 'relationship', 'task', 'method', 'lesson', 'note'] as const;
@@ -45,6 +46,7 @@ Record conditions, counterexamples, task/run IDs and source hashes for methods. 
 Old inventory, positions and relationships must be checked again before acting. No library is auto-injected.
 Local mode makes no model or network calls. Configured vector/remote modes may index or search game notes.
 sync(id,expectedRevision) explicitly indexes one existing note with the selected retrieval provider.
+Optional service workflows: action:service,operation:help. Service-generated experience stays a candidate until human review.
 No game action, teammate authorization or body-task cancellation is started here.`;
 
 const stringField = (maxLength: number) => ({ type: 'string', minLength: 1, maxLength });
@@ -54,7 +56,8 @@ export const GAME_MEMORY_TOOL: Omit<ToolDef, 'handler'> = {
     + 'Historical observations and attributed notes never establish current facts, permissions or goal success. '
     + 'Use action:help first; optional configured retrieval service, no body actions. Requires a persistent dataDir.',
   parameters: { type: 'object', additionalProperties: false, properties: {
-    action: { type: 'string', enum: ['help', 'search', 'get', 'remember', 'capture', 'revise', 'archive', 'sync'] },
+    action: { type: 'string', enum: ['help', 'search', 'get', 'remember', 'capture', 'revise', 'archive', 'sync', 'service'] },
+    operation: { type: 'string', enum: LEARNING_OPERATIONS }, input: { type: 'object', maxProperties: 12 }, requestId: stringField(128),
     id: stringField(48), expectedRevision: { type: 'integer', minimum: 1 }, revision: { type: 'integer', minimum: 1 },
     kind: { type: 'string', enum: [...KINDS] }, summary: stringField(180), content: stringField(6000),
     source: { type: 'object', additionalProperties: false, required: ['kind'], properties: {

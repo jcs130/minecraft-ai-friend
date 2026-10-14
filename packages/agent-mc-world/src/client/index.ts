@@ -12,3 +12,6 @@ export { serveClientConsole, type ClientConsolePort } from './console-server.ts'
 export type { PublicAccountState, AuthenticationMode } from './authentication.ts';
 
 export { planLegacyConfiguration, copyLegacyData } from './migration.ts';
+
+export { GameMemoryLearning } from '../../core/game-memory-learning.ts';
+export { learningHelp, type ArtifactRef, type SourceRef } from '../../core/game-memory-learning-contract.ts';

@@ -2,6 +2,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { GameMemoryLearning } from './game-memory-learning.ts';
+import { artifactRef } from './game-memory-learning-contract.ts';
+import { memoryRequest } from './game-memory-http.ts';
 import { GameMemoryBook, type GameMemoryContext, type MemoryCandidate } from './game-memory.ts';
 
 export interface GameMemoryConfig {
@@ -10,10 +13,11 @@ export interface GameMemoryConfig {
   provider: 'http' | 'mem0-oss' | 'mem0-platform' | 'bailian' | 'powercontext';
   libraryId: string; projectId: string; scopeId: string;
   searchMode: 'text' | 'vector' | 'hybrid';
+  learningEnabled: boolean;
 }
 export const GAME_MEMORY_DEFAULTS: GameMemoryConfig = {
   mode: 'local', endpoint: '', model: '', apiKeyEnv: '', timeoutMs: 3000,
-  provider: 'http', libraryId: '', projectId: 'agent-mc', scopeId: '', searchMode: 'text',
+  provider: 'http', libraryId: '', projectId: 'agent-mc', scopeId: '', searchMode: 'text', learningEnabled: false,
 };
 export const GAME_MEMORY_CONFIG_SCHEMA = Object.fromEntries(Object.entries({
   mode: { type: 'string', enum: ['local', 'vector', 'remote'], title: '游戏记忆检索', description: '本地关键词 / 本地向量混合 / 外挂记忆服务。外部服务故障时回退关键词，并报告降级。' },
@@ -25,6 +29,7 @@ export const GAME_MEMORY_CONFIG_SCHEMA = Object.fromEntries(Object.entries({
   libraryId: { type: 'string', title: '百炼记忆库 ID', description: '可选，空值使用服务端默认记忆库。' },
   projectId: { type: 'string', title: '记忆项目 ID', description: '外挂服务使用的项目隔离名称；角色与服务器继续单独隔离。' },
   scopeId: { type: 'string', title: 'PowerContext Scope ID', description: '填写已配置且有权访问的 Scope；插件不会创建或枚举 Scope。游戏记录仍按服务器与角色隔离。' },
+  learningEnabled: { type: 'boolean', title: '启用服务端经验整理', description: '仅 PowerContext 或通用 HTTP 桥接。需绑定该服务器、账号和角色专用的已有 Scope；允许显式提交游戏证据和生成待审核候选，人工审核在记忆服务完成。默认关闭。' },
   searchMode: { type: 'string', enum: ['text', 'vector', 'hybrid'], title: 'PowerContext 检索方式', description: '默认全文检索，不要求向量模型。服务端支持后可选向量或混合检索。' },
 }).map(([key, schema]) => [`worlds.minecraft.memory.${key}`, { ...schema, 'x-hot': true }]));
 
@@ -49,40 +54,7 @@ export class GameMemoryService {
   }
 
   private async post(cfg: GameMemoryConfig, suffix: string, body: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
-    if (!cfg.endpoint.trim()) throw new Error('Memory endpoint is not configured');
-    const url = new URL(cfg.endpoint);
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('Memory endpoint must be HTTP(S), without embedded credentials or query');
-    if (!Number.isInteger(cfg.timeoutMs) || cfg.timeoutMs < 100 || cfg.timeoutMs > 30000) throw new Error('Invalid memory timeout');
-    if (suffix) url.pathname = url.pathname.replace(/\/$/, '') + suffix;
-    const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
-    if (cfg.apiKeyEnv) {
-      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(cfg.apiKeyEnv)) throw new Error('Invalid API key environment variable name');
-      const key = process.env[cfg.apiKeyEnv];
-      if (!key) throw new Error('Configured memory API key environment variable is missing');
-      if (cfg.mode === 'remote' && cfg.provider === 'mem0-oss') headers['X-API-Key'] = key;
-      else headers.Authorization = `${cfg.mode === 'remote' && cfg.provider === 'mem0-platform' ? 'Token' : 'Bearer'} ${key}`;
-    }
-    const abort = AbortSignal.any([AbortSignal.timeout(cfg.timeoutMs), ...(signal ? [signal] : [])]);
-    // Explicit endpoint only. No redirects, discovery, automatic retries or response bodies in errors.
-    try {
-      const response = await this.request(url, { method: 'POST', headers, body: JSON.stringify(body), signal: abort, redirect: 'error' });
-      if (!response.ok) { await response.body?.cancel(); throw new Error(`Memory service HTTP ${response.status}`); }
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('Empty memory service response');
-      const chunks: Uint8Array[] = []; let size = 0;
-      try {
-        for (;;) { const part = await reader.read(); if (part.done) break; size += part.value.length;
-          if (size > 1024 * 1024) { await reader.cancel(); throw new Error('Memory service response exceeds 1 MiB'); } chunks.push(part.value); }
-      } finally { reader.releaseLock(); }
-      const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid memory service response');
-      return data;
-    } catch (e) {
-      if (signal?.aborted) throw new Error('Memory request cancelled');
-      if (abort.aborted) throw new Error('Memory service timeout; write outcome may be unknown');
-      if (e instanceof Error && /^Memory service (HTTP|response)/.test(e.message)) throw e;
-      throw new Error('Memory service request failed; no automatic retry');
-    }
+    return (await memoryRequest(this.request, cfg, suffix, body, signal)).data;
   }
 
   private async embed(cfg: GameMemoryConfig, input: string, signal?: AbortSignal): Promise<number[]> {
@@ -126,11 +98,14 @@ export class GameMemoryService {
     else throw new Error('Unknown memory provider');
     const pending = reply.status === 'PENDING';
     if (reply.status === 'FAILED' || reply.error) throw new Error('Remote memory write rejected');
-    const confirmed = cfg.provider === 'powercontext' ? Array.isArray(reply.records) && reply.records.some(r => r?.text === serialized)
+    const powerRecords = cfg.provider === 'powercontext' && Array.isArray(reply.records) ? reply.records.filter(r => r?.text === serialized
+      && r?.artifact?.family === 'atomic-memory' && artifactRef.safeParse(r.artifact).success) : [];
+    const confirmed = cfg.provider === 'powercontext' ? powerRecords.length > 0
       : cfg.provider === 'http' ? reply.status === 'stored'
       : cfg.provider === 'bailian' ? Array.isArray(reply.memory_nodes) && reply.memory_nodes.length > 0
         : Array.isArray(reply.results) && reply.results.length > 0;
     return { mode: 'remote', provider: cfg.provider, status: pending ? 'pending' : confirmed ? 'stored' : 'unverified',
+      ...(cfg.provider === 'powercontext' ? { artifacts: powerRecords.map(r => r.artifact), scopeId: cfg.scopeId } : {}),
       eventId: typeof reply.event_id === 'string' ? reply.event_id.slice(0, 120) : null, searchVerified: false };
   }
 
@@ -169,6 +144,10 @@ export class GameMemoryService {
     signal?.throwIfAborted();
     const cfg = { ...GAME_MEMORY_DEFAULTS, ...config };
     if (!['local', 'vector', 'remote'].includes(cfg.mode)) throw new Error('Unknown memory mode');
+    if (args.action === 'service') {
+      const scope = this.book.execute({ action: 'search', limit: 1, query: '' }, ctx).scopeKey;
+      return new GameMemoryLearning(this.directory, this.request).execute(args, String(scope), cfg, signal);
+    }
     if (args.action === 'sync') {
       if (Object.keys(args).some(k => !['action', 'id', 'expectedRevision'].includes(k))) throw new Error('sync only accepts id and expectedRevision');
       const result = this.book.execute({ action: 'get', id: args.id }, ctx);
@@ -178,7 +157,7 @@ export class GameMemoryService {
     }
     let candidates: MemoryCandidate[] = [], lexical: MemoryCandidate[] = [];
     const result = this.book.execute(args, ctx, { candidates: entries => { candidates = entries; }, lexical: entries => { lexical = entries; } });
-    if (args.action === 'help' || !args.action) return { ...result, retrievalMode: cfg.mode,
+    if (args.action === 'help' || !args.action) return { ...result, retrievalMode: cfg.mode, serviceLearning: { enabled: cfg.learningEnabled, help: 'Use action:service,operation:help for optional evidence, reviewed experience and bounded context workflows.' },
       retrievalHelp: 'Optional vector or remote retrieval preserves local revision/evidence authority. Only game notes are sent. sync(id,expectedRevision) explicitly indexes a pre-existing note. Failed/unknown external writes are never automatically replayed. Remote results must match local scope, revision and content hash; restore/migrate local notebooks to reuse them on another machine.' };
     if (cfg.mode === 'local') return result;
     if (result.saved) return { ...result, index: await this.tryIndex(cfg, String(result.scopeKey), this.canonical(result.entry as MemoryCandidate), signal) };

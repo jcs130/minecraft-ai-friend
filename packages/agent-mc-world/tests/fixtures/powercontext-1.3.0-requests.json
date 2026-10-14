@@ -1,0 +1,1051 @@
+{
+  "$comment": "Apache-2.0 PowerContext 1.3.0 request schemas; https://github.com/oceanbase/powercontext/blob/powercontext-v1.3.0/openapi/powercontext.yaml; source SHA256 7aa91ae9af78300e7bdbcc2e8b2135da5749469290a1aee67bc255c3e9a07b0c",
+  "components": {
+    "schemas": {
+      "PrepareContextRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope_id",
+          "query"
+        ],
+        "properties": {
+          "scope_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": ".*\\S.*"
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192,
+            "pattern": ".*\\S.*"
+          },
+          "max_bytes": {
+            "type": "integer",
+            "minimum": 512,
+            "maximum": 32768,
+            "default": 8000
+          },
+          "include_code": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt into current-Scope native code evidence. No index is built during preparation."
+          },
+          "assembly": {
+            "$ref": "#/components/schemas/ContextAssembly"
+          }
+        }
+      },
+      "ContextAssembly": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Explicitly opt into grouped Markdown context. Omit assembly to preserve the existing context format; null is invalid.",
+        "properties": {
+          "format": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContextAssemblyFormat"
+              }
+            ],
+            "default": "markdown"
+          },
+          "sections": {
+            "type": "array",
+            "maxItems": 4,
+            "description": "Unique families in output and byte-budget priority order. Profile explicitly includes the latest committed snapshot from the current Scope and direct Context References, in that order, without query filtering or generation. Topic Memory searches only the current Scope and includes title, summary, and an optional matching snippet, with an exact revision citation. An empty array disables candidate recall.",
+            "default": [
+              {
+                "family": "memory",
+                "limit": 6
+              },
+              {
+                "family": "experience",
+                "limit": 2
+              }
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ContextAssemblySection"
+            }
+          },
+          "show": {
+            "type": "array",
+            "maxItems": 2,
+            "uniqueItems": true,
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ContextAssemblyMetadata"
+            }
+          }
+        }
+      },
+      "ContextAssemblyFormat": {
+        "type": "string",
+        "enum": [
+          "markdown"
+        ]
+      },
+      "ContextAssemblySection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "family",
+          "limit"
+        ],
+        "properties": {
+          "family": {
+            "$ref": "#/components/schemas/ContextAssemblyFamily"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8,
+            "description": "Maximum included entries. Each Profile entry is one Scope snapshot. Experience is limited to two. All section limits together must not exceed the Server's runtime.context_assembly_max_entries policy (default 8); exceeding it returns HTTP 422 before recall. The byte budget may reduce the actual output count."
+          }
+        }
+      },
+      "ContextAssemblyFamily": {
+        "type": "string",
+        "enum": [
+          "memory",
+          "experience",
+          "profile",
+          "topic-memory"
+        ]
+      },
+      "ContextAssemblyMetadata": {
+        "type": "string",
+        "enum": [
+          "confidence",
+          "recall_rank"
+        ]
+      },
+      "CaptureContentSourceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope_id",
+          "source_id",
+          "content"
+        ],
+        "properties": {
+          "scope_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": ".*\\S.*"
+          },
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200000,
+            "description": "Raw integration content. Server-reserved payload schemas, including handoff receipts, are rejected on this generic capture operation and must be created through their dedicated workflow."
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "nullable": true
+          }
+        }
+      },
+      "RecordTaskOutcomeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope_id",
+          "source_id",
+          "outcome"
+        ],
+        "properties": {
+          "scope_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": ".*\\S.*"
+          },
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": ".*\\S.*"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/TaskOutcome"
+          }
+        }
+      },
+      "TaskOutcome": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema",
+          "trust",
+          "objective",
+          "status",
+          "summary",
+          "observations",
+          "checks",
+          "produced_artifacts",
+          "remaining_work"
+        ],
+        "properties": {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "powercontext.task-outcome.v1"
+            ]
+          },
+          "trust": {
+            "type": "string",
+            "enum": [
+              "untrusted_observation"
+            ]
+          },
+          "objective": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192,
+            "pattern": ".*\\S.*"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskOutcomeStatus"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192,
+            "pattern": ".*\\S.*"
+          },
+          "handoff_receipt_ref": {
+            "$ref": "#/components/schemas/SourceReference",
+            "nullable": true
+          },
+          "observations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "items": {
+              "$ref": "#/components/schemas/WorkClaim"
+            }
+          },
+          "checks": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "$ref": "#/components/schemas/TaskCheck"
+            }
+          },
+          "produced_artifacts": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/ArtifactReference"
+            }
+          },
+          "remaining_work": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192,
+              "pattern": ".*\\S.*"
+            }
+          }
+        }
+      },
+      "TaskOutcomeStatus": {
+        "type": "string",
+        "enum": [
+          "succeeded",
+          "partial",
+          "blocked",
+          "failed",
+          "cancelled",
+          "unknown"
+        ]
+      },
+      "SourceReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "source_id"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Stable Source type."
+          },
+          "source_id": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkClaim": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "basis",
+          "evidence"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192,
+            "pattern": ".*\\S.*"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/WorkClaimBasis"
+          },
+          "evidence": {
+            "type": "array",
+            "maxItems": 31,
+            "description": "Use [] with declared. verified requires exact previously returned citations; never invent evidence from the new Source ID.",
+            "items": {
+              "$ref": "#/components/schemas/HandoffCitation"
+            }
+          }
+        }
+      },
+      "WorkClaimBasis": {
+        "description": "Use declared for inspected conversation or repository facts, even when the user calls progress verified. verified requires nonempty exact PowerContext citations returned by an earlier operation.",
+        "type": "string",
+        "enum": [
+          "declared",
+          "verified"
+        ]
+      },
+      "HandoffCitation": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/HandoffSourceCitation"
+          },
+          {
+            "$ref": "#/components/schemas/HandoffArtifactCitation"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "source": "#/components/schemas/HandoffSourceCitation",
+            "artifact": "#/components/schemas/HandoffArtifactCitation"
+          }
+        }
+      },
+      "HandoffSourceCitation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "source_ref"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "source"
+            ]
+          },
+          "source_ref": {
+            "$ref": "#/components/schemas/SourceReference"
+          }
+        }
+      },
+      "HandoffArtifactCitation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "artifact_ref"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "artifact"
+            ]
+          },
+          "artifact_ref": {
+            "$ref": "#/components/schemas/ArtifactReference"
+          }
+        }
+      },
+      "ArtifactReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "family",
+          "artifact_id",
+          "revision"
+        ],
+        "properties": {
+          "family": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[\\x21-\\x7E]+$"
+          },
+          "artifact_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[\\x21-\\x7E]+$"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "TaskCheck": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "status",
+          "basis",
+          "evidence"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192,
+            "pattern": ".*\\S.*"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskCheckStatus"
+          },
+          "details": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192,
+            "pattern": ".*\\S.*",
+            "nullable": true
+          },
+          "basis": {
+            "$ref": "#/components/schemas/WorkClaimBasis"
+          },
+          "evidence": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/HandoffCitation"
+            }
+          }
+        }
+      },
+      "TaskCheckStatus": {
+        "type": "string",
+        "enum": [
+          "passed",
+          "failed",
+          "skipped",
+          "timed_out",
+          "unavailable",
+          "cancelled",
+          "unknown"
+        ]
+      },
+      "ProposeExperienceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope_id",
+          "proposal",
+          "source_refs",
+          "artifact_refs"
+        ],
+        "properties": {
+          "scope_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": ".*\\S.*"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/ExperienceProposal"
+          },
+          "source_refs": {
+            "type": "array",
+            "maxItems": 32,
+            "description": "Exact Source evidence. Counted with artifact_refs toward a combined maximum of 32 references.",
+            "items": {
+              "$ref": "#/components/schemas/SourceReference"
+            }
+          },
+          "artifact_refs": {
+            "type": "array",
+            "maxItems": 32,
+            "description": "Exact Artifact evidence. Counted with source_refs toward a combined maximum of 32 references.",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactReference"
+            }
+          },
+          "target": {
+            "$ref": "#/components/schemas/ArtifactReference",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "nullable": true
+          }
+        }
+      },
+      "ExperienceProposal": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "situation",
+          "action",
+          "outcome",
+          "lesson"
+        ],
+        "properties": {
+          "situation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "pattern": ".*\\S.*"
+          },
+          "action": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "pattern": ".*\\S.*"
+          },
+          "outcome": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "pattern": ".*\\S.*"
+          },
+          "lesson": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "pattern": ".*\\S.*"
+          },
+          "failure": {
+            "$ref": "#/components/schemas/FailureRecord",
+            "nullable": true
+          }
+        }
+      },
+      "FailureRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "signature",
+          "repair_surface",
+          "verification"
+        ],
+        "properties": {
+          "signature": {
+            "$ref": "#/components/schemas/FailureSignature"
+          },
+          "repair_surface": {
+            "$ref": "#/components/schemas/RepairSurface"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/FailureVerification"
+          }
+        }
+      },
+      "FailureSignature": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recall_cue"
+        ],
+        "properties": {
+          "recall_cue": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": ".*\\S.*"
+          },
+          "symptom": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "pattern": ".*\\S.*",
+            "nullable": true
+          }
+        }
+      },
+      "RepairSurface": {
+        "type": "string",
+        "enum": [
+          "experience_content",
+          "working_state",
+          "recall_policy",
+          "acceptance_check"
+        ]
+      },
+      "FailureVerification": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "condition",
+          "check_subject"
+        ],
+        "properties": {
+          "condition": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "pattern": ".*\\S.*"
+          },
+          "check_subject": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": ".*\\S.*"
+          }
+        }
+      },
+      "GenerateExperienceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope_id",
+          "source_refs",
+          "artifact_refs"
+        ],
+        "properties": {
+          "scope_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": ".*\\S.*"
+          },
+          "source_refs": {
+            "type": "array",
+            "maxItems": 32,
+            "description": "Exact Source evidence. Counted with artifact_refs toward a combined maximum of 32 references.",
+            "items": {
+              "$ref": "#/components/schemas/SourceReference"
+            }
+          },
+          "artifact_refs": {
+            "type": "array",
+            "maxItems": 32,
+            "description": "Exact Artifact evidence. Counted with source_refs toward a combined maximum of 32 references.",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactReference"
+            }
+          },
+          "target": {
+            "$ref": "#/components/schemas/ArtifactReference",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "nullable": true
+          }
+        }
+      },
+      "GenerateSkillRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope_id",
+          "origin",
+          "source_refs",
+          "artifact_refs"
+        ],
+        "properties": {
+          "scope_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": ".*\\S.*"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/SkillGenerationOrigin"
+          },
+          "source_refs": {
+            "type": "array",
+            "maxItems": 32,
+            "description": "Exact Source evidence. Counted with artifact_refs toward a combined maximum of 32 references.",
+            "items": {
+              "$ref": "#/components/schemas/SourceReference"
+            }
+          },
+          "artifact_refs": {
+            "type": "array",
+            "maxItems": 32,
+            "description": "Exact Artifact evidence. Counted with source_refs toward a combined maximum of 32 references.",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactReference"
+            }
+          },
+          "target": {
+            "$ref": "#/components/schemas/ArtifactReference",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "nullable": true
+          }
+        }
+      },
+      "SkillGenerationOrigin": {
+        "type": "string",
+        "enum": [
+          "experience",
+          "source",
+          "usage"
+        ],
+        "description": "The operation-specific direct provenance shape required for managed Skill generation."
+      },
+      "ReviseArtifactCandidateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope_id",
+          "candidate_id",
+          "expected_version",
+          "proposal",
+          "source_refs",
+          "artifact_refs"
+        ],
+        "properties": {
+          "scope_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": ".*\\S.*"
+          },
+          "candidate_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[\\x21-\\x7E]+$"
+          },
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "proposal": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExperienceProposal"
+              },
+              {
+                "$ref": "#/components/schemas/SkillProposal"
+              },
+              {
+                "$ref": "#/components/schemas/ProfileWriteContent"
+              }
+            ]
+          },
+          "source_refs": {
+            "type": "array",
+            "maxItems": 32,
+            "description": "Exact Source evidence. Counted with artifact_refs toward a combined maximum of 32 references.",
+            "items": {
+              "$ref": "#/components/schemas/SourceReference"
+            }
+          },
+          "artifact_refs": {
+            "type": "array",
+            "maxItems": 32,
+            "description": "Exact Artifact evidence. Counted with source_refs toward a combined maximum of 32 references.",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactReference"
+            }
+          },
+          "target": {
+            "$ref": "#/components/schemas/ArtifactReference",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "nullable": true
+          }
+        }
+      },
+      "SkillProposal": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "instructions",
+          "validation"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^\\S(?:.*\\S)?$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "^\\S(?:.*\\S)?$"
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 131072
+          },
+          "validation": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/SkillValidationItem"
+            }
+          },
+          "package": {
+            "$ref": "#/components/schemas/SkillPackageReference",
+            "nullable": true
+          },
+          "license": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "nullable": true
+          },
+          "compatibility": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "maxProperties": 64,
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "allowed_tools": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "nullable": true
+          }
+        }
+      },
+      "SkillValidationItem": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000,
+        "pattern": "^\\S(?:.*\\S)?$"
+      },
+      "SkillPackageReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tree_digest",
+          "archive_digest",
+          "file_count",
+          "uncompressed_size",
+          "archive_size"
+        ],
+        "properties": {
+          "tree_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "archive_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "file_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 256
+          },
+          "uncompressed_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4194304
+          },
+          "archive_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5242880
+          }
+        }
+      },
+      "ProfileWriteContent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "content"
+        ],
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1
+          },
+          "restored_from_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true
+          }
+        }
+      },
+      "ListArtifactCandidatesRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope_id"
+        ],
+        "properties": {
+          "scope_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": ".*\\S.*"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CandidateStatus",
+            "default": "pending"
+          },
+          "family": {
+            "$ref": "#/components/schemas/CandidateFamily",
+            "nullable": true
+          },
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "nullable": true
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          }
+        }
+      },
+      "CandidateStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected"
+        ]
+      },
+      "CandidateFamily": {
+        "type": "string",
+        "enum": [
+          "experience",
+          "skill",
+          "profile"
+        ]
+      },
+      "GetArtifactCandidateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope_id",
+          "candidate_id"
+        ],
+        "properties": {
+          "scope_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": ".*\\S.*"
+          },
+          "candidate_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[\\x21-\\x7E]+$"
+          }
+        }
+      },
+      "CreateDreamRunRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/DreamOperation"
+          },
+          "artifacts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ArtifactReference"
+            },
+            "type": "array"
+          },
+          "sources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DreamSourceReference"
+            },
+            "type": "array"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ArtifactReference",
+            "nullable": true
+          },
+          "idempotency_key": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string",
+            "pattern": "^\\S(?:[\\s\\S]*\\S)?$"
+          }
+        },
+        "required": [
+          "operation",
+          "idempotency_key"
+        ],
+        "type": "object",
+        "description": "Select 1-20 exact Experience or Atomic Memory Artifacts after deduplication, with at most 32 combined references including Sources. Only refine_experience accepts Atomic Memory Artifacts or a target."
+      },
+      "DreamOperation": {
+        "type": "string",
+        "enum": [
+          "refine_experience",
+          "derive_skill"
+        ]
+      },
+      "DreamSourceReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_type",
+          "source_id"
+        ],
+        "properties": {
+          "source_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      }
+    }
+  }
+}

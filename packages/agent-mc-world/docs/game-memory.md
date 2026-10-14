@@ -2,7 +2,7 @@
 
 `mc_memory` is the same notebook through the SDK, MCP, Cortico and DSH interfaces. N.E.K.O discovers it through its progressive `mc_tool_help` / `mc_invoke` interface. A persistent `dataDir` is required. The default local mode makes no network or model calls. Optional retrieval connections are explicitly configured; the core never starts a model service or a planning loop.
 
-The caller retains personality, general memory and learning decisions. The Minecraft notebook holds locations, resource observations, attributed player reports, task notes, methods and counterexamples. Existing chest/exploration/blueprint/tactic ledgers remain their own sources of truth. Notes do not update those ledgers, create teammates, resume goals, execute code or cancel body tasks.
+The caller retains personality, general memory and learning decisions. The Minecraft notebook holds locations, resource observations, attributed player reports, task notes, methods and counterexamples. Existing chest/exploration/blueprint/tactic ledgers remain their own sources of truth. Notes do not update those ledgers, create teammates, resume goals, execute code or cancel body tasks. Optional [service learning](game-memory-learning.md) exposes evidence capture, reviewed experience candidates, asynchronous refinement and bounded historical recall through the same core tool.
 
 ## Small reads
 
@@ -59,11 +59,11 @@ Vector example (under `world.memory`):
 
 These are distinct APIs, not an industry-wide interchangeable memory protocol. Cloud vendors with another API can implement the bridge or add a core provider. No vendor SDK or cloud account is required for local mode.
 
-PowerContext uses the supplied existing Scope and a `kind` keyed by the game scope. It never creates, lists or changes Scopes. Its 8,192 UTF-8-byte limit applies to the complete serialized record; oversized records remain local with an indexing error, without truncation. The adapter targets the Atomic Memory API documented in the linked OpenAPI. Other installed versions need a contract check; no home service or real cloud credentials were used for repository tests.
+PowerContext uses the supplied existing Scope and a `kind` keyed by the game scope. It never creates, lists or changes Scopes. Its 8,192 UTF-8-byte limit applies to the complete serialized record; oversized records remain local with an indexing error, without truncation. A confirmed write returns exact `artifacts` (family, artifact_id, revision) and `scopeId`; matching text without a valid ArtifactRef is unverified. The adapter targets PowerContext 1.3.0. Other installed versions need a contract check; no home service or real cloud credentials were used for repository tests.
 
 ### Failure, revision and replication boundaries
 
-Local revision history is authoritative. Remote results must exactly match local scope, note ID, revision and content hash. Stale, archived, unrelated and foreign-agent remote records cannot become current facts. A second machine needs the corresponding local notebook restored or migrated; this version does not automatically import a whole remote account. Archiving suppresses old matches locally but does not erase the provider's stored history.
+For notebook search, local revision history is authoritative. Remote results must exactly match local scope, note ID, revision and content hash. Stale, archived, unrelated and foreign-agent remote records cannot become current facts. A second machine needs the corresponding local notebook restored or migrated; this version does not automatically import a whole remote account. Archiving suppresses old matches locally but does not erase the provider's stored history. Separately enabled service learning can read external reviewed experience and topics in an explicitly dedicated game Scope; these remain attributed historical service results, never silently imported as local observations.
 
 Writes commit locally first. A provider acknowledgement reports `stored` with `searchVerified:false`; an asynchronous acknowledgement stays `pending`, and a timeout stays `unverified`. None proves successful future recall. Unknown writes are not retried automatically. Search failure falls back to local results and reports `retrieval.degraded:true`. Requests have an explicit timeout, cancellation, a 1 MiB response bound and no redirects/discovery. Provider keys and response error bodies are excluded from tool results. A write cancelled after local commit retains `saved:true` and reports its remote indexing status.
 
@@ -80,6 +80,6 @@ The bounded local notebook avoids an always-running database and native extensio
 - [Mem0 platform add](https://docs.mem0.ai/api-reference/memory/add-memories) and [search](https://docs.mem0.ai/api-reference/memory/search-memories).
 - [Mem0 OSS REST server source](https://github.com/mem0ai/mem0/blob/main/server/main.py).
 - [Bailian add](https://help.aliyun.com/zh/model-studio/memory/add-memory) and [search](https://help.aliyun.com/zh/model-studio/memory/search-memory).
-- [PowerContext OpenAPI](https://github.com/oceanbase/powercontext/blob/master/openapi/powercontext.yaml).
+- [PowerContext 1.3.0 OpenAPI](https://github.com/oceanbase/powercontext/blob/powercontext-v1.3.0/openapi/powercontext.yaml).
 
 Tests cover local persistence through the actual disconnected core child and mocked provider wire contracts, isolation, revision races, cancellation and degradation. They do not establish real cloud/home-service connectivity or Agent learning gains.

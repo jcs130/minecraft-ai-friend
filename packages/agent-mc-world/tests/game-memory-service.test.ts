@@ -78,7 +78,7 @@ it.each(['http', 'mem0-oss', 'mem0-platform', 'bailian', 'powercontext'] as cons
           expect(url.pathname).toBe('/v1/memory/remember');
           expect(body.scope_id).toBe('operator-selected-game-scope');
           expect(body.expected_revision).toBeUndefined();
-          return json({ changed: true, records: [{ text: body.text }] });
+          return json({ changed: true, records: [{ text: body.text, artifact: { family: 'atomic-memory', artifact_id: 'actual-id', revision: 1 } }] });
         }
         expect(url.pathname).toBe(provider === 'mem0-oss' ? '/memories' : '/v3/memories/add/');
         expect(body.infer).toBe(false);
@@ -163,4 +163,10 @@ it('requires an explicit PowerContext scope, preserves over-size notes locally a
   expect(await service.execute({ ...note, content: '中'.repeat(5000) }, ctx, { ...cfg, scopeId: 'existing' }))
     .toMatchObject({ saved: true, index: { status: 'unverified' } });
   expect(request).not.toHaveBeenCalled();
+});
+
+it('does not claim an explicit PowerContext memory was stored when the acknowledgement has no exact ArtifactRef', async () => {
+  const { service } = setup((_url, body) => json({ changed: true, records: [{ text: body.text }] }));
+  expect(await service.execute(note, ctx, { mode: 'remote', provider: 'powercontext', endpoint: 'https://fixture.invalid', scopeId: 'existing' }))
+    .toMatchObject({ saved: true, index: { status: 'unverified', artifacts: [] } });
 });
