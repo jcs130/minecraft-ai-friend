@@ -25,6 +25,19 @@ READ_ACTIVITY_TOOLS = {"mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue
 IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout"}
 
 
+def observation_call(name, arguments):
+    """Classify native queued reads without treating their task IDs as actions."""
+    if name in READ_ACTIVITY_TOOLS:
+        return True
+    if name != "mc_do":
+        return False
+    steps = arguments.get("steps")
+    return isinstance(steps, list) and bool(steps) and all(
+        isinstance(step, dict) and (step.get("skill") in {"observe", "check", "probe"}
+                                   or (step.get("skill") == "find" and not step.get("direction")))
+        for step in steps)
+
+
 class ModelCallRejected(ValueError):
     """Known local rejection before any dispatch or uncertainty journal."""
 
@@ -178,6 +191,8 @@ def failure_context(catalogue, name, arguments, result):
     notice = {"tool": name, "arguments": encode(arguments)[:1200], "error": str(result.get("text", ""))[:700],
               "next_step": "Do not repeat rejected arguments. Read mc_help for the selected skill and mc_tool_help for the tool schema; then correct the call or choose another useful action.",
               "parameter_help": {}, "original_receipts": "receipts.jsonl"}
+    if name == "mc_do" and not result.get("execution"):
+        notice["next_step"] += " The batch was not accepted: earlier steps did not run either. Submit only the next feasible action; leave blocked optional searches and unverified dependent crafting out of that batch."
     if name == "mc_scout" and isinstance(steps, list):
         allowed = properties.get("steps", {}).get("items", {}).get("properties", {}).get("skill", {}).get("enum", [])
         rejected = sorted({step["skill"] for step in steps if isinstance(step, dict) and isinstance(step.get("skill"), str) and step["skill"] not in allowed})
@@ -242,6 +257,7 @@ class Controller:
 
     def record_tool_failure(self, name, arguments, result, request_id=None):
         self.tool_failure = failure_context(self.bridge.tools, name, arguments, result)
+        self.tool_failure["observation_only"] = observation_call(name, arguments)
         self.tool_failure["receipt"] = {"request_id": request_id, "turn_id": self.turn,
                                         "archive": "receipts.jsonl" if request_id else "decisions.jsonl"}
         # The planner's full diagnostic stays local. Other hosts receive the
@@ -578,8 +594,9 @@ class Controller:
             compact = await self.archive_receipt(request_id, name, result)
         else:
             result, compact = await self.dispatch(name, arguments, request_id)
+        read_only = observation_call(name, arguments)
         if not result.get("failed"):
-            if name in READ_ACTIVITY_TOOLS:
+            if read_only:
                 self.read_activity[name] = min(999, self.read_activity.get(name, 0) + 1)
             elif result.get("execution") and (name == "mc_do" or "act" in next(
                     (t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])):
@@ -595,7 +612,11 @@ class Controller:
                 if len(self.rejected_calls) >= 16:
                     self.rejected_calls.clear()
                 self.rejected_calls[rejected_key] = self.tool_failure
-        elif result.get("execution"):
+        elif result.get("execution") and (not read_only or (
+                self.tool_failure and self.tool_failure.get("observation_only")
+                and self.tool_failure["tool"] == name)):
+            # A corrected observation can resolve its own invalid parameters.
+            # An unrelated queued read cannot resolve a rejected body plan.
             self.tool_failure = None
             self.publish(tool_failure=None)
         control = result.get("control") or {}

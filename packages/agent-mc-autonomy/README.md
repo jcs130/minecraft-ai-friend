@@ -352,6 +352,14 @@ Hosts choose wording, rate limits and voice delivery. Review acknowledgements
 never instruct a host to speak, and a commentary opportunity is not playback or
 verified goal completion. Raw facts and query handles remain intact for planning.
 
+Since 0.1.29, queued observations (including stationary `find` in `mc_do`)
+retain the last rejected body plan in the request tail, even after history is
+evicted. A corrected read can resolve its own invalid arguments; an unrelated
+accepted read cannot prove recovery of a body action. Rejected batches explicitly
+report that their earlier steps did not run, so a feasible next action can be
+submitted without repeating blocked optional searches. Native safety guards,
+unknown-outcome blocking and raw receipts remain unchanged.
+
 Run `python -m pytest -q` here. Tests deny host SDK imports, network and service
 launches; the isolated process test exercises both a fake autonomous planner and
 queue-only operation. These tests do not prove live survival, actual model
