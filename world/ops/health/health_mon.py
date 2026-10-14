@@ -75,6 +75,8 @@ SOCIETY_SERVICE_MANIFEST = {
 # it must not report an autonomous Neko/dialogue runtime as healthy from a file.
 NEKO_ADAPTER_MANIFEST = Path('E:/QiandengJiSocietyLab/integrations/neko/installation.json')
 SOCIETY_NATIVE_SDK_MANIFEST = Path('E:/QiandengJiSocietyLab/integrations/native-sdk/installation.json')
+JAVA_CLIENT_BRIDGE_MANIFEST = {'probe': 'tools/java_client_bridge_health.py', 'optional': True,
+    'managedBy': 'owning-minecraft-client-lifecycle', 'serverRequired': False, 'bind': '127.0.0.1'}
 SOCIETY_UNDERWORLD_MANIFEST = {'probe': 'tools/maw_underworld_health.py',
     'managedBy': 'existing-native-java-supervisor', 'questProvider': 'simplequests',
     'economyProvider': 'economycraft', 'scope': 'installed_content_and_menu_contract'}
@@ -435,6 +437,15 @@ def probe_agent_frame():
 
 
 def probe_panel_smoke(scope=None):
+    if scope == 'society-java-client':
+        import os
+        tools_path = str(PROJECT/'tools')
+        if tools_path not in sys.path:
+            sys.path.insert(0, tools_path)
+        from java_client_bridge_health import probe
+        result = probe(os.environ.get('MAW_JAVA_CLIENT_CONFIG'))
+        return {'ok': result['ok'], 'java_client_bridge': result, 'manifest': JAVA_CLIENT_BRIDGE_MANIFEST,
+                'modelRequests': 0, 'worldActions': 0}
     if scope == 'society-performance':
         sys.path.insert(0, str(PROJECT/'tools'))
         from maw_performance_health import probe
@@ -2180,6 +2191,10 @@ def inventory_lock_failure(reason):
 
 
 def main():
+    if sys.argv[1:] == ['--society-java-client-smoke']:
+        report = probe_panel_smoke(scope='society-java-client')
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report['ok'] else 1
     if sys.argv[1:] in (['--society-performance'], ['--society-performance-smoke']):
         report = probe_panel_smoke(scope='society-performance')
         print(json.dumps(report, ensure_ascii=False, indent=2))

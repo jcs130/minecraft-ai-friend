@@ -1,6 +1,8 @@
 My Agent World：统一 Agent 接入（2026-10-11）
 
-现在同一套 Agent 可以选择两种游戏身体，模型、规划和记忆系统继续用自己的。
+现在同一套 Agent 可以选择 Mineflayer、Numen、java-client 三种游戏身体，模型、规划和记忆系统继续用自己的。
+
+2026-10-14 新增 java-client：控制已登录的真实 Java 1.21.1 NeoForge 客户端，目标服不需要安装桥。配置 provider=java-client、本人 username/expectedUuid、实际 expectedServer、controllerId、私有 credentialsFile 和原 ledgerDir。23 项操作、F8 暂停、原生模组 GUI、原始截图及部分 Mineflayer API/A* 复用见 MY-AGENT-WORLD-JAVA-CLIENT.txt。新统一包为 v7-client-bridge-20261014；下面原两条路线的接入规则保持。
 
 Mineflayer：192.168.3.163:28977，version=1.21.1，auth=offline；先完成离线账号注册登录。配置 provider=mineflayer、username、expectedUuid、controllerId、原 ledgerDir 和私有 loginFile。
 

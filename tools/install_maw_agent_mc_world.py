@@ -42,6 +42,7 @@ def install(destination: Path, core_package: Path, npm: Path):
     if seen != set(expected):
         raise ValueError('Packed core build files missing')
     source_files = dependencies(SOURCE / 'world-adapter/index.cjs')
+    source_files += dependencies(SOURCE / 'java-client/mineflayer-facade.cjs')
     source_files += sorted((SOURCE / 'agent-mc-host').glob('*.mjs'))
     source_files += sorted((SOURCE / 'agent-mc-host').glob('*.mts'))
     source_files += [SOURCE / 'agent-mc-host/ENV_PROMPT.txt']
@@ -58,6 +59,8 @@ def install(destination: Path, core_package: Path, npm: Path):
     files['package.json'] = (json.dumps(bundle, indent=2) + '\n').encode()
     files['LICENSE'] = (REPO / 'LICENSE').read_bytes()
     files['MY-AGENT-WORLD-AGENT-MC-WORLD.txt'] = (REPO / 'docs/MY-AGENT-WORLD-AGENT-MC-WORLD.txt').read_bytes()
+    for name in ('MY-AGENT-WORLD-JAVA-CLIENT.md', 'MY-AGENT-WORLD-JAVA-CLIENT.txt'):
+        files[name] = (REPO / 'docs' / name).read_bytes()
     destination.mkdir(parents=True)
     for name, data in files.items():
         target = destination / name
@@ -73,7 +76,7 @@ def install(destination: Path, core_package: Path, npm: Path):
     files['package-lock.json'] = (destination / 'package-lock.json').read_bytes()
     result = {'schemaVersion': 1, 'directory': str(destination), 'version': bundle['version'], 'coreVersion': package['version'],
               'coreArchiveSha256': sha(vendor.read_bytes()), 'coreSourceFiles': {i['file']: i['sha256'] for i in build['sourceFiles']},
-              'viewerInput': build['viewer'], 'providers': ['mineflayer', 'numen'], 'newServices': 0,
+              'viewerInput': build['viewer'], 'providers': ['mineflayer', 'numen', 'java-client'], 'newServices': 0,
               'modelRequests': 0, 'bodyConnections': 0, 'productionRestarted': False,
               'files': {name: sha(data) for name, data in sorted(files.items())},
               'sourceFiles': {p.relative_to(SOURCE).as_posix(): sha(p.read_bytes()) for p in source_files}}

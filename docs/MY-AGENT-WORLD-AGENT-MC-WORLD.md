@@ -1,6 +1,8 @@
 # 独立 Minecraft 核心的原生模组服接入
 
-2026-10-14：最新可选SDK分发为`v12-village-compat-20261014`，复用原核心0.4.0和原生适配器代码，更新候选接入说明。Settlements两个真实物品组件的编解码改在服务端网关源码，SDK分发不包含网关。角色配置和原账本沿用原版本；该SDK分发不代表已安装新增模组。万家烟火/村民新闻目前只在隔离候选验证，现役仍35个JAR，详见[整合记录](MY-AGENT-WORLD-SETTLEMENTS.md)。
+2026-10-14：新增可选 `java-client` 身体与 `v13-java-client-20261014` 分发。宿主的 `mc_state/mc_help/mc_do/mc_result/mc_control` 沿用原接口，通过本机客户端桥控制已登录玩家，目标服务器无需安装桥。配置增加 `expectedServer` 和客户端私有 `credentialsFile`；保留独立 Harness 目录与原动作账本。真实模组 GUI、原帧采集和 Mineflayer API/A* 复用见 [客户端接入](MY-AGENT-WORLD-JAVA-CLIENT.md)。原核心0.4.0、生产角色配置与原身体均不切换；默认1.20.6工具不会自动映射为客户端模组操作。
+
+2026-10-14 此前的`v12-village-compat-20261014`分发复用原核心0.4.0和原生适配器代码，更新候选接入说明。Settlements两个真实物品组件的编解码改在服务端网关源码，SDK分发不包含网关。角色配置和原账本沿用原版本；该SDK分发不代表已安装新增模组。万家烟火/村民新闻目前只在隔离候选验证，现役仍35个JAR，详见[整合记录](MY-AGENT-WORLD-SETTLEMENTS.md)。
 
 2026-10-13：已继续合入 `main@5aeea112eee88523bac9bf65eb475a05f7857bc7`，保留 `agent-mc-world 0.4.0` 与可选宿主包 `@my-agent-world/agent-mc-host 0.1.0`。当时安装在 `E:\QiandengJiSocietyLab\integrations\agent-mc-world\v11-upstream-20261013`，原v4至v10包保留，分支仍为 `experiment/agent-society-1.21.1`。任务统计、动作位移反馈、原生 SDK 和模组操作保持。有限试玩角色仍使用原v10配置并已停止；安装v11不代表角色已重新上线或切换新版运行。
 

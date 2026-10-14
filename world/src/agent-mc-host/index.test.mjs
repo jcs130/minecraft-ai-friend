@@ -83,6 +83,19 @@ test('construction and connection never claim, spawn another body, start a model
   await f.environment.stop()
   assert.deepEqual(f.calls, [['connect'], ['close']])
 })
+
+test('real Java client provider preserves the existing harness tools and original body binding', async t => {
+  const f = fixture(t)
+  Object.assign(f.config, { provider: 'java-client', expectedServer: '127.0.0.1:28978', credentialsFile: path.join(f.directory, 'client-private.json') })
+  f.identity.provider = 'java-client'; f.state.provider = 'java-client'
+  const environment = new MyAgentWorldEnvironment(f.config, { connect: f.connect })
+  f.cleanup.push(() => environment.stop()); await environment.start(f.host)
+  const tool = environment.tools().find(t => t.name === 'mc_state')
+  const result = JSON.parse((await tool.handler({}, {})).text)
+  assert.equal(result.provider, 'java-client'); assert.equal(result.bodyId, BODY)
+  assert.equal(f.calls.filter(c => c[0] === 'connect').length, 1)
+  assert.equal(f.calls.some(c => ['claim', 'submit'].includes(c[0])), false)
+})
 test('binding mismatch closes the returned adapter before admitting tools', async t => {
   const f = fixture(t); f.flags.wrongIdentity = true
   await assert.rejects(f.environment.start(f.host), /body_binding_mismatch/)
@@ -104,6 +117,14 @@ test('state keeps real mana, absolute coordinates and complete native SNBT', asy
   assert.equal(state.inventory.items[0].snbt, f.state.inventory.items[0].snbt)
   assert.equal(state.capturedAt, '2026-10-13T00:00:00Z'); assert.equal(state.bodyId, BODY)
   assert.equal(JSON.parse(f.environment.requestFacts().parts[0].text).position.x, .5)
+})
+
+test('compact model facts preserve custom display names and the real underlying item id separately', async t => {
+  const f = fixture(t)
+  f.state.inventory.items = [{ slot: 36, id: 'minecraft:player_head', name: '大背包', count: 1, snbt: '{id:"minecraft:player_head",count:1}' }]
+  await f.environment.start(f.host)
+  const item = JSON.parse(f.environment.requestFacts().parts[0].text).inventory.items[0]
+  assert.equal(item.id, 'minecraft:player_head'); assert.equal(item.name, '大背包'); assert.equal(item.count, 1)
 })
 test('nonempty provider arguments pass unchanged through the envelope validator', async t => {
   const f = fixture(t); await f.environment.start(f.host)

@@ -1,0 +1,659 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "provider": "java-client",
+  "operationCount": 23,
+  "serverRequired": false,
+  "allGameplayVerified": false,
+  "authority": "client_observed",
+  "operations": [
+    {
+      "id": "chat.recent",
+      "readOnly": true,
+      "available": true,
+      "async": false,
+      "permission": "signed_in_player",
+      "description": "读取此连接实际收到的聊天、系统与动作栏文字；按序号增量读取，128条有界缓冲，换连接清空。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {
+          "afterSeq": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+          "limit": {"type": "integer", "minimum": 1, "maximum": 64}
+        }
+      }
+    },
+    {
+      "id": "body.identity",
+      "readOnly": true,
+      "available": true,
+      "async": false,
+      "permission": "signed_in_player",
+      "description": "当前真实客户端的账号、UUID、服务器及连接标识。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "id": "body.snapshot",
+      "readOnly": true,
+      "available": true,
+      "async": false,
+      "permission": "signed_in_player",
+      "description": "同一客户端 tick 的真实位置、生命、完整物品组件、菜单和界面。服务端未同步的数据为 null。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "id": "body.observe",
+      "readOnly": true,
+      "available": true,
+      "async": false,
+      "permission": "signed_in_player",
+      "description": "读取已加载客户端世界的方块、真实碰撞形状和实体；不代表视线过滤。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "radius": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "world.blockAt",
+      "readOnly": true,
+      "available": true,
+      "async": false,
+      "permission": "signed_in_player",
+      "description": "按绝对坐标查询一个已加载方块。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "position": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -29999984,
+                "maximum": 29999984
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2048,
+                "maximum": 2048
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -29999984,
+                "maximum": 29999984
+              }
+            }
+          }
+        },
+        "required": [
+          "position"
+        ]
+      }
+    },
+    {
+      "id": "menu.current",
+      "readOnly": true,
+      "available": true,
+      "async": false,
+      "permission": "signed_in_player",
+      "description": "当前原生菜单，完整槽位组件、光标和 stateId。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "id": "screen.current",
+      "readOnly": true,
+      "available": true,
+      "async": false,
+      "permission": "signed_in_player",
+      "description": "原客户端界面标题、按钮、位置及 screenToken；自绘控件可用真实画面。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "id": "control.keys",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "按住真实游戏按键指定 tick；结束、取消、失联及 F8 均释放。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "controls": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "forward": {
+                "type": "boolean"
+              },
+              "back": {
+                "type": "boolean"
+              },
+              "left": {
+                "type": "boolean"
+              },
+              "right": {
+                "type": "boolean"
+              },
+              "jump": {
+                "type": "boolean"
+              },
+              "sneak": {
+                "type": "boolean"
+              },
+              "sprint": {
+                "type": "boolean"
+              },
+              "attack": {
+                "type": "boolean"
+              },
+              "use": {
+                "type": "boolean"
+              }
+            }
+          },
+          "ticks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "required": [
+          "controls",
+          "ticks"
+        ]
+      }
+    },
+    {
+      "id": "control.look",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "按角度设置同一玩家视角，yaw/pitch 单位为度。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "yaw": {
+            "type": "number",
+            "minimum": -3600,
+            "maximum": 3600
+          },
+          "pitch": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          }
+        },
+        "required": [
+          "yaw",
+          "pitch"
+        ]
+      }
+    },
+    {
+      "id": "body.move",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "使用原客户端物理直走至16格内绝对方块坐标，不挖路搭桥；复杂寻路另由规划器处理。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "position": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -29999984,
+                "maximum": 29999984
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2048,
+                "maximum": 2048
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -29999984,
+                "maximum": 29999984
+              }
+            }
+          }
+        },
+        "required": [
+          "position"
+        ]
+      }
+    },
+    {
+      "id": "inventory.selectHotbar",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "选择快捷栏0–8；核对目标物品完整SNBT。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "hotbarSlot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "expectedSnbt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hotbarSlot",
+          "expectedSnbt"
+        ]
+      }
+    },
+    {
+      "id": "menu.openInventory",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "打开本人真实原版背包界面。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "id": "menu.close",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "关闭已观察到的真实容器。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "windowId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "windowId"
+        ]
+      }
+    },
+    {
+      "id": "menu.click",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "正常原生槽位点击；核对窗口、状态、完整物品及光标，等待实际菜单变化。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "windowId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "expectedStateId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "slot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1023
+          },
+          "button": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "clickType": {
+            "type": "string",
+            "enum": [
+              "PICKUP",
+              "QUICK_MOVE",
+              "SWAP"
+            ]
+          },
+          "expectedSnbt": {
+            "type": "string"
+          },
+          "expectedCarriedSnbt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "windowId",
+          "expectedStateId",
+          "slot",
+          "button",
+          "clickType",
+          "expectedSnbt",
+          "expectedCarriedSnbt"
+        ]
+      }
+    },
+    {
+      "id": "screen.click",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "点击实际界面；坐标为GUI缩放后的坐标，screenToken防止误点旧界面。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "screenToken": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 16384
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 16384
+          },
+          "button": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2
+          }
+        },
+        "required": [
+          "screenToken",
+          "x",
+          "y",
+          "button"
+        ]
+      }
+    },
+    {
+      "id": "screen.key",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "向当前原生界面发送GLFW按键。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "screenToken": {
+            "type": "string"
+          },
+          "key": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 348
+          },
+          "modifiers": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 15
+          }
+        },
+        "required": [
+          "screenToken",
+          "key"
+        ]
+      }
+    },
+    {
+      "id": "screen.type",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "向当前界面焦点输入文本；不会读取并回传输入框中可能存在的密钥。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "screenToken": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 512
+          }
+        },
+        "required": [
+          "screenToken",
+          "text"
+        ]
+      }
+    },
+    {
+      "id": "screen.capture",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "采集原客户端Framebuffer PNG，包括完整模组模型与GUI。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "id": "world.dig",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "挖掘准星指向、正常触及距离内的绝对坐标方块，核对客户端实际方块变化。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "position": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -29999984,
+                "maximum": 29999984
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2048,
+                "maximum": 2048
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -29999984,
+                "maximum": 29999984
+              }
+            }
+          }
+        },
+        "required": [
+          "position"
+        ]
+      }
+    },
+    {
+      "id": "world.useBlock",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "正常右键准星指向的方块，用于机器、容器与放置；可核对命中面与主手完整SNBT，不等于已完成上层任务。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "face": {"type": "string", "enum": ["up", "down", "north", "south", "east", "west"]},
+          "expectedHeldSnbt": {"type": "string"},
+          "position": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -29999984,
+                "maximum": 29999984
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2048,
+                "maximum": 2048
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -29999984,
+                "maximum": 29999984
+              }
+            }
+          }
+        },
+        "required": [
+          "position"
+        ]
+      }
+    },
+    {
+      "id": "world.useItem",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "按住正常使用物品键指定tick，例如进食、蓄力和模组道具。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ticks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "required": [
+          "ticks"
+        ]
+      }
+    },
+    {
+      "id": "world.attack",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "攻击实际准星命中的实体，核对运行时ID、UUID和触及距离。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entityId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "expectedUuid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "expectedUuid"
+        ]
+      }
+    },
+    {
+      "id": "chat.send",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "通过本人正常游戏连接发送聊天或斜杠命令；不会授予额外权限。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    }
+  ]
+}

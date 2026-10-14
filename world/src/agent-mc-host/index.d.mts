@@ -2,10 +2,11 @@ import type { MinecraftAgentClient, Logger, ModelFacts } from 'agent-mc-world/cl
 import type { ExecutionReceipt, World, WorldHost } from 'agent-mc-world/contracts';
 
 export interface MyAgentWorldConfig {
-  provider: 'mineflayer' | 'numen'; username: string; controllerId: string;
+  provider: 'mineflayer' | 'numen' | 'java-client'; username: string; controllerId: string;
   dataDir: string; ledgerDir: string;
   host?: string; port?: number; expectedUuid?: string; loginFile?: string;
   bodyId?: string; credentialsFile?: string; viewerUrl?: string;
+  expectedServer?: string;
   connectTimeoutMs?: number; timeoutMs?: number; pollMs?: number;
 }
 /** Injectable transport for tests or an already owned native adapter. No new connection is implicit. */
@@ -17,6 +18,7 @@ export interface BodyAdapter {
   cancel(id: string): Promise<unknown>; claimControl(): Promise<unknown>; releaseControl(): Promise<unknown>;
   stop(): Promise<unknown>; restore(): Promise<unknown>; viewer(): unknown | Promise<unknown>;
   luaOperations?(group?: string): Promise<unknown>; close(): Promise<unknown>;
+  frame?(actionId: string): Promise<Uint8Array>;
 }
 export class MyAgentWorldEnvironment implements World {
   constructor(config: MyAgentWorldConfig, options?: {connect?: (config: MyAgentWorldConfig) => Promise<BodyAdapter>});

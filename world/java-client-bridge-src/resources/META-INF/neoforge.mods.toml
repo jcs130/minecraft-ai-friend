@@ -1,0 +1,21 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="maw_client_bridge"
+version="0.1.0"
+displayName="My Agent World · Client Bridge"
+description="Optional client-only state, input, native menus and framebuffer bridge. No server counterpart or custom network channel."
+
+[[dependencies.maw_client_bridge]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1]"
+side="CLIENT"
+
+[[dependencies.maw_client_bridge]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.248,21.2)"
+side="CLIENT"

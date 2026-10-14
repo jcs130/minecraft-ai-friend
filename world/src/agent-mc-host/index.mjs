@@ -25,7 +25,7 @@ const error = code => Object.assign(new Error(code), { code })
 const fail = code => ({ ok: false, code, retryAutomatically: false })
 
 function validateConfig(config) {
-  if (!['mineflayer', 'numen'].includes(config?.provider) || !/^[A-Za-z0-9_]{1,16}$/.test(config.username || '') ||
+  if (!['mineflayer', 'numen', 'java-client'].includes(config?.provider) || !/^[A-Za-z0-9_]{1,16}$/.test(config.username || '') ||
       !ID.test(config.controllerId || '') || !path.isAbsolute(config.dataDir || '') || !path.isAbsolute(config.ledgerDir || '')) throw error('maw_host_config_invalid')
   const data = path.resolve(config.dataDir), ledger = path.resolve(config.ledgerDir)
   const overlaps = (a, b) => a === b || a.startsWith(b + path.sep) || b.startsWith(a + path.sep)
@@ -33,6 +33,7 @@ function validateConfig(config) {
   for (const key of ['credentialsFile', 'loginFile']) if (config[key] && !path.isAbsolute(config[key])) throw error('maw_host_private_path_invalid')
   if (config.provider === 'mineflayer' && (!config.host || !Number.isInteger(config.port) || config.port < 1 || config.port > 65535 || !UUID.test(config.expectedUuid || ''))) throw error('maw_host_mineflayer_binding_invalid')
   if (config.provider === 'numen' && (!UUID.test(config.bodyId || '') || !path.isAbsolute(config.credentialsFile || ''))) throw error('maw_host_numen_binding_invalid')
+  if (config.provider === 'java-client' && (!UUID.test(config.expectedUuid || '') || !config.expectedServer || !path.isAbsolute(config.credentialsFile || ''))) throw error('maw_host_java_client_binding_invalid')
   if (config.pollMs !== undefined && (!Number.isInteger(config.pollMs) || config.pollMs < 250 || config.pollMs > 5000)) throw error('maw_host_poll_interval_invalid')
   if (config.viewerUrl) {
     const url = new URL(config.viewerUrl)
@@ -94,7 +95,7 @@ export class MyAgentWorldEnvironment {
       status: s.status, position: s.position, dimension: s.dimension, health: s.health, maxHealth: s.maxHealth,
       hunger: s.hunger, mana: s.mana, currentAction: s.currentAction,
       inventory: { available: s.inventory?.available, slotNamespace: s.inventory?.slotNamespace,
-        items: s.inventory?.items?.map(({ slot, id, count }) => ({ slot, id, count })) },
+        items: s.inventory?.items?.map(({ slot, id, count, name, displayName }) => ({ slot, id, name: displayName ?? name ?? null, count })) },
       menu: s.menu ? { windowId: s.menu.windowId, stateId: s.menu.stateId } : null }
     return { text: '', snapshotTypes: ['maw.body'], parts: [{ key: 'maw.body', text: JSON.stringify(fact) }] }
   }
@@ -201,7 +202,7 @@ export class MyAgentWorldEnvironment {
         const value = this.#own(await this.#ready().wait(a.action_id, { timeoutMs: a.timeoutMs ?? 30000 })); return this.#out(value, executionOf(value, a.action_id))
       }),
       tool('mc_cancel', '显式取消本人原 action_id；取消请求不等于回滚，继续核对终态。', object({ action_id: actionId }, ['action_id']), ['act'], async a => this.#out(this.#own(await this.#ready().cancel(a.action_id)))),
-      tool('mc_control', 'Numen 显式 claim/release/restore 原身体；Mineflayer 复用 SDK 排他锁。stop 仅停止本人动作。不授OP、不自动续租。', object({ action: { enum: ['claim', 'release', 'stop', 'restore'] } }, ['action']), ['act'], async a => {
+      tool('mc_control', 'Numen/真实Java客户端显式claim/release原身体；Mineflayer复用SDK排他锁。stop停止本人输入，不回滚物品；restore仅Numen支持。不授OP、不自动续租。', object({ action: { enum: ['claim', 'release', 'stop', 'restore'] } }, ['action']), ['act'], async a => {
         const method = { claim: 'claimControl', release: 'releaseControl', stop: 'stop', restore: 'restore' }[a.action]
         return this.#out(this.#own(await this.#ready()[method]()))
       }),
@@ -220,6 +221,7 @@ export function createMyAgentWorldClient(config, { log = nullLogger(), modelFact
   const environment = new MyAgentWorldEnvironment(config, connect ? { connect } : {})
   let host = config.host, port = config.port
   if (config.provider === 'numen') { const endpoint = new URL(credentials(config.credentialsFile).url); host = endpoint.hostname; port = Number(endpoint.port) || (endpoint.protocol === 'https:' ? 443 : 80) }
+  if (config.provider === 'java-client') { const endpoint = require('../java-client/index.cjs').credentials(config.credentialsFile).url; host = endpoint.hostname; port = Number(endpoint.port) }
   class NativeClient extends MinecraftAgentClient {
     validateConfig() { validateConfig(config) }
     async environment() { return readFileSync(new URL('./ENV_PROMPT.txt', import.meta.url), 'utf8') }

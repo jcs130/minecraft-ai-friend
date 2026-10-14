@@ -1,8 +1,8 @@
 # My Agent World 统一身体接口
 
-2026-10-12，`@my-agent-world/world-adapter` 0.3.0。上层 Agent 的规划、记忆、模型和调度保持原样，通过一套 JS 或 JSONL 接口选择 `mineflayer` 或 `numen` 身体。新增 19 项通用底层控制 API；参数和直接 HTTP 调用见 [控制 API 纯文本指南](MY-AGENT-WORLD-CONTROL-API.txt)。
+2026-10-14，`@my-agent-world/world-adapter` 0.4.0。上层 Agent 的规划、记忆、模型和调度保持原样，通过一套 JS 或 JSONL 接口选择 `mineflayer`、`numen` 或 `java-client` 身体。真实客户端入口及 23 项原生输入/菜单/截图操作见 [客户端接入指南](MY-AGENT-WORLD-JAVA-CLIENT.md)；原两条服务端路线的底层控制 API 见 [控制 API 纯文本指南](MY-AGENT-WORLD-CONTROL-API.txt)。
 
-源码：`world/src/world-adapter/`。可分发目录：`E:\QiandengJiSocietyLab\integrations\world-adapter\v6-underworld-20261012`；复制整个目录到 Agent 主机，用 Node 22 在该目录执行 `npm ci`。包附运行环境原始传递依赖锁，沿用锁定 Mineflayer / 协议依赖，不任意升级。新版包与原 Native SDK 包并存，不覆盖原 Agent 或其账本。
+源码：`world/src/world-adapter/`。可分发目录：`E:\QiandengJiSocietyLab\integrations\world-adapter\v7-client-bridge-20261014`；复制整个目录到 Agent 主机，用 Node 22 在该目录执行 `npm ci`。包附运行环境原始传递依赖锁，沿用锁定 Mineflayer / 协议依赖，不任意升级。新版包与原 Native SDK 包并存，不覆盖原 Agent 或其账本。
 
 ## 明确选择身体
 
@@ -10,6 +10,7 @@
 |---|---|---|---|
 | mineflayer | `192.168.3.163:28977`，原账号、原 UUID；离线密码认证 | 复用现有 Native SDK、Mineflayer 物理和寻路、原生模组通道 | 同账号、同 expectedUuid、同一原 SDK ledgerDir 重新连接 |
 | numen | `http://192.168.3.163:28984/numen/mcp`，本人令牌绑定已有 bodyId | 服务端 Numen 原生 Lua / 99 项同身体原生 API | 服务端原 UUID 存档与动作账本，加本机独立 shadow ledger |
+| java-client | 本机真实 Java 客户端已登录的玩家；目标服无需安装桥 | 客户端实际状态、物理、原生模组界面及 Framebuffer；可复用部分 Mineflayer API/A* | 客户端持久动作记录与原 SDK shadow ledger，绑定服务器和本人 UUID |
 
 每个实例固定 provider 和 bodyId。接口不会按名字寻找替身、自动创建身体、复制背包/技能、换 UUID 或回退另一种接入方式。新身体先按原 Numen 管理流程显式创建；统一层只接已登记的身体。跨 provider 切换是上层选择不同身体，**不是同一身体无损迁移**。
 

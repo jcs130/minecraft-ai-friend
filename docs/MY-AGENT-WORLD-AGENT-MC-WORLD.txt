@@ -1,5 +1,7 @@
 My Agent World 接入新版独立 agent-mc-world（2026-10-14）
 
+新增可选 v13-java-client-20261014：provider=java-client 控制已经登录的真实 Java 客户端；配置本人 expectedUuid、实际 expectedServer、本机 credentialsFile、原 ledgerDir，以及独立 dataDir。仍使用 mc_state/mc_help/mc_do/mc_result/mc_control，不要求目标服务器装桥。23 项输入/原生GUI/聊天/截图操作见 MY-AGENT-WORLD-JAVA-CLIENT.txt。原角色和服务端入口保持，不自动换身体。
+
 核心已合入 minecraft-ai-friend/main@5aeea112eee88523bac9bf65eb475a05f7857bc7，agent-mc-world 0.4.0。
 适配源码：world/src/agent-mc-host。它使用核心公开 /client、/contracts、/mcp 接口，不把服务端规则写回通用核心。
 

@@ -28,7 +28,7 @@ def probe(root=DEFAULT_ROOT):
         checks['packed_independent_core_installed'] = json.loads((core / 'package.json').read_text('utf-8'))['version'] == installation['coreVersion'] == '0.4.0'
         build = json.loads((core / 'dist/build.json').read_text('utf-8'))
         checks['installed_runtime_matches_build'] = exact(core, {row['file']: row['sha256'] for row in build['files'] if row['file'].startswith('dist/runtime/')})
-        checks['both_providers_explicit'] = installation['providers'] == ['mineflayer', 'numen']
+        checks['explicit_body_providers'] = installation['providers'] == ['mineflayer', 'numen', 'java-client']
         checks['no_model_or_body_autostart'] = installation['modelRequests'] == installation['bodyConnections'] == installation['newServices'] == 0
         checks['runtime_protocol_pins'] = all(json.loads((directory / 'node_modules' / name / 'package.json').read_text('utf-8'))['version'] == version
                                             for name, version in [('mineflayer', '4.37.1'), ('minecraft-protocol', '1.66.2'), ('minecraft-data', '3.112.0')])

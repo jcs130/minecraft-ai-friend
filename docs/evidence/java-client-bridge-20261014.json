@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-14",
+  "feature": "optional_real_java_client_bridge",
+  "branch": "experiment/agent-society-1.21.1",
+  "minecraft": "1.21.1",
+  "neoForge": "21.1.248",
+  "java": 21,
+  "clientBridgeVersion": "0.1.0",
+  "worldAdapterVersion": "0.4.0",
+  "jarSha256": "29b0be3c6ba63c85c9eb4194932e66de5519c3a76a01a7e364818640e0b84068",
+  "reproducibleBuild": true,
+  "serverBridgeRequired": false,
+  "customPayloadChannels": [],
+  "operationCount": 23,
+  "samePlayer": true,
+  "secondMinecraftConnection": false,
+  "testedServerMods": [
+    "farmersdelight"
+  ],
+  "clientRendering": "original_framebuffer",
+  "stateAuthority": "client_observed",
+  "tests": {
+    "adapterNode": {
+      "pass": 36,
+      "fail": 0,
+      "skip": 0
+    },
+    "packedHost": {
+      "pass": 18,
+      "fail": 0,
+      "skip": 0
+    },
+    "journalJvm": {
+      "assertions": 21,
+      "pass": true
+    },
+    "externalTypeConsumer": true,
+    "realClientOperations": {
+      "pass": 19,
+      "checks": [
+        "same_identity",
+        "complete_item_components",
+        "received_private_chat",
+        "exclusive_controller",
+        "native_key_movement",
+        "actual_mod_collision_shapes",
+        "mineflayer_astar_native_physics",
+        "original_cooking_pot_menu",
+        "twelve_tomato_deposit",
+        "original_gui_framebuffer",
+        "twelve_tomato_withdraw",
+        "stale_screen_rejection",
+        "actual_inventory_crafting",
+        "native_gui_keyboard",
+        "equipment_selection",
+        "survival_dig",
+        "survival_place_with_face",
+        "cancel_releases_keys",
+        "sdk_reconnect_deduplication"
+      ]
+    },
+    "realClientRestart": {
+      "pass": 5,
+      "sameWorld": true,
+      "sameUuid": true,
+      "samePosition": true,
+      "originalReceiptPersisted": true,
+      "noDuplicateExecution": true
+    },
+    "authentication": {
+      "pass": 5,
+      "noTokenRejected": true,
+      "badTokenRejected": true,
+      "originRejected": true,
+      "hostRejected": true,
+      "rpcPostOnly": true
+    },
+    "independentHarnessLive": {
+      "pass": 4,
+      "paidModelCalls": 0,
+      "newMinecraftConnections": 0
+    },
+    "actualServerSave": {
+      "pass": 5,
+      "inventoryMatches": true,
+      "tomatoes": 12,
+      "craftingTable": 1,
+      "remainingStone": 7,
+      "positionMatches": true
+    },
+    "health": {
+      "clientContractAndActualReads": 11,
+      "hostDistribution": 10,
+      "adapterDistribution": 8,
+      "preservation": 13
+    }
+  },
+  "backpackFinding": {
+    "initialFixture": "Named player_head without profile; name/component test only, not a real backpack",
+    "oldPaperImplementation": "Minepacks shortcut using minecraft:player_head, custom_name and profile",
+    "originalTextureTest": {
+      "present": true,
+      "length": 180,
+      "actualAppearance": "blue backpack icon",
+      "sampleOnly": true,
+      "storageFunctionTested": false
+    },
+    "agentFactsNowPreserveDisplayName": true,
+    "underlyingIdPreserved": true,
+    "neoForgeOldBackpackCapacityMigrated": false
+  },
+  "performance": {
+    "scope": "20 local loopback client snapshot reads, not server TPS",
+    "sampleCount": 20,
+    "p50Ms": 33.3674,
+    "p95Ms": 33.6247,
+    "maxMs": 33.7227
+  },
+  "correction": {
+    "failedInitialNavigation": "Early success at block edge rejected by final GoalBlock verification",
+    "fix": "Require actual target BlockPos and within 0.30 of horizontal center",
+    "failedEvidencePreserved": true
+  },
+  "preservation": {
+    "productionRestarted": false,
+    "productionMods": 35,
+    "modBytesUnchanged": true,
+    "configsUnchanged": true,
+    "supervisorOwnersUnchanged": true,
+    "mawExplorerPaused": true,
+    "mawExplorerRound": 464,
+    "originalLedgerPrefixUnchanged": true,
+    "kiritoConfigurationSwitched": false,
+    "paidModelCalls": 0,
+    "publicNetworkChanged": false,
+    "allQaExitedNormally": true
+  },
+  "bundles": {
+    "client": "E:/QiandengJiSocietyLab/integrations/java-client-bridge/v1-20261014",
+    "adapter": "E:/QiandengJiSocietyLab/integrations/world-adapter/v7-client-bridge-20261014",
+    "host": "E:/QiandengJiSocietyLab/integrations/agent-mc-world/v13-java-client-20261014",
+    "coreVersion": "0.4.0",
+    "coreArchiveSha256": "d6570284a778b7569205fecb3fdd8dda97532864cbb6f3521e1299f5e96a1aae"
+  },
+  "limits": {
+    "allModsSemanticsVerified": false,
+    "unmodifiedMineflayerPluginsVerified": false,
+    "strictVisibleOnlyPerception": false,
+    "serverTransactionAuthority": false,
+    "continuousVideoStream": false,
+    "bedrockConversion": false,
+    "humanPhysicalF8Tested": false,
+    "longTermAutonomousLifeVerified": false
+  },
+  "privateEvidenceDirectory": "E:/QiandengJiSocietyLab/research/client-bridge-20261014"
+}

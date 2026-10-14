@@ -342,6 +342,7 @@ async function withNumen (client, { bodyId, ownerUuid, controllerId, ledgerDir, 
   }
 }
 async function connect (config) {
+  if (config?.provider === 'java-client') return require('../java-client/index.cjs').connectJavaClient(config)
   if (config?.provider === 'numen') {
     const auth = credentials(config.credentialsFile)
     const url = new URL(auth.url)
