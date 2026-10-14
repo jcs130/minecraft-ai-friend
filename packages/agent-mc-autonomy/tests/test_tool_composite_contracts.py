@@ -44,3 +44,28 @@ def test_native_array_bounds_reject_invalid_shapes_without_inventing_conditional
     for field, value in (("sites", [[1, 2]]), ("rays", [[0, "east", 20]]), ("bounds", [-17, 0, 0, 1, 1, 1])):
         assert not validator.is_valid({"steps": [{"skill": "observe", field: value}]})
     assert validator.is_valid({"steps": [{"skill": "craft"}]})
+
+
+def test_compact_step_projection_preserves_short_action_parameter_meanings():
+    native = catalogue()
+    props = native[0]["inputSchema"]["properties"]["steps"]["items"]["properties"]
+    for field, description in {
+        "mode": "observe requires sites, voxels or rays.",
+        "target": "find requires an English block or entity ID.",
+        "direction": "find without direction is a stationary observation.",
+        "count": "Desired output item count, not recipe repetitions.",
+    }.items():
+        props[field] = {"type": "string" if field != "count" else "integer", "description": description}
+    result = model_tools(native)[0]["function"]["parameters"]["properties"]["steps"]["items"]["properties"]
+    for field in ("mode", "target", "direction", "count"):
+        assert result[field] == props[field]
+
+
+def test_scout_description_exposes_a_valid_bounded_example_and_find_explains_movement():
+    native = catalogue()
+    native.append({**copy.deepcopy(native[0]), "name": "mc_do"})
+    tools = {row["function"]["name"]: row["function"] for row in model_tools(native)}
+    assert "512" in tools["mc_scout"]["description"]
+    assert "[-3,-2,-3,3,3,3]" in tools["mc_scout"]["description"]
+    assert "direction" in tools["mc_do"]["description"]
+    assert "target" in tools["mc_do"]["description"]

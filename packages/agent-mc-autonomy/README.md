@@ -413,3 +413,12 @@ It rejects damaging dry navigation drops, predicts imminent falls with the actua
 physics engine and no longer exempts an observed deep fall because the goal is lower.
 Source/build hashes and the isolated consumer checks remain mandatory. This update
 does not establish long-term survival or authorize restarting another host.
+
+## Action parameter projection (0.1.39)
+
+Keep short native meanings for target, direction, mode, count and spatial inputs.
+The compact scout description includes a legal inclusive voxel example; the action
+description explains that find without direction only observes. Repeated read
+attempts receive a changing request-tail notice to choose an action when facts
+suffice or query a specific unresolved fact. This is advisory and does not
+automatically move the body, interrupt work or claim progress.

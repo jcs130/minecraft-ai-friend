@@ -26,11 +26,14 @@ def catalogue():
 
 
 @pytest.mark.parametrize("field", ["mode", "item", "count", "pitch", "mature", "shape"])
-def test_projection_keeps_native_scalar_structure_without_manuals(field):
+def test_projection_keeps_native_scalar_structure_without_long_manuals(field):
     original = catalogue()
     before = copy.deepcopy(original)
     projected = model_tools(original)[0]["function"]["parameters"]["properties"]["steps"]["items"]
     expected = {k: v for k, v in original[0]["inputSchema"]["properties"]["steps"]["items"]["properties"][field].items() if k != "description"}
+    if field == "count":
+        # Output-count semantics are necessary arguments, not a long manual.
+        expected["description"] = original[0]["inputSchema"]["properties"]["steps"]["items"]["properties"][field]["description"]
     assert projected["properties"][field] == expected
     assert projected["properties"]["sites"] == original[0]["inputSchema"]["properties"]["steps"]["items"]["properties"]["sites"]
     assert original == before

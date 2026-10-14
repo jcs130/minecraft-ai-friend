@@ -66,6 +66,12 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
         tail["fast_focus"] = fast_focus
     if read_activity:
         tail["read_activity"] = {"calls_since_body_action": read_activity, "action_progress_verified": False}
+        if sum(read_activity.values()) >= 5:
+            tail["read_activity"]["next_decision"] = (
+                "Several read attempts have not constituted a body action. If the needed facts are already observed, "
+                "choose one bounded mc_do with the selected skill's required parameters. Otherwise query a specific "
+                "unresolved fact or report genuine blocked evidence; avoid rescanning unchanged space."
+            )
     if events:
         tail["recent_events_archive"] = {"run": events[0].get("run"), "after": max(0, events[0].get("cursor", 1) - 1)}
 

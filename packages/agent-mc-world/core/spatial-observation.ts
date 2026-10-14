@@ -4,7 +4,7 @@ import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { AIR_NAMES, LIQUIDS } from './cell-facts.ts';
 import { SkillBlocked } from './skill-context.ts';
-import { spatialBoxBudgetNote } from './spatial-slices.ts';
+import { spatialBoxBudgetNote, partitionSpatialBox } from './spatial-slices.ts';
 import { spatialSites } from './spatial-site.ts';
 
 type Point = [number, number, number];
@@ -45,7 +45,12 @@ export function parseSpatialObservation(c: Record<string, unknown>): SpatialObse
       return { error: `bounds 的最小值不能大于最大值；同一区域的升序边界为 ${JSON.stringify(ordered)}，请核对相对坐标后重新提交；尚未读取` };
     }
     const budget = spatialBoxBudgetNote(b, SPATIAL_OBSERVATION_LIMITS.cells);
-    if (budget) return { error: `voxels ${budget}` };
+    if (budget) {
+      const plan = partitionSpatialBox(b, SPATIAL_OBSERVATION_LIMITS.cells);
+      const first = [...b.slice(0, 3), ...plan.chunkSizes.map((size, axis) => Math.min(b[axis + 3], b[axis] + size - 1))];
+      const retry = { steps: [{ skill: 'observe', mode: 'voxels', bounds: first }] };
+      return { error: `voxels ${budget}\n可复用首批(mc_scout)：${JSON.stringify(retry)}\n这只是 ${plan.chunks} 批中的首批，尚未读取任何一批；后续按实际未解决的问题查询，不必把整个区域重复拼回请求。` };
+    }
     return { mode: 'voxels', bounds: [...b] as Box };
   }
   if (c.mode === 'rays') {

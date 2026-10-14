@@ -110,16 +110,17 @@ def model_tools(catalogue):
                 projected = {}
                 for key, value in properties.items():
                     projected[key] = structural(value, descriptions=False)
-                    if isinstance(value, dict) and scalar_structure(value) is None and numeric_field(value):
+                    if isinstance(value, dict) and (key in {"target", "direction", "mode", "count", "anchors", "bounds", "needs"}
+                                                   or scalar_structure(value) is None and numeric_field(value)):
                         meaning = value.get("description")
                         if isinstance(meaning, str) and len(meaning) <= 240:
                             projected[key]["description"] = meaning
                 step["properties"] = projected
         description = tool.get("description", "")[:450]
         if tool["name"] == "mc_do" and "steps" in schema.get("properties", {}):
-            description = "Execute real Minecraft actions: movement, collect, craft, eat, attack, build, etc. Steps run in order on the native body queue. Read mc_help for the selected skill's exact parameters/examples, then submit flat step objects. Default queue is append; afterCheckpoint inserts safely, now interrupts. A returned task ID means accepted, not completed."
+            description = "Execute real actions using flat steps. find requires target; direction makes it walk, otherwise it only observes. collect uses block; craft uses item/count. Read mc_help for exact skill parameters. Queue append preserves work; afterCheckpoint inserts safely, now interrupts. Task IDs mean accepted, not completed."
         elif tool["name"] == "mc_scout":
-            description = "Read-only observations or dry-run trials. Only the skills in steps.skill.enum are allowed. Does not collect, craft, eat, move the player or build anything. Use mc_do for real actions."
+            description = "Read-only observations/dry runs; use mc_do for real actions. observe requires mode: sites|voxels|rays. voxels bounds are six inclusive foot-relative integers with volume <=512; [-3,-2,-3,3,3,3] reads 294 cells. Copy the legal first-query example from an oversized rejection instead of repeatedly guessing smaller bounds."
         tools.append({"type": "function", "function": {"name": tool["name"], "description": description, "parameters": schema}})
     if advanced:
         tools.append({"type": "function", "function": {"name": "mc_invoke",

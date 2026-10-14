@@ -8,6 +8,20 @@ import { partitionSpatialBox, spatialBoxBudgetNote } from '../core/spatial-slice
 const cap = SPATIAL_OBSERVATION_LIMITS.cells;
 
 describe('bounded spatial request recovery', () => {
+  it('gives a directly reusable legal first query for the observed 2205-cell rejection', () => {
+    const input = { mode: 'voxels', bounds: [-10, -2, -10, 10, 2, 10] };
+    const original = structuredClone(input);
+    const result = parseSpatialObservation(input) as { error: string };
+    const encoded = result.error.match(/可复用首批\(mc_scout\)：([^\n]+)/)?.[1];
+    expect(encoded).toBeDefined();
+    const retry = JSON.parse(encoded!);
+    expect(retry.steps).toHaveLength(1);
+    expect(retry.steps[0].skill).toBe('observe');
+    expect(parseSpatialObservation(retry.steps[0])).not.toHaveProperty('error');
+    expect(retry.steps[0].bounds.slice(0, 3)).toEqual(input.bounds.slice(0, 3));
+    expect(result.error).toContain('尚未读取');
+    expect(input).toEqual(original);
+  });
   it.each([
     [-8, -2, -8, 0, 4, 8],
     [-6, 0, -6, 6, 3, 6],
