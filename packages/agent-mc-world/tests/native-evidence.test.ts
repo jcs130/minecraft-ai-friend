@@ -15,3 +15,14 @@ it('bounds common state while retaining exact original revisions with digest and
     expect(() => archive.read('same-action', '../outside')).toThrow('digest');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+it('pages the exact script report independently of a large original body snapshot',()=>{
+  const dir=mkdtempSync(join(tmpdir(),'native-script-evidence-'));
+  try {
+    const archive=new NativeEvidenceArchive(dir),script={ok:true,result:{symbols:['player_position','getblocklist']},programReport:true};
+    const original={evidence:{inventory:[{book:'large book'.repeat(50000)}],script}},ref=archive.save('program',original);
+    const page=archive.read(ref.key,ref.sha256,0,8000,'script');
+    expect(JSON.parse(page.text)).toEqual(script);expect(page.sha256).toBe(ref.sha256);expect(page.part).toBe('script');
+    expect(page.originalChars).toBeGreaterThan(400000);expect(page.totalChars).toBeLessThan(300);
+    const full=archive.read(ref.key,ref.sha256,0,40);expect(full.part).toBe('full');expect(full.text).toContain('inventory');
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});

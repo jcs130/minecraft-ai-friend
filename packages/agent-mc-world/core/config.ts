@@ -4,7 +4,7 @@ import { GAME_MEMORY_DEFAULTS, GAME_MEMORY_CONFIG_SCHEMA } from './game-memory-s
 
 export const MINECRAFT_DEFAULTS = {
   provider: 'mineflayer' as 'mineflayer' | 'java-client',
-  javaClient: { expectedUuid: '', expectedServer: '', controllerId: '', credentialsFile: '', ledgerDir: '', leaseMs: 15000, viewerMode: 'data', viewerPageFile: '', minescriptEnabled: false } as import('../src/contracts/java-client.ts').JavaClientConfiguration,
+  javaClient: { expectedUuid: '', expectedServer: '', controllerId: '', credentialsFile: '', ledgerDir: '', leaseMs: 15000, viewerMode: 'auto', viewerPageFile: '', minescriptEnabled: false, actionWaitMs: 1000 } as import('../src/contracts/java-client.ts').JavaClientConfiguration,
   // enabled 由Persona的装配层显式开启。
   enabled: false,
   /** 服务器地址(私服 dry-run 默认本机) */
@@ -299,7 +299,8 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
         description: '选择该游戏实例生成的 agent-mc-bridge/connection.json，不复制旧令牌。', 'x-path': { kind: 'file', extensions: ['.json'] } },
       'worlds.minecraft.javaClient.ledgerDir': { type: 'string', title: '固定账本目录', 'x-hot': false,
         description: '固定目录保留改名和升级历史，不随显示名自动更换。', 'x-path': { kind: 'directory' } },
-      'worlds.minecraft.javaClient.viewerMode': { type: 'string', enum: ['data', 'framebuffer'], title: '网页画面来源', 'x-hot': false, description: 'data 使用真实游戏数据驱动网页三维画面；framebuffer 仅用于原生截图诊断。' },
+      'worlds.minecraft.javaClient.actionWaitMs': { type: 'integer', title: '短动作回执合并等待（毫秒）', minimum: 0, maximum: 2000, 'x-hot': false, description: '短动作在同一工具调用内等待真实终态，减少下一轮模型查询；超时仍返回受理状态，原动作不重投。0 只返回受理。' },
+      'worlds.minecraft.javaClient.viewerMode': { type: 'string', enum: ['auto', 'data', 'framebuffer'], title: '网页画面来源', 'x-hot': false, description: 'auto 按当前客户端能力选择，网页打开才采样；data 使用真实游戏数据，framebuffer 使用配置的原生截图页。显式指定的模式不自动回退。' },
       'worlds.minecraft.javaClient.leaseMs': { type: 'integer', title: '控制权租期', minimum: 1000, maximum: 30000, 'x-hot': false,
         description: '宿主须显式续租，过期释放游戏按键；单位毫秒。' },
       'worlds.minecraft.host': { type: 'string', title: '服务器地址', 'x-hot': false },
