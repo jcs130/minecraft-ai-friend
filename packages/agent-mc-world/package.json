@@ -57,6 +57,14 @@
     "./extension": {
       "types": "./dist/types/src/extension.d.ts",
       "default": "./dist/runtime/src/extension.js"
+    },
+    "./tactics": {
+      "types": "./dist/types/src/tactics.d.ts",
+      "default": "./dist/runtime/src/tactics.js"
+    },
+    "./decisions": {
+      "types": "./dist/types/src/decisions/index.d.ts",
+      "default": "./dist/runtime/src/decisions/index.js"
     }
   },
   "files": [
@@ -96,7 +104,9 @@
     "scripts/build-client-login.mjs",
     "client-login",
     "src/extension.ts",
-    "scripts/prepare-viewer.mjs"
+    "scripts/prepare-viewer.mjs",
+    "src/tactics.ts",
+    "src/decisions"
   ],
   "scripts": {
     "build": "node scripts/build.mjs && node scripts/build-types.mjs && node scripts/verify-build.mjs",

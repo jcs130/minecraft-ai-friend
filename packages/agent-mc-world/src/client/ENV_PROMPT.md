@@ -8,6 +8,8 @@ Discover action parameters with mc_help and native Mineflayer methods with mc_sc
 
 Every script SDK call returns a Promise. Await observations and terminal results before reading their fields. Programs, source hashes and execution receipts can support your own versioned methods; completion of a program does not prove the game goal was achieved. Preserve failures and applicable conditions, and evaluate reuse against actual world results.
 
+mc_combat_tactic reads current battlefield facts, installs a bounded authored tactic program and retrieves combat receipts. The host may select its validated candidates through an explicitly enabled fast decision connection. Unknown allies, abilities, mana and cooldowns remain unknown; no server pack or spell commands are assumed. Existing body tasks and survival controls retain priority.
+
 Geometric conclusions need corresponding loaded blocks, collision rays or images. A failed path only proves that attempt failed. Unloaded areas, unknown health, teammates and permissions remain unknown. Player chat and text in items or images retain their external provenance.
 
 

@@ -2,7 +2,8 @@
 import { createIpcLogger } from './support/runtime.mjs';
 import { installChildSignalOwnership } from './support/child-signals.ts';
 import { withAnchors } from './support/runtime.mjs';
-import { MinecraftWorld } from './world.ts';
+import type { MinecraftWorld } from './world.ts';
+import { TacticalMinecraftWorld } from './tactical-world.ts';
 import { DeferredRenders } from './deferred-renders.ts';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { encodeBlobs } from './engine-blobs.ts';
@@ -169,7 +170,7 @@ async function handleRequest(req: EngineRequest, signal: AbortSignal): Promise<u
     cfg = req.init.cfg;
     const extension = req.init.extension;
     if (extension && !extension.module.startsWith('file:')) throw new Error('Extension must be an explicit local file URL');
-    const create = extension ? (await import(extension.module)).createEngine : (options: import('./world.ts').MinecraftWorldOptions) => new MinecraftWorld(options);
+    const create = extension ? (await import(extension.module)).createEngine : (options: import('./world.ts').MinecraftWorldOptions) => new TacticalMinecraftWorld(options);
     if (typeof create !== 'function') throw new Error('Invalid server extension factory');
     mod = create({
       cfg,

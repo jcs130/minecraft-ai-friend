@@ -14,8 +14,8 @@ await rm(output, {recursive:true,force:true});
 export const digest = data => createHash('sha256').update(data).digest('hex');
 const walk = async path => (await Promise.all((await readdir(path, { withFileTypes: true })).map(async e =>
   e.isDirectory() ? walk(join(path, e.name)) : [join(path, e.name)]))).flat();
-const sources = ['core', 'src/client', 'src/contracts', 'src/runtime', 'src/mcp/server.ts', 'src/mcp/stdio.ts',
-  'src/index.ts', 'src/extension.ts', 'src/chat-provenance.ts', 'src/collect-contract.ts', 'src/mounted-look.ts', 'src/vehicle-state.ts',
+const sources = ['core', 'src/decisions', 'src/client', 'src/contracts', 'src/runtime', 'src/mcp/server.ts', 'src/mcp/stdio.ts',
+  'src/index.ts', 'src/extension.ts', 'src/tactics.ts', 'src/chat-provenance.ts', 'src/collect-contract.ts', 'src/mounted-look.ts', 'src/vehicle-state.ts',
   'src/railway.ts', 'src/blueprint-railway.ts', 'bridges/performance'];
 const inputs = [];
 for (const source of sources) {

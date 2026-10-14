@@ -192,6 +192,8 @@ export const MINECRAFT_DEFAULTS = {
 } as const;
 
 export interface MinecraftConfigSection {
+  /** Generic fast-tactic execution permissions; no model endpoint or credentials. */
+  combatOptions?: Partial<import('./combat-decision-types.ts').CombatExecutionPolicy>;
   enabled: boolean;
   host: string;
   port: number;

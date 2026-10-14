@@ -1,0 +1,10 @@
+export * from '../core/battlefield.ts';
+export * from '../core/combat-decision-types.ts';
+export * from '../core/combat-options.ts';
+export * from '../core/combat-program.ts';
+export * from '../core/combat-reactions.ts';
+export * from '../core/combat-rules.ts';
+export * from '../core/combat-tactics.ts';
+export * from '../core/combat-abilities.ts';
+export { TacticalMinecraftWorld } from '../core/tactical-world.ts';
+export { COMBAT_TACTIC_TOOL } from '../core/combat-tool.ts';

@@ -10,7 +10,7 @@ const output = resolve(root, 'dist/types');
 if (output !== join(root, 'dist', 'types')) throw new Error('Invalid declaration output path');
 // Run in a release checkout, as with the engine/viewer build.
 await rm(output, { recursive: true, force: true });
-const entries = ['src/index.ts', 'src/extension.ts', 'src/client/index.ts', 'src/client/contracts.ts', 'src/contracts/index.ts', 'src/mcp/server.ts', 'src/mcp/stdio.ts', 'bridges/performance/relay.d.mts'];
+const entries = ['src/index.ts', 'src/extension.ts', 'src/decisions/index.ts', 'src/tactics.ts', 'src/client/index.ts', 'src/client/contracts.ts', 'src/contracts/index.ts', 'src/mcp/server.ts', 'src/mcp/stdio.ts', 'bridges/performance/relay.d.mts'];
 const program = ts.createProgram(entries.map(path => join(root, path)), {
   target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
   strict: true, esModuleInterop: true, skipLibCheck: true, allowImportingTsExtensions: true,

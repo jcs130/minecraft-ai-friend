@@ -32,6 +32,7 @@ import { loadPolicy, renderPolicyEnv } from './policy.ts';
 import { worldEnvLine, worldIdentityOf } from './server-config.ts';
 import { decodeBlobs } from './engine-blobs.ts';
 import { resolveProcedure, procedureReference } from './support/procedure.ts';
+import { COMBAT_TACTIC_TOOL } from './combat-tool.ts';
 import { METHOD_ADAPTER } from './method-runner.ts';
 
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
@@ -119,7 +120,7 @@ export class MinecraftWorldProxy implements World {
   }
 
   tools(): ToolDef[] {
-    return [...minecraftToolDecls(), ...(this.opts.extension?.tools ?? [])].map((decl) => ({
+    return [...new Map([...minecraftToolDecls(), COMBAT_TACTIC_TOOL, ...(this.opts.extension?.tools ?? [])].map(t => [t.name, t])).values()].map((decl) => ({
       ...decl,
       handler: async (args, ctx) => {
         const selected = new Map<string, {handle: string; b64: string; mime: string}>();

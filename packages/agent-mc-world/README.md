@@ -21,6 +21,11 @@ Consumers depend on the package, never on another host's checkout:
 The modern visualization remains maintained in `jcs130/mc-visual-console`.
 Server packs and performance services require explicit configuration.
 
+Generic battlefield sampling, authored tactics, combat receipts and ability state
+are provided by `agent-mc-world/tactics`; optional host selector helpers are in
+`agent-mc-world/decisions`. The default SDK/MCP client exposes `mc_combat_tactic`
+without a server pack. See [component boundaries](docs/component-boundaries.md).
+
 ## Spatial observations
 
 The same SDK/MCP action interface offers compact site diagnostics, local 3D voxels,
