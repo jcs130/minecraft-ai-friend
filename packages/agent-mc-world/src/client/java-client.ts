@@ -6,6 +6,7 @@ import type { MinecraftClientConfig } from './config.ts';
 import { PhotographyService, PHOTO_TOOL } from '../../core/photography.ts';
 import { createImageGenerationPort } from '../../core/image-generation.ts';
 import { serveNativeView } from './native-view.ts';
+import { createJavaDataViewer, type JavaDataViewerHandle } from '../../core/java-data-viewer.mjs';
 import type { Server } from 'node:http';
 import { JAVA_LEGACY_HELP, translateJavaLegacy } from './java-legacy.ts';
 import { NativeEvidenceArchive, compactNativeState, compactItem, compactItems } from './native-evidence.ts';
@@ -20,6 +21,7 @@ function uuid(value: string) { return value.replaceAll('-', '').toLowerCase(); }
 function address(value: string) { return value.toLowerCase().replace(/:25565$/, ''); }
 const SCRIPT_HELP = `Optional mc_script executor: Minescript 4.0 Python, explicitly installed and enabled in this native bridge. Use {language:"python",code:"...",input:{...},timeoutMs:10000,action_id:"stable-id"}. Variables: minescript (module), input_data (JSON input), result (assign JSON result). Functions include player_position(), player_orientation(), entities(sort="nearest",limit=12), getblock(x,y,z), player_inventory(), player_inventory_select_slot(slot), player_inventory_slot_to_hotbar(slot), player_set_orientation(yaw,pitch), press_key_bind("key.forward",True/False), execute("/help"), flush(). Use try/finally to release keys. Python can access the local machine; it is trusted code, not the Numen Lua sandbox. No hidden model loop. The script runs as one original native action, with body lease, timeout, cancel and stop. Query mc_result/mc_wait by the same ID. Script termination and result are program reports; inspect actual state, inventory and server receipts. This does not translate old JavaScript or automatically implement navigation, crafting or digging. Full versioned API: https://github.com/maxuser0/minescript/blob/main/docs/v4.0/README.md`;
 export function validateJavaClientConfiguration(cfg: Partial<JavaClientConfiguration> | undefined): asserts cfg is JavaClientConfiguration {
+  if (cfg?.viewerMode !== undefined && !['data', 'framebuffer'].includes(cfg.viewerMode)) throw new Error('Unknown Java viewer mode');
   if (!cfg || !/^(?:[a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i.test(cfg.expectedUuid ?? '')
     || !cfg.expectedServer?.trim() || !/^[A-Za-z0-9_.:-]{1,128}$/.test(cfg.controllerId ?? '')
     || !cfg.credentialsFile?.trim() || !cfg.ledgerDir?.trim()
@@ -49,6 +51,8 @@ export class JavaClientWorld implements World {
   private lease: { nonce: string; expiresAt: number } | null = null;
   private timer?: ReturnType<typeof setInterval>;
   private viewer?: Server;
+  private dataViewer?: JavaDataViewerHandle;
+  private viewerError: string | null = null;
   private epoch = 0;
   private pollingEpoch: number | null = null;
   private messageSeq = 0;
@@ -82,8 +86,10 @@ export class JavaClientWorld implements World {
     ];
     return { text: parts.map(part => part.text).join('\n'), parts, snapshotTypes: ['minecraft.client.snapshot'] };
   }
-  console() { return { label: 'Real Java client', lamps: [{ label: '服务器', state: this.state?.connected ? 'online' as const : 'offline' as const }],
-    links: this.viewer ? [{ label: '真实客户端画面', href: `http://127.0.0.1:${this.cfg.viewerPort}` }] : [] }; }
+  console() { return { label: 'Real Java client', lamps: [{ label: '服务器', state: this.state?.connected ? 'online' as const : 'offline' as const },
+    ...(this.cfg.viewerPort > 0 ? [{label:'画面',state:this.viewerError || (this.dataViewer && !this.dataViewer.status().ok) ? 'error' as const : this.dataViewer || this.viewer ? 'online' as const : 'offline' as const,
+      hint:this.viewerError ?? (this.dataViewer?.status().error as string | undefined)}] : [])],
+    links: this.dataViewer ? [{label: '游戏三维画面',href:this.dataViewer.url}] : this.viewer ? [{ label: '原生截图预览', href: `http://127.0.0.1:${this.cfg.viewerPort}` }] : [] }; }
   async start(host: WorldHost): Promise<void> {
     if (this.host) throw new Error('Java client is already attached');
     validateJavaClientConfiguration(this.cfg.javaClient);
@@ -102,19 +108,33 @@ export class JavaClientWorld implements World {
       this.messageSeq = Math.max(0, ...this.state.messages.map(message => message.seq));
       this.phases.clear(); for (const action of this.state.actions) this.phases.set(action.id, action.phase);
       this.photos.start(host);
-      if (this.cfg.javaClient.viewerPageFile && this.cfg.viewerPort > 0) {
+      this.viewerError = null;
+      try {
+      if (this.cfg.viewerPort > 0 && this.cfg.javaClient.viewerMode !== 'framebuffer') {
+        this.dataViewer = await createJavaDataViewer({port:this.cfg.viewerPort,assetsDir:this.cfg.viewerAssetsDir,
+          uuid:this.cfg.javaClient.expectedUuid,server:this.cfg.javaClient.expectedServer,rpc:(method,params)=>this.rpc(method,params)});
+      } else if (this.cfg.javaClient.viewerMode === 'framebuffer' && this.cfg.viewerPort > 0) {
+        if (!this.cfg.javaClient.viewerPageFile) throw new Error('Framebuffer mode requires viewerPageFile');
         this.viewer = await serveNativeView(this.cfg.viewerPort, this.cfg.javaClient.viewerPageFile, async () => {
           const capture = await this.rpc('screenshot', {}); this.verify(capture.state);
           return Buffer.from(capture.base64, 'base64');
         }, () => ({ connected: this.state?.connected ?? false, username: this.state?.username, health: this.state?.health, food: this.state?.food }));
       }
+      } catch (error) {
+        // Rendering availability is separate from the action body's lifecycle.
+        // Report it without detaching an otherwise valid running player or
+        // switching silently to screenshots.
+        this.viewerError = error instanceof Error ? error.message.slice(0,300) : 'Native viewer unavailable';
+      }
       this.timer = setInterval(() => { void this.poll(); }, 500);
       this.timer.unref();
-    } catch (error) { this.photos.stop(); this.viewer?.closeAllConnections(); this.viewer?.close(); this.viewer = undefined; this.host = null; this.connection = null; this.state = null; this.lifetime.abort(); throw error; }
+    } catch (error) { await this.dataViewer?.close(); this.dataViewer=undefined; this.photos.stop(); this.viewer?.closeAllConnections(); this.viewer?.close(); this.viewer = undefined; this.host = null; this.connection = null; this.state = null; this.lifetime.abort(); throw error; }
   }
   async stop(): Promise<void> {
     this.epoch++;
     clearInterval(this.timer); this.timer = undefined; this.photos.stop();
+    await this.dataViewer?.close(); this.dataViewer=undefined;
+    this.viewerError = null;
     const viewer = this.viewer; this.viewer = undefined;
     if (viewer) { viewer.closeAllConnections(); await new Promise<void>(resolve => viewer.close(() => resolve())); }
     this.lifetime.abort(new Error('Java client adapter stopped'));

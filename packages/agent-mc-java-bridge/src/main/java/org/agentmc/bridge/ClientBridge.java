@@ -29,6 +29,7 @@ public final class ClientBridge implements ClientModInitializer {
     private ControlLedger ledger;
     private ControlLedger.Action current;
     private class_310 client;
+    private VisualExport visual;
     private Object lastScreen, lastHandler;
     private String screenToken = UUID.randomUUID().toString();
     private int generation;
@@ -38,7 +39,7 @@ public final class ClientBridge implements ClientModInitializer {
     private boolean scriptStopUnconfirmed;
     public static boolean hasController() { return instance != null && instance.ledger != null && instance.ledger.active(System.currentTimeMillis()); }
     @Override public void onInitializeClient() {
-        instance = this; client = class_310.method_1551();
+        instance = this; client = class_310.method_1551(); visual = new VisualExport(client);
         try {
             Path directory = FabricLoader.getInstance().getGameDir().resolve("agent-mc-bridge");
             Path config = directory.resolve("config.json");
@@ -103,13 +104,16 @@ public final class ClientBridge implements ClientModInitializer {
     }
     private JsonObject rpc(String method, JsonObject args) throws Exception {
         long now = System.currentTimeMillis();
-        if (method.equals("capabilities")) return gson.toJsonTree(Map.of("protocol", PROTOCOL, "minecraftVersion", "1.20.6", "realRendering", true, "systemInput", false, "minescript", minescriptAvailable(), "baritone", false)).getAsJsonObject();
+        if (method.equals("capabilities")) return gson.toJsonTree(Map.of("protocol", PROTOCOL, "minecraftVersion", "1.20.6", "realRendering", true, "visualData", "agent-mc-visual/v1", "systemInput", false, "minescript", minescriptAvailable(), "baritone", false)).getAsJsonObject();
         if (method.equals("operations")) return operations();
         if (method.equals("state")) return state();
         if (method.equals("result")) { ControlLedger.Action action = ledger.get(text(args, "action_id", "")); if (action == null) throw new IllegalArgumentException("Unknown action_id; do not assume it was not dispatched"); return gson.toJsonTree(action).getAsJsonObject(); }
         connected();
         String actualServer=client.method_1558()==null?"":client.method_1558().field_3761;
         if(!client.field_1724.method_5667().toString().replace("-", "").equalsIgnoreCase(text(args,"expectedUuid","").replace("-", "")) || !actualServer.toLowerCase().replaceAll(":25565$","").equals(text(args,"expectedServer","").toLowerCase().replaceAll(":25565$",""))) throw new IllegalStateException("Client UUID/server mismatch");
+        if (method.equals("visual_registry")) return visual.registry();
+        if (method.equals("visual_frame")) return visual.frame(integer(args,"radius",2));
+        if (method.equals("visual_chunk")) return visual.chunk(integer(args,"x",0),integer(args,"z",0),text(args,"epoch",""));
         if (method.equals("screenshot")) {
             try (class_1011 image = class_318.method_1663(client.method_1522())) {
                 JsonObject shot = new JsonObject(); shot.addProperty("mime", "image/png"); shot.addProperty("base64", Base64.getEncoder().encodeToString(image.method_24036()));

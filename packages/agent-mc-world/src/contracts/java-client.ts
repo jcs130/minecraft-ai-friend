@@ -4,6 +4,8 @@ export interface JavaClientConfiguration {
   credentialsFile: string; ledgerDir: string; leaseMs: number;
   /** Explicit mc-visual-console HTML path. With viewerPort > 0 serves only loopback GETs. */
   viewerPageFile?: string;
+  /** data reuses the browser 3D renderer; framebuffer is an explicit diagnostic view. */
+  viewerMode?: 'data' | 'framebuffer';
   /** Expose the optional trusted local Python executor only after explicitly installing/enabling Minescript. */
   minescriptEnabled?: boolean;
 }
