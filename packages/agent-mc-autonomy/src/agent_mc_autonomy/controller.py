@@ -259,10 +259,21 @@ class Controller:
         temporary.replace(self.state_path)
 
     def record_tool_failure(self, name, arguments, result, request_id=None):
-        self.tool_failure = failure_context(self.bridge.tools, name, arguments, result)
-        self.tool_failure["observation_only"] = observation_call(name, arguments)
-        self.tool_failure["receipt"] = {"request_id": request_id, "turn_id": self.turn,
-                                        "archive": "receipts.jsonl" if request_id else "decisions.jsonl"}
+        failure = failure_context(self.bridge.tools, name, arguments, result)
+        failure["observation_only"] = observation_call(name, arguments)
+        failure["receipt"] = {"request_id": request_id, "turn_id": self.turn,
+                              "archive": "receipts.jsonl" if request_id else "decisions.jsonl"}
+        self.retain_tool_failure(failure)
+        return failure
+
+    def retain_tool_failure(self, failure):
+        # A failed read is not a new body plan. Keep both causes, with the body
+        # rejection first so budgeted context cannot evict it in favor of a read.
+        if failure.get("observation_only") and self.tool_failure and not self.tool_failure.get("observation_only"):
+            self.tool_failure["observation_failure"] = {
+                key: failure[key] for key in ("tool", "error", "next_step", "receipt") if key in failure}
+        else:
+            self.tool_failure = failure
         # The planner's full diagnostic stays local. Other hosts receive the
         # same actual error plus a reference, without private arguments/schema.
         self.publish(tool_failure=tool_failure_view(self.tool_failure))
@@ -588,8 +599,7 @@ class Controller:
         if rejected_key in self.rejected_calls:
             # A known pre-dispatch rejection cannot be replayed by a later batch.
             self.planner_notice = "The exact same call already failed argument validation. It was NOT dispatched again. Consult mc_help/mc_tool_help and change the invalid parameters."
-            self.tool_failure = self.rejected_calls[rejected_key]
-            self.publish(tool_failure=tool_failure_view(self.tool_failure))
+            self.retain_tool_failure(self.rejected_calls[rejected_key])
             self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
             self.continuation_needed = True
             self.publish(planner_error="repeated_invalid_tool_call", rejected_tool=name)
@@ -612,13 +622,13 @@ class Controller:
                 self.publish(unactioned_replies=0)
             self.publish(read_activity=dict(self.read_activity))
         if result.get("failed"):
-            self.record_tool_failure(name, arguments, result, request_id)
+            failure_notice = self.record_tool_failure(name, arguments, result, request_id)
             failure = str(result.get("text", ""))
             parse_rejected = name in {"mc_do", "mc_scout"} and failure.startswith(f"[{name} 失败]") and "。你写的是 " in failure
             if not result.get("execution") and (failure.startswith("Invalid arguments:") or parse_rejected):
                 if len(self.rejected_calls) >= 16:
                     self.rejected_calls.clear()
-                self.rejected_calls[rejected_key] = self.tool_failure
+                self.rejected_calls[rejected_key] = failure_notice
         elif result.get("execution") and (not read_only or (
                 self.tool_failure and self.tool_failure.get("observation_only")
                 and self.tool_failure["tool"] == name)):
@@ -626,6 +636,12 @@ class Controller:
             # An unrelated queued read cannot resolve a rejected body plan.
             self.tool_failure = None
             self.publish(tool_failure=None)
+        elif result.get("execution") and self.tool_failure:
+            # Correcting the intervening read resolves only that read's error.
+            read_failure = self.tool_failure.get("observation_failure", {})
+            if read_failure.get("tool") == name:
+                self.tool_failure.pop("observation_failure")
+                self.publish(tool_failure=tool_failure_view(self.tool_failure))
         control = result.get("control") or {}
         boundary = bool(control.get("endTurnRequested") or result.get("endsTurn") or (self.current_work() and not self.feedback_pending))
         return result, compact, boundary

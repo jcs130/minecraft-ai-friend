@@ -16,8 +16,9 @@ PLAN = {"steps": [{"skill": "collect", "block": "oak_log", "count": 3},
     ("mc_do", {"steps": [{"skill": "observe", "mode": "rays"},
                          {"skill": "find", "target": "oak_log", "distance": 24}]}),
 ])
+@pytest.mark.parametrize("invalid_read_first", [False, True])
 def test_queued_observation_does_not_erase_rejected_survival_plan(
-        framework_module, tmp_path, run_async, tool, arguments):
+        framework_module, tmp_path, run_async, tool, arguments, invalid_read_first):
     _, bridge, controller = setup(framework_module, tmp_path, None)
     controller.turn = "rejected-plan"
     bridge.result = {"failed": True, "protocol": "agent-mc/v1", "text": REJECTED}
@@ -29,6 +30,12 @@ def test_queued_observation_does_not_erase_rejected_survival_plan(
         return await native_call("mc_do" if name == "mc_scout" else name, args, **metadata)
 
     bridge.call = call
+    if invalid_read_first:
+        bridge.result = {"protocol": "agent-mc/v1", "failed": True,
+                         "text": "Invalid arguments: voxel volume 1183 exceeds 512; no observation was read"}
+        invalid = {"steps": [{"skill": "observe", "mode": "voxels", "bounds": [-6, -2, -6, 6, 4, 6]}]}
+        run_async(controller.execute_model_call(tool, invalid))
+        run_async(controller.execute_model_call(tool, invalid))  # Cached rejection is another read, not recovery.
     bridge.result = {"protocol": "agent-mc/v1", "text": "observations queued, not body progress",
                      "execution": action()}
     run_async(controller.execute_model_call(tool, arguments))
@@ -42,7 +49,7 @@ def test_queued_observation_does_not_erase_rejected_survival_plan(
     assert tail["read_activity"]["action_progress_verified"] is False
     assert tail["read_activity"]["calls_since_body_action"][tool] == 1
     receipts = [json.loads(line) for line in (tmp_path / "receipts.jsonl").read_text(encoding="utf-8").splitlines()]
-    assert len(receipts) == 2 and receipts[0]["result"]["failed"] is True
+    assert len(receipts) == (3 if invalid_read_first else 2) and receipts[0]["result"]["failed"] is True
 
 
 @pytest.mark.parametrize("steps,expected", [

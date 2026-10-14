@@ -13,6 +13,20 @@ an unrelated accepted read cannot clear a body rejection. A corrected body plan
 can replace the rejection, while its acceptance still remains nonterminal and
 does not imply goal completion. Unknown native outcomes retain blocking.
 
+Live follow-up exposed a second variant: the intervening observation itself
+failed validation, overwrote the body error, then cleared both when corrected.
+Version 0.1.30 keeps the body error primary and attaches at most one later read
+error. Cached invalid-read retries use the same retention path. Correcting the
+read removes only its companion diagnostic. Both replay variants fail on 0.1.29
+and pass on the corrected controller.
+
+The follow-up passed 389 framework tests after integrating concurrent upstream
+source, plus the 12-case installed-wheel replay and offline autonomous/queue
+probe. Eight style violations in the incoming Java-client test file are an
+upstream lint baseline; changed controller/replay files pass lint. The deployed
+Mineflayer core remains the separately checked pin above; the new upstream Java
+body is not enabled by this repair.
+
 When a batch is refused, the feedback explicitly says its earlier steps did not
 run. The planner can submit its next feasible action separately from a blocked
 optional search or an unverified crafting dependency. Native admission guards

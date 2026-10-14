@@ -368,6 +368,10 @@ report that their earlier steps did not run, so a feasible next action can be
 submitted without repeating blocked optional searches. Native safety guards,
 unknown-outcome blocking and raw receipts remain unchanged.
 
+Since 0.1.30, an intervening failed observation and its cached retry also retain
+the unresolved body rejection. Correcting that observation clears only its own
+diagnostic; it cannot erase the body failure from the next planner request.
+
 Run `python -m pytest -q` here. Tests deny host SDK imports, network and service
 launches; the isolated process test exercises both a fake autonomous planner and
 queue-only operation. These tests do not prove live survival, actual model
