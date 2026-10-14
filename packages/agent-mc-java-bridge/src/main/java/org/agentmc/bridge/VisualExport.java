@@ -55,7 +55,9 @@ public final class VisualExport {
             }
             registry.add("blocks", blocks); JsonArray biomes = new JsonArray();
             var biomeRegistry = world.method_30349().method_30530(class_7924.field_41236);
-            for (var biome : biomeRegistry) { JsonObject entry = new JsonObject(); entry.addProperty("id", biomeRegistry.method_10206(biome)); entry.addProperty("name", biomeRegistry.method_10221(biome).toString()); biomes.add(entry); }
+            for (var biome : biomeRegistry) { JsonObject entry = new JsonObject(); entry.addProperty("id", biomeRegistry.method_10206(biome)); entry.addProperty("name", biomeRegistry.method_10221(biome).toString()); JsonObject colors = new JsonObject();
+                colors.addProperty("grass", biome.method_8711(0,0)); colors.addProperty("foliage", biome.method_8698()); colors.addProperty("water", biome.method_8687());
+                entry.add("colors", colors); entry.addProperty("grassSample", "biome-origin-no-blending"); biomes.add(entry); }
             registry.add("biomes", biomes);
         }
         out.add("registry", registry); return out;
