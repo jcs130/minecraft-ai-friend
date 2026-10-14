@@ -3405,6 +3405,25 @@ export class MinecraftWorld implements World {
 
   private initialSceneStop: (() => void) | null = null;
 
+  /** Describe the actual connection lifecycle, without promising a stopped retry. */
+  protected unavailableConnectionText(): string {
+    const connection = this.bridge?.connectionState;
+    if (!connection || !connection.active) return 'Minecraft 连接尚未启用；当前世界读数不可用。';
+    if (connection.phase === 'stopped') {
+      const reasons: Record<string, string> = {
+        'confirmation-timeout': '服务器登录确认超时（不等于密码错误）',
+        'server-rejected': '服务器拒绝了本次登录',
+        'credential-unavailable': '配置的登录凭据不可用',
+        'account-not-matched': '没有匹配当前服务器与账号的登录配置',
+        'invalid-configuration': '登录配置无效',
+      };
+      const reason = connection.serverLogin.reason;
+      return `${reason && reasons[reason] ? reasons[reason] : 'Minecraft 连接已停止'}；自动重连已停止，需要操作员核验后明确重连。当前坐标、维度和背包未验证；旧目标保留，恢复前不要重复提交身体动作。`;
+    }
+    if (connection.phase === 'retrying') return 'Minecraft 已断线，正在按现有机制自动重连；连接恢复会有事件，当前世界读数不可用。';
+    return 'Minecraft 正在等待连接、登录或出生点就绪；当前世界读数不可用，等待连接恢复事件。';
+  }
+
   console(): WorldConsoleDecl {
     const connected = this.bridge?.connected ?? false;
     const managedServerOff = this.managedLocalServer() && !this.serverWanted;
@@ -3437,6 +3456,8 @@ export class MinecraftWorld implements World {
               ? { state: 'offline' as const, hint: '未启动' }
               : connected
                 ? { state: 'online' as const, hint: `${this.cfg.host}:${this.cfg.port}` }
+                : this.bridge.connectionState?.phase === 'stopped'
+                  ? { state: 'error' as const, hint: this.unavailableConnectionText() }
                 : this.bridge.reconnects <= 2
                   ? { state: 'loading' as const, hint: '连接中' }
                   : { state: 'error' as const, hint: `连不上 ${this.cfg.host}:${this.cfg.port}` }),
@@ -4904,7 +4925,7 @@ export class MinecraftWorld implements World {
     if (!snap) {
       return {
         stamp: bagStamp(null),
-        text: '[mc_bag] 还没连上服务器,看不了包(断线会自动重连,连上会有事件)',
+        text: `[mc_bag] 看不了背包：${this.unavailableConnectionText()}`,
       };
     }
     const records = this.chests.chestsIn(snap.dimension);
@@ -6209,6 +6230,11 @@ export class MinecraftWorld implements World {
       return { text: this.toolLog(name, args, `[${name} 失败] ${parsed.error}。你写的是 ${JSON.stringify(args.steps)}`), failed: true };
     }
     if (!this.executor) return { text: this.toolLog(name, args, `[${name} 失败] World 未启动`), failed: true };
+    // A stopped login cannot execute a new body task. Reject before queue=replace
+    // can cancel existing work or create a misleading accepted task receipt.
+    if (!this.bridge?.bot && this.bridge?.connectionState?.phase === 'stopped') {
+      return { text: this.toolLog(name, args, `[${name} 未受理] ${this.unavailableConnectionText()} 当前任务和待办保留。`), failed: true };
+    }
     const only = parsed.steps.length === 1 ? parsed.steps[0] : null;
     if (name === 'mc_do' && only?.skill === 'use' && args.queue == null && this.cfg.precheck) {
       const status = this.executor.status();

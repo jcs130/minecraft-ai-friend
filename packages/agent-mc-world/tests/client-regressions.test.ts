@@ -63,6 +63,37 @@ describe('whisper identity from raw messages', () => {
 });
 
 describe('live readouts and honest startup', () => {
+  it('reports a stopped login honestly and rejects replacement work without changing the queue', async () => {
+    const r = methodHarness();
+    try {
+      Object.assign((r.world as any).bridge, { bot: null, connected: false, reconnects: 1,
+        connectionState: { active: true, phase: 'stopped', protocolState: 'closed', ready: false,
+          serverLogin: { stage: 'closed', reason: 'confirmation-timeout' } } });
+      const before = r.exec.status();
+      const bag = await r.world.tools().find(t => t.name === 'mc_bag')!.handler({}, { role: 'test', log: r.host.log });
+      expect(typeof bag === 'string' ? bag : bag.text).toContain('自动重连已停止');
+      expect(typeof bag === 'string' ? bag : bag.text).toContain('不等于密码错误');
+      expect(r.world.console().lamps?.find(l => l.label === '服务器')).toMatchObject({ state: 'error', hint: expect.stringContaining('确认超时') });
+      for (let n = 0; n < 2; n++) {
+        const result = await r.world.tools().find(t => t.name === 'mc_do')!.handler(
+          { queue: 'replace', steps: [{ skill: 'goto', at: [12, 64, 0] }] }, { role: 'test', log: r.host.log });
+        expect(result).toMatchObject({ failed: true, text: expect.stringContaining('未受理') });
+      }
+      expect(r.exec.status()).toEqual(before);
+      expect(r.host.events.some(e => /受理任务|开始任务/.test(e.text))).toBe(false);
+      expect(r.bot.entity.position.x).toBe(0.5);
+    } finally { r.close(); }
+  });
+  it('keeps an actual retry distinct from a stopped login in inventory feedback', async () => {
+    const r = methodHarness();
+    try {
+      Object.assign((r.world as any).bridge, { bot: null, connected: false, reconnects: 1,
+        connectionState: { active: true, phase: 'retrying', protocolState: 'closed', ready: false } });
+      const result = await r.world.tools().find(t => t.name === 'mc_bag')!.handler({}, { role: 'test', log: r.host.log });
+      expect(typeof result === 'string' ? result : result.text).toContain('正在按现有机制自动重连');
+      expect(r.world.console().lamps?.find(l => l.label === '服务器')).toMatchObject({ state: 'loading' });
+    } finally { r.close(); }
+  });
   it('delivers freshly checked scaffold obligations to tool facts and scripts, then replaces cleared facts', () => {
     const r = methodHarness();
     try {
