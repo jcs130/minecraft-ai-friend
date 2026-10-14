@@ -30,6 +30,8 @@ export function viewerVersionCss(css, version) {
 /** Resolve renderer legacy entity names to the exact selected Java texture layout. */
 export function viewerVersionTexture(relative, version) {
   if (!['1.20.6', '1.21.1'].includes(version)) throw Error('VIEWER_VERSION_UNSUPPORTED');
+  if (relative.startsWith('minecraft-assets/painting/'))
+    return `textures/${version}/painting/${relative.slice('minecraft-assets/painting/'.length)}`;
   if (!relative.startsWith('textures/')) return null;
   let texture = relative.slice('textures/'.length);
   if (version === '1.21.1' && ['entity/squid.png', 'entity/glow_squid.png'].includes(texture))
