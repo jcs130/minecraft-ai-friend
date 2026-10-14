@@ -1,13 +1,13 @@
 // Generated from mc-visual-console by tools/build-java-data-host.mjs. Edit the shared source.
 
-// host/java-data-viewer.mjs
+// packages/modern-viewer/renderer-src/host/java-data-viewer.mjs
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path2 from "node:path";
 import { createHash } from "node:crypto";
 import { Server as SocketServer } from "socket.io";
 
-// host/java-visual-data.mjs
+// packages/modern-viewer/renderer-src/host/java-visual-data.mjs
 import { createRequire } from "node:module";
 var require2 = createRequire(import.meta.url);
 var mc = require2("minecraft-data")("1.20.6");
@@ -34,6 +34,7 @@ var JavaVisualData = class {
     this.sequence = -1;
     this.blocks = null;
     this.biomes = null;
+    this.nativeBiomes = /* @__PURE__ */ new Map();
     this.columns = /* @__PURE__ */ new Map();
     this.entities = /* @__PURE__ */ new Map();
     this.frame = null;
@@ -48,7 +49,7 @@ var JavaVisualData = class {
     this.verify(value);
     const { blocks, biomes } = value.registry ?? {};
     requireValue(Array.isArray(blocks) && blocks.length > 0 && blocks.length <= 131072 && Array.isArray(biomes) && biomes.length <= 4096, "REGISTRY_INVALID");
-    const states = /* @__PURE__ */ new Map(), biomeIds = /* @__PURE__ */ new Map(), vanillaStates = /* @__PURE__ */ new Map();
+    const states = /* @__PURE__ */ new Map(), biomeIds = /* @__PURE__ */ new Map(), nativeBiomes = /* @__PURE__ */ new Map(), vanillaStates = /* @__PURE__ */ new Map();
     for (const block of mc.blocksArray) for (let id = block.minStateId; id <= block.maxStateId; id++) vanillaStates.set(block.name + canonical(Block.fromStateId(id, 0).getProperties()), id);
     for (const row of blocks) {
       requireValue(integer(row.id, 0, 131071) && typeof row.name === "string" && row.properties && !states.has(row.id), "STATE_INVALID");
@@ -60,12 +61,19 @@ var JavaVisualData = class {
     }
     for (const row of biomes) {
       requireValue(integer(row.id, 0, 4095) && !biomeIds.has(row.id), "BIOME_INVALID");
-      biomeIds.set(row.id, identifier.test(row.name) ? mc.biomesByName[row.name.slice(10)]?.id ?? null : null);
+      let mapped = identifier.test(row.name) ? mc.biomesByName[row.name.slice(10)]?.id ?? null : null;
+      if (row.colors) {
+        requireValue(typeof row.name === "string" && /^[a-z0-9_.-]+:[a-z0-9_./-]{1,128}$/.test(row.name) && ["grass", "foliage", "water"].every((k) => integer(row.colors[k], 0, 16777215)), "BIOME_COLORS_INVALID");
+        mapped ??= 1024 + row.id;
+        nativeBiomes.set(mapped, { id: mapped, name: row.name, colors: row.colors });
+      }
+      biomeIds.set(row.id, mapped);
     }
     this.clear();
     this.epoch = value.epoch;
     this.blocks = states;
     this.biomes = biomeIds;
+    this.nativeBiomes = nativeBiomes;
   }
   decodeChunk(value) {
     this.verify(value, true);
@@ -75,6 +83,7 @@ var JavaVisualData = class {
     raw.maxBitsPerBlock = Math.ceil(Math.log2([...this.blocks.keys()].reduce((a, b) => Math.max(a, b), 0) + 1));
     raw.maxBitsPerBiome = Math.ceil(Math.log2([...this.biomes.keys()].reduce((a, b) => Math.max(a, b), 0) + 1));
     raw.load(Buffer.from(value.sections, "base64"));
+    const usedBiomes = /* @__PURE__ */ new Set();
     for (let i = 0; i < raw.sections.length; i++) {
       const section = raw.sections[i];
       for (let y = 0; y < 16; y++) for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
@@ -86,6 +95,7 @@ var JavaVisualData = class {
       for (let y = 0; y < 4; y++) for (let z = 0; z < 4; z++) for (let x = 0; x < 4; x++) {
         const p = { x, y, z }, before = biome.get(p), after = this.biomes.get(before);
         requireValue(after !== void 0 && after !== null, "UNSUPPORTED_BIOME_" + before);
+        usedBiomes.add(after);
         if (before !== after) biome.set(p, after);
       }
     }
@@ -101,10 +111,13 @@ var JavaVisualData = class {
       return b;
     }));
     raw.loadParsedLight(lights[0], lights[1], masks[0], masks[1], [], []);
+    const json = JSON.parse(raw.toJson());
+    const palette = [...usedBiomes].map((id) => this.nativeBiomes.get(id)).filter(Boolean);
+    if (palette.length) json.agentMcBiomes = { protocol: "agent-mc-native-biomes/v1", entries: palette };
     return {
       x: value.x * 16,
       z: value.z * 16,
-      chunk: raw.toJson(),
+      chunk: JSON.stringify(json),
       worldConfig: { minY: value.minY, worldHeight: value.height },
       native: {
         epoch: value.epoch,
@@ -212,7 +225,7 @@ var JavaVisualData = class {
   }
 };
 
-// host/viewer-asset-server.mjs
+// packages/modern-viewer/renderer-src/host/viewer-asset-server.mjs
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
@@ -280,7 +293,7 @@ async function serveViewerAsset(res, root, relative, cacheControl = "public, max
   return true;
 }
 
-// host/java-data-viewer.mjs
+// packages/modern-viewer/renderer-src/host/java-data-viewer.mjs
 async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expectedServer, radius = 2 }) {
   if (!Number.isInteger(port) || port < 0 || port > 65535 || !Number.isInteger(radius) || radius < 0 || radius > 4) throw Error("JAVA_VIEWER_CONFIG_INVALID");
   const root = path2.resolve(assetsDir), source = JSON.parse(await readFile(path2.join(root, "public/asset-source.json"), "utf8"));
@@ -417,6 +430,7 @@ async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expect
         const started = performance.now(), registry = await rpc("visual_registry", {});
         if (closed) return;
         data.registry(registry);
+        if (data.nativeBiomes.size && !(await readFile(path2.join(root, "public/mesher.js"), "utf8")).includes("agent-mc-native-biomes/v1")) throw Error("JAVA_VIEWER_NATIVE_BIOME_RENDERER_REQUIRED");
         registryMs = performance.now() - started;
         if (value.epoch !== data.epoch) return;
       }

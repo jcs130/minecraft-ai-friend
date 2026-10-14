@@ -1,11 +1,11 @@
 {
   "viewer": {
     "repository": "https://github.com/jcs130/mc-visual-console",
-    "commit": "651578a7a686615c683542cae90b282255dad54e",
+    "commit": "0ef327047d712a3238c7f72eed690b8063077748",
     "assetPack": "java-1.20.6",
     "preset": null,
-    "artifact": "vendor/mc-visual-console-java-1.20.6-651578a7.tgz",
-    "sha256": "8c7f465aa1e347c7667d1aef1985f4b02bc86b34fa13c50a236f90762bec04bc"
+    "artifact": "vendor/mc-visual-console-java-1.20.6-0ef32704.tgz",
+    "sha256": "f8376a4f4503251fe86969c5dc660f245d7153fea55424d7976973241c827316"
   },
   "core": {
     "source": "core/",
