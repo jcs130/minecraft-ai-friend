@@ -35,6 +35,16 @@ def fact_fingerprint(facts):
 
 
 def model_tools(catalogue):
+    def scalar_structure(value):
+        if not isinstance(value, dict):
+            return None
+        types = value.get("type", [])
+        types = [types] if isinstance(types, str) else types
+        scalar = bool(types) and set(types) <= {"string", "number", "integer", "boolean", "null"}
+        values = value.get("enum")
+        scalar |= isinstance(values, list) and all(not isinstance(item, (list, dict)) for item in values)
+        return {key: item for key, item in value.items() if key != "description"} if scalar else None
+
     def numeric_field(value):
         types = value.get("type", [])
         types = [types] if isinstance(types, str) else types
@@ -76,10 +86,18 @@ def model_tools(catalogue):
             properties = step.get("properties", {})
             if isinstance(properties.get("skill"), dict) and "enum" in properties["skill"]:
                 # Native steps use one large flat union across unrelated skills.
-                # Keep the stable envelope; mc_help supplies the selected skill's
-                # full fields/examples. Dispatch still validates the ORIGINAL.
+                # Keep scalar types/enums/bounds so generation can obey native
+                # constraints. Complex fields/examples remain progressive.
+                # Dispatch still validates the ORIGINAL complete schema.
                 kept = {"skill", "needs", "expect", *step.get("required", [])}
-                step["properties"] = {key: value for key, value in properties.items() if key in kept}
+                projected = {}
+                for key, value in properties.items():
+                    scalar = scalar_structure(value)
+                    if key in kept:
+                        projected[key] = value
+                    elif scalar is not None:
+                        projected[key] = scalar
+                step["properties"] = projected
                 step["additionalProperties"] = True
                 step["description"] = ("Flat step: skill plus its native parameters (not nested arguments). "
                                        "Read mc_help for the selected skill's exact fields and examples before using unfamiliar skills.")
