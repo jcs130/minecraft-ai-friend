@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-mc-autonomy"
-version = "0.1.35"
+version = "0.1.36"
 description = "Host-neutral autonomous Minecraft planner, native queue coordinator and strategic review port"
 requires-python = ">=3.11"
 license = "Apache-2.0"

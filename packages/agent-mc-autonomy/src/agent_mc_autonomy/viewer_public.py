@@ -35,9 +35,13 @@ def record_playback(state, values):
         # stable category, not the raw error or planner recovery instructions.
         schema = str(failure.get("error", "")).startswith("Invalid arguments:")
         notice = "工具参数校验未通过；未派发到游戏" if schema else "操作遇到错误；完整回执保留在本地"
-        history.append({"at": datetime.now(timezone.utc).isoformat(), "action": {
+        if (history and history[-1].get("execution_id") is None and history[-1]["result"].get("ok") is False
+                and history[-1]["action"].get("type") == str(failure.get("tool", ""))[:80]):
+            history[-1] = {**history[-1], "notice": notice}
+        else:
+            history.append({"at": datetime.now(timezone.utc).isoformat(), "action": {
             "type": str(failure.get("tool", ""))[:80], "operation": ""}, "execution_id": None,
-            "result": {"ok": False, "code": "rejected" if schema else "failed", "effectVerified": False}, "notice": notice})
+                "result": {"ok": False, "code": "rejected" if schema else "failed", "effectVerified": False}, "notice": notice})
     state["viewer_history"] = history[-20:]
 
 
@@ -56,7 +60,11 @@ def viewer_projection(state, username, session):
     playback = {"timeline": list(state.get("viewer_history") or [])[-20:], "queue": []}
     for execution in (state.get("pending") or [])[:12]:
         if isinstance(execution, dict):
-            playback["queue"].append({key: str(execution[key])[:120] for key in ("id", "kind", "phase", "operation") if execution.get(key) is not None})
+            row = {key: str(execution[key])[:120] for key in ("id", "kind", "phase", "operation") if execution.get(key) is not None}
+            known = next((item for item in reversed(playback["timeline"]) if execution.get("id") and item.get("execution_id") == execution["id"]), None)
+            if "operation" not in row and known:
+                row["operation"] = str(known["action"].get("operation", ""))[:120]
+            playback["queue"].append(row)
     value = {"schema_version": 1, "session": session, "username": username,
             "updated_at": datetime.now(timezone.utc).isoformat(), "online": state.get("game_connected") is True,
             "mode": mode, "goal": str((state.get("current_goal") or {}).get("goal") or state.get("standing_goal") or "")[:1000],

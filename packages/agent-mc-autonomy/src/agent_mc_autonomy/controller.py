@@ -527,6 +527,7 @@ class Controller:
         await self.protocol("begin_turn", id=self.turn)
         try:
             result, _ = await self.dispatch("mc_do", command["payload"], command["id"])
+            self.publish(viewer_action=tool_receipt("mc_do", command["payload"], result))
             self.commands.finish(command["id"], result)
         finally:
             if not self.inflight_request:

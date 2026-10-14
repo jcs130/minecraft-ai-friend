@@ -97,13 +97,18 @@ def test_command_uses_native_mode_and_original_receipt(framework_module, tmp_pat
     payload = {"steps": [{"skill": "eat"}], "queue": queue}
     box.submit("steps", payload, request_id)
     bridge = Bridge()
-    controller = controller_module.Controller(bridge, None, framework_module.Settings(), tmp_path, lambda **_: None, lambda: False, box)
+    published = []
+    controller = controller_module.Controller(bridge, None, framework_module.Settings(), tmp_path, lambda **value: published.append(value), lambda: False, box)
     assert run_async(controller.external_command())
     sent = next(row for row in bridge.calls if row[0] == "mc_do")
     assert sent[1] == payload and sent[2]["request_id"] == request_id
     result = box.get(request_id)
     assert result["native_receipt"]["execution"]["phase"] == "accepted"
     assert result["native_receipt"]["execution"]["goalCompleted"] is False
+    receipt = next(row["viewer_action"] for row in published if "viewer_action" in row)
+    assert receipt["action"] == {"type": "mc_do", "operation": "eat"}
+    assert receipt["execution_id"] == result["native_receipt"]["execution"]["id"]
+    assert receipt["result"]["effectVerified"] is False
     assert not run_async(controller.external_command())
     assert len([row for row in bridge.calls if row[0] == "mc_do"]) == 1
 

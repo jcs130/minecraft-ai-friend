@@ -40,6 +40,7 @@ def test_public_timeline_keeps_matching_terminal_and_queue_without_private_paylo
     value = public.viewer_projection(state, 'Player', 'session')
     assert value['playback']['timeline'][-1]['result']['code'] == 'blocked'
     assert value['playback']['queue'][0]['phase'] == 'running'
+    assert value['playback']['queue'][0]['operation'] == 'craft'
     assert 'private' not in json.dumps(value) and 'arguments' not in json.dumps(value)
 
 
@@ -54,3 +55,13 @@ def test_public_history_is_bounded_and_schema_failure_does_not_expose_error_argu
     assert len(json.dumps(value, ensure_ascii=False).encode('utf-8')) <= 16384
     assert 'private' not in json.dumps(value)
     assert value['playback']['timeline'][-1]['result']['code'] == 'rejected'
+
+
+def test_one_rejection_and_its_private_diagnostic_make_one_public_row(framework_module):
+    public = importlib.import_module('agent_mc_autonomy.viewer_public')
+    state = {}
+    public.record_playback(state, {'viewer_action': public.tool_receipt('mc_do', {}, {'failed': True})})
+    public.record_playback(state, {'tool_failure': {'tool': 'mc_do', 'error': 'Invalid arguments: private secret'}})
+    assert len(state['viewer_history']) == 1
+    assert state['viewer_history'][0]['result']['code'] == 'rejected'
+    assert 'private' not in json.dumps(state)
