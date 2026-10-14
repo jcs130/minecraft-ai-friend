@@ -21,3 +21,9 @@ The npm lock must change the actual local tarball integrity when reusing a relea
 - Live deployment and sustained survival are separate acceptance gates. No live death is intentionally triggered to test cancellation, and the old accepted task must be retired only through the owned runtime's normal disconnect, preserving original evidence.
 
 Local proof directory: `reports/death-task-terminal-20261014/` (excluded from source delivery).
+
+## Deployment observation
+
+Framework 0.1.27 and thin Neko adapter 0.5.12 were installed through their normal verified dependency paths and development reload. The owned body was disconnected/restarted at 19:07–19:11 Beijing; server, model and Neko service processes stayed unchanged. Original JSON/SQLite evidence was preserved and the old accepted task retired by normal disconnect, without record deletion or replay. The original user goal was restored once through the public mailbox at 19:18:25.
+
+The 19:13–19:21 window contains 17 connected/running samples; decisions 6→22, oak planks 4→29 and new sticks/birch logs/wooden shovel. Health ended 20/20, hunger 16/20, with no pending/uncertain task. No new server-reported death occurred, so the repaired death branch was not exercised live. The later samples remained at the same position and no food reserve, eating or shelter was confirmed: **sustained survival is not passed**. Actual world/player rendering was checked; missing Agent HUD/item textures remain separate viewer limitations. Window SHA256 `1c2e979fb90fafc396dee1581ee00b8da1356b01f883c0be7d47e0a21f59ae59`.
