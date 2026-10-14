@@ -16,7 +16,7 @@ missing previous evidence must be explicitly unresolved.
 - [x] Reproduce dangling reference after full-answer history eviction (11 red regressions).
 - [x] Add the narrow shared compatibility projection and 16 boundary regressions.
 - [x] Run complete suite, Ruff, wheel and isolated consumer (combined 0.1.24: 342 passed); commit/push follows.
-- [ ] Consume in the thin adapter, package/deploy, observe natural gameplay separately.
+- [x] Consume in plugin 0.5.10, package/deploy, observe natural gameplay separately.
 
 Longer-term core improvement: typed priorRequestId/stamp metadata can replace the
 exact legacy receipt contract. Do not fabricate such fields in native journals.
@@ -26,3 +26,8 @@ separate counter-port work. Independent review found no blocking issue. Exact
 queue burst notices, failures and execution receipts do not overwrite substantive
 answers. Existing >6,000-byte compaction remains a preview plus original chunks;
 this patch does not claim to restore unabridged long answers or change execution.
+
+The completed 0.1.24 live window has no legacy repeat pointer in captured requests
+or their corresponding raw turns. This branch is deployed but not covered by
+that live window; its correctness evidence remains the failing/passing offline
+regressions. Raw journals contain no planner-only previous_answer/resolved fields.
