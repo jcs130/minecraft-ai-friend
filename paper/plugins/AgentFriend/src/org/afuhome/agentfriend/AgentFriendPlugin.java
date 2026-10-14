@@ -1210,7 +1210,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args[0].equalsIgnoreCase("help")) {
             if (args.length == 1) help(player);
             else if(args.length==2&&args[1].equalsIgnoreCase("full")) helpFull(player);
-            else AgentCliCatalog.explain(player, args, 1);
+            else AgentCliCatalog.commandHelp(player,java.util.Arrays.copyOfRange(args,1,args.length));
             return true;
         }
         String action = args[0].toLowerCase(Locale.ROOT);
@@ -1280,8 +1280,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return String.join(" ", java.util.Arrays.copyOfRange(args, from, args.length)).trim();
     }
     private void help(Player p) {
-        agentEntry.intro(p);
-        p.sendMessage("§7/mycli capabilities info <ID> 查参数、权限、消耗与结果查询；/mycli help full 保留完整旧帮助。查询不等于执行。");
+        AgentCliCatalog.commandHelp(p,new String[]{"--help"});
     }
     private void helpFull(Player p) {
         p.sendMessage(ChatColor.GOLD + "千灯纪技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
@@ -3084,7 +3083,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return SpellGuide.entries().stream().map(SpellGuide.Entry::id).toList();
         if (args.length == 2 && args[0].equalsIgnoreCase("coach")) return List.of("status", "next", "guide", "lessons", "enroll", "cancel", "menu", "later", "on", "off");
         if (args.length == 2 && args[0].equalsIgnoreCase("progress")) return List.of("all", "main", "training", "guild", "challenge");
-        if (args.length == 2 && args[0].equalsIgnoreCase("challenge")) return List.of("list", "info", "menu", "start", "join", "begin", "status", "result", "history", "cancel");
+        if (args.length == 2 && args[0].equalsIgnoreCase("challenge")) return List.of("list", "info", "menu", "create", "start", "join", "status", "result", "history", "cancel", "--help");
         if (args.length == 2 && args[0].equalsIgnoreCase("capabilities")) return List.of("list", "info");
         if (args.length == 3 && args[0].equalsIgnoreCase("capabilities") && args[1].equalsIgnoreCase("info")) return AgentCliCatalog.ids();
         if (args.length == 2 && args[0].equalsIgnoreCase("pvp"))

@@ -23,22 +23,24 @@ final class AgentCliCatalog {
 
     private static void add(Map<String, Spec> specs, String id, String category, String mode,
                             String usage, String summary, String requires, String returns) {
+        if(id.startsWith("challenge.")&&!usage.contains("--json"))usage+=" [--json]";
         if (specs.putIfAbsent(id, new Spec(id, category, mode, usage, summary, requires, returns)) != null)
             throw new IllegalStateException("Duplicate /mycli catalog id: " + id);
     }
 
     private static Map<String, Spec> createSpecs() {
         Map<String, Spec> specs = new LinkedHashMap<>();
-        add(specs,"challenge","life","read","/mycli challenge list|info <ID>|status [场次ID]|result [场次ID]|history|menu","生活能力挑战：行囊存取、三人供货和同队救援；读目标、缺项、下一步和本人证据","查询免费且不报名；本人/队伍自愿参测；生活实测不代表标准化模型排名","私有MC_CHALLENGE；result通过MC_PAGE分页读取证据；success且durable才算已保存通过");
-        add(specs,"challenge.start","life","write","/mycli challenge start <项目ID>","自愿建立一场生活挑战，保留独立编号和冻结规则；尚未开始计时","生存或冒险角色，无在办挑战；不发物品、不扣点、不接公会委托","MC_CHALLENGE state=forming；准备完成后队长 challenge begin");
+        add(specs,"challenge","life","read","/mycli challenge <子命令> [--json]","自愿生活挑战；create报名、start开始、status查进度","查询免费且不报名；生活实测不代表标准化模型排名","私有MC_CHALLENGE；success且durable才算已保存通过");
+        add(specs,"challenge.create","life","write","/mycli challenge create <项目ID> [--json]","创建等待场次，冻结规则；尚未开始计时","生存或冒险角色，无在办挑战；免费，使用自己物资","MC_CHALLENGE state=forming；准备后 challenge start；重复创建同项目返回原场次");
+        add(specs,"challenge.start","life","write","/mycli challenge start [--json]","队长开始当前场次计时；重复调用不会重置计时","成员齐备、在线存活、窗口关闭、光标为空；物资条件见info","MC_CHALLENGE state=running；旧 start <项目ID> 仍等价create，begin仍等价start");
         add(specs,"challenge.join","life","write","/mycli challenge join <场次UUID> <分工>","本人加入等候队伍；supply用maker或receiver，rescue用partner","本人空闲且角色可参测；不允许替别人报名；菜单可直接选分工","MC_CHALLENGE members；人员齐备后由队长开始");
-        add(specs,"challenge.begin","life","write","/mycli challenge begin","队长确认准备完成，记录起点并开始计时","成员在线存活、窗口关闭、光标为空；物资条件见info；之后正常游戏，原魔力和物资消耗照常","MC_CHALLENGE state=running；status读真实步骤与缺项；不会代走路、拿物品或开副本");
+        add(specs,"challenge.begin","life","write","/mycli challenge begin [--json]","兼容旧入口；等价 challenge start","成员在线存活、窗口关闭、光标为空；物资条件见info","MC_CHALLENGE state=running");
         add(specs,"challenge.cancel","life","write","/mycli challenge cancel","退出本轮团队记录，保留结束原因与已确认步骤","任一参测成员可取消；不会回滚物品、取消公会委托或退出地下城","MC_CHALLENGE state=cancelled；再次报名创建新场次，旧记录保留");
-        add(specs,"challenge.status","life","read","/mycli challenge status [场次UUID] [--json]","读取本人当前或最近挑战：阶段、缺项、下一步、保存状态","免费只读，不报名、不开始计时；普通玩家只显示中文；Agent或显式--json另给机器回执","MC_CHALLENGE；success=true且durable=true才是已保存的完成结果");
-        add(specs,"challenge.result","life","read","/mycli challenge result [场次UUID] [--json]","读取本人或所在队伍的本轮证据和结束原因","免费只读；其他队伍记录拒绝访问；事件来源为服务器，自动化或LLM身份未经评估","MC_CHALLENGE与MC_PAGE；nextCommand继续读证据，重复读取不消费事件");
-        add(specs,"challenge.list","life","read","/mycli challenge list [--json]","列出当前生活挑战目录","免费只读，不报名；角色、时限和说明用info查看","MC_CHALLENGE type=catalog");
+        add(specs,"challenge.status","life","read","/mycli challenge status [场次UUID] [--verbose] [--json]","本人当前或最近场次的简短进度；--verbose展开队伍和缺项","免费只读，不报名；Agent默认只给结构化回执","MC_CHALLENGE；success=true且durable=true才是已保存的完成结果");
+        add(specs,"challenge.result","life","read","/mycli challenge result [场次UUID] [--page 页码] [--verbose] [--json]","按需读取本场证据和结束原因","免费只读；其他队伍记录拒绝访问；事件来源为服务器，自动化或LLM身份未经评估","MC_CHALLENGE含items/page/pages/nextCommand；重复读取不消费事件");
+        add(specs,"challenge.list","life","read","/mycli challenge list [--page 页码] [--json]","分页列出项目摘要；info查看选中项目的规则","免费只读，不报名；角色、时限和说明用info查看","一条MC_CHALLENGE type=catalog含items，不逐项刷屏");
         add(specs,"challenge.info","life","read","/mycli challenge info <项目ID> [--json]","读取挑战规则、分工、时限与物资条件","免费只读；新场次冻结当前规则，在办场次不随热配置改变","MC_CHALLENGE type=detail；ruleVersion标识规则版本");
-        add(specs,"challenge.history","life","read","/mycli challenge history [--json]","读取本人最近五场记录，包括取消与中断","免费只读；按场次UUID可继续查旧记录","MC_CHALLENGE type=status；result查看本场证据");
+        add(specs,"challenge.history","life","read","/mycli challenge history [--page 页码] [--json]","分页读取本人历史摘要，包括取消与中断","免费只读；按场次UUID可继续查旧记录","MC_CHALLENGE type=history含items；result查看选中场次");
         add(specs,"challenge.menu","life","gui","/mycli challenge menu","打开生活挑战的原版菜单，查看说明或自愿加入分工","普通Java和基岩玩家可用；点击报名/开始/取消才改变挑战状态","原版箱式菜单；/mycli challenge status复核");
         add(specs,"intro","info","read","/mycli intro","一屏入门：规则、本人状态、能力目录、我的进度和安全下一步","已登录普通玩家可用；只读，不报名、不接单","MC_INTRO；可用 /mycli 或 /mycli help 进入");
         add(specs,"rules","info","read","/mycli rules [页码]","普通玩家可读的中文服务器规则","已登录玩家，无OP要求，查询免费","MC_RULES page/pages/rules/nextCommand");
@@ -300,8 +302,11 @@ final class AgentCliCatalog {
     }
 
     private static Map<String, Spec> catalogSpecs() {
+        return catalogSpecs(SpellGuide.entries());
+    }
+    private static Map<String, Spec> catalogSpecs(List<SpellGuide.Entry> spells) {
         Map<String, Spec> specs = new LinkedHashMap<>(SPECS);
-        for (SpellGuide.Entry spell : SpellGuide.entries()) {
+        for (SpellGuide.Entry spell : spells) {
             String id = "cast." + spell.id();
             specs.putIfAbsent(id, new Spec(id, "magic", "cast", spell.command(), spell.effect(),
                     spell.requires(), "MC_PROFESSION_RESULT、mcagent:event"));
@@ -312,15 +317,74 @@ final class AgentCliCatalog {
     static List<String> ids() { return catalogSpecs().keySet().stream().sorted().toList(); }
     /** Standard --help/-h discovery never runs the requested gameplay command. */
     static void commandHelp(Player player,String[] args) {
-        List<String> words=java.util.Arrays.stream(args).filter(s->!s.equals("--help")&&!s.equals("-h")&&!s.equals("--json"))
-                .map(s->s.toLowerCase(Locale.ROOT)).toList();
-        for(int count=words.size();count>0;count--) {
-            String id=String.join(".",words.subList(0,count));
-            if(catalogSpecs().containsKey(id)) {explain(player,new String[]{id},0,false);return;}
-        }
-        if(words.isEmpty()) {list(player,new String[]{"list","roots","1"},false);return;}
-        error(player,"UNKNOWN_ID","没有这个命令；/mycli capabilities 查目录。帮助未执行任何动作。");
+        var communication=org.bukkit.plugin.java.JavaPlugin.getPlugin(AgentFriendPlugin.class).communication();
+        boolean json=communication.compact(player)||java.util.Arrays.asList(args).contains("--json");
+        JsonObject out=helpData(args);stamp(player,out);
+        if(json){player.sendMessage("MC_CLI_HELP "+out);return;}
+        if(out.has("errorCode")){player.sendMessage("§e"+out.get("message").getAsString()+"；"+out.get("nextCommand").getAsString());return;}
+        player.sendMessage("§6用法："+out.get("usage").getAsString());
+        if(out.has("commands"))for(var item:out.getAsJsonArray("commands")){var command=item.getAsJsonObject();player.sendMessage("§b"+command.get("name").getAsString()+" §7"+command.get("summary").getAsString());}
+        else{player.sendMessage("§f"+out.get("summary").getAsString());player.sendMessage("§7"+out.get("requirements").getAsString());}
+        if(out.has("nextCommand"))player.sendMessage("§7下一页："+out.get("nextCommand").getAsString());
+        player.sendMessage("§7用 <命令> --help 查看参数；--json返回结构化结果。");
     }
+
+    /** Pure help generation shares the actual catalog; never emits tutorial or gameplay evidence. */
+    static JsonObject helpData(String[] raw) {
+        return helpData(raw,SpellGuide.entries());
+    }
+    static JsonObject helpData(String[] raw,List<SpellGuide.Entry> spells) {
+        JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("readOnly",true);
+        try{
+            var words=new ArrayList<String>();int page=1;boolean seenPage=false,json=false;
+            for(int i=0;i<raw.length;i++){
+                String word=raw[i];if(word.equals("--help")||word.equals("-h"))continue;
+                if(word.equals("--json")){json=true;continue;}
+                if(word.equals("--verbose"))continue;
+                if(word.equals("--page")){
+                    if(seenPage||++i==raw.length)throw new IllegalArgumentException("--page需要正整数");
+                    try{page=Integer.parseInt(raw[i]);}catch(NumberFormatException invalid){throw new IllegalArgumentException("--page需要正整数");}
+                    if(page<1)throw new IllegalArgumentException("--page需要正整数");seenPage=true;continue;
+                }
+                if(word.startsWith("-"))throw new IllegalArgumentException("未知帮助选项 "+word);
+                words.add(word.toLowerCase(Locale.ROOT));
+            }
+            Map<String,Spec> specs=catalogSpecs(spells);String id="";int matched=0;
+            for(int count=words.size();count>0;count--){String candidate=String.join(".",words.subList(0,count));if(specs.containsKey(candidate)){id=candidate;matched=count;break;}}
+            if(!words.isEmpty()&&id.isEmpty())throw new IllegalArgumentException("未知命令");
+            String path=id.isEmpty()?"/mycli":"/mycli "+id.replace('.',' ');
+            String prefix=id.isEmpty()?"":id+".";
+            Set<String> compatibility=Set.of("help","intro","list","explain","spells","status.full","challenge.begin");
+            var children=new LinkedHashMap<String,Spec>();
+            for(Spec spec:specs.values()){
+                if(!spec.id().startsWith(prefix)||spec.id().equals(id)||compatibility.contains(spec.id()))continue;
+                String tail=spec.id().substring(prefix.length());String child=prefix+tail.split("\\.")[0];
+                if(!compatibility.contains(child)&&specs.containsKey(child))children.putIfAbsent(child,specs.get(child));
+            }
+            out.addProperty("path",path);
+            if(!children.isEmpty()){
+                // Parameterised leaf commands (e.g. cast heal) are matched above. Unknown
+                // subcommands must not silently fall back to a parent help page.
+                if(words.size()>matched)throw new IllegalArgumentException("未知子命令；用 "+path+" --help 查看");
+                var order=List.of("status","progress","rules","skills","challenge","inventory","world");
+                var list=new ArrayList<>(children.values());
+                list.sort(java.util.Comparator.comparingInt((Spec s)->idEmptyPriority(prefix,s.id(),order)).thenComparing(Spec::id));
+                int pages=Math.max(1,(list.size()+PAGE_SIZE-1)/PAGE_SIZE);if(page>pages)throw new IllegalArgumentException("页码范围1–"+pages);
+                out.addProperty("usage",path+" <命令> [参数] [--json]");out.addProperty("page",page);out.addProperty("pages",pages);out.addProperty("total",list.size());
+                var rows=new com.google.gson.JsonArray();
+                list.stream().skip((long)(page-1)*PAGE_SIZE).limit(PAGE_SIZE).forEach(spec->{JsonObject row=new JsonObject();row.addProperty("name",spec.id().substring(prefix.length()));row.addProperty("summary",spec.summary());rows.add(row);});out.add("commands",rows);
+                if(page<pages)out.addProperty("nextCommand",path+" --help --page "+(page+1)+(json?" --json":""));
+            }else{
+                if(page!=1)throw new IllegalArgumentException("具体命令帮助只有1页");Spec spec=specs.get(id);if(spec==null)throw new IllegalArgumentException("未知命令");
+                out.addProperty("usage",spec.usage());out.addProperty("summary",spec.summary());JsonObject semantic=semantics(spec);
+                for(String key:List.of("operation","parameters","permission","requirements","consumption","resultQuery"))out.add(key,semantic.get(key));
+                out.add("actionReadOnly",semantic.get("readOnly"));out.addProperty("jsonSupported",jsonSupported(id));
+            }
+        }catch(IllegalArgumentException invalid){out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("readOnly",true);out.addProperty("errorCode","INVALID_ARGUMENT");out.addProperty("message",invalid.getMessage());out.addProperty("nextCommand","/mycli --help");}
+        return out;
+    }
+    private static int idEmptyPriority(String prefix,String id,List<String> order){return prefix.isEmpty()&&order.contains(id)?order.indexOf(id):order.size();}
+    private static boolean jsonSupported(String id){return id.startsWith("challenge")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro").contains(id)||id.startsWith("protect");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -406,7 +470,7 @@ final class AgentCliCatalog {
                 ||Set.of("world.guide","world.practice","guild.exam","guild.stash","guild.rewards","arena.rewards","arena.shop","arena.recycle").contains(id);
         boolean evidence=Set.of("help","list","explain","status.full","skills.list","spells.list","skills.explain","spells.explain").contains(id);
         boolean legacyRefresh=Set.of("guild.board","guild.status","life.status","guild.exam.list","guild.exam.status","skills.mine","skills.info","skills.points","profession.status").contains(id);
-        boolean enroll=Set.of("challenge.start","coach.enroll","world.guide.start","world.practice.start","guild.exam.start").contains(id)||id.endsWith(".accept")||id.endsWith(".join");
+        boolean enroll=Set.of("challenge.create","coach.enroll","world.guide.start","world.practice.start","guild.exam.start").contains(id)||id.endsWith(".accept")||id.endsWith(".join");
         boolean cancel=id.endsWith(".cancel")||id.endsWith(".abandon")||id.endsWith(".stop")||id.endsWith(".leave");
         boolean action=Set.of("guild.verify","trade.locate","arena.recycle.quote","world.photos","skills.learnmenu").contains(id);
         String operation=mixed?"group":enroll?"enroll":cancel?"cancel":action?"execute":spec.mode().equals("read")?"query":"execute";

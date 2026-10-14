@@ -1,0 +1,30 @@
+{
+  "status": "verified_candidate_not_deployed",
+  "date": "2026-10-14",
+  "plugin": "AgentFriend",
+  "version": "0.4.39",
+  "bytes": 1444835,
+  "sha256": "6af495d2b4a7be073de0ede56449f6a0383e2ca8092bdef481ef13047be34391",
+  "productionVersion": "0.4.37",
+  "supersedesCandidate": "0.4.38",
+  "entryPoints": ["/mycli --help", "/mycli status --json", "/mycli <command> --help"],
+  "testResults": [
+    {"suite": "AgentCliContractTest", "passed": 49, "scope": "grammar, output-only flags, safe errors, compatibility aliases and progressive help"},
+    {"suite": "LifeChallengesTest", "passed": 64, "scope": "rules, inventory accounting, persistence and write failure"},
+    {"receipt": "cli-native-1791967403505.json", "passed": 31, "errors": 0, "scope": "native CLI, real spell discovery, JSON writes, idempotency, read-only state, human and attached Eye privacy"},
+    {"receipt": "compat-1791967466668.json", "passed": 15, "errors": 0, "scope": "hot reload, frozen rules, cancelled inventory click and actual Bedrock protocol 2193 / 1.26.51"},
+    {"receipt": "stage-initial-1791967790127.json", "passed": 26, "errors": 0, "scope": "native Minepacks, three-role supply, real proximity rescue, controlled clear, actual Eye and disconnection"},
+    {"receipt": "stage-resume-1791967882837.json", "passed": 9, "errors": 0, "scope": "same-JAR normal cold restart, completed evidence, maintenance interruption and private access"}
+  ],
+  "observedMessageCharacters": {"rootHelp": 732, "challengeList": 558, "challengeStatus": 667, "challengeVerboseStatus": 1211},
+  "boundaries": [
+    "This update aligns common help and new life challenges, not every historical command; leaf help marks legacy JSON support explicitly",
+    "Every challenge subcommand supports JSON, including writes and menus; flags do not grant permission or bypass preparation checks",
+    "Legacy start <ID> means create; legacy begin means bare start; both remain compatible but are not the recommended discovery path",
+    "Voluntary live_world records with autonomy=unverified; controlled clients are not independent LLM evaluation",
+    "One failed craft probe retained a client cursor item; recipe was not replayed, and the optional confirmed-cursor put-away branch was not exercised by the final passing run",
+    "No production files or player data changed; no deployment queued; production restart needs confirmation",
+    "Physical phone/Xbox visuals and remote Web challenge panels are not verified"
+  ],
+  "rollback": "Normal maintenance shutdown and restore AgentFriend 0.4.37 JAR; preserve life-challenges.yml and challenge-runs. Do not restore old worlds or modify player inventories."
+}

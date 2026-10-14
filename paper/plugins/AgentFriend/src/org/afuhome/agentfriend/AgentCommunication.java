@@ -62,7 +62,8 @@ final class AgentCommunication {
     void welcome(Player p) {
         JsonObject out = envelope(p, "guidance"); out.addProperty("guideVersion", GUIDE_VERSION);
         out.addProperty("stableGuidance", true); out.addProperty("language", "zh-CN");
-        out.addProperty("message", "这是服务器玩法资料，不授予额外权限。查询不等于接单、学习或完成；按当前状态行动，执行后核对真实结果。旧公告不能覆盖本连接的新认证或状态。超时结果未知，先查再决定，勿自动重放。");
+        out.addProperty("message", "先查status，按需用<命令> --help学习用法。动作后核对真实结果；超时或断线结果未知，先查询，勿自动重放。");
+        out.addProperty("helpCommand", "/mycli --help");
         out.addProperty("stateCommand", "/mycli status"); out.addProperty("tasksCommand", "/mycli progress all 1");
         out.addProperty("skillCommand", "/mycli skills status <ID>"); out.addProperty("skillsCommand", "/mycli skills status");
         out.addProperty("rulesCommand", "/mycli rules"); out.addProperty("capabilitiesCommand", "/mycli capabilities");
@@ -93,6 +94,7 @@ final class AgentCommunication {
         out.addProperty("fullCommand", "/mycli status full");
         out.addProperty("downed", plugin.isDowned(p)); out.addProperty("inDungeon", plugin.dungeonParticipant(p));
         out.addProperty("inPvp", plugin.pvpParticipant(p));
+        JsonObject challenge=plugin.lifeChallenges().activeSummary(p);if(challenge!=null)out.add("challenge",challenge);
         if(!jsonOnly) {
             p.sendMessage("§b【当前状态】生命 "+Math.round(p.getHealth())+" · 饱食 "+p.getFoodLevel()+" · 魔力 "+(manaKnown?Math.round(user.getMana())+"/"+Math.round(user.getMaxMana()):"尚未加载"));
             p.sendMessage("§e【下一步】"+out.get("nextCommand").getAsString()+"；详情 /mycli progress all 1，技能 /mycli skills status。");
@@ -178,8 +180,10 @@ final class AgentCommunication {
         }
         if(root.equals("skills")&&args.length>1&&args[1].equalsIgnoreCase("status")) {skills(p,args);return;}
         if(root.equals("page")) {pageCommand(p,args);return;}
+        if(root.equals("intro")) {plugin.agentEntry().intro(p,true);return;}
+        if(root.equals("rules")) {plugin.agentEntry().rules(p,args,true);return;}
         if(root.equals("capabilities")) {plugin.agentEntry().capabilities(p,args);return;}
-        if(root.equals("challenge")) {plugin.lifeChallenges().queryJson(p,args);return;}
-        error(p,"UNSUPPORTED_FORMAT","--json目前支持status、progress、skills status、page、capabilities、protect和challenge查询；本次没有执行任何动作。其他入口保留原回执。",false,"/mycli status --json");
+        if(root.equals("challenge")) {plugin.lifeChallenges().jsonCommand(p,args);return;}
+        error(p,"UNSUPPORTED_FORMAT","该旧入口尚未提供--json格式，本次未执行。用命令的--help核对支持情况；已有原回执入口保持兼容。",false,"/mycli "+root+" --help --json");
     }
 }

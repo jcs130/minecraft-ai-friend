@@ -1,6 +1,6 @@
 # 生活能力挑战：服务器第一期落地
 
-2026-10-14，AgentFriend **0.4.38 候选**。代码与隔离联机验证见下文；**正式服仍是 0.4.37，此功能尚未部署**。
+2026-10-14，AgentFriend **0.4.39 候选**。CLI 已按 [统一交互约定](CLI_CONTRACT.md) 收敛，0.4.38 原始验收另保留；**正式服仍是 0.4.37，此功能尚未部署**。
 
 把日常游戏中的操作变成可核对的经历：玩家自愿报名，服务器记录真实动作、阶段和结束原因。Agent 能用原有 Mineflayer 聊天接口参加，真人能用原版菜单参加。入口合入 `/mycli`、能力目录、统一进度和世界生活菜单。
 
@@ -19,10 +19,11 @@
 ### Agent 最短入口
 
 ```text
+/mycli --help
 /mycli challenge list
 /mycli challenge info backpack_roundtrip
-/mycli challenge start backpack_roundtrip
-/mycli challenge begin
+/mycli challenge create backpack_roundtrip
+/mycli challenge start
 /minepacks:backpack open
 ```
 
@@ -38,15 +39,15 @@
 
 ### 多人自愿加入
 
-队长 `/mycli challenge start supply_chain` 后取得 `runId`，自行邀请队友。每人只能参加一个在办挑战。
+队长 `/mycli challenge create supply_chain` 后取得 `runId`，自行邀请队友。每人只能参加一个在办挑战；用 `status --verbose` 读取空缺分工和可直接复制的加入命令。
 
 ```text
 木匠：/mycli challenge join <runId> maker
 收货者：/mycli challenge join <runId> receiver
-队长：/mycli challenge begin
+队长：/mycli challenge start
 ```
 
-采集者为发起者，角色是 `gatherer`；三人必须是不同 UUID。开始前各自把随身橡木原木、橡木木板收好，关闭窗口，清空光标。先查看目标并准备队友，`begin` 才开始计时。等候超过 5 分钟结束为 `party_wait_limit`，可以重新报名。
+采集者为发起者，角色是 `gatherer`；三人必须是不同 UUID。开始前各自把随身橡木原木、橡木木板收好，关闭窗口，清空光标。先查看目标并准备队友，裸 `start` 才开始计时。等候超过 5 分钟结束为 `party_wait_limit`，可以重新报名。
 
 救援项目发起者为 `rescuer`，另一人用 `partner` 加入。挑战不会代开副本、代走路或自动选择职业；本期也没有要求必须选战士／法师／牧师。清场自动复活不能代替前面的实际靠近救援。
 
@@ -54,34 +55,34 @@
 
 `/mycli world menu` → **生活能力挑战**，或直接 `/mycli challenge menu`。原版箱式菜单可查看项目、报名、选择队伍分工、开始、看进度和取消。报名后可再次打开菜单，人员齐备后点“开始计时”。
 
-默认只显示中文。机器回执只给 Agent 本人或主动加 `--json` 的查询者，团队进度仅发给成员；实际附身 Eye 延续原来的简短中文转发，不显示机器 JSON，不发全服公告。
+真人默认只显示中文。机器回执只给 Agent 本人或主动加 `--json` 的调用者，团队进度仅发给成员；实际附身 Eye 收一份简短中文，不显示机器 JSON，不发全服公告。Agent 不重复接收同一段中文。
 
 ## 命令语义与兼容
 
 | 命令 | 作用 / 副作用 |
 | --- | --- |
 | `challenge list` / `info <项目ID>` | 只读目录、分工、时限、规则版本。 |
-| `challenge status [runId]` / `result [runId]` | 只读本人参加的场次；`result` 可分页查看服务器事件证据。 |
-| `challenge history` | 本人最近五场；已知旧 runId 仍可查询。 |
-| `challenge start <项目ID>` | 创建等候场次，冻结规则；重复 start 返回在办场次，不重复开场。 |
+| `challenge status [runId] [--verbose]` / `result [runId] [--page N]` | 只读本人参加的场次；默认简短进度，详细条件与事件按需读取。 |
+| `challenge history [--page N]` | 本人历史摘要，一次至多四场；旧记录可继续翻页。 |
+| `challenge create <项目ID>` | 创建等候场次，冻结规则；重复创建同一在办项目返回原场次，另一项目明确报冲突。 |
 | `challenge join <runId> <role>` | 本人同意加入空缺分工，不能替别人报名。 |
-| `challenge begin` | 队长确认物资、窗口、人员条件，记录起点并开始计时。 |
+| `challenge start` | 队长确认物资、窗口、人员条件，记录起点并开始计时；重复开始不重置计时。 |
 | `challenge cancel` | 任一成员结束团队这份记录，保留实际发起者和结束原因。 |
 | `challenge menu` | 打开界面；具体按钮按相应命令执行。 |
 | `progress challenge 1` | 统一进度中的生活挑战分项；`progress all` 也包含它。 |
 
-`capabilities info challenge.begin` 等目录条目包含参数、权限、消耗和结果查询方式。旧 `/mycli` 命令保持。纯查询不会自动报名，也不会沿用曾经完成的新手证明来通过新场次。
+`/mycli challenge --help` 按页发现子命令，`/mycli challenge create --help` 等具体帮助才返回参数、权限、消耗和结果查询方式。旧 `start <ID>` 是 `create <ID>` 别名，旧 `begin` 是裸 `start` 别名；新 Agent 无须记住它们。纯查询不会自动报名，也不会沿用曾经完成的新手证明来通过新场次。
 
-Java 插件消息通道为 `mcagent:challenge`，聊天兼容前缀为 `MC_CHALLENGE`。`list/info/status/result/history` 支持 `--json`；带该参数的动作被拒绝，避免把查询通道当执行接口。无需修改 Agent 启动流程，也没有新增公网服务。Web 本期未增加挑战专用面板。
+Java 插件消息通道为 `mcagent:challenge`，聊天兼容前缀为 `MC_CHALLENGE`。**所有挑战子命令都支持 `--json`，包括写操作与菜单；只控制输出格式，执行相同权限检查和真实动作。** 帮助不执行动作；不支持的选项在执行前拒绝。无需修改 Agent 启动流程，也没有新增公网服务。Web 本期未增加挑战专用面板。
 
 状态回执包含：
 
-- `runId`、`challengeId`、`ruleVersion`、本人分工与参测成员。
-- `state`、`completedSteps`、`missingConditions`、`nextAction`、`nextCommand`。
-- `startedAt`、`deadline`、`endedAt`；时间是 Unix 毫秒。
+- `runId`、`challengeId`、`ruleVersion`、本人分工。
+- `state`、`completedSteps`、`nextAction`、`nextCommand`；没有记录时正常返回 `state=none`。
+- `startedAt`、`deadline`；时间是 Unix 毫秒。`--verbose` 才增加参测成员、空缺分工、完整规则、`missingConditions` 和 `endedAt`。
 - `trigger` 是请求命令或 `server_observation`；命令回执的 `readOnly` 表明该请求是否只读。异步进度通知是状态快照。
 - `durable` 表明本次修订已保存；**只有 `success=true` 且 `durable=true` 才能宣布通过**。写入未完成显示 `settling`，写入异常显示 `unknown/evidence_write_failed`。
-- 继承原通信层的连接与观察时间字段；`result` 的事件列表沿用 `MC_PAGE` 和 `/mycli page` 分页。
+- 继承原通信层的连接与观察时间字段；`list/history/result` 一次返回一个对象，`items/page/pages/total/nextCommand` 按需分页，不逐项刷屏。
 
 `forming` 表示准备，`running` 表示参测。结束分为 `completed`、`cancelled`、`expired`、`interrupted`；断线、维护、超时、成员不可用、交接失去追踪、库存无法一致确认分别留原因。读状态不会自动续跑或重复动作。服务端原因事件的 `actorUuid` 为空，主动取消／断线记录对应成员。
 
@@ -122,6 +123,7 @@ challenges:
 ```powershell
 ./paper/plugins/AgentFriend/build.ps1
 ./paper/plugins/AgentFriend/test-life-challenges.ps1
+./paper/plugins/AgentFriend/test-cli-contract.ps1
 ```
 
 规则测试覆盖自愿分工、重试、顺序与重复事件、过期、跨场清理拒绝、库存元数据与光标守恒、实际结束成员、记录恢复和磁盘错误。
@@ -132,13 +134,20 @@ challenges:
 - `paper/probe/life-challenges-stage.mjs`：真实 Minepacks 存取、采集、合成、三人交接、原生靠近救援、私有消息与实际 Eye、断线和主动停服。
 - 正常重启副本后再执行上个脚本，加 `resume`，检查完成记录及维护中断恢复。
 - `paper/probe/life-challenges-compat-stage.mjs`：有效／无效热配置、冻结规则、被服务器取消的库存点击、真实 Geyser 协议与原生菜单。
+- `paper/probe/cli-contract-stage.mjs`：逐层帮助、JSON与原命令同义、重复调用、简短状态与按需详情、普通玩家和实际Eye私有显示。
 - `paper/probe/fixtures/LifeChallengeQA.java`：仅允许固定 loopback 端口和测试 MOTD，以控制资源和战斗清场。不能启用于正式服。
 
 联机测试使用受控脚本，传送摆位、测试原木和受控清怪都在报告中记录；不据此声称 Agent 已自主寻路、作战或完成任务。手机／Xbox 的实际画面和手柄点击尚未真机测试。
 
-已通过规则／存档测试 64 项、最终 JAR 的完整 Java／Mineflayer／实际 Eye 流程 26 项、热配置／拒绝操作／基岩协议 15 项、正常冷重启后恢复 9 项，共 114 项。三项已完成记录恢复，未完成场次明确为维护中断，查询不会重跑或改写记录。基岩协议为 2193 / 1.26.51，通过 Geyser 实收菜单、物品和命令回执；45 格 Java 菜单被转换为 54 格基岩箱式界面，含占位格。
+### 0.4.39 当前候选
 
-同一最终 JAR：`AgentFriend-0.4.38.jar`，1,436,627 字节，SHA-256 `8e24c1e1630381183e61fc2b3ec3f150988d1207edf33694cf6e60e200fb9fd9`。验证范围与回退清单见 [候选清单](../manifests/life-challenges-candidate-20261014.json)。
+统一CLI后重新用同一0.4.39 JAR完成194项检查：CLI语法/帮助49、规则/存档64、原生CLI31、真实基岩及热配置15、三挑战完整流程26、正常冷启动9。原完成证据和维护中断保存正确。默认状态实收667字符，完整条件按需展开；写操作不重复发确认。详情、失败尝试和边界见 [CLI约定](CLI_CONTRACT.md) 及 [0.4.39候选清单](../manifests/cli-contract-candidate-20261014.json)。
+
+### 0.4.38 原始基线（历史，不作为新版验收）
+
+0.4.38 已通过规则／存档测试 64 项、最终 JAR 的完整 Java／Mineflayer／实际 Eye 流程 26 项、热配置／拒绝操作／基岩协议 15 项、正常冷重启后恢复 9 项，共 114 项。三项已完成记录恢复，未完成场次明确为维护中断，查询不会重跑或改写记录。基岩协议为 2193 / 1.26.51，通过 Geyser 实收菜单、物品和命令回执；45 格 Java 菜单被转换为 54 格基岩箱式界面，含占位格。
+
+当时的最终 JAR：`AgentFriend-0.4.38.jar`，1,436,627 字节，SHA-256 `8e24c1e1630381183e61fc2b3ec3f150988d1207edf33694cf6e60e200fb9fd9`。验证范围与回退清单见 [0.4.38历史候选](../manifests/life-challenges-candidate-20261014.json)。
 
 测试中保留的失败：首次探针早于 RCON 就绪，交接时测试客户端朝向尚未同步，合成时客户端快照尚未稳定；修正夹具并等待实际确认后通过，没有重放合成。一次 Geyser 获取微软 OpenID 配置时 TLS 握手中断，正常重启隔离副本后恢复，未关闭 TLS 校验或改变正式认证；另修正了测试中菜单格数假设和报告的 BigInt 序列化。
 

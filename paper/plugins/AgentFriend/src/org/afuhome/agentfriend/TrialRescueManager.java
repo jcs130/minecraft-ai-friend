@@ -140,10 +140,12 @@ final class TrialRescueManager implements Listener {
         if (downed(e.getPlayer())) { e.setCancelled(true); notice(e.getPlayer()); }
     }
     boolean readCommand(String[] args) {
+        if(Arrays.stream(args).anyMatch(s->s.equals("--help")||s.equals("-h")))return true;
+        args=Arrays.stream(args).filter(s->!s.equals("--json")).toArray(String[]::new);
         if (args.length == 0) return true;
         String root = args[0].toLowerCase(Locale.ROOT);
-        if (Set.of("help", "status", "list", "explain").contains(root)) return true;
-        if(root.equals("challenge"))return args.length==1||Set.of("list","info","status","result","history").contains(args[1].toLowerCase(Locale.ROOT));
+        if (Set.of("help", "status", "list", "explain", "rules", "progress", "capabilities").contains(root)) return true;
+        if(root.equals("challenge")){try{return ChallengeCli.parse(args).readOnly();}catch(IllegalArgumentException invalid){return false;}}
         return Set.of("arena", "dungeon").contains(root)
                 && (args.length == 1 || Set.of("status", "layout", "info", "list", "loot").contains(args[1].toLowerCase(Locale.ROOT)));
     }

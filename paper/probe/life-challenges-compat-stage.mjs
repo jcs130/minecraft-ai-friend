@@ -8,10 +8,10 @@ import {setTimeout as sleep} from 'node:timers/promises';
 import {command} from '../ops/rcon-client.mjs';
 import {fix1206PotionProtocol} from '../ops/minecraft-1206-potion.mjs';
 import {installRecipePacketBypass} from '../ops/mineflayer-client-compat.mjs';
-const stage='E:/MC/staging/life-challenges-20261014/paper',output='E:/MC/ops/repairs/life-challenges-20261014';
+const stage='E:/MC/staging/life-challenges-20261014/paper',output='E:/MC/ops/repairs/cli-contract-20261014';
 const properties=stage+'/server.properties',props=fs.readFileSync(properties,'utf8');
 assert.match(props,/^server-ip=127\.0\.0\.1\r?$/m);assert.match(props,/^server-port=25678\r?$/m);assert.match(props,/^rcon.port=25679\r?$/m);assert.match(props,/^motd=Life challenges isolated check\r?$/m);
-const report={at:new Date().toISOString(),checks:[],errors:[],fixtures:[],samples:{},sha256:createHash('sha256').update(fs.readFileSync(stage+'/plugins/AgentFriend-0.4.38.jar')).digest('hex')};
+const report={at:new Date().toISOString(),checks:[],errors:[],fixtures:[],samples:{},sha256:createHash('sha256').update(fs.readFileSync(stage+'/plugins/AgentFriend-0.4.39.jar')).digest('hex')};
 const config=stage+'/plugins/AgentFriend/life-challenges.yml',original=fs.readFileSync(config);
 const req=createRequire('E:/MC/research/mineflayer-client-fixes-20261011/package.json');fix1206PotionProtocol(req);
 let bot,be,closing=false,configChanged=false;
@@ -24,7 +24,7 @@ async function close(){if(bot.currentWindow)bot.closeWindow(bot.currentWindow);a
 async function bag(){await chat('/minepacks:backpack open');await until(()=>bot.currentWindow?.inventoryStart===54,'Minepacks');return bot.currentWindow;}
 const amount=()=>bot.inventory.items().filter(i=>i.name==='cobblestone').reduce((sum,i)=>sum+i.count,0);
 try{
- await until(async()=>{try{return (await rc('version AgentFriend')).includes('0.4.38');}catch{return false;}},'QA server',90000);
+ await until(async()=>{try{return (await rc('version AgentFriend')).includes('0.4.39');}catch{return false;}},'QA server',90000);
  await rc('minecraft:whitelist add ag_LifeA');
  bot=req('mineflayer').createBot({host:'127.0.0.1',port:25678,username:'ag_LifeA',version:'1.20.6',auth:'offline',checkTimeoutInterval:60000});installRecipePacketBypass(bot._client);bot.lines=[];
  bot.on('messagestr',s=>bot.lines.push(s));bot.on('error',e=>{if(!closing)report.errors.push('Java '+e.message);});
@@ -62,9 +62,9 @@ try{
  const window=opens.at(-1);be.write('container_close',{window_id:window.window_id,window_type:window.window_type,server:false});await sleep(500);
  let at=texts.length;await send('/mycli challenge info backpack_roundtrip --json');const machine=await until(()=>texts.slice(at).find(t=>t.startsWith('MC_CHALLENGE ')),'explicit JSON');
  check('Bedrock explicit query returns same read-only schema',JSON.parse(machine.slice(13)).readOnly===true&&JSON.parse(machine.slice(13)).trigger==='info');
- at=texts.length;await send('/mycli challenge start backpack_roundtrip --json');const denied=await until(()=>texts.slice(at).find(t=>t.startsWith('MC_CHALLENGE ')),'JSON-only write rejected');check('JSON read path cannot enrol ordinary player',JSON.parse(denied.slice(13)).reason==='query_only');
- at=texts.length;await send('/mycli challenge start backpack_roundtrip');await until(()=>texts.slice(at).some(t=>t.includes('分工：')&&t.includes('齐备后')),'Bedrock signup');
- at=texts.length;await send('/mycli challenge status --json');const beState=JSON.parse((await until(()=>texts.slice(at).find(t=>t.startsWith('MC_CHALLENGE ')),'Bedrock state')).slice(13));check('Bedrock self-enrolment stays forming until begin',beState.state==='forming'&&beState.startedAt===0);
+ at=texts.length;await send('/mycli challenge create backpack_roundtrip --json');const created=JSON.parse((await until(()=>texts.slice(at).find(t=>t.startsWith('MC_CHALLENGE ')),'JSON create')).slice(13));check('Bedrock JSON action creates durably with no duplicate prose',created.state==='forming'&&created.durable&&!created.readOnly&&!texts.slice(at).some(t=>t.includes('[生活挑战]')||t.includes('[行囊有序]')));
+ at=texts.length;await send('/mycli challenge start backpack_roundtrip');await until(()=>texts.slice(at).some(t=>t.includes('人员齐备')),'Bedrock legacy signup');
+ at=texts.length;await send('/mycli challenge status --json');const beState=JSON.parse((await until(()=>texts.slice(at).find(t=>t.startsWith('MC_CHALLENGE ')),'Bedrock state')).slice(13));check('Bedrock legacy enrolment reuses same unstarted run',beState.state==='forming'&&beState.startedAt===0&&beState.runId===created.runId);
  await send('/mycli challenge cancel');await until(()=>texts.some(t=>t.includes('成员主动取消')),'Bedrock cancel');
  report.samples.bedrock={protocol:2193,texts,opens,contents,runId:beState.runId};
  check('no unexpected protocol errors',report.errors.length===0);report.passed=true;

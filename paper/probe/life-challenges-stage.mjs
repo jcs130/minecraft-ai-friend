@@ -9,12 +9,12 @@ import {command} from '../ops/rcon-client.mjs';
 import {fix1206PotionProtocol} from '../ops/minecraft-1206-potion.mjs';
 import {installRecipePacketBypass} from '../ops/mineflayer-client-compat.mjs';
 const stage='E:/MC/staging/life-challenges-20261014/paper';
-const output='E:/MC/ops/repairs/life-challenges-20261014';
+const output='E:/MC/ops/repairs/cli-contract-20261014';
 const props=fs.readFileSync(stage+'/server.properties','utf8');
 assert.match(props,/^server-ip=127\.0\.0\.1\r?$/m);assert.match(props,/^server-port=25678\r?$/m);assert.match(props,/^rcon.port=25679\r?$/m);assert.match(props,/^motd=Life challenges isolated check\r?$/m);
 const req=createRequire('E:/MC/research/mineflayer-client-fixes-20261011/package.json');fix1206PotionProtocol(req);
 const {Vec3}=req('vec3');
-const report={at:new Date().toISOString(),mode:process.argv[2]??'initial',checks:[],errors:[],fixtures:[],samples:{},sha256:createHash('sha256').update(fs.readFileSync(stage+'/plugins/AgentFriend-0.4.38.jar')).digest('hex')};
+const report={at:new Date().toISOString(),mode:process.argv[2]??'initial',checks:[],errors:[],fixtures:[],samples:{},sha256:createHash('sha256').update(fs.readFileSync(stage+'/plugins/AgentFriend-0.4.39.jar')).digest('hex')};
 const bots=[];let closing=false;
 const rc=async q=>{const answer=await command(q,15000,{port:25679,properties:stage+'/server.properties'});report.fixtures.push({q,answer});return answer;};
 const qa=async q=>assert.match(await rc('lifeqa '+q),/LIFE_QA_OK/);
@@ -22,7 +22,8 @@ const check=(name,ok)=>{report.checks.push({name,pass:!!ok});assert(ok,name);con
 async function until(fn,label,ms=18000){const end=Date.now()+ms;while(Date.now()<end){const r=await fn();if(r)return r;await sleep(100);}throw Error('Timeout '+label);}
 async function join(username){
  await rc('minecraft:whitelist add '+username);
- const b=req('mineflayer').createBot({host:'127.0.0.1',port:25678,username,auth:'offline',version:'1.20.6',checkTimeoutInterval:60000});bots.push(b);installRecipePacketBypass(b._client);b.lines=[];b.camera=[];
+ const b=req('mineflayer').createBot({host:'127.0.0.1',port:25678,username,auth:'offline',version:'1.20.6',checkTimeoutInterval:60000});bots.push(b);installRecipePacketBypass(b._client);b.lines=[];b.camera=[];b.inventoryPackets=[];
+ b._client.on('window_items',packet=>{b.inventoryPackets.push({at:Date.now(),packet});if(b.inventoryPackets.length>30)b.inventoryPackets.shift();});
  b.on('messagestr',s=>b.lines.push(s));b._client.on('camera',p=>b.camera.push(p.cameraId));
  b.on('error',e=>{if(!closing&&!b.expectedClose)report.errors.push(username+': '+e.message);});b.on('kicked',e=>{if(!closing&&!b.expectedClose)report.errors.push(username+': '+JSON.stringify(e));});
  await until(()=>b.entity&&b.world.getColumnAt(b.entity.position),username+' world',45000);return b;
@@ -46,8 +47,8 @@ async function handoff(from,to,material,count){
 async function setup(b,x){await rc('minecraft:gamemode survival '+b.username);await rc('minecraft:effect give '+b.username+' minecraft:resistance 99999 4 true');await rc('lp user '+b.username+' permission set backpack.use true');await rc('lp user '+b.username+' permission set backpack.size.6 true');await tp(b,x,101,2002.5);}
 function record(id){return JSON.parse(fs.readFileSync(stage+'/plugins/AgentFriend/challenge-runs/'+id+'.json','utf8'));}
 try{
- await until(async()=>{try{return (await rc('version AgentFriend')).includes('0.4.38');}catch{return false;}},'isolated server ready',90000);
- check('candidate enabled',(await rc('version AgentFriend')).includes('0.4.38'));
+ await until(async()=>{try{return (await rc('version AgentFriend')).includes('0.4.39');}catch{return false;}},'isolated server ready',90000);
+ check('candidate enabled',(await rc('version AgentFriend')).includes('0.4.39'));
  const a=await join('ag_LifeA'),b=await join('ag_LifeB'),c=await join('ag_LifeC'),other=await join('LifeVisitor'),eye=await join('ag_LifeA_eye');
  await until(()=>eye.game.gameMode==='spectator'&&eye.camera.at(-1)===a.entity.id,'actual paired Eye',25000);check('real Eye follows participating account',true);
  if(report.mode==='resume'){
@@ -65,7 +66,7 @@ try{
   // Repeated QA runs retain old evidence, but empty only the dedicated fixture accounts' bags.
   for(const bot of [a,b,c]){let w=await bag(bot);for(let slot=0;slot<54;slot++)if(w.slots[slot])await shift(bot,slot);await close(bot);await rc('minecraft:clear '+bot.username);}
   await rc('minecraft:give '+a.username+' minecraft:cobblestone 32');await sleep(300);
-  let at=a.lines.length;await cli(a,'list',o=>o.type==='catalog');await sleep(250);check('three discoverable tasks',responses(a,at).filter(o=>o.type==='catalog').length===3);
+  let at=a.lines.length;const catalog=await cli(a,'list',o=>o.type==='catalog');await sleep(250);check('three tasks in one concise catalogue reply',catalog.items.length===3&&responses(a,at).filter(o=>o.type==='catalog').length===1);
   const archiveCount=fs.readdirSync(stage+'/plugins/AgentFriend/challenge-runs').filter(x=>x.endsWith('.json')).length;
   await cli(a,'info backpack_roundtrip',o=>o.type==='detail');await chat(a,'/mycli progress challenge 1');await sleep(250);
   check('discovery and progress create no attempt',fs.readdirSync(stage+'/plugins/AgentFriend/challenge-runs').filter(x=>x.endsWith('.json')).length===archiveCount);
@@ -98,7 +99,21 @@ try{
   // Server proof can arrive before the final inventory packet. Observe; never replay the craft.
   report.samples.craftClientInitial={logs:amount(b,'oak_log'),planks:amount(b,'oak_planks'),cursor:b.inventory.selectedItem};
   const craftSettled=()=>amount(b,'oak_log')===0&&amount(b,'oak_planks')===4&&!b.inventory.selectedItem;
-  try{await until(craftSettled,'craft inventory packets settle',5000);}catch{await chat(b,'/mycli inventory refresh');await until(craftSettled,'craft server inventory refresh',5000);}
+  try{await until(craftSettled,'craft inventory packets settle',5000);}catch{
+   const refreshAt=Date.now();await chat(b,'/mycli inventory refresh');
+   const native=await until(()=>b.inventoryPackets.find(p=>p.at>=refreshAt&&p.packet.windowId===0),'fresh native inventory');
+   const Item=req('prismarine-item')(b.registry),cursor=Item.fromNotch(native.packet.carriedItem),items=native.packet.items.map(Item.fromNotch);
+   report.samples.craftServerRefresh={stateId:native.packet.stateId,cursor:cursor&&{name:cursor.name,count:cursor.count},items:items.map((item,slot)=>item&&{slot,name:item.name,count:item.count}).filter(Boolean)};
+   // A craft may have produced items on the server cursor while its last put-away
+   // was rejected. Only after a fresh server snapshot proves that exact state do
+   // we perform ONE new put-away click. Never repeat the recipe or a stale click.
+   if(cursor?.name==='oak_planks'&&cursor.count===4&&!items.some(i=>i?.name==='oak_log'||i?.name==='oak_planks')){
+    const destination=items.findIndex((item,slot)=>slot>=9&&slot<45&&!item);assert(destination>=0,'safe empty destination');
+    assert.equal(b.inventory.selectedItem?.name,'oak_planks');assert.equal(b.inventory.selectedItem?.count,4);
+    report.fixtures.push({action:'put_away_confirmed_server_cursor_once',destination,recipeReplayed:false});await b.clickWindow(destination,0,0);
+   }
+   await until(craftSettled,'craft server inventory refresh',5000);
+  }
   check('native craft consumed one log and produced four planks',craftSettled());
   await tp(c,2004.5,101,2001.5);await handoff(b,c,'oak_planks',4);await reached(a,4);
   await rc('minecraft:setblock 2004 101 2000 minecraft:chest');await until(()=>c.blockAt(new Vec3(2004,101,2000))?.name==='chest','chest');const chest=await c.openContainer(c.blockAt(new Vec3(2004,101,2000)));await chest.deposit(c.registry.itemsByName.oak_planks.id,null,4);await close(c);s=await reached(a,5);

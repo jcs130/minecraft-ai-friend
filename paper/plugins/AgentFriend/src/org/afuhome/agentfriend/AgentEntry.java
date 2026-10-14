@@ -25,6 +25,9 @@ final class AgentEntry {
     private static String label(String status){return switch(status){case "none"->"未接单";case "active"->"进行中";case "ready_to_submit"->"待交付";case "needs_verification"->"待主动验收";default->"需核对数据";};}
     private static JsonArray commands(String... values){JsonArray a=new JsonArray();for(String value:values)a.add(value);return a;}
     void intro(Player p) {
+        intro(p,plugin.communication().compact(p));
+    }
+    void intro(Player p,boolean jsonOnly) {
         JsonObject onboarding=plugin.agentCoach().entryState(p),out=new JsonObject(),self=new JsonObject();
         out.addProperty("schemaVersion",1);out.addProperty("scope","self");out.addProperty("playerUuid",p.getUniqueId().toString());
         out.addProperty("language","zh-CN");out.addProperty("readOnly",true);out.addProperty("observedAt",System.currentTimeMillis());
@@ -35,25 +38,28 @@ final class AgentEntry {
         self.addProperty("adventurerRank",plugin.guild().adventurerRankName(p));out.add("self",self);
         out.addProperty("rulesCommand","/mycli rules");out.addProperty("stateCommand","/mycli status");
         out.addProperty("capabilitiesCommand","/mycli capabilities");out.addProperty("progressCommand","/mycli progress");
-        out.addProperty("challengeCommand","/mycli challenge list");
+        out.addProperty("helpCommand","/mycli --help");
         out.addProperty("nextCommand",onboarding.has("nextCommand")?onboarding.get("nextCommand").getAsString():"/mycli rules");
         out.addProperty("nextAdvice",onboarding.has("message")?onboarding.get("message").getAsString():"这是观战账号；在对应生存角色的连接上进行任务和存取。");
         out.addProperty("mainlineGraduated",flag(onboarding,"completed"));
         out.addProperty("normalHelpAllowed",p.hasPermission("essentials.help"));out.addProperty("normalRulesAllowed",p.hasPermission("essentials.rules"));
         out.addProperty("inventoryAdvice","存取以服务器槽位和光标核对；超时结果未知，先重新查询，不自动重放。54格大背包与任务袋、个人奖励箱独立。");
-        p.sendMessage("§6【千灯纪入门】规则 /mycli rules；能力 /mycli capabilities；我的进度 /mycli progress。查询不报名、不接单。");
+        if(!jsonOnly){p.sendMessage("§6【千灯纪入门】/mycli --help 查看命令；/mycli status 查本人状态；/mycli rules 读规则。");
         p.sendMessage("§b【本人】"+p.getName()+" · "+self.get("adventurerRank").getAsString()+" · 生命 "+Math.round(p.getHealth())+" · 饱食 "+p.getFoodLevel()
                 +(flag(self,"manaLoaded")?" · 魔力 "+Math.round(mana.getMana())+"/"+Math.round(mana.getMaxMana()):" · 魔力尚未加载，等候后再查"));
-        p.sendMessage("§e【建议下一步】"+out.get("nextAdvice").getAsString()+" "+out.get("nextCommand").getAsString());
+        p.sendMessage("§e【建议下一步】"+out.get("nextAdvice").getAsString()+" "+out.get("nextCommand").getAsString());}
         plugin.communication().stamp(p,out);p.sendMessage("MC_INTRO "+out);
     }
     void rules(Player p,String[] args) {
+        rules(p,args,plugin.communication().compact(p));
+    }
+    void rules(Player p,String[] args,boolean jsonOnly) {
         int page=1,pages=(rules.size()+3)/4;
         try{if(args.length>2)throw new NumberFormatException();if(args.length==2)page=Integer.parseInt(args[1]);if(page<1||page>pages)throw new NumberFormatException();}
-        catch(NumberFormatException e){p.sendMessage("§e用 /mycli rules [页码] 阅读规则；页码 1–"+pages+"，所有已登录玩家可读。");return;}
+        catch(NumberFormatException e){plugin.communication().error(p,"INVALID_ARGUMENT","用 /mycli rules [页码] 阅读规则；页码 1–"+pages+"，所有已登录玩家可读。",false,"/mycli rules");return;}
         JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("readOnly",true);out.addProperty("page",page);out.addProperty("pages",pages);out.addProperty("total",rules.size());
         JsonArray rows=new JsonArray();
-        for(int i=(page-1)*4;i<Math.min(page*4,rules.size());i++){rows.add(rules.get(i));p.sendMessage("§f"+(i+1)+". "+rules.get(i));}
+        for(int i=(page-1)*4;i<Math.min(page*4,rules.size());i++){rows.add(rules.get(i));if(!jsonOnly)p.sendMessage("§f"+(i+1)+". "+rules.get(i));}
         out.add("rules",rows);if(page<pages)out.addProperty("nextCommand","/mycli rules "+(page+1));
         plugin.communication().stamp(p,out);p.sendMessage("MC_RULES "+out);
     }

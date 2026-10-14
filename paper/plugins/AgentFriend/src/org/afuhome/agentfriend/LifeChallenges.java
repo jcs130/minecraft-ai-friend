@@ -29,7 +29,7 @@ final class LifeChallenges implements Listener {
     private final Map<UUID,Drop> drops=new HashMap<>();
     private final Map<Inventory,Menu> menus=new IdentityHashMap<>();
     private final Set<UUID> explicitJson=new HashSet<>();
-    private final Map<UUID,String> commandVerbs=new HashMap<>();
+    private final Map<UUID,ChallengeCli.Request> commands=new HashMap<>();
     private boolean closing;
     private record Window(UUID run,Inventory inventory,ChallengeInventory.Snapshot before,boolean backpack) { }
     private record Drop(UUID run,UUID recipient,String kind,Material material,int count,long expires) { }
@@ -72,71 +72,107 @@ final class LifeChallenges implements Listener {
     private ChallengeRun current(Player p){UUID id=active.get(p.getUniqueId());return id==null?null:runs.get(id);}
     private ChallengeRun running(Player p,String type){ChallengeRun r=current(p);return r!=null&&r.state.equals("running")&&r.definition.type().equals(type)&&store.error.get().isEmpty()?r:null;}
     private void error(Player p,String reason,String instruction){
-        JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("status","denied");out.addProperty("reason",reason);out.addProperty("nextAction",instruction);
-        p.sendMessage("§e[生活挑战] "+instruction);emit(p,out);
+        JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("status","denied");out.addProperty("reason",reason);out.addProperty("errorCode",reason);out.addProperty("nextAction",instruction);
+        out.addProperty("retryable",false);out.addProperty("nextCommand","/mycli challenge --help");
+        human(p,"§e[生活挑战] "+instruction);emit(p,out);
     }
-    private boolean machine(Player p){return plugin.communication().compact(p)||explicitJson.contains(p.getUniqueId());}
+    private boolean machine(Player p){var request=commands.get(p.getUniqueId());return plugin.communication().compact(p)||explicitJson.contains(p.getUniqueId())||request!=null&&request.json();}
+    private void human(Player p,String message){
+        if(!machine(p))p.sendMessage(message);
+        // Machine clients receive one structured reply. Only their actually attached Eyes
+        // receive the readable counterpart; never broadcast it or repeat it to the Agent.
+        else for(Player eye:plugin.attachedEyes(p))eye.sendMessage(message);
+    }
     private void emit(Player p,JsonObject out){
-        String verb=commandVerbs.get(p.getUniqueId());out.addProperty("trigger",verb==null?"server_observation":verb);
-        if(verb!=null)out.addProperty("readOnly",Set.of("list","info","status","result","history").contains(verb));
+        var request=commands.get(p.getUniqueId());out.addProperty("trigger",request==null?"server_observation":request.verb());
+        if(request!=null)out.addProperty("readOnly",request.readOnly());
+        if(!out.has("schemaVersion"))out.addProperty("schemaVersion",1);
+        if(request!=null&&request.json()&&out.has("nextCommand")&&!out.get("nextCommand").getAsString().contains("--json"))out.addProperty("nextCommand",out.get("nextCommand").getAsString()+" --json");
         plugin.communication().stamp(p,out);p.sendPluginMessage(plugin,"mcagent:challenge",out.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));if(machine(p))p.sendMessage("MC_CHALLENGE "+out);
     }
-    void queryJson(Player p,String[] args){String verb=args.length<2?"list":args[1].toLowerCase(Locale.ROOT);explicitJson.add(p.getUniqueId());try{if(!Set.of("list","info","status","result","history").contains(verb)){error(p,"query_only","--json查询只支持list、info、status、result、history；动作请用单独的start/join/begin/cancel命令。");return;}command(p,args);}finally{explicitJson.remove(p.getUniqueId());}}
+    void jsonCommand(Player p,String[] args){String[] formatted=Arrays.copyOf(args,args.length+1);formatted[args.length]="--json";command(p,formatted);}
     void command(Player p,String[] args){
-        String verb=args.length<2?"list":args[1].toLowerCase(Locale.ROOT);
-        commandVerbs.put(p.getUniqueId(),verb);
+        boolean json=Arrays.asList(args).contains("--json");if(json)explicitJson.add(p.getUniqueId());
         try{
-            switch(verb){
-                case "list" -> {if(args.length>2)throw new IllegalArgumentException();list(p);}
-                case "info" -> {if(args.length!=3)throw new IllegalArgumentException();var d=catalog.get(args[2]);if(d==null)throw new IllegalArgumentException();detail(p,d);}
-                case "menu" -> {if(args.length>2)throw new IllegalArgumentException();menu(p);}
-                case "start" -> {if(args.length!=3)throw new IllegalArgumentException();start(p,args[2]);}
-                case "join" -> {if(args.length!=4)throw new IllegalArgumentException();join(p,UUID.fromString(args[2]),args[3]);}
-                case "begin" -> {if(args.length!=2)throw new IllegalArgumentException();begin(p);}
-                case "cancel" -> {if(args.length!=2)throw new IllegalArgumentException();ChallengeRun r=current(p);if(r==null){error(p,"no_active_run","没有在办挑战；/mycli challenge list 查看可参加项目。");return;}r.end("cancelled","participant_cancelled",now(),p.getUniqueId());changed(r);show(p,r,false);}
+            var request=ChallengeCli.parse(args);commands.put(p.getUniqueId(),request);
+            if(plugin.isDowned(p)&&!request.readOnly()){error(p,"downed","倒地时等待队友救援；可用 /mycli challenge status 查询进度。");return;}
+            switch(request.action()){
+                case "list" -> list(p,request.page());
+                case "info" -> {var d=catalog.get(request.value(0));if(d==null){error(p,"unknown_challenge","项目不存在；用 /mycli challenge list 查看实际ID。");return;}detail(p,d);}
+                case "menu" -> {menu(p);JsonObject out=new JsonObject();out.addProperty("type","menu");out.addProperty("status","opened");out.addProperty("nextCommand","/mycli challenge status");emit(p,out);}
+                case "create" -> start(p,request.value(0));
+                case "join" -> join(p,UUID.fromString(request.value(0)),request.value(1));
+                case "start" -> begin(p);
+                case "cancel" -> {ChallengeRun r=current(p);if(r==null){showLatest(p);return;}r.end("cancelled","participant_cancelled",now(),p.getUniqueId());changed(r);}
                 case "status","result" -> {
-                    if(args.length>3)throw new IllegalArgumentException();ChallengeRun r=args.length==3?runs.get(UUID.fromString(args[2])):latest(p);
-                    if(r==null||!r.contains(p.getUniqueId())){error(p,"record_unavailable","仅可查询本人参加的场次；/mycli challenge history 查看自己的场次编号。");return;}show(p,r,verb.equals("result"));
+                    if(request.values().isEmpty()&&latest(p)==null){showLatest(p);return;}
+                    ChallengeRun r=request.values().isEmpty()?latest(p):runs.get(UUID.fromString(request.value(0)));
+                    if(r==null||!r.contains(p.getUniqueId())){error(p,"record_unavailable","仅可查询本人参加的场次；/mycli challenge history 查看自己的场次编号。");return;}show(p,r,request.action().equals("result"));
                 }
-                case "history" -> {if(args.length>2)throw new IllegalArgumentException();var own=history(p);if(own.isEmpty())p.sendMessage("§7[生活挑战] 暂无记录；/mycli challenge list 查看项目。");for(ChallengeRun r:own)show(p,r,false);}
+                case "history" -> history(p,request.page());
                 default -> throw new IllegalArgumentException();
             }
-        }catch(IllegalArgumentException invalid){error(p,"invalid_argument","用 /mycli challenge list 看目录，info <项目ID> 看说明，start <项目ID> 报名，status 看进度；/mycli challenge menu 可点选。");}
-        finally{commandVerbs.remove(p.getUniqueId());}
+        }catch(IllegalArgumentException invalid){error(p,"invalid_argument",(invalid.getMessage()==null?"参数格式不符":invalid.getMessage())+"；/mycli challenge --help 查看用法。");}
+        finally{commands.remove(p.getUniqueId());explicitJson.remove(p.getUniqueId());}
     }
-    private List<ChallengeRun> history(Player p){return runs.values().stream().filter(r->r.contains(p.getUniqueId())).sorted(Comparator.comparingLong((ChallengeRun r)->r.created).reversed()).limit(5).toList();}
+    private List<ChallengeRun> history(Player p){return runs.values().stream().filter(r->r.contains(p.getUniqueId())).sorted(Comparator.comparingLong((ChallengeRun r)->r.created).reversed()).toList();}
     private ChallengeRun latest(Player p){ChallengeRun r=current(p);return r!=null?r:history(p).stream().findFirst().orElse(null);}
-    private void list(Player p){for(var d:catalog.values()){
-        JsonObject out=definition(d);out.addProperty("type","catalog");out.addProperty("readOnly",true);emit(p,out);
-        p.sendMessage("§b[生活挑战] "+d.title()+" · "+d.roles().size()+"人 · /mycli challenge info "+d.id());
-    }}
+    private void showLatest(Player p){ChallengeRun r=latest(p);if(r!=null)show(p,r,false);else{emit(p,summary(p));human(p,"§7[生活挑战] 暂无记录；/mycli challenge list 查看项目。");}}
+    private void list(Player p,int page){
+        List<JsonObject> rows=new ArrayList<>();for(var d:catalog.values()){
+            JsonObject row=new JsonObject();row.addProperty("id",d.id());row.addProperty("title",d.title());row.addProperty("players",d.roles().size());row.addProperty("seconds",d.seconds());row.addProperty("nextCommand","/mycli challenge info "+d.id());rows.add(row);
+        }
+        JsonObject out=paged("catalog","list",rows,page);emit(p,out);
+        for(var row:out.getAsJsonArray("items")){var d=row.getAsJsonObject();human(p,"§b[生活挑战] "+d.get("title").getAsString()+" · "+d.get("players").getAsInt()+"人 · "+d.get("nextCommand").getAsString());}
+        if(out.has("nextCommand"))human(p,"§7下一页："+out.get("nextCommand").getAsString());
+    }
+    private void history(Player p,int page){
+        List<JsonObject> rows=new ArrayList<>();for(var r:history(p)){JsonObject row=new JsonObject();row.addProperty("runId",r.id.toString());row.addProperty("challengeId",r.definition.id());row.addProperty("title",r.definition.title());row.addProperty("state",state(p,r).get("state").getAsString());row.addProperty("success",r.state.equals("completed")&&store.durable(r));row.addProperty("nextCommand","/mycli challenge result "+r.id);rows.add(row);}
+        JsonObject out=paged("history","history",rows,page);emit(p,out);
+        if(rows.isEmpty())human(p,"§7[生活挑战] 暂无记录；/mycli challenge list 查看项目。");
+        for(var row:out.getAsJsonArray("items")){var d=row.getAsJsonObject();human(p,"§b[生活挑战] "+d.get("title").getAsString()+" · "+d.get("nextCommand").getAsString());}
+        if(out.has("nextCommand"))human(p,"§7下一页："+out.get("nextCommand").getAsString());
+    }
+    private static JsonObject paged(String type,String query,List<JsonObject> rows,int page){
+        int pages=ChallengeCli.pages(rows.size());if(page>pages)throw new IllegalArgumentException("页码范围1–"+pages);
+        JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("type",type);out.addProperty("readOnly",true);out.addProperty("page",page);out.addProperty("pages",pages);out.addProperty("total",rows.size());JsonArray items=new JsonArray();
+        rows.stream().skip((long)(page-1)*ChallengeCli.PAGE_SIZE).limit(ChallengeCli.PAGE_SIZE).forEach(items::add);out.add("items",items);
+        if(page<pages)out.addProperty("nextCommand","/mycli challenge "+query+" --page "+(page+1));return out;
+    }
     private static JsonObject definition(ChallengeRun.Definition d){JsonObject out=ChallengeRun.JSON.toJsonTree(d).getAsJsonObject();out.addProperty("schemaVersion",1);out.addProperty("ruleVersion",d.version());out.addProperty("track","live_world");return out;}
     private void detail(Player p,ChallengeRun.Definition d){
-        JsonObject out=definition(d);out.addProperty("type","detail");out.addProperty("readOnly",true);out.addProperty("nextCommand","/mycli challenge start "+d.id());
-        emit(p,out);p.sendMessage("§6["+d.title()+"] "+d.description());
-        p.sendMessage("§7报名免费，使用自己的物资与已学技能；原玩法消耗照常。成绩为本次生活实测，无额外奖励；/mycli challenge start "+d.id()+" 自愿报名。");
+        JsonObject out=definition(d);out.addProperty("type","detail");out.addProperty("readOnly",true);out.addProperty("nextCommand","/mycli challenge create "+d.id());
+        out.addProperty("consumption","报名免费；使用自己的物资与技能，原玩法消耗照常；无额外奖励");
+        emit(p,out);human(p,"§6["+d.title()+"] "+d.description());
+        human(p,"§7报名免费，使用自己的物资与已学技能；原玩法消耗照常。成绩为本次生活实测，无额外奖励；/mycli challenge create "+d.id()+" 自愿报名。");
     }
     private void start(Player p,String id){
         var d=catalog.get(id);if(d==null)throw new IllegalArgumentException();
         if(!eligible(p)){error(p,"not_playing","请用在线生存角色参加；倒地时先等队友救援。");return;}
-        if(current(p)!=null){show(p,current(p),false);return;} // Retried start cannot create a second attempt.
+        if(current(p)!=null){
+            if(!current(p).definition.id().equals(id)){error(p,"active_challenge","已有另一项挑战；先 /mycli challenge status 核对，需换项目时主动 cancel。");return;}
+            show(p,current(p),false);return;
+        } // A retried create cannot create a second attempt.
         if(!store.error.get().isEmpty()||runs.size()>=10_000||new HashSet<>(active.values()).size()>=32){error(p,"recording_unavailable","记录服务暂不可用；请联系房管，恢复后再报名，现有记录保留。");return;}
-        ChallengeRun r=new ChallengeRun(p.getUniqueId(),d,now());runs.put(r.id,r);active.put(p.getUniqueId(),r.id);changed(r);show(p,r,false);
+        ChallengeRun r=new ChallengeRun(p.getUniqueId(),d,now());runs.put(r.id,r);active.put(p.getUniqueId(),r.id);changed(r);
     }
     private void join(Player p,UUID id,String role){
         ChallengeRun r=runs.get(id);
+        if(r!=null&&r.active()&&r.contains(p.getUniqueId())&&Objects.equals(r.role(p.getUniqueId()),role)){show(p,r,false);return;}
         if(!store.error.get().isEmpty()||!eligible(p)||current(p)!=null||r==null||!r.join(p.getUniqueId(),role,now())){error(p,"join_unavailable","需要空闲生存角色、等候中的场次和未占用分工。由队长发场次编号；或打开 /mycli challenge menu 选择等候队伍。");return;}
-        active.put(p.getUniqueId(),id);changed(r);show(p,r,false);
+        active.put(p.getUniqueId(),id);changed(r);
     }
     private void begin(Player p){
         if(!store.error.get().isEmpty()){error(p,"recording_unavailable","证据记录暂不可用，请联系房管核对；本次未开始。");return;}
-        ChallengeRun r=current(p);if(r==null||!r.state.equals("forming")||!r.owner.equals(p.getUniqueId())||r.members.size()!=r.definition.roles().size()){
-            error(p,"party_not_ready","由队长报名并等待各分工本人加入，人员齐备后队长 /mycli challenge begin 开始计时。");return;}
+        ChallengeRun r=current(p);
+        if(r!=null&&r.state.equals("running")&&r.owner.equals(p.getUniqueId())){show(p,r,false);return;}
+        if(r==null||!r.state.equals("forming")||!r.owner.equals(p.getUniqueId())||r.members.size()!=r.definition.roles().size()){
+            error(p,"party_not_ready","由队长创建并等待各分工本人加入；/mycli challenge status --verbose 查看空缺，齐备后队长 /mycli challenge start 开始。");return;}
         JsonObject initial=new JsonObject();initial.addProperty("serverVersion",Bukkit.getVersion());initial.addProperty("pluginVersion",plugin.getDescription().getVersion());initial.addProperty("initialConditions","participants_own_resources");JsonArray players=new JsonArray();
         for(UUID id:r.members.values()){
             Player member=Bukkit.getPlayer(id);
-            if(!eligible(member)||!member.getItemOnCursor().getType().isAir()||member.getOpenInventory().getTopInventory().getType()!=InventoryType.CRAFTING){error(p,"player_not_ready","各成员先关闭窗口、收好光标物品，并保持在线存活，再 begin。");return;}
-            if(r.definition.type().equals("backpack") && count(member,Material.COBBLESTONE)<r.definition.count()) {error(p,"missing_material","先准备至少 "+r.definition.count()+" 个普通圆石，再 begin。不要放在任务袋或奖励箱。");return;}
+            if(!eligible(member)||!member.getItemOnCursor().getType().isAir()||member.getOpenInventory().getTopInventory().getType()!=InventoryType.CRAFTING){error(p,"player_not_ready","各成员先关闭窗口、收好光标物品，并保持在线存活，再 /mycli challenge start。");return;}
+            if(r.definition.type().equals("backpack") && count(member,Material.COBBLESTONE)<r.definition.count()) {error(p,"missing_material","先准备至少 "+r.definition.count()+" 个普通圆石，再 /mycli challenge start。不要放在任务袋或奖励箱。");return;}
             if(r.definition.type().equals("supply")&&(count(member,Material.OAK_LOG)>0||count(member,Material.OAK_PLANKS)>0)){error(p,"old_materials","各成员先把随身橡木原木、橡木木板收好；开始后本轮采集并交接，其他工具物资可保留。");return;}
             JsonObject person=new JsonObject();person.addProperty("uuid",id.toString());person.addProperty("name",member.getName());person.addProperty("mode",member.getGameMode().name());person.addProperty("world",member.getWorld().getKey().toString());
             person.addProperty("x",member.getLocation().getX());person.addProperty("y",member.getLocation().getY());person.addProperty("z",member.getLocation().getZ());person.addProperty("inventoryHash",ChallengeRun.sha(new Gson().toJson(playerItems(member))));
@@ -144,25 +180,30 @@ final class LifeChallenges implements Listener {
         }
         initial.add("players",players);if(!r.begin(p.getUniqueId(),initial,now()))return;
         if(r.definition.type().equals("backpack"))bags.put(r.id,new ChallengeInventory(identity(new ItemStack(Material.COBBLESTONE)),r.definition.count()));
-        changed(r);show(p,r,false);
+        changed(r);
     }
-    JsonObject summary(Player p){ChallengeRun r=latest(p);if(r==null){JsonObject out=new JsonObject();out.addProperty("state","none");out.addProperty("title","生活能力挑战");out.addProperty("nextCommand","/mycli challenge list");return out;}return state(p,r);}
+    JsonObject summary(Player p){ChallengeRun r=latest(p);if(r==null){JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("type","status");out.addProperty("readOnly",true);out.addProperty("state","none");out.addProperty("title","生活能力挑战");out.addProperty("nextCommand","/mycli challenge list");return out;}return state(p,r);}
+    JsonObject activeSummary(Player p){ChallengeRun r=current(p);if(r==null)return null;JsonObject out=new JsonObject();out.addProperty("title",r.definition.title());out.addProperty("state",state(p,r).get("state").getAsString());out.addProperty("nextCommand","/mycli challenge status");return out;}
     private JsonObject state(Player p,ChallengeRun r){
         JsonObject out=new JsonObject();boolean durable=store.durable(r);
         out.addProperty("schemaVersion",1);out.addProperty("type","status");out.addProperty("readOnly",true);out.addProperty("runId",r.id.toString());out.addProperty("challengeId",r.definition.id());out.addProperty("title",r.definition.title());out.addProperty("ruleVersion",r.definition.version());
         out.addProperty("state",!store.error.get().isEmpty()?"unknown":r.state.equals("completed")&&!durable?"settling":r.state);out.addProperty("reason",store.error.get().isEmpty()?r.reason:"evidence_write_failed");out.addProperty("durable",durable);out.addProperty("success",r.state.equals("completed")&&durable);
         out.addProperty("completedSteps",r.completed);out.addProperty("totalSteps",r.definition.steps().size());out.addProperty("nextStep",r.nextStep());out.addProperty("role",r.role(p.getUniqueId()));
-        out.addProperty("startedAt",r.started);out.addProperty("deadline",r.deadline);out.addProperty("endedAt",r.ended);out.addProperty("track","live_world");out.addProperty("autonomy","unverified");
-        out.addProperty("nextAction",advice(r));out.addProperty("nextCommand",r.state.equals("forming")?r.owner.equals(p.getUniqueId())?"/mycli challenge begin":"/mycli challenge status":r.active()?"/mycli challenge status":"/mycli challenge result "+r.id);
+        out.addProperty("startedAt",r.started);out.addProperty("deadline",r.deadline);out.addProperty("track","live_world");out.addProperty("autonomy","unverified");
+        out.addProperty("nextAction",advice(r));out.addProperty("nextCommand",r.state.equals("forming")?r.owner.equals(p.getUniqueId())&&r.members.size()==r.definition.roles().size()?"/mycli challenge start":"/mycli challenge status --verbose":r.active()?"/mycli challenge status":"/mycli challenge result "+r.id);
+        return out;
+    }
+    private void details(JsonObject out,ChallengeRun r){
+        out.addProperty("endedAt",r.ended);out.add("rule",definition(r.definition));
         JsonArray missing=new JsonArray();for(int i=r.completed;i<r.definition.steps().size();i++)missing.add(step(r.definition.steps().get(i)));out.add("missingConditions",missing);
         JsonArray members=new JsonArray();r.members.forEach((role,id)->{JsonObject m=new JsonObject();m.addProperty("role",role);m.addProperty("uuid",id.toString());Player online=Bukkit.getPlayer(id);m.addProperty("name",online==null?"离线成员":online.getName());members.add(m);});out.add("members",members);
-        return out;
+        JsonArray vacancies=new JsonArray();for(String role:r.definition.roles())if(!r.members.containsKey(role)){JsonObject v=new JsonObject();v.addProperty("role",role);v.addProperty("label",roleName(role));v.addProperty("joinCommand","/mycli challenge join "+r.id+" "+role);vacancies.add(v);}out.add("vacancies",vacancies);
     }
     private String advice(ChallengeRun r){
         if(!store.error.get().isEmpty())return "证据保存异常，不能宣布通过。请联系房管核对原记录，不要重复交付。";
-        if(r.state.equals("forming"))return "分工："+String.join("、",r.definition.roles().stream().map(role->roleName(role)+(r.members.containsKey(role)?"已就位":"空缺：/mycli challenge join "+r.id+" "+role)).toList())+"；齐备后队长 begin。";
+        if(r.state.equals("forming"))return r.members.size()==r.definition.roles().size()?"人员齐备；按info备好物资、关闭窗口后队长 /mycli challenge start。":"等待"+(r.definition.roles().size()-r.members.size())+"个分工；/mycli challenge status --verbose 查看加入命令。";
         if(r.state.equals("completed"))return store.durable(r)?"本轮全部条件已核验并保存。可用 result 查看证据；没有额外领奖步骤。":"正在保存证据；稍后查 status，暂不算完成。";
-        if(!r.active())return reason(r.reason)+"；已有物资和游戏进度保留。查 result 核对缺项，需要重试时重新 start。";
+        if(!r.active())return reason(r.reason)+"；已有物资和游戏进度保留。查 result 核对缺项，需要重试时重新 create。";
         return switch(r.nextStep()){
             case "bag_open"->"打开本人的黄色大背包：/minepacks:backpack open。准备 "+r.definition.count()+" 个普通圆石。";
             case "bag_deposit"->"存入至少 "+r.definition.count()+" 个普通圆石，收好光标并关闭大背包。";
@@ -181,18 +222,27 @@ final class LifeChallenges implements Listener {
     private static String roleName(String role){return switch(role){case "learner"->"旅人";case "gatherer"->"采集者";case "maker"->"木匠";case "receiver"->"收货者";case "rescuer"->"救援者";default->"同伴";};}
     private static String step(String key){return switch(key){case "bag_open"->"打开本人大背包";case "bag_deposit"->"存入并关闭";case "bag_reopen"->"重开核对";case "bag_return"->"取回、关闭并确认守恒";case "wood_gathered"->"采集者砍木并捡起";case "wood_handoff"->"原木交到木匠手中";case "planks_crafted"->"木匠实际完成合成";case "planks_handoff"->"木板交到收货者手中";case "chest_delivered"->"木板存入合法实体箱";case "teammate_revived"->"连续靠近救起同伴";default->"同场共同清场";};}
     private void show(Player p,ChallengeRun r,boolean evidence){
-        JsonObject out=state(p,r);emit(p,out);
-        p.sendMessage("§b["+r.definition.title()+"] "+r.completed+"/"+r.definition.steps().size()+" · "+advice(r));
-        if(evidence){if(machine(p)){List<JsonObject> rows=r.events.asList().stream().map(JsonElement::getAsJsonObject).map(JsonObject::deepCopy).toList();plugin.communication().list(p,"challenge_evidence","/mycli challenge result "+r.id,rows,1);}else for(int i=0;i<r.definition.steps().size();i++)p.sendMessage((i<r.completed?"§a✓ ":"§7○ ")+step(r.definition.steps().get(i)));}
+        var request=commands.get(p.getUniqueId());JsonObject out=state(p,r);
+        if(request!=null&&request.verbose())details(out,r);
+        if(evidence){List<JsonObject> rows=r.events.asList().stream().map(JsonElement::getAsJsonObject).map(JsonObject::deepCopy).toList();JsonObject page=paged("result","result "+r.id,rows,request==null?1:request.page());for(String key:List.of("page","pages","total","items","nextCommand"))if(page.has(key))out.add(key,page.get(key));}
+        emit(p,out);human(p,"§b["+r.definition.title()+"] "+r.completed+"/"+r.definition.steps().size()+" · "+advice(r));
+        if(request!=null&&request.verbose()&&!machine(p)){
+            for(var vacancy:out.getAsJsonArray("vacancies"))human(p,"§e待加入："+vacancy.getAsJsonObject().get("label").getAsString()+" · "+vacancy.getAsJsonObject().get("joinCommand").getAsString());
+            for(var missing:out.getAsJsonArray("missingConditions"))human(p,"§7○ "+missing.getAsString());
+        }
+        if(evidence&&!machine(p))for(int i=0;i<r.definition.steps().size();i++)human(p,(i<r.completed?"§a✓ ":"§7○ ")+step(r.definition.steps().get(i)));
     }
     private void changed(ChallengeRun r){
         if(!r.active()){for(UUID id:r.members.values()){active.remove(id,r.id);windows.remove(id);}bags.remove(r.id);drops.values().removeIf(d->d.run.equals(r.id));}
         int version=r.revision;
+        // Capture only the originating command. Its asynchronous durable receipt must keep
+        // --json and readOnly=false without turning subsequent observations into commands.
+        Map<UUID,ChallengeCli.Request> requests=new HashMap<>();for(UUID id:r.members.values())if(commands.containsKey(id))requests.put(id,commands.get(id));
         store.save(r).whenComplete((ok,failure)->{
             if(closing||!plugin.isEnabled())return;
             Bukkit.getScheduler().runTask(plugin,()->{
                 if(r.revision!=version)return;
-                for(UUID id:r.members.values()){Player p=Bukkit.getPlayer(id);if(p!=null)show(p,r,false);}
+                for(UUID id:r.members.values()){Player p=Bukkit.getPlayer(id);if(p!=null){var request=requests.get(id);if(request!=null)commands.put(id,request);try{show(p,r,false);}finally{if(request!=null)commands.remove(id);}}}
             });
         });
     }

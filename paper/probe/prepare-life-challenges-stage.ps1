@@ -22,7 +22,7 @@ $image=Join-Path $challengeStage 'plugins/ImageFrame/config.yml'
 $oldJar=Join-Path $challengeStage 'plugins/AgentFriend-0.4.37.jar'
 Move-Item -LiteralPath $oldJar -Destination ($oldJar+'.disabled')
 $sourceRoot=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-Copy-Item -LiteralPath (Join-Path $sourceRoot 'paper/plugins/AgentFriend/AgentFriend-0.4.38.jar') -Destination ($challengeStage+'/plugins')
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'paper/plugins/AgentFriend/AgentFriend-0.4.39.jar') -Destination ($challengeStage+'/plugins')
 Copy-Item -LiteralPath E:/MC/server/plugins/Minepacks-2.5.9-Release.jar -Destination ($challengeStage+'/plugins')
 New-Item -ItemType Directory -Path ($challengeStage+'/plugins/Minepacks') -Force | Out-Null
 Copy-Item -LiteralPath E:/MC/server/plugins/Minepacks/config.yml -Destination ($challengeStage+'/plugins/Minepacks/config.yml')
