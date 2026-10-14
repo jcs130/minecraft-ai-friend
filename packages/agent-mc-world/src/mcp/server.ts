@@ -44,7 +44,8 @@ const artifactSpec: Tool = {
     + 'are checked by the existing executor. This stores execution data, without creating or adopting Agent memories.',
   inputSchema: { type: 'object', properties: {
     action: { type: 'string', enum: ['put', 'get'] }, handle: { type: 'string' },
-    text: { type: 'string', maxLength: 64000 }, mime: { type: 'string', enum: ['application/json', 'text/plain'] },
+    text: { type: 'string', maxLength: 64000 }, base64: { type: 'string', maxLength: 13981016 },
+    mime: { type: 'string', enum: ['application/json', 'text/plain', 'image/png', 'image/jpeg', 'image/webp'] },
   }, required: ['action'], additionalProperties: false },
 };
 const metricsSpec: Tool = { name: 'mc_metrics', description: 'Read runtime-measured tool return latency and explicitly host-reported model/method metadata. Tool returns are not game task completion. No intelligence score or verified learning is inferred.',
@@ -135,8 +136,18 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
       }
       if (name === artifact.name) {
         if (args.action === 'put') {
-          if (typeof args.text !== 'string') throw new Error('put requires text.');
-          const [ref] = runtime.journal.saveBlobs([{ bytes: Buffer.from(args.text), mime: String(args.mime ?? 'application/json'),
+          const mime = String(args.mime ?? 'application/json');
+          let bytes: Buffer;
+          if (mime.startsWith('image/')) {
+            if (args.text !== undefined || typeof args.base64 !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(args.base64)) throw new Error('Image put requires base64 only');
+            bytes = Buffer.from(args.base64, 'base64');
+            const { validatePhotoImage } = await import('../../core/image-generation.ts');
+            validatePhotoImage({ bytes, mime });
+          } else {
+            if (typeof args.text !== 'string' || args.base64 !== undefined) throw new Error('Text put requires text only');
+            bytes = Buffer.from(args.text);
+          }
+          const [ref] = runtime.journal.saveBlobs([{ bytes, mime,
             fallbackText: 'Agent-provided execution artifact; not evidence of successful execution.' }]);
           return outcome({ text: JSON.stringify(ref) });
         }

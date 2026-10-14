@@ -124,6 +124,16 @@ export class MinecraftWorldProxy implements World {
       ...decl,
       handler: async (args, ctx) => {
         const selected = new Map<string, {handle: string; b64: string; mime: string}>();
+        if (decl.name === 'mc_photo' && args.reference_handles !== undefined) {
+          if (!Array.isArray(args.reference_handles) || args.reference_handles.length > 14)
+            return { text: 'Invalid photography reference handles', failed: true };
+          for (const handle of args.reference_handles) {
+            if (typeof handle !== 'string') return { text: 'Invalid photography reference handle', failed: true };
+            const got = this.host?.blob(handle);
+            if (!got || got.bytes.length > 10 * 1024 * 1024) return { text: 'Photo reference missing or exceeds 10 MiB', failed: true };
+            selected.set(handle, { handle, b64: Buffer.from(got.bytes).toString('base64'), mime: got.mime });
+          }
+        }
         if (decl.name === 'mc_script' && args.procedure !== undefined) {
           try {
             const reference = procedureReference(args.procedure);

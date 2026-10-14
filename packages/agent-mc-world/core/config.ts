@@ -34,6 +34,8 @@ export const MINECRAFT_DEFAULTS = {
   memory: { ...GAME_MEMORY_DEFAULTS },
   /** Omitted mc_visual.background follows this mode; explicit arguments take precedence. */
   visual: { background: false },
+  photography: { provider: 'none' as const, endpoint: '', model: '', apiKeyEnv: '',
+    generate: true, edit: true, maxReferences: 3, timeoutMs: 600000, resultHosts: '' },
   /** 普通玩家可用的脱困传送指令；空值沿用受管服务器的控制台传送。 */
   escapeCommand: '',
   /** 挂载面板启停的本地服务器(空 = 未配置,按钮会提示去配置) */
@@ -215,6 +217,7 @@ export interface MinecraftConfigSection {
   remoteTextures?: boolean;
   memory?: Partial<import('./game-memory-service.ts').GameMemoryConfig>;
   visual: { background: boolean };
+  photography?: Partial<import('../src/contracts/photography.ts').PhotographyConfig>;
   escapeCommand: string;
   local: {
     startWithWorld: boolean;
@@ -317,6 +320,18 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
         type: 'boolean', title: '后台观察画面', 'x-hot': true,
         description: '未指定 background 的看图调用立即受理，结果通过事件返回；显式 background:false 仍等待结果。',
       },
+      'worlds.minecraft.photography.provider': { type: 'string', title: '绘图服务', enum: ['none', 'bailian', 'volcengine'], 'x-hot': true,
+        description: '默认关闭生成，仍可拍摄网页原图。阿里百炼或字节火山只在明确请求增强/创作时调用。' },
+      'worlds.minecraft.photography.endpoint': { type: 'string', title: '绘图 API 完整地址', 'x-hot': true },
+      'worlds.minecraft.photography.model': { type: 'string', title: '绘图模型 / 接入点 ID', 'x-hot': true },
+      'worlds.minecraft.photography.apiKeyEnv': { type: 'string', title: '绘图 Key 的环境变量名', 'x-hot': true,
+        description: '填写变量名，密钥放在运行进程的环境中；不在配置或提示词中保存密钥。' },
+      'worlds.minecraft.photography.generate': { type: 'boolean', title: '允许原创绘图', 'x-hot': true },
+      'worlds.minecraft.photography.edit': { type: 'boolean', title: '允许照片增强 / 参考图', 'x-hot': true },
+      'worlds.minecraft.photography.maxReferences': { type: 'integer', title: '模型参考图上限', minimum: 1, maximum: 14, 'x-hot': true },
+      'worlds.minecraft.photography.timeoutMs': { type: 'integer', title: '绘图等待上限', minimum: 1000, maximum: 1800000, 'x-hot': true },
+      'worlds.minecraft.photography.resultHosts': { type: 'string', title: '绘图结果下载域名', 'x-hot': true,
+        description: '逗号分隔的精确域名。阿里返回临时 URL 时需要；下载不携带 API Key，不跟随跳转。' },
       'worlds.minecraft.escapeCommand': {
         type: 'string', title: '普通玩家脱困指令', 'x-hot': false,
         description: '远程服务器可填普通玩家有权限使用的传送命令，例如 /spawn。空值使用受管服务器控制台。',

@@ -33,6 +33,8 @@ import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
 import { Bridge } from './bridge.ts';
 import { captureMinecraftView, closeMinecraftViewCapture, warmMinecraftViewCapture } from './visual-capture.ts';
+import { PhotographyService, PHOTO_TOOL } from './photography.ts';
+import { createImageGenerationPort } from './image-generation.ts';
 import { OVERVIEW_SCHEMA, overviewArgumentError, type OverviewOptions } from './visual-overview.ts';
 import { visualFovError } from './visual-fov.ts';
 import { PlayerObservations, playerObservationMeta, renderPlayerObservation, type PlayerObservation } from './player-observation.ts';
@@ -2169,6 +2171,7 @@ const MAP_ICON_ZH: Record<string, string> = {
 };
 
 export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
+  PHOTO_TOOL,
   GAME_MEMORY_TOOL,
   ...PERCEPTION_TOOLS,
   RAILWAY_TOOL_DECL,
@@ -2676,6 +2679,7 @@ export class MinecraftWorld implements World {
   protected readonly botName: string;
   /** 这份部署的账本目录;'' = 没给,几本账只在内存里,皮肤留不了底 */
   protected readonly dataDir: string;
+  protected readonly photography: PhotographyService;
   protected bridge: Bridge | null = null;
   protected itemBreak: ItemBreakDecoder | null = null;
   protected executor: Executor | null = null;
@@ -2848,6 +2852,11 @@ export class MinecraftWorld implements World {
       emit: (event) => this.logBodyLease(event),
     });
     this.dataDir = opts.dataDir ?? '';
+    this.photography = new PhotographyService({
+      directory: this.dataDir ? join(this.dataDir, 'minecraft-photos') : undefined,
+      provider: () => createImageGenerationPort(this.cfg.photography),
+      capture: (args, signal) => this.capturePhoto(args, signal),
+    });
     const account = (lane: 'agent' | 'observer' | 'player') => {
       const config = lane === 'agent' ? this.cfg : lane === 'observer' ? this.cfg.client : this.cfg.player;
       return { mode: config.auth ?? 'offline', account: config.username, profilesFolder: config.profilesFolder };
@@ -3928,6 +3937,7 @@ export class MinecraftWorld implements World {
 
   async start(host: WorldHost): Promise<void> {
     this.host = host;
+    this.photography.start(host);
     this.shuttingDown = false; // 重新启用同一个实例时要把收摊闸放开
     const log = host.log;
 
@@ -4198,6 +4208,7 @@ export class MinecraftWorld implements World {
   }
 
   async stop(): Promise<void> {
+    this.photography.stop();
     this.initialSceneStop?.(); this.initialSceneStop = null;
     this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
     this.shuttingDown = true;
@@ -4392,6 +4403,7 @@ export class MinecraftWorld implements World {
         }
       },
       mc_visual: async (args, ctx) => this.visualObservation(args, ctx),
+      mc_photo: async (args, ctx) => this.photography.execute(args, ctx),
       mc_policy: async (args) => this.toolLog('mc_policy', args, this.setPolicy(args)),
       mc_memory: async (args, ctx) => {
         try {
@@ -4656,6 +4668,32 @@ export class MinecraftWorld implements World {
   }
 
   /** Capture current evidence; the Persona may interpret it in a separate task-scoped call. */
+  protected async capturePhoto(args: Record<string, unknown>, signal: AbortSignal) {
+    const bot = this.bridge?.bot, viewerUrl = this.bridge?.viewerUrl, host = this.host;
+    if (!bot?.entity || !viewerUrl || this.bridge?.viewerKind === 'basic' || this.shuttingDown)
+      throw new Error('Photography requires a connected modern web viewer');
+    const generation = this.connectionGeneration, dimension = String(bot.game.dimension);
+    const mode = (args.mode ?? 'third') as 'first' | 'third' | 'dungeon';
+    if (!['first', 'third', 'dungeon'].includes(mode)) throw new Error('Invalid photograph camera mode');
+    const invalid = this.visualArgumentFailure({ mode, fov: args.fov });
+    if (invalid) throw new Error(invalid.text);
+    const before = bot.entity.position.clone();
+    const frame = await captureMinecraftView({ viewerUrl, mode, fov: args.fov as number | undefined,
+      includeHud: false, timeoutMs: 25000, signal });
+    signal.throwIfAborted();
+    if (this.shuttingDown || this.host !== host || this.connectionGeneration !== generation || this.bridge?.bot !== bot
+      || this.bridge?.viewerUrl !== viewerUrl || String(bot.game.dimension) !== dimension)
+      throw new Error('Connection or dimension changed during photograph');
+    const snapshot = this.snapshot({ scanBlocks: false });
+    if (!snapshot) throw new Error('Fresh game readings unavailable; photograph was not archived as paired evidence');
+    return { bytes: frame.png, mime: 'image/png', capturedAt: frame.capturedAt, sampledAt: new Date().toISOString(), captureId: randomUUID(),
+      facts: { snapshot, server: { host: this.cfg.host, port: this.cfg.port }, account: bot.username,
+        connectionGeneration: generation, camera: { mode, fov: frame.fov, width: frame.width, height: frame.height,
+          sampledYaw: bot.entity.yaw, sampledPitch: bot.entity.pitch },
+        movedDuringCapture: before.distanceTo(bot.entity.position), sampling: 'game state sampled immediately after frame; not atomic',
+        visibility: 'Snapshot nearby/online entities are not guaranteed to be visible in the frame' } };
+  }
+
   protected async visualReadout(args: Record<string, unknown>, ctx: ToolCallContext): Promise<ToolOutcome> {
     const name = 'mc_visual';
     const invalid = this.visualArgumentFailure(args);

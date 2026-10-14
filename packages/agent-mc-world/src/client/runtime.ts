@@ -66,7 +66,7 @@ export class MinecraftAgentClient {
     this.lease = new AgentConnectionLease(options.dataDir, this.journal.run);
     this.host = {
       pushEvent: async (event, opts) => {
-        if (event.execution) this.executions.set(`${event.execution.kind}:${event.execution.id}`, event.execution);
+        if (event.execution) this.recordExecution(event.execution);
         return this.journal.pushEvent(event, opts);
       },
       pushDeferred: (event, opts) => this.journal.pushDeferred(event, opts),
@@ -82,6 +82,12 @@ export class MinecraftAgentClient {
   }
 
   get profile() { return this.binding.profile; }
+  private recordExecution(receipt: ExecutionReceipt): void {
+    const key = `${receipt.kind}:${receipt.id}`, previous = this.executions.get(key);
+    // A very fast background operation can finish before its admission RPC returns.
+    if (previous?.terminal && !receipt.terminal) return;
+    this.executions.set(key, receipt);
+  }
   get toolPrefix() { return this.binding.toolPrefix; }
   protected validateConfig(): void { assertMinecraftReady(this.options.cfg); }
 
@@ -294,7 +300,7 @@ export class MinecraftAgentClient {
       outcome.control = { protocol: PROTOCOL, requestId: callId, ...(turn ? { turnId: turn.id } : {}),
         barrierAfter: tool.barrierAfter === true, endTurnRequested: outcome.endsTurn === true || tool.endsTurn === true, turnEnded: false };
       if (turn && outcome.control.endTurnRequested) this.endRequested = true;
-      if (outcome.execution) this.executions.set(`${outcome.execution.kind}:${outcome.execution.id}`, outcome.execution);
+      if (outcome.execution) this.recordExecution(outcome.execution);
       if (queued.length) outcome.events = [...(outcome.events ?? []), ...queued];
       if (queued.length) outcome.text += '\n[Game events returned with this call]\n' + JSON.stringify(queued);
       this.requests.write({ requestId: callId, signature, phase: 'returned', outcome });
