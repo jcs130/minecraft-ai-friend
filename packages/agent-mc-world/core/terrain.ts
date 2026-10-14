@@ -18,6 +18,7 @@ import {
 } from './names.ts';
 import { piglinIsHostile } from './piglin.ts';
 import { itemCustomName } from './item-display.ts';
+import { inventoryIdentityText } from './item-identities.ts';
 import { animalStateNote, type FactBot, type FactEntity } from './animal-state.ts';
 import { BURNING_BLOCKS, SCORCHING_FLOOR, hazardBodyBounds } from './hazard-geometry.ts';
 import { remainingEffectTicks } from './status-effects.ts';
@@ -315,7 +316,7 @@ function whereIs(direction: Direction | null, distance: number, dy: number): str
  * 键不同才算"这段变了";显示文本在判定变了之后用当刻新鲜值。
  */
 interface SnapshotSegment {
-  key: 'place' | 'vehicle' | 'flight' | 'clock' | 'realclock' | 'body' | 'gear' | 'equip' | 'life' | 'structure' | 'terrain' | 'players';
+  key: 'place' | 'vehicle' | 'flight' | 'clock' | 'realclock' | 'body' | 'gear' | 'inventoryIds' | 'equip' | 'life' | 'structure' | 'terrain' | 'players';
   /** 完整句子;空串=本段当下无内容(目前只有 structure 可能为空) */
   text: string;
   cmp: string;
@@ -443,6 +444,10 @@ export function narrateWorldSegments(
     text: gear,
     cmp: s.invSynced ? `${s.heldItem ?? 'bare'}:${s.heldItemDisplayName ?? ''}|${bagFull}|${narrateCursor(s)}` : gear,
   });
+  const inventoryIds = s.invSynced
+    ? `当前随身物品 ID：${inventoryIdentityText(s.inventory) || '空'}。数量见背包读数；调用技能使用这些实际 ID，不推测别名。`
+    : '当前随身物品 ID 暂不可用：库存尚未确认。';
+  segs.push({ key: 'inventoryIds', text: inventoryIds, cmp: inventoryIds });
 
   // 装备与状态自成一段:背包每挖一块土就变,盔甲与效果几十分钟才动一次,
   // 混进 gear 段等于四个槽位每拍重印一遍

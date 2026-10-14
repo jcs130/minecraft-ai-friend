@@ -53,7 +53,7 @@ import {
 import { HOE_TILLED, SHOVEL_PATH, blockStateItem } from './blueprint-registry.ts';
 import { ShowPacer, type ShowTempo } from './show.ts';
 import {
-  PLAYER_SLOTS, edibleInBag, notFoodText, precheckSteps, renderPrecheckNotes, type PrecheckDeps,
+  PLAYER_SLOTS, edibleInBag, notFoodText, precheckSteps, renderPrecheckNotes, unknownCraftItemText, type PrecheckDeps,
 } from './precheck.ts';
 import { normalizeDimension } from './escape.ts';
 import { InspectionGuard } from './inspection-guard.ts';
@@ -2719,16 +2719,21 @@ export class Executor {
 
   /** 只拒绝开工前已可证明失败的合成；后续取料、加工仍交给逐步试算。 */
   private impossibleCraftStartNote(steps: readonly SkillCall[]): string | null {
+    const bot = this.opts.getBot();
     for (const step of steps) {
       if (step.skill === 'craft' && step.grid && step.item) {
         return `合成同时写了 item 和 grid；实际只会按 grid 摆，item 会被忽略。若要做${zhName(step.item)}，只写 item 走官方配方；若要试自摆配方，只写 grid。原队列保留`;
       }
+      if (bot && this.opts.precheck?.() !== false && step.skill === 'craft' && step.grid) {
+        const unknown = step.grid.flat().find(name => name && !bot.registry?.itemsByName?.[name]);
+        if (unknown) return `${unknownCraftItemText(bot, unknown)}先核对 ID 再提交；原队列保留`;
+      }
     }
     const first = steps[0];
     if (first?.skill !== 'craft' || this.opts.precheck?.() === false) return null;
-    const bot = this.opts.getBot();
     if (!bot) return null;
     if (first.grid) {
+      if (!inventoryReadConfirmed(bot)) return null;
       // A queued task may still supply ingredients before this task starts.
       if (this.task || this.queue.length > 0 || this.frozen) return null;
       const needed = new Map<string, number>();

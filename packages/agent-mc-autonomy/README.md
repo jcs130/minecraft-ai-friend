@@ -422,3 +422,12 @@ description explains that find without direction only observes. Repeated read
 attempts receive a changing request-tail notice to choose an action when facts
 suffice or query a specific unresolved fact. This is advisory and does not
 automatically move the body, interrupt work or claim progress.
+
+## Inventory identity and recipe feedback (0.1.40)
+
+Current verified inventory IDs are prioritized with inventory quantities in the
+changing request tail. Replacing an unconfirmed snapshot clears those IDs; quantity
+changes do not resend the identity map. Unknown IDs are identity errors, not evidence
+that a known item is absent. Craft failure guidance distinguishes crafting-grid
+recipes from furnace processing instead of recommending a guessed grid for every
+missing recipe. No alias substitution, body action or additional model call is added.
