@@ -43,8 +43,12 @@ final class MinescriptRunner {
         if (Files.exists(output)) throw new IllegalStateException("Existing script evidence; reconcile original action ID");
         Files.writeString(request, input.toString());
         String source = """
-import json, os, traceback, dataclasses
+import json, os, traceback, dataclasses, sys
 from pathlib import Path
+# Configure pipes before Minescript starts its reader thread. Windows locale
+# decoding can consume JSON escapes adjacent to UTF-8 item names and book NBT.
+for _stream in (sys.stdin, sys.stdout, sys.stderr):
+    _stream.reconfigure(encoding='utf-8', errors='strict')
 import minescript
 _request = Path(%s)
 _output = Path(%s)
