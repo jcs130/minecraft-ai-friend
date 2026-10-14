@@ -1,6 +1,7 @@
 """Bounded public playback state; never expose prompts, arguments or host config."""
 
 from datetime import datetime, timezone
+import json
 import re
 
 
@@ -15,6 +16,31 @@ def tool_receipt(name, arguments, result):
             "execution_id": execution.get("id"), "result": {"ok": not failed, "code": code or "terminal", "effectVerified": False}}
 
 
+def record_playback(state, values):
+    """Keep only public action outcomes; repeated status publication adds nothing."""
+    history = list(state.get("viewer_history") or [])[-20:]
+    receipt = values.get("viewer_action")
+    if receipt and (not history or receipt != history[-1]):
+        history.append(receipt)
+    terminal = values.get("viewer_terminal") or {}
+    if terminal.get("terminal") is True and terminal.get("id"):
+        previous = next((row for row in reversed(history) if row.get("execution_id") == terminal["id"]), None)
+        phase = terminal.get("phase")
+        if previous and previous["result"].get("code") != phase:
+            history.append({**previous, "at": datetime.now(timezone.utc).isoformat(), "result": {
+                "ok": phase not in {"blocked", "failed", "cancelled"}, "code": phase, "effectVerified": False}})
+    failure = values.get("tool_failure")
+    if isinstance(failure, dict):
+        # Native/schema diagnostics can include private arguments. Publish a
+        # stable category, not the raw error or planner recovery instructions.
+        schema = str(failure.get("error", "")).startswith("Invalid arguments:")
+        notice = "工具参数校验未通过；未派发到游戏" if schema else "操作遇到错误；完整回执保留在本地"
+        history.append({"at": datetime.now(timezone.utc).isoformat(), "action": {
+            "type": str(failure.get("tool", ""))[:80], "operation": ""}, "execution_id": None,
+            "result": {"ok": False, "code": "rejected" if schema else "failed", "effectVerified": False}, "notice": notice})
+    state["viewer_history"] = history[-20:]
+
+
 def viewer_projection(state, username, session):
     receipt = state.get("viewer_action")
     if receipt:
@@ -27,8 +53,16 @@ def viewer_projection(state, username, session):
     if state.get("phase") in {"starting", "stopping"}:
         mode = state["phase"]
     action = " / ".join(value for value in ((receipt or {}).get("action") or {}).values() if value)
-    return {"schema_version": 1, "session": session, "username": username,
+    playback = {"timeline": list(state.get("viewer_history") or [])[-20:], "queue": []}
+    for execution in (state.get("pending") or [])[:12]:
+        if isinstance(execution, dict):
+            playback["queue"].append({key: str(execution[key])[:120] for key in ("id", "kind", "phase", "operation") if execution.get(key) is not None})
+    value = {"schema_version": 1, "session": session, "username": username,
             "updated_at": datetime.now(timezone.utc).isoformat(), "online": state.get("game_connected") is True,
             "mode": mode, "goal": str((state.get("current_goal") or {}).get("goal") or state.get("standing_goal") or "")[:1000],
             "action": action, "receipts": [receipt] if receipt else [],
-            "lastDecision": {"at": state.get("viewer_decision_at")} if state.get("viewer_decision_at") else None}
+            "lastDecision": {"at": state.get("viewer_decision_at")} if state.get("viewer_decision_at") else None,
+            "playback": playback}
+    while len(json.dumps(value, ensure_ascii=False).encode("utf-8")) > 15000 and playback["timeline"]:
+        playback["timeline"].pop(0)
+    return value

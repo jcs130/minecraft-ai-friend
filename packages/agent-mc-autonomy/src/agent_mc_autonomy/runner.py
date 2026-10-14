@@ -19,7 +19,7 @@ from .ownership import session_lease
 from .planner import Planner
 from .review import ReviewPort
 from .viewer import ViewerWindow
-from .viewer_public import viewer_projection
+from .viewer_public import viewer_projection, record_playback
 
 
 def validate_start(settings: Settings, goal: str):
@@ -49,6 +49,7 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
 
     def update(**values):
         nonlocal viewer_task
+        record_playback(state, values)
         state.update(values)
         if settings.viewer_renderer_directory:
             try:
