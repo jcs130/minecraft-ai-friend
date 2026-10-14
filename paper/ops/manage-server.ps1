@@ -33,7 +33,9 @@ $jvmDiagnosticRequest = Join-Path $opsDir 'jvm-diagnostics.requested'
 $auraCachePatchRequest = Join-Path $opsDir 'auraskills-cache-fix.requested.json'
 $auraCachePatchJar = Join-Path $opsDir 'instrumentation\auraskills-cache-patch.jar'
 $pendingContentDeploy = Join-Path $opsDir 'content-plugins.pending.json'
+$pendingPaperCoreUpgrade = Join-Path $opsDir 'paper-core-upgrade.pending.json'
 . (Join-Path $PSScriptRoot 'content-deploy.ps1')
+. (Join-Path $PSScriptRoot 'paper-core-upgrade.ps1')
 . (Join-Path $PSScriptRoot 'ysm-services.ps1')
 
 function Log([string]$message) {
@@ -289,7 +291,8 @@ function HumanPlayers {
     # ag_CorMy is the replacement Agent account identified by the owner on 2026-10-11.
     # ag_neko_eye is the owner's explicitly identified NEKO spectator account.
     # yubeen explicitly confirmed as a reconnectable Agent by the owner on 2026-10-12.
-    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye', 'feiyu_bot', 'ag_Kirito', 'ag_NEKO', 'ag_neko_eye', 'ag_CorMy', 'ag_cormy_eye', 'ag_cormyeye', 'live', 'yubeen')
+    # ag_NarutoPi is the Naruto Agent identified by the owner on 2026-10-14.
+    $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye', 'feiyu_bot', 'ag_Kirito', 'ag_NEKO', 'ag_neko_eye', 'ag_CorMy', 'ag_cormy_eye', 'ag_cormyeye', 'ag_NarutoPi', 'live', 'yubeen')
     $roster = PlayerRoster
     @($roster.Names | Where-Object { $serviceNames -notcontains $_ })
 }
@@ -386,7 +389,7 @@ function Collect-JvmDiagnostics {
     # Run in the scheduled task's security context, which owns the Paper JVM.
     # -all avoids requesting a Full GC; the histogram still briefly scans the heap.
     $status = Probe
-    if ($status -notmatch 'Paper 1\.20\.6 \(proto 766\)') { throw 'Unexpected server for JVM diagnostics.' }
+    if (-not (Core-SupportedStatus $status)) { throw 'Unexpected server for JVM diagnostics.' }
     $listeners = @(Listener)
     if ($listeners.Count -ne 1) { throw 'Expected exactly one Paper listener for JVM diagnostics.' }
     $jvmProcessId = [int]$listeners[0].OwningProcess
@@ -422,7 +425,7 @@ function Apply-AuraSkillsCachePatch {
     if ($request.mode -notin @('fix', 'rollback')) { throw 'Unsupported AuraSkills cache patch mode.' }
     if (-not (Test-Path -LiteralPath $auraCachePatchJar)) { throw 'AuraSkills cache patch tool is missing.' }
     $status = Probe
-    if ($status -notmatch 'Paper 1\.20\.6 \(proto 766\)') { throw 'Unexpected server for AuraSkills cache patch.' }
+    if (-not (Core-SupportedStatus $status)) { throw 'Unexpected server for AuraSkills cache patch.' }
     $listeners = @(Listener)
     if ($listeners.Count -ne 1) { throw 'Expected exactly one Paper listener for AuraSkills cache patch.' }
     $jvmProcessId = [int]$listeners[0].OwningProcess
@@ -462,7 +465,7 @@ function Start-Server {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $stdout = Join-Path $serverDir "startup-$stamp.log"
     $stderr = Join-Path $serverDir "startup-$stamp.error.log"
-    $javaArguments = @('-Xms1G', '-Xmx4G', '-Xlog:gc*,safepoint:file=logs/gc-%t.log:time,uptime,level,tags:filecount=5,filesize=20M')
+    $javaArguments = @('-Xms1G', '-Xmx4G', '-Dpaper.preferSparkPlugin=true', '-Xlog:gc*,safepoint:file=logs/gc-%t.log:time,uptime,level,tags:filecount=5,filesize=20M')
     if (Test-Path -LiteralPath $auraCachePatchJar) {
         $javaArguments += "-javaagent:$auraCachePatchJar"
         Log 'Enabling the pinned AuraSkills message cache patch at startup'
@@ -512,7 +515,7 @@ function Repair-NoRcon {
     # inside the same scheduled-task security context that launched Paper.
     Remove-Item -LiteralPath $repairFile -Force
     $status = Probe
-    if ($status -notmatch 'Paper 1\.20\.6 \(proto 766\)' -or $status -notmatch 'online 0/') {
+    if (-not (Core-SupportedStatus $status) -or $status -notmatch 'online 0/') {
         throw "Refusing no-RCON repair while players may be online: $status"
     }
     $properties = Get-Content -LiteralPath (Join-Path $serverDir 'server.properties') -Raw
@@ -811,6 +814,7 @@ function Backup-Server {
             if (((Test-Path -LiteralPath $pendingAgentFriendDeploy) -or
                  (Test-Path -LiteralPath $pendingEyeMirrorDeploy) -or
                  (Test-Path -LiteralPath $pendingContentDeploy) -or
+                 (Test-Path -LiteralPath $pendingPaperCoreUpgrade) -or
                  (Test-Path -LiteralPath $pendingServerSettings)) -and (DungeonActive)) {
                 Log 'Backup and pending deployment skipped: dungeon run active'
                 return
@@ -834,7 +838,7 @@ function Backup-Server {
         # locks, control tokens, and logs are intentionally not restorable.
         $opsCopy = Join-Path $dest 'ops'
         & robocopy.exe $opsDir $opsCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP `
-            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' | Out-Null
+            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'paper-core-upgrade.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Incomplete backup: $dest" }
         $probeCopy = Join-Path $dest 'probe'
         & robocopy.exe 'E:\MC\probe' $probeCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'node_modules' | Out-Null
@@ -874,6 +878,7 @@ function Backup-Server {
         Log "Backup complete: $dest"
         # Pending deployments require both verified recovery copies before any JAR changes.
         Mirror-LatestBackup
+        Deploy-PendingPaperCore $dest (Join-Path $mirrorRoot $stamp)
         Deploy-PendingContent
         Deploy-PendingServerSettings
         Deploy-PendingAgentFriend
@@ -881,7 +886,10 @@ function Backup-Server {
         Deploy-PendingGeyser
     }
     finally {
-        if ($wasRunning) {
+        if ($wasRunning -and $script:coreUpgradeRecoveryBlocked) {
+            Log 'CRITICAL: Core file rollback requires inspection; automatic startup remains paused'
+            throw 'Core file recovery incomplete; refusing automatic restart'
+        } elseif ($wasRunning) {
             try { Start-Server; $startedAgain = $true }
             catch { Log "CRITICAL: Paper restart after backup failed: $_"; throw }
         } else { $startedAgain = $true }

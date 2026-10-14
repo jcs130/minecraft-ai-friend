@@ -490,6 +490,6 @@ final class VillageWatchManager implements Listener {
         if (player.getListeningPluginChannels().contains(CHANNEL))
             player.sendPluginMessage(plugin, CHANNEL, bytes);
         else ((CraftPlayer) player).getHandle().connection.send(new ClientboundCustomPayloadPacket(
-                new DiscardedPayload(new ResourceLocation(CHANNEL), Unpooled.wrappedBuffer(bytes))));
+                new DiscardedPayload(ResourceLocation.tryParse(CHANNEL), Unpooled.wrappedBuffer(bytes))));
     }
 }

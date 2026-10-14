@@ -206,7 +206,7 @@ final class ProtectionAdvisor implements Listener {
             // one of them. Send the same vanilla custom payload directly.
             CraftPlayer craft = (CraftPlayer) player;
             craft.getHandle().connection.send(new ClientboundCustomPayloadPacket(
-                    new DiscardedPayload(new ResourceLocation(channel), Unpooled.wrappedBuffer(bytes))));
+                    new DiscardedPayload(ResourceLocation.tryParse(channel), Unpooled.wrappedBuffer(bytes))));
         }
     }
 

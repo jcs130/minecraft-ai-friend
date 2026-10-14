@@ -62,6 +62,7 @@ public final class LoginGuard {
     private final Map<Player,Long> passwordReminders=new ConcurrentHashMap<>();
     private final Map<Player,String> observationSessions=new ConcurrentHashMap<>();
     private final Map<Player,String> authenticationMethods=new ConcurrentHashMap<>();
+    private final Set<Player> authenticationNotified=ConcurrentHashMap.newKeySet();
 
     @Inject public LoginGuard(ProxyServer server, Logger logger) { this.server=server; this.logger=logger; }
     private static String key(String name) { return name.toLowerCase(Locale.ROOT); }
@@ -159,7 +160,14 @@ public final class LoginGuard {
                 });
                 hooked=true;
             }
-            if(ready) { refreshEyes(); refreshFirstPasswords(); }
+            if(ready) {
+                refreshEyes(); refreshFirstPasswords();
+                // ServerPostConnect can precede completion of a bootstrap/Eye
+                // authorization or overlap a transient unavailable observation.
+                // Deliver the old success marker once when BOTH facts are true.
+                // This observes authorization; it never grants or retries login.
+                server.getAllPlayers().forEach(this::notifyAuthenticated);
+            }
         } catch(Throwable e) { ready=false; }
         if(heartbeat!=null) try {
             var names=server.getAllPlayers().stream().filter(this::authorized).map(Player::getUsername).toList();
@@ -185,6 +193,14 @@ public final class LoginGuard {
         if(!p.isActive())return;
         JsonObject out=authenticationState(p);
         p.sendMessage(text("MC_AUTH_STATE "+out));
+    }
+    private void notifyAuthenticated(Player p) {
+        if(!p.isActive() || !inPaper(p))return;
+        JsonObject state=authenticationState(p);
+        if(!state.get("status").getAsString().equals("authenticated")
+                || !state.get("authorized").getAsBoolean() || !authenticationNotified.add(p))return;
+        p.sendMessage(text("[MC_AUTH_SUCCESS] 登录成功，可以开始游戏。"));
+        p.sendMessage(text("MC_AUTH_STATE "+state));
     }
     private static boolean inPaper(Player p) {
         return p.getCurrentServer().filter(c->c.getServerInfo().getName().equals("paper")).isPresent();
@@ -340,9 +356,8 @@ public final class LoginGuard {
         if(!authorized(e.getPlayer())) e.setResult(PlayerChatEvent.ChatResult.denied());
     }
     @Subscribe(order=PostOrder.LAST) public void joined(ServerPostConnectEvent e) {
-        if(e.getPlayer().getCurrentServer().filter(s->!s.getServerInfo().getName().equals("auth")).isPresent() && authorized(e.getPlayer()))
-            e.getPlayer().sendMessage(text("[MC_AUTH_SUCCESS] 登录成功，可以开始游戏。"));
-        publishAuthentication(e.getPlayer());
+        notifyAuthenticated(e.getPlayer());
+        if(!authenticationNotified.contains(e.getPlayer()))publishAuthentication(e.getPlayer());
     }
     @Subscribe(order=PostOrder.LAST) public void command(CommandExecuteEvent e) {
         if(!(e.getCommandSource() instanceof Player p)) return;
@@ -381,6 +396,7 @@ public final class LoginGuard {
         authenticated.remove(e.getPlayer());verifiedAdminPassword.remove(e.getPlayer());eyeSessions.remove(e.getPlayer());premiumProofs.remove(e.getPlayer().getRemoteAddress());
         firstPasswordSessions.remove(e.getPlayer());passwordReminders.remove(e.getPlayer());
         observationSessions.remove(e.getPlayer());authenticationMethods.remove(e.getPlayer());
+        authenticationNotified.remove(e.getPlayer());
     }
     @Subscribe public void stop(ProxyShutdownEvent event) {
         ready=false; try { if(heartbeat!=null) Files.deleteIfExists(heartbeat); } catch(Exception ignored) { }

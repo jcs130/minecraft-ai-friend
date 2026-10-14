@@ -54,7 +54,7 @@ final class SkillEventPublisher {
             // Mineflayer need not register channels. Send the same raw UTF-8 JSON
             // directly to this player's connection, never to chat or nearby players.
             ((CraftPlayer) caster).getHandle().connection.send(new ClientboundCustomPayloadPacket(
-                    new DiscardedPayload(new ResourceLocation(CHANNEL), Unpooled.wrappedBuffer(bytes))));
+                    new DiscardedPayload(ResourceLocation.tryParse(CHANNEL), Unpooled.wrappedBuffer(bytes))));
         }
     }
 

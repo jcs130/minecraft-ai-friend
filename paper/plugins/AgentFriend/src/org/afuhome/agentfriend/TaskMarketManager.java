@@ -885,7 +885,7 @@ final class TaskMarketManager implements Listener {
         if (bytes.length <= 32_768) {
             if (player.getListeningPluginChannels().contains(CHANNEL)) player.sendPluginMessage(plugin, CHANNEL, bytes);
             else ((CraftPlayer) player).getHandle().connection.send(new ClientboundCustomPayloadPacket(
-                    new DiscardedPayload(new ResourceLocation(CHANNEL), Unpooled.wrappedBuffer(bytes))));
+                    new DiscardedPayload(ResourceLocation.tryParse(CHANNEL), Unpooled.wrappedBuffer(bytes))));
         }
         JsonObject shortNotice = new JsonObject(); shortNotice.addProperty("type", type);
         shortNotice.addProperty("schemaVersion", 1); shortNotice.addProperty("command", "/mycli guild engineering");

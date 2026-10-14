@@ -424,9 +424,11 @@ final class TradeDirectory implements Listener {
         return world + "(" + at.getWorld().getName() + ") " + LocationOutput.shortForm(at);
     }
     private static String profession(Villager.Profession job) {
-        return switch (job) { case FARMER -> "农民"; case FISHERMAN -> "渔夫"; case LIBRARIAN -> "图书管理员"; case TOOLSMITH -> "工具匠";
-            case ARMORER -> "盔甲匠"; case BUTCHER -> "屠夫"; case CARTOGRAPHER -> "制图师"; case CLERIC -> "牧师"; case FLETCHER -> "制箭师";
-            case LEATHERWORKER -> "皮匠"; case MASON -> "石匠"; case SHEPHERD -> "牧羊人"; case WEAPONSMITH -> "武器匠"; default -> "村民"; };
+        // Paper 1.21 exposes professions through a registry rather than a Java enum.
+        // The namespaced key is stable on both 1.20.6 and 1.21.1.
+        return switch (job.getKey().toString()) { case "minecraft:farmer" -> "农民"; case "minecraft:fisherman" -> "渔夫"; case "minecraft:librarian" -> "图书管理员"; case "minecraft:toolsmith" -> "工具匠";
+            case "minecraft:armorer" -> "盔甲匠"; case "minecraft:butcher" -> "屠夫"; case "minecraft:cartographer" -> "制图师"; case "minecraft:cleric" -> "牧师"; case "minecraft:fletcher" -> "制箭师";
+            case "minecraft:leatherworker" -> "皮匠"; case "minecraft:mason" -> "石匠"; case "minecraft:shepherd" -> "牧羊人"; case "minecraft:weaponsmith" -> "武器匠"; default -> "村民"; };
     }
 
     /** Optional Shopkeepers API: public interfaces avoid non-public implementation reflection.

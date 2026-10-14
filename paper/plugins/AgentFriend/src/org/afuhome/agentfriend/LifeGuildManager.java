@@ -530,7 +530,7 @@ final class LifeGuildManager implements Listener {
             // connection via the normal clientbound custom-payload packet.
             CraftPlayer craft = (CraftPlayer) player;
             craft.getHandle().connection.send(new ClientboundCustomPayloadPacket(
-                    new DiscardedPayload(new ResourceLocation(CHANNEL), Unpooled.wrappedBuffer(data))));
+                    new DiscardedPayload(ResourceLocation.tryParse(CHANNEL), Unpooled.wrappedBuffer(data))));
         }
     }
 }

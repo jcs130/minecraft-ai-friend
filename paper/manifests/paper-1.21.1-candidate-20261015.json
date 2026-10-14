@@ -1,0 +1,391 @@
+{
+  "status": "validated_candidate_not_deployed",
+  "date": "2026-10-15",
+  "targetCore": "Paper 1.21.1 build 133",
+  "nativeProtocol": 767,
+  "dataVersion": 3955,
+  "java": 21,
+  "agentFriendVersion": "0.4.41",
+  "eyeVersion": "0.1.16",
+  "loginGuardVersion": "0.1.2",
+  "restartAuthorized": false,
+  "productionModified": false,
+  "sourceBranch": "qiandengji-personal-stash",
+  "production": {
+    "core": "1.20.6",
+    "agentFriend": "0.4.40",
+    "eye": "0.1.15",
+    "loginGuard": "0.1.1"
+  },
+  "files": [
+    {
+      "target": "server.jar",
+      "sha256": "39bd8c00b9e18de91dcabd3cc3dcfa5328685a53b7187a2f63280c22e2d287b9",
+      "beforeSha256": "4b011f5adb5f6c72007686a223174fce82f31aeb4b34faf4652abc840b47e640",
+      "bytes": 49394394
+    },
+    {
+      "target": "cache/mojang_1.21.1.jar",
+      "sha256": "e3bc55693e93cda0188f2e60aea28113fc647c5e85a15fa3d1b347349231b4bb",
+      "beforeSha256": null,
+      "bytes": 51627615
+    },
+    {
+      "target": "versions/1.21.1/paper-1.21.1.jar",
+      "sha256": "020b6831758cfbaad2890d77eb05d664758319c12a1b190f6abf40323e96120e",
+      "beforeSha256": null,
+      "bytes": 25757283
+    },
+    {
+      "target": "libraries/com/destroystokyo/paper/paper-mojangapi/1.21.1-R0.1-SNAPSHOT/paper-mojangapi-1.21.1-R0.1-SNAPSHOT.jar",
+      "sha256": "b8df3e7f2739e21072a5263e41b307bd30cfa8d8f72258ce27973167f8ad07c0",
+      "beforeSha256": null,
+      "bytes": 2344886
+    },
+    {
+      "target": "libraries/com/mojang/brigadier/1.3.10/brigadier-1.3.10.jar",
+      "sha256": "c8ee4136e474ac7723ca2b432ec8d1a2bc88ef7d1ec57c314ba9e33cdc83dd75",
+      "beforeSha256": null,
+      "bytes": 80082
+    },
+    {
+      "target": "libraries/com/mojang/datafixerupper/8.0.16/datafixerupper-8.0.16.jar",
+      "sha256": "ffc138bc2596c291781b0d5e211ccac51f0f2345f27fc2742f335cedf7e2870d",
+      "beforeSha256": null,
+      "bytes": 724313
+    },
+    {
+      "target": "libraries/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar",
+      "sha256": "d77962877d010777cff997015da90ee689f0f4bb76848340e1488f2b83332af5",
+      "beforeSha256": null,
+      "bytes": 2533399
+    },
+    {
+      "target": "libraries/com/velocitypowered/velocity-native/3.3.0-SNAPSHOT/velocity-native-3.3.0-SNAPSHOT.jar",
+      "sha256": "016a94555a7ba68dafa73312580d4e2b5538b2231e586baea90c9d1e053de57b",
+      "beforeSha256": null,
+      "bytes": 237055
+    },
+    {
+      "target": "libraries/io/papermc/asm-utils/0.0.3/asm-utils-0.0.3.jar",
+      "sha256": "0e0b9b519ef36f86b44067ea1ed559751b18bb7b5ee8844bc243375961728f11",
+      "beforeSha256": null,
+      "bytes": 112231
+    },
+    {
+      "target": "libraries/io/papermc/reflection-rewriter/0.0.3/reflection-rewriter-0.0.3.jar",
+      "sha256": "dc7dca499eb485d47abe179176d63efc7121d7249d3d9625f8bd2e7a1642a4d9",
+      "beforeSha256": null,
+      "bytes": 10743
+    },
+    {
+      "target": "libraries/io/papermc/reflection-rewriter-proxy-generator/0.0.3/reflection-rewriter-proxy-generator-0.0.3.jar",
+      "sha256": "c972ba1ae0669702b5795fb4bc79ac8741702b315c1c200ab546e470973a9690",
+      "beforeSha256": null,
+      "bytes": 7847
+    },
+    {
+      "target": "libraries/io/papermc/reflection-rewriter-runtime/0.0.3/reflection-rewriter-runtime-0.0.3.jar",
+      "sha256": "61e066c3eb6f164ef65a73af4dcd95d3a0caeefea261606be6f9034a715ee8e5",
+      "beforeSha256": null,
+      "bytes": 13379
+    },
+    {
+      "target": "libraries/me/lucko/spark-api/0.1-20240720.200737-2/spark-api-0.1-20240720.200737-2.jar",
+      "sha256": "f99a3ba0cd3df1aee7b8f285fe7967a28d9c0cea37fa6621b643da919dcfb819",
+      "beforeSha256": null,
+      "bytes": 9520
+    },
+    {
+      "target": "libraries/me/lucko/spark-paper/1.10.119-SNAPSHOT/spark-paper-1.10.119-SNAPSHOT.jar",
+      "sha256": "85937f6166a7fb766c1c82ce5a083c09255188dad01d2c3b73913239017d2295",
+      "beforeSha256": null,
+      "bytes": 2833577
+    },
+    {
+      "target": "libraries/org/ow2/asm/asm/9.7.1/asm-9.7.1.jar",
+      "sha256": "8cadd43ac5eb6d09de05faecca38b917a040bb9139c7edeb4cc81c740b713281",
+      "beforeSha256": null,
+      "bytes": 126093
+    },
+    {
+      "target": "libraries/org/ow2/asm/asm-commons/9.7.1/asm-commons-9.7.1.jar",
+      "sha256": "9a579b54d292ad9be171d4313fd4739c635592c2b5ac3a459bbd1049cddec6a0",
+      "beforeSha256": null,
+      "bytes": 73459
+    },
+    {
+      "target": "libraries/org/ow2/asm/asm-tree/9.7.1/asm-tree-9.7.1.jar",
+      "sha256": "9929881f59eb6b840e86d54570c77b59ce721d104e6dfd7a40978991c2d3b41f",
+      "beforeSha256": null,
+      "bytes": 51939
+    },
+    {
+      "target": "libraries/org/spongepowered/configurate-core/4.2.0-SNAPSHOT/configurate-core-4.2.0-SNAPSHOT.jar",
+      "sha256": "ecd323604b3789c3fd4588e22a62b25d1faed56ccd2487c68314f33eb828f086",
+      "beforeSha256": "cec46194b1e819e5266c7a8658f61d650437371fac6989d425c6f8743f3c0454",
+      "bytes": 364327
+    },
+    {
+      "target": "libraries/org/spongepowered/configurate-yaml/4.2.0-SNAPSHOT/configurate-yaml-4.2.0-SNAPSHOT.jar",
+      "sha256": "f6ba6ff12b29a4ee89d3744e84058be62b6aea2b78f35943bf8b068606c3922b",
+      "beforeSha256": "128bb25516462607c8cfa4cbe29639302c9814439201cd695caa052aaa13be27",
+      "bytes": 379223
+    },
+    {
+      "target": "libraries/org/xerial/sqlite-jdbc/3.46.0.0/sqlite-jdbc-3.46.0.0.jar",
+      "sha256": "e697df15be3f95219d80773c5f1002030e33e932adda186c1c86fd51df6691a9",
+      "beforeSha256": null,
+      "bytes": 13615436
+    },
+    {
+      "target": "plugins/AgentFriend-0.4.41.jar",
+      "sha256": "fca7edf4b9f32b419f85b987bc1feb06e106928a4eef64dc2f2624ae0201c182",
+      "beforeSha256": null,
+      "bytes": 1458299
+    },
+    {
+      "target": "plugins/CortiEyeMirror-0.1.16.jar",
+      "sha256": "53ed34888734289d39f2ef5c69fbb2e213f7b03f30304b0d90496bec2d2b7921",
+      "beforeSha256": null,
+      "bytes": 48364
+    },
+    {
+      "target": "plugins/worldguard-bukkit-7.0.12-dist.jar",
+      "sha256": "48b136938b3cd4816a95887847ff28e56a06fb110103344bb574739c35f9e86c",
+      "beforeSha256": null,
+      "bytes": 1163769
+    },
+    {
+      "target": "plugins/Citizens-2.0.35-b3592.jar",
+      "sha256": "35ca802f482ff0844c8cba4c5122a332a91499dbbd5bb07b0805402ae60f64b9",
+      "beforeSha256": null,
+      "bytes": 3777412
+    },
+    {
+      "target": "plugins/Denizen-1.3.1-b7074-paper1211.jar",
+      "sha256": "5ecb7f7fa4141c2f8acb8b8c7cf2c004cd8e8f69fe22b31574431db9484574c6",
+      "beforeSha256": null,
+      "bytes": 4554446
+    },
+    {
+      "target": "plugins/spectatorplus-paper-1.2.1.jar",
+      "sha256": "95faff5336fdd265202e1589f39338f06cd6c4de788eeedd94164ec4cb2c92d2",
+      "beforeSha256": null,
+      "bytes": 258244
+    },
+    {
+      "target": "world/datapacks/Attract-Villagers-3.0.0.zip",
+      "sha256": "dd0abb9fa5d0593058b4f52ec511f3421de99367195a24f00caedd59433ce2c5",
+      "beforeSha256": "1916c9cfd7e2e4c23e4ed16943fff225f889ca3af46a2cea9ca379af75d9d1ab",
+      "bytes": 32192
+    },
+    {
+      "target": "world/datapacks/Better Villages 3.3.1.zip",
+      "sha256": "844c3327ab00e4436dade4d6dc7998bbc1e96c4b6d6a48ec9344be1a72446ef8",
+      "beforeSha256": "2b42fd0045d030ace9061cbbccfaf4d4d97657808ff66aac2e8284c51d70fc5a",
+      "bytes": 2293675
+    },
+    {
+      "target": "world/datapacks/Dungeons and Taverns v3.2.zip",
+      "sha256": "7ab8020f0f09f46450750e6b64a5a6b698ee4710bd95ec8a3caac5d91c0b8ea2",
+      "beforeSha256": "84bab5f46680693d576b9f8c9ad1aa20dd1c32920bbe3fc9cb64095a7615a286",
+      "bytes": 6658657
+    },
+    {
+      "target": "world/datapacks/Ships-3.0.3.zip",
+      "sha256": "96e34f85dc4601eac9f152f17a8ce1272bcb6b9f20547cf101ab7b94e9c60e96",
+      "beforeSha256": "6de32d59f50f32f548a463e416e93500322f28d63a9c24e06510fcd0bc06e9f7",
+      "bytes": 207506
+    },
+    {
+      "target": "world/datapacks/Structory_1.20_v1.3.5.zip",
+      "sha256": "0e09a9fdfa98d57b1c2a088c7a02812936401cea2218e0ecb6b5d3fd0f82a8fb",
+      "beforeSha256": "f84a6cece9c2f63ba343cdf1dce8f7d29dc02b9c850111ea42a7de8a29b4046d",
+      "bytes": 1218657
+    },
+    {
+      "target": "world/datapacks/Structory_Towers_1.20_v1.0.7.zip",
+      "sha256": "254e21e7c56411ea27a9b9628bcae08a34d001b03f182e086cc568aab3838deb",
+      "beforeSha256": "55d41299fe7e7f72750668922a0eae5c97fcaaf2c355af0d5b5fac580ff9c76c",
+      "bytes": 469323
+    },
+    {
+      "target": "world/datapacks/StructurePack v1.0.0.zip",
+      "sha256": "013cb14ae1b55a7ca1abd5c88d21fde70a231254065d27400edbed4d0c968f1a",
+      "beforeSha256": "d314c240e37a19dcbb850a945f5d398a9a078ca03f880712d3fd1ad2096a1dd3",
+      "bytes": 189378
+    },
+    {
+      "target": "world/datapacks/Terralith_1.20_v2.5.4.zip",
+      "sha256": "e66574394602344f12a02db3084384b8b8c5d3b72143759d74a914d7733f0035",
+      "beforeSha256": "f6822d4dc50c7e8e4d3dc0a7700c623a6de9a9df723a1b6c23075a5b2df860cc",
+      "bytes": 2612055
+    },
+    {
+      "target": "ysm-private/proxy/plugins/LoginGuard-0.1.2.jar",
+      "sha256": "f32f55603e91903ae24bc4b094fede678122fd5fde419bed622de271d47b6a70",
+      "beforeSha256": null,
+      "bytes": 18781
+    }
+  ],
+  "disableOldJars": [
+    {
+      "target": "plugins/AgentFriend-0.4.40.jar",
+      "sha256": "5cf98eda641357e79aec1514f635603d903e37e3b15115cf6993d48d2b5529ea"
+    },
+    {
+      "target": "plugins/CortiEyeMirror-0.1.15.jar",
+      "sha256": "58b8337887b26cff72f569bee50913c3aa829d1ff89d2791abecd17464022615"
+    },
+    {
+      "target": "plugins/worldguard-bukkit-7.0.10-dist.jar",
+      "sha256": "050b440bfd9c3b259b54e01f01a0014bab4f2ea93d658e82f6149ee9b1376942"
+    },
+    {
+      "target": "plugins/Citizens-2.0.40-b4013.jar",
+      "sha256": "38701d6101dfd8b1acc667c5049d7574ad2892b467cd7eaf54e387b65ca0b2b3"
+    },
+    {
+      "target": "plugins/Denizen-1.3.4-b7311-DEV.jar",
+      "sha256": "c0b374fb360a244076cf14bb746a403bce74964082c86e15c7230f738009dc04"
+    },
+    {
+      "target": "plugins/spectatorplus-paper-1.2.0.jar",
+      "sha256": "015d895c0053d3c4833ac86f44b09a4ec94022f331998ac2f450cdd59d0e6fc0"
+    },
+    {
+      "target": "ysm-private/proxy/plugins/LoginGuard-0.1.1.jar",
+      "sha256": "127f4a789bdf51b48c0cb3fd4fc9562af8908986084009693d833b3bff1a70bd"
+    }
+  ],
+  "operations": [
+    {
+      "file": "manage-server.ps1",
+      "sha256": "55d9709ed487e267c64fbe31134e052c54b223859b9d657a3c0c7ad6d0d292e7",
+      "beforeSha256": "61a2773482aa88b0c8a5bde6dbaaeff42229ba94ef35969a285d9f22772207da"
+    },
+    {
+      "file": "paper-core-upgrade.ps1",
+      "sha256": "26f2d8c67195e3660d3831ec3c4f2c69128cfa4c67e359b822988a550905c03d",
+      "beforeSha256": null
+    },
+    {
+      "file": "migrate-legacy-item-meta.mjs",
+      "sha256": "f83cb8c77d12584d5026b8606a2f635938a4beb3b30585a72986d1ead39820bf",
+      "beforeSha256": null
+    }
+  ],
+  "datapacks": {
+    "original": 9,
+    "converted": 8,
+    "unchanged": 1,
+    "renamedResources": 2937,
+    "changedJson": 73,
+    "structureNbtPreserved": true
+  },
+  "legacyShieldMigration": {
+    "count": 5,
+    "latestStoppedDataOnly": true,
+    "namesLoreEnchantmentsAndCustomValuesPreserved": true,
+    "unknownEmbeddedStateAborts": true
+  },
+  "verification": {
+    "datapackTests": 8,
+    "denizenPatchTests": 5,
+    "legacyItemTests": 5,
+    "powershell51TransactionChecks": 36,
+    "exactCandidateTransactionEntries": 43,
+    "exactTransactionWorldWritten": false,
+    "authenticationNotificationTests": 8,
+    "authenticationObservationTests": 11,
+    "firstPasswordTests": 8,
+    "premiumEyeTests": 21,
+    "concurrencyCases": 2,
+    "basicJava1211": 17,
+    "basicJava1206": 17,
+    "inventoryJava1211": 11,
+    "inventoryJava1206": 11,
+    "authenticatedModelAndEyeColdConnections": 22,
+    "actualCamera": 7,
+    "realDungeonAndHealingChecks": 9,
+    "actualRewardReadbackChecks": 7,
+    "coldReadback": 11,
+    "originalBackpacksPreserved": 26,
+    "originalGameplayState": [
+      {
+        "key": "guild-players",
+        "originalEntriesUnchanged": 47
+      },
+      {
+        "key": "dungeon-rewards",
+        "originalEntriesUnchanged": 13
+      },
+      {
+        "key": "dungeon-bonus-items",
+        "originalEntriesUnchanged": 11
+      },
+      {
+        "key": "dungeon-rare-misses",
+        "originalEntriesUnchanged": 7
+      },
+      {
+        "file": "plugins/AgentFriend/lands.yml",
+        "allOriginalRulesUnchanged": true
+      },
+      {
+        "file": "plugins/AgentFriend/waypoints.yml",
+        "allOriginalRulesUnchanged": true
+      },
+      {
+        "file": "plugins/WorldGuard/worlds/world/regions.yml",
+        "allOriginalRulesUnchanged": true
+      },
+      {
+        "file": "profession-ledger.json",
+        "originalPlayerEntriesUnchanged": 179
+      },
+      {
+        "world": "world",
+        "uuidUnchanged": true
+      },
+      {
+        "world": "world_nether",
+        "uuidUnchanged": true
+      },
+      {
+        "world": "world_the_end",
+        "uuidUnchanged": true
+      }
+    ],
+    "controlled16Connections": {
+      "checks": 3,
+      "nativeClients": 8,
+      "oldClients": 8,
+      "avgMspt5Seconds": 10.6,
+      "maxMsptHotWindow": 104.2,
+      "viewDistance": 8,
+      "simulationDistance": 8,
+      "testHeapGiB": 2,
+      "autonomousLlmAgents": false
+    }
+  },
+  "sources": {
+    "paper": "https://fill.papermc.io/v3/projects/paper/versions/1.21.1/builds",
+    "worldguard": "https://modrinth.com/plugin/worldguard/version/J66QOTLZ",
+    "citizens": "https://ci.citizensnpcs.co/job/Citizens2/3592/",
+    "denizen": "https://ci.citizensnpcs.co/job/Denizen_Developmental/7074/artifact/target/Denizen-1.3.1-b7074-DEV.jar",
+    "spectatorplus": "https://modrinth.com/plugin/spectatorplus/version/gglfSgWS"
+  },
+  "boundaries": [
+    "EssentialsX 2.22.0 enabled with upstream unsupported-version warning retained; all commands not certified",
+    "Existing Agent and camera connections keep protocol 1.20.6 via ViaBackwards; native 1.21.1 remote Web assets not rebuilt",
+    "No shared Web source change or remote host deployment in this task",
+    "Native Bedrock UDP Pong verified; self-signed fixture rejected by Xbox validation; physical phone/Xbox and authenticated Bedrock world not verified",
+    "Existing Bedrock YSM source-revision limitation remains",
+    "16 colocated controlled connections are not 16 autonomous LLM players or cold exploration",
+    "All original failed attempts retained; publication and production cutover distinct"
+  ],
+  "deployment": "One approved core plan through existing gated maintenance task, 180/60/10 notices, fresh verified complete E/F stopped snapshots, pinned static files and dynamic latest-data shield migration; no prequeued plan",
+  "rollback": "Before new-core startup, file transaction rollback. After 1.21.1 writes world data, normal stop, preserve incident state, obtain owner approval and restore the same complete pre-upgrade worlds/plugins/config/auth/YSM snapshot plus old maintenance code; later progress is lost."
+}

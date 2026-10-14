@@ -142,7 +142,7 @@ final class AgentStatePublisher implements Listener {
             // to this connection alone, as mcagent:protection already does.
             CraftPlayer craft = (CraftPlayer) player;
             craft.getHandle().connection.send(new ClientboundCustomPayloadPacket(
-                    new DiscardedPayload(new ResourceLocation(CHANNEL), Unpooled.wrappedBuffer(bytes))));
+                    new DiscardedPayload(ResourceLocation.tryParse(CHANNEL), Unpooled.wrappedBuffer(bytes))));
         }
         lastStates.put(player.getUniqueId(), new LastState(json, now));
     }

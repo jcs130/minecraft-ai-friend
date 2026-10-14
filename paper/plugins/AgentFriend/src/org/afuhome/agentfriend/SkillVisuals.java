@@ -104,7 +104,7 @@ final class SkillVisuals {
             for (Map<?,?> raw : rawLayers) {
                 YamlConfiguration l = new YamlConfiguration(); raw.forEach((k,v)->l.set(k.toString(),v));
                 String shape = l.getString("shape","ring"), particle = l.getString("particle","DUST");
-                if (!SHAPES.contains(shape) || !PARTICLES.contains(particle)) throw new IllegalArgumentException(name + ": 形状或粒子不支持1.20.6");
+                if (!SHAPES.contains(shape) || !PARTICLES.contains(particle)) throw new IllegalArgumentException(name + ": 形状或粒子不在当前服务器支持列表中");
                 List<Point> points = new ArrayList<>();
                 if (shape.equals("points")) {
                     for (Object value : l.getList("points", List.of())) {

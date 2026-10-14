@@ -83,7 +83,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
-/** A vanilla-protocol command/compass bridge and bounded family arena for Paper 1.20.6. */
+/** A vanilla-protocol command/compass bridge and bounded family arena for Paper. */
 public final class AgentFriendPlugin extends JavaPlugin implements Listener, CommandExecutor, TabCompleter {
     private static final int X = -590, Z = -305, FLOOR = 90, RADIUS = 12;
     private static final UUID GODDESS_UUID = UUID.fromString("b2f9ceb0-8271-3470-b99f-e1c3ffe4edbd");
@@ -373,7 +373,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     BackpackShortcutMigration.restoreMissing(player, dungeon);
             }
         }, 1200L, 1200L);
-        getLogger().info("Ready; arena-built=" + arenaBuilt + ", Paper 1.20.6 vanilla protocol");
+        getLogger().info("Ready; arena-built=" + arenaBuilt + ", Paper " + getServer().getBukkitVersion() + " vanilla protocol");
     }
 
     @Override public void onDisable() {
