@@ -40,8 +40,8 @@
 
 **Files:** plugin `neko_heartbeat.py`, `neko_presentation.py`, `neko_tools.py`, `tests/test_heartbeat.py`, `tests/test_presentation.py`, README, manifest/project versions and fixed framework dependency.
 
-- [ ] Add tests demonstrating that strategic reviews still request inspect/continue/insert, while their speech instructions forbid inventory/inspection readouts and allow a concise highlight or silence.
-- [ ] Forward the framework projection, share presentation interval with strategic heartbeat commentary, and attach the same bounded commentary instruction to inspection/decision replies. Persist submission opportunities truthfully, not playback success.
-- [ ] Replace inventory-heavy narration text with one highlighted event/current activity and short natural-language guidance. Direct user questions remain normal.
-- [ ] Run adapter pytest, Node observer tests, Ruff and official release/Market structure checks; inspect staged files and packaged contents, then commit and push.
-- [ ] Reload the development adapter through the normal public API, preserving the independent game/model/server processes. Verify fresh tool receipts, voice delivery/playback, and live viewer identity; record actual observations without claiming hard suppression from prompt text alone.
+- [x] Add tests demonstrating that strategic reviews still request inspect/continue/insert, while their speech instructions forbid inventory/inspection readouts and allow a concise highlight or silence.
+- [x] Forward the framework projection, share presentation interval with strategic heartbeat commentary, and attach the same bounded commentary instruction to inspection/decision replies. Persist submission opportunities truthfully, not playback success.
+- [x] Replace inventory-heavy narration text with one highlighted event/current activity and short natural-language guidance. Direct user questions remain normal.
+- [x] Run adapter pytest (56), Node observer tests (4), Ruff and official release/Market structure checks; inspect staged files and packaged contents, then commit and push.
+- [x] Reload the development adapter through the normal public API, preserving the independent game/model/server processes. Verify fresh tool receipts, voice delivery/playback, and live viewer identity. Subsequent 0.5.14 moved the 30-character limit into the notification preview because tool-return guidance alone did not control a main brain that skipped inspect. Natural voice playback now includes approximately 3- and 7-second samples; hard silent output is still not enforced by the public host SDK.
