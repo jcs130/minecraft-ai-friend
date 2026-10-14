@@ -13,6 +13,7 @@ import { NativeEvidenceArchive, compactNativeState, compactNativeItems, compactN
 import { javaScriptHelp, javaScriptErrorHelp } from './java-script-help.ts';
 import { selectJavaViewer } from './java-viewer-selection.ts';
 import { nativeProbeInput, NATIVE_PROBE_PROGRAM } from './java-probe.ts';
+import { nativeInteractInput, nativeInteractProgram } from './java-interact.ts';
 
 export const JAVA_CLIENT_ENVIRONMENT = `You control an actual rendered Minecraft Java client through agent-mc-java/v1. The host owns goals, personality, models and memory. The client bridge owns one actual body queue. It never launches a game, reconnects, simulates OS input or runs a model.
 Query mc_capabilities, mc_operations and mc_help before acting. Claim mc_control explicitly, then renew the lease before expiry. Disconnect releases your own lease and keys. Identity is the actual server-assigned UUID and exact server address; offline servers do not require Microsoft authentication. Never control a different player or server after an identity change.
@@ -77,7 +78,7 @@ export class JavaClientWorld implements World {
         syncId: state.syncId, revision: state.menuRevision, slots: items.menuSlots, rawQuery: 'mc_bag' }) },
       { key: 'queue', text: JSON.stringify(state.actions.filter(action => ['accepted', 'running', 'unknown'].includes(action.phase))) },
       { key: 'notices', text: JSON.stringify({ lastSeq: state.messages.at(-1)?.seq ?? 0, retained: state.messages.length, rawQuery: 'mc_notices', observationOnly: true }) },
-      ...(this.cfg.javaClient?.minescriptEnabled ? [{ key:'executor',text:JSON.stringify({provider:'java-client',scriptEngine:'Minescript 4.0 Python',blockObservation:'mc_probe',scriptReference:'mc_script api:index / blocks / movement / interaction / inventory',blockReturn:'namespaced string, e.g. minecraft:carrots[age=7]',aim:'minescript.player_look_at(x,y,z)',wait:'Python time.sleep(seconds)',archiveQuery:'mc_evidence part:script',shortActionWaitMs:this.cfg.javaClient.actionWaitMs??1000}) }] : []),
+      ...(this.cfg.javaClient?.minescriptEnabled ? [{ key:'executor',text:JSON.stringify({provider:'java-client',scriptEngine:'Minescript 4.0 Python',blockObservation:'mc_probe',blockInteraction:'mc_interact',scriptReference:'mc_script api:index / blocks / movement / interaction / inventory',blockReturn:'namespaced string, e.g. minecraft:carrots[age=7]',aim:'minescript.player_look_at(x,y,z)',wait:'Python time.sleep(seconds)',archiveQuery:'mc_evidence part:script',shortActionWaitMs:this.cfg.javaClient.actionWaitMs??1000}) }] : []),
     ];
     return { text: parts.map(part => part.text).join('\n'), parts, snapshotTypes: ['minecraft.client.snapshot'] };
   }
@@ -342,6 +343,13 @@ export class JavaClientWorld implements World {
       names:{type:'array',maxItems:16,items:{type:'string'}},limit:{type:'integer',minimum:1,maximum:32}}), async(args,ctx)=>{
         const input=nativeProbeInput(args);
         return tools.find(t=>t.name==='mc_do')!.handler({action_id:args.action_id,operation:'minescript.run',input:{code:NATIVE_PROBE_PROGRAM,input,timeoutMs:5000}},ctx);
+      },true));
+    if (this.cfg.javaClient?.minescriptEnabled) tools.push(tool('mc_interact', 'Interact with one absolute target block without writing Python. Checks GUI, actual crosshair hit/distance before bounded attack/use, always releases the key, returns observed before/after in script.result. For planting target actual support farmland, aimOffset [.5,.9,.5], observePositions including the space above; select the held item separately. blocked/no_observed_change requires new evidence or position. Raycast bound does not grant reach/permission. Same native lease, queue, stable action_id and cancellation; partial is not goal completion.', parameters({action_id:str,
+      target:{type:'array',minItems:3,maxItems:3,items:{type:'integer'}},action:{enum:['attack','use']},holdMs:{type:'integer',minimum:50,maximum:2000},
+      maxDistance:{type:'number',minimum:.5,maximum:8},aimOffset:{type:'array',minItems:3,maxItems:3,items:{type:'number',minimum:0,maximum:1}},
+      observePositions:{type:'array',maxItems:4,items:{type:'array',minItems:3,maxItems:3,items:{type:'integer'}}},waitMs:{type:'integer',minimum:0,maximum:2000}},['target']), async(args,ctx)=>{
+        const input=nativeInteractInput(args),code=nativeInteractProgram();
+        return tools.find(t=>t.name==='mc_do')!.handler({action_id:args.action_id,operation:'minescript.run',waitMs:args.waitMs??this.cfg.javaClient?.actionWaitMs??2000,input:{code,input,timeoutMs:10000}},ctx);
       },true));
     return tools;
   }

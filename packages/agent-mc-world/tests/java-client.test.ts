@@ -109,6 +109,21 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
       expect(call.params.input.code).toContain('getblocklist');expect(call.params.input.code).not.toContain('press_key');
     }finally{await r.runtime.disconnect();}
   });
+  it('exposes fixed block interactions through SDK/MCP with the same native queue, ID and unfinished goal',async()=>{
+    expect(rig(false).world.tools().some(t=>t.name==='mc_interact')).toBe(false);
+    const r=rig(true),server=createMinecraftMcpServer(r.runtime,'interaction'),client=new Client({name:'interaction',version:'1'}),[a,b]=InMemoryTransport.createLinkedPair();
+    await server.connect(a);await client.connect(b);await r.runtime.connect();await r.runtime.call('mc_control',{action:'claim'});
+    try {
+      const sdk=await r.runtime.call('mc_interact',{action_id:'sdk-interact',target:[-1,65,-2],action:'use',holdMs:150,observePositions:[[-1,66,-2]]});
+      expect(sdk.execution).toMatchObject({id:'sdk-interact',terminal:false,goalCompleted:false});expect(sdk.control?.turnEnded).toBe(false);
+      const request=r.calls.find(c=>c.method==='do').params;
+      expect(request).toMatchObject({operation:'minescript.run',action_id:'sdk-interact',input:{timeoutMs:10000,input:{position:[-1,65,-2],action:'use',hold:.15,observe_positions:[[-1,66,-2]]}}});
+      expect(request.input.code).toContain('def interact_block(');
+      const mcp=await client.callTool({name:'mc_interact',arguments:{action_id:'mcp-interact',target:[-1,65,-2]}});
+      expect(mcp.structuredContent.execution).toMatchObject({id:'mcp-interact',terminal:false,goalCompleted:false});expect(mcp.structuredContent.control.turnEnded).toBe(false);
+      const bad=await r.runtime.call('mc_interact',{target:[.5,65,-2]});expect(bad.failed).toBe(true);expect(r.calls.filter(c=>c.method==='do')).toHaveLength(2);
+    }finally{await r.runtime.disconnect();await client.close();await server.close();}
+  });
   it('delivers compact terminal evidence with an exact archive without repeating inventory and queue snapshots',async()=>{
     const r=rig(true),events:any[]=[],http=r.http.getMockImplementation()!;
     const inventory=Array.from({length:36},(_,slot)=>({slot,count:64,name:'minecraft:stone',displayName:'原始物品'.repeat(60),encoded:{component:'exact-original-'+slot}}));
