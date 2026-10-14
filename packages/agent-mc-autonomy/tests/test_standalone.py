@@ -68,6 +68,27 @@ def test_two_owners_cannot_share_an_account_ledger(framework_module, tmp_path):
         assert (tmp_path / "owner.lock").is_file()
 
 
+def test_account_lease_probe_requires_a_current_holder_and_creates_no_state(framework_module, tmp_path):
+    _, _, _, ownership, _ = modules(framework_module)
+    account = tmp_path / "account"
+    assert not ownership.session_is_owned(account)
+    assert not account.exists()
+    account.mkdir()
+    (account / "owner.lock").write_bytes(b"0")
+    with ownership.session_lease(account):
+        assert ownership.session_is_owned(account)
+        assert not ownership.session_is_owned(tmp_path / "other-account")
+    assert not ownership.session_is_owned(account)
+    assert (account / "owner.lock").read_bytes() == b"0"
+
+
+def test_empty_lease_file_is_not_an_owner(framework_module, tmp_path):
+    _, _, _, ownership, _ = modules(framework_module)
+    (tmp_path / "owner.lock").touch()
+    assert not ownership.session_is_owned(tmp_path)
+    assert (tmp_path / "owner.lock").read_bytes() == b""
+
+
 @pytest.mark.parametrize("queue", ["append", "afterCheckpoint", "now"])
 def test_command_uses_native_mode_and_original_receipt(framework_module, tmp_path, run_async, queue):
     _, mail, _, _, controller_module = modules(framework_module)

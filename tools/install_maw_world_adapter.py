@@ -32,8 +32,10 @@ def install(destination: Path):
     lock['packages'][''].update(name=package['name'], version=package['version'], license='MIT')
     files['package-lock.json'] = (json.dumps(lock, indent=2)+'\n').encode()
     files['LICENSE'] = (REPO/'LICENSE').read_bytes()
-    for name in ('MY-AGENT-WORLD-JAVA-CLIENT.md', 'MY-AGENT-WORLD-JAVA-CLIENT.txt'):
+    for name in ('MY-AGENT-WORLD-JAVA-CLIENT.md', 'MY-AGENT-WORLD-JAVA-CLIENT.txt', 'MY-AGENT-WORLD-UNIFIED-ACCESS.md', 'MY-AGENT-WORLD-UNIFIED-ACCESS.txt'):
         files[name] = (REPO/'docs'/name).read_bytes()
+    evidence = REPO/'docs/evidence/unified-access-20261014.json'
+    if evidence.is_file():files['evidence/'+evidence.name] = evidence.read_bytes()
     for name in ('MY-AGENT-WORLD-WORLD-ADAPTER.md', 'MY-AGENT-WORLD-WORLD-ADAPTER.txt', 'MY-AGENT-WORLD-LOGIN.txt', 'MY-AGENT-WORLD-CONTROL-API.txt', 'MY-AGENT-WORLD-RPG-CONTENT.txt', 'MY-AGENT-WORLD-PAPER-MIGRATION.txt', 'MY-AGENT-WORLD-UNDERWORLD.txt', 'MY-AGENT-WORLD-UNDERWORLD.md', 'MY-AGENT-WORLD-MOD-REUSE.md'):
         files[name] = (REPO/'docs'/name).read_bytes()
     for name, content in files.items():

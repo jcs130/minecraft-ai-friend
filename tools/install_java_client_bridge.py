@@ -19,7 +19,9 @@ def install(destination:Path,build_record:Path,baritone_jar:Path|None=None):
     lock.update(name=package['name'],version=package['version']);lock['packages'][''].update(name=package['name'],version=package['version'])
     files['package.json']=(json.dumps(package,indent=2)+'\n').encode();files['package-lock.json']=(json.dumps(lock,indent=2)+'\n').encode()
     files[jar.name]=jar.read_bytes();files['LICENSE']=(REPO/'LICENSE').read_bytes()
-    for name in ('MY-AGENT-WORLD-JAVA-CLIENT.md','MY-AGENT-WORLD-JAVA-CLIENT.txt'):files[name]=(REPO/'docs'/name).read_bytes()
+    for name in ('MY-AGENT-WORLD-JAVA-CLIENT.md','MY-AGENT-WORLD-JAVA-CLIENT.txt','MY-AGENT-WORLD-UNIFIED-ACCESS.md','MY-AGENT-WORLD-UNIFIED-ACCESS.txt'):files[name]=(REPO/'docs'/name).read_bytes()
+    evidence=REPO/'docs/evidence/unified-access-20261014.json'
+    if evidence.is_file():files['evidence/'+evidence.name]=evidence.read_bytes()
     files['operations.json']=(source/'resources/client-operations.json').read_bytes()
     baritone_sha='7f9f40952c49e78388e4e9ceaa6fd91a5b662238e06c997b3de5438177f99d8d'
     if baritone_jar:

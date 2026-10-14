@@ -61,6 +61,9 @@ def install(destination: Path, core_package: Path, npm: Path):
     files['MY-AGENT-WORLD-AGENT-MC-WORLD.txt'] = (REPO / 'docs/MY-AGENT-WORLD-AGENT-MC-WORLD.txt').read_bytes()
     for name in ('MY-AGENT-WORLD-JAVA-CLIENT.md', 'MY-AGENT-WORLD-JAVA-CLIENT.txt', 'MY-AGENT-WORLD-UNIFIED-ACCESS.md', 'MY-AGENT-WORLD-UNIFIED-ACCESS.txt'):
         files[name] = (REPO / 'docs' / name).read_bytes()
+    evidence = REPO / 'docs/evidence/unified-access-20261014.json'
+    if evidence.is_file():
+        files['evidence/' + evidence.name] = evidence.read_bytes()
     destination.mkdir(parents=True)
     for name, data in files.items():
         target = destination / name

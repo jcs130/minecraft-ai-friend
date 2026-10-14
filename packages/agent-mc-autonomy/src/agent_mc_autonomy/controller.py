@@ -50,6 +50,16 @@ def fact_fingerprint(facts):
 
 
 def model_tools(catalogue):
+    def scalar_structure(value):
+        if not isinstance(value, dict):
+            return None
+        types = value.get("type", [])
+        types = [types] if isinstance(types, str) else types
+        scalar = bool(types) and set(types) <= {"string", "number", "integer", "boolean", "null"}
+        values = value.get("enum")
+        scalar |= isinstance(values, list) and all(not isinstance(item, (list, dict)) for item in values)
+        return {key: item for key, item in value.items() if key != "description"} if scalar else None
+
     def numeric_field(value):
         types = value.get("type", [])
         types = [types] if isinstance(types, str) else types
@@ -92,10 +102,18 @@ def model_tools(catalogue):
             properties = step.get("properties", {})
             if isinstance(properties.get("skill"), dict) and "enum" in properties["skill"]:
                 # Native steps use one large flat union across unrelated skills.
-                # Keep the stable envelope; mc_help supplies the selected skill's
-                # full fields/examples. Dispatch still validates the ORIGINAL.
+                # Keep scalar types/enums/bounds so generation can obey native
+                # constraints. Complex fields/examples remain progressive.
+                # Dispatch still validates the ORIGINAL complete schema.
                 kept = {"skill", "needs", "expect", *step.get("required", [])}
-                step["properties"] = {key: value for key, value in properties.items() if key in kept}
+                projected = {}
+                for key, value in properties.items():
+                    scalar = scalar_structure(value)
+                    if key in kept:
+                        projected[key] = value
+                    elif scalar is not None:
+                        projected[key] = scalar
+                step["properties"] = projected
                 step["additionalProperties"] = True
                 step["description"] = ("Flat step: skill plus its native parameters (not nested arguments). "
                                        "Read mc_help for the selected skill's exact fields and examples before using unfamiliar skills.")
@@ -619,11 +637,26 @@ class Controller:
         boundary = bool(control.get("endTurnRequested") or result.get("endsTurn") or (self.current_work() and not self.feedback_pending))
         return result, compact, boundary
 
-    def reject_model_call(self, error):
+    def reject_model_call(self, error, response=None):
         # Validation is not an uncertain action. Keep the exact response above,
         # let the next bounded decision correct it, and leave the body connected.
         self.invalid_tool_calls += 1
         self.planner_notice = "No tool was dispatched. " + str(error)
+        calls = response.get("tool_calls") if isinstance(response, dict) else None
+        # Complete wire envelopes can carry their exact rejection into the next
+        # request. Never serialize malformed IDs/functions as model tool history.
+        if (isinstance(calls, list) and 1 <= len(calls) <= 8
+                and all(isinstance(call, dict) and call.get("type", "function") == "function"
+                        and isinstance(call.get("id"), str) and call["id"]
+                        and isinstance(call.get("function"), dict)
+                        and isinstance(call["function"].get("name"), str) and call["function"]["name"]
+                        and isinstance(call["function"].get("arguments"), str) for call in calls)
+                and len({call["id"] for call in calls}) == len(calls)):
+            failure = encode({"failed": True, "dispatched": False, "origin": "controller_validation",
+                              "text": self.planner_notice})
+            self.groups.append([assistant_history(response), *[
+                {"role": "tool", "tool_call_id": call["id"], "content": failure} for call in calls]])
+            self.groups = self.groups[-8:]
         with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
             output.write(encode({"turnId": self.turn, "rejected": str(error), "dispatched": False}) + "\n")
         delay = min(60, max(1, self.settings.min_decision_seconds) * 2 ** min(6, self.invalid_tool_calls - 1))
@@ -736,7 +769,7 @@ class Controller:
                 try:
                     prepared = self.prepare_calls(calls, tools)
                 except ModelCallRejected as error:
-                    self.reject_model_call(error)
+                    self.reject_model_call(error, response)
                     return
                 self.invalid_tool_calls = 0
                 exchange = [assistant_history(response)]
@@ -766,6 +799,31 @@ class Controller:
             if not self.inflight_request:
                 await self.protocol("end_turn", id=self.turn)
                 self.turn = None
+
+    def goal_prompt(self, standing_goal):
+        text = "Standing goal: " + standing_goal
+        if not self.active_goal:
+            return text + "\nContinue this goal; goal_report is unavailable without a submitted goal."
+        active = self.active_goal
+        origin = active.get("origin", "unknown")
+        user = self.commands.current_user_goal(active["id"]) if self.commands else (active if origin == "user" else None)
+        if user:
+            text += "\nCurrent user goal (priority over proposed stages): " + user["goal"]
+        if origin == "host_review":
+            text += "\nHost review proposed stage: " + active["goal"]
+            text += "\nThis stage is model judgment, not user feedback. Keep it subordinate to the current user goal and standing goal; do not promote unrelated remembered tasks into current intent."
+        elif origin != "user":
+            text += "\nSubmitted stage (origin unknown): " + active["goal"]
+            text += "\nUnknown origin is not evidence of a new user instruction; preserve the standing goal and any explicit current user goal."
+        text += "\nWhen observed facts satisfy this stage, use goal_report after native work ends to resume its parent goal or the standing goal; do not keep repeating a satisfied stage."
+        if self.feedback_pending:
+            if origin == "user":
+                text += "\nCurrent user feedback takes priority."
+            if self.has_step_queue():
+                text += "\nPlan through mc_do; the framework applies the requested native queue policy at its safe checkpoint."
+            else:
+                text += "\nPlan through the discovered operation schema. An inserted stage waits for the original action terminal; explicit replacement stops current work first."
+        return text
 
     async def run(self, goal):
         if self.commands:
@@ -834,12 +892,7 @@ class Controller:
                 if (self.decide and wake and (not self.current_work() or urgent) and elapsed >= self.settings.min_decision_seconds
                         and not (self.feedback_pending and self.current_work() and not self.has_step_queue())
                         and time.monotonic() >= self.planner_retry_at):
-                    current_goal = ("Standing goal: " + goal + "\nSubmitted goal (current priority): " + self.active_goal["goal"]
-                                    + "\nWhen observed facts satisfy this stage, use goal_report after native work ends to resume the standing goal; do not keep repeating a satisfied stage."
-                                    if self.active_goal
-                                    else "Standing goal: " + goal + "\nContinue this goal; goal_report is unavailable without a submitted goal.")
-                    if self.feedback_pending:
-                        current_goal += "\nCurrent user feedback takes priority. Plan through mc_do; the framework applies the requested native queue policy."
+                    current_goal = self.goal_prompt(goal)
                     await self.turn_once(current_goal, prefix, tools)
                     self.count += 1
                     self.last_decision = time.monotonic()

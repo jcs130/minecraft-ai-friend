@@ -621,7 +621,7 @@ def test_stop_during_model_wait_blocks_late_action(framework_module, tmp_path, r
     run_async(exercise())
 
 
-def test_submitted_stage_keeps_standing_goal_context_without_losing_priority(framework_module, tmp_path, run_async):
+def test_legacy_stage_keeps_standing_goal_without_claiming_user_priority(framework_module, tmp_path, run_async):
     seen = []
 
     async def decide(messages, _):
@@ -634,8 +634,39 @@ def test_submitted_stage_keeps_standing_goal_context_without_losing_priority(fra
     run_async(controller.run("Survive, establish food reserves and shelter"))
     prompt = "\n".join(m.get("content") or "" for m in seen[0])
     assert "Standing goal: Survive, establish food reserves and shelter" in prompt
-    assert "Submitted goal (current priority): Gather a few logs and craft a workbench" in prompt
+    assert "Submitted stage (origin unknown): Gather a few logs and craft a workbench" in prompt
+    assert "Current user feedback takes priority" not in prompt
     assert "goal_report" in prompt and "observed" in prompt
+
+
+@pytest.mark.parametrize("origin", ["user", "host_review", "unknown"])
+def test_goal_prompt_distinguishes_user_and_model_stage(framework_module, tmp_path, origin):
+    _, _, controller = setup(framework_module, tmp_path, None)
+    controller.active_goal = {"id": "stage", "goal": "find food", "origin": origin}
+    controller.feedback_pending = True
+    prompt = controller.goal_prompt("survive")
+    assert ("Current user feedback takes priority" in prompt) == (origin == "user")
+    assert ("Host review proposed stage" in prompt) == (origin == "host_review")
+    assert "safe checkpoint" in prompt
+
+
+def test_host_stage_prompt_keeps_explicit_user_parent_goal(framework_module, tmp_path):
+    import uuid
+    from agent_mc_autonomy.mailbox import Mailbox
+    _, _, controller = setup(framework_module, tmp_path, None)
+    box = Mailbox(tmp_path)
+    user, stage = str(uuid.uuid4()), str(uuid.uuid4())
+    box.submit_user_intent("feedback", {"goal": "Find food, keep current shelter", "mode": "insert"}, user)
+    box.activate_feedback(box.claim())
+    box.submit("feedback", {"goal": "inspect berry bushes", "mode": "insert", "origin": "host_review", "parent_id": user}, stage)
+    box.activate_feedback(box.claim())
+    controller.commands, controller.active_goal = box, box.active_goal()
+    controller.feedback_pending = True
+    prompt = controller.goal_prompt("Survive safely")
+    assert "Standing goal: Survive safely" in prompt
+    assert "Current user goal (priority over proposed stages): Find food, keep current shelter" in prompt
+    assert "Host review proposed stage: inspect berry bushes" in prompt
+    assert "Current user feedback takes priority" not in prompt
 
 
 def test_unknown_outcome_blocks_restart_without_replay(framework_module, tmp_path, run_async):
@@ -736,7 +767,7 @@ def test_action_and_observation_tools_keep_distinct_semantics(framework_module):
     assert "Execute real" in tools["mc_do"]["description"]
     assert "Read-only" in tools["mc_scout"]["description"]
     assert tools["mc_scout"]["parameters"]["properties"]["queue"] == {"enum": ["append", "afterCheckpoint", "now"]}
-    assert "block" not in tools["mc_do"]["parameters"]["properties"]["steps"]["items"]["properties"]
+    assert tools["mc_do"]["parameters"]["properties"]["steps"]["items"]["properties"]["block"] == {"type": "string"}
     original_step = json.loads(module.tool_help(catalog, {"name": "mc_do", "path": "/inputSchema/properties/steps/items"})["text"])
     assert original_step["properties"]["block"] == props["block"]
     failure = module.failure_context(catalog, "mc_scout", {"steps": [{"skill": "craft"}, {"skill": "collect"}]}, {"text": "Invalid arguments"})
@@ -757,7 +788,9 @@ def test_step_projection_preserves_envelope_and_full_native_constraints(framewor
     before = json.dumps(original)
     projected = module.model_tools([original])[0]["function"]["parameters"]["properties"]["steps"]
     assert projected["type"] == "array" and projected["minItems"] == 1 and projected["maxItems"] == 16
-    assert projected["items"]["properties"] == {k: schema["properties"]["steps"]["items"]["properties"][k] for k in ["skill", "needs"]}
+    assert projected["items"]["properties"] == {
+        **{k: schema["properties"]["steps"]["items"]["properties"][k] for k in ["skill", "needs", "count"]},
+        "item": {"type": "string"}}
     assert projected["items"]["additionalProperties"] is True and "mc_help" in projected["items"]["description"]
     assert json.loads(module.tool_help([original], {"name": "mc_do", "path": "/inputSchema"})["text"]) == schema
     assert json.dumps(original) == before

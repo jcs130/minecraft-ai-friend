@@ -1,6 +1,6 @@
 # My Agent World：统一 Agent 接入
 
-2026-10-14。整合分支沿用 `experiment/agent-society-1.21.1`，合入本轮发现的 `main@603c184`，核心仍为 `agent-mc-world 0.4.0`，包含最新游戏笔记、经验服务、通用战术、库存同步和连接修复。包版本相同不表示字节相同，部署时核对安装清单中的源码与归档 SHA。
+2026-10-14。整合分支沿用 `experiment/agent-society-1.21.1`，合入本轮发现的 `main@4f677be`，核心仍为 `agent-mc-world 0.4.0`，包含最新游戏笔记、经验服务、通用战术、库存同步和连接修复。包版本相同不表示字节相同，部署时核对安装清单中的源码与归档 SHA。
 
 ## 三种身体，一套框架
 
@@ -78,6 +78,8 @@ targetCount 是期望背包总量，不是新增数量。期间开启 legitMine�
 
 ## 接入自主框架
 
+独立自主框架跟进到 0.1.21；本机候选 wheel 位于 `E:\QiandengJiSocietyLab\integrations\agent-mc-autonomy\v2-unified-20261014`。它是可选安装包，构建和安装不会启动模型。按下文显式选择本轮 v15 MCP entry，避免误用另一身体后端。
+
 已有 Neko、Cortico 或其他宿主可以继续使用自己的模型与高层记忆，通过统一 SDK/MCP 接入。本次没有接 QwenPaw、复制 Cormy 个人信息或启动新的长期模型循环。
 
 要使用独立自主框架，把原生 JSON 配置保存为私有绝对路径，并在 TOML 中选择显式身体配置：
@@ -121,7 +123,7 @@ body_config_file 的对象原样交给显式 MCP entry，不自动改为默认 v
 原 ledgerDir 必须保留。首次新身体才创建新的账本。Mineflayer 和 Numen 的字段见[统一身体适配器](MY-AGENT-WORLD-WORLD-ADAPTER.md)，真实客户端见[客户端桥](MY-AGENT-WORLD-JAVA-CLIENT.md)。
 
 ```text
-agent-mc-autonomy run --config E:/private/autonomy.toml --entry E:/QiandengJiSocietyLab/integrations/agent-mc-world/v14-unified-access-20261014/agent-mc-host/mcp.mjs --goal "观察周围，收集食物并搭建安全住处"
+agent-mc-autonomy run --config E:/private/autonomy.toml --entry E:/QiandengJiSocietyLab/integrations/agent-mc-world/v15-unified-access-20261014/agent-mc-host/mcp.mjs --goal "观察周围，收集食物并搭建安全住处"
 ```
 
 模型配置沿用自主框架的显式 provider/model 与密钥环境变量。没有配置模型就不冒充自然语言自主规划。框架仅在发现 mc_control 后 claim，并在已知租约到期前续租；不会增加第二个身体队列。实时状态查询来自同一身体；采样时间变化不会独自触发重复决策。遇到 unknown 保留原请求和账本，停止重投。

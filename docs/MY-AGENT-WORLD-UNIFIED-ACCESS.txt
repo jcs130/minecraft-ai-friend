@@ -1,5 +1,7 @@
 My Agent World 统一 Agent 接入（2026-10-14）
 
+本轮合入 main@4f677be，核心 agent-mc-world 0.4.0，独立自主框架 0.1.21。统一宿主包为 v15-unified-access-20261014，客户端桥为 0.2.0；安装包附带 SHA 清单，安装不会自动启动模型或接管角色。
+
 现在有三种身体：
 mineflayer：远程游戏协议玩家，复用现有原生 SDK。
 numen：服务端 Numen 身体，原生 Lua 和持久身份。
@@ -27,7 +29,7 @@ body_config_file = "E:/private/your-agent-body.json"
 不要把令牌、密码或模型 Key 写进公开文档；只给私有文件路径和密钥环境变量名。
 
 启动示例：
-agent-mc-autonomy run --config E:/private/autonomy.toml --entry E:/QiandengJiSocietyLab/integrations/agent-mc-world/v14-unified-access-20261014/agent-mc-host/mcp.mjs --goal "观察周围，收集食物并搭建安全住处"
+agent-mc-autonomy run --config E:/private/autonomy.toml --entry E:/QiandengJiSocietyLab/integrations/agent-mc-world/v15-unified-access-20261014/agent-mc-host/mcp.mjs --goal "观察周围，收集食物并搭建安全住处"
 
-这轮跟进 main@603c184 的核心，保留现役服务器、世界与原 Agent 状态。
+这轮跟进 main@4f677be 的核心，保留现役服务器、世界与原 Agent 状态。
 完整安装、三种配置、接口差异及验收边界见 MY-AGENT-WORLD-UNIFIED-ACCESS.md。

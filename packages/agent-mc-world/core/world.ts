@@ -1,5 +1,6 @@
 import { observationView, observedEntity } from './perception-sight.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
+import { PlayerMemoryRecall } from './game-memory-player.ts';
 import { GameMemoryService } from './game-memory-service.ts';
 import { temporaryScaffoldReadout } from './temporary-scaffold.ts';
 import { setViewerBodyState } from './viewer-body-state.ts';
@@ -2740,6 +2741,7 @@ export class MinecraftWorld implements World {
   /** 常驻规矩(mc_policy 的六格);五格落盘跨重启活着,fight 重启回默认 */
   protected readonly policy: PolicyBook;
   protected readonly gameMemory: GameMemoryBook;
+  protected readonly playerMemory: PlayerMemoryRecall;
   protected readonly gameMemoryService: GameMemoryService;
   private readonly methodLibraries = new Map<string, MethodLibrary>();
 
@@ -2863,6 +2865,7 @@ export class MinecraftWorld implements World {
     this.works = new WorksBook(ledger('minecraft-works.json'));
     this.policy = new PolicyBook(ledger('minecraft-policy.json'));
     this.gameMemory = new GameMemoryBook(opts.dataDir ? join(opts.dataDir, 'minecraft-memory') : null);
+    this.playerMemory = new PlayerMemoryRecall(this.gameMemory);
     this.gameMemoryService = new GameMemoryService(this.gameMemory, opts.dataDir ? join(opts.dataDir, 'minecraft-memory') : null);
     this.worldFile = ledger('minecraft-world.json');
     // host 挂载在 start();管理器可能在此之前被控制台使用,日志经转发器现取
@@ -8408,6 +8411,20 @@ export class MinecraftWorld implements World {
   ): void {
     if (!this.host) return;
     const player = opts?.meta?.uname;
+    if (opts?.deliver !== false && typeof player === 'string' && player !== this.chatName() && !this.isCamera(player)
+      && (type === 'minecraft.chat' || type === 'minecraft.enter' || !!opts?.meta?.minecraftPlayerObservation)) {
+      const uuid = typeof opts?.meta?.senderUuid === 'string' ? opts.meta.senderUuid : this.bridge?.bot?.players?.[player]?.uuid;
+      const recall = this.playerMemory.recall({ name: player, uuid, direct: type === 'minecraft.chat' }, {
+        scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.botName }, dimension: null,
+      });
+      if (recall) {
+        // Keep the player's original words unchanged for chat archives, classifiers and replies.
+        // Queue engine-owned history first; the actual encounter supplies the wake-up trigger.
+        this.emit('minecraft.memory', recall.text, false,
+          { trigger: 'piggyback', meta: { gamePlayerMemory: recall.meta } }, 'minecraft.memory');
+        opts = { ...opts, meta: { ...opts?.meta, gamePlayerMemory: recall.meta } };
+      }
+    }
     if (type === 'minecraft.chat' && opts?.deliver !== false && typeof player === 'string'
       && player !== this.chatName() && !this.isCamera(player)) {
       this.idleContext.noteChat(player, text, text.startsWith('[MC 私聊]') ? 'whisper' : 'public');

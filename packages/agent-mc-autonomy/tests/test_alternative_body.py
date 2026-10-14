@@ -95,3 +95,13 @@ def test_visual_discovery_keeps_the_default_backend_policy():
     assert 'mc_visual' not in hidden_tools(catalogue())
     steps=[{'name':'mc_do','inputSchema':{'properties':{'steps':{'type':'array'}}}}]
     assert 'mc_visual' in hidden_tools(steps)
+
+
+def test_operation_goal_prompt_preserves_authority_without_promising_a_queue(tmp_path):
+    controller=Controller(SimpleNamespace(tools=catalogue()),None,Settings(),tmp_path,lambda **_:None,lambda:False)
+    controller.active_goal={'id':'goal','goal':'reach home','origin':'user','mode':'insert'}
+    controller.feedback_pending=True
+    prompt=controller.goal_prompt('survive')
+    assert 'Current user goal' in prompt
+    assert 'original action terminal' in prompt
+    assert 'native queue policy' not in prompt

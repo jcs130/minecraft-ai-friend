@@ -1,0 +1,276 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-14",
+  "branch": "experiment/agent-society-1.21.1",
+  "upstream": {
+    "firstMerge": "603c1846fd8afbf8d6f49ac564ff003a69256b42",
+    "finalMerge": "4f677be7df02e6a723efd01a638500701138fea2",
+    "coreVersion": "0.4.0",
+    "autonomyVersion": "0.1.21"
+  },
+  "architecture": {
+    "providers": [
+      "mineflayer",
+      "numen",
+      "java-client"
+    ],
+    "optionalClientNavigation": "Baritone 1.11.3 original public API",
+    "singleBodyController": true,
+    "canonicalGameNotebook": true,
+    "existingActorsSwitched": false,
+    "newLongRunningModelLoops": 0
+  },
+  "artifacts": {
+    "coreArchiveSha256": "c10542bcb5691e3564ea55b6b4a4ca6131ba851f7446cfcb2819de9eb79035ab",
+    "hostBundle": "v15-unified-access-20261014",
+    "clientBridgeVersion": "0.2.0",
+    "clientJarSha256": "b42bf88736c04f219b5aa60be8ded317591d68df753a26d63c5c5d070f00bb02",
+    "originalBaritoneSha256": "7f9f40952c49e78388e4e9ceaa6fd91a5b662238e06c997b3de5438177f99d8d",
+    "autonomyWheelSha256": "bafa2e3f537fb94e7c17f3deac16b7fb69329bd9c3c2abcd0a3affadfc9ad5de",
+    "autonomyDefaultCanonicalCorePin": "41fbc284cb0e7157c520f28c21110782870472a5",
+    "unifiedAutonomyExplicitEntry": "v15-unified-access-20261014/agent-mc-host/mcp.mjs"
+  },
+  "offlineTests": {
+    "core": {
+      "passed": 656,
+      "failed": 0,
+      "skipped": 1,
+      "skippedNames": [],
+      "java": 21,
+      "maxWorkers": 4
+    },
+    "autonomy": {
+      "passed": 291,
+      "failed": 0
+    },
+    "packedHost": {
+      "passed": 35,
+      "failed": 0
+    },
+    "bodyAdapters": {
+      "passed": 36,
+      "failed": 0
+    },
+    "strictPackedTypes": true,
+    "runtimeBuildAndSourceVerification": true,
+    "pinnedPnpmFrozenInstall": "11.5.0"
+  },
+  "realGameplay": {
+    "isolatedOnly": true,
+    "mineflayerAndNumen": {
+      "mineflayer": {
+        "checks": [
+          "real_identity_and_absolute_state",
+          "real_inventory_components",
+          "actual_operation_schema",
+          "unpublished_optional_mod_is_unavailable",
+          "common_capability_contract",
+          "canonical_game_memory_capture",
+          "walk_actual_position_verified",
+          "action_terminal_has_position",
+          "spell.list",
+          "maid.list",
+          "colony_absence_reported_without_fabrication",
+          "society.state",
+          "actual_guild_registration",
+          "real_native_menu_open",
+          "real_native_menu_close",
+          "terminal_event_delivered_without_goal_claim",
+          "reconnect_same_body_and_original_terminal",
+          "same_id_replay_does_not_move_again"
+        ],
+        "passed": 18,
+        "operationCount": 140,
+        "ok": true
+      },
+      "numen": {
+        "checks": [
+          "real_identity_and_absolute_state",
+          "real_inventory_components",
+          "actual_operation_schema",
+          "unpublished_optional_mod_is_unavailable",
+          "common_capability_contract",
+          "canonical_game_memory_capture",
+          "walk_actual_position_verified",
+          "action_terminal_has_position",
+          "spell.list",
+          "maid.list",
+          "colony_absence_reported_without_fabrication",
+          "society.state",
+          "actual_guild_registration",
+          "real_native_menu_open",
+          "real_native_menu_close",
+          "terminal_event_delivered_without_goal_claim",
+          "reconnect_same_body_and_original_terminal",
+          "same_id_replay_does_not_move_again"
+        ],
+        "passed": 18,
+        "operationCount": 104,
+        "ok": true
+      }
+    },
+    "baritone": {
+      "passed": 11,
+      "checks": [
+        "optional_baritone_discovered_28_operations",
+        "lease_credentials_not_in_agent_reply",
+        "single_action_baritone_detour_and_actual_goal_receipt",
+        "same_body_input_mutual_exclusion_and_legit_mining_settings",
+        "mineflayer_facade_routes_same_body_through_baritone",
+        "native_mod_gui_and_original_frame_still_work",
+        "sdk_cancel_stops_baritone_process_and_keeps_original_receipt",
+        "mine_requires_real_inventory_postcondition",
+        "baritone_original_action_id_deduplicates",
+        "finite_follow_actual_loaded_uuid",
+        "finite_farm_harvests_and_replants_real_wheat"
+      ],
+      "ok": true
+    },
+    "baritoneFramework": {
+      "passed": 5,
+      "checks": [
+        "canonical_autonomy_native_operation_envelope_actual_java_body",
+        "framework_actual_goal_position_and_original_body",
+        "original_action_terminal_receipt_persisted_across_framework_reconnect",
+        "original_framebuffer_transported_as_mcp_image",
+        "canonical_game_notebook_online_capture_and_offline_recall_same_scope"
+      ],
+      "ok": true
+    },
+    "coldRestartAndMappedF8": {
+      "passed": 4,
+      "checks": [
+        "same_world_restart_original_uuid_and_native_mod_receipts",
+        "restart_same_action_id_no_second_mining_dispatch",
+        "mapped_f8_stops_owned_baritone_and_blocks_reclaim_until_human_resume",
+        "mapped_f8_resume_requires_explicit_claim"
+      ],
+      "ok": true
+    },
+    "realLeaseExpiry": {
+      "passed": 2,
+      "checks": [
+        "navigation_timeout_stops_baritone_without_false_success",
+        "real_90_second_lease_expiry_stops_body_and_fences_unknown_actions"
+      ],
+      "ok": true
+    },
+    "withoutBaritone": {
+      "passed": 20,
+      "checks": [
+        "no_baritone_optional_discovery",
+        "same_real_client_identity",
+        "full_item_components",
+        "actual_private_chat_reply",
+        "exclusive_controller",
+        "native_key_movement",
+        "native_mod_blocks_and_collision_shapes",
+        "mineflayer_astar_original_client_physics",
+        "original_farmers_delight_menu",
+        "native_mod_menu_deposit_full_stack",
+        "original_mod_gui_framebuffer",
+        "native_mod_menu_withdraw_no_loss",
+        "stale_gui_click_rejected",
+        "original_inventory_crafting_real_result",
+        "original_inventory_and_keyboard_gui",
+        "original_equipment_selection",
+        "native_survival_dig_actual_block_change",
+        "native_survival_place_verified_face",
+        "cancel_releases_native_keys",
+        "sdk_reconnect_deduplicates_original_action"
+      ],
+      "ok": true
+    },
+    "finalWheelAndCoreFramework": {
+      "passed": 5,
+      "checks": [
+        "canonical_autonomy_native_operation_envelope_actual_java_body",
+        "framework_actual_goal_position_and_original_body",
+        "original_action_terminal_receipt_persisted_across_framework_reconnect",
+        "original_framebuffer_transported_as_mcp_image",
+        "canonical_game_notebook_online_capture_and_offline_recall_same_scope"
+      ],
+      "ok": true
+    },
+    "scriptedPlanner": true,
+    "paidModelCalls": 0,
+    "physicalKeyboardTested": false
+  },
+  "health": {
+    "health-agent-world-final.json": {
+      "ok": true,
+      "worldActions": 0,
+      "modelRequests": 0
+    },
+    "health-java-client-final.json": {
+      "ok": true,
+      "worldActions": 0,
+      "modelRequests": 0
+    },
+    "health-world-adapter-final.json": {
+      "ok": true,
+      "worldActions": 0,
+      "modelRequests": 0
+    },
+    "client-live-health.json": {
+      "ok": true,
+      "worldActions": 0,
+      "modelRequests": 0
+    }
+  },
+  "preservation": {
+    "original35ModsUnchanged": true,
+    "protectedConfigsUnchanged": true,
+    "originalLedgerPrefixRetained": true,
+    "originalUnknownRetained": true,
+    "mawExplorerPausedAt464": true,
+    "kiritoStoppedAt559": true,
+    "kiritoOriginalV10": true,
+    "privateJournalNoTruncation": true,
+    "qaTCPClosed": true,
+    "restoredManagersHealthy": true
+  },
+  "serviceRecovery": {
+    "unrelatedOutageDetected": "2026-10-14T15:03:47+08:00",
+    "cause": "undetermined",
+    "pauseOrShutdownMarkers": false,
+    "action": "Started only the two original registered managers with unchanged runtime configuration",
+    "beforeOwners": {
+      "28985": "9ea741527b2c4e54ab583d9a6047b35e",
+      "28996": "c1890da8cee940489737ff5a35095c05"
+    },
+    "afterOwners": {
+      "28985": {
+        "runId": "91b0f704dc2d4811bc760062cbcb4441",
+        "healthy": true,
+        "heartbeatFresh": true
+      },
+      "28996": {
+        "runId": "0d3fdecb5ca74cc484921bb42fa32423",
+        "healthy": true,
+        "heartbeatFresh": true
+      }
+    },
+    "agentPauseRetained": true,
+    "newGameCodeDeployed": false
+  },
+  "failedAttemptsRetained": [
+    "First fixtures overwrote the cooking pot; corrected the private fixture wall.",
+    "First Baritone mine initialized block metadata on render thread and deadlocked. Exact owned QA client PID was force-closed after server save; metadata preparation now runs on a bounded owned worker.",
+    "Farm process first exited before falling crop drops settled; finite farm now waits for growth until its duration expires.",
+    "An exact floating position dedup assertion failed on normal inertia; original ledger bytes and inactive ownership now establish no redispatch.",
+    "Build and tests were initially run concurrently against the same dist directory; missing-file failures retained and corrected by sequential execution.",
+    "A Java test initially used system JDK17; final suite explicitly uses Java21.",
+    "One worker-based combat adoption assertion failed in a default-parallel whole-suite run; isolated rerun and full suite at four workers passed without weakening tests.",
+    "Initial wheel build lacked setuptools in the private venv; private build dependency installed and final wheel verified."
+  ],
+  "remainingValidation": [
+    "Long-running LLM autonomy and task completion efficiency",
+    "Physical F8 keyboard input",
+    "All mod-specific semantics and GUI paths",
+    "Continuous original-client video streaming",
+    "Bedrock-specific changes: none deployed in this task"
+  ],
+  "privateEvidenceDirectory": "E:/QiandengJiSocietyLab/research/unified-access-20261014",
+  "privateArtifactsExcludedFromGit": true
+}

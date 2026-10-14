@@ -36,7 +36,7 @@ def receipt_view(value):
 def spatial_summary(value):
     result = {k: value[k] for k in ("source", "observedAt", "dimension", "kind", "bounds", "unknownCells") if k in value}
     result["feet"] = value.get("frame", {}).get("feet")
-    result["detail"] = "Summary of loaded observations only; query original for collision geometry and omitted samples."
+    result["detail"] = "Summary of observed samples only; query original for collision geometry and omitted samples."
     if value.get("kind") == "voxels":
         bounds, cells, palette = value.get("bounds"), value.get("cells"), value.get("palette")
         if (value.get("order") != "y,z,x; x fastest" or not isinstance(bounds, list) or len(bounds) != 6
@@ -94,7 +94,7 @@ def spatial_summary(value):
 def spatial_text(text):
     """Replace only recognized native observation objects inside receipt text."""
     decoder, output, cursor = json.JSONDecoder(), [], 0
-    for match in re.finditer(r'\{"source"\s*:\s*"client-loaded-world"', text):
+    for match in re.finditer(r'\{"source"\s*:\s*"client-(?:loaded|visible)-world"', text):
         if match.start() < cursor:
             continue
         try:

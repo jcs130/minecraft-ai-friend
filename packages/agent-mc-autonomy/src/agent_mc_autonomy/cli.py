@@ -97,9 +97,9 @@ def main(argv=None, *, entry_resolver=None, viewer_entry=None):
             if args.command == "submit" and args.steps_file is None:
                 raise ValueError("steps_file_required")
             if args.command == "feedback":
-                result = mailbox.submit("feedback", {"goal": args.goal, "mode": args.mode}, args.request_id)
+                result = mailbox.submit_user_intent("feedback", {"goal": args.goal, "mode": args.mode}, args.request_id)
             elif args.command == "submit-goal":
-                result = mailbox.submit("goal", {"goal": args.goal}, args.request_id)
+                result = mailbox.submit_user_intent("goal", {"goal": args.goal}, args.request_id)
             else:
                 payload = {"steps": json.loads(args.steps_file.read_text(encoding="utf-8-sig")), "queue": args.queue} if args.command == "submit" else {}
                 result = mailbox.submit("steps" if args.command == "submit" else "stop", payload, args.request_id)
