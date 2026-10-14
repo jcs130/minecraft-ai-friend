@@ -113,6 +113,7 @@ public final class ClientBridge implements ClientModInitializer {
         if(!client.field_1724.method_5667().toString().replace("-", "").equalsIgnoreCase(text(args,"expectedUuid","").replace("-", "")) || !actualServer.toLowerCase().replaceAll(":25565$","").equals(text(args,"expectedServer","").toLowerCase().replaceAll(":25565$",""))) throw new IllegalStateException("Client UUID/server mismatch");
         if (method.equals("visual_registry")) return visual.registry();
         if (method.equals("visual_frame")) return visual.frame(integer(args,"radius",2));
+        if (method.equals("visual_skin")) return visual.skin(text(args,"resource",""));
         if (method.equals("visual_chunk")) return visual.chunk(integer(args,"x",0),integer(args,"z",0),text(args,"epoch",""));
         if (method.equals("screenshot")) {
             try (class_1011 image = class_318.method_1663(client.method_1522())) {

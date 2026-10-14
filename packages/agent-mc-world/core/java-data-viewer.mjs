@@ -1,13 +1,13 @@
 // Generated from mc-visual-console by tools/build-java-data-host.mjs. Edit the shared source.
 
-// packages/modern-viewer/renderer-src/host/java-data-viewer.mjs
+// host/java-data-viewer.mjs
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path2 from "node:path";
 import { createHash } from "node:crypto";
 import { Server as SocketServer } from "socket.io";
 
-// packages/modern-viewer/renderer-src/host/java-visual-data.mjs
+// host/java-visual-data.mjs
 import { createRequire } from "node:module";
 var require2 = createRequire(import.meta.url);
 var mc = require2("minecraft-data")("1.20.6");
@@ -225,7 +225,7 @@ var JavaVisualData = class {
   }
 };
 
-// packages/modern-viewer/renderer-src/host/viewer-asset-server.mjs
+// host/viewer-asset-server.mjs
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
@@ -293,7 +293,7 @@ async function serveViewerAsset(res, root, relative, cacheControl = "public, max
   return true;
 }
 
-// packages/modern-viewer/renderer-src/host/java-data-viewer.mjs
+// host/java-data-viewer.mjs
 async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expectedServer, radius = 2 }) {
   if (!Number.isInteger(port) || port < 0 || port > 65535 || !Number.isInteger(radius) || radius < 0 || radius > 4) throw Error("JAVA_VIEWER_CONFIG_INVALID");
   const root = path2.resolve(assetsDir), source = JSON.parse(await readFile(path2.join(root, "public/asset-source.json"), "utf8"));
@@ -305,8 +305,20 @@ async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expect
   const data = new JavaVisualData({ uuid, server: expectedServer, skinUrl: (resource) => skins.get(resource) ?? null });
   async function prepareSkin(resource) {
     if (skins.has(resource)) return;
-    if (!/^minecraft:textures\/entity\/player\/(slim|wide)\/[a-z_]+\.png$/.test(resource ?? "")) throw Error("JAVA_VISUAL_NATIVE_SKIN_UNAVAILABLE");
-    const bytes = await readFile(path2.join(root, "public/textures/1.20.6", resource.slice("minecraft:textures/".length)));
+    let bytes;
+    if (/^minecraft:textures\/entity\/player\/(slim|wide)\/[a-z_]+\.png$/.test(resource ?? "")) {
+      bytes = await readFile(path2.join(root, "public/textures/1.20.6", resource.slice("minecraft:textures/".length)));
+    } else {
+      const value = await rpc("visual_skin", { resource });
+      data.verify(value);
+      if (value.resource !== resource || value.source !== "same_java_client_skin_texture" || value.mime !== "image/png" || typeof value.base64 !== "string" || value.base64.length > 87384) throw Error("JAVA_VISUAL_NATIVE_SKIN_INVALID");
+      bytes = Buffer.from(value.base64, "base64");
+      if (bytes.length < 24 || !bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) || value.width !== 64 || ![32, 64].includes(value.height) || bytes.readUInt32BE(16) !== value.width || bytes.readUInt32BE(20) !== value.height) throw Error("JAVA_VISUAL_NATIVE_SKIN_INVALID");
+    }
+    if (skins.size >= 32) {
+      skins.clear();
+      skinBytes.clear();
+    }
     const hash = createHash("sha256").update(bytes).digest("hex");
     skins.set(resource, `/head-texture/${hash}.png`);
     skinBytes.set(hash, bytes);

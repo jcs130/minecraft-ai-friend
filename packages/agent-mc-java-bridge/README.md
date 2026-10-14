@@ -25,6 +25,7 @@ POST `/v1/rpc`, `Authorization: Bearer <local token>`:
 ```
 
 - Discover: `capabilities`, `operations`; observe: `state`, `screenshot`, `result`.
+- Optional WebGL data observation: `visual_frame`, `visual_registry`, `visual_chunk`, `visual_skin`. `visual_skin {resource}` exports only the current action player's actual 64x32/64x64 skin texture as bounded PNG, checks the requested current resource and account/server, and restores the GL binding. It never reads arbitrary files/URLs or substitutes another skin; no control lease is needed for observations.
 - Control: `claim`, `renew`, `release`. All input and captures verify `expectedUuid` and `expectedServer`. Input also requires the controller ID and private lease nonce.
 - Execute: `do` with stable `action_id`, `operation`, `input`, and `queue` (`append`, `now`, `afterCheckpoint`). One body queue; at most 16 waiting actions. `afterCheckpoint` currently means after the current primitive's terminal boundary.
 - Reconcile/cancel: `result`, `cancel`, `stop`. A timeout is unknown until reconciled; never retry under a new ID.

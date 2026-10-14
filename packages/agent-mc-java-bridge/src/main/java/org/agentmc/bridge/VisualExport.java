@@ -64,6 +64,28 @@ public final class VisualExport {
     }
     @SuppressWarnings({"rawtypes","unchecked"})
     private static String propertyName(class_2769 property, Comparable value) { return property.method_11901(value); }
+    /** Export only the attached player's currently bound skin, never an arbitrary texture/path/URL. */
+    public JsonObject skin(String resource) throws java.io.IOException {
+        JsonObject out = base();
+        var id = client.field_1724.method_52814().comp_1626();
+        if (!id.toString().equals(resource)) throw new IllegalArgumentException("Visual skin changed; request a fresh frame");
+        var texture = client.method_1531().method_4619(id);
+        int previous = org.lwjgl.opengl.GL11.glGetInteger(org.lwjgl.opengl.GL11.GL_TEXTURE_BINDING_2D);
+        try {
+            texture.method_23207();
+            int width = org.lwjgl.opengl.GL11.glGetTexLevelParameteri(org.lwjgl.opengl.GL11.GL_TEXTURE_2D,0,org.lwjgl.opengl.GL11.GL_TEXTURE_WIDTH);
+            int height = org.lwjgl.opengl.GL11.glGetTexLevelParameteri(org.lwjgl.opengl.GL11.GL_TEXTURE_2D,0,org.lwjgl.opengl.GL11.GL_TEXTURE_HEIGHT);
+            if (width != 64 || (height != 32 && height != 64)) throw new IllegalStateException("Unsupported native skin dimensions");
+            try (class_1011 image = new class_1011(width,height,false)) {
+                image.method_4327(0,false);
+                byte[] png = image.method_24036();
+                if (png.length > 65536) throw new IllegalStateException("Native skin PNG exceeds limit");
+                out.addProperty("resource",resource);out.addProperty("mime","image/png");out.addProperty("width",width);out.addProperty("height",height);
+                out.addProperty("base64",Base64.getEncoder().encodeToString(png));out.addProperty("source","same_java_client_skin_texture");
+            }
+        } finally { com.mojang.blaze3d.platform.GlStateManager._bindTexture(previous); }
+        return out;
+    }
     public JsonObject frame(int radius) {
         if (radius < 0 || radius > 4) throw new IllegalArgumentException("visual radius must be 0..4");
         JsonObject out = base(); var self = client.field_1724;
