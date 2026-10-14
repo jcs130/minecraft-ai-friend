@@ -21,27 +21,35 @@
 
 ## Task 1: Restore shared native console overlays
 
-- [ ] Add a failing same-body host/console test for live `agentVisualization` frames, real pathfinder paths, controls and movement trail.
-- [ ] Reuse `createViewerAgentBridge` and `installAgentVisualization` through the native host's existing SSE connection, with no new Minecraft client or browser action channel.
-- [ ] Feed renderer camera projection to the existing world-path overlay; verify original shared widgets and cleanup.
-- [ ] Run relevant Node regressions and commit/push the shared repository.
+- [x] Add a failing same-body host/console test for live `agentVisualization` frames, real pathfinder paths, controls and movement trail.
+- [x] Reuse `createViewerAgentBridge` and `installAgentVisualization` through the native host's existing SSE connection, with no new Minecraft client or browser action channel.
+- [x] Feed renderer camera projection to the existing world-path overlay; verify original shared widgets and cleanup.
+- [x] Run relevant Node regressions and commit/push the shared repository.
 
 ## Task 2: Inject the independent framework's public Agent state
 
-- [ ] Test bounded projection, rejected/accepted/terminal distinctions, freshness and session mismatch without network or processes.
-- [ ] Publish a separate atomic public state file from runner/controller, inject its validated getter and intent into the explicit viewer adapter.
-- [ ] Run full framework pytest and isolated wheel consumer checks; commit/push and pin the thin plugin.
+- [x] Test bounded projection, rejected/accepted/terminal distinctions, freshness and session mismatch without network or processes.
+- [x] Publish a separate atomic public state file from runner/controller, inject its validated getter and intent into the explicit viewer adapter.
+- [x] Run full framework pytest and isolated wheel consumer checks; commit/push and pin the thin plugin.
 
 ## Task 3: Restore actual vanilla hand and swing state
 
-- [ ] Reproduce missing main-arm/use/swing state with the vanilla presentation fixture.
-- [ ] Observe the existing 1.21.1 connection's own settings/metadata and serialized arm-animation packets, without sending extra gameplay packets.
-- [ ] Port the locked client's supported hand transforms and swings to the native player renderer, preserving resource/UUID checks and declaring unsupported animation families.
-- [ ] Run original-asset and motion regressions plus the shared renderer suite; record the exact source/bundle hashes.
+- [x] Reproduce missing main-arm/use/swing state with the vanilla presentation fixture.
+- [x] Observe the existing 1.21.1 connection's own settings/metadata and serialized arm-animation packets, without sending extra gameplay packets.
+- [x] Port the locked client's supported hand transforms and swings to the native player renderer, preserving resource/UUID checks and declaring unsupported animation families.
+- [x] Run original-asset and motion regressions plus the shared renderer suite; record the exact source/bundle hashes.
 
 ## Task 4: Deploy and verify the actual page
 
-- [ ] Prepare pinned packages and official thin-plugin checks before touching the running owner.
-- [ ] Perform one normal owned-runtime handover if required, restore the previously authorized survival goal and keep the server/model/main services continuous.
-- [ ] Verify GET status, actual browser intent/route/input widgets, first/third-person switches and naturally observed movement/swing frames.
-- [ ] Save screenshots and a receipt distinguishing tested, deployed, observed and unsupported behavior.
+- [x] Prepare pinned packages and official thin-plugin checks before touching the running owner.
+- [x] Perform normal owned-runtime handovers for the overlay/menu build and the subsequent held-block fix, restore the previously authorized survival goal and keep the server/model/main services continuous.
+- [x] Verify GET status, actual browser intent/input widgets and first/third-person switches. Route/swing plumbing is regression-tested; fresh natural movement/swing and crafting/furnace sequences remain separate live acceptance work.
+- [x] Save screenshots and a receipt distinguishing tested, deployed, observed and unsupported behavior.
+
+The user's additional Mineflayer inventory/crafting request is included: full
+inventory/window layouts, real slot/window pointers, cursor stack and furnace
+properties reuse the existing shared menu UI. Static opaque BlockItems retain
+all original faces/textures and separate hand transforms. See
+`docs/VIEWER-FEATURE-INTEGRATION.md` for actual test/deployment observations and
+remaining live gameplay gaps, and the shared viewer's
+`docs/mineflayer-visual-data.md` for the audited API/data opportunities.
