@@ -76,8 +76,8 @@ export function describeSkill(c: SkillCall, heldItem?: string | null): string {
     case 'goto_player': return `去 ${c.name} 身边`;
     case 'follow': return `跟着 ${c.name}`;
     case 'find': return c.direction
-      ? `朝${DIRECTION_ZH[c.direction]}找${zhThing(c.target)}(最多 ${c.distance} 格${untilText(c.until)})`
-      : `在周围 ${c.distance} 格内找${zhThing(c.target)}`;
+      ? `朝${DIRECTION_ZH[c.direction]}找${zhEntity(c.target)}(最多 ${c.distance} 格${untilText(c.until)})`
+      : `在周围 ${c.distance} 格内找${zhEntity(c.target)}`;
     case 'flee': return `远离敌对生物(拉开 ${c.distance} 格)`;
     case 'surface': return '脱离水体或向上到露天';
     case 'look': return `原地看向 ${anchorsText([c.at])}`;

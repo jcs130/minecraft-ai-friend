@@ -2373,7 +2373,7 @@ export class Executor {
     const stamp = (at: number): string => nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE, new Date(at))
       .replace('T', ' ').slice(0, 19);
     const evidence = (entry: typeof nearby[number]): string =>
-      `${stamp(entry.at)} 从 ${cellText(entry.from)} 朝${DIRECTION_ZH[entry.direction]}走满 ${entry.distance} 格，未命中${zhThing(find.target)}`;
+      `${stamp(entry.at)} 从 ${cellText(entry.from)} 朝${DIRECTION_ZH[entry.direction]}走满 ${entry.distance} 格，未命中${zhEntity(find.target)}`;
     const prior = [...nearby].reverse().find((entry) =>
       now - entry.at < DIRECTIONAL_SWEEP_REPEAT_MS
       && entry.direction === find.direction
@@ -2421,7 +2421,7 @@ export class Executor {
     // The hold applies only to this search intent; other tasks remain available.
     const retryAfterMs = Math.min(entry.until - now, 8_000);
     return {
-      text: `这片区域已连续 ${entry.count} 次没找到${zhThing(find.target)}，继续逐格移动或改变搜索半径不会得到新线索。`
+      text: `这片区域已连续 ${entry.count} 次没找到${zhEntity(find.target)}，继续逐格移动或改变搜索半径不会得到新线索。`
         + `暂缓在周围 ${EMPTY_FIND_REGION_DISTANCE} 格内重复找它；去建筑入口、远处新区域，或改做其他任务`,
       retryAfterMs,
     };
@@ -2962,7 +2962,7 @@ export class Executor {
       const resolved = resolveAnchors([step.at], { x: Math.floor(pos.x), y: Math.floor(pos.y), z: Math.floor(pos.z) });
       return Array.isArray(resolved) && !travelGoalReached(bot, gotoArrivalGoal(step, resolved[0]));
     })) return null;
-    return `刚才从这里朝${DIRECTION_ZH[find.direction!]}找${zhThing(find.target)}时，出发点就命中同一可见目标，人并未沿指定方向走；原地重找不会产生新信息。先走离这处至少几格，或改查不同目标；原队列保留`;
+    return `刚才从这里朝${DIRECTION_ZH[find.direction!]}找${zhEntity(find.target)}时，出发点就命中同一可见目标，人并未沿指定方向走；原地重找不会产生新信息。先走离这处至少几格，或改查不同目标；原队列保留`;
   }
 
   private recordUnmovedFindHits(task: RunningTask): void {
