@@ -2,10 +2,14 @@ import { createServer, type Server } from 'node:http';
 import { readFileSync } from 'node:fs';
 
 /** Explicit local, read-only framebuffer view. UI is supplied by mc-visual-console. */
-export async function serveNativeView(port: number, pageFile: string, capture: () => Promise<Buffer>, status: () => unknown): Promise<Server> {
+export async function serveNativeView(port: number, pageFile: string, capture: () => Promise<Buffer>, status: () => unknown, notice?: string): Promise<Server> {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid native viewer port');
-  const page = readFileSync(pageFile);
+  let page = readFileSync(pageFile);
   if (page.length > 256 * 1024) throw new Error('Native viewer page too large');
+  if (notice) {
+    const safe = notice.replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]!));
+    page = Buffer.from(page.toString('utf8').replace('</body>', `<div role="status" style="position:fixed;bottom:8px;left:8px;background:#172129;color:white;padding:8px;z-index:9999">${safe}</div></body>`));
+  }
   let pending: Promise<Buffer> | undefined, cached: Buffer | undefined, capturedAt = 0;
   const frame = () => {
     if (cached && Date.now() - capturedAt < 300) return Promise.resolve(cached);

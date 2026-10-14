@@ -298,10 +298,11 @@ async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expect
     skins.set(resource, `/head-texture/${hash}.png`);
     skinBytes.set(hash, bytes);
   }
-  let activePort = port, closed = false, timer, chunkTimer, frameBusy = false, chunkBusy = false, dirty = [], error = null, lastFrameAt = 0;
+  let activePort = port, closed = false, timer, chunkTimer, framePending = null, chunkBusy = false, dirty = [], error = null, lastFrameAt = 0;
   let retryAfter = 0, lastError = null;
   let frames = 0, columns = 0, chunkMs = 0, registryMs = 0, unsupportedEntities = 0;
-  const clients = /* @__PURE__ */ new Set(), sockets = [];
+  const clients = /* @__PURE__ */ new Set(), waiting = /* @__PURE__ */ new Set(), sockets = [];
+  const demanded = () => clients.size + waiting.size > 0;
   const allowed = (req) => req.headers.host === `127.0.0.1:${activePort}` && (!req.headers.origin || req.headers.origin === `http://127.0.0.1:${activePort}`) && req.headers["sec-fetch-site"] !== "cross-site";
   const emit = (name, value) => {
     for (const socket of clients) {
@@ -313,7 +314,9 @@ async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expect
     }
   };
   const status = () => ({
-    ok: !closed && !error && lastFrameAt > 0 && Date.now() - lastFrameAt <= 3e3,
+    ok: !closed && !error && (!demanded() || lastFrameAt > 0 && Date.now() - lastFrameAt <= 3e3),
+    state: closed ? "closed" : error ? "unavailable" : demanded() ? "streaming" : "idle",
+    sampling: demanded() && !closed,
     source: "real-java-world-data",
     transport: "socket.io",
     minecraftVersion: "1.20.6",
@@ -390,13 +393,18 @@ async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expect
     console.error(reason);
     for (const socket of clients) socket.disconnect(true);
   }
-  async function frame() {
-    if (!closed && frameBusy && lastFrameAt && Date.now() - lastFrameAt > 3e3 && !error) unavailable("JAVA_VISUAL_SAMPLE_STALE");
-    if (closed || frameBusy || Date.now() < retryAfter) return;
-    frameBusy = true;
+  function frame() {
+    if (!closed && demanded() && framePending && lastFrameAt && Date.now() - lastFrameAt > 3e3 && !error) unavailable("JAVA_VISUAL_SAMPLE_STALE");
+    if (closed || !demanded() || Date.now() < retryAfter) return Promise.resolve();
+    return framePending ??= sampleFrame().finally(() => {
+      framePending = null;
+    });
+  }
+  async function sampleFrame() {
     try {
       const value = await rpc("visual_frame", { radius });
       if (closed) return;
+      if (!demanded()) return;
       data.verify(value);
       if (Math.abs(Date.now() - value.sampledAt) > 3e3) throw Error("JAVA_VISUAL_SAMPLE_STALE");
       await prepareSkin(value.self.skinResource);
@@ -419,12 +427,10 @@ async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expect
       error = null;
     } catch (e) {
       if (!closed) unavailable(e.message);
-    } finally {
-      frameBusy = false;
     }
   }
   async function chunk() {
-    if (closed || chunkBusy || !dirty.length || !data.epoch) return;
+    if (closed || !clients.size || chunkBusy || !dirty.length || !data.epoch) return;
     chunkBusy = true;
     const item = dirty.shift(), epoch = data.epoch, started = performance.now();
     try {
@@ -442,15 +448,26 @@ async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expect
   for (const pathname of ["/socket.io", "/third/socket.io"]) {
     const io = new SocketServer(http, { path: pathname, serveClient: false, maxHttpBufferSize: 1024, allowRequest: (req, done) => done(null, allowed(req)) });
     sockets.push(io);
-    io.on("connection", (socket) => {
+    io.on("connection", async (socket) => {
       const capture = socket.handshake.headers["x-mc-viewer-capture"] === "1";
-      if (closed || error || !data.frame) {
-        socket.emit("viewerBusy", { reason: error ?? "Waiting for actual Java world" });
+      if ([...clients, ...waiting].filter((s) => s.handshake.headers["x-mc-viewer-capture"] === "1" === capture).length >= (capture ? 1 : 2)) {
+        socket.emit("viewerBusy", { reason: "Viewer limit", maximum: capture ? 1 : 2 });
         socket.disconnect(true);
         return;
       }
-      if ([...clients].filter((s) => s.handshake.headers["x-mc-viewer-capture"] === "1" === capture).length >= (capture ? 1 : 2)) {
-        socket.emit("viewerBusy", { reason: "Viewer limit", maximum: capture ? 1 : 2 });
+      waiting.add(socket);
+      const lease = capture ? setTimeout(() => socket.disconnect(true), 6e4) : null;
+      lease?.unref();
+      socket.on("disconnect", () => {
+        clients.delete(socket);
+        waiting.delete(socket);
+        if (lease) clearTimeout(lease);
+      });
+      await frame();
+      waiting.delete(socket);
+      if (!socket.connected) return;
+      if (closed || error || !data.frame || Date.now() - lastFrameAt > 3e3) {
+        socket.emit("viewerBusy", { reason: error ?? "Waiting for actual Java world" });
         socket.disconnect(true);
         return;
       }
@@ -464,18 +481,7 @@ async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expect
       socket.emit("time", (latest.time % 24e3 + 24e3) % 24e3);
       socket.emit("weather", { raining: latest.raining, thunder: latest.thunder });
       socket.emit("viewerControlState", { available: false, reason: "Read-only native data view" });
-      const lease = capture ? setTimeout(() => socket.disconnect(true), 6e4) : null;
-      lease?.unref();
-      socket.on("disconnect", () => {
-        clients.delete(socket);
-        if (lease) clearTimeout(lease);
-      });
     });
-  }
-  await frame();
-  if (error) {
-    for (const io of sockets) io.close();
-    throw Error(error);
   }
   await new Promise((resolve, reject) => {
     http.once("error", reject);
@@ -492,7 +498,7 @@ async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expect
     closed = true;
     clearInterval(timer);
     clearInterval(chunkTimer);
-    for (const socket of clients) socket.disconnect(true);
+    for (const socket of [...clients, ...waiting]) socket.disconnect(true);
     for (const io of sockets) io.close();
     http.closeAllConnections();
     if (http.listening) await new Promise((resolve) => http.close(resolve));

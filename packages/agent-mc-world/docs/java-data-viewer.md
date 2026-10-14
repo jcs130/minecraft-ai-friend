@@ -1,10 +1,12 @@
 # Native client data viewer
 
-For `provider: "java-client"`, `javaClient.viewerMode: "data"` selects the shared WebGL data viewer. It is the default for new native viewer configurations. Set `viewerPort` and a matching Minecraft 1.20.6 `viewerAssetsDir`. This requires the companion Java bridge advertising `visualData: "agent-mc-visual/v1"`.
+For `provider: "java-client"`, `javaClient.viewerMode: "auto"` (also the default when omitted) reads the actual client's capabilities. The matching Minecraft 1.20.6 bridge advertising `visualData: "agent-mc-visual/v1"` selects the shared WebGL data viewer. Set `viewerPort` and the matching `viewerAssetsDir`; detection never scans servers or launches another client.
 
 The Java bridge reads the action player's already loaded ClientWorld and ClientPlayer. Shared `mc-visual-console` source translates the registry, real chunk sections/light and own movement into the old viewer's data messages. It does not simulate Mineflayer, log in a second observer, control the body or call models. The browser retains its own cameras. Actual `mc_visual` / photography capture can still use a screenshot separately.
 
-`javaClient.viewerMode: "framebuffer"` with an explicit `viewerPageFile` retains the diagnostic native screenshot page. There is no silent fallback between modes.
+An older/unsupported data protocol can use the native screenshot compatibility page only if `realRendering` is advertised and `viewerPageFile` is explicitly configured. Both the console and page label this mode. `viewerMode: "data"` and `"framebuffer"` remain strict manual selections. Missing assets, identity/authentication errors and runtime rendering failures remain visible errors, not a reason to silently switch modes or detach the game body.
+
+World data is demand driven: no connected WebGL viewer means no `visual_frame`, registry or chunk RPCs. A first viewer takes a fresh frame, loads the registry once per world epoch and requests only missing/changed columns. Concurrent viewers share observations, within the original two ordinary/one capture limits. Closing the last viewer stops visual sampling; health/page GETs do not wake it. Game perception and the native client's own rendering continue independently. Explicit `mc_visual`/photography requests still capture the real framebuffer on demand, preserving native GUI/mod effects without pretending they were ported to WebGL.
 
 Current data viewer is a partial vanilla 1.20.6 preview: terrain/block updates, own skin/movement/turning/vitals, time and weather. Other entities, container/inventory UI, mod resources/YSM and Java shaders are not yet renderer parity. Unknown native states are refused; the page and health endpoint disclose missing coverage. Keep production on its current configuration until the desired modules and deployment are explicitly validated.
 

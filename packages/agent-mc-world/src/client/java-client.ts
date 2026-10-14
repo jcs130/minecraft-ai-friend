@@ -11,6 +11,7 @@ import type { Server } from 'node:http';
 import { JAVA_LEGACY_HELP, translateJavaLegacy } from './java-legacy.ts';
 import { NativeEvidenceArchive, compactNativeState, compactItem, compactItems } from './native-evidence.ts';
 import { javaScriptHelp } from './java-script-help.ts';
+import { selectJavaViewer } from './java-viewer-selection.ts';
 
 export const JAVA_CLIENT_ENVIRONMENT = `You control an actual rendered Minecraft Java client through agent-mc-java/v1. The host owns goals, personality, models and memory. The client bridge owns one actual body queue. It never launches a game, reconnects, simulates OS input or runs a model.
 Query mc_capabilities, mc_operations and mc_help before acting. Claim mc_control explicitly, then renew the lease before expiry. Disconnect releases your own lease and keys. Identity is the actual server-assigned UUID and exact server address; offline servers do not require Microsoft authentication. Never control a different player or server after an identity change.
@@ -21,7 +22,7 @@ mc_visual returns the real client framebuffer, original textures, current animat
 function uuid(value: string) { return value.replaceAll('-', '').toLowerCase(); }
 function address(value: string) { return value.toLowerCase().replace(/:25565$/, ''); }
 export function validateJavaClientConfiguration(cfg: Partial<JavaClientConfiguration> | undefined): asserts cfg is JavaClientConfiguration {
-  if (cfg?.viewerMode !== undefined && !['data', 'framebuffer'].includes(cfg.viewerMode)) throw new Error('Unknown Java viewer mode');
+  if (cfg?.viewerMode !== undefined && !['auto', 'data', 'framebuffer'].includes(cfg.viewerMode)) throw new Error('Unknown Java viewer mode');
   if (!cfg || !/^(?:[a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i.test(cfg.expectedUuid ?? '')
     || !cfg.expectedServer?.trim() || !/^[A-Za-z0-9_.:-]{1,128}$/.test(cfg.controllerId ?? '')
     || !cfg.credentialsFile?.trim() || !cfg.ledgerDir?.trim()
@@ -53,6 +54,7 @@ export class JavaClientWorld implements World {
   private viewer?: Server;
   private dataViewer?: JavaDataViewerHandle;
   private viewerError: string | null = null;
+  private viewerSelection: ReturnType<typeof selectJavaViewer> | null = null;
   private epoch = 0;
   private pollingEpoch: number | null = null;
   private messageSeq = 0;
@@ -88,7 +90,7 @@ export class JavaClientWorld implements World {
   }
   console() { return { label: 'Real Java client', lamps: [{ label: '服务器', state: this.state?.connected ? 'online' as const : 'offline' as const },
     ...(this.cfg.viewerPort > 0 ? [{label:'画面',state:this.viewerError || (this.dataViewer && !this.dataViewer.status().ok) ? 'error' as const : this.dataViewer || this.viewer ? 'online' as const : 'offline' as const,
-      hint:this.viewerError ?? (this.dataViewer?.status().error as string | undefined)}] : [])],
+      hint:this.viewerError ?? (this.dataViewer?.status().error as string | undefined) ?? this.viewerSelection?.reason}] : [])],
     links: this.dataViewer ? [{label: '游戏三维画面',href:this.dataViewer.url}] : this.viewer ? [{ label: '原生截图预览', href: `http://127.0.0.1:${this.cfg.viewerPort}` }] : [] }; }
   async start(host: WorldHost): Promise<void> {
     if (this.host) throw new Error('Java client is already attached');
@@ -109,16 +111,18 @@ export class JavaClientWorld implements World {
       this.phases.clear(); for (const action of this.state.actions) this.phases.set(action.id, action.phase);
       this.photos.start(host);
       this.viewerError = null;
+      this.viewerSelection = null;
       try {
-      if (this.cfg.viewerPort > 0 && this.cfg.javaClient.viewerMode !== 'framebuffer') {
+      if (this.cfg.viewerPort > 0) this.viewerSelection = selectJavaViewer(this.cfg.javaClient, await this.rpc('capabilities', {}));
+      if (this.viewerSelection?.mode === 'data') {
         this.dataViewer = await createJavaDataViewer({port:this.cfg.viewerPort,assetsDir:this.cfg.viewerAssetsDir,
           uuid:this.cfg.javaClient.expectedUuid,server:this.cfg.javaClient.expectedServer,rpc:(method,params)=>this.rpc(method,params)});
-      } else if (this.cfg.javaClient.viewerMode === 'framebuffer' && this.cfg.viewerPort > 0) {
+      } else if (this.viewerSelection?.mode === 'framebuffer') {
         if (!this.cfg.javaClient.viewerPageFile) throw new Error('Framebuffer mode requires viewerPageFile');
         this.viewer = await serveNativeView(this.cfg.viewerPort, this.cfg.javaClient.viewerPageFile, async () => {
           const capture = await this.rpc('screenshot', {}); this.verify(capture.state);
           return Buffer.from(capture.base64, 'base64');
-        }, () => ({ connected: this.state?.connected ?? false, username: this.state?.username, health: this.state?.health, food: this.state?.food }));
+        }, () => ({ connected: this.state?.connected ?? false, username: this.state?.username, health: this.state?.health, food: this.state?.food, viewer: this.viewerSelection }), this.viewerSelection.reason);
       }
       } catch (error) {
         // Rendering availability is separate from the action body's lifecycle.

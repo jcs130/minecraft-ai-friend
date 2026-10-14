@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/jcs130/mc-visual-console",
-  "commit": "a701575c7e7a2cfceb1a287dc87636df379525f9",
+  "commit": "cb7b643ec9439682c36d0ab7dfe3398b7c1ba3de",
   "inputs": [
     {
       "file": "host/java-data-viewer.mjs",
-      "sha256": "5e17ca8dd3560b5fc58a31af35922a8a141bb160ef7251a45f371d6fc3e2a81f"
+      "sha256": "da8a628d05ff2d11a0c936097347e109466aa71e1c47843b839535042a5fa4f8"
     },
     {
       "file": "host/java-visual-data.mjs",
@@ -15,7 +15,7 @@
       "sha256": "5d42164d5c567ba29ce5bb27ecb57dbe32b53b301bc9a8feb0c67e6144ca9a43"
     }
   ],
-  "outputSha256": "d29687e3007d47a745c3ed01a3fd3612a6fe1aa21322f5e7cd949e675472b703",
+  "outputSha256": "2ce3483651d84098b85e7f85490771bf99e535e12f0cea32254580adaecac466",
   "externalDependencies": [
     "minecraft-data",
     "prismarine-block",
