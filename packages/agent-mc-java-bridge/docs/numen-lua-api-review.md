@@ -77,6 +77,8 @@ Numen 源码采用 LGPL-3.0；本次仅研究与独立实现，没有把其实�
 
 ## 一手来源
 
+进一步核对的最新发行、上游修复与开发经验见 [真实客户端上游调研](client-automation-upstream-research-20261014.md)，包含 Minescript 5 / Pyjinn、匹配 1.20.6 的 Baritone、JsMacrosCE、MCPFabric 和 Lua VM 的比较。
+
 - [ScriptCatalog](https://github.com/Dwinovo/minecraft-numen/blob/0bafb9349e0fe808f1a4bc7aad5bf54f0060fc90/agent/src/main/java/com/dwinovo/numen/api/agent/script/ScriptCatalog.java)
 - [ScriptRun](https://github.com/Dwinovo/minecraft-numen/blob/0bafb9349e0fe808f1a4bc7aad5bf54f0060fc90/agent/src/main/java/com/dwinovo/numen/api/agent/script/ScriptRun.java)
 - [ScriptLimits](https://github.com/Dwinovo/minecraft-numen/blob/0bafb9349e0fe808f1a4bc7aad5bf54f0060fc90/agent/src/main/java/com/dwinovo/numen/api/agent/script/ScriptLimits.java)
