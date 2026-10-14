@@ -45,3 +45,20 @@ export function javaScriptHelp(topic = 'index'): string {
   if (!Object.hasOwn(PAGES, topic)) throw new Error('Unknown Python API page. Use index, blocks, movement, interaction or inventory.');
   return PAGES[topic];
 }
+
+/** Explain an observed API error. Never rewrite, retry or execute the caller's program. */
+export function javaScriptErrorHelp(error: unknown): string | undefined {
+  if (typeof error !== 'string') return;
+  // Signatures and key names are from the pinned upstream v4.0 reference above.
+  if (error.includes('No key mapping with name')) return 'Minescript 4.0 press_key_bind uses full names such as "key.attack", "key.use" and "key.forward", not "attack"/"use"/"forward". Release held keys in finally and flush. Read mc_script api:interaction.';
+  const member = /module ['"]minescript['"] has no attribute ['"]([a-zA-Z_][a-zA-Z_0-9]*)['"]/.exec(error)?.[1];
+  if (!member) return;
+  const fixes: Record<string,string> = {
+    equipment_hotbar_select: 'Use mc_do operation:hotbar with a discovered slot input, or minescript.player_inventory_select_slot(slot), slot 0..8. Read mc_script api:inventory.',
+    block_at: 'Use mc_probe for bounded typed block observations, or minescript.getblock(x,y,z)/getblocklist(points). They return namespaced strings, not state dictionaries. Read mc_script api:blocks.',
+    state: 'Use mc_state for actual native body state, or minescript.player_position()/player_orientation()/player_inventory() for specific readings. Read mc_script api:index.',
+    sleep: 'Use import time; time.sleep(seconds) inside the admitted timeout and key cleanup. Read mc_script api:movement.',
+    left_click_block: 'Aim using minescript.player_look_at(x+.5,y+.5,z+.5), then use bounded minescript.player_press_attack(True/False) with try/finally release and flush. Verify actual blocks/inventory. Read mc_script api:interaction.',
+  };
+  return `Observed unsupported Minescript 4.0 member: ${member}. ${fixes[member] ?? 'Read mc_script api:index and its focused pages before selecting a different program.'} No correction was executed; reconcile any earlier effects before a new action.`;
+}

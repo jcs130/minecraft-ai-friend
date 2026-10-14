@@ -8,6 +8,10 @@ When Minescript 4.0 is explicitly enabled, `mc_probe` selects a fixed read-only 
 
 `mc_evidence part:script` pages the exact program report while retaining the full original's digest and size. This avoids paging through a large inventory/book snapshot to reach a small result. `part:full` remains the default. An `mc_script api` request only reads the requested reference, even if a caller supplies placeholder code; the reply explicitly says that code was not executed.
 
+Terminal events carry identity, phase, timestamps, body readings, program results and the exact raw archive reference. They do not repeat the receipt's full inventory, menu and action history. Tool replies and fresh state queries still expose those readings. When the displayed inventory and menu occupied slot lists are exactly equal (including slot numbers and counts), `menuSlots.occupiedFrom: "inventory.occupied"` references the one displayed list while retaining its own menu size. Different mappings or counts remain separate. Raw originals never use this projection. The same alias is used in keyed request-tail facts.
+
+Observed Minescript attribute/keybinding errors receive a short `script.apiCorrection` derived from the pinned 4.0 reference. The original error and raw program receipt remain unchanged. This only explains the error; it does not rewrite the program, retry it, infer prior effects or run another model. The host chooses its next method.
+
 ## Validation
 
 The integrated core preserves upstream `84ee91e` automatic/on-demand viewer changes. Its default/schema includes `auto`; an explicitly selected viewer mode retains its own failure policy. Core full suite: 97 files / 750 tests, public typecheck, standalone build and packed SDK/MCP checks passed. Tests cover cooperative event delivery, actual short terminals, long admissions, cancellation without replay, API-only queries, bounded probes and exact script evidence projection. The generated probe program was executed against an offline Python API fixture, including negative coordinates, state properties, nearest-first order and incomplete/unknown reads. No game or model was needed for those checks.

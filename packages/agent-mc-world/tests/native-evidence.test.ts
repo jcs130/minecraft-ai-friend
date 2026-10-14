@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import { NativeEvidenceArchive, compactNativeState } from '../src/client/native-evidence.ts';
+import { NativeEvidenceArchive, compactNativeState, compactNativeItems } from '../src/client/native-evidence.ts';
 it('bounds common state while retaining exact original revisions with digest and paginated access', () => {
   const dir = mkdtempSync(join(tmpdir(), 'native-evidence-'));
   try {
@@ -25,4 +25,12 @@ it('pages the exact script report independently of a large original body snapsho
     expect(page.originalChars).toBeGreaterThan(400000);expect(page.totalChars).toBeLessThan(300);
     const full=archive.read(ref.key,ref.sha256,0,40);expect(full.part).toBe('full');expect(full.text).toContain('inventory');
   }finally{rmSync(dir,{recursive:true,force:true});}
+});
+it('aliases identical displayed inventory slots but preserves distinct container mappings and changes',()=>{
+  const item={slot:0,count:4,name:'minecraft:stone',displayName:'Stone',encoded:{private:'full components'}};
+  const state={inventory:[item,{slot:1,empty:true}],menuSlots:[{...item},...Array.from({length:8},(_,i)=>({slot:i+1,empty:true}))]};
+  expect(compactNativeItems(state)).toEqual({inventory:{size:2,occupied:[{slot:0,count:4,name:'minecraft:stone',displayName:'Stone'}]},menuSlots:{size:9,occupiedFrom:'inventory.occupied'}});
+  expect((compactNativeItems({...state,menuSlots:[{...item,slot:36}]}).menuSlots as any).occupied[0].slot).toBe(36);
+  expect((compactNativeItems({...state,menuSlots:[{...item,count:3}]}).menuSlots as any).occupied[0].count).toBe(3);
+  expect(compactNativeItems({inventory:[],menuSlots:[]}).menuSlots).toEqual({size:0,occupied:[]});
 });

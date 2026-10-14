@@ -33,10 +33,23 @@ export function compactItem(value: any): unknown {
   return Object.fromEntries(['slot', 'empty', 'count', 'name', 'displayName'].filter(key => key in value).map(key => [key, typeof value[key] === 'string' ? value[key].slice(0, 256) : value[key]]));
 }
 export function compactItems(value: any) { return Array.isArray(value) ? { size: value.length, occupied: value.filter(item => !item.empty).map(compactItem) } : value; }
+/** Only alias an exactly equal displayed slot list; different slot mappings stay explicit. */
+export function compactNativeItems(state: Record<string, any>) {
+  const inventory = compactItems(state.inventory), menuSlots = compactItems(state.menuSlots);
+  return { inventory, menuSlots: inventory?.occupied && menuSlots?.occupied
+    && inventory.occupied.length > 0 && JSON.stringify(inventory.occupied) === JSON.stringify(menuSlots.occupied)
+    ? { size: menuSlots.size, occupiedFrom: 'inventory.occupied' } : menuSlots };
+}
+/** A terminal notification points to the full archived receipt instead of repeating its body snapshot. */
+export function compactNativeActionEvent(state: Record<string, any>) {
+  const keys = ['protocol','sampledAt','generation','connected','server','uuid','username','dimension','position','health','food','yaw','pitch','onGround','selectedSlot','screen','screenToken','screenTitle','syncId','menuRevision'];
+  return { ...Object.fromEntries(keys.filter(key => key in state).map(key => [key, typeof state[key] === 'string' ? state[key].slice(0,512) : state[key]])),
+    cursor: compactItem(state.cursor), stateQuery: 'mc_state / mc_bag', originalQuery: 'mc_evidence with raw.key and raw.sha256' };
+}
 export function compactNativeState(state: Record<string, any>) {
   const keys = ['protocol','sampledAt','generation','connected','server','uuid','username','dimension','position','health','food','yaw','pitch','onGround','selectedSlot','weather','time','screen','screenToken','screenTitle','syncId','menuRevision','buttons'];
   const out: Record<string, unknown> = Object.fromEntries(keys.filter(key => key in state).map(key => [key, typeof state[key] === 'string' ? state[key].slice(0, 512) : state[key]]));
-  out.inventory = compactItems(state.inventory); out.menuSlots = compactItems(state.menuSlots); out.cursor = compactItem(state.cursor);
+  Object.assign(out, compactNativeItems(state)); out.cursor = compactItem(state.cursor);
   out.notices = { retained: state.messages?.length ?? 0, lastSeq: state.messages?.at(-1)?.seq ?? 0 };
   if (Array.isArray(state.actions)) {
     // Past actions remain in the raw archive, not repeated in every input receipt/frame.

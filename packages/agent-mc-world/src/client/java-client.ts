@@ -9,8 +9,8 @@ import { serveNativeView } from './native-view.ts';
 import { createJavaDataViewer, type JavaDataViewerHandle } from '../../core/java-data-viewer.mjs';
 import type { Server } from 'node:http';
 import { JAVA_LEGACY_HELP, translateJavaLegacy } from './java-legacy.ts';
-import { NativeEvidenceArchive, compactNativeState, compactItem, compactItems } from './native-evidence.ts';
-import { javaScriptHelp } from './java-script-help.ts';
+import { NativeEvidenceArchive, compactNativeState, compactNativeItems, compactNativeActionEvent, compactItem, compactItems } from './native-evidence.ts';
+import { javaScriptHelp, javaScriptErrorHelp } from './java-script-help.ts';
 import { selectJavaViewer } from './java-viewer-selection.ts';
 import { nativeProbeInput, NATIVE_PROBE_PROGRAM } from './java-probe.ts';
 
@@ -33,17 +33,6 @@ export function validateJavaClientConfiguration(cfg: Partial<JavaClientConfigura
 }
 const parameters = (properties: Record<string, unknown>, required: string[] = []) => ({ type: 'object', properties, required, additionalProperties: false });
 const str = { type: 'string', minLength: 1, maxLength: 256 };
-// Keep large books/component payloads queryable without repeating them in every model request.
-function summarizeItem(value: unknown) {
-  if (!value || typeof value !== 'object') return value;
-  const item = value as Record<string, unknown>;
-  return Object.fromEntries(['slot', 'empty', 'count', 'name', 'displayName'].filter(key => key in item)
-    .map(key => [key, typeof item[key] === 'string' ? item[key].slice(0, 256) : item[key]]));
-}
-function summarizeItems(value: unknown) {
-  return Array.isArray(value) ? { size: value.length, occupied: value.filter(item => !item.empty).map(summarizeItem) } : value;
-}
-
 /** An alternative body backend. No Mineflayer instance/second queue is created. */
 export class JavaClientWorld implements World {
   readonly id = 'minecraft';
@@ -78,13 +67,14 @@ export class JavaClientWorld implements World {
   requestFacts(): WorldRequestFacts | null {
     if (!this.state) return null;
     const state = this.state;
+    const items = compactNativeItems(state);
     const parts = [
       { key: 'sample', text: `Actual Java client readings sampled ${state.sampledAt}` },
       { key: 'body', text: JSON.stringify({ uuid: state.uuid, username: state.username, server: state.server, dimension: state.dimension, position: state.position,
         health: state.health, food: state.food, yaw: state.yaw, pitch: state.pitch, generation: state.generation }) },
-      { key: 'inventory', text: JSON.stringify({ selectedSlot: state.selectedSlot, inventory: summarizeItems(state.inventory), cursor: summarizeItem(state.cursor), rawQuery: 'mc_bag' }) },
+      { key: 'inventory', text: JSON.stringify({ selectedSlot: state.selectedSlot, inventory: items.inventory, cursor: compactItem(state.cursor), rawQuery: 'mc_bag' }) },
       { key: 'menu', text: JSON.stringify({ screen: state.screen, screenToken: state.screenToken, screenTitle: state.screenTitle, buttons: state.buttons,
-        syncId: state.syncId, revision: state.menuRevision, slots: summarizeItems(state.menuSlots), rawQuery: 'mc_bag' }) },
+        syncId: state.syncId, revision: state.menuRevision, slots: items.menuSlots, rawQuery: 'mc_bag' }) },
       { key: 'queue', text: JSON.stringify(state.actions.filter(action => ['accepted', 'running', 'unknown'].includes(action.phase))) },
       { key: 'notices', text: JSON.stringify({ lastSeq: state.messages.at(-1)?.seq ?? 0, retained: state.messages.length, rawQuery: 'mc_notices', observationOnly: true }) },
       ...(this.cfg.javaClient?.minescriptEnabled ? [{ key:'executor',text:JSON.stringify({provider:'java-client',scriptEngine:'Minescript 4.0 Python',blockObservation:'mc_probe',scriptReference:'mc_script api:index / blocks / movement / interaction / inventory',blockReturn:'namespaced string, e.g. minecraft:carrots[age=7]',aim:'minescript.player_look_at(x,y,z)',wait:'Python time.sleep(seconds)',archiveQuery:'mc_evidence part:script',shortActionWaitMs:this.cfg.javaClient.actionWaitMs??1000}) }] : []),
@@ -183,11 +173,12 @@ export class JavaClientWorld implements World {
     if (!response.ok || result.error) throw new Error(typeof result.error === 'string' ? result.error : 'Java client operation rejected');
     return result;
   }
-  private receipt(action: JavaClientAction): ToolOutcome {
+  private receipt(action: JavaClientAction, notification = false): ToolOutcome {
     const raw = this.evidence.save(action.id, action), state = action.evidence ?? {};
     const script = state.script as any;
+    const apiCorrection = javaScriptErrorHelp(script?.error);
     const result = script ? JSON.stringify(script.result ?? null) : '';
-    const compact = { ...action, evidence: { ...compactNativeState(state), ...(script ? { script: { ok: script.ok, jobId: script.jobId, programReport: true, error: script.error,
+    const compact = { ...action, evidence: { ...(notification ? compactNativeActionEvent(state) : compactNativeState(state)), ...(script ? { script: { ok: script.ok, jobId: script.jobId, programReport: true, error: script.error, ...(apiCorrection ? {apiCorrection} : {}),
       ...(result.length <= 4000 ? { result: script.result } : { preview: result.slice(0, 4000), truncated: true }) } } : {}), raw } };
     return { text: JSON.stringify(compact), meta: { javaClient: compact },
       ...(action.phase === 'blocked' || action.phase === 'unknown' ? { failed: true as const } : {}),
@@ -236,7 +227,7 @@ export class JavaClientWorld implements World {
         if (action.phase === 'accepted' || action.phase === 'running') continue;
         const full = await this.rpc('result', { action_id: action.id }) as JavaClientAction;
         if (this.host !== host || this.epoch !== epoch) return;
-        const receipt = this.receipt(full);
+        const receipt = this.receipt(full, true);
         await host.pushEvent({ type: 'minecraft.client.action', source: 'minecraft', ts: new Date(full.updatedAt).toISOString(),
           text: receipt.text, execution: receipt.execution, meta: receipt.meta }, { trigger: 'flush' });
       }

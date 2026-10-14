@@ -6,6 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { MinecraftAgentClient, JavaClientWorld, MINECRAFT_CLIENT_DEFAULTS, offlineUuid, nullLogger, loadMinecraftClientConfig } from '../src/client/index.ts';
 import { createMinecraftMcpServer } from '../src/mcp/server.ts';
+import { javaScriptErrorHelp } from '../src/client/java-script-help.ts';
 const paths: string[]=[];
 const directory=()=>{const path=mkdtempSync(join(tmpdir(),'real-java-client-'));paths.push(path);return path;};
 afterEach(()=>{vi.restoreAllMocks();for(const path of paths.splice(0))rmSync(path,{recursive:true,force:true});});
@@ -35,6 +36,14 @@ function rig(scriptEnabled = false) {
   return {cfg,state,world,runtime,http,calls,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it('explains observed version-specific API failures without rewriting or dispatching a correction',()=>{
+    expect(javaScriptErrorHelp("module 'minescript' has no attribute 'equipment_hotbar_select'")).toContain('player_inventory_select_slot(slot)');
+    expect(javaScriptErrorHelp("module 'minescript' has no attribute 'block_at'")).toContain('mc_probe');
+    expect(javaScriptErrorHelp('java.lang.IllegalArgumentException: No key mapping with name `attack`')).toContain('"key.attack"');
+    expect(javaScriptErrorHelp("module 'minescript' has no attribute 'state'")).toContain('No correction was executed');
+    expect(javaScriptErrorHelp('Unexpected unrelated script error')).toBeUndefined();
+    expect(javaScriptErrorHelp(null)).toBeUndefined();
+  });
   it('reports unavailable data rendering without detaching the actual body or falling back to screenshots',async()=>{
     const r=rig();r.cfg.viewerPort=1;r.cfg.viewerAssetsDir=join(directory(),'not-installed');
     await r.runtime.connect();try {
@@ -99,6 +108,26 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
       const call=r.calls.find(c=>c.method==='do');expect(call.params).toMatchObject({action_id:'probe-original',operation:'minescript.run',input:{timeoutMs:5000,input:{positions:[[-1,65,-2]],names:['minecraft:stone']}}});
       expect(call.params.input.code).toContain('getblocklist');expect(call.params.input.code).not.toContain('press_key');
     }finally{await r.runtime.disconnect();}
+  });
+  it('delivers compact terminal evidence with an exact archive without repeating inventory and queue snapshots',async()=>{
+    const r=rig(true),events:any[]=[],http=r.http.getMockImplementation()!;
+    const inventory=Array.from({length:36},(_,slot)=>({slot,count:64,name:'minecraft:stone',displayName:'原始物品'.repeat(60),encoded:{component:'exact-original-'+slot}}));
+    const action={id:'compact-terminal',operation:'minescript.run',phase:'partial',acceptedAt:1,updatedAt:2,
+      evidence:{...r.state,inventory,menuSlots:inventory,script:{ok:true,jobId:'job-original',result:{observed:36}}}};
+    r.http.mockImplementation(async(url:any,init:any)=>JSON.parse(init.body).method==='result'?new Response(JSON.stringify(action)):http(url,init));
+    await r.world.start({log:nullLogger(),pushEvent:async(event:any,options:any)=>{events.push({event,options});return event;}} as any);
+    try {
+      r.state.actions=[{id:action.id,phase:'partial',updatedAt:2}];
+      await vi.waitFor(()=>expect(events).toHaveLength(1),{timeout:1500});
+      const event=events[0].event,projected=JSON.parse(event.text);
+      expect(event.text.length).toBeLessThan(2000);expect(events[0].options.trigger).toBe('flush');
+      expect(projected.evidence).toMatchObject({position:[1,65,3],health:20,script:{ok:true,result:{observed:36}},originalQuery:expect.stringContaining('mc_evidence')});
+      expect(projected.evidence.inventory).toBeUndefined();expect(projected.evidence.actions).toBeUndefined();
+      expect(event.execution).toMatchObject({id:action.id,phase:'partial',terminal:true,goalCompleted:false,evidence:{raw:projected.evidence.raw}});
+      const query=r.world.tools().find(t=>t.name==='mc_evidence')!;
+      let full='';for(let offset=0;offset<projected.evidence.raw.originalChars;offset+=16000){const page=await query.handler({...projected.evidence.raw,offset,limit:16000},{} as any);full+=JSON.parse(page.text).text;}
+      expect(JSON.parse(full)).toEqual(action);
+    }finally{await r.world.stop();}
   });
   it('serves focused version-correct Python recipes through SDK/MCP without executing body operations', async()=>{
     const r=rig(true),server=createMinecraftMcpServer(r.runtime,'script-help'),client=new Client({name:'script-help',version:'1'});
