@@ -37,7 +37,7 @@ export function createEngine(options) {
         prepared = await prepareNativeWorldPreviewHost({ assetDirectory: resolve(dirname(cfg.catalogFile), selected.pack.assetDirectory), port: cfg.port });
         if (prepared.registrySha256 !== selected.pack.registrySha256) throw Error('VIEWER_CATALOG_REGISTRY_MISMATCH');
         streamFactory = vanilla.observeVanillaNativeStream;
-        presentation = bot => vanilla.vanillaPlayerPresentation(bot, stream?.handState?.());
+        presentation = bot => vanilla.vanillaPlayerPresentation(bot, stream?.handState?.(), stream?.menuState?.());
         record({ pack: selected.pack.id, minecraftVersion: selected.minecraftVersion, registrySha256: prepared.registrySha256 });
       } catch (error) {
         prepared = null;
