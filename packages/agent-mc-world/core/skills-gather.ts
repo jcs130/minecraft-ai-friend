@@ -206,7 +206,15 @@ export async function skillCollect(
     return t.length > 0 ? `;${t.join(';')}` : '';
   };
   let scaffold: TemporaryScaffoldScope | undefined;
+  // Keep execution-selected crop cells, not the requested destination or the
+  // player's feet. Original-cell work must survive a partial result/failed pickup.
+  const harvested: string[] = [];
+  const harvestCellsNote = (): string => harvested.length === 0 ? ''
+    : `已收割作物格（${dimensionOf(bot)}，历史执行记录，不代表当前为空）：${harvested.slice(0, 16).join('、')}`
+      + (harvested.length > 16 ? `；另 ${harvested.length - 16} 格见本任务 crop-harvest 日志` : '')
+      + '。坐标是作物格，补种前核对其下方耕地及原格占用；收割/播种成功不证明服务端委托计数';
   const finish = async (receipt: string): Promise<string> => receipt
+    + (harvested.length > 0 ? `;${harvestCellsNote()}` : '')
     + (skippedStructures.size > 0 ? `;${structureNote()}` : '') + (scaffold
     ? await reclaimTemporaryScaffold(bot, ctx, scaffold) : '');
   try {
@@ -353,6 +361,14 @@ export async function skillCollect(
       checkAbort(ctx);
       await digBlock(bot, live, ctx);
       dug++;
+      if (CROP_MAX_AGE[live.name] !== undefined) {
+        const at = { x: pos.x, y: pos.y, z: pos.z };
+        const cell = `${live.name}@(${at.x},${at.y},${at.z})`;
+        harvested.push(cell);
+        ctx.diag?.write({ lane: 'skill', event: 'crop-harvest', level: 'info', taskId: ctx.taskId,
+          msg: `已收割作物格 ${cell}`, data: { dimension: dimensionOf(bot), at, block: live.name,
+            ordinal: harvested.length, evidence: 'dig-completed', inventoryGain: 'checked-separately' } });
+      }
       ctx.progress?.(dug, count);
       await collectDrops(bot, pos, countedDrops, countGains, mark, ctx);
       await keep.light(undefined, 'travel');
@@ -411,6 +427,7 @@ export async function skillCollect(
     }
     return await finish(`挖了 ${dug} 块${zhName(block)},实际入包 ${gained} 个${toolTail}${litTail()}`);
   } catch (err) {
+    if (err instanceof SkillBlocked && harvested.length > 0) err.scene.push(harvestCellsNote());
     if (scaffold && !scaffold.finished && !ctx.aborted() && err instanceof SkillBlocked) {
       const cleanup = await reclaimTemporaryScaffold(bot, ctx, scaffold);
       if (cleanup) err.scene.push(cleanup.replace(/^;/, ''));

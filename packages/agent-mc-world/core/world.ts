@@ -5136,7 +5136,7 @@ export class MinecraftWorld implements World {
 
   /**
    * 断言求值器那一侧的世界取用面。四个口都是**现读**:一次对账里读到的是同一刻的世界,
-   * 不缓存也不预取。区块没加载在这里就是 `null`,一路传到回执上说成"没加载"。
+   * 不缓存也不预取。遮挡、超距、未加载或读取失败都可能返回 null，回执保留未知。
    */
   protected checkWorld(bot: NonNullable<Bridge['bot']>): CheckWorld {
     bot=observationView(bot);
@@ -5158,7 +5158,7 @@ export class MinecraftWorld implements World {
             solid: b.boundingBox === 'block',
           };
         } catch {
-          return null; // 对账不许成为故障源:读不出来就当没加载
+          return null; // 对账读不到则保留未知，不推断未加载或空气
         }
       },
       inventory: () => {

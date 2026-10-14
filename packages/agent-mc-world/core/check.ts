@@ -1,6 +1,6 @@
 /**
  * 通过 CheckWorld 读取当前状态并核验断言。
- * 方块按 ID 比较；未加载单独报告；sealed 将水和岩浆视为通路。
+ * 方块按 ID 比较；未观察单独报告；sealed 将水和岩浆视为通路。
  */
 
 import { blueprintStepStateMatches, diffBlueprint, type BlueprintPlan } from './blueprint-plan.ts';
@@ -51,7 +51,7 @@ export interface CheckMarkProbe {
 export interface CheckWorld {
   /** 当前玩家位置；可供工地核验标注直线距离，不代表可行路线。 */
   position?: () => readonly [number, number, number] | null;
-  /** 世界坐标一格;区块没加载、读不到 → null */
+  /** 世界坐标一格；遮挡、超距、未加载或读取失败 → null，不能从 null 推断具体原因 */
   cell(x: number, y: number, z: number): CheckCell | null;
   /** 背包现有:物品名 → 个数 */
   inventory(): ReadonlyMap<string, number>;
@@ -319,13 +319,13 @@ function forEachBoxCell(box: CheckBox, fn: (x: number, y: number, z: number) => 
   }
 }
 
-function unloadedTail(n: number): string {
-  return n > 0 ? `;另有 ${n} 格没加载,没对全` : '';
+function unknownTail(n: number): string {
+  return n > 0 ? `;另有 ${n} 格未观察,没对全` : '';
 }
 
 function evalAt(a: Extract<CheckAssert, { kind: 'at' }>, world: CheckWorld): CheckResult {
   const cell = world.cell(a.at[0], a.at[1], a.at[2]);
-  if (!cell) return { verdict: 'unknown', text: `${posText(a.at)} 区块没加载,走近再对` };
+  if (!cell) return { verdict: 'unknown', text: `${posText(a.at)} 尚未观察（遮挡、超距、未加载或读取失败），核对视线和距离后再对` };
   const actual = idOf(cell.state);
   const hit = AIR_IDS.has(a.is) ? AIR_IDS.has(actual) : actual === a.is;
   if (hit) return { verdict: 'ok', text: `${posText(a.at)} 是${zhName(a.is)}` };
@@ -353,10 +353,10 @@ function evalCount(a: Extract<CheckAssert, { kind: 'count' }>, world: CheckWorld
   }
   const where = boxText(a.box);
   if (bad.length > 0) {
-    return { verdict: 'bad', text: `${where} 里 ${bad.join('、')}${unloadedTail(unloaded)}` };
+    return { verdict: 'bad', text: `${where} 里 ${bad.join('、')}${unknownTail(unloaded)}` };
   }
   if (unloaded > 0) {
-    return { verdict: 'unknown', text: `${where} 里 ${okBits.join('、')},但有 ${unloaded} 格没加载,数不准` };
+    return { verdict: 'unknown', text: `${where} 里 ${okBits.join('、')},但有 ${unloaded} 格未观察,数不准` };
   }
   return { verdict: 'ok', text: `${where} 里 ${okBits.join('、')}` };
 }
@@ -386,13 +386,13 @@ function evalUniform(
     return {
       verdict: 'bad',
       text: `${boxText(a.box)} ${total} 格里 ${bad} 格不是${what}:${offenders.join('、')}${more}`
-        + unloadedTail(unloaded),
+        + unknownTail(unloaded),
     };
   }
   if (unloaded > 0) {
     return {
       verdict: 'unknown',
-      text: `${boxText(a.box)} 读到的 ${total - unloaded} 格都是${what},另有 ${unloaded} 格没加载,没对全`,
+      text: `${boxText(a.box)} 读到的 ${total - unloaded} 格都是${what},另有 ${unloaded} 格未观察,没对全`,
     };
   }
   return { verdict: 'ok', text: `${boxText(a.box)} ${total} 格都是${what}` };
@@ -415,10 +415,10 @@ function evalSealed(a: Extract<CheckAssert, { kind: 'sealed' }>, world: CheckWor
 
   const start = a.from ?? findStart(box, world);
   if (!start) {
-    return { verdict: 'error', text: `${boxText(a.box)} 里没有可站的空格(整个盒子是实心的,或者区块没加载)` };
+    return { verdict: 'error', text: `${boxText(a.box)} 里没有可站的空格(可能被实心方块占用，或格子尚未观察)` };
   }
   if (passable(start[0], start[1], start[2]) === null) {
-    return { verdict: 'unknown', text: `${posText(start)} 区块没加载,洪泛起不了步` };
+    return { verdict: 'unknown', text: `${posText(start)} 尚未观察，无法开始连通性检查` };
   }
   if (passable(start[0], start[1], start[2]) === false) {
     return { verdict: 'error', text: `${posText(start)} 是实心的,从这里洪泛不起来;换一个 from` };
@@ -471,13 +471,13 @@ function evalSealed(a: Extract<CheckAssert, { kind: 'sealed' }>, world: CheckWor
       text: `${boxText(box)} 不封闭:${leakCount} 个漏口,最近的在 ${posText(nearest[0].p)}`
         + `${rest.length > 0 ? `,还有 ${rest.join('、')}` : ''}`
         + `${liquidLeak ? '(液体按通路算,水会灌进来)' : ''}`
-        + unloadedTail(unloadedCells.size),
+        + unknownTail(unloadedCells.size),
     };
   }
   if (unloadedCells.size > 0) {
     return {
       verdict: 'unknown',
-      text: `${boxText(box)} 目前没找到漏口,但周边 ${unloadedCells.size} 格没加载,没对全`,
+      text: `${boxText(box)} 目前没找到漏口,但周边 ${unloadedCells.size} 格未观察,没对全`,
     };
   }
   return { verdict: 'ok', text: `${boxText(box)} 封闭(从 ${posText(start)} 洪泛 ${seen.size} 格,没走出去)` };
@@ -587,7 +587,7 @@ export function blueprintCheckText(site: CheckSite | null, key: string, world: C
     const samples = diff.conflicts.map((conflict) => `${posText(conflict.pos)} 该是${zhName(blockIdOf(conflict.expect))},现在是${zhName(blockIdOf(conflict.actual))}`);
     bits.push(`冲突 ${conflicts} 格(${samples.join('、')}${conflicts > samples.length ? ' 等' : ''})`);
   }
-  if (diff.unknown > 0) bits.push(`${diff.unknown} 格没加载,没对全(这些格的现状未知)`);
+  if (diff.unknown > 0) bits.push(`${diff.unknown} 格未观察,没对全(这些格的现状未知)`);
   return {
     verdict: diff.missing > 0 || conflicts > 0 ? 'bad' : 'unknown',
     text: `${head};${bits.join(';')}`,
@@ -607,7 +607,7 @@ function evalMark(a: Extract<CheckAssert, { kind: 'mark' }>, world: CheckWorld):
         text: `「${probe.name}」登记的是${probe.kind},${where} 现在是${probe.found}`,
       };
     case 'unloaded':
-      return { verdict: 'unknown', text: `「${probe.name}」${where} 区块没加载,走近再对` };
+      return { verdict: 'unknown', text: `「${probe.name}」${where} 尚未观察（遮挡、超距、未加载或读取失败），核对视线和距离后再对` };
     case 'other-dimension':
       return { verdict: 'unknown', text: `「${probe.name}」在别的维度 ${where},当前维度没法核` };
     case 'unchecked':
@@ -647,7 +647,7 @@ export function renderChecks(parsed: readonly CheckParsed[], world: CheckWorld):
     [
       `${ok.length} 条符合`,
       bad.length > 0 ? `${bad.length} 条不符` : '',
-      unknown.length > 0 ? `${unknown.length} 条没对上(区块没加载)` : '',
+      unknown.length > 0 ? `${unknown.length} 条未验证` : '',
       errored.length > 0 ? `${errored.length} 条没受理` : '',
     ].filter(Boolean).join('、'),
   ].join(':');
