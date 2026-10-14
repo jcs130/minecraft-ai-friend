@@ -248,6 +248,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private UtilitySpells utilitySpells;
     private FlightLeases flightLeases;
     private SkillAssessments skillAssessments;
+    private LifeChallenges lifeChallenges;
     private SpellMastery spellMastery;
     private ProfessionManager professions;
     private TrialRescueManager trialRescue;
@@ -356,6 +357,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         villageTrades = new VillageTrades(this);
         tradeDirectory = new TradeDirectory(this);
         trialRescue = new TrialRescueManager(this);
+        lifeChallenges = new LifeChallenges(this);
         viewerStatePublisher = new ViewerStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
         viewerStatePublisher.start();
         agentStatePublisher = new AgentStatePublisher(this, combatSpells, prospectingSpell, utilitySpells);
@@ -375,6 +377,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (lifeChallenges != null) lifeChallenges.shutdown();
         if (privateChatNames != null) privateChatNames.stop();
         if (itemAppearances != null) itemAppearances.stop();
         if (tradeDirectory != null) tradeDirectory.shutdown();
@@ -444,6 +447,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     ProfessionManager professions() { return professions; }
     FlightLeases flightLeases() { return flightLeases; }
     SkillAssessments skillAssessments() { return skillAssessments; }
+    LifeChallenges lifeChallenges() { return lifeChallenges; }
     AgentEntry agentEntry() { return agentEntry; }
     AgentCommunication communication() { return communication; }
     AgentCoach agentCoach() { return agentCoach; }
@@ -855,6 +859,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if(!(sender instanceof ConsoleCommandSender)&&!(sender instanceof RemoteConsoleCommandSender)){sender.sendMessage("只允许控制台维护考试场地与题库。");return true;}
             skillAssessments.admin(sender,args);return true;
         }
+        if(args.length>=2&&args[0].equalsIgnoreCase("admin")&&args[1].equalsIgnoreCase("challenges")) {
+            if(!(sender instanceof ConsoleCommandSender)&&!(sender instanceof RemoteConsoleCommandSender)){sender.sendMessage("只允许控制台维护生活挑战题库；玩家用 /mycli challenge list 查询。");return true;}
+            lifeChallenges.admin(sender,args);return true;
+        }
         if (args.length >= 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("professions")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
                 sender.sendMessage("只允许服务器控制台维护职业账本。"); return true;
@@ -1210,6 +1218,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "intro", "入门状态" -> agentEntry.intro(player);
             case "rules", "规则" -> agentEntry.rules(player,args);
             case "progress", "进度" -> agentEntry.progress(player,args);
+            case "challenge", "挑战记录" -> lifeChallenges.command(player,args);
             case "page", "续读" -> communication.pageCommand(player,args);
             case "capabilities", "能力目录" -> agentEntry.capabilities(player,args);
             case "list" -> AgentCliCatalog.list(player, args);
@@ -3074,7 +3083,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 3 && args[0].equalsIgnoreCase("spells") && args[1].equalsIgnoreCase("explain"))
             return SpellGuide.entries().stream().map(SpellGuide.Entry::id).toList();
         if (args.length == 2 && args[0].equalsIgnoreCase("coach")) return List.of("status", "next", "guide", "lessons", "enroll", "cancel", "menu", "later", "on", "off");
-        if (args.length == 2 && args[0].equalsIgnoreCase("progress")) return List.of("all", "main", "training", "guild");
+        if (args.length == 2 && args[0].equalsIgnoreCase("progress")) return List.of("all", "main", "training", "guild", "challenge");
+        if (args.length == 2 && args[0].equalsIgnoreCase("challenge")) return List.of("list", "info", "menu", "start", "join", "begin", "status", "result", "history", "cancel");
         if (args.length == 2 && args[0].equalsIgnoreCase("capabilities")) return List.of("list", "info");
         if (args.length == 3 && args[0].equalsIgnoreCase("capabilities") && args[1].equalsIgnoreCase("info")) return AgentCliCatalog.ids();
         if (args.length == 2 && args[0].equalsIgnoreCase("pvp"))

@@ -101,6 +101,7 @@ final class SiteDungeonManager implements Listener {
         return null;
     }
     private String rescueKey(Run r){return "site:"+r.id;}
+    String challengeContext(UUID id){Run r=runs.values().stream().filter(run->run.party.contains(id)).findFirst().orElse(null);return r==null?"":rescueKey(r)+":"+r.stage+":"+r.attempt;}
     TrialRescueManager.Team rescueTeam(UUID id){
         Run r=runs.values().stream().filter(run->run.party.contains(id)).findFirst().orElse(null);if(r==null)return null;
         return new TrialRescueManager.Team(rescueKey(r),Set.copyOf(r.party),r.site::contains,r.pausedAt>0||!r.fault.isEmpty(),
@@ -421,7 +422,10 @@ final class SiteDungeonManager implements Listener {
                 Set<UUID> credited=new LinkedHashSet<>(r.roomParticipants);credited.retainAll(r.party);
                 r.roomAttendance.put(r.stage,Set.copyOf(credited));
                 for(UUID id:credited)r.attendance.merge(id,1,Integer::sum);
+                String challengeContext=rescueKey(r)+":"+r.stage+":"+r.attempt;
+                Set<UUID> challengePresent=present(r).stream().filter(p->r.room().contains(p.getLocation())&&credited.contains(p.getUniqueId())).map(Player::getUniqueId).collect(java.util.stream.Collectors.toSet());
                 String roomName=r.room().name;clean(r);r.stage++;r.attempt=0;r.phase=r.stage==r.site.rooms.size()?"returning":"moving";persist();
+                if(plugin.lifeChallenges()!=null)plugin.lifeChallenges().roomCleared(challengeContext,challengePresent);
                 for(UUID id:r.party){Player p=Bukkit.getPlayer(id);if(p!=null)p.sendMessage((credited.contains(id)?"§a":"§e")+"【遗迹地下城·参战登记】"+roomName+"："+(credited.contains(id)?"已记录本室参战":"本室缺席，未登记")+"；累计 "+r.attendance.getOrDefault(id,0)+"/"+r.site.rooms.size()+"。"+(credited.contains(id)?"":"继续可练习，完整奖励需重新组队挑战。"));}
                 notice(r,"§a战斗室已清理；"+(r.phase.equals("returning")?"返回首室完成本次探索并登记奖励。":"步行前往下一室："+r.room().name+" "+r.room().x+","+r.room().y+","+r.room().z));
             }

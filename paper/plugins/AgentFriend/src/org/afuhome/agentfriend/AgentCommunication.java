@@ -179,6 +179,7 @@ final class AgentCommunication {
         if(root.equals("skills")&&args.length>1&&args[1].equalsIgnoreCase("status")) {skills(p,args);return;}
         if(root.equals("page")) {pageCommand(p,args);return;}
         if(root.equals("capabilities")) {plugin.agentEntry().capabilities(p,args);return;}
-        error(p,"UNSUPPORTED_FORMAT","--json目前支持status、progress、skills status、page、capabilities和protect；本次没有执行任何动作。其他入口保留原回执。",false,"/mycli status --json");
+        if(root.equals("challenge")) {plugin.lifeChallenges().queryJson(p,args);return;}
+        error(p,"UNSUPPORTED_FORMAT","--json目前支持status、progress、skills status、page、capabilities、protect和challenge查询；本次没有执行任何动作。其他入口保留原回执。",false,"/mycli status --json");
     }
 }

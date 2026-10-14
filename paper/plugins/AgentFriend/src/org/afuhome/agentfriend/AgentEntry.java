@@ -35,6 +35,7 @@ final class AgentEntry {
         self.addProperty("adventurerRank",plugin.guild().adventurerRankName(p));out.add("self",self);
         out.addProperty("rulesCommand","/mycli rules");out.addProperty("stateCommand","/mycli status");
         out.addProperty("capabilitiesCommand","/mycli capabilities");out.addProperty("progressCommand","/mycli progress");
+        out.addProperty("challengeCommand","/mycli challenge list");
         out.addProperty("nextCommand",onboarding.has("nextCommand")?onboarding.get("nextCommand").getAsString():"/mycli rules");
         out.addProperty("nextAdvice",onboarding.has("message")?onboarding.get("message").getAsString():"这是观战账号；在对应生存角色的连接上进行任务和存取。");
         out.addProperty("mainlineGraduated",flag(onboarding,"completed"));
@@ -66,7 +67,7 @@ final class AgentEntry {
     }
     void progress(Player p,String[] args) {
         String filter=args.length>1?args[1].toLowerCase(Locale.ROOT):"all";
-        if(args.length>3||!Set.of("all","main","training","guild").contains(filter)){plugin.communication().error(p,"INVALID_ARGUMENT","/mycli progress [all|main|training|guild] [页码]：第三个参数启用按需分页；查询不接单、不领奖。",false,"/mycli progress all 1");return;}
+        if(args.length>3||!Set.of("all","main","training","guild","challenge").contains(filter)){plugin.communication().error(p,"INVALID_ARGUMENT","/mycli progress [all|main|training|guild|challenge] [页码]：第三个参数启用按需分页；查询不接单、不领奖。",false,"/mycli progress all 1");return;}
         List<JsonObject> rows=progressRows(p,filter);
         if(args.length==3) {
             try{plugin.communication().list(p,"progress","/mycli progress "+filter+" 1",rows,Integer.parseInt(args[2]));}
@@ -120,6 +121,9 @@ final class AgentEntry {
             life.add("missingConditions",missing);rows.add(life);
             JsonObject academy=plugin.skillAssessments().summary(p);academy.addProperty("section","guild");academy.addProperty("kind","assessment");academy.addProperty("title","能力认证与晋级考试");
             academy.addProperty("nextCommand","/mycli guild exam status");academy.add("missingConditions",academy.has("nextAction")?commands(academy.get("nextAction").getAsString()):new JsonArray());rows.add(academy);
+        }
+        if(filter.equals("all")||filter.equals("challenge")) {
+            JsonObject challenge=plugin.lifeChallenges().summary(p);challenge.addProperty("section","challenge");rows.add(challenge);
         }
         return rows;
     }

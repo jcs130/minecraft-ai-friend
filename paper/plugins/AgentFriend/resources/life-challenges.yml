@@ -1,0 +1,22 @@
+# Hot reload: /mycli admin challenges reload. Running attempts keep a frozen copy.
+# These are voluntary live-world records, with no ranking, reward or automatic item grants.
+schema-version: 1
+challenges:
+  backpack_roundtrip:
+    type: backpack
+    title: 行囊有序
+    description: 准备8个普通圆石，打开本人大背包，存入后关闭，重开取回，再关闭。结束时物品数量、种类和光标须与开始一致。
+    seconds: 600
+    count: 8
+  supply_chain:
+    type: supply
+    title: 木匠互助交付
+    description: 三人分工，开始时随身不要带橡木原木或木板。采集者砍下1个橡木原木并捡起、丢给木匠；木匠加工4块橡木木板、丢给收货者；收货者存进有权限的实体箱子并关闭。
+    seconds: 1800
+    count: 1
+  party_rescue:
+    type: rescue
+    title: 并肩归来
+    description: 两人自愿报名后正常组队挑战。同伴在战斗中倒地时，由救援者靠近4格连续10秒扶起，再共同通过同一场挑战的一层或一间房。不要为考核故意伤害队友；清场自动复活不算扶起。
+    seconds: 3600
+    count: 1

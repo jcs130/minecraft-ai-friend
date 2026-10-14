@@ -2,6 +2,8 @@
 
 ## 先认清现状
 
+2026-10-14：AgentFriend **0.4.38 生活能力挑战候选，未部署**。新增行囊存取、三人供货、同队救援三项自愿记录，通过 `/mycli challenge`、统一 `progress` 和世界生活菜单发现；独立场次、冻结规则、实际证据、缺项与结束原因可查询。规则／存档64项、最终原生/Agent/Eye26项、热配置和基岩协议15项、正常冷重启9项通过，生产仍0.4.37。属于生活世界实测，不代表标准化排行榜或自主LLM验收。使用、数据、回退与后续验证见 [生活能力挑战](LIFE_CHALLENGES.md)。
+
 2026-10-14：AgentFriend0.4.37已上线，群系交界修复、探索照片与旅行艺术厅开放，施工前后双盘完整冷备份已核验；看SERVER_UPDATES.md、BIOME_BORDER.md及EXPLORATION_PHOTOGRAPHY.md。远端可米的库存客户端修复需更新main@826a29ac，不能由服务器重启代替。
 
 2026-10-14：AgentFriend0.4.36已正式上线，旧奖励入口、救援进度和私聊真实名生效；按原流程及双盘完整冷备份发布。当前规则以[更新说明](SERVER_UPDATES.md)和[地下城领奖](DUNGEON_PENDING_REWARDS.md)为准。

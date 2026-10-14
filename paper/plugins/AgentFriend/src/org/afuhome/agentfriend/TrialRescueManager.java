@@ -143,6 +143,7 @@ final class TrialRescueManager implements Listener {
         if (args.length == 0) return true;
         String root = args[0].toLowerCase(Locale.ROOT);
         if (Set.of("help", "status", "list", "explain").contains(root)) return true;
+        if(root.equals("challenge"))return args.length==1||Set.of("list","info","status","result","history").contains(args[1].toLowerCase(Locale.ROOT));
         return Set.of("arena", "dungeon").contains(root)
                 && (args.length == 1 || Set.of("status", "layout", "info", "list", "loot").contains(args[1].toLowerCase(Locale.ROOT)));
     }
@@ -301,6 +302,7 @@ final class TrialRescueManager implements Listener {
         }
         remove(id); restoreHealth(p); persist();
         audit(d, "revived", reason);
+        if(reason.equals("nearby_teammate")&&d.rescuer!=null&&plugin.lifeChallenges()!=null)plugin.lifeChallenges().rescued(d.rescuer,id);
         if(reason.equals("nearby_teammate")&&d.rescuer!=null&&plugin.siteDungeons()!=null)
             plugin.siteDungeons().support(Bukkit.getPlayer(d.rescuer),p);
         if(reason.equals("nearby_teammate")&&d.rescuer!=null&&plugin.skillAssessments()!=null) {

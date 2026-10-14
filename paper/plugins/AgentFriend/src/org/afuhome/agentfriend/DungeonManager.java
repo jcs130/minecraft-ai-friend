@@ -886,6 +886,8 @@ final class DungeonManager implements Listener {
         cleared = true;
         if (plugin.trialRescue() != null) plugin.trialRescue().reviveTeam(rescueKey(), "room_cleared");
         int credited = rewardFloor();
+        if(plugin.lifeChallenges()!=null)plugin.lifeChallenges().roomCleared(rescueKey()+":"+floor,
+                participants.stream().map(Bukkit::getPlayer).filter(p->p!=null&&p.isOnline()&&!p.isDead()&&inFloor(p.getLocation(),floor)).map(Player::getUniqueId).collect(java.util.stream.Collectors.toSet()));
         announce(ChatColor.GREEN + "第 " + floor + "/" + maxFloor() + " 层已通关！奖励已放进个人箱子（" + credited + " 人）。");
         if (floor == maxFloor()) finish(true, "cleared", maxFloor() + " 层完成！打开奖励箱领取，再按红色木按钮回地面。");
         else {
@@ -1498,6 +1500,7 @@ final class DungeonManager implements Listener {
     }
 
     private String rescueKey() { return "tower:" + runId; }
+    String challengeContext(UUID id) { return active&&participants.contains(id)?rescueKey()+":"+floor:""; }
     private boolean waveCleared() {
         return cleared || spawned && mobs.stream().noneMatch(uuid -> {
             Entity e = Bukkit.getEntity(uuid); return e instanceof LivingEntity l && e.isValid() && !l.isDead();

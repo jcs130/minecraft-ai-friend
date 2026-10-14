@@ -304,6 +304,7 @@ final class WorldLifeManager implements Listener {
         inv.setItem(15, item(Material.LADDER, "§a开门与爬梯实练", "亲手开门穿过、沿现有梯子爬升3格", "不拆墙、不垫块，不代操作或授予技能", "/mycli world practice start"));
         inv.setItem(16, item(Material.OAK_DOOR, "§7结束聊天", "恢复普通公屏聊天"));
         inv.setItem(22, item(Material.BELL, "§6居民事务板", "农耕、集市、照片和遗迹调查", "/mycli world board"));
+        inv.setItem(24, item(Material.WRITABLE_BOOK, "§b生活能力挑战", "行囊存取、木匠互助、同队救援", "自愿报名；查看真实进度与证据", "/mycli challenge menu"));
         p.openInventory(inv);
     }
     @EventHandler public void onClick(InventoryClickEvent event) {
@@ -318,6 +319,7 @@ final class WorldLifeManager implements Listener {
         if (!(event.getView().getTopInventory().getHolder() instanceof MenuHolder holder)) return;
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p) || !holder.owner().equals(p.getUniqueId()) || event.getRawSlot() < 0 || event.getRawSlot() >= 27) return;
+        if(event.getRawSlot()==24){p.closeInventory();plugin.lifeChallenges().command(p,new String[]{"challenge","menu"});return;}
         String action = switch (event.getRawSlot()) { case 10 -> "guide start"; case 11 -> "npcs"; case 12 -> "events"; case 13 -> "photos"; case 14 -> "trades"; case 15 -> "practice start"; case 16 -> "end"; case 22 -> "board menu"; default -> ""; };
         if (!action.isEmpty()) { p.closeInventory(); command(p, ("world " + action).split(" ")); }
     }

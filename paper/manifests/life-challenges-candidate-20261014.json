@@ -1,0 +1,32 @@
+{
+  "status": "verified_candidate_not_deployed",
+  "date": "2026-10-14",
+  "plugin": "AgentFriend",
+  "version": "0.4.38",
+  "bytes": 1436627,
+  "sha256": "8e24c1e1630381183e61fc2b3ec3f150988d1207edf33694cf6e60e200fb9fd9",
+  "productionVersion": "0.4.37",
+  "templates": ["backpack_roundtrip", "supply_chain", "party_rescue"],
+  "commands": ["/mycli challenge", "/mycli progress challenge 1", "/mycli world menu"],
+  "channel": "mcagent:challenge",
+  "chatPrefix": "MC_CHALLENGE",
+  "configuration": "plugins/AgentFriend/life-challenges.yml",
+  "records": "plugins/AgentFriend/challenge-runs/<runId>.json",
+  "testResults": [
+    {"suite": "LifeChallengesTest", "passed": 64, "scope": "rules, inventory accounting, persistence and write failure"},
+    {"receipt": "stage-initial-1791965440700.json", "passed": 26, "errors": 0, "scope": "native Minepacks, three-role supply, real proximity rescue, controlled clear, actual Eye and disconnection"},
+    {"receipt": "compat-1791960801743.json", "passed": 15, "errors": 0, "scope": "hot reload, frozen rules, cancelled inventory click and actual Bedrock protocol 2193 / 1.26.51"},
+    {"receipt": "stage-resume-1791965511845.json", "passed": 9, "errors": 0, "scope": "same-JAR normal cold restart, completed evidence, explicit maintenance interruption and private access"}
+  ],
+  "boundaries": [
+    "Voluntary live_world records with autonomy=unverified; no standardized leaderboard or independent LLM performance claim",
+    "Participants use their own materials; existing game costs and permissions remain; no extra grants or rewards",
+    "Only successful durable writes may report success; missing or inconsistent observations remain unknown or interrupted",
+    "Supply evidence proves observed actions and amounts, not unique provenance of interchangeable vanilla items",
+    "Human and Eye messages remain Chinese and private; detailed machine results go to participants or explicit JSON queries",
+    "No new public interface, world scan, screenshot process or model call",
+    "No production files or player data changed; no deployment queued; production Paper restart requires confirmation",
+    "Physical phone/Xbox visuals and remote Web challenge panels are not verified"
+  ],
+  "rollback": "Normal maintenance shutdown and restore AgentFriend 0.4.37 JAR; preserve challenge config and records. No world rollback or player-data migration is required."
+}
