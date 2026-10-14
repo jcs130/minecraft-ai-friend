@@ -1,5 +1,15 @@
 # Agent 角色皮肤
 
+## 鸣人普通皮肤（2026-10-15核验，已在线生效）
+
+`ag_NarutoPi`（`3a0d9481-2a8f-3bdd-9f56-b5d57c7aafd0`）已在线绑定现有签名预设 `afu_naruto`，细手臂（slim）。外观为黄发、木叶头带、橙黑忍服；普通原版皮肤与 `qiandengji_naruto/skin` 的 YSM 绑定同时保存，未修改既有 YSM 选择或强制标志。不装 YSM 的客户端可通过普通玩家皮肤协议显示；手机/Xbox最终画面仍需真机确认，不能把普通皮肤当成完整 YSM 几何与动画。
+
+现有预设的 Mojang 纹理为 `df7616797d615c7785f706ba8a36af5612a83e15c111a57e33ab66c2ac500ed8`，64×64；复用原签名，没有重新上传或生成。仅通过 `skinsrestorer:skin set afu_naruto ag_NarutoPi slim` 应用一次。实际普通认证 Mineflayer 观察连接已收到与预设逐字一致的 `textures` value/signature，签名元数据明确 `model=slim`；原生 `.player` 持久绑定及目标原认证会话保持。
+
+11项最终检查通过，45份原皮肤/配置文件保持，只新增目标UUID的一份CUSTOM映射。首次夹具错误地要求CUSTOM映射单独保存variant字段，实际手臂形状来自签名纹理metadata；失败保留，随后只读核验纠正该假设，没有重复换装。E/F `repairs/naruto-vanilla-skin-20261014` 保存前像、实际profile包、原失败和最终核验。服务器、代理及模型服务未重启；远端网页/Java/基岩实际像素未验收。
+
+回退本次普通皮肤可在线执行 `skinsrestorer:skin clear ag_NarutoPi`（原先没有普通皮肤覆盖），不会撤销独立的YSM分配；不要整目录恢复覆盖其他玩家的换装。
+
 ## NEKO 白色猫娘（2026-10-08 19:48:21已在线生效）
 
 `ag_NEKO`（`6e8b395e-4349-3d44-99f5-b7488825e426`）绑定`afu_neko_whitecat`，slim手臂。外观为白色猫耳兜帽、浅色长发和白色服装，少量浅灰/淡粉细节。素材来自[ShadowCat100：White Cat Girl](https://www.minecraftskins.com/skin/23050342/white-cat-girl/)；原始64×64 PNG的SHA256为`c77a7b6bee493b6e0228b1a3eae13250fdf7db5326bcc7aa6420a831ec31a1fb`。SkinsRestorer 15.12.6已生成并保存签名预设，Mojang材质`d8c68d4b05a1b147b51b68148038f81f07d3413f2b1ec24acc2e1ed6fa76573a`与选中PNG可见像素相同；第三方PNG和签名存储文件只保存在私有快照中。

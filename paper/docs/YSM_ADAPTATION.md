@@ -1,5 +1,7 @@
 # YSM 外观桥接（2026-10-11已上线）
 
+2026-10-15补充：`ag_NarutoPi` 已同时绑定普通鸣人签名皮肤 `afu_naruto`（slim），原生保存和实际普通游戏连接profile下发核验通过；现有 `qiandengji_naruto/skin` YSM分配保持。两份外观各走原有路径，无需重启。普通皮肤并非完整基岩YSM适配；详见 [Agent角色皮肤](AGENT_SKINS.md)。
+
 ## 2026-10-14：鸣人专属模型已热绑定
 
 `ag_NarutoPi` 原 UUID `3a0d9481-2a8f-3bdd-9f56-b5d57c7aafd0` 已原生选择 `qiandengji_naruto` / `skin`，`mandatory=true`。沿用旧千灯纪的“鸣人·木叶忍者”方块造型：黄色碎发、木叶头带、橙黑衣和忍具包；恢复原构建器与 CC0 的 YSM `misc/2_steve` 骨架，主体 67 骨骼/49 方块、第一人称手臂 14 骨骼/10 方块，比例 1。主体几何 SHA256 与旧清单一致（`f2d6c96ff3fa1e2ee8a6f6d78f9a695f74fad6ae5588067bc6745448acdcde8f`）。皮肤取自旧记录的 [Mojang 纹理地址](https://textures.minecraft.net/texture/e5fe33c4101093cbd1eb0b961b25b9c3990726f1b7f23f3578dc3f1b6e31b296)，64×64 PNG 原样复制；其编码字节与旧本地 PNG 不同，不冒称找回了旧 PNG 的相同字节。角色与皮肤权利仍归原权利人，不提交第三方模型或贴图。
