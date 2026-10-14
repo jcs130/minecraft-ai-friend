@@ -30,8 +30,19 @@ actual built MCP entry explicitly. No private deployment or model is discovered.
 
 Copy `standalone.example.toml` to a private configuration. Set the server/account,
 an absolute shared data directory, `autonomy.enabled = true`, and an explicit
-OpenAI-compatible planner endpoint/model. Keep credentials in an environment
-variable named by `api_key_env`.
+planner provider/model. Choose a documented provider preset or an explicit
+compatible endpoint. Keep API credentials in the environment variable named by
+`api_key_env`.
+
+### Model providers and authentication (0.1.16)
+
+The shared planner supports OpenAI Chat/Responses, Claude Messages and Gemini
+native protocols, including tool calls, opt-in images, streaming, thinking
+continuations and explicit model parameters. Presets cover Qwen, DeepSeek, Kimi,
+GLM, Doubao, SiliconFlow, OpenAI, Anthropic and Google. OAuth is available through
+official OpenAI/Google flows, with optional OS credential storage and rotating
+token refresh; Google ADC is also optional. Nothing signs in or calls a model
+automatically. See [configuration, parameter and OAuth guide](docs/model-providers.md).
 
 For the shared body pinned to `5dea9f0`, this repository owns explicit source-pin
 and installation tooling around the canonical `agent-mc-world` build:

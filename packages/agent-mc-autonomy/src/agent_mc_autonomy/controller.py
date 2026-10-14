@@ -13,6 +13,7 @@ from .context import assemble, encode
 from .fast import FastPolicy, focus_state, rule_focus
 from .observations import receipt_view, spatial_text, tool_failure_view
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
+from .model_protocols import assistant_history
 from .planner import PlannerResponseError
 from .tool_schema import argument_error
 
@@ -663,7 +664,7 @@ class Controller:
                     self.invalid_tool_calls = 0
                     # A plain plan is still model history. Dropping it gives an
                     # unchanged world the same request on every idle wakeup.
-                    self.groups.append([{"role": "assistant", "content": response.get("content")}])
+                    self.groups.append([assistant_history(response)])
                     self.groups = self.groups[-8:]
                     # Text is not a native task or a completed standing goal.
                     # Revisit it even when an idle world never emits a change,
@@ -683,7 +684,7 @@ class Controller:
                     self.reject_model_call(error)
                     return
                 self.invalid_tool_calls = 0
-                exchange = [{"role": "assistant", "content": response.get("content"), "tool_calls": calls}]
+                exchange = [assistant_history(response)]
                 boundary = False
                 for call, name, arguments in prepared:
                     if boundary or self.stop_requested():
