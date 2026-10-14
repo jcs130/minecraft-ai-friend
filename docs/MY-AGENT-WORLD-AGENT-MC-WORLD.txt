@@ -1,8 +1,8 @@
 My Agent World 接入新版独立 agent-mc-world（2026-10-14）
 
-新增可选 v13-java-client-20261014：provider=java-client 控制已经登录的真实 Java 客户端；配置本人 expectedUuid、实际 expectedServer、本机 credentialsFile、原 ledgerDir，以及独立 dataDir。仍使用 mc_state/mc_help/mc_do/mc_result/mc_control，不要求目标服务器装桥。23 项输入/原生GUI/聊天/截图操作见 MY-AGENT-WORLD-JAVA-CLIENT.txt。原角色和服务端入口保持，不自动换身体。
+当前可选包 v14-unified-access-20261014：统一 Mineflayer、Numen、真实 Java 客户端和可选 Baritone。增加 mc_capabilities、mc_navigate、mc_stop、mc_visual 和核心 mc_memory；独立 agent-mc-autonomy 按实际工具 schema 接入，不注入不存在的原版队列。28 项客户端输入/原生 GUI/聊天/截图/Baritone 操作见 MY-AGENT-WORLD-JAVA-CLIENT.txt，统一框架与配置见 MY-AGENT-WORLD-UNIFIED-ACCESS.txt。原角色和服务端入口保持，不自动换身体。
 
-核心已合入 minecraft-ai-friend/main@5aeea112eee88523bac9bf65eb475a05f7857bc7，agent-mc-world 0.4.0。
+核心已合入 minecraft-ai-friend/main@603c1846fd8afbf8d6f49ac564ff003a69256b42，agent-mc-world 0.4.0。版本号相同也要核对本轮制品 SHA。
 适配源码：world/src/agent-mc-host。它使用核心公开 /client、/contracts、/mcp 接口，不把服务端规则写回通用核心。
 
 连接关系：宿主的模型/规划/记忆 → agent-mc/v1 回合、事件、回执 → My Agent World 原生身体适配器 → Mineflayer 游戏连接，或 Numen 原身体。

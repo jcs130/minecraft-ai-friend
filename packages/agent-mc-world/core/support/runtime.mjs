@@ -8,6 +8,7 @@ function currentAnchors() {
   return storage.getStore() ?? {};
 }
 
+const SYSTEM_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 function nowIso(timezone, d = /* @__PURE__ */ new Date()) {
   const fmt = new Intl.DateTimeFormat("sv-SE", {
     timeZone: timezone,
@@ -28,9 +29,13 @@ function nowIso(timezone, d = /* @__PURE__ */ new Date()) {
   return `${parts}${sign}${hh}:${mm}`;
 }
 function getTimezoneOffsetMinutes(timezone, d) {
-  const utc = new Date(d.toLocaleString("en-US", { timeZone: "UTC" }));
-  const loc = new Date(d.toLocaleString("en-US", { timeZone: timezone }));
-  return (utc.getTime() - loc.getTime()) / 6e4;
+  const parts = {};
+  for (const p of new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone, hourCycle: 'h23',
+    year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
+  }).formatToParts(d)) parts[p.type] = Number(p.value);
+  const wall = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  return (Math.floor(d.getTime() / 1000) * 1000 - wall) / 60000;
 }
 var ROTATE_BYTES = 64 * 1024 * 1024;
 function normalizeError(value) {
@@ -117,9 +122,13 @@ function createIpcLogger(send, area = "") {
   };
 }
 function emitLogNote(root, note, timezone) {
-  const target = note.area ? root.child(note.area) : root;
+  const target = note.area && typeof root.child === 'function' ? root.child(note.area) : root;
   const { kind: _kind, level, area: _area, msg, atMs, ...rest } = note;
-  target.emit(level, msg, { ...rest, ts: nowIso(timezone, new Date(atMs)) });
+  writeLog(target, level, msg, { ...rest, ts: nowIso(timezone, new Date(atMs)) });
+}
+function writeLog(target, level, msg, fields) {
+  if (typeof target?.emit === 'function') target.emit(level, msg, fields);
+  else if (typeof target?.[level] === 'function') target[level](msg, fields);
 }
 function logLines(stream, log, level, event) {
   if (!stream) return;
@@ -130,17 +139,17 @@ function logLines(stream, log, level, event) {
     carry = lines.pop() ?? "";
     for (const line of lines) {
       const trimmed = line.trim();
-      if (trimmed) log.emit(level, trimmed, { event });
+      if (trimmed) writeLog(log, level, trimmed, { event });
     }
   });
   stream.on("end", () => {
     const trimmed = carry.trim();
     carry = "";
-    if (trimmed) log.emit(level, trimmed, { event });
+    if (trimmed) writeLog(log, level, trimmed, { event });
   });
 }
 function logChildStdio(child, log) {
-  const stdio = log.child("stdio");
+  const stdio = typeof log.child === 'function' ? log.child("stdio") : log;
   logLines(child.stdout, stdio, "debug", "stdout");
   logLines(child.stderr, stdio, "warn", "stderr");
 }
@@ -155,6 +164,7 @@ function renderTemplate(template, vars) {
   });
 }
 export {
+  SYSTEM_TIMEZONE,
   createIpcLogger,
   emitLogNote,
   logChildStdio,

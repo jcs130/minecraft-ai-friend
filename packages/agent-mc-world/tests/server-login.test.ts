@@ -28,6 +28,42 @@ async function settle(check: () => boolean) {
   while (!check()) { if (Date.now() > end) throw new Error('authentication callback timeout'); await new Promise(r => setTimeout(r, 10)); }
 }
 describe('scoped automatic server authentication', () => {
+  it.each([true, false])('accepts structured authorization with passwordSet=%s, without executing nextCommand', passwordSet => {
+    const r = fixture(), login = installServerLogin(r.bot, r.options);
+    r.messages('MC_AUTH_STATE ' + JSON.stringify({ username: 'Agent', authorized: true,
+      status: 'authenticated', passwordSet, nextCommand: '/changepassword <旧密码> <新密码>' }));
+    expect(login.ready()).toBe(true);
+    expect(login.authState()).toMatchObject({ authorized: true, passwordSet,
+      nextCommand: '/changepassword <旧密码> <新密码>' });
+    expect(r.sent).toEqual([]); login.stop();
+  });
+  it('does not authorize malformed, public, wrong-account, or incomplete MC_AUTH_STATE', () => {
+    const r = fixture(), login = installServerLogin(r.bot, r.options);
+    const state = { authorized: true, status: 'authenticated' };
+    r.messages('MC_AUTH_STATE ' + JSON.stringify(state), 'chat');
+    for (const payload of ['not-json', '{"authorized":true}', JSON.stringify({ ...state, authorized: 'true' }),
+      JSON.stringify({ ...state, status: 'waiting' }), JSON.stringify({ ...state, username: 'Else' })]) {
+      r.messages('MC_AUTH_STATE ' + payload); expect(login.ready()).toBe(false);
+    }
+    r.messages('MC_AUTH_STATE {"authorized":false,"status":"login_required","passwordSet":true,"nextCommand":"/login <密码>"}');
+    expect(login.authState()).toMatchObject({ authorized: false, passwordSet: true, nextCommand: '/login <密码>' });
+    expect(login.ready()).toBe(false); expect(r.sent).toEqual([]);
+    r.messages('AUTH_SUCCESS'); expect(login.ready()).toBe(true); login.stop();
+  });
+  it('uses default machine markers and authenticates a new connection without replaying login', async () => {
+    const r = fixture();
+    writeFileSync(r.configFile, JSON.stringify({ enabled: true, accounts: [{ ...r.account,
+      requestMarkers: undefined, successMarkers: undefined, failureMarkers: undefined }] }));
+    const login = installServerLogin(r.bot, r.options);
+    r.messages('MC_AUTH_LOGIN {"status":"required"}'); r.messages('MC_AUTH_LOGIN repeated');
+    await settle(() => r.sent.length === 1);
+    r.messages('MC_AUTH_STATE {"authorized":true,"status":"authenticated"}');
+    expect(login.ready()).toBe(true); r.messages('MC_AUTH_LOGIN stale'); expect(r.sent).toHaveLength(1);
+    r.bot.emit('end'); r.messages('MC_AUTH_SUCCESS'); expect(login.ready()).toBe(false);
+    const next = installServerLogin(r.bot, r.options);
+    r.messages('MC_AUTH_LOGIN reconnect'); await settle(() => r.sent.length === 2);
+    r.messages('MC_AUTH_SUCCESS'); expect(next.ready()).toBe(true); next.stop();
+  });
   it('repeats a registration secret only when explicitly configured, without logging it', async () => {
     const r = fixture();
     writeFileSync(r.configFile, JSON.stringify({ enabled: true, accounts: [{ ...r.account,
@@ -122,11 +158,21 @@ describe('scoped automatic server authentication', () => {
     const login = installServerLogin(unreadable.bot, unreadable.options); unreadable.messages('AUTH_LOGIN');
     await settle(() => login.status().stage === 'blocked'); unreadable.messages('AUTH_LOGIN'); expect(unreadable.sent).toEqual([]);
   });
-  it.skipIf(process.platform !== 'win32')('reads a real current-user DPAPI credential without plaintext process arguments', async () => {
+  it.skipIf(process.platform !== 'win32')('reads a real current-user DPAPI credential without plaintext process arguments', async context => {
     const r = fixture(), encrypted = join(r.dir, 'private.dpapi');
-    execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-      'Add-Type -AssemblyName System.Security; $bytes=[Text.Encoding]::UTF8.GetBytes($env:CORTICO_TEST_VALUE); [IO.File]::WriteAllBytes($env:CORTICO_TEST_FILE,[Security.Cryptography.ProtectedData]::Protect($bytes,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)); [Array]::Clear($bytes,0,$bytes.Length)'],
-    { windowsHide: true, env: { ...process.env, CORTICO_TEST_VALUE: 'fixture-value', CORTICO_TEST_FILE: encrypted } });
+    try {
+      execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+        "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.Security; $bytes=[Text.Encoding]::UTF8.GetBytes($env:CORTICO_TEST_VALUE); try { $protected=[Security.Cryptography.ProtectedData]::Protect($bytes,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser) } catch { if ($_.Exception.InnerException -is [Security.Cryptography.CryptographicException]) { exit 42 }; throw }; [IO.File]::WriteAllBytes($env:CORTICO_TEST_FILE,$protected); [Array]::Clear($bytes,0,$bytes.Length)"],
+      { windowsHide: true, stdio: 'pipe', env: { ...process.env, CORTICO_TEST_VALUE: 'fixture-value', CORTICO_TEST_FILE: encrypted } });
+    } catch (error) {
+      // Some Windows service/CI identities have no usable DPAPI profile.
+      // Skip only failed fixture provisioning, never a failed credential read.
+      if ((error as { status?: number }).status === 42) {
+        console.warn('SKIP: this Windows identity cannot provision a DPAPI test credential.');
+        context.skip(); return;
+      }
+      throw error;
+    }
     const bytes = await readProtectedCredential(encrypted);
     try { expect(bytes.toString('utf8')).toBe('fixture-value'); } finally { bytes.fill(0); }
   });

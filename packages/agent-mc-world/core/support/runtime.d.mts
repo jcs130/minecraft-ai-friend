@@ -5,6 +5,7 @@ export interface LogNote extends LogAnchorFields {
   event?: string; durMs?: number; data?: unknown; err?: LogError;
 }
 export declare function nowIso(timezone: string, date?: Date): string;
+export declare const SYSTEM_TIMEZONE: string;
 export declare function nullLogger(): Logger;
 export declare function createIpcLogger(send: (note: LogNote) => void, area?: string): Logger;
 export declare function emitLogNote(root: Logger, note: LogNote, timezone: string): void;

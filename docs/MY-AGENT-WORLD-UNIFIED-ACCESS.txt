@@ -1,0 +1,33 @@
+My Agent World 统一 Agent 接入（2026-10-14）
+
+现在有三种身体：
+mineflayer：远程游戏协议玩家，复用现有原生 SDK。
+numen：服务端 Numen 身体，原生 Lua 和持久身份。
+java-client：真实 Java 客户端玩家，实际模组界面和原始画面；可选 Baritone。
+
+三种方式共用 agent-mc-world 核心和 agent-mc-host：
+mc_capabilities 查实际能力；mc_state 查本人状态；mc_help 查某操作的完整参数。
+mc_do 接收 action_id、operation、args，不接 vanilla steps。
+mc_result / mc_wait 查询原动作；unknown 只对账，不换 ID 重做。
+mc_navigate 接收 action_id 与绝对 position:{x,y,z}，在当前身体上选合适导航后端。
+mc_stop 停止当前输入；mc_control 用于 claim、续租和 release。
+mc_memory 是核心游戏笔记，默认本地；历史笔记不能代替当前观察。
+mc_visual 在真实客户端上返回原始 PNG，包含模组 GUI；其他方式仍可使用已有 mc_viewer 地址。
+
+真实客户端安装 maw-client-bridge 0.2.0；可选加原作者 baritone-api-neoforge-1.11.3.jar。
+版本：Minecraft 1.21.1 / NeoForge 21.1.248 / Java 21。服务端无需安装这两个客户端桥模组。
+Baritone 开放 goto、mine、follow、farm 和 state。导航默认不拆建；采矿开启可见矿规则。
+采矿 blocks 是方块ID、itemId 是实际掉落物、targetCount 是背包目标总量。
+F8 暂停并释放控制，再按 F8 后仍需重新 claim。同一身体不能由多个控制器抢操作。
+
+独立自主框架也能接这三种身体。在私有 TOML 的 [backend] 里写：
+body_config_file = "E:/private/your-agent-body.json"
+用 --entry 指定新包的 agent-mc-host/mcp.mjs。
+该 JSON 保留 provider、真实 UUID/bodyId、controllerId、原 ledgerDir 和独立 dataDir。
+不要把令牌、密码或模型 Key 写进公开文档；只给私有文件路径和密钥环境变量名。
+
+启动示例：
+agent-mc-autonomy run --config E:/private/autonomy.toml --entry E:/QiandengJiSocietyLab/integrations/agent-mc-world/v14-unified-access-20261014/agent-mc-host/mcp.mjs --goal "观察周围，收集食物并搭建安全住处"
+
+这轮跟进 main@603c184 的核心，保留现役服务器、世界与原 Agent 状态。
+完整安装、三种配置、接口差异及验收边界见 MY-AGENT-WORLD-UNIFIED-ACCESS.md。

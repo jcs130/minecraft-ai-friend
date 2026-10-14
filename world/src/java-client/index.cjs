@@ -112,7 +112,8 @@ async function connectJavaClient (config, { remote: injected } = {}) {
     async claimControl () {
       if (closed) return decorate(fail('java_client_adapter_closed'))
       const result = own(await rpc('claim')); if (result.ok) lease = result
-      return decorate(result)
+      const { leaseId, ...visible } = result
+      return decorate(visible)
     },
     async submit ({ action_id: id, operation, args = {} }) {
       if (!ID.test(id || '')) return decorate(fail('action_id_invalid'))

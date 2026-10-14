@@ -1,7 +1,9 @@
 /** Minecraft 引擎子进程入口。创建 World 并通过 IPC 接收配置和工具请求，向主进程转发事件及 Core 请求。 */
 import { createIpcLogger } from './support/runtime.mjs';
+import { installChildSignalOwnership } from './support/child-signals.ts';
 import { withAnchors } from './support/runtime.mjs';
-import { MinecraftWorld } from './world.ts';
+import type { MinecraftWorld } from './world.ts';
+import { TacticalMinecraftWorld } from './tactical-world.ts';
 import { DeferredRenders } from './deferred-renders.ts';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { encodeBlobs } from './engine-blobs.ts';
@@ -30,6 +32,7 @@ function send(msg: ChildToMain): void {
 const makeLogger = (area: string): Logger => createIpcLogger((note) => send({ t: 'note', note }), area);
 
 const log = makeLogger('');
+installChildSignalOwnership(process);
 
 const HOST_RPC_TIMEOUT_MS = 10_000;
 let nextHostReqId = 1;
@@ -167,7 +170,7 @@ async function handleRequest(req: EngineRequest, signal: AbortSignal): Promise<u
     cfg = req.init.cfg;
     const extension = req.init.extension;
     if (extension && !extension.module.startsWith('file:')) throw new Error('Extension must be an explicit local file URL');
-    const create = extension ? (await import(extension.module)).createEngine : (options: import('./world.ts').MinecraftWorldOptions) => new MinecraftWorld(options);
+    const create = extension ? (await import(extension.module)).createEngine : (options: import('./world.ts').MinecraftWorldOptions) => new TacticalMinecraftWorld(options);
     if (typeof create !== 'function') throw new Error('Invalid server extension factory');
     mod = create({
       cfg,
@@ -179,6 +182,7 @@ async function handleRequest(req: EngineRequest, signal: AbortSignal): Promise<u
     if (!mod) throw new Error('Engine factory returned no engine');
     await mod.start(host);
     if (stopping) { await mod?.stop(); throw new Error('Engine startup cancelled'); }
+    pushStatus();
     statusTimer = setInterval(pushStatus, 1000);
     statusTimer.unref?.();
     return null;

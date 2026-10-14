@@ -82,7 +82,7 @@ export function renderSpatialSlices(observation: SpatialSliceObservation): strin
   const bounds = axes.map(a => `${a}=${min[a]}..${max[a]}`).join(',');
   const lines = [
     `空间切片(${cells.length}格);observedAt=${observedAt};dimension=${dimension ?? '未读'};feet=(${feet.x},${feet.y},${feet.z});${bounds}`,
-    '来源=客户端已加载区块，不检查视线；每个记号=1方块；..=已读空气，??=未读。collision 为格内碰撞箱，[] 表示无碰撞箱；空气或无碰撞箱本身不证明有支撑或可通行。',
+    '来源=当前视线可达的已加载区块；每个记号=1方块；..=已读空气，??=未观察（遮挡、超距或未加载）。collision 为格内碰撞箱，[] 表示无碰撞箱；空气或无碰撞箱本身不证明有支撑或可通行。',
     `图例:${[...legend].map(([label, token]) => `${token}=${label}`).join(' | ') || '无已读非空气方块'}`,
     `切面 ${axis} 从 ${min[axis]} 到 ${max[axis]}；列 ${column} 从 ${min[column]} 到 ${max[column]}(递增)；行 ${row} ${row === 'y' ? '从高到低' : '递增'}。`,
   ];

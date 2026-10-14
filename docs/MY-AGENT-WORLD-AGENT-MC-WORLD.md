@@ -1,5 +1,7 @@
 # 独立 Minecraft 核心的原生模组服接入
 
+2026-10-14 后续更新：合入 `main@603c184`，三种 provider、可选 Baritone、核心游戏笔记、独立自主框架的实际 schema 与原帧 MCP 接入见[统一接入指南](MY-AGENT-WORLD-UNIFIED-ACCESS.md)。可选新包为 `v14-unified-access-20261014`、宿主0.2.0和客户端桥0.2.0；旧包与现役角色配置不切换。下文按日期保留此前证据，不能把旧归档 SHA 当本轮新工件。
+
 2026-10-14：新增可选 `java-client` 身体与 `v13-java-client-20261014` 分发。宿主的 `mc_state/mc_help/mc_do/mc_result/mc_control` 沿用原接口，通过本机客户端桥控制已登录玩家，目标服务器无需安装桥。配置增加 `expectedServer` 和客户端私有 `credentialsFile`；保留独立 Harness 目录与原动作账本。真实模组 GUI、原帧采集和 Mineflayer API/A* 复用见 [客户端接入](MY-AGENT-WORLD-JAVA-CLIENT.md)。原核心0.4.0、生产角色配置与原身体均不切换；默认1.20.6工具不会自动映射为客户端模组操作。
 
 2026-10-14 此前的`v12-village-compat-20261014`分发复用原核心0.4.0和原生适配器代码，更新候选接入说明。Settlements两个真实物品组件的编解码改在服务端网关源码，SDK分发不包含网关。角色配置和原账本沿用原版本；该SDK分发不代表已安装新增模组。万家烟火/村民新闻目前只在隔离候选验证，现役仍35个JAR，详见[整合记录](MY-AGENT-WORLD-SETTLEMENTS.md)。

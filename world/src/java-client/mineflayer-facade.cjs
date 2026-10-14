@@ -8,7 +8,8 @@ const key = p => `${Math.floor(p.x)},${Math.floor(p.y)},${Math.floor(p.z)}`
 const item = (v, slot) => v ? { ...structuredClone(v), slot, name: v.id.replace(/^minecraft:/, ''), displayName: v.name, stackSize: v.maxStackSize } : null
 const error = (code, result) => Object.assign(Error(code), { code, result, retryAutomatically: false })
 
-async function createMineflayerFacade (adapter) {
+async function createMineflayerFacade (adapter, { navigationBackend = 'auto' } = {}) {
+  if (!['auto', 'native', 'baritone'].includes(navigationBackend)) throw Error('facade_navigation_backend_invalid')
   if ((await adapter.identity()).provider !== 'java-client') throw Error('facade_requires_java_client_provider')
   const bot = new EventEmitter(), blocks = new Map()
   let snapshot, stopped = false, chatSeq = 0, chatConnection = null
@@ -51,7 +52,7 @@ async function createMineflayerFacade (adapter) {
   async function act (operation, args = {}, actionId = `java-${crypto.randomUUID()}`) {
     const accepted = await adapter.submit({ action_id: actionId, operation, args })
     if (!accepted.accepted && !accepted.terminal) throw error(accepted.code || 'java_client_action_rejected', accepted)
-    const result = accepted.terminal ? accepted : await adapter.wait(actionId, { timeoutMs: 20000 })
+    const result = accepted.terminal ? accepted : await adapter.wait(actionId, { timeoutMs: operation.startsWith('baritone.') ? 60000 : 20000 })
     if (!result.ok || !result.terminal || result.outcomeKnown !== true) throw error(result.code || 'java_client_action_unconfirmed', result)
     await bot.refresh(); return result
   }
@@ -69,6 +70,17 @@ async function createMineflayerFacade (adapter) {
       expectedSnbt: menu.slots[slot]?.item?.snbt || '', expectedCarriedSnbt: menu.carried?.snbt || '' })
   }
   bot.closeWindow = async () => { await bot.refresh(); return act('menu.close', { windowId: snapshot.menu.windowId }) }
+  bot.openContainer = async block => {
+    await bot.refresh(); const previous = snapshot.menu.windowId
+    await bot.activateBlock(block)
+    const deadline = Date.now() + 3000
+    do {
+      await bot.refresh()
+      if (snapshot.menu.windowId !== previous && snapshot.menu.windowId !== 0) return bot.currentWindow
+      await new Promise(resolve => setTimeout(resolve, 100))
+    } while (Date.now() < deadline)
+    throw error('facade_container_open_not_confirmed', { menu: snapshot.menu, heldItem: bot.heldItem, retryAutomatically: false })
+  }
   bot.equip = async (stack, destination) => {
     if (destination !== 'hand') throw Error('facade_equip_destination_unavailable')
     await bot.refresh(); const own = bot.inventory.slots[stack.slot]
@@ -122,7 +134,15 @@ async function createMineflayerFacade (adapter) {
     async getPathTo (goal) { await bot.refresh(); await bot.refreshWorld(); return plan(goal) },
     async goto (goal, { actionPrefix = `walk-${crypto.randomUUID()}` } = {}) {
       if (!/^[A-Za-z0-9_.-]{1,48}$/.test(actionPrefix)) throw Error('facade_path_action_prefix_invalid')
-      stopped = false; await bot.refresh(); await bot.refreshWorld(); const route = plan(goal)
+      stopped = false; await bot.refresh()
+      const spec = await adapter.operations('baritone.goto')
+      if (navigationBackend === 'baritone' || navigationBackend === 'auto' && spec?.available === true && [goal.x, goal.y, goal.z].every(Number.isInteger)) {
+        if (![goal.x, goal.y, goal.z].every(Number.isInteger)) throw Error('facade_baritone_requires_xyz_goal')
+        const result = await act('baritone.goto', { position: { x: goal.x, y: goal.y, z: goal.z } }, actionPrefix + '-baritone')
+        await bot.refresh(); if (!goal.isEnd(bot.entity.position.floored())) throw error('facade_path_final_position_not_reached', result)
+        return { backend: 'baritone', actualPosition: bot.entity.position.clone(), physics: 'original_java_client', action: result }
+      }
+      await bot.refreshWorld(); const route = plan(goal)
       if (route.status !== 'success') throw error('native_collision_path_unavailable', route)
       for (let i=0;i<route.path.length;i++) { if (stopped) throw Error('facade_path_stopped'); await act('body.move', { position: route.path[i] },`${actionPrefix}-${i}`) }
       await bot.refresh(); if (!goal.isEnd(bot.entity.position.floored())) throw Error('facade_path_final_position_not_reached')

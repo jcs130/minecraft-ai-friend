@@ -1,6 +1,6 @@
 /** 主进程中的 Minecraft World 代理。游戏连接、执行器和客户端管理在引擎子进程；此处转发工具、事件、控制台及存储请求，并每秒推送配置。 */
 import { fork, type ChildProcess } from 'node:child_process';
-import { nowIso } from './support/runtime.mjs';
+import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { emitLogNote, logChildStdio } from './support/runtime.mjs';
 import { childExecArgv } from './support/child-process.ts';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -32,6 +32,7 @@ import { loadPolicy, renderPolicyEnv } from './policy.ts';
 import { worldEnvLine, worldIdentityOf } from './server-config.ts';
 import { decodeBlobs } from './engine-blobs.ts';
 import { resolveProcedure, procedureReference } from './support/procedure.ts';
+import { COMBAT_TACTIC_TOOL } from './combat-tool.ts';
 import { METHOD_ADAPTER } from './method-runner.ts';
 
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
@@ -119,13 +120,16 @@ export class MinecraftWorldProxy implements World {
   }
 
   tools(): ToolDef[] {
-    return [...minecraftToolDecls(), ...(this.opts.extension?.tools ?? [])].map((decl) => ({
+    return [...new Map([...minecraftToolDecls(), COMBAT_TACTIC_TOOL, ...(this.opts.extension?.tools ?? [])].map(t => [t.name, t])).values()].map((decl) => ({
       ...decl,
       handler: async (args, ctx) => {
         const selected = new Map<string, {handle: string; b64: string; mime: string}>();
         if (decl.name === 'mc_script' && args.procedure !== undefined) {
           try {
-            resolveProcedure(procedureReference(args.procedure), METHOD_ADAPTER, handle => {
+            const reference = procedureReference(args.procedure);
+            // Core-owned methods are resolved inside the engine's scoped library.
+            // Host artifacts retain the existing selective transfer contract.
+            if (!reference.handle.startsWith('mem:mc-method/')) resolveProcedure(reference, METHOD_ADAPTER, handle => {
               const got = this.host?.blob(handle);
               if (got) selected.set(handle, {handle, b64: Buffer.from(got.bytes).toString('base64'), mime: got.mime});
               return got ?? null;
@@ -288,7 +292,7 @@ export class MinecraftWorldProxy implements World {
         /** shutdown RPC 超时后终止子进程。 */
       }
       await waitExit(child, 5000);
-      if (child.exitCode === null && !child.killed) child.kill();
+      if (child.exitCode === null && !child.killed) child.kill('SIGKILL');
     }
     this.teardownChild();
     this.host = null;
@@ -306,14 +310,14 @@ export class MinecraftWorldProxy implements World {
     this.child = child;
     if (this.host) logChildStdio(child, this.host.log);
     child.on('message', (msg) => { if (this.child === child) this.onMessage(msg as ChildToMain); });
-    child.on('exit', (code) => { if (this.child === child) this.onExit(code); });
+    child.on('exit', (code, signal) => { if (this.child === child) this.onExit(code, signal); });
     child.on('error', (err) => this.host?.log.error('Minecraft 引擎子进程出错', { err: String(err) }));
     this.lastConfigJson = JSON.stringify(this.opts.cfg);
     await this.rpc(
       {
         kind: 'init',
         init: {
-          timezone: this.opts.timezone ?? 'Asia/Shanghai',
+          timezone: this.opts.timezone ?? SYSTEM_TIMEZONE,
           botName: this.opts.botName ?? 'bot',
           dataDir: this.opts.dataDir ?? null,
           extension: this.opts.extension,
@@ -347,12 +351,12 @@ export class MinecraftWorldProxy implements World {
     this.pending.clear();
   }
 
-  private onExit(code: number | null): void {
+  private onExit(code: number | null, signal?: string | null): void {
     const wasStopping = this.stopping;
     this.teardownChild();
     if (wasStopping) return;
-    if (code === CONSOLE_KILL_EXIT_CODE) {
-      this.host?.log.warn('Minecraft 引擎子进程收到 0xC000013A 退出状态，宿主退出');
+    if (code === CONSOLE_KILL_EXIT_CODE || signal === 'SIGINT' || signal === 'SIGTERM') {
+      this.host?.log.warn(`Minecraft 引擎子进程收到中断（${signal ?? '0xC000013A'}），等待宿主关闭或明确重连`);
       this.stopping = true; // A child interrupt must not terminate its host or restart the game.
       this.host?.pushEvent({ts:nowIso(this.opts.timezone ?? 'UTC'),source:this.id,type:'minecraft.lifecycle',text:'Engine interrupted; reconnect explicitly.'},{trigger:'flush'}).catch(()=>{});
       return;
@@ -360,7 +364,7 @@ export class MinecraftWorldProxy implements World {
     this.host?.log.error(`Minecraft 引擎子进程意外退出(code=${code}),${RESTART_DELAY_MS / 1000}s 后重启`);
     this.host?.pushEvent(
       {
-        ts: nowIso(this.opts.timezone ?? 'Asia/Shanghai'),
+        ts: nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE),
         source: this.id,
         type: 'minecraft.event',
         text: '[Minecraft] 游戏引擎崩了,正在自动重启;重新连上之前,游戏里的动作都不会生效。',
@@ -427,7 +431,7 @@ export class MinecraftWorldProxy implements World {
     if (!host) return;
     switch (note.kind) {
       case 'log':
-        emitLogNote(host.log, note, this.opts.timezone ?? 'Asia/Shanghai');
+        emitLogNote(host.log, note, this.opts.timezone ?? SYSTEM_TIMEZONE);
         return;
       case 'usage':
         host.reportUsage(note.usage, note.opts);

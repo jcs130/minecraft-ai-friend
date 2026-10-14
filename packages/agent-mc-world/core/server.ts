@@ -182,6 +182,9 @@ interface MinecraftRealm {
 }
 
 function realmMarkerPath(worldDir: string): string {
+  // Preserve the identity of worlds managed by the earlier independent distribution.
+  const independent = join(worldDir, 'agent-mc-realm.json');
+  if (existsSync(independent)) return independent;
   return join(worldDir, REALM_MARKER_FILE);
 }
 

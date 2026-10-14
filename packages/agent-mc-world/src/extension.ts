@@ -6,6 +6,7 @@ export { Bridge, type BridgeOptions } from '../core/bridge.ts';
 export { type CombatResult, type CombatScene } from '../core/combat-observation.ts';
 export { MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_CONFIG_GROUP, MINECRAFT_DEFAULTS, MINECRAFT_PLAYER_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP, type MinecraftConfigSection } from '../core/config.ts';
 export { setFlightExpiry } from '../core/flight.ts';
+export type { QueueStatus } from '../core/executor.ts';
 export { corridorSafe, loadedSight } from '../core/idle-actions.ts';
 export { HOSTILE } from '../core/melee.ts';
 export { piglinIsHostile } from '../core/piglin.ts';

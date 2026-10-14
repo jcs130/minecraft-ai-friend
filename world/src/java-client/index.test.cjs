@@ -38,7 +38,7 @@ function setup (t) {
 test('client provider reads actual identity/components without starting a connection or claiming control', async t => {
   const { open, calls } = setup(t), adapter = await open(), s = await adapter.snapshot()
   assert.equal(adapter.identity().bodyKind, 'connected_java_client'); assert.equal(s.inventory.slots[36].name, '大背包')
-  assert.match(s.inventory.slots[36].snbt, /minecraft:custom_name/); assert.equal(adapter.operations().operationCount, 23)
+  assert.match(s.inventory.slots[36].snbt, /minecraft:custom_name/); assert.equal(adapter.operations().operationCount, 28)
   assert.equal(calls.some(c => c.method === 'claim'), false); assert.equal(adapter.viewer().secondAccount, false)
 })
 test('lease and argument validation happen before accepting any new action', async t => {

@@ -203,6 +203,34 @@ export function pendingTemporaryScaffolds(bot: Bot): ReadonlyArray<{
     ({ x, y, z, dimension, name, invalid }));
 }
 
+/** Bounded, freshly checked housekeeping facts. Read-only: no digging, navigation or promotion. */
+export function temporaryScaffoldReadout(bot: Bot, limit = 6): string {
+  const pending = [...(trackers.get(bot)?.pending.values() ?? [])];
+  if (!pending.length) return '临时垫脚：本连接没有待清理记录；不代表历史工地已清理。';
+  const pos = bot.entity?.position;
+  const distance = (r: SupportRecord): number => r.dimension !== dimensionOf(bot) ? Infinity
+    : pos ? Math.hypot(r.x + .5 - pos.x, r.y + .5 - pos.y, r.z + .5 - pos.z) : Infinity;
+  pending.sort((a, b) => distance(a) - distance(b) || b.seq - a.seq);
+  const ctx = { aborted: () => false } as SkillContext;
+  const shown = pending.slice(0, Math.max(1, Math.min(12, limit))).map(record => {
+    const reason = retainedReason(bot, record, ctx);
+    return `${record.dimension}(${record.x},${record.y},${record.z}) ${record.name}：${reason ?? '当前可尝试清理，动手前仍会复核'}`;
+  });
+  return `临时垫脚待处理 ${pending.length} 块：${shown.join('；')}`
+    + (pending.length > shown.length ? `；另 ${pending.length - shown.length} 块` : '')
+    + '。安全收尾时用 cleanup；够不到先检查站位，不能拆脚下、承重或来源未确认的方块。';
+}
+
+/** A trailing report or observation must not suppress cleanup after the final construction/travel step. */
+export function scaffoldCleanupCheckpoint(steps: readonly { skill: string; walkOnly?: boolean; dryRun?: boolean; temporary?: boolean; text?: string }[], index: number): boolean {
+  const step = steps[index];
+  return !!step && ['goto', 'find', 'surface', 'build', 'collect', 'land'].includes(step.skill)
+    && !(step.skill === 'build' && step.temporary)
+    && !(step.skill === 'goto' && step.walkOnly) && !steps.some(s => s.dryRun)
+    && steps.slice(index + 1).every(s => ['look', 'probe', 'observe', 'gesture'].includes(s.skill)
+      || (s.skill === 'chat' && !s.text?.startsWith('/')));
+}
+
 /** An explicit building or reusable-route intention permanently removes cleanup authority. */
 export function promoteTemporaryScaffold(bot: Bot, cells: Iterable<{ x: number; y: number; z: number } | string>): number {
   const tracker = trackers.get(bot);
@@ -385,7 +413,7 @@ export async function reclaimTemporaryScaffold(bot: Bot, ctx: SkillContext, scop
   // scene into the model's context on each later cleanup-eligible completion.
   const notice = JSON.stringify({ retained: retained.map(({ record, reason }) => ({
     seq: record.seq, dimension: record.dimension, x: record.x, y: record.y, z: record.z, reason,
-  })), inventory: [...invSnapshot(bot)].sort(([a], [b]) => a.localeCompare(b)) });
+  })) });
   const unchanged = reclaimed === 0 && tracker.lastNotice === notice;
   tracker.lastNotice = notice;
   if (unchanged) return '';

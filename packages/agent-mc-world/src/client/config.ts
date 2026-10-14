@@ -22,4 +22,6 @@ export function assertMinecraftReady(cfg: MinecraftClientConfig): void {
     throw new Error('Invalid Minecraft account identifier.');
   if (cfg.idle.selector !== 'random') throw new Error('Idle inference belongs to the host; migrate legacy configuration before connecting.');
   protocolVersion(cfg.version);
+  if (cfg.keepAliveTimeoutMs !== undefined && (!Number.isInteger(cfg.keepAliveTimeoutMs) || cfg.keepAliveTimeoutMs < 1000 || cfg.keepAliveTimeoutMs > 300000))
+    throw new Error('keepAliveTimeoutMs must be an integer from 1000 to 300000 milliseconds.');
 }

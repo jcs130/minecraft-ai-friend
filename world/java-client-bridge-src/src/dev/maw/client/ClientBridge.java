@@ -32,6 +32,7 @@ public final class ClientBridge {
     private static final Gson JSON=new GsonBuilder().serializeNulls().create();
     private final Minecraft mc=Minecraft.getInstance();
     private final ClientState state=new ClientState();
+    private final BaritoneAccess baritone=new BaritoneAccess();
     private final Path root=mc.gameDirectory.toPath().resolve("maw-client-bridge");
     private final String token=UUID.randomUUID().toString()+UUID.randomUUID(), instance=UUID.randomUUID().toString();
     private final ExecutorService io=Executors.newSingleThreadExecutor(r->{Thread t=new Thread(r,"maw-client-journal");t.setDaemon(true);return t;});
@@ -53,7 +54,7 @@ public final class ClientBridge {
     private record Lease(String id,String controller,String body,String server,String connection,long expiresAt) { }
     private static final class Action {
         volatile JsonObject record;final JsonObject args,before;final String operation,connection;final ActionStore store;
-        int ticks;boolean started,finishing;String beforeBlock;
+        int ticks,idleTicks;long startedAt;boolean started,finishing;String beforeBlock;
         Action(JsonObject record,JsonObject before,ActionStore store,String connection){
             this.record=record;this.args=record.getAsJsonObject("args");this.operation=record.get("operation").getAsString();
             this.before=before;this.store=store;this.connection=connection;
@@ -77,7 +78,7 @@ public final class ClientBridge {
         http.setExecutor(new ThreadPoolExecutor(2,4,30,TimeUnit.SECONDS,new ArrayBlockingQueue<>(16),r->{Thread t=new Thread(r,"maw-client-http");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy()));
         http.start();String endpoint="http://127.0.0.1:"+http.getAddress().getPort()+"/rpc";
         Files.writeString(root.resolve("connection.json"),JSON.toJson(object("schemaVersion",1,"endpoint",endpoint,"token",token,"instanceId",instance))+"\n");
-        Runtime.getRuntime().addShutdownHook(new Thread(()->{http.stop(0);io.shutdown();try{lock.release();lockFile.close();}catch(Exception ignored){}},"maw-client-close"));
+        Runtime.getRuntime().addShutdownHook(new Thread(()->{http.stop(0);io.shutdown();baritone.close();try{lock.release();lockFile.close();}catch(Exception ignored){}},"maw-client-close"));
         org.slf4j.LoggerFactory.getLogger("maw_client_bridge").info("Client-only Agent bridge ready on loopback; credentials remain in the game directory. F8 releases control.");
     }
     private void pre(ClientTickEvent.Pre event) {
@@ -93,6 +94,19 @@ public final class ClientBridge {
         a.ticks++;
         try {
             switch(a.operation) {
+                case "baritone.goto","baritone.mine","baritone.follow","baritone.farm" -> {
+                    if(a.operation.equals("baritone.mine"))baritone.tickMine();
+                    long elapsed=System.currentTimeMillis()-a.startedAt;
+                    boolean interval=a.operation.equals("baritone.follow")||a.operation.equals("baritone.farm");
+                    int budget=a.args.has(interval?"durationMs":"timeoutMs")?integer(a.args,interval?"durationMs":"timeoutMs",1000,600000):60000;
+                    JsonObject progress=a.record.deepCopy();progress.add("progress",object("backend","baritone","elapsedMs",elapsed,"actualPosition",object("x",mc.player.getX(),"y",mc.player.getY(),"z",mc.player.getZ())));a.record=progress;
+                    if(a.operation.equals("baritone.goto")&&baritone.atGoal(blockPos(a.args)))finish(a,"succeeded","baritone_position_observed",true);
+                    else if(a.operation.equals("baritone.mine")&&baritone.itemCount(text(a.args,"itemId"))>=integer(a.args,"targetCount",1,4096))finish(a,"succeeded","baritone_inventory_target_observed",true);
+                    else if(a.operation.equals("baritone.follow")&&!baritone.targetPresent(text(a.args,"targetUuid")))finish(a,"failed","follow_target_no_longer_loaded",true);
+                    else if(elapsed>=budget)finish(a,interval?"succeeded":"failed",interval?"baritone_interval_completed":"baritone_goal_timeout",true);
+                    else if(baritone.preparingMine()||baritone.busy())a.idleTicks=0;
+                    else if(++a.idleTicks>10&&a.ticks>20)finish(a,a.operation.equals("baritone.farm")?"succeeded":"failed",a.operation.equals("baritone.farm")?"baritone_farm_process_finished":"baritone_stopped_before_postcondition",true);
+                }
                 case "control.keys","world.useItem" -> { if(a.ticks>=integer(a.args,"ticks",1,200))finish(a,"succeeded","input_duration_completed",true); }
                 case "body.move" -> {
                     JsonObject p=a.args.getAsJsonObject("position");double dx=p.get("x").getAsDouble()+.5-mc.player.getX(),dz=p.get("z").getAsDouble()+.5-mc.player.getZ();
@@ -123,7 +137,14 @@ public final class ClientBridge {
         state.tick(mc);lastTickAt=System.currentTimeMillis();
         if(state.tick()%5==0)try{cached=snapshot();}catch(Exception error){cached=object("ok",false,"status","unavailable","code","client_snapshot_failed");}
     }
-    private JsonObject snapshot(){JsonObject out=state.snapshot(mc);out.addProperty("instanceId",instance);if(active!=null)out.add("currentAction",active.record.deepCopy());return out;}
+    private JsonObject snapshot(){JsonObject out=state.snapshot(mc);out.addProperty("instanceId",instance);out.add("baritone",baritone.state());if(active!=null)out.add("currentAction",active.record.deepCopy());return out;}
+    private JsonObject operations(){
+        JsonObject result=catalog.deepCopy();
+        for(var row:result.getAsJsonArray("operations")){
+            JsonObject spec=row.getAsJsonObject();String id=spec.get("id").getAsString();
+            if(id.startsWith("baritone.")&&!id.equals("baritone.state")){spec.addProperty("available",baritone.available());if(!baritone.available())spec.addProperty("unavailableReason","baritone_not_installed");}
+        }return result;
+    }
     private <T>T onClient(Callable<T> call) throws Exception {return mc.submit(()->{try{return call.call();}catch(RuntimeException e){throw e;}catch(Exception e){throw new CompletionException(e);}}).get(5,TimeUnit.SECONDS);}
     private void handle(HttpExchange exchange) {
         try {
@@ -166,7 +187,7 @@ public final class ClientBridge {
     private JsonObject rpc(String method,JsonObject p)throws Exception{
         if(method.equals("health"))return object("ok",!broken&&System.currentTimeMillis()-lastTickAt<5000,"provider","java-client",
             "lastTickAt",lastTickAt,"body",cached.deepCopy(),"controlAcquired",lease!=null,"controlPaused",controlPaused,"unresolved",store==null?0:store.unresolvedCount(),"modelRequests",0);
-        if(method.equals("operations"))return catalog.deepCopy();
+        if(method.equals("operations"))return operations();
         if(method.equals("shutdown")&&Boolean.getBoolean("maw.clientBridge.qaQuit")){
             if(active!=null)throw new IllegalStateException("finish_action_before_shutdown");
             mc.execute(mc::stop);return object("ok",true,"clientShutdownRequested",true);
@@ -189,6 +210,7 @@ public final class ClientBridge {
                 case "chat.recent" -> state.messages(mc,args.has("afterSeq")?integer(args,"afterSeq",0,Integer.MAX_VALUE):0,args.has("limit")?integer(args,"limit",1,64):24);
                 case "world.blockAt" -> object("ok",true,"bodyId",mc.player.getUUID(),"block",state.block(mc,blockPos(args)));
                 case "body.observe" -> state.observe(mc,args.has("radius")?integer(args,"radius",1,8):4);
+                case "baritone.state" -> object("ok",true,"bodyId",mc.player.getUUID(),"capturedAt",Instant.now(),"state",baritone.state());
                 default -> throw new IllegalArgumentException("read_operation_unavailable");
             };
         });
@@ -206,6 +228,7 @@ public final class ClientBridge {
         synchronized(submissions){
             JsonObject own=onClient(()->{checkBinding(p,true);String controller=text(p,"controllerId");
                 if(controlPaused)throw new IllegalStateException("human_control_paused");
+                if(baritone.busy()&&!baritone.owned())throw new IllegalStateException("baritone_already_controlled");
                 if(!controller.matches("[A-Za-z0-9_.-]{1,64}"))throw new IllegalArgumentException("controller_id_invalid");
                 if(lease!=null&&System.currentTimeMillis()<lease.expiresAt&&!lease.controller.equals(controller))throw new IllegalStateException("body_already_controlled");
                 return snapshot();});
@@ -251,7 +274,16 @@ public final class ClientBridge {
         var schema=spec.getAsJsonObject("parameters");for(String key:a.keySet())if(!schema.getAsJsonObject("properties").has(key))throw new IllegalArgumentException("unexpected_argument");
         if(schema.has("required"))for(var key:schema.getAsJsonArray("required"))if(!a.has(key.getAsString()))throw new IllegalArgumentException("required_argument_missing");
         if(a.has("ticks"))integer(a,"ticks",1,200);
+        if(!op.startsWith("baritone."))try{if(baritone.busy()&&!baritone.owned())throw new IllegalStateException("baritone_already_controlled");}catch(Exception error){throw new IllegalStateException(safeCode(error,"baritone_api_unavailable"));}
         switch(op){
+            case "baritone.goto","baritone.mine","baritone.follow","baritone.farm" -> {
+                if(mc.screen!=null)throw new IllegalArgumentException("close_screen_before_baritone");
+                if(a.has("timeoutMs"))integer(a,"timeoutMs",1000,600000);if(a.has("durationMs"))integer(a,"durationMs",1000,600000);
+                if(op.equals("baritone.goto"))blockPos(a);
+                if(op.equals("baritone.mine"))integer(a,"targetCount",1,4096);
+                if(op.equals("baritone.farm"))integer(a,"radius",1,32);
+                try{baritone.validate(op,a);}catch(Exception error){throw new IllegalStateException(safeCode(error,"baritone_api_unavailable"));}
+            }
             case "control.keys" -> {if(mc.screen!=null)throw new IllegalArgumentException("close_screen_before_movement");
                 for(String key:a.getAsJsonObject("controls").keySet())if(!keys().containsKey(key)||!a.getAsJsonObject("controls").get(key).isJsonPrimitive()||!a.getAsJsonObject("controls").get(key).getAsJsonPrimitive().isBoolean())throw new IllegalArgumentException("control_key_invalid");}
             case "body.move" -> {if(mc.screen!=null)throw new IllegalArgumentException("close_screen_before_movement");BlockPos target=blockPos(a);if(mc.player.position().distanceTo(Vec3.atBottomCenterOf(target))>16)throw new IllegalArgumentException("direct_move_range_exceeded");}
@@ -286,8 +318,12 @@ public final class ClientBridge {
     }
     private void begin(Action a){
         if(a.finishing||active!=a)return;
-        validate(a.operation,a.args);a.started=true;
+        validate(a.operation,a.args);a.started=true;a.startedAt=System.currentTimeMillis();
         switch(a.operation){
+            case "baritone.goto","baritone.mine","baritone.follow","baritone.farm" -> {
+                if(a.operation.equals("baritone.mine")&&baritone.itemCount(text(a.args,"itemId"))>=integer(a.args,"targetCount",1,4096)){finish(a,"succeeded","baritone_inventory_target_observed",true);return;}
+                try{baritone.begin(a.operation,a.args);}catch(Exception error){throw new IllegalStateException(safeCode(error,"baritone_api_unavailable"));}
+            }
             case "control.keys" -> {releaseKeys();a.args.getAsJsonObject("controls").entrySet().forEach(e->keys().get(e.getKey()).setDown(e.getValue().getAsBoolean()));}
             case "control.look" -> look((float)number(a.args,"yaw",-3600,3600),(float)number(a.args,"pitch",-90,90));
             case "body.move" -> {releaseKeys();}
@@ -320,10 +356,14 @@ public final class ClientBridge {
     }
     private void finish(Action a,String status,String code,boolean known){
         if(a.finishing)return;a.finishing=true;releaseKeys();
+        boolean stopImmediate=true;
+        try{stopImmediate=baritone.stopOwned();}catch(Exception error){status="unknown";code="baritone_stop_unconfirmed";known=false;broken=true;}
         if(a.operation.equals("world.dig")&&mc.gameMode!=null)mc.gameMode.stopDestroyBlock();
         JsonObject result=a.record.deepCopy();result.addProperty("status",status);result.addProperty("terminal",true);result.addProperty("outcomeKnown",known);
         result.addProperty("ok",status.equals("succeeded"));result.addProperty("code",code);result.addProperty("completedAt",Instant.now().toString());
-        result.addProperty("effectConfirmed",Set.of("position_observed","block_change_observed","menu_change_observed","original_framebuffer_captured").contains(code));
+        result.addProperty("effectConfirmed",Set.of("position_observed","baritone_position_observed","baritone_inventory_target_observed","block_change_observed","menu_change_observed","original_framebuffer_captured").contains(code));
+        if(a.operation.startsWith("baritone."))result.add("result",object("backend","baritone","stopImmediate",stopImmediate,"goalCompleted",false,
+            "actualPosition",mc.player==null?null:object("x",mc.player.getX(),"y",mc.player.getY(),"z",mc.player.getZ()),"inventoryCount",mc.player!=null&&a.args.has("itemId")?baritone.itemCount(text(a.args,"itemId")):null));
         try{result.add("after",state.snapshot(mc));}catch(Exception error){result.add("after",JsonNull.INSTANCE);}
         io.execute(()->{try{a.store.finish(result);a.record=result;}
             catch(Exception error){broken=true;}finally{if(active==a)active=null;}});

@@ -13,12 +13,12 @@ import { RequestLedger } from '../src/client/request-ledger.ts';
 const directories: string[] = [];
 function directory() { const p=mkdtempSync(join(tmpdir(),'mc-neutral-')); directories.push(p); return p; }
 afterEach(()=>{ vi.useRealTimers(); vi.restoreAllMocks(); for(const p of directories.splice(0))rmSync(p,{recursive:true,force:true}); });
-function rig(tools: ToolDef[] = [], dataDir=directory()) {
+function rig(tools: ToolDef[] = [], dataDir=directory(), autoAcknowledgeBarriers=false) {
   let host!: WorldHost;
   const onTurnEnded=vi.fn();
   const world={id:'minecraft',tools:()=>tools,envPromptVars:()=>({}),start:async(h:WorldHost)=>{host=h;},
     stop:vi.fn(async()=>{}),onTurnEnded,requestFacts:()=>({text:'',snapshotTypes:[],parts:[{key:'body',text:'health: 8'}]})};
-  const runtime=new MinecraftAgentClient({dataDir,log:nullLogger(),cfg:{...structuredClone(MINECRAFT_CLIENT_DEFAULTS),host:'offline.invalid',username:'Test'}},world);
+  const runtime=new MinecraftAgentClient({dataDir,autoAcknowledgeBarriers,log:nullLogger(),cfg:{...structuredClone(MINECRAFT_CLIENT_DEFAULTS),host:'offline.invalid',username:'Test'}},world);
   return {runtime,world,onTurnEnded,host:()=>host};
 }
 function tool(name:string, handler:ToolDef['handler'], extra:Partial<ToolDef>={}):ToolDef {
@@ -27,6 +27,15 @@ function tool(name:string, handler:ToolDef['handler'], extra:Partial<ToolDef>={}
 const admitted={kind:'task' as const,id:'connection-1:7',phase:'accepted' as const,terminal:false,goalCompleted:false as const};
 
 describe('agent-mc/v1 semantics',()=>{
+  it('delegates an alternative offline notebook under the same runtime lease without starting its body',async()=>{
+    const r=rig([tool('mc_memory',async()=>({text:'connected notebook'}))]);
+    const memory=vi.fn(async(args:Record<string,unknown>)=>({text:JSON.stringify({scope:'explicit-realm',action:args.action})}));
+    Object.assign(r.world,{gameNotebook:memory});
+    const out=await r.runtime.call('mc_memory',{action:'help'});
+    expect(JSON.parse(out.text)).toEqual({scope:'explicit-realm',action:'help'});
+    expect(memory).toHaveBeenCalledOnce();expect(r.runtime.status().phase).toBe('disconnected');
+    expect(r.runtime.journal.read(0,10).events).toBeDefined();
+  });
   it('accepts explicit host instructions without importing a server adapter or changing native tools',async()=>{
     const r=rig([tool('mc_native_action',async()=>({text:'accepted'}))]);
     const server=createMinecraftMcpServer(r.runtime,'test',{instructions:'Explicit native host: use mc_native_action.'});
@@ -38,6 +47,30 @@ describe('agent-mc/v1 semantics',()=>{
       expect((await client.listTools()).tools.some(t=>t.name==='mc_native_action')).toBe(true);
       expect(r.runtime.status().phase).toBe('disconnected');
     } finally { await client.close(); await server.close(); }
+  });
+  it('allows emergency stop and disconnect through manual barriers',async()=>{
+    const stop=vi.fn(async()=>({text:'stopped'}));
+    const r=rig([tool('mc_visual',async()=>({text:'inspect'}),{barrierAfter:true}), tool('mc_stop',stop)]);
+    await r.runtime.connect();
+    await r.runtime.call('mc_visual',{},'visual');
+    await r.runtime.call('mc_stop',{}); expect(stop).toHaveBeenCalledOnce();
+    await expect(r.runtime.call('mc_visual',{})).rejects.toThrow('Acknowledge');
+    await r.runtime.disconnect(); expect(r.world.stop).toHaveBeenCalledOnce();
+  });
+  it('auto-acknowledges settled barriers only, including failed calls, without allowing concurrent effects',async()=>{
+    let release!:(value:string)=>void;
+    const act=vi.fn(async()=>({text:'acted'}));
+    const r=rig([tool('mc_visual',()=>new Promise(resolve=>{release=resolve;}),{barrierAfter:true}),
+      tool('mc_bad',async()=>{throw new Error('capture failed');},{barrierAfter:true}),tool('mc_act',act)],directory(),true);
+    await r.runtime.connect();
+    try {
+      const pending=r.runtime.call('mc_visual',{},'v'); await Promise.resolve();
+      await expect(r.runtime.call('mc_act',{})).rejects.toThrow('Acknowledge');
+      release('no image, live facts'); await pending;
+      await r.runtime.call('mc_act',{});
+      await expect(r.runtime.call('mc_bad',{})).rejects.toThrow('capture failed');
+      await r.runtime.call('mc_act',{}); expect(act).toHaveBeenCalledTimes(2);
+    } finally { await r.runtime.disconnect(); }
   });
   it('keeps a real turn open across RPC returns, forwards round identity, and enforces barriers',async()=>{
     const contexts:unknown[]=[];

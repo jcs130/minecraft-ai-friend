@@ -248,7 +248,7 @@ interface Foe {
   visible: boolean;
 }
 
-type EndReason = 'clear' | 'flee' | 'timeout' | 'stuck' | 'mc_stop' | 'env' | 'death' | 'gone' | 'busy' | 'preempt';
+type EndReason = 'clear' | 'flee' | 'timeout' | 'stuck' | 'mc_stop' | 'env' | 'death' | 'gone' | 'busy' | 'preempt' | 'inhibited';
 
 /** 眼睛到实体 AABB 最近点的距离 */
 function aabbReach(bot: Bot, e: { position: Vec3; height?: number; width?: number }): number {
@@ -501,6 +501,12 @@ export class CombatSession {
 
   onConnectionLost(): void {
     if (this.state !== 'idle') this.end('gone');
+    else this.cancelRanged();
+  }
+
+  /** An observed inability to act is neither a navigation failure nor a lost battle. */
+  inhibit(): void {
+    if (this.state !== 'idle') this.end('inhibited');
     else this.cancelRanged();
   }
 

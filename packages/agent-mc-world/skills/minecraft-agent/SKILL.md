@@ -14,6 +14,8 @@ Read [connection](references/connection.md) for installation, private configurat
 5. Acceptance is not completion. Consume `mc_events`, preserving `run` and `nextCursor`; detect run changes or gaps and re-read facts. Deliver actual event bodies, speakers and times to your reasoning context. Verify terminal results plus the relevant position, block, inventory or entity change.
 6. Improve methods when evidence warrants it: record author, hypothesis, source/hash, parent version, applicable conditions, validation, expanded receipts and world change. Keep counterexamples, adopt/revert explicitly, and retrieve the method in the next applicable scene. Source existence or one random win is not learning.
 
+For building, cleanup and editing your own methods, read [building and methods](references/building-methods.md), or request `mc_script {"api":"building"}` / `{"api":"methods"}`. Both guides are on demand; current cleanup obligations arrive separately as fresh facts.
+
 `mc_artifact` stores selected UTF-8 execution artifacts. Versioned `agent-mc.procedure/v1` artifacts (legacy `cortico.procedure/v1` remains readable) can compose existing game methods; the format does not require the Cortico framework. Your host owns memory, retrieval, evaluation and event wakeups. Do not inject the whole method library every turn.
 
 Read actual tool availability before using quick tactics. The generic client currently exposes native control and ordinary reflexes; the legacy RPG tactic/spell adapter is not a default capability. Do not claim a tool or server skill exists because an old server guide mentioned it.

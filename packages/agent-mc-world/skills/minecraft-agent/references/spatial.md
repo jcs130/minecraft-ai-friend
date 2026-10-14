@@ -49,6 +49,12 @@ The helper caches only within this call; it never edits blocks or moves the body
 
 ## Coordinate overhead photograph
 
+Ordinary `mc_visual` observations default to **first-person, 120° vertical FOV**:
+your eye position and current look direction, without your own avatar. Use an
+explicit `mode:"third"` only when an external view is intended. `focus` is a label,
+not a camera turn; looking elsewhere requires a real look action. The spectator
+page's camera settings are independent.
+
 Use `mc_visual` when the host accepts images and the matched modern viewer is
 available. It photographs the **actual loaded renderer scene** without moving
 the body, issuing camera controls to the game, or loading remote terrain:

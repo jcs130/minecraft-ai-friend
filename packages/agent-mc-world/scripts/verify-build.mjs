@@ -9,11 +9,24 @@ for (const entry of [...manifest.sourceFiles, ...manifest.files]) {
   if (hash(await readFile(new URL(entry.file, root))) !== entry.sha256) throw new Error('Build differs from source: ' + entry.file);
 }
 const sources=JSON.parse(await readFile(new URL('release-sources.json',root),'utf8'));
-if(hash(await readFile(new URL(sources.viewer.artifact,root)))!==sources.viewer.sha256)throw new Error('Viewer input hash mismatch');
+if (manifest.viewer.included !== false) {
+  if(hash(await readFile(new URL(sources.viewer.artifact,root)))!==sources.viewer.sha256)throw new Error('Viewer input hash mismatch');
+} else if (manifest.files.some(entry => /^dist\/(?:runtime\/dist\/)?(?:viewer|client-console|monitor)\//.test(entry.file))) {
+  throw new Error('Viewer assets leaked into an engine-only build');
+}
 const pkg = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
 if (pkg.dependencies?.cortico || pkg.devDependencies?.cortico || pkg.cortico) throw new Error('Default package must be host-independent');
 if (Object.keys(pkg.exports).some(key => /cortico/i.test(key)) || manifest.files.some(entry => /adapters\/(?:cortico|minecraft)/i.test(entry.file)))
   throw new Error('Host adapter leaked into the independent core distribution');
+// A server/host package must consume the core; the inverse would make the
+// standalone client depend on an adapter checkout again. Check shipped modules.
+for (const entry of manifest.files.filter(e => /^dist\/runtime\/(?:core|src)\/.*\.(?:js|mjs)$/.test(e.file))) {
+  const code = await readFile(new URL(entry.file, root), 'utf8');
+  if (/(?:from\s*|import\s*\(\s*|import\s*)['"](?:agent-mc-qiandengji|cortico(?:-world-[^/'"]+)?|dsh-minecraft-agent|neko)(?:\/|['"])/i.test(code))
+    throw new Error('Reverse adapter dependency in core: ' + entry.file);
+  if (entry.file.startsWith('dist/runtime/core/') && /['"][^'"]*src\/decisions\//.test(code))
+    throw new Error('Game process must not import host decision services: ' + entry.file);
+}
 const declarations = JSON.parse(await readFile(new URL('dist/types/manifest.json', root), 'utf8'));
 for (const entry of declarations.files) {
   const bytes = await readFile(new URL('dist/types/' + entry.file, root));

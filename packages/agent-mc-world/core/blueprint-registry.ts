@@ -52,6 +52,8 @@ interface RegistryStateDefinition {
 interface RegistryBlock {
   name: string;
   defaultState: number;
+  minStateId: number;
+  maxStateId: number;
   states?: RegistryStateDefinition[];
 }
 
@@ -62,6 +64,7 @@ interface MinecraftRegistry {
 
 interface DecodedBlockState {
   getProperties(): Record<string, boolean | number | string>;
+  shapes: number[][];
 }
 
 interface PrismarineBlock {
@@ -70,6 +73,27 @@ interface PrismarineBlock {
 
 let cachedRegistry: MinecraftRegistry | null = null;
 let cachedBlockFactory: PrismarineBlock | null = null;
+const collisionCache = new Map<string, readonly (readonly number[])[] | null>();
+
+/** Exact registry shapes, without guessing collision from a material name. */
+export function blueprintCollisionShapes(state: string): readonly (readonly number[])[] | null {
+  const key = `${activeBlueprintMcVersion}:${state}`;
+  if (collisionCache.has(key)) return collisionCache.get(key)!;
+  const parsed = parseBlockState(completeBlockStateDefaults(state).state);
+  const name = vanillaName(parsed.id);
+  const definition = name && registry().blocksByName[name];
+  let shapes: readonly (readonly number[])[] | null = null;
+  if (definition) for (let id = definition.minStateId; id <= definition.maxStateId; id++) {
+    const block = blockFactory().fromStateId(id, 0);
+    const properties = block.getProperties();
+    if (Object.entries(parsed.properties).every(([key, value]) => String(properties[key]) === value)) {
+      shapes = block.shapes.map(shape => [...shape]); break;
+    }
+  }
+  if (collisionCache.size >= 4096) collisionCache.clear();
+  collisionCache.set(key, shapes);
+  return shapes;
+}
 
 /** 从 Mineflayer 的依赖目录解析 minecraft-data 和 prismarine-block。 */
 function fromMineflayer<T>(moduleName: string): T {

@@ -2,10 +2,11 @@
  * One native SDK/provider owns the body; this port never starts the default
  * vanilla engine, another connection, a viewer, a model or a control heartbeat.
  */
-import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger } from 'agent-mc-world/client'
+import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger, GameMemoryBook, GameMemoryService, GAME_MEMORY_TOOL } from 'agent-mc-world/client'
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
 export { TaskMonitor, evaluateTask } from './task-monitor.mjs'
 export { describeActionEffect } from './action-effect.mjs'
 const require = createRequire(import.meta.url)
@@ -35,6 +36,7 @@ function validateConfig(config) {
   if (config.provider === 'numen' && (!UUID.test(config.bodyId || '') || !path.isAbsolute(config.credentialsFile || ''))) throw error('maw_host_numen_binding_invalid')
   if (config.provider === 'java-client' && (!UUID.test(config.expectedUuid || '') || !config.expectedServer || !path.isAbsolute(config.credentialsFile || ''))) throw error('maw_host_java_client_binding_invalid')
   if (config.pollMs !== undefined && (!Number.isInteger(config.pollMs) || config.pollMs < 250 || config.pollMs > 5000)) throw error('maw_host_poll_interval_invalid')
+  for (const key of ['realmId', 'agentId']) if (config[key] !== undefined && (typeof config[key] !== 'string' || !config[key].trim() || config[key].length > 300)) throw error('maw_host_memory_identity_invalid')
   if (config.viewerUrl) {
     const url = new URL(config.viewerUrl)
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw error('maw_host_viewer_url_must_not_contain_credentials')
@@ -48,7 +50,7 @@ export function executionOf(value, id = value.action_id) {
     terminal: value.terminal === true || (!value.accepted && !['accepted', 'running'].includes(value.status)), goalCompleted: false,
     evidence: { provider: value.provider, bodyId: value.bodyId, operation: value.operation, nativeStatus: value.status ?? null,
       outcomeKnown: value.outcomeKnown ?? null, outcomeUnknown: value.outcomeUnknown ?? null,
-      actualPosition: value.actualPosition || value.result?.actualPosition || null, code: value.code || value.result?.code || null,
+      actualPosition: value.actualPosition || value.result?.actualPosition || value.after?.position || null, code: value.code || value.result?.code || null,
       retryAutomatically: false } }
 }
 
@@ -56,7 +58,12 @@ export class MyAgentWorldEnvironment {
   id = 'minecraft'
   #config; #connect; #body = null; #host = null; #identity = null; #state = null
   #watchers = new Map(); #generation = 0; #stopping = false; #eventFailure = false
-  constructor(config, { connect = connectBody } = {}) { validateConfig(config); this.#config = copy(config); this.#connect = connect }
+  #memory
+  constructor(config, { connect = connectBody } = {}) {
+    validateConfig(config); this.#config = copy(config); this.#connect = connect
+    const directory = path.join(config.dataDir, 'minecraft-memory')
+    this.#memory = new GameMemoryService(new GameMemoryBook(directory), directory)
+  }
   #own(value) {
     if (value?.bodyId && value.bodyId !== this.#identity?.bodyId) throw error('maw_host_body_identity_changed')
     if (value?.provider && value.provider !== this.#config.provider) throw error('maw_host_body_provider_changed')
@@ -88,6 +95,24 @@ export class MyAgentWorldEnvironment {
     if (body) await body.close() // Numen keeps its body/actions; Mineflayer closes its owned connection.
   }
   envPromptVars() { return { 'minecraft.current_task': JSON.stringify(this.#state?.currentAction || null), 'minecraft.goals': 'Goals and memory belong to the host.' } }
+  async gameNotebook(input, signal) {
+    validateJsonArguments(input, GAME_MEMORY_TOOL.parameters); signal?.throwIfAborted()
+    let fresh = null
+    if (input.action === 'capture') {
+      fresh = this.#own(await this.#ready().snapshot())
+      if (!fresh.ok || !fresh.dimension || !fresh.capturedAt || Math.abs(Date.now() - Date.parse(fresh.capturedAt)) > 5000 || !Number.isFinite(Date.parse(fresh.capturedAt))) throw error('maw_memory_fresh_observation_unavailable')
+      this.#state = fresh
+    }
+    const config = this.#config, bodyId = config.provider === 'numen' ? config.bodyId : config.expectedUuid
+    const realm = config.realmId || (config.provider === 'java-client' ? `weak:${config.expectedServer}` : config.provider === 'mineflayer' ? `weak:${config.host}:${config.port}` : `weak:numen-body:${bodyId}`)
+    const result = await this.#memory.execute(input, { scope: { realm, account: `${bodyId}:${config.username}`, agent: config.agentId || config.controllerId },
+      dimension: this.#body ? this.#state?.dimension ?? null : null,
+      ...(fresh ? { capture: () => ({ observedAt: fresh.capturedAt, dimension: fresh.dimension, reference: `${bodyId}@${fresh.capturedAt}`,
+        content: JSON.stringify({ bodyId, provider: config.provider, position: fresh.position, health: fresh.health, hunger: fresh.hunger, mana: fresh.mana,
+          inventory: { available: fresh.inventory?.available, items: fresh.inventory?.available ? fresh.inventory.items?.map(({ id, count, slot, name, displayName }) => ({ id, count, slot, name: displayName ?? name ?? null })) : null } }) }) } : {})
+    }, config.memory, signal)
+    return this.#out(result)
+  }
   requestFacts() {
     if (!this.#state) return null
     const s = this.#state
@@ -100,7 +125,7 @@ export class MyAgentWorldEnvironment {
     return { text: '', snapshotTypes: ['maw.body'], parts: [{ key: 'maw.body', text: JSON.stringify(fact) }] }
   }
   console() {
-    return { label: 'My Agent World', lamps: [{ label: '原生身体', state: this.#body ? 'online' : 'offline' }], links: [],
+    return { label: 'My Agent World', lamps: [{ label: '服务器', state: this.#body && this.#state?.ok && this.#state.status !== 'offline' ? 'online' : 'offline' }], links: [],
       panels: [{ id: 'connection', title: '原生身体' }],
       invoke: async (panel, method) => {
         if (panel !== 'connection' || method !== 'state') throw error('maw_host_operator_action_unavailable')
@@ -156,6 +181,16 @@ export class MyAgentWorldEnvironment {
     this.#watchers.set(id, watch)
     watch.timer = setTimeout(poll, this.#config.pollMs ?? 1000)
   }
+  async #submitAction(a, context) {
+    const body = this.#ready()
+    if (this.#eventFailure || this.#watchers.size >= 16) return this.#out(fail('maw_host_receipt_delivery_unavailable'))
+    const row = await body.operations(a.operation)
+    if (!row || row.readOnly || row.available === false) return this.#out(fail('submit_requires_available_mutation_operation'))
+    context.signal?.throwIfAborted()
+    const value = this.#own(await body.submit({ action_id: a.action_id, operation: a.operation, args: a.args || {} }))
+    if (!value.terminal && (value.accepted || ['accepted', 'running'].includes(value.status))) this.#watch(a.action_id)
+    return this.#out(value, executionOf(value, a.action_id))
+  }
   tools() {
     const tool = (name, description, parameters, tags, handler) => ({ name, description, parameters, tags, interruptible: true,
       handler: async (input, context) => {
@@ -175,6 +210,18 @@ export class MyAgentWorldEnvironment {
     }
     const discovery = object({ operation, prefix: { type: 'string', maxLength: 96 }, offset: { type: 'integer', minimum: 0, maximum: 10000 }, limit: { type: 'integer', minimum: 1, maximum: 24 } })
     return [
+      { ...GAME_MEMORY_TOOL, handler: (input, context) => this.gameNotebook(input, context.signal) },
+      tool('mc_capabilities', '读取当前provider、身体身份、真实能力及导航后端；不创建另一个身体，不把目录当作全玩法已验收。', object(), ['read'], async () => {
+        const body = this.#ready(), catalog = await body.operations()
+        return this.#out({ ok: true, provider: this.#config.provider, bodyId: this.#identity.bodyId, operationCount: catalog.operations.length,
+          navigation: { native: catalog.operations.some(x => x.id === 'body.move' && x.available !== false), baritone: catalog.operations.some(x => x.id === 'baritone.goto' && x.available !== false) },
+          sameBodyOnly: true, allGameplayVerified: false })
+      }),
+      tool('mc_navigate', '按同一动作契约走到绝对坐标。auto在Java客户端装有Baritone时用其寻路，否则用当前provider的body.move；不切换身体或重试未知动作。',
+        object({ action_id: actionId, position: object({ x: { type: 'integer' }, y: { type: 'integer' }, z: { type: 'integer' } }, ['x', 'y', 'z']), backend: { enum: ['auto', 'native', 'baritone'] } }, ['action_id', 'position']), ['act'], async (a, context) => {
+          const body = this.#ready(), baritone = await body.operations('baritone.goto'), selected = a.backend === 'baritone' || a.backend !== 'native' && baritone?.available === true ? 'baritone.goto' : 'body.move'
+          return this.#submitAction({ action_id: a.action_id, operation: selected, args: { position: a.position } }, context)
+        }),
       tool('mc_operations', '分页列出当前身体实际能力；operation 查看一项真实参数、权限和回执。以本 provider 的目录为准。', discovery, ['read'], listing),
       tool('mc_help', '按需发现原生 API。没有启用的模组明确 unavailable；不猜另一个 provider 的参数。', discovery, ['read'], listing),
       tool('mc_state', '本人实际血量、魔力、绝对坐标、菜单、装备和完整物品组件。附 UUID 与采集时间，不扫描其他账号。', object(), ['read', 'snapshot'], async () => {
@@ -186,14 +233,7 @@ export class MyAgentWorldEnvironment {
         return this.#out(this.#own(await body.read(a.operation, a.args || {})))
       }),
       tool('mc_do', '提交一个原生动作。action_id 必须稳定且唯一；受理不等于完成。读 mc_result/mc_events 核验，未知时只对账不重做。', object({ action_id: actionId, operation, args }, ['action_id', 'operation']), ['act'], async (a, context) => {
-        const body = this.#ready()
-        if (this.#eventFailure || this.#watchers.size >= 16) return this.#out(fail('maw_host_receipt_delivery_unavailable'))
-        const row = await body.operations(a.operation)
-        if (!row || row.readOnly || row.available === false) return this.#out(fail('submit_requires_available_mutation_operation'))
-        context.signal?.throwIfAborted()
-        const value = this.#own(await body.submit({ action_id: a.action_id, operation: a.operation, args: a.args || {} }))
-        if (!value.terminal && (value.accepted || ['accepted', 'running'].includes(value.status))) this.#watch(a.action_id)
-        return this.#out(value, executionOf(value, a.action_id))
+        return this.#submitAction(a, context)
       }),
       tool('mc_result', '查询原 action_id 的终态。断线后沿用原 UUID 和 SDK ledgerDir，不能把 unknown 当失败重试。', object({ action_id: actionId }, ['action_id']), ['read'], async a => {
         const value = this.#own(await this.#ready().actionStatus(a.action_id)); return this.#out(value, executionOf(value, a.action_id))
@@ -206,10 +246,21 @@ export class MyAgentWorldEnvironment {
         const method = { claim: 'claimControl', release: 'releaseControl', stop: 'stop', restore: 'restore' }[a.action]
         return this.#out(this.#own(await this.#ready()[method]()))
       }),
+      tool('mc_stop', '紧急停止本人当前输入及受控Baritone过程；保留原action_id回执，不删除身体、不回滚物品。', object(), ['act'], async () => this.#out(this.#own(await this.#ready().stop()))),
       tool('mc_lua_operations', '仅 Numen：发现原生 Lua 函数与签名，再用 mc_do 的 numen.lua 操作。不提供服务器任意JavaScript执行。', object({ group: { type: 'string', maxLength: 80 } }), ['read'], async a => {
         const body = this.#ready(); return this.#out(body.luaOperations ? await body.luaOperations(a.group) : fail('provider_operation_unavailable'))
       }),
       tool('mc_viewer', '返回配置的本人原生模组画面入口。复用已有可视化，不启动1.20.6默认画面、不创建观战替身。', object(), ['read'], async () => this.#out(this.#own(await this.#ready().viewer()))),
+      { ...tool('mc_visual', '真实Java客户端的原始PNG画面，包含模组界面。复用本人连接与action_id；需要已claim控制权。没有原帧能力的provider明确不可用，不用近似画面代替。', object(), ['read', 'snapshot'], async (_a, context) => {
+        const body = this.#ready()
+        if (!body.frame) return this.#out(fail('provider_original_framebuffer_unavailable'))
+        const id = 'frame-' + createHash('sha256').update(context.callId || context.requestId || randomUUID()).digest('hex').slice(0, 40)
+        let value = this.#own(await body.submit({ action_id: id, operation: 'screen.capture', args: {} }))
+        if (value.accepted && !value.terminal) value = this.#own(await body.wait(id, { timeoutMs: 10000 }))
+        const out = this.#out(value, executionOf(value, id))
+        if (value.ok && value.terminal) return { ...out, blobs: [...(out.blobs || []), { bytes: Buffer.from(await body.frame(id)), mime: 'image/png', fallbackText: 'Original Java client framebuffer, including the actual mod GUI.' }] }
+        return out
+      }), barrierAfter: true },
     ]
   }
 }

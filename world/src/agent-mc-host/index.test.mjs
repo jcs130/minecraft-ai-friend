@@ -239,3 +239,77 @@ test('MCP initializes with matching host instructions and actual native tools, w
   assert.match(guide.content[0].text, /原生身体/)
   assert.doesNotMatch(guide.content[0].text, /mc_script/)
 })
+
+
+test('common capability and navigation tools preserve the original operation action id', async t => {
+  const f = fixture(t); await f.environment.start(f.host)
+  const caps = (await f.invoke('mc_capabilities')).value
+  assert.deepEqual(caps.navigation, { native: true, baritone: false })
+  assert.equal(caps.bodyId, BODY)
+  const result = await f.invoke('mc_navigate', { action_id: 'native-walk', position: { x: 2, y: 64, z: 0 } })
+  assert.equal(result.execution.goalCompleted, false)
+  assert.deepEqual(f.calls.find(x => x[0] === 'submit')[1], { action_id: 'native-walk', operation: 'body.move', args: { position: { x: 2, y: 64, z: 0 } } })
+})
+
+test('Baritone is selected only from the actual available catalogue, and native can be explicit', async t => {
+  const f = fixture(t)
+  f.rows.push({ id: 'baritone.goto', available: true, readOnly: false, parameters: { type: 'object' } })
+  await f.environment.start(f.host)
+  assert.equal((await f.invoke('mc_capabilities')).value.navigation.baritone, true)
+  await f.invoke('mc_navigate', { action_id: 'baritone-walk', position: { x: 8, y: 64, z: 0 } })
+  assert.equal(f.calls.find(x => x[0] === 'submit')[1].operation, 'baritone.goto')
+  f.flags.done = true; await f.invoke('mc_result', { action_id: 'baritone-walk' })
+  await f.invoke('mc_navigate', { action_id: 'explicit-native', backend: 'native', position: { x: 2, y: 64, z: 0 } })
+  assert.equal(f.calls.filter(x => x[0] === 'submit').at(-1)[1].operation, 'body.move')
+})
+
+test('an explicitly unavailable navigation backend fails before dispatch without falling back', async t => {
+  const f = fixture(t); await f.environment.start(f.host)
+  const value = (await f.invoke('mc_navigate', { action_id: 'absent-b', backend: 'baritone', position: { x: 2, y: 64, z: 0 } })).value
+  assert.equal(value.ok, false); assert.equal(f.calls.some(x => x[0] === 'submit'), false)
+})
+
+test('emergency stop uses the existing body controller rather than starting another connection', async t => {
+  const f = fixture(t); await f.environment.start(f.host)
+  await f.invoke('mc_stop'); assert.equal(f.calls.filter(x => x[0] === 'stop').length, 1)
+  assert.equal(f.calls.filter(x => x[0] === 'connect').length, 1)
+})
+
+test('the same canonical notebook works before connect, while connected and after disconnect', async t => {
+  const f = fixture(t), client = createMyAgentWorldClient(f.config, { connect: f.connect })
+  f.cleanup.push(() => client.disconnect())
+  const note = JSON.parse((await client.call('mc_memory', { action: 'remember', kind: 'note', summary: '入口', content: '历史路线，重新观察后再行动', source: { kind: 'agent_note' } })).text)
+  assert(note.saved); assert.equal(f.calls.some(x => x[0] === 'connect'), false)
+  await client.connect()
+  const online = JSON.parse((await client.call('mc_memory', { action: 'get', id: note.entry.id })).text)
+  assert.equal(online.entry.content, note.entry.content)
+  await client.disconnect()
+  const offline = JSON.parse((await client.call('mc_memory', { action: 'get', id: note.entry.id })).text)
+  assert.equal(offline.scopeKey, online.scopeKey)
+  await assert.rejects(client.call('mc_memory', { action: 'capture' }), /not_connected/)
+})
+
+test('native notebook capture requires a fresh owned snapshot and never copies item components or chat', async t => {
+  const f = fixture(t); await f.environment.start(f.host)
+  await assert.rejects(f.invoke('mc_memory', { action: 'capture' }), /fresh_observation/)
+  f.state.capturedAt = new Date().toISOString()
+  const captured = (await f.invoke('mc_memory', { action: 'capture' })).value
+  assert.equal(captured.entry.source.kind, 'runtime_observation')
+  assert.equal(JSON.parse(captured.entry.content).health, 19)
+  assert.equal(captured.entry.content.includes('snbt'), false)
+  assert.equal(captured.currentWorldVerified, false)
+})
+
+test('explicit realm/account/agent scope can span providers without leaking another agent notebook', async t => {
+  const f = fixture(t)
+  const base = { ...f.config, realmId: 'qa-explicit-realm', agentId: 'same-agent' }
+  const first = new MyAgentWorldEnvironment(base, { connect: f.connect })
+  const note = JSON.parse((await first.gameNotebook({ action: 'remember', kind: 'note', summary: '同一世界', content: '已归档的历史观察', source: { kind: 'agent_note' } })).text)
+  const clientBody = new MyAgentWorldEnvironment({ ...base, provider: 'java-client', expectedServer: '127.0.0.1:28978', credentialsFile: path.join(f.directory, 'unused-private.json') }, { connect: f.connect })
+  const same = JSON.parse((await clientBody.gameNotebook({ action: 'get', id: note.entry.id })).text)
+  assert.equal(same.scopeKey, note.scopeKey)
+  const other = new MyAgentWorldEnvironment({ ...base, agentId: 'another-agent' }, { connect: f.connect })
+  const search = JSON.parse((await other.gameNotebook({ action: 'search', query: '' })).text)
+  assert.notEqual(search.scopeKey, note.scopeKey); assert.equal(search.entries.length, 0)
+  assert.equal(f.calls.length, 0)
+})

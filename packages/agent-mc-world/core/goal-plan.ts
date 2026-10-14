@@ -105,7 +105,7 @@ const REGION_SCHEMA = {
   minItems: 2,
   maxItems: 2,
   items: VEC3_SCHEMA,
-  description: '两个角 [[x1,y1,z1],[x2,y2,z2]]；必须同时给 dimension。',
+  description: '两个角 [[x1,y1,z1],[x2,y2,z2]]；必须同时给 dimension。position 仅比较当前位置，不扫描区域；entity/item 的计数区域最多 4096 格并须完整加载。',
 };
 
 const COMPARE_SCHEMA = {
@@ -205,7 +205,7 @@ function parseCompare(value: unknown, path: string): GoalCompare | { error: stri
   return { error: `${path} 要非负数或 ">=8" / "<=2"` };
 }
 
-function parseRegion(body: Record<string, unknown>, path: string): Region | { error: string } {
+function parseRegion(body: Record<string, unknown>, path: string, cellCap: number | null = CHECK_BOX_CELL_CAP): Region | { error: string } {
   if (!Array.isArray(body.region) || body.region.length !== 2) {
     return { error: `${path}.region 要 [[x1,y1,z1],[x2,y2,z2]]` };
   }
@@ -221,12 +221,12 @@ function parseRegion(body: Record<string, unknown>, path: string): Region | { er
   const dy = max[1] - min[1] + 1;
   const dz = max[2] - min[2] + 1;
   const cells = dx * dy * dz;
-  if (cells > CHECK_BOX_CELL_CAP) {
+  if (cellCap !== null && cells > cellCap) {
     // 将体积上限换算成边长，并报告本次三条边长，供调用方缩小范围。
-    const edge = Math.floor(Math.cbrt(CHECK_BOX_CELL_CAP));
+    const edge = Math.floor(Math.cbrt(cellCap));
     return {
-      error: `${path}.region 共 ${cells} 格，超过一次能核的 ${CHECK_BOX_CELL_CAP} 格`
-        + `(${CHECK_BOX_CELL_CAP} 格 ≈ ${edge}×${edge}×${edge};你这次是 ${dx}×${dy}×${dz})`,
+      error: `${path}.region 共 ${cells} 格，超过一次能核的 ${cellCap} 格`
+        + `(${cellCap} 格 ≈ ${edge}×${edge}×${edge};你这次是 ${dx}×${dy}×${dz})`,
     };
   }
   return { min, max, dimension };
@@ -277,7 +277,8 @@ function parseProbe(value: unknown, path: string): GoalProbe | { error: string }
     return { source, key, loaded, matched };
   }
   if (source === 'position') {
-    const region = parseRegion(body, path);
+    // Point containment reads no cells; only counting probes need the observable-volume budget.
+    const region = parseRegion(body, path, null);
     return 'error' in region ? region : { source, region };
   }
   if (source === 'entity') {

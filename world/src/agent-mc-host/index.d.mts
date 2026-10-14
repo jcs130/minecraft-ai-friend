@@ -1,4 +1,4 @@
-import type { MinecraftAgentClient, Logger, ModelFacts } from 'agent-mc-world/client';
+import type { MinecraftAgentClient, Logger, ModelFacts, GameMemoryConfig } from 'agent-mc-world/client';
 import type { ExecutionReceipt, World, WorldHost } from 'agent-mc-world/contracts';
 
 export interface MyAgentWorldConfig {
@@ -7,6 +7,8 @@ export interface MyAgentWorldConfig {
   host?: string; port?: number; expectedUuid?: string; loginFile?: string;
   bodyId?: string; credentialsFile?: string; viewerUrl?: string;
   expectedServer?: string;
+  /** Same explicit realm/account/agent can retain notebook identity across body providers. */
+  realmId?: string; agentId?: string; memory?: Partial<GameMemoryConfig>;
   connectTimeoutMs?: number; timeoutMs?: number; pollMs?: number;
 }
 /** Injectable transport for tests or an already owned native adapter. No new connection is implicit. */
@@ -26,6 +28,7 @@ export class MyAgentWorldEnvironment implements World {
   start(host: WorldHost): Promise<void>; stop(): Promise<void>;
   envPromptVars(): Record<string, string>;
   tools(): ReturnType<World['tools']>;
+  gameNotebook(args: Record<string, unknown>, signal?: AbortSignal): Promise<import('agent-mc-world/contracts').ToolOutcome>;
   requestFacts(): import('agent-mc-world/contracts').WorldRequestFacts | null;
   console(): import('agent-mc-world/contracts').WorldConsoleDecl;
 }

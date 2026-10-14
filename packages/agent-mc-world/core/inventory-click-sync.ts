@@ -202,7 +202,12 @@ export function installInventoryClickSync(bot: Bot, diag?: MinecraftLog): void {
     if (pending && seq <= pending.sentSeq) return;
     // The failed operation has already returned. A later complete server view
     // can restore inventory access without claiming that the click succeeded.
-    if (state.phase === 'quarantined' && pending?.sent && pending.nativeSettled) {
+    // Once the one click packet is sent, the pinned Mineflayer clickWindow only
+    // waits for result-slot events; an unchanged crafting result can keep that
+    // promise pending forever. It cannot send a second click. A fresh complete
+    // server frame therefore releases this failed operation even if that passive
+    // wait remains pending. Unsent delayed clicks keep the stricter guard above.
+    if (state.phase === 'quarantined' && pending?.sent) {
       state.phase = 'ready'; state.reason = undefined; state.pending = null;
       record(state, 'click-recovered', { packetSeq: seq, windowId: window.id,
         windowSerial: windowSerial(state, window), failedSentSeq: pending.sentSeq });

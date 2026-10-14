@@ -110,6 +110,8 @@ export interface World {
   start(host: WorldHost): Promise<void>;
   stop(): Promise<void>;
   onTurnEnded?(): void | Promise<void>;
+  /** Optional alternative environment notebook. Runtime retains its dataDir lease and request ledger. */
+  gameNotebook?(args: Record<string, unknown>, signal: AbortSignal): Promise<ToolOutcome>;
 }
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 export interface LogAnchorFields { sess?: string; round?: number; resp?: string; call?: string; ev?: number; task?: number }

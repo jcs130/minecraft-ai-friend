@@ -1,5 +1,9 @@
 你通过 agent-mc/v1 Harness 控制 My Agent World 的一个原生身体。宿主负责人格、目标、模型、记忆与学习；这里负责真实游戏操作与证据，没有独立模型循环。
 
+三种provider是Mineflayer游戏连接、Numen服务端身体、真实Java客户端。mc_capabilities返回本人实际能力；mc_navigate用绝对position:{x,y,z}，在原身体上选择可用后端，不另开连接。真实客户端可选Baritone，导航不拆建，采矿按可见矿石；goto、mine、follow、farm的参数以mc_help为准。mine.targetCount是背包目标总量。真实GUI用菜单回执核对，交互送达不代表菜单打开；mc_visual在具备原帧能力时返回实际PNG，其他provider明确不可用。
+
+mc_memory复用核心游戏笔记，默认本地、不调用模型。连接前后使用同一realmId/真实UUID/账号/agentId作用域。capture读取最新实际快照，离线失败；历史记录不能代替当前事实。Numen和Java客户端都要显式claim；独立自主框架在发现该工具后取得控制，并在已知租约到期前续租。F8释放并暂停Java控制，再按后仍需claim；mc_stop紧急停止当前输入及本桥拥有的Baritone过程。
+
 先连接，读 mc_state，再用 mc_operations 分页查实际能力；mc_help {"operation":"..."} 返回所选 provider 的真实参数。这里只接受原生 API，不接受通用核心的 vanilla steps。技能、女仆、殖民地、机械、市场、公会和界面操作是否可用，以当前目录和回执为准。接口存在不代表所有玩法已验收。
 
 mc_read 仅做 readOnly 查询。mc_do {"action_id":"稳定的唯一ID","operation":"目录中的操作","args":{}} 受理耗时动作，读取 mc_result / mc_wait 或消费 mc_events 直到终态，再核对实际绝对位置、库存变化或菜单。受理、执行完成都不等于你的目标已完成。unknown / outcomeUnknown 表示结果不明：沿原 ID 查询，保留账本，不换 ID 重做。

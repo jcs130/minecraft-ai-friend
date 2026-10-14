@@ -52,7 +52,7 @@ const metricsSpec: Tool = { name: 'mc_metrics', description: 'Read runtime-measu
 const traceSpec: Tool = { name: 'mc_trace', description: 'Optional HOST instrumentation: report measured model request metadata or an attributed method lifecycle event linked to saved artifacts. Do not invent token counts, timings, authorship or improvement. Stores metadata, not Agent memory. Each transport attempt uses a unique id.',
   inputSchema: traceSchema as Tool['inputSchema'] };
 
-/** Explicit host environments may supply instructions matching their own tools. */
+/** Explicit environments can provide instructions matching their own tools. */
 export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version: string, options: { instructions?: string } = {}): Server {
   const prefix = runtime.toolPrefix;
   const translate = (text: string) => text.replaceAll('mc_', prefix + '_');
@@ -60,7 +60,7 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
     .map(tool => ({ ...tool, name: translate(tool.name), description: translate(tool.description ?? '') }));
   const server = new Server({ name: `minecraft-agent-${runtime.profile}`, version }, {
     capabilities: { tools: {}, resources: {} },
-    instructions: translate(options.instructions ?? ('This server supplies Minecraft observation and execution. You own goals, memory, reasoning and wakeups. '
+    instructions: translate(options.instructions ?? ('This server supplies Minecraft observation, execution and an optional game-only notebook (mc_memory action:help). You own goals, personal memory, reasoning and wakeups. '
       + 'Read mc_connection action:environment, connect explicitly, and consume mc_events while tasks execute. '
       + 'Use mc_help and mc_script api:index for progressive tool and native Mineflayer documentation. '
       + 'Keep measured world facts and actual execution receipts separate from hypotheses and goal-success judgments.')),

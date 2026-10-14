@@ -85,7 +85,7 @@ export type AttackMode = 'auto' | 'melee' | 'ranged' | 'kite';
 export type SkillCall = StepBounds & (
   | { skill: 'goto'; at: Anchor; dimension?: string; groundY?: true; exact?: boolean; walkOnly?: boolean; dryRun?: boolean }
   | { skill: 'look'; at: Anchor }
-  | { skill: 'control'; keys: ControlKey[]; durationMs: number; mode: 'ground' | 'flight'; yawDeg?: number; pitchDeg?: number }
+  | { skill: 'control'; keys: ControlKey[]; durationMs: number; mode: 'ground' | 'water' | 'flight'; yawDeg?: number; pitchDeg?: number }
   | { skill: 'transit'; at: Anchor }
   | { skill: 'goto_player'; name: string }
   | { skill: 'follow'; name: string }
@@ -94,10 +94,11 @@ export type SkillCall = StepBounds & (
   | { skill: 'surface' }
   | { skill: 'flight'; at: Anchor; land?: boolean; dryRun?: boolean }
   | { skill: 'land' }
+  | { skill: 'cleanup'; dryRun?: boolean }
   | { skill: 'collect'; block: string; count: number; buried?: boolean; mature?: boolean; tool?: string }
   | { skill: 'fish'; at?: Anchor }
-  | { skill: 'build'; on: PlaceOnFace[]; material: string; dryRun?: boolean }
-  | { skill: 'build'; anchors: Anchor[]; material: string; shape?: ShapeName; fill?: BoxFill; dryRun?: boolean }
+  | { skill: 'build'; on: PlaceOnFace[]; material: string; temporary?: boolean; dryRun?: boolean }
+  | { skill: 'build'; anchors: Anchor[]; material: string; shape?: ShapeName; fill?: BoxFill; temporary?: boolean; dryRun?: boolean }
   /**
    * 按已装载的蓝图施工(判别式的第三形态,判据是 `blueprint` 在不在)。
    * 形状与材料都在图里,所以这一形态一个 material 都不收;`at` 是蓝图 [0,0,0]
@@ -400,14 +401,14 @@ function parseControl(c: Record<string, unknown>, at: string): ParseResult {
     return { error: `${at} control 的 durationMs 要 ${CONTROL_DURATION.minMs}–${CONTROL_DURATION.maxMs} 之间的整数毫秒` };
   }
   const mode = c.mode ?? 'ground';
-  if (mode !== 'ground' && mode !== 'flight') return { error: `${at} control 的 mode 要 ground 或 flight` };
+  if (mode !== 'ground' && mode !== 'water' && mode !== 'flight') return { error: `${at} control 的 mode 要 ground、water 或 flight` };
   for (const [field, limit] of [['yawDeg', 180], ['pitchDeg', 90]] as const) {
     const value = c[field];
     if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > limit)) {
       return { error: `${at} control 的 ${field} 要 -${limit}–${limit} 之间的有限角度` };
     }
   }
-  if (!keys.length && !c.yawDeg && !c.pitchDeg) return { error: `${at} control 至少提供一个按键或非零转角` };
+  if (!keys.length && !c.yawDeg && !c.pitchDeg && mode !== 'water') return { error: `${at} control 至少提供一个按键或非零转角（水中 mode:water 可空 keys 自然下沉）` };
   return { step: { skill: 'control', keys, durationMs, mode,
     ...(c.yawDeg === undefined ? {} : { yawDeg: c.yawDeg as number }),
     ...(c.pitchDeg === undefined ? {} : { pitchDeg: c.pitchDeg as number }) } };
@@ -508,7 +509,7 @@ function parseBuildOnFaces(c: Record<string, unknown>, at: string): ParseResult 
       notes.push({ field: key, given, kind: 'dropped', why: '贴面放置是一处一处的,没有形状' });
     }
   }
-  const step: SkillCall = { skill: 'build', material, on, ...(c.dryRun === true ? { dryRun: true } : {}) };
+  const step: SkillCall = { skill: 'build', material, on, ...(c.temporary === true ? { temporary: true } : {}), ...(c.dryRun === true ? { dryRun: true } : {}) };
   return notes.length > 0 ? { step, notes } : { step };
 }
 
@@ -599,6 +600,12 @@ export const UNTIL_CATEGORY_DOC = Object.keys(UNTIL_CATEGORIES).map((k) => `#${k
 
 function parseShaped(skill: 'build' | 'excavate' | 'probe') {
   return (c: Record<string, unknown>, at: string, marks?: MarkLookup): ParseResult => {
+    if (skill === 'build' && c.temporary !== undefined && typeof c.temporary !== 'boolean') {
+      return { error: `${at} build.temporary 要布尔值；只对明确临时支撑写 true` };
+    }
+    if (skill === 'build' && c.blueprint != null && c.temporary === true) {
+      return { error: `${at} 蓝图是作品；临时支撑请另用 build material/on/anchors 并写 temporary:true` };
+    }
     // 判别式三形态,判据各是一个独占字段:blueprint(按图盖)→ on(贴面)→ anchors(点格子)
     if (skill === 'build' && c.blueprint !== undefined && c.blueprint !== null) {
       return parseBuildBlueprint(c, at);
@@ -645,7 +652,7 @@ function parseShaped(skill: 'build' | 'excavate' | 'probe') {
         step: {
           skill, anchors, material,
           ...(shape ? { shape: shape as ShapeName } : {}),
-          ...(fill ? { fill } : {}), ...(dryRun ? { dryRun } : {}),
+          ...(fill ? { fill } : {}), ...(dryRun ? { dryRun } : {}), ...(c.temporary === true ? { temporary: true } : {}),
         },
       };
     }
@@ -1056,6 +1063,7 @@ const SKILLS: readonly SkillSpec[] = [
   {
     name: 'control',
     doc: `{"skill":"control","keys":["forward","jump"],"durationMs":500,"mode":"ground"} 短时直接按键，不计算寻路、不挖方块。每步 50–2000 毫秒，结束或中断松开按键；跳跃、服务端跃空的冲量由普通游戏物理处理。
+{"skill":"control","mode":"water","keys":[],"durationMs":1000} 已在水中时暂停自动踩水，松开上浮键自然下沉；jump 上浮、WASD 水平游动。仍用原有物理和碰撞，不改坐标/速度；当前物理不支持俯仰驱动潜泳或 sneak 加速下潜。结束恢复踩水，低氧/环境自救仍可接管；回执核对实际高度、头部浸水与氧气，未知不算满氧。不能替代水下绕障寻路。
 {"skill":"control","keys":["forward","jump"],"durationMs":1000,"mode":"flight","yawDeg":30} 先相对当前视角左转 30 度，再向前上方斜飞。飞行必须已有服务端许可，可与授予许可的 chat 同单用 needs 连接；最多等待许可 2 秒。
 keys: forward/back/left/right/jump/sneak/sprint；相反方向不能同按。flight 中 WASD 水平移动，jump 上升、sneak 下降，可边平移边升降；forward+sprint 水平加速，升降速度不翻倍。方向按当前视角水平朝向，pitch 不改变升降。受控短时飞行使用服务端能力速度及保守步长，不复刻完整创造模式惯性。yawDeg 正数左转、pitchDeg 正数抬头；单位度。空 keys 配转角可原地转头。
 ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight 检查身位碰撞和区块加载，遇遮挡停止；不会绕路。位置修正、死亡、断线或身体被其他任务接管时结束本步，不从旧坐标继续移动。
@@ -1064,7 +1072,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     fields: [
       { key: 'keys', kind: 'opaque', required: true, schema: { type: 'array', items: { type: 'string', enum: [...CONTROL_KEYS] } } },
       { key: 'durationMs', kind: 'int', lo: CONTROL_DURATION.minMs, hi: CONTROL_DURATION.maxMs, def: CONTROL_DURATION.defaultMs, unit: '毫秒' },
-      { key: 'mode', kind: 'enum', values: ['ground', 'flight'], error: 'control 的 mode 要 ground 或 flight' },
+      { key: 'mode', kind: 'enum', values: ['ground', 'water', 'flight'], error: 'control 的 mode 要 ground、water 或 flight' },
       { key: 'yawDeg', kind: 'opaque', schema: { type: 'number', minimum: -180, maximum: 180 }, doc: '相对视角，正数左转，单位度' },
       { key: 'pitchDeg', kind: 'opaque', schema: { type: 'number', minimum: -90, maximum: 90 }, doc: '相对视角，正数抬头，单位度' },
     ],
@@ -1083,6 +1091,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     doc: `{"skill":"goto","at":[100,-20],"dimension":"overworld"} 去坐标。dimension 是当前维度前置条件,不符就不动。
                                                  **只写 [x,z] = 按水平距离到那儿附近**，高度不进到达判据，也不保证站上陆地；长途按近处航段推进，不必猜未加载终点的高度。途中受阻会报告实际位置。
                                                  要指定楼层或高度,请给完整 [x,y,z]。
+                                                 水路按水面通行；当前不规划主动下潜，填水下 Y 不能补齐这项能力。已入水可用 control(mode:water) 短步游动/下沉，核验高度与氧气；surface 换气。
                                                  完整坐标的到达判定允许离目标格 1 格，回执给出实际落脚格；到门旁不代表已经进屋。
                                                  exact:true 要完整 [x,y,z]，脚下必须到该格；用于穿过门洞或精确站位，不会把门外邻格当作进屋。
                                                  dryRun 只计算路线，不移动身体。穿过门洞要选择门另一侧的可站立空气格，并核对实际位置。
@@ -1125,7 +1134,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   },
   {
     name: 'follow',
-    doc: '{"skill":"follow","name":"Alice"}                玩家叫你“跟我来”时持续跟随他,直到被新任务顶替',
+    doc: '{"skill":"follow","name":"Alice"}                持续跟随明确指定的同伴（约3格、不拆搭）；战斗临时接管后续跟，mc_stop或新任务可取消；跟随不等于确认队友关系',
     fields: [{ key: 'name', kind: 'string', required: true, hint: '在线玩家名' }],
   },
   {
@@ -1187,6 +1196,10 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     ],
   },
   { name: 'land', doc: '{"skill":"land"}  从飞行悬停位置下降到下方已加载的安全地面，恢复普通地面动作。', fields: [] },
+  { name: 'cleanup',
+    doc: `{"skill":"cleanup","dryRun":true} 检查本连接确认由自己临时放置、尚未收尾的垫脚，给出坐标和保留原因。
+{"skill":"cleanup"} 从当前安全站位尝试拆除这些垫脚；不走路、不搭新块、不拆永久建筑。实体脚下、承重/依附、液体邻接、卸载或重连后无法确认来源的方块均保留。拆除与捡回分开回报；未全部清理不算工地收尾完成。`,
+    fields: [{ key: 'dryRun', kind: 'flag' }] },
   {
     name: 'collect',
     doc: `{"skill":"collect","block":"oak_log","count":3}  采集方块,只挖看得见的——埋在石头里的看不见,得先挖开或者找暴露的。
@@ -1251,6 +1264,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  outline 不清内部,原版 /fill 的 hollow 那个模式这里没有)。
                                                  一单最多 256 块;材料用完或贴不住就停在那。
                                                  dryRun 试算:要动几块、材料够不够
+                                                 临时支撑另加 temporary:true；只登记本次确认放成的实心方块，已有方块不接管。
+                                                 使用完移到稳定地面后 cleanup；仍承重、够不到或来源失效的保留并回报。
 {"skill":"build","blueprint":"home-v2","at":[100,64,-30]}
                                                  按 mc_blueprint 装载着的那张图施工。**at 是蓝图 [0,0,0] 落在世界的哪一格**,
                                                  第一次要给,续建省略(接着上次那个锚点往下施工)。
@@ -1302,6 +1317,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
       },
       // 三形态里两形态必填;蓝图形态一个都不收,由 parse 钩子裁决(required 只进文档)
       { key: 'material', kind: 'string', required: true, hint: '方块英文 id' },
+      { key: 'temporary', kind: 'flag', doc: '只用于材料/锚点或贴面形态；本次确认的临时支撑用完后 cleanup，已有方块不接管' },
       {
         key: 'at', kind: 'anchor',
         error: `build 的 at 要 [x,y,z](蓝图 [0,0,0] 落在世界的哪一格;${RELATIVE_HINT})`,
@@ -1342,11 +1358,10 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
 {"skill":"probe","shape":"box","anchors":[["~-2","~","~-2"],["~2","~4","~2"]],"slice":"y"}
                                                  slice 保留每格位置：y=水平各层，z=各正截面，x=各侧截面；世界坐标轴，不随镜头转。
                                                  须用 box、fill:solid(可省略)，不与 where 同用，每次最多 ${PROBE_SLICE_CELL_CAP} 格；过长时缩小范围。
-                                                 附读取时间、维度、脚下坐标和碰撞箱；.. 是已读空气，?? 是未加载。直接读区块，不检查视线。
+                                                 附读取时间、维度、脚下坐标和碰撞箱；.. 是已读空气，?? 是未观察（遮挡、超距或未加载），不能当成空气。
 {"skill":"probe","shape":"box","anchors":[[-40,40,-120],[-8,60,-88]],"where":["spawner","#chests"]}
                                                  加 "where" = 只报这几样在这片里的坐标(按远近,每样最多 ${PROBE_WHERE_SHOWN} 处)。
-                                                 这一档直接读区块,不看视线也不管挡没挡着 —— 封在结构里的刷怪笼、
-                                                 埋着的箱子、矿脉走这条;find 只看得见明面上的东西。名单认 ${UNTIL_CATEGORY_DOC}`,
+                                                 同样受视线和观察距离约束；未见的箱子、矿脉等保持未知，不含特殊探测技能结果。名单认 ${UNTIL_CATEGORY_DOC}`,
     parse: parseShaped('probe'),
     fields: [
       {
@@ -1362,7 +1377,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
       { key: 'slice', kind: 'enum', values: SPATIAL_SLICE_AXES, error: 'slice 只认 x/y/z', doc: `box 空间切片；体积=(|dx|+1)(|dy|+1)(|dz|+1)≤${PROBE_SLICE_CELL_CAP}，不与 where 同用` },
       {
         key: 'where', kind: 'names', hint: `方块英文 id 或类别 ${UNTIL_CATEGORY_DOC};实体 id 按收到的实体表报`,
-        doc: '只报这几样在这片里的坐标(不看视线)',
+        doc: '只报这几样在这片里当前可见的坐标；遮挡、超距或未加载保持未知',
       },
     ],
   },
@@ -1647,7 +1662,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   {
     name: 'pickup',
     doc: '{"skill":"pickup","item":"cobblestone"}          拾取附近掉落物;item 可选,不写就近扫;按目标物品实际入包验收,靠近后零入包报受阻',
-    fields: [{ key: 'item', kind: 'string', doc: '不写就近扫' }],
+    fields: [{ key: 'item', kind: 'string', doc: '不写就近扫并避开2分钟内刚主动丢弃的已识别掉落物；明确写物品可取回' }],
   },
   {
     name: 'toss',
@@ -2066,6 +2081,7 @@ function asScoutStep(step: SkillCall): SkillCall {
     case 'build':
     case 'excavate':
     case 'tunnel':
+    case 'cleanup':
       return { ...step, dryRun: true };
     default:
       return step;

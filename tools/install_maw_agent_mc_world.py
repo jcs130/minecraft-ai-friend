@@ -49,7 +49,7 @@ def install(destination: Path, core_package: Path, npm: Path):
     source_files = sorted(set(p for p in source_files if '.test.' not in p.name))
     files = {p.relative_to(SOURCE).as_posix(): p.read_bytes() for p in source_files}
     native = json.loads((SOURCE / 'society-agent/package.json').read_text('utf-8'))
-    bundle = {'name': '@my-agent-world/agent-mc-host', 'version': '0.1.0', 'private': True,
+    bundle = {'name': '@my-agent-world/agent-mc-host', 'version': '0.2.0', 'private': True,
               'description': 'Explicit native My Agent World environment for the independent agent-mc/v1 harness',
               'license': 'MIT', 'type': 'module', 'engines': {'node': '>=22 <23'},
               'exports': {'.': {'types': './agent-mc-host/index.d.mts', 'default': './agent-mc-host/index.mjs'}},
@@ -59,7 +59,7 @@ def install(destination: Path, core_package: Path, npm: Path):
     files['package.json'] = (json.dumps(bundle, indent=2) + '\n').encode()
     files['LICENSE'] = (REPO / 'LICENSE').read_bytes()
     files['MY-AGENT-WORLD-AGENT-MC-WORLD.txt'] = (REPO / 'docs/MY-AGENT-WORLD-AGENT-MC-WORLD.txt').read_bytes()
-    for name in ('MY-AGENT-WORLD-JAVA-CLIENT.md', 'MY-AGENT-WORLD-JAVA-CLIENT.txt'):
+    for name in ('MY-AGENT-WORLD-JAVA-CLIENT.md', 'MY-AGENT-WORLD-JAVA-CLIENT.txt', 'MY-AGENT-WORLD-UNIFIED-ACCESS.md', 'MY-AGENT-WORLD-UNIFIED-ACCESS.txt'):
         files[name] = (REPO / 'docs' / name).read_bytes()
     destination.mkdir(parents=True)
     for name, data in files.items():

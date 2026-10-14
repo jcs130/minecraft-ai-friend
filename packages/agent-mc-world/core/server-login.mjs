@@ -45,7 +45,7 @@ async function readAccountCredential(account, configFile) {
 
 export function installServerLogin(bot, options) {
   let stage = 'disabled', attempted = false, active = true, account, timer;
-  let reason = null;
+  let reason = null, authState = null;
   const report = (status, detail = null) => {
     stage = status; reason = detail;
     if (['confirmed', 'blocked', 'closed'].includes(status)) clearTimeout(timer);
@@ -60,7 +60,8 @@ export function installServerLogin(bot, options) {
         const accounts = config.accounts.filter(a => a && typeof a.server === 'string'
           && address(a.server) === address(options.server) && a.username === options.username);
         if (accounts.length > 1) throw new Error('duplicate accounts');
-        account = accounts[0];
+        account = accounts[0] && { requestMarkers: ['MC_AUTH_LOGIN'], successMarkers: ['MC_AUTH_SUCCESS'],
+          failureMarkers: ['MC_AUTH_FAILED', 'MC_AUTH_2FA'], ...accounts[0] };
         if (account) {
           const file = typeof account.credentialFile === 'string' && !!account.credentialFile;
           const env = typeof account.credentialEnv === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(account.credentialEnv);
@@ -68,7 +69,7 @@ export function installServerLogin(bot, options) {
             || (account.credentialFormat !== undefined && !['dpapi', 'file'].includes(account.credentialFormat))
             || !/^[a-z][a-z0-9_]*$/.test(account.command)
             || ['requestMarkers', 'successMarkers', 'failureMarkers'].some(key => !Array.isArray(account[key])
-              || account[key].length < 1 || account[key].length > 16 || account[key].some(m => typeof m !== 'string' || !m.trim() || m.length > 160))) throw new Error('incomplete account');
+              || account[key].length > 16 || account[key].some(m => typeof m !== 'string' || !m.trim() || m.length > 160))) throw new Error('incomplete account');
           report('armed');
           const timeoutMs = account.timeoutMs ?? 30000;
           if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 300000) throw new Error('invalid timeout');
@@ -84,6 +85,25 @@ export function installServerLogin(bot, options) {
   const onMessage = (message, position) => {
     if (!active || !account || !['armed', 'submitted'].includes(stage) || position !== 'system') return;
     const value = message.toString().replace(/§[0-9A-FK-OR]/gi, '').trimStart();
+    const stateMatch = /^(?:MC_AUTH_STATE|\[MC_AUTH_STATE\])\s+(\{.*\})\s*$/s.exec(value);
+    if (stateMatch) {
+      // Only a direct system receipt can open the gate. Unknown/malformed
+      // JSON is not success, even if a configured text marker matches it.
+      try {
+        const data = JSON.parse(stateMatch[1]);
+        if (!data || typeof data !== 'object' || Array.isArray(data)
+          || (data.username !== undefined && data.username !== options.username)) return;
+        authState = { authorized: data.authorized === true,
+          status: typeof data.status === 'string' ? data.status : 'unknown',
+          passwordSet: typeof data.passwordSet === 'boolean' ? data.passwordSet : null,
+          // Guidance only: never execute an arbitrary command from server text.
+          nextCommand: typeof data.nextCommand === 'string' && data.nextCommand.length <= 256
+            && !/[\r\n\x00]/.test(data.nextCommand) ? data.nextCommand : null };
+        if (authState.authorized && authState.status === 'authenticated') report('confirmed');
+      } catch { /* No authority in invalid JSON. */ }
+      return;
+    }
+    if (/^(?:MC_AUTH_STATE|\[MC_AUTH_STATE\])(?:\s|$)/.test(value)) return;
     if (matches(value, account.failureMarkers)) { report('blocked', 'server-rejected'); return; }
     if (matches(value, account.successMarkers)) { report('confirmed'); return; }
     if (attempted || !matches(value, account.requestMarkers)) return;
@@ -102,6 +122,7 @@ export function installServerLogin(bot, options) {
   bot.on('message', onMessage);
   bot.once('end', stop);
   bot.once('kicked', stop);
-  return { stop, status: () => ({ stage, attempted }), detail: () => ({ stage, attempted, reason }),
-    ready: () => stage === 'disabled' || stage === 'confirmed' };
+  return { stop, status: () => ({ stage, attempted }), detail: () => ({ stage, attempted, reason,
+      ...(authState ? { authState: { ...authState } } : {}) }),
+    ready: () => stage === 'disabled' || stage === 'confirmed', authState: () => authState && { ...authState } };
 }

@@ -14,7 +14,7 @@ import { observeDamage, type DamageEvidence } from './damage-evidence.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
 import type { Logger } from './support/host-contract.ts';
-import { nowIso } from './support/runtime.mjs';
+import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import type { MinecraftLog } from './log.ts';
 import {
   BLOCK_FACES, cellOnFace, rasterize, resolveAnchors,
@@ -64,7 +64,7 @@ import { skillGesture } from './skills-social.ts';
 import { skillLook } from './skills-look.ts';
 import { skillControl } from './skills-control.ts';
 import { flyToLanding, flyToPosition, landFlight, flightState, previewFlight } from './flight.ts';
-import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold } from './temporary-scaffold.ts';
+import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold, temporaryScaffoldReadout, scaffoldCleanupCheckpoint } from './temporary-scaffold.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { assertInventoryClicksReady, isInventoryClickError } from './inventory-click-sync.ts';
 import { ContainerWindowOwnership } from './container-window-ownership.ts';
@@ -153,8 +153,8 @@ import { dimensionOf } from './cell-facts.ts';
 import { fmtDur } from './receipt.ts';
 import {
   FLEE_DEADLINE_MS, clearEscapeGoalOwner, digBackoffScene, digBlock, dropGoal, escapeIntent,
-  findEntity, fmtDist, gotoGoal, holdTreadWater, onEscapeGoal, goalOwnerKind, levelTravelGoal, nextLongTravelLeg, matchBlockIds, readStamp, releaseBody,
-  renderRouteMenu, routeNote, setOwnedGoal, travelGoalReached, type DistanceMetric, walkOnlyPath, withRouteScene,
+  findEntity, fmtDist, gotoGoal, holdTreadWater, onEscapeGoal, goalOwnerKind, goalOwnerOf, levelTravelGoal, nextLongTravelLeg, matchBlockIds, releaseBody,
+  renderRouteMenu, routeNote, setOwnedGoal, travelGoalReached, type DistanceMetric, walkOnlyPath, withRouteScene, underwaterRouteNote,
 } from './travel.ts';
 import {
   HOSTILE, MELEE_CHASE, MELEE_REACH,
@@ -687,9 +687,10 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
         const startDist = call.groundY
           ? Math.hypot(me.x - target.x, me.z - target.z)
           : Math.hypot(me.x - target.x, me.y - target.y, me.z - target.z);
-        return renderRouteMenu(probes, target, {
-          startDist, diag: call.groundY ? null : ctx.probeTarget?.(target) ?? null,
-        });
+        const waterNote = underwaterRouteNote(bot, target, finalGoal);
+        return [waterNote, renderRouteMenu(probes, target, {
+          startDist, diag: call.groundY || waterNote ? null : ctx.probeTarget?.(target) ?? null,
+        })].filter(Boolean).join('\n');
       }
       const note = routeNote(bot, travelContext, target, call.groundY || call.exact ? finalGoal : undefined);
       const startedAt = Date.now();
@@ -743,10 +744,16 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
       if (!isKnownTarget(bot, call.name)) throw new SkillBlocked(`${call.name} 不在线`);
       const e = findEntity(bot, call.name, 128);
       if (!e) throw new SkillBlocked(`${call.name} 在线但不在附近 128 格内`);
-      setOwnedGoal(bot, new goals.GoalFollow(e, 3), 'task', `跟着 ${call.name}`, { dynamic: true, diag: ctx.diag });
-      // 持续任务:挂着直到被顶替/叫停
-      while (!ctx.aborted() && e.isValid) await sleep(500);
-      dropGoal(bot, 'task', '跟随结束', ctx.diag);
+      const goal = new goals.GoalFollow(e, 3);
+      const releaseWalkOnly = walkOnlyPath(bot);
+      setOwnedGoal(bot, goal, 'task', `跟着 ${call.name}`, { dynamic: true, diag: ctx.diag });
+      try {
+        // 战斗会挂起本步并原样续做。旧实例醒来时不能撤掉新持有者的目标。
+        while (!ctx.aborted() && e.isValid) await sleep(100);
+      } finally {
+        if (goalOwnerOf(bot)?.goal === goal) dropGoal(bot, 'task', '跟随结束', ctx.diag);
+        releaseWalkOnly();
+      }
       if (!e.isValid) return `${call.name} 不见了,停止跟随`;
       throw new Aborted(ctx.abortedBy?.() ?? null);
     }
@@ -862,6 +869,12 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
     case 'tunnel': return skillTunnel(bot, call, ctx);
     case 'probe': return skillProbe(bot, call, ctx);
     case 'observe': return spatialObservationText(bot, call);
+    case 'cleanup': {
+      if (call.dryRun) return temporaryScaffoldReadout(bot, 12);
+      if (flightState(bot).flying) throw new SkillBlocked('清理垫脚前先安全落地');
+      const result = await reclaimPendingTemporaryScaffold(bot, ctx);
+      return result || temporaryScaffoldReadout(bot, 12);
+    }
     case 'use': return skillUse(bot, call, ctx);
     case 'ride': return skillRide(bot, call, ctx);
     case 'anvil': return skillAnvil(bot, call, ctx);
@@ -1104,7 +1117,7 @@ export type QueueFreezeOwner = 'combat' | 'queue';
  * environment/fall 各持自己的冻结令牌，各自释放并独立计时。
  * 两槽都空后才恢复队列。
  */
-type QueueHoldSlot = 'environment' | 'fall';
+type QueueHoldSlot = 'environment' | 'fall' | 'external';
 
 /**
  * 这一步被打断后能不能从头重跑。goto/collect/build/excavate 这类幂等(build 重放
@@ -1641,6 +1654,9 @@ export interface QueueStatus {
   /** elapsedMs 是**这一步**跑了多久;整条任务的那份另给 taskElapsedMs */
   running: {
     id: number; label: string; step: string; stepIndex: number; stepCount: number; elapsedMs: number;
+    /** Structured current intent; never infer control ownership by parsing the label. */
+    skill?: SkillCall['skill'];
+    followTarget?: string;
     /** 受理到现在。只看步骤耗时读不出「这一单已经磨了二十分钟」 */
     taskElapsedMs: number;
     count: { done: number; total: number } | null;
@@ -1724,7 +1740,7 @@ interface ExecutorOptions {
   log: Logger;
   /** 任务号发号器 */
   nextId: () => number;
-  /** 回执里 HH:MM:SS 按哪个时区渲染;不给按东八区(与世界快照的现实时间同一默认) */
+  /** 回执里 HH:MM:SS 按哪个时区渲染;不给按本机时区(与世界快照的现实时间同一默认) */
   timezone?: string;
   /** 战斗中生命跌破此值就收手撤退(与反射的脱战血线同源);不给 = 不撤 */
   fleeHealth?: () => number;
@@ -1808,7 +1824,7 @@ interface ExecutorOptions {
   searchContext?: () => { connectionGeneration: number; realm: string };
 }
 
-interface QueueHoldToken {
+export interface QueueHoldToken {
   readonly owner: symbol;
 }
 
@@ -1827,12 +1843,13 @@ export class Executor {
   private task: RunningTask | null = null;
   private queue: QueuedTask[] = [];
   /**
-   * 两个独立的冻结槽(见 QueueHoldSlot):环境危机一张、深坠一张,各自释放,
+   * 独立冻结槽(见 QueueHoldSlot):环境危机、深坠、外部身体限制，各自释放,
    * **都空了**队列才开闸。队列内容在冻结期间原样保留。
    */
   private readonly queueHolds: Record<QueueHoldSlot, { token: QueueHoldToken; reason: string } | null> = {
     environment: null,
     fall: null,
+    external: null,
   };
   private stopped = false;
   private executionEpoch = 0;
@@ -1974,6 +1991,9 @@ export class Executor {
             id: t.id,
             label: labelOf(t),
             step: t.program?.name ?? describeSkill(t.steps[Math.min(t.stepIndex, t.steps.length - 1)]),
+            ...(!t.program ? { skill: t.steps[t.stepIndex]?.skill,
+              ...(t.steps[t.stepIndex]?.skill === 'follow'
+                ? { followTarget: (t.steps[t.stepIndex] as Extract<SkillCall, {skill:'follow'}>).name } : {}) } : {}),
             stepIndex: t.stepIndex,
             stepCount: t.program ? 1 : t.steps.length,
             elapsedMs: Date.now() - t.stepStartedAt,
@@ -2006,7 +2026,7 @@ export class Executor {
 
   /** 挂钟时刻 HH:MM:SS。一场就是一天,不带日期 */
   private clock(ms: number): string {
-    return nowIso(this.opts.timezone ?? 'Asia/Shanghai', new Date(ms)).slice(11, 19);
+    return nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE, new Date(ms)).slice(11, 19);
   }
 
   /** 仅供 mc_do 受理前使用；不改队列，也不为其他工具设置全局退避。 */
@@ -2026,7 +2046,7 @@ export class Executor {
         .filter((at) => now - at < windowMs);
       if (recent.length < config.maxSuccesses) continue;
       const until = recent[recent.length - config.maxSuccesses] + windowMs;
-      const localUntil = nowIso(this.opts.timezone ?? 'Asia/Shanghai', new Date(until))
+      const localUntil = nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE, new Date(until))
         .replace('T', ' ').slice(0, 19);
       return `[mc_do 暂缓] ${config.windowMinutes} 分钟内目标技能「${describeSkill(target)}」成功 ${recent.length} 次，`
         + `同类新任务到 ${localUntil} 可再受理。当前任务和队列保留，其他目标技能照常可用`;
@@ -2350,7 +2370,7 @@ export class Executor {
       && entry.target === find.target.trim().toLowerCase()
       && Math.hypot(from.x - entry.from.x, from.z - entry.from.z) <= DIRECTIONAL_SWEEP_EVIDENCE_RADIUS);
     if (nearby.length === 0) return null;
-    const stamp = (at: number): string => nowIso(this.opts.timezone ?? 'Asia/Shanghai', new Date(at))
+    const stamp = (at: number): string => nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE, new Date(at))
       .replace('T', ' ').slice(0, 19);
     const evidence = (entry: typeof nearby[number]): string =>
       `${stamp(entry.at)} 从 ${cellText(entry.from)} 朝${DIRECTION_ZH[entry.direction]}走满 ${entry.distance} 格，未命中${zhThing(find.target)}`;
@@ -4432,17 +4452,18 @@ export class Executor {
     return true;
   }
 
-  /** 两槽合起来的一句冻结理由;都空着为 null。同时冻着就两条都说 */
+  /** 各槽合起来的一句冻结理由；都空着为 null。 */
   private holdReason(): string | null {
-    const bits = [this.queueHolds.environment?.reason, this.queueHolds.fall?.reason].filter(Boolean);
+    const bits = Object.values(this.queueHolds).map(hold => hold?.reason).filter(Boolean);
     return bits.length > 0 ? bits.join('、') : null;
   }
 
-  /** 两槽一起清空(mc_stop / 抢占 / 死亡 / 断线 / 停机):留哪一张都够把队列关死 */
+  /** 全部清空(mc_stop / 抢占 / 死亡 / 断线 / 停机)，旧令牌不能再恢复任务。 */
   private releaseAllHolds(): void {
-    const had = this.queueHolds.environment !== null || this.queueHolds.fall !== null;
+    const had = Object.values(this.queueHolds).some(Boolean);
     this.queueHolds.environment = null;
     this.queueHolds.fall = null;
+    this.queueHolds.external = null;
     // 回边:反射那边的令牌已经作废,别让它拿着旧票挡住这一轮危机的重新冻结
     if (had) this.opts.onHoldsReleased?.();
   }
@@ -4458,7 +4479,7 @@ export class Executor {
     if (other !== null) {
       this.opts.diag?.write({
         lane: 'task', event: 'hold-partial-release',
-        msg: `${slot === 'fall' ? '深坠' : '环境'}那一槽解了,另一槽还冻着(${other}),队列不开闸`,
+        msg: `${slot}那一槽解了,其他状态还冻着(${other}),队列不开闸`,
         data: { slot, stillHeld: other, frozenId: this.frozen?.id ?? null },
       });
       return { released: true, note: null, stillHeld: other };
@@ -4510,6 +4531,20 @@ export class Executor {
       data: { resumedTask: out.note !== null, stillHeld: this.holdReason() },
     });
     return out;
+  }
+
+  /** An explicit body restriction freezes even escape tasks; never replay an interrupted non-idempotent step. */
+  pauseForExternal(reason: string): QueueHoldToken {
+    const token: QueueHoldToken = { owner: Symbol('external-hold') };
+    this.queueHolds.external = { token, reason };
+    this.suspend(reason, 'queue');
+    // The combat controller cannot release a checkpoint while another body owner inhibits it.
+    if (this.frozen) this.frozen.frozenBy = 'queue';
+    return token;
+  }
+
+  resumeAfterExternal(token: QueueHoldToken): QueueResumeResult {
+    return this.releaseHold('external', token);
   }
 
   /** 坠落危险解除后继续仍在队列中的计划(除非环境那一槽还冻着)。 */
@@ -5458,10 +5493,7 @@ export class Executor {
           let skillResult = await runSkill(bot, run, ctx).finally(() => releaseTread?.());
           if (ctx.aborted()) return;
           promoteTemporaryScaffold(bot, intended);
-          if (i === steps.length - 1 && !bot.currentWindow && !flightState(bot).flying
-            && ['goto', 'find', 'surface', 'build', 'collect', 'land'].includes(call.skill)
-            && !(call.skill === 'goto' && call.walkOnly)
-            && !steps.some((step) => 'dryRun' in step && step.dryRun)) {
+          if (!bot.currentWindow && !flightState(bot).flying && scaffoldCleanupCheckpoint(steps, i)) {
             try {
               skillResult += await reclaimPendingTemporaryScaffold(bot, ctx);
             } catch (err) {
@@ -6121,8 +6153,17 @@ export class Reflexes {
   }
 
   start(): void {
+    if (this.timer) return;
     this.stopped = false;
     this.timer = setInterval(() => this.tick(), REFLEX_TICK_MS);
+  }
+
+  /** Called only after an external queue hold is installed, so releasing old reflex holds cannot resume work. */
+  inhibit(): void {
+    const environment = this.environmentHold, fall = this.fall?.hold;
+    this.stop();
+    if (environment) this.opts.resumeEnvironment(environment);
+    if (fall) this.opts.resumeAfterFall(fall);
   }
 
   stop(): void {

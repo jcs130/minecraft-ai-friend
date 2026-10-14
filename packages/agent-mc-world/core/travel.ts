@@ -6,7 +6,6 @@
 import type { Bot } from 'mineflayer';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
-import { nowIso } from './support/runtime.mjs';
 import {
   Aborted, SkillBlocked, checkAbort, sleep, type RouteProbe, type SkillContext, type TargetDiag,
 } from './skill-context.ts';
@@ -19,7 +18,8 @@ import { type Cell } from './geometry.ts';
 import { probabilisticDropsOf } from './inventory.ts';
 import { PLACE_REACH } from './cell-facts.ts';
 import { flightState } from './flight.ts';
-import { cancelControlInput } from './skills-control.ts';
+import { cancelControlInput, waterControlActive } from './skills-control.ts';
+import { groundPathIssueOf } from './path-waypoints.ts';
 
 export const { goals } = pathfinderPkg;
 
@@ -91,6 +91,12 @@ export function installTreadWater(bot: Bot): void {
   bot.on('path_reset', () => { path = []; });
   bot.on('physicsTick', () => {
     if (!bot.entity) return;
+    if (waterControlActive(bot)) {
+      // Do not clear jump here: it may be an explicit ascent or a rescue input.
+      // The input lease releases the former; emergency body ownership stays intact.
+      treading = false;
+      return;
+    }
     const wet = bodyInWater(bot);
     const next = path[0];
     const walking = bot.pathfinder?.isMoving() && next !== undefined
@@ -171,14 +177,6 @@ export const PROBE_LABEL: Record<RouteProbe['profile'], string> = {
   style: '按当前风格', dig: '只挖不垫', walk: '只靠走',
 };
 
-/**
- * 闸门拒绝理由里的回读时刻(HH:MM:SS)。技能层拿不到执行器的时区配置,用默认那档;
- * 它与执行器的 `clock()` 同一口径。
- */
-export function readStamp(): string {
-  return nowIso('Asia/Shanghai').slice(11, 19);
-}
-
 /** 与判决同口径的距离文案:2.4 显示 2.4,别四舍五入成"2 格却不放行"的自相矛盾 */
 export function fmtDist(d: number): string {
   return Number.isInteger(d) ? String(d) : d.toFixed(1);
@@ -241,6 +239,16 @@ export function whereFromMe(bot: Bot, target: { x: number; y: number; z: number 
   return `${dir ? DIRECTION_ZH[dir] + '边' : '就在脚边'}约 ${away} 格${height}`;
 }
 
+/** Capability boundary, not a claim that the measured water cell is unreachable. */
+export function underwaterRouteNote(bot: Bot, target: Cell,
+  goal?: InstanceType<typeof goals.Goal>): string | null {
+  if (goal instanceof goals.GoalNearXZ || target.y >= Math.floor(bot.entity.position.y)) return null;
+  const feet = bot.blockAt(new Vec3(target.x, target.y, target.z));
+  const head = bot.blockAt(new Vec3(target.x, target.y + 1, target.z));
+  if (!feet || !head || !WATER_BLOCKS.has(feet.name) || !WATER_BLOCKS.has(head.name)) return null;
+  return '目标需要下潜：当前 goto 不规划水下下降路线，寻路失败不代表目标不可达；已入水可用 control(mode:water) 短步下沉并核验高度/氧气，surface 换气';
+}
+
 /**
  * 受阻回执附位置、目标高差和三种路线试算；行动选择留给 agent。
  * 目标格分诊结论优先呈现，A* 超时信息随后。
@@ -256,10 +264,12 @@ export function withRouteScene(
   // 目标格分诊问的是"那一格站不站得进人",只对精确坐标目标成立。水平行军的 target.y
   // 是脚下高度凑出来的、根本不是目标的一部分,拿它去分诊会凭空造出「站不进人」。
   const probes = ctx.probeRoutes?.(target, goal);
-  const diag = goal || probes?.some((probe) => probe.status === 'complete')
+  const waterNote = underwaterRouteNote(bot, target, goal);
+  const diag = waterNote || goal || probes?.some((probe) => probe.status === 'complete')
     ? null : ctx.probeTarget?.(target) ?? null;
   const scene = [
     ...extra,
+    ...(waterNote && !extra.some(line => line.includes(waterNote)) ? [waterNote] : []),
     `我在 (${Math.round(me.x)}, ${Math.round(me.y)}, ${Math.round(me.z)}),目标在${whereFromMe(bot, target)}`,
   ];
   if (probes && probes.length > 0) {
@@ -305,19 +315,20 @@ export function routeCostly(p: RouteProbe, startDist: number): boolean {
 export function routeNote(bot: Bot, ctx: SkillContext, target: { x: number; y: number; z: number },
   goal?: InstanceType<typeof goals.Goal>): string | null {
   const probes = ctx.probeRoutes?.(target, goal);
-  if (!probes || probes.length === 0) return null;
+  const waterNote = underwaterRouteNote(bot, target, goal);
+  if (!probes || probes.length === 0) return waterNote;
   const style = probes.find((p) => p.profile === 'style') ?? probes[0];
   const me = bot.entity.position;
   const startDist = goal instanceof goals.GoalNearXZ
     ? Math.hypot(me.x - target.x, me.z - target.z)
     : Math.hypot(me.x - target.x, me.y - target.y, me.z - target.z);
-  const diag = !goal && !probes.some((probe) => probe.status === 'complete')
+  const diag = !waterNote && !goal && !probes.some((probe) => probe.status === 'complete')
     ? ctx.probeTarget?.(target) ?? null : null;
   if (diag && diag.kind !== 'open') {
     throw new SkillBlocked(renderRouteMenu(probes, target, { startDist, diag }));
   }
-  if (!routeCostly(style, startDist)) return null;
-  return renderRouteMenu(probes, target, { startDist, diag, head: '出发前按三种走法的试算:' });
+  if (!routeCostly(style, startDist)) return waterNote;
+  return [waterNote, renderRouteMenu(probes, target, { startDist, diag, head: '出发前按三种走法的试算:' })].filter(Boolean).join('\n');
 }
 
 export interface PathSupportFailure {
@@ -627,6 +638,11 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
   const stallError = (s: Stall): Error => (s.wedged ? new Wedged(s) : stallBlocked(bot, s));
   const deadline = Date.now() + GOTO_DEADLINE_MS;
   const supportSeq = pathSupportFailureOf(bot)?.seq ?? 0;
+  const geometrySeq = groundPathIssueOf(bot)?.sequence ?? 0;
+  const geometryBlocked = (): string | null => {
+    const issue = groundPathIssueOf(bot);
+    return issue && issue.sequence > geometrySeq ? issue.reason : null;
+  };
   const supportBlocked = (): PathSupportFailure | null => {
     const failure = pathSupportFailureOf(bot);
     return failure && failure.seq > supportSeq ? failure : null;
@@ -704,6 +720,7 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
     // 中止时目标可能已归抢占方；此处不撤目标，撤销由 abortTask/pump 负责。
     if (ctx.aborted()) throw new Aborted(ctx.abortedBy?.() ?? null);
     dropGoal(bot, 'task', '寻路报错,技能退出', ctx.diag);
+    if (geometryBlocked()) throw new SkillBlocked(geometryBlocked()!);
     const support = supportBlocked();
     if (support) {
       throw new SkillBlocked(
@@ -722,6 +739,10 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
   }
   checkAbort(ctx);
   const support = supportBlocked();
+  if (geometryBlocked()) {
+    dropGoal(bot, 'task', '路径内部几何校验未通过', ctx.diag);
+    throw new SkillBlocked(geometryBlocked()!);
+  }
   if (support) {
     dropGoal(bot, 'task', '搭路支撑未确认', ctx.diag);
     throw new SkillBlocked(

@@ -80,6 +80,9 @@ export async function skillPickup(bot: Bot, ctx: SkillContext, item?: string): P
       if (!e?.position || (e.name !== 'item' && e.name !== 'item_stack')) continue;
       const stack = droppedStackOf(e);
       if (item && (!stack || !matchItemName(item, stack.name, bot?.registry))) continue;
+      // An explicit item request can recover a discarded item; an unqualified
+      // loot sweep must not walk straight back to our own recent discard.
+      if (!item && isRecentDiscard(bot, e)) continue;
       const d = e.position.distanceTo(me);
       if (d <= 24 && (!nearest || d < nearest.d)) nearest = { id, pos: e.position, d };
     }
@@ -130,6 +133,41 @@ export const TOSS_AIM_MAX = 8;
 /** 等服务端结算掉落与紧接着的自动拾取后，再核对背包净变化 */
 const TOSS_SETTLE_MS = 4000;
 const recentTosses = new WeakMap<Bot, Map<string, { at: number; after: number; x: number; y: number; z: number }>>();
+const recentDiscards = new WeakMap<Bot, Map<Bot['entity'], number>>();
+const TOSS_MEMORY_MS = 120_000;
+
+export function isRecentDiscard(bot: Bot, entity: Bot['entity']): boolean {
+  const records = recentDiscards.get(bot);
+  if (!records) return false;
+  for (const [drop, at] of records) if (Date.now() - at >= TOSS_MEMORY_MS) records.delete(drop);
+  return records.has(entity);
+}
+
+function rememberDiscard(bot: Bot, entity: Bot['entity']): void {
+  let records = recentDiscards.get(bot);
+  if (!records) { records = new Map(); recentDiscards.set(bot, records); }
+  records.set(entity, Date.now());
+  while (records.size > 64) records.delete(records.keys().next().value!);
+}
+
+/** look(force=true) only updates local rotation. Mineflayer writes its movement
+ * packet after physicsTick listeners return. Resume on the following microtask
+ * before sending a non-idempotent inventory click; never guess a sleep duration. */
+async function flushTossAim(bot: Bot, ctx: SkillContext): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const finish = (error?: Error): void => {
+      clearInterval(poll); clearTimeout(timeout);
+      bot.off('physicsTick', tick); bot.off('end', ended);
+      if (error) reject(error); else resolve();
+    };
+    const tick = (): void => finish();
+    const ended = (): void => finish(new SkillBlocked('连接已结束，尚未抛出'));
+    const poll = setInterval(() => { try { checkAbort(ctx); } catch (error) { finish(error as Error); } }, 50);
+    const timeout = setTimeout(() => finish(new SkillBlocked('未等到朝向发送的物理刻，尚未抛出')), 1000);
+    bot.once('physicsTick', tick); bot.once('end', ended);
+  });
+  checkAbort(ctx);
+}
 
 /**
  * toss 按当前 yaw/pitch 给物品初速度，须预先转向。
@@ -157,10 +195,13 @@ export function planTossThrow(bot: Bot): { yaw: number; pitch: number; distance:
       const dx = -Math.sin(rad);
       const dz = -Math.cos(rad);
       let reach = 0;
-      for (let d = 1; d <= TOSS_RANGE.max; d++) {
-        const x = Math.floor(me.x + dx * d);
-        const z = Math.floor(me.z + dz * d);
-        if (!layers.every((dy) => clear(blockAtCell(bot, { x, y: feetY + dy, z })))) break;
+      for (let d = 0.25; d <= TOSS_RANGE.max; d += 0.25) {
+        // Include the first metre and a drop's width; integer-only rays miss
+        // a nearby wall when the player stands against a cell boundary.
+        if (![-0.15, 0.15].every(side => layers.every(dy => clear(blockAtCell(bot, {
+          x: Math.floor(me.x + dx * d + dz * side), y: feetY + dy,
+          z: Math.floor(me.z + dz * d - dx * side),
+        }))))) break;
         reach = d;
       }
       if (reach >= TOSS_RANGE.min && (!best || reach > best.distance)) best = { yaw: rad, pitch, distance: reach };
@@ -236,15 +277,24 @@ export async function skillToss(
   const origin = bot.entity.position.clone();
   const track = (entity: Bot['entity']) => {
     const stack = droppedStackOf(entity);
-    if (!existing.has(entity.id) && stack?.name === registryName && entity.position.distanceTo(origin) <= 2.5) drops.add(entity.id);
+    if (!existing.has(entity.id) && stack?.name === registryName && entity.position.distanceTo(origin) <= 2.5) {
+      drops.add(entity.id);
+      if (!aim) rememberDiscard(bot, entity);
+    }
   };
   const collect = (collector: Bot['entity'], entity: Bot['entity']) => { track(entity); if (drops.has(entity.id)) collectors.add(collector.id); };
-  bot.on('entitySpawn', track); bot.on('playerCollect', collect);
+  bot.on('entitySpawn', track); bot.on('entityUpdate', track); bot.on('playerCollect', collect);
   const picked: PickTarget[] = [];
   try {
   for (const it of bot.inventory.items().filter((i) => pred(i.name, i))) {
     checkAbort(ctx);
     if (left <= 0) break;
+    const aimedYaw = bot.entity.yaw, aimedPitch = bot.entity.pitch;
+    await flushTossAim(bot, ctx);
+    if (Math.abs(Math.atan2(Math.sin(bot.entity.yaw - aimedYaw), Math.cos(bot.entity.yaw - aimedYaw))) > 0.02
+      || Math.abs(bot.entity.pitch - aimedPitch) > 0.02 || bot.entity.position.distanceTo(origin) > 0.5) {
+      throw new SkillBlocked(`抛物前身体或朝向已改变；本次已尝试抛出${tossed}，其余未抛，先核对现场`);
+    }
     if (recipient && (bot.entities[recipient.id] !== recipient || !observedEntity(bot, recipient)
       || Math.hypot(recipient.position.x - bot.entity.position.x, recipient.position.z - bot.entity.position.z) < 2
       || Math.hypot(recipient.position.x - bot.entity.position.x, recipient.position.z - bot.entity.position.z) > 4)) {
@@ -259,6 +309,9 @@ export async function skillToss(
     if (moved <= 0) break;
     tossed += moved;
     left -= moved;
+    // Remember the actual low-water mark, including attempts reacquired during
+    // settlement; previously those failures never entered the repeat guard.
+    rememberToss(bot, registryName);
     if (pick !== undefined) picked.push(pickTargetOf(it, bot.registry as never));
   }
   if (tossed === 0) throw new SkillBlocked(`${zhName(item)}没扔出去`);
@@ -268,14 +321,14 @@ export async function skillToss(
   if (netAway <= 0) {
     throw new SkillBlocked(`${zhName(item)}确实抛出×${tossed},但稍等后背包同类物品没有净减少;可能已自动捡回或同时拾得同类物品。不要重复 toss 腾格,改用 stow 存进容器`);
   }
-  rememberToss(bot, registryName);
   const anchor = isSpawnAnchorBlock(item) ? anchorInHandNote(bot, ctx, [zhName(item)], '扔掉') : '';
   // Vanilla collect packets identify entities, not the thrower's ownership. Nearby matching drops can merge.
   const seenPickup = recipient && collectors.has(recipient.id);
+  const selfCollected = collectors.has(bot.entity.id) ? '；观察到本人拾取同类掉落物' : '';
   const delivery = recipient ? (seenPickup ? `；${call.target}拾取过同类掉落物，本次交付数量未确认，不自动重投`
-    : '；对方领取未确认，先查回执/询问，不自动重投') : '；无人领取证据，走近仍可能捡回';
-  return `抛出${picked.length ? pickedText(picked) : zhName(item)}×${tossed}；4秒后净少${netAway}${delivery}${anchor}。${where}`;
-  } finally { bot.off('entitySpawn', track); bot.off('playerCollect', collect); }
+    : '；对方领取未确认，先查回执/询问，不自动重投') : '；走近仍可能捡回';
+  return `抛出${picked.length ? pickedText(picked) : zhName(item)}×${tossed}；4秒后净少${netAway}${selfCollected}${delivery}${anchor}。${where}`;
+  } finally { bot.off('entitySpawn', track); bot.off('entityUpdate', track); bot.off('playerCollect', collect); }
 }
 
 /** 抛出后又自动捡回的同种物品，不能继续当作腾格手段。 */
@@ -284,7 +337,7 @@ export function reacquiredTossNote(bot: Bot, item: string): string | null {
   const stack = bot.inventory.items().find((candidate) => matchItemName(item, candidate.name, bot?.registry));
   if (!stack) return null;
   const prior = recentTosses.get(bot)?.get(stack.name);
-  if (!prior || Date.now() - prior.at >= 120_000) return null;
+  if (!prior || Date.now() - prior.at >= TOSS_MEMORY_MS) return null;
   const pos = bot.entity?.position;
   if (!pos || Math.hypot(pos.x - prior.x, pos.y - prior.y, pos.z - prior.z) > 8) return null;
   const now = invCount(bot, (name) => name === stack.name);

@@ -7,6 +7,8 @@
     "src/mcp/server.ts",
     "src/mcp/stdio.ts",
     "src/index.ts",
+    "src/tactics.ts",
+    "src/decisions/**/*.ts",
     "core/**/*.ts"
   ],
   "exclude": [

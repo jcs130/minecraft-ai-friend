@@ -1,0 +1,24 @@
+{
+  "repository": "https://github.com/Pal-AI-Lab/Cortico",
+  "reviewedHead": "088a071",
+  "author": "Codex maintainer adapting upstream MIT changes",
+  "ports": [
+    {
+      "commit": "bdd3843",
+      "scope": "Link failure text, network/JSON/NBT diagnostics and truthful connection phases, retaining independent spawn plus server authentication readiness and per-generation cancellation.",
+      "boundary": "Independent runtime already owns explicit connect/disconnect and account changes. Framework-specific connection UI, World mounts and retarget path were not copied. Local server advice now follows the actual managed-server setting."
+    },
+    {
+      "commit": "6ac1f64f4f7cc796ad855a7dd555546dc64a0985",
+      "scope": "DST-safe offset calculation, system timezone defaults and executor-clock build receipts.",
+      "compatibility": "Explicit timezone is unchanged. Unconfigured standalone clients now follow the system timezone, matching upstream. Stored timestamps are unchanged."
+    }
+  ],
+  "alreadyPresent": [
+    { "commit": "493dd21", "scope": "Ranged weapon selected at melee distance is rejected explicitly instead of spinning in attack." }
+  ],
+  "notCopied": [
+    { "commit": "793a670", "reason": "Built-in World locale/UI extraction depends on Cortico catalogs; independent shared viewer and host adapters retain their own presentation boundaries." },
+    { "commit": "14ab329", "reason": "Built-in World unused-import cleanup; independent core has different live imports and is checked independently." }
+  ]
+}

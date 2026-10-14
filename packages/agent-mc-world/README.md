@@ -8,7 +8,8 @@ Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.
 This package owns the Mineflayer connection, inventory synchronization, navigation,
 validated actions, executable methods, evidence receipts, current facts/archive,
 deduplication, goal revisions, cancellation, SDK/MCP and the viewer integration.
-The host owns personality, goals, model calls, decisions and long-term memory.
+The host owns personality, goals, planning model calls, decisions and personal long-term memory.
+The core also offers [game memory](docs/game-memory.md): scoped historical notes with local keywords, optional embeddings or external memory services. It never turns recalled notes into current world facts.
 The core starts no model loop. Connecting to a game server is explicit.
 
 Consumers depend on the package, never on another host's checkout:
@@ -21,6 +22,11 @@ Consumers depend on the package, never on another host's checkout:
 The modern visualization remains maintained in `jcs130/mc-visual-console`.
 Server packs and performance services require explicit configuration.
 
+Generic battlefield sampling, authored tactics, combat receipts and ability state
+are provided by `agent-mc-world/tactics`; optional host selector helpers are in
+`agent-mc-world/decisions`. The default SDK/MCP client exposes `mc_combat_tactic`
+without a server pack. See [component boundaries](docs/component-boundaries.md).
+
 ## Spatial observations
 
 The same SDK/MCP action interface offers compact site diagnostics, local 3D voxels,
@@ -30,6 +36,17 @@ reads target occupancy, support height, adjacent collision faces and standing
 clearance without moving or building. Results retain unknowns and sampling time;
 geometry is not proof of reachability or server placement permission.
 See the [on-demand spatial guide](skills/minecraft-agent/references/spatial.md).
+
+Construction also reports bounded blueprint proportions, exposed materials and known
+headroom problems. Temporary supports have provenance-based cleanup, fresh retained
+obligations and an explicit `cleanup` action. Agent-authored supports may use
+`build temporary:true`. The final ground waypoints are checked for unplanned rises
+outside the ordinary jump envelope before movement; this is not a complete route proof.
+
+`mc_script` includes a host-independent method library with scoped, immutable source
+versions, syntax-validation requirements, parent conflict checks and explicit execution
+or rollback. Saved source is not evaluated gameplay evidence. See
+[building and editable methods](skills/minecraft-agent/references/building-methods.md).
 
 ## Build and verification
 
@@ -54,6 +71,8 @@ does not need either source repository at runtime.
 
 See [client setup](docs/minecraft-client.md), [accounts](docs/online-accounts.md),
 [protocol](docs/protocol-v1.md) and [host integration](docs/harness.md).
+For confirmed inventory operations and recovery after a timeout, see
+[inventory synchronization](docs/inventory-synchronization.md).
 Historical import licenses and hashes remain in `provenance/` and
 `vendor/native-types/`. The repository move is recorded separately; no identities,
 goals, memories, credentials or game ledgers are moved by installing this package.

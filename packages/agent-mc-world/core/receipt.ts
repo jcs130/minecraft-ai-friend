@@ -62,6 +62,7 @@ export type BlueprintCall = Extract<SkillCall, { skill: 'build'; blueprint: stri
 
 /** heldItem 由调用方提供，供 use 未指定 item 时呈现实际手持物。 */
 export function describeSkill(c: SkillCall, heldItem?: string | null): string {
+  if (c.skill === 'cleanup') return c.dryRun ? '检查临时垫脚' : '清理临时垫脚';
   const tool = 'tool' in c && c.tool
     ? `(${c.tool === 'fastest' ? '最快工具' : `指定${zhName(c.tool)}`})`
     : '';

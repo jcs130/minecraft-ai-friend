@@ -13,7 +13,12 @@ def probe(config_file=None,manifest_file=DEFAULT_MANIFEST):
         checks['client_only_mod']=manifest['clientOnly'] and not manifest['serverRequired'] and manifest['customPayloadChannels']==[]
         checks['three_explicit_providers']=manifest['providers']==['mineflayer','numen','java-client']
         checks['no_background_model_or_new_service']=manifest['modelRequests']==manifest['newServices']==0
-        checks['operation_contract']=manifest['operationCount']==23
+        contract=json.loads((bundle/'operations.json').read_bytes())
+        ids={row['id'] for row in contract['operations']}
+        checks['operation_contract']=manifest['operationCount']==contract['operationCount']==len(ids) and {'body.move','screen.capture','world.dig','menu.click'}<=ids
+        if manifest['version']=='0.2.0':
+            checks['optional_baritone_contract']={'baritone.state','baritone.goto','baritone.mine','baritone.follow','baritone.farm'}<=ids
+            if manifest['optionalBaritone']['bundled']:checks['original_baritone_verified']=hashlib.sha256((bundle/'baritone-api-neoforge-1.11.3.jar').read_bytes()).hexdigest()==manifest['optionalBaritone']['sha256']
         if config_file:
             config=json.loads(Path(config_file).read_bytes());auth=json.loads(Path(config['credentialsFile']).read_bytes());url=urlsplit(auth['endpoint'])
             checks['loopback_only']=url.scheme=='http' and url.hostname=='127.0.0.1' and url.path=='/rpc' and not url.query and not url.fragment and not url.username
@@ -27,7 +32,10 @@ def probe(config_file=None,manifest_file=DEFAULT_MANIFEST):
             checks['client_tick_fresh']=health['ok'] and 0<=time.time()*1000-health['lastTickAt']<5000
             checks['original_player_and_server']=state['ok'] and state['bodyId']==config['expectedUuid'] and state['server']==config['expectedServer']
             checks['actual_inventory_and_native_menu']=state['inventory']['slotNamespace']=='player_menu_46' and len(state['inventory']['slots'])==46 and state['menu']['playerUuid']==state['bodyId']
-            checks['actual_api_smoke']=catalog['operationCount']==23 and len({r['id'] for r in catalog['operations']})==23 and catalog['serverRequired'] is False
+            checks['actual_api_smoke']=catalog['operationCount']==manifest['operationCount'] and {r['id'] for r in catalog['operations']}==ids and catalog['serverRequired'] is False
+            if 'baritone.state' in ids:
+                present=state['baritone']['available']
+                checks['optional_baritone_discovery']=all(row['available']==present for row in catalog['operations'] if row['id'].startswith('baritone.') and row['id']!='baritone.state')
             checks['original_framebuffer_available']=state['screen']['framebufferWidth']>0 and state['screen']['framebufferHeight']>0
             report['actualClientChecked']=True
         else:report['actualClientChecked']=False

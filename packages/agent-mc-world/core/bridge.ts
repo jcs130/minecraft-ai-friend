@@ -16,7 +16,7 @@ import { DEFAULT_BLUEPRINT_MC_VERSION, setBlueprintMcVersion } from './blueprint
 import { DIG_UNCONFIRMED_EVENT, installMineflayerFixes, installOffsetShapes, installPathfinderToolSelection } from './mineflayer-fixes.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { installNavigationBareHand } from './hand-interaction.ts';
-import { installDoorWaypointRepair } from './path-waypoints.ts';
+import { installDoorWaypointRepair, groundPathIssueOf } from './path-waypoints.ts';
 import {
   installPathfinderPerf, setDigBackoff, setNoPlaceCells, setProtectedCells, setProtectedPlaceCells,
   setSiteZones, type SiteZone,
@@ -41,12 +41,14 @@ import { trackDamageSources } from './damage-source.ts';
 import { MinecraftAuthentication, protocolVersion } from '../src/client/authentication.ts';
 import { installServerLogin } from './server-login.mjs';
 import { installMountedLook } from '../src/mounted-look.ts';
+import { errorFailure, kickFailure } from './link.ts';
 
 export interface BridgeOptions {
   host: string;
   port: number;
   username: string;
   version: string;
+  keepAliveTimeoutMs?: number;
   authentication?: MinecraftAuthentication;
   /** Private account configuration, reread for every network connection. Empty disables automatic login. */
   loginConfigFile?: () => string;
@@ -91,6 +93,8 @@ export interface BridgeOptions {
   onAlarm?: (text: string) => void;
   /** 停止期间不创建连接或安排重连。 */
   shuttingDown?: () => boolean;
+  /** Whether the host actually manages this server process, independent of its address. */
+  managedServer?: () => boolean;
 }
 
 const RECONNECT_DELAYS_MS = [3_000, 10_000, 30_000, 60_000];
@@ -245,13 +249,15 @@ export class Bridge {
   protected stopped = false;
   protected reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   protected reconnectAttempt = 0;
+  protected lastError: Error | null = null;
+  protected failure: string | null = null;
   /** 每次 connect 递增的连接世代；资源和迟到回调均据此判定归属。 */
   protected generation = 0;
   /** 已经作废的最高世代；世代单调作废，一代结束才有下一代。 */
   protected disposedThrough = -1;
   protected readonly bags = new Map<number, ResourceBag>();
   protected readonly disposing = new Set<Promise<void>>();
-  protected viewer: { gen: number; url: string; kind: 'modern' | 'basic' } | null = null;
+  protected viewer: { gen: number; url: string; kind: 'modern' | 'basic'; agentViews?: import('./viewer-agent-views.ts').AgentViewGallery } | null = null;
   protected _invSynced = false;
   protected scaffoldComplained = '';
   protected refusedStreak = 0;
@@ -317,6 +323,9 @@ export class Bridge {
 
   get connectionState() {
     return { active: this.started, protocolState: this._bot?._client.state ?? 'closed',
+      phase: this.stopped || !this.started ? 'stopped' : this.connected ? 'online'
+        : this._bot ? 'connecting' : this.reconnectAttempt > 0 ? 'retrying' : 'connecting',
+      failure: this.failure,
       spawnReceived: this.protocolSpawned, ready: this.connected, reconnects: this.reconnectAttempt,
       serverLogin: this.serverLogin?.detail() ?? { stage: 'disabled', attempted: false, reason: null } };
   }
@@ -336,6 +345,10 @@ export class Bridge {
 
   get viewerUrl(): string | null {
     return this.viewer !== null && this.viewer.gen === this.generation ? this.viewer.url : null;
+  }
+
+  get agentViews(): import('./viewer-agent-views.ts').AgentViewGallery | undefined {
+    return this.viewer?.gen === this.generation ? this.viewer.agentViews : undefined;
   }
 
   /** 已作废代次使用关闭状态的 ResourceBag，迟到资源登记时立即关闭。 */
@@ -368,6 +381,7 @@ export class Bridge {
     if (this.started) return;
     this.started = true;
     this.stopped = false;
+    this.failure = null;
     this.connect();
   }
 
@@ -393,6 +407,8 @@ export class Bridge {
     this.reconnectAttempt = 0;
     this.refusedStreak = 0;
     this.viewer = null;
+    this.lastError = null;
+    this.failure = null;
     if (bot) {
       try {
         bot.quit();
@@ -429,6 +445,7 @@ export class Bridge {
     }
     this.protection.beginConnection();
     const { host, port, username, version, log } = this.opts;
+    this.lastError = null;
     const gen = ++this.generation;
     for (const old of [...this.bags.keys()]) {
       if (old < gen) void this.disposeGeneration(old);
@@ -443,10 +460,12 @@ export class Bridge {
     try {
       bot = mineflayer.createBot({ host, port, username, version: protocolVersion(version) || undefined,
         ...(this.opts.authentication?.botOptions() ?? { auth: 'offline' as const }),
+        checkTimeoutInterval: this.opts.keepAliveTimeoutMs ?? 60_000,
         logErrors: false });
     } catch (err) {
-      log.warn(`createBot 失败: ${(err as Error).message}`);
-      this.scheduleReconnect(String((err as Error).message));
+      this.failure = errorFailure(err instanceof Error ? err : new Error(String(err)));
+      log.warn(`createBot 失败: ${this.failure}`);
+      this.scheduleReconnect(this.failure);
       return;
     }
     this._bot = bot;
@@ -469,6 +488,13 @@ export class Bridge {
       report: status => {
         log.info(`minecraft authentication ${status.status}`, { username, server: `${host}:${port}`, reason: status.reason });
         if (status.status === 'confirmed') activate();
+        if (status.status === 'blocked') queueMicrotask(() => {
+          // A wrong password/2FA/timeout needs operator attention. Reconnecting
+          // here would repeatedly submit the same failed credential.
+          if (this._bot !== bot || this.generation !== gen) return;
+          this.stopped = true;
+          bot.quit('服务器登录未通过，请检查账号配置后明确重连');
+        });
       } });
     this.serverLogin = login;
     this.bagFor(gen).register('server-login', login.stop);
@@ -641,6 +667,8 @@ export class Bridge {
         || !this.protocolSpawned || !login.ready()) return;
       setBlueprintMcVersion(bot.version);
       this.spawnedBot = bot;
+      this.failure = null;
+      this.lastError = null;
       this.reconnectAttempt = 0;
       this.refusedStreak = 0;
       this.installSpawnGear(bot, gen);
@@ -656,6 +684,7 @@ export class Bridge {
 
     const onGone = (reason: string) => {
       if (this._bot !== bot || this.generation !== gen) return;
+      this.failure = reason;
       this._bot = null;
       this.spawnedBot = null;
       this.protocolSpawned = false;
@@ -673,11 +702,14 @@ export class Bridge {
       this.opts.onDisconnect(reason, willReconnect, this.reconnectAttempt);
       if (willReconnect) this.scheduleReconnect(reason);
     };
-    bot.once('end', (reason) => onGone(String(reason)));
-    bot.once('kicked', (reason) => onGone(`kicked: ${JSON.stringify(reason)}`));
+    bot.once('end', (reason) => onGone(errorFailure(this.lastError, String(reason))));
+    bot.once('kicked', (reason) => onGone(kickFailure(reason)));
     bot.on('error', (err) => {
+      if (this.stopped || this._bot !== bot || this.generation !== gen) return;
+      this.lastError = err;
+      this.failure = errorFailure(err);
       this.opts.authentication?.failPending();
-      log.warn(`minecraft 连接错误: ${err.message}`);
+      log.warn(`minecraft 连接错误: ${this.failure}`);
       this.noteConnectError(err);
     });
   }
@@ -695,10 +727,9 @@ export class Bridge {
     const where = `${this.opts.host}:${this.opts.port}`;
     this.opts.log.error(`minecraft 连续 ${n} 次被 ${where} 拒连:连接被拒绝`);
     this.opts.onAlarm?.(
-      isLocalHost(this.opts.host)
-        ? `连着 ${n} 次连不上 ${where},端口上根本没有进程在听 —— MC 服务器没在跑,去控制台的 Minecraft 面板把它启动起来;` +
-          '在那之前我进不了游戏,做不了任何事。'
-        : `连着 ${n} 次连不上 ${where},对面端口没有进程在听 —— 那台服务器没在跑。`,
+      (this.opts.managedServer?.() ?? isLocalHost(this.opts.host))
+        ? `连着 ${n} 次连不上 ${where}(连接被拒绝)。请在控制台检查受管服务器的运行状态。`
+        : `连着 ${n} 次连不上 ${where}(连接被拒绝)。请检查服务器地址、端口与服务是否可用。`,
     );
   }
 
@@ -1029,7 +1060,13 @@ export class Bridge {
       suppressed.set(key, 0);
       lastAt.set(key, now);
     };
+    let reportedGeometryIssue = 0;
     bot.on('path_update', (r) => {
+      const issue = groundPathIssueOf(bot);
+      if (issue && issue.sequence > reportedGeometryIssue) {
+        reportedGeometryIssue = issue.sequence;
+        write('geometry-rejected', 'geometry-rejected', issue.reason, { ...issue }, true);
+      }
       lastPath = r.path.slice(0, 8).map((mv) => ({
         at: [mv.x, mv.y, mv.z],
         break: (mv.toBreak ?? []).slice(0, 3).map((p) => [p.x, p.y, p.z]),
@@ -1084,6 +1121,7 @@ export class Bridge {
           return;
         }
         let modernAssets = this.opts.viewerAssetsDir;
+        let agentViews: import('./viewer-agent-views.ts').AgentViewGallery | undefined;
         if (modernAssets) {
           const { readFile } = await import('node:fs/promises');
           const { join } = await import('node:path');
@@ -1107,6 +1145,7 @@ export class Bridge {
             agentMana: () => this.agentMana, serverProtocol: this.viewerServerProtocol(),
           }).catch(error => {relay?.close();throw error;});
           this.bagFor(gen).register('modern-viewer', () => this.releaseViewer(gen, port, handle.close));
+          agentViews = handle.agentViews;
         } else {
           const mod = await this.loadViewer();
           if (this.stopped || this._bot !== bot || this.generation !== gen || this.bagFor(gen).disposed) return;
@@ -1116,7 +1155,7 @@ export class Bridge {
           this.bagFor(gen).register('prismarine-viewer', () => this.releaseViewer(gen, port, close));
         }
         if (this.stopped || this.generation !== gen) return; // 旧代不得改新代状态
-        this.viewer = { gen, url: `http://127.0.0.1:${port}`, kind: modernAssets ? 'modern' : 'basic' };
+        this.viewer = { gen, url: `http://127.0.0.1:${port}`, kind: modernAssets ? 'modern' : 'basic', agentViews };
         this.opts.log.info(`minecraft viewer 已启动 http://127.0.0.1:${port}`);
       } catch (err) {
         this.opts.log.warn(`minecraft viewer 启动失败(不影响游玩): ${(err as Error).message}`);

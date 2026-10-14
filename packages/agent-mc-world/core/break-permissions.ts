@@ -2,6 +2,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 export const BREAK_ACL_CHANNEL = 'corti:break_acl';
+/** Neutral protocol used by independent clients; the legacy channel remains compatible. */
+export const NEUTRAL_BREAK_ACL_CHANNEL = 'agent_mc:break_acl';
 /** Paper 1.20.6 Messenger.MAX_MESSAGE_SIZE。 */
 const MAX_PACKET_BYTES = 32766;
 type Point = readonly [number, number, number];
@@ -50,7 +52,7 @@ export class BreakPermissions {
 
   /** Paper 插件 custom_payload JSON；返回 changed 时才需要重新算路。 */
   applyPacket(channel: unknown, data: unknown, now = Date.now()): 'changed' | 'refreshed' | false {
-    if (channel !== BREAK_ACL_CHANNEL) return false;
+    if (channel !== BREAK_ACL_CHANNEL && channel !== NEUTRAL_BREAK_ACL_CHANNEL) return false;
     try {
       const bytes = Buffer.isBuffer(data) ? data : data instanceof Uint8Array ? Buffer.from(data) : null;
       if (!bytes || bytes.length > MAX_PACKET_BYTES) return false;

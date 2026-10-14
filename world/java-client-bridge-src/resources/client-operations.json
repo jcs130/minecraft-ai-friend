@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "ok": true,
   "provider": "java-client",
-  "operationCount": 23,
+  "operationCount": 28,
   "serverRequired": false,
   "allGameplayVerified": false,
   "authority": "client_observed",
@@ -19,8 +19,16 @@
         "additionalProperties": false,
         "required": [],
         "properties": {
-          "afterSeq": {"type": "integer", "minimum": 0, "maximum": 2147483647},
-          "limit": {"type": "integer", "minimum": 1, "maximum": 64}
+          "afterSeq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          }
         }
       }
     },
@@ -551,8 +559,20 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "face": {"type": "string", "enum": ["up", "down", "north", "south", "east", "west"]},
-          "expectedHeldSnbt": {"type": "string"},
+          "face": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "north",
+              "south",
+              "east",
+              "west"
+            ]
+          },
+          "expectedHeldSnbt": {
+            "type": "string"
+          },
           "position": {
             "type": "object",
             "additionalProperties": false,
@@ -653,6 +673,174 @@
         "required": [
           "text"
         ]
+      }
+    },
+    {
+      "id": "baritone.state",
+      "description": "读取可选Baritone是否安装、控制归属、路径、目标与ETA；未安装明确available=false。",
+      "readOnly": true,
+      "available": true,
+      "async": false,
+      "permission": "signed_in_player",
+      "backend": "optional_baritone",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "baritone.goto",
+      "description": "客户端原生A*走到绝对坐标的目标方格；默认不拆块不垫块。实际到达才成功，沿用action_id及控制租约。",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "backend": "optional_baritone",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer",
+                "minimum": -29999984,
+                "maximum": 29999984
+              },
+              "y": {
+                "type": "integer",
+                "minimum": -2048,
+                "maximum": 2048
+              },
+              "z": {
+                "type": "integer",
+                "minimum": -29999984,
+                "maximum": 29999984
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "additionalProperties": false
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 600000,
+            "description": "毫秒。超过90秒须显式续租；断线或F8会停止，不自动恢复。"
+          }
+        },
+        "required": [
+          "position"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "baritone.mine",
+      "description": "按可见矿石采掘。blocks是方块ID；itemId是预期掉落物；targetCount是背包目标总量，不是新增数量。实际库存达标才成功，关闭对角透矿。",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "backend": "optional_baritone",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$"
+            },
+            "minItems": 1,
+            "maxItems": 16
+          },
+          "itemId": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$"
+          },
+          "targetCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4096
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 600000,
+            "description": "毫秒。超过90秒须显式续租；断线或F8会停止，不自动恢复。"
+          }
+        },
+        "required": [
+          "blocks",
+          "itemId",
+          "targetCount"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "baritone.follow",
+      "description": "在限定时段跟随同维度已加载且存活的UUID；目标消失明确失败。时段结束不代表其他任务完成。",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "backend": "optional_baritone",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "targetUuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 600000,
+            "description": "毫秒。超过90秒须显式续租；断线或F8会停止，不自动恢复。"
+          }
+        },
+        "required": [
+          "targetUuid",
+          "durationMs"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "baritone.farm",
+      "description": "以本人起点为中心，在半径内执行有限时段的原版成熟作物收获和补种；备好种子。过程结束不保证收成，核对库存和作物。模组作物不自动兼容。",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "backend": "optional_baritone",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "radius": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 600000,
+            "description": "毫秒。超过90秒须显式续租；断线或F8会停止，不自动恢复。"
+          }
+        },
+        "required": [
+          "radius",
+          "durationMs"
+        ],
+        "additionalProperties": false
       }
     }
   ]

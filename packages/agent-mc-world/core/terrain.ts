@@ -9,7 +9,7 @@
 import { Vec3 } from 'vec3';
 import { observedEntity, observationView } from './perception-sight.ts';
 import { vehicleStateFromBot, vehicleFingerprint, narrateVehicleState, type VehicleReading } from '../src/vehicle-state.ts';
-import { nowIso } from './support/runtime.mjs';
+import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import {
   type Durability, type ItemEnchant, type ItemLike, readDurability, readEnchants, readPotionName,
 } from './item-facts.ts';
@@ -23,6 +23,7 @@ import { BURNING_BLOCKS, SCORCHING_FLOOR, hazardBodyBounds } from './hazard-geom
 import { remainingEffectTicks } from './status-effects.ts';
 import type { TargetDiag } from './skill-context.ts';
 import { flightState, type FlightState } from './flight.ts';
+import { inventoryReadState, narrateInventorySync, type InventoryReadState } from './inventory-window-sync.ts';
 export { BURNING_BLOCKS, SCORCHING_FLOOR } from './hazard-geometry.ts';
 
 /** 八方位罗盘。北=-z 南=+z 东=+x 西=-x,与 move 技能同一套词。 */
@@ -150,6 +151,8 @@ export interface WorldSnapshot {
   inWater: boolean;
   /** 物品栏已从服务器同步到(登录后 window_items 未到之前不能把空栏当空) */
   invSynced: boolean;
+  /** Why an inventory read is unavailable; distinct from the initial login snapshot. */
+  inventorySync?: InventoryReadState;
   /** 0–24000;13000–23000 为夜 */
   timeOfDay: number;
   /** 抽这份快照时的现实时刻,部署时区的 nowIso 串;与游戏内的 timeOfDay 无关 */
@@ -353,7 +356,7 @@ export function snapshotFingerprint(s: WorldSnapshot): string {
     timePhrase(s.timeOfDay), isNight(s.timeOfDay) ? 'night' : 'day',
     s.raining ? 'rain' : 'clear',
     s.light === null ? 'l?' : `l${s.light}`,
-    s.invSynced ? 'inv' : 'nosync',
+    s.invSynced ? 'inv' : `nosync:${s.inventorySync?.phase ?? 'initial'}:${s.inventorySync?.reason ?? ''}`,
     `${s.heldItem ?? 'bare'}:${s.heldItemDisplayName ?? ''}`,
     s.inventory.map((i) => `${i.name}:${i.displayName ?? ''}x${i.count}`).sort().join(','),
     narrateCursor(s),
@@ -433,12 +436,12 @@ export function narrateWorldSegments(
     const held = s.heldItem ? `手里拿着${s.heldItemDisplayName ?? zhName(s.heldItem)}` : '两手空空';
     gear = `${held}。${prevBag ? narrateBagChange(prevBag, s.inventory) : bagFull}${narrateCursor(s)}`;
   } else {
-    gear = '背包还在从服务器同步，这份清单还没到。';
+    gear = narrateInventorySync(s.inventorySync);
   }
   segs.push({
     key: 'gear',
     text: gear,
-    cmp: s.invSynced ? `${s.heldItem ?? 'bare'}:${s.heldItemDisplayName ?? ''}|${bagFull}|${narrateCursor(s)}` : 'nosync',
+    cmp: s.invSynced ? `${s.heldItem ?? 'bare'}:${s.heldItemDisplayName ?? ''}|${bagFull}|${narrateCursor(s)}` : gear,
   });
 
   // 装备与状态自成一段:背包每挖一块土就变,盔甲与效果几十分钟才动一次,
@@ -486,7 +489,7 @@ export function narrateWorldSegments(
               .map((b) => `${whereIs(b.direction, b.distance, b.dy)}是${zhName(b.name)}${blockSuffix(b)}${blockCoordinateSuffix(b)}`)
               .join('、') +
             '。'
-        : '16 格内露出来的只有天然地形。',
+        : '当前已读且可见区域未见可报告的人工方块；未加载或被遮挡区域仍未知。',
     );
   }
   const structCmp = s.nearbyBlocks.map((b) =>
@@ -521,7 +524,7 @@ export function narrateWorldSegments(
     const covered = new Set(s.terrain.map((t) => t.direction));
     const flat = (Object.keys(DIRECTIONS) as Direction[]).filter((d) => !covered.has(d));
     if (flat.length > 0) tails.push(`${flat.map((d) => DIRECTION_ZH[d]).join('、')}边读到了，是平的`);
-    terrainText = `地形：${seg.join('、')}${tails.length > 0 ? `；${tails.join('；')}` : ''}。`;
+    terrainText = `地形：${[seg.join('、'), ...tails].filter(Boolean).join('；')}。`;
   }
   segs.push({ key: 'terrain', text: terrainText, cmp: '地形只随全量锚发' });
 
@@ -529,7 +532,7 @@ export function narrateWorldSegments(
   const others = s.players.filter(Boolean);
   segs.push({
     key: 'players',
-    text: others.length > 0 ? `服务器上还有：${others.join('、')}。` : '服务器上只有我一个人。',
+    text: others.length > 0 ? `当前收到的在线名单还有：${others.join('、')}。` : '当前名单尚未收到其他玩家；不能据此确认服务器只有我。',
     cmp: [...others].sort().join('、'),
   });
   return segs;
@@ -1726,7 +1729,7 @@ export function snapshotFromBot(
     maxEntities?: number;
     invSynced?: boolean;
     scanBlocks?: boolean;
-    /** 现实时刻按哪个时区报;缺省东八区 */
+    /** 现实时刻按哪个时区报;缺省本机时区 */
     timezone?: string;
     chestOf?: (dimension: string, p: { x: number; y: number; z: number }) => { items: ItemStack[] } | undefined;
   },
@@ -1870,6 +1873,7 @@ export function snapshotFromBot(
       ...(ench.length > 0 ? { enchantments: ench } : {}) };
   };
   const cursor = (bot.currentWindow ?? bot.inventory)?.selectedItem;
+  const inventorySync = inventoryReadState(bot, opts?.invSynced ?? true);
 
   return {
     position: { x: pos.x, y: pos.y, z: pos.z },
@@ -1880,9 +1884,10 @@ export function snapshotFromBot(
     // 旱地上的氧气读数是残留旧值,一律按满算;水下才用真实值(截到 0–20)
     oxygen: inWater ? Math.max(0, Math.min(20, bot.oxygenLevel ?? 20)) : 20,
     inWater,
-    invSynced: opts?.invSynced ?? true,
+    invSynced: inventorySync.phase === 'ready',
+    inventorySync,
     timeOfDay,
-    realTime: nowIso(opts?.timezone ?? 'Asia/Shanghai'),
+    realTime: nowIso(opts?.timezone ?? SYSTEM_TIMEZONE),
     light: sampleLight(bot, isNight(timeOfDay)),
     raining: isRaining(bot),
     biome,
