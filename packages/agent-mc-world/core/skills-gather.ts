@@ -649,7 +649,9 @@ export async function skillFind(
   // 定向找农作物通常是为了收获。幼苗可以由站着 find 查看 age，但不能让
   // 定向搜索在出发点因一棵未成熟作物立刻宣称找到可采集目标。
   const harvestSearch = direction !== undefined && CROP_MAX_AGE[target] !== undefined;
-  const searchedName = harvestSearch ? `成熟${zhThing(target)}` : zhThing(target);
+  // find resolves exact entity IDs before item names (chicken is also food).
+  const targetName = entityName ? zhEntity(entityName) : zhThing(target);
+  const searchedName = harvestSearch ? `成熟${targetName}` : targetName;
   const noFindText = (): string => structureSeen.size > 0
     ? `没看见可作为批量采集来源的${searchedName}`
     : deniedSeen.size > 0 ? `没找到未被标记保护的${searchedName}` : `没看见${searchedName}`;
@@ -735,7 +737,7 @@ export async function skillFind(
     if (hits.length === 0) {
       const kind = findKind(null, entityName);
       return finish(
-        `当前观察:在周围 ${radius} 格内没看见${deniedSeen.size > 0 ? '未被标记保护的' : ''}${zhThing(target)}${capped}${deniedNote()};` +
+        `当前观察:在周围 ${radius} 格内没看见${deniedSeen.size > 0 ? '未被标记保护的' : ''}${targetName}${capped}${deniedNote()};` +
           `这只说明当前已加载且视线可达的观察面没有命中,不表示目标不存在` +
           `${historyNote(kind)}。${findEmptyHint(bot, ctx, target, entityName !== null)}`,
         null,
@@ -753,7 +755,7 @@ export async function skillFind(
     });
     const more = hits.length - shown.length;
     return finish(
-      `当前观察:在周围 ${radius} 格内看见 ${hits.length} 处${zhThing(target)}${capped}: ` +
+      `当前观察:在周围 ${radius} 格内看见 ${hits.length} 处${targetName}${capped}: ` +
         `${shown.join('、')}${more > 0 ? `,另有 ${more} 处` : ''}${deniedNote()}`,
       hits[0],
     );
