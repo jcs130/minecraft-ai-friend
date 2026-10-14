@@ -8,6 +8,8 @@ export interface JavaClientConfiguration {
   viewerMode?: 'auto' | 'data' | 'framebuffer';
   /** Expose the optional trusted local Python executor only after explicitly installing/enabling Minescript. */
   minescriptEnabled?: boolean;
+  /** Fold short action terminals into the tool reply; zero keeps admission-only replies. */
+  actionWaitMs?: number;
 }
 export interface JavaClientAction {
   id: string; operation: string; phase: 'accepted' | 'running' | 'completed' | 'partial' | 'blocked' | 'cancelled' | 'unknown';

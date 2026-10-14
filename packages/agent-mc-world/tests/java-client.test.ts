@@ -13,7 +13,7 @@ function rig(scriptEnabled = false) {
   const data=directory(), credentials=join(data,'connection.json');
   writeFileSync(credentials,JSON.stringify({protocol:'agent-mc-java/v1',endpoint:'http://127.0.0.1:1234',token:'a'.repeat(64),instanceId:'offline-fixture'}));
   const cfg={...structuredClone(MINECRAFT_CLIENT_DEFAULTS),provider:'java-client' as const,host:'fixture.test',username:'Test',version:'1.20.6',
-    javaClient:{expectedUuid:offlineUuid('Test'),expectedServer:'fixture.test:25565',controllerId:'independent-test',credentialsFile:credentials,ledgerDir:join(data,'ledger'),leaseMs:15000,minescriptEnabled:scriptEnabled}};
+    javaClient:{expectedUuid:offlineUuid('Test'),expectedServer:'fixture.test:25565',controllerId:'independent-test',credentialsFile:credentials,ledgerDir:join(data,'ledger'),leaseMs:15000,minescriptEnabled:scriptEnabled,actionWaitMs:0}};
   const state={protocol:'agent-mc-java/v1',connected:true,uuid:cfg.javaClient.expectedUuid,server:cfg.javaClient.expectedServer,username:'Test',sampledAt:new Date().toISOString(),generation:1,
     position:[1,65,3],health:20,food:20,inventory:[{slot:0,name:'player_head',displayName:'大背包',components:'CustomModelData=backpack',encoded:{components:{custom_name:'大背包'}}}],cursor:{empty:true},menuSlots:[],actions:[] as any[],messages:[]};
   const calls:any[]=[];let completed=false;
@@ -47,6 +47,7 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
     const r=rig(true);expect(r.calls).toEqual([]);await r.runtime.connect();
     try {
       const manual=await r.runtime.call('mc_script',{api:'index'});expect(manual.text).toContain('trusted code');expect(r.calls.some(call=>call.method==='do')).toBe(false);
+      const ambiguous=await r.runtime.call('mc_script',{api:'index',code:'result="placeholder"'});expect(ambiguous.text).toContain('not executed');expect(r.calls.some(call=>call.method==='do')).toBe(false);
       await r.runtime.call('mc_control',{action:'claim'});
       const code='result = minescript.player_position()';
       const accepted=await r.runtime.call('mc_script',{code,input:{label:'fixture'},timeoutMs:2000,action_id:'program-original'});
@@ -56,6 +57,48 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
       await r.runtime.call('mc_cancel',{action_id:'program-original'});
       expect(r.calls.filter(call=>call.method==='do')).toHaveLength(1);
     } finally {await r.runtime.disconnect();}
+  });
+  it('returns a short real terminal in the original call without ending the host turn or resubmitting',async()=>{
+    const r=rig();r.cfg.javaClient.actionWaitMs=1000;await r.runtime.connect();await r.runtime.call('mc_control',{action:'claim'});
+    try {
+      setTimeout(()=>r.complete(),30);
+      const reply=await r.runtime.call('mc_do',{action_id:'short-original',operation:'move',input:{ticks:2}});
+      expect(reply.execution).toMatchObject({id:'short-original',phase:'completed',terminal:true,goalCompleted:false});
+      expect(reply.control?.turnEnded).toBe(false);expect(r.calls.filter(c=>c.method==='do')).toHaveLength(1);
+    }finally{await r.runtime.disconnect();}
+  });
+  it('leaves long actions admitted and cancels folded waiting without cancelling or replaying body work',async()=>{
+    const r=rig();await r.runtime.connect();await r.runtime.call('mc_control',{action:'claim'});
+    try {
+      const long=await r.runtime.call('mc_do',{action_id:'long-original',operation:'move',input:{ticks:200},waitMs:30});
+      expect(long.execution).toMatchObject({terminal:false,goalCompleted:false});
+      const abort=new AbortController();setTimeout(()=>abort.abort(new Error('cancel short wait')),20);
+      await expect(r.runtime.call('mc_do',{action_id:'second-original',operation:'move',input:{ticks:2},waitMs:1000},{requestId:'folded-wait',signal:abort.signal})).rejects.toThrow('cancel short wait');
+      expect(r.calls.filter(c=>c.method==='do')).toHaveLength(2);expect(r.calls.some(c=>['cancel','stop'].includes(c.method))).toBe(false);
+    }finally{await r.runtime.disconnect();}
+  });
+  it('delivers every native notice and terminal with cooperative wakeups instead of interrupting on own receipts',async()=>{
+    const r=rig(),events:any[]=[];
+    await r.world.start({log:nullLogger(),pushEvent:async(event:any,options:any)=>{events.push({event,options});return event;}} as any);
+    try {
+      r.state.messages=[{seq:1,text:'command reply',at:new Date().toISOString(),overlay:false,kind:'system'},
+        {seq:2,text:'HUD',at:new Date().toISOString(),overlay:true,kind:'system'},
+        {seq:3,text:'hello',at:new Date().toISOString(),overlay:false,kind:'player',sender:'Alex'}] as any;
+      r.state.actions=[{id:'own-completed',phase:'completed',updatedAt:1}];r.complete();
+      await vi.waitFor(()=>expect(events).toHaveLength(4),{timeout:1500});
+      expect(events.map(e=>[e.event.text==='command reply'?'system':e.event.text==='HUD'?'hud':e.event.text==='hello'?'player':'terminal',e.options.trigger]))
+        .toEqual([['system','debounce'],['hud','piggyback'],['player','preempt'],['terminal','flush']]);
+      expect(events.at(-1).event.execution).toMatchObject({id:'own-completed',terminal:true,goalCompleted:false});
+    }finally{await r.world.stop();}
+  });
+  it('offers a bounded batch probe through the same original body task without model-generated code',async()=>{
+    const r=rig(true);await r.runtime.connect();await r.runtime.call('mc_control',{action:'claim'});
+    try {
+      const reply=await r.runtime.call('mc_probe',{action_id:'probe-original',positions:[[-1,65,-2]],names:['minecraft:stone']});
+      expect(reply.execution).toMatchObject({id:'probe-original',terminal:false,goalCompleted:false});
+      const call=r.calls.find(c=>c.method==='do');expect(call.params).toMatchObject({action_id:'probe-original',operation:'minescript.run',input:{timeoutMs:5000,input:{positions:[[-1,65,-2]],names:['minecraft:stone']}}});
+      expect(call.params.input.code).toContain('getblocklist');expect(call.params.input.code).not.toContain('press_key');
+    }finally{await r.runtime.disconnect();}
   });
   it('serves focused version-correct Python recipes through SDK/MCP without executing body operations', async()=>{
     const r=rig(true),server=createMinecraftMcpServer(r.runtime,'script-help'),client=new Client({name:'script-help',version:'1'});

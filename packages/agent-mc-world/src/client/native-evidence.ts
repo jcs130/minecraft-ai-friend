@@ -12,13 +12,20 @@ export class NativeEvidenceArchive {
     writeFileSync(join(this.directory, `${name}.json`), JSON.stringify({ key, sha256 }));
     return { key, sha256, originalChars: text.length };
   }
-  read(key: string, sha256: string | undefined, offset = 0, limit = 8000) {
+  read(key: string, sha256: string | undefined, offset = 0, limit = 8000, part: 'full' | 'script' = 'full') {
+    if (!['full','script'].includes(part)) throw new Error('Unknown evidence part; use full or script');
     if (!key || key.length > 512 || !Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 16000) throw new Error('Invalid original evidence query');
     const name = hash(key), latest = sha256 ?? JSON.parse(readFileSync(join(this.directory, `${name}.json`), 'utf8')).sha256;
     if (!/^[a-f0-9]{64}$/.test(latest)) throw new Error('Invalid evidence digest');
     const text = gunzipSync(readFileSync(join(this.directory, `${name}.${latest}.json.gz`)), { maxOutputLength: 24 * 1024 * 1024 }).toString('utf8');
     if (hash(text) !== latest) throw new Error('Original evidence digest mismatch');
-    return { key, sha256: latest, totalChars: text.length, offset, text: text.slice(offset, offset + limit), hasMore: offset + limit < text.length };
+    let selected = text;
+    if (part === 'script') {
+      const original = JSON.parse(text), script = original.evidence?.script ?? original.script;
+      if (script === undefined) throw new Error('This original evidence has no script report');
+      selected = JSON.stringify(script);
+    }
+    return { key, sha256: latest, part, originalChars: text.length, totalChars: selected.length, offset, text: selected.slice(offset, offset + limit), hasMore: offset + limit < selected.length };
   }
 }
 export function compactItem(value: any): unknown {
