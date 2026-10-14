@@ -4710,6 +4710,25 @@ export class Executor {
     this.releaseAllHolds();
     releaseBody(this.opts.getBot(), '死亡', this.opts.diag, 'link');
     const holdText = held ? `;当时队列还冻结着(${held}),那份排队计划因死亡作废` : '';
+    // Accepted work must reach a real terminal receipt even when it never
+    // started. Queue clearing alone leaves external coordinators waiting on
+    // the old task forever after respawn. Keep the same identity/step ledger
+    // contract used for connection loss; late old-body work stays epoch-fenced.
+    const reported = new Set<number>();
+    const reason = `死亡撤单${holdText}`;
+    if (current) {
+      reported.add(current.id);
+      this.reportCancelled(current, reason, this.progressOf(current));
+    }
+    if (frozen && !reported.has(frozen.id)) {
+      reported.add(frozen.id);
+      this.reportCancelled(frozen, reason, Executor.frozenProgress(frozen));
+    }
+    for (const task of queued) {
+      if (reported.has(task.id)) continue;
+      reported.add(task.id);
+      this.reportCancelled(task, reason, Executor.frozenProgress(task));
+    }
     this.opts.diag?.write({
       lane: 'task', event: 'death-cancelled', taskId: current?.id ?? frozen?.id ?? queued[0]?.id,
       msg: `死亡取消了当前与待执行工作(${current ? 1 : 0} 当前、${frozen ? 1 : 0} 冻结、${queued.length} 排队)`
@@ -4722,13 +4741,6 @@ export class Executor {
         releasedHold: held,
       },
     });
-    if (held !== null) {
-      this.opts.report({
-        kind: 'superseded',
-        text: `死的时候队列还冻着(${held}),排在里面的计划因死亡作废,想接着做要重新排。`,
-        taskId: current?.id ?? frozen?.id ?? queued[0]?.id,
-      });
-    }
   }
 
   /**
