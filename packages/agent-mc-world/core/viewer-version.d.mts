@@ -5,3 +5,4 @@ export function viewerVersionRegistry(version: string,
     biomes: Array<{ id: number; name: string }>; plainsBiomeId: number; TradeItem: { fromNotch(packet: unknown): unknown };
   };
 export function viewerVersionCss(css: string, version: string): string;
+export function viewerVersionTexture(relative: string, version: string): string | null;

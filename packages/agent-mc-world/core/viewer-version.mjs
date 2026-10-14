@@ -26,3 +26,13 @@ export function viewerVersionCss(css, version) {
   if (!['1.20.6', '1.21.1'].includes(version)) throw Error('VIEWER_VERSION_UNSUPPORTED');
   return css.replaceAll('/textures/1.20.6/', `/textures/${version}/`);
 }
+
+/** Resolve renderer legacy entity names to the exact selected Java texture layout. */
+export function viewerVersionTexture(relative, version) {
+  if (!['1.20.6', '1.21.1'].includes(version)) throw Error('VIEWER_VERSION_UNSUPPORTED');
+  if (!relative.startsWith('textures/')) return null;
+  let texture = relative.slice('textures/'.length);
+  if (version === '1.21.1' && ['entity/squid.png', 'entity/glow_squid.png'].includes(texture))
+    texture = `entity/squid/${texture.slice('entity/'.length)}`;
+  return `textures/${version}/${texture}`;
+}

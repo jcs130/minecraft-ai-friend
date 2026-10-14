@@ -14,6 +14,27 @@ const dir = () => { const path = mkdtempSync(join(tmpdir(), 'native-minecraft-cl
 afterEach(() => { for (const path of dirs.splice(0)) rmSync(path, { recursive: true, force: true }); });
 
 describe('generic Minecraft client boundary', () => {
+  it.each(['mc', 'mymc'] as const)('exposes host-owned fast choices through a composed World using %s tool names', async prefix => {
+    let decisions = 0;
+    const environment = { id: 'composed-world', tools: () => [], envPromptVars: async () => ({}), start: async () => {}, stop: async () => {},
+      requestFacts: () => ({ text: 'Standing on dry ground; no current task.', parts: [{ key: 'place', text: 'Dry ground' }] }) };
+    const cfg = Object.assign(structuredClone(MINECRAFT_CLIENT_DEFAULTS), { host: '127.0.0.1', username: 'ChoiceTest' });
+    const client = new MinecraftAgentClient({ cfg, dataDir: dir(), log: nullLogger(), decisions: { request: async () => {
+      decisions++; return { answers: { action: { choice: 'inspect', confidence: .9, probabilities: { inspect: .9, build: .05, _inspect: .05 } } },
+        usage: { input_tokens: 333, output_tokens: 0, cached_input_tokens: null } };
+    } } }, environment as never, { profile: 'custom', toolPrefix: prefix });
+    try {
+      await client.connect(); client.beginTurn('choice-turn');
+      expect(client.tools().filter(tool => tool.name === `${prefix}_choose`)).toHaveLength(1);
+      const result = await client.call(`${prefix}_choose`, { category: 'goal', goal: 'Choose the next verified step', candidates: [
+        { id: 'inspect', label: 'Inspect material stock', evidence: 'The stock has not been read this session', ready: true },
+        { id: 'build', label: 'Build next stage', evidence: 'Materials were available in a historical note', ready: true },
+      ] }, { requestId: 'choice-request', turnId: 'choice-turn' });
+      expect(JSON.parse(result.text)).toMatchObject({ status: 'advice', choice: 'inspect', inputTokens: 333, execution: '未执行，行动前核验' });
+      expect(decisions).toBe(1);
+    } finally { await client.disconnect(); }
+  });
+
   it('preserves readiness through a composed console wrapper and exposes only allowlisted fields', async () => {
     let connection: { ready: boolean; phase: string; deviceCode: string } | null = { ready: false, phase: 'retrying', deviceCode: 'DO_NOT_EXPOSE' };
     const environment = { id: 'wrapped-world', tools: () => [], envPromptVars: async () => ({}), start: async () => {}, stop: async () => {},

@@ -1,5 +1,5 @@
 import { createViewerHeadTextures } from './viewer-head-textures.mjs';
-import { viewerVersionRegistry, viewerVersionCss, viewerVersionAssets } from './viewer-version.mjs';
+import { viewerVersionRegistry, viewerVersionCss, viewerVersionAssets, viewerVersionTexture } from './viewer-version.mjs';
 import { viewerBodyState } from './viewer-body-state.ts';
 import { viewerSleepState } from './viewer-sleep.ts';
 /** Read-only modern Minecraft picture served from the current Mineflayer bot. */
@@ -783,8 +783,8 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       const range = typeof req.headers.range === 'string' ? req.headers.range : undefined;
       if (relative === 'index.js' && await serveViewerAsset(res, root, 'dist/modern-viewer.js', 'no-store', range)) return;
       if (await serveViewerAsset(res, path.join(root, 'public'), relative, undefined, range)) return;
-      if (relative.startsWith('textures/') && await serveViewerAsset(res, path.join(root, 'public'),
-        `textures/${bot.version}/${relative.slice('textures/'.length)}`, undefined, range)) return;
+      const versionTexture = viewerVersionTexture(relative, bot.version);
+      if (versionTexture && await serveViewerAsset(res, path.join(root, 'public'), versionTexture, undefined, range)) return;
       res.writeHead(404); res.end();
     } catch {
       if (!res.headersSent) res.writeHead(500);

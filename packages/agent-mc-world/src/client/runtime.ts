@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { createMinecraftChoiceTool } from './choice.ts';
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { EventEnvelope, Logger, ModelFacts, ToolOutcome, World, WorldHost } from './contracts.ts';
+import type { EventEnvelope, Logger, ModelFacts, ToolOutcome, World, WorldHost, WorldRequestFacts } from './contracts.ts';
 import { MinecraftClientWorld } from './world.ts';
 import { JavaClientWorld, JAVA_CLIENT_ENVIRONMENT } from './java-client.ts';
 import { assertMinecraftReady } from './config.ts';
@@ -58,6 +59,8 @@ export class MinecraftAgentClient {
   private readonly facts: CurrentFacts;
   private readonly lease: AgentConnectionLease;
   private offlineMemoryCalls = 0;
+  private readonly hostChoice = createMinecraftChoiceTool(() => this.host,
+    () => this.phase === 'started' ? (this.world.requestFacts?.() as WorldRequestFacts | null) ?? null : null);
 
   constructor(protected readonly options: MinecraftClientOptions,
     private readonly world: ClientEnvironment = options.cfg.provider === 'java-client' ? new JavaClientWorld(options.cfg)
@@ -96,7 +99,11 @@ export class MinecraftAgentClient {
   get toolPrefix() { return this.binding.toolPrefix; }
   protected validateConfig(): void { assertMinecraftReady(this.options.cfg); }
 
-  tools() { return this.world.tools(); }
+  tools() {
+    const tools = this.world.tools(), name = `${this.toolPrefix}_choose`;
+    return this.options.decisions && !tools.some(tool => tool.name === name || tool.name === 'mc_choose')
+      ? [...tools, { ...this.hostChoice, name }] : tools;
+  }
 
   async connect(): Promise<void> {
     if (this.phase === 'started') return;
