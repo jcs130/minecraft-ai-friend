@@ -149,12 +149,14 @@ function storageStats(parts: StoragePart[]): StorageStat[] {
 function pushStatus(): void {
   if (!mod) return;
   const decl = mod.console();
+  const connection = typeof mod.connectionReadiness === 'function' ? mod.connectionReadiness() : null;
   const note = {
     kind: 'status' as const,
     decl: { lamps: decl.lamps, badges: decl.badges, links: decl.links },
     storage: storageStats(decl.storage ?? []),
     promptVars: mod.envPromptRuntimeVars(),
     requestFacts: mod.requestFacts(),
+    ...(connection ? { connection: { ...connection, observedAt: Date.now() } } : {}),
   };
   const key = JSON.stringify(note);
   if (key === lastStatus) return;

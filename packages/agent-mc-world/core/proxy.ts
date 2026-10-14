@@ -82,6 +82,7 @@ export class MinecraftWorldProxy implements World {
   private declCache: Pick<WorldConsoleDecl, 'lamps' | 'badges' | 'links'> = {};
   private storageCache: StorageStat[] = [];
   private requestFactsCache: WorldRequestFacts | null = null;
+  private connectionCache: { ready: boolean; phase: string; observedAt: number } | null = null;
   private promptVars: Record<'minecraft.current_task' | 'minecraft.goals', string> = {
     'minecraft.current_task': '(引擎尚未报告任务状态；用 mc_queue 现查)',
     'minecraft.goals': '(引擎尚未报告目标状态；用 mc_goal 现查)',
@@ -117,6 +118,14 @@ export class MinecraftWorldProxy implements World {
   requestFacts(): WorldRequestFacts | null {
     if (!this.ready || !this.child?.connected || !this.requestFactsCache) return null;
     return { ...this.requestFactsCache, snapshotTypes: [...this.requestFactsCache.snapshotTypes] };
+  }
+
+  /** Existing engine status heartbeat only; never RPC into human authentication state. */
+  connectionReadiness(): { ready: boolean; phase: string } | null {
+    const cached = this.connectionCache;
+    if (!this.ready || !this.child?.connected || !cached || Date.now() - cached.observedAt > 5000
+        || cached.observedAt - Date.now() > 1000) return null;
+    return { ready: cached.ready, phase: cached.phase };
   }
 
   tools(): ToolDef[] {
@@ -167,6 +176,7 @@ export class MinecraftWorldProxy implements World {
 
   console(): WorldConsoleDecl {
     return {
+      connection: this.connectionReadiness(),
       lamps: this.declCache.lamps ?? [this.child
         ? { label: '引擎', state: 'loading' as const, hint: '启动中' }
         : { label: '引擎', state: 'offline' as const, hint: '未启动' }],
@@ -349,6 +359,7 @@ export class MinecraftWorldProxy implements World {
     this.declCache = {};
     this.storageCache = [];
     this.requestFactsCache = null;
+    this.connectionCache = null;
     this.promptVars = {
       'minecraft.current_task': '(引擎尚未报告任务状态；用 mc_queue 现查)',
       'minecraft.goals': '(引擎尚未报告目标状态；用 mc_goal 现查)',
@@ -476,6 +487,9 @@ export class MinecraftWorldProxy implements World {
         this.storageCache = note.storage;
         this.promptVars = note.promptVars;
         this.requestFactsCache = note.requestFacts;
+        this.connectionCache = note.connection && typeof note.connection.ready === 'boolean'
+          && typeof note.connection.phase === 'string' && Number.isFinite(note.connection.observedAt)
+          ? { ready: note.connection.ready, phase: note.connection.phase, observedAt: note.connection.observedAt } : null;
         return;
     }
   }

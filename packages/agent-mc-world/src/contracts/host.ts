@@ -93,6 +93,8 @@ export interface ConfigGroup {
   schema: { type: 'object'; title: string; description?: string; properties: Record<string, ConfigProperty> };
 }
 export interface WorldConsoleDecl {
+  /** Optional metadata facet preserved by wrappers; contains no authentication state. */
+  connection?: { ready: boolean; phase: string } | null;
   label?: string;
   lamps?: Array<{ label: string; state: 'online' | 'loading' | 'error' | 'offline'; hint?: string }>;
   badges?: Array<{ label: string; value: string | number; tone?: 'on' | 'off' | 'plain' }>;

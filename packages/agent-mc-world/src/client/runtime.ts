@@ -31,7 +31,10 @@ export interface MinecraftClientOptions {
   log: Logger;
 }
 
-export type ClientEnvironment = World & { requestFacts?(): unknown };
+export type ClientEnvironment = World & {
+  requestFacts?(): unknown;
+  connectionReadiness?(): { ready: boolean; phase: string } | null;
+};
 
 /** The caller owns reasoning, personal memory and wakeups. The client owns game receipts and an optional game notebook. */
 export class MinecraftAgentClient {
@@ -141,7 +144,10 @@ export class MinecraftAgentClient {
 
   status() {
     const console = this.world.console?.();
+    const connection = this.world.connectionReadiness?.() ?? console?.connection ?? null;
     return { profile: this.profile, toolPrefix: this.toolPrefix, phase: this.phase, run: this.journal.run, latestCursor: this.journal.store.latestCursor(),
+      connection: connection && typeof connection.ready === 'boolean' && typeof connection.phase === 'string'
+        ? { ready: connection.ready, phase: connection.phase } : null,
       lamps: console?.lamps ?? [], links: console?.links ?? [],
       facts: this.phase === 'started' ? this.world.requestFacts?.() ?? null : null };
   }
@@ -159,7 +165,7 @@ export class MinecraftAgentClient {
       connection, links: this.status().links,
       configuredAccounts: { agent: cfg.username, observer: cfg.client.username, player: cfg.player.username },
       configuredAuthentication: { agent: cfg.auth ?? 'offline', observer: cfg.client.auth ?? 'offline', player: cfg.player.auth ?? 'offline' },
-      viewerAssetNote: 'Bundled modern assets: Java 1.20.6. Other versions need matching assets or the fallback viewer.',
+      viewerAssetNote: 'Modern viewer assets must match the action connection version; the bundled version and hashes are pinned in release-sources.json.',
     };
   }
 

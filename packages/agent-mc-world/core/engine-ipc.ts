@@ -89,6 +89,7 @@ export type EngineNote =
       storage: StorageStat[];
       promptVars: Record<'minecraft.current_task' | 'minecraft.goals', string>;
       requestFacts: WorldRequestFacts | null;
+      connection?: { ready: boolean; phase: string; observedAt: number };
     };
 
 /** 子进程调用宿主并等待结果。跨进程 drain 仅支持读取本 World 来源的事件。 */

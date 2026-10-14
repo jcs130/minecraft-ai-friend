@@ -18,6 +18,24 @@ import {MinecraftWorldProxy} from '../core/proxy.ts';
 import {MINECRAFT_CLIENT_DEFAULTS} from '../src/client/config.ts';
 import {FakeHost} from './method-host.ts';
 afterEach(()=>{vi.useRealTimers();state.children.length=0;});
+it('forwards fresh server readiness through the child proxy and expires missing or stale status without RPC',async()=>{
+  vi.useFakeTimers();
+  const proxy=new MinecraftWorldProxy({cfg:structuredClone(MINECRAFT_CLIENT_DEFAULTS)}),host=new FakeHost();
+  const started=proxy.start(host),child=state.children[0],init=child.sent.find((m:any)=>m.req?.kind==='init');
+  child.emit('message',{t:'rep',id:init.id,ok:true,value:null});await started;
+  const status=(connection?:unknown)=>child.emit('message',{t:'note',note:{kind:'status',decl:{},storage:[],promptVars:{},requestFacts:null,connection}});
+  expect(proxy.connectionReadiness()).toBeNull();
+  status({ready:true,phase:'online',observedAt:Date.now(),deviceCode:'MUST_NOT_ESCAPE'});
+  const sent=child.sent.length;
+  expect(proxy.connectionReadiness()).toEqual({ready:true,phase:'online'});
+  expect(child.sent).toHaveLength(sent);
+  await vi.advanceTimersByTimeAsync(5100);
+  expect(proxy.connectionReadiness()).toBeNull();
+  status({ready:false,phase:'retrying',observedAt:Date.now()});
+  expect(proxy.connectionReadiness()).toEqual({ready:false,phase:'retrying'});
+  status();expect(proxy.connectionReadiness()).toBeNull();
+  await proxy.stop();expect(proxy.connectionReadiness()).toBeNull();
+});
 it.each(['SIGINT','SIGTERM'])('does not auto-restart an interrupted child (%s)',async signal=>{
   vi.useFakeTimers();
   const proxy=new MinecraftWorldProxy({cfg:structuredClone(MINECRAFT_CLIENT_DEFAULTS)}),host=new FakeHost();

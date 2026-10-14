@@ -1122,17 +1122,8 @@ export class Bridge {
         }
         let modernAssets = this.opts.viewerAssetsDir;
         let agentViews: import('./viewer-agent-views.ts').AgentViewGallery | undefined;
-        if (modernAssets) {
-          const { readFile } = await import('node:fs/promises');
-          const { join } = await import('node:path');
-          try {
-            const manifest = JSON.parse(await readFile(join(modernAssets, 'viewer-assets.json'), 'utf8'));
-            if (manifest.minecraftVersion !== bot.version) {
-              this.opts.log.warn(`Modern assets ${manifest.minecraftVersion} do not match Java ${bot.version}; using the basic viewer.`);
-              modernAssets = '';
-            }
-          } catch { /* An explicitly configured broken pack fails with its own diagnostic. */ }
-        }
+        // startModernViewer selects only an explicitly packaged matching version.
+        // Configured broken/mismatched assets remain a visible error instead of an approximate picture.
         if (modernAssets) {
           const { startModernViewer } = await import('./modern-viewer.ts');
           if (this.stopped || this._bot !== bot || this.generation !== gen || this.bagFor(gen).disposed) return;

@@ -1,4 +1,4 @@
-/** Translate server biome registry IDs in viewer chunks to 1.20.6 IDs. */
+/** Translate server biome registry IDs into the matching viewer's vanilla registry. */
 function nearestVanillaBiome(name: string): string {
   const value = name.replace(/^.*:/, '').toLowerCase();
   if (/cherry|sakura/.test(value)) return 'cherry_grove';
@@ -23,7 +23,7 @@ export function biomeIdMap(
 ): Map<number, number> {
   const targetByName = new Map(vanilla.map(biome => [biome.name.replace(/^minecraft:/, ''), biome.id]));
   const fallback = targetByName.get('plains');
-  if (fallback === undefined) throw Error('Minecraft 1.20.6 群系列表缺少 plains');
+  if (fallback === undefined) throw Error('Viewer biome registry is missing plains');
   const result = new Map<number, number>();
   const add = (key: string, biome: { id?: number; name?: string }) => {
     const id = Number.isInteger(biome.id) ? biome.id! : Number(key);

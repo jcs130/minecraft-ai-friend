@@ -20,6 +20,7 @@ import { PLACE_REACH } from './cell-facts.ts';
 import { flightState } from './flight.ts';
 import { cancelControlInput, waterControlActive } from './skills-control.ts';
 import { groundPathIssueOf } from './path-waypoints.ts';
+import { corridorSafe } from './idle-actions.ts';
 
 export const { goals } = pathfinderPkg;
 
@@ -532,27 +533,53 @@ export class Wedged extends Error {
 }
 
 /**
- * 寻路卡住时释放控制键，再跳跃、后退和侧移解卡。
+ * 寻路卡住时只在已核实的干燥平地短程后退和侧移，不盲跳到崖边或未知地形。
  * 必须先撤寻路目标，避免寻路器逐 tick 覆盖控制键。
  */
 export async function unwedgeBody(bot: Bot, ctx: SkillContext): Promise<number> {
-  const hold = async (keys: readonly string[], ms: number): Promise<void> => {
-    for (const k of keys) bot.setControlState(k as never, true);
-    await sleep(ms);
-    for (const k of keys) bot.setControlState(k as never, false);
-  };
   bot.clearControlStates();
   const before = bot.entity.position.clone();
-  await hold(['jump', 'back'], 400);
+  let attempted = false;
+  const safe = (direction: 'back' | 'left'): boolean => {
+    const p = bot.entity.position, yaw = bot.entity.yaw;
+    if (!Number.isFinite(yaw)) return false;
+    const dx = direction === 'back' ? Math.sin(yaw) : -Math.cos(yaw);
+    const dz = direction === 'back' ? Math.cos(yaw) : Math.sin(yaw);
+    return corridorSafe(bot, p, p.offset(dx * 1.2, 0, dz * 1.2));
+  };
+  try {
+    for (const [direction, ms] of [['back', 400], ['left', 300]] as const) {
+      checkAbort(ctx);
+      if (!safe(direction)) {
+        ctx.diag?.write({ lane: 'path', event: 'goto-unwedge-unsafe', taskId: ctx.taskId,
+          msg: `解卡${direction === 'back' ? '后退' : '侧移'}未核实到连续干燥支撑与净空，未发移动按键` });
+        continue;
+      }
+      attempted = true;
+      bot.setControlState('sneak', true);
+      bot.setControlState(direction, true);
+      try {
+        for (let elapsed = 0; elapsed < ms; elapsed += 50) {
+          checkAbort(ctx);
+          if (!safe(direction)) break;
+          await sleep(50);
+        }
+      } finally {
+        bot.setControlState(direction, false);
+        bot.setControlState('sneak', false);
+      }
+    }
+  } finally {
+    bot.clearControlStates();
+  }
   checkAbort(ctx);
-  await hold(['jump', 'left'], 300);
-  bot.clearControlStates();
-  await sleep(200);
+  if (attempted) await sleep(200);
+  checkAbort(ctx);
   const after = bot.entity.position;
   const moved = Math.hypot(after.x - before.x, after.y - before.y, after.z - before.z);
   ctx.diag?.write({
     lane: 'path', event: 'goto-unwedge', taskId: ctx.taskId,
-    msg: `钉在原地,跳/退解卡:挪了 ${moved.toFixed(2)} 格`,
+    msg: `钉在原地,安全平地后退/侧移解卡:挪了 ${moved.toFixed(2)} 格`,
     data: {
       moved: Number(moved.toFixed(3)),
       from: { x: Number(before.x.toFixed(3)), y: Number(before.y.toFixed(3)), z: Number(before.z.toFixed(3)) },

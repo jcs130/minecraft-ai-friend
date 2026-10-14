@@ -14,6 +14,37 @@ const dir = () => { const path = mkdtempSync(join(tmpdir(), 'native-minecraft-cl
 afterEach(() => { for (const path of dirs.splice(0)) rmSync(path, { recursive: true, force: true }); });
 
 describe('generic Minecraft client boundary', () => {
+  it('preserves readiness through a composed console wrapper and exposes only allowlisted fields', async () => {
+    let connection: { ready: boolean; phase: string; deviceCode: string } | null = { ready: false, phase: 'retrying', deviceCode: 'DO_NOT_EXPOSE' };
+    const environment = { id: 'wrapped-world', tools: () => [], envPromptVars: async () => ({}), start: async () => {}, stop: async () => {},
+      console: () => ({ connection, invoke: () => { throw new Error('No authentication RPC is allowed'); } }) };
+    const cfg = Object.assign(structuredClone(MINECRAFT_CLIENT_DEFAULTS), { host: '127.0.0.1', username: 'WrapperTest' });
+    const client = new MinecraftAgentClient({ cfg, dataDir: dir(), log: nullLogger() }, environment as never);
+    try {
+      await client.connect();
+      expect(client.status().connection).toEqual({ ready: false, phase: 'retrying' });
+      expect(JSON.stringify(client.status())).not.toContain('DO_NOT_EXPOSE');
+      connection = { ready: true, phase: 'online', deviceCode: 'DO_NOT_EXPOSE' };
+      expect(client.status().connection).toEqual({ ready: true, phase: 'online' });
+      connection = null; expect(client.status().connection).toBeNull();
+    } finally { await client.disconnect(); }
+  });
+
+  it('reports connection readiness independently from a started runtime without reading human authentication state', async () => {
+    let ready = false;
+    const environment = { id: 'offline-world', tools: () => [], envPromptVars: async () => ({}), start: async () => {}, stop: async () => {},
+      connectionReadiness: () => ({ ready, phase: ready ? 'online' : 'retrying' }),
+      console: () => ({ invoke: () => { throw new Error('Human authentication state must not be read by status.'); } }) };
+    const cfg = Object.assign(structuredClone(MINECRAFT_CLIENT_DEFAULTS), { host: '127.0.0.1', username: 'ReadinessTest' });
+    const client = new MinecraftAgentClient({ cfg, dataDir: dir(), log: nullLogger() }, environment as never);
+    try {
+      await client.connect();
+      expect(client.status()).toMatchObject({ phase: 'started', connection: { ready: false, phase: 'retrying' } });
+      ready = true;
+      expect(client.status().connection).toEqual({ ready: true, phase: 'online' });
+    } finally { await client.disconnect(); }
+  });
+
   it('uses a neutral account/configuration and discovers only available native tools before connecting', async () => {
     const path = join(dir(), 'client.json');
     writeFileSync(path, JSON.stringify({ dataDir: './data', world: { host: 'example.test', username: 'Alice' } }));

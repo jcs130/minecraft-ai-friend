@@ -3380,6 +3380,12 @@ export class MinecraftWorld implements World {
   }
 
   /** 已有快照及最近执行终态；只读已有状态，不扫描、不推进增量基线。 */
+  /** Metadata only. The runtime may be started while the server is still offline or logging in. */
+  connectionReadiness(): { ready: boolean; phase: string } {
+    const state = this.bridge?.connectionState;
+    return { ready: state?.ready ?? false, phase: state?.phase ?? 'stopped' };
+  }
+
   requestFacts(): WorldRequestFacts | null {
     if (!this.bridge?.connected) return null;
     // SDK hosts need not drain deferred event renders. Sample cheap live
@@ -3443,6 +3449,7 @@ export class MinecraftWorld implements World {
     ];
     const viewerUrl = this.bridge?.viewerUrl;
     return {
+      connection: this.connectionReadiness(),
       // 三条链路各一颗:进服务器、手上的任务、给人看的画面。
       //
       // 服务器那颗:头两次重连算"正在回来"(掉线重连是常态,退避表前两档共 13 秒);

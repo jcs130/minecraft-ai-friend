@@ -86,4 +86,8 @@ been published to npm or deployed to running agents.
 
 ## Photography and optional cloud artwork
 
+The local `0.4.5-dev.20261015.1` candidate builds on independent core `0.4.4` and bundles matching Java 1.21.1 viewer assets from the shared visual repository. Mineflayer item decoding, biome IDs and texture URLs use the action connection's version. It retains guarded ground navigation and limits unsticking to short crouched moves over loaded continuous dry support; cancellation releases held keys. These checks do not certify every fall scenario.
+
+The public SDK exposes optional metadata-only `status().connection` (`ready`, `phase`) separately from runtime startup. Engine proxy samples expire after five seconds; composed server packs retain this facet through `console()`. Missing or stale samples stay `null`. No authentication RPC or secret enters this facet. Source, packed-package verification and live scene evidence remain separate; this candidate is not published.
+
 `mc_photo` saves web screenshots with paired game readings without an image model. Optional native Alibaba Bailian and ByteDance Volcengine Ark adapters add photo enhancement and original artwork; the host Agent owns interpretation, prompts and creative decisions. Providers default to disabled. [Configuration, lifecycle and fallback guide](docs/PHOTOGRAPHY.md).

@@ -1,4 +1,5 @@
 import { createViewerHeadTextures } from './viewer-head-textures.mjs';
+import { viewerVersionRegistry, viewerVersionCss, viewerVersionAssets } from './viewer-version.mjs';
 import { viewerBodyState } from './viewer-body-state.ts';
 import { viewerSleepState } from './viewer-sleep.ts';
 /** Read-only modern Minecraft picture served from the current Mineflayer bot. */
@@ -56,17 +57,6 @@ const require = createRequire(import.meta.url);
 const { WorldView } = require('prismarine-viewer/viewer/lib/worldView.js') as {
   WorldView: new (world: unknown, distance: number, position: unknown, socket: Socket) => WorldView;
 };
-const TradeItem = createRequire(require.resolve('mineflayer'))('prismarine-item')('1.20.6') as {
-  fromNotch(packet: unknown): unknown;
-};
-const vanillaBiomes = (require('minecraft-data')('1.20.6') as {
-  biomesArray: Array<{ id: number; name: string }>;
-}).biomesArray;
-const plainsBiomeId: number = (() => {
-  const id = vanillaBiomes.find(biome => biome.name === 'plains')?.id;
-  if (id === undefined) throw Error('1.20.6 群系列表缺少 plains');
-  return id;
-})();
 
 const VIEW_DISTANCE = 5;
 const MANA_CSS = `.corti-mana-bar{height:5px;margin-top:7px;background:#294852;border-radius:5px;overflow:hidden}.corti-mana-bar span{display:block;height:100%;width:0;background:linear-gradient(90deg,#447acb,#8de9ff);box-shadow:0 0 9px #87dafa;transition:width .3s ease}`;
@@ -446,8 +436,10 @@ export function observeViewerInventoryPreview(
 
 export async function startModernViewer(bot: mineflayer.Bot, options: ModernViewerOptions): Promise<ModernViewerHandle> {
   observeStatusEffects(bot);
-  const root = path.resolve(options.assetsDir);
+  const root = await viewerVersionAssets(path.resolve(options.assetsDir), bot.version);
   if (!(await requiredAssetsPresent(root, bot.version))) throw new Error(`modern viewer: ${bot.version} 资源不完整 ${root}`);
+  const { TradeItem, biomes: vanillaBiomes, plainsBiomeId } = viewerVersionRegistry(bot.version,
+    require('minecraft-data'), createRequire(require.resolve('mineflayer'))('prismarine-item'));
   const soundRegistry = await loadViewerSoundRegistry(root, bot.version,
     bot.registry as unknown as Parameters<typeof observeViewerSounds>[1]);
   if (soundRegistry.diagnostic) console.warn(`modern viewer: ${soundRegistry.diagnostic}`);
@@ -733,7 +725,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       }
       if (pathname === '/viewer.css') {
         const legacyCss = CSS + HUD_CSS + '.corti-offhand{position:absolute;left:-45px;top:4px;width:40px;height:36px;background:#505050bb;border:2px solid #a8a8a8;box-sizing:border-box;box-shadow:inset 2px 2px #272727,inset -2px -2px #ddd}' + DURABILITY_CSS + ENCHANT_CSS + ENCHANT_GLOW_CSS + PANELS_CSS + MANA_CSS + ABILITY_CSS + ABILITY_ICON_CSS + CAST_CSS + SKILL_TONE_CSS + NOTICE_CSS + COMBAT_CSS + TACTICS_CSS + EXTRA_FEEDBACK_CSS + VIEWER_LAYOUT_CSS + SPEECH_BUBBLE_CSS + PRESENTATION_CSS + STATUS_VIGNETTE_CSS + THEME_SURFACE_CSS + ABILITY_LAYOUT_CSS;
-        const style = await viewerPageCss(root, legacyCss, SPEECH_BUBBLE_CSS);
+        const style = viewerVersionCss(await viewerPageCss(root, legacyCss, SPEECH_BUBBLE_CSS), bot.version);
         res.writeHead(200, { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'no-store' });
         res.end(style); return;
       }
