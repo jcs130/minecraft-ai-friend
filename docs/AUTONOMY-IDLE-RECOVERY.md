@@ -39,6 +39,19 @@ in; its forced nonthinking prefix must also be counted by the deployment's CPU
 token-counter adapter. The 0.1.31 framework passed 394 tests; its isolated wheel
 passed 68 provider/rejection replay tests and the offline autonomy/queue probe.
 
+A further lifecycle replay showed that `feedback_pending` bypassed the turn
+boundary for a newly accepted scout: the planner could run all six rounds before
+the read completed. Version 0.1.32 ends the turn for every newly accepted
+nonterminal native task, preserving the feedback insertion policy until its body
+plan is submitted. Immediate help reads remain available within a turn, and old
+unrelated native work does not block safe planning for a new goal. The failing
+replay changed from six premature model calls to one call awaiting its terminal
+receipt.
+
+The final boundary revision passed 395 framework tests and 69 tests against an
+isolated installed wheel, plus the offline autonomous/queue-only probe. No game,
+host service or model was called by these tests.
+
 When a batch is refused, the feedback explicitly says its earlier steps did not
 run. The planner can submit its next feasible action separately from a blocked
 optional search or an unverified crafting dependency. Native admission guards

@@ -379,6 +379,11 @@ the tool and arguments, and native validation remains authoritative. The default
 is unchanged. Requests without tools omit this option. It does not guarantee a
 useful body action or enable an unsupported provider capability.
 
+Since 0.1.32, any newly accepted nonterminal native task ends the planning turn,
+including a scout submitted while user feedback is awaiting its first body plan.
+The coordinator waits for the native result instead of planning repeatedly from
+an acceptance. Observation work still does not consume the feedback queue policy.
+
 Run `python -m pytest -q` here. Tests deny host SDK imports, network and service
 launches; the isolated process test exercises both a fake autonomous planner and
 queue-only operation. These tests do not prove live survival, actual model

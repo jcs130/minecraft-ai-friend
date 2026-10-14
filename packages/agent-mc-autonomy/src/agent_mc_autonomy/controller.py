@@ -643,7 +643,10 @@ class Controller:
                 self.tool_failure.pop("observation_failure")
                 self.publish(tool_failure=tool_failure_view(self.tool_failure))
         control = result.get("control") or {}
-        boundary = bool(control.get("endTurnRequested") or result.get("endsTurn") or (self.current_work() and not self.feedback_pending))
+        execution = result.get("execution") or {}
+        queued = bool(execution and execution.get("terminal") is not True)
+        boundary = bool(queued or control.get("endTurnRequested") or result.get("endsTurn")
+                        or (self.current_work() and not self.feedback_pending))
         return result, compact, boundary
 
     def reject_model_call(self, error, response=None):

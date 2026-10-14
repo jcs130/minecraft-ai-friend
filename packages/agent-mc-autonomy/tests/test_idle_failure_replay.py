@@ -78,3 +78,28 @@ def test_corrected_body_plan_replaces_its_rejection_without_claiming_completion(
     assert controller.tool_failure is None
     assert controller.pending[("task", "body-1")]["terminal"] is False
     assert controller.pending[("task", "body-1")]["goalCompleted"] is False
+
+
+def test_feedback_waits_for_its_queued_scout_before_planning_again(framework_module, tmp_path, run_async):
+    seen = []
+
+    async def decide(messages, _):
+        seen.append(messages)
+        return {"content": None, "tool_calls": [{"id": "scout-1", "type": "function",
+                "function": {"name": "mc_scout", "arguments": '{"steps":[{"skill":"observe","mode":"voxels"}]}'}}]}
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    bridge.tools.append({"name": "mc_scout", "inputSchema": {"type": "object"}})
+    original = bridge.call
+
+    async def call(name, args, **metadata):
+        return await original("mc_do" if name == "mc_scout" else name, args, **metadata)
+
+    bridge.call = call
+    controller.active_goal = {"id": "new-intent", "mode": "insert", "origin": "user"}
+    controller.feedback_pending = True
+    run_async(controller.turn_once("survive", "rules", module.model_tools(bridge.tools)))
+    assert len(seen) == 1  # Acceptance is not the queued observation's result.
+    assert controller.pending[("task", "body-1")]["terminal"] is False
+    assert controller.feedback_pending  # A read does not consume the body's insertion policy.
+    assert [a["action"] for name, a, _ in bridge.calls if name == "mc_protocol"][-1] == "end_turn"
