@@ -2,6 +2,8 @@ export const JAVA_CLIENT_PROTOCOL = 'agent-mc-java/v1' as const;
 export interface JavaClientConfiguration {
   expectedUuid: string; expectedServer: string; controllerId: string;
   credentialsFile: string; ledgerDir: string; leaseMs: number;
+  /** Explicit mc-visual-console HTML path. With viewerPort > 0 serves only loopback GETs. */
+  viewerPageFile?: string;
 }
 export interface JavaClientAction {
   id: string; operation: string; phase: 'accepted' | 'running' | 'completed' | 'partial' | 'blocked' | 'cancelled' | 'unknown';

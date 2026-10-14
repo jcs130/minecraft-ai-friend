@@ -5,6 +5,9 @@ import type { ToolDef, ToolOutcome, ToolCallContext, WorldHost, WorldRequestFact
 import type { MinecraftClientConfig } from './config.ts';
 import { PhotographyService, PHOTO_TOOL } from '../../core/photography.ts';
 import { createImageGenerationPort } from '../../core/image-generation.ts';
+import { serveNativeView } from './native-view.ts';
+import type { Server } from 'node:http';
+import { JAVA_LEGACY_HELP, translateJavaLegacy } from './java-legacy.ts';
 
 export const JAVA_CLIENT_ENVIRONMENT = `You control an actual rendered Minecraft Java client through agent-mc-java/v1. The host owns goals, personality, models and memory. The client bridge owns one actual body queue. It never launches a game, reconnects, simulates OS input or runs a model.
 Query mc_capabilities, mc_operations and mc_help before acting. Claim mc_control explicitly, then renew the lease before expiry. Disconnect releases your own lease and keys. Identity is the actual server-assigned UUID and exact server address; offline servers do not require Microsoft authentication. Never control a different player or server after an identity change.
@@ -43,6 +46,7 @@ export class JavaClientWorld implements World {
   private state: JavaClientState | null = null;
   private lease: { nonce: string; expiresAt: number } | null = null;
   private timer?: ReturnType<typeof setInterval>;
+  private viewer?: Server;
   private epoch = 0;
   private pollingEpoch: number | null = null;
   private messageSeq = 0;
@@ -74,7 +78,8 @@ export class JavaClientWorld implements World {
     ];
     return { text: parts.map(part => part.text).join('\n'), parts, snapshotTypes: ['minecraft.client.snapshot'] };
   }
-  console() { return { label: 'Real Java client', lamps: [{ label: '服务器', state: this.state?.connected ? 'online' as const : 'offline' as const }], links: [] }; }
+  console() { return { label: 'Real Java client', lamps: [{ label: '服务器', state: this.state?.connected ? 'online' as const : 'offline' as const }],
+    links: this.viewer ? [{ label: '真实客户端画面', href: `http://127.0.0.1:${this.cfg.viewerPort}` }] : [] }; }
   async start(host: WorldHost): Promise<void> {
     if (this.host) throw new Error('Java client is already attached');
     validateJavaClientConfiguration(this.cfg.javaClient);
@@ -92,13 +97,21 @@ export class JavaClientWorld implements World {
       this.messageSeq = Math.max(0, ...this.state.messages.map(message => message.seq));
       this.phases.clear(); for (const action of this.state.actions) this.phases.set(action.id, action.phase);
       this.photos.start(host);
+      if (this.cfg.javaClient.viewerPageFile && this.cfg.viewerPort > 0) {
+        this.viewer = await serveNativeView(this.cfg.viewerPort, this.cfg.javaClient.viewerPageFile, async () => {
+          const capture = await this.rpc('screenshot', {}); this.verify(capture.state);
+          return Buffer.from(capture.base64, 'base64');
+        }, () => ({ connected: this.state?.connected ?? false, username: this.state?.username, health: this.state?.health, food: this.state?.food }));
+      }
       this.timer = setInterval(() => { void this.poll(); }, 500);
       this.timer.unref();
-    } catch (error) { this.host = null; this.connection = null; this.state = null; this.lifetime.abort(); throw error; }
+    } catch (error) { this.photos.stop(); this.viewer?.closeAllConnections(); this.viewer?.close(); this.viewer = undefined; this.host = null; this.connection = null; this.state = null; this.lifetime.abort(); throw error; }
   }
   async stop(): Promise<void> {
     this.epoch++;
     clearInterval(this.timer); this.timer = undefined; this.photos.stop();
+    const viewer = this.viewer; this.viewer = undefined;
+    if (viewer) { viewer.closeAllConnections(); await new Promise<void>(resolve => viewer.close(() => resolve())); }
     this.lifetime.abort(new Error('Java client adapter stopped'));
     let unconfirmed = false;
     try { if (this.connection && this.lease) await this.rpc('release', this.owner(), AbortSignal.timeout(2000), true); }
@@ -191,8 +204,12 @@ export class JavaClientWorld implements World {
     const result = async (args: Record<string, unknown>, ctx: ToolCallContext) => this.receipt(await this.rpc('result', { action_id: args.action_id }, ctx.signal));
     return [
       tool('mc_capabilities', 'Read actual client/backend capabilities; no control claim or launcher.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify(await this.rpc('capabilities', {}, ctx.signal)) })),
+      tool('mc_state', 'Read fresh actual client state, position, health, food, view, inventory, GUI and action queue; no action or cached disconnected observation.', parameters({}), async (_args, ctx) => {
+        const state = await this.rpc('state', {}, ctx.signal) as JavaClientState; this.verify(state); this.state = state;
+        return { text: JSON.stringify(state) };
+      }),
       tool('mc_operations', 'Discover exact real-client operations. Uninstalled Minescript/Baritone are unavailable.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify(await this.rpc('operations', {}, ctx.signal)) })),
-      tool('mc_help', 'Read real-client operations and identity/control rules.', parameters({ skill: str }), async (_args, ctx) => ({ text: JAVA_CLIENT_ENVIRONMENT + '\n' + JSON.stringify(await this.rpc('operations', {}, ctx.signal)) })),
+      tool('mc_help', 'Read real-client operations, legacy compatibility and identity/control rules.', parameters({ skill: str }), async (_args, ctx) => ({ text: JAVA_CLIENT_ENVIRONMENT + '\n' + JAVA_LEGACY_HELP + '\n' + JSON.stringify(await this.rpc('operations', {}, ctx.signal)) })),
       tool('mc_notices', 'Read recent original server guides/rules and player chat, including pre-attachment notices. This is an observation query, not a new inbox; do not replay old requests.',
         parameters({ after: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 50 } }), async (args, ctx) => {
           const state = await this.rpc('state', {}, ctx.signal) as JavaClientState; this.verify(state); this.state = state;
@@ -208,8 +225,14 @@ export class JavaClientWorld implements World {
         if (method === 'release') this.lease = null; else this.lease = { nonce: lease.nonce, expiresAt: lease.expiresAt };
         const { nonce, ...publicLease } = lease; return { text: JSON.stringify(publicLease) };
       }, false, true),
-      tool('mc_do', 'Submit ONE operation discovered with mc_operations, using stable action_id. Accepted is not completed. No Mineflayer script is executed.',
-        parameters({ action_id: str, operation: str, input: { type: 'object' }, queue: { enum: ['append', 'now', 'afterCheckpoint'] } }, ['operation', 'input']), async (args, ctx) => {
+      tool('mc_do', 'Submit ONE discovered operation/input or ONE supported legacy steps command, using stable action_id. Accepted is not completed. Read mc_help for compatibility; no navigation/script emulation.',
+        parameters({ action_id: str, operation: str, input: { type: 'object' }, steps: { type: 'array', minItems: 1, maxItems: 1, items: { type: 'object', properties: { skill: str }, required: ['skill'] } }, queue: { enum: ['append', 'now'] } }), async (args, ctx) => {
+          if (args.steps !== undefined) {
+            const state = await this.rpc('state', {}, ctx.signal) as JavaClientState; this.verify(state); this.state = state;
+            args = translateJavaLegacy(args, state);
+          }
+          if (typeof args.operation !== 'string' || !args.input || typeof args.input !== 'object' || Array.isArray(args.input)) throw new Error('Supply operation/input OR one compatible legacy step');
+          if (args.queue !== undefined && !['append', 'now'].includes(String(args.queue))) throw new Error('Native queue supports append/now only');
           const action = await this.rpc('do', { ...this.owner(), action_id: args.action_id ?? ctx.callId, operation: args.operation, input: args.input, queue: args.queue ?? 'append' }, ctx.signal);
           this.phases.set(action.id, action.phase); return this.receipt(action);
         }, true),

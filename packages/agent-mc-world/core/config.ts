@@ -4,7 +4,7 @@ import { GAME_MEMORY_DEFAULTS, GAME_MEMORY_CONFIG_SCHEMA } from './game-memory-s
 
 export const MINECRAFT_DEFAULTS = {
   provider: 'mineflayer' as 'mineflayer' | 'java-client',
-  javaClient: { expectedUuid: '', expectedServer: '', controllerId: '', credentialsFile: '', ledgerDir: '', leaseMs: 15000 },
+  javaClient: { expectedUuid: '', expectedServer: '', controllerId: '', credentialsFile: '', ledgerDir: '', leaseMs: 15000 } as import('../src/contracts/java-client.ts').JavaClientConfiguration,
   // enabled 由Persona的装配层显式开启。
   enabled: false,
   /** 服务器地址(私服 dry-run 默认本机) */
