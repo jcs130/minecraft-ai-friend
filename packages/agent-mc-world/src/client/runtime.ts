@@ -28,7 +28,7 @@ export interface MinecraftClientOptions {
 
 export type ClientEnvironment = World & { requestFacts?(): unknown };
 
-/** The caller owns reasoning, memory and wakeups. This runtime owns one game connection and its receipts. */
+/** The caller owns reasoning, personal memory and wakeups. The client owns game receipts and an optional game notebook. */
 export class MinecraftAgentClient {
   readonly journal: AgentJournal;
   readonly metrics: AgentMetrics;

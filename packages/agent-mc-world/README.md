@@ -8,7 +8,8 @@ Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.
 This package owns the Mineflayer connection, inventory synchronization, navigation,
 validated actions, executable methods, evidence receipts, current facts/archive,
 deduplication, goal revisions, cancellation, SDK/MCP and the viewer integration.
-The host owns personality, goals, model calls, decisions and long-term memory.
+The host owns personality, goals, planning model calls, decisions and personal long-term memory.
+The core also offers [game memory](docs/game-memory.md): scoped historical notes with local keywords, optional embeddings or external memory services. It never turns recalled notes into current world facts.
 The core starts no model loop. Connecting to a game server is explicit.
 
 Consumers depend on the package, never on another host's checkout:

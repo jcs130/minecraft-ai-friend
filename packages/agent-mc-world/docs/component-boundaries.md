@@ -1,7 +1,7 @@
 # Minecraft component boundaries
 
 `agent-mc-world` is the reusable game runtime. A host is the application running
-an Agent: for example Cortico or DSH. Hosts supply personality, long-term memory,
+an Agent: for example Cortico or DSH. Hosts supply personality, personal long-term memory,
 goals, model connections and decisions. A host adapter translates their tool,
 event and lifecycle interfaces; it must not maintain another game implementation.
 
@@ -10,6 +10,7 @@ event and lifecycle interfaces; it must not maintain another game implementation
 | `agent-mc-world` | Connections, inventory synchronization, navigation, water/flight controls, following, combat execution, perception, scripts, body leases, cancellation, task terminals and evidence receipts |
 | `agent-mc-world/tactics` | Native battlefield observations, bounded candidate generation, authored tactic workers, ability state, rules, versioned tactic storage and encounter receipts |
 | `agent-mc-world/decisions` | Optional host-side selector helpers, explicitly constructed and started by a host; the game process never starts them |
+| `agent-mc-world` game memory | Server/account/agent isolation, historical notes, revisions and evidence, local keyword/vector retrieval and explicit external memory providers; no host personal-memory import or hidden planning loop |
 | Host adapter | Tool/event names, host model connection selection, lifecycle forwarding and configuration UI |
 | Optional server pack | Server command syntax, authenticated custom protocols, ability catalogues and game-specific rules/guides |
 | `mc-visual-console` | Shared renderer source and visual assets; the core consumes a versioned build |
@@ -45,6 +46,13 @@ The 2026-10-14 extraction retains the existing `minecraft-combat-tactics.json`
 version 1 format and realm keys, program source/hash, tactic revisions and last
 five combat receipts. Former Qiandengji module paths re-export the core during
 migration. They contain no second implementation or worker.
+
+The former independent headless distribution's `agent_mc:break_acl` channel and
+`agent-mc-realm.json` marker are accepted by the canonical core, alongside the
+legacy protocol/marker. An existing independent marker takes precedence; neither
+is automatically renamed or copied. This preserves data identity and permissions
+without maintaining a second patched source tree. Historical migration helpers
+remain opt-in exports; compatibility strings are not framework imports.
 
 ## Verification gates
 

@@ -1,4 +1,6 @@
 import { observationView, observedEntity } from './perception-sight.ts';
+import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
+import { GameMemoryService } from './game-memory-service.ts';
 import { setViewerBodyState } from './viewer-body-state.ts';
 /**
  * MinecraftWorld — 实时游戏 World(worlds-minecraft),实时游戏 World 的范例实现。
@@ -2164,6 +2166,7 @@ const MAP_ICON_ZH: Record<string, string> = {
 };
 
 export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
+  GAME_MEMORY_TOOL,
   ...PERCEPTION_TOOLS,
   RAILWAY_TOOL_DECL,
   {
@@ -2730,6 +2733,8 @@ export class MinecraftWorld implements World {
   protected readonly works: WorksBook;
   /** 常驻规矩(mc_policy 的六格);五格落盘跨重启活着,fight 重启回默认 */
   protected readonly policy: PolicyBook;
+  protected readonly gameMemory: GameMemoryBook;
+  protected readonly gameMemoryService: GameMemoryService;
   /** 按 realmKey 隔离的内存暂态表，不落盘。 */
   protected readonly pwsr = new PwsrTables();
   /**
@@ -2840,6 +2845,8 @@ export class MinecraftWorld implements World {
     this.deaths = new DeathBook(ledger('minecraft-deaths.json'), this.timezone);
     this.works = new WorksBook(ledger('minecraft-works.json'));
     this.policy = new PolicyBook(ledger('minecraft-policy.json'));
+    this.gameMemory = new GameMemoryBook(opts.dataDir ? join(opts.dataDir, 'minecraft-memory') : null);
+    this.gameMemoryService = new GameMemoryService(this.gameMemory, opts.dataDir ? join(opts.dataDir, 'minecraft-memory') : null);
     this.worldFile = ledger('minecraft-world.json');
     // host 挂载在 start();管理器可能在此之前被控制台使用,日志经转发器现取
     const fwd: import('./support/host-contract.ts').Logger = {
@@ -4349,6 +4356,27 @@ export class MinecraftWorld implements World {
       },
       mc_visual: async (args, ctx) => this.visualObservation(args, ctx),
       mc_policy: async (args) => this.toolLog('mc_policy', args, this.setPolicy(args)),
+      mc_memory: async (args, ctx) => {
+        try {
+          ctx.signal?.throwIfAborted();
+          const bot = this.bridge?.bot;
+          const result = await this.gameMemoryService.execute(args, {
+            scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.botName },
+            dimension: bot?.entity && bot.game?.dimension ? normalizeDimension(bot.game.dimension) : null,
+            capture: () => {
+              const snap = this.snapshot({ scanBlocks: false });
+              if (!snap || !bot?.entity || !bot.game?.dimension) throw new Error('Minecraft not connected; cannot capture historical cached facts as current');
+              return { observedAt: new Date().toISOString(), dimension: normalizeDimension(snap.dimension),
+                reference: `runtime:${this.executionEpoch}:connection:${this.connectionGeneration}`,
+                content: JSON.stringify({ position: snap.position, dimension: snap.dimension,
+                  health: snap.health, food: snap.food, inventorySynced: snap.invSynced,
+                  inventory: snap.invSynced ? snap.inventory.map(i => ({ name: i.name, count: i.count })) : null,
+                  inventorySync: snap.inventorySync ?? null }) };
+            },
+          }, this.cfg.memory, ctx.signal);
+          return { text: this.toolLog('mc_memory', args, JSON.stringify(result)), meta: { gameMemory: result } };
+        } catch (error) { return { text: this.toolLog('mc_memory', args, `[mc_memory] ${String(error)}`), failed: true }; }
+      },
       mc_goal: async (args) => {
         const op = parseGoal(args);
         if ('error' in op) return { text: this.toolLog('mc_goal', args, `[mc_goal 失败] ${op.error}`), failed: true };

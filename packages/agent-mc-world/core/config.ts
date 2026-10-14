@@ -1,4 +1,5 @@
 import type { ConfigGroup } from './support/host-contract.ts';
+import { GAME_MEMORY_DEFAULTS, GAME_MEMORY_CONFIG_SCHEMA } from './game-memory-service.ts';
 
 
 export const MINECRAFT_DEFAULTS = {
@@ -30,6 +31,7 @@ export const MINECRAFT_DEFAULTS = {
   metricsDashboardUrl: '',
   performanceBridge: {module:'',endpoint:''},
   remoteTextures: false,
+  memory: { ...GAME_MEMORY_DEFAULTS },
   /** Omitted mc_visual.background follows this mode; explicit arguments take precedence. */
   visual: { background: false },
   /** 普通玩家可用的脱困传送指令；空值沿用受管服务器的控制台传送。 */
@@ -211,6 +213,7 @@ export interface MinecraftConfigSection {
   metricsDashboardUrl?: string;
   performanceBridge?: import('./relay-port.ts').RelayConfiguration;
   remoteTextures?: boolean;
+  memory?: Partial<import('./game-memory-service.ts').GameMemoryConfig>;
   visual: { background: boolean };
   escapeCommand: string;
   local: {
@@ -278,6 +281,7 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
     title: 'Minecraft · 连接',
     description: '连接项要重启 World 才生效；服务器路径在下次启动服务器时采用。',
     properties: {
+      ...GAME_MEMORY_CONFIG_SCHEMA,
       'worlds.minecraft.host': { type: 'string', title: '服务器地址', 'x-hot': false },
       'worlds.minecraft.port': { type: 'integer', title: '端口', minimum: 1, maximum: 65535, 'x-hot': false },
       'worlds.minecraft.username': { type: 'string', title: '账号标识 / 离线游戏名', 'x-hot': false,
