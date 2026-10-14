@@ -1,7 +1,7 @@
-My Agent World 真实客户端桥 0.2.0
+My Agent World 真实客户端桥 0.3.0
 
 环境：Minecraft Java 1.21.1 + NeoForge 21.1.248 + Java 21。
-把 maw-client-bridge-0.2.0-neoforge-1.21.1.jar 放进客户端的 mods，通过正常启动器登录服务器。
+把 maw-client-bridge-0.3.0-neoforge-1.21.1.jar 放进客户端的 mods，通过正常启动器登录服务器。
 可选安装原作者 baritone-api-neoforge-1.11.3.jar，可由同一身体执行导航、采矿、跟随和有限种田；不装时原生操作照常可用。
 服务端不需要安装对应桥接模组。目标服务器原有的版本、整合包、账号和权限要求仍然适用。
 
@@ -12,7 +12,7 @@ expectedServer 必须与客户端实际连接地址一致。正常使用沿用�
 流程：连接统一 SDK → snapshot 查询本人 → operations/help 查看参数 → claimControl 申请控制 → submit 带稳定 action_id → wait/result 查询终态 → 核对实际位置或库存。
 相同 action_id 和相同参数只返回旧结果；未知动作只对账，不自动重做。客户端观察成功不等于上层任务完成。
 
-现有接口覆盖真实状态、完整背包组件、菜单槽位、聊天回执、移动视角、挖掘攻击、物品使用、模组界面点击和原始游戏截图，加上 5 项可选 Baritone，共 28 项。
+现有接口覆盖真实状态、完整背包组件、菜单槽位、聊天回执、移动视角、挖掘攻击、物品使用、模组界面点击和原始游戏截图，加上 5 项可选 Baritone 和 2 项可选 Minescript，共 30 项。Minescript 用法见 MY-AGENT-WORLD-MINESCRIPT.txt。
 魔力等未接入字段返回 null，不能假造满值。世界方块读取来自客户端已加载区块，尚未做严格视线过滤。
 菜单操作核对完整物品及光标，界面操作核对 screenToken，避免旧界面误点。
 

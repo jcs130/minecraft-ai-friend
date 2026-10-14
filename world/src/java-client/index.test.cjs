@@ -38,7 +38,7 @@ function setup (t) {
 test('client provider reads actual identity/components without starting a connection or claiming control', async t => {
   const { open, calls } = setup(t), adapter = await open(), s = await adapter.snapshot()
   assert.equal(adapter.identity().bodyKind, 'connected_java_client'); assert.equal(s.inventory.slots[36].name, '大背包')
-  assert.match(s.inventory.slots[36].snbt, /minecraft:custom_name/); assert.equal(adapter.operations().operationCount, 28)
+  assert.match(s.inventory.slots[36].snbt, /minecraft:custom_name/); assert.equal(adapter.operations().operationCount, 30)
   assert.equal(calls.some(c => c.method === 'claim'), false); assert.equal(adapter.viewer().secondAccount, false)
 })
 test('lease and argument validation happen before accepting any new action', async t => {
@@ -112,4 +112,17 @@ test('credentials accept only explicit loopback RPC and never embedded URL secre
   for (const endpoint of ['http://192.168.3.163:1/rpc', 'http://127.0.0.1:1/rpc?token=secret', 'http://u:p@127.0.0.1:1/rpc', 'https://127.0.0.1:1/rpc']) {
     fs.writeFileSync(file, JSON.stringify({ endpoint, token: 'a'.repeat(64), instanceId: BODY })); assert.throws(() => credentials(file))
   }
+})
+
+test('finite Minescript preserves nested JSON input and the original intent across replay', async t => {
+  const { open, calls } = setup(t), body = await open(); await body.claimControl()
+  const args = { code: "result = input_data", input: { items: [{ id: 'farmersdelight:tomato', count: 12 }], exact: true }, timeoutMs: 5000 }
+  await body.submit({ action_id: 'finite-python', operation: 'minescript.run', args })
+  await body.wait('finite-python')
+  await body.submit({ action_id: 'finite-python', operation: 'minescript.run', args })
+  const submissions = calls.filter(call => call.method === 'submit')
+  assert.equal(submissions.length, 1)
+  assert.deepEqual(submissions[0].params.args, args)
+  const changed = await body.submit({ action_id: 'finite-python', operation: 'minescript.run', args: { ...args, code: 'result = 2' } })
+  assert.equal(changed.code, 'action_id_parameters_changed')
 })

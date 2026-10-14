@@ -16,9 +16,12 @@ def probe(config_file=None,manifest_file=DEFAULT_MANIFEST):
         contract=json.loads((bundle/'operations.json').read_bytes())
         ids={row['id'] for row in contract['operations']}
         checks['operation_contract']=manifest['operationCount']==contract['operationCount']==len(ids) and {'body.move','screen.capture','world.dig','menu.click'}<=ids
-        if manifest['version']=='0.2.0':
+        if manifest['version'] in ('0.2.0','0.3.0'):
             checks['optional_baritone_contract']={'baritone.state','baritone.goto','baritone.mine','baritone.follow','baritone.farm'}<=ids
             if manifest['optionalBaritone']['bundled']:checks['original_baritone_verified']=hashlib.sha256((bundle/'baritone-api-neoforge-1.11.3.jar').read_bytes()).hexdigest()==manifest['optionalBaritone']['sha256']
+        if manifest['version']=='0.3.0':
+            checks['optional_minescript_contract']={'minescript.state','minescript.run'}<=ids
+            if manifest['optionalMinescript']['bundled']:checks['original_minescript_verified']=hashlib.sha256((bundle/'minescript-neoforge-1.21.1-4.0.jar').read_bytes()).hexdigest()==manifest['optionalMinescript']['sha256']
         if config_file:
             config=json.loads(Path(config_file).read_bytes());auth=json.loads(Path(config['credentialsFile']).read_bytes());url=urlsplit(auth['endpoint'])
             checks['loopback_only']=url.scheme=='http' and url.hostname=='127.0.0.1' and url.path=='/rpc' and not url.query and not url.fragment and not url.username
@@ -36,6 +39,9 @@ def probe(config_file=None,manifest_file=DEFAULT_MANIFEST):
             if 'baritone.state' in ids:
                 present=state['baritone']['available']
                 checks['optional_baritone_discovery']=all(row['available']==present for row in catalog['operations'] if row['id'].startswith('baritone.') and row['id']!='baritone.state')
+            if 'minescript.run' in ids:
+                checks['optional_minescript_discovery']=next(row['available'] for row in catalog['operations'] if row['id']=='minescript.run')==state['minescript']['available']
+                checks['local_owned_status_filter_installed']=health.get('localChatFilterInstalled') is True
             checks['original_framebuffer_available']=state['screen']['framebufferWidth']>0 and state['screen']['framebufferHeight']>0
             report['actualClientChecked']=True
         else:report['actualClientChecked']=False

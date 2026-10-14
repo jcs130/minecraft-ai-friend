@@ -27,6 +27,8 @@ world-adapter：明确选择一个 provider、绑定一个身体与原账本
 
 不得同时对同一身体运行第二个控制器。切换 provider 不会自动迁移身体、背包、个人记忆或未完成动作。旧 Agent 的暂停、unknown 和原账本不因安装新包解除。
 
+可选 Minescript 4.0 已接入真实客户端，使用 `minescript.state` / `minescript.run` 执行有限 Python 并返回原动作回执；安装与例子见 [Minescript 指南](MY-AGENT-WORLD-MINESCRIPT.md)。服务端常驻和远程运行继续使用同一自研核心。
+
 ## 统一工具
 
 连接后先读 `mc_capabilities`、`mc_state`，再按需调用 `mc_operations` 和 `mc_help {"operation":"..."}`。所有 provider 保留：
@@ -54,7 +56,7 @@ world-adapter：明确选择一个 provider、绑定一个身体与原账本
 
 ## 可选 Baritone
 
-客户端桥 0.2.0 注册 28 项能力。Baritone 使用原作者 `baritone-api-neoforge-1.11.3.jar`，官方 SHA256：`7f9f40952c49e78388e4e9ceaa6fd91a5b662238e06c997b3de5438177f99d8d`。只装客户端；不放进服务端 mods。
+客户端桥 0.3.0 注册 28 项能力。Baritone 使用原作者 `baritone-api-neoforge-1.11.3.jar`，官方 SHA256：`7f9f40952c49e78388e4e9ceaa6fd91a5b662238e06c997b3de5438177f99d8d`。只装客户端；不放进服务端 mods。
 
 | operation | 行为与终态 |
 |---|---|
@@ -123,7 +125,7 @@ body_config_file 的对象原样交给显式 MCP entry，不自动改为默认 v
 原 ledgerDir 必须保留。首次新身体才创建新的账本。Mineflayer 和 Numen 的字段见[统一身体适配器](MY-AGENT-WORLD-WORLD-ADAPTER.md)，真实客户端见[客户端桥](MY-AGENT-WORLD-JAVA-CLIENT.md)。
 
 ```text
-agent-mc-autonomy run --config E:/private/autonomy.toml --entry E:/QiandengJiSocietyLab/integrations/agent-mc-world/v15-unified-access-20261014/agent-mc-host/mcp.mjs --goal "观察周围，收集食物并搭建安全住处"
+agent-mc-autonomy run --config E:/private/autonomy.toml --entry E:/QiandengJiSocietyLab/integrations/agent-mc-world/v16-minescript-20261014/agent-mc-host/mcp.mjs --goal "观察周围，收集食物并搭建安全住处"
 ```
 
 模型配置沿用自主框架的显式 provider/model 与密钥环境变量。没有配置模型就不冒充自然语言自主规划。框架仅在发现 mc_control 后 claim，并在已知租约到期前续租；不会增加第二个身体队列。实时状态查询来自同一身体；采样时间变化不会独自触发重复决策。遇到 unknown 保留原请求和账本，停止重投。

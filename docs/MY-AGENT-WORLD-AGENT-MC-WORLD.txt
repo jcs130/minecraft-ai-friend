@@ -1,6 +1,6 @@
 My Agent World 接入新版独立 agent-mc-world（2026-10-14）
 
-当前可选包 v15-unified-access-20261014：统一 Mineflayer、Numen、真实 Java 客户端和可选 Baritone。增加 mc_capabilities、mc_navigate、mc_stop、mc_visual 和核心 mc_memory；独立 agent-mc-autonomy 按实际工具 schema 接入，不注入不存在的原版队列。28 项客户端输入/原生 GUI/聊天/截图/Baritone 操作见 MY-AGENT-WORLD-JAVA-CLIENT.txt，统一框架与配置见 MY-AGENT-WORLD-UNIFIED-ACCESS.txt。原角色和服务端入口保持，不自动换身体。
+当前可选包 v16-minescript-20261014：统一 Mineflayer、Numen、真实 Java 客户端和可选 Baritone。增加 mc_capabilities、mc_navigate、mc_stop、mc_visual 和核心 mc_memory；独立 agent-mc-autonomy 按实际工具 schema 接入，不注入不存在的原版队列。30 项客户端输入/原生 GUI/聊天/截图/Baritone 操作见 MY-AGENT-WORLD-JAVA-CLIENT.txt，统一框架与配置见 MY-AGENT-WORLD-UNIFIED-ACCESS.txt。原角色和服务端入口保持，不自动换身体。
 
 核心已合入 minecraft-ai-friend/main@4f677be6fd8afbf8d6f49ac564ff003a69256b42，agent-mc-world 0.4.0。版本号相同也要核对本轮制品 SHA。
 适配源码：world/src/agent-mc-host。它使用核心公开 /client、/contracts、/mcp 接口，不把服务端规则写回通用核心。
@@ -46,7 +46,7 @@ MCP 仅是宿主侧可选 stdio 入口：node agent-mc-host/mcp.mjs D:/agents/yo
 适配器安装与重启现役 Agent 是两件事。安装不会替换 MawExplorer、Numen 模型配置、原人物记忆或账本；现役暂停及旧 unknown 保持。
 生产服务不需要因安装这个宿主包而重启。运行一个新的自主角色仍需由宿主明确指定模型、预算、目标和身份。
 
-当前可用分发目录：E:\QiandengJiSocietyLab\integrations\agent-mc-world\v15-unified-access-20261014，历史分发保留；宿主包 @my-agent-world/agent-mc-host 0.2.0，独立核心 0.4.0。把整个目录作为受控 SDK 工件分发；重新安装依赖使用该目录内 package-lock.json 执行 npm ci --ignore-scripts --no-audit --no-fund，要求 Node 22。它不是已经在 npm 发布的包。普通寻路失败会停止按键、查询实际停点并明确报告未到达；真正的连接或身体状态未知仍需对账。
+当前可用分发目录：E:\QiandengJiSocietyLab\integrations\agent-mc-world\v16-minescript-20261014，历史分发保留；宿主包 @my-agent-world/agent-mc-host 0.2.0，独立核心 0.4.0。把整个目录作为受控 SDK 工件分发；重新安装依赖使用该目录内 package-lock.json 执行 npm ci --ignore-scripts --no-audit --no-fund，要求 Node 22。它不是已经在 npm 发布的包。普通寻路失败会停止按键、查询实际停点并明确报告未到达；真正的连接或身体状态未知仍需对账。
 
 框架新增 TaskMonitor/evaluateTask：为每个任务固定验收条件，记录实际成功/失败/证据不足/取消、模型轮次、纠错轮次、耗时及底层调用量。当前可验本人持有/装备、到达绝对位置、公会任务完成及这些条件的组合；复杂模组工程需补原生验收器。node agent-mc-host/task-report.mjs --directory <绝对任务监控目录> 可只读查询成功率、失败热点和迭代建议；不中断游戏、不另开端口。反复观察而目标状态不变会产生进展提醒。标准、计数和旧失败不随重启清零。详见 docs/MY-AGENT-WORLD-TASK-EVALUATION.md。
 

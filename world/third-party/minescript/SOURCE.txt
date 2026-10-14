@@ -1,0 +1,9 @@
+Original unmodified Minescript 4.0 for Minecraft 1.21.1 / NeoForge.
+Author: Greg Christiana (maxuser0). License: GPL-3.0-only; see COPYING.
+Source: https://github.com/maxuser0/minescript/tree/4f09f7a46347bafbef9fd77a34ce08bb442b7555
+Release tag: v4.0-mc1.21.1
+Original binary: https://cdn.modrinth.com/data/KcpXWngB/versions/l71kqsDA/minescript-neoforge-1.21.1-4.0.jar
+Modrinth version: https://modrinth.com/mod/minescript/version/l71kqsDA
+SHA256: 4e421ed49e38f7453178ce7d8cc8415367cb513e2d837d648ae844c1d8e4b351
+SHA512: 6055837f2b5222c42b75f85eb3731b5fbe5acf96f166586b49d15909626a78c4ebdbe8a69f7322721dd070441da19bef81f11c8f9ae1abe1cffbca2382e675e5
+Install this separate original JAR only in the Java client. No third-party code or JAR is embedded in the My Agent World client bridge.

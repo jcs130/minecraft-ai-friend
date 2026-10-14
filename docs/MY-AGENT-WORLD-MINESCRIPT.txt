@@ -1,0 +1,21 @@
+My Agent World 可选 Minescript（2026-10-14）
+
+仍使用自研 agent-mc-autonomy + agent-mc-world。Minescript 是真实客户端的脚本执行后端，任务、记忆、控制权与动作账本仍属于同一框架。
+
+环境：Minecraft 1.21.1、NeoForge 21.1.248、Java 21，客户端桥 0.3.0，原作者 minescript-neoforge-1.21.1-4.0.jar。装入客户端 mods，Baritone 可选；服务器照常使用原整合包。
+在 Minescript 工作目录 minescript/config.txt 设置 python="C:/path/to/python.exe"，可使用 Agent 核心所在的 Python 3.11+ 环境。
+
+接入用 provider=java-client，填写本人 expectedUuid、实际 expectedServer、本机 credentialsFile，以及原 ledgerDir / dataDir。
+连接后先查 mc_capabilities、mc_operations 和 mc_help，再用 mc_control claim 取得控制权。
+查询：mc_read 的 operation=minescript.state，args={}。
+执行：mc_do 带稳定 action_id，operation=minescript.run，args 包含 code、可选 input 和 timeoutMs。
+代码使用 minescript 原生 API，input_data 是输入 JSON 对象，把 JSON 输出赋给 result。
+示例代码：result = {"position": minescript.player_position(), "request": input_data}
+用 mc_result / mc_wait 查原 ID，result.value 是输出，after 是实际快照；执行结束后核对游戏效果。
+
+可一次组合状态查询、容器读取、模组 Java 调用和核验。容器用 minescript.container_get_items()；反射采用 4.0 的 java_* API。GUI 操作核对窗口、完整物品与光标，等待服务器同步后重读。原始截图用 mc_visual。
+默认脚本 30 秒、最多 120 秒；租约 90 秒，由原控制器续租。取消、F8、超时和失去控制权会停止自己的任务并释放输入。unknown 保留原记录，只对账，不重投。
+已有独立 Minescript 任务时拒绝接管。机器回执经本人 SDK 返回，请求、结果、打印日志和账本在客户端私有目录。
+脚本使用当前用户的 Python 权限；仅提交有限任务，不启动独立后台进程、线程或其他脚本。
+本桥任务的完成与正常取消提示经 SDK 呈现，独立脚本输出、普通聊天及真正执行错误仍保留。
+完整参数、SHA 和维护说明见 MY-AGENT-WORLD-MINESCRIPT.md；核心配置见 MY-AGENT-WORLD-UNIFIED-ACCESS.txt。

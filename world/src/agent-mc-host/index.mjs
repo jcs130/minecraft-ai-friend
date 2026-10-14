@@ -215,6 +215,7 @@ export class MyAgentWorldEnvironment {
         const body = this.#ready(), catalog = await body.operations()
         return this.#out({ ok: true, provider: this.#config.provider, bodyId: this.#identity.bodyId, operationCount: catalog.operations.length,
           navigation: { native: catalog.operations.some(x => x.id === 'body.move' && x.available !== false), baritone: catalog.operations.some(x => x.id === 'baritone.goto' && x.available !== false) },
+          scripting: { minescript: catalog.operations.some(x => x.id === 'minescript.run' && x.available !== false) },
           sameBodyOnly: true, allGameplayVerified: false })
       }),
       tool('mc_navigate', '按同一动作契约走到绝对坐标。auto在Java客户端装有Baritone时用其寻路，否则用当前provider的body.move；不切换身体或重试未知动作。',
@@ -246,7 +247,7 @@ export class MyAgentWorldEnvironment {
         const method = { claim: 'claimControl', release: 'releaseControl', stop: 'stop', restore: 'restore' }[a.action]
         return this.#out(this.#own(await this.#ready()[method]()))
       }),
-      tool('mc_stop', '紧急停止本人当前输入及受控Baritone过程；保留原action_id回执，不删除身体、不回滚物品。', object(), ['act'], async () => this.#out(this.#own(await this.#ready().stop()))),
+      tool('mc_stop', '紧急停止本人当前输入、受控Baritone过程或Minescript脚本；保留原action_id回执，不删除身体、不回滚物品。', object(), ['act'], async () => this.#out(this.#own(await this.#ready().stop()))),
       tool('mc_lua_operations', '仅 Numen：发现原生 Lua 函数与签名，再用 mc_do 的 numen.lua 操作。不提供服务器任意JavaScript执行。', object({ group: { type: 'string', maxLength: 80 } }), ['read'], async a => {
         const body = this.#ready(); return this.#out(body.luaOperations ? await body.luaOperations(a.group) : fail('provider_operation_unavailable'))
       }),

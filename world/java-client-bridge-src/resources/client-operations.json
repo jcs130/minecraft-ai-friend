@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "ok": true,
   "provider": "java-client",
-  "operationCount": 28,
+  "operationCount": 30,
   "serverRequired": false,
   "allGameplayVerified": false,
   "authority": "client_observed",
@@ -841,6 +841,52 @@
           "durationMs"
         ],
         "additionalProperties": false
+      }
+    },
+    {
+      "id": "minescript.state",
+      "readOnly": true,
+      "available": true,
+      "async": false,
+      "permission": "signed_in_player",
+      "description": "读取可选Minescript版本、本人控制归属及实际脚本任务；未装或不兼容明确返回available=false。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "id": "minescript.run",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player_with_control_lease",
+      "description": "在已登录真实客户端执行一个有限Python脚本。使用minescript原生API和input_data，将JSON结果赋给result。默认30秒，最多120秒；完成仅表示脚本结束，核对after实际状态。调用仅走本人动作账本，不发游戏聊天。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384
+          },
+          "input": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {}
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 120000
+          }
+        },
+        "required": [
+          "code"
+        ]
       }
     }
   ]

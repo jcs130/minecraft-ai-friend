@@ -1,0 +1,288 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-14",
+  "branch": "experiment/agent-society-1.21.1",
+  "architecture": {
+    "canonicalCore": "agent-mc-world 0.4.0",
+    "canonicalAutonomy": "agent-mc-autonomy 0.1.21",
+    "newBrain": false,
+    "optionalClientExecution": "Minescript 4.0 finite Python",
+    "bodyProvider": "java-client",
+    "operationCount": 30,
+    "serverModRequired": false,
+    "newLongRunningServices": 0,
+    "existingActorsSwitched": false
+  },
+  "upstream": {
+    "repository": "https://github.com/maxuser0/minescript",
+    "sourceTag": "v4.0-mc1.21.1",
+    "sourceRevision": "4f09f7a46347bafbef9fd77a34ce08bb442b7555",
+    "modrinthVersionId": "l71kqsDA",
+    "minecraft": "1.21.1",
+    "loader": "NeoForge 21.1.248",
+    "version": "4.0",
+    "license": "GPL-3.0-only",
+    "originalJarSha256": "4e421ed49e38f7453178ce7d8cc8415367cb513e2d837d648ae844c1d8e4b351",
+    "originalJarBytes": 261306,
+    "originalSeparateJar": true
+  },
+  "artifacts": {
+    "clientBridgeVersion": "0.3.0",
+    "clientJarSha256": "aebdcb3b29236fc97cb6f33a1aa69468f5ed73b8ce5254c31be7820895a6bcda",
+    "reproducibleJar": true,
+    "sourceHashesVerified": true,
+    "hostBundle": "v16-minescript-20261014",
+    "adapterBundle": "v9-minescript-20261014",
+    "clientBundle": "v4-minescript-20261014",
+    "coreArchiveReusedUnchanged": true,
+    "coreArchiveSha256": "c10542bcb5691e3564ea55b6b4a4ca6131ba851f7446cfcb2819de9eb79035ab",
+    "autonomyWheelReusedUnchanged": true,
+    "autonomyWheelSha256": "bafa2e3f537fb94e7c17f3deac16b7fb69329bd9c3c2abcd0a3affadfc9ad5de"
+  },
+  "offlineTests": {
+    "bodyAdapters": {
+      "passed": 37,
+      "failed": 0
+    },
+    "packedHost": {
+      "passed": 35,
+      "failed": 0
+    },
+    "jvmActionStore": {
+      "passed": 21,
+      "failed": 0
+    },
+    "strictExternalPackedTypes": true,
+    "changedPythonCompiled": true,
+    "coreAndAutonomySourceUnchanged": true
+  },
+  "realGameplay": {
+    "finalJar": {
+      "modGui": {
+        "passed": 3,
+        "checks": [
+          "minescript_opens_actual_farmers_delight_gui",
+          "minescript_reflection_native_mod_menu_deposit_12",
+          "minescript_native_mod_menu_withdraw_no_loss"
+        ],
+        "ok": true
+      },
+      "canonicalCoreAndMcp": {
+        "passed": 5,
+        "checks": [
+          "canonical_autonomy_minescript_execution_on_original_java_body",
+          "framework_actual_cooking_pot_12_tomatoes_and_original_body",
+          "original_action_terminal_receipt_persisted_across_framework_reconnect",
+          "original_framebuffer_transported_as_mcp_image",
+          "canonical_game_notebook_online_capture_and_offline_recall_same_scope"
+        ],
+        "ok": true
+      },
+      "localOwnedChatFilter": {
+        "passed": 2,
+        "checks": [
+          "actual_local_chat_mixin_hides_only_own_expected_status",
+          "actual_native_cancel_keeps_sdk_receipt_and_no_red_chat_status"
+        ],
+        "ok": true
+      },
+      "lifecycle": {
+        "passed": 10,
+        "checks": [
+          "actual_minescript_with_baritone_absent",
+          "controller_reconnect_original_script_receipt_no_redispatch",
+          "nested_json_input_and_private_bound_result_without_false_goal",
+          "syntax_failure_retains_known_original_receipt",
+          "non_finite_output_rejected",
+          "oversized_output_returns_explicit_failure",
+          "script_timeout_stops_native_job_and_releases_inputs",
+          "single_body_mutual_exclusion_and_explicit_script_cancel",
+          "mapped_f8_stops_script_and_requires_explicit_reclaim",
+          "external_job_blocks_claim_and_is_never_killed_by_bridge_stop"
+        ],
+        "ok": true
+      },
+      "withoutEitherOptionalMod": {
+        "passed": 21,
+        "checks": [
+          "no_baritone_optional_discovery",
+          "minescript_absent_without_blocking_native_actions",
+          "same_real_client_identity",
+          "full_item_components",
+          "actual_private_chat_reply",
+          "exclusive_controller",
+          "native_key_movement",
+          "native_mod_blocks_and_collision_shapes",
+          "mineflayer_astar_original_client_physics",
+          "original_farmers_delight_menu",
+          "native_mod_menu_deposit_full_stack",
+          "original_mod_gui_framebuffer",
+          "native_mod_menu_withdraw_no_loss",
+          "stale_gui_click_rejected",
+          "original_inventory_crafting_real_result",
+          "original_inventory_and_keyboard_gui",
+          "original_equipment_selection",
+          "native_survival_dig_actual_block_change",
+          "native_survival_place_verified_face",
+          "cancel_releases_native_keys",
+          "sdk_reconnect_deduplicates_original_action"
+        ],
+        "ok": true
+      },
+      "framebufferSha256": "1efde7f0840e21560779f62a6a74fc3a25471eef9a1eeda9c2618f376c53a2f1"
+    },
+    "beforeLocalChatFilterAddition": {
+      "coldRestartAndLifecycle": {
+        "passed": 10,
+        "checks": [
+          "actual_minescript_and_baritone_optional_discovery",
+          "same_world_client_restart_original_script_receipt_no_redispatch",
+          "nested_json_input_and_private_bound_result_without_false_goal",
+          "syntax_failure_retains_known_original_receipt",
+          "non_finite_output_rejected",
+          "oversized_output_returns_explicit_failure",
+          "script_timeout_stops_native_job_and_releases_inputs",
+          "single_body_mutual_exclusion_and_explicit_script_cancel",
+          "mapped_f8_stops_script_and_requires_explicit_reclaim",
+          "external_job_blocks_claim_and_is_never_killed_by_bridge_stop"
+        ],
+        "ok": true
+      },
+      "actual90SecondLeaseExpiry": {
+        "passed": 2,
+        "checks": [
+          "actual_90_second_expiry_stops_minescript_and_inputs",
+          "unknown_original_id_preserved_and_blocks_new_dispatch"
+        ],
+        "ok": true
+      },
+      "unknownOriginalId": "ms-actual-expiry",
+      "unknownRecordPreserved": true
+    },
+    "fixture": "Only Farmers Delight server mod, loopback isolated world; survival player without OP",
+    "potActualContents": {
+      "id": "farmersdelight:tomato",
+      "count": 12,
+      "slot": 0
+    },
+    "serverNbtCrossCheck": "Inventory.Items",
+    "scriptedPlannerResponses": 3,
+    "paidModelCalls": 0,
+    "noLlmEfficiencyClaim": true,
+    "cleanExits": {
+      "minescript-baritone-attempt1/host-exit.json": {
+        "clientExitCode": 0,
+        "serverExitCode": 0
+      },
+      "minescript-baritone-attempt1/reopen-exit.json": {
+        "clientExitCode": 0,
+        "serverExitCode": 0
+      },
+      "minescript-baritone-attempt1/reopen2-exit.json": {
+        "clientExitCode": 0,
+        "serverExitCode": 0
+      },
+      "minescript-baritone-attempt1/reopen3-exit.json": {
+        "clientExitCode": 0,
+        "serverExitCode": 0
+      },
+      "minescript-chat-final/host-exit.json": {
+        "clientExitCode": 0,
+        "serverExitCode": 0
+      },
+      "optional-absent-final/host-exit.json": {
+        "clientExitCode": 0,
+        "serverExitCode": 0
+      }
+    }
+  },
+  "health": {
+    "java-client": {
+      "ok": true,
+      "passed": 9,
+      "worldActions": 0,
+      "modelRequests": 0
+    },
+    "agent-mc-world": {
+      "ok": true,
+      "passed": 10,
+      "worldActions": 0,
+      "modelRequests": 0
+    },
+    "world-adapter": {
+      "ok": true,
+      "passed": 8,
+      "worldActions": 0,
+      "modelRequests": 0
+    },
+    "actualFinalClient": {
+      "passed": 18,
+      "checks": [
+        "exact_bundle",
+        "client_only_mod",
+        "three_explicit_providers",
+        "no_background_model_or_new_service",
+        "operation_contract",
+        "optional_baritone_contract",
+        "original_baritone_verified",
+        "optional_minescript_contract",
+        "original_minescript_verified",
+        "loopback_only",
+        "client_tick_fresh",
+        "original_player_and_server",
+        "actual_inventory_and_native_menu",
+        "actual_api_smoke",
+        "optional_baritone_discovery",
+        "optional_minescript_discovery",
+        "local_owned_status_filter_installed",
+        "original_framebuffer_available"
+      ],
+      "ok": true
+    }
+  },
+  "preservation": {
+    "original35ModsUnchanged": true,
+    "protectedConfigsUnchanged": true,
+    "originalLedgerPrefixRetained": true,
+    "originalUnknownRetained": true,
+    "mawExplorerPausedAt464": true,
+    "kiritoStoppedAt559": true,
+    "kiritoOriginalV10": true,
+    "ownerUnchangedAndHealthy28985": true,
+    "ownerUnchangedAndHealthy28996": true,
+    "qaTCPClosed28978": true,
+    "qaTCPClosed28979": true,
+    "qaTCPClosed28990": true,
+    "qaVoicePortFree": true
+  },
+  "owners": {
+    "28985": {
+      "runId": "91b0f704dc2d4811bc760062cbcb4441",
+      "healthy": true,
+      "heartbeatFresh": true
+    },
+    "28996": {
+      "runId": "0d3fdecb5ca74cc484921bb42fa32423",
+      "healthy": true,
+      "heartbeatFresh": true
+    }
+  },
+  "failedAttemptsRetained": [
+    "Initial missing nested schema properties rejected before dispatch; corrected schema and probe.",
+    "Initial pre-dispatch rejection assertion expected a terminal receipt; corrected fixture and reconciled the original canceled action.",
+    "Minescript 4.0 JobState display text differs from enum name; fixed exact state matching and kept DONE busy until removal.",
+    "First cooking pot NBT query used wrong Items path; full Inventory.Items read confirmed 12 tomatoes.",
+    "Actual controlled job cancellation produced local red -5 status; final targeted local-chat filter verified against ordinary messages and genuine errors."
+  ],
+  "remainingValidation": [
+    "Long-running LLM task success and round efficiency",
+    "Physical keyboard F8 rather than mapped binding invocation",
+    "Other Minescript versions",
+    "All mod-specific semantics and GUI paths",
+    "Continuous original-client video",
+    "Bedrock changes: none in this task"
+  ],
+  "executionScope": "Finite trusted Python under the current OS user; self-spawned processes, threads and other jobs are outside the managed finite-action contract",
+  "privateEvidenceDirectory": "E:\\QiandengJiSocietyLab\\research\\minescript-20261014",
+  "privateArtifactsExcludedFromGit": true
+}

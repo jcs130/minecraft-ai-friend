@@ -30,11 +30,18 @@ import static dev.maw.client.ClientState.object;
 @Mod(value="maw_client_bridge", dist=Dist.CLIENT)
 public final class ClientBridge {
     private static final Gson JSON=new GsonBuilder().serializeNulls().create();
+    private static volatile ClientBridge ownInstance;
+    private static volatile boolean localChatFilterInstalled;
+    public static void chatFilterReady(){localChatFilterInstalled=true;}
+    public static boolean hideOwnedMinescriptStatus(net.minecraft.network.chat.Component message){
+        ClientBridge owner=ownInstance;return owner!=null&&owner.minescript.hideOwnStatus(message.getString());
+    }
     private final Minecraft mc=Minecraft.getInstance();
     private final ClientState state=new ClientState();
     private final BaritoneAccess baritone=new BaritoneAccess();
     private final Path root=mc.gameDirectory.toPath().resolve("maw-client-bridge");
     private final String token=UUID.randomUUID().toString()+UUID.randomUUID(), instance=UUID.randomUUID().toString();
+    private final MinescriptAccess minescript=new MinescriptAccess(root,instance);
     private final ExecutorService io=Executors.newSingleThreadExecutor(r->{Thread t=new Thread(r,"maw-client-journal");t.setDaemon(true);return t;});
     private final KeyMapping pause=new KeyMapping("key.maw_client_bridge.pause",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_F8,"key.categories.misc");
     private final JsonObject catalog;
@@ -69,6 +76,7 @@ public final class ClientBridge {
         NeoForge.EVENT_BUS.addListener(this::pre);NeoForge.EVENT_BUS.addListener(this::post);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.ClientChatReceivedEvent event)->state.message(mc,event));
         if(!Boolean.parseBoolean(System.getProperty("maw.clientBridge.enabled","true")))return;
+        ownInstance=this;
         Files.createDirectories(root.resolve("frames"));
         lockFile=FileChannel.open(root.resolve("instance.lock"),StandardOpenOption.CREATE,StandardOpenOption.WRITE);
         lock=lockFile.tryLock();if(lock==null)throw new IllegalStateException("client_bridge_game_directory_in_use");
@@ -78,7 +86,7 @@ public final class ClientBridge {
         http.setExecutor(new ThreadPoolExecutor(2,4,30,TimeUnit.SECONDS,new ArrayBlockingQueue<>(16),r->{Thread t=new Thread(r,"maw-client-http");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy()));
         http.start();String endpoint="http://127.0.0.1:"+http.getAddress().getPort()+"/rpc";
         Files.writeString(root.resolve("connection.json"),JSON.toJson(object("schemaVersion",1,"endpoint",endpoint,"token",token,"instanceId",instance))+"\n");
-        Runtime.getRuntime().addShutdownHook(new Thread(()->{http.stop(0);io.shutdown();baritone.close();try{lock.release();lockFile.close();}catch(Exception ignored){}},"maw-client-close"));
+        Runtime.getRuntime().addShutdownHook(new Thread(()->{http.stop(0);io.shutdown();baritone.close();minescript.close();try{lock.release();lockFile.close();}catch(Exception ignored){}},"maw-client-close"));
         org.slf4j.LoggerFactory.getLogger("maw_client_bridge").info("Client-only Agent bridge ready on loopback; credentials remain in the game directory. F8 releases control.");
     }
     private void pre(ClientTickEvent.Pre event) {
@@ -94,6 +102,13 @@ public final class ClientBridge {
         a.ticks++;
         try {
             switch(a.operation) {
+                case "minescript.run" -> {
+                    JsonObject reply=minescript.poll();
+                    if(reply!=null){JsonObject progress=a.record.deepCopy();progress.add("result",reply);a.record=progress;
+                        finish(a,reply.get("ok").getAsBoolean()?"succeeded":"failed",reply.get("ok").getAsBoolean()?"minescript_script_completed":"minescript_script_failed",true);}
+                    else if(System.currentTimeMillis()-a.startedAt>=(a.args.has("timeoutMs")?integer(a.args,"timeoutMs",1000,120000):30000))
+                        finish(a,"failed","minescript_script_timeout",true);
+                }
                 case "baritone.goto","baritone.mine","baritone.follow","baritone.farm" -> {
                     if(a.operation.equals("baritone.mine"))baritone.tickMine();
                     long elapsed=System.currentTimeMillis()-a.startedAt;
@@ -137,12 +152,13 @@ public final class ClientBridge {
         state.tick(mc);lastTickAt=System.currentTimeMillis();
         if(state.tick()%5==0)try{cached=snapshot();}catch(Exception error){cached=object("ok",false,"status","unavailable","code","client_snapshot_failed");}
     }
-    private JsonObject snapshot(){JsonObject out=state.snapshot(mc);out.addProperty("instanceId",instance);out.add("baritone",baritone.state());if(active!=null)out.add("currentAction",active.record.deepCopy());return out;}
+    private JsonObject snapshot(){JsonObject out=state.snapshot(mc);out.addProperty("instanceId",instance);out.add("baritone",baritone.state());out.add("minescript",minescript.state());if(active!=null)out.add("currentAction",active.record.deepCopy());return out;}
     private JsonObject operations(){
         JsonObject result=catalog.deepCopy();
         for(var row:result.getAsJsonArray("operations")){
             JsonObject spec=row.getAsJsonObject();String id=spec.get("id").getAsString();
             if(id.startsWith("baritone.")&&!id.equals("baritone.state")){spec.addProperty("available",baritone.available());if(!baritone.available())spec.addProperty("unavailableReason","baritone_not_installed");}
+            if(id.equals("minescript.run")){spec.addProperty("available",minescript.available());if(!minescript.available())spec.addProperty("unavailableReason","minescript_not_installed_or_unsupported");}
         }return result;
     }
     private <T>T onClient(Callable<T> call) throws Exception {return mc.submit(()->{try{return call.call();}catch(RuntimeException e){throw e;}catch(Exception e){throw new CompletionException(e);}}).get(5,TimeUnit.SECONDS);}
@@ -186,7 +202,7 @@ public final class ClientBridge {
     }
     private JsonObject rpc(String method,JsonObject p)throws Exception{
         if(method.equals("health"))return object("ok",!broken&&System.currentTimeMillis()-lastTickAt<5000,"provider","java-client",
-            "lastTickAt",lastTickAt,"body",cached.deepCopy(),"controlAcquired",lease!=null,"controlPaused",controlPaused,"unresolved",store==null?0:store.unresolvedCount(),"modelRequests",0);
+            "lastTickAt",lastTickAt,"body",cached.deepCopy(),"controlAcquired",lease!=null,"controlPaused",controlPaused,"unresolved",store==null?0:store.unresolvedCount(),"modelRequests",0,"localChatFilterInstalled",localChatFilterInstalled);
         if(method.equals("operations"))return operations();
         if(method.equals("shutdown")&&Boolean.getBoolean("maw.clientBridge.qaQuit")){
             if(active!=null)throw new IllegalStateException("finish_action_before_shutdown");
@@ -211,6 +227,7 @@ public final class ClientBridge {
                 case "world.blockAt" -> object("ok",true,"bodyId",mc.player.getUUID(),"block",state.block(mc,blockPos(args)));
                 case "body.observe" -> state.observe(mc,args.has("radius")?integer(args,"radius",1,8):4);
                 case "baritone.state" -> object("ok",true,"bodyId",mc.player.getUUID(),"capturedAt",Instant.now(),"state",baritone.state());
+                case "minescript.state" -> object("ok",true,"bodyId",mc.player.getUUID(),"capturedAt",Instant.now(),"state",minescript.state());
                 default -> throw new IllegalArgumentException("read_operation_unavailable");
             };
         });
@@ -229,6 +246,7 @@ public final class ClientBridge {
             JsonObject own=onClient(()->{checkBinding(p,true);String controller=text(p,"controllerId");
                 if(controlPaused)throw new IllegalStateException("human_control_paused");
                 if(baritone.busy()&&!baritone.owned())throw new IllegalStateException("baritone_already_controlled");
+                if(minescript.busyElsewhere())throw new IllegalStateException("minescript_already_controlled");
                 if(!controller.matches("[A-Za-z0-9_.-]{1,64}"))throw new IllegalArgumentException("controller_id_invalid");
                 if(lease!=null&&System.currentTimeMillis()<lease.expiresAt&&!lease.controller.equals(controller))throw new IllegalStateException("body_already_controlled");
                 return snapshot();});
@@ -275,7 +293,14 @@ public final class ClientBridge {
         if(schema.has("required"))for(var key:schema.getAsJsonArray("required"))if(!a.has(key.getAsString()))throw new IllegalArgumentException("required_argument_missing");
         if(a.has("ticks"))integer(a,"ticks",1,200);
         if(!op.startsWith("baritone."))try{if(baritone.busy()&&!baritone.owned())throw new IllegalStateException("baritone_already_controlled");}catch(Exception error){throw new IllegalStateException(safeCode(error,"baritone_api_unavailable"));}
+        try{if(minescript.busyElsewhere())throw new IllegalStateException("minescript_already_controlled");}catch(Exception error){throw new IllegalStateException(safeCode(error,"minescript_api_unavailable"));}
         switch(op){
+            case "minescript.run" -> {
+                if(!minescript.available())throw new IllegalArgumentException("minescript_not_installed_or_unsupported");
+                String script=text(a,"code");if(script.isBlank()||script.length()>16384)throw new IllegalArgumentException("minescript_code_over_budget");
+                if(a.has("input")&&!a.get("input").isJsonObject())throw new IllegalArgumentException("minescript_input_invalid");
+                if(a.has("timeoutMs"))integer(a,"timeoutMs",1000,120000);
+            }
             case "baritone.goto","baritone.mine","baritone.follow","baritone.farm" -> {
                 if(mc.screen!=null)throw new IllegalArgumentException("close_screen_before_baritone");
                 if(a.has("timeoutMs"))integer(a,"timeoutMs",1000,600000);if(a.has("durationMs"))integer(a,"durationMs",1000,600000);
@@ -320,6 +345,7 @@ public final class ClientBridge {
         if(a.finishing||active!=a)return;
         validate(a.operation,a.args);a.started=true;a.startedAt=System.currentTimeMillis();
         switch(a.operation){
+            case "minescript.run" -> {try{minescript.start(text(a.record,"action_id"),a.args);}catch(Exception error){throw new IllegalStateException(safeCode(error,"minescript_start_failed"));}}
             case "baritone.goto","baritone.mine","baritone.follow","baritone.farm" -> {
                 if(a.operation.equals("baritone.mine")&&baritone.itemCount(text(a.args,"itemId"))>=integer(a.args,"targetCount",1,4096)){finish(a,"succeeded","baritone_inventory_target_observed",true);return;}
                 try{baritone.begin(a.operation,a.args);}catch(Exception error){throw new IllegalStateException(safeCode(error,"baritone_api_unavailable"));}
@@ -358,6 +384,8 @@ public final class ClientBridge {
         if(a.finishing)return;a.finishing=true;releaseKeys();
         boolean stopImmediate=true;
         try{stopImmediate=baritone.stopOwned();}catch(Exception error){status="unknown";code="baritone_stop_unconfirmed";known=false;broken=true;}
+        try{minescript.stopOwned();if(a.operation.equals("minescript.run"))KeyMapping.releaseAll();}
+        catch(Exception error){status="unknown";code="minescript_stop_unconfirmed";known=false;broken=true;}
         if(a.operation.equals("world.dig")&&mc.gameMode!=null)mc.gameMode.stopDestroyBlock();
         JsonObject result=a.record.deepCopy();result.addProperty("status",status);result.addProperty("terminal",true);result.addProperty("outcomeKnown",known);
         result.addProperty("ok",status.equals("succeeded"));result.addProperty("code",code);result.addProperty("completedAt",Instant.now().toString());

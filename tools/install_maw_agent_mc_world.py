@@ -64,6 +64,9 @@ def install(destination: Path, core_package: Path, npm: Path):
     evidence = REPO / 'docs/evidence/unified-access-20261014.json'
     if evidence.is_file():
         files['evidence/' + evidence.name] = evidence.read_bytes()
+    for name in ('MY-AGENT-WORLD-MINESCRIPT.md','MY-AGENT-WORLD-MINESCRIPT.txt','evidence/minescript-20261014.json'):
+        path=REPO/'docs'/name
+        if path.is_file():files[name]=path.read_bytes()
     destination.mkdir(parents=True)
     for name, data in files.items():
         target = destination / name
