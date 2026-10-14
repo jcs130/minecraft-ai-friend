@@ -1,9 +1,7 @@
 /** Bounded transport shared by optional memory retrieval and learning services. */
 import type { GameMemoryConfig } from './game-memory-service.ts';
 
-export async function memoryRequest(request: typeof fetch, cfg: GameMemoryConfig, suffix: string,
-  body: unknown, signal?: AbortSignal, method: 'POST' | 'GET' = 'POST', query: Record<string, string> = {}):
-  Promise<{ data: Record<string, unknown>; etag: string | null; requestId: string | null }> {
+function transport(cfg: GameMemoryConfig, suffix: string, query: Record<string, string>) {
   if (!cfg.endpoint.trim()) throw new Error('Memory endpoint is not configured');
   let url: URL;
   try { url = new URL(cfg.endpoint); } catch { throw new Error('Invalid memory endpoint'); }
@@ -20,6 +18,15 @@ export async function memoryRequest(request: typeof fetch, cfg: GameMemoryConfig
     if (cfg.mode === 'remote' && cfg.provider === 'mem0-oss') headers['X-API-Key'] = key;
     else headers.Authorization = `${cfg.mode === 'remote' && cfg.provider === 'mem0-platform' ? 'Token' : 'Bearer'} ${key}`;
   }
+  return { url, headers };
+}
+/** Configuration rejection before dispatch does not create an uncertain remote write. */
+export function validateMemoryTransport(cfg: GameMemoryConfig) { transport(cfg, '', {}); }
+
+export async function memoryRequest(request: typeof fetch, cfg: GameMemoryConfig, suffix: string,
+  body: unknown, signal?: AbortSignal, method: 'POST' | 'GET' = 'POST', query: Record<string, string> = {}):
+  Promise<{ data: Record<string, unknown>; etag: string | null; requestId: string | null }> {
+  const { url, headers } = transport(cfg, suffix, query);
   const abort = AbortSignal.any([AbortSignal.timeout(cfg.timeoutMs), ...(signal ? [signal] : [])]);
   try {
     const response = await request(url, { method, headers, ...(method === 'POST' ? { body: JSON.stringify(body) } : {}), signal: abort, redirect: 'error' });

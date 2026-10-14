@@ -59,6 +59,7 @@ class MemorySettings:
     scope_id: str = ""
     search_mode: str = "text"
     learning_enabled: bool = False
+    read_preference: str = "balanced"
 
     @classmethod
     def parse(cls, raw: dict) -> MemorySettings:
@@ -71,6 +72,8 @@ class MemorySettings:
             raise ValueError("Invalid memory provider")
         if fields["search_mode"] not in {"text", "vector", "hybrid"}:
             raise ValueError("Invalid memory search mode")
+        if fields["read_preference"] not in {"local-first", "balanced", "remote-first"}:
+            raise ValueError("Invalid memory read preference")
         if fields["endpoint"]:
             viewer_url(fields["endpoint"])
         key = fields["api_key_env"]
@@ -89,7 +92,7 @@ class MemorySettings:
 
     def client_config(self) -> dict:
         aliases = {"api_key_env": "apiKeyEnv", "timeout_ms": "timeoutMs", "library_id": "libraryId",
-                   "project_id": "projectId", "scope_id": "scopeId", "search_mode": "searchMode", "learning_enabled": "learningEnabled"}
+                   "project_id": "projectId", "scope_id": "scopeId", "search_mode": "searchMode", "learning_enabled": "learningEnabled", "read_preference": "readPreference"}
         return {aliases.get(key, key): getattr(self, key) for key in self.__dataclass_fields__}
 
     def environment(self) -> dict[str, str]:

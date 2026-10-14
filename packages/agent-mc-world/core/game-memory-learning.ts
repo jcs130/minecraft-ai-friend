@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { memoryRequest } from './game-memory-http.ts';
 import { artifactRef, sourceRef, LEARNING_INPUTS, LEARNING_WRITES, learningHelp, type LearningOperation } from './game-memory-learning-contract.ts';
 import type { GameMemoryConfig } from './game-memory-service.ts';
+import { MemoryKnowledgeCache } from './game-memory-redundancy.ts';
 
 type Data = Record<string, any>;
 interface Submission { operation: LearningOperation; digest: string; state: 'unverified' | 'confirmed'; at: string; source?: unknown; runKey?: string; evidence?: Data; receipt?: Data }
@@ -99,15 +100,32 @@ export class GameMemoryLearning {
           ...(operation === 'dream' ? { runKey: eventId } : {}) };
       }
       this.save(path, ledger); // Persist binding and dispatch uncertainty BEFORE any mutating HTTP request.
+      const cache = new MemoryKnowledgeCache(this.directory);
       try {
         const raw = await this.call(cfg, scopeKey, operation, input, eventId, signal);
         const result = this.normalize(operation, raw, input, ledger, cfg, eventId);
         bounds(result);
         if (writing) { ledger.submissions[hash(requestId)].state = 'confirmed'; ledger.submissions[hash(requestId)].receipt = result; }
         this.save(path, ledger);
-        return { ...envelope, status: 'confirmed', ...(writing ? { requestId, automaticRetry: false } : {}), result };
+        let cacheStatus: string | undefined;
+        if (['prepare', 'artifact', 'source'].includes(operation)) {
+          try { cache.put(binding, scopeKey, operation, input, result); cacheStatus = 'stored'; }
+          catch { cacheStatus = 'unavailable'; }
+        }
+        return { ...envelope, status: 'confirmed', ...(writing ? { requestId, automaticRetry: false } : {}),
+          ...(cacheStatus ? { localCache: { status: cacheStatus } } : {}), result };
       } catch (error) {
-        if (!writing) throw error;
+        if (!writing) {
+          if (error instanceof Error && /^Memory service HTTP (401|403|404|410)\b/.test(error.message)) {
+            try { cache.invalidate(binding, scopeKey, operation, input); } catch { /* Keep the original failure; never serve cache on a denied read. */ }
+          }
+          const unavailable = error instanceof Error && /^Memory service (request failed|timeout|HTTP (5\d\d|429)\b)/.test(error.message);
+          const cached = !signal?.aborted && unavailable ? cache.get(binding, scopeKey, operation, input) : null;
+          if (cached) return { ...envelope, status: 'cached', degraded: true, result: cached.result,
+            localCache: { status: 'fallback', fetchedAt: cached.at, ageMs: cached.ageMs, maxAgeMs: cached.maxAgeMs, currentServiceStateVerified: false },
+            guidance: 'Previously read historical result for this exact query/reference. Service is unavailable; recheck freshness before use. No mutation, capability, approval or installation is confirmed by this cache.' };
+          throw error;
+        }
         // The file already says unverified, including after process loss, cancellation, bad replies or a lost response.
         return { ...envelope, status: 'unverified', requestId, automaticRetry: false, result: null,
           reason: error instanceof Error && /^(Memory (service|request)|Learning result|Invalid learning response)/.test(error.message)

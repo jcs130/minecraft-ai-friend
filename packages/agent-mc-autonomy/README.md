@@ -67,6 +67,8 @@ HTTP bridge. Historical memory never overrides fresh world observations.
 
 Optional PowerContext 1.3 / HTTP service learning is configured by `[memory].learning_enabled` (default false), forwarded to the core. Its `mc_memory` service operations capture attributed game outcomes, organize pending candidates and recall bounded historical experience. Human review stays in the memory service; no automatic approval, Skill installation, host policy update or weight training. See [core learning workflows](../agent-mc-world/docs/game-memory-learning.md).
 
+Local notes remain active in remote mode. `[memory].read_preference` defaults to `balanced`; the Agent can select `search.preference` for each task. The core owns durable replication receipts, unknown-write reconciliation and bounded local fallback for already-read cloud knowledge. The host only forwards this setting; it does not implement a second memory store or background learning loop. See [local/cloud roles](../agent-mc-world/docs/game-memory.md#local-and-cloud-roles).
+
 ```sh
 agent-mc-autonomy check --config config.local.toml --entry /path/to/bin/minecraft-agent-mcp.mjs
 agent-mc-autonomy run --config config.local.toml --entry /path/to/bin/minecraft-agent-mcp.mjs --goal "Survive safely, obtain food and prepare shelter"

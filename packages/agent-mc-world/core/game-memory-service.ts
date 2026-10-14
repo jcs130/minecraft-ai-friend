@@ -4,8 +4,9 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import { GameMemoryLearning } from './game-memory-learning.ts';
 import { artifactRef } from './game-memory-learning-contract.ts';
-import { memoryRequest } from './game-memory-http.ts';
+import { memoryRequest, validateMemoryTransport } from './game-memory-http.ts';
 import { GameMemoryBook, type GameMemoryContext, type MemoryCandidate } from './game-memory.ts';
+import { MemoryReplicaLedger, memoryTarget, type ReplicaReceipt } from './game-memory-redundancy.ts';
 
 export interface GameMemoryConfig {
   mode: 'local' | 'vector' | 'remote';
@@ -14,10 +15,11 @@ export interface GameMemoryConfig {
   libraryId: string; projectId: string; scopeId: string;
   searchMode: 'text' | 'vector' | 'hybrid';
   learningEnabled: boolean;
+  readPreference: 'local-first' | 'balanced' | 'remote-first';
 }
 export const GAME_MEMORY_DEFAULTS: GameMemoryConfig = {
   mode: 'local', endpoint: '', model: '', apiKeyEnv: '', timeoutMs: 3000,
-  provider: 'http', libraryId: '', projectId: 'agent-mc', scopeId: '', searchMode: 'text', learningEnabled: false,
+  provider: 'http', libraryId: '', projectId: 'agent-mc', scopeId: '', searchMode: 'text', learningEnabled: false, readPreference: 'balanced',
 };
 export const GAME_MEMORY_CONFIG_SCHEMA = Object.fromEntries(Object.entries({
   mode: { type: 'string', enum: ['local', 'vector', 'remote'], title: '游戏记忆检索', description: '本地关键词 / 本地向量混合 / 外挂记忆服务。外部服务故障时回退关键词，并报告降级。' },
@@ -31,6 +33,7 @@ export const GAME_MEMORY_CONFIG_SCHEMA = Object.fromEntries(Object.entries({
   scopeId: { type: 'string', title: 'PowerContext Scope ID', description: '填写已配置且有权访问的 Scope；插件不会创建或枚举 Scope。游戏记录仍按服务器与角色隔离。' },
   learningEnabled: { type: 'boolean', title: '启用服务端经验整理', description: '仅 PowerContext 或通用 HTTP 桥接。需绑定该服务器、账号和角色专用的已有 Scope；允许显式提交游戏证据和生成待审核候选，人工审核在记忆服务完成。默认关闭。' },
   searchMode: { type: 'string', enum: ['text', 'vector', 'hybrid'], title: 'PowerContext 检索方式', description: '默认全文检索，不要求向量模型。服务端支持后可选向量或混合检索。' },
+  readPreference: { type: 'string', enum: ['local-first', 'balanced', 'remote-first'], title: '本地与云端记忆侧重', description: '本地始终保存原始记录及版本。默认两端并用，Agent 可在每次 search 的 preference 按任务选择侧重。云端故障回退本地，不把历史当当前事实。' },
 }).map(([key, schema]) => [`worlds.minecraft.memory.${key}`, { ...schema, 'x-hot': true }]));
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -99,7 +102,7 @@ export class GameMemoryService {
     const pending = reply.status === 'PENDING';
     if (reply.status === 'FAILED' || reply.error) throw new Error('Remote memory write rejected');
     const powerRecords = cfg.provider === 'powercontext' && Array.isArray(reply.records) ? reply.records.filter(r => r?.text === serialized
-      && r?.artifact?.family === 'atomic-memory' && artifactRef.safeParse(r.artifact).success) : [];
+      && r?.artifact?.family === 'atomic-memory' && artifactRef.safeParse(r.artifact).success).slice(0, 100) : [];
     const confirmed = cfg.provider === 'powercontext' ? powerRecords.length > 0
       : cfg.provider === 'http' ? reply.status === 'stored'
       : cfg.provider === 'bailian' ? Array.isArray(reply.memory_nodes) && reply.memory_nodes.length > 0
@@ -143,25 +146,45 @@ export class GameMemoryService {
   async execute(args: Record<string, unknown>, ctx: GameMemoryContext, config: Partial<GameMemoryConfig> = {}, signal?: AbortSignal): Promise<Record<string, unknown>> {
     signal?.throwIfAborted();
     const cfg = { ...GAME_MEMORY_DEFAULTS, ...config };
+    if (args.action === 'search' && args.preference !== undefined) cfg.readPreference = args.preference as GameMemoryConfig['readPreference'];
     if (!['local', 'vector', 'remote'].includes(cfg.mode)) throw new Error('Unknown memory mode');
+    if (!['local-first', 'balanced', 'remote-first'].includes(cfg.readPreference)) throw new Error('Unknown memory read preference');
     if (args.action === 'service') {
       const scope = this.book.execute({ action: 'search', limit: 1, query: '' }, ctx).scopeKey;
       return new GameMemoryLearning(this.directory, this.request).execute(args, String(scope), cfg, signal);
+    }
+    if (args.action === 'replication') {
+      if (Object.keys(args).some(k => !['action', 'limit', 'offset'].includes(k))) throw new Error('replication only accepts limit and offset');
+      const result = this.book.execute({ action: 'search', dimension: '*', includeArchived: true, limit: args.limit, offset: args.offset }, ctx);
+      const scope = String(result.scopeKey), ledger = cfg.mode === 'remote' ? new MemoryReplicaLedger(this.directory).entries(memoryTarget(cfg, scope), scope) : {};
+      const entries = (result.entries as MemoryCandidate[]).map(entry => {
+        const full = this.canonical(this.book.execute({ action: 'get', id: entry.id }, ctx).entry as MemoryCandidate);
+        const receipt = ledger[entry.id], matches = receipt?.revision === entry.revision && receipt.contentHash === digest(full);
+        return { id: entry.id, revision: entry.revision, summary: entry.summary, archived: entry.archived,
+          state: cfg.mode !== 'remote' ? 'local-only' : matches ? receipt.status : 'not-recorded',
+          receipt: receipt ?? null, currentRevisionConfirmed: !!matches && receipt.status === 'stored' };
+      });
+      return { ...result, entries, remoteConfigured: cfg.mode === 'remote', localAuthoritative: true,
+        recovery: 'sync one id with expectedRevision. Pending/unknown dispatches are reconciled by an exact remote match, never automatically re-sent. not-recorded may include pre-ledger writes. This is replication of current notes, not a full disaster-recovery backup.' };
     }
     if (args.action === 'sync') {
       if (Object.keys(args).some(k => !['action', 'id', 'expectedRevision'].includes(k))) throw new Error('sync only accepts id and expectedRevision');
       const result = this.book.execute({ action: 'get', id: args.id }, ctx);
       const current = result.entry as MemoryCandidate;
       if (args.expectedRevision !== current.revision) throw new Error('Revision conflict; get current note before sync');
-      return { ...result, index: await this.tryIndex(cfg, String(result.scopeKey), this.canonical(current), signal) };
+      return { ...result, index: await this.tryIndex(cfg, String(result.scopeKey), this.canonical(current), signal, true) };
     }
     let candidates: MemoryCandidate[] = [], lexical: MemoryCandidate[] = [];
     const result = this.book.execute(args, ctx, { candidates: entries => { candidates = entries; }, lexical: entries => { lexical = entries; } });
     if (args.action === 'help' || !args.action) return { ...result, retrievalMode: cfg.mode, serviceLearning: { enabled: cfg.learningEnabled, help: 'Use action:service,operation:help for optional evidence, reviewed experience and bounded context workflows.' },
-      retrievalHelp: 'Optional vector or remote retrieval preserves local revision/evidence authority. Only game notes are sent. sync(id,expectedRevision) explicitly indexes a pre-existing note. Failed/unknown external writes are never automatically replayed. Remote results must match local scope, revision and content hash; restore/migrate local notebooks to reuse them on another machine.' };
+      redundancy: { local: 'authoritative versioned evidence and offline retrieval', remote: 'replica, semantic retrieval and explicitly requested learning', readPreference: cfg.readPreference,
+        syncStatus: 'action:replication', serviceReadFallback: 'Exact previously read historical prepare/artifact/source results may fall back to a bounded local cache during service outages; stale results stay labelled.' },
+      retrievalHelp: 'Local storage remains active in every mode. Only game notes are sent. replication lists current revision sync receipts across restart; sync(id,expectedRevision) indexes a pre-existing note or reconciles pending/unknown writes without replay. Remote matches must agree with local scope, revision and content hash. This is not a full-history backup: restore/migrate local notebooks for another machine.' };
     if (cfg.mode === 'local') return result;
     if (result.saved) return { ...result, index: await this.tryIndex(cfg, String(result.scopeKey), this.canonical(result.entry as MemoryCandidate), signal) };
     if (args.action !== 'search' || !String(args.query ?? '').trim()) return result;
+    if (cfg.readPreference === 'local-first' && lexical.length >= Number(args.limit ?? 8) + Number(args.offset ?? 0))
+      return { ...result, retrieval: { mode: 'local', requested: cfg.mode, readPreference: cfg.readPreference, remoteConsulted: false, reason: 'Local matches fill the requested page; external retrieval remains available with balanced or remote-first preference.' } };
     const scope = String(result.scopeKey);
     try {
       let semantic: string[], indexed = 0;
@@ -178,9 +201,10 @@ export class GameMemoryService {
       } else semantic = await this.remoteSearch(cfg, scope, String(args.query), candidates, signal);
       signal?.throwIfAborted();
       const ranks = new Map<string, number>();
-      for (const list of [lexical.map(idOf), semantic]) list.forEach((id, i) => ranks.set(id, (ranks.get(id) ?? 0) + 1 / (60 + i + 1)));
+      const weights = cfg.readPreference === 'local-first' ? [3, 1] : cfg.readPreference === 'remote-first' ? [1, 3] : [1, 1];
+      [lexical.map(idOf), semantic].forEach((list, index) => list.forEach((id, i) => ranks.set(id, (ranks.get(id) ?? 0) + weights[index] / (60 + i + 1))));
       // Re-read after network wait: revisions/archives may have changed. Never return old remote copies as current notes.
-      return { ...this.book.execute(args, ctx, { ranks }), retrieval: { mode: cfg.mode, fusion: 'reciprocal-rank',
+      return { ...this.book.execute(args, ctx, { ranks }), retrieval: { mode: cfg.mode, fusion: 'reciprocal-rank', readPreference: cfg.readPreference, remoteConsulted: true,
         ...(cfg.mode === 'vector' ? { indexed, candidates: candidates.length, incompleteIndex: indexed < candidates.length } : { acceptedRemoteMatches: semantic.length }) } };
     } catch (error) {
       if (signal?.aborted) throw error;
@@ -193,8 +217,42 @@ export class GameMemoryService {
     return { id, revision, recordedAt, kind, summary, content, dimension, tags, source, expiresAt, archived };
   }
 
-  private async tryIndex(cfg: GameMemoryConfig, scope: string, e: MemoryCandidate, signal?: AbortSignal) {
-    try { return await this.index(cfg, scope, e, signal); }
+  private async tryIndex(cfg: GameMemoryConfig, scope: string, e: MemoryCandidate, signal?: AbortSignal, reconcile = false) {
+    try {
+      if (cfg.mode !== 'remote') return await this.index(cfg, scope, e, signal);
+      signal?.throwIfAborted();
+      validateMemoryTransport(cfg);
+      if (!['http', 'mem0-oss', 'mem0-platform', 'bailian', 'powercontext'].includes(cfg.provider)) throw new Error('Unknown memory provider');
+      if (cfg.provider === 'powercontext') {
+        this.powerScope(cfg);
+        const serialized = JSON.stringify({ protocol: 'agent-mc-memory/v1', mc_scope: scope, mc_id: e.id, mc_revision: e.revision, mc_hash: digest(e), entry: e });
+        if (Buffer.byteLength(serialized, 'utf8') > 8192) throw new Error('PowerContext memory exceeds 8192 UTF-8 bytes; local note preserved');
+      }
+      const ledger = new MemoryReplicaLedger(this.directory), target = memoryTarget(cfg, scope), contentHash = digest(e);
+      const old = ledger.entries(target, scope)[e.id];
+      if (old?.revision === e.revision && old.contentHash === contentHash) {
+        if (old.status === 'stored') return { ...old, mode: 'remote', replayed: false };
+        if (reconcile) {
+          const matches = await this.remoteSearch(cfg, scope, e.summary, [e], signal);
+          signal?.throwIfAborted();
+          if (matches.includes(idOf(e))) {
+            const receipt: ReplicaReceipt = { ...old, at: new Date().toISOString(), status: 'stored', searchVerified: true };
+            ledger.put(target, scope, e.id, receipt);
+            return { ...receipt, mode: 'remote', reconciled: true, replayed: false };
+          }
+        }
+        return { ...old, mode: 'remote', replayed: false, automaticRetry: false, needsReconciliation: true,
+          guidance: 'No exact remote match confirmed yet. Search absence is not proof the write failed; inspect its remote event or receipt before re-submitting.' };
+      }
+      const initial: ReplicaReceipt = { revision: e.revision, contentHash, at: new Date().toISOString(), status: 'unverified', searchVerified: false };
+      ledger.put(target, scope, e.id, initial); // Persist uncertainty before dispatch; process loss must not invite a duplicate write.
+      const indexed = await this.index(cfg, scope, e, signal);
+      ledger.put(target, scope, e.id, { ...initial, at: new Date().toISOString(),
+        status: indexed.status === 'stored' ? 'stored' : indexed.status === 'pending' ? 'pending' : 'unverified',
+        eventId: 'eventId' in indexed ? indexed.eventId : null,
+        ...('artifacts' in indexed ? { artifacts: indexed.artifacts, scopeId: indexed.scopeId } : {}) });
+      return indexed;
+    }
     catch (error) { return { status: 'unverified', mode: cfg.mode, reason: String(error), localSaved: true, automaticRetry: false }; }
   }
 }
