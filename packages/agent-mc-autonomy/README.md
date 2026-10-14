@@ -372,6 +372,13 @@ Since 0.1.30, an intervening failed observation and its cached retry also retain
 the unresolved body rejection. Correcting that observation clears only its own
 diagnostic; it cannot erase the body failure from the next planner request.
 
+Since 0.1.31, Chat/Responses planners can explicitly set
+`planner.parameters.tool_choice = "required"` on a provider that supports it.
+This prevents text-only plans when tools are advertised; the model still chooses
+the tool and arguments, and native validation remains authoritative. The default
+is unchanged. Requests without tools omit this option. It does not guarantee a
+useful body action or enable an unsupported provider capability.
+
 Run `python -m pytest -q` here. Tests deny host SDK imports, network and service
 launches; the isolated process test exercises both a fake autonomous planner and
 queue-only operation. These tests do not prove live survival, actual model

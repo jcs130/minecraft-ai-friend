@@ -26,8 +26,8 @@ PRESETS = {
 PARAMETERS = {
     "chat": {"temperature", "top_p", "top_k", "seed", "stop", "presence_penalty", "frequency_penalty",
              "reasoning_effort", "thinking", "enable_thinking", "thinking_budget", "response_format",
-             "min_p", "repetition_penalty", "chat_template_kwargs"},
-    "responses": {"temperature", "top_p", "reasoning", "text", "service_tier", "prompt_cache_key", "prompt_cache_retention"},
+             "min_p", "repetition_penalty", "chat_template_kwargs", "tool_choice"},
+    "responses": {"temperature", "top_p", "reasoning", "text", "service_tier", "prompt_cache_key", "prompt_cache_retention", "tool_choice"},
     "anthropic": {"temperature", "top_p", "top_k", "stop_sequences", "thinking", "output_config", "service_tier"},
     "gemini": {"temperature", "topP", "topK", "seed", "stopSequences", "presencePenalty", "frequencyPenalty",
                "thinkingConfig", "responseMimeType", "responseSchema", "responseJsonSchema", "mediaResolution"},
@@ -91,6 +91,8 @@ class AuthConfig:
 def validate_parameters(protocol, raw):
     if not isinstance(raw, dict) or set(raw) - PARAMETERS[protocol]:
         raise ValueError("brain_parameters_unsupported_for_protocol")
+    if "tool_choice" in raw and raw["tool_choice"] not in ("auto", "required"):
+        raise ValueError("brain_tool_choice_must_be_auto_or_required")
     try:
         data = json.dumps(raw, allow_nan=False)
     except (ValueError, TypeError, RecursionError):

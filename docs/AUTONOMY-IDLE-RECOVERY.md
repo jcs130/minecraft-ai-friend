@@ -27,6 +27,18 @@ upstream lint baseline; changed controller/replay files pass lint. The deployed
 Mineflayer core remains the separately checked pin above; the new upstream Java
 body is not enabled by this repair.
 
+The live planner also returned repeated text-only intentions with no function
+calls. Such replies correctly dispatch nothing, and the existing bounded
+backoff can leave the player idle for minutes. Version 0.1.31 allows explicit
+`tool_choice="required"` for Chat/Responses providers supporting that option.
+It is not a scripted body fallback: the provider must return a tool choice, the
+model selects its arguments, and native admission still decides whether it can
+execute. Defaults and other protocols remain unchanged. Requests with no tools
+omit the setting. The local provider's implementation was checked before opting
+in; its forced nonthinking prefix must also be counted by the deployment's CPU
+token-counter adapter. The 0.1.31 framework passed 394 tests; its isolated wheel
+passed 68 provider/rejection replay tests and the offline autonomy/queue probe.
+
 When a batch is refused, the feedback explicitly says its earlier steps did not
 run. The planner can submit its next feasible action separately from a blocked
 optional search or an unverified crafting dependency. Native admission guards

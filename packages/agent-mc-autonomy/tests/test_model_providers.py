@@ -21,6 +21,23 @@ def config(provider, **fields):
     return HttpPlannerConfig.parse({"provider": provider, "model": "chosen", "auth": {"mode": "none"}, **fields})
 
 
+@pytest.mark.parametrize("protocol", ["chat", "responses"])
+def test_explicit_required_tool_choice_reaches_wire_and_is_omitted_without_tools(protocol):
+    cfg = config("openai-compatible", protocol=protocol, base_url="http://127.0.0.1:8000/v1",
+                 parameters={"tool_choice": "required"})
+    _, body = request(cfg, BASE, [TOOL], 2048)
+    assert body["tool_choice"] == "required" and body["parallel_tool_calls"] is False
+    assert "tool_choice" not in request(cfg, BASE, [], 2048)[1]
+    assert "tool_choice" not in request(config("openai-compatible", protocol=protocol,
+                                             base_url=cfg.base_url), BASE, [TOOL], 2048)[1]
+
+
+@pytest.mark.parametrize("choice", ["none", "unknown", {"type": "function", "name": "invented"}])
+def test_autonomy_tool_choice_cannot_disable_tools_or_force_unadvertised_functions(choice):
+    with pytest.raises(ValueError, match="tool_choice"):
+        config("openai-compatible", base_url="http://127.0.0.1:8000/v1", parameters={"tool_choice": choice})
+
+
 def payload(protocol):
     if protocol == "chat":
         return {"choices": [{"finish_reason": "tool_calls", "message": {"content": None, "reasoning_content": "opaque-reason", "tool_calls": [CALL]}}]}

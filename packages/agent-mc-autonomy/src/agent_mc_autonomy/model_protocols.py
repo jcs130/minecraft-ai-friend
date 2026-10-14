@@ -48,6 +48,8 @@ def image_data(part):
 def request(config, messages, tools, budget):
     p = config.protocol
     options = copy.deepcopy(config.parameters)
+    if not tools:
+        options.pop("tool_choice", None)
     base = config.base_url.rstrip("/")
     if p == "chat":
         rows = []
