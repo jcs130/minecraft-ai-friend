@@ -115,8 +115,11 @@ export function createImageGenerationPort(config: Partial<PhotographyConfig> | u
       } else if (typeof output.url === 'string') {
         let url: URL;
         try { url = new URL(output.url); } catch { return fail('Invalid generated image URL'); }
-        if (url.protocol !== 'https:' || url.username || url.password || !allowed.has(url.hostname.toLowerCase()))
-          fail('Image result host is not explicitly configured');
+        if (url.protocol !== 'https:' || url.username || url.password)
+          fail('Image result URL must use HTTPS without embedded credentials');
+        if (!allowed.has(url.hostname.toLowerCase()))
+          // Report the configuration fact, never the signed path/query or provider body.
+          fail(`Image result host is not explicitly configured: ${url.hostname}. No download attempted; do not resubmit generation`);
         let downloaded: Response;
         try { downloaded = await http(url, { signal, redirect: 'error' }); }
         catch { signal.throwIfAborted(); return fail('Generated image download failed; do not resubmit generation'); }

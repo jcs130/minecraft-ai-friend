@@ -54,9 +54,15 @@ describe('native cloud image adapters, entirely offline fixtures', () => {
     await expect(port.generate({ prompt: 'test', images: [] }, signal())).rejects.toMatchObject({ message: 'Image provider HTTP 429; no automatic retry', providerRequestId: 'failed-request' }); expect(http).toHaveBeenCalledTimes(2);
   });
   it('blocks unconfigured result destinations and reports the already submitted native request id', async () => {
-    const http = vi.fn(async () => json({ request_id: 'ali-saved', output: { choices: [{ message: { content: [{ image: 'https://unconfigured.invalid/image' }] } }] } }));
+    const http = vi.fn(async () => json({ request_id: 'ali-saved', output: { choices: [{ message: { content: [{ image: 'https://unconfigured.invalid/private-path?Signature=secret-fixture-only' }] } }] } }));
     const port = createImageGenerationPort({ ...base, provider: 'bailian' }, { fetch: http, env })!;
-    await expect(port.generate({ prompt: 'test', images: [] }, signal())).rejects.toMatchObject({ providerRequestId: 'ali-saved', message: 'Image result host is not explicitly configured' });
+    await expect(port.generate({ prompt: 'test', images: [] }, signal())).rejects.toMatchObject({ providerRequestId: 'ali-saved', message: 'Image result host is not explicitly configured: unconfigured.invalid. No download attempted; do not resubmit generation' });
+    expect(http).toHaveBeenCalledOnce();
+  });
+  it.each(['http://result.invalid/a', 'https://secret-fixture-only@result.invalid/a'])('rejects unsafe result URL form without exposing it or downloading: %s', async url => {
+    const http = vi.fn(async () => json({ request_id: 'ali-unsafe', output: { choices: [{ message: { content: [{ image: url }] } }] } }));
+    const port = createImageGenerationPort({ ...base, provider: 'bailian', resultHosts: 'result.invalid' }, { fetch: http, env })!;
+    await expect(port.generate({ prompt: 'test', images: [] }, signal())).rejects.toMatchObject({ providerRequestId: 'ali-unsafe', message: 'Image result URL must use HTTPS without embedded credentials' });
     expect(http).toHaveBeenCalledOnce();
   });
   it('aborts in-flight HTTP requests promptly and does not submit again', async () => {
