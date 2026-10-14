@@ -14,6 +14,7 @@ import type { GearPiece, GearSlot, ItemStack, WorldSnapshot } from './terrain.ts
 import { enchantSuffix, narrateCursor, narrateInventory } from './terrain.ts';
 import { zhName } from './names.ts';
 import { PLAYER_SLOTS } from './precheck.ts';
+import { narrateInventorySync } from './inventory-window-sync.ts';
 
 const GEAR_SLOT_ZH: Record<GearSlot, string> = {
   head: '头', chest: '胸', legs: '腿', feet: '脚', offhand: '副手',
@@ -30,7 +31,7 @@ function gearPhrase(p: GearPiece): string {
  * 首次服务端同步前报告未同步，避免将初始空视图当成空背包。
  */
 export function renderBagReadout(s: WorldSnapshot): string {
-  if (!s.invSynced) return '[背包] 物品栏还在从服务器同步,这份清单还没到。';
+  if (!s.invSynced) return `[背包] ${narrateInventorySync(s.inventorySync)}`;
   const used = s.inventory.length;
   const held = s.heldItem ? `手里拿着${s.heldItemDisplayName ?? zhName(s.heldItem)}` : '手里空着';
   const worn = WORN_ORDER
@@ -56,7 +57,7 @@ export function renderStoredItemReadout(
   openWindow?: { title: string; items: readonly ItemStack[] } | null,
   registry?: NameRegistry | null,
 ): string {
-  if (!s.invSynced) return '[物资查询] 物品栏还在从服务器同步。';
+  if (!s.invSynced) return `[物资查询] ${narrateInventorySync(s.inventorySync)}`;
   const item = query.trim().toLowerCase().replace(/^minecraft:/, '');
   if (!/^[^\p{Cc}\p{Cf}]{1,64}$/u.test(item)) return '[物资查询] 物品名格式不对。';
   const normalize = (name: string) => name.trim().toLowerCase().replace(/\s+/gu, ' ');

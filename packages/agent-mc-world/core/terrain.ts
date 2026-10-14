@@ -23,6 +23,7 @@ import { BURNING_BLOCKS, SCORCHING_FLOOR, hazardBodyBounds } from './hazard-geom
 import { remainingEffectTicks } from './status-effects.ts';
 import type { TargetDiag } from './skill-context.ts';
 import { flightState, type FlightState } from './flight.ts';
+import { inventoryReadState, narrateInventorySync, type InventoryReadState } from './inventory-window-sync.ts';
 export { BURNING_BLOCKS, SCORCHING_FLOOR } from './hazard-geometry.ts';
 
 /** 八方位罗盘。北=-z 南=+z 东=+x 西=-x,与 move 技能同一套词。 */
@@ -150,6 +151,8 @@ export interface WorldSnapshot {
   inWater: boolean;
   /** 物品栏已从服务器同步到(登录后 window_items 未到之前不能把空栏当空) */
   invSynced: boolean;
+  /** Why an inventory read is unavailable; distinct from the initial login snapshot. */
+  inventorySync?: InventoryReadState;
   /** 0–24000;13000–23000 为夜 */
   timeOfDay: number;
   /** 抽这份快照时的现实时刻,部署时区的 nowIso 串;与游戏内的 timeOfDay 无关 */
@@ -433,12 +436,12 @@ export function narrateWorldSegments(
     const held = s.heldItem ? `手里拿着${s.heldItemDisplayName ?? zhName(s.heldItem)}` : '两手空空';
     gear = `${held}。${prevBag ? narrateBagChange(prevBag, s.inventory) : bagFull}${narrateCursor(s)}`;
   } else {
-    gear = '背包还在从服务器同步，这份清单还没到。';
+    gear = narrateInventorySync(s.inventorySync);
   }
   segs.push({
     key: 'gear',
     text: gear,
-    cmp: s.invSynced ? `${s.heldItem ?? 'bare'}:${s.heldItemDisplayName ?? ''}|${bagFull}|${narrateCursor(s)}` : 'nosync',
+    cmp: s.invSynced ? `${s.heldItem ?? 'bare'}:${s.heldItemDisplayName ?? ''}|${bagFull}|${narrateCursor(s)}` : gear,
   });
 
   // 装备与状态自成一段:背包每挖一块土就变,盔甲与效果几十分钟才动一次,
@@ -1870,6 +1873,7 @@ export function snapshotFromBot(
       ...(ench.length > 0 ? { enchantments: ench } : {}) };
   };
   const cursor = (bot.currentWindow ?? bot.inventory)?.selectedItem;
+  const inventorySync = inventoryReadState(bot, opts?.invSynced ?? true);
 
   return {
     position: { x: pos.x, y: pos.y, z: pos.z },
@@ -1880,7 +1884,8 @@ export function snapshotFromBot(
     // 旱地上的氧气读数是残留旧值,一律按满算;水下才用真实值(截到 0–20)
     oxygen: inWater ? Math.max(0, Math.min(20, bot.oxygenLevel ?? 20)) : 20,
     inWater,
-    invSynced: opts?.invSynced ?? true,
+    invSynced: inventorySync.phase === 'ready',
+    inventorySync,
     timeOfDay,
     realTime: nowIso(opts?.timezone ?? SYSTEM_TIMEZONE),
     light: sampleLight(bot, isNight(timeOfDay)),

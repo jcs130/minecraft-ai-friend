@@ -54,6 +54,8 @@ does not need either source repository at runtime.
 
 See [client setup](docs/minecraft-client.md), [accounts](docs/online-accounts.md),
 [protocol](docs/protocol-v1.md) and [host integration](docs/harness.md).
+For confirmed inventory operations and recovery after a timeout, see
+[inventory synchronization](docs/inventory-synchronization.md).
 Historical import licenses and hashes remain in `provenance/` and
 `vendor/native-types/`. The repository move is recorded separately; no identities,
 goals, memories, credentials or game ledgers are moved by installing this package.
