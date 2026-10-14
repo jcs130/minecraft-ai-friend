@@ -1,14 +1,14 @@
 # My Agent World 真实客户端接入
 
-2026-10-14：客户端桥 0.3.1 补齐崩溃后离线人工审核恢复，原有 30 项 Agent 操作保持。可选 Baritone、Minescript、统一导航与原始 PNG 的 MCP 回传见[统一接入指南](MY-AGENT-WORLD-UNIFIED-ACCESS.md)，有限 Python 执行见[Minescript 指南](MY-AGENT-WORLD-MINESCRIPT.md)。文末首版验收记录保留。
+2026-10-15：客户端桥 0.5.0 新增真实物品、tooltip 和同步配方查询，共 35 项操作；合成结果槽明确标记为尚未领取的预览。保留崩溃后离线人工审核恢复。可选 Baritone、Minescript、统一导航与原始 PNG 的 MCP 回传见[统一接入指南](MY-AGENT-WORLD-UNIFIED-ACCESS.md)，有限 Python 执行见[Minescript 指南](MY-AGENT-WORLD-MINESCRIPT.md)。文末首版验收记录保留。
 
-客户端桥 0.3.1 支持 Minecraft 1.21.1、NeoForge 21.1.248 和 Java 21。它控制启动器中已经登录的真实玩家，通过本机 SDK 读取状态和操作游戏。接入不需要服务器安装桥接模组，也不注册游戏自定义频道。
+客户端桥 0.5.0 支持 Minecraft 1.21.1、NeoForge 21.1.248 和 Java 21。它控制启动器中已经登录的真实玩家，通过本机 SDK 读取状态和操作游戏。接入不需要服务器安装桥接模组，也不注册游戏自定义频道。
 
 客户端仍需满足目标服务器的版本、整合包、账号和自动化规则。服务端未同步的机器内部数据、隐藏任务或保护规则无法由客户端桥直接查询；可通过真实界面、服务器命令或后续模组适配获取。
 
 ## 安装与连接
 
-把 `maw-client-bridge-0.3.1-neoforge-1.21.1.jar` 放进客户端整合包的 `mods`，通过正常启动器进入服务器。正版账号沿用启动器的官方认证；离线账号沿用目标服务器的登录方式。桥不会读取启动器令牌或创建另一个玩家。可选的原作者 Baritone JAR 也只装客户端，来源与哈希见统一指南。
+把 `maw-client-bridge-0.5.0-neoforge-1.21.1.jar` 放进客户端整合包的 `mods`，通过正常启动器进入服务器。正版账号沿用启动器的官方认证；离线账号沿用目标服务器的登录方式。桥不会读取启动器令牌或创建另一个玩家。可选的原作者 Baritone JAR 也只装客户端，来源与哈希见统一指南。
 
 客户端启动后，在游戏目录生成 `maw-client-bridge/connection.json`。文件含随机回环地址、令牌和本次客户端实例 ID，只交给本机 Agent。游戏服务器可以在远方；控制接口目前仅绑定本机 `127.0.0.1`，无需新增防火墙规则或公网端口。
 
@@ -52,7 +52,7 @@ try {
 
 ## 能力与回执
 
-30 项操作可通过 `operations()` 与 `operations(id)` 查询真实参数，其中 5 项属于可选 Baritone，2 项属于可选 Minescript；未安装时可查询不可用状态，原生操作继续可用。
+35 项操作可通过 `operations()` 与 `operations(id)` 查询真实参数，其中 5 项属于可选 Baritone，2 项属于可选 Minescript；未安装时可查询不可用状态，原生操作继续可用。
 
 | 类别 | 操作 |
 |---|---|
@@ -63,6 +63,16 @@ try {
 | 模组界面 | screen.click、screen.key、screen.type |
 | 原生操作 | world.dig、world.useBlock、world.useItem、world.attack、chat.send |
 | 画面 | screen.capture |
+| 模组知识 | knowledge.items、knowledge.item、knowledge.recipes、knowledge.recipe |
+| 原生合成 | craft.recipe |
+
+`knowledge.items {query,namespace,offset,limit}` 搜索真实注册表，支持本客户端的中文显示名，单页最多 32 项。`knowledge.item {id}` 返回默认样本及原生 tooltip，不表示已经拥有；`knowledge.item {slot}` 读取本人实际槽位。第 0 格的 `stackSource=crafting_result_preview_not_owned`，不能作为取得物品的证明。
+
+`knowledge.recipes {outputId,query,offset,limit}` 读取当前连接实际同步的 RecipeManager。`knowledge.recipe {id}` 返回材料及替代材料、实际产物、shaped 尺寸；标准合成标明 2×2 或工作台，未知模组设备为 `null`。在 serializer 能编码时附 `nativeJson`，保留处理时间、副产物和概率等原始字段；有些网络同步的配方缺少原始编码信息，明确返回 `nativeJsonUnavailable`，结构化材料仍可读。查不到返回 `recipe_not_synced_to_this_client`，不推断隐藏配方不存在。
+
+Harness 用 `mc_read {"operation":"knowledge.recipes","args":{"outputId":"create:shaft"}}` 查询，再按真实配方 ID 读取详情。查询失败会返回原参数 schema；不要猜 `recipeId`、`output` 等别名。只有 `mc_do` 才提交变更，仍需先查询对应菜单或脚本操作的真实 schema。
+
+`craft.recipe {id,windowId,expectedStateId}` 通过原客户端配方书放入材料，并取走一批产物。要求已解锁的标准 crafting 配方、正确的 2×2/3×3 工作台、空合成格和空光标、足够的背包容量；没有材料仍由服务端拒绝。它等待实际菜单同步和背包数量变化，不生成物品、不授予配方。不能用于熔炉、Create 机器或特殊自定义网格；这些仍使用各自真实菜单或脚本。完整组件比较与动作防重继续保留。
 
 `snapshot` 包括本人 UUID、连接 ID、采集时间与客户端 tick、绝对坐标、维度、生命、饥饿、经验、装备和完整物品 SNBT。标准背包用 `player_menu_46` 槽位，快捷栏为 36–44；实际模组容器另用其真实窗口槽号，附 `owner/inventoryIndex`。未适配的模组魔力字段为 `null`。
 

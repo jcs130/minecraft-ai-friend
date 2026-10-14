@@ -30,7 +30,41 @@ def receipt_view(value):
         evidence = execution["evidence"]
         if isinstance(value.get("text"), str) and evidence.get("receipt") == value["text"]:
             result["execution"] = {**execution, "evidence": {k: v for k, v in evidence.items() if k != "receipt"}}
+    if isinstance(result.get("text"), str):
+        result["text"] = native_text_preview(result["text"])
     return result
+
+
+def native_text_preview(text):
+    """Keep native menu contents ahead of redundant empty slots and item metadata.
+
+    This is a planner-only projection. Original component bytes stay in snbt and
+    the untouched receipt archive; no inferred ownership or game result is added.
+    """
+    try:
+        root = json.loads(text)
+    except (ValueError, TypeError):
+        return text
+    if not isinstance(root, dict) or not root.get("bodyId") or not (
+            root.get("authority") == "client_observed" or isinstance(root.get("state"), dict) and "windowId" in root["state"]):
+        return text
+
+    def project(value):
+        if isinstance(value, list):
+            return [project(child) for child in value]
+        if not isinstance(value, dict):
+            return value
+        if isinstance(value.get("snbt"), str) and isinstance(value.get("id"), str) and isinstance(value.get("count"), int):
+            return {k: value[k] for k in ("slot", "id", "name", "displayName", "count", "damage", "maxDamage", "snbt") if k in value}
+        if "windowId" in value and isinstance(value.get("slots"), list) and all(isinstance(row, dict) and "item" in row for row in value["slots"]):
+            menu = {k: project(v) for k, v in value.items() if k != "slots"}
+            menu["slots"] = [project(row) for row in value["slots"] if row.get("item") is not None or row.get("owner") != "player"]
+            menu["emptyPlayerSlots"] = [row["slot"] for row in value["slots"] if row.get("item") is None and row.get("owner") == "player"]
+            menu["slotProjection"] = "Nonempty slots and all container slots shown; empty player slots listed by exact slot id."
+            return menu
+        return {k: v if k == "nativeJson" else project(v) for k, v in value.items()}
+
+    return json.dumps(project(root), ensure_ascii=False, separators=(",", ":"))
 
 
 def spatial_summary(value):

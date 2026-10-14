@@ -20,9 +20,9 @@ from .tool_schema import argument_error
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
 HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_visual"}
-DIRECT_TOOLS = {"mc_help", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape"}
-READ_ACTIVITY_TOOLS = {"mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original"}
-IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout"}
+DIRECT_TOOLS = {"mc_help", "mc_do", "mc_read", "mc_result", "mc_wait", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape"}
+READ_ACTIVITY_TOOLS = {"mc_help", "mc_read", "mc_result", "mc_wait", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original"}
+IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout", "mc_wait"}
 
 
 def hidden_tools(catalogue):
@@ -284,6 +284,12 @@ class Controller:
             if result.get("failed"):
                 self.record_tool_failure("mc_state", {}, result)
 
+    async def renew_discovered_control_if_due(self):
+        # A long model/documentation chain can outlive a lease inside one turn.
+        # Renewal remains an explicit coordinator call, never a second controller.
+        if type(self.control_expires_at) in (int, float) and time.time() * 1000 >= self.control_expires_at - 15000:
+            await self.claim_discovered_control()
+
     def persist(self, **changes):
         self.data.mkdir(parents=True, exist_ok=True)
         previous = json.loads(self.state_path.read_text(encoding="utf-8")) if self.state_path.exists() else {}
@@ -322,6 +328,32 @@ class Controller:
             return any(self.action_owners.get(key) in {None, self.active_goal["id"]} for key in self.pending)
         return bool(self.pending)
 
+    async def finish_operation_receipts(self):
+        """Stop owned input and reconcile original IDs before losing an operation body.
+
+        An adapter disconnect is not proof that a server-resident action ended.
+        Keep every unresolved receipt instead of treating connection closure as cancellation.
+        """
+        names = {tool['name'] for tool in self.bridge.tools}
+        if not self.pending:
+            return
+        if 'mc_stop' in names:
+            try:
+                await self.bridge.call('mc_stop', {}, timeout=10)
+            except Exception:
+                pass  # A stop request alone never resolves an original action.
+        if 'mc_result' in names:
+            for key, execution in list(self.pending.items()):
+                try:
+                    result = outcome(await self.bridge.call('mc_result', {'action_id': execution['id']}, timeout=10))
+                    receipt = result.get('execution')
+                    if receipt and (receipt.get('kind'), receipt.get('id')) == key and receipt.get('terminal') is True:
+                        self.receipt(result)
+                except Exception:
+                    pass
+        self.persist(pending=list(self.pending.values()), **({'uncertain': True} if self.pending else {}))
+        self.publish(pending=list(self.pending.values()))
+
     async def protocol(self, action, **arguments):
         return json_content(await self.bridge.call("mc_protocol", {"protocol": PROTOCOL, "action": action, **arguments}))
 
@@ -358,9 +390,12 @@ class Controller:
         for offset in range(0, len(original), 16000):
             refs.append(json_content(await self.bridge.call("mc_artifact", {
                 "action": "put", "text": original[offset:offset + 16000], "mime": "text/plain"})) ["handle"])
+        compact_view = {**view, "original_chunks": refs, "retrieve": "mc_original(handle,offset,limit), chunks in order"}
+        if len(encode(compact_view).encode("utf-8")) <= 6000:
+            return encode(compact_view)
         # The context budget counts UTF-8 bytes, not Python characters. Chinese
         # help pages must not become a 10 KiB preview that evicts its own reply.
-        preview = spatial_text(result.get("text", "")).encode("utf-8")[:2800].decode("utf-8", errors="ignore")
+        preview = spatial_text(view.get("text", "")).encode("utf-8")[:2800].decode("utf-8", errors="ignore")
         return encode({"text": preview, "failed": result.get("failed"),
                        "execution": view.get("execution"),
                        "original_chunks": refs, "retrieve": "mc_original(handle,offset,limit), chunks in order"})
@@ -584,6 +619,9 @@ class Controller:
 
     async def execute_model_call(self, name, arguments):
         """Dispatch one validated call; return its result and native turn boundary."""
+        tags = next((t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])
+        if name == "mc_do" or "act" in tags:
+            await self.renew_discovered_control_if_due()
         queue_error = None
         if name in {"mc_do", "mc_scout"} and self.has_step_queue():
             if arguments.get("queue", "append") not in {"append", "afterCheckpoint", "now"}:
@@ -875,8 +913,7 @@ class Controller:
                 if more:
                     await asyncio.sleep(0)
                     continue
-                if type(self.control_expires_at) in (int, float) and time.time() * 1000 >= self.control_expires_at - 15000:
-                    await self.claim_discovered_control()
+                await self.renew_discovered_control_if_due()
                 if time.monotonic() - last_status_check >= 10:
                     status = json_content(await self.bridge.call("mc_connection", {"action": "status"}))
                     if not online(status):
@@ -901,6 +938,8 @@ class Controller:
                 await asyncio.sleep(1)
             self.publish(phase="stopped" if self.stop_requested() else "budget_exhausted")
         finally:
+            if not self.has_step_queue():
+                await self.finish_operation_receipts()
             self.persist(stopped=True)  # Retain uncertainty and exact request IDs.
             try:
                 status = json_content(await self.bridge.call("mc_connection", {"action": "disconnect"}, timeout=10))
@@ -908,7 +947,10 @@ class Controller:
                     raise RuntimeError("Disconnect not confirmed")
                 # Generic core disconnect explicitly stops its own action queue.
                 # This must not be reused for Numen, whose remote body stays alive.
-                self.persist(pending=[])
+                if self.has_step_queue():
+                    self.pending.clear()
+                    self.persist(pending=[])
+                self.publish(disconnect_confirmed=True, pending=list(self.pending.values()))
             except Exception:
                 if self.pending or self.inflight_request:
                     self.persist(uncertain=True)

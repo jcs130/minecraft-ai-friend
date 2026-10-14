@@ -452,7 +452,7 @@ def probe_panel_smoke(scope=None):
         if tools_path not in sys.path:
             sys.path.insert(0, tools_path)
         from java_client_bridge_health import probe
-        result = probe(os.environ.get('MAW_JAVA_CLIENT_CONFIG'))
+        result = probe(os.environ.get('MAW_JAVA_CLIENT_CONFIG'), **({'manifest_file': os.environ['MAW_JAVA_CLIENT_MANIFEST']} if os.environ.get('MAW_JAVA_CLIENT_MANIFEST') else {}))
         return {'ok': result['ok'], 'java_client_bridge': result, 'manifest': JAVA_CLIENT_BRIDGE_MANIFEST,
                 'modelRequests': 0, 'worldActions': 0}
     if scope == 'society-performance':

@@ -2,11 +2,29 @@
   "schemaVersion": 1,
   "ok": true,
   "provider": "java-client",
-  "operationCount": 30,
+  "operationCount": 35,
   "serverRequired": false,
   "allGameplayVerified": false,
   "authority": "client_observed",
   "operations": [
+    {
+      "id": "craft.recipe",
+      "readOnly": false,
+      "available": true,
+      "async": true,
+      "permission": "signed_in_player",
+      "description": "用真实配方书合成并取走一批标准合成配方，保持原材料和解锁规则；先清空合成格和光标。id来自knowledge.recipe，查询unlocked及实际工作台，不用于熔炉或模组机器。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "maxLength": 160 },
+          "windowId": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
+          "expectedStateId": { "type": "integer", "minimum": 0, "maximum": 2147483647 }
+        },
+        "required": ["id", "windowId", "expectedStateId"]
+      }
+    },
     {
       "id": "chat.recent",
       "readOnly": true,
@@ -886,6 +904,117 @@
         },
         "required": [
           "code"
+        ]
+      }
+    },
+    {
+      "id": "knowledge.items",
+      "readOnly": true,
+      "available": true,
+      "async": false,
+      "permission": "signed_in_player",
+      "description": "查询当前整合包真实物品注册表，支持中文名、ID和namespace；目录中的物品不代表已经拥有。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "namespace": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "knowledge.item",
+      "readOnly": true,
+      "available": true,
+      "async": false,
+      "permission": "signed_in_player",
+      "description": "读取物品原生中文名、组件与tooltip。slot为本人player_menu_46槽位；id查询默认样本并明确不是已拥有物品。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "slot": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 45
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "knowledge.recipes",
+      "readOnly": true,
+      "available": true,
+      "async": false,
+      "permission": "signed_in_player",
+      "description": "查询当前服务器实际同步的配方：按产物ID或配方ID/名称搜索，返回原始类型、产物和已知工作台；未知工作台不猜。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "outputId": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "query": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "knowledge.recipe",
+      "readOnly": true,
+      "available": true,
+      "async": false,
+      "permission": "signed_in_player",
+      "description": "按真实配方ID读取原生成分、替代材料、产物、合成尺寸和实际serializer编码JSON，保留模组特有字段。查不到不代表服务器没有隐藏配方。",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "id"
         ]
       }
     }

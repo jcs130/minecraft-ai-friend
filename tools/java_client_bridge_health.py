@@ -16,20 +16,25 @@ def probe(config_file=None,manifest_file=DEFAULT_MANIFEST):
         contract=json.loads((bundle/'operations.json').read_bytes())
         ids={row['id'] for row in contract['operations']}
         checks['operation_contract']=manifest['operationCount']==contract['operationCount']==len(ids) and {'body.move','screen.capture','world.dig','menu.click'}<=ids
-        if manifest['version'] in ('0.2.0','0.3.0','0.3.1'):
+        if manifest['version'] in ('0.2.0','0.3.0','0.3.1','0.4.0','0.4.1','0.5.0'):
             checks['optional_baritone_contract']={'baritone.state','baritone.goto','baritone.mine','baritone.follow','baritone.farm'}<=ids
             if manifest['optionalBaritone']['bundled']:checks['original_baritone_verified']=hashlib.sha256((bundle/'baritone-api-neoforge-1.11.3.jar').read_bytes()).hexdigest()==manifest['optionalBaritone']['sha256']
-        if manifest['version'] in ('0.3.0','0.3.1'):
+        if manifest['version'] in ('0.3.0','0.3.1','0.4.0','0.4.1','0.5.0'):
             checks['optional_minescript_contract']={'minescript.state','minescript.run'}<=ids
             if manifest['optionalMinescript']['bundled']:checks['original_minescript_verified']=hashlib.sha256((bundle/'minescript-neoforge-1.21.1-4.0.jar').read_bytes()).hexdigest()==manifest['optionalMinescript']['sha256']
-        if manifest['version']=='0.3.1':
+        if manifest['version'] in ('0.3.1','0.4.0','0.4.1','0.5.0'):
             with zipfile.ZipFile(bundle/manifest['jar']) as jar:checks['offline_operator_recovery']= 'dev/maw/client/ActionStoreAudit.class' in jar.namelist()
+        if manifest['version'] in ('0.4.0','0.4.1','0.5.0'):
+            checks['native_item_and_recipe_knowledge']={'knowledge.items','knowledge.item','knowledge.recipes','knowledge.recipe'}<=ids
+        if manifest['version']=='0.5.0':
+            checks['native_recipe_book_crafting']='craft.recipe' in ids
         if config_file:
             config=json.loads(Path(config_file).read_bytes());auth=json.loads(Path(config['credentialsFile']).read_bytes());url=urlsplit(auth['endpoint'])
             checks['loopback_only']=url.scheme=='http' and url.hostname=='127.0.0.1' and url.path=='/rpc' and not url.query and not url.fragment and not url.username
             if not checks['loopback_only']:raise ValueError('Refusing non-local endpoint')
-            def rpc(method):
+            def rpc(method,extra=None):
                 params={k:config[k] for k in ['expectedUuid','expectedServer','controllerId']}
+                params.update(extra or {})
                 data=json.dumps({'instanceId':auth['instanceId'],'method':method,'params':params}).encode()
                 request=Request(auth['endpoint'],data,headers={'Authorization':'Bearer '+auth['token'],'Content-Type':'application/json'})
                 with urlopen(request,timeout=7) as response:return json.load(response)
@@ -38,6 +43,14 @@ def probe(config_file=None,manifest_file=DEFAULT_MANIFEST):
             checks['original_player_and_server']=state['ok'] and state['bodyId']==config['expectedUuid'] and state['server']==config['expectedServer']
             checks['actual_inventory_and_native_menu']=state['inventory']['slotNamespace']=='player_menu_46' and len(state['inventory']['slots'])==46 and state['menu']['playerUuid']==state['bodyId']
             checks['actual_api_smoke']=catalog['operationCount']==manifest['operationCount'] and {r['id'] for r in catalog['operations']}==ids and catalog['serverRequired'] is False
+            if 'knowledge.items' in ids:
+                items=rpc('read',{'operation':'knowledge.items','args':{'query':'minecraft:air','limit':1}})
+                item=rpc('read',{'operation':'knowledge.item','args':{'id':'minecraft:air'}})
+                recipes=rpc('read',{'operation':'knowledge.recipes','args':{'outputId':'maw_probe:absent','limit':1}})
+                missing=rpc('read',{'operation':'knowledge.recipe','args':{'id':'maw_probe:absent'}})
+                checks['native_knowledge_api_smoke']=(items['ok'] and items['bodyId']==state['bodyId'] and items['source']=='native_client_registry_and_synced_recipes'
+                    and item['ok'] and item['stackSource']=='registry_default_stack_not_owned'
+                    and recipes['ok'] and recipes['total']==0 and missing['ok'] is False and missing['code']=='recipe_not_synced_to_this_client')
             if 'baritone.state' in ids:
                 present=state['baritone']['available']
                 checks['optional_baritone_discovery']=all(row['available']==present for row in catalog['operations'] if row['id'].startswith('baritone.') and row['id']!='baritone.state')

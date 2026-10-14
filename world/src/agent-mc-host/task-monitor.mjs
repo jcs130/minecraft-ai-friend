@@ -43,7 +43,10 @@ export function evaluateTask(criteria, observations, { bodyId, now = Date.now(),
     }
     if (c.type === 'owned_item') {
       if (!s.inventory?.available || !Array.isArray(s.inventory.items)) return { verified: false, conclusive: false, code: 'task_inventory_unavailable' }
-      const count = s.inventory.items.filter(i => i.id === c.itemId).reduce((n, i) => n + i.count, 0)
+      // A real client also exposes the crafting output preview at player slot 0.
+      // It is not owned until the player actually takes it from that result slot.
+      const count = s.inventory.items.filter(i => i.id === c.itemId &&
+        !(s.inventory.slotNamespace === 'player_menu_46' && i.slot === 0)).reduce((n, i) => n + i.count, 0)
       const equipped = s.equipment?.mainhand?.id === c.itemId
       return { verified: count >= c.countAtLeast && (!c.requireEquipped || equipped), conclusive: true, itemId: c.itemId, count, equipped }
     }

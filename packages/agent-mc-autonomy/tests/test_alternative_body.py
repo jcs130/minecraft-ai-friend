@@ -24,6 +24,37 @@ def test_operation_schema_keeps_its_real_envelope_without_steps_or_queue():
     assert tool['parameters']['required']==['action_id','operation']
     assert 'action_id' in tool['description'] and 'Steps run' not in tool['description']
 
+
+def test_operation_context_cannot_instruct_an_unavailable_vanilla_queue():
+    from agent_mc_autonomy.context import assemble
+    messages,_=assemble('native host',model_tools(catalogue()),'craft',{'parts':[]},[],[],context_tokens=32768,reserved_output=1024)
+    rules=messages[0]['content']
+    assert 'mc_do {action_id,operation,args}' in rules
+    assert 'prefer skill:craft' not in rules and 'default to queue:append' not in rules
+    assert 'headless build' not in rules
+    steps=[{'name':'mc_do','inputSchema':{'type':'object','properties':{'steps':{'type':'array'}},'required':['steps']}}]
+    messages,_=assemble('vanilla host',model_tools(steps),'craft',{'parts':[]},[],[],context_tokens=32768,reserved_output=1024)
+    assert 'prefer skill:craft' in messages[0]['content'] and 'default to queue:append' in messages[0]['content']
+
+
+def test_operation_reads_and_receipts_are_direct_with_original_validation(tmp_path):
+    reads=[{'name':name,'inputSchema':{'type':'object','properties':{'action_id':{'type':'string'}},'required':['action_id'],'additionalProperties':False},
+            '_meta':{PROTOCOL:{'tags':['read']}}} for name in ('mc_read','mc_result','mc_wait')]
+    tools=model_tools([*catalogue(),*reads])
+    visible={t['function']['name'] for t in tools}
+    assert {'mc_read','mc_result','mc_wait'}<=visible
+    advanced=next(t for t in tools if t['function']['name']=='mc_invoke')['function']['parameters']['properties']['name']['enum']
+    assert not {'mc_read','mc_result','mc_wait'} & set(advanced)
+    controller=Controller(SimpleNamespace(tools=[*catalogue(),*reads]),None,Settings(),tmp_path,lambda **_:None,lambda:False)
+    assert controller.immediate_read('mc_wait') is False
+    call={'id':'receipt','function':{'name':'mc_result','arguments':json.dumps({'action_id':'original'})}}
+    _,name,args=controller.prepare_call([call],tools)
+    assert name=='mc_result' and args=={'action_id':'original'}
+    from agent_mc_autonomy.controller import ModelCallRejected
+    call['function']['arguments']=json.dumps({'wrong':'original'})
+    with pytest.raises(ModelCallRejected,match='Invalid arguments'):
+        controller.prepare_call([call],tools)
+
 def test_operation_dispatch_does_not_inject_a_vanilla_queue(tmp_path,run_async):
     calls=[]
     class Bridge:
@@ -73,6 +104,21 @@ def test_control_is_claimed_only_when_discovered_and_exposes_expiry(tmp_path,run
     assert controller.control_expires_at==1900000000000
 
 
+def test_long_inference_renews_discovered_lease_before_original_mutation(tmp_path,run_async):
+    calls=[]
+    class Bridge:
+        tools=[*catalogue(),{'name':'mc_control','inputSchema':{'type':'object','properties':{'action':{'enum':['claim']}},'required':['action']}}]
+        async def call(self,name,args,**kwargs):
+            calls.append((name,args))
+            return {'structuredContent':{'protocol':PROTOCOL,'text':json.dumps({'ok':True,'expiresAt':1900000000000})}}
+    controller=Controller(Bridge(),None,Settings(),tmp_path,lambda **_:None,lambda:False)
+    controller.control_expires_at=1
+    action={'action_id':'original','operation':'body.move','args':{}}
+    run_async(controller.execute_model_call('mc_do',action))
+    assert calls==[('mc_control',{'action':'claim'}),('mc_do',action)]
+    assert controller.control_expires_at==1900000000000
+
+
 def test_operation_backend_observation_does_not_call_a_nonexistent_queue(tmp_path,run_async):
     calls=[]
     published=[]
@@ -105,3 +151,33 @@ def test_operation_goal_prompt_preserves_authority_without_promising_a_queue(tmp
     assert 'Current user goal' in prompt
     assert 'original action terminal' in prompt
     assert 'native queue policy' not in prompt
+
+
+def test_operation_shutdown_resolves_only_original_confirmed_terminal_receipts(tmp_path,run_async):
+    calls=[]
+    class Bridge:
+        tools=[*catalogue(),{'name':'mc_stop'},{'name':'mc_result'}]
+        async def call(self,name,args,**kwargs):
+            calls.append((name,args))
+            return {'structuredContent':{'protocol':PROTOCOL,'text':'receipt','execution':{'kind':'task','id':'original','terminal':True,'phase':'cancelled'}}}
+    controller=Controller(Bridge(),None,Settings(),tmp_path,lambda **_:None,lambda:False)
+    controller.pending={('task','original'):{'kind':'task','id':'original'}}
+    run_async(controller.finish_operation_receipts())
+    assert calls==[('mc_stop',{}),('mc_result',{'action_id':'original'})]
+    assert not controller.pending
+    assert json.loads(controller.state_path.read_text())['pending']==[]
+
+
+def test_operation_disconnect_cannot_erase_unknown_or_still_running_action(tmp_path,run_async):
+    calls=[]
+    class Bridge:
+        tools=[*catalogue(),{'name':'mc_stop'},{'name':'mc_result'}]
+        async def call(self,name,args,**kwargs):
+            calls.append((name,args))
+            return {'structuredContent':{'protocol':PROTOCOL,'text':'still running','execution':{'kind':'task','id':'original','terminal':False,'phase':'accepted'}}}
+    controller=Controller(Bridge(),None,Settings(),tmp_path,lambda **_:None,lambda:False)
+    controller.pending={('task','original'):{'kind':'task','id':'original'}}
+    run_async(controller.finish_operation_receipts())
+    state=json.loads(controller.state_path.read_text())
+    assert state['uncertain'] is True and state['pending'][0]['id']=='original'
+    assert not any(name=='mc_do' for name,args in calls)

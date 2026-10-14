@@ -28,7 +28,9 @@ function fixture(t) {
   const identity = { provider: 'mineflayer', bodyId: BODY, playerUuid: BODY, controllerId: config.controllerId, account: config.username }
   const records = new Map(), calls = [], events = []
   const schema = { type: 'object', properties: {}, additionalProperties: false }
-  const rows = [{ id: 'body.move', readOnly: false, available: true, description: 'Walk', parameters: schema },
+  const moveSchema = { ...schema, properties: { position: { type: 'object', properties: { x: { type: 'integer' }, y: { type: 'integer' }, z: { type: 'integer' } },
+    required: ['x', 'y', 'z'], additionalProperties: false }, expectedSnbt: { type: 'string' } } }
+  const rows = [{ id: 'body.move', readOnly: false, available: true, description: 'Walk', parameters: moveSchema },
     { id: 'spell.list', readOnly: true, available: true, parameters: schema },
     { id: 'wandscape.found', readOnly: false, available: false, parameters: schema }]
   const state = { ...identity, ok: true, status: 'alive', capturedAt: '2026-10-13T00:00:00Z', position: { x: 0.5, y: 64, z: 0.5 },
@@ -82,6 +84,41 @@ test('construction and connection never claim, spawn another body, start a model
   assert.deepEqual(f.calls, [['connect']])
   await f.environment.stop()
   assert.deepEqual(f.calls, [['connect'], ['close']])
+})
+
+test('read-only operation sent to mc_do returns the correct route without dispatching a body action', async t => {
+  const f = fixture(t)
+  await f.environment.start(f.host)
+  const result = await f.invoke('mc_do', { action_id: 'wrong-route', operation: 'spell.list', args: {} })
+  assert.equal(result.value.code, 'read_only_operation_requires_mc_read')
+  assert.equal(result.value.suggestedTool, 'mc_read')
+  assert.deepEqual(result.value.suggestedArguments, { operation: 'spell.list', args: {} })
+  assert.equal(f.calls.some(row => row[0] === 'submit'), false)
+})
+
+test('invalid read arguments return the actual parameter schema without a provider read', async t => {
+  const f = fixture(t)
+  await f.environment.start(f.host)
+  const result = await f.invoke('mc_read', { operation: 'spell.list', args: { guessed: true } })
+  assert.equal(result.value.code, 'operation_arguments_invalid')
+  assert.deepEqual(result.value.parameters, f.rows.find(row => row.id === 'spell.list').parameters)
+  assert.equal(f.calls.some(row => row[0] === 'read'), false)
+})
+
+test('invalid mutation arguments return the original schema before native dispatch', async t => {
+  const f = fixture(t)
+  await f.environment.start(f.host)
+  const result = await f.invoke('mc_do', { action_id: 'invalid', operation: 'body.move', args: { guessed: true } })
+  assert.equal(result.value.code, 'operation_arguments_invalid')
+  assert.equal(f.calls.some(row => row[0] === 'submit'), false)
+})
+
+test('empty discovery supplies actual provider prefixes rather than encouraging name guesses', async t => {
+  const f = fixture(t)
+  await f.environment.start(f.host)
+  const result = await f.invoke('mc_help', { prefix: 'imaginary' })
+  assert.equal(result.value.total, 0)
+  assert.deepEqual(result.value.availablePrefixes, ['body', 'spell', 'wandscape'])
 })
 
 test('real Java client provider preserves the existing harness tools and original body binding', async t => {
@@ -253,7 +290,7 @@ test('common capability and navigation tools preserve the original operation act
 
 test('Baritone is selected only from the actual available catalogue, and native can be explicit', async t => {
   const f = fixture(t)
-  f.rows.push({ id: 'baritone.goto', available: true, readOnly: false, parameters: { type: 'object' } })
+  f.rows.push({ id: 'baritone.goto', available: true, readOnly: false, parameters: structuredClone(f.rows[0].parameters) })
   await f.environment.start(f.host)
   assert.equal((await f.invoke('mc_capabilities')).value.navigation.baritone, true)
   await f.invoke('mc_navigate', { action_id: 'baritone-walk', position: { x: 8, y: 64, z: 0 } })

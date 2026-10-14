@@ -4,7 +4,7 @@ license="MIT"
 
 [[mods]]
 modId="maw_client_bridge"
-version="0.3.1"
+version="0.5.0"
 displayName="My Agent World · Client Bridge"
 description="Optional client-only state, input, native menus and framebuffer bridge. No server counterpart or custom network channel."
 

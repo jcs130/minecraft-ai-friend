@@ -22,7 +22,7 @@ def build(minecraft: Path, javac: Path, output: Path):
         result=subprocess.run([str(javac),'@'+str(args)],capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=180)
         (output/'compile.log').write_text(result.stdout+result.stderr,encoding='utf-8')
         if result.returncode: raise RuntimeError(result.stderr[-9000:])
-        jar=output/'maw-client-bridge-0.3.1-neoforge-1.21.1.jar'
+        jar=output/'maw-client-bridge-0.5.0-neoforge-1.21.1.jar'
         with zipfile.ZipFile(jar,'w',zipfile.ZIP_DEFLATED) as z:
             for root in [classes,HERE/'resources']:
                 for p in sorted(root.rglob('*')):
@@ -30,7 +30,7 @@ def build(minecraft: Path, javac: Path, output: Path):
                         entry=zipfile.ZipInfo(p.relative_to(root).as_posix(),(1980,1,1,0,0,0));entry.compress_type=zipfile.ZIP_DEFLATED
                         z.writestr(entry,p.read_bytes())
     digest=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
-    record={'schemaVersion':1,'version':'0.3.1','minecraft':'1.21.1','neoforge':'21.1.248','clientOnly':True,
+    record={'schemaVersion':1,'version':'0.5.0','minecraft':'1.21.1','neoforge':'21.1.248','clientOnly':True,
             'serverRequired':False,'customPayloadChannels':[],'jar':str(jar),'sha256':digest(jar),
             'sources':{p.relative_to(HERE).as_posix():digest(p) for p in [HERE/'build.py',*sources,*sorted((HERE/'resources').rglob('*'))] if p.is_file()},
             'classpath':{str(p):digest(p) for p in cp}}

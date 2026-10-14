@@ -39,6 +39,14 @@ test('independent verifier rejects model claims, stale/foreign bodies and unavai
   assert.equal(evaluateTask(criteria, { body: body(true) }, { bodyId, now: now + 60000 }).conclusive, false)
   assert.equal(evaluateTask(criteria, { body: { ...body(true), inventory: { available: false } } }, { bodyId, now }).conclusive, false)
 })
+
+test('real Java crafting preview does not complete ownership until the output is taken', () => {
+  const observed = body(true)
+  observed.inventory = { available: true, slotNamespace: 'player_menu_46', items: [{ id: criteria.itemId, count: 1, slot: 0 }] }
+  assert.equal(evaluateTask(criteria, { body: observed }, { bodyId, now }).verified, false)
+  observed.inventory.items[0].slot = 36
+  assert.equal(evaluateTask(criteria, { body: observed }, { bodyId, now }).verified, true)
+})
 test('position and quest combinations require matching authoritative evidence', () => {
   const c = { type: 'all', criteria: [{ type: 'reach_position', position: { x: 1, y: 64, z: 2 }, radius: 1, dimension: 'minecraft:overworld' }, { type: 'quest_completed', questId: 'maw:workbench', countAtLeast: 1 }] }
   const observations = { body: body(), society: { ok: true, bodyId, capturedAt: new Date(now).toISOString(), state: { quests: [{ id: 'maw:workbench', completed: 1 }] } } }

@@ -185,7 +185,12 @@ export class MyAgentWorldEnvironment {
     const body = this.#ready()
     if (this.#eventFailure || this.#watchers.size >= 16) return this.#out(fail('maw_host_receipt_delivery_unavailable'))
     const row = await body.operations(a.operation)
+    if (row?.readOnly) return this.#out({ ...fail('read_only_operation_requires_mc_read'), suggestedTool: 'mc_read',
+      suggestedArguments: { operation: a.operation, args: a.args || {} }, parameters: row.parameters })
     if (!row || row.readOnly || row.available === false) return this.#out(fail('submit_requires_available_mutation_operation'))
+    try { validateJsonArguments(a.args || {}, row.parameters) }
+    catch { return this.#out({ ...fail('operation_arguments_invalid'), operation: a.operation, parameters: row.parameters,
+      nextStep: 'Use these exact parameter names and types; no native action was dispatched.' }) }
     context.signal?.throwIfAborted()
     const value = this.#own(await body.submit({ action_id: a.action_id, operation: a.operation, args: a.args || {} }))
     if (!value.terminal && (value.accepted || ['accepted', 'running'].includes(value.status))) this.#watch(a.action_id)
@@ -205,6 +210,8 @@ export class MyAgentWorldEnvironment {
       const offset = a.offset ?? 0, limit = a.limit ?? 24
       return this.#out({ ok: true, provider: this.#config.provider, bodyId: this.#identity.bodyId, total: rows.length,
         nextOffset: offset + limit < rows.length ? offset + limit : null, allGameplayVerified: false,
+        ...(!rows.length ? { availablePrefixes: [...new Set(catalog.operations.map(row => row.id.split('.')[0]))].sort(),
+          nextStep: 'No matching operation. Query an available prefix or omit prefix to list the actual catalogue.' } : {}),
         operations: rows.slice(offset, offset + limit).map(({ id, description, readOnly, available, execution, permission }) =>
           ({ id, description, readOnly, available, execution, permission })) })
     }
@@ -216,6 +223,8 @@ export class MyAgentWorldEnvironment {
         return this.#out({ ok: true, provider: this.#config.provider, bodyId: this.#identity.bodyId, operationCount: catalog.operations.length,
           navigation: { native: catalog.operations.some(x => x.id === 'body.move' && x.available !== false), baritone: catalog.operations.some(x => x.id === 'baritone.goto' && x.available !== false) },
           scripting: { minescript: catalog.operations.some(x => x.id === 'minescript.run' && x.available !== false) },
+          knowledge: { items: catalog.operations.some(x => x.id === 'knowledge.items' && x.available !== false),
+            recipes: catalog.operations.some(x => x.id === 'knowledge.recipes' && x.available !== false) },
           sameBodyOnly: true, allGameplayVerified: false })
       }),
       tool('mc_navigate', '按同一动作契约走到绝对坐标。auto在Java客户端装有Baritone时用其寻路，否则用当前provider的body.move；不切换身体或重试未知动作。',
@@ -231,6 +240,9 @@ export class MyAgentWorldEnvironment {
       tool('mc_read', '执行目录中 readOnly=true 的本人原生查询；大结果保存在私有 JSON 制品，保持完整组件。', object({ operation, args }, ['operation']), ['read'], async a => {
         const body = this.#ready(), row = await body.operations(a.operation)
         if (!row?.readOnly || row.available === false) return this.#out(fail('read_requires_available_read_only_operation'))
+        try { validateJsonArguments(a.args || {}, row.parameters) }
+        catch { return this.#out({ ...fail('operation_arguments_invalid'), operation: a.operation, parameters: row.parameters,
+          nextStep: 'Use these exact parameter names and types; no native read or action was dispatched.' }) }
         return this.#out(this.#own(await body.read(a.operation, a.args || {})))
       }),
       tool('mc_do', '提交一个原生动作。action_id 必须稳定且唯一；受理不等于完成。读 mc_result/mc_events 核验，未知时只对账不重做。', object({ action_id: actionId, operation, args }, ['action_id', 'operation']), ['act'], async (a, context) => {

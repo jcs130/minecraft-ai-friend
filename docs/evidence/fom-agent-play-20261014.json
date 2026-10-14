@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-15",
+  "scope": "FOM real Java client native knowledge and online autonomous crafting",
+  "model": {
+    "provider": "Aliyun Coding Plan",
+    "model": "qwen3.7-plus",
+    "online": true,
+    "localFallback": false,
+    "imageInput": false,
+    "qwenpawAgentConnected": false,
+    "totalCalls": 159,
+    "successfulAttemptCalls": 14,
+    "successfulAttemptLatencyMs": [
+      4828,
+      2984,
+      7578,
+      2203,
+      5906,
+      2328,
+      7563,
+      6891,
+      2766,
+      5219,
+      6547,
+      10171,
+      4375,
+      5860
+    ]
+  },
+  "body": {
+    "provider": "java-client",
+    "username": "KiritoFOM",
+    "uuid": "631fc66c-d1f1-3581-ba4b-42e5295f4050",
+    "playerOp": false,
+    "sameBodyAndLedger": true
+  },
+  "framework": {
+    "coreVersion": "0.4.0",
+    "autonomyVersion": "0.1.25",
+    "autonomyWheelSha256": "199b81df4e1e7905961d0b3ee73e0ed618469985c7508e52689aa179148c6e73",
+    "hostBundle": "v19-native-crafting-20261015"
+  },
+  "client": {
+    "version": "0.5.0",
+    "operationCount": 35,
+    "serverCounterpartRequired": false,
+    "customGamePayloadChannels": [],
+    "modelTrialJarSha256": "10c5ef415066e71e7634013a6162daee08290bf009a438fc142f8ab89b7ff68f",
+    "releaseJarSha256": "fef3447ed9c620d01a1e899a2ddec33c756da76a144aca412fd1a0774fb91aa1",
+    "releaseDifference": "Correct baseline for failure-only serverMenuStateChanged metadata; no action or crafting behavior change.",
+    "releaseBundle": "v9-native-crafting-release-20261015"
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "status": "failed",
+      "modelCalls": 13,
+      "cumulativeCalls": 13,
+      "elapsedSeconds": 97.63999999999942,
+      "harnessVersion": "client-0.3.1-autonomy-0.1.21"
+    },
+    {
+      "attempt": 2,
+      "status": "failed",
+      "modelCalls": 24,
+      "cumulativeCalls": 37,
+      "elapsedSeconds": 145.71899999999732,
+      "harnessVersion": "client-0.4.0-autonomy-0.1.22"
+    },
+    {
+      "attempt": 3,
+      "status": "failed",
+      "modelCalls": 36,
+      "cumulativeCalls": 73,
+      "elapsedSeconds": 217.09399999999732,
+      "harnessVersion": "client-0.4.0-autonomy-0.1.23"
+    },
+    {
+      "attempt": 4,
+      "status": "failed",
+      "modelCalls": 36,
+      "cumulativeCalls": 109,
+      "elapsedSeconds": 266.3439999999973,
+      "harnessVersion": "client-0.4.1-autonomy-0.1.24"
+    },
+    {
+      "attempt": 5,
+      "status": "failed",
+      "modelCalls": 36,
+      "cumulativeCalls": 145,
+      "elapsedSeconds": 253.3130000000092,
+      "harnessVersion": "client-0.4.1-autonomy-0.1.25"
+    },
+    {
+      "attempt": 6,
+      "status": "succeeded",
+      "modelCalls": 14,
+      "cumulativeCalls": 159,
+      "elapsedSeconds": 86.51599999998871,
+      "harnessVersion": "client-0.5.0-autonomy-0.1.25"
+    }
+  ],
+  "result": {
+    "verifiedByClient": true,
+    "verifiedByServerConsole": true,
+    "shaftCount": 8,
+    "andesiteAlloyUsed": 2,
+    "remainingAlloy": 2,
+    "elapsedSeconds": 86.51599999998871,
+    "providedMaterials": true,
+    "additionalFourAlloyFixtureBeforeAttempt6": true,
+    "previewSlotExcluded": true,
+    "allOriginalModelActionReceiptsKnown": true
+  },
+  "releaseNativeQA": {
+    "ok": true,
+    "modelRequests": 0,
+    "standardRecipeBookCraft": true,
+    "insufficientMaterialsKnownFailure": true,
+    "failureMenuStateMatchesNativeReceipt": true,
+    "originalFramebufferCaptured": true,
+    "afterClientRestartShaftsPreserved": 8,
+    "operatorCraftedTableCount": 1
+  },
+  "tests": {
+    "autonomySourcePassed": 298,
+    "packedAutonomyConsumerPassed": 298,
+    "hostPassed": 40,
+    "realJvmStoreChecks": 36,
+    "healthTestsPassed": 3
+  },
+  "clientHealth": {
+    "schemaVersion": 1,
+    "scope": "optional_real_java_client_bridge",
+    "checks": {
+      "exact_bundle": true,
+      "client_only_mod": true,
+      "three_explicit_providers": true,
+      "no_background_model_or_new_service": true,
+      "operation_contract": true,
+      "optional_baritone_contract": true,
+      "original_baritone_verified": true,
+      "optional_minescript_contract": true,
+      "original_minescript_verified": true,
+      "offline_operator_recovery": true,
+      "native_item_and_recipe_knowledge": true,
+      "native_recipe_book_crafting": true,
+      "loopback_only": true,
+      "client_tick_fresh": true,
+      "original_player_and_server": true,
+      "actual_inventory_and_native_menu": true,
+      "actual_api_smoke": true,
+      "native_knowledge_api_smoke": true,
+      "optional_baritone_discovery": true,
+      "optional_minescript_discovery": true,
+      "local_owned_status_filter_installed": true,
+      "original_framebuffer_available": true
+    },
+    "modelRequests": 0,
+    "worldActions": 0,
+    "bodyConnections": 0,
+    "managedBy": "owning_minecraft_client_lifecycle",
+    "allModsVerified": false,
+    "actualClientChecked": true,
+    "ok": true
+  },
+  "serverHealth": {
+    "schemaVersion": 1,
+    "scope": "fom_public_server",
+    "checks": {
+      "release_files_and_login_policy_verified": true,
+      "correct_server_owner": true,
+      "owner_heartbeat": true,
+      "actual_minecraft_status": true,
+      "explicit_game_bind": true,
+      "private_admin_http": true,
+      "mixed_login_database_created": true
+    },
+    "modelRequests": 0,
+    "worldActions": 0,
+    "allModGameplayVerified": false,
+    "gamePort": 28976,
+    "healthPort": 28985,
+    "runId": "248ca85131074998beb6d7f59c569f5a",
+    "physicsTransport": "TCP",
+    "publicGameAccess": true,
+    "supervisedBy": "existing owned-child supervisor",
+    "ok": true
+  },
+  "operations": {
+    "serverRestarted": false,
+    "serverRunIdUnchanged": true,
+    "serverJarsChanged": false,
+    "routerChanged": false,
+    "globalSdkSelectionChanged": false,
+    "modelLoopEnded": true,
+    "longRunningBrainEnabled": false
+  },
+  "limitations": [
+    "Six exploratory attempts changed harness and budgets; not a controlled efficiency or success-rate experiment.",
+    "Four alloy previously in cursor/crafting grid were absent after an early disconnect; whereabouts not established; replacement fixture explicitly recorded.",
+    "No natural gathering, all-mod playability, long-term survival, full factory, Bedrock, Numen or old RPG migration claimed.",
+    "Hidden server state and special machine recipes still require their actual menus/APIs."
+  ],
+  "privateEvidenceUploaded": false
+}

@@ -9,9 +9,9 @@ Agent 客户端组件（3）
 - Baritone | 1.11.3 | 客户端
   可选的客户端寻路、采矿和跟随执行工具。
   文件：baritone-api-neoforge-1.11.3.jar
-- My Agent World · Client Bridge | 0.3.1 | 客户端
+- My Agent World · Client Bridge | 0.5.0 | 客户端
   可选的真实客户端状态、输入、原生 GUI 和画面桥。
-  文件：maw-client-bridge-0.3.1-neoforge-1.21.1.jar
+  文件：maw-client-bridge-0.5.0-neoforge-1.21.1.jar
 - Minescript | 4.0 | 客户端
   可选的客户端 Python 脚本执行。
   文件：minescript-neoforge-1.21.1-4.0.jar

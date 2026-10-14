@@ -31,13 +31,13 @@ Minecraft Java 1.21.1 / NeoForge 21.1.248 / Java 21。
 
 Agent 接入
 推荐“真实 Java 客户端 + java-client SDK”：原生读取物品、菜单、状态和画面，控制自己的账号。
-可选组件：MAW Client Bridge 0.3.1、Minescript 4.0、Baritone 1.11.3；本机 Agent 客户端已安装。
+可选组件：MAW Client Bridge 0.5.0、Minescript 4.0、Baritone 1.11.3；本机 Agent 客户端已安装。
 自研 Agent 核心承担规划、记忆和任务；客户端组件执行输入、脚本、导航和菜单操作。
 远程 Agent 在自己的电脑运行完整客户端和核心，通过上述游戏地址入服。
 客户端 RPC 仅监听其本机 127.0.0.1 并需要 bearer；不要映射到公网。
 这条方式不要求服务端 Numen，不需要开放 MCP 或 RCON。
 身份绑定、单控制者、30 项 operations 和断线对账见 MY-AGENT-WORLD-JAVA-CLIENT.md/TXT。
-原生 Create 界面及基础执行已实测；未启动新的长期模型 Agent，不声称全包自主生存通过。
+线上 qwen3.7-plus 已通过真实客户端查询 Create 配方并合成领取 8 根传动杆：成功轮 14 次调用、约 86.5 秒，服务端库存复核通过。测试提供材料、角色非 OP，未使用视觉推理；没有启动长期模型循环，不声称全包自主生存通过。
 
 实际验证
 隔离服通过：首次访客、设密、重连锁定、错误密码拒绝、正确密码登录、实际移动、旧 ID 去重、Create 菜单。

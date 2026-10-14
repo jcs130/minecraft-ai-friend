@@ -61,7 +61,7 @@ public final class ClientBridge {
     private record Lease(String id,String controller,String body,String server,String connection,long expiresAt) { }
     private static final class Action {
         volatile JsonObject record;final JsonObject args,before;final String operation,connection;final ActionStore store;
-        int ticks,idleTicks;long startedAt;boolean started,finishing;String beforeBlock;
+        int ticks,idleTicks;long startedAt;boolean started,finishing;String beforeBlock;ClientCrafting crafting;
         Action(JsonObject record,JsonObject before,ActionStore store,String connection){
             this.record=record;this.args=record.getAsJsonObject("args");this.operation=record.get("operation").getAsString();
             this.before=before;this.store=store;this.connection=connection;
@@ -143,6 +143,8 @@ public final class ClientBridge {
                     if(changed&&a.ticks>=4)finish(a,"succeeded","menu_change_observed",true);
                     else if(a.ticks>100)finish(a,"unknown","menu_change_not_confirmed",false);
                 }
+                case "craft.recipe" -> {var result=a.crafting.tick(a.ticks);if(result!=null){a.record.add("result",result);
+                    finish(a,text(result,"status"),text(result,"code"),result.get("outcomeKnown").getAsBoolean());}}
                 case "screen.capture" -> { if(a.ticks>200)finish(a,"failed","frame_capture_timeout",true); }
                 default -> { if(a.ticks>=5)finish(a,"succeeded","client_input_delivered",true); }
             }
@@ -228,6 +230,7 @@ public final class ClientBridge {
                 case "body.observe" -> state.observe(mc,args.has("radius")?integer(args,"radius",1,8):4);
                 case "baritone.state" -> object("ok",true,"bodyId",mc.player.getUUID(),"capturedAt",Instant.now(),"state",baritone.state());
                 case "minescript.state" -> object("ok",true,"bodyId",mc.player.getUUID(),"capturedAt",Instant.now(),"state",minescript.state());
+                case "knowledge.items","knowledge.item","knowledge.recipes","knowledge.recipe" -> new ClientKnowledge(state).read(mc,op,args);
                 default -> throw new IllegalArgumentException("read_operation_unavailable");
             };
         });
@@ -315,6 +318,7 @@ public final class ClientBridge {
             case "control.look" -> {number(a,"yaw",-3600,3600);number(a,"pitch",-90,90);}
             case "inventory.selectHotbar" -> {integer(a,"hotbarSlot",0,8);if(!state.snbt(mc,mc.player.getInventory().getItem(integer(a,"hotbarSlot",0,8))).equals(text(a,"expectedSnbt")))throw new IllegalArgumentException("hotbar_item_changed");}
             case "menu.click" -> checkMenu(a);
+            case "craft.recipe" -> {integer(a,"windowId",0,Integer.MAX_VALUE);integer(a,"expectedStateId",0,Integer.MAX_VALUE);text(a,"id");ClientCrafting.validate(mc,a);}
             case "menu.close" -> {if(mc.player.containerMenu.containerId!=integer(a,"windowId",0,Integer.MAX_VALUE))throw new IllegalArgumentException("menu_changed");}
             case "screen.click","screen.key","screen.type" -> {
                 if(mc.screen==null||!state.screenToken().equals(text(a,"screenToken")))throw new IllegalArgumentException("screen_changed");
@@ -357,6 +361,7 @@ public final class ClientBridge {
             case "menu.openInventory" -> mc.setScreen(new InventoryScreen(mc.player));
             case "menu.close" -> mc.player.closeContainer();
             case "menu.click" -> mc.gameMode.handleInventoryMouseClick(integer(a.args,"windowId",0,Integer.MAX_VALUE),integer(a.args,"slot",0,mc.player.containerMenu.slots.size()-1),integer(a.args,"button",0,8),ClickType.valueOf(text(a.args,"clickType")),mc.player);
+            case "craft.recipe" -> a.crafting=ClientCrafting.start(mc,a.args);
             case "screen.click" -> {double x=number(a.args,"x",0,mc.screen.width),y=number(a.args,"y",0,mc.screen.height);int b=integer(a.args,"button",0,2);var screen=mc.screen;screen.mouseClicked(x,y,b);screen.mouseReleased(x,y,b);}
             case "screen.key" -> {int key=integer(a.args,"key",0,GLFW.GLFW_KEY_LAST),mods=a.args.has("modifiers")?integer(a.args,"modifiers",0,15):0;var screen=mc.screen;screen.keyPressed(key,0,mods);screen.keyReleased(key,0,mods);}
             case "screen.type" -> {for(char c:text(a.args,"text").toCharArray())mc.screen.charTyped(c,0);}
@@ -389,7 +394,7 @@ public final class ClientBridge {
         if(a.operation.equals("world.dig")&&mc.gameMode!=null)mc.gameMode.stopDestroyBlock();
         JsonObject result=a.record.deepCopy();result.addProperty("status",status);result.addProperty("terminal",true);result.addProperty("outcomeKnown",known);
         result.addProperty("ok",status.equals("succeeded"));result.addProperty("code",code);result.addProperty("completedAt",Instant.now().toString());
-        result.addProperty("effectConfirmed",Set.of("position_observed","baritone_position_observed","baritone_inventory_target_observed","block_change_observed","menu_change_observed","original_framebuffer_captured").contains(code));
+        result.addProperty("effectConfirmed",Set.of("position_observed","baritone_position_observed","baritone_inventory_target_observed","block_change_observed","menu_change_observed","craft_inventory_observed","original_framebuffer_captured").contains(code));
         if(a.operation.startsWith("baritone."))result.add("result",object("backend","baritone","stopImmediate",stopImmediate,"goalCompleted",false,
             "actualPosition",mc.player==null?null:object("x",mc.player.getX(),"y",mc.player.getY(),"z",mc.player.getZ()),"inventoryCount",mc.player!=null&&a.args.has("itemId")?baritone.itemCount(text(a.args,"itemId")):null));
         try{result.add("after",state.snapshot(mc));}catch(Exception error){result.add("after",JsonNull.INSTANCE);}

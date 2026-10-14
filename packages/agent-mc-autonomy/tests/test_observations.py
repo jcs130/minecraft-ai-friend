@@ -2,6 +2,29 @@ import importlib
 import json
 
 
+def test_native_menu_preview_retains_hotbar_components_and_empty_container_slots(framework_module):
+    module=importlib.import_module('agent_mc_autonomy.observations')
+    snbt='{id:"example:alloy",count:4,components:{"minecraft:custom_name":"精确名字"}}'
+    slots=[{'slot':i,'owner':'container' if i<5 else 'player','item':None} for i in range(46)]
+    slots[36]['item']={'id':'example:alloy','name':'合金','count':4,'snbt':snbt,'componentTypes':['example:large']*500}
+    native={'ok':True,'bodyId':'same','state':{'windowId':0,'stateId':7,'carried':None,'slots':slots}}
+    original=json.dumps(native,ensure_ascii=False)
+    result=module.receipt_view({'text':original,'failed':False})
+    menu=json.loads(result['text'])['state']
+    assert [r['slot'] for r in menu['slots']]==[0,1,2,3,4,36]
+    assert menu['slots'][-1]['item']['snbt']==snbt
+    assert menu['stateId']==7 and 37 in menu['emptyPlayerSlots'] and 36 not in menu['emptyPlayerSlots']
+    assert len(result['text'].encode('utf-8'))<2000
+    assert json.dumps(native,ensure_ascii=False)==original
+
+
+def test_native_recipe_projection_never_rewrites_mod_serializer_json(framework_module):
+    module=importlib.import_module('agent_mc_autonomy.observations')
+    native={'bodyId':'same','authority':'client_observed','nativeJson':{'results':[{'id':'example:output','count':2,'snbt':'raw','chance':0.5}]}}
+    assert json.loads(module.native_text_preview(json.dumps(native)))['nativeJson']==native['nativeJson']
+    assert module.native_text_preview('unstructured game text')=='unstructured game text'
+
+
 def test_ray_preview_preserves_the_view_frame_and_actual_world_direction(framework_module):
     module = importlib.import_module("agent_mc_autonomy.observations")
     # After collecting overhead wood, local pitch=0 points up, not horizontally.

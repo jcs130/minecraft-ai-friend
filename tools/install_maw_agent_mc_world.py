@@ -12,7 +12,7 @@ from install_maw_native_sdk import dependencies, REPO, SOURCE, RUNTIME
 def sha(data):
     return hashlib.sha256(data).hexdigest()
 
-def install(destination: Path, core_package: Path, npm: Path):
+def install(destination: Path, core_package: Path, npm: Path, *, activate=True):
     destination, core_package = destination.resolve(), core_package.resolve()
     parent = (RUNTIME / 'integrations/agent-mc-world').resolve()
     if parent not in destination.parents or destination.exists():
@@ -87,7 +87,8 @@ def install(destination: Path, core_package: Path, npm: Path):
               'files': {name: sha(data) for name, data in sorted(files.items())},
               'sourceFiles': {p.relative_to(SOURCE).as_posix(): sha(p.read_bytes()) for p in source_files}}
     (destination / 'installation.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
-    (parent / 'installation.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
+    if activate:
+        (parent / 'installation.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     return {key: result[key] for key in ('directory', 'version', 'coreVersion', 'coreArchiveSha256', 'bodyConnections', 'newServices', 'modelRequests')}
 
 if __name__ == '__main__':
@@ -95,5 +96,6 @@ if __name__ == '__main__':
     parser.add_argument('--destination', type=Path, required=True)
     parser.add_argument('--core-package', type=Path, required=True)
     parser.add_argument('--npm', type=Path, required=True)
+    parser.add_argument('--no-activate', action='store_true', help='Keep the previous shared installation selected')
     a = parser.parse_args()
-    print(json.dumps(install(a.destination, a.core_package, a.npm), indent=2))
+    print(json.dumps(install(a.destination, a.core_package, a.npm, activate=not a.no_activate), indent=2))
