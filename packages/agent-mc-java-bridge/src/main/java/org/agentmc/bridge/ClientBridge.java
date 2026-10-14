@@ -20,6 +20,7 @@ import net.minecraft.*;
 
 /** Actual game-thread operations. This client has no model, launcher or reconnect policy. */
 public final class ClientBridge implements ClientModInitializer {
+    public static final String MINECRAFT_VERSION = FabricLoader.getInstance().getModContainer("minecraft").orElseThrow().getMetadata().getVersion().getFriendlyString();
     public static volatile boolean running;
     private static ClientBridge instance;
     private static final String PROTOCOL = "agent-mc-java/v1";
@@ -79,7 +80,7 @@ public final class ClientBridge implements ClientModInitializer {
             server.start(); running = true;
             JsonObject connection = new JsonObject(); connection.addProperty("protocol", PROTOCOL); connection.addProperty("endpoint", "http://127.0.0.1:" + server.getAddress().getPort());
             connection.addProperty("token", token); connection.addProperty("instanceId", UUID.randomUUID().toString());
-            connection.addProperty("minecraftVersion", "1.20.6"); connection.addProperty("createdAt", Instant.now().toString());
+            connection.addProperty("minecraftVersion", MINECRAFT_VERSION); connection.addProperty("createdAt", Instant.now().toString());
             Path file = directory.resolve("connection.json"); Files.writeString(file, gson.toJson(connection)); restrict(file);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> { running = false; server.stop(0); }));
             ClientTickEvents.START_CLIENT_TICK.register(this::tick);
@@ -104,7 +105,7 @@ public final class ClientBridge implements ClientModInitializer {
     }
     private JsonObject rpc(String method, JsonObject args) throws Exception {
         long now = System.currentTimeMillis();
-        if (method.equals("capabilities")) return gson.toJsonTree(Map.of("protocol", PROTOCOL, "minecraftVersion", "1.20.6", "realRendering", true, "visualData", "agent-mc-visual/v1", "systemInput", false, "minescript", minescriptAvailable(), "baritone", false)).getAsJsonObject();
+        if (method.equals("capabilities")) return gson.toJsonTree(Map.of("protocol", PROTOCOL, "minecraftVersion", MINECRAFT_VERSION, "realRendering", true, "visualData", "agent-mc-visual/v1", "systemInput", false, "minescript", minescriptAvailable(), "baritone", false)).getAsJsonObject();
         if (method.equals("operations")) return operations();
         if (method.equals("state")) return state();
         if (method.equals("result")) { ControlLedger.Action action = ledger.get(text(args, "action_id", "")); if (action == null) throw new IllegalArgumentException("Unknown action_id; do not assume it was not dispatched"); return gson.toJsonTree(action).getAsJsonObject(); }

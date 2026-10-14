@@ -106,9 +106,10 @@ export class JavaClientWorld implements World {
       this.viewerError = null;
       this.viewerSelection = null;
       try {
-      if (this.cfg.viewerPort > 0) this.viewerSelection = selectJavaViewer(this.cfg.javaClient, await this.rpc('capabilities', {}));
+      const capabilities = await this.rpc('capabilities', {});
+      if (this.cfg.viewerPort > 0) this.viewerSelection = selectJavaViewer(this.cfg.javaClient, capabilities);
       if (this.viewerSelection?.mode === 'data') {
-        this.dataViewer = await createJavaDataViewer({port:this.cfg.viewerPort,assetsDir:this.cfg.viewerAssetsDir,
+        this.dataViewer = await createJavaDataViewer({port:this.cfg.viewerPort,assetsDir:this.cfg.viewerAssetsDir,minecraftVersion:String(capabilities.minecraftVersion),
           uuid:this.cfg.javaClient.expectedUuid,server:this.cfg.javaClient.expectedServer,rpc:(method,params)=>this.rpc(method,params)});
       } else if (this.viewerSelection?.mode === 'framebuffer') {
         if (!this.cfg.javaClient.viewerPageFile) throw new Error('Framebuffer mode requires viewerPageFile');
