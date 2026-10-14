@@ -58,12 +58,13 @@ class MemorySettings:
     project_id: str = "agent-mc"
     scope_id: str = ""
     search_mode: str = "text"
+    learning_enabled: bool = False
 
     @classmethod
     def parse(cls, raw: dict) -> MemorySettings:
         if not isinstance(raw, dict) or set(raw) - cls.__dataclass_fields__.keys():
             raise ValueError("memory must be a table of supported retrieval settings")
-        fields = {key: _text(raw, key, value.default) for key, value in cls.__dataclass_fields__.items() if key != "timeout_ms"}
+        fields = {key: _text(raw, key, value.default) for key, value in cls.__dataclass_fields__.items() if key not in {"timeout_ms", "learning_enabled"}}
         if fields["mode"] not in {"local", "vector", "remote"}:
             raise ValueError("memory.mode must be local, vector or remote")
         if fields["provider"] not in {"http", "mem0-oss", "mem0-platform", "bailian", "powercontext"}:
@@ -81,11 +82,14 @@ class MemorySettings:
             raise ValueError("Configure memory.model for vector retrieval")
         if fields["mode"] == "remote" and fields["provider"] == "powercontext" and not fields["scope_id"]:
             raise ValueError("Configure an existing PowerContext memory.scope_id")
-        return cls(**fields, timeout_ms=_integer(raw, "timeout_ms", 3000, 100, 30000))
+        learning = _boolean(raw, "learning_enabled", False)
+        if learning and (fields["mode"] != "remote" or fields["provider"] not in {"powercontext", "http"}):
+            raise ValueError("Service learning requires remote PowerContext or a learning-capable HTTP bridge")
+        return cls(**fields, timeout_ms=_integer(raw, "timeout_ms", 3000, 100, 30000), learning_enabled=learning)
 
     def client_config(self) -> dict:
         aliases = {"api_key_env": "apiKeyEnv", "timeout_ms": "timeoutMs", "library_id": "libraryId",
-                   "project_id": "projectId", "scope_id": "scopeId", "search_mode": "searchMode"}
+                   "project_id": "projectId", "scope_id": "scopeId", "search_mode": "searchMode", "learning_enabled": "learningEnabled"}
         return {aliases.get(key, key): getattr(self, key) for key in self.__dataclass_fields__}
 
     def environment(self) -> dict[str, str]:

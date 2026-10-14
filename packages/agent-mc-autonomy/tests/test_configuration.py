@@ -93,15 +93,17 @@ def test_game_memory_config_and_credentials_are_forwarded_without_personal_memor
     monkeypatch.setenv("UNRELATED_MODEL_KEY", "do-not-forward")
     settings = Settings.parse({"server": {"host": "fixture.test", "username": "Alice"}, "memory": {
         "mode": "remote", "provider": "powercontext", "endpoint": "https://memory.example.org", "scope_id": "game-scope",
-        "api_key_env": "MC_MEMORY_KEY", "search_mode": "hybrid"}})
+        "api_key_env": "MC_MEMORY_KEY", "search_mode": "hybrid", "learning_enabled": True}})
     assert settings.memory.environment() == {"MC_MEMORY_KEY": "private-fixture-key"}
     config = settings.client_config(tmp_path)
     assert config["world"]["memory"]["scopeId"] == "game-scope"
     assert config["world"]["memory"]["apiKeyEnv"] == "MC_MEMORY_KEY"
+    assert config["world"]["memory"]["learningEnabled"] is True
     assert "private-fixture-key" not in json.dumps(config)
     assert "do-not-forward" not in json.dumps(config)
     assert Settings.parse({"memory": {"api_key_env": "MC_MEMORY_KEY"}}).memory.environment() == {}
     assert Settings.parse({}).memory.mode == "local"
+    assert Settings.parse({}).memory.learning_enabled is False
 
 
 @pytest.mark.parametrize("memory", [
@@ -110,6 +112,8 @@ def test_game_memory_config_and_credentials_are_forwarded_without_personal_memor
     {"mode": "remote", "endpoint": "https://user:secret@memory.example.org"},
     {"api_key_env": "literal-secret-value"}, {"api_key": "literal-secret"}, {"timeout_ms": True},
     {"timeout_ms": 30001}, {"provider": "guessed-cloud"}, {"search_mode": "auto"},
+    {"learning_enabled": True}, {"learning_enabled": "true"},
+    {"mode": "remote", "provider": "bailian", "endpoint": "https://memory.example.org", "learning_enabled": True},
 ])
 def test_invalid_memory_configuration_is_rejected(memory):
     with pytest.raises(ValueError):

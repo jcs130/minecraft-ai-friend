@@ -44,7 +44,7 @@ official OpenAI/Google flows, with optional OS credential storage and rotating
 token refresh; Google ADC is also optional. Nothing signs in or calls a model
 automatically. See [configuration, parameter and OAuth guide](docs/model-providers.md).
 
-For the shared body pinned to `5dea9f0`, this repository owns explicit source-pin
+For the shared body pinned to `01e9991`, this repository owns explicit source-pin
 and installation tooling around the canonical `agent-mc-world` build:
 `python -m agent_mc_autonomy.core_distribution.build --checkout <repo> --destination <empty-dir>`;
 then `python -m agent_mc_autonomy.core_distribution.install --destination <runtime-dir> --archive <tgz>`.
@@ -64,6 +64,8 @@ the autonomous runtime nor a host adapter keeps a second notebook implementation
 Only the configured key environment variable is forwarded to the body. Local
 mode needs no model; remote providers are Mem0, Bailian, PowerContext or an explicit
 HTTP bridge. Historical memory never overrides fresh world observations.
+
+Optional PowerContext 1.3 / HTTP service learning is configured by `[memory].learning_enabled` (default false), forwarded to the core. Its `mc_memory` service operations capture attributed game outcomes, organize pending candidates and recall bounded historical experience. Human review stays in the memory service; no automatic approval, Skill installation, host policy update or weight training. See [core learning workflows](../agent-mc-world/docs/game-memory-learning.md).
 
 ```sh
 agent-mc-autonomy check --config config.local.toml --entry /path/to/bin/minecraft-agent-mcp.mjs

@@ -32,6 +32,10 @@ async def check(directory: Path, node: str) -> dict:
                 "summary": "Offline method fixture", "content": "Historical hypothesis, no gameplay claim.",
                 "source": {"kind": "hypothesis", "reference": "offline:test"}}))
             memory_id = saved["entry"]["id"]
+            learning_help = module.json_content(await bridge.call("mc_memory", {"action": "service", "operation": "help",
+                "input": {"operation": "record_outcome"}}))
+            assert learning_help["enabled"] is False and learning_help["inputSchema"]["type"] == "object"
+            assert "dream" in learning_help["operations"] and "approve" not in learning_help["operations"]
             recalled = module.json_content(await bridge.call("mc_memory", {"action": "get", "id": memory_id}))
             assert recalled["entry"]["content"] == "Historical hypothesis, no gameplay claim."
             assert recalled["entry"]["currentWorldVerified"] is False
@@ -82,6 +86,7 @@ async def check(directory: Path, node: str) -> dict:
                     "minecraft_version": "1.21.1", "stable_context_byte_budget": budget["total"],
                     "image_and_body_facts_fit_default_budget": image_fits,
                     "concurrent_status_and_cancel": True,
+                    "service_learning_contract": True, "service_learning_opt_in": True,
                     "game_memory_write_recall": True, "game_memory_restart_recall": True,
                     "disconnected_capture_refused": True, "shared_tactics_discovered": True,
                     "cortico_installed": (directory / "node_modules/cortico").exists()}

@@ -66,3 +66,4 @@ library_id = ""
 project_id = "agent-mc"
 scope_id = "" # Existing PowerContext Scope. No discovery or automatic creation.
 search_mode = "text" # PowerContext: text | vector | hybrid.
+learning_enabled = false # Optional PowerContext / HTTP game evidence and reviewed experience workflows.
