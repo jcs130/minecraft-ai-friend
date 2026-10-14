@@ -14,7 +14,7 @@ import { observeDamage, type DamageEvidence } from './damage-evidence.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
 import type { Logger } from './support/host-contract.ts';
-import { nowIso } from './support/runtime.mjs';
+import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import type { MinecraftLog } from './log.ts';
 import {
   BLOCK_FACES, cellOnFace, rasterize, resolveAnchors,
@@ -153,7 +153,7 @@ import { dimensionOf } from './cell-facts.ts';
 import { fmtDur } from './receipt.ts';
 import {
   FLEE_DEADLINE_MS, clearEscapeGoalOwner, digBackoffScene, digBlock, dropGoal, escapeIntent,
-  findEntity, fmtDist, gotoGoal, holdTreadWater, onEscapeGoal, goalOwnerKind, goalOwnerOf, levelTravelGoal, nextLongTravelLeg, matchBlockIds, readStamp, releaseBody,
+  findEntity, fmtDist, gotoGoal, holdTreadWater, onEscapeGoal, goalOwnerKind, goalOwnerOf, levelTravelGoal, nextLongTravelLeg, matchBlockIds, releaseBody,
   renderRouteMenu, routeNote, setOwnedGoal, travelGoalReached, type DistanceMetric, walkOnlyPath, withRouteScene, underwaterRouteNote,
 } from './travel.ts';
 import {
@@ -1734,7 +1734,7 @@ interface ExecutorOptions {
   log: Logger;
   /** 任务号发号器 */
   nextId: () => number;
-  /** 回执里 HH:MM:SS 按哪个时区渲染;不给按东八区(与世界快照的现实时间同一默认) */
+  /** 回执里 HH:MM:SS 按哪个时区渲染;不给按本机时区(与世界快照的现实时间同一默认) */
   timezone?: string;
   /** 战斗中生命跌破此值就收手撤退(与反射的脱战血线同源);不给 = 不撤 */
   fleeHealth?: () => number;
@@ -2020,7 +2020,7 @@ export class Executor {
 
   /** 挂钟时刻 HH:MM:SS。一场就是一天,不带日期 */
   private clock(ms: number): string {
-    return nowIso(this.opts.timezone ?? 'Asia/Shanghai', new Date(ms)).slice(11, 19);
+    return nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE, new Date(ms)).slice(11, 19);
   }
 
   /** 仅供 mc_do 受理前使用；不改队列，也不为其他工具设置全局退避。 */
@@ -2040,7 +2040,7 @@ export class Executor {
         .filter((at) => now - at < windowMs);
       if (recent.length < config.maxSuccesses) continue;
       const until = recent[recent.length - config.maxSuccesses] + windowMs;
-      const localUntil = nowIso(this.opts.timezone ?? 'Asia/Shanghai', new Date(until))
+      const localUntil = nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE, new Date(until))
         .replace('T', ' ').slice(0, 19);
       return `[mc_do 暂缓] ${config.windowMinutes} 分钟内目标技能「${describeSkill(target)}」成功 ${recent.length} 次，`
         + `同类新任务到 ${localUntil} 可再受理。当前任务和队列保留，其他目标技能照常可用`;
@@ -2364,7 +2364,7 @@ export class Executor {
       && entry.target === find.target.trim().toLowerCase()
       && Math.hypot(from.x - entry.from.x, from.z - entry.from.z) <= DIRECTIONAL_SWEEP_EVIDENCE_RADIUS);
     if (nearby.length === 0) return null;
-    const stamp = (at: number): string => nowIso(this.opts.timezone ?? 'Asia/Shanghai', new Date(at))
+    const stamp = (at: number): string => nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE, new Date(at))
       .replace('T', ' ').slice(0, 19);
     const evidence = (entry: typeof nearby[number]): string =>
       `${stamp(entry.at)} 从 ${cellText(entry.from)} 朝${DIRECTION_ZH[entry.direction]}走满 ${entry.distance} 格，未命中${zhThing(find.target)}`;

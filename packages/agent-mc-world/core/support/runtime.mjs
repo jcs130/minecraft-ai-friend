@@ -8,6 +8,7 @@ function currentAnchors() {
   return storage.getStore() ?? {};
 }
 
+const SYSTEM_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 function nowIso(timezone, d = /* @__PURE__ */ new Date()) {
   const fmt = new Intl.DateTimeFormat("sv-SE", {
     timeZone: timezone,
@@ -28,9 +29,13 @@ function nowIso(timezone, d = /* @__PURE__ */ new Date()) {
   return `${parts}${sign}${hh}:${mm}`;
 }
 function getTimezoneOffsetMinutes(timezone, d) {
-  const utc = new Date(d.toLocaleString("en-US", { timeZone: "UTC" }));
-  const loc = new Date(d.toLocaleString("en-US", { timeZone: timezone }));
-  return (utc.getTime() - loc.getTime()) / 6e4;
+  const parts = {};
+  for (const p of new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone, hourCycle: 'h23',
+    year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
+  }).formatToParts(d)) parts[p.type] = Number(p.value);
+  const wall = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  return (Math.floor(d.getTime() / 1000) * 1000 - wall) / 60000;
 }
 var ROTATE_BYTES = 64 * 1024 * 1024;
 function normalizeError(value) {
@@ -159,6 +164,7 @@ function renderTemplate(template, vars) {
   });
 }
 export {
+  SYSTEM_TIMEZONE,
   createIpcLogger,
   emitLogNote,
   logChildStdio,

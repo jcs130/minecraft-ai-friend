@@ -25,7 +25,7 @@ import { readMapDat } from './level-dat.ts';
 import { readMapId } from './item-facts.ts';
 import { Vec3 } from 'vec3';
 import type { Bot } from 'mineflayer';
-import { nowIso } from './support/runtime.mjs';
+import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
 import { Bridge } from './bridge.ts';
 import { captureMinecraftView, closeMinecraftViewCapture, warmMinecraftViewCapture } from './visual-capture.ts';
@@ -2817,7 +2817,7 @@ export class MinecraftWorld implements World {
   constructor(opts: MinecraftWorldOptions) {
     this.cfg = opts.cfg;
 
-    this.timezone = opts.timezone ?? 'Asia/Shanghai';
+    this.timezone = opts.timezone ?? SYSTEM_TIMEZONE;
     this.botName = opts.botName ?? 'bot';
     this.bodyLease = new BodyLeaseArbiter({
       connectionGeneration: 0,
@@ -4088,6 +4088,7 @@ export class MinecraftWorld implements World {
       log,
       diag: this.diag,
       shuttingDown: () => this.shuttingDown,
+      managedServer: () => this.managedLocalServer(),
       scaffoldBlocks: () => this.scaffoldBlocksForUse(),
       movementCosts: () => TRAVEL_COSTS[this.policy.get().travel],
       taskId: () => this.executor?.currentTask?.id ?? null,

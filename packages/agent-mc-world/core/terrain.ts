@@ -9,7 +9,7 @@
 import { Vec3 } from 'vec3';
 import { observedEntity, observationView } from './perception-sight.ts';
 import { vehicleStateFromBot, vehicleFingerprint, narrateVehicleState, type VehicleReading } from '../src/vehicle-state.ts';
-import { nowIso } from './support/runtime.mjs';
+import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import {
   type Durability, type ItemEnchant, type ItemLike, readDurability, readEnchants, readPotionName,
 } from './item-facts.ts';
@@ -1726,7 +1726,7 @@ export function snapshotFromBot(
     maxEntities?: number;
     invSynced?: boolean;
     scanBlocks?: boolean;
-    /** 现实时刻按哪个时区报;缺省东八区 */
+    /** 现实时刻按哪个时区报;缺省本机时区 */
     timezone?: string;
     chestOf?: (dimension: string, p: { x: number; y: number; z: number }) => { items: ItemStack[] } | undefined;
   },
@@ -1882,7 +1882,7 @@ export function snapshotFromBot(
     inWater,
     invSynced: opts?.invSynced ?? true,
     timeOfDay,
-    realTime: nowIso(opts?.timezone ?? 'Asia/Shanghai'),
+    realTime: nowIso(opts?.timezone ?? SYSTEM_TIMEZONE),
     light: sampleLight(bot, isNight(timeOfDay)),
     raining: isRaining(bot),
     biome,

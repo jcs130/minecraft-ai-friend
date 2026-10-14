@@ -19,7 +19,7 @@ import {
   occupiedByMe, permitPlacement, placeIntoCell, siteAtCellAnywhere, stationNotes,
   singlePlaceScene, placementReadback, stepOffCell, type BuildSpot,
 } from './placement.ts';
-import { digBlock, readStamp, settleOnGround } from './travel.ts';
+import { digBlock, settleOnGround } from './travel.ts';
 import { zhName } from './names.ts';
 import { equipToolFor } from './tools.ts';
 import { bodyInWater, headInWater } from './terrain.ts';
@@ -221,7 +221,7 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
       .map((c) => occupantText(bot, c));
     // 标出回读时刻，便于区分稍后核验得到的新读数。
     throw new SkillBlocked(
-      `一块都没放上:${spanText}没有一格空着(${bits.join(',')};读于 ${readStamp()})`,
+      `一块都没放上:${spanText}没有一格空着(${bits.join(',')};读于 ${ctx.clock?.(Date.now()) ?? new Date().toISOString().slice(11, 19)})`,
       one && first.occupied > 0
         ? [...blockers, ...singlePlaceScene(bot, cells[0], call.material)] : blockers,
     );

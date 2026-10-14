@@ -13,6 +13,47 @@ afterEach(async () => {
 });
 
 describe('login readiness', () => {
+  it('keeps the real network error through end and retry, then clears it only after usable spawn', async () => {
+    vi.useFakeTimers();
+    const makeBot = () => Object.assign(new EventEmitter(), { _client: new EventEmitter(), loadPlugin() {}, quit() {},
+      entity: { position: { x: 0, y: 64, z: 0 } } });
+    const first = makeBot(), second = makeBot(), onDisconnect = vi.fn();
+    vi.spyOn(mineflayer, 'createBot').mockReturnValueOnce(first as never).mockReturnValueOnce(second as never);
+    const log = { info() {}, warn() {}, error() {}, debug() {}, trace() {}, emit() {}, child() { return this; } };
+    const bridge = new Bridge({ host: 'example.test', port: 25565, username: 'tester', version: '1.20.6', viewerPort: 0,
+      log: log as never, onSpawn() {}, onDisconnect });
+    bridges.push(bridge); Object.assign(bridge, { installSpawnGear() {} });
+    try {
+      bridge.start();
+      first.emit('error', Object.assign(new Error('connect ETIMEDOUT 203.0.113.5:25565'), { code: 'ETIMEDOUT' }));
+      first.emit('end', 'socketClosed');
+      expect(onDisconnect).toHaveBeenCalledWith('网络:connect ETIMEDOUT 203.0.113.5:25565', true, 0);
+      expect(bridge.connectionState).toMatchObject({ phase: 'retrying', ready: false,
+        failure: '网络:connect ETIMEDOUT 203.0.113.5:25565' });
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(bridge.connectionState.phase).toBe('connecting');
+      expect(bridge.connectionState.failure).toContain('ETIMEDOUT');
+      first.emit('error', new Error('late old connection error'));
+      expect(bridge.connectionState.failure).toContain('ETIMEDOUT');
+      second.emit('spawn');
+      expect(bridge.connectionState).toMatchObject({ phase: 'online', failure: null, ready: true });
+      await bridge.stop(); second.emit('error', new Error('late stopped connection error'));
+      expect(bridge.connectionState).toMatchObject({ phase: 'stopped', failure: null, ready: false });
+    } finally { vi.useRealTimers(); }
+  });
+  it('retains a translated kick instead of replacing it with the following generic close', () => {
+    const bot = Object.assign(new EventEmitter(), { _client: new EventEmitter(), loadPlugin() {}, quit() {} });
+    vi.spyOn(mineflayer, 'createBot').mockReturnValue(bot as never);
+    const log = { info() {}, warn() {}, error() {}, debug() {}, trace() {}, emit() {}, child() { return this; } };
+    const onDisconnect = vi.fn();
+    const bridge = new Bridge({ host: 'example.test', port: 25565, username: 'tester', version: '1.20.6', viewerPort: 0,
+      log: log as never, onSpawn() {}, onDisconnect });
+    bridges.push(bridge); bridge.start();
+    bot.emit('kicked', { translate: 'multiplayer.disconnect.not_whitelisted' });
+    bot.emit('end', 'socketClosed');
+    expect(onDisconnect).toHaveBeenCalledOnce();
+    expect(bridge.connectionState.failure).toBe('被服务器断开(白名单):multiplayer.disconnect.not_whitelisted');
+  });
   it('stops after rejected authentication instead of reconnecting and resending a bad password', async () => {
     vi.useFakeTimers();
     const dir = mkdtempSync(join(tmpdir(), 'login-failed-')), configFile = join(dir, 'accounts.json');
@@ -27,7 +68,7 @@ describe('login readiness', () => {
     try {
       bridge.start(); bot.emit('message', { toString: () => 'MC_AUTH_FAILED wrong password' }, 'system');
       await vi.advanceTimersByTimeAsync(60_000);
-      expect(bot.quit).toHaveBeenCalledOnce(); expect(onDisconnect).toHaveBeenCalledWith('auth failed', false, 0);
+      expect(bot.quit).toHaveBeenCalledOnce(); expect(onDisconnect).toHaveBeenCalledWith('连接关闭:auth failed', false, 0);
       expect(create).toHaveBeenCalledOnce();
     } finally { vi.useRealTimers(); rmSync(dir, { recursive: true, force: true }); }
   });
