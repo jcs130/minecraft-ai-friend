@@ -85,8 +85,8 @@ def focus_state(goal, facts, pending):
 
 def rule_focus(state):
     body = state.get("facts", {}).get("body", "")
-    health = re.search(r"(?:生命|health)\s*[:=]?\s*(\d+(?:\.\d+)?)", body, re.I)
-    hunger = re.search(r"(?:饥饿|hunger|food)\s*[:=]?\s*(\d+(?:\.\d+)?)", body, re.I)
+    health = re.search(r'''(?:生命|health)["']?\s*[:=]?\s*(\d+(?:\.\d+)?)''', body, re.I)
+    hunger = re.search(r'''(?:饥饿|hunger|food)["']?\s*[:=]?\s*(\d+(?:\.\d+)?)''', body, re.I)
     if (health and float(health[1]) <= 8) or (hunger and float(hunger[1]) <= 4):
         return "survival"
     if state.get("native_work_pending"):

@@ -62,7 +62,7 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
     capabilities: { tools: {}, resources: {} },
     instructions: translate('This server supplies Minecraft observation, execution and an optional game-only notebook (mc_memory action:help). You own goals, personal memory, reasoning and wakeups. '
       + 'Read mc_connection action:environment, connect explicitly, and consume mc_events while tasks execute. '
-      + 'Use mc_help and mc_script api:index for progressive tool and native Mineflayer documentation. '
+      + 'Use mc_help and the advertised provider tools for progressive operation discovery; only use mc_script if this body advertises it. '
       + 'Keep measured world facts and actual execution receipts separate from hypotheses and goal-success judgments.'),
   });
   const session = randomUUID();

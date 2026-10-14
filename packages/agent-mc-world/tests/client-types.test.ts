@@ -39,6 +39,14 @@ it.each(['Bundler','NodeNext'] as const)('consumes published declarations in %s 
     const result: Promise<ToolOutcome> = client.call('mc_script', {api:'index'});
     const events: EventEnvelope[] = client.journal.read(0, 8).events;
     void result; void events;
+    import { JavaClientWorld, validateJavaClientConfiguration, JAVA_CLIENT_PROTOCOL,
+      type JavaClientConfiguration, type JavaClientAction, type JavaClientState } from '../dist/types/src/client/index.js';
+    const native: JavaClientConfiguration = {expectedUuid:'12345678-1234-1234-1234-123456789abc',expectedServer:'fixture.test',controllerId:'consumer',credentialsFile:'./connection.json',ledgerDir:'./ledger',leaseMs:15000};
+    validateJavaClientConfiguration(native);
+    const body = new JavaClientWorld({...MINECRAFT_CLIENT_DEFAULTS,provider:'java-client',javaClient:native});
+    const nativeAction: JavaClientAction = {id:'id',operation:'move',phase:'unknown',acceptedAt:0,updatedAt:0};
+    const nativeState: JavaClientState = {protocol:JAVA_CLIENT_PROTOCOL,connected:false,server:'',sampledAt:'now',generation:0,actions:[nativeAction],messages:[]};
+    void body;void nativeState;
     import { PhotographyService, createImageGenerationPort, preparePhotoContext,
       type PhotoRecord, type ImageGenerationPort, type PhotographyConfig } from '../dist/types/src/client/index.js';
     import { PHOTOGRAPHY_PROTOCOL, type PhotoCapture } from '../dist/types/src/contracts/index.js';

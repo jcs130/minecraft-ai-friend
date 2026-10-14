@@ -3,6 +3,8 @@ import { GAME_MEMORY_DEFAULTS, GAME_MEMORY_CONFIG_SCHEMA } from './game-memory-s
 
 
 export const MINECRAFT_DEFAULTS = {
+  provider: 'mineflayer' as 'mineflayer' | 'java-client',
+  javaClient: { expectedUuid: '', expectedServer: '', controllerId: '', credentialsFile: '', ledgerDir: '', leaseMs: 15000 },
   // enabled 由Persona的装配层显式开启。
   enabled: false,
   /** 服务器地址(私服 dry-run 默认本机) */
@@ -196,6 +198,8 @@ export const MINECRAFT_DEFAULTS = {
 } as const;
 
 export interface MinecraftConfigSection {
+  provider?: 'mineflayer' | 'java-client';
+  javaClient?: import('../src/contracts/java-client.ts').JavaClientConfiguration;
   /** Generic fast-tactic execution permissions; no model endpoint or credentials. */
   combatOptions?: Partial<import('./combat-decision-types.ts').CombatExecutionPolicy>;
   enabled: boolean;
@@ -285,6 +289,18 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
     description: '连接项要重启 World 才生效；服务器路径在下次启动服务器时采用。',
     properties: {
       ...GAME_MEMORY_CONFIG_SCHEMA,
+      'worlds.minecraft.provider': { type: 'string', title: '客户端类型', enum: ['mineflayer', 'java-client'], 'x-hot': false,
+        description: 'java-client 接管已进服的真实客户端；不会自动启动游戏或重连。' },
+      'worlds.minecraft.javaClient.expectedUuid': { type: 'string', title: '真实玩家 UUID', 'x-hot': false,
+        description: '必须与服务端实际身份一致；离线账号改名也可能改变 UUID，需要显式迁移。' },
+      'worlds.minecraft.javaClient.expectedServer': { type: 'string', title: '真实客户端连接地址', 'x-hot': false },
+      'worlds.minecraft.javaClient.controllerId': { type: 'string', title: '控制器标识', 'x-hot': false },
+      'worlds.minecraft.javaClient.credentialsFile': { type: 'string', title: '真实客户端私有连接文件', 'x-hot': false,
+        description: '选择该游戏实例生成的 agent-mc-bridge/connection.json，不复制旧令牌。', 'x-path': { kind: 'file', extensions: ['.json'] } },
+      'worlds.minecraft.javaClient.ledgerDir': { type: 'string', title: '固定账本目录', 'x-hot': false,
+        description: '固定目录保留改名和升级历史，不随显示名自动更换。', 'x-path': { kind: 'directory' } },
+      'worlds.minecraft.javaClient.leaseMs': { type: 'integer', title: '控制权租期', minimum: 1000, maximum: 30000, 'x-hot': false,
+        description: '宿主须显式续租，过期释放游戏按键；单位毫秒。' },
       'worlds.minecraft.host': { type: 'string', title: '服务器地址', 'x-hot': false },
       'worlds.minecraft.port': { type: 'integer', title: '端口', minimum: 1, maximum: 65535, 'x-hot': false },
       'worlds.minecraft.username': { type: 'string', title: '账号标识 / 离线游戏名', 'x-hot': false,

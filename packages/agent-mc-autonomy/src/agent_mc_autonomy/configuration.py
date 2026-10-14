@@ -115,6 +115,8 @@ class Settings:
     version: str = "1.21.1"
     node: str = "node"
     backend_directory: str = ""
+    body_provider: str = "mineflayer"
+    java_client: dict = field(default_factory=dict)
     login_config_file: str = ""
     viewer_port: int = 0
     console_port: int = 0
@@ -142,6 +144,26 @@ class Settings:
         if not all(isinstance(section, dict) for section in sections):
             raise ValueError("autonomy, server, backend and viewer must be tables")
         autonomy, server, backend, viewer = sections
+        body_provider = _text(backend, "provider", "mineflayer")
+        if body_provider not in {"mineflayer", "java-client"}:
+            raise ValueError("backend.provider must be mineflayer or java-client")
+        java_raw = raw.get("java_client", {})
+        if not isinstance(java_raw, dict):
+            raise ValueError("java_client must be a table")
+        java_client = {}
+        if body_provider == "java-client":
+            if set(java_raw) - {"expected_uuid", "expected_server", "controller_id", "credentials_file", "ledger_dir", "lease_ms"}:
+                raise ValueError("Unsupported java_client setting")
+            fields = {key: _text(java_raw, key) for key in ("expected_uuid", "expected_server", "controller_id", "credentials_file", "ledger_dir")}
+            if not re.fullmatch(r"(?:[a-fA-F0-9]{32}|[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12})", fields["expected_uuid"]):
+                raise ValueError("java_client.expected_uuid must be an explicit actual player UUID")
+            if not all(fields.values()) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", fields["controller_id"]):
+                raise ValueError("Configure explicit Java client server/controller/credentials/ledger")
+            aliases = {"expected_uuid": "expectedUuid", "expected_server": "expectedServer", "controller_id": "controllerId", "credentials_file": "credentialsFile", "ledger_dir": "ledgerDir"}
+            java_client = {aliases[key]: value for key, value in fields.items()}
+            java_client["leaseMs"] = _integer(java_raw, "lease_ms", 15000, 1000, 30000)
+            if _text(viewer, "renderer_directory"):
+                raise ValueError("Java client uses its real framebuffer; do not start a second Mineflayer viewer body")
         perception = raw.get("perception", {})
         if not isinstance(perception, dict):
             raise ValueError("perception must be a table")
@@ -158,7 +180,7 @@ class Settings:
         if len(username) > 254 or (username and auth == "offline" and not re.fullmatch(r"[A-Za-z0-9_]{1,16}", username)):
             raise ValueError("Invalid server.username for the selected authentication mode")
         version = _text(server, "version", "1.21.1")
-        if version != "1.21.1":
+        if version != "1.21.1" and not (body_provider == "java-client" and version == "1.20.6"):
             raise ValueError("server.version must be exactly 1.21.1 for this integration")
         if _integer(viewer, "port", 0, 0, 65535) or _integer(viewer, "console_port", 0, 0, 65535):
             raise ValueError("This headless build uses viewer.url; bundled viewer and console ports must be zero")
@@ -170,6 +192,7 @@ class Settings:
             enabled=_boolean(autonomy, "enabled", False), host=host,
             port=_integer(server, "port", 25565, 1, 65535), username=username, auth=auth, version=version,
             node=_text(backend, "node", "node"), backend_directory=_text(backend, "directory"),
+            body_provider=body_provider, java_client=java_client,
             login_config_file=_text(server, "login_config_file"),
             viewer_port=0, console_port=0,
             external_viewer_url=viewer_url(_text(viewer, "url")), min_decision_seconds=minimum,
@@ -195,6 +218,11 @@ class Settings:
 
     @property
     def identity(self) -> str:
+        if self.body_provider == "java-client":
+            # Keep the host ledger through a Microsoft profile rename. Offline
+            # renames change UUID and still need explicit identity migration.
+            text = json.dumps(["java-client", self.java_client["expectedServer"].lower(), self.java_client["controllerId"]], separators=(",", ":"))
+            return hashlib.sha256(text.encode()).hexdigest()[:24]
         text = json.dumps([self.host.lower(), self.port, self.username, self.auth], separators=(",", ":"))
         return hashlib.sha256(text.encode()).hexdigest()[:24]
 
@@ -208,9 +236,10 @@ class Settings:
         self.require_server()
         private = data / "sessions" / self.identity
         return {
-            "dataDir": str(private / "client"), "timezone": "Asia/Shanghai", "acceptsImages": self.vision_enabled,
+            "dataDir": str(Path(self.java_client["ledgerDir"]).expanduser().resolve()) if self.body_provider == "java-client" else str(private / "client"), "timezone": "Asia/Shanghai", "acceptsImages": self.vision_enabled,
             "metricsPort": 0, "consolePort": self.console_port,
             "world": {
+                **({"provider": "java-client", "javaClient": self.java_client} if self.body_provider == "java-client" else {}),
                 "host": self.host, "port": self.port, "username": self.username, "auth": self.auth,
                 "version": self.version, "profilesFolder": str(private / "auth"),
                 "loginConfigFile": str(Path(self.login_config_file).expanduser().resolve()) if self.login_config_file else "",

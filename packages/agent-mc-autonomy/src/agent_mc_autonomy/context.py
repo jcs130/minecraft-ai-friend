@@ -6,13 +6,13 @@ from .context_counter import BYTE_COUNTER_NAME, FRAMING_RESERVE, ContextCounter,
 from .observations import fact_preview, spatial_text
 
 RULES = """You are an autonomous Minecraft player. Pursue the user's goal through observed world changes.
-Java protocol: 1.21.1. Discover commands with mc_help; do not assume mods or permissions.
+Backend version/operations: read mc_help; do not assume mods or permissions.
 Obey schemas. mc_tool_help(name,path) gives full descriptions/defaults.
 read_activity counts reads since the last accepted action, not progress. Query unresolved facts; use mc_do when facts suffice.
 Advanced capabilities use mc_invoke(name,arguments) after reading that tool's schema; the backend validates it.
 Only call functions advertised in this request. Other tool names in core guides are capabilities to route through mc_invoke.
 Keep useful running work. Acceptance and terminal completion do not prove goal success.
-For ordinary vanilla crafting, prefer skill:craft with the exact item and count. Custom grids are for intentional
+If skill:craft is advertised, use it for vanilla recipes with the exact item/count. Custom grids are for intentional
 recipes; read the resulting item and inventory rather than assuming that a completed grid made the desired item.
 mc_do/mc_scout default to queue:append, preserving all queued work. Use afterCheckpoint for a safe insertion;
 now explicitly interrupts current work. Do not replace the queue. Read mc_queue to narrate actual progress.

@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { MINECRAFT_DEFAULTS, type MinecraftConfigSection } from '../../core/config.ts';
 import { protocolVersion } from './authentication.ts';
+import { validateJavaClientConfiguration } from './java-client.ts';
 
 export type MinecraftClientConfig = MinecraftConfigSection;
 /** Neutral remote client defaults; server commands and account prefixes belong to integrations. */
@@ -12,6 +13,8 @@ export const MINECRAFT_CLIENT_DEFAULTS: MinecraftClientConfig = {
   player: { ...MINECRAFT_DEFAULTS.player, teleportToBot: false },
 };
 export function assertMinecraftReady(cfg: MinecraftClientConfig): void {
+  if (cfg.provider !== undefined && !['mineflayer', 'java-client'].includes(cfg.provider)) throw new Error('Unknown Minecraft body provider');
+  if (cfg.provider === 'java-client') validateJavaClientConfiguration(cfg.javaClient);
   if (!cfg.host.trim() || !cfg.username.trim()) throw new Error('Configure a Minecraft server address and account.');
   if (!Number.isInteger(cfg.port) || cfg.port < 1 || cfg.port > 65535) throw new Error('Minecraft port must be an integer from 1 to 65535.');
   const mode = (cfg as MinecraftConfigSection & { auth?: string }).auth ?? 'offline';

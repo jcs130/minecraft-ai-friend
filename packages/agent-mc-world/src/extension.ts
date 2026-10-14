@@ -23,6 +23,8 @@ export { loadPrivateClientConfig } from './client/config-file.ts';
 export { observeVisual, acceptsImages, visualArgumentError, structuredVisual } from './client/visual.ts';
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady } from './client/config.ts';
 export { MinecraftClientWorld } from './client/world.ts';
+export { JavaClientWorld, validateJavaClientConfiguration } from './client/java-client.ts';
+export * from './contracts/java-client.ts';
 export { itemCustomName } from '../core/item-display.ts';
 export { zhName } from '../core/names.ts';
 export { invCount, itemPredOf, invItemNamed } from '../core/inventory.ts';

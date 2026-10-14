@@ -43,6 +43,10 @@ export function loadPrivateClientConfig<T extends MinecraftClientConfig>(path: s
     if (!validate(value)) throw new Error(`Invalid ${key}: ${ajv.errorsText(validate.errors)}`);
   }
   if (cfg.loginConfigFile) cfg.loginConfigFile = resolve(dirname(fullPath), cfg.loginConfigFile);
+  if (cfg.provider === 'java-client' && cfg.javaClient) {
+    cfg.javaClient.credentialsFile = resolve(dirname(fullPath), cfg.javaClient.credentialsFile);
+    cfg.javaClient.ledgerDir = resolve(dirname(fullPath), cfg.javaClient.ledgerDir);
+  }
   for (const account of [cfg, cfg.client, cfg.player] as Array<{ profilesFolder?: string }>)
     if (account.profilesFolder) account.profilesFolder = resolve(dirname(fullPath), account.profilesFolder);
   policy.validate(cfg);

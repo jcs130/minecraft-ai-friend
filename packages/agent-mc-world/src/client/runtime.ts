@@ -3,6 +3,7 @@ import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { EventEnvelope, Logger, ModelFacts, ToolOutcome, World, WorldHost } from './contracts.ts';
 import { MinecraftClientWorld } from './world.ts';
+import { JavaClientWorld, JAVA_CLIENT_ENVIRONMENT } from './java-client.ts';
 import { assertMinecraftReady } from './config.ts';
 import type { MinecraftClientConfig } from './config.ts';
 import { renderTemplate } from '../../core/support/runtime.mjs';
@@ -56,8 +57,9 @@ export class MinecraftAgentClient {
   private offlineMemoryCalls = 0;
 
   constructor(protected readonly options: MinecraftClientOptions,
-    private readonly world: ClientEnvironment = new MinecraftClientWorld({ cfg: options.cfg, dataDir: options.dataDir,
-      timezone: options.timezone ?? 'UTC', botName: options.agentName ?? options.cfg.username }),
+    private readonly world: ClientEnvironment = options.cfg.provider === 'java-client' ? new JavaClientWorld(options.cfg)
+      : new MinecraftClientWorld({ cfg: options.cfg, dataDir: options.dataDir,
+        timezone: options.timezone ?? 'UTC', botName: options.agentName ?? options.cfg.username }),
     readonly binding: { profile: string; toolPrefix: 'mc' | 'mymc' } = { profile: 'minecraft', toolPrefix: 'mc' }) {
     this.journal = new AgentJournal(options.dataDir, 1024, world.id);
     this.facts = new CurrentFacts(this.journal);
@@ -174,6 +176,7 @@ export class MinecraftAgentClient {
   }
 
   async environment(): Promise<string> {
+    if (this.options.cfg.provider === 'java-client') return JAVA_CLIENT_ENVIRONMENT;
     const { readFileSync } = await import('node:fs');
     return readFileSync(new URL('./ENV_PROMPT.md', import.meta.url), 'utf8').replaceAll('mc_', this.toolPrefix + '_');
   }

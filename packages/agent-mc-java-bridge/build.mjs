@@ -1,0 +1,32 @@
+/** Explicit installed-game compilation, with no framework checkout or automatic game launch. */
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { delimiter, join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root=dirname(fileURLToPath(import.meta.url)), game=resolve(process.argv[2]??'');
+const home=process.argv[3];
+if(!home||!existsSync(join(game,'.fabric','remappedJars')))throw new Error('Usage: node build.mjs <installed Fabric 1.20.6 game directory> <JDK 21 directory>');
+const walk=directory=>existsSync(directory)?readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?walk(join(directory,entry.name)):[join(directory,entry.name)]):[];
+const run=(name,args,cwd=root)=>{const result=spawnSync(join(home,'bin',name+(process.platform==='win32'?'.exe':'')),args,{cwd,windowsHide:true,encoding:'utf8'});if(result.error)throw result.error;if(result.status)throw new Error(result.stdout+'\n'+result.stderr);if(result.stdout.trim())console.log(result.stdout.trim());};
+const build=join(root,'build'),deps=join(build,'deps'),classes=join(build,'classes');
+// Clean only our exact generated class directory so moved Mixin classes cannot survive a build.
+if(resolve(classes)!==resolve(root,'build','classes'))throw new Error('Unsafe generated class directory');
+rmSync(classes,{recursive:true,force:true});
+mkdirSync(deps,{recursive:true});mkdirSync(classes,{recursive:true});
+const resources=join(root,'src','main','resources');
+const mod=JSON.parse(readFileSync(join(resources,'fabric.mod.json'),'utf8'));
+const mixin=JSON.parse(readFileSync(join(resources,'agent-mc-bridge.mixins.json'),'utf8'));
+if(mod.entrypoints.client.some(entry=>String(entry).startsWith(mixin.package+'.')))throw new Error('Entrypoint must not live in a Mixin-only package');
+const api=walk(join(game,'mods')).find(path=>/fabric-api-.*\+1\.20\.6\.jar$/.test(path));
+const minecraft=walk(join(game,'.fabric','remappedJars')).find(path=>path.includes('minecraft-1.20.6-')&&path.endsWith('client-intermediary.jar'));
+if(!api||!minecraft)throw new Error('Matching installed Minecraft/Fabric API inputs are required');
+run('jar',['--extract','--file',api],deps);
+const classpath=[minecraft,...walk(join(game,'libraries')).filter(path=>path.endsWith('.jar')),...walk(deps).filter(path=>path.endsWith('.jar'))].join(delimiter);
+const sources=[...walk(join(root,'src','main','java')),...walk(join(root,'src','test','java'))].filter(path=>path.endsWith('.java'));
+const quote=value=>'"'+value.replaceAll('\\','/').replaceAll('"','\\"')+'"';
+const args=join(build,'compile.args');writeFileSync(args,['--release','21','-encoding','UTF-8','-proc:none','-classpath',classpath,'-d',classes,...sources].map(quote).join('\n'));
+run('javac',['@'+args]);
+run('java',['-cp',classes+delimiter+classpath,'ControlLedgerCheck']);
+const output=join(build,'agent-mc-bridge-0.1.0-fabric-1.20.6.jar');
+run('jar',['--create','--file',output,'-C',classes,'org','-C',resources,'fabric.mod.json','-C',resources,'agent-mc-bridge.mixins.json','-C',root,'LICENSE']);
+console.log(output);

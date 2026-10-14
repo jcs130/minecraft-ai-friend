@@ -30,6 +30,14 @@ Neko / Cortico / other Agent                 Explicit model endpoint
 
 ## Run independently
 
+For a real rendered client, see `java-client.example.toml` and the core's
+`docs/java-client.md`. Pass a freshly built core explicitly with `--entry`;
+the historical pinned installer below does not yet contain that provider.
+Capability checks reject an old/Mineflayer-only backend before connecting.
+Autonomy's controller discovers operations, claims and renews the native lease;
+it does not launch Minecraft or add a second body queue. Leave `enabled=false`
+until identity, authentication, actions and background rendering are verified.
+
 Install with Python 3.11+ (`pip install ./packages/agent-mc-autonomy`). Install and
 build `packages/agent-mc-world` separately following its documentation; pass the
 actual built MCP entry explicitly. No private deployment or model is discovered.

@@ -19,9 +19,9 @@ from .tool_schema import argument_error
 
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
-HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_visual"}
+HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_visual", "mc_control"}
 DIRECT_TOOLS = {"mc_help", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape"}
-READ_ACTIVITY_TOOLS = {"mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original"}
+READ_ACTIVITY_TOOLS = {"mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original", "mc_capabilities", "mc_operations", "mc_result", "mc_notices"}
 IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout"}
 
 
@@ -72,10 +72,12 @@ def model_tools(catalogue):
         return value
 
     tools = []
+    native = any(tool["name"] == "mc_do" and "operation" in tool.get("inputSchema", {}).get("properties", {}) for tool in catalogue)
+    direct = DIRECT_TOOLS | ({"mc_capabilities", "mc_operations", "mc_result", "mc_wait", "mc_cancel", "mc_notices"} if native else set())
     available = sorted(tool["name"] for tool in catalogue if tool["name"] not in HIDDEN_TOOLS)
-    advanced = [name for name in available if name not in DIRECT_TOOLS]
+    advanced = [name for name in available if name not in direct]
     for tool in sorted(catalogue, key=lambda row: row["name"]):
-        if tool["name"] not in DIRECT_TOOLS:
+        if tool["name"] not in direct:
             continue
         schema = structural(tool["inputSchema"])
         if tool["name"] == "mc_protocol":
@@ -99,7 +101,7 @@ def model_tools(catalogue):
                             projected[key]["description"] = meaning
                 step["properties"] = projected
         description = tool.get("description", "")[:450]
-        if tool["name"] == "mc_do":
+        if tool["name"] == "mc_do" and "steps" in schema.get("properties", {}):
             description = "Execute real Minecraft actions: movement, collect, craft, eat, attack, build, etc. Steps run in order on the native body queue. Read mc_help for the selected skill's exact parameters/examples, then submit flat step objects. Default queue is append; afterCheckpoint inserts safely, now interrupts. A returned task ID means accepted, not completed."
         elif tool["name"] == "mc_scout":
             description = "Read-only observations or dry-run trials. Only the skills in steps.skill.enum are allowed. Does not collect, craft, eat, move the player or build anything. Use mc_do for real actions."
@@ -232,6 +234,7 @@ class Controller:
         self.state_path = data / "host-state.json"
         self.fast_policy = fast_policy or FastPolicy(settings.fast)
         self.frame = None
+        self.body_lease_due = None
 
     def persist(self, **changes):
         self.data.mkdir(parents=True, exist_ok=True)
@@ -275,6 +278,10 @@ class Controller:
         return json_content(await self.bridge.call("mc_protocol", {"protocol": PROTOCOL, "action": action, **arguments}))
 
     async def events(self):
+        if self.body_lease_due is not None and time.monotonic() >= self.body_lease_due:
+            lease_ms = self.settings.java_client["leaseMs"]
+            json_content(await self.bridge.call("mc_control", {"action": "renew", "ttlMs": lease_ms}))
+            self.body_lease_due = time.monotonic() + lease_ms / 2000
         page = json_content(await self.bridge.call("mc_events", {"after": self.cursor, "run": self.event_run, "limit": 64, "waitMs": 0} if self.event_run else {"after": 0, "limit": 64, "waitMs": 0}))
         if page.get("gap"):
             # Archive from the original cursor before resuming any plan; do not
@@ -803,6 +810,10 @@ class Controller:
         self.persist(stopped=False)
         try:
             await self.bridge.open()
+            if self.settings.body_provider == "java-client":
+                advertised = {tool["name"] for tool in self.bridge.tools}
+                if not {"mc_control", "mc_operations", "mc_capabilities"}.issubset(advertised):
+                    raise RuntimeError("java_client_backend_required: use an explicit core build advertising native client control; refusing Mineflayer fallback")
             self.publish(phase="connecting")
             json_content(await self.bridge.call("mc_connection", {"action": "connect"}, timeout=120))
             deadline = time.monotonic() + 120
@@ -815,6 +826,14 @@ class Controller:
                 await asyncio.sleep(1)
             if self.stop_requested():
                 return
+            if self.settings.body_provider == "java-client":
+                for name in ("mc_capabilities", "mc_operations", "mc_help"):
+                    inspected = outcome(await self.bridge.call(name, {}))
+                    if inspected.get("failed"):
+                        raise RuntimeError("Java client capability inspection failed")
+                lease_ms = self.settings.java_client["leaseMs"]
+                json_content(await self.bridge.call("mc_control", {"action": "claim", "ttlMs": lease_ms}))
+                self.body_lease_due = time.monotonic() + lease_ms / 2000
             self.publish(phase="running", game_connected=True, autonomy_running=self.decide is not None, current_goal=self.active_goal)
             prefix = text_content(await self.bridge.resource("mc://environment"))
             tools = model_tools(self.bridge.tools)
