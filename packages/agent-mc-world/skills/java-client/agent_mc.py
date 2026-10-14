@@ -7,7 +7,7 @@ import math
 import time
 from datetime import datetime, timezone
 
-__all__ = ["help", "sample_blocks", "scan_blocks", "scan_nearby", "wait"]
+__all__ = ["help", "sample_blocks", "scan_blocks", "scan_nearby", "wait", "interact_block"]
 
 
 def help(topic="index"):
@@ -26,6 +26,11 @@ def help(topic="index"):
         "sample_blocks": {"signature": "sample_blocks(positions)", "example": {"positions": [[-406, 120, -475], [-406, 121, -475]]},
             "bounds": "1..512 absolute integer [x,y,z] vectors", "returns": "blocks,checked,startedAt,sampledAt,source,serverConfirmed; block rows use position/name/properties/raw/observation"},
         "wait": {"signature": "wait(seconds)", "bounds": "0..5 seconds; include waits and cleanup in the native script timeout and lease"},
+        "interact_block": {"signature": "interact_block(position, action='attack', hold=0.3, max_distance=4.5, aim_offset=[0.5,0.5,0.5], observe_positions=[])",
+            "bounds": "One absolute integer target; action attack/use; hold 0.05..2 seconds; raycast bound 0.5..8; aim offsets 0..1. Run only in an explicitly admitted leased mc_script job.",
+            "example": {"position": [-566,66,-455], "action": "use", "hold": 0.15, "aim_offset": [0.5,0.9,0.5]},
+            "note": "Planting targets the actual support farmland, not its empty air above. Aim is configurable for non-full blocks. The helper checks real crosshair hit and distance before input. A raycast bound does not grant server reach or permission.",
+            "returns": "target,before,after,observedBefore/After for <=4 explicitly selected related positions,hit,inputDispatched,outcome,reason,observedChanged,sampledAt,serverConfirmed=false; no_observed_change is not success. It neither moves nor retries."},
     }
     if topic == "index":
         return {"api": "agent-mc-python/v1", "minescriptVersion": "4.0", "topics": list(pages), "next": "result = agent_mc.help('scan_blocks')",
@@ -40,6 +45,69 @@ def help(topic="index"):
 def _api():
     import minescript
     return minescript
+
+
+def interact_block(position, action="attack", hold=0.3, max_distance=4.5, aim_offset=None, observe_positions=None):
+    """One explicitly chosen, bounded body interaction; never pathfind or retry."""
+    target = _point(position)
+    if action not in ("attack", "use"):
+        raise ValueError("action must be attack or use")
+    for value, minimum, maximum in ((hold, 0.05, 2), (max_distance, 0.5, 8)):
+        if type(value) not in (int, float) or not math.isfinite(value) or not minimum <= value <= maximum:
+            raise ValueError("Invalid bounded interaction duration or raycast distance")
+    offset = [0.5,0.5,0.5] if aim_offset is None else aim_offset
+    if not isinstance(offset, (list,tuple)) or len(offset) != 3 or any(type(v) not in (int,float) or not math.isfinite(v) or not 0 <= v <= 1 for v in offset):
+        raise ValueError("aim_offset must contain three finite 0..1 values")
+    related = [] if observe_positions is None else observe_positions
+    if not isinstance(related, (list,tuple)) or len(related) > 4:
+        raise ValueError("observe_positions supports at most four absolute positions")
+    related = [_point(point) for point in related]
+    api = _api()
+    report = {"target": target, "action": action, "startedAt": _stamp(), "inputDispatched": False,
+              "outcome": "blocked", "observedChanged": False, "serverConfirmed": False}
+    def finish(reason=None):
+        if reason is not None:
+            report["reason"] = reason
+        report["sampledAt"] = _stamp()
+        return report
+    if api.screen_name():
+        return finish("gui_open; inspect and close the actual screen first")
+    before = _block(target, api.getblock(*target))
+    report["before"] = before
+    if before["observation"] != "client_cache" or before["name"] in ("minecraft:air", "minecraft:cave_air"):
+        return finish("target is air or unknown; select an actual observed block")
+    api.player_look_at(*[coordinate+delta for coordinate,delta in zip(target,offset)])
+    api.flush()
+    time.sleep(0.05)
+    hit = api.player_get_targeted_block(max_distance)
+    if hit is None:
+        return finish("no_hit_within_bound; change position or target before retrying")
+    hit_position = list(hit.position)
+    distance = hit.distance
+    report["hit"] = {"position": hit_position, "distance": distance, "side": hit.side, "type": hit.type}
+    if hit_position != target or not isinstance(distance,(int,float)) or not math.isfinite(distance) or not 0 <= distance <= max_distance:
+        return finish("target_not_hit_or_out_of_bound; inspect occlusion and change position or target")
+    if related:
+        report["observedBefore"] = sample_blocks(related)["blocks"]
+    press = api.player_press_attack if action == "attack" else api.player_press_use
+    try:
+        press(True)
+        report["inputDispatched"] = True
+        api.flush()
+        time.sleep(hold)
+    finally:
+        press(False)
+        api.flush()
+    time.sleep(0.1)
+    after = _block(target, api.getblock(*target))
+    report["after"] = after
+    report["observedChanged"] = before["raw"] != after["raw"]
+    if related:
+        report["observedAfter"] = sample_blocks(related)["blocks"]
+        report["observedChanged"] |= any(a["observation"] == b["observation"] == "client_cache" and a["raw"] != b["raw"]
+                                         for a,b in zip(report["observedBefore"],report["observedAfter"]))
+    report["outcome"] = "observed_change" if report["observedChanged"] else "no_observed_change"
+    return finish(None if report["observedChanged"] else "input dispatched without observed block change; verify inventory/server notices")
 
 
 def _point(value):
