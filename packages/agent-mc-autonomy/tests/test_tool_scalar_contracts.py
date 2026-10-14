@@ -32,7 +32,7 @@ def test_projection_keeps_native_scalar_structure_without_manuals(field):
     projected = model_tools(original)[0]["function"]["parameters"]["properties"]["steps"]["items"]
     expected = {k: v for k, v in original[0]["inputSchema"]["properties"]["steps"]["items"]["properties"][field].items() if k != "description"}
     assert projected["properties"][field] == expected
-    assert "sites" not in projected["properties"]
+    assert projected["properties"]["sites"] == original[0]["inputSchema"]["properties"]["steps"]["items"]["properties"]["sites"]
     assert original == before
     expanded = json.loads(tool_help(original, {"name": "mc_scout", "path": "/inputSchema/properties/steps/items/properties/" + field})["text"])
     assert expanded == before[0]["inputSchema"]["properties"]["steps"]["items"]["properties"][field]

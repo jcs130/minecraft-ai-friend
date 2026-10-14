@@ -271,8 +271,8 @@ the bounded projection retains unknown areas and original-query access. These
 context fixes do not independently establish successful gameplay.
 
 Since 0.1.20, compact action/observation tools retain the discovered backend's
-scalar parameter names, types, enums and bounds. Long manuals and complex fields
-remain available through progressive help. Native validation and skill-specific
+scalar parameter names, types, enums and bounds. Long manuals stay available
+through progressive help. Native validation and skill-specific
 requirements are unchanged; an optional mode never becomes required for all skills.
 The neutral `ownership.session_is_owned` probe checks an existing account lease
 without creating state or starting a process. A held lease must be combined with
@@ -285,6 +285,13 @@ inspection, while the prompt keeps the current user goal and proposed stage.
 Rejected calls with valid wire envelopes retain a matching failure result for
 every call in the next request. Malformed envelopes remain in the original
 journal without poisoning provider tool-history protocols.
+
+Since 0.1.22, flat action/scout steps also retain every native composite parameter
+structure, including observation sites/rays/bounds, build anchors and recipe grids.
+Repeated property descriptions are removed; short numeric-array units remain.
+This avoids hiding arguments that even basic skills need. The complete backend
+schema and help remain authoritative; no new conditional requirements or parameter
+aliases are invented. More structure can reduce history under a tight budget.
 
 Run `python -m pytest -q` here. Tests deny host SDK imports, network and service
 launches; the isolated process test exercises both a fake autonomous planner and

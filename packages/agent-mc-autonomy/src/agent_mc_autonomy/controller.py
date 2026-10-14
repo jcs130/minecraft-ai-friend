@@ -51,23 +51,23 @@ def model_tools(catalogue):
         return bool({"number", "integer"}.intersection(types)) or (
             "array" in types and isinstance(value.get("items"), dict) and numeric_field(value["items"]))
 
-    def structural(value):
+    def structural(value, descriptions=True):
         if isinstance(value, list):
-            return [structural(item) for item in value]
+            return [structural(item, descriptions) for item in value]
         if isinstance(value, dict):
             result = {}
             for key, item in value.items():
                 # Short parameter semantics (units, coordinate order, volume
                 # limits) are needed to use a schema, not optional long manuals.
-                if key == "description" and isinstance(item, str) and len(item) <= 240 and (numeric_field(value) or len(item) <= 120):
+                if descriptions and key == "description" and isinstance(item, str) and len(item) <= 240 and (numeric_field(value) or len(item) <= 120):
                     result[key] = item
                     continue
                 if key in {"description", "title", "examples", "$comment", "default"}:
                     continue
                 if key in {"properties", "patternProperties", "$defs", "definitions", "dependentSchemas"}:
-                    result[key] = {name: structural(child) for name, child in item.items()}
+                    result[key] = {name: structural(child, descriptions) for name, child in item.items()}
                 else:
-                    result[key] = item if key in {"const", "enum"} else structural(item)
+                    result[key] = item if key in {"const", "enum"} else structural(item, descriptions)
             return result
         return value
 
@@ -86,21 +86,18 @@ def model_tools(catalogue):
             properties = step.get("properties", {})
             if isinstance(properties.get("skill"), dict) and "enum" in properties["skill"]:
                 # Native steps use one large flat union across unrelated skills.
-                # Keep scalar types/enums/bounds so generation can obey native
-                # constraints. Complex fields/examples remain progressive.
+                # Arrays/objects are native arguments too: hiding sites, rays,
+                # anchors or recipes makes even basic tools impossible to infer.
+                # Keep every field's structure; manuals remain progressive.
                 # Dispatch still validates the ORIGINAL complete schema.
-                kept = {"skill", "needs", "expect", *step.get("required", [])}
                 projected = {}
                 for key, value in properties.items():
-                    scalar = scalar_structure(value)
-                    if key in kept:
-                        projected[key] = value
-                    elif scalar is not None:
-                        projected[key] = scalar
+                    projected[key] = structural(value, descriptions=False)
+                    if isinstance(value, dict) and scalar_structure(value) is None and numeric_field(value):
+                        meaning = value.get("description")
+                        if isinstance(meaning, str) and len(meaning) <= 240:
+                            projected[key]["description"] = meaning
                 step["properties"] = projected
-                step["additionalProperties"] = True
-                step["description"] = ("Flat step: skill plus its native parameters (not nested arguments). "
-                                       "Read mc_help for the selected skill's exact fields and examples before using unfamiliar skills.")
         description = tool.get("description", "")[:450]
         if tool["name"] == "mc_do":
             description = "Execute real Minecraft actions: movement, collect, craft, eat, attack, build, etc. Steps run in order on the native body queue. Read mc_help for the selected skill's exact parameters/examples, then submit flat step objects. Default queue is append; afterCheckpoint inserts safely, now interrupts. A returned task ID means accepted, not completed."

@@ -791,7 +791,8 @@ def test_step_projection_preserves_envelope_and_full_native_constraints(framewor
     assert projected["items"]["properties"] == {
         **{k: schema["properties"]["steps"]["items"]["properties"][k] for k in ["skill", "needs", "count"]},
         "item": {"type": "string"}}
-    assert projected["items"]["additionalProperties"] is True and "mc_help" in projected["items"]["description"]
+    assert projected["items"].get("additionalProperties", True) is True
+    assert "flat step" in module.model_tools([original])[0]["function"]["description"]
     assert json.loads(module.tool_help([original], {"name": "mc_do", "path": "/inputSchema"})["text"]) == schema
     assert json.dumps(original) == before
     assert "minimum=1" in argument_error([original], "mc_do", {"steps": [{"skill": "craft", "count": 0}]})
