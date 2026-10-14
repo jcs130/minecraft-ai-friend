@@ -22,6 +22,10 @@ const MOD_CODECS = {
   'folkways:colony_id': 'UUID',
   'folkways:book_gesture': 'varint',
   'folkways:filter_tag': 'string',
+  // Settlements nightly-101226 DataComponentRegistry: ByteBufCodecs.BOOL
+  // and ByteBufCodecs.INT (fixed signed big-endian, not VarInt).
+  'settlements:enchant_attempted': 'bool',
+  'settlements:villager_totem_mode': 'i32',
   'ars_nouveau:spell_caster': 'MawArsSpellCaster',
   'domum_ornamentum:texture_data': 'MawDomumTextureData'
 }

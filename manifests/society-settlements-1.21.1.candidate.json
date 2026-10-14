@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "minecraftVersion": "1.21.1",
+  "neoforgeVersion": "21.1.248",
+  "baseLock": "manifests/society-lab-1.21.1.lock.json",
+  "deployment": "candidate_isolated_only",
+  "productionInstalled": false,
+  "source": "NAS 共享文件/mc-mods/万家烟火",
+  "modifications": [
+    {
+      "name": "settlements-1.0.0-beta.nightly-101226.jar",
+      "sha256": "ff21dce2264b946d37413f3bb149620b975fe9723b9acad5d485436b39ba6ab7",
+      "version": "1.0.0-beta.nightly-101226",
+      "project": "https://github.com/breeze-devs/Settlements-Alpha",
+      "license": "GPL-3.0-only"
+    },
+    {
+      "name": "villager_news-1.0.1-maw-compat2.jar",
+      "sha256": "176629f82a43cc47f9ee5174e65bb51ed81b9a91addb55f770c2a07501798eb8",
+      "version": "1.0.0-r328",
+      "filenameReleaseLabel": "1.0.1",
+      "sourceSha256": "89380fc3ab05e15e085db74f39564836a67c94cf53c262f8d3a618105d111fda",
+      "license": "All Rights Reserved; artifact remains private",
+      "build": "tools/build_villager_news_compat.py"
+    }
+  ],
+  "adapters": {
+    "optionalPlayChannels": [
+      "settlements:packet_ballista_aim_serverbound",
+      "settlements:packet_bubble_snapshot_clientbound",
+      "settlements:packet_cultivation_seed_set_clientbound",
+      "settlements:packet_day_plan_snapshot_clientbound",
+      "settlements:packet_flare_clientbound",
+      "settlements:packet_settlement_debug_clientbound",
+      "settlements:packet_village_day_type_clientbound",
+      "settlements:packet_villager_demand_snapshot_clientbound",
+      "settlements:packet_villager_stats_inventory_snapshot_clientbound",
+      "settlements:packet_villager_stats_snapshot_clientbound",
+      "settlements:packet_villager_trade_catalog_snapshot_clientbound",
+      "settlements:ui_sync_close_serverbound",
+      "settlements:ui_sync_heartbeat_ack_clientbound",
+      "settlements:ui_sync_heartbeat_serverbound",
+      "settlements:ui_sync_open_clientbound",
+      "settlements:ui_sync_open_serverbound",
+      "settlements:ui_sync_unavailable_clientbound"
+    ],
+    "components": {
+      "settlements:enchant_attempted": "bool",
+      "settlements:villager_totem_mode": "int32_big_endian"
+    },
+    "registryMustBeReexported": true,
+    "usePreviousRegistry": false
+  },
+  "extraNasModsNotInstalled": [
+    "ModernFix",
+    "FerriteCore",
+    "Waystones",
+    "Sophisticated Storage",
+    "Lootr",
+    "Kaleidoscope Cookery",
+    "Supplementaries",
+    "client UI/dependency mods"
+  ],
+  "unverified": [
+    "bedrock_village_models_and_ui",
+    "web_village_models_and_ui",
+    "matched_java_scene",
+    "long_running_village_work_and_performance"
+  ],
+  "verified": {
+    "dedicatedServer37Mods": true,
+    "mineflayerBasicChecks": 16,
+    "numenBasicChecks": 16,
+    "realNpcBackpackAndMerchantMenu": true,
+    "nativeItemComponentsAndQuantity": true,
+    "sameWorldRestartAndNpcIdentity": true,
+    "reproducibleCompatibilityArtifact": true
+  }
+}

@@ -63,6 +63,25 @@ test('an unsupported native codec explicitly fails instead of consuming a neighb
   assert.throws(() => protocol.parsePacketBuffer('packet', buffer), /UNSUPPORTED_NATIVE_ITEM_COMPONENT/)
 })
 
+test('Settlements totem modes use fixed INT and preserve following stacks and native components', () => {
+  const current = new Map(registry)
+  current.set('settlements:enchant_attempted', 90)
+  current.set('settlements:villager_totem_mode', 91)
+  const backend = createBackendComponentProtocol(current)
+  const totem = stack(2300, [{ type: 'settlements:villager_totem_mode', data: 3 },
+    { type: 'settlements:enchant_attempted', data: true }])
+  const original = { name: 'window_items', params: { windowId: 1, stateId: 5,
+    items: [totem, maid, empty], carriedItem: empty } }
+  const bytes = backend.createPacketBuffer('packet', original)
+  assert.notEqual(bytes.indexOf(Buffer.from([91, 0, 0, 0, 3, 90, 1])), -1)
+  const parsed = backend.parsePacketBuffer('packet', bytes)
+  assert.equal(parsed.metadata.size, bytes.length)
+  assert.deepEqual(parsed.data.params.items[0].components, totem.components)
+  assert.equal(parsed.data.params.items[1].components[0].data, owner)
+  assert.equal(vanillaProjection(parsed.data).params.items[0].components.length, 0)
+  assert.equal(parsed.data.params.items[0].components.length, 2)
+})
+
 test('Folkways colony book components follow exported IDs and preserve following stacks', () => {
   const reordered = new Map(registry)
   reordered.set('folkways:colony_id', 167)

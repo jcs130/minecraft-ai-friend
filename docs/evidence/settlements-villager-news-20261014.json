@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-14",
+  "scope": "NAS mod audit, compatibility artifact and isolated candidate only",
+  "productionInstalled": false,
+  "sourceCount": 22,
+  "selectedMods": [
+    {
+      "name": "settlements-1.0.0-beta.nightly-101226.jar",
+      "sha256": "ff21dce2264b946d37413f3bb149620b975fe9723b9acad5d485436b39ba6ab7",
+      "version": "1.0.0-beta.nightly-101226",
+      "project": "https://github.com/breeze-devs/Settlements-Alpha",
+      "license": "GPL-3.0-only"
+    },
+    {
+      "name": "villager_news-1.0.1-maw-compat2.jar",
+      "sha256": "176629f82a43cc47f9ee5174e65bb51ed81b9a91addb55f770c2a07501798eb8",
+      "version": "1.0.0-r328",
+      "filenameReleaseLabel": "1.0.1",
+      "sourceSha256": "89380fc3ab05e15e085db74f39564836a67c94cf53c262f8d3a618105d111fda",
+      "license": "All Rights Reserved; artifact remains private",
+      "build": "tools/build_villager_news_compat.py"
+    }
+  ],
+  "build": {
+    "schemaVersion": 1,
+    "newsInputSha256": "89380fc3ab05e15e085db74f39564836a67c94cf53c262f8d3a618105d111fda",
+    "settlementsSha256": "ff21dce2264b946d37413f3bb149620b975fe9723b9acad5d485436b39ba6ab7",
+    "outputSha256": "176629f82a43cc47f9ee5174e65bb51ed81b9a91addb55f770c2a07501798eb8",
+    "changedEntries": [
+      "cn/blockforge/generated/villagernews/SettlementsCompat$SettlementsBackpackView.class",
+      "villager_news.mixins.json"
+    ],
+    "removedObsoleteRedirect": "SettlementsInventorySaveMixin",
+    "assetsPreserved": true,
+    "containerClassReplaced": true,
+    "allOtherClassesPreserved": true,
+    "nativeAttachmentSerializerPreserved": true,
+    "restartPersistenceVerified": false,
+    "containerSourceSha256": "24d74bd3c9dcdba5efdda56d362100358e24513a5cf245a668bb8cccdaf80d93",
+    "compilerRelease": 21
+  },
+  "runtimeValidation": {
+    "mineflayerChecks": {
+      "real_identity_and_absolute_state": true,
+      "real_inventory_components": true,
+      "actual_operation_schema": true,
+      "unpublished_optional_mod_is_unavailable": true,
+      "walk_actual_position_verified": true,
+      "action_terminal_has_position": true,
+      "spell.list": true,
+      "maid.list": true,
+      "colony_absence_reported_without_fabrication": true,
+      "society.state": true,
+      "actual_guild_registration": true,
+      "real_native_menu_open": true,
+      "real_native_menu_close": true,
+      "terminal_event_delivered_without_goal_claim": true,
+      "reconnect_same_body_and_original_terminal": true,
+      "same_id_replay_does_not_move_again": true
+    },
+    "numenChecks": {
+      "real_identity_and_absolute_state": true,
+      "real_inventory_components": true,
+      "actual_operation_schema": true,
+      "unpublished_optional_mod_is_unavailable": true,
+      "walk_actual_position_verified": true,
+      "action_terminal_has_position": true,
+      "spell.list": true,
+      "maid.list": true,
+      "colony_absence_reported_without_fabrication": true,
+      "society.state": true,
+      "actual_guild_registration": true,
+      "real_native_menu_open": true,
+      "real_native_menu_close": true,
+      "terminal_event_delivered_without_goal_claim": true,
+      "reconnect_same_body_and_original_terminal": true,
+      "same_id_replay_does_not_move_again": true
+    },
+    "npcTransferChecks": {
+      "native_components_and_quantity_preserved_on_withdrawal": true,
+      "normal_pickup_and_deposit_roundtrip": true,
+      "original_128_bread_is_valid_split_stacks": true,
+      "news_mayor_has_real_merchant_menu": true
+    },
+    "persistence": {
+      "ok": true,
+      "checks": {
+        "same_npc_uuids_after_restart": true,
+        "exact_full_backpack_preserved": true,
+        "gem_name_and_quantity_preserved": true,
+        "original_bread_128_preserved": true,
+        "reproducible_compatibility_jar": true
+      },
+      "sameOriginalWorld": true,
+      "noRegeneratedWorld": true,
+      "modelRequests": 0,
+      "productionChanged": false,
+      "previousComparison": "Preserved first failure: NPC drank a water bottle during runtime. Second comparison captures the current native inventory before a separate real restart."
+    }
+  },
+  "sourceTests": {
+    "gateway": {
+      "passed": 263,
+      "failed": 0,
+      "skipped": 0
+    },
+    "packedNativeHost": {
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typescriptConsumer": true,
+    "coreArchiveUnchanged": true,
+    "oldCatalogAssertion": "122 was stale before this change; actual catalog130 retained as an exact assertion"
+  },
+  "sdk": {
+    "bundle": "v12-village-compat-20261014",
+    "coreArchiveSha256": "d6570284a778b7569205fecb3fdd8dda97532864cbb6f3521e1299f5e96a1aae",
+    "oldBundlesPreserved": true,
+    "health": {
+      "scope": "independent_core_native_host_distribution",
+      "checks": {
+        "owned_bundle": true,
+        "exact_distribution": true,
+        "native_sources_match": true,
+        "core_sources_match": true,
+        "packed_independent_core_installed": true,
+        "installed_runtime_matches_build": true,
+        "both_providers_explicit": true,
+        "no_model_or_body_autostart": true,
+        "runtime_protocol_pins": true,
+        "existing_supervisor_healthy": true
+      },
+      "modelRequests": 0,
+      "bodyConnections": 0,
+      "worldActions": 0,
+      "newServices": 0,
+      "ok": true
+    },
+    "codeUnchanged": true,
+    "gatewayIncluded": false,
+    "guideUpdated": true
+  },
+  "failedStagesPreserved": {
+    "isolated-base": "Old inventory save redirect refers to an absent Settlements class; startup failed",
+    "isolated-compat1": "Optional play channels missing, server could not place gate player",
+    "isolated-compat2": "Old registry component IDs caused native packet length mismatch on login",
+    "isolated-compat3": "Production bridge did not include the newer source registry dump command; isolated fixture added a read-only command without adding registry entries",
+    "isolated-compat4": "Opening128 bread in the old vendor container crashed server; unknown action and world retained",
+    "firstFullInventoryComparison": "NPC water bottle became glass bottle during runtime; first failure retained, stable current inventory recaptured before a new real restart",
+    "menuProbeParameterErrors": "QA mixed provider-specific menu.pickup/menu.click schemas. Refused before dispatch; corrected after operations discovery"
+  },
+  "fixtures": {
+    "world": "fresh flat isolated world, later restarted unchanged",
+    "npcs": "three explicitly spawned QA actors; no production NPC conversion",
+    "items": "128 bread and seven named gems provided for serialization and persistence tests",
+    "mineflayerOperator": false,
+    "numenPermissionMode": "bypass test fixture; not a complete production authorization test",
+    "paidModels": 0
+  },
+  "unverified": [
+    "bedrock_village_models_and_ui",
+    "web_village_models_and_ui",
+    "matched_java_scene",
+    "long_running_village_work_and_performance",
+    "production_world_copy_and_existing_guild_npcs",
+    "all_custom_payloads_and_gameplay",
+    "java_pixel_parity"
+  ],
+  "preservation": {
+    "ok": true,
+    "checks": {
+      "original_35_mods_preserved": true,
+      "service_configs_and_agent_pause_preserved": true,
+      "maw_explorer_still_round_464": true,
+      "old_agent_ledger_prefix_preserved": true,
+      "owner_28985_unchanged_and_healthy": true,
+      "owner_28996_unchanged_and_healthy": true,
+      "all_isolated_processes_exited": true,
+      "qa_tcp_28978_closed": true,
+      "qa_tcp_28979_closed": true,
+      "qa_tcp_28990_closed": true,
+      "qa_voice_udp_closed": true,
+      "nas_archive_unchanged": true,
+      "nas_villager_news_unchanged": true
+    },
+    "productionRestarted": false,
+    "productionModChanges": 0,
+    "productionActions": 0,
+    "modelRequests": 0
+  },
+  "privateEvidence": "E:\\QiandengJiSocietyLab\\research\\wanjiayanhuo-20261014",
+  "logs": {
+    "gateway-tests.log": "227024b8bc2ca4cc49b68003e1d128dbe565c4fb944b390ffde90858a37d0334",
+    "gateway-tests-final.log": "04c4d7734e4c7341ff9f279b021b09ee617e237278ac86fab6e13289f52c54b0",
+    "packed-host-tests.log": "7bdbf097f05f374ef96d91f9d3a19693098be45f4480343d20ba02b3643ea4ba",
+    "provider-compat5.log": "d83446275ebd0ee2a8bfa77ff6d1d6b15fdb884dab561ca6ea3bbc99c330815c",
+    "npc-transfer-run2.log": "80a9f5276c47a0849b2e1c8ef6597fd5ff349d078c6f9faca0be536fb3aad1c4",
+    "npc-transfer-run3.log": "f06c91b654360f10d6c5dc58437fd12ccdc670aff139536531e5c0bdfbf1a5f4",
+    "npc-restart-probe.log": "709b0fb242bd4a8f9a8ccb9582dff44785754869abebf27956b27d57b48295c6",
+    "npc-restart2-probe.log": "709b0fb242bd4a8f9a8ccb9582dff44785754869abebf27956b27d57b48295c6",
+    "sdk-install.log": "4f31db8d765db09b0c44cb170b801f7f8d3779fa3bf720b06e5fa7580cfebb22"
+  }
+}

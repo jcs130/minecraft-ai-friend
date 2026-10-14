@@ -1,4 +1,4 @@
-My Agent World 接入新版独立 agent-mc-world（2026-10-13）
+My Agent World 接入新版独立 agent-mc-world（2026-10-14）
 
 核心已合入 minecraft-ai-friend/main@5aeea112eee88523bac9bf65eb475a05f7857bc7，agent-mc-world 0.4.0。
 适配源码：world/src/agent-mc-host。它使用核心公开 /client、/contracts、/mcp 接口，不把服务端规则写回通用核心。
@@ -44,7 +44,7 @@ MCP 仅是宿主侧可选 stdio 入口：node agent-mc-host/mcp.mjs D:/agents/yo
 适配器安装与重启现役 Agent 是两件事。安装不会替换 MawExplorer、Numen 模型配置、原人物记忆或账本；现役暂停及旧 unknown 保持。
 生产服务不需要因安装这个宿主包而重启。运行一个新的自主角色仍需由宿主明确指定模型、预算、目标和身份。
 
-当前可用分发目录：E:\QiandengJiSocietyLab\integrations\agent-mc-world\v11-upstream-20261013，原v4至v10保留；宿主包 @my-agent-world/agent-mc-host 0.1.0，独立核心 0.4.0。把整个目录作为受控 SDK 工件分发；重新安装依赖使用该目录内 package-lock.json 执行 npm ci --ignore-scripts --no-audit --no-fund，要求 Node 22。它不是已经在 npm 发布的包。普通寻路失败会停止按键、查询实际停点并明确报告未到达；真正的连接或身体状态未知仍需对账。
+当前可用分发目录：E:\QiandengJiSocietyLab\integrations\agent-mc-world\v12-village-compat-20261014，原v4至v11保留；宿主包 @my-agent-world/agent-mc-host 0.1.0，独立核心 0.4.0。把整个目录作为受控 SDK 工件分发；重新安装依赖使用该目录内 package-lock.json 执行 npm ci --ignore-scripts --no-audit --no-fund，要求 Node 22。它不是已经在 npm 发布的包。普通寻路失败会停止按键、查询实际停点并明确报告未到达；真正的连接或身体状态未知仍需对账。
 
 框架新增 TaskMonitor/evaluateTask：为每个任务固定验收条件，记录实际成功/失败/证据不足/取消、模型轮次、纠错轮次、耗时及底层调用量。当前可验本人持有/装备、到达绝对位置、公会任务完成及这些条件的组合；复杂模组工程需补原生验收器。node agent-mc-host/task-report.mjs --directory <绝对任务监控目录> 可只读查询成功率、失败热点和迭代建议；不中断游戏、不另开端口。反复观察而目标状态不变会产生进展提醒。标准、计数和旧失败不随重启清零。详见 docs/MY-AGENT-WORLD-TASK-EVALUATION.md。
 
@@ -63,3 +63,5 @@ v8另提供 describeActionEffect：宿主传入同一身体的动作前后原生
 重启后续测（上游此次合并之前）：主服务和基岩桥已从原登记守护恢复，当时SDK为v10-task-context-20261013。累计559次调用、本阶段新增220次；木镐最后尝试未完成。真实位移、错误热点、保留菜单的重新规划和放置校验已修复，131项Node回归通过。所有失败/人工中止/旧unknown仍计入统计，不宣称已验证长期模组自主生活；具体看CORE-LIVE-TRIAL和TASK-EVALUATION文档。
 
 本次上游合并新增默认客户端的可见几何/听觉、空间诊断/俯视图、宿主决策、生活目标和真实丢物品回执。mc_choose/mc_life属于默认MinecraftClientWorld，本服原生环境没有自动接入，不能照默认引擎手册直接调用。模组服仍使用上述原生工具及1.21.1真实画面。v11是经过打包验证的可选SDK；没有重启服务器或重新启动角色，Kirito有限试玩仍停止且保留原v10配置。新增公开接口的后续接线需单独验证。
+
+v12复用原核心和原生适配器代码，更新候选接入说明；两个新物品组件的编解码在服务端网关源码，SDK包不含网关。万家烟火和村民新闻本体目前仍是隔离候选，未发布到现役35模组服。客户端仍连接原游戏入口。新增NPC的Agent背包/交易菜单已验证，基岩和网页模型、界面仍需适配；不要把SDK目录升级当作新增模组已经上线。详情见 docs/MY-AGENT-WORLD-SETTLEMENTS.md。

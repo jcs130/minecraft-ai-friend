@@ -1,6 +1,8 @@
 # 独立 Minecraft 核心的原生模组服接入
 
-2026-10-13：已继续合入 `main@5aeea112eee88523bac9bf65eb475a05f7857bc7`，保留 `agent-mc-world 0.4.0` 与可选宿主包 `@my-agent-world/agent-mc-host 0.1.0`。当前安装在 `E:\QiandengJiSocietyLab\integrations\agent-mc-world\v11-upstream-20261013`，原v4至v10包保留，分支仍为 `experiment/agent-society-1.21.1`。任务统计、动作位移反馈、原生 SDK 和模组操作保持。有限试玩角色仍使用原v10配置并已停止；安装v11不代表角色已重新上线或切换新版运行。
+2026-10-14：最新可选SDK分发为`v12-village-compat-20261014`，复用原核心0.4.0和原生适配器代码，更新候选接入说明。Settlements两个真实物品组件的编解码改在服务端网关源码，SDK分发不包含网关。角色配置和原账本沿用原版本；该SDK分发不代表已安装新增模组。万家烟火/村民新闻目前只在隔离候选验证，现役仍35个JAR，详见[整合记录](MY-AGENT-WORLD-SETTLEMENTS.md)。
+
+2026-10-13：已继续合入 `main@5aeea112eee88523bac9bf65eb475a05f7857bc7`，保留 `agent-mc-world 0.4.0` 与可选宿主包 `@my-agent-world/agent-mc-host 0.1.0`。当时安装在 `E:\QiandengJiSocietyLab\integrations\agent-mc-world\v11-upstream-20261013`，原v4至v10包保留，分支仍为 `experiment/agent-society-1.21.1`。任务统计、动作位移反馈、原生 SDK 和模组操作保持。有限试玩角色仍使用原v10配置并已停止；安装v11不代表角色已重新上线或切换新版运行。
 
 这次上游7个提交增加默认客户端的可见几何感知、粗粒度听觉、空间诊断、任务区域俯视图、宿主决策接口和生活目标资料，并核对丢物品的真实领取证据。`mc_choose`/`mc_life` 加在默认 `MinecraftClientWorld`；本服使用独立原生环境，没有自动获得这两项工具。`DecisionPort`、`observedEntity` 等公开扩展可供后续显式接线。1.21.1的模组方块、视觉和操作仍走原生适配器；不能把默认1.20.6引擎的更新说成本服新增玩法已经实测。
 
