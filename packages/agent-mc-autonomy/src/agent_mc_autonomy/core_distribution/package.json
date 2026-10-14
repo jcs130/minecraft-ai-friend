@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "description": "Pinned standalone Minecraft execution plugin by jcs130",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
-    "agent-mc-world": "file:agent-mc-world-0.4.0.tgz"
+    "agent-mc-world": "file:agent-mc-world-0.4.3.tgz"
   }
 }

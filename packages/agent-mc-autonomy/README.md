@@ -405,3 +405,11 @@ The initial runtime was extracted from the user's autonomous plugin at
 preserved in this package. The sibling body retains its own license. The Neko
 plugin now consumes this package at a fixed commit; it must not carry a second
 copy of the controller, context policy or review scheduler.
+
+## Checked ground-navigation update (0.1.38)
+
+The explicit core distribution is now pinned to independent headless `agent-mc-world` 0.4.3.
+It rejects damaging dry navigation drops, predicts imminent falls with the actual installed
+physics engine and no longer exempts an observed deep fall because the goal is lower.
+Source/build hashes and the isolated consumer checks remain mandatory. This update
+does not establish long-term survival or authorize restarting another host.
