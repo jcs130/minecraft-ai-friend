@@ -24,10 +24,26 @@ async def check(directory: Path, node: str) -> dict:
         try:
             await bridge.open()
             names = {tool["name"] for tool in bridge.tools}
-            assert {"mc_connection", "mc_do", "mc_events", "mc_script", "mc_queue", "mc_visual"} <= names
+            assert {"mc_connection", "mc_do", "mc_events", "mc_script", "mc_queue", "mc_visual", "mc_memory", "mc_combat_tactic"} <= names
             assert not any(name.startswith("mymc_") for name in names)
             status = module.json_content(await bridge.call("mc_connection", {"action": "status"}))
             assert status["phase"] == "disconnected" and status["facts"] is None
+            saved = module.json_content(await bridge.call("mc_memory", {"action": "remember", "kind": "method",
+                "summary": "Offline method fixture", "content": "Historical hypothesis, no gameplay claim.",
+                "source": {"kind": "hypothesis", "reference": "offline:test"}}))
+            memory_id = saved["entry"]["id"]
+            recalled = module.json_content(await bridge.call("mc_memory", {"action": "get", "id": memory_id}))
+            assert recalled["entry"]["content"] == "Historical hypothesis, no gameplay claim."
+            assert recalled["entry"]["currentWorldVerified"] is False
+            assert (await bridge.call("mc_memory", {"action": "capture"})).get("isError") is True
+            await bridge.close()
+            bridge = module.MinecraftBridge(node, directory.resolve() / "node_modules/agent-mc-world/bin/minecraft-agent-mcp.mjs",
+                                            config, data / "reopened-backend.log", node_args=("--import", (root / "deny-network.mjs").as_uri()))
+            await bridge.open()
+            restored = module.json_content(await bridge.call("mc_memory", {"action": "get", "id": memory_id}))
+            for key in ("id", "revision", "content", "source", "currentWorldVerified"):
+                assert restored["entry"][key] == recalled["entry"][key]
+            assert module.json_content(await bridge.call("mc_connection", {"action": "status"}))["phase"] == "disconnected"
             environment = module.text_content(await bridge.resource("mc://environment"))
             assert "mc_help" in environment
             _, budget = controller.assemble(environment, controller.model_tools(bridge.tools), "survive", {"parts": []}, [], [],
@@ -66,6 +82,8 @@ async def check(directory: Path, node: str) -> dict:
                     "minecraft_version": "1.21.1", "stable_context_byte_budget": budget["total"],
                     "image_and_body_facts_fit_default_budget": image_fits,
                     "concurrent_status_and_cancel": True,
+                    "game_memory_write_recall": True, "game_memory_restart_recall": True,
+                    "disconnected_capture_refused": True, "shared_tactics_discovered": True,
                     "cortico_installed": (directory / "node_modules/cortico").exists()}
         finally:
             await bridge.close()

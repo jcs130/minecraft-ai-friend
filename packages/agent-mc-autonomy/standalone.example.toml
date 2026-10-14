@@ -54,3 +54,15 @@ min_confidence = 0.75
 enabled = false
 min_interval_seconds = 60
 review_interval_seconds = 180
+
+[memory]
+mode = "local" # local | vector | remote; the canonical core implements retrieval.
+endpoint = "" # Vector: full embeddings URL. Remote: memory API base URL.
+model = ""
+api_key_env = "" # Environment variable name, never a literal secret.
+timeout_ms = 3000
+provider = "http" # http | mem0-oss | mem0-platform | bailian | powercontext
+library_id = ""
+project_id = "agent-mc"
+scope_id = "" # Existing PowerContext Scope. No discovery or automatic creation.
+search_mode = "text" # PowerContext: text | vector | hybrid.

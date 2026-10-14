@@ -33,13 +33,26 @@ an absolute shared data directory, `autonomy.enabled = true`, and an explicit
 OpenAI-compatible planner endpoint/model. Keep credentials in an environment
 variable named by `api_key_env`.
 
-For the already verified compatibility body pinned to `7889ce2`, this repository
-also owns its explicit build/install/verification tooling and patch set:
+For the shared body pinned to `5dea9f0`, this repository owns explicit source-pin
+and installation tooling around the canonical `agent-mc-world` build:
 `python -m agent_mc_autonomy.core_distribution.build --checkout <repo> --destination <empty-dir>`;
 then `python -m agent_mc_autonomy.core_distribution.install --destination <runtime-dir> --archive <tgz>`.
-These commands never run implicitly. The existing `nekoBuild`/`neko-headless`
-receipt field/file names remain readable for compatibility; they require no host
-SDK. Moving this tooling does not upgrade the live body's pinned source.
+These commands never run implicitly. The builder invokes the core's official
+`build:engine` without a patch or a second compiler. Prepare pnpm 11.5.0 dependencies
+in its cache first; the source build is offline. Installation verifies the archive,
+the pinned build/type receipts, entry shims and every listed file. Use `--offline`
+on the installer when npm dependencies are cached. Existing running installations
+are not migrated or replaced automatically.
+
+### Game memory
+
+The `[memory]` table forwards local, vector or remote retrieval settings to the
+shared core. See [game-memory configuration and provider contracts](../agent-mc-world/docs/game-memory.md).
+`mc_memory` is available through progressive `mc_tool_help` / `mc_invoke`; neither
+the autonomous runtime nor a host adapter keeps a second notebook implementation.
+Only the configured key environment variable is forwarded to the body. Local
+mode needs no model; remote providers are Mem0, Bailian, PowerContext or an explicit
+HTTP bridge. Historical memory never overrides fresh world observations.
 
 ```sh
 agent-mc-autonomy check --config config.local.toml --entry /path/to/bin/minecraft-agent-mcp.mjs

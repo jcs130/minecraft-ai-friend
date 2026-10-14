@@ -8,9 +8,10 @@ from pathlib import Path
 
 
 class MinecraftBridge:
-    def __init__(self, node: str, entry: Path, config: Path, log: Path, *, node_args: tuple[str, ...] = ()):
+    def __init__(self, node: str, entry: Path, config: Path, log: Path, *, node_args: tuple[str, ...] = (), env: dict[str, str] | None = None):
         self.node, self.entry, self.config, self.log = node, entry, config, log
         self.node_args = node_args
+        self.env = dict(env) if env else None
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=16)
         self._owner: asyncio.Task | None = None
         self._ready: asyncio.Future | None = None
@@ -37,7 +38,7 @@ class MinecraftBridge:
 
             self.log.parent.mkdir(parents=True, exist_ok=True)
             with self.log.open("a", encoding="utf-8") as errors:
-                parameters = StdioServerParameters(command=self.node, args=[*self.node_args, str(self.entry), str(self.config)])
+                parameters = StdioServerParameters(command=self.node, args=[*self.node_args, str(self.entry), str(self.config)], env=self.env)
                 async with stdio_client(parameters, errlog=errors) as (read, write), ClientSession(read, write) as session:
                     await session.initialize()
                     self.tools = [tool.model_dump(mode="json", exclude_none=True, by_alias=True) for tool in (await session.list_tools()).tools]

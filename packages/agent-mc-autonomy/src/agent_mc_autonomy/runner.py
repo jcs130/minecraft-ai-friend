@@ -88,7 +88,8 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                 entry = Path(viewer_entry) if viewer_entry else Path(__file__).parent / "integrations" / "viewer-stdio.mjs"
             config.write_text(json.dumps(client_config, ensure_ascii=False), encoding="utf-8")
             update()
-            bridge = bridge_factory(settings.node, entry, config, directory / "backend.log")
+            memory_env = settings.memory.environment()
+            bridge = bridge_factory(settings.node, entry, config, directory / "backend.log", **({"env": memory_env} if memory_env else {}))
             try:
                 if settings.fast.mode == "system_one" and planner:
                     system_one = SystemOne(settings.fast)

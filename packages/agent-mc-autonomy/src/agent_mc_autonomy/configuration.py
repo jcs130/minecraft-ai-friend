@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,6 +46,55 @@ def viewer_url(value: str) -> str:
 
 
 @dataclass(frozen=True)
+class MemorySettings:
+    """Configuration forwarding only; retrieval, scopes and persistence live in agent-mc-world."""
+    mode: str = "local"
+    endpoint: str = ""
+    model: str = ""
+    api_key_env: str = ""
+    timeout_ms: int = 3000
+    provider: str = "http"
+    library_id: str = ""
+    project_id: str = "agent-mc"
+    scope_id: str = ""
+    search_mode: str = "text"
+
+    @classmethod
+    def parse(cls, raw: dict) -> MemorySettings:
+        if not isinstance(raw, dict) or set(raw) - cls.__dataclass_fields__.keys():
+            raise ValueError("memory must be a table of supported retrieval settings")
+        fields = {key: _text(raw, key, value.default) for key, value in cls.__dataclass_fields__.items() if key != "timeout_ms"}
+        if fields["mode"] not in {"local", "vector", "remote"}:
+            raise ValueError("memory.mode must be local, vector or remote")
+        if fields["provider"] not in {"http", "mem0-oss", "mem0-platform", "bailian", "powercontext"}:
+            raise ValueError("Invalid memory provider")
+        if fields["search_mode"] not in {"text", "vector", "hybrid"}:
+            raise ValueError("Invalid memory search mode")
+        if fields["endpoint"]:
+            viewer_url(fields["endpoint"])
+        key = fields["api_key_env"]
+        if key and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            raise ValueError("memory.api_key_env must be an environment variable name")
+        if fields["mode"] != "local" and not fields["endpoint"]:
+            raise ValueError("Configure memory.endpoint for external retrieval")
+        if fields["mode"] == "vector" and not fields["model"]:
+            raise ValueError("Configure memory.model for vector retrieval")
+        if fields["mode"] == "remote" and fields["provider"] == "powercontext" and not fields["scope_id"]:
+            raise ValueError("Configure an existing PowerContext memory.scope_id")
+        return cls(**fields, timeout_ms=_integer(raw, "timeout_ms", 3000, 100, 30000))
+
+    def client_config(self) -> dict:
+        aliases = {"api_key_env": "apiKeyEnv", "timeout_ms": "timeoutMs", "library_id": "libraryId",
+                   "project_id": "projectId", "scope_id": "scopeId", "search_mode": "searchMode"}
+        return {aliases.get(key, key): getattr(self, key) for key in self.__dataclass_fields__}
+
+    def environment(self) -> dict[str, str]:
+        # MCP's child environment is allowlisted. Forward only this configured key, never all host credentials.
+        key = self.api_key_env
+        return {key: os.environ[key]} if self.mode != "local" and key and key in os.environ else {}
+
+
+@dataclass(frozen=True)
 class Settings:
     enabled: bool = False
     host: str = ""
@@ -73,6 +123,7 @@ class Settings:
     data_directory: str = ""
     vision_enabled: bool = True
     fast: FastSettings = field(default_factory=FastSettings)
+    memory: MemorySettings = field(default_factory=MemorySettings)
 
     @classmethod
     def parse(cls, raw: dict) -> Settings:
@@ -122,6 +173,7 @@ class Settings:
             max_decisions=_integer(autonomy, "max_decisions", 100, 0, 10000),
             runtime_mode=_text(runtime, "mode", "embedded"), data_directory=_text(runtime, "data_directory"),
             vision_enabled=_boolean(perception, "enabled", True), fast=FastSettings.parse(raw.get("fast", {})),
+            memory=MemorySettings.parse(raw.get("memory", {})),
         )
 
     def require_server(self) -> None:
@@ -152,6 +204,7 @@ class Settings:
                 "version": self.version, "profilesFolder": str(private / "auth"),
                 "loginConfigFile": str(Path(self.login_config_file).expanduser().resolve()) if self.login_config_file else "",
                 "viewerPort": self.viewer_port,
+                "memory": self.memory.client_config(),
                 "performanceBridge": {"module": "", "endpoint": ""},
                 "local": {"startWithWorld": False, "serverDir": "", "cheats": False},
                 "client": {"enabled": False}, "player": {"enabled": False},

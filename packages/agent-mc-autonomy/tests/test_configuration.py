@@ -59,26 +59,58 @@ def test_upgrade_does_not_change_account_ledger(tmp_path):
     assert upgraded.client_config(tmp_path)["dataDir"] == settings.client_config(tmp_path)["dataDir"]
 
 
-def test_runtime_requires_cleanup_patch_and_untampered_compiled_files(tmp_path):
+@pytest.mark.parametrize("tampered", ["package.json", "dist/build.json", "dist/runtime.js", "dist/types/public.d.ts", "bin/minecraft-agent-mcp.mjs"])
+def test_runtime_requires_pinned_receipts_and_untampered_files(tmp_path, monkeypatch, tampered):
     root = tmp_path / "node_modules/agent-mc-world"
     (root / "bin").mkdir(parents=True)
     (root / "bin/minecraft-agent-mcp.mjs").write_text("// fixture", encoding="utf-8")
     (root / "dist").mkdir()
     code = root / "dist/runtime.js"
     code.write_bytes(b"export const example = 1;")
-    pin = installer.SOURCE
-    package = {"name": pin["name"], "version": pin["version"], "nekoBuild": {
-        "profile": "headless", "sourceRevision": pin["source_revision"]}}
+    pin = installer.SOURCE.copy()
+    package = {"name": pin["name"], "version": pin["version"]}
     manifest = root / "package.json"
     manifest.write_text(json.dumps(package), encoding="utf-8")
-    with pytest.raises(ValueError, match="backend_build_mismatch"):
-        installer.verify_runtime(tmp_path)
-    package["nekoBuild"]["patches"] = pin["patches"]
-    manifest.write_text(json.dumps(package), encoding="utf-8")
-    receipt = {"sourceRevision": pin["source_revision"], "bundledViewer": False, "patches": pin["patches"],
+    receipt = {"schema": "agent-mc-build/v1", "viewer": {"included": False}, "sourceFiles": [],
                "files": [{"file": "dist/runtime.js", "sha256": hashlib.sha256(code.read_bytes()).hexdigest()}]}
-    (root / "dist/neko-headless.json").write_text(json.dumps(receipt), encoding="utf-8")
+    (root / "dist/build.json").write_text(json.dumps(receipt), encoding="utf-8")
+    (root / "dist/types").mkdir()
+    declaration = root / "dist/types/public.d.ts"
+    declaration.write_bytes(b"export declare const example: number;")
+    (root / "dist/types/manifest.json").write_text(json.dumps({"files": [
+        {"file": "public.d.ts", "sha256": hashlib.sha256(declaration.read_bytes()).hexdigest()}]}), encoding="utf-8")
+    pin["verification"] = {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in (
+        "package.json", "dist/build.json", "dist/types/manifest.json", "bin/minecraft-agent-mcp.mjs")}
+    monkeypatch.setattr(installer, "SOURCE", pin)
     assert installer.verify_runtime(tmp_path).is_file()
-    code.write_bytes(b"tampered")
+    (root / tampered).write_bytes(b"tampered")
     with pytest.raises(ValueError, match="backend_build_mismatch"):
         installer.verify_runtime(tmp_path)
+
+
+def test_game_memory_config_and_credentials_are_forwarded_without_personal_memory(tmp_path, monkeypatch):
+    monkeypatch.setenv("MC_MEMORY_KEY", "private-fixture-key")
+    monkeypatch.setenv("UNRELATED_MODEL_KEY", "do-not-forward")
+    settings = Settings.parse({"server": {"host": "fixture.test", "username": "Alice"}, "memory": {
+        "mode": "remote", "provider": "powercontext", "endpoint": "https://memory.example.org", "scope_id": "game-scope",
+        "api_key_env": "MC_MEMORY_KEY", "search_mode": "hybrid"}})
+    assert settings.memory.environment() == {"MC_MEMORY_KEY": "private-fixture-key"}
+    config = settings.client_config(tmp_path)
+    assert config["world"]["memory"]["scopeId"] == "game-scope"
+    assert config["world"]["memory"]["apiKeyEnv"] == "MC_MEMORY_KEY"
+    assert "private-fixture-key" not in json.dumps(config)
+    assert "do-not-forward" not in json.dumps(config)
+    assert Settings.parse({"memory": {"api_key_env": "MC_MEMORY_KEY"}}).memory.environment() == {}
+    assert Settings.parse({}).memory.mode == "local"
+
+
+@pytest.mark.parametrize("memory", [
+    {"mode": "vector"}, {"mode": "vector", "endpoint": "https://embedding.example.org"},
+    {"mode": "remote", "endpoint": "https://memory.example.org", "provider": "powercontext"},
+    {"mode": "remote", "endpoint": "https://user:secret@memory.example.org"},
+    {"api_key_env": "literal-secret-value"}, {"api_key": "literal-secret"}, {"timeout_ms": True},
+    {"timeout_ms": 30001}, {"provider": "guessed-cloud"}, {"search_mode": "auto"},
+])
+def test_invalid_memory_configuration_is_rejected(memory):
+    with pytest.raises(ValueError):
+        Settings.parse({"memory": memory})

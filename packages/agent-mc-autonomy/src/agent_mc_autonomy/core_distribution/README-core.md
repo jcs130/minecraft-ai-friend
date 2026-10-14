@@ -1,24 +1,27 @@
-# Agent MC World — N.E.K.O headless distribution
+# Agent MC World — canonical engine-only distribution
 
 Minecraft execution plugin authored and maintained by jcs130.
 Source: https://github.com/jcs130/minecraft-ai-friend, package `agent-mc-world`.
 
-This artifact is built by `backend/build.py` in
-https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous from the base commit
-and reviewed cleanup patch recorded in `dist/neko-headless.json`. The source and
-compiled file hashes are included. It is a derived build, not an upstream release.
+`build.py` archives the exact source commit in `source.json` and calls the core's
+official `pnpm build:engine`. No source patch, replacement compiler, rewritten
+manifest or copied game implementation is used. Build/type receipts, entry shims
+and archive hashes are pinned for installation. This local build is not an npm
+release. N.E.K.O's backend scripts only re-export these shared tools.
 
 The public SDK/MCP expose the Mineflayer body, validated actions, facts, events,
-execution receipts and cancellation. N.E.K.O owns models, goals, memory and the
-decision loop. Defaults use Minecraft 1.21.1 and require explicit configuration
-and connection. No server policies, framework imports or service discovery are
-installed. No native client mods, bundled viewer or legacy host migration helpers
-are shipped in this profile.
+execution receipts, tactics, game memory and cancellation. The caller owns
+personality, general memory, planning models and the decision loop. The Python
+integration explicitly selects Minecraft 1.21.1 and requires configuration and
+connection. The canonical SDK retains its version-auto default. No framework is
+imported and no service is discovered. Viewer assets are a separate optional input.
 
 The optional permission extension uses `agent_mc:break_acl`; its server endpoint
 must implement the same protocol. Existing server protection still applies.
-Procedures accept only `agent-mc.procedure/v1`. Older procedure bytes and world
-identities are never converted implicitly. Remote play does not open local saves.
+The legacy permission channel and realm-marker filenames remain readable; the
+old independent marker is reused unchanged. Optional migration helpers are normal
+canonical exports, never invoked during installation. Remote play does not open
+local saves. Keep prior private data directories when explicitly upgrading.
 
 The supplied MIT license notices remain in LICENSE. Third-party public declaration
 licenses remain under dist/types/native. They do not identify another framework
