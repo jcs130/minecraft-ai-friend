@@ -295,7 +295,7 @@ class ReviewPort:
                 if goal.strip() == (current["evidence"]["current_goal"].get("goal") or current["evidence"]["standing_goal"]):
                     return {"is_error": True, "error": "goal_already_active"}
             result = {"acknowledged": True, "dispatched": False, "decision": decision, "verified": False,
-                      "reply": "已记录主脑判断，未新增任务；现在可简短说明情况和打算。"}
+                      "reply": "已记录主脑判断，未新增任务。"}
             if decision in {"insert", "revise"}:
                 try:
                     payload = {"goal": goal.strip(), "mode": "insert", "origin": "host_review"}
@@ -310,7 +310,7 @@ class ReviewPort:
                 state["last_request_id"] = request_id
                 result.update(dispatched=True, request_id=request_id, delivery=receipt["delivery"],
                               reply=("阶段目标修订已投递，保留现有身体动作与先前用户目标；尚未证明完成。" if decision == "revise" else
-                                     "阶段目标已投递，原生队列在安全检查点插入；尚未证明完成。现在可简短说明打算。"))
+                                     "阶段目标已投递，原生队列在安全检查点插入；尚未证明完成。"))
             review.update(choice=choice, result=result)
             state["last_decision"] = {**choice, "at": self.now(), "heartbeat_id": review_id, "request_id": result.get("request_id")}
             return result

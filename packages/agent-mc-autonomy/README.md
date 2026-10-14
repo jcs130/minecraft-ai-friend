@@ -344,6 +344,14 @@ public ContextCounter port. Unverified or failed counters retain the conservativ
 fallback with explicit units. Legacy repeated bag/queue/blocked reads also carry
 their actual same-turn prior answer when available; raw journals remain unchanged.
 
+Since 0.1.28, `commentary_observation` and `commentary_changes` expose fresh,
+host-neutral speaking signals separately from strategic reviews. Inventory
+quantity/durability churn and look-only tasks are quiet; meaningful health/hunger
+transitions, new item types and useful native task results remain available.
+Hosts choose wording, rate limits and voice delivery. Review acknowledgements
+never instruct a host to speak, and a commentary opportunity is not playback or
+verified goal completion. Raw facts and query handles remain intact for planning.
+
 Run `python -m pytest -q` here. Tests deny host SDK imports, network and service
 launches; the isolated process test exercises both a fake autonomous planner and
 queue-only operation. These tests do not prove live survival, actual model
