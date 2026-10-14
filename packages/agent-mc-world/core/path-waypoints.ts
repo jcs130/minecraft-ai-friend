@@ -6,6 +6,11 @@
  */
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
+import { createRequire } from 'node:module';
+
+const physicsRequire = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
+const { PlayerState } = physicsRequire('prismarine-physics');
+const SAFE_GROUND_DROP = 3;
 
 type Waypoint = { x: number; y: number; z: number; toBreak?: unknown[]; toPlace?: unknown[] };
 export interface GroundPathIssue { sequence: number; from: { x: number; y: number; z: number }; to: { x: number; y: number; z: number }; rise: number; reason: string }
@@ -28,6 +33,14 @@ export function checkGroundPath(bot: Pick<Bot, 'entity' | 'blockAt'> & Partial<P
     const to = path[i];
     if (to.toBreak?.length || to.toPlace?.length) break;
     const rise = to.y - from.y;
+    if (rise < -SAFE_GROUND_DROP && (i > 0 || bot.entity.onGround)) {
+      const start = bot.blockAt(new Vec3(from.x, from.y, from.z).floored());
+      const end = bot.blockAt(new Vec3(to.x, to.y, to.z).floored());
+      if (start && end && !climb.has(start.name) && !climb.has(end.name)) {
+        return { from: { x: from.x, y: from.y, z: from.z }, to: { x: to.x, y: to.y, z: to.z }, rise,
+          reason: `路径内部几何校验：脚高 ${from.y.toFixed(3)}→${to.y.toFixed(3)}，单步落差 ${(-rise).toFixed(3)} 格会产生摔落伤害；未读到水中或攀爬条件。已拒绝这条路径；目标在低处不代表可以直接跳下，请核实阶梯或其他安全路线。` };
+      }
+    }
     if (rise > 1.25 && (i > 0 || bot.entity.onGround)) {
       const start = bot.blockAt(new Vec3(from.x, from.y, from.z).floored());
       const end = bot.blockAt(new Vec3(to.x, to.y, to.z).floored());
@@ -37,6 +50,49 @@ export function checkGroundPath(bot: Pick<Bot, 'entity' | 'blockAt'> & Partial<P
       }
     }
     from = new Vec3(to.x, to.y, to.z);
+  }
+  return null;
+}
+
+/** Predict the next 600ms using the same installed physics engine and received
+ * block collision shapes as the body. Do not apply the simulated state. Stop at
+ * the current waypoint: continuing straight through a future turn is not evidence.
+ */
+function predictedGroundFall(bot: Bot, path: readonly Waypoint[]): Omit<GroundPathIssue, 'sequence'> | null {
+  // Mineflayer's public PhysicsOptions declaration omits these runtime members.
+  type State = { pos: Vec3; onGround: boolean; isInWater: boolean; isInLava: boolean };
+  const physics = bot.physics as unknown as { simulatePlayer?: (state: State, world: { getBlock(position: Vec3): unknown }) => unknown };
+  if (!bot.entity?.onGround || bot.physicsEnabled === false || !physics?.simulatePlayer
+    || !bot.pathfinder?.goal || (bot as Bot & { vehicle?: unknown }).vehicle != null || ['creative', 'spectator'].includes(bot.game?.gameMode ?? '')
+    || !['forward', 'back', 'left', 'right'].some(key => bot.controlState?.[key as keyof typeof bot.controlState])) return null;
+  if (Object.keys(bot.entity.effects ?? {}).some(id => {
+    const name = bot.registry?.effects?.[Number(id)]?.name;
+    return !name || ['JumpBoost', 'Levitation', 'SlowFalling'].includes(name);
+  })) return null;
+  const from = bot.entity.position, state: State = new PlayerState(bot, { ...bot.controlState }), next = path[0];
+  let peak = from.y;
+  const unknown = Symbol('unreceived_collision');
+  const world = { getBlock(position: Vec3) {
+    const block = bot.blockAt(position, false);
+    if (!block) throw unknown;
+    return block;
+  } };
+  try {
+    for (let tick = 0; tick < 12; tick++) {
+      if (next && Math.abs(next.x - state.pos.x) <= .35 && Math.abs(next.z - state.pos.z) <= .35 && Math.abs(next.y - state.pos.y) < 1) return null;
+      physics.simulatePlayer(state, world);
+      if (state.isInWater || state.isInLava) return null;
+      peak = Math.max(peak, state.pos.y);
+      const drop = peak - state.pos.y;
+      if (drop > SAFE_GROUND_DROP) return { from: { x: from.x, y: from.y, z: from.z },
+        to: { x: state.pos.x, y: state.pos.y, z: state.pos.z }, rise: state.pos.y - from.y,
+        reason: `路径内部几何校验：按当前控制与已加载的真实碰撞，未来 ${(tick + 1) * 50}ms 会出现超过 ${SAFE_GROUND_DROP} 格的干燥落差（预测 ${drop.toFixed(2)} 格）；已在离开支撑前制动。此为物理预测而非已发生位移，请改走安全阶梯或核实路线。` };
+      if (state.onGround && tick > 0 && state.pos.y < from.y) return null;
+    }
+  } catch (error) {
+    // An incomplete collision view cannot certify a predicted fall. Never turn
+    // unknown chunks into air or a world-impossibility claim.
+    if (error !== unknown) throw error;
   }
   return null;
 }
@@ -63,8 +119,10 @@ export function repairDoorWaypoints(
 }
 
 export function installDoorWaypointRepair(bot: Bot): void {
+  let path: Waypoint[] = [], braking = false;
   bot.prependListener('path_update', (result: { path?: Waypoint[]; status?: string }) => {
     if (!result.path) return;
+    path = result.path;
     repairDoorWaypoints(bot, result.path);
     const issue = checkGroundPath(bot, result.path);
     if (issue) {
@@ -72,5 +130,17 @@ export function installDoorWaypointRepair(bot: Bot): void {
       result.path.length = 0;
       result.status = 'noPath';
     }
+  });
+  // Installed after pathfinder: inspect the actual control it selected for the
+  // next tick, including shortcut/sprint execution, rather than only its A* nodes.
+  bot.on('physicsTick', () => {
+    if (braking) { bot.setControlState('sneak', false); braking = false; }
+    const issue = predictedGroundFall(bot, path);
+    if (!issue) return;
+    groundPathIssues.set(bot, { ...issue, sequence: (groundPathIssues.get(bot)?.sequence ?? 0) + 1 });
+    bot.pathfinder.setGoal(null);
+    bot.clearControlStates();
+    bot.setControlState('sneak', true);
+    braking = true;
   });
 }

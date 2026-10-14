@@ -7267,21 +7267,8 @@ export class Reflexes {
       });
     }
     if (this.fall.handled || drop < FALL_TASK_STOP_BLOCKS) return;
-    // 目标的数值 y 至少比当前位置低 FALL_TASK_STOP_BLOCKS 时，本轮深坠不撤销寻路。
-    // 判据不区分目标类型；GoalFollow 等带数值 y 的目标也可豁免。
-    const goal = bot.pathfinder?.goal as { y?: unknown } | undefined;
-    if (goal && typeof goal.y === 'number' && goal.y <= y - FALL_TASK_STOP_BLOCKS) {
-      this.fall.handled = true; // 这一轮落体不再评估:目的地没变,判据也不会变
-      this.opts.diag?.write({
-        lane: 'reflex', event: 'falling-en-route',
-        msg: `深坠落已掉 ${drop.toFixed(1)} 格,但寻路目标就在下方(y=${goal.y}),原单继续`,
-        data: {
-          fromY: this.fall.fromY, y, drop, goalY: goal.y,
-          health: bot.health, position: bot.entity.position,
-        },
-      });
-      return;
-    }
+    // A lower destination does not establish water, a ladder or a safe landing.
+    // This is already an observed deep fall; never exempt it using goal.y.
     this.fall.handled = true;
     const hold = this.opts.stopFallTask(`深坠落超过 ${FALL_TASK_STOP_BLOCKS} 格`);
     // 拿不到冻结租约(执行器不在)时队列根本没被冻:不进冻结态,免得落地那一拍

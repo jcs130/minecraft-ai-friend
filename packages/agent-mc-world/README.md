@@ -42,6 +42,10 @@ headroom problems. Temporary supports have provenance-based cleanup, fresh retai
 obligations and an explicit `cleanup` action. Agent-authored supports may use
 `build temporary:true`. The final ground waypoints are checked for unplanned rises
 outside the ordinary jump envelope before movement; this is not a complete route proof.
+Dry damaging drops are also rejected. A short prediction using the body's installed
+physics engine checks live pathfinder control against received collision shapes and
+brakes before a predicted cliff fall. Lower destination coordinates never exempt an
+observed deep fall. See [navigation safety and its limits](docs/navigation-fall-safety.md).
 
 `mc_script` includes a host-independent method library with scoped, immutable source
 versions, syntax-validation requirements, parent conflict checks and explicit execution
