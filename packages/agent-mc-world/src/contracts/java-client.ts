@@ -4,6 +4,8 @@ export interface JavaClientConfiguration {
   credentialsFile: string; ledgerDir: string; leaseMs: number;
   /** Explicit mc-visual-console HTML path. With viewerPort > 0 serves only loopback GETs. */
   viewerPageFile?: string;
+  /** Expose the optional trusted local Python executor only after explicitly installing/enabling Minescript. */
+  minescriptEnabled?: boolean;
 }
 export interface JavaClientAction {
   id: string; operation: string; phase: 'accepted' | 'running' | 'completed' | 'partial' | 'blocked' | 'cancelled' | 'unknown';

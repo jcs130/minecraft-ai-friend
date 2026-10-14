@@ -8,6 +8,7 @@ import { createImageGenerationPort } from '../../core/image-generation.ts';
 import { serveNativeView } from './native-view.ts';
 import type { Server } from 'node:http';
 import { JAVA_LEGACY_HELP, translateJavaLegacy } from './java-legacy.ts';
+import { NativeEvidenceArchive, compactNativeState, compactItem, compactItems } from './native-evidence.ts';
 
 export const JAVA_CLIENT_ENVIRONMENT = `You control an actual rendered Minecraft Java client through agent-mc-java/v1. The host owns goals, personality, models and memory. The client bridge owns one actual body queue. It never launches a game, reconnects, simulates OS input or runs a model.
 Query mc_capabilities, mc_operations and mc_help before acting. Claim mc_control explicitly, then renew the lease before expiry. Disconnect releases your own lease and keys. Identity is the actual server-assigned UUID and exact server address; offline servers do not require Microsoft authentication. Never control a different player or server after an identity change.
@@ -17,6 +18,7 @@ mc_visual returns the real client framebuffer, original textures, current animat
 
 function uuid(value: string) { return value.replaceAll('-', '').toLowerCase(); }
 function address(value: string) { return value.toLowerCase().replace(/:25565$/, ''); }
+const SCRIPT_HELP = `Optional mc_script executor: Minescript 4.0 Python, explicitly installed and enabled in this native bridge. Use {language:"python",code:"...",input:{...},timeoutMs:10000,action_id:"stable-id"}. Variables: minescript (module), input_data (JSON input), result (assign JSON result). Functions include player_position(), player_orientation(), entities(sort="nearest",limit=12), getblock(x,y,z), player_inventory(), player_inventory_select_slot(slot), player_inventory_slot_to_hotbar(slot), player_set_orientation(yaw,pitch), press_key_bind("key.forward",True/False), execute("/help"), flush(). Use try/finally to release keys. Python can access the local machine; it is trusted code, not the Numen Lua sandbox. No hidden model loop. The script runs as one original native action, with body lease, timeout, cancel and stop. Query mc_result/mc_wait by the same ID. Script termination and result are program reports; inspect actual state, inventory and server receipts. This does not translate old JavaScript or automatically implement navigation, crafting or digging. Full versioned API: https://github.com/maxuser0/minescript/blob/main/docs/v4.0/README.md`;
 export function validateJavaClientConfiguration(cfg: Partial<JavaClientConfiguration> | undefined): asserts cfg is JavaClientConfiguration {
   if (!cfg || !/^(?:[a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i.test(cfg.expectedUuid ?? '')
     || !cfg.expectedServer?.trim() || !/^[A-Za-z0-9_.:-]{1,128}$/.test(cfg.controllerId ?? '')
@@ -52,8 +54,10 @@ export class JavaClientWorld implements World {
   private messageSeq = 0;
   private readonly phases = new Map<string, string>();
   private readonly photos: PhotographyService;
+  private readonly evidence: NativeEvidenceArchive;
   constructor(private readonly cfg: MinecraftClientConfig, private readonly http: typeof fetch = globalThis.fetch) {
     const dir = cfg.javaClient?.ledgerDir;
+    this.evidence = new NativeEvidenceArchive(join(dir || '.', 'native-evidence'));
     this.photos = new PhotographyService({ directory: dir ? join(dir, 'photos') : undefined,
       provider: () => createImageGenerationPort(cfg.photography), capture: async (_args, signal) => {
         const capture = await this.rpc('screenshot', {}, signal);
@@ -94,6 +98,7 @@ export class JavaClientWorld implements World {
     try {
       this.state = await this.rpc('state', {}) as JavaClientState; this.verify(this.state);
       if (!this.state.connected) throw new Error('Java client is not in a world; join explicitly before attaching');
+      if (this.cfg.javaClient.minescriptEnabled && !(await this.rpc('capabilities', {})).minescript) throw new Error('Configured Minescript executor is unavailable in the actual native client');
       this.messageSeq = Math.max(0, ...this.state.messages.map(message => message.seq));
       this.phases.clear(); for (const action of this.state.actions) this.phases.set(action.id, action.phase);
       this.photos.start(host);
@@ -152,11 +157,16 @@ export class JavaClientWorld implements World {
     return result;
   }
   private receipt(action: JavaClientAction): ToolOutcome {
-    return { text: JSON.stringify(action), meta: { javaClient: action },
+    const raw = this.evidence.save(action.id, action), state = action.evidence ?? {};
+    const script = state.script as any;
+    const result = script ? JSON.stringify(script.result ?? null) : '';
+    const compact = { ...action, evidence: { ...compactNativeState(state), ...(script ? { script: { ok: script.ok, jobId: script.jobId, programReport: true, error: script.error,
+      ...(result.length <= 4000 ? { result: script.result } : { preview: result.slice(0, 4000), truncated: true }) } } : {}), raw } };
+    return { text: JSON.stringify(compact), meta: { javaClient: compact },
       ...(action.phase === 'blocked' || action.phase === 'unknown' ? { failed: true as const } : {}),
       execution: { kind: 'task', id: action.id, phase: action.phase === 'unknown' ? 'blocked' : action.phase,
         terminal: !['accepted', 'running', 'unknown'].includes(action.phase), goalCompleted: false,
-        evidence: { protocol: JAVA_CLIENT_PROTOCOL, operation: action.operation, ...(action.evidence ?? {}) } } };
+        evidence: { protocol: JAVA_CLIENT_PROTOCOL, operation: action.operation, ...compact.evidence } } };
   }
   private async poll(): Promise<void> {
     if (this.pollingEpoch === this.epoch || !this.host) return;
@@ -202,14 +212,15 @@ export class JavaClientWorld implements World {
         try { return await handler(args, ctx); } catch (error) { return { text: error instanceof Error ? error.message : 'Java client operation failed', failed: true }; }
       } });
     const result = async (args: Record<string, unknown>, ctx: ToolCallContext) => this.receipt(await this.rpc('result', { action_id: args.action_id }, ctx.signal));
-    return [
+    const tools: ToolDef[] = [
       tool('mc_capabilities', 'Read actual client/backend capabilities; no control claim or launcher.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify(await this.rpc('capabilities', {}, ctx.signal)) })),
       tool('mc_state', 'Read fresh actual client state, position, health, food, view, inventory, GUI and action queue; no action or cached disconnected observation.', parameters({}), async (_args, ctx) => {
         const state = await this.rpc('state', {}, ctx.signal) as JavaClientState; this.verify(state); this.state = state;
-        return { text: JSON.stringify(state) };
+        return { text: JSON.stringify({ ...compactNativeState(state), raw: this.evidence.save('state:' + state.sampledAt, state) }) };
       }),
+      tool('mc_evidence', 'Read original archived native JSON by raw.key and optional raw.sha256. Paginated text preserves full components, books, script results and terminal evidence without repeating them in normal replies.', parameters({ key: str, sha256: str, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 16000 } }, ['key']), async args => ({ text: JSON.stringify(this.evidence.read(String(args.key), args.sha256 as string | undefined, Number(args.offset ?? 0), Number(args.limit ?? 8000))) })),
       tool('mc_operations', 'Discover exact real-client operations. Uninstalled Minescript/Baritone are unavailable.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify(await this.rpc('operations', {}, ctx.signal)) })),
-      tool('mc_help', 'Read real-client operations, legacy compatibility and identity/control rules.', parameters({ skill: str }), async (_args, ctx) => ({ text: JAVA_CLIENT_ENVIRONMENT + '\n' + JAVA_LEGACY_HELP + '\n' + JSON.stringify(await this.rpc('operations', {}, ctx.signal)) })),
+      tool('mc_help', 'Read real-client operations, legacy compatibility and identity/control rules.', parameters({ skill: str }), async (_args, ctx) => ({ text: JAVA_CLIENT_ENVIRONMENT + '\n' + JAVA_LEGACY_HELP + (this.cfg.javaClient?.minescriptEnabled ? '\n' + SCRIPT_HELP : '') + '\n' + JSON.stringify(await this.rpc('operations', {}, ctx.signal)) })),
       tool('mc_notices', 'Read recent original server guides/rules and player chat, including pre-attachment notices. This is an observation query, not a new inbox; do not replay old requests.',
         parameters({ after: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 50 } }), async (args, ctx) => {
           const state = await this.rpc('state', {}, ctx.signal) as JavaClientState; this.verify(state); this.state = state;
@@ -252,18 +263,33 @@ export class JavaClientWorld implements World {
           });
         }
       }),
-      tool('mc_bag', 'Read actual full item encoding/components, cursor, slots and menu revision.', parameters({ item: str }), async (_args, ctx) => {
+      tool('mc_bag', 'Read actual inventory/menu summaries and raw evidence reference. For full components select item and detail:components; offset/limit page through the original. No huge books are repeated by default.', parameters({ item: str, detail: { enum: ['summary', 'components'] }, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 16000 } }), async (args, ctx) => {
         const state = await this.rpc('state', {}, ctx.signal) as JavaClientState; this.verify(state); this.state = state;
-        return { text: JSON.stringify({ sampledAt: state.sampledAt, inventory: state.inventory, cursor: state.cursor, slots: state.menuSlots, revision: state.menuRevision, screenToken: state.screenToken }) };
+        const raw = this.evidence.save('bag:' + state.sampledAt, state);
+        if (args.detail === 'components') {
+          if (!args.item) return { text: 'Select item by native id/display name before querying component pages.', failed: true };
+          const matches = [...state.inventory as any[], ...state.menuSlots as any[]].filter(item => item.name === args.item || item.name === 'minecraft:' + args.item || String(item.displayName ?? '').replace(/§./g, '') === args.item);
+          const original = JSON.stringify(matches), offset = Number(args.offset ?? 0), limit = Number(args.limit ?? 8000);
+          if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 16000) return { text: 'Invalid component page offset/limit', failed: true };
+          return { text: JSON.stringify({ sampledAt: state.sampledAt, raw, totalChars: original.length, offset, text: original.slice(offset, offset + limit), hasMore: offset + limit < original.length }) };
+        }
+        return { text: JSON.stringify({ sampledAt: state.sampledAt, inventory: compactItems(state.inventory), cursor: compactItem(state.cursor), slots: compactItems(state.menuSlots), revision: state.menuRevision, screenToken: state.screenToken, raw }) };
       }),
       tool('mc_visual', 'Capture the actual rendered Java framebuffer with original textures, animation and GUI; no vision model.', parameters({ raw: { type: 'boolean' }, focus: str }), async (_args, ctx) => {
         const capture = await this.rpc('screenshot', {}, ctx.signal); this.verify(capture.state);
-        return { text: JSON.stringify({ capturedAt: capture.capturedAt, state: capture.state, source: 'real-java-framebuffer' }),
+        return { text: JSON.stringify({ capturedAt: capture.capturedAt, state: compactNativeState(capture.state), raw: this.evidence.save('visual:' + capture.capturedAt, capture.state), source: 'real-java-framebuffer' }),
           blobs: [{ bytes: Buffer.from(capture.base64, 'base64'), mime: 'image/png', fallbackText: 'Actual Java client framebuffer and GUI' }] };
       }),
       tool('mc_queue', 'Read actual client action queue and original action IDs.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify((await this.rpc('state', {}, ctx.signal)).actions) })),
       tool('mc_stop', 'Explicitly cancel this controller body queue and release held game inputs.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify(await this.rpc('stop', this.owner(), ctx.signal)) }), true),
       { ...PHOTO_TOOL, handler: (args, ctx) => this.photos.execute(args, ctx) },
     ];
+    if (this.cfg.javaClient?.minescriptEnabled) tools.push(tool('mc_script', 'Run one explicitly selected Python Minescript program on the real body, with original action ID, timeout, cancellation and real terminal receipt. Read api:index first. No extra model loop; trusted local code, not a sandbox. Old Mineflayer JavaScript is unsupported.', parameters({ api: str, language: { enum: ['python'] }, code: { type: 'string', minLength: 1, maxLength: 32768 }, input: {}, timeoutMs: { type: 'integer', minimum: 100, maximum: 30000 }, action_id: str }), async (args, ctx) => {
+      if (args.api && !args.code) return { text: SCRIPT_HELP };
+      if (args.language !== 'python' || typeof args.code !== 'string') return { text: 'Use language:python and code, or api:index. Old JavaScript is not converted.', failed: true };
+      const body = tools.find(tool => tool.name === 'mc_do')!;
+      return body.handler({ action_id: args.action_id, operation: 'minescript.run', input: { code: args.code, input: args.input, timeoutMs: args.timeoutMs ?? 10000 } }, ctx);
+    }, true));
+    return tools;
   }
 }
