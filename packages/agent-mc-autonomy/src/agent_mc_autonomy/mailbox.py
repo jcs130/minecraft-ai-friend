@@ -46,12 +46,20 @@ class Mailbox:
             raise ValueError("request_id_must_be_uuid: reuse the same ID when confirmation is uncertain") from None
         if kind not in {"steps", "stop", "goal", "feedback"} or not isinstance(payload, dict):
             raise ValueError("command_invalid")
-        if kind == "goal" and (set(payload) != {"goal"} or not isinstance(payload["goal"], str)
+        if kind == "goal" and (not {"goal"} <= set(payload) <= {"goal", "origin"} or not isinstance(payload["goal"], str)
                 or not payload["goal"].strip() or len(payload["goal"]) > 4000):
             raise ValueError("goal_must_contain_1_to_4000_characters")
-        if kind == "feedback" and (set(payload) not in ({"goal", "mode"}, {"goal", "mode", "revision_of"}) or not isinstance(payload["goal"], str)
+        if kind == "feedback" and (not {"goal", "mode"} <= set(payload) <= {"goal", "mode", "revision_of", "origin", "parent_id"} or not isinstance(payload["goal"], str)
                 or not payload["goal"].strip() or len(payload["goal"]) > 4000 or payload["mode"] not in {"insert", "replace"}):
             raise ValueError("feedback_requires_goal_and_explicit_insert_or_replace_mode")
+        if kind in {"goal", "feedback"} and (not isinstance(payload.get("origin", "unknown"), str)
+                or payload.get("origin", "unknown") not in {"user", "host_review", "unknown"}):
+            raise ValueError("goal_origin_must_be_user_host_review_or_unknown")
+        if kind == "feedback" and "parent_id" in payload:
+            try:
+                uuid.UUID(payload["parent_id"])
+            except (ValueError, TypeError, AttributeError):
+                raise ValueError("parent_goal_must_be_uuid") from None
         if kind == "feedback" and "revision_of" in payload:
             try:
                 uuid.UUID(payload["revision_of"])
@@ -76,6 +84,8 @@ class Mailbox:
                 return self.result(row)
             if expected_revision is not None and self._intent_revision(db) != expected_revision:
                 raise ValueError("intent_revision_changed")
+            if "parent_id" in payload and not db.execute("SELECT 1 FROM commands WHERE id=? AND kind IN ('goal','feedback')", (payload["parent_id"],)).fetchone():
+                raise ValueError("parent_goal_not_found")
             if kind != "stop" and db.execute("SELECT count(*) FROM commands WHERE state IN ('queued','dispatching','planning','paused')").fetchone()[0] >= 64:
                 raise ValueError("command_inbox_full")
             db.execute("INSERT INTO commands VALUES (?, ?, ?, 'queued', NULL, ?)", (request_id, kind, text, time.time()))
@@ -126,8 +136,39 @@ class Mailbox:
             return None
         with self.connection() as db:
             row = db.execute("SELECT * FROM commands WHERE state='planning' ORDER BY rowid LIMIT 1").fetchone()
-            return {"id": row["id"], **json.loads(row["payload"]),
+            return {"id": row["id"], "origin": "unknown", **json.loads(row["payload"]),
                     "queue_policy_consumed": bool(row["receipt"] and json.loads(row["receipt"]).get("queue_policy_consumed"))} if row else None
+
+    def goal_lineage(self, request_id):
+        """Current-to-parent original goals; old untagged records stay unknown."""
+        if not self.path.exists() or not request_id:
+            return []
+        chain, seen = [], set()
+        with self.connection() as db:
+            while request_id and request_id not in seen:
+                seen.add(request_id)
+                row = db.execute("SELECT * FROM commands WHERE id=? AND kind IN ('goal','feedback')", (request_id,)).fetchone()
+                if not row:
+                    break
+                payload = json.loads(row["payload"])
+                chain.append({"id": row["id"], "state": row["state"], "origin": "unknown", **payload})
+                request_id = payload.get("parent_id") or payload.get("revision_of")
+        return chain
+
+    def current_user_goal(self, request_id):
+        return next((goal for goal in self.goal_lineage(request_id)
+                     if goal["origin"] == "user" and goal["state"] in {"planning", "paused"}), None)
+
+    def submit_user_intent(self, kind, payload, request_id):
+        """Explicit human entry only; retries cannot relabel pre-upgrade records."""
+        if kind not in {"goal", "feedback"}:
+            raise ValueError("user_intent_requires_goal_or_feedback")
+        if self.path.exists():
+            with self.connection() as db:
+                row = db.execute("SELECT kind,payload FROM commands WHERE id=?", (request_id,)).fetchone()
+            if row and row["kind"] == kind and json.loads(row["payload"]) == payload and "origin" not in payload:
+                return self.submit(kind, payload, request_id)
+        return self.submit(kind, {**payload, "origin": "user"}, request_id)
 
     def activate_feedback(self, command):
         with self.connection() as db:
