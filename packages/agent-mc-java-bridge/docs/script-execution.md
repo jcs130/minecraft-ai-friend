@@ -1,0 +1,17 @@
+# Optional script execution
+
+The native bridge can run Minescript **4.0 for Fabric 1.20.6**, downloaded separately from its official Modrinth release `xXUEOKOM`. SHA512: `b30b5ebabf1cfe55e0605d3d9cc4bf4fa565eb013f84a9816c0562cedfd90fb527a070f435b08594ce2adbd96a3af4e6fad0ffac885f3dc8b8419db457819484`.
+
+Launch the Java process with its working directory equal to its actual `gameDir`: Minescript 4.0 resolves its scripts and configuration from the process working directory, not Minecraft's `--gameDir` alone. The bridge advertises Minescript as unavailable on a mismatch. Set an effective Python 3.11+ executable in that instance's `minescript/config.txt`. Explicitly enable `minescriptEnabled` in `agent-mc-bridge/config.json` and `javaClient.minescriptEnabled` in the SDK/host configuration. Unconfigured bridges advertise it as unavailable. Installation is not an execution proof.
+
+`minescript.run` accepts `code`, optional JSON `input` and `timeoutMs` (100–30000). The program receives `minescript`, `input_data` and `result`. It occupies the same native action queue, original stable action ID and controller lease. Duplicate IDs never launch another job. The generated wrapper stores bounded JSON output privately, waits for actual job-manager removal and separates program reports from actual body evidence. Cancel, timeout, disconnect and lease expiry kill only the owned job and release game keys. Unconfirmed cancellation blocks future body work. No GUI focus or system input is used.
+
+Minescript is trusted local Python and Java access, **not a sandbox**. The optional adapter references the separately installed mod through reflection, with pinned API checks; no GPL implementation or JAR is copied into this MIT package. The host still owns goals, personality, memory and all model calls. Existing JavaScript programs are not translated automatically.
+
+## Numen design reference
+
+Reviewed upstream `Dwinovo/minecraft-numen` commit `0bafb9349e0fe808f1a4bc7aad5bf54f0060fc90`: `agent/.../script/lua/LuaEngine.java` and `lua/.../LuaSandbox.java`. Its Lua engine suspends at a host API call, receives the actual result through `resume`, and distinguishes structured failure from success. Its sandbox limits instruction slices, total instructions, string allocation and wall time; interruption is enforced separately from script errors.
+
+These are useful execution boundaries: a selected program can perform several local actions without additional model decisions, wait for real results and stop promptly. The current Python adapter implements native queue/identity, bounded duration/output, deduplication, cancellation and evidence, but does **not** claim Numen's VM sandbox or a complete port of its Lua API. A future Lua backend can share the same neutral action/receipt protocol; it need not replace the host brain or import Numen's model loop. No Numen implementation is copied here.
+
+Sources: [Minescript 4.0 API](https://github.com/maxuser0/minescript/blob/main/docs/v4.0/README.md), [official compatible release](https://modrinth.com/mod/minescript/version/xXUEOKOM), [Numen LuaEngine](https://github.com/Dwinovo/minecraft-numen/blob/0bafb9349e0fe808f1a4bc7aad5bf54f0060fc90/agent/src/main/java/com/dwinovo/numen/api/agent/script/lua/LuaEngine.java), [Numen LuaSandbox](https://github.com/Dwinovo/minecraft-numen/blob/0bafb9349e0fe808f1a4bc7aad5bf54f0060fc90/lua/src/main/java/com/dwinovo/lua/LuaSandbox.java).

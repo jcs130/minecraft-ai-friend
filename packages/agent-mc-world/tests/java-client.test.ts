@@ -9,11 +9,11 @@ import { createMinecraftMcpServer } from '../src/mcp/server.ts';
 const paths: string[]=[];
 const directory=()=>{const path=mkdtempSync(join(tmpdir(),'real-java-client-'));paths.push(path);return path;};
 afterEach(()=>{vi.restoreAllMocks();for(const path of paths.splice(0))rmSync(path,{recursive:true,force:true});});
-function rig() {
+function rig(scriptEnabled = false) {
   const data=directory(), credentials=join(data,'connection.json');
   writeFileSync(credentials,JSON.stringify({protocol:'agent-mc-java/v1',endpoint:'http://127.0.0.1:1234',token:'a'.repeat(64),instanceId:'offline-fixture'}));
   const cfg={...structuredClone(MINECRAFT_CLIENT_DEFAULTS),provider:'java-client' as const,host:'fixture.test',username:'Test',version:'1.20.6',
-    javaClient:{expectedUuid:offlineUuid('Test'),expectedServer:'fixture.test:25565',controllerId:'independent-test',credentialsFile:credentials,ledgerDir:join(data,'ledger'),leaseMs:15000}};
+    javaClient:{expectedUuid:offlineUuid('Test'),expectedServer:'fixture.test:25565',controllerId:'independent-test',credentialsFile:credentials,ledgerDir:join(data,'ledger'),leaseMs:15000,minescriptEnabled:scriptEnabled}};
   const state={protocol:'agent-mc-java/v1',connected:true,uuid:cfg.javaClient.expectedUuid,server:cfg.javaClient.expectedServer,username:'Test',sampledAt:new Date().toISOString(),generation:1,
     position:[1,65,3],health:20,food:20,inventory:[{slot:0,name:'player_head',displayName:'大背包',components:'CustomModelData=backpack',encoded:{components:{custom_name:'大背包'}}}],cursor:{empty:true},menuSlots:[],actions:[] as any[],messages:[]};
   const calls:any[]=[];let completed=false;
@@ -24,7 +24,7 @@ function rig() {
     else if(method==='release'||method==='stop')value={stopped:true};
     else if(method==='cancel')value={id:params.action_id,operation:'move',phase:'cancelled',acceptedAt:Date.now(),updatedAt:Date.now()};
     else if(method==='operations')value={operations:{move:'native move'}};
-    else if(method==='capabilities')value={protocol:'agent-mc-java/v1',realRendering:true,minescript:false,baritone:false};
+    else if(method==='capabilities')value={protocol:'agent-mc-java/v1',realRendering:true,minescript:scriptEnabled,baritone:false};
     else if(method==='do'||method==='result'){
       value={id:params.action_id,operation:'move',phase:completed?'completed':'accepted',acceptedAt:Date.now(),updatedAt:Date.now(),evidence:{position:[2,65,3]}};
       if(method==='do')state.actions=[value];
@@ -35,6 +35,20 @@ function rig() {
   return {cfg,state,world,runtime,http,calls,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it('exposes Python programs only when explicitly configured and passes original identity, action ID and cancellation to the same body',async()=>{
+    const r=rig(true);expect(r.calls).toEqual([]);await r.runtime.connect();
+    try {
+      const manual=await r.runtime.call('mc_script',{api:'index'});expect(manual.text).toContain('trusted code');expect(r.calls.some(call=>call.method==='do')).toBe(false);
+      await r.runtime.call('mc_control',{action:'claim'});
+      const code='result = minescript.player_position()';
+      const accepted=await r.runtime.call('mc_script',{language:'python',code,input:{label:'fixture'},timeoutMs:2000,action_id:'program-original'});
+      expect(accepted.execution).toMatchObject({id:'program-original',terminal:false,goalCompleted:false});
+      expect(r.calls.find(call=>call.method==='do').params).toMatchObject({operation:'minescript.run',action_id:'program-original',input:{code,timeoutMs:2000,input:{label:'fixture'}}});
+      expect((await r.runtime.call('mc_script',{language:'javascript',code:'old()'})).failed).toBe(true);
+      await r.runtime.call('mc_cancel',{action_id:'program-original'});
+      expect(r.calls.filter(call=>call.method==='do')).toHaveLength(1);
+    } finally {await r.runtime.disconnect();}
+  });
   it('discovers without credentials/network and defaults to the existing independent body',()=>{
     const r=rig();expect(r.http).not.toHaveBeenCalled();expect(r.runtime.tools().map(tool=>tool.name)).toEqual(expect.arrayContaining(['mc_control','mc_operations','mc_wait','mc_photo']));
     expect(r.runtime.tools().map(tool=>tool.name)).not.toContain('mc_script');expect(r.runtime.status().phase).toBe('disconnected');
@@ -74,7 +88,11 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
     await r.runtime.connect();
     try {
       expect(JSON.stringify(r.runtime.currentFacts())).not.toContain('large-book-payload');
-      expect((await r.runtime.call('mc_bag',{})).text).toContain('large-book-payload');
+      const bag=await r.runtime.call('mc_bag',{});expect(bag.text.length).toBeLessThan(5000);expect(bag.text).not.toContain('large-book-payload');
+      expect((await r.runtime.call('mc_bag',{item:'player_head',detail:'components',limit:1000})).text).toContain('large-book-payload');
+      const snapshot=await r.runtime.call('mc_state',{}),compact=JSON.parse(snapshot.text);expect(snapshot.text.length).toBeLessThan(5000);
+      let original='';for(let offset=0;offset<compact.raw.originalChars;offset+=16000){const page=JSON.parse((await r.runtime.call('mc_evidence',{key:compact.raw.key,sha256:compact.raw.sha256,offset,limit:16000})).text);original+=page.text;}
+      expect(JSON.parse(original).inventory[0].encoded.components.book).toBe((r.state.inventory[0] as any).encoded.components.book);
     } finally {await r.runtime.disconnect();}
   });
   it('exposes explicit action cancellation and never polls or claims again after stop',async()=>{
