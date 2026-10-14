@@ -25,6 +25,8 @@ Search has bounded results and pagination; no notebook is automatically injected
 
 Files are stored under `dataDir/minecraft-memory/`, keyed by a hash of realm, Minecraft account/authentication mode and agent identity. Callers cannot select another account or server in tool arguments. Searches default to current dimension and dimensionless notes; use an explicit dimension or `"*"` to search across dimensions within the same scope. Place/resource notes require a known dimension. Offline reads work; offline capture fails.
 
+SDK/MCP notebook calls also work before `connect` and after `disconnect`, without starting the engine or a reconnect loop. Offline capture fails and offline place/resource writes need an explicit dimension. A local managed world must already have its realm marker; offline calls do not create world identities. The same data-directory lease excludes a second client or connection while an offline call is pending.
+
 Remote server identity is address based, so a world replacement behind the same address is not automatically detectable. Use a new data directory for a replacement world. Changing configured account or agent identity intentionally selects a separate scope. There is no automatic cross-agent import or personal memory migration.
 
 Writes use atomic replacement. The client data-directory lease supplies one writer. Corrupt/oversized files fail visibly and remain untouched. Limits: 1,000 notes, 32 revisions per note, 6,000 content characters per revision and 16 MiB per scope; hitting a limit refuses the write instead of silently evicting history. Export/rotate or repair a backup explicitly. No deletion tool is provided.

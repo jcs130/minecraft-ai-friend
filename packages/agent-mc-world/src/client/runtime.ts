@@ -13,6 +13,10 @@ import { createHash } from 'node:crypto';
 import { PROTOCOL, type CallOptions, type ContextBudget, type ExecutionReceipt, type TurnReceipt } from '../contracts/protocol.ts';
 import { CurrentFacts, prepareContext } from './context.ts';
 import { RequestLedger } from './request-ledger.ts';
+import { GameMemoryBook } from '../../core/game-memory.ts';
+import { GameMemoryService } from '../../core/game-memory-service.ts';
+import { worldIdentityOf } from '../../core/server-config.ts';
+import { readRealmMarker } from '../../core/server.ts';
 
 export interface MinecraftClientOptions {
   cfg: MinecraftClientConfig;
@@ -49,6 +53,7 @@ export class MinecraftAgentClient {
   private readonly executions = new Map<string, ExecutionReceipt>();
   private readonly facts: CurrentFacts;
   private readonly lease: AgentConnectionLease;
+  private offlineMemoryCalls = 0;
 
   constructor(protected readonly options: MinecraftClientOptions,
     private readonly world: ClientEnvironment = new MinecraftClientWorld({ cfg: options.cfg, dataDir: options.dataDir,
@@ -87,6 +92,7 @@ export class MinecraftAgentClient {
     if (this.phase === 'starting') return this.transition;
     if (this.phase === 'stopping') throw new Error('Game runtime is stopping.');
     if (this.startupPending) throw new Error('Previous engine startup is still draining');
+    if (this.offlineMemoryCalls) throw new Error('Wait for pending offline memory calls before connecting');
     this.validateConfig();
     this.lease.acquire();
     const epoch = ++this.epoch;
@@ -242,7 +248,8 @@ export class MinecraftAgentClient {
 
   async call(name: string, args: Record<string, unknown>, options: string | CallOptions = {}, legacySignal?: AbortSignal): Promise<ToolOutcome> {
     const { requestId: callId = randomUUID(), turnId, signal = legacySignal } = typeof options === 'string' ? { requestId: options } : options;
-    if (this.phase !== 'started') throw new Error(`Game runtime is disconnected; call ${this.toolPrefix}_connection action:connect first.`);
+    const offlineMemory = this.phase === 'disconnected' && name === `${this.toolPrefix}_memory`;
+    if (this.phase !== 'started' && !offlineMemory) throw new Error(`Game runtime is disconnected; call ${this.toolPrefix}_connection action:connect first.`);
     if (typeof callId !== 'string' || !callId || callId.length > 256) throw new Error('Invalid request id');
     const signature = createHash('sha256').update(JSON.stringify([name, args, turnId ?? this.turn?.id])).digest('hex');
     const prior = this.calls.get(callId);
@@ -259,19 +266,30 @@ export class MinecraftAgentClient {
     if (signal?.aborted) throw new Error('Tool call cancelled before submission.');
     if (tool.barrierAfter && [...this.calls.values()].some(call => call.pending)) throw new Error('Drain pending calls before a barrier tool');
     if (tool.barrierAfter) this.barrier = callId;
-    this.requests.write({ requestId: callId, signature, phase: 'pending' });
+    if (offlineMemory) {
+      this.lease.acquire();
+      if (!this.offlineMemoryCalls && this.lifetime.signal.aborted) this.lifetime = new AbortController();
+      this.offlineMemoryCalls++;
+    }
+    try { this.requests.write({ requestId: callId, signature, phase: 'pending' }); }
+    catch (error) {
+      if (offlineMemory && --this.offlineMemoryCalls === 0) this.lease.release();
+      if (this.barrier === callId) this.barrier = null;
+      throw error;
+    }
     const controller = new AbortController();
     const combined = AbortSignal.any([this.lifetime.signal, controller.signal, ...(signal ? [signal] : [])]);
     const turn = this.turn;
     const state = { signature, controller, pending: true, promise: null as unknown as Promise<ToolOutcome> };
     this.calls.set(callId, state);
     state.promise = Promise.resolve().then(async () => {
-    this.metrics.toolStarted(callId, name);
     const queued: EventEnvelope[] = [];
     try {
+      this.metrics.toolStarted(callId, name);
       combined.throwIfAborted();
-      const result = await cancellable(tool.handler(args, { role: this.options.agentName ?? 'agent', log: this.options.log,
-        callId, signal: combined, ...(turn ? { turnId: turn.id, round: turn.round } : {}), queueExternalEvents: events => queued.push(...events) }), combined);
+      const result = await cancellable(offlineMemory ? this.callOfflineMemory(args, combined) : tool.handler(args, {
+        role: this.options.agentName ?? 'agent', log: this.options.log, callId, signal: combined,
+        ...(turn ? { turnId: turn.id, round: turn.round } : {}), queueExternalEvents: events => queued.push(...events) }), combined);
       const outcome: ToolOutcome = typeof result === 'string' ? { text: result } : { ...result };
       outcome.control = { protocol: PROTOCOL, requestId: callId, ...(turn ? { turnId: turn.id } : {}),
         barrierAfter: tool.barrierAfter === true, endTurnRequested: outcome.endsTurn === true || tool.endsTurn === true, turnEnded: false };
@@ -292,6 +310,7 @@ export class MinecraftAgentClient {
       throw error;
     } finally {
       state.pending = false;
+      if (offlineMemory && --this.offlineMemoryCalls === 0) this.lease.release();
       if (this.options.autoAcknowledgeBarriers && this.barrier === callId) this.acknowledgeBarrier(callId);
       if (this.calls.size > 1024) for (const [id, call] of this.calls) {
         if (!call.pending && id !== this.barrier) this.calls.delete(id);
@@ -300,6 +319,23 @@ export class MinecraftAgentClient {
     }
     });
     return state.promise;
+  }
+
+  /** Same core service without starting the game engine, reconnect loop, launcher or a model. */
+  private async callOfflineMemory(args: Record<string, unknown>, signal: AbortSignal): Promise<ToolOutcome> {
+    const cfg = this.options.cfg, address = `${cfg.host}:${cfg.port}`;
+    const world = worldIdentityOf(cfg.local.serverDir, address);
+    const marker = world.local ? readRealmMarker(join(cfg.local.serverDir, world.key)) : null;
+    // Do not create a world identity or silently bind local notes to a temporary address.
+    if (world.local && !marker && args.action !== 'help' && args.action !== undefined)
+      throw new Error('Local world identity is not initialized; connect explicitly before using its notebook');
+    const directory = join(this.options.dataDir, 'minecraft-memory');
+    const memory = new GameMemoryService(new GameMemoryBook(directory), directory);
+    const result = await memory.execute(args, { scope: {
+      realm: marker ? `uuid:${marker.uuid}` : `weak:${address}|`,
+      account: `${cfg.auth ?? 'offline'}:${cfg.username}`, agent: this.options.agentName ?? cfg.username,
+    }, dimension: null }, cfg.memory, signal);
+    return { text: JSON.stringify(result), meta: { gameMemory: result } };
   }
 }
 

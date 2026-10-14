@@ -1,15 +1,15 @@
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { GameMemoryBook, type GameMemoryContext } from '../core/game-memory.ts';
 import { MinecraftWorldProxy } from '../core/proxy.ts';
-import { MINECRAFT_CLIENT_DEFAULTS } from '../src/client/index.ts';
+import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger } from '../src/client/index.ts';
 import { FakeHost } from './method-host.ts';
 
 const dirs: string[] = [];
 const directory = () => { const dir = mkdtempSync(join(tmpdir(), 'mc-memory-test-')); dirs.push(dir); return dir; };
-afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => { vi.restoreAllMocks(); for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 const ctx: GameMemoryContext = { scope: { realm: 'weak:fixture.invalid:25565', account: 'offline:alice', agent: 'fixture' }, dimension: 'minecraft:overworld' };
 const note = { action: 'remember', kind: 'method', summary: '水下换气方法', content: '先读氧气；仅在实际水中使用。未验证长距离下潜。源码sha:test；失败task:1', source: { kind: 'hypothesis', reference: 'task:1' }, tags: ['下潜', '换气'] };
 const entry = (result: Record<string, unknown>) => result.entry as { id: string; revision: number; source: { kind: string }; content: string };
@@ -95,3 +95,58 @@ it('persists through the real default child IPC and rejects disconnected capture
     } finally { await proxy.stop(); }
   }
 }, 15000);
+
+it('uses the same notebook through offline SDK calls, preserving deduplication, ownership and explicit stop', async () => {
+  const dataDir = directory(), cfg = { ...structuredClone(MINECRAFT_CLIENT_DEFAULTS), host: 'fixture.invalid', username: 'Alice' };
+  const client = new MinecraftAgentClient({ cfg, dataDir, log: nullLogger() });
+  try {
+    const result = await client.call('mc_memory', note, { requestId: 'offline-memory-write' });
+    const saved = JSON.parse(result.text);
+    expect(await client.call('mc_memory', note, { requestId: 'offline-memory-write' })).toEqual(result);
+    expect(client.status().phase).toBe('disconnected');
+    expect(readdirSync(dataDir)).not.toContain('connection.lock');
+    await expect(client.call('mc_bag', {})).rejects.toThrow('disconnected');
+    await expect(client.call('mc_memory', { action: 'capture' })).rejects.toThrow('No connected');
+    await client.disconnect();
+    const restored = new MinecraftAgentClient({ cfg, dataDir, log: nullLogger() });
+    try {
+      const read = await restored.call('mc_memory', { action: 'get', id: saved.entry.id });
+      expect(JSON.parse(read.text).entry.content).toBe(note.content);
+      expect(restored.status().phase).toBe('disconnected');
+    } finally { await restored.disconnect(); }
+  } finally { await client.disconnect(); }
+});
+
+it('holds the offline writer lease until cancellation and releases it on journal failure', async () => {
+  const dataDir = directory(), cfg = { ...structuredClone(MINECRAFT_CLIENT_DEFAULTS), host: 'fixture.invalid', username: 'Alice',
+    memory: { mode: 'remote' as const, provider: 'http' as const, endpoint: 'https://memory.invalid', timeoutMs: 30000 } };
+  const client = new MinecraftAgentClient({ cfg, dataDir, log: nullLogger() });
+  const other = new MinecraftAgentClient({ cfg, dataDir, log: nullLogger() });
+  let signalIndex!: () => void;
+  const indexing = new Promise<void>(resolve => { signalIndex = resolve; });
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+    signalIndex();
+    return new Promise((_resolve, reject) => {
+      init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason), { once: true });
+    });
+  });
+  try {
+    const pending = client.call('mc_memory', note, { requestId: 'pending-index' });
+    const cancelled = expect(pending).rejects.toThrow('cancelled');
+    await indexing;
+    await expect(other.call('mc_memory', { action: 'search', query: '换气' })).rejects.toThrow('live game connection owner');
+    await expect(client.connect()).rejects.toThrow('offline memory');
+    client.cancel('pending-index');
+    await cancelled;
+    expect(readdirSync(dataDir)).not.toContain('connection.lock');
+    const local = JSON.parse((await other.call('mc_memory', { action: 'search' })).text);
+    expect(local.entries).toHaveLength(1);
+    // Simulate a ledger failure before any note can be submitted.
+    const ledger = (client as unknown as { requests: { write: () => void } }).requests;
+    const failure = vi.spyOn(ledger, 'write').mockImplementationOnce(() => { throw new Error('disk unavailable'); });
+    await expect(client.call('mc_memory', { action: 'help' })).rejects.toThrow('disk unavailable');
+    failure.mockRestore();
+    expect(readdirSync(dataDir)).not.toContain('connection.lock');
+    expect(JSON.parse((await other.call('mc_memory', { action: 'help' })).text)).toHaveProperty('retrievalMode');
+  } finally { await client.disconnect(); await other.disconnect(); }
+});
