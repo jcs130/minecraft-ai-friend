@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { publicAgentReader } from './viewer-public.mjs';
 
 const require = createRequire(resolve(new URL(import.meta.url).searchParams.get('package'), 'package.json'));
 const { MinecraftWorld, Bridge } = await import(pathToFileURL(require.resolve('agent-mc-world/extension')).href);
@@ -36,7 +37,7 @@ export function createEngine(options) {
         prepared = await prepareNativeWorldPreviewHost({ assetDirectory: resolve(dirname(cfg.catalogFile), selected.pack.assetDirectory), port: cfg.port });
         if (prepared.registrySha256 !== selected.pack.registrySha256) throw Error('VIEWER_CATALOG_REGISTRY_MISMATCH');
         streamFactory = vanilla.observeVanillaNativeStream;
-        presentation = vanilla.vanillaPlayerPresentation;
+        presentation = bot => vanilla.vanillaPlayerPresentation(bot, stream?.handState?.());
         record({ pack: selected.pack.id, minecraftVersion: selected.minecraftVersion, registrySha256: prepared.registrySha256 });
       } catch (error) {
         prepared = null;
@@ -54,7 +55,8 @@ export function createEngine(options) {
         const oldClose = close();
         stream = streamFactory(bot, prepared.registrySha256, options.cfg.version);
         const view = attached = prepared.attach({ bot, nativeStream: stream, simplifyNBT: simplify,
-          expectedUsername: options.cfg.username, getPresentationState: () => presentation(bot), logger: { error() {} } });
+          expectedUsername: options.cfg.username, getAgentStatus: publicAgentReader(cfg.agentStateFile, cfg.session, options.cfg.username),
+          getPresentationState: () => presentation(bot), logger: { error() {} } });
         const publish = () => {
           if (attached !== view || stopped) return;
           const current = view.status();
