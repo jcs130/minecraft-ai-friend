@@ -17,6 +17,7 @@ def tool_failure_view(value):
     receipt = value.get("receipt") if isinstance(value.get("receipt"), dict) else {}
     return {"tool": brief(value.get("tool", ""), 80), "error": brief(value["error"], 900),
             "next_step": brief(value.get("next_step", ""), 400),
+            **({"native_execution": value["native_execution"], "native_event": value.get("native_event", {})} if value.get("native_execution") else {}),
             "receipt": {key: brief(receipt[key], 256) if isinstance(receipt.get(key), str) else None
                         for key in ("request_id", "turn_id", "archive")}}
 

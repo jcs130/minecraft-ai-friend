@@ -35,11 +35,11 @@ def encode(value) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, context_counter: ContextCounter | None = None):
+def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, native_outcomes=None, context_counter: ContextCounter | None = None):
     """Use one counting mode throughout, restarting conservatively on failure."""
     options = {"context_tokens": context_tokens, "reserved_output": reserved_output,
                "planner_notice": planner_notice, "fast_focus": fast_focus,
-               "tool_failure": tool_failure, "read_activity": read_activity}
+               "tool_failure": tool_failure, "read_activity": read_activity, "native_outcomes": native_outcomes}
     try:
         return _assemble(prefix, tools, goal, facts, events, groups, context_counter=context_counter, **options)
     except CounterUnavailable as error:
@@ -48,7 +48,7 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
         return messages, budget
 
 
-def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, context_counter=None):
+def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, native_outcomes=None, context_counter=None):
     """Use an injected input counter or the conservative UTF-8 byte bound.
 
     Account for messages/tools plus separate output and framing reserves.
@@ -98,6 +98,18 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
             tail["tool_failure"] = "Previous call failed; consult its receipt and tool documentation before acting."
             if cost() > context_tokens:
                 del tail["tool_failure"]
+    # Outcomes are changing evidence at the request tail, not immutable prompt
+    # cost. Fit newest rows without evicting the current failure or world facts.
+    if native_outcomes:
+        before_outcomes = cost()
+        allowance = min(1400, max(0, (context_tokens - before_outcomes) // 5))
+        tail["recent_native_outcomes"] = []
+        for row in reversed(native_outcomes[-6:]):
+            tail["recent_native_outcomes"].insert(0, row)
+            if cost() - before_outcomes > allowance:
+                tail["recent_native_outcomes"].pop(0)
+        if not tail["recent_native_outcomes"]:
+            del tail["recent_native_outcomes"]
     base_cost = cost()
     history = saved_history
     evicted = []
@@ -162,6 +174,15 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
                 tail["omitted_facts"].pop()
     for event in reversed(events[-24:]):
         item = {key: event[key] for key in ("run", "cursor", "type", "trigger", "execution") if key in event}
+        execution = item.get("execution")
+        evidence = execution.get("evidence") if isinstance(execution, dict) else None
+        if isinstance(evidence, dict) and isinstance(evidence.get("receipt"), str):
+            # Terminal receipts were bypassing the dispatch projection and
+            # repeating full voxel/ray arrays in every event. Preserve measured
+            # direction/coordinates and the native archive entry for full data.
+            projected = spatial_text(evidence["receipt"])
+            item["execution"] = {**execution, "evidence": {**evidence, "receipt": fact_preview(projected, 1800),
+                "abridged": len(projected.encode("utf-8")) > 1800}}
         item["text"] = spatial_text(str(event.get("text", "")))[:700]
         item["original"] = {"tool": "mc_protocol", "action": "archive", "run": event.get("run"), "after": max(0, event.get("cursor", 1) - 1), "limit": 1}
         tail["events"].insert(0, item)

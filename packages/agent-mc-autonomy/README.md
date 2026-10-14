@@ -390,6 +390,16 @@ queue-only operation. These tests do not prove live survival, actual model
 capability, voice playback or all possible host integrations. Cortico integration
 is supported by the neutral ports, not claimed as a shipped/tested adapter.
 
+Version 0.1.37 preserves a submitted task's native blocked/partial/rejected
+terminal as an actionable planner failure. A subsequent read or new acceptance
+does not erase it. Six bounded recent outcomes remain changing evidence at the
+request tail, with native archive references; successful body completion can
+clear the active failure but never verifies the overall goal. Terminal event
+receipts now use the same spatial projection as direct tool receipts, keeping
+measured coordinates/directions without repeating full voxel arrays. Original
+events and receipt journals remain unchanged and queryable. This fixes a known
+failure-feedback gap; live sustained survival still needs separate observation.
+
 The initial runtime was extracted from the user's autonomous plugin at
 `jcs130/n.e.k.o_plugin_minecraft_autonomous@581e65b`. Its Apache-2.0 license is
 preserved in this package. The sibling body retains its own license. The Neko

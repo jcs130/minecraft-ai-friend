@@ -248,6 +248,8 @@ class Controller:
         self.invalid_tool_calls = 0
         self.unactioned_replies = 0
         self.read_activity = {}
+        self.action_requests = {}
+        self.native_outcomes = []
         self.state_path = data / "host-state.json"
         self.fast_policy = fast_policy or FastPolicy(settings.fast)
         self.frame = None
@@ -288,6 +290,30 @@ class Controller:
         if execution:
             key = (execution["kind"], execution["id"])
             if execution.get("terminal") is True:
+                submitted = self.action_requests.pop(key, None)
+                if submitted:
+                    name, arguments, request_id, read_only = submitted
+                    phase = execution.get("phase")
+                    event = next((e for e in value.get("events", []) if (e.get("execution") or {}).get("id") == execution["id"]), {})
+                    reference = {k: event[k] for k in ("run", "cursor") if k in event}
+                    receipt = str((execution.get("evidence") or {}).get("receipt", ""))
+                    self.native_outcomes.append({"tool": name, "execution_id": execution["id"], "phase": phase,
+                        "observation_only": read_only, "goal_verified": False,
+                        "receipt": spatial_text(receipt)[:450], "original_event": reference})
+                    self.native_outcomes = self.native_outcomes[-6:]
+                    self.publish(native_outcomes=list(self.native_outcomes))
+                    if not read_only and phase in {"blocked", "rejected", "partial"}:
+                        failure = self.record_tool_failure(name, arguments, {"text": receipt, "execution": execution}, request_id)
+                        failure["native_execution"] = {k: execution[k] for k in ("kind", "id", "phase")}
+                        failure["native_event"] = reference
+                        failure["next_step"] = ("The native task was accepted and has now ended with this actual outcome. "
+                            "Earlier successful steps may have run. Use the latest world facts and this receipt to change the next feasible action; "
+                            "do not resubmit the whole failed batch or repeat observations already answered. "
+                            "Query mc_protocol(action=archive,run=original_event.run,after=original_event.cursor-1) for the full native event.")
+                        self.retain_tool_failure(failure)
+                    elif not read_only and phase == "completed" and self.tool_failure and self.tool_failure.get("native_execution"):
+                        self.tool_failure = None
+                        self.publish(tool_failure=None)
                 self.pending.pop(key, None)
                 self.action_owners.pop(key, None)
                 self.publish(viewer_terminal={key: execution[key] for key in ("id", "terminal", "phase") if key in execution})
@@ -451,6 +477,11 @@ class Controller:
         if not raw.get("structuredContent") and {"write", "speak", "act"}.intersection(meta.get("tags", [])):
             raise RuntimeError("outcome_unknown: mutation returned no structured execution receipt")
         execution = result.get("execution")
+        if execution:
+            key = (execution["kind"], execution["id"])
+            if len(self.action_requests) >= 64 and key not in self.action_requests:
+                self.action_requests.pop(next(iter(self.action_requests)))
+            self.action_requests[key] = (name, json.loads(encode(arguments)), request_id, observation_call(name, arguments))
         if execution and not execution.get("terminal"):
             self.action_owners[(execution["kind"], execution["id"])] = self.active_goal["id"] if self.active_goal else "base-goal"
         self.receipt(result)
@@ -634,7 +665,7 @@ class Controller:
                 if len(self.rejected_calls) >= 16:
                     self.rejected_calls.clear()
                 self.rejected_calls[rejected_key] = failure_notice
-        elif result.get("execution") and (not read_only or (
+        elif result.get("execution") and (not read_only and not (self.tool_failure or {}).get("native_execution") or (
                 self.tool_failure and self.tool_failure.get("observation_only")
                 and self.tool_failure["tool"] == name)):
             # A corrected observation can resolve its own invalid parameters.
@@ -715,7 +746,7 @@ class Controller:
                 try:
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
-                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity,
+                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter)
                 except ValueError:
                     if not reserve:
@@ -723,7 +754,7 @@ class Controller:
                     reserve = 0
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
-                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity,
+                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter)
                 if reserve:
                     messages, _ = attach_frame(messages, frame)
