@@ -1,6 +1,12 @@
 # My Agent World · Agent 共生模组分支
 
-当前分支为 `experiment/agent-society-1.21.1`，运行 NeoForge 1.21.1 / My Agent World。局域网 Java、基岩、Mineflayer 和 Numen 接入见 [连接指南](docs/MY-AGENT-WORLD-LAN-CONNECT.txt)。[旧 Paper 玩法迁移表](docs/MY-AGENT-WORLD-PAPER-MIGRATION.md)逐项列出领地、36 项技能、十五层试炼及历史数据的边界；SDK 和统一身体包分别为 0.4.0 / 0.3.0。下面保留旧分支说明作为历史，端口与运行状态以 My Agent World 文档及受管服务为准。
+当前分支为 `experiment/agent-society-1.21.1`。2026-10-14 按用户要求，以《命运齿轮 FOM 2.42》替换未完成的 NeoForge 服：Minecraft Java 1.21.1 / NeoForge 21.1.248，公网 `micro.kangqiang.site:28976`，LAN `192.168.3.163:28976`。需使用完整整合包，见[连接文字版](docs/MY-AGENT-WORLD-FOM.txt)、[模组分类清单](docs/MY-AGENT-WORLD-FOM-MODS.txt)和[维护与回滚](docs/MY-AGENT-WORLD-FOM-OPERATIONS.md)。旧服、角色与账本完整归档，旧 Paper 千灯纪保持独立。
+
+Agent 目前使用完整 Java 客户端及[可选 java-client SDK](docs/MY-AGENT-WORLD-JAVA-CLIENT.md)，复用自研核心、Minescript 和 Baritone；真实移动、原生 Create 菜单及接口已验收，未启动新的长期模型角色。新包的基岩、Numen、普通 Mineflayer 直接接入、旧 RPG 和语音尚未迁移，不能沿用旧栈的注册表/入口声明兼容。
+
+## 历史：已归档的 NeoForge 共生服
+
+下述部署与实跑属于被替换的旧 NeoForge 栈。其资料、回执、未知动作与暂停保留；不要为恢复旧探针而重新启动旧服。旧[连接指南](docs/MY-AGENT-WORLD-LAN-CONNECT.txt)、[Paper 玩法迁移表](docs/MY-AGENT-WORLD-PAPER-MIGRATION.md)和 SDK 资料作为后续迁移参考。
 
 已发布[异界开拓纪](docs/MY-AGENT-WORLD-UNDERWORLD.md)：真实天命、十条原技能术式、十二项章节委托，以及 EconomyCraft 原生拍卖/出售/流水入口。经济和其他玩法优先复用现成模组，见[模组复用调研](docs/MY-AGENT-WORLD-MOD-REUSE.md)。
 

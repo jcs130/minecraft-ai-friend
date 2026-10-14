@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-14",
+  "pack": "FOM 2.42",
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.248",
+  "publicAddress": "micro.kangqiang.site:28976",
+  "lanAddress": "192.168.3.163:28976",
+  "counts": {
+    "clientEnabled": 124,
+    "serverEnabled": 96,
+    "authorDisabled": 10,
+    "agentOptional": 3
+  },
+  "retiredOldServer": true,
+  "oldMainAndBedrockAllOwnedChildrenNormalExit": true,
+  "oldAgentStillPaused": true,
+  "old35JarsAndProtectedConfigsUnchanged": true,
+  "oldUnknownLedgerPrefixesPreserved": true,
+  "coldBackup": {
+    "fileCount": 6900,
+    "bytes": 636603560,
+    "everyFileSha256AndCrcVerified": true
+  },
+  "authDatabaseColdCopied": true,
+  "oldOpsNotImported": true,
+  "isolatedAuthChecks": {
+    "newOfflineAccountGuestAllowed": true,
+    "guestActualServerMovement": true,
+    "passwordSaved": true,
+    "sameIdentityAfterReconnect": true,
+    "registeredAccountLockedBeforeLogin": true,
+    "movementBlockedOnActualServer": true,
+    "wrongPasswordRejected": true,
+    "correctPasswordAccepted": true,
+    "actualMovementAfterLogin": true,
+    "oldLoginIdDeduplicatedDoesNotAuthenticateNewConnection": true,
+    "freshLoginActionAfterReconnectRequired": true,
+    "originalCreateGuiAfterLogin": true,
+    "liveClientHealthAndApiSmoke": true
+  },
+  "productionClient": {
+    "actualOfflineLogin": true,
+    "nonOp": true,
+    "actualMovement": true,
+    "originalCreateMenu": "com.simibubi.create.content.schematics.cannon.SchematicannonMenu",
+    "operationCount": 30,
+    "actualApiHealth": true,
+    "normalExitCode": 0,
+    "operatorSpawnFixture": true,
+    "naturalAutonomyTested": false
+  },
+  "externalStatus": {
+    "online": true,
+    "motd": "My Agent World - FOM 2.42",
+    "retrievedAtEpochMs": 1791989942548,
+    "actualExternalFullModLoginTested": false
+  },
+  "startup": {
+    "method": "HKCU Run",
+    "currentUserLoginRequired": true,
+    "preLoginBootStartup": false,
+    "independentPython": "3.12.14",
+    "copiedStdlibFiles": 781,
+    "fixedReleaseTools": 6
+  },
+  "javaWatchdog": {
+    "ownedChild": true,
+    "backoff": true,
+    "startsPerHourMax": 6,
+    "supervisorProcessCrashAutorestart": false
+  },
+  "normalStopAndRestartAndPauseResumeVerified": true,
+  "gameBind": "0.0.0.0:28976",
+  "privateReadOnlyHealth": "127.0.0.1:28985",
+  "physicsTransport": "official TCP fallback",
+  "routerChanged": false,
+  "firewallChanged": false,
+  "newPublicPorts": 0,
+  "rconEnabled": false,
+  "actualWorldBackups": [
+    {
+      "file": "world_2026-10-14_22-48-04.zip",
+      "entries": 77,
+      "bytes": 4922698,
+      "crcVerified": true
+    }
+  ],
+  "tests": {
+    "fomGuards": 11,
+    "existingSupervisor": 37,
+    "registeredFomPanelSmoke": true
+  },
+  "knownInitialTomlNewlineFailurePreservedAndFixed": true,
+  "lithiumSingleMethodJitExclusion": true,
+  "upstreamJvmCrashRootCauseConfirmed": false,
+  "authorCompatibilityAndLootErrorsStillPresent": true,
+  "allModGameplayVerified": false,
+  "fullAircraftAndLoadTested": false,
+  "bedrockAdapted": false,
+  "numenMigrated": false,
+  "oldRpgMigrated": false,
+  "directMineflayerFullPackTested": false,
+  "paidModelCalls": 0
+}

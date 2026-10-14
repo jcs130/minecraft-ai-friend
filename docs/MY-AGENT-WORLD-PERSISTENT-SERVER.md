@@ -1,3 +1,5 @@
+2026-10-14 更新：未完成的 NeoForge 服已按用户要求退役，由命运齿轮 FOM 2.42 替换。当前 Java 地址 micro.kangqiang.site:28976（LAN 192.168.3.163:28976），MC1.21.1 / NeoForge21.1.248，需完整客户端整合包。最新连接、Agent 客户端接入及维护见 MY-AGENT-WORLD-FOM.txt 和 MY-AGENT-WORLD-FOM-OPERATIONS.md。下文属于旧栈留档；旧基岩、AgentGate、Numen 与 RPG 功能未迁入新包，不要照旧文档复活退役服务或解除旧 Agent 的自主暂停。
+
 2026-10-09 当前 Numen 已升级为官方 0.1.4.1 beta，新增假玩家 Lua/原身份恢复桥和主人客户端外脑接入说明。安装、权限、旧接口迁移与验证范围以 [Numen 接入](MY-AGENT-WORLD-NUMEN.md) 为准。原 Mineflayer SDK、world-life 和各局域网端口保持。下文较早的 0.1.3 / invoke 示例属于历史记录。
 
 # My Agent World：常驻服运维与 Agent 操作指引

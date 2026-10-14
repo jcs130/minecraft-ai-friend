@@ -1,3 +1,5 @@
+2026-10-14 更新：未完成的 NeoForge 服已按用户要求退役，由命运齿轮 FOM 2.42 替换。当前 Java 地址 micro.kangqiang.site:28976（LAN 192.168.3.163:28976），MC1.21.1 / NeoForge21.1.248，需完整客户端整合包。最新连接、Agent 客户端接入及维护见 MY-AGENT-WORLD-FOM.txt 和 MY-AGENT-WORLD-FOM-OPERATIONS.md。下文属于旧栈留档；旧基岩、AgentGate、Numen 与 RPG 功能未迁入新包，不要照旧文档复活退役服务或解除旧 Agent 的自主暂停。
+
 # My Agent World：外部 Agent 接入契约
 
 2026-10-11：可在可信 LAN 小范围邀请独立 Agent。新增 [邀请试玩指引](MY-AGENT-WORLD-INVITED-PLAYTEST.md)、[可转发 TXT](MY-AGENT-WORLD-INVITED-PLAYTEST.txt) 和[独立 Python MCP 客户端](../tools/maw_numen_client.py)。纯服务端 Numen 已可控制原身份身体、用 48 项原生模组接口（含法术书/女仆）与实际官方 Lua 目录；下文“Numen 尚未接入/新服基岩仍未完成”等早期状态以最新分入口说明为准。Mineflayer 自己的身体 SDK 与 Numen MCP 是两个 provider，不共用同一身体；公网及全模组/全端体验仍未验收。

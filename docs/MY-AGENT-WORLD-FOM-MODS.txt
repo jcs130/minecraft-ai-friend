@@ -1,0 +1,426 @@
+命运齿轮 FOM 2.42 · 模组分类清单（实际文件核对）
+Minecraft 1.21.1 / NeoForge 21.1.248 / Java 21。
+客户端启用 124 个 JAR，服务端启用 96 个 JAR，作者禁用 10 个文件。
+Agent 客户端组件 3 个为可选；普通玩家使用作者客户端整包即可。
+JAR 数不等于加载器显示的模组数，部分 JAR 内嵌多个模组或依赖。
+下方“客户端/服务端”表示实际放置位置，不等于所有功能已逐项验收。分类按模组名称、元数据及用途整理。
+
+Agent 客户端组件（3）
+- Baritone | 1.11.3 | 客户端
+  可选的客户端寻路、采矿和跟随执行工具。
+  文件：baritone-api-neoforge-1.11.3.jar
+- My Agent World · Client Bridge | 0.3.1 | 客户端
+  可选的真实客户端状态、输入、原生 GUI 和画面桥。
+  文件：maw-client-bridge-0.3.1-neoforge-1.21.1.jar
+- Minescript | 4.0 | 客户端
+  可选的客户端 Python 脚本执行。
+  文件：minescript-neoforge-1.21.1-4.0.jar
+
+登录与多人运维（6）
+- e4mc | 6.2.1 | 客户端
+  客户端局域网世界穿透；本专用公网服无需使用。
+  文件：e4mc-neoforge-6.2.1.jar
+- My Agent World · FOM Server Support | 0.1.0 | 服务端
+  服务端复用现役首次访客、设密和认证查询规则；不包含旧 RPG 内容。
+  文件：maw-fom-support-0.1.0.jar
+- LAN World Plug-n-Play | 1.9.0 | 客户端/服务端
+  登录、领地、备份或多人连接工具。
+  文件：mcwifipnp-1.9.0-1.21-neoforge.jar
+- MixAuth / MixAuth GameTest Framework | 1.3.3 / 1.0.0 | 服务端
+  服务端混合认证：正版会话验证及离线账号密码。
+  文件：mixauth-1.21.1-1.3.3.jar
+- Open Parties and Claims | 0.30.3 | 客户端/服务端
+  队伍、领地与强制加载管理；需遵守服务器权限。
+  文件：open-parties-and-claims-neoforge-1.21.1-0.30.3.jar
+- Simple Backups | 1.21-4.0.30 | 客户端/服务端
+  服务端自动存档备份；另有发布前冷备份。
+  文件：SimpleBackups-1.21-4.0.30.jar
+
+航空与移动物理（9）
+- AeroEngine | 1.0.2 | 客户端/服务端
+  航空学、移动结构物理、推进器及航空扩展。
+  文件：AeroEngine-1.3.0.jar
+- Create: Aeroworks | 1.5.0 | 客户端/服务端
+  航空学、移动结构物理、推进器及航空扩展。
+  文件：aeroworks-1.5.0.jar
+- Azimuth | 1.4.9 | 客户端/服务端
+  航空学、移动结构物理、推进器及航空扩展。
+  文件：azimuth-1.4.9.jar
+- Cosmonautics Deep Air | 1.0.2 | 客户端/服务端
+  航空学、移动结构物理、推进器及航空扩展。
+  文件：cosmonauticsdeepair-1.0.2.jar
+- Create Aeronautics | 1.3.2 | 客户端/服务端
+  机械动力航空学；移动结构物理由 Sable 提供。
+  文件：create-aeronautics-bundled-1.21.1-1.3.2.jar
+- Create: Radars | 0.4.9.4-1.21.1 | 客户端/服务端
+  航空学、移动结构物理、推进器及航空扩展。
+  文件：create_radar-0.4.9.4-1.21.1.jar
+- Create Propulsion: Simulated | 1.1.5 | 客户端/服务端
+  航空学、移动结构物理、推进器及航空扩展。
+  文件：createpropulsion-1.1.5.jar
+- Sable | 2.0.5 | 客户端/服务端
+  移动方块结构的物理与同步基础；本次公网发布使用官方 TCP 回退。
+  文件：sable-neoforge-1.21.1-2.0.5.jar
+- Strut Your Stuff | 1.3.1 | 客户端/服务端
+  航空学、移动结构物理、推进器及航空扩展。
+  文件：struts-1.3.1.jar
+
+铁路、船舶与火炮（8）
+- Create: Bells & Whistles | 0.4.7-1.21.1 | 客户端/服务端
+  铁路、列车信息、船舶或火炮相关内容。
+  文件：bellsandwhistles-0.4.7-1.21.1.jar
+- Create Deep Seas / Create Abyss / Create High Seas | 3.3.0 / 1.0.0 / 0.1.1 | 客户端/服务端
+  铁路、列车信息、船舶或火炮相关内容。
+  文件：create_submarine-3.3.0.jar
+- Create Big Cannons | 5.11.7 | 客户端/服务端
+  机械动力：大炮，包含火炮结构及弹药。
+  文件：createbigcannons-5.11.7+mc.1.21.1.jar
+- Create Railways Navigator | 1.21.1-beta-0.9.1-C6 | 客户端/服务端
+  列车导航、时刻和信息显示。
+  文件：createrailwaysnavigator-neoforge-1.21.1-beta-0.9.1-C6.jar
+- Create: Interiors | 0.6.1 | 客户端/服务端
+  铁路、列车信息、船舶或火炮相关内容。
+  文件：interiors-1.21.1-neoforge-0.6.1.jar
+- Create: Steam 'n' Rails 1.21.1 | 0.3.0-beta.2+neoforge-mc1.21.1 | 客户端/服务端
+  机械动力铁路扩展 Steam n Rails。
+  文件：railways-0.3.0-beta.2+neoforge-mc1.21.1.jar
+- Create: Deep Seas - Lava Fix | 1.0.1 | 客户端/服务端
+  铁路、列车信息、船舶或火炮相关内容。
+  文件：submarinefix-1.0.1.jar
+- Create Tracks | 1.0.1 | 客户端/服务端
+  铁路、列车信息、船舶或火炮相关内容。
+  文件：tracks-neoforge-1.21.1-1.0.1.jar
+
+仓储与物流（5）
+- Create More: Package Couriers | 2.3.0 | 客户端/服务端
+  背包、仓库、存储或包裹物流。
+  文件：cmpackagecouriers-neoforge-2.3.0.jar
+- Create Ender Transmission | 2.1.1-1.21.1 | 客户端/服务端
+  背包、仓库、存储或包裹物流。
+  文件：createendertransmission-2.1.1-1.21.1.jar
+- Functional Storage | 1.21.1-1.5.7 | 客户端/服务端
+  抽屉式仓储与存储升级。
+  文件：functionalstorage-1.21.1-1.5.7.jar
+- Sophisticated Backpacks | 3.25.77 | 客户端/服务端
+  精妙背包及其升级系统。
+  文件：sophisticatedbackpacks-1.21.1-3.25.77.2086.jar
+- Tom's Simple Storage Mod | 2.4.2 | 客户端/服务端
+  仓储终端和容器连接。
+  文件：toms_storage-1.21-2.4.2.jar
+
+机械动力与生产（24）
+- Create Bits 'n' Bobs | 2.3.5 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：bits_n_bobs-2.3.5.jar
+- Create: Copycats+ | 3.0.9+mc.1.21.1-neoforge | 客户端/服务端
+  机械动力仿制构件与形状扩展。
+  文件：copycats-3.0.9+mc.1.21.1-neoforge.jar
+- Create Encased | 1.9.0-ht3 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：Create Encased-1.21.1-1.9.0-ht3.jar
+- Create | 6.0.10 | 客户端/服务端
+  机械动力本体：旋转动力、加工机器、传送带和自动化。
+  文件：create-1.21.1-6.0.10.jar
+- Create: Crimsite Recipe | 1 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：create-crimsite-recipe-1.jar
+- Create: Enchantment Industry | 2.5.3b | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：create-enchantment-industry-2.5.3b.jar
+- Create: Glowstone Dust Recipe | 1 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：create-glowstone-dust-recipe-1.jar
+- Create: Ochrum Recipe | 1 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：create-ochrum-recipe-1.jar
+- Create: Redstone Recipe | 1 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：create-redstone-recipe-1.jar
+- Create Track Map | 2.1 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：create-track-map-2.1+mc1.21.1-neoforge.jar
+- Create: Connected | 1.3.3-mc1.21.1 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：create_connected-1.3.3-mc1.21.1.jar
+- Create: Copper and Zinc | 2.0.0 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：create_copper_and_zinc-2.0.0-neoforge-1.21.1.jar
+- Create: Easy Structures | 0.2 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：create_easy_structures-0.2a-neoforge-1.21.1.jar
+- Create: Power Loader | 2.0.5-mc1.21.1 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：create_power_loader-2.0.5-mc1.21.1.jar
+- Create Oh The Biomes We ve Gone Compat | 版本见文件名 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：create_sophback_compat-1.0.jar
+- Create: Synthetic Pressure | 1.0.1 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：create_synthetic_pressure-1.0.1.jar
+- Create Tweaked Controllers | 1.21.1-1.2.7 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：create_tweaked_controllers-1.21.1-1.2.7.jar
+- Create Contraption Terminals | 1.4.0 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：createcontraptionterminals-1.21-1.4.0.jar
+- Create Diesel Generators | 1.21.1-1.3.15 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：createdieselgenerators-1.21.1-1.3.15.jar
+- Create: Dragons Plus | 1.11.7b | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：CreateDragonsPlus-1.11.7b.jar
+- Create: Factory Controller | 1.2.1-neoforge-1.21.1 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：createfactorycontroller-1.2.1-neoforge-1.21.1.jar
+- Create: Fast Schematic Cannon | 2.6.1-neoforge | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：CreateFastSchematicCannon-2.6.1-neoforge-1.21.1.jar
+- Create Ore Excavation | 1.6.8 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：createoreexcavation-1.21-1.6.8.jar
+- Petrol's Parts | 1.3.0-snapshot-2 | 客户端/服务端
+  机械动力本体、生产、配方、控制或构件扩展。
+  文件：petrolsparts-1.21.1-1.3.0-snapshot-2.jar
+
+探索、建筑与生活（8）
+- Effortless Structure | 3.4.0 | 客户端/服务端
+  群系/结构导航、传送、建造、原版内容回移或死亡保管。
+  文件：effortless-1.21.1-3.4.0.jar
+- Explorer's Compass | 1.21.1-3.4.0-neoforge | 客户端/服务端
+  探索者罗盘，用于寻找结构。
+  文件：ExplorersCompass-1.21.1-3.4.0-neoforge.jar
+- Gravestone Mod | 1.21.1-1.0.40 | 客户端/服务端
+  群系/结构导航、传送、建造、原版内容回移或死亡保管。
+  文件：gravestone-neoforge-1.21.1-1.0.40.jar
+- Gravestone Curios Compatibility | 4.0.2 | 客户端/服务端
+  群系/结构导航、传送、建造、原版内容回移或死亡保管。
+  文件：gravestonecurioscompat-1.21.1-NeoForge-4.0.2.jar
+- Nature's Compass | 1.21.1-3.4.0-neoforge | 客户端/服务端
+  自然罗盘，用于寻找群系。
+  文件：NaturesCompass-1.21.1-3.4.0-neoforge.jar
+- VanillaBackport | 1.1.7.10 | 客户端/服务端
+  把后续原版内容回移到 1.21.1，具体内容以该版本实际物品/配方为准。
+  文件：VanillaBackport-neoforge-1.21.1-1.1.7.10.jar
+- Vein Vantage | 3.0.0 | 客户端/服务端
+  为挖矿工具增加独特附魔；具体效果和配方以原生界面为准。
+  文件：vein_vantage-3.0.0-neoforge-1.21.1.jar
+- Waystones | 21.1.44 | 客户端/服务端
+  传送石碑与传送网络。
+  文件：waystones-neoforge-1.21.1-21.1.44.jar
+
+性能与诊断（10）
+- EntityCulling | 1.10.5 | 客户端
+  内存、逻辑、渲染、区块优化或性能诊断；具体侧别见安装列。
+  文件：entityculling-neoforge-1.10.5-mc1.21.1.jar
+- Ferrite Core | 7.0.3 | 客户端/服务端
+  降低内存占用。
+  文件：ferritecore-7.0.3-neoforge.jar
+- ImmediatelyFast | 1.6.13+1.21.1 | 客户端
+  内存、逻辑、渲染、区块优化或性能诊断；具体侧别见安装列。
+  文件：ImmediatelyFast-NeoForge-1.6.13+1.21.1.jar
+- Ixeris | 4.6.8+1.21.1-neoforge | 客户端
+  内存、逻辑、渲染、区块优化或性能诊断；具体侧别见安装列。
+  文件：Ixeris-4.6.8+1.21.1-neoforge.jar
+- Lithium | 0.15.4+mc1.21.1 | 客户端/服务端
+  游戏逻辑优化；保留已记录的单方法 JVM 编译规避。
+  文件：lithium-neoforge-0.15.4+mc1.21.1.jar
+- ModernFix | 5.27.24+mc1.21.1 | 客户端/服务端
+  加载、内存及部分运行时优化。
+  文件：modernfix-neoforge-5.27.24+mc1.21.1.jar
+- PacketFixer | 3.3.1 | 客户端/服务端
+  内存、逻辑、渲染、区块优化或性能诊断；具体侧别见安装列。
+  文件：packetfixer-3.3.1-1.20.5-1.21.X-merged.jar
+- Sodium Extra | 0.9.3+mc1.21.1 | 客户端
+  内存、逻辑、渲染、区块优化或性能诊断；具体侧别见安装列。
+  文件：sodium-extra-neoforge-0.9.3+mc1.21.1.jar
+- Sodium | 0.8.13+mc1.21.1 | 客户端
+  客户端渲染优化；不放入专用服务端。
+  文件：sodium-neoforge-0.8.13+mc1.21.1.jar
+- spark | 1.10.124 | 客户端/服务端
+  性能分析与 TPS/MSPT 诊断。
+  文件：spark-1.10.124-neoforge.jar
+
+画面、声音与摄影（11）
+- Better Third Person | 1.9.0 | 客户端
+  客户端画面、声音、第三人称、摄影或录制兼容。
+  文件：BetterThirdPerson-neoforge-1.9.0.jar
+- Entity Model Features | 3.2.4 | 客户端
+  客户端画面、声音、第三人称、摄影或录制兼容。
+  文件：entity_model_features-3.2.4-1.21-neoforge.jar
+- Entity Texture Features | 7.1 | 客户端
+  客户端画面、声音、第三人称、摄影或录制兼容。
+  文件：entity_texture_features_1.21-neoforge-7.1.jar
+- Freecam | 1.3.0+mc1.21 | 客户端
+  客户端自由摄影视角工具。
+  文件：freecam-neoforge-1.3.0+mc1.21.jar
+- Iris | 1.8.14-beta.1+mc1.21.1 | 客户端
+  客户端光影支持。
+  文件：iris-neoforge-1.8.14-beta.1+mc1.21.1.jar
+- ReForgedPlay Mod / Replay Mod | 0.3 / 2.6.18 | 客户端
+  客户端录制工具；专用服务端分离此 JAR，保留客户端原件。
+  文件：reforgedplaymod-1.21.1-0.3.jar
+- Sable Replay Compat | 1.0.0 | 客户端/服务端
+  Sable 与录制系统的兼容组件。
+  文件：sablereforgedplay-1.21.1-1.0.0.jar
+- Seamless Loading Screen | 2.2.1+1.21 | 客户端
+  客户端画面、声音、第三人称、摄影或录制兼容。
+  文件：seamless-loading-screen-2.2.1+1.21-neoforge.jar
+- Sounds | 2.4.22+lts | 客户端
+  环境/操作音效扩展，不是实时语音聊天。
+  文件：sounds-2.4.22+lts+1.21.1-neoforge.jar
+- What Are They Up To | 1.21.0-1.2.7 | 客户端/服务端
+  客户端画面、声音、第三人称、摄影或录制兼容。
+  文件：watut-neoforge-1.21.0-1.2.7.jar
+- Zume | 1.2.2 | 客户端
+  客户端画面、声音、第三人称、摄影或录制兼容。
+  文件：zume-1.2.2.jar
+
+配方、地图与操作界面（19）
+- AppleSkin | 3.0.9+mc1.21 | 客户端/服务端
+  食物、饥饿和饱和度 HUD 信息。
+  文件：appleskin-neoforge-mc1.21-3.0.9.jar
+- Controlling | 19.0.5 | 客户端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：Controlling-neoforge-1.21.1-19.0.5.jar
+- EMI | 1.1.24+1.21.1+neoforge | 客户端/服务端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：emi-1.1.24+1.21.1+neoforge.jar
+- EMI Enchanting | 0.1.2+1.21+neoforge | 客户端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：emi_enchanting-0.1.2+1.21+neoforge.jar
+- EMI Loot | 0.7.9+1.21+neoforge | 客户端/服务端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：emi_loot-0.7.9+1.21+neoforge.jar
+- EMI Ores | 1.3+1.21.1+neoforge | 客户端/服务端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：emi_ores-1.3+1.21.1+neoforge.jar
+- Extra Mod Integrations | 1.0.3+1.21.1 | 客户端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：extra-mod-integrations-all-neoforge-1.0.3+1.21.1.jar
+- FancyMenu | 3.4.6 | 客户端/服务端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：fancymenu_neoforge_3.4.6_MC_1.21.1.jar
+- Inventory Profiles Next | 2.2.5 | 客户端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：InventoryProfilesNext-neoforge-1.21.1-2.2.5.jar
+- Jade | 15.10.6+neoforge | 客户端/服务端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：Jade-1.21.1-NeoForge-15.10.6.jar
+- Jade Addons | 6.1.1+neoforge | 客户端/服务端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：JadeAddons-1.21.1-NeoForge-6.1.1.jar
+- Just Enough Characters | 4.5.29 | 客户端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：jecharacters-1.21.1-neoforge-4.5.29.jar
+- Just Enough Items | 19.43.0.392 | 客户端/服务端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：jei-1.21.1-neoforge-19.43.0.392.jar
+- Mouse Tweaks | 2.26.1 | 客户端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：MouseTweaks-neoforge-mc1.21-2.26.1.jar
+- Reese's Sodium Options | 2.2.3+mc1.21.1 | 客户端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：reeses-sodium-options-neoforge-2.2.3+mc1.21.1.jar
+- Resourcify | 1.8.5 | 客户端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：Resourcify (1.21.1-neoforge)-1.8.5.jar
+- Tiny Item Animations | 1.2.1 | 客户端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：tia-neoforge-1.21-1.2.1.jar
+- Xaero's Minimap | 26.4.2 | 客户端/服务端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：xaerominimap-neoforge-1.21.1-26.4.2.jar
+- Xaero's World Map | 1.45.0 | 客户端/服务端
+  配方、物品信息、地图、菜单或操作便利功能。
+  文件：xaeroworldmap-neoforge-1.21.1-1.45.0.jar
+
+基础库与兼容依赖（23）
+- BaguetteLib | 2.0.6 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：baguettelib-1.21.1-NeoForge-2.0.6.jar
+- Balm | 21.0.65 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：balm-neoforge-1.21.1-21.0.65.jar
+- Collective | 8.39 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：collective-1.21.1-8.39.jar
+- CoroUtil | 1.21.0-1.3.8 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：coroutil-neoforge-1.21.0-1.3.8.jar
+- CreativeCore | 2.13.44 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：CreativeCore_NEOFORGE_v2.13.44_mc1.21.1.jar
+- Curios API | 9.5.1+1.21.1 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：curios-neoforge-9.5.1+1.21.1.jar
+- DragonLib | 1.21.1-beta-3.0.28 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：dragonlib-neoforge-1.21.1-beta-3.0.28.jar
+- Fzzy Config | 0.7.6+1.21+neoforge | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：fzzy_config-0.7.6+1.21+neoforge.jar
+- Konkrete | 1.9.9 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：konkrete_neoforge_1.9.9_MC_1.21.jar
+- kotlinforforge-5.12.0-all.jar |  | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：kotlinforforge-5.12.0-all.jar
+- libIPN | 6.6.3 | 客户端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：libIPN-neoforge-1.21.1-6.6.3.jar
+- Lithostitched | 1.8.0+beta4 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：lithostitched-1.8.0+beta4-neoforge-21.1.jar
+- MaFgLib / MaLiLib Stub | 0.4.3+mc1.21.1 / 0.4.3+mc1.21.1 | 客户端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：mafglib-0.4.3+mc1.21.1.jar
+- Melody | 1.0.10 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：melody_neoforge_1.0.10_MC_1.21.jar
+- MRU | 1.0.33+1.21.1 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：mru-1.0.33+1.21.1-neoforge.jar
+- Petrolpark's Library | 1.5.1 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：petrolpark-1.21.1-1.5.1.jar
+- Platform | 1.3.3 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：Platform-neoforge-1.21.1-1.3.3.jar
+- Rhino | 2101.2.8-build.91 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：rhino-2101.2.8-build.91.jar
+- Ritchie's Projectile Library | 2.1.2 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：ritchiesprojectilelib-2.1.2+mc.1.21.1-neoforge.jar
+- Searchables | 1.0.2 | 客户端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：Searchables-neoforge-1.21.1-1.0.2.jar
+- Sophisticated Core | 1.4.87 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：sophisticatedcore-1.21.1-1.4.87.2270.jar
+- Titanium | 4.0.45 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：titanium-1.21-4.0.45.jar
+- YetAnotherConfigLib | 3.8.2+1.21.1-neoforge | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：yet_another_config_lib_v3-3.8.2+1.21.1-neoforge.jar
+
+作者禁用文件（继续禁用）
+- architectury-13.0.11-neoforge.jar.disabled
+- c2me-neoforge-mc1.21.1-0.4.0-alpha.0.120.jar.disabled
+- cloth-config-15.0.140-neoforge.jar.disabled
+- create-dyn-light-forge-1.21.1-2.0.1.jar.disabled
+- DistantHorizons-3.2.0-b-1.21.1-fabric-neoforge.jar.disabled
+- flerovium-neoforge-1.21.1-1.1.2-all.jar.disabled
+- iris-flywheel-compat-NeoForge-2.4.0.jar.disabled
+- noisium-neoforge-2.3.0+mc1.21-1.21.1.jar.disabled
+- sodiumdynamiclights-neoforge-1.0.10-1.21.1.jar.disabled
+- sodiumoptionsapi-neoforge-1.0.10-1.21.1.jar.disabled
+作者未逐项注明禁用原因；不把禁用文件擅自恢复为启用，也不据此断言它们均有冲突。
+
+功能范围
+本包重点是机械自动化、航空、铁路/船舶和仓储。旧千灯纪的 /mycli 技能、公会、试炼、女仆和殖民地不是本整合包自带内容。
+多人使用统一版本整包。不要单独升级 Sable、航空学或 Create；按完整版本测试升级。
+本次切换保留原包的玩法模组，没有将新物品/方块翻译为原版近似物。
+性能优化来自原包已有 ModernFix、FerriteCore、Lithium、spark 等；尚未做负载对照，不能据此宣称提升百分比。
+实时 Java 距离语音不在原包中，sounds 是音效扩展。基岩转换和普通 Mineflayer 直接操作整包尚未发布。

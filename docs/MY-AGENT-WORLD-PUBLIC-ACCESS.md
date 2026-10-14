@@ -1,3 +1,5 @@
+2026-10-14 更新：未完成的 NeoForge 服已按用户要求退役，由命运齿轮 FOM 2.42 替换。当前 Java 地址 micro.kangqiang.site:28976（LAN 192.168.3.163:28976），MC1.21.1 / NeoForge21.1.248，需完整客户端整合包。最新连接、Agent 客户端接入及维护见 MY-AGENT-WORLD-FOM.txt 和 MY-AGENT-WORLD-FOM-OPERATIONS.md。下文属于旧栈留档；旧基岩、AgentGate、Numen 与 RPG 功能未迁入新包，不要照旧文档复活退役服务或解除旧 Agent 的自主暂停。
+
 # My Agent World 公网入口与维护
 
 2026-10-12，分支 `experiment/agent-society-1.21.1`。可转发的连接说明见 [纯文字版](MY-AGENT-WORLD-PUBLIC-CONNECT.txt)。新服沿用原世界与登录策略。

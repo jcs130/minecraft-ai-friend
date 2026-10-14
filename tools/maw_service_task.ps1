@@ -3,12 +3,15 @@ param(
     [ValidateSet('Auto', 'S4U', 'Interactive', 'Run', 'Startup')][string]$StartupMethod = 'Auto',
     [Parameter(Mandatory=$true)][string]$Python,
     [Parameter(Mandatory=$true)][string]$Config,
-    [switch]$Bedrock
+    [switch]$Bedrock,
+    [switch]$Fom
 )
 
 $ErrorActionPreference = 'Stop'
 $scriptPath = Join-Path $PSScriptRoot 'maw_service.py'
+if ($Bedrock -and $Fom) { throw 'Select one service type' }
 if ($Bedrock) { $scriptPath = Join-Path $PSScriptRoot 'maw_bedrock_service.py' }
+if ($Fom) { $scriptPath = Join-Path $PSScriptRoot 'fom_service.py' }
 $pythonPath = (Resolve-Path -LiteralPath $Python -ErrorAction Stop).Path
 $configPath = (Resolve-Path -LiteralPath $Config -ErrorAction Stop).Path
 $pythonw = Join-Path (Split-Path -Parent $pythonPath) 'pythonw.exe'
@@ -17,6 +20,7 @@ $planText = & $pythonPath $scriptPath plan --config $configPath
 if ($LASTEXITCODE -ne 0) { throw ('Supervisor configuration validation failed: ' + $planText) }
 $plan = $planText | ConvertFrom-Json
 $taskName = 'MyAgentWorld.Service.' + $plan.services[0].port
+if ($Fom) { $taskName = 'MyAgentWorld.FOM.Service.' + $plan.services[0].port }
 $argument = '"' + $scriptPath + '" run --config "' + $configPath + '"'
 $runCommand = '"' + $pythonw + '" ' + $argument
 $account = [Security.Principal.WindowsIdentity]::GetCurrent().Name
