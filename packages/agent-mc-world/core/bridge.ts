@@ -1,4 +1,5 @@
 import { loadViewerRelay } from './relay-port.ts';
+import { installConfigurationPhaseGuard, configurationTransportReady } from './configuration-round.ts';
 /**
  * 管理 Mineflayer 连接、重连和 prismarine-viewer。
  * 重连会替换 bot 实例，World 与执行器须通过 bridge.bot 取得当前实例。
@@ -317,6 +318,7 @@ export class Bridge {
 
   get connected(): boolean {
     return this._bot !== null && this.spawnedBot === this._bot
+      && configurationTransportReady(this._bot._client)
       && (this.serverLogin?.ready() ?? true)
       && (this._bot as unknown as { entity?: unknown }).entity !== undefined;
   }
@@ -469,6 +471,7 @@ export class Bridge {
       return;
     }
     this._bot = bot;
+    this.bagFor(gen).register('configuration-phase-guard', installConfigurationPhaseGuard(bot));
     bot._client.on('session', session => {
       if (this._bot === bot && this.generation === gen && !this.stopped) this.opts.authentication?.acceptProtocolSession(session);
     });

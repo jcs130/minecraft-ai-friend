@@ -86,7 +86,9 @@ been published to npm or deployed to running agents.
 
 ## Photography and optional cloud artwork
 
-The local `0.4.5-dev.20261015.1` candidate builds on independent core `0.4.4` and bundles matching Java 1.21.1 viewer assets from the shared visual repository. Mineflayer item decoding, biome IDs and texture URLs use the action connection's version. It retains guarded ground navigation and limits unsticking to short crouched moves over loaded continuous dry support; cancellation releases held keys. These checks do not certify every fall scenario.
+The local `0.4.5-dev.20261015.2` candidate builds on independent core `0.4.4` and bundles matching Java 1.21.1 viewer assets from the shared visual repository while retaining 1.20.6 assets. Mineflayer item decoding, biome IDs and texture URLs use the action connection's version. It retains guarded ground navigation and limits unsticking to short crouched moves over loaded continuous dry support; cancellation releases held keys. These checks do not certify every fall scenario.
+
+Proxy reconfiguration expires unanswered one-shot known-packs replies, suspends physics and blocks old-world movement packets until a fresh PLAY position arrives. The caller's previous physics setting is restored, including an explicitly disabled setting. Protocol startup alone does not open gameplay readiness. The guard is scoped to the owned connection and does not edit dependency files or server configuration.
 
 The public SDK exposes optional metadata-only `status().connection` (`ready`, `phase`) separately from runtime startup. Engine proxy samples expire after five seconds; composed server packs retain this facet through `console()`. Missing or stale samples stay `null`. No authentication RPC or secret enters this facet. Source, packed-package verification and live scene evidence remain separate; this candidate is not published.
 
