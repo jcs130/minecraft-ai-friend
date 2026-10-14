@@ -58,7 +58,8 @@ def review_observation(status, now):
     # Raw facts remain in the independent journal/status API; no accumulating prompt history here.
     evidence = {"sampled_at": snapshot["updated_at"], "phase": snapshot["phase"], "connected": snapshot.get("game_connected") is True,
                 "standing_goal": str(snapshot.get("standing_goal", ""))[:600],
-                "current_goal": {key: active.get(key) for key in ("id", "goal", "mode")}, "pending": pending,
+                "current_goal": {**{key: active.get(key) for key in ("id", "goal", "mode", "parent_id")},
+                                 "origin": active.get("origin", "unknown")}, "pending": pending,
                 "facts": useful,
                 "fact_originals": {part["key"]: part["original"] for part in snapshot.get("facts", {}).get("parts", [])
                                    if part.get("key") in useful and part.get("original")},
@@ -88,7 +89,11 @@ def brief(text, size):
 
 def summary(evidence):
     facts = evidence["facts"]
-    goal = evidence["current_goal"].get("goal") or evidence["standing_goal"]
+    goal = "站立目标:" + brief(evidence["standing_goal"], 360)
+    if user := evidence.get("current_user_goal"):
+        goal += "；当前用户目标:" + brief(user["goal"], 360)
+    if (active := evidence["current_goal"].get("goal")) and (not user or user["id"] != evidence["current_goal"].get("id")):
+        goal += "；阶段(" + evidence["current_goal"]["origin"] + "):" + brief(active, 180)
     readings = "；".join(brief(facts[key], size) for key, size in (
         ("body", 120), ("foodReserve", 120), ("gear", 420), ("queue", 150)))
     # A 70-byte inventory preview hid already-owned tools from the main brain.
@@ -100,7 +105,7 @@ def summary(evidence):
         activity += f"；连续查询{reads}次（查询不代表行动进展）"
     if failure := evidence.get("tool_failure"):
         activity += "；最近未解工具错误:" + failure["tool"] + " " + brief(failure["error"], 210)
-    return "目标:" + brief(goal, 360) + "；新鲜观测:" + readings + activity
+    return goal + "；新鲜观测:" + readings + activity
 
 
 class ReviewPort:
@@ -176,6 +181,7 @@ class ReviewPort:
         observed = review_observation(snapshot, now)
         if not observed or self.stopping():
             return
+        observed["evidence"]["current_user_goal"] = self.mailbox.current_user_goal(observed["evidence"]["current_goal"].get("id"))
         with self.transaction() as state:
             self.reconcile(state)
             policy = ReviewPolicy.parse(state.get("policy", {}))
@@ -237,9 +243,11 @@ class ReviewPort:
                 if accepted:
                     state["submitted_at"] = self.now()
 
-    def decide(self, review_id, decision, reason="", goal=""):
+    def decide(self, review_id, decision, reason="", goal="", *, lineage_offset=None):
         if decision not in {"inspect", "continue", "insert", "revise"} or not all(isinstance(v, str) for v in (review_id, reason, goal)):
             return {"is_error": True, "error": "invalid_review"}
+        if lineage_offset is not None and (decision != "inspect" or type(lineage_offset) is not int or lineage_offset < 0):
+            return {"is_error": True, "error": "invalid_lineage_offset"}
         if len(reason) > 600 or len(goal) > 2000 or (decision != "inspect" and not reason.strip()) or (decision in {"insert", "revise"} and not goal.strip()):
             return {"is_error": True, "error": "reason_and_stage_goal_required"}
         current = review_observation(observation(self.directory), self.now())
@@ -263,9 +271,15 @@ class ReviewPort:
                 and previous["request_id"] == current["evidence"]["current_goal"].get("id"))
             stage = {"request_id": previous["request_id"], "delivery": previous["delivery"], "can_revise": can_revise} if previous else None
             if decision == "inspect":
-                return {"heartbeat_id": review_id, "stage_delivery": stage,
+                if lineage_offset is not None:
+                    chain = self.mailbox.goal_lineage(current["evidence"]["current_goal"].get("id"))
+                    end = min(len(chain), lineage_offset + 4)
+                    return {"heartbeat_id": review_id, "goal_lineage": chain[lineage_offset:end],
+                            "next_offset": end, "has_more": end < len(chain)}
+                return {"heartbeat_id": review_id, **review["evidence"], "stage_delivery": stage,
                         "next": "Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending. Keep stages within the standing goal and user intent; server-specific quests, exams or capabilities need fresh evidence from this world, not unrelated conversation memories.",
-                        "last_decision": state.get("last_decision"), **review["evidence"]}
+                        "goal_authority": "current_user_goal is explicitly user-sourced. host_review is a proposed stage subordinate to current user intent and the standing goal; unknown origin is not user authorization. last_decision is prior model judgment, not fresh world evidence. Query inspect with lineage_offset=0 for full original parent goals, four per page.",
+                        "last_decision": state.get("last_decision")}
             request_id = self.request_id(review_id)
             existing = self.mailbox.get(request_id)
             if not existing and (self.mailbox.intent_revision() != review["revision"] or current["intent"] != review["intent"]):
@@ -284,7 +298,9 @@ class ReviewPort:
                       "reply": "已记录主脑判断，未新增任务；现在可简短说明情况和打算。"}
             if decision in {"insert", "revise"}:
                 try:
-                    payload = {"goal": goal.strip(), "mode": "insert"}
+                    payload = {"goal": goal.strip(), "mode": "insert", "origin": "host_review"}
+                    if parent := current["evidence"]["current_goal"].get("id"):
+                        payload["parent_id"] = parent
                     if decision == "revise":
                         payload["revision_of"] = previous["request_id"]
                     receipt = self.mailbox.submit("feedback", payload, request_id,

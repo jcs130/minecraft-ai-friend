@@ -270,6 +270,22 @@ observations support both `client-loaded-world` and `client-visible-world` sourc
 the bounded projection retains unknown areas and original-query access. These
 context fixes do not independently establish successful gameplay.
 
+Since 0.1.20, compact action/observation tools retain the discovered backend's
+scalar parameter names, types, enums and bounds. Long manuals and complex fields
+remain available through progressive help. Native validation and skill-specific
+requirements are unchanged; an optional mode never becomes required for all skills.
+The neutral `ownership.session_is_owned` probe checks an existing account lease
+without creating state or starting a process. A held lease must be combined with
+a fresh connected snapshot; it does not verify gameplay or revive a stopped host.
+
+Since 0.1.21, host review stages carry explicit provenance and parent-goal IDs.
+Only explicitly user-sourced goals are described as user intent; legacy records
+remain unknown. Complete original ancestry is queryable through paged review
+inspection, while the prompt keeps the current user goal and proposed stage.
+Rejected calls with valid wire envelopes retain a matching failure result for
+every call in the next request. Malformed envelopes remain in the original
+journal without poisoning provider tool-history protocols.
+
 Run `python -m pytest -q` here. Tests deny host SDK imports, network and service
 launches; the isolated process test exercises both a fake autonomous planner and
 queue-only operation. These tests do not prove live survival, actual model
