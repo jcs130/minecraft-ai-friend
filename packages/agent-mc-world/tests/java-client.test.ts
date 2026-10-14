@@ -35,6 +35,14 @@ function rig(scriptEnabled = false) {
   return {cfg,state,world,runtime,http,calls,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it('reports unavailable data rendering without detaching the actual body or falling back to screenshots',async()=>{
+    const r=rig();r.cfg.viewerPort=1;r.cfg.viewerAssetsDir=join(directory(),'not-installed');
+    await r.runtime.connect();try {
+      expect(r.world.console().lamps).toEqual(expect.arrayContaining([expect.objectContaining({label:'服务器',state:'online'}),expect.objectContaining({label:'画面',state:'error'})]));
+      expect(r.world.console().links).toEqual([]);
+      expect(r.calls.some(call=>['screenshot','claim','release','stop'].includes(call.method))).toBe(false);
+    }finally{await r.runtime.disconnect();}
+  });
   it('exposes Python programs only when explicitly configured and passes original identity, action ID and cancellation to the same body',async()=>{
     const r=rig(true);expect(r.calls).toEqual([]);await r.runtime.connect();
     try {

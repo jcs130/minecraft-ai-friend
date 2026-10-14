@@ -4,7 +4,7 @@ import { GAME_MEMORY_DEFAULTS, GAME_MEMORY_CONFIG_SCHEMA } from './game-memory-s
 
 export const MINECRAFT_DEFAULTS = {
   provider: 'mineflayer' as 'mineflayer' | 'java-client',
-  javaClient: { expectedUuid: '', expectedServer: '', controllerId: '', credentialsFile: '', ledgerDir: '', leaseMs: 15000, viewerPageFile: '', minescriptEnabled: false } as import('../src/contracts/java-client.ts').JavaClientConfiguration,
+  javaClient: { expectedUuid: '', expectedServer: '', controllerId: '', credentialsFile: '', ledgerDir: '', leaseMs: 15000, viewerMode: 'data', viewerPageFile: '', minescriptEnabled: false } as import('../src/contracts/java-client.ts').JavaClientConfiguration,
   // enabled 由Persona的装配层显式开启。
   enabled: false,
   /** 服务器地址(私服 dry-run 默认本机) */
@@ -299,6 +299,7 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
         description: '选择该游戏实例生成的 agent-mc-bridge/connection.json，不复制旧令牌。', 'x-path': { kind: 'file', extensions: ['.json'] } },
       'worlds.minecraft.javaClient.ledgerDir': { type: 'string', title: '固定账本目录', 'x-hot': false,
         description: '固定目录保留改名和升级历史，不随显示名自动更换。', 'x-path': { kind: 'directory' } },
+      'worlds.minecraft.javaClient.viewerMode': { type: 'string', enum: ['data', 'framebuffer'], title: '网页画面来源', 'x-hot': false, description: 'data 使用真实游戏数据驱动网页三维画面；framebuffer 仅用于原生截图诊断。' },
       'worlds.minecraft.javaClient.leaseMs': { type: 'integer', title: '控制权租期', minimum: 1000, maximum: 30000, 'x-hot': false,
         description: '宿主须显式续租，过期释放游戏按键；单位毫秒。' },
       'worlds.minecraft.host': { type: 'string', title: '服务器地址', 'x-hot': false },
