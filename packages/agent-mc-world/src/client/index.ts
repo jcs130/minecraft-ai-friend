@@ -14,4 +14,7 @@ export type { PublicAccountState, AuthenticationMode } from './authentication.ts
 export { planLegacyConfiguration, copyLegacyData } from './migration.ts';
 
 export { GameMemoryLearning } from '../../core/game-memory-learning.ts';
+export { PhotographyService, PHOTO_TOOL, PHOTO_PLANNER_SYSTEM, preparePhotoContext, type PhotographyOptions } from '../../core/photography.ts';
+export { createImageGenerationPort, PHOTOGRAPHY_DEFAULTS } from '../../core/image-generation.ts';
+export * from '../contracts/photography.ts';
 export { learningHelp, type ArtifactRef, type SourceRef } from '../../core/game-memory-learning-contract.ts';

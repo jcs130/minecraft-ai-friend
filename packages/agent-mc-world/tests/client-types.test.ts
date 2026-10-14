@@ -38,7 +38,17 @@ it.each(['Bundler','NodeNext'] as const)('consumes published declarations in %s 
     const client = new MinecraftAgentClient({ cfg: MINECRAFT_CLIENT_DEFAULTS, dataDir:'./data', log:nullLogger() });
     const result: Promise<ToolOutcome> = client.call('mc_script', {api:'index'});
     const events: EventEnvelope[] = client.journal.read(0, 8).events;
-    void result; void events;`;
+    void result; void events;
+    import { PhotographyService, createImageGenerationPort, preparePhotoContext,
+      type PhotoRecord, type ImageGenerationPort, type PhotographyConfig } from '../dist/types/src/client/index.js';
+    import { PHOTOGRAPHY_PROTOCOL, type PhotoCapture } from '../dist/types/src/contracts/index.js';
+    const config: PhotographyConfig = { provider:'none', endpoint:'', model:'', apiKeyEnv:'', generate:true, edit:true, maxReferences:3, timeoutMs:600000, resultHosts:'' };
+    const port: ImageGenerationPort | null = createImageGenerationPort(config);
+    const photo: PhotoRecord = { schema:PHOTOGRAPHY_PROTOCOL, id:'id', action:'capture', phase:'completed', createdAt:'now', updatedAt:'now' };
+    const capture: PhotoCapture = { bytes:new Uint8Array(), mime:'image/png', captureId:'id', capturedAt:'now', sampledAt:'now', facts:{} };
+    const photos = new PhotographyService({capture:async()=>capture,provider:()=>port});
+    preparePhotoContext(photo,'intent',{contextTokens:20000,reservedOutputTokens:1000,imageInputTokens:1000});
+    void photos;`;
   const options: ts.CompilerOptions = {target:ts.ScriptTarget.ES2022,module:mode==='NodeNext'?ts.ModuleKind.NodeNext:ts.ModuleKind.ESNext,
     moduleResolution:mode==='NodeNext'?ts.ModuleResolutionKind.NodeNext:ts.ModuleResolutionKind.Bundler,
     strict:true,noEmit:true,esModuleInterop:true,skipLibCheck:false,types:['node']};

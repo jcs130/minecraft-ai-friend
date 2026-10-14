@@ -79,3 +79,7 @@ goals, memories, credentials or game ledgers are moved by installing this packag
 
 Version 0.4.0 is a locally verified release candidate, not a promise that it has
 been published to npm or deployed to running agents.
+
+## Photography and optional cloud artwork
+
+`mc_photo` saves web screenshots with paired game readings without an image model. Optional native Alibaba Bailian and ByteDance Volcengine Ark adapters add photo enhancement and original artwork; the host Agent owns interpretation, prompts and creative decisions. Providers default to disabled. [Configuration, lifecycle and fallback guide](docs/PHOTOGRAPHY.md).
