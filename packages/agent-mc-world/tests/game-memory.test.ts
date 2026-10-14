@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { GameMemoryBook, type GameMemoryContext } from '../core/game-memory.ts';
+import { GameMemoryBook, GAME_MEMORY_TOOL, type GameMemoryContext } from '../core/game-memory.ts';
 import { MinecraftWorldProxy } from '../core/proxy.ts';
 import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger } from '../src/client/index.ts';
 import { FakeHost } from './method-host.ts';
@@ -13,6 +13,39 @@ afterEach(() => { vi.restoreAllMocks(); for (const dir of dirs.splice(0)) rmSync
 const ctx: GameMemoryContext = { scope: { realm: 'weak:fixture.invalid:25565', account: 'offline:alice', agent: 'fixture' }, dimension: 'minecraft:overworld' };
 const note = { action: 'remember', kind: 'method', summary: '水下换气方法', content: '先读氧气；仅在实际水中使用。未验证长距离下潜。源码sha:test；失败task:1', source: { kind: 'hypothesis', reference: 'task:1' }, tags: ['下潜', '换气'] };
 const entry = (result: Record<string, unknown>) => result.entry as { id: string; revision: number; source: { kind: string }; content: string };
+
+it('recovers the observed missing-source and misrouted-capture failures without forging runtime provenance', () => {
+  const dir = directory(), book = new GameMemoryBook(dir);
+  const { source: _source, ...missingSource } = note;
+  expect(() => book.execute(missingSource, ctx)).toThrow('source is required');
+  let sampled = false;
+  expect(() => book.execute({ action: 'capture', operation: 'capture_source', input: missingSource }, {
+    ...ctx, capture: () => { sampled = true; throw new Error('must not sample for malformed input'); },
+  })).toThrow('Use remember');
+  expect(sampled).toBe(false);
+  expect(book.execute({ action: 'search' }, ctx)).toMatchObject({ total: 0 });
+  const help = book.execute({ action: 'help', topic: 'remember' }, ctx) as { example: Record<string, unknown>; inputSchema: { required: string[] } };
+  expect(help.inputSchema.required).toEqual(['action', 'kind', 'summary', 'content', 'source']);
+  const saved = entry(book.execute({ ...help.example, ...note, source: { kind: 'agent_note', speaker: 'fixture agent', reference: 'run:test/task:5' } }, ctx));
+  const restarted = new GameMemoryBook(dir);
+  expect(restarted.execute({ action: 'get', id: saved.id }, ctx)).toMatchObject({ entry: { evidence: 'attributed-unverified-note', currentWorldVerified: false } });
+  expect(restarted.execute({ action: 'search', query: '换气', kind: 'method' }, ctx)).toMatchObject({ entries: [{ id: saved.id }] });
+  expect(() => restarted.execute({ ...note, source: { kind: 'runtime_observation' } }, ctx)).toThrow('runtime observations');
+});
+
+it('offers bounded action-specific help without storage, capture or remote learning arguments', () => {
+  const book = new GameMemoryBook(null);
+  for (const topic of ['search', 'remember', 'capture', 'revise']) {
+    const help = book.execute({ action: 'help', topic }, ctx) as { inputSchema: { properties: Record<string, unknown> }; example: Record<string, unknown> };
+    expect(help.inputSchema.properties).not.toHaveProperty('input');
+    expect(help.inputSchema.properties).not.toHaveProperty('operation');
+    expect(help.example.action).toBe(topic);
+    expect(JSON.stringify(help).length).toBeLessThan(4500);
+  }
+  expect(book.execute({ action: 'help' }, ctx).help).toContain('mc_script {api:"methods"}');
+  expect(() => book.execute({ action: 'help', topic: 'unknown' }, ctx)).toThrow('help topic');
+  expect(GAME_MEMORY_TOOL.description).toContain('source.kind=agent_note');
+});
 
 it('retrieves bounded summaries and provenance after restart, with explicit detail and old revisions', () => {
   const dir = directory(), first = new GameMemoryBook(dir);

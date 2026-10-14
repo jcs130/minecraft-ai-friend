@@ -37,7 +37,9 @@ search tags matches any exact tag (case-insensitive), never partial names. Playe
 player:<account-name> and, when actually observed, player-uuid:<uuid>. Names are not cross-platform identity.
 remember needs kind, summary, content, source. source.kind is agent_note, user_report or hypothesis;
 user_report also needs speaker and reference. reference is a pointer, not verified evidence.
-capture records a fresh runtime observation with engine-owned provenance; disconnected capture fails.
+Use action:help,topic:remember for an executable argument example and the required fields.
+capture records ONLY fresh position/health/food/inventory with engine-owned provenance; disconnected capture fails.
+capture accepts top-level summary/tags/expiresAt, never content/input/operation. An interpreted lesson belongs in remember.
 revise needs id and expectedRevision plus a complete replacement note; old versions remain readable.
 archive needs id and expectedRevision. No deletion or automatic eviction. Archived notes remain retrievable.
 Place/resource notes default to the current dimension. Other notes are server-wide unless dimension is supplied.
@@ -45,6 +47,11 @@ search defaults to current dimension plus server-wide notes; dimension:"*" expli
 Every record is isolated by server, account and agent. Server addresses are weak identity: a reset/replaced
 remote world cannot be detected automatically. Use a new dataDir for a replacement world.
 Record conditions, counterexamples, task/run IDs and source hashes for methods. A saved method is not mastery.
+Local learning needs no remote service: search an applicable lesson/method, get one full note, check current facts,
+execute and inspect terminal receipts/net change, then remember or revise your attributed conclusion. After saved:true,
+get the returned id to check persistence; at the next applicable scene search and evaluate reuse. Rejected local validation saves nothing;
+remote indexing can fail after a successful local save, so inspect saved/index separately.
+Editable programs have their own versioned library: mc_script {api:"methods"}. Do not confuse notebook notes with executable methods.
 Old inventory, positions and relationships must be checked again before acting. On player interactions,
 up to three matching local relationship summaries may accompany the event; full notes stay on demand.
 Local mode makes no model or network calls. Configured vector/remote modes may index or search game notes.
@@ -57,10 +64,14 @@ export const GAME_MEMORY_TOOL: Omit<ToolDef, 'handler'> = {
   name: 'mc_memory', tags: ['read', 'write'],
   description: 'Persistent game-only notebook, isolated by server/account/agent. Search summaries, then get details. '
     + 'Historical observations and attributed notes never establish current facts, permissions or goal success. '
-    + 'Use action:help first; optional configured retrieval service, no body actions. Requires a persistent dataDir.',
+    + 'remember needs top-level kind/summary/content/source (your conclusion: source.kind=agent_note). '
+    + 'capture only samples current runtime facts. Use action:help,topic:remember for exact arguments. '
+    + 'Optional service learning uses action:service; local lessons need no remote service. No body actions; requires dataDir.',
   parameters: { type: 'object', additionalProperties: false, properties: {
     action: { type: 'string', enum: ['help', 'search', 'get', 'remember', 'capture', 'revise', 'archive', 'sync', 'service'] },
-    operation: { type: 'string', enum: LEARNING_OPERATIONS }, input: { type: 'object', maxProperties: 12 }, requestId: stringField(128),
+    topic: { type: 'string', enum: ['search', 'remember', 'capture', 'revise'], description: 'Only for action:help; returns one action schema and example.' },
+    operation: { type: 'string', enum: LEARNING_OPERATIONS, description: 'Only for action:service, not local capture or remember.' },
+    input: { type: 'object', maxProperties: 12, description: 'Only service-operation arguments. Local note fields stay at the top level.' }, requestId: stringField(128),
     id: stringField(48), expectedRevision: { type: 'integer', minimum: 1 }, revision: { type: 'integer', minimum: 1 },
     kind: { type: 'string', enum: [...KINDS] }, summary: stringField(180), content: stringField(6000),
     source: { type: 'object', additionalProperties: false, required: ['kind'], properties: {
@@ -73,6 +84,30 @@ export const GAME_MEMORY_TOOL: Omit<ToolDef, 'handler'> = {
     includeArchived: { type: 'boolean' },
   } },
 };
+
+const LOCAL_FIELDS: Record<string, string[]> = {
+  help: ['topic'], search: ['query', 'tags', 'kind', 'dimension', 'limit', 'offset', 'includeArchived'], get: ['id', 'revision'],
+  remember: ['kind', 'summary', 'content', 'source', 'tags', 'dimension', 'expiresAt'],
+  capture: ['summary', 'tags', 'expiresAt'],
+  revise: ['id', 'expectedRevision', 'kind', 'summary', 'content', 'source', 'tags', 'dimension', 'expiresAt'],
+  archive: ['id', 'expectedRevision'],
+};
+const NOTE_EXAMPLE = { kind: 'lesson', summary: 'A failed route needs a fresh geometry check',
+  content: 'Describe the actual attempt, terminal, measured change, applicability and counterexample here; do not invent a successful result.',
+  source: { kind: 'agent_note', speaker: '<actual author>', reference: '<actual run/task/receipt location>' } };
+function actionHelp(topic: unknown): Record<string, unknown> {
+  if (typeof topic !== 'string' || !['search', 'remember', 'capture', 'revise'].includes(topic)) throw new Error('help topic must be search, remember, capture or revise');
+  const required = topic === 'remember' ? ['kind', 'summary', 'content', 'source']
+    : topic === 'revise' ? ['id', 'expectedRevision', 'kind', 'summary', 'content', 'source'] : [];
+  const fields = GAME_MEMORY_TOOL.parameters.properties as Record<string, unknown>;
+  const example = topic === 'remember' ? { action: topic, ...NOTE_EXAMPLE }
+    : topic === 'revise' ? { action: topic, id: '<returned id>', expectedRevision: 1, ...NOTE_EXAMPLE }
+    : topic === 'capture' ? { action: topic, summary: 'Current runtime sample' }
+    : { action: topic, query: 'route geometry', kind: 'lesson', limit: 3 };
+  return { topic, inputSchema: { type: 'object', additionalProperties: false, required: ['action', ...required],
+    properties: { action: { type: 'string', enum: [topic] }, ...Object.fromEntries(LOCAL_FIELDS[topic].map(k => [k, fields[k]])) } },
+    example, note: 'Replace placeholders with your own attributed content and real references. References are unverified pointers. After saving get the returned id; later search and recheck applicability before reuse.' };
+}
 
 function text(value: unknown, name: string, max: number): string {
   if (typeof value !== 'string' || !value.trim() || value.length > max) throw new Error(`${name}: expected 1..${max} characters`);
@@ -104,16 +139,14 @@ export class GameMemoryBook {
     candidates?: (entries: MemoryCandidate[]) => void; lexical?: (entries: MemoryCandidate[]) => void; ranks?: Map<string, number>;
   }): Record<string, unknown> {
     const action = args.action ?? 'help';
-    const allowed: Record<string, string[]> = {
-      help: [], search: ['query', 'tags', 'kind', 'dimension', 'limit', 'offset', 'includeArchived'], get: ['id', 'revision'],
-      remember: ['kind', 'summary', 'content', 'source', 'tags', 'dimension', 'expiresAt'],
-      capture: ['summary', 'tags', 'expiresAt'],
-      revise: ['id', 'expectedRevision', 'kind', 'summary', 'content', 'source', 'tags', 'dimension', 'expiresAt'],
-      archive: ['id', 'expectedRevision'],
-    };
+    const allowed = LOCAL_FIELDS;
     if (typeof action !== 'string' || !Object.hasOwn(allowed, action)) throw new Error('Unknown memory action');
-    for (const key of Object.keys(args)) if (key !== 'action' && !allowed[action].includes(key)) throw new Error(`${key} does not apply to ${action}`);
-    if (action === 'help') return { help: HELP, persistent: Boolean(this.directory) };
+    for (const key of Object.keys(args)) if (key !== 'action' && !allowed[action].includes(key)) {
+      const hint = action === 'capture' ? 'capture only samples current runtime facts; it cannot store your lesson. Use remember with top-level kind,summary,content,source; service capture_source requires action:service and configured remote learning.'
+        : `Allowed fields: ${allowed[action].join(', ')}. Use action:help for the contract.`;
+      throw new Error(`${key} does not apply to ${action}; ${hint}`);
+    }
+    if (action === 'help') return { ...(args.topic === undefined ? { help: HELP } : actionHelp(args.topic)), persistent: Boolean(this.directory) };
     if (!this.directory) throw new Error('Game memory requires dataDir; no persistent store configured');
     for (const [key, value] of Object.entries(context.scope)) text(value, `scope.${key}`, 500);
     const scopeKey = createHash('sha256').update(JSON.stringify([context.scope.realm, context.scope.account, context.scope.agent])).digest('hex');
@@ -187,6 +220,7 @@ export class GameMemoryBook {
       if (sampled) source = { kind: 'runtime_observation', observedAt: date(sampled.observedAt, 'observedAt'), reference: sampled.reference };
       else {
         const raw = args.source as Record<string, unknown>;
+        if (raw === undefined) throw new Error('source is required for remember/revise; for your own conclusion add source:{kind:"agent_note",speaker:"<actual author>",reference:"<actual run/task/receipt location>"}. All note fields are top-level. Use action:help,topic:remember. Nothing saved.');
         if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !['agent_note', 'user_report', 'hypothesis'].includes(String(raw.kind))
           || Object.keys(raw).some(k => !['kind', 'reference', 'speaker', 'observedAt'].includes(k))) throw new Error('source must be an attributed note; runtime observations can only be captured');
         source = { kind: raw.kind as GameMemorySource['kind'] };

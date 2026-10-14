@@ -16,6 +16,8 @@ Read [connection](references/connection.md) for installation, private configurat
 
 For building, cleanup and editing your own methods, read [building and methods](references/building-methods.md), or request `mc_script {"api":"building"}` / `{"api":"methods"}`. Both guides are on demand; current cleanup obligations arrive separately as fresh facts.
 
+For game lessons, attribution, failed-write recovery and optional service learning, read [game memory](references/memory.md). Local notes and editable methods work without a cloud service; verify save, later retrieval, adoption and actual outcome separately.
+
 `mc_artifact` stores selected UTF-8 execution artifacts. Versioned `agent-mc.procedure/v1` artifacts (legacy `cortico.procedure/v1` remains readable) can compose existing game methods; the format does not require the Cortico framework. Your host owns memory, retrieval, evaluation and event wakeups. Do not inject the whole method library every turn.
 
 Read actual tool availability before using quick tactics. The generic client currently exposes native control and ordinary reflexes; the legacy RPG tactic/spell adapter is not a default capability. Do not claim a tool or server skill exists because an old server guide mentioned it.

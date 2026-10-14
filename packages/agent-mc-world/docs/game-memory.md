@@ -27,6 +27,14 @@ This path is local, bounded and does not call an embedding/model/cloud service o
 
 `capture` reads current connected position, health/food and inventory synchronization state directly from the runtime. Unsynchronized inventory is saved as unknown. Only this action can create `runtime_observation` provenance. Every retrieved record is still historical and `currentWorldVerified:false`, including an unexpired capture. The runtime does not validate a caller's interpretation or a user report.
 
+For exact local arguments, use `{"action":"help","topic":"remember"}` (also `search`, `capture`, `revise`). Local note fields are top-level; `input` and `operation` belong only to `action:service`. Missing `source` is a rejected write, not a request to switch to `capture`. For your own interpretation use `source:{kind:"agent_note",speaker:"<actual author>",reference:"<actual run/task/receipt location>"}`. An arbitrary reference remains an unverified pointer; do not invent an external observation ID.
+
+### Local learning and method evolution
+
+Local learning does not require a vector model or a cloud service. Search for an applicable `lesson`/`method`, read one note, check current facts, and compare actual terminal receipts and world changes. Record or revise the conclusion with applicability, counterexamples and provenance. After `saved:true`, read the returned ID; at a later comparable task search again and evaluate reuse. Rejected local validation saves nothing; remote indexing can fail after local storage succeeds, so inspect `saved` and `index` separately. A successful read-back verifies storage, not improved gameplay.
+
+Executable methods are separate from notebook prose. Read `mc_script {api:"methods"}` for the versioned library: retrieve source, modify, validate, save with its parent revision, explicitly execute, expand task terminals, and keep or revert based on measured results. Saving a note does not install a script. Optional remote experience generation is a separate, explicitly configured path; a disabled remote service does not disable local lessons or editable methods.
+
 `revise` requires the latest `expectedRevision` and a complete replacement note. Earlier versions remain readable with `get(id, revision)`. Revising an observation creates an attributed note, not a new runtime observation. `archive` also requires a matching revision and preserves history. `expiresAt` is advisory; expired results are visibly marked and never represented as current.
 
 ## Isolation and recovery
