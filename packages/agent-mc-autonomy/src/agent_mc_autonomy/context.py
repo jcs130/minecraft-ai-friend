@@ -2,6 +2,7 @@
 
 import json
 
+from .context_counter import BYTE_COUNTER_NAME, FRAMING_RESERVE, ContextCounter, CounterUnavailable, count_input, counter_name
 from .observations import fact_preview, spatial_text
 
 RULES = """You are an autonomous Minecraft player. Pursue the user's goal through observed world changes.
@@ -34,13 +35,27 @@ def encode(value) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None):
-    """UTF-8 bytes are a conservative bound, not a model-specific tokenizer.
+def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, context_counter: ContextCounter | None = None):
+    """Use one counting mode throughout, restarting conservatively on failure."""
+    options = {"context_tokens": context_tokens, "reserved_output": reserved_output,
+               "planner_notice": planner_notice, "fast_focus": fast_focus,
+               "tool_failure": tool_failure, "read_activity": read_activity}
+    try:
+        return _assemble(prefix, tools, goal, facts, events, groups, context_counter=context_counter, **options)
+    except CounterUnavailable as error:
+        messages, budget = _assemble(prefix, tools, goal, facts, events, groups, **options)
+        budget["counter_fallback"] = str(error)
+        return messages, budget
 
-    Account for the entire messages/tools JSON plus an explicit framing reserve.
+
+def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, context_counter=None):
+    """Use an injected input counter or the conservative UTF-8 byte bound.
+
+    Account for messages/tools plus separate output and framing reserves.
     Drop oldest complete exchanges, then omit whole facts; never accumulate old
     snapshots in history. No model call is made if the stable base cannot fit.
     """
+    name = counter_name(context_counter) if context_counter is not None else BYTE_COUNTER_NAME
     head = [{"role": "system", "content": RULES + "\n" + prefix}, {"role": "user", "content": "Goal: " + goal}]
     history = list(groups)
     tail = {"current_facts": [], "omitted_facts": [], "events": [],
@@ -58,7 +73,10 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
         return head + [message for group in history for message in group] + [{"role": "user", "content": encode(tail)}]
 
     def cost():
-        return len(encode({"messages": messages(), "tools": tools}).encode("utf-8")) + reserved_output + 1024
+        current = messages()
+        size = (count_input(context_counter, current, tools) if context_counter is not None
+                else len(encode({"messages": current, "tools": tools}).encode("utf-8")))
+        return size + reserved_output + FRAMING_RESERVE
 
     # Reserve fresh-state space from what remains after the fixed prefix, not from
     # the entire context window. A large valid prefix must not evict every tool
@@ -157,5 +175,8 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
         if cost() > context_tokens:
             history.pop(0)
             break
-    return messages(), {"counter": "utf8-byte-upper-bound+1024-framing", "total": cost(),
-                        "limit": context_tokens, "omitted": omitted}
+    total = cost()
+    return messages(), {"counter": name, "units": "tokens" if context_counter is not None else "token_upper_bound",
+                        "input": total - reserved_output - FRAMING_RESERVE,
+                        "output_reserve": reserved_output, "framing_reserve": FRAMING_RESERVE,
+                        "total": total, "limit": context_tokens, "omitted": omitted}

@@ -17,7 +17,7 @@ from .review import ReviewPolicy, ReviewPort
 from .runner import run_session, validate_start
 
 
-async def play(settings, entry, data, brain_config, goal, viewer_entry=None):
+async def play(settings, entry, data, brain_config, goal, viewer_entry=None, *, context_counter_factory=None):
     stopped = threading.Event()
     task = asyncio.current_task()
     loop = asyncio.get_running_loop()
@@ -29,7 +29,15 @@ async def play(settings, entry, data, brain_config, goal, viewer_entry=None):
 
     previous = {sig: signal.signal(sig, stop) for sig in (signal.SIGINT, signal.SIGTERM)}
     try:
-        brain = HttpPlanner(brain_config, settings.max_output_tokens, settings.model_timeout_seconds) if brain_config else None
+        counter = None
+        if brain_config is not None and context_counter_factory is not None:
+            try:
+                counter = context_counter_factory(brain_config)
+            except Exception as error:
+                raise ValueError("context_counter_factory_unavailable_" + type(error).__name__) from None
+        counter_options = {"context_counter": counter} if counter is not None else {}
+        brain = HttpPlanner(brain_config, settings.max_output_tokens, settings.model_timeout_seconds,
+                            **counter_options) if brain_config else None
         try:
             await run_session(settings, entry, data, brain, goal, lambda **_: None, stopped.is_set, viewer_entry=viewer_entry)
         except asyncio.CancelledError:
@@ -40,7 +48,7 @@ async def play(settings, entry, data, brain_config, goal, viewer_entry=None):
             signal.signal(sig, handler)
 
 
-def main(argv=None, *, entry_resolver=None, viewer_entry=None):
+def main(argv=None, *, entry_resolver=None, viewer_entry=None, context_counter_factory=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["check", "status", "run", "submit-goal", "feedback", "submit", "receipt", "stop",
                                             "model-config", "model-list", "model-check", "auth-login", "auth-forget"])
@@ -119,7 +127,9 @@ def main(argv=None, *, entry_resolver=None, viewer_entry=None):
                 validate_start(settings, args.goal)
                 if "review" in raw:
                     ReviewPort(directory).configure(ReviewPolicy.parse(raw["review"]))
-                asyncio.run(play(settings, entry, data, config, args.goal, viewer_entry=args.viewer_entry or viewer_entry))
+                counter_options = {"context_counter_factory": context_counter_factory} if config is not None and context_counter_factory is not None else {}
+                asyncio.run(play(settings, entry, data, config, args.goal, viewer_entry=args.viewer_entry or viewer_entry,
+                                 **counter_options))
                 result = observation(directory)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0

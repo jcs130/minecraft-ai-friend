@@ -96,6 +96,39 @@ resumes prior goals; `replace` is an explicit user choice. UUIDs are durable,
 uncertain dispatch blocks replay, and planner completion reports are never
 treated as verified gameplay completion.
 
+### Optional local token counting
+
+Embedders can pass `context_counter=counter` to `run_session` or `Controller`,
+or attach the counter to their planner as `planner.context_counter`.
+`HttpPlanner(..., context_counter=counter)` exposes the same port. A custom
+standalone launcher can call `agent_mc_autonomy.cli.main(...,
+context_counter_factory=factory)`; `factory(HttpPlannerConfig)` runs before the
+planner is constructed, only for autonomous `run`. Returning `None` keeps the
+default. Configuration files never load arbitrary module strings.
+
+The exported `ContextCounter` protocol is a synchronous callable
+`counter(messages, tools) -> int` with a stable public `name` (1–96 ASCII letters,
+digits or `_.:/+-`, starting with a letter or digit). It returns nonnegative input
+token counts; an optional `units` attribute must be `tokens`. It must perform no
+network, model or game calls. The adapter owns
+the selected model, tokenizer, template and protocol normalization; an
+`HttpPlanner` adapter can use `model_protocols.request(config, messages, tools,
+max_output_tokens)` to obtain the real wire representation. Count tools and
+native replay data too. Do not tokenize serialized request JSON and label that
+an exact provider count. The implementation must be deterministic and invalidate
+itself when its model/template binding changes. No tokenizer library or
+host-specific model path is required by the framework.
+
+Diagnostics expose `counter`, `units`, `input`, `output_reserve`,
+`framing_reserve`, `total` and `limit`. The framework independently retains the
+configured output reserve and 1024 framing tokens; a current image still adds
+the existing `image_reserve` after text assembly. This does not claim an exact
+multimodal count. Cache hits still occupy context and are not subtracted.
+An invalid count (including booleans) or counter exception restarts the entire
+assembly using the existing byte bound, with only its failure type recorded as
+`counter_fallback`. The default counter name and byte-budget behavior remain
+unchanged, reported as `units=token_upper_bound` rather than measured tokens.
+
 ### 0.1.13: preserve room for observations and validate before dispatch
 
 The resident `mc_do`/`mc_scout` schemas retain the native queue/array envelope,
@@ -297,6 +330,11 @@ Since 0.1.23, an accepted host review revision of the same stage preserves
 complete tool exchanges, including help and rejection results, for the next
 budgeted request. New goals, user feedback and unknown-source revisions still
 discard old-goal context. This does not cancel native work or change queue policy.
+
+Since 0.1.24, a matched adapter can supply real input-token counting through the
+public ContextCounter port. Unverified or failed counters retain the conservative
+fallback with explicit units. Legacy repeated bag/queue/blocked reads also carry
+their actual same-turn prior answer when available; raw journals remain unchanged.
 
 Run `python -m pytest -q` here. Tests deny host SDK imports, network and service
 launches; the isolated process test exercises both a fake autonomous planner and

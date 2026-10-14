@@ -7,8 +7,12 @@ Scope: restore scalar structure dynamically from the discovered canonical backen
 - [x] Add failing contract tests for scalar enums, bounds, field names, optionality and unchanged complete backend schema.
 - [x] Restore the native scalar structure in shared autonomy and validate the context bound.
 - [x] Run the shared suite, Ruff, wheel and isolated consumer; commit/push normally.
-- [ ] Consume the new fixed dependency in the thin plugin, check/package/deploy, then verify real gameplay separately.
+- [x] Consume in plugin 0.5.6, check/package/deploy, and observe real gameplay separately.
 
 All 261 shared tests and Ruff pass, including the neutral existing-account lease probe needed by explicit host participation resume. The final wheel passes the isolated autonomous and queue-only consumer probe. Twelve actual request replays remain within 32,768; projected metadata adds 2,912 bytes and history groups still trim as needed. No whole fact is dropped; one replay shortens a large terminal fact through the existing budget policy. This is schema/context evidence, not survival acceptance.
 
 Fetched and fast-forwarded upstream `455521a` (player-history recall). It does not change autonomy files; this patch retains the previously built/tested body pin `41fbc28`. A source update is not a deployment of a new body.
+
+Completed live 16:05:36–16:09:36 Beijing window: 9 samples, decisions 11→20,
+health 10/20, hunger 13/20 and position unchanged, no food. Main-brain review
+and official online speech/playback resumed, but survival acceptance is not passed.

@@ -30,7 +30,8 @@ def validate_start(settings: Settings, goal: str):
 
 
 async def run_session(settings: Settings, entry: Path, data_root: Path, planner: Planner | None, goal: str,
-                      publish, stopped, *, bridge_factory=MinecraftBridge, viewer_opener=None, viewer_entry=None):
+                      publish, stopped, *, bridge_factory=MinecraftBridge, viewer_opener=None, viewer_entry=None,
+                      context_counter=None):
     """Own the injected planner, lease, config, controller and all cleanup."""
     state = {"phase": "starting", "game_connected": False, "autonomy_running": False, "standing_goal": goal}
     directory = data_root / "sessions" / settings.identity / "host"
@@ -95,7 +96,10 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                     system_one = SystemOne(settings.fast)
                 selector = system_one.select if system_one else getattr(planner, "select_fast", None) if settings.fast.mode == "host" else None
                 policy = FastPolicy(settings.fast, selector)
-                await Controller(bridge, planner.decide if planner else None, settings, directory, update, stopped, commands, policy).run(goal.strip())
+                counter = context_counter if context_counter is not None else getattr(planner, "context_counter", None)
+                counter_options = {"context_counter": counter} if counter is not None else {}
+                await Controller(bridge, planner.decide if planner else None, settings, directory, update, stopped,
+                                 commands, policy, **counter_options).run(goal.strip())
             except asyncio.CancelledError:
                 commands.stop_queued()
                 update(phase="stopped")

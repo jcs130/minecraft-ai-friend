@@ -56,10 +56,12 @@ def decision(message: dict) -> dict:
 class HttpPlanner:
     """Explicit provider port. Retries and game ownership belong to the controller."""
 
-    def __init__(self, config: HttpPlannerConfig, max_output_tokens: int, timeout: int, *, client=None, authorization=None):
+    def __init__(self, config: HttpPlannerConfig, max_output_tokens: int, timeout: int, *, client=None, authorization=None,
+                 context_counter=None):
         import httpx
 
         self.config, self.max_output_tokens, self.timeout = config, max_output_tokens, timeout
+        self.context_counter = context_counter
         config.validate_budget(max_output_tokens)
         config.key()  # Fail before starting a body when an explicitly named key is missing.
         self.auth = authorization or Authorization(config)

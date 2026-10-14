@@ -198,8 +198,9 @@ def failure_context(catalogue, name, arguments, result):
 
 
 class Controller:
-    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None):
+    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None, *, context_counter=None):
         self.bridge, self.decide, self.settings = bridge, decide, settings
+        self.context_counter = context_counter
         self.data, self.publish = data, publish
         self.operator_stop = False
         self.stop_requested = lambda: self.operator_stop or stop_requested()
@@ -297,21 +298,39 @@ class Controller:
         original = encode(result)
         with (self.data / "receipts.jsonl").open("a", encoding="utf-8") as output:
             output.write(encode({"requestId": request_id, "turnId": self.turn, "tool": name, "result": result}) + "\n")
+        if not hasattr(self, "_read_once_answers") or self._read_once_turn != self.turn:
+            self._read_once_turn, self._read_once_answers = self.turn, {}
         view = receipt_view(result)
-        if len(original.encode("utf-8")) <= 6000:
-            return encode(view)
-        # Chunks remain queryable through the existing artifact tool. JavaScript
-        # measures maxLength in UTF-16; 16000 Python characters fit even with emoji.
-        refs = []
-        for offset in range(0, len(original), 16000):
-            refs.append(json_content(await self.bridge.call("mc_artifact", {
-                "action": "put", "text": original[offset:offset + 16000], "mime": "text/plain"})) ["handle"])
-        # The context budget counts UTF-8 bytes, not Python characters. Chinese
-        # help pages must not become a 10 KiB preview that evicts its own reply.
-        preview = spatial_text(result.get("text", "")).encode("utf-8")[:2800].decode("utf-8", errors="ignore")
-        return encode({"text": preview, "failed": result.get("failed"),
-                       "execution": view.get("execution"),
-                       "original_chunks": refs, "retrieve": "mc_original(handle,offset,limit), chunks in order"})
+        if len(original.encode("utf-8")) > 6000:
+            # Chunks remain queryable through the existing artifact tool. JavaScript
+            # measures maxLength in UTF-16; 16000 Python characters fit even with emoji.
+            refs = []
+            for offset in range(0, len(original), 16000):
+                refs.append(json_content(await self.bridge.call("mc_artifact", {
+                    "action": "put", "text": original[offset:offset + 16000], "mime": "text/plain"})) ["handle"])
+            # The legacy context fallback counts UTF-8 bytes, not characters. Chinese
+            # help pages must not become a 10 KiB preview that evicts its own reply.
+            preview = spatial_text(result.get("text", "")).encode("utf-8")[:2800].decode("utf-8", errors="ignore")
+            view = {"text": preview, "failed": result.get("failed"),
+                    "execution": view.get("execution"),
+                    "original_chunks": refs, "retrieve": "mc_original(handle,offset,limit), chunks in order"}
+        # The core's legacy RoundOnceGate emits this exact receipt only for these
+        # primitives when their same-turn fingerprint is unchanged. It supplies
+        # no reference ID. Keep at most three already-projected answers so history
+        # eviction cannot leave a dangling pointer; never requery or reuse a turn.
+        if name in {"mc_bag", "mc_queue", "mc_blocked"}:
+            if result.get("text") == "这轮已经答过了,答案不会变,先看上一条。":
+                previous = self._read_once_answers.get(name) if self.turn else None
+                view["resolved_same_turn"] = previous is not None
+                if previous is not None:
+                    view["previous_answer"] = previous
+                else:
+                    view["unresolved_reference"] = "No saved substantive answer in this native turn; the referenced answer is unavailable."
+            elif (self.turn and not result.get("failed") and not result.get("execution") and result.get("text")
+                  and not (name == "mc_queue" and result["text"] == "[mc_queue] 队列状态未变；等任务或战斗结果事件再查。")):
+                self._read_once_answers[name] = {"request_id": request_id, "turn_id": self.turn,
+                                                 "answer": json.loads(encode(view))}
+        return encode(view)
 
     async def original_page(self, arguments):
         offset, limit = arguments.get("offset", 0), arguments.get("limit", 1000)
@@ -644,14 +663,16 @@ class Controller:
                 try:
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
-                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity)
+                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity,
+                        context_counter=self.context_counter)
                 except ValueError:
                     if not reserve:
                         raise
                     reserve = 0
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
-                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity)
+                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity,
+                        context_counter=self.context_counter)
                 if reserve:
                     messages, _ = attach_frame(messages, frame)
                 budget.update(image_reserve=reserve, total=budget["total"] + reserve, limit=self.settings.context_tokens)
