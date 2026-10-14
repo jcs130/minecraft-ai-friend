@@ -6,6 +6,7 @@ import asyncio
 import json
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .bridge import json_content, outcome, text_content
@@ -16,6 +17,7 @@ from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .model_protocols import assistant_history
 from .planner import PlannerResponseError, PlannerUnavailableError
 from .tool_schema import argument_error
+from .viewer_public import tool_receipt
 
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
@@ -288,6 +290,7 @@ class Controller:
             if execution.get("terminal") is True:
                 self.pending.pop(key, None)
                 self.action_owners.pop(key, None)
+                self.publish(viewer_terminal={key: execution[key] for key in ("id", "terminal", "phase") if key in execution})
             else:
                 self.pending[key] = execution
             self.persist(pending=list(self.pending.values()))
@@ -611,6 +614,7 @@ class Controller:
             compact = await self.archive_receipt(request_id, name, result)
         else:
             result, compact = await self.dispatch(name, arguments, request_id)
+        self.publish(viewer_action=tool_receipt(name, arguments, result))
         read_only = observation_call(name, arguments)
         if not result.get("failed"):
             if read_only:
@@ -763,7 +767,7 @@ class Controller:
                 consumed_ids = {id(event) for event in consumed}
                 self.recent = [event for event in self.recent if id(event) not in consumed_ids]
                 calls = response.get("tool_calls") or []
-                self.publish(last_message=(response.get("content") or "")[:1200])
+                self.publish(last_message=(response.get("content") or "")[:1200], viewer_decision_at=datetime.now(timezone.utc).isoformat())
                 if not calls:
                     self.invalid_tool_calls = 0
                     # A plain plan is still model history. Dropping it gives an

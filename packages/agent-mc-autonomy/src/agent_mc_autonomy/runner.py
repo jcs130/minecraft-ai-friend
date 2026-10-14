@@ -19,6 +19,7 @@ from .ownership import session_lease
 from .planner import Planner
 from .review import ReviewPort
 from .viewer import ViewerWindow
+from .viewer_public import viewer_projection
 
 
 def validate_start(settings: Settings, goal: str):
@@ -58,6 +59,14 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
             except (OSError, ValueError):
                 pass
         state.update(updated_at=datetime.now(timezone.utc).isoformat(), owner_pid=os.getpid())
+        if settings.viewer_renderer_directory:
+            try:
+                public_file = directory / "viewer-agent.json"
+                public_tmp = public_file.with_suffix(".tmp")
+                public_tmp.write_text(json.dumps(viewer_projection(state, settings.username, viewer_session), ensure_ascii=False), encoding="utf-8")
+                public_tmp.replace(public_file)
+            except OSError:
+                pass  # Optional playback telemetry cannot stop the game owner.
         try:
             reviews.observe(state)
             state.pop("review_error", None)
@@ -85,6 +94,7 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                     "packageDirectory": str(entry.parent.parent), "rendererDirectory": settings.viewer_renderer_directory,
                     "catalogFile": settings.viewer_catalog_file, "port": settings.viewer_listen_port,
                     "stateFile": str(directory / "viewer-state.json"), "session": viewer_session,
+                    "agentStateFile": str(directory / "viewer-agent.json"),
                 }
                 entry = Path(viewer_entry) if viewer_entry else Path(__file__).parent / "integrations" / "viewer-stdio.mjs"
             config.write_text(json.dumps(client_config, ensure_ascii=False), encoding="utf-8")
