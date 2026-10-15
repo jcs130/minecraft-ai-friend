@@ -158,6 +158,7 @@ import {
 } from './ranged.ts';
 import { piglinIsHostile } from './piglin.ts';
 import { DeathBook } from './deaths.ts';
+import { isOwnDeathTranslation } from './death-cause.ts';
 import { ExploreBook } from './explored.ts';
 import { ServerActionWait } from './server-action-wait.ts';
 import { zhDimension, zhEntity, zhName } from './names.ts';
@@ -4191,6 +4192,7 @@ export class MinecraftWorld implements World {
       // 第一次掉线值得叫醒她(手上的事全废了);之后每一次重连没成只是同一件事的
       // 复述,压成不唤醒的一条,免得连不上的那半小时里每隔几十秒炸一次
       onDisconnect: (reason, willReconnect, attempt) => {
+        this.pendingDeathCause = null;
         this.bodyInhibitReason = null; this.bodyInhibitHold = null;
         this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
         this.methods.stop('游戏连接已断开，原方法坐标和权限作废');
@@ -4255,6 +4257,7 @@ export class MinecraftWorld implements World {
   }
 
   async stop(): Promise<void> {
+    this.pendingDeathCause = null;
     this.photography.stop();
     this.initialSceneStop?.(); this.initialSceneStop = null;
     this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
@@ -6440,6 +6443,7 @@ export class MinecraftWorld implements World {
   }
 
   protected onSpawn(): void {
+    this.pendingDeathCause = null;
     this.bodyInhibitReason = null; this.bodyInhibitHold = null;
     this.reflexes?.start();
     this.initialSceneStop?.();
@@ -6518,6 +6522,7 @@ export class MinecraftWorld implements World {
    * 不重走 onSpawn：世界和连接未变，快照基线与暂态仍有效。
    */
   protected onRespawn(): void {
+    this.pendingDeathCause = null;
     this.setBodyInhibited(null);
     this.attention.reset();
     const now = Date.now();
@@ -6916,6 +6921,10 @@ export class MinecraftWorld implements World {
   protected hookMessageEvents(bot: any): void {
     if (this.hookedMessageBots.has(bot)) return;
     this.hookedMessageBots.add(bot);
+    this.pendingDeathCause = null;
+    const clearDeathCause = () => { if (this.bridge?.bot === bot) this.pendingDeathCause = null; };
+    bot.on('respawn', clearDeathCause);
+    bot.on('spawn', clearDeathCause);
     this.lastServerFeedback = null;
     this.recentSystemMessages.clear();
     const noteActionFeedback = (value: unknown, keyHint = ''): void => {
@@ -7016,7 +7025,10 @@ export class MinecraftWorld implements World {
         if (key.startsWith('death.') || key === 'chat.type.advancement') {
           const text = jsonMsg.toString();
           if (!text) return;
-          if (text.includes(this.chatName())) {
+          const own = key.startsWith('death.')
+            ? this.bridge?.bot === bot && isOwnDeathTranslation(jsonMsg, bot.username || this.chatName(), bot.player?.uuid)
+            : text.includes(this.chatName());
+          if (own) {
             if (key.startsWith('death.')) {
               this.diag.write({
                 lane: 'world', event: 'death-cause',

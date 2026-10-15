@@ -43,6 +43,20 @@ it('starts a new episode only after fresh native spawn', async () => {
   expect(r.bot.deathLifecycle!.episodeId).not.toBe(old);
   r.recovery.dispose();
 });
+it('cancels on the native respawn packet before fresh health emits spawn', async () => {
+  const r = rig(); r.bot.emit('death');
+  const old = r.bot.deathLifecycle!.episodeId;
+  await vi.advanceTimersByTimeAsync(2000);
+  r.bot.emit('respawn'); // Mineflayer leaves health at zero until update_health.
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(r.bot.respawn).not.toHaveBeenCalled();
+  expect(r.bot.deathLifecycle).toMatchObject({ episodeId: old, phase: 'dead', respawnAt: null });
+  r.bot.emit('death');
+  expect(r.bot.deathLifecycle!.episodeId).toBe(old);
+  r.bot.health = 20; r.bot.emit('spawn');
+  expect(r.bot.deathLifecycle!.phase).toBe('alive');
+  r.recovery.dispose();
+});
 it('validates the bounded configurable delay', () => {
   expect(respawnDelay(undefined)).toBe(4000);
   expect(respawnDelay(15000)).toBe(15000);

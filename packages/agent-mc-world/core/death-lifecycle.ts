@@ -49,11 +49,13 @@ export function installDeathLifecycle(bot: DeathBot, delayMs: number | undefined
     if (bot.deathLifecycle) bot.deathLifecycle = { ...bot.deathLifecycle, phase: 'alive', respawnAt: null };
   };
   bot.on('death', death);
+  bot.on('respawn', cancel); // Native packet precedes spawn/positive health; it already satisfies the dispatch.
   bot.on('spawn', spawn);
   bot.on('end', cancel);
   return { cancel, dispose: () => {
     cancel();
     bot.removeListener('death', death);
+    bot.removeListener('respawn', cancel);
     bot.removeListener('spawn', spawn);
     bot.removeListener('end', cancel);
   } };
