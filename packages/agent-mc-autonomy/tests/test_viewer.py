@@ -69,7 +69,7 @@ def test_viewer_binding_requires_fresh_matching_identity(framework_module):
 
 
 def test_optional_viewer_configuration_is_atomic(framework_module):
-    with pytest.raises(ValueError, match="configured together"):
+    with pytest.raises(ValueError, match="renderer_catalog_pair_required"):
         framework_module.Settings.parse({"viewer": {"renderer_directory": "/renderer"}})
     settings = framework_module.Settings.parse({"viewer": {"renderer_directory": "/renderer", "catalog_file": "/catalog.json"}})
     assert not settings.enabled and settings.viewer_listen_port == 28985

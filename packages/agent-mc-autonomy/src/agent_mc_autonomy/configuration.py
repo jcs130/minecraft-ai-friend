@@ -14,24 +14,32 @@ from .decision_profiles import DecisionSettings
 from .fast import FastSettings
 
 
+class SettingsValidationError(ValueError):
+    """Safe structured error: never expose submitted values or exception text."""
+
+    def __init__(self, field: str, code: str):
+        self.field, self.code = field, code
+        super().__init__(code)
+
+
 def _text(section: dict, key: str, default: str = "") -> str:
     value = section.get(key, default)
     if not isinstance(value, str) or value != value.strip() or any(ord(char) < 32 for char in value):
-        raise ValueError(f"Invalid text setting: {key}")
+        raise SettingsValidationError(key, "invalid_text")
     return value
 
 
-def _integer(section: dict, key: str, default: int, minimum: int, maximum: int) -> int:
+def _integer(section: dict, key: str, default: int, minimum: int, maximum: int, field: str = "") -> int:
     value = section.get(key, default)
     if type(value) is not int or not minimum <= value <= maximum:
-        raise ValueError(f"{key} must be an integer in {minimum}..{maximum}")
+        raise SettingsValidationError(field or key, "invalid_integer_range")
     return value
 
 
 def _boolean(section: dict, key: str, default: bool) -> bool:
     value = section.get(key, default)
     if type(value) is not bool:
-        raise ValueError(f"{key} must be boolean")
+        raise SettingsValidationError(key, "invalid_boolean")
     return value
 
 
@@ -176,36 +184,36 @@ class Settings:
             raise ValueError("runtime.mode must be embedded or external")
         host = _text(server, "host")
         if host and (len(host) > 253 or re.search(r"[\s/@?#\\]", host) or "://" in host):
-            raise ValueError("server.host must be a DNS name or IP address, not a URL")
+            raise SettingsValidationError("server.host", "invalid_host")
         local_hosts = {"", "localhost", "127.0.0.1", "::1"}
         connection_type = _text(server, "connection_type", "local" if host.lower() in local_hosts else "custom")
         if connection_type not in {"local", "custom"} or connection_type == "local" and host.lower() not in local_hosts:
-            raise ValueError("Select custom connection type for a non-local server")
+            raise SettingsValidationError("server.connection_type", "connection_type_mismatch")
         auth = _text(server, "auth", "offline")
         if auth not in {"offline", "microsoft"}:
-            raise ValueError("server.auth must be offline or microsoft")
+            raise SettingsValidationError("server.auth", "invalid_auth")
         username = _text(server, "username")
         if len(username) > 254 or (username and auth == "offline" and not re.fullmatch(r"[A-Za-z0-9_]{1,16}", username)):
-            raise ValueError("Invalid server.username for the selected authentication mode")
+            raise SettingsValidationError("server.username", "invalid_username")
         version = _text(server, "version", "1.21.1")
         if version != "1.21.1" and not (body_provider == "java-client" and version == "1.20.6"):
-            raise ValueError("server.version must be exactly 1.21.1 for this integration")
+            raise SettingsValidationError("server.version", "unsupported_version")
         if _integer(viewer, "port", 0, 0, 65535) or _integer(viewer, "console_port", 0, 0, 65535):
             raise ValueError("This headless build uses viewer.url; bundled viewer and console ports must be zero")
         operator = raw.get("operator", {})
         if not isinstance(operator, dict) or set(operator) - {"port"}:
             raise ValueError("operator supports only an optional local port")
-        console_port = _integer(operator, "port", 0, 0, 65535)
+        console_port = _integer(operator, "port", 0, 0, 65535, "operator.port")
         if console_port and (console_port < 1024 or body_provider != "mineflayer"):
-            raise ValueError("operator.port requires Mineflayer and an unprivileged loopback port; Java login uses its own client")
+            raise SettingsValidationError("operator.port", "operator_port_unprivileged")
         minimum = _integer(autonomy, "min_decision_seconds", 10, 5, 300)
         renderer, catalog = _text(viewer, "renderer_directory"), _text(viewer, "catalog_file")
         if bool(renderer) != bool(catalog):
-            raise ValueError("viewer.renderer_directory and viewer.catalog_file must be configured together")
+            raise SettingsValidationError("viewer.renderer_directory", "renderer_catalog_pair_required")
         maximum_output = _integer(autonomy, "max_output_tokens", 1024, 128, 131072)
         return cls(
             enabled=_boolean(autonomy, "enabled", False), host=host,
-            port=_integer(server, "port", 25565, 1, 65535), username=username, auth=auth, version=version, connection_type=connection_type,
+            port=_integer(server, "port", 25565, 1, 65535, "server.port"), username=username, auth=auth, version=version, connection_type=connection_type,
             node=_text(backend, "node", "node"), backend_directory=_text(backend, "directory"),
             body_provider=body_provider, java_client=java_client,
             login_config_file=_text(server, "login_config_file"),
