@@ -1,5 +1,7 @@
 # Optional YSM bridge for the Paper server
 
+2026-10-16: production Freesia is **af3**, retaining the af2 PLAY/session checks. After forwarding the pinned native cache-initialization payload, it replays existing peers' actual native model states once per observer mapper. Delayed handshakes and reconnects no longer miss players tracked before the handshake; vanilla observers receive no native model replay. The final candidate passed 17 lifecycle and 10 isolated wire checks; 10 production release checks include Naruto's native model/entity ID after a delayed handshake. CorMy was offline after maintenance, and native Java pixels still need a player retest. Stopped E/F backups precede installation; Paper remained running. See [peer synchronization and rollback](../../docs/YSM_PEER_SYNC.md). Earlier dated versions below are historical.
+
 2026-10-15: production is Paper 1.21.1, AgentAppearance 0.3.2 and Freesia **af2**. The proxy-only login/configuration fix was deployed after owner approval, advance notices and stopped E/F YSM backups; Paper stayed running. It skips the authentication limbo, starts the Worker after the actual world JOIN, and checks PLAY, session epoch and mapper identity at the final write. Native bytes/channel remain unchanged. 17 lifecycle, 43 isolated wire and 20 production wire checks passed; the remote Fabric GUI still needs a client retest. See [diagnosis, tests and rollback](../../docs/YSM_LOGIN_PHASE.md). Historical version statements below describe their dated releases.
 
 Status (2026-10-11): deployed behind the existing identity gateway, with the existing maintenance lock, Watchdog and stopped E/F backups. Proxy bridge 0.3.0 supplies Web/camera assets and private state to the [Geyser Bedrock adapter](../geyser-ysm/README.md). Production unmodified Mineflayer, original UUIDs and exact model bundle delivery are verified; Bedrock geometry/UV/texture delivery is verified in isolation. Remote Web hosts need their own update. Native Java pixel parity, full animation/equipment parity and phone/Xbox device visuals remain unaccepted. See [adaptation status](../../docs/YSM_ADAPTATION.md) and [lifecycle](../../docs/YSM_LIFECYCLE.md).
@@ -45,6 +47,7 @@ The full modified MPL-2.0 files are under `src/`, alongside the upstream [LICENS
 4. Make the Worker controller reconnect asynchronously, with one connect in flight, a connection timeout and a bounded pending queue. The lifecycle addon retries once after server startup and closes controller event loops on normal shutdown.
 5. Publish a bounded, read-only projection of the actual Worker NBT through the existing Minecraft connection. No fake YSM handshake is added to ordinary clients.
 6. Start native model sessions only after the actual world JOIN, never in `auth`. Reject stale Worker callbacks and queued writes after a backend change; check the current client PLAY state on its Netty event loop. The pure lifecycle test and separate real authentication/transfer tests are documented above.
+7. Replay same-backend peer model states after the observer's actual native model-cache initialization. Deduplicate by mapper identity and clear on backend change/disconnect; preserve native encoding, real gameplay entity IDs and final PLAY/epoch guards. This uses the pinned protocol's cache-ready payload, not a fixed delay or periodic broadcast.
 
 `bridge/` implements `AgentAppearance`. `worker/` implements the Fabric lifecycle addon. The patched Freesia code is MPL-2.0; retain its license and provide these modified source files if redistributing the binaries. Model redistribution permissions are independent of Freesia's license.
 
@@ -93,7 +96,7 @@ python build.py --dependencies <private-dependencies> --output <new-private-buil
 
 Use a fresh output directory. The script verifies input JAR digests, records source and cache hashes, and produces:
 
-- `Freesia-Velocity-2.5.1+2.4.1-af2.jar`
+- `Freesia-Velocity-2.5.1+2.4.1-af3.jar`
 - `Freesia-Worker-2.5.1+2.4.1-af1.jar`
 - `AgentAppearance-0.3.2.jar` (candidate; production remains 0.3.1)
 - `AgentAppearance-WorkerCleanup-0.1.0.jar`

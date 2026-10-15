@@ -1,5 +1,7 @@
 # YSM 登录后断线：握手阶段修复
 
+> 2026-10-16：正式已由本文af2升级至af3，保留登录时序检查并补上初始化后其他玩家模型重发。当前部署、验证范围及af3→af2回退见[YSM_PEER_SYNC.md](YSM_PEER_SYNC.md)。以下为af2原发布记录。
+
 ## 状态（2026-10-15）
 
 Freesia **2.5.1+2.4.1-af2** 已于11:28正式上线。服主回复“现在提醒并上线”后，180/60/10秒提醒、原维护锁与真人/活动副本门禁通过，代理和Worker正常停止；E/F `repairs/ysm-play-phase-20261015/cold-before/.complete` 均在替换前完成。仅更新私有代理的 Freesia 插件，沿原Windows Job监管和Watchdog启动。Paper PID始终为6372，未重启；原生 YSM 2.4.1、Worker插件和认证配置保持。

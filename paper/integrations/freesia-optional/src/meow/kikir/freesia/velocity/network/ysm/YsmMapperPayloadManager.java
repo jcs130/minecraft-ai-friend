@@ -55,6 +55,7 @@ public class YsmMapperPayloadManager {
 
     // The players who installed ysm(Used for packet sending reduction)
     private final Set<UUID> ysmInstalledPlayers = Sets.newConcurrentHashSet();
+    private final Map<UUID, MapperSessionProcessor> observersResynced = Maps.newConcurrentMap();
     private final YsmPlayGate playGate = new YsmPlayGate();
     private final Set<MapperSessionProcessor> startedMappers = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -62,6 +63,7 @@ public class YsmMapperPayloadManager {
         this.playGate.begin(player.getUniqueId(), backend);
         this.backendEntityIds.remove(player.getUniqueId());
         this.unavailableMappers.remove(player.getUniqueId());
+        this.observersResynced.remove(player.getUniqueId());
     }
 
     public long backendEpoch(Player player) { return this.playGate.epoch(player.getUniqueId()); }
@@ -105,6 +107,31 @@ public class YsmMapperPayloadManager {
 
     public void onClientYsmHandshakePacketReply(@NotNull Player target) {
         this.ysmInstalledPlayers.add(target.getUniqueId());
+    }
+
+    public void onClientModelCacheInitialized(@NotNull MapperSessionProcessor observer) {
+        final Player target = observer.getBindPlayer();
+        final long epoch = this.backendEpoch(target);
+        if (this.mapperSessions.get(target) != observer || !this.isPlayerInstalledYsm(target)
+                || !this.isPlayReady(target, epoch)
+                || this.observersResynced.put(target.getUniqueId(), observer) == observer) return;
+
+        // Initial entity tracking usually precedes the native client's handshake.
+        // Its callbacks were skipped while the observer was not YSM-capable.
+        // Replay once after forwarding the Worker's actual cache initialization,
+        // retaining the existing native state encoding and final PLAY checks.
+        Freesia.PROXY_SERVER.getScheduler().buildTask(Freesia.INSTANCE, () -> {
+            if (this.mapperSessions.get(target) != observer || !this.isPlayReady(target, epoch)
+                    || !this.isPlayerInstalledYsm(target) || target.getCurrentServer().isEmpty()) return;
+            final var backend = target.getCurrentServer().get().getServerInfo();
+            for (final var entry : this.mapperSessions.entrySet()) {
+                final Player owner = entry.getKey();
+                if (owner == target || owner.getCurrentServer().isEmpty()
+                        || !backend.equals(owner.getCurrentServer().get().getServerInfo())
+                        || !this.acceptsWorkerPayload(entry.getValue())) continue;
+                this.onRealPlayerTrackerUpdate(owner, target);
+            }
+        }).schedule();
     }
 
     public void updateWorkerPlayerEntityId(Player target, int entityId){
@@ -338,6 +365,7 @@ public class YsmMapperPayloadManager {
         this.unavailableMappers.remove(player.getUniqueId());
         this.backendEntityIds.remove(player.getUniqueId());
         this.ysmInstalledPlayers.remove(player.getUniqueId());
+        this.observersResynced.remove(player.getUniqueId());
 
         final MapperSessionProcessor mapperSession = this.mapperSessions.remove(player);
 

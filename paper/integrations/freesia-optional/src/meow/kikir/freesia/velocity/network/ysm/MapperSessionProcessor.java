@@ -176,6 +176,15 @@ public class MapperSessionProcessor implements SessionListener {
             case PASS ->
                     this.packetProxy.sendPluginMessageToOwner(MinecraftChannelIdentifier.create(channelKey.namespace(), channelKey.value()), packetData);
         }
+
+        // Pinned native YSM 2.4.0 packet 1 initializes the model cache, after
+        // the handshake, catalog and permissions. Queue peer state only after
+        // this payload has been queued for the observer; never use a timer to
+        // guess whether its Worker has completed initialization.
+        if (result.result() == ProxyComputeResult.EnumResult.PASS && packetData.length > 0
+                && Byte.toUnsignedInt(packetData[0]) == 1) {
+            this.mapperPayloadManager.onClientModelCacheInitialized(this);
+        }
     }
 
     @Override

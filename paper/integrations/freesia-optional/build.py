@@ -22,14 +22,14 @@ for name,digest in PINNED.items():
 classes=out/'classes';classes.mkdir(exist_ok=True)
 sources=list((ROOT/'src').rglob('*.java'))+list((ROOT/'bridge').rglob('*.java'))
 subprocess.run([str(args.jdk/'bin/javac.exe'),'-proc:none','-encoding','UTF-8','--release','21','-cp',';'.join(deps),'-d',str(classes),*[str(p) for p in sources]],check=True)
-patched=out/'Freesia-Velocity-2.5.1+2.4.1-af2.jar'
+patched=out/'Freesia-Velocity-2.5.1+2.4.1-af3.jar'
 with zipfile.ZipFile(args.dependencies/'Freesia-Velocity-2.5.1+2.4.1-all.jar') as src,zipfile.ZipFile(patched,'w',zipfile.ZIP_DEFLATED) as dst:
     updates={p.relative_to(classes).as_posix():p.read_bytes() for p in (classes/'meow').rglob('*.class')}
     for info in src.infolist():
         if info.filename in updates:continue
         content=src.read(info.filename)
         if info.filename=='velocity-plugin.json':
-            meta=json.loads(content);meta['version']='2.5.1+2.4.1.af2';content=json.dumps(meta).encode()
+            meta=json.loads(content);meta['version']='2.5.1+2.4.1.af3';content=json.dumps(meta).encode()
         dst.writestr(info,content)
     for name,data in updates.items():dst.writestr(name,data)
     dst.writestr('META-INF/agentfriend/MPL-2.0.txt',(ROOT/'LICENSE').read_bytes())
