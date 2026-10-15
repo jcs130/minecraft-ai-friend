@@ -55,6 +55,47 @@ public class YsmMapperPayloadManager {
 
     // The players who installed ysm(Used for packet sending reduction)
     private final Set<UUID> ysmInstalledPlayers = Sets.newConcurrentHashSet();
+    private final YsmPlayGate playGate = new YsmPlayGate();
+    private final Set<MapperSessionProcessor> startedMappers = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    public void beginBackendChange(Player player, String backend) {
+        this.playGate.begin(player.getUniqueId(), backend);
+        this.backendEntityIds.remove(player.getUniqueId());
+        this.unavailableMappers.remove(player.getUniqueId());
+    }
+
+    public long backendEpoch(Player player) { return this.playGate.epoch(player.getUniqueId()); }
+
+    public boolean isPlayReady(Player player, long epoch) {
+        return this.playGate.canSend(player.getUniqueId(), epoch) && this.clientIsPlaying(player);
+    }
+
+    public boolean acceptsWorkerPayload(MapperSessionProcessor processor) {
+        final Player player = processor.getBindPlayer();
+        return this.mapperSessions.get(player) == processor && this.isPlayReady(player, this.backendEpoch(player));
+    }
+
+    private boolean clientIsPlaying(Player player) {
+        return player.isActive() && player instanceof com.velocitypowered.proxy.connection.client.ConnectedPlayer connected
+                && connected.getConnection().getState() == com.velocitypowered.proxy.protocol.StateRegistry.PLAY;
+    }
+
+    /** Check again on the client's Netty event loop, at the actual write.
+     * A Worker reply queued before a transfer must not be sent during CONFIG,
+     * or replayed into a new world/session. Native YSM bytes remain unchanged. */
+    public void sendWhenReady(Player target, YsmPacketProxy source, MinecraftChannelIdentifier channel, byte[] data) {
+        if (!(target instanceof com.velocitypowered.proxy.connection.client.ConnectedPlayer connected)) return;
+        final long epoch = this.playGate.epoch(target.getUniqueId());
+        connected.getConnection().eventLoop().execute(() -> {
+            if (!this.playGate.canSend(target.getUniqueId(), epoch) || !this.clientIsPlaying(target)) return;
+            final Player owner = source.getOwner();
+            if (owner != null) {
+                final MapperSessionProcessor current = this.mapperSessions.get(owner);
+                if (current == null || current.getPacketProxy() != source) return;
+            }
+            target.sendPluginMessage(channel, data);
+        });
+    }
 
     public YsmMapperPayloadManager(Function<Player, YsmPacketProxy> packetProxyCreator, Function<UUID, YsmPacketProxy> packetProxyCreatorVirtual) {
         this.packetProxyCreator = packetProxyCreator;
@@ -229,14 +270,25 @@ public class YsmMapperPayloadManager {
     }
 
     public void autoCreateMapper(Player player) {
+        if (!this.playGate.ready(player.getUniqueId()) || !this.clientIsPlaying(player)) return;
+        final MapperSessionProcessor processor = this.mapperSessions.get(player);
+        if (processor == null || !this.startedMappers.add(processor)) return;
         final InetSocketAddress worker = Freesia.registedWorkers.isEmpty() ? null : this.selectLessPlayer();
         if (worker == null) {
+            this.startedMappers.remove(processor);
             this.unavailableMappers.add(player.getUniqueId());
             if (FreesiaConfig.kickIfYsmNotInstalled) player.disconnect(Component.text("YSM Worker unavailable"));
             return;
         }
         this.unavailableMappers.remove(player.getUniqueId());
-        this.createMapperSession(player, worker);
+        try {
+            this.createMapperSession(player, worker);
+        } catch (RuntimeException failure) {
+            this.startedMappers.remove(processor);
+            this.unavailableMappers.add(player.getUniqueId());
+            Freesia.LOGGER.warn("Optional YSM session failed to start for {}", player.getUsername(), failure);
+            if (FreesiaConfig.kickIfYsmNotInstalled) player.disconnect(Component.text("YSM Worker unavailable"));
+        }
     }
 
     // Periodic optional retry also covers controller-before-Minecraft startup.
@@ -246,7 +298,7 @@ public class YsmMapperPayloadManager {
         for (UUID uuid : Set.copyOf(this.unavailableMappers)) {
             if (attempted >= 40) break;
             final Player player = Freesia.PROXY_SERVER.getPlayer(uuid).orElse(null);
-            if (player == null || player.getCurrentServer().isEmpty()) continue;
+            if (player == null || player.getCurrentServer().isEmpty() || !this.playGate.ready(uuid) || !this.clientIsPlaying(player)) continue;
             final Integer entityId = this.backendEntityIds.get(uuid);
             if (entityId == null) continue;
             if (!this.mapperSessions.containsKey(player)) this.initMapperPacketProcessor(player);
@@ -282,6 +334,7 @@ public class YsmMapperPayloadManager {
     private final Map<UUID, Integer> backendEntityIds = new java.util.concurrent.ConcurrentHashMap<>();
 
     public void onPlayerDisconnect(@NotNull Player player) {
+        this.playGate.remove(player.getUniqueId());
         this.unavailableMappers.remove(player.getUniqueId());
         this.backendEntityIds.remove(player.getUniqueId());
         this.ysmInstalledPlayers.remove(player.getUniqueId());
@@ -289,11 +342,13 @@ public class YsmMapperPayloadManager {
         final MapperSessionProcessor mapperSession = this.mapperSessions.remove(player);
 
         if (mapperSession != null) {
+            this.startedMappers.remove(mapperSession);
             this.disconnectMapperWithoutKickingMaster(mapperSession);
         }
     }
 
     protected void onWorkerSessionDisconnect(@NotNull MapperSessionProcessor mapperSession, boolean kickMaster, @Nullable Component reason) {
+        this.startedMappers.remove(mapperSession);
         // A late callback from an old session cannot invalidate its replacement.
         if (!this.mapperSessions.remove(mapperSession.getBindPlayer(), mapperSession)) return;
         // Kick the master it binds
@@ -313,6 +368,7 @@ public class YsmMapperPayloadManager {
         if (!channel.equals(YSM_CHANNEL_KEY_VELOCITY)) {
             return;
         }
+        if (!this.isPlayReady(player, this.backendEpoch(player))) return;
 
         final MapperSessionProcessor mapperSession = this.mapperSessions.get(player);
         if (mapperSession == null || this.unavailableMappers.contains(player.getUniqueId())) return;
@@ -321,6 +377,11 @@ public class YsmMapperPayloadManager {
     }
 
     public void onBackendReady(Player player) {
+        this.onBackendReady(player, this.playGate.epoch(player.getUniqueId()));
+    }
+
+    public void onBackendReady(Player player, long epoch) {
+        if (!this.clientIsPlaying(player) || !this.playGate.markReady(player.getUniqueId(), epoch)) return;
         final MapperSessionProcessor mapperSession = this.mapperSessions.get(player);
 
         if (mapperSession == null) {
@@ -328,6 +389,7 @@ public class YsmMapperPayloadManager {
         }
 
         mapperSession.onBackendReady();
+        this.autoCreateMapper(player);
     }
 
     public boolean disconnectAlreadyConnected(Player player) {
@@ -338,7 +400,10 @@ public class YsmMapperPayloadManager {
             return false;
         }
 
-        // Will do remove in the callback
+        // Remove before awaiting close: late callbacks must not remove the new
+        // processor, and old Worker replies must fail the source identity check.
+        this.mapperSessions.remove(player, current);
+        this.startedMappers.remove(current);
         this.disconnectMapperWithoutKickingMaster(current);
         return true;
     }

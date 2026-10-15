@@ -1,3 +1,5 @@
+2026-10-15 当前正式为Paper1.21.1 / AgentFriend0.4.41 / Eye0.1.16 / Freesia af2。YSM登录大厅提前握手修复已按服主确认、预告及E/F模型服务冷备份上线；Paper未重启，正式20项协议检查通过。原生Fabric模型界面仍待可米重连复测，按SERVER_UPDATES.md与YSM_LOGIN_PHASE.md回答。下方较早版本为历史。
+
 2026-10-14 当前正式 **AgentFriend0.4.40 / Eye0.1.15**。服主批准后，180/60/10秒预告、原维护任务正常停启，E/F完整冷备份20261014-182425在安装前完成。AgentFriend **0.4.40** / CortiEyeMirror **0.1.15** 已上线。正式状态29项、真实认证Java/Agent/实际Eye联机27项、玩家保存8项通过。批量保护、短回执、通用CLI和三项自愿生活挑战生效。Goddess、ag_CorMy、ag_cormy_eye以原UUID恢复；普通难度及三维度死亡保留物品读回。手机/Xbox画面、远端Web和16个自主Agent未作本次验收。原0.4.38/0.4.39候选已随本版部署，后续新增CLI继续遵循CLI_CONTRACT.md。下方旧候选记录为各自时点。
 
 本文是 `qiandengji-personal-stash` 分支的长期工作约定。目标是让 Agent 团队持续提出、制作、验证和运营新内容，同时让六岁玩家、手柄玩家、Java 玩家、基岩玩家和 Mineflayer Agent 在同一世界里获得可理解、可完成的体验。当前正式服的启停、备份、发布命令仍以 [维护与发布](OPERATIONS.md) 为准；本手册说明内容如何从想法进入这个流程。

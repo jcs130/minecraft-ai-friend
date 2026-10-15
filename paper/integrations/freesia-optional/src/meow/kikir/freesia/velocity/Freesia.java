@@ -14,6 +14,7 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerJo
 import com.google.common.collect.Maps;
 import com.velocitypowered.api.event.EventTask;
 import com.velocitypowered.api.event.Subscribe;
+import com.velocitypowered.api.event.PostOrder;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.connection.PluginMessageEvent;
 import com.velocitypowered.api.event.player.ServerConnectedEvent;
@@ -155,23 +156,23 @@ public class Freesia implements PacketListener {
         final Player targetPlayer = event.getPlayer();
 
         return EventTask.async(() -> {
-            this.logger.info("Initiating mapper session for player {}", targetPlayer.getUsername());
+            this.logger.info("Backend connected for {}; waiting for actual world join before YSM", targetPlayer.getUsername());
 
-            // Create mapper session
-            mapperManager.autoCreateMapper(targetPlayer);
-
-            // Add to client kicker
-            kickChecker.onPlayerJoin(targetPlayer);
+            // ServerConnected also fires for the authentication limbo and while
+            // modern clients are still in CONFIGURATION. Wait for actual JOIN_GAME.
         });
     }
 
-    @Subscribe
+    @Subscribe(order = PostOrder.LAST)
     public EventTask onServerPreConnect(@NotNull ServerPreConnectEvent event) {
         //mapperManager.updateRealPlayerEntityId(event.getPlayer(), -1); // Reset player's entity id to -1 as non initialized to prevent incorrect tracker status update
         final Player player = event.getPlayer();
 
         // Create mapper processor here
         return EventTask.async(() -> {
+            if (!event.getResult().isAllowed()) return;
+            final String backend = event.getResult().getServer().orElse(event.getOriginalServer()).getServerInfo().getName();
+            mapperManager.beginBackendChange(player, backend);
             final boolean potentialDisconnected = mapperManager.disconnectAlreadyConnected(player);
 
             if (potentialDisconnected) {
@@ -210,7 +211,11 @@ public class Freesia implements PacketListener {
             mapperManager.updateRealPlayerEntityId(target, playerSpawnPacket.getEntityId());
 
             // Finalize callbacks
-            PROXY_SERVER.getScheduler().buildTask(this, () -> mapperManager.onBackendReady(target)).schedule();
+            final long epoch = mapperManager.backendEpoch(target);
+            PROXY_SERVER.getScheduler().buildTask(this, () -> {
+                mapperManager.onBackendReady(target, epoch);
+                if (mapperManager.isPlayReady(target, epoch)) kickChecker.onPlayerJoin(target);
+            }).schedule();
         }
     }
 }
