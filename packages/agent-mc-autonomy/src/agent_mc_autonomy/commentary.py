@@ -19,6 +19,31 @@ def _band(text, label, boundaries):
     return next((index for index, ceiling in enumerate(boundaries) if value <= ceiling), len(boundaries))
 
 
+def _task_progress(task):
+    """Select actual terminal steps, including successes in a blocked batch.
+
+    Native mixed receipts put successful steps after ``做成的:``. They do not
+    say the whole task completed. Keep that distinction in the presentation.
+    """
+    task = re.split(r"\[背包\]|\[重复尝试记录\]", task, maxsplit=1)[0]
+    split = re.split(r"做成的[:：]", task, maxsplit=1)
+    partial = len(split) == 2
+    successful = split[-1]
+    rows = re.split(r"(?=第\s*\d+\s*步\s*\{)", successful)
+    useful = []
+    for row in rows:
+        skills = set(re.findall(r'"skill"\s*:\s*"([a-z_]+)"', row))
+        if not skills - {"observe", "find", "check"}:
+            continue
+        if re.search(r"没做成|失败|未成功|跳过|取消|没跑|本来就是|已经够|无需", row):
+            continue
+        # A detailed native terminal step has its actual elapsed time/outcome;
+        # retain the old compact terminal receipt format as well.
+        if "用时" in row or "完成:" in row or "完成：" in row:
+            useful.append(row.strip())
+    return "\n".join(useful[-2:]), "partial" if partial else "completed"
+
+
 def commentary_observation(status, now):
     """Project native facts or a review envelope, retaining originals at their source.
 
@@ -48,21 +73,19 @@ def commentary_observation(status, now):
     items = sorted(set(name.strip() for name in re.findall(
         r"([^、，,：:；;。]+?)(?:\s+耐久\s*\d+/\d+)?\s*[×x]\s*\d+", bag)))
     task = str(facts.get("lastTask", ""))
-    skills = set(re.findall(r'"skill"\s*:\s*"([a-z_]+)"', task))
-    useful_task = (bool(skills - {"observe", "find", "check"}) and "完成" in task
-                   and not re.search(r"失败|未成功|跳过|取消", task))
+    progress, outcome = _task_progress(task)
     body = str(facts.get("body", ""))
     baseline = {"connected": connected, "phase": phase,
                 "session": snapshot.get("session", str(snapshot.get("owner_pid", "")) + ":" + str((snapshot.get("viewer") or {}).get("session", ""))),
                 "health": _band(body, "生命", (0, 6, 12)), "hunger": _band(body, "饥饿", (6, 12)),
-                "items": items, "progress": hashlib.sha256(task.encode()).hexdigest() if useful_task else ""}
+                "items": items, "progress": hashlib.sha256(progress.encode()).hexdigest() if progress else ""}
     # Reviews already carry full inventory and original fact handles for strategy.
     # Presentation needs the current activity and outcome, not another bag dump.
     payload = {"sampled_at": sampled_at, "connected": connected, "phase": phase,
                "error": _brief(snapshot.get("error", snapshot.get("runtime_error", "")), 160),
                "facts": {key: _brief(facts.get(key, ""), size) for key, size in (
                    ("body", 180), ("place", 160), ("queue", 300))},
-               "progress": _brief(task, 420) if useful_task else "",
+               "progress": _brief(progress, 420), "task_outcome": outcome if progress else None,
                "viewer_url": status.get("viewer_url", ""),
                "viewer_binding_verified": status.get("viewer_body_binding_verified", False)}
     signature = hashlib.sha256(json.dumps(baseline, ensure_ascii=False, sort_keys=True).encode()).hexdigest()

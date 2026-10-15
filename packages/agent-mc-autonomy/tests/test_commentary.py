@@ -54,3 +54,31 @@ def test_baseline_and_freshness():
     assert commentary_changes(first, None)["topics"] == ["session_started"]
     for now in (9999, 10031):
         assert commentary_observation(sample(), now) is None
+
+
+def test_actual_mixed_receipt_keeps_verified_steps_without_claiming_the_failed_goal():
+    receipt = ('[最近一单] 任务#73「烧原木;挖石头」:\n'
+               '第 1 步 {"skill":"smelt"} 用时 0s: 没做成(包里没有煤炭)\n'
+               '做成的: 第 2 步 {"skill":"excavate"} 用时 2m: 挖开了 75/75 块。\n'
+               '[背包] 圆石×69')
+    event = commentary_observation(sample(task=receipt), 10000)
+    assert event["baseline"]["progress"]
+    assert "挖开了 75/75" in event["payload"]["progress"]
+    assert "没做成" not in event["payload"]["progress"]
+    assert event["payload"]["task_outcome"] == "partial"
+
+
+def test_noop_or_only_read_steps_after_a_failure_do_not_become_achievements():
+    for ending in ('第 2 步 {"skill":"observe"} 读取现场成功',
+                   '第 2 步 {"skill":"build"} 本来就是箱子;核验:达成'):
+        receipt = '任务#1:\n第 1 步 {"skill":"craft"} 没做成(缺材料)\n做成的:\n' + ending
+        assert not commentary_observation(sample(task=receipt), 10000)["baseline"]["progress"]
+
+
+def test_real_detailed_terminal_receipt_does_not_require_a_completed_header():
+    receipt = ('[最近一单] 任务#4「合成工作台」:\n'
+               '第 1 步 {"skill":"craft","item":"crafting_table"} 用时 1s: '
+               '合成出来:工作台×1;该步核验:达成(实测 1)')
+    event = commentary_observation(sample(task=receipt), 10000)
+    assert event["payload"]["task_outcome"] == "completed"
+    assert "合成出来" in event["payload"]["progress"]
