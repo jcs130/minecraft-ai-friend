@@ -20,6 +20,8 @@ protected readonly choiceReceipts: Array<Record<string, unknown>> = [];
 protected readonly combatProgram = new CombatProgramRunner();
 protected combatProgramErrorHash: string | null = null;
 protected combatProgramError: string | null = null;
+protected combatProgramRetryAt = 0;
+protected combatProgramTimeoutRetriedHash: string | null = null;
 protected lastCombatProgramFeedbackAt = 0;
 protected lastCombatDecision: { atMs: number; generation: number; outcome: unknown; elapsedMs: unknown } | null = null;
   constructor(options: MinecraftWorldOptions, protected readonly tactics = new CombatAbilities(new CombatTacticBook(options.dataDir ? join(options.dataDir,'minecraft-combat-tactics.json') : null))) { super(options); }
@@ -80,6 +82,7 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
     if (args.enabled === false) {
       this.tactics.setTactic(null);
       this.combatProgram.close(); this.combatProgramErrorHash = null; this.combatProgramError = null;
+      this.combatProgramRetryAt = 0; this.combatProgramTimeoutRetriedHash = null;
       return this.toolLog(tool, args, '已清除并保存自定战术，恢复默认即时战斗控制。');
     }
     const rawSpells = args.spells;
@@ -115,7 +118,8 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
     this.tactics.setTactic({ spells, healAtOrBelow, ...(rules !== undefined ? { rules } : {}),
       ...(program !== undefined ? { program } : {}) });
     if (rawProgram === null) this.combatProgram.close();
-    if (rawProgram !== undefined) { this.combatProgramErrorHash = null; this.combatProgramError = null; }
+    if (rawProgram !== undefined) { this.combatProgramErrorHash = null; this.combatProgramError = null;
+      this.combatProgramRetryAt = 0; this.combatProgramTimeoutRetriedHash = null; }
     const programHash = program ? combatProgramHash(program) : null;
     const programError = program && this.combatProgramErrorHash === programHash
       ? this.combatProgramError : this.combatProgram.status().error;
@@ -183,19 +187,30 @@ protected async prepareCombatProgram(frame: CombatDecisionFrame): Promise<Combat
     const program = frame.program, bot = this.bridge?.bot;
     if (!program || !bot) return frame;
     const hash = combatProgramHash(program);
-    if (this.combatProgramErrorHash === hash) return frame;
+    if (this.combatProgramErrorHash === hash) {
+      if (!this.combatProgramRetryAt || Date.now() < this.combatProgramRetryAt) return frame;
+      // A single bounded retry on a fresh sample handles host scheduling stalls.
+      // Never reuse the timed-out output, raise the execution budget or spin.
+      this.combatProgramRetryAt = 0; this.combatProgram.close();
+    }
     try {
       const result = combatProgramCandidates(await this.combatProgram.run(program, frame), frame,
         to => this.combatDecisionConfig().allowMovement && corridorSafe(bot, new Vec3(...frame.battlefield.self.position), new Vec3(...to)));
       const max = this.combatDecisionConfig().maxCandidates;
+      this.combatProgramErrorHash = null; this.combatProgramError = null;
       return { ...frame, candidates: diverseCombatOptions(result.candidates, max),
         omittedCandidates: Math.max(0, result.candidates.length - max),
         policy: { name: program.name, sourceHash: hash, instructions: result.instructions } };
     } catch (error) {
       this.combatProgramErrorHash = hash;
       this.combatProgramError = String(error);
+      const timeout = /Combat program (?:exceeded evaluation budget|worker response timed out)/.test(String(error));
+      if (timeout && this.combatProgramTimeoutRetriedHash !== hash) {
+        this.combatProgramTimeoutRetriedHash = hash; this.combatProgramRetryAt = Date.now() + 1000;
+      } else this.combatProgramRetryAt = 0;
       this.emit('minecraft.tactic', `自主战术程序「${program.name}」SHA256 ${hash}已停止采用：${String(error)}。`
-        + '当前使用默认候选作为回退；请读取真实战场与回执，修订program后再验证。', false, { trigger: 'piggyback' });
+        + (this.combatProgramRetryAt ? '本次使用默认候选，至少1秒后的新鲜采样仅重试一次；再次失败须修订program。'
+          : '当前使用默认候选作为回退；请读取真实战场与回执，修订program后再验证。'), false, { trigger: 'piggyback' });
       return frame;
     }
   }

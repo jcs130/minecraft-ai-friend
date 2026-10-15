@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { Vec3 } from 'vec3';
 import { TacticalMinecraftWorld as QiandengjiEngine } from '../core/tactical-world.ts';
 import { combatProgramHash, type CombatProgram } from '../core/combat-program.ts';
@@ -22,7 +22,29 @@ class StatusWorld extends QiandengjiEngine {
     return this.prepareCombatProgram(frame);
   }
   closeProgram() { this.combatProgram.close(); }
+  runner() { return this.combatProgram; }
 }
+
+it('retries a timed-out program only once on a later sample while ordinary fallback stays available', async () => {
+  const world = new StatusWorld({ cfg: structuredClone(MINECRAFT_DEFAULTS) });
+  const program={name:'bounded-recovery',code:'return {candidates:[],instructions:"fresh"};'};
+  let now=Date.now(); const clock=vi.spyOn(Date,'now').mockImplementation(()=>now);
+  const run=vi.spyOn(world.runner(),'run');
+  try {
+    await world.update({program});
+    run.mockRejectedValueOnce(new Error('Combat program exceeded evaluation budget'));
+    expect((await world.evaluate(program)).policy).toBeUndefined();
+    expect((await world.evaluate(program)).policy).toBeUndefined();
+    expect(run).toHaveBeenCalledTimes(1);
+    now+=1001;
+    expect((await world.evaluate(program)).policy?.name).toBe(program.name);
+    run.mockRejectedValueOnce(new Error('Combat program exceeded evaluation budget'));
+    expect((await world.evaluate(program)).policy).toBeUndefined();
+    now+=10001;
+    expect((await world.evaluate(program)).policy).toBeUndefined();
+    expect(run).toHaveBeenCalledTimes(3);
+  } finally {clock.mockRestore();run.mockRestore();world.closeProgram();}
+});
 
 it('retains an adoption failure in a rule-only receipt until an authored program revision is installed', async () => {
   const world = new StatusWorld({ cfg: structuredClone(MINECRAFT_DEFAULTS) });

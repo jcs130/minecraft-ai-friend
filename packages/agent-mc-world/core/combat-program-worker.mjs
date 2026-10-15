@@ -5,14 +5,19 @@ import 'ses';
 lockdown({ errorTaming: 'unsafe', consoleTaming: 'safe' });
 try {
   const source = `(frame, params) => {\n${workerData.code}\n}`;
-  new Compartment().evaluate(source);
+  // Compile once at worker startup, outside the per-frame execution budget.
+  // Freezing both function and globals prevents this reuse from becoming a
+  // hidden cross-frame memory channel. Inputs remain hardened per invocation.
+  const compartment = new Compartment();
+  const program = harden(compartment.evaluate(source));
+  harden(compartment.globalThis);
   const evaluate = new Script('run()');
   parentPort.on('message', ({ frame, params }) => {
     try {
       const startedAt = performance.now();
       // SES owns capabilities; the VM timeout also covers getters during serialization.
       const text = evaluate.runInNewContext({ run: () => {
-        const result = new Compartment().evaluate(source)(harden(frame), harden(params));
+        const result = program(harden(frame), harden(params));
         if (result && typeof result.then === 'function') throw new Error('Combat program must be synchronous');
         const serialized = JSON.stringify(result);
         if (!serialized || serialized.length > workerData.outputChars) throw new Error('Combat program output exceeds budget');

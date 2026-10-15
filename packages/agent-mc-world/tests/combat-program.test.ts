@@ -45,6 +45,18 @@ describe('agent-authored combat programs', () => {
     await expect(r.run({ ...p, code: `frame.battlefield.self.position[0]=99; return {candidates:[],instructions:''};` }, frame())).rejects.toThrow();
   });
 
+  it('reuses compiled code with fresh inputs but cannot retain state in compartment globals', async () => {
+    const r = runner(), f = frame(), p = { name: 'fresh-frame', code: `
+      let rejected = false;
+      try { globalThis.previousFrame = frame; } catch { rejected = true; }
+      return {candidates:[],instructions:JSON.stringify({rejected, retained:typeof previousFrame,
+        health:frame.battlefield.self.health.current})};` };
+    expect(JSON.parse((await r.run(p, f)).instructions)).toEqual({rejected:true,retained:'undefined',health:20});
+    f.battlefield.self.health.current = 8;
+    expect(JSON.parse((await r.run(p, f)).instructions)).toEqual({rejected:true,retained:'undefined',health:8});
+    expect(r.status().error).toBeNull();
+  });
+
   it('revokes an infinite program without blocking the game clock and accepts a revision', async () => {
     const r = runner();
     const bad = { name: 'bad-loop', code: 'while (true) {}' };
