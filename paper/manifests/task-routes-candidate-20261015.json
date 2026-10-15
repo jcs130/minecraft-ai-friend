@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "date": "2026-10-15",
-  "status": "candidate_not_deployed",
+  "status": "deployed_and_verified",
   "target": "existing Paper Qiandengji",
   "core": "Paper 1.21.1 build 133",
   "agentFriend": "0.4.42",
@@ -29,14 +29,39 @@
   ],
   "deployment": {
     "requiresPaperRestart": true,
-    "approval": "pending",
+    "approval": "user confirmed 可以重启",
     "noticeSeconds": [
       180,
       60,
       10
     ],
     "guard": "humans and active instances; original maintenance task and full E/F cold backup",
-    "queued": false
+    "queued": false,
+    "at": "2026-10-15T13:27:18.218Z",
+    "backupStamp": "20261015-211316",
+    "completeColdCopies": [
+      "E:/MC/backups/scheduled/20261015-211316",
+      "F:/MC-backups/scheduled/20261015-211316"
+    ],
+    "sourceCommit": "094e2b6a522b05bc03297616eb237df81eb41877",
+    "productionChecks": {
+      "isolated": 169,
+      "productionState": 30,
+      "authenticatedJavaAgentEye": 25,
+      "savedData": 16
+    },
+    "originalBackpacksPreserved": 29,
+    "maintenanceTaskResult": 0,
+    "paperPid": 11548,
+    "welcomingRevision": 12,
+    "taskDefinitions": 52,
+    "goddess": {
+      "actualReadOnlyQuestionVerified": true,
+      "gamePromptAndParserVerified": true,
+      "characters": 119,
+      "sourceCopiesVerified": true,
+      "gameTestChatSent": false
+    }
   },
   "files": [
     {
@@ -56,5 +81,13 @@
       "sha256": "cfb0abdb85166ede13bfece8b30c140f31b929550f0126c8f208e37681081df7"
     }
   ],
-  "rollback": "Disable new offers on 0.4.42 while preserving frozen in-flight contracts. Do not settle new combat snapshots with 0.4.41."
+  "rollback": "Disable new offers on 0.4.42 while preserving frozen in-flight contracts. Do not settle new combat snapshots with 0.4.41.",
+  "runtimeEvidence": {
+    "bedrockPong": true,
+    "bedrockPhysicalDevice": false,
+    "remoteWebModified": false,
+    "clientsModified": false,
+    "fomModified": false,
+    "fixtureFailuresPreserved": true
+  }
 }

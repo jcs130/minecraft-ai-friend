@@ -1,6 +1,6 @@
 # 自选委托路线
 
-2026-10-15：AgentFriend **0.4.42 候选**，用于现有 Paper 千灯纪。正式服仍为 0.4.41；本文不是上线回执。
+2026-10-15：AgentFriend **0.4.42 已上线**，用于现有 Paper 千灯纪；完整冷备份为 E/F `20261015-211316`。正式状态30项、认证 Java/Agent/实际 Eye 25项、原数据16项及29份大背包对账通过。
 
 ## 玩家与 Agent 的入口
 
@@ -87,7 +87,7 @@ Agent 默认一份私有 `MC_TASKS` JSON；超过短消息预算的详情用既�
 按 [维护流程](OPERATIONS.md) 另行确认、提前提醒、检查真人和活动副本、完整双盘冷备份后部署唯一 AgentFriend JAR。同步新版 `onboarding.yml`、新增 `route-contracts.yml` 及小满的 BetonQuest 对话，后者沿其原生重载入口更新；不使用 Paper `/reload`。没有新增第三方插件、客户端补丁、建筑施工或世界迁移，FOM 不在本次范围内。
 
 ```powershell
-./paper/plugins/AgentFriend/build.ps1
+./paper/plugins/AgentFriend/build.ps1 -MinecraftVersion 1.21.1
 ./paper/plugins/AgentFriend/test-task-routes.ps1
 node paper/probe/task-routes-stage.mjs M
 node paper/probe/task-routes-compat-stage.mjs F
@@ -99,14 +99,21 @@ node paper/probe/task-routes-resume-stage.mjs M
 
 若只撤回新内容，在 0.4.42 上禁用新任务并 `market reload`，保留在途冻结规则让玩家完成。直接降回 0.4.41 会丢失新武器条件的解释能力，不能让新 `combat` 在途单据由旧 JAR 继续结算；须先安全停发并处理这些在途单据，保留原账本和备份。不要为撤回功能回滚玩家物品或整个世界。
 
-具体摘要、测试结果与未覆盖范围写入本轮候选清单；正式发布后再修订本页状态并同步女神资料箱。
+具体摘要、测试结果与未覆盖范围见本轮发布清单；现役女神资料箱同步相同玩家说明。
 
 ### 本轮结果
 
-同一 JAR（SHA256 `78e39073c251bdb14d426858e4933c8075618ad04832bcb56f4e8d85914c2e01`）通过 **169 项**：规则 43、CLI 回归 49、原生 Java/Agent/实际 Eye 流程 60、旧 Java 与基岩协议 7、正常冷启动回读 10。正式服未替换或重启，未排队维护。
+同一 JAR（SHA256 `78e39073c251bdb14d426858e4933c8075618ad04832bcb56f4e8d85914c2e01`）通过 **169 项**：规则 43、CLI 回归 49、原生 Java/Agent/实际 Eye 流程 60、旧 Java 与基岩协议 7、正常冷启动回读 10。以上为部署前隔离验收；随后经服主确认完成正常备份重启，正式核验见页首与发布清单。
 
 实际验收包括：纯查询不报名；普通 Java 中文、Agent 单份 JSON、Eye 中文、外人收不到；八阶段长详情可无损拼回；错误怪物/武器/魔法不计，弓箭发射后换剑仍正确计数；制造只交第一步不毕业；回补满仓保留物品与任务，成功时本人少 16 支火把、公共仓库多 16 支；实际走查满足区域、距离、行进时间；在途讨伐 1/4、四次最终交付与毕业状态冷启动后保持。另有明确标注的旧格式存档夹具验证旧任务和旧生活证明兼容。
 
 原失败均留在私有证据中，包括界面标题类型、未加载场地、客户端预测合成、仓库空 `Items` 字段、聊天 SNBT 缩略，以及一次基岩 OpenID 网络握手失败；修正夹具后复验，不能拿失败的中间快照声称物品丢失或服务端判定异常。最后使用原生输出槽位、原生库存数量查询和完整 NBT 克隆备份；未重放结果未知的合成。隔离服已正常保存停止，最终包不含诊断插件。
 
-源码、发布文件摘要与维护边界见 [候选清单](../manifests/task-routes-candidate-20261015.json)。E/F 双盘候选与原始回执在 `repairs/task-routes-20261015`；这是候选副本，正式部署前仍须最新完整冷备份。
+源码、发布文件摘要与维护边界见 [候选清单](../manifests/task-routes-candidate-20261015.json)。E/F 双盘候选与原始回执在 `repairs/task-routes-20261015`；候选副本另存；正式部署使用更新前完整冷备份 E/F `scheduled/20261015-211316`。
+
+### 正式发布与协议核验
+
+服主确认“可以重启”后，180/60/10秒预告、真人/副本/PvP门禁通过；原Afu-MC-DailyBackup正常停启，E/F完整冷备份20261015-211316均先于安装完成。正式Paper1.21.1 build133 / AgentFriend0.4.42 / Eye0.1.16，31插件启用、52委托/7场地、欢迎修订12。正式状态30项、认证Java/Agent/真实Eye25项、原数据16项通过，29份原背包逐行与物品摘要一致。普通难度与三维度keepInventory=true保留。手机/Xbox真机、远端Web更新及16自主Agent长期负载未验。启动期间server.properties仅日期注释变化，全部设置值一致；标准客户端需声明minecraft:register中的mcagent:tasks订阅才能接收该自定义频道，私有中文/JSON聊天回执照常可用。ag_账号默认单份机器回执，实际Eye中文不转发JSON；真实原生菜单浏览没有接单，原大背包仍能打开。测试期间未替真实玩家接单、转移物资或发奖。
+
+
+女神收尾：现役资料源/副本摘要一致，真实游戏提示及解析器验收通过；实际read_file读取TASK_ROUTES和SERVER_UPDATES，119字中文正确说明六条任选、农业非前置、/mycli tasks逐层入口与旧证明/任务保留，未发游戏测试消息。初次普通console长答、漏列只读glob_search的夹具失败均保留。
