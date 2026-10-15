@@ -5,7 +5,8 @@ import { pathToFileURL } from 'node:url';
 import { publicAgentReader } from './viewer-public.mjs';
 
 const require = createRequire(resolve(new URL(import.meta.url).searchParams.get('package'), 'package.json'));
-const { MinecraftWorld, Bridge } = await import(pathToFileURL(require.resolve('agent-mc-world/extension')).href);
+const { Bridge } = await import(pathToFileURL(require.resolve('agent-mc-world/extension')).href);
+const { TacticalMinecraftWorld } = await import(pathToFileURL(require.resolve('agent-mc-world/tactics')).href);
 const { simplify } = require('prismarine-nbt');
 
 export function createEngine(options) {
@@ -24,7 +25,9 @@ export function createEngine(options) {
     stream?.close(); stream = null;
     await previous?.close();
   };
-  return new class extends MinecraftWorld {
+  // Presentation decorates the default tactical body; it must retain its tools,
+  // battlefield sampling, combat receipts and extension lifecycle hooks.
+  return new class extends TacticalMinecraftWorld {
     async start(host) {
       stopped = false;
       try {
