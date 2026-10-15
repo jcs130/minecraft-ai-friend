@@ -423,6 +423,13 @@ attempts receive a changing request-tail notice to choose an action when facts
 suffice or query a specific unresolved fact. This is advisory and does not
 automatically move the body, interrupt work or claim progress.
 
+## Current food reserve in standalone reads (0.1.41)
+
+Direct SDK facts now include the same synchronized food-reserve readout as host
+events, with native item IDs for the planner. Hunger and non-food inventory no
+longer have to be interpreted as food stock. Unconfirmed inventory remains
+unknown; this read does not scan the world or consume host events.
+
 ## Inventory identity and recipe feedback (0.1.40)
 
 Current verified inventory IDs are prioritized with inventory quantities in the
