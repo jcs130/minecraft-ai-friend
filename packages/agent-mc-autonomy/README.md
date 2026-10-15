@@ -5,6 +5,13 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.65 retains validated native step outcomes before receipt truncation, including
+successes in blocked batches. Review and commentary share bounded samples,
+outcome counts, omission counts and source queries; native `ok` does not verify
+the objective. Late accepted previews cannot replace retained terminal outcomes.
+The fixed core includes current-stock recipe preview wording and the respawn
+movement repair. The speech and death-reflection APIs below remain available.
+
 0.1.64 keeps transport delivery, main-brain inspection/decision, factual death
 reflection and playback receipts separate. Accepted death notifications remain
 pending until an evidence-referenced lesson or explicit deferral is supplied in

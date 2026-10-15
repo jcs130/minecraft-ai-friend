@@ -13,7 +13,7 @@ from datetime import datetime
 from .configuration import _boolean, _integer
 from .host_context import HostContextPort, validate_host_context
 from .mailbox import Mailbox, observation
-from .observations import body_feedback, feedback_signal, fact_preview, spatial_text, tool_failure_view
+from .observations import body_feedback, feedback_signal, fact_preview, spatial_text, tool_failure_view, native_outcome_summary
 from .death_memory import DeathMemory, lifecycle, scope_key, recovery_context
 
 
@@ -67,6 +67,7 @@ def review_observation(status, now):
                 "current_goal": {**{key: active.get(key) for key in ("id", "goal", "mode", "parent_id")},
                                  "origin": active.get("origin", "unknown")}, "pending": pending,
                 "facts": useful, "body_events": feedback["body_events"], "native_outcomes": feedback["native_outcomes"],
+                "outcome_precedence": feedback["outcome_precedence"],
                 "fact_originals": {part["key"]: part["original"] for part in snapshot.get("facts", {}).get("parts", [])
                                    if part.get("key") in useful and part.get("original")},
                 "planner_error": snapshot.get("planner_error"),
@@ -127,6 +128,9 @@ def summary(evidence):
     reads = sum(evidence.get("read_activity", {}).values())
     if reads:
         activity += f"；连续查询{reads}次（查询不代表行动进展）"
+    terminal = [row for row in evidence["native_outcomes"] if not row["observation_only"] and row.get("terminal") is True]
+    if terminal:
+        activity += "；" + native_outcome_summary(terminal[-1])
     if failure := evidence.get("tool_failure"):
         activity += "；最近未解工具错误:" + failure["tool"] + " " + brief(failure["error"], 210)
     if episode := evidence.get("death_episode"):

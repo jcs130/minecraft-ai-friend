@@ -18,6 +18,8 @@ from .fast import FastPolicy, focus_state, rule_focus
 from .model_protocols import assistant_history
 from .observations import (
     body_event_view,
+    native_outcome_view,
+    terminal_step_outcomes,
     fact_preview,
     receipt_view,
     spatial_text,
@@ -382,9 +384,11 @@ class Controller:
                     event = next((e for e in value.get("events", []) if (e.get("execution") or {}).get("id") == execution["id"]), {})
                     reference = {k: event[k] for k in ("run", "cursor", "ts") if k in event}
                     receipt = str((execution.get("evidence") or {}).get("receipt", ""))
-                    self.native_outcomes.append({"tool": name, "execution_id": execution["id"], "phase": phase,
+                    self.native_outcomes.append(native_outcome_view({"tool": name, "execution_id": execution["id"], "phase": phase,
                         "observation_only": read_only, "goal_verified": False,
-                        "receipt": spatial_text(receipt)[:450], "original_event": reference})
+                        "terminal": True, "goalCompleted": execution.get("goalCompleted"),
+                        "step_outcomes": terminal_step_outcomes(execution, arguments),
+                        "receipt": spatial_text(receipt), "original_event": reference}))
                     self.native_outcomes = self.native_outcomes[-6:]
                     self.publish(native_outcomes=list(self.native_outcomes))
                     if not read_only and phase == "completed":
@@ -407,7 +411,11 @@ class Controller:
                 self.action_owners.pop(key, None)
                 self.publish(viewer_terminal={key: execution[key] for key in ("id", "terminal", "phase") if key in execution})
             else:
-                self.pending[key] = execution
+                # Late acceptance cannot resurrect an execution whose terminal
+                # outcome is already retained for this game scope.
+                if not any(row["execution_id"] == execution["id"] and row.get("terminal") is True
+                           for row in self.native_outcomes):
+                    self.pending[key] = execution
             self.persist(pending=list(self.pending.values()))
         for event in value.get("events", []):
             if event.get("contextDelivery") == "archive-only" or event.get("meta", {}).get("staleEpoch"):

@@ -13,8 +13,9 @@ def runtime_error_code(error):
 
 
 def _bounded(value, size):
-    raw = str(value or "").encode("utf-8")
-    return raw.decode() if len(raw) <= size else raw[:size - 3].decode("utf-8", errors="ignore") + "…"
+    text = str(value or "")
+    raw = text[:size].encode("utf-8")
+    return raw.decode() if len(text) <= size and len(raw) <= size else raw[:size - 3].decode("utf-8", errors="ignore") + "…"
 
 
 def event_reference(value):
@@ -41,12 +42,120 @@ def body_event_view(value):
 
 
 def native_outcome_view(value):
-    if not isinstance(value, dict) or not isinstance(value.get("execution_id"), str):
+    if (not isinstance(value, dict) or not isinstance(value.get("execution_id"), str)
+            or value.get("terminal") is False):
         return None
     return {"tool": _bounded(value.get("tool"), 80), "execution_id": _bounded(value["execution_id"], 160),
             "phase": _bounded(value.get("phase"), 40), "observation_only": value.get("observation_only") is True,
+            "terminal": value.get("terminal") if type(value.get("terminal")) is bool else None,
+            "goalCompleted": value.get("goalCompleted") if type(value.get("goalCompleted")) is bool else None,
             "goal_verified": False, "receipt": _bounded(value.get("receipt"), 450),
+            **({"step_outcomes": step_outcomes_view(value["step_outcomes"])} if "step_outcomes" in value else {}),
             "original_event": event_reference(value.get("original_event"))}
+
+
+STEP_OUTCOMES = ("ok", "noop", "partial", "fail", "skip", "cut")
+OUTCOME_PRECEDENCE = ("Newest native terminal outcomes take precedence over earlier accepted previews. "
+                      "A blocked batch can contain successful steps; ok alone does not verify a goal. "
+                      "Use current confirmed stock and query originals for omitted evidence.")
+OUTCOME_QUERY = "mc_protocol(action=archive,run=original_event.run,after=original_event.cursor-1)"
+
+
+def terminal_step_outcomes(execution, arguments):
+    """Validate before text truncation; retain both outcome groups in bounded memory.
+
+    Duplicate indices are ambiguous, including contradictory results: discard all
+    entries at that index. Native outcomes never imply objective verification.
+    The 10,000-index validation ceiling bounds scratch memory for malformed input;
+    everything beyond it is explicitly counted as invalid and remains queryable.
+    """
+    evidence = execution.get("evidence")
+    raw = evidence.get("steps") if isinstance(evidence, dict) else None
+    submitted = arguments.get("steps") if isinstance(arguments, dict) else None
+    ceiling = min(len(submitted), 10000) if isinstance(submitted, list) else 10000
+    counts = dict.fromkeys(STEP_OUTCOMES, 0)
+    result = {"status": "unknown", "total": len(raw) if isinstance(raw, list) else None,
+              "valid": 0, "invalid": 0, "counts": counts, "samples": [], "omitted": 0,
+              "mixed": False, "query": OUTCOME_QUERY}
+    if not isinstance(raw, list):
+        return result
+    indices = Counter(row["step"] for row in raw if isinstance(row, dict)
+                      and type(row.get("step")) is int and 1 <= row["step"] <= ceiling)
+    groups = {outcome: [] for outcome in STEP_OUTCOMES}
+    small = []
+    for row in raw:
+        if (not isinstance(row, dict) or type(row.get("step")) is not int
+                or not 1 <= row["step"] <= ceiling or indices[row["step"]] != 1
+                or not isinstance(row.get("outcome"), str) or row["outcome"] not in counts
+                or (row.get("why") is not None and not isinstance(row["why"], str))):
+            result["invalid"] += 1
+            continue
+        outcome = row["outcome"]
+        counts[outcome] += 1
+        # First and latest sample per outcome; reasons are bounded UTF-8 bytes.
+        sample = {"step": row["step"], "outcome": outcome,
+                  **({"why": _bounded(row["why"], 120) if row["why"] is not None else None} if "why" in row else {})}
+        if len(small) < 8:
+            small.append(sample)
+        if len(groups[outcome]) < 2:
+            groups[outcome].append(sample)
+        else:
+            groups[outcome][-1] = sample
+    result["valid"] = sum(counts.values())
+    # Round-robin prevents early failures or successes from hiding other groups.
+    samples = small if result["valid"] <= 8 else [group[i] for i in range(2) for group in groups.values() if len(group) > i][:8]
+    result["samples"] = sorted(samples,
+                               key=lambda row: row["step"])
+    result["omitted"] = result["valid"] - len(result["samples"])
+    result["mixed"] = bool(counts["ok"] and result["valid"] > counts["ok"])
+    if result["valid"]:
+        result["status"] = "partial" if result["invalid"] else "available"
+    return result
+
+
+def step_outcomes_view(value):
+    """Revalidate the bounded canonical projection when reading persisted status."""
+    unknown = terminal_step_outcomes({}, {})
+    if not isinstance(value, dict):
+        return unknown
+    counts = value.get("counts")
+    samples = value.get("samples")
+    if (not isinstance(counts, dict) or not isinstance(samples, list) or len(samples) > 8
+            or any(type(counts.get(key)) is not int or not 0 <= counts[key] <= 10**9 for key in STEP_OUTCOMES)
+            or any(type(value.get(key)) is not int or not 0 <= value[key] <= 10**9 for key in ("valid", "invalid", "omitted"))
+            or sum(counts[key] for key in STEP_OUTCOMES) != value["valid"]
+            or value["omitted"] != value["valid"] - len(samples)
+            or (value.get("total") is not None and (type(value["total"]) is not int
+                or value["total"] != value["valid"] + value["invalid"]))):
+        return unknown
+    projected, seen = [], set()
+    for row in samples:
+        if (not isinstance(row, dict) or type(row.get("step")) is not int or not 1 <= row["step"] <= 10000
+                or row["step"] in seen or not isinstance(row.get("outcome"), str) or row["outcome"] not in STEP_OUTCOMES
+                or (row.get("why") is not None and not isinstance(row["why"], str))):
+            return unknown
+        seen.add(row["step"])
+        projected.append({"step": row["step"], "outcome": row["outcome"],
+                          **({"why": _bounded(row["why"], 120) if row["why"] is not None else None} if "why" in row else {})})
+    if any(sum(row["outcome"] == key for row in projected) > counts[key] for key in STEP_OUTCOMES):
+        return unknown
+    return {"status": ("partial" if value["invalid"] else "available") if value["valid"] else "unknown",
+            "total": value.get("total"), **{key: value[key] for key in ("valid", "invalid", "omitted")},
+            "counts": {key: counts[key] for key in STEP_OUTCOMES}, "samples": projected,
+            "mixed": bool(counts["ok"] and value["valid"] > counts["ok"]), "query": OUTCOME_QUERY}
+
+
+def native_outcome_summary(row):
+    steps = row.get("step_outcomes") or {}
+    counts = steps.get("counts") or {}
+    text = "原生任务" + row["execution_id"] + "终态" + row["phase"]
+    if steps.get("status") in {"available", "partial"}:
+        text += "；步骤结果:" + ",".join(f"{key}={counts[key]}" for key in STEP_OUTCOMES if counts.get(key))
+        if steps.get("mixed"):
+            text += "（成功与未成功并存）"
+    else:
+        text += "；步骤结果未知"
+    return text + "；ok不等于目标核验"
 
 
 def body_feedback(snapshot, facts):
@@ -58,7 +167,7 @@ def body_feedback(snapshot, facts):
             if value:
                 selected[value[key]] = value
         return list(selected.values())[-6:]
-    return {"bodyRestriction": _bounded(facts.get("bodyRestriction"), 400),
+    return {"bodyRestriction": _bounded(facts.get("bodyRestriction"), 400), "outcome_precedence": OUTCOME_PRECEDENCE,
             "body_events": project(snapshot.get("body_events"), body_event_view, "id"),
             "native_outcomes": project(snapshot.get("native_outcomes"), native_outcome_view, "execution_id")}
 
@@ -68,7 +177,7 @@ def feedback_signal(feedback):
     body = feedback["body_events"][-1:]
     outcomes = [row for row in feedback["native_outcomes"] if not row["observation_only"]][-1:]
     selected = [feedback["bodyRestriction"], [(row["id"], row["phase"], row["text"]) for row in body],
-                [(row["execution_id"], row["phase"], row["receipt"]) for row in outcomes]]
+                [(row["execution_id"], row["phase"], row["receipt"], row.get("step_outcomes")) for row in outcomes]]
     return hashlib.sha256(json.dumps(selected, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 
