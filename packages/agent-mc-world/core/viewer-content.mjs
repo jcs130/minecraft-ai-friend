@@ -1,4 +1,4 @@
-/** Vanilla 1.20.6 content from the action bot's connection, with bounded replay. */
+/** Exact supported Java content from the action bot's connection, with bounded replay. */
 import {decodeTextDisplay,textDisplayMetadataKeys} from './text-display.mjs';
 const finite = n => typeof n === 'number' && Number.isFinite(n);
 const integer = (n, min, max) => Number.isInteger(n) && n >= min && n <= max;
@@ -34,7 +34,7 @@ export function viewerParticlePacket(packet, { version = '1.20.6', protocol } = 
       // Protocol 766 writes two vectors then scale. Some minecraft-data releases
       // label the fourth float scale: reinterpret those labels without mutating the bot.
       const order = transitionFieldOrder(protocol);
-      if (version === '1.20.6' && order === 'fromRed,fromGreen,fromBlue,scale,toRed,toGreen,toBlue') {
+      if (['1.20.6','1.21.1'].includes(version) && order === 'fromRed,fromGreen,fromBlue,scale,toRed,toGreen,toBlue') {
         colorEnd = [data.scale, data.toRed, data.toGreen]; scale = data.toBlue;
       } else if (order === 'fromRed,fromGreen,fromBlue,toRed,toGreen,toBlue,scale') {
         colorEnd = [data.toRed, data.toGreen, data.toBlue]; scale = data.scale;
@@ -101,7 +101,7 @@ export function cachedMapFrame(entity, registry) {
 }
 
 export function createViewerContentBridge(bot, { now = Date.now, schedule = setInterval, unschedule = clearInterval } = {}) {
-  if (bot.version !== '1.20.6') throw Error('viewer_content_requires_1.20.6');
+  if (!['1.20.6','1.21.1'].includes(bot.version)) throw Error('viewer_content_version_unsupported');
   const protocol = bot._client, maps = new Map(), frames = new Map(), textEntities=new Map(), textDisplays=new Map(), listeners = new Set(), hooks = [], socketDrainers=new Set(), socketDisposers=new Set();
   let epoch = 0, queue = [], disposed = false;
   const diagnostics = { particles: 0, droppedParticles: 0, mapPatches: 0, rejected: 0, subscriberErrors: 0, cachedFrames: 0, cachedTextDisplays:0, rejectedTextDisplays:0 };

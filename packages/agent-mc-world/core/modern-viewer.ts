@@ -457,7 +457,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
   const mergeViewerSpellCatalogue = (previous: ViewerSkills | null, abilities: NonNullable<ViewerSkills['abilities']>, seen: boolean) => serverProtocol?.mergeViewerSpellCatalogue(previous,abilities,seen) ?? previous!;
   const parseViewerCustomEvent = (channel: unknown, data: unknown) => serverProtocol?.parseViewerCustomEvent(channel,data) ?? null;
   const speechRelay = options.relay;
-  const content = bot.version === '1.20.6' ? createViewerContentBridge(bot) : null;
+  const content = ['1.20.6','1.21.1'].includes(bot.version) ? createViewerContentBridge(bot) : null;
   const appearance = serverProtocol?.createAppearance?.(bot) ?? null;
   const agentVisuals = createViewerAgentBridge(bot, { getFlightState: () => flightState(bot) });
   // Container serialization is already supplied by this host; preserve its richer trade/property state.
@@ -733,6 +733,10 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
         res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' }); res.end(speakerScript); return;
       }
       if (await speechRelay?.handle(req, res, pathname)) return;
+      if (pathname === '/speech-source') {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        res.end('{"available":false,"reason":"performance_bridge_not_configured"}'); return;
+      }
       if (pathname === '/healthz') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
         res.end(JSON.stringify({ ok: !closed, version: bot.version, ...sessionSlots.status(), content: content?.stats() ?? null,
@@ -775,7 +779,10 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
         return;
       }
       if (pathname.startsWith('/head-texture/')) {
-        if (options.remoteTextures !== true) { res.writeHead(503).end('Remote texture retrieval is disabled'); return; }
+        if (options.remoteTextures !== true) {
+          res.writeHead(503, { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' })
+            .end('{"available":false,"reason":"remote_textures_disabled"}'); return;
+        }
         await headTextures.serve(req, res, pathname, bot);
         return;
       }
