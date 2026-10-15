@@ -5,7 +5,7 @@ import { Vec3 } from 'vec3';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Bridge } from '../core/bridge.ts';
 import { MinecraftWorld } from '../core/world.ts';
-import { type WorldSnapshot } from '../core/terrain.ts';
+import { biomeAt, type WorldSnapshot } from '../core/terrain.ts';
 import { nullLogger } from '../src/client/index.ts';
 
 const require = createRequire(import.meta.url);
@@ -25,8 +25,11 @@ function rig(initialX = 0, positionFirst = false) {
     entity: { position: new Vec3(initialX, 64, 0), velocity: new Vec3(0, 0, 0), effects: {}, yaw: 0, pitch: 0, equipment: [] },
     game: { dimension: 'overworld' }, player: { uuid: 'test-player' }, username: 'tester',
     health: 20, food: 20, entities: {}, players: {},
+    biomeName: 'plains',
     supportFeature: (name: string) => registry.supportFeature(name), loadPlugin() {}, quit() {},
   });
+  bot.blockAt = () => registry.biomesByName[bot.biomeName]
+    ? { biome: { id: registry.biomesByName[bot.biomeName].id } } : null;
   bot.once('inject_allowed', () => {
     mf('mineflayer/lib/plugins/health.js')(bot, { respawn: false });
     mf('mineflayer/lib/plugins/inventory.js')(bot, { hideErrors: true });
@@ -52,7 +55,7 @@ function rig(initialX = 0, positionFirst = false) {
   bridges.push(bridge); Object.assign(bridge, { installSpawnGear() {} }); world.bridge = bridge;
   vi.spyOn(mineflayer, 'createBot').mockReturnValue(bot);
   world.snapshot = (): WorldSnapshot => ({ position: { ...bot.entity.position }, dimension: bot.game.dimension,
-    biome: 'plains', raining: false, health: bot.health, food: bot.food, xpLevel: 0,
+    biome: biomeAt(bot, bot.entity.position), raining: false, health: bot.health, food: bot.food, xpLevel: 0,
     inventory: bot.inventory.items().map((item: any) => ({ name: item.name, count: item.count })),
     invSynced: bridge.invSynced,
   } as WorldSnapshot);
@@ -125,6 +128,37 @@ it('does not rebase a later ordinary position packet in the same life', () => {
   const r = rig(); r.die(); r.bot._client.emit('respawn', {}); r.position(121); r.full(); r.health(20);
   r.position(128); r.world.reportWorldDelta();
   expect(r.texts().some(text => text.includes('走了 7 格'))).toBe(true);
+});
+
+it.each([
+  [false, false], [false, true], [true, false], [true, true],
+])('does not call a landing biome walking (late-biome=%s, inventory-before-health=%s)', (lateBiome, inventoryFirst) => {
+  const r = rig(); r.die(); r.bot._client.emit('respawn', {});
+  r.bot.biomeName = lateBiome ? 'unknown' : 'forest';
+  r.position(121);
+  expect(r.bridge.invSynced).toBe(false);
+  if (inventoryFirst) r.full();
+  r.health(20, 14);
+  if (!inventoryFirst) { expect(r.bridge.invSynced).toBe(false); r.full(); }
+  r.world.reportWorldDelta();
+  r.bot.biomeName = 'forest'; r.world.reportWorldDelta(); // Biome chunks may arrive after position and health.
+  expect(r.texts().some(text => text.includes('走进了'))).toBe(false);
+  expect(r.texts().some(text => text.includes('走了 121'))).toBe(false);
+  expect(r.bridge.invSynced).toBe(true);
+  expect(r.texts().some(text => /少了.*橡木原木|少了.*oak_log/.test(text))).toBe(true);
+  expect(r.texts().some(text => text.includes('饥饿 14/20'))).toBe(true);
+  if (lateBiome) expect(r.texts().some(text => text.includes('所在的群系是'))).toBe(true);
+  r.bot.biomeName = 'desert'; r.walk(129);
+  expect(r.texts().some(text => text.includes('走进了沙漠'))).toBe(true);
+  expect(r.texts().some(text => text.includes('走了 8 格'))).toBe(true);
+});
+
+it('rebases a dimension landing biome but preserves the next actual crossing', () => {
+  const r = rig(); r.bot._client.emit('respawn', {}); r.bot.game.dimension = 'the_nether';
+  r.bot.biomeName = 'forest'; r.health(20); r.position(121); r.world.reportWorldDelta();
+  expect(r.texts().some(text => text.includes('走进了'))).toBe(false);
+  r.bot.biomeName = 'desert'; r.walk(129);
+  expect(r.texts().some(text => text.includes('走进了沙漠'))).toBe(true);
 });
 
 it.each(['new-death', 'new-generation'])('does not let an old confirmation rewrite the baseline after %s', async boundary => {

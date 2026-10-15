@@ -6552,11 +6552,12 @@ export class MinecraftWorld implements World {
     this.scheduleRespawnConfirmation();
   }
 
-  /** Rebase only space, exactly at the first applied server position of this boundary. */
+  /** Rebase spatial facts at the first applied server position of this boundary. */
   protected onSpawnPosition(landing: DimensionPoint): void {
     const dimension = normalizeDimension(landing.dimension);
     if (this.lastReported) this.lastReported = { ...this.lastReported,
-      position: { x: landing.x, y: landing.y, z: landing.z }, dimension };
+      position: { x: landing.x, y: landing.y, z: landing.z }, dimension,
+      biome: biomeAt(this.bridge?.bot, landing) };
     if (this.deathRespawnConfirmation) this.deathRespawnConfirmation.landing = { ...landing, dimension };
     this.scheduleRespawnConfirmation();
   }

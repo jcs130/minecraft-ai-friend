@@ -822,7 +822,10 @@ export function worldDelta(
       );
     }
   }
-  if (sameDimension && spatialReady && cur.biome !== prev.biome) notes.push(`走进了${zhBiome(cur.biome)}`);
+  if (sameDimension && spatialReady && cur.biome !== 'unknown' && cur.biome !== prev.biome) {
+    // A newly loaded landing chunk establishes a biome reading, not locomotion.
+    notes.push(prev.biome === 'unknown' ? `现在所在的群系是${zhBiome(cur.biome)}` : `走进了${zhBiome(cur.biome)}`);
+  }
   if (sameDimension && cur.raining !== prev.raining) notes.push(cur.raining ? '开始下雨了' : '雨停了');
 
   // 初次同步前的空物品栏不是有效基线。
