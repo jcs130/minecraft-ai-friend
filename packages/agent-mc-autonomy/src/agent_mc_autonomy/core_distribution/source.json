@@ -1,19 +1,19 @@
 {
   "repository": "https://github.com/jcs130/minecraft-ai-friend",
-  "source_revision": "3f7ec0c69a2475e20a5f7aea63cc6ae6460df1eb",
+  "source_revision": "d6ffbf446a768d1ff2cf72079554b9c7217706e9",
   "source_path": "packages/agent-mc-world",
   "name": "agent-mc-world",
-  "version": "0.5.2",
-  "archive": "agent-mc-world-0.5.2.tgz",
-  "sha256": "7c43f8be625bc21b838a683fbe77c7a0f662c9dda1fe483a880d46387c98be90",
+  "version": "0.5.3",
+  "archive": "agent-mc-world-0.5.3.tgz",
+  "sha256": "f6b0376b70cf1f2ee8259aae54496db5fc8cc522844716c14ae0f6d88e393fb0",
   "build_profile": "canonical-engine-only",
   "upstream_release": false,
   "minecraft_version": "1.21.1",
   "viewer_assets": null,
   "verification": {
-    "package.json": "0c095d86040a014726598a26cbe9d539295335b068f6c4b0e0e09b38449a244a",
-    "dist/build.json": "ba5c254a192db531199b28a1a4467d9f221ff49f3a76a07ba549d8b092c92fd8",
-    "dist/types/manifest.json": "da160ff56d04d4e51f346ae456a9718aaf65dcd40e730a1f027b81cc8fb3e28e",
+    "package.json": "fec210a5975864c1668da8ad528f93b12da93938d32fd27484b064ecf08e4077",
+    "dist/build.json": "d90e46645f109feb8b11464214d8497ab056a2b7fcfe6a9106109580152bcfb6",
+    "dist/types/manifest.json": "408bc3d8ecb0645221268965c5e1ba199ca54f7f9cdfdacc55075ffd36e4a306",
     "bin/minecraft-agent-mcp.mjs": "161d2ebcc11726d655e2c204f412553bcc8ed6df6b7d20c2c6fcb82bf30760a8",
     "bin/minecraft-agent-client.mjs": "7cf81abccdcef5ad0aaf59340b233c3b5d398160e1c3d829a36fc25bfcbfb1bc"
   }
