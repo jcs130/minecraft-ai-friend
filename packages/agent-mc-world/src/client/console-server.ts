@@ -98,10 +98,11 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
     } catch (error) { server.close(); server.closeAllConnections(); throw error; }
   }
   return { url: `http://127.0.0.1:${address.port}/`, accountUrl: `http://127.0.0.1:${address.port}${accountPath}`, close: async () => {
+    closing = true;
     if (descriptor) {
       try { if (JSON.parse(await readFile(descriptor, 'utf8')).instanceId === instanceId) await unlink(descriptor); } catch { /* Stale links fail instance validation. */ }
     }
     return new Promise<void>((resolve, reject) => {
-    closing = true; server.close(error => error ? reject(error) : resolve()); server.closeAllConnections();
+    server.close(error => error ? reject(error) : resolve()); server.closeAllConnections();
   }); } };
 }
