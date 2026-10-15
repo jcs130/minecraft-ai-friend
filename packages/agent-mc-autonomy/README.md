@@ -5,7 +5,21 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
-0.1.53 pins checked core 0.5.4, including Java 1.21.1 defaults,
+0.1.54 adds factual death episodes and inferred lessons in the existing
+`reviews.sqlite3`. Up to 32 episodes per actual realm/account/agent survive
+restart; original event run/cursor/time, bounded game facts, actions and receipts
+remain queryable through the local `death_review` search/get/report tool. Lessons
+are attributed planner hypotheses and never mark behavioral improvement verified.
+The existing planner request receives scoped history and applicability; no extra
+inference loop or body queue is started. Planning waits for respawn and fresh
+lifecycle facts. An accepted host review notification consumes that episode once,
+while its original evidence remains inspectable in the pending review. Quiet
+unchanged periodic reviews may use `ReviewPort.defer(id, accepted)` for context-only
+delivery, without claiming a main decision or submitting a goal. Death and state
+changes cannot be deferred. Built-in survival guides are optional knowledge;
+persona, current interests and explicit user goals drive the activity choice.
+
+The prior 0.1.53 release pinned checked core 0.5.4, including Java 1.21.1 defaults,
 native interface fixes and structured action-admission evidence. The coordinator
 keeps native recovery references at the dynamic request tail and suppresses an
 identical rejected plan while non-clock facts remain unchanged, for at most

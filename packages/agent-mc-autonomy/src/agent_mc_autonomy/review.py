@@ -14,6 +14,7 @@ from .configuration import _boolean, _integer
 from .host_context import HostContextPort, validate_host_context
 from .mailbox import Mailbox, observation
 from .observations import fact_preview, spatial_text, tool_failure_view
+from .death_memory import DeathMemory, scope_key
 
 
 @dataclass(frozen=True)
@@ -74,8 +75,12 @@ def review_observation(status, now):
     terminal = useful["lastTask"]
     if re.search(r'"skill"\s*:\s*"observe"', facts.get("lastTask", "")) and "完成" in facts.get("lastTask", ""):
         terminal = ""  # Repeated successful look-only tasks are not new survival progress.
+    episode = snapshot.get("death_episode")
+    if (isinstance(episode, dict) and scope_key(episode.get("scope"))
+            and episode.get("scope") == snapshot.get("game_identity") and isinstance(episode.get("source_event"), dict)):
+        evidence["death_episode"] = episode
     urgent = "runtime_failed" if snapshot["phase"] == "failed" else (
-        "death" if re.search(r"生命\s*0(?:\.0)?\s*/", useful["body"]) else None)
+        "death:" + str(episode.get("id")) if "death_episode" in evidence else None)
     return {"session": str(snapshot.get("owner_pid", "")) + ":" + str((snapshot.get("viewer") or {}).get("session", "")),
             "material": digest(material), "intent": digest([evidence["standing_goal"], active]),
             "signal": digest([material, active, evidence["planner_error"], bool(pending), terminal,
@@ -106,6 +111,8 @@ def summary(evidence):
         activity += f"；连续查询{reads}次（查询不代表行动进展）"
     if failure := evidence.get("tool_failure"):
         activity += "；最近未解工具错误:" + failure["tool"] + " " + brief(failure["error"], 210)
+    if episode := evidence.get("death_episode"):
+        activity += "；实际死亡事件:" + episode["id"] + "（可选叙述；本次历史事实不证明学会或改进）"
     return goal + "；新鲜观测:" + readings + activity
 
 
@@ -152,6 +159,12 @@ class ReviewPort:
                 row = db.execute("SELECT body FROM review_state WHERE id=1").fetchone()
                 state = json.loads(row[0]) if row else {}
                 yield state
+                review = state.get("review", {})
+                episode = review.get("evidence", {}).get("death_episode")
+                if (episode and (review.get("notification_accepted") or review.get("result", {}).get("acknowledged"))
+                        and db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='death_episodes'").fetchone()):
+                    db.execute("UPDATE death_episodes SET notified=1 WHERE scope=? AND id=?",
+                               (scope_key(episode["scope"]), episode["id"]))
                 db.execute("INSERT OR REPLACE INTO review_state VALUES(1,?)", (json.dumps(state, ensure_ascii=False),))
         finally:
             db.close()
@@ -183,12 +196,20 @@ class ReviewPort:
         if not observed or self.stopping():
             return
         observed["evidence"]["current_user_goal"] = self.mailbox.current_user_goal(observed["evidence"]["current_goal"].get("id"))
+        if episode := observed["evidence"].get("death_episode"):
+            if not any(row["id"] == episode["id"] for row in DeathMemory(self.directory).entries(episode["scope"], pending=True)):
+                observed["evidence"].pop("death_episode")
+                observed["urgent"] = None
         with self.transaction() as state:
             self.reconcile(state)
             policy = ReviewPolicy.parse(state.get("policy", {}))
             if not policy.enabled:
                 return
             previous = state.get("review", {})
+            if (previous.get("notification_accepted") and observed["evidence"].get("death_episode", {}).get("id")
+                    == previous.get("evidence", {}).get("death_episode", {}).get("id")):
+                observed["evidence"].pop("death_episode", None)
+                observed["urgent"] = None
             revision = self.mailbox.intent_revision()
             same_session = previous.get("session") == observed["session"]
             same_intent = previous.get("revision") == revision and previous.get("intent") == observed["intent"]
@@ -204,6 +225,8 @@ class ReviewPort:
                     previous["result"] = {"acknowledged": False, "error": "main_brain_not_acknowledged"}
                     state["retry_after"] = now + 300
                 else:
+                    if previous.get("notification_accepted") and previous.get("evidence", {}).get("death_episode"):
+                        observed["evidence"]["death_episode"] = previous["evidence"]["death_episode"]
                     previous["evidence"] = observed["evidence"]
                     previous["summary"] = summary(observed["evidence"])
                 return
@@ -213,7 +236,7 @@ class ReviewPort:
                 return
             state.update(created_at=now, review={**observed, "id": uuid.uuid4().hex[:12], "created_at": now,
                          "revision": revision, "attempts": 0, "summary": summary(observed["evidence"]),
-                         "trigger": "state_changed" if changed else "periodic_review"})
+                         "trigger": "death_review" if observed["evidence"].get("death_episode") else "state_changed" if changed else "periodic_review"})
 
     def offer(self):
         """Claim one bounded delivery attempt; does not manufacture a game event."""
@@ -225,6 +248,8 @@ class ReviewPort:
             review = state.get("review", {})
             if not state.get("policy", {}).get("enabled") or not review or review.get("result"):
                 return {"offered": False, "reason": "no_pending_review"}
+            if review.get("evidence", {}).get("death_episode") and review.get("notification_accepted"):
+                return {"offered": False, "reason": "death_episode_already_delivered"}
             if current["session"] != review["session"] or current["intent"] != review["intent"] or self.mailbox.intent_revision() != review["revision"]:
                 return {"offered": False, "reason": "review_superseded"}
             now = self.now()
@@ -240,9 +265,34 @@ class ReviewPort:
         with self.transaction() as state:
             review = state.get("review", {})
             if review.get("id") == review_id:
-                review["notification_accepted"] = accepted is True
+                review["notification_accepted"] = review.get("notification_accepted") is True or accepted is True
                 if accepted:
                     state["submitted_at"] = self.now()
+
+    def defer(self, review_id, accepted):
+        """Complete a quiet periodic context delivery without claiming a main decision."""
+        current = review_observation(observation(self.directory), self.now())
+        if self.stopping():
+            return {"is_error": True, "error": "disabled_or_stopped"}
+        with self.transaction() as state:
+            review = state.get("review", {})
+            if not state.get("policy", {}).get("enabled"):
+                return {"is_error": True, "error": "disabled_or_stopped"}
+            if review.get("id") != review_id:
+                return {"is_error": True, "error": "review_superseded"}
+            if review.get("trigger") != "periodic_review" or review.get("evidence", {}).get("death_episode"):
+                return {"is_error": True, "error": "meaningful_review_requires_decision"}
+            if (not current or current["session"] != review["session"] or current["intent"] != review["intent"]
+                    or current["signal"] != review["signal"] or self.mailbox.intent_revision() != review["revision"]
+                    or not 0 <= self.now() - review["created_at"] <= 180):
+                return {"is_error": True, "error": "review_expired_or_changed"}
+            if review.get("result"):
+                return review["result"]
+            result = {"acknowledged": False, "dispatched": False, "verified": False,
+                      "deferred": accepted is True, "context_only": True}
+            if accepted is True:
+                review["result"] = result
+            return result
 
     def decide(self, review_id, decision, reason="", goal="", *, lineage_offset=None, host_context=None):
         if host_context is not None:

@@ -79,6 +79,43 @@ def test_runtime_owns_creation_and_periodic_review_without_user_chat(runtime):
     assert port.offer()["review"]["trigger"] == "periodic_review"
 
 
+def test_periodic_context_delivery_can_defer_without_main_acknowledgement(runtime):
+    port, clock, publish = runtime
+    publish()
+    first = port.offer()["review"]
+    assert port.defer(first["id"], True)["error"] == "meaningful_review_requires_decision"
+    port.decide(first["id"], "continue", "继续")
+    prior = port.state()["last_decision"]
+    clock[0] += 180
+    publish()
+    periodic = port.offer()["review"]
+    rejected = port.defer(periodic["id"], False)
+    assert not rejected["deferred"] and not port.state()["review"].get("result")
+    result = port.defer(periodic["id"], True)
+    assert result == {"acknowledged": False, "dispatched": False, "verified": False, "deferred": True, "context_only": True}
+    assert port.state()["last_decision"] == prior
+    assert not port.offer()["offered"]
+    assert not (port.directory / "host-context.json").exists()
+
+
+@pytest.mark.parametrize("change", ["stop", "stale", "intent"])
+def test_defer_preserves_stop_freshness_and_intent_checks(runtime, change):
+    port, clock, publish = runtime
+    publish()
+    port.decide(port.offer()["review"]["id"], "continue", "继续")
+    clock[0] += 180
+    publish()
+    periodic = port.offer()["review"]
+    if change == "stop":
+        port.mailbox.submit("stop", {}, str(uuid.uuid4()))
+    elif change == "stale":
+        clock[0] += 181
+    else:
+        port.mailbox.submit("feedback", {"goal": "用户新目标", "mode": "insert"}, str(uuid.uuid4()))
+    assert port.defer(periodic["id"], True)["is_error"]
+    assert not port.state()["review"].get("result")
+
+
 def test_review_summary_keeps_tools_and_material_stagnation_visible(runtime):
     port, clock, publish = runtime
     facts = snapshot(clock[0])["facts"]
@@ -245,7 +282,10 @@ def test_successful_look_chatter_is_not_progress_but_task_result_and_death_are_e
     previous = port.offer()["review"]["id"]
     clock[0] += 10
     facts["parts"][0]["text"] = "生命 0/20"
-    publish(facts=facts)
+    from test_death_memory import event, SCOPE
+    from agent_mc_autonomy.death_memory import DeathMemory
+    episode = DeathMemory(port.directory).record(event(), facts, [], [], [])
+    publish(facts=facts, death_episode=episode, game_identity=SCOPE)
     assert port.offer()["review"]["id"] != previous
 
 
