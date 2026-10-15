@@ -4627,7 +4627,7 @@ export class MinecraftWorld implements World {
 
   protected visualArgumentFailure(args: Record<string, unknown>): ToolOutcome | undefined {
     const name = 'mc_visual';
-    const mode = args.mode === undefined ? 'first' : args.mode;
+    const mode = args.mode === 'dungeon' ? '3dview' : args.mode === undefined ? 'first' : args.mode;
     const fovError = visualFovError(mode, args.fov);
     if (fovError) return { text: this.toolLog(name, args, `[mc_visual 失败] ${fovError}`), failed: true };
     if (!['first', 'third', '3dview', 'overview'].includes(mode as string)) {
@@ -4749,7 +4749,7 @@ export class MinecraftWorld implements World {
     if (!bot?.entity || !viewerUrl || this.bridge?.viewerKind === 'basic' || this.shuttingDown)
       throw new Error('Photography requires a connected modern web viewer');
     const generation = this.connectionGeneration, dimension = String(bot.game.dimension);
-    const mode = (args.mode ?? 'third') as 'first' | 'third' | '3dview';
+    const mode = (args.mode === 'dungeon' ? '3dview' : args.mode ?? 'third') as 'first' | 'third' | '3dview';
     if (!['first', 'third', '3dview'].includes(mode)) throw new Error('Invalid photograph camera mode');
     const invalid = this.visualArgumentFailure({ mode, fov: args.fov });
     if (invalid) throw new Error(invalid.text);
@@ -4774,7 +4774,7 @@ export class MinecraftWorld implements World {
     const name = 'mc_visual';
     const invalid = this.visualArgumentFailure(args);
     if (invalid) return invalid;
-    const mode = (args.mode ?? 'first') as 'first' | 'third' | '3dview' | 'overview';
+    const mode = (args.mode === 'dungeon' ? '3dview' : args.mode ?? 'first') as 'first' | 'third' | '3dview' | 'overview';
     const focus = typeof args.focus === 'string' ? args.focus.replace(/\s+/g, ' ').trim().slice(0, 160) : '';
     const bot = this.bridge?.bot;
     const viewerUrl = this.bridge?.viewerUrl;

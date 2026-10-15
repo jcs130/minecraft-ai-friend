@@ -7,7 +7,7 @@ const fixture = vi.hoisted(() => ({ capture: vi.fn() }));
 vi.mock('../core/visual-capture.ts', async original => ({ ...await original<typeof import('../core/visual-capture.ts')>(), captureMinecraftView: fixture.capture }));
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6NQAAAABJRU5ErkJggg==', 'base64');
 class OfflineWorld extends MinecraftWorld {
-  readonly actor = { username: 'Fixture', entity: { position: new Vec3(2, 65, 7), yaw: 0.3, pitch: -0.4 }, game: { dimension: 'overworld' } };
+  readonly actor = { username: 'Fixture', entity: { position: new Vec3(2, 65, 7), yaw: 0.3, pitch: -0.4 }, game: { dimension: 'overworld' }, blockAt: () => null };
   constructor() {
     super({ cfg: { ...structuredClone(MINECRAFT_CLIENT_DEFAULTS), host: 'offline.invalid', username: 'Fixture' } });
     this.bridge = { bot: this.actor, viewerUrl: 'http://offline-viewer.invalid', viewerKind: 'modern', connected: true } as any;
@@ -15,6 +15,7 @@ class OfflineWorld extends MinecraftWorld {
     this.photography.start(this.host);
   }
   protected override snapshot() { return { position: { x: 2, y: 65, z: 7 }, dimension: this.actor.game.dimension, inventory: [{ name: 'stone', count: 4 }], entities: [] } as any; }
+  readVisual(args: Record<string, unknown>) { return this.visualReadout(args, { role: 'Fixture', callId: 'visual', log: nullLogger() }); }
   closeFixture() { this.photography.stop(); }
 }
 afterEach(() => vi.clearAllMocks());
@@ -44,4 +45,18 @@ it('rejects a frame if the game dimension changed before its state could be pair
     const outcome = await world.tools().find(tool => tool.name === 'mc_photo')!.handler({ action: 'capture' }, { role: 'Fixture', callId: 'changed', log: nullLogger() }) as any;
     expect(outcome.failed).toBe(true); expect(outcome.text).toContain('dimension changed'); expect(outcome.blobs).toBeUndefined();
   } finally { world.closeFixture(); }
+});
+
+it.each(['dungeon', '3dview'])('normalizes %s at the actual World visual and photograph boundaries', async mode => {
+ const world=new OfflineWorld();
+ fixture.capture.mockImplementation(async args => ({png,mode:args.mode,capturedAt:new Date().toISOString(),width:1200,height:800}));
+ try {
+  const visual=await world.readVisual({mode});
+  expect(visual.failed).not.toBe(true);expect(visual.text).toContain('3dview 视角');
+  expect(visual.blobs?.[0].name).toMatch(/^minecraft-3dview-/);
+  expect(fixture.capture).toHaveBeenLastCalledWith(expect.objectContaining({mode:'3dview'}));
+  const photo=await world.tools().find(t=>t.name==='mc_photo')!.handler({action:'capture',mode},{role:'Fixture',callId:'legacy-photo',log:nullLogger()}) as any;
+  expect(photo.failed).not.toBe(true);expect(JSON.parse(photo.text).facts.camera.mode).toBe('3dview');
+  expect(fixture.capture).toHaveBeenLastCalledWith(expect.objectContaining({mode:'3dview'}));
+ } finally {world.closeFixture();}
 });
