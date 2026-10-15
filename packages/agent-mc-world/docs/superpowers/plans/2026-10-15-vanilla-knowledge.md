@@ -66,8 +66,17 @@ expect(chooseRoutineFood(6,[{name:'ominous_bottle',count:1}],foods)).toBeNull();
 
 ### Task 3: Validate, commit and integrate
 
-- [ ] Run focused regressions, then the full core suite, public declarations and official engine build; preserve logs privately.
-- [ ] Pack the core and inspect an isolated SDK/MCP consumer with network denied, including offline reference retrieval.
-- [ ] Run the full controller tests with fake ports and an isolated wheel consumer; commit scoped validated changes and push normally after a fresh upstream check.
-- [ ] If a deployment is made, follow the existing checked source/archive pin and exact-owned executor handover; record deployed versus source-only status honestly and preserve the game, Neko, viewer and model processes.
-- [ ] Report submitted commits, exact food causes, sourced knowledge coverage and remaining live acceptance limits.
+- [x] Run focused regressions, then the full core suite, public declarations and official engine build; preserve logs privately.
+- [x] Pack the core and inspect an isolated SDK/MCP consumer with network denied, including offline reference retrieval.
+- [x] Run the full controller tests with fake ports and an isolated wheel consumer; commit scoped validated changes and push normally after a fresh upstream check.
+- [x] If a deployment is made, follow the existing checked source/archive pin and exact-owned executor handover; record deployed versus source-only status honestly and preserve the game, Neko, viewer and model processes.
+- [x] Report submitted commits, exact food causes, sourced knowledge coverage and remaining live acceptance limits.
+
+## Verification record (2026-10-15)
+
+- Core 0.5.1 implementation: `95d356cb45ff7f09098ec9d8dcad02f67003731d`; framework 0.1.45 pin: `fded8318f948ed10ff340d7464b26862321d7ff4`; thin plugin 0.5.28: `48ba2606b1a3e105f79ba327b3f82988f7eb1f61`. All were pushed normally to their main branches.
+- Core: 812 tests passed, 2 conditional tests skipped; public declarations, typecheck, engine build and isolated packed SDK checks passed. Framework source and isolated wheel: 409 tests passed each. Adapter: 56 tests and 4 browser-data tests passed; tracked Python lint and official release/market structure/payload-hash checks passed. No release tag or marketplace publication was performed.
+- The exact committed core archive SHA-256 is `4a97513a8ac52d9c34a38a3f18c77a8e31ed9c7d4e438717b0de0d2e606c218e`. Installed MCP was checked with networking denied; implicit reference searches and smelting recipe reads passed while disconnected.
+- Production executor was handed over through public stop/drain/start/resume. Minecraft, Neko, its plugin manager and the local model retained their process identities. The existing browser viewer was reused; its bundle/registry matched the offline preflight.
+- Live observations confirmed model-initiated local reference searches and baseline nutrition/cooking in fresh ration facts. The first deployment exposed optional-action inference and recipe-filter discovery gaps, which were reproduced and fixed in 0.5.1.
+- Long-run autonomous survival is **not** accepted by these checks. The live run still made ineffective craft/read choices and reached health 4/20; a later observation had health 10/20 and hunger 20/20 while moving. These are actual observations, not evidence that a knowledge lookup solved all planning or survival failures.
