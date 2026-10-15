@@ -1,4 +1,5 @@
 import { loadViewerRelay } from './relay-port.ts';
+import { installDeathLifecycle } from './death-lifecycle.ts';
 import { installConfigurationPhaseGuard, configurationTransportReady } from './configuration-round.ts';
 /**
  * 管理 Mineflayer 连接、重连和 prismarine-viewer。
@@ -50,6 +51,7 @@ export interface BridgeOptions {
   username: string;
   version: string;
   keepAliveTimeoutMs?: number;
+  deathRespawnDelayMs?: number;
   authentication?: MinecraftAuthentication;
   /** Private account configuration, reread for every network connection. Empty disables automatic login. */
   loginConfigFile?: () => string;
@@ -264,6 +266,9 @@ export class Bridge {
   protected refusedStreak = 0;
   protected liveMovements: Movements | null = null;
   protected aclReplanTimer: ReturnType<typeof setTimeout> | null = null;
+  private deathRecovery: ReturnType<typeof installDeathLifecycle> | null = null;
+
+  cancelRespawn(): void { this.deathRecovery?.cancel(); }
 
   /**
    * 挖掘失败按格坐标记账；连续失败 DIG_BACKOFF_TRIES 次进入退避，
@@ -463,7 +468,7 @@ export class Bridge {
       bot = mineflayer.createBot({ host, port, username, version: protocolVersion(version) || undefined,
         ...(this.opts.authentication?.botOptions() ?? { auth: 'offline' as const }),
         checkTimeoutInterval: this.opts.keepAliveTimeoutMs ?? 60_000,
-        logErrors: false });
+        logErrors: false, respawn: false });
     } catch (err) {
       this.failure = errorFailure(err instanceof Error ? err : new Error(String(err)));
       log.warn(`createBot 失败: ${this.failure}`);
@@ -471,6 +476,9 @@ export class Bridge {
       return;
     }
     this._bot = bot;
+    this.deathRecovery = installDeathLifecycle(bot, this.opts.deathRespawnDelayMs,
+      () => !this.stopped && this._bot === bot && this.generation === gen && !this.opts.shuttingDown?.());
+    this.bagFor(gen).register('death-recovery', this.deathRecovery.dispose);
     this.bagFor(gen).register('configuration-phase-guard', installConfigurationPhaseGuard(bot));
     bot._client.on('session', session => {
       if (this._bot === bot && this.generation === gen && !this.stopped) this.opts.authentication?.acceptProtocolSession(session);
