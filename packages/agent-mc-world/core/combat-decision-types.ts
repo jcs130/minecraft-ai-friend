@@ -4,6 +4,7 @@ export type CombatCandidate = { id: string; intent: string } & (
   { kind: 'cast'; spell: string; manaCost: number; ruleId: string }
   | { kind: 'engage'; targetId: number; uuid: string | null }
   | { kind: 'step'; destination: [number, number, number] }
+  | { kind: 'track'; targetId: number; uuid: string | null; minDistance: number; maxDistance: number; leaseMs: number }
   | { kind: 'retreat' }
 );
 export interface CombatDecisionFrame {

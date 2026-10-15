@@ -54,6 +54,16 @@ function rig() {
 afterEach(() => vi.useRealTimers());
 
 describe('independent asynchronous combat choices', () => {
+  it.each([['clear-lead', [.45, .3, .2, .05], 'sent'], ['near-tie', [.4, .39, .16, .05], 'uncertain']] as const)
+    ('uses a separately configured multi-option floor and rejects %s ambiguity', async (_name, scores, expected) => {
+      vi.useFakeTimers(); const r = rig(); r.cfg.minConfidence = .4; r.cfg.minMargin = .1;
+      r.f!.candidates.push({ id: 'withdraw', kind: 'retreat', intent: 'Withdraw.' },
+        { id: 'follow', kind: 'track', targetId: 3, uuid: 'target', minDistance: 5, maxDistance: 8, leaseMs: 4000, intent: 'Observe at distance.' });
+      r.loop.tick(); r.resolve(new Response(JSON.stringify({ answers: { tactic: { choice: 'option_0', confidence: scores[0],
+        probabilities: { option_0: scores[0], option_1: scores[1], option_2: scores[2], keep: scores[3] } } } })));
+      await vi.advanceTimersByTimeAsync(1);
+      expect(r.reports.at(-1)?.data.outcome).toBe(expected); expect(r.sent).toHaveLength(expected === 'sent' ? 1 : 0);
+    });
   it('sends game health/type facts and applies a choice while the main-model request is still pending', async () => {
     vi.useFakeTimers();
     let mainReturned = false;
@@ -97,11 +107,11 @@ describe('independent asynchronous combat choices', () => {
     r.cfg.allowMovement = true;
     const control = { bodyFree: false, canStep: true, targetId: 3, sinceHitMs: 3000,
       fight: 'armed', fleeHealth: 6, chaseMax: 12 };
-    r.f!.candidates = combatReactions(bot, f, r.cfg, control).slice(0, 1);
+    r.f!.candidates = combatReactions(bot, f, r.cfg, control).filter(c => c.kind === 'step').slice(0, 1);
     const before = r.f!.candidates[0];
     r.loop.tick();
     bot.entity.position.x = .25; f.self.position[0] = .25; f.actors[0].distance = 2.75;
-    r.f!.candidates = combatReactions(bot, f, r.cfg, control).slice(0, 1);
+    r.f!.candidates = combatReactions(bot, f, r.cfg, control).filter(c => c.kind === 'step').slice(0, 1);
     expect(r.f!.candidates[0]).not.toEqual(before);
     r.resolve(); await vi.advanceTimersByTimeAsync(1);
     expect(r.sent).toEqual([r.f!.candidates[0]]);
@@ -233,6 +243,15 @@ function flatBot() {
   return bot as unknown as Bot;
 }
 describe('physically available combat candidates', () => {
+  it('offers attack, withdraw and distance tracking before the first hit, but does not steal another task', () => {
+    const bot = flatBot(), f = frame().battlefield, cfg = { ...config(), allowEngage: true, allowMovement: true, engageScope: 'hostile' as const };
+    f.action.fighting = false;
+    const control = { bodyFree: true, canStep: false, targetId: null, sinceHitMs: null, fight: 'armed', fleeHealth: 6, chaseMax: 12 };
+    expect(combatReactions(bot, f, cfg, control).map(c => c.kind)).toEqual(['retreat', 'track', 'engage']);
+    expect(combatReactions(bot, f, cfg, { ...control, bodyFree: false })).toEqual([]);
+    f.actors[0].relation = 'unknown';
+    expect(combatReactions(bot, f, cfg, control)).toEqual([]);
+  });
   it('retains a server catalogued cost through partial HUD updates, but forgets it on removal or reconnect', () => {
     const spells=new CombatSpells(), bot=flatBot(), field=frame().battlefield;
     spells.setTactic({spells:null,healAtOrBelow:6,rules:[{id:'bolt',spell:'spark',intent:'Hit a visible enemy',when:{within:12}}]});
@@ -270,11 +289,11 @@ describe('physically available combat candidates', () => {
     const choices = combatReactions(bot, f, cfg, control);
     expect(choices.filter(c => c.kind === 'step')).toHaveLength(2);
     expect(choices.some(c => c.kind === 'retreat')).toBe(true);
-    expect(choices.slice(0, cfg.maxCandidates).map(c => c.kind)).toEqual(['step', 'retreat']);
-    expect(combatReactions(bot, f, cfg, { ...control, sinceHitMs: 20 })).toEqual([]);
-    expect(combatReactions(bot, f, cfg, { ...control, canStep: false })).toEqual([]);
+    expect(choices.map(c => c.kind)).toEqual(['retreat', 'track', 'step', 'step']);
+    expect(combatReactions(bot, f, cfg, { ...control, sinceHitMs: 20 }).map(c => c.kind)).toEqual(['retreat', 'track']);
+    expect(combatReactions(bot, f, cfg, { ...control, canStep: false }).map(c => c.kind)).toEqual(['retreat', 'track']);
     bot.blockAt = () => null;
-    expect(combatReactions(bot, f, cfg, control).map(c => c.kind)).toEqual(['retreat']);
+    expect(combatReactions(bot, f, cfg, control).map(c => c.kind)).toEqual(['retreat', 'track']);
   });
 
   it('removes casts for unknown cost, missing abilities, occlusion and changed mana', () => {

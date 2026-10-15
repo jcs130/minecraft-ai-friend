@@ -15,7 +15,16 @@ export function combatReactions(bot: Bot, field: Battlefield, cfg: CombatExecuti
     && e.health.current !== 0 && e.entityId !== null).map(e => e.entityId!)]);
   const target = hostiles.find(e => e.entityId === control.targetId) ?? hostiles[0];
   if (!target) return [];
+  if (field.action.tracking && !control.bodyFree) return []; // A newly queued task must not wait behind renewed tracking leases.
   const candidates: CombatCandidate[] = [];
+  // Spacing/withdrawal are useful BEFORE the first hit, including while the planner thinks.
+  if (cfg.allowMovement && (control.bodyFree || field.action.fighting || field.action.tracking)) {
+    candidates.push({ id: 'retreat', kind: 'retreat', intent: 'Move away from visible danger now without starting an attack; keep retreating using the body controller.' });
+    if (target.position && target.distance! <= control.chaseMax + 4)
+      candidates.push({ id: `track_${target.entityId}`, kind: 'track', targetId: target.entityId!, uuid: target.uuid,
+        minDistance: 5, maxDistance: 8, leaseMs: 4000,
+        intent: 'Follow this visible hostile at 5–8 blocks without attacking; maintain that distance continuously while the planner thinks. Stop on lost sight or unsafe ground.' });
+  }
   if (cfg.allowEngage && control.bodyFree && control.fight !== 'off'
     && (field.self.health.current ?? 0) >= control.fleeHealth + 3) {
     const enemies = hostiles.filter(e => e.distance! <= control.chaseMax
@@ -41,7 +50,5 @@ export function combatReactions(bot: Bot, field: Battlefield, cfg: CombatExecuti
     if (corridorSafe(bot, p, to)) candidates.push({ id: `step_${d.id}`, kind: 'step',
       intent: d.intent, destination: [to.x, to.y, to.z] });
   }
-  candidates.splice(candidates[0]?.kind === 'step' ? 1 : candidates.length, 0,
-    { id: 'retreat', kind: 'retreat', intent: 'Stop offensive pursuit and use the existing retreat controller to move away from danger.' });
   return candidates;
 }

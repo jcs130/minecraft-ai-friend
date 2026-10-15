@@ -28,9 +28,11 @@ export interface Battlefield {
   sampledAtMs: number;
   connectionGeneration: number;
   dimension: string | null;
-  self: { entityId: number; health: Health; food: number | null; position: [number, number, number]; scoreboardTeam: string | null };
+  self: { entityId: number; health: Health; food: number | null; position: [number, number, number]; scoreboardTeam: string | null;
+    equipment?: { held: string | null; armor: Array<string | null> | null } };
   action: { fighting: boolean; emergency: boolean; taskId: number | null; step: string | null;
-    targetEntityId?: number | null; sinceHitMs?: number | null; canStep?: boolean; followTarget?: string | null };
+    targetEntityId?: number | null; sinceHitMs?: number | null; canStep?: boolean; followTarget?: string | null;
+    tracking?: boolean };
   actors: BattlefieldActor[];
   omitted: number;
   server: { sequence: number; receivedAtMs: number; expiresAtMs: number } | null;
@@ -191,7 +193,9 @@ export class BattlefieldObserver {
     return { sampledAtMs: now, connectionGeneration: generation, dimension: dim,
       self: { entityId: bot.entity.id, health: { current: number(bot.health) ? bot.health : null,
         max: maxHealth(bot.entity), source: number(bot.health) ? 'native' : 'unknown', updatedAtMs: this.ownHealthAtMs },
-        food: number(bot.food) ? bot.food : null, position: [p.x, p.y, p.z], scoreboardTeam: team(bot.username) },
+        food: number(bot.food) ? bot.food : null, position: [p.x, p.y, p.z], scoreboardTeam: team(bot.username),
+        equipment: { held: bot.heldItem?.name ?? null,
+          armor: bot.inventory?.slots ? [5, 6, 7, 8].map(i => bot.inventory.slots[i]?.name ?? null) : null } },
       action, actors: actors.slice(0, maxEntities), omitted: Math.max(0, actors.length - maxEntities),
       server: server ? { sequence: server.sequence, receivedAtMs: server.receivedAtMs, expiresAtMs: server.expiresAtMs } : null };
   }

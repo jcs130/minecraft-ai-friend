@@ -60,6 +60,7 @@ export class MinecraftAgentClient {
   private readonly facts: CurrentFacts;
   private readonly lease: AgentConnectionLease;
   private offlineMemoryCalls = 0;
+  private readonly tacticCalls = new Map<string, { signature: string; pending: boolean; controller: AbortController; promise: Promise<ToolOutcome> }>();
   private readonly hostChoice = createMinecraftChoiceTool(() => this.host,
     () => this.phase === 'started' ? (this.world.requestFacts?.() as WorldRequestFacts | null) ?? null : null);
 
@@ -283,6 +284,9 @@ export class MinecraftAgentClient {
     const replay = this.requests.read(callId, signature);
     if (replay) return replay;
     const stopping = name === `${this.toolPrefix}_stop`;
+    const tactics = [...this.tacticCalls.values()].filter(c => c.pending);
+    if (tactics.length && !stopping) throw new Error('Wait for or cancel the pending host tactic before a planner tool');
+    if (stopping) for (const tactic of tactics) tactic.controller.abort(new Error('Planner stopped the body'));
     if (this.closingTurn && !stopping) throw new Error('Decision turn is ending');
     if (turnId && this.turn?.id !== turnId) throw new Error('Unknown decision turn');
     if (this.barrier && !stopping) throw new Error(`Acknowledge tool barrier ${this.barrier} before the next call`);
@@ -348,6 +352,48 @@ export class MinecraftAgentClient {
     }
     });
     return state.promise;
+  }
+
+  /** Explicit host fast-control port, independent of a planner's open reasoning turn.
+   * Sampling is read-only and does not fill the action journal. Choices retain request identities;
+   * the engine revalidates ownership, connection, target and geometry before applying them.
+   */
+  async hostTactics(args: { battlefield: true } | { choice: Record<string, unknown> },
+    options: { requestId?: string; signal?: AbortSignal } = {}): Promise<ToolOutcome> {
+    if (this.phase !== 'started') throw new Error('Game runtime is disconnected');
+    const sample = Object.keys(args).length === 1 && 'battlefield' in args && args.battlefield === true;
+    const choice = Object.keys(args).length === 1 && 'choice' in args && args.choice && typeof args.choice === 'object';
+    if (!sample && !choice) throw new Error('Host tactics accepts only a battlefield sample or an exact choice');
+    const name = `${this.toolPrefix}_combat_tactic`, tool = this.tools().find(t => t.name === name);
+    if (!tool) throw new Error('Host tactics unavailable');
+    const controller = new AbortController();
+    const signal = AbortSignal.any([this.lifetime.signal, controller.signal, ...(options.signal ? [options.signal] : [])]);
+    signal.throwIfAborted();
+    const callId = options.requestId ?? randomUUID();
+    if (!callId || callId.length > 256) throw new Error('Invalid request id');
+    const invoke = async () => {
+      const result = await cancellable(tool.handler(args, { role: 'host-decision', log: this.options.log, callId, signal }), signal);
+      return typeof result === 'string' ? { text: result } : result;
+    };
+    if (sample) return invoke();
+    const signature = createHash('sha256').update(JSON.stringify(['host-tactics', args])).digest('hex');
+    const prior = this.tacticCalls.get(callId);
+    if (prior) { if (prior.signature !== signature) throw new Error('Request id reused with different arguments'); return prior.promise; }
+    const replay = this.requests.read(callId, signature); if (replay) return replay;
+    if (this.closingTurn || this.barrier || [...this.calls.values(), ...this.tacticCalls.values()].some(c => c.pending))
+      return { text: 'Planner tool owns admission; refresh the battlefield before another choice.', failed: true,
+        meta: { protocol: 'agent-mc-tactics/v1', receipt: { accepted: false, meaning: 'planner-tool-active', goalCompleted: false } } };
+    this.requests.write({ requestId: callId, signature, phase: 'pending' });
+    const state = { signature, controller, pending: true, promise: null as unknown as Promise<ToolOutcome> };
+    this.tacticCalls.set(callId, state);
+    const promise = Promise.resolve().then(() => { signal.throwIfAborted(); return invoke(); }).then(outcome => {
+      this.requests.write({ requestId: callId, signature, phase: 'returned', outcome });
+      return outcome;
+    }, error => { this.requests.write({ requestId: callId, signature, phase: 'failed', error: String(error) }); throw error; })
+      .finally(() => { state.pending = false; });
+    state.promise = promise;
+    if (this.tacticCalls.size > 256) this.tacticCalls.delete(this.tacticCalls.keys().next().value!);
+    return promise;
   }
 
   /** Same core service without starting the game engine, reconnect loop, launcher or a model. */

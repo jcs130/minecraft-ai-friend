@@ -5,6 +5,8 @@ export type { CombatExecutionPolicy, CombatCandidate, CombatDecisionFrame } from
 export interface CombatDecisionConfig extends CombatExecutionPolicy {
   connection?: 'auto' | 'host' | 'endpoint'; decisionProvider?: string;
   enabled:boolean;mode:'shadow'|'act';endpoint:string;timeoutMs:number;minIntervalMs:number;minConfidence:number;maxAgeMs:number;
+  /** Optional lead over the strongest alternative; model scores are not calibrated win probabilities. */
+  minMargin?: number;
   model?: string; apiKeyEnv?: string;
 }
 export interface CombatDecisionOptions {
@@ -35,7 +37,7 @@ function sceneFacts(frame: CombatDecisionFrame, selected: CombatCandidate | null
   return { connection: [f.connectionGeneration, f.dimension], tactic: frame.tacticRevision,
     self: [f.self.entityId, healthBand(f.self.health.current, f.self.health.max), f.self.health.max,
       f.self.food === null ? null : f.self.food <= 6 ? 'hungry' : 'fed'],
-    action: [f.action.fighting, f.action.emergency, f.action.taskId, f.action.step, f.action.followTarget,
+    action: [f.action.fighting, f.action.tracking, f.action.emergency, f.action.taskId, f.action.step, f.action.followTarget,
       f.action.targetEntityId, selected?.kind === 'step' ? f.action.canStep : null],
     skills: frame.skills.filter(s => selected?.kind === 'cast' && s.spell === selected.spell)
       .map(s => [s.spell, s.available, s.manaCost, s.block,
@@ -113,12 +115,13 @@ export class CombatDecisionLoop {
     if (!frame.candidates.length) { entry.outcome = 'program-idle'; return; }
     const criteria: Record<string, string> = { keep: frame.battlefield.action.fighting
       ? 'Continue the current attack and movement without an extra action.'
-      : 'Wait without engaging or moving. No attack is currently running.' };
+        : frame.battlefield.action.tracking ? 'Continue distance tracking only until its existing short lease expires. Choose the track candidate to renew the lease.'
+        : 'Do not take a body action; no attack or distance-tracking controller is running.' };
     frame.candidates.forEach((c, i) => { criteria[`option_${i}`] = c.kind === 'cast'
       ? `${c.intent} Cast ${c.spell}, mana cost ${c.manaCost}.` : c.intent; });
     const { program: _program, actionPool: _pool, ...publicFrame } = frame;
     const body = JSON.stringify({ ...(cfg.model ? { model: cfg.model } : {}), state: { ...publicFrame, objective: 'Assist the party against eligible visible enemies, survive and preserve useful ongoing attacks.' }, questions: { tactic: {
-      type: 'choice', instructions: 'Choose one executable action for the next second. Engage a permitted visible hostile before being hit when healthy and available; assist confirmed allies. Follow resumes after combat. Keep means the current controller continues; do not restart a useful attack. Cast uses a ready skill, step adjusts position, retreat ends pursuit. Use health, reach, line of sight and mana; null is unknown. Never infer a team from proximity.'
+      type: 'choice', instructions: 'Choose whether to fight, withdraw, or track at a distance from the executable candidates. Decide BEFORE the first hit, independently of the slow planner. Engage only an eligible hostile when the situation favors combat; retreat from unfavorable threats; track follows without attacking when distance and observation are preferable. Keep preserves a useful controller, not a promise to move. Continue through model wait time. Use health, numbers, reach, line of sight, equipment and mana; null is unknown. Never infer a team from proximity.'
         + (frame.policy ? '\nAgent-authored tactic: ' + frame.policy.instructions : ''), criteria,
     } } });
     const scope = { id, startedAtMs, connectionGeneration: frame.battlefield.connectionGeneration,
@@ -149,6 +152,8 @@ export class CombatDecisionLoop {
       if (this.stopped) return;
       const answer = parseTypedChoice(payload.answers?.tactic, Object.keys(criteria));
       if (!answer) throw new Error('invalid-response');
+      const margin = answer.choiceProbability - Math.max(0, ...Object.entries(answer.probabilities)
+        .filter(([key]) => key !== answer.choice).map(([, value]) => value));
       const liveCfg = this.options.config();
       let current = this.options.refresh ? await this.options.refresh() : this.options.sample();
       if (current?.program && this.options.prepare) current = await this.options.prepare(current);
@@ -157,7 +162,8 @@ export class CombatDecisionLoop {
       const selected = answer.choice === 'keep' ? null : frame.candidates[Number(answer.choice.slice(7))];
       const executable = selected && current?.candidates.find(c => c.id === selected.id && c.kind === selected.kind
         && (selected.kind !== 'cast' || (c.kind === 'cast' && c.spell === selected.spell && c.ruleId === selected.ruleId))
-        && (selected.kind !== 'engage' || (c.kind === 'engage' && c.targetId === selected.targetId && c.uuid === selected.uuid)));
+        && (selected.kind !== 'engage' || (c.kind === 'engage' && c.targetId === selected.targetId && c.uuid === selected.uuid))
+        && (selected.kind !== 'track' || (c.kind === 'track' && c.targetId === selected.targetId && c.uuid === selected.uuid)));
       const changed = current ? sceneChanges(frame, current, selected ?? null) : ['unavailable'];
       let outcome: string;
       if (!liveCfg.enabled || liveCfg.mode !== cfg.mode || liveCfg.endpoint !== cfg.endpoint
@@ -165,8 +171,11 @@ export class CombatDecisionLoop {
         || liveCfg.model !== cfg.model || liveCfg.apiKeyEnv !== cfg.apiKeyEnv) outcome = 'configuration-changed';
       else if (elapsedMs > Math.min(cfg.maxAgeMs, liveCfg.maxAgeMs)) outcome = 'expired';
       else if (!current || changed.length) outcome = 'scene-changed';
-      else if (Math.hypot(...current.battlefield.self.position.map((v, i) => v - frame.battlefield.self.position[i])) > 1.5) outcome = 'moved';
-      else if (answer.choiceProbability < Math.max(cfg.minConfidence, liveCfg.minConfidence)) outcome = 'uncertain';
+      else if ((!selected || selected.kind === 'step' || selected.kind === 'cast')
+        && Math.hypot(...current.battlefield.self.position.map((v, i) => v - frame.battlefield.self.position[i])) > 1.5) outcome = 'moved';
+      else if (answer.confidence < Math.max(cfg.minConfidence, liveCfg.minConfidence)
+        || answer.choiceProbability < Math.max(cfg.minConfidence, liveCfg.minConfidence)
+        || margin < Math.max(cfg.minMargin ?? 0, liveCfg.minMargin ?? 0)) outcome = 'uncertain';
       else if (!selected) outcome = 'keep';
       else if (!executable) outcome = 'no-longer-executable';
       else if (cfg.mode === 'shadow') outcome = 'shadow';
@@ -175,7 +184,7 @@ export class CombatDecisionLoop {
       if (this.stopped) return;
       if (outcome === 'uncertain' && cfg.mode === 'act') this.options.fallback?.();
       const result = { ...scope, elapsedMs, choice: answer.choice,
-        probability: answer.choiceProbability, probabilities: answer.probabilities, outcome,
+        probability: answer.choiceProbability, probabilities: answer.probabilities, margin, outcome,
         sceneChanges: changed,
         modelMs: payload.latency_ms ?? null, usage: payload.usage ?? null,
         candidate: (outcome === 'sent' ? executable : selected) ?? null };
@@ -183,7 +192,7 @@ export class CombatDecisionLoop {
       this.options.report('result', result);
       if (outcome === 'sent') {
         const before = current!.battlefield;
-        const targetId = executable?.kind === 'engage' ? executable.targetId : before.action.targetEntityId;
+        const targetId = executable?.kind === 'engage' || executable?.kind === 'track' ? executable.targetId : before.action.targetEntityId;
         const timer = setTimeout(() => { void (async () => {
           this.observations.delete(timer);
           if(this.stopped)return;
