@@ -2,21 +2,21 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { JavaMethods, JAVA_METHODS, JAVA_METHOD_PROTOCOL, javaMethodHelp } from '../src/client/java-methods.ts';
+import { JavaMethods, JAVA_METHODS, JAVA_METHOD_REQUIRED, JAVA_METHOD_PROTOCOL, javaMethodHelp } from '../src/client/java-methods.ts';
 const paths:string[]=[];const methods:JavaMethods[]=[];
 afterEach(async()=>{for(const m of methods.splice(0))await m.stop('test finished');for(const path of paths.splice(0))rmSync(path,{recursive:true,force:true});});
 function rig(){
   const dir=mkdtempSync(join(tmpdir(),'native-method-'));paths.push(dir);
   const cfg={expectedServer:'fixture.test:25565',expectedUuid:'a'.repeat(32),controllerId:'test',ledgerDir:dir,credentialsFile:'unused',leaseMs:1000};
-  const events:any[]=[],actions=new Map<string,any>(),calls:any[]=[];let cap=true,hang=false,cleanupFail=false;
+  const events:any[]=[],actions=new Map<string,any>(),calls:any[]=[];let cap=true,hang=false,cleanupFail=false,advertised=JAVA_METHODS;
   const held=new Set<string>();
   const state:any={protocol:'agent-mc-java/v1',connected:true,generation:1,sampledAt:new Date().toISOString(),server:'fixture.test',position:[0,64,0],health:20,food:20,inventory:[],menuSlots:[],cursor:{empty:true},actions:[],messages:[]};
   const rpc=async(method:string,args:any)=>{
-    calls.push({method,args});if(method==='capabilities')return{methodAdapter:cap?JAVA_METHOD_PROTOCOL:null,methodCalls:JAVA_METHODS};
+    calls.push({method,args});if(method==='capabilities')return{methodAdapter:cap?JAVA_METHOD_PROTOCOL:null,methodCalls:advertised};
     if(method==='renew')return{};
     if(method==='do'){const a={id:args.action_id,phase:args.operation==='method.run'?'running':'partial',operation:args.operation};actions.set(a.id,a);return a;}
     if(method==='result')return actions.get(args.action_id);
-    if(method==='method_read')return{value:args.name==='blockAt'?{name:'carrots',type:1,stateId:2,position:args.args[0],properties:{age:'7'}}:args.args[0]==='entity'?{position:{x:-1,y:64,z:2}}:args.name==='getControlState'?held.has(args.args[0]):null};
+    if(method==='method_read')return{value:args.name==='blockAt'||args.name==='findBlock'?{name:'carrots',type:1,stateId:2,position:args.name==='findBlock'?{x:0,y:63,z:2}:args.args[0],properties:{age:'7'}}:args.name==='findBlocks'?[{x:0,y:63,z:2}]:args.args[0]==='entity'?{position:{x:-1,y:64,z:2}}:args.name==='getControlState'?held.has(args.args[0]):null};
     if(method==='method_call'){
       if(args.name==='setControlState'){if(args.args[1])held.add(args.args[0]);else held.delete(args.args[0]);}
       if(args.name==='clearControlStates')held.clear();
@@ -29,7 +29,7 @@ function rig(){
   const port={rpc,state:async()=>state,owner:()=>({controllerId:'test',nonce:'private'}),host:()=>({pushEvent:async(event:any)=>{events.push(event);},blob:()=>null}) as any};
   const m=new JavaMethods(cfg,port);methods.push(m);
   const call=(args:any)=>m.execute(args,{role:'fixture-agent',callId:'fixture'} as any);
-  return{m,cfg,port,call,calls,events,actions,held,state,setCap:(v:boolean)=>cap=v,setHang:(v:boolean)=>hang=v,setCleanupFail:(v:boolean)=>cleanupFail=v};
+  return{m,cfg,port,call,calls,events,actions,held,state,setCap:(v:boolean)=>cap=v,setAdvertised:(v:string[])=>advertised=v,setHang:(v:boolean)=>hang=v,setCleanupFail:(v:boolean)=>cleanupFail=v};
 }
 async function finished(r:ReturnType<typeof rig>,id:number){await vi.waitFor(()=>expect(r.m.runner.read(id)[0].status).not.toBe('running'));await vi.waitFor(()=>expect(r.events.some(e=>e.execution.evidence.localId===id)).toBe(true));return r.m.runner.read(id)[0];}
 it('executes unchanged JS in the actual shared worker, revives Vec3 and Block.getProperties and serializes native body calls',async()=>{
@@ -48,6 +48,27 @@ it('validates and saves immutable methods offline, reopens the same scoped libra
 });
 it('refuses an old bridge before execution instead of translating JavaScript to guessed Python',async()=>{
   const r=rig();r.setCap(false);await expect(r.call({name:'old',code:'await bot.look(0,0);'})).rejects.toThrow('lacks agent-mc-method/v1');expect(r.calls.some(c=>['do','method_call','method_read'].includes(c.method))).toBe(false);
+});
+it('keeps baseline v1 programs usable and refuses unadvertised optional methods before dispatch',async()=>{
+  const r=rig();r.setAdvertised(JAVA_METHOD_REQUIRED);
+  const started=await r.call({name:'baseline',code:'return (await bot.read("entity")).position;'});
+  expect((await finished(r,JSON.parse(started.text).id)).status).toBe('completed');
+  for(const code of ['return await bot.findBlock({matching:1});','await bot.setQuickBarSlot(3);']){
+    const before=r.calls.length;
+    const attempt=await r.call({name:'optional',code});
+    const run=await finished(r,JSON.parse(attempt.text).id);
+    expect(run.status).toBe('failed');expect(run.error).toContain('does not advertise');
+    expect(r.calls.slice(before).some(c=>['do','method_call','method_read'].includes(c.method))).toBe(false);
+  }
+});
+it('reuses unchanged findBlock(s) and hotbar calls in the shared worker with native read/body routing',async()=>{
+  const r=rig();
+  const code='const positions=await bot.findBlocks({matching:[1],maxDistance:4,count:2}); const nearest=await bot.findBlock({point:positions[0].offset(0,1,0),matching:1}); await bot.setQuickBarSlot(3); return {pos:nearest.position,age:nearest.getProperties().age};';
+  const started=await r.call({name:'find-and-select',code});
+  expect(await finished(r,JSON.parse(started.text).id)).toMatchObject({status:'completed',result:{pos:{x:0,y:63,z:2},age:'7'}});
+  expect(r.calls.filter(c=>c.method==='method_read').map(c=>c.args.name)).toEqual(['findBlocks','findBlock']);
+  expect(r.calls.filter(c=>c.method==='method_call').map(c=>[c.args.name,c.args.args])).toEqual([['setQuickBarSlot',[3]]]);
+  expect(r.calls.filter(c=>c.method==='do')).toHaveLength(1);
 });
 it('cancels only its original pending native action and blocks new body commands until cleanup is confirmed',async()=>{
   const r=rig();r.setHang(true);r.setCleanupFail(true);await r.call({name:'move',code:'await bot.setControlState("forward",true); await bot.waitForTicks(200);'});

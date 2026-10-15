@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.3-dev.20261015.1",
+  "version": "0.5.3-dev.20261015.2",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {

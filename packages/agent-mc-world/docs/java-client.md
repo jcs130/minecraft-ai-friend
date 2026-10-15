@@ -10,7 +10,7 @@ The default independent body remains Mineflayer. Set `world.provider` to `java-c
     "host": "your-server.example",
     "username": "AgentTest",
     "auth": "offline",
-    "version": "1.20.6",
+    "version": "1.21.1",
     "javaClient": {
       "expectedUuid": "12345678-1234-1234-1234-123456789abc",
       "expectedServer": "your-server.example:25565",
@@ -65,18 +65,34 @@ return { before: before.position, after: after.position,
 
 The first body call reserves the existing native queue until program completion/cancellation. Movement keys and held use survive awaited calls, and waits count actual client ticks. View angles use Mineflayer radians; inventory snapshots map the native hotbar to slots 36–44, armor to 5–8 and offhand to 45. A body method renews only the already explicitly claimed controller lease while active. `mc.do` after a body reservation is rejected to avoid waiting on its own queue. Other tool body submissions are rejected while a method or its cleanup owns execution. Cancellation addresses only that program's original action IDs; uncertain cleanup prevents another program until reconciliation.
 
-`{name,code}` selects JavaScript for existing Agent scripts. Explicit `language:"python"` preserves trusted Minescript. Legacy unnamed code still selects Python, so an old program cannot silently change languages. For JS guides select `{language:"javascript",api:"index"}` / `api:"compatibility"`; Python guides retain their separate API. JavaScript syntax validation does not require a running game or Minescript. The native bridge version is checked before execution; an older bridge fails without dispatch.
+`{name,code}` selects JavaScript for existing Agent scripts. Explicit `language:"python"` preserves trusted Minescript. Legacy unnamed code still selects Python, so an old program cannot silently change languages. For JS guides select `{language:"javascript",api:"index"}` / `api:"compatibility"`; Python guides retain their separate API. JavaScript syntax validation does not require a running game or Minescript. The native bridge version is checked before execution; a bridge without the v1 baseline fails without dispatch. Optional additions are checked against its actual `methodCalls` before a native call, so earlier v1 bridges can still run their existing methods.
 
 `validate`, `runId`, `call`, `library:{op:"list"|"read"|"save"}` and `procedure` reuse the original version format and source hashes. Native library storage is under the private ledger, scoped by server, actual UUID and controller. Existing versions are portable, but moving a library between identities/backends is explicit: do not merge another character's methods or claim that saved code has been validated in the new world.
 
 | Area | Current native support / boundary |
 | --- | --- |
-| Observations | `read`, `blockAt`, `canSeeBlock`, `inventory.items`, `getControlState`. Real client registry IDs; block identity/state/position/properties only. Unloaded/occluded is null. Native outline ray visibility can be more conservative than Mineflayer. Other block fields remain unavailable. |
+| Observations | `read`, `blockAt`, `findBlock(s)`, `canSeeBlock`, `inventory.items`, `getControlState`. Real client registry IDs; block identity/state/position/properties only. Unloaded/occluded is null. Native outline ray visibility can be more conservative than Mineflayer. Other block fields remain unavailable. |
 | Movement | `look`, `lookAt`, held `setControlState`, `clearControlStates`, actual `waitForTicks`. No pathfinding or teleport alias. Native view assignment does not reproduce Mineflayer's smoothing curve. |
 | Interaction | `activateBlock` validates current block/reach/line of sight/hand and lets the new look pass through a game tick before vanilla dispatch. `activateItem(false)` and `deactivateItem` preserve held use. Receipts confirm dispatch, not a crop growing or a server transaction. |
-| Equipment | `equip(item,"hand")` supports fresh hotbar stacks; other slots/destinations are rejected. Item snapshots include component identity hashes (full components via `mc_bag`), but are not complete prismarine-item instances. |
+| Equipment | `equip(item,"hand")` supports fresh hotbar stacks; other slots/destinations are rejected. `setQuickBarSlot(0..8)` selects a hotbar index and waits for an actual native tick, without moving items. Item snapshots include component identity hashes (full components via `mc_bag`), but are not complete prismarine-item instances. |
 | SDK groups | `mc.state` returns known readings and null for unavailable systems. `mc.do` currently supports one existing legacy-compatible step; unsupported groups fail before execution and partial native dispatch remains `done:false`. |
-| Still unavailable | `findBlock(s)`, digging/placing, `unequip`, non-hotbar equipment, flight plans, broad skill groups, arbitrary Mineflayer plugins/events and pathfinder. Missing APIs never become successful no-ops. |
+| Still unavailable | Digging/placing, `unequip`, non-hotbar equipment, flight plans, broad skill groups, arbitrary Mineflayer plugins/events and pathfinder. Missing APIs never become successful no-ops. |
+
+`findBlocks({point?,matching,maxDistance?,count?,useExtraInfo?})` returns observed positions nearest first; `findBlock(options)` returns the nearest observed Block or null. Both backends take actual numeric block registry IDs (or an array of 1–64 IDs), not function predicates across the worker JSON boundary. Read a registry entry first and filter returned properties in the program. Native searches use radius 1–16 (default 16), count 1–64 (default 1); Mineflayer permits radius 32. The entire native search sphere must be within 32 blocks of the eyes. Only loaded, ray-visible blocks qualify. Unloaded/hidden blocks are unknown; an empty result does not prove absence in unexplored or occluded space.
+
+To bound game-thread work, a native search permits at most 256 matching visibility checks. Exceeding that limit fails explicitly, rather than returning an incomplete empty result; narrow the radius or matching IDs. `useExtraInfo` accepts a boolean but does not add unavailable native block fields or NBT. These are read-only calls and do not reserve the body. `setQuickBarSlot`, `findBlock` and `findBlocks` require their individual advertised capability, while old v1 bridge methods remain usable.
+
+```js
+// This source runs on both matching backends; native limits are used here.
+const crop = await bot.read('registry.blocksByName.carrots');
+const positions = await bot.findBlocks({matching:crop.id,maxDistance:4,count:8});
+const observed = [];
+for (const position of positions) {
+  const block = await bot.blockAt(position);
+  if (block) observed.push({position:block.position,properties:block.getProperties()});
+}
+return observed; // observation, not proof of harvesting or planting
+```
 
 Read `runId/call` for expanded SDK receipts and compare actual before/after blocks or inventory. A program named “planted”, a custom `{ok:true}` or a completed worker is not evidence of planting. Native programs have the same bounded source, calls, time and version limits as Mineflayer methods; the native body adds a maximum reservation duration and cleanup on GUI takeover, death, disconnect, dimension/player change or a large position discontinuity.
 

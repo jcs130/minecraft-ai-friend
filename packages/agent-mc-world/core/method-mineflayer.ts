@@ -24,6 +24,7 @@ export const NATIVE_API = Object.freeze({
   digTime: 'digTime(block): milliseconds for the currently held tool.',
   'inventory.items': 'inventory.items(): current native inventory stacks, including slot and instance identity. Read heldItem or inventory.slots separately for equipment.',
   getControlState: 'getControlState(control): boolean. forward/back/left/right/jump/sprint/sneak.',
+  setQuickBarSlot: 'setQuickBarSlot(slot): select a hotbar index 0..8. This is not an inventory slot (36..44); no item is moved or dropped. Read heldItem to check the selected stack.',
   look: 'look(yaw,pitch,force?): Promise<void>. Native radians; no relative angle or automatic navigation.',
   lookAt: 'lookAt(point,force?): Promise<void>. Use Vec3 coordinates.',
   setControlState: 'setControlState(control,state): native key input. Keys remain held across awaited calls in this program; all are released on completion or revocation. Normal collision physics applies; flight uses existing flight/control tools.',
@@ -194,6 +195,9 @@ export class MineflayerMethod {
       case 'digTime': return bot.digTime(block(bot, a));
       case 'inventory.items': return bot.inventory.items().map(packItem);
       case 'getControlState': return bot.getControlState(control(a));
+      case 'setQuickBarSlot':
+        if (!Number.isInteger(a) || Number(a) < 0 || Number(a) > 8) throw new Error('Hotbar index must be integer 0..8, not inventory slot36..44');
+        return bot.setQuickBarSlot(a as number);
       case 'look':
         if (typeof a !== 'number' || !Number.isFinite(a) || typeof b !== 'number' || !Number.isFinite(b) || Math.abs(b) > Math.PI / 2) throw new Error('look 要有限弧度与有效 pitch');
         return bot.look(a, b, c === true);

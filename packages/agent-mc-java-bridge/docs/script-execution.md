@@ -8,6 +8,8 @@ The bridge now advertises `agent-mc-method/v1` for the independent core's existi
 
 Keys remain held across calls. `waitForTicks` is driven by actual START_CLIENT_TICK events, with the initial boundary excluded so a requested duration cannot finish before vanilla processes those ticks. Block interaction defers dispatch until the aimed view has passed through a tick, then rechecks block, hand, reach and line of sight. The bridge never changes blocks directly or reports a planting success from a click.
 
+`findBlock` / `findBlocks` are bounded native observations using actual registry IDs, loaded chunks and collision rays. They share the Agent JavaScript signatures and nearest-first ordering with Mineflayer; radius/visibility limits and unknown-space semantics are in the compatibility matrix. `setQuickBarSlot` accepts hotbar indexes 0–8 and runs through the same ordered, tick-driven body session. These additions are advertised individually so older v1 bridges keep supporting their baseline methods.
+
 ## Optional Python Minescript
 
 The native bridge can run Minescript **4.0**, installed separately for the matching Fabric game version. The original **1.20.6** input was official Modrinth release `xXUEOKOM`, SHA512 `b30b5ebabf1cfe55e0605d3d9cc4bf4fa565eb013f84a9816c0562cedfd90fb527a070f435b08594ce2adbd96a3af4e6fad0ffac885f3dc8b8419db457819484`; this filename/hash is not a 1.21.1 install instruction. Use the matching 1.21.1 distribution for that game.
