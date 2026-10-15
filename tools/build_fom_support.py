@@ -4,6 +4,7 @@ import argparse,hashlib,json,os,subprocess,tempfile,zipfile
 REPO=Path(__file__).resolve().parents[1]
 SOURCE=REPO/'world/fom-support-src'
 AUTH=REPO/'world/society-bridge-src/src/main/java/dev/qiandeng/maw/PlayerAuthBridge.java'
+REGISTRY=AUTH.with_name('NativeRegistryDump.java')
 
 def build(server,java,output):
     server,output=Path(server).resolve(),Path(output).resolve()
@@ -13,7 +14,7 @@ def build(server,java,output):
     patched=libs/'net/neoforged/neoforge/21.1.248/neoforge-21.1.248-server.jar'
     assert mapped.is_file() and neo.is_file() and patched.is_file(),'Exact Minecraft/NeoForge cache required'
     cp=list(dict.fromkeys([patched,mapped,neo,*sorted(libs.rglob('*.jar'))]))
-    sources=[AUTH,*sorted((SOURCE/'src').rglob('*.java'))]
+    sources=[AUTH,REGISTRY,*sorted((SOURCE/'src').rglob('*.java'))]
     output.mkdir(parents=True,exist_ok=False)
     with tempfile.TemporaryDirectory(prefix='compile-',dir=output) as temp:
         classes=Path(temp)/'classes';classes.mkdir()
@@ -23,7 +24,7 @@ def build(server,java,output):
         result=subprocess.run([str(Path(java).with_name('javac.exe')),'-J-Duser.language=en','-J-Dfile.encoding=UTF-8','@'+str(args)],capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=180)
         (output/'compile.log').write_text(result.stdout+result.stderr,encoding='utf-8')
         if result.returncode:raise RuntimeError(result.stderr[-5000:])
-        jar=output/'maw-fom-support-0.1.0.jar'
+        jar=output/'maw-fom-support-0.2.0.jar'
         with zipfile.ZipFile(jar,'x',zipfile.ZIP_DEFLATED) as archive:
             for root in (classes,SOURCE/'resources'):
                 for path in sorted(root.rglob('*')):

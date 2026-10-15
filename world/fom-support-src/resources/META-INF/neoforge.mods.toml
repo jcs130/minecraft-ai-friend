@@ -3,9 +3,9 @@ loaderVersion="[4,)"
 license="MIT"
 [[mods]]
 modId="maw_fom_support"
-version="0.1.0"
+version="0.2.0"
 displayName="My Agent World · FOM Server Support"
-description="Server-only reuse of the existing mixed login and first-join guest policy. No Agent brain or gameplay registry entries."
+description="Server-only mixed login, first-join guest policy and OP-only native registry/network export. No Agent brain or gameplay registry entries."
 [[dependencies.maw_fom_support]]
 modId="minecraft"
 type="required"

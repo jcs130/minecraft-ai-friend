@@ -157,6 +157,7 @@ function relayFixture () {
   const front = { write: (name, params) => writes.push({ name, params }) }
   const session = { front, back: { uuid: OWN }, username: 'ordinary-player' }
   const context = { Buffer, DEBUG_MENUS: false, BRIDGE_COOKING_POT_GUI: true, BRIDGE_NEOFORGE_TIME: false,
+    vanillaAgentProjection: false,
     nativeViewerHash: hash, NativeViewer, createNativeMenuProxyGuard, vanillaMenuParserWindows: windows,
     cookingPotWindow, decodeNeoForgeTime: () => null, componentProtocol: true,
     vanillaProjection: params => ({ ...params, item: { itemId: 1, components: [] } }),

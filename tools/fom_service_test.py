@@ -63,5 +63,59 @@ class FomGuards(unittest.TestCase):
     def test_manifest_change_is_not_accepted_at_runtime(self):
         cfg=service.load_config(self.file);doc=json.loads(self.lock.read_bytes());doc['note']='changed';self.lock.write_text(json.dumps(doc))
         with self.assertRaisesRegex(ValueError,'manifest changed'):service.validator(cfg)
+    def test_new_support_requires_explicit_selection(self):
+        candidate=self.server/'mods/maw-fom-support-0.2.0.jar'
+        self.support.rename(candidate)
+        self.lock.write_text(json.dumps({'files':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (self.server/'mods').iterdir()}}))
+        with self.assertRaisesRegex(ValueError,'Explicit first-join'):service.load_config(self.file)
+        self.raw['supportJar']=candidate.name;self.save()
+        cfg=service.load_config(self.file);service.validator(cfg)
+    def test_duplicate_support_is_rejected(self):
+        (self.server/'mods/maw-fom-support-0.2.0.jar').write_bytes(b'other adapter')
+        self.lock.write_text(json.dumps({'files':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (self.server/'mods').iterdir()}}))
+        with self.assertRaisesRegex(ValueError,'Duplicate'):service.load_config(self.file)
+    def test_unknown_support_filename_is_rejected(self):
+        self.raw['supportJar']='another-login.jar';self.save()
+        with self.assertRaisesRegex(ValueError,'Explicit first-join'):service.load_config(self.file)
+
+    def gateway(self):
+        self.support.rename(self.server/'mods/maw-fom-support-0.2.0.jar')
+        self.lock.write_text(json.dumps({'files':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (self.server/'mods').iterdir()}}))
+        self.raw['supportJar']='maw-fom-support-0.2.0.jar'
+        root=self.root/'case/ops/agent-gateway/fixture';root.mkdir(parents=True)
+        names=('node.exe','gate/gate.cjs','registry/idmap.json','registry/items.json','registry/network-channels.json',
+            'registry/components.tsv','registry/particles.tsv','registry/entity-data-serializers.tsv')
+        for name in names:
+            path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'pinned fixture')
+        release={'schemaVersion':1,'minecraft':'1.21.1','modFiles':json.loads(self.lock.read_text())['files'],
+            'files':{name:hashlib.sha256((root/name).read_bytes()).hexdigest() for name in names}}
+        (root/'release.json').write_text(json.dumps(release))
+        self.raw['agentGateway']={'releaseDir':str(root),'port':39174};self.save();return root
+
+    def test_gateway_is_owned_dependent_lan_only_and_reverse_stoppable(self):
+        self.gateway();cfg=service.load_config(self.file);gate=cfg['services'][1]
+        self.assertEqual([s['id'] for s in cfg['services']],['java','gate'])
+        self.assertEqual(gate['dependsOn'],['java']);self.assertEqual(gate['stopText'],'{"kind":"shutdown"}')
+        self.assertEqual(gate['readiness'],'minecraft');self.assertEqual(gate['env']['GATE_PUBLIC_GAME_ACCESS'],'0')
+        self.assertEqual(gate['env']['GATE_AGENT_PREFIX'],'ag_');service.validator(cfg)
+
+    def test_gateway_refuses_foreign_pack_manifest(self):
+        root=self.gateway();release=json.loads((root/'release.json').read_text());release['modFiles']['unrelated.jar']='00'
+        (root/'release.json').write_text(json.dumps(release))
+        with self.assertRaisesRegex(ValueError,'exact FOM mod set'):service.load_config(self.file)
+
+    def test_gateway_refuses_changed_bytes_and_runtime_drift(self):
+        root=self.gateway();cfg=service.load_config(self.file);(root/'gate/gate.cjs').write_bytes(b'changed')
+        with self.assertRaisesRegex(ValueError,'Gateway release hash'):service.load_config(self.file)
+        with self.assertRaisesRegex(ValueError,'gateway release changed'):service.validator(cfg)
+
+    def test_gateway_paths_and_ports_cannot_escape_deployment(self):
+        root=self.gateway()
+        for changes in ({'releaseDir':str(self.root/'foreign')},{'port':self.raw['gamePort']},{'port':28977}):
+            original=dict(self.raw['agentGateway']);self.raw['agentGateway'].update(changes);self.save()
+            with self.assertRaises(ValueError):service.load_config(self.file)
+            self.raw['agentGateway']=original
+        self.save();release=json.loads((root/'release.json').read_text());release['files']['../../escape']='00';(root/'release.json').write_text(json.dumps(release))
+        with self.assertRaisesRegex(ValueError,'Invalid gateway release file'):service.load_config(self.file)
 
 if __name__=='__main__':unittest.main()

@@ -45,6 +45,8 @@ final class NativeRegistryDump {
                     dumpEntities(dir.resolve("entities.tsv"));
                     dumpParticles(dir.resolve("particles.tsv"));
                     dumpEntitySerializers(dir.resolve("entity-data-serializers.tsv"));
+                    dumpNetworkChannels(dir.resolve("network-channels.json"));
+                    dumpSounds(dir.resolve("sounds.tsv"));
                     var complete = new com.google.gson.JsonObject();
                     complete.addProperty("schemaVersion", 1);
                     complete.addProperty("completedAt", java.time.Instant.now().toString());
@@ -67,6 +69,51 @@ final class NativeRegistryDump {
             for (var component : BuiltInRegistries.DATA_COMPONENT_TYPE) {
                 w.write(BuiltInRegistries.DATA_COMPONENT_TYPE.getKey(component).toString() + "\t" +
                         BuiltInRegistries.DATA_COMPONENT_TYPE.getId(component));
+                w.newLine();
+            }
+        }
+    }
+
+    /** Export the actual registrations, including version/flow and protocol.
+     * Never infer a required mod channel by repeatedly reconnecting players.
+     * This is an OP-only diagnostic of the pinned NeoForge 21.1 API. */
+    private static void dumpNetworkChannels(Path file) throws Exception {
+        var field = net.neoforged.neoforge.network.registration.NetworkRegistry.class
+                .getDeclaredField("PAYLOAD_REGISTRATIONS");
+        field.setAccessible(true);
+        var registrations = (java.util.Map<?, ?>) field.get(null);
+        var protocols = new com.google.gson.JsonObject();
+        for (var protocolEntry : registrations.entrySet()) {
+            var protocol = (net.minecraft.network.ConnectionProtocol) protocolEntry.getKey();
+            if (protocol != net.minecraft.network.ConnectionProtocol.PLAY &&
+                    protocol != net.minecraft.network.ConnectionProtocol.CONFIGURATION) continue;
+            var rows = new com.google.gson.JsonArray();
+            var entries = (java.util.Map<?, ?>) protocolEntry.getValue();
+            for (var entry : entries.entrySet()) {
+                Object registration = entry.getValue();
+                Class<?> type = registration.getClass();
+                var row = new com.google.gson.JsonObject();
+                row.addProperty("id", entry.getKey().toString());
+                row.addProperty("version", (String) type.getMethod("version").invoke(registration));
+                row.addProperty("optional", (Boolean) type.getMethod("optional").invoke(registration));
+                var flow = (java.util.Optional<?>) type.getMethod("flow").invoke(registration);
+                if (flow.isPresent()) row.addProperty("flow", ((net.minecraft.network.protocol.PacketFlow) flow.get()).ordinal());
+                rows.add(row);
+            }
+            protocols.add(Integer.toString(protocol.ordinal()), rows);
+        }
+        var out = new com.google.gson.JsonObject();
+        out.addProperty("schemaVersion", 1);
+        out.addProperty("minecraft", "1.21.1");
+        out.addProperty("neoforge", "21.1.248");
+        out.add("protocols", protocols);
+        Files.writeString(file, out.toString());
+    }
+
+    private static void dumpSounds(Path file) throws Exception {
+        try (BufferedWriter w = Files.newBufferedWriter(file)) {
+            for (var sound : BuiltInRegistries.SOUND_EVENT) {
+                w.write(BuiltInRegistries.SOUND_EVENT.getKey(sound) + "\t" + BuiltInRegistries.SOUND_EVENT.getId(sound));
                 w.newLine();
             }
         }

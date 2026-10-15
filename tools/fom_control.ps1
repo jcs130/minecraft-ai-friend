@@ -59,7 +59,13 @@ if (-not (Is-Fresh $state)) {
     if (-not (Is-Fresh $state) -or $state.shutdownRequested) { throw 'New owner heartbeat not confirmed' }
 }
 # Explicit Start is an operator request to leave the previous maintenance pause.
-if ($state.paused -or $state.stopRequested) { Invoke-Service 'resume' }
+$resumeConfirmedAt = $null
+if ($state.paused -or $state.stopRequested) {
+    Invoke-Service 'resume'
+    # The mailbox receipt can precede publication of the next health snapshot.
+    # Do not report the previous maintenance pause as a new startup failure.
+    $resumeConfirmedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()/1000.0
+}
 $deadline=[DateTime]::UtcNow.AddSeconds(300)
 do {
     $state=Read-OwnedHealth
@@ -67,7 +73,10 @@ do {
         @{ok=$true;state='ready';gamePort=$settings.gamePort;serverDir=$settings.serverDir} | ConvertTo-Json
         exit 0
     }
-    if ((Is-Fresh $state) -and $state.paused) { throw ('Server paused: '+$state.problem) }
+    if ((Is-Fresh $state) -and $state.paused -and
+        ($null -eq $resumeConfirmedAt -or $state.heartbeatEpoch -gt $resumeConfirmedAt)) {
+        throw ('Server paused: '+$state.problem)
+    }
     Start-Sleep -Milliseconds 500
 } while ([DateTime]::UtcNow -lt $deadline)
 throw 'Server readiness not confirmed; inspect owned logs'

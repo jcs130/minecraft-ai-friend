@@ -78,7 +78,8 @@ SOCIETY_NATIVE_SDK_MANIFEST = Path('E:/QiandengJiSocietyLab/integrations/native-
 JAVA_CLIENT_BRIDGE_MANIFEST = {'probe': 'tools/java_client_bridge_health.py', 'optional': True,
     'managedBy': 'owning-minecraft-client-lifecycle', 'serverRequired': False, 'bind': '127.0.0.1'}
 FOM_SERVER_MANIFEST = {'probe': 'tools/fom_health.py', 'managedBy': 'existing-owned-child-supervisor',
-    'gamePort': 28976, 'healthBind': '127.0.0.1', 'modpack': 'FOM 2.42', 'physicsTransport': 'TCP'}
+    'gamePort': 28976, 'healthBind': '127.0.0.1', 'modpack': 'FOM 2.42', 'physicsTransport': 'TCP',
+    'agentGatewayOptional': True, 'agentGatewayPort': 28977, 'agentGatewayPolicy': 'ag_ / LAN only / partial projection'}
 SOCIETY_UNDERWORLD_MANIFEST = {'probe': 'tools/maw_underworld_health.py',
     'managedBy': 'existing-native-java-supervisor', 'questProvider': 'simplequests',
     'economyProvider': 'economycraft', 'scope': 'installed_content_and_menu_contract'}

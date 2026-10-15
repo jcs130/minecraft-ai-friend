@@ -198,7 +198,7 @@ function buildChannelList (knowledge) {
   const list = {}
   for (const [id, k] of knowledge) {
     if (!list[k.bucket]) list[k.bucket] = []
-    const comp = { id, version: k.version, optional: !!k.optional }
+    const comp = { id: k.id || id, version: k.version, optional: !!k.optional }
     if (k.flow !== null && k.flow !== undefined) comp.flow = k.flow
     list[k.bucket].push(comp)
   }

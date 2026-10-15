@@ -2,6 +2,8 @@
 
 2026-10-15。现役世界是 FOM 2.42 / Minecraft 1.21.1 / NeoForge 21.1.248。
 
+补充：普通 Mineflayer 的基础兼容入口见 [FOM Mineflayer 接入](MY-AGENT-WORLD-FOM-MINEFLAYER.md)。它复用原翻译网关，更新本包注册表和组件；完整模组交互仍使用下述 Java 客户端桥。
+
 ## 技能体系与 Agent 身体是两层
 
 旧千灯纪的 RPG 技能是服务端代码。Paper 版 `AgentFriendPlugin` 注册 `/mycli`，结合 AuraSkills、MagicSpells，处理实际魔力、冷却、伤害、学习、粒子和声音；部分命令按玩家本人身份调用。它不是一个仅靠 OP 指令模拟全部技能的机器人。后续 NeoForge 版也有原生服务端实现与模组接口。

@@ -60,7 +60,64 @@ test('an unsupported native codec explicitly fails instead of consuming a neighb
   const packet = { name: 'set_slot', params: { windowId: 0, stateId: 1, slot: 36, item: empty } }
   const emptyPacket = protocol.createPacketBuffer('packet', packet)
   const buffer = Buffer.concat([emptyPacket.subarray(0, -1), Buffer.from([1, 1, 1, 0, 89, 123])])
-  assert.throws(() => protocol.parsePacketBuffer('packet', buffer), /UNSUPPORTED_NATIVE_ITEM_COMPONENT/)
+  assert.throws(() => protocol.parsePacketBuffer('packet', buffer), /UNSUPPORTED_NATIVE_ITEM_COMPONENT test:unsupported/)
+})
+
+test('FOM mob backpack decodes fixed INT components and the following equipment slot', () => {
+  const names = ['sophisticatedcore:number_of_inventory_slots', 'sophisticatedcore:number_of_upgrade_slots',
+    'sophisticatedcore:main_color', 'sophisticatedcore:accent_color', 'sophisticatedbackpacks:loot_table', 'sophisticatedbackpacks:loot_factor']
+  const ids = [75, 76, 77, 78, 133, 134]
+  const current = new Map(Object.entries(vanilla).map(([id, name]) => ['minecraft:' + name, Number(id)]))
+  names.forEach((name, i) => current.set(name, ids[i]))
+  const backend = createBackendComponentProtocol(current)
+  // Equipment packet from an isolated flat-world mob; contains no player data.
+  const bytes = Buffer.from('WzSAAaEGAACCAdsGAACDAdoGAACEAbcKBgBLAAAAG0wAAAABTf/BwcFO/0lJSYUBH21pbmVjcmFmdDpjaGVzdHMvc2ltcGxlX2R1bmdlb26GAT8qqqsFAdgGAAA=', 'base64')
+  const original = Buffer.from(bytes)
+  const decoded = backend.parsePacketBuffer('packet', bytes)
+  assert.equal(decoded.metadata.size, bytes.length)
+  assert.deepEqual(bytes, original, 'source equipment continuation bits remain untouched')
+  const gear = decoded.data.params.equipments
+  const backpack = gear.find(e => e.item?.components?.some(c => c.type === names[0]))
+  assert.deepEqual(backpack.item.components.map(c => c.type), names)
+  assert.equal(backpack.item.components[0].data, 27)
+  assert.equal(backpack.item.components[1].data, 1)
+  assert.equal(backpack.item.components[4].data, 'minecraft:chests/simple_dungeon')
+  assert(Math.abs(backpack.item.components[5].data - 2 / 3) < 1e-6)
+  assert.equal(gear.at(-1).slot, 5)
+  assert.equal(gear.at(-1).item.itemId, 856)
+  assert.equal(vanillaProjection(decoded.data).params.equipments.find(e => e.slot === backpack.slot).item.components.length, 0)
+})
+
+test('FOM backpack UUID and fixed INT settings use the actual reordered registry IDs', () => {
+  const current = new Map(registry)
+  current.set('sophisticatedcore:storage_uuid', 201)
+  current.set('sophisticatedcore:open_tab_id', 202)
+  current.set('sophisticatedbackpacks:columns_taken', 203)
+  const backend = createBackendComponentProtocol(current)
+  const item = stack(1500, [{ type: 'sophisticatedcore:storage_uuid', data: owner },
+    { type: 'sophisticatedcore:open_tab_id', data: -1 }, { type: 'sophisticatedbackpacks:columns_taken', data: 3 }])
+  const packet = { name: 'window_items', params: { windowId: 2, stateId: 8, items: [item, book, empty], carriedItem: empty } }
+  const bytes = backend.createPacketBuffer('packet', packet)
+  assert(bytes.includes(Buffer.from([202, 1, 255, 255, 255, 255, 203, 1, 0, 0, 0, 3])))
+  const decoded = backend.parsePacketBuffer('packet', bytes)
+  assert.equal(decoded.metadata.size, bytes.length)
+  assert.deepEqual(decoded.data.params.items[0], item)
+  assert.equal(decoded.data.params.items[1].components[0].data, 'touhou_little_maid:memorizable_gensokyo')
+})
+
+test('FOM obituary uses two fixed UUIDs without consuming the next stack', () => {
+  const current = new Map(registry); current.set('gravestone:death', 292)
+  const backend = createBackendComponentProtocol(current)
+  const deathId = 'a744bc03-c660-4d01-a6d4-1be4555c5051'
+  const obituary = stack(2400, [{ type: 'gravestone:death', data: { playerId: owner, deathId } }])
+  const packet = { name: 'window_items', params: { windowId: 0, stateId: 6, items: [obituary, book], carriedItem: empty } }
+  const bytes = backend.createPacketBuffer('packet', packet)
+  assert(bytes.includes(Buffer.from(owner.replaceAll('-', '') + deathId.replaceAll('-', ''), 'hex')))
+  const parsed = backend.parsePacketBuffer('packet', bytes)
+  assert.equal(parsed.metadata.size, bytes.length)
+  assert.deepEqual(parsed.data.params.items, packet.params.items)
+  assert.equal(vanillaProjection(parsed.data).params.items[0].components.length, 0)
+  assert.throws(() => backend.parsePacketBuffer('packet', bytes.subarray(0, bytes.length - 17)))
 })
 
 test('Settlements totem modes use fixed INT and preserve following stacks and native components', () => {

@@ -8,6 +8,35 @@ PRODUCTION=Path('E:/MC/servers/fom-2.42/server').resolve()
 RESEARCH=Path('E:/QiandengJiSocietyLab/research').resolve()
 JIT='-XX:CompileCommand=exclude,net.caffeinemc.mods.lithium.common.shapes.VoxelShapeMatchesAnywhere::cuboidMatchesAnywhere'
 
+def gateway_spec(raw,server,port,health,public,verify_hashes):
+    gate=raw.get('agentGateway')
+    if gate is None:return None,[]
+    root=Path(gate['releaseDir']).resolve();gate_port=gate['port']
+    if not root.is_relative_to(server.parent/'ops') or root==server.parent/'ops':raise ValueError('Gateway release must stay in this deployment ops directory')
+    if type(gate_port)!=int or gate_port in (port,health) or (public and gate_port!=28977) or (not public and not 39000<=gate_port<=39999):raise ValueError('Invalid FOM Agent gateway port')
+    manifest=root/'release.json';release=read_json(manifest,2*1024*1024)
+    if release.get('schemaVersion')!=1 or release.get('minecraft')!='1.21.1' or release.get('modFiles')!=read_json(Path(raw['modsManifest']),65536)['files']:
+        raise ValueError('Gateway release does not match this exact FOM mod set')
+    files=release['files'];stats=[]
+    required={'node.exe','gate/gate.cjs','registry/idmap.json','registry/items.json','registry/network-channels.json','registry/components.tsv','registry/particles.tsv','registry/entity-data-serializers.tsv'}
+    if not required.issubset(files):raise ValueError('Incomplete Agent gateway release')
+    for relative,digest in files.items():
+        path=(root/relative).resolve()
+        if not path.is_relative_to(root) or not path.is_file():raise ValueError('Invalid gateway release file')
+        if verify_hashes and hashlib.sha256(path.read_bytes()).hexdigest()!=digest:raise ValueError('Gateway release hash differs')
+        stat=path.stat();stats.append((str(path),stat.st_size,stat.st_mtime_ns))
+    stat=manifest.stat();stats.append((str(manifest),stat.st_size,stat.st_mtime_ns))
+    host='0.0.0.0' if public else '127.0.0.1'
+    env={'NODE_PATH':str(root/'node_modules'),'GATE_LISTEN_HOST':host,'GATE_PUBLIC_GAME_ACCESS':'0',
+        'GATE_LAN_SUBNET':'192.168.3.0/24','GATE_AGENT_PREFIX':'ag_',
+        'GATE_PREFIX_MSG':'此入口供 ag_ 开头的 Agent 使用；完整模组 Java 客户端请连接 28976。',
+        'GATE_VANILLA':'0','GATE_VANILLA_PROJECTION':'1','GATE_REMAP':'1','GATE_SKIP_MOD_RECIPES':'1','GATE_NEOFORGE_TIME_BRIDGE':'1',
+        'GATE_CACHE_FILE':str(Path(raw['runtimeDir'])/'gateway-cache.json')}
+    for key,name in {'GATE_CHANNELS_FILE':'network-channels.json','GATE_COMPONENTS_FILE':'components.tsv','GATE_PARTICLES_FILE':'particles.tsv',
+        'GATE_ENTITY_SERIALIZERS_FILE':'entity-data-serializers.tsv','GATE_IDMAP_FILE':'idmap.json','GATE_BEDROCK_ITEMS_FILE':'items.json'}.items():env[key]=str(root/'registry'/name)
+    return {'id':'gate','port':gate_port,'host':'127.0.0.1','listenHost':host,'command':[str(root/'node.exe'),str(root/'gate/gate.cjs'),str(gate_port),'127.0.0.1',str(port)],
+        'cwd':str(root),'env':env,'dependsOn':['java'],'readiness':'minecraft','healthUrl':None,'stopMode':'stdin','stopText':'{"kind":"shutdown"}','startupTimeoutSeconds':30},stats
+
 def check_server(server,port,host):
     values=properties(server/'server.properties')
     expected={'server-ip':host,'server-port':str(port),'online-mode':'false','enforce-secure-profile':'false','enable-rcon':'false','enable-query':'false','level-name':'world'}
@@ -41,13 +70,17 @@ def load_config(file,*,verify_hashes=True):
     if set(actual)!=set(lock['files']):raise ValueError('FOM mod set differs from its release manifest')
     if verify_hashes and any(hashlib.sha256(actual[name].read_bytes()).hexdigest()!=digest for name,digest in lock['files'].items()):raise ValueError('FOM mod hash differs')
     verify(server/'mods'/AUTH_NAME)
-    if 'maw-fom-support-0.1.0.jar' not in actual:raise ValueError('Existing first-join login policy adapter required')
+    support=raw.get('supportJar','maw-fom-support-0.1.0.jar')
+    if support not in ('maw-fom-support-0.1.0.jar','maw-fom-support-0.2.0.jar') or support not in actual:raise ValueError('Explicit first-join login policy adapter required')
+    if [name for name in actual if name.startswith('maw-fom-support-')]!=[support]:raise ValueError('Duplicate or unselected FOM support adapter')
     check_policies(server)
     command=[str(java),'-Djava.net.preferIPv4Stack=true',JIT,'-Xms512M','-Xmx'+str(raw['maxMemoryMiB'])+'M','-Dfile.encoding=UTF-8','-Dstdout.encoding=UTF-8','-Dstderr.encoding=UTF-8','@java.args','nogui']
     spec={'id':'java','port':port,'host':'127.0.0.1','listenHost':host,'command':command,'cwd':str(server),'env':{},'dependsOn':[],'readiness':'minecraft','healthUrl':None,'stopMode':'stdin','stopText':'stop','startupTimeoutSeconds':300}
-    return {'schemaVersion':1,'serverDir':str(server),'gamePort':port,'healthPort':health,'runtimeDir':str(runtime),'services':[spec],
+    if raw.get('agentGateway') is not None and support!='maw-fom-support-0.2.0.jar':raise ValueError('Agent gateway requires explicitly selected FOM support 0.2.0')
+    gate,gate_stats=gateway_spec(raw,server,port,health,public,verify_hashes)
+    return {'schemaVersion':1,'serverDir':str(server),'gamePort':port,'healthPort':health,'runtimeDir':str(runtime),'services':[spec]+([gate] if gate else []),
         'networkExposure':{'mode':'lan' if public else 'loopback','listenHost':host,'address':'192.168.3.163' if public else None,'publicGameAccess':public},
-        '_file':str(file),'_raw':raw,'_lock':lock,'_modStats':[(str(p),p.stat().st_size,p.stat().st_mtime_ns) for p in actual.values()]}
+        '_file':str(file),'_raw':raw,'_lock':lock,'_gateStats':gate_stats,'_modStats':[(str(p),p.stat().st_size,p.stat().st_mtime_ns) for p in actual.values()]}
 
 def validator(config):
     # Full hashes are checked on launch/resume; per-tick guards avoid rehashing hundreds of MiB.
@@ -57,6 +90,9 @@ def validator(config):
     if read_json(Path(config['_raw']['modsManifest']),65536)!=config['_lock']:raise ValueError('FOM release manifest changed while running')
     current=sorted((str(p),p.stat().st_size,p.stat().st_mtime_ns) for p in (server/'mods').glob('*.jar'))
     if current!=sorted(config['_modStats']):raise ValueError('FOM mods changed while running')
+    for path,size,stamp in config.get('_gateStats',[]):
+        stat=Path(path).stat()
+        if (stat.st_size,stat.st_mtime_ns)!=(size,stamp):raise ValueError('FOM Agent gateway release changed while running')
 
 def main():
     if sys.stdout is not None:sys.stdout.reconfigure(encoding='utf-8')

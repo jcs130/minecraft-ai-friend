@@ -22,6 +22,8 @@ function load () {
     bm: new Map(Object.entries(raw.blocks || {}).map(([k, v]) => [Number(k), v.v])),
     bs: new Map(Object.entries(raw.states || {}).map(([k, v]) => [Number(k), v])),
     im: new Map(Object.entries(raw.items || {}).map(([k, v]) => [Number(k), v])),
+    reverseVanillaItems: raw.reverseVanillaItems || null,
+    reverseVanillaStates: raw.reverseVanillaStates || null,
     fallbackBlock: raw.fallbackBlockState ?? 0 // air? 由映射生成器决定
   }
   console.log(`[REMAP] 载入 state=${MAP.bs.size} item=${MAP.im.size}`)
@@ -52,6 +54,16 @@ function finalize () {
   for (const [n, v] of MAP.bs) if (n === v) MAP.rev.set(v, n)
   for (const [n, v] of MAP.im) MAP.revI.set(v, n)
   for (const [n, v] of MAP.im) if (n === v) MAP.revI.set(v, n)
+  // A content pack can move vanilla IDs too. Numeric equality is not proof
+  // of identity; newer exports resolve the reverse table by registry name.
+  if (MAP.reverseVanillaItems) for (const [v, n] of Object.entries(MAP.reverseVanillaItems)) {
+    if (!Number.isInteger(n) || MAP.im.get(n) !== Number(v)) throw Error('INVALID_VANILLA_ITEM_REVERSE')
+    MAP.revI.set(Number(v), n)
+  }
+  if (MAP.reverseVanillaStates) for (const [v, n] of Object.entries(MAP.reverseVanillaStates)) {
+    if (!Number.isInteger(n) || MAP.bs.get(n) !== Number(v)) throw Error('INVALID_VANILLA_STATE_REVERSE')
+    MAP.rev.set(Number(v), n)
+  }
   console.log(`[REMAP] 反表 state=${MAP.rev.size} item=${MAP.revI.size}`)
 }
 
@@ -64,33 +76,14 @@ function remapStack (st) {
   return st
 }
 
-// map_chunk 的 chunkData 是原始字节 ✓ 手写 varint 游标两次翻车(2026-09-21 定谳) ✗
-// 唯一懂这格式的=prismarine-chunk(mineflayer 实测能 parse 同一块 buffer) ✓
-// 姿势：load → 原地翻 palette(单值段翻 value) → dump 重打包 ✓ 解不懂的直接透传不碰 ✓
-let ChunkCls = undefined
+const { remapChunk } = require('./native-chunk-remap.cjs')
+let vanillaGlobalBits
 function remapChunkBuf (buf) {
-  if (ChunkCls === undefined) { try { ChunkCls = require('prismarine-chunk')('1.21.1') } catch (e) { ChunkCls = null } }
-  if (!ChunkCls) return buf
-  const c = new ChunkCls()
-  c.load(buf)                                                  // 解不动会 throw → 上层透传 ✓
-  let hit = 0
-  for (const s of c.sections) {
-    if (!s || !s.data) continue
-    const d = s.data
-    if (Array.isArray(d.palette)) {                            // 间接调色板 ✓
-      for (let i = 0; i < d.palette.length; i++) {
-        const v = MAP.bs.get(d.palette[i])
-        if (v != null) { d.palette[i] = v; hit++ } else { d.palette[i] = MAP.fallbackBlock; hit++ }
-      }
-    } else if (typeof d.value === 'number') {                  // 单值段(整段同方块) ✓
-      const v = MAP.bs.get(d.value)
-      d.value = v == null ? MAP.fallbackBlock : v
-      hit++
-    }
-    // direct 全局调色板段:少见 ✓ 暂不碰(透传) ✓ 若 verify 显示仍错位再补
-  }
-  if (!hit) return buf                                          // 一个号都没改到 → 别白重打包 ✓
-  return c.dump()
+  vanillaGlobalBits ??= Math.ceil(Math.log2(Math.max(...require('minecraft-data')('1.21.1').blocksArray.map(b => b.maxStateId)) + 1))
+  return remapChunk(buf, id => {
+    if (!MAP.bs.has(id)) throw Error('UNKNOWN_NATIVE_BLOCK_STATE ' + id)
+    return MAP.bs.get(id)
+  }, vanillaGlobalBits)
 }
 
 const BLOCK_KEYS = { blockId: 1, newState: 1, blockStateId: 1, block: 1 }
@@ -103,10 +96,10 @@ function remapOut (name, params) { // 后端→前端: NeoForge号→原版号
     return params
   }
   if (name === 'map_chunk' && Buffer.isBuffer(params.chunkData)) {
-    try {
-      const nb = remapChunkBuf(params.chunkData)
-      if (nb && Math.abs(nb.length - params.chunkData.length) <= 4096) params.chunkData = nb // 尺寸剧变=重打包有诈 ✓ 透传
-    } catch (e) {} // 手术失败=透传这包 ✓ 错位好过崩溃
+    // Palette compression may legitimately change length by far more than
+    // 4096 bytes. Invalid wire data is rejected by the owning session, never
+    // silently forwarded as if native numeric IDs were vanilla IDs.
+    params = { ...params, chunkData: remapChunkBuf(params.chunkData) }
     return params
   }
   if (name === 'multi_block_change' && Array.isArray(params.records)) {

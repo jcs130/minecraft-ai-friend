@@ -13,6 +13,7 @@ const DUMP = process.env.IDMAP_DUMP_DIR || path.join(__dirname, 'idmap-dump')
 const OUTPUT = process.env.IDMAP_OUTPUT_FILE || path.join(__dirname, 'idmap.json')
 const states = {}
 const items = {}
+const reverseVanillaItems = {}
 const report = { matched: 0, stateMismatch: 0, modFallback: {}, unknownVanilla: [], modItemFallback: 0, vanillaItemNoDump: 0 }
 
 const vb = new Map()
@@ -220,7 +221,7 @@ for (const line of it) {
   const neoN = Number(nid)
   if (name.startsWith('minecraft:')) {
     const rec = vi.get(name.slice(10))
-    if (rec) { items[neoN] = rec.id; continue }
+    if (rec) { items[neoN] = rec.id; reverseVanillaItems[rec.id] = neoN; continue }
   }
   let tgt = null, why = null
   const blk = report.modFallback[name]                    // 级1：同名 mod 方块已映射到的原版块
@@ -250,13 +251,21 @@ for (const [short, rec] of vi) {
 const topTargets = Object.entries(itemSrc.byTarget).sort((a, b) => b[1] - a[1]).slice(0, 15)
 const out = {
   generatedAt: new Date().toISOString(),
-  states, items,
+  states, items, reverseVanillaItems,
   fallbackBlockState: (vb2.get('stone') || { minStateId: 1 }).minStateId,
   report: { ...report, modFallbackCount: Object.keys(report.modFallback).length,
             modFallbackSample: Object.entries(report.modFallback).slice(0, 40),
             itemMapping: { blockItem: itemSrc.blockItem, tier: itemSrc.tier, family: itemSrc.family, paper: itemSrc.paper,
                            distinctTargets: Object.keys(itemSrc.byTarget).length,
                            topTargets, badRules } }
+}
+const actualStates = path.join(DUMP, 'block-states.jsonl')
+if (fs.existsSync(actualStates)) {
+  const exact = require('./exact-state-map.cjs').exactStateMap(actualStates, v.blocks, require('prismarine-block')('1.21.1'))
+  Object.assign(out.states, exact.states)
+  out.reverseVanillaStates = exact.reverseVanillaStates
+  out.report.exactVanillaStates = Object.keys(exact.states).length
+  out.report.additionalMinecraftNames = exact.additionalNames
 }
 fs.writeFileSync(OUTPUT, JSON.stringify(out))
 console.log(`idmap.json 生成 ✓ states=${Object.keys(states).length} items=${Object.keys(items).length} matched=${report.matched} stateMismatch=${report.stateMismatch} modFallback=${Object.keys(report.modFallback).length}`)

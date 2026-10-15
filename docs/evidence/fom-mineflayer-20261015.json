@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "at": "2026-10-15T10:32:14.659025+00:00",
+  "scope": "FOM 2.42 partial vanilla Agent projection; existing gateway reused",
+  "productionDeployed": true,
+  "paperChanged": false,
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.248",
+  "mineflayerTested": "4.39.0",
+  "minecraftProtocol": "1.68.0",
+  "supportVersion": "0.2.0",
+  "supportSha256": "6a9d84a04d03c29b159f10a8fe82bd923b96d19d1bdfedfcf01391897a359a2a",
+  "serverJarCount": 96,
+  "other95JarHashesPreserved": true,
+  "endpoints": {
+    "fullJava": "micro.kangqiang.site:28976",
+    "agentLanOnly": "192.168.3.163:28977",
+    "agentPrefix": "ag_"
+  },
+  "modelRequestsThisPhase": 0,
+  "tests": {
+    "nodeProtocolAndMapping": 89,
+    "pythonSupervisorGuards": 18,
+    "isolatedGameplay": 13,
+    "authPrivateQueriesColdRestart": 9,
+    "existingSdkAutoLogin": 2,
+    "actualNativeMobOmissionAndQueries": 2,
+    "productionReadOnlyConnection": 6,
+    "productionHealthSmoke": 9
+  },
+  "serverConfirmedInventory": {
+    "diamondRoundTrip": 12,
+    "shaftRoundTrip": 4,
+    "shaftPlacedOnce": 1,
+    "alloyConsumedByRecipe": 2,
+    "shaftsCrafted": 8,
+    "finalShafts": 11,
+    "finalCursor": 0
+  },
+  "actualProductionRegistryVerification": {
+    "actualProductionRegistryMapsIdentical": {
+      "states": true,
+      "items": true,
+      "reverseVanillaItems": true,
+      "reverseVanillaStates": true
+    },
+    "actualProductionItemCatalogIdentical": true,
+    "states": 180456,
+    "items": 5415
+  },
+  "fixtureLimits": {
+    "world": "independent flat test world",
+    "qaNonOp": true,
+    "itemsExplicitlyGivenByOperator": true,
+    "temporaryResistanceForInventoryIsolation": true,
+    "twoNativeMobsExplicitlySummoned": true
+  },
+  "backup": {
+    "cold": true,
+    "baseFiles": 679,
+    "dualDiskShaAndZipCrcVerified": true,
+    "runtimeArchivesNotCommitted": true
+  },
+  "knownOriginalPackStartupErrors": {
+    "uniqueErrorMessages": 311,
+    "newOnlyComparedWithPriorPack": 0,
+    "notSuppressed": true
+  },
+  "limits": [
+    "partial vanilla item/block display, not native model parity",
+    "unknown entities omitted with private one-per-type notices; real nearby query available",
+    "unknown required item codecs and mod menus remain explicit failures",
+    "complex vehicles, all mod GUI, full natural pathfinding and food semantics not universally verified",
+    "FOM Bedrock not deployed",
+    "Farmers Delight, Touhou Little Maid and old RPG not added in this phase",
+    "no new long-lived LLM agent or 16-agent load claim"
+  ],
+  "failuresPreserved": [
+    "earlier passive backpack component failure",
+    "client-predicted inventory discrepancy",
+    "isolated QA deaths",
+    "QA direction-vector and SDK hook mistakes",
+    "initial production sulfur cube rejection",
+    "initial production waterlogged section counter rejection",
+    "control-start stale paused snapshot"
+  ],
+  "privateEvidenceScope": "local research/fom-mineflayer-20261015/resume-20261015; no worlds, credentials, raw packets or JARs published"
+}

@@ -27,7 +27,24 @@ const MOD_CODECS = {
   'settlements:enchant_attempted': 'bool',
   'settlements:villager_totem_mode': 'i32',
   'ars_nouveau:spell_caster': 'MawArsSpellCaster',
-  'domum_ornamentum:texture_data': 'MawDomumTextureData'
+  'domum_ornamentum:texture_data': 'MawDomumTextureData',
+  // FOM 2.42: SophisticatedCore 1.4.87.2270 / Backpacks 3.25.77.2086.
+  // Verified against installed Mod(Core)DataComponents bytecode: counts and
+  // colors use fixed INT, not VarInt. Equipped mobs carry these components too.
+  'sophisticatedcore:number_of_inventory_slots': 'i32',
+  'sophisticatedcore:number_of_upgrade_slots': 'i32',
+  'sophisticatedcore:main_color': 'i32',
+  'sophisticatedcore:accent_color': 'i32',
+  'sophisticatedcore:storage_uuid': 'UUID',
+  'sophisticatedcore:open_tab_id': 'i32',
+  'sophisticatedbackpacks:loot_table': 'string',
+  'sophisticatedbackpacks:loot_factor': 'f32',
+  'sophisticatedbackpacks:columns_taken': 'i32',
+  // Gravestone 1.0.40 DeathInfo.STREAM_CODEC is two UUIDUtil.STREAM_CODECs
+  // (playerId, deathId), not NBT. Obituaries can appear after a normal death.
+  'gravestone:death': ['container', [
+    { name: 'playerId', type: 'UUID' }, { name: 'deathId', type: 'UUID' }
+  ]]
 }
 // Exact installed TLM 1.5.3 / Ars 5.13.2 stream codecs. The names are mapped
 // to the exported network IDs of this server, never to assumed registry order.
@@ -90,10 +107,19 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
     { name: 'customColor', type: ['option', 'i32'] },
     { name: 'customEffects', type: ['array', { countType: 'varint', type: 'ItemPotionEffect' }] }
   ]]
+  const unsupportedNamedTypes = { Read: {}, Write: {}, SizeOf: {} }
   for (const [name, id] of registry) {
     if (name.startsWith('minecraft:')) continue
     mappings[id] = name
-    fields[name] = MOD_CODECS[name] || 'mawUnsupportedComponent'
+    if (MOD_CODECS[name]) fields[name] = MOD_CODECS[name]
+    else {
+      // Only report the registered type, never its private payload. Stop before
+      // an unknown codec can consume bytes belonging to the following stack.
+      const type = 'mawUnsupportedNativeComponent' + id
+      fields[name] = type
+      const reject = () => { throw Error('UNSUPPORTED_NATIVE_ITEM_COMPONENT ' + name) }
+      for (const direction of Object.keys(unsupportedNamedTypes)) unsupportedNamedTypes[direction][type] = ['native', reject]
+    }
   }
   protocol.types.SlotComponentType = ['mapper', { type: 'varint', mappings }]
   protocol.types.SlotComponent[1][1].type[1].default = 'mawUnsupportedComponent'
@@ -187,6 +213,7 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
   compiler.addTypes(arsNativeTypes)
   compiler.addTypes(arsEntityNativeTypes)
   compiler.addTypes(domumNativeTypes)
+  compiler.addTypes(unsupportedNamedTypes)
   compiler.addTypes({
     Read: {
       mawUnsupportedComponent: ['native', unsupported], mawUnsupportedParticle: ['native', unsupportedParticle],

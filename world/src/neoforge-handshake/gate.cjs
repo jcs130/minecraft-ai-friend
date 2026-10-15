@@ -46,7 +46,9 @@ const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONEN
 const NativeViewer = require('./native-viewer-packet.cjs')
 const { BedrockProjection } = require('./bedrock-projection.cjs')
 const { BedrockItems } = require('./bedrock-items.cjs')
-const bedrockItemWriter = process.env.GATE_BEDROCK_PROJECTION === '1'
+const { authoritativeWindowClick } = require('./authoritative-clicks.cjs')
+const vanillaAgentProjection = process.env.GATE_VANILLA_PROJECTION === '1'
+const bedrockItemWriter = (process.env.GATE_BEDROCK_PROJECTION === '1' || vanillaAgentProjection)
   ? loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE, null, null, 'toServer') : null
 const nativeViewerHash = process.env.GATE_NATIVE_VIEWER === '1'
   ? NativeViewer.registryHash(process.env.GATE_NATIVE_STATES_FILE) : null
@@ -93,6 +95,7 @@ const log = (s) => console.log(`[${new Date().toISOString().slice(11, 19)}] ${s}
 // Each world has its own negotiated channels. Keep experimental worlds from
 // overwriting the production cache; the listener address is separately configurable.
 const cacheFile = process.env.GATE_CACHE_FILE || path.join(__dirname, 'knowledge-cache.json')
+const declaredChannels = require('./channel-manifest.cjs').readChannelManifest(process.env.GATE_CHANNELS_FILE)
 const listenHost = process.env.GATE_LISTEN_HOST || '0.0.0.0'
 
 // Better Combat 2.3.2 通道（2026-08-29 定谳，javap 反编译挖出）：
@@ -125,6 +128,7 @@ function encodeMCString (s) {
 }
 
 function loadKnowledge () {
+  if (declaredChannels) return declaredChannels
   const knowledge = probe.seedKnowledge()
   for (const c of BETTERCOMBAT_CHANNELS) {
     knowledge.set(c.id, { bucket: c.bucket, version: '1', flow: null, moves: 0, optional: true, core: true })
@@ -148,6 +152,7 @@ function loadKnowledge () {
 }
 
 function saveKnowledge () {
+  if (declaredChannels) return // Explicit exports are immutable; never overwrite them with guessed channels.
   try {
     let cached = {}
     try { cached = JSON.parse(fs.readFileSync(cacheFile, 'utf8')) } catch (e) {}
@@ -243,8 +248,8 @@ const sessionCount = () => sessions.size
 
 function startSession (front, username) {
   const sess = { front, username, phase: 'config', retry: 0, closed: false, reconnecting: false, backReady: false, frontQueue: [], playQueue: [] }
-  if (process.env.GATE_BEDROCK_PROJECTION === '1') {
-    sess.bedrockProjection = new BedrockProjection(require('./bedrock-models.cjs').BedrockModels.load(process.env.GATE_BEDROCK_MODELS_FILE))
+  if (process.env.GATE_BEDROCK_PROJECTION === '1' || vanillaAgentProjection) {
+    sess.bedrockProjection = new BedrockProjection(vanillaAgentProjection ? null : require('./bedrock-models.cjs').BedrockModels.load(process.env.GATE_BEDROCK_MODELS_FILE), { strict: vanillaAgentProjection, omitUnsupportedEntities: vanillaAgentProjection })
     sess.bedrockItems = BedrockItems.load(process.env.GATE_BEDROCK_ITEMS_FILE)
   }
   sessions.add(sess)
@@ -575,6 +580,7 @@ function relayTo (sess, target, name, params, dir) {
   }
   let vanillaTime = null
   let cookingPotMenu = null
+  let menuProjected = false
   if (BRIDGE_COOKING_POT_GUI && target === sess.front && name === 'custom_payload' &&
       params.channel === 'neoforge:advanced_open_screen') {
     try { cookingPotMenu = cookingPotWindow(params.data) }
@@ -606,6 +612,10 @@ function relayTo (sess, target, name, params, dir) {
     // menus belong to PlayerMenuBridge/native rendering; feeding them into
     // Mineflayer's vanilla Window factory would return null and crash its
     // inventory plugin. This is parser isolation, never a fabricated UI.
+    if (vanillaAgentProjection && name === 'open_window') {
+      try { params = sess.bedrockProjection.project(name, params).params; menuProjected = true }
+      catch (error) { kickFront(sess, error.message); return }
+    }
     if (!sess.menuProxyGuard || sess.menuProxyGuardBackend !== sess.back) {
       sess.menuProxyGuard = createNativeMenuProxyGuard({ windows: vanillaMenuParserWindows,
         getPlayerUuid: () => sess.back?.uuid })
@@ -629,25 +639,31 @@ function relayTo (sess, target, name, params, dir) {
     }
     // Retained model snapshots must stay native. Replaying a display-projected
     // ItemStack would apply its connection token twice and lose native fields.
-    if (sess.bedrockProjection) {
+    if (sess.bedrockProjection && !menuProjected) {
       try {
         const projected = sess.bedrockProjection.project(name, params)
         if (projected === null) return
         for (const packet of projected.before || []) target.write(packet.name, packet.params)
+        if (projected.omit) return
         params = projected.params
       } catch (error) {
-        kickFront(sess, '基岩兼容包尚未适配：' + name + ' / ' + error.message.slice(0, 120)); return
+        kickFront(sess, (vanillaAgentProjection ? 'Agent兼容包尚未适配：' : '基岩兼容包尚未适配：') + name + ' / ' + error.message.slice(0, 120)); return
       }
     }
     if (sess.bedrockItems) {
       try { params = sess.bedrockItems.outgoing(name, params) }
       catch (error) { kickFront(sess, '基岩物品显示转换失败：' + error.message); return }
     } else if (componentProtocol && ['window_items', 'set_slot', 'entity_equipment', 'trade_list', 'world_particles', 'entity_metadata'].includes(name)) params = vanillaProjection(params)
-    if (REMAP.hasMap()) params = REMAP.remapOut(name, params) // 后端→前端: NeoForge号→原版号 ✓
+    if (REMAP.hasMap()) {
+      try { params = REMAP.remapOut(name, params) }
+      catch (error) { kickFront(sess, '模组区块转换失败，请联系管理员更新当前整包的注册表：' + error.message.slice(0, 120)); return }
+    }
     sess.lastFrontWrite = name
     // 【时间包普查】前端方向也计数(与 backCensus 对照找丢包层)
     sess.frontCensus = sess.frontCensus || {}
     sess.frontCensus[name] = (sess.frontCensus[name] || 0) + 1
+  } else if (vanillaAgentProjection && name === 'window_click') {
+    params = authoritativeWindowClick(params)
   } else if (sess.bedrockItems && ['window_click', 'set_creative_slot'].includes(name)) {
     try { params = sess.bedrockItems.incoming(name, params) }
     catch (error) { kickFront(sess, '基岩物品身份校验失败，请重连刷新背包：' + error.message); return }
@@ -756,6 +772,11 @@ function handleNeoForgePayload (sess, channel, data) {
 
 // 协商失败 -> 神谕学习 -> 换清单重连（真客户端在 CONFIG 里等着）
 function onSetupFailed (sess, failures) {
+  if (declaredChannels) {
+    log(`${sess.username}：实际通道清单协商失败，停止重连；请核对整合包版本与导出清单`)
+    kickFront(sess, '模组通道清单与服务器不一致，请管理员重新导出本服注册表并更新接入网关。')
+    return true
+  }
   const advice = P.analyzeFailures(failures)
   const n = Object.keys(advice).length
   sess.retry++
@@ -776,6 +797,10 @@ function onSetupFailed (sess, failures) {
 
 // ── 启动自检：先以探针学一遍，门再开张接客 ───────────────────────
 async function bootLearn () {
+  if (declaredChannels) {
+    log(`使用本服实际导出的 ${declaredChannels.size} 条通道，跳过模拟玩家探测与自动重连`)
+    return
+  }
   if (VANILLA_BACKEND) { // vanilla 姿势无需通道知识,探针反而徒增 timeout 记录
     log('vanilla 后端模式：跳过协商自检（brand 兼容路径无需通道知识）')
     return

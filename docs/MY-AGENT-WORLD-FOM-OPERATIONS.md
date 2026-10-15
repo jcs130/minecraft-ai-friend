@@ -12,11 +12,11 @@
 | 游戏监听 | 0.0.0.0:28976 TCP |
 | 只读健康 | 127.0.0.1:28985/healthz |
 | 物理同步 | Sable 官方 TCP 回退，共用游戏连接 |
-| JAR | 原包服务端 94 + MixAuth 1.3.3 + FOM Server Support 0.1.0 |
+| JAR | 原包服务端 94 + MixAuth 1.3.3 + FOM Server Support 0.2.0 |
 | 客户端 | 原包 121 + 本机 Agent 可选 3；作者 10 个禁用文件保持 |
 | 内存 / 距离 | Java 最大 6144 MiB，视距 6、模拟距离 4、最多 8 人 |
 
-不开放 MCP、RPC 或 RCON。复用原有 Java WAN 转发及 Windows 规则，未修改路由器、未开放新端口。旧 AgentGate 28977、基岩 28988、语音 28989 的旧进程已退出；路由规则保留，但不能视为新包支持这些入口。
+不开放 MCP、RPC 或 RCON。复用原有 Java WAN 转发及 Windows 规则，未修改路由器、未开放新端口。2026-10-15 在原 28977 端口启用 **FOM 基础 Mineflayer 兼容网关**，仅允许本机及家庭局域网的 `ag_` 账号，由同一服务守护管理；这是更新后的 FOM 映射，详见 [接入说明](MY-AGENT-WORLD-FOM-MINEFLAYER.md)。旧 35 模组服、旧 Agent 控制器、基岩 28988 和语音 28989 仍停用，不能因旧端口规则保留就视为 FOM 已支持。
 
 ## 文件布局和日常操作
 

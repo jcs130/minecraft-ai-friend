@@ -10,7 +10,10 @@ const attrNames = new Set(Object.values(attrType))
 const vanilla = {
   'minecraft:block': mcData.blocksByName,
   'minecraft:item': mcData.itemsByName,
-  'minecraft:entity_type': mcData.entitiesByName
+  'minecraft:entity_type': mcData.entitiesByName,
+  'minecraft:menu': Object.fromEntries(Object.entries(require('prismarine-windows')('1.21.1').windows)
+    .filter(([key, value]) => key.startsWith('minecraft:') && value.type >= 0)
+    .map(([key, value]) => [key.slice(10), { id: value.type }]))
 }
 
 function frozenRegistry (buffer) {
@@ -49,8 +52,11 @@ function frozenRegistry (buffer) {
 }
 
 class BedrockProjection {
-  constructor (models = null) {
+  constructor (models = null, { strict = false, omitUnsupportedEntities = false } = {}) {
     this.models = models
+    this.strict = strict
+    this.omitUnsupportedEntities = omitUnsupportedEntities
+    this.omissionNotices = new Set()
     this.registries = new Map(); this.hiddenEntities = new Set(); this.recipesSent = false
     this.stats = { registries: 0, tagEntriesOmitted: 0, attributesOmitted: 0, entitiesOmitted: 0 }
   }
@@ -93,7 +99,18 @@ class BedrockProjection {
     if (name === 'spawn_entity') {
       const mapped = this.vanillaId('minecraft:entity_type', params.type)
       if (mapped === null) {
-        this.hiddenEntities.add(params.entityId); this.stats.entitiesOmitted++; return null
+        const nativeType = this.registries.get('minecraft:entity_type')?.get(params.type)
+        if (this.strict && !this.omitUnsupportedEntities) throw Error('当前原版协议接入不支持实体 ' + (nativeType || params.type) + '，请使用完整模组客户端桥接')
+        if (this.omitUnsupportedEntities && !nativeType) throw Error('ENTITY_REGISTRY_UNAVAILABLE')
+        this.hiddenEntities.add(params.entityId); this.stats.entitiesOmitted++
+        if (this.omitUnsupportedEntities && !this.omissionNotices.has(nativeType)) {
+          this.omissionNotices.add(nativeType)
+          const text = 'MC_FOM_COMPAT ' + JSON.stringify({ schemaVersion: 1, kind: 'entity_not_rendered', nativeType,
+            scope: 'tracked_entity', nextCommand: '/fom nearby', nextAction: '服务器跟踪到当前兼容画面不能显示的模组生物，可能在16格之外。用 /fom nearby 查询16格内真实生物和坐标；完整显示与交互请使用模组Java客户端桥。' })
+          return { omit: true, before: [{ name: 'system_chat', params: {
+            content: { type: 'compound', value: { text: { type: 'string', value: text } } }, isActionBar: false } }] }
+        }
+        return null
       }
       this.hiddenEntities.delete(params.entityId)
       return { params: { ...params, type: mapped } }
@@ -102,6 +119,21 @@ class BedrockProjection {
     if (name === 'entity_destroy') {
       const entityIds = params.entityIds.filter(id => !this.hiddenEntities.delete(id))
       return { params: { ...params, entityIds } }
+    }
+    if (this.strict && (name === 'sound_effect' || name === 'entity_sound_effect') && params.sound?.soundId > 0) {
+      // Sound holders use registry ID + 1; zero carries a named custom sound.
+      // Resolve actual registry names before interpreting sound clues.
+      const nativeName = this.registries.get('minecraft:sound_event')?.get(params.sound.soundId - 1)
+      if (!nativeName) throw Error('SOUND_REGISTRY_UNAVAILABLE')
+      const mapped = nativeName.startsWith('minecraft:') ? mcData.soundsByName[nativeName.slice(10)] : null
+      // minecraft-data's sound IDs already include that holder offset.
+      if (mapped) return { params: { ...params, sound: { ...params.sound, soundId: mapped.id } } }
+      return { params: { ...params, sound: { soundId: 0, data: { soundName: nativeName, fixedRange: undefined } } } }
+    }
+    if (this.strict && name === 'open_window') {
+      const id = this.vanillaId('minecraft:menu', params.inventoryType)
+      if (id === null) throw Error('当前原版协议接入不支持菜单 ' + (this.registries.get('minecraft:menu')?.get(params.inventoryType) || params.inventoryType) + '，请使用完整模组客户端桥接')
+      return { params: { ...params, inventoryType: id } }
     }
     if (name === 'unlock_recipes') {
       // The mod recipe serializer stream was deliberately not decoded by the

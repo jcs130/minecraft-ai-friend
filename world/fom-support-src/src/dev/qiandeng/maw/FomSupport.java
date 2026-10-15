@@ -17,6 +17,8 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 public final class FomSupport {
     public FomSupport(IEventBus bus) {
         PlayerAuthBridge.register(bus);
+        NativeRegistryDump.register();
+        FomAgentAccess.register();
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event)->event.getDispatcher().register(
             Commands.literal("fom").then(Commands.literal("status").executes(c->report(c.getSource(),c.getSource().getPlayerOrException())))
                 .then(Commands.literal("auth").requires(s->s.hasPermission(4)).then(Commands.argument("player",EntityArgument.player())

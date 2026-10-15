@@ -5,6 +5,29 @@ const { BufWriter } = require('./buf.cjs')
 const { BedrockProjection, frozenRegistry } = require('./bedrock-projection.cjs')
 const data = require('minecraft-data')('1.21.1')
 
+test('strict Agent projection rejects unknown mod entities instead of inventing a vanilla creature', () => {
+  const projection = new BedrockProjection(null, { strict: true })
+  projection.learn(snapshot('minecraft:entity_type', [[900, 'test:contraption'], [901, 'minecraft:villager']]))
+  assert.throws(() => projection.project('spawn_entity', { entityId: 40, type: 900 }), /test:contraption/)
+  assert.equal(projection.project('spawn_entity', { entityId: 41, type: 901 }).params.type, data.entitiesByName.villager.id)
+})
+test('strict Agent sound clues resolve the native registry with exactly one holder offset', () => {
+  const projection = new BedrockProjection(null, { strict: true })
+  projection.learn(snapshot('minecraft:sound_event', [[900, 'minecraft:entity.villager.ambient'], [901, 'test:machine']]))
+  const input = { sound: { soundId: 901 }, volume: 1, pitch: 1 }
+  assert.equal(projection.project('sound_effect', input).params.sound.soundId, data.soundsByName['entity.villager.ambient'].id)
+  assert.deepEqual(input.sound, { soundId: 901 })
+  const custom = projection.project('entity_sound_effect', { sound: { soundId: 902 } }).params.sound
+  assert.equal(custom.soundId, 0); assert.equal(custom.data.soundName, 'test:machine')
+  assert.throws(() => projection.project('sound_effect', { sound: { soundId: 903 } }), /SOUND_REGISTRY_UNAVAILABLE/)
+})
+test('strict Agent vanilla menus resolve their native numeric ID before the window parser', () => {
+  const projection = new BedrockProjection(null, { strict: true })
+  projection.learn(snapshot('minecraft:menu', [[900, 'minecraft:generic_9x3'], [901, 'test:machine']]))
+  assert.equal(projection.project('open_window', { inventoryType: 900, windowId: 4 }).params.inventoryType, 2)
+  assert.throws(() => projection.project('open_window', { inventoryType: 901 }), /test:machine/)
+})
+
 function snapshot (name, rows) {
   const writer = new BufWriter().string(name).varint(rows.length)
   for (const [id, key] of rows) writer.varint(id).string(key)
@@ -63,4 +86,24 @@ test('unknown native recipes get an empty declared catalog before book updates, 
 test('empty bundle delimiters keep their wire shape and cannot crash the gateway', () => {
   const projection = new BedrockProjection()
   assert.deepEqual(projection.project('bundle_delimiter', undefined), { params: undefined })
+})
+
+test('Agent omits unknown mod mobs with one private notice per type, no invented entity or metadata', () => {
+  const projection = new BedrockProjection(null, { strict: true, omitUnsupportedEntities: true })
+  projection.learn(snapshot('minecraft:entity_type', [[501, 'minecraft:sulfur_cube']]))
+  const first = projection.project('spawn_entity', { entityId: 11, type: 501 })
+  assert.equal(first.omit, true)
+  const notice = JSON.parse(first.before[0].params.content.value.text.value.slice('MC_FOM_COMPAT '.length))
+  assert.equal(notice.nativeType, 'minecraft:sulfur_cube'); assert.equal(notice.nextCommand, '/fom nearby')
+  assert.equal(projection.project('spawn_entity', { entityId: 12, type: 501 }), null)
+  assert.equal(projection.project('entity_metadata', { entityId: 11, metadata: [] }), null)
+  assert.equal(projection.project('entity_equipment', { entityId: 12, equipments: [] }), null)
+  assert.deepEqual(projection.project('entity_destroy', { entityIds: [11, 12] }).params.entityIds, [])
+  assert.equal(projection.hiddenEntities.size, 0)
+})
+
+test('strict native menu guards and missing entity registries remain errors', () => {
+  const projection = new BedrockProjection(null, { strict: true, omitUnsupportedEntities: true })
+  assert.throws(() => projection.project('spawn_entity', { entityId: 1, type: 900 }), /ENTITY_REGISTRY_UNAVAILABLE/)
+  assert.throws(() => projection.project('open_window', { inventoryType: 900 }), /不支持菜单/)
 })
