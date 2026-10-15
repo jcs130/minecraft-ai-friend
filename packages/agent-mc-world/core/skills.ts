@@ -1152,7 +1152,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  边走边找时加 "until" = 路上看见这里头任何一样就停下来报坐标(算做完)。
                                                  名单写方块英文 id,也认类别 ${UNTIL_CATEGORY_DOC};站着扫用不上它`,
     fields: [
-      { key: 'target', kind: 'string', required: true, hint: '要找的方块或活物英文 id', doc: '方块或实体英文 id；敌对生物类别写 hostile，不能写 #hostiles；未命中不能证明区域安全' },
+      { key: 'target', kind: 'string', required: true, hint: '要找的方块或活物英文 id', doc: '当前连接的方块或实体英文 id，方块可用 log 等名称匹配；不支持 hostile/tree 类别，# 名单只用于 until；未命中不能证明区域安全' },
       {
         key: 'direction', kind: 'enum', values: Object.keys(DIRECTIONS),
         error: `find 的 direction 要是 ${Object.keys(DIRECTIONS).join('/')} 之一`,

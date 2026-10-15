@@ -509,7 +509,7 @@ export function travelRisks(bot: Bot, ctx: SkillContext): string[] {
 }
 
 /** find 的一次扫描命中:在哪、叫什么、是不是活物 */
-export interface ExploreHit { x: number; y: number; z: number; what: string; entity: boolean }
+export interface ExploreHit { x: number; y: number; z: number; what: string; entity: boolean; sourceItem?: string }
 
 export function findKind(hit: ExploreHit | null, entityName: string | null): FindKind {
   return hit?.entity || entityName !== null ? 'entity' : 'block';
@@ -564,6 +564,20 @@ export function rememberFindHit(ctx: SkillContext, target: string, hit: ExploreH
   });
 }
 
+/** A drop-index hit observes a source block, never a quantity of its possible loot. */
+export function findBlockObservation(bot: Bot, target: string, actualName: string): { what: string; sourceItem?: string } {
+  const exact = !!bot.registry.blocksByName[target];
+  const direct = actualName === target || (!exact && (actualName.endsWith(`_${target}`) || actualName.startsWith(`${target}_`)));
+  return direct ? { what: zhName(actualName) } : {
+    what: `${zhName(actualName)}（${zhThing(target)}的可能产出来源，尚未观察到该掉落，不保证产出）`, sourceItem: target,
+  };
+}
+export function findObservedSummary(hits: ExploreHit[], targetName: string): string {
+  return hits.some(hit => hit.sourceItem)
+    ? `${hits.length} 处匹配方块（含${targetName}的可能产出来源；数量是方块数，不是${targetName}数量）`
+    : `${hits.length} 处${targetName}`;
+}
+
 /** target 是不是实体类型 id(sheep、cow、zombie);玩家不算,找玩家有 goto_player */
 export function matchEntityName(bot: Bot, name: string): string | null {
   const n = name.toLowerCase();
@@ -606,7 +620,7 @@ export async function skillFind(
 ): Promise<string> {
   const { ids, entityName } = resolveFindTarget(bot, target);
   if (ids.length === 0 && entityName === null) {
-    throw new SkillBlocked(categoryScopeText(target) ?? `不认识「${target}」这种方块或实体`);
+    throw new SkillBlocked(categoryScopeText(target) ?? `不认识「${target.slice(0, 80)}」这种方块或实体；用 mc_help {skills:["find"]} 核对 target，用 mc_knowledge {action:"search",kind:"block",query:"log"} 查询方块英文 ID；实体请用当前连接的具体实体 ID（如 zombie），不支持 hostile/tree 类别`);
   }
   const resourceSearch = entityName === null && resourceFindTarget(bot, ids);
   const structureSearch = resourceSearch && direction !== undefined;
@@ -689,7 +703,7 @@ export async function skillFind(
       return false;
     });
     // 回执使用扫描到的实际方块名:target 可能来自不可靠的视觉识别
-    return p ? { x: p.x, y: p.y, z: p.z, what: zhName(bot.blockAt(p)?.name ?? target), entity: false } : null;
+    return p ? { x: p.x, y: p.y, z: p.z, ...findBlockObservation(bot, target, bot.blockAt(p)?.name ?? target), entity: false } : null;
   };
 
   /** 站着扫用:这一刻看得见的全部,按距离排。 */
@@ -714,8 +728,9 @@ export async function skillFind(
         if (!canSeeBlockAt(bot, q)) continue;
         if (!candidate(q)) continue;
         const structure = resourceSearch ? structureSource(q) : null;
-        out.push({ x: q.x, y: q.y, z: q.z,
-          what: zhName(bot.blockAt(q)?.name ?? target)
+        const observed = findBlockObservation(bot, target, bot.blockAt(q)?.name ?? target);
+        out.push({ x: q.x, y: q.y, z: q.z, ...observed,
+          what: observed.what
             + (structure ? `(登记蓝图「${structure}」的结构材料，collect 会保留)` : ''), entity: false });
       }
     }
@@ -756,7 +771,7 @@ export async function skillFind(
     });
     const more = hits.length - shown.length;
     return finish(
-      `当前观察:在周围 ${radius} 格内看见 ${hits.length} 处${targetName}${capped}: ` +
+      `当前观察:在周围 ${radius} 格内看见 ${findObservedSummary(hits, targetName)}${capped}: ` +
         `${shown.join('、')}${more > 0 ? `,另有 ${more} 处` : ''}${deniedNote()}`,
       hits[0],
     );
