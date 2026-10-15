@@ -308,3 +308,65 @@ def test_duplicate_death_cannot_rearm_consumed_recovery_or_clear_unknown(framewo
         controller.receipt({"execution": {"kind": "task", "id": "old", "evidence": {"outcomeUnknown": True}}})
     assert json.loads(controller.state_path.read_text())["uncertain"] is True
     assert not any(name == "mc_do" for name, _, _ in bridge.calls)
+
+
+@pytest.mark.parametrize("finish_during_poll", [False, True])
+def test_death_invalidates_delayed_planner_even_after_respawn_and_closes_old_turn(
+        framework_module, tmp_path, run_async, monkeypatch, finish_during_poll):
+    import asyncio
+    import dataclasses
+    from types import SimpleNamespace
+    from test_controller import action
+    clock, requests, cancelled, delivered = [1000], [], [], [False]
+    release = asyncio.Event()
+    async def decide(messages, _):
+        requests.append(messages)
+        reply = choose()
+        reply["tool_calls"][0]["function"]["arguments"] = json.dumps({"steps": [
+            {"skill": "goto", "at": [1 if len(requests) == 1 else 301, 64, 2]}]})
+        if len(requests) == 1:
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                cancelled.append(True)  # Even a provider returning after cancellation is stale.
+        return reply
+    module, bridge, controller = setup(framework_module, tmp_path, decide, lambda: clock[0] > 1020)
+    controller.settings = dataclasses.replace(controller.settings, min_decision_seconds=10, max_tool_rounds=1)
+    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    original_sleep, original_wait, original_call = asyncio.sleep, asyncio.wait, bridge.call
+    async def tick(_):
+        clock[0] += 1
+        await original_sleep(0)
+    async def wait(tasks, timeout):
+        return await original_wait(tasks, timeout=0.001)
+    monkeypatch.setattr(module.asyncio, "sleep", tick)
+    monkeypatch.setattr(module.asyncio, "wait", wait)
+    async def call(name, args, **kwargs):
+        if name == "mc_protocol" and args["action"] == "facts":
+            if delivered[0] and finish_during_poll:
+                release.set()
+                await original_sleep(0)
+                await original_sleep(0)
+            return packed(facts(episode_id="death-1" if delivered[0] else "previous-life"))
+        return await original_call(name, args, **kwargs)
+    bridge.call = call
+    def poll():
+        if requests and not delivered[0]:
+            delivered[0] = True
+            controller.pending[("task", "old-body")] = {"kind": "task", "id": "old-body"}
+            bridge.event_pages.append([{**event(), "trigger": "flush"}, {"cursor": 2,
+                "execution": {**action(True), "id": "old-body", "phase": "cancelled"}}])
+        elif delivered[0]:
+            release.set()  # The unfixed old inference eventually returns instead of hanging the regression.
+    bridge.on_poll = poll
+    run_async(controller.run("preserve user purpose"))
+    assert len(requests) == 2
+    dispatched = [(args, kw) for name, args, kw in bridge.calls if name == "mc_do"]
+    assert len(dispatched) == 1 and dispatched[0][0]["steps"][0]["at"] == [301, 64, 2]
+    turns = [(args["action"], args["id"]) for name, args, _ in bridge.calls
+             if name == "mc_protocol" and args["action"] in {"begin_turn", "end_turn"}]
+    assert [action for action, _ in turns] == ["begin_turn", "end_turn", "begin_turn", "end_turn"]
+    assert turns[0][1] == turns[1][1] and turns[2][1] == turns[3][1] != turns[0][1]
+    assert dispatched[0][1]["turn_id"] == turns[2][1]
+    assert "death-1" in json.dumps(requests[1])
+    assert bool(cancelled) is (not finish_during_poll)

@@ -5,6 +5,10 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.63 invalidates an in-flight planning request when a new death episode arrives,
+including a result finishing during event polling. The old turn closes before a
+fresh recovery request; stale tool calls remain blocked after the body respawns.
+
 0.1.62 requests one post-respawn planning opportunity after matching fresh identity,
 death episode, synchronized inventory and all prior native task terminals arrive.
 Inference failure backoff and unknown-outcome blocking still apply. Planner and

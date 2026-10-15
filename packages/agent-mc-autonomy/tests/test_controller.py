@@ -451,7 +451,7 @@ def test_invalid_model_call_is_not_dispatched_and_can_recover(framework_module, 
     assert controller.continuation_needed and controller.planner_retry_at > module.time.monotonic()
     assert not bridge.closed and controller.inflight_request is None
     assert not json.loads(controller.state_path.read_text()).get("uncertain")
-    assert all(name == "mc_protocol" and args["action"] in {"begin_turn", "facts", "end_turn"}
+    assert all(name == "mc_events" or (name == "mc_protocol" and args["action"] in {"begin_turn", "facts", "end_turn"})
                for name, args, _ in bridge.calls)
     records = [json.loads(line) for line in (tmp_path / "decisions.jsonl").read_text().splitlines()]
     assert records[0]["response"] == invalid

@@ -309,6 +309,8 @@ class Controller:
         self.game_facts = {"parts": []}
         self.death_waiting = False
         self.death_recovery = None
+        self.death_epoch = 0
+        self.turn_death_epoch = 0
 
     def observe_game_facts(self, facts):
         self.game_facts = facts
@@ -420,6 +422,7 @@ class Controller:
                     [{"tool": item[0], "request_id": item[2], "execution_id": key[1], "observation_only": item[3]}
                      for key, item in self.action_requests.items() if self.action_scopes.get(key) == death.get("scope")])
                 if episode:
+                    self.death_epoch += 1  # Invalidates inference even if respawn arrives in the same poll.
                     self.death_recovery = episode
                     self.death_waiting = True
                     self.continuation_needed = True
@@ -530,6 +533,7 @@ class Controller:
                                 "next_offset": end, "has_more": end < len(text), "total_characters": len(text)})}
 
     async def decide_with_events(self, messages, tools, profile=None):
+        death_epoch = self.death_epoch
         call=self.profile_decide(messages,tools,profile) if profile and self.profile_decide else self.decide(messages,tools)
         task = asyncio.create_task(asyncio.wait_for(call, self.settings.model_timeout_seconds))
         try:
@@ -542,16 +546,18 @@ class Controller:
                     # a stale model completion must not replace a newly inserted job.
                     self.preempted = True
                     return None
+                wake, urgent, more = await self.events()
+                self.deferred_wake |= wake
+                if urgent or death_epoch != self.death_epoch:
+                    self.preempted = True
+                    return None
+                if more:
+                    continue  # A completed inference cannot outrun a queued death event page.
                 if done:
                     result=await task
                     if profile and not self.profile_decide and isinstance(result,dict):
                         result.setdefault('model_status',{})['decision_profile']=profile_view(profile,parameters_applied=False,fallback='planner_profile_port_unavailable',budget_applied=False)
                     return result
-                wake, urgent, _ = await self.events()
-                self.deferred_wake |= wake
-                if urgent:
-                    self.preempted = True
-                    return None
         finally:
             if not task.done():
                 task.cancel()
@@ -770,7 +776,7 @@ class Controller:
         return prepared
 
     async def execute_model_call(self, name, arguments):
-        if self.death_waiting:
+        if self.death_waiting or (self.turn and self.turn_death_epoch != self.death_epoch):
             self.continuation_needed = True
             result = {"failed": True, "dispatched": False, "origin": "controller_boundary",
                       "text": "Death recovery is awaiting respawn and fresh facts. No action was dispatched."}
@@ -898,6 +904,7 @@ class Controller:
         self.continuation_needed = False
         self.continuation_ready = False  # Consume one meaningful handoff, never a polling loop.
         self.turn = str(uuid.uuid4())
+        self.turn_death_epoch = self.death_epoch
         await self.protocol("begin_turn", id=self.turn)
         try:
             focus = None
@@ -971,7 +978,7 @@ class Controller:
                     self.publish(planner_retry_seconds=delay)
                     self.continuation_needed = True
                     return
-                if self.stop_requested() or response is None:
+                if self.stop_requested() or response is None or self.turn_death_epoch != self.death_epoch:
                     return
                 if profile and profile['reason']=='death_review':
                     self.profile_death_id=episode_id
@@ -1144,6 +1151,7 @@ class Controller:
                     wake |= fact_fingerprint(await self.protocol("facts")) != self.last_facts
                 if (self.decide and wake and (not self.current_work() or urgent)
                         and not self.death_waiting
+                        and self.death_recovery is None
                         and (elapsed >= self.settings.min_decision_seconds or self.continuation_ready)
                         and time.monotonic() >= self.planner_retry_at):
                     current_goal = self.goal_prompt(goal)
