@@ -8,6 +8,7 @@
  */
 import { Vec3 } from 'vec3';
 import { observedEntity, observationView } from './perception-sight.ts';
+import { spatialSites } from './spatial-site.ts';
 import { vehicleStateFromBot, vehicleFingerprint, narrateVehicleState, type VehicleReading } from '../src/vehicle-state.ts';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import {
@@ -1206,7 +1207,7 @@ export function bodyInWater(bot: any): boolean {
 }
 
 /**
- * 从水里找登岸格:脚下实心、脚与头都不是水也不是实心。由近及远逐圈扫,同一圈里
+ * 从水里找干燥站位候选:按共享几何规则核对身体净空、流体与完整支撑面，未验证路径。逐圈采样,同一圈里
  * 优先背离 `from`(怪群质心)那一侧——对着追兵上岸等于把背身白送给它。
  */
 export function findBankCell(
@@ -1230,8 +1231,15 @@ export function findBankCell(
           const head = bot.blockAt(new Vec3(x, y + 1, z));
           if (!below || !feet || !head) continue;
           if (below.boundingBox !== 'block') continue;
-          if (feet.boundingBox !== 'empty' || WATER_BLOCKS.has(feet.name)) continue;
-          if (head.boundingBox !== 'empty' || WATER_BLOCKS.has(head.name)) continue;
+          if (SCORCHING_FLOOR.has(below.name) || BURNING_BLOCKS.has(feet.name) || BURNING_BLOCKS.has(head.name)) continue;
+          const [site] = spatialSites(([cx, cy, cz]) => {
+            const block = bot.blockAt(new Vec3(cx, cy, cz));
+            return block ? { material: { name: block.name,
+              properties: typeof block.getProperties === 'function' ? block.getProperties() : null,
+              collision: block.shapes ?? null, liquid: WATER_BLOCKS.has(block.name) || block.name === 'lava' } }
+              : { unknown: 'unloaded' };
+          }, [[x, y, z]]);
+          if (site.body.clear !== true || site.body.fluids !== 0 || site.below.topY !== y || site.below.topArea !== 1) continue;
           const d = Math.hypot(dx, dz) || 1;
           const dot = (dx * ax + dz * az) / (d * alen);
           if (dot > bestDot) { bestDot = dot; best = { x, y, z }; }
@@ -1245,7 +1253,7 @@ export function findBankCell(
 }
 
 /**
- * 一步做完人还泡在水里时补在回执末尾的一句:脚下水多深、最近能站的干地在哪。
+ * 一步做完人还泡在水里时补在回执末尾的一句:脚下水多深、已核对局部几何的干燥站位候选在哪；路径未验证。
  * 不在水里、或者坐着船,返回空串。
  */
 export function wetNote(bot: any): string {
@@ -1261,7 +1269,7 @@ export function wetNote(bot: any): string {
   }
   const bank = findBankCell(bot, null, 16);
   return `。人现在泡在水里(脚下水深 ${depth} 格,`
-    + (bank ? `最近能站的干地 (${bank.x}, ${bank.y}, ${bank.z}))` : '16 格内没有能站的岸)');
+    + (bank ? `干燥站位候选 (${bank.x}, ${bank.y}, ${bank.z})，路径与可达性尚未验证)` : '16 格内本次采样未确认干燥站位候选)');
 }
 
 /** 实体共享元数据第 0 字节的第 0 位 = 身上着火 */
