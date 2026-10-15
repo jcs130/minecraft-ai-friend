@@ -8,6 +8,8 @@ import threading
 import traceback
 from pathlib import Path
 
+from .observations import runtime_error_code
+
 
 class Worker:
     def __init__(self, factory, log: Path):
@@ -53,9 +55,7 @@ class Worker:
                 with self.log.open("a", encoding="utf-8") as output:
                     traceback.print_exc(file=output)
                 # Do not return provider errors, credentials or raw server text.
-                code = str(error).split(":", 1)[0]
-                self.publish(phase="failed", error=code if code in {"outcome_unknown", "context_budget_exceeded", "connection_lost"}
-                             else type(error).__name__, error_log=str(self.log))
+                self.publish(phase="failed", error=runtime_error_code(error), error_log=str(self.log))
             finally:
                 self.publish(game_connected=False, autonomy_running=False)
                 with self.lock:

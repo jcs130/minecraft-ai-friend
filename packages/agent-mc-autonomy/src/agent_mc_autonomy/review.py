@@ -13,7 +13,7 @@ from datetime import datetime
 from .configuration import _boolean, _integer
 from .host_context import HostContextPort, validate_host_context
 from .mailbox import Mailbox, observation
-from .observations import fact_preview, spatial_text, tool_failure_view
+from .observations import body_feedback, feedback_signal, fact_preview, spatial_text, tool_failure_view
 from .death_memory import DeathMemory, scope_key
 
 
@@ -51,18 +51,19 @@ def review_observation(status, now):
     pending = [{key: task.get(key) for key in ("kind", "id", "phase", "terminal")} for task in snapshot.get("pending", [])[:16]]
     useful = {key: facts.get(key, "")[:size] for key, size in (
         ("body", 180), ("gear", 420), ("foodReserve", 160), ("life", 250), ("place", 180),
-        ("clock", 80), ("queue", 350), ("structure", 300), ("terrain", 250))}
+        ("clock", 80), ("queue", 350), ("structure", 300), ("terrain", 250), ("bodyRestriction", 400))}
     useful["lastTask"] = fact_preview(spatial_text(facts.get("lastTask", "")), 1000)
     reads = snapshot.get("read_activity") or {}
     reads = {key: min(999, reads[key]) for key in (
         "mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original")
         if isinstance(reads, dict) and type(reads.get(key)) is int and reads[key] > 0}
+    feedback = body_feedback(snapshot, facts)
     # Raw facts remain in the independent journal/status API; no accumulating prompt history here.
     evidence = {"sampled_at": snapshot["updated_at"], "phase": snapshot["phase"], "connected": snapshot.get("game_connected") is True,
                 "standing_goal": str(snapshot.get("standing_goal", ""))[:600],
                 "current_goal": {**{key: active.get(key) for key in ("id", "goal", "mode", "parent_id")},
                                  "origin": active.get("origin", "unknown")}, "pending": pending,
-                "facts": useful,
+                "facts": useful, "body_events": feedback["body_events"], "native_outcomes": feedback["native_outcomes"],
                 "fact_originals": {part["key"]: part["original"] for part in snapshot.get("facts", {}).get("parts", [])
                                    if part.get("key") in useful and part.get("original")},
                 "planner_error": snapshot.get("planner_error"),
@@ -83,7 +84,7 @@ def review_observation(status, now):
         "death:" + str(episode.get("id")) if "death_episode" in evidence else None)
     return {"session": str(snapshot.get("owner_pid", "")) + ":" + str((snapshot.get("viewer") or {}).get("session", "")),
             "material": digest(material), "intent": digest([evidence["standing_goal"], active]),
-            "signal": digest([material, active, evidence["planner_error"], bool(pending), terminal,
+            "signal": digest([material, active, evidence["planner_error"], bool(pending), terminal, feedback_signal(feedback),
                               {key: evidence["tool_failure"][key] for key in ("tool", "error")} if evidence["tool_failure"] else None]),
             "urgent": urgent, "scope": scope_key(snapshot.get("game_identity")), "evidence": evidence}
 
@@ -232,6 +233,12 @@ class ReviewPort:
                         observed["evidence"]["death_episode"] = previous["evidence"]["death_episode"]
                     previous["evidence"] = observed["evidence"]
                     previous["summary"] = summary(observed["evidence"])
+                    if previous.get("signal") != observed["signal"]:
+                        # Bind dedup to the evidence the main brain will inspect,
+                        # so acknowledging it cannot wake the same episode again.
+                        previous["signal"] = observed["signal"]
+                        if previous.get("trigger") == "periodic_review":
+                            previous["trigger"] = "state_changed"
                 return
             elapsed = now - state.get("created_at", 0)
             changed = not same_session or not same_intent or observed["signal"] != previous.get("signal")

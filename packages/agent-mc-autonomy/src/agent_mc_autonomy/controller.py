@@ -12,7 +12,7 @@ from pathlib import Path
 from .bridge import json_content, outcome, text_content
 from .context import assemble, encode
 from .fast import FastPolicy, focus_state, rule_focus
-from .observations import fact_preview, receipt_view, spatial_text, tool_failure_view
+from .observations import body_event_view, fact_preview, receipt_view, spatial_text, tool_failure_view
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .model_protocols import assistant_history
 from .planner import PlannerResponseError, PlannerUnavailableError
@@ -22,7 +22,7 @@ from .death_memory import DeathMemory, TOOL as DEATH_REVIEW_TOOL, identity, life
 
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
-HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_visual", "mc_control"}
+HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_control"}
 DIRECT_TOOLS = {"mc_help", "mc_knowledge", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape"}
 READ_ACTIVITY_TOOLS = {"mc_help", "mc_knowledge", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original", "mc_capabilities", "mc_operations", "mc_result", "mc_notices"}
 IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout"}
@@ -161,6 +161,12 @@ def tool_help(catalogue, arguments):
     value = json.loads(encode(value))
     if value["name"] == "mc_protocol":
         value["inputSchema"]["properties"]["action"] = {"enum": sorted(READ_PROTOCOL)}
+    if value["name"] == "mc_visual":
+        value["planner_guidance"] = (
+            "Use supported synchronous raw PNG when useful; actual modes and limits come from this schema and body receipt. "
+            "Only a fresh attached image is visual evidence. mc_view_map images are maps, not camera scenes; "
+            "overview covers observed/historical terrain, not unknown terrain. On capture failure or text-model fallback, "
+            "reason from fresh text facts without claiming to have seen a screenshot. Background image delivery is not wired.")
     path = arguments.get("path", "")
     if path and not path.startswith("/"):
         raise ValueError("Tool documentation path must be a JSON pointer")
@@ -278,6 +284,7 @@ class Controller:
         self.action_requests = {}
         self.action_scopes = {}
         self.native_outcomes = []
+        self.body_events = []
         self.state_path = data / "host-state.json"
         self.fast_policy = fast_policy or FastPolicy(settings.fast)
         self.frame = None
@@ -293,6 +300,8 @@ class Controller:
         if fresh_scope != self.game_scope:
             self.recent.clear()
             self.native_outcomes.clear()
+            self.body_events.clear()
+            self.publish(native_outcomes=[], body_events=[])
             self.groups.clear()  # Tool replies/provider replay belong to the previous game identity too.
         self.game_scope = fresh_scope
         life = lifecycle(facts)
@@ -378,6 +387,10 @@ class Controller:
         for event in value.get("events", []):
             if event.get("contextDelivery") == "archive-only" or event.get("meta", {}).get("staleEpoch"):
                 continue
+            body = body_event_view(event)
+            if body and not any(row["id"] == body["id"] for row in self.body_events):
+                self.body_events = [*self.body_events, body][-6:]
+                self.publish(body_events=list(self.body_events))
             death = (event.get("meta") or {}).get("death")
             if isinstance(death, dict):
                 episode = self.death_memory.record(event, self.game_facts, self.recent, self.native_outcomes,

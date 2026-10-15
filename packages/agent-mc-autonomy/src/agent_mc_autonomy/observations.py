@@ -1,8 +1,75 @@
 """Deterministic spatial receipt previews; full originals stay queryable."""
 
+import hashlib
 import json
 import re
 from collections import Counter
+
+
+def runtime_error_code(error):
+    """Only explicitly supported controller causes may escape exception text."""
+    code = str(error).split(":", 1)[0]
+    return code if code in {"outcome_unknown", "context_budget_exceeded", "connection_lost"} else type(error).__name__
+
+
+def _bounded(value, size):
+    raw = str(value or "").encode("utf-8")
+    return raw.decode() if len(raw) <= size else raw[:size - 3].decode("utf-8", errors="ignore") + "…"
+
+
+def event_reference(value):
+    if not isinstance(value, dict):
+        return {}
+    return {key: _bounded(value[key], 160) if isinstance(value[key], str) else value[key]
+            for key in ("run", "cursor", "ts") if isinstance(value.get(key), str) or type(value.get(key)) is int}
+
+
+def body_event_view(value):
+    """Project authoritative body lifecycle; never infer a stall from position."""
+    if not isinstance(value, dict) or value.get("type") != "minecraft.body":
+        return None
+    text = _bounded(value.get("text"), 400)
+    phase = value.get("phase") or (value.get("meta") or {}).get("phase")
+    if not phase:
+        phase = "inhibited" if text.startswith("[身体受限]") else "recovered" if text.startswith("[身体恢复]") else "observed"
+    if phase not in {"inhibited", "recovered", "stalled", "observed"}:
+        phase = "observed"
+    reference = event_reference(value.get("original_event", value))
+    identity = value.get("id") or ([reference.get("run"), reference["cursor"]] if "cursor" in reference else [phase, text])
+    return {"id": _bounded(identity, 240), "type": "minecraft.body", "phase": phase, "text": text,
+            "sampled_at": _bounded(value.get("sampled_at", reference.get("ts")), 80), "original_event": reference}
+
+
+def native_outcome_view(value):
+    if not isinstance(value, dict) or not isinstance(value.get("execution_id"), str):
+        return None
+    return {"tool": _bounded(value.get("tool"), 80), "execution_id": _bounded(value["execution_id"], 160),
+            "phase": _bounded(value.get("phase"), 40), "observation_only": value.get("observation_only") is True,
+            "goal_verified": False, "receipt": _bounded(value.get("receipt"), 450),
+            "original_event": event_reference(value.get("original_event"))}
+
+
+def body_feedback(snapshot, facts):
+    """Small public evidence shared by review and commentary, excluding private args."""
+    def project(rows, projector, key):
+        selected = {}
+        for row in rows[-64:] if isinstance(rows, list) else []:
+            value = projector(row)
+            if value:
+                selected[value[key]] = value
+        return list(selected.values())[-6:]
+    return {"bodyRestriction": _bounded(facts.get("bodyRestriction"), 400),
+            "body_events": project(snapshot.get("body_events"), body_event_view, "id"),
+            "native_outcomes": project(snapshot.get("native_outcomes"), native_outcome_view, "execution_id")}
+
+
+def feedback_signal(feedback):
+    """Exclude sample timestamps and older ring churn from change detection."""
+    body = feedback["body_events"][-1:]
+    outcomes = [row for row in feedback["native_outcomes"] if not row["observation_only"]][-1:]
+    selected = [feedback["bodyRestriction"], [(row["id"], row["phase"], row["text"]) for row in body],
+                [(row["execution_id"], row["phase"], row["receipt"]) for row in outcomes]]
+    return hashlib.sha256(json.dumps(selected, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 
 def tool_failure_view(value):
@@ -17,7 +84,10 @@ def tool_failure_view(value):
     receipt = value.get("receipt") if isinstance(value.get("receipt"), dict) else {}
     return {"tool": brief(value.get("tool", ""), 80), "error": brief(value["error"], 900),
             "next_step": brief(value.get("next_step", ""), 400),
-            **({"native_execution": value["native_execution"], "native_event": value.get("native_event", {})} if value.get("native_execution") else {}),
+            **({"native_execution": {key: brief(value["native_execution"].get(key, ""), 160)
+                                      for key in ("kind", "id", "phase")},
+                "native_event": event_reference(value.get("native_event"))}
+               if isinstance(value.get("native_execution"), dict) else {}),
             "receipt": {key: brief(receipt[key], 256) if isinstance(receipt.get(key), str) else None
                         for key in ("request_id", "turn_id", "archive")}}
 

@@ -16,6 +16,7 @@ from .controller import Controller
 from .fast import FastPolicy, SystemOne
 from .mailbox import Mailbox
 from .ownership import session_lease
+from .observations import runtime_error_code
 from .planner import Planner
 from .review import ReviewPort
 from .viewer import ViewerWindow
@@ -120,7 +121,7 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                 update(phase="stopped")
                 raise
             except Exception as error:
-                update(phase="failed", error=type(error).__name__)
+                update(phase="failed", error=runtime_error_code(error))
                 raise
             finally:
                 update(game_connected=False, autonomy_running=False)

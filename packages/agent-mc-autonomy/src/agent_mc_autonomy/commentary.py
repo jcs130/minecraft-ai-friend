@@ -5,6 +5,8 @@ import json
 import re
 from datetime import datetime
 
+from .observations import body_feedback, feedback_signal, tool_failure_view
+
 
 def _brief(value, limit):
     raw = str(value or "").encode("utf-8")
@@ -75,10 +77,19 @@ def commentary_observation(status, now):
     task = str(facts.get("lastTask", ""))
     progress, outcome = _task_progress(task)
     body = str(facts.get("body", ""))
+    feedback = body_feedback(snapshot, facts)
+    failure = tool_failure_view(snapshot.get("tool_failure"))
+    failed = [row for row in feedback["native_outcomes"] if not row["observation_only"] and row["phase"] in {"blocked", "rejected", "partial"}][-1:]
+    failure_id = (failed[0]["execution_id"] + ":" + failed[0]["phase"] if failed else
+                  json.dumps([failure["tool"], failure["error"], failure["receipt"]], sort_keys=True) if failure else "")
     baseline = {"connected": connected, "phase": phase,
                 "session": snapshot.get("session", str(snapshot.get("owner_pid", "")) + ":" + str((snapshot.get("viewer") or {}).get("session", ""))),
                 "health": _band(body, "生命", (0, 6, 12)), "hunger": _band(body, "饥饿", (6, 12)),
-                "items": items, "progress": hashlib.sha256(progress.encode()).hexdigest() if progress else ""}
+                "items": items, "progress": hashlib.sha256(progress.encode()).hexdigest() if progress else "",
+                "failure": hashlib.sha256(failure_id.encode()).hexdigest() if failure_id else "",
+                "body_feedback": feedback_signal({**feedback, "native_outcomes": []}),
+                "body_phase": feedback["body_events"][-1]["phase"] if feedback["body_events"] else "inhibited" if feedback["bodyRestriction"] else "",
+                "restriction": feedback["bodyRestriction"]}
     # Reviews already carry full inventory and original fact handles for strategy.
     # Presentation needs the current activity and outcome, not another bag dump.
     payload = {"sampled_at": sampled_at, "connected": connected, "phase": phase,
@@ -86,6 +97,7 @@ def commentary_observation(status, now):
                "facts": {key: _brief(facts.get(key, ""), size) for key, size in (
                    ("body", 180), ("place", 160), ("queue", 300))},
                "progress": _brief(progress, 420), "task_outcome": outcome if progress else None,
+               "body_feedback": {**feedback, "tool_failure": failure},
                "viewer_url": status.get("viewer_url", ""),
                "viewer_binding_verified": status.get("viewer_body_binding_verified", False)}
     signature = hashlib.sha256(json.dumps(baseline, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
@@ -109,6 +121,14 @@ def commentary_changes(current, previous):
             topics.append("new_resources")
         if baseline["progress"] and baseline["progress"] != previous.get("progress"):
             topics.append("task_progress")
+        if baseline["failure"] and baseline["failure"] != previous.get("failure"):
+            topics.append("task_failure")
+        if baseline["body_feedback"] != previous.get("body_feedback", baseline["body_feedback"]):
+            phase = baseline["body_phase"]
+            if phase in {"inhibited", "recovered", "stalled"}:
+                topics.append("body_" + phase)
+            elif previous.get("restriction") and not baseline["restriction"]:
+                topics.append("body_recovered")
     urgent = ((baseline["health"] in {0, 1} and (not previous or baseline["health"] != previous.get("health")))
               or (baseline["phase"] == "failed" and previous.get("phase") != "failed"))
     return {"topics": topics, "urgent": urgent}
