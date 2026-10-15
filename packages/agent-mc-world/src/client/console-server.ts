@@ -1,8 +1,9 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { accountCss, accountPage, accountScript } from './account-page.ts';
 
 export interface ClientConsolePort {
   operatorState(): Promise<unknown>;
@@ -13,8 +14,11 @@ export interface ClientConsolePort {
 const actions = new Set(['connect', 'disconnect', 'observer.start', 'observer.stop', 'player.start', 'player.stop']);
 /** Loopback operator UI. It cannot execute arbitrary commands, edit credentials or expose token caches. */
 export async function serveClientConsole(port: number, runtime: ClientConsolePort,
-  assets = fileURLToPath(new URL('../../dist/client-console/', import.meta.url))) {
+  assets = fileURLToPath(new URL('../../dist/client-console/', import.meta.url)),
+  binding?: { directory: string; identity: string }) {
   const token = randomBytes(32).toString('hex');
+  const instanceId = randomBytes(32).toString('hex');
+  if (binding && !/^[a-f0-9]{24}$/.test(binding.identity)) throw new Error('Invalid operator identity');
   const operations = new Map<string, { status: 'running' | 'completed' | 'failed'; at: string; error?: string }>();
   const pending = new Set<Promise<void>>();
   let files: Map<string, Buffer>;
@@ -28,6 +32,10 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
     files = new Map();
   }
   let closing = false;
+  const accountPath = `/account/${instanceId}`;
+  files.set(accountPath, Buffer.from(accountPage));
+  files.set('/account.js', Buffer.from(accountScript));
+  files.set('/account.css', Buffer.from(accountCss));
   const server = createServer(async (request, response) => {
     const address = server.address();
     const expected = typeof address === 'object' && address ? `127.0.0.1:${address.port}` : '';
@@ -41,14 +49,17 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
       || request.headers['sec-fetch-site'] === 'cross-site') { json(403, { error: 'Local operator access only.' }); return; }
     try {
       if (request.method === 'GET') {
-        if (request.url === '/api/client') { json(200, { ...await runtime.operatorState() as object, webConsoleAvailable: files.has('/'), controlToken: token, operations: Object.fromEntries(operations) }); return; }
+        if (request.url === '/api/client') {
+          if (binding && request.headers['x-mc-instance'] !== instanceId) { json(409, { error: 'Operator instance changed.' }); return; }
+          json(200, { ...await runtime.operatorState() as object, instanceId, webConsoleAvailable: files.has('/'), controlToken: token, operations: Object.fromEntries(operations) }); return;
+        }
         if (request.url === '/api/harness/metrics') { json(200, runtime.metrics.snapshot(runtime.status().phase)); return; }
         const file = files.get(request.url ?? '');
         if (!file && (request.url === '/' || request.url === '/metrics')) {
           json(503, { error: '本构建未包含网页控制台；SDK/MCP 仍可用。准备匹配的 viewer 资源包后重新构建可启用网页。' }); return;
         }
         if (!file) { json(404, { error: 'Not found.' }); return; }
-        response.writeHead(200, { 'content-type': request.url === '/' || request.url === '/metrics' ? 'text/html; charset=utf-8'
+        response.writeHead(200, { 'content-type': request.url === '/' || request.url === '/metrics' || request.url === accountPath ? 'text/html; charset=utf-8'
           : request.url?.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8',
           'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer',
           'content-security-policy': "default-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" });
@@ -57,6 +68,7 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
       if (request.method !== 'POST' || request.url !== '/api/client/action') { json(405, { error: 'Method not allowed.' }); return; }
       const supplied = request.headers['x-mc-control'];
       if (request.headers.origin !== origin || request.headers['content-type'] !== 'application/json'
+        || (binding || request.headers['x-mc-instance']) && request.headers['x-mc-instance'] !== instanceId
         || typeof supplied !== 'string' || supplied.length !== token.length
         || !timingSafeEqual(Buffer.from(supplied), Buffer.from(token))) { json(403, { error: 'Use the local console.' }); return; }
       let body = '';
@@ -78,7 +90,19 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
   });
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', () => { server.off('error', reject); resolve(); }); });
   const address = server.address() as { port: number };
-  return { url: `http://127.0.0.1:${address.port}/`, close: () => new Promise<void>((resolve, reject) => {
-    closing = true; server.close(error => error ? reject(error) : resolve()); server.closeAllConnections();
-  }) };
+  const descriptor = binding ? join(binding.directory, 'operator.json') : null;
+  if (binding && descriptor) {
+    try {
+      await mkdir(binding.directory, { recursive: true, mode: 0o700 });
+      await writeFile(descriptor, JSON.stringify({ schema: 'minecraft-operator-binding/v1', identity: binding.identity, instanceId, port: address.port }), { mode: 0o600 });
+    } catch (error) { server.close(); server.closeAllConnections(); throw error; }
+  }
+  return { url: `http://127.0.0.1:${address.port}/`, accountUrl: `http://127.0.0.1:${address.port}${accountPath}`, close: async () => {
+    closing = true;
+    if (descriptor) {
+      try { if (JSON.parse(await readFile(descriptor, 'utf8')).instanceId === instanceId) await unlink(descriptor); } catch { /* Stale links fail instance validation. */ }
+    }
+    return new Promise<void>((resolve, reject) => {
+    server.close(error => error ? reject(error) : resolve()); server.closeAllConnections();
+  }); } };
 }

@@ -10,7 +10,7 @@ import { compactNativeItems } from './native-evidence.ts';
 export interface JavaClientServices {
   dataDir: string;
   agentName?: string;
-  /** Exact configured game account, after any host-side login-name mapping. */
+  /** Optional display/cache alias; never used as authoritative player identity. */
   accountName?: string;
 }
 
@@ -21,14 +21,19 @@ export function createJavaMemoryTool(cfg: MinecraftClientConfig, services: JavaC
   readFresh: (signal?: AbortSignal) => Promise<JavaClientState>, current: () => JavaClientState | null): ToolDef {
   const directory = join(services.dataDir, 'minecraft-memory');
   const memory = new GameMemoryService(new GameMemoryBook(directory), directory);
-  const scope = { realm: `weak:${cfg.host}:${cfg.port}|`,
-    account: `${cfg.auth ?? 'offline'}:${services.accountName ?? cfg.username}`,
-    agent: services.agentName ?? cfg.username };
+  // Native identity is available offline. A new namespace deliberately does not
+  // import older weak host/login-alias notebooks or notes from another provider.
+  const native = cfg.javaClient;
+  const scope = native ? { realm: `java:${native.expectedServer.toLowerCase().replace(/:25565$/, '')}`,
+    account: `uuid:${native.expectedUuid.replaceAll('-', '').toLowerCase()}`,
+    agent: services.agentName ?? native.controllerId } : null;
   return { ...GAME_MEMORY_TOOL,
     description: GAME_MEMORY_TOOL.description + ' Historical notebook operations also work while the body is disconnected; capture alone requires a fresh connected identity-checked state. Offline dimension is unknown; use dimension:"*" to search across dimensions.',
     handler: async (args, ctx) => {
       try {
         ctx.signal?.throwIfAborted();
+        if (!scope || !scope.realm.slice(5) || !/^uuid:[a-f0-9]{32}$/.test(scope.account) || !scope.agent)
+          throw new Error('Java memory requires an explicit native server, UUID and agent/controller identity');
         // Historical retrieval/notes must not depend on a body RPC, lease or launcher.
         const fresh = args.action === 'capture' ? await readFresh(ctx.signal) : null;
         ctx.signal?.throwIfAborted();

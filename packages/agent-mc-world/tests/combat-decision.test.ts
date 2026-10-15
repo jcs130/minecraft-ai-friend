@@ -54,6 +54,16 @@ function rig() {
 afterEach(() => vi.useRealTimers());
 
 describe('independent asynchronous combat choices', () => {
+  it.each([['clear-lead', [.45, .3, .2, .05], 'sent'], ['near-tie', [.4, .39, .16, .05], 'uncertain']] as const)
+    ('uses a separately configured multi-option floor and rejects %s ambiguity', async (_name, scores, expected) => {
+      vi.useFakeTimers(); const r = rig(); r.cfg.minConfidence = .4; r.cfg.minMargin = .1;
+      r.f!.candidates.push({ id: 'withdraw', kind: 'retreat', intent: 'Withdraw.' },
+        { id: 'follow', kind: 'track', targetId: 3, uuid: 'target', minDistance: 5, maxDistance: 8, leaseMs: 4000, intent: 'Observe at distance.' });
+      r.loop.tick(); r.resolve(new Response(JSON.stringify({ answers: { tactic: { choice: 'option_0', confidence: scores[0],
+        probabilities: { option_0: scores[0], option_1: scores[1], option_2: scores[2], keep: scores[3] } } } })));
+      await vi.advanceTimersByTimeAsync(1);
+      expect(r.reports.at(-1)?.data.outcome).toBe(expected); expect(r.sent).toHaveLength(expected === 'sent' ? 1 : 0);
+    });
   it('sends game health/type facts and applies a choice while the main-model request is still pending', async () => {
     vi.useFakeTimers();
     let mainReturned = false;

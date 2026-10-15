@@ -15,18 +15,18 @@ function logger(area: string): Logger {
     info: (msg, data) => emit('info', msg, { data }), warn: (msg, data) => emit('warn', msg, { data }),
     error: (msg, data) => emit('error', msg, { data }) };
 }
-export interface McStdioRuntime { runtime: MinecraftAgentClient; metricsPort: number; consolePort?: number }
+export interface McStdioRuntime { runtime: MinecraftAgentClient; metricsPort: number; consolePort?: number; operatorBinding?: { directory: string; identity: string } }
 export type McStdioFactory = (configPath: string, log: Logger) => McStdioRuntime;
 const nativeClient: McStdioFactory = (path, log) => {
   const options = loadMinecraftClientConfig(path);
-  return { metricsPort: options.metricsPort, consolePort: options.consolePort, runtime: new MinecraftAgentClient({ ...options, agentName: options.cfg.username, log,
+  return { metricsPort: options.metricsPort, consolePort: options.consolePort, operatorBinding: options.operatorBinding, runtime: new MinecraftAgentClient({ ...options, agentName: options.cfg.username, log,
     modelFacts: { model: () => '', accepts: mime => options.acceptsImages && mime.startsWith('image/'), contextWindow: () => undefined } }) };
 };
 /** Integrations may supply an assembly factory; core transport never imports them. */
 export async function startMcpStdio(factory: McStdioFactory = nativeClient, command = 'minecraft-agent-mcp'): Promise<void> {
 const configPath = process.argv[2];
 if (!configPath || process.argv.length !== 3) throw new Error(`Usage: ${command} <private-config.json>`);
-const { runtime, metricsPort, consolePort } = factory(configPath, logger(command));
+const { runtime, metricsPort, consolePort, operatorBinding } = factory(configPath, logger(command));
 const manifest = JSON.parse(readFileSync(createRequire(import.meta.url).resolve('agent-mc-world/package.json'), 'utf8'));
 const server = createMinecraftMcpServer(runtime, manifest.version);
 let operator: Awaited<ReturnType<typeof serveClientConsole>> | null = null;
@@ -40,7 +40,7 @@ const close = () => closing ??= runtime.disconnect().finally(async () => {
 });
 server.onclose = () => { void close(); };
 try {
-  operator = consolePort ? await serveClientConsole(consolePort, runtime) : null;
+  operator = consolePort ? await serveClientConsole(consolePort, runtime, undefined, operatorBinding) : null;
   monitor = metricsPort && metricsPort !== consolePort ? await serveAgentMetrics(metricsPort, () => runtime.metrics.snapshot(runtime.status().phase)) : null;
   for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, onSignal);
   await server.connect(new StdioServerTransport());

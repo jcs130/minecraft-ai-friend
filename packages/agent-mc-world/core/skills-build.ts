@@ -829,7 +829,7 @@ export async function skillBuildBlueprint(
     throw new SkillBlocked(
       `蓝图「${call.blueprint}」这边没装载,施工不了`,
       [
-        '笔记里存过设计要求的话,mc_blueprint 的 design 重新出一张图;',
+        '按实际材料和现场自行修订设计,用 mc_blueprint 的 {save:{...}} 提交;',
         '手上有现成数据就 mc_blueprint 的 save 交回来;',
         `装载着哪几份看 mc_blueprint{}(现在:${desk?.keys().join('、') || '一份都没有'})`,
       ],
@@ -947,7 +947,7 @@ export async function skillBuildBlueprint(
       survey.samples.length > 0 ? `冲突样本:${survey.samples.join('、')}。` : '',
       conflicts > 0
         ? '先审阅现场；接受清掉这些冲突格就用同一锚点再 build 并带 confirm:true，'
-          + '要保留现场就用同一个键重新 design，探测结果会带给修订轮。'
+          + '要保留现场就按探测结果修订设计，用同一个键重新 save。'
         : '现场没有冲突；用同一锚点再 build 就会正式施工。',
     ].filter(Boolean).join('\n');
   }
@@ -965,7 +965,7 @@ export async function skillBuildBlueprint(
       [
         ...surveyFromDiff(diff).samples,
         '接受清掉这些格就原调用加 confirm:true;'
-        + '只想先把能放的放上就加 skipConflicts:true;要保留它们就同键重新 design',
+        + '只想先把能放的放上就加 skipConflicts:true;要保留它们就修订设计并同键重新 save',
       ],
     );
   }

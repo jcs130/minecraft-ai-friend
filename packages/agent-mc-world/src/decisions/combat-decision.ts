@@ -5,6 +5,8 @@ export type { CombatExecutionPolicy, CombatCandidate, CombatDecisionFrame } from
 export interface CombatDecisionConfig extends CombatExecutionPolicy {
   connection?: 'auto' | 'host' | 'endpoint'; decisionProvider?: string;
   enabled:boolean;mode:'shadow'|'act';endpoint:string;timeoutMs:number;minIntervalMs:number;minConfidence:number;maxAgeMs:number;
+  /** Optional lead over the strongest alternative; model scores are not calibrated win probabilities. */
+  minMargin?: number;
   model?: string; apiKeyEnv?: string;
 }
 export interface CombatDecisionOptions {
@@ -150,6 +152,8 @@ export class CombatDecisionLoop {
       if (this.stopped) return;
       const answer = parseTypedChoice(payload.answers?.tactic, Object.keys(criteria));
       if (!answer) throw new Error('invalid-response');
+      const margin = answer.choiceProbability - Math.max(0, ...Object.entries(answer.probabilities)
+        .filter(([key]) => key !== answer.choice).map(([, value]) => value));
       const liveCfg = this.options.config();
       let current = this.options.refresh ? await this.options.refresh() : this.options.sample();
       if (current?.program && this.options.prepare) current = await this.options.prepare(current);
@@ -170,7 +174,8 @@ export class CombatDecisionLoop {
       else if ((!selected || selected.kind === 'step' || selected.kind === 'cast')
         && Math.hypot(...current.battlefield.self.position.map((v, i) => v - frame.battlefield.self.position[i])) > 1.5) outcome = 'moved';
       else if (answer.confidence < Math.max(cfg.minConfidence, liveCfg.minConfidence)
-        || answer.choiceProbability < Math.max(cfg.minConfidence, liveCfg.minConfidence)) outcome = 'uncertain';
+        || answer.choiceProbability < Math.max(cfg.minConfidence, liveCfg.minConfidence)
+        || margin < Math.max(cfg.minMargin ?? 0, liveCfg.minMargin ?? 0)) outcome = 'uncertain';
       else if (!selected) outcome = 'keep';
       else if (!executable) outcome = 'no-longer-executable';
       else if (cfg.mode === 'shadow') outcome = 'shadow';
@@ -179,7 +184,7 @@ export class CombatDecisionLoop {
       if (this.stopped) return;
       if (outcome === 'uncertain' && cfg.mode === 'act') this.options.fallback?.();
       const result = { ...scope, elapsedMs, choice: answer.choice,
-        probability: answer.choiceProbability, probabilities: answer.probabilities, outcome,
+        probability: answer.choiceProbability, probabilities: answer.probabilities, margin, outcome,
         sceneChanges: changed,
         modelMs: payload.latency_ms ?? null, usage: payload.usage ?? null,
         candidate: (outcome === 'sent' ? executable : selected) ?? null };

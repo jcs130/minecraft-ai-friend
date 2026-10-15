@@ -50,6 +50,19 @@ describe('generic Minecraft client boundary', () => {
     await expect(runtime.hostTactics({ battlefield: true })).rejects.toThrow('disconnected');
   });
 
+  it('shows human authentication while starting without copying it to normal status', async () => {
+    let finish!: () => void;
+    const environment = {id:'pending-login',tools:()=>[],envPromptVars:async()=>({}),
+      start:async()=>new Promise<void>(resolve=>{finish=resolve;}),stop:async()=>{},
+      console:()=>({invoke:async()=>({accounts:{agent:{phase:'awaiting-user',challenge:{userCode:'PRIVATE-FIXTURE'}}}})})};
+    const cfg = Object.assign(structuredClone(MINECRAFT_CLIENT_DEFAULTS), {host:'fixture.test',username:'Fixture',auth:'microsoft'});
+    const client = new MinecraftAgentClient({cfg,dataDir:dir(),log:nullLogger()},environment as never);
+    const pending = client.connect();
+    try {
+      expect(JSON.stringify(await client.operatorState())).toContain('PRIVATE-FIXTURE');
+      expect(JSON.stringify(client.status())).not.toContain('PRIVATE-FIXTURE');
+    } finally { finish(); await pending; await client.disconnect(); }
+  });
   it.each(['mc', 'mymc'] as const)('exposes host-owned fast choices through a composed World using %s tool names', async prefix => {
     let decisions = 0;
     const environment = { id: 'composed-world', tools: () => [], envPromptVars: async () => ({}), start: async () => {}, stop: async () => {},

@@ -113,6 +113,7 @@ class Settings:
     username: str = ""
     auth: str = "offline"
     version: str = "1.21.1"
+    connection_type: str = "local"
     node: str = "node"
     backend_directory: str = ""
     body_provider: str = "mineflayer"
@@ -174,6 +175,10 @@ class Settings:
         host = _text(server, "host")
         if host and (len(host) > 253 or re.search(r"[\s/@?#\\]", host) or "://" in host):
             raise ValueError("server.host must be a DNS name or IP address, not a URL")
+        local_hosts = {"", "localhost", "127.0.0.1", "::1"}
+        connection_type = _text(server, "connection_type", "local" if host.lower() in local_hosts else "custom")
+        if connection_type not in {"local", "custom"} or connection_type == "local" and host.lower() not in local_hosts:
+            raise ValueError("Select custom connection type for a non-local server")
         auth = _text(server, "auth", "offline")
         if auth not in {"offline", "microsoft"}:
             raise ValueError("server.auth must be offline or microsoft")
@@ -185,17 +190,23 @@ class Settings:
             raise ValueError("server.version must be exactly 1.21.1 for this integration")
         if _integer(viewer, "port", 0, 0, 65535) or _integer(viewer, "console_port", 0, 0, 65535):
             raise ValueError("This headless build uses viewer.url; bundled viewer and console ports must be zero")
+        operator = raw.get("operator", {})
+        if not isinstance(operator, dict) or set(operator) - {"port"}:
+            raise ValueError("operator supports only an optional local port")
+        console_port = _integer(operator, "port", 0, 0, 65535)
+        if console_port and (console_port < 1024 or body_provider != "mineflayer"):
+            raise ValueError("operator.port requires Mineflayer and an unprivileged loopback port; Java login uses its own client")
         minimum = _integer(autonomy, "min_decision_seconds", 10, 5, 300)
         renderer, catalog = _text(viewer, "renderer_directory"), _text(viewer, "catalog_file")
         if bool(renderer) != bool(catalog):
             raise ValueError("viewer.renderer_directory and viewer.catalog_file must be configured together")
         return cls(
             enabled=_boolean(autonomy, "enabled", False), host=host,
-            port=_integer(server, "port", 25565, 1, 65535), username=username, auth=auth, version=version,
+            port=_integer(server, "port", 25565, 1, 65535), username=username, auth=auth, version=version, connection_type=connection_type,
             node=_text(backend, "node", "node"), backend_directory=_text(backend, "directory"),
             body_provider=body_provider, java_client=java_client,
             login_config_file=_text(server, "login_config_file"),
-            viewer_port=0, console_port=0,
+            viewer_port=0, console_port=console_port,
             external_viewer_url=viewer_url(_text(viewer, "url")), min_decision_seconds=minimum,
             viewer_auto_open=_boolean(viewer, "auto_open", True),
             viewer_renderer_directory=renderer, viewer_catalog_file=catalog,
@@ -240,6 +251,7 @@ class Settings:
         return {
             "dataDir": str(Path(self.java_client["ledgerDir"]).expanduser().resolve()) if self.body_provider == "java-client" else str(private / "client"), "timezone": "Asia/Shanghai", "acceptsImages": self.vision_enabled,
             "metricsPort": 0, "consolePort": self.console_port,
+            **({"operatorIdentity": self.identity} if self.console_port else {}),
             "world": {
                 **({"provider": "java-client", "javaClient": self.java_client} if self.body_provider == "java-client" else {}),
                 "host": self.host, "port": self.port, "username": self.username, "auth": self.auth,

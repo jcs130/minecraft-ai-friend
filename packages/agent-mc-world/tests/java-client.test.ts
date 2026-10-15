@@ -7,6 +7,8 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { MinecraftAgentClient, JavaClientWorld, MINECRAFT_CLIENT_DEFAULTS, offlineUuid, nullLogger, loadMinecraftClientConfig } from '../src/client/index.ts';
 import { createMinecraftMcpServer } from '../src/mcp/server.ts';
 import { javaScriptErrorHelp } from '../src/client/java-script-help.ts';
+import { createJavaMemoryTool } from '../src/client/java-memory.ts';
+import { GameMemoryBook } from '../core/game-memory.ts';
 const paths: string[]=[];
 const directory=()=>{const path=mkdtempSync(join(tmpdir(),'real-java-client-'));paths.push(path);return path;};
 afterEach(()=>{vi.restoreAllMocks();for(const path of paths.splice(0))rmSync(path,{recursive:true,force:true});});
@@ -38,6 +40,48 @@ function rig(scriptEnabled = false, minecraftVersion?: string, scriptFailure?: s
   return {cfg,state,world,runtime,http,calls,dataDir,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it.each(['server','uuid','agent'])('isolates offline notes by actual Java %s binding',async field=>{
+    const r=rig(), services={dataDir:r.dataDir,agentName:'stable-agent'};
+    const fresh=vi.fn(async()=>{throw Error('Offline memory must not read the body');});
+    const tool=createJavaMemoryTool(r.cfg,services,fresh,()=>null),ctx={role:'test',log:nullLogger()};
+    await tool.handler({action:'remember',kind:'lesson',summary:'Private lesson',content:'Only this body identity',source:{kind:'agent_note'}},ctx);
+    const cfg=structuredClone(r.cfg);
+    if(field==='server')cfg.javaClient.expectedServer='different.test:25565';
+    if(field==='uuid')cfg.javaClient.expectedUuid=offlineUuid('Other');
+    const other=createJavaMemoryTool(cfg,{...services,agentName:field==='agent'?'other-agent':services.agentName},fresh,()=>null);
+    const found=await other.handler({action:'search',dimension:'*'},ctx);
+    expect(JSON.parse((found as any).text).total).toBe(0);expect(fresh).not.toHaveBeenCalled();expect(r.http).not.toHaveBeenCalled();
+  });
+  it('reopens the actual Java identity after nickname, auth alias and equivalent address changes',async()=>{
+    const r=rig(),services={dataDir:r.dataDir,agentName:'stable-agent',accountName:'old-cache-alias'};
+    const fresh=vi.fn(async()=>{throw Error('No body RPC');}),ctx={role:'test',log:nullLogger()};
+    const tool=createJavaMemoryTool(r.cfg,services,fresh,()=>null);
+    const saved=JSON.parse(((await tool.handler({action:'remember',kind:'lesson',summary:'Retained lesson',content:'Historical',source:{kind:'agent_note'}},ctx)) as any).text);
+    const cfg=structuredClone(r.cfg);cfg.username='Renamed';cfg.auth='microsoft';cfg.host='unrelated-alias.test';
+    cfg.javaClient.expectedServer='FIXTURE.TEST';
+    cfg.javaClient.expectedUuid=cfg.javaClient.expectedUuid.replaceAll('-','').toUpperCase();
+    const reopened=createJavaMemoryTool(cfg,{...services,accountName:'new-cache-alias'},fresh,()=>null);
+    const read=JSON.parse(((await reopened.handler({action:'get',id:saved.entry.id},ctx)) as any).text);
+    expect(read.entry.content).toBe('Historical');expect(fresh).not.toHaveBeenCalled();
+  });
+  it('does not implicitly migrate alias-scoped notebooks into the actual Java identity',async()=>{
+    const r=rig(),book=new GameMemoryBook(join(r.dataDir,'minecraft-memory'));
+    book.execute({action:'remember',kind:'lesson',summary:'Legacy alias lesson',content:'Old scope',source:{kind:'agent_note'}},
+      {scope:{realm:`weak:${r.cfg.host}:${r.cfg.port}|`,account:`${r.cfg.auth}:${r.cfg.username}`,agent:r.cfg.username},dimension:null});
+    const found=JSON.parse((await r.runtime.call('mc_memory',{action:'search',dimension:'*'})).text);
+    expect(found.total).toBe(0);expect(r.http).not.toHaveBeenCalled();
+  });
+  it('uses the stable controller namespace when the default SDK account nickname changes',async()=>{
+    const r=rig();
+    const saved=await r.runtime.call('mc_memory',{action:'remember',kind:'lesson',summary:'Controller lesson',content:'Historical',source:{kind:'agent_note'}});
+    expect(saved.failed).not.toBe(true);
+    const cfg={...r.cfg,username:'Renamed'};
+    const reopened=new MinecraftAgentClient({cfg,dataDir:r.dataDir,log:nullLogger()});
+    const read=await reopened.call('mc_memory',{action:'search',dimension:'*'});
+    expect(JSON.parse(read.text).total).toBe(1);expect(r.http).not.toHaveBeenCalled();
+    const other=new MinecraftAgentClient({cfg,dataDir:r.dataDir,agentName:'another-explicit-agent',log:nullLogger()});
+    expect(JSON.parse((await other.call('mc_memory',{action:'search',dimension:'*'})).text).total).toBe(0);
+  });
   it('keeps native historical memory and learning help available offline without any body RPC',async()=>{
     const r=rig();
     expect((await r.runtime.call('mc_memory',{action:'help'})).failed).not.toBe(true);
@@ -50,7 +94,7 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
     const reopened=new JavaClientWorld(r.cfg,r.http,{dataDir});
     const read=await reopened.tools().find(t=>t.name==='mc_memory')!.handler({action:'get',id:saved.entry.id},{role:'test',log:nullLogger()});
     expect(JSON.parse((read as any).text).entry.content).toContain('measured dirt hit');
-    const other=new JavaClientWorld({...r.cfg,username:'Other'},r.http,{dataDir});
+    const other=new JavaClientWorld({...r.cfg,username:'Other'},r.http,{dataDir,agentName:'other-agent'});
     const isolated=await other.tools().find(t=>t.name==='mc_memory')!.handler({action:'search',dimension:'*'},{role:'test',log:nullLogger()});
     expect(JSON.parse((isolated as any).text).total).toBe(0);
     expect(r.http).not.toHaveBeenCalled();expect(r.runtime.status().phase).toBe('disconnected');

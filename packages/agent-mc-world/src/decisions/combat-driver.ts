@@ -31,6 +31,7 @@ export function validateHostCombat(cfg: HostCombatConfig): void {
   if (!usesHostDecision(c) && ((c.apiKeyEnv && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(c.apiKeyEnv)) || (c.model && c.model.length > 120)))
     throw new Error('Invalid host decision model or credential reference.');
   if (!['act', 'shadow'].includes(c.mode) || !Number.isFinite(c.minConfidence) || c.minConfidence < 0 || c.minConfidence > 1
+    || (c.minMargin !== undefined && (!Number.isFinite(c.minMargin) || c.minMargin < 0 || c.minMargin > 1))
     || [c.timeoutMs, c.minIntervalMs, c.maxAgeMs].some(n => !Number.isFinite(n) || n < 50 || n > 60000))
     throw new Error('Invalid host combat decision limits.');
 }

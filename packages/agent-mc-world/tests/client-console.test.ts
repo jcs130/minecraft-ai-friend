@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { get } from 'node:http';
@@ -43,6 +43,36 @@ it('keeps the local control API usable without optional viewer assets', async ()
   expect(await (await fetch(app.url + 'api/client')).json()).toMatchObject({ webConsoleAvailable: false });
   expect((await app.post('{"action":"disconnect"}')).status).toBe(202);
   expect(app.runtime.operatorAction).toHaveBeenCalledWith('disconnect');
+});
+it('binds the engine-only human page to its owned descriptor and rejects stale instances', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'mc-account-binding-'));
+  cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
+  const runtime = { operatorState: vi.fn(async () => ({ schema:'minecraft-client-console/v1', connection:{accounts:{agent:{challenge:{userCode:'FIXTURE-1234'}}}} })),
+    operatorAction: vi.fn(async () => {}), metrics:{snapshot:() => ({schema:'metrics'})}, status:() => ({phase:'disconnected'}) };
+  const app = await serveClientConsole(0, runtime, directory, {directory,identity:'a'.repeat(24)});
+  try {
+    const descriptor = JSON.parse(readFileSync(join(directory, 'operator.json'), 'utf8'));
+    expect(Object.keys(descriptor).sort()).toEqual(['identity','instanceId','port','schema']);
+    expect(app.accountUrl).toBe(app.url + 'account/' + descriptor.instanceId);
+    const page = await fetch(app.accountUrl);
+    expect(page.status).toBe(200); expect(await page.text()).toContain('取消授权');
+    expect((await fetch(app.url + 'account/' + 'b'.repeat(64))).status).toBe(404);
+    expect((await fetch(app.url + 'api/client')).status).toBe(409);
+    expect(runtime.operatorState).not.toHaveBeenCalled();
+    const headers = {'x-mc-instance':descriptor.instanceId};
+    const state = await (await fetch(app.url + 'api/client', {headers})).json() as {controlToken:string};
+    const post = (extra = {}) => fetch(app.url + 'api/client/action', {method:'POST',body:'{"action":"disconnect"}',headers:{...headers,
+      origin:app.url.slice(0,-1),'content-type':'application/json','x-mc-control':state.controlToken,...extra}});
+    expect((await post({'x-mc-instance':'b'.repeat(64)})).status).toBe(403);
+    expect((await post({origin:'https://attacker.test'})).status).toBe(403);
+    expect((await post({'x-mc-control':'invalid'})).status).toBe(403);
+    expect(runtime.operatorAction).not.toHaveBeenCalled();
+    expect((await post()).status).toBe(202);
+    expect(runtime.operatorAction).toHaveBeenCalledWith('disconnect');
+    const metrics = await (await fetch(app.url + 'api/harness/metrics')).text();
+    expect(metrics).not.toMatch(/FIXTURE|controlToken|instanceId/);
+  } finally { await app.close(); }
+  expect(existsSync(join(directory, 'operator.json'))).toBe(false);
 });
 it('requires local Host/Origin and the process nonce; GET cannot execute game or launcher actions', async () => {
   const app = await setup();
