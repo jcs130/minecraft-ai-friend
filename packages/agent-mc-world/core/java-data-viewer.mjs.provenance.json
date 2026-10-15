@@ -1,21 +1,25 @@
 {
   "repository": "https://github.com/jcs130/mc-visual-console",
-  "commit": "674896d6e8a7a9690a5a4e82c8c2fd65297772eb",
+  "commit": "f832ee2a0838162b18daa546f975937f72913b76",
   "inputs": [
     {
       "file": "host/java-data-viewer.mjs",
-      "sha256": "058ef3400778eb915ac1bfc9202e7dd931392767123afa4e70ec80819404221e"
+      "sha256": "96bb3e4ca1580501042f832982676c2de7e39075061136ae3db1acc1884746ae"
     },
     {
       "file": "host/java-visual-data.mjs",
-      "sha256": "b0b70c1343a2ac677e2845c670d0a0a41aa2a8d7ae1b2566820ed64e7583d60f"
+      "sha256": "c1e569a56120504ab48f8c69c478dab0658394eab08f9b686bc8265721ccd143"
     },
     {
       "file": "host/viewer-asset-server.mjs",
       "sha256": "5d42164d5c567ba29ce5bb27ecb57dbe32b53b301bc9a8feb0c67e6144ca9a43"
+    },
+    {
+      "file": "host/viewer-version.mjs",
+      "sha256": "2a391fa5a59bc7d1d9289b11f795b712a2911d1e84bf3e3824dc69dc1ef709a0"
     }
   ],
-  "outputSha256": "55fc8cce22a45c5057e16d5e48180ed2211f5d1bdf02b5a11cad418a38a3f255",
+  "outputSha256": "bb0f82f1ccc740c423eefb462a7d41191f224caf3ed99cb07d2e6ee885b234b5",
   "externalDependencies": [
     "minecraft-data",
     "prismarine-block",

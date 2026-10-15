@@ -1,3 +1,4 @@
+export const PRIMARY_VIEWER_VERSION: '1.21.1';
 export function viewerVersionAssets(root: string, version: string): Promise<string>;
 export function viewerVersionRegistry(version: string,
   loadData: (version: string) => { version: { minecraftVersion: string }; biomesArray: Array<{ id: number; name: string }> },

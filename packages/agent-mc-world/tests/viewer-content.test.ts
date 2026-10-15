@@ -57,12 +57,12 @@ describe.skipIf(engineOnly)('packaged viewer content (requires locked optional v
       const fontResponse = await fetch(viewer.url + '/text-display-font.json');
       expect(fontResponse.status).toBe(200);
       const font = await fontResponse.json() as { files: Record<string, { sha256: string }> };
-      const zipResponse = await fetch(viewer.url + '/fonts/1.20.6/unifont.zip');
+      const zipResponse = await fetch(viewer.url + '/fonts/1.21.1/unifont.zip');
       expect(zipResponse.status).toBe(200);
       expect(zipResponse.headers.get('content-type')).toBe('application/zip');
       const zip = Buffer.from(await zipResponse.arrayBuffer());
-      expect(createHash('sha256').update(zip).digest('hex')).toBe(font.files['fonts/1.20.6/unifont.zip'].sha256);
-      expect(zip).toEqual(await readFile(join(MINECRAFT_CLIENT_DEFAULTS.viewerAssetsDir, 'public/fonts/1.20.6/unifont.zip')));
+      expect(createHash('sha256').update(zip).digest('hex')).toBe(font.files['fonts/1.21.1/unifont.zip'].sha256);
+      expect(zip).toEqual(await readFile(join(MINECRAFT_CLIENT_DEFAULTS.viewerAssetsDir, 'public/fonts/1.21.1/unifont.zip')));
 
       const first = await connect('/socket.io');
       const third = await connect('/third/socket.io');

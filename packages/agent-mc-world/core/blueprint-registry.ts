@@ -1,5 +1,5 @@
 /**
- * 用 Minecraft 1.20.6 注册表校验蓝图状态，并映射施工物品、功能动作与支撑规则。
+ * 用实际连接版本的注册表校验蓝图状态，并映射施工物品、功能动作与支撑规则。
  * 数据通过 Mineflayer 依赖的 minecraft-data 和 prismarine-block 加载并缓存。
  * wall_ 变体映射到去掉 wall_ 后的物品名；位置相关支撑由 compileBlueprint 核验。
  */
@@ -17,11 +17,11 @@ import {
 } from './blueprint.ts';
 
 /** 蓝图校验/补全的默认注册表版本。**运行时随实际连接的服务器版本对齐,见 setBlueprintMcVersion。** */
-export const DEFAULT_BLUEPRINT_MC_VERSION = '1.20.6';
+export const DEFAULT_BLUEPRINT_MC_VERSION = '1.21.1';
 
 let activeBlueprintMcVersion: string = DEFAULT_BLUEPRINT_MC_VERSION;
 
-/** 当前蓝图注册表版本(默认 1.20.6,通常已被世界对齐到实际连接的服务器版本)。 */
+/** 当前蓝图注册表版本(默认 1.21.1，运行时随实际连接对齐)。 */
 export function blueprintMcVersion(): string {
   return activeBlueprintMcVersion;
 }

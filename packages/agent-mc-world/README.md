@@ -87,8 +87,10 @@ Historical import licenses and hashes remain in `provenance/` and
 `vendor/native-types/`. The repository move is recorded separately; no identities,
 goals, memories, credentials or game ledgers are moved by installing this package.
 
-Version 0.4.0 is a locally verified release candidate, not a promise that it has
-been published to npm or deployed to running agents.
+The build version and exact dependencies are recorded in `package.json` and
+`release-sources.json`. Source synchronization does not establish publication or
+deployment. Java 1.21.1 is the primary viewer/build acceptance target; matching
+1.20.6 resources remain an explicit compatibility input.
 
 ## Photography and optional cloud artwork
 

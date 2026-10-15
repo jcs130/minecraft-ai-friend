@@ -9,6 +9,11 @@ import { Server as SocketServer } from "socket.io";
 
 // packages/modern-viewer/renderer-src/host/java-visual-data.mjs
 import { createRequire } from "node:module";
+
+// packages/modern-viewer/renderer-src/host/viewer-version.mjs
+var PRIMARY_VIEWER_VERSION = "1.21.1";
+
+// packages/modern-viewer/renderer-src/host/java-visual-data.mjs
 var require2 = createRequire(import.meta.url);
 var canonical = (props) => JSON.stringify(Object.entries(props).map(([k, v]) => [k, String(v)]).sort(([a], [b]) => a.localeCompare(b)));
 var identifier = /^minecraft:[a-z0-9_./-]+$/;
@@ -21,7 +26,7 @@ var requireValue = (ok, why) => {
 var javaYaw = (degrees) => Math.PI - degrees * Math.PI / 180;
 var javaPitch = (degrees) => -degrees * Math.PI / 180;
 var JavaVisualData = class {
-  constructor({ uuid, server, skinUrl = () => null, minecraftVersion = "1.20.6" }) {
+  constructor({ uuid, server, skinUrl = () => null, minecraftVersion = PRIMARY_VIEWER_VERSION }) {
     requireValue(["1.20.6", "1.21.1"].includes(minecraftVersion), "VERSION_MISMATCH");
     this.version = minecraftVersion;
     this.mc = require2("minecraft-data")(minecraftVersion);
@@ -297,7 +302,7 @@ async function serveViewerAsset(res, root, relative, cacheControl = "public, max
 }
 
 // packages/modern-viewer/renderer-src/host/java-data-viewer.mjs
-async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expectedServer, radius = 2, minecraftVersion = "1.20.6" }) {
+async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expectedServer, radius = 2, minecraftVersion = PRIMARY_VIEWER_VERSION }) {
   if (!Number.isInteger(port) || port < 0 || port > 65535 || !Number.isInteger(radius) || radius < 0 || radius > 4) throw Error("JAVA_VIEWER_CONFIG_INVALID");
   const root = path2.resolve(assetsDir), source = JSON.parse(await readFile(path2.join(root, "public/asset-source.json"), "utf8"));
   if (!["1.20.6", "1.21.1"].includes(minecraftVersion) || source.minecraftVersion !== minecraftVersion) throw Error("JAVA_VIEWER_ASSET_VERSION_MISMATCH");

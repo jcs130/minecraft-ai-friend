@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { startModernViewer, ownEntity } from '../core/modern-viewer.ts';
 import { MINECRAFT_CLIENT_DEFAULTS } from '../src/client/config.ts';
 import { freeViewerPort, viewerBot } from './fixtures/viewer-bot.ts';
+import { viewerVersionAssets } from '../core/viewer-version.mjs';
 
 const engineOnly = JSON.parse(readFileSync(new URL('../dist/build.json', import.meta.url), 'utf8')).viewer.included === false;
 describe.skipIf(engineOnly)('packaged exact Minecraft 1.21.1 viewer', () => {
@@ -17,6 +18,7 @@ describe.skipIf(engineOnly)('packaged exact Minecraft 1.21.1 viewer', () => {
     expect(ownEntity(bot as never)).toMatchObject({skinUrl:null,skinAvailability:'disabled'});
     expect(ownEntity(bot as never,true).skinUrl).toBe('/head-texture/'+'a'.repeat(64)+'.png');
     const viewer = await startModernViewer(bot as never, { port: await freeViewerPort(), assetsDir: MINECRAFT_CLIENT_DEFAULTS.viewerAssetsDir });
+    const assets = await viewerVersionAssets(MINECRAFT_CLIENT_DEFAULTS.viewerAssetsDir,bot.version);
     const socket = io(viewer.url, { autoConnect: false, reconnection: false, transports: ['websocket'] });
     try {
       const own = new Promise<Record<string,unknown>>(resolve=>socket.once('playerEntity',resolve));
@@ -30,7 +32,7 @@ describe.skipIf(engineOnly)('packaged exact Minecraft 1.21.1 viewer', () => {
       expect(content.minecraftVersion).toBe('1.21.1');expect(content.mapColors).toHaveLength(62);
       expect((await fetch(viewer.url + '/particle-content.png')).status).toBe(200);
       const horse=Buffer.from(await(await fetch(viewer.url+'/textures/1.16.4/entity/horse/horse_skeleton.png')).arrayBuffer());
-      const originalHorse=readFileSync(join(MINECRAFT_CLIENT_DEFAULTS.viewerAssetsDir,'versions/1.21.1/public/textures/1.21.1/entity/horse/horse_skeleton.png'));
+      const originalHorse=readFileSync(join(assets,'public/textures/1.21.1/entity/horse/horse_skeleton.png'));
       expect(horse).toEqual(originalHorse);
       expect(await (await fetch(viewer.url + '/speech-source')).json()).toMatchObject({available:false});
       const unavailable = await fetch(viewer.url + '/head-texture/' + 'a'.repeat(64) + '.png');
@@ -40,7 +42,7 @@ describe.skipIf(engineOnly)('packaged exact Minecraft 1.21.1 viewer', () => {
       protocol.emit('map', {itemDamage:725,scale:0,locked:false,columns:1,rows:1,x:0,y:0,data:Buffer.from([4])});
       expect(await patch).toMatchObject({mapId:725,columns:1});
       const bytes = Buffer.from(await (await fetch(viewer.url + '/blocksStates/1.21.1.json')).arrayBuffer());
-      const original = readFileSync(join(MINECRAFT_CLIENT_DEFAULTS.viewerAssetsDir, 'versions/1.21.1/public/blocksStates/1.21.1.json'));
+      const original = readFileSync(join(assets, 'public/blocksStates/1.21.1.json'));
       expect(createHash('sha256').update(bytes).digest('hex')).toBe(createHash('sha256').update(original).digest('hex'));
       expect((await fetch(viewer.url + '/fonts/1.20.6/unifont.zip')).status).toBe(404);
     } finally { socket.disconnect(); await viewer.close(); }

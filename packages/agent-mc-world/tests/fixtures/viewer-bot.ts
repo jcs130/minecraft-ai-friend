@@ -10,13 +10,13 @@ export const bubbleEntity = (id: number, text: string) => ({
     24: 320, 25: 0x40000000, 26: -1, 27: 1 },
 });
 
-export function viewerBot() {
-  const registry = minecraftData('1.20.6');
+export function viewerBot(version = '1.21.1') {
+  const registry = minecraftData(version);
   const protocol = Object.assign(new EventEmitter(), {
     write() { throw new Error('Viewer must not send game actions'); },
   });
   const bot = Object.assign(new EventEmitter(), {
-    version: '1.20.6', username: 'ag_Viewer', registry, _client: protocol,
+    version, username: 'ag_Viewer', registry, _client: protocol,
     entity: { id: 1, name: 'player', position: new Vec3(0, 64, 0), velocity: new Vec3(0, 0, 0),
       yaw: 0, pitch: 0, width: .6, height: 1.8, equipment: [], effects: {} },
     entities: { 40: bubbleEntity(40, '中文问候\n继续探索\n▼') },

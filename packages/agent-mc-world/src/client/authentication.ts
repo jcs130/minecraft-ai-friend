@@ -124,6 +124,6 @@ export class MinecraftAuthentication {
 export function protocolVersion(value: string): string | false {
   const version = value.trim();
   if (!version || version === 'auto') return false;
-  if (!/^\d+\.\d+(?:\.\d+)?$/.test(version)) throw new Error('Use auto or an explicit supported Java version, for example 1.20.6.');
+  if (!/^\d+\.\d+(?:\.\d+)?$/.test(version)) throw new Error('Use auto or an explicit supported Java version, for example 1.21.1.');
   return version;
 }

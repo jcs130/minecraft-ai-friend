@@ -1,4 +1,4 @@
-/** Compile against the installed Fabric 1.20.6 client without starting a game. */
+/** Compile against the explicitly selected Fabric client; 1.21.1 is the primary target. */
 import {spawnSync} from 'node:child_process';
 import {copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
 import {delimiter, dirname, join, resolve} from 'node:path';
@@ -10,7 +10,7 @@ const gameDir = args[0] && resolve(args[0]);
 const javaIndex = args.indexOf('--java-home');
 const javaDir = javaIndex >= 0 ? args[javaIndex + 1] : process.env.JAVA_HOME;
 const versionIndex = args.indexOf('--minecraft');
-const version = versionIndex >= 0 ? args[versionIndex + 1] : '1.20.6';
+const version = versionIndex >= 0 ? args[versionIndex + 1] : '1.21.1';
 if (!['1.20.6', '1.21.1'].includes(version)) throw new Error('Unsupported Minecraft build target');
 if (!gameDir || !existsSync(join(gameDir, '.fabric', 'remappedJars')))
   throw new Error('Supply a previously launched matching Fabric game directory');

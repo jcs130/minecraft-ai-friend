@@ -1,5 +1,7 @@
 # Independent Minecraft core
 
+- Java 1.21.1 is the primary maintenance, default viewer build and acceptance target. Keep actual-connection version matching and explicit legacy compatibility tests; remove obsolete feature gates only when payload or codec capability checks establish support.
+
 - This directory is the single source for `agent-mc-world`; build and test it independently of the server project at `world/`.
 - Host adapters depend on this package. Core source, default entry, declarations and build must not import Cortico, DSH, N.E.K.O or Qiandengji adapters.
 - Preserve `agent-mc/v1` event delivery, tool barriers, explicit turns, task identity/terminal states, facts/archive, deduplication and cancellation. Acceptance is not goal completion.

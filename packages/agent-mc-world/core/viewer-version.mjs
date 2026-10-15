@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+export const PRIMARY_VIEWER_VERSION = '1.21.1';
+
 /** Select the explicitly packaged version, without substituting an approximate registry or picture. */
 export async function viewerVersionAssets(root, version) {
   if (!['1.20.6', '1.21.1'].includes(version)) throw Error('VIEWER_VERSION_UNSUPPORTED');
