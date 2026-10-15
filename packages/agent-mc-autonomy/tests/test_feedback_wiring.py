@@ -33,6 +33,7 @@ def test_body_restriction_and_native_failure_are_inspectable_material_changes(ru
     clock[0] += 60
     value = publish(native_outcomes=[failed_outcome()])
     value["facts"]["parts"].append({"key": "bodyRestriction", "text": "身体当前受限：server restraint", "original": "fact:restriction"})
+    (port.directory / "status.json").write_text(json.dumps(value), encoding="utf-8")
     port.observe(value)
     review = port.offer()["review"]
     detail = port.decide(review["id"], "inspect")
