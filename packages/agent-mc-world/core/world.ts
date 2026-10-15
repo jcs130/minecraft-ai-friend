@@ -1921,16 +1921,18 @@ type BlueprintOp =
 
 /** `{}` = 查询；其余顶层字段各是一次写，一次只受理一个。 */
 export function parseBlueprintArgs(args: Record<string, unknown>): BlueprintOp | { error: string } {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return { error: 'mc_blueprint 要一个对象;仅 {} 是查询。' };
   if (Object.keys(args).some(key => !['save', 'design', 'accept', 'reserve_override', 'unload'].includes(key))) {
     return { error: 'mc_blueprint 不接受 action/op 等未知顶层字段。查询用 {};交稿用 {save:{key,site_mode,size_xyz,palette,layers}}。先查 mc_tool_help 的真实 schema;未保存、未设计或施工。' };
   }
   const given = (['save', 'design', 'accept', 'reserve_override', 'unload'] as const)
-    .filter((k) => args[k] !== undefined && args[k] !== null);
+    .filter((k) => Object.hasOwn(args, k));
   if (given.length === 0) return { kind: 'query' };
   if (given.length > 1) {
     return { error: `一次只受理一件事,这次给了 ${given.join(' 和 ')};分开调用` };
   }
   const which = given[0];
+  if (which === 'design') return { error: 'Design belongs to the host. Submit {save:{key,site_mode,size_xyz,palette,layers}}; no model request or background task was started.' };
   if (which === 'unload') {
     const key = typeof args.unload === 'string' ? args.unload.trim() : '';
     if (!key) return { error: 'unload 要一个蓝图键(字符串)' };
@@ -1960,11 +1962,6 @@ export function parseBlueprintArgs(args: Record<string, unknown>): BlueprintOp |
   } catch (e) {
     const err = e as { path?: string; reason?: string; message?: string };
     return { error: `${which}.${err.path ?? '?'}: ${err.reason ?? err.message ?? '写法不对'}` };
-  }
-  if (which === 'design') {
-    const brief = typeof body.brief === 'string' ? body.brief.trim() : '';
-    if (!brief) return { error: 'design.brief 要一段话:这项结构或工程要什么样,你自己说清楚' };
-    return { kind: 'design', key: label.key, name: label.name, brief };
   }
   if (which === 'accept') {
     const versionId = typeof body.version_id === 'string' ? body.version_id.trim() : '';
@@ -4500,7 +4497,10 @@ export class MinecraftWorld implements World {
         return result;
       },
       mc_map: async (args) => this.toolLog('mc_map', args, this.setMap(args)),
-      mc_blueprint: async (args) => this.toolLog('mc_blueprint', args, this.setBlueprint(args)),
+      mc_blueprint: async (args) => {
+        const outcome = this.setBlueprint(args);
+        return { ...outcome, text: this.toolLog('mc_blueprint', args, outcome.text) };
+      },
       mc_check: async (args) => this.toolLog('mc_check', args, this.runCheck(args)),
       mc_bag: async (args, ctx) => this.readOnce('mc_bag', ctx,
         () => this.bagReadout(typeof args.item === 'string' ? args.item : undefined)),
@@ -5369,19 +5369,19 @@ export class MinecraftWorld implements World {
   // ── mc_blueprint ─────────────────────────────────────────────────────────
 
   /**
-   * mc_blueprint:四条路(查询 / save / design / unload)。与 mc_goal 同一档 ——
-   * 不进队列、不产生任务事件;design 的构思在后台跑,这里只给受理回执。
+   * Blueprint admission is synchronous; host-authored designs use save/accept.
+   * Preserve machine-readable failure through the SDK, without parsing prose.
    */
-  protected setBlueprint(args: Record<string, unknown>): string {
+  protected setBlueprint(args: Record<string, unknown>): ToolOutcome {
     const op = parseBlueprintArgs(args);
-    if ('error' in op) return `[mc_blueprint 失败] ${op.error}`;
+    if ('error' in op) return { text: `[mc_blueprint 失败] ${op.error}`, failed: true };
     // 施工绑定是 realm 域的:取之前先对一次命名空间(她可能在连上之前就交了图)
     this.syncRealm();
     switch (op.kind) {
-      case 'query': return this.blueprintQuery();
-      case 'unload': return this.blueprintUnload(op.key);
+      case 'query': return { text: this.blueprintQuery() };
+      case 'unload': return { text: this.blueprintUnload(op.key) };
       case 'save': return this.blueprintSave(op);
-      case 'design': return this.blueprintDesign(op);
+      case 'design': return { text: this.blueprintDesign(op), failed: true };
       case 'accept': return this.blueprintAccept(op);
       case 'reserveOverride': return this.blueprintReserveOverride(op);
     }
@@ -5879,37 +5879,38 @@ export class MinecraftWorld implements World {
   }
 
   /** `{save}`:整份交或分批交,最后都走同一个受理管线 */
-  protected blueprintSave(op: Extract<BlueprintOp, { kind: 'save' }>): string {
+  protected blueprintSave(op: Extract<BlueprintOp, { kind: 'save' }>): ToolOutcome {
     const key = op.label.key;
     const job = op.jobId === null ? null : this.designInFlight;
     if (op.jobId !== null && (!job || job.id !== op.jobId || job.key !== key)) {
-      return `[mc_blueprint 失败] job_id「${op.jobId}」不是当前这份「${key}」的在途构思;`
-        + '后台交稿必须照任务说明原样带 id,前台直接 save 不要写 job_id';
+      return { text: `[mc_blueprint 失败] job_id「${op.jobId}」不是当前这份「${key}」的在途构思;`
+        + '后台交稿必须照任务说明原样带 id,前台直接 save 不要写 job_id', failed: true };
     }
     if (!op.append) {
-      if (op.versionId) return '[mc_blueprint 失败] 整份 save 会新建版本,不要写 version_id';
+      if (op.versionId) return { text: '[mc_blueprint 失败] 整份 save 会新建版本,不要写 version_id', failed: true };
       const prepared = this.blueprintPrepare(op.label, op.submission, op.jobId);
-      if (!prepared.ok) return prepared.receipt;
+      if (!prepared.ok) return { text: prepared.receipt, failed: true };
       if (job) {
         this.blueprintReadyDrafts.set(prepared.draft.versionId, prepared.draft);
         job.outputVersionId = prepared.draft.versionId;
-        return this.blueprintReadyReceipt(prepared.draft, '后台交稿已绑定本轮 job,等本轮收尾后再决定是否提升');
+        return { text: this.blueprintReadyReceipt(prepared.draft, '后台交稿已绑定本轮 job,等本轮收尾后再决定是否提升') };
       }
-      return this.blueprintPromote(prepared.draft).receipt;
+      const promoted = this.blueprintPromote(prepared.draft);
+      return promoted.ok ? { text: promoted.receipt } : { text: promoted.receipt, failed: true };
     }
     const size = readSize(op.submission.size_xyz);
-    if (!size) return '[mc_blueprint 失败] 分批交每一批都要带同一个 size_xyz:[X,Y,Z](三个正整数)';
+    if (!size) return { text: '[mc_blueprint 失败] 分批交每一批都要带同一个 size_xyz:[X,Y,Z](三个正整数)', failed: true };
     const siteMode = op.submission.site_mode;
     if (siteMode !== 'new' && siteMode !== 'retrofit') {
-      return '[mc_blueprint 失败] 分批交每一批都要带同一个 site_mode:new 或 retrofit';
+      return { text: '[mc_blueprint 失败] 分批交每一批都要带同一个 site_mode:new 或 retrofit', failed: true };
     }
     const palette = op.submission.palette;
     if (!Array.isArray(palette) || palette.length === 0) {
-      return '[mc_blueprint 失败] 分批交每一批都要带同一份 palette(非空数组)';
+      return { text: '[mc_blueprint 失败] 分批交每一批都要带同一份 palette(非空数组)', failed: true };
     }
     const layers = op.submission.layers;
     if (!Array.isArray(layers) || layers.length === 0) {
-      return '[mc_blueprint 失败] 这一批的 layers 是空的,没有可收的层';
+      return { text: '[mc_blueprint 失败] 这一批的 layers 是空的,没有可收的层', failed: true };
     }
     const paletteKey = JSON.stringify(palette);
     const candidates = [...this.blueprintStreams.values()].filter((draft) =>
@@ -5918,23 +5919,23 @@ export class MinecraftWorld implements World {
       ? this.blueprintStreams.get(op.versionId)
       : candidates.length === 1 ? candidates[0] : undefined;
     if (op.versionId && !prev) {
-      return `[mc_blueprint 失败] version_id「${op.versionId}」没有对应的分批 draft;照首批回执原样填写`;
+      return { text: `[mc_blueprint 失败] version_id「${op.versionId}」没有对应的分批 draft;照首批回执原样填写`, failed: true };
     }
     if (prev && (prev.label.key !== key || prev.sourceJobId !== op.jobId)) {
-      return `[mc_blueprint 失败] version_id「${prev.versionId}」属于另一份键或另一个 job,不能串批`;
+      return { text: `[mc_blueprint 失败] version_id「${prev.versionId}」属于另一份键或另一个 job,不能串批`, failed: true };
     }
     if (prev) {
       if (prev.size.some((v, i) => v !== size[i])) {
-        return `[mc_blueprint 失败] 这一批的 size_xyz [${size.join(',')}] 与前几批的 `
-          + `[${prev.size.join(',')}] 对不上;要换尺寸就别带 append,重新交一整份`;
+        return { text: `[mc_blueprint 失败] 这一批的 size_xyz [${size.join(',')}] 与前几批的 `
+          + `[${prev.size.join(',')}] 对不上;要换尺寸就别带 append,重新交一整份`, failed: true };
       }
       if (prev.paletteKey !== paletteKey) {
-        return '[mc_blueprint 失败] 分批的 palette 必须逐条一样(索引对不上就是另一份图);'
-          + '要改 palette 就别带 append,重新交一整份';
+        return { text: '[mc_blueprint 失败] 分批的 palette 必须逐条一样(索引对不上就是另一份图);'
+          + '要改 palette 就别带 append,重新交一整份', failed: true };
       }
       if (prev.siteMode !== siteMode) {
-        return `[mc_blueprint 失败] 这一批的 site_mode:${siteMode} 与前几批的 ${prev.siteMode} 对不上;`
-          + '要换场地模式就别带 append,重新交一整份';
+        return { text: `[mc_blueprint 失败] 这一批的 site_mode:${siteMode} 与前几批的 ${prev.siteMode} 对不上;`
+          + '要换场地模式就别带 append,重新交一整份', failed: true };
       }
     }
     const draft: BlueprintStreamDraft = prev
@@ -5944,21 +5945,21 @@ export class MinecraftWorld implements World {
       };
     const from = draft.layers.length;
     if (from + layers.length > size[1]) {
-      return `[mc_blueprint 失败] 已经收了 ${from} 层,这一批又来 ${layers.length} 层,`
-        + `超过声明的 ${size[1]} 层;这一批一层都没收`;
+      return { text: `[mc_blueprint 失败] 已经收了 ${from} 层,这一批又来 ${layers.length} 层,`
+        + `超过声明的 ${size[1]} 层;这一批一层都没收`, failed: true };
     }
     for (let i = 0; i < layers.length; i++) {
       const bad = checkLayerShape(layers[i], from + i, size, palette.length);
-      if (bad) return `[mc_blueprint 失败] 这一批第 ${i + 1} 层过不了,整批没收:\n· ${bad}`;
+      if (bad) return { text: `[mc_blueprint 失败] 这一批第 ${i + 1} 层过不了,整批没收:\n· ${bad}`, failed: true };
     }
     draft.layers.push(...layers);
     if (op.label.name) draft.label = { key, name: op.label.name };
     this.blueprintStreams.set(draft.versionId, draft);
     const to = draft.layers.length - 1;
     if (draft.layers.length < size[1]) {
-      return `[mc_blueprint] 「${key}」draft ${draft.versionId} 收到第 ${from}..${to} 层,`
+      return { text: `[mc_blueprint] 「${key}」draft ${draft.versionId} 收到第 ${from}..${to} 层,`
         + `还差 ${size[1] - draft.layers.length} 层(一共 ${size[1]} 层);`
-        + `接着 append 并原样带 "version_id":"${draft.versionId}"。`;
+        + `接着 append 并原样带 "version_id":"${draft.versionId}"。` };
     }
     this.blueprintStreams.delete(draft.versionId);
     const prepared = this.blueprintPrepare(draft.label, {
@@ -5970,13 +5971,13 @@ export class MinecraftWorld implements World {
       palette,
       layers: draft.layers,
     }, draft.sourceJobId, draft.versionId);
-    if (!prepared.ok) return prepared.receipt;
+    if (!prepared.ok) return { text: prepared.receipt, failed: true };
     this.blueprintReadyDrafts.set(prepared.draft.versionId, prepared.draft);
     if (job) job.outputVersionId = prepared.draft.versionId;
-    return this.blueprintReadyReceipt(
+    return { text: this.blueprintReadyReceipt(
       prepared.draft,
       job ? '完整 draft 已绑定本轮 job,等本轮收尾后再决定是否提升' : '分批已齐,仍是 draft,没有替换当前可执行版本',
-    );
+    ) };
   }
 
   /** 受理一份完整内容，生成不可变版本身份；这一步不改 current。 */
@@ -6072,28 +6073,29 @@ export class MinecraftWorld implements World {
     };
   }
 
-  protected blueprintAccept(op: Extract<BlueprintOp, { kind: 'accept' }>): string {
+  protected blueprintAccept(op: Extract<BlueprintOp, { kind: 'accept' }>): ToolOutcome {
     const draft = this.blueprintReadyDrafts.get(op.versionId);
     if (!draft || draft.label.key !== op.key) {
       // 晋级会从 readyDrafts 移除草稿；current 已匹配同一版本及内容时，accept 幂等成功。
       const current = this.blueprints.get(op.key);
       if (current && current.versionId === op.versionId && current.contentHash === op.contentHash) {
-        return `[mc_blueprint] 「${op.key}」这一份已经是当前可执行版本了,没有需要提升的`
+        return { text: `[mc_blueprint] 「${op.key}」这一份已经是当前可执行版本了,没有需要提升的`
           + `(版本 ${current.versionId},内容摘要 ${current.contentHash},`
-          + `${current.plan.steps.length} 步)。build 直接就能用。`;
+          + `${current.plan.steps.length} 步)。build 直接就能用。` };
       }
-      return `[mc_blueprint 失败] 「${op.key}」没有 version_id「${op.versionId}」这份完整 draft`;
+      return { text: `[mc_blueprint 失败] 「${op.key}」没有 version_id「${op.versionId}」这份完整 draft`, failed: true };
     }
     if (draft.contentHash !== op.contentHash) {
-      return `[mc_blueprint 失败] content_hash 对不上;draft 没提升,current 没变`;
+      return { text: `[mc_blueprint 失败] content_hash 对不上;draft 没提升,current 没变`, failed: true };
     }
-    return this.blueprintPromote(draft).receipt;
+    const promoted = this.blueprintPromote(draft);
+    return promoted.ok ? { text: promoted.receipt } : { text: promoted.receipt, failed: true };
   }
 
-  protected blueprintReserveOverride(op: Extract<BlueprintOp, { kind: 'reserveOverride' }>): string {
+  protected blueprintReserveOverride(op: Extract<BlueprintOp, { kind: 'reserveOverride' }>): ToolOutcome {
     const reserve = this.blueprintResources.reserve();
     if (Object.keys(reserve).length === 0) {
-      return '[mc_blueprint 失败] 当前没有蓝图剩余材料 reserve,无需开临时覆盖';
+      return { text: '[mc_blueprint 失败] 当前没有蓝图剩余材料 reserve,无需开临时覆盖', failed: true };
     }
     this.blueprintResources.observe(this.stockNow().carried);
     const lease = this.blueprintResources.openOverride(op);
@@ -6105,9 +6107,9 @@ export class MinecraftWorld implements World {
     }, op.ttlMs);
     this.resourceOverrideTimer.unref?.();
     this.bridge?.retune();
-    return `[mc_blueprint] 蓝图材料临时覆盖 ${lease.id} 已开启:${op.reason};`
+    return { text: `[mc_blueprint] 蓝图材料临时覆盖 ${lease.id} 已开启:${op.reason};`
       + `${op.ttlMs / 1000} 秒内最多借 ${op.maxBlocks} 块。实际跨入 reserve 的每一块都会扣预算,`
-      + '到期或预算用完立即收口;首次实际借料后才会标记“需补料”。';
+      + '到期或预算用完立即收口;首次实际借料后才会标记“需补料”。' };
   }
   protected blueprintDesign(_op: Extract<BlueprintOp, {kind:'design'}>): string {
     return '[mc_blueprint 未受理] Design belongs to the host. Submit a blueprint with save; no model request or background task was started.';

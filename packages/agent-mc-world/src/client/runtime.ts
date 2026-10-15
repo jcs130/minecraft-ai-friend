@@ -65,7 +65,7 @@ export class MinecraftAgentClient {
 
   constructor(protected readonly options: MinecraftClientOptions,
     private readonly world: ClientEnvironment = options.cfg.provider === 'java-client' ? new JavaClientWorld(options.cfg, undefined,
-      { dataDir: options.dataDir, agentName: options.agentName ?? options.cfg.username })
+      { dataDir: options.dataDir, agentName: options.agentName })
       : new MinecraftClientWorld({ cfg: options.cfg, dataDir: options.dataDir,
         timezone: options.timezone ?? 'UTC', botName: options.agentName ?? options.cfg.username }),
     readonly binding: { profile: string; toolPrefix: 'mc' | 'mymc' } = { profile: 'minecraft', toolPrefix: 'mc' }) {
