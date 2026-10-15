@@ -30,7 +30,7 @@ IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout"}
 
 def observation_call(name, arguments):
     """Classify native queued reads without treating their task IDs as actions."""
-    if name in READ_ACTIVITY_TOOLS:
+    if name in READ_ACTIVITY_TOOLS or empty_catalogue_query(name, arguments):
         return True
     if name != "mc_do":
         return False
@@ -39,6 +39,11 @@ def observation_call(name, arguments):
         isinstance(step, dict) and (step.get("skill") in {"observe", "check", "probe"}
                                    or (step.get("skill") == "find" and not step.get("direction")))
         for step in steps)
+
+
+def empty_catalogue_query(name, arguments):
+    """Only the two native mixed tools' exact empty calls are catalogue reads."""
+    return name in {"mc_blueprint", "mc_map"} and arguments == {}
 
 
 class ModelCallRejected(ValueError):
@@ -716,8 +721,10 @@ class Controller:
             raise ModelCallRejected(error)
         if self.feedback_pending:
             tags = next((t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])
-            if name != "mc_do" and {"act", "write", "speak"}.intersection(tags):
-                raise ModelCallRejected("Pending feedback must submit its body plan through mc_do.")
+            if name != "mc_do" and not empty_catalogue_query(name, arguments) and {"act", "write", "speak"}.intersection(tags):
+                raise ModelCallRejected("Pending feedback must submit its body plan through mc_do. "
+                    "Read-only catalogue queries mc_blueprint({}) and mc_map({}) are allowed; "
+                    "metadata writes remain blocked until the body plan is accepted.")
         return call, name, arguments
 
     def prepare_calls(self, calls, tools):
@@ -951,6 +958,7 @@ class Controller:
                 self.publish(last_message=(response.get("content") or "")[:1200], viewer_decision_at=datetime.now(timezone.utc).isoformat())
                 if not calls:
                     self.invalid_tool_calls = 0
+                    self.publish(invalid_tool_calls=0)
                     # A plain plan is still model history. Dropping it gives an
                     # unchanged world the same request on every idle wakeup.
                     self.groups.append([assistant_history(response)])
@@ -973,6 +981,7 @@ class Controller:
                     self.reject_model_call(error, response)
                     return
                 self.invalid_tool_calls = 0
+                self.publish(invalid_tool_calls=0)
                 exchange = [assistant_history(response)]
                 boundary = False
                 for call, name, arguments in prepared:
