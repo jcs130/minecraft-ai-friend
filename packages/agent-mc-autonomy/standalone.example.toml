@@ -11,6 +11,15 @@ context_tokens = 32768
 max_output_tokens = 1024
 model_timeout_seconds = 180
 
+# Optional, uses the same planner and its existing reserved output budget.
+# Native rules/queues continue while a model response is pending.
+[decision_policy]
+enabled = false
+routine_output_tokens = 768
+complex_output_tokens = 1024
+routine_parameters = {} # Only explicitly configured provider-supported hints.
+complex_parameters = {} # No endpoint/model switching or extra depth model.
+
 [server]
 host = ""
 port = 25565
