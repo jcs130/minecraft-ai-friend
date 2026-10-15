@@ -4,6 +4,8 @@
  * 配方只认服务端给的那一份;吃喝与换装都等服务端回话再报。
  */
 import type { Bot } from 'mineflayer';
+import { craftItemDef } from './craft-product.ts';
+export { craftItemDef } from './craft-product.ts';
 import { SkillBlocked, checkAbort, sleep, type SkillContext } from './skill-context.ts';
 import { type SkillCall } from './skills.ts';
 import { zhEffect, zhName } from './names.ts';
@@ -49,21 +51,6 @@ export function craftNeeds(r: CraftRecipeLike): Map<number, number> {
     for (const ing of r.ingredients) if (ing.id >= 0) bump(ing.id);
   }
   return need;
-}
-
-/** 名字 → 物品定义;planks/bed 这两个类别词按包里的树种/羊毛色落地 */
-export function craftItemDef(bot: Bot, item: string): { id: number; name: string } | undefined {
-  const registry = bot.registry;
-  let def = registry.itemsByName[item];
-  if (!def && item === 'planks') {
-    const log = bot.inventory.items().find((i) => i.name.endsWith('_log'));
-    def = registry.itemsByName[log ? log.name.replace('_log', '_planks') : 'oak_planks'];
-  }
-  if (!def && item === 'bed') {
-    const wool = bot.inventory.items().find((i) => i.name.endsWith('_wool'));
-    def = registry.itemsByName[wool ? wool.name.replace('_wool', '_bed') : 'white_bed'];
-  }
-  return def;
 }
 
 /** A missing crafting recipe is independent of inventory or earlier queued work. */

@@ -8,6 +8,7 @@
  * 不 equip、place、寻路或发包；goto 的路线试算成本较高，只由 dryRun 显式调用。
  */
 import type { Bot } from 'mineflayer';
+import { craftItemDef } from './craft-product.ts';
 import type { SkillCall } from './skills.ts';
 import type { BlockFace, Cell } from './geometry.ts';
 import { matchItemName, type ChestBook } from './chests.ts';
@@ -83,7 +84,7 @@ function precheckCraft(bot: Bot, call: Extract<SkillCall, { skill: 'craft' }>): 
     return unknown ? { level: 'hard', text: unknownCraftItemText(bot, unknown), rule: 'craft.unknownItem' } : null;
   } // 自摆配方不预判产物
   const item = call.item ?? '';
-  const def = bot.registry?.itemsByName?.[item];
+  const def = craftItemDef(bot, item);
   if (!def) return { level: 'hard', text: unknownCraftItemText(bot, item), rule: 'craft.unknownItem' };
   if (!inventoryReadConfirmed(bot) || (bot.currentWindow ?? bot.inventory).selectedItem) {
     return { level: 'soft', text: '库存同步或游标归位尚未完成，暂不能判断合成材料缺口；执行前先核对并归还游标', rule: 'craft.inventorySync' };

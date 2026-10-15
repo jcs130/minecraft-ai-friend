@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { Vec3 } from 'vec3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Executor } from '../core/executor.ts';
-import { skillCraft } from '../core/skills-craft.ts';
+import { craftItemDef, skillCraft } from '../core/skills-craft.ts';
 import { narrateWorldSegments, snapshotFromBot } from '../core/terrain.ts';
 import { precheckStep, precheckSteps, renderPrecheckNotes } from '../core/precheck.ts';
 
@@ -179,5 +179,37 @@ describe('verified inventory identities and craft correction', () => {
       { skill: 'chat', text: 'offline prefix' },
       step as never,
     ], 'append').accepted).toBe(true);
+  });
+});
+
+
+describe('craft alias identity across admission and precheck', () => {
+  const deps = { resolve: () => null, blockAt: () => null, cellsOf: () => null };
+  it.each([['white_wool', 'white_bed'], ['red_wool', 'red_bed']])('resolves bed from %s consistently', (wool, bed) => {
+    const r = rig(); r.slots.fill(null);
+    r.slots[9] = new Item(registry.itemsByName[wool].id, 3);
+    r.slots[10] = new Item(registry.itemsByName.oak_planks.id, 3);
+    r.bot.recipesAll.mockImplementation((id: number) => Recipe.find(id, null));
+    expect(craftItemDef(r.bot as never, 'bed')?.name).toBe(bed);
+    expect(precheckStep(r.bot as never, { skill: 'craft', item: 'bed', count: 1 }, deps)).toEqual(
+      precheckStep(r.bot as never, { skill: 'craft', item: bed, count: 1 }, deps));
+    expect(r.exec.submitDetailed([{ skill: 'craft', item: 'bed', count: 1 }], 'append').accepted).toBe(true);
+    expect(r.craft).not.toHaveBeenCalled();
+  });
+  it('reports actual missing wool, preserves log species aliases and strict grid IDs', () => {
+    const r = rig(); r.slots.fill(null);
+    r.slots[9] = new Item(registry.itemsByName.oak_planks.id, 3);
+    r.bot.recipesAll.mockImplementation((id: number) => Recipe.find(id, null));
+    // This server exposes the wool recipe, without optional bed recoloring recipes.
+    r.bot.recipesAll.mockImplementation((id: number) => Recipe.find(id, null).filter((recipe: any) =>
+      id !== registry.itemsByName.white_bed.id || recipe.delta.some((d: any) => d.id === registry.itemsByName.white_wool.id && d.count < 0)));
+    const note = precheckStep(r.bot as never, { skill: 'craft', item: 'bed', count: 1 }, deps);
+    expect(note?.rule).toBe('craft.short'); expect(note?.text).toContain('羊毛');
+    expect(r.exec.submitDetailed([{ skill: 'craft', item: 'bed', count: 1 }], 'append').receipt).toContain('羊毛');
+    r.slots[9] = new Item(registry.itemsByName.birch_log.id, 1);
+    expect(craftItemDef(r.bot as never, 'planks')?.name).toBe('birch_planks');
+    expect(precheckStep(r.bot as never, { skill: 'craft', item: 'planks', count: 4 }, deps)).toBeNull();
+    expect(precheckStep(r.bot as never, { skill: 'craft', item: 'workbench', count: 1 }, deps)?.rule).toBe('craft.unknownItem');
+    expect(precheckStep(r.bot as never, { skill: 'craft', grid: [['bed']], count: 1 }, deps)?.rule).toBe('craft.unknownItem');
   });
 });
