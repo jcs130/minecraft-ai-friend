@@ -118,12 +118,32 @@ class DeathMemory:
         if not key:
             return []
         with self.connection() as db:
-            return [json.loads(r[0]) for r in db.execute("SELECT body FROM death_episodes WHERE scope=?" +
-                    (" AND notified=0" if pending else "") + " ORDER BY rowid DESC LIMIT 32", (key,))]
+            rows = [json.loads(r[0]) for r in db.execute(
+                "SELECT body FROM death_episodes WHERE scope=? ORDER BY rowid DESC LIMIT 32", (key,))]
+            # Legacy notified means transport accepted, not reflection completed.
+            return [r for r in rows if not pending or not (r.get("reflection") or r.get("lesson"))]
 
     def notified(self, episode):
         with self.connection() as db:
             db.execute("UPDATE death_episodes SET notified=1 WHERE scope=? AND id=?", (scope_key(episode["scope"]), episode["id"]))
+
+    @staticmethod
+    def validate_reflection(value, episode):
+        if not isinstance(value, dict) or set(value) - {"episode_id", "outcome", "lesson", "applicability", "evidence", "reason"}:
+            raise ValueError("invalid_death_reflection")
+        if not episode or value.get("episode_id") != episode["id"]:
+            raise ValueError("death_episode_mismatch")
+        outcome = value.get("outcome")
+        required = (("lesson", 1200), ("applicability", 600), ("evidence", 600)) if outcome == "lesson" else (("reason", 600),)
+        if outcome not in {"lesson", "deferred"} or any(
+                not isinstance(value.get(k), str) or not 1 <= len(value[k].strip()) <= size for k, size in required):
+            raise ValueError("death_reflection_evidence_or_deferral_required")
+        if outcome == "lesson" and not any(ref and ref in value["evidence"] for ref in
+                                           (episode["id"], episode["source_event"].get("run"))):
+            raise ValueError("death_evidence_must_reference_episode_or_source_run")
+        return {"episode_id": episode["id"], "outcome": outcome,
+                **{k: value[k].strip() for k, _ in required}, "source_event": episode["source_event"],
+                "source": "main_brain_review", "hypothesis": True, "behavioral_improvement_verified": False}
 
     def context(self, scope, facts=None, objective=None):
         rows = self.entries(scope)

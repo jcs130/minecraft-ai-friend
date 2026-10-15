@@ -101,7 +101,7 @@ def test_host_receives_real_episode_once_even_after_restart_and_instant_respawn(
     from test_review import snapshot
     clock = [10000]
     port = ReviewPort(tmp_path, now=lambda: clock[0])
-    port.configure(ReviewPolicy(enabled=True))
+    port.configure(ReviewPolicy(enabled=True, idle_presence_seconds=900))
     episode = DeathMemory(tmp_path).record(event(), facts(), [], [], [])
     def publish():
         value = snapshot(clock[0], death_episode=episode, game_identity=SCOPE)
@@ -114,7 +114,7 @@ def test_host_receives_real_episode_once_even_after_restart_and_instant_respawn(
     assert port.defer(offered["id"], True)["error"] == "meaningful_review_requires_decision"
     port.delivered(offered["id"], True)
     assert not port.offer()["offered"]
-    assert DeathMemory(tmp_path).entries(SCOPE, pending=True) == []
+    assert DeathMemory(tmp_path).entries(SCOPE, pending=True)[0]["id"] == episode["id"]
     clock[0] += 1
     publish()
     assert port.decide(offered["id"], "inspect")["death_episode"]["id"] == episode["id"]
@@ -125,7 +125,7 @@ def test_host_receives_real_episode_once_even_after_restart_and_instant_respawn(
     clock[0] += 400
     publish()
     next_review = port.offer().get("review")
-    assert not next_review or "death_episode" not in next_review["evidence"]
+    assert next_review["evidence"]["death_episode"]["id"] == episode["id"]
 
 
 def test_large_lessons_fit_context_without_evicting_fresh_body_facts(tmp_path):
@@ -189,7 +189,7 @@ def test_quiet_review_defer_rechecks_new_urgent_event_and_identity_before_observ
     from test_review import snapshot
     clock = [10000]
     port = ReviewPort(tmp_path, now=lambda: clock[0])
-    port.configure(ReviewPolicy(enabled=True))
+    port.configure(ReviewPolicy(enabled=True, idle_presence_seconds=900))
     def publish(value, observe=True):
         (tmp_path / "status.json").write_text(json.dumps(value), encoding="utf-8")
         if observe:

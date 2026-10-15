@@ -20,7 +20,7 @@ def snapshot(now, **changes):
 def runtime(tmp_path):
     clock = [10000]
     port = ReviewPort(tmp_path, now=lambda: clock[0])
-    port.configure(ReviewPolicy(enabled=True))
+    port.configure(ReviewPolicy(enabled=True, idle_presence_seconds=900))
 
     def publish(**changes):
         value = snapshot(clock[0], **changes)
@@ -217,7 +217,7 @@ def test_delivered_death_metadata_dedup_cannot_hide_a_later_runtime_failure(runt
     assert failure["id"] != death["id"] and failure["urgent"] == "runtime_failed"
     assert failure["trigger"] == "state_changed"
     assert failure["evidence"]["runtime_error"] == "runtime failed after respawn"
-    assert "death_episode" not in failure["evidence"]  # Old death narration remains consumed.
+    assert failure["evidence"]["death_episode"]["id"] == episode["id"]  # Reflection stays pending independently.
 
 
 def test_periodic_context_delivery_can_defer_without_main_acknowledgement(runtime):
@@ -353,7 +353,7 @@ def test_disabled_and_stop_never_wake_or_dispatch(runtime):
     port.configure(ReviewPolicy())
     publish()
     assert not port.offer()["offered"]
-    port.configure(ReviewPolicy(enabled=True))
+    port.configure(ReviewPolicy(enabled=True, idle_presence_seconds=900))
     publish()
     review_id = port.offer()["review"]["id"]
     port.mailbox.submit("stop", {}, str(uuid.uuid4()))

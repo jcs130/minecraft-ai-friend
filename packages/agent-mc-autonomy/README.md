@@ -5,6 +5,22 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.64 keeps transport delivery, main-brain inspection/decision, factual death
+reflection and playback receipts separate. Accepted death notifications remain
+pending until an evidence-referenced lesson or explicit deferral is supplied in
+the existing final review decision. Inspection never acknowledges strategy or
+executes a body action. Lessons remain hypotheses, not verified improvement.
+
+The existing review loop offers optional idle presence after 45 seconds by
+default (`idle_presence_seconds`, range 30–900). Fresh accepted event invitations
+reset this interval; existing review deduplication, retry backoff and stop rules
+remain authoritative. This is an offered conversation opportunity, not evidence
+that speech played. Quiet periodic context transport still needs no decision.
+Hosts can inject a nonblocking `before_dispatch` output enqueue into the validated
+final decision. Its correlation is prepared before the ordinary goal mailbox
+submission; failures never gate native work or emergency reflexes. The package
+contains no speech model, host import or TTS client.
+
 0.1.63 invalidates an in-flight planning request when a new death episode arrives,
 including a result finishing during event polling. The old turn closes before a
 fresh recovery request; stale tool calls remain blocked after the body respawns.

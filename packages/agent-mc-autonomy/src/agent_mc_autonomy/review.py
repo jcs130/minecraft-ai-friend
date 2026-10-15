@@ -22,12 +22,14 @@ class ReviewPolicy:
     enabled: bool = False
     min_interval_seconds: int = 60
     review_interval_seconds: int = 180
+    idle_presence_seconds: int = 45
 
     @classmethod
     def parse(cls, raw):
         minimum = _integer(raw, "min_interval_seconds", 60, 30, 900)
         return cls(_boolean(raw, "enabled", False), minimum,
-                   _integer(raw, "review_interval_seconds", 180, minimum, 1800))
+                   _integer(raw, "review_interval_seconds", 180, minimum, 1800),
+                   _integer(raw, "idle_presence_seconds", 45, 30, 900))
 
 
 def digest(value):
@@ -145,6 +147,19 @@ class ReviewPort:
     def request_id(self, review_id):
         return str(uuid.uuid5(uuid.NAMESPACE_URL, self.directory.as_uri() + ":" + review_id))
 
+    def speech_current(self, correlation):
+        """Validate output against this decision, allowing only its own new goal."""
+        current = review_observation(observation(self.directory), self.now())
+        if (self.stopping() or not current or current["session"] != correlation["session"]
+                or current["scope"] != correlation["scope"] or current["baseline"] != correlation["baseline"]
+                or self.now() > correlation["expires_at"]):
+            return False
+        if self.mailbox.intent_revision() == correlation["revision"]:
+            return True
+        with self.mailbox.connection() as db:
+            row = db.execute("SELECT id FROM commands WHERE kind IN ('goal','feedback','stop') ORDER BY rowid DESC LIMIT 1").fetchone()
+            return bool(row and row[0] == correlation["decision_id"])
+
     def reconcile(self, state):
         """Recover a mailbox commit if the process died before saving its review receipt."""
         review = state.get("review", {})
@@ -178,10 +193,25 @@ class ReviewPort:
                 yield state
                 review = state.get("review", {})
                 episode = review.get("evidence", {}).get("death_episode")
-                if (episode and (review.get("notification_accepted") or review.get("result", {}).get("acknowledged"))
-                        and db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='death_episodes'").fetchone()):
-                    db.execute("UPDATE death_episodes SET notified=1 WHERE scope=? AND id=?",
-                               (scope_key(episode["scope"]), episode["id"]))
+                if episode and db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='death_episodes'").fetchone():
+                    row = db.execute("SELECT body FROM death_episodes WHERE scope=? AND id=?",
+                                     (scope_key(episode["scope"]), episode["id"])).fetchone()
+                    if row:
+                        recorded = json.loads(row[0])
+                        history = recorded.get("host_review", {})
+                        recorded["host_review"] = {"review_id": review["id"], "offered_at": review.get("last_attempt", history.get("offered_at")),
+                            "transport_accepted": review.get("notification_accepted") is True or history.get("transport_accepted") is True,
+                            "accepted_at": review.get("accepted_at", history.get("accepted_at")),
+                            "inspected_at": review.get("inspected_at", history.get("inspected_at")),
+                            "acknowledged": review.get("result", {}).get("acknowledged") is True or history.get("acknowledged") is True,
+                            "playback_verified": False}
+                        if reflection := review.get("reflection"):
+                            recorded["reflection"] = reflection
+                            if reflection["outcome"] == "lesson":
+                                recorded["lesson"] = {k: reflection[k] for k in ("lesson", "applicability", "evidence", "source", "hypothesis", "behavioral_improvement_verified")}
+                        db.execute("UPDATE death_episodes SET body=?, notified=? WHERE scope=? AND id=?",
+                                   (json.dumps(recorded, ensure_ascii=False), int(recorded["host_review"]["transport_accepted"]),
+                                    scope_key(episode["scope"]), episode["id"]))
                 db.execute("INSERT OR REPLACE INTO review_state VALUES(1,?)", (json.dumps(state, ensure_ascii=False),))
         finally:
             db.close()
@@ -224,12 +254,6 @@ class ReviewPort:
             if not policy.enabled:
                 return
             previous = state.get("review", {})
-            episode_id = observed["evidence"].get("death_episode", {}).get("id")
-            if (previous.get("notification_accepted") and episode_id
-                    and episode_id == previous.get("evidence", {}).get("death_episode", {}).get("id")):
-                observed["evidence"].pop("death_episode", None)
-                if observed["urgent"] == "death:" + str(episode_id):
-                    observed["urgent"] = None
             revision = self.mailbox.intent_revision()
             same_session = previous.get("session") == observed["session"]
             same_intent = previous.get("revision") == revision and previous.get("intent") == observed["intent"]
@@ -258,11 +282,13 @@ class ReviewPort:
                 return
             elapsed = now - state.get("created_at", 0)
             changed = not same_session or not same_intent or observed["signal"] != previous.get("signal")
-            if not urgent and (elapsed < policy.min_interval_seconds or (not changed and elapsed < policy.review_interval_seconds)):
+            idle_due = bool(previous and same_session and same_intent and not changed
+                            and now - state.get("submitted_at", state.get("created_at", now)) >= policy.idle_presence_seconds)
+            if not urgent and not idle_due and (elapsed < policy.min_interval_seconds or (not changed and elapsed < policy.review_interval_seconds)):
                 return
             state.update(created_at=now, review={**observed, "id": uuid.uuid4().hex[:12], "created_at": now,
                          "revision": revision, "attempts": 0, "summary": summary(observed["evidence"]),
-                         "trigger": "death_review" if observed["evidence"].get("death_episode") else "state_changed" if urgent or changed else "periodic_review"})
+                         "trigger": "state_changed" if observed["urgent"] == "runtime_failed" else "death_review" if observed["evidence"].get("death_episode") else "state_changed" if urgent or changed else "idle_presence" if idle_due else "periodic_review"})
 
     def offer(self):
         """Claim one bounded delivery attempt; does not manufacture a game event."""
@@ -274,8 +300,6 @@ class ReviewPort:
             review = state.get("review", {})
             if not state.get("policy", {}).get("enabled") or not review or review.get("result"):
                 return {"offered": False, "reason": "no_pending_review"}
-            if review.get("evidence", {}).get("death_episode") and review.get("notification_accepted"):
-                return {"offered": False, "reason": "death_episode_already_delivered"}
             if current["session"] != review["session"] or current["intent"] != review["intent"] or self.mailbox.intent_revision() != review["revision"]:
                 return {"offered": False, "reason": "review_superseded"}
             now = self.now()
@@ -285,6 +309,10 @@ class ReviewPort:
                 return {"offered": False, "reason": "awaiting_main_brain"}
             review["attempts"] += 1
             review["last_attempt"] = now
+            episode = review.get("evidence", {}).get("death_episode")
+            opportunity_id = "death-" + digest([review["scope"], episode["id"]])[:24] if episode else review["id"]
+            review["opportunity"] = {"id": opportunity_id, "kind": review["trigger"], "offered_at": now,
+                                     "expires_at": review["created_at"] + 180, "playback_verified": False}
             return {"offered": True, "review": json.loads(json.dumps(review))}
 
     def delivered(self, review_id, accepted):
@@ -292,7 +320,9 @@ class ReviewPort:
             review = state.get("review", {})
             if review.get("id") == review_id:
                 review["notification_accepted"] = review.get("notification_accepted") is True or accepted is True
+                review["notification_status"] = "accepted" if accepted is True else "rejected" if accepted is False else "unknown"
                 if accepted:
+                    review["accepted_at"] = self.now()
                     state["submitted_at"] = self.now()
 
     def defer(self, review_id, accepted):
@@ -322,7 +352,10 @@ class ReviewPort:
                 review["result"] = result
             return result
 
-    def decide(self, review_id, decision, reason="", goal="", *, lineage_offset=None, host_context=None):
+    def decide(self, review_id, decision, reason="", goal="", *, lineage_offset=None, host_context=None,
+               death_reflection=None, before_dispatch=None):
+        if decision == "inspect" and (death_reflection is not None or before_dispatch is not None):
+            return {"is_error": True, "error": "inspect_is_read_only"}
         if host_context is not None:
             try:
                 host_context = validate_host_context(host_context)
@@ -371,11 +404,22 @@ class ReviewPort:
                 if review.get("scope") == current["scope"] and (episode := review["evidence"].get("death_episode")):
                     fresh.setdefault("death_episode", episode)  # Explicit historical event, not current inventory.
                     fresh["death_recovery"] = recovery_context(episode, snapshot.get("observation", snapshot).get("facts", {}), fresh["current_goal"])
-                review.update(evidence=fresh, baseline=current["baseline"])
+                review.update(evidence=fresh, baseline=current["baseline"], inspected_at=self.now())
                 return {"heartbeat_id": review_id, **review["evidence"], "stage_delivery": stage,
-                        "next": "Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending. Keep stages within the standing goal and user intent; server-specific quests, exams or capabilities need fresh evidence from this world, not unrelated conversation memories.",
+                        "next": "Now call continue/insert/revise with your evidence-based reason. For death include death_reflection: lesson with evidence/applicability, or deferred with reason. Optional spoken_text belongs in that same decision; no extra tool round is needed. Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending. Keep stages within the standing goal and user intent; server-specific quests, exams or capabilities need fresh evidence from this world, not unrelated conversation memories.",
                         "goal_authority": "current_user_goal is explicitly user-sourced. host_review is a proposed stage subordinate to current user intent and the standing goal; unknown origin is not user authorization. last_decision is prior model judgment, not fresh world evidence. Query inspect with lineage_offset=0 for full original parent goals, four per page.",
                         "last_decision": state.get("last_decision")}
+            reflection = None
+            if death_reflection is not None:
+                try:
+                    reflection = DeathMemory.validate_reflection(death_reflection, review["evidence"].get("death_episode"))
+                except ValueError as error:
+                    return {"is_error": True, "error": str(error)}
+                if reflection["outcome"] == "lesson":
+                    recovery = recovery_context(review["evidence"]["death_episode"], snapshot.get("observation", snapshot).get("facts", {})).get("current", {})
+                    if (not review.get("inspected_at") or current["evidence"]["body_baseline"]["lifecycle"].get("phase") != "alive"
+                            or recovery.get("inventorySynced") is not True or not recovery.get("position")):
+                        return {"is_error": True, "error": "fresh_recovery_inspection_required"}
             request_id = self.request_id(review_id)
             existing = self.mailbox.get(request_id)
             if not existing and (self.mailbox.intent_revision() != review["revision"] or current["intent"] != review["intent"]):
@@ -392,6 +436,13 @@ class ReviewPort:
                     return {"is_error": True, "error": "goal_already_active"}
             result = {"acknowledged": True, "dispatched": False, "decision": decision, "verified": False,
                       "reply": "已记录主脑判断，未新增任务。"}
+            if before_dispatch is not None:
+                try:
+                    result["speech"] = before_dispatch({"review_id": review_id, "decision_id": request_id,
+                        "session": review["session"], "scope": review["scope"], "revision": review["revision"], "baseline": review["baseline"],
+                        "expires_at": review["created_at"] + 180, "opportunity_id": review.get("opportunity", {}).get("id", review_id)})
+                except Exception:
+                    result["speech"] = {"status": "enqueue_failed", "playback_verified": False}
             if decision in {"insert", "revise"}:
                 try:
                     payload = {"goal": goal.strip(), "mode": "insert", "origin": "host_review"}
@@ -407,7 +458,12 @@ class ReviewPort:
                 result.update(dispatched=True, request_id=request_id, delivery=receipt["delivery"],
                               reply=("阶段目标修订已投递，保留现有身体动作与先前用户目标；尚未证明完成。" if decision == "revise" else
                                      "阶段目标已投递，原生队列在安全检查点插入；尚未证明完成。"))
+            if reflection:
+                review["reflection"] = reflection
+            result["reflection_pending"] = bool(review["evidence"].get("death_episode") and not reflection)
             review.update(choice=choice, result=result)
+            if result["reflection_pending"]:
+                state["retry_after"] = self.now() + 300
             if host_context is not None:
                 try:
                     result["host_context"] = HostContextPort(self.directory, now=self.now).publish(
