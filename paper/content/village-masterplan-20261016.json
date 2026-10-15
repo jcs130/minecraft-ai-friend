@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "id": "village-masterplan-20261016",
+  "title": "千灯纪主村庄：街巷、田园与河湾云轨",
+  "status": "proposal",
+  "deploymentReady": false,
+  "world": "minecraft:overworld",
+  "survey": {
+    "savedAt": "2026-10-16T03:55:00+08:00",
+    "boundsXZ": [-705, -610, -430, -315],
+    "generatedChunksRead": 380,
+    "nativeBlockChecks": {"matched": 32, "total": 32},
+    "originalHouseRegions": 23,
+    "farmlandBlocksInVillage": 113,
+    "farmlandGroups": 23,
+    "farmlandGrouping": "horizontal Chebyshev distance <= 2 and elevation difference <= 2; planning groups, not native POIs",
+    "rails": {"surfaceBandY54OrHigher": 408, "elevatedY75OrHigher": 68, "undergroundBelowY54": 589},
+    "centralRailGroup": {"blocks": 115, "min": [-545, 67, -467], "max": [-530, 68, -435]},
+    "limitations": ["保存样本不能代表之后的玩家施工", "轨道邻近分组不等于原版可乘坐连通性", "只核验32处当前方块，未验收新道路或过山车"]
+  },
+  "anchors": [
+    {"id": "guild", "title": "冒险者公会", "position": [-489, 66, -502]},
+    {"id": "supplies", "title": "公会公共补给", "position": [-477, 66, -490]},
+    {"id": "harvest", "title": "丰穗食堂", "position": [-599, 71, -499]},
+    {"id": "harbor", "title": "溪畔商栈", "position": [-614, 68, -472]},
+    {"id": "library", "title": "灯语书屋", "position": [-587, 66, -451]},
+    {"id": "workshop", "title": "石铜工坊", "position": [-539, 68, -463]},
+    {"id": "meeting_bell", "title": "现有安全集合钟", "position": [-547, 67, -439]},
+    {"id": "portal", "title": "现有下界门", "position": [-558, 67, -453]},
+    {"id": "art_hall", "title": "旅行艺术厅", "position": [-616, 67, -378]},
+    {"id": "cormy_tower", "title": "可米观景塔", "position": [-563, 85, -575]}
+  ],
+  "zones": [
+    {
+      "id": "civic_plaza", "title": "工坊西侧小广场", "boundsXZ": [-568, -474, -554, -463],
+      "proposedCenter": [-561, 67, -468], "phase": 2,
+      "design": "顺坡做两级小广场，南边保留原箱子工作区；钟边保持步行连接，暂不迁移钟或村民记忆",
+      "constraints": ["不向南扩入Z=-462起的箱子与钻石块", "不向东覆盖石铜工坊入口", "逐列定坡，不统一fill"]
+    },
+    {
+      "id": "farm_terraces", "title": "丰穗上台地公田", "boundsXZ": [-640, -517, -617, -505],
+      "phase": 2, "farmFloorY": 74,
+      "plots": [
+        {"id": "wheat", "crop": "minecraft:wheat", "boundsXZ": [-638, -515, -630, -507], "water": [-634, 74, -511], "cropCells": 80},
+        {"id": "roots", "crop": "minecraft:carrots", "boundsXZ": [-627, -515, -619, -507], "water": [-623, 74, -511], "cropCells": 80}
+      ],
+      "design": "两个9×9模块，中间两格田埂；每块中心一水源，水面用上半格盖板，边上设置堆肥和补种提示。根菜田可按运营需求轮作土豆",
+      "constraints": ["现状地面约Y73..76，局部一至两格整理，不削整座山", "保留周边树带并补植被采伐的普通树", "不拓展整片不可破坏保护；作物与农田继续公开使用"]
+    },
+    {
+      "id": "courtyard_gardens", "title": "书屋东侧菜园与院落小田", "boundsXZ": [-583, -458, -562, -443], "phase": 2,
+      "design": "保留小院农田，整成短畦、连通田埂；路径旁零碎田逐步迁入公田，先种好新田再整理旧田",
+      "constraints": ["原堆肥桶先保留，核对村民职业后再换位", "不改在途委托目标和玩家物资", "保留河岸水系"]
+    },
+    {
+      "id": "existing_work_court", "title": "原钟旁玩家工作院", "boundsXZ": [-559, -449, -546, -438], "phase": 3,
+      "design": "按箱子、床、熔炉和锻造工作台分区整理；只先整理可确认公共的通行带，私人物资保留原位",
+      "constraints": ["未确定归属的箱子、床、工作站不自动搬迁", "不把整块院子当空地", "保留(-545,66,-439)维护盖板及上方防跌闸门"]
+    },
+    {
+      "id": "river_park", "title": "村南河湾云轨公园", "boundsXZ": [-554, -362, -514, -332], "phase": 3,
+      "proposedEntry": [-543, 64, -357],
+      "stationBoundsXZ": [-549, -361, -537, -351],
+      "preferredRideHeightY": [80, 86],
+      "conceptLoopXYZ": [[-543,80,-355],[-550,84,-345],[-545,86,-335],[-523,84,-335],[-516,82,-344],[-521,80,-357],[-543,80,-355]],
+      "design": "保留可米作品主题，把新增回环、车站和车辆存放集中在村南；先完成新环线并试乘，再按确认范围调整住宅上空旧段和广场地面轨道",
+      "constraints": ["曲线为运镜和布局概念线，尚不是可放置的轨道蓝图", "旧轨道先逐块备份，不能边拆边试", "箱子矿车、命名车辆和乘客不得清空删除", "队列与轨道隔离，村民通路不经过轨面", "新支柱避开水道、屋门和步行净空", "竣工前不登记公共传送点"]
+    }
+  ],
+  "roads": {
+    "geometry": "planning_corridors_not_construction_blueprints",
+    "mainClearWidth": 3,
+    "laneClearWidth": 2,
+    "headroomMin": 3,
+    "edgeDecorationOutsideClearWidth": true,
+    "routes": [
+      {"id":"commerce", "title":"公会商贸主街", "phase":1, "pointsXZ":[[-561,-468],[-560,-474],[-547,-473],[-535,-473],[-528,-473],[-520,-478],[-512,-480],[-491,-480],[-484,-482],[-481,-490],[-477,-490]]},
+      {"id":"harvest", "title":"食堂支路", "phase":1, "pointsXZ":[[-561,-468],[-568,-466],[-578,-465],[-585,-466],[-594,-478],[-599,-490],[-599,-499]]},
+      {"id":"farm", "title":"台地田园支路", "phase":1, "pointsXZ":[[-599,-490],[-616,-490],[-618,-500],[-618,-506]]},
+      {"id":"market", "title":"商栈支路", "phase":1, "pointsXZ":[[-594,-478],[-608,-480],[-614,-472]]},
+      {"id":"library", "title":"书屋支路", "phase":1, "pointsXZ":[[-585,-466],[-584,-456],[-587,-451]]},
+      {"id":"south_greenway", "title":"南岸步行绿道", "phase":1, "pointsXZ":[[-584,-456],[-583,-440],[-565,-439],[-565,-415],[-570,-411],[-568,-390],[-565,-386],[-557,-383],[-557,-365],[-551,-358],[-543,-357]]},
+      {"id":"gallery", "title":"河岸艺术支路", "phase":1, "pointsXZ":[[-565,-386],[-577,-386],[-599,-386],[-605,-380],[-616,-378]]},
+      {"id":"east_homes", "title":"东侧住宅巷", "phase":1, "pointsXZ":[[-512,-480],[-514,-480],[-514,-442],[-504,-442],[-486,-442]]}
+    ],
+    "palette": {"main":"石砖主体，安山岩收边", "lanes":"泥径与少量石材", "waterside":"云杉木栈道", "retaining":"苔石和石砖矮挡墙", "lighting":"暖色灯笼，优先复用现有26处灯"},
+    "constraints": ["施工时绕实际房屋、树干、容器和领地收边，不能把折线直接fill成直路", "优先复用现有八条村路和试炼栈道", "不把屋顶或树冠当道路地坪", "上下坡用阶梯或缓坡，高差不超过1格每步", "原有屋门与公会入口保留可达的2格宽接入段", "东侧住宅从北侧主街绕接，不让新主路跨过安全集合钟和玩家箱子工作院"]
+  },
+  "phases": [
+    {"id":1, "title":"通路和安全", "scope":"逐段确认可行走中心线；补断路、路口标识、井口防跌和车辆停放隔离", "liveWritesAuthorizedByThisFile":false},
+    {"id":2, "title":"田园和小广场", "scope":"先建两块新田，再整理零碎旧田；顺坡铺小广场和绿化，保留现有箱子工作院", "liveWritesAuthorizedByThisFile":false},
+    {"id":3, "title":"云轨与玩家院落", "scope":"先备份及确认玩家作品、容器归属；完成河湾环线、车辆存放和试乘，再调整旧段", "liveWritesAuthorizedByThisFile":false},
+    {"id":4, "title":"游戏内运营", "scope":"竣工后把导览、轮作补给和养护委托纳入现有设施与任务配置", "liveWritesAuthorizedByThisFile":false}
+  ],
+  "acceptance": [
+    "普通Java、Mineflayer与基岩使用原版方块，无新客户端依赖",
+    "从公会补给可步行到工坊、书屋、农田、艺术厅和公园入口，不破坏方块且不借魔法",
+    "在两格宽的门前接入处不与轨道、支柱、装饰冲突",
+    "村民原UUID、交易和家/工作点保留，白天可离家、夜间能返回",
+    "新农田先成熟可用，公众能收割补种，旧作物与委托进度不提前清除",
+    "所有旧箱子物品与方块实体NBT核对，未知归属一律暂停该处施工",
+    "过山车完成空车与玩家试乘、进出站、上下坡、断线和乘客救援检查后才开放",
+    "原岩基层只作保留约束，不重放旧铺设方案，不出现地面裸露基岩",
+    "不常驻强制加载，不铺大量实体灯饰，不添加持续全村粒子"
+  ]
+}
