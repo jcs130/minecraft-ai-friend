@@ -37,6 +37,70 @@ function rig(scriptEnabled = false, minecraftVersion?: string, scriptFailure?: s
   return {cfg,state,world,runtime,http,calls,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it.each(['close_screen','menu_click','gui_click'])('returns fresh GUI state after a stale %s rejection without replaying input',async operation=>{
+    const r=rig(),http=r.http.getMockImplementation()!;
+    Object.assign(r.state,{screen:'CurrentScreen',screenTitle:'Current menu',screenToken:'new-token',syncId:7,menuRevision:3,cursor:{slot:-1,empty:false,count:2,name:'minecraft:wheat_seeds'}});
+    let submits=0;
+    r.http.mockImplementation(async(url:any,init:any)=>{
+      if(JSON.parse(init.body).method==='do'){submits++;return new Response(JSON.stringify({error:'Stale screenToken'}),{status:409});}
+      return http(url,init);
+    });
+    await r.runtime.connect();await r.runtime.call('mc_control',{action:'claim'});
+    try {
+      const reply=await r.runtime.call('mc_do',{action_id:'original-gui',operation,input:{screenToken:'old-token'},waitMs:0});
+      expect(reply.failed).toBe(true);expect(reply.execution).toBeUndefined();
+      expect(JSON.parse(reply.text)).toMatchObject({action_id:'original-gui',operation,rejectedThisAttempt:true,retried:false,
+        currentGui:{screen:'CurrentScreen',screenTitle:'Current menu',screenToken:'new-token',syncId:7,menuRevision:3,alreadyClosed:false,closureAttributedToAction:false,cursor:{count:2,name:'minecraft:wheat_seeds'}}});
+      expect(reply.text).toContain('mc_result');expect(reply.text).toContain('current slots/buttons');
+      expect(submits).toBe(1);expect(r.state.actions).toEqual([]);
+      expect(r.world.requestFacts()?.parts?.find(p=>p.key==='menu')?.text).toContain('new-token');
+    }finally{await r.runtime.disconnect();}
+  });
+  it('does not claim to have closed a GUI already closed by another actor',async()=>{
+    const r=rig(),http=r.http.getMockImplementation()!;
+    Object.assign(r.state,{screen:'',screenTitle:'',screenToken:'closed-token',syncId:0,menuRevision:4});
+    let submits=0;
+    r.http.mockImplementation(async(url:any,init:any)=>{
+      if(JSON.parse(init.body).method==='do'){submits++;return new Response(JSON.stringify({error:'Stale screenToken'}),{status:409});}
+      return http(url,init);
+    });
+    await r.runtime.connect();await r.runtime.call('mc_control',{action:'claim'});
+    try {
+      const reply=await r.runtime.call('mc_do',{action_id:'old-close',operation:'close_screen',input:{screenToken:'old-token'}});
+      expect(reply.failed).toBe(true);expect(reply.execution).toBeUndefined();
+      expect(JSON.parse(reply.text).currentGui).toMatchObject({alreadyClosed:true,closureAttributedToAction:false,screen:''});
+      expect(submits).toBe(1);expect(reply.text).toContain('cause is unknown');
+    }finally{await r.runtime.disconnect();}
+  });
+  it.each(['unavailable','identity-changed'])('marks stale GUI recovery unverified when fresh state is %s',async mode=>{
+    const r=rig(),http=r.http.getMockImplementation()!;let rejected=false,submits=0;
+    r.http.mockImplementation(async(url:any,init:any)=>{
+      const request=JSON.parse(init.body);
+      if(request.method==='do'){rejected=true;submits++;return new Response(JSON.stringify({error:'Stale screenToken'}),{status:409});}
+      if(rejected&&request.method==='state')return mode==='unavailable'
+        ?new Response(JSON.stringify({error:'read unavailable'}),{status:409})
+        :new Response(JSON.stringify({...r.state,uuid:offlineUuid('Other')}));
+      return http(url,init);
+    });
+    await r.runtime.connect();await r.runtime.call('mc_control',{action:'claim'});
+    try {
+      const reply=await r.runtime.call('mc_do',{action_id:'old-close',operation:'close_screen',input:{screenToken:'old-token'}});
+      expect(reply.failed).toBe(true);expect(JSON.parse(reply.text)).toMatchObject({currentGui:null,retried:false,error:'Stale screenToken',observationError:expect.any(String)});
+      expect(reply.execution).toBeUndefined();expect(submits).toBe(1);
+    }finally{await r.runtime.disconnect();}
+  });
+  it('keeps an unknown GUI dispatch unknown instead of reclassifying it as a stale-token rejection',async()=>{
+    const r=rig(),http=r.http.getMockImplementation()!;let submits=0;
+    r.http.mockImplementation(async(url:any,init:any)=>{
+      if(JSON.parse(init.body).method==='do'){submits++;throw new Error('transport lost after dispatch');}
+      return http(url,init);
+    });
+    await r.runtime.connect();await r.runtime.call('mc_control',{action:'claim'});
+    try {
+      const reply=await r.runtime.call('mc_do',{action_id:'unknown-close',operation:'close_screen',input:{screenToken:'token'}});
+      expect(reply.failed).toBe(true);expect(reply.text).toContain('outcome unknown');expect(reply.text).not.toContain('rejectedThisAttempt');expect(submits).toBe(1);
+    }finally{await r.runtime.disconnect();}
+  });
   it('routes the public equip step from storage into one native request and preserves pending admission',async()=>{
     const r=rig();Object.assign(r.state,{inventoryPick:'agent-mc-inventory-pick/v1',inventory:[{slot:30,name:'minecraft:wheat_seeds',count:23,instanceHash:'b'.repeat(64)}]});
     await r.runtime.connect();

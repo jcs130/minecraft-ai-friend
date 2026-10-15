@@ -22,7 +22,7 @@ Query mc_capabilities, mc_operations and mc_help before acting. Claim mc_control
 Read mc_notices for actual server guides, rules and recent notices, including messages received before attachment. These are observations; do not replay old player requests as new commands.
 Use mc_do with one discovered operation, input and stable action_id. mc_script supports the shared JavaScript method contract when the actual bridge advertises agent-mc-method/v1; inspect language:javascript,api:compatibility for supported bot calls and remaining gaps. Python Minescript is a separate explicit executor. Action acceptance is not completion: mc_result / mc_wait and minecraft.client.action events provide actual terminal receipts. Unknown actions must be reconciled by their original ID, not submitted under new IDs. A completed operation is not a completed host goal. Tool RPC return does not end a decision turn.
 Shared JavaScript reads position as (await bot.read("entity")).position. Inputs use await bot.setControlState("forward", true/false), await bot.waitForTicks(n), and await bot.clearControlStates() in finally. Direct bot.entity, bot.keyPress/keyRelease and global setTimeout are not exported by this worker. Read the focused JavaScript guide before selecting an unsupported method; Python uses its own guide and exact function signatures.
-mc_visual returns the real client framebuffer, original textures, current animation frame and GUI. mc_photo can save it with paired real game readings and optional explicitly configured enhancement. mc_bag includes actual components, cursor and menu slots. Menu commands require the current screenToken. A click/use/chat dispatch does not prove the server accepted its effect: inspect fresh inventory/menu/system notices. World facts replace older facts by key; archived evidence is historical.`;
+mc_visual returns the real client framebuffer, original textures, current animation frame and GUI. mc_photo can save it with paired real game readings and optional explicitly configured enhancement. mc_bag includes actual components, cursor and menu slots. To close a GUI, read mc_state and submit mc_do operation:close_screen with that current screenToken. There is no generic Escape/key operation or server chat command for closing a client menu. A stale token rejection supplies a fresh GUI observation when available; never reuse historical tokens or attribute an already closed screen to a rejected action. A click/use/chat dispatch does not prove the server accepted its effect: inspect fresh inventory/menu/system notices. World facts replace older facts by key; archived evidence is historical.`;
 
 function uuid(value: string) { return value.replaceAll('-', '').toLowerCase(); }
 function address(value: string) { return value.toLowerCase().replace(/:25565$/, ''); }
@@ -200,6 +200,26 @@ export class JavaClientWorld implements World {
         terminal: !['accepted', 'running', 'unknown'].includes(action.phase), goalCompleted: false,
         evidence: { protocol: JAVA_CLIENT_PROTOCOL, operation: action.operation, ...compact.evidence } } };
   }
+  /** Recovery is observation only: a changed GUI must never be clicked or closed by replay. */
+  private async staleGuiOutcome(actionId: string, operation: string, signal?: AbortSignal): Promise<ToolOutcome> {
+    let currentGui: Record<string, unknown> | null = null;
+    let observationError: string | undefined;
+    try {
+      const state = await this.rpc('state', {}, signal) as JavaClientState;
+      this.verify(state);
+      if (!state.connected) throw new Error('Client is disconnected; current in-game GUI is unverified');
+      this.state = state;
+      const fields = ['sampledAt','generation','screen','screenTitle','screenToken','syncId','menuRevision'] as const;
+      currentGui = { ...Object.fromEntries(fields.map(key => [key, state[key]])), cursor: compactItem(state.cursor),
+        alreadyClosed: state.screen === '', closureAttributedToAction: false };
+    } catch (error) {
+      signal?.throwIfAborted(); this.lifetime.signal.throwIfAborted();
+      observationError = error instanceof Error ? error.message : 'Current GUI observation failed';
+    }
+    return { failed: true, text: JSON.stringify({ action_id: actionId, operation, error: 'Stale screenToken',
+      rejectedThisAttempt: true, retried: false, currentGui, observationError,
+      recovery: 'The supplied token belongs to an older GUI. This attempt did not close or click a screen. If currentGui is unavailable, read mc_state. If alreadyClosed is true, no close is needed; the cause is unknown and is not this rejected action. Otherwise inspect the fresh screen and use its token only if the intended GUI is still appropriate. For menu_click/gui_click read current slots/buttons first. An earlier attempt under this action_id must still be reconciled with mc_result; never infer its outcome or replay it from this rejection.' }) };
+  }
   private async settle(action: JavaClientAction, waitMs: number, signal?: AbortSignal): Promise<JavaClientAction> {
     const until = Date.now() + waitMs;
     const combined = AbortSignal.any([this.lifetime.signal, ...(signal ? [signal] : [])]);
@@ -313,7 +333,15 @@ export class JavaClientWorld implements World {
           if (args.queue !== undefined && !['append', 'now'].includes(String(args.queue))) throw new Error('Native queue supports append/now only');
           const waitMs = args.waitMs ?? this.cfg.javaClient?.actionWaitMs ?? 1000;
           if (!Number.isInteger(waitMs) || Number(waitMs) < 0 || Number(waitMs) > 2000) throw new Error('waitMs must be 0..2000');
-          const action = await this.rpc('do', { ...this.owner(), action_id: args.action_id ?? ctx.callId, operation: args.operation, input: args.input, queue: args.queue ?? 'append' }, ctx.signal);
+          const actionId = String(args.action_id ?? ctx.callId);
+          let action: JavaClientAction;
+          try {
+            action = await this.rpc('do', { ...this.owner(), action_id: actionId, operation: args.operation, input: args.input, queue: args.queue ?? 'append' }, ctx.signal);
+          } catch (error) {
+            if (['close_screen','menu_click','gui_click'].includes(args.operation) && error instanceof Error && error.message === 'Stale screenToken')
+              return this.staleGuiOutcome(actionId, args.operation, ctx.signal);
+            throw error;
+          }
           this.phases.set(action.id, action.phase); return this.receipt(await this.settle(action,Number(waitMs),ctx.signal));
         }, true),
       tool('mc_result', 'Reconcile the original action ID, including uncertain dispatch and archived terminals.', parameters({ action_id: str }, ['action_id']), result),

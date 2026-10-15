@@ -47,6 +47,8 @@ Current facts contain compact identity/vitals/inventory/menu/action readings rep
 
 `mc_help {skill}` retains the compatible legacy chat/control/look/equip/eat/use step shape used by `mc_do {steps:[...]}`. For example, legacy control takes keys/durationMs and translates to native move/ticks under the same action ID. `mc_operations` exposes the lower-level native names; unsupported legacy skills remain explicit failures. Known Python signature/member errors retain their original terminal and add the pinned API reference without rewriting or redispatching a program.
 
+Close a client GUI using `mc_do {operation:"close_screen",input:{screenToken},action_id}` with the token from a fresh `mc_state`. Server chat commands and a generic Escape/key operation do not close native menus through this API. On a `Stale screenToken` rejection, the adapter performs one read-only state query and returns the current screen/title/token/revision/cursor, or explicitly marks that observation unavailable. It never retries the click/close, replaces its token automatically, or reports the rejected attempt as a completed task. An empty screen means no GUI is currently open; the closing actor remains unknown. Read fresh slots/buttons before deciding another click. A previous uncertain action with the same ID still requires its original result, even when the newest submission was rejected.
+
 The actual native game window provides the rendered view; the SDK operator console is status/control, not a claim that a second Mineflayer renderer is showing the native client. Optional modern web presentation should consume this same body's captures/readings. Do not launch another player merely to render it.
 
 ## Shared Agent JavaScript methods
