@@ -20,7 +20,7 @@ def test_default_memory_preference_keeps_existing_strict_body_config_compatible(
 
 def test_remote_server_and_separate_viewer(tmp_path):
     settings = Settings.parse({"server": {"host": "play.example.org", "username": "Alice", "version": "1.21.1"},
-                               "viewer": {"url": "https://viewer.example.org/dungeon/"}})
+                               "viewer": {"url": "https://viewer.example.org/3dview/"}})
     config = settings.client_config(tmp_path)
     assert config["world"]["host"] == "play.example.org"
     assert config["world"]["username"] == "Alice"

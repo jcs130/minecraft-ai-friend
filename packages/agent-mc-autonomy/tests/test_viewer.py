@@ -58,7 +58,7 @@ def test_viewer_binding_requires_fresh_matching_identity(framework_module):
     settings = framework_module.Settings.parse({"server": {"host": "localhost", "username": "ag_NEKO"}})
     now = datetime.now(timezone.utc)
     state = {"game_connected": True, "viewer": {"available": True, "updated_at": now.isoformat(),
-             "url": "http://127.0.0.1:28985/dungeon/", "player": {"uuid": "same-player"},
+             "url": "http://127.0.0.1:28985/3dview/", "player": {"uuid": "same-player"},
              "status": {"identity": {"confirmed": True, "player": "ag_NEKO", "playerUuid": "same-player"}}}}
     assert module.viewer_observation(settings, state)["viewer_body_binding_verified"]
     state["viewer"]["status"]["identity"]["playerUuid"] = "other-player"

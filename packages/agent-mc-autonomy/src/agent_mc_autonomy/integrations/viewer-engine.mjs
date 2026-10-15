@@ -41,7 +41,7 @@ export function createEngine(options) {
           bundledAppearanceCatalogFile: cfg.bundledAppearanceCatalogFile || '' });
         if (prepared.registrySha256 !== selected.pack.registrySha256) throw Error('VIEWER_CATALOG_REGISTRY_MISMATCH');
         streamFactory = vanilla.observeVanillaNativeStream;
-        presentation = bot => vanilla.vanillaPlayerPresentation(bot, stream?.handState?.(), stream?.menuState?.());
+        presentation = bot => vanilla.vanillaPlayerPresentation(bot, stream?.handState?.(), stream?.menuState?.(), stream?.selfState?.());
         record({ pack: selected.pack.id, minecraftVersion: selected.minecraftVersion, registrySha256: prepared.registrySha256 });
       } catch (error) {
         prepared = null;
@@ -65,7 +65,7 @@ export function createEngine(options) {
           if (attached !== view || stopped) return;
           const current = view.status();
           const connected = bot.version === options.cfg.version && !!bot.entity && !!bot._client.uuid;
-          record({ available: connected && current.viewer.available && !!view.url, url: view.url ? view.url + 'dungeon/' : null,
+          record({ available: connected && current.viewer.available && !!view.url, url: view.url ? view.url + '3dview/' : null,
             reason: current.viewer.reason, player: current.selfPlayer ?? null, status: current,
             active_viewers: typeof view.activeViewers === 'function' ? view.activeViewers() : null });
         };
