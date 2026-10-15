@@ -79,6 +79,52 @@ def test_runtime_owns_creation_and_periodic_review_without_user_chat(runtime):
     assert port.offer()["review"]["trigger"] == "periodic_review"
 
 
+@pytest.mark.parametrize("delivery", ["accepted", "acknowledged", "accepted_and_acknowledged"])
+def test_ordinary_review_cannot_suppress_a_fresh_runtime_failure(runtime, delivery):
+    port, clock, publish = runtime
+    publish()
+    first = port.offer()["review"]
+    if delivery != "acknowledged":
+        port.delivered(first["id"], True)
+    if delivery != "accepted":
+        assert port.decide(first["id"], "continue", "Continue useful work")["acknowledged"]
+    clock[0] += 1  # Urgent failure bypasses the normal review interval.
+    publish(phase="failed", error="actual runtime failure")
+    offered = port.offer()
+    assert offered["offered"]
+    failure = offered["review"]
+    assert failure["id"] != first["id"]
+    assert failure["urgent"] == "runtime_failed"
+    assert failure["trigger"] == "state_changed"
+    assert failure["evidence"]["phase"] == "failed"
+    assert failure["evidence"]["runtime_error"] == "actual runtime failure"
+    assert "death_episode" not in failure["evidence"]
+
+
+@pytest.mark.parametrize("acknowledged", [False, True])
+def test_delivered_death_metadata_dedup_cannot_hide_a_later_runtime_failure(runtime, acknowledged):
+    from agent_mc_autonomy.death_memory import DeathMemory
+    from test_death_memory import event, facts, SCOPE
+    port, clock, publish = runtime
+    episode = DeathMemory(port.directory).record(event(), facts(), [], [], [])
+    publish(death_episode=episode, game_identity=SCOPE)
+    death = port.offer()["review"]
+    assert death["trigger"] == "death_review"
+    port.delivered(death["id"], True)
+    if acknowledged:
+        assert port.decide(death["id"], "continue", "Use fresh facts after respawn")["acknowledged"]
+    clock[0] += 1
+    # A status publication can still contain notified death metadata when a real failure arrives.
+    publish(phase="failed", error="runtime failed after respawn", death_episode=episode, game_identity=SCOPE)
+    offered = port.offer()
+    assert offered["offered"]
+    failure = offered["review"]
+    assert failure["id"] != death["id"] and failure["urgent"] == "runtime_failed"
+    assert failure["trigger"] == "state_changed"
+    assert failure["evidence"]["runtime_error"] == "runtime failed after respawn"
+    assert "death_episode" not in failure["evidence"]  # Old death narration remains consumed.
+
+
 def test_periodic_context_delivery_can_defer_without_main_acknowledgement(runtime):
     port, clock, publish = runtime
     publish()

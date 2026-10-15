@@ -199,17 +199,20 @@ class ReviewPort:
         if episode := observed["evidence"].get("death_episode"):
             if not any(row["id"] == episode["id"] for row in DeathMemory(self.directory).entries(episode["scope"], pending=True)):
                 observed["evidence"].pop("death_episode")
-                observed["urgent"] = None
+                if observed["urgent"] == "death:" + str(episode["id"]):
+                    observed["urgent"] = None
         with self.transaction() as state:
             self.reconcile(state)
             policy = ReviewPolicy.parse(state.get("policy", {}))
             if not policy.enabled:
                 return
             previous = state.get("review", {})
-            if (previous.get("notification_accepted") and observed["evidence"].get("death_episode", {}).get("id")
-                    == previous.get("evidence", {}).get("death_episode", {}).get("id")):
+            episode_id = observed["evidence"].get("death_episode", {}).get("id")
+            if (previous.get("notification_accepted") and episode_id
+                    and episode_id == previous.get("evidence", {}).get("death_episode", {}).get("id")):
                 observed["evidence"].pop("death_episode", None)
-                observed["urgent"] = None
+                if observed["urgent"] == "death:" + str(episode_id):
+                    observed["urgent"] = None
             revision = self.mailbox.intent_revision()
             same_session = previous.get("session") == observed["session"]
             same_intent = previous.get("revision") == revision and previous.get("intent") == observed["intent"]
@@ -236,7 +239,7 @@ class ReviewPort:
                 return
             state.update(created_at=now, review={**observed, "id": uuid.uuid4().hex[:12], "created_at": now,
                          "revision": revision, "attempts": 0, "summary": summary(observed["evidence"]),
-                         "trigger": "death_review" if observed["evidence"].get("death_episode") else "state_changed" if changed else "periodic_review"})
+                         "trigger": "death_review" if observed["evidence"].get("death_episode") else "state_changed" if urgent or changed else "periodic_review"})
 
     def offer(self):
         """Claim one bounded delivery attempt; does not manufacture a game event."""
