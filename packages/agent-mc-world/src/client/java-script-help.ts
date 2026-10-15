@@ -52,6 +52,7 @@ export function javaScriptHelp(topic = 'index'): string {
 export function javaScriptErrorHelp(error: unknown): string | undefined {
   if (typeof error !== 'string') return;
   // Signatures and key names are from the pinned upstream v4.0 reference above.
+  if (error.includes("getblock() missing 2 required positional arguments: 'y' and 'z'")) return 'Minescript 4.0 getblock(x,y,z) takes three separate coordinates, not one tuple/list. It returns a namespaced string; getblocklist(points) accepts a list of coordinate triples. Read mc_script language:python api:blocks. No correction was executed; reconcile earlier effects before another action.';
   if (error.includes('No key mapping with name')) return 'Minescript 4.0 press_key_bind uses full names such as "key.attack", "key.use" and "key.forward", not "attack"/"use"/"forward". Release held keys in finally and flush. Read mc_script api:interaction.';
   const member = /module ['"]minescript['"] has no attribute ['"]([a-zA-Z_][a-zA-Z_0-9]*)['"]/.exec(error)?.[1];
   if (!member) return;
@@ -63,6 +64,10 @@ export function javaScriptErrorHelp(error: unknown): string | undefined {
     press_key: 'Use minescript.player_press_attack(True/False), player_press_use(True/False), or press_key_bind("key.attack", True/False). Full key mapping names are required. Release in finally and flush. Read mc_script api:interaction.',
     release_key: 'Use the same player_press_attack/player_press_use or press_key_bind API with False in finally, then flush. Read mc_script api:interaction.',
     Input: 'Minescript 4.0 has no Input context manager. Use bounded player_press_attack/player_press_use or press_key_bind calls with try/finally release and flush. Read mc_script api:interaction.',
+    keyboard_key: 'Use minescript.press_key_bind("key.forward", True/False) or player_press_attack/player_press_use for their named inputs. Full key mapping names, finally release and flush are required. Read mc_script language:python api:movement or interaction.',
+    keyboard_hold: 'Use bounded player_press_attack(True/False) or player_press_use(True/False), with time.sleep only inside the admitted timeout and finally release/flush. Read mc_script language:python api:interaction.',
+    get_inventory: 'Use minescript.player_inventory(); its entries are ItemStack dataclasses, not arbitrary dictionaries. Prefer mc_bag for actual inventory/menu components. Read mc_script language:python api:inventory.',
+    equip_hotbar: 'Use minescript.player_inventory_select_slot(slot) or mc_do operation:hotbar, with a hotbar index 0..8. Inventory and container menu slot indexes differ. Read mc_script language:python api:inventory.',
     left_click_block: 'Aim using minescript.player_look_at(x+.5,y+.5,z+.5), then use bounded minescript.player_press_attack(True/False) with try/finally release and flush. Verify actual blocks/inventory. Read mc_script api:interaction.',
   };
   return `Observed unsupported Minescript 4.0 member: ${member}. ${fixes[member] ?? 'Read mc_script api:index and its focused pages before selecting a different program.'} No correction was executed; reconcile any earlier effects before a new action.`;

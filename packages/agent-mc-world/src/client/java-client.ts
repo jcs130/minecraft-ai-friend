@@ -9,7 +9,7 @@ import { createImageGenerationPort } from '../../core/image-generation.ts';
 import { serveNativeView } from './native-view.ts';
 import { createJavaDataViewer, type JavaDataViewerHandle } from '../../core/java-data-viewer.mjs';
 import type { Server } from 'node:http';
-import { JAVA_LEGACY_HELP, translateJavaLegacy } from './java-legacy.ts';
+import { JAVA_LEGACY_HELP, javaLegacySkillHelp, translateJavaLegacy } from './java-legacy.ts';
 import { NativeEvidenceArchive, compactNativeState, compactNativeItems, compactNativeActionEvent, compactItem, compactItems } from './native-evidence.ts';
 import { javaScriptHelp, javaScriptErrorHelp } from './java-script-help.ts';
 import { selectJavaViewer } from './java-viewer-selection.ts';
@@ -21,6 +21,7 @@ export const JAVA_CLIENT_ENVIRONMENT = `You control an actual rendered Minecraft
 Query mc_capabilities, mc_operations and mc_help before acting. Claim mc_control explicitly, then renew the lease before expiry. Disconnect releases your own lease and keys. Identity is the actual server-assigned UUID and exact server address; offline servers do not require Microsoft authentication. Never control a different player or server after an identity change.
 Read mc_notices for actual server guides, rules and recent notices, including messages received before attachment. These are observations; do not replay old player requests as new commands.
 Use mc_do with one discovered operation, input and stable action_id. mc_script supports the shared JavaScript method contract when the actual bridge advertises agent-mc-method/v1; inspect language:javascript,api:compatibility for supported bot calls and remaining gaps. Python Minescript is a separate explicit executor. Action acceptance is not completion: mc_result / mc_wait and minecraft.client.action events provide actual terminal receipts. Unknown actions must be reconciled by their original ID, not submitted under new IDs. A completed operation is not a completed host goal. Tool RPC return does not end a decision turn.
+Shared JavaScript reads position as (await bot.read("entity")).position. Inputs use await bot.setControlState("forward", true/false), await bot.waitForTicks(n), and await bot.clearControlStates() in finally. Direct bot.entity, bot.keyPress/keyRelease and global setTimeout are not exported by this worker. Read the focused JavaScript guide before selecting an unsupported method; Python uses its own guide and exact function signatures.
 mc_visual returns the real client framebuffer, original textures, current animation frame and GUI. mc_photo can save it with paired real game readings and optional explicitly configured enhancement. mc_bag includes actual components, cursor and menu slots. Menu commands require the current screenToken. A click/use/chat dispatch does not prove the server accepted its effect: inspect fresh inventory/menu/system notices. World facts replace older facts by key; archived evidence is historical.`;
 
 function uuid(value: string) { return value.replaceAll('-', '').toLowerCase(); }
@@ -273,10 +274,12 @@ export class JavaClientWorld implements World {
       }),
       tool('mc_evidence', 'Read original native evidence by raw.key and optional raw.sha256. part:script pages the program report directly without repeated inventory/books; default full preserves the entire original.', parameters({ key: str, sha256: str, part: {enum:['full','script']}, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 16000 } }, ['key']), async args => ({ text: JSON.stringify(this.evidence.read(String(args.key), args.sha256 as string | undefined, Number(args.offset ?? 0), Number(args.limit ?? 8000), args.part as 'full'|'script'|undefined)) })),
       tool('mc_operations', 'Discover exact real-client operations. Uninstalled Minescript/Baritone are unavailable.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify(await this.rpc('operations', {}, ctx.signal)) })),
-      tool('mc_help', 'Read real-client operations, legacy compatibility and identity/control rules. Supply skill for one discovered operation and exact input fields.', parameters({ skill: str }), async (args, ctx) => {
+      tool('mc_help', 'Read real-client operations, legacy compatibility and identity/control rules. Supply skill for one compatible legacy step or discovered native operation and exact input fields.', parameters({ skill: str }), async (args, ctx) => {
         const operations = await this.rpc('operations', {}, ctx.signal);
         if (args.skill) {
           const key = String(args.skill);
+          const legacy = javaLegacySkillHelp(key);
+          if (legacy) return { text: legacy };
           if (key === 'script') return { text: javaMethodHelp()+(this.cfg.javaClient?.minescriptEnabled?'\n'+javaScriptHelp():'') };
           if (!Object.hasOwn(operations.operations ?? {}, key)) return { text: `Unknown native operation ${key}. Available: ${Object.keys(operations.operations ?? {}).join(', ')}. Query mc_operations or omit skill for legacy compatibility.`, failed: true };
           return { text: JSON.stringify({ operation: key, input: operations.operations[key] })

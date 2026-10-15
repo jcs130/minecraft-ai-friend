@@ -1,6 +1,18 @@
 import type { JavaClientState } from '../contracts/java-client.ts';
 
 export const JAVA_LEGACY_HELP = `Compatibility: mc_do also accepts ONE legacy steps:[{skill,...}] command. Supported: chat(text), control(keys,durationMs; ground only), look(at:[absolute x,y,z]), equip(item; main hand hotbar only), eat(item already held), use(with no target/options; held item). Explicit queue append/now supported; the native default preserves queued work. Each converts to one native operation with the SAME action_id and original terminal receipt. Multiple steps, dependencies/expect, navigation, mining, crafting, scripts, offhand/armor and flight planning require a native execution backend and are rejected before dispatch; never simulate success. Query mc_operations for native primitives.`;
+/** Legacy help uses the same public step shape as execution. Native input stays discoverable separately. */
+export function javaLegacySkillHelp(skill: string): string | undefined {
+  const pages: Record<string,string> = {
+    control: 'mc_do {steps:[{skill:"control",keys:["forward"],durationMs:500,mode:"ground"}],action_id}. Keys: forward/back/left/right/jump/sneak/sprint; durationMs:50..10000 in multiples of50. This translates to native operation:"move" with ticks=durationMs/50. Native operation:"control" does not exist. No route or obstacle clearance is inferred.',
+    chat: 'mc_do {steps:[{skill:"chat",text:"..."}],action_id} translates to native operation:"chat" with input.text. Dispatch does not establish a server reply, permission or social response.',
+    look: 'mc_do {steps:[{skill:"look",at:[x,y,z]}],action_id} uses absolute block coordinates and the current eye position to look at the block center. Native operation:"look" instead takes input.yaw/pitch in degrees; JavaScript bot.look uses Mineflayer radians.',
+    equip: 'mc_do {steps:[{skill:"equip",item:"<observed id/name>",hand:"main"}],action_id} selects one uniquely matching current hotbar stack. No other inventory movement, armor or offhand equipment is implied. Native primitive: hotbar with slot0..8.',
+    eat: 'mc_do {steps:[{skill:"eat",item:"<observed held food>"}],action_id} requires the selected matching hotbar item and holds native use for40 ticks. It does not equip or prove consumption; verify actual food/item changes.',
+    use: 'mc_do {steps:[{skill:"use"}],action_id} uses the held item for one native tick. Target/options are unavailable in this legacy step. For targeted native block interaction read mc_interact.',
+  };
+  const page=pages[skill];return page ? page+' Submit exactly one step, preserve its action_id and query mc_result/mc_wait for the original terminal. queue append/now is explicit; acceptance/input dispatch is not goal completion.' : undefined;
+}
 const fail = (why: string): never => { throw new Error('Legacy command unavailable: ' + why + '. Query mc_help / mc_operations.'); };
 /** Pure translation only. No network, queue, retry, model or inferred route. */
 export function translateJavaLegacy(args: Record<string, unknown>, state: JavaClientState) {

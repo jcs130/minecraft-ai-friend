@@ -10,7 +10,7 @@ import { javaScriptErrorHelp } from '../src/client/java-script-help.ts';
 const paths: string[]=[];
 const directory=()=>{const path=mkdtempSync(join(tmpdir(),'real-java-client-'));paths.push(path);return path;};
 afterEach(()=>{vi.restoreAllMocks();for(const path of paths.splice(0))rmSync(path,{recursive:true,force:true});});
-function rig(scriptEnabled = false, minecraftVersion?: string) {
+function rig(scriptEnabled = false, minecraftVersion?: string, scriptFailure?: string) {
   const data=directory(), credentials=join(data,'connection.json');
   writeFileSync(credentials,JSON.stringify({protocol:'agent-mc-java/v1',endpoint:'http://127.0.0.1:1234',token:'a'.repeat(64),instanceId:'offline-fixture'}));
   const cfg={...structuredClone(MINECRAFT_CLIENT_DEFAULTS),provider:'java-client' as const,host:'fixture.test',username:'Test',version:'1.20.6',
@@ -28,6 +28,7 @@ function rig(scriptEnabled = false, minecraftVersion?: string) {
     else if(method==='capabilities')value={protocol:'agent-mc-java/v1',realRendering:true,minescript:scriptEnabled,baritone:false,...(minecraftVersion?{minecraftVersion}:{})};
     else if(method==='do'||method==='result'){
       value={id:params.action_id,operation:'move',phase:completed?'completed':'accepted',acceptedAt:Date.now(),updatedAt:Date.now(),evidence:{position:[2,65,3]}};
+      if (scriptFailure) value={...value,operation:'minescript.run',phase:'blocked',evidence:{...value.evidence,script:{ok:false,error:scriptFailure,jobId:1}}};
       if(method==='do')state.actions=[value];
     }
     return new Response(JSON.stringify(value));
@@ -36,6 +37,33 @@ function rig(scriptEnabled = false, minecraftVersion?: string) {
   return {cfg,state,world,runtime,http,calls,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it('discovers and submits the same legacy control step without a host-side native rewrite',async()=>{
+    const r=rig();await r.runtime.connect();
+    try {
+      const help=await r.runtime.call('mc_help',{skill:'control'});
+      expect(help.failed).not.toBe(true);expect(help.text).toContain('steps:');expect(help.text).toContain('durationMs');
+      expect(r.calls.filter(call=>call.method==='do')).toHaveLength(0);
+      await r.runtime.call('mc_control',{action:'claim'});
+      await r.runtime.call('mc_do',{steps:[{skill:'control',keys:['forward'],durationMs:500,mode:'ground'}],action_id:'same-legacy-control'});
+      expect(r.calls.filter(call=>call.method==='do')).toHaveLength(1);
+      expect(r.calls.find(call=>call.method==='do')?.params).toMatchObject({action_id:'same-legacy-control',operation:'move',input:{forward:true,ticks:10}});
+    } finally {await r.runtime.disconnect();}
+  });
+  it.each([
+    ["getblock() missing 2 required positional arguments: 'y' and 'z'", 'getblock(x,y,z)'],
+    ["module 'minescript' has no attribute 'keyboard_key'", 'press_key_bind'],
+  ])('retains a rejected Python action and its API reference without redispatch: %s',async(error,reference)=>{
+    const r=rig(true,undefined,error);await r.runtime.connect();
+    try {
+      await r.runtime.call('mc_control',{action:'claim'});
+      const admitted=await r.runtime.call('mc_script',{language:'python',action_id:'observed-python-failure',code:'result = None'});
+      const queried=await r.runtime.call('mc_result',{action_id:'observed-python-failure'});
+      for(const result of [admitted,queried])expect(JSON.parse(result.text)).toMatchObject({id:'observed-python-failure',phase:'blocked',evidence:{script:{error,apiCorrection:expect.stringContaining(reference)}}});
+      expect(r.calls.filter(call=>call.method==='do')).toHaveLength(1);
+      expect(r.state.actions.map(action=>action.id)).toEqual(['observed-python-failure']);
+      expect(r.state.position).toEqual([1,65,3]);
+    } finally {await r.runtime.disconnect();}
+  });
   it('uses the attached native client version for local knowledge without another RPC or body action',async()=>{
     const r=rig(false,'1.21.1');r.cfg.version='auto';await r.runtime.connect();
     try {
