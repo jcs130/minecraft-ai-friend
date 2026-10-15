@@ -36,6 +36,38 @@ def encode(value) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def rejected_action_exchange(group):
+    """Recognize one fully answered proposal proven to have done no body work."""
+    # Mixed read/action batches and opaque provider history remain intact.
+    if not isinstance(group, list) or len(group) != 2:
+        return False
+    try:
+        assistant, reply = group
+        calls = assistant.get("tool_calls")
+        if assistant.get("role") != "assistant" or not isinstance(calls, list) or len(calls) != 1:
+            return False
+        call = calls[0]
+        if (call["function"]["name"] != "mc_do" or reply.get("role") != "tool"
+                or reply.get("tool_call_id") != call["id"]):
+            return False
+        arguments = json.loads(call["function"]["arguments"])
+        steps = arguments.get("steps")
+        if not isinstance(steps, list) or not any(
+                isinstance(step, dict) and isinstance(step.get("skill"), str)
+                and step["skill"] not in {"observe", "check", "probe"}
+                and (step["skill"] != "find" or step.get("direction")) for step in steps):
+            return False
+        result = json.loads(reply["content"])
+        if (not isinstance(result, dict) or result.get("failed") is not True
+                or result.get("execution") is not None or result.get("uncertain") or result.get("outcome_unknown")):
+            return False
+        admission = (result.get("meta") or {}).get("admission") or {}
+        return admission.get("accepted") is False or (
+            result.get("dispatched") is False and result.get("origin") in {"controller_validation", "controller_boundary"})
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return False
+
+
 def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, native_outcomes=None, context_counter: ContextCounter | None = None):
     """Use one counting mode throughout, restarting conservatively on failure."""
     options = {"context_tokens": context_tokens, "reserved_output": reserved_output,
@@ -61,6 +93,18 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
     history = list(groups)
     tail = {"current_facts": [], "omitted_facts": [], "events": [],
             "originals": "mc_protocol(protocol=agent-mc/v1,action=facts/archive); mc_original(handle=original,offset=0,limit=1000)"}
+    rejected = [i for i, group in enumerate(history) if rejected_action_exchange(group)] if tool_failure else []
+    superseded = set(rejected[:-1])
+    if superseded:
+        originals = []
+        for index in sorted(superseded):
+            result = json.loads(history[index][-1]["content"])
+            for handle in result.get("original_chunks", []):
+                query = {"tool": "mc_original", "handle": handle}
+                if isinstance(handle, str) and len(handle) <= 256 and query not in originals:
+                    originals.append(query)
+        tail["superseded_rejected_plans"] = {"count": len(superseded), "originals": originals[:8]}
+        history = [group for i, group in enumerate(history) if i not in superseded]
     if planner_notice:
         tail["planner_notice"] = planner_notice
     if fast_focus:
@@ -89,6 +133,11 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
     # the entire context window. A large valid prefix must not evict every tool
     # result, otherwise the planner repeats a rejected call without seeing why.
     saved_history, history = history, []
+    if "superseded_rejected_plans" in tail:
+        while cost() > context_tokens and tail["superseded_rejected_plans"]["originals"]:
+            tail["superseded_rejected_plans"]["originals"].pop()
+        if cost() > context_tokens:
+            del tail["superseded_rejected_plans"]
     stable_cost = cost()
     if tool_failure:
         # Failure diagnostics are dynamic evidence, not part of the immutable
@@ -210,4 +259,5 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
     return messages(), {"counter": name, "units": "tokens" if context_counter is not None else "token_upper_bound",
                         "input": total - reserved_output - FRAMING_RESERVE,
                         "output_reserve": reserved_output, "framing_reserve": FRAMING_RESERVE,
-                        "total": total, "limit": context_tokens, "omitted": omitted}
+                         "total": total, "limit": context_tokens, "omitted": omitted,
+                         "superseded_rejected_plans": len(superseded)}

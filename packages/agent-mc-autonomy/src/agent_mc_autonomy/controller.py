@@ -399,6 +399,11 @@ class Controller:
             view = {"text": preview, "failed": result.get("failed"),
                     "execution": view.get("execution"),
                     "original_chunks": refs, "retrieve": "mc_original(handle,offset,limit), chunks in order"}
+            admission = (result.get("meta") or {}).get("admission")
+            if isinstance(admission, dict) and admission.get("accepted") is False:
+                view["meta"] = {"admission": {key: admission[key] for key in ("accepted", "rule", "kind") if key in admission}}
+            if result.get("dispatched") is False:
+                view.update(dispatched=False, origin=result.get("origin"))
         # The core's legacy RoundOnceGate emits this exact receipt only for these
         # primitives when their same-turn fingerprint is unchanged. It supplies
         # no reference ID. Keep at most three already-projected answers so history

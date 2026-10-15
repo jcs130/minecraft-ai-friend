@@ -5,7 +5,7 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
-0.1.48 pins checked core 0.5.4, including current main's Java 1.21.1 defaults,
+0.1.49 pins checked core 0.5.4, including current main's Java 1.21.1 defaults,
 native interface fixes and structured action-admission evidence. The coordinator
 keeps native recovery references at the dynamic request tail and suppresses an
 identical rejected plan while non-clock facts remain unchanged, for at most
@@ -13,6 +13,15 @@ identical rejected plan while non-clock facts remain unchanged, for at most
 Named-item retrieval now outranks generic food/cooking words, and synchronized
 absence of edible food is explicit in the latest facts. The renderer remains an explicit independent input; optional
 panels follow validated connection data, and no host source patch is required.
+
+While an unresolved failure is present, planning history keeps only the newest
+complete action exchange whose receipt proves that the proposal was rejected
+before native work. Older such proposals remain in the original journal, with
+bounded artifact queries at the changing request tail. Accepted work, uncertain
+outcomes, read answers and mixed exchanges are retained. Large receipt previews
+preserve the native admission marker so compaction cannot hide that distinction.
+This reduces repeated invalid proposals in the input; it does not prove that a
+model will choose a valid next action or that long-term survival has passed.
 
 In 0.1.25, temporary inference transport failures and HTTP 408/429/500/502/503/504
 pause planning with exponential backoff capped at 300 seconds. The native body,
