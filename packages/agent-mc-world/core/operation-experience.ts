@@ -10,6 +10,13 @@ export type OperationObservation = {
   at: string; dimension: string | null; position: { x: number; y: number; z: number } | null;
   health: number | null; food: number | null; inventory: Record<string, number> | null;
 };
+/** Project physical stacks into new operation evidence; never alter raw snapshots or saved history. */
+export function operationInventory(stacks: readonly { name: string; count: number }[], synced: boolean): Record<string, number> | null {
+  if (!synced) return null;
+  const totals = new Map<string, number>();
+  for (const stack of stacks) totals.set(stack.name, (totals.get(stack.name) ?? 0) + stack.count);
+  return Object.fromEntries(totals);
+}
 export type OperationAttribution = {
   controller?: 'system1' | 'system2' | 'human' | 'unknown'; sessionId?: string; decisionId?: string;
   method?: { id: string; revision: string }; memoryRefs?: string[];

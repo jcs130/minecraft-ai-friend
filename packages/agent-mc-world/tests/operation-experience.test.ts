@@ -4,7 +4,7 @@ import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {afterEach,it,expect,vi} from 'vitest';
-import {OperationExperienceBook,operationScopeKey,operationObservation} from '../core/operation-experience.ts';
+import {OperationExperienceBook,operationScopeKey,operationObservation,operationInventory} from '../core/operation-experience.ts';
 import {GameMemoryBook} from '../core/game-memory.ts';
 import {GameMemoryService} from '../core/game-memory-service.ts';
 import {ClientOperationLearning} from '../src/client/operation-learning.ts';
@@ -145,4 +145,30 @@ it('packages portable skills with hashes, validates paths and refuses overwritin
   expect(manifest).toMatchObject({gameTarget:'Java 1.21.1',runtimeInstalled:false,marketplacePublished:false});
   expect(manifest.files.every((f:any)=>/^[a-f0-9]{64}$/.test(f.sha256))).toBe(true);
   expect(()=>execFileSync(process.execPath,[script,directory],{stdio:'pipe'})).toThrow();
+});
+
+it('aggregates duplicate physical stacks into truthful forward-only operation evidence',()=>{
+  const stacks=Object.freeze([Object.freeze({name:'minecraft:cobblestone',count:64}),Object.freeze({name:'minecraft:cobblestone',count:10}),Object.freeze({name:'mod:cobblestone',count:3})]);
+  const original=JSON.stringify(stacks),directory=dir(),book=new OperationExperienceBook(directory);
+  const row=book.begin(scope,'run','stack-removal','mc_do',{skill:'craft'},{...sample(),inventory:operationInventory(stacks,true)});
+  book.finish(scope,row.id,{text:'completed',execution:completed},{...sample(),inventory:operationInventory([stacks[0],stacks[2]],true)},1);
+  const stored=book.get(scope,row.id);
+  expect(stored.before?.inventory).toEqual({'minecraft:cobblestone':74,'mod:cobblestone':3});
+  expect(stored.after?.inventory?.['minecraft:cobblestone']).toBe(64);
+  expect(stored.after!.inventory!['minecraft:cobblestone']-stored.before!.inventory!['minecraft:cobblestone']).toBe(-10);
+  expect(operationInventory([...stacks].reverse(),true)).toEqual(stored.before?.inventory);
+  expect(JSON.stringify(stacks)).toBe(original);
+  // Old persisted evidence remains exactly as recorded, including former producer errors.
+  const historical=book.begin(scope,'old-run','old-stack-record','mc_do',{}, {...sample(),inventory:{'minecraft:cobblestone':10}});
+  const path=join(directory,'operations',operationScopeKey(scope),historical.id+'.json'),bytes=readFileSync(path,'utf8');
+  operationInventory(stacks,true);
+  expect(readFileSync(path,'utf8')).toBe(bytes);
+  expect(new OperationExperienceBook(directory).get(scope,historical.id).before?.inventory).toEqual({'minecraft:cobblestone':10});
+});
+it('retains unknown inventory separately from synchronized empty and preserves exact IDs',()=>{
+  expect(operationInventory([{name:'minecraft:stone',count:1}],false)).toBeNull();
+  expect(operationInventory([],false)).toBeNull();
+  expect(operationObservation({...sample(),inventory:operationInventory([],true)})?.inventory).toEqual({});
+  expect(operationObservation({...sample(),inventory:operationInventory([],false)})?.inventory).toBeNull();
+  expect(operationInventory([{name:'__proto__',count:2},{name:'__proto__',count:3},{name:'constructor',count:1}],true)).toEqual(JSON.parse('{"__proto__":5,"constructor":1}'));
 });

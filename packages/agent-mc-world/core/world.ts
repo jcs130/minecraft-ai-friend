@@ -1,3 +1,4 @@
+import { operationInventory } from './operation-experience.ts';
 import { observationView, observedEntity } from './perception-sight.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
 import { KNOWLEDGE_TOOL, readMinecraftKnowledge } from './knowledge.ts';
@@ -3426,7 +3427,7 @@ export class MinecraftWorld implements World {
     return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts,
       experience: { scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.botName },
         observation: { at: new Date().toISOString(), dimension: normalizeDimension(snap.dimension), position: snap.position,
-          health: snap.health, food: snap.food, inventory: snap.invSynced ? Object.fromEntries(snap.inventory.map(i=>[i.name,i.count])) : null } },
+          health: snap.health, food: snap.food, inventory: operationInventory(snap.inventory, snap.invSynced) } },
       snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue'] };
   }
 
