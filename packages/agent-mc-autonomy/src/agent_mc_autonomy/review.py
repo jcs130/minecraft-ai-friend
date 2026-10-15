@@ -81,12 +81,13 @@ def review_observation(status, now):
     if re.search(r'"skill"\s*:\s*"observe"', facts.get("lastTask", "")) and "完成" in facts.get("lastTask", ""):
         terminal = ""  # Repeated successful look-only tasks are not new survival progress.
     episode = snapshot.get("death_episode")
-    if (isinstance(episode, dict) and scope_key(episode.get("scope"))
-            and episode.get("scope") == snapshot.get("game_identity") and isinstance(episode.get("source_event"), dict)):
-        evidence["death_episode"] = episode
-        evidence["death_recovery"] = recovery_context(episode, snapshot.get("facts", {}), evidence["current_goal"])
     life = lifecycle(snapshot.get("facts", {}))
     life = life if isinstance(life, dict) else {}
+    if (isinstance(episode, dict) and scope_key(episode.get("scope"))
+            and episode.get("scope") == snapshot.get("game_identity") and isinstance(episode.get("source_event"), dict)
+            and life.get("episodeId") in {None, episode.get("id")}):
+        evidence["death_episode"] = episode
+        evidence["death_recovery"] = recovery_context(episode, snapshot.get("facts", {}), evidence["current_goal"])
     # Stable safety boundary, excluding movement, clock, inventory and ordinary
     # task progress. Keep it separate from evidence refreshed during delivery.
     evidence["body_baseline"] = {
@@ -211,6 +212,8 @@ class ReviewPort:
                             "playback_verified": False}
                         if reflection := review.get("reflection"):
                             recorded["reflection"] = reflection
+                            if completion := review.get("reflection_completion"):
+                                recorded["reflection_completion"] = completion
                             if reflection["outcome"] == "lesson":
                                 recorded["lesson"] = {k: reflection[k] for k in ("lesson", "applicability", "evidence", "source", "hypothesis", "behavioral_improvement_verified")}
                         db.execute("UPDATE death_episodes SET body=?, notified=? WHERE scope=? AND id=?",
@@ -227,6 +230,19 @@ class ReviewPort:
         try:
             row = db.execute("SELECT body FROM review_state WHERE id=1").fetchone()
             return json.loads(row[0]) if row else {}
+        finally:
+            db.close()
+
+    def death_record(self, episode):
+        """Read under the caller's review write lock; never create history."""
+        db = sqlite3.connect(f"{self.path.as_uri()}?mode=ro", uri=True, timeout=5)
+        try:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='death_episodes'").fetchone():
+                return None, None
+            key = scope_key(episode["scope"])
+            row = db.execute("SELECT body FROM death_episodes WHERE scope=? AND id=?", (key, episode["id"])).fetchone()
+            newest = db.execute("SELECT id FROM death_episodes WHERE scope=? ORDER BY rowid DESC LIMIT 1", (key,)).fetchone()
+            return json.loads(row[0]) if row else None, newest[0] if newest else None
         finally:
             db.close()
 
@@ -386,10 +402,25 @@ class ReviewPort:
             compare = ("decision", "goal") if review.get("recovered") else ("decision", "goal", "reason")
             if review.get("choice") and any(review["choice"][key] != choice[key] for key in compare) and decision != "inspect":
                 return {"is_error": True, "error": "review_choice_conflict"}
-            if review.get("result"):
+            episode = review.get("evidence", {}).get("death_episode")
+            legacy_pending = bool(review.get("result", {}).get("acknowledged") and episode
+                                  and not review.get("reflection")
+                                  and review.get("result", {}).get("reflection_pending", True))
+            if review.get("result") and not legacy_pending:
                 return review["result"]
-            if not current or current["session"] != review["session"] or not 0 <= self.now() - review["created_at"] <= 180:
+            if (not current or current["session"] != review["session"]
+                    or (not legacy_pending and not 0 <= self.now() - review["created_at"] <= 180)):
                 return {"is_error": True, "error": "review_expired_or_game_unavailable"}
+            if episode and (current["scope"] != review.get("scope") or current["scope"] != scope_key(episode["scope"])
+                    or current["evidence"].get("death_episode", {}).get("id", episode["id"]) != episode["id"]
+                    or current["evidence"]["body_baseline"]["lifecycle"].get("episodeId") not in {None, episode["id"]}):
+                return {"is_error": True, "error": "death_episode_superseded",
+                        "next": "Inspect the current heartbeat and death episode; historical recovery decisions cannot be replayed."}
+            if episode:
+                recorded, newest = self.death_record(episode)
+                if recorded is None or newest != episode["id"]:
+                    return {"is_error": True, "error": "death_episode_superseded",
+                            "next": "Use the current scoped episode; this historical or missing death cannot complete the current review."}
             if decision != "inspect" and current["baseline"] != review.get("baseline"):
                 return {"is_error": True, "error": "critical_baseline_changed",
                         "next": "Inspect this heartbeat again before deciding: death/respawn, scope, body restrictions or unknown outcomes changed. Earlier body evidence is historical."}
@@ -409,21 +440,43 @@ class ReviewPort:
                     fresh.setdefault("death_episode", episode)  # Explicit historical event, not current inventory.
                     fresh["death_recovery"] = recovery_context(episode, snapshot.get("observation", snapshot).get("facts", {}), fresh["current_goal"])
                 review.update(evidence=fresh, baseline=current["baseline"], inspected_at=self.now())
+                if legacy_pending:
+                    review["reflection_inspected_at"] = self.now()
                 return {"heartbeat_id": review_id, **review["evidence"], "stage_delivery": stage,
+                        "legacy_reflection_completion": {"choice": review["choice"], "receipt": review["result"],
+                            "next": "Resubmit this original choice with death_reflection to complete only this episode. Goal, speech and context will not be replayed."} if legacy_pending else None,
                         "next": "Now call continue/insert/revise with your evidence-based reason. For death include death_reflection: lesson with evidence/applicability, or deferred with reason. Optional spoken_text belongs in that same decision; no extra tool round is needed. Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending. Keep stages within the standing goal and user intent; server-specific quests, exams or capabilities need fresh evidence from this world, not unrelated conversation memories.",
                         "goal_authority": "current_user_goal is explicitly user-sourced. host_review is a proposed stage subordinate to current user intent and the standing goal; unknown origin is not user authorization. last_decision is prior model judgment, not fresh world evidence. Query inspect with lineage_offset=0 for full original parent goals, four per page.",
                         "last_decision": state.get("last_decision")}
             reflection = None
+            if episode and death_reflection is None:
+                return {"is_error": True, "error": "death_reflection_required",
+                        "next": "Inspect this heartbeat, then include death_reflection with episode_id and either lesson/applicability/evidence referencing the episode or source run, or outcome=deferred with an honest reason. Retry this same choice; this call has no delivery or acknowledgement effects."}
             if death_reflection is not None:
                 try:
                     reflection = DeathMemory.validate_reflection(death_reflection, review["evidence"].get("death_episode"))
                 except ValueError as error:
                     return {"is_error": True, "error": str(error)}
+                inspected = review.get("reflection_inspected_at") if legacy_pending else review.get("inspected_at")
+                if inspected is None or not 0 <= self.now() - inspected <= 180:
+                    return {"is_error": True, "error": "fresh_recovery_inspection_required",
+                            "next": "Inspect this heartbeat again, then submit a lesson or justified deferral."}
                 if reflection["outcome"] == "lesson":
                     recovery = recovery_context(review["evidence"]["death_episode"], snapshot.get("observation", snapshot).get("facts", {})).get("current", {})
                     if (not review.get("inspected_at") or current["evidence"]["body_baseline"]["lifecycle"].get("phase") != "alive"
                             or recovery.get("inventorySynced") is not True or not recovery.get("position")):
                         return {"is_error": True, "error": "fresh_recovery_inspection_required"}
+            if legacy_pending:
+                # Complete only the already acknowledged episode. The original
+                # decision, delivery and speech receipts are immutable here.
+                review["reflection"] = recorded.get("reflection") or reflection
+                review["reflection_completion"] = recorded.get("reflection_completion") or {
+                    "id": str(uuid.uuid5(uuid.NAMESPACE_URL, review["scope"] + ":" + episode["id"])),
+                    "episode_id": episode["id"], "scope": episode["scope"], "at": self.now(),
+                }
+                review["result"].update(reflection_pending=False, reflection_completion=review["reflection_completion"])
+                state.pop("retry_after", None)
+                return review["result"]
             request_id = self.request_id(review_id)
             existing = self.mailbox.get(request_id)
             if not existing and (self.mailbox.intent_revision() != review["revision"] or current["intent"] != review["intent"]):

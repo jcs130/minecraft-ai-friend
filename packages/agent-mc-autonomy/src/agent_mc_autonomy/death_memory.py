@@ -177,8 +177,19 @@ class DeathMemory:
         for field, size in (("lesson", 1200), ("applicability", 600), ("evidence", 600)):
             if not isinstance(args.get(field), str) or not 1 <= len(args[field].strip()) <= size:
                 raise ValueError(field + " is required and bounded")
-        row["lesson"] = {k: args[k].strip() for k in ("lesson", "applicability", "evidence")}
-        row["lesson"].update(source="planner_inference", hypothesis=True, behavioral_improvement_verified=False)
         with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            # A host reflection may have committed after the search above.
+            # Reread under the write lock rather than replace its whole row
+            # with that older snapshot. Completed main-brain lessons win.
+            current = db.execute("SELECT body FROM death_episodes WHERE scope=? AND id=?", (scope_key(scope), row["id"])).fetchone()
+            if not current:
+                raise ValueError("Death episode not found in current realm/account/agent")
+            row = json.loads(current[0])
+            if (row.get("reflection") or {}).get("outcome") == "lesson":
+                return {"saved": False, "episode_id": row["id"], "lesson": row["lesson"],
+                        "reason": "main_brain_reflection_completed", "behavioral_improvement_verified": False}
+            row["lesson"] = {k: args[k].strip() for k in ("lesson", "applicability", "evidence")}
+            row["lesson"].update(source="planner_inference", hypothesis=True, behavioral_improvement_verified=False)
             db.execute("UPDATE death_episodes SET body=? WHERE scope=? AND id=?", (json.dumps(row, ensure_ascii=False), scope_key(scope), row["id"]))
         return {"saved": True, "episode_id": row["id"], "lesson": row["lesson"], "behavioral_improvement_verified": False}

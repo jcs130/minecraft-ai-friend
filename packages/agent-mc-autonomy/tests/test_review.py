@@ -62,7 +62,9 @@ def test_delivered_death_review_requires_fresh_respawn_inspection_before_mailbox
     fresh = port.decide(death["id"], "inspect")
     assert fresh["facts"]["gear"] == "背包为空"
     assert fresh["body_baseline"]["lifecycle"]["phase"] == "alive"
-    accepted = port.decide(death["id"], "insert", "复活后背包为空", "先寻找安全处再获取原木")
+    accepted = port.decide(death["id"], "insert", "复活后背包为空", "先寻找安全处再获取原木",
+                           death_reflection={"episode_id": episode["id"], "outcome": "deferred",
+                                             "reason": "Recovery inventory synchronization is not known yet"})
     assert accepted["dispatched"] and port.mailbox.get(accepted["request_id"])["delivery"] == "queued"
 
 
@@ -207,7 +209,9 @@ def test_delivered_death_metadata_dedup_cannot_hide_a_later_runtime_failure(runt
     assert death["trigger"] == "death_review"
     port.delivered(death["id"], True)
     if acknowledged:
-        assert port.decide(death["id"], "continue", "Use fresh facts after respawn")["acknowledged"]
+        port.decide(death["id"], "inspect")
+        assert port.decide(death["id"], "continue", "Use fresh facts after respawn", death_reflection={
+            "episode_id": episode["id"], "outcome": "deferred", "reason": "Recovery facts are not yet known"})["acknowledged"]
     clock[0] += 1
     # A status publication can still contain notified death metadata when a real failure arrives.
     publish(phase="failed", error="runtime failed after respawn", death_episode=episode, game_identity=SCOPE)
@@ -217,7 +221,10 @@ def test_delivered_death_metadata_dedup_cannot_hide_a_later_runtime_failure(runt
     assert failure["id"] != death["id"] and failure["urgent"] == "runtime_failed"
     assert failure["trigger"] == "state_changed"
     assert failure["evidence"]["runtime_error"] == "runtime failed after respawn"
-    assert failure["evidence"]["death_episode"]["id"] == episode["id"]  # Reflection stays pending independently.
+    if acknowledged:
+        assert "death_episode" not in failure["evidence"]  # Deferral completed; history remains historical.
+    else:
+        assert failure["evidence"]["death_episode"]["id"] == episode["id"]
 
 
 def test_periodic_context_delivery_can_defer_without_main_acknowledgement(runtime):

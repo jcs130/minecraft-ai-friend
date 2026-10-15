@@ -46,7 +46,7 @@ def test_default_idle_opportunity_is_45_seconds_and_delivery_resets_it(tmp_path)
     assert not port.offer()["offered"]
 
 
-def test_death_transport_inspection_and_decision_do_not_complete_reflection(tmp_path):
+def test_death_transport_inspection_and_missing_reflection_do_not_complete(tmp_path):
     port, clock, publish = setup(tmp_path)
     episode = DeathMemory(tmp_path).record(event(), facts(), [], [], [])
     publish(death_episode=episode, game_identity=SCOPE)
@@ -59,14 +59,11 @@ def test_death_transport_inspection_and_decision_do_not_complete_reflection(tmp_
     port.decide(review["id"], "inspect")
     assert not port.state()["review"].get("result")
     result = port.decide(review["id"], "continue", "Wait for inventory sync")
-    assert result["reflection_pending"]
-    clock[0] += 301
-    publish(death_episode=episode, game_identity=SCOPE)
-    retry = port.offer()["review"]
-    assert retry["id"] != review["id"]
-    assert retry["evidence"]["death_episode"]["id"] == episode["id"]
+    assert result["error"] == "death_reflection_required"
+    assert not port.state()["review"].get("result")
+    assert not DeathMemory(tmp_path).entries(SCOPE)[0]["host_review"]["acknowledged"]
     deferred = {"episode_id": episode["id"], "outcome": "deferred", "reason": "Inventory is not synchronized yet"}
-    result = port.decide(retry["id"], "continue", "Wait safely", death_reflection=deferred)
+    result = port.decide(review["id"], "continue", "Wait safely", death_reflection=deferred)
     assert not result["reflection_pending"]
     assert DeathMemory(tmp_path).entries(SCOPE, pending=True) == []
     assert DeathMemory(tmp_path).entries(SCOPE)[0]["lesson"] is None
