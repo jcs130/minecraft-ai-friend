@@ -708,6 +708,10 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
           await gotoGoal(bot, levelTravelGoal(leg.x, leg.z), travelContext);
           const moved = Math.hypot(bot.entity.position.x - from.x, bot.entity.position.z - from.z);
           if (moved < 4) throw new SkillBlocked('长途这一段没有足够位移，停止原路线');
+          // A reached navigation leg is an actual handoff opportunity, not just
+          // progress text. Drain at safe footing and retain this task's fixed goal.
+          await ctx.checkpoint?.(() => settleOnGround(bot, ctx, 1_500));
+          checkAbort(ctx);
         }
         sceneTarget = target;
         await gotoGoal(bot, finalGoal, travelContext);
@@ -897,7 +901,10 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
       if (!call.command.startsWith('/')) throw new SkillBlocked('server_travel 只接受 / 开头的服务端命令');
       const target = resolveAt(bot, call.at);
       const distance = (): number => bot.entity.position.distanceTo(new Vec3(target.x, target.y, target.z));
-      if (distance() <= call.within) return `已在服务端传送落点 ${cellText(target)} 附近，无需重复传送`;
+      if (distance() <= call.within) throw new SkillBlocked(
+        `当前站位已经在你填写的验收坐标 ${cellText(target)} 附近，命令未发送；`
+        + '这不能证明服务端命令的目的地。先核对命令与真实目标坐标，不要用当前位置代替传送落点；若已经到达，直接观察并决定下一步',
+      );
       sendChat(bot, call.command);
       const until = Date.now() + 6_000;
       while (Date.now() < until) {

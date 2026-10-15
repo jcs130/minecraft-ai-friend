@@ -7,8 +7,8 @@
       "java-1.20.6"
     ],
     "preset": null,
-    "artifact": "vendor/mc-visual-console-java-1.21.1-4b59ce79.tgz",
-    "sha256": "9e9bd90ec1a813ad75a70acd076d76abba0856c064784b12d775655b0186a44e"
+    "artifact": "vendor/mc-visual-console-java-1.21.1-4b59ce79-behavior-20261015.tgz",
+    "sha256": "07feb3fbafa3794a0a4e8547813942610664c09520bf7ae9d9cda2334e57d2c4"
   },
   "core": {
     "source": "core/",
