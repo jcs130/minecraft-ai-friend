@@ -30,5 +30,16 @@
     "current approved maintenance and E/F complete cold backups required before release"
   ],
   "privateEvidence": "E/F repairs/exam-supplies-20261016",
-  "documentation": "paper/docs/EXAM_SUPPLIES.md"
+  "documentation": "paper/docs/EXAM_SUPPLIES.md",
+  "scheduledMaintenanceObserved": {
+    "time": "2026-10-16T04:00:01+08:00",
+    "restartWasCandidateDeployment": false,
+    "retainedAgentFriend": "0.4.42",
+    "backupComplete": false,
+    "opsRobocopyExitCode": 9,
+    "sessionLockExclusionFixApplied": true,
+    "fixtureChecks": 4,
+    "windowsPowerShell5SyntaxPassed": true,
+    "newFullColdBackupRequired": true
+  }
 }

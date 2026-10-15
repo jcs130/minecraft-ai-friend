@@ -838,7 +838,7 @@ function Backup-Server {
         # locks, control tokens, and logs are intentionally not restorable.
         $opsCopy = Join-Path $dest 'ops'
         & robocopy.exe $opsDir $opsCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP `
-            /XF '*.log' '*.jsonl' 'manage-server.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'paper-core-upgrade.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' | Out-Null
+            /XF '*.log' '*.jsonl' 'manage-server.lock' 'session.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'paper-core-upgrade.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Incomplete backup: $dest" }
         $probeCopy = Join-Path $dest 'probe'
         & robocopy.exe 'E:\MC\probe' $probeCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'node_modules' | Out-Null
