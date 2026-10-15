@@ -3387,7 +3387,7 @@ export class MinecraftWorld implements World {
     const stacks = [...snap.inventory,
       ...(offhand?.count === undefined ? [] : [{ name: offhand.name, count: offhand.count }])];
     return renderFoodReserveReadout(stacks, this.bridge?.bot?.registry?.foodsByName ?? {}, snap.invSynced,
-      includeIds ? name => `${zhName(name)} (${name})` : zhName);
+      includeIds ? name => `${zhName(name)} (${name})` : zhName, this.bridge?.bot?.registry?.itemsByName ?? {});
   }
 
   /** 已有快照及最近执行终态；只读已有状态，不扫描、不推进增量基线。 */

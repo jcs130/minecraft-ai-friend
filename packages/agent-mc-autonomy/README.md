@@ -5,7 +5,9 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
-0.1.55 adds bounded native body/failure feedback, progressive real visual
+0.1.56 consumes the verified core's bounded, registry-based carried-item
+edibility evidence, distinguishing known nonfoods from unknown custom items.
+It retains the 0.1.55 bounded native body/failure feedback, progressive real visual
 capture, an optional human-only account console, and opt-in per-request
 planning profiles. Native work keeps its original queue; profiles do not
 switch models or create an extra inference loop. Unsupported host reasoning
