@@ -14,9 +14,11 @@ def event(index=1, scope=SCOPE):
                      "observed_at": "2026-10-15T01:02:03Z", "cause": None, "position": {"x": 1, "y": 64, "z": 2}}}}
 
 
-def facts(phase="alive", scope=SCOPE):
+def facts(phase="alive", scope=SCOPE, episode_id="death-1"):
     return {"parts": [{"key": "identity", "text": json.dumps(scope)},
-                      {"key": "deathLifecycle", "text": json.dumps({"phase": phase})},
+                      {"key": "deathLifecycle", "text": json.dumps({"phase": phase, "episodeId": episode_id})},
+                      {"key": "recoveryState", "text": json.dumps({"position": {"x": 301, "y": 64, "z": 2},
+                       "dimension": "overworld", "inventorySynced": True, "inventory": [], "health": 20, "food": 20})},
                       {"key": "body", "text": "生命 20/20", "original": "actual-body-handle"}]}
 
 
@@ -154,7 +156,7 @@ def test_scope_change_removes_old_death_tool_history_from_the_next_model_request
     original = bridge.call
     async def call(name, args, **kw):
         if name == "mc_protocol" and args["action"] == "facts":
-            return packed(facts(scope={**SCOPE, "realm": "realm-b"}))
+            return packed(facts(scope={**SCOPE, "realm": "realm-b"}, episode_id="death-2"))
         return await original(name, args, **kw)
     bridge.call = call
     run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
@@ -208,3 +210,101 @@ def test_quiet_review_defer_rechecks_new_urgent_event_and_identity_before_observ
     publish(snapshot(clock[0], **changes), observe=False)
     assert port.defer(periodic["id"], True)["is_error"]
     assert not port.state()["review"].get("result")
+
+
+@pytest.mark.parametrize("terminal_at,retry_until,expected", [(1002, 0, 1004), (1006, 0, 1006), (1002, 1020, 1020)])
+def test_fresh_respawn_handoff_waits_for_native_terminal_and_retains_backoff(
+        framework_module, tmp_path, run_async, monkeypatch, terminal_at, retry_until, expected):
+    import asyncio
+    import dataclasses
+    from types import SimpleNamespace
+    from test_controller import action
+    clock, decisions = [1000], []
+    async def decide(messages, _):
+        decisions.append((clock[0], messages))
+        return choose()
+    module, bridge, controller = setup(framework_module, tmp_path, decide, lambda: clock[0] >= 1025)
+    controller.settings = dataclasses.replace(controller.settings, min_decision_seconds=10, max_tool_rounds=1)
+    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    original_sleep, original_call = asyncio.sleep, bridge.call
+    async def tick(_):
+        clock[0] += 1
+        await original_sleep(0)
+    monkeypatch.setattr(module.asyncio, "sleep", tick)
+    async def call(name, args, **kwargs):
+        if name == "mc_protocol" and args["action"] == "facts":
+            return packed(facts("respawn_pending" if 1002 <= clock[0] < 1004 else "alive"))
+        return await original_call(name, args, **kwargs)
+    bridge.call = call
+    def poll():
+        if clock[0] == 1002:
+            controller.planner_retry_at = retry_until
+            bridge.event_pages.append([{**event(), "trigger": "flush"}])
+        if clock[0] == terminal_at:
+            bridge.event_pages.append([{"cursor": 2, "trigger": "piggyback", "execution": {
+                **action(True), "phase": "cancelled", "evidence": {"receipt": "death cancellation acknowledged"}}}])
+    bridge.on_poll = poll
+    run_async(controller.run("preserve original objective"))
+    assert [at for at, _ in decisions] == [1000, expected]
+    assert "death_memory" in decisions[-1][1][-1]["content"]
+
+
+def test_respawn_requires_matching_identity_episode_and_synced_inventory(framework_module, tmp_path, run_async):
+    _, bridge, controller = setup(framework_module, tmp_path, None)
+    controller.observe_game_facts(facts())
+    controller.receipt({"events": [event()]})
+    for stale in (facts(scope={**SCOPE, "account": "other"}),
+                  {"parts": [p for p in facts()["parts"] if p["key"] != "identity"]},
+                  {"parts": [{**p, "text": json.dumps({"inventorySynced": False})}
+                             if p["key"] == "recoveryState" else p for p in facts()["parts"]]},
+                  {"parts": [{**p, "text": json.dumps({"inventorySynced": True, "health": 0})}
+                             if p["key"] == "recoveryState" else p for p in facts()["parts"]]},
+                  {"parts": [{**p, "text": json.dumps({"phase": "alive", "episodeId": "old"})}
+                             if p["key"] == "deathLifecycle" else p for p in facts()["parts"]]}):
+        controller.observe_game_facts(stale)
+        assert controller.death_waiting
+    assert not controller.continuation_ready
+
+
+def test_recovery_context_preserves_proposal_and_measured_distance_without_inventing_route(tmp_path):
+    from agent_mc_autonomy.death_memory import recovery_context
+    from agent_mc_autonomy.review import review_observation
+    from test_review import snapshot
+    original = event()
+    original["meta"]["death"]["position"]["dimension"] = "overworld"
+    episode = DeathMemory(tmp_path).record(original, facts(), [], [], [])
+    goal = {"id": "stage-1", "goal": "Return to the old work site", "origin": "host_review", "parent_id": "user-1"}
+    recovery = recovery_context(episode, facts(), goal)
+    assert recovery["straight_line_death_distance"] == 300
+    assert recovery["route_distance"] is None
+    assert recovery["objective_proposal"] == goal
+    assert recovery["current"]["inventory"] == []
+    assert recovery["applicability"] == "requires_fresh_review"
+    changed = {**episode, "position": {**episode["position"], "dimension": "the_nether"}}
+    assert recovery_context(changed, facts())["straight_line_death_distance"] is None
+    value = snapshot(10000, game_identity=SCOPE, death_episode=episode, current_goal=goal)
+    value["facts"]["parts"].extend(facts()["parts"])
+    evidence = review_observation(value, 10000)["evidence"]
+    assert evidence["death_recovery"]["straight_line_death_distance"] == 300
+    assert evidence["death_recovery"]["objective_proposal"]["parent_id"] == "user-1"
+
+
+def test_duplicate_death_cannot_rearm_consumed_recovery_or_clear_unknown(framework_module, tmp_path, run_async):
+    _, bridge, controller = setup(framework_module, tmp_path, None)
+    original = bridge.call
+    async def call(name, args, **kwargs):
+        if name == "mc_protocol" and args["action"] == "facts":
+            return packed(facts())
+        return await original(name, args, **kwargs)
+    bridge.call = call
+    controller.receipt({"events": [event()]})
+    run_async(controller.events())
+    assert controller.continuation_ready
+    controller.continuation_ready = False
+    controller.receipt({"events": [event()]})
+    run_async(controller.events())
+    assert not controller.continuation_ready
+    with pytest.raises(RuntimeError, match="outcome_unknown"):
+        controller.receipt({"execution": {"kind": "task", "id": "old", "evidence": {"outcomeUnknown": True}}})
+    assert json.loads(controller.state_path.read_text())["uncertain"] is True
+    assert not any(name == "mc_do" for name, _, _ in bridge.calls)

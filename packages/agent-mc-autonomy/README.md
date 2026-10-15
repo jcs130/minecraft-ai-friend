@@ -5,6 +5,12 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.62 requests one post-respawn planning opportunity after matching fresh identity,
+death episode, synchronized inventory and all prior native task terminals arrive.
+Inference failure backoff and unknown-outcome blocking still apply. Planner and
+host review receive the historical death, measured displacement and original stage
+proposal so they can explain whether that objective remains applicable.
+
 0.1.56 consumes the verified core's bounded, registry-based carried-item
 edibility evidence, distinguishing known nonfoods from unknown custom items.
 It retains the 0.1.55 bounded native body/failure feedback, progressive real visual

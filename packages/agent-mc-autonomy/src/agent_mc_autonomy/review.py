@@ -14,7 +14,7 @@ from .configuration import _boolean, _integer
 from .host_context import HostContextPort, validate_host_context
 from .mailbox import Mailbox, observation
 from .observations import body_feedback, feedback_signal, fact_preview, spatial_text, tool_failure_view
-from .death_memory import DeathMemory, lifecycle, scope_key
+from .death_memory import DeathMemory, lifecycle, scope_key, recovery_context
 
 
 @dataclass(frozen=True)
@@ -81,6 +81,7 @@ def review_observation(status, now):
     if (isinstance(episode, dict) and scope_key(episode.get("scope"))
             and episode.get("scope") == snapshot.get("game_identity") and isinstance(episode.get("source_event"), dict)):
         evidence["death_episode"] = episode
+        evidence["death_recovery"] = recovery_context(episode, snapshot.get("facts", {}), evidence["current_goal"])
     life = lifecycle(snapshot.get("facts", {}))
     life = life if isinstance(life, dict) else {}
     # Stable safety boundary, excluding movement, clock, inventory and ordinary
@@ -128,6 +129,7 @@ def summary(evidence):
         activity += "；最近未解工具错误:" + failure["tool"] + " " + brief(failure["error"], 210)
     if episode := evidence.get("death_episode"):
         activity += "；实际死亡事件:" + episode["id"] + "（可选叙述；本次历史事实不证明学会或改进）"
+        activity += "；重生后须按当前位置和物资重新判断原阶段是否适用，并说明继续、修改或暂缓的理由"
     return goal + "；新鲜观测:" + readings + activity
 
 
@@ -334,7 +336,8 @@ class ReviewPort:
             return {"is_error": True, "error": "invalid_lineage_offset"}
         if len(reason) > 600 or len(goal) > 2000 or (decision != "inspect" and not reason.strip()) or (decision in {"insert", "revise"} and not goal.strip()):
             return {"is_error": True, "error": "reason_and_stage_goal_required"}
-        current = review_observation(observation(self.directory), self.now())
+        snapshot = observation(self.directory)
+        current = review_observation(snapshot, self.now())
         choice = {"decision": decision, "reason": reason.strip(), "goal": goal.strip()}
         with self.transaction() as state:
             self.reconcile(state)
@@ -367,6 +370,7 @@ class ReviewPort:
                 fresh["current_user_goal"] = self.mailbox.current_user_goal(fresh["current_goal"].get("id"))
                 if review.get("scope") == current["scope"] and (episode := review["evidence"].get("death_episode")):
                     fresh.setdefault("death_episode", episode)  # Explicit historical event, not current inventory.
+                    fresh["death_recovery"] = recovery_context(episode, snapshot.get("observation", snapshot).get("facts", {}), fresh["current_goal"])
                 review.update(evidence=fresh, baseline=current["baseline"])
                 return {"heartbeat_id": review_id, **review["evidence"], "stage_delivery": stage,
                         "next": "Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending. Keep stages within the standing goal and user intent; server-specific quests, exams or capabilities need fresh evidence from this world, not unrelated conversation memories.",

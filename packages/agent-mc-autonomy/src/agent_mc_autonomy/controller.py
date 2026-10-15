@@ -12,7 +12,7 @@ from pathlib import Path
 from .bridge import json_content, outcome, text_content
 from .context import assemble, encode
 from .death_memory import TOOL as DEATH_REVIEW_TOOL
-from .death_memory import DeathMemory, identity, lifecycle
+from .death_memory import DeathMemory, identity, lifecycle, recovery_state
 from .decision_profiles import profile_view
 from .fast import FastPolicy, focus_state, rule_focus
 from .model_protocols import assistant_history
@@ -308,6 +308,7 @@ class Controller:
         self.game_scope = None
         self.game_facts = {"parts": []}
         self.death_waiting = False
+        self.death_recovery = None
 
     def observe_game_facts(self, facts):
         self.game_facts = facts
@@ -320,9 +321,16 @@ class Controller:
             self.groups.clear()  # Tool replies/provider replay belong to the previous game identity too.
         self.game_scope = fresh_scope
         life = lifecycle(facts)
-        if isinstance(life, dict):
+        if self.death_recovery:
+            body = recovery_state(facts)
+            self.death_waiting = not (fresh_scope == self.death_recovery["scope"]
+                and isinstance(life, dict) and life.get("phase") == "alive"
+                and life.get("episodeId") == self.death_recovery["id"]
+                and body.get("inventorySynced") is True
+                and type(body.get("health")) in {int, float} and body["health"] > 0)
+        elif isinstance(life, dict):
             self.death_waiting = life.get("phase") != "alive"
-        self.publish(game_identity=self.game_scope,
+        self.publish(facts=facts, game_identity=self.game_scope,
                      death_episode=next(iter(self.death_memory.entries(self.game_scope, pending=True)), None))
         return not self.death_waiting
 
@@ -412,6 +420,7 @@ class Controller:
                     [{"tool": item[0], "request_id": item[2], "execution_id": key[1], "observation_only": item[3]}
                      for key, item in self.action_requests.items() if self.action_scopes.get(key) == death.get("scope")])
                 if episode:
+                    self.death_recovery = episode
                     self.death_waiting = True
                     self.continuation_needed = True
                     self.publish(death_episode=episode, game_identity=episode["scope"])
@@ -454,6 +463,15 @@ class Controller:
             trigger = trigger.get("type") if isinstance(trigger, dict) else trigger
             wake |= terminal or trigger in {"preempt", "interrupt", "flush", "debounce"}
             urgent |= trigger in {"preempt", "interrupt"}
+        if self.death_recovery and not page.get("hasMore", False):
+            # Poll only native facts while recovering; cancellation receipts must
+            # drain before one fresh decision can bypass the ordinary throttle.
+            await self.protocol("facts")
+            if not self.death_waiting and not self.pending and not self.inflight_request:
+                self.death_recovery = None
+                self.continuation_ready = True
+                self.continuation_needed = True
+                wake = True
         return wake, urgent, page.get("hasMore", False)
 
     async def archive_receipt(self, request_id, name, result):
@@ -917,7 +935,7 @@ class Controller:
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
-                        context_counter=self.context_counter, host_context=host_context, death_memory=self.death_memory.context(self.game_scope))
+                        context_counter=self.context_counter, host_context=host_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
                 except ValueError:
                     if not reserve:
                         raise
@@ -925,13 +943,13 @@ class Controller:
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
-                        context_counter=self.context_counter, host_context=host_context, death_memory=self.death_memory.context(self.game_scope))
+                        context_counter=self.context_counter, host_context=host_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
                 if reserve:
                     messages, _ = attach_frame(messages, frame)
                 budget.update(image_reserve=reserve, total=budget["total"] + reserve, limit=self.settings.context_tokens)
                 self.publish(context=budget)
                 try:
-                    death_context=self.death_memory.context(self.game_scope) if self.settings.decision_policy.enabled else None
+                    death_context=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal) if self.settings.decision_policy.enabled else None
                     episode_id=death_context.get('latest_episode',{}).get('id') if death_context else None
                     profile=self.settings.decision_policy.select(focus=focus.get('choice'),failure=bool(self.tool_failure or self.planner_notice),feedback=self.feedback_pending,
                         death=bool(episode_id and episode_id!=self.profile_death_id))
@@ -1125,6 +1143,7 @@ class Controller:
                     # Poll state without a model request when nothing has changed.
                     wake |= fact_fingerprint(await self.protocol("facts")) != self.last_facts
                 if (self.decide and wake and (not self.current_work() or urgent)
+                        and not self.death_waiting
                         and (elapsed >= self.settings.min_decision_seconds or self.continuation_ready)
                         and time.monotonic() >= self.planner_retry_at):
                     current_goal = self.goal_prompt(goal)

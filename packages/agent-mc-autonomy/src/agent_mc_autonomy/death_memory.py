@@ -1,6 +1,7 @@
 """Bounded game-only death history in the existing strategic review database."""
 
 import json
+import math
 import sqlite3
 from contextlib import contextmanager
 
@@ -25,6 +26,31 @@ def lifecycle(facts):
         return json.loads(next(p["text"] for p in facts.get("parts", []) if p["key"] == "deathLifecycle"))
     except (StopIteration, KeyError, TypeError, ValueError):
         return None
+
+
+def recovery_state(facts):
+    try:
+        value = json.loads(next(p["text"] for p in facts.get("parts", []) if p["key"] == "recoveryState"))
+        return value if isinstance(value, dict) else {}
+    except (StopIteration, KeyError, TypeError, ValueError):
+        return {}
+
+
+def recovery_context(episode, facts, objective=None):
+    """Measured displacement is evidence for a choice, never an instruction to return."""
+    current = recovery_state(facts)
+    old, new = episode.get("position") or {}, current.get("position") or {}
+    distance = None
+    dimension = old.get("dimension")
+    if dimension and dimension == current.get("dimension") and all(
+            type(p.get(axis)) in {int, float} and math.isfinite(p[axis]) for p in (old, new) for axis in ("x", "y", "z")):
+        distance = round(math.dist([old[a] for a in ("x", "y", "z")], [new[a] for a in ("x", "y", "z")]), 1)
+    return {"episode_id": episode["id"], "historical_position": episode.get("position"),
+            "current": current, "straight_line_death_distance": distance, "route_distance": None,
+            "objective_proposal": objective, "applicability": "requires_fresh_review",
+            "next": "Reevaluate the original objective and stage against current spawn position, inventory and native cancellation receipts. "
+                    "Earlier coordinates and routes are historical proposals. Explain whether to continue locally, revise or defer the stage, "
+                    "or return only if current evidence supports it. Distance is straight-line evidence, not route safety or a command to return."}
 
 
 TOOL = {"type": "function", "function": {"name": "death_review",
@@ -99,11 +125,12 @@ class DeathMemory:
         with self.connection() as db:
             db.execute("UPDATE death_episodes SET notified=1 WHERE scope=? AND id=?", (scope_key(episode["scope"]), episode["id"]))
 
-    def context(self, scope):
+    def context(self, scope, facts=None, objective=None):
         rows = self.entries(scope)
         if not rows:
             return None
         return {"latest_episode": {k: rows[0][k] for k in ("id", "source_event", "observed_at", "position", "health", "food", "cause")},
+                **({"recovery": recovery_context(rows[0], facts, objective)} if facts is not None else {}),
                 "lessons": [{"episode_id": r["id"], **r["lesson"]} for r in rows if r.get("lesson")][:3],
                 "historical": True, "behavioral_improvement_verified": False,
                 "next": "Use death_review get(id) to inspect facts and receipts. Review the death in this existing planning turn; record an inferred lesson only with applicability and evidence. Evaluate applicability against fresh facts before reuse."}
