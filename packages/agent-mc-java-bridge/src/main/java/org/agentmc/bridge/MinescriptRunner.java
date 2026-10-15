@@ -56,6 +56,16 @@ def _json_default(value):
     if dataclasses.is_dataclass(value): return dataclasses.asdict(value)
     raise TypeError('result must be JSON serializable')
 try:
+    # Minescript 4.0 forwards unchecked slots to Minecraft. Validate its argument
+    # builder so direct, asynchronous and task calls retain the same contract.
+    # This protects against accidental invalid packets, not trusted-code escape.
+    _select_slot = minescript.player_inventory_select_slot
+    _select_slot_args = _select_slot.args_func
+    def _checked_hotbar_slot(slot):
+        if type(slot) is not int or not 0 <= slot <= 8:
+            raise ValueError('player_inventory_select_slot requires a hotbar slot integer 0..8; inventory slots 9..35 must first be moved with player_inventory_slot_to_hotbar after checking the destination')
+        return _select_slot_args(slot)
+    _select_slot.args_func = _checked_hotbar_slot
     _data = json.loads(_request.read_text(encoding='utf-8'))
     _scope = {'minescript': minescript, 'input_data': _data.get('input'), 'result': None, '__name__': '__agent_script__'}
     exec(compile(_data['code'], '<agent-script>', 'exec'), _scope, _scope)
