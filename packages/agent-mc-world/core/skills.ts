@@ -1515,9 +1515,9 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     name: 'craft',
     doc: `{"skill":"craft","item":"chest","count":1}
                                                  已知目标物品优先写 item,按游戏配方表选可用材料和摆位;1.20.6 木板等标签材料可混用不同种类。**中间材料不会自动补**。
-                                                 材料不足时先按回执补材料,不要靠猜 grid 消耗库存。
+                                                 item 模式的 count 是本次要新增的产物个数,不是原料数或合成次数;按配方产量向上取整。例如要 12 块木板写 count:12,通常用 3 根原木。材料不足时先按回执补材料,不要靠猜 grid 消耗库存。
 {"skill":"craft","grid":[["charcoal"],["stick"]],"count":4}
-                                                 grid 仅用于已知的自定合成格配方:按行写物品 ID 二维数组,空位写 null;产出槽出什么算什么。烧炼使用 smelt，不在合成格制作熟食。
+                                                 grid 模式的 count 是重复配方次数,每次产量由实际配方决定;仅用于已知的自定合成格配方:按行写物品 ID 二维数组,空位写 null;产出槽出什么算什么。烧炼使用 smelt，不在合成格制作熟食。
                                                  2 行 2 列以内徒手就能做,更大要工作台。够得着的工作台直接用;够不着就放一个自己带的,包里没有才走去现成的。
                                                  下界合金装备走锻造台:每件要下界合金升级模板、同种钻石件、下界合金锭各 1 个，钻石件附魔与耐久保留`,
     parse: parseCraft,
@@ -1528,7 +1528,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
         schema: { type: 'array', items: { type: 'array', items: { type: ['string', 'null'] } } },
         doc: '与 item 二选一',
       },
-      { key: 'count', kind: 'int', lo: 1, hi: 64, def: 1 },
+      { key: 'count', kind: 'int', lo: 1, hi: 64, def: 1, doc: 'item=要新增的产物个数(按配方产量向上取整);grid=配方重复次数。不是原料数。' },
     ],
   },
   {

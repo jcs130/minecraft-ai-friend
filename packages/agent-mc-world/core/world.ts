@@ -1883,9 +1883,7 @@ const BLUEPRINT_FORMAT_DOC = [
 
 /** 蓝图工具的用法说明(schema description) */
 const BLUEPRINT_DOC = [
-  '六件事,一次只受理一件:',
-  '· {"design":{"key":"farm-v2","brief":"要什么结构或功能,写清楚"}} —— 交给后台去构思。',
-  '  立刻回执"开工了",几分钟后成没成都会浮上来。同键再下一次 = 带新要求重出图。',
+  '五件事,一次只受理一件;设计由当前 Agent 完成,核心不另起模型或后台构思:',
   '· {"save":{…}} —— 交一份现成的设计;',
   '  太大就分批:每批带同样的 key/size_xyz/palette,加 "append":true,layers 只放接着的几层。'
     + '分批齐了先成为 draft,不会替换当前可执行版本。',
@@ -1923,6 +1921,9 @@ type BlueprintOp =
 
 /** `{}` = 查询；其余顶层字段各是一次写，一次只受理一个。 */
 export function parseBlueprintArgs(args: Record<string, unknown>): BlueprintOp | { error: string } {
+  if (Object.keys(args).some(key => !['save', 'design', 'accept', 'reserve_override', 'unload'].includes(key))) {
+    return { error: 'mc_blueprint 不接受 action/op 等未知顶层字段。查询用 {};交稿用 {save:{key,site_mode,size_xyz,palette,layers}}。先查 mc_tool_help 的真实 schema;未保存、未设计或施工。' };
+  }
   const given = (['save', 'design', 'accept', 'reserve_override', 'unload'] as const)
     .filter((k) => args[k] !== undefined && args[k] !== null);
   if (given.length === 0) return { kind: 'query' };
@@ -2464,6 +2465,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     parameters: {
       type: 'object',
       description: BLUEPRINT_DOC,
+      additionalProperties: false,
       properties: {
         save: {
           type: 'object',
@@ -5810,8 +5812,8 @@ export class MinecraftWorld implements World {
         : '',
     ].filter(Boolean);
     if (all.length === 0) {
-      const head = '这边一份蓝图都没装载。要新图就 mc_blueprint 的 design;'
-        + '笔记里存过现成数据的话直接 save 交回来。';
+      const head = '这边一份蓝图都没装载。由当前 Agent 设计后用 {save:{key,site_mode,size_xyz,palette,layers}} 交稿;'
+        + '完整写法查 mc_tool_help(mc_blueprint)。核心不另起模型或后台设计任务。';
       return [head, drafts.length > 0 ? `分批交着的:${drafts.join('、')}` : '', ...resourceLines]
         .filter(Boolean).join('\n');
     }
