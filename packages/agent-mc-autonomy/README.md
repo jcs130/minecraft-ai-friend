@@ -5,6 +5,11 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.46 pins checked core 0.5.2, including current main's Java 1.21.1 defaults
+and the shared viewer integration. Source and isolated wheel each passed 409
+offline tests. The renderer remains an explicit independent input; optional
+panels follow validated connection data, and no host source patch is required.
+
 In 0.1.25, temporary inference transport failures and HTTP 408/429/500/502/503/504
 pause planning with exponential backoff capped at 300 seconds. The native body,
 event polling and reflexes stay connected. No tool is dispatched from a failed
