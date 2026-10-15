@@ -1,4 +1,4 @@
-import {describe,it,expect} from 'vitest';
+import {describe,it,expect,vi} from 'vitest';
 import {EventEmitter} from 'node:events';
 import {Vec3} from 'vec3';
 import {HearingLedger,audibleHint,attachHearing,hearingOf} from '../core/perception-hearing.ts';
@@ -32,9 +32,11 @@ describe('perception evidence boundaries',()=>{
   });
   it('attaches real packet events and cleans up on end; entity tracking alone emits no sound',async()=>{
     const bot=Object.assign(new EventEmitter(),rig(),{version:'1.21.1',_client:new EventEmitter(),registry:{sounds:{4:{name:'entity.zombie.ambient'}}}});
-    const stop=attachHearing(bot as never,'');await new Promise(r=>setTimeout(r,0));
+    const stop=attachHearing(bot as never,'');await vi.waitFor(()=>expect(hearingOf(bot)?.source).toBe('named-only'));
     const ledger=hearingOf(bot)!;expect(ledger.read()).toHaveLength(0);
     bot._client.emit('sound_effect',{soundId:4,soundCategory:5,x:48,y:512,z:-48,volume:1,pitch:1});
+    expect(ledger.read()).toHaveLength(0);expect(ledger.source).toBe('named-only');
+    bot._client.emit('sound_effect',{sound:{data:{soundName:'minecraft:entity.zombie.ambient'}},soundCategory:5,x:48,y:512,z:-48,volume:1,pitch:1});
     expect(ledger.read()[0]?.direction).toBe('东北');
     bot.emit('respawn');expect(ledger.read()).toHaveLength(0);
     bot.emit('end');expect(bot._client.listenerCount('sound_effect')).toBe(0);stop();
