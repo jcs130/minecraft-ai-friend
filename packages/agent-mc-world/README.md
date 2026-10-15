@@ -3,6 +3,11 @@
 Independent Minecraft execution core, maintained in `jcs130/minecraft-ai-friend`.
 Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.
 
+0.5.7-dev.20261016.9 clarifies that admission-time crafting previews use current
+confirmed stock without earlier unexecuted production or consumption. Tied
+recipe examples are explicitly non-exhaustive; recipe selection and queue
+execution still use actual inventory. Includes the respawn movement repair below.
+
 0.5.7-dev.20261016.8 uses the first applied native spawn position as the spatial
 baseline, including when health or inventory arrives first. Respawn displacement
 is not reported as walking; the delayed landing notice preserves the measured

@@ -123,7 +123,8 @@ function precheckCraft(bot: Bot, call: Extract<SkillCall, { skill: 'craft' }>): 
   // 最小缺口并列时列出所有并列配方，与 skillCraft 使用相同的“或”连接语义。
   const min = Math.min(...options.map((o) => o.total));
   const tied = [...new Set(options.filter((o) => o.total === min).map(gapsOf))];
-  const more = tied.length > CRAFT_TIED_MAX ? `;还有 ${tied.length - CRAFT_TIED_MAX} 条配方缺口一样多` : '';
+  const more = tied.length > CRAFT_TIED_MAX
+    ? `;这些只是缺口并列的配方示例，不是仅允许这些材料；还有 ${tied.length - CRAFT_TIED_MAX} 条配方缺口一样多` : '';
   const gaps = tied.slice(0, CRAFT_TIED_MAX).join(' 或 ');
   return { level: 'hard', text: `做${label}还差 ${gaps}${more}`, rule: 'craft.short' };
 }
@@ -839,6 +840,9 @@ export function renderPrecheckNotes(hits: Array<{ index: number; note: PrecheckN
   const soft = rest.filter((h) => h.note.level === 'soft');
   const one = (h: { index: number; note: PrecheckNote }): string => `第 ${h.index + 1} 步${h.note.text}`;
   const parts: string[] = [];
+  if (hits.some((h) => h.note.rule === 'craft.short')) {
+    parts.push('合成试算仅按受理时当前已确认库存，未计入前面尚未执行步骤的产出或消耗；实际动工时会按当时库存重查');
+  }
   if (hard.length > 0) parts.push(`试算(还没动工):${hard.map(one).join(';')}`);
   if (soft.length > 0) parts.push(`另外:${soft.map(one).join(';')}`);
   const body = parts.join('。');
