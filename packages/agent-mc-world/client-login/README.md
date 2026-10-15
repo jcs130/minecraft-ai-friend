@@ -2,15 +2,15 @@
 
 # 原生观察者自动登录与重连
 
-Fabric 1.20.6 客户端在收到配置的系统登录提示后提交一次 `/login`，以服务端成功提示确认登录。每次连接只提交一次；错误密码、两步验证或凭据不可读时停止自动重试。普通玩家聊天不触发登录。附身与本模块分别核验。
+此辅助模块默认以 Fabric Java 1.21.1 为构建目标，旧版 1.20.6 需显式选择。客户端在收到配置的系统登录提示后提交一次 `/login`，以服务端成功提示确认登录。每次连接只提交一次；错误密码、两步验证或凭据不可读时停止自动重试。普通玩家聊天不触发登录。附身与本模块分别核验。
 
 凭据使用 Windows 当前用户 DPAPI 加密，保存在部署私有目录。配置文件只保存凭据路径；客户端、命令行、Agent 上下文与日志不保存明文密码。同一个游戏目录中的其他账号或其他服务器不匹配时不会读取凭据。
 
 ```text
-node scripts/build-client-login.mjs <gameDir> --java-home <JDK21Dir> --install
+node scripts/build-client-login.mjs <gameDir> --minecraft 1.21.1 --java-home <JDK21Dir> --install
 ```
 
-脚本使用该游戏目录已安装的 Fabric API、Minecraft 1.20.6 中间命名客户端及 JNA 编译并检查认证状态机，然后安装 `mods/cortico-client-login.jar`。单独重启原生观察者客户端生效，无需重载 Mineflayer、主循环或语音。
+脚本使用该游戏目录中与所选版本匹配的 Fabric API、Minecraft 中间命名客户端及 JNA 编译并检查认证状态机；输出清单的 Minecraft 版本也由所选目标写入。加上 `--install` 才安装 `mods/cortico-client-login.jar`，省略时仅生成候选包。兼容构建使用 `--minecraft 1.20.6`。原生客户端实际登录与重连仍需单独验收，不能由 Mineflayer 或网页测试推断。单独重启原生观察者客户端生效，无需重载 Mineflayer、主循环或语音。
 
 `config/cortico-client-login.json` 示例不包含密码：
 
