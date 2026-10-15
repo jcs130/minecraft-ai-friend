@@ -309,9 +309,9 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
         {seq:2,text:'HUD',at:new Date().toISOString(),overlay:true,kind:'system'},
         {seq:3,text:'hello',at:new Date().toISOString(),overlay:false,kind:'player',sender:'Alex'}] as any;
       r.state.actions=[{id:'own-completed',phase:'completed',updatedAt:1}];r.complete();
-      await vi.waitFor(()=>expect(events).toHaveLength(4),{timeout:1500});
-      expect(events.map(e=>[e.event.text==='command reply'?'system':e.event.text==='HUD'?'hud':e.event.text==='hello'?'player':'terminal',e.options.trigger]))
-        .toEqual([['system','debounce'],['hud','piggyback'],['player','preempt'],['terminal','flush']]);
+      await vi.waitFor(()=>expect(events).toHaveLength(5),{timeout:1500});
+      expect(events.map(e=>[e.event.text==='command reply'?'system':e.event.text==='HUD'?'hud':e.event.text==='hello'?'player':e.event.type==='minecraft.memory'?'memory':'terminal',e.options.trigger]))
+        .toEqual([['system','debounce'],['hud','piggyback'],['memory','piggyback'],['player','preempt'],['terminal','flush']]);
       expect(events.at(-1).event.execution).toMatchObject({id:'own-completed',terminal:true,goalCompleted:false});
     }finally{await r.world.stop();}
   });
@@ -464,11 +464,32 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
     const r=rig();await r.runtime.connect();
     try {
       r.state.messages=[{seq:51,text:'hello',at:new Date().toISOString(),overlay:false,kind:'player',sender:'Other'}] as any;
-      await vi.waitFor(()=>expect(r.runtime.journal.read(0,100).events.some(event=>event.type==='minecraft.client.message')).toBe(true),{timeout:1500});
+      await vi.waitFor(()=>expect(r.runtime.journal.read(0,100).events.some(event=>event.type==='minecraft.chat')).toBe(true),{timeout:1500});
       const events=r.runtime.journal.read(0,100).events;
       expect(events.find(event=>event.type==='minecraft.client.message_gap')?.meta).toMatchObject({missing:50});
-      expect(events.find(event=>event.type==='minecraft.client.message')?.meta).toMatchObject({raw:true,kind:'player',sender:'Other'});
+      expect(events.find(event=>event.type==='minecraft.chat')).toMatchObject({senderKey:'Other',text:'hello',meta:{raw:true,kind:'player',sender:'Other',uname:'Other',socialScope:'minecraft-server'}});
     }finally{await r.runtime.disconnect();}
+  });
+  it('recalls native relationship notes before one unchanged canonical chat and never assigns text or self as an incoming identity',async()=>{
+    const r=rig(),events:any[]=[];
+    const memory=r.world.tools().find(t=>t.name==='mc_memory')!;
+    await memory.handler({action:'remember',kind:'relationship',summary:'Alex returned a borrowed pickaxe',content:'Historical relationship, not current inventory.',tags:['player:alex'],source:{kind:'agent_note',speaker:'Test'}},{role:'test',log:nullLogger()});
+    await r.world.start({log:nullLogger(),pushEvent:async(event:any,options:any)=>{events.push({event,options});return event;}} as any);
+    try {
+      const at=new Date().toISOString();
+      r.state.messages=[{seq:1,text:'<Alex> hello',at,overlay:false,kind:'player',sender:'Alex'},
+        {seq:2,text:'<Alex> quoted',at,overlay:false,kind:'system'},
+        {seq:3,text:'<Test> reply',at,overlay:false,kind:'player',sender:'Test'},
+        {seq:4,text:'HUD',at,overlay:true,kind:'player',sender:'Alex'}] as any;
+      await vi.waitFor(()=>expect(events).toHaveLength(5),{timeout:1500});
+      expect(events[0].event).toMatchObject({type:'minecraft.memory',meta:{gamePlayerMemory:{historical:true,localOnly:true}}});
+      expect(events[0].event.text).toContain('returned a borrowed pickaxe');
+      expect(events[1].event).toMatchObject({type:'minecraft.chat',senderKey:'Alex',text:'<Alex> hello',ts:at});
+      expect(events[2].event).toMatchObject({type:'minecraft.client.message',text:'<Alex> quoted'});
+      expect(events.slice(2).every(e=>e.event.senderKey===undefined)).toBe(true);
+      expect(events[3].options.trigger).toBe('piggyback');
+      expect(r.calls.every(c=>['state','capabilities'].includes(c.method))).toBe(true);
+    } finally {await r.world.stop();}
   });
   it('keeps pre-attachment server guides queryable without replaying historical chat events',async()=>{
     const r=rig();r.state.messages=[{seq:1,text:'Server guide: /fixture --help',at:new Date().toISOString(),overlay:false,kind:'system'}] as any;
