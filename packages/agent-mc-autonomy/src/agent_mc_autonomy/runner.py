@@ -15,12 +15,12 @@ from .configuration import Settings
 from .controller import Controller
 from .fast import FastPolicy, SystemOne
 from .mailbox import Mailbox
-from .ownership import session_lease
 from .observations import runtime_error_code
+from .ownership import session_lease
 from .planner import Planner
 from .review import ReviewPort
 from .viewer import ViewerWindow
-from .viewer_public import viewer_projection, record_playback
+from .viewer_public import record_playback, viewer_projection
 
 
 def validate_start(settings: Settings, goal: str):
@@ -87,6 +87,9 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
 
     try:
         validate_start(settings, goal)
+        validate_profiles=getattr(planner,'validate_profiles',None)
+        if validate_profiles:
+            validate_profiles(settings.decision_policy)
         if stopped():
             return
         with session_lease(directory):
@@ -114,6 +117,8 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                 policy = FastPolicy(settings.fast, selector)
                 counter = context_counter if context_counter is not None else getattr(planner, "context_counter", None)
                 counter_options = {"context_counter": counter} if counter is not None else {}
+                if settings.decision_policy.enabled and callable(getattr(planner,'decide_profile',None)):
+                    counter_options['profile_decide']=planner.decide_profile
                 await Controller(bridge, planner.decide if planner else None, settings, directory, update, stopped,
                                  commands, policy, **counter_options).run(goal.strip())
             except asyncio.CancelledError:

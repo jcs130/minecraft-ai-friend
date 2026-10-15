@@ -14,7 +14,7 @@ from .configuration import _boolean, _integer
 from .host_context import HostContextPort, validate_host_context
 from .mailbox import Mailbox, observation
 from .observations import body_feedback, feedback_signal, fact_preview, spatial_text, tool_failure_view
-from .death_memory import DeathMemory, scope_key
+from .death_memory import DeathMemory, lifecycle, scope_key
 
 
 @dataclass(frozen=True)
@@ -80,10 +80,23 @@ def review_observation(status, now):
     if (isinstance(episode, dict) and scope_key(episode.get("scope"))
             and episode.get("scope") == snapshot.get("game_identity") and isinstance(episode.get("source_event"), dict)):
         evidence["death_episode"] = episode
+    life = lifecycle(snapshot.get("facts", {}))
+    life = life if isinstance(life, dict) else {}
+    # Stable safety boundary, excluding movement, clock, inventory and ordinary
+    # task progress. Keep it separate from evidence refreshed during delivery.
+    evidence["body_baseline"] = {
+        "scope": scope_key(snapshot.get("game_identity")),
+        "lifecycle": {"phase": life.get("phase"), "episodeId": life.get("episodeId")
+                      or evidence.get("death_episode", {}).get("id")},
+        "restriction": feedback["bodyRestriction"], "phase": snapshot["phase"],
+        "unknown": [task for task in pending if task.get("phase") in {"unknown", "outcome_unknown"}],
+        "uncertain": snapshot.get("uncertain") is True or snapshot.get("error_code") == "outcome_unknown",
+    }
     urgent = "runtime_failed" if snapshot["phase"] == "failed" else (
         "death:" + str(episode.get("id")) if "death_episode" in evidence else None)
     return {"session": str(snapshot.get("owner_pid", "")) + ":" + str((snapshot.get("viewer") or {}).get("session", "")),
             "material": digest(material), "intent": digest([evidence["standing_goal"], active]),
+            "baseline": digest(evidence["body_baseline"]),
             "signal": digest([material, active, evidence["planner_error"], bool(pending), terminal, feedback_signal(feedback),
                               {key: evidence["tool_failure"][key] for key in ("tool", "error")} if evidence["tool_failure"] else None]),
             "urgent": urgent, "scope": scope_key(snapshot.get("game_identity")), "evidence": evidence}
@@ -233,7 +246,7 @@ class ReviewPort:
                         observed["evidence"]["death_episode"] = previous["evidence"]["death_episode"]
                     previous["evidence"] = observed["evidence"]
                     previous["summary"] = summary(observed["evidence"])
-                    if previous.get("signal") != observed["signal"]:
+                    if previous.get("signal") != observed["signal"] or previous.get("baseline") != observed["baseline"]:
                         # Bind dedup to the evidence the main brain will inspect,
                         # so acknowledging it cannot wake the same episode again.
                         previous["signal"] = observed["signal"]
@@ -294,6 +307,7 @@ class ReviewPort:
                 return {"is_error": True, "error": "meaningful_review_requires_decision"}
             if (not current or current["session"] != review["session"] or current["intent"] != review["intent"]
                     or current.get("urgent") or current.get("scope") != review.get("scope")
+                    or current["baseline"] != review.get("baseline")
                     or current["signal"] != review["signal"] or self.mailbox.intent_revision() != review["revision"]
                     or not 0 <= self.now() - review["created_at"] <= 180):
                 return {"is_error": True, "error": "review_expired_or_changed"}
@@ -335,6 +349,9 @@ class ReviewPort:
                 return review["result"]
             if not current or current["session"] != review["session"] or not 0 <= self.now() - review["created_at"] <= 180:
                 return {"is_error": True, "error": "review_expired_or_game_unavailable"}
+            if decision != "inspect" and current["baseline"] != review.get("baseline"):
+                return {"is_error": True, "error": "critical_baseline_changed",
+                        "next": "Inspect this heartbeat again before deciding: death/respawn, scope, body restrictions or unknown outcomes changed. Earlier body evidence is historical."}
             previous = self.mailbox.get(state.get("last_request_id", ""))
             can_revise = bool(previous and previous["delivery"] == "planning"
                 and previous["request_id"] == current["evidence"]["current_goal"].get("id"))
@@ -345,6 +362,11 @@ class ReviewPort:
                     end = min(len(chain), lineage_offset + 4)
                     return {"heartbeat_id": review_id, "goal_lineage": chain[lineage_offset:end],
                             "next_offset": end, "has_more": end < len(chain)}
+                fresh = current["evidence"]
+                fresh["current_user_goal"] = self.mailbox.current_user_goal(fresh["current_goal"].get("id"))
+                if review.get("scope") == current["scope"] and (episode := review["evidence"].get("death_episode")):
+                    fresh.setdefault("death_episode", episode)  # Explicit historical event, not current inventory.
+                review.update(evidence=fresh, baseline=current["baseline"])
                 return {"heartbeat_id": review_id, **review["evidence"], "stage_delivery": stage,
                         "next": "Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending. Keep stages within the standing goal and user intent; server-specific quests, exams or capabilities need fresh evidence from this world, not unrelated conversation memories.",
                         "goal_authority": "current_user_goal is explicitly user-sourced. host_review is a proposed stage subordinate to current user intent and the standing goal; unknown origin is not user authorization. last_decision is prior model judgment, not fresh world evidence. Query inspect with lineage_offset=0 for full original parent goals, four per page.",

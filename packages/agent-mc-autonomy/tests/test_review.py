@@ -31,6 +31,101 @@ def runtime(tmp_path):
     return port, clock, publish
 
 
+def body_snapshot(now, phase="alive", episode_id=None, gear="木镐×1"):
+    value = snapshot(now)["facts"]
+    value["parts"][1]["text"] = gear
+    value["parts"].append({"key": "deathLifecycle", "text": json.dumps({"phase": phase, "episodeId": episode_id})})
+    return value
+
+
+def test_delivered_death_review_requires_fresh_respawn_inspection_before_mailbox_insert(runtime):
+    from agent_mc_autonomy.death_memory import DeathMemory
+    from test_death_memory import event, facts, SCOPE
+    port, clock, publish = runtime
+    publish(facts=body_snapshot(clock[0]), game_identity=SCOPE)
+    before = port.offer()["review"]
+    port.delivered(before["id"], True)
+    episode = DeathMemory(port.directory).record(event(), facts(), [], [], [])
+    clock[0] += 1
+    publish(facts=body_snapshot(clock[0], "respawn_pending", episode["id"], "橡木原木×3"),
+            death_episode=episode, game_identity=SCOPE)
+    death = port.offer()["review"]
+    port.delivered(death["id"], True)
+    assert port.decide(before["id"], "insert", "旧物资计划", "使用木镐")["is_error"]
+    assert port.decide(death["id"], "inspect")["facts"]["gear"] == "橡木原木×3"
+    clock[0] += 1
+    publish(facts=body_snapshot(clock[0], "alive", episode["id"], "背包为空"),
+            death_episode=None, game_identity=SCOPE)
+    rejected = port.decide(death["id"], "insert", "旧死亡前物资", "用3个原木制作工具")
+    assert rejected.get("error") == "critical_baseline_changed"
+    assert port.mailbox.get(port.request_id(death["id"])) is None
+    fresh = port.decide(death["id"], "inspect")
+    assert fresh["facts"]["gear"] == "背包为空"
+    assert fresh["body_baseline"]["lifecycle"]["phase"] == "alive"
+    accepted = port.decide(death["id"], "insert", "复活后背包为空", "先寻找安全处再获取原木")
+    assert accepted["dispatched"] and port.mailbox.get(accepted["request_id"])["delivery"] == "queued"
+
+
+@pytest.mark.parametrize("change", ["scope", "death", "restriction", "unknown"])
+@pytest.mark.parametrize("observe", [False, True])
+def test_critical_body_changes_fence_issued_evidence_even_before_observe(runtime, change, observe):
+    from test_death_memory import SCOPE
+    port, clock, publish = runtime
+    publish(facts=body_snapshot(clock[0]), game_identity=SCOPE)
+    review_id = port.offer()["review"]["id"]
+    port.delivered(review_id, True)
+    clock[0] += 1
+    value = snapshot(clock[0], facts=body_snapshot(clock[0]), game_identity=SCOPE)
+    if change == "scope":
+        value["game_identity"] = {**SCOPE, "realm": "other-world"}
+    elif change == "death":
+        value["facts"] = body_snapshot(clock[0], "alive", "instant-death-respawn", "背包为空")
+    elif change == "restriction":
+        value["facts"]["parts"].append({"key": "bodyRestriction", "text": "authoritative incapacitation"})
+    else:
+        value["pending"] = [{"kind": "task", "id": "native-1", "phase": "unknown"}]
+    (port.directory / "status.json").write_text(json.dumps(value), encoding="utf-8")
+    if observe:
+        port.observe(value)
+    # Goal-lineage lookup does not inspect the changed body or authorize a plan.
+    assert "goal_lineage" in port.decide(review_id, "inspect", lineage_offset=0)
+    result = port.decide(review_id, "continue", "依据原先检查继续", host_context={"agent_name": "TestRole"})
+    assert result.get("error") == "critical_baseline_changed"
+    assert not (port.directory / "host-context.json").exists()
+    assert port.decide(review_id, "inspect")["sampled_at"] == value["updated_at"]
+    assert port.decide(review_id, "continue", "已重新检查身体")["acknowledged"]
+
+
+def test_ordinary_movement_and_task_progress_keep_delivered_review_usable(runtime):
+    port, clock, publish = runtime
+    publish(facts=body_snapshot(clock[0]))
+    review_id = port.offer()["review"]["id"]
+    port.delivered(review_id, True)
+    clock[0] += 1
+    facts = body_snapshot(clock[0], gear="木镐×1、原木×1")
+    facts["parts"].append({"key": "place", "text": "moved ten blocks"})
+    publish(facts=facts, pending=[{"id": "working", "phase": "running"}])
+    assert port.state()["review"]["id"] == review_id
+    assert not port.offer()["offered"]
+    assert port.decide(review_id, "continue", "继续获取食物")["acknowledged"]
+
+
+def test_quiet_defer_cannot_consume_a_lifecycle_change_with_identical_material(runtime):
+    port, clock, publish = runtime
+    publish(facts=body_snapshot(clock[0]))
+    port.decide(port.offer()["review"]["id"], "continue", "继续")
+    clock[0] += 180
+    publish(facts=body_snapshot(clock[0]))
+    review_id = port.offer()["review"]["id"]
+    clock[0] += 1
+    value = snapshot(clock[0], facts=body_snapshot(clock[0], "alive", "death-even-if-items-preserved"))
+    (port.directory / "status.json").write_text(json.dumps(value), encoding="utf-8")
+    assert port.defer(review_id, True)["error"] == "review_expired_or_changed"
+    assert not port.state()["review"].get("result")
+    port.observe(value)
+    assert port.state()["review"]["trigger"] == "state_changed"
+
+
 def test_review_shares_context_after_its_own_intent_revision_and_keeps_private_data_out_of_state(runtime):
     port, _, publish = runtime
     publish()

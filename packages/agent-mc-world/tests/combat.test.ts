@@ -715,7 +715,7 @@ describe('战斗会话:进入(夺手不夺嘴)', () => {
       b.session.stop();
     });
 
-    it('三档下挨打一律还手;armed 空手 / off 打起来时措辞永远走「被打」那一支', async () => {
+    it('三档下空手挨打均撤退，保留自动进场配置', async () => {
       for (const fight of ['auto', 'armed', 'off'] as const) {
         const bare = combatRigBot([foe(7, 'zombie', 2.2)]);
         (bare.bot as unknown as { inventory: { items: () => unknown[] } }).inventory.items = () => [];
@@ -732,7 +732,7 @@ describe('战斗会话:进入(夺手不夺嘴)', () => {
         (hit.bot as unknown as { heldItem: unknown }).heldItem = null;
         const b = rig(hit.bot, { fight });
         expect(b.session.onHurtBy(7, 'zombie')).toBe(true);
-        expect(b.events[0].text).toContain('打过来了');
+        expect(b.session.reactionState().retreating).toBe(true);
         expect(b.events[0].text).not.toContain('我先动手');
         b.session.stop();
       }
@@ -1426,11 +1426,68 @@ describe('空手低血:挨打的默认反应改成脱离', () => {
     session.stop();
   });
 
-  it('空手但血还够:照旧还手 —— 闸只钉在"空手且低血"这一对上', () => {
-    const { bot } = bareHanded([foe(7, 'zombie', 2.2)], 20);
-    const { session, events } = rig(bot); // 20 ≥ 13,闸不管
+  it('空手第一击后即撤退，不等到低血', () => {
+    const { bot, attacks } = bareHanded([foe(7, 'zombie', 2.2)], 17);
+    const { session } = rig(bot);
     expect(session.onHurtBy(7, 'zombie')).toBe(true);
-    expect(events[0].text).toContain('抄家伙还手');
+    expect(session.reactionState().retreating).toBe(true);
+    expect(attacks).toHaveLength(0);
+    session.stop();
+  });
+
+  it.each(['hurt', 'tick'] as const)('交战中武器损失由 %s 重新判断，空手及时撤离', async (trigger) => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.2)]);
+    const { session } = rig(bot);
+    session.onHurtBy(7, 'zombie');
+    expect(session.fighting).toBe(true);
+    Object.assign(bot, { heldItem: null, health: 17, inventory: { items: () => [], slots: [] } });
+    if (trigger === 'hurt') session.onHurtBy(7, 'zombie');
+    else await drive(bot, 50);
+    expect(session.reactionState().retreating).toBe(true);
+    expect(attacks).toHaveLength(0);
+    session.stop();
+  });
+
+  it('空手但远程可用仍可自卫，显式攻击任务仍持有身体', () => {
+    const ranged = rangedRig();
+    const a = bareHanded([foe(7, 'skeleton', 12)], 17);
+    const first = rig(a.bot, {}, undefined, ranged.actions);
+    first.session.onHurtBy(7, 'skeleton');
+    expect(first.session.fighting).toBe(true);
+    first.session.stop();
+    const b = bareHanded([foe(7, 'zombie', 2.2)], 17);
+    const second = rig(b.bot);
+    second.setTaskFighting(true);
+    expect(second.session.onHurtBy(7, 'zombie')).toBe(true);
+    expect(second.session.active).toBe(false);
+    expect(second.calls.suspended).toBe(0);
+  });
+
+  it.each([false, true])('撤退跳跃侧向抖动不能冒充前进，真实前进不误封锁 (%s)', async (advancing) => {
+    const { bot } = bareHanded([foe(7, 'zombie', 7)], 5);
+    const diag = new MinecraftLog({ log });
+    const { session } = rig(bot, {}, diag);
+    session.onHurtBy(7, 'zombie');
+    const body = (bot as unknown as Bot).entity;
+    const internal = session as unknown as { movementIntent: { x: number; z: number }; blockedHeadings: unknown[] };
+    bot.emit('physicsTick');
+    const original = { ...internal.movementIntent };
+    for (let i = 0; i < 30; i++) {
+      const intent = internal.movementIntent;
+      if (intent) {
+        const jitter = i % 2 ? 0.12 : -0.12;
+        body.position.x += advancing ? intent.x * 0.08 : -intent.z * jitter;
+        body.position.z += advancing ? intent.z * 0.08 : intent.x * jitter;
+      }
+      body.position.y = 64 + (i % 2 ? 0.2 : 0);
+      body.onGround = false;
+      await drive(bot, 50);
+    }
+    expect(diag.after(0).some(e => e.event === 'wall-stall')).toBe(!advancing);
+    if (!advancing) {
+      expect(internal.blockedHeadings.length).toBeGreaterThan(0);
+      expect(internal.movementIntent.x * original.x + internal.movementIntent.z * original.z).toBeLessThan(0.9);
+    }
     session.stop();
   });
 

@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import time
+from dataclasses import replace
 from typing import Protocol
 
-from .perception import has_images, text_only
-from .model_config import HttpPlannerConfig
+from .decision_profiles import base_output_budget, profile_view, validate_policy
 from .model_auth import Authorization
+from .model_config import HttpPlannerConfig, validate_parameters
 from .model_protocols import decode, request, scope, usage_metrics
 from .model_stream import collect
+from .perception import has_images, text_only
 
 
 class Planner(Protocol):
@@ -77,7 +80,44 @@ class HttpPlanner:
         config.validate_budget(max_output_tokens)
         config.key()  # Fail before starting a body when an explicitly named key is missing.
         self.auth = authorization or Authorization(config)
+        self.profile_rejections=set()
         self.client = client or httpx.AsyncClient(timeout=timeout, follow_redirects=False, trust_env=False)
+
+    def validate_profiles(self, policy):
+        validate_policy(policy,self.config,self.max_output_tokens)
+
+    async def decide_profile(self, messages, tools, profile):
+        # An independent per-call view shares the owned transport/auth, never
+        # mutates model routing or a concurrent request's configured parameters.
+        parameters=validate_parameters(self.config.protocol,{**self.config.parameters,**profile["parameters"]})
+        branch=copy.copy(self)
+        branch.config=replace(self.config,parameters=parameters)
+        branch.max_output_tokens=profile["max_output_tokens"]
+        if branch.max_output_tokens>self.max_output_tokens:
+            raise ValueError("decision_profile_exceeds_reserved_output")
+        branch.config.validate_budget(branch.max_output_tokens)
+        key=json.dumps([profile['profile'],profile['parameters']],sort_keys=True)
+        rejected=key in self.profile_rejections
+        if rejected:
+            branch.config=self.config
+            branch.max_output_tokens=base_output_budget(self.config,profile['max_output_tokens'],self.max_output_tokens)
+        try:
+            result=await branch.decide(messages,tools)
+        except RuntimeError as error:
+            if not profile['parameters'] or rejected or str(error) not in {'brain_http_error_400','brain_http_error_422'}:
+                raise
+            # A known HTTP rejection has not dispatched any game action. Try
+            # the configured base once; only a successful fallback disables
+            # these optional hints for the rest of this planner's lifetime.
+            branch.config=self.config
+            branch.max_output_tokens=base_output_budget(self.config,profile['max_output_tokens'],self.max_output_tokens)
+            result=await branch.decide(messages,tools)
+            self.profile_rejections.add(key)
+            rejected=True
+        result.setdefault("model_status",{})["decision_profile"]=profile_view(profile,parameters_applied=not rejected,
+            fallback='provider_rejected_profile' if rejected else None,
+            budget_applied=branch.max_output_tokens==profile['max_output_tokens'],effective_output_tokens=branch.max_output_tokens)
+        return result
 
     async def _request(self, messages, tools):
         url, body = request(self.config, messages, tools, self.max_output_tokens)

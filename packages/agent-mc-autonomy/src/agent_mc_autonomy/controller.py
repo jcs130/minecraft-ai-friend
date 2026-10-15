@@ -11,14 +11,22 @@ from pathlib import Path
 
 from .bridge import json_content, outcome, text_content
 from .context import assemble, encode
+from .death_memory import TOOL as DEATH_REVIEW_TOOL
+from .death_memory import DeathMemory, identity, lifecycle
+from .decision_profiles import profile_view
 from .fast import FastPolicy, focus_state, rule_focus
-from .observations import body_event_view, fact_preview, receipt_view, spatial_text, tool_failure_view
-from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .model_protocols import assistant_history
+from .observations import (
+    body_event_view,
+    fact_preview,
+    receipt_view,
+    spatial_text,
+    tool_failure_view,
+)
+from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .planner import PlannerResponseError, PlannerUnavailableError
 from .tool_schema import argument_error
 from .viewer_public import tool_receipt
-from .death_memory import DeathMemory, TOOL as DEATH_REVIEW_TOOL, identity, lifecycle
 
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
@@ -250,8 +258,10 @@ def failure_context(catalogue, name, arguments, result):
 
 
 class Controller:
-    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None, *, context_counter=None, host_context_provider=None):
+    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None, *, context_counter=None, host_context_provider=None, profile_decide=None):
         self.bridge, self.decide, self.settings = bridge, decide, settings
+        self.profile_decide=profile_decide
+        self.profile_death_id=None
         from .host_context import HostContextPort
         self.host_context_provider = host_context_provider or HostContextPort(data).read
         self.context_counter = context_counter
@@ -501,8 +511,9 @@ class Controller:
         return {"text": encode({"handle": arguments["handle"], "offset": offset, "text": text[offset:end],
                                 "next_offset": end, "has_more": end < len(text), "total_characters": len(text)})}
 
-    async def decide_with_events(self, messages, tools):
-        task = asyncio.create_task(asyncio.wait_for(self.decide(messages, tools), self.settings.model_timeout_seconds))
+    async def decide_with_events(self, messages, tools, profile=None):
+        call=self.profile_decide(messages,tools,profile) if profile and self.profile_decide else self.decide(messages,tools)
+        task = asyncio.create_task(asyncio.wait_for(call, self.settings.model_timeout_seconds))
         try:
             while True:
                 done, _ = await asyncio.wait({task}, timeout=1)
@@ -514,7 +525,10 @@ class Controller:
                     self.preempted = True
                     return None
                 if done:
-                    return await task
+                    result=await task
+                    if profile and not self.profile_decide and isinstance(result,dict):
+                        result.setdefault('model_status',{})['decision_profile']=profile_view(profile,parameters_applied=False,fallback='planner_profile_port_unavailable',budget_applied=False)
+                    return result
                 wake, urgent, _ = await self.events()
                 self.deferred_wake |= wake
                 if urgent:
@@ -917,7 +931,11 @@ class Controller:
                 budget.update(image_reserve=reserve, total=budget["total"] + reserve, limit=self.settings.context_tokens)
                 self.publish(context=budget)
                 try:
-                    response = await self.decide_with_events(messages, tools)
+                    death_context=self.death_memory.context(self.game_scope) if self.settings.decision_policy.enabled else None
+                    episode_id=death_context.get('latest_episode',{}).get('id') if death_context else None
+                    profile=self.settings.decision_policy.select(focus=focus.get('choice'),failure=bool(self.tool_failure or self.planner_notice),feedback=self.feedback_pending,
+                        death=bool(episode_id and episode_id!=self.profile_death_id))
+                    response = await self.decide_with_events(messages, tools, profile)
                 except (PlannerResponseError, PlannerUnavailableError) as error:
                     with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
                         output.write(encode({"turnId": self.turn, "rejected": error.diagnostic, "dispatched": False}) + "\n")
@@ -937,6 +955,8 @@ class Controller:
                     return
                 if self.stop_requested() or response is None:
                     return
+                if profile and profile['reason']=='death_review':
+                    self.profile_death_id=episode_id
                 self.planner_failures = 0
                 self.planner_retry_at = 0.0
                 self.planner_notice = None

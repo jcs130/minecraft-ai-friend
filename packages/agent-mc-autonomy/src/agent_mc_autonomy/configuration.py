@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from .decision_profiles import DecisionSettings
 from .fast import FastSettings
 
 
@@ -139,6 +140,7 @@ class Settings:
     vision_enabled: bool = True
     fast: FastSettings = field(default_factory=FastSettings)
     memory: MemorySettings = field(default_factory=MemorySettings)
+    decision_policy: DecisionSettings = field(default_factory=DecisionSettings)
 
     @classmethod
     def parse(cls, raw: dict) -> Settings:
@@ -200,6 +202,7 @@ class Settings:
         renderer, catalog = _text(viewer, "renderer_directory"), _text(viewer, "catalog_file")
         if bool(renderer) != bool(catalog):
             raise ValueError("viewer.renderer_directory and viewer.catalog_file must be configured together")
+        maximum_output = _integer(autonomy, "max_output_tokens", 1024, 128, 131072)
         return cls(
             enabled=_boolean(autonomy, "enabled", False), host=host,
             port=_integer(server, "port", 25565, 1, 65535), username=username, auth=auth, version=version, connection_type=connection_type,
@@ -214,13 +217,14 @@ class Settings:
             viewer_listen_port=_integer(viewer, "listen_port", 28985, 1024, 65535),
             idle_decision_seconds=_integer(autonomy, "idle_decision_seconds", 60, minimum, 3600),
             max_tool_rounds=_integer(autonomy, "max_tool_rounds", 6, 1, 12),
-            max_output_tokens=_integer(autonomy, "max_output_tokens", 1024, 128, 131072),
+            max_output_tokens=maximum_output,
             model_timeout_seconds=_integer(autonomy, "model_timeout_seconds", 180, 10, 300),
             context_tokens=_integer(autonomy, "context_tokens", 32768, 4096, 2097152),
             max_decisions=_integer(autonomy, "max_decisions", 100, 0, 10000),
             runtime_mode=_text(runtime, "mode", "embedded"), data_directory=_text(runtime, "data_directory"),
             vision_enabled=_boolean(perception, "enabled", True), fast=FastSettings.parse(raw.get("fast", {})),
             memory=MemorySettings.parse(raw.get("memory", {})),
+            decision_policy=DecisionSettings.parse(raw.get("decision_policy", {}), maximum_output),
         )
 
     def require_server(self) -> None:
