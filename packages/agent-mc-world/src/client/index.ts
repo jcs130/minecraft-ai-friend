@@ -20,6 +20,7 @@ export { planLegacyConfiguration, copyLegacyData } from './migration.ts';
 
 export { GameMemoryLearning } from '../../core/game-memory-learning.ts';
 export { ClientOperationLearning } from './operation-learning.ts';
+export { WorldOperationLearning } from './world-learning.ts';
 export { OperationExperienceBook, experienceHash, operationObservation, operationScopeKey,
   type OperationExperience, type OperationObservation, type OperationDecision, type OperationAttribution } from '../../core/operation-experience.ts';
 export { PhotographyService, PHOTO_TOOL, PHOTO_PLANNER_SYSTEM, preparePhotoContext, type PhotographyOptions } from '../../core/photography.ts';

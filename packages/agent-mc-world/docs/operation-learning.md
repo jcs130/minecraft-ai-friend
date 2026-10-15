@@ -3,7 +3,19 @@
 The core supplies a game evidence substrate for every Agent using its SDK/MCP. Pi is one consumer;
 no Pi schema, model or persona is imported. Direct legacy World integrations may use the public
 OperationExperienceBook/ClientOperationLearning ports explicitly; they must not claim automatic
-collection until wired. Existing ordinary game memory and optional service-learning APIs remain available.
+collection until wired. `WorldOperationLearning` supplies the direct-host integration: wrap the
+existing host with `start(host)`, wrap exposed tools with `tools(...)`, and wrap any internal
+host-controlled body calls with the same collector. Call `stop()` after the body finishes stopping.
+It adds no timer, model request, dispatch queue or personal-memory writes. Do not combine this
+wrapper with an SDK collector for the same calls. Existing ordinary game memory and optional
+service-learning APIs remain available.
+
+Direct-host capture runs have their own `world-<UUID>` identity; original call and execution IDs
+link back to host logs. A confirmed `requestFacts().experience.scope` is required; missing identity
+never creates a guessed notebook. Inline script hashes identify the actual submitted version.
+Choice recall is bounded to three historical lessons. Recall is not adoption: without explicit
+SDK attribution, adopted memory references remain unknown. Automatic combat controllers which
+do not submit tools retain their original reports; no synthetic terminal or success is fabricated.
 
 `MinecraftAgentClient.learning` records host decisions and recalls at most three relevant local lessons.
 `call` automatically captures physical tools and executable methods; `hostTactics` captures exact choice

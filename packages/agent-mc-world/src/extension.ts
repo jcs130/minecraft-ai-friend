@@ -23,6 +23,7 @@ export { loadPrivateClientConfig } from './client/config-file.ts';
 export { observeVisual, acceptsImages, visualArgumentError, structuredVisual } from './client/visual.ts';
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady } from './client/config.ts';
 export { MinecraftClientWorld } from './client/world.ts';
+export { WorldOperationLearning } from './client/world-learning.ts';
 export { JavaClientWorld, validateJavaClientConfiguration } from './client/java-client.ts';
 export type { JavaClientServices } from './client/java-memory.ts';
 export * from './contracts/java-client.ts';
