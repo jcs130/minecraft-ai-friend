@@ -34,6 +34,9 @@ export function viewerVersionTexture(relative, version) {
     return `textures/${version}/painting/${relative.slice('minecraft-assets/painting/'.length)}`;
   if (!relative.startsWith('textures/')) return null;
   let texture = relative.slice('textures/'.length);
+  // Renderer entity tables still contain old version directories. Keep the
+  // relative original resource name and resolve it only in the selected pack.
+  texture = texture.replace(/^1\.\d+(?:\.\d+)?\//, '');
   if (version === '1.21.1' && ['entity/squid.png', 'entity/glow_squid.png'].includes(texture))
     texture = `entity/squid/${texture.slice('entity/'.length)}`;
   return `textures/${version}/${texture}`;

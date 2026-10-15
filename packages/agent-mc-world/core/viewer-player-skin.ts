@@ -2,7 +2,8 @@
 import type mineflayer from 'mineflayer';
 
 export function viewerPlayerSkin(bot: mineflayer.Bot, username: string | undefined,
-  uuid?: string): { skinUrl?: string; skinModel?: 'classic' | 'slim' } {
+  uuid?: string, remoteTextures = true): { skinUrl?: string; skinModel?: 'classic' | 'slim'; skinAvailability?: 'disabled' } {
+  if (!remoteTextures) return { skinAvailability: 'disabled' };
   const player = (username ? bot.players?.[username] : undefined)
     ?? (uuid ? Object.values(bot.players ?? {}).find(entry => entry.uuid === uuid) : undefined);
   const skin = player?.skinData;

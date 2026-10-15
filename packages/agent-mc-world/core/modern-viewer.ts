@@ -216,7 +216,7 @@ async function requiredAssetsPresent(root: string, version: string): Promise<boo
   return true;
 }
 
-export function ownEntity(bot: mineflayer.Bot): Record<string, unknown> {
+export function ownEntity(bot: mineflayer.Bot, remoteTextures = false): Record<string, unknown> {
   const entity = bot.entity;
   const uuid = bot._client?.uuid ?? bot.player?.uuid ?? entity.uuid;
   const inventory = bot.inventory as unknown as { slots?: unknown[]; hotbarStart?: number };
@@ -230,7 +230,7 @@ export function ownEntity(bot: mineflayer.Bot): Record<string, unknown> {
     width: entity.width, height: entity.height, yaw: entity.yaw, pitch: entity.pitch,
     username: bot.username, uuid, isSelf: true, equipment, skinUrl: null, skinModel: null,
     bodyState: viewerBodyState(bot), sleepState: viewerSleepState(bot),
-    ...viewerPlayerSkin(bot, bot.username, uuid),
+    ...viewerPlayerSkin(bot, bot.username, uuid, remoteTextures),
     burning: Boolean((entity as unknown as { isOnFire?: boolean }).isOnFire) ||
       (Number((entity as unknown as { metadata?: unknown[] }).metadata?.[0]) & 1) !== 0 };
 }
@@ -281,7 +281,7 @@ export function recordFishingBobberOwner(owners: Map<number, number>,
 }
 
 export function viewerEntity(bot: mineflayer.Bot, entity: ViewerEntity,
-  fishingBobberOwners?: ReadonlyMap<number, number>): Record<string, unknown> {
+  fishingBobberOwners?: ReadonlyMap<number, number>, remoteTextures = false): Record<string, unknown> {
   const record = entity as unknown as Record<string, unknown>;
   const registry = bot.registry?.entitiesByName as Record<string,
     { name?: string; width?: number; height?: number; metadataKeys?: string[] }> | undefined;
@@ -296,7 +296,7 @@ export function viewerEntity(bot: mineflayer.Bot, entity: ViewerEntity,
     yaw: entity.yaw, pitch: entity.pitch, headYaw: record.headYaw,
     velocity: entity.velocity ? { x: entity.velocity.x, y: entity.velocity.y, z: entity.velocity.z } : undefined,
     username: entity.username, uuid: entity.uuid, age: record.age,
-    ...(name === 'player' ? { skinUrl: null, skinModel: null, ...viewerPlayerSkin(bot, entity.username, entity.uuid) } : {}),
+    ...(name === 'player' ? { skinUrl: null, skinModel: null, ...viewerPlayerSkin(bot, entity.username, entity.uuid, remoteTextures) } : {}),
     metadata: viewerRenderableMetadata(record.metadata),
     burning: record.isOnFire === true || (Number((record.metadata as unknown[] | undefined)?.[0]) & 1) !== 0,
     equipment: Array.isArray(record.equipment) ? record.equipment.slice(0, 6).map(viewerItem) : undefined,
@@ -355,7 +355,7 @@ function equipmentArmor(equipment: unknown[]): number {
   }, 0);
 }
 
-function avatarState(bot: mineflayer.Bot, sequence: number, shieldRaised = false): Record<string, unknown> {
+function avatarState(bot: mineflayer.Bot, sequence: number, shieldRaised = false, remoteTextures = false): Record<string, unknown> {
   const entity = bot.entity as unknown as Record<string, unknown>;
   const velocity = entity.velocity as { x?: number; y?: number; z?: number } | undefined;
   const speed = Math.hypot(Number(velocity?.x) || 0, Number(velocity?.z) || 0);
@@ -377,7 +377,7 @@ function avatarState(bot: mineflayer.Bot, sequence: number, shieldRaised = false
   const foodRegistry = (bot.registry as unknown as { foodsByName?: Record<string, unknown> }).foodsByName;
   const held = bot.heldItem as unknown as { name?: string; components?: Array<{ type?: string }> } | null;
   return {
-    seq: sequence, sequence, capturedAt: Date.now(), entity: ownEntity(bot),
+    seq: sequence, sequence, capturedAt: Date.now(), entity: ownEntity(bot, remoteTextures),
     movementState: viewerMovementState(speed, sprinting, sneaking),
     horizontalSpeed: speed,
     verticalSpeed: Number(velocity?.y) || 0,
@@ -768,6 +768,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       if (pathname === '/viewer-coverage') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
         res.end(JSON.stringify({ version: bot.version,
+          remoteTextures: { enabled: options.remoteTextures === true },
           audio: { registrySource: soundRegistry.source,
             registryEntries: Object.keys(soundRegistry.registry.sounds ?? {}).length, diagnostic: soundRegistry.diagnostic },
           channels: [...observedChannels].map(([name, count]) => ({ name, count })),
@@ -996,7 +997,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
         const id = String(entity.id);
         if (!knownEntities.has(id) && knownEntities.size >= 128) continue;
         const complete = full || !knownEntities.has(id);
-        socket.emit(complete ? 'entity' : 'entityMoved', complete ? viewerEntity(bot, entity, fishingBobberOwners) :
+        socket.emit(complete ? 'entity' : 'entityMoved', complete ? viewerEntity(bot, entity, fishingBobberOwners, options.remoteTextures) :
           { id: entity.id, pos: entity.position, yaw: entity.yaw, pitch: entity.pitch,
             headYaw: (entity as unknown as { headYaw?: number }).headYaw });
         knownEntities.add(id);
@@ -1026,7 +1027,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     };
     const publishAvatar = () => {
       if (active && bot.entity && socket.connected) {
-        socket.emit('avatarState', avatarState(bot, ++sequence, shieldRaised));
+        socket.emit('avatarState', avatarState(bot, ++sequence, shieldRaised, options.remoteTextures));
         publishDigging();
       }
     };
@@ -1081,7 +1082,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       if (!active || !bot.entity) return;
       socket.emit('position', { pos: bot.entity.position, yaw: bot.entity.yaw, pitch: bot.entity.pitch,
         addMesh: view === 'third', teleport: teleport === true });
-      socket.emit(view === 'third' ? 'entityMoved' : 'playerEntity', ownEntity(bot));
+      socket.emit(view === 'third' ? 'entityMoved' : 'playerEntity', ownEntity(bot, options.remoteTextures));
       updateChunkPosition();
     };
     const forcedPosition = () => position(undefined, true);
@@ -1215,7 +1216,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
         ...effectDetails(effect.id), amplifier: effect.amplifier, durationTicks: remainingEffectTicks(effect) });
     }
     socket.emit('biome', { name: 'unknown', dimension: String(bot.game.dimension || 'minecraft:overworld'), id: null });
-    socket.emit(view === 'third' ? 'entity' : 'playerEntity', ownEntity(bot));
+    socket.emit(view === 'third' ? 'entity' : 'playerEntity', ownEntity(bot, options.remoteTextures));
     bot.on('move', position); bot.on('forcedMove', forcedPosition);
     bot.on('time', time);
     protocol.on('game_state_change', weather);
