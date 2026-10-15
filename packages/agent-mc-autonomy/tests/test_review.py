@@ -265,14 +265,23 @@ def test_review_summary_keeps_tools_and_material_stagnation_visible(runtime):
     publish(facts=facts, standing_goal=goal)
     port.decide(port.offer()["review"]["id"], "continue", "先按原目标观察")
     clock[0] += 180
-    publish(facts=facts, standing_goal=goal, read_activity={"mc_bag": 9, "mc_scout": 5})
+    publish(facts=facts, standing_goal=goal, read_activity={"mc_bag": 9, "mc_scout": 5, "mc_knowledge": 10})
     review = port.offer()["review"]
     assert review["trigger"] == "periodic_review"  # No extra calls due to a counter.
     assert "工作台×1" in review["summary"] and "木镐" in review["summary"]
     assert "获取食物" in review["summary"] and "庇护所" in review["summary"]
-    assert "180秒" in review["summary"] and "查询14次" in review["summary"]
-    assert review["evidence"]["read_activity"] == {"mc_bag": 9, "mc_scout": 5}
+    assert "180秒" in review["summary"] and "查询24次" in review["summary"]
+    assert review["evidence"]["read_activity"] == {"mc_bag": 9, "mc_scout": 5, "mc_knowledge": 10}
     assert len(review["summary"].encode("utf-8")) < 1800
+
+
+def test_knowledge_only_read_activity_is_visible_and_counts_remain_bounded(runtime):
+    port, _, publish = runtime
+    publish(read_activity={"mc_knowledge": 5000, "mc_bag": -1, "mc_help": True,
+                           "mc_map": 99, "mc_knowledge_extra": 88})
+    review = port.offer()["review"]
+    assert review["evidence"]["read_activity"] == {"mc_knowledge": 999}
+    assert "连续查询999次（查询不代表行动进展）" in review["summary"]
 
 
 def test_review_keeps_observed_structures_and_terminal_outcome(runtime):
