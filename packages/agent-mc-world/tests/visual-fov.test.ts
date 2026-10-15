@@ -9,7 +9,7 @@ it('validates perspective FOV before any browser or network work', async () => {
     expect(visualArgumentError({ fov })?.failed).toBe(true);
     await expect(manager.capture({ viewerUrl: 'http://127.0.0.1:7793', fov: fov as number })).rejects.toThrow('fov');
   }
-  for (const mode of ['overview', 'dungeon'] as const)
+  for (const mode of ['overview', '3dview'] as const)
     expect(visualArgumentError({ mode, fov: 120 })?.failed).toBe(true);
   expect(calls).toBe(0);
 });

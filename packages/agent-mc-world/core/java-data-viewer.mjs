@@ -1,19 +1,17 @@
-// Generated from mc-visual-console by tools/build-java-data-host.mjs. Edit the shared source.
-
-// packages/modern-viewer/renderer-src/host/java-data-viewer.mjs
+// host/java-data-viewer.mjs
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path2 from "node:path";
 import { createHash } from "node:crypto";
 import { Server as SocketServer } from "socket.io";
 
-// packages/modern-viewer/renderer-src/host/java-visual-data.mjs
+// host/java-visual-data.mjs
 import { createRequire } from "node:module";
 
-// packages/modern-viewer/renderer-src/host/viewer-version.mjs
+// host/viewer-version.mjs
 var PRIMARY_VIEWER_VERSION = "1.21.1";
 
-// packages/modern-viewer/renderer-src/host/java-visual-data.mjs
+// host/java-visual-data.mjs
 var require2 = createRequire(import.meta.url);
 var canonical = (props) => JSON.stringify(Object.entries(props).map(([k, v]) => [k, String(v)]).sort(([a], [b]) => a.localeCompare(b)));
 var identifier = /^minecraft:[a-z0-9_./-]+$/;
@@ -233,7 +231,7 @@ var JavaVisualData = class {
   }
 };
 
-// packages/modern-viewer/renderer-src/host/viewer-asset-server.mjs
+// host/viewer-asset-server.mjs
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
@@ -301,13 +299,13 @@ async function serveViewerAsset(res, root, relative, cacheControl = "public, max
   return true;
 }
 
-// packages/modern-viewer/renderer-src/host/java-data-viewer.mjs
+// host/java-data-viewer.mjs
 async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expectedServer, radius = 2, minecraftVersion = PRIMARY_VIEWER_VERSION }) {
   if (!Number.isInteger(port) || port < 0 || port > 65535 || !Number.isInteger(radius) || radius < 0 || radius > 4) throw Error("JAVA_VIEWER_CONFIG_INVALID");
   const root = path2.resolve(assetsDir), source = JSON.parse(await readFile(path2.join(root, "public/asset-source.json"), "utf8"));
   if (!["1.20.6", "1.21.1"].includes(minecraftVersion) || source.minecraftVersion !== minecraftVersion) throw Error("JAVA_VIEWER_ASSET_VERSION_MISMATCH");
   const notice = '<div role="status" style="position:fixed;bottom:54px;left:12px;z-index:99999;background:#13242fe8;color:white;padding:8px;max-width:430px;font:13px sans-serif">\u539F\u751F\u6570\u636E\u9884\u89C8 \xB7 \u5DF2\u63A5\u5165\u5730\u5F62\u4E0E\u672C\u4EBA\u79FB\u52A8\u3002\u5176\u4ED6\u5B9E\u4F53\u3001\u5BB9\u5668\u3001YSM\u3001\u6A21\u7EC4\u6750\u8D28\u4E0E\u5149\u5F71\u5C1A\u672A\u63A5\u5165\uFF1B\u754C\u9762\u7A7A\u69FD\u4E0D\u4EE3\u8868\u5B9E\u9645\u80CC\u5305\u4E3A\u7A7A\u3002</div>';
-  const pages = new Map(await Promise.all(["", "third/", "dungeon/"].map(async (route) => [route, (await readFile(path2.join(root, "public", route, "index.html"), "utf8")).replace("</body>", notice + "</body>")])));
+  const pages = new Map(await Promise.all(["", "third/", "3dview/"].map(async (route) => [route, (await readFile(path2.join(root, "public", route, "index.html"), "utf8")).replace("</body>", notice + "</body>")])));
   const css = await readFile(path2.join(root, "public/viewer.css"));
   const skins = /* @__PURE__ */ new Map(), skinBytes = /* @__PURE__ */ new Map();
   const data = new JavaVisualData({ uuid, server: expectedServer, minecraftVersion, skinUrl: (resource) => skins.get(resource) ?? null });
@@ -385,7 +383,12 @@ async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expect
       return;
     }
     try {
-      const route = new URL(req.url, "http://127.0.0.1").pathname.slice(1);
+      let route = new URL(req.url, "http://127.0.0.1").pathname.slice(1);
+      if (route === "dungeon" || route.startsWith("dungeon/")) {
+        res.writeHead(308, { Location: "/3dview" + (route.slice(7) || "/") + new URL(req.url, "http://localhost").search }).end();
+        return;
+      }
+      if (/^(third|3dview)\/.+/.test(route)) route = route.replace(/^(third|3dview)\//, "");
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("X-Content-Type-Options", "nosniff");
       if (pages.has(route)) {

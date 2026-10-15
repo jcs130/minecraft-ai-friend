@@ -2321,8 +2321,8 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       type: 'object',
       properties: {
         mode: {
-          type: 'string', enum: ['first', 'third', 'dungeon', 'overview'],
-          description: 'Default first: your eye position and look direction, without your own avatar in view. third=explicit external view of surroundings/avatar, dungeon=angled view, overview=north-up coordinate photograph of loaded terrain.',
+          type: 'string', enum: ['first', 'third', '3dview', 'overview'],
+          description: 'Default first: your eye position and look direction, without your own avatar in view. third=explicit external view of surroundings/avatar, 3dview=angled spectator view, overview=north-up coordinate photograph of loaded terrain.',
         },
         overview: OVERVIEW_SCHEMA,
         fov: { type: 'number', minimum: 30, maximum: 140, description: 'first/third vertical field of view in degrees; default 120. Does not change look direction or reveal occluded terrain.' },
@@ -3569,7 +3569,7 @@ export class MinecraftWorld implements World {
         { label: this.bridge?.viewerKind === 'basic' ? '基础画面' : '第一人称', href: viewerUrl },
         ...(this.bridge?.viewerKind === 'modern' ? [
           { label: '第三人称', href: viewerUrl + '/third/' },
-          { label: '2.5D', href: viewerUrl + '/dungeon/' },
+          { label: '3D观战', href: viewerUrl + '/3dview/' },
           { label: 'OBS', href: viewerUrl + '/?obs=1' },
           { label: 'OBS 布局', href: viewerUrl + '/?obs=1&obsEdit=1' },
         ] : []),
@@ -4630,8 +4630,8 @@ export class MinecraftWorld implements World {
     const mode = args.mode === undefined ? 'first' : args.mode;
     const fovError = visualFovError(mode, args.fov);
     if (fovError) return { text: this.toolLog(name, args, `[mc_visual 失败] ${fovError}`), failed: true };
-    if (!['first', 'third', 'dungeon', 'overview'].includes(mode as string)) {
-      return { text: this.toolLog(name, args, '[mc_visual 失败] mode 只能是 first、third、dungeon 或 overview'), failed: true };
+    if (!['first', 'third', '3dview', 'overview'].includes(mode as string)) {
+      return { text: this.toolLog(name, args, '[mc_visual 失败] mode 只能是 first、third、3dview 或 overview'), failed: true };
     }
     const overviewError = overviewArgumentError(mode, args.overview, args.include_hud);
     if (overviewError) return { text: this.toolLog(name, args, `[mc_visual 失败] ${overviewError}`), failed: true };
@@ -4749,8 +4749,8 @@ export class MinecraftWorld implements World {
     if (!bot?.entity || !viewerUrl || this.bridge?.viewerKind === 'basic' || this.shuttingDown)
       throw new Error('Photography requires a connected modern web viewer');
     const generation = this.connectionGeneration, dimension = String(bot.game.dimension);
-    const mode = (args.mode ?? 'third') as 'first' | 'third' | 'dungeon';
-    if (!['first', 'third', 'dungeon'].includes(mode)) throw new Error('Invalid photograph camera mode');
+    const mode = (args.mode ?? 'third') as 'first' | 'third' | '3dview';
+    if (!['first', 'third', '3dview'].includes(mode)) throw new Error('Invalid photograph camera mode');
     const invalid = this.visualArgumentFailure({ mode, fov: args.fov });
     if (invalid) throw new Error(invalid.text);
     const before = bot.entity.position.clone();
@@ -4774,7 +4774,7 @@ export class MinecraftWorld implements World {
     const name = 'mc_visual';
     const invalid = this.visualArgumentFailure(args);
     if (invalid) return invalid;
-    const mode = (args.mode ?? 'first') as 'first' | 'third' | 'dungeon' | 'overview';
+    const mode = (args.mode ?? 'first') as 'first' | 'third' | '3dview' | 'overview';
     const focus = typeof args.focus === 'string' ? args.focus.replace(/\s+/g, ' ').trim().slice(0, 160) : '';
     const bot = this.bridge?.bot;
     const viewerUrl = this.bridge?.viewerUrl;

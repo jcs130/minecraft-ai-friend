@@ -37,7 +37,7 @@ export const PHOTO_TOOL: Omit<ToolDef, 'handler'> = {
     prompt: { type: 'string', minLength: 1, maxLength: 16000 },
     reference_handles: { type: 'array', maxItems: 14, uniqueItems: true, items: { type: 'string', maxLength: 256 } },
     size: { type: 'string', maxLength: 16 },
-    mode: { type: 'string', enum: ['first', 'third', 'dungeon'] },
+    mode: { type: 'string', enum: ['first', 'third', '3dview'] },
     fov: { type: 'number', minimum: 30, maximum: 140 },
     request_id: { type: 'string', minLength: 1, maxLength: 256 },
   }, required: ['action'] },

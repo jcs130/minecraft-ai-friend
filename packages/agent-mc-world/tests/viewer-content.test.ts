@@ -34,7 +34,7 @@ describe.skipIf(engineOnly)('packaged viewer content (requires locked optional v
       return { socket, events };
     };
     try {
-      for (const page of ['/', '/third/', '/dungeon/']) {
+      for (const page of ['/', '/third/', '/3dview/']) {
         const response = await fetch(viewer.url + page);
         expect(response.status).toBe(200);
         expect(await response.text()).toContain('/index.js');

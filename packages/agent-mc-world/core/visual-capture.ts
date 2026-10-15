@@ -6,7 +6,7 @@ import { chromium, type Browser, type Page } from 'playwright-core';
 import { overviewArgumentError, type OverviewOptions, type OverviewMetadata } from './visual-overview.ts';
 import { visualFov } from './visual-fov.ts';
 
-export type MinecraftViewMode = 'first' | 'third' | 'dungeon' | 'overview';
+export type MinecraftViewMode = 'first' | 'third' | '3dview' | 'dungeon' | 'overview';
 
 export interface MinecraftViewCaptureOptions {
   viewerUrl: string;
@@ -199,8 +199,8 @@ export class MinecraftViewCaptureManager {
 
   async capture(options: MinecraftViewCaptureOptions): Promise<MinecraftViewCapture> {
     const origin = localViewerOrigin(options.viewerUrl);
-    const mode = options.mode ?? 'first';
-    if (!['first', 'third', 'dungeon', 'overview'].includes(mode)) throw new RangeError('invalid Minecraft view mode');
+    const mode = options.mode === 'dungeon' ? '3dview' : options.mode ?? 'first';
+    if (!['first', 'third', '3dview', 'overview'].includes(mode)) throw new RangeError('invalid Minecraft view mode');
     const fov = visualFov(mode, options.fov);
     const overviewError = overviewArgumentError(mode, options.overview, options.includeHud);
     if (overviewError) throw new RangeError(overviewError);

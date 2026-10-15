@@ -11,8 +11,8 @@ export function acceptsImages(host: WorldHost | null): boolean {
 export function visualArgumentError(args: Record<string, unknown>, prefix = 'mc'): ToolOutcome | undefined {
   const fovError = visualFovError(args.mode, args.fov);
   if (fovError) return { text: `[${prefix}_visual 失败] ${fovError}`, failed: true };
-  if (args.mode !== undefined && (typeof args.mode !== 'string' || !['first', 'third', 'dungeon', 'overview'].includes(args.mode)))
-    return { text: `[${prefix}_visual 失败] mode 只能是 first、third、dungeon 或 overview`, failed: true };
+  if (args.mode !== undefined && (typeof args.mode !== 'string' || !['first', 'third', '3dview', 'dungeon', 'overview'].includes(args.mode)))
+    return { text: `[${prefix}_visual 失败] mode 只能是 first、third、3dview 或 overview`, failed: true };
   const overviewError = overviewArgumentError(args.mode, args.overview, args.include_hud);
   if (overviewError) return { text: `[${prefix}_visual 失败] ${overviewError}`, failed: true };
   for (const key of ['include_hud', 'raw', 'background']) {

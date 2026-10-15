@@ -102,7 +102,7 @@ const PAGE = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>联机版我的世界</title><link rel="stylesheet" href="/viewer.css"></head><body data-view-mode="__VIEW_MODE__">
 <div class="boot" aria-live="polite">正在载入世界画面…</div>
-<nav class="corti-view-switch" aria-label="切换观察视角"><a href="/" data-view="first">第一人称</a><a href="/third/" data-view="third">第三人称</a><a href="/dungeon/" data-view="dungeon">地下城 2.5D</a></nav>
+<nav class="corti-view-switch" aria-label="切换观察视角"><a href="/" data-view="first">第一人称</a><a href="/third/" data-view="third">第三人称</a><a href="/3dview/" data-view="3dview">3D观战</a></nav>
 <div class="viewer-hud"><div class="viewer-help"></div><div class="viewer-motion"></div><div class="viewer-held"></div><div class="viewer-hotbar"></div></div>
 <div class="corti-crosshair" aria-hidden="true"></div>
 <div class="corti-status-vignette" id="corti-status-vignette" aria-hidden="true"></div>
@@ -180,7 +180,7 @@ const ENCHANT_GLOW_CSS = `
 @media(prefers-reduced-motion:reduce){.corti-enchant-glint{animation:none}}
 `;
 const VIEWER_LAYOUT_CSS = `
-.corti-view-switch{position:fixed;z-index:9;top:14px;right:14px;display:flex;gap:2px;padding:3px;border:1px solid #b0ccb5a8;border-radius:8px;background:#11242cde;box-shadow:0 4px 20px #0007;opacity:.72;transition:opacity .2s ease}.corti-view-switch:hover,.corti-view-switch:focus-within{opacity:1}.corti-view-switch a{padding:4px 7px;border-radius:5px;color:#dce8e5;font:12px/1.2 system-ui;text-decoration:none;white-space:nowrap}.corti-view-switch a:hover,.corti-view-switch a:focus-visible{background:#ffffff25;outline:none}body[data-view-mode="first"] .corti-view-switch a[data-view="first"],body[data-view-mode="third"] .corti-view-switch a[data-view="third"],body[data-view-mode="dungeon"] .corti-view-switch a[data-view="dungeon"]{background:#8acbb34d;color:#f5fff6;font-weight:700}body[data-view-mode="third"] .corti-crosshair,body[data-view-mode="dungeon"] .corti-crosshair{display:none}.corti-skills{top:56px}
+.corti-view-switch{position:fixed;z-index:9;top:14px;right:14px;display:flex;gap:2px;padding:3px;border:1px solid #b0ccb5a8;border-radius:8px;background:#11242cde;box-shadow:0 4px 20px #0007;opacity:.72;transition:opacity .2s ease}.corti-view-switch:hover,.corti-view-switch:focus-within{opacity:1}.corti-view-switch a{padding:4px 7px;border-radius:5px;color:#dce8e5;font:12px/1.2 system-ui;text-decoration:none;white-space:nowrap}.corti-view-switch a:hover,.corti-view-switch a:focus-visible{background:#ffffff25;outline:none}body[data-view-mode="first"] .corti-view-switch a[data-view="first"],body[data-view-mode="third"] .corti-view-switch a[data-view="third"],body[data-view-mode="3dview"] .corti-view-switch a[data-view="3dview"]{background:#8acbb34d;color:#f5fff6;font-weight:700}body[data-view-mode="third"] .corti-crosshair,body[data-view-mode="3dview"] .corti-crosshair{display:none}.corti-skills{top:56px}
 .boot.is-compact:not(.is-error){display:none}
 .corti-event-feed{bottom:112px;max-height:min(26vh,170px);overflow:hidden;justify-content:flex-end}
 .corti-event{flex:none;max-height:4.4em;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3}
@@ -710,8 +710,11 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       const pathname = new URL(req.url ?? '/', origin).pathname;
       if ((req.method !== 'GET' && !(req.method === 'DELETE' && pathname === '/capture-lease'))
           || req.headers.host !== `127.0.0.1:${options.port}`) { res.writeHead(403); res.end(); return; }
-      if (pathname === '/' || pathname === '/third/' || pathname === '/dungeon/' || pathname === '/photo/') {
-        const viewMode = pathname === '/third/' ? 'third' : pathname === '/dungeon/' ? 'dungeon' : 'first';
+      if (pathname === '/dungeon' || pathname.startsWith('/dungeon/')) {
+        res.writeHead(308, { location: '/3dview' + (pathname.slice(8) || '/') + new URL(req.url ?? '/', origin).search }); res.end(); return;
+      }
+      if (pathname === '/' || pathname === '/third/' || pathname === '/3dview/' || pathname === '/photo/') {
+        const viewMode = pathname === '/third/' ? 'third' : pathname === '/3dview/' ? '3dview' : 'first';
         const photo = pathname === '/photo/';
         const page = photo ? await viewerPhotoPage(root) : await viewerPageHtml(root, viewMode, PAGE,
           '<iframe class="corti-speech-bubble" id="corti-speech-bubble" title="主播语音气泡" aria-label="主播语音气泡" hidden></iframe>',
@@ -787,7 +790,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
         await headTextures.serve(req, res, pathname, bot);
         return;
       }
-      const relative = pathname.replace(/^\/(third|dungeon)\//, '/').slice(1);
+      const relative = pathname.replace(/^\/(third|3dview)\//, '/').slice(1);
       const range = typeof req.headers.range === 'string' ? req.headers.range : undefined;
       if (relative === 'index.js' && await serveViewerAsset(res, root, 'dist/modern-viewer.js', 'no-store', range)) return;
       if (await serveViewerAsset(res, path.join(root, 'public'), relative, undefined, range)) return;

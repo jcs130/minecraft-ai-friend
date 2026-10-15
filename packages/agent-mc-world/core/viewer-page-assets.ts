@@ -2,7 +2,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-export type ViewerPageMode = 'first' | 'third' | 'dungeon';
+export type ViewerPageMode = 'first' | 'third' | '3dview';
 const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
 
 async function document(root: string, relative: string): Promise<string | null> {
