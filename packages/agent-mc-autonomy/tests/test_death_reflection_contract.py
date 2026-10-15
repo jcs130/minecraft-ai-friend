@@ -245,3 +245,78 @@ def test_body_report_cannot_erase_concurrently_completed_reflection(tmp_path, mo
     if outcome == "lesson":
         assert not result["saved"] and saved["lesson"]["source"] == "main_brain_review"
     assert saved["historical"] and not saved["behavioral_improvement_verified"]
+
+
+@pytest.mark.parametrize("outcome", ["lesson", "deferred"])
+def test_completed_episode_stays_historical_in_later_ordinary_inspection(tmp_path, outcome):
+    port, clock, episode, fresh, review = death_review(tmp_path)
+    port.decide(review["id"], "inspect")
+    assert port.decide(review["id"], "continue", "Recover locally", death_reflection=reflection(episode, outcome))["acknowledged"]
+    original = DeathMemory(tmp_path).entries(SCOPE)[0]
+    clock[0] += 46
+    value = snapshot(clock[0], death_episode=episode, game_identity=SCOPE, facts=fresh)
+    (tmp_path / "status.json").write_text(json.dumps(value), encoding="utf-8")
+    port.observe(value)
+    ordinary = port.offer()["review"]
+    assert ordinary["trigger"] == "idle_presence" and "death_episode" not in ordinary["evidence"]
+    inspected = port.decide(ordinary["id"], "inspect")
+    assert "death_episode" not in inspected and "death_recovery" not in inspected
+    speak = Mock()
+    replacement = reflection(episode)
+    replacement["lesson"] = "Replacement after already completed episode"
+    assert port.decide(ordinary["id"], "continue", "Ordinary strategy", death_reflection=replacement,
+                       before_dispatch=speak)["is_error"]
+    speak.assert_not_called()
+    assert not port.state()["review"].get("result")
+    assert port.decide(ordinary["id"], "continue", "Ordinary strategy")["acknowledged"]
+    saved = DeathMemory(tmp_path).entries(SCOPE)[0]
+    for key in ("reflection", "lesson", "reflection_completion"):
+        assert saved.get(key) == original.get(key)
+    newer = DeathMemory(tmp_path).record(event(2), facts(episode_id="death-2"), [], [], [])
+    next_facts = facts(episode_id=newer["id"])
+    next_facts["parts"].append({"key": "gear", "text": "empty"})
+    value = snapshot(clock[0], death_episode=newer, game_identity=SCOPE, facts=next_facts)
+    (tmp_path / "status.json").write_text(json.dumps(value), encoding="utf-8")
+    port.observe(value)
+    current = port.offer()["review"]
+    assert port.decide(current["id"], "inspect")["death_episode"]["id"] == newer["id"]
+    assert port.decide(current["id"], "continue", "Fresh new death")["error"] == "death_reflection_required"
+    assert port.decide(current["id"], "continue", "Fresh new death", death_reflection=reflection(newer, "deferred"))["acknowledged"]
+
+
+@pytest.mark.parametrize("inspect_again", [False, True])
+def test_durable_completion_after_observe_cannot_be_overwritten(tmp_path, inspect_again):
+    port, _, episode, _, review = death_review(tmp_path)
+    port.decide(review["id"], "inspect")
+    # Real planner report can complete durable history after observe/inspect.
+    DeathMemory(tmp_path).execute(SCOPE, {"action": "report", "id": episode["id"], "lesson": "Original planner hypothesis",
+        "applicability": "Only after fresh review", "evidence": "native-run cursor 1"})
+    original = DeathMemory(tmp_path).entries(SCOPE)[0]["lesson"]
+    if inspect_again:
+        assert "death_episode" not in port.decide(review["id"], "inspect")
+    speak = Mock()
+    assert port.decide(review["id"], "continue", "Ordinary now", death_reflection=reflection(episode),
+                       before_dispatch=speak)["is_error"]
+    speak.assert_not_called()
+    assert port.decide(review["id"], "continue", "Ordinary now")["acknowledged"]
+    row = DeathMemory(tmp_path).entries(SCOPE)[0]
+    assert row["lesson"] == original and not row.get("reflection")
+
+
+def test_legacy_receipt_can_reuse_already_saved_planner_lesson_without_replacement(tmp_path):
+    port, _, episode, _, review = death_review(tmp_path)
+    choice, original = legacy(port, review, "continue")
+    DeathMemory(tmp_path).execute(SCOPE, {"action": "report", "id": episode["id"], "lesson": "Historical planner hypothesis",
+        "applicability": "Fresh facts needed before reuse", "evidence": "native-run cursor 1"})
+    lesson = DeathMemory(tmp_path).entries(SCOPE)[0]["lesson"]
+    assert port.decide(review["id"], **choice)["error"] == "fresh_recovery_inspection_required"
+    inspected = port.decide(review["id"], "inspect")
+    assert inspected["legacy_reflection_completion"]["reflection_already_saved"]
+    speak = Mock()
+    result = port.decide(review["id"], **choice, before_dispatch=speak)
+    assert not result["reflection_pending"] and result["speech"] == original["speech"]
+    speak.assert_not_called()
+    row = DeathMemory(tmp_path).entries(SCOPE)[0]
+    assert row["lesson"] == lesson and not row.get("reflection")
+    assert row["reflection_completion"] == result["reflection_completion"]
+    assert port.decide(review["id"], **choice) == result

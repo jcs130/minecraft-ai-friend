@@ -210,12 +210,12 @@ class ReviewPort:
                             "inspected_at": review.get("inspected_at", history.get("inspected_at")),
                             "acknowledged": review.get("result", {}).get("acknowledged") is True or history.get("acknowledged") is True,
                             "playback_verified": False}
-                        if reflection := review.get("reflection"):
+                        if (reflection := review.get("reflection")) and not (recorded.get("reflection") or recorded.get("lesson")):
                             recorded["reflection"] = reflection
-                            if completion := review.get("reflection_completion"):
-                                recorded["reflection_completion"] = completion
                             if reflection["outcome"] == "lesson":
                                 recorded["lesson"] = {k: reflection[k] for k in ("lesson", "applicability", "evidence", "source", "hypothesis", "behavioral_improvement_verified")}
+                        if (completion := review.get("reflection_completion")) and not recorded.get("reflection_completion"):
+                            recorded["reflection_completion"] = completion
                         db.execute("UPDATE death_episodes SET body=?, notified=? WHERE scope=? AND id=?",
                                    (json.dumps(recorded, ensure_ascii=False), int(recorded["host_review"]["transport_accepted"]),
                                     scope_key(episode["scope"]), episode["id"]))
@@ -421,6 +421,17 @@ class ReviewPort:
                 if recorded is None or newest != episode["id"]:
                     return {"is_error": True, "error": "death_episode_superseded",
                             "next": "Use the current scoped episode; this historical or missing death cannot complete the current review."}
+                if recorded.get("reflection") or recorded.get("lesson"):
+                    if not legacy_pending:
+                        if death_reflection is not None:
+                            return {"is_error": True, "error": "death_reflection_already_completed",
+                                    "next": "This scoped episode is already complete. Inspect and decide normally without replacing its historical reflection."}
+                        review["evidence"].pop("death_episode", None)
+                        review["evidence"].pop("death_recovery", None)
+                        episode = None
+                    elif not recorded.get("reflection") and death_reflection is not None:
+                        return {"is_error": True, "error": "death_reflection_already_completed",
+                                "next": "The saved historical planner lesson is complete; do not replace it with a new death reflection."}
             if decision != "inspect" and current["baseline"] != review.get("baseline"):
                 return {"is_error": True, "error": "critical_baseline_changed",
                         "next": "Inspect this heartbeat again before deciding: death/respawn, scope, body restrictions or unknown outcomes changed. Earlier body evidence is historical."}
@@ -436,7 +447,12 @@ class ReviewPort:
                             "next_offset": end, "has_more": end < len(chain)}
                 fresh = current["evidence"]
                 fresh["current_user_goal"] = self.mailbox.current_user_goal(fresh["current_goal"].get("id"))
-                if review.get("scope") == current["scope"] and (episode := review["evidence"].get("death_episode")):
+                if candidate := fresh.get("death_episode"):
+                    saved, _ = self.death_record(candidate)
+                    if saved and (saved.get("reflection") or saved.get("lesson")):
+                        fresh.pop("death_episode", None)
+                        fresh.pop("death_recovery", None)
+                if review.get("scope") == current["scope"] and episode:
                     fresh.setdefault("death_episode", episode)  # Explicit historical event, not current inventory.
                     fresh["death_recovery"] = recovery_context(episode, snapshot.get("observation", snapshot).get("facts", {}), fresh["current_goal"])
                 review.update(evidence=fresh, baseline=current["baseline"], inspected_at=self.now())
@@ -444,14 +460,20 @@ class ReviewPort:
                     review["reflection_inspected_at"] = self.now()
                 return {"heartbeat_id": review_id, **review["evidence"], "stage_delivery": stage,
                         "legacy_reflection_completion": {"choice": review["choice"], "receipt": review["result"],
-                            "next": "Resubmit this original choice with death_reflection to complete only this episode. Goal, speech and context will not be replayed."} if legacy_pending else None,
+                            "reflection_already_saved": bool(recorded.get("reflection") or recorded.get("lesson")),
+                            "next": "Resubmit this original choice to complete only this episode. Include death_reflection only if no reflection/lesson is already saved. Goal, speech and context will not be replayed."} if legacy_pending else None,
                         "next": "Now call continue/insert/revise with your evidence-based reason. For death include death_reflection: lesson with evidence/applicability, or deferred with reason. Optional spoken_text belongs in that same decision; no extra tool round is needed. Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending. Keep stages within the standing goal and user intent; server-specific quests, exams or capabilities need fresh evidence from this world, not unrelated conversation memories.",
                         "goal_authority": "current_user_goal is explicitly user-sourced. host_review is a proposed stage subordinate to current user intent and the standing goal; unknown origin is not user authorization. last_decision is prior model judgment, not fresh world evidence. Query inspect with lineage_offset=0 for full original parent goals, four per page.",
                         "last_decision": state.get("last_decision")}
             reflection = None
-            if episode and death_reflection is None:
+            saved_completion = bool(legacy_pending and (recorded.get("reflection") or recorded.get("lesson")))
+            if episode and death_reflection is None and not saved_completion:
                 return {"is_error": True, "error": "death_reflection_required",
                         "next": "Inspect this heartbeat, then include death_reflection with episode_id and either lesson/applicability/evidence referencing the episode or source run, or outcome=deferred with an honest reason. Retry this same choice; this call has no delivery or acknowledgement effects."}
+            if saved_completion and death_reflection is None:
+                inspected = review.get("reflection_inspected_at")
+                if inspected is None or not 0 <= self.now() - inspected <= 180:
+                    return {"is_error": True, "error": "fresh_recovery_inspection_required"}
             if death_reflection is not None:
                 try:
                     reflection = DeathMemory.validate_reflection(death_reflection, review["evidence"].get("death_episode"))
@@ -469,7 +491,8 @@ class ReviewPort:
             if legacy_pending:
                 # Complete only the already acknowledged episode. The original
                 # decision, delivery and speech receipts are immutable here.
-                review["reflection"] = recorded.get("reflection") or reflection
+                if stored_reflection := recorded.get("reflection") or reflection:
+                    review["reflection"] = stored_reflection
                 review["reflection_completion"] = recorded.get("reflection_completion") or {
                     "id": str(uuid.uuid5(uuid.NAMESPACE_URL, review["scope"] + ":" + episode["id"])),
                     "episode_id": episode["id"], "scope": episode["scope"], "at": self.now(),
