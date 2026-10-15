@@ -12,6 +12,7 @@ from datetime import datetime
 
 from .configuration import _boolean, _integer
 from .host_context import HostContextPort, validate_host_context
+from . import review_evidence
 from .mailbox import Mailbox, observation
 from .observations import body_feedback, feedback_signal, fact_preview, spatial_text, tool_failure_view, native_outcome_summary
 from .death_memory import DeathMemory, lifecycle, scope_key, recovery_context
@@ -372,8 +373,35 @@ class ReviewPort:
                 review["result"] = result
             return result
 
+    def bind_character(self, review_id, reference, profile):
+        """Static public identity after fresh inspection; no strategic effects."""
+        current = review_observation(observation(self.directory), self.now())
+        with self.transaction() as state:
+            review = state.get("review", {})
+            if (not current or self.stopping() or not state.get("policy", {}).get("enabled")
+                    or review.get("id") != review_id or review.get("inspected_evidence_ref") != reference
+                    or current["session"] != review.get("session") or current["scope"] != review.get("scope")
+                    or current["baseline"] != review.get("baseline") or current["intent"] != review.get("intent")
+                    or self.mailbox.intent_revision() != review.get("revision")
+                    or not 0 <= self.now() - review.get("inspected_at", 0) <= 30):
+                return {"available": False, "reason": "inspection_superseded"}
+            context = HostContextPort(self.directory, now=self.now)
+            if not profile:
+                context.clear_static()
+                return {"available": False, "reason": "public_profile_unavailable"}
+            return context.publish_static(profile, scope=current["scope"])
+
     def decide(self, review_id, decision, reason="", goal="", *, lineage_offset=None, host_context=None,
-               death_reflection=None, before_dispatch=None):
+               death_reflection=None, before_dispatch=None, require_inspection=False, compact=False,
+               evidence_ref=None, detail_path=None, detail_offset=0):
+        if evidence_ref is not None:
+            if decision != "inspect" or host_context is not None or death_reflection is not None or before_dispatch is not None:
+                return {"is_error": True, "error": "detail_is_read_only"}
+            if self.stopping():
+                return {"is_error": True, "error": "disabled_or_stopped"}
+            return review_evidence.detail(self.directory, review_id, evidence_ref, detail_path, detail_offset)
+        if detail_path is not None or detail_offset != 0:
+            return {"is_error": True, "error": "evidence_reference_required"}
         if decision == "inspect" and (death_reflection is not None or before_dispatch is not None):
             return {"is_error": True, "error": "inspect_is_read_only"}
         if host_context is not None:
@@ -455,16 +483,42 @@ class ReviewPort:
                 if review.get("scope") == current["scope"] and episode:
                     fresh.setdefault("death_episode", episode)  # Explicit historical event, not current inventory.
                     fresh["death_recovery"] = recovery_context(episode, snapshot.get("observation", snapshot).get("facts", {}), fresh["current_goal"])
-                review.update(evidence=fresh, baseline=current["baseline"], inspected_at=self.now())
+                if not legacy_pending and (current["intent"] != review["intent"] or self.mailbox.intent_revision() != review["revision"]):
+                    return {"is_error": True, "error": "intent_or_scope_changed"}
+                review.update(evidence=fresh, scope=current["scope"], baseline=current["baseline"], inspected_at=self.now())
+                reference = review_evidence.save(self.directory, review,
+                    self.mailbox.goal_lineage(fresh["current_goal"].get("id")), state.get("last_decision"))
+                review["inspected_evidence_ref"] = reference
                 if legacy_pending:
                     review["reflection_inspected_at"] = self.now()
-                return {"heartbeat_id": review_id, **review["evidence"], "stage_delivery": stage,
+                result = {"heartbeat_id": review_id, **review["evidence"], "stage_delivery": stage,
                         "legacy_reflection_completion": {"choice": review["choice"], "receipt": review["result"],
                             "reflection_already_saved": bool(recorded.get("reflection") or recorded.get("lesson")),
                             "next": "Resubmit this original choice to complete only this episode. Include death_reflection only if no reflection/lesson is already saved. Goal, speech and context will not be replayed."} if legacy_pending else None,
                         "next": "Now call continue/insert/revise with your evidence-based reason. For death include death_reflection: lesson with evidence/applicability, or deferred with reason. Optional spoken_text belongs in that same decision; no extra tool round is needed. Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending. Keep stages within the standing goal and user intent; server-specific quests, exams or capabilities need fresh evidence from this world, not unrelated conversation memories.",
                         "goal_authority": "current_user_goal is explicitly user-sourced. host_review is a proposed stage subordinate to current user intent and the standing goal; unknown origin is not user authorization. last_decision is prior model judgment, not fresh world evidence. Query inspect with lineage_offset=0 for full original parent goals, four per page.",
                         "last_decision": state.get("last_decision")}
+                if compact:
+                    result = {"heartbeat_id": review_id, **review_evidence.compact(fresh, reference),
+                        "stage_delivery": stage, "acknowledged": False,
+                        "legacy_reflection_completion": result["legacy_reflection_completion"],
+                        "goal_authority": "User goal and standing goal govern; host_review is your subordinate stage. Planning is delivery, not actual work. Details include original goal_lineage.",
+                        "next": "Final now: continue/insert/revise + short factual reason; goal only for insert/revise. Optional spoken_text is one natural sentence. For pending death add death_reflection with evidence_ref above: outcome=lesson + lesson/applicability, or outcome=deferred + honest reason. Do not invent a lesson. Context/memory is optional."}
+                else:
+                    result["evidence_ref"] = reference
+                return result
+            if require_inspection and not review.get("inspected_at"):
+                return {"is_error": True, "error": "fresh_inspection_required"}
+            if isinstance(death_reflection, dict) and "evidence_ref" in death_reflection:
+                reference = death_reflection["evidence_ref"]
+                if not episode or reference != review.get("inspected_evidence_ref"):
+                    return {"is_error": True, "error": "death_evidence_reference_mismatch"}
+                death_reflection = {key: value for key, value in death_reflection.items() if key != "evidence_ref"}
+                if death_reflection.get("episode_id", episode["id"]) != episode["id"]:
+                    return {"is_error": True, "error": "death_episode_mismatch"}
+                death_reflection["episode_id"] = episode["id"]
+                if death_reflection.get("outcome") == "lesson":
+                    death_reflection["evidence"] = death_reflection.get("evidence") or ("Inspected episode " + episode["id"] + "; evidence_ref=" + reference)
             reflection = None
             saved_completion = bool(legacy_pending and (recorded.get("reflection") or recorded.get("lesson")))
             if episode and death_reflection is None and not saved_completion:

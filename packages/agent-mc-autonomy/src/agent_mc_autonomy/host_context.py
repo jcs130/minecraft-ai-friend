@@ -22,7 +22,7 @@ def validate_host_context(value):
     if source not in {"character_profile", "host_projection"}:
         raise ValueError("host_context_source_invalid")
     result["persona_source"] = source
-    result["memories_selected"] = value.get("memories_selected", True)
+    result["memories_selected"] = value.get("memories_selected", "memories" in value)
     if type(result["memories_selected"]) is not bool:
         raise ValueError("host_context_memory_selection_invalid")
     memories = value.get("memories", [])
@@ -47,7 +47,7 @@ def metadata(value):
     stable, dynamic = value["stable"], value["dynamic"]
     return {"available": True, "agent_name": stable["agent_name"], "persona_source": stable["persona_source"],
             "persona_bytes": len(stable["persona"].encode("utf-8")), "memory_count": len(dynamic["memories"]),
-            "memory_selection": "host_selected" if dynamic.get("memories_selected") else "not_provided",
+            "memory_selection": ("host_selected" if dynamic["memories"] else "host_selected_empty") if dynamic.get("memories_selected") else "not_provided",
             "revision": hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:16]}
 
 
@@ -68,11 +68,39 @@ class HostContextPort:
         temporary.replace(self.path)
         return metadata(value)
 
+    def publish_static(self, context, *, scope):
+        """Configured public character only; never renew scoped intent/memory."""
+        if not isinstance(context, dict) or set(context) != {"agent_name", "persona", "persona_source"} or context.get("persona_source") != "character_profile":
+            raise ValueError("static_character_profile_required")
+        payload = validate_host_context(context)
+        if not payload["persona"]:
+            raise ValueError("static_character_profile_required")
+        stable = {key: payload[key] for key in ("agent_name", "persona", "persona_source")}
+        issued = self.now()
+        value = {"stable": stable, "scope": scope, "issued_at": issued, "expires_at": issued + 600}
+        self.directory.mkdir(parents=True, exist_ok=True)
+        path = self.directory / "host-character.json"
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+        temporary.replace(path)
+        # Actor replacement must not resurrect a previous actor's selected data.
+        try:
+            old = json.loads(self.path.read_text(encoding="utf-8"))
+            if old["stable"]["agent_name"] != stable["agent_name"]:
+                self.path.unlink(missing_ok=True)
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        return {"available": True, "persona_source": "character_profile"}
+
+    def clear_static(self):
+        (self.directory / "host-character.json").unlink(missing_ok=True)
+
     def invalidate(self):
         # Do not retain a previous profile after a host opts out or changes role.
         self.path.unlink(missing_ok=True)
+        self.clear_static()
 
-    def read(self, revision):
+    def _read_dynamic(self, revision):
         try:
             if self.path.stat().st_size > 18000:
                 return None
@@ -89,3 +117,29 @@ class HostContextPort:
             return {"stable": value["stable"], "dynamic": value["dynamic"]}
         except (OSError, ValueError, TypeError, KeyError):
             return None
+
+    def read(self, revision):
+        dynamic = self._read_dynamic(revision)
+        try:
+            from .death_memory import scope_key
+            path = self.directory / "host-character.json"
+            if path.stat().st_size > 5000:
+                return dynamic
+            profile = json.loads(path.read_text(encoding="utf-8"))
+            snapshot = json.loads((self.directory / "status.json").read_text(encoding="utf-8"))
+            age = self.now() - datetime.fromisoformat(snapshot["updated_at"]).timestamp()
+            if (profile["scope"] != scope_key(snapshot.get("game_identity")) or not 0 <= age <= 30
+                    or snapshot.get("phase") != "running" or snapshot.get("game_connected") is not True
+                    or not profile["issued_at"] <= self.now() <= profile["expires_at"] <= profile["issued_at"] + 600):
+                return dynamic
+            stable = profile["stable"]
+            validate_host_context(stable)
+            if stable["persona_source"] != "character_profile":
+                return dynamic
+            if dynamic and dynamic["stable"]["agent_name"] == stable["agent_name"]:
+                if dynamic["stable"]["persona_source"] == "host_projection" and dynamic["stable"]["persona"]:
+                    return dynamic
+                return {"stable": stable, "dynamic": dynamic["dynamic"]}
+            return {"stable": stable, "dynamic": {"current_intent": "", "memories": [], "memories_selected": False}}
+        except (OSError, ValueError, KeyError, TypeError):
+            return dynamic

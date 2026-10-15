@@ -5,6 +5,28 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.67 adds optional compact host inspection (`compact=True`) and immutable
+review evidence snapshots. Query `decide(id, "inspect", evidence_ref=...,
+detail_path=["evidence", "death_episode", "receipts"], detail_offset=0)`;
+concatenate bounded `json_chunk` pages, then parse the original JSON. The snapshot
+also contains original goal lineage. Historical pages never mark a current
+inspection or acknowledge a decision. Original snapshots remain on disk; operators
+should archive the private session directory according to their retention policy.
+Hosts can require ordinary inspect-before-final with `require_inspection=True`;
+the default preserves existing neutral callers, while death inspection remains
+mandatory. Accepted duplicate finals still return their original receipt.
+
+A short death `evidence_ref` must match the last inspected immutable snapshot;
+the runtime expands only episode/source provenance, never the authored lesson,
+applicability or deferral reason. `bind_character` publishes a configured public
+static profile after fresh inspection without strategic ACK. Static identity
+survives intent/session changes within its scoped expiry; explicit dynamic
+persona, intent and selected memories retain their original session/revision
+fences. Static refresh cannot overwrite a fresh explicit persona, select memories
+or revive expired intent. Stable identity remains in the planner prefix and
+dynamic context at the tail. Core .9 remains pinned; offline tests do not establish
+host model compliance, natural speech or live survival.
+
 0.1.66 requires an inspected pending death's final decision to include an
 evidence-referenced lesson with applicability or an honest justified deferral.
 Missing/invalid reflection is recoverable before speech, goal, context or
