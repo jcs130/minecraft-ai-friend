@@ -258,6 +258,12 @@ final class AgentCliCatalog {
         add(specs,"guild.exam.info","adventure","read","/mycli guild exam info <ID>","查看题目、技能与资源准备、航点和验收要求","查询免费；自然前往已勘察起点","MC_GUILD_EXAM，含冻结版本与绝对目标");
         add(specs,"guild.exam.start","adventure","write","/mycli guild exam start <ID>","主动开始一项能力考试；start promotion <ID>参加下一阶晋级","一人一场；学习准备施法由本人操作；只收技能本身魔力","MC_GUILD_EXAM；市场SKILL_ASSESSMENT使用guild claim交付");
         add(specs,"guild.exam.status","adventure","read","/mycli guild exam status [--json]","查本人考试、匹配且可接的委托与准确下一步；区分考证和晋级","只接收本人或实际附身对象；推荐不自动接单","MC_GUILD_EXAM；contractOptions含真实拒绝原因和nextCommand");
+        add(specs,"guild.exam.guide","adventure","gui","/mycli guild exam guide [--json]","考试分步指引：准备、接单、实地调查、拍照、返程和交付","普通玩家打开原版菜单；Agent或--json读取步骤，不接单不发奖","MC_GUILD_EXAM；guide.steps/currentContract/supplies，实际冻结要求");
+        add(specs,"guild.exam.supplies.list","adventure","read","/mycli guild exam supplies list [--json]","列出本题提供的空地图和可选遗迹探险图","只读；首次摄影备料与每目的地地图一次，重复开考不重复发","MC_GUILD_EXAM type=supplies；本人材料清单");
+        add(specs,"guild.exam.supplies.status","adventure","read","/mycli guild exam supplies status [--json]","查询材料发放和目标核验状态","只读不生成地图、不加载目的地区块","MC_GUILD_EXAM；allocation给出个人箱页码/全局槽位/待入箱状态");
+        add(specs,"guild.exam.supplies.info","adventure","read","/mycli guild exam supplies info <photo|map> [--json]","查看材料用途与领取条件","photo是摄影空图；map是带真实天然遗迹目标的filled_map","MC_GUILD_EXAM；缺项、领取命令及箱子入口");
+        add(specs,"guild.exam.supplies.claim","adventure","write","/mycli guild exam supplies claim <photo|map> [--json]","领取考试材料到本人个人箱","在办生存考试；免费；map异步核验已勘察天然结构，绝不新生成地形；箱满入原待领队列","MC_GUILD_EXAM；pending不等于已发，最终allocated及saved=true后再取物");
+        add(specs,"guild.exam.supplies.take","adventure","write","/mycli guild exam supplies take <photo|map|all> [--json]","免费将已发考试材料取到本人主背包","仅转移原发放记录中的完整物品；不授予其他个人箱访问、不要求传送术；背包满则保留原处","MC_GUILD_EXAM；taken_into_inventory与saved=true表示实物已取，重复调用不重发");
         add(specs,"guild.exam.submit","adventure","write","/mycli guild exam submit","复核并交付本场实操，授予证书或下一阶","实际条件齐全；固定场次结算去重；失败不降级","MC_GUILD_EXAM；不额外赠声望、技能点或物品");
         add(specs,"guild.exam.cancel","adventure","write","/mycli guild exam cancel","主动取消独立考试；市场阶段中断后用exam retry从本阶段重试","已花技能魔力/冷却保留；市场放弃用guild abandon","MC_GUILD_EXAM；旧证书保持");
         add(specs,"guild.certificates","adventure","read","/mycli guild certificates","列出本人已通过的能力证书与18阶冒险者认证","只显示服务器实际验收；未认证不表示不会","MC_GUILD_CERTIFICATES；职业高跃/御空/祝福二三级需要对应基础/进阶证书");
@@ -390,7 +396,7 @@ final class AgentCliCatalog {
         return out;
     }
     private static int idEmptyPriority(String prefix,String id,List<String> order){return prefix.isEmpty()&&order.contains(id)?order.indexOf(id):order.size();}
-    private static boolean jsonSupported(String id){return id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","guild.exam.status","guild.exam.info").contains(id)||id.startsWith("protect");}
+    private static boolean jsonSupported(String id){return id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -473,7 +479,7 @@ final class AgentCliCatalog {
 
     private static JsonObject semantics(Spec spec) {
         String id=spec.id();boolean mixed=(spec.root()&&Set.of("tasks","challenge","world","photo","profession","skills","spells","coach","arena","guild","life","land","landmark","waypoint","locate","commission","goddess","focus","imprint","trade","village","pvp","skillbook").contains(id))
-                ||Set.of("world.guide","world.practice","guild.exam","guild.stash","guild.rewards","arena.rewards","arena.shop","arena.recycle").contains(id);
+                ||Set.of("world.guide","world.practice","guild.exam","guild.exam.supplies","guild.stash","guild.rewards","arena.rewards","arena.shop","arena.recycle").contains(id);
         boolean evidence=Set.of("help","list","explain","status.full","skills.list","spells.list","skills.explain","spells.explain").contains(id);
         boolean legacyRefresh=Set.of("guild.board","guild.status","life.status","guild.exam.list","guild.exam.status","skills.mine","skills.info","skills.points","profession.status").contains(id);
         boolean enroll=Set.of("challenge.create","coach.enroll","world.guide.start","world.practice.start","guild.exam.start").contains(id)||id.endsWith(".accept")||id.endsWith(".join");

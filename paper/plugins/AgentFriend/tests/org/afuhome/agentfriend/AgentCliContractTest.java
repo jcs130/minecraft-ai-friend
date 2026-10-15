@@ -32,6 +32,10 @@ public final class AgentCliContractTest {
         check("JSON actions advertised",create.get("jsonSupported").getAsBoolean());
         check("exam status explicitly supports JSON",help("guild exam status --help --json").get("jsonSupported").getAsBoolean());
         check("exam info explicitly supports JSON",help("guild exam info survey_basic --help --json").get("jsonSupported").getAsBoolean());
+        check("supplies claim is an explicit JSON action",help("guild exam supplies claim map --help --json").get("jsonSupported").getAsBoolean()&&!help("guild exam supplies claim map --help --json").get("actionReadOnly").getAsBoolean());
+        check("supplies status is an inexpensive JSON query",help("guild exam supplies status --help --json").get("jsonSupported").getAsBoolean()&&help("guild exam supplies status --help --json").get("actionReadOnly").getAsBoolean());
+        check("guide supports progressive JSON discovery",help("guild exam guide --help --json").get("jsonSupported").getAsBoolean());
+        check("free exam checkout is an explicit JSON action",help("guild exam supplies take all --help --json").get("jsonSupported").getAsBoolean()&&!help("guild exam supplies take all --help --json").get("actionReadOnly").getAsBoolean());
         check("unknown child is not silently parent help",help("challenge bogus --help").has("errorCode"));
         check("unknown root errors",help("bogus --help").has("errorCode"));
         check("invalid help page errors",help("challenge --help --page 99").has("errorCode"));

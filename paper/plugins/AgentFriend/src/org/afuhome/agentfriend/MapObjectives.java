@@ -155,6 +155,9 @@ final class MapObjectives implements Listener {
         State s = new State(run, step, held(p), p.getLocation()); states.put(p.getUniqueId(), s); persist(p, s);
     }
     private boolean claimed(Player p, String type, String key) { return plugin.getConfig().contains(CLAIMS + p.getUniqueId() + "." + type + "." + key); }
+    static boolean destinationClaimed(AgentFriendPlugin plugin,Player p,UUID world,int x,int z) {
+        return plugin.getConfig().contains(CLAIMS+p.getUniqueId()+".targets."+digest(world+":"+x+":"+z));
+    }
     void completed(Player p) {
         State s = state(p); if (s == null) throw new IllegalStateException("Missing verified map binding");
         String root = CLAIMS + p.getUniqueId();

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-16",
+  "status": "candidate_not_deployed",
+  "server": "Paper 1.21.1 build 133",
+  "agentFriend": "0.4.44",
+  "artifactSha256": "cd6002d25989752f280f4c219da0306f0505433c325d93e4e8c940d5be176805",
+  "productionAgentFriend": "0.4.42",
+  "productionRestarted": false,
+  "releaseQueued": false,
+  "includesCandidate": "0.4.43",
+  "checks": {
+    "finalNativeJavaAgentMenuItemAndFailure": 40,
+    "finalNormalColdRestart": 7,
+    "cliContractRegression": 55
+  },
+  "features": [
+    "ordered native exam guide and actual frozen contract criteria",
+    "first photo exam kit and optional verified natural explorer map",
+    "per-player and per-destination issue receipts, stable run-map reconciliation",
+    "free exact-item checkout without remote chest skill prerequisite",
+    "full storage handling and real write-failure rollback",
+    "native map accepted by existing map-hunt quest"
+  ],
+  "limits": [
+    "phone/Xbox pixels and real Eye not retested",
+    "not a new full photography or autonomous LLM exam",
+    "sudden power failure/kill between player and plugin files not fault-tested",
+    "no production task, inventory, fame or qualification edited",
+    "current approved maintenance and E/F complete cold backups required before release"
+  ],
+  "privateEvidence": "E/F repairs/exam-supplies-20261016",
+  "documentation": "paper/docs/EXAM_SUPPLIES.md"
+}

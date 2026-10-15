@@ -414,6 +414,13 @@ final class TaskMarketManager implements Listener {
         out.addProperty("requiresVerification",EngineeringSites.GOALS.contains(step.goal()));
         return out;
     }
+    JsonObject examRequirements(Player player) {
+        Task task=frozen(player);if(task==null)return null;Step step=task.steps().get(index(player));
+        JsonObject out=progressState(player);out.addProperty("id",task.id());
+        if(step.exploration()!=null)out.add("exploration",step.exploration().json());
+        if(step.map()!=null){out.add("mapHunt",step.map().json());out.add("map",maps.info(player));}
+        out.add("photography",photoStatus(player));out.addProperty("verifyCommand","/mycli guild verify");out.addProperty("claimCommand","/mycli guild claim");return out;
+    }
     AssessmentCatalog.Definition activeAssessment(Player player) {Task task=frozen(player);return task==null?null:task.steps.get(index(player)).assessment;}
     boolean suppliesAssessmentProof(String id,List<String> proofs) {
         Task task=tasks.get(id);if(task==null||task.steps.stream().anyMatch(s->s.assessment!=null))return false;

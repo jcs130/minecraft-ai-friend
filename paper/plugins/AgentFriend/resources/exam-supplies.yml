@@ -1,0 +1,26 @@
+schema-version: 1
+enabled: true
+# Public, previously surveyed natural ruins. Claim verifies native structure data;
+# queries never locate or generate terrain. At most 25 existing chunks per claim.
+map-targets:
+  - id: desert_pyramid
+    title: 黄沙神殿
+    world: world
+    x: -1926
+    y: 70
+    z: -966
+    structure: minecraft:desert_pyramid
+  - id: undead_crypt
+    title: 亡灵墓穴遗迹
+    world: world
+    x: -425
+    y: 4
+    z: 677
+    structure: nova_structures:undead_crypt
+  - id: creeping_crypt
+    title: 蔓生墓穴遗迹
+    world: world
+    x: 1159
+    y: 45
+    z: 209
+    structure: nova_structures:creeping_crypt

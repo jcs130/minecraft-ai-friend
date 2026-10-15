@@ -19,6 +19,7 @@ final class SkillAssessments implements Listener {
     static final String CHANNEL="mcagent:exam";
     private final AgentFriendPlugin plugin;
     private final ProfessionLedger ledger;
+    private final ExamSupplies supplies;
     private AssessmentCatalog catalog;
     private boolean validLedger=true;
     private final Map<UUID,Run> runs=new HashMap<>();
@@ -47,6 +48,7 @@ final class SkillAssessments implements Listener {
     }
     SkillAssessments(AgentFriendPlugin plugin) {
         this.plugin=plugin;ledger=plugin.professions().ledger;
+        supplies=new ExamSupplies(plugin,this);
         for(String name:List.of("skill-assessments.yml","adventurer-grades.yml"))if(!new File(plugin.getDataFolder(),name).exists())plugin.saveResource(name,false);
         reload();validateLedger();
         Bukkit.getPluginManager().registerEvents(this,plugin);
@@ -149,8 +151,9 @@ final class SkillAssessments implements Listener {
         Run r=newRun(d,"");r.grade=g;
         if(!save(p,r)){reply(p,"data_unavailable",d);return;}
         runs.put(p.getUniqueId(),r);
+        supplies.automaticPhoto(p,d,r.id,result->supplyReply(p,result,plugin.communication().compact(p)));
         if(d.primitive().equals("native_lesson")) {plugin.featureTutorials().enroll(p);plugin.traversalPractice().command(p,"start");reuseTraining(p,r);}
-        show(p);p.sendMessage("§a考试已开始："+d.title()+"。"+d.description()+"；技能需本人主动准备、施放并实际操作，查询不收费。");
+        show(p);if(!plugin.communication().compact(p))p.sendMessage("§a考试已开始："+d.title()+"。"+d.description()+"；公会→训练与考试→当前考试指引，按步骤操作。");
     }
     private Run newRun(AssessmentCatalog.Definition d,String market) {
         Run r=new Run();r.id=UUID.randomUUID();r.definition=d;r.market=market;r.started=System.currentTimeMillis();
@@ -445,6 +448,63 @@ final class SkillAssessments implements Listener {
         if(r.definition.primitive().equals("flight_route"))return "依次经过航点；保持空中水平移动、转向、升降，面朝前方后退，再到降落台稳定停留2秒";
         return r.definition.description();
     }
+    boolean canSupply(Player p,UUID run) {
+        Run r=current(p);return r!=null&&r.id.equals(run)&&r.state.equals("active")&&System.currentTimeMillis()<r.expires
+                &&p.isOnline()&&!p.isDead()&&!plugin.isObserver(p)&&p.getGameMode()==GameMode.SURVIVAL;
+    }
+    String supplyRun(Player p){Run r=runs.get(p.getUniqueId());return r==null?"":r.id.toString();}
+    private void supplyReply(Player p,JsonObject out,boolean machine) {
+        if(!p.isOnline())return;
+        if(!machine) {
+            String reason=out.has("reason")?out.get("reason").getAsString():"";
+            p.sendMessage("§b考试备料："+(reason.equals("allocated_to_personal_storage")?"已发到你的个人箱。":reason.equals("taken_into_inventory")?"已免费取到主背包。":reason.equals("already_issued")?"已经发过，保留原份。":reason.equals("checking_existing_natural_structure")?"正在核验原有遗迹，稍后给出结果。":"请按清单查看材料和领取条件。"));
+            if(out.has("nextCommand"))p.sendMessage("§a下一步："+out.get("nextCommand").getAsString());
+            if(out.has("advice"))p.sendMessage("§7"+out.get("advice").getAsString());
+        }
+        send(p,"MC_GUILD_EXAM",out);
+    }
+    private void suppliesCommand(Player p,String[] args,boolean machine) {
+        String action=args.length>3?args[3].toLowerCase(Locale.ROOT):"status";
+        boolean item=Set.of("claim","info","take").contains(action);
+        if(!Set.of("list","status","info","claim","take").contains(action)||args.length>(item?5:4)||item&&(args.length!=5||!(action.equals("take")?Set.of("photo","map","all"):Set.of("photo","map")).contains(args[4]))) {
+            JsonObject error=new JsonObject();error.addProperty("type","supplies");error.addProperty("ok",false);error.addProperty("reason","invalid_arguments");
+            error.addProperty("nextCommand","/mycli guild exam supplies --help");supplyReply(p,error,machine);return;
+        }
+        Run r=current(p);AssessmentCatalog.Definition d=r==null?null:r.definition;
+        if(Set.of("claim","take").contains(action)) {
+            if(r==null){JsonObject error=new JsonObject();error.addProperty("type","supplies");error.addProperty("ok",false);error.addProperty("reason","active_exam_required");error.addProperty("nextCommand","/mycli guild exam status");supplyReply(p,error,machine);return;}
+            if(action.equals("take"))supplies.take(p,d,r.id,args[4],out->supplyReply(p,out,machine));else supplies.claim(p,d,r.id,args[4],out->supplyReply(p,out,machine));return;
+        }
+        JsonObject out=item?supplies.status(p,d,args[4]):supplies.all(p,d);out.addProperty("type","supplies");out.addProperty("action",action);out.addProperty("readOnly",true);
+        supplyReply(p,out,machine);
+        if(!machine&&out.has("items"))for(var entry:out.getAsJsonArray("items")) {
+            var row=entry.getAsJsonObject();p.sendMessage("§e"+row.get("name").getAsString()+" · "+row.get("status").getAsString()+"；"+row.get("advice").getAsString());
+        }
+    }
+    private JsonObject guide(Player p,Run r) {
+        JsonObject out=new JsonObject();JsonArray steps=new JsonArray();
+        out.addProperty("title",r.definition.title());out.addProperty("currentCommand","/mycli guild exam status");
+        if(r.definition.proofs().contains("survey")) {
+            String active=plugin.getConfig().getString("guild-players."+p.getUniqueId()+".active.id","");
+            guideStep(steps,"prepare","取考试材料","摄影考试初次提供8张空地图；supplies take all免费取到主背包，再留1空格。普通走查不用藏宝图；想走原图寻宝路线，可领取真正的遗迹探险图。","/mycli guild exam supplies take all");
+            guideStep(steps,"contract","选择有效委托",active.isEmpty()?"按contractOptions中available的准确ID接单，推荐入门走查；不必先找到神庙。寻宝则主手拿带目标的图，guild map确认，再接tm_map_hunt。":"你正在做 "+active+"；保留这张委托，按下方currentContract的冻结条件继续，不用重接。",active.isEmpty()?"/mycli guild exam status":"/mycli guild status");
+            guideStep(steps,"survey","实地调查","亲自走过不同地点，满足区域数、行进距离、有效行进时间；有建筑/群系/高差要求时也必须满足。重复绕圈、站着等待和传送不计路线。","/mycli guild verify");
+            if(r.definition.proofs().contains("survey_photo"))guideStep(steps,"photograph","在目标现场拍照","每个探索阶段至少1张合格照片；要求多种群系时每种各1张。对准景物，photo menu或photo take 唯一名字 first 1；photo album核查，旧照片不能代本场。","/mycli photo menu");
+            guideStep(steps,"return","按本单返程交付","原图寻宝要回接单点16格内；其他委托只按本单要求返程。guild verify查缺项，齐全后guild claim逐阶段交付。","/mycli guild verify");
+            guideStep(steps,"submit","取得证书或晋级","完成整张委托及照片后，考试state=ready才exam submit；purpose=promotion才是本次晋级，单拿证书不自动升段。","/mycli guild exam submit");
+            JsonObject contract=plugin.taskMarket().examRequirements(p);if(contract!=null)out.add("currentContract",contract);
+            out.add("supplies",supplies.all(p,r.definition));
+        } else {
+            guideStep(steps,"prepare","查看准备条件",r.definition.description(),"/mycli guild exam info "+r.definition.id());
+            if(!r.definition.skills().isEmpty())guideStep(steps,"skill","准备并施放技能","本人学习、准备并施放："+String.join("、",r.definition.skills())+"；只收技能原有魔力与冷却，不自动花技能点。","/mycli skills info "+r.definition.skills().getFirst());
+            guideStep(steps,"practice","完成现场实操",next(r),"/mycli guild exam status");
+            guideStep(steps,"submit","核验交付","state=ready后交付；中断或缺项看reason和nextCommand，不连续盲目重试。",r.market.isEmpty()?"/mycli guild exam submit":"/mycli guild claim");
+        }
+        out.add("steps",steps);return out;
+    }
+    private static void guideStep(JsonArray steps,String id,String title,String instruction,String command) {
+        JsonObject row=new JsonObject();row.addProperty("order",steps.size()+1);row.addProperty("id",id);row.addProperty("title",title);row.addProperty("instruction",instruction);row.addProperty("command",command);steps.add(row);
+    }
     private void contractGuidance(Player p, AssessmentCatalog.Definition d, JsonObject out) {
         if (!d.primitive().equals("contract_record") || d.proofs().stream().noneMatch(s -> Set.of("survey", "project", "supply").contains(s))) return;
         JsonObject options = plugin.taskMarket().assessmentContracts(p, d.proofs());
@@ -471,6 +531,7 @@ final class SkillAssessments implements Listener {
         Run r=current(p);JsonObject out=summary(p);out.addProperty("type","status");out.addProperty("schemaVersion",1);out.addProperty("subjectUuid",p.getUniqueId().toString());out.addProperty("scope","self");
         if(r!=null){out.addProperty("version",r.definition.version());out.add("requirements",AssessmentCatalog.JSON.toJsonTree(r.definition));out.add("measured",measurements(r));
             out.addProperty("purpose",r.grade==null?"certificate":"promotion");
+            out.add("guide",guide(p,r));out.addProperty("guideCommand","/mycli guild exam guide");
             if(r.state.equals("active"))contractGuidance(p,r.definition,out);
             else if(r.state.equals("ready"))out.addProperty("nextCommand",r.market.isEmpty()?"/mycli guild exam submit":"/mycli guild claim");
             if(r.definition.proofs().contains("survey_photo")) {
@@ -479,12 +540,15 @@ final class SkillAssessments implements Listener {
             }
             AssessmentCatalog.Point target=target(r);if(target!=null){JsonObject at=AssessmentCatalog.JSON.toJsonTree(target).getAsJsonObject();at.addProperty("worldUuid",r.definition.course().world().toString());out.add("target",at);}
             if(!machine){p.sendMessage("§b"+r.definition.title()+"："+r.state+"；"+next(r));
+                p.sendMessage("§e完整步骤与材料：公会→训练与考试→当前考试指引；或 /mycli guild exam guide。");
                 if(out.has("nextCommand"))p.sendMessage("§a下一步："+out.get("nextCommand").getAsString()+"；只推荐，不自动接单或消费。");
                 if(target!=null)p.sendMessage("§e当前目标 "+r.definition.course().world()+" X="+target.x()+" Y="+target.y()+" Z="+target.z()+"，距离 "+Math.round(point(p).distance(target))+"格；测量 "+measurements(r));}
         }else {out.addProperty("nextCommand","/mycli guild exam list");if(!machine)p.sendMessage("§e没有在办考试；/mycli guild exam list 看题目，或 /mycli guild exam promotion 查下一阶。");}
         send(p,"MC_GUILD_EXAM",out);
     }
     void jsonQuery(Player p,String[] args) {
+        if(args.length>=3&&args[2].equalsIgnoreCase("supplies")){suppliesCommand(p,args,true);return;}
+        if(args.length==3&&args[2].equalsIgnoreCase("guide")){guideReply(p,true);return;}
         if(args.length==3&&args[2].equalsIgnoreCase("status")){show(p,true);return;}
         if(args.length==4&&args[2].equalsIgnoreCase("info")) {
             AssessmentCatalog.Definition d=definition(args[3]);if(d==null){JsonObject out=new JsonObject();out.addProperty("type","error");out.addProperty("ok",false);out.addProperty("reason","unknown_exam");out.addProperty("nextCommand","/mycli guild exam list");send(p,"MC_GUILD_EXAM",out);return;}
@@ -544,6 +608,8 @@ final class SkillAssessments implements Listener {
             case "info" -> {AssessmentCatalog.Definition d=args.length>3?definition(args[3]):null;if(d==null){reply(p,"unknown_exam",null);break;}info(p,d,plugin.communication().compact(p));}
             case "start" -> {if(args.length<4){reply(p,"choose_exam",null);break;}boolean promotion=args[3].equals("promotion");if(promotion&&args.length<5){promotion(p);break;}start(p,args[promotion?4:3],promotion);}
             case "status" -> show(p);
+            case "guide" -> {if(args.length==3){if(plugin.communication().compact(p))guideReply(p,true);else guideMenu(p);}else reply(p,"invalid_arguments",null);}
+            case "supplies" -> suppliesCommand(p,args,plugin.communication().compact(p));
             case "promotion", "rank" -> promotion(p);
             case "submit" -> {Run r=current(p);if(r==null)reply(p,"no_exam",null);else if(!r.market.isEmpty())p.sendMessage("§e此题属于市场委托；请 /mycli guild claim 交付，不能独立重复结算。");else submit(p,r);}
             case "cancel" -> {Run r=current(p);if(r==null)break;if(!r.market.isEmpty()){p.sendMessage("§e请 /mycli guild abandon 放弃市场委托；不会暗中释放当前阶段。");break;}r.state="cancelled";r.reason="player_cancelled";save(p,r);show(p);}
@@ -557,25 +623,59 @@ final class SkillAssessments implements Listener {
         Inventory inv=Bukkit.createInventory(null,45,promotion?"晋级考试 · 选择专长":"公会 · 训练与考试");
         for(int i=0;i<ids.size();i++){var d=definition(ids.get(i));inv.setItem(i,icon(Material.WRITABLE_BOOK,d.title(),d.description(),d.enabled()?"点击查看条件，自行确认开考":"场地待勘察，暂不能开考",hasCertificate(p,d.id())?"已有证书，可重练":"未认证"));}
         inv.setItem(36,icon(Material.EXPERIENCE_BOTTLE,gradeName(p)+" · 晋级考试","查看下一阶，并选择现场专长题"));inv.setItem(37,icon(Material.BOOK,"我的能力证书"));
-        inv.setItem(38,icon(Material.CLOCK,"当前考试与目标"));inv.setItem(40,icon(Material.BARRIER,"关闭"));
+        inv.setItem(38,icon(Material.CLOCK,"当前考试指引与材料","按步骤操作；材料领取、相机和任务入口"));inv.setItem(40,icon(Material.BARRIER,"关闭"));
         menus.put(inv,new Menu(p.getUniqueId(),List.copyOf(ids),"",promotion));p.openInventory(inv);
     }
     private ItemStack icon(Material type,String name,String... lore) {ItemStack item=new ItemStack(type);var meta=item.getItemMeta();meta.setDisplayName(name);meta.setLore(List.of(lore));item.setItemMeta(meta);return item;}
+    private void guideReply(Player p,boolean machine) {
+        Run r=current(p);if(r==null){show(p,machine);return;}JsonObject out=new JsonObject();out.addProperty("type","guide");out.addProperty("examId",r.definition.id());out.addProperty("runId",r.id.toString());out.add("guide",guide(p,r));
+        if(!machine)for(var value:out.getAsJsonObject("guide").getAsJsonArray("steps")){var row=value.getAsJsonObject();p.sendMessage("§e"+row.get("order")+". "+row.get("title").getAsString()+"："+row.get("instruction").getAsString());}
+        send(p,"MC_GUILD_EXAM",out);
+    }
+    private void guideMenu(Player p) {
+        Run r=current(p);if(r==null){show(p);return;}JsonObject g=guide(p,r);Inventory inv=Bukkit.createInventory(null,45,"考试指引 · "+r.definition.title());
+        for(var value:g.getAsJsonArray("steps")) {
+            var row=value.getAsJsonObject();String text=row.get("instruction").getAsString();List<String> lore=new ArrayList<>();for(int i=0;i<text.length();i+=28)lore.add("§7"+text.substring(i,Math.min(text.length(),i+28)));
+            lore.add("§a"+row.get("command").getAsString());inv.setItem(row.get("order").getAsInt()-1,icon(Material.BOOK,row.get("order")+". "+row.get("title").getAsString(),lore.toArray(String[]::new)));
+        }
+        inv.setItem(20,icon(Material.MAP,"领取摄影空地图","首次本题8张，发到个人箱；重复点击不多发"));
+        inv.setItem(21,icon(Material.FILLED_MAP,"领取遗迹探险图","仅原图寻宝路线需要；天然遗迹有真实目标"));
+        inv.setItem(22,icon(Material.CHEST,"免费取出考试材料","只取本场已发的材料到主背包","无需学习传送术；不扣魔力；背包满则保留"));
+        inv.setItem(23,icon(Material.SPYGLASS,"现场拍照","打开女神相机，拍完查看合格结果"));
+        inv.setItem(24,icon(Material.WRITABLE_BOOK,"选择探索委托","查看真实可接条件，再主动接单"));
+        inv.setItem(30,icon(Material.CLOCK,"核查当前缺项"));inv.setItem(31,icon(Material.EMERALD,"交付当前委托阶段","先核查；有缺项不会扣物或冒充通过"));
+        inv.setItem(32,icon(Material.EXPERIENCE_BOTTLE,"交付考试","实操和照片齐全，ready后领取证书或晋级"));inv.setItem(40,icon(Material.ARROW,"返回考试目录"));
+        menus.put(inv,new Menu(p.getUniqueId(),List.of(),"@guide",false));p.openInventory(inv);
+    }
     @EventHandler(priority=EventPriority.HIGHEST) public void click(InventoryClickEvent e) {
         Menu m=menus.get(e.getView().getTopInventory());if(m==null)return;e.setCancelled(true);
         if(!(e.getWhoClicked() instanceof Player p)||!m.owner.equals(p.getUniqueId())||e.getRawSlot()<0||e.getRawSlot()>=e.getView().getTopInventory().getSize())return;
         int slot=e.getRawSlot();p.closeInventory();
+        if(m.detail.equals("@guide")) {
+            Bukkit.getScheduler().runTask(plugin,()->{if(!p.isOnline())return;switch(slot){
+                case 20 -> suppliesCommand(p,new String[]{"guild","exam","supplies","claim","photo"},plugin.communication().compact(p));
+                case 21 -> suppliesCommand(p,new String[]{"guild","exam","supplies","claim","map"},plugin.communication().compact(p));
+                case 22 -> suppliesCommand(p,new String[]{"guild","exam","supplies","take","all"},plugin.communication().compact(p));
+                case 23 -> plugin.photoCamera().command(p,new String[]{"photo","menu"});
+                case 24 -> plugin.taskMarket().routes().open(p,"exploration",1);
+                case 30 -> plugin.guild().command(p,new String[]{"guild","verify"});
+                case 31 -> plugin.guild().command(p,new String[]{"guild","claim"});
+                case 32 -> command(p,new String[]{"guild","exam","submit"});
+                case 40 -> menu(p,false);
+                default -> guideReply(p,plugin.communication().compact(p));
+            }});return;
+        }
         if(!m.detail.isEmpty()){if(slot==11)start(p,m.detail,m.promotion);else if(slot==15)menu(p,m.promotion);return;}
         if(slot<m.ids.size()){String id=m.ids.get(slot);var d=definition(id);Inventory inv=Bukkit.createInventory(null,27,d.title()+" · 确认开考");
             inv.setItem(4,icon(Material.BOOK,d.title(),d.description(),"条件："+eligibility(p,d),"限时"+d.timeout()+"秒；技能消耗照常；不自动花点"));
             inv.setItem(11,icon(Material.EMERALD,"主动开始考试"));inv.setItem(15,icon(Material.ARROW,"返回"));menus.put(inv,new Menu(p.getUniqueId(),List.of(),id,m.promotion));p.openInventory(inv);
-        }else if(slot==36){promotion(p);menu(p,true);}else if(slot==37)certificates(p);else if(slot==38)show(p);
+        }else if(slot==36){promotion(p);menu(p,true);}else if(slot==37)certificates(p);else if(slot==38)guideMenu(p);
     }
     @EventHandler(priority=EventPriority.HIGHEST) public void drag(InventoryDragEvent e) {if(menus.containsKey(e.getView().getTopInventory()))e.setCancelled(true);}
     @EventHandler public void close(InventoryCloseEvent e) {menus.remove(e.getInventory());}
     String bookPage(Player p) {
         JsonObject a=academy(p.getUniqueId());String ids=a.has("certificates")?String.join("、",a.getAsJsonObject("certificates").keySet()):"未认证";
-        return "§6冒险者认证§r\n\n"+gradeName(p)+"\n声望 "+plugin.guild().reputation(p)+"\n\n能力证书："+ids+"\n\n公会→训练与考试\n/mycli guild exam promotion\n查看下一级缺项。\n\n旧资历保留，声望达标后主动考试，不自动花点。";
+        return "§6冒险者认证§r\n\n"+gradeName(p)+"\n声望 "+plugin.guild().reputation(p)+"\n\n能力证书："+ids+"\n\n公会→训练与考试\n→当前考试指引与材料\n分步骤完成；摄影空图和遗迹探险图在个人箱领取。\n\n/mycli guild exam guide\n旧资历保留，不自动花点。";
     }
     void admin(CommandSender sender,String[] args) {
         if(args.length>2&&args[2].equals("reload"))sender.sendMessage(reload()?"考试与18阶目录已热加载；在途定义保持冻结。":"配置错误，已保留上次有效目录；修正两份配置后再加载。");
