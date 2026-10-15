@@ -16,6 +16,14 @@ validated actions, executable methods, evidence receipts, current facts/archive,
 deduplication, goal revisions, cancellation, SDK/MCP and the viewer integration.
 The host owns personality, goals, planning model calls, decisions and personal long-term memory.
 The core also offers [game memory](docs/game-memory.md): scoped historical notes with local keywords, optional embeddings or external memory services. It never turns recalled notes into current world facts.
+
+The SDK/MCP native backend uses that same notebook. A host mounting the body
+directly supplies storage with `new JavaClientWorld(cfg, fetch, { dataDir,
+agentName, accountName })`; `accountName` is the exact configured game login
+after host-side name mapping. Historical reads and attributed notes work while
+disconnected, without client RPC or a control lease. `capture` alone requires a
+fresh identity-checked body reading; offline dimension stays unknown. Existing
+`dataDir/minecraft-memory` notes retain their server/account/agent scope.
 The core starts no model loop. Connecting to a game server is explicit.
 
 Version 0.5.5 owns Mineflayer death recovery: `deathRespawnDelayMs` defaults to
