@@ -1,5 +1,6 @@
 import { observationView, observedEntity } from './perception-sight.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
+import { KNOWLEDGE_TOOL, readMinecraftKnowledge } from './knowledge.ts';
 import { PlayerMemoryRecall } from './game-memory-player.ts';
 import { GameMemoryService } from './game-memory-service.ts';
 import { temporaryScaffoldReadout } from './temporary-scaffold.ts';
@@ -2173,6 +2174,7 @@ const MAP_ICON_ZH: Record<string, string> = {
 export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   PHOTO_TOOL,
   GAME_MEMORY_TOOL,
+  KNOWLEDGE_TOOL,
   ...PERCEPTION_TOOLS,
   RAILWAY_TOOL_DECL,
   {
@@ -4360,6 +4362,13 @@ export class MinecraftWorld implements World {
 
   tools(): ToolDef[] {
     const handlers: Record<string, ToolDef['handler']> = {
+      mc_knowledge: async (args, ctx) => {
+        ctx.signal?.throwIfAborted();
+        try {
+          const result = readMinecraftKnowledge(args, this.bridge?.bot?.version ?? this.cfg.version);
+          return { text: this.toolLog('mc_knowledge', args, JSON.stringify(result)), meta: { knowledge: result } };
+        } catch (error) { return { text: String(error), failed: true }; }
+      },
       mc_railway: async (args, ctx) => {
         if (ctx.signal?.aborted) return { text: '[mc_railway 未受理] 观察已取消', failed: true };
         const outcome = railwayReadout(this.bridge?.bot ?? null, args);

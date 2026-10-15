@@ -4,6 +4,7 @@ import { JAVA_CLIENT_PROTOCOL, type JavaClientConfiguration, type JavaClientActi
 import type { ToolDef, ToolOutcome, ToolCallContext, WorldHost, WorldRequestFacts, World } from './contracts.ts';
 import type { MinecraftClientConfig } from './config.ts';
 import { PhotographyService, PHOTO_TOOL } from '../../core/photography.ts';
+import { KNOWLEDGE_TOOL, readMinecraftKnowledge } from '../../core/knowledge.ts';
 import { createImageGenerationPort } from '../../core/image-generation.ts';
 import { serveNativeView } from './native-view.ts';
 import { createJavaDataViewer, type JavaDataViewerHandle } from '../../core/java-data-viewer.mjs';
@@ -56,6 +57,7 @@ export class JavaClientWorld implements World {
   private readonly evidence: NativeEvidenceArchive;
   private readonly methods: JavaMethods | null;
   private nativeMethodsAvailable = false;
+  private knowledgeVersion: string | null = null;
   constructor(private readonly cfg: MinecraftClientConfig, private readonly http: typeof fetch = globalThis.fetch) {
     const dir = cfg.javaClient?.ledgerDir;
     this.evidence = new NativeEvidenceArchive(join(dir || '.', 'native-evidence'));
@@ -102,7 +104,7 @@ export class JavaClientWorld implements World {
       || typeof saved.token !== 'string' || !/^[a-f0-9]{64}$/i.test(saved.token) || typeof saved.instanceId !== 'string')
       throw new Error('Unsupported or nonlocal Java bridge credentials');
     this.connection = { endpoint: endpoint.origin, token: saved.token, instanceId: saved.instanceId };
-    this.host = host; this.lifetime = new AbortController(); this.lease = null; this.nativeMethodsAvailable=false; this.epoch++;
+    this.host = host; this.lifetime = new AbortController(); this.lease = null; this.nativeMethodsAvailable=false; this.knowledgeVersion=null; this.epoch++;
     try {
       this.state = await this.rpc('state', {}) as JavaClientState; this.verify(this.state);
       if (!this.state.connected) throw new Error('Java client is not in a world; join explicitly before attaching');
@@ -114,6 +116,7 @@ export class JavaClientWorld implements World {
       this.viewerSelection = null;
       try {
       const capabilities = await this.rpc('capabilities', {});
+      this.knowledgeVersion = typeof capabilities.minecraftVersion === 'string' ? capabilities.minecraftVersion : null;
       this.nativeMethodsAvailable = capabilities.methodAdapter === JAVA_METHOD_PROTOCOL;
       if (this.cfg.viewerPort > 0) this.viewerSelection = selectJavaViewer(this.cfg.javaClient, capabilities);
       if (this.viewerSelection?.mode === 'data') {
@@ -256,6 +259,13 @@ export class JavaClientWorld implements World {
       } });
     const result = async (args: Record<string, unknown>, ctx: ToolCallContext) => this.receipt(await this.rpc('result', { action_id: args.action_id }, ctx.signal));
     const tools: ToolDef[] = [
+      { ...KNOWLEDGE_TOOL, handler: async (args, ctx) => {
+        ctx.signal?.throwIfAborted();
+        try {
+          return { text: JSON.stringify(readMinecraftKnowledge(args,
+            typeof this.state?.minecraftVersion === 'string' ? this.state.minecraftVersion : this.knowledgeVersion ?? this.cfg.version)) };
+        } catch (error) { return { text: String(error), failed: true }; }
+      } },
       tool('mc_capabilities', 'Read actual client/backend capabilities; no control claim or launcher.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify(await this.rpc('capabilities', {}, ctx.signal)) })),
       tool('mc_state', 'Read fresh actual client state, position, health, food, view, inventory, GUI and action queue; no action or cached disconnected observation.', parameters({}), async (_args, ctx) => {
         const state = await this.rpc('state', {}, ctx.signal) as JavaClientState; this.verify(state); this.state = state;

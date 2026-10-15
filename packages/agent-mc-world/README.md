@@ -3,6 +3,12 @@
 Independent Minecraft execution core, maintained in `jcs130/minecraft-ai-friend`.
 Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.
 
+Primary optimization and acceptance target: **Minecraft Java 1.21.1**. Other
+versions remain selectable; the public SDK keeps explicit/automatic negotiation.
+The core supplies [versioned vanilla knowledge](docs/vanilla-knowledge.md) through
+`mc_knowledge`: search summaries, then read needed food/cooking/health, item,
+mining or crafting references locally without loading a manual into every turn.
+
 ## Responsibilities
 
 This package owns the Mineflayer connection, inventory synchronization, navigation,

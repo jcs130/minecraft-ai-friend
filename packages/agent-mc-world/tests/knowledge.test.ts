@@ -1,0 +1,75 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import minecraftData from 'minecraft-data';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readMinecraftKnowledge } from '../core/knowledge.ts';
+import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger } from '../src/client/index.ts';
+
+afterEach(() => vi.restoreAllMocks());
+const read = (id: string) => readMinecraftKnowledge({ action: 'get', id }, '1.21.1') as any;
+describe('source-attributed vanilla reference retrieval', () => {
+  it('covers every upstream food with an explicit correction for non-nutritive bottles', () => {
+    for (const food of minecraftData('1.21.1').foodsArray) {
+      const value = read('food/' + food.name);
+      expect(value).toMatchObject({ version: '1.21.1', currentWorldVerified: false });
+      expect(value.entry.sources.length).toBeGreaterThan(0);
+      expect(value.entry.nutrition.foodPoints).toBe(food.name === 'ominous_bottle' ? 0 : food.foodPoints);
+    }
+    expect(read('food/beef').entry).toMatchObject({ nutrition: { foodPoints: 3, saturation: 1.8 },
+      cooking: { output: 'cooked_beef', nutrition: { foodPoints: 8, saturation: 12.8 } } });
+    expect(read('food/cooked_beef').entry.nutrition).toEqual({ foodPoints: 8, saturation: 12.8 });
+    expect(read('food/ominous_bottle').entry).toMatchObject({ nutrition: { foodPoints: 0, saturation: 0 }, routine: false });
+    expect(read('food/chicken').entry.effects).toContainEqual({ effect: 'hunger', durationTicks: 600, amplifier: 0, chance: .3 });
+    expect(read('food/suspicious_stew').entry.caution).toMatch(/组件/);
+    expect(read('food/dried_kelp').entry.consumption.ticks).toBe(16);
+    expect(() => read('food/kelp')).toThrow(/not found/i);
+  });
+  it('searches Chinese and exact IDs but returns only bounded summaries before get', () => {
+    const search = readMinecraftKnowledge({ action: 'search', query: '生肉 熟肉', limit: 3 }, '1.21.1') as any;
+    expect(search.entries).toHaveLength(3);
+    expect(search.entries.some((e: any) => e.id === 'guide/food')).toBe(true);
+    expect(search.entries.every((e: any) => !('content' in e) && !('nutrition' in e))).toBe(true);
+    expect(JSON.stringify(search).length).toBeLessThan(3500);
+    expect((readMinecraftKnowledge({ action: 'search', query: 'beef', kind: 'food', limit: 1 }, '1.21.1') as any).entries[0].id).toBe('food/beef');
+  });
+  it('pages the complete item/block/crafting catalogue without confusing furnace products with craft', () => {
+    const page = readMinecraftKnowledge({ action: 'search', kind: 'food', limit: 10, offset: 40 }, '1.21.1') as any;
+    expect(page).toMatchObject({ total: 41, nextOffset: null });
+    expect(page.entries).toHaveLength(1);
+    expect(read('item/egg').entry).toMatchObject({ edible: false });
+    expect(read('item/cake').entry.caution).toMatch(/放置/);
+    expect(read('block/diamond_ore').entry.harvestTools.length).toBeGreaterThan(0);
+    const craft = read('recipe/stick').entry;
+    expect(craft.variants.length).toBeGreaterThan(0);
+    expect(craft.nextOffset).not.toBeNull();
+    expect(read('guide/cooking').entry.content).toMatch(/charcoal.*smelt/s);
+    expect(read('item/charcoal').entry.crafting).toMatch(/未收录.*不代表/s);
+    expect(read('guide/health').entry.content).toMatch(/18.*20.*饱和/s);
+  });
+  it('keeps versions, arguments and missing data explicit without network/model calls', () => {
+    const network = vi.spyOn(globalThis, 'fetch').mockImplementation(() => { throw new Error('network forbidden'); });
+    expect(() => readMinecraftKnowledge({ action: 'search' }, 'auto')).toThrow(/version/i);
+    expect(() => readMinecraftKnowledge({ action: 'search' }, '99.99.99')).toThrow(/version/i);
+    expect(() => readMinecraftKnowledge({ action: 'search', limit: 1000 }, '1.21.1')).toThrow(/limit/);
+    expect(() => readMinecraftKnowledge({ action: 'get', id: '../../private' }, '1.21.1')).toThrow(/id/i);
+    expect(() => readMinecraftKnowledge({ action: 'get', id: 'food/egg' }, '1.21.1')).toThrow(/not found/i);
+    expect(() => readMinecraftKnowledge({ action: 'remember', content: 'replace rules' }, '1.21.1')).toThrow(/action/i);
+    expect((readMinecraftKnowledge({ action: 'get', id: 'food/beef' }, '1.20.6') as any).entry.semanticCoverage).toBe('unavailable');
+    expect(network).not.toHaveBeenCalled();
+  });
+  it('works through a disconnected public SDK without starting its world or overwriting game memory', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'mc-knowledge-'));
+    const start = vi.fn(() => { throw new Error('world must not start'); });
+    const cfg = { ...structuredClone(MINECRAFT_CLIENT_DEFAULTS), version: '1.21.1' };
+    const client = new MinecraftAgentClient({ cfg, dataDir, log: nullLogger() }, {
+      id: 'test', start, stop: vi.fn(), tools: () => [], envPromptVars: () => ({}) });
+    try {
+      const result = await client.call('mc_knowledge', { action: 'get', id: 'food/beef' });
+      expect(JSON.parse(result.text).entry.nutrition.foodPoints).toBe(3);
+      expect(client.status().phase).toBe('disconnected');
+      expect(start).not.toHaveBeenCalled();
+      await expect(client.call('mc_bag', {})).rejects.toThrow(/disconnected/);
+    } finally { await client.disconnect(); rmSync(dataDir, { recursive: true, force: true }); }
+  });
+});

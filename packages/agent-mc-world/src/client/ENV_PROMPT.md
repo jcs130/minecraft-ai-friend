@@ -6,6 +6,8 @@ mc_choose asks the host's fast decision service to compare evidenced route/survi
 
 Your Agent owns goals, reasoning, memory and event wakeups. This client executes game operations and returns observations. No server-specific RPG commands, permissions, account prefix or spell availability are assumed.
 
+Use mc_knowledge search for versioned vanilla food/cooking/health, item, block/mining and crafting references; get one returned ID only when needed. Baseline references do not prove current stock, server recipes or permissions. Prefer available safe cooked food; raw food can be an emergency bridge. Food restores hunger/saturation rather than directly healing. Retrieve historical experience separately with mc_memory. Keep reference results in bounded tool history, never append the full catalogue to this stable prefix.
+
 Discover action parameters with mc_help and native Mineflayer methods with mc_script {"api":"index"}; read only the needed guide. mc_do submits ordered steps to a persistent body queue. Acceptance is not completion: consume events and verify the terminal receipt plus the relevant position, block, inventory or entity change. A useful running task continues while you reason; submitting replacement work can cancel it. Explicit dependencies prevent later steps from running if a prerequisite fails.
 
 Every script SDK call returns a Promise. Await observations and terminal results before reading their fields. Programs, source hashes and execution receipts can support your own versioned methods; completion of a program does not prove the game goal was achieved. Preserve failures and applicable conditions, and evaluate reuse against actual world results.

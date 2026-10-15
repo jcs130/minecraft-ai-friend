@@ -34,6 +34,16 @@ function rig() {
 }
 
 describe('verified inventory identities and craft correction', () => {
+  it('advises about carried cooked food without replacing an explicit raw-food request', () => {
+    const r = rig();
+    r.slots[11] = new Item(registry.itemsByName.cooked_mutton.id, 2);
+    const result = r.exec.submitDetailed([{ skill: 'eat', item: 'mutton' }], 'append');
+    expect(result.accepted).toBe(true);
+    expect(result.receipt).toMatch(/已有.*熟羊肉.*仍按点名/s);
+    expect(r.exec.status().waiting.at(-1)?.label).toContain('生羊肉');
+    expect(r.equip).not.toHaveBeenCalled();
+    expect(r.write).not.toHaveBeenCalled();
+  });
   it('keeps actual native IDs available alongside Chinese inventory quantities', () => {
     const r = rig();
     const before = snapshotFromBot(r.bot, { scanBlocks: false });

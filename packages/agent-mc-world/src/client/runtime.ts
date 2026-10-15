@@ -17,6 +17,7 @@ import { CurrentFacts, prepareContext } from './context.ts';
 import { RequestLedger } from './request-ledger.ts';
 import { GameMemoryBook } from '../../core/game-memory.ts';
 import { GameMemoryService } from '../../core/game-memory-service.ts';
+import { KNOWLEDGE_TOOL, readMinecraftKnowledge } from '../../core/knowledge.ts';
 import { worldIdentityOf } from '../../core/server-config.ts';
 import { readRealmMarker } from '../../core/server.ts';
 
@@ -271,7 +272,9 @@ export class MinecraftAgentClient {
   async call(name: string, args: Record<string, unknown>, options: string | CallOptions = {}, legacySignal?: AbortSignal): Promise<ToolOutcome> {
     const { requestId: callId = randomUUID(), turnId, signal = legacySignal } = typeof options === 'string' ? { requestId: options } : options;
     const offlineMemory = this.phase === 'disconnected' && name === `${this.toolPrefix}_memory`;
-    if (this.phase !== 'started' && !offlineMemory) throw new Error(`Game runtime is disconnected; call ${this.toolPrefix}_connection action:connect first.`);
+    const offlineKnowledge = this.phase === 'disconnected' && name === `${this.toolPrefix}_knowledge`;
+    const offlineCall = offlineMemory || offlineKnowledge;
+    if (this.phase !== 'started' && !offlineCall) throw new Error(`Game runtime is disconnected; call ${this.toolPrefix}_connection action:connect first.`);
     if (typeof callId !== 'string' || !callId || callId.length > 256) throw new Error('Invalid request id');
     const signature = createHash('sha256').update(JSON.stringify([name, args, turnId ?? this.turn?.id])).digest('hex');
     const prior = this.calls.get(callId);
@@ -283,19 +286,20 @@ export class MinecraftAgentClient {
     if (turnId && this.turn?.id !== turnId) throw new Error('Unknown decision turn');
     if (this.barrier && !stopping) throw new Error(`Acknowledge tool barrier ${this.barrier} before the next call`);
     if (this.turn && this.endRequested && !stopping) throw new Error('Host must end the current decision turn before submitting more calls');
-    const tool = this.tools().find(candidate => candidate.name === name);
+    const tool = this.tools().find(candidate => candidate.name === name)
+      ?? (offlineKnowledge ? { ...KNOWLEDGE_TOOL, name, handler: async () => '' } : undefined);
     if (!tool) throw new Error(`Unknown game tool: ${name}`);
     if (signal?.aborted) throw new Error('Tool call cancelled before submission.');
     if (tool.barrierAfter && [...this.calls.values()].some(call => call.pending)) throw new Error('Drain pending calls before a barrier tool');
     if (tool.barrierAfter) this.barrier = callId;
-    if (offlineMemory) {
+    if (offlineCall) {
       this.lease.acquire();
       if (!this.offlineMemoryCalls && this.lifetime.signal.aborted) this.lifetime = new AbortController();
       this.offlineMemoryCalls++;
     }
     try { this.requests.write({ requestId: callId, signature, phase: 'pending' }); }
     catch (error) {
-      if (offlineMemory && --this.offlineMemoryCalls === 0) this.lease.release();
+      if (offlineCall && --this.offlineMemoryCalls === 0) this.lease.release();
       if (this.barrier === callId) this.barrier = null;
       throw error;
     }
@@ -309,7 +313,9 @@ export class MinecraftAgentClient {
     try {
       this.metrics.toolStarted(callId, name);
       combined.throwIfAborted();
-      const result = await cancellable(offlineMemory ? this.callOfflineMemory(args, combined) : tool.handler(args, {
+      const result = await cancellable(offlineKnowledge
+        ? Promise.resolve({ text: JSON.stringify(readMinecraftKnowledge(args, this.options.cfg.version)) })
+        : offlineMemory ? this.callOfflineMemory(args, combined) : tool.handler(args, {
         role: this.options.agentName ?? 'agent', log: this.options.log, callId, signal: combined,
         ...(turn ? { turnId: turn.id, round: turn.round } : {}), queueExternalEvents: events => queued.push(...events) }), combined);
       const outcome: ToolOutcome = typeof result === 'string' ? { text: result } : { ...result };
@@ -332,7 +338,7 @@ export class MinecraftAgentClient {
       throw error;
     } finally {
       state.pending = false;
-      if (offlineMemory && --this.offlineMemoryCalls === 0) this.lease.release();
+      if (offlineCall && --this.offlineMemoryCalls === 0) this.lease.release();
       if (this.options.autoAcknowledgeBarriers && this.barrier === callId) this.acknowledgeBarrier(callId);
       if (this.calls.size > 1024) for (const [id, call] of this.calls) {
         if (!call.pending && id !== this.barrier) this.calls.delete(id);

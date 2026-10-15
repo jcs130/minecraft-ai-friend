@@ -20,10 +20,10 @@ export const MINECRAFT_DEFAULTS = {
   keepAliveTimeoutMs: 60_000,
   /**
    * 全链路的版本约定:服务器(Paper)、观察者客户端(Fabric+SpectatorPlus)、
-   * mineflayer 协议必须使用同一版本。1.20.6 是 SpectatorPlus(观察者附身时补渲
-   * HUD/手臂/手持)客户端模组支持的 1.20.x 最高版;1.20.5+ 需要 Java 21。
+   * mineflayer 协议必须使用同一版本。主力优化和验收目标为原版 Java 1.21.1，
+   * 需要 Java 21+；其他版本按实际连接及对应资源选择，不能沿用历史观察者限制。
    */
-  version: '1.20.6',
+  version: '1.21.1',
   /** 网页画面端口(OBS 浏览器源 + 画面源之一);0=不开 */
   viewerPort: 0,
   /** 现代画面资源包根目录；空 = 使用自带 prismarine-viewer */

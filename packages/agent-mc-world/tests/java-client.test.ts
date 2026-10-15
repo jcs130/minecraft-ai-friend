@@ -10,7 +10,7 @@ import { javaScriptErrorHelp } from '../src/client/java-script-help.ts';
 const paths: string[]=[];
 const directory=()=>{const path=mkdtempSync(join(tmpdir(),'real-java-client-'));paths.push(path);return path;};
 afterEach(()=>{vi.restoreAllMocks();for(const path of paths.splice(0))rmSync(path,{recursive:true,force:true});});
-function rig(scriptEnabled = false) {
+function rig(scriptEnabled = false, minecraftVersion?: string) {
   const data=directory(), credentials=join(data,'connection.json');
   writeFileSync(credentials,JSON.stringify({protocol:'agent-mc-java/v1',endpoint:'http://127.0.0.1:1234',token:'a'.repeat(64),instanceId:'offline-fixture'}));
   const cfg={...structuredClone(MINECRAFT_CLIENT_DEFAULTS),provider:'java-client' as const,host:'fixture.test',username:'Test',version:'1.20.6',
@@ -25,7 +25,7 @@ function rig(scriptEnabled = false) {
     else if(method==='release'||method==='stop')value={stopped:true};
     else if(method==='cancel')value={id:params.action_id,operation:'move',phase:'cancelled',acceptedAt:Date.now(),updatedAt:Date.now()};
     else if(method==='operations')value={operations:{move:'native move'}};
-    else if(method==='capabilities')value={protocol:'agent-mc-java/v1',realRendering:true,minescript:scriptEnabled,baritone:false};
+    else if(method==='capabilities')value={protocol:'agent-mc-java/v1',realRendering:true,minescript:scriptEnabled,baritone:false,...(minecraftVersion?{minecraftVersion}:{})};
     else if(method==='do'||method==='result'){
       value={id:params.action_id,operation:'move',phase:completed?'completed':'accepted',acceptedAt:Date.now(),updatedAt:Date.now(),evidence:{position:[2,65,3]}};
       if(method==='do')state.actions=[value];
@@ -36,6 +36,16 @@ function rig(scriptEnabled = false) {
   return {cfg,state,world,runtime,http,calls,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it('uses the attached native client version for local knowledge without another RPC or body action',async()=>{
+    const r=rig(false,'1.21.1');r.cfg.version='auto';await r.runtime.connect();
+    try {
+      const before=r.calls.length;
+      const result=await r.runtime.call('mc_knowledge',{action:'get',id:'food/beef'});
+      expect(JSON.parse(result.text)).toMatchObject({version:'1.21.1',currentWorldVerified:false,
+        entry:{nutrition:{foodPoints:3,saturation:1.8}}});
+      expect(r.calls.length).toBe(before);
+    } finally {await r.runtime.disconnect();}
+  });
   it('explains observed version-specific API failures without rewriting or dispatching a correction',()=>{
     expect(javaScriptErrorHelp("module 'minescript' has no attribute 'equipment_hotbar_select'")).toContain('player_inventory_select_slot(slot)');
     expect(javaScriptErrorHelp("module 'minescript' has no attribute 'block_at'")).toContain('mc_probe');

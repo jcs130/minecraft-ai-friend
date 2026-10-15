@@ -8,6 +8,7 @@ export { loadMinecraftClientConfig } from './config-file.ts';
 export { AgentJournal } from './journal.ts';
 export { GameMemoryBook, GAME_MEMORY_TOOL, type GameMemoryScope, type GameMemorySource, type GameMemoryContext } from '../../core/game-memory.ts';
 export { GameMemoryService, GAME_MEMORY_DEFAULTS, type GameMemoryConfig } from '../../core/game-memory-service.ts';
+export { KNOWLEDGE_TOOL, readMinecraftKnowledge } from '../../core/knowledge.ts';
 export { AgentMetrics, serveAgentMetrics, type HarnessTrace } from './metrics.ts';
 export type { ToolDef, ToolOutcome, ToolCallContext, EventEnvelope, WorldRequestFacts, Logger, ModelFacts } from './contracts.ts';
 export { nullLogger } from '../../core/support/runtime.mjs';

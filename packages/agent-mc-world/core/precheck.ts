@@ -15,6 +15,7 @@ import { equipDestOf, equippedAlready } from './tools.ts';
 import { itemsInReach, offHandItem } from './inventory.ts';
 import { DRINKABLES } from './item-facts.ts';
 import { RISKY_FOODS } from './nutrition.ts';
+import { FOOD_COOKING } from './vanilla-food.ts';
 import { itemMatchesPick, pickMissText, pickTargetOf } from './item-pick.ts';
 import { zhDimension, zhEntity, zhName } from './names.ts';
 import { invItemNamed, noSuchItem } from './inventory.ts';
@@ -146,6 +147,11 @@ function precheckEat(
   }
   // 吃饱了是这一步的正常结局,执行器不会调用 consume()。
   if (bot.food >= 20) return null;
+  const cooked = FOOD_COOKING[call.item];
+  if (cooked && itemsInReach(bot).some(item => item.count > 0 && item.name === cooked)) {
+    return { level: 'soft', rule: 'eat.cookedAvailable',
+      text: `包里已有${zhName(cooked)}，通常比${zhName(call.item)}补更多饥饿与饱和；仍按点名物品进食，不自动替换。生熟对比可查 mc_knowledge get food/${call.item}` };
+  }
   if (RISKY_FOODS.has(call.item)) {
     const safer = itemsInReach(bot).find((item) => item.count > 0 && foods[item.name]
       && !RISKY_FOODS.has(item.name) && item.name !== 'golden_apple'
