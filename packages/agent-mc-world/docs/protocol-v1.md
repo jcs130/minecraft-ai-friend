@@ -40,3 +40,7 @@ archive_runs / journal.archiveRuns() 列出保留的运行。archive / journal.a
 ## 宿主目标修订
 
 mc_goal {revise:{slot,expectedRevision,text,plan,reason}} 只在宿主明确调用时替换当前工作计划，目标身份不变；返回带前后原文、版本和原因的 goal-revision，并投递同内容的事件。旧版本修订被拒绝，新计划的证据清空后重新核验。原计划证据在归档回执中保留。跨场次目标与长期记忆仍由宿主保存和恢复。
+
+只修改 plan 时也必须提供要保留的 text。缺少或超长的 text/reason 会按字段说明错误，原目标和版本保留。
+
+verify 检查当前条件，最近已通过的机械步骤会继续现读；库存减少或离开区域可能使登记条件进度退回，这不能否定此前采集、消耗、交付或抵达已经发生。需要记录历史动作与净变化时，在计划中用 judgment 指明证据来源，再以 milestone 登记原回执与时间。核心保留宿主判断，不将它冒充独立验证；新证据否定前提时由宿主 reopen/revise。条件选择错误不能靠重做旧阶段来掩盖。
