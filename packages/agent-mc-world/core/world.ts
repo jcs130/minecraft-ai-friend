@@ -1,6 +1,7 @@
 import { observationView, observedEntity } from './perception-sight.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
 import { KNOWLEDGE_TOOL, readMinecraftKnowledge } from './knowledge.ts';
+import { FOOD_COOKING } from './vanilla-food.ts';
 import { PlayerMemoryRecall } from './game-memory-player.ts';
 import { GameMemoryService } from './game-memory-service.ts';
 import { temporaryScaffoldReadout } from './temporary-scaffold.ts';
@@ -6398,7 +6399,17 @@ export class MinecraftWorld implements World {
     const execution: ExecutionReceipt | undefined = admittedTaskId === undefined ? undefined : { kind:'task',
       id:`${this.executionEpoch}:${admittedTaskId}`, phase: admitted ? completedImmediately ? 'completed' : 'accepted' : 'rejected',
       terminal: !admitted || completedImmediately, goalCompleted:false, evidence:{localId:admittedTaskId,receipt} };
-    return {text:receipt, ...(execution ? {execution} : {}), ...(admitted ? completedImmediately ? {endsTurn:true} : {}
+    // Preserve machine-readable admission evidence instead of requiring a host
+    // to classify a localized receipt. A processing correction carries the
+    // actual registry documentation, without another model/server request.
+    const processing = parsed.steps.some(step => step.skill === 'craft' && !step.grid
+      && (step.item === 'charcoal' || Object.values(FOOD_COOKING).includes(step.item ?? '')));
+    const recoverySkill = !admitted && rejection
+      ? rejection.rule === 'craft.invalid' && processing ? 'smelt' : parsed.steps[0]?.skill : undefined;
+    const help = recoverySkill ? readSkillHelp({ skill: recoverySkill }) : null;
+    const admission = !admitted && rejection ? { accepted: false, ...rejection,
+      recovery: help && 'text' in help ? [{ tool: 'mc_help', arguments: { skill: recoverySkill }, text: help.text }] : [] } : null;
+    return {text:receipt, ...(admission ? { meta: { admission } } : {}), ...(execution ? {execution} : {}), ...(admitted ? completedImmediately ? {endsTurn:true} : {}
       : {failed:true, ...(rejection?.kind === 'correction' ? {} : {endsTurn:true})})};
   }
 
