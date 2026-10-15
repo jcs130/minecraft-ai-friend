@@ -27,6 +27,10 @@ try {
     assert.deepEqual(food.entry.nutrition, { foodPoints: 3, saturation: 1.8 });
     assert.deepEqual(food.entry.cooking.nutrition, { foodPoints: 8, saturation: 12.8 });
     assert.equal(food.currentWorldVerified, false);
+    const recipes = JSON.parse((await client.call('mc_knowledge', { query: 'charcoal', kind: 'recipe', limit: 1 })).text);
+    assert.equal(recipes.entries[0].id, 'recipe/charcoal');
+    const charcoal = JSON.parse((await client.call('mc_knowledge', { id: 'recipe/charcoal' })).text);
+    assert.equal(charcoal.entry.variants[0].type, 'smelting');
     assert(!names.has('mc_cast'));
     assert.equal(client.status().phase, 'disconnected');
   } finally { await client.disconnect(); }

@@ -33,6 +33,10 @@ async def check(directory: Path, node: str) -> dict:
             assert reference["entry"]["nutrition"] == {"foodPoints": 3, "saturation": 1.8}
             assert reference["entry"]["cooking"]["nutrition"] == {"foodPoints": 8, "saturation": 12.8}
             assert reference["retrieval"] == "local-reference"
+            recipes = module.json_content(await bridge.call("mc_knowledge", {"query": "charcoal", "kind": "recipe", "limit": 1}))
+            assert recipes["entries"][0]["id"] == "recipe/charcoal"
+            charcoal = module.json_content(await bridge.call("mc_knowledge", {"id": "recipe/charcoal"}))
+            assert charcoal["entry"]["variants"][0]["type"] == "smelting"
             saved = module.json_content(await bridge.call("mc_memory", {"action": "remember", "kind": "method",
                 "summary": "Offline method fixture", "content": "Historical hypothesis, no gameplay claim.",
                 "source": {"kind": "hypothesis", "reference": "offline:test"}}))
