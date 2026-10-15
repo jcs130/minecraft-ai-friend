@@ -26,7 +26,9 @@ fresh identity-checked body reading; offline dimension stays unknown. Existing
 `dataDir/minecraft-memory` notes retain their server/account/agent scope.
 The core starts no model loop. Connecting to a game server is explicit.
 
-Version 0.5.5 owns Mineflayer death recovery: `deathRespawnDelayMs` defaults to
+Version 0.5.6 includes strict blueprint operation admission, explicit crafting
+count units and a loopback human account console bound to its executor. It keeps
+Mineflayer death recovery: `deathRespawnDelayMs` defaults to
 4000 and accepts 0–15000 milliseconds. It disables implicit native auto-respawn
 and dispatches at most once per actual death. Stop, disconnect, connection
 replacement and an early server respawn cancel the pending dispatch. Death still
