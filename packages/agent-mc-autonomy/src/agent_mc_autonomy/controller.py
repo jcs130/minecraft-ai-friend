@@ -293,6 +293,7 @@ class Controller:
         if fresh_scope != self.game_scope:
             self.recent.clear()
             self.native_outcomes.clear()
+            self.groups.clear()  # Tool replies/provider replay belong to the previous game identity too.
         self.game_scope = fresh_scope
         life = lifecycle(facts)
         if isinstance(life, dict):
@@ -333,12 +334,15 @@ class Controller:
             self.persist(uncertain=True)
             raise RuntimeError("outcome_unknown: inspect the original action receipt; automatic replay is blocked")
         execution = value.get("execution")
+        foreign_execution_id = None
         if execution:
             key = (execution["kind"], execution["id"])
             if execution.get("terminal") is True:
                 submitted = self.action_requests.pop(key, None)
-                self.action_scopes.pop(key, None)
-                if submitted:
+                submitted_scope = self.action_scopes.pop(key, None)
+                if submitted and submitted_scope != self.game_scope:
+                    foreign_execution_id = execution["id"]
+                if submitted and submitted_scope == self.game_scope:
                     name, arguments, request_id, read_only = submitted
                     phase = execution.get("phase")
                     event = next((e for e in value.get("events", []) if (e.get("execution") or {}).get("id") == execution["id"]), {})
@@ -380,11 +384,11 @@ class Controller:
                     [{"tool": item[0], "request_id": item[2], "execution_id": key[1], "observation_only": item[3]}
                      for key, item in self.action_requests.items() if self.action_scopes.get(key) == death.get("scope")])
                 if episode:
-                    self.game_scope = episode["scope"]
                     self.death_waiting = True
                     self.continuation_needed = True
-                    self.publish(death_episode=episode, game_identity=self.game_scope)
-        self.recent.extend(e for e in value.get("events", []) if e.get("contextDelivery") != "archive-only" and not e.get("meta", {}).get("staleEpoch"))
+                    self.publish(death_episode=episode, game_identity=episode["scope"])
+        self.recent.extend(e for e in value.get("events", []) if e.get("contextDelivery") != "archive-only" and not e.get("meta", {}).get("staleEpoch")
+                           and (foreign_execution_id is None or (e.get("execution") or {}).get("id") != foreign_execution_id))
         self.recent = self.recent[-64:]
 
     def current_work(self):

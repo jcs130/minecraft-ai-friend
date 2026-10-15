@@ -136,3 +136,75 @@ def test_large_lessons_fit_context_without_evicting_fresh_body_facts(tmp_path):
                                 death_memory=store.context(SCOPE))
     assert budget["total"] <= 8000
     assert any(p["key"] == "body" for p in json.loads(messages[-1]["content"])["current_facts"])
+
+
+def test_scope_change_removes_old_death_tool_history_from_the_next_model_request(framework_module, tmp_path, run_async):
+    seen = []
+    async def decide(messages, tools):
+        seen.append(messages)
+        return {"content": "wait", "tool_calls": []}
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    controller.observe_game_facts(facts())
+    episode = controller.death_memory.record(event(), facts(), [], [], [])
+    controller.groups = [[{"role": "assistant", "content": None, "tool_calls": [{"id": "old-death-read", "type": "function",
+        "function": {"name": "death_review", "arguments": '{"action":"get","id":"death-1"}'}}]},
+        {"role": "tool", "tool_call_id": "old-death-read", "content": json.dumps(episode)}]]
+    # The new realm's death can arrive before its next fresh identity sample.
+    controller.receipt({"events": [event(2, scope={**SCOPE, "realm": "realm-b"})]})
+    original = bridge.call
+    async def call(name, args, **kw):
+        if name == "mc_protocol" and args["action"] == "facts":
+            return packed(facts(scope={**SCOPE, "realm": "realm-b"}))
+        return await original(name, args, **kw)
+    bridge.call = call
+    run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    assert seen and "realm-a" not in json.dumps(seen)
+    assert "old-death-read" not in json.dumps(seen)
+
+
+def test_foreign_scope_terminal_settles_native_ledger_without_contaminating_new_episode(framework_module, tmp_path):
+    _, _, controller = setup(framework_module, tmp_path, None)
+    controller.observe_game_facts(facts())
+    key = ("task", "old-realm-task")
+    controller.action_requests[key] = ("mc_do", {"steps": []}, "actual-old-request", False)
+    controller.action_scopes[key] = SCOPE
+    controller.pending[key] = {"kind": "task", "id": key[1]}
+    new_scope = {**SCOPE, "realm": "realm-b"}
+    controller.observe_game_facts(facts(scope=new_scope))
+    terminal = {"kind": "task", "id": key[1], "terminal": True, "phase": "completed", "evidence": {"receipt": "old-realm-receipt"}}
+    controller.receipt({"execution": terminal, "events": [{"run": "old-native-run", "cursor": 3, "ts": "2026-10-15T01:00:00Z", "type": "minecraft.task", "execution": terminal}]})
+    assert key not in controller.pending and key not in controller.action_requests
+    controller.receipt({"events": [event(4, scope=new_scope)]})
+    episode = controller.death_memory.entries(new_scope)[0]
+    assert episode["receipts"] == []
+    assert controller.native_outcomes == []
+    assert "old-native-run" not in json.dumps(episode)
+
+
+@pytest.mark.parametrize("change", ["death", "scope", "runtime_failure"])
+def test_quiet_review_defer_rechecks_new_urgent_event_and_identity_before_observe(tmp_path, change):
+    from agent_mc_autonomy.review import ReviewPort, ReviewPolicy
+    from test_review import snapshot
+    clock = [10000]
+    port = ReviewPort(tmp_path, now=lambda: clock[0])
+    port.configure(ReviewPolicy(enabled=True))
+    def publish(value, observe=True):
+        (tmp_path / "status.json").write_text(json.dumps(value), encoding="utf-8")
+        if observe:
+            port.observe(value)
+    publish(snapshot(clock[0], game_identity=SCOPE))
+    port.decide(port.offer()["review"]["id"], "continue", "Continue")
+    clock[0] += 180
+    publish(snapshot(clock[0], game_identity=SCOPE))
+    periodic = port.offer()["review"]
+    assert periodic["trigger"] == "periodic_review"
+    changes = {"game_identity": SCOPE}
+    if change == "death":
+        changes["death_episode"] = DeathMemory(tmp_path).record(event(), facts(), [], [], [])
+    elif change == "scope":
+        changes["game_identity"] = {**SCOPE, "realm": "realm-b"}
+    else:
+        changes["phase"] = "failed"
+    publish(snapshot(clock[0], **changes), observe=False)
+    assert port.defer(periodic["id"], True)["is_error"]
+    assert not port.state()["review"].get("result")

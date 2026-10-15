@@ -85,7 +85,7 @@ def review_observation(status, now):
             "material": digest(material), "intent": digest([evidence["standing_goal"], active]),
             "signal": digest([material, active, evidence["planner_error"], bool(pending), terminal,
                               {key: evidence["tool_failure"][key] for key in ("tool", "error")} if evidence["tool_failure"] else None]),
-            "urgent": urgent, "evidence": evidence}
+            "urgent": urgent, "scope": scope_key(snapshot.get("game_identity")), "evidence": evidence}
 
 
 def brief(text, size):
@@ -283,6 +283,7 @@ class ReviewPort:
             if review.get("trigger") != "periodic_review" or review.get("evidence", {}).get("death_episode"):
                 return {"is_error": True, "error": "meaningful_review_requires_decision"}
             if (not current or current["session"] != review["session"] or current["intent"] != review["intent"]
+                    or current.get("urgent") or current.get("scope") != review.get("scope")
                     or current["signal"] != review["signal"] or self.mailbox.intent_revision() != review["revision"]
                     or not 0 <= self.now() - review["created_at"] <= 180):
                 return {"is_error": True, "error": "review_expired_or_changed"}
