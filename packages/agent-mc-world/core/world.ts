@@ -6557,7 +6557,7 @@ export class MinecraftWorld implements World {
     const dimension = normalizeDimension(landing.dimension);
     if (this.lastReported) this.lastReported = { ...this.lastReported,
       position: { x: landing.x, y: landing.y, z: landing.z }, dimension,
-      biome: biomeAt(this.bridge?.bot, landing) };
+      biome: biomeAt(this.bridge?.bot, new Vec3(landing.x, landing.y, landing.z)) };
     if (this.deathRespawnConfirmation) this.deathRespawnConfirmation.landing = { ...landing, dimension };
     this.scheduleRespawnConfirmation();
   }

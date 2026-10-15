@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import mineflayer from 'mineflayer';
+import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Bridge } from '../core/bridge.ts';
@@ -28,8 +29,13 @@ function rig(initialX = 0, positionFirst = false) {
     biomeName: 'plains',
     supportFeature: (name: string) => registry.supportFeature(name), loadPlugin() {}, quit() {},
   });
-  bot.blockAt = () => registry.biomesByName[bot.biomeName]
-    ? { biome: { id: registry.biomesByName[bot.biomeName].id } } : null;
+  const blockAt: Bot['blockAt'] = position => {
+    // The native prismarine world path requires Vec3, not a coordinate record.
+    position.floored();
+    return registry.biomesByName[bot.biomeName]
+      ? { biome: { id: registry.biomesByName[bot.biomeName].id } } as never : null;
+  };
+  bot.blockAt = blockAt;
   bot.once('inject_allowed', () => {
     mf('mineflayer/lib/plugins/health.js')(bot, { respawn: false });
     mf('mineflayer/lib/plugins/inventory.js')(bot, { hideErrors: true });
@@ -159,6 +165,17 @@ it('rebases a dimension landing biome but preserves the next actual crossing', (
   expect(r.texts().some(text => text.includes('走进了'))).toBe(false);
   r.bot.biomeName = 'desert'; r.walk(129);
   expect(r.texts().some(text => text.includes('走进了沙漠'))).toBe(true);
+});
+
+it('captures the loaded landing biome with a native Vec3 before the next world delta', () => {
+  const r = rig(); r.die(); r.bot._client.emit('respawn', {});
+  r.bot.biomeName = 'forest'; r.position(121);
+  expect(r.world.lastReported.biome).toBe('forest');
+  // The bot crosses again before health or the periodic delta samples the landing.
+  r.bot.biomeName = 'desert'; r.bot.entity.position.x = 129;
+  r.full(); r.health(20);
+  expect(r.texts().some(text => text.includes('走进了沙漠'))).toBe(true);
+  expect(r.texts().some(text => text.includes('走了 8 格'))).toBe(true);
 });
 
 it.each(['new-death', 'new-generation'])('does not let an old confirmation rewrite the baseline after %s', async boundary => {
