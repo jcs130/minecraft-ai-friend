@@ -260,6 +260,7 @@ class Controller:
         self.preempted = False
         self.deferred_wake = False
         self.continuation_needed = False
+        self.continuation_ready = False
         self.planner_failures = 0
         self.planner_retry_at = 0.0
         self.planner_notice = None
@@ -324,6 +325,10 @@ class Controller:
                         "receipt": spatial_text(receipt)[:450], "original_event": reference})
                     self.native_outcomes = self.native_outcomes[-6:]
                     self.publish(native_outcomes=list(self.native_outcomes))
+                    if not read_only and phase == "completed":
+                        # A known body task has finished. Its next useful decision
+                        # need not wait for the unrelated ordinary event throttle.
+                        self.continuation_ready = True
                     if not read_only and phase in {"blocked", "rejected", "partial"}:
                         failure = self.record_tool_failure(name, arguments, {"text": receipt, "execution": execution}, request_id)
                         failure["native_execution"] = {k: execution[k] for k in ("kind", "id", "phase")}
@@ -495,8 +500,10 @@ class Controller:
         if name == "goal_report":
             report = {**arguments, "verified": False, "source": "planner_report",
                       "observed_facts": await self.protocol("facts"), "original_receipts": "receipts.jsonl"}
-            self.commands.report_goal(self.active_goal["id"], report)
+            finished_goal = self.active_goal["id"]
+            self.commands.report_goal(finished_goal, report)
             self.active_goal = self.commands.resume_goal()
+            self.continuation_ready |= self.active_goal is None or self.active_goal["id"] != finished_goal
             self.feedback_pending = bool(self.active_goal and self.active_goal.get("mode") and not self.active_goal.get("queue_policy_consumed"))
             self.continuation_needed = True
             self.publish(current_goal=self.active_goal, last_goal_report=report)
@@ -779,6 +786,7 @@ class Controller:
         self.preempted = False
         self.deferred_wake = False
         self.continuation_needed = False
+        self.continuation_ready = False  # Consume one meaningful handoff, never a polling loop.
         self.turn = str(uuid.uuid4())
         await self.protocol("begin_turn", id=self.turn)
         try:
@@ -1010,7 +1018,8 @@ class Controller:
                 if self.decide and not self.current_work() and elapsed >= self.settings.idle_decision_seconds:
                     # Poll state without a model request when nothing has changed.
                     wake |= fact_fingerprint(await self.protocol("facts")) != self.last_facts
-                if (self.decide and wake and (not self.current_work() or urgent) and elapsed >= self.settings.min_decision_seconds
+                if (self.decide and wake and (not self.current_work() or urgent)
+                        and (elapsed >= self.settings.min_decision_seconds or self.continuation_ready)
                         and time.monotonic() >= self.planner_retry_at):
                     current_goal = self.goal_prompt(goal)
                     await self.turn_once(current_goal, prefix, tools)

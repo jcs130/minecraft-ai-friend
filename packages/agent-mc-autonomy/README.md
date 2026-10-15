@@ -5,7 +5,7 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
-0.1.50 pins checked core 0.5.4, including current main's Java 1.21.1 defaults,
+0.1.51 pins checked core 0.5.4, including Java 1.21.1 defaults,
 native interface fixes and structured action-admission evidence. The coordinator
 keeps native recovery references at the dynamic request tail and suppresses an
 identical rejected plan while non-clock facts remain unchanged, for at most
@@ -28,6 +28,14 @@ body dispatch is journaled. A nonexistent property, invalid array index or
 unavailable tool returns a known validation rejection with documentation lookup
 guidance. It does not disconnect the body or create an unknown game outcome;
 an unresolved real native failure remains available beside the failed read.
+
+A tracked body task's successful terminal receipt and an actual submitted-goal
+transition each allow one immediate planning handoff. They do not add a second
+queue or speculative inference while native work is running. Ordinary observation
+completions retain the configured decision throttle, and failed calls, provider
+backoff, explicit stop and unknown dispatch retain their existing guards. This
+removes an avoidable post-task cooldown; it does not remove model latency or prove
+that a model's next plan is feasible.
 
 In 0.1.25, temporary inference transport failures and HTTP 408/429/500/502/503/504
 pause planning with exponential backoff capped at 300 seconds. The native body,
