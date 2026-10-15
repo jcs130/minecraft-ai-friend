@@ -155,11 +155,15 @@ describe('live readouts and honest startup', () => {
       const food = () => r.world.requestFacts()!.parts!.find(part => part.key === 'foodReserve')!.text;
       expect(food()).toContain('常规 4 个');
       expect(food()).toContain('mutton');
-      expect(food()).not.toContain('cocoa_beans');
+      expect(food().slice(0, 160)).toContain('不可直接吃 cocoa_beans');
       r.bot.food = 20;
       expect(food()).toContain('常规 4 个'); // Hunger is not a food-stock observation.
       Object.assign(r.bot.inventory, { items: () => [{ name: 'cocoa_beans', count: 3 }] });
       expect(food()).toContain('常规 0 个');
+      Object.assign(r.bot.inventory, { items: () => [{ name: 'egg', count: 2 }, { name: 'sugar', count: 3 },
+        { name: 'custom:food', count: 1 }] });
+      expect(food().slice(0, 160)).toContain('不可直接吃 sugar、egg');
+      expect(food().slice(0, 160)).toContain('未知 custom:food');
       Object.assign((r.world as any).bridge, { invSynced: false });
       expect(food()).toContain('数量未知');
     } finally { r.close(); }

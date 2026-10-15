@@ -9,21 +9,42 @@ export interface FoodStack { name: string; count: number }
 export interface FoodValue { foodPoints?: number; saturation?: number }
 const SPECIAL_FOODS = new Set(['golden_apple', 'enchanted_golden_apple']);
 
-/** Counts are from the synchronized carried inventory; hunger and stored food are separate facts. */
+/** Counts are from synchronized carried inventory. knownItems is the same versioned registry
+ * as foods; absence from foods alone is not evidence that a custom/unknown item is inedible. */
 export function renderFoodReserveReadout(
   stacks: readonly FoodStack[],
   foods: Record<string, FoodValue | undefined>,
   synced: boolean,
   nameOf: (name: string) => string = (name) => name,
+  knownItems: Readonly<Record<string, unknown>> = {},
 ): string {
   if (!synced) return '口粮储备：物品栏尚未同步，数量未知。';
   if (Object.keys(foods).length === 0) return '口粮储备：食物注册表尚不可用，未分类。';
   const totals = new Map<string, number>();
+  const nonfoods = new Set<string>(), unknown = new Set<string>();
+  const carriedCounts = new Map<string, number>();
   for (const stack of stacks) {
-    if (Number.isSafeInteger(stack.count) && stack.count > 0 && (foods[stack.name]?.foodPoints ?? 0) > 0) {
+    if (!Number.isSafeInteger(stack.count) || stack.count <= 0) continue;
+    carriedCounts.set(stack.name, (carriedCounts.get(stack.name) ?? 0) + stack.count);
+    if (Object.hasOwn(foods, stack.name) && (foods[stack.name]?.foodPoints ?? 0) > 0) {
       totals.set(stack.name, (totals.get(stack.name) ?? 0) + stack.count);
-    }
+    } else if (Object.hasOwn(knownItems, stack.name)) nonfoods.add(stack.name);
+    else unknown.add(stack.name);
   }
+  // Whole native IDs stay usable as query handles. Bound each category independently
+  // so neither a full backpack nor long translations hide uncertainty in host previews.
+  const examples = (names: Set<string>): string => {
+    const selected: string[] = [];
+    for (const name of [...names].sort((a, b) => carriedCounts.get(b)! - carriedCounts.get(a)! || a.localeCompare(b))) {
+      if (selected.length >= 4 || [...selected, name].join('、').length > 44) break;
+      selected.push(name);
+    }
+    return selected.join('、') + (selected.length < names.size ? `（等${names.size}种）` : '');
+  };
+  const edibleCount = [...totals].reduce((sum, [name, amount]) => sum + (name === 'ominous_bottle' ? 0 : amount), 0);
+  const clarification = `随身可食性（版本注册表）：已识别可直接进食 ${edibleCount} 个`
+    + (nonfoods.size ? `；不可直接吃 ${examples(nonfoods)}` : '')
+    + (unknown.size ? `；未知 ${examples(unknown)}` : '') + '。';
   const normal: string[] = [], risky: string[] = [], special: string[] = [];
   let points = 0, count = 0;
   for (const [name, amount] of [...totals].sort(([a], [b]) => a.localeCompare(b))) {
@@ -38,7 +59,8 @@ export function renderFoodReserveReadout(
     else if (SPECIAL_FOODS.has(name)) special.push(label);
     else { normal.push(label); count += amount; points += (foods[name]!.foodPoints ?? 0) * amount; }
   }
-  return (totals.size === 0 ? '已同步随身物品没有可直接进食的食物；食物原料不能代替口粮。' : '')
+  return clarification
+    + (totals.size === 0 && unknown.size === 0 ? '已同步随身物品没有可直接进食的食物；食物原料不能代替口粮。' : '')
     + `随身口粮储备：常规 ${count} 个（${normal.join('、') || '无'}；基础补饥饿值合计 ${points} 点，不含浪费与后续消耗）。`
     + (risky.length ? `有风险或特殊副作用：${risky.join('、')}。` : '')
     + (special.length ? `特殊食物：${special.join('、')}。` : '')
