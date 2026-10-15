@@ -12,8 +12,8 @@
 | 游戏监听 | 0.0.0.0:28976 TCP |
 | 只读健康 | 127.0.0.1:28985/healthz |
 | 物理同步 | Sable 官方 TCP 回退，共用游戏连接 |
-| JAR | 原包服务端 94 + MixAuth 1.3.3 + FOM Server Support 0.2.0 |
-| 客户端 | 原包 121 + 本机 Agent 可选 3；作者 10 个禁用文件保持 |
+| JAR | 原包服务端 94 + MixAuth 1.3.3 + FOM Server Support 0.2.0 + 内容扩展 6，共 102 |
+| 客户端 | 原包 121 + 本机 Agent 可选 3 + 内容扩展 6，共 130；作者 10 个禁用文件保持 |
 | 内存 / 距离 | Java 最大 6144 MiB，视距 6、模拟距离 4、最多 8 人 |
 
 不开放 MCP、RPC 或 RCON。复用原有 Java WAN 转发及 Windows 规则，未修改路由器、未开放新端口。2026-10-15 在原 28977 端口启用 **FOM 基础 Mineflayer 兼容网关**，仅允许本机及家庭局域网的 `ag_` 账号，由同一服务守护管理；这是更新后的 FOM 映射，详见 [接入说明](MY-AGENT-WORLD-FOM-MINEFLAYER.md)。旧 35 模组服、旧 Agent 控制器、基岩 28988 和语音 28989 仍停用，不能因旧端口规则保留就视为 FOM 已支持。
@@ -22,7 +22,8 @@
 
 - `server/`：原生游戏目录、mods、world、配置、MixAuth 认证库。
 - `ops/service.json`：唯一生产服务配置。
-- `ops/mods.lock.json`：96 个服务端 JAR 的 SHA256。
+- `ops/mods.lock.json`：102 个服务端 JAR 的 SHA256。
+- `ops/content-release.json`：2026-10-15 内容发布、增量包与双盘冷备记录。
 - `ops/service-tools/`：固定发布的六个管理脚本及源码哈希清单。
 - `ops/fom-service/`：私有信箱、回执、锁、心跳、维护标记和轮转日志，DACL 限本用户、SYSTEM 与管理员。
 - `E:\MC\runtime\python-3.12.14/`：从既有可信运行时逐文件校验后独立复制的标准库运行时及许可证，不依赖 Codex 缓存或研究 venv。
@@ -95,4 +96,6 @@ python tools/fom_health.py --config E:\MC\servers\fom-2.42\ops\service.json
 
 FOM 当前用完整 Java 客户端原生渲染交互。远程 Agent 在自己的电脑运行客户端和自研核心，经游戏 TCP 入服；桥 RPC 留在本机回环并用 bearer，服务端不需要 MCP。普通玩家不用三个 Agent 组件。
 
-旧 Mineflayer registry 翻译、旧网页资源、基岩桥、Numen、RPG 技能/公会/试炼、女仆/殖民地和距离语音未迁入。不能因为旧映射还在就宣布可用；后续按实际整包注册表与协议另行适配，并验证真实画面和操作。
+Mineflayer 基础 registry 翻译已在 FOM 发布，见 [基础接入](MY-AGENT-WORLD-FOM-MINEFLAYER.md)。烹饪、女仆和 Iron 法术内容已通过独立候选及正式服检查，2026-10-15 发布，见 [内容扩展](MY-AGENT-WORLD-FOM-CONTENT.md)。
+
+旧网页资源、基岩桥、Numen、千灯纪技能/公会/试炼、殖民地和距离语音未迁入当前 FOM。新内容必须按实际整包注册表与协议适配，并验证真实画面和操作。

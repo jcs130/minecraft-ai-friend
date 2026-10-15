@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-15",
+  "status": "production_deployed_verified",
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.248",
+  "originalServerJarCount": 96,
+  "candidateServerJarCount": 102,
+  "candidateClientJarCount": 130,
+  "original96ModHashesPreserved": true,
+  "modelRequests": 0,
+  "tests": {
+    "nodeProtocolAndMapping": 101,
+    "pythonSupervisorAndOverlay": 25,
+    "coldMineflayerChecks": 6
+  },
+  "nativeGameplay": {
+    "ironKnifeCrafted": 1,
+    "cookedRiceProduced": 2,
+    "riceConsumed": 2,
+    "bowlsConsumed": 2,
+    "cakeConsumedToTameMaid": 1,
+    "maidOwnerPersistedAfterColdStart": true,
+    "nativeInscriptionAndCuriosEquipment": true,
+    "firebolt": {
+      "manaBefore": 100,
+      "manaAfter": 91,
+      "targetHealthBefore": 12.096,
+      "targetHealthAfter": 6.1919994,
+      "keyReleased": true
+    }
+  },
+  "mineflayer": {
+    "version": "4.39.0",
+    "authenticated": true,
+    "nativeStacksRoundtripped": 6,
+    "fiveFixtureTypesAndCountsConserved": true,
+    "originalStarterSlabInitializedByMod": true,
+    "emptyContainerAndCursorConfirmed": true,
+    "scrollSpellAndMaidOwnerComponentsServerConfirmed": true,
+    "coldReconnectPassed": true
+  },
+  "unknownFirstCast": {
+    "statusUnchanged": "unknown",
+    "originalClientFileBytesUnchanged": true,
+    "sdkHistoryPrefixUnchanged": true,
+    "explicitOfflineAuditsAllowIndependentNewActions": true,
+    "originalActionNotReplayed": true
+  },
+  "candidateColdBackup": {
+    "files": 494,
+    "crcAndPerFileSha256Verified": true,
+    "secondaryVerified": true
+  },
+  "gatewayReleaseManifestSha256": "de61aff7b2b5a8d750445768496e4d50f180fb2a82b034eaddac1a8bc7a4d41f",
+  "startupErrors": {
+    "baseDistinctMessages": 311,
+    "candidateDistinctMessages": 311,
+    "newDistinctMessagesAfterCuriosCompat": 0,
+    "originalPackErrorsNotHidden": true
+  },
+  "overlay": {
+    "files": 10,
+    "sha256": "fe47ec8ec196810c9505ea28453918b9d8a621e1eb958978b7809a44e8f5cc59",
+    "bytes": 40444444,
+    "scope": "released_client_and_server_increment"
+  },
+  "productionChanged": true,
+  "paperChanged": false,
+  "bedrockAndOldWeb3DVerified": false,
+  "limitations": [
+    "Operator-provided native gameplay fixtures, not natural autonomous progression",
+    "Maid autonomous farming, all spells and GUIs, complex aircraft, and sustained 16-Agent load not verified",
+    "Requires matching full Java client overlay before production activation"
+  ],
+  "optionalParticles": {
+    "nativeFireFramesObserved": 3,
+    "connectionAndInventoryRemainUsable": true,
+    "privateNoticeCount": 1,
+    "requiredItemAndMetadataFailuresStillFatal": true
+  },
+  "production": {
+    "runId": "b32e9412dfe644d0a98c64312891d680",
+    "healthy": true,
+    "nativePort": 28976,
+    "agentLanPort": 28977,
+    "healthChecks": 9,
+    "minecraftProtocol": 767,
+    "sameOwnedSupervisorAndWatchdog": true,
+    "nativeExportChecks": {
+      "checks": {
+        "components.tsv": true,
+        "particles.tsv": true,
+        "entity-data-serializers.tsv": true,
+        "network-channels.json": true,
+        "blocks.tsv": true,
+        "items.tsv": true,
+        "block-states.jsonl": true
+      },
+      "byteIdentical": {
+        "components.tsv": true,
+        "particles.tsv": true,
+        "entity-data-serializers.tsv": true,
+        "network-channels.json": false,
+        "blocks.tsv": true,
+        "items.tsv": true,
+        "block-states.jsonl": false
+      },
+      "semanticEquivalenceForJsonOrderingAndShapePrecision": {
+        "network-channels.json": true,
+        "block-states.jsonl": true
+      },
+      "nativeStateIdentityExact": true,
+      "maxOcclusionBoxDelta": 5.551115123125783e-17,
+      "occlusionBoxTolerance": 1e-12,
+      "ok": true,
+      "actualProductionExportMatchesFrozenGateway": true,
+      "complete": {
+        "schemaVersion": 1,
+        "completedAt": "2026-10-15T15:27:52.501218500Z",
+        "processId": 14248
+      }
+    },
+    "mineflayerReadOnlyChecks": 6,
+    "fullJavaClientLoginAndNativeCatalogVerified": true,
+    "catalogTotals": {
+      "farmersdelight": 185,
+      "touhou_little_maid": 73,
+      "irons_spellbooks": 231
+    },
+    "originalFramebufferInspected": true,
+    "qaClientNormalExit": 0,
+    "candidateOwnedServicesNormalExit": true,
+    "originalOfflinePlayerFilesByteIdentical": 5,
+    "original96ServerAnd124ClientJarHashesUnchanged": true,
+    "protectedConfigDifferencePaths": [
+      "server.properties",
+      "usercache.json",
+      "config/packetfixer.properties",
+      "config/submarine_hull.json",
+      "config/jade/sort-order.json"
+    ],
+    "fullColdBackupFiles": 7378,
+    "fullColdBackupZipBytes": 662570565,
+    "backupCrcAndPerFileSha256Verified": true,
+    "dualDiskBackupVerified": true,
+    "paperOriginalPid": 11548,
+    "portsAndFirewallUnchanged": true,
+    "runtimeFileDifferences": {
+      "server.properties": {
+        "semanticValuesUnchanged": true,
+        "differentKeys": []
+      },
+      "usercache.json": {
+        "normalQaLoginCacheUpdated": true
+      },
+      "config/packetfixer.properties": {
+        "semanticValuesUnchanged": true,
+        "differentKeys": []
+      },
+      "config/submarine_hull.json": {
+        "jsonSemanticUnchanged": false,
+        "beforeType": "dict",
+        "afterType": "dict",
+        "addedKeys": [
+          "farmersdelight:acacia_cabinet",
+          "farmersdelight:apple_pie",
+          "farmersdelight:bamboo_basket",
+          "farmersdelight:bamboo_cabinet",
+          "farmersdelight:beetroot_crate",
+          "farmersdelight:birch_cabinet",
+          "farmersdelight:black_canvas_sign",
+          "farmersdelight:black_canvas_wall_sign",
+          "farmersdelight:black_hanging_canvas_sign",
+          "farmersdelight:black_wall_hanging_canvas_sign",
+          "farmersdelight:blue_canvas_sign",
+          "farmersdelight:blue_canvas_wall_sign",
+          "farmersdelight:blue_hanging_canvas_sign",
+          "farmersdelight:blue_wall_hanging_canvas_sign",
+          "farmersdelight:brown_canvas_sign",
+          "farmersdelight:brown_canvas_wall_sign",
+          "farmersdelight:brown_hanging_canvas_sign",
+          "farmersdelight:brown_mushroom_colony",
+          "farmersdelight:brown_wall_hanging_canvas_sign",
+          "farmersdelight:budding_tomatoes"
+        ],
+        "removedKeys": [
+          "cbc_compact_mount:compact_cannon_mount"
+        ],
+        "changedKeys": []
+      },
+      "config/jade/sort-order.json": {
+        "jsonSemanticUnchanged": false,
+        "beforeType": "dict",
+        "afterType": "dict",
+        "addedKeys": [
+          "touhou_little_maid:altar",
+          "touhou_little_maid:picnic_mat",
+          "touhou_little_maid:tombstone"
+        ],
+        "removedKeys": [],
+        "changedKeys": []
+      }
+    },
+    "startupUniqueErrors": {
+      "before": 311,
+      "after": 311,
+      "newDistinctMessages": []
+    },
+    "windowsCrLfOverlayReproductionTestPassed": true
+  },
+  "candidateOverlay": {
+    "files": 10,
+    "sha256": "ab3627cfbbb1ed48fa08a68e2a888e0ca734c5efa27f689cd0945806ecb0afb6"
+  }
+}

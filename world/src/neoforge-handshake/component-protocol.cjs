@@ -11,12 +11,57 @@ const nativeTypes = require('minecraft-protocol/src/datatypes/compiler-minecraft
 const { arsNativeTypes } = require('./native-ars-codec.cjs')
 const { arsEntityNativeTypes } = require('./native-ars-entity-codec.cjs')
 const { domumNativeTypes } = require('./native-domum-codec.cjs')
+const { contentNativeTypes } = require('./native-content-types.cjs')
 
 // Verified in TLM 1.5.3 InitDataComponent and Patchouli 93: UUIDUtil.STREAM_CODEC
 // is fixed 16-byte UUID; ResourceLocation.STREAM_CODEC is a protocol string.
 const MOD_CODECS = {
   'touhou_little_maid:init_maid_owner': 'UUID',
   'patchouli:book': 'string',
+  // Farmer's Delight 1.3.4: ItemStackWrapper uses OPTIONAL_STREAM_CODEC;
+  // cooking time is fixed INT, while skillet time is VAR_LONG (not LONG).
+  'farmersdelight:meal': 'Slot',
+  'farmersdelight:container': 'Slot',
+  'farmersdelight:cooking_time_length': 'i32',
+  'farmersdelight:skillet_ingredient': 'Slot',
+  'farmersdelight:skillet_flip_timestamp': 'MawFarmerVarLong',
+  'farmersdelight:skillet_flipped': 'bool',
+  // Iron's Spells 3.16.3 ComponentRegistry / SpellContainer / SpellData.
+  // These are stream codecs, not the persistent JSON/NBT representation.
+  // Book capacity, active count, levels and slot indices are fixed BE INTs.
+  'irons_spellbooks:spell_container': ['container', [
+    { name: 'maxSpells', type: 'MawIronCount' },
+    { name: 'spellWheel', type: 'bool' },
+    { name: 'mustEquip', type: 'bool' },
+    { name: 'improved', type: 'bool' },
+    { name: 'spells', type: ['array', { countType: 'MawIronCount', type: ['container', [
+      { name: 'id', type: 'string' }, { name: 'level', type: 'i32' },
+      { name: 'locked', type: 'bool' }, { name: 'index', type: 'i32' }
+    ]] }] }
+  ]],
+  'irons_spellbooks:upgrade_data': ['container', [
+    { name: 'upgradedSlot', type: 'string' },
+    { name: 'upgrades', type: ['array', { countType: 'MawIronCount', type: ['container', [
+      { name: 'id', type: 'string' }, { name: 'level', type: 'i32' }
+    ]] }] }
+  ]],
+  'irons_spellbooks:wayward_compass': ['container', [{ name: 'position', type: 'position' }]],
+  'irons_spellbooks:furled_map_data': ['container', [
+    { name: 'destinationResource', type: 'string' },
+    { name: 'dimension', type: ['option', 'string'] },
+    { name: 'descriptionOverride', type: ['option', 'anonymousNbt'] }
+  ]],
+  'irons_spellbooks:crossbow_load_state': ['container', [
+    { name: 'isLoading', type: 'bool' }, { name: 'loadTimestamp', type: 'i32' }
+  ]],
+  'irons_spellbooks:casting_implement': 'void',
+  'irons_spellbooks:multihand_weapon': 'void',
+  'irons_spellbooks:clothing_variant': 'string',
+  // ByteBufCodecs.fromCodec writes an unnamed NBT tag, including for enum
+  // and ResourceKey codecs. It does not write a UTF-8 protocol string.
+  'irons_spellbooks:affinity_data': 'anonymousNbt',
+  'irons_spellbooks:upgrade_orb_type': 'anonymousNbt',
+  'irons_spellbooks:potion_bottle_type': 'anonymousNbt',
   // Folkways 5567e84: UUIDUtil.STREAM_CODEC, enum idMapper, ResourceLocation.
   // Resolve IDs from the running mod set; adding mods can reorder registries.
   'folkways:colony_id': 'UUID',
@@ -64,6 +109,15 @@ const ITEM_PACKET_NAMES = new Set(['window_items', 'set_slot', 'entity_equipment
 const packetMappings = mcData.protocol.play.toClient.types.packet[1][0].type[1].mappings
 const itemPacketIds = new Set(Object.entries(packetMappings).filter(([, name]) => ITEM_PACKET_NAMES.has(name)).map(([id]) => Number(id)))
 function isItemPacket (buffer) { return itemPacketIds.has(buffer[0]) }
+const particlePacketId = Number(Object.entries(packetMappings).find(([, name]) => name === 'world_particles')[0])
+function isOptionalParticleFailure (buffer, error, vanillaProjectionEnabled) {
+  // Each input chunk is already one complete protocol frame. A visual-only
+  // world_particles frame can be omitted without consuming any next packet.
+  // Never apply this exception to inventory, equipment, metadata, truncated
+  // data, or other decoder failures. Strict native connections keep failing.
+  return vanillaProjectionEnabled === true && Buffer.isBuffer(buffer) && buffer[0] === particlePacketId &&
+    /(?:^|\s)UNSUPPORTED_NATIVE_PARTICLE_CODEC$/.test(String(error?.message))
+}
 
 function disconnectComponent (message) {
   return { type: 'compound', value: { text: { type: 'string', value: String(message) } } }
@@ -127,6 +181,8 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
   protocol.types.MawArsSpellResolver = 'mawArsSpellResolverCodec'
   protocol.types.MawArsVec3 = 'mawArsVec3Codec'
   protocol.types.MawDomumTextureData = 'mawDomumTextureDataCodec'
+  protocol.types.MawIronCount = 'mawIronCount'
+  protocol.types.MawFarmerVarLong = 'mawFarmerVarLong'
   // NeoForge 21.1.248 CommonHooks keeps vanilla IDs and adds 256 to the
   // custom serializer registry ID. The TSV contains those actual network IDs.
   // TLM maids and Ars spell projectiles use custom serializers; every unknown
@@ -209,6 +265,7 @@ function createBackendComponentProtocol (registry, particles = null, entitySeria
   const unsupportedMetadata = () => { throw Error('UNSUPPORTED_NATIVE_ENTITY_METADATA_CODEC') }
   const unsupportedChatBubble = () => { throw Error('UNSUPPORTED_NATIVE_CHAT_BUBBLE_CODEC') }
   const compiler = new ProtoDefCompiler()
+  compiler.addTypes(contentNativeTypes)
   compiler.addTypes(nativeTypes)
   compiler.addTypes(arsNativeTypes)
   compiler.addTypes(arsEntityNativeTypes)
@@ -287,4 +344,4 @@ function vanillaProjection (value) {
   return copy
 }
 
-module.exports = { registryFromTsv, createBackendComponentProtocol, loadBackendComponentProtocol, vanillaProjection, isItemPacket, disconnectComponent }
+module.exports = { registryFromTsv, createBackendComponentProtocol, loadBackendComponentProtocol, vanillaProjection, isItemPacket, isOptionalParticleFailure, disconnectComponent }

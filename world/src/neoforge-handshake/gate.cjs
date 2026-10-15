@@ -40,7 +40,7 @@ const publicGameAccess = process.env.GATE_PUBLIC_GAME_ACCESS ?? '0'
 if (!['0', '1'].includes(publicGameAccess)) throw Error('GATE_PUBLIC_GAME_ACCESS_INVALID')
 const acceptsPeer = lanPeerPolicy(process.env.GATE_LAN_SUBNET ?? null, publicGameAccess === '1')
 const vanillaMenuParserWindows = require('prismarine-windows')('1.21.1').windows
-const { loadBackendComponentProtocol, vanillaProjection, isItemPacket, disconnectComponent } = require('./component-protocol.cjs')
+const { loadBackendComponentProtocol, vanillaProjection, isItemPacket, isOptionalParticleFailure, disconnectComponent } = require('./component-protocol.cjs')
 const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE, process.env.GATE_PARTICLES_FILE,
   process.env.GATE_ENTITY_SERIALIZERS_FILE)
 const NativeViewer = require('./native-viewer-packet.cjs')
@@ -344,6 +344,21 @@ function connectBackend (sess) {
             if (parsed.metadata.size !== chunk.length) throw Error('NATIVE_PACKET_LENGTH_MISMATCH')
             this.push(parsed)
           } catch (error) {
+            if (isOptionalParticleFailure(chunk, error, vanillaAgentProjection)) {
+              // The vanilla connection cannot display these mod visuals. Skip
+              // this one framed particle, not the stream or any game state.
+              // Unknown required item/metadata codecs still disconnect below.
+              sess.optionalParticleFramesOmitted = (sess.optionalParticleFramesOmitted || 0) + 1
+              if (!sess.optionalParticleNotice) {
+                sess.optionalParticleNotice = true
+                const text = 'MC_FOM_COMPAT ' + JSON.stringify({ schemaVersion: 1,
+                  kind: 'particle_not_rendered', scope: 'visual_only',
+                  nextAction: '此兼容连接略过暂不支持的模组粒子；完整特效请使用模组Java客户端，库存和游戏操作继续正常处理。' })
+                sess.front.write('system_chat', { content: disconnectComponent(text), isActionBar: false })
+                log(`DEBUG：[${sess.username}] 原版投影略过未支持的粒子帧，其他游戏包保持处理`)
+              }
+              return callback()
+            }
             sess.decoderFailed = true
             log(`DEBUG：[${sess.username}] 原生 PLAY 包 id=${chunk[0]} 长=${chunk.length} 无法解析：${error.message.slice(0, 160)}`)
             // Explicit local diagnostics only. Keep raw private packets outside

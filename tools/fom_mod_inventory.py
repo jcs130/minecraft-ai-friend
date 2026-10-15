@@ -9,6 +9,8 @@ GROUPS=[
  ('航空与移动物理',r'^(create-aeronautics|sable-neoforge|aeroengine|aeroworks|azimuth|struts|cosmonautics|createpropulsion|create_radar)', '航空学、移动结构物理、推进器及航空扩展。'),
  ('铁路、船舶与火炮',r'^(railways|createrailwaysnavigator|tracks-|bellsandwhistles|interiors|create_submarine|submarinefix|createbigcannons)', '铁路、列车信息、船舶或火炮相关内容。'),
  ('仓储与物流',r'^(sophisticatedbackpacks|functionalstorage|toms_storage|cmpackagecouriers|createendertransmission)', '背包、仓库、存储或包裹物流。'),
+ ('农业烹饪与随从',r'^(FarmersDelight|touhoulittlemaid)', '原生烹饪与农业、女仆认主和随从管理；具体操作见对应模组手册。'),
+ ('魔法与角色成长',r'^(irons_spellbooks)', '原生法术书、卷轴、装备、魔力与探索战斗；沿用模组本身规则。'),
  ('机械动力与生产',r'^(create|copycats|petrolsparts|bits_n_bobs)', '机械动力本体、生产、配方、控制或构件扩展。'),
  ('探索、建筑与生活',r'^(NaturesCompass|ExplorersCompass|waystones|effortless|VanillaBackport|gravestone|vein_vantage)', '群系/结构导航、传送、建造、原版内容回移或死亡保管。'),
  ('性能与诊断',r'^(ferritecore|lithium|modernfix|spark|packetfixer|sodium|ImmediatelyFast|entityculling|Ixeris|c2me|noisium|flerovium)', '内存、逻辑、渲染、区块优化或性能诊断；具体侧别见安装列。'),
@@ -105,11 +107,11 @@ def inventory(client,server,index,output):
     parts+=['作者禁用文件（继续禁用）']
     parts += ['- '+r['file'] for r in rows if not r['enabled']]
     parts+=['作者未逐项注明禁用原因；不把禁用文件擅自恢复为启用，也不据此断言它们均有冲突。','',
-        '功能范围','本包重点是机械自动化、航空、铁路/船舶和仓储。旧千灯纪的 /mycli 技能、公会、试炼、女仆和殖民地不是本整合包自带内容。',
+        '功能范围','本包包含机械自动化、航空、铁路/船舶、仓储，以及上文列明的生活和魔法扩展。旧千灯纪的 /mycli 技能、公会和试炼未迁入。',
         '多人使用统一版本整包。不要单独升级 Sable、航空学或 Create；按完整版本测试升级。',
-        '本次切换保留原包的玩法模组，没有将新物品/方块翻译为原版近似物。',
+        '完整 Java 客户端使用原生模型；Mineflayer 基础兼容入口会投影部分物品/方块，决策须核对 /fom 原生查询。',
         '性能优化来自原包已有 ModernFix、FerriteCore、Lithium、spark 等；尚未做负载对照，不能据此宣称提升百分比。',
-        '实时 Java 距离语音不在原包中，sounds 是音效扩展。基岩转换和普通 Mineflayer 直接操作整包尚未发布。']
+        '实时 Java 距离语音不在原包中，sounds 是音效扩展。Mineflayer 基础兼容已发布；基岩转换和全模组原生操作尚未完成。']
     (output/'模组说明.txt').write_text('\n'.join(parts)+'\n',encoding='utf-8-sig')
     difference=['命运齿轮 · 客户端和服务端文件差异','']
     for label,predicate in [('仅客户端启用',lambda r:r['enabled'] and r['clientInstalled'] and not r['serverInstalled']),

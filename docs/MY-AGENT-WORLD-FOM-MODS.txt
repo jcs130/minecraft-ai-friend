@@ -1,6 +1,6 @@
-命运齿轮 FOM 2.42 · 模组分类清单（实际文件核对）
+﻿命运齿轮 FOM 2.42 · 模组分类清单（实际文件核对）
 Minecraft 1.21.1 / NeoForge 21.1.248 / Java 21。
-客户端启用 124 个 JAR，服务端启用 96 个 JAR，作者禁用 10 个文件。
+客户端启用 130 个 JAR，服务端启用 102 个 JAR，作者禁用 10 个文件。
 Agent 客户端组件 3 个为可选；普通玩家使用作者客户端整包即可。
 JAR 数不等于加载器显示的模组数，部分 JAR 内嵌多个模组或依赖。
 下方“客户端/服务端”表示实际放置位置，不等于所有功能已逐项验收。分类按模组名称、元数据及用途整理。
@@ -20,9 +20,9 @@ Agent 客户端组件（3）
 - e4mc | 6.2.1 | 客户端
   客户端局域网世界穿透；本专用公网服无需使用。
   文件：e4mc-neoforge-6.2.1.jar
-- My Agent World · FOM Server Support | 0.1.0 | 服务端
+- My Agent World · FOM Server Support | 0.2.0 | 服务端
   服务端复用现役首次访客、设密和认证查询规则；不包含旧 RPG 内容。
-  文件：maw-fom-support-0.1.0.jar
+  文件：maw-fom-support-0.2.0.jar
 - LAN World Plug-n-Play | 1.9.0 | 客户端/服务端
   登录、领地、备份或多人连接工具。
   文件：mcwifipnp-1.9.0-1.21-neoforge.jar
@@ -107,6 +107,19 @@ Agent 客户端组件（3）
 - Tom's Simple Storage Mod | 2.4.2 | 客户端/服务端
   仓储终端和容器连接。
   文件：toms_storage-1.21-2.4.2.jar
+
+农业烹饪与随从（2）
+- Farmer's Delight | 1.3.4 | 客户端/服务端
+  原生烹饪与农业、女仆认主和随从管理；具体操作见对应模组手册。
+  文件：FarmersDelight-1.21.1-1.3.4.jar
+- Touhou Little Maid | 1.5.3-neoforge+mc1.21.1 | 客户端/服务端
+  原生烹饪与农业、女仆认主和随从管理；具体操作见对应模组手册。
+  文件：touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar
+
+魔法与角色成长（1）
+- Iron's Spells 'n Spellbooks | 1.21.1-3.16.3 | 客户端/服务端
+  原生法术书、卷轴、装备、魔力与探索战斗；沿用模组本身规则。
+  文件：irons_spellbooks-1.21.1-3.16.3.jar
 
 机械动力与生产（24）
 - Create Bits 'n' Bobs | 2.3.5 | 客户端/服务端
@@ -334,7 +347,7 @@ Agent 客户端组件（3）
   配方、物品信息、地图、菜单或操作便利功能。
   文件：xaeroworldmap-neoforge-1.21.1-1.45.0.jar
 
-基础库与兼容依赖（23）
+基础库与兼容依赖（26）
 - BaguetteLib | 2.0.6 | 客户端/服务端
   模组依赖或兼容基础；保留作者所选版本。
   文件：baguettelib-1.21.1-NeoForge-2.0.6.jar
@@ -359,6 +372,12 @@ Agent 客户端组件（3）
 - Fzzy Config | 0.7.6+1.21+neoforge | 客户端/服务端
   模组依赖或兼容基础；保留作者所选版本。
   文件：fzzy_config-0.7.6+1.21+neoforge.jar
+- GeckoLib 4 | 4.9.3 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：geckolib-neoforge-1.21.1-4.9.3.jar
+- Iron's Lib | 1.21.1-2.2.0 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：irons_lib-1.21.1-2.2.0.jar
 - Konkrete | 1.9.9 | 客户端/服务端
   模组依赖或兼容基础；保留作者所选版本。
   文件：konkrete_neoforge_1.9.9_MC_1.21.jar
@@ -386,6 +405,9 @@ Agent 客户端组件（3）
 - Platform | 1.3.3 | 客户端/服务端
   模组依赖或兼容基础；保留作者所选版本。
   文件：Platform-neoforge-1.21.1-1.3.3.jar
+- Player Animator | 2.0.4+1.21.1 | 客户端/服务端
+  模组依赖或兼容基础；保留作者所选版本。
+  文件：player-animation-lib-forge-2.0.4+1.21.1.jar
 - Rhino | 2101.2.8-build.91 | 客户端/服务端
   模组依赖或兼容基础；保留作者所选版本。
   文件：rhino-2101.2.8-build.91.jar
@@ -419,8 +441,8 @@ Agent 客户端组件（3）
 作者未逐项注明禁用原因；不把禁用文件擅自恢复为启用，也不据此断言它们均有冲突。
 
 功能范围
-本包重点是机械自动化、航空、铁路/船舶和仓储。旧千灯纪的 /mycli 技能、公会、试炼、女仆和殖民地不是本整合包自带内容。
+本包包含机械自动化、航空、铁路/船舶、仓储，以及上文列明的生活和魔法扩展。旧千灯纪的 /mycli 技能、公会和试炼未迁入。
 多人使用统一版本整包。不要单独升级 Sable、航空学或 Create；按完整版本测试升级。
-本次切换保留原包的玩法模组，没有将新物品/方块翻译为原版近似物。
+完整 Java 客户端使用原生模型；Mineflayer 基础兼容入口会投影部分物品/方块，决策须核对 /fom 原生查询。
 性能优化来自原包已有 ModernFix、FerriteCore、Lithium、spark 等；尚未做负载对照，不能据此宣称提升百分比。
-实时 Java 距离语音不在原包中，sounds 是音效扩展。基岩转换和普通 Mineflayer 直接操作整包尚未发布。
+实时 Java 距离语音不在原包中，sounds 是音效扩展。Mineflayer 基础兼容已发布；基岩转换和全模组原生操作尚未完成。

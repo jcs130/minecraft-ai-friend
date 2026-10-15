@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 1,
+  "minecraft": "1.21.1",
+  "testedNeoForge": "21.1.248",
+  "basePack": "FOM 2.42",
+  "checkedAt": "2026-10-15",
+  "existingDependency": {
+    "curios": "9.5.1+1.21.1"
+  },
+  "mods": [
+    {
+      "project": "farmers-delight",
+      "version": "1.21.1-1.3.4",
+      "releaseType": "release",
+      "file": "FarmersDelight-1.21.1-1.3.4.jar",
+      "sha256": "139ad7696462c89c03eea463f805abffa552526c5dadaadae221dd9624cb197c",
+      "sha512": "1f6f8796469f747cff36f477b4f589a3d69613882399f9ee7f86db36c7bca9aa4828731f43db15dc6c7f5a4c1bbe3d4092a232e8cef010b09cec0581848fda90",
+      "url": "https://cdn.modrinth.com/data/R2OftAxM/versions/XTVZDOol/FarmersDelight-1.21.1-1.3.4.jar",
+      "projectUrl": "https://modrinth.com/mod/farmers-delight",
+      "license": "MIT",
+      "modIds": [
+        "farmersdelight"
+      ],
+      "requiredJarDependencies": {
+        "farmersdelight": [
+          {
+            "modId": "neoforge",
+            "type": "required",
+            "versionRange": "[21.1.219,)",
+            "ordering": "NONE",
+            "side": "BOTH"
+          },
+          {
+            "modId": "minecraft",
+            "type": "required",
+            "versionRange": "[1.21.1]",
+            "ordering": "NONE",
+            "side": "BOTH"
+          }
+        ]
+      },
+      "sides": [
+        "client",
+        "server"
+      ]
+    },
+    {
+      "project": "touhou-little-maid",
+      "version": "1.5.3-neoforge+mc1.21.1",
+      "releaseType": "release",
+      "file": "touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar",
+      "sha256": "f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27",
+      "sha512": "147bc10f5cc7159ee16c4918795155b3e52cf6bab5e09f588ed3fec14f8b47bbc512948bb8fef30346a47feba2692b6dbe20781c6cc1dc1d2c6b9377a9649bbe",
+      "url": "https://cdn.modrinth.com/data/R0bDWFAW/versions/tXG1TkGx/touhoulittlemaid-1.5.3-neoforge%2Bmc1.21.1.jar",
+      "projectUrl": "https://modrinth.com/mod/touhou-little-maid",
+      "license": "CC-BY-NC-SA-4.0",
+      "modIds": [
+        "touhou_little_maid"
+      ],
+      "requiredJarDependencies": {
+        "touhou_little_maid": [
+          {
+            "modId": "neoforge",
+            "type": "required",
+            "versionRange": "[21,)",
+            "ordering": "NONE",
+            "side": "BOTH"
+          },
+          {
+            "modId": "minecraft",
+            "type": "required",
+            "versionRange": "[1.21.1,1.21.2)",
+            "ordering": "NONE",
+            "side": "BOTH"
+          }
+        ]
+      },
+      "sides": [
+        "client",
+        "server"
+      ]
+    },
+    {
+      "project": "irons-spells-n-spellbooks",
+      "version": "1.21.1-3.16.3",
+      "releaseType": "release",
+      "file": "irons_spellbooks-1.21.1-3.16.3.jar",
+      "sha256": "55a290db9b966e0c5d2f5c051d50775f3db6375cdb52730c4da528bcf5d5daa0",
+      "sha512": "fd782f98c6c59b193c4832f33775291d2a7e639e1e23dd47510bfb494d99d182bec1253566b9394f96c733a0d0108be34bd729614b82dc29e55e096fdeb96f5b",
+      "url": "https://cdn.modrinth.com/data/s4OWxYQQ/versions/slKLosTb/irons_spellbooks-1.21.1-3.16.3.jar",
+      "projectUrl": "https://modrinth.com/mod/irons-spells-n-spellbooks",
+      "license": "LicenseRef-All-Rights-Reserved",
+      "modIds": [
+        "irons_spellbooks"
+      ],
+      "requiredJarDependencies": {
+        "irons_spellbooks": [
+          {
+            "modId": "neoforge",
+            "type": "required",
+            "versionRange": "[21.0.0-beta,)",
+            "ordering": "NONE",
+            "side": "BOTH"
+          },
+          {
+            "modId": "minecraft",
+            "type": "required",
+            "versionRange": "[1.21.1,1.21.2)",
+            "ordering": "NONE",
+            "side": "BOTH"
+          },
+          {
+            "modId": "geckolib",
+            "type": "required",
+            "versionRange": "[4.7.5.1,)",
+            "ordering": "NONE",
+            "side": "BOTH"
+          },
+          {
+            "modId": "playeranimator",
+            "type": "required",
+            "versionRange": "[2.0.1+1.21.1,)",
+            "ordering": "NONE",
+            "side": "BOTH"
+          },
+          {
+            "modId": "curios",
+            "type": "required",
+            "versionRange": "[9.0.5+1.21.0,)",
+            "ordering": "NONE",
+            "side": "BOTH"
+          },
+          {
+            "modId": "irons_lib",
+            "type": "required",
+            "versionRange": "[1.21.1-2,1.21.1-3)",
+            "ordering": "NONE",
+            "side": "BOTH"
+          }
+        ]
+      },
+      "sides": [
+        "client",
+        "server"
+      ]
+    },
+    {
+      "project": "geckolib",
+      "version": "4.9.3",
+      "releaseType": "release",
+      "file": "geckolib-neoforge-1.21.1-4.9.3.jar",
+      "sha256": "20a1995e4074f387ff549e2c57ea79dd7d41ee83c6afb9dd6a6e840e592d1c47",
+      "sha512": "8dfa5f8c57224a5e34e5098367ea9819ca6dc9c11357cd3062c16da3455c8bd1a483098af7383debc4b9ce8e4d7ab3fdc799b415644eb829da83eb72a7335dfd",
+      "url": "https://cdn.modrinth.com/data/8BmcQJ2H/versions/Grwn5rUB/geckolib-neoforge-1.21.1-4.9.3.jar",
+      "projectUrl": "https://modrinth.com/mod/geckolib",
+      "license": "MIT",
+      "modIds": [
+        "geckolib"
+      ],
+      "requiredJarDependencies": {
+        "geckolib": [
+          {
+            "modId": "neoforge",
+            "type": "required",
+            "versionRange": "[21.1.150,)",
+            "ordering": "NONE",
+            "side": "BOTH"
+          },
+          {
+            "modId": "minecraft",
+            "type": "required",
+            "versionRange": "[1.21,)",
+            "ordering": "NONE",
+            "side": "BOTH"
+          }
+        ]
+      },
+      "sides": [
+        "client",
+        "server"
+      ]
+    },
+    {
+      "project": "playeranimator",
+      "version": "2.0.4+1.21.1-forge",
+      "releaseType": "beta",
+      "file": "player-animation-lib-forge-2.0.4+1.21.1.jar",
+      "sha256": "dbe5de45f5cd60c0e5e47af14e6d564534a98456e973cf670cb881f6938eee92",
+      "sha512": "fc00450fb6c95ec1779021bdc726122dacb5915c6baddaacc981cd221b01b8db35f2a0dfde5d6fa6766d877266dc82f58854f571ea53cc5c4d468b80e1548a5f",
+      "url": "https://cdn.modrinth.com/data/gedNE4y2/versions/HJZB6bmA/player-animation-lib-forge-2.0.4%2B1.21.1.jar",
+      "projectUrl": "https://modrinth.com/mod/playeranimator",
+      "license": "MIT",
+      "modIds": [
+        "playeranimator"
+      ],
+      "requiredJarDependencies": {
+        "playeranimator": [
+          {
+            "modId": "minecraft",
+            "type": "required",
+            "mandatory": true,
+            "versionRange": "[1.21,1.21.2)",
+            "ordering": "NONE",
+            "side": "BOTH"
+          }
+        ]
+      },
+      "sides": [
+        "client",
+        "server"
+      ]
+    },
+    {
+      "project": "irons-lib",
+      "version": "1.21.1-2.2.0",
+      "releaseType": "release",
+      "file": "irons_lib-1.21.1-2.2.0.jar",
+      "sha256": "9e086a4d449147baad6468b11fd34924a905d9cb6818c962676aa0c4589dcc3c",
+      "sha512": "2a7c61843b57a93d80f963469c4c4cad027a0bf11bc39112112444a41da2283704547037254cd732f12d781a3b8a3f17f3d0d45c965f3ebc5fe8d63adbe6a1ab",
+      "url": "https://cdn.modrinth.com/data/9nfaJPtX/versions/lUwUKYPl/irons_lib-1.21.1-2.2.0.jar",
+      "projectUrl": "https://modrinth.com/mod/irons-lib",
+      "license": "LicenseRef-All-Rights-Reserved",
+      "modIds": [
+        "irons_lib"
+      ],
+      "requiredJarDependencies": {
+        "irons_lib": [
+          {
+            "modId": "neoforge",
+            "type": "required",
+            "versionRange": "[21.1.221,)",
+            "ordering": "NONE",
+            "side": "BOTH"
+          },
+          {
+            "modId": "minecraft",
+            "type": "required",
+            "versionRange": "[1.21.1]",
+            "ordering": "NONE",
+            "side": "BOTH"
+          },
+          {
+            "modId": "geckolib",
+            "type": "required",
+            "versionRange": "4.7.5.1",
+            "ordering": "NONE",
+            "side": "BOTH"
+          }
+        ]
+      },
+      "sides": [
+        "client",
+        "server"
+      ]
+    }
+  ],
+  "serverDataPackFiles": {
+    "data/touhou_little_maid/curios/entities/curios.json": "cd247c5627230ea7765d906eb07849b7e7bb27d337b39812f83b845bd828dae5",
+    "pack.mcmeta": "cc23f5ff62d7511d10c680efd2cd0aec0b17329be6465b2490bbd5a48c00f6c3"
+  },
+  "scope": "verified_fom_2_42_content_overlay"
+}

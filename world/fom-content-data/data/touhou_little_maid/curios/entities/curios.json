@@ -1,0 +1,12 @@
+{
+  "neoforge:conditions": [
+    { "type": "neoforge:mod_loaded", "modid": "touhou_little_maid" },
+    { "type": "neoforge:mod_loaded", "modid": "curios" }
+  ],
+  "replace": false,
+  "entities": ["touhou_little_maid:maid"],
+  "slots": [
+    "curio", "back", "belt", "body", "bracelet", "charm",
+    "head", "hands", "necklace", "ring", "spellbook"
+  ]
+}
