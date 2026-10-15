@@ -28,11 +28,24 @@ The core also offers [game memory](docs/game-memory.md): scoped historical notes
 
 The SDK/MCP native backend uses that same notebook. A host mounting the body
 directly supplies storage with `new JavaClientWorld(cfg, fetch, { dataDir,
-agentName, accountName })`; `accountName` is the exact configured game login
-after host-side name mapping. Historical reads and attributed notes work while
+agentName, accountName })`; native storage is bound to the explicitly configured
+server and player UUID plus agent identity. `accountName` is only a display alias.
+Historical reads and attributed notes work while
 disconnected, without client RPC or a control lease. `capture` alone requires a
 fresh identity-checked body reading; offline dimension stays unknown. Existing
-`dataDir/minecraft-memory` notes retain their server/account/agent scope.
+`dataDir/minecraft-memory` notes retain their server/account/agent scope. Older
+alias-scoped notes are never implicitly imported into a UUID scope. A deployment
+upgrade must explicitly verify the same account and preserve IDs, all revisions,
+authors and sources when migrating a notebook; keep the original backup.
+
+Native player chat uses the shared `minecraft.chat` event with `senderKey`,
+`meta.uname` and `socialScope: minecraft-server`, derived from the bridge's player
+channel, while preserving original text, timestamp and sequence. System/HUD
+notices remain `minecraft.client.message`; text alone never establishes a player
+identity. Own echoes do not wake the Agent as incoming players. When storage is
+configured, bounded local relationship recall precedes incoming chat using the
+same notebook. This performs no model/cloud request and makes no nearby/teammate
+claim. Optional server packs may normalize their documented arrival notices.
 The core starts no model loop. Connecting to a game server is explicit.
 
 Version 0.5.6 includes strict blueprint operation admission, explicit crafting
