@@ -152,7 +152,7 @@ export const GOAL_PLAN_SCHEMA = {
       do: { type: 'string', description: '这一步要实施什么。' },
       verify: {
         type: ['object', 'array', 'null'],
-        description: '直接证明本步成果的读数，或最多 8 个读数组成的 AND 数组。无关状态不能代替成果；健康、饱食或位置符合不能证明已经读懂信息、交付物品或完成对话。没有对应读数时用 judgment。',
+        description: '直接证明本步成果的当前读数，或最多 8 个读数组成的 AND 数组。最近已通过的机械步骤会继续现读，条件不再符合时登记进度可退回。若要保存一次已经发生的动作及其回执，用 judgment；当前库存不等于历史采集、消耗或交付量，离开区域也不否定曾经到达。无关状态不能代替成果。',
         properties: GOAL_PROBE_SCHEMA.properties,
         required: ['source'],
         items: GOAL_PROBE_SCHEMA,
@@ -161,7 +161,7 @@ export const GOAL_PLAN_SCHEMA = {
       },
       judgment: {
         type: ['string', 'null'],
-        description: '说明需要核对的成果与证据来源；完成时用 milestone 引用实际观察、对方回复或服务端回执。缺少机械字段时可以用它，不必填一个无关的 verify。',
+        description: '说明需要核对的成果与证据来源；完成时用 milestone 引用实际观察、对方回复或服务端回执。适合已发生的动作与净变化，保留来源时间；它是宿主判断，不是核心独立证明。前提被新证据否定时用 reopen/revise 订正，不必填一个无关的 verify。',
       },
     },
     required: ['do'],
@@ -644,7 +644,8 @@ export function renderGoalPlanTransition(transition: GoalPlanTransition): string
     return `登记条件符合，进度 ${transition.to}/${transition.total}${evidence}${next}；条件是否直接证明该阶段成果仍需你核对`;
   }
   if (transition.kind === 'regress') {
-    return `第 ${transition.step}/${transition.total} 项旁证已失效：${transition.evidence.join('；')}；进度退回 ${transition.to}/${transition.total}`;
+    return `第 ${transition.step}/${transition.total} 项当前旁证已失效：${transition.evidence.join('；')}；登记条件进度退回 ${transition.to}/${transition.total}`
+      + '。这不否定此前动作已经发生；先核对该条件是否仍代表本步成果。历史动作及净变化应以原回执用 judgment 登记，条件选错时用 revise 修订，不要仅为恢复读数重做旧阶段。';
   }
   return `${transition.total} 项里程碑的登记条件均有记录；核对记录确实证明各阶段成果后，用 mc_goal done 明确结案`;
 }

@@ -2,6 +2,30 @@ import {expect,it} from 'vitest';
 import {applyGoal,parseGoal,MinecraftWorld,type GoalTable} from '../core/world.ts';
 import { MINECRAFT_CLIENT_DEFAULTS } from '../src/client/config.ts';
 
+it('lets a caller recover a rejected plan-only revision without losing the existing goal', async () => {
+  const world = new MinecraftWorld({ cfg: structuredClone(MINECRAFT_CLIENT_DEFAULTS) });
+  const call = (args: Record<string, unknown>) => world.tools().find(t => t.name === 'mc_goal')!.handler(args, {} as never);
+  const text = (receipt: unknown) => typeof receipt === 'string' ? receipt : (receipt as {text:string}).text;
+  await call({add:{text:'Review the route',plan:[{do:'read the survey',judgment:'survey receipt'}]}});
+  const revise = {slot:1,expectedRevision:1,reason:'The survey contradicted the earlier route',
+    plan:[{do:'measure the alternative',judgment:'new survey receipt'}]};
+  const missing = await call({revise});
+  expect(missing).toMatchObject({failed:true});
+  expect(text(missing)).toContain('revise.text');
+  const unchanged = await call({});
+  expect(text(unchanged)).toContain('#1 v1 Review the route');
+  expect(text(unchanged)).toContain('read the survey');
+  const tooLong = await call({revise:{...revise,text:'Review the route',reason:'x'.repeat(2001)}});
+  expect(tooLong).toMatchObject({failed:true});
+  expect(text(tooLong)).toContain('revise.reason');
+  expect(text(tooLong)).toContain('2001');
+  const repaired = await call({revise:{...revise,text:'Review the route'}});
+  expect(text(repaired)).toContain('"after"');
+  const current = await call({});
+  expect(text(current)).toContain('#1 v2 Review the route');
+  expect(text(current)).toContain('measure the alternative');
+});
+
 it('returns failed arguments and identifies a host judgment closure without claiming independent verification', async () => {
   const world = new MinecraftWorld({ cfg: structuredClone(MINECRAFT_CLIENT_DEFAULTS) });
   const call = (args: Record<string, unknown>) => world.tools().find(t => t.name === 'mc_goal')!.handler(args, {} as never);

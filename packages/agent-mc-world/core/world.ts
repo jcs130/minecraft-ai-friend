@@ -776,10 +776,16 @@ export function parseGoal(args: Record<string, unknown>): GoalOp | { error: stri
     if(Object.keys(r).some(k=>!['slot','expectedRevision','text','plan','reason'].includes(k)))return {error:'Unknown revision field'};
     if(!Number.isInteger(r.slot) || Number(r.slot)<1 || Number(r.slot)>GOAL_SLOTS || !Number.isInteger(r.expectedRevision) || Number(r.expectedRevision)<1)
       return {error:'Invalid goal slot or expectedRevision'};
-    if(typeof r.text!=='string' || !r.text.trim() || r.text.length>2000 || typeof r.reason!=='string' || !r.reason.trim() || r.reason.length>2000)
-      return {error:'Revision requires bounded text and reason'};
+    for (const field of ['text', 'reason'] as const) {
+      if (typeof r[field] !== 'string' || !r[field].trim()) {
+        return {error:`revise.${field} 必须是非空字符串（最多 2000 字符）；${field === 'text' ? '只改计划也须带上保留或修订后的目标 text。' : '请说明此次修订依据。'}本次未修订，原目标和版本保留。`};
+      }
+      if (r[field].length > 2000) {
+        return {error:`revise.${field} 有 ${r[field].length} 字符，超过 2000；本次未修订，原目标和版本保留。`};
+      }
+    }
     const plan=parseGoalPlan(r.plan);if('error' in plan)return plan;
-    return {kind:'revise',slot:Number(r.slot),expectedRevision:Number(r.expectedRevision),text:r.text.trim(),plan,reason:r.reason.trim()};
+    return {kind:'revise',slot:Number(r.slot),expectedRevision:Number(r.expectedRevision),text:(r.text as string).trim(),plan,reason:(r.reason as string).trim()};
   }
   if (which === 'milestone' || which === 'reopen') {
     const body = args[which];
