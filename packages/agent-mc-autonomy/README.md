@@ -58,7 +58,7 @@ official OpenAI/Google flows, with optional OS credential storage and rotating
 token refresh; Google ADC is also optional. Nothing signs in or calls a model
 automatically. See [configuration, parameter and OAuth guide](docs/model-providers.md).
 
-For the shared body 0.5.0 pinned to `089de8e9bb5ce1cda900a51f249a12958ce58297`, this repository owns explicit source-pin
+For the shared body 0.5.1 pinned to `95d356cb45ff7f09098ec9d8dcad02f67003731d`, this repository owns explicit source-pin
 and installation tooling around the canonical `agent-mc-world` build:
 `python -m agent_mc_autonomy.core_distribution.build --checkout <repo> --destination <empty-dir>`;
 then `python -m agent_mc_autonomy.core_distribution.install --destination <runtime-dir> --archive <tgz>`.
