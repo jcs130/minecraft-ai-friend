@@ -17,7 +17,7 @@ await startMcpStdio((path, log) => {
   const options = loadMinecraftClientConfig(path);
   const world = new MinecraftClientWorld({ cfg: options.cfg, dataDir: options.dataDir, timezone: options.timezone,
     botName: options.cfg.username, extension: { module: moduleUrl.href, tools: [], config: viewer } });
-  return { metricsPort: options.metricsPort, consolePort: options.consolePort,
+  return { metricsPort: options.metricsPort, consolePort: options.consolePort, operatorBinding: options.operatorBinding,
     runtime: new MinecraftAgentClient({ ...options, log, agentName: options.cfg.username,
       modelFacts: { model: () => '', accepts: mime => options.acceptsImages && mime.startsWith('image/'), contextWindow: () => undefined } }, world) };
 }, 'minecraft-viewer-mcp');

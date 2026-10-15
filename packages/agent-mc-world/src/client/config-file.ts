@@ -31,6 +31,8 @@ export function loadPrivateClientConfig<T extends MinecraftClientConfig>(path: s
     throw new Error('metricsPort must be an integer between 0 (disabled) and 65535.');
   if (input.consolePort !== undefined && (!Number.isInteger(input.consolePort) || Number(input.consolePort) < 0 || Number(input.consolePort) > 65535))
     throw new Error('consolePort must be an integer between 0 (disabled) and 65535.');
+  if (input.operatorIdentity !== undefined && (typeof input.operatorIdentity !== 'string' || !/^[a-f0-9]{24}$/.test(input.operatorIdentity)))
+    throw new Error('operatorIdentity must be a session identity hash.');
   const cfg = structuredClone(policy.defaults);
   merge(cfg as unknown as Record<string, unknown>, input.world as Record<string, unknown>);
   const ajv = new Ajv({ strict: false, validateFormats: false });
@@ -51,7 +53,8 @@ export function loadPrivateClientConfig<T extends MinecraftClientConfig>(path: s
     if (account.profilesFolder) account.profilesFolder = resolve(dirname(fullPath), account.profilesFolder);
   policy.validate(cfg);
   return { cfg, dataDir: resolve(dirname(fullPath), input.dataDir), timezone: String(input.timezone ?? 'UTC'),
-    acceptsImages: input.acceptsImages === true, metricsPort: Number(input.metricsPort ?? 0), consolePort: Number(input.consolePort ?? 0) };
+    acceptsImages: input.acceptsImages === true, metricsPort: Number(input.metricsPort ?? 0), consolePort: Number(input.consolePort ?? 0),
+    operatorBinding: typeof input.operatorIdentity === 'string' ? { identity: input.operatorIdentity, directory: resolve(dirname(fullPath), input.dataDir) } : undefined };
 }
 export const loadMinecraftClientConfig = (path: string) => loadPrivateClientConfig(path, {
   defaults: MINECRAFT_CLIENT_DEFAULTS, schemaPrefix: 'worlds.minecraft.', validate: assertMinecraftReady,

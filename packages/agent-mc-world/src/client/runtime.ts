@@ -164,7 +164,7 @@ export class MinecraftAgentClient {
   async operatorState() {
     const cfg = this.options.cfg;
     const console = this.world.console?.();
-    const connection = this.phase === 'started' && console?.invoke
+    const connection = ['starting', 'started'].includes(this.phase) && console?.invoke
       ? await console.invoke('connection', 'state', []) : {
         server: { host: cfg.host, port: cfg.port, requestedVersion: cfg.version, actualVersion: null, username: null },
         accounts: null, clients: null,
