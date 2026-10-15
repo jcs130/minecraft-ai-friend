@@ -43,7 +43,10 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
     reviews = ReviewPort(directory)
 
     async def open_viewer():
-        result = await viewer.connected()
+        # Existing pages reconnect to the same owned viewer after a handover.
+        # Give those streams time to attach without delaying the game loop.
+        existing = (lambda: (state.get("viewer") or {}).get("active_viewers")) if settings.viewer_renderer_directory else None
+        result = await viewer.connected(existing_viewers=existing)
         if result:
             update(viewer_window=result)
 

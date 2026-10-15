@@ -53,3 +53,20 @@ def test_backfill_never_splits_an_exchange_or_exceeds_actual_bound():
     assert [call["id"] for message in messages for call in message.get("tool_calls", [])] == ["call-2", "call-3"]
     assert [message["tool_call_id"] for message in messages if message["role"] == "tool"] == ["call-2", "call-3"]
     assert json.loads(messages[-1]["content"])["current_facts"] == facts["parts"]
+
+
+def test_current_inventory_ids_survive_clutter_and_replace_old_ids_at_the_dynamic_tail():
+    facts = {"parts": [{"key": f"detail-{index}", "text": "unrelated " * 90} for index in range(30)]
+             + [{"key": "gear", "text": "生羊肉×4、西瓜片×37"},
+                {"key": "inventoryIds", "text": "生羊肉=mutton、西瓜片=melon_slice"}]}
+    messages, budget = assemble("stable", [], "survive", facts, [], [],
+                                context_tokens=9000, reserved_output=2048)
+    tail = json.loads(messages[-1]["content"])
+    assert any(part["key"] == "inventoryIds" and "mutton" in part["text"] for part in tail["current_facts"])
+    assert tail["omitted_facts"]
+    assert budget["total"] <= 9000
+    assert "mutton" not in messages[0]["content"]
+    facts["parts"][-1]["text"] = "当前随身物品 ID 暂不可用：库存尚未确认。"
+    changed, _ = assemble("stable", [], "survive", facts, [], [], context_tokens=9000, reserved_output=2048)
+    assert changed[0] == messages[0]
+    assert "mutton" not in changed[-1]["content"]

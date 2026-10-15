@@ -3379,6 +3379,14 @@ export class MinecraftWorld implements World {
     };
   }
 
+  private currentFoodReserve(snap: WorldSnapshot, includeIds = false): string {
+    const offhand = snap.equipment.find(piece => piece.slot === 'offhand');
+    const stacks = [...snap.inventory,
+      ...(offhand?.count === undefined ? [] : [{ name: offhand.name, count: offhand.count }])];
+    return renderFoodReserveReadout(stacks, this.bridge?.bot?.registry?.foodsByName ?? {}, snap.invSynced,
+      includeIds ? name => `${zhName(name)} (${name})` : zhName);
+  }
+
   /** 已有快照及最近执行终态；只读已有状态，不扫描、不推进增量基线。 */
   /** Metadata only. The runtime may be started while the server is still offline or logging in. */
   connectionReadiness(): { ready: boolean; phase: string } {
@@ -3394,7 +3402,8 @@ export class MinecraftWorld implements World {
     if (!snap) return null;
     const parts = [{ key: 'sample', text: `[Minecraft 当前读数；采样 ${snap.realTime}]` },
       ...narrateWorldSegments(snap, this.nearMarkNote(snap.position)).map(({ key, text }) => ({ key, text })),
-      { key: 'queue', text: renderQueue(this.executor?.status() ?? { running: null, waiting: [] }) }];
+      { key: 'queue', text: renderQueue(this.executor?.status() ?? { running: null, waiting: [] }) },
+      { key: 'foodReserve', text: this.currentFoodReserve(snap, true) }];
     const last = this.lastFinishedTask;
     const bot = this.bridge.bot;
     if (bot) parts.push({ key: 'temporaryScaffolds', text: temporaryScaffoldReadout(bot) });
@@ -8369,11 +8378,7 @@ export class MinecraftWorld implements World {
     const goals = goalSnapshotLine(this.goals().list, (k) => this.blueprints.noteOf(k));
     const marks = mapSnapshotLine(this.markTable().list);
     const blueprints = this.blueprints.siteFacts();
-    const offhand = snap.equipment.find(piece => piece.slot === 'offhand');
-    const foodStacks = [...snap.inventory,
-      ...(offhand?.count === undefined ? [] : [{ name: offhand.name, count: offhand.count }])];
-    const foodReserve = renderFoodReserveReadout(foodStacks,
-      this.bridge?.bot?.registry?.foodsByName ?? {}, snap.invSynced === true, zhName);
+    const foodReserve = this.currentFoodReserve(snap);
     const spawn = this.personalSpawn;
     const respawn = spawn
       ? `个人重生点：[${zhDimension(spawn.dimension)}] (${Math.round(spawn.x)}, ${Math.round(spawn.y)}, ${Math.round(spawn.z)})，来源 ${spawn.source}。`

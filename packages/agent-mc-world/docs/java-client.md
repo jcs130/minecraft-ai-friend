@@ -32,7 +32,7 @@ The credentials file contains a local secret and a new instance ID per launch. O
 1. Join the intended server normally and attach with SDK `connect()` or MCP `mc_connection`.
 2. Read `mc_capabilities`, `mc_operations`, `mc_help`.
 3. Host begins a real decision turn, then explicitly `mc_control {action:"claim"}`. Renew before the lease expires. Autonomy's controller does this while polling, including during slow model calls.
-4. Submit `mc_do {action_id,operation,input}`. Use only discovered native operations; Mineflayer scripts are not advertised by this backend.
+4. Submit `mc_do {action_id,operation,input}`, or use the shared JavaScript method interface described below. Use only capabilities advertised by the actual bridge.
 5. Consume `mc_result`, cancellable `mc_wait` and `minecraft.client.action` events. Accepted is not completed; an RPC return is not end-of-turn. Chat/use/menu input can be partial despite successful dispatch.
 6. A cancelled wait only ends waiting. `mc_cancel` cancels one body action; `mc_stop` cancels this controller's queue. Disconnect releases this controller and keys. No automatic reconnect or late action replay.
 7. Unknown dispatch/recovered actions require reconciliation under the **original ID**. An unknown result is nonterminal and blocks goal-success claims.
@@ -47,6 +47,39 @@ Current facts contain compact identity/vitals/inventory/menu/action readings rep
 
 The actual native game window provides the rendered view; the SDK operator console is status/control, not a claim that a second Mineflayer renderer is showing the native client. Optional modern web presentation should consume this same body's captures/readings. Do not launch another player merely to render it.
 
+## Shared Agent JavaScript methods
+
+The native bridge advertises `methodAdapter: "agent-mc-method/v1"` and its exact `methodCalls` list. With a matching bridge, `mc_script` reuses the **same** SES worker, `mc`/`bot`/`Vec3` interface, validation, bounded trace and immutable method library as the Mineflayer provider. It does not rewrite JavaScript to Python or create a second game connection.
+
+```js
+// mc_script {language:"javascript",name:"inspect-and-step",code:...}
+const before = await bot.read('entity');
+const floor = await bot.blockAt(before.position.offset(0, -1, 0));
+await bot.setControlState('forward', true);
+await bot.waitForTicks(4);
+await bot.clearControlStates();
+const after = await bot.read('entity');
+return { before: before.position, after: after.position,
+  floor: floor?.name, properties: floor?.getProperties() };
+```
+
+The first body call reserves the existing native queue until program completion/cancellation. Movement keys and held use survive awaited calls, and waits count actual client ticks. View angles use Mineflayer radians; inventory snapshots map the native hotbar to slots 36–44, armor to 5–8 and offhand to 45. A body method renews only the already explicitly claimed controller lease while active. `mc.do` after a body reservation is rejected to avoid waiting on its own queue. Other tool body submissions are rejected while a method or its cleanup owns execution. Cancellation addresses only that program's original action IDs; uncertain cleanup prevents another program until reconciliation.
+
+`{name,code}` selects JavaScript for existing Agent scripts. Explicit `language:"python"` preserves trusted Minescript. Legacy unnamed code still selects Python, so an old program cannot silently change languages. For JS guides select `{language:"javascript",api:"index"}` / `api:"compatibility"`; Python guides retain their separate API. JavaScript syntax validation does not require a running game or Minescript. The native bridge version is checked before execution; an older bridge fails without dispatch.
+
+`validate`, `runId`, `call`, `library:{op:"list"|"read"|"save"}` and `procedure` reuse the original version format and source hashes. Native library storage is under the private ledger, scoped by server, actual UUID and controller. Existing versions are portable, but moving a library between identities/backends is explicit: do not merge another character's methods or claim that saved code has been validated in the new world.
+
+| Area | Current native support / boundary |
+| --- | --- |
+| Observations | `read`, `blockAt`, `canSeeBlock`, `inventory.items`, `getControlState`. Real client registry IDs; block identity/state/position/properties only. Unloaded/occluded is null. Native outline ray visibility can be more conservative than Mineflayer. Other block fields remain unavailable. |
+| Movement | `look`, `lookAt`, held `setControlState`, `clearControlStates`, actual `waitForTicks`. No pathfinding or teleport alias. Native view assignment does not reproduce Mineflayer's smoothing curve. |
+| Interaction | `activateBlock` validates current block/reach/line of sight/hand and lets the new look pass through a game tick before vanilla dispatch. `activateItem(false)` and `deactivateItem` preserve held use. Receipts confirm dispatch, not a crop growing or a server transaction. |
+| Equipment | `equip(item,"hand")` supports fresh hotbar stacks; other slots/destinations are rejected. Item snapshots include component identity hashes (full components via `mc_bag`), but are not complete prismarine-item instances. |
+| SDK groups | `mc.state` returns known readings and null for unavailable systems. `mc.do` currently supports one existing legacy-compatible step; unsupported groups fail before execution and partial native dispatch remains `done:false`. |
+| Still unavailable | `findBlock(s)`, digging/placing, `unequip`, non-hotbar equipment, flight plans, broad skill groups, arbitrary Mineflayer plugins/events and pathfinder. Missing APIs never become successful no-ops. |
+
+Read `runId/call` for expanded SDK receipts and compare actual before/after blocks or inventory. A program named “planted”, a custom `{ok:true}` or a completed worker is not evidence of planting. Native programs have the same bounded source, calls, time and version limits as Mineflayer methods; the native body adds a maximum reservation duration and cleanup on GUI takeover, death, disconnect, dimension/player change or a large position discontinuity.
+
 ## Current support
 
-The first native bridge targets Fabric 1.20.6 only. HMCL may manage an independently installed matching instance, but importing a NeoForge 1.21.1 pack does not make this mod compatible. Minescript/Baritone adapters, general autonomous navigation/combat and automatic password login remain explicit follow-up work. Existing Mineflayer skills/reflexes are not silently forwarded to native operations. The core exposes only capabilities actually installed and verified.
+Separate native bridge builds target Fabric 1.20.6 and 1.21.1 with Java 21; install the build matching the actual game. HMCL may manage the instance; a NeoForge pack does not make a Fabric mod compatible. Optional trusted Python requires explicitly installed/enabled Minescript 4.0. General autonomous native navigation/combat and Baritone remain follow-up work. Existing Mineflayer skills/reflexes and arbitrary plugins are not silently forwarded to native operations. Compilation/protocol fixtures are separate from acceptance in an actual connected game.

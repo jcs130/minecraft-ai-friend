@@ -134,6 +134,23 @@ describe('live readouts and honest startup', () => {
       expect(r.world.requestFacts()).toBeNull();
     } finally { r.close(); }
   });
+  it('keeps the native food-reserve fact in direct SDK reads without draining host events', () => {
+    const r = methodHarness();
+    try {
+      Object.assign((r.world as any).bridge, { connected: true });
+      Object.assign(r.bot.inventory, { items: () => [{ name: 'cocoa_beans', count: 3 }, { name: 'mutton', count: 4 }] });
+      const food = () => r.world.requestFacts()!.parts!.find(part => part.key === 'foodReserve')!.text;
+      expect(food()).toContain('常规 4 个');
+      expect(food()).toContain('mutton');
+      expect(food()).not.toContain('cocoa_beans');
+      r.bot.food = 20;
+      expect(food()).toContain('常规 4 个'); // Hunger is not a food-stock observation.
+      Object.assign(r.bot.inventory, { items: () => [{ name: 'cocoa_beans', count: 3 }] });
+      expect(food()).toContain('常规 0 个');
+      Object.assign((r.world as any).bridge, { invSynced: false });
+      expect(food()).toContain('数量未知');
+    } finally { r.close(); }
+  });
   it('rejects chat accurately while connected but waiting for authentication', async () => {
     const r = methodHarness();
     try {

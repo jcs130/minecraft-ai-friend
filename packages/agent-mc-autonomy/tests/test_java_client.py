@@ -9,7 +9,8 @@ def config(tmp_path):
                            "credentials_file":str(tmp_path/"connection.json"),"ledger_dir":str(tmp_path/"stable-ledger")}}
 
 def test_offline_real_client_configuration_and_rename_continuity(tmp_path):
-    settings=Settings.parse(config(tmp_path));native=settings.client_config(tmp_path)
+    settings=Settings.parse(config(tmp_path))
+    native=settings.client_config(tmp_path)
     assert native["world"]["provider"]=="java-client" and native["world"]["auth"]=="offline"
     assert native["dataDir"]==str(tmp_path/"stable-ledger")
     renamed=dataclasses.replace(settings,username="Renamed")
@@ -17,18 +18,24 @@ def test_offline_real_client_configuration_and_rename_continuity(tmp_path):
     assert native["world"]["javaClient"]["expectedUuid"]==settings.java_client["expectedUuid"]
 
 def test_no_implicit_java_credentials_or_second_viewer(tmp_path):
-    raw=config(tmp_path);raw["java_client"]["expected_uuid"]=""
-    with pytest.raises(ValueError,match="UUID"):Settings.parse(raw)
-    raw=config(tmp_path);raw["viewer"]={"renderer_directory":"somewhere","catalog_file":"catalog"}
-    with pytest.raises(ValueError,match="second Mineflayer"):Settings.parse(raw)
+    raw=config(tmp_path)
+    raw["java_client"]["expected_uuid"]=""
+    with pytest.raises(ValueError,match="UUID"):
+        Settings.parse(raw)
+    raw=config(tmp_path)
+    raw["viewer"]={"renderer_directory":"somewhere","catalog_file":"catalog"}
+    with pytest.raises(ValueError,match="second Mineflayer"):
+        Settings.parse(raw)
 
 def test_controller_renews_real_client_lease_without_a_model_call(framework_module,tmp_path,run_async):
     _,bridge,controller=setup(framework_module,tmp_path,None)
-    controller.settings=Settings.parse(config(tmp_path));controller.body_lease_due=0
+    controller.settings=Settings.parse(config(tmp_path))
+    controller.body_lease_due=0
     original=bridge.call
     async def call(name,args,**kwargs):
         if name=="mc_control":
-            bridge.calls.append((name,args,kwargs));return packed({"expiresAt":15000})
+            bridge.calls.append((name,args,kwargs))
+            return packed({"expiresAt":15000})
         return await original(name,args,**kwargs)
     bridge.call=call
     run_async(controller.events())
@@ -45,7 +52,8 @@ def test_native_startup_inspects_before_claim_without_creating_a_second_body_loo
         nonlocal stopped
         if name in {"mc_capabilities","mc_operations","mc_control"}:
             bridge.calls.append((name,args,kwargs))
-            if name=="mc_control":stopped=True
+            if name=="mc_control":
+                stopped=True
             return packed({"protocol":"agent-mc-java/v1"})
         return await original(name,args,**kwargs)
     bridge.call=call

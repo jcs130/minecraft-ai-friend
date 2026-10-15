@@ -30,6 +30,7 @@ const quote=value=>'"'+value.replaceAll('\\','/').replaceAll('"','\\"')+'"';
 const args=join(build,'compile.args');writeFileSync(args,['--release','21','-encoding','UTF-8','-proc:none','-classpath',classpath,'-d',classes,...sources].map(quote).join('\n'));
 run('javac',['@'+args]);
 run('java',['-cp',classes+delimiter+classpath,'ControlLedgerCheck']);
+run('java',['-cp',classes+delimiter+classpath,'MethodCallsCheck']);
 mod.depends.minecraft=version;
 writeFileSync(join(build,'fabric.mod.json'),JSON.stringify(mod,null,2)+'\n');
 const output=join(root,'build','agent-mc-bridge-0.1.0-fabric-'+version+'.jar');

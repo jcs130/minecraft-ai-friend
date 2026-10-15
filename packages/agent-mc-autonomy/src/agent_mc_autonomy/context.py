@@ -12,8 +12,9 @@ read_activity counts reads since the last accepted action, not progress. Query u
 Advanced capabilities use mc_invoke(name,arguments) after reading that tool's schema; the backend validates it.
 Only call functions advertised in this request. Other tool names in core guides are capabilities to route through mc_invoke.
 Keep useful running work. Acceptance and terminal completion do not prove goal success.
-If skill:craft is advertised, use it for vanilla recipes with the exact item/count. Custom grids are for intentional
-recipes; read the resulting item and inventory rather than assuming that a completed grid made the desired item.
+Use observed inventoryIds/mc_bag IDs; unknown IDs do not mean zero stock. Craft uses item/count for known crafting
+recipes, grid only for intentional custom recipes. Furnace processing uses smelt input/fuel, never a crafting grid.
+Read mc_help and verify the actual output/inventory.
 mc_do/mc_scout default to queue:append, preserving all queued work. Use afterCheckpoint for a safe insertion;
 now explicitly interrupts current work. Do not replace the queue. Read mc_queue to narrate actual progress.
 For an active submitted goal, use goal_report only after native work ends. Include observed evidence or why blocked;
@@ -139,7 +140,7 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
         raise ValueError("context_budget_exceeded: stable rules, goal, tool schemas and output reserve do not fit")
     # Current state replaces by key; omit old keys that are absent in this sample.
     unique = {part["key"]: part for part in facts.get("parts", [])}
-    priority = {key: rank for rank, key in enumerate(("body", "health", "place", "gear", "foodReserve", "queue", "life", "terrain", "structure", "lastTask"))}
+    priority = {key: rank for rank, key in enumerate(("body", "health", "place", "gear", "inventoryIds", "foodReserve", "queue", "life", "terrain", "structure", "lastTask"))}
     omitted = []
     for key, fact in sorted(unique.items(), key=lambda item: priority.get(item[0], len(priority))):
         # The internal change-detection hash is not gameplay evidence. Repeating

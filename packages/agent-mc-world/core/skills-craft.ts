@@ -20,7 +20,7 @@ import {
 import { HANDHELD_SUFFIXES, equipDestOf, equippedAlready } from './tools.ts';
 import { DRINKABLES } from './item-facts.ts';
 import { noteAte } from './placed-ledger.ts';
-import { edibleInBag, notFoodText } from './precheck.ts';
+import { edibleInBag, notFoodText, unknownCraftItemText } from './precheck.ts';
 import { pickLabel, pickTargetOf } from './item-pick.ts';
 import { itemCustomName } from './item-display.ts';
 import { taggedCraftChoice } from './tagged-crafting.ts';
@@ -75,7 +75,7 @@ export function recipeFromGrid(bot: Bot, grid: string[][]): CraftRecipeLike {
       const name = row[x] ?? '';
       if (!name) { cells.push(null); continue; }
       const def = bot.registry.itemsByName[name];
-      if (!def) throw new SkillBlocked(`不认识「${name}」这种物品`);
+      if (!def) throw new SkillBlocked(unknownCraftItemText(bot, name));
       cells.push({ id: def.id });
     }
     return cells;
@@ -114,7 +114,7 @@ export async function skillCraft(
     label = gridText(call.grid);
   } else {
     const def = craftItemDef(bot, call.item ?? '');
-    if (!def) throw new SkillBlocked(`不认识「${call.item}」这种物品`);
+    if (!def) throw new SkillBlocked(unknownCraftItemText(bot, call.item ?? ''));
     targetId = def.id;
     label = zhName(def.name);
     const smithing = smithingInputs(def.name);
@@ -133,7 +133,9 @@ export async function skillCraft(
       throw new SkillBlocked(`${label}的官方配方需要 ${tagged.needs};包里凑不齐`);
     } else {
       const all = bot.recipesAll(def.id, null, true as never) as unknown as CraftRecipeLike[];
-      if (all.length === 0) throw new SkillBlocked(`游戏的配方表里没有${label}的做法;要自己摆就写 grid`);
+      if (all.length === 0) throw new SkillBlocked(`游戏的合成配方表里没有${label}的做法。`
+        + '若需要烧炼，用 smelt 的 input/fuel 指定实际原料和燃料 ID，先用 mc_help 核对参数及熔炉条件；'
+        + 'grid 仅用于已知的合成格配方，不能代替烧炼。');
       const have = new Map<number, number>();
       for (const it of bot.inventory.items()) have.set(it.type, (have.get(it.type) ?? 0) + it.count);
       const ready = all.find((r) => [...craftNeeds(r)].every(([id, n]) => (have.get(id) ?? 0) >= n));

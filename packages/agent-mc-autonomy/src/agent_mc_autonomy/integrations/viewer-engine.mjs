@@ -62,7 +62,8 @@ export function createEngine(options) {
           const current = view.status();
           const connected = bot.version === options.cfg.version && !!bot.entity && !!bot._client.uuid;
           record({ available: connected && current.viewer.available && !!view.url, url: view.url ? view.url + 'dungeon/' : null,
-            reason: current.viewer.reason, player: current.selfPlayer ?? null, status: current });
+            reason: current.viewer.reason, player: current.selfPlayer ?? null, status: current,
+            active_viewers: typeof view.activeViewers === 'function' ? view.activeViewers() : null });
         };
         void oldClose.then(() => view.listen()).then(() => {
           if (attached !== view || stopped) return view.close();

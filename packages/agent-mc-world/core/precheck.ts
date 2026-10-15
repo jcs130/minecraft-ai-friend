@@ -22,6 +22,7 @@ import { itemCustomName } from './item-display.ts';
 import { bestRangedWeapon, hasRangedLos, hasUsableArrows, type RangedTarget } from './ranged.ts';
 import { taggedCraftChoice } from './tagged-crafting.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
+import { inventoryIdentityText } from './item-identities.ts';
 import { HOE_TILLED } from './blueprint-registry.ts';
 import { farmingClickCell, floodedCropSpace, isHoeUseItem } from './farming-target.ts';
 import { SEED_CROP } from './placed-ledger.ts';
@@ -63,15 +64,26 @@ type BlockLike = { name: string; boundingBox?: string } | null | undefined;
 /** 缺口并列时最多列几条配方;超出的只报条数,不糊一屏 */
 const CRAFT_TIED_MAX = 3;
 
+/** An unknown registry identity is not a zero quantity of a known ingredient. */
+export function unknownCraftItemText(bot: Bot, name: string): string {
+  const current = inventoryReadConfirmed(bot)
+    ? inventoryIdentityText(bot.inventory.items()) : '';
+  return `未知物品 ID「${name}」：当前连接的物品表没有此 ID，不能据此判断已知物品的库存为零。`
+    + (current ? `当前随身物品 ID：${current}。` : '先用 mc_bag 查询已确认的物品 ID。');
+}
+
 /**
  * craft:配方齐不齐。与 skillCraft 问的是同一份数据(标签配方或 recipesAll + 背包),
  * 所以它说凑不齐,真跑也一定凑不齐 —— 台架 `bench-precheck.ts` 锁死这条蕴含。
  */
 function precheckCraft(bot: Bot, call: Extract<SkillCall, { skill: 'craft' }>): PrecheckNote | null {
-  if (call.grid) return null; // 自摆配方不预判
+  if (call.grid) {
+    const unknown = call.grid.flat().find(name => name && !bot.registry?.itemsByName?.[name]);
+    return unknown ? { level: 'hard', text: unknownCraftItemText(bot, unknown), rule: 'craft.unknownItem' } : null;
+  } // 自摆配方不预判产物
   const item = call.item ?? '';
   const def = bot.registry?.itemsByName?.[item];
-  if (!def) return { level: 'hard', text: `不认识「${item}」这种物品`, rule: 'craft.unknownItem' };
+  if (!def) return { level: 'hard', text: unknownCraftItemText(bot, item), rule: 'craft.unknownItem' };
   if (!inventoryReadConfirmed(bot) || (bot.currentWindow ?? bot.inventory).selectedItem) {
     return { level: 'soft', text: '库存同步或游标归位尚未完成，暂不能判断合成材料缺口；执行前先核对并归还游标', rule: 'craft.inventorySync' };
   }

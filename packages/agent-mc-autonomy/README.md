@@ -422,3 +422,27 @@ description explains that find without direction only observes. Repeated read
 attempts receive a changing request-tail notice to choose an action when facts
 suffice or query a specific unresolved fact. This is advisory and does not
 automatically move the body, interrupt work or claim progress.
+
+## Reuse attached viewer pages (0.1.42)
+
+An internal viewer reports its actual attached stream count. Startup allows a
+bounded four-second reconnect grace without blocking gameplay; an already
+attached page is reused instead of opening another browser tab on each runtime
+handover. With no attached page, automatic opening still happens once. External
+viewer integrations keep their existing explicit opener behavior.
+
+## Current food reserve in standalone reads (0.1.41)
+
+Direct SDK facts now include the same synchronized food-reserve readout as host
+events, with native item IDs for the planner. Hunger and non-food inventory no
+longer have to be interpreted as food stock. Unconfirmed inventory remains
+unknown; this read does not scan the world or consume host events.
+
+## Inventory identity and recipe feedback (0.1.40)
+
+Current verified inventory IDs are prioritized with inventory quantities in the
+changing request tail. Replacing an unconfirmed snapshot clears those IDs; quantity
+changes do not resend the identity map. Unknown IDs are identity errors, not evidence
+that a known item is absent. Craft failure guidance distinguishes crafting-grid
+recipes from furnace processing instead of recommending a guessed grid for every
+missing recipe. No alias substitution, body action or additional model call is added.
