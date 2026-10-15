@@ -74,6 +74,7 @@ it('records rejected decisions without treating their probability as execution a
   const row=book.decision(scope,'run',{id:'d',category:'skill',selected:'blink',status:'stale',candidates:[{id:'blink',ready:true,probability:.95}],elapsedMs:2100},sample());
   expect(row).toMatchObject({kind:'decision',before:null,execution:null,goalVerified:false});
   expect(row.after).not.toBeNull();
+  expect(book.decision(scope,'run',row.decision!,sample(9))).toEqual(row);
   await expect(book.query({operation:'reflect',requestId:'bad',input:{ids:[row.id],verdict:'helpful'}},ctx,new GameMemoryBook(directory))).rejects.toThrow('completed');
 });
 it('joins a fast terminal before RPC return and a later terminal after admission through the public SDK',async()=>{

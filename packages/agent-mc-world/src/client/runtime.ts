@@ -341,10 +341,11 @@ export class MinecraftAgentClient {
       if(name.endsWith('_choose')) {
         // Only schema-owned choice metadata; never retain candidate prose or the model request.
         try { const chosen=JSON.parse(outcome.text), candidates=Array.isArray(args.candidates)?args.candidates:[];
-          const decision=this.learning.recordDecision({id:callId,category:String(args.category),selected:chosen.choice??null,status:chosen.status??'unknown',
+          const decisionId=chosen.decisionId??callId;
+          const decision=this.learning.recordDecision({id:decisionId,category:String(args.category),selected:chosen.choice??null,status:chosen.status??'unknown',
             candidates:candidates.map(c=>({id:c.id,ready:c.ready,probability:c.id===chosen.choice?chosen.probability:null})),
             model:chosen.model??null,elapsedMs:chosen.elapsedMs??null,inputTokens:chosen.inputTokens??null,recalledMemoryRefs:chosen.recalledMemoryRefs??[]});
-          if(decision) outcome.meta={...outcome.meta,decisionId:callId,experience:{id:decision.id,protocol:decision.schema}};
+          if(decision) outcome.meta={...outcome.meta,decisionId,experience:{id:decision.id,protocol:decision.schema}};
         } catch { /* Unrecognized advice stays unknown; no inferred decision. */ }
       }
       outcome.control = { protocol: PROTOCOL, requestId: callId, ...(turn ? { turnId: turn.id } : {}),

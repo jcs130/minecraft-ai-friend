@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { ToolDef, WorldHost, WorldRequestFacts } from './contracts.ts';
 import { parseTypedChoice } from '../../core/support/typed-decision.ts';
 
@@ -93,7 +93,7 @@ export function createMinecraftChoiceTool(host: () => WorldHost | null,
         const answer = parseTypedChoice(response.answers.action, [...ready.map(c => c.id), '_inspect']);
         if (!answer) return { text: '{"status":"invalid-response","choice":null}' };
         const uncertain = answer.choiceProbability < .65 || answer.choice === '_inspect';
-        const result = JSON.stringify({ status: uncertain ? 'inspect' : 'advice', choice: uncertain ? null : answer.choice,
+        const result = JSON.stringify({ decisionId:ctx.callId??randomUUID(),status: uncertain ? 'inspect' : 'advice', choice: uncertain ? null : answer.choice,
           probability: Number(answer.choiceProbability.toFixed(3)), scene: before.revision, expiresAt: start + deadline.age,
           elapsedMs: Date.now() - start, execution: '未执行，行动前核验', model:response.model??null,inputTokens: response.usage?.input_tokens ?? null,
           recalledMemoryRefs:lessons.map(l=>l.reference) });

@@ -124,15 +124,19 @@ export class OperationExperienceBook {
     if (row.schema !== 'agent-mc-experience/v1' || row.id !== id || row.scopeKey !== operationScopeKey(scope)) throw new Error('Experience identity mismatch');
     return row;
   }
-  list(scope: GameMemoryScope, input: Record<string,unknown> = {}) {
-    const limit = input.limit ?? 8, offset = input.offset ?? 0;
-    if (!Number.isInteger(limit) || Number(limit)<1 || Number(limit)>20 || !Number.isInteger(offset) || Number(offset)<0 || Number(offset)>1024) throw new Error('limit 1..20, offset 0..1024');
+  private recent(scope:GameMemoryScope,input:Record<string,unknown>){
     const file = join(this.folder(scope),'recent.json');
     const ids: string[] = existsSync(file) ? JSON.parse(readFileSync(file,'utf8')) : [];
     const rows = ids.slice().reverse().map(id=>this.get(scope,id)).filter(r =>
       (!input.run || r.run===input.run) && (!input.kind || r.kind===input.kind)
       && (!input.operation || r.operations.includes(String(input.operation)) || r.decision?.category===input.operation)
       && (!input.controller || r.attribution.controller===input.controller));
+    return {ids,rows};
+  }
+  list(scope: GameMemoryScope, input: Record<string,unknown> = {}) {
+    const limit = input.limit ?? 8, offset = input.offset ?? 0;
+    if (!Number.isInteger(limit) || Number(limit)<1 || Number(limit)>20 || !Number.isInteger(offset) || Number(offset)<0 || Number(offset)>1024) throw new Error('limit 1..20, offset 0..1024');
+    const {ids,rows}=this.recent(scope,input);
     return {window:'latest-1024-records',retained:ids.length,total:rows.length, nextOffset:Number(offset)+Number(limit)<rows.length ? Number(offset)+Number(limit) : null,
       entries:rows.slice(Number(offset),Number(offset)+Number(limit)), historical:true, goalVerified:false};
   }
@@ -151,7 +155,7 @@ export class OperationExperienceBook {
   decision(scope: GameMemoryScope, run: string, value: OperationDecision, before: OperationObservation | null) {
     const decision=normalizedDecision(value);
     const row=this.begin(scope,run,`decision:${decision.id}`, 'host-decision', {},before,{controller:'system1',sessionId:decision.sessionId,decisionId:decision.id});
-    if (row.decision && experienceHash(row.decision)!==experienceHash(decision)) throw new Error('Decision ID conflict');
+    if (row.decision) {if(experienceHash(row.decision)!==experienceHash(decision)) throw new Error('Decision ID conflict');return row;}
     return this.save(scope,{...row,kind:'decision',decision,before:null,after:row.before,dispatch:'returned',elapsedMs:decision.elapsedMs??null,updatedAt:new Date().toISOString()});
   }
   finish(scope: GameMemoryScope, id: string, outcome: ToolOutcome | null, after: OperationObservation | null, elapsedMs: number) {
@@ -183,8 +187,7 @@ export class OperationExperienceBook {
     if (args.operation==='get') return {entry:this.get(ctx.scope,String(input.id)),historical:true};
     if (args.operation==='list') return this.list(ctx.scope,input);
     if (args.operation==='stats') {
-      const rows:OperationExperience[]=[]; let offset=0;
-      do { const page=this.list(ctx.scope,{...input,limit:20,offset}); rows.push(...page.entries); if(page.nextOffset===null) break; offset=page.nextOffset; } while(offset<1024);
+      const {rows}=this.recent(ctx.scope,input);
       const counts:Record<string,number>={}; for(const r of rows){const key=r.kind==='decision'?`decision:${r.decision?.status}`:`operation:${r.execution?.phase??r.dispatch}`;counts[key]=(counts[key]??0)+1;}
       return {window:'latest-1024-records',sampleSize:rows.length,from:rows.at(-1)?.at??null,to:rows[0]?.at??null,counts,
         measuredPairs:rows.filter(r=>r.kind==='operation'&&r.before&&r.after).length,goalSuccessRate:null,modelAccuracy:null,masteryVerified:false};
