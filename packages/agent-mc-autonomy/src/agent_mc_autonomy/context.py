@@ -96,8 +96,11 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
         allowance = min(1200, max(0, (context_tokens - stable_cost) // 4))
         tail["tool_failure"] = tool_failure
         if cost() - stable_cost > allowance:
-            tail["tool_failure"] = {key: tool_failure[key] for key in ("tool", "error", "next_step") if key in tool_failure}
+            tail["tool_failure"] = {key: tool_failure[key] for key in ("tool", "error", "next_step", "admission", "recovery", "receipt") if key in tool_failure}
             tail["tool_failure"]["abridged"] = True
+            if cost() - stable_cost > allowance and isinstance(tail["tool_failure"].get("recovery"), list):
+                tail["tool_failure"]["recovery"] = [{**row, "text": fact_preview(row["text"], 600)}
+                                                   for row in tail["tool_failure"]["recovery"] if isinstance(row, dict) and isinstance(row.get("text"), str)]
         while cost() - stable_cost > allowance and allowance >= 300:
             text = encode(tail["tool_failure"])
             tail["tool_failure"] = fact_preview(text, max(100, len(text.encode("utf-8")) // 2))

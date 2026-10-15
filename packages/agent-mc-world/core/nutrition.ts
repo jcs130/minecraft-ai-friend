@@ -38,7 +38,8 @@ export function renderFoodReserveReadout(
     else if (SPECIAL_FOODS.has(name)) special.push(label);
     else { normal.push(label); count += amount; points += (foods[name]!.foodPoints ?? 0) * amount; }
   }
-  return `随身口粮储备：常规 ${count} 个（${normal.join('、') || '无'}；基础补饥饿值合计 ${points} 点，不含浪费与后续消耗）。`
+  return (totals.size === 0 ? '已同步随身物品没有可直接进食的食物；食物原料不能代替口粮。' : '')
+    + `随身口粮储备：常规 ${count} 个（${normal.join('、') || '无'}；基础补饥饿值合计 ${points} 点，不含浪费与后续消耗）。`
     + (risky.length ? `有风险或特殊副作用：${risky.join('、')}。` : '')
     + (special.length ? `特殊食物：${special.join('、')}。` : '')
     + '括号为原版基础饥饿/饱和点，非当前饱和或直接回血；优先已有安全熟食，危急时可先用安全生食。'

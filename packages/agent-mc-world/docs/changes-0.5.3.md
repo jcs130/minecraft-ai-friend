@@ -1,4 +1,16 @@
-# Candidate 0.5.3
+# 0.5.3: action admission evidence
+
+The native body already rejected impossible recipes before changing its queue. The MCP outcome now also retains `meta.admission` with `accepted: false`, the executor's actual `rule`/`kind`, and the relevant `mc_help` reference. Refused cooking/charcoal crafts include the canonical `smelt` documentation, with no extra inference or server operation.
+
+This makes a semantic rejection distinguishable from a schema error, a queued task or an unknown action. Hosts can keep the original error, suppress unchanged repeats for a bounded interval and reconsider when inventory/world evidence changes. Documentation is a reference; it does not prove a furnace, fuel or output exists. No admission, cancellation, task completion or user authorization semantics changed.
+
+Java 1.21.1 remains primary. This snapshot also includes the latest native Mineflayer-compatible Java-client method fixes from main. The optional shared viewer is still an explicit independent input.
+
+Validation: 817 core tests passed, two conditional viewer tests skipped in the explicitly headless build; typecheck, canonical build verification and isolated packed consumer passed with network denied. Live survival acceptance is recorded separately and remains required for a playable release.
+
+## Independent behavior repair candidate
+
+The following changes were validated and deployed in the immutable private candidate 0.5.3-dev.20261015.2 at 55f3a4c. The source branch also follows newer main changes; that does not silently replace an installed candidate.
 
 Long navigation now offers a safe checkpoint after each completed local leg. A queued short task such as eating can run, then the original fixed destination resumes with the same execution identity. The existing dry-footing, inventory, body-owner, combat and active-effect guards remain in force; no checkpoint is forced in water or during combat.
 

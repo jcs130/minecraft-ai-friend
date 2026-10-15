@@ -12,7 +12,7 @@ from pathlib import Path
 from .bridge import json_content, outcome, text_content
 from .context import assemble, encode
 from .fast import FastPolicy, focus_state, rule_focus
-from .observations import receipt_view, spatial_text, tool_failure_view
+from .observations import fact_preview, receipt_view, spatial_text, tool_failure_view
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .model_protocols import assistant_history
 from .planner import PlannerResponseError, PlannerUnavailableError
@@ -47,6 +47,14 @@ class ModelCallRejected(ValueError):
 def fact_fingerprint(facts):
     # The sample timestamp is useful context, but is not a decision trigger.
     return encode([(p["key"], p["text"]) for p in facts.get("parts", []) if p["key"] not in {"sample", "realclock"}])
+
+
+def admission_fingerprint(facts):
+    # Re-reading clocks is not new evidence that a rejected recipe/plan works.
+    # Expiry below still permits checking server-side changes not in these facts.
+    parts = [(p["key"], p["text"]) for p in facts.get("parts", [])
+             if p["key"] not in {"sample", "realclock", "clock", "lastTask"}]
+    return encode(parts) if parts else None
 
 
 def model_tools(catalogue):
@@ -198,6 +206,17 @@ def failure_context(catalogue, name, arguments, result):
               "parameter_help": {}, "original_receipts": "receipts.jsonl"}
     if name == "mc_do" and not result.get("execution"):
         notice["next_step"] += " The batch was not accepted: earlier steps did not run either. Submit only the next feasible action; leave blocked optional searches and unverified dependent crafting out of that batch."
+    admission = (result.get("meta") or {}).get("admission")
+    if isinstance(admission, dict) and admission.get("accepted") is False:
+        notice["admission"] = {key: admission[key] for key in ("accepted", "rule", "kind") if key in admission}
+        notice["recovery"] = [{"tool": row["tool"], "arguments": row["arguments"],
+                               "text": fact_preview(row["text"], 1800)}
+                              for row in admission.get("recovery", [])[:1]
+                              if isinstance(row, dict) and row.get("tool") == "mc_help"
+                              and isinstance(row.get("arguments"), dict) and isinstance(row.get("text"), str)]
+        notice["next_step"] += " The recovery field is the native skill reference, not a claim that its prerequisites exist. Use its exact operation/parameters and fresh inventory."
+        if any(row["arguments"].get("skill") == "smelt" for row in notice["recovery"]):
+            notice["next_step"] += " Cooking/charcoal requires smelt, never craft; verify a furnace and real fuel before submitting."
     if name == "mc_scout" and isinstance(steps, list):
         allowed = properties.get("steps", {}).get("items", {}).get("properties", {}).get("skill", {}).get("enum", [])
         rejected = sorted({step["skill"] for step in steps if isinstance(step, dict) and isinstance(step.get("skill"), str) and step["skill"] not in allowed})
@@ -246,6 +265,8 @@ class Controller:
         self.planner_notice = None
         self.tool_failure = None
         self.rejected_calls = {}
+        self.admission_failures = {}
+        self.last_admission_facts = None
         self.invalid_tool_calls = 0
         self.unactioned_replies = 0
         self.read_activity = {}
@@ -632,6 +653,22 @@ class Controller:
                     arguments["queue"] = "append"
         request_id = str(uuid.uuid4())
         rejected_key = json.dumps([name, arguments], sort_keys=True, ensure_ascii=False)
+        prior_admission = self.admission_failures.get(rejected_key)
+        if prior_admission and (prior_admission["facts"] != self.last_admission_facts
+                                or time.monotonic() - prior_admission["at"] >= 120):
+            self.admission_failures.pop(rejected_key)
+            prior_admission = None
+        if prior_admission and self.last_admission_facts is not None:
+            self.planner_notice = "The native executor already rejected this identical plan with unchanged world facts. It was NOT dispatched again. Use the retained native recovery reference to choose one feasible action, or query the specific missing prerequisite. Clocks and new tool-call IDs do not make a rejected plan feasible."
+            self.retain_tool_failure(prior_admission["failure"])
+            self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
+            self.continuation_needed = True
+            self.publish(planner_error="repeated_admission_rejection", rejected_tool=name,
+                         planner_retry_seconds=max(30, self.settings.min_decision_seconds))
+            result = {"failed": True, "dispatched": False, "origin": "controller_validation",
+                      "text": self.planner_notice, "previous_failure": self.tool_failure}
+            compact = await self.archive_receipt(request_id, name, result)
+            return result, compact, True
         if rejected_key in self.rejected_calls:
             # A known pre-dispatch rejection cannot be replayed by a later batch.
             self.planner_notice = "The exact same call already failed argument validation. It was NOT dispatched again. Consult mc_help/mc_tool_help and change the invalid parameters."
@@ -660,6 +697,12 @@ class Controller:
             self.publish(read_activity=dict(self.read_activity))
         if result.get("failed"):
             failure_notice = self.record_tool_failure(name, arguments, result, request_id)
+            admission = failure_notice.get("admission") or {}
+            if not result.get("execution") and admission.get("kind") in {"correction", "repeat"}:
+                if len(self.admission_failures) >= 16:
+                    self.admission_failures.pop(next(iter(self.admission_failures)))
+                self.admission_failures[rejected_key] = {"failure": failure_notice,
+                    "facts": self.last_admission_facts, "at": time.monotonic()}
             failure = str(result.get("text", ""))
             parse_rejected = name in {"mc_do", "mc_scout"} and failure.startswith(f"[{name} 失败]") and "。你写的是 " in failure
             if not result.get("execution") and (failure.startswith("Invalid arguments:") or parse_rejected):
@@ -738,6 +781,7 @@ class Controller:
                 else:
                     focus = {"source": "rules", "choice": rule_focus(state), "advisory_only": True}
                 self.last_facts = fact_fingerprint(facts)
+                self.last_admission_facts = admission_fingerprint(facts)
                 consumed = tuple(self.recent)
                 self.deferred_wake = False
                 frame = self.frame

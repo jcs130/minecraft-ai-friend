@@ -36,4 +36,13 @@ describe('Java 1.21.1 routine food', () => {
     expect(text).toContain('不补饥饿');
     expect(renderFoodReserveReadout([{ name: 'beef', count: 2 }], foods, false)).toContain('未知');
   });
+  it('puts confirmed absence of edible food before inventory summaries without classifying risky food as absent', () => {
+    const none = renderFoodReserveReadout([{ name: 'egg', count: 1 }, { name: 'wheat', count: 2 }], foods, true);
+    expect(none.startsWith('已同步随身物品没有可直接进食的食物')).toBe(true);
+    expect(none).toContain('食物原料不能代替口粮');
+    const risky = renderFoodReserveReadout([{ name: 'chicken', count: 1 }], foods, true);
+    expect(risky).not.toContain('没有可直接进食');
+    expect(risky).toContain('风险30%');
+    expect(renderFoodReserveReadout([{ name: 'egg', count: 1 }], foods, false)).not.toContain('没有可直接进食');
+  });
 });
