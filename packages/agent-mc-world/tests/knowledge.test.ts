@@ -44,6 +44,23 @@ describe('source-attributed vanilla reference retrieval', () => {
     expect(read('recipe/dried_kelp').entry.variants.some((v: any) => v.type === 'smelting')).toBe(true);
     expect(() => readMinecraftKnowledge({ action: 'help', query: 'food' }, '1.21.1')).toThrow(/Field/);
   });
+  it.each(['egg food cook', 'minecraft:egg food', '鸡蛋 食物 烹饪'])('keeps the queried item ahead of generic food/cooking terms (%s)', query => {
+    const result = readMinecraftKnowledge({ query, limit: 5 }, '1.21.1') as any;
+    expect(result.entries[0].id).toBe('item/egg');
+    expect(result.entries[0].summary).toContain('不可直接进食');
+    expect(result.entries[0]).not.toHaveProperty('nutrition');
+    expect(result.entries.some((entry: any) => entry.id === 'food/egg')).toBe(false);
+  });
+  it('ranks a complete compound item name ahead of a shorter ingredient and keeps paging stable', () => {
+    const first = readMinecraftKnowledge({ query: 'cooked chicken smelt', limit: 3 }, '1.21.1') as any;
+    expect(first.entries.every((entry: any) => entry.id.endsWith('/cooked_chicken'))).toBe(true);
+    const page = readMinecraftKnowledge({ query: 'cooked chicken smelt', limit: 3, offset: 3 }, '1.21.1') as any;
+    expect(new Set([...first.entries, ...page.entries].map((entry: any) => entry.id)).size).toBe(6);
+  });
+  it.each(['exposed_cut_copper_stairs', 'dark_oak_pressure_plate'])('uses the same named-object ranking for uncommon compound IDs (%s)', name => {
+    const result = readMinecraftKnowledge({ query: name.replaceAll('_', ' ') + ' food cook', limit: 1 }, '1.21.1') as any;
+    expect(result.entries[0].id.endsWith('/' + name)).toBe(true);
+  });
   it('pages the complete item/block/crafting catalogue without confusing furnace products with craft', () => {
     const page = readMinecraftKnowledge({ action: 'search', kind: 'food', limit: 10, offset: 40 }, '1.21.1') as any;
     expect(page).toMatchObject({ total: 41, nextOffset: null });

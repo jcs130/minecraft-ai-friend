@@ -64,7 +64,7 @@ function catalogue(version: string): Entry[] {
         sources: semantic ? semanticSources : sources };
     });
   for (const item of data.itemsArray) add('item', item.name, `${zhName(item.name)} / ${item.displayName} (${item.name})`,
-    data.foodsByName[item.name] ? '物品与食物条目；详见对应 food ID。' : '物品注册表；并不等于当前已持有或可直接食用。', () => ({
+    data.foodsByName[item.name] ? '物品与食物条目；详见对应 food ID。' : '原版不可直接进食的物品；特殊交互另查详情，不是当前库存事实。', () => ({
       nativeId: item.id, stackSize: item.stackSize, edible: Boolean(data.foodsByName[item.name]) && item.name !== 'ominous_bottle',
       ...(semantic && item.name === 'cake' ? { caution: '蛋糕需放置后交互吃：7 片，每片补 2 饥饿/0.4 饱和，不是手持 consume 食物。' } : {}),
       ...(semantic && FOOD_COOKING[item.name] ? { processing: { output: FOOD_COOKING[item.name], guide: 'guide/cooking' } } : {}),
@@ -139,10 +139,21 @@ export function readMinecraftKnowledge(args: Record<string, unknown>, version: s
   if (args.query !== undefined && (typeof args.query !== 'string' || args.query.length > 200)) throw new Error('Invalid knowledge query');
   const query = String(args.query ?? '').trim().toLowerCase();
   const tokens = query.match(/[a-z0-9_]+|[\u3400-\u9fff]{1,2}/g) ?? [];
+  // A named object remains the subject even when the question also contains
+  // generic words such as "food cook". Match whole IDs/phrases, so an egg is
+  // not displaced by every cooked food or confused with a spawn/dragon egg.
+  const words = query.match(/[a-z0-9]+/g) ?? [];
+  const phrases = new Set<string>();
+  for (let start = 0; start < words.length; start++) {
+    for (let end = start + 1; end <= words.length; end++) phrases.add(words.slice(start, end).join(' '));
+  }
   const matches = entries.filter(e => !args.kind || e.kind === args.kind).map(e => {
     const title = `${e.id} ${e.title}`.toLowerCase(), text = `${title} ${e.summary}`.toLowerCase();
     const exact = e.id.split('/')[1] === query;
-    return { entry: e, score: !query ? 1 : (exact ? 100 : 0) + (title.includes(query) ? 30 : 0)
+    const native = e.id.split('/')[1].replaceAll('_', ' '), chinese = e.title.split(' / ')[0];
+    const named = e.kind === 'guide' ? 0 : Math.max(phrases.has(native) ? native.split(' ').length * 100 : 0,
+      /^[\u3400-\u9fff]+$/.test(chinese) && query.includes(chinese) ? 100 + chinese.length * 10 : 0);
+    return { entry: e, score: !query ? 1 : named + (exact ? 100 : 0) + (title.includes(query) ? 30 : 0)
       + tokens.reduce((sum, token) => sum + (title.includes(token) ? 5 : text.includes(token) ? 1 : 0), 0) };
   }).filter(e => e.score > 0).sort((a, b) => b.score - a.score || a.entry.id.localeCompare(b.entry.id));
   return { ...base, total: matches.length, nextOffset: offset + limit < matches.length ? offset + limit : null,
