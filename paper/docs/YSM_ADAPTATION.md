@@ -1,3 +1,13 @@
+## 2026-10-15 可米猫娘面具与平面闪烁修正已热加载
+
+沿用 cormy-winefox-cream / cormy-cream 和原UUID，采用 jcs130/cormy-live2d 固定提交670fa1c的1.2.1-preview-cat-depthfix。只替换主模型与第一人称手臂几何，去除狐狸面具，1259对共面薄片居中加厚0.01模型单位；猫耳、头发、尾巴、UV、动画、2048贴图、0.8比例和CC BY-NC-SA4.0署名保留。现役兼容化ysm.json不覆盖。17份文件实际落盘核对，恰有2份改变，其余15份字节一致；绑定model/texture/mandatory保持安装前当前值（mandatory=false，不强行改回历史true）。
+
+- main.json实际SHA256：adae9772b1851f920935ef081d432524c51c068dc6f1bc9bc946c3a21f7a3b4a。
+- arm.json实际SHA256：c0092ab7ee1ad08a0f70e8df6681b90d7c6b8b76b15e729038b9e484fc51acf8。
+- 既有稳定扫描器自动原生重载，Worker状态confirmed；真实Mineflayer连接收到62块754001字节资源，SHA256 5c201ee53bab0f11f9ab80aa2370603a034dc5e0e9873051a9ed34c17ea87bd2，逐文件摘要与现役源一致。不是只根据预期after值报成功。
+- E/F repairs/ysm-cormy-mask-depth-20261015含17份完整before/after-model、安装/原绑定/实际投递回执。Paper/Proxy/Worker均未重启，也未操作可米客户端；客户端像素由其运行端另行验收，本机不以资源投递代替画面。
+- 回退只用before-model的两份几何在核对当前摘要后替换，沿相同扫描器重载，核对真实状态/分发；不覆盖其他纹理、玩家绑定或存档。
+
 # YSM 外观桥接（2026-10-11已上线）
 
 2026-10-15登录阶段修复已上线：服主确认并提前180/60/10秒提醒，原维护锁与真人/副本门禁、E/F模型服务冷备份完成后，Freesia更新af2；Paper保持原PID6372运行。17项时序、43项隔离联机与20项正式联机通过，修复登录大厅提前握手导致原生YSM回复跨入configuration的时序；39账号认证字段、51份绑定、172模型资源保持，女神和鸣人恢复。原生Fabric界面完成同步仍待可米重连复测，详见 [YSM登录阶段](YSM_LOGIN_PHASE.md)。
