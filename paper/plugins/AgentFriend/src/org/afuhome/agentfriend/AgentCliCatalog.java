@@ -257,7 +257,7 @@ final class AgentCliCatalog {
         add(specs,"guild.exam.list","adventure","read","/mycli guild exam list","查看实操题库、场地开放情况与下一阶晋级缺项","生存角色；先guild join登记","MC_GUILD_EXAM；声望不自动跳段");
         add(specs,"guild.exam.info","adventure","read","/mycli guild exam info <ID>","查看题目、技能与资源准备、航点和验收要求","查询免费；自然前往已勘察起点","MC_GUILD_EXAM，含冻结版本与绝对目标");
         add(specs,"guild.exam.start","adventure","write","/mycli guild exam start <ID>","主动开始一项能力考试；start promotion <ID>参加下一阶晋级","一人一场；学习准备施法由本人操作；只收技能本身魔力","MC_GUILD_EXAM；市场SKILL_ASSESSMENT使用guild claim交付");
-        add(specs,"guild.exam.status","adventure","read","/mycli guild exam status","查本人考试轨迹、受益队友与下一步","只接收本人或当前实际附身对象的私有数据","MC_GUILD_EXAM；mcagent:exam；academy状态摘要");
+        add(specs,"guild.exam.status","adventure","read","/mycli guild exam status [--json]","查本人考试、匹配且可接的委托与准确下一步；区分考证和晋级","只接收本人或实际附身对象；推荐不自动接单","MC_GUILD_EXAM；contractOptions含真实拒绝原因和nextCommand");
         add(specs,"guild.exam.submit","adventure","write","/mycli guild exam submit","复核并交付本场实操，授予证书或下一阶","实际条件齐全；固定场次结算去重；失败不降级","MC_GUILD_EXAM；不额外赠声望、技能点或物品");
         add(specs,"guild.exam.cancel","adventure","write","/mycli guild exam cancel","主动取消独立考试；市场阶段中断后用exam retry从本阶段重试","已花技能魔力/冷却保留；市场放弃用guild abandon","MC_GUILD_EXAM；旧证书保持");
         add(specs,"guild.certificates","adventure","read","/mycli guild certificates","列出本人已通过的能力证书与18阶冒险者认证","只显示服务器实际验收；未认证不表示不会","MC_GUILD_CERTIFICATES；职业高跃/御空/祝福二三级需要对应基础/进阶证书");
@@ -390,7 +390,7 @@ final class AgentCliCatalog {
         return out;
     }
     private static int idEmptyPriority(String prefix,String id,List<String> order){return prefix.isEmpty()&&order.contains(id)?order.indexOf(id):order.size();}
-    private static boolean jsonSupported(String id){return id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro").contains(id)||id.startsWith("protect");}
+    private static boolean jsonSupported(String id){return id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","guild.exam.status","guild.exam.info").contains(id)||id.startsWith("protect");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);

@@ -20,7 +20,7 @@ $classpath = @(
     Join-Path $ServerRoot 'plugins\EssentialsX-2.22.0.jar'
     Join-Path $ServerRoot 'plugins\ProtocolLib-5.3.0.jar'
 ) -join ';'
-$build = Join-Path $root "build-0.4.42-mc-$MinecraftVersion"
+$build = Join-Path $root "build-0.4.43-mc-$MinecraftVersion"
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 # The isolated server path plus both library generations can exceed Windows'
 # command-line limit. A UTF-8 argument file also handles paths containing spaces.
@@ -64,7 +64,7 @@ Copy-Item -LiteralPath (Join-Path $root 'resources\skill-visuals.yml') -Destinat
 Copy-Item -LiteralPath (Join-Path $root 'resources\structure-protection.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\text-bubbles.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\photo-camera.yml') -Destination $build -Force
-$out = Join-Path $root 'AgentFriend-0.4.42.jar'
+$out = Join-Path $root 'AgentFriend-0.4.43.jar'
 & $jar --create --file $out -C $build .
 if ($LASTEXITCODE -ne 0) { throw 'jar failed' }
 Get-FileHash -LiteralPath $out -Algorithm SHA256 | Select-Object Path,Hash

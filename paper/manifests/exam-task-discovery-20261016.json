@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-16",
+  "status": "candidate_not_deployed",
+  "server": "Paper 1.21.1 build 133",
+  "agentFriend": "0.4.43",
+  "artifactSha256": "f3573ed4afdc1c0d64faf487a4f5f4f52e026a296ff93923a1af022aefe1fda4",
+  "productionAgentFriend": "0.4.42",
+  "productionRestarted": false,
+  "checks": {
+    "baselineReproduction": 11,
+    "finalNativeJavaAgentAndMenu": 29,
+    "finalColdRestartAndLifecycleGuards": 9,
+    "cliContractRegression": 51
+  },
+  "features": [
+    "shared real eligibility in market/chat/menu/task discovery",
+    "bounded own-account compatible exam contracts and nextCommand",
+    "private structured incompatible-contract denials",
+    "exam status/info JSON format",
+    "same-run durable survey reconnect and restart recovery",
+    "explicit cancellation, expiry and continuous-action guards retained"
+  ],
+  "limits": [
+    "not a new full photography or autonomous LLM exam run",
+    "phone/Xbox device visuals and real Eye not retested here",
+    "no production task, fame, certificate or rewards edited",
+    "requires current release approval and original backed-up maintenance path"
+  ],
+  "privateEvidence": "E/F repairs/exam-offers-20261016",
+  "documentation": "paper/docs/EXAM_TASK_DISCOVERY.md"
+}

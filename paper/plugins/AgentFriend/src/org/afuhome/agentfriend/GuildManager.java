@@ -329,7 +329,7 @@ final class GuildManager implements Listener {
             player.sendMessage(ChatColor.YELLOW + quest.id() + ChatColor.WHITE + " " + quest.title()
                     + " · " + quest.description() + " · 声望+" + quest.fame()
                     + " / 绿宝石×" + quest.emeralds()
-                    + " [" + (doneToday(player, quest) ? "今日已完成" : "可接") + "]");
+                    + " [" + (doneToday(player, quest) ? "今日已完成" : examBlocks(player, quest.id()) ? "不适合本场考试" : "可接") + "]");
         }
         player.sendMessage(ChatColor.GOLD + "【冒险者公会 · 常驻委托】");
         int[] focus = todayFocus();
@@ -340,7 +340,7 @@ final class GuildManager implements Listener {
         for (Contract quest : CONTRACTS) {
             if (!availableToday(player, quest)) continue;
             String gate = quest.minRank() > rank ? "需" + RANKS[quest.minRank()] : "可接";
-            String state = doneToday(player, quest) ? "今日已完成" : gate;
+            String state = doneToday(player, quest) ? "今日已完成" : examBlocks(player, quest.id()) ? "不适合本场考试" : gate;
             player.sendMessage(ChatColor.YELLOW + quest.id() + ChatColor.WHITE + " " + quest.title()
                     + " · " + quest.description() + " · 声望+" + quest.fame()
                     + " / 绿宝石×" + quest.emeralds() + " [" + DIMS[quest.dim()] + "|" + state + "]");
@@ -376,8 +376,12 @@ final class GuildManager implements Listener {
         if (quest != null && (ExplorationObjectives.GOALS.contains(quest.goal()) || quest.goal() == Goal.MAP_HUNT)) plugin.taskMarket().surveyStatus(player);
     }
 
+    private boolean examBlocks(Player player, String id) {
+        return plugin.skillAssessments()!=null && plugin.skillAssessments().busy(player)
+                && !plugin.skillAssessments().canAttachContract(player,id);
+    }
     private void accept(Player player, String id) {
-        if(plugin.skillAssessments()!=null&&plugin.skillAssessments().busy(player)&&!plugin.skillAssessments().canAttachContract(player,id)){player.sendMessage("§e已有在办考试；/mycli guild exam status 查看。现场委托题只可接题目对应的走查、工程或供货单；其他题需先submit或cancel。");return;}
+        if(examBlocks(player,id)){plugin.skillAssessments().contractRejected(player,id);return;}
         Contract quest = contract(id);
         if (quest == null) { player.sendMessage(ChatColor.RED + "没有这个任务 ID；/mycli guild board 查看精确名称。"); return; }
         if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能接单；请使用生存角色，/mycli guild board 查看委托。"); return; }

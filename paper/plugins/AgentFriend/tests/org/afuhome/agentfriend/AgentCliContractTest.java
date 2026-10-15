@@ -30,6 +30,8 @@ public final class AgentCliContractTest {
         check("help never pretends to execute",create.get("readOnly").getAsBoolean()&&!create.get("actionReadOnly").getAsBoolean());
         check("leaf exposes real parameters and resource rules",create.has("parameters")&&create.has("consumption")&&create.has("permission")&&create.has("resultQuery"));
         check("JSON actions advertised",create.get("jsonSupported").getAsBoolean());
+        check("exam status explicitly supports JSON",help("guild exam status --help --json").get("jsonSupported").getAsBoolean());
+        check("exam info explicitly supports JSON",help("guild exam info survey_basic --help --json").get("jsonSupported").getAsBoolean());
         check("unknown child is not silently parent help",help("challenge bogus --help").has("errorCode"));
         check("unknown root errors",help("bogus --help").has("errorCode"));
         check("invalid help page errors",help("challenge --help --page 99").has("errorCode"));

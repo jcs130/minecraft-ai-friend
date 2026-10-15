@@ -189,6 +189,10 @@ final class AgentCommunication {
             String[] query=Arrays.copyOf(args,args.length+1);query[args.length]="--json";
             plugin.taskMarket().routes().command(p,query);return;
         }
+        if(root.equals("guild")&&args.length>=3&&args[1].equalsIgnoreCase("exam")
+                &&Set.of("status","info").contains(args[2].toLowerCase(Locale.ROOT))) {
+            plugin.skillAssessments().jsonQuery(p,args);return;
+        }
         error(p,"UNSUPPORTED_FORMAT","该旧入口尚未提供--json格式，本次未执行。用命令的--help核对支持情况；已有原回执入口保持兼容。",false,"/mycli "+root+" --help --json");
     }
 }

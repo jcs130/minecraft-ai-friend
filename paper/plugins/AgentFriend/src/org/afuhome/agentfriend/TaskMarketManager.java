@@ -434,7 +434,34 @@ final class TaskMarketManager implements Listener {
         String qualification = plugin.professions().taskDenial(player, task.definition());
         if (!qualification.equals("available")) return qualification;
         if (!plugin.getConfig().getString(activePath(player) + ".id", "").isEmpty()) return "another_contract_active";
+        if (plugin.skillAssessments() != null && plugin.skillAssessments().busy(player)
+                && !plugin.skillAssessments().canAttachContract(player, task.id())) return "exam_contract_incompatible";
+        if (task.steps.stream().anyMatch(s -> s.map != null)) {
+            String denial = maps.denial(player);
+            if (!denial.equals("available")) return denial;
+        }
         return current;
+    }
+    JsonObject assessmentContracts(Player player, List<String> proofs) {
+        Map<String,String> states = new HashMap<>();
+        List<Task> matching = offers().stream().filter(t -> suppliesAssessmentProof(t.id(), proofs))
+                .peek(t -> states.put(t.id(), offerState(t, player)))
+                .sorted(java.util.Comparator.comparing((Task t) -> !states.get(t.id()).equals("available"))
+                        .thenComparing(java.util.Comparator.comparing(Task::beginner).reversed())
+                        .thenComparingInt(Task::minRank).thenComparing(Task::id)).toList();
+        JsonObject out = new JsonObject(); JsonArray items = new JsonArray();
+        out.addProperty("total", matching.size());
+        out.addProperty("availableCount", matching.stream().filter(t -> states.get(t.id()).equals("available")).count());
+        for (Task task : matching.stream().limit(7).toList()) {
+            JsonObject row = summary(task); String status = states.get(task.id());
+            row.addProperty("status", status); row.addProperty("countsForExam", true);
+            row.addProperty("detailCommand", "/mycli tasks info " + task.id());
+            if (status.equals("available")) row.addProperty("acceptCommand", "/mycli guild accept " + task.id());
+            items.add(row);
+        }
+        out.add("items", items);
+        out.addProperty("moreCommand", "/mycli tasks list all");
+        return out;
     }
     boolean onceCompleted(String id) {
         return plugin.getConfig().getBoolean(ROOT + ".projects." + id + ".completed", false);
@@ -808,13 +835,13 @@ final class TaskMarketManager implements Listener {
     void list(Player player) {
         player.sendMessage("§6【任务市场 · 千灯纪委托】工程、远征与生活；探索履历每人一次，日常按任务说明。");
         for (Task task : offers()) player.sendMessage("§e" + task.id() + " §f" + task.title + " · " + TaskGuidance.description(task.description)
-                + " §7[" + state(task, player) + "] · 声望+" + task.fame + " / 绿宝石×" + task.emeralds);
+                + " §7[" + offerState(task, player) + "] · 声望+" + task.fame + " / 绿宝石×" + task.emeralds);
         player.sendMessage("§7/mycli guild engineering <ID> 看步骤与坐标；guild accept <ID> 接单；guild verify 验收；guild claim 交付。");
         publish(player);
     }
     private void publish(Player player) {
         JsonObject data = new JsonObject(); JsonArray array = new JsonArray();
-        for (Task task : offers()) { JsonObject row = summary(task); row.addProperty("state", state(task, player)); array.add(row); }
+        for (Task task : offers()) { JsonObject row = summary(task); row.addProperty("state", offerState(task, player)); array.add(row); }
         data.add("tasks", array); send(player, "MC_MARKET_BOARD", data);
     }
     private void publishAll() {
@@ -838,7 +865,7 @@ final class TaskMarketManager implements Listener {
     JsonObject residentCard(Player player, String id) {
         Task task = tasks.get(id);
         if (task == null || !task.enabled) return null;
-        JsonObject row = summary(task); row.addProperty("state", state(task, player));
+        JsonObject row = summary(task); row.addProperty("state", offerState(task, player));
         row.addProperty("beneficiary", task.beneficiary); row.addProperty("icon", task.icon.name());
         row.addProperty("detailCommand", "/mycli guild market " + id);
         row.addProperty("acceptCommand", "/mycli guild accept " + id);
@@ -981,7 +1008,7 @@ final class TaskMarketManager implements Listener {
             Task task = tasks.get(ids.get(i)); ItemStack item = new ItemStack(task.icon);
             var meta = item.getItemMeta(); meta.setDisplayName("§e" + task.title);
             meta.setLore(List.of(TaskGuidance.description(task.description), task.steps.size() + " 个阶段 · " + (task.project ? "公共工程仅结算一次" : task.repeatOnce ? "本人远行履历仅一次" : task.repeatDestination ? "每个新目的地一次，换图可继续" : "本人每日一次"),
-                    "声望 +" + task.fame + " / 绿宝石 ×" + task.emeralds, "状态：" + state(task, player), "左键接单，右键看步骤"));
+                    "声望 +" + task.fame + " / 绿宝石 ×" + task.emeralds, "状态：" + offerState(task, player), "左键接单，右键看步骤"));
             item.setItemMeta(meta); inventory.setItem(i, item);
         }
         menuItem(inventory, 36, Material.BOOK, "§b当前任务", "查看当前进度");

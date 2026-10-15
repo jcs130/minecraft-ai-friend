@@ -1,3 +1,7 @@
+## 2026-10-16 考试接单排查，修复候选尚未部署
+
+正式AgentFriend仍0.4.42。遗迹调查survey_basic要真实自然走查/原图寻宝及实地照片；biome_border、lost_town、tm_ruins_journal不能直接作为本题走查证明，tm_map_hunt需主手真实目标地图。tm_starter_trail是可用入门走查，实际走主世界3个16格区域、48格新路线及15秒有效行进，摄影要求照常；已经接单则先guild status，不替玩家换单或放弃。可米02:56已接到tm_desert_pyramid_archive，勿按旧接取失败记录称她仍没有任务；当前进度实时查。0.4.43候选修正匹配目录/JSON下一步并恢复调查断线续接，29联机/9冷重启/51CLI检查通过，尚未部署，不能让玩家期待新增字段已生效。按需读resource/EXAM_TASK_DISCOVERY.md。
+
 ## 2026-10-16 当前YSM同步修复af3已上线
 
 当前正式Paper1.21.1 build133 / AgentFriend0.4.42 / Eye0.1.16 / Freesia af3。00:01仅模型代理维护上线，Paper未重启，原身份、模型分配和资源保留，Watchdog及女神桥恢复。小鱼换YSM2.4.1后23:22:53已完成真实握手；自己模型可用、其他玩家仍默认是另一个初始化漏补发问题，不能继续只回答“2.6.5不匹配”。af3在真实缓存初始化后自动补发同后端其他在线玩家模型，重连可恢复。仍需匹配YSM2.4.1/原生协议2.4.0，并未升级支持2.6.5。正式已实收鸣人原生模型/实体ID，可米维护后离线待回连，实际Java像素待玩家复验。按需读resource/YSM_PEER_SYNC.md和YSM_ADAPTATION.md；以下旧版本按历史时点阅读。

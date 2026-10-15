@@ -74,7 +74,7 @@ final class SkillAssessments implements Listener {
                 if(a.has("history")&&a.getAsJsonArray("history").size()>16)throw new IllegalArgumentException("history");
                 if(a.has("active")) {
                     Run run=decode(a.getAsJsonObject("active"));
-                    if(run.state.equals("active")) {run.state="interrupted";run.reason="server_restart";}
+                    if(run.state.equals("active")&&!durableSurvey(run)) {run.state="interrupted";run.reason="server_restart";}
                     UUID id=UUID.fromString(entry.getKey());if(Bukkit.getPlayer(id)!=null)runs.put(id,run);
                 }
             }
@@ -104,6 +104,9 @@ final class SkillAssessments implements Listener {
     }
     String gradeName(Player p) {int g=readGrade(p);return RANKS[g/3]+" "+DIVISIONS[g%3];}
     boolean busy(Player p) {Run r=runs.get(p.getUniqueId());return r!=null&&r.market.isEmpty()&&Set.of("active","ready").contains(r.state);}
+    private static boolean durableSurvey(Run r) {
+        return r.definition.primitive().equals("contract_record")&&r.definition.proofs().contains("survey");
+    }
     boolean canAttachContract(Player p,String id) {
         Run r=runs.get(p.getUniqueId());return r!=null&&r.state.equals("active")&&r.definition.primitive().equals("contract_record")
                 &&plugin.taskMarket().suppliesAssessmentProof(id,r.definition.proofs());
@@ -157,7 +160,7 @@ final class SkillAssessments implements Listener {
     private Run current(Player p) {
         Run r=runs.get(p.getUniqueId());
         if(r==null&&available()&&academy(p.getUniqueId()).has("active")) {
-            try {r=decode(academy(p.getUniqueId()).getAsJsonObject("active"));if(r.state.equals("active")){r.state="interrupted";r.reason="server_restart";}runs.put(p.getUniqueId(),r);}
+            try {r=decode(academy(p.getUniqueId()).getAsJsonObject("active"));if(r.state.equals("active")&&!durableSurvey(r)){r.state="interrupted";r.reason="server_restart";}runs.put(p.getUniqueId(),r);}
             catch(RuntimeException invalid){validLedger=false;plugin.getLogger().severe("Invalid assessment record retained for "+p.getUniqueId());return null;}
         }
         TaskMarketManager market=plugin.taskMarket();
@@ -172,6 +175,14 @@ final class SkillAssessments implements Listener {
             r=newRun(d,token);if(!save(p,r))return null;runs.put(p.getUniqueId(),r);
             p.sendMessage("§b能力阶段已开始："+d.title()+"；/mycli guild exam status 查看当前目标。技能须在本阶段开始后施放。");
             if(d.primitive().equals("native_lesson")){plugin.featureTutorials().enroll(p);plugin.traversalPractice().command(p,"start");reuseTraining(p,r);}
+        }
+        if(r!=null&&durableSurvey(r)&&r.state.equals("interrupted")&&Set.of("logout","server_restart").contains(r.reason)
+                &&System.currentTimeMillis()<r.expires&&definition(r.definition.id())!=null&&definition(r.definition.id()).enabled()) {
+            // Upgrade recovery for old releases: restore only a durable survey
+            // interrupted by transport/shutdown, never cancelled/expired/movement.
+            // Its original run, frozen requirements, proofs and deadline remain.
+            String prior=r.reason;r.state="active";r.reason="resumed_after_reconnect";
+            if(!save(p,r)){r.state="interrupted";r.reason=prior;}
         }
         return r;
     }
@@ -350,7 +361,7 @@ final class SkillAssessments implements Listener {
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void mode(PlayerGameModeChangeEvent e) {qualificationChanged(e.getPlayer());}
     @EventHandler(priority=EventPriority.MONITOR) public void death(PlayerDeathEvent e) {qualificationChanged(e.getEntity());}
     @EventHandler(priority=EventPriority.MONITOR) public void quit(PlayerQuitEvent e) {
-        Run r=runs.get(e.getPlayer().getUniqueId());if(r!=null)interrupt(e.getPlayer(),r,"logout");runs.remove(e.getPlayer().getUniqueId());
+        Run r=runs.get(e.getPlayer().getUniqueId());if(r!=null&&!durableSurvey(r))interrupt(e.getPlayer(),r,"logout");runs.remove(e.getPlayer().getUniqueId());
         menus.entrySet().removeIf(x->x.getValue().owner.equals(e.getPlayer().getUniqueId()));
         for(var entry:runs.entrySet())entry.getValue().allies.remove(e.getPlayer().getUniqueId());
     }
@@ -434,24 +445,72 @@ final class SkillAssessments implements Listener {
         if(r.definition.primitive().equals("flight_route"))return "依次经过航点；保持空中水平移动、转向、升降，面朝前方后退，再到降落台稳定停留2秒";
         return r.definition.description();
     }
-    void show(Player p) {
+    private void contractGuidance(Player p, AssessmentCatalog.Definition d, JsonObject out) {
+        if (!d.primitive().equals("contract_record") || d.proofs().stream().noneMatch(s -> Set.of("survey", "project", "supply").contains(s))) return;
+        JsonObject options = plugin.taskMarket().assessmentContracts(p, d.proofs());
+        out.add("contractOptions", options);
+        String active = plugin.getConfig().getString("guild-players."+p.getUniqueId()+".active.id", "");
+        if (!active.isEmpty()) { out.addProperty("nextCommand", "/mycli guild status"); return; }
+        for (var item : options.getAsJsonArray("items")) {
+            JsonObject row = item.getAsJsonObject();
+            if (row.has("acceptCommand")) { out.addProperty("nextCommand", row.get("acceptCommand").getAsString()); return; }
+        }
+        out.addProperty("nextCommand", "/mycli tasks list all");
+        out.addProperty("advice", "没有符合本场考试且当前可接的委托；已完成的一次性履历不能重领。可先查看拒绝原因，或主动cancel后换考题；不会自动放弃或覆盖进度。");
+    }
+    void contractRejected(Player p, String id) {
+        Run r=current(p); JsonObject out=new JsonObject();
+        out.addProperty("type","contract_denied"); out.addProperty("ok",false);
+        out.addProperty("reason","exam_contract_incompatible"); out.addProperty("requestedContractId",id);
+        if(r!=null){out.addProperty("examId",r.definition.id());contractGuidance(p,r.definition,out);}
+        if(!plugin.communication().compact(p))p.sendMessage("§e这张委托不计入当前考试；/mycli guild exam status 会列出本人可接的匹配委托与准确命令。原考试进度保留。");
+        send(p,"MC_GUILD_EXAM",out);
+    }
+    void show(Player p) { show(p, plugin.communication().compact(p)); }
+    private void show(Player p, boolean machine) {
         Run r=current(p);JsonObject out=summary(p);out.addProperty("type","status");out.addProperty("schemaVersion",1);out.addProperty("subjectUuid",p.getUniqueId().toString());out.addProperty("scope","self");
         if(r!=null){out.addProperty("version",r.definition.version());out.add("requirements",AssessmentCatalog.JSON.toJsonTree(r.definition));out.add("measured",measurements(r));
+            out.addProperty("purpose",r.grade==null?"certificate":"promotion");
+            if(r.state.equals("active"))contractGuidance(p,r.definition,out);
+            else if(r.state.equals("ready"))out.addProperty("nextCommand",r.market.isEmpty()?"/mycli guild exam submit":"/mycli guild claim");
             if(r.definition.proofs().contains("survey_photo")) {
                 out.add("photography",plugin.taskMarket().photoStatus(p));
-                p.sendMessage("§b摄影实考：每个探索阶段至少1张合格实地照片；要求多种群系时，每种各拍一张。走查、返程照常；好构图额外纪念荣誉，不影响晋级。/mycli photo menu");
+                if(!machine)p.sendMessage("§b摄影实考：每个探索阶段至少1张合格实地照片；要求多种群系时，每种各拍一张。走查、返程照常；好构图额外纪念荣誉，不影响晋级。/mycli photo menu");
             }
             AssessmentCatalog.Point target=target(r);if(target!=null){JsonObject at=AssessmentCatalog.JSON.toJsonTree(target).getAsJsonObject();at.addProperty("worldUuid",r.definition.course().world().toString());out.add("target",at);}
-            p.sendMessage("§b"+r.definition.title()+"："+r.state+"；"+next(r));
-            if(target!=null)p.sendMessage("§e当前目标 "+r.definition.course().world()+" X="+target.x()+" Y="+target.y()+" Z="+target.z()+"，距离 "+Math.round(point(p).distance(target))+"格；测量 "+measurements(r));
-        }else p.sendMessage("§e没有在办考试；/mycli guild exam list 看题目，或 /mycli guild exam promotion 查下一阶。");
+            if(!machine){p.sendMessage("§b"+r.definition.title()+"："+r.state+"；"+next(r));
+                if(out.has("nextCommand"))p.sendMessage("§a下一步："+out.get("nextCommand").getAsString()+"；只推荐，不自动接单或消费。");
+                if(target!=null)p.sendMessage("§e当前目标 "+r.definition.course().world()+" X="+target.x()+" Y="+target.y()+" Z="+target.z()+"，距离 "+Math.round(point(p).distance(target))+"格；测量 "+measurements(r));}
+        }else {out.addProperty("nextCommand","/mycli guild exam list");if(!machine)p.sendMessage("§e没有在办考试；/mycli guild exam list 看题目，或 /mycli guild exam promotion 查下一阶。");}
         send(p,"MC_GUILD_EXAM",out);
+    }
+    void jsonQuery(Player p,String[] args) {
+        if(args.length==3&&args[2].equalsIgnoreCase("status")){show(p,true);return;}
+        if(args.length==4&&args[2].equalsIgnoreCase("info")) {
+            AssessmentCatalog.Definition d=definition(args[3]);if(d==null){JsonObject out=new JsonObject();out.addProperty("type","error");out.addProperty("ok",false);out.addProperty("reason","unknown_exam");out.addProperty("nextCommand","/mycli guild exam list");send(p,"MC_GUILD_EXAM",out);return;}
+            info(p,d,true);return;
+        }
+        JsonObject out=new JsonObject();out.addProperty("type","error");out.addProperty("ok",false);out.addProperty("reason","invalid_arguments");
+        out.addProperty("nextCommand","/mycli guild exam status --json");send(p,"MC_GUILD_EXAM",out);
+    }
+    private void info(Player p,AssessmentCatalog.Definition d,boolean machine) {
+        JsonObject out=AssessmentCatalog.JSON.toJsonTree(d).getAsJsonObject();out.addProperty("type","definition");out.addProperty("eligibility",eligibility(p,d));
+        contractGuidance(p,d,out);
+        Run r=runs.get(p.getUniqueId());boolean same=r!=null&&r.definition.id().equals(d.id())&&Set.of("active","ready").contains(r.state);
+        if(same){out.addProperty("eligibility","in_progress");if(r.state.equals("ready"))out.addProperty("nextCommand",r.market.isEmpty()?"/mycli guild exam submit":"/mycli guild claim");}
+        else out.addProperty("nextCommand",busy(p)?"/mycli guild exam status":"/mycli guild exam start "+d.id());
+        if(same&&!out.has("nextCommand"))out.addProperty("nextCommand","/mycli guild exam status");send(p,"MC_GUILD_EXAM",out);
+        if(!machine)p.sendMessage("§b"+d.title()+"："+d.description()+"；限时"+d.timeout()+"秒。下一步："+out.get("nextCommand").getAsString());
     }
     private void send(Player p,String prefix,JsonObject out) {
         out.addProperty("schemaVersion",1);out.addProperty("subjectUuid",p.getUniqueId().toString());out.addProperty("scope","self");
         p.sendMessage(prefix+" "+out);byte[] bytes=out.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);if(bytes.length<=24000)p.sendPluginMessage(plugin,CHANNEL,bytes);
     }
     private void reply(Player p,String reason,AssessmentCatalog.Definition d) {
+        JsonObject out=new JsonObject();out.addProperty("type","error");out.addProperty("ok",false);out.addProperty("reason",reason);
+        out.addProperty("nextCommand",reason.equals("task_slot_busy")?"/mycli guild exam status":"/mycli guild exam promotion");
+        if(d!=null)out.addProperty("examId",d.id());send(p,"MC_GUILD_EXAM",out);
+        if(plugin.communication().compact(p))return;
         p.sendMessage("§e未开始/未交付："+reason+"。"+(reason.equals("go_to_start")&&d!=null&&d.course()!=null?"请正常前往出发台 "+d.course().world()+" "+d.course().start()+"，落地后开考。":
                 reason.equals("task_slot_busy")?"先 /mycli guild status 或 guild exam status 查看当前任务；交付或主动放弃后再开考。":
                 reason.startsWith("certificate_required")?"/mycli guild certificates 查看已取得证书；/mycli guild exam list 选择所缺能力题。":
@@ -482,7 +541,7 @@ final class SkillAssessments implements Listener {
         switch(action) {
             case "menu" -> menu(p,false);
             case "list" -> {for(var d:catalog==null?List.<AssessmentCatalog.Definition>of():catalog.definitions.values().stream().sorted(Comparator.comparing(AssessmentCatalog.Definition::id)).toList())p.sendMessage("§e"+d.id()+" · "+d.title()+" ["+(d.enabled()?"开放":"待勘察场地")+"] "+d.description());promotion(p);}
-            case "info" -> {AssessmentCatalog.Definition d=args.length>3?definition(args[3]):null;if(d==null){reply(p,"unknown_exam",null);break;}JsonObject o=AssessmentCatalog.JSON.toJsonTree(d).getAsJsonObject();o.addProperty("type","definition");o.addProperty("eligibility",eligibility(p,d));send(p,"MC_GUILD_EXAM",o);p.sendMessage("§b"+d.title()+"："+d.description()+"；限时"+d.timeout()+"秒。/mycli guild exam start "+d.id());}
+            case "info" -> {AssessmentCatalog.Definition d=args.length>3?definition(args[3]):null;if(d==null){reply(p,"unknown_exam",null);break;}info(p,d,plugin.communication().compact(p));}
             case "start" -> {if(args.length<4){reply(p,"choose_exam",null);break;}boolean promotion=args[3].equals("promotion");if(promotion&&args.length<5){promotion(p);break;}start(p,args[promotion?4:3],promotion);}
             case "status" -> show(p);
             case "promotion", "rank" -> promotion(p);
@@ -522,5 +581,5 @@ final class SkillAssessments implements Listener {
         if(args.length>2&&args[2].equals("reload"))sender.sendMessage(reload()?"考试与18阶目录已热加载；在途定义保持冻结。":"配置错误，已保留上次有效目录；修正两份配置后再加载。");
         else sender.sendMessage("Assessment catalog="+(catalog==null?0:catalog.definitions.size())+" ledger="+available()+" active="+runs.values().stream().filter(r->r.state.equals("active")).count()+" sampleMs="+lastSampleMs+" peakMs="+maxSampleMs);
     }
-    void shutdown() {task.cancel();for(var entry:List.copyOf(runs.entrySet())){Player p=Bukkit.getPlayer(entry.getKey());if(p!=null)interrupt(p,entry.getValue(),"server_restart");}menus.clear();}
+    void shutdown() {task.cancel();for(var entry:List.copyOf(runs.entrySet())){Player p=Bukkit.getPlayer(entry.getKey());if(p!=null&&!durableSurvey(entry.getValue()))interrupt(p,entry.getValue(),"server_restart");}menus.clear();}
 }
