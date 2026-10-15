@@ -49,6 +49,9 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
   it('explains observed version-specific API failures without rewriting or dispatching a correction',()=>{
     expect(javaScriptErrorHelp("module 'minescript' has no attribute 'equipment_hotbar_select'")).toContain('player_inventory_select_slot(slot)');
     expect(javaScriptErrorHelp("module 'minescript' has no attribute 'block_at'")).toContain('mc_probe');
+    expect(javaScriptErrorHelp("module 'minescript' has no attribute 'press_key'")).toContain('player_press_attack(True/False)');
+    expect(javaScriptErrorHelp("module 'minescript' has no attribute 'release_key'")).toContain('False in finally');
+    expect(javaScriptErrorHelp("module 'minescript' has no attribute 'Input'")).toContain('no Input context manager');
     expect(javaScriptErrorHelp('java.lang.IllegalArgumentException: No key mapping with name `attack`')).toContain('"key.attack"');
     expect(javaScriptErrorHelp("module 'minescript' has no attribute 'state'")).toContain('No correction was executed');
     expect(javaScriptErrorHelp('Unexpected unrelated script error')).toBeUndefined();

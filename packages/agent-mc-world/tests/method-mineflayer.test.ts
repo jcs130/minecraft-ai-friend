@@ -49,6 +49,19 @@ async function until(check: () => boolean) {
 }
 
 describe('agent programs using Mineflayer public primitives', () => {
+  it('selects hotbar indexes through the shared worker without moving items and rejects inventory indexes', async () => {
+    const r=rig();r.stock('carrot',4,39);
+    const run=r.runner.start({name:'select-hotbar',code:'await bot.setQuickBarSlot(3); return await bot.read("heldItem");'});
+    expect(await methodEnded(r,run.id)).toMatchObject({status:'completed',result:{name:'carrot',count:4,slot:39}});
+    expect(r.live.quickBarSlot).toBe(3);expect(r.live.inventory.slots[39]?.count).toBe(4);
+    expect(r.packets.some(p=>p.name==='held_item_slot'&&p.value.slotId===3)).toBe(true);
+    await until(()=>r.exec.currentTask===null);
+    const before=r.packets.filter(p=>p.name==='held_item_slot').length;
+    const invalid=r.runner.start({name:'invalid-hotbar',code:'await bot.setQuickBarSlot(39);'});
+    expect(await methodEnded(r,invalid.id)).toMatchObject({status:'failed',error:expect.stringContaining('0..8')});
+    expect(r.packets.filter(p=>p.name==='held_item_slot')).toHaveLength(before);
+    expect(r.live.quickBarSlot).toBe(3);
+  });
   it('reads real native water properties, preserves unknown blocks and computes positions with Vec3', async () => {
     const r = rig(); r.set(1, 64, 0, 'water');
     const blockAt = r.live.blockAt.bind(r.live);
