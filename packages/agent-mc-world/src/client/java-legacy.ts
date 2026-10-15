@@ -1,9 +1,10 @@
 import type { JavaClientState } from '../contracts/java-client.ts';
 
-export const JAVA_LEGACY_HELP = `Compatibility: mc_do also accepts ONE legacy steps:[{skill,...}] command. Supported: chat(text), control(keys,durationMs; ground only), look(at:[absolute x,y,z]), equip(item; main hand, storage requires inventoryPick capability), eat(item already held), use(with no target/options; held item). Explicit queue append/now supported; the native default preserves queued work. Each converts to one native operation with the SAME action_id and original terminal receipt. Multiple steps, dependencies/expect, navigation, mining, crafting, scripts, offhand/armor and flight planning require a native execution backend and are rejected before dispatch; never simulate success. Query mc_operations for native primitives.`;
+export const JAVA_LEGACY_HELP = `Compatibility: mc_do also accepts ONE legacy steps:[{skill,...}] command. Supported: chat(text), control(keys,durationMs; ground only), look(at:[absolute x,y,z]), equip(item; main hand, storage requires inventoryPick capability), eat(item already held), use(with no target/options; held item). goto(at:[absolute x,y,z],exact?,walkOnly?,dimension?) requires navigationCapability:agent-mc-navigation/v1 (optional Baritone). Native goto only walks existing routes; walkOnly:false is rejected. Explicit queue append/now supported; the native default preserves queued work. Each converts to one native operation with the SAME action_id and original terminal receipt. Multiple steps, dependencies/expect, relative/2D/named goals, mining, crafting, scripts, offhand/armor and flight planning are rejected before dispatch; never simulate success. Query mc_operations for native primitives.`;
 /** Legacy help uses the same public step shape as execution. Native input stays discoverable separately. */
 export function javaLegacySkillHelp(skill: string): string | undefined {
   const pages: Record<string,string> = {
+    goto:'mc_do {steps:[{skill:"goto",at:[x,y,z],exact:true,walkOnly:true}],action_id} requires native navigationCapability:agent-mc-navigation/v1. Absolute numeric coordinates are floored. exact:true verifies the actual foot cell; default permits one cell in 3D, as the Mineflayer step does. Optional dimension is a current-world precondition, never a transfer. Existing walking routes only, no digging/placing/parkour or server teleport. Relative/2D/named goals and dryRun are not supported here. Timeout, no progress, GUI/death/teleport or lost ownership fail with measured feet; cancellation stays unknown until owned navigation stops.',
     control: 'mc_do {steps:[{skill:"control",keys:["forward"],durationMs:500,mode:"ground"}],action_id}. Keys: forward/back/left/right/jump/sneak/sprint; durationMs:50..10000 in multiples of50. This translates to native operation:"move" with ticks=durationMs/50. Native operation:"control" does not exist. No route or obstacle clearance is inferred.',
     chat: 'mc_do {steps:[{skill:"chat",text:"..."}],action_id} translates to native operation:"chat" with input.text. Dispatch does not establish a server reply, permission or social response.',
     look: 'mc_do {steps:[{skill:"look",at:[x,y,z]}],action_id} uses absolute block coordinates and the current eye position to look at the block center. Native operation:"look" instead takes input.yaw/pitch in degrees; JavaScript bot.look uses Mineflayer radians.',
@@ -21,12 +22,18 @@ export function translateJavaLegacy(args: Record<string, unknown>, state: JavaCl
   if (args.queue !== undefined && !['append', 'now'].includes(String(args.queue))) fail('only append/now queue modes');
   const step = (args.steps as unknown[])[0] as Record<string, unknown>;
   if (!step || typeof step !== 'object' || Array.isArray(step)) fail('invalid step');
-  const allowed: Record<string, string[]> = { chat: ['text'], control: ['keys', 'durationMs', 'mode'], look: ['at'], equip: ['item', 'hand'], eat: ['item'], use: [] };
+  const allowed: Record<string, string[]> = { goto:['at','exact','walkOnly','dimension'], chat: ['text'], control: ['keys', 'durationMs', 'mode'], look: ['at'], equip: ['item', 'hand'], eat: ['item'], use: [] };
   const skill = String(step.skill);
   if (!allowed[skill]) fail('skill ' + skill + ' needs a native executor');
   if (Object.keys(step).some(key => key !== 'skill' && !allowed[skill].includes(key))) fail('unsupported step options/dependencies');
   let operation: string, input: Record<string, unknown>;
-  if (skill === 'chat') { operation = 'chat'; input = { text: step.text }; }
+  if(skill==='goto'){
+    if(state.navigationCapability!=='agent-mc-navigation/v1')fail('current bridge does not advertise navigation capability');
+    if(!Array.isArray(step.at)||step.at.length!==3||!step.at.every(v=>typeof v==='number'&&Number.isFinite(v)&&Math.abs(v)<=30_000_000))fail('goto requires absolute numeric [x,y,z]');
+    if(step.exact!==undefined&&typeof step.exact!=='boolean'||step.walkOnly!==undefined&&step.walkOnly!==true)fail('goto only supports boolean exact and walking routes');
+    if(step.dimension!==undefined&&(typeof step.dimension!=='string'||step.dimension.replace(/^minecraft:/,'')!==String(state.dimension).replace(/^minecraft:/,'')))fail('dimension precondition differs from current world');
+    const [x,y,z]=(step.at as number[]).map(v=>Math.floor(v));operation='navigate';input={goal:{x,y,z,...(step.exact===true?{}:{rangeSq:1})},timeoutMs:60_000};
+  } else if (skill === 'chat') { operation = 'chat'; input = { text: step.text }; }
   else if (skill === 'control') {
     const keys = ['forward', 'back', 'left', 'right', 'jump', 'sneak', 'sprint'];
     if (!Array.isArray(step.keys) || !step.keys.every(key => keys.includes(String(key))) || step.mode && step.mode !== 'ground') fail('control keys or mode');

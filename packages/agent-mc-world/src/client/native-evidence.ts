@@ -44,7 +44,7 @@ export function compactNativeItems(state: Record<string, any>) {
 export function compactNativeActionEvent(state: Record<string, any>) {
   const keys = ['protocol','sampledAt','generation','connected','server','uuid','username','dimension','position','health','food','yaw','pitch','onGround','selectedSlot','screen','screenToken','screenTitle','syncId','menuRevision'];
   return { ...Object.fromEntries(keys.filter(key => key in state).map(key => [key, typeof state[key] === 'string' ? state[key].slice(0,512) : state[key]])),
-    cursor: compactItem(state.cursor), inventoryTransfer: compactInventoryTransfer(state.inventoryTransfer), stateQuery: 'mc_state / mc_bag', originalQuery: 'mc_evidence with raw.key and raw.sha256' };
+    cursor: compactItem(state.cursor), inventoryTransfer: compactInventoryTransfer(state.inventoryTransfer), ...(state.navigation?{navigation:compactNavigation(state.navigation)}:{}),stateQuery: 'mc_state / mc_bag', originalQuery: 'mc_evidence with raw.key and raw.sha256' };
 }
 export function compactNativeState(state: Record<string, any>) {
   const keys = ['protocol','sampledAt','generation','connected','server','uuid','username','dimension','position','health','food','yaw','pitch','onGround','selectedSlot','weather','time','screen','screenToken','screenTitle','syncId','menuRevision','buttons'];
@@ -52,6 +52,8 @@ export function compactNativeState(state: Record<string, any>) {
   Object.assign(out, compactNativeItems(state)); out.cursor = compactItem(state.cursor);
   if(state.inventoryPick) out.inventoryPick=state.inventoryPick;
   if(state.inventoryTransfer) out.inventoryTransfer=compactInventoryTransfer(state.inventoryTransfer);
+  if(state.navigationCapability)out.navigationCapability=state.navigationCapability;
+  if(state.navigation)out.navigation=compactNavigation(state.navigation);
   out.notices = { retained: state.messages?.length ?? 0, lastSeq: state.messages?.at(-1)?.seq ?? 0 };
   if (Array.isArray(state.actions)) {
     // Past actions remain in the raw archive, not repeated in every input receipt/frame.
@@ -65,6 +67,11 @@ export function compactNativeState(state: Record<string, any>) {
       pending: active.length, unknown: state.actions.filter((a: any) => a.phase === 'unknown').length, rawQuery: 'mc_queue / mc_evidence' };
   }
   return out;
+}
+
+function compactNavigation(value: any){
+  if(!value||typeof value!=='object')return undefined;
+  return Object.fromEntries(['protocol','navigator','actionId','phase','reason','goal','feet','onGround','cleanupPending'].filter(key=>key in value).map(key=>[key,typeof value[key]==='string'?value[key].slice(0,512):value[key]]));
 }
 
 function compactInventoryTransfer(value: any) {

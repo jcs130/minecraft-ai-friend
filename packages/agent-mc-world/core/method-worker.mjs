@@ -2,6 +2,7 @@ import { parentPort, workerData } from 'node:worker_threads';
 import 'ses';
 import { Vec3 } from 'vec3';
 import { procedureProgram } from './support/procedure-program.mjs';
+import { GoalBlock, GoalNear } from './method-goals.mjs';
 
 lockdown({ errorTaming: 'unsafe', consoleTaming: 'safe' });
 
@@ -43,10 +44,11 @@ function revive(value) {
 
 function capabilities(scope) {
   const bot = workerData.nativeMethods ? Object.fromEntries(workerData.nativeMethods
-    .filter(name => name !== 'inventory.items').map(name => [name, (...args) => rpc('mineflayer', { name, args }, scope)])) : undefined;
+    .filter(name => !name.includes('.')).map(name => [name, (...args) => rpc('mineflayer', { name, args }, scope)])) : undefined;
   if (bot) bot.inventory = { items: () => rpc('mineflayer', { name: 'inventory.items', args: [] }, scope) };
+  if(bot&&workerData.nativeMethods.includes('pathfinder.goto')) bot.pathfinder={goto:goal=>rpc('mineflayer',{name:'pathfinder.goto',args:[goal]},scope)};
   return { mc: harden({ state: () => rpc('state', {}, scope), do: steps => rpc('do', { steps }, scope),
-    flightPlan: args => rpc('flightPlan', args, scope) }), ...(bot ? { bot: harden(bot), Vec3: harden(Vec3) } : {}) };
+    flightPlan: args => rpc('flightPlan', args, scope) }), ...(bot ? { bot: harden(bot), Vec3: harden(Vec3),goals:harden({GoalBlock,GoalNear}) } : {}) };
 }
 
 try {

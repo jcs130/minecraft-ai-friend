@@ -59,7 +59,7 @@ it('keeps baseline v1 programs usable and refuses unadvertised optional methods 
   const r=rig();r.setAdvertised(JAVA_METHOD_REQUIRED);
   const started=await r.call({name:'baseline',code:'return (await bot.read("entity")).position;'});
   expect((await finished(r,JSON.parse(started.text).id)).status).toBe('completed');
-  for(const code of ['return await bot.findBlock({matching:1});','await bot.setQuickBarSlot(3);']){
+  for(const code of ['return await bot.findBlock({matching:1});','await bot.setQuickBarSlot(3);','await bot.pathfinder.goto(new goals.GoalBlock(1,64,0));']){
     const before=r.calls.length;
     const attempt=await r.call({name:'optional',code});
     const run=await finished(r,JSON.parse(attempt.text).id);
@@ -97,7 +97,27 @@ it('reconciles already cancelled native work after lease loss without reacquirin
   await vi.waitFor(()=>expect(r.actions.size).toBe(1));const action=[...r.actions.values()][0];action.phase='cancelled';await r.m.stop('lease expired');expect(r.m.busy).toBe(false);
   expect(r.calls.some(c=>c.method==='claim')).toBe(false);expect(r.events.at(-1).execution.terminal).toBe(true);
 });
-it('reports supported signatures and gaps explicitly',()=>{expect(javaMethodHelp('movement')).toContain('RADIANS');expect(javaMethodHelp('inventory')).toContain('36..44');expect(javaMethodHelp('compatibility')).toContain('placeBlock');expect(()=>javaMethodHelp('pathfinder')).toThrow('unavailable');});
+it('reports supported signatures and gaps explicitly',()=>{expect(javaMethodHelp('movement')).toContain('RADIANS');expect(javaMethodHelp('inventory')).toContain('36..44');expect(javaMethodHelp('compatibility')).toContain('placeBlock');expect(javaMethodHelp('pathfinder')).toContain('measured feet');});
+it('awaits one native navigation call and retains actual arrival evidence in the shared script trace',async()=>{
+  const r=rig(),original=r.port.rpc;let arrived=false;
+  r.port.rpc=async(method,args)=>{
+    if(method==='method_call'&&args.name==='pathfinder.goto'){expect(args.args).toEqual([{x:-1,y:64,z:2,rangeSq:1}]);return{status:'running'};}
+    if(method==='method_result')return arrived?{status:'completed',value:null,navigation:{phase:'completed',goal:{x:-1,y:64,z:2,range:1},feet:[-.5,64,2.5],onGround:true,cleanupPending:false}}:{status:'running'};
+    return original(method,args);
+  };
+  const start=await r.call({name:'walk',code:'await bot.pathfinder.goto(new goals.GoalNear(-.1,64.5,2.9,1));return (await bot.read("entity.position")).x;'});
+  const id=JSON.parse(start.text).id;await vi.waitFor(()=>expect(r.calls.some(c=>c.method==='do')).toBe(true));expect(r.m.runner.read(id)[0].status).toBe('running');
+  arrived=true;const run=await finished(r,id);expect(run.status).toBe('completed');expect(run.trace[0].result).toMatchObject({navigation:{phase:'completed',feet:[-.5,64,2.5],cleanupPending:false}});
+  expect(r.calls.filter(c=>c.method==='do')).toHaveLength(1);expect(run.trace.map(t=>t.method)).toHaveLength(2);
+});
+it('does not reserve a body for invalid navigation and cancels the original action on a rejected route',async()=>{
+  const r=rig();const invalid=await r.call({name:'bad-goal',code:'await bot.pathfinder.goto({x:0,y:64,z:0,rangeSq:2});'});
+  expect(await finished(r,JSON.parse(invalid.text).id)).toMatchObject({status:'failed'});expect(r.calls.some(c=>c.method==='do')).toBe(false);
+  const original=r.port.rpc;r.port.rpc=async(method,args)=>method==='method_call'?{status:'failed',error:'No measured progress for5s; feet=(0,64,0)'}:original(method,args);
+  const attempt=await r.call({name:'blocked-walk',code:'await bot.pathfinder.goto(new goals.GoalBlock(3,64,0));'});
+  expect(await finished(r,JSON.parse(attempt.text).id)).toMatchObject({status:'failed',error:expect.stringContaining('No measured progress')});
+  expect(r.calls.filter(c=>c.method==='cancel')).toHaveLength(1);expect(r.calls.some(c=>c.method==='stop')).toBe(false);
+});
 it('awaits storage equip through the unchanged shared program and retains server evidence outside the script return',async()=>{
   const r=rig(),original=r.port.rpc,seed={slot:30,name:'wheat_seeds',type:5,count:23,instanceHash:'a'.repeat(64)};
   let response=false,dispatches=0;
