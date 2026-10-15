@@ -109,6 +109,24 @@ it('does not attach another realm sample to a pending action',()=>{
   c.finish(pending,{text:'accepted',execution:accepted});current={...scope,realm:'new-world'};c.execution(completed);
   expect(new OperationExperienceBook(join(data,'minecraft-memory')).get(scope,pending.id).after).toBeNull();
 });
+it.each(['realm','account','agent'] as const)('keeps early terminal samples bound to their sampled %s',field=>{
+  for(const ordering of ['same','changed','changed-back','changed-after'] as const){
+    const data=dir();let current=scope;
+    const other={...scope,[field]:'other'};
+    const c=new ClientOperationLearning(data,'run',()=>({text:'',snapshotTypes:[],experience:{scope:current,observation:sample(7)}}),()=>scope);
+    const pending=c.begin({name:'mc_do',tags:['act'],description:'',parameters:{},handler:async()=>''},{skill:'flight'},'r')!;
+    if(ordering==='changed'||ordering==='changed-back')current=other;
+    c.execution(completed);
+    if(ordering==='changed-back')current=scope;
+    if(ordering==='changed-after')current=other;
+    c.finish(pending,{text:'accepted',execution:accepted});
+    const row=new OperationExperienceBook(join(data,'minecraft-memory')).get(scope,pending.id);
+    expect(row.execution).toMatchObject({kind:completed.kind,id:completed.id,phase:'completed',terminal:true});
+    if(ordering==='changed'||ordering==='changed-back')expect(row.after).toBeNull();
+    else expect(row.after?.position?.x).toBe(7);
+    expect(c.status().recordingFailures).toBe(0);
+  }
+});
 it('summarizes archived metadata in an explicit scope and never invents an accuracy',()=>{
   const directory=dir(),book=new OperationExperienceBook(directory),row=book.begin(scope,'run','r','mc_do',{skill:'flight'},sample());
   book.finish(scope,row.id,{text:'done',execution:completed},sample(3),2);

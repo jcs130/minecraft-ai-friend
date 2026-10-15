@@ -10,7 +10,7 @@ export class ClientOperationLearning {
   private readonly book: OperationExperienceBook;
   private readonly notebook:GameMemoryBook;
   private readonly pending = new Map<string, Pending>();
-  private readonly early = new Map<string, {receipt:ExecutionReceipt;sample:OperationObservation|null}>();
+  private readonly early = new Map<string, {receipt:ExecutionReceipt;sample:OperationObservation|null;scopeKey:string|null}>();
   private failures=0;
   constructor(dataDir:string,private readonly run:string,private readonly facts:()=>WorldRequestFacts|null,
     private readonly fallbackScope:()=>GameMemoryScope) { this.book=new OperationExperienceBook(join(dataDir,'minecraft-memory')); this.notebook=new GameMemoryBook(join(dataDir,'minecraft-memory')); }
@@ -51,7 +51,8 @@ export class ClientOperationLearning {
     return this.safe(()=>{
       let row=this.book.finish(p.scope,p.id,outcome,this.sample(p.scope),performance.now()-p.started);
       if(outcome?.execution){const e=outcome.execution,key=`${e.kind}:${e.id}`;
-        const early=this.early.get(key); if(early?.receipt.terminal){row=this.book.terminal(p.scope,p.id,early.receipt,early.sample);this.early.delete(key);}
+        const early=this.early.get(key); if(early?.receipt.terminal){row=this.book.terminal(p.scope,p.id,early.receipt,
+          early.scopeKey===operationScopeKey(p.scope)?early.sample:null);this.early.delete(key);}
         else if(!e.terminal)this.pending.set(key,p);
       }
       return {id:row.id,protocol:row.schema,dispatch:row.dispatch,goalVerified:false};
@@ -59,9 +60,11 @@ export class ClientOperationLearning {
   }
   execution(receipt:ExecutionReceipt){
     if(!receipt.terminal)return;
-    this.safe(()=>{const key=`${receipt.kind}:${receipt.id}`,p=this.pending.get(key),sample=this.sample(p?.scope);
+    this.safe(()=>{const key=`${receipt.kind}:${receipt.id}`,p=this.pending.get(key),e=this.facts()?.experience;
+      const scopeKey=e?operationScopeKey(e.scope):null;
+      const sample=e&&(!p||scopeKey===operationScopeKey(p.scope))?e.observation:null;
       if(p){this.book.terminal(p.scope,p.id,receipt,sample);this.pending.delete(key);}
-      else {this.early.set(key,{receipt,sample});if(this.early.size>256)this.early.delete(this.early.keys().next().value!);}
+      else {this.early.set(key,{receipt,sample,scopeKey});if(this.early.size>256)this.early.delete(this.early.keys().next().value!);}
     });
   }
 }
