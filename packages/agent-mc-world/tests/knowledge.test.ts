@@ -33,6 +33,17 @@ describe('source-attributed vanilla reference retrieval', () => {
     expect(JSON.stringify(search).length).toBeLessThan(3500);
     expect((readMinecraftKnowledge({ action: 'search', query: 'beef', kind: 'food', limit: 1 }, '1.21.1') as any).entries[0].id).toBe('food/beef');
   });
+  it('infers a read-only action from the live omitted-action query and retrieves furnace production as recipes', () => {
+    const live = { query: 'charcoal coal torch crafting', kind: 'recipe', limit: 5 };
+    const result = readMinecraftKnowledge(live, '1.21.1') as any;
+    expect(result.entries.some((entry: any) => entry.id === 'recipe/charcoal')).toBe(true);
+    expect((readMinecraftKnowledge({ id: 'food/beef' }, '1.21.1') as any).entry.nutrition.foodPoints).toBe(3);
+    expect(read('recipe/charcoal').entry.variants[0]).toMatchObject({ type: 'smelting', inputTag: 'minecraft:logs_that_burn', cookingTicks: 200 });
+    expect(read('recipe/cooked_mutton').entry.variants).toHaveLength(3);
+    expect(read('recipe/cooked_mutton').entry.variants.map((v: any) => v.type)).toEqual(['smelting', 'smoking', 'campfire_cooking']);
+    expect(read('recipe/dried_kelp').entry.variants.some((v: any) => v.type === 'smelting')).toBe(true);
+    expect(() => readMinecraftKnowledge({ action: 'help', query: 'food' }, '1.21.1')).toThrow(/Field/);
+  });
   it('pages the complete item/block/crafting catalogue without confusing furnace products with craft', () => {
     const page = readMinecraftKnowledge({ action: 'search', kind: 'food', limit: 10, offset: 40 }, '1.21.1') as any;
     expect(page).toMatchObject({ total: 41, nextOffset: null });

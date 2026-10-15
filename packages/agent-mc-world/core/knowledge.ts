@@ -17,7 +17,7 @@ export const KNOWLEDGE_TOOL: Omit<ToolDef, 'handler'> = {
     + 'search returns summaries; get(id) reads one entry. Offline local lookup, no model/network/action. '
     + 'Baseline reference only; mc_memory holds historical experience. Main semantic target Java 1.21.1.',
   parameters: { type: 'object', additionalProperties: false, properties: {
-    action: { type: 'string', enum: ['help', 'search', 'get'] },
+    action: { type: 'string', enum: ['help', 'search', 'get'], description: 'Omit: id implies get; query/filter/paging implies search; empty arguments imply help.' },
     query: { type: 'string', maxLength: 200 }, kind: { type: 'string', enum: [...KINDS] },
     id: { type: 'string', maxLength: 120, description: 'Exact returned ID, e.g. food/beef or guide/cooking.' },
     limit: { type: 'integer', minimum: 1, maximum: 10 }, offset: { type: 'integer', minimum: 0 },
@@ -86,16 +86,29 @@ function catalogue(version: string): Entry[] {
     }
     return null;
   };
-  for (const [id, variants] of Object.entries(data.recipes)) {
-    const item = data.items[Number(id)];
-    if (!item || !Array.isArray(variants)) continue;
-    add('recipe', item.name, `${zhName(item.name)} / ${item.displayName} (${item.name}) 合成 crafting`,
-      `${variants.length} 个 crafting 注册配方；详情每页 4 个，实际服务器配方另查。`, offset => ({
-        total: variants.length, nextOffset: offset + 4 < variants.length ? offset + 4 : null,
-        variants: variants.slice(offset, offset + 4).map(recipe => ({
+  const results = new Set(Object.keys(data.recipes).map(id => data.items[Number(id)]?.name).filter(Boolean));
+  if (semantic) for (const name of [...Object.values(FOOD_COOKING), 'charcoal']) results.add(name);
+  for (const name of results) {
+    const item = data.itemsByName[name];
+    if (!item) continue;
+    const crafting = data.recipes[item.id] ?? [];
+    const variants: Record<string, unknown>[] = crafting.map(recipe => ({ type: 'crafting',
           ...('inShape' in recipe ? { grid: ingredient(recipe.inShape) } : {}),
           ...('ingredients' in recipe ? { ingredients: ingredient(recipe.ingredients) } : {}), result: ingredient(recipe.result),
-        })), sources }));
+        }));
+    const raw = semantic ? Object.entries(FOOD_COOKING).find(([, output]) => output === name)?.[0] : undefined;
+    if (raw) for (const [index, type] of ['smelting', 'smoking', 'campfire_cooking'].entries()) {
+      variants.push({ type, input: raw, result: { item: name, count: 1 }, cookingTicks: [200, 100, 600][index],
+        fuelRequired: index < 2, litCampfireRequired: index === 2,
+        sourcePath: `data/minecraft/recipe/${name}${index ? index === 1 ? '_from_smoking' : '_from_campfire_cooking' : name === 'dried_kelp' ? '_from_smelting' : ''}.json` });
+    }
+    if (semantic && name === 'charcoal') variants.push({ type: 'smelting', inputTag: 'minecraft:logs_that_burn',
+      result: { item: name, count: 1 }, cookingTicks: 200, fuelRequired: true, sourcePath: 'data/minecraft/recipe/charcoal.json' });
+    if (!variants.length) continue;
+    add('recipe', name, `${zhName(name)} / ${item.displayName} (${name}) 制作 recipes`,
+      `${variants.length} 个原版配方（${[...new Set(variants.map(v => v.type))].join('/')}）；详情每页 4 个，实际服务器配方另查。`, offset => ({
+        total: variants.length, nextOffset: offset + 4 < variants.length ? offset + 4 : null,
+        variants: variants.slice(offset, offset + 4), sources: raw || name === 'charcoal' && semantic ? semanticSources : sources }));
   }
   if (caches.size >= 4) caches.delete(caches.keys().next().value!);
   caches.set(version, entries);
@@ -103,7 +116,8 @@ function catalogue(version: string): Entry[] {
 }
 
 export function readMinecraftKnowledge(args: Record<string, unknown>, version: string): Record<string, unknown> {
-  const action = args.action ?? 'help';
+  const action = args.action ?? (args.id !== undefined ? 'get'
+    : ['query', 'kind', 'limit', 'offset'].some(key => args[key] !== undefined) ? 'search' : 'help');
   const allowed: Record<string, string[]> = { help: [], search: ['query', 'kind', 'limit', 'offset'], get: ['id', 'offset'] };
   if (typeof action !== 'string' || !Object.hasOwn(allowed, action)) throw new Error('Unknown knowledge action');
   if (Object.keys(args).some(key => key !== 'action' && !allowed[action].includes(key))) throw new Error('Field does not apply to knowledge action');

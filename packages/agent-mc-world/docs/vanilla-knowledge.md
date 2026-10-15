@@ -19,6 +19,8 @@ Any host can use the SDK/MCP tool; no Neko or Cortico dependency is involved.
 ```
 
 Search returns at most 10 summaries. Read one returned ID for full bounded details.
+If `action` is omitted, an `id` infers get, query/filter/paging fields infer search,
+and empty arguments return help. Explicit conflicting fields are still rejected.
 Item, food and block indexes cover every entry in the installed exact-version
 `minecraft-data@3.112.0` registry; crafting references cover all its recipe result
 IDs, with four variants per page. Missing crafting data does **not** imply that
@@ -28,7 +30,9 @@ Server datapacks and item components can override vanilla behavior.
 
 For 1.21.1 the semantic layer additionally covers all 41 registered food entries,
 their default effects/special behaviors, nine cooking conversions and natural
-regeneration. Other versions expose their numeric registry references with
+regeneration. Recipe search/get also includes these cooking outputs and charcoal,
+with explicit smelting/smoking/campfire types; dried kelp retains both its crafting
+conversion and its cooking recipes. Other versions expose their numeric registry references with
 `semanticCoverage:unavailable`; the verified 1.21.1 mechanics are not silently
 applied to another version. See the [primary-source research](research/vanilla-1.21.1-food-knowledge.md).
 
