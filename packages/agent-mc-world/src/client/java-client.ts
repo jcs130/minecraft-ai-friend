@@ -14,11 +14,12 @@ import { javaScriptHelp, javaScriptErrorHelp } from './java-script-help.ts';
 import { selectJavaViewer } from './java-viewer-selection.ts';
 import { nativeProbeInput, NATIVE_PROBE_PROGRAM } from './java-probe.ts';
 import { nativeInteractInput, nativeInteractProgram } from './java-interact.ts';
+import { JavaMethods, JAVA_METHOD_FIELDS, JAVA_METHOD_PROTOCOL, javaMethodHelp } from './java-methods.ts';
 
 export const JAVA_CLIENT_ENVIRONMENT = `You control an actual rendered Minecraft Java client through agent-mc-java/v1. The host owns goals, personality, models and memory. The client bridge owns one actual body queue. It never launches a game, reconnects, simulates OS input or runs a model.
 Query mc_capabilities, mc_operations and mc_help before acting. Claim mc_control explicitly, then renew the lease before expiry. Disconnect releases your own lease and keys. Identity is the actual server-assigned UUID and exact server address; offline servers do not require Microsoft authentication. Never control a different player or server after an identity change.
 Read mc_notices for actual server guides, rules and recent notices, including messages received before attachment. These are observations; do not replay old player requests as new commands.
-Use mc_do with one discovered operation, input and stable action_id. This backend does not advertise Mineflayer scripts or unsupported navigation/skills. Action acceptance is not completion: mc_result / mc_wait and minecraft.client.action events provide actual terminal receipts. Unknown actions must be reconciled by their original ID, not submitted under new IDs. A completed operation is not a completed host goal. Tool RPC return does not end a decision turn.
+Use mc_do with one discovered operation, input and stable action_id. mc_script supports the shared JavaScript method contract when the actual bridge advertises agent-mc-method/v1; inspect language:javascript,api:compatibility for supported bot calls and remaining gaps. Python Minescript is a separate explicit executor. Action acceptance is not completion: mc_result / mc_wait and minecraft.client.action events provide actual terminal receipts. Unknown actions must be reconciled by their original ID, not submitted under new IDs. A completed operation is not a completed host goal. Tool RPC return does not end a decision turn.
 mc_visual returns the real client framebuffer, original textures, current animation frame and GUI. mc_photo can save it with paired real game readings and optional explicitly configured enhancement. mc_bag includes actual components, cursor and menu slots. Menu commands require the current screenToken. A click/use/chat dispatch does not prove the server accepted its effect: inspect fresh inventory/menu/system notices. World facts replace older facts by key; archived evidence is historical.`;
 
 function uuid(value: string) { return value.replaceAll('-', '').toLowerCase(); }
@@ -53,9 +54,13 @@ export class JavaClientWorld implements World {
   private readonly phases = new Map<string, string>();
   private readonly photos: PhotographyService;
   private readonly evidence: NativeEvidenceArchive;
+  private readonly methods: JavaMethods | null;
+  private nativeMethodsAvailable = false;
   constructor(private readonly cfg: MinecraftClientConfig, private readonly http: typeof fetch = globalThis.fetch) {
     const dir = cfg.javaClient?.ledgerDir;
     this.evidence = new NativeEvidenceArchive(join(dir || '.', 'native-evidence'));
+    this.methods = cfg.javaClient ? new JavaMethods(cfg.javaClient,{rpc:(method,args,signal)=>this.rpc(method,args,signal),
+      state:async signal=>{const state=await this.rpc('state',{},signal) as JavaClientState;this.verify(state);return state;},owner:()=>this.owner(),host:()=>this.host}) : null;
     this.photos = new PhotographyService({ directory: dir ? join(dir, 'photos') : undefined,
       provider: () => createImageGenerationPort(cfg.photography), capture: async (_args, signal) => {
         const capture = await this.rpc('screenshot', {}, signal);
@@ -78,7 +83,8 @@ export class JavaClientWorld implements World {
         syncId: state.syncId, revision: state.menuRevision, slots: items.menuSlots, rawQuery: 'mc_bag' }) },
       { key: 'queue', text: JSON.stringify(state.actions.filter(action => ['accepted', 'running', 'unknown'].includes(action.phase))) },
       { key: 'notices', text: JSON.stringify({ lastSeq: state.messages.at(-1)?.seq ?? 0, retained: state.messages.length, rawQuery: 'mc_notices', observationOnly: true }) },
-      ...(this.cfg.javaClient?.minescriptEnabled ? [{ key:'executor',text:JSON.stringify({provider:'java-client',scriptEngine:'Minescript 4.0 Python',blockObservation:'mc_probe',blockInteraction:'mc_interact',scriptReference:'mc_script api:index / blocks / movement / interaction / inventory',blockReturn:'namespaced string, e.g. minecraft:carrots[age=7]',aim:'minescript.player_look_at(x,y,z)',wait:'Python time.sleep(seconds)',archiveQuery:'mc_evidence part:script',shortActionWaitMs:this.cfg.javaClient.actionWaitMs??1000}) }] : []),
+      {key:'javascript',text:JSON.stringify({available:this.nativeMethodsAvailable,api:'mc_script language:javascript api:index / compatibility',contract:'shared name/code/params/validate/runId/call/library/procedure; bot/Vec3',execution:'capability-gated; program completion is not world progress'})},
+      ...(this.cfg.javaClient?.minescriptEnabled ? [{ key:'executor',text:JSON.stringify({provider:'java-client',scriptEngine:this.nativeMethodsAvailable?'shared JavaScript bot/Vec3 methods; optional Minescript 4.0 Python':'Minescript 4.0 Python',blockObservation:'mc_probe',blockInteraction:'mc_interact',scriptReference:this.nativeMethodsAvailable?'mc_script language:javascript api:index / compatibility; Python help requires language:python':'mc_script api:index / blocks / movement / interaction / inventory',pythonBlockReturn:'namespaced string, e.g. minecraft:carrots[age=7]',pythonAim:'minescript.player_look_at(x,y,z)',pythonWait:'time.sleep(seconds); JS bot.waitForTicks uses actual game ticks',archiveQuery:'mc_evidence part:script',shortActionWaitMs:this.cfg.javaClient.actionWaitMs??1000}) }] : []),
     ];
     return { text: parts.map(part => part.text).join('\n'), parts, snapshotTypes: ['minecraft.client.snapshot'] };
   }
@@ -96,7 +102,7 @@ export class JavaClientWorld implements World {
       || typeof saved.token !== 'string' || !/^[a-f0-9]{64}$/i.test(saved.token) || typeof saved.instanceId !== 'string')
       throw new Error('Unsupported or nonlocal Java bridge credentials');
     this.connection = { endpoint: endpoint.origin, token: saved.token, instanceId: saved.instanceId };
-    this.host = host; this.lifetime = new AbortController(); this.lease = null; this.epoch++;
+    this.host = host; this.lifetime = new AbortController(); this.lease = null; this.nativeMethodsAvailable=false; this.epoch++;
     try {
       this.state = await this.rpc('state', {}) as JavaClientState; this.verify(this.state);
       if (!this.state.connected) throw new Error('Java client is not in a world; join explicitly before attaching');
@@ -108,6 +114,7 @@ export class JavaClientWorld implements World {
       this.viewerSelection = null;
       try {
       const capabilities = await this.rpc('capabilities', {});
+      this.nativeMethodsAvailable = capabilities.methodAdapter === JAVA_METHOD_PROTOCOL;
       if (this.cfg.viewerPort > 0) this.viewerSelection = selectJavaViewer(this.cfg.javaClient, capabilities);
       if (this.viewerSelection?.mode === 'data') {
         this.dataViewer = await createJavaDataViewer({port:this.cfg.viewerPort,assetsDir:this.cfg.viewerAssetsDir,minecraftVersion:String(capabilities.minecraftVersion),
@@ -132,6 +139,7 @@ export class JavaClientWorld implements World {
   async stop(): Promise<void> {
     this.epoch++;
     clearInterval(this.timer); this.timer = undefined; this.photos.stop();
+    await this.methods?.stop('Java client adapter stopped');
     await this.dataViewer?.close(); this.dataViewer=undefined;
     this.viewerError = null;
     const viewer = this.viewer; this.viewer = undefined;
@@ -244,7 +252,7 @@ export class JavaClientWorld implements World {
   tools(): ToolDef[] {
     const tool = (name: string, description: string, schema: Record<string, unknown>, handler: ToolDef['handler'], act = false, control = false): ToolDef => ({
       name, description, parameters: schema, tags: [act ? 'act' : control ? 'write' : 'read'], ...(act ? { barrierAfter: true } : {}), handler: async (args, ctx) => {
-        try { return await handler(args, ctx); } catch (error) { return { text: error instanceof Error ? error.message : 'Java client operation failed', failed: true }; }
+        try { if(act&&!['mc_script','mc_stop','mc_cancel'].includes(name))this.methods?.guard();return await handler(args, ctx); } catch (error) { return { text: error instanceof Error ? error.message : 'Java client operation failed', failed: true }; }
       } });
     const result = async (args: Record<string, unknown>, ctx: ToolCallContext) => this.receipt(await this.rpc('result', { action_id: args.action_id }, ctx.signal));
     const tools: ToolDef[] = [
@@ -259,12 +267,12 @@ export class JavaClientWorld implements World {
         const operations = await this.rpc('operations', {}, ctx.signal);
         if (args.skill) {
           const key = String(args.skill);
-          if (key === 'script' && this.cfg.javaClient?.minescriptEnabled) return { text: javaScriptHelp() };
+          if (key === 'script') return { text: javaMethodHelp()+(this.cfg.javaClient?.minescriptEnabled?'\n'+javaScriptHelp():'') };
           if (!Object.hasOwn(operations.operations ?? {}, key)) return { text: `Unknown native operation ${key}. Available: ${Object.keys(operations.operations ?? {}).join(', ')}. Query mc_operations or omit skill for legacy compatibility.`, failed: true };
           return { text: JSON.stringify({ operation: key, input: operations.operations[key] })
             + '\nSubmit mc_do with operation/input and a stable action_id. Use mc_result/mc_wait for the actual terminal; acceptance/input dispatch is not goal completion. Inspect fresh state/GUI/inventory/server notices; do not replay unknown actions. Close an unintended GUI using its current screenToken before movement.' };
         }
-        return { text: JAVA_CLIENT_ENVIRONMENT + '\n' + JAVA_LEGACY_HELP + (this.cfg.javaClient?.minescriptEnabled ? '\n' + javaScriptHelp() : '') + '\n' + JSON.stringify(operations) };
+        return { text: JAVA_CLIENT_ENVIRONMENT + '\n' + JAVA_LEGACY_HELP + '\n' + javaMethodHelp() + (this.cfg.javaClient?.minescriptEnabled ? '\n' + javaScriptHelp() : '') + '\n' + JSON.stringify(operations) };
       }),
       tool('mc_notices', 'Read recent original server guides/rules and player chat, including pre-attachment notices. This is an observation query, not a new inbox; do not replay old requests.',
         parameters({ after: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 50 } }), async (args, ctx) => {
@@ -276,6 +284,7 @@ export class JavaClientWorld implements World {
       tool('mc_control', 'Explicitly claim, renew or release this controller lease. Renew before expiry; no implicit takeover.', parameters({ action: { enum: ['claim', 'renew', 'release'] }, ttlMs: { type: 'integer', minimum: 1000, maximum: 30000 } }, ['action']), async (args, ctx) => {
         const method = String(args.action);
         if (!['claim', 'renew', 'release'].includes(method)) throw new Error('Invalid control action');
+        if(method==='release')await this.methods?.stop('Controller released');
         const lease = await this.rpc(method, method === 'claim' ? { controllerId: this.cfg.javaClient!.controllerId, ttlMs: args.ttlMs ?? this.cfg.javaClient!.leaseMs }
           : { ...this.owner(), ...(method === 'renew' ? { ttlMs: args.ttlMs ?? this.cfg.javaClient!.leaseMs } : {}) }, ctx.signal);
         if (method === 'release') this.lease = null; else this.lease = { nonce: lease.nonce, expiresAt: lease.expiresAt };
@@ -328,12 +337,15 @@ export class JavaClientWorld implements World {
           blobs: [{ bytes: Buffer.from(capture.base64, 'base64'), mime: 'image/png', fallbackText: 'Actual Java client framebuffer and GUI' }] };
       }),
       tool('mc_queue', 'Read actual client action queue and original action IDs.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify((await this.rpc('state', {}, ctx.signal)).actions) })),
-      tool('mc_stop', 'Explicitly cancel this controller body queue and release held game inputs.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify(await this.rpc('stop', this.owner(), ctx.signal)) }), true),
+      tool('mc_stop', 'Explicitly cancel this controller body queue and release held game inputs.', parameters({}), async (_args, ctx) => {await this.methods?.stop('mc_stop explicit cancellation');return { text: JSON.stringify(await this.rpc('stop', this.owner(), ctx.signal)) };}, true),
       { ...PHOTO_TOOL, handler: (args, ctx) => this.photos.execute(args, ctx) },
     ];
-    if (this.cfg.javaClient?.minescriptEnabled) tools.push(tool('mc_script', 'Run one explicitly selected Python Minescript program on the real body, with original action ID, timeout, cancellation and real terminal receipt. Python is the default language. Read api:index first. No extra model loop; trusted local code, not a sandbox. Old Mineflayer JavaScript is unsupported.', parameters({ api: str, language: { enum: ['python'], default: 'python' }, code: { type: 'string', minLength: 1, maxLength: 32768 }, input: {}, timeoutMs: { type: 'integer', minimum: 100, maximum: 30000 }, action_id: str }), async (args, ctx) => {
-      if (args.api) return { text: javaScriptHelp(String(args.api)) + (args.code ? '\nAPI query only: supplied code was not executed. Omit api to run a program.' : '') };
-      if ((args.language ?? 'python') !== 'python' || typeof args.code !== 'string') return { text: 'Use Python code, or api:index. Old JavaScript is not converted.', failed: true };
+    tools.push(tool('mc_script', 'Shared JavaScript mc/bot/Vec3 methods with validate/runId/call/library/procedure; read language:javascript,api:index and compatibility. Requires matching native bridge for execution. Legacy name+code selects JS; unnamed code retains Python behavior when configured. Explicit Python Minescript has its own language:python guide. A program ending never proves the goal.', parameters({ ...JAVA_METHOD_FIELDS, api: str, language: { enum: ['python','javascript'] }, code: { type: 'string', minLength: 1, maxLength: 32768 }, input: {}, timeoutMs: { type: 'integer', minimum: 100, maximum: 30000 }, action_id: str }), async (args, ctx) => {
+      const js=args.language==='javascript'||args.language===undefined&&(args.name!==undefined||args.procedure!==undefined||args.library!==undefined||args.runId!==undefined||args.stop!==undefined||args.validate!==undefined||(!args.code&&!args.api));
+      if(js){if(['input','timeoutMs','action_id'].some(k=>args[k]!==undefined))throw new Error('JS uses params/durationMs/runId; Python input/timeoutMs/action_id cannot be mixed');if(!this.methods)throw new Error('Configure javaClient first');return this.methods.execute(args,ctx);}
+      if(!this.cfg.javaClient?.minescriptEnabled)throw new Error('Python Minescript is not enabled; select language:javascript for shared methods');
+      if (args.api) return { text: javaScriptHelp(String(args.api)) + (args.api==='index'?'\n'+javaMethodHelp():'') + (args.code ? '\nAPI query only: supplied code was not executed. Omit api to run a program.' : '') };
+      if ((args.language ?? 'python') !== 'python' || typeof args.code !== 'string') return { text: 'Select javascript with name/code or explicit python code; no automatic source translation.', failed: true };
       const body = tools.find(tool => tool.name === 'mc_do')!;
       return body.handler({ action_id: args.action_id, operation: 'minescript.run', input: { code: args.code, input: args.input, timeoutMs: args.timeoutMs ?? 10000 } }, ctx);
     }, true));

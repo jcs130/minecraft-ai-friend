@@ -1,6 +1,16 @@
-# Optional script execution
+# Script execution
 
-The native bridge can run Minescript **4.0 for Fabric 1.20.6**, downloaded separately from its official Modrinth release `xXUEOKOM`. SHA512: `b30b5ebabf1cfe55e0605d3d9cc4bf4fa565eb013f84a9816c0562cedfd90fb527a070f435b08594ce2adbd96a3af4e6fad0ffac885f3dc8b8419db457819484`.
+## Shared Agent JavaScript
+
+The bridge now advertises `agent-mc-method/v1` for the independent core's existing SES JavaScript worker. `mc_script` retains `name/code/params/validate/runId/call/library/procedure`, `bot` and `Vec3`; see the [compatibility matrix](../../agent-mc-world/docs/java-client.md#shared-agent-javascript-methods). Java does not evaluate arbitrary source. It accepts bounded typed primitive calls under the same explicit controller and native queue.
+
+`method_read {name,args}` is an identity-checked observation. `do {operation:"method.run",input:{durationMs},action_id}` reserves the normal body queue. Once running, `method_call {action_id,call,name,args}` admits one numbered call, and `method_result {action_id,call}` queries it. Duplicate numbered calls return the original receipt; changed payloads and concurrent/out-of-order calls fail. `method_finish {action_id}` releases the reservation only after pending work has ended; the final action is partial because program completion is not a gameplay postcondition. All three session RPCs require the original controller lease. Cancel, disconnect, death, changed player/world, large position discontinuity, lease expiry and duration limit release owned inputs; the core gates further work on confirmed cleanup.
+
+Keys remain held across calls. `waitForTicks` is driven by actual START_CLIENT_TICK events, with the initial boundary excluded so a requested duration cannot finish before vanilla processes those ticks. Block interaction defers dispatch until the aimed view has passed through a tick, then rechecks block, hand, reach and line of sight. The bridge never changes blocks directly or reports a planting success from a click.
+
+## Optional Python Minescript
+
+The native bridge can run Minescript **4.0**, installed separately for the matching Fabric game version. The original **1.20.6** input was official Modrinth release `xXUEOKOM`, SHA512 `b30b5ebabf1cfe55e0605d3d9cc4bf4fa565eb013f84a9816c0562cedfd90fb527a070f435b08594ce2adbd96a3af4e6fad0ffac885f3dc8b8419db457819484`; this filename/hash is not a 1.21.1 install instruction. Use the matching 1.21.1 distribution for that game.
 
 Launch the Java process with its working directory equal to its actual `gameDir`: Minescript 4.0 resolves its scripts and configuration from the process working directory, not Minecraft's `--gameDir` alone. The bridge advertises Minescript as unavailable on a mismatch. Set an effective Python 3.11+ executable in that instance's `minescript/config.txt`. Explicitly enable `minescriptEnabled` in `agent-mc-bridge/config.json` and `javaClient.minescriptEnabled` in the SDK/host configuration. Unconfigured bridges advertise it as unavailable. Installation is not an execution proof.
 

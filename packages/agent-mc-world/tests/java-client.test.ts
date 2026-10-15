@@ -179,7 +179,9 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
   });
   it('discovers without credentials/network and defaults to the existing independent body',()=>{
     const r=rig();expect(r.http).not.toHaveBeenCalled();expect(r.runtime.tools().map(tool=>tool.name)).toEqual(expect.arrayContaining(['mc_control','mc_operations','mc_wait','mc_photo']));
-    expect(r.runtime.tools().map(tool=>tool.name)).not.toContain('mc_script');expect(r.runtime.status().phase).toBe('disconnected');
+    // Shared JS validation/discovery is independent of optional trusted Python.
+    expect(r.runtime.tools().map(tool=>tool.name)).toContain('mc_script');expect(r.runtime.status().phase).toBe('disconnected');
+    expect(r.runtime.tools().map(tool=>tool.name)).not.toContain('mc_probe');
     expect(MINECRAFT_CLIENT_DEFAULTS.provider).toBe('mineflayer');
   });
   it('validates actual offline UUID/server, claims explicitly and keeps lease proofs out of tool results',async()=>{
