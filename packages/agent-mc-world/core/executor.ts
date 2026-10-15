@@ -137,7 +137,7 @@ import {
 import {
   CRAFT_SETTLE_MS, INVENTORY_SLOTS, PICKUP_SETTLE_MS, askedLabel, awaitCraftGain, awaitInvConfirm,
   dropNamesOf, invCount, invCountById, invCountIn, invGains, invGainsSplit, invItemNamed,
-  invLosses, invSnapshot, itemAsked, itemPredOf, lootNote, moveExactSlot, namedLike, noSuchItem,
+  invLosses, invSnapshot, itemAsked, itemPredOf, itemsInReach, lootNote, moveExactSlot, namedLike, noSuchItem,
   playerInvIn, probabilisticDropsOf, type InvItem, type InvPred,
 } from './inventory.ts';
 import {
@@ -1977,10 +1977,22 @@ export class Executor {
     return t ? { id: t.id, label: labelOf(t), elapsedMs: Date.now() - t.startedAt } : null;
   }
 
-  /** Routine nutrition must not queue another meal behind an existing eat step. */
+  /** Only current consumption or an executable checkpoint meal reserves nutrition.
+   * Future/past steps and frozen work are proposals, not a claim on the held item.
+   * Actual handoff still goes through the native checkpoint/ownership barriers.
+   */
   hasPendingEat(): boolean {
-    return [this.task, this.frozen, ...this.queue].some((task) =>
-      task?.steps.some((step) => step.skill === 'eat'));
+    const bot = this.opts.getBot();
+    if (!bot) return false;
+    const edible = (step: SkillCall | undefined): step is Extract<SkillCall, { skill: 'eat' }> =>
+      step?.skill === 'eat' && Boolean(bot.registry?.foodsByName?.[step.item] || DRINKABLES[step.item]);
+    const current = this.task?.steps[this.task.stepIndex];
+    // Keep ownership through receipt settlement, even if the last item was consumed.
+    if (this.task && !this.task.flag.aborted && edible(current)) return true;
+    const next = this.queue[0];
+    const step = next?.steps[next.resumeFrom ?? 0];
+    return Boolean(next && (next.checkpointRequest || (!this.task && !this.frozen))
+      && edible(step) && itemsInReach(bot).some(item => item.name === step.item && item.count > 0));
   }
 
   status(): QueueStatus {

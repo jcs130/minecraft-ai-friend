@@ -3,6 +3,12 @@
 Independent Minecraft execution core, maintained in `jcs130/minecraft-ai-friend`.
 Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.
 
+0.5.7-dev.20261016.5 fixes native nutrition arbitration: future, completed or
+frozen meal proposals no longer suppress an available meal at a safe checkpoint.
+Current consumption, inventory confirmation and native body ownership remain
+authoritative. Post-death facts include the current measured position and inventory
+for the host to reevaluate earlier objectives; no route is automatically replayed.
+
 Reusable Agent Skills: [minecraft-agent](skills/minecraft-agent/SKILL.md) operates the client;
 [minecraft-learning](skills/minecraft-learning/SKILL.md) reviews and improves all operations,
 including flight, blink, spells, gathering and combat. Shared SDK/MCP operation evidence and

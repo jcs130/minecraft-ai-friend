@@ -3415,6 +3415,11 @@ export class MinecraftWorld implements World {
         account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.botName }) });
       const lifecycle = (bot as Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }).deathLifecycle;
       parts.unshift({ key: 'deathLifecycle', text: JSON.stringify(lifecycle ?? { phase: 'alive' }) });
+      if (lifecycle) parts.push({ key: 'recoveryState', text: JSON.stringify({
+        sampledAt: snap.realTime, episodeId: lifecycle.episodeId, dimension: normalizeDimension(snap.dimension),
+        position: snap.position, health: snap.health, food: snap.food, inventorySynced: snap.invSynced,
+        inventory: snap.invSynced ? snap.inventory.slice(0, 40).map(item => ({ name: item.name, count: item.count })) : null,
+      }) });
     }
     if (bot) parts.push({ key: 'temporaryScaffolds', text: temporaryScaffoldReadout(bot) });
     if (this.bodyInhibitReason) parts.push({ key: 'bodyRestriction', text: `身体当前受限：${this.bodyInhibitReason}；动作等待恢复回执，不能当作寻路失败。` });
