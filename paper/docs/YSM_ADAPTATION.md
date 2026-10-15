@@ -1,3 +1,9 @@
+## 2026-10-15 原生客户端2.6.5与现役桥接版本不匹配
+
+小鱼确认Minecraft1.21.1 / YSM2.6.5。当前Paper使用Freesia2.5.1+2.4.1-af2和Fabric1.21.1 / YSM2.4.1 Worker，原生频道是yes_steve_model:2_4_0。Minecraft版本一致不能替代YSM协议一致；当前桥接不能直接服务2.6.5客户端。实际22:45/22:58连接有Worker握手发送，却没有小鱼的客户端handshake_request日志；可米与鸣人的模型绑定均为confirmed。不能把Web资源确认或Worker连接正常当成原生Java客户端已完成同步。
+
+当前可用的匹配客户端下载：[Fabric1.21.1 / YSM2.4.1](https://modrinth.com/mod/yes-steve-model/version/1cHRrrpZ)。2026-10-15核对[Freesia最新发布](https://github.com/YesSteveModel/Freesia/releases/latest)仍指向2.5.1+2.4.1；没有因此直接替换现役服务。若保留客户端2.6.5，需完整适配代理、Worker及消息格式并隔离实测，不能只改频道字符串或更换Worker的YSM JAR。小鱼换版后的原生画面仍需实测，不宣称本次已修复客户端。
+
 ## 2026-10-15 可米猫娘面具与平面闪烁修正已热加载
 
 沿用 cormy-winefox-cream / cormy-cream 和原UUID，采用 jcs130/cormy-live2d 固定提交670fa1c的1.2.1-preview-cat-depthfix。只替换主模型与第一人称手臂几何，去除狐狸面具，1259对共面薄片居中加厚0.01模型单位；猫耳、头发、尾巴、UV、动画、2048贴图、0.8比例和CC BY-NC-SA4.0署名保留。现役兼容化ysm.json不覆盖。17份文件实际落盘核对，恰有2份改变，其余15份字节一致；绑定model/texture/mandatory保持安装前当前值（mandatory=false，不强行改回历史true）。

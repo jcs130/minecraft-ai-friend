@@ -18,8 +18,14 @@
       -2
     ],
     "material": "minecraft:bedrock",
-    "cells": 40567,
-    "legacySpaceExceptionColumns": 1754
+    "cells": 35921,
+    "legacySpaceExceptionColumns": 1754,
+    "initialCells": 40567,
+    "restoredAbnormalCells": 4646,
+    "uniformDepthGuaranteed": false,
+    "baselineOffsetsAreHistoricalPlan": true,
+    "postRepairExposedCells": 0,
+    "verifiedUnchangedRails": 397
   },
   "routes": [
     {
