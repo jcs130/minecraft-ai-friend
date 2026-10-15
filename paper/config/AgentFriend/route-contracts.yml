@@ -1,0 +1,109 @@
+# Parallel routes for new and returning players. No route/profession is selected by browsing.
+# Reload: mycli admin market reload. Existing accepted definitions remain frozen.
+# KILLS without combat keeps its historical tower/team rules. With combat it credits
+# only the real killer and lethal weapon; target is entity count, never damage or clicks.
+schema-version: 1
+tasks:
+  starter_blade:
+    route: combat
+    beginner: true
+    repeat: once
+    title: 巡夜人·初试锋芒
+    description: 不必先种田。按需从公会门口公共箱取剑、护甲和食物，持剑亲自击败三只僵尸或尸壳；城外夜间或普通试炼塔可寻找敌人。
+    beneficiary: 村庄巡夜人
+    icon: STONE_SWORD
+    reward: {fame: 5, emeralds: 2, bonus: BREAD, bonus-count: 3}
+    steps:
+      - title: 持剑清剿
+        description: 接单后用任意材质的剑近战击败三只僵尸或尸壳；本人最后一击才计数，队友击杀、斧头、法术和环境伤害不算。出发前 guild shared 查公共补给。
+        goal: kills
+        target: 3
+        combat: {mobs: [ZOMBIE, HUSK], weapons: [SWORD], attack: melee}
+  starter_archer:
+    route: combat
+    beginner: true
+    repeat: once
+    title: 巡夜人·弦上的星火
+    description: 从公共箱按需领取弓弩、箭和护甲，用实际发射的箭击败两只骷髅类敌人。可独立接取，不要求先完成剑士或农事任务。
+    beneficiary: 村庄巡夜人
+    icon: BOW
+    reward: {fame: 5, emeralds: 2, bonus: ARROW, bonus-count: 8}
+    steps:
+      - title: 骷髅弓术
+        description: 本人用弓或弩射出的箭完成两次骷髅、流浪者或沼骸的最后一击；按发射时的武器验收，射后换成剑仍是弓箭，近战或队友击杀不算。
+        goal: kills
+        target: 2
+        combat: {mobs: [SKELETON, STRAY, BOGGED], weapons: [BOW, CROSSBOW], attack: projectile}
+  spider_patrol:
+    route: combat
+    repeat: daily
+    title: 林缘巡守·蛛网清理
+    description: 城镇之外巡逻时用剑或斧清理四只蜘蛛类敌人，为旅人留出安全行路空间。按需取用门口公共武器与补给，别拆受保护建筑找怪。
+    beneficiary: 林间旅人
+    icon: IRON_AXE
+    reward: {fame: 4, emeralds: 2, bonus: TORCH, bonus-count: 8}
+    steps:
+      - title: 近战清理蛛患
+        description: 本人持剑或斧近战击败四只蜘蛛或洞穴蜘蛛；不同怪物各计一次，不要求拆毁刷怪笼，不计算动物和村民。
+        goal: kills
+        target: 4
+        combat: {mobs: [SPIDER, CAVE_SPIDER], weapons: [SWORD, AXE], attack: melee}
+  starter_equipment:
+    route: crafting
+    beginner: true
+    repeat: once
+    title: 工匠的第一套战备
+    description: 亲手制作石剑与盾牌，学会准备战斗装备。材料可自备或按需从公共箱领取；成品留给自己，不必先参加农事。
+    beneficiary: 工匠导师
+    icon: SHIELD
+    reward: {fame: 5, emeralds: 2, bonus: IRON_INGOT, bonus-count: 2}
+    steps:
+      - {title: 制作石剑, description: 接单后在工作台亲手合成一把石剑；从箱子取成品或捡起别人的剑不算。完成后 guild claim 进入下一阶段。, goal: craft, item: STONE_SWORD, target: 1}
+      - {title: 制作盾牌, description: 第一阶段交付后亲手合成一个盾牌；需要木板与铁锭。最后 guild claim 结算，成品不扣走。, goal: craft, item: SHIELD, target: 1}
+  starter_tools:
+    route: crafting
+    beginner: true
+    repeat: once
+    title: 工匠的开拓工具
+    description: 用木棍和圆石打造石镐、石斧，准备采矿与林业。成品留给自己，采集到营地石质边线和建筑保护之外。
+    beneficiary: 工匠导师
+    icon: STONE_PICKAXE
+    reward: {fame: 4, emeralds: 2, bonus: TORCH, bonus-count: 8}
+    steps:
+      - {title: 石镐, description: 接单后亲手合成一把石镐，guild claim 交阶段；保护区内不可挖深坑。, goal: craft, item: STONE_PICKAXE, target: 1}
+      - {title: 石斧, description: 前一阶段交付后亲手合成一把石斧，guild claim 结算；不要砍建筑用的木料。, goal: craft, item: STONE_AXE, target: 1}
+  starter_trail:
+    route: exploration
+    beginner: true
+    repeat: once
+    title: 旅人的第一张路线笔记
+    description: 从附近起步，亲自调查主世界三个不同区域，记下一段至少四十八格的新路线。不必找稀有群系、天然高山或先学会跨维度传送。
+    beneficiary: 旅人阿岚
+    icon: COMPASS
+    reward: {fame: 5, emeralds: 2, bonus: MAP, bonus-count: 1}
+    steps:
+      - {title: 附近路线走查, description: 主世界内实际走过三个不同的十六格区域，至少四十八格新路线与十五秒有效行进；重复绕圈、原地等候和传送不增加探索证据。看 guild status 缺项再 guild claim。, goal: dimension, dimension: overworld, target: 3, zone-size: 16, min-distance: 48, min-seconds: 15}
+  restock_light:
+    route: supply
+    beginner: true
+    repeat: daily
+    title: 后勤·为下一位旅人点灯
+    description: 亲手合成火把，再把十六支交入公会公共补给仓库。不是往私人箱里放物品，guild claim 会核对随身栏并真正入库。
+    beneficiary: 公会补给员与后来者
+    icon: TORCH
+    reward: {fame: 4, emeralds: 1, bonus: BREAD, bonus-count: 2}
+    steps:
+      - {title: 亲手制作照明, description: 接单后亲手合成至少一批火把；备齐十六支，再 guild claim 确认制造阶段。每批合成出四支，煤炭或木炭配木棍。, goal: craft, item: TORCH, target: 1}
+      - {title: 公共照明入库, description: 主背包备齐十六支普通火把后 guild claim，真实扣物并放入公共补给库存；仓库满或不可用不扣物、不完成。guild shared 查箱体，不取大厅私产。, goal: donate, item: TORCH, target: 16, chest: supplies}
+  restock_shield:
+    route: supply
+    beginner: true
+    repeat: daily
+    title: 后勤·留一面盾给同伴
+    description: 亲手造一面普通盾牌交给公共护甲箱，让下一位挑战者有所依靠。成品入公共仓库，奖励进本人个人箱。
+    beneficiary: 公会补给员与挑战者
+    icon: SHIELD
+    reward: {fame: 4, emeralds: 1, bonus: BREAD, bonus-count: 2}
+    steps:
+      - {title: 制作备用盾牌, description: 接单后亲手合成一个盾牌，然后 guild claim 确认制作阶段；直接拿公共成品来回交不能跳过制作。, goal: craft, item: SHIELD, target: 1}
+      - {title: 备用盾牌入库, description: 主背包保留一面无附魔无自定义名的普通盾牌，用 guild claim 实际放入公共护甲库存；满仓不扣物，原任务保留。, goal: donate, item: SHIELD, target: 1, chest: armor}

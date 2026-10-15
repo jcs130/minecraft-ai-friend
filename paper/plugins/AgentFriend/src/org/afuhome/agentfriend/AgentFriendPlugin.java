@@ -1219,6 +1219,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "rules", "规则" -> agentEntry.rules(player,args);
             case "progress", "进度" -> agentEntry.progress(player,args);
             case "challenge", "挑战记录" -> lifeChallenges.command(player,args);
+            case "tasks", "任务路线" -> taskMarket.routes().command(player,args);
             case "page", "续读" -> communication.pageCommand(player,args);
             case "capabilities", "能力目录" -> agentEntry.capabilities(player,args);
             case "list" -> AgentCliCatalog.list(player, args);
@@ -2412,7 +2413,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(10, item(Material.COMPASS, "§a① 先去探索", "打开地点页；选村庄、樱花林或遗迹", "营地也能保存在地点页"));
             inv.setItem(11, item(Material.BLAZE_ROD, "§d② 学会魔法", "打开技能罗盘；选图标直接施法", "法杖可绑定喜欢的技能"));
             inv.setItem(12, item(Material.ENCHANTING_TABLE, "§5③ 给工具刻印", "拿着镐或剑到附魔台旁", "潜行使用附魔台，选要刻印的技能"));
-            inv.setItem(13, item(Material.LECTERN, "§6④ 接公会任务", "打开任务看板；选一张委托", "完成后在看板交付，奖励进个人箱"));
+            inv.setItem(13, item(Material.LECTERN, "§6④ 自选委托路线", "战斗、制造、探索、后勤、工程或生活", "先查看再接单，不必先种田"));
             inv.setItem(14, item(Material.IRON_SWORD, "§c⑤ 结伴打试炼塔", "入口有普通／冒险／末日三个按钮", "按按钮选难度后确认开始；附近队友一起进入"));
             inv.setItem(15, item(Material.PLAYER_HEAD, "§b⑥ 找队友", "追踪方向，或安全传送到队友身边"));
             inv.setItem(16, item(Material.WRITTEN_BOOK, "§e翻开命格书", "查看本人状态与全部旅途指引", "页面箭头可用手柄选择"));
@@ -2666,7 +2667,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                             openImprintMenu(p);
                         else guide(p, new String[]{"guide", "gear"});
                     }
-                    case 13 -> openMenu(p, "guild");
+                    case 13 -> taskMarket.routes().open(p, "", 1);
                     case 14 -> { guide(p, new String[]{"guide", "dungeon"}); openMenu(p, "places"); }
                     case 15 -> openMenu(p, "players");
                     case 16 -> p.openBook(statusBook(p));
@@ -2764,6 +2765,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 }
             } else if (page.equals("guild")) {
                 if(slot==50&&event.isRightClick()){dungeon.openStashPages(p);return;}
+                if(slot==53){taskMarket.routes().open(p,"",1);return;}
                 if (slot == 51) gotoPlace(p, "arena");
                 else if (slot == 52) openMenu(p, "skills");
                 else if (slot == 47) openMenu(p, "life");

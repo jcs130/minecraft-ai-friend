@@ -97,8 +97,8 @@ final class SkillAssessments implements Listener {
             row.addProperty("migrationRank",legacy);row.addProperty("migratedAt",System.currentTimeMillis());}))return legacy*3;
         return academy(p.getUniqueId()).get("grade").getAsInt();
     }
-    private int readGrade(Player p) {
-        int legacy=plugin.guild().legacyRank(p);
+    int readGrade(Player p) {
+        int legacy=plugin.guild().readLegacyRank(p);
         if(!available()||!promotionsEnabled()||!plugin.guild().hasJoined(p)||plugin.isObserver(p))return legacy*3;
         JsonObject a=academy(p.getUniqueId());return a.has("grade")?a.get("grade").getAsInt():legacy*3;
     }

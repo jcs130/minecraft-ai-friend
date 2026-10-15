@@ -39,6 +39,7 @@ final class AgentEntry {
         out.addProperty("rulesCommand","/mycli rules");out.addProperty("stateCommand","/mycli status");
         out.addProperty("capabilitiesCommand","/mycli capabilities");out.addProperty("progressCommand","/mycli progress");
         out.addProperty("helpCommand","/mycli --help");
+        out.addProperty("routesCommand","/mycli tasks list");
         out.addProperty("nextCommand",onboarding.has("nextCommand")?onboarding.get("nextCommand").getAsString():"/mycli rules");
         out.addProperty("nextAdvice",onboarding.has("message")?onboarding.get("message").getAsString():"这是观战账号；在对应生存角色的连接上进行任务和存取。");
         out.addProperty("mainlineGraduated",flag(onboarding,"completed"));
@@ -109,7 +110,7 @@ final class AgentEntry {
             for(var e:state.getAsJsonArray("checklist"))if(!flag(e.getAsJsonObject(),"done"))missing.add(e.getAsJsonObject().get("title").getAsString());
             main.add("missingConditions",missing);var internship=state.getAsJsonObject("guide").deepCopy();
             internship.addProperty("completed",flag(internship,"catalog")&&flag(internship,"cast")&&flag(internship,"life"));main.add("internship",internship);
-            main.addProperty("meaning","专项实练、三证实习和整条主线分别验收；只有graduated=true才表示入门主线完成。");rows.add(main);
+            main.addProperty("meaning","专项实练独立验收；三证是读目录、成功施法、完整交付任选路线委托。生活旧证明保留；只有graduated=true才表示入门主线完成。");main.addProperty("routesCommand","/mycli tasks list");rows.add(main);
         }
         if(filter.equals("all")||filter.equals("training")) {
             int done=0;for(var element:features.getAsJsonArray("lessons")) {

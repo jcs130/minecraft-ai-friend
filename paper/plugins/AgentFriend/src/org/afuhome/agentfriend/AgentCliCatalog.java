@@ -23,13 +23,18 @@ final class AgentCliCatalog {
 
     private static void add(Map<String, Spec> specs, String id, String category, String mode,
                             String usage, String summary, String requires, String returns) {
-        if(id.startsWith("challenge.")&&!usage.contains("--json"))usage+=" [--json]";
+        if((id.startsWith("challenge.")||id.startsWith("tasks"))&&!usage.contains("--json"))usage+=" [--json]";
         if (specs.putIfAbsent(id, new Spec(id, category, mode, usage, summary, requires, returns)) != null)
             throw new IllegalStateException("Duplicate /mycli catalog id: " + id);
     }
 
     private static Map<String, Spec> createSpecs() {
         Map<String, Spec> specs = new LinkedHashMap<>();
+        add(specs,"tasks","adventure","read","/mycli tasks <list|info|status|menu>","自选战斗、制造、探索、后勤、工程或生活委托；没有种田必修","已登录玩家；查看不报名、不选职业、不换任务；查询免费","私有MC_TASKS；接单和交付沿用guild accept/claim，任务进度查tasks status");
+        add(specs,"tasks.list","adventure","read","/mycli tasks list [combat|crafting|exploration|supply|engineering|life|all] [--page 页码]","裸list列六条路线；指定路线分页查任务，入门任务优先","免费只读；每页最多7张；beginner只推荐，不限制选其他任务","MC_TASKS type=routes/list；items/page/pages/total/nextCommand");
+        add(specs,"tasks.info","adventure","read","/mycli tasks info <任务ID>","查指定委托阶段、怪物/武器条件、奖励与本人可接状态","ID从tasks list取得；在途使用接单快照；超长详情按nextCommand无损续读","MC_TASKS type=info或MC_PAGE完整分片；acceptCommand接单、submitCommand交阶段、statusCommand复查");
+        add(specs,"tasks.status","adventure","read","/mycli tasks status","读取本人冒险与生活委托的阶段和下一步","免费只读；不自动刷新验收、释放过期任务或报名","MC_TASKS type=status；全部阶段实际交付后才发最终奖");
+        add(specs,"tasks.menu","adventure","gui","/mycli tasks menu [路线|all] [--page 页码]","罗盘同款路线菜单：先选路线、查看详情，再明确接单","原版Java/基岩/Mineflayer可用；浏览不接单，不选职业；公共补给另有按钮","原版菜单与MC_TASKS type=menu；只有接单按钮调用guild accept");
         add(specs,"challenge","life","read","/mycli challenge <子命令> [--json]","自愿生活挑战；create报名、start开始、status查进度","查询免费且不报名；生活实测不代表标准化模型排名","私有MC_CHALLENGE；success且durable才算已保存通过");
         add(specs,"challenge.create","life","write","/mycli challenge create <项目ID> [--json]","创建等待场次，冻结规则；尚未开始计时","生存或冒险角色，无在办挑战；免费，使用自己物资","MC_CHALLENGE state=forming；准备后 challenge start；重复创建同项目返回原场次");
         add(specs,"challenge.start","life","write","/mycli challenge start [--json]","队长开始当前场次计时；重复调用不会重置计时","成员齐备、在线存活、窗口关闭、光标为空；物资条件见info","MC_CHALLENGE state=running；旧 start <项目ID> 仍等价create，begin仍等价start");
@@ -60,7 +65,7 @@ final class AgentCliCatalog {
         add(specs,"world.npcs","life","read","/mycli world npcs","查看可聊天村民的ID、真实位置和是否在八格内","查询免费；先步行靠近，不自动传送","MC_WORLD type=npcs");
         add(specs,"world.talk","life","chat","/mycli world talk <NPC ID> <话>","与附近村民自然交谈，NPC有独立性格与对话记录","生存角色；NPC八格内；180字内；等待实际答复；对话不替代任务验收","MC_WORLD type=talk status=submitted或denied；NPC实际答复另到达");
         add(specs,"world.end","life","write","/mycli world end","结束村民对话，恢复普通公屏聊天","本人的当前对话","MC_WORLD type=talk status=ended");
-        add(specs,"world.guide","life","write","/mycli world guide start|status","新手实习：查看技能目录、真正成功施法、完成生活委托；服务器记录证据","主动开始；失败施法/自称完成不计进度；不代学、不代花点","MC_WORLD type=guide/guide_progress");
+        add(specs,"world.guide","life","write","/mycli world guide start|status","新手实习：读技能目录、成功施法、完整交付任选路线委托；旧生活证明保留","主动开始；tasks list看路线，不必种田；失败施法/自称完成不计进度；不代学不花点","MC_WORLD type=guide/guide_progress");
         add(specs,"world.practice","life","write","/mycli world practice start|status|stop","通行实练：亲手打开木门并穿过、沿现有梯子连续爬升3格；不拆墙、不垫方块","自愿报名；生存或冒险模式；本人原生交互与移动；飞行、传送、自称完成不算；没有额外奖励或代操作","MC_WORLD type=practice/practice_progress；真实坐标、时间及原生操作证明；一次通过不表示长期掌握");
         add(specs,"world.events","life","read","/mycli world events","查看正在进行的世界生活事件","查询免费；活动公告另发；活动不自动完成任务","MC_WORLD type=events与WorldEvents当前列表");
         add(specs,"photo","life","write","/mycli photo menu；take <名字> [第一人称|第三人称|俯视] [1|2]；status|cancel","技能罗盘→女神相机点击拍照，站稳等待地图入包；无需截图或上传文件；原first/third/top参数继续可用","单图1张空地图和1个空主背包格；2×2海报4张地图和4个空格；每人60秒，串行排队","MC_PHOTO 含中文statusLabel；success才表示实际地图已交付");
@@ -385,7 +390,7 @@ final class AgentCliCatalog {
         return out;
     }
     private static int idEmptyPriority(String prefix,String id,List<String> order){return prefix.isEmpty()&&order.contains(id)?order.indexOf(id):order.size();}
-    private static boolean jsonSupported(String id){return id.startsWith("challenge")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro").contains(id)||id.startsWith("protect");}
+    private static boolean jsonSupported(String id){return id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro").contains(id)||id.startsWith("protect");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -467,7 +472,7 @@ final class AgentCliCatalog {
     }
 
     private static JsonObject semantics(Spec spec) {
-        String id=spec.id();boolean mixed=(spec.root()&&Set.of("challenge","world","photo","profession","skills","spells","coach","arena","guild","life","land","landmark","waypoint","locate","commission","goddess","focus","imprint","trade","village","pvp","skillbook").contains(id))
+        String id=spec.id();boolean mixed=(spec.root()&&Set.of("tasks","challenge","world","photo","profession","skills","spells","coach","arena","guild","life","land","landmark","waypoint","locate","commission","goddess","focus","imprint","trade","village","pvp","skillbook").contains(id))
                 ||Set.of("world.guide","world.practice","guild.exam","guild.stash","guild.rewards","arena.rewards","arena.shop","arena.recycle").contains(id);
         boolean evidence=Set.of("help","list","explain","status.full","skills.list","spells.list","skills.explain","spells.explain").contains(id);
         boolean legacyRefresh=Set.of("guild.board","guild.status","life.status","guild.exam.list","guild.exam.status","skills.mine","skills.info","skills.points","profession.status").contains(id);
@@ -489,6 +494,7 @@ final class AgentCliCatalog {
         String query=id.startsWith("skills.")||id.startsWith("cast.")||id.startsWith("profession")?"/mycli status；/mycli skills info <ID>；/mycli skills points":id.startsWith("photo")?"/mycli photo status":id.startsWith("inventory")?"/mycli inventory；重新打开对应容器核对":id.startsWith("arena.stash")||id.startsWith("guild.stash")||id.endsWith(".rewards")?"/mycli arena stash list；/mycli arena rewards list；关闭重开容器核对":id.startsWith("arena.recycle")||id.startsWith("arena.shop")||id.equals("arena.wallet")?"/mycli arena wallet；/mycli arena stash list；/mycli inventory":id.startsWith("arena")?"/mycli arena status；/mycli arena loot":id.startsWith("dungeon")?"/mycli dungeon status <ID>":id.startsWith("landmark")?"/mycli landmark info <领地ID>":id.startsWith("land.")||id.startsWith("admin.land")?"/mycli land info <ID>；/mycli land members <ID>":id.startsWith("waypoint")||id.equals("goto")?"/mycli waypoint list；本人最终 MC_TRAVEL/MC_WAYPOINT_RESULT":id.startsWith("trade")?"/mycli trade info <商人ID>":id.startsWith("commission")?"/mycli commission mine":id.startsWith("pvp")?"/mycli pvp status":id.startsWith("village")?"/mycli village threat":"/mycli progress";
         if(id.startsWith("challenge"))query="/mycli challenge status；/mycli challenge result [场次UUID]";
         if(id.startsWith("protect"))query="原命令重新查询当前权限；详情在原命令后加 --verbose；查询不代表操作完成";
+        if(id.startsWith("tasks"))query="/mycli tasks status；/mycli progress guild 1";
         out.addProperty("resultQuery",query);out.addProperty("completionPolicy","命令发出或pending不等于完成；以本人最终回执和实际状态为准。超时/断线结果未知，先查询，不自动重放。");
         return out;
     }

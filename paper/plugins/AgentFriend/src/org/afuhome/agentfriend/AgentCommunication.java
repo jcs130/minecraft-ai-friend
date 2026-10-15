@@ -90,6 +90,7 @@ final class AgentCommunication {
             out.add("nextCommand", next.get("nextCommand"));
         } else { out.addProperty("mainStage", "observer"); out.addProperty("nextCommand", "/mycli intro"); }
         out.addProperty("progressCommand", "/mycli progress all 1");
+        out.addProperty("routesCommand", "/mycli tasks list");
         out.addProperty("skillsCommand", "/mycli skills status"); out.addProperty("inventoryCommand", "/mycli inventory status");
         out.addProperty("fullCommand", "/mycli status full");
         out.addProperty("downed", plugin.isDowned(p)); out.addProperty("inDungeon", plugin.dungeonParticipant(p));
@@ -184,6 +185,10 @@ final class AgentCommunication {
         if(root.equals("rules")) {plugin.agentEntry().rules(p,args,true);return;}
         if(root.equals("capabilities")) {plugin.agentEntry().capabilities(p,args);return;}
         if(root.equals("challenge")) {plugin.lifeChallenges().jsonCommand(p,args);return;}
+        if(root.equals("tasks")) {
+            String[] query=Arrays.copyOf(args,args.length+1);query[args.length]="--json";
+            plugin.taskMarket().routes().command(p,query);return;
+        }
         error(p,"UNSUPPORTED_FORMAT","该旧入口尚未提供--json格式，本次未执行。用命令的--help核对支持情况；已有原回执入口保持兼容。",false,"/mycli "+root+" --help --json");
     }
 }

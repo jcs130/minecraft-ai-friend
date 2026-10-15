@@ -188,6 +188,14 @@ final class GuildManager implements Listener {
     private int fame(Player p) { return plugin.getConfig().getInt(base(p.getUniqueId()) + ".fame", 0); }
     int reputation(Player p) {return fame(p);}
     int legacyRank(Player p) {return Math.min(rankIndex(fame(p)),certified(p));}
+    int readLegacyRank(Player p) {
+        int rank = rankIndex(fame(p));
+        return Math.min(rank, plugin.getConfig().getInt(base(p.getUniqueId()) + ".rituals.certified", rank));
+    }
+    int readRank(Player p) {
+        return plugin.skillAssessments() != null && plugin.skillAssessments().promotionsEnabled()
+                ? plugin.skillAssessments().readGrade(p) / 3 : readLegacyRank(p);
+    }
     boolean promotionHistoryMet(int rank,Player p) {return certRequirementMet(rank,p);}
     String promotionHistoryAdvice(int rank) {return rank==1?"声望达标并通过首次综合考试":certRequirementText(rank);}
     void mirrorPromotion(Player p,int rank) {
@@ -438,6 +446,9 @@ final class GuildManager implements Listener {
     void onDungeonMobDefeated(Player player, org.bukkit.entity.EntityType type) {
         Contract quest = active(player);
         if (quest == null) return;
+        // Legacy tower contracts share team kills. Targeted weapon contracts require the
+        // actual killer/damage evidence and must not also receive this generic team credit.
+        if (plugin.taskMarket().combat(player) != null) return;
         if (quest.goal() == Goal.KILLS) advance(player, quest);
         else if (quest.goal() == Goal.WITCH_KILLS && type == org.bukkit.entity.EntityType.WITCH) advance(player, quest);
     }
@@ -969,6 +980,7 @@ final class GuildManager implements Listener {
         if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().completed(player);
         plugin.getConfig().set(path + ".active", null);
         plugin.saveConfig();
+        plugin.recordWorldLesson(player, "commission");
         if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().afterComplete(player, quest.id());
         player.sendMessage(ChatColor.GREEN + "委托交付成功！声望 +" + gain
                 + (dims >= 3 ? "（含三维度 +20% 加成，今日已集 " + dims + " 个维度）" : "")
@@ -1056,6 +1068,7 @@ final class GuildManager implements Listener {
         inventory.setItem(51, icon(Material.IRON_SWORD, "§c前往地下城", "前往试炼塔入口"));
         inventory.setItem(52, icon(Material.ARROW, "§7返回技能", "返回技能罗盘"));
         inventory.setItem(47, icon(Material.SUNFLOWER, "§a生活公会", "种田、烹饪、钓鱼、建筑、写书和红石机关"));
+        inventory.setItem(53, icon(Material.COMPASS, "§b自选委托路线", "战斗、制造、探索、后勤、工程或生活", "先看条件再接单；没有种田必修"));
     }
 
     private ItemStack icon(Material material, String title, String... lines) {

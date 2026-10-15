@@ -14,10 +14,13 @@ conversations:
     first: welcome
     NPC_options:
       welcome:
-        text: 我是小满。村庄生活季已经开张：技能实习、照料田地、集市供给、照片和遗迹调查。你想从哪里开始？
-        pointers: magic,life,season,rescue,bye
+        text: 我是小满。这里可以打怪、造装备、探险、支援补给或过田园生活。先 /mycli tasks list 自选路线，不必先种田。你想从哪里开始？
+        pointers: routes,magic,life,season,rescue,bye
+      routes:
+        text: tasks list 看路线，tasks list combat/crafting/exploration/supply/engineering/life 看任务，再 tasks info ID 查条件；guild accept ID 接单，每阶段 guild claim。guild shared 查门口公共箱按需拿装备和补给，门内私产别取。三证实习的最后一项任选一张完整交付，生活旧证明也保留。
+        pointers: back,bye
       magic:
-        text: 先 world guide start，再 skills list common。tm_first_spell 是我的实操委托：真正施放一次本人技能，再到集市交易。旧技能资格保留，新学和升级花技能点；成功施法仍要资源与冷却。
+        text: 先 world guide start，再 skills list common，亲手成功施法，最后完整交付任选路线委托。tasks list 选路线，旧技能资格保留，新学和升级花技能点；成功施法仍要资源与冷却。
         pointers: back,bye
       life:
         text: 青禾在world(-537.5,67,-441.5)，居民事务 world board；禾仓收农产，补给商卖口粮和空地图，灯穗卖火把、箭和展示框。world shops查位置。公共箱可用，萌萌私产不可拿拆。
@@ -30,6 +33,9 @@ conversations:
           guild assessment。
         pointers: back,bye
     player_options:
+      routes:
+        text: 我想打怪、造装备或去探索。
+        pointers: routes
       magic:
         text: 怎样使用技能？
         pointers: magic

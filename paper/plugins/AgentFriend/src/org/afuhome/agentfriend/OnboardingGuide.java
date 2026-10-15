@@ -33,7 +33,7 @@ import org.bukkit.persistence.PersistentDataType;
 /** Read actual ledgers, suggest one next step, and keep all actions player initiated. */
 final class OnboardingGuide implements Listener {
     private static final List<String> STEPS = List.of("register", "guide_start", "catalog", "cast",
-            "life_accept", "life_progress", "life_claim", "guild_accept", "guild_progress", "complete");
+            "life_accept", "life_progress", "life_claim", "guild_accept", "guild_progress", "route_choose", "complete");
     private static final class Session {
         final long joined;
         long nextCheck;
@@ -166,7 +166,7 @@ final class OnboardingGuide implements Listener {
         if (observer(p)) { out.addProperty("reason", "observer"); return out; }
         JsonObject guide = plugin.worldLife().guideState(p), life = plugin.lifeGuild().onboardingState(p), guild = plugin.guild().onboardingState(p);
         boolean enrolled = flag(guide, "started"), catalog = flag(guide, "catalog"), cast = flag(guide, "cast"), lived = flag(guide, "life");
-        boolean registered = flag(guild, "joined"), commissioned = guild.get("completed").getAsInt() > 0;
+        boolean registered = flag(guild, "joined");
         Step step;
         if (!registered) step = new Step("register", "", List.of("/mycli guild join", "/mycli guild trader"));
         else if (!enrolled) step = new Step("guide_start", "", List.of("/mycli world guide start"));
@@ -179,26 +179,24 @@ final class OnboardingGuide implements Listener {
                             : List.of("/mycli skills info fireworks", "/mycli skills points", "/mycli skills learn fireworks", "/mycli cast fireworks"));
         } else if (!lived) {
             String id = value(life, "activeId");
-            if (id.isEmpty()) {
-                String available = value(life, "availableId");
-                step = new Step("life_accept", available.isEmpty() ? "今日七项生活委托都已交付，可明天继续；已完成的旧委托不会追记为报名后的实习。"
-                        : "可先接 " + available + "；生活任务与冒险委托使用不同任务槽。",
-                        available.isEmpty() ? List.of("/mycli life status") : List.of("/mycli life board", "/mycli life accept " + available));
+            if (!value(guild, "activeId").isEmpty()) {
+                step = new Step("guild_progress", "当前委托 " + value(guild, "activeId") + "；已接的任务可继续，不需换成农事。每阶段达标后交付，全部完成才计实习证明。",
+                        List.of("/mycli tasks status", "/mycli guild claim"));
+            } else if (id.isEmpty()) {
+                step = new Step("route_choose", "六条路线任选，也可接旧 life 委托；不会自动选职业。出发前 guild shared 查公会门口武器、护甲与补给箱，按需领取。",
+                        List.of("/mycli tasks list", "/mycli tasks menu", "/mycli guild shared"));
             } else if (flag(life, "ready")) step = new Step("life_claim", value(life, "title") + " " + life.get("progress") + "/" + life.get("target"), List.of("/mycli life claim"));
             else step = new Step("life_progress", value(life, "title") + " " + life.get("progress") + "/" + life.get("target") + "；" + value(life, "instruction"), List.of("/mycli life status", "/mycli life locations"));
-        } else if (!commissioned) {
-            if (!value(guild, "activeId").isEmpty()) step = new Step("guild_progress", "当前委托 " + value(guild, "activeId") + "；先查真实阶段，完成一阶段后交付。", List.of("/mycli guild status", "/mycli guild claim"));
-            else if (plugin.taskMarket().offered("tm_first_spell") != null) step = new Step("guild_accept", "推荐小满的实操委托 tm_first_spell：先接单，再成功施法并到补给商真实交易；每阶段 guild claim。", List.of("/mycli guild market tm_first_spell", "/mycli guild accept tm_first_spell"));
-            else step = new Step("guild_accept", "选择一张符合当前等级的委托，先读条件再接单。", List.of("/mycli guild board"));
-        } else step = new Step("complete", "已完成登记、实习三项证明和首张冒险委托。可按兴趣探索、做居民事务、结伴挑战、聊村民或记录生活。", List.of("/mycli world board", "/mycli world npcs", "/mycli world events", "/mycli world photos", "/mycli skills list profession"));
+        } else step = new Step("complete", "已完成登记、技能目录、真实施法与一项自选委托。可继续战斗、制造、探索、后勤、工程或生活，不要求补做种田。", List.of("/mycli tasks list", "/mycli world npcs", "/mycli world events", "/mycli world photos", "/mycli skills list profession"));
         out.addProperty("step", step.id()); out.addProperty("title", settings.getString("steps." + step.id() + ".title"));
         out.addProperty("message", settings.getString("steps." + step.id() + ".message") + (step.detail().isEmpty() ? "" : " " + step.detail()));
         out.addProperty("nextCommand", step.commands().getFirst()); JsonArray commands = new JsonArray(); step.commands().forEach(commands::add); out.add("commands", commands);
-        out.addProperty("completed", step.id().equals("complete"));
+        out.addProperty("completed", registered && TaskRouteCatalog.graduated(enrolled, catalog, cast, lived));
+        out.addProperty("routesCommand", "/mycli tasks list");
         JsonArray checklist = new JsonArray();
         milestone(checklist, "register", "冒险者登记", registered); milestone(checklist, "guide_start", "报名新手实习", enrolled);
         milestone(checklist, "catalog", "读取技能目录", catalog); milestone(checklist, "cast", "成功施放一次技能", cast);
-        milestone(checklist, "life", "完成并交付生活委托", lived); milestone(checklist, "commission", "交付首张冒险委托", commissioned);
+        milestone(checklist, "commission", "任选路线，完整交付一项委托", lived);
         out.add("serverFeatures", plugin.featureTutorials().state(p));
         out.add("checklist", checklist); out.add("guide", guide); out.add("life", life); out.add("guild", guild);
         return out;
@@ -222,6 +220,7 @@ final class OnboardingGuide implements Listener {
         result.addProperty("entryCommand", "/mycli intro"); result.addProperty("rulesCommand", "/mycli rules");
         result.addProperty("progressCommand", "/mycli progress"); result.addProperty("capabilitiesCommand", "/mycli capabilities");
         JsonObject tasks = new JsonObject(); tasks.addProperty("adventureBoard", "/mycli guild board");
+        tasks.addProperty("routes", "/mycli tasks list");
         tasks.addProperty("adventureStatus", "/mycli guild status"); tasks.addProperty("lifeBoard", "/mycli life board");
         tasks.addProperty("lifeStatus", "/mycli life status"); tasks.addProperty("tutorial", "/mycli world guide start");
         result.add("taskCommands", tasks);
@@ -271,7 +270,7 @@ final class OnboardingGuide implements Listener {
         inv.setItem(19, icon(Material.NAME_TAG, "§6冒险者登记", "点击登记；已登记时只查看状态，不花魔力"));
         inv.setItem(20, icon(Material.WRITABLE_BOOK, "§a报名新手实习", "点击自愿开始；不代学技能，不发完成奖励"));
         inv.setItem(21, icon(Material.BOOK, "§d读取基础技能目录", "只读目录；报名后记第一项实习证明"));
-        inv.setItem(22, icon(Material.WHEAT, "§a生活公会看板", "先接单，再亲自完成，最后交付"));
+        inv.setItem(22, icon(Material.COMPASS, "§a自选委托路线", "战斗、制造、探索、后勤、工程或生活", "不用先种田；先看条件，再接单"));
         inv.setItem(23, icon(Material.BELL, "§6居民事务板", "实际进度、任务详情与接单入口"));
         inv.setItem(24, icon(Material.CLOCK, "§7暂停提醒", "暂停" + ms("pause-seconds") / 60_000 + "分钟，查询照常"));
         inv.setItem(26, icon(Material.BARRIER, "§c关闭")); p.openInventory(inv);
@@ -293,7 +292,7 @@ final class OnboardingGuide implements Listener {
                 case 19 -> plugin.guild().command(p, new String[]{"guild", "join"});
                 case 20 -> plugin.worldLife().command(p, new String[]{"world", "guide", "start"});
                 case 21 -> p.performCommand("mycli skills list common");
-                case 22 -> plugin.openLifeGuildMenu(p);
+                case 22 -> plugin.taskMarket().routes().open(p, "", 1);
                 case 23 -> plugin.worldLife().command(p, new String[]{"world", "board", "menu"});
                 case 24 -> pause(p);
                 default -> { }

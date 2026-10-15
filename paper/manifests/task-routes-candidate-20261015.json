@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-15",
+  "status": "candidate_not_deployed",
+  "target": "existing Paper Qiandengji",
+  "core": "Paper 1.21.1 build 133",
+  "agentFriend": "0.4.42",
+  "sha256": "78e39073c251bdb14d426858e4933c8075618ad04832bcb56f4e8d85914c2e01",
+  "changes": [
+    "six optional task routes",
+    "eight configurable starter/patrol/supply contracts",
+    "native typed kill and launch-time weapon evidence",
+    "any completed commission counts for apprenticeship; legacy life proof retained",
+    "private bounded CLI and native menus"
+  ],
+  "checks": {
+    "combatRules": 28,
+    "routeRules": 15,
+    "cliRegression": 49,
+    "nativeJavaAgentEye": 60,
+    "legacyJavaAndBedrockProtocol": 7,
+    "normalColdReadback": 10,
+    "total": 169
+  },
+  "limitations": [
+    "Physical phone/Xbox screen and touch/gamepad input were not tested.",
+    "No 16 autonomous LLM-agent workload claim.",
+    "Authentication proxy/client programs were unchanged; UDP fixture accepts self-signed chains only on loopback."
+  ],
+  "deployment": {
+    "requiresPaperRestart": true,
+    "approval": "pending",
+    "noticeSeconds": [
+      180,
+      60,
+      10
+    ],
+    "guard": "humans and active instances; original maintenance task and full E/F cold backup",
+    "queued": false
+  },
+  "files": [
+    {
+      "path": "plugins/AgentFriend-0.4.42.jar",
+      "sha256": "78e39073c251bdb14d426858e4933c8075618ad04832bcb56f4e8d85914c2e01"
+    },
+    {
+      "path": "plugins/AgentFriend/route-contracts.yml",
+      "sha256": "e721e257df55f17a958fa3ff578eb66ae7e4f71252d52adefff87f6568896846"
+    },
+    {
+      "path": "plugins/AgentFriend/onboarding.yml",
+      "sha256": "9d767595b418a16d1f0c5b62ae6151632edc0e840207b981042dc96cc2ff7569"
+    },
+    {
+      "path": "plugins/BetonQuest/QuestPackages/qd_life/package.yml",
+      "sha256": "cfb0abdb85166ede13bfece8b30c140f31b929550f0126c8f208e37681081df7"
+    }
+  ],
+  "rollback": "Disable new offers on 0.4.42 while preserving frozen in-flight contracts. Do not settle new combat snapshots with 0.4.41."
+}

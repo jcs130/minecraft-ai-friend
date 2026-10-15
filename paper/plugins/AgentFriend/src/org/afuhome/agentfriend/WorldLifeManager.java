@@ -246,7 +246,7 @@ final class WorldLifeManager implements Listener {
         }
         JsonObject out = guideState(p);
         JsonArray steps = new JsonArray();
-        String[] descriptions = {"读取技能目录 /mycli skills list common", "按本人资格真正成功施放一次技能；失败或只说已施法不算", "完成并交付一项生活公会委托 /mycli life board"};
+        String[] descriptions = {"读取技能目录 /mycli skills list common", "按本人资格真正成功施放一次技能；失败或只说已施法不算", "从 /mycli tasks list 自选战斗、制造、探索、后勤、工程或生活委托，全部阶段实际交付；旧 life 委托同样有效，不必种田"};
         int done = 0;
         for (int i = 0; i < LESSONS.size(); i++) {
             boolean complete = ledger.getBoolean(base + ".proof." + LESSONS.get(i)); if (complete) done++;
@@ -264,9 +264,13 @@ final class WorldLifeManager implements Listener {
         String base = "players." + p.getUniqueId(); JsonObject out = new JsonObject();
         out.addProperty("started", ledger.getBoolean(base + ".started"));
         for (String lesson : LESSONS) out.addProperty(lesson, ledger.getBoolean(base + ".proof." + lesson));
+        // Retain the historical storage key and protocol field. It now means any
+        // successfully submitted commission, including the original life route.
+        out.addProperty("commission", ledger.getBoolean(base + ".proof.life"));
         return out;
     }
     void note(Player p, String lesson) {
+        if (lesson.equals("commission")) lesson = "life";
         if (!LESSONS.contains(lesson) || p.getGameMode() == GameMode.SPECTATOR) return;
         String base = "players." + p.getUniqueId();
         if (!ledger.getBoolean(base + ".started") || ledger.getBoolean(base + ".proof." + lesson)) return;
@@ -296,7 +300,7 @@ final class WorldLifeManager implements Listener {
     }
     private void menu(Player p) {
         Inventory inv = Bukkit.createInventory(new MenuHolder(p.getUniqueId()), 27, "千灯纪 · 世界生活");
-        inv.setItem(10, item(Material.WRITABLE_BOOK, "§a新手实习", "真实施法与生活委托教学", "/mycli world guide start"));
+        inv.setItem(10, item(Material.WRITABLE_BOOK, "§a新手实习", "真实施法与自选路线委托", "/mycli world guide start"));
         inv.setItem(11, item(Material.VILLAGER_SPAWN_EGG, "§e村民聊天", "显示人物 ID 和位置；走近右键交谈", "/mycli world npcs"));
         inv.setItem(12, item(Material.SUNFLOWER, "§6世界事件", "查看当前正在进行的活动", "/mycli world events"));
         inv.setItem(13, item(Material.SPYGLASS, "§b女神相机 · 拍照与相册", "点击选择拍照视角，单图消耗1张空地图", "/mycli photo menu；自动拍摄，无需截图上传"));
