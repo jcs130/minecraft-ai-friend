@@ -40,7 +40,17 @@ describe.skipIf(engineOnly)('packaged exact Minecraft 1.21.1 viewer', () => {
       expect(await unavailable.json()).toMatchObject({available:false,reason:'remote_textures_disabled'});
       const patch = new Promise<Record<string,unknown>>(resolve => socket.once('mapPixels', resolve));
       protocol.emit('map', {itemDamage:725,scale:0,locked:false,columns:1,rows:1,x:0,y:0,data:Buffer.from([4])});
-      expect(await patch).toMatchObject({mapId:725,columns:1});
+      const received=await patch;
+      expect(received).toMatchObject({mapId:725,x:0,y:0});
+      // Backpressure may coalesce this patch into the exact bounded map cache.
+      // Either representation must retain the actual received pixel, not fill
+      // unknown pixels or require a particular socket scheduling order.
+      expect([1,128]).toContain(received.columns);
+      expect(received.rows).toBe(received.columns===1?1:128);
+      const pixels=received.data as number[];
+      expect(pixels).toHaveLength((received.columns as number)*(received.rows as number));
+      expect(pixels[0]).toBe(4);
+      if(received.columns===128) expect((received.coverage as number[])[0]&1).toBe(1);
       const bytes = Buffer.from(await (await fetch(viewer.url + '/blocksStates/1.21.1.json')).arrayBuffer());
       const original = readFileSync(join(assets, 'public/blocksStates/1.21.1.json'));
       expect(createHash('sha256').update(bytes).digest('hex')).toBe(createHash('sha256').update(original).digest('hex'));
