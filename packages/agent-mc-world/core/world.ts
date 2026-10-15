@@ -4197,6 +4197,7 @@ export class MinecraftWorld implements World {
       onBotCreated: (bot) => this.hookMessageEvents(bot),
       onSpawn: () => this.onSpawn(),
       onRespawn: () => this.onRespawn(),
+      onSpawnPosition: (landing) => this.onSpawnPosition(landing),
       // 第一次掉线值得叫醒她(手上的事全废了);之后每一次重连没成只是同一件事的
       // 复述,压成不唤醒的一条,免得连不上的那半小时里每隔几十秒炸一次
       onDisconnect: (reason, willReconnect, attempt) => {
@@ -6457,6 +6458,7 @@ export class MinecraftWorld implements World {
 
   protected onSpawn(): void {
     this.pendingDeathCause = null;
+    this.deathRespawnConfirmation = null;
     this.bodyInhibitReason = null; this.bodyInhibitHold = null;
     this.reflexes?.start();
     this.initialSceneStop?.();
@@ -6544,11 +6546,27 @@ export class MinecraftWorld implements World {
     // 新一期身体不继承旧 owner 实例:死时已清过一次,死到重生之间还可能又攒了几个
     this.resetBodyOwners();
     const lifecycle = (this.bridge?.bot as (Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }) | null)?.deathLifecycle;
-    if (lifecycle?.phase === 'alive') this.emit('minecraft.event', '[Minecraft] 已收到重生后的生命读数。', false,
+    if (lifecycle?.phase === 'alive' && this.deathRespawnConfirmation) this.emit('minecraft.event', '[Minecraft] 已收到重生后的生命读数。', false,
       { trigger: 'flush', meta: { deathLifecycle: lifecycle } });
-    const confirm = this.deathRespawnConfirmation;
+    if (this.deathRespawnConfirmation) this.deathRespawnConfirmation.spawned = true;
+    this.scheduleRespawnConfirmation();
+  }
+
+  /** Rebase only space, exactly at the first applied server position of this boundary. */
+  protected onSpawnPosition(landing: DimensionPoint): void {
+    const dimension = normalizeDimension(landing.dimension);
+    if (this.lastReported) this.lastReported = { ...this.lastReported,
+      position: { x: landing.x, y: landing.y, z: landing.z }, dimension };
+    if (this.deathRespawnConfirmation) this.deathRespawnConfirmation.landing = { ...landing, dimension };
+    this.scheduleRespawnConfirmation();
+  }
+
+  protected scheduleRespawnConfirmation(): void {
+    const pending = this.deathRespawnConfirmation;
+    if (!pending?.spawned || !pending.landing) return;
     this.deathRespawnConfirmation = null;
-    if (confirm) setTimeout(confirm, 3000);
+    const landing = pending.landing;
+    setTimeout(() => pending.confirm(landing), 3000);
   }
 
   protected attachItemBreak(bot: NonNullable<Bridge['bot']>): void {
@@ -7426,11 +7444,13 @@ export class MinecraftWorld implements World {
           cause: cause ? { text: cause.text, key: cause.key, observed_at: new Date(cause.at).toISOString() } : null } } },
       );
       // 死亡会把摄像机的附身甩掉,重生后重下;同一拍用实测坐标复核重生落点
-      this.deathRespawnConfirmation = () => {
-        if (this.bridge?.bot !== bot || bot.health <= 0 || this.lastDeathEpisodeId !== lifecycle?.episodeId) return;
+      const generation = this.connectionGeneration;
+      this.deathRespawnConfirmation = { spawned: false, landing: null, confirm: (landing) => {
+        if (this.bridge?.bot !== bot || this.connectionGeneration !== generation || bot.health <= 0
+          || this.lastDeathEpisodeId !== lifecycle?.episodeId) return;
         this.syncSpectator('bot 重生');
-        this.confirmRespawn(bot, dropAt, predicted);
-      };
+        this.confirmRespawn(landing, dropAt, predicted);
+      } };
     });
     bot.on('health', () => {
       const h = bot.health;
@@ -7967,6 +7987,7 @@ export class MinecraftWorld implements World {
       this.lastReported,
       snap,
       this.cfg.world.moveThreshold,
+      !this.bridge?.spawnPositionPending,
     );
     if (notes.length === 0) {
       // 首份身体、经验读数只建立基线；位置仍从上次已报告的落点累计。
@@ -7985,7 +8006,14 @@ export class MinecraftWorld implements World {
       inventoryOnly || this.executor?.currentTask || this.combat?.active
         ? { trigger: 'piggyback' } : undefined,
     );
-    this.lastReported = snap;
+    // Transient unconfirmed inventory must not erase the last confirmed comparison
+    // baseline, or a health/food update before window_items would hide death losses.
+    this.lastReported = { ...snap,
+      ...(!snap.invSynced && this.lastReported.invSynced
+        ? { inventory: this.lastReported.inventory, invSynced: true } : {}),
+      ...(this.bridge?.spawnPositionPending
+        ? { position: this.lastReported.position, dimension: this.lastReported.dimension } : {}),
+    };
   }
 
   /**
@@ -8156,19 +8184,15 @@ export class MinecraftWorld implements World {
   }
 
   /**
-   * 重生三秒后用实测坐标复核落点,并就地重设位置基线 —— 重生是一次瞬移,
-   * 不重设的话世界摘要会把它渲染成「往东走了 863.7 格」,往她的世界模型里写假事实。
-   * 只动 position 这一段:掉了什么、走进了什么群系照旧照实报。
+   * 三秒后报告原生位置包捕获的重生落点。空间基线已在那个同步边界重设；
+   * 此处不能再读当前位置或改基线，否则会把其间真实行走吞掉。
    */
   protected confirmRespawn(
-    bot: { entity?: { position?: Vec3like }; game?: { dimension?: string } },
+    p: DimensionPoint,
     dropAt: DimensionPoint | null,
     predicted: SpawnTarget | null,
   ): void {
-    const p = bot.entity?.position;
-    if (!p) return;
-    if (this.lastReported) this.lastReported = { ...this.lastReported, position: { x: p.x, y: p.y, z: p.z } };
-    const dimension = normalizeDimension(bot.game?.dimension);
+    const dimension = normalizeDimension(p.dimension);
     const off = predicted && normalizeDimension(predicted.dimension) === dimension
       ? Math.hypot(p.x - predicted.x, p.y - predicted.y, p.z - predicted.z)
       : null;
@@ -8371,7 +8395,9 @@ export class MinecraftWorld implements World {
   /** 上一条持续伤害播报的时刻(着火/窒息那条节流线) */
   protected lastPersistentDamageAt = 0;
   protected lastDeathEpisodeId: string | null = null;
-  protected deathRespawnConfirmation: (() => void) | null = null;
+  protected deathRespawnConfirmation: {
+    spawned: boolean; landing: DimensionPoint | null; confirm: (landing: DimensionPoint) => void;
+  } | null = null;
 
   /**
    * 持续伤害的节流播报:只报状态事实(在烧/头卡在什么里 + 当前血量),不建议动作。

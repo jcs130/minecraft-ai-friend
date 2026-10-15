@@ -804,11 +804,12 @@ export function worldDelta(
   prev: WorldSnapshot,
   cur: WorldSnapshot,
   moveThreshold: number,
+  spatialReady = true,
 ): WorldDelta {
   const notes: string[] = [];
   let inventoryNotes = 0;
   const sameDimension = prev.dimension.replace(/^minecraft:/, '') === cur.dimension.replace(/^minecraft:/, '');
-  if (sameDimension) {
+  if (sameDimension && spatialReady) {
     const dx = cur.position.x - prev.position.x;
     const dy = cur.position.y - prev.position.y;
     const dz = cur.position.z - prev.position.z;
@@ -821,7 +822,7 @@ export function worldDelta(
       );
     }
   }
-  if (sameDimension && cur.biome !== prev.biome) notes.push(`走进了${zhBiome(cur.biome)}`);
+  if (sameDimension && spatialReady && cur.biome !== prev.biome) notes.push(`走进了${zhBiome(cur.biome)}`);
   if (sameDimension && cur.raining !== prev.raining) notes.push(cur.raining ? '开始下雨了' : '雨停了');
 
   // 初次同步前的空物品栏不是有效基线。

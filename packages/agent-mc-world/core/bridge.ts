@@ -90,6 +90,8 @@ export interface BridgeOptions {
   onBotCreated?: (bot: mineflayer.Bot) => void;
   /** 同一连接内的死亡重生；连接代次和资源保持不变。 */
   onRespawn?: () => void;
+  /** First server position after initial join or a native respawn/dimension packet, already applied by Mineflayer. */
+  onSpawnPosition?: (landing: { x: number; y: number; z: number; dimension: string }) => void;
   /** 断线后通知；attempt 为本次断线前连续连接失败次数，连接成功归零。 */
   onDisconnect: (reason: string, willReconnect: boolean, attempt: number) => void;
   /** 连接告警通过 World 事件通道投递。 */
@@ -262,6 +264,7 @@ export class Bridge {
   protected readonly disposing = new Set<Promise<void>>();
   protected viewer: { gen: number; url: string; kind: 'modern' | 'basic'; agentViews?: import('./viewer-agent-views.ts').AgentViewGallery } | null = null;
   protected _invSynced = false;
+  protected _spawnPositionPending = true;
   protected scaffoldComplained = '';
   protected refusedStreak = 0;
   protected liveMovements: Movements | null = null;
@@ -322,6 +325,9 @@ export class Bridge {
     return this._invSynced && (!episode || episode.inventorySynced === true)
       && (this._bot ? inventoryReadConfirmed(this._bot) : false);
   }
+
+  /** Health/spawn can precede the authoritative position; neither is a spatial boundary. */
+  get spawnPositionPending(): boolean { return this._spawnPositionPending; }
 
   get connected(): boolean {
     return this._bot !== null && this.spawnedBot === this._bot
@@ -478,6 +484,7 @@ export class Bridge {
       return;
     }
     this._bot = bot;
+    this._spawnPositionPending = true;
     this.deathRecovery = installDeathLifecycle(bot, this.opts.deathRespawnDelayMs,
       () => !this.stopped && this._bot === bot && this.generation === gen && !this.opts.shuttingDown?.());
     this.bagFor(gen).register('death-recovery', this.deathRecovery.dispose);
@@ -486,7 +493,21 @@ export class Bridge {
       if (this._bot === bot && this.generation === gen && !this.stopped) this.opts.authentication?.acceptProtocolSession(session);
     });
     bot.once('inject_allowed', () => {
-      if (this._bot === bot && this.generation === gen) setBlueprintMcVersion(bot.version);
+      if (this._bot !== bot || this.generation !== gen || this.stopped) return;
+      setBlueprintMcVersion(bot.version);
+      // The built-in plugin loader runs first on inject_allowed. Register after
+      // physics applies the position, not on forcedMove (delayed 1.5s after death).
+      bot._client.on('position', () => {
+        if (this._bot !== bot || this.generation !== gen || this.stopped || !this._spawnPositionPending) return;
+        const p = bot.entity?.position;
+        if (!p || ![p.x, p.y, p.z].every(Number.isFinite)) return;
+        this._spawnPositionPending = false;
+        if (this.spawnedBot === bot) this.opts.onSpawnPosition?.({ x: p.x, y: p.y, z: p.z,
+          dimension: String(bot.game?.dimension ?? 'overworld') });
+      });
+    });
+    bot.on('respawn', () => {
+      if (this._bot === bot && this.generation === gen && !this.stopped) this._spawnPositionPending = true;
     });
     // Authentication may finish after the user stopped a pending connection.
     bot._client.on('connect', () => {
