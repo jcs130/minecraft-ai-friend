@@ -24,10 +24,15 @@ async def check(directory: Path, node: str) -> dict:
         try:
             await bridge.open()
             names = {tool["name"] for tool in bridge.tools}
-            assert {"mc_connection", "mc_do", "mc_events", "mc_script", "mc_queue", "mc_visual", "mc_memory", "mc_combat_tactic"} <= names
+            assert {"mc_connection", "mc_do", "mc_events", "mc_script", "mc_queue", "mc_visual", "mc_memory", "mc_combat_tactic", "mc_knowledge"} <= names
             assert not any(name.startswith("mymc_") for name in names)
             status = module.json_content(await bridge.call("mc_connection", {"action": "status"}))
             assert status["phase"] == "disconnected" and status["facts"] is None
+            reference = module.json_content(await bridge.call("mc_knowledge", {"action": "get", "id": "food/beef"}))
+            assert reference["version"] == "1.21.1" and reference["currentWorldVerified"] is False
+            assert reference["entry"]["nutrition"] == {"foodPoints": 3, "saturation": 1.8}
+            assert reference["entry"]["cooking"]["nutrition"] == {"foodPoints": 8, "saturation": 12.8}
+            assert reference["retrieval"] == "local-reference"
             saved = module.json_content(await bridge.call("mc_memory", {"action": "remember", "kind": "method",
                 "summary": "Offline method fixture", "content": "Historical hypothesis, no gameplay claim.",
                 "source": {"kind": "hypothesis", "reference": "offline:test"}}))

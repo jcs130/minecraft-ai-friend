@@ -58,7 +58,7 @@ official OpenAI/Google flows, with optional OS credential storage and rotating
 token refresh; Google ADC is also optional. Nothing signs in or calls a model
 automatically. See [configuration, parameter and OAuth guide](docs/model-providers.md).
 
-For the shared body pinned to `41fbc28`, this repository owns explicit source-pin
+For the shared body 0.5.0 pinned to `089de8e9bb5ce1cda900a51f249a12958ce58297`, this repository owns explicit source-pin
 and installation tooling around the canonical `agent-mc-world` build:
 `python -m agent_mc_autonomy.core_distribution.build --checkout <repo> --destination <empty-dir>`;
 then `python -m agent_mc_autonomy.core_distribution.install --destination <runtime-dir> --archive <tgz>`.
@@ -70,6 +70,13 @@ on the installer when npm dependencies are cached. Existing running installation
 are not migrated or replaced automatically.
 
 ### Game memory
+
+Java 1.21.1 is the primary optimization target. When the selected core advertises
+`mc_knowledge`, the controller exposes it as an immediate read for bounded vanilla
+reference search/get. Its implementation and source data stay in the core. See
+[versioned vanilla knowledge](../agent-mc-world/docs/vanilla-knowledge.md).
+Only discovery guidance belongs in the stable prefix; fetched references use
+ordinary bounded tool history. No embedding endpoint is implicitly selected.
 
 The `[memory]` table forwards local, vector or remote retrieval settings to the
 shared core. See [game-memory configuration and provider contracts](../agent-mc-world/docs/game-memory.md).

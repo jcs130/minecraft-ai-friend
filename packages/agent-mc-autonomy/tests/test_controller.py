@@ -846,6 +846,18 @@ def test_large_script_and_artifact_schemas_remain_discoverable_on_demand(framewo
     assert json.loads(module.tool_help(catalogue, {"name": "mc_script"})["text"]) == catalogue[0]
 
 
+def test_native_knowledge_is_discovered_as_an_immediate_read_only_when_available(framework_module):
+    module = importlib.import_module("agent_mc_autonomy.controller")
+    catalogue = [{"name": "mc_knowledge", "description": "Versioned local vanilla knowledge",
+                  "inputSchema": {"type": "object", "properties": {"action": {"enum": ["search", "get"]},
+                    "id": {"type": "string"}, "query": {"type": "string"}}}}]
+    tools = {t["function"]["name"]: t["function"] for t in module.model_tools(catalogue)}
+    assert tools["mc_knowledge"]["parameters"] == catalogue[0]["inputSchema"]
+    assert "mc_knowledge" in module.IMMEDIATE_READ_TOOLS
+    assert module.observation_call("mc_knowledge", {"action": "get", "id": "food/beef"})
+    assert "mc_knowledge" not in {t["function"]["name"] for t in module.model_tools([])}
+
+
 def test_urgent_event_discards_inflight_plan(framework_module, tmp_path, run_async):
     async def decide(*_):
         await asyncio.Event().wait()

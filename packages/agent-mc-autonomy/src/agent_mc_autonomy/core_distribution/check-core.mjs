@@ -21,9 +21,15 @@ try {
     const names = new Set(client.tools().map(t => t.name));
     assert(names.has('mc_memory'));
     assert(names.has('mc_combat_tactic'));
+    assert(names.has('mc_knowledge'));
+    const food = JSON.parse((await client.call('mc_knowledge', { action: 'get', id: 'food/beef' })).text);
+    assert.equal(food.version, '1.21.1');
+    assert.deepEqual(food.entry.nutrition, { foodPoints: 3, saturation: 1.8 });
+    assert.deepEqual(food.entry.cooking.nutrition, { foodPoints: 8, saturation: 12.8 });
+    assert.equal(food.currentWorldVerified, false);
     assert(!names.has('mc_cast'));
     assert.equal(client.status().phase, 'disconnected');
   } finally { await client.disconnect(); }
 } finally { await rm(dataDir, { recursive: true, force: true }); }
-console.log(JSON.stringify({ canonicalBuild: true, independent: true, sharedMemory: true, sharedTactics: true,
+console.log(JSON.stringify({ canonicalBuild: true, independent: true, sharedMemory: true, sharedTactics: true, sharedKnowledge: true,
   bundledViewer: false, connection: 'disconnected', network: 'denied' }));
