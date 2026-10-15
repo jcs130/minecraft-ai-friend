@@ -16,7 +16,7 @@ import { selectJavaViewer } from './java-viewer-selection.ts';
 import { nativeProbeInput, NATIVE_PROBE_PROGRAM } from './java-probe.ts';
 import { nativeInteractInput, nativeInteractProgram } from './java-interact.ts';
 import { JavaMethods, JAVA_METHOD_FIELDS, JAVA_METHOD_PROTOCOL, javaMethodHelp } from './java-methods.ts';
-import { createJavaMemoryTool, type JavaClientServices } from './java-memory.ts';
+import { createJavaMemoryAccess, type JavaClientServices } from './java-memory.ts';
 
 export const JAVA_CLIENT_ENVIRONMENT = `You control an actual rendered Minecraft Java client through agent-mc-java/v1. The host owns goals, personality, models and memory. The client bridge owns one actual body queue. It never launches a game, reconnects, simulates OS input or runs a model.
 Query mc_capabilities, mc_operations and mc_help before acting. Claim mc_control explicitly, then renew the lease before expiry. Disconnect releases your own lease and keys. Identity is the actual server-assigned UUID and exact server address; offline servers do not require Microsoft authentication. Never control a different player or server after an identity change.
@@ -60,17 +60,19 @@ export class JavaClientWorld implements World {
   private readonly evidence: NativeEvidenceArchive;
   private readonly methods: JavaMethods | null;
   private readonly memoryTool: ToolDef | null;
+  private readonly memoryAccess: ReturnType<typeof createJavaMemoryAccess> | null;
   private nativeMethodsAvailable = false;
   private knowledgeVersion: string | null = null;
   constructor(private readonly cfg: MinecraftClientConfig, private readonly http: typeof fetch = globalThis.fetch,
     private readonly services?: JavaClientServices) {
     const dir = cfg.javaClient?.ledgerDir;
     this.evidence = new NativeEvidenceArchive(join(dir || '.', 'native-evidence'));
-    this.memoryTool = this.services ? createJavaMemoryTool(this.cfg, this.services, async signal => {
+    this.memoryAccess = this.services ? createJavaMemoryAccess(this.cfg, this.services, async signal => {
       const state = await this.rpc('state', {}, signal) as JavaClientState;
       this.verify(state);
       return state;
     }, () => this.state) : null;
+    this.memoryTool = this.memoryAccess?.tool ?? null;
     this.methods = cfg.javaClient ? new JavaMethods(cfg.javaClient,{rpc:(method,args,signal)=>this.rpc(method,args,signal),
       state:async signal=>{const state=await this.rpc('state',{},signal) as JavaClientState;this.verify(state);return state;},owner:()=>this.owner(),host:()=>this.host}) : null;
     this.photos = new PhotographyService({ directory: dir ? join(dir, 'photos') : undefined,
@@ -261,9 +263,23 @@ export class JavaClientWorld implements World {
       }
       for (const message of state.messages) if (message.seq > this.messageSeq) {
         this.messageSeq = message.seq;
-        await host.pushEvent({ type: 'minecraft.client.message', source: 'minecraft', ts: message.at, text: message.text,
-          meta: { overlay: message.overlay, raw: true, generation: state.generation, kind: message.kind, sender: message.sender } },
-          { trigger: message.overlay ? 'piggyback' : message.kind === 'player' ? 'preempt' : 'debounce' });
+        // Identity comes only from the bridge's player channel metadata, never message text.
+        const player = !message.overlay && message.kind === 'player' && /^[A-Za-z0-9_]{1,16}$/.test(message.sender ?? '')
+          ? message.sender! : null;
+        const own = player !== null && player.toLowerCase() === state.username?.toLowerCase();
+        const recall = player && !own ? this.memoryAccess?.recallPlayer(player) : null;
+        if (recall) {
+          await host.pushEvent({ type: 'minecraft.memory', source: 'minecraft', ts: message.at, text: recall.text,
+            meta: { gamePlayerMemory: recall.meta } }, { trigger: 'piggyback' });
+          if (this.host !== host || this.epoch !== epoch) return;
+        }
+        await host.pushEvent({ type: player ? 'minecraft.chat' : 'minecraft.client.message', source: 'minecraft', ts: message.at, text: message.text,
+          ...(player && !own ? { senderKey: player } : {}),
+          meta: { overlay: message.overlay, raw: true, nativeType: 'minecraft.client.message', sequence: message.seq,
+            generation: state.generation, kind: message.kind, sender: message.sender,
+            ...(player ? { uname: player, socialScope: 'minecraft-server', outgoing: own } : {}),
+            ...(recall ? { gamePlayerMemory: recall.meta } : {}) } },
+          { trigger: message.overlay || own ? 'piggyback' : player ? 'preempt' : 'debounce' });
       }
       for (const action of state.actions) if (this.phases.get(action.id) !== action.phase) {
         this.phases.set(action.id, action.phase);

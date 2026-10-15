@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from '../../core/game-memory.ts';
 import { GameMemoryService } from '../../core/game-memory-service.ts';
+import { PlayerMemoryRecall } from '../../core/game-memory-player.ts';
 import type { JavaClientState } from '../contracts/java-client.ts';
 import type { MinecraftClientConfig } from './config.ts';
 import type { ToolDef } from './contracts.ts';
@@ -19,15 +20,22 @@ const dimensionOf = (state: JavaClientState | null) => state?.connected
 
 export function createJavaMemoryTool(cfg: MinecraftClientConfig, services: JavaClientServices,
   readFresh: (signal?: AbortSignal) => Promise<JavaClientState>, current: () => JavaClientState | null): ToolDef {
+  return createJavaMemoryAccess(cfg, services, readFresh, current).tool;
+}
+
+/** Tool writes and encounter recall share one isolated notebook; recall never calls a provider. */
+export function createJavaMemoryAccess(cfg: MinecraftClientConfig, services: JavaClientServices,
+  readFresh: (signal?: AbortSignal) => Promise<JavaClientState>, current: () => JavaClientState | null) {
   const directory = join(services.dataDir, 'minecraft-memory');
-  const memory = new GameMemoryService(new GameMemoryBook(directory), directory);
+  const book = new GameMemoryBook(directory);
+  const memory = new GameMemoryService(book, directory), players = new PlayerMemoryRecall(book);
   // Native identity is available offline. A new namespace deliberately does not
   // import older weak host/login-alias notebooks or notes from another provider.
   const native = cfg.javaClient;
   const scope = native ? { realm: `java:${native.expectedServer.toLowerCase().replace(/:25565$/, '')}`,
     account: `uuid:${native.expectedUuid.replaceAll('-', '').toLowerCase()}`,
     agent: services.agentName ?? native.controllerId } : null;
-  return { ...GAME_MEMORY_TOOL,
+  const tool: ToolDef = { ...GAME_MEMORY_TOOL,
     description: GAME_MEMORY_TOOL.description + ' Historical notebook operations also work while the body is disconnected; capture alone requires a fresh connected identity-checked state. Offline dimension is unknown; use dimension:"*" to search across dimensions.',
     handler: async (args, ctx) => {
       try {
@@ -50,4 +58,6 @@ export function createJavaMemoryTool(cfg: MinecraftClientConfig, services: JavaC
       } catch (error) { return { text: String(error), failed: true }; }
     },
   };
+  return { tool, recallPlayer: (name: string) => scope
+    ? players.recall({ name, direct: true }, { scope, dimension: null }) : null };
 }
