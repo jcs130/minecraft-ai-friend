@@ -55,7 +55,8 @@ def review_observation(status, now):
     useful["lastTask"] = fact_preview(spatial_text(facts.get("lastTask", "")), 1000)
     reads = snapshot.get("read_activity") or {}
     reads = {key: min(999, reads[key]) for key in (
-        "mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original")
+        "mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original",
+        "mc_knowledge")
         if isinstance(reads, dict) and type(reads.get(key)) is int and reads[key] > 0}
     feedback = body_feedback(snapshot, facts)
     # Raw facts remain in the independent journal/status API; no accumulating prompt history here.
