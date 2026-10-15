@@ -7,6 +7,7 @@
   "landOwner": "Goddess",
   "visitorUse": true,
   "landmarkEnabled": true,
+  "ground": {"regionId": "qd_wayfarer_ground", "min": [-1146, -64, -638], "max": [-1078, 71, -567], "paving": "minecraft:stone_bricks", "boundary": "minecraft:polished_andesite", "foundation": "minecraft:stone", "foundationLayers": 2, "pavedColumns": 4581, "priority": 40, "visitorUse": true, "regionFragment": "wayfarer-ground-region.yml"},
   "buildings": [
     {"id": "wayfarer_tower", "title": "旅人营地·瞭望塔", "archive": "Structory_Towers_1.20_v1.0.7.zip", "entry": "data/structory_towers/structure/small_firetower.nbt", "origin": [-1092, 66, -636], "size": [11, 29, 11], "protectionMin": [-1092, 65, -636], "protectionMax": [-1082, 94, -626], "sanitizedSha256": "42fc20e22da27eed6ed2bfb0cf455f1433a46267880591eb89b031017923c50c"},
     {"id": "wayfarer_tent", "title": "旅人营地·红帐篷", "archive": "Structory_1.20_v1.3.5.zip", "entry": "data/structory/structure/harvest/camp/tent.nbt", "origin": [-1144, 63, -579], "size": [13, 7, 11], "protectionMin": [-1144, 62, -579], "protectionMax": [-1132, 69, -569], "sanitizedSha256": "9a43641b4d383ef86788aa209099d3ed638ab431b803e9280045216b805255b3"},
@@ -14,5 +15,5 @@
   ],
   "guideProtection": {"id": "wayfarer_guide", "min": [-1101, 63, -604], "max": [-1096, 69, -598]},
   "placement": {"templateNamespace": "qiandengji", "rotation": "none", "mirror": "none", "sanitization": ["remove entity lists and block-entity loot/instructions", "resolve jigsaw to its final_state", "rename old grass to short_grass", "extinguish decorative campfire", "ensure solid shallow well bottom"]},
-  "notes": ["Deployment inventory, not an automatically executed datapack", "Reuse installed blueprints; third-party NBT/ZIP files are not stored in Git", "Native world spawn and spawnRadius; returning players keep saved locations and valid beds/anchors retain priority", "Only the four listed building footprints are claimed; the randomized landing field and surrounding wilderness remain unclaimed"]
+  "notes": ["Deployment inventory, not an automatically executed datapack", "Reuse installed blueprints; third-party NBT/ZIP files are not stored in Git", "Native world spawn and spawnRadius; returning players keep saved locations and valid beds/anchors retain priority", "The four building lands retain their own permissions; camp paving and foundations also have the bounded WorldGuard ground region", "Mining and construction belong outside the camp rectangle; do not apply this ground exception to wilderness or village farms"]
 }

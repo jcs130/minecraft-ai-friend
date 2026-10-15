@@ -1,0 +1,32 @@
+regions:
+  qd_wayfarer_ground:
+    min:
+      x: -1146
+      'y': -64
+      z: -638
+    max:
+      x: -1078
+      'y': 71
+      z: -567
+    members: {}
+    owners:
+      unique-ids:
+        - b2f9ceb0-8271-3470-b99f-e1c3ffe4edbd
+    type: cuboid
+    priority: 40
+    flags:
+      passthrough: allow
+      block-break: deny
+      block-break-group: NON_MEMBERS
+      block-place: deny
+      block-place-group: NON_MEMBERS
+      use: allow
+      interact: allow
+      creeper-explosion: deny
+      tnt: deny
+      other-explosion: deny
+      ghast-fireball: deny
+      wither-damage: deny
+      enderman-grief: deny
+      deny-message: 旅人营地地坪与地基受保护：X=-1146..-1078、Z=-638..-567、Y=-64..71（含边界）。请保留地面；采矿、建造请到石质边线外，再用 /mycli protect 查询。门、床和引路人可正常使用。
+      pistons: deny
