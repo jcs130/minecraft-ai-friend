@@ -5,7 +5,11 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
-0.1.54 adds factual death episodes and inferred lessons in the existing
+0.1.55 adds bounded native body/failure feedback, progressive real visual
+capture, an optional human-only account console, and opt-in per-request
+planning profiles. Native work keeps its original queue; profiles do not
+switch models or create an extra inference loop. Unsupported host reasoning
+parameters use an explicit budget-only fallback. It retains factual death episodes and inferred lessons in the existing
 `reviews.sqlite3`. Up to 32 episodes per actual realm/account/agent survive
 restart; original event run/cursor/time, bounded game facts, actions and receipts
 remain queryable through the local `death_review` search/get/report tool. Lessons
