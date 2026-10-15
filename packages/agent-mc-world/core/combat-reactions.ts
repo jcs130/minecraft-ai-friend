@@ -7,7 +7,8 @@ import { corridorSafe } from './idle-actions.ts';
 
 export function combatReactions(bot: Bot, field: Battlefield, cfg: CombatExecutionPolicy,
   control: { bodyFree: boolean; canStep: boolean; targetId: number | null; sinceHitMs: number | null;
-    fight: string; fleeHealth: number; chaseMax: number }, programmable = false): CombatCandidate[] {
+    fight: string; fleeHealth: number; chaseMax: number; trackingTargets?: ReadonlySet<number>;
+    retreatAvailable?: boolean }, programmable = false): CombatCandidate[] {
   if (field.action.emergency) return [];
   const hostiles = field.actors.filter(e => e.relation === 'hostile' && e.health.current !== 0
     && e.entityId !== null && e.lineOfSight === true && e.distance !== null);
@@ -19,9 +20,12 @@ export function combatReactions(bot: Bot, field: Battlefield, cfg: CombatExecuti
   const candidates: CombatCandidate[] = [];
   // Spacing/withdrawal are useful BEFORE the first hit, including while the planner thinks.
   if (cfg.allowMovement && (control.bodyFree || field.action.fighting || field.action.tracking)) {
-    candidates.push({ id: 'retreat', kind: 'retreat', intent: 'Move away from visible danger now without starting an attack; keep retreating using the body controller.' });
-    if (target.position && target.distance! <= control.chaseMax + 4)
-      candidates.push({ id: `track_${target.entityId}`, kind: 'track', targetId: target.entityId!, uuid: target.uuid,
+    if (control.retreatAvailable !== false)
+      candidates.push({ id: 'retreat', kind: 'retreat', intent: 'Move away from visible danger now without starting an attack; keep retreating using the body controller.' });
+    const trackable = hostiles.filter(e => !control.trackingTargets || control.trackingTargets.has(e.entityId!));
+    const tracked = trackable.find(e => e.entityId === control.targetId) ?? trackable[0];
+    if (tracked?.position && tracked.distance! <= control.chaseMax + 4)
+      candidates.push({ id: `track_${tracked.entityId}`, kind: 'track', targetId: tracked.entityId!, uuid: tracked.uuid,
         minDistance: 5, maxDistance: 8, leaseMs: 4000,
         intent: 'Follow this visible hostile at 5–8 blocks without attacking; maintain that distance continuously while the planner thinks. Stop on lost sight or unsafe ground.' });
   }

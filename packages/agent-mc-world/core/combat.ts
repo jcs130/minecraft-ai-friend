@@ -448,6 +448,25 @@ export class CombatSession {
     return this.scan(bot, t, t.chaseMax).filter(f => f.visible && !NO_FIGHT.has(f.name)).map(f => f.id);
   }
 
+  /** Tracking must use the same provocation, visibility and admission rules as react(). */
+  trackingTargets(): number[] {
+    const bot = this.opts.getBot(), t = this.opts.tuning();
+    if (!bot?.entity || !t.enabled || this.state === 'retreating'
+      || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()
+      || (bot.health ?? 0) < t.fleeHealth + ENGAGE_MARGIN
+      || (!this.active && (Date.now() < this.capCooldownUntil
+        || (!t.arena && this.busyRatioNow() > t.busyRatio / 100)))) return [];
+    // Observation does not require a weapon or permission to start attacking.
+    return this.scan(bot, t, 24).filter(f => f.visible).map(f => f.id);
+  }
+
+  canRetreat(): boolean {
+    const bot = this.opts.getBot();
+    if (!bot?.entity || (bot.health ?? 0) <= 0 || this.opts.envBusy()
+      || this.opts.taskEscaping?.() || this.opts.taskFighting?.()) return false;
+    return this.active || this.scan(bot, this.opts.tuning(), RETREAT_CLEAR_DIST).some(f => f.visible);
+  }
+
   /** Reuses the combat body's existing lease, health gates and retreat controller. */
   react(action: { kind: 'engage'; targetId: number } | { kind: 'retreat' }
     | { kind: 'track'; targetId: number; uuid: string | null; minDistance: number; maxDistance: number; leaseMs: number }
@@ -455,15 +474,16 @@ export class CombatSession {
     const bot = this.opts.getBot();
     if (!bot?.entity || (bot.health ?? 0) <= 0 || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()) return false;
     if (action.kind === 'retreat') {
+      if (!this.canRetreat()) return false;
       if (this.state === 'retreating') return true;
       if (!this.active) {
-        if (!this.scan(bot, this.opts.tuning(), RETREAT_CLEAR_DIST).some(f => f.visible)) return false;
         this.bot = bot; this.opts.suspendTasks('快决策:交战前撤离'); this.hook(bot);
       }
       this.trackingLease = null;
       this.tacticalMove = null; this.beginRetreat('flee'); return true;
     }
     if (action.kind === 'track') {
+      if (!this.trackingTargets().includes(action.targetId)) return false;
       const foe = this.scan(bot, this.opts.tuning(), 24).find(f => f.id === action.targetId && f.visible);
       if (!foe || action.uuid !== (bot.entities[action.targetId]?.uuid ?? null)
         || !Number.isFinite(action.minDistance) || !Number.isFinite(action.maxDistance)

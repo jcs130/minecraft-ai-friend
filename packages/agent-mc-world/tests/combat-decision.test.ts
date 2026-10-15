@@ -243,6 +243,18 @@ function flatBot() {
   return bot as unknown as Bot;
 }
 describe('physically available combat candidates', () => {
+  it('does not let a neutral first actor hide an eligible tracking target, or offer withdrawal without a native threat', () => {
+    const bot = flatBot(), f = frame().battlefield;
+    f.action.fighting = false;
+    f.actors = [ { ...f.actors[0], entityId: 7, type: 'enderman' }, { ...f.actors[0], entityId: 8, type: 'zombie' } ];
+    const cfg = { ...config(), allowEngage: false, allowMovement: true };
+    const control = { bodyFree: true, canStep: false, targetId: null, sinceHitMs: null, fight: 'auto', fleeHealth: 6,
+      chaseMax: 12, trackingTargets: new Set([8]), retreatAvailable: true };
+    const choices = combatReactions(bot, f, cfg, control);
+    expect(choices.map(c => c.kind)).toEqual(['retreat', 'track']);
+    expect(choices[1]).toMatchObject({ kind: 'track', targetId: 8 });
+    expect(combatReactions(bot, f, cfg, { ...control, trackingTargets: new Set(), retreatAvailable: false })).toEqual([]);
+  });
   it('offers attack, withdraw and distance tracking before the first hit, but does not steal another task', () => {
     const bot = flatBot(), f = frame().battlefield, cfg = { ...config(), allowEngage: true, allowMovement: true, engageScope: 'hostile' as const };
     f.action.fighting = false;

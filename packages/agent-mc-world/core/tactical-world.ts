@@ -163,6 +163,8 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
       canStep: (reaction?.canStep ?? false) && !bot.currentWindow && !(this.executor?.eating ?? false),
       targetId: reaction?.targetId ?? null, sinceHitMs: reaction?.sinceHitMs ?? null,
       fight: this.policy.get().fight, fleeHealth: this.cfg.reflex.fleeHealth, chaseMax: this.cfg.combat.chaseMax,
+      trackingTargets: new Set(this.combat?.trackingTargets() ?? []),
+      retreatAvailable: this.combat?.canRetreat() ?? false,
     };
     const engagementTargets = new Set(this.combat?.engagementTargets() ?? []);
     const executableReaction = (candidate: CombatCandidate) => candidate.kind !== 'engage'

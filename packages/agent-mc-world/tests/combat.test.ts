@@ -1951,6 +1951,42 @@ describe('末地:龙只报不撤,撤退不朝悬崖跑', () => {
 });
 
 describe('异步战术动作共用战斗控制器', () => {
+  it('跟随与撤离候选沿用真实挑衅判据，不因末影人的类型标签产生无法执行的选择', () => {
+    const { bot, attacks } = combatRigBot([foe(7, 'enderman', 5)]);
+    const r = rig(bot);
+    const track = { kind: 'track' as const, targetId: 7, uuid: null, minDistance: 5, maxDistance: 8, leaseMs: 4000 };
+    expect(r.session.trackingTargets()).toEqual([]);
+    expect(r.session.canRetreat()).toBe(false);
+    expect(r.session.react(track)).toBe(false);
+    expect(r.calls.suspended).toBe(0);
+    (bot as unknown as Bot).entities[8] = foe(8, 'zombie', 7) as never;
+    expect(r.session.trackingTargets()).toEqual([8]);
+    expect(r.session.canRetreat()).toBe(true);
+    r.setTaskFighting(true);
+    expect(r.session.trackingTargets()).toEqual([]);
+    expect(r.session.canRetreat()).toBe(false);
+    r.setTaskFighting(false);
+    expect(r.session.react({ ...track, targetId: 8 })).toBe(true);
+    expect(attacks).toEqual([]);
+    r.session.stop();
+  });
+
+  it('观望不要求攻击许可，但入场冷却和低血量不能隐式变成跟随受理', () => {
+    const { bot } = combatRigBot([foe(7, 'zombie', 6)]);
+    const r = rig(bot, { fight: 'off' });
+    expect(r.session.engagementTargets()).toEqual([]);
+    expect(r.session.trackingTargets()).toEqual([7]);
+    (r.session as unknown as { capCooldownUntil: number }).capCooldownUntil = Date.now() + 1000;
+    expect(r.session.trackingTargets()).toEqual([]);
+    (r.session as unknown as { capCooldownUntil: number }).capCooldownUntil = 0;
+    (bot as unknown as Bot).health = 8;
+    expect(r.session.trackingTargets()).toEqual([]);
+    expect(r.session.canRetreat()).toBe(true);
+    expect(r.session.react({ kind: 'track', targetId: 7, uuid: null, minDistance: 5, maxDistance: 8, leaseMs: 4000 })).toBe(false);
+    expect(r.calls.suspended).toBe(0);
+    r.session.stop();
+  });
+
   it('接敌候选沿用控制器的中立生物、危险目标和距离判据，采样不接管身体', () => {
     const { bot } = combatRigBot([foe(7, 'enderman', 3), foe(8, 'zombie', 5.5),
       foe(9, 'warden', 3), foe(10, 'zombie', 20)]);
