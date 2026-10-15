@@ -33,6 +33,16 @@ def test_remote_server_and_separate_viewer(tmp_path):
     assert settings.identity != Settings.parse({"server": {"host": "other.example.org", "username": "Alice"}}).identity
 
 
+def test_explicit_optional_bundled_viewer_catalog_is_not_part_of_account_or_body_config(tmp_path):
+    base = {"server": {"host": "fixture.test", "username": "Alice"}}
+    settings = Settings.parse({**base, "viewer": {"bundled_appearance_catalog_file": "C:/plugin/assets/appearances/catalog.json"}})
+    default = Settings.parse(base)
+    assert default.viewer_bundled_appearance_catalog_file == ""
+    assert settings.viewer_bundled_appearance_catalog_file.endswith("catalog.json")
+    assert settings.identity == default.identity
+    assert settings.client_config(tmp_path) == default.client_config(tmp_path)
+
+
 @pytest.mark.parametrize("config", [
     {"server": {"host": "http://example.org"}}, {"server": {"port": True}},
     {"server": {"port": 65536}}, {"server": {"username": "bad name"}},

@@ -124,6 +124,7 @@ class Settings:
     viewer_auto_open: bool = True
     viewer_renderer_directory: str = ""
     viewer_catalog_file: str = ""
+    viewer_bundled_appearance_catalog_file: str = ""
     viewer_listen_port: int = 28985
     min_decision_seconds: int = 10
     idle_decision_seconds: int = 60
@@ -198,6 +199,7 @@ class Settings:
             external_viewer_url=viewer_url(_text(viewer, "url")), min_decision_seconds=minimum,
             viewer_auto_open=_boolean(viewer, "auto_open", True),
             viewer_renderer_directory=renderer, viewer_catalog_file=catalog,
+            viewer_bundled_appearance_catalog_file=_text(viewer, "bundled_appearance_catalog_file"),
             viewer_listen_port=_integer(viewer, "listen_port", 28985, 1024, 65535),
             idle_decision_seconds=_integer(autonomy, "idle_decision_seconds", 60, minimum, 3600),
             max_tool_rounds=_integer(autonomy, "max_tool_rounds", 6, 1, 12),

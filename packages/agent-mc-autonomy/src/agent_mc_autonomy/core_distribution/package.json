@@ -7,6 +7,6 @@
     "node": ">=22"
   },
   "dependencies": {
-    "agent-mc-world": "file:agent-mc-world-0.5.4.tgz"
+    "agent-mc-world": "file:agent-mc-world-0.5.5.tgz"
   }
 }
