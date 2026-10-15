@@ -473,6 +473,22 @@ class Controller:
         if name == "goal_report" and (not self.active_goal or self.current_work() or arguments.get("outcome") not in {"reported_done", "blocked"}
                 or not isinstance(arguments.get("evidence"), str) or not 1 <= len(arguments["evidence"]) <= 1200):
             raise ValueError("goal_report_requires_active_goal_no_pending_actions_and_evidence")
+        documentation = None
+        if name == "mc_tool_help":
+            # This is a local schema lookup. A guessed field/index has not sent
+            # anything to the body and must not poison its uncertainty journal.
+            available = {tool["name"] for tool in self.bridge.tools} - HIDDEN_TOOLS
+            if (isinstance(arguments.get("name"), str) and arguments["name"] in available
+                    and isinstance(arguments.get("path", ""), str)):
+                try:
+                    documentation = tool_help(self.bridge.tools, arguments)
+                except (LookupError, TypeError, ValueError):
+                    pass
+            if documentation is None:
+                result = {"protocol": PROTOCOL, "failed": True, "execution": None,
+                          "dispatched": False, "origin": "controller_validation",
+                          "text": "Invalid arguments: mc_tool_help requires an available tool and a documented JSON-pointer path. No native call was dispatched. Read mc_tool_help(name) first and copy an actual child path; for a skill manual use mc_help(skill), not a skill name as a schema property."}
+                return result, await self.archive_receipt(request_id, name, result)
         # Journal before sending: unknown delivery never gets a new request ID.
         self.inflight_request = request_id
         self.persist(inflight_request=request_id, uncertain=True)
@@ -488,9 +504,7 @@ class Controller:
         elif name == "mc_original":
             raw = {"structuredContent": {"protocol": PROTOCOL, **await self.original_page(arguments)}}
         elif name == "mc_tool_help":
-            if arguments.get("name") not in {t["name"] for t in self.bridge.tools} - HIDDEN_TOOLS:
-                raise ValueError("Unavailable tool documentation")
-            raw = {"structuredContent": {"protocol": PROTOCOL, **tool_help(self.bridge.tools, arguments)}}
+            raw = {"structuredContent": {"protocol": PROTOCOL, **documentation}}
         else:
             raw = await self.bridge.call(name, arguments, request_id=request_id, turn_id=self.turn)
         result = outcome(raw)
