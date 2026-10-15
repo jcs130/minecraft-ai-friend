@@ -139,6 +139,7 @@ export function combatProgramCandidates(result: unknown, frame: CombatDecisionFr
     const eligible = pool.find(a => a.kind === c.kind && (c.kind === 'cast'
       ? a.kind === 'cast' && a.spell === c.spell && a.ruleId === c.ruleId
       : c.kind === 'engage' ? a.kind === 'engage' && a.targetId === c.targetId && a.uuid === c.uuid
+        : c.kind === 'track' ? a.kind === 'track' && a.targetId === c.targetId && a.uuid === c.uuid
         : c.kind === 'retreat'));
     if (!eligible) throw new Error(`Unavailable candidate: ${c.id}`);
     return { ...eligible, id: c.id, intent: c.intent };

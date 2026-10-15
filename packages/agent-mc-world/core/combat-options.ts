@@ -10,7 +10,7 @@ export function combatMayTakeTask(queue: QueueStatus | undefined): boolean {
 /** Reserve choice space for different capabilities before same-kind variants. */
 export function diverseCombatOptions(candidates: CombatCandidate[], limit: number): CombatCandidate[] {
   const selected: CombatCandidate[] = [];
-  for (const kind of ['cast', 'engage', 'step', 'retreat'] as const) {
+  for (const kind of ['cast', 'engage', 'step', 'retreat', 'track'] as const) {
     const first = candidates.find(c => c.kind === kind);
     if (first && selected.length < limit) selected.push(first);
   }

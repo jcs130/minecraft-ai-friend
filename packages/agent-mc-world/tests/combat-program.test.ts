@@ -120,7 +120,7 @@ describe('agent-authored combat programs', () => {
       : { boundingBox: 'empty', name: 'air', shapes: [], getProperties: () => ({}) } } as unknown as Bot;
     const cfg = { ...COMBAT_DECISION_DEFAULTS, allowMovement: true };
     const control = { bodyFree: false, canStep: true, targetId: 2, sinceHitMs: 20, fight: 'armed', fleeHealth: 6, chaseMax: 12 };
-    expect(combatReactions(bot, f.battlefield, cfg, control)).toEqual([]);
+    expect(combatReactions(bot, f.battlefield, cfg, control).map(c => c.kind)).toEqual(['retreat', 'track']);
     const pool = combatReactions(bot, f.battlefield, cfg, control, true);
     expect(pool.filter(c => c.kind === 'step')).toHaveLength(8);
     expect(pool.some(c => c.kind === 'retreat')).toBe(true);

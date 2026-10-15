@@ -49,6 +49,21 @@ are provided by `agent-mc-world/tactics`; optional host selector helpers are in
 `agent-mc-world/decisions`. The default SDK/MCP client exposes `mc_combat_tactic`
 without a server pack. See [component boundaries](docs/component-boundaries.md).
 
+Hosts that need combat decisions during a slow planning generation can connect
+`HostCombatDriver` to `client.hostTactics(args, { signal, requestId })`.
+This narrow port accepts only `{ battlefield: true }` or an exact `{ choice }`.
+It does not acquire the planner's turn; samples do not flood the tool journal.
+Choices remain idempotent and are rejected while a planner tool owns admission.
+Drain/cancel the driver around real tool operations, not around model inference.
+Connection, target, tactic revision and executable conditions are rechecked.
+
+With explicit `combatOptions.allowMovement` / `allowEngage` authorization, the
+candidate set includes proactive withdrawal and a nonattacking `track` controller
+as well as engagement. Tracking maintains a 5–8 block band on physics ticks under
+a short renewable lease; it stops on lost identity/sight or expiry and checks
+loaded safe ground before moving. Set `maxCandidates` to at least 3 to expose the
+different tactics. No host selector or inference starts by importing the package.
+
 ## Spatial observations
 
 The same SDK/MCP action interface offers compact site diagnostics, local 3D voxels,

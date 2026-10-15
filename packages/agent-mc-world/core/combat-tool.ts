@@ -11,7 +11,7 @@ export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
        + 'The host selects candidates from {battlefield:true}; submit {choice:{candidate,tacticRevision,connectionGeneration}} for fresh validation. No inference runs in this extension. '
       + 'program:{name,code,params?} installs your JavaScript synchronous function body with frame and params; return {candidates,instructions}. '
       + 'frame.actionPool contains currently executable casts, engagements and collision-checked directions; you may select, reorder or relabel them, or construct step destinations 0.5 to 1.6 blocks away. '
-      + 'Read actors from frame.battlefield.actors (relation, health, distance, lineOfSight); candidate kinds are cast, engage, step and retreat. There is no frame.snapshot.enemies or melee candidate. '
+      + 'Read actors from frame.battlefield.actors (relation, health, distance, lineOfSight); candidate kinds are cast, engage, step, retreat and track. Track maintains a bounded distance lease without attacking, including before combat starts. There is no frame.snapshot.enemies or melee candidate. '
       + 'The program constructs choices from fresh battlefield facts independently of the main model; the fast model chooses and the combat controller executes. '
       + 'Direct steps last at most 700ms and share the combat body lease; survival, task ownership and collisions remain checked. '
       + 'Use program:null to remove it. No imports, files, network or raw bot; 50ms worker execution budget, separate 500ms response deadline. Runtime failure revokes that program until updated; built-in choices remain a fallback. '

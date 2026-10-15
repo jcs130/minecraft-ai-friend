@@ -284,7 +284,8 @@ function hasLosFrom(bot: Bot, eye: Vec3, e: { position: Vec3; height?: number })
  */
 export class CombatSession {
   private watch: ReturnType<typeof setInterval> | null = null;
-  private state: 'idle' | 'fighting' | 'retreating' = 'idle';
+  private state: 'idle' | 'fighting' | 'retreating' | 'tracking' = 'idle';
+  private trackingLease: { targetId: number; uuid: string | null; minDistance: number; maxDistance: number; expiresAt: number } | null = null;
   private bot: Bot | null = null;
   private releaseWalkOnly: (() => void) | null = null;
   private startedAt = 0;
@@ -426,6 +427,7 @@ export class CombatSession {
   get fighting(): boolean {
     return this.state === 'fighting';
   }
+  get tracking(): boolean { return this.state === 'tracking'; }
 
   reactionState(): { targetId: number | null; canStep: boolean; sinceHitMs: number | null; retreating: boolean } {
     return { targetId: this.targetId >= 0 ? this.targetId : null,
@@ -437,7 +439,7 @@ export class CombatSession {
   /** Read-only target eligibility shared by candidate construction and execution. */
   engagementTargets(): number[] {
     const bot = this.opts.getBot(), t = this.opts.tuning();
-    if (!bot?.entity || this.active || !t.enabled || t.fight === 'off'
+    if (!bot?.entity || (this.active && !this.tracking) || !t.enabled || t.fight === 'off'
       || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()
       || (bot.health ?? 0) < t.fleeHealth + ENGAGE_MARGIN
       || (t.fight === 'armed' && !bestWeapon(bot) && !this.rangedReady(bot))
@@ -448,12 +450,36 @@ export class CombatSession {
 
   /** Reuses the combat body's existing lease, health gates and retreat controller. */
   react(action: { kind: 'engage'; targetId: number } | { kind: 'retreat' }
+    | { kind: 'track'; targetId: number; uuid: string | null; minDistance: number; maxDistance: number; leaseMs: number }
     | { kind: 'step'; destination: [number, number, number] }): boolean {
     const bot = this.opts.getBot();
     if (!bot?.entity || (bot.health ?? 0) <= 0 || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()) return false;
     if (action.kind === 'retreat') {
-      if (!this.fighting) return false;
+      if (this.state === 'retreating') return true;
+      if (!this.active) {
+        if (!this.scan(bot, this.opts.tuning(), RETREAT_CLEAR_DIST).some(f => f.visible)) return false;
+        this.bot = bot; this.opts.suspendTasks('快决策:交战前撤离'); this.hook(bot);
+      }
+      this.trackingLease = null;
       this.tacticalMove = null; this.beginRetreat('flee'); return true;
+    }
+    if (action.kind === 'track') {
+      const foe = this.scan(bot, this.opts.tuning(), 24).find(f => f.id === action.targetId && f.visible);
+      if (!foe || action.uuid !== (bot.entities[action.targetId]?.uuid ?? null)
+        || !Number.isFinite(action.minDistance) || !Number.isFinite(action.maxDistance)
+        || action.minDistance < 3.5 || action.maxDistance < action.minDistance + 1 || action.maxDistance > 16
+        || !Number.isFinite(action.leaseMs) || action.leaseMs < 500 || action.leaseMs > 6000
+        || this.state === 'retreating') return false;
+      if (!this.active && !this.engage(foe.name, false, 'tracking')) return false;
+      if (this.reactionState().retreating) return false;
+      if (this.trackingLease?.targetId === action.targetId && this.trackingLease.uuid === action.uuid) {
+        this.trackingLease = { ...action, expiresAt: Date.now() + action.leaseMs }; return true;
+      }
+      this.cancelRanged(); this.cancelCombatFood(bot); this.release(bot);
+      if (this.pathing) dropOwnedGoal(bot, 'combat', '保持距离', this.opts.diag);
+      this.pathing = false; this.swingPhase = 'idle'; this.state = 'tracking'; this.targetId = action.targetId;
+      this.trackingLease = { ...action, expiresAt: Date.now() + action.leaseMs };
+      return true;
     }
     if (action.kind === 'step') {
       const to = new Vec3(...action.destination);
@@ -462,7 +488,11 @@ export class CombatSession {
       return true;
     }
     const foe = bot.entities[action.targetId];
-    if (!foe || !this.engagementTargets().includes(action.targetId) || !this.engage(foe.name ?? '', false)) return false;
+    if (!foe || !this.engagementTargets().includes(action.targetId)) return false;
+    if (this.tracking) {
+      this.trackingLease = null; this.state = 'fighting'; this.rangedOwner = {}; this.armMelee(bot);
+      this.lastLandedAt = this.lastProgressAt = this.lastRealProgressAt = Date.now();
+    } else if (!this.engage(foe.name ?? '', false)) return false;
     if (this.fighting) this.targetId = action.targetId;
     return true;
   }
@@ -528,6 +558,10 @@ export class CombatSession {
     if (this.state === 'fighting') {
       this.provoked.add(attackerId);
       return true;
+    }
+    if (this.tracking) {
+      this.provoked.add(attackerId); this.trackingLease = null;
+      this.beginRetreat('flee'); return true;
     }
     if (this.opts.taskEating?.()) {
       this.provoked.add(attackerId);
@@ -618,7 +652,7 @@ export class CombatSession {
     return Math.ceil(this.bot?.health ?? 0);
   }
 
-  private engage(firstName: string, hurt: boolean): boolean {
+  private engage(firstName: string, hurt: boolean, initial: 'fighting' | 'tracking' = 'fighting'): boolean {
     const bot = this.opts.getBot();
     if (!bot?.entity) return false;
     // 血线不足时转入撤退，避免 250ms 巡检反复尝试进场。
@@ -649,7 +683,8 @@ export class CombatSession {
     this.cooldownNoticed = false;
     if (Date.now() < this.capCooldownUntil && !hurt) return false;
     this.bot = bot;
-    this.state = 'fighting';
+    this.state = initial;
+    this.trackingLease = null;
     const now = Date.now();
     this.startedAt = now;
     this.healthBefore = bot.health ?? null;
@@ -699,9 +734,10 @@ export class CombatSession {
     this.opts.suspendTasks(`战斗:${trialClear ? '试炼清怪' : hurt ? '被' : ''}${zhEntity(firstName)}${hurt ? '打了' : trialClear ? '' : '贴到跟前'}`);
     this.releaseWalkOnly ??= walkOnlyPath(bot);
     this.hook(bot);
-    const held = this.armMelee(bot);
+    const held = initial === 'fighting' ? this.armMelee(bot) : '';
     this.opts.emit(
-      hurt
+      initial === 'tracking' ? `先和${zhEntity(firstName)}保持距离，跟进观察，不主动出手。`
+      : hurt
         ? `有只${zhEntity(firstName)}打过来了,我抄家伙还手!(生命 ${this.hp()}/20${held})`
         : trialClear
           ? `试炼层发现${zhEntity(firstName)},我主动清怪!(生命 ${this.hp()}/20${held})`
@@ -911,6 +947,7 @@ export class CombatSession {
     }
     this.equipSpareTotem(bot, now);
     if (this.state === 'retreating') { this.retreatTick(bot, now); return; }
+    if (this.tracking) { this.trackTick(bot, now); return; }
 
     const t = this.opts.tuning();
     const rangedReady = this.rangedReady(bot);
@@ -2013,6 +2050,7 @@ export class CombatSession {
     const bot = this.bot;
     if (bot) this.cancelCombatFood(bot);
     this.state = 'idle';
+    this.trackingLease = null;
     this.desperate = false;
     this.retreatBank = null;
     this.unhook();
@@ -2054,6 +2092,25 @@ export class CombatSession {
     if (resumed) {
       this.opts.emit(`${resumed}。`, false, false);
     }
+  }
+
+  private trackTick(bot: Bot, now: number): void {
+    const lease = this.trackingLease, entity = lease ? bot.entities[lease.targetId] : null;
+    if (!lease || now >= lease.expiresAt || !entity?.isValid || !entity.position
+      || (entity.uuid ?? null) !== lease.uuid || !canSeeEntity(bot, entity)
+      || !this.scan(bot, this.opts.tuning(), 24).some(f => f.id === lease.targetId && f.visible)) {
+      this.trackingLease = null; this.end('clear'); return;
+    }
+    if ((bot.health ?? 0) < this.opts.tuning().fleeHealth) { this.trackingLease = null; this.beginRetreat('flee'); return; }
+    const delta = entity.position.minus(bot.entity.position), distance = Math.hypot(delta.x, delta.z);
+    if (distance < .01) { this.stopMovement(bot); return; }
+    const toward = distance > lease.maxDistance ? 1 : distance < lease.minDistance ? -1 : 0;
+    // Maintain the selected range on each physics tick; never chase through unseen terrain or a cliff.
+    if (!toward) { this.stopMovement(bot); return; }
+    const dx = delta.x / distance * toward, dz = delta.z / distance * toward;
+    const to = bot.entity.position.offset(dx * 1.2, 0, dz * 1.2);
+    if (!corridorSafe(bot, bot.entity.position, to)) { this.stopMovement(bot); return; }
+    this.pressToward(bot, dx, dz, false);
   }
 
   private release(bot: Bot): void {

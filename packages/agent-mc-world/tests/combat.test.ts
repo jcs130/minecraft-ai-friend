@@ -67,7 +67,8 @@ function combatRigBot(foes: FakeFoe[] = []) {
   bot.attack = (e: { id: number }) => { attacks.push(e.id); };
   bot.setControlState = (k: string, v: boolean) => { controls[k] = v; };
   bot.controlState = controls;
-  bot.blockAt = (p: { y: number }) => ({ name: p.y < 64 ? 'stone' : 'air', boundingBox: p.y < 64 ? 'block' : 'empty' });
+  bot.blockAt = (p: { y: number }) => ({ name: p.y < 64 ? 'stone' : 'air', boundingBox: p.y < 64 ? 'block' : 'empty',
+    getProperties: () => ({}), shapes: p.y < 64 ? [[0, 0, 0, 1, 1, 1]] : [] });
   bot.world = { raycast: () => null };
   bot.pathfinder = { setGoal: () => {} };
   return { bot: bot as never, attacks, controls };
@@ -142,6 +143,62 @@ async function drive(bot: EventEmitter, ms: number, stepMs = 50): Promise<void> 
 }
 
 describe('战斗补给', () => {
+  it('tracks proactively, keeps the chosen range on physics ticks and never swings until told to engage', async () => {
+    const enemy = foe(7, 'zombie', 10), { bot, controls, attacks } = combatRigBot([enemy]);
+    const { session, calls } = rig(bot, { chaseMax: 12 });
+    const track = { kind: 'track' as const, targetId: 7, uuid: null, minDistance: 5, maxDistance: 8, leaseMs: 4000 };
+    session.start();
+    expect(session.react(track)).toBe(true);
+    await drive(bot, 300);
+    expect(session.tracking).toBe(true); expect(attacks).toEqual([]);
+    expect(['forward', 'back', 'left', 'right'].some(k => controls[k])).toBe(true);
+    enemy.position.x = 7;
+    await drive(bot, 200);
+    expect(['forward', 'back', 'left', 'right'].some(k => controls[k])).toBe(false);
+    enemy.position.x = 3;
+    await drive(bot, 200);
+    expect(['forward', 'back', 'left', 'right'].some(k => controls[k])).toBe(true);
+    expect(attacks).toEqual([]); expect(calls.suspended).toBe(1);
+    expect(session.react(track)).toBe(true); expect(calls.suspended).toBe(1);
+    enemy.position = new Vec3(.5, 64, 3);
+    expect(session.react({ kind: 'engage', targetId: 7 })).toBe(true);
+    bot.entity.velocity.y = -.1; // Simulate the descent phase of the native jump-attack controller.
+    await drive(bot, 800);
+    expect(session.fighting).toBe(true); expect(attacks).toContain(7);
+    session.stop();
+  });
+
+  it.each(['expired', 'identity', 'unseen', 'unloaded', 'neutral'])('ends or holds tracking safely when %s instead of chasing or attacking', async change => {
+    const enemy = foe(7, 'zombie', 10), { bot, controls, attacks } = combatRigBot([enemy]);
+    const { session, calls } = rig(bot, { chaseMax: 12 });
+    session.start();
+    expect(session.react({ kind: 'track', targetId: 7, uuid: null, minDistance: 5, maxDistance: 8, leaseMs: 500 })).toBe(true);
+    if (change === 'identity') Object.assign(enemy, { uuid: 'replacement-entity' });
+    if (change === 'unseen') bot.world.raycast = (() => ({})) as never;
+    if (change === 'unloaded') bot.blockAt = (() => null) as never;
+    if (change === 'neutral') enemy.name = 'cow';
+    await drive(bot, change === 'expired' ? 550 : 100);
+    expect(attacks).toEqual([]);
+    expect(['forward', 'back', 'left', 'right'].some(k => controls[k])).toBe(false);
+    if (change !== 'unloaded') { expect(session.active).toBe(false); expect(calls.resumed).toBe(1); }
+    session.stop();
+  });
+
+  it('withdraws before being hit and does not convert tracking into a duplicate hit-triggered fight', async () => {
+    const { bot, attacks } = combatRigBot([foe(7, 'zombie', 5)]), { session, calls } = rig(bot);
+    session.start();
+    expect(session.react({ kind: 'retreat' })).toBe(true);
+    await drive(bot, 150);
+    expect(session.reactionState().retreating).toBe(true); expect(attacks).toEqual([]);
+    expect(calls.suspended).toBe(1); session.stop();
+    const r = combatRigBot([foe(7, 'zombie', 5)]), c = rig(r.bot);
+    c.session.start();
+    expect(c.session.react({ kind: 'track', targetId: 7, uuid: null, minDistance: 5, maxDistance: 8, leaseMs: 4000 })).toBe(true);
+    expect(c.session.onHurtBy(7, 'zombie')).toBe(true);
+    expect(c.session.reactionState().retreating).toBe(true); expect(c.calls.suspended).toBe(1);
+    await drive(r.bot, 300); expect(r.attacks).toEqual([]); c.session.stop();
+  });
+
   it('authoritative incapacitation stops attacks and movement without claiming a stuck route or resuming tasks', async () => {
     const {bot,controls,attacks}=combatRigBot([foe(7,'zombie',3)]);
     const {session,calls,combatReports,setEnvBusy}=rig(bot);

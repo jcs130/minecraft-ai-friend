@@ -14,6 +14,42 @@ const dir = () => { const path = mkdtempSync(join(tmpdir(), 'native-minecraft-cl
 afterEach(() => { for (const path of dirs.splice(0)) rmSync(path, { recursive: true, force: true }); });
 
 describe('generic Minecraft client boundary', () => {
+  it('host tactics run during an open planner turn, deduplicate choices and respect pending planner barriers', async () => {
+    const calls: Array<{ args: unknown; role: string }> = [];
+    let release!: () => void;
+    const world = new MinecraftClientWorld({ cfg: structuredClone(MINECRAFT_CLIENT_DEFAULTS) }, {
+      id: 'minecraft', envPromptVars: () => ({}), start: async () => {}, stop: async () => {},
+      tools: () => [
+        { name: 'mc_combat_tactic', description: '', parameters: {}, handler: async (args, ctx) => {
+          calls.push({ args, role: ctx.role }); return { text: '', meta: { protocol: 'agent-mc-tactics/v1', receipt: { accepted: true } } };
+        } },
+        { name: 'mc_do', description: '', parameters: {}, barrierAfter: true,
+          handler: async () => { await new Promise<void>(resolve => { release = resolve; }); return 'accepted'; } },
+      ],
+    });
+    const runtime = new MinecraftAgentClient({ cfg: { ...structuredClone(MINECRAFT_CLIENT_DEFAULTS), host: 'example.test', username: 'Alice' }, dataDir: dir(), log: nullLogger() }, world);
+    try {
+      await runtime.connect(); runtime.beginTurn('slow-planner');
+      await runtime.hostTactics({ battlefield: true });
+      const args = { choice: { candidate: { kind: 'retreat' }, tacticRevision: 1, connectionGeneration: 1 } };
+      const first = await runtime.hostTactics(args, { requestId: 'fast-1' });
+      expect(await runtime.hostTactics(args, { requestId: 'fast-1' })).toEqual(first);
+      expect(calls).toHaveLength(2); expect(calls.every(c => c.role === 'host-decision')).toBe(true);
+      await expect(runtime.hostTactics({ choice: {} }, { requestId: 'fast-1' })).rejects.toThrow('different arguments');
+      const pending = runtime.call('mc_do', {}, { requestId: 'planner-action', turnId: 'slow-planner' });
+      await Promise.resolve();
+      expect((await runtime.hostTactics(args)).meta?.receipt).toMatchObject({ accepted: false, goalCompleted: false });
+      release(); await pending;
+      expect((await runtime.hostTactics(args)).meta?.receipt).toMatchObject({ accepted: false });
+      runtime.acknowledgeBarrier('planner-action');
+      expect((await runtime.hostTactics(args)).meta?.receipt).toMatchObject({ accepted: true });
+      const abort = new AbortController(); abort.abort();
+      await expect(runtime.hostTactics(args, { signal: abort.signal })).rejects.toThrow();
+      await runtime.endTurn('slow-planner');
+    } finally { release?.(); await runtime.disconnect(); }
+    await expect(runtime.hostTactics({ battlefield: true })).rejects.toThrow('disconnected');
+  });
+
   it.each(['mc', 'mymc'] as const)('exposes host-owned fast choices through a composed World using %s tool names', async prefix => {
     let decisions = 0;
     const environment = { id: 'composed-world', tools: () => [], envPromptVars: async () => ({}), start: async () => {}, stop: async () => {},

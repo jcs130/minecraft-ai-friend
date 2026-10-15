@@ -152,12 +152,13 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
     const battlefield = this.battlefield.sample(bot, this.connectionGeneration, { fighting, emergency,
       taskId: queue?.running?.id ?? null, step: queue?.running?.step.slice(0, 120) ?? null,
       targetEntityId: reaction?.targetId ?? null, sinceHitMs: reaction?.sinceHitMs ?? null,
-      canStep: reaction?.canStep ?? false, followTarget: queue?.running?.followTarget ?? null }, cfg.maxEntities, now);
+      canStep: reaction?.canStep ?? false, followTarget: queue?.running?.followTarget ?? null,
+      tracking: this.combat?.tracking ?? false }, cfg.maxEntities, now);
     const program = this.tactics.getTactic()?.program;
     const frame = this.tactics.decisionFrame(bot, battlefield, program ? 16 : cfg.maxCandidates, now);
     if (!fighting) frame.candidates = [];
     const control = {
-      bodyFree: !this.combat?.active && combatMayTakeTask(queue)
+      bodyFree: (this.combat?.tracking ? !queue?.waiting.length : !this.combat?.active && combatMayTakeTask(queue))
         && !this.methods.current && !bot.currentWindow && !(this.executor?.eating ?? false),
       canStep: (reaction?.canStep ?? false) && !bot.currentWindow && !(this.executor?.eating ?? false),
       targetId: reaction?.targetId ?? null, sinceHitMs: reaction?.sinceHitMs ?? null,
