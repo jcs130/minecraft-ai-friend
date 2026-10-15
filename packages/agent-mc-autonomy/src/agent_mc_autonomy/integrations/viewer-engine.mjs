@@ -34,7 +34,8 @@ export function createEngine(options) {
         const catalog = JSON.parse(readFileSync(cfg.catalogFile, 'utf8'));
         const selected = selectViewerPack(catalog.packs, { minecraftVersion: options.cfg.version });
         if (!selected.available) throw Error(selected.reason);
-        prepared = await prepareNativeWorldPreviewHost({ assetDirectory: resolve(dirname(cfg.catalogFile), selected.pack.assetDirectory), port: cfg.port });
+        prepared = await prepareNativeWorldPreviewHost({ assetDirectory: resolve(dirname(cfg.catalogFile), selected.pack.assetDirectory), port: cfg.port,
+          bundledAppearanceCatalogFile: cfg.bundledAppearanceCatalogFile || '' });
         if (prepared.registrySha256 !== selected.pack.registrySha256) throw Error('VIEWER_CATALOG_REGISTRY_MISMATCH');
         streamFactory = vanilla.observeVanillaNativeStream;
         presentation = bot => vanilla.vanillaPlayerPresentation(bot, stream?.handState?.(), stream?.menuState?.());

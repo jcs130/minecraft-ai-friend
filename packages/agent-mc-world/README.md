@@ -18,6 +18,18 @@ The host owns personality, goals, planning model calls, decisions and personal l
 The core also offers [game memory](docs/game-memory.md): scoped historical notes with local keywords, optional embeddings or external memory services. It never turns recalled notes into current world facts.
 The core starts no model loop. Connecting to a game server is explicit.
 
+Version 0.5.5 owns Mineflayer death recovery: `deathRespawnDelayMs` defaults to
+4000 and accepts 0–15000 milliseconds. It disables implicit native auto-respawn
+and dispatches at most once per actual death. Stop, disconnect, connection
+replacement and an early server respawn cancel the pending dispatch. Death still
+cancels the original native tasks and leases; none of that work is replayed.
+`bot.deathLifecycle` and death event metadata expose the episode ID, observed
+time, phase and pending deadline. Fresh facts include the actual account/realm
+identity and lifecycle. Service-side immediate respawn can shorten the display.
+The host may retain structured `meta.death` with the actual journal event
+run/cursor/time; missing official cause remains unknown. Built-in guides are
+optional knowledge, never a required activity sequence.
+
 Consumers depend on the package, never on another host's checkout:
 
 - `cortico-world-qiandengji`: Cortico API 5 adapter, public name 联机版我的世界.

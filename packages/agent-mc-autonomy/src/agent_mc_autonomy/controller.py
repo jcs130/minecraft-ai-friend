@@ -18,6 +18,7 @@ from .model_protocols import assistant_history
 from .planner import PlannerResponseError, PlannerUnavailableError
 from .tool_schema import argument_error
 from .viewer_public import tool_receipt
+from .death_memory import DeathMemory, TOOL as DEATH_REVIEW_TOOL, identity, lifecycle
 
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
@@ -150,6 +151,7 @@ def model_tools(catalogue):
                   "parameters": {"type": "object", "properties": {"outcome": {"enum": ["reported_done", "blocked"]},
                     "evidence": {"type": "string", "minLength": 1, "maxLength": 1200}},
                     "required": ["outcome", "evidence"], "additionalProperties": False}}})
+    tools.append(DEATH_REVIEW_TOOL)
     return tools
 
 
@@ -274,11 +276,31 @@ class Controller:
         self.unactioned_replies = 0
         self.read_activity = {}
         self.action_requests = {}
+        self.action_scopes = {}
         self.native_outcomes = []
         self.state_path = data / "host-state.json"
         self.fast_policy = fast_policy or FastPolicy(settings.fast)
         self.frame = None
         self.body_lease_due = None
+        self.death_memory = DeathMemory(data)
+        self.game_scope = None
+        self.game_facts = {"parts": []}
+        self.death_waiting = False
+
+    def observe_game_facts(self, facts):
+        self.game_facts = facts
+        fresh_scope = identity(facts)
+        if fresh_scope != self.game_scope:
+            self.recent.clear()
+            self.native_outcomes.clear()
+            self.groups.clear()  # Tool replies/provider replay belong to the previous game identity too.
+        self.game_scope = fresh_scope
+        life = lifecycle(facts)
+        if isinstance(life, dict):
+            self.death_waiting = life.get("phase") != "alive"
+        self.publish(game_identity=self.game_scope,
+                     death_episode=next(iter(self.death_memory.entries(self.game_scope, pending=True)), None))
+        return not self.death_waiting
 
     def persist(self, **changes):
         self.data.mkdir(parents=True, exist_ok=True)
@@ -312,15 +334,19 @@ class Controller:
             self.persist(uncertain=True)
             raise RuntimeError("outcome_unknown: inspect the original action receipt; automatic replay is blocked")
         execution = value.get("execution")
+        foreign_execution_id = None
         if execution:
             key = (execution["kind"], execution["id"])
             if execution.get("terminal") is True:
                 submitted = self.action_requests.pop(key, None)
-                if submitted:
+                submitted_scope = self.action_scopes.pop(key, None)
+                if submitted and submitted_scope != self.game_scope:
+                    foreign_execution_id = execution["id"]
+                if submitted and submitted_scope == self.game_scope:
                     name, arguments, request_id, read_only = submitted
                     phase = execution.get("phase")
                     event = next((e for e in value.get("events", []) if (e.get("execution") or {}).get("id") == execution["id"]), {})
-                    reference = {k: event[k] for k in ("run", "cursor") if k in event}
+                    reference = {k: event[k] for k in ("run", "cursor", "ts") if k in event}
                     receipt = str((execution.get("evidence") or {}).get("receipt", ""))
                     self.native_outcomes.append({"tool": name, "execution_id": execution["id"], "phase": phase,
                         "observation_only": read_only, "goal_verified": False,
@@ -349,7 +375,20 @@ class Controller:
             else:
                 self.pending[key] = execution
             self.persist(pending=list(self.pending.values()))
-        self.recent.extend(e for e in value.get("events", []) if e.get("contextDelivery") != "archive-only" and not e.get("meta", {}).get("staleEpoch"))
+        for event in value.get("events", []):
+            if event.get("contextDelivery") == "archive-only" or event.get("meta", {}).get("staleEpoch"):
+                continue
+            death = (event.get("meta") or {}).get("death")
+            if isinstance(death, dict):
+                episode = self.death_memory.record(event, self.game_facts, self.recent, self.native_outcomes,
+                    [{"tool": item[0], "request_id": item[2], "execution_id": key[1], "observation_only": item[3]}
+                     for key, item in self.action_requests.items() if self.action_scopes.get(key) == death.get("scope")])
+                if episode:
+                    self.death_waiting = True
+                    self.continuation_needed = True
+                    self.publish(death_episode=episode, game_identity=episode["scope"])
+        self.recent.extend(e for e in value.get("events", []) if e.get("contextDelivery") != "archive-only" and not e.get("meta", {}).get("staleEpoch")
+                           and (foreign_execution_id is None or (e.get("execution") or {}).get("id") != foreign_execution_id))
         self.recent = self.recent[-64:]
 
     def current_work(self):
@@ -360,7 +399,10 @@ class Controller:
         return bool(self.pending)
 
     async def protocol(self, action, **arguments):
-        return json_content(await self.bridge.call("mc_protocol", {"protocol": PROTOCOL, "action": action, **arguments}))
+        result = json_content(await self.bridge.call("mc_protocol", {"protocol": PROTOCOL, "action": action, **arguments}))
+        if action == "facts":
+            self.observe_game_facts(result)
+        return result
 
     async def events(self):
         if self.body_lease_due is not None and time.monotonic() >= self.body_lease_due:
@@ -514,6 +556,12 @@ class Controller:
             raw = {"structuredContent": {"protocol": PROTOCOL, **await self.original_page(arguments)}}
         elif name == "mc_tool_help":
             raw = {"structuredContent": {"protocol": PROTOCOL, **documentation}}
+        elif name == "death_review":
+            try:
+                detail = self.death_memory.execute(self.game_scope, arguments)
+                raw = {"structuredContent": {"protocol": PROTOCOL, "text": encode(detail)}}
+            except ValueError as error:
+                raw = {"structuredContent": {"protocol": PROTOCOL, "failed": True, "text": str(error)}}
         else:
             raw = await self.bridge.call(name, arguments, request_id=request_id, turn_id=self.turn)
         result = outcome(raw)
@@ -530,8 +578,11 @@ class Controller:
         if execution:
             key = (execution["kind"], execution["id"])
             if len(self.action_requests) >= 64 and key not in self.action_requests:
-                self.action_requests.pop(next(iter(self.action_requests)))
+                old = next(iter(self.action_requests))
+                self.action_requests.pop(old)
+                self.action_scopes.pop(old, None)
             self.action_requests[key] = (name, json.loads(encode(arguments)), request_id, observation_call(name, arguments))
+            self.action_scopes[key] = self.game_scope
         if execution and not execution.get("terminal"):
             self.action_owners[(execution["kind"], execution["id"])] = self.active_goal["id"] if self.active_goal else "base-goal"
         self.receipt(result)
@@ -667,6 +718,11 @@ class Controller:
         return prepared
 
     async def execute_model_call(self, name, arguments):
+        if self.death_waiting:
+            self.continuation_needed = True
+            result = {"failed": True, "dispatched": False, "origin": "controller_boundary",
+                      "text": "Death recovery is awaiting respawn and fresh facts. No action was dispatched."}
+            return result, encode(result), True
         """Dispatch one validated call; return its result and native turn boundary."""
         queue_error = None
         if name in {"mc_do", "mc_scout"}:
@@ -797,6 +853,9 @@ class Controller:
                 if self.stop_requested():
                     return
                 facts = await self.protocol("facts")
+                if self.death_waiting:
+                    self.continuation_needed = True
+                    return
                 state = focus_state(goal, facts, self.pending)
                 if round_index == 0:
                     focus = await self.fast_policy.choose(state)
@@ -824,7 +883,7 @@ class Controller:
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
-                        context_counter=self.context_counter, host_context=host_context)
+                        context_counter=self.context_counter, host_context=host_context, death_memory=self.death_memory.context(self.game_scope))
                 except ValueError:
                     if not reserve:
                         raise
@@ -832,7 +891,7 @@ class Controller:
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
-                        context_counter=self.context_counter, host_context=host_context)
+                        context_counter=self.context_counter, host_context=host_context, death_memory=self.death_memory.context(self.game_scope))
                 if reserve:
                     messages, _ = attach_frame(messages, frame)
                 budget.update(image_reserve=reserve, total=budget["total"] + reserve, limit=self.settings.context_tokens)

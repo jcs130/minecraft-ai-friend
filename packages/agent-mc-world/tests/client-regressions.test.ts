@@ -63,6 +63,19 @@ describe('whisper identity from raw messages', () => {
 });
 
 describe('live readouts and honest startup', () => {
+  it('reads actual current account identity and death lifecycle rather than an old configured name', () => {
+    const r = methodHarness();
+    try {
+      Object.assign((r.world as any).bridge, { connected: true });
+      Object.assign(r.bot, { username: 'ActualPlayer', player: { uuid: 'actual-current-uuid' },
+        deathLifecycle: { episodeId: 'death-actual', phase: 'respawn_pending', observedAt: '2026-10-15T01:00:00Z', respawnAt: '2026-10-15T01:00:04Z' } });
+      const parts = r.world.requestFacts()!.parts!;
+      expect(JSON.parse(parts.find(p => p.key === 'identity')!.text)).toMatchObject({ account: 'offline:actual-current-uuid' });
+      expect(JSON.parse(parts.find(p => p.key === 'deathLifecycle')!.text)).toMatchObject({ episodeId: 'death-actual', phase: 'respawn_pending' });
+      Object.assign(r.bot, { player: { uuid: 'new-current-uuid' } });
+      expect(r.world.requestFacts()!.parts!.find(p => p.key === 'identity')!.text).toContain('new-current-uuid');
+    } finally { r.close(); }
+  });
   it('reports a stopped login honestly and rejects replacement work without changing the queue', async () => {
     const r = methodHarness();
     try {

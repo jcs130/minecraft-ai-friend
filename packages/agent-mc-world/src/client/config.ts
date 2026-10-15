@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { MINECRAFT_DEFAULTS, type MinecraftConfigSection } from '../../core/config.ts';
 import { protocolVersion } from './authentication.ts';
+import { respawnDelay } from '../../core/death-lifecycle.ts';
 import { validateJavaClientConfiguration } from './java-client.ts';
 
 export type MinecraftClientConfig = MinecraftConfigSection;
@@ -13,6 +14,7 @@ export const MINECRAFT_CLIENT_DEFAULTS: MinecraftClientConfig = {
   player: { ...MINECRAFT_DEFAULTS.player, teleportToBot: false },
 };
 export function assertMinecraftReady(cfg: MinecraftClientConfig): void {
+  respawnDelay(cfg.deathRespawnDelayMs);
   if (cfg.provider !== undefined && !['mineflayer', 'java-client'].includes(cfg.provider)) throw new Error('Unknown Minecraft body provider');
   if (cfg.provider === 'java-client') validateJavaClientConfiguration(cfg.javaClient);
   if (!cfg.host.trim() || !cfg.username.trim()) throw new Error('Configure a Minecraft server address and account.');

@@ -18,6 +18,7 @@ export const MINECRAFT_DEFAULTS = {
   loginConfigFile: '',
   /** Maximum gap between server keepalive packets; not an action retry budget. */
   keepAliveTimeoutMs: 60_000,
+  deathRespawnDelayMs: 4000,
   /**
    * 全链路的版本约定:服务器(Paper)、观察者客户端(Fabric+SpectatorPlus)、
    * mineflayer 协议必须使用同一版本。主力优化和验收目标为原版 Java 1.21.1，
@@ -211,6 +212,8 @@ export interface MinecraftConfigSection {
   loginConfigFile: string;
   /** Keepalive packet timeout in milliseconds, default 60 seconds. */
   keepAliveTimeoutMs?: number;
+  /** Connection-owned death display delay, 0..15000 milliseconds. */
+  deathRespawnDelayMs?: number;
   version: string;
   viewerPort: number;
   viewerAssetsDir: string;
@@ -392,6 +395,10 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
     properties: {
       'worlds.minecraft.world.tickSec': {
         type: 'integer', title: '世界节流 tick', minimum: 5, maximum: 300, 'x-suffix': 's', 'x-hot': true,
+      },
+      'worlds.minecraft.deathRespawnDelayMs': {
+        type: 'integer', title: '死亡后重生等待', minimum: 0, maximum: 15000, 'x-suffix': 'ms', 'x-hot': false,
+        description: '连接内实际重生前的等待时间；服务端主动重生优先。停止会取消尚未派发的重生。',
       },
       'worlds.minecraft.world.moveThreshold': {
         type: 'integer', title: '位移播报阈值', minimum: 4, maximum: 200, 'x-suffix': '格', 'x-hot': true,

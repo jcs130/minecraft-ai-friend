@@ -158,6 +158,7 @@ import {
 } from './ranged.ts';
 import { piglinIsHostile } from './piglin.ts';
 import { DeathBook } from './deaths.ts';
+import { isOwnDeathTranslation } from './death-cause.ts';
 import { ExploreBook } from './explored.ts';
 import { ServerActionWait } from './server-action-wait.ts';
 import { zhDimension, zhEntity, zhName } from './names.ts';
@@ -3409,6 +3410,12 @@ export class MinecraftWorld implements World {
       { key: 'foodReserve', text: this.currentFoodReserve(snap, true) }];
     const last = this.lastFinishedTask;
     const bot = this.bridge.bot;
+    if (bot) {
+      parts.unshift({ key: 'identity', text: JSON.stringify({ realm: this.realmKey(),
+        account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.botName }) });
+      const lifecycle = (bot as Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }).deathLifecycle;
+      parts.unshift({ key: 'deathLifecycle', text: JSON.stringify(lifecycle ?? { phase: 'alive' }) });
+    }
     if (bot) parts.push({ key: 'temporaryScaffolds', text: temporaryScaffoldReadout(bot) });
     if (this.bodyInhibitReason) parts.push({ key: 'bodyRestriction', text: `身体当前受限：${this.bodyInhibitReason}；动作等待恢复回执，不能当作寻路失败。` });
     // 终态可能刚投递，而下一拍快照尚未发生。读取最新原文，避免只有受理回执
@@ -4157,6 +4164,7 @@ export class MinecraftWorld implements World {
       username: this.cfg.username || this.botName,
       version: this.cfg.version,
       keepAliveTimeoutMs: this.cfg.keepAliveTimeoutMs,
+      deathRespawnDelayMs: this.cfg.deathRespawnDelayMs,
       authentication: this.accountAuth.agent,
       loginConfigFile: () => this.cfg.loginConfigFile,
       viewerPort: this.cfg.viewerPort,
@@ -4184,6 +4192,7 @@ export class MinecraftWorld implements World {
       // 第一次掉线值得叫醒她(手上的事全废了);之后每一次重连没成只是同一件事的
       // 复述,压成不唤醒的一条,免得连不上的那半小时里每隔几十秒炸一次
       onDisconnect: (reason, willReconnect, attempt) => {
+        this.pendingDeathCause = null;
         this.bodyInhibitReason = null; this.bodyInhibitHold = null;
         this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
         this.methods.stop('游戏连接已断开，原方法坐标和权限作废');
@@ -4248,6 +4257,7 @@ export class MinecraftWorld implements World {
   }
 
   async stop(): Promise<void> {
+    this.pendingDeathCause = null;
     this.photography.stop();
     this.initialSceneStop?.(); this.initialSceneStop = null;
     this.hearingDetach?.();this.hearingDetach=null;this.attention.reset();
@@ -4496,6 +4506,7 @@ export class MinecraftWorld implements World {
       mc_queue: async (_args, ctx) => this.readOnce('mc_queue', ctx, () => this.queueReadout()),
       mc_blocked: async (_args, ctx) => this.readOnce('mc_blocked', ctx, () => this.blockedReadout()),
       mc_stop: async () => {
+        this.bridge?.cancelRespawn();
         this.methods.stop('mc_stop取消方法');
         this.interruptIdle('stop-command');
         if (!this.executor) return this.toolLog('mc_stop', {}, '[mc_stop 失败] World 未启动');
@@ -6432,6 +6443,7 @@ export class MinecraftWorld implements World {
   }
 
   protected onSpawn(): void {
+    this.pendingDeathCause = null;
     this.bodyInhibitReason = null; this.bodyInhibitHold = null;
     this.reflexes?.start();
     this.initialSceneStop?.();
@@ -6510,6 +6522,7 @@ export class MinecraftWorld implements World {
    * 不重走 onSpawn：世界和连接未变，快照基线与暂态仍有效。
    */
   protected onRespawn(): void {
+    this.pendingDeathCause = null;
     this.setBodyInhibited(null);
     this.attention.reset();
     const now = Date.now();
@@ -6517,6 +6530,12 @@ export class MinecraftWorld implements World {
     this.bodyLease.revive(now);
     // 新一期身体不继承旧 owner 实例:死时已清过一次,死到重生之间还可能又攒了几个
     this.resetBodyOwners();
+    const lifecycle = (this.bridge?.bot as (Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }) | null)?.deathLifecycle;
+    if (lifecycle?.phase === 'alive') this.emit('minecraft.event', '[Minecraft] 已收到重生后的生命读数。', false,
+      { trigger: 'flush', meta: { deathLifecycle: lifecycle } });
+    const confirm = this.deathRespawnConfirmation;
+    this.deathRespawnConfirmation = null;
+    if (confirm) setTimeout(confirm, 3000);
   }
 
   protected attachItemBreak(bot: NonNullable<Bridge['bot']>): void {
@@ -6902,6 +6921,10 @@ export class MinecraftWorld implements World {
   protected hookMessageEvents(bot: any): void {
     if (this.hookedMessageBots.has(bot)) return;
     this.hookedMessageBots.add(bot);
+    this.pendingDeathCause = null;
+    const clearDeathCause = () => { if (this.bridge?.bot === bot) this.pendingDeathCause = null; };
+    bot.on('respawn', clearDeathCause);
+    bot.on('spawn', clearDeathCause);
     this.lastServerFeedback = null;
     this.recentSystemMessages.clear();
     const noteActionFeedback = (value: unknown, keyHint = ''): void => {
@@ -7002,7 +7025,10 @@ export class MinecraftWorld implements World {
         if (key.startsWith('death.') || key === 'chat.type.advancement') {
           const text = jsonMsg.toString();
           if (!text) return;
-          if (text.includes(this.chatName())) {
+          const own = key.startsWith('death.')
+            ? this.bridge?.bot === bot && isOwnDeathTranslation(jsonMsg, bot.username || this.chatName(), bot.player?.uuid)
+            : text.includes(this.chatName());
+          if (own) {
             if (key.startsWith('death.')) {
               this.diag.write({
                 lane: 'world', event: 'death-cause',
@@ -7333,6 +7359,9 @@ export class MinecraftWorld implements World {
     });
     bot.on('death', () => {
       // death 是 terminal 边界：先撤掉旧技能、冻结任务、队列与 path goal，再记录/播报。
+      const lifecycle = (bot as Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }).deathLifecycle;
+      if (lifecycle && this.lastDeathEpisodeId === lifecycle.episodeId) return;
+      this.lastDeathEpisodeId = lifecycle?.episodeId ?? null;
       // CombatSession 自己随后收到同一事件，只负责释放身体，不得恢复这些旧任务。
       this.interruptIdle('death');
       this.bodyLease.invalidate('death', Date.now());
@@ -7377,12 +7406,18 @@ export class MinecraftWorld implements World {
         'minecraft.event',
         `[Minecraft] 你死了(今天第 ${toll.today} 次)。${causeLine}${this.deathNote(bot, dropAt)}${hereLine}`,
         true,
+        { meta: { deathLifecycle: lifecycle, death: { id: lifecycle?.episodeId ?? randomUUID(),
+          observed_at: lifecycle?.observedAt ?? new Date(this.lastDeathAt).toISOString(),
+          scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.botName },
+          position: dropAt, health: bot.health, food: bot.food,
+          cause: cause ? { text: cause.text, key: cause.key, observed_at: new Date(cause.at).toISOString() } : null } } },
       );
       // 死亡会把摄像机的附身甩掉,重生后重下;同一拍用实测坐标复核重生落点
-      setTimeout(() => {
+      this.deathRespawnConfirmation = () => {
+        if (this.bridge?.bot !== bot || bot.health <= 0 || this.lastDeathEpisodeId !== lifecycle?.episodeId) return;
         this.syncSpectator('bot 重生');
         this.confirmRespawn(bot, dropAt, predicted);
-      }, 3_000);
+      };
     });
     bot.on('health', () => {
       const h = bot.health;
@@ -8322,6 +8357,8 @@ export class MinecraftWorld implements World {
 
   /** 上一条持续伤害播报的时刻(着火/窒息那条节流线) */
   protected lastPersistentDamageAt = 0;
+  protected lastDeathEpisodeId: string | null = null;
+  protected deathRespawnConfirmation: (() => void) | null = null;
 
   /**
    * 持续伤害的节流播报:只报状态事实(在烧/头卡在什么里 + 当前血量),不建议动作。
