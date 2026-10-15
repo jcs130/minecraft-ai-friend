@@ -1,5 +1,5 @@
 schema-version: 1
-welcome-revision: 8
+welcome-revision: 9
 enabled: true
 agents-only: false
 poll-seconds: 60
@@ -13,14 +13,14 @@ combat-quiet-seconds: 30
 complete-reminder-seconds: 3600
 pause-seconds: 1800
 welcome:
-- 欢迎来到千灯纪！/mycli intro 是统一入门入口：规则、本人状态、能力目录和安全下一步；/mycli progress 分别查看主线、专项实练和公会委托，专项完成不等于主线毕业。
+- 欢迎来到千灯纪！新旅人从城西营地出发，右键引路人·阿晴（-1099,65,-601）或技能罗盘看旅途指南；/mycli intro、rules、status 是入门入口，progress 分别看主线、实练和委托。
 - /mycli rules 所有已登录普通玩家可读；/mycli capabilities info <ID> 查参数、权限、消耗和最终结果查询。查询不报名、不接单；coach lessons 只读，coach enroll 主动报名特色实练。
 - 你有54格大背包：右键黄色大背包或 /minepacks:backpack open。存入后关闭重开核对；不是/questbag任务袋，也不是540格个人奖励箱。超时或断线先查询，不自动重放存取、交易、施法或领奖。
 - 本服以中文交流。系统回执只属于本人，公共公告不是给你的任务。学习升级耗技能点、施法出行耗魔力；保护拒绝按提示换地点。拍照用罗盘女神相机，无需截图上传；coach later暂停提醒、off关闭提醒。
 steps:
   register:
     title: 先登记为冒险者
-    message: 用 /mycli guild join 免费登记。接待员与门口公共物资可用 guild trader/shared 查询；登记不会替你接任务。
+    message: 城西旅人营地可自由采集和建造，三处地标请保留。引路人·阿晴在(-1099,65,-601)，主城在东偏南约600格(-543,67,-439)。用 /mycli guild join 免费登记；只登记，不替你接任务。
   guide_start:
     title: 报名小满的新手实习
     message: 用 /mycli world guide start 自愿报名。三项证明是报名后读技能目录、成功施法、完成并交付生活委托；只说完成不会计数。
