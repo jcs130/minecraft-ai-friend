@@ -30,7 +30,7 @@ export class NativeEvidenceArchive {
 }
 export function compactItem(value: any): unknown {
   if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(['slot', 'empty', 'count', 'name', 'displayName'].filter(key => key in value).map(key => [key, typeof value[key] === 'string' ? value[key].slice(0, 256) : value[key]]));
+  return Object.fromEntries(['slot', 'empty', 'count', 'name', 'displayName', 'instanceHash'].filter(key => key in value).map(key => [key, typeof value[key] === 'string' ? value[key].slice(0, 256) : value[key]]));
 }
 export function compactItems(value: any) { return Array.isArray(value) ? { size: value.length, occupied: value.filter(item => !item.empty).map(compactItem) } : value; }
 /** Only alias an exactly equal displayed slot list; different slot mappings stay explicit. */
@@ -44,12 +44,14 @@ export function compactNativeItems(state: Record<string, any>) {
 export function compactNativeActionEvent(state: Record<string, any>) {
   const keys = ['protocol','sampledAt','generation','connected','server','uuid','username','dimension','position','health','food','yaw','pitch','onGround','selectedSlot','screen','screenToken','screenTitle','syncId','menuRevision'];
   return { ...Object.fromEntries(keys.filter(key => key in state).map(key => [key, typeof state[key] === 'string' ? state[key].slice(0,512) : state[key]])),
-    cursor: compactItem(state.cursor), stateQuery: 'mc_state / mc_bag', originalQuery: 'mc_evidence with raw.key and raw.sha256' };
+    cursor: compactItem(state.cursor), inventoryTransfer: compactInventoryTransfer(state.inventoryTransfer), stateQuery: 'mc_state / mc_bag', originalQuery: 'mc_evidence with raw.key and raw.sha256' };
 }
 export function compactNativeState(state: Record<string, any>) {
   const keys = ['protocol','sampledAt','generation','connected','server','uuid','username','dimension','position','health','food','yaw','pitch','onGround','selectedSlot','weather','time','screen','screenToken','screenTitle','syncId','menuRevision','buttons'];
   const out: Record<string, unknown> = Object.fromEntries(keys.filter(key => key in state).map(key => [key, typeof state[key] === 'string' ? state[key].slice(0, 512) : state[key]]));
   Object.assign(out, compactNativeItems(state)); out.cursor = compactItem(state.cursor);
+  if(state.inventoryPick) out.inventoryPick=state.inventoryPick;
+  if(state.inventoryTransfer) out.inventoryTransfer=compactInventoryTransfer(state.inventoryTransfer);
   out.notices = { retained: state.messages?.length ?? 0, lastSeq: state.messages?.at(-1)?.seq ?? 0 };
   if (Array.isArray(state.actions)) {
     // Past actions remain in the raw archive, not repeated in every input receipt/frame.
@@ -63,4 +65,10 @@ export function compactNativeState(state: Record<string, any>) {
       pending: active.length, unknown: state.actions.filter((a: any) => a.phase === 'unknown').length, rawQuery: 'mc_queue / mc_evidence' };
   }
   return out;
+}
+
+function compactInventoryTransfer(value: any) {
+  if(!value || typeof value!=='object') return undefined;
+  return Object.fromEntries(['protocol','id','actionId','sourceSlot','selectedSlot','phase','sentAt','dispatched','confirmedAt','confirmation','matched','reason']
+    .filter(key=>key in value).map(key=>[key,typeof value[key]==='string'?value[key].slice(0,512):value[key]]));
 }

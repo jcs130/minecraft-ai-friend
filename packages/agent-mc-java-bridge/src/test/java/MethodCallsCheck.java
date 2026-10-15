@@ -18,6 +18,12 @@ public final class MethodCallsCheck {
         rejects(()->calls.result(4));rejects(()->calls.call(5,"skip",1,()->JsonNull.INSTANCE,()->null));
         for(int i=4;i<=32;i++){calls.call(i,"bounded",1,()->JsonNull.INSTANCE,()->null);calls.tick();calls.tick();}
         rejects(()->calls.call(33,"overflow",1,()->JsonNull.INSTANCE,()->null));
+        MethodCalls async=new MethodCalls();AtomicInteger sent=new AtomicInteger(),reply=new AtomicInteger();
+        async.call(1,"equip",1,()->{sent.incrementAndGet();return JsonNull.INSTANCE;},()->null,()->()->reply.get()>0);
+        for(int i=0;i<30;i++)async.tick();check(async.pending()&&sent.get()==1);
+        async.call(1,"equip",1,()->{throw new AssertionError("Repeated dispatch");},()->null,()->null);
+        reply.incrementAndGet();async.tick();check(!async.pending()&&async.result(1).get("status").getAsString().equals("completed"));
+        async.call(2,"lost",1,()->JsonNull.INSTANCE,()->null,()->()->{throw new IllegalStateException("confirmation unknown");});async.tick();async.tick();check(async.result(2).get("status").getAsString().equals("failed"));
         System.out.println("Native method deduplication, ordered admission, actual tick waits, deferred dispatch and failure receipts passed");
     }
 }

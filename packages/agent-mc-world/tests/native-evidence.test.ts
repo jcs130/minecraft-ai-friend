@@ -3,6 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { NativeEvidenceArchive, compactNativeState, compactNativeItems } from '../src/client/native-evidence.ts';
+it('keeps unresolved inventory exchange identity and confirmation boundaries in compact state',()=>{
+  const result=compactNativeState({inventoryPick:'agent-mc-inventory-pick/v1',inventoryTransfer:{id:'original:1',actionId:'original',phase:'unknown',sourceSlot:30,dispatched:true,reason:'confirmation timed out',unboundedDetails:'x'.repeat(10000)},inventory:[{slot:30,count:23,name:'minecraft:wheat_seeds',instanceHash:'a'.repeat(64)}]});
+  expect(result.inventoryTransfer).toEqual({id:'original:1',actionId:'original',phase:'unknown',sourceSlot:30,dispatched:true,reason:'confirmation timed out'});
+  expect((result.inventory as any).occupied[0].instanceHash).toBe('a'.repeat(64));
+  expect(JSON.stringify(result).length).toBeLessThan(1000);
+});
 it('bounds common state while retaining exact original revisions with digest and paginated access', () => {
   const dir = mkdtempSync(join(tmpdir(), 'native-evidence-'));
   try {

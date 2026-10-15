@@ -49,6 +49,18 @@ async function until(check: () => boolean) {
 }
 
 describe('agent programs using Mineflayer public primitives', () => {
+  it('projects supported nested reads from the public snapshot without exposing live bot fields', async () => {
+    const r=rig();r.stock('wheat_seeds',23,36);const packetCount=r.packets.length;
+    const run=r.runner.start({name:'nested-public-read',code:'const p=await bot.read("entity.position"); return {x:await bot.read("entity.position.x"),p:p.offset(1,0,0),held:await bot.read("heldItem.name"),missing:await bot.read("entity.velocity.x")};'});
+    const result=await methodEnded(r,run.id);
+    expect(result.status).toBe('completed');
+    expect(result.result).toMatchObject({x:r.live.entity.position.x,p:{x:r.live.entity.position.x+1},held:'wheat_seeds'});
+    for(const path of ['entity._client','entity.position.constructor','game.__proto__','heldItem.nbt.secret']){
+      const bad=r.runner.start({name:'private-path',code:`return await bot.read(${JSON.stringify(path)});`});
+      expect(await methodEnded(r,bad.id)).toMatchObject({status:'failed'});
+    }
+    expect(r.packets).toHaveLength(packetCount);
+  });
   it('selects hotbar indexes through the shared worker without moving items and rejects inventory indexes', async () => {
     const r=rig();r.stock('carrot',4,39);
     const run=r.runner.start({name:'select-hotbar',code:'await bot.setQuickBarSlot(3); return await bot.read("heldItem");'});

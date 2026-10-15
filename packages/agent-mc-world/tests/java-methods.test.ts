@@ -32,6 +32,12 @@ function rig(){
   return{m,cfg,port,call,calls,events,actions,held,state,setCap:(v:boolean)=>cap=v,setAdvertised:(v:string[])=>advertised=v,setHang:(v:boolean)=>hang=v,setCleanupFail:(v:boolean)=>cleanupFail=v};
 }
 async function finished(r:ReturnType<typeof rig>,id:number){await vi.waitFor(()=>expect(r.m.runner.read(id)[0].status).not.toBe('running'));await vi.waitFor(()=>expect(r.events.some(e=>e.execution.evidence.localId===id)).toBe(true));return r.m.runner.read(id)[0];}
+it('projects the same nested public reads through one root RPC and preserves Vec3/unknown values',async()=>{
+  const r=rig();const result=await r.call({name:'nested-read',code:'const p=await bot.read("entity.position");return {p:p.offset(1,0,0),x:await bot.read("entity.position.x"),unknown:await bot.read("entity.velocity.x"),emptyHand:await bot.read("heldItem.name")};'});
+  expect(await finished(r,JSON.parse(result.text).id)).toMatchObject({status:'completed',result:{p:{x:0,y:64,z:2},x:-1,unknown:null,emptyHand:null}});
+  expect(r.calls.filter(c=>c.method==='method_read').map(c=>c.args.args)).toEqual([['entity'],['entity'],['entity'],['heldItem']]);
+  expect(r.calls.some(c=>['do','method_call'].includes(c.method))).toBe(false);
+});
 it('executes unchanged JS in the actual shared worker, revives Vec3 and Block.getProperties and serializes native body calls',async()=>{
   const r=rig();const result=await r.call({name:'old-farm-method',code:'const p=(await bot.read("entity")).position; const b=await bot.blockAt(p.offset(1,-1,0)); await bot.setControlState("forward",true); await bot.waitForTicks(3); const held=await bot.getControlState("forward"); await bot.clearControlStates(); return {age:b.getProperties().age,position:b.position.offset(0,1,0),held};'});
   const run=await finished(r,JSON.parse(result.text).id);expect(run.status).toBe('completed');expect(run.result).toEqual({age:'7',position:{x:0,y:64,z:2},held:true});
@@ -92,3 +98,20 @@ it('reconciles already cancelled native work after lease loss without reacquirin
   expect(r.calls.some(c=>c.method==='claim')).toBe(false);expect(r.events.at(-1).execution.terminal).toBe(true);
 });
 it('reports supported signatures and gaps explicitly',()=>{expect(javaMethodHelp('movement')).toContain('RADIANS');expect(javaMethodHelp('inventory')).toContain('36..44');expect(javaMethodHelp('compatibility')).toContain('placeBlock');expect(()=>javaMethodHelp('pathfinder')).toThrow('unavailable');});
+it('awaits storage equip through the unchanged shared program and retains server evidence outside the script return',async()=>{
+  const r=rig(),original=r.port.rpc,seed={slot:30,name:'wheat_seeds',type:5,count:23,instanceHash:'a'.repeat(64)};
+  let response=false,dispatches=0;
+  r.port.rpc=async(method,args)=>{
+    if(method==='method_read'&&args.name==='inventory.items')return{value:[seed]};
+    if(method==='method_read'&&args.args[0]==='heldItem')return{value:response?{...seed,slot:40}:null};
+    if(method==='method_call'&&args.name==='equip'){dispatches++;expect(args.args).toEqual([seed,'hand']);return{status:'running'};}
+    if(method==='method_result')return response?{status:'completed',value:null,inventoryTransfer:{phase:'completed',sourceSlot:30,selectedSlot:4,matched:true,confirmation:'server-slot-and-selection-packets'}}:{status:'running'};
+    return original(method,args);
+  };
+  const start=await r.call({name:'equip-seeds',code:'const item=(await bot.inventory.items()).find(i=>i.name==="wheat_seeds"); await bot.equip(item,"hand"); return await bot.read("heldItem");'});
+  const id=JSON.parse(start.text).id;await vi.waitFor(()=>expect(dispatches).toBe(1));
+  expect(r.m.runner.read(id)[0].status).toBe('running');response=true;
+  const run=await finished(r,id);expect(run).toMatchObject({status:'completed',result:{name:'wheat_seeds',count:23,slot:40}});
+  expect(run.trace[1].result).toMatchObject({inventoryTransfer:{phase:'completed',matched:true,confirmation:'server-slot-and-selection-packets'}});
+  expect(dispatches).toBe(1);
+});

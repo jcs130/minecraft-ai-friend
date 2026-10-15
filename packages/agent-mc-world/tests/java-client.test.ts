@@ -37,6 +37,18 @@ function rig(scriptEnabled = false, minecraftVersion?: string, scriptFailure?: s
   return {cfg,state,world,runtime,http,calls,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it('routes the public equip step from storage into one native request and preserves pending admission',async()=>{
+    const r=rig();Object.assign(r.state,{inventoryPick:'agent-mc-inventory-pick/v1',inventory:[{slot:30,name:'minecraft:wheat_seeds',count:23,instanceHash:'b'.repeat(64)}]});
+    await r.runtime.connect();
+    try {
+      await r.runtime.call('mc_control',{action:'claim'});
+      const bag=JSON.parse((await r.runtime.call('mc_bag',{})).text);expect(bag.inventory.occupied[0].instanceHash).toBe('b'.repeat(64));
+      const result=await r.runtime.call('mc_do',{steps:[{skill:'equip',item:'wheat_seeds'}],action_id:'original-pick'});
+      expect(result.execution).toMatchObject({phase:'accepted',terminal:false,goalCompleted:false});
+      expect(r.calls.filter(call=>call.method==='do')).toHaveLength(1);
+      expect(r.calls.find(call=>call.method==='do')?.params).toMatchObject({action_id:'original-pick',operation:'equip',input:{slot:30,instanceHash:'b'.repeat(64)}});
+    }finally{await r.runtime.disconnect();}
+  });
   it('discovers and submits the same legacy control step without a host-side native rewrite',async()=>{
     const r=rig();await r.runtime.connect();
     try {

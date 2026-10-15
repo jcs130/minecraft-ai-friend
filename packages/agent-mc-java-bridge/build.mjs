@@ -32,6 +32,7 @@ run('javac',['@'+args]);
 run('java',['-cp',classes+delimiter+classpath,'ControlLedgerCheck']);
 run('java',['-cp',classes+delimiter+classpath,'MethodCallsCheck']);
 run('java',['-cp',classes+delimiter+classpath,'BlockSearchCheck']);
+run('java',['-cp',classes+delimiter+classpath,'InventoryPickCheck']);
 mod.depends.minecraft=version;
 writeFileSync(join(build,'fabric.mod.json'),JSON.stringify(mod,null,2)+'\n');
 const output=join(root,'build','agent-mc-bridge-0.1.0-fabric-'+version+'.jar');

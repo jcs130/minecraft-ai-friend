@@ -39,6 +39,11 @@ public final class ClientBridge implements ClientModInitializer {
     private MinescriptRunner scriptRunner;
     private boolean scriptStopUnconfirmed;
     private MethodSession methodSession;
+    private final InventoryPick inventoryPick = new InventoryPick();
+    private static boolean currentNetwork(class_634 handler) { return instance != null && instance.client.method_1562() == handler; }
+    public static void inventorySlot(class_634 handler,int syncId,int slot) { if(currentNetwork(handler)) instance.inventoryPick.slot(syncId,slot); }
+    public static void inventoryFull(class_634 handler,int syncId) { if(currentNetwork(handler)) instance.inventoryPick.full(syncId); }
+    public static void inventorySelection(class_634 handler,int slot) { if(currentNetwork(handler)) instance.inventoryPick.selected(slot); }
     public static boolean hasController() { return instance != null && instance.ledger != null && instance.ledger.active(System.currentTimeMillis()); }
     @Override public void onInitializeClient() {
         instance = this; client = class_310.method_1551(); visual = new VisualExport(client);
@@ -85,7 +90,7 @@ public final class ClientBridge implements ClientModInitializer {
             Path file = directory.resolve("connection.json"); Files.writeString(file, gson.toJson(connection)); restrict(file);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> { running = false; server.stop(0); }));
             ClientTickEvents.START_CLIENT_TICK.register(this::tick);
-            ClientPlayConnectionEvents.JOIN.register((handler, sender, c) -> { generation++; ledger.release(); cancelAll("connection changed"); });
+            ClientPlayConnectionEvents.JOIN.register((handler, sender, c) -> { generation++; ledger.release(); cancelAll("connection changed"); inventoryPick.newConnection(); });
             ClientPlayConnectionEvents.DISCONNECT.register((handler, c) -> { generation++; ledger.release(); cancelAll("connection closed"); });
             ClientReceiveMessageEvents.GAME.register((message, overlay) -> receiveMessage(message.getString(), overlay, "system", null));
             ClientReceiveMessageEvents.CHAT.register((message, signed, sender, parameters, timestamp) ->
@@ -106,7 +111,7 @@ public final class ClientBridge implements ClientModInitializer {
     }
     private JsonObject rpc(String method, JsonObject args) throws Exception {
         long now = System.currentTimeMillis();
-        if (method.equals("capabilities")) return gson.toJsonTree(Map.of("protocol", PROTOCOL, "minecraftVersion", MINECRAFT_VERSION, "realRendering", true, "visualData", "agent-mc-visual/v1", "systemInput", false, "minescript", minescriptAvailable(), "baritone", false, "methodAdapter", MethodSession.PROTOCOL, "methodCalls", MethodSession.METHODS)).getAsJsonObject();
+        if (method.equals("capabilities")) return gson.toJsonTree(Map.of("protocol", PROTOCOL, "minecraftVersion", MINECRAFT_VERSION, "realRendering", true, "visualData", "agent-mc-visual/v1", "systemInput", false, "minescript", minescriptAvailable(), "baritone", false, "methodAdapter", MethodSession.PROTOCOL, "methodCalls", MethodSession.METHODS, "inventoryPick", InventoryPick.PROTOCOL)).getAsJsonObject();
         if (method.equals("operations")) return operations();
         if (method.equals("state")) return state();
         if (method.equals("result")) { ControlLedger.Action action = ledger.get(text(args, "action_id", "")); if (action == null) throw new IllegalArgumentException("Unknown action_id; do not assume it was not dispatched"); return gson.toJsonTree(action).getAsJsonObject(); }
@@ -131,7 +136,7 @@ public final class ClientBridge implements ClientModInitializer {
         if (Set.of("method_call","method_result","method_finish").contains(method)) {
             if(current==null||!current.id.equals(text(args,"action_id",""))||methodSession==null)throw new IllegalStateException("Original method session is not running; reconcile original action_id");
             if(method.equals("method_call"))return methodSession.call(integer(args,"call",0),text(args,"name",""),args.getAsJsonArray("args"));
-            if(method.equals("method_result"))return methodSession.result(integer(args,"call",0));
+            if(method.equals("method_result")){JsonObject result=methodSession.result(integer(args,"call",0)).deepCopy();JsonObject transfer=inventoryPick.inspect();if(transfer.has("id")&&transfer.get("id").getAsString().equals(current.id+":"+integer(args,"call",0)))result.add("inventoryTransfer",transfer);return result;}
             if(methodSession.pending())throw new IllegalStateException("Await pending method call before finishing");
             releaseKeys();ledger.finish(current,"partial","JavaScript program ended; verify actual world effect",state(),now);JsonObject result=gson.toJsonTree(current).getAsJsonObject();current=null;methodSession=null;return result;
         }
@@ -140,10 +145,12 @@ public final class ClientBridge implements ClientModInitializer {
             String id = text(args, "action_id", ""); ControlLedger.Action action = ledger.get(id);
             if (action == null) throw new IllegalArgumentException("Unknown action_id");
             queue.remove(action); if (current == action) { cancelScript(); releaseKeys(); current = null; }
-            ledger.finish(action, "cancelled", "explicit cancellation", state(), now); return gson.toJsonTree(action).getAsJsonObject();
+            ledger.finish(action, inventoryPendingFor(action)?"unknown":"cancelled", "explicit cancellation; dispatched inventory requests are reconciled separately", state(), now); return gson.toJsonTree(action).getAsJsonObject();
         }
         if (!method.equals("do")) throw new IllegalArgumentException("Unknown bridge method");
         if(scriptStopUnconfirmed) throw new IllegalStateException("Prior script cancellation unknown; body blocked");
+        // Reads/reconciliation remain available. Never dispatch over an unknown inventory exchange.
+        if(inventoryPick.unresolved()) { String phase=inventoryPick.inspect().get("phase").getAsString(); if(phase.equals("unknown")) inventoryPick.requireResolved(); }
         connected();
         String operation = text(args, "operation", ""); JsonObject input = object(args, "input"); validate(operation, input);
         String id = text(args, "action_id", ""); ControlLedger.Action existing = ledger.get(id);
@@ -164,6 +171,7 @@ public final class ClientBridge implements ClientModInitializer {
             "inventory_open", "{}; opens the actual player inventory GUI without OS input",
             "gui_click", "{screenToken,index}; actual displayed ButtonWidget, no system mouse")));
         if (minescriptAvailable()) result.getAsJsonObject("operations").addProperty("minescript.run", "{code:string,input:JSON,timeoutMs:100..30000}; Python Minescript 4.0; variables minescript/input_data/result; trusted local code, not a sandbox. Original action ID, exclusive native queue and cancellation apply. Script report is not goal evidence.");
+        result.getAsJsonObject("operations").addProperty("equip", "{slot:0..35,instanceHash:string}; fresh player-inventory stack to main hand, preserving displaced item. Storage uses vanilla server pick and waits for source/hotbar/selection responses, at most5s. Unknown is not replayed. No armor/offhand or open GUI/cursor support.");
         result.getAsJsonObject("operations").addProperty("method.run", "{durationMs:1000..120000}; reserved JavaScript body session, method_call/result/finish. mc_script owns its lifecycle; no source code executes inside Java.");
         return result;
     }
@@ -174,6 +182,7 @@ public final class ClientBridge implements ClientModInitializer {
         try { scriptRunner.cancel(); } catch(Exception error) { scriptStopUnconfirmed=true;releaseKeys();try{if(current!=null)ledger.finish(current,"unknown","Script cancellation unconfirmed",new JsonObject(),System.currentTimeMillis());}catch(Exception ignored){} throw new IllegalStateException("Minescript cancellation unknown; no new body work permitted"); }
     }
     private void validate(String operation, JsonObject input) {
+        if(operation.equals("equip")){if(input.size()!=2||!input.has("slot")||!input.get("slot").isJsonPrimitive()||!input.get("slot").getAsJsonPrimitive().isNumber()||input.get("slot").getAsDouble()!=integer(input,"slot",-1)||integer(input,"slot",-1)<0||integer(input,"slot",-1)>35||!text(input,"instanceHash","").matches("[a-f0-9]{64}"))throw new IllegalArgumentException("equip requires native inventory slot0..35 and fresh instanceHash from mc_bag");return;}
         if(operation.equals("method.run")){if(input.size()!=1||!input.has("durationMs")||!input.get("durationMs").isJsonPrimitive()||!input.get("durationMs").getAsJsonPrimitive().isNumber()||input.get("durationMs").getAsDouble()!=integer(input,"durationMs",0)||integer(input,"durationMs",0)<1000||integer(input,"durationMs",0)>120000)throw new IllegalArgumentException("method.run requires integer durationMs 1000..120000");return;}
         Map<String,Set<String>> fields=Map.of("move",Set.of("forward","back","left","right","jump","sneak","sprint","ticks"),"look",Set.of("yaw","pitch"),"chat",Set.of("text"),"use",Set.of("ticks"),"menu_click",Set.of("screenToken","slot","button","type"),"close_screen",Set.of("screenToken"),"hotbar",Set.of("slot"),"gui_click",Set.of("screenToken","index"),"inventory_open",Set.of(),"minescript.run",Set.of("code","input","timeoutMs"));
         if(fields.containsKey(operation))for(String key:input.keySet())if(!fields.get(operation).contains(key))throw new IllegalArgumentException("Unknown "+operation+" input field: "+key+"; query operations for exact names (back, not backward)");
@@ -190,15 +199,30 @@ public final class ClientBridge implements ClientModInitializer {
     private void tick(class_310 c) {
         try {
             updateScreen();
+            if(inventoryPick.unresolved()&&c.field_1724!=null&&c.field_1687!=null){
+                inventoryPick.update(MethodSession.inventoryIdentities(c),c.field_1724.method_31548().field_7545,System.currentTimeMillis());
+                if(!inventoryPick.unresolved()){
+                    JsonObject transfer=inventoryPick.inspect();ControlLedger.Action original=ledger.get(transfer.get("actionId").getAsString());
+                    if(original!=null&&original.phase.equals("unknown"))ledger.finish(original,original.operation.equals("equip")?transfer.get("phase").getAsString():"cancelled","Original inventory response reconciled after local execution ended; no program replay",state(),System.currentTimeMillis());
+                }
+            }
             if (!ledger.active(System.currentTimeMillis()) || c.field_1724 == null || c.field_1687 == null) { if (current != null || !queue.isEmpty()) cancelAll("lease expired or body disconnected"); return; }
             c.field_1690.field_1837 = false;
             if (current == null && !queue.isEmpty()) {
-                current = queue.remove(); validate(current.operation, current.input);
+                current = queue.remove(); inventoryPick.requireResolved(); validate(current.operation, current.input);
                 current.before = position(); current.phase = "running"; ledger.save(current); dispatch(current);
             }
             if (current == null) return;
             ControlLedger.Action action = current;
             if(action.operation.equals("method.run")){methodSession.tick();return;}
+            if(action.operation.equals("equip")) {
+                methodSession.tick(); JsonObject reply=methodSession.result(1);
+                if(reply.get("status").getAsString().equals("running"))return;
+                JsonObject evidence=state(); evidence.add("method",reply.deepCopy());
+                String phase=reply.get("status").getAsString().equals("completed")?"completed":inventoryPick.unresolved()?"unknown":"blocked";
+                String reason=reply.has("error")?reply.get("error").getAsString():integer(action.input,"slot",-1)<9?"Selected hotbar item observed after game tick; no storage exchange or use implied.":"Main hand observed; storage exchange confirmed by server packets. No use/planting implied.";
+                releaseKeys();ledger.finish(action,phase,reason,evidence,System.currentTimeMillis());current=null;return;
+            }
             if (action.operation.equals("minescript.run")) {
                 JsonObject reply = scripts().poll(); if(reply==null)return;
                 releaseKeys(); JsonObject evidence=state();evidence.add("script",reply);
@@ -214,14 +238,20 @@ public final class ClientBridge implements ClientModInitializer {
             String phase = Set.of("chat", "use", "menu_click", "gui_click").contains(action.operation) ? "partial" : action.operation.equals("move") && moved < .02 ? "blocked" : "completed";
             ledger.finish(action, phase, phase.equals("partial") ? "Input dispatched; verify actual server/inventory/GUI effect before claiming success" : phase.equals("blocked") ? "No actual movement. Inspect collision, GUI and actual movement key names before changing the plan" : null, evidence, System.currentTimeMillis()); current = null;
         } catch (Exception error) {
-            try { cancelScript(); releaseKeys(); if (current != null) ledger.finish(current, scriptStopUnconfirmed?"unknown":"blocked", error.getMessage(), new JsonObject(), System.currentTimeMillis()); } catch (Exception ignored) {}
+            try { cancelScript(); releaseKeys(); if (current != null) ledger.finish(current, scriptStopUnconfirmed||inventoryPendingFor(current)?"unknown":"blocked", error.getMessage(), state(), System.currentTimeMillis()); } catch (Exception ignored) {}
             current = null;
         }
     }
     private void dispatch(ControlLedger.Action action) throws Exception {
         JsonObject input = action.input;
         switch (action.operation) {
-            case "method.run" -> methodSession=new MethodSession(client,integer(input,"durationMs",60000));
+            case "method.run" -> methodSession=new MethodSession(client,integer(input,"durationMs",60000),inventoryPick,action.id);
+            case "equip" -> {
+                int slot=integer(input,"slot",-1);var stack=client.field_1724.method_31548().method_5438(slot);
+                if(!Objects.equals(MethodSession.identity(stack),text(input,"instanceHash","")))throw new IllegalStateException("Inventory item changed before equip dispatch; read fresh mc_bag");
+                JsonArray args=new JsonArray();args.add(MethodSession.item(client,stack,slot<9?slot+36:slot));args.add("hand");
+                methodSession=new MethodSession(client,10000,inventoryPick,action.id);methodSession.call(1,"equip",args);
+            }
             case "minescript.run" -> scripts().start(action.id,input);
             case "look" -> { client.field_1724.method_36456(input.get("yaw").getAsFloat()); client.field_1724.method_36457(input.get("pitch").getAsFloat()); }
             case "chat" -> { String value = text(input, "text", ""); if (value.startsWith("/")) client.method_1562().method_45730(value.substring(1)); else client.method_1562().method_45729(value); }
@@ -244,8 +274,9 @@ public final class ClientBridge implements ClientModInitializer {
         options.field_1894.method_23481(flag(input,"forward")); options.field_1881.method_23481(flag(input,"back")); options.field_1913.method_23481(flag(input,"left")); options.field_1849.method_23481(flag(input,"right"));
         options.field_1903.method_23481(flag(input,"jump")); options.field_1832.method_23481(flag(input,"sneak")); options.field_1867.method_23481(flag(input,"sprint")); options.field_1904.method_23481(action.operation.equals("use"));
     }
-    private void releaseKeys() { methodSession=null; if (client == null) return; class_315 o=client.field_1690; for (class_304 key : List.of(o.field_1894,o.field_1881,o.field_1913,o.field_1849,o.field_1903,o.field_1832,o.field_1867,o.field_1904,o.field_1886)) key.method_23481(false); }
-    private void cancelAll(String reason) { cancelScript(); try { releaseKeys(); if (current != null) ledger.finish(current,"cancelled",reason,new JsonObject(),System.currentTimeMillis()); for(var action:queue) ledger.finish(action,"cancelled",reason,new JsonObject(),System.currentTimeMillis()); } catch(Exception ignored) {} current=null;queue.clear(); }
+    private void releaseKeys() { inventoryPick.unknown("Local execution ended before inventory confirmation; await original server response, no replay"); methodSession=null; if (client == null) return; class_315 o=client.field_1690; for (class_304 key : List.of(o.field_1894,o.field_1881,o.field_1913,o.field_1849,o.field_1903,o.field_1832,o.field_1867,o.field_1904,o.field_1886)) key.method_23481(false); }
+    private boolean inventoryPendingFor(ControlLedger.Action action) { JsonObject receipt=inventoryPick.inspect();return inventoryPick.unresolved()&&receipt.has("actionId")&&receipt.get("actionId").getAsString().equals(action.id); }
+    private void cancelAll(String reason) { cancelScript(); try { releaseKeys(); if (current != null) ledger.finish(current,inventoryPendingFor(current)?"unknown":"cancelled",reason,state(),System.currentTimeMillis()); for(var action:queue) ledger.finish(action,"cancelled",reason,new JsonObject(),System.currentTimeMillis()); } catch(Exception ignored) {} current=null;queue.clear(); }
     private void connected() { if (client.field_1724 == null || client.field_1687 == null || client.method_1562() == null) throw new IllegalStateException("Client is not connected to a world"); }
     private double[] position() { return new double[]{client.field_1724.method_23317(),client.field_1724.method_23318(),client.field_1724.method_23321()}; }
     private void updateScreen() { Object handler=client.field_1724 == null ? null : client.field_1724.field_7512; if(lastScreen!=client.field_1755 || lastHandler!=handler) {screenToken=UUID.randomUUID().toString();lastScreen=client.field_1755;lastHandler=handler;} }
@@ -254,6 +285,7 @@ public final class ClientBridge implements ClientModInitializer {
         JsonObject item=new JsonObject(); item.addProperty("slot",slot);item.addProperty("empty",stack.method_7960());item.addProperty("count",stack.method_7947());
         if(!stack.method_7960()) {
             item.addProperty("name",class_7923.field_41178.method_10221(stack.method_7909()).toString());item.addProperty("displayName",stack.method_7964().getString());
+            item.addProperty("instanceHash",MethodSession.identity(stack));
             item.add("encoded",class_1799.field_24671.encodeStart(class_6903.method_46632(JsonOps.INSTANCE,client.field_1724.method_56673()),stack).result().orElse(JsonNull.INSTANCE));
             item.addProperty("components",stack.method_57353().toString());
         }
@@ -261,6 +293,7 @@ public final class ClientBridge implements ClientModInitializer {
     }
     private JsonObject state() {
         updateScreen(); JsonObject state=new JsonObject();state.addProperty("protocol",PROTOCOL);state.addProperty("sampledAt",Instant.now().toString());state.addProperty("generation",generation);
+        state.addProperty("inventoryPick",InventoryPick.PROTOCOL);state.add("inventoryTransfer",inventoryPick.inspect());
         state.addProperty("connected",client.field_1724!=null&&client.field_1687!=null);state.addProperty("server",client.method_1558()==null?"":client.method_1558().field_3761);state.addProperty("controllerId",ledger.owner(System.currentTimeMillis()));
         state.addProperty("screenToken",screenToken);state.addProperty("screen",client.field_1755==null?"":client.field_1755.getClass().getName());state.addProperty("screenTitle",client.field_1755==null?"":client.field_1755.method_25440().getString());
         JsonArray buttons=new JsonArray();int index=0;for(var button:buttons()){JsonObject b=new JsonObject();b.addProperty("index",index++);b.addProperty("label",button.method_25369().getString());b.addProperty("active",button.field_22763);buttons.add(b);}state.add("buttons",buttons);

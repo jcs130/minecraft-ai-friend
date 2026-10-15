@@ -19,4 +19,13 @@ describe('native legacy command conversion', () => {
     expect(() => translateJavaLegacy({ steps: [{ skill: 'eat', item: 'bread' }] }, { ...state, selectedSlot: 1 })).toThrow();
     expect(() => translateJavaLegacy({ steps: [{ skill: 'equip', item: 'bread', hand: 'off' }] }, state)).toThrow();
   });
+  it('keeps the same equip step/action identity for a storage stack only on an advertised capable bridge',()=>{
+    const request={action_id:'seeds-original',steps:[{skill:'equip',item:'wheat_seeds',hand:'main'}]};
+    const fresh={...state,inventoryPick:'agent-mc-inventory-pick/v1',inventory:[...state.inventory as any[],{slot:30,name:'minecraft:wheat_seeds',count:23,instanceHash:'a'.repeat(64)}]};
+    expect(translateJavaLegacy(request,fresh)).toMatchObject({action_id:'seeds-original',operation:'equip',input:{slot:30,instanceHash:'a'.repeat(64)}});
+    expect(()=>translateJavaLegacy(request,{...fresh,inventoryPick:undefined})).toThrow('Storage requires');
+    expect(()=>translateJavaLegacy(request,{...fresh,inventory:[{slot:30,name:'minecraft:wheat_seeds',count:23}]})).toThrow('identity missing');
+    expect(()=>translateJavaLegacy(request,{...fresh,inventory:[...fresh.inventory,{slot:31,name:'minecraft:wheat_seeds',count:23,instanceHash:'a'.repeat(64)}]})).toThrow('uniquely match');
+    expect(()=>translateJavaLegacy({steps:[{skill:'eat',item:'wheat_seeds'}]},fresh)).toThrow();
+  });
 });
