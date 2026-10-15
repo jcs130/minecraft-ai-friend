@@ -98,7 +98,13 @@ export class JavaClientWorld implements World {
       {key:'javascript',text:JSON.stringify({available:this.nativeMethodsAvailable,api:'mc_script language:javascript api:index / compatibility',contract:'shared name/code/params/validate/runId/call/library/procedure; bot/Vec3',execution:'capability-gated; program completion is not world progress'})},
       ...(this.cfg.javaClient?.minescriptEnabled ? [{ key:'executor',text:JSON.stringify({provider:'java-client',scriptEngine:this.nativeMethodsAvailable?'shared JavaScript bot/Vec3 methods; optional Minescript 4.0 Python':'Minescript 4.0 Python',blockObservation:'mc_probe',blockInteraction:'mc_interact',scriptReference:this.nativeMethodsAvailable?'mc_script language:javascript api:index / compatibility; Python help requires language:python':'mc_script api:index / blocks / movement / interaction / inventory',pythonBlockReturn:'namespaced string, e.g. minecraft:carrots[age=7]',pythonAim:'minescript.player_look_at(x,y,z)',pythonWait:'time.sleep(seconds); JS bot.waitForTicks uses actual game ticks',archiveQuery:'mc_evidence part:script',shortActionWaitMs:this.cfg.javaClient.actionWaitMs??1000}) }] : []),
     ];
-    return { text: parts.map(part => part.text).join('\n'), parts, snapshotTypes: ['minecraft.client.snapshot'] };
+    const native=this.cfg.javaClient;
+    return { text: parts.map(part => part.text).join('\n'), parts, snapshotTypes: ['minecraft.client.snapshot'],
+      ...(native ? {experience:{scope:{realm:`java:${native.expectedServer.toLowerCase().replace(/:25565$/, '')}`,
+        account:`uuid:${native.expectedUuid.replaceAll('-', '').toLowerCase()}`,agent:this.services?.agentName??native.controllerId},
+        observation:state.connected?{at:state.sampledAt,dimension:typeof state.dimension==='string'?state.dimension:null,
+          position:state.position?.length===3?{x:state.position[0],y:state.position[1],z:state.position[2]}:null,
+          health:typeof state.health==='number'?state.health:null,food:typeof state.food==='number'?state.food:null,inventory:null}:null}}:{}) };
   }
   console() { return { label: 'Real Java client', lamps: [{ label: '服务器', state: this.state?.connected ? 'online' as const : 'offline' as const },
     ...(this.cfg.viewerPort > 0 ? [{label:'画面',state:this.viewerError || (this.dataViewer && !this.dataViewer.status().ok) ? 'error' as const : this.dataViewer || this.viewer ? 'online' as const : 'offline' as const,

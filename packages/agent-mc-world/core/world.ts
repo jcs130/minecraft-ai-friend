@@ -3424,6 +3424,9 @@ export class MinecraftWorld implements World {
       : null);
     parts.push({ key: 'lastTask', text: outcome });
     return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts,
+      experience: { scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.botName },
+        observation: { at: new Date().toISOString(), dimension: normalizeDimension(snap.dimension), position: snap.position,
+          health: snap.health, food: snap.food, inventory: snap.invSynced ? Object.fromEntries(snap.inventory.map(i=>[i.name,i.count])) : null } },
       snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue'] };
   }
 

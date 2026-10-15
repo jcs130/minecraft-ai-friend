@@ -3,6 +3,15 @@
 Independent Minecraft execution core, maintained in `jcs130/minecraft-ai-friend`.
 Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.
 
+Reusable Agent Skills: [minecraft-agent](skills/minecraft-agent/SKILL.md) operates the client;
+[minecraft-learning](skills/minecraft-learning/SKILL.md) reviews and improves all operations,
+including flight, blink, spells, gathering and combat. Shared SDK/MCP operation evidence and
+local lesson recall live in this core, with host-owned decisions and personal memory.
+Use `mc_memory {action:"experience",operation:"help"}`. No additional inference is started.
+`node scripts/package-skills.mjs <output-directory>` creates an allowlisted, checksummed
+portable skill bundle without runtime state, credentials or game assets. It does not publish
+to a marketplace or install/connect the runtime. See [the learning contract](docs/operation-learning.md).
+
 Primary optimization and acceptance target: **Minecraft Java 1.21.1**. Other
 versions remain selectable; the public SDK keeps explicit/automatic negotiation.
 The core supplies [versioned vanilla knowledge](docs/vanilla-knowledge.md) through

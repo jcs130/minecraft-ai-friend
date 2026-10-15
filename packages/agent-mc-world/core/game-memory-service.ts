@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { GameMemoryLearning } from './game-memory-learning.ts';
+import { OperationExperienceBook } from './operation-experience.ts';
 import { artifactRef } from './game-memory-learning-contract.ts';
 import { memoryRequest, validateMemoryTransport } from './game-memory-http.ts';
 import { GameMemoryBook, type GameMemoryContext, type MemoryCandidate } from './game-memory.ts';
@@ -146,6 +147,10 @@ export class GameMemoryService {
   async execute(args: Record<string, unknown>, ctx: GameMemoryContext, config: Partial<GameMemoryConfig> = {}, signal?: AbortSignal): Promise<Record<string, unknown>> {
     signal?.throwIfAborted();
     const cfg = { ...GAME_MEMORY_DEFAULTS, ...config };
+    if (args.action === 'experience') {
+      if (!this.directory) throw new Error('Persistent dataDir is required for operation experience');
+      return new OperationExperienceBook(this.directory).query(args, ctx, this.book);
+    }
     if (args.action === 'search' && args.preference !== undefined) cfg.readPreference = args.preference as GameMemoryConfig['readPreference'];
     if (!['local', 'vector', 'remote'].includes(cfg.mode)) throw new Error('Unknown memory mode');
     if (!['local-first', 'balanced', 'remote-first'].includes(cfg.readPreference)) throw new Error('Unknown memory read preference');

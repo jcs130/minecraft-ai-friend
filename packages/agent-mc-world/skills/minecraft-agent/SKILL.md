@@ -18,6 +18,8 @@ For building, cleanup and editing your own methods, read [building and methods](
 
 For game lessons, attribution, failed-write recovery and optional service learning, read [game memory](references/memory.md). Local notes and editable methods work without a cloud service; verify save, later retrieval, adoption and actual outcome separately.
 
+For improvement across **all** operations (flight, blink, spells, movement, gathering, crafting, interaction and combat), use the companion `minecraft-learning` skill and [operation learning](references/operation-learning.md). SDK/MCP calls retain scoped choice/action metadata, fresh numeric observations and execution receipts in the core. Query `mc_memory {action:"experience",operation:"help"}` before reflecting. Retrieved lessons are historical Agent interpretations. Apply only when current prerequisites match; preserve failures and old method versions. Installing either skill starts no inference or game connection.
+
 `mc_artifact` stores selected UTF-8 execution artifacts. Versioned `agent-mc.procedure/v1` artifacts (legacy `cortico.procedure/v1` remains readable) can compose existing game methods; the format does not require the Cortico framework. Your host owns memory, retrieval, evaluation and event wakeups. Do not inject the whole method library every turn.
 
 Read actual tool availability before using quick tactics. The generic client currently exposes native control and ordinary reflexes; the legacy RPG tactic/spell adapter is not a default capability. Do not claim a tool or server skill exists because an old server guide mentioned it.

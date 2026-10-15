@@ -62,6 +62,7 @@ export interface WorldHost {
   drainPendingEvents(filter: (event: EventEnvelope) => boolean): Promise<EventEnvelope[]>;
   modelFacts: ModelFacts;
   decisions?: import('./decision.ts').DecisionPort;
+  recallGameLessons?(query:string): {reference:string;summary:string;content:string;truncated:boolean;trust:string;currentWorldVerified:boolean}[];
   blob(handle: string): { bytes: Uint8Array; mime: string } | null;
   reportUsage(usage: LLMUsage, options?: { model?: string; label?: string }): void;
   llmStalls?(withinMs: number): Promise<number>;
@@ -69,6 +70,7 @@ export interface WorldHost {
 }
 export interface WorldRequestFacts {
   text: string; snapshotTypes: readonly string[]; parts?: readonly { key: string; text: string }[];
+  experience?: { scope: import('../../core/game-memory.ts').GameMemoryScope; observation: import('../../core/operation-experience.ts').OperationObservation | null };
 }
 export interface StoragePart {
   key: string; label: string; kind: 'disk' | 'memory'; location?: string; danger?: boolean; note?: string; order?: number;

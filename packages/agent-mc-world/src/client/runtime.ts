@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createMinecraftChoiceTool } from './choice.ts';
+import { ClientOperationLearning } from './operation-learning.ts';
+import type { OperationAttribution } from '../../core/operation-experience.ts';
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { EventEnvelope, Logger, ModelFacts, ToolOutcome, World, WorldHost, WorldRequestFacts } from './contracts.ts';
@@ -42,6 +44,7 @@ export type ClientEnvironment = World & {
 export class MinecraftAgentClient {
   readonly journal: AgentJournal;
   readonly metrics: AgentMetrics;
+  readonly learning: ClientOperationLearning;
   private phase: 'disconnected' | 'starting' | 'started' | 'stopping' = 'disconnected';
   private transition?: Promise<void>;
   private startupPending = false;
@@ -71,6 +74,10 @@ export class MinecraftAgentClient {
         timezone: options.timezone ?? 'UTC', botName: options.agentName ?? options.cfg.username }),
     readonly binding: { profile: string; toolPrefix: 'mc' | 'mymc' } = { profile: 'minecraft', toolPrefix: 'mc' }) {
     this.journal = new AgentJournal(options.dataDir, 1024, world.id);
+    this.learning = new ClientOperationLearning(options.dataDir, this.journal.run,
+      () => this.world.requestFacts?.() as WorldRequestFacts | null,
+      () => ({realm:`weak:${options.cfg.host}:${options.cfg.port}|`,account:`${options.cfg.auth??'offline'}:${options.cfg.username}`,
+        agent:options.agentName??options.cfg.username}));
     this.facts = new CurrentFacts(this.journal);
     this.requests = new RequestLedger(this.journal);
     this.metrics = new AgentMetrics(this.journal.run, options.dataDir, handle => this.journal.blob(handle) !== null);
@@ -86,6 +93,7 @@ export class MinecraftAgentClient {
       blob: handle => this.journal.blob(handle),
       modelFacts: options.modelFacts ?? { model: () => '', accepts: () => false, contextWindow: () => undefined },
       decisions: options.decisions,
+      recallGameLessons: query=>this.learning.recall(query),
       reportUsage: (usage, metadata) => appendFileSync(join(options.dataDir, 'usage.jsonl'), JSON.stringify({
         at: new Date().toISOString(), run: this.journal.run, usage, metadata }) + '\n'),
       log: options.log,
@@ -94,6 +102,7 @@ export class MinecraftAgentClient {
 
   get profile() { return this.binding.profile; }
   private recordExecution(receipt: ExecutionReceipt): void {
+    this.learning.execution(receipt);
     const key = `${receipt.kind}:${receipt.id}`, previous = this.executions.get(key);
     // A very fast background operation can finish before its admission RPC returns.
     if (previous?.terminal && !receipt.terminal) return;
@@ -156,6 +165,7 @@ export class MinecraftAgentClient {
     const console = this.world.console?.();
     const connection = this.world.connectionReadiness?.() ?? console?.connection ?? null;
     return { profile: this.profile, toolPrefix: this.toolPrefix, phase: this.phase, run: this.journal.run, latestCursor: this.journal.store.latestCursor(),
+      learning:this.learning.status(),
       connection: connection && typeof connection.ready === 'boolean' && typeof connection.phase === 'string'
         ? { ready: connection.ready, phase: connection.phase } : null,
       lamps: console?.lamps ?? [], links: console?.links ?? [],
@@ -272,13 +282,13 @@ export class MinecraftAgentClient {
   }
 
   async call(name: string, args: Record<string, unknown>, options: string | CallOptions = {}, legacySignal?: AbortSignal): Promise<ToolOutcome> {
-    const { requestId: callId = randomUUID(), turnId, signal = legacySignal } = typeof options === 'string' ? { requestId: options } : options;
+    const { requestId: callId = randomUUID(), turnId, signal = legacySignal, attribution } = typeof options === 'string' ? { requestId: options } : options;
     const offlineMemory = this.phase === 'disconnected' && name === `${this.toolPrefix}_memory`;
     const offlineKnowledge = this.phase === 'disconnected' && name === `${this.toolPrefix}_knowledge`;
     const offlineCall = offlineMemory || offlineKnowledge;
     if (this.phase !== 'started' && !offlineCall) throw new Error(`Game runtime is disconnected; call ${this.toolPrefix}_connection action:connect first.`);
     if (typeof callId !== 'string' || !callId || callId.length > 256) throw new Error('Invalid request id');
-    const signature = createHash('sha256').update(JSON.stringify([name, args, turnId ?? this.turn?.id])).digest('hex');
+    const signature = createHash('sha256').update(JSON.stringify([name, args, turnId ?? this.turn?.id, ...(attribution ? [attribution] : [])])).digest('hex');
     const prior = this.calls.get(callId);
     if (prior) { if (prior.signature !== signature) throw new Error('Request id reused with different arguments'); return prior.promise; }
     const replay = this.requests.read(callId, signature);
@@ -315,6 +325,7 @@ export class MinecraftAgentClient {
     this.calls.set(callId, state);
     state.promise = Promise.resolve().then(async () => {
     const queued: EventEnvelope[] = [];
+    const experience = this.learning.begin(tool,args,callId,attribution);
     try {
       this.metrics.toolStarted(callId, name);
       combined.throwIfAborted();
@@ -324,6 +335,18 @@ export class MinecraftAgentClient {
         role: this.options.agentName ?? 'agent', log: this.options.log, callId, signal: combined,
         ...(turn ? { turnId: turn.id, round: turn.round } : {}), queueExternalEvents: events => queued.push(...events) }), combined);
       const outcome: ToolOutcome = typeof result === 'string' ? { text: result } : { ...result };
+      const recorded = this.learning.finish(experience,outcome);
+      // Observation artifacts have immutable metadata shared by capture and later reads.
+      if(recorded&&outcome.execution?.kind!=='observation') outcome.meta={...outcome.meta,experience:recorded};
+      if(name.endsWith('_choose')) {
+        // Only schema-owned choice metadata; never retain candidate prose or the model request.
+        try { const chosen=JSON.parse(outcome.text), candidates=Array.isArray(args.candidates)?args.candidates:[];
+          const decision=this.learning.recordDecision({id:callId,category:String(args.category),selected:chosen.choice??null,status:chosen.status??'unknown',
+            candidates:candidates.map(c=>({id:c.id,ready:c.ready,probability:c.id===chosen.choice?chosen.probability:null})),
+            model:chosen.model??null,elapsedMs:chosen.elapsedMs??null,inputTokens:chosen.inputTokens??null,recalledMemoryRefs:chosen.recalledMemoryRefs??[]});
+          if(decision) outcome.meta={...outcome.meta,decisionId:callId,experience:{id:decision.id,protocol:decision.schema}};
+        } catch { /* Unrecognized advice stays unknown; no inferred decision. */ }
+      }
       outcome.control = { protocol: PROTOCOL, requestId: callId, ...(turn ? { turnId: turn.id } : {}),
         barrierAfter: tool.barrierAfter === true, endTurnRequested: outcome.endsTurn === true || tool.endsTurn === true, turnEnded: false };
       if (turn && outcome.control.endTurnRequested) this.endRequested = true;
@@ -336,6 +359,7 @@ export class MinecraftAgentClient {
         run: this.journal.run, callId, name, failed: outcome.failed === true, text: outcome.text }) + '\n');
       return outcome;
     } catch (error) {
+      this.learning.finish(experience,null);
       this.requests.write({ requestId: callId, signature, phase: 'failed', error: String(error) });
       this.metrics.toolEnded(callId, true);
       appendFileSync(join(this.options.dataDir, 'tools.jsonl'), JSON.stringify({ at: new Date().toISOString(),
@@ -359,7 +383,7 @@ export class MinecraftAgentClient {
    * the engine revalidates ownership, connection, target and geometry before applying them.
    */
   async hostTactics(args: { battlefield: true } | { choice: Record<string, unknown> },
-    options: { requestId?: string; signal?: AbortSignal } = {}): Promise<ToolOutcome> {
+    options: { requestId?: string; signal?: AbortSignal; attribution?: OperationAttribution } = {}): Promise<ToolOutcome> {
     if (this.phase !== 'started') throw new Error('Game runtime is disconnected');
     const sample = Object.keys(args).length === 1 && 'battlefield' in args && args.battlefield === true;
     const choice = Object.keys(args).length === 1 && 'choice' in args && args.choice && typeof args.choice === 'object';
@@ -376,20 +400,24 @@ export class MinecraftAgentClient {
       return typeof result === 'string' ? { text: result } : result;
     };
     if (sample) return invoke();
-    const signature = createHash('sha256').update(JSON.stringify(['host-tactics', args])).digest('hex');
+    const signature = createHash('sha256').update(JSON.stringify(['host-tactics', args,...(options.attribution?[options.attribution]:[])])).digest('hex');
     const prior = this.tacticCalls.get(callId);
     if (prior) { if (prior.signature !== signature) throw new Error('Request id reused with different arguments'); return prior.promise; }
     const replay = this.requests.read(callId, signature); if (replay) return replay;
-    if (this.closingTurn || this.barrier || [...this.calls.values(), ...this.tacticCalls.values()].some(c => c.pending))
-      return { text: 'Planner tool owns admission; refresh the battlefield before another choice.', failed: true,
+    const experience=this.learning.begin(tool,args,callId,{controller:'system1',...options.attribution});
+    if (this.closingTurn || this.barrier || [...this.calls.values(), ...this.tacticCalls.values()].some(c => c.pending)) {
+      const outcome:ToolOutcome={ text: 'Planner tool owns admission; refresh the battlefield before another choice.', failed: true,
         meta: { protocol: 'agent-mc-tactics/v1', receipt: { accepted: false, meaning: 'planner-tool-active', goalCompleted: false } } };
+      this.learning.finish(experience,outcome);this.requests.write({requestId:callId,signature,phase:'returned',outcome});return outcome;
+    }
     this.requests.write({ requestId: callId, signature, phase: 'pending' });
     const state = { signature, controller, pending: true, promise: null as unknown as Promise<ToolOutcome> };
     this.tacticCalls.set(callId, state);
     const promise = Promise.resolve().then(() => { signal.throwIfAborted(); return invoke(); }).then(outcome => {
+      const recorded=this.learning.finish(experience,outcome);if(recorded)outcome.meta={...outcome.meta,experience:recorded};
       this.requests.write({ requestId: callId, signature, phase: 'returned', outcome });
       return outcome;
-    }, error => { this.requests.write({ requestId: callId, signature, phase: 'failed', error: String(error) }); throw error; })
+    }, error => { this.learning.finish(experience,null);this.requests.write({ requestId: callId, signature, phase: 'failed', error: String(error) }); throw error; })
       .finally(() => { state.pending = false; });
     state.promise = promise;
     if (this.tacticCalls.size > 256) this.tacticCalls.delete(this.tacticCalls.keys().next().value!);

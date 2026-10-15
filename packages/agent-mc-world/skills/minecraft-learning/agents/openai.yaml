@@ -1,0 +1,4 @@
+interface:
+  display_name: "Minecraft 操作学习"
+  short_description: "从快决策、执行回执与世界变化中提炼可复用方法，保留反例并验证再次采用的效果"
+  default_prompt: "使用 $minecraft-learning 分析新的 Minecraft 操作证据，修订一个可验证、可回退的方法。"

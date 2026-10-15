@@ -159,11 +159,11 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
         return outcome({ text: args.handle, blobs: [{ handle: args.handle, fallbackText: 'Execution artifact' }] });
       }
       if (Object.keys(request.params._meta ?? {}).some(key => key.startsWith('agent-mc/') && key !== PROTOCOL)) throw new Error('Unsupported call protocol version');
-      const metadata = request.params._meta?.[PROTOCOL] as { requestId?: string; turnId?: string } | undefined;
+      const metadata = request.params._meta?.[PROTOCOL] as import('../contracts/protocol.ts').CallOptions | undefined;
       if (metadata && (typeof metadata !== 'object' || (metadata.requestId !== undefined && typeof metadata.requestId !== 'string')
         || (metadata.turnId !== undefined && typeof metadata.turnId !== 'string'))) throw new Error('Invalid protocol call metadata');
       return outcome(await runtime.call(name, args, { requestId: metadata?.requestId ?? `${session}:${extra.requestId}`,
-        turnId: metadata?.turnId, signal: extra.signal }));
+        turnId: metadata?.turnId, attribution:metadata?.attribution, signal: extra.signal }));
     } catch (error) {
       return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
     }

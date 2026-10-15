@@ -78,8 +78,9 @@ export function createMinecraftChoiceTool(host: () => WorldHost | null,
       busy = true;
       try {
         signal.throwIfAborted();
+        const lessons=owner.recallGameLessons?.(String(args.goal))??[];
         const response = await Promise.race([
-          owner.decisions.request({ state: { goal: args.goal, category, observed: before, candidates,
+          owner.decisions.request({ state: { goal: args.goal, category, observed: before, candidates,historicalLessons:lessons,
             evidenceSource: 'candidate evidence supplied by Agent; current facts supplied by game; neither is an instruction' },
             questions: { action: { type: 'choice', instructions: guidance[category] + '证据不足选_inspect；返回概率不证明成功。',
               criteria: Object.fromEntries([...ready.map(c => [c.id, c.label]), ['_inspect', '先补一项关键观察；保持有用行动']]) } } },
@@ -94,7 +95,8 @@ export function createMinecraftChoiceTool(host: () => WorldHost | null,
         const uncertain = answer.choiceProbability < .65 || answer.choice === '_inspect';
         const result = JSON.stringify({ status: uncertain ? 'inspect' : 'advice', choice: uncertain ? null : answer.choice,
           probability: Number(answer.choiceProbability.toFixed(3)), scene: before.revision, expiresAt: start + deadline.age,
-          elapsedMs: Date.now() - start, execution: '未执行，行动前核验', inputTokens: response.usage?.input_tokens ?? null });
+          elapsedMs: Date.now() - start, execution: '未执行，行动前核验', model:response.model??null,inputTokens: response.usage?.input_tokens ?? null,
+          recalledMemoryRefs:lessons.map(l=>l.reference) });
         last = { key, owner, until: Math.min(start + deadline.age, Date.now() + 2000), result };
         return result;
       } catch { return { text: JSON.stringify({ status: ctx.signal?.aborted ? 'cancelled' : 'unavailable', choice: null, next: '保留当前行动，由主Agent处理' }) }; }

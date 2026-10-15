@@ -70,13 +70,13 @@ export const GAME_MEMORY_TOOL: Omit<ToolDef, 'handler'> = {
     + 'Historical observations and attributed notes never establish current facts, permissions or goal success. '
     + 'remember needs top-level kind/summary/content/source (your conclusion: source.kind=agent_note). '
     + 'capture only samples current runtime facts. Use action:help,topic:remember for exact arguments. '
-    + 'Optional service learning uses action:service; local lessons need no remote service. No body actions; requires dataDir.',
+    + 'Use action:experience,operation:help for shared decision/execution evidence and evidence-linked local reflection. Optional service learning uses action:service; local lessons need no remote service. No body actions; requires dataDir.',
   parameters: { type: 'object', additionalProperties: false, properties: {
-    action: { type: 'string', enum: ['help', 'search', 'get', 'remember', 'capture', 'revise', 'archive', 'sync', 'replication', 'service'] },
+    action: { type: 'string', enum: ['help', 'search', 'get', 'remember', 'capture', 'revise', 'archive', 'sync', 'replication', 'service', 'experience'] },
     preference: { type: 'string', enum: ['local-first', 'balanced', 'remote-first'], description: 'Only search: choose retrieval emphasis for this task. Does not disable local persistence or enable an unconfigured service.' },
     topic: { type: 'string', enum: ['search', 'remember', 'capture', 'revise'], description: 'Only for action:help; returns one action schema and example.' },
-    operation: { type: 'string', enum: LEARNING_OPERATIONS, description: 'Only for action:service, not local capture or remember.' },
-    input: { type: 'object', maxProperties: 12, description: 'Only service-operation arguments. Local note fields stay at the top level.' }, requestId: stringField(128),
+    operation: { type: 'string', enum: [...new Set([...LEARNING_OPERATIONS, 'list', 'get', 'stats', 'reflect'])], description: 'Only for action:service or experience, not local capture or remember.' },
+    input: { type: 'object', maxProperties: 12, description: 'Only service/experience-operation arguments. Local note fields stay at the top level.' }, requestId: stringField(128),
     id: stringField(48), expectedRevision: { type: 'integer', minimum: 1 }, revision: { type: 'integer', minimum: 1 },
     kind: { type: 'string', enum: [...KINDS] }, summary: stringField(180), content: stringField(6000),
     source: { type: 'object', additionalProperties: false, required: ['kind'], properties: {

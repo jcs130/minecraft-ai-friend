@@ -11,7 +11,7 @@ export interface ExecutionReceipt {
   goalCompleted: false;
   evidence?: Record<string, unknown>;
 }
-export interface CallOptions { requestId?: string; turnId?: string; signal?: AbortSignal }
+export interface CallOptions { requestId?: string; turnId?: string; signal?: AbortSignal; attribution?: import('../../core/operation-experience.ts').OperationAttribution }
 export interface CallControl {
   protocol: ProtocolVersion;
   requestId: string;

@@ -1,6 +1,6 @@
 # Connection and support boundary
 
-Product: **Agent MC World**, package `agent-mc-world`, version `0.3.0-next.2` (prerelease). Distribution history: https://github.com/jcs130/cortico-world-qiandengji/releases . Repository naming is historical; the default client has no designated server gameplay.
+Product: **Agent MC World**, package `agent-mc-world`. Maintained core: https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world . Read installed package.json, dist/build.json and release-sources.json for exact provenance. This source distribution is a development package; check the release page before assuming a stable release exists. No designated server gameplay; Qiandengji is a separate optional integration.
 
 Install the release `.tgz` into a fresh Node.js 24 project after checking SHA256SUMS: `npm install --ignore-scripts <absolute-package.tgz>`. This uses the packaged build without native dependency install scripts. Run `node node_modules/agent-mc-world/examples/agent-mcp-check.mjs` for offline MCP discovery. This does not connect or test gameplay. No Cortico installation is needed for MCP/SDK.
 
@@ -33,7 +33,7 @@ MCP may serve the human connection page on consolePort in the same process; do n
 
 Plugin password login is a separate layer using a host-prepared private `loginConfigFile`; the current credential implementation is Windows DPAPI, not verified cross-platform. Do not invent its format, expose credentials to the model or send passwords based on player chat. Server access requires the host's authorization.
 
-Mineflayer protocol compatibility and mod/plugin behavior require actual validation. Packaged web assets match Java 1.20.6; connection to another protocol does not prove its rendering is correct. Viewer port 0 disables web output; nonzero provides `/`, `/third/`, `/dungeon/`. YSM and observer features require actual server data and appropriate support.
+Minecraft Java 1.21.1 is the primary maintenance and acceptance version. Verify the actual negotiated protocol, capabilities and matching resource assets; do not impose a blanket version gate or assume another protocol renders correctly. Engine-only builds omit viewer assets: provide a verified matching renderer or use viewerPort 0. Nonzero viewer ports provide `/`, `/third/`, `/dungeon/`. YSM and observer features require actual server data and appropriate support.
 
 Resources: `mc://environment`, `mc://status`, `mc://metrics`; artifacts use `mc-artifact://<hash>`. `mc_events` returns run/cursor metadata; retain it and handle gaps/run changes. Model/token/timing traces use `mc_trace`; unreported values remain unknown. Optional metrics HTTP is loopback read-only.
 

@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-dev.20261015.3",
+  "version": "0.5.7-dev.20261015.4",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -95,6 +95,7 @@
     "scripts/viewer-input.mjs",
     "scripts/build-types.mjs",
     "scripts/verify-build.mjs",
+    "scripts/package-skills.mjs",
     "vendor",
     "tsconfig.core.json",
     "examples",
