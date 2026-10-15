@@ -66,6 +66,13 @@ export function craftItemDef(bot: Bot, item: string): { id: number; name: string
   return def;
 }
 
+/** A missing crafting recipe is independent of inventory or earlier queued work. */
+export function missingCraftRecipeText(item: string): string {
+  return `当前客户端的合成配方表里没有${zhName(item)}的做法。`
+    + '若需要烧炼，用 smelt 的 input/fuel 指定实际原料和燃料 ID，先用 mc_help 核对参数及熔炉条件；'
+    + 'grid 仅用于已知的合成格配方，不能代替烧炼。';
+}
+
 /** 她自己摆的格子 → 摆位指令。产物不预设:产出槽出什么就是什么 */
 export function recipeFromGrid(bot: Bot, grid: string[][]): CraftRecipeLike {
   const width = Math.max(...grid.map((r) => r.length));
@@ -133,9 +140,7 @@ export async function skillCraft(
       throw new SkillBlocked(`${label}的官方配方需要 ${tagged.needs};包里凑不齐`);
     } else {
       const all = bot.recipesAll(def.id, null, true as never) as unknown as CraftRecipeLike[];
-      if (all.length === 0) throw new SkillBlocked(`游戏的合成配方表里没有${label}的做法。`
-        + '若需要烧炼，用 smelt 的 input/fuel 指定实际原料和燃料 ID，先用 mc_help 核对参数及熔炉条件；'
-        + 'grid 仅用于已知的合成格配方，不能代替烧炼。');
+      if (all.length === 0) throw new SkillBlocked(missingCraftRecipeText(def.name));
       const have = new Map<number, number>();
       for (const it of bot.inventory.items()) have.set(it.type, (have.get(it.type) ?? 0) + it.count);
       const ready = all.find((r) => [...craftNeeds(r)].every(([id, n]) => (have.get(id) ?? 0) >= n));
