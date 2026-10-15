@@ -332,6 +332,7 @@ export class CombatSession {
   private retreatEdgeNoted = false;
   /** 撤退失败转身还手中:E2 血线对本场静默(血线的前提是"跑得掉",这里已经证伪) */
   private desperate = false;
+  private hadCombatWeapon = false;
 
   // —— v7 出手/移动状态
   private lastSwingAt = 0;
@@ -527,8 +528,10 @@ export class CombatSession {
     } // 已经在撤了,别叠加;伤害历史留在同一场里,逃不掉要转身
     if (this.state === 'fighting') {
       this.provoked.add(attackerId);
+      if (!this.desperate && this.bot && !bestWeapon(this.bot) && !this.rangedReady(this.bot)) this.retreatUnarmed();
       return true;
     }
+    if (this.opts.taskFighting?.()) return true;
     if (this.opts.taskEating?.()) {
       this.provoked.add(attackerId);
       this.opts.diag?.write({ lane: 'combat', event: 'hurt-during-eat',
@@ -562,17 +565,12 @@ export class CombatSession {
       this.beginRetreat('no-fight');
       return true;
     }
-    if (bot?.entity && !bestWeapon(bot) && !this.rangedReady(bot) && (bot.health ?? 20) < t.fleeHealth + ENGAGE_MARGIN) {
+    if (bot?.entity && !bestWeapon(bot) && !this.rangedReady(bot)) {
       this.bot = bot;
-      this.opts.suspendTasks(`战斗:空手血 ${this.hp()},不还手,撤`);
+      this.provoked.add(attackerId);
+      this.opts.suspendTasks(`战斗:空手受击,撤退`);
       this.hook(bot);
-      this.opts.emit(`空手,血只剩 ${this.hp()}/20 —— 这架不还手了,撤。`, true, true);
-      this.opts.diag?.write({
-        lane: 'combat', event: 'barehand-flee',
-        msg: `空手低血脱离:${zhEntity(name)}打过来,生命 ${this.hp()}/20 低于 ${t.fleeHealth + ENGAGE_MARGIN}`,
-        data: { foe: name, health: bot.health, line: t.fleeHealth + ENGAGE_MARGIN },
-      });
-      this.beginRetreat('flee');
+      this.retreatUnarmed();
       return true;
     }
     // A hit can arrive through a wall or after the attacker leaves the loaded
@@ -590,6 +588,13 @@ export class CombatSession {
     }
     this.provoked.add(attackerId);
     return this.engage(name, true);
+  }
+
+  private retreatUnarmed(): void {
+    this.opts.emit(`空手,没有可用武器,这架不还手了,先撤。(生命 ${this.hp()}/20)`, true, true);
+    this.opts.diag?.write({ lane: 'combat', event: 'barehand-flee',
+      msg: '受击或交战中失去可用武器,撤退', data: { health: this.bot?.health } });
+    this.beginRetreat('flee');
   }
 
   /** 250ms 巡检:3 格内有敌对就开打(不主动招惹,这是"找上门"的判据) */
@@ -650,6 +655,7 @@ export class CombatSession {
     if (Date.now() < this.capCooldownUntil && !hurt) return false;
     this.bot = bot;
     this.state = 'fighting';
+    this.hadCombatWeapon = Boolean(bestWeapon(bot) || this.rangedReady(bot));
     const now = Date.now();
     this.startedAt = now;
     this.healthBefore = bot.health ?? null;
@@ -870,9 +876,12 @@ export class CombatSession {
     this.trajectoryPos = { x: p.x, y: p.y, z: p.z };
 
     // 寻路器还在算路径、尚未按方向键时不算顶墙。
-    const checking = bot.entity.onGround && !bodyInWater(bot) && pressing &&
+    // Retreat jumps and lateral knockback do not establish progress along the
+    // commanded route. Reuse the same bounded heading exclusion even airborne.
+    const retreat = this.state === 'retreating';
+    const checking = (bot.entity.onGround || retreat) && !bodyInWater(bot) && pressing &&
       (this.pathing || intent !== null);
-    if (!checking || moved >= 0.06) { this.stallSince = 0; this.stallMode = ''; return; }
+    if (!checking || (retreat ? progress : moved) >= 0.06) { this.stallSince = 0; this.stallMode = ''; return; }
     if (this.stallMode !== mode) { this.stallMode = mode; this.stallSince = now; return; }
     if (now - this.stallSince < MOVEMENT_STALL_MS) return;
     this.stallSince = now;
@@ -914,6 +923,9 @@ export class CombatSession {
 
     const t = this.opts.tuning();
     const rangedReady = this.rangedReady(bot);
+    const armed = Boolean(bestWeapon(bot) || rangedReady);
+    if (!this.desperate && !armed && this.hadCombatWeapon) { this.retreatUnarmed(); return; }
+    this.hadCombatWeapon ||= armed;
     const foes = this.scan(
       bot,
       t,
