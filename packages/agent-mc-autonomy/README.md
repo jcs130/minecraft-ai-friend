@@ -5,7 +5,7 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
-0.1.51 pins checked core 0.5.4, including Java 1.21.1 defaults,
+0.1.53 pins checked core 0.5.4, including Java 1.21.1 defaults,
 native interface fixes and structured action-admission evidence. The coordinator
 keeps native recovery references at the dynamic request tail and suppresses an
 identical rejected plan while non-clock facts remain unchanged, for at most
@@ -22,6 +22,30 @@ outcomes, read answers and mixed exchanges are retained. Large receipt previews
 preserve the native admission marker so compaction cannot hide that distinction.
 This reduces repeated invalid proposals in the input; it does not prove that a
 model will choose a valid next action or that long-term survival has passed.
+
+### Shared host identity and context
+
+An attached agent owns personality, relevant personal memories and high-level
+intent. Its body planner must receive those materials, rather than infer a second
+identity from a generic game prompt. `ReviewPort.decide(..., host_context=...)`
+accepts a bounded neutral projection: `agent_name`, `persona`, `persona_source`
+(`character_profile` excerpt or `host_projection`), `current_intent`, and up to six
+selected memories with original `id`, `source`, `text`. This is not a complete
+host session snapshot or a replacement personal-memory service.
+
+The controller's injectable context provider reads a private `HostContextPort`
+projection. Stable identity is budgeted into the system prefix; changing intent
+and selected memories are budgeted once at the request tail. The budget reports
+what actually fit. Current body facts and explicit user intent take precedence;
+memories do not authorize actions or prove current world capabilities.
+
+The projection expires after ten minutes and is bound to the running body session
+and mailbox intent revision, including a newly inserted review stage. New user
+feedback, a different session, stale/disconnected state or an invalid review cannot
+reuse it. Hosts invalidate it on opt-out or role changes. Public status and review
+receipts contain counts/hash metadata only. No host SDK, implicit memory endpoint,
+extra model loop or copied personality database is introduced. Without an attached
+host, the explicitly configured standalone planner continues normally.
 
 Local `mc_tool_help` names and JSON-pointer paths are resolved before any possible
 body dispatch is journaled. A nonexistent property, invalid array index or

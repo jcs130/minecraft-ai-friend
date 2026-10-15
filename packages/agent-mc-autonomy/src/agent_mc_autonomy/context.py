@@ -68,11 +68,11 @@ def rejected_action_exchange(group):
         return False
 
 
-def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, native_outcomes=None, context_counter: ContextCounter | None = None):
+def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, native_outcomes=None, context_counter: ContextCounter | None = None, host_context=None):
     """Use one counting mode throughout, restarting conservatively on failure."""
     options = {"context_tokens": context_tokens, "reserved_output": reserved_output,
                "planner_notice": planner_notice, "fast_focus": fast_focus,
-               "tool_failure": tool_failure, "read_activity": read_activity, "native_outcomes": native_outcomes}
+               "tool_failure": tool_failure, "read_activity": read_activity, "native_outcomes": native_outcomes, "host_context": host_context}
     try:
         return _assemble(prefix, tools, goal, facts, events, groups, context_counter=context_counter, **options)
     except CounterUnavailable as error:
@@ -81,7 +81,7 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
         return messages, budget
 
 
-def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, native_outcomes=None, context_counter=None):
+def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, native_outcomes=None, context_counter=None, host_context=None):
     """Use an injected input counter or the conservative UTF-8 byte bound.
 
     Account for messages/tools plus separate output and framing reserves.
@@ -133,6 +133,47 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
     # the entire context window. A large valid prefix must not evict every tool
     # result, otherwise the planner repeats a rejected call without seeing why.
     saved_history, history = history, []
+    included_host_context = {"persona": False, "memories": 0, "current_intent": False}
+    if host_context:
+        # Identity is a stable prefix. Selected memories/intent are changing
+        # host context at the request tail, never appended into game history.
+        base = cost()
+        allowance = min(2600, max(0, (context_tokens - base) // 4))
+        stable = dict(host_context.get("stable", {}))
+        stable.pop("memories", None)
+        stable.pop("current_intent", None)
+        original = head[0]["content"]
+        instruction = ("\nYou are this host agent's Minecraft body and action planner, not a separate character. "
+                       "Share its identity, preferences and selected memories. Personal memories are not current "
+                       "world facts or action permission; fresh user intent, native evidence and safety take priority.\n")
+        while stable:
+            head[0]["content"] = RULES + instruction + encode(stable) + "\n" + prefix
+            if cost() - base <= allowance:
+                break
+            if stable.get("persona"):
+                persona = stable["persona"]
+                stable["persona"] = fact_preview(persona, max(0, len(persona.encode("utf-8")) // 2)) if len(persona.encode("utf-8")) > 100 else ""
+            else:
+                stable = {}
+        if not stable:
+            head[0]["content"] = original
+        included_host_context["persona"] = bool(stable.get("persona"))
+        dynamic = json.loads(encode(host_context.get("dynamic", {})))
+        before = cost()
+        dynamic_allowance = min(2400, max(0, (context_tokens - before) // 5))
+        while dynamic:
+            tail["host_context"] = dynamic
+            if cost() - before <= dynamic_allowance:
+                break
+            if dynamic.get("memories"):
+                dynamic["memories"].pop(0)
+            elif dynamic.get("current_intent"):
+                dynamic.pop("current_intent")
+            else:
+                dynamic = {}
+        if not dynamic:
+            tail.pop("host_context", None)
+        included_host_context.update(memories=len(dynamic.get("memories", [])), current_intent=bool(dynamic.get("current_intent")))
     if "superseded_rejected_plans" in tail:
         while cost() > context_tokens and tail["superseded_rejected_plans"]["originals"]:
             tail["superseded_rejected_plans"]["originals"].pop()
@@ -260,4 +301,4 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
                         "input": total - reserved_output - FRAMING_RESERVE,
                         "output_reserve": reserved_output, "framing_reserve": FRAMING_RESERVE,
                          "total": total, "limit": context_tokens, "omitted": omitted,
-                         "superseded_rejected_plans": len(superseded)}
+                         "superseded_rejected_plans": len(superseded), "host_context": included_host_context}

@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 
 from .configuration import _boolean, _integer
+from .host_context import HostContextPort, validate_host_context
 from .mailbox import Mailbox, observation
 from .observations import fact_preview, spatial_text, tool_failure_view
 
@@ -243,7 +244,14 @@ class ReviewPort:
                 if accepted:
                     state["submitted_at"] = self.now()
 
-    def decide(self, review_id, decision, reason="", goal="", *, lineage_offset=None):
+    def decide(self, review_id, decision, reason="", goal="", *, lineage_offset=None, host_context=None):
+        if host_context is not None:
+            try:
+                host_context = validate_host_context(host_context)
+            except ValueError as error:
+                return {"is_error": True, "error": str(error)}
+            if decision == "inspect":
+                return {"is_error": True, "error": "inspect_is_read_only"}
         if decision not in {"inspect", "continue", "insert", "revise"} or not all(isinstance(v, str) for v in (review_id, reason, goal)):
             return {"is_error": True, "error": "invalid_review"}
         if lineage_offset is not None and (decision != "inspect" or type(lineage_offset) is not int or lineage_offset < 0):
@@ -312,6 +320,12 @@ class ReviewPort:
                               reply=("阶段目标修订已投递，保留现有身体动作与先前用户目标；尚未证明完成。" if decision == "revise" else
                                      "阶段目标已投递，原生队列在安全检查点插入；尚未证明完成。"))
             review.update(choice=choice, result=result)
+            if host_context is not None:
+                try:
+                    result["host_context"] = HostContextPort(self.directory, now=self.now).publish(
+                        host_context, session=review["session"], revision=self.mailbox.intent_revision())
+                except OSError:
+                    result["host_context"] = {"available": False, "reason": "host_context_write_failed"}
             state["last_decision"] = {**choice, "at": self.now(), "heartbeat_id": review_id, "request_id": result.get("request_id")}
             return result
 

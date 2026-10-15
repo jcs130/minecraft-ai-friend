@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
+from agent_mc_autonomy.host_context import HostContextPort
 from agent_mc_autonomy.review import ReviewPolicy, ReviewPort
 
 
@@ -28,6 +29,39 @@ def runtime(tmp_path):
         return value
 
     return port, clock, publish
+
+
+def test_review_shares_context_after_its_own_intent_revision_and_keeps_private_data_out_of_state(runtime):
+    port, _, publish = runtime
+    publish()
+    review_id = port.offer()["review"]["id"]
+    context = {"agent_name": "TestRole", "persona": "有耐心", "current_intent": "收集食物",
+               "memories": [{"id": "m-1", "source": "recall", "text": "不要破坏建筑"}]}
+    assert port.decide(review_id, "inspect", host_context=context)["error"] == "inspect_is_read_only"
+    result = port.decide(review_id, "insert", "没有口粮", "收集食物", host_context=context)
+    assert result["dispatched"] and result["host_context"]["memory_count"] == 1
+    value = HostContextPort(port.directory, now=port.now).read(port.mailbox.intent_revision())
+    assert value["dynamic"]["memories"][0]["id"] == "m-1"
+    assert "不要破坏建筑" not in json.dumps(port.state(), ensure_ascii=False)
+    assert "有耐心" not in json.dumps(port.state(), ensure_ascii=False)
+    assert port.decide(review_id, "insert", "没有口粮", "收集食物", host_context=context) == result
+    port.mailbox.submit("feedback", {"goal": "保护营地", "mode": "insert"}, str(uuid.uuid4()))
+    assert HostContextPort(port.directory, now=port.now).read(port.mailbox.intent_revision()) is None
+
+
+@pytest.mark.parametrize("change", ["stop", "expired", "new_session"])
+def test_invalid_review_cannot_refresh_host_context(runtime, change):
+    port, clock, publish = runtime
+    publish()
+    review_id = port.offer()["review"]["id"]
+    if change == "stop":
+        port.mailbox.submit("stop", {}, str(uuid.uuid4()))
+    elif change == "expired":
+        clock[0] += 181
+    else:
+        publish(owner_pid=124)
+    result = port.decide(review_id, "continue", "继续", host_context={"agent_name": "TestRole"})
+    assert result["is_error"] and not (port.directory / "host-context.json").exists()
 
 
 def test_runtime_owns_creation_and_periodic_review_without_user_chat(runtime):

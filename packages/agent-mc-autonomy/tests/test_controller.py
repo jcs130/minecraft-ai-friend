@@ -72,6 +72,28 @@ def setup(framework_module, tmp_path, decide, stop=lambda: False):
     return module, bridge, controller
 
 
+def test_actual_turn_uses_shared_identity_and_selected_memory_without_public_plaintext(framework_module, tmp_path, run_async):
+    shared = {"stable": {"agent_name": "TestRole", "persona": "珍惜材料", "persona_source": "host_projection"},
+              "dynamic": {"current_intent": "收集食物", "memories": [{"id": "m-1", "source": "recall", "text": "保护建筑"}]}}
+    captured, published = [], []
+
+    async def decide(messages, _):
+        captured.append(messages)
+        return choose()
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    controller.host_context_provider = lambda _: shared
+    controller.publish = lambda **value: published.append(value)
+    run_async(controller.turn_once("survive", "body contract", module.model_tools(bridge.tools)))
+    assert "珍惜材料" in captured[0][0]["content"]
+    assert "m-1" not in captured[0][0]["content"]
+    assert json.loads(captured[0][-1]["content"])["host_context"]["memories"][0]["text"] == "保护建筑"
+    metadata = next(row["host_context"] for row in published if "host_context" in row)
+    assert metadata["memory_count"] == 1 and metadata["persona_bytes"] > 0
+    assert "保护建筑" not in json.dumps(published, ensure_ascii=False)
+    assert "珍惜材料" not in json.dumps(published, ensure_ascii=False)
+
+
 def test_accepted_receipt_preserves_action_and_acknowledges_barrier(framework_module, tmp_path, run_async):
     async def decide(*_):
         return choose()

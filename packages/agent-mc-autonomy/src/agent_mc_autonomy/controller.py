@@ -237,8 +237,10 @@ def failure_context(catalogue, name, arguments, result):
 
 
 class Controller:
-    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None, *, context_counter=None):
+    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None, *, context_counter=None, host_context_provider=None):
         self.bridge, self.decide, self.settings = bridge, decide, settings
+        from .host_context import HostContextPort
+        self.host_context_provider = host_context_provider or HostContextPort(data).read
         self.context_counter = context_counter
         self.data, self.publish = data, publish
         self.operator_stop = False
@@ -815,11 +817,14 @@ class Controller:
                 self.frame = None
                 _, image_ready = attach_frame([{"role": "user", "content": ""}], frame)
                 reserve = IMAGE_RESERVE if image_ready else 0
+                from .host_context import metadata as host_context_metadata
+                host_context = self.host_context_provider(self.commands.intent_revision() if self.commands else 0)
+                self.publish(host_context=host_context_metadata(host_context))
                 try:
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
-                        context_counter=self.context_counter)
+                        context_counter=self.context_counter, host_context=host_context)
                 except ValueError:
                     if not reserve:
                         raise
@@ -827,7 +832,7 @@ class Controller:
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
-                        context_counter=self.context_counter)
+                        context_counter=self.context_counter, host_context=host_context)
                 if reserve:
                     messages, _ = attach_frame(messages, frame)
                 budget.update(image_reserve=reserve, total=budget["total"] + reserve, limit=self.settings.context_tokens)
