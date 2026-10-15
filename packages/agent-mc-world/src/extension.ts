@@ -24,6 +24,7 @@ export { observeVisual, acceptsImages, visualArgumentError, structuredVisual } f
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady } from './client/config.ts';
 export { MinecraftClientWorld } from './client/world.ts';
 export { JavaClientWorld, validateJavaClientConfiguration } from './client/java-client.ts';
+export type { JavaClientServices } from './client/java-memory.ts';
 export * from './contracts/java-client.ts';
 export { itemCustomName } from '../core/item-display.ts';
 export { zhName } from '../core/names.ts';
