@@ -65,7 +65,8 @@ export class MinecraftAgentClient {
     () => this.phase === 'started' ? (this.world.requestFacts?.() as WorldRequestFacts | null) ?? null : null);
 
   constructor(protected readonly options: MinecraftClientOptions,
-    private readonly world: ClientEnvironment = options.cfg.provider === 'java-client' ? new JavaClientWorld(options.cfg)
+    private readonly world: ClientEnvironment = options.cfg.provider === 'java-client' ? new JavaClientWorld(options.cfg, undefined,
+      { dataDir: options.dataDir, agentName: options.agentName ?? options.cfg.username })
       : new MinecraftClientWorld({ cfg: options.cfg, dataDir: options.dataDir,
         timezone: options.timezone ?? 'UTC', botName: options.agentName ?? options.cfg.username }),
     readonly binding: { profile: string; toolPrefix: 'mc' | 'mymc' } = { profile: 'minecraft', toolPrefix: 'mc' }) {
@@ -319,7 +320,7 @@ export class MinecraftAgentClient {
       combined.throwIfAborted();
       const result = await cancellable(offlineKnowledge
         ? Promise.resolve({ text: JSON.stringify(readMinecraftKnowledge(args, this.options.cfg.version)) })
-        : offlineMemory ? this.callOfflineMemory(args, combined) : tool.handler(args, {
+        : offlineMemory && this.options.cfg.provider !== 'java-client' ? this.callOfflineMemory(args, combined) : tool.handler(args, {
         role: this.options.agentName ?? 'agent', log: this.options.log, callId, signal: combined,
         ...(turn ? { turnId: turn.id, round: turn.round } : {}), queueExternalEvents: events => queued.push(...events) }), combined);
       const outcome: ToolOutcome = typeof result === 'string' ? { text: result } : { ...result };

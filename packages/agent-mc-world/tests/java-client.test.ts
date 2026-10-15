@@ -33,10 +33,64 @@ function rig(scriptEnabled = false, minecraftVersion?: string, scriptFailure?: s
     }
     return new Response(JSON.stringify(value));
   });
-  const world=new JavaClientWorld(cfg,http),runtime=new MinecraftAgentClient({cfg,dataDir:join(data,'sdk'),log:nullLogger(),autoAcknowledgeBarriers:true},world);
-  return {cfg,state,world,runtime,http,calls,complete:()=>{completed=true;state.actions[0].phase='completed';}};
+  const dataDir=join(data,'sdk');
+  const world=new JavaClientWorld(cfg,http,{dataDir}),runtime=new MinecraftAgentClient({cfg,dataDir,log:nullLogger(),autoAcknowledgeBarriers:true},world);
+  return {cfg,state,world,runtime,http,calls,dataDir,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it('keeps native historical memory and learning help available offline without any body RPC',async()=>{
+    const r=rig();
+    expect((await r.runtime.call('mc_memory',{action:'help'})).failed).not.toBe(true);
+    expect((await r.runtime.call('mc_memory',{action:'service',operation:'help'})).failed).not.toBe(true);
+    const saved=JSON.parse((await r.runtime.call('mc_memory',{action:'remember',kind:'lesson',summary:'有遮挡时换位置',
+      content:'task:blocked measured dirt hit; not a verified route.',source:{kind:'agent_note',reference:'task:blocked'}})).text);
+    const found=JSON.parse((await r.runtime.call('mc_memory',{action:'search',query:'遮挡'})).text);
+    expect(found).toMatchObject({total:1,currentWorldVerified:false,entries:[{id:saved.entry.id,historical:true}]});
+    const dataDir=r.dataDir;
+    const reopened=new JavaClientWorld(r.cfg,r.http,{dataDir});
+    const read=await reopened.tools().find(t=>t.name==='mc_memory')!.handler({action:'get',id:saved.entry.id},{role:'test',log:nullLogger()});
+    expect(JSON.parse((read as any).text).entry.content).toContain('measured dirt hit');
+    const other=new JavaClientWorld({...r.cfg,username:'Other'},r.http,{dataDir});
+    const isolated=await other.tools().find(t=>t.name==='mc_memory')!.handler({action:'search',dimension:'*'},{role:'test',log:nullLogger()});
+    expect(JSON.parse((isolated as any).text).total).toBe(0);
+    expect(r.http).not.toHaveBeenCalled();expect(r.runtime.status().phase).toBe('disconnected');
+  });
+  it('captures only fresh native state and keeps historical reads after disconnect without reusing cached facts',async()=>{
+    const r=rig();Object.assign(r.state,{dimension:'minecraft:overworld'});await r.runtime.connect();
+    try {
+      r.state.position=[12,66,34];const before=r.calls.length;
+      const captured=await r.runtime.call('mc_memory',{action:'capture',summary:'真实现场'});
+      expect(captured.failed).not.toBe(true);
+      const entry=JSON.parse(captured.text).entry;
+      expect(JSON.parse(entry.content).position).toEqual([12,66,34]);
+      expect(entry.source.kind).toBe('runtime_observation');
+      expect(r.calls.slice(before).map(c=>c.method)).toEqual(['state']);
+      await r.runtime.disconnect();const stoppedCalls=r.calls.length;
+      const failed=await r.runtime.call('mc_memory',{action:'capture'});
+      expect(failed.failed).toBe(true);expect(failed.text).toContain('disconnected');
+      const found=JSON.parse((await r.runtime.call('mc_memory',{action:'search',dimension:'*'})).text);
+      expect(found.total).toBe(1);expect(found.currentWorldVerified).toBe(false);
+      expect(r.calls).toHaveLength(stoppedCalls);
+    }finally{await r.runtime.disconnect();}
+  });
+  it('does not save a native capture after an actual identity mismatch',async()=>{
+    const r=rig();Object.assign(r.state,{dimension:'minecraft:overworld'});await r.runtime.connect();
+    try {
+      r.state.uuid=offlineUuid('Other');
+      const failed=await r.runtime.call('mc_memory',{action:'capture'});
+      expect(failed.failed).toBe(true);expect(failed.text).toContain('UUID/server mismatch');
+      const found=JSON.parse((await r.runtime.call('mc_memory',{action:'search',dimension:'*'})).text);
+      expect(found.total).toBe(0);expect(r.calls.some(c=>c.method==='do'||c.method==='claim')).toBe(false);
+    }finally{await r.runtime.disconnect();}
+  });
+  it('wires the default SDK native backend to the same persisted notebook without launching a client',async()=>{
+    const r=rig();const client=new MinecraftAgentClient({cfg:r.cfg,dataDir:r.dataDir,log:nullLogger()});
+    expect(client.tools().filter(t=>t.name==='mc_memory')).toHaveLength(1);
+    const saved=await client.call('mc_memory',{action:'remember',kind:'lesson',summary:'SDK 离线笔记',content:'未执行游戏动作',source:{kind:'agent_note'}});
+    expect(saved.failed).not.toBe(true);
+    const found=JSON.parse((await r.runtime.call('mc_memory',{action:'search',query:'SDK'})).text);
+    expect(found.total).toBe(1);expect(r.http).not.toHaveBeenCalled();expect(client.status().phase).toBe('disconnected');
+  });
   it.each(['close_screen','menu_click','gui_click'])('returns fresh GUI state after a stale %s rejection without replaying input',async operation=>{
     const r=rig(),http=r.http.getMockImplementation()!;
     Object.assign(r.state,{screen:'CurrentScreen',screenTitle:'Current menu',screenToken:'new-token',syncId:7,menuRevision:3,cursor:{slot:-1,empty:false,count:2,name:'minecraft:wheat_seeds'}});
