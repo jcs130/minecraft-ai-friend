@@ -8,17 +8,19 @@ import { clickInventoryConfirmed, installInventoryClickSync, inventoryClickState
 import { snapshotFromBot, narrateWorld, snapshotFingerprint } from '../core/terrain.ts';
 import { renderBagReadout, renderStoredItemReadout, bagStamp } from '../core/readouts.ts';
 import { methodHarness } from './method-harness.ts';
+import { installDeathLifecycle } from '../core/death-lifecycle.ts';
+import { Bridge } from '../core/bridge.ts';
 
 const require = createRequire(import.meta.url);
 const mf = createRequire(require.resolve('mineflayer'));
 
 /** Exercise the pinned Mineflayer inventory plugin, including its private close closure. */
-function rig() {
-  const registry = require('minecraft-data')('1.20.6');
+function rig(version = '1.20.6') {
+  const registry = require('minecraft-data')(version);
   const Item = mf('prismarine-item')(registry);
   const write = vi.fn();
   const client = Object.assign(new EventEmitter(), { write });
-  const bot = Object.assign(new EventEmitter(), { registry, version: '1.20.6', _client: client,
+  const bot = Object.assign(new EventEmitter(), { registry, version, _client: client,
     QUICK_BAR_START: 36, supportFeature: (f: string) => registry.supportFeature(f),
   }) as unknown as Bot;
   mf('mineflayer/lib/plugins/inventory.js')(bot, { hideErrors: true });
@@ -42,6 +44,28 @@ function rig() {
 }
 
 afterEach(() => vi.useRealTimers());
+
+it.each([true, false])('uses real 1.21.1 inventory packets for episode freshness, inventory-before-spawn=%s', beforeSpawn => {
+  const r = rig('1.21.1');
+  Object.assign(r.bot, { entity: {} });
+  mf('mineflayer/lib/plugins/health.js')(r.bot, { respawn: false });
+  const lifecycle = installDeathLifecycle(r.bot, 4000, () => true);
+  const synced = () => Reflect.get(Bridge.prototype, 'invSynced', { _invSynced: true, _bot: r.bot });
+  expect(synced()).toBe(true);
+  r.client.emit('update_health', { health: 0, food: 4, foodSaturation: 0 });
+  expect(synced()).toBe(false);
+  expect(r.bot.inventory.slots[9]?.name).toBe('oak_log'); // Old cached inventory is still present.
+  r.full(0, 46, { 9: r.raw('oak_log', 8) });
+  expect(synced()).toBe(false); // Even a full old-life packet cannot refresh the new life.
+  r.client.emit('respawn', {});
+  if (beforeSpawn) r.full(0, 46); // Actual server snapshot clears the old stacks.
+  r.client.emit('update_health', { health: 20, food: 20, foodSaturation: 5 });
+  expect(synced()).toBe(beforeSpawn);
+  r.full(0, 46);
+  expect(synced()).toBe(true);
+  expect(r.bot.inventory.items()).toEqual([]);
+  lifecycle.dispose();
+});
 
 describe('inventory read recovery', () => {
   it('unlocks when a partial container is followed by a complete server snapshot', () => {

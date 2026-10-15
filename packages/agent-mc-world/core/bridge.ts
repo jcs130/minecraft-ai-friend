@@ -318,7 +318,9 @@ export class Bridge {
 
   /** 登录后收到窗口 0 的完整清单，且未被不完整容器窗覆盖。 */
   get invSynced(): boolean {
-    return this._invSynced && (this._bot ? inventoryReadConfirmed(this._bot) : false);
+    const episode = (this._bot as { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle } | null)?.deathLifecycle;
+    return this._invSynced && (!episode || episode.inventorySynced === true)
+      && (this._bot ? inventoryReadConfirmed(this._bot) : false);
   }
 
   get connected(): boolean {

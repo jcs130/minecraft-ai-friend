@@ -3,6 +3,11 @@
 Independent Minecraft execution core, maintained in `jcs130/minecraft-ai-friend`.
 Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.
 
+0.5.7-dev.20261016.6 binds post-death inventory freshness to a full player
+inventory packet after that episode's native respawn. Old cached inventory and
+pre-respawn packets cannot authorize recovery; either inventory/spawn packet order
+is supported without relaxing the existing inventory confirmation guard.
+
 0.5.7-dev.20261016.5 fixes native nutrition arbitration: future, completed or
 frozen meal proposals no longer suppress an available meal at a safe checkpoint.
 Current consumption, inventory confirmation and native body ownership remain

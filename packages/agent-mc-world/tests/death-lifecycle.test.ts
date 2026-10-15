@@ -6,7 +6,8 @@ afterEach(() => vi.useRealTimers());
 function rig(delay?: number) {
   vi.useFakeTimers();
   let current = true;
-  const bot = Object.assign(new EventEmitter(), { health: 0, respawn: vi.fn(), deathLifecycle: undefined as DeathLifecycle | undefined });
+  const bot = Object.assign(new EventEmitter(), { health: 0, respawn: vi.fn(), deathLifecycle: undefined as DeathLifecycle | undefined,
+    _client: new EventEmitter(), inventory: { slots: Array(46).fill(null) } });
   const recovery = installDeathLifecycle(bot, delay, () => current);
   return { bot, recovery, stale: () => { current = false; } };
 }
@@ -61,4 +62,30 @@ it('validates the bounded configurable delay', () => {
   expect(respawnDelay(undefined)).toBe(4000);
   expect(respawnDelay(15000)).toBe(15000);
   for (const n of [-1, 15001, NaN, 0.5]) expect(() => respawnDelay(n)).toThrow();
+});
+
+it.each([true, false])('requires a complete inventory packet after respawn, including inventory-before-spawn=%s', beforeSpawn => {
+  const r = rig();
+  const packet = (windowId = 0, length = 46) => r.bot._client.emit('window_items', { windowId, items: Array(length).fill(null) });
+  packet();
+  r.bot.emit('death');
+  expect(r.bot.deathLifecycle).toMatchObject({ inventorySynced: false });
+  packet(); // Late old-life inventory, before the native respawn boundary.
+  expect(r.bot.deathLifecycle).toMatchObject({ inventorySynced: false });
+  r.bot.emit('respawn');
+  packet(1); packet(0, 20);
+  expect(r.bot.deathLifecycle).toMatchObject({ inventorySynced: false });
+  if (beforeSpawn) packet();
+  r.bot.health = 20;
+  r.bot.emit('spawn');
+  expect(r.bot.deathLifecycle).toMatchObject({ phase: 'alive', inventorySynced: beforeSpawn });
+  packet();
+  expect(r.bot.deathLifecycle).toMatchObject({ inventorySynced: true });
+  r.bot.emit('respawn'); // A later dimension transfer is not another death episode.
+  expect(r.bot.deathLifecycle).toMatchObject({ inventorySynced: true });
+  r.bot.emit('death');
+  expect(r.bot.deathLifecycle).toMatchObject({ inventorySynced: false });
+  r.stale(); r.bot.emit('respawn'); packet();
+  expect(r.bot.deathLifecycle).toMatchObject({ inventorySynced: false });
+  r.recovery.dispose();
 });
