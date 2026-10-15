@@ -26,6 +26,33 @@ def test_browser_failure_does_not_break_game_or_retry(framework_module, run_asyn
     assert run_async(viewer.connected()) is None
 
 
+def test_existing_viewer_reconnects_during_handover_without_another_tab(framework_module, run_async, monkeypatch):
+    module = importlib.import_module("agent_mc_autonomy.viewer")
+    opened, pauses = [], []
+
+    async def pause(seconds):
+        pauses.append(seconds)
+
+    monkeypatch.setattr(module.asyncio, "sleep", pause)
+    viewer = module.ViewerWindow("https://viewer.test/", opener=lambda *a, **kw: opened.append(a) or True)
+    result = run_async(viewer.connected(existing_viewers=lambda: 1 if len(pauses) >= 2 else 0))
+    assert result == "already_attached" and not opened and pauses == [0.25, 0.25]
+    assert run_async(viewer.connected()) is None
+
+
+def test_no_existing_viewer_still_opens_once_after_bounded_grace(framework_module, run_async, monkeypatch):
+    module = importlib.import_module("agent_mc_autonomy.viewer")
+    opened, pauses = [], []
+
+    async def pause(seconds):
+        pauses.append(seconds)
+
+    monkeypatch.setattr(module.asyncio, "sleep", pause)
+    viewer = module.ViewerWindow("https://viewer.test/", opener=lambda *a, **kw: opened.append(a) or True)
+    assert run_async(viewer.connected(existing_viewers=lambda: False)) == "requested"
+    assert len(opened) == 1 and len(pauses) == 16 and sum(pauses) == 4
+
+
 def test_viewer_binding_requires_fresh_matching_identity(framework_module):
     module = importlib.import_module("agent_mc_autonomy.viewer")
     settings = framework_module.Settings.parse({"server": {"host": "localhost", "username": "ag_NEKO"}})

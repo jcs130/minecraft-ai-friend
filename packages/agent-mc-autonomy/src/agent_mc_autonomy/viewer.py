@@ -30,11 +30,19 @@ class ViewerWindow:
         self.opener = opener or webbrowser.open
         self.attempted = False
 
-    async def connected(self):
+    async def connected(self, *, existing_viewers=None):
         if self.attempted or not self.enabled or not self.url:
             return None
         self.attempted = True
         try:
+            if existing_viewers is not None:
+                # This callback reads the current same-body viewer receipt;
+                # it does not discover browsers, services or other sessions.
+                for _ in range(16):
+                    count = existing_viewers()
+                    if type(count) is int and count > 0:
+                        return "already_attached"
+                    await asyncio.sleep(0.25)
             opened = await asyncio.to_thread(self.opener, self.url, new=2)
             return "requested" if opened else "manual_open_required"
         except Exception:

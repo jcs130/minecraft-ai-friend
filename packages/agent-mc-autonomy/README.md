@@ -423,6 +423,14 @@ attempts receive a changing request-tail notice to choose an action when facts
 suffice or query a specific unresolved fact. This is advisory and does not
 automatically move the body, interrupt work or claim progress.
 
+## Reuse attached viewer pages (0.1.42)
+
+An internal viewer reports its actual attached stream count. Startup allows a
+bounded four-second reconnect grace without blocking gameplay; an already
+attached page is reused instead of opening another browser tab on each runtime
+handover. With no attached page, automatic opening still happens once. External
+viewer integrations keep their existing explicit opener behavior.
+
 ## Current food reserve in standalone reads (0.1.41)
 
 Direct SDK facts now include the same synchronized food-reserve readout as host
