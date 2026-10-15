@@ -1,1 +1,1 @@
-include tests/fixtures/mixed_outcomes.json
+recursive-include tests *.py *.mjs *.json
