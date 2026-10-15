@@ -25,14 +25,20 @@ const minecraft=walk(join(game,'.fabric','remappedJars')).find(path=>path.includ
 if(!api||!minecraft)throw new Error('Matching installed Minecraft/Fabric API inputs are required');
 run('jar',['--extract','--file',api],deps);
 const classpath=[minecraft,...walk(join(game,'libraries')).filter(path=>path.endsWith('.jar')),...walk(deps).filter(path=>path.endsWith('.jar'))].join(delimiter);
-const sources=[...walk(join(root,'src','main','java')),...walk(join(root,'src','test','java'))].filter(path=>path.endsWith('.java'));
+const sources=walk(join(root,'src','main','java')).filter(path=>path.endsWith('.java'));
 const quote=value=>'"'+value.replaceAll('\\','/').replaceAll('"','\\"')+'"';
 const args=join(build,'compile.args');writeFileSync(args,['--release','21','-encoding','UTF-8','-proc:none','-classpath',classpath,'-d',classes,...sources].map(quote).join('\n'));
 run('javac',['@'+args]);
-run('java',['-cp',classes+delimiter+classpath,'ControlLedgerCheck']);
-run('java',['-cp',classes+delimiter+classpath,'MethodCallsCheck']);
-run('java',['-cp',classes+delimiter+classpath,'BlockSearchCheck']);
-run('java',['-cp',classes+delimiter+classpath,'InventoryPickCheck']);
+const testClasses=join(build,'test-classes');
+if(resolve(testClasses)!==resolve(root,'build',version,'test-classes'))throw new Error('Unsafe test class directory');
+rmSync(testClasses,{recursive:true,force:true});mkdirSync(testClasses,{recursive:true});
+const testArgs=join(build,'test-compile.args'),testClasspath=classes+delimiter+classpath;
+writeFileSync(testArgs,['--release','21','-encoding','UTF-8','-proc:none','-classpath',testClasspath,'-d',testClasses,...walk(join(root,'src','test','java')).filter(path=>path.endsWith('.java'))].map(quote).join('\n'));
+run('javac',['@'+testArgs]);
+for(const check of ['ControlLedgerCheck','MethodCallsCheck','BlockSearchCheck','InventoryPickCheck','org.agentmc.bridge.NavigationSessionCheck'])run('java',['-cp',testClasses+delimiter+testClasspath,check]);
+run('java',['-cp',testClasses+delimiter+testClasspath,'org.agentmc.bridge.BaritoneApiCheck']);
+// An explicit API jar exercises optional discovery offline; it is never installed into the game.
+if(process.argv[5])run('java',['-cp',testClasses+delimiter+testClasspath+delimiter+resolve(process.argv[5]),'org.agentmc.bridge.BaritoneApiCheck','present']);
 mod.depends.minecraft=version;
 writeFileSync(join(build,'fabric.mod.json'),JSON.stringify(mod,null,2)+'\n');
 const output=join(root,'build','agent-mc-bridge-0.1.0-fabric-'+version+'.jar');

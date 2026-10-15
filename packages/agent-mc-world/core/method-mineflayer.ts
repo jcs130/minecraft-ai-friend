@@ -6,7 +6,8 @@ import { Vec3 } from 'vec3';
 import { createHash } from 'node:crypto';
 import type { Executor } from './executor.ts';
 import { checkAbort, type SkillContext } from './skill-context.ts';
-import { breakPermissionNote } from './travel.ts';
+import { breakPermissionNote, goals, gotoGoal, walkOnlyPath } from './travel.ts';
+import { navigationGoal } from './navigation-goal.ts';
 import { permitPlacement } from './placement.ts';
 import { withPreparedInteractionHand } from './hand-interaction.ts';
 import { equipSlotConfirmed, unequipSlotConfirmed } from './equipment.ts';
@@ -31,6 +32,7 @@ export const NATIVE_API = Object.freeze({
   setControlState: 'setControlState(control,state): native key input. Keys remain held across awaited calls in this program; all are released on completion or revocation. Normal collision physics applies; flight uses existing flight/control tools.',
   clearControlStates: 'clearControlStates(): release all native movement keys held by this program.',
   waitForTicks: 'waitForTicks(ticks): native physics ticks, 1..200. Await serially; cancellation revokes the entire program.',
+  'pathfinder.goto': 'await bot.pathfinder.goto(new goals.GoalBlock(x,y,z)) or new goals.GoalNear(x,y,z,integerRange0..16). One awaited SDK call owns the walk until measured arrival or failure. Uses existing walking routes without digging or scaffolding. Goal coordinates are floored like Mineflayer. Cancellation/death/GUI/disconnect revoke the originating program; an accepted route is not arrival.',
   dig: 'dig(block,forceLook=true,digFace="auto"): native dig with current tool and measured reach; no navigation or automatic tool selection. digFace is auto/raycast or a Vec3 face. Protected, unknown-permission or changed blocks are rejected.',
   stopDigging: 'stopDigging(): interrupt current native digging.',
   placeBlock: 'placeBlock(referenceBlock,faceVector): native server-confirmed placement at reference.position.plus(faceVector). Six cardinal faces only; current held item and normal material permission apply. No automatic equip or navigation; installed World confirmation and retry fixes still apply.',
@@ -213,6 +215,14 @@ export class MineflayerMethod {
       case 'waitForTicks':
         if (!Number.isInteger(a) || Number(a) < 1 || Number(a) > 200) throw new Error('ticks 须为1..200');
         return bot.waitForTicks(a as number);
+      case 'pathfinder.goto': {
+        if(!ctx)throw new Error('Navigation requires the owned body task');
+        const target=navigationGoal(a),goal=target.range===0?new goals.GoalBlock(target.x,target.y,target.z):new goals.GoalNear(target.x,target.y,target.z,target.range);
+        const release=walkOnlyPath(bot);
+        try{await gotoGoal(bot,goal,ctx);if(!goal.isEnd(bot.entity.position.floored() as never)||!bot.entity.onGround)throw new Error('Path ended without measured grounded goal arrival');}
+        finally{release();}
+        return null;
+      }
       case 'dig': {
         const target = block(bot, a, true), permission = breakPermissionNote(bot, target);
         if (permission) throw new Error(permission);

@@ -13,18 +13,21 @@ final class MethodSession {
     static final Set<String> READS = Set.of("read", "blockAt", "findBlocks", "findBlock", "canSeeBlock", "inventory.items", "getControlState");
     private static final Set<String> CONTROLS=Set.of("forward","back","left","right","jump","sprint","sneak");
     static final List<String> METHODS = List.of("read", "blockAt", "canSeeBlock", "inventory.items", "getControlState", "look", "lookAt", "setControlState", "clearControlStates", "waitForTicks", "equip", "activateBlock", "activateItem", "deactivateItem", "findBlocks", "findBlock", "setQuickBarSlot");
+    static List<String> methods(boolean navigation){List<String> out=new ArrayList<>(METHODS);if(navigation)out.add("pathfinder.goto");return out;}
     private final class_310 c;
     private final MethodCalls calls=new MethodCalls();
     private final Map<String, Boolean> held = new HashMap<>();
     private Runnable deferred;
     private Supplier<Boolean> completion;
     private final InventoryPick inventoryPick;
+    private final NativeNavigation navigation;
+    private final Map<Integer,JsonObject> navigationReports=new HashMap<>();
     private final String actionId;
     private int currentCall;
     private final Object player,world;
     private class_243 previousPosition;
     private final long deadline;
-    MethodSession(class_310 client, int durationMs, InventoryPick pick, String id) { c=client; inventoryPick=pick; actionId=id; player=c.field_1724;world=c.field_1687;previousPosition=c.field_1724.method_19538();deadline=System.currentTimeMillis()+durationMs; }
+    MethodSession(class_310 client, int durationMs, InventoryPick pick, String id,NativeNavigation navigation) { c=client; inventoryPick=pick; actionId=id;this.navigation=navigation; player=c.field_1724;world=c.field_1687;previousPosition=c.field_1724.method_19538();deadline=System.currentTimeMillis()+durationMs; }
     void tick() {
         if(System.currentTimeMillis()>deadline)throw new IllegalStateException("JavaScript body session expired");
         if(c.field_1724!=player||c.field_1687!=world||c.field_1724.method_19538().method_1022(previousPosition)>8)throw new IllegalStateException("Body respawned, changed dimension or teleported; method revoked");
@@ -40,14 +43,32 @@ final class MethodSession {
             deferred=null;completion=null;currentCall=call;
             if(c.field_1755!=null)throw new IllegalStateException("Close the current GUI before body calls");
             inventoryPick.requireResolved();
+            if(navigation.unresolved())throw new IllegalStateException("Original navigation cleanup pending; no body call dispatched");
             return invoke(name,args);
         },()->deferred,()->completion);
     }
-    JsonObject result(int call){return calls.result(call);}
+    JsonObject result(int call){JsonObject reply=calls.result(call).deepCopy();if(navigationReports.containsKey(call))reply.add("navigation",navigationReports.get(call));return reply;}
     boolean pending(){return calls.pending();}
     private JsonElement invoke(String name,JsonArray args) {
-        if(!METHODS.contains(name)||READS.contains(name))throw new IllegalArgumentException("Unsupported body method: "+name);
+        if(!methods(navigation.available()).contains(name)||READS.contains(name))throw new IllegalArgumentException("Unsupported body method: "+name);
         switch(name) {
+            case "pathfinder.goto" -> {
+                if(args.size()!=1||!args.get(0).isJsonObject())throw new IllegalArgumentException("goto requires one GoalBlock/GoalNear");
+                NativeNavigation.validate(args.get(0).getAsJsonObject());
+                if(held.containsKey("use"))throw new IllegalStateException("Release held item use before navigation");
+                held.clear();for(String key:CONTROLS)key(c,key).method_23481(false);
+                int call=currentCall;
+                try{navigation.start(args.get(0).getAsJsonObject(),(int)Math.max(1000,deadline-System.currentTimeMillis()),actionId);}
+                catch(Exception error){throw new IllegalStateException(error.getMessage(),error);}
+                completion=()->{
+                    try{
+                        String phase=navigation.tick();if(phase.equals("running"))return false;
+                        String reason=navigation.reason();navigationReports.put(call,navigation.report());
+                        if(!navigation.cancel())throw new IllegalStateException("Navigation cleanup unknown; reconcile original action");
+                        if(!phase.equals("completed"))throw new IllegalStateException(reason);return true;
+                    }catch(Exception error){throw new IllegalStateException(error.getMessage(),error);}
+                };
+            }
             case "setControlState" -> {String key=args.get(0).getAsString();if(!CONTROLS.contains(key))throw new IllegalArgumentException("Unknown movement control; held use has separate activateItem/deactivateItem APIs");boolean value=bool(args.get(1));key(c,key).method_23481(value);if(value)held.put(key,true);else held.remove(key);}
             case "clearControlStates" -> {for(String key:List.of("forward","back","left","right","jump","sprint","sneak"))key(c,key).method_23481(false);held.keySet().removeIf(key->!key.equals("use"));}
             case "waitForTicks" -> boundedInt(args.get(0),1,200);

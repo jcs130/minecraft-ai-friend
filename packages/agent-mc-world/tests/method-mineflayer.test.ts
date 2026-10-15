@@ -4,6 +4,7 @@ import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { methodHarness, methodEnded } from './method-harness.ts';
 import { installNavigationBareHand } from '../core/hand-interaction.ts';
+import pathfinderPkg from 'mineflayer-pathfinder';
 
 const dependency = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 const registry = dependency('prismarine-registry')('1.20.6');
@@ -49,6 +50,23 @@ async function until(check: () => boolean) {
 }
 
 describe('agent programs using Mineflayer public primitives', () => {
+  it('runs one shared goto through the real pathfinder and collision physics around a wall',async()=>{
+    const r=rig();r.set(1,64,0,'stone');r.set(1,65,0,'stone');
+    pathfinderPkg.pathfinder(r.live);r.live.pathfinder.movements.allowParkour=false;r.live.pathfinder.movements.allowSprinting=false;
+    const run=r.runner.start({name:'walk-around-wall',code:'await bot.pathfinder.goto(new goals.GoalBlock(3,64,0));return (await bot.read("entity.position"));'});
+    const result=await methodEnded(r,run.id);expect(result.status).toBe('completed');
+    expect(r.live.entity.position.floored()).toEqual(new Vec3(3,64,0));expect(result.result).toMatchObject({x:expect.any(Number)});
+    expect(result.trace.filter(t=>t.args.name==='pathfinder.goto')).toHaveLength(1);
+    expect(r.live.blockAt(new Vec3(1,64,0))?.name).toBe('stone');expect(r.live.pathfinder.movements.canDig).toBe(true);
+  },8000);
+  it('cancels an awaited real navigation with its original program before queued work continues',async()=>{
+    const r=rig();pathfinderPkg.pathfinder(r.live);
+    const run=r.runner.start({name:'cancel-walk',code:'await bot.pathfinder.goto(new goals.GoalBlock(20,64,0));throw new Error("Must not reach after cancellation");'});
+    await until(()=>r.live.pathfinder.goal!==null);r.exec.submit([{skill:'chat',text:'after cancelled walk'}],'append');r.runner.stop('operator test');
+    expect(await methodEnded(r,run.id)).toMatchObject({status:'cancelled'});await until(()=>r.said.length===1);
+    expect(r.live.pathfinder.goal).toBeNull();expect(Object.values(r.live.controlState).some(Boolean)).toBe(false);
+    expect(r.live.entity.position.x).toBeLessThan(20);expect(r.said).toEqual(['after cancelled walk']);
+  });
   it('projects supported nested reads from the public snapshot without exposing live bot fields', async () => {
     const r=rig();r.stock('wheat_seeds',23,36);const packetCount=r.packets.length;
     const run=r.runner.start({name:'nested-public-read',code:'const p=await bot.read("entity.position"); return {x:await bot.read("entity.position.x"),p:p.offset(1,0,0),held:await bot.read("heldItem.name"),missing:await bot.read("entity.velocity.x")};'});
