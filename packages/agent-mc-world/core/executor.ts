@@ -63,6 +63,7 @@ import { publishViewerCastCommand } from './command-events.ts';
 import { skillGesture } from './skills-social.ts';
 import { skillLook } from './skills-look.ts';
 import { skillControl } from './skills-control.ts';
+import { taggedCraftChoice } from './tagged-crafting.ts';
 import { flyToLanding, flyToPosition, landFlight, flightState, previewFlight } from './flight.ts';
 import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold, temporaryScaffoldReadout, scaffoldCleanupCheckpoint } from './temporary-scaffold.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
@@ -199,7 +200,7 @@ import {
   slotStack, smeltPerItemMs, stationItemFacts, type GenericWindow,
 } from './containers.ts';
 import {
-  consumeHeldFood, craftItemDef, craftNeeds, equipNamed, skillCraft, skillEat, skillEquip, smithingInputs,
+  consumeHeldFood, craftItemDef, craftNeeds, equipNamed, missingCraftRecipeText, skillCraft, skillEat, skillEquip, smithingInputs,
   type CraftRecipeLike,
 } from './skills-craft.ts';
 import { isKnownTarget, unknownUseTargetText } from './entity-facts.ts';
@@ -2717,16 +2718,31 @@ export class Executor {
     return null;
   }
 
-  /** 只拒绝开工前已可证明失败的合成；后续取料、加工仍交给逐步试算。 */
+  /** Only reject proven recipe/identity errors throughout a batch; stock may change before execution. */
   private impossibleCraftStartNote(steps: readonly SkillCall[]): string | null {
     const bot = this.opts.getBot();
-    for (const step of steps) {
+    for (const [index, step] of steps.entries()) {
       if (step.skill === 'craft' && step.grid && step.item) {
         return `合成同时写了 item 和 grid；实际只会按 grid 摆，item 会被忽略。若要做${zhName(step.item)}，只写 item 走官方配方；若要试自摆配方，只写 grid。原队列保留`;
       }
       if (bot && this.opts.precheck?.() !== false && step.skill === 'craft' && step.grid) {
         const unknown = step.grid.flat().find(name => name && !bot.registry?.itemsByName?.[name]);
         if (unknown) return `${unknownCraftItemText(bot, unknown)}先核对 ID 再提交；原队列保留`;
+      }
+      if (bot && this.opts.precheck?.() !== false && step.skill === 'craft' && !step.grid) {
+        const def = craftItemDef(bot, step.item ?? '');
+        if (!def) return `第 ${index + 1} 步${unknownCraftItemText(bot, step.item ?? '')}先核对 ID 再提交；原队列保留`;
+        // Smithing has its own station path; tagged crafting can supply a
+        // recipe absent from minecraft-data. A custom grid has no assumed
+        // output. None of these is a missing ordinary crafting recipe.
+        if (!smithingInputs(def.name) && !taggedCraftChoice(bot, def.name) && typeof bot.recipesAll === 'function') {
+          try {
+            const all = bot.recipesAll(def.id, null, true as never);
+            if (Array.isArray(all) && all.length === 0) {
+              return `第 ${index + 1} 步${missingCraftRecipeText(def.name)}本单未入队，前面的步骤也未执行；原队列保留`;
+            }
+          } catch { /* An unavailable recipe reader is unknown, not an empty recipe table. */ }
+        }
       }
     }
     const first = steps[0];
