@@ -66,6 +66,12 @@ class HostContextPort:
         temporary = self.path.with_suffix(".tmp")
         temporary.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
         temporary.replace(self.path)
+        try:
+            profile = json.loads((self.directory / "host-character.json").read_text(encoding="utf-8"))
+            if profile["stable"]["agent_name"] != payload["agent_name"]:
+                self.clear_static()
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
         return metadata(value)
 
     def publish_static(self, context, *, scope):
@@ -136,6 +142,8 @@ class HostContextPort:
             validate_host_context(stable)
             if stable["persona_source"] != "character_profile":
                 return dynamic
+            if dynamic and dynamic["stable"]["agent_name"] != stable["agent_name"]:
+                return dynamic  # A freshly accepted actor supersedes an older static binding.
             if dynamic and dynamic["stable"]["agent_name"] == stable["agent_name"]:
                 if dynamic["stable"]["persona_source"] == "host_projection" and dynamic["stable"]["persona"]:
                     return dynamic

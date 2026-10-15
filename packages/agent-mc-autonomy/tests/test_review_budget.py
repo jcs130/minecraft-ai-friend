@@ -129,3 +129,67 @@ def test_profile_binding_cannot_bypass_current_fences(runtime, change):
     result = port.bind_character(rid, ref, {"agent_name": "Role", "persona": "public", "persona_source": "character_profile"})
     assert result["reason"] == "inspection_superseded"
     assert not (port.directory / "host-character.json").exists()
+
+
+@pytest.mark.parametrize("reference", [None, "", " ", 1, [], {}, "z" * 24, "a" * 23, "a" * 24])
+def test_invalid_or_uninspected_death_reference_is_recoverable_without_effects(tmp_path, reference):
+    from unittest.mock import Mock
+    port, _, _, _, review = death_review(tmp_path)
+    before = deepcopy(port.state())
+    speak = Mock()
+    result = port.decide(review["id"], "continue", "Evaluate recovery", before_dispatch=speak,
+                         host_context={"agent_name": "Role"}, death_reflection={"evidence_ref": reference,
+                         "outcome": "lesson", "lesson": "Check resources", "applicability": "After respawn"})
+    assert result["error"] == "death_evidence_reference_mismatch"
+    assert port.state() == before and not port.mailbox.ready()
+    assert not (tmp_path / "host-context.json").exists()
+    speak.assert_not_called()
+
+
+def test_missing_death_reference_keeps_original_recoverable_validation(tmp_path):
+    port, _, _, _, review = death_review(tmp_path)
+    before = deepcopy(port.state())
+    result = port.decide(review["id"], "continue", "Evaluate recovery", death_reflection={
+        "outcome": "lesson", "lesson": "Check resources", "applicability": "After respawn"})
+    assert result["error"] == "death_episode_mismatch" and port.state() == before
+
+
+def test_new_explicit_actor_retires_old_static_without_losing_intent_or_memories(runtime):
+    port, _, publish = runtime
+    publish()
+    host = HostContextPort(port.directory, now=port.now)
+    host.publish_static({"agent_name": "A", "persona": "public A", "persona_source": "character_profile"}, scope=None)
+    memories = [{"id": "m", "source": "main_brain_recall", "text": "Selected by B"}]
+    host.publish({"agent_name": "B", "persona": "explicit B", "current_intent": "B's intent", "memories": memories},
+                 session="123:", revision=0)
+    value = host.read(0)
+    assert value["stable"]["agent_name"] == "B" and value["stable"]["persona"] == "explicit B"
+    assert value["dynamic"]["current_intent"] == "B's intent" and value["dynamic"]["memories"] == memories
+    assert not (port.directory / "host-character.json").exists()
+    assert host.read(1) is None  # Old static A cannot reappear after B's revision expires.
+
+
+def test_concurrent_final_wins_over_profile_read_started_before_it(runtime):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    port, _, publish = runtime
+    publish()
+    rid = port.offer()["review"]["id"]
+    ref = port.decide(rid, "inspect", compact=True)["evidence_ref"]
+    final_done = Event()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        def late_profile():
+            assert final_done.wait(5)
+            return ReviewPort(port.directory, now=port.now).bind_character(rid, ref,
+                {"agent_name": "A", "persona": "old public A", "persona_source": "character_profile"})
+        pending = pool.submit(late_profile)
+        accepted = port.decide(rid, "continue", "Current work", require_inspection=True,
+            host_context={"agent_name": "B", "persona": "explicit B", "current_intent": "fresh B intent",
+                          "memories": [{"id": "m", "source": "main_brain", "text": "fresh B memory"}]})
+        final_done.set()
+        assert pending.result()["reason"] == "inspection_superseded"
+    assert accepted["acknowledged"]
+    context = HostContextPort(port.directory, now=port.now).read(0)
+    assert context["stable"]["agent_name"] == "B"
+    assert context["dynamic"]["current_intent"] == "fresh B intent"
+    assert context["dynamic"]["memories"][0]["text"] == "fresh B memory"

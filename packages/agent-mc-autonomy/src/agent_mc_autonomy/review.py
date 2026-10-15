@@ -379,6 +379,7 @@ class ReviewPort:
         with self.transaction() as state:
             review = state.get("review", {})
             if (not current or self.stopping() or not state.get("policy", {}).get("enabled")
+                    or review.get("result", {}).get("acknowledged")
                     or review.get("id") != review_id or review.get("inspected_evidence_ref") != reference
                     or current["session"] != review.get("session") or current["scope"] != review.get("scope")
                     or current["baseline"] != review.get("baseline") or current["intent"] != review.get("intent")
@@ -511,7 +512,8 @@ class ReviewPort:
                 return {"is_error": True, "error": "fresh_inspection_required"}
             if isinstance(death_reflection, dict) and "evidence_ref" in death_reflection:
                 reference = death_reflection["evidence_ref"]
-                if not episode or reference != review.get("inspected_evidence_ref"):
+                if (not episode or not isinstance(reference, str) or not re.fullmatch(r"[0-9a-f]{24}", reference)
+                        or not review.get("inspected_at") or reference != review.get("inspected_evidence_ref")):
                     return {"is_error": True, "error": "death_evidence_reference_mismatch"}
                 death_reflection = {key: value for key, value in death_reflection.items() if key != "evidence_ref"}
                 if death_reflection.get("episode_id", episode["id"]) != episode["id"]:
