@@ -30,6 +30,10 @@ The host may retain structured `meta.death` with the actual journal event
 run/cursor/time; missing official cause remains unknown. Built-in guides are
 optional knowledge, never a required activity sequence.
 
+Native collision shapes, sight, body clearance and hazards are separate contracts.
+See the [Java 1.21.1 state audit](docs/native-collision.md) for exact empty/partial
+shape handling, door/gate/trapdoor behavior, test coverage and remaining limits.
+
 Consumers depend on the package, never on another host's checkout:
 
 - `cortico-world-qiandengji`: Cortico API 5 adapter, public name 联机版我的世界.

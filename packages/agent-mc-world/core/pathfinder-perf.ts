@@ -80,7 +80,7 @@ const DOOR_KIND = 3;
  *    可它 `boundingBox` 仍是 `block`,照样被当墙 —— 开着的栅栏门今天也走不过去)。
  *
  * **活板门不进来**:它是横着的地板,「开一下再过去」等于把脚下的地板打开。
- * 开着的活板门当空气是对的,但那属于另一个判断(掉下去),这里不顺手做。
+ * 开着的活板门仍有竖直碰撞板,不能当空气;其方向、身体净空和脚下支撑仍须分别检查。
  */
 export function doorStateOf(name: string, props: Record<string, unknown>): number {
   const isDoor = name.endsWith('_door') && !name.endsWith('_trapdoor');

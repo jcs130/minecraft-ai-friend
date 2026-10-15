@@ -28,7 +28,7 @@ export function clearObservationRay(bot:any,from:Point,to:Point):boolean {
       const p=[at[0]!,at[1]!+dy,at[2]!],key=p.join(',');if(tested.has(key))continue;tested.add(key);
       const block=bot.blockAt(new Vec3(p[0]!,p[1]!,p[2]!),false);if(!block)return false;
       if(transparent(String(block.name)))continue;
-      const shapes=block.shapes?.length?block.shapes:[[0,0,0,1,1,1]];
+      const shapes=Array.isArray(block.shapes)?block.shapes:[[0,0,0,1,1,1]];
       if(shapes.some((s:number[])=>intersects(a,d,s,p)))return false;
     }
     return true;

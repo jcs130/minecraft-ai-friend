@@ -11,6 +11,39 @@ const sound={name:'entity.zombie.ambient',category:'hostile',volume:1,pitch:1,po
 const self={id:1,position:new Vec3(.5,64,.5),yaw:0,pitch:0};
 const rig=()=>({entity:self,entities:{9:{id:9,name:'zombie',height:1.8,position:new Vec3(.5,64,-6)}},registry:{},blockAt:()=>air});
 describe('perception evidence boundaries',()=>{
+  it('observes loaded voxels and entities through known empty grass, fern and near-eye vine shapes',()=>{
+    const bot={...rig(),game:{dimension:'overworld'},blockAt:(p:Vec3)=>{
+      const name=p.z===-1&&p.y===64?'tall_grass':p.z===-1&&p.y===65?'fern':null;
+      if(name)return {name,shapes:[],position:p};
+      if(p.z===0&&p.y===65)return {name:'vine',shapes:[],position:p};
+      if(p.z===-3&&p.y===64)return {...stone,name:'jungle_log',position:p};
+      return {...air,position:p};
+    }};
+    const eye={x:.5,y:65.62,z:.5};
+    expect(clearObservationRay(bot,eye,{x:.5,y:65,z:-2.5})).toBe(true);
+    expect(observedEntity(bot,bot.entities[9])).toBe(true);
+    const voxels=observeSpatial(bot as never,{mode:'voxels',bounds:[0,0,-3,0,1,-1]});
+    expect(voxels.unknownCells).toBe(0);
+    expect(voxels.cells.every((cell:number)=>cell>=0)).toBe(true);
+    expect(JSON.stringify(voxels.palette)).toContain('tall_grass');
+    expect(JSON.stringify(voxels.palette)).toContain('fern');
+    expect(JSON.stringify(voxels.palette)).toContain('jungle_log');
+  });
+  it.each(['wall','unknown-shapes','unloaded-collar'] as const)('keeps %s opaque despite known empty vegetation shapes',kind=>{
+    const bot={...rig(),game:{dimension:'overworld'},blockAt:(p:Vec3):any=>{
+      if(p.z===-1)return {name:'fern',shapes:[],position:p};
+      if(p.z===-2){
+        if(kind==='unloaded-collar')return p.y===66?null:{...air,position:p};
+        return kind==='wall'?{...stone,position:p}:{name:'opaque_unread_geometry',position:p};
+      }
+      if(p.z===-4)return {...stone,name:'diamond_ore',position:p};
+      return {...air,position:p};
+    }};
+    expect(clearObservationRay(bot,{x:.5,y:65.62,z:.5},{x:.5,y:65,z:-4.5})).toBe(false);
+    expect(observedEntity(bot,bot.entities[9])).toBe(false);
+    const voxels=observeSpatial(bot as never,{mode:'voxels',bounds:[0,0,-4,0,0,-4]});
+    expect(voxels).toMatchObject({unknownCells:1,palette:[],cells:[-1]});
+  });
   it('masks hidden block identities consistently in direct reads, index searches and voxel palettes',()=>{
     const bot={...rig(),game:{dimension:'overworld'},findBlocks:()=>[new Vec3(0,64,-2),new Vec3(0,64,-5)],
       blockAt:(p:Vec3)=>p.z===-2?{...stone,position:p}:p.z===-5?{name:'diamond_ore',shapes:[[0,0,0,1,1,1]],position:p}:air};
