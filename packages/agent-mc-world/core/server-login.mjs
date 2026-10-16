@@ -49,7 +49,7 @@ export function installServerLogin(bot, options) {
   const report = (status, detail = null) => {
     if (stage === status && reason === detail) return;
     stage = status; reason = detail;
-    if (['confirmed', 'blocked', 'closed'].includes(status)) clearTimeout(timer);
+    if (['confirmed', 'retrying', 'blocked', 'closed'].includes(status)) clearTimeout(timer);
     options.report?.({ status, reason, username: options.username, server: options.server });
   };
   try {
@@ -74,7 +74,9 @@ export function installServerLogin(bot, options) {
           report('armed');
           const timeoutMs = account.timeoutMs ?? 30000;
           if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 300000) throw new Error('invalid timeout');
-          timer = setTimeout(() => { if (active && ['armed', 'submitted'].includes(stage)) report('blocked', 'confirmation-timeout'); }, timeoutMs);
+          // Missing final authorization is unknown, not a rejected credential.
+          // End this attempt and let the connection owner use its normal backoff.
+          timer = setTimeout(() => { if (active && ['armed', 'submitted'].includes(stage)) report('retrying', 'confirmation-timeout'); }, timeoutMs);
           timer.unref?.();
         } else report('blocked', 'account-not-matched');
       } else if (config.enabled === true) {

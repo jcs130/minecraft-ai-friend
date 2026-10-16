@@ -136,7 +136,7 @@ describe('scoped automatic server authentication', () => {
       const login = installServerLogin(r.bot, { ...r.options, readCredential: () => new Promise(resolve => { finish = resolve; }) });
       r.messages('AUTH_LOGIN');
       await vi.advanceTimersByTimeAsync(1000);
-      expect(login.detail()).toMatchObject({ stage: 'blocked', reason: 'confirmation-timeout' });
+      expect(login.detail()).toMatchObject({ stage: 'retrying', reason: 'confirmation-timeout' });
       const bytes = Buffer.from('must-not-send'); finish(bytes);
       await Promise.resolve();
       r.messages('AUTH_SUCCESS');

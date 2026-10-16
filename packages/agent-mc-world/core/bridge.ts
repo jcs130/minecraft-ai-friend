@@ -526,12 +526,18 @@ export class Bridge {
         if (status.status === 'required') {
           this.opts.onAlarm?.('服务器系统回执要求重新登录：网络连接保留，但当前操作授权未就绪。旧在线状态已经失效；保留目标，等待新的授权确认，不重复提交未生效的动作。');
         }
-        if (status.status === 'blocked') queueMicrotask(() => {
-          // A wrong password/2FA/timeout needs operator attention. Reconnecting
-          // here would repeatedly submit the same failed credential.
-          if (this._bot !== bot || this.generation !== gen) return;
-          this.stopped = true;
-          bot.quit('服务器登录未通过，请检查账号配置后明确重连');
+        if (status.status === 'blocked' || status.status === 'retrying') queueMicrotask(() => {
+          if (this.stopped || this.opts.shuttingDown?.() || this._bot !== bot || this.generation !== gen) return;
+          if (status.status === 'blocked') {
+            // An explicit rejection, 2FA or invalid local configuration needs
+            // attention; do not resubmit that credential on every reconnect.
+            this.stopped = true;
+            bot.quit('服务器登录未通过，请检查账号配置后明确重连');
+          } else {
+            // No authoritative confirmation arrived. This is a transient
+            // connection attempt, so onGone retains normal retry/backoff.
+            bot.quit('服务器登录确认超时，将自动重连');
+          }
         });
       } });
     this.serverLogin = login;
