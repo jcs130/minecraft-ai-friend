@@ -68,7 +68,7 @@ def installation_readiness(settings, cache: Path) -> dict:
         return result
     try:
         renderer = Path(settings.viewer_renderer_directory).expanduser()
-        if not (renderer / "host/native-world-preview-host.mjs").is_file():
+        if not (renderer / "tools/native-world-preview-host.mjs").is_file():
             result["viewer"] = "renderer_missing"
             return result
         result["viewer"] = "catalog_invalid_or_missing"

@@ -3,7 +3,7 @@
 Independent Minecraft execution core, maintained in `jcs130/minecraft-ai-friend`.
 Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.
 
-`0.5.7-rc.1` prepares the complete shared Java 1.21.1 viewer with explicit
+`0.5.7-rc.2` prepares the complete shared Java 1.21.1 viewer with explicit
 1.20.6 compatibility: version-matched original sounds, sound registry metadata,
 and the eight-track shared original BGM library. The locked input records its
 upstream commit and SHA-256. The npm package ships one compiled viewer tree;

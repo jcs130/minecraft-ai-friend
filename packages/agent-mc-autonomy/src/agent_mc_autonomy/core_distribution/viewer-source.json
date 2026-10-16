@@ -1,0 +1,1298 @@
+{
+  "schema": "agent-mc-viewer-source/v1",
+  "sourceRevision": "f0f2227e65ea05ea89dcd4954790ec787a3a2e7a",
+  "files": {
+    "package.json": {
+      "bytes": 1191,
+      "sha256": "2444b8ecf68c34ed24bb8a1bb83e81f97ab38524340a068d1cc32879ed1895e9"
+    },
+    "renderer-src/host/java-data-viewer.mjs": {
+      "bytes": 11338,
+      "sha256": "a99d31bf688166b898ac93b93841b85b4517a91380611108abde27dcf6ea3eeb"
+    },
+    "renderer-src/host/java-visual-data.mjs": {
+      "bytes": 11730,
+      "sha256": "78bbf5f594bfa881c6a31ea0a925bcb463b08eebc08558dada2b3237d7f172f4"
+    },
+    "renderer-src/host/native-agent-visual.mjs": {
+      "bytes": 1812,
+      "sha256": "e2ff47285f9e9a4ae9840e7f5d27933af29625c2ee32f3247dabb1c16d30e5f2"
+    },
+    "renderer-src/host/native-audio-assets.mjs": {
+      "bytes": 4955,
+      "sha256": "427fadb172f7af333aba9a4b7d7bad1c07533bdbb3e88899e2b93619589d627c"
+    },
+    "renderer-src/host/native-bundled-appearances.mjs": {
+      "bytes": 3012,
+      "sha256": "5c72ede3b8112f42cdfcc094234906a21718ffe5e196dc64fdfa9a213dfa9dc6"
+    },
+    "renderer-src/host/native-particle-collisions.mjs": {
+      "bytes": 2938,
+      "sha256": "8169a637d02d1daeb7c6106389c4db62388f620b45274defb12b955a5cadec9a"
+    },
+    "renderer-src/host/text-display.mjs": {
+      "bytes": 5377,
+      "sha256": "82a48c5d15f73640f8cbf17d7e327ea8a6b4b6d02e3ab391cbb0b1ebd4146353"
+    },
+    "renderer-src/host/vanilla-activity.mjs": {
+      "bytes": 15066,
+      "sha256": "cf8694f2a1a208fb584a9ed5d92c951b57780107e46b8448af5b989dab0ff1c7"
+    },
+    "renderer-src/host/vanilla-hand-state.mjs": {
+      "bytes": 5009,
+      "sha256": "94d4f3aaa2b723ba8ea1b74d8df80aa84c89369e2d20e23edc3e42be1395a9c5"
+    },
+    "renderer-src/host/vanilla-item-stack.mjs": {
+      "bytes": 7097,
+      "sha256": "bac1416517a02a05d4fc812351c4bd15aa66f590a9da845a6c78fa2a8214e118"
+    },
+    "renderer-src/host/vanilla-menu-state.mjs": {
+      "bytes": 2355,
+      "sha256": "9df3de717658f5189f0bc4396f22e5163d103615614e68096b0be643d2aa7020"
+    },
+    "renderer-src/host/vanilla-native-stream.mjs": {
+      "bytes": 8641,
+      "sha256": "ccee303fe24e27505d8edb719829b38b9a9d69df8ccb5578a23c56f0c150b520"
+    },
+    "renderer-src/host/viewer-agent.mjs": {
+      "bytes": 14192,
+      "sha256": "f9053531b917a6ee4f25188124acfaf0dca201fcb36036cf76d991e515b076ae"
+    },
+    "renderer-src/host/viewer-appearance.d.mts": {
+      "bytes": 588,
+      "sha256": "dc01479acc9345d7a0e9ec7d7176b6c65fa676af30b9c441e8cdb289db6554e0"
+    },
+    "renderer-src/host/viewer-appearance.mjs": {
+      "bytes": 7328,
+      "sha256": "43033b1f5d1353d6ecc06df40f3db9c4502fc73ba9443cc948848132f6bf9b9b"
+    },
+    "renderer-src/host/viewer-asset-server.mjs": {
+      "bytes": 2692,
+      "sha256": "6f864162f3c05bf824999664b97eb479639241c9c901d6a97f3c292808992180"
+    },
+    "renderer-src/host/viewer-content.d.mts": {
+      "bytes": 2464,
+      "sha256": "c9f952dd570e6ef172273405a752bfa7797db837625c01ec04c745002905dea0"
+    },
+    "renderer-src/host/viewer-content.mjs": {
+      "bytes": 18570,
+      "sha256": "e2976acc7b3f3de66bb4af723c6a847db296402bcd91940ae0d298656e8cc2c9"
+    },
+    "renderer-src/host/viewer-control.mjs": {
+      "bytes": 10383,
+      "sha256": "75228607fa029856d6e5d17ab27215cc7ad7de0be6704ccaafac93fdb01ba06c"
+    },
+    "renderer-src/host/viewer-fishing.mjs": {
+      "bytes": 9705,
+      "sha256": "176ffcb1246aa7df6089f2afa2fdfb0c6bf4ab5fcbc08181dcaa483cb7238dfd"
+    },
+    "renderer-src/host/viewer-head-textures.mjs": {
+      "bytes": 3208,
+      "sha256": "616a8b2c1058492b8056fed80499c265be6bc5f9c8de844f2c1c8d407afeb722"
+    },
+    "renderer-src/host/viewer-mineflayer-control.mjs": {
+      "bytes": 9521,
+      "sha256": "c24fa11e395244e1d91f8e1fadd8cf93428ce35579bfa907e7c4a2906626e35d"
+    },
+    "renderer-src/host/viewer-observer.d.mts": {
+      "bytes": 263,
+      "sha256": "f056519d8dc5a5fc335701b95e12081734cc3330d49eabbe91fb7ed134932705"
+    },
+    "renderer-src/host/viewer-observer.mjs": {
+      "bytes": 5459,
+      "sha256": "f36199ce3e8bd1fad36718b9165d7216c681d2ad3e5f3830f87ec18ac6dc1ce2"
+    },
+    "renderer-src/host/viewer-pack-selection.mjs": {
+      "bytes": 1399,
+      "sha256": "386ccfdfc5e0ec62513ac3e68fb22f4dc97eb65451c103873112a31545ac3628"
+    },
+    "renderer-src/host/viewer-page-assets.mjs": {
+      "bytes": 1821,
+      "sha256": "f961e0b65f3408ff03fd9400861c87674b9d0ee8249577724871a9dfee1f0b99"
+    },
+    "renderer-src/host/viewer-performance-relay.d.mts": {
+      "bytes": 397,
+      "sha256": "53654178968bf571c04f08c0fd82ce590d83a10ddd34b59db5533d2c0a9365e0"
+    },
+    "renderer-src/host/viewer-performance-relay.mjs": {
+      "bytes": 3349,
+      "sha256": "3e79bdfabd12aebb3c9171391170ae5d9774769adecc9c6927a3578e25b2491e"
+    },
+    "renderer-src/host/viewer-performance-relay.test.mjs": {
+      "bytes": 2291,
+      "sha256": "e89832b0a35b369237d918d5a687fe190ead6e1f785740d11697497d2149eabd"
+    },
+    "renderer-src/host/viewer-photo-page.mjs": {
+      "bytes": 1765,
+      "sha256": "b1f7c6b9dbc51902b4c16df4f8e2428af61433d82980f52c5f88ca8230fb2971"
+    },
+    "renderer-src/host/viewer-sound-packets.mjs": {
+      "bytes": 4972,
+      "sha256": "040a0ae117b6b855810897f25c49e408ddd97c975fea35feafc88bc82473b0b3"
+    },
+    "renderer-src/host/viewer-sound-registry.mjs": {
+      "bytes": 3673,
+      "sha256": "adf1bb65d90b099395d6ed35c6602851bafe848dc02ff49478c9e03356d7a3be"
+    },
+    "renderer-src/host/viewer-version.d.mts": {
+      "bytes": 679,
+      "sha256": "345254f8f76f9db19c225367c0340e1a7f0e4f59c325032fd362c94af6dd9c61"
+    },
+    "renderer-src/host/viewer-version.mjs": {
+      "bytes": 2565,
+      "sha256": "2a391fa5a59bc7d1d9289b11f795b712a2911d1e84bf3e3824dc69dc1ef709a0"
+    },
+    "renderer-src/host/viewer-ysm-assets.mjs": {
+      "bytes": 5126,
+      "sha256": "b66d0d670c9f978c6335cf393d3766ab45e22972a2baa37112d72dec26b37a8b"
+    },
+    "renderer-src/host/viewer-ysm-motion.mjs": {
+      "bytes": 8616,
+      "sha256": "41010edcb648c8e837d50b8b9376d9e671dcc9b86932fd7eac3788a250aa139a"
+    },
+    "renderer-src/package-lock.json": {
+      "bytes": 62731,
+      "sha256": "edeb3be874f7307588c2ee9ce08b9ec43b963324c9c56466bb442dcb803fe5fe"
+    },
+    "renderer-src/package.json": {
+      "bytes": 1137,
+      "sha256": "a9d150412d0203e382850642f61bdedf32413c715f347275f8739c12db16f8af"
+    },
+    "renderer-src/src/modern-viewer/agent-pointer.js": {
+      "bytes": 3237,
+      "sha256": "c777b4e3261cc0ba72d8e2bd9460a983f50d1062954ecff085926d2f436218cf"
+    },
+    "renderer-src/src/modern-viewer/agent-view-gallery.js": {
+      "bytes": 5537,
+      "sha256": "128d599f452d709bddb3edf49d9f76d47a1db020b5d69065511d02f1f359d8d3"
+    },
+    "renderer-src/src/modern-viewer/agent-visual-drawing.js": {
+      "bytes": 7254,
+      "sha256": "6aaa79dc1edde389ba70b3718ba5424bd8bafe57f6d9f5bf3ed12fbc8348b9b4"
+    },
+    "renderer-src/src/modern-viewer/agent-visual-overlay.js": {
+      "bytes": 17272,
+      "sha256": "6613362c326fe0a8ade84c0ff4eff13d9b0dfeccc79de10bb2f3fe78c7230696"
+    },
+    "renderer-src/src/modern-viewer/agent-visual-projection.js": {
+      "bytes": 1010,
+      "sha256": "75db010ad266670873ffc37aa70b74b26a741c9fba9c2156fcc5f3c66cd0e77c"
+    },
+    "renderer-src/src/modern-viewer/agent-visual-protocol.js": {
+      "bytes": 10880,
+      "sha256": "ae8856c0aa7c9c52110466a316e9dc0319b59859702a534ba4ab3b010efc2996"
+    },
+    "renderer-src/src/modern-viewer/agent-visual-state.js": {
+      "bytes": 6508,
+      "sha256": "0156dcf4d122367177ca078191275b1e0e738385b23a0859df79ec9e5a672c52"
+    },
+    "renderer-src/src/modern-viewer/appearance-settings.js": {
+      "bytes": 6327,
+      "sha256": "e831d01801370e98a091b2a5a50b4cc5cbf9e57b3f9b2cfa4833fa96454fd914"
+    },
+    "renderer-src/src/modern-viewer/avatar-motion.js": {
+      "bytes": 38405,
+      "sha256": "ea693e68bf4062982e36e66f175112faa2e295257cc45f16de64ed9050f1198f"
+    },
+    "renderer-src/src/modern-viewer/avatar-rig-registry.js": {
+      "bytes": 9864,
+      "sha256": "0836be713c7c3e6f823a8d14a571f14a4d15569dfe19e30b3802d64ad890b316"
+    },
+    "renderer-src/src/modern-viewer/camera-director.js": {
+      "bytes": 8266,
+      "sha256": "58379c300526e0aefda85338649528d9ff6bbc473655041020efdc4cbe866418"
+    },
+    "renderer-src/src/modern-viewer/camera-preferences.js": {
+      "bytes": 954,
+      "sha256": "198b8861bf670ac56b6f3916ea8fa9865f0df387b4be1fe0aa556f510dff0463"
+    },
+    "renderer-src/src/modern-viewer/camera-settings.js": {
+      "bytes": 5557,
+      "sha256": "75aaa475e8c6ccd5d42260f34932b46c809c75579fa89e0936e679742accb3f4"
+    },
+    "renderer-src/src/modern-viewer/camera-water.js": {
+      "bytes": 6155,
+      "sha256": "b28ee9cf8e52a26d8534f029b29339f743fc8bbc4bbdbeb40fe5bafcf8d2bdfe"
+    },
+    "renderer-src/src/modern-viewer/character-visual-profiles.d.ts": {
+      "bytes": 3928,
+      "sha256": "4df1efb9d0df8efed0c4f74dd8b5534bf178248e7108ab32ac23912ace7bc028"
+    },
+    "renderer-src/src/modern-viewer/character-visual-profiles.js": {
+      "bytes": 148,
+      "sha256": "b54a4671895c2521a17c70ab7e7fd27fd1b77e04cc3778a1b2f4a44d0672b001"
+    },
+    "renderer-src/src/modern-viewer/chat-history.js": {
+      "bytes": 7908,
+      "sha256": "cbd72dc9c369d91d1cdd362b1ae8ff4d57eac2f27b475f168af446ac13bfcf0e"
+    },
+    "renderer-src/src/modern-viewer/chunk-loading-guard.d.ts": {
+      "bytes": 185,
+      "sha256": "889c0ca109f315ecaa61eca4918e75c65954d0d27692688635da4de87ecf538a"
+    },
+    "renderer-src/src/modern-viewer/chunk-loading-guard.js": {
+      "bytes": 521,
+      "sha256": "62229f17d1530081ef7712c06cee7a7114424a94edeaa0d06db070de0f0e98bd"
+    },
+    "renderer-src/src/modern-viewer/client.js": {
+      "bytes": 272384,
+      "sha256": "fb3f7eef889321d59134d792d0911b07b134cc9972519226a562091262481596"
+    },
+    "renderer-src/src/modern-viewer/custom-characters.d.ts": {
+      "bytes": 2455,
+      "sha256": "64204c655e293d1ba3672220a541396345a014272c5073e6e543bd91ab657c35"
+    },
+    "renderer-src/src/modern-viewer/custom-characters.js": {
+      "bytes": 149,
+      "sha256": "01d05f897b83b8024479f635354bb2073f19d46073efb8912e3037b9587df8d3"
+    },
+    "renderer-src/src/modern-viewer/dungeon-interactions.d.ts": {
+      "bytes": 1436,
+      "sha256": "4d99c14b5d17389fb29b2b365072098eb859789a8e052630f74399f57f43e693"
+    },
+    "renderer-src/src/modern-viewer/dungeon-interactions.js": {
+      "bytes": 13351,
+      "sha256": "19f16ff0b21e967d45f2cce292e124c8f0c1ff939e4d15a0081733dc8cd011c2"
+    },
+    "renderer-src/src/modern-viewer/dungeon-observer-controls.js": {
+      "bytes": 3139,
+      "sha256": "8a424143e494559cea6b7da6d4aa570ea3770ba4e3bc8dfa5781404604357368"
+    },
+    "renderer-src/src/modern-viewer/dungeon-view-controls.d.ts": {
+      "bytes": 1627,
+      "sha256": "f7dd153e635de1378a66ee8a5b74f7d85d03adf70d48a45e1cad6b5cf8fc6147"
+    },
+    "renderer-src/src/modern-viewer/dungeon-view-controls.js": {
+      "bytes": 9860,
+      "sha256": "a9699ba108ac92417314a8b6021a37d41c80d1a6ad45c0d45bc972f149453972"
+    },
+    "renderer-src/src/modern-viewer/entity-context-menu.d.ts": {
+      "bytes": 1815,
+      "sha256": "9a9f0c36d23c74eeb9d8bc28edb144d743ec0502dea8e0cc926f3a8f4c457151"
+    },
+    "renderer-src/src/modern-viewer/entity-context-menu.js": {
+      "bytes": 12406,
+      "sha256": "d6c5a86c83d999fc2060f60dd1a9446608d16a998e1cd80e4f6c39bc94723348"
+    },
+    "renderer-src/src/modern-viewer/entity-hurt-tint.js": {
+      "bytes": 1090,
+      "sha256": "dc3ebdf40b9819f49d596ea3020596aa738920e098e222251c489fe2bc38b855"
+    },
+    "renderer-src/src/modern-viewer/entity-picker.js": {
+      "bytes": 9476,
+      "sha256": "d25e5fb7f6c528b2ddfd8f918e8fb99473b797501d9c23a7af1093f6cf7fcddc"
+    },
+    "renderer-src/src/modern-viewer/entity-position-timeline.js": {
+      "bytes": 2732,
+      "sha256": "f516ade521851455f164361f3cd5c535530244062c5b64fce6bde6c70e02d2bc"
+    },
+    "renderer-src/src/modern-viewer/entity-render-bounds.js": {
+      "bytes": 983,
+      "sha256": "febf8170e3bf3201441507ffb500277b29fe7d961ceabca605eba4eb9a5ea1e5"
+    },
+    "renderer-src/src/modern-viewer/fishing-catch.js": {
+      "bytes": 5438,
+      "sha256": "6d4b37dce4783a686e1f7e449372c12066df5ff339d1b6e018c787468e95275d"
+    },
+    "renderer-src/src/modern-viewer/fishing-visuals.js": {
+      "bytes": 10130,
+      "sha256": "a054a7a4511074477510359964bdc0043bd490f00496892bdc4266cf890c8971"
+    },
+    "renderer-src/src/modern-viewer/inventory-player-preview.js": {
+      "bytes": 21571,
+      "sha256": "8284691e57a8220d06533e0bbfff5b7b8e05de66f3c4a10dc66e6e24b7894112"
+    },
+    "renderer-src/src/modern-viewer/item-appearances.js": {
+      "bytes": 13867,
+      "sha256": "9eff6b60c2c4a22d53da2522fdb79eb027cde503cea8943c0ff5b4c060347e80"
+    },
+    "renderer-src/src/modern-viewer/item-heads.js": {
+      "bytes": 9046,
+      "sha256": "2c5cab57a0f773d67a1e421067b823dcd7d56ea8719f2bda4588ede3872644d6"
+    },
+    "renderer-src/src/modern-viewer/item-profile.js": {
+      "bytes": 4317,
+      "sha256": "7fb620ae27175c216bd9330f0512711b2c48bb94ce9a9d72e546478150692aac"
+    },
+    "renderer-src/src/modern-viewer/manual-control-ui.js": {
+      "bytes": 1307,
+      "sha256": "d82fc48d0f4e9cca800902915bb39cd971f6a7d999273d542ffc99cc26076f16"
+    },
+    "renderer-src/src/modern-viewer/map-photos.js": {
+      "bytes": 9586,
+      "sha256": "640aed5398b4a6ef31a8697f9a93d4dd27710463894b7c8feabf3f1fc3491595"
+    },
+    "renderer-src/src/modern-viewer/named-character-identities.d.ts": {
+      "bytes": 850,
+      "sha256": "7c32160684f204c8511666ebab1f083fb65dd5202f894bbe2c211339ab4605af"
+    },
+    "renderer-src/src/modern-viewer/named-character-identities.js": {
+      "bytes": 151,
+      "sha256": "042b296801445a1007ac5250428423df18489b4da2de3926639e706205c3b9fc"
+    },
+    "renderer-src/src/modern-viewer/npc-gameplay.js": {
+      "bytes": 146,
+      "sha256": "41aacfb0fc0e2b3881f27744d0381b035b92526efccc17bcada1017dbe429ddd"
+    },
+    "renderer-src/src/modern-viewer/npc-portraits.d.ts": {
+      "bytes": 3888,
+      "sha256": "e7f6df73a9f379a26e161132396d187b209985442c69ae6583e4ad49cbd2ece4"
+    },
+    "renderer-src/src/modern-viewer/npc-portraits.js": {
+      "bytes": 130,
+      "sha256": "b6fecf6e25a0d88587bc3c4877cabd4b84e98a9caf2e9f9022918aa882ac1373"
+    },
+    "renderer-src/src/modern-viewer/obs-camera.js": {
+      "bytes": 964,
+      "sha256": "07987f96dcd050a1096e7c2b1d53fcd516f8a91a88773b0c045bfffb490e531f"
+    },
+    "renderer-src/src/modern-viewer/obs-hands.js": {
+      "bytes": 5796,
+      "sha256": "9211e267680a3a001212dbb4d478a1314f6a165f3f3a2326544c206a04e29e0b"
+    },
+    "renderer-src/src/modern-viewer/obs-layout.js": {
+      "bytes": 14582,
+      "sha256": "d7dabce2685a9c023a2a609f4ef54809705578320fbad6b58a50342ec386888d"
+    },
+    "renderer-src/src/modern-viewer/observer-section-culling.js": {
+      "bytes": 5083,
+      "sha256": "8e94603a6ef8942fc2c6e1dd2315530a3c22dd6c431972ddb4d1df0dda9aff2f"
+    },
+    "renderer-src/src/modern-viewer/observer-transparency.js": {
+      "bytes": 5925,
+      "sha256": "4fa352c9c2d4817a79ffaa228557cc1cd439e9872228f7c8c46af343e8fec50b"
+    },
+    "renderer-src/src/modern-viewer/overview-capture.js": {
+      "bytes": 20345,
+      "sha256": "c0c5556deb2e1292e84f19e45c711bccf06e1b03d2b9c76c28ad1707bf7dbc2d"
+    },
+    "renderer-src/src/modern-viewer/painting-variants.d.ts": {
+      "bytes": 421,
+      "sha256": "e3c0c2a01f05fac1ad0602812e2e1ec19e56ce8eba129be0ecf01b6ab9495de5"
+    },
+    "renderer-src/src/modern-viewer/painting-variants.js": {
+      "bytes": 2881,
+      "sha256": "88878b24b5a5883161e3b8afea5e75be89591b895cbadc8c219e9bc6c616b8d9"
+    },
+    "renderer-src/src/modern-viewer/paper-bundled-appearance.js": {
+      "bytes": 7626,
+      "sha256": "cf8a504a0329110c2937615f51b91a1a5da76a07e133b8b8c9841d4be537c42c"
+    },
+    "renderer-src/src/modern-viewer/paper-skin.js": {
+      "bytes": 2700,
+      "sha256": "f69f38037fc190a6cbc2e767c18cf3463e09467c3c2993e0823e315294b57b67"
+    },
+    "renderer-src/src/modern-viewer/paper-ysm-animation.js": {
+      "bytes": 16139,
+      "sha256": "a64bdd31ed1e4eb86c920efbde2088dc2b5f905cb2e750c122e2685a6bf9fdce"
+    },
+    "renderer-src/src/modern-viewer/paper-ysm-items.js": {
+      "bytes": 12556,
+      "sha256": "051d6da90703c3d3a36296e063ff99e64579f224cf871a67e96ade3d1785916c"
+    },
+    "renderer-src/src/modern-viewer/paper-ysm-molang.js": {
+      "bytes": 6642,
+      "sha256": "0ad80cfe13a8b98751401ed154911020e77b70e12a89087bed26169e700cc42a"
+    },
+    "renderer-src/src/modern-viewer/paper-ysm-rest-pose.js": {
+      "bytes": 5788,
+      "sha256": "ee05e158d00b25385c30f22f9550ef5fd7146321c14a6e3673ad045154549590"
+    },
+    "renderer-src/src/modern-viewer/paper-ysm.js": {
+      "bytes": 25445,
+      "sha256": "5bde76ab3631ce6848f2167ba15bb6dbc2e75167961745cc58ab0191f1a8af19"
+    },
+    "renderer-src/src/modern-viewer/perception-risk.js": {
+      "bytes": 2638,
+      "sha256": "e32894dad2c2ba16104b8c92dcc538fdb7e7cc66a8dab2395df430138eef8382"
+    },
+    "renderer-src/src/modern-viewer/perception-view.js": {
+      "bytes": 12275,
+      "sha256": "673f79df7f282836c283dcc8cc6c1fe16f4986e615a6497981d56694b36f180d"
+    },
+    "renderer-src/src/modern-viewer/player-models.d.ts": {
+      "bytes": 618,
+      "sha256": "4eaa58c6abe6f4e46cde73d096aee5842fdd3be2c783417e014eaf5e8f137189"
+    },
+    "renderer-src/src/modern-viewer/player-models.js": {
+      "bytes": 2594,
+      "sha256": "71a39ab395b47b17617d2e9bfc55c4b635a1704c472bef7f5970f8eb0cc35e63"
+    },
+    "renderer-src/src/modern-viewer/player-skins.js": {
+      "bytes": 155,
+      "sha256": "fdb0400c8f716fecee99b9b4edc8877d6d297fcfef517c9aed827f5e69d359d6"
+    },
+    "renderer-src/src/modern-viewer/presets/qiandengji/character-visual-profiles.js": {
+      "bytes": 48649,
+      "sha256": "be8a8ab894cbbdc556930f3e86a2e9db81fbaf7712ca376a4c5f81ee171d64d5"
+    },
+    "renderer-src/src/modern-viewer/presets/qiandengji/custom-characters.js": {
+      "bytes": 70186,
+      "sha256": "59eafd3108fc21eff15fe09a95d863fb1d5350c245239c1e0dd0c2f8e4ae2846"
+    },
+    "renderer-src/src/modern-viewer/presets/qiandengji/named-character-identities.js": {
+      "bytes": 3024,
+      "sha256": "148ba54818f3f7673a6c81312592f12059b74f88c6969eba5d6d950aeb5df7bb"
+    },
+    "renderer-src/src/modern-viewer/presets/qiandengji/npc-copy.js": {
+      "bytes": 1111,
+      "sha256": "e32025c3bcbb048af30e5f10b6fced30c503ef4536b054ccfe88c20c1536e3c4"
+    },
+    "renderer-src/src/modern-viewer/presets/qiandengji/npc-gameplay.js": {
+      "bytes": 36275,
+      "sha256": "3e657c179cff6cb8cfea3aad804a72c6b9d0fc54bc4594d32777bcee02af5a17"
+    },
+    "renderer-src/src/modern-viewer/presets/qiandengji/npc-portraits.js": {
+      "bytes": 38405,
+      "sha256": "210be8533992f980eccc3d64cf43dda24f83df28ac723075a037af85ac6f3c98"
+    },
+    "renderer-src/src/modern-viewer/presets/qiandengji/player-skins.js": {
+      "bytes": 1517,
+      "sha256": "1c2775651067f45b56de63f5c1f49246e58b4238a94d602497b132081ac204d5"
+    },
+    "renderer-src/src/modern-viewer/render-clock.js": {
+      "bytes": 540,
+      "sha256": "343a7be2767349fa17d7c90a9cf5d4685f89f14c5875b9d174386ef36466f438"
+    },
+    "renderer-src/src/modern-viewer/rendered-camera-follow.js": {
+      "bytes": 1047,
+      "sha256": "4461048b58409d7109308f3d725e837b092703dfb50aa78b40cc914ff9e080c8"
+    },
+    "renderer-src/src/modern-viewer/renderer-equipment.js": {
+      "bytes": 589,
+      "sha256": "4b4bd602df20ba16f0dd727babc0ea69251cbc530e72ad3c9a00e5570a423710"
+    },
+    "renderer-src/src/modern-viewer/room-cover-cache.js": {
+      "bytes": 3057,
+      "sha256": "79d6f1e23cb52170c8946afa479574b40afe814a7679a67f958892850915e922"
+    },
+    "renderer-src/src/modern-viewer/room-cutaway-cap.js": {
+      "bytes": 4897,
+      "sha256": "948c478dff04ab665761cb7fd3037873a62b66c141cf52b93993d410b1f70c5e"
+    },
+    "renderer-src/src/modern-viewer/room-floor-mask.js": {
+      "bytes": 5144,
+      "sha256": "b8cfce63ea75eebd50e7a4e503325f798c5502d6c49a641cf1e7cfccc58dd85f"
+    },
+    "renderer-src/src/modern-viewer/room-visibility.js": {
+      "bytes": 16008,
+      "sha256": "9a88bbe24a073deb53acbfd4dc31bbbd80cd238ffcc470deaf0beca2ffbe0a01"
+    },
+    "renderer-src/src/modern-viewer/scene-minimap.js": {
+      "bytes": 20277,
+      "sha256": "c4c1337b79352bf5ed1514de1339d43d20c17a9b9d0f53d2f2dca2d348fd78a1"
+    },
+    "renderer-src/src/modern-viewer/scene-quality.js": {
+      "bytes": 3347,
+      "sha256": "789b31ebfd4f7bb780b40aafa0d6510378b801bd962d71ef57fe89cfb38cb932"
+    },
+    "renderer-src/src/modern-viewer/scene-settings.js": {
+      "bytes": 3023,
+      "sha256": "b8db59852ed0e59bf07623030798ea58202319de6135ac7a0619da850be01737"
+    },
+    "renderer-src/src/modern-viewer/self-avatar-camera-visibility.js": {
+      "bytes": 10571,
+      "sha256": "9e3a3e04063cc1980cafffaba6101458542c062274986e2d42a931145a7d1f24"
+    },
+    "renderer-src/src/modern-viewer/server-particles.js": {
+      "bytes": 7084,
+      "sha256": "25aea22fed24dcdf1f2a726491672012612e1b2ef845f0885d905ba904abe927"
+    },
+    "renderer-src/src/modern-viewer/terrain-entity-culling.js": {
+      "bytes": 3996,
+      "sha256": "659246892b2c037a311a0e910b9cffad1670edab076c98daca8aa5b967352ad5"
+    },
+    "renderer-src/src/modern-viewer/text-display-font.js": {
+      "bytes": 7754,
+      "sha256": "e7151d7862e7fa649b72432e9aecf95a832a3cdd04c658c3bf330f4f9f134b38"
+    },
+    "renderer-src/src/modern-viewer/text-displays.js": {
+      "bytes": 6767,
+      "sha256": "fb5bec370aaad5fc9cd6e70798b3119ea181a882ea6b07c345417f35b38814f5"
+    },
+    "renderer-src/src/modern-viewer/trusted-avatar-assets.d.ts": {
+      "bytes": 2475,
+      "sha256": "372dafa8889bcde584a812a107744eb3b168154934c00506500d7b735cf02f4f"
+    },
+    "renderer-src/src/modern-viewer/trusted-avatar-assets.js": {
+      "bytes": 70108,
+      "sha256": "69ab066f87ecd96ed577d28e1359f3885eeb9d0306cf87b1bae02ea22426a792"
+    },
+    "renderer-src/src/modern-viewer/trusted-avatar-manifest.d.ts": {
+      "bytes": 1391,
+      "sha256": "077b9941879cef2824e1d5fe377a32510fd86910c6b86a45603063fbac371ad9"
+    },
+    "renderer-src/src/modern-viewer/trusted-avatar-manifest.js": {
+      "bytes": 7167,
+      "sha256": "790dfaaa6a26c4e2b66c4118fc1ab840d46ab292fcbcaad5a4312a903729869b"
+    },
+    "renderer-src/src/modern-viewer/valtio-utils-shim.js": {
+      "bytes": 361,
+      "sha256": "8f21413781d9e22d57ec8c5ce677c783cf1b6f332c059b7718be5de26e046e04"
+    },
+    "renderer-src/src/modern-viewer/viewer-connection.js": {
+      "bytes": 2040,
+      "sha256": "4294b10860d02242c676fa5d6bff0e4c041a50e4aa6f5b796526e3b689150f49"
+    },
+    "renderer-src/src/modern-viewer/viewer-control-client.js": {
+      "bytes": 6611,
+      "sha256": "4aa7b1bfea74a777d780083176e176951025dabe79b635edf6a506552f51d244"
+    },
+    "renderer-src/src/modern-viewer/viewer-effects.d.ts": {
+      "bytes": 2331,
+      "sha256": "1a6bbdd8cecf9919f479a40951371b772cf1b72875a494a6e35718c32e32a1c6"
+    },
+    "renderer-src/src/modern-viewer/viewer-effects.js": {
+      "bytes": 25452,
+      "sha256": "d78e8fb0fb08aa64222b2556d3574da624d52349610db1167537c8ea48d1e326"
+    },
+    "renderer-src/src/modern-viewer/viewer-layout.js": {
+      "bytes": 7963,
+      "sha256": "7905f7475f3ac163f1dad43a7290e48584150c8715663f301abceaf0eb3c0f08"
+    },
+    "renderer-src/src/modern-viewer/viewer-performance.d.ts": {
+      "bytes": 1492,
+      "sha256": "79c4204b24e8cafb43d536d1eb634bbb7f97143687279ee6cefd4601b2339d6f"
+    },
+    "renderer-src/src/modern-viewer/viewer-performance.js": {
+      "bytes": 6926,
+      "sha256": "659feff8c9c5927424663a6d9574902aada5131e631c9723e1d61394595c7959"
+    },
+    "renderer-src/src/modern-viewer/viewer-runtime.ts": {
+      "bytes": 5073,
+      "sha256": "8e13518bb298d0cb16621941ea9df09a9559bb13337af73796f1343b29b96c39"
+    },
+    "renderer-src/src/modern-viewer/villager-rendering.d.ts": {
+      "bytes": 1001,
+      "sha256": "c5d616ff9fef7f826cd37c2278f75de14467a2bfb9b93f36e14e886884a0eb0e"
+    },
+    "renderer-src/src/modern-viewer/villager-rendering.js": {
+      "bytes": 6499,
+      "sha256": "8b7631d8a518e32b9c9efeaef4d64c37e22049e232167d7398e85bf9a649d73f"
+    },
+    "renderer-src/src/modern-viewer/villager-trades.d.ts": {
+      "bytes": 1290,
+      "sha256": "b1a7a4ef1268ab21468237f75b1771fbb17d88c3b5e024428d326f3a0ed47591"
+    },
+    "renderer-src/src/modern-viewer/villager-trades.js": {
+      "bytes": 8377,
+      "sha256": "857bc04b9bba1f97a94232ad1af391b312d3c918d05123ac6dca95e316a14b58"
+    },
+    "renderer-src/src/modern-viewer/web-skin.js": {
+      "bytes": 4093,
+      "sha256": "20b24432aebbf0c8c7e09993c208265c6f63fb9be84bfbe73d88edc76e54d00c"
+    },
+    "renderer-src/src/modern-viewer/ysm-bone-batch.js": {
+      "bytes": 3754,
+      "sha256": "e0d18bf827e0517031b50bd10aab702748cab68c919fef4f41bd71fabbc7fbcd"
+    },
+    "renderer-src/src/native-viewer/agent-status.js": {
+      "bytes": 5620,
+      "sha256": "56c3848bcadf2d677006a6dc3a5d84418ff2fb4dd21ce84fda1c1c778435a047"
+    },
+    "renderer-src/src/native-viewer/create-kinetics.js": {
+      "bytes": 5878,
+      "sha256": "217b63f997d049ddba5b516128dbe002c4bbf4822eb811f24705a923ac7f9040"
+    },
+    "renderer-src/src/native-viewer/create-preview.html": {
+      "bytes": 3429,
+      "sha256": "e8e29db13898745db0e956fc37a7ccec7a875b1b0515dab847b6defb2b8839f1"
+    },
+    "renderer-src/src/native-viewer/create-preview.js": {
+      "bytes": 6847,
+      "sha256": "226f9964b531ac4b415df4840dfe823905c2220f20b8953f653466f13a404d95"
+    },
+    "renderer-src/src/native-viewer/cutting-board.js": {
+      "bytes": 2294,
+      "sha256": "9ad0819095897b03331d18832d555bd9963b31a709df5005cb3ffea14760ccc5"
+    },
+    "renderer-src/src/native-viewer/model-loader.js": {
+      "bytes": 13415,
+      "sha256": "02cde9997065d300a916b538fc1ac73bbf03e0dda02cfb82f5ae382894cef650"
+    },
+    "renderer-src/src/native-viewer/model-selection.js": {
+      "bytes": 4679,
+      "sha256": "e909d57366b9e43c447a2a33112a4ab51e86d646f4d28d8cbb22dd15fc0f5a96"
+    },
+    "renderer-src/src/native-viewer/native-action-sounds.js": {
+      "bytes": 2790,
+      "sha256": "70ebf4a33c06aa989a0f3ee59f9ad1d4f221fa0c2ea667d5dcca22d7cc1f064b"
+    },
+    "renderer-src/src/native-viewer/native-activity-ui.js": {
+      "bytes": 13038,
+      "sha256": "36e0e22df891d611334592700928d33a992bd2add2c21fb9489b080cc3aeef8a"
+    },
+    "renderer-src/src/native-viewer/native-appearance-default.js": {
+      "bytes": 982,
+      "sha256": "c1d1f80c0643ef94adee62766349bf14cdb9714e697eeabf5682d1ea2b212f34"
+    },
+    "renderer-src/src/native-viewer/native-appearance.js": {
+      "bytes": 2759,
+      "sha256": "74f30836aa324116143a2fa3523fb15b1c0587813100cc5314247935855f1cb9"
+    },
+    "renderer-src/src/native-viewer/native-aquatic-actors.js": {
+      "bytes": 15286,
+      "sha256": "42a2d5541594685641c31d6182965b4d7bdd38e195c59fb022b99ae0599bf372"
+    },
+    "renderer-src/src/native-viewer/native-aquatic-animation.js": {
+      "bytes": 15035,
+      "sha256": "306aa959ef20696835e6f005626f0b5a8919c998272cb0c160b754cdbd03236a"
+    },
+    "renderer-src/src/native-viewer/native-aquatic-state.js": {
+      "bytes": 8089,
+      "sha256": "8dc52d297d59625adaa091308e676c00ab337e0c0a681307a54da2034bd3773b"
+    },
+    "renderer-src/src/native-viewer/native-ars-item-icons.js": {
+      "bytes": 19154,
+      "sha256": "c214c3f0413213e8028e1107360ab64b9f94e6c2a0cb316be1479232ab47ae5a"
+    },
+    "renderer-src/src/native-viewer/native-audio.js": {
+      "bytes": 14015,
+      "sha256": "d395cf28c009f41737d0ec27140887c43e459c1809de0be1c54199da25b7b057"
+    },
+    "renderer-src/src/native-viewer/native-bed.js": {
+      "bytes": 5013,
+      "sha256": "04a7db9c7f95bf8abfa14a9e6e8b6e987d64cb061f731d2fa2361e7feae5f14e"
+    },
+    "renderer-src/src/native-viewer/native-block-item-icons.js": {
+      "bytes": 19004,
+      "sha256": "1ca32442f6a8ba5b627166736c391c1aa045fb68aa93e48e4b6f4e6c270b6ff8"
+    },
+    "renderer-src/src/native-viewer/native-bundled-appearance.js": {
+      "bytes": 2783,
+      "sha256": "e313d70837bf7f2b6af952cfbda6909f5e36ba0d257909ea274d411925bf0adf"
+    },
+    "renderer-src/src/native-viewer/native-bundled-contract.js": {
+      "bytes": 2808,
+      "sha256": "9d325208ad32221ce7c905aa0b4040dc7959a5f0950d107caa2a904ef20d8cb5"
+    },
+    "renderer-src/src/native-viewer/native-bundled-ysm-first-person.js": {
+      "bytes": 2620,
+      "sha256": "0516c9571eca37cdc03509e2a4ab965f3c4d58c4756957e7baf749e8d5909d37"
+    },
+    "renderer-src/src/native-viewer/native-bundled-ysm-items.js": {
+      "bytes": 4766,
+      "sha256": "d540074b744b1fb7644eee98ead2340742d70784660c36fb2cafba6818823d19"
+    },
+    "renderer-src/src/native-viewer/native-bundled-ysm-motion.js": {
+      "bytes": 8525,
+      "sha256": "6bf1f93438924cd99eb8bc13120c5486444180394758bad228f79cd0bc7ec828"
+    },
+    "renderer-src/src/native-viewer/native-camera.js": {
+      "bytes": 2133,
+      "sha256": "2656c891fa82f07aa792b93c66e09e472b84a4d01fb12364be409ba240a4dbe1"
+    },
+    "renderer-src/src/native-viewer/native-chest-item-icons.js": {
+      "bytes": 3978,
+      "sha256": "8d558828650b62d74e7e9a424784fb19c63b1a6b6263bbfdb7f3ebcf5e555d7d"
+    },
+    "renderer-src/src/native-viewer/native-client-source.js": {
+      "bytes": 832,
+      "sha256": "f13afa10936be6a3ff9b89fdea6c19892941ca7103df05b3c928c9f68fb5781c"
+    },
+    "renderer-src/src/native-viewer/native-colony-huts.js": {
+      "bytes": 35240,
+      "sha256": "c09e716f9629b8188c7370021065b275633dba3060bb61bce369c14fadc7cebe"
+    },
+    "renderer-src/src/native-viewer/native-console.js": {
+      "bytes": 29657,
+      "sha256": "7ae548685f058b89c4167aa0912484fd5a84e6dd358db8f6b09cbe80520a5d6c"
+    },
+    "renderer-src/src/native-viewer/native-contraption.js": {
+      "bytes": 5793,
+      "sha256": "cceea0ecad599688837056730368476ef14ba7a4969901964d3f5f525b35b7fc"
+    },
+    "renderer-src/src/native-viewer/native-crafter-menu.js": {
+      "bytes": 3341,
+      "sha256": "0230273364e94214c9c0b280e98bc5f70769eff9f499933b2c78ec5a9a06433b"
+    },
+    "renderer-src/src/native-viewer/native-death-ui.js": {
+      "bytes": 3055,
+      "sha256": "5921f774dde4627911ab1b923ffa4d5c2968a8c560ed3674c7e5afbb3d449f96"
+    },
+    "renderer-src/src/native-viewer/native-display-performance.js": {
+      "bytes": 4704,
+      "sha256": "21d524fe0b203c15c4665028c0775881732634d5eae2ce91ce9a67ab902a1dbe"
+    },
+    "renderer-src/src/native-viewer/native-domum-item-icons.js": {
+      "bytes": 14301,
+      "sha256": "8e158628b2df036fe3d6b179edf726b5dcc999ef474a1cdd2a46d6b75f502e73"
+    },
+    "renderer-src/src/native-viewer/native-dropped-items.js": {
+      "bytes": 5179,
+      "sha256": "05835b84cf326e133b9065cbb8960793496b5bbbb48a133b6b1d6dea6cfdf47c"
+    },
+    "renderer-src/src/native-viewer/native-entity-coverage.js": {
+      "bytes": 52691,
+      "sha256": "a9e3b6c43377b11bcc782f6949ed539982c38b7f10d26556f98b42506c80f1ec"
+    },
+    "renderer-src/src/native-viewer/native-entity-dispatch-maid.js": {
+      "bytes": 16007,
+      "sha256": "f8a2460b17c4229311ac1fe912930048dffcf5523b21a05791daf5dc58dcb3ac"
+    },
+    "renderer-src/src/native-viewer/native-entity-dispatch-wandscape.js": {
+      "bytes": 9642,
+      "sha256": "5e1fce10ae208797673e1ef38ea3dd7923bd655949286832239ad22412fe084b"
+    },
+    "renderer-src/src/native-viewer/native-entity-dispatch.js": {
+      "bytes": 22570,
+      "sha256": "bc8c5c8d6475905550c677f9ff6c3c1140384e0b541de5883c9c1f72e328d9f1"
+    },
+    "renderer-src/src/native-viewer/native-entity-layer.js": {
+      "bytes": 9997,
+      "sha256": "5b2a5242e784cf33b29b32012fb9ad86bfe3c9f87e46ca56ed45ff4b2ea5b229"
+    },
+    "renderer-src/src/native-viewer/native-entity-model-bedrock.js": {
+      "bytes": 9665,
+      "sha256": "3902ded4c7f810e60b65546fd08e9323144708aefccc6c8604b43b990bcfe334"
+    },
+    "renderer-src/src/native-viewer/native-entity-model.js": {
+      "bytes": 4869,
+      "sha256": "3deb2f4597af890bd9e81adf58c1ab7450667eefb42090ab566b95ec4a3e41ff"
+    },
+    "renderer-src/src/native-viewer/native-entity-motion.js": {
+      "bytes": 9536,
+      "sha256": "ff5631758463a5590a0610211f98353d7d3bf4c0095294b735b2fc5daa0e2cce"
+    },
+    "renderer-src/src/native-viewer/native-entity-presentation.js": {
+      "bytes": 4221,
+      "sha256": "511e0eb5db930119a6d81f6d616311d7f75c88991587e34b68ae561e6011fbc4"
+    },
+    "renderer-src/src/native-viewer/native-environment.js": {
+      "bytes": 7706,
+      "sha256": "345ffe719b783c1dab4ff01a1cc3b0405f93a71cd145792d9f9932a92d8b80a9"
+    },
+    "renderer-src/src/native-viewer/native-first-person-motion.js": {
+      "bytes": 7320,
+      "sha256": "08e3d7badbb650246a52a02e442ce14d76d16e4a48e3b555cfe03ac7b72fb64c"
+    },
+    "renderer-src/src/native-viewer/native-fluid-meshes.js": {
+      "bytes": 3817,
+      "sha256": "996f2839169452ad17979fb1908610ac7f003bce76aad06caedabdf245c2a198"
+    },
+    "renderer-src/src/native-viewer/native-fluid.js": {
+      "bytes": 10258,
+      "sha256": "e03f0533f853b054dfcd99a9c19bd81b757e272c7d91c7b682d0920e887b155a"
+    },
+    "renderer-src/src/native-viewer/native-guide-item-icons.js": {
+      "bytes": 3668,
+      "sha256": "ab35f8d56286c211082467163c6122112cd91ce08240d50fb09f3cb8332f9315"
+    },
+    "renderer-src/src/native-viewer/native-held-items.js": {
+      "bytes": 43581,
+      "sha256": "b6b7009e3f6c2f8861eb771223cf5bc74542b022c1e6f249943bdb0a227dfa67"
+    },
+    "renderer-src/src/native-viewer/native-hidden-solids.js": {
+      "bytes": 1125,
+      "sha256": "0728cbdc2990b1c58e0cd05a501540717570e646788d3baff61d9725a1347c36"
+    },
+    "renderer-src/src/native-viewer/native-hostile-actors.js": {
+      "bytes": 15478,
+      "sha256": "1fa9a91f0cadd956c721a8900e784f1ac668a43b0567c2680b5e83a58db5ede9"
+    },
+    "renderer-src/src/native-viewer/native-hostile-models.js": {
+      "bytes": 6745,
+      "sha256": "f8b8c1fa38ce4422d65726eb50011ed6a521afc3f2d2fc0ed1df30cf1552b107"
+    },
+    "renderer-src/src/native-viewer/native-item-appearance.js": {
+      "bytes": 9075,
+      "sha256": "b0f4d455e6e2a81278b189412f1986712c0958482648ccb27c226fc74651103e"
+    },
+    "renderer-src/src/native-viewer/native-item-icons.js": {
+      "bytes": 9388,
+      "sha256": "c0ca5dbfe585aadb5dfba448371bac95b0e65c9322cc88c56f391b8d0cfb944a"
+    },
+    "renderer-src/src/native-viewer/native-item-stack.js": {
+      "bytes": 11470,
+      "sha256": "77d0f2b916b4b5ee277935b5b8134acec39f506841aae912c59e9e7d1c882711"
+    },
+    "renderer-src/src/native-viewer/native-kinetic-layer.js": {
+      "bytes": 3290,
+      "sha256": "417e637c4a5240e8b8af2e1a69cad9bc03245a453ef0e9c031e42ba861421050"
+    },
+    "renderer-src/src/native-viewer/native-language.js": {
+      "bytes": 9949,
+      "sha256": "fe39c6ffc07303d574e99f96cffb6d13096d76401f4cf0f9627e5be9cd4b7ee9"
+    },
+    "renderer-src/src/native-viewer/native-living-state.js": {
+      "bytes": 5521,
+      "sha256": "82c801ea6996f803449c88676e689273b78e7378418b61d579b996b805ff59b2"
+    },
+    "renderer-src/src/native-viewer/native-millstone.js": {
+      "bytes": 7477,
+      "sha256": "5f6b21e43140bb081b567a42cccb6e9e842dedfbe6cb0ee0d33eb1890515755e"
+    },
+    "renderer-src/src/native-viewer/native-mini-map.js": {
+      "bytes": 6070,
+      "sha256": "0960e57ef5b7904d17a5a500e48dc733883214d0c8feb2e34b8aebfc5d920d4a"
+    },
+    "renderer-src/src/native-viewer/native-mod-menus.js": {
+      "bytes": 9400,
+      "sha256": "83c07253f3635473e7f093828f76613990faa246a2b9ab850682f0c24aca9d00"
+    },
+    "renderer-src/src/native-viewer/native-original-model-layers.js": {
+      "bytes": 5313,
+      "sha256": "f81402286070d8b1e219b606fd45ed4a7f10fe05b67caab9db728db1c3a51075"
+    },
+    "renderer-src/src/native-viewer/native-particle-state.js": {
+      "bytes": 9522,
+      "sha256": "909663caf5633b9d6bbdd98032f50ffc3d0c5e066dffef5559a1663b2cbcdc7a"
+    },
+    "renderer-src/src/native-viewer/native-particles.js": {
+      "bytes": 8576,
+      "sha256": "2623ff6ad86c23293469ef5ee9b1ace27dbeea7212e5299baa9809c98e05be1d"
+    },
+    "renderer-src/src/native-viewer/native-player-bundled-ysm.js": {
+      "bytes": 10303,
+      "sha256": "95c6e3af9bc13de0ee769df67d7113c62f901aac3b9c226e06493bd16161ed14"
+    },
+    "renderer-src/src/native-viewer/native-player-motion.js": {
+      "bytes": 9029,
+      "sha256": "4c53e26f528e430bebee247cc1bfefdeb051924a82cd221300ab4a3ad7e7a87f"
+    },
+    "renderer-src/src/native-viewer/native-player-render-state.js": {
+      "bytes": 2996,
+      "sha256": "c704e8daff8092a7311fe2d192b1c927d7b2e9f90640d32a641effa9230f56a9"
+    },
+    "renderer-src/src/native-viewer/native-player-ysm.js": {
+      "bytes": 10530,
+      "sha256": "a6bd1c004e8137065c534fd45c3e721977cdef79357a5fa7369e6ac72db10ce7"
+    },
+    "renderer-src/src/native-viewer/native-player.js": {
+      "bytes": 9455,
+      "sha256": "df17d0bc98eb826cf246e6458fe921f4c2dc9f0f93c8fa000445f8ee7d292346"
+    },
+    "renderer-src/src/native-viewer/native-potion-icons.js": {
+      "bytes": 3874,
+      "sha256": "67fc8231aa36ced9911479dabddb0680cccf45052139ed0a9b8615f2a1531bd4"
+    },
+    "renderer-src/src/native-viewer/native-potion-items.js": {
+      "bytes": 5412,
+      "sha256": "6f830b746684e3315b24cccb2392bd25720a746cb1b9d5219df97b62bf428cb5"
+    },
+    "renderer-src/src/native-viewer/native-projectile-state.js": {
+      "bytes": 1196,
+      "sha256": "e02ebcc60cf05fcfef430af1fda6c26e05dd5be0aaa12f5cceba62000d15abe8"
+    },
+    "renderer-src/src/native-viewer/native-projectiles.js": {
+      "bytes": 6627,
+      "sha256": "e23c85fab24d366885c0c4937b7631e328b2268c9b887057e45fbe3bb0a7576b"
+    },
+    "renderer-src/src/native-viewer/native-rebuild-work.js": {
+      "bytes": 4389,
+      "sha256": "4b9fadc0a181afbea1fc556e093b0b19a6be3952b4775cabff71d0e66657ad4b"
+    },
+    "renderer-src/src/native-viewer/native-recipe-reference.js": {
+      "bytes": 2257,
+      "sha256": "94803cb3a034b3bbf4dd2ebb5ae8858420a2f710ded3da2e9197db17383e16b8"
+    },
+    "renderer-src/src/native-viewer/native-resource-priority.js": {
+      "bytes": 2291,
+      "sha256": "7ea2b4843bbceb9fb30cd00b03902ada0309f63b214b4914263c64f119d3e3e0"
+    },
+    "renderer-src/src/native-viewer/native-room-visibility.js": {
+      "bytes": 4201,
+      "sha256": "a930dd6afdb597e0e40fba1e85ef285cf4db480beaecc1e6428a2514c980750e"
+    },
+    "renderer-src/src/native-viewer/native-scene.js": {
+      "bytes": 42891,
+      "sha256": "91dfa356e802e8866143925f95f5dbf9ef762c77c81f250a7023ec0f937a3b76"
+    },
+    "renderer-src/src/native-viewer/native-self-player.js": {
+      "bytes": 7913,
+      "sha256": "253f403b412e0c7a3af0b1ca650e1cdcf49ca021ca9f4f170cf3c5c92f098bf3"
+    },
+    "renderer-src/src/native-viewer/native-session.js": {
+      "bytes": 5281,
+      "sha256": "29fb5f19822692d663137e17f7bf7d0d1a3c87c8ae27bce2f257fe164077a521"
+    },
+    "renderer-src/src/native-viewer/native-soul-slab-icons.js": {
+      "bytes": 6921,
+      "sha256": "9f7bc9babcfda088027b1022bd8819623966af771e01bc181bbdeb3efa62a33e"
+    },
+    "renderer-src/src/native-viewer/native-sound-selection.js": {
+      "bytes": 2472,
+      "sha256": "3f0f090fbeb7d549e825705cf9c1ad1e9a2ae17b937c9a52251760cbe43f600d"
+    },
+    "renderer-src/src/native-viewer/native-static-batch.js": {
+      "bytes": 2061,
+      "sha256": "a397792510f21d1d60de94f27e0f6ef4f2f2f6a6f2993a4e5daf8fcd1f7db041"
+    },
+    "renderer-src/src/native-viewer/native-static-item-providers.js": {
+      "bytes": 24820,
+      "sha256": "33372899c4b4a00a1fac121c981a217d5652c2bc1737b69cd3ebec194dd2bd2e"
+    },
+    "renderer-src/src/native-viewer/native-survival-ui.js": {
+      "bytes": 5151,
+      "sha256": "58dc18e672ec5fd53d9ea8cd939f7e7bccf4b15a7589654f656b85237f136976"
+    },
+    "renderer-src/src/native-viewer/native-terrain-raycast.js": {
+      "bytes": 2025,
+      "sha256": "ab817de6fc1771c46750961456b72c8a9b71966c9ac255269a8df454f07282f2"
+    },
+    "renderer-src/src/native-viewer/native-thrown-item-state.js": {
+      "bytes": 1998,
+      "sha256": "45243885564488b7876956f676dc1e3decf08f790e33451d8136a5970ce50919"
+    },
+    "renderer-src/src/native-viewer/native-thrown-items.js": {
+      "bytes": 4253,
+      "sha256": "28024e7cc781ab032cdc473a5a731ad719e5fb3b385eb3fef2806bfcf2abf0e0"
+    },
+    "renderer-src/src/native-viewer/native-transition-timing.js": {
+      "bytes": 5531,
+      "sha256": "053770d06338e772a10af345e3aec2813c9f4162f0888790abf2f7e3df06277c"
+    },
+    "renderer-src/src/native-viewer/native-ui-adapter.js": {
+      "bytes": 72022,
+      "sha256": "b3b07c21098c8f3d9e05ef01414f26fcec67ff292cfa4b7cae2559cdd63c667a"
+    },
+    "renderer-src/src/native-viewer/native-url.js": {
+      "bytes": 245,
+      "sha256": "a7584a5d09d521a5a6a5c8182e759af6565bf5b2e075c0fbd87e397c98fc7b0b"
+    },
+    "renderer-src/src/native-viewer/native-vanilla-menus.js": {
+      "bytes": 5410,
+      "sha256": "30aeac46a97b6e3ca4565eea73df758b4146f721b335bcd2c4838049334ca669"
+    },
+    "renderer-src/src/native-viewer/native-viewer-build.js": {
+      "bytes": 1110,
+      "sha256": "a60fe196d9be87437e4924cc2f83b0f6585aee98dd42714d2d80444a3d8d5419"
+    },
+    "renderer-src/src/native-viewer/native-windmill-bearing.js": {
+      "bytes": 5214,
+      "sha256": "728a15ae80281db2a2b1a58a73bbc831711ba0cb1c59762a11452964c058c5ca"
+    },
+    "renderer-src/src/native-viewer/native-ysm-animation.js": {
+      "bytes": 22750,
+      "sha256": "1eae13dad0ee1e5895d04fc8067da70766332b82bff84b9a04a02d477fd3bf91"
+    },
+    "renderer-src/src/native-viewer/native-ysm-models.js": {
+      "bytes": 2488,
+      "sha256": "4a15fac02c5d7996514c75b998251500c74dfc68fbf082c54c9c0ad2e8fd6e84"
+    },
+    "renderer-src/src/native-viewer/native-ysm-state.js": {
+      "bytes": 3894,
+      "sha256": "7568b207edc505f641465a76e151ab64eed4f439fb6b31f38fa4de93490e38c9"
+    },
+    "renderer-src/src/native-viewer/player-camera.js": {
+      "bytes": 2309,
+      "sha256": "adb475fca72022f078874a5259f61282392e6aa258110209e21eeb0b230ac169"
+    },
+    "renderer-src/src/native-viewer/texture-animation.js": {
+      "bytes": 4331,
+      "sha256": "6e2f28fdd917ac8ffb46d47b914cc58b0229de4f27f8f483ab2726a582e1bbe1"
+    },
+    "renderer-src/src/native-viewer/uv-lock.js": {
+      "bytes": 2375,
+      "sha256": "54f770d2af42a4bd803a81a4acb53e35c5f69b86ebaa3cfca7dd76e7c0fe15f2"
+    },
+    "renderer-src/src/native-viewer/world-preview.html": {
+      "bytes": 7529,
+      "sha256": "569cb7b933ec3c2168e0678f1c4b1e934f4e2d56d73433168511a463efcc7fc1"
+    },
+    "renderer-src/src/native-viewer/world-preview.js": {
+      "bytes": 4186,
+      "sha256": "7fde8c07f104fb91a2a2627d12764951f6d1e7b849f5975bf1ede131ba44a92d"
+    },
+    "renderer-src/src/page-template.html": {
+      "bytes": 6813,
+      "sha256": "de587a0e651a0453db94bdb6ef89f017590fd8c657596a51a44f7f081f970bda"
+    },
+    "renderer-src/src/viewer-page.mjs": {
+      "bytes": 1989,
+      "sha256": "1089c7990985b680eb72a37066035fd480f2334703005d7c425c8abc0ff0bc0a"
+    },
+    "renderer-src/src/viewer.css": {
+      "bytes": 64967,
+      "sha256": "50c688dc9a43908984315ec2eae977774c77f3ef00628197e862bf5b59570da8"
+    },
+    "renderer-src/tools/audit-native-item-gui.mjs": {
+      "bytes": 11867,
+      "sha256": "237425aa8f5fc50134a9be1c5b6d724212c647ecd694a0aa4764a46e50e01858"
+    },
+    "renderer-src/tools/benchmark-native-captured-scene.mjs": {
+      "bytes": 7552,
+      "sha256": "0a95e54f1a9dc6689f515b666ec579af136e10f68b072a7cd0d7a78cef267410"
+    },
+    "renderer-src/tools/benchmark-native-display-performance.mjs": {
+      "bytes": 2400,
+      "sha256": "94533c9261e4dcbcfc9a8f23cb1e25bad8b53e9e3acbb958b638593887b7a9ee"
+    },
+    "renderer-src/tools/build-java-data-host.mjs": {
+      "bytes": 1315,
+      "sha256": "78650f54fc69963e735d6e855d10794330706219bed54440cc2d17e9744db62e"
+    },
+    "renderer-src/tools/build-minecraft-viewer-biome-worker.mjs": {
+      "bytes": 5313,
+      "sha256": "b782993bcc3d42058011f379710c351e142203a7277d109ada20e3b7e6746a94"
+    },
+    "renderer-src/tools/build-minecraft-viewer-client.mjs": {
+      "bytes": 33217,
+      "sha256": "e2309ff58b3386aecc6800fbd0104844af4d922b1ce4b4549f4733248b08df29"
+    },
+    "renderer-src/tools/build-native-ysm-review.mjs": {
+      "bytes": 3753,
+      "sha256": "3c16a6f89ddaa6388c86c6c5785f2f0b63368e2940fd27fc4334d54c48a691c7"
+    },
+    "renderer-src/tools/export-minecraft-item-colors.mjs": {
+      "bytes": 3027,
+      "sha256": "47b022fe7a31e25d6da646ccf0210b299ffe6c5aec38e493858db779de5e4a8f"
+    },
+    "renderer-src/tools/export-minecraft-model-layers.mjs": {
+      "bytes": 3368,
+      "sha256": "fed3bff39ffddcc9781ce786e6cacde516a6758d40c66de032406080b6546fb7"
+    },
+    "renderer-src/tools/export-minecraft-particle-collisions.mjs": {
+      "bytes": 2681,
+      "sha256": "a9a4511967d4a84ee1ce5d9e5beaa70eccdc28b2fc3e28b5ac824627e9fc515e"
+    },
+    "renderer-src/tools/export-minecraft-viewer-block-sounds.mjs": {
+      "bytes": 4364,
+      "sha256": "ad3f2b31f3663187a70d9da87aeec1d19d31168e040e5ef1a37117c818d71ead"
+    },
+    "renderer-src/tools/export-minecraft-viewer-sounds.mjs": {
+      "bytes": 3095,
+      "sha256": "146986e52826528b350044168ae8cf380c993640760e4413012263049779285a"
+    },
+    "renderer-src/tools/fixtures/native-bundled-ysm-review.js": {
+      "bytes": 4316,
+      "sha256": "28b2bd5196b76788c6dc5d77695d22de7b088ea160677fd2ee5c07bb78ac51b0"
+    },
+    "renderer-src/tools/install-item-appearances.mjs": {
+      "bytes": 429,
+      "sha256": "f1a1b67c8dc883d9d655673cfb08e9d97cba797085dc4ef9cbf6f473980f870b"
+    },
+    "renderer-src/tools/install-paper-appearances.mjs": {
+      "bytes": 2224,
+      "sha256": "e44985102be321c382fc8bfac6b77f6f46496bc625c95d0e4516142a4cde02d2"
+    },
+    "renderer-src/tools/item-appearance-assets.mjs": {
+      "bytes": 3020,
+      "sha256": "7dfc1f261837978e4b65b50744a8987da78b0050d0877d01914a77fe4d2fa60c"
+    },
+    "renderer-src/tools/minecraft-viewer-avatar-integrity.js": {
+      "bytes": 2514,
+      "sha256": "258ed915c57a4057ac7de4ce7f1ece475635e76053116046717660873f3170d2"
+    },
+    "renderer-src/tools/minecraft-viewer-avatar-patch.mjs": {
+      "bytes": 7340,
+      "sha256": "299131250a1a580a6690c7c2fca3eb840dd4b334455026cc953590f11ff7b47c"
+    },
+    "renderer-src/tools/minecraft-viewer-bed-geometry.json": {
+      "bytes": 8147,
+      "sha256": "3dc1f52be6727bf3b3cb007bf941a3e94385ab0de3802132a4c37f9f72e53a8d"
+    },
+    "renderer-src/tools/minecraft-viewer-biome-style.js": {
+      "bytes": 11283,
+      "sha256": "755e2f783752a7abe8a243fbeb2710066cc6f3a66dae441657ff101730e220fc"
+    },
+    "renderer-src/tools/minecraft-viewer-block-entity-geometry.json": {
+      "bytes": 24575,
+      "sha256": "b9bc7682519b46283acddef2044eb2274933e332062d172fe19b4eaa7e791a6b"
+    },
+    "renderer-src/tools/minecraft-viewer-bundle-check.mjs": {
+      "bytes": 627,
+      "sha256": "de965d1ccd55127ca5ea9eb351ad08e6c45428f3f304630bfff499ac32c50529"
+    },
+    "renderer-src/tools/minecraft-viewer-cast.js": {
+      "bytes": 15422,
+      "sha256": "9289d1d5cefe7b5c37aafae13c58eb6d19b6398d6e2257ba05f17ac2d16997f1"
+    },
+    "renderer-src/tools/minecraft-viewer-chat.js": {
+      "bytes": 171,
+      "sha256": "f0aa902973cf36d2040fb5c4fe2a42c8c5df002d483e5f15271b9cccce448f82"
+    },
+    "renderer-src/tools/minecraft-viewer-combat.js": {
+      "bytes": 2710,
+      "sha256": "1546fa7aa2c921152d0a90a07c44e7ba576b7222c516bfb9573531db74be021a"
+    },
+    "renderer-src/tools/minecraft-viewer-content.js": {
+      "bytes": 12315,
+      "sha256": "5c832dfc094b91c3677a39d70896e25928f8c9971feb12838a26a592e63d5a77"
+    },
+    "renderer-src/tools/minecraft-viewer-dropped-items.js": {
+      "bytes": 4745,
+      "sha256": "63f85dcc7e0908c97a6150256d7c05534b398458ce8a7590d498c010daac9650"
+    },
+    "renderer-src/tools/minecraft-viewer-entity-motion.js": {
+      "bytes": 29983,
+      "sha256": "ccfeecf26e1514491c0b2211ff9c0e39e57b1cb88c85f0a2f8f0256a33d2e3d2"
+    },
+    "renderer-src/tools/minecraft-viewer-entity-visibility.mjs": {
+      "bytes": 1727,
+      "sha256": "547d69a2a037a592f3efd8a1f2c516fe45c85e160c617eae305c77b5af91a792"
+    },
+    "renderer-src/tools/minecraft-viewer-events.js": {
+      "bytes": 7846,
+      "sha256": "5c681b7e4d6c5eb0f60b03668329060226a10e89edd47c3c7ec4de91f9b06748"
+    },
+    "renderer-src/tools/minecraft-viewer-hud.js": {
+      "bytes": 8949,
+      "sha256": "b0f94f925662ae5bcbcd2bf460b08c7d20f900ba1b0b682c2bf0d240b6cf7dfb"
+    },
+    "renderer-src/tools/minecraft-viewer-item-icon.js": {
+      "bytes": 3550,
+      "sha256": "a0f180dcc746d06a3b18839ecb1d6ef654e2c92e5cd3e212e8b6eaff3eb6a61f"
+    },
+    "renderer-src/tools/minecraft-viewer-leaf-tints.mjs": {
+      "bytes": 1991,
+      "sha256": "28756019234590f80a359d65947a9680b304f99b99bf46b1fc3a865fd1a6119a"
+    },
+    "renderer-src/tools/minecraft-viewer-motion.js": {
+      "bytes": 2869,
+      "sha256": "429383b8d6910e31892a10ea2f047ccded8cd10322bdc80dd751aeb6129a8c37"
+    },
+    "renderer-src/tools/minecraft-viewer-movement-patch.mjs": {
+      "bytes": 2153,
+      "sha256": "617839b6fad4046f4d08cffed41caf44400c2a4ec555923d6c3e293a20b2d81a"
+    },
+    "renderer-src/tools/minecraft-viewer-obs-alpha.mjs": {
+      "bytes": 565,
+      "sha256": "7d754125ec339c4a8151386320b9a1632b24672081f7146591363470e0a57749"
+    },
+    "renderer-src/tools/minecraft-viewer-panels.js": {
+      "bytes": 46254,
+      "sha256": "b24e53db0a8b7d410099c17ab00401c289a21ba4759147459eae31a49248937d"
+    },
+    "renderer-src/tools/minecraft-viewer-particles.js": {
+      "bytes": 9046,
+      "sha256": "d562f06e41461b62df49e5186affe4257ad5fae227996cbf3a388311eb7047ac"
+    },
+    "renderer-src/tools/minecraft-viewer-player-skin.mjs": {
+      "bytes": 1387,
+      "sha256": "8d7140e2f08443fe95ca62c61478463cfca91217b3f56637e8be52973298d65a"
+    },
+    "renderer-src/tools/minecraft-viewer-presentation.js": {
+      "bytes": 9750,
+      "sha256": "f174883e300f5e62a6b84bbe9cae11eaf07d0c3d49299514849f59e2c0ab3c2e"
+    },
+    "renderer-src/tools/minecraft-viewer-room-occlusion.mjs": {
+      "bytes": 10458,
+      "sha256": "6a13b9541be26b583b748af4483feef6cdf92192251b30f22ab50b859e137fef"
+    },
+    "renderer-src/tools/minecraft-viewer-service-panel.js": {
+      "bytes": 9186,
+      "sha256": "e04f9c09e393bb7130fb601726374820c37d61e85ac9615c324f7a5a84527f2d"
+    },
+    "renderer-src/tools/minecraft-viewer-sheep.js": {
+      "bytes": 1233,
+      "sha256": "7a71e0ad9494b9a432586da52db812e8d8a4b73a76e54603c13732e8c301ca61"
+    },
+    "renderer-src/tools/minecraft-viewer-shield.js": {
+      "bytes": 4008,
+      "sha256": "14bc6ad5ab890dab0ba8e284cf6cdec046e2dea5fbf20d2d9238b1501028fa03"
+    },
+    "renderer-src/tools/minecraft-viewer-sound-manifest.mjs": {
+      "bytes": 2960,
+      "sha256": "1116c155edceeb7b92ebe898dae89fada1c21542a820598dd130b45555d00179"
+    },
+    "renderer-src/tools/minecraft-viewer-sound.js": {
+      "bytes": 48696,
+      "sha256": "75168e9a30d86d6f23867c196a2fbbd45d5ef357f7fcbcd91f640a38ae26a5b7"
+    },
+    "renderer-src/tools/minecraft-viewer-tactics.js": {
+      "bytes": 5312,
+      "sha256": "ce36a3d5f331e06a7008915279689e61d564a1e5d246d5631f382f482f1e2eb3"
+    },
+    "renderer-src/tools/minecraft-viewer-third-person-swing.js": {
+      "bytes": 2079,
+      "sha256": "ffd661430e902fedb66e30e91b9fba1e5cb7e4170fffdac7ae412b2ac5883941"
+    },
+    "renderer-src/tools/minecraft-viewer-weapon-motion.js": {
+      "bytes": 21360,
+      "sha256": "86a7ff08e617a8b08972674e635c2cbe1cf4c85696d8e330988eac8d4e70d51e"
+    },
+    "renderer-src/tools/native-biome-worker.mjs": {
+      "bytes": 1175,
+      "sha256": "f309c27b3662214f65ef156e41a147a2888c0541640378c60fc3ca26f1f21a3d"
+    },
+    "renderer-src/tools/native-occlusion.mjs": {
+      "bytes": 1316,
+      "sha256": "7d58cdd57621d821942b72ed4a8645b3afd690c964d3f46e222fc7ca16ea7c06"
+    },
+    "renderer-src/tools/native-preview-access.mjs": {
+      "bytes": 1175,
+      "sha256": "34469b231c13162345faa75b994951aa8443dbeb18c5c00dc20ba542a9918d5e"
+    },
+    "renderer-src/tools/native-snapshot-cadence.mjs": {
+      "bytes": 2479,
+      "sha256": "62b0d3ad93334650c190108b6cf516f80fe2368e4a9ac386e4e8c3d8748ce33e"
+    },
+    "renderer-src/tools/native-world-host.mjs": {
+      "bytes": 48885,
+      "sha256": "1a359ef9b76432fb3fbaa0eb329b575a4b8086b43c1235ddb4b86181299f3aec"
+    },
+    "renderer-src/tools/native-world-preview-host.mjs": {
+      "bytes": 61698,
+      "sha256": "6a171b810ed6ee9870ebf6c34ba5f86986a676bbaf255b3376198b8ee7908a86"
+    },
+    "renderer-src/tools/presets/qiandengji-guild.js": {
+      "bytes": 2830,
+      "sha256": "14a33fb303f94fe0bfe1de1ec3f6a85e30e1f7a6f17367dd8a50137a6857abc9"
+    },
+    "renderer-src/tools/presets/qiandengji-skills.js": {
+      "bytes": 1792,
+      "sha256": "53b44f719e49d58293f652eac15479b93b89e00cdd1ba4931aaae48806c52271"
+    },
+    "renderer-src/tools/run-renderer-tests.mjs": {
+      "bytes": 764,
+      "sha256": "cb3b88685a5b11e22e35a57bdfa006716438ba2912defc1ccf51dd61fec17660"
+    },
+    "renderer-src/tools/serve-native-create-preview.mjs": {
+      "bytes": 3894,
+      "sha256": "c0256250c1e52f9857dec741a57957c0b4b160b5da72281a0727f22237bfb4dd"
+    },
+    "renderer-src/tools/serve-native-world-preview.mjs": {
+      "bytes": 2029,
+      "sha256": "b38e37e865dbbfc1c2278e2dbbf56f2ff5331c27f5aa0779af3e5e50338fbf1e"
+    },
+    "renderer-src/tools/text-display-assets.mjs": {
+      "bytes": 2011,
+      "sha256": "bc8d42b4fedce54928438cfdca3f983a5849a8be7e9ff0bad1f416d3ecfa10a7"
+    },
+    "renderer-src/tools/vanilla-feature-matrix.mjs": {
+      "bytes": 5676,
+      "sha256": "fd89b44d4e330d8a4c0eb426b1e1e174d38dd5e77d81c3908e955226debb28f3"
+    },
+    "renderer-src/tools/verify-minecraft-viewer-assets.mjs": {
+      "bytes": 9645,
+      "sha256": "b49b666487c718aaa9489fbd206792dc4ab07d30f9bf112353cd46dea72f1fc0"
+    },
+    "renderer-src/tools/viewer-build-source.mjs": {
+      "bytes": 2187,
+      "sha256": "0018190aa52549833bbd11386dbb30229ddaf8d73ec615cc2245ebcad23aa5d9"
+    },
+    "renderer-src/tools/viewer-content-assets.mjs": {
+      "bytes": 2550,
+      "sha256": "e8054099244ff5d2085596717a112aedfc33a77a0521eb1ce168f27967946c49"
+    },
+    "renderer-src/tools/viewer-reactive-module.mjs": {
+      "bytes": 464,
+      "sha256": "a5ce1df1f3d2a38863cd849a545f3f0d00213eeffbf4395a9d2cd9dca20b7736"
+    },
+    "src/mc-modern-viewer.mts": {
+      "bytes": 96648,
+      "sha256": "19f14ede007dc3bf9cfd5572c7f420674b9ecaf6452cbae790500ecba152423c"
+    },
+    "src/observer-inventory.mts": {
+      "bytes": 6352,
+      "sha256": "4e0e70a94198d9c0de48d69b8c5ac6cfbc4a28d3b90521bc6d8f0ea9cc65b44a"
+    },
+    "src/viewer-session-slots.mjs": {
+      "bytes": 799,
+      "sha256": "6198c8f0a00ad6d050f9ea752703242e54101e6d298ece3067c99acda63a556d"
+    },
+    "src/viewer-state-map.mts": {
+      "bytes": 5497,
+      "sha256": "f95b5d0894ebaadbfb7d99d3ae9dba5e6afd4573267f7ef0a3e39f326a2e4d8d"
+    },
+    "src/viewer-static.mjs": {
+      "bytes": 3180,
+      "sha256": "b742f289d7478a95f6e7d0bd58da7b0f33d51c038b56adee1085b3c84da32bde"
+    },
+    "src/viewer-stream.mts": {
+      "bytes": 9313,
+      "sha256": "83b458869cbccc81e4616c1ff91d376e7f0d58d2f065e643be7f173dda90fb6e"
+    }
+  }
+}

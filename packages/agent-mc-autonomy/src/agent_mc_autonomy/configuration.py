@@ -148,6 +148,8 @@ class Settings:
     max_decisions: int = 100
     runtime_mode: str = "embedded"
     data_directory: str = ""
+    bundle_root: str = ""
+    bundle_manifest_sha256: str = ""
     vision_enabled: bool = True
     fast: FastSettings = field(default_factory=FastSettings)
     memory: MemorySettings = field(default_factory=MemorySettings)
@@ -237,6 +239,7 @@ class Settings:
             context_tokens=_integer(autonomy, "context_tokens", DEFAULT_CONTEXT_TOKENS, 4096, 2097152),
             max_decisions=_integer(autonomy, "max_decisions", 100, 0, 10000),
             runtime_mode=_text(runtime, "mode", "embedded"), data_directory=_text(runtime, "data_directory"),
+            bundle_root=_text(runtime, "bundle_root"), bundle_manifest_sha256=_text(runtime, "bundle_manifest_sha256"),
             vision_enabled=_boolean(perception, "enabled", True), fast=FastSettings.parse(raw.get("fast", {})),
             memory=MemorySettings.parse(raw.get("memory", {})),
             decision_policy=DecisionSettings.parse(raw.get("decision_policy", {}), maximum_output),

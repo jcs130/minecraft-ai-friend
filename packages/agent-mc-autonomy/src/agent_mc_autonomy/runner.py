@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import sqlite3
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,40 @@ from .planner import Planner
 from .review import ReviewPort
 from .viewer import ViewerWindow
 from .viewer_public import record_playback, viewer_projection
+
+
+def _replace_status(temporary: Path, destination: Path):
+    """Brief Windows reader contention only; authoritative persistence is separate."""
+    deadline = time.monotonic() + .050
+    failures = []
+    first_trace = None
+    for delay in (0, .005, .010, .020):
+        if delay:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(delay, remaining))
+            if time.monotonic() >= deadline:
+                break
+        try:
+            temporary.replace(destination)
+            return
+        except OSError as error:
+            candidate = os.name == "nt" and getattr(error, "winerror", None) in {5, 32}
+            if not failures and not candidate:
+                raise
+            if not failures:
+                first_trace = error.__traceback__
+            failures.append(error)
+            if not candidate:
+                break
+    # Recovered retries are not fatal diagnostics. Exhaustion retains the first
+    # object/trace and any later failure, including a different cleanup fault.
+    diagnostics = current.get()
+    if diagnostics is not None:
+        for error in failures:
+            diagnostics.capture(error, "status.publish")
+    raise failures[0].with_traceback(first_trace)
 
 
 def validate_start(settings: Settings, goal: str):
@@ -94,13 +129,20 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
             state["review_error"] = "review_store_unavailable"
         temporary = directory / "status.tmp"
         temporary.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
-        temporary.replace(directory / "status.json")
+        _replace_status(temporary, directory / "status.json")
         publish(**state)
         if state.get("game_connected") is True and viewer_task is None and settings.viewer_auto_open and viewer.url:
             viewer_task = asyncio.create_task(open_viewer())
 
     try:
         validate_start(settings, goal)
+        bundle_env = {}
+        if settings.bundle_root:
+            from .runtime_bundle import verify_settings_runtime
+            bundle_env = verify_settings_runtime(settings)
+            from .core_distribution.install import runtime_entry
+            if entry.resolve() != runtime_entry(Path(settings.backend_directory)).resolve():
+                raise ValueError("runtime_bundle_core_entry_mismatch")
         validate_profiles=getattr(planner,'validate_profiles',None)
         if validate_profiles:
             validate_profiles(settings.decision_policy)
@@ -126,7 +168,7 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                 entry = Path(viewer_entry) if viewer_entry else Path(__file__).parent / "integrations" / "viewer-stdio.mjs"
             config.write_text(json.dumps(client_config, ensure_ascii=False), encoding="utf-8")
             update()
-            memory_env = settings.memory.environment()
+            memory_env = {**bundle_env, **settings.memory.environment()}
             bridge = bridge_factory(settings.node, entry, config, directory / "backend.log", **({"env": memory_env} if memory_env else {}))
             try:
                 if settings.fast.mode == "system_one" and planner:
