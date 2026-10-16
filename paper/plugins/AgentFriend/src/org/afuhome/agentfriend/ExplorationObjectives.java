@@ -31,6 +31,20 @@ final class ExplorationObjectives {
             GuildManager.Goal.STRUCTURE, GuildManager.Goal.BIOME, GuildManager.Goal.RETURN);
     record Target(GuildManager.Goal goal, String dimension, List<String> keys, int zoneSize,
             int minDistance, int minSeconds, int minParts, int minBiomes, int minHeightSpan) {
+        String dimensionLabel() { return switch(dimension) { case "nether" -> "下界"; case "end" -> "末地"; default -> "主世界"; }; }
+        JsonObject navigation(Location at) {
+            JsonObject j=new JsonObject();String required="minecraft:"+switch(dimension){case "nether"->"the_nether";case "end"->"the_end";default->"overworld";};
+            boolean matches=dimension.equals(ExplorationObjectives.dimension(at.getWorld()));
+            j.addProperty("requiredDimension",required);j.addProperty("requiredDimensionLabel",dimensionLabel());
+            j.addProperty("currentDimension",at.getWorld().getKey().toString());j.addProperty("currentWorldUuid",at.getWorld().getUID().toString());
+            j.addProperty("dimensionMatches",matches);j.addProperty("reason",matches?"dimension_matches":"wrong_dimension");
+            JsonArray structures=new JsonArray(),biomes=new JsonArray();
+            for(String key:keys)if(goal==GuildManager.Goal.STRUCTURE)structures.add(key);else if(goal==GuildManager.Goal.BIOME)biomes.add(key);
+            j.add("requiredStructureKeys",structures);j.add("requiredBiomeKeys",biomes);
+            j.addProperty("nextAction",!matches?"return_to_required_dimension":goal==GuildManager.Goal.STRUCTURE?"check_structure_type_then_survey":goal==GuildManager.Goal.RETURN?"verify_return":"continue_survey");
+            j.addProperty("structureMatchStatus","not_checked"); // A matching dimension alone never proves arrival at a structure.
+            return j;
+        }
         JsonObject json() {
             JsonObject j = new JsonObject(); j.addProperty("dimension", dimension);
             JsonArray a = new JsonArray(); keys.forEach(a::add); j.add("keys", a);

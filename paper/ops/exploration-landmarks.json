@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-10-16T05:24:00Z",
+  "source": "formal_anvil_structure_and_block_records",
+  "places": [
+    {"id":"desert_pyramid","name":"原版沙漠神殿","world":"minecraft:overworld","x":-1926,"z":-966,"structureKey":"minecraft:desert_pyramid","precision":"horizontal_structure_reference","entranceVerified":false},
+    {"id":"desert_ruins","name":"模组沙漠遗迹","world":"minecraft:overworld","x":-3296,"z":-2096,"structureKey":"nova_structures:desert_ruins","precision":"horizontal_structure_reference","entranceVerified":false}
+  ]
+}

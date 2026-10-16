@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-16",
+  "status": "goddess_guidance_live_plugin_candidate_not_deployed",
+  "productionAgentFriend": "0.4.42",
+  "agentFriendCandidate": "0.4.45",
+  "includesCandidate": "0.4.44",
+  "artifactSha256": "93f50c0bf79e4bfb04735674819b180a7bc4e8ab46f7be0452727f0fcc88a019",
+  "paperRestarted": false,
+  "paperReleaseQueued": false,
+  "goddessBridgeRestarted": true,
+  "checks": {
+    "nodeRegressionTests": 8,
+    "nativeJavaAgentNavigation": 14
+  },
+  "productionFrozenContractUnchanged": true,
+  "limits": [
+    "No new autonomous LLM/full photography exam or phone/Xbox pixel acceptance",
+    "Existing 0.4.44 full-suite evidence is not a full rerun on 0.4.45",
+    "Known X/Z is a structure reference, not a verified safe entrance or unlooted chest",
+    "Paper candidate still needs original approved maintenance and E/F complete cold backups"
+  ],
+  "privateEvidenceRoot": "E:\\MC\\ops\\repairs\\exploration-guidance-20261016",
+  "rollback": "Restore backed up Goddess perception module and catalog through the original cooperative bridge lifecycle; preserve all quest/player progress. Candidate JAR was not installed."
+}

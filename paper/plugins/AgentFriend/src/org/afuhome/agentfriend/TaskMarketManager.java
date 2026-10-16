@@ -152,6 +152,10 @@ final class TaskMarketManager implements Listener {
         Step step = task.steps.get(index(player));
         if (step.map != null) { EngineeringSites.Result result = observe(player, task); player.sendMessage("§7" + MapObjectives.hint(result.reason())); mapInfo(player); return; }
         if (step.exploration == null) return;
+        JsonObject navigation=step.exploration.navigation(player.getLocation());
+        player.sendMessage("§7所需维度："+step.exploration.dimensionLabel()+"（"+navigation.get("requiredDimension").getAsString()+"）；当前："+navigation.get("currentDimension").getAsString()+"。");
+        if(!navigation.get("dimensionMatches").getAsBoolean())player.sendMessage("§e当前维度不匹配，请先返回"+step.exploration.dimensionLabel()+"；中转坐标不是任务目标，在这里走查不增加本阶段证据。");
+        if(step.goal==GuildManager.Goal.STRUCTURE)player.sendMessage("§7所需天然结构："+String.join(" 或 ",step.exploration.keys())+"；同名遗迹、砂岩和沙漠群系不能代替结构匹配。");
         EngineeringSites.Result result = observe(player, task); JsonObject e = result.evidence();
         if (step.goal == GuildManager.Goal.RETURN) {
             player.sendMessage("§7返程目标：" + step.exploration.dimension() + "；" + (result.ready() ? "已返回，可 guild claim 完成委托。" : "请先实际返回目标维度。"));
@@ -410,6 +414,8 @@ final class TaskMarketManager implements Listener {
         out.addProperty("condition",TaskGuidance.step(step.goal(),step.description()));
         out.addProperty("goal",step.goal().name());out.addProperty("target",step.target());
         out.addProperty("route",task.route());
+        out.addProperty("id",task.id());
+        if(step.exploration()!=null){out.add("exploration",step.exploration().json());out.add("navigation",step.exploration().navigation(player.getLocation()));}
         if(step.combat()!=null)out.add("combat",step.combat().json());
         out.addProperty("requiresVerification",EngineeringSites.GOALS.contains(step.goal()));
         return out;
