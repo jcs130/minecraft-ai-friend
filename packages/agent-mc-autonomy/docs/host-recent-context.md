@@ -63,6 +63,11 @@ Provider/validation failures are optional; native event/transport errors propaga
 through their authoritative path, including durable unknown-outcome fences.
 Shutdown observes a completed poll's error or fences an unresolved poll before
 cancelling and closing transport. It never silently discards a late unknown page.
+Durable mailbox stops retain priority before deferred joining, during the join,
+and across `hasMore` continuation. Only stop commands can be claimed on this
+path; ordinary goals, feedback and steps still await authoritative draining.
+A stop is delivered through the existing stop lifecycle, then unresolved native
+polls or unread `hasMore` pages preserve the restart fence during shutdown.
 
 External runtime defaults are file-only. An external adapter refreshes through
 its existing observer; a 10-second observer gives disclosed bounded staleness,

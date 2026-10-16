@@ -519,6 +519,8 @@ class Controller:
     async def close_event_poll(self):
         task, self._event_poll = self._event_poll, None
         if task is None:
+            if self._deferred_event_drain:
+                self.persist(uncertain=True)  # hasMore attests unread native pages.
             return
         if not task.done() or task.cancelled():
             # Shutdown cannot certify an undrained authoritative page. Preserve
@@ -528,7 +530,28 @@ class Controller:
                 task.cancel()
         await asyncio.gather(task, return_exceptions=True)
         if not task.cancelled():
-            task.result()  # Propagate late native errors; never classify optional.
+            result = task.result()  # Propagate late native errors; never classify optional.
+            if result[2]:
+                self.persist(uncertain=True)  # Completed page still attests unread pages.
+
+    async def join_deferred_events(self):
+        """Join native ownership while admitting only explicit mailbox stops."""
+        waiter = asyncio.create_task(self.events())
+        try:
+            while not waiter.done():
+                await asyncio.wait({waiter}, timeout=0.05)
+                await self.external_command(stop_only=True)
+                if waiter.done():
+                    break  # Observe completed native errors even alongside stop.
+                if self.stop_requested():
+                    return None
+            return waiter.result()
+        finally:
+            if not waiter.done():
+                waiter.cancel()  # The shielded poll remains owned by shutdown.
+                await asyncio.sleep(0)
+            if waiter.done() and not waiter.cancelled():
+                waiter.result()  # Never hide a raced unknown or transport error.
 
     async def _poll_events(self):
         if self.body_lease_due is not None and time.monotonic() >= self.body_lease_due:
@@ -902,8 +925,9 @@ class Controller:
             await self.protocol("ack_barrier", id=control["requestId"])
         return result, compact
 
-    async def external_command(self):
-        command = self.commands.claim(allow_goal=self.active_goal is None and not self.pending) if self.commands else None
+    async def external_command(self, *, stop_only=False):
+        command = (self.commands.claim(stop_only=True) if stop_only else
+                   self.commands.claim(allow_goal=self.active_goal is None and not self.pending)) if self.commands else None
         if not command:
             return False
         if command["kind"] == "stop":
@@ -1406,8 +1430,16 @@ class Controller:
             if self.commands:
                 await self.observe_queue()
             while not self.stop_requested() and (self.settings.max_decisions == 0 or self.count < self.settings.max_decisions):
+                # A durable CLI stop is not the external callback. Admit it
+                # before native joins/hasMore loops, without admitting actions.
+                await self.external_command(stop_only=True)
+                if self.stop_requested():
+                    break
                 if self._event_poll is not None or self._deferred_event_drain:
-                    event_wake, event_urgent, more = await self.events()
+                    drained = await self.join_deferred_events()
+                    if drained is None or self.stop_requested():
+                        break
+                    event_wake, event_urgent, more = drained
                     wake |= event_wake
                     urgent |= event_urgent
                     if more:

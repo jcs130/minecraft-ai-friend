@@ -121,12 +121,12 @@ class Mailbox:
                 if db.execute("SELECT 1 FROM commands WHERE state='dispatching' LIMIT 1").fetchone():
                     raise RuntimeError("outcome_unknown: inspect the dispatching command and original native receipts")
 
-    def claim(self, allow_goal=True):
+    def claim(self, allow_goal=True, *, stop_only=False):
         if not self.path.exists():
             return None
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT * FROM commands WHERE state='queued' AND (kind!='goal' OR ?) ORDER BY CASE kind WHEN 'stop' THEN 0 WHEN 'feedback' THEN 1 ELSE 2 END, rowid LIMIT 1", (allow_goal,)).fetchone()
+            row = db.execute("SELECT * FROM commands WHERE state='queued' AND (kind!='goal' OR ?) AND (?=0 OR kind='stop') ORDER BY CASE kind WHEN 'stop' THEN 0 WHEN 'feedback' THEN 1 ELSE 2 END, rowid LIMIT 1", (allow_goal, stop_only)).fetchone()
             if not row:
                 return None
             db.execute("UPDATE commands SET state=? WHERE id=?", ("planning" if row["kind"] == "goal" else "dispatching", row["id"]))

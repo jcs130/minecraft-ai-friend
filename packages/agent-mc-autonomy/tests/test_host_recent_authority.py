@@ -343,3 +343,164 @@ def test_cancelled_owned_native_poll_still_fences_restart_during_shutdown(
         assert not restarted_bridge.opened
 
     run_async(scenario())
+
+
+@pytest.mark.parametrize("stop_at", ["optional_wait", "deferred_join"])
+def test_real_mailbox_stop_closes_runtime_without_releasing_deferred_native_page(
+        framework_module, tmp_path, run_async, stop_at):
+    inferred, native_calls, cancelled = [], [], []
+    stop_id = "00000000-0000-4000-8000-000000000201"
+    steps_id = "00000000-0000-4000-8000-000000000202"
+
+    async def decide(*_):
+        inferred.append(True)
+        return choose()
+
+    _, bridge, controller = controller_fixture(framework_module, tmp_path, decide)
+    box = controller.commands = Mailbox(tmp_path)
+    original, original_events = bridge.call, controller.events
+
+    async def scenario():
+        entered, joined, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        polls, joins = 0, 0
+
+        async def events():
+            nonlocal joins
+            joins += 1
+            if joins == 3:  # Normal poll, optional poll, then coordinator join.
+                joined.set()
+            return await original_events()
+
+        async def call(name, args, **kwargs):
+            nonlocal polls
+            native_calls.append(name)
+            if name == "mc_events":
+                polls += 1
+                if polls == 2:
+                    entered.set()
+                    try:
+                        await release.wait()
+                    except asyncio.CancelledError:
+                        cancelled.append(True)
+                        raise
+                return packed({"run": "run-1", "nextCursor": polls, "events": []})
+            return await original(name, args, **kwargs)
+
+        async def provider(req):
+            await asyncio.sleep(0)
+            return projection(req)
+
+        bridge.call, controller.events, controller.recent_context_provider = call, events, provider
+        runtime = asyncio.create_task(controller.run("survive"))
+        try:
+            await asyncio.wait_for(entered.wait(), 0.5)
+            # An ordinary older command must not bypass the unresolved page.
+            box.submit("steps", {"steps": [{"skill": "observe"}], "queue": "append"}, steps_id)
+            if stop_at == "deferred_join":
+                await asyncio.wait_for(joined.wait(), 2)
+            started = time.monotonic()
+            assert box.submit("stop", {}, stop_id)["delivery"] == "queued"
+            await asyncio.wait_for(asyncio.shield(runtime), 1.8)
+            assert time.monotonic() - started < 1.7
+            delivered = box.get(stop_id)
+            assert delivered["delivery"] == "delivered" and delivered["native_receipt"]["stop_requested"] is True
+            assert box.submit("stop", {}, stop_id) == delivered  # Same durable UUID, no second stop.
+            assert box.get(steps_id)["delivery"] == "cancelled"
+            assert not release.is_set() and cancelled == [True] and polls == 2
+            assert bridge.closed and inferred == []
+            assert not {"mc_do", "mc_scout", "mc_stop"}.intersection(native_calls)
+            assert json.loads(controller.state_path.read_text())["uncertain"] is True
+            _, restarted_bridge, restarted = setup(framework_module, tmp_path, decide)
+            with pytest.raises(RuntimeError, match="previous dispatch requires receipt reconciliation"):
+                await restarted.run("survive")
+            assert not restarted_bridge.opened
+        finally:
+            if not runtime.done():
+                runtime.cancel()
+            await asyncio.gather(runtime, return_exceptions=True)
+            release.set()
+
+    run_async(scenario())
+
+
+def test_real_mailbox_stop_cannot_be_starved_by_repeated_has_more_pages(
+        framework_module, tmp_path, run_async):
+    inferred, native_calls = [], []
+    stop_id = "00000000-0000-4000-8000-000000000203"
+
+    async def decide(*_):
+        inferred.append(True)
+        return choose()
+
+    _, bridge, controller = controller_fixture(framework_module, tmp_path, decide)
+    box = controller.commands = Mailbox(tmp_path)
+    original = bridge.call
+
+    async def scenario():
+        repeated = asyncio.Event()
+        polls = 0
+
+        async def call(name, args, **kwargs):
+            nonlocal polls
+            native_calls.append(name)
+            if name == "mc_events":
+                polls += 1
+                if polls >= 3:
+                    repeated.set()
+                await asyncio.sleep(0.005)
+                return packed({"run": "run-1", "nextCursor": polls, "events": [], "hasMore": polls > 1})
+            return await original(name, args, **kwargs)
+
+        async def provider(req):
+            await asyncio.sleep(0)
+            return projection(req)
+
+        bridge.call, controller.recent_context_provider = call, provider
+        runtime = asyncio.create_task(controller.run("survive"))
+        try:
+            await asyncio.wait_for(repeated.wait(), 0.5)
+            started = time.monotonic()
+            box.submit("stop", {}, stop_id)
+            await asyncio.wait_for(asyncio.shield(runtime), 1.8)
+            assert time.monotonic() - started < 1.7
+            assert box.get(stop_id)["delivery"] == "delivered"
+            assert box.get(stop_id)["native_receipt"]["stop_requested"] is True
+            assert bridge.closed and inferred == []
+            assert not {"mc_do", "mc_scout", "mc_stop"}.intersection(native_calls)
+            assert json.loads(controller.state_path.read_text())["uncertain"] is True
+            _, restarted_bridge, restarted = setup(framework_module, tmp_path, decide)
+            with pytest.raises(RuntimeError, match="previous dispatch requires receipt reconciliation"):
+                await restarted.run("survive")
+            assert not restarted_bridge.opened
+        finally:
+            if not runtime.done():
+                runtime.cancel()
+            await asyncio.gather(runtime, return_exceptions=True)
+
+    run_async(scenario())
+
+
+def test_shutdown_fences_completed_has_more_page_when_its_waiter_was_cancelled(
+        framework_module, tmp_path, run_async):
+    _, bridge, controller = controller_fixture(framework_module, tmp_path, None)
+    original = bridge.call
+
+    async def scenario():
+        waiter = None
+        async def call(name, args, **kwargs):
+            if name == "mc_events":
+                # Cancellation races delivery of an already-completed page.
+                asyncio.get_running_loop().call_soon(waiter.cancel)
+                return packed({"run": "run-1", "nextCursor": 1, "events": [], "hasMore": True})
+            return await original(name, args, **kwargs)
+        bridge.call = call
+        waiter = asyncio.create_task(controller.events())
+        await asyncio.gather(waiter, return_exceptions=True)
+        await controller.close_event_poll()
+        assert json.loads(controller.state_path.read_text())["uncertain"] is True
+        _, restarted_bridge, restarted = setup(framework_module, tmp_path, None)
+        with pytest.raises(RuntimeError, match="previous dispatch requires receipt reconciliation"):
+            await restarted.run("survive")
+        assert not restarted_bridge.opened
+
+    run_async(scenario())
