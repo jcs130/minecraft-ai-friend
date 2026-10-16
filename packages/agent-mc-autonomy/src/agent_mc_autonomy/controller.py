@@ -1392,6 +1392,8 @@ class Controller:
         return text
 
     async def run(self, goal):
+        from .recovery import require_no_pending_acknowledgement
+        require_no_pending_acknowledgement(self.data)
         if self.commands:
             self.commands.check_uncertain()
             self.active_goal = self.commands.active_goal()

@@ -5,6 +5,12 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.77 preserves private first-exception diagnostics across cleanup failures and
+adds explicit offline operator acknowledgement for a failed, empty local body
+ledger. Old native work remains unknown; acknowledgement never replays a request
+or starts gameplay. See [the recovery contract](docs/runtime-failure-recovery.md).
+It requires the new kernel's additional pending-maintenance startup fence.
+
 0.1.76 corrects the .75 artifact pin to the exact Git build produced by the public
 builder, retaining core 0.5.7-dev.20261016.39 and the same source revision. Raw Git
 source bytes and strict build receipts now agree; runtime and public declarations

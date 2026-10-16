@@ -51,6 +51,7 @@ async def play(settings, entry, data, brain_config, goal, viewer_entry=None, *, 
 def main(argv=None, *, entry_resolver=None, viewer_entry=None, context_counter_factory=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["check", "status", "run", "submit-goal", "feedback", "submit", "receipt", "stop",
+                                            "recovery-assess", "acknowledge-unknown",
                                             "model-config", "model-list", "model-check", "auth-login", "auth-forget"])
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--entry", type=Path, help="Explicit built agent-mc-world MCP entry; no host checkout is required")
@@ -62,6 +63,17 @@ def main(argv=None, *, entry_resolver=None, viewer_entry=None, context_counter_f
     parser.add_argument("--steps-file", type=Path, help="JSON array of native mc_do steps")
     parser.add_argument("--queue", choices=["append", "afterCheckpoint", "now"], default="append")
     parser.add_argument("--mode", choices=["insert", "replace"], help="Required for feedback: insert then resume, or explicitly cancel old work")
+    parser.add_argument("--native-request-id", action="append", default=[], help="Original native request UUID; local evidence only")
+    parser.add_argument("--expected-identity", default="")
+    parser.add_argument("--expected-session", default="")
+    parser.add_argument("--expected-run", default="")
+    parser.add_argument("--expected-state-sha256", default="")
+    parser.add_argument("--expected-status-sha256", default="")
+    parser.add_argument("--operator", default="")
+    parser.add_argument("--reason", default="")
+    parser.add_argument("--evidence-id", default="")
+    parser.add_argument("--attest-prior-processes-exited", action="store_true")
+    parser.add_argument("--acknowledge-unknown", action="store_true", help="Explicitly retain old outcome as unknown; never verifies/replays it")
     args = parser.parse_args(argv)
     try:
         raw = tomllib.loads(args.config.read_text(encoding="utf-8-sig"))
@@ -93,7 +105,18 @@ def main(argv=None, *, entry_resolver=None, viewer_entry=None, context_counter_f
         data = args.data.resolve() if args.data else settings.data_root(Path("runtime").resolve())
         directory = data / "sessions" / settings.identity / "host"
         mailbox = Mailbox(directory)
-        if args.command == "status":
+        if args.command in {"recovery-assess", "acknowledge-unknown"}:
+            from .recovery import acknowledge_unknown, assess
+            if args.command == "recovery-assess":
+                result = assess(settings, data, native_request_ids=args.native_request_id)
+            else:
+                result = acknowledge_unknown(settings, data, expected_identity=args.expected_identity,
+                    expected_session=args.expected_session, expected_run=args.expected_run,
+                    expected_state_sha256=args.expected_state_sha256, expected_status_sha256=args.expected_status_sha256,
+                    acknowledgement_id=args.request_id, operator=args.operator, reason=args.reason,
+                    evidence_id=args.evidence_id, attest_prior_processes_exited=args.attest_prior_processes_exited,
+                    choice="acknowledge-unknown" if args.acknowledge_unknown else "", native_request_ids=args.native_request_id)
+        elif args.command == "status":
             result = observation(directory)
         elif args.command == "receipt":
             result = {"command": mailbox.get(args.request_id)}

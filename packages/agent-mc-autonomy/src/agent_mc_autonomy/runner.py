@@ -109,6 +109,8 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
         with session_lease(directory):
             commands = Mailbox(directory)
             commands.check_uncertain()
+            from .recovery import require_no_pending_acknowledgement
+            require_no_pending_acknowledgement(directory)
             config = directory / "client.json"
             client_config = settings.client_config(data_root)
             if settings.viewer_renderer_directory:
