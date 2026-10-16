@@ -27,6 +27,12 @@ Rows are isolated under `minecraft-memory/operations/<realm-account-agent-hash>`
 scope/run/request; retries with canonical equivalent input reuse the row. Execution IDs link terminal
 events even when completion races ahead of admission. Restart leaves unresolved effects unresolved.
 The SDK request ledger, not this analytics store, remains the dispatch deduplication authority.
+
+Argument parsing rejects the entire batch before dispatch, including valid steps preceding an
+invalid observation. `meta.admission` reports `accepted:false`, `dispatched:false`, the correction
+rule and recovery guidance. Hosts must not turn these rejections into failed physical destinations
+or require failed-task retry evidence for corrected read-only queries. A bare error without admission
+or execution proof remains an unknown effect; absence of a receipt does not authorize replay.
 The online index retains 1024 recent rows; evidence files are never automatically deleted. Use exact
 IDs or the bundled offline summarizer for older records. Scope directories share the account's single
 writer/connection lease. Preserve the whole private dataDir on migration or backup.

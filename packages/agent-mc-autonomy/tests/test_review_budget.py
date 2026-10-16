@@ -10,6 +10,57 @@ from test_death_reflection_contract import death_review
 import test_review
 
 
+def test_minimal_completion_contract_is_neutral_and_ordinary_final_needs_no_extras(runtime):
+    port, _, publish = runtime
+    publish()
+    rid = port.offer()["review"]["id"]
+    contract = port.decide(rid, "inspect", compact=True)["completion_contract"]
+    assert contract["required"]["heartbeat_id"] == rid
+    assert contract["required"]["decision"] == ["continue", "insert", "revise"]
+    assert set(contract["required"]) == {"heartbeat_id", "decision", "reason"}
+    assert "death_reflection" not in contract
+    assert "spoken_text" not in json.dumps(contract) and "context" not in json.dumps(contract)
+    result = port.decide(rid, "continue", "当前队列仍在执行", require_inspection=True)
+    assert result["acknowledged"] and not result["verified"]
+    assert not port.mailbox.ready()
+
+
+@pytest.mark.parametrize("outcome", ["lesson", "deferred"])
+def test_completion_contract_death_paths_are_minimal_and_evidence_bound(tmp_path, outcome):
+    port, _, _, _, review = death_review(tmp_path)
+    inspected = port.decide(review["id"], "inspect", compact=True)
+    contract = inspected["completion_contract"]["death_reflection"]
+    assert contract["required"] == {"evidence_ref": inspected["evidence_ref"]}
+    assert {row["outcome"] for row in contract["one_of"]} == {"lesson", "deferred"}
+    assert "evidence-based" in contract["one_of"][0]["lesson"]
+    reflection = {**contract["required"], "outcome": outcome}
+    reflection.update({"lesson": "复活后重新核对资源", "applicability": "准备返回旧路线时"}
+                      if outcome == "lesson" else {"reason": "现场不能确定死因，暂不推断"})
+    result = port.decide(review["id"], "continue", "当前背包为空，旧路线尚未核实", death_reflection=reflection)
+    assert result["acknowledged"] and not result["reflection_pending"]
+
+
+@pytest.mark.parametrize("saved", [False, True])
+def test_legacy_completion_contract_preserves_original_choice_without_replay(tmp_path, saved):
+    from test_death_reflection_contract import legacy
+    from agent_mc_autonomy.death_memory import DeathMemory
+    from test_death_memory import SCOPE
+    port, _, episode, _, review = death_review(tmp_path)
+    choice, _ = legacy(port, review)
+    if saved:
+        DeathMemory(tmp_path).execute(SCOPE, {"action": "report", "id": episode["id"],
+            "lesson": "Historical hypothesis", "applicability": "Fresh facts needed", "evidence": "native-run cursor 1"})
+    inspected = port.decide(review["id"], "inspect", compact=True)
+    contract = inspected["completion_contract"]
+    assert contract["required"] == {"heartbeat_id": review["id"], **choice}
+    assert ("death_reflection" in contract) is not saved
+    before = port.mailbox.get(port.request_id(review["id"]))
+    result = port.decide(review["id"], **choice, **({} if saved else {"death_reflection": {
+        "evidence_ref": inspected["evidence_ref"], "outcome": "deferred", "reason": "死因未知"}}))
+    assert result["acknowledged"] and not result["reflection_pending"]
+    assert port.mailbox.get(port.request_id(review["id"])) == before
+
+
 @pytest.fixture
 def runtime(tmp_path):
     return test_review.runtime.__wrapped__(tmp_path)

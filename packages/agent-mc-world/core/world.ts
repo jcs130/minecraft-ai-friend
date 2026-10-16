@@ -6280,11 +6280,17 @@ export class MinecraftWorld implements World {
     parse: (raw: unknown) => { steps: SkillCall[]; notes?: ParseNote[] } | { error: string },
     methodAdmission?: (decision: TaskAdmissionDecision) => void,
   ): string | ToolOutcome {
+    // Proven pre-dispatch rejection: no queue mutation, navigation or interaction took place.
+    const invalidArguments = (rule: string, text: string): ToolOutcome => ({
+      text: this.toolLog(name, args, `[${name} 失败] ${text}`), failed: true,
+      meta: { admission: { accepted: false, dispatched: false, kind: 'correction', rule,
+        recovery: [{ tool: 'mc_help', arguments: {}, text: '按工具签名纠正参数；整批未提交，前面的步骤也未执行。' }] } },
+    });
     const mode = parseQueueMode(args.queue);
-    if ('error' in mode) return { text: this.toolLog(name, args, `[${name} 失败] ${mode.error}`), failed: true };
+    if ('error' in mode) return invalidArguments('arguments.queue', mode.error);
     const parsed = parse(args.steps);
     if ('error' in parsed) {
-      return { text: this.toolLog(name, args, `[${name} 失败] ${parsed.error}。你写的是 ${JSON.stringify(args.steps)}`), failed: true };
+      return invalidArguments('arguments.steps', `${parsed.error}。你写的是 ${JSON.stringify(args.steps)}`);
     }
     if (!this.executor) return { text: this.toolLog(name, args, `[${name} 失败] World 未启动`), failed: true };
     // A stopped login cannot execute a new body task. Reject before queue=replace
@@ -6305,7 +6311,8 @@ export class MinecraftWorld implements World {
           const rejection = this.executor.noteAdmissionRejection([only], invalid.rule, invalid.text);
           return { text: this.toolLog(name, args,
             `[${name} 未受理] ${invalid.text} 没有发送使用，也没有导航；当前任务和待办保留。`),
-            failed: true, ...(rejection.kind === 'correction' ? {} : { endsTurn: true }) };
+            failed: true, meta: { admission: { accepted: false, dispatched: false, ...rejection } },
+            ...(rejection.kind === 'correction' ? {} : { endsTurn: true }) };
         }
       }
     }

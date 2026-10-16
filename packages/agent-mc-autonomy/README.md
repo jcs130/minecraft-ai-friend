@@ -5,6 +5,13 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.70 adds the reviewed short final completion contract: inspection supplies the
+actual heartbeat and evidence references, available decisions and conditional
+goal/reflection requirements. Authored reasons, goals and lessons remain the
+host's decisions; the existing validation and no-replay boundaries still apply.
+This is an offline package candidate, pending host/provider and live acceptance.
+It retains the immutable core and viewer inputs described below.
+
 0.1.69 integrates the reviewed fresh-connection/death-recovery, strategic
 applicability and speech work with independently built core 0.5.7-dev.20261016.13.
 The exact archive and build/declaration receipts are pinned in
