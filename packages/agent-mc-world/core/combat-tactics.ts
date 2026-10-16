@@ -5,6 +5,7 @@ import type { CombatTactic } from './combat-abilities.ts';
 import { validCombatRules } from './combat-rules.ts';
 import { validCombatProgram } from './combat-program.ts';
 
+import { sanitizeCombatResult } from './combat-observation.ts';
 import type {CombatScene,CombatResult} from './combat-observation.ts';
 export type {CombatScene,CombatResult} from './combat-observation.ts';
 export interface CombatCastAttempt {
@@ -91,7 +92,7 @@ export class CombatTacticBook {
         || (state.updatedAt !== null && !Number.isFinite(Date.parse(state.updatedAt)))
         || !Array.isArray(state.reports) || !state.reports.every(validReceipt))
         throw new Error('Invalid combat tactic state');
-      this.realms.set(key, structuredClone({ ...state, reports: state.reports.slice(-5) }));
+      this.realms.set(key, structuredClone({ ...state, reports: state.reports.slice(-5).map(sanitizeCombatResult) }));
     }
   }
 
@@ -111,7 +112,7 @@ export class CombatTacticBook {
 
   record(result: CombatResult, casts: CombatCastAttempt[]): CombatReceipt {
     const state = this.current();
-    const receipt = { ...structuredClone(result), id: (state.reports.at(-1)?.id ?? 0) + 1,
+    const receipt = { ...sanitizeCombatResult(result), id: (state.reports.at(-1)?.id ?? 0) + 1,
       tacticRevision: state.revision, tacticAtEnd: state.tactic,
       casts: structuredClone(casts.slice(-16)), castsTruncated: casts.length > 16 };
     this.save({ ...state, reports: [...state.reports, receipt].slice(-5) });

@@ -468,6 +468,11 @@ class Controller:
                     self.continuation_needed = True
                     self.synchronize_goals()
                     self.publish(death_episode=episode, game_identity=episode["scope"])
+            if self.death_memory.append_combat(event):
+                current = self.death_memory.current_episode(self.game_scope, self.game_facts, pending=True)
+                life = lifecycle(self.game_facts)
+                if current and isinstance(life, dict) and life.get("episodeId") == current["id"]:
+                    self.publish(death_episode=current)
         self.recent.extend(e for e in value.get("events", []) if e.get("contextDelivery") != "archive-only" and not e.get("meta", {}).get("staleEpoch")
                            and (foreign_execution_id is None or (e.get("execution") or {}).get("id") != foreign_execution_id))
         self.recent = self.recent[-64:]

@@ -1,3 +1,4 @@
+import { installDeathLifecycle } from '../core/death-lifecycle.ts';
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import type { Bot } from 'mineflayer';
@@ -1357,6 +1358,111 @@ describe('战斗:水里与逃不掉', () => {
     };
     return r;
   }
+
+  function deepRig() {
+    const r = combatRigBot([foe(7, 'drowned', -2)]), b = r.bot as any;
+    b.entity.position = new Vec3(.12, 64.68, .75); b.entity.onGround = false;
+    b.health = 9; b.heldItem = null; b.inventory.items = () => [];
+    const overrides = new Map<string, string | null>();
+    b.blockAt = (p: Vec3) => {
+      const [x, y, z] = [p.x, p.y, p.z].map(Math.floor), key = `${x},${y},${z}`;
+      const name = overrides.has(key) ? overrides.get(key) : x >= 5 && y < 65 ? 'stone' : y <= 64 ? 'water' : 'air';
+      return name === null ? null : block(name!);
+    };
+    return { ...r, b, overrides };
+  }
+
+  it('water-to-bank keeps native controls through the fractional shoreline then requires terrestrial support', async () => {
+    const { bot, b, controls } = deepRig();
+    const { session, calls } = rig(bot);
+    session.onHurtBy(7, 'drowned');
+    for (const x of [.12, 2.5, 4.2, 4.69]) {
+      b.entity.position.x = x;
+      await drive(bot, 300);
+      expect(['forward', 'back', 'left', 'right'].some(k => controls[k])).toBe(true);
+      expect((session as any).movementIntent.x).toBeGreaterThan(0);
+      expect(controls.jump).toBe(true);
+    }
+    b.entity.position = new Vec3(5.5, 65, .75); b.entity.onGround = true;
+    await drive(bot, 300);
+    expect(['forward', 'back', 'left', 'right'].some(k => controls[k])).toBe(true);
+    expect(calls.suspended).toBe(1); expect(calls.resumed).toBe(0);
+    session.stop();
+  });
+
+  it.each(['stone', 'lava', 'fire', null] as const)('deep water rejects known obstruction, hazard or unknown body corridor: %s', async name => {
+    const { bot, b, controls, overrides } = deepRig();
+    // Surround the actual body, including above its fractional head height.
+    for (let x = -3; x <= 3; x++) for (let z = -3; z <= 3; z++) for (let y = 64; y <= 67; y++) {
+      if (x < -1 || x > 0 || z < 0 || z > 1) overrides.set(`${x},${y},${z}`, name);
+    }
+    const { session } = rig(bot);
+    session.onHurtBy(7, 'drowned'); await drive(bot, 300);
+    expect(['forward', 'back', 'left', 'right'].some(k => controls[k])).toBe(false);
+    expect((session as any).movementIntent).toBeNull();
+    session.stop();
+  });
+
+  it('checks the actual quantized direction and fractional head/side footprint, with no dry ledge bypass', () => {
+    const { bot, b, overrides } = deepRig(); const { session } = rig(bot);
+    b.entity.position = new Vec3(.75, 64.68, .75); b.entity.yaw = 0;
+    const safe = (x: number, z: number) => (session as any).movementSafe(bot, x, z, false, 2.1);
+    expect(safe(1, .4)).toBe(true);
+    // Requested 1,.4 quantizes to 1,1: this lies in that actual diagonal body sweep.
+    overrides.set('2,66,2', 'stone'); expect(safe(1, .4)).toBe(false);
+    overrides.clear(); overrides.set('1,66,1', 'stone'); expect(safe(1, 0)).toBe(false);
+    overrides.clear(); overrides.set('1,64,1', 'lava'); expect(safe(1, 0)).toBe(false);
+    overrides.clear(); b.blockAt = (p: Vec3) => block(Math.floor(p.x) <= 0 && Math.floor(p.y) <= 64 ? 'water' : 'air');
+    expect(safe(1, 0)).toBe(false);
+    // The final sweep still touches water behind the body; its dry endpoint is unsupported.
+    expect((session as any).movementSafe(bot, 1, 0, false, .55)).toBe(false);
+    session.stop();
+  });
+
+  it('reports retreat-only sampled facts and exact native death ID before teardown without resuming cancelled work', async () => {
+    const { bot, b, controls } = deepRig();
+    b.respawn = () => {};
+    const lifecycle = installDeathLifecycle(b, 4000, () => true);
+    const { session, combatReports, calls } = rig(bot);
+    session.onHurtBy(7, 'drowned'); await drive(bot, 600);
+    b.health = 0; bot.emit('death');
+    const r = combatReports[0];
+    expect(r).toMatchObject({ reason: 'death', deathEpisodeId: b.deathLifecycle.episodeId, swings: 0, healthBefore: 9, healthAfter: 0,
+      controlSummary: { finalMode: 'retreating', enteredDesperate: false, retreat: { waterAtStart: true, routeStatus: 'unverified' } } });
+    expect(r.controlSummary!.retreat!.bankCandidate).not.toBeNull();
+    expect(r.controlSummary!.retreat!.movement.samples).toBeGreaterThan(0);
+    expect(r.controlSummary!.retreat!.movement.horizontalIntentSamples).toBeGreaterThan(0);
+    expect(r.controlSummary!.retreat!.movement.observedHorizontalDistance).toBe(0);
+    expect(Buffer.byteLength(JSON.stringify(r.controlSummary))).toBeLessThanOrEqual(2048);
+    expect(calls.resumed).toBe(0);
+    expect(['forward', 'back', 'left', 'right'].some(k => controls[k])).toBe(false);
+    b.health = 9; session.onHurtBy(7, 'drowned'); session.stop();
+    expect(combatReports[1].deathEpisodeId).toBeUndefined();
+    lifecycle.dispose();
+  });
+
+  it('deep water retreat applies horizontal controls with a real nearby bank and original fractional footprint', async () => {
+    const enemy = foe(7, 'drowned', -14.5, 285.75); enemy.position.y = 62;
+    const { bot, controls, attacks } = combatRigBot([enemy]);
+    const b = bot as any;
+    b.entity.position = new Vec3(-12.098910593411883, 62.68288979426175, 285.74739562800346);
+    b.entity.onGround = false;
+    b.health = 9; b.heldItem = null; b.inventory.items = () => [];
+    b.blockAt = (p: Vec3) => {
+      const x = Math.floor(p.x), y = Math.floor(p.y);
+      return block(x >= -7 && y < 63 ? 'stone' : y <= 62 ? 'water' : 'air');
+    };
+    const diag = new MinecraftLog();
+    const { session } = rig(bot, {}, diag);
+    session.onHurtBy(7, 'drowned');
+    await drive(bot, 300);
+    expect(diag.after(0).some(e => e.event === 'retreat-to-bank')).toBe(true);
+    expect(['forward', 'back', 'left', 'right'].some(k => controls[k])).toBe(true);
+    expect(diag.after(0).filter(e => e.event === 'trajectory').some(e => (e.data as any).intent !== null)).toBe(true);
+    expect(controls.jump).toBe(true);
+    expect(attacks).toEqual([]);
+    session.stop();
+  });
 
   it('低血在水里被打:撤退带登岸目标,水里按住跳不沉底', async () => {
     const diag = new MinecraftLog();

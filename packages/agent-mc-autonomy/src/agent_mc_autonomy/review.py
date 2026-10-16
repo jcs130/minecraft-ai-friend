@@ -15,7 +15,7 @@ from .host_context import HostContextPort, validate_host_context
 from . import review_evidence
 from .mailbox import Mailbox, observation
 from .observations import body_feedback, feedback_signal, fact_preview, spatial_text, tool_failure_view, native_outcome_summary
-from .death_memory import DeathMemory, lifecycle, scope_key, recovery_context
+from .death_memory import hydrate_combat, DeathMemory, lifecycle, scope_key, recovery_context
 from .stage_applicability import body_baseline
 
 
@@ -167,7 +167,7 @@ class ReviewPort:
             snapshot.get("game_identity"), snapshot.get("facts", {}), pending=True)
         supplied = snapshot.get("death_episode")
         if episode and isinstance(supplied, dict) and all(supplied.get(key) == episode.get(key) for key in ("id", "scope", "source_event")):
-            episode = supplied  # Preserve lossless receipts from the same verified episode.
+            episode = hydrate_combat(supplied, episode)  # Keep fresh additive evidence and lossless receipts.
         return review_observation({**snapshot, "death_episode": episode}, self.now())
 
     def speech_current(self, correlation):
@@ -315,7 +315,7 @@ class ReviewPort:
                     state["retry_after"] = now + 300
                 else:
                     if previous.get("notification_accepted") and previous.get("evidence", {}).get("death_episode"):
-                        observed["evidence"]["death_episode"] = previous["evidence"]["death_episode"]
+                        observed["evidence"]["death_episode"] = hydrate_combat(previous["evidence"]["death_episode"], observed["evidence"].get("death_episode"))
                     previous["evidence"] = observed["evidence"]
                     previous["summary"] = summary(observed["evidence"])
                     if previous.get("signal") != observed["signal"] or previous.get("baseline") != observed["baseline"]:
@@ -487,6 +487,10 @@ class ReviewPort:
                     elif not recorded.get("reflection") and death_reflection is not None:
                         return {"is_error": True, "error": "death_reflection_already_completed",
                                 "next": "The saved historical planner lesson is complete; do not replace it with a new death reflection."}
+            if (decision != "inspect" and episode and not (recorded.get("reflection") or recorded.get("lesson"))
+                    and recorded.get("combat_observations", []) != review.get("inspected_combat_observations", [])):
+                return {"is_error": True, "error": "fresh_recovery_inspection_required",
+                        "next": "Inspect this same heartbeat again; later native combat evidence was attached to this death."}
             if decision != "inspect" and current["baseline"] != review.get("baseline"):
                 return {"is_error": True, "error": "critical_baseline_changed",
                         "next": "Inspect this heartbeat again before deciding: death/respawn, scope, body restrictions or unknown outcomes changed. Earlier body evidence is historical."}
@@ -521,6 +525,7 @@ class ReviewPort:
                 reference = review_evidence.save(self.directory, review,
                     self.mailbox.goal_lineage(historical.get("id") or fresh["current_goal"].get("id")), state.get("last_decision"))
                 review["inspected_evidence_ref"] = reference
+                review["inspected_combat_observations"] = (fresh.get("death_episode") or {}).get("combat_observations", [])
                 if legacy_pending:
                     review["reflection_inspected_at"] = self.now()
                 result = {"heartbeat_id": review_id, **review["evidence"], "stage_delivery": stage,

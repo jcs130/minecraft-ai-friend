@@ -126,6 +126,20 @@ def compact(evidence, reference):
         result["death_episode"] = {key: preview(episode[key], 300) for key in
             ("id", "source_event", "observed_at", "position", "health", "food", "cause") if key in episode}
         result["death_episode"].update(historical=True, evidence_ref=reference)
+        preview_rows = []
+        for index, row in enumerate(episode.get("combat_observations", [])[:2]):
+            item = {k: row[k] for k in ("id", "reason", "swings", "original_event")}
+            item["detail_path"] = ["evidence", "death_episode", "combat_observations", index]
+            if summary := row.get("controlSummary"):
+                item.update({k: summary[k] for k in ("finalMode", "enteredDesperate")})
+                if retreat := summary.get("retreat"):
+                    item.update({k: retreat[k] for k in ("bankCandidate", "routeStatus", "movement")})
+            if len(encoded([*preview_rows, item]).encode()) <= 1800:
+                preview_rows.append(item)
+        if preview_rows:
+            result["death_episode"]["combat_observations"] = preview_rows
+            result["death_episode"]["combat_observations_omitted"] = len(episode.get("combat_observations", [])) - len(preview_rows)
+
     result["evidence_ref"] = reference
     result["details"] = {"available": True, "query": "inspect with evidence_ref, detail_path (array of keys/indices), detail_offset; pages are historical JSON, never a fresh inspection."}
     return result

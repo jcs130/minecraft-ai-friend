@@ -3,6 +3,7 @@
 import json
 import math
 import sqlite3
+from datetime import datetime
 from contextlib import contextmanager
 
 
@@ -61,6 +62,73 @@ TOOL = {"type": "function", "function": {"name": "death_review",
         "applicability": {"type": "string", "maxLength": 600}, "evidence": {"type": "string", "maxLength": 600}}}}}
 
 
+def combat_summary(value):
+    """Whitelist bounded controller facts; malformed optional data remains in the raw archive."""
+    if (not isinstance(value, dict) or not {'schemaVersion', 'finalMode', 'enteredDesperate', 'retreat'} <= value.keys()
+            or len(json.dumps(value, ensure_ascii=False).encode()) > 2048):
+        return None
+    if (type(value.get('schemaVersion')) is not int or value['schemaVersion'] != 1 or not isinstance(value.get('finalMode'), str) or value['finalMode'] not in {'fighting', 'retreating', 'tracking'}
+            or type(value.get('enteredDesperate')) is not bool):
+        return None
+    result = {k: value[k] for k in ('schemaVersion', 'finalMode', 'enteredDesperate')}
+    retreat = value.get('retreat')
+    if retreat is None:
+        return {**result, 'retreat': None}
+    if (not isinstance(retreat, dict) or not {'startedAt', 'waterAtStart', 'bankCandidate', 'routeStatus', 'movement'} <= retreat.keys()
+            or retreat.get('routeStatus') != 'unverified'):
+        return None
+    bank, movement = retreat.get('bankCandidate'), retreat.get('movement')
+    if (timestamp(retreat.get('startedAt')) is None or (retreat.get('waterAtStart') is not None and type(retreat.get('waterAtStart')) is not bool)
+            or (bank is not None and (not isinstance(bank, dict) or set(bank) != {'x', 'y', 'z'}
+                or not all(number(v) for v in bank.values()))) or not isinstance(movement, dict)):
+        return None
+    counts = ('samples', 'horizontalActiveSamples', 'horizontalIntentSamples', 'jumpOnlySamples')
+    if (not {*counts, 'observedHorizontalDistance', 'progressBasis', 'lastRejection'} <= movement.keys()
+            or not all(count(movement.get(k)) for k in counts)
+            or any(movement[k] > movement['samples'] for k in counts[1:])
+            or not number(movement.get('observedHorizontalDistance'), nonnegative=True)
+            or movement.get('progressBasis') != 'sampled_position_delta'
+            or (movement.get('lastRejection') is not None and not isinstance(movement.get('lastRejection'), str))
+            or movement.get('lastRejection') not in {None, 'unknown_cell', 'collision', 'no_support', 'hazard', 'unsafe_footing', 'blocked_heading', 'no_direction'}):
+        return None
+    result['retreat'] = {k: retreat[k] for k in ('startedAt', 'waterAtStart', 'bankCandidate', 'routeStatus')}
+    result['retreat']['movement'] = {k: movement[k] for k in (*counts, 'observedHorizontalDistance', 'progressBasis', 'lastRejection')}
+    return result
+
+
+def number(value, *, nonnegative=False):
+    try:
+        return type(value) in {int, float} and math.isfinite(value) and (not nonnegative or value >= 0)
+    except OverflowError:
+        return False
+
+
+def count(value):
+    return type(value) is int and 0 <= value <= 9007199254740991
+
+
+def timestamp(value):
+    if not isinstance(value, str) or not 1 <= len(value) <= 40:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        return parsed.timestamp() if parsed.tzinfo else None
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
+def hydrate_combat(supplied, authoritative):
+    """Preserve lossless supplied receipts, refreshing only exact-episode additive evidence."""
+    if not isinstance(supplied, dict) or not isinstance(authoritative, dict) or any(
+            supplied.get(k) != authoritative.get(k) for k in ('id', 'scope', 'source_event')):
+        return authoritative
+    result = {**supplied}
+    result.pop('combat_observations', None)
+    if 'combat_observations' in authoritative:
+        result['combat_observations'] = authoritative['combat_observations']
+    return result
+
+
 class DeathMemory:
     def __init__(self, directory):
         self.path = directory / "reviews.sqlite3"
@@ -112,6 +180,46 @@ class DeathMemory:
             db.execute("DELETE FROM death_cursors WHERE scope=? AND rowid NOT IN (SELECT rowid FROM death_cursors WHERE scope=? ORDER BY rowid DESC LIMIT 64)", (key, key))
             db.execute("DELETE FROM death_episodes WHERE scope=? AND rowid NOT IN (SELECT rowid FROM death_episodes WHERE scope=? ORDER BY rowid DESC LIMIT 32)", (key, key))
         return episode if inserted else None
+
+    def append_combat(self, event):
+        """Attach explicit native death IDs only, under a fresh transactional row lock."""
+        receipt = (event.get('meta') or {}).get('receipt')
+        if event.get('type') != 'minecraft.combat' or not isinstance(receipt, dict):
+            return False
+        key, episode_id = scope_key(receipt.get('scope')), receipt.get('deathEpisodeId')
+        start, end, emitted = (timestamp(receipt.get('startedAt')), timestamp(receipt.get('endedAt')), timestamp(event.get('ts')))
+        if (not key or not isinstance(episode_id, str) or not 1 <= len(episode_id) <= 80
+                or not {'healthBefore', 'healthAfter'} <= receipt.keys()
+                or receipt.get('reason') != 'death' or not count(receipt.get('id')) or receipt['id'] == 0
+                or not isinstance(event.get('run'), str) or not 1 <= len(event['run']) <= 200
+                or not count(event.get('cursor')) or not event['cursor'] or None in (start, end, emitted)
+                or not start <= end <= emitted
+                or any(not count(receipt.get(k)) for k in ('swings', 'meleeLanded', 'arrows', 'rangedLanded'))
+                or any(receipt.get(k) is not None and not number(receipt[k], nonnegative=True) for k in ('healthBefore', 'healthAfter'))):
+            return False
+        entry = {k: receipt.get(k) for k in ('id', 'startedAt', 'endedAt', 'reason', 'healthBefore', 'healthAfter',
+                                            'swings', 'meleeLanded', 'arrows', 'rangedLanded')}
+        entry.update(original_event={k: event[k] for k in ('run', 'cursor', 'ts')}, historical=True, goal_verified=False)
+        if summary := combat_summary(receipt.get('controlSummary')):
+            entry['controlSummary'] = summary
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT body FROM death_episodes WHERE scope=? AND id=?', (key, episode_id)).fetchone()
+            if not row:
+                return False
+            episode = json.loads(row[0])
+            source, observed = episode['source_event'], timestamp(episode.get('observed_at'))
+            existing = episode.get('combat_observations', [])
+            if (source.get('run') != event['run'] or not count(source.get('cursor')) or event['cursor'] <= source['cursor']
+                    or observed is None or not start <= observed <= end or len(existing) >= 2
+                    or any(e['id'] == entry['id'] or e['original_event']['cursor'] >= event['cursor'] for e in existing)):
+                return False  # Duplicate/conflicting/out-of-order data remains available in the original journal.
+            additions = [*existing, entry]
+            if len(json.dumps(additions, ensure_ascii=False).encode()) > 4096:
+                return False
+            episode['combat_observations'] = additions
+            db.execute('UPDATE death_episodes SET body=? WHERE scope=? AND id=?', (json.dumps(episode, ensure_ascii=False), key, episode_id))
+        return True
 
     def entries(self, scope, *, pending=False):
         key = scope_key(scope)

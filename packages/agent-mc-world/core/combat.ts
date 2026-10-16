@@ -29,7 +29,8 @@ import { Vec3 } from 'vec3';
 import type { Logger } from './support/host-contract.ts';
 import type { MinecraftLog } from './log.ts';
 import type { SkillCall } from './skills.ts';
-import type { CombatResult, CombatScene } from './combat-observation.ts';
+import { spatialBody } from './spatial-site.ts';
+import type { CombatResult, CombatScene, CombatControlSummary, MovementRejection } from './combat-observation.ts';
 import {
   HARD, blend, blur, decide, dirSlot, newMap, slotDir, write, writeSlot, type Map16,
 } from './combat-context.ts';
@@ -288,6 +289,9 @@ export class CombatSession {
   private trackingLease: { targetId: number; uuid: string | null; minDistance: number; maxDistance: number; expiresAt: number } | null = null;
   private bot: Bot | null = null;
   private releaseWalkOnly: (() => void) | null = null;
+  private controlSummary: CombatControlSummary = { schemaVersion: 1, finalMode: 'fighting', enteredDesperate: false, retreat: null };
+  private retreatSamplePosition: { x: number; z: number } | null = null;
+  private lastMovementRejection: MovementRejection | null = null;
   private startedAt = 0;
   private healthBefore: number | null = null;
   private sceneBefore: CombatScene | undefined;
@@ -712,6 +716,7 @@ export class CombatSession {
     this.trackingLease = null;
     this.hadCombatWeapon = Boolean(bestWeapon(bot) || this.rangedReady(bot));
     const now = Date.now();
+    this.controlSummary = { schemaVersion: 1, finalMode: 'fighting', enteredDesperate: false, retreat: null };
     this.startedAt = now;
     this.healthBefore = bot.health ?? null;
     this.sceneBefore = this.observeScene(bot);
@@ -911,6 +916,19 @@ export class CombatSession {
     const mode = this.state === 'retreating' ? 'retreat' : this.pathing ? 'path' : this.hybridWeapon;
     const controls = bot.controlState;
     const pressing = Boolean(controls.forward || controls.back || controls.left || controls.right);
+    const movement = this.state === 'retreating' ? this.controlSummary.retreat?.movement : null;
+    if (movement) {
+      movement.samples++;
+      if (pressing) movement.horizontalActiveSamples++;
+      if (intent) movement.horizontalIntentSamples++;
+      if (controls.jump && !pressing) movement.jumpOnlySamples++;
+      // Position deltas include knockback; this is observed displacement, not verified escape.
+      const previousRetreatSample = this.retreatSamplePosition;
+      if (previousRetreatSample) movement.observedHorizontalDistance = Math.round((movement.observedHorizontalDistance
+        + Math.hypot(p.x - previousRetreatSample.x, p.z - previousRetreatSample.z)) * 1000) / 1000;
+      this.retreatSamplePosition = { x: p.x, z: p.z };
+      movement.lastRejection = this.lastMovementRejection;
+    }
     const target = bot.entities[this.targetId];
     const ahead = intent ? p.offset(intent.x * 0.8, 0, intent.z * 0.8) : null;
     this.opts.diag?.write({
@@ -1425,10 +1443,12 @@ export class CombatSession {
   /** 角色宽 0.6 格；沿整段路径检查身体两侧，避开墙角、悬崖及近期实测顶墙方向。 */
   private movementSafe(bot: Bot, dx: number, dz: number, ranged = false, far = 1.4): boolean {
     const d = this.appliedDirection(bot, dx, dz);
-    if (!d) return false;
+    this.lastMovementRejection = null;
+    if (!d) return this.rejectMovement('no_direction');
     const now = Date.now();
-    if (this.blockedHeadings.some((b) => b.until > now && b.x * d.x + b.z * d.z > 0.9)) return false;
+    if (this.blockedHeadings.some((b) => b.until > now && b.x * d.x + b.z * d.z > 0.9)) return this.rejectMovement('blocked_heading');
     const p = bot.entity.position;
+    if (bodyInWater(bot)) return this.swimmingMovementSafe(bot, d, far);
     const y = Math.floor(p.y);
     const canStand = ranged ? this.rangedStandable.bind(this) : this.standable.bind(this);
     const nx = -d.z, nz = d.x;
@@ -1439,8 +1459,45 @@ export class CombatSession {
       for (const side of [-0.31, 0, 0.31]) {
         const x = Math.floor(p.x + d.x * range + nx * side);
         const z = Math.floor(p.z + d.z * range + nz * side);
-        if (![y, y + 1, y - 1].some((atY) => canStand(bot, x, atY, z))) return false;
+        if (![y, y + 1, y - 1].some((atY) => canStand(bot, x, atY, z))) return this.rejectMovement('unsafe_footing');
       }
+    }
+    return true;
+  }
+
+  private rejectMovement(reason: MovementRejection): false { this.lastMovementRejection = reason; return false; }
+
+  /** Swimming still needs a known, unobstructed body corridor. Dry exits need full support. */
+  private swimmingMovementSafe(bot: Bot, d: { x: number; z: number }, far: number): boolean {
+    const p = bot.entity.position;
+    const read = ([x, y, z]: [number, number, number]) => {
+      const block = bot.blockAt(new Vec3(x, y, z));
+      return block ? { material: { name: block.name, properties: block.getProperties?.() ?? null,
+        collision: block.shapes ?? null, liquid: block.name === 'water' || block.name === 'lava' } }
+        : { unknown: 'unloaded' };
+    };
+    let previous: [number, number, number] = [p.x, p.y, p.z];
+    for (let range = 0; range <= far + .249; range += .25) {
+      const distance = Math.min(range, far);
+      let at: [number, number, number] = [p.x + d.x * distance, previous[1], p.z + d.z * distance];
+      let body = spatialBody(read, previous, at);
+      if (body.unknown) return this.rejectMovement('unknown_cell');
+      if (body.hazard) return this.rejectMovement('hazard');
+      if (body.collision || (!body.water && !body.supported)) {
+        // Existing autoJump owns the one-block water-to-bank ascent. Verify both
+        // its raised corridor and destination support; never assume a dry ledge is safe.
+        const raised = Math.floor(p.y) + 1;
+        const start: [number, number, number] = [previous[0], raised, previous[2]];
+        at = [at[0], raised, at[2]];
+        body = spatialBody(read, start, at);
+        const lift = spatialBody(read, previous, start);
+        if (raised - p.y > 1 || body.unknown || body.hazard || body.collision || !body.wetSupport
+          || lift.unknown || lift.hazard || lift.collision) return this.rejectMovement(
+            body.unknown || lift.unknown ? 'unknown_cell' : body.hazard || lift.hazard ? 'hazard'
+              : body.collision || lift.collision ? 'collision' : 'no_support');
+      }
+      previous = at;
+      if (distance === far) break;
     }
     return true;
   }
@@ -1756,6 +1813,7 @@ export class CombatSession {
     // 没打起来就直接撤(E7 / 血线挡下):E4 滑窗记的是这一场,起点得是现在,
     // 否则 end() 会把上一场的开始时刻算成本场时长
     if (this.state === 'idle') {
+      this.controlSummary = { schemaVersion: 1, finalMode: 'retreating', enteredDesperate: false, retreat: null };
       this.startedAt = Date.now();
       this.healthBefore = bot.health ?? null;
       this.sceneBefore = this.observeScene(bot);
@@ -1791,6 +1849,12 @@ export class CombatSession {
     this.retreatEdgeNoted = false;
     // 在水里"拉开 N 格"是永远追不上的目标(溺尸游得比人快),赢法只有出水:目标改成最近的岸
     this.retreatBank = bodyInWater(bot) ? findBankCell(bot, this.retreatFrom, 16) : null;
+    this.retreatSamplePosition = null;
+    this.controlSummary.retreat = { startedAt: new Date(now).toISOString(), waterAtStart: bodyInWater(bot),
+      bankCandidate: this.retreatBank ? { ...this.retreatBank } : null, routeStatus: 'unverified',
+      movement: { samples: 0, horizontalActiveSamples: 0, horizontalIntentSamples: 0, jumpOnlySamples: 0,
+        observedHorizontalDistance: 0, progressBasis: 'sampled_position_delta', lastRejection: null } };
+    this.lastMovementRejection = null;
     if (this.retreatBank) {
       const b = this.retreatBank;
       this.opts.diag?.write({
@@ -1910,6 +1974,7 @@ export class CombatSession {
       return;
     }
     void bot.lookAt(new Vec3(p.x + heading.x * 4, p.y + EYE, p.z + heading.z * 4), true).catch(() => undefined);
+    if (!this.movementSafe(bot, heading.x, heading.z, false, 2.1)) { this.stopMovement(bot); return; }
     this.pressToward(bot, heading.x, heading.z, true);
     this.autoJump(bot, heading.x, heading.z);
   }
@@ -1956,6 +2021,7 @@ export class CombatSession {
       }
       return false;
     }
+    this.controlSummary.enteredDesperate = true;
     this.desperate = true;
     this.state = 'fighting';
     this.retreatBank = null;
@@ -2081,6 +2147,10 @@ export class CombatSession {
     this.cancelRanged();
     const bot = this.bot;
     if (bot) this.cancelCombatFood(bot);
+    const controlSummary = structuredClone({ ...this.controlSummary, finalMode: this.state });
+    const lifecycle = (bot as (Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }) | null)?.deathLifecycle;
+    const deathEpisodeId = reason === 'death' && lifecycle?.phase !== 'alive' && lifecycle?.episodeId
+      && Date.parse(lifecycle.observedAt) >= this.startedAt ? lifecycle.episodeId : undefined;
     this.state = 'idle';
     this.trackingLease = null;
     this.desperate = false;
@@ -2113,7 +2183,7 @@ export class CombatSession {
     this.opts.report?.({ startedAt: new Date(this.startedAt).toISOString(),
       endedAt: new Date(Date.now()).toISOString(), reason,
       healthBefore: this.healthBefore, healthAfter: bot?.health ?? null,
-      sceneBefore: this.sceneBefore,
+      sceneBefore: this.sceneBefore, controlSummary, ...(deathEpisodeId ? { deathEpisodeId } : {}),
       kills: Object.fromEntries(this.kills), swings: this.swings,
       meleeLanded: this.meleeLanded(), arrows: this.arrows, rangedLanded: this.rangedLanded });
     // 只有正常战斗收尾解冻断点。断线、环境夺权、外部抢占与死亡各自由其终态边界

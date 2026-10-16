@@ -77,3 +77,41 @@ export function spatialSites(read: Read, sites: Point[]) {
     };
   });
 }
+
+/** Actual (unrounded) player volume, including collision owners protruding from below.
+ * A swept end is conservative at diagonal corners; unknown geometry fails closed.
+ */
+export function spatialBody(read: Read, at: Point, end: Point = at) {
+  const box: Box = [Math.min(at[0], end[0]) - .3, Math.min(at[1], end[1]), Math.min(at[2], end[2]) - .3,
+    Math.max(at[0], end[0]) + .3, Math.max(at[1], end[1]) + 1.8, Math.max(at[2], end[2]) + .3];
+  const destinationBox: Box = [end[0] - .3, end[1], end[2] - .3, end[0] + .3, end[1] + 1.8, end[2] + .3];
+  let unknown = false, collision = false, water = false, hazard = false, supportArea = 0, waterSupportArea = 0;
+  for (let x = Math.floor(box[0]) - 1; x <= Math.floor(box[3]) + 1; x++)
+    for (let y = Math.floor(box[1]) - 1; y <= Math.floor(box[4]); y++)
+      for (let z = Math.floor(box[2]) - 1; z <= Math.floor(box[5]) + 1; z++) {
+        const sample = read([x, y, z]), shapes = shapesOf(sample);
+        if (shapes === null) unknown = true;
+        if (!('material' in sample)) continue;
+        const material = sample.material;
+        const touching = overlaps(box, [x, y, z, x + 1, y + 1, z + 1]);
+        if (touching && ['lava', 'fire', 'soul_fire', 'cactus', 'sweet_berry_bush', 'powder_snow'].includes(material.name)) hazard = true;
+        if (overlaps(destinationBox, [x, y, z, x + 1, y + 1, z + 1]) && (['water', 'bubble_column', 'seagrass', 'tall_seagrass', 'kelp', 'kelp_plant'].includes(material.name)
+          || material.properties?.waterlogged === true || material.properties?.waterlogged === 'true')) water = true;
+        if (material.name === 'magma_block' && overlaps([box[0], box[1] - .05, box[2], box[3], box[4], box[5]], [x, y, z, x + 1, y + 1, z + 1])) hazard = true;
+        if (shapes?.some(shape => overlaps(box, shape.map((n, i) => n + [x, y, z][i % 3]) as Box))) collision = true;
+        if (['water', 'bubble_column', 'seagrass', 'tall_seagrass', 'kelp', 'kelp_plant'].includes(material.name)
+          && y < end[1] - EPS && y + 1 >= end[1] - EPS) {
+          waterSupportArea += Math.max(0, Math.min(x + 1, end[0] + .3) - Math.max(x, end[0] - .3))
+            * Math.max(0, Math.min(z + 1, end[2] + .3) - Math.max(z, end[2] - .3));
+        }
+        // Clip top faces to the destination footprint; faceArea unions overlapping shapes.
+        if (shapes) {
+          const clipped = shapes.filter(shape => Math.abs(y + shape[4] - end[1]) < EPS).map(shape => [
+            Math.max(shape[0], end[0] - .3 - x), 0, Math.max(shape[2], end[2] - .3 - z),
+            Math.min(shape[3], end[0] + .3 - x), 1, Math.min(shape[5], end[2] + .3 - z),
+          ] as Box).filter(shape => shape[3] > shape[0] && shape[5] > shape[2]);
+          supportArea += faceArea(clipped, 1, true) ?? 0;
+        }
+      }
+  return { unknown, collision, water, hazard, supported: supportArea >= .36 - 1e-6, wetSupport: supportArea + waterSupportArea >= .36 - 1e-6 };
+}

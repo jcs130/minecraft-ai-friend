@@ -236,7 +236,10 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
   protected override extensionCombatReport(result: import('./combat-observation.ts').CombatResult): void {
 
         try {
-          const receipt = this.tactics.recordCombat(result);
+          const bot = this.bridge?.bot;
+          const receipt = this.tactics.recordCombat({ ...result, ...(bot ? {
+            scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.botName },
+          } : {}) });
           this.emit('minecraft.combat', `[Minecraft] 战斗观察回执#${receipt.id}：${result.reason}；`
             + `生命 ${result.healthBefore ?? '未知'}→${result.healthAfter ?? '未知'}，`
             + `刀 ${result.swings} 次/命中 ${result.meleeLanded} 次；`
