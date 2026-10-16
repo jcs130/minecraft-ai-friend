@@ -7,6 +7,24 @@ from agent_mc_autonomy.configuration import Settings
 from agent_mc_autonomy.core_distribution import install as installer
 
 
+def test_context_default_matches_parsed_and_public_example():
+    import tomllib
+    from pathlib import Path
+
+    example = tomllib.loads((Path(__file__).resolve().parents[1] / "standalone.example.toml").read_text(encoding="utf-8"))
+    assert Settings().context_tokens == Settings.parse({}).context_tokens == 65536
+    assert Settings.parse(example).context_tokens == 65536
+
+
+@pytest.mark.parametrize("limit", [4096, 32768, 98304, 131072, 2097152])
+def test_explicit_context_limit_is_preserved(limit):
+    import dataclasses
+
+    settings = Settings.parse({"autonomy": {"context_tokens": limit}})
+    assert settings.context_tokens == limit
+    assert Settings.parse({"autonomy": {"context_tokens": dataclasses.asdict(settings)["context_tokens"]}}).context_tokens == limit
+
+
 @pytest.mark.parametrize("memory", [{}, {"read_preference": "balanced"}])
 def test_default_memory_preference_keeps_existing_strict_body_config_compatible(tmp_path, memory):
     settings = Settings.parse({"server": {"host": "fixture.test", "username": "Alice"}, "memory": memory})

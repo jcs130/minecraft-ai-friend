@@ -182,6 +182,8 @@ export type ResourcePlacementGate = (item: string, intent?: BlueprintPlacementIn
 export type ResourcePlacementPreview = (item: string) => { ok: boolean; reason?: string };
 
 export interface SkillContext {
+  /** Existing task revocation wakes presentation waits without canceling native receipts. */
+  signal?: AbortSignal;
   aborted: () => boolean;
   /**
    * 在可按现场续做的原子动作边界请求让位。没有排队请求时不执行 settle；有请求时

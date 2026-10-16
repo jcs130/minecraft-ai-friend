@@ -1,20 +1,50 @@
 {
   "repository": "https://github.com/jcs130/minecraft-ai-friend",
-  "source_revision": "2723d39f8129a6d2f87a773832289888dda1d51c",
+  "source_revision": "c9ac67e2de2b0429b49fe25fe21721852bb6ec5e",
   "source_path": "packages/agent-mc-world",
   "name": "agent-mc-world",
-  "version": "0.5.7-dev.20261016.24",
-  "archive": "agent-mc-world-0.5.7-dev.20261016.24.tgz",
-  "sha256": "453fe0b633b0511bde5e4d816706145b9aa14a880f70b49698b6e1ff16bfdfdd",
+  "version": "0.5.7-dev.20261016.32",
+  "archive": "agent-mc-world-0.5.7-dev.20261016.32.tgz",
+  "sha256": "ec513eeb71b7da90f06a2a86e61cbfa15cff00de16da9630f10bdb8aa0708ceb",
   "build_profile": "canonical-engine-only",
   "upstream_release": false,
   "minecraft_version": "1.21.1",
   "viewer_assets": null,
   "verification": {
-    "package.json": "51d5813ab97a3cb90a6c1691ca75123c360da03f58ebb112e85d917e89f2c492",
-    "dist/build.json": "7087727b06ad9391045672295c559ddd8bc8e2cb7dcc9dff668121b775a6d393",
-    "dist/types/manifest.json": "8323656cf357404cf4c60e6cb729b818575318fb492251e2c7a67376a8217d87",
+    "package.json": "ba14de1664c945dcf5261182a06a1edec52234bda7f6656c95fa0ec86895503b",
+    "dist/build.json": "8b19239e44939cd60a4ced0293f1835587180f19c28cd163e3907e68c68e1a26",
+    "dist/types/manifest.json": "66f465a6fd4353ba3ea2280c6e21ed5bb7f712361c2057051cd3e69d545e34b6",
     "bin/minecraft-agent-mcp.mjs": "161d2ebcc11726d655e2c204f412553bcc8ed6df6b7d20c2c6fcb82bf30760a8",
     "bin/minecraft-agent-client.mjs": "7cf81abccdcef5ad0aaf59340b233c3b5d398160e1c3d829a36fc25bfcbfb1bc"
+  },
+  "external_viewer": {
+    "repository": "https://github.com/jcs130/mc-visual-console",
+    "source_revision": "c799ae1a71fd7a03f3404f67e33f2985eed8a7aa",
+    "archive": "modern-viewer-c799ae1a-source.tar.gz",
+    "sha256": "8acc9a51e1bf0a5115f381c4a18552752ac03866f53f1e5fed7230243ec3fb98",
+    "archive_paths": [
+      "modern-viewer/renderer-src",
+      "modern-viewer/src"
+    ],
+    "source_receipt": {
+      "sourceSha256": "08ae93cb4510f201234b8c0111e517c7f10577e031e0cbae6ddb748285c1884a",
+      "sourceFiles": 315,
+      "scope": "renderer_source_and_mineflayer_host_adapters"
+    },
+    "original_catalog_sha256": "e014078c1e0498fd70616cb951fb87b8091cea934cc3d26959b8b94394c5f353",
+    "bundle_sha256": {
+      "world-preview.js": "c5e1510e0ce5748f2392495fec7afc61bc99d22459f7a21360782febd4237efd",
+      "native-console.js": "e9c1b86f4ae1fe4ec41c387204c1c0707dc507c9b50642fbdcdf4db390d52d45",
+      "ysm-review.js": "0a1680cb6ac51564a3400601767030e3c286760a0c05d28dc08ebf10adeba912"
+    },
+    "bundled_in_core": false,
+    "original_asset_packs": {
+      "archive": "viewer-original-packs-c799ae1a-exact.tar.gz",
+      "sha256": "cba6f1c01685a7d2bbd832a1bea5e0043c6677d07f71ba3caeac69253428a6c2",
+      "packs": [
+        "vanilla-1.21.1",
+        "native-1.21.1"
+      ]
+    }
   }
 }

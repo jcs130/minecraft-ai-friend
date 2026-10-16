@@ -1,84 +1,170 @@
-/**
- * 容器操作的演出节拍(GUI 同步给观众看时,把 ms 级的协议操作放慢到人手速度)。
- *
- * 节拍只在「摄像机客户端开着 + GUI 同步开着」时非 null;关着时所有 beat 都是
- * 零等待,协议层照旧瞬时。预算封顶:单次操作(一单 stow/take/craft/装炉)加起来
- * 最多多花 budgetMs,超了剩余步骤恢复瞬时——整箱掏空不会变成慢动作长镜头。
- *
- * 两次开窗之间还有一道 `openGap`:关窗到下一次开窗至少空 reopenGapMs。协议层里
- * 这个间隔是几十到几百毫秒,同步到摄像机画面上就是一次快速闪屏;而同 tick 的
- * 开关窗正是历史上「同步屏关不掉」那个竞态的源头。
- * 所以这道间隔既是观感也是防竞态,不受 budgetMs 约束。
- */
+/** Ordinary GUI presentation. No timer owns or cancels a native inventory receipt. */
+import { AsyncLocalStorage } from 'node:async_hooks';
+import type { Bot } from 'mineflayer';
+import { Aborted, type SkillContext } from './skill-context.ts';
 
 export interface ShowTempo {
-  /** 逐格摆放/逐栈存取的间隔 */
   clickMs: number;
-  /** 开窗后停一拍再动手 */
   dwellOpenMs: number;
-  /** 材料摆齐后停一拍,让产出槽亮相 */
   dwellResultMs: number;
-  /** 收完手停一拍再关窗 */
   dwellCloseMs: number;
-  /** 单次操作的节拍总预算 */
   budgetMs: number;
-  /** 上一次关窗到这一次开窗之间至少空多久(不吃 budgetMs) */
   reopenGapMs: number;
+  /** True only for a current native presentation that includes inventory-grid slots. */
+  inventory?: boolean;
 }
-
 type ShowBeat = 'open' | 'click' | 'result' | 'close';
+type Window = NonNullable<Bot['currentWindow']>;
+type TempoSource = ShowTempo | null | (() => ShowTempo | null);
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-/**
- * 关窗时刻是跨技能的:stow 关的窗,下一步 craft 开窗时要知道它多久之前关的。
- * 引擎子进程里只有一个 bot,所以这里是模块级的一份;由 world.ts 的 `windowClose`
- * 监听统一打点,覆盖所有关窗路径(技能收尾、合成前清遗留窗、队列空了的窗口卫生)。
- */
-let lastWindowCloseAt = 0;
-
-/** 关窗打点。任何路径关掉的容器窗口都算数,所以挂在 bot 的 windowClose 事件上。 */
-export function markShowWindowClosed(now = Date.now()): void {
-  lastWindowCloseAt = now;
+/** The producer owns current player/session/epoch readiness, never a saved URL. */
+export interface NativeGuiPresentation { ready: boolean; epoch: number; playerUuid: string }
+const presentations = new WeakMap<Bot, () => NativeGuiPresentation | null>();
+export function bindNativeGuiPresentation(bot: Bot, ready: () => NativeGuiPresentation | null): () => void {
+  presentations.set(bot, ready);
+  const revoke = () => { if (presentations.get(bot) === ready) presentations.delete(bot); bot.off('end', revoke); };
+  bot.once('end', revoke);
+  return revoke;
+}
+export function nativeGuiPresented(bot: Bot | null | undefined): boolean {
+  if (!bot?.entity) return false;
+  try { return presentations.get(bot)?.()?.ready === true; } catch { return false; }
 }
 
-/** 测试用:清掉模块级的关窗时刻 */
-export function resetShowScene(): void {
-  lastWindowCloseAt = 0;
+interface Scene { closedAt: number | null; epoch: number }
+const scenes = new WeakMap<Bot, Scene>();
+function sceneFor(bot: Bot): Scene {
+  let scene = scenes.get(bot);
+  if (scene) return scene;
+  scene = { closedAt: null, epoch: 0 }; scenes.set(bot, scene);
+  const current = scene;
+  bot.on('windowClose', () => { current.closedAt = Date.now(); });
+  for (const event of ['end', 'death', 'respawn'] as const) bot.on(event, () => { current.epoch++; });
+  return scene;
+}
+export function markShowWindowClosed(bot: Bot, now = Date.now()): void { sceneFor(bot).closedAt = now; }
+
+const operations = new AsyncLocalStorage<{ bot: Bot; show: ShowPacer }>();
+export function currentShowPacer(bot: Bot): ShowPacer | undefined {
+  const operation = operations.getStore(); return operation?.bot === bot ? operation.show : undefined;
+}
+export function withShowPacer<T>(bot: Bot, show: ShowPacer, run: () => Promise<T>): Promise<T> {
+  return operations.run({ bot, show }, run);
 }
 
-/**
- * 一次容器操作一个 pacer:构造时把节拍快照下来(操作中途热改配置不半途变速),
- * tempo 为 null 时整个对象是无操作的。
- */
 export class ShowPacer {
   private spent = 0;
+  private window: Window | undefined;
+  private readonly scene?: Scene;
+  private readonly epoch?: number;
+  private readonly dimension?: unknown;
+  private invalid: Error | null = null;
+  private readonly presentation?: () => NativeGuiPresentation | null;
+  private readonly presentationEpoch?: number;
+  private plan?: Record<ShowBeat, number>;
+  private budgetReported = false;
 
-  constructor(private readonly tempo: ShowTempo | null) {}
-
-  /**
-   * 开窗之前调:上一次关窗离现在不够 reopenGapMs 就把差额等掉。
-   * 不吃预算——预算封顶是为了「别演成慢动作」,而这道间隔是为了「别闪屏」,
-   * 预算耗尽恰恰是连着做了很多下的时候,正是最需要它的时候。
-   */
-  async openGap(now = Date.now()): Promise<void> {
-    const t = this.tempo;
-    if (!t || t.reopenGapMs <= 0) return;
-    const wait = t.reopenGapMs - (now - lastWindowCloseAt);
-    if (wait > 0) await sleep(Math.min(wait, t.reopenGapMs));
+  constructor(private readonly source: TempoSource, private readonly options: {
+    bot?: Bot; ctx?: Pick<SkillContext, 'aborted'> & Partial<Pick<SkillContext, 'abortedBy' | 'signal' | 'diag' | 'taskId'>>;
+  } = {}) {
+    if (options.bot) {
+      this.scene = sceneFor(options.bot); this.epoch = this.scene.epoch;
+      this.dimension = options.bot.game?.dimension;
+      this.presentation = presentations.get(options.bot);
+      try { this.presentationEpoch = this.presentation?.()?.epoch; } catch { /* optional renderer */ }
+    }
   }
-
+  get tempo(): ShowTempo | null { return typeof this.source === 'function' ? this.source() : this.source; }
+  get budget(): { spentMs: number; adjusted: boolean } { return { spentMs: this.spent, adjusted: this.budgetReported }; }
+  /** Known craft work shares the budget proportionally, including the last iteration. */
+  planBeats(beats: Record<ShowBeat, number>): void { this.plan = { ...beats }; }
+  bindWindow(window: Window): void { this.window = window; this.assertActive(); }
+  releaseWindow(): void { this.window = undefined; }
+  assertActive(): void {
+    if (this.invalid) throw this.invalid;
+    const { bot, ctx } = this.options;
+    try {
+      if (ctx?.aborted()) throw new Aborted(ctx.abortedBy?.() ?? null);
+      if (ctx?.signal?.aborted || (this.scene && this.scene.epoch !== this.epoch)
+        || (bot && bot.game?.dimension !== this.dimension)) throw new Aborted('GUI 操作的任务或连接代次已改变');
+      if (bot && this.presentation) {
+        let epoch: number | undefined;
+        try { epoch = this.presentation()?.epoch; } catch { /* absence disables presentation */ }
+        if (presentations.get(bot) !== this.presentation
+          || (epoch !== undefined && this.presentationEpoch !== undefined && epoch !== this.presentationEpoch))
+          throw new Aborted('原生 GUI 展示的会话或代次已改变');
+      }
+      if (bot && this.window && (bot.currentWindow ?? bot.inventory) !== this.window)
+        throw new Aborted('GUI 操作窗口已关闭或被替换');
+    } catch (error) { this.invalid = error as Error; throw error; }
+  }
+  /** Close only the same actual window; cancellation may leave its materials for reconciliation. */
+  ownsWindow(window: Window): boolean {
+    const bot = this.options.bot;
+    return !!bot && this.scene?.epoch === this.epoch && bot.game?.dimension === this.dimension
+      && (bot.currentWindow ?? bot.inventory) === window;
+  }
+  closeWindow(window: Window, close: () => void): void {
+    if (this.ownsWindow(window)) close();
+    this.releaseWindow();
+  }
+  private async wait(ms: number): Promise<void> {
+    this.assertActive();
+    if (ms <= 0) return;
+    const { bot, ctx } = this.options;
+    const expected = bot ? bot.currentWindow ?? bot.inventory : undefined;
+    const finishAt = Date.now() + ms;
+    await new Promise<void>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout>;
+      const events = ['windowOpen', 'windowClose', 'end', 'death', 'respawn'] as const;
+      const finish = (error?: unknown) => {
+        clearTimeout(timer);
+        ctx?.signal?.removeEventListener('abort', check);
+        for (const event of events) bot?.off(event, check);
+        if (error) reject(error); else resolve();
+      };
+      const check = () => {
+        try {
+          this.assertActive();
+          if (bot && (bot.currentWindow ?? bot.inventory) !== expected) {
+            this.invalid = new Aborted('GUI 等待期间窗口已被替换'); throw this.invalid;
+          }
+          // Disabled presentation drops its remaining dwell. Checks also cover old
+          // contexts without an AbortSignal and producer readiness/epoch changes.
+          if (!this.tempo || Date.now() >= finishAt) return finish();
+          clearTimeout(timer); timer = setTimeout(check, Math.min(25, finishAt - Date.now()));
+        } catch (error) { finish(error); }
+      };
+      for (const event of events) bot?.on(event, check);
+      ctx?.signal?.addEventListener('abort', check, { once: true });
+      check();
+    });
+    this.assertActive();
+  }
+  async openGap(now = Date.now()): Promise<void> {
+    this.assertActive();
+    const t = this.tempo, closed = this.scene?.closedAt;
+    if (!t || closed == null) return;
+    await this.wait(Math.max(0, Math.min(t.reopenGapMs, t.reopenGapMs - (now - closed))));
+  }
   async beat(kind: ShowBeat): Promise<void> {
+    this.assertActive();
+    if (kind === 'open' && this.options.bot) this.bindWindow(this.options.bot.currentWindow ?? this.options.bot.inventory);
     const t = this.tempo;
-    if (!t) return;
-    const ms =
-      kind === 'open' ? t.dwellOpenMs :
-      kind === 'click' ? t.clickMs :
-      kind === 'result' ? t.dwellResultMs : t.dwellCloseMs;
-    const left = t.budgetMs - this.spent;
-    if (ms <= 0 || left <= 0) return;
-    const wait = Math.min(ms, left);
+    if (!t) { if (this.plan) this.plan[kind] = Math.max(0, this.plan[kind] - 1); return; }
+    const durations = { open: t.dwellOpenMs, click: t.clickMs, result: t.dwellResultMs, close: t.dwellCloseMs };
+    const ms = durations[kind], left = Math.max(0, t.budgetMs - this.spent);
+    const remaining = this.plan ? (Object.keys(durations) as ShowBeat[])
+      .reduce((sum, beat) => sum + this.plan![beat] * durations[beat], 0) : ms;
+    const wait = Math.max(0, Math.min(ms, left, remaining > 0 ? left * ms / remaining : ms));
+    if (this.plan) this.plan[kind] = Math.max(0, this.plan[kind] - 1);
+    if (wait < ms && !this.budgetReported) {
+      this.budgetReported = true;
+      this.options.ctx?.diag?.write({ lane: 'craft', event: 'show-budget-limited', taskId: this.options.ctx.taskId,
+        msg: this.plan ? 'GUI 节拍预算不足，按剩余合成步骤等比例分配，末轮保留节拍' : 'GUI 节拍预算耗尽，后续步骤减少等待',
+        data: { budgetMs: t.budgetMs, spentMs: this.spent, remainingRequestedMs: remaining, planned: !!this.plan } });
+    }
     this.spent += wait;
-    await sleep(wait);
+    await this.wait(wait);
   }
 }

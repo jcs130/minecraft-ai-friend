@@ -33,7 +33,9 @@ function rig(){
   const call=(args:any)=>m.execute(args,{role:'fixture-agent',callId:'fixture'} as any);
   return{m,cfg,port,call,calls,events,actions,held,state,setCap:(v:boolean)=>cap=v,setAdvertised:(v:string[])=>advertised=v,setHang:(v:boolean)=>hang=v,setCleanupFail:(v:boolean)=>cleanupFail=v};
 }
-async function finished(r:ReturnType<typeof rig>,id:number){await vi.waitFor(()=>expect(r.m.runner.read(id)[0].status).not.toBe('running'));await vi.waitFor(()=>expect(r.events.some(e=>e.execution.evidence.localId===id)).toBe(true));return r.m.runner.read(id)[0];}
+// Native and Mineflayer methods both start a real SES worker. Match the shared
+// harness's bounded completion window when a full suite starts workers at once.
+async function finished(r:ReturnType<typeof rig>,id:number){await vi.waitFor(()=>expect(r.m.runner.read(id)[0].status).not.toBe('running'),{timeout:5000});await vi.waitFor(()=>expect(r.events.some(e=>e.execution.evidence.localId===id)).toBe(true),{timeout:5000});return r.m.runner.read(id)[0];}
 it('projects the same nested public reads through one root RPC and preserves Vec3/unknown values',async()=>{
   const r=rig();const result=await r.call({name:'nested-read',code:'const p=await bot.read("entity.position");return {p:p.offset(1,0,0),x:await bot.read("entity.position.x"),unknown:await bot.read("entity.velocity.x"),emptyHand:await bot.read("heldItem.name")};'});
   expect(await finished(r,JSON.parse(result.text).id)).toMatchObject({status:'completed',result:{p:{x:0,y:64,z:2},x:-1,unknown:null,emptyHand:null}});

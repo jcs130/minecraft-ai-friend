@@ -13,6 +13,8 @@ from urllib.parse import urlsplit
 from .decision_profiles import DecisionSettings
 from .fast import FastSettings
 
+DEFAULT_CONTEXT_TOKENS = 65536
+
 
 class SettingsValidationError(ValueError):
     """Safe structured error: never expose submitted values or exception text."""
@@ -142,7 +144,7 @@ class Settings:
     max_tool_rounds: int = 6
     max_output_tokens: int = 1024
     model_timeout_seconds: int = 180
-    context_tokens: int = 32768
+    context_tokens: int = DEFAULT_CONTEXT_TOKENS
     max_decisions: int = 100
     runtime_mode: str = "embedded"
     data_directory: str = ""
@@ -232,7 +234,7 @@ class Settings:
             max_tool_rounds=_integer(autonomy, "max_tool_rounds", 6, 1, 12),
             max_output_tokens=maximum_output,
             model_timeout_seconds=_integer(autonomy, "model_timeout_seconds", 180, 10, 300),
-            context_tokens=_integer(autonomy, "context_tokens", 32768, 4096, 2097152),
+            context_tokens=_integer(autonomy, "context_tokens", DEFAULT_CONTEXT_TOKENS, 4096, 2097152),
             max_decisions=_integer(autonomy, "max_decisions", 100, 0, 10000),
             runtime_mode=_text(runtime, "mode", "embedded"), data_directory=_text(runtime, "data_directory"),
             vision_enabled=_boolean(perception, "enabled", True), fast=FastSettings.parse(raw.get("fast", {})),
