@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createMinecraftChoiceTool } from './choice.ts';
 import { ClientOperationLearning } from './operation-learning.ts';
-import type { OperationAttribution } from '../../core/operation-experience.ts';
+import { operationObservation, type OperationAttribution } from '../../core/operation-experience.ts';
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { EventEnvelope, Logger, ModelFacts, ToolOutcome, World, WorldHost, WorldRequestFacts } from './contracts.ts';
@@ -250,7 +250,7 @@ export class MinecraftAgentClient {
     const current = this.phase === 'started' ? this.world.requestFacts?.() as import('./contracts.ts').WorldRequestFacts | null : null;
     const connection = { key: 'connection', text: JSON.stringify({ phase: this.phase, host: this.options.cfg.host,
       port: this.options.cfg.port, username: this.options.cfg.username, version: this.options.cfg.version }) };
-    return { protocol: PROTOCOL, run: this.journal.run, parts: this.facts.replace({ text: '', snapshotTypes: [],
+    return { protocol: PROTOCOL, run: this.journal.run, observation: operationObservation(current?.experience?.observation), parts: this.facts.replace({ text: '', snapshotTypes: [],
       parts: [connection, ...(current?.parts ?? (current?.text ? [{key:'world',text:current.text}] : []))] }) };
   }
 

@@ -1339,16 +1339,17 @@ describe('战斗:水里与逃不掉', () => {
   /** 头在水面上、脚泡在水里的假 bot;x≥5 是岸 */
   function swimRigBot(foes: FakeFoe[] = []) {
     const r = combatRigBot(foes);
+    // The shared bank verifier now requires actual collision data; boundingBox alone
+    // intentionally leaves support/clearance unknown.
+    const air = { name: 'air', boundingBox: 'empty', shapes: [], getProperties: () => ({}) };
+    const water = { name: 'water', boundingBox: 'empty', shapes: [], getProperties: () => ({ level: 0 }) };
+    const stone = { name: 'stone', boundingBox: 'block', shapes: [[0,0,0,1,1,1]], getProperties: () => ({}) };
     (r.bot as unknown as Record<string, unknown>).blockAt = (p: { x: number; y: number }) => {
       const onLand = p.x >= 5;
-      if (p.y >= 65) return { name: 'air', boundingBox: 'empty' };
-      if (p.y === 64) return onLand
-        ? { name: 'air', boundingBox: 'empty' }
-        : { name: 'water', boundingBox: 'empty' };
-      if (p.y === 63) return onLand
-        ? { name: 'stone', boundingBox: 'block' }
-        : { name: 'water', boundingBox: 'empty' };
-      return { name: 'stone', boundingBox: 'block' };
+      if (p.y >= 65) return air;
+      if (p.y === 64) return onLand ? air : water;
+      if (p.y === 63) return onLand ? stone : water;
+      return stone;
     };
     return r;
   }
