@@ -103,6 +103,7 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                     "catalogFile": settings.viewer_catalog_file, "port": settings.viewer_listen_port,
                     "bundledAppearanceCatalogFile": settings.viewer_bundled_appearance_catalog_file,
                     "defaultAppearance": settings.viewer_default_appearance,
+                    "selectionScope": settings.identity,
                     "stateFile": str(directory / "viewer-state.json"), "session": viewer_session,
                     "agentStateFile": str(directory / "viewer-agent.json"),
                 }

@@ -1,5 +1,6 @@
 import importlib
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -26,10 +27,16 @@ def test_runner_forwards_local_appearance_only_to_optional_viewer(framework_modu
             pass
 
     monkeypatch.setattr(runner, "Controller", Controller)
-    run_async(runner.run_session(settings, Path("core/bin/mcp.mjs"), tmp_path, None, "fixture",
-                                lambda **_values: None, lambda: False, bridge_factory=bridge_factory))
-    config, = configurations
+    # Same viewer URL and offline username (hence same UUID), different server.
+    # A same-account restart can use a different build without changing scope.
+    for current in [settings, replace(settings, host="other-fixture.test"), replace(settings, backend_directory="new-build")]:
+        run_async(runner.run_session(current, Path("core/bin/mcp.mjs"), tmp_path, None, "fixture",
+                                    lambda **_values: None, lambda: False, bridge_factory=bridge_factory))
+    config, other, restarted = configurations
     assert config["viewerIntegration"]["defaultAppearance"] == "bundled:yui-ysm"
+    assert config["viewerIntegration"]["selectionScope"] == settings.identity
+    assert config["viewerIntegration"]["selectionScope"] != other["viewerIntegration"]["selectionScope"]
+    assert config["viewerIntegration"]["selectionScope"] == restarted["viewerIntegration"]["selectionScope"]
     assert "defaultAppearance" not in config["world"]
     assert config["world"]["username"] == "Alice" and config["world"]["version"] == "1.21.1"
 

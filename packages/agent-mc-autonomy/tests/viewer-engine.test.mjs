@@ -94,6 +94,7 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
   }
   const config = { rendererDirectory: directory, catalogFile: join(directory, 'catalog.json'),
     defaultAppearance: 'bundled:yui-ysm',
+    selectionScope: 'a'.repeat(24),
     stateFile: join(directory, 'viewer.json'), agentStateFile: join(directory, 'agent.json'), session: 'test-session', port: 0 };
   writeFileSync(config.catalogFile, JSON.stringify({ packs: [{ id: 'fixture', assetDirectory: 'assets', registrySha256: 'registry' }] }));
   const options = { cfg: { ...structuredClone(MINECRAFT_DEFAULTS), username: 'FixtureBody' },
@@ -119,6 +120,7 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
   const host = { log: { warn: message => calls.push(['warn', message]) } };
   assert.equal(await viewer.start(host), 'core-started');
   assert.equal(calls.find(call => call[0] === 'prepare')[1].defaultAppearance, 'bundled:yui-ysm');
+  assert.equal(calls.find(call => call[0] === 'prepare')[1].selectionScope, config.selectionScope);
   assert.deepEqual(calls.find(call => call[0] === 'core-start'), ['core-start', viewer, host]);
   let coreBot;
   const bridge = viewer.createBridge({ host: 'game.invalid', port: 0,
