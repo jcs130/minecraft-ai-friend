@@ -1,7 +1,9 @@
 /** On-demand contracts for the program SDK; native primitives retain their own guide. */
 import { nativeApiHelp } from './method-mineflayer.ts';
+import { METHOD_CAPABILITIES_HELP } from './method-capabilities.ts';
 
 const SDK_API = Object.freeze({
+  'mc.capabilities': METHOD_CAPABILITIES_HELP,
   'mc.state': 'await mc.state(): {sampledAt,connectionGeneration,snapshot,flight,queue,temporaryScaffolds,combatActive,combat,method}. '
     + 'snapshot can be null; position/dimension/health/food/inventory/equipment are under snapshot. '
     + 'No block scan is performed. Missing readings are unknown. Preserve sampledAt and connectionGeneration when comparing observations.',

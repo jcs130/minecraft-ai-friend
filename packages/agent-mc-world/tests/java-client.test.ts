@@ -535,7 +535,10 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
       const catalogue=await client.listTools();
       expect(catalogue.tools.find(tool=>tool.name==='mc_control')?.annotations?.readOnlyHint).toBe(false);
       expect(catalogue.tools.find(tool=>tool.name==='mc_stop')?._meta?.['agent-mc/v1']).toMatchObject({barrierAfter:true,endsTurn:false});
-      const response=await client.callTool({name:'mc_capabilities',arguments:{}});expect(response.isError).not.toBe(true);expect(JSON.parse((response.content as any[])[0].text).realRendering).toBe(true);
+      const response=await client.callTool({name:'mc_capabilities',arguments:{}});expect(response.isError).not.toBe(true);
+      const caps=JSON.parse((response.content as any[])[0].text);
+      expect(caps.realRendering).toBe(true);
+      expect(caps.javascript).toMatchObject({contract:'minecraft-method/v1',backend:'java-client',botMethods:[],pluginLoading:false});
       expect(response.structuredContent).toMatchObject({protocol:'agent-mc/v1',control:{turnEnded:false}});
       await client.callTool({name:'mc_protocol',arguments:{protocol:'agent-mc/v1',action:'begin_turn',id:'native-turn'}});
       await client.callTool({name:'mc_control',arguments:{action:'claim'}});

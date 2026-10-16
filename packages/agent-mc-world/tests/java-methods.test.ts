@@ -2,7 +2,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { JavaMethods, JAVA_METHODS, JAVA_METHOD_REQUIRED, JAVA_METHOD_PROTOCOL, javaMethodHelp } from '../src/client/java-methods.ts';
+import { JavaMethods, JAVA_METHODS, JAVA_METHOD_REQUIRED, JAVA_METHOD_PROTOCOL, javaMethodHelp, javaMethodCapabilities } from '../src/client/java-methods.ts';
+import { methodHarness, methodEnded } from './method-harness.ts';
+import { portableMethod } from '../examples/portable-method.mjs';
 const paths:string[]=[];const methods:JavaMethods[]=[];
 afterEach(async()=>{for(const m of methods.splice(0))await m.stop('test finished');for(const path of paths.splice(0))rmSync(path,{recursive:true,force:true});});
 function rig(){
@@ -37,6 +39,37 @@ it('projects the same nested public reads through one root RPC and preserves Vec
   expect(await finished(r,JSON.parse(result.text).id)).toMatchObject({status:'completed',result:{p:{x:0,y:64,z:2},x:-1,unknown:null,emptyHand:null}});
   expect(r.calls.filter(c=>c.method==='method_read').map(c=>c.args.args)).toEqual([['entity'],['entity'],['entity'],['heldItem']]);
   expect(r.calls.some(c=>['do','method_call'].includes(c.method))).toBe(false);
+});
+it('runs exactly the same capability-aware Mineflayer program on both bodies, without source rewriting',async()=>{
+  const native=rig(),headless=methodHarness();
+  try {
+    const before=native.calls.length;
+    const inspected=await native.call({name:'portable-read',code:portableMethod});
+    expect(await finished(native,JSON.parse(inspected.text).id)).toMatchObject({status:'completed',result:{ready:true,position:{x:-1,y:64,z:2},health:null,goalCompleted:false}});
+    expect(native.calls.slice(before).some(c=>['do','method_call','claim'].includes(c.method))).toBe(false);
+    const a=await native.call({name:'portable-look',code:portableMethod,params:{look:{yaw:.25,pitch:0}}});
+    const b=headless.runner.start({name:'portable-look',code:portableMethod,params:{look:{yaw:.25,pitch:0}}});
+    const [nativeRun,mineflayerRun]=await Promise.all([finished(native,JSON.parse(a.text).id),methodEnded(headless,b.id)]);
+    expect(nativeRun.sourceHash).toBe(mineflayerRun.sourceHash);
+    for(const run of [nativeRun,mineflayerRun]){
+      expect(run).toMatchObject({status:'completed',result:{ready:true,goalCompleted:false}});
+      expect(run.trace.map(t=>t.method==='mineflayer'?(t.args as any).name:t.method)).toEqual(['capabilities','read','look','read']);
+    }
+    expect(native.calls.filter(c=>c.method==='method_call').map(c=>c.args.name)).toEqual(['look']);
+  } finally {headless.close();}
+});
+it('uses actual advertised methods for portable preflight and never treats a future or absent method as supported',async()=>{
+  const r=rig();r.setAdvertised([...JAVA_METHOD_REQUIRED,'dig','unknown.future.method','nonce:private']);
+  const a=await r.call({name:'capability-check',code:'const caps=await mc.capabilities(); if(!caps.botMethods.includes("pathfinder.goto")) return {missing:"pathfinder.goto",caps}; await bot.pathfinder.goto(new goals.GoalBlock(1,64,0));'});
+  const run=await finished(r,JSON.parse(a.text).id);
+  expect(run).toMatchObject({status:'completed',result:{missing:'pathfinder.goto',caps:{backend:'java-client',contract:'minecraft-method/v1',pluginLoading:false,stepGroups:'single-legacy'}}});
+  const caps=(run.result as any).caps;
+  expect(caps.botMethods).not.toContain('dig');expect(caps.botMethods).not.toContain('pathfinder.goto');
+  expect(JSON.stringify(caps)).not.toContain('private');
+  expect(r.calls.some(c=>['do','method_call','method_read','claim','renew'].includes(c.method))).toBe(false);
+  expect(javaMethodCapabilities({methodCalls:JAVA_METHODS,nonce:'private'}).botMethods).toEqual([]);
+  expect(javaMethodCapabilities({methodAdapter:JAVA_METHOD_PROTOCOL,methodCalls:['look','read','look']}).botMethods).toEqual([]);
+  expect(javaMethodCapabilities({methodAdapter:JAVA_METHOD_PROTOCOL,methodCalls:[...JAVA_METHOD_REQUIRED].reverse().concat('read')})).toMatchObject({botMethods:JAVA_METHOD_REQUIRED});
 });
 it('executes unchanged JS in the actual shared worker, revives Vec3 and Block.getProperties and serializes native body calls',async()=>{
   const r=rig();const result=await r.call({name:'old-farm-method',code:'const p=(await bot.read("entity")).position; const b=await bot.blockAt(p.offset(1,-1,0)); await bot.setControlState("forward",true); await bot.waitForTicks(3); const held=await bot.getControlState("forward"); await bot.clearControlStates(); return {age:b.getProperties().age,position:b.position.offset(0,1,0),held};'});
