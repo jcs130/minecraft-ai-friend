@@ -47,6 +47,11 @@ terminal observation. A failed read clears the sample to null without changing t
 This samples current client state at delivery; it does not wait for later server effects, prove that
 all inventory packets arrived, or repair historical rows collected by earlier versions.
 
+A tunnel whose endpoint is already the current feet cell reports a `noop` step, including when a
+queued predecessor reached that cell. It does not dig or move, and does not certify the earlier
+route or the enclosing goal. Cancellation and invalid-slope checks still apply. Repeated no-ops
+remain visible as no-progress evidence; they are not recorded as blocked digging failures.
+
 `mc_memory action:experience` exposes help/list/get/stats/reflect through existing SDK and MCP tools.
 Reflection checks scope-bound evidence IDs and preserves an attributed notebook lesson, with explicit
 conditions and counterexamples. Stable review IDs support local crash recovery without duplicate notes.
