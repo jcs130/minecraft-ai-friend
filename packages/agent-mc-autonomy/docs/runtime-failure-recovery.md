@@ -101,8 +101,12 @@ Missing prepared evidence cannot hide a surviving committed or staged receipt.
 Even if both records disappear, surviving snapshots or an empty transaction
 directory keep startup fenced. Only the original administrator UUID may retry a
 demonstrably pre-mutation transaction: stopped/uncertain/empty current work and
-byte-matching original snapshots, with no commit evidence. Missing post-mutation
-audit is never silently recreated.
+complete, byte-matching original state **and** status snapshots, with no commit
+evidence. The status snapshot binds that UUID to the original identity/session/run;
+the supplied digests and binding checks remain required. Empty directories or
+state-only/status-only evidence never qualify. If a write failed before a
+complete original pair survived, the transaction stays fenced for inspection.
+Missing post-mutation audit is never silently recreated.
 Portable file fsync and atomic replacement are used; platform/power-loss
 durability beyond those primitives is not claimed.
 

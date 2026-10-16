@@ -433,3 +433,85 @@ def test_assessment_explicitly_closes_readonly_sqlite_handle(tmp_path, framework
         for connection in opened:
             if connection not in closed:
                 connection.close()
+
+
+@pytest.mark.parametrize('surviving', ['empty', 'state_only', 'status_only', 'state_staging_only', 'status_staging_only'])
+@pytest.mark.parametrize('later_run', [False, True])
+def test_same_id_retry_requires_complete_original_binding_pair(tmp_path, framework_module, surviving, later_run):
+    import agent_mc_autonomy.recovery as recovery
+    settings, host, _, _, options = fixture(tmp_path, framework_module)
+    recovery.acknowledge_unknown(settings, tmp_path, **options)
+    transaction = host/'recovery-acknowledgements'/options['acknowledgement_id']
+    original_state = (transaction/'before-state.json').read_bytes()
+    original_status = (transaction/'before-status.json').read_bytes()
+    for path in transaction.iterdir():
+        path.unlink()
+    if surviving != 'empty':
+        kind = 'state' if surviving.startswith('state') else 'status'
+        filename = 'before-'+kind+'.json'+('.staging' if 'staging' in surviving else '')
+        (transaction/filename).write_bytes(original_state if kind == 'state' else original_status)
+    # A later empty failed ledger can have exactly the same state bytes. Only
+    # the missing original status could bind this UUID to its old session/run.
+    (host/'host-state.json').write_bytes(original_state)
+    if later_run:
+        status = json.loads(original_status)
+        status['runtime_session'], status['native_run'], request = [str(uuid.uuid4()) for _ in range(3)]
+        task = str(uuid.uuid4())+':17'
+        status['pending'] = [{'kind':'task','id':task,'phase':'accepted','terminal':False}]
+        (host/'status.json').write_text(json.dumps(status), encoding='utf-8')
+        client = host.parent/'client'
+        (client/f"events-{status['native_run']}.jsonl").write_text(
+            json.dumps({'run':status['native_run'],'cursor':1,'type':'minecraft.event'})+'\n', encoding='utf-8')
+        (client/'requests'/(hashlib.sha256(request.encode()).hexdigest()+'.json')).write_text(json.dumps({
+            'requestId':request,'phase':'returned','outcome':{'execution':{'id':task,'phase':'accepted','terminal':False}}}), encoding='utf-8')
+        options = {**options, 'expected_session':status['runtime_session'], 'expected_run':status['native_run'],
+                   'native_request_ids':[request], 'expected_status_sha256':hashlib.sha256((host/'status.json').read_bytes()).hexdigest()}
+    before = {path.name:path.read_bytes() for path in transaction.iterdir()}
+    state_before, status_before = (host/'host-state.json').read_bytes(), (host/'status.json').read_bytes()
+    with pytest.raises(RuntimeError, match='outcome_unknown'):
+        recovery.acknowledge_unknown(settings, tmp_path, **options)
+    assert before == {path.name:path.read_bytes() for path in transaction.iterdir()}
+    assert state_before == (host/'host-state.json').read_bytes()
+    assert status_before == (host/'status.json').read_bytes()
+    assert json.loads(state_before)['uncertain'] is True
+
+
+def test_surviving_complete_pair_refuses_changed_session_and_run(tmp_path, framework_module):
+    import agent_mc_autonomy.recovery as recovery
+    settings, host, _, _, options = fixture(tmp_path, framework_module)
+    recovery.acknowledge_unknown(settings, tmp_path, **options)
+    transaction = host/'recovery-acknowledgements'/options['acknowledgement_id']
+    (host/'host-state.json').write_bytes((transaction/'before-state.json').read_bytes())
+    for filename in ['prepared.json','committed.json']:
+        (transaction/filename).unlink()
+    status = json.loads((host/'status.json').read_text())
+    status['runtime_session'], status['native_run'] = str(uuid.uuid4()), str(uuid.uuid4())
+    (host/'status.json').write_text(json.dumps(status), encoding='utf-8')
+    changed = {**options, 'expected_session':status['runtime_session'], 'expected_run':status['native_run'],
+               'expected_status_sha256':hashlib.sha256((host/'status.json').read_bytes()).hexdigest()}
+    before = {path.name:path.read_bytes() for path in transaction.iterdir()}
+    with pytest.raises(RuntimeError, match='outcome_unknown'):
+        recovery.acknowledge_unknown(settings, tmp_path, **changed)
+    assert before == {path.name:path.read_bytes() for path in transaction.iterdir()}
+    assert json.loads((host/'host-state.json').read_text())['uncertain'] is True
+
+
+@pytest.mark.parametrize('failed_snapshot', ['before-state.json', 'before-status.json'])
+def test_failed_write_before_complete_binding_pair_requires_inspection(tmp_path, framework_module, monkeypatch, failed_snapshot):
+    import agent_mc_autonomy.recovery as recovery
+    settings, host, _, _, options = fixture(tmp_path, framework_module)
+    original = recovery._write_immutable
+    def fail(path, body):
+        if path.name == failed_snapshot:
+            raise PermissionError('fixture no complete original binding pair')
+        original(path, body)
+    monkeypatch.setattr(recovery, '_write_immutable', fail)
+    with pytest.raises(OSError):
+        recovery.acknowledge_unknown(settings, tmp_path, **options)
+    monkeypatch.setattr(recovery, '_write_immutable', original)
+    transaction = host/'recovery-acknowledgements'/options['acknowledgement_id']
+    before = {path.name:path.read_bytes() for path in transaction.iterdir()}
+    with pytest.raises(RuntimeError, match='outcome_unknown'):
+        recovery.acknowledge_unknown(settings, tmp_path, **options)
+    assert before == {path.name:path.read_bytes() for path in transaction.iterdir()}
+    assert json.loads((host/'host-state.json').read_text())['uncertain'] is True

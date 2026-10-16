@@ -112,6 +112,10 @@ def require_no_pending_acknowledgement(host, *, same_id=None):
             entries = list(transaction.iterdir())
             if any(path.name not in allowed or not path.is_file() or path.is_symlink() for path in entries):
                 raise RuntimeError("recovery_incomplete_transaction")
+            names = {path.name for path in entries}
+            if (not names.intersection({"before-state.json", "before-state.json.staging"})
+                    or not names.intersection({"before-status.json", "before-status.json.staging"})):
+                raise RuntimeError("recovery_original_binding_pair_missing")
             state_raw, status_raw = _read(host / "host-state.json", 65536), _read(host / "status.json")
             state, status = json.loads(state_raw), json.loads(status_raw)
             if (not isinstance(state, dict) or not isinstance(status, dict) or status.get("phase") != "failed"
