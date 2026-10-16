@@ -67,6 +67,8 @@ import { taggedCraftChoice } from './tagged-crafting.ts';
 import { flyToLanding, flyToPosition, landFlight, flightState, previewFlight } from './flight.ts';
 import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold, temporaryScaffoldReadout, scaffoldCleanupCheckpoint } from './temporary-scaffold.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
+import { sampleEffect, observedEffect } from './observed-effect.ts';
+import type { ObservedEffect } from '../src/contracts/observed-effect.ts';
 import { assertInventoryClicksReady, isInventoryClickError } from './inventory-click-sync.ts';
 import { ContainerWindowOwnership } from './container-window-ownership.ts';
 import { isBabyPiglin, piglinIsHostile } from './piglin.ts';
@@ -953,7 +955,7 @@ export interface TaskReport {
   taskId?: number;
   /** Last completed step of a successful task. */
   lastSkill?: SkillCall['skill'];
-  steps?: Array<{ step: number; outcome: StepOutcome | 'cut'; why: string | null }>;
+  steps?: Array<{ step: number; outcome: StepOutcome | 'cut'; why: string | null; observedEffect?: ObservedEffect }>;
   /** 同形状任务在短时间内再次未达整体目标时，附上上一回的受阻事实。 */
   repeatFailure?: { attempts: number; previousReceipt: string; scope: 'target' | 'shape'; observation: 'changed' | 'unchanged' | 'unavailable' };
   /** 这条汇报已经讲明了掉血的来由;World 据此不再复述一遍掉血播报 */
@@ -970,6 +972,7 @@ interface AbortFlag {
 
 /** 已落地步骤的终态；供未运行 finish 的取消路径通过 reportCancelled 回报各步结果。 */
 interface StepLanding {
+  observedEffect?: ObservedEffect;
   /** 1 起的步号 */
   step: number;
   /** 这一步是什么(describeSkill 的说法,与受理回执同一口径) */
@@ -4921,7 +4924,8 @@ export class Executor {
       data: { by, landings },
     });
     this.opts.report({ kind: 'cancelled', text, taskId: task.id,
-      steps: landings.map(({ step, outcome, why }) => ({ step, outcome, why })) });
+      steps: landings.map(landing => ({ step: landing.step, outcome: landing.outcome, why: landing.why,
+        ...('observedEffect' in landing && landing.observedEffect ? { observedEffect: landing.observedEffect } : {}) })) });
   }
 
   /**
@@ -5174,6 +5178,7 @@ export class Executor {
     let transitBoundary: number | null = null;
     /** 各步在验收后的结局。显式依赖要求 ok/partial；自动因果边还可凭现有入料放行。 */
     const outcomes: StepOutcome[] = [];
+    const effectReadbacks = new Map<number, ObservedEffect>();
     /**
      * 一步落地:记进 outcomes(闸门读它),同时记一笔终态账(见 StepLanding)。
      * 两处必须同一刻写,否则被叫停时那本账与实际跑到哪一步对不上号。
@@ -5183,6 +5188,7 @@ export class Executor {
       outcomes.push(outcome);
       task.stepLog.push({
         step: i + 1, what: describeSkill(steps[i]), outcome, why: shortWhy(why), line,
+        ...(effectReadbacks.has(i) ? { observedEffect: effectReadbacks.get(i)! } : {}),
         ...(code ? { code } : {}),
       });
       if (outcome === 'ok') this.noteSuccessfulIntent(steps[i], Date.now());
@@ -5535,7 +5541,17 @@ export class Executor {
           }
           const tread = stepTargetCell(bot, call);
           const releaseTread = tread ? holdTreadWater(bot, tread) : null;
-          let skillResult = await runSkill(bot, run, ctx).finally(() => releaseTread?.());
+          // Keep readback separate from the skill verdict. A right-click may complete while
+          // its target stays unchanged; invisible server effects and missing reads stay unknown.
+          const effectCell = tread ? [tread.x, tread.y, tread.z] as [number, number, number] : null;
+          const effectDimension = normalizeDimension(dimensionOf(bot));
+          const effectBefore = ['chat', 'observe', 'probe', 'look', 'wait'].includes(call.skill) ? null : sampleEffect(bot, effectCell);
+          let skillResult: string;
+          try { skillResult = await runSkill(bot, run, ctx).finally(() => releaseTread?.()); }
+          finally {
+            if (effectBefore && !ctx.aborted() && normalizeDimension(dimensionOf(bot)) === effectDimension)
+              effectReadbacks.set(i, observedEffect(call.skill, effectDimension, effectCell, effectBefore, sampleEffect(bot, effectCell)));
+          }
           if (ctx.aborted()) return;
           promoteTemporaryScaffold(bot, intended);
           if (!bot.currentWindow && !flightState(bot).flying && scaffoldCleanupCheckpoint(steps, i)) {
@@ -6027,7 +6043,8 @@ export class Executor {
     });
     const lastLanding = t?.stepLog.at(-1);
     this.opts.report({ ...report, text,
-      ...(t ? { steps: t.stepLog.map(({ step, outcome, why }) => ({ step, outcome, why })) } : {}),
+      ...(t ? { steps: t.stepLog.map(({ step, outcome, why, observedEffect }) => ({ step, outcome, why,
+        ...(observedEffect ? { observedEffect } : {}) })) } : {}),
       ...(report.kind === 'done' && t && lastLanding
         && (lastLanding.outcome === 'ok' || lastLanding.outcome === 'noop')
         ? { lastSkill: t.steps[lastLanding.step - 1]?.skill } : {}) });

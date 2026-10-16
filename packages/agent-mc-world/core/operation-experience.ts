@@ -36,7 +36,26 @@ export type OperationExperience = {
   execution: Pick<ExecutionReceipt, 'kind' | 'id' | 'phase' | 'terminal'> | null;
   dispatch: 'pending' | 'returned' | 'rejected' | 'unknown'; elapsedMs: number | null;
   goalVerified: false;
+  stepEffects?: Array<{ step: number; skill: string; status: string; at: number[] | null;
+    changed: { target: boolean | null; inventory: boolean | null; position: boolean | null; window: boolean | null };
+    coverage: 'client-visible-only'; goalVerified: false }>;
 };
+export function operationStepEffects(receipt?: ExecutionReceipt): NonNullable<OperationExperience['stepEffects']> {
+  const steps = receipt?.evidence?.steps;
+  if (!Array.isArray(steps)) return [];
+  return steps.slice(0, 16).flatMap(step => {
+    const e = step?.observedEffect;
+    if (!Number.isSafeInteger(step?.step) || !e || e.schema !== 'agent-mc-observed-effect/v1'
+        || e.coverage !== 'client-visible-only' || e.goalVerified !== false
+        || typeof e.skill !== 'string' || !/^[a-z_]{1,50}$/.test(e.skill)
+        || !['changed','unchanged','unknown'].includes(e.status) || !e.changed) return [];
+    const value = (key: string) => typeof e.changed[key] === 'boolean' ? e.changed[key] : null;
+    return [{ step: step.step, skill: e.skill, status: e.status,
+      at: Array.isArray(e.at) && e.at.length === 3 && e.at.every(Number.isFinite) ? e.at : null,
+      changed: { target: value('target'), inventory: value('inventory'), position: value('position'), window: value('window') },
+      coverage: 'client-visible-only' as const, goalVerified: false as const }];
+  });
+}
 export const experienceHash = (v: unknown): string => createHash('sha256').update(stable(v)).digest('hex');
 function stable(v: unknown): string {
   if (v === undefined) return 'null';
@@ -171,14 +190,16 @@ export class OperationExperienceBook {
     const raw=outcome?.execution;
     const execution = raw ? {kind:raw.kind,id:raw.id,phase:raw.phase,terminal:raw.terminal} : null;
     const admission=(outcome?.meta?.receipt as {accepted?:boolean}|undefined)?.accepted;
-    return this.save(scope,{...row,dispatch:!outcome?'unknown':outcome.failed||admission===false?'rejected':'returned',execution:row.execution?.terminal?row.execution:execution,
+    const stepEffects = operationStepEffects(outcome?.execution);
+    return this.save(scope,{...row,...(!row.execution?.terminal && stepEffects.length ? {stepEffects} : {}),dispatch:!outcome?'unknown':outcome.failed||admission===false?'rejected':'returned',execution:row.execution?.terminal?row.execution:execution,
       after:row.execution?.terminal?row.after:operationObservation(after),elapsedMs:count(elapsedMs),updatedAt:new Date().toISOString()});
   }
   terminal(scope: GameMemoryScope, id: string, receipt: ExecutionReceipt, after: OperationObservation | null) {
     const row=this.get(scope,id);
     if (row.execution?.terminal) return row;
     if (row.execution && (row.execution.id!==receipt.id || row.execution.kind!==receipt.kind)) throw new Error('Execution identity mismatch');
-    return this.save(scope,{...row,execution:{kind:receipt.kind,id:receipt.id,phase:receipt.phase,terminal:receipt.terminal},
+    const stepEffects = operationStepEffects(receipt);
+    return this.save(scope,{...row,...(stepEffects.length ? {stepEffects} : {}),execution:{kind:receipt.kind,id:receipt.id,phase:receipt.phase,terminal:receipt.terminal},
       after:operationObservation(after),updatedAt:new Date().toISOString()});
   }
   async query(args: Record<string,unknown>, ctx: GameMemoryContext, notebook: GameMemoryBook): Promise<Record<string,unknown>> {

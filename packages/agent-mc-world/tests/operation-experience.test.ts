@@ -19,6 +19,18 @@ const sample=(x=0)=>({at:new Date().toISOString(),dimension:'overworld',position
 const accepted={kind:'task' as const,id:'epoch:1',phase:'accepted' as const,terminal:false,goalCompleted:false as const};
 const completed={...accepted,phase:'completed' as const,terminal:true};
 
+it('retains step change evidence across restart without copying result prose or promoting a goal',()=>{
+  const directory=dir(),book=new OperationExperienceBook(directory);
+  const row=book.begin(scope,'run','effect-readback','mc_do',{steps:[{skill:'use',at:[1,63,1]}]},sample());
+  book.finish(scope,row.id,{text:'Accepted.',execution:accepted},sample(),2);
+  book.terminal(scope,row.id,{...completed,evidence:{steps:[{step:1,outcome:'ok',why:'PRIVATE_RESULT_PROSE',observedEffect:{
+    schema:'agent-mc-observed-effect/v1',skill:'use',status:'unchanged',at:[1,63,1],coverage:'client-visible-only',goalVerified:false,
+    changed:{target:false,inventory:false,position:false,window:false},prompt:'PRIVATE_PROMPT'}}]}},sample());
+  const restored=new OperationExperienceBook(directory).get(scope,row.id);
+  expect(restored.execution?.phase).toBe('completed');expect(restored.stepEffects?.[0].status).toBe('unchanged');
+  expect(restored.goalVerified).toBe(false);expect(JSON.stringify(restored)).not.toContain('PRIVATE_');
+});
+
 it('records flight/blink/food choices and selected parameters without prompts, chat, code or credentials',()=>{
   const directory=dir(),book=new OperationExperienceBook(directory);
   const row=book.begin(scope,'run','req','mc_do',{steps:[{skill:'control',mode:'flight',durationMs:500,keys:['forward'],password:'secret'},

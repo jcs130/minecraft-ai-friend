@@ -44,3 +44,8 @@ mc_goal {revise:{slot,expectedRevision,text,plan,reason}} 只在宿主明确调�
 只修改 plan 时也必须提供要保留的 text。缺少或超长的 text/reason 会按字段说明错误，原目标和版本保留。
 
 verify 检查当前条件，最近已通过的机械步骤会继续现读；库存减少或离开区域可能使登记条件进度退回，这不能否定此前采集、消耗、交付或抵达已经发生。需要记录历史动作与净变化时，在计划中用 judgment 指明证据来源，再以 milestone 登记原回执与时间。核心保留宿主判断，不将它冒充独立验证；新证据否定前提时由宿主 reopen/revise。条件选择错误不能靠重做旧阶段来掩盖。
+# Client-visible action readback
+
+Terminal task step evidence may include `observedEffect` (`agent-mc-observed-effect/v1`): bounded before/after client position, target block state, synchronized inventory and window state, plus independent change flags. Missing reads stay null/unknown. Read-only sampling, chat, look and waiting do not produce physical effect readbacks.
+
+`unchanged` describes only the listed client-visible domains; it cannot exclude hidden server effects or determine task/goal success. Execution status remains independent and `goalVerified` is always false. A host can use repeated unchanged evidence to ask its Agent to inspect the real skill contract, choose another method or declare a not-already-satisfied native `expect` postcondition. This adds no model loop or automatic action to the core. Complete evidence is retained in task archives and travels through the public SDK/MCP execution receipt.
