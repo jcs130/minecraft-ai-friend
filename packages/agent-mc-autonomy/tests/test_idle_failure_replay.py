@@ -96,7 +96,7 @@ def test_feedback_waits_for_its_queued_scout_before_planning_again(framework_mod
         return await original("mc_do" if name == "mc_scout" else name, args, **metadata)
 
     bridge.call = call
-    controller.active_goal = {"id": "new-intent", "mode": "insert", "origin": "user"}
+    controller.active_goal = {"id": "new-intent", "goal": "Inspect a local site", "mode": "insert", "origin": "user"}
     controller.feedback_pending = True
     run_async(controller.turn_once("survive", "rules", module.model_tools(bridge.tools)))
     assert len(seen) == 1  # Acceptance is not the queued observation's result.

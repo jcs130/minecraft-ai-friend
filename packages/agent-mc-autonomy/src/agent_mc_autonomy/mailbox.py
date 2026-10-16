@@ -9,6 +9,8 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
+from .stage_applicability import historical_proposal, inapplicable_reason
+
 
 class Mailbox:
     def __init__(self, directory: Path):
@@ -46,15 +48,19 @@ class Mailbox:
             raise ValueError("request_id_must_be_uuid: reuse the same ID when confirmation is uncertain") from None
         if kind not in {"steps", "stop", "goal", "feedback"} or not isinstance(payload, dict):
             raise ValueError("command_invalid")
-        if kind == "goal" and (not {"goal"} <= set(payload) <= {"goal", "origin"} or not isinstance(payload["goal"], str)
+        if kind == "goal" and (not {"goal"} <= set(payload) <= {"goal", "origin", "stage_baseline"} or not isinstance(payload["goal"], str)
                 or not payload["goal"].strip() or len(payload["goal"]) > 4000):
             raise ValueError("goal_must_contain_1_to_4000_characters")
-        if kind == "feedback" and (not {"goal", "mode"} <= set(payload) <= {"goal", "mode", "revision_of", "origin", "parent_id"} or not isinstance(payload["goal"], str)
+        if kind == "feedback" and (not {"goal", "mode"} <= set(payload) <= {"goal", "mode", "revision_of", "origin", "parent_id", "stage_baseline", "review_decision"} or not isinstance(payload["goal"], str)
                 or not payload["goal"].strip() or len(payload["goal"]) > 4000 or payload["mode"] not in {"insert", "replace"}):
             raise ValueError("feedback_requires_goal_and_explicit_insert_or_replace_mode")
         if kind in {"goal", "feedback"} and (not isinstance(payload.get("origin", "unknown"), str)
                 or payload.get("origin", "unknown") not in {"user", "host_review", "unknown"}):
             raise ValueError("goal_origin_must_be_user_host_review_or_unknown")
+        if "stage_baseline" in payload and (payload.get("origin") != "host_review" or not isinstance(payload["stage_baseline"], dict)):
+            raise ValueError("stage_baseline_requires_host_review")
+        if "review_decision" in payload and (payload.get("origin") != "host_review" or payload["review_decision"] not in {"continue", "insert", "revise"}):
+            raise ValueError("review_decision_requires_host_review_choice")
         if kind == "feedback" and "parent_id" in payload:
             try:
                 uuid.UUID(payload["parent_id"])
@@ -159,6 +165,32 @@ class Mailbox:
         return next((goal for goal in self.goal_lineage(request_id)
                      if goal["origin"] == "user" and goal["state"] in {"planning", "paused"}), None)
 
+    def reassess_host_stages(self, baseline):
+        """Retain immutable proposal/receipts; retire only its current applicability."""
+        if not self.path.exists():
+            return False
+        changed = False
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            for row in db.execute("SELECT id,payload FROM commands WHERE state IN ('queued','planning','paused') AND kind IN ('goal','feedback')").fetchall():
+                if inapplicable_reason(json.loads(row["payload"]), baseline):
+                    db.execute("UPDATE commands SET state='needs_reassessment' WHERE id=?", (row["id"],))
+                    changed = True
+            if not db.execute("SELECT 1 FROM commands WHERE state='planning'").fetchone():
+                db.execute("UPDATE commands SET state='planning' WHERE id=(SELECT id FROM commands WHERE state='paused' ORDER BY rowid DESC LIMIT 1)")
+        return changed
+
+    def historical_goal(self, baseline):
+        if not self.path.exists():
+            return None
+        with self.connection() as db:
+            row = db.execute("SELECT id,payload FROM commands WHERE state='needs_reassessment' ORDER BY rowid DESC LIMIT 1").fetchone()
+            return historical_proposal({"id": row["id"], **json.loads(row["payload"])}, baseline) if row else None
+
+    def retire_host_admission(self, request_id):
+        with self.connection() as db:
+            db.execute("UPDATE commands SET state='needs_reassessment' WHERE id=? AND state='dispatching'", (request_id,))
+
     def submit_user_intent(self, kind, payload, request_id):
         """Explicit human entry only; retries cannot relabel pre-upgrade records."""
         if kind not in {"goal", "feedback"}:
@@ -175,7 +207,7 @@ class Mailbox:
             db.execute("BEGIN IMMEDIATE")
             revised = command["payload"].get("revision_of")
             if revised:
-                row = db.execute("SELECT * FROM commands WHERE id=? AND state='planning'", (revised,)).fetchone()
+                row = db.execute("SELECT * FROM commands WHERE id=? AND state IN ('planning','needs_reassessment')", (revised,)).fetchone()
                 if not row or json.loads(row["payload"]).get("mode") != "insert":
                     db.execute("UPDATE commands SET state='delivered', receipt=? WHERE id=? AND state='dispatching'",
                                ('{"failed":true,"reason":"revision_target_not_active","verified":false}', command["id"]))
@@ -183,6 +215,11 @@ class Mailbox:
                 # New UUID and immutable old payload/receipt preserve the audit.
                 # This changes one stage, not the paused user-goal stack or body.
                 receipt = json.loads(row["receipt"]) if row["receipt"] else {}
+                if row["state"] == "needs_reassessment":
+                    # Fresh reassessment is a new stage at a native checkpoint.
+                    # The resumed user goal stays its retained parent.
+                    db.execute("UPDATE commands SET state='paused' WHERE state='planning'")
+                    receipt = {}
                 db.execute("UPDATE commands SET state='revised' WHERE id=?", (revised,))
                 db.execute("UPDATE commands SET state='planning', receipt=? WHERE id=? AND state='dispatching'",
                            (json.dumps({"queue_policy_consumed": bool(receipt.get("queue_policy_consumed"))}), command["id"]))

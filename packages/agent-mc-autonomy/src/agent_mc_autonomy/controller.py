@@ -13,6 +13,7 @@ from .bridge import json_content, outcome, text_content
 from .context import assemble, encode
 from .death_memory import TOOL as DEATH_REVIEW_TOOL
 from .death_memory import DeathMemory, identity, lifecycle, recovery_state
+from .stage_applicability import body_baseline, historical_proposal, inapplicable_reason
 from .decision_profiles import profile_view
 from .fast import FastPolicy, focus_state, rule_focus
 from .model_protocols import assistant_history
@@ -272,6 +273,7 @@ class Controller:
         self.stop_requested = lambda: self.operator_stop or stop_requested()
         self.commands = commands
         self.active_goal = None
+        self.historical_goal = None
         self.feedback_pending = False
         self.pending = {}
         self.action_owners = {}
@@ -323,6 +325,10 @@ class Controller:
             self.body_events.clear()
             self.publish(native_outcomes=[], body_events=[])
             self.groups.clear()  # Tool replies/provider replay belong to the previous game identity too.
+            if not self.death_recovery:
+                # Hydration must honor persisted actual death even when its event
+                # will not be delivered again after restart.
+                self.death_recovery = next(iter(self.death_memory.entries(fresh_scope)), None)
         self.game_scope = fresh_scope
         life = lifecycle(facts)
         if self.death_recovery:
@@ -334,9 +340,31 @@ class Controller:
                 and type(body.get("health")) in {int, float} and body["health"] > 0)
         elif isinstance(life, dict):
             self.death_waiting = life.get("phase") != "alive"
+        self.synchronize_goals()
         self.publish(facts=facts, game_identity=self.game_scope,
                      death_episode=next(iter(self.death_memory.entries(self.game_scope, pending=True)), None))
         return not self.death_waiting
+
+    def stage_baseline(self):
+        latest = next(iter(self.death_memory.entries(self.game_scope)), None)
+        return body_baseline(self.game_facts, latest)
+
+    def synchronize_goals(self):
+        baseline = self.stage_baseline()
+        if self.commands:
+            changed = self.commands.reassess_host_stages(baseline)
+            self.active_goal = self.commands.active_goal()
+            self.historical_goal = self.commands.historical_goal(baseline)
+        else:
+            changed = bool(inapplicable_reason(self.active_goal, baseline))
+            if changed:
+                self.historical_goal = historical_proposal(self.active_goal, baseline)
+                self.active_goal = None
+        if changed:
+            self.groups.clear()  # Old exchanges remain archived, not current instructions.
+            self.continuation_needed = True
+        self.feedback_pending = bool(self.active_goal and self.active_goal.get("mode") and not self.active_goal.get("queue_policy_consumed"))
+        self.publish(current_goal=self.active_goal, historical_goal=self.historical_goal)
 
     def persist(self, **changes):
         self.data.mkdir(parents=True, exist_ok=True)
@@ -434,6 +462,7 @@ class Controller:
                     self.death_recovery = episode
                     self.death_waiting = True
                     self.continuation_needed = True
+                    self.synchronize_goals()
                     self.publish(death_episode=episode, game_identity=episode["scope"])
         self.recent.extend(e for e in value.get("events", []) if e.get("contextDelivery") != "archive-only" and not e.get("meta", {}).get("staleEpoch")
                            and (foreign_execution_id is None or (e.get("execution") or {}).get("id") != foreign_execution_id))
@@ -586,6 +615,14 @@ class Controller:
         if name == "goal_report" and (not self.active_goal or self.current_work() or arguments.get("outcome") not in {"reported_done", "blocked"}
                 or not isinstance(arguments.get("evidence"), str) or not 1 <= len(arguments["evidence"]) <= 1200):
             raise ValueError("goal_report_requires_active_goal_no_pending_actions_and_evidence")
+        reported_facts = None
+        if name == "goal_report":
+            target = self.active_goal["id"]
+            reported_facts = await self.protocol("facts")
+            if not self.active_goal or self.active_goal["id"] != target or self.death_waiting:
+                result = {"protocol": PROTOCOL, "failed": True, "execution": None, "dispatched": False,
+                          "text": "Fresh body facts invalidated the reported stage. No goal was completed; reassess against current intent and original receipts."}
+                return result, await self.archive_receipt(request_id, name, result)
         documentation = None
         if name == "mc_tool_help":
             # This is a local schema lookup. A guessed field/index has not sent
@@ -607,7 +644,7 @@ class Controller:
         self.persist(inflight_request=request_id, uncertain=True)
         if name == "goal_report":
             report = {**arguments, "verified": False, "source": "planner_report",
-                      "observed_facts": await self.protocol("facts"), "original_receipts": "receipts.jsonl"}
+                      "observed_facts": reported_facts, "original_receipts": "receipts.jsonl"}
             finished_goal = self.active_goal["id"]
             self.commands.report_goal(finished_goal, report)
             self.active_goal = self.commands.resume_goal()
@@ -671,6 +708,13 @@ class Controller:
             self.commands.stop_queued()
             self.commands.finish(command["id"], {"stop_requested": True, "disconnect_confirmed": False})
             return True
+        if command["kind"] in {"goal", "feedback"} and command["payload"].get("origin") == "host_review":
+            # Recheck at actual mailbox admission, not just host acceptance.
+            await self.protocol("facts")
+            if inapplicable_reason(command["payload"], self.stage_baseline()):
+                self.commands.retire_host_admission(command["id"])
+                self.synchronize_goals()
+                return True
         if command["kind"] == "feedback":
             if self.decide is None:
                 self.commands.finish(command["id"], {"failed": True, "reason": "planner_unavailable"})
@@ -923,15 +967,17 @@ class Controller:
                 if self.death_waiting:
                     self.continuation_needed = True
                     return
-                state = focus_state(goal, facts, self.pending)
+                planning_goal = self.goal_prompt(goal)
+                state = focus_state(planning_goal, facts, self.pending)
                 if round_index == 0:
                     focus = await self.fast_policy.choose(state)
                     if focus["source"] != "rules":
                         fresh = await self.protocol("facts")
                         if fact_fingerprint(fresh) != fact_fingerprint(facts):
-                            focus = {"source": "rules", "choice": rule_focus(focus_state(goal, fresh, self.pending)),
+                            focus = {"source": "rules", "choice": rule_focus(focus_state(self.goal_prompt(goal), fresh, self.pending)),
                                      "reason": "state_changed", "advisory_only": True}
                         facts = fresh
+                        planning_goal = self.goal_prompt(goal)
                     self.publish(fast_focus=focus)
                 else:
                     focus = {"source": "rules", "choice": rule_focus(state), "advisory_only": True}
@@ -947,7 +993,7 @@ class Controller:
                 host_context = self.host_context_provider(self.commands.intent_revision() if self.commands else 0)
                 self.publish(host_context=host_context_metadata(host_context))
                 try:
-                    messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
+                    messages, budget = assemble(prefix, tools, planning_goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
@@ -955,7 +1001,7 @@ class Controller:
                     if not reserve:
                         raise
                     reserve = 0
-                    messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
+                    messages, budget = assemble(prefix, tools, planning_goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
@@ -1064,7 +1110,11 @@ class Controller:
                 self.turn = None
 
     def goal_prompt(self, standing_goal):
+        self.synchronize_goals()
         text = "Standing goal: " + standing_goal
+        if self.historical_goal:
+            text += "\nHistorical host proposal (requires fresh reassessment, not current intent): " + self.historical_goal["goal"]
+            text += "\nUse current body facts and native receipts to choose useful local work under the user and standing goals. A host review, speech or lesson is not required before acting. Earlier coordinates are historical; only fresh explicit reassessment can restore this proposal as a stage."
         if not self.active_goal:
             return text + "\nContinue this goal; goal_report is unavailable without a submitted goal."
         active = self.active_goal
@@ -1121,7 +1171,7 @@ class Controller:
                 lease_ms = self.settings.java_client["leaseMs"]
                 json_content(await self.bridge.call("mc_control", {"action": "claim", "ttlMs": lease_ms}))
                 self.body_lease_due = time.monotonic() + lease_ms / 2000
-            self.publish(phase="running", game_connected=True, autonomy_running=self.decide is not None, current_goal=self.active_goal)
+            self.publish(phase="running", game_connected=True, autonomy_running=self.decide is not None, current_goal=None)
             prefix = text_content(await self.bridge.resource("mc://environment"))
             tools = model_tools(self.bridge.tools)
             wake, urgent = True, False
@@ -1162,8 +1212,7 @@ class Controller:
                         and self.death_recovery is None
                         and (elapsed >= self.settings.min_decision_seconds or self.continuation_ready)
                         and time.monotonic() >= self.planner_retry_at):
-                    current_goal = self.goal_prompt(goal)
-                    await self.turn_once(current_goal, prefix, tools)
+                    await self.turn_once(goal, prefix, tools)
                     self.count += 1
                     self.last_decision = time.monotonic()
                     wake, urgent = self.preempted or self.deferred_wake or self.continuation_needed, self.preempted

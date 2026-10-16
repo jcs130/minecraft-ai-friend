@@ -663,8 +663,11 @@ def test_legacy_stage_keeps_standing_goal_without_claiming_user_priority(framewo
 
 @pytest.mark.parametrize("origin", ["user", "host_review", "unknown"])
 def test_goal_prompt_distinguishes_user_and_model_stage(framework_module, tmp_path, origin):
+    from test_death_memory import facts
     _, _, controller = setup(framework_module, tmp_path, None)
-    controller.active_goal = {"id": "stage", "goal": "find food", "origin": origin}
+    controller.observe_game_facts(facts())
+    controller.active_goal = {"id": "stage", "goal": "find food", "origin": origin, "mode": "insert",
+                              **({"stage_baseline": controller.stage_baseline()} if origin == "host_review" else {})}
     controller.feedback_pending = True
     prompt = controller.goal_prompt("survive")
     assert ("Current user feedback takes priority" in prompt) == (origin == "user")
@@ -675,12 +678,15 @@ def test_goal_prompt_distinguishes_user_and_model_stage(framework_module, tmp_pa
 def test_host_stage_prompt_keeps_explicit_user_parent_goal(framework_module, tmp_path):
     import uuid
     from agent_mc_autonomy.mailbox import Mailbox
+    from test_death_memory import facts
     _, _, controller = setup(framework_module, tmp_path, None)
+    controller.observe_game_facts(facts())
     box = Mailbox(tmp_path)
     user, stage = str(uuid.uuid4()), str(uuid.uuid4())
     box.submit_user_intent("feedback", {"goal": "Find food, keep current shelter", "mode": "insert"}, user)
     box.activate_feedback(box.claim())
-    box.submit("feedback", {"goal": "inspect berry bushes", "mode": "insert", "origin": "host_review", "parent_id": user}, stage)
+    box.submit("feedback", {"goal": "inspect berry bushes", "mode": "insert", "origin": "host_review", "parent_id": user,
+                            "stage_baseline": controller.stage_baseline()}, stage)
     box.activate_feedback(box.claim())
     controller.commands, controller.active_goal = box, box.active_goal()
     controller.feedback_pending = True

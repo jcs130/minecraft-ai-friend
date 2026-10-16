@@ -77,7 +77,9 @@ def test_only_an_actual_goal_transition_readies_the_next_stage(
     reports = []
     controller.commands = SimpleNamespace(
         report_goal=lambda goal_id, report: reports.append((goal_id, report)),
-        resume_goal=lambda: {"id": "parent", "goal": "survive"})
+        resume_goal=lambda: {"id": "parent", "goal": "survive"},
+        reassess_host_stages=lambda _: False, active_goal=lambda: controller.active_goal,
+        historical_goal=lambda _: None)
     controller.active_goal = {"id": "child", "goal": "gather wood"} if active else None
     result, _ = run_async(controller.dispatch("goal_report", {
         "outcome": "reported_done", "evidence": "Original inventory and terminal receipt"}, "report-request"))
