@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { publicAgentReader } from './viewer-public.mjs';
 
 const require = createRequire(resolve(new URL(import.meta.url).searchParams.get('package'), 'package.json'));
-const { Bridge } = await import(pathToFileURL(require.resolve('agent-mc-world/extension')).href);
+const { Bridge, bindNativeGuiPresentation } = await import(pathToFileURL(require.resolve('agent-mc-world/extension')).href);
 const { TacticalMinecraftWorld } = await import(pathToFileURL(require.resolve('agent-mc-world/tactics')).href);
 const { simplify } = require('prismarine-nbt');
 
@@ -54,6 +54,7 @@ export function createEngine(options) {
   const close = () => {
     clearInterval(timer); timer = null;
     const previous = attached; attached = null;
+    previous?.revokeGui?.();
     const previousStream = stream; stream = null;
     try { previousStream?.close(); } catch { warn('Optional viewer stream close failed'); }
     const cleanup = async () => {
@@ -102,14 +103,35 @@ export function createEngine(options) {
         // Reconnects must release the old listener before binding this same body's
         // next connection. Never open a second Minecraft account for rendering.
         const oldClose = close();
-        stream = streamFactory(bot, prepared.registrySha256, options.cfg.version);
-        const view = prepared.attach({ bot, nativeStream: stream, simplifyNBT: simplify,
-          expectedUsername: options.cfg.username, getAgentStatus: publicAgentReader(cfg.agentStateFile, cfg.session, options.cfg.username),
-          getPresentationState: () => presentation(bot), logger: { error() {} } });
-        const attachment = attached = { view, listening: null };
+        let view;
+        try {
+          stream = streamFactory(bot, prepared.registrySha256, options.cfg.version);
+          view = prepared.attach({ bot, nativeStream: stream, simplifyNBT: simplify,
+            expectedUsername: options.cfg.username, getAgentStatus: publicAgentReader(cfg.agentStateFile, cfg.session, options.cfg.username),
+            getPresentationState: () => presentation(bot), logger: { error() {} } });
+        } catch {
+          record({ available: false, reason: 'VIEWER_ATTACH_FAILED', url: null });
+          warn('Optional viewer attachment unavailable; game execution continues');
+          void close(); return;
+        }
+        const attachment = attached = { view, listening: null, revokeGui: null };
+        let admission = null;
         const publish = () => {
           if (attached !== attachment || stopped) return;
+          admission = null;
           const current = view.status();
+          const identity = current.identity, player = current.selfPlayer;
+          const uuid = typeof bot._client.uuid === 'string' ? bot._client.uuid.toLowerCase() : null;
+          const epoch = current.viewer?.epoch;
+          if (uuid && player?.uuid === uuid && player?.name === options.cfg.username
+            && player?.entityId === bot.entity?.id && identity?.confirmed === true
+            && identity.playerUuid?.toLowerCase() === uuid && identity.epoch === epoch
+            && Number.isSafeInteger(epoch) && current.connection?.ended === false
+            && current.viewer.available === true && current.viewer.state === 'snapshot'
+            && current.presentation?.available === true && current.presentation.playerUuid === uuid
+            && current.presentation.nativeState?.available === true) {
+            admission = { epoch, uuid, entity: bot.entity, entityId: bot.entity.id, client: bot._client, expires: Date.now() + 1500 };
+          }
           const connected = bot.version === options.cfg.version && !!bot.entity && !!bot._client.uuid;
           record({ available: connected && current.viewer.available && !!view.url, url: view.url ? view.url + '3dview/' : null,
             reason: current.viewer.reason, player: current.selfPlayer ?? null, status: current,
@@ -121,9 +143,29 @@ export function createEngine(options) {
         });
         void attachment.listening.then(() => {
           if (attached !== attachment || stopped) return;
+          attachment.revokeGui = bindNativeGuiPresentation(bot, () => {
+            if (attached !== attachment || stopped) return null;
+            // status() serializes entities/inventory and reads agent state. Reuse
+            // the existing 1s publication; pacing checks only current cheap state.
+            const world = view.world, epoch = world?.epoch, entity = bot.entity;
+            const uuid = typeof bot._client.uuid === 'string' ? bot._client.uuid.toLowerCase() : null;
+            if (!uuid || !Number.isSafeInteger(epoch)) return null;
+            return { epoch, playerUuid: uuid, ready: !!(admission && Date.now() < admission.expires
+              && admission.epoch === epoch && admission.uuid === uuid && admission.entity === entity
+              && admission.client === bot._client && bot.version === options.cfg.version
+              && (bot.username || bot._client.username) === options.cfg.username
+              && entity?.isValid !== false && entity?.id === admission.entityId && Number.isSafeInteger(entity?.id)
+              && (!entity.username || entity.username === options.cfg.username)
+              && (!entity.uuid || (typeof entity.uuid === 'string' && entity.uuid.toLowerCase() === uuid))
+              && [entity?.position?.x, entity?.position?.y, entity?.position?.z].every(Number.isFinite)
+              && Array.isArray(bot.inventory?.slots) && view.server?.listening === true
+              && !world.error && world.dimension && world.pose && view.activeViewers?.() > 0) };
+          });
           publish(); timer = setInterval(publish, 1000); timer.unref();
         }).catch(() => {
-          if (attached === attachment && !stopped) record({ available: false, reason: 'VIEWER_LISTEN_FAILED', url: null });
+          if (attached === attachment && !stopped) {
+            record({ available: false, reason: 'VIEWER_LISTEN_FAILED', url: null }); void close();
+          }
         });
         bot.once('end', () => {
           if (attached === attachment && !stopped) { record({ available: false, reason: 'GAME_DISCONNECTED', url: null }); void close(); }

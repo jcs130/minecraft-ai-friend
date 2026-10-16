@@ -470,7 +470,7 @@ async function stowIntoOne(
   }
   const menu = selectionMenuTitle(chest.title);
   if (menu) {
-    chest.close();
+    show.closeWindow(chest as never, () => chest.close());
     rememberNonStorageMenu(bot, target);
     ctx.diag?.write({ lane: 'skill', event: 'stow-menu-skip', taskId: ctx.taskId,
       msg: `${where}打开的是${menu}，跳过并寻找普通箱子`, data: { at: target, menu } });
@@ -537,7 +537,7 @@ async function stowIntoOne(
     }
     await show.beat('close');
   } finally {
-    chest.close();
+    show.closeWindow(chest as never, () => chest.close());
   }
 
   // close() 里的 copyInventory() 才把窗口那本账灌回 bot.inventory,这时才对得上。
@@ -619,7 +619,7 @@ export async function skillStow(
   if (found.length === 0) throw noContainerNearby(bot, ctx);
   const pred = itemPredOf(bot, item, pick);
   const want = Math.min(count, invCount(bot, pred));
-  const show = new ShowPacer(ctx.showTempo?.() ?? null);
+  const show = new ShowPacer(() => ctx.showTempo?.() ?? null, { bot, ctx });
   const ordered = call.at === undefined ? orderForStow(found, ctx, bot, item) : found;
   const lines: Array<{ ok: boolean; text: string }> = [];
   const opened: Cell[] = [];
@@ -908,7 +908,7 @@ export async function takeFromFurnace(
   ctx: SkillContext,
 ): Promise<string> {
   const where = `(${cell.x}, ${cell.y}, ${cell.z}) 的${zhName(block.name)}`;
-  const show = new ShowPacer(ctx.showTempo?.() ?? null);
+  const show = new ShowPacer(() => ctx.showTempo?.() ?? null, { bot, ctx });
   await show.openGap();
   let furnace: Awaited<ReturnType<Bot['openFurnace']>>;
   try {
@@ -969,7 +969,7 @@ export async function takeFromFurnace(
     );
     await show.beat('close');
   } finally {
-    furnace.close();
+    show.closeWindow(furnace as never, () => furnace.close());
   }
   ctx.diag?.write({
     lane: 'skill', event: parts.length === 0 ? 'take-none' : 'take-done', taskId: ctx.taskId,
@@ -1006,7 +1006,7 @@ export async function takeFromChestAt(
   ctx: SkillContext,
 ): Promise<string> {
   const where = `(${cell.x}, ${cell.y}, ${cell.z}) 的${zhName(block.name)}`;
-  const show = new ShowPacer(ctx.showTempo?.() ?? null);
+  const show = new ShowPacer(() => ctx.showTempo?.() ?? null, { bot, ctx });
   await show.openGap();
   let chest: Awaited<ReturnType<Bot['openContainer']>>;
   try {
@@ -1050,7 +1050,7 @@ export async function takeFromChestAt(
     snap = rememberChest(ctx, bot, cell, chest);
     await show.beat('close');
   } finally {
-    chest.close();
+    show.closeWindow(chest as never, () => chest.close());
   }
   ctx.diag?.write({
     lane: 'skill', event: took === 0 ? 'take-none' : 'take-done', taskId: ctx.taskId,
@@ -1280,7 +1280,7 @@ export async function skillTake(bot: Bot, call: Extract<SkillCall, { skill: 'tak
   /** 拿不出来是因为包满了:这一条决定结论句的主语,不能让"箱子里没取到"顶上去 */
   let noRoom = false;
   // 巡回取最多开 3 口箱:一单共享一份节拍预算,不按箱翻倍
-  const show = new ShowPacer(ctx.showTempo?.() ?? null);
+  const show = new ShowPacer(() => ctx.showTempo?.() ?? null, { bot, ctx });
   for (const target of ordered.slice(0, AUTO_CONTAINER_OPEN_LIMIT)) {
     if (got >= count) break;
     checkAbort(ctx);
@@ -1300,7 +1300,7 @@ export async function skillTake(bot: Bot, call: Extract<SkillCall, { skill: 'tak
     }
     const menu = selectionMenuTitle(chest.title);
     if (menu) {
-      chest.close();
+      show.closeWindow(chest as never, () => chest.close());
       rememberNonStorageMenu(bot, target);
       notes.push(`${at} 打开的是${menu}选择菜单`);
       continue;
@@ -1354,7 +1354,7 @@ export async function skillTake(bot: Bot, call: Extract<SkillCall, { skill: 'tak
       snap = target.entity ? containerStacks(chest, bot.registry as never) : rememberChest(ctx, bot, target, chest);
       await show.beat('close');
     } finally {
-      chest.close();
+      show.closeWindow(chest as never, () => chest.close());
     }
 
     if (empty) {
@@ -1483,7 +1483,7 @@ export async function skillSmelt(
   // 用的是哪一座、包里还剩几个,由工作站那一步自己报;自备的不是路上的耗材
   const station = `${at.note};`;
   const atLog = { x: at.x, y: at.y, z: at.z, name: at.name };
-  const show = new ShowPacer(ctx.showTempo?.() ?? null);
+  const show = new ShowPacer(() => ctx.showTempo?.() ?? null, { bot, ctx });
   await show.openGap();
   let furnace: Awaited<ReturnType<Bot['openFurnace']>>;
   try {
@@ -1580,7 +1580,7 @@ export async function skillSmelt(
       loaded = record();
     }
   } finally {
-    furnace.close();
+    show.closeWindow(furnace as never, () => furnace.close());
   }
   const perS = smeltPerItemMs(at.name) / 1000;
   const slot = (s: ItemStack | null): string => s ? `${zhName(s.name)}×${s.count}` : '空';
@@ -1852,7 +1852,7 @@ export async function skillBrew(
   }
   const cell = { x: at.x, y: at.y, z: at.z };
   const where = `酿造台 ${cellText(cell)}`;
-  const show = new ShowPacer(ctx.showTempo?.() ?? null);
+  const show = new ShowPacer(() => ctx.showTempo?.() ?? null, { bot, ctx });
   await show.openGap();
   let win: GenericWindow;
   try {
@@ -1916,7 +1916,7 @@ export async function skillBrew(
       brewing ? now + BREW_ROUND_MS : null,
     );
     stand = brewStandText(bot, win);
-    win.close();
+    show.closeWindow(win as never, () => win.close());
   }
   ctx.diag?.write({
     lane: 'craft', event: brewing ? 'brew-start' : 'brew-idle', taskId: ctx.taskId,
@@ -1944,7 +1944,7 @@ export async function takeFromBrewingStand(
   ctx: SkillContext,
 ): Promise<string> {
   const where = `${cellText(cell)} 的酿造台`;
-  const show = new ShowPacer(ctx.showTempo?.() ?? null);
+  const show = new ShowPacer(() => ctx.showTempo?.() ?? null, { bot, ctx });
   await show.openGap();
   let win: GenericWindow;
   try {
@@ -1981,7 +1981,7 @@ export async function takeFromBrewingStand(
     };
     ctx.chests?.rememberFurnace(dimensionOf(bot), cell, 'brewing_stand', state, Date.now(), null);
   } finally {
-    win.close();
+    show.closeWindow(win as never, () => win.close());
   }
   if (took.length === 0) {
     throw new SkillBlocked(`${where}里没有取到东西${leftBehind ? `(${leftBehind})` : '(五个槽都空着)'}`);

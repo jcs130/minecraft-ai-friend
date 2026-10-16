@@ -20,7 +20,7 @@ import { blockStateItem } from './blueprint-registry.ts';
 import { setNameRegistry, zhName } from './names.ts';
 import { PLACE_MISS_TTL_MS } from './pathfinder-perf.ts';
 import { installPlacementMissState } from './placement-miss-state.ts';
-import { ShowPacer, type ShowTempo } from './show.ts';
+import { ShowPacer, currentShowPacer, withShowPacer, type ShowTempo } from './show.ts';
 import { dropOwnedGoal } from './executor.ts';
 import { SkillBlocked } from './skill-context.ts';
 import { installInventoryWindowSyncGuard } from './inventory-window-sync.ts';
@@ -1230,73 +1230,87 @@ function installConfirmedCraft(
   showTempo?: () => ShowTempo | null,
 ): void {
   bot.craft = async (recipe, count, craftingTable): Promise<void> => {
-    assertInventoryClicksReady(bot);
-    const r = recipe as unknown as CraftRecipe;
-    const times = Math.max(1, Number(count ?? 1));
-    if (r.requiresTable && !craftingTable) {
-      throw new Error('Recipe requires craftingTable, but one was not supplied');
-    }
-    // 开始前关闭遗留窗口；clickWindow 始终以 bot.currentWindow 为目标。
-    if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
-    setTracing(1);
-    let opened: WindowLike | null = null;
-    // 演出节拍:只有工作台窗口在摄像机上看得见(窗口 0 的徒手合成协议上没有开窗,
-    // 白等没人看);预算由这一整次 bot.craft 共享,times 大时后面的轮次自动恢复瞬时
-    const show = new ShowPacer(r.requiresTable ? showTempo?.() ?? null : null);
-    const startedAt = Date.now();
-    let failure: unknown;
-    try {
-      for (let i = 0; i < times; i++) {
-        let window: WindowLike;
-        if (r.requiresTable) {
-          const firstOpen = opened === null;
-          // 上一次关窗离现在太近就先空开:同步屏那边看是一次闪屏(见 show.ts openGap)
-          if (firstOpen) await show.openGap();
-          opened ??= await openCraftingTable(bot, craftingTable as never);
-          window = opened;
-          if (firstOpen) await show.beat('open');
-        } else {
-          window = bot.inventory as unknown as WindowLike;
-        }
-        await craftOnce(bot, window, r, trace, show);
+    const inherited = currentShowPacer(bot);
+    const tempo = () => { const t = showTempo?.() ?? null; return recipe.requiresTable || t?.inventory ? t : null; };
+    const show = inherited ?? new ShowPacer(tempo, { bot, ctx: { aborted: () => false, diag } });
+    return withShowPacer(bot, show, async () => {
+      show.assertActive();
+      assertInventoryClicksReady(bot);
+      const r = recipe as unknown as CraftRecipe;
+      const times = Math.max(1, Number(count ?? 1));
+      if (r.requiresTable && !craftingTable) {
+        throw new Error('Recipe requires craftingTable, but one was not supplied');
       }
-      diag?.write({
-        lane: 'craft', event: 'confirmed', durMs: Date.now() - startedAt,
-        msg: `按服务端给的产物做完了 ${times} 次` +
-          (r.result.id === null ? '(她自己摆的格子)' : `(物品 #${r.result.id})`),
-        data: { item: r.result.id, times, table: r.requiresTable },
-      });
-    } catch (error) {
-      failure = error;
-      throw error;
-    } finally {
-      // 工作台窗口一关,格子里的材料由服务端退回背包;窗口 0 关不掉,只能自己拿回来,
-      // 否则失败时摆进去的材料会一直不在背包清单里。腾空失败不能盖掉合成本身的错。
+      // 开始前关闭遗留窗口；clickWindow 始终以 bot.currentWindow 为目标。
+      if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
+      setTracing(1);
+      let opened: WindowLike | null = null;
+      if (!inherited) show.planBeats({ open: 1, close: 1, result: times,
+        click: gridPlan({ type: r.requiresTable ? 'minecraft:crafting' : 'minecraft:inventory' } as WindowLike, r).size * times });
+      const startedAt = Date.now();
+      let failure: unknown;
       try {
-        if (inventoryClickState(bot).phase !== 'ready') {
-          const suffix = '材料和游标保留在当前窗口，等待服务端完整同步后再整理';
-          if (failure instanceof Error) failure.message += `；${suffix}`;
-          else assertInventoryClicksReady(bot);
-        } else if (opened) {
-          if (bot.currentWindow !== opened as unknown) throw new Error('合成窗口已被替换，原窗口材料未整理');
-          await stashCursor(bot, opened, null);
-          await show.beat('close');
-          bot.closeWindow(opened as never);
-        } else {
-          await clearGrid(bot, bot.inventory as unknown as WindowLike, trace);
-        }
-      } catch (cleanupError) {
-        if (failure instanceof Error && cleanupError instanceof Error) {
-          if (isInventoryClickError(cleanupError)) {
-            cleanupError.message = `${failure.message}；归还材料未完成：${cleanupError.message}`;
-            throw cleanupError;
+        for (let i = 0; i < times; i++) {
+          let window: WindowLike;
+          if (r.requiresTable) {
+            const firstOpen = opened === null;
+            // 上一次关窗离现在太近就先空开:同步屏那边看是一次闪屏(见 show.ts openGap)
+            if (firstOpen) await show.openGap();
+            opened ??= await openCraftingTable(bot, craftingTable as never);
+            window = opened;
+            show.bindWindow(window as never);
+            if (firstOpen) await show.beat('open');
+          } else {
+            window = bot.inventory as unknown as WindowLike;
+            show.bindWindow(window as never);
+            if (i === 0) { await show.openGap(); await show.beat('open'); }
           }
-          failure.message += `；归还材料未完成：${cleanupError.message}`;
-        } else throw cleanupError;
+          show.assertActive();
+          await craftOnce(bot, window, r, trace, show);
+        }
+        diag?.write({
+          lane: 'craft', event: 'confirmed', durMs: Date.now() - startedAt,
+          msg: `按服务端给的产物做完了 ${times} 次` +
+            (r.result.id === null ? '(她自己摆的格子)' : `(物品 #${r.result.id})`),
+          data: { item: r.result.id, times, table: r.requiresTable },
+        });
+      } catch (error) {
+        failure = error;
+        throw error;
       } finally {
-        setTracing(-1);
+        // 工作台窗口一关,格子里的材料由服务端退回背包;窗口 0 关不掉,只能自己拿回来,
+        // 否则失败时摆进去的材料会一直不在背包清单里。腾空失败不能盖掉合成本身的错。
+        try {
+          show.assertActive();
+          if (inventoryClickState(bot).phase !== 'ready') {
+            const suffix = '材料和游标保留在当前窗口，等待服务端完整同步后再整理';
+            if (failure instanceof Error) failure.message += `；${suffix}`;
+            else assertInventoryClicksReady(bot);
+          } else if (opened) {
+            if (bot.currentWindow !== opened as unknown) throw new Error('合成窗口已被替换，原窗口材料未整理');
+            await stashCursor(bot, opened, null);
+            await show.beat('close');
+            show.assertActive();
+            bot.closeWindow(opened as never);
+            show.releaseWindow();
+          } else {
+            await clearGrid(bot, bot.inventory as unknown as WindowLike, trace);
+            await show.beat('close');
+            show.releaseWindow();
+          }
+        } catch (cleanupError) {
+          if (failure instanceof Error && cleanupError instanceof Error) {
+            if (isInventoryClickError(cleanupError)) {
+              cleanupError.message = `${failure.message}；归还材料未完成：${cleanupError.message}`;
+              throw cleanupError;
+            }
+            failure.message += `；归还材料未完成：${cleanupError.message}`;
+          } else throw cleanupError;
+        } finally {
+          setTracing(-1);
+        }
       }
-    }
+    });
   };
 }
 
@@ -1384,7 +1398,7 @@ async function craftOnce(
     await stashCursor(bot, window, from, id); // 余下的放回原处,进下一种材料时光标是空的
   }
 
-  const result = await waitForResult(window, recipe.result.id, RESULT_WAIT_MS);
+  const result = await waitForResult(window, recipe.result.id, RESULT_WAIT_MS, show);
   trace('result-slot', result
     ? `产出槽出现了物品 #${result.type}×${result.count}(服务端给的)`
     : `等了 ${RESULT_WAIT_MS}ms 产出槽还是空的`, { want: recipe.result.id, got: result?.type ?? null });
@@ -1425,7 +1439,10 @@ export async function clickCraftWindow(bot: Bot, slot: number, mouseButton: numb
 }
 
 const click = async (bot: Bot, slot: number, button: number, mode: number, window: WindowLike): Promise<void> => {
-  await clickInventoryConfirmed(bot, slot, button, mode, window as unknown as NonNullable<Bot['currentWindow']>);
+  const show = currentShowPacer(bot);
+  show?.assertActive();
+  await clickInventoryConfirmed(bot, slot, button, mode, window as unknown as NonNullable<Bot['currentWindow']>,
+    () => show?.assertActive());
 };
 
 /**
@@ -1490,10 +1507,11 @@ async function clearGrid(
 
 /** `itemId === null` = 收任意产物:她自己摆的格子,产出什么由服务端说了算 */
 async function waitForResult(
-  window: WindowLike, itemId: number | null, ms: number,
+  window: WindowLike, itemId: number | null, ms: number, show?: ShowPacer,
 ): Promise<WindowLike['slots'][number]> {
   const deadline = Date.now() + ms;
   for (;;) {
+    show?.assertActive();
     const item = window.slots[0];
     if (item && (itemId === null || item.type === itemId)) return item;
     if (Date.now() >= deadline) return null;

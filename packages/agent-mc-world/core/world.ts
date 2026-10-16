@@ -113,7 +113,7 @@ import {
   parsePolicy, policyNoteText, renderFightRollback, renderPolicy, renderPolicyChange, renderPolicyEnv,
   PolicyBook, POLICY_DOC, POLICY_SCHEMA, type TravelPrefer,
 } from './policy.ts';
-import { markShowWindowClosed, type ShowTempo } from './show.ts';
+import { markShowWindowClosed, nativeGuiPresented, type ShowTempo } from './show.ts';
 import { MinecraftLog, type MinecraftLogEntry } from './log.ts';
 import { observeInitialScene } from './initial-scene.ts';
 import {
@@ -6893,8 +6893,10 @@ export class MinecraftWorld implements World {
 
   /** 容器 GUI 演出节拍:摄像机窗口在、演出开着才有;否则 null(协议层照旧瞬时) */
   protected showTempo(): ShowTempo | null {
-    if (!this.cfg.client.syncGui || this.client.windowHint() === null) return null;
-    return { ...this.cfg.show };
+    if (!this.cfg.client.syncGui) return null;
+    const inventory = nativeGuiPresented(this.bridge?.bot);
+    if (!inventory && this.client.windowHint() === null) return null;
+    return { ...this.cfg.show, inventory };
   }
 
   /** 队列清空后的窗口卫生:忘关的窗口服务端一直记着开,同步屏就一直糊在画面上 */
@@ -7222,7 +7224,7 @@ export class MinecraftWorld implements World {
     });
     bot.on('windowClose', () => {
       // 关窗打点喂给演出节拍:下一次开窗要跟它隔开 reopenGapMs,否则同步屏就是闪一下
-      markShowWindowClosed();
+      markShowWindowClosed(bot);
       this.scheduleGuiKick();
     });
 

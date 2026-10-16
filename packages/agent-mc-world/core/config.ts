@@ -164,12 +164,12 @@ export const MINECRAFT_DEFAULTS = {
   },
   /** 演出节拍:同步 GUI 开着时把容器操作放慢到人手速度;预算封顶防慢动作长镜头 */
   show: {
-    clickMs: 200,
-    dwellOpenMs: 400,
-    dwellResultMs: 600,
-    dwellCloseMs: 300,
-    reopenGapMs: 600,
-    budgetMs: 6000,
+    clickMs: 400,
+    dwellOpenMs: 800,
+    dwellResultMs: 1200,
+    dwellCloseMs: 600,
+    reopenGapMs: 900,
+    budgetMs: 12000,
   },
   /**
    * 玩家客户端:以普通玩家身份再开一份客户端进同一个服务器,人跟她一起玩。
@@ -263,7 +263,7 @@ export interface MinecraftConfigSection {
     autoJoin: boolean; autoSpectate: boolean; resyncSec: number; restartMax: number;
     noPauseOnLostFocus: boolean; syncGui: boolean;
   };
-  /** 容器操作的 GUI 演出节拍(摄像机开着且 syncGui 开着时生效) */
+  /** GUI 演出节拍(当前原生观众/摄像机与 syncGui 同时就绪时生效) */
   show: {
     clickMs: number; dwellOpenMs: number; dwellResultMs: number;
     dwellCloseMs: number; budgetMs: number; reopenGapMs: number;
@@ -510,7 +510,7 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.show.clickMs': {
         type: 'integer', title: '演出·逐格间隔', minimum: 0, maximum: 2000, 'x-suffix': 'ms', 'x-hot': true,
         description: 'GUI 演出开着时,逐格摆料/逐栈存取之间停这么久。0=瞬时。'
-          + '摄像机没开或「GUI 演出」关着时,整套节拍自动归零。',
+          + '没有当前原生观众/摄像机或「GUI 演出」关着时,整套节拍自动归零。',
       },
       'worlds.minecraft.show.dwellOpenMs': {
         type: 'integer', title: '演出·开窗停顿', minimum: 0, maximum: 3000, 'x-suffix': 'ms', 'x-hot': true,
@@ -529,7 +529,7 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       },
       'worlds.minecraft.show.budgetMs': {
         type: 'integer', title: '演出·单次预算', minimum: 0, maximum: 30000, 'x-suffix': 'ms', 'x-hot': true,
-        description: '一单操作的节拍总预算,超了剩余步骤恢复瞬时——整箱掏空不会变成慢动作长镜头。',
+        description: '一单操作的节拍总预算；多轮合成按全部步骤均摊，预算不足会记录节拍缩短；未知长度的存取耗尽后减少等待。',
       },
     },
   },
@@ -610,8 +610,8 @@ export const MINECRAFT_CLIENT_CONFIG_GROUP: ConfigGroup = {
         type: 'boolean', title: 'GUI 演出', 'x-hot': false,
         description: 'bot 开箱子/合成/熔炉时,把那张界面同步到摄像机画面上'
           + '(SpectatorPlus 的 Open Synced Screens),配合「节奏与反射」里的演出节拍,'
-          + '观众能看到逐格摆料、产物出现、收回的全过程。徒手 2x2 合成协议上没有窗口,'
-          + '演不了。客户端重启生效。',
+            + '原生 Web 观众就绪时也启用节拍，包括背包里的 2x2 合成；Java 摄像机不展示 2x2。'
+            + '客户端重启生效。',
       },
     },
   },
