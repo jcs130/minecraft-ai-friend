@@ -26,6 +26,8 @@ Read actual tool availability before using quick tactics. The generic client cur
 
 For a real choice between routes, survival actions, skills, methods or a longer goal, read [focused decisions](references/choices.md). `mc_choose` uses an optional host-owned service only when called; `mc_life` offers progressively read, editable life goals. Neither changes the active task automatically.
 
+For crossing a river or travelling over water, read [water travel](references/water-travel.md) on demand. Compare an existing boat, crafting one, a bridge, swimming and a land detour using current materials, water geometry and a usable exit; the guide does not choose or start a route.
+
 Report actual progress and limits. Pathfinding failure alone does not prove a cliff or an unreachable destination. Online players are not necessarily nearby or teammates. Preserve chat provenance; unverified speech is not personal success. Model latency/token/cache statistics must come from host instrumentation, not guesses.
 
 Use `mc_protocol` with protocol `agent-mc/v1` to begin/end actual host decision turns and acknowledge tool barriers. RPC completion never ends a turn. Preserve execution IDs, terminal state, triggers and original evidence. Cancel waits explicitly; an already accepted task must be stopped through its task or script controls. Keep environment prefix bytes stable, replace current facts by key at the request tail, and budget tool descriptions plus reserved output. Use archive queries and artifact handles to retrieve originals omitted from a bounded prompt.
