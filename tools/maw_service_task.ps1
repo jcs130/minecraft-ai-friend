@@ -4,14 +4,16 @@ param(
     [Parameter(Mandatory=$true)][string]$Python,
     [Parameter(Mandatory=$true)][string]$Config,
     [switch]$Bedrock,
-    [switch]$Fom
+    [switch]$Fom,
+    [switch]$FomBedrock
 )
 
 $ErrorActionPreference = 'Stop'
 $scriptPath = Join-Path $PSScriptRoot 'maw_service.py'
-if ($Bedrock -and $Fom) { throw 'Select one service type' }
+if (($Bedrock -and $Fom) -or ($FomBedrock -and ($Bedrock -or $Fom))) { throw 'Select one service type' }
 if ($Bedrock) { $scriptPath = Join-Path $PSScriptRoot 'maw_bedrock_service.py' }
 if ($Fom) { $scriptPath = Join-Path $PSScriptRoot 'fom_service.py' }
+if ($FomBedrock) { $scriptPath = Join-Path $PSScriptRoot 'fom_bedrock_service.py' }
 $pythonPath = (Resolve-Path -LiteralPath $Python -ErrorAction Stop).Path
 $configPath = (Resolve-Path -LiteralPath $Config -ErrorAction Stop).Path
 $pythonw = Join-Path (Split-Path -Parent $pythonPath) 'pythonw.exe'
@@ -21,6 +23,7 @@ if ($LASTEXITCODE -ne 0) { throw ('Supervisor configuration validation failed: '
 $plan = $planText | ConvertFrom-Json
 $taskName = 'MyAgentWorld.Service.' + $plan.services[0].port
 if ($Fom) { $taskName = 'MyAgentWorld.FOM.Service.' + $plan.services[0].port }
+if ($FomBedrock) { $taskName = 'MyAgentWorld.FOM.Bedrock.28988' }
 $argument = '"' + $scriptPath + '" run --config "' + $configPath + '"'
 $runCommand = '"' + $pythonw + '" ' + $argument
 $account = [Security.Principal.WindowsIdentity]::GetCurrent().Name

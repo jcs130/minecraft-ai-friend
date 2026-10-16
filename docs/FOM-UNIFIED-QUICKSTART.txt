@@ -35,7 +35,7 @@ Minescript 需要本机可用的 Python。运行一次 Python 版本命令确认
 
 范围
 完整 Java 客户端呈现原生模型、界面和法术。Mineflayer 基础翻译入口仍为家庭网 28977，使用实际 nativeId。
-本次未打通 FOM 的基岩端与旧 Web 3D；未完成全部法术、女仆自主种田、多人飞船或 16 Agent 长期压测。
+2026-10-16 已新增 FOM 基岩部分兼容入口 micro.kangqiang.site:28988（UDP，需登录 Xbox 和接受资源包），详见 FOM-MULTICLIENT-CONNECT.txt。旧 Web 3D 仍未适配；未完成全部法术、女仆自主种田、多人飞船或 16 Agent 长期压测。
 
 来源
 原作者整合包：https://modrinth.com/modpack/fom （固定 2.42，保留原作者资源和署名）

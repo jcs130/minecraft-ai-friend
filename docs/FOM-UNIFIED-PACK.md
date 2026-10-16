@@ -54,7 +54,7 @@ python -m unittest build_fom_pack_test prepare_fom_content_test fom_service_test
 
 原生玩法及生产发布验收见 [FOM 内容扩展](MY-AGENT-WORLD-FOM-CONTENT.md)。本次新实例的实际连接、目录和画面结果另见 [整包验收记录](evidence/fom-unified-pack-20261016.json)。线上服务继续由现有拥有者守护；本次没有新增后台服务。
 
-FOM 的旧 Web 3D 和基岩连接仍待适配；Mineflayer 目前仅有基础翻译，不能代替完整模组客户端执行所有玩法。全部法术、女仆自主种田、多人航空器及 16 Agent 长期负载仍未全面验收。Paper 千灯纪保持独立。
+FOM 的旧 Web 3D 仍待适配。2026-10-16 基岩部分兼容入口已上线 UDP 28988，见 [多端接入](MY-AGENT-WORLD-FOM-BEDROCK.md)；Mineflayer 和基岩兼容入口均不能代替完整模组客户端执行所有玩法。全部法术、女仆自主种田、多人航空器及 16 Agent 长期负载仍未全面验收。Paper 千灯纪保持独立。
 
 ## 更新和回退
 

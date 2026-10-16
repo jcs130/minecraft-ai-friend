@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-16",
+  "scope": "fom_bedrock_and_preserved_lan_mineflayer",
+  "baseCommit": "41162ec1cd6be6eefd488f0200523fa5315c91c6",
+  "gameServerRestarted": false,
+  "mainRunId": "526495a42e9d43df966787617ac81e65",
+  "mainPids": {
+    "java": 15948,
+    "gate": 23952
+  },
+  "bridgeRunId": "8f169acd15c24996b25fce71ae455d14",
+  "bridgePids": {
+    "compat_gate": 30088,
+    "bedrock": 27248
+  },
+  "preservedConfigAndOldPauseHashes": {
+    "E:\\MC\\servers\\fom-2.42\\ops\\service.json": "4df8d58ea89f183e35c87b672109d34349493b9890b681508465f45883cb62bc",
+    "E:\\MC\\servers\\fom-2.42\\ops\\mods.lock.json": "27df6535c20d7e7912e067c8646d097db8532c41f019bb52c1a014d0135dd128",
+    "E:\\QiandengJiSocietyLab\\bedrock\\ops\\paused.json": "e8f9882bbb5b6d85655bf2ce179760aee2effb9abfcdc415cde95b97b8946279"
+  },
+  "tests": {
+    "nodeProtocolPassed": 20,
+    "newPythonPassed": 14,
+    "existingSupervisorPythonPassed": 63,
+    "realBedrockUdpPassed": [
+      {
+        "name": "real Bedrock UDP login reaches native FOM terrain",
+        "pass": true
+      },
+      {
+        "name": "native FOM icon pack must be accepted and downloads with its announced SHA256",
+        "pass": true
+      },
+      {
+        "name": "download is the exact FOM pack rather than retired-world resources",
+        "pass": true
+      },
+      {
+        "name": "Bedrock account is isolated from Java and Agent names",
+        "pass": true
+      },
+      {
+        "name": "native mixed-login policy authorizes first guest without a fabricated password",
+        "pass": true
+      },
+      {
+        "name": "own native inventory and nearby-entity queries return through Bedrock",
+        "pass": true
+      },
+      {
+        "name": "Bedrock position comes from the native body rather than origin placeholder",
+        "pass": true
+      },
+      {
+        "name": "three actual mod item types reach the Bedrock connection",
+        "pass": true
+      },
+      {
+        "name": "native mod stack carries a real Bedrock item and server network stack identity",
+        "pass": true
+      },
+      {
+        "name": "ordinary Bedrock inventory swap gets an authoritative success",
+        "pass": true
+      },
+      {
+        "name": "native mod identity and count survive the real Bedrock inventory operation",
+        "pass": true
+      },
+      {
+        "name": "original QA guide/items remain in their original slots",
+        "pass": true
+      },
+      {
+        "name": "only temporary QA items removed; original inventory fully retained",
+        "pass": true
+      }
+    ],
+    "realBedrock75SecondsPassed": {
+      "name": "real Bedrock session survives 75 seconds with native state and inventory retained",
+      "pass": true
+    },
+    "productionMineflayerPassed": [
+      {
+        "name": "ordinary Mineflayer reaches an actual world through LAN Agent gateway",
+        "pass": true
+      },
+      {
+        "name": "server confirms the QA account is authenticated",
+        "pass": true
+      },
+      {
+        "name": "server auth response belongs to this exact QA account",
+        "pass": true
+      },
+      {
+        "name": "client position matches server native position",
+        "pass": true
+      },
+      {
+        "name": "actual terrain blocks are readable at the native spawn",
+        "pass": true
+      },
+      {
+        "name": "native inventory readback received",
+        "pass": true
+      },
+      {
+        "name": "native nearby entities readback received",
+        "pass": true
+      },
+      {
+        "name": "connection remains healthy after native read-only queries",
+        "pass": true
+      }
+    ],
+    "bridgeHealth": {
+      "release_and_actual_fom_registry": true,
+      "correct_owner": true,
+      "fresh_heartbeat": true,
+      "supervised_children_ready": true,
+      "actual_udp_pong": true,
+      "native_icon_registration": true,
+      "private_upstream": true,
+      "xbox_required_on_lan": true
+    },
+    "mainFomHealthPassed": 9,
+    "powershellParsersPassed": 2,
+    "unsignedXboxConnectionRejectedByFreshServerLog": true
+  },
+  "resources": {
+    "staticNativeIcons": 1079,
+    "namedNativeItems": 4573,
+    "packSha256": "69c93044b9568b1e81d2371db2fa3f76b69f91f00ddb6e2224574e9a2f4d56fe",
+    "packUuid": "9156e070-7005-5d17-8c78-a1b4d7a26ef3",
+    "perNamespace": {
+      "aeroengineering": 11,
+      "bellsandwhistles": 9,
+      "bits_n_bobs": 1,
+      "cmpackagecouriers": 1,
+      "create": 114,
+      "create_connected": 5,
+      "create_dragons_plus": 18,
+      "create_enchantment_industry": 6,
+      "create_radar": 5,
+      "create_submarine": 3,
+      "create_synthetic_pressure": 3,
+      "createbigcannons": 42,
+      "createcasing": 3,
+      "createdieselgenerators": 33,
+      "createfactorycontroller": 3,
+      "createoreexcavation": 8,
+      "createpropulsion": 13,
+      "destroy": 3,
+      "dragonlib": 1,
+      "farmersdelight": 152,
+      "functionalstorage": 17,
+      "irons_spellbooks": 145,
+      "minecraft": 41,
+      "petrolpark": 12,
+      "railways": 300,
+      "sophisticatedbackpacks": 65,
+      "toms_storage": 7,
+      "touhou_little_maid": 46,
+      "waystones": 12
+    }
+  },
+  "externalBedrockProviders": [
+    {
+      "url": "https://api.mcsrvstat.us/bedrock/3/micro.kangqiang.site:28988",
+      "at": "2026-10-16T12:56:40.006Z",
+      "online": false,
+      "motd": null
+    },
+    {
+      "url": "https://api.mcstatus.io/v2/status/bedrock/micro.kangqiang.site:28988",
+      "at": "2026-10-16T12:56:40.043Z",
+      "online": true,
+      "motd": "My Agent World FOM 2.42\nJava + Agent + Bedrock"
+    }
+  ],
+  "productionConfigSha256": "3fe2c951f4b0dd2b70cfafb3e8ace0a1ff23e90dc39e6baa5492972440c3e166",
+  "helperHashes": {
+    "fom_bedrock_service.py": "012211f53e57aecc62b9e016c5ded9b40ef1b886784098c84239b8b523fce2b5",
+    "fom_bedrock_health.py": "37df41771c2cdf7f4a6bdd344693222f4102094951e6be5c5c80e8f27cf9bad0",
+    "fom_bedrock_control.ps1": "cd88eab4379b9df739bd1de4a9a0e4871579184a35fd8165b65a3418e6ac4596",
+    "maw_bedrock_service.py": "df8c1e4fd05905b0a5f0a58408a207d2a37a170836aa8055e082c3d44c7aa3fc",
+    "maw_bedrock_resources.py": "7179fcd7038ff821bc8b3aeb7dda64c458e2e8d942066f19dcc1527afd9ee38f",
+    "maw_service.py": "fc0472a2d18a106edcbc9bd354a8bb17a832407fa311864f274cc1fb77144b54",
+    "maw_service_task.ps1": "5e287c79c338f53fe14c028dc496b47efeac768256694dc27b2372a231721485",
+    "fom_service.py": "95a3809cf1db0cebbd7b1a74facf9ea40c3c8b26581dfca7055b791c94311f05",
+    "mixed_auth_support.py": "a93027185e9a1959d1268637f57ad37f7d579e8b6346a656d132fe6384631af7"
+  },
+  "gatewayManifestSha256": "6ba35598212e1e897246c021e4cfd83383b8525a0632701690611eb3aa11ebac",
+  "startupName": "MyAgentWorld.FOM.Bedrock.28988",
+  "startupMethod": "HKCU Run",
+  "preLoginBootStartup": false,
+  "ownerSelfRecoveryGuaranteed": false,
+  "testAccountInventoryRestored": true,
+  "qaChildrenExitedNormally": true,
+  "qaOuterWrapperExitedNormally": false,
+  "actualPhoneTested": false,
+  "actualSignedXboxLoginTested": false,
+  "allModGameplayVerified": false,
+  "modelRequests": 0,
+  "networkRulesChanged": false,
+  "oldPaperPidsObservedUnchanged": {
+    "java": 7964,
+    "gateway": 13288
+  },
+  "retiredWorldResumed": false,
+  "priorUnknownActionsReplayed": false,
+  "limits": [
+    "partial vanilla block/entity projection",
+    "special mod GUI/renderers/vehicles not fully adapted",
+    "one external UDP checker timed out",
+    "QA first-connection Geyser-ViaProxy NPE retained",
+    "original modpack startup warnings remain"
+  ],
+  "retainedFailures": [
+    "ambiguous language-resource priority; active-release labels used",
+    "long texture paths; shortened without changing pixels",
+    "initial QA sync console and unopened inventory caused timeout",
+    "QA probe used null entity ID; corrected and fixtures reconciled",
+    "unsigned QA library did not decode prelogin disconnect; fresh server log independently verified refusal",
+    "stdlib legacy model tests lacked Pillow; rerun with build Python passed",
+    "QA outer wrapper exhausted 900 second budget; explicit owned shutdown verified"
+  ]
+}

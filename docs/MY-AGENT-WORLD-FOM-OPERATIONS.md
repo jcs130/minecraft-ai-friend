@@ -16,7 +16,7 @@
 | 客户端 | 原包 121 + 本机 Agent 可选 3 + 内容扩展 6，共 130；作者 10 个禁用文件保持 |
 | 内存 / 距离 | Java 最大 6144 MiB，视距 6、模拟距离 4、最多 8 人 |
 
-不开放 MCP、RPC 或 RCON。复用原有 Java WAN 转发及 Windows 规则，未修改路由器、未开放新端口。2026-10-15 在原 28977 端口启用 **FOM 基础 Mineflayer 兼容网关**，仅允许本机及家庭局域网的 `ag_` 账号，由同一服务守护管理；这是更新后的 FOM 映射，详见 [接入说明](MY-AGENT-WORLD-FOM-MINEFLAYER.md)。旧 35 模组服、旧 Agent 控制器、基岩 28988 和语音 28989 仍停用，不能因旧端口规则保留就视为 FOM 已支持。
+不开放 MCP、RPC 或 RCON。复用原有 Java WAN 转发及 Windows 规则，未修改路由器、未开放新端口。2026-10-15 在原 28977 端口启用 **FOM 基础 Mineflayer 兼容网关**，仅允许本机及家庭局域网的 `ag_` 账号，由同一服务守护管理；这是更新后的 FOM 映射，详见 [接入说明](MY-AGENT-WORLD-FOM-MINEFLAYER.md)。2026-10-16 新的独立 FOM 基岩桥使用原 UDP 28988，见下文；旧 35 模组服、旧 Agent 控制器、旧基岩桥和语音 28989 仍停用。
 
 ## 文件布局和日常操作
 
@@ -88,9 +88,13 @@ python tools/fom_health.py --config E:\MC\servers\fom-2.42\ops\service.json
 
 冷备：`E:\QiandengJiSocietyLab\backups\fom-takeover-20261014\unfinished-my-agent-world-cold.zip`，6,900 文件、636,603,560 字节，CRC 和每文件 SHA256 全部校验。原 35 个 JAR、受保护配置及 JSONL 历史前缀保持。
 
-回滚先正常停止新 FOM，确保 28976/28985 释放，停用新 FOM 登录启动项，再按记录恢复两条旧启动值，用旧管理入口启动旧主服/基岩桥。旧 shutdown 的维护暂停通过明确 resume 解除。旧 MawExplorer 自主暂停是另一个意图，不能随基础服务回滚解除；未知动作继续按原证据对账。
+回滚到旧栈前，先按基岩运维说明正常停止独立 FOM 基岩桥并停用它的启动项，确认 UDP 28988 释放；再正常停止新 FOM，确保 28976/28985 释放，停用新 FOM 登录启动项，再按记录恢复两条旧启动值，用旧管理入口启动旧主服/基岩桥。旧 shutdown 的维护暂停通过明确 resume 解除。旧 MawExplorer 自主暂停是另一个意图，不能随基础服务回滚解除；未知动作继续按原证据对账。
 
 旧 Paper `E:\MC\server`、宿主 QwenPaw 及其他非本次服务不在替换范围。原型 `ops/server_manager.py` 的 39171 入口已退役，请用新根目录批处理。
+
+## FOM 基岩桥（2026-10-16）
+
+独立基岩桥已上线，公网/家中 UDP 28988，共用现役 FOM 世界。配置 `ops/fom-bedrock.json`，控制脚本 `ops/bedrock-service-tools/fom_bedrock_control.ps1`；独立 owner 和 HKCU Run 启动名 `MyAgentWorld.FOM.Bedrock.28988`，支持正常停启、持久暂停、子进程退避与健康冒烟 `--society-fom-bedrock-smoke`。只更新此桥可不重启游戏服。安装范围、资源包边界、失败证据和独立回退见 [基岩运维说明](MY-AGENT-WORLD-FOM-BEDROCK.md)。原桥继续暂停，不能用原桥启动脚本替代。
 
 ## 后续兼容边界
 
@@ -98,4 +102,4 @@ FOM 当前用完整 Java 客户端原生渲染交互。远程 Agent 在自己的
 
 Mineflayer 基础 registry 翻译已在 FOM 发布，见 [基础接入](MY-AGENT-WORLD-FOM-MINEFLAYER.md)。烹饪、女仆和 Iron 法术内容已通过独立候选及正式服检查，2026-10-15 发布，见 [内容扩展](MY-AGENT-WORLD-FOM-CONTENT.md)。
 
-旧网页资源、基岩桥、Numen、千灯纪技能/公会/试炼、殖民地和距离语音未迁入当前 FOM。新内容必须按实际整包注册表与协议适配，并验证真实画面和操作。
+旧网页资源、Numen、千灯纪技能/公会/试炼、殖民地和距离语音未迁入当前 FOM。基岩现有独立的部分兼容入口，旧模型/表单/语音扩展未迁入。新内容必须按实际整包注册表与协议适配，并验证真实画面和操作。

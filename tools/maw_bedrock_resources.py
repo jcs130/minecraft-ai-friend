@@ -15,7 +15,6 @@ import re
 from pathlib import Path, PurePosixPath
 import uuid
 import zipfile
-from PIL import Image
 
 PACK = 'maw-native-icons.mcpack'
 MAPPINGS = 'maw-native-icons.json'
@@ -86,6 +85,7 @@ class Assets:
         return {**base, 'textures': {**base['textures'], **data.get('textures', {})}}
 
     def icon(self, model):
+        from PIL import Image
         textures = model['textures']
         layers = sorted(k for k in textures if k.startswith('layer') and k[5:].isdigit())
         if not layers or layers != [f'layer{i}' for i in range(len(layers))]:
@@ -122,24 +122,34 @@ class Assets:
         return buffer.getvalue(), 'native_layers_alpha_composite'
 
 
-def build(assets_root: Path, registry: Path, idmap: Path, output: Path):
+def build(assets_root: Path, registry: Path, idmap: Path, output: Path, *, identity: str | None = None, display_names: dict | None = None):
     assets = Assets(assets_root)
     rows = []
     for line in registry.read_text('utf-8').splitlines():
         key, number = line.split('\t')[:2]; rows.append((key, int(number)))
-    vanilla = {number: key for key, number in rows if key.startswith('minecraft:')}
-    mapping = json.loads(idmap.read_text('utf-8'))['items']
+    table = json.loads(idmap.read_text('utf-8'))
+    mapping = table['items']
+    native_names = {number: key for key, number in rows}
+    reverse = table.get('reverseVanillaItems')
+    vanilla = ({int(vanilla_id): native_names[int(native_id)] for vanilla_id, native_id in reverse.items()}
+               if reverse else {number: key for key, number in rows if key.startswith('minecraft:')})
+    exact_vanilla = {int(n) for n in reverse.values()} if reverse else None
     languages = {}
     for namespace in {key.split(':')[0] for key, _ in rows}:
         merged = {}
         for lang in ['en_us', 'zh_cn']:
             key = f'assets/{namespace}/lang/{lang}.json'
             if key in assets.manifest['assets']:
-                merged.update(assets.json(key))
+                try:merged.update(assets.json(key))
+                except ValueError as error:
+                    if str(error)!='ambiguous_resource_priority':raise
+                    # Conflicting language providers cannot decide resource
+                    # order. Keep exact registry identity and prefer an
+                    # independently verified active-release display label.
         languages[namespace] = merged
     catalog, definitions, entries, excluded = [], {}, {}, []
     for key, number in sorted(rows):
-        if key.startswith('minecraft:'):
+        if key.startswith('minecraft:') and (exact_vanilla is None or number in exact_vanilla):
             continue
         namespace, local = key.split(':')
         try:
@@ -151,8 +161,9 @@ def build(assets_root: Path, registry: Path, idmap: Path, output: Path):
             identifier = 'maw_native:'+namespace+'__'+local.replace('/', '__')
             icon = identifier.replace(':', '.')
             png_path = 'textures/items/'+namespace+'/'+local+'.png'
+            if len(png_path)>=80:png_path='textures/items/long/'+str(number)+'.png'
             entries[png_path] = raw
-            title = (languages[namespace].get('item.'+namespace+'.'+local)
+            title = ((display_names or {}).get(key) or languages[namespace].get('item.'+namespace+'.'+local)
                      or languages[namespace].get('block.'+namespace+'.'+local) or key)
             marker = MARKER_BASE + number
             if marker >= 2**24:
@@ -170,7 +181,8 @@ def build(assets_root: Path, registry: Path, idmap: Path, output: Path):
             excluded.append({'nativeItem': key, 'reason': str(error)})
     if not catalog or len({r['bedrockIdentifier'] for r in catalog}) != len(catalog):
         raise ValueError('Empty or ambiguous custom item catalog')
-    pack_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, 'https://github.com/jcs130/minecraft-ai-friend/bedrock-icons'))
+    if identity is not None and not re.fullmatch('[a-z0-9._-]{1,96}',identity):raise ValueError('Invalid resource pack identity')
+    pack_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, 'https://github.com/jcs130/minecraft-ai-friend/bedrock-icons'+('/'+identity if identity else '')))
     entries['manifest.json'] = encoded({'format_version': 2, 'header': {
         'name': 'My Agent World · 模组物品图标',
         'description': '经校验的原模组静态物品贴图；不包含未适配模型和模组客户端逻辑。',

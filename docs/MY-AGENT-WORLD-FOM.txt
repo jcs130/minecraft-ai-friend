@@ -1,5 +1,5 @@
 My Agent World · 命运齿轮 FOM 2.42
-2026-10-15 公网连接与使用指引（含内容扩展）
+2026-10-16 公网、局域网与多端连接指引（含内容扩展）
 
 公网：micro.kangqiang.site:28976
 家中局域网：192.168.3.163:28976
@@ -56,7 +56,9 @@ Java 子进程有异常退出重启、退避和频率上限；当前用户登录
 详细维护与回滚见 MY-AGENT-WORLD-FOM-OPERATIONS.md。
 
 当前边界
-基岩版尚未适配这套包，旧基岩桥随未完成的服务器停用。
+2026-10-16 新的独立 FOM 基岩桥已上线：micro.kangqiang.site:28988 / 家里 192.168.3.163:28988（UDP），需要登录 Xbox 并接受资源包。
+支持部分模组物品图标和原生身份，复杂 GUI、动态模型和载具未全部转换；手机实际体验待验证。详见 FOM-MULTICLIENT-CONNECT.txt 和 MY-AGENT-WORLD-FOM-BEDROCK.md。
+旧基岩桥随未完成的服务器继续停用。
 普通 Mineflayer 基础接入已发布（局域网 28977，ag_，1.21.1）；深度模组交互仍使用完整 Java 客户端。
 烹饪、女仆、Iron 法术已验证并在正式 FOM 启用，见 MY-AGENT-WORLD-FOM-CONTENT.md。
 Numen、旧 /mycli 技能、公会、试炼、殖民地和距离语音尚未迁入当前 FOM。

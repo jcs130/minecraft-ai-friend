@@ -80,6 +80,9 @@ JAVA_CLIENT_BRIDGE_MANIFEST = {'probe': 'tools/java_client_bridge_health.py', 'o
 FOM_SERVER_MANIFEST = {'probe': 'tools/fom_health.py', 'managedBy': 'existing-owned-child-supervisor',
     'gamePort': 28976, 'healthBind': '127.0.0.1', 'modpack': 'FOM 2.42', 'physicsTransport': 'TCP',
     'agentGatewayOptional': True, 'agentGatewayPort': 28977, 'agentGatewayPolicy': 'ag_ / LAN only / partial projection'}
+FOM_BEDROCK_MANIFEST = {'probe':'tools/fom_bedrock_health.py','managedBy':'owned-child-supervisor-and-registered-startup',
+    'udpPort':28988,'healthBind':'127.0.0.1','healthPort':28996,'modpack':'FOM 2.42',
+    'accountNamespace':'b_ / bh','requiresXboxValidation':True,'scope':'selected native item icons and standard gameplay; complex mod renderers remain separate'}
 SOCIETY_UNDERWORLD_MANIFEST = {'probe': 'tools/maw_underworld_health.py',
     'managedBy': 'existing-native-java-supervisor', 'questProvider': 'simplequests',
     'economyProvider': 'economycraft', 'scope': 'installed_content_and_menu_contract'}
@@ -440,6 +443,12 @@ def probe_agent_frame():
 
 
 def probe_panel_smoke(scope=None):
+    if scope == 'society-fom-bedrock':
+        import os
+        sys.path.insert(0,str(PROJECT/'tools'))
+        from fom_bedrock_health import probe,DEFAULT
+        result=probe(os.environ.get('MAW_FOM_BEDROCK_CONFIG',str(DEFAULT)))
+        return {'ok':result['ok'],'bedrock':result,'manifest':FOM_BEDROCK_MANIFEST,'modelRequests':0,'worldActions':0}
     if scope == 'society-fom':
         import os
         sys.path.insert(0, str(PROJECT/'tools'))
@@ -2201,6 +2210,9 @@ def inventory_lock_failure(reason):
 
 
 def main():
+    if sys.argv[1:] in (['--society-fom-bedrock'],['--society-fom-bedrock-smoke']):
+        report=probe_panel_smoke(scope='society-fom-bedrock')
+        print(json.dumps(report,ensure_ascii=True,indent=2));return 0 if report['ok'] else 1
     if sys.argv[1:] in (['--society-fom'], ['--society-fom-smoke']):
         report = probe_panel_smoke(scope='society-fom')
         print(json.dumps(report, ensure_ascii=True, indent=2))

@@ -11,6 +11,29 @@ import maw_bedrock_resources as resources
 
 
 class ResourcesTests(unittest.TestCase):
+    def test_fom_shifted_vanilla_ids_and_separate_pack_cache_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);assets,registry,idmap,png=self.fixture(root)
+            registry.write_text(registry.read_text().replace('minecraft:paper\t1091','minecraft:paper\t15000'))
+            table=json.loads(idmap.read_text());table['reverseVanillaItems']={'1091':15000};idmap.write_text(json.dumps(table))
+            a=resources.build(assets,registry,idmap,root/'a',identity='fom-2.42-a')
+            b=resources.build(assets,registry,idmap,root/'b',identity='fom-2.42-b')
+            self.assertNotEqual(a['packUuid'],b['packUuid'])
+            definition=json.loads((root/'a'/resources.MAPPINGS).read_bytes())['items']['minecraft:paper'][0]
+            self.assertEqual(definition['display_name'],'原料理')
+            with zipfile.ZipFile(root/'a'/resources.PACK) as z:self.assertEqual(z.read('textures/items/test/meal.png'),png)
+
+    def test_conflicting_locale_does_not_change_texture_or_native_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);assets,registry,idmap,png=self.fixture(root)
+            file=assets/'native-assets.json';manifest=json.loads(file.read_text())
+            for lang in ['en_us','zh_cn']:manifest['assets'][f'assets/test/lang/{lang}.json']['variants']=[{'source':'another.jar'}]
+            file.write_text(json.dumps(manifest))
+            contract=resources.build(assets,registry,idmap,root/'out',display_names={'test:meal':'服中原料理'})
+            self.assertEqual(contract['itemCount'],1)
+            row=json.loads((root/'out'/resources.CATALOG).read_bytes())['items'][0]
+            self.assertEqual(row['displayName'],'服中原料理');self.assertEqual(row['nativeItem'],'test:meal')
+
     def test_unimplemented_runtime_tint_is_not_replaced_by_a_plain_white_egg(self):
         with tempfile.TemporaryDirectory() as tmp:
             assets, *_ = self.fixture(Path(tmp))
@@ -71,6 +94,22 @@ class ResourcesTests(unittest.TestCase):
             (assets/'assets/test/textures/item/meal.png').write_bytes(b'bad texture')
             with self.assertRaisesRegex(ValueError, 'Empty'):
                 resources.build(assets, registry, idmap, root/'out')
+
+    def test_long_native_item_name_uses_short_bedrock_texture_path_without_changing_pixels(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); assets, registry, idmap, png = self.fixture(root)
+            name = 'very_long_native_material_name_' * 4
+            model = f'assets/test/models/item/{name}.json'
+            raw = json.dumps({'parent':'minecraft:item/generated','textures':{'layer0':'test:item/meal'}}).encode()
+            (assets/model).write_bytes(raw)
+            manifest = json.loads((assets/'native-assets.json').read_text('utf-8'))
+            manifest['assets'][model] = {'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)}
+            (assets/'native-assets.json').write_text(json.dumps(manifest),'utf-8')
+            registry.write_text(f'minecraft:paper\t1091\ntest:{name}\t2000\n')
+            resources.build(assets, registry, idmap, root/'out')
+            with zipfile.ZipFile(root/'out'/resources.PACK) as archive:
+                self.assertEqual(archive.read('textures/items/long/2000.png'),png)
+                self.assertTrue(all(len(n)<80 for n in archive.namelist() if n.endswith('.png')))
 
     def test_deployed_layout_and_tamper_detection(self):
         with tempfile.TemporaryDirectory() as tmp:
