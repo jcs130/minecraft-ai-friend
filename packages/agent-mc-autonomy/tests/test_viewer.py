@@ -1,7 +1,37 @@
 import importlib
+import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
+
+
+def test_runner_forwards_local_appearance_only_to_optional_viewer(framework_module, tmp_path, run_async, monkeypatch):
+    runner = importlib.import_module("agent_mc_autonomy.runner")
+    settings = framework_module.Settings.parse({"autonomy": {"enabled": True},
+        "server": {"host": "fixture.test", "username": "Alice"},
+        "viewer": {"renderer_directory": "renderer", "catalog_file": "catalog.json",
+                   "default_appearance": "bundled:yui-ysm", "auto_open": False}})
+    configurations = []
+
+    def bridge_factory(_node, _entry, config, _log):
+        configurations.append(json.loads(config.read_text(encoding="utf-8")))
+        return object()
+
+    class Controller:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def run(self, _goal):
+            pass
+
+    monkeypatch.setattr(runner, "Controller", Controller)
+    run_async(runner.run_session(settings, Path("core/bin/mcp.mjs"), tmp_path, None, "fixture",
+                                lambda **_values: None, lambda: False, bridge_factory=bridge_factory))
+    config, = configurations
+    assert config["viewerIntegration"]["defaultAppearance"] == "bundled:yui-ysm"
+    assert "defaultAppearance" not in config["world"]
+    assert config["world"]["username"] == "Alice" and config["world"]["version"] == "1.21.1"
 
 
 @pytest.mark.parametrize("url,enabled,calls", [("", True, 0), ("https://viewer.test/", False, 0), ("https://viewer.test/", True, 1)])

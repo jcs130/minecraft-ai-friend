@@ -135,6 +135,7 @@ class Settings:
     viewer_renderer_directory: str = ""
     viewer_catalog_file: str = ""
     viewer_bundled_appearance_catalog_file: str = ""
+    viewer_default_appearance: str = "server"
     viewer_listen_port: int = 28985
     min_decision_seconds: int = 10
     idle_decision_seconds: int = 60
@@ -211,6 +212,9 @@ class Settings:
         if bool(renderer) != bool(catalog):
             raise SettingsValidationError("viewer.renderer_directory", "renderer_catalog_pair_required")
         maximum_output = _integer(autonomy, "max_output_tokens", 1024, 128, 131072)
+        appearance = _text(viewer, "default_appearance", "server")
+        if len(appearance) > 128 or not re.fullmatch(r"(?:server|bundled:[A-Za-z0-9_-]+|native:[A-Za-z0-9_/-]+:[A-Za-z0-9_-]+)", appearance):
+            raise SettingsValidationError("viewer.default_appearance", "invalid_default_appearance")
         return cls(
             enabled=_boolean(autonomy, "enabled", False), host=host,
             port=_integer(server, "port", 25565, 1, 65535, "server.port"), username=username, auth=auth, version=version, connection_type=connection_type,
@@ -222,6 +226,7 @@ class Settings:
             viewer_auto_open=_boolean(viewer, "auto_open", True),
             viewer_renderer_directory=renderer, viewer_catalog_file=catalog,
             viewer_bundled_appearance_catalog_file=_text(viewer, "bundled_appearance_catalog_file"),
+            viewer_default_appearance=appearance,
             viewer_listen_port=_integer(viewer, "listen_port", 28985, 1024, 65535),
             idle_decision_seconds=_integer(autonomy, "idle_decision_seconds", 60, minimum, 3600),
             max_tool_rounds=_integer(autonomy, "max_tool_rounds", 6, 1, 12),

@@ -5,6 +5,17 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.69 integrates the reviewed fresh-connection/death-recovery, strategic
+applicability and speech work with independently built core 0.5.7-dev.20261016.13.
+The exact archive and build/declaration receipts are pinned in
+`core_distribution/source.json`; this is an engine-only local artifact, not an
+npm release or viewer bundle. Optional `viewer.default_appearance` defaults to
+`server`; a host may choose `bundled:yui-ysm` for Web presentation. The selected
+ID reaches the native page without changing account/session identity or body
+configuration; explicit stored browser choices, including server-follow, win.
+Saving settings still does not start gameplay. Viewer source, original asset
+integrity, actual served builds and live scene/voice acceptance remain separate.
+
 Host review proposals carry an immutable game identity and body/death baseline.
 Actual death, scope changes, or missing legacy baselines retire their current
 applicability to `needs_reassessment`; original text, lineage and receipts stay
@@ -16,7 +27,7 @@ Delayed host admission rechecks that same baseline. After fresh inspection,
 `revise` can replace a reassessable historical proposal, or explicit `continue`
 can revalidate it under a new UUID/baseline without reporting old work complete.
 An unrelated new user intent requires a new subordinate proposal instead.
-This source repair does not change the packaged core input or prove live play.
+Offline recovery tests do not prove live play.
 
 Current death review hydration selects only the newest real scoped episode that
 matches available lifecycle evidence and still needs reflection. Older unfinished

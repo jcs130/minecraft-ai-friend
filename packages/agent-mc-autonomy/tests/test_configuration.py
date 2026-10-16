@@ -43,6 +43,24 @@ def test_explicit_optional_bundled_viewer_catalog_is_not_part_of_account_or_body
     assert settings.client_config(tmp_path) == default.client_config(tmp_path)
 
 
+@pytest.mark.parametrize("appearance", ["server", "bundled:yui-ysm", "native:misc/3_default_boy:red"])
+def test_local_viewer_default_preserves_account_body_and_disabled_start(tmp_path, appearance):
+    base = {"server": {"host": "fixture.test", "username": "Alice"}}
+    default = Settings.parse(base)
+    settings = Settings.parse({**base, "viewer": {"default_appearance": appearance}})
+    assert default.viewer_default_appearance == "server"
+    assert settings.viewer_default_appearance == appearance
+    assert settings.identity == default.identity
+    assert settings.client_config(tmp_path) == default.client_config(tmp_path)
+    assert settings.enabled is False
+
+
+@pytest.mark.parametrize("appearance", ["", "server\n", "bundled:<script>", "server\"", "a" * 129, None])
+def test_invalid_local_viewer_default_is_rejected(appearance):
+    with pytest.raises(ValueError):
+        Settings.parse({"viewer": {"default_appearance": appearance}})
+
+
 @pytest.mark.parametrize("config", [
     {"server": {"host": "http://example.org"}}, {"server": {"port": True}},
     {"server": {"port": 65536}}, {"server": {"username": "bad name"}},
