@@ -4,6 +4,8 @@ import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { methodHarness, methodEnded } from './method-harness.ts';
 import { installNavigationBareHand } from '../core/hand-interaction.ts';
+import { installTreadWater } from '../core/travel.ts';
+import { waterControlActive } from '../core/skills-control.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
 
 const dependency = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
@@ -14,12 +16,12 @@ const rigs: ReturnType<typeof methodHarness>[] = [];
 afterEach(() => rigs.splice(0).forEach(r => r.close()));
 
 /** Real Mineflayer inventory, physics controls, look, activation and placement; no network connection. */
-function rig() {
-  const r = methodHarness(); rigs.push(r);
+function rig(version = '1.20.6') {
+  const r = methodHarness(version); rigs.push(r);
   const bot = r.bot as unknown as Bot;
   const packets: Array<{ name: string; value: Record<string, unknown>; hand: string | null }> = [];
   let receive = (_name: string, _value: Record<string, unknown>) => {};
-  Object.assign(bot, { supportFeature: (name: string) => registry.supportFeature(name), swingArm() {} });
+  Object.assign(bot, { supportFeature: (name: string) => bot.registry.supportFeature(name), swingArm() {} });
   bot._client.write = ((name: string, value: Record<string, unknown>) => {
     packets.push({ name, value, hand: bot.heldItem?.name ?? null }); receive(name, value);
   }) as never;
@@ -50,6 +52,29 @@ async function until(check: () => boolean) {
 }
 
 describe('agent programs using Mineflayer public primitives', () => {
+  it.each(['1.21.1','1.20.6'])('lets a native key program sink without passive treading rewriting jump in %s', async version => {
+    const r=rig(version);
+    for(let x=-2;x<=2;x++)for(let z=-2;z<=2;z++)for(let y=64;y<=69;y++)r.set(x,y,z,'water');
+    r.live.entity.position=new Vec3(.5,66,.5);r.live.entity.onGround=false;
+    Object.assign(r.live.pathfinder,{isMoving:()=>false});
+    installTreadWater(r.live);r.live.emit('physicsTick');
+    expect(r.live.getControlState('jump')).toBe(true);
+    const run=r.runner.start({name:'native-water-descent',code:
+      "await bot.setControlState('jump',false);const before=await bot.read('entity.position');"
+      +"await bot.waitForTicks(40);"
+      +"return {before,after:await bot.read('entity.position'),jump:await bot.getControlState('jump')};"});
+    const result=await methodEnded(r,run.id);
+    expect(result.status).toBe('completed');
+    const value=result.result as {before:{y:number};after:{y:number};jump:boolean};
+    expect(value.jump).toBe(false);
+    // The initial passive jump can leave upward momentum while acquiring the
+    // body. Require net descent without resetting velocity or physics.
+    expect(value.after.y).toBeLessThan(value.before.y-.1);
+    await until(()=>r.exec.currentTask===null);
+    expect(waterControlActive(r.live)).toBe(false);
+    r.live.emit('physicsTick');
+    expect(r.live.getControlState('jump')).toBe(true);
+  });
   it('runs one shared goto through the real pathfinder and collision physics around a wall',async()=>{
     const r=rig();r.set(1,64,0,'stone');r.set(1,65,0,'stone');
     pathfinderPkg.pathfinder(r.live);r.live.pathfinder.movements.allowParkour=false;r.live.pathfinder.movements.allowSprinting=false;
@@ -226,12 +251,14 @@ describe('agent programs using Mineflayer public primitives', () => {
     const run = r.runner.start({ name: 'interrupted native', code: `
       await bot.setControlState('forward',true); await bot.waitForTicks(20);` });
     await until(() => r.live.getControlState('forward'));
+    expect(waterControlActive(r.live)).toBe(true);
     if (event === 'end') r.live.emit('end', 'test disconnection');
     else r.live.emit(event);
     expect((await methodEnded(r, run.id)).status).toBe('cancelled');
     expect(r.live.getControlState('forward')).toBe(false);
     expect(r.exec.status().waiting).toEqual([]);
     expect(r.exec.status().running).toBeNull();
+    expect(waterControlActive(r.live)).toBe(false);
   });
 
   it('revokes a native program when combat takes the body and keeps its actions out of the frozen queue', async () => {

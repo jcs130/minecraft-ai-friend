@@ -12,12 +12,12 @@ import { FakeHost } from './method-host.ts';
 function nextTaskId(): () => number { let seq = 0; return () => ++seq; }
 
 const req = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
-const registry = req('prismarine-registry')('1.20.6');
-const Blocks = req('prismarine-block')(registry);
 const { Physics, PlayerState } = req('prismarine-physics');
 
 /** Real executor and physics with a local block grid, without a server connection. */
-export function methodHarness() {
+export function methodHarness(version = '1.20.6') {
+  const registry = req('prismarine-registry')(version);
+  const Blocks = req('prismarine-block')(registry);
   const host = new FakeHost();
   const cells = new Map<string, string>();
   const keys = Object.fromEntries(CONTROL_KEYS.map(key => [key, false]));
@@ -31,7 +31,7 @@ export function methodHarness() {
   };
   const blockWorld = { getBlock: blockAt };
   const bot = Object.assign(new EventEmitter(), {
-    _client: Object.assign(new EventEmitter(), { write() {} }), registry, version: '1.20.6', world: blockWorld,
+    _client: Object.assign(new EventEmitter(), { write() {} }), registry, version, world: blockWorld,
     game: { dimension: 'overworld', gameMode: 'survival' }, entities: {}, players: {}, health: 20, food: 20,
     time: { timeOfDay: 1000 }, rainState: 0, oxygenLevel: 20,
     entity: { id: 1, position: new Vec3(0.5, 64, 0.5), velocity: new Vec3(0, 0, 0), yaw: 0, pitch: 0,

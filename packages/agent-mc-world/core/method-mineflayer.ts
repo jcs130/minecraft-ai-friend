@@ -13,6 +13,7 @@ import { withPreparedInteractionHand } from './hand-interaction.ts';
 import { equipSlotConfirmed, unequipSlotConfirmed } from './equipment.ts';
 import { publicReadProjection, projectPublicRead } from './method-read.ts';
 import type { BotMethod } from './method-capabilities.ts';
+import { ownNativeControlInput } from './skills-control.ts';
 
 const nativeCalls = new AsyncLocalStorage<() => void>();
 const guarded = new WeakSet<object>();
@@ -109,15 +110,20 @@ export class MineflayerMethod {
   private release: (() => void) | null = null;
   private taskId: number | null = null;
   private terminalError: Error | null = null;
+  private releaseInput: (() => void) | null = null;
   constructor(private readonly opts: { executor: Executor; name: string; signal: AbortSignal;
     getBot(): Bot | null; successful(): boolean; revoke(reason: string): void; beforeEnqueue(): void }) {
     this.connectionBot = opts.getBot();
     opts.signal.addEventListener('abort', () => {
+      this.releaseNativeInput();
       this.release?.();
       if (!opts.successful() && !this.terminalError && this.taskId !== null) opts.executor.cancelTask(this.taskId, '原生程序权限撤销');
     }, { once: true });
   }
   get ownsBody(): boolean { return this.body !== null; }
+  private releaseNativeInput(): void {
+    this.releaseInput?.(); this.releaseInput = null;
+  }
   private acquire(): Promise<{ bot: Bot; ctx: SkillContext }> {
     if (this.body) return this.body;
     let enter!: (owner: { bot: Bot; ctx: SkillContext }) => void;
@@ -131,11 +137,12 @@ export class MineflayerMethod {
         const events = ['end', 'death', 'respawn', 'forcedMove'] as const;
         for (const event of events) bot.on(event, revoke);
         try { enter({ bot, ctx }); await untilFinished; }
-        finally { for (const event of events) bot.off(event, revoke); }
+        finally { this.releaseNativeInput(); for (const event of events) bot.off(event, revoke); }
       },
       cancel: reason => {
         if (this.terminalError) return;
         this.terminalError = new Error(reason);
+        this.releaseNativeInput();
         fail(this.terminalError); this.release?.(); this.opts.revoke(reason);
       } });
     return this.body;
@@ -211,8 +218,10 @@ export class MineflayerMethod {
       case 'setControlState':
         if (typeof b !== 'boolean') throw new Error('控制键状态须为布尔值');
         if (!bot.physicsEnabled) throw new Error('普通物理未启用；飞行控制使用现有 flight/control 入口');
-        return bot.setControlState(control(a), b);
-      case 'clearControlStates': return bot.clearControlStates();
+        { const key=control(a);this.releaseInput ??= ownNativeControlInput(bot);return bot.setControlState(key, b); }
+      case 'clearControlStates':
+        this.releaseInput ??= ownNativeControlInput(bot);
+        return bot.clearControlStates();
       case 'waitForTicks':
         if (!Number.isInteger(a) || Number(a) < 1 || Number(a) > 200) throw new Error('ticks 须为1..200');
         return bot.waitForTicks(a as number);

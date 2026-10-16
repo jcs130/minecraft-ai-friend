@@ -14,10 +14,22 @@ interface InputLease {
   source?: 'server' | 'local';
 }
 const inputs = new WeakMap<Bot, InputLease>();
+const nativeInputs = new WeakMap<Bot, Set<symbol>>();
 
-/** Passive treading yields only to an explicit, currently owned water input. */
+/** A native program owns its key state until completion or revocation. */
+export function ownNativeControlInput(bot: Bot): () => void {
+  const owners = nativeInputs.get(bot) ?? new Set<symbol>();
+  const owner = Symbol('native control');
+  owners.add(owner); nativeInputs.set(bot, owners);
+  return () => {
+    owners.delete(owner);
+    if (!owners.size && nativeInputs.get(bot) === owners) nativeInputs.delete(bot);
+  };
+}
+
+/** Passive treading must not rewrite an explicit water skill or native key program. */
 export function waterControlActive(bot: Bot): boolean {
-  return inputs.get(bot)?.mode === 'water';
+  return inputs.get(bot)?.mode === 'water' || (nativeInputs.get(bot)?.size ?? 0) > 0;
 }
 
 function waterReadout(bot: Bot): { headWet: boolean; oxygen: number | null } {
