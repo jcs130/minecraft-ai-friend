@@ -285,6 +285,8 @@ class Controller:
         self.groups = []
         self.turn = None
         self.event_run = None
+        self._event_poll = None
+        self._deferred_event_drain = False
         self.cursor = 0
         self.last_decision = 0.0
         self.count = 0
@@ -495,6 +497,40 @@ class Controller:
         return result
 
     async def events(self):
+        # A timed-out optional waiter must not cancel/lose an admitted native
+        # page (including renewal, archive and recovery facts). The coordinator
+        # owns exactly one poll until its result or error has been observed.
+        if self._event_poll is None:
+            self._event_poll = asyncio.create_task(self._poll_events())
+        task = self._event_poll
+        try:
+            result = await asyncio.shield(task)
+        except asyncio.CancelledError:
+            raise  # Keep ownership, even if completion raced waiter cancellation.
+        except BaseException:
+            self._event_poll = None
+            self._deferred_event_drain = True
+            raise
+        else:
+            self._event_poll = None
+            self._deferred_event_drain = result[2]
+            return result
+
+    async def close_event_poll(self):
+        task, self._event_poll = self._event_poll, None
+        if task is None:
+            return
+        if not task.done() or task.cancelled():
+            # Shutdown cannot certify an undrained authoritative page. Preserve
+            # the restart fence before closing its native transport ownership.
+            self.persist(uncertain=True)
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        if not task.cancelled():
+            task.result()  # Propagate late native errors; never classify optional.
+
+    async def _poll_events(self):
         if self.body_lease_due is not None and time.monotonic() >= self.body_lease_due:
             lease_ms = self.settings.java_client["leaseMs"]
             json_content(await self.bridge.call("mc_control", {"action": "renew", "ttlMs": lease_ms}))
@@ -528,14 +564,14 @@ class Controller:
                 wake = True
         return wake, urgent, page.get("hasMore", False)
 
-    async def archive_receipt(self, request_id, name, result):
+    async def archive_receipt(self, request_id, name, result, *, local_only=False):
         original = encode(result)
         with (self.data / "receipts.jsonl").open("a", encoding="utf-8") as output:
             output.write(encode({"requestId": request_id, "turnId": self.turn, "tool": name, "result": result}) + "\n")
         if not hasattr(self, "_read_once_answers") or self._read_once_turn != self.turn:
             self._read_once_turn, self._read_once_answers = self.turn, {}
         view = receipt_view(result)
-        if len(original.encode("utf-8")) > 6000:
+        if not local_only and len(original.encode("utf-8")) > 6000:
             # Chunks remain queryable through the existing artifact tool. JavaScript
             # measures maxLength in UTF-16; 16000 Python characters fit even with emoji.
             refs = []
@@ -625,7 +661,7 @@ class Controller:
             return None
 
     async def recent_for_round(self, host):
-        """Read once per model round; an embedded await preserves event priority."""
+        """Bound optional work without recovering authoritative native failures."""
         import inspect
         from . import host_recent
         request = self.recent_request(host)
@@ -633,31 +669,69 @@ class Controller:
         if request is None:
             return host_recent.unavailable("binding_unavailable")
         epoch = self.death_epoch
-        task = None
+        task, event_wait = None, None
+
+        def interrupted():
+            if self.stop_requested():
+                return "stopped"
+            if self.commands and self.commands.ready(allow_goal=self.active_goal is None and not self.pending):
+                self.preempted = True
+                return "feedback_changed"
+            if epoch != self.death_epoch:
+                self.preempted = True
+                return "body_changed"
+            return None
+
+        def deferred(reason):
+            self.preempted = True
+            self._deferred_event_drain = True
+            return host_recent.unavailable(reason)
+
         try:
-            value = self.recent_context_provider(request)
+            # Only provider invocation, result retrieval and schema validation
+            # recover optional errors. Native event work is outside those scopes.
+            try:
+                value = self.recent_context_provider(request)
+            except Exception:
+                return host_recent.unavailable("provider_invalid")
             if inspect.isawaitable(value):
                 task = asyncio.ensure_future(value)
                 deadline = time.monotonic() + 0.5
                 while True:
-                    done, _ = await asyncio.wait({task}, timeout=max(0, min(0.05, deadline - time.monotonic())))
-                    if self.stop_requested():
-                        return host_recent.unavailable("stopped")
-                    if self.commands and self.commands.ready(allow_goal=self.active_goal is None and not self.pending):
-                        self.preempted = True
-                        return host_recent.unavailable("feedback_changed")
-                    wake, urgent, more = await self.events()
+                    if not task.done():
+                        await asyncio.wait({task}, timeout=max(0, min(0.05, deadline - time.monotonic())))
+                    if reason := interrupted():
+                        return host_recent.unavailable(reason)
+                    if time.monotonic() >= deadline:
+                        return host_recent.unavailable("provider_timeout")
+                    event_wait = asyncio.create_task(self.events())
+                    while not event_wait.done():
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            return deferred("native_events_pending")
+                        await asyncio.wait({event_wait}, timeout=min(0.05, remaining))
+                        # Completed native errors always propagate, even when a
+                        # stop or deadline arrives in the same scheduling cycle.
+                        if event_wait.done():
+                            break
+                        if reason := interrupted():
+                            return deferred(reason)
+                    wake, urgent, more = event_wait.result()
+                    event_wait = None
                     self.deferred_wake |= wake
-                    if urgent or epoch != self.death_epoch:
+                    if urgent or (reason := interrupted()):
                         self.preempted = True
-                        return host_recent.unavailable("body_changed")
-                    if done and not more:
-                        value = await task
-                        break
+                        return host_recent.unavailable(reason or "body_changed")
                     if time.monotonic() >= deadline:
                         if more:
-                            self.preempted = True  # Drain queued native pages before inference.
+                            return deferred("native_events_pending")
                         return host_recent.unavailable("provider_timeout")
+                    if task.done() and not more:
+                        try:
+                            value = task.result()
+                        except Exception:
+                            return host_recent.unavailable("provider_invalid")
+                        break
             current = self.recent_request(self.current_host_context())
             if (self.stop_requested() or self.preempted or current is None or epoch != self.death_epoch
                     or host_recent.binding(current, request=True) != host_recent.binding(request, request=True)):
@@ -665,30 +739,36 @@ class Controller:
                 return host_recent.unavailable("binding_changed")
             if isinstance(value, dict) and value.get("available") is False:
                 return host_recent.unavailable("snapshot_unavailable")
-            value = host_recent.validate(value, current, time.time())
-            return self.host_context_port.queryable_recent(value, current)
-        except asyncio.TimeoutError:
-            return host_recent.unavailable("provider_timeout")
-        except Exception:
-            return host_recent.unavailable("provider_invalid")
+            try:
+                value = host_recent.validate(value, current, time.time())
+                return self.host_context_port.queryable_recent(value, current)
+            except Exception:
+                return host_recent.unavailable("provider_invalid")
         finally:
-            if task is not None:
-                if not task.done():
-                    task.cancel()
-                    await asyncio.sleep(0)  # Cooperative cleanup cannot extend the optional deadline.
-                def consume_result(completed):
-                    if not completed.cancelled():
-                        completed.exception()  # Consume errors without exposing private text.
-                if task.done():
-                    consume_result(task)
-                else:
-                    task.add_done_callback(consume_result)
-            # Timeout/error/cancellation cleanup may itself yield to fresh work.
-            current = self.recent_request(self.current_host_context())
-            if (self.stop_requested() or epoch != self.death_epoch or current is None
-                    or host_recent.binding(current, request=True) != host_recent.binding(request, request=True)
-                    or self.commands and self.commands.ready(allow_goal=self.active_goal is None and not self.pending)):
-                self.preempted = True
+            try:
+                if event_wait is not None:
+                    if not event_wait.done():
+                        self._deferred_event_drain = True
+                        event_wait.cancel()  # Shield preserves the coordinator poll.
+                        await asyncio.sleep(0)
+                    if event_wait.done() and not event_wait.cancelled():
+                        event_wait.result()  # Do not swallow a raced native error.
+            finally:
+                if task is not None:
+                    if not task.done():
+                        task.cancel()
+                        await asyncio.sleep(0)
+                    def consume_result(completed):
+                        if not completed.cancelled():
+                            completed.exception()
+                    if task.done():
+                        consume_result(task)
+                    else:
+                        task.add_done_callback(consume_result)
+                current = self.recent_request(self.current_host_context())
+                if (interrupted() or current is None
+                        or host_recent.binding(current, request=True) != host_recent.binding(request, request=True)):
+                    self.preempted = True
 
     async def decide_with_events(self, messages, tools, profile=None):
         death_epoch = self.death_epoch
@@ -792,7 +872,9 @@ class Controller:
             if frame:
                 self.frame = frame
                 self.publish(perception={k: v for k, v in frame.items() if k not in {"url", "received_at"}})
-        compact = await self.archive_receipt(request_id, name, result)
+        from .host_recent import HANDLE_PREFIX
+        host_original = name == "mc_original" and isinstance(arguments.get("handle"), str) and arguments["handle"].startswith(HANDLE_PREFIX)
+        compact = await self.archive_receipt(request_id, name, result, local_only=host_original)
         meta = next((t for t in self.bridge.tools if t["name"] == name), {}).get("_meta", {}).get(PROTOCOL, {})
         if not raw.get("structuredContent") and {"write", "speak", "act"}.intersection(meta.get("tags", [])):
             raise RuntimeError("outcome_unknown: mutation returned no structured execution receipt")
@@ -949,6 +1031,11 @@ class Controller:
         return prepared
 
     async def execute_model_call(self, name, arguments):
+        if self._event_poll is not None or self._deferred_event_drain:
+            self.preempted = True
+            result = {"failed": True, "dispatched": False, "origin": "controller_boundary",
+                      "text": "Authoritative native events must drain before another tool dispatch."}
+            return result, encode(result), True
         if self.death_waiting or (self.turn and self.turn_death_epoch != self.death_epoch):
             self.continuation_needed = True
             result = {"failed": True, "dispatched": False, "origin": "controller_boundary",
@@ -1084,6 +1171,10 @@ class Controller:
         self.publish(planner_error="invalid_model_tool_call", invalid_tool_calls=self.invalid_tool_calls)
 
     async def turn_once(self, goal, prefix, tools):
+        if self._event_poll is not None or self._deferred_event_drain:
+            self.preempted = True
+            self.continuation_needed = True
+            return
         self.preempted = False
         self.deferred_wake = False
         self.continuation_needed = False
@@ -1126,7 +1217,7 @@ class Controller:
                 host_context = self.current_host_context()
                 self.publish(host_context=host_context_metadata(host_context))
                 recent_context = await self.recent_for_round(host_context)
-                if self.stop_requested() or self.preempted or self.turn_death_epoch != self.death_epoch:
+                if self.stop_requested() or self.preempted or self.turn_death_epoch != self.death_epoch or self._event_poll is not None or self._deferred_event_drain:
                     return
                 try:
                     messages, budget = assemble(prefix, tools, planning_goal, facts, self.recent, self.groups,
@@ -1315,6 +1406,13 @@ class Controller:
             if self.commands:
                 await self.observe_queue()
             while not self.stop_requested() and (self.settings.max_decisions == 0 or self.count < self.settings.max_decisions):
+                if self._event_poll is not None or self._deferred_event_drain:
+                    event_wake, event_urgent, more = await self.events()
+                    wake |= event_wake
+                    urgent |= event_urgent
+                    if more:
+                        await asyncio.sleep(0)
+                        continue
                 inserted = await self.external_command()
                 if self.stop_requested():
                     break
@@ -1356,18 +1454,21 @@ class Controller:
                 await asyncio.sleep(1)
             self.publish(phase="stopped" if self.stop_requested() else "budget_exhausted")
         finally:
-            self.persist(stopped=True)  # Retain uncertainty and exact request IDs.
             try:
-                status = json_content(await self.bridge.call("mc_connection", {"action": "disconnect"}, timeout=10))
-                if status.get("phase") != "disconnected":
-                    raise RuntimeError("Disconnect not confirmed")
-                # Generic core disconnect explicitly stops its own action queue.
-                # This must not be reused for Numen, whose remote body stays alive.
-                self.persist(pending=[])
-            except Exception:
-                if self.pending or self.inflight_request:
-                    self.persist(uncertain=True)
-                self.publish(disconnect_confirmed=False)
+                await self.close_event_poll()
             finally:
-                await self.bridge.close()
-                self.publish(game_connected=False, autonomy_running=False)
+                self.persist(stopped=True)  # Retain uncertainty and exact request IDs.
+                try:
+                    status = json_content(await self.bridge.call("mc_connection", {"action": "disconnect"}, timeout=10))
+                    if status.get("phase") != "disconnected":
+                        raise RuntimeError("Disconnect not confirmed")
+                    # Generic core disconnect explicitly stops its own action queue.
+                    # This must not be reused for Numen, whose remote body stays alive.
+                    self.persist(pending=[])
+                except Exception:
+                    if self.pending or self.inflight_request:
+                        self.persist(uncertain=True)
+                    self.publish(disconnect_confirmed=False)
+                finally:
+                    await self.bridge.close()
+                    self.publish(game_connected=False, autonomy_running=False)

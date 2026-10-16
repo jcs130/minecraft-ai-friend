@@ -55,6 +55,15 @@ checks stop, user feedback, death epoch and binding/revision before inference,
 including error/timeout cleanup. Timeout/error omits optional context and leaves
 the normal game coordinator running. No model call is added.
 
+The 0.5-second optional deadline includes waiting for native event transport,
+lease renewal, archive-gap recovery and recovery facts. If a native poll cannot
+finish in time, inference is deferred; one shielded poll remains owned by the
+coordinator and is drained exactly once before new decisions or commands.
+Provider/validation failures are optional; native event/transport errors propagate
+through their authoritative path, including durable unknown-outcome fences.
+Shutdown observes a completed poll's error or fences an unresolved poll before
+cancelling and closing transport. It never silently discards a late unknown page.
+
 External runtime defaults are file-only. An external adapter refreshes through
 its existing observer; a 10-second observer gives disclosed bounded staleness,
 not query-at-every-round transport. The body never waits for bus refresh, calls
@@ -170,6 +179,9 @@ bound to exact actor/Settings identity/session/run/scope/revision/death and TTL.
 The in-memory original registry is itself capped at 8192 serialized bytes;
 older originals can become unavailable under registry pressure. Queries never
 read arbitrary files, invoke a host SDK, use network or dispatch native actions.
+This local-only rule covers the complete tool dispatch and private receipt
+archival, including text that expands substantially under JSON escaping. Such
+pages retain exact characters locally and never become native artifact chunks.
 Unknown/traversal handles in this reserved namespace fail closed. Genuine body
 artifact handles continue through the existing `mc_artifact` route.
 
