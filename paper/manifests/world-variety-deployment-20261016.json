@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "id": "world-variety-release-20261016",
+  "status": "deployed",
+  "deployedAt": "2026-10-16T15:17:01+08:00",
+  "verifiedAt": "2026-10-16T07:24:33.574Z",
+  "paper": "1.21.1 build 133",
+  "agentFriend": "0.4.42",
+  "eyeMirror": "0.1.16",
+  "sourceCommit": "acfdaf46bea53eb5c22e3ecf375253dc713c8270",
+  "backupStamp": "20261016-150940",
+  "coldBackups": [
+    "E:/MC/backups/scheduled/20261016-150940",
+    "F:/MC-backups/scheduled/20261016-150940"
+  ],
+  "scheduledTaskResult": 0,
+  "installedFiles": 46,
+  "removedFiles": 1,
+  "enabledPlugins": 36,
+  "enabledPacks": 39,
+  "newStructurePacks": 26,
+  "overlayPacks": 1,
+  "productionClientChecks": 9,
+  "productionClientPassed": true,
+  "guardUUIDs": {
+    "camp": "4efdb1e6-8ed8-406d-8630-c65a6517180a",
+    "village": "b685308c-9ff7-461e-a41e-264b0d82ca04"
+  },
+  "services": {
+    "javaGateway": true,
+    "bedrockUdp": true,
+    "ysmProxy": true,
+    "ysmWorker": true,
+    "goddess": true,
+    "agentEyeWatcher": true
+  },
+  "inventoryTest": "Read-only open/close/reopen; 54 storage slots, unchanged contents, empty cursor. Dedicated QA original mode restored.",
+  "configurationNormalization": {
+    "path": "plugins/OlEncounters/config.yml",
+    "addedDefault": {
+      "basic-settings.location.distance-from-spawn": {
+        "minimum": 500,
+        "maximum": 10000
+      }
+    },
+    "otherSemanticChanges": 0
+  },
+  "knownExistingWarnings": [
+    "Essentials 2.22.0 unsupported server version warning also present in pre-update startup"
+  ],
+  "limitations": [
+    "Physical phone/Xbox and Web pixels not re-tested on production",
+    "16-Agent prolonged load not proven",
+    "New structures generate in newly explored chunks; existing village is preserved"
+  ],
+  "candidateManifest": "world-variety-candidate-20261016.json",
+  "privateEvidenceRoot": "E:/MC/ops/repairs/world-variety-release-20261016",
+  "installedDigestAudit": {
+    "exactMatches": 45,
+    "total": 46,
+    "normalizedConfiguration": "plugins/OlEncounters/config.yml"
+  }
+}
