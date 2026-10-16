@@ -306,7 +306,8 @@ def test_review_keeps_observed_structures_and_terminal_outcome(runtime):
     assert "task ended" in inspected["facts"]["lastTask"] and "placement failed: occupied" in inspected["facts"]["lastTask"]
     assert inspected["fact_originals"]["lastTask"] == "log:terminal"
     assert len(inspected["facts"]["lastTask"].encode("utf-8")) <= 1000
-    assert "standing goal" in inspected["next"] and "fresh evidence" in inspected["next"]
+    assert "standing goal" in inspected["completion_contract"]["goal"]
+    assert "fresh evidence" in inspected["completion_contract"]["constraints"]
 
 
 def test_review_transports_exact_unresolved_tool_error_with_bounded_receipt_reference(runtime):

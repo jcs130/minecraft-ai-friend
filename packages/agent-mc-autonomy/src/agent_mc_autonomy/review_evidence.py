@@ -10,6 +10,33 @@ def encoded(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def completion_contract(review_id, reference, *, pending_death, legacy=None):
+    """Describe the smallest final transaction without choosing for the host."""
+    contract = {
+        "required": {"heartbeat_id": review_id, "decision": ["continue", "insert", "revise"],
+                     "reason": "One short factual clause from inspected evidence."},
+        "goal": "Required only for insert/revise; a concise stage within user intent and standing goal.",
+        "constraints": "World-specific capabilities require fresh evidence, not unrelated memories. "
+            "Revise requires stage_delivery.can_revise. "
+            "For a reassessable historical_goal, continue revalidates it on this baseline; revise replaces it.",
+    }
+    if legacy:
+        contract["required"] = {"heartbeat_id": review_id, **legacy["choice"]}
+        contract["constraints"] = "Resubmit the exact original choice; only reflection completes. No goal, speech or context replay."
+        contract.pop("goal")
+        pending_death = not legacy["reflection_already_saved"]
+    if pending_death:
+        contract["death_reflection"] = {
+            "required": {"evidence_ref": reference},
+            "one_of": [
+                {"outcome": "lesson", "lesson": "Short evidence-based lesson.",
+                 "applicability": "Short condition where it applies."},
+                {"outcome": "deferred", "reason": "Short honest reason evidence is insufficient."},
+            ],
+        }
+    return contract
+
+
 def preview(value, limit):
     """Bound any section in wire bytes; originals are separately queryable."""
     raw = encoded(value).encode()

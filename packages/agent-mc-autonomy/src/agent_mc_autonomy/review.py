@@ -527,7 +527,7 @@ class ReviewPort:
                         "legacy_reflection_completion": {"choice": review["choice"], "receipt": review["result"],
                             "reflection_already_saved": bool(recorded.get("reflection") or recorded.get("lesson")),
                             "next": "Resubmit this original choice to complete only this episode. Include death_reflection only if no reflection/lesson is already saved. Goal, speech and context will not be replayed."} if legacy_pending else None,
-                        "next": "Now call continue/insert/revise with your evidence-based reason. If stage_delivery.can_revise refers to historical_goal, continue explicitly revalidates that proposal against this fresh body baseline; revise replaces it. For death include death_reflection: lesson with evidence/applicability, or deferred with reason. Optional spoken_text belongs in that same decision; no extra tool round is needed. Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending. Keep stages within the standing goal and user intent; server-specific quests, exams or capabilities need fresh evidence from this world, not unrelated conversation memories.",
+                        "next": "Submit the minimal final transaction in completion_contract now. Use original evidence queries if needed; never invent a lesson.",
                         "goal_authority": "current_user_goal is explicitly user-sourced. host_review is a proposed stage subordinate to current user intent and the standing goal; unknown origin is not user authorization. last_decision is prior model judgment, not fresh world evidence. Query inspect with lineage_offset=0 for full original parent goals, four per page.",
                         "last_decision": state.get("last_decision")}
                 if compact:
@@ -535,9 +535,12 @@ class ReviewPort:
                         "stage_delivery": stage, "acknowledged": False,
                         "legacy_reflection_completion": result["legacy_reflection_completion"],
                         "goal_authority": "User goal and standing goal govern; host_review is your subordinate stage. Planning is delivery, not actual work. Details include original goal_lineage.",
-                        "next": "Final now: continue/insert/revise + short factual reason; goal only for insert/revise. With a reassessable historical_goal, continue explicitly revalidates it on this fresh baseline; revise replaces it. Optional spoken_text is one natural sentence. For pending death add death_reflection with evidence_ref above: outcome=lesson + lesson/applicability, or outcome=deferred + honest reason. Do not invent a lesson. Context/memory is optional."}
+                        "next": "Submit the minimal final transaction in completion_contract now. Use original evidence queries if needed; never invent a lesson."}
                 else:
                     result["evidence_ref"] = reference
+                result["completion_contract"] = review_evidence.completion_contract(
+                    review_id, reference, pending_death=bool(fresh.get("death_episode")),
+                    legacy=result["legacy_reflection_completion"])
                 return result
             if require_inspection and not review.get("inspected_at"):
                 return {"is_error": True, "error": "fresh_inspection_required"}
