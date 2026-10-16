@@ -14,6 +14,8 @@ Any host can use the SDK/MCP tool; no Neko or Cortico dependency is involved.
 {"action":"get","id":"food/beef"}
 {"action":"get","id":"guide/health"}
 {"action":"get","id":"guide/cooking"}
+{"action":"search","kind":"guide","query":"没床 庇护"}
+{"action":"get","id":"guide/bed"}
 {"action":"search","kind":"block","query":"diamond_ore","limit":2}
 {"action":"get","id":"recipe/stick","offset":4}
 ```
@@ -60,3 +62,39 @@ Keep only discovery instructions in the stable request prefix. Put current facts
 at the tail, replacing old keys; fetched references remain in bounded tool history.
 Do not append the whole catalogue or duplicate a retrieved manual every turn.
 No vector endpoint or model is required to use the bundled knowledge.
+
+## Optional survival cards (Java 1.21.1 only)
+
+| ID | Discoverable topics |
+| --- | --- |
+| `guide/bed` | 床、羊毛、睡觉、跳夜、重生点 / bed wool sleep night spawn |
+| `guide/night_shelter` | 没床、临时庇护、挖洞、等天亮 / no bed shelter hide wait dawn |
+| `guide/equipment` | 武器、防具、工具、剑斧盾镐 / equipment armor weapon tools |
+| `guide/base` | 房子、家、基地、营地、工作台炉子 / house home base camp |
+| `guide/storage` | 箱子、收纳、背包存取 / chest storage inventory stow take |
+| `guide/farming` | 食物来源、耕地、种子、补种 / farming crops seeds renewable food |
+
+These six original Chinese references have bilingual titles and short summaries,
+bounded content (at most 3500 UTF-8 bytes each), and their own first-party citations
+with a 1.21.1 applicability version. The [survival research](research/vanilla-1.21.1-survival-foundations-20261016.md)
+records the original Mojang client/mappings hashes and exact recipe, dimension,
+crop and collision evidence. Introductory Minecraft.net examples are advisory;
+exact mechanics use the pinned original inputs. Existing food/health/cooking
+cards and numeric registry/recipe references remain available separately.
+
+Priorities are conditional on fresh body, hunger, time, threats, resources and
+user interests. Reading a card never chooses, queues or certifies an activity.
+Mineflayer already supports bed-targeted `use {at}` and bounded waiting for wake;
+no new sleep tool is introduced. Crafting, placement, spawn-setting, entering
+sleep, waking and actually skipping night require distinct observations.
+Nether/End beds explode; unknown dimension behavior must be resolved before use.
+The optional Java-client helper has different advertised method capabilities;
+its limits do not describe the active Mineflayer body.
+
+A shelter needs observed clearance, support, enclosure, access and danger checks.
+Waiting requires actual elapsed game time and new observations, not an action
+terminal or a short delay labelled morning. Crops similarly require observed
+growth, collected inventory and replanting; planting does not feed immediately.
+Server/datapack overrides and current executor support still require inspection.
+These cards are not added to the stable environment prefix or personal memory,
+and are unavailable for unverified game versions.

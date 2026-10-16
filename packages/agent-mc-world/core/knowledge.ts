@@ -3,6 +3,7 @@ import minecraftData from 'minecraft-data';
 import { zhName } from './names.ts';
 import type { ToolDef } from './support/host-contract.ts';
 import { FOOD_CAUTIONS, FOOD_COOKING, FOOD_EFFECTS, MOJANG_1211_SOURCE, VANILLA_GUIDES, VANILLA_KNOWLEDGE_VERSION } from './vanilla-food.ts';
+import { VANILLA_SURVIVAL_GUIDES } from './vanilla-survival.ts';
 
 const KINDS = ['guide', 'food', 'item', 'block', 'recipe'] as const;
 type Kind = typeof KINDS[number];
@@ -13,7 +14,7 @@ const WARNING = 'Versioned vanilla reference, not current inventory, server reci
 const caches = new Map<string, Entry[]>();
 export const KNOWLEDGE_TOOL: Omit<ToolDef, 'handler'> = {
   name: 'mc_knowledge', tags: ['read'],
-  description: 'Read versioned vanilla Minecraft knowledge on demand: food/cooking/health, items, mining blocks and crafting. '
+  description: 'Read versioned vanilla Minecraft knowledge on demand: food/cooking/health, bed/sleep, night shelter, equipment, base, storage, farming, items, mining blocks and crafting. '
     + 'search returns summaries; get(id) reads one entry. Offline local lookup, no model/network/action. '
     + 'Baseline reference only; mc_memory holds historical experience. Main semantic target Java 1.21.1.',
   parameters: { type: 'object', additionalProperties: false, properties: {
@@ -43,6 +44,8 @@ function catalogue(version: string): Entry[] {
     saturation: name === 'ominous_bottle' ? 0 : data.foodsByName[name].saturation });
   if (semantic) for (const guide of VANILLA_GUIDES) add('guide', guide.name, guide.title, guide.content.slice(0, 160),
     () => ({ content: guide.content, sources: semanticSources }));
+  if (semantic) for (const guide of VANILLA_SURVIVAL_GUIDES) add('guide', guide.name, guide.title, guide.summary,
+    () => ({ content: guide.content, sources: guide.sources }));
   for (const food of data.foodsArray) add('food', food.name, `${zhName(food.name)} / ${food.displayName} (${food.name})`,
     semantic && FOOD_CAUTIONS[food.name] ? FOOD_CAUTIONS[food.name] : '原版食物营养；查询详情比较饥饿/饱和与烹饪收益。', () => {
       const cooked = semantic ? FOOD_COOKING[food.name] : undefined;
@@ -123,9 +126,10 @@ export function readMinecraftKnowledge(args: Record<string, unknown>, version: s
   if (Object.keys(args).some(key => key !== 'action' && !allowed[action].includes(key))) throw new Error('Field does not apply to knowledge action');
   const base = { protocol: 'agent-mc-knowledge/v1', version, currentWorldVerified: false, retrieval: 'local-reference', warning: WARNING };
   if (action === 'help') return { ...base, help: 'search(query,kind?,limit<=10,offset) returns summaries; get(id,offset?) reads one reference. '
-    + 'recipe variants page 4 at a time. Exact connected/configured Java version required. Java 1.21.1 food/cooking/health semantics plus complete local item/block/food/crafting indexes. '
+    + 'recipe variants page 4 at a time. Exact connected/configured Java version required. Java 1.21.1 food/cooking/health plus optional bed/night shelter/equipment/base/storage/farming guides and complete local item/block/food/crafting indexes. '
     + 'No model, network or embedding needed. For historical local/vector/remote experience use mc_memory.',
-    examples: [{ action: 'search', query: '生肉 熟肉', limit: 3 }, { action: 'get', id: 'food/beef' }] };
+    examples: [{ action: 'search', query: '生肉 熟肉', limit: 3 }, { action: 'get', id: 'food/beef' },
+      ...['bed', 'night_shelter', 'equipment', 'base', 'storage', 'farming'].map(name => ({ action: 'get', id: `guide/${name}` }))] };
   const entries = catalogue(version), offset = bounded(args.offset, 0, 100000, 'offset');
   if (action === 'get') {
     if (typeof args.id !== 'string' || !/^(guide|food|item|block|recipe)\/[a-z0-9_]+$/.test(args.id)) throw new Error('Invalid knowledge id');
