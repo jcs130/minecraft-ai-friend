@@ -99,6 +99,7 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
   writeFileSync(config.catalogFile, JSON.stringify({ packs: [{ id: 'fixture', assetDirectory: 'assets', registrySha256: 'registry' }] }));
   const options = { cfg: { ...structuredClone(MINECRAFT_DEFAULTS), username: 'FixtureBody' },
     extension: { config } };
+  const tacticalDispose = t.mock.method(TacticalMinecraftWorld.prototype, 'disposeExtension');
   const normal = new TacticalMinecraftWorld(options), viewer = createEngine(options);
   t.after(() => { normal.disposeExtension(); viewer.disposeExtension(); });
   assert.deepEqual(viewer.tools().map(tool => tool.name), normal.tools().map(tool => tool.name));
@@ -114,7 +115,7 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
   const battlefield = await tactic.handler({ battlefield: true }, { role: 'host-decision' });
   assert.equal(battlefield.meta.protocol, 'agent-mc-tactics/v1');
   assert.equal(battlefield.meta.frame, null); // Disconnected sampling cannot return invented facts.
-  for (const hook of ['extensionSpawn', 'extensionRealm', 'extensionCombatReport', 'disposeExtension'])
+  for (const hook of ['extensionSpawn', 'extensionRealm', 'extensionCombatReport'])
     assert.equal(viewer[hook], normal[hook], `tactical hook lost: ${hook}`);
 
   const host = { log: { warn: message => calls.push(['warn', message]) } };
@@ -127,7 +128,7 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
     onBotCreated: bot => { coreBot = bot; calls.push(['core-bot', bot]); } });
   assert.ok(bridge instanceof Bridge);
   const bot = Object.assign(new EventEmitter(), { version: options.cfg.version, entity: {}, _client: { uuid: 'body-id' } });
-  const flush = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
+  const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
   bridge.opts.onBotCreated(bot); await flush();
   assert.equal(coreBot, bot);
   assert.equal(calls.find(call => call[0] === 'attach')[1].bot, bot);
@@ -144,6 +145,7 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
   assert.equal(intervals.size, 0);
   assert.equal(JSON.parse(readFileSync(config.stateFile)).reason, 'STOPPED');
   assert.ok(calls.some(call => call[0] === 'core-stop' && call[1] === viewer));
+  assert.ok(tacticalDispose.mock.calls.some(call => call.this === viewer));
   bridge.opts.onBotCreated(bot); await flush();
   assert.equal(views.length, 2); // A late bot callback cannot attach after explicit stop.
 
