@@ -379,6 +379,7 @@ public final class ClientBridge implements ClientModInitializer {
         if(client.field_1724!=null&&client.field_1687!=null){
             var player=client.field_1724;state.addProperty("uuid",player.method_5667().toString());state.addProperty("username",player.method_5477().getString());state.add("position",gson.toJsonTree(position()));
             state.addProperty("yaw",player.method_36454());state.addProperty("pitch",player.method_36455());state.addProperty("health",player.method_6032());state.addProperty("food",player.method_7344().method_7586());state.addProperty("dimension",client.field_1687.method_27983().method_29177().toString());
+            state.addProperty("onGround",player.method_24828());
             state.addProperty("worldTime",client.field_1687.method_8532());state.addProperty("raining",client.field_1687.method_8419());
             JsonArray inventory=new JsonArray();var inv=player.method_31548();for(int slot=0;slot<inv.method_5439();slot++) inventory.add(item(inv.method_5438(slot),slot));state.add("inventory",inventory);state.addProperty("selectedSlot",inv.field_7545);
             var menu=player.field_7512;JsonArray slots=new JsonArray();for(int slot=0;slot<menu.field_7761.size();slot++) slots.add(item(menu.field_7761.get(slot).method_7677(),slot));state.add("menuSlots",slots);state.add("cursor",item(menu.method_34255(),-1));state.addProperty("syncId",menu.field_7763);state.addProperty("menuRevision",menu.method_37421());
@@ -391,6 +392,7 @@ public final class ClientBridge implements ClientModInitializer {
         out.addProperty("connected",client.field_1724!=null&&client.field_1687!=null);out.addProperty("server",client.method_1558()==null?"":client.method_1558().field_3761);
         var p=client.field_1724;out.addProperty("uuid",p.method_5667().toString());out.addProperty("username",p.method_5477().getString());out.add("position",gson.toJsonTree(position()));
         out.addProperty("yaw",p.method_36454());out.addProperty("pitch",p.method_36455());out.addProperty("health",p.method_6032());out.addProperty("food",p.method_7344().method_7586());out.addProperty("selectedSlot",p.method_31548().field_7545);
+        out.addProperty("onGround",p.method_24828());
         out.addProperty("dimension",client.field_1687.method_27983().method_29177().toString());out.addProperty("screen",client.field_1755==null?"":client.field_1755.getClass().getName());out.addProperty("syncId",p.field_7512.field_7763);
         out.addProperty("reflexScope",reflexFrames.scope(client));out.add("serverAuthorization",gson.toJsonTree(authorization()));out.add("reflex",reflexInputs.status(reflexFrames.scope(client)));out.add("actions",new JsonArray());out.add("messages",new JsonArray());out.addProperty("excluded","actions/messages/menu/encoded stacks; read full state explicitly");return out;
     }
