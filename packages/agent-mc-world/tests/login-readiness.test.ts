@@ -10,7 +10,31 @@ const bridges: Bridge[] = [];
 afterEach(async () => {
   await Promise.all(bridges.splice(0).map(b => b.stop()));
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
+
+function scopedLoginRig() {
+  const dir = mkdtempSync(join(tmpdir(), 'login-reconnect-')), configFile = join(dir, 'accounts.json');
+  writeFileSync(configFile, JSON.stringify({ enabled: true, accounts: [{ server: 'example.test:25565', username: 'tester',
+    credentialEnv: 'AGENT_MC_RECONNECT_FIXTURE', command: 'login', timeoutMs: 1000 }] }));
+  vi.stubEnv('AGENT_MC_RECONNECT_FIXTURE', 'private-reconnect-fixture');
+  const bots = Array.from({ length: 3 }, () => {
+    const bot = Object.assign(new EventEmitter(), { _client: new EventEmitter(), loadPlugin() {},
+      chat: vi.fn(), quit: vi.fn(), entity: { position: { x: 0, y: 64, z: 0 } } });
+    bot.quit.mockImplementation((reason?: string) => { bot.emit('end', reason); });
+    return bot;
+  });
+  const create = vi.spyOn(mineflayer, 'createBot');
+  for (const bot of bots) create.mockReturnValueOnce(bot as never);
+  const log = { info: vi.fn(), warn() {}, error() {}, debug() {}, trace() {}, emit() {}, child() { return this; } };
+  const onSpawn = vi.fn(), onDisconnect = vi.fn();
+  const bridge = new Bridge({ host: 'example.test', port: 25565, username: 'tester', version: '1.21.1', viewerPort: 0,
+    loginConfigFile: () => configFile, log: log as never, onSpawn, onDisconnect });
+  bridges.push(bridge); Object.assign(bridge, { installSpawnGear() {} });
+  const message = (index: number, text: string) => bots[index]!.emit('message', { toString: () => text }, 'system');
+  return { bridge, bots, create, log, onSpawn, onDisconnect, message,
+    close: async () => { await bridge.stop(); rmSync(dir, { recursive: true, force: true }); } };
+}
 
 describe('login readiness', () => {
   it('owns real respawn dispatch and cancels it on explicit stop instead of native auto-respawn', async () => {
@@ -81,7 +105,8 @@ describe('login readiness', () => {
     expect(onDisconnect).toHaveBeenCalledOnce();
     expect(bridge.connectionState.failure).toBe('被服务器断开(白名单):multiplayer.disconnect.not_whitelisted');
   });
-  it('stops after rejected authentication instead of reconnecting and resending a bad password', async () => {
+  it.each(['MC_AUTH_FAILED wrong password', 'MC_AUTH_2FA required'])
+  ('stops after explicit rejected authentication instead of resending credentials: %s', async receipt => {
     vi.useFakeTimers();
     const dir = mkdtempSync(join(tmpdir(), 'login-failed-')), configFile = join(dir, 'accounts.json');
     writeFileSync(configFile, JSON.stringify({ enabled: true, accounts: [{ server: 'localhost:25565', username: 'tester',
@@ -93,11 +118,73 @@ describe('login readiness', () => {
       loginConfigFile: () => configFile, log: log as never, onSpawn() {}, onDisconnect });
     bridges.push(bridge);
     try {
-      bridge.start(); bot.emit('message', { toString: () => 'MC_AUTH_FAILED wrong password' }, 'system');
+      bridge.start(); bot.emit('message', { toString: () => receipt }, 'system');
       await vi.advanceTimersByTimeAsync(60_000);
       expect(bot.quit).toHaveBeenCalledOnce(); expect(onDisconnect).toHaveBeenCalledWith('连接关闭:auth failed', false, 0);
       expect(create).toHaveBeenCalledOnce();
     } finally { vi.useRealTimers(); rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('retries missing final authorization with increasing backoff and submits once per new connection', async () => {
+    vi.useFakeTimers();
+    const r = scopedLoginRig();
+    try {
+      r.bridge.start(); r.bots[0]!.emit('spawn');
+      r.message(0, 'MC_AUTH_LOGIN'); r.message(0, 'MC_AUTH_LOGIN repeated');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(r.bots[0]!.chat).toHaveBeenCalledTimes(1);
+      r.message(0, 'MC_AUTH_PASSWORD_OK');
+      expect(r.bridge.connected).toBe(false); expect(r.onSpawn).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(r.bridge.connectionState).toMatchObject({ phase: 'retrying', ready: false, reconnects: 1,
+        serverLogin: { reason: 'confirmation-timeout' } });
+      expect(r.onDisconnect).toHaveBeenLastCalledWith(expect.stringContaining('确认超时'), true, 0);
+      expect(r.bots[0]!.listenerCount('message')).toBe(0);
+      r.message(0, 'MC_AUTH_SUCCESS stale');
+      await vi.advanceTimersByTimeAsync(2999); expect(r.create).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1); expect(r.create).toHaveBeenCalledTimes(2);
+      r.bots[1]!.emit('spawn'); r.message(1, 'MC_AUTH_LOGIN'); r.message(1, 'MC_AUTH_LOGIN repeated');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(r.bots[1]!.chat).toHaveBeenCalledTimes(1);
+      expect(r.bridge.connectionState).toMatchObject({ phase: 'connecting', ready: false, reconnects: 1 });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(r.onDisconnect).toHaveBeenLastCalledWith(expect.stringContaining('确认超时'), true, 1);
+      expect(r.bridge.connectionState).toMatchObject({ phase: 'retrying', reconnects: 2 });
+      await vi.advanceTimersByTimeAsync(9999); expect(r.create).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(1); expect(r.create).toHaveBeenCalledTimes(3);
+      r.bots[2]!.emit('spawn');
+      expect(r.bridge.connected).toBe(false);
+      r.message(2, 'MC_AUTH_STATE {"username":"tester","authorized":true,"status":"authenticated"}');
+      expect(r.bridge.connectionState).toMatchObject({ phase: 'online', ready: true, reconnects: 0, failure: null });
+      expect(r.onSpawn).toHaveBeenCalledOnce();
+      expect(JSON.stringify(r.log.info.mock.calls)).not.toContain('private-reconnect-fixture');
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(r.create).toHaveBeenCalledTimes(3); expect(r.bots[2]!.quit).not.toHaveBeenCalled();
+    } finally { await r.close(); vi.useRealTimers(); }
+  });
+  it('cancels an authorization-timeout reconnect when manually stopped', async () => {
+    vi.useFakeTimers(); const r = scopedLoginRig();
+    try {
+      r.bridge.start(); await vi.advanceTimersByTimeAsync(1000);
+      expect(r.bridge.connectionState.phase).toBe('retrying');
+      await r.bridge.stop(); await vi.advanceTimersByTimeAsync(120_000);
+      expect(r.create).toHaveBeenCalledOnce();
+      expect(r.bridge.connectionState).toMatchObject({ phase: 'stopped', ready: false });
+    } finally { await r.close(); vi.useRealTimers(); }
+  });
+  it('disposes the old login timeout after a kick and waits for the new body to authorize', async () => {
+    vi.useFakeTimers(); const r = scopedLoginRig();
+    try {
+      r.bridge.start(); r.bots[0]!.emit('kicked', 'null'); r.bots[0]!.emit('end', 'socketClosed');
+      expect(r.onDisconnect).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(r.create).toHaveBeenCalledTimes(2); expect(r.bots[0]!.quit).not.toHaveBeenCalled();
+      r.message(0, 'MC_AUTH_SUCCESS stale'); r.bots[0]!.emit('spawn');
+      expect(r.bridge.connected).toBe(false);
+      r.message(1, 'MC_AUTH_SUCCESS'); r.bots[1]!.emit('spawn');
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(r.bridge.connectionState).toMatchObject({ phase: 'online', ready: true });
+      expect(r.create).toHaveBeenCalledTimes(2); expect(r.onSpawn).toHaveBeenCalledOnce();
+    } finally { await r.close(); vi.useRealTimers(); }
   });
   it.each([undefined, 90_000])('passes the keepalive timeout to the protocol client (%s)', keepAliveTimeoutMs => {
     const bot = Object.assign(new EventEmitter(), { _client: new EventEmitter(), loadPlugin() {}, quit() {} });

@@ -28,8 +28,8 @@ protected lastCombatDecision: { atMs: number; generation: number; outcome: unkno
   protected combatHealingUrgent(_bot: Bot): boolean { return false; }
   protected sendAutoCombatSpell(_bot: Bot, _spell: CombatSpell, _ruleId?: string): boolean { return false; }
   protected battlefieldChannel(): string | undefined { return undefined; }
-  protected override extensionTools(): ToolDef[] { return [{...COMBAT_TACTIC_TOOL, handler: (args, ctx) => this.setCombatTactic(args, ctx.role === 'host-decision')}]; }
-protected async setCombatTactic(args: Record<string, unknown>, hostSampling = false): Promise<string | ToolOutcome> {
+  protected override extensionTools(): ToolDef[] { return [{...COMBAT_TACTIC_TOOL, handler: (args, ctx) => this.setCombatTactic(args, ctx.role === 'host-decision', ctx.role)}]; }
+protected async setCombatTactic(args: Record<string, unknown>, hostSampling = false, role?: string): Promise<string | ToolOutcome> {
     const tool = 'mc_combat_tactic';
     this.syncRealm();
     if (args.choice !== undefined) {
@@ -43,6 +43,11 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
         candidate:choice.candidate,tacticRevision:choice.tacticRevision,goalCompleted:false,
         meaning: accepted ? 'action-sent; inspect server receipts and refreshed scene' : 'stale-or-ineligible'};
       this.choiceReceipts.push(receipt);if(this.choiceReceipts.length>32)this.choiceReceipts.shift();
+      const candidate = choice.candidate;
+      const target = ('targetId' in candidate && typeof candidate.targetId === 'number')
+        ? this.bridge?.bot?.entities[candidate.targetId]?.position ?? null : null;
+      const label = { engage: '接敌', retreat: '撤离', track: '跟踪', step: '短步移动', cast: '施法' }[candidate.kind];
+      this.reportViewerDecision(role, `choice:${this.connectionGeneration}:${receipt.id}`, label, accepted, target);
       this.emit('minecraft.tactic',JSON.stringify(receipt),false,{trigger:'piggyback',meta:receipt});
       return { text: this.toolLog(tool,args,JSON.stringify(receipt)), meta: { protocol: 'agent-mc-tactics/v1', receipt } };
     }

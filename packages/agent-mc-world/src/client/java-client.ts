@@ -104,6 +104,12 @@ export class JavaClientWorld implements World {
     ];
     const native=this.cfg.javaClient;
     return { text: parts.map(part => part.text).join('\n'), parts, snapshotTypes: ['minecraft.client.snapshot'],
+      decisionStability: { sampledAtMs: Date.parse(state.sampledAt),
+        identity: [state.uuid, state.username, state.server, state.generation], dimension: typeof state.dimension === 'string' ? state.dimension : null,
+        position: state.position?.length === 3 && state.position.every(Number.isFinite) ? [state.position[0], state.position[1], state.position[2]] : null,
+        health: typeof state.health === 'number' && Number.isFinite(state.health) ? state.health : null,
+        food: typeof state.food === 'number' && Number.isFinite(state.food) ? state.food : null,
+        guards: { body: [state.uuid, state.username, state.server, state.generation, state.dimension] } },
       ...(native ? {experience:{scope:{realm:`java:${native.expectedServer.toLowerCase().replace(/:25565$/, '')}`,
         account:`uuid:${native.expectedUuid.replaceAll('-', '').toLowerCase()}`,agent:this.services?.agentName??native.controllerId},
         observation:state.connected?{at:state.sampledAt,dimension:typeof state.dimension==='string'?state.dimension:null,

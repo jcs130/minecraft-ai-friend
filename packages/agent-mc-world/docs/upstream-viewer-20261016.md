@@ -1,6 +1,6 @@
 # Reviewed renderer input
 
-This candidate consumes mc-visual-console source `97ce75adc385816a7ffb2cf413906a835fd7e4a0`,
+This candidate consumes mc-visual-console source `e8a2255f4f70c3b7997716fa24f64ecd6654abc3`,
 rebuilt from its locked original Java 1.21.1 and 1.20.6 asset packs with no server preset.
 The release input and SHA-256 live in `release-sources.json`; generated Java data host provenance
 stays beside `core/java-data-viewer.mjs`. The independent client console and metadata monitor

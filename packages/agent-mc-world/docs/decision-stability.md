@@ -1,0 +1,11 @@
+# Bounded host decision stability
+
+The public `agent-mc-world/decisions` export includes `assessObservationStability(before, after, options)`. It is a pure comparison, starts no model or game connection, and authorizes no action. Both Mineflayer and Java client request facts supply `decisionStability` with fresh typed body fields and producer-owned guards. Hosts compare the original full facts, not the truncated prompt rendering.
+
+The default sample lifetime is 5 seconds. Within that lifetime, horizontal drift up to 1.5 blocks and vertical drift up to 1.25 blocks, an ordinary health tick of at most one point above the critical threshold, food drift of one point above six, and orientation changes can be tolerated. Identity, dimension, lost known body readings, health loss beyond one point, critical health, changed underwater/oxygen safety, unknown queue or menu identity changes reject the pending approval. The host retains its connection, cancellation, intent, event, lease and executable-target checks. Current facts remain distinct from the observation the model used.
+
+Other relevant scene changes return `recheck`. A host can retain the exact authorization and ask System1 again against fresh facts, with a bounded retry count. This is a classification retry before dispatch, never replay of an accepted or unknown action. A useful policy permits two rechecks, then hands the unstable situation to the planner. Unchanged opaque legacy observations remain compatible; changed opaque body readings are unsafe because their meaning cannot be established mechanically.
+
+The optional host combat selector ignores unrelated neutral bystanders when comparing tactical dependencies. Selected targets, allies, hostiles, unknown relations, new attacks against the party, omitted actor changes, equipment, action ownership, connection and tactic revision still invalidate old choices. The engine recomputes executable candidates, and the selector applies the freshly checked candidate. Existing movement, confidence, age and mana guards remain active. No decision tolerance confers new attack permission.
+
+Hosts should record tolerated categories, recheck counts and actual execution references as metadata. A completed method or stable scene does not prove arrival, a win, a learned skill or an overall goal.

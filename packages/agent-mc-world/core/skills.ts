@@ -917,12 +917,9 @@ function parseAnvil(c: Record<string, unknown>, at: string, marks?: MarkLookup):
   }
   if (op === 'rename') {
     if (!name) return { error: `${at} anvil 的 op:"rename" 要 name(新名字)` };
-    if (name.length > ANVIL_NAME_MAX) {
-      return { error: `${at} anvil 的 name 最多 ${ANVIL_NAME_MAX} 个字符,给了 ${name.length} 个` };
-    }
   }
-  if (op !== 'rename' && name !== null) {
-    return { error: `${at} anvil 的 name 只跟 op:"rename" 一起用;合修顺便改名分两步做` };
+  if (name && name.length > ANVIL_NAME_MAX) {
+    return { error: `${at} anvil 的 name 最多 ${ANVIL_NAME_MAX} 个字符,给了 ${name.length} 个` };
   }
   const anvilAt = c.at === undefined || c.at === null ? null : anchorOf(c.at, marks);
   if (c.at !== undefined && c.at !== null && !anvilAt) {
@@ -1439,7 +1436,9 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  加 "times":5 = 连着右键 5 次(最多 16)。
                                                  at 是被点击的参照格，face 是其表面；上面一格是 at+[0,1,0]，下面一格是 at+[0,-1,0]。
                                                  use 是右键交互，不能挖掉石头、苔藓或其他方块；破坏方块用 dig 并查其帮助。
-                                                 右键完成只证明点击流程已结束。重复操作先核对 observedEffect 可见变化；需要验证具体结果时给 expect（如 block:"air",at:[x,y,z]），未知读数不是空气。放方块/床/船用 build 的 anchors 指定目标格并核验
+                                                 右键完成只证明点击流程已结束。重复操作先核对 observedEffect 可见变化；需要验证具体结果时给 expect（如 block:"air",at:[x,y,z]），未知读数不是空气。放方块/床用 build 的 anchors 指定目标格并核验；船/竹筏是物品生成实体，走下面的 use，不走 build。
+{"skill":"use","item":"oak_boat","at":[103,64,-31]}
+                                                 放船：at 指已观察的水面/落点；回执分别核对背包船数量与附近船实体。没有船时先 craft 对应物品；水域、空位或区块未知时先观察。上船、驾驶、下船读 ride 帮助。
 {"skill":"use","item":"water_bucket","at":[-185,70,61]}
                                                  满桶由服务端沿视线选落点。at 是瞄准参照格；实心格瞄其 face 表面，顶面通常落在 at+[0,1,0]，不是参照格本身。
                                                  灌溉先挖田边水槽，把水放在槽内；对种着作物的耕地顶面倒水可能冲掉作物。先供水并核验，再播种。
@@ -1485,6 +1484,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  马/驴/骡可空手上骑、尝试驯服和下车；尚不支持驾驶。坐上去不证明驯服成功。
                                                  to 只认水平目的地,到目标 2.5 格内算到;20 秒零推进会自己下来并报走到哪。
 {"skill":"ride","target":"boat"}                 只骑上不走;之后驾驭再来一步 {"skill":"ride","to":[x,y,z]}
+                                                 较长水路可比较乘船、游泳、走桥或绕行；已有船先用，没有再核对 craft 材料和工作台，用 use 放船。1.21.1 的 oak_boat 是物品，boat 是实体；target 以当前版本与现场观察为准。
+                                                 先选已观察的水路与上岸点，分段驾到岸边再下船；骑着时 goto 不会驾船。放船、乘上、驶过水面和安全上岸分别核验，不把接口存在当作已经学会。
 {"skill":"ride","off":true}                      从坐骑上下来。骑着的时候寻路器不管坐骑,goto 走不了`,
     parse: parseRide,
     fields: [
@@ -1602,6 +1603,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     doc: `{"skill":"anvil","op":"combine","item":"iron_pickaxe","with":"iron_pickaxe"}
                                                  铁砧:两件同种合修(耐久相加+12%),或本体+附魔书。
                                                  op:"repair" 与 combine 同义。**花的是经验等级**,回执报实扣几级;
+                                                 已有名字不限制修理；用 pick 点名那件装备，不填 name 保留服务端原名和属性。
+                                                 repair/combine 可同时填 name 改名，不必拆成两次。产物、附魔和花费以服务端为准。
                                                  等级不够时产出拿不走,回执会说门槛。铁砧每用一次有 12% 概率磨损一级
 {"skill":"anvil","op":"rename","item":"iron_sword","name":"新名字"}
                                                  改名(最多 ${ANVIL_NAME_MAX} 字符)。at 不写就用附近 16 格内的铁砧
@@ -1611,9 +1614,9 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     parse: parseAnvil,
     fields: [
       { key: 'op', kind: 'enum', values: ['repair', 'combine', 'rename'], required: true, error: 'anvil 的 op 只认 repair/combine/rename' },
-      { key: 'item', kind: 'string', required: true, hint: '左格物品英文 id' },
+      { key: 'item', kind: 'string', required: true, hint: '左格物品英文 id 或当前完整显示名' },
       { key: 'with', kind: 'string', doc: 'repair/combine 必写:右格放什么' },
-      { key: 'name', kind: 'string', doc: 'rename 必写:新名字' },
+      { key: 'name', kind: 'string', doc: 'rename 必写；repair/combine 可选:同时改成此名字，不写保留原名' },
       // 挑选词的说明只挂第一处:字段池按 (技能, doc) 逐条印,六个技能各写一遍就是印六遍
       { key: 'pick', kind: 'string', doc: PICK_DOC },
       { key: 'withPick', kind: 'string', doc: '同 pick,筛的是 with 那一格' },

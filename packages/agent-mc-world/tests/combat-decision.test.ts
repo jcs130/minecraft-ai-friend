@@ -54,6 +54,20 @@ function rig() {
 afterEach(() => vi.useRealTimers());
 
 describe('independent asynchronous combat choices', () => {
+  it('tolerates unrelated neutral bystander visibility and departure', async () => {
+    vi.useFakeTimers(); const r = rig();
+    r.f!.battlefield.actors.push({ ...r.f!.battlefield.actors[1], entityId: 8, uuid: 'neutral', relation: 'neutral', targetEntityId: null });
+    r.loop.tick(); r.f!.battlefield.actors.pop(); r.resolve(); await vi.advanceTimersByTimeAsync(1);
+    expect(r.sent).toHaveLength(1); expect(r.reports.at(-1)?.data.outcome).toBe('sent'); r.loop.stop();
+  });
+  it.each(['new-hostile', 'bystander-attacks', 'hidden-actors'])('still rejects a changed threat: %s', async change => {
+    vi.useFakeTimers(); const r = rig(); r.loop.tick();
+    if (change === 'hidden-actors') r.f!.battlefield.omitted = 2;
+    else r.f!.battlefield.actors.push({ ...r.f!.battlefield.actors[0], entityId: 8, uuid: 'new',
+      relation: change === 'new-hostile' ? 'hostile' : 'neutral', targetEntityId: 1 });
+    r.resolve(); await vi.advanceTimersByTimeAsync(1);
+    expect(r.sent).toHaveLength(0); expect(r.reports.at(-1)?.data.outcome).toBe('scene-changed'); r.loop.stop();
+  });
   it.each([['clear-lead', [.45, .3, .2, .05], 'sent'], ['near-tie', [.4, .39, .16, .05], 'uncertain']] as const)
     ('uses a separately configured multi-option floor and rejects %s ambiguity', async (_name, scores, expected) => {
       vi.useFakeTimers(); const r = rig(); r.cfg.minConfidence = .4; r.cfg.minMargin = .1;

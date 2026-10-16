@@ -3436,6 +3436,12 @@ export class MinecraftWorld implements World {
       : null);
     parts.push({ key: 'lastTask', text: outcome });
     return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts,
+      decisionStability: { sampledAtMs: Date.now(),
+        identity: [this.realmKey(), bot?.player?.uuid ?? bot?.username ?? null], dimension: normalizeDimension(snap.dimension),
+        position: [snap.position.x, snap.position.y, snap.position.z], health: snap.health, food: snap.food,
+        guards: { body: [snap.inWater, snap.inWater ? snap.oxygen : null],
+          place: [snap.biome, snap.standingOn, snap.dimension, snap.gameMode],
+          clock: [snap.timeOfDay >= 13000 && snap.timeOfDay < 23000, snap.raining, snap.light === null ? null : snap.light <= 7] } },
       experience: { scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.botName },
         observation: { at: new Date().toISOString(), dimension: normalizeDimension(snap.dimension), position: snap.position,
           health: snap.health, food: snap.food, inventory: operationInventory(snap.inventory, snap.invSynced) } },
@@ -3448,6 +3454,9 @@ export class MinecraftWorld implements World {
   protected unavailableConnectionText(): string {
     const connection = this.bridge?.connectionState;
     if (!connection || !connection.active) return 'Minecraft 连接尚未启用；当前世界读数不可用。';
+    if (connection.serverLogin?.stage === 'required') {
+      return '服务器当前要求重新登录；网络连接仍保留，但操作授权未就绪，旧在线状态已经失效。目标保留，等待新的授权确认；不要把消息发送成功当成施法或移动生效，也不要重复提交未生效的动作。';
+    }
     if (connection.phase === 'stopped') {
       const reasons: Record<string, string> = {
         'confirmation-timeout': '服务器登录确认超时（不等于密码错误）',
@@ -3496,6 +3505,8 @@ export class MinecraftWorld implements World {
               ? { state: 'offline' as const, hint: '未启动' }
               : connected
                 ? { state: 'online' as const, hint: `${this.cfg.host}:${this.cfg.port}` }
+                : this.bridge.connectionState?.serverLogin?.stage === 'required'
+                  ? { state: 'error' as const, hint: this.unavailableConnectionText() }
                 : this.bridge.connectionState?.phase === 'stopped'
                   ? { state: 'error' as const, hint: this.unavailableConnectionText() }
                 : this.bridge.reconnects <= 2
@@ -4462,8 +4473,8 @@ export class MinecraftWorld implements World {
         } catch (error) { return { text: this.toolLog('mc_script', args, String(error)), failed: true }; }
       },
       // 路标表在受理这一刻取一次:at 写名字时按当刻登记解析
-      mc_do: async (args) => this.enqueueTool('mc_do', args, (raw) => parseSteps(raw, this.markLookup())),
-      mc_scout: async (args) => this.enqueueTool('mc_scout', args, (raw) => parseScoutSteps(raw, this.markLookup())),
+      mc_do: async (args, ctx) => this.enqueueTool('mc_do', args, (raw) => parseSteps(raw, this.markLookup()), undefined, ctx.role),
+      mc_scout: async (args, ctx) => this.enqueueTool('mc_scout', args, (raw) => parseScoutSteps(raw, this.markLookup()), undefined, ctx.role),
       mc_attention: async (args) => this.perceptionReadout('mc_attention',args),
       mc_hear: async (args) => this.perceptionReadout('mc_hear',args),
       mc_risk: async (args) => this.perceptionReadout('mc_risk',args),
@@ -6260,11 +6271,22 @@ export class MinecraftWorld implements World {
   }
 
   /** mc_do / mc_scout 共用:校验 → 受理。参数错误优先于「World 未启动」。 */
+  protected reportViewerDecision(role: string | undefined, id: string, label: string, accepted: boolean,
+    target: { x: number; y: number; z: number } | null = null): void {
+    const bot = this.bridge?.bot;
+    if (!bot) return;
+    try {
+      (bot as unknown as EventEmitter).emit('viewer:decision', { id, label,
+        source: role === 'host-decision' ? 'system1' : role === 'main' ? 'system2' : 'unknown',
+        status: accepted ? 'accepted' : 'rejected', from: bot.entity?.position ?? null, target });
+    } catch { /* Read-only presentation cannot change task admission or execution. */ }
+  }
   protected enqueueTool(
     name: 'mc_do' | 'mc_scout',
     args: Record<string, unknown>,
     parse: (raw: unknown) => { steps: SkillCall[]; notes?: ParseNote[] } | { error: string },
     methodAdmission?: (decision: TaskAdmissionDecision) => void,
+    role?: string,
   ): string | ToolOutcome {
     // Proven pre-dispatch rejection: no queue mutation, navigation or interaction took place.
     const invalidArguments = (rule: string, text: string): ToolOutcome => ({
@@ -6281,7 +6303,8 @@ export class MinecraftWorld implements World {
     if (!this.executor) return { text: this.toolLog(name, args, `[${name} 失败] World 未启动`), failed: true };
     // A stopped login cannot execute a new body task. Reject before queue=replace
     // can cancel existing work or create a misleading accepted task receipt.
-    if (!this.bridge?.bot && this.bridge?.connectionState?.phase === 'stopped') {
+    if (!this.bridge?.bot && (this.bridge?.connectionState?.phase === 'stopped'
+      || this.bridge?.connectionState?.serverLogin?.stage === 'required')) {
       return { text: this.toolLog(name, args, `[${name} 未受理] ${this.unavailableConnectionText()} 当前任务和待办保留。`), failed: true };
     }
     const only = parsed.steps.length === 1 ? parsed.steps[0] : null;
@@ -6370,6 +6393,16 @@ export class MinecraftWorld implements World {
     const execution: ExecutionReceipt | undefined = admittedTaskId === undefined ? undefined : { kind:'task',
       id:`${this.executionEpoch}:${admittedTaskId}`, phase: admitted ? completedImmediately ? 'completed' : 'accepted' : 'rejected',
       terminal: !admitted || completedImmediately, goalCompleted:false, evidence:{localId:admittedTaskId,receipt} };
+    if (admittedTaskId !== undefined) {
+      const at = parsed.steps.find(step => Array.isArray((step as { at?: unknown }).at)) as { at?: number[] } | undefined;
+      const point = at?.at?.length === 3 && at.at.every(Number.isFinite) ? { x: at.at[0], y: at.at[1], z: at.at[2] } : null;
+      const labels: Record<string, string> = { goto: '前往目标', attack: '攻击', gather: '采集', collect: '收集',
+        eat: '进食', take: '取物', store: '存放', toss: '丢弃', craft: '合成', smelt: '烧炼', use: '交互',
+        build: '建造', tunnel: '挖掘通道', excavate: '挖掘', pickup: '拾取', flight: '飞行', move: '移动',
+        chat: '发送消息', wait: '等待', observe: '观察', probe: '探查' };
+      this.reportViewerDecision(role, `${this.executionEpoch}:${admittedTaskId}`,
+        `任务 #${admittedTaskId} · ${parsed.steps.slice(0, 3).map(step => labels[step.skill] ?? '动作').join(' / ')}`, admitted, point);
+    }
     // Preserve machine-readable admission evidence instead of requiring a host
     // to classify a localized receipt. A processing correction carries the
     // actual registry documentation, without another model/server request.

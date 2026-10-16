@@ -35,7 +35,9 @@ function rig(){
   const call=(args:any)=>m.execute(args,{role:'fixture-agent',callId:'fixture'} as any);
   return{m,cfg,port,call,calls,readAttempts,events,actions,held,state,get stateReads(){return stateReads;},setCap:(v:boolean)=>cap=v,setAdvertised:(v:string[])=>advertised=v,setHang:(v:boolean)=>hang=v,setCleanupFail:(v:boolean)=>cleanupFail=v};
 }
-async function finished(r:ReturnType<typeof rig>,id:number){await vi.waitFor(()=>expect(r.m.runner.read(id)[0].status).not.toBe('running'));await vi.waitFor(()=>expect(r.events.some(e=>e.execution.evidence.localId===id)).toBe(true));return r.m.runner.read(id)[0];}
+// Native and Mineflayer methods both start a real SES worker. Preserve the
+// upstream bounded completion window while retaining short-reply coverage.
+async function finished(r:ReturnType<typeof rig>,id:number){await vi.waitFor(()=>expect(r.m.runner.read(id)[0].status).not.toBe('running'),{timeout:5000});await vi.waitFor(()=>expect(r.events.some(e=>e.execution.evidence.localId===id)).toBe(true),{timeout:5000});return r.m.runner.read(id)[0];}
 it('folds a short native program and its confirmed cleanup into the default tool reply',async()=>{
   const r=rig();Reflect.deleteProperty(r.cfg,'methodWaitMs');
   const reply=await r.call({name:'one-read',code:'return (await bot.read("entity.position")).x;'});

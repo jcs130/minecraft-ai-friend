@@ -47,8 +47,9 @@ export function installServerLogin(bot, options) {
   let stage = 'disabled', attempted = false, active = true, account, timer;
   let reason = null, authState = null;
   const report = (status, detail = null) => {
+    if (stage === status && reason === detail) return;
     stage = status; reason = detail;
-    if (['confirmed', 'blocked', 'closed'].includes(status)) clearTimeout(timer);
+    if (['confirmed', 'retrying', 'blocked', 'closed'].includes(status)) clearTimeout(timer);
     options.report?.({ status, reason, username: options.username, server: options.server });
   };
   try {
@@ -73,7 +74,9 @@ export function installServerLogin(bot, options) {
           report('armed');
           const timeoutMs = account.timeoutMs ?? 30000;
           if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 300000) throw new Error('invalid timeout');
-          timer = setTimeout(() => { if (active && ['armed', 'submitted'].includes(stage)) report('blocked', 'confirmation-timeout'); }, timeoutMs);
+          // Missing final authorization is unknown, not a rejected credential.
+          // End this attempt and let the connection owner use its normal backoff.
+          timer = setTimeout(() => { if (active && ['armed', 'submitted'].includes(stage)) report('retrying', 'confirmation-timeout'); }, timeoutMs);
           timer.unref?.();
         } else report('blocked', 'account-not-matched');
       } else if (config.enabled === true) {
@@ -83,7 +86,7 @@ export function installServerLogin(bot, options) {
   } catch { account = undefined; report('blocked', 'invalid-configuration'); }
   const stop = () => { active = false; clearTimeout(timer); bot.off('message', onMessage); bot.off('end', stop); bot.off('kicked', stop); stage = 'closed'; };
   const onMessage = (message, position) => {
-    if (!active || !account || !['armed', 'submitted'].includes(stage) || position !== 'system') return;
+    if (!active || !account || !['armed', 'submitted', 'confirmed', 'required'].includes(stage) || position !== 'system') return;
     const value = message.toString().replace(/§[0-9A-FK-OR]/gi, '').trimStart();
     const stateMatch = /^(?:MC_AUTH_STATE|\[MC_AUTH_STATE\])\s+(\{.*\})\s*$/s.exec(value);
     if (stateMatch) {
@@ -92,6 +95,7 @@ export function installServerLogin(bot, options) {
       try {
         const data = JSON.parse(stateMatch[1]);
         if (!data || typeof data !== 'object' || Array.isArray(data)
+          || typeof data.authorized !== 'boolean' || typeof data.status !== 'string'
           || (data.username !== undefined && data.username !== options.username)) return;
         authState = { authorized: data.authorized === true,
           status: typeof data.status === 'string' ? data.status : 'unknown',
@@ -100,13 +104,28 @@ export function installServerLogin(bot, options) {
           nextCommand: typeof data.nextCommand === 'string' && data.nextCommand.length <= 256
             && !/[\r\n\x00]/.test(data.nextCommand) ? data.nextCommand : null };
         if (authState.authorized && authState.status === 'authenticated') report('confirmed');
+        else if (data.authorized === false && ['confirmed', 'required'].includes(stage)) {
+          report('required', 'authorization-revoked');
+        }
       } catch { /* No authority in invalid JSON. */ }
       return;
     }
     if (/^(?:MC_AUTH_STATE|\[MC_AUTH_STATE\])(?:\s|$)/.test(value)) return;
-    if (matches(value, account.failureMarkers)) { report('blocked', 'server-rejected'); return; }
-    if (matches(value, account.successMarkers)) { report('confirmed'); return; }
-    if (attempted || !matches(value, account.requestMarkers)) return;
+    if (/^(?:MC_AUTH_DENIED|\[MC_AUTH_DENIED\])(?:\s|$)/.test(value)
+      && ['confirmed', 'required'].includes(stage)) {
+      authState = { ...authState, authorized: false, status: 'login_required',
+        passwordSet: authState?.passwordSet ?? null, nextCommand: null };
+      report('required', 'authorization-revoked');
+      return;
+    }
+    if (matches(value, account.failureMarkers)) {
+      report(['confirmed', 'required'].includes(stage) ? 'required' : 'blocked', 'server-rejected'); return;
+    }
+    if (matches(value, account.successMarkers)) {
+      if (authState) authState = { ...authState, authorized: true, status: 'authenticated' };
+      report('confirmed'); return;
+    }
+    if (attempted || ['confirmed', 'required'].includes(stage) || !matches(value, account.requestMarkers)) return;
     attempted = true;
     const selected = account;
     void (options.readCredential ? options.readCredential(selected.credentialFile) : readAccountCredential(selected, options.configFile)).then(bytes => {

@@ -458,6 +458,7 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
     await r.runtime.connect();
     try {
       expect(JSON.stringify(r.runtime.currentFacts())).not.toContain('large-book-payload');
+      expect(r.runtime.currentFacts().decisionStability).toMatchObject({ identity: expect.any(Array), health: r.state.health });
       const bag=await r.runtime.call('mc_bag',{});expect(bag.text.length).toBeLessThan(5000);expect(bag.text).not.toContain('large-book-payload');
       expect((await r.runtime.call('mc_bag',{item:'player_head',detail:'components',limit:1000})).text).toContain('large-book-payload');
       const snapshot=await r.runtime.call('mc_state',{}),compact=JSON.parse(snapshot.text);expect(snapshot.text.length).toBeLessThan(5000);

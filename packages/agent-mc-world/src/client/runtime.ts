@@ -250,7 +250,9 @@ export class MinecraftAgentClient {
     const current = this.phase === 'started' ? this.world.requestFacts?.() as import('./contracts.ts').WorldRequestFacts | null : null;
     const connection = { key: 'connection', text: JSON.stringify({ phase: this.phase, host: this.options.cfg.host,
       port: this.options.cfg.port, username: this.options.cfg.username, version: this.options.cfg.version }) };
-    return { protocol: PROTOCOL, run: this.journal.run, observation: operationObservation(current?.experience?.observation), parts: this.facts.replace({ text: '', snapshotTypes: [],
+    return { protocol: PROTOCOL, run: this.journal.run,
+      ...(current?.decisionStability ? { decisionStability: structuredClone(current.decisionStability) } : {}),
+      observation: operationObservation(current?.experience?.observation), parts: this.facts.replace({ text: '', snapshotTypes: [],
       parts: [connection, ...(current?.parts ?? (current?.text ? [{key:'world',text:current.text}] : []))] }) };
   }
 
