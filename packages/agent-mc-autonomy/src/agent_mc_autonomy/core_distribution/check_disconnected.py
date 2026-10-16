@@ -7,10 +7,61 @@ import tempfile
 from pathlib import Path
 
 
+def check_context(environment: str, tools: list) -> dict:
+    """Check the real catalogue with defaults and explicit limits, without a model."""
+    from agent_mc_autonomy import controller
+    from agent_mc_autonomy.configuration import Settings
+    from agent_mc_autonomy.context import encode
+    from agent_mc_autonomy.context_counter import BYTE_COUNTER_NAME, FRAMING_RESERVE
+
+    settings = Settings.parse({})
+    projected = controller.model_tools(tools)
+    # Synthetic evidence exercises retention; it makes no live-world claim.
+    facts = {"parts": [
+        {"key": "body", "text": "health 14/20, hunger 9/20, onGround true", "original": "fixture:body"},
+        {"key": "place", "text": "overworld (0,64,0), water east", "original": "fixture:place"},
+        {"key": "queue", "text": "idle; previous task ended; no pending actions", "original": "fixture:queue"},
+    ]}
+    failure = {"tool": "mc_scout", "error": "ray yaw exceeds maximum 180", "receipt": "fixture:rejected",
+               "next_step": "Read mc_tool_help before correcting the ray; original request was not dispatched."}
+    messages, budget = controller.assemble(environment, projected, "survive", facts, [], [],
+        context_tokens=settings.context_tokens, reserved_output=settings.max_output_tokens, tool_failure=failure)
+    tail = json.loads(messages[-1]["content"])
+    assert tail["current_facts"] == facts["parts"] and not budget["omitted"]
+    assert tail["tool_failure"] == failure
+    assert "mc_original" in tail["originals"] and "mc_protocol" in tail["originals"]
+    assert "mc_help" in messages[0]["content"] and "mc_tool_help" in messages[0]["content"]
+    assert budget["counter"] == BYTE_COUNTER_NAME and budget["units"] == "token_upper_bound"
+    assert budget["input"] == len(encode({"messages": messages, "tools": projected}).encode("utf-8"))
+    assert budget["output_reserve"] == settings.max_output_tokens
+    assert budget["framing_reserve"] == FRAMING_RESERVE
+    assert budget["total"] == budget["input"] + settings.max_output_tokens + FRAMING_RESERVE
+    assert budget["total"] <= settings.context_tokens
+    smaller = Settings.parse({"autonomy": {"context_tokens": 32768}})
+    assert smaller.context_tokens == 32768
+    try:
+        controller.assemble(environment, projected, "survive", facts, [], [],
+            context_tokens=smaller.context_tokens, reserved_output=smaller.max_output_tokens, tool_failure=failure)
+    except ValueError as error:
+        if not str(error).startswith("context_budget_exceeded:"):
+            raise
+        refusal = str(error)
+    else:
+        raise AssertionError("Expected explicit 32K conservative-budget rejection for this packed catalogue")
+    optional = Settings.parse({"autonomy": {"context_tokens": 131072}})
+    larger_messages, _ = controller.assemble(environment, projected, "survive", facts, [], [],
+        context_tokens=optional.context_tokens, reserved_output=optional.max_output_tokens, tool_failure=failure)
+    assert larger_messages == messages
+    return {"budget": budget, "projected_tools": [tool["function"]["name"] for tool in projected],
+            "explicit_32k_refusal": refusal, "optional_128k_preserved": optional.context_tokens == 131072,
+            "essential_facts_and_failure_retained": True, "counter_is_measured_model_tokens": False}
+
+
 async def check(directory: Path, node: str) -> dict:
     root = Path(__file__).resolve().parent
     from agent_mc_autonomy import bridge as module
     from agent_mc_autonomy import controller
+    from agent_mc_autonomy.configuration import Settings
 
     from . import install as installer
     installer.verify_runtime(directory.resolve())
@@ -59,14 +110,14 @@ async def check(directory: Path, node: str) -> dict:
             assert module.json_content(await bridge.call("mc_connection", {"action": "status"}))["phase"] == "disconnected"
             environment = module.text_content(await bridge.resource("mc://environment"))
             assert "mc_help" in environment
-            _, budget = controller.assemble(environment, controller.model_tools(bridge.tools), "survive", {"parts": []}, [], [],
-                                            context_tokens=32768, reserved_output=1024)
-            # Keep room for one image and essential body facts in the default
-            # 32k budget, while complete large tool manuals stay retrievable.
+            context_check = check_context(environment, bridge.tools)
+            budget = context_check["budget"]
+            settings = Settings.parse({})
+            # Check reserved image capacity; this is not a rendered-image or model test.
             try:
                 _, image_budget = controller.assemble(environment, controller.model_tools(bridge.tools), "survive", {"parts": [
                     {"key": "body", "text": "health 20/20, hunger 20/20"}, {"key": "place", "text": "overworld (0,64,0)"}]}, [], [],
-                    context_tokens=32768 - controller.IMAGE_RESERVE, reserved_output=2048)
+                    context_tokens=settings.context_tokens - controller.IMAGE_RESERVE, reserved_output=2048)
                 image_fits = not image_budget["omitted"]
             except ValueError as error:
                 if not str(error).startswith("context_budget_exceeded:"):
@@ -93,6 +144,7 @@ async def check(directory: Path, node: str) -> dict:
             return {"ok": True, "protocol": "MCP stdio", "profile": status["profile"], "tools": len(names),
                     "phase": status["phase"], "game_connected": False, "network_denied": True,
                     "minecraft_version": "1.21.1", "stable_context_byte_budget": budget["total"],
+                    "context_check": context_check,
                     "image_and_body_facts_fit_default_budget": image_fits,
                     "concurrent_status_and_cancel": True,
                     "service_learning_contract": True, "service_learning_opt_in": True,
