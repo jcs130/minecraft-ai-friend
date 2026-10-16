@@ -1341,14 +1341,11 @@ describe('战斗:水里与逃不掉', () => {
     const r = combatRigBot(foes);
     (r.bot as unknown as Record<string, unknown>).blockAt = (p: { x: number; y: number }) => {
       const onLand = p.x >= 5;
-      if (p.y >= 65) return { name: 'air', boundingBox: 'empty' };
-      if (p.y === 64) return onLand
-        ? { name: 'air', boundingBox: 'empty' }
-        : { name: 'water', boundingBox: 'empty' };
-      if (p.y === 63) return onLand
-        ? { name: 'stone', boundingBox: 'block' }
-        : { name: 'water', boundingBox: 'empty' };
-      return { name: 'stone', boundingBox: 'block' };
+      const name = p.y >= 65 ? 'air' : p.y === 64 ? onLand ? 'air' : 'water'
+        : p.y === 63 ? onLand ? 'stone' : 'water' : 'stone';
+      // Bank admission now verifies collision geometry, as a real 1.21.1 block does.
+      return { name, boundingBox: name === 'stone' ? 'block' : 'empty',
+        getProperties: () => ({}), shapes: name === 'stone' ? [[0, 0, 0, 1, 1, 1]] : [] };
     };
     return r;
   }

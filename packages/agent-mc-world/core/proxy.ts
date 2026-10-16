@@ -418,6 +418,7 @@ export class MinecraftWorldProxy implements World {
       this.pending.delete(msg.id);
       clearTimeout(p.timer);
       p.cleanup?.();
+      if (msg.requestFacts !== undefined) this.requestFactsCache = msg.requestFacts;
       if (msg.ok) p.resolve(msg.value);
       else p.reject(new Error(msg.error ?? '子进程报错'));
       return;
@@ -436,6 +437,9 @@ export class MinecraftWorldProxy implements World {
       if (!host) throw new Error('宿主未接线');
       let value: unknown;
       if (req.kind === 'push') {
+        // Observers run inside pushEvent. Publish the correlated sample before
+        // they record the terminal, including null when sampling failed.
+        if (req.requestFacts !== undefined) this.requestFactsCache = req.requestFacts;
         value = await host.pushEvent({ ...req.evt, blobs: decodeBlobs(req.evt.blobs) }, req.opts);
       } else if (req.kind === 'drain') {
         value = await host.drainPendingEvents((e) => e.source === this.id);
