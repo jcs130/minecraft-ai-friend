@@ -123,6 +123,16 @@ class DeathMemory:
             # Legacy notified means transport accepted, not reflection completed.
             return [r for r in rows if not pending or not (r.get("reflection") or r.get("lesson"))]
 
+    def current_episode(self, scope, facts=None, *, pending=False):
+        """Newest real scoped episode only; unfinished history is not current authority."""
+        latest = next(iter(self.entries(scope)), None)
+        if not latest or (pending and (latest.get("reflection") or latest.get("lesson"))):
+            return None
+        life = lifecycle(facts) if facts is not None else None
+        if isinstance(life, dict) and life.get("episodeId") not in {None, latest["id"]}:
+            return None
+        return latest
+
     def notified(self, episode):
         with self.connection() as db:
             db.execute("UPDATE death_episodes SET notified=1 WHERE scope=? AND id=?", (scope_key(episode["scope"]), episode["id"]))

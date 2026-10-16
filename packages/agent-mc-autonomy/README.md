@@ -18,6 +18,14 @@ can revalidate it under a new UUID/baseline without reporting old work complete.
 An unrelated new user intent requires a new subordinate proposal instead.
 This source repair does not change the packaged core input or prove live play.
 
+Current death review hydration selects only the newest real scoped episode that
+matches available lifecycle evidence and still needs reflection. Older unfinished
+episodes stay in `death_review search/get` as history, even when the newest episode
+already has a lesson or honest deferral. An obsolete current-review envelope is
+superseded without ACK or fabricated learning; its own retry backoff cannot block
+fresh ordinary presence/profile inspection. Historical inspection timestamps never
+count as a fresh inspection of a replacement envelope.
+
 0.1.67 adds optional compact host inspection (`compact=True`) and immutable
 review evidence snapshots. Query `decide(id, "inspect", evidence_ref=...,
 detail_path=["evidence", "death_episode", "receipts"], detail_offset=0)`;

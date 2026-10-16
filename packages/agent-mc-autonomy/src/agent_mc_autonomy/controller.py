@@ -342,7 +342,7 @@ class Controller:
             self.death_waiting = life.get("phase") != "alive"
         self.synchronize_goals()
         self.publish(facts=facts, game_identity=self.game_scope,
-                     death_episode=next(iter(self.death_memory.entries(self.game_scope, pending=True)), None))
+                     death_episode=self.death_memory.current_episode(self.game_scope, facts, pending=True))
         return not self.death_waiting
 
     def stage_baseline(self):

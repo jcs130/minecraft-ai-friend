@@ -157,9 +157,21 @@ class ReviewPort:
     def request_id(self, review_id):
         return str(uuid.uuid5(uuid.NAMESPACE_URL, self.directory.as_uri() + ":" + review_id))
 
+    def current_observation(self, status):
+        """Sanitize even pre-upgrade snapshots before any current-review operation."""
+        if not review_observation(status, self.now()):
+            return None
+        snapshot = status.get("observation", status)
+        episode = DeathMemory(self.directory).current_episode(
+            snapshot.get("game_identity"), snapshot.get("facts", {}), pending=True)
+        supplied = snapshot.get("death_episode")
+        if episode and isinstance(supplied, dict) and all(supplied.get(key) == episode.get(key) for key in ("id", "scope", "source_event")):
+            episode = supplied  # Preserve lossless receipts from the same verified episode.
+        return review_observation({**snapshot, "death_episode": episode}, self.now())
+
     def speech_current(self, correlation):
         """Validate output against this decision, allowing only its own new goal."""
-        current = review_observation(observation(self.directory), self.now())
+        current = self.current_observation(observation(self.directory))
         if (self.stopping() or not current or current["session"] != correlation["session"]
                 or current["scope"] != correlation["scope"] or current["baseline"] != correlation["baseline"]
                 or self.now() > correlation["expires_at"]):
@@ -264,25 +276,32 @@ class ReviewPort:
     def observe(self, snapshot):
         """Called by the existing runtime publish path, never by a frontend timer."""
         now = self.now()
-        observed = review_observation(snapshot, now)
+        observed = self.current_observation(snapshot)
         if not observed or self.stopping():
             return
         observed["evidence"]["current_user_goal"] = self.mailbox.current_user_goal(observed["evidence"]["current_goal"].get("id"))
-        if episode := observed["evidence"].get("death_episode"):
-            if not any(row["id"] == episode["id"] for row in DeathMemory(self.directory).entries(episode["scope"], pending=True)):
-                observed["evidence"].pop("death_episode")
-                if observed["urgent"] == "death:" + str(episode["id"]):
-                    observed["urgent"] = None
         with self.transaction() as state:
             self.reconcile(state)
             policy = ReviewPolicy.parse(state.get("policy", {}))
             if not policy.enabled:
                 return
             previous = state.get("review", {})
+            previous_episode = previous.get("evidence", {}).get("death_episode")
+            superseded_death = bool(previous_episode
+                and previous_episode["id"] != observed["evidence"].get("death_episode", {}).get("id")
+                and (not previous.get("result") or previous["result"].get("error") == "main_brain_not_acknowledged"
+                     or previous["result"].get("reflection_pending")))
+            if superseded_death:
+                state["last_superseded_review"] = {"id": previous["id"], "episode_id": previous_episode["id"],
+                    "reason": "death_episode_superseded", "acknowledged": previous.get("result", {}).get("acknowledged") is True,
+                    "inspected_at": previous.get("inspected_at"), "historical": True}
+                # Only the invalid current-death envelope loses its backoff. The
+                # unfinished episode and all actual delivery/lesson receipts stay.
+                state.pop("retry_after", None)
             revision = self.mailbox.intent_revision()
             same_session = previous.get("session") == observed["session"]
             same_intent = previous.get("revision") == revision and previous.get("intent") == observed["intent"]
-            urgent = bool(observed["urgent"] and observed["urgent"] != previous.get("urgent"))
+            urgent = superseded_death or bool(observed["urgent"] and observed["urgent"] != previous.get("urgent"))
             if state.get("material") != observed["material"] or not same_session:
                 state.update(material=observed["material"], material_since=now)
             observed["evidence"]["material_unchanged_seconds"] = int(now - state.get("material_since", now))
@@ -317,7 +336,7 @@ class ReviewPort:
 
     def offer(self):
         """Claim one bounded delivery attempt; does not manufacture a game event."""
-        current = review_observation(observation(self.directory), self.now())
+        current = self.current_observation(observation(self.directory))
         if not current or self.stopping():
             return {"offered": False, "reason": "no_fresh_running_observation"}
         with self.transaction() as state:
@@ -325,6 +344,8 @@ class ReviewPort:
             review = state.get("review", {})
             if not state.get("policy", {}).get("enabled") or not review or review.get("result"):
                 return {"offered": False, "reason": "no_pending_review"}
+            if (episode := review.get("evidence", {}).get("death_episode")) and episode["id"] != current["evidence"].get("death_episode", {}).get("id"):
+                return {"offered": False, "reason": "death_episode_superseded", "historical": True, "episode_id": episode["id"]}
             if current["session"] != review["session"] or current["intent"] != review["intent"] or self.mailbox.intent_revision() != review["revision"]:
                 return {"offered": False, "reason": "review_superseded"}
             now = self.now()
@@ -352,7 +373,7 @@ class ReviewPort:
 
     def defer(self, review_id, accepted):
         """Complete a quiet periodic context delivery without claiming a main decision."""
-        current = review_observation(observation(self.directory), self.now())
+        current = self.current_observation(observation(self.directory))
         if self.stopping():
             return {"is_error": True, "error": "disabled_or_stopped"}
         with self.transaction() as state:
@@ -379,7 +400,7 @@ class ReviewPort:
 
     def bind_character(self, review_id, reference, profile):
         """Static public identity after fresh inspection; no strategic effects."""
-        current = review_observation(observation(self.directory), self.now())
+        current = self.current_observation(observation(self.directory))
         with self.transaction() as state:
             review = state.get("review", {})
             if (not current or self.stopping() or not state.get("policy", {}).get("enabled")
@@ -423,7 +444,7 @@ class ReviewPort:
         if len(reason) > 600 or len(goal) > 2000 or (decision != "inspect" and not reason.strip()) or (decision in {"insert", "revise"} and not goal.strip()):
             return {"is_error": True, "error": "reason_and_stage_goal_required"}
         snapshot = observation(self.directory)
-        current = review_observation(snapshot, self.now())
+        current = self.current_observation(snapshot)
         choice = {"decision": decision, "reason": reason.strip(), "goal": goal.strip()}
         with self.transaction() as state:
             self.reconcile(state)
