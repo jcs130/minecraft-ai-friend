@@ -71,6 +71,10 @@ export interface WorldHost {
 export interface WorldRequestFacts {
   text: string; snapshotTypes: readonly string[]; parts?: readonly { key: string; text: string }[];
   experience?: { scope: import('../../core/game-memory.ts').GameMemoryScope; observation: import('../../core/operation-experience.ts').OperationObservation | null };
+  /** Fresh typed fields for optional host-side bounded decision stability checks. */
+  decisionStability?: { sampledAtMs: number; identity: unknown; dimension: string | null;
+    position: readonly [number, number, number] | null; health: number | null; food: number | null;
+    guards: Readonly<Record<string, unknown>> };
 }
 export interface StoragePart {
   key: string; label: string; kind: 'disk' | 'memory'; location?: string; danger?: boolean; note?: string; order?: number;

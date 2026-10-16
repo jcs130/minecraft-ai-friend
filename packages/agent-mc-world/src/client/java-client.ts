@@ -10,7 +10,7 @@ import { serveNativeView } from './native-view.ts';
 import { createJavaDataViewer, type JavaDataViewerHandle } from '../../core/java-data-viewer.mjs';
 import type { Server } from 'node:http';
 import { JAVA_LEGACY_HELP, javaLegacySkillHelp, translateJavaLegacy } from './java-legacy.ts';
-import { NativeEvidenceArchive, compactNativeState, compactNativeItems, compactNativeActionEvent, compactItem, compactItems } from './native-evidence.ts';
+import { NativeEvidenceArchive, compactNativeState, compactNativeBody, compactNativeItems, compactNativeActionEvent, compactItem, compactItems } from './native-evidence.ts';
 import { javaScriptHelp, javaScriptErrorHelp } from './java-script-help.ts';
 import { selectJavaViewer } from './java-viewer-selection.ts';
 import { nativeProbeInput, NATIVE_PROBE_PROGRAM } from './java-probe.ts';
@@ -30,6 +30,8 @@ function uuid(value: string) { return value.replaceAll('-', '').toLowerCase(); }
 function address(value: string) { return value.toLowerCase().replace(/:25565$/, ''); }
 export function validateJavaClientConfiguration(cfg: Partial<JavaClientConfiguration> | undefined): asserts cfg is JavaClientConfiguration {
   if (cfg?.actionWaitMs !== undefined && (!Number.isInteger(cfg.actionWaitMs) || cfg.actionWaitMs < 0 || cfg.actionWaitMs > 2000)) throw new Error('Java actionWaitMs must be 0..2000');
+  if (cfg?.methodWaitMs !== undefined && (!Number.isInteger(cfg.methodWaitMs) || cfg.methodWaitMs < 0 || cfg.methodWaitMs > 30000)) throw new Error('Java methodWaitMs must be 0..30000');
+  if (cfg?.stateDetail !== undefined && !['body', 'summary'].includes(cfg.stateDetail)) throw new Error('Java stateDetail must be body or summary');
   if (cfg?.viewerMode !== undefined && !['auto', 'data', 'framebuffer'].includes(cfg.viewerMode)) throw new Error('Unknown Java viewer mode');
   if (!cfg || !/^(?:[a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i.test(cfg.expectedUuid ?? '')
     || !cfg.expectedServer?.trim() || !/^[A-Za-z0-9_.:-]{1,128}$/.test(cfg.controllerId ?? '')
@@ -102,6 +104,12 @@ export class JavaClientWorld implements World {
     ];
     const native=this.cfg.javaClient;
     return { text: parts.map(part => part.text).join('\n'), parts, snapshotTypes: ['minecraft.client.snapshot'],
+      decisionStability: { sampledAtMs: Date.parse(state.sampledAt),
+        identity: [state.uuid, state.username, state.server, state.generation], dimension: typeof state.dimension === 'string' ? state.dimension : null,
+        position: state.position?.length === 3 && state.position.every(Number.isFinite) ? [state.position[0], state.position[1], state.position[2]] : null,
+        health: typeof state.health === 'number' && Number.isFinite(state.health) ? state.health : null,
+        food: typeof state.food === 'number' && Number.isFinite(state.food) ? state.food : null,
+        guards: { body: [state.uuid, state.username, state.server, state.generation, state.dimension] } },
       ...(native ? {experience:{scope:{realm:`java:${native.expectedServer.toLowerCase().replace(/:25565$/, '')}`,
         account:`uuid:${native.expectedUuid.replaceAll('-', '').toLowerCase()}`,agent:this.services?.agentName??native.controllerId},
         observation:state.connected?{at:state.sampledAt,dimension:typeof state.dimension==='string'?state.dimension:null,
@@ -324,9 +332,11 @@ export class JavaClientWorld implements World {
         const caps = await this.rpc('capabilities', {}, ctx.signal);
         return { text: JSON.stringify({ ...caps, javascript: javaMethodCapabilities(caps) }) };
       }),
-      tool('mc_state', 'Read fresh actual client state, position, health, food, view, inventory, GUI and action queue; no action or cached disconnected observation.', parameters({}), async (_args, ctx) => {
+      tool('mc_state', 'Read fresh actual client state, position, health, food, GUI identity and action queue. detail:body omits inventory/menu stack lists; use mc_bag when those change. detail:summary returns the original full summary. No action or cached disconnected observation.', parameters({ detail: { enum: ['body', 'summary'] } }), async (args, ctx) => {
+        const detail = args.detail ?? this.cfg.javaClient?.stateDetail ?? 'summary';
+        if (!['body', 'summary'].includes(String(detail))) throw new Error('detail must be body or summary');
         const state = await this.rpc('state', {}, ctx.signal) as JavaClientState; this.verify(state); this.state = state;
-        return { text: JSON.stringify({ ...compactNativeState(state), raw: this.evidence.save('state:' + state.sampledAt, state) }) };
+        return { text: JSON.stringify({ ...(detail === 'body' ? compactNativeBody(state) : compactNativeState(state)), raw: this.evidence.save('state:' + state.sampledAt, state) }) };
       }),
       tool('mc_evidence', 'Read original native evidence by raw.key and optional raw.sha256. part:script pages the program report directly without repeated inventory/books; default full preserves the entire original.', parameters({ key: str, sha256: str, part: {enum:['full','script']}, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 16000 } }, ['key']), async args => ({ text: JSON.stringify(this.evidence.read(String(args.key), args.sha256 as string | undefined, Number(args.offset ?? 0), Number(args.limit ?? 8000), args.part as 'full'|'script'|undefined)) })),
       tool('mc_operations', 'Discover exact real-client operations. Uninstalled Minescript/Baritone are unavailable.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify(await this.rpc('operations', {}, ctx.signal)) })),

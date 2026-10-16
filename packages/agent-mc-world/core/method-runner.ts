@@ -35,12 +35,31 @@ export class MethodRunner {
   private serial = 0;
   private active: { run: MethodRun; stop: (reason?: string) => void } | null = null;
   private readonly runs = new Map<number, MethodRun>();
+  private readonly waiters = new Map<number, Set<() => void>>();
 
   constructor(private readonly host: MethodHost) {}
 
   get current(): Pick<MethodRun, 'id' | 'name' | 'sourceHash' | 'startedAt'> | null {
     const run = this.active?.run;
     return run ? { id: run.id, name: run.name, sourceHash: run.sourceHash, startedAt: run.startedAt } : null;
+  }
+
+  /** Wait for an original run; a cancelled/expired wait never cancels the program. */
+  async wait(id: number, waitMs: number, signal?: AbortSignal): Promise<void> {
+    if (!Number.isInteger(waitMs) || waitMs < 0 || waitMs > 30000) throw new Error('waitMs must be 0..30000');
+    signal?.throwIfAborted();
+    const run = this.runs.get(id);
+    if (!run) throw new Error(`Unknown method run ${id}`);
+    if (run.status !== 'running' || waitMs === 0) return;
+    await new Promise<void>((resolve, reject) => {
+      const done = () => { cleanup(); resolve(); };
+      const abort = () => { cleanup(); reject(signal?.reason ?? new Error('Method wait cancelled')); };
+      const cleanup = () => { clearTimeout(timer); signal?.removeEventListener('abort', abort);
+        this.waiters.get(id)?.delete(done); if (!this.waiters.get(id)?.size) this.waiters.delete(id); };
+      const timer = setTimeout(done, waitMs);
+      const waiting = this.waiters.get(id) ?? new Set<() => void>(); waiting.add(done); this.waiters.set(id, waiting);
+      signal?.addEventListener('abort', abort, { once: true }); if (signal?.aborted) abort();
+    });
   }
 
   read(id?: number): MethodRun[] {
@@ -129,6 +148,7 @@ export class MethodRunner {
       void worker.terminate();
       this.active = null;
       this.host.onFinish(structuredClone(run));
+      for (const done of [...(this.waiters.get(run.id) ?? [])]) done();
     };
     const timer = setTimeout(() => finish('failed', `方法超过${durationMs}毫秒；已撤销它自己的未完成任务`), durationMs);
     this.active = { run, stop: (reason) => finish('cancelled', reason) };

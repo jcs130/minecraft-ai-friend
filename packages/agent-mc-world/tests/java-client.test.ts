@@ -40,6 +40,19 @@ function rig(scriptEnabled = false, minecraftVersion?: string, scriptFailure?: s
   return {cfg,state,world,runtime,http,calls,dataDir,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it('makes light body state opt-in, keeps the original summary and archives exact inventory evidence',async()=>{
+    const r=rig();Object.assign(r.cfg.javaClient,{stateDetail:'body'});Object.assign(r.state,{selectedSlot:0});
+    await r.runtime.connect();
+    try{
+      const light=JSON.parse((await r.runtime.call('mc_state',{})).text);
+      expect(light).toMatchObject({detail:'body',position:[1,65,3],health:20,inventorySummary:{size:1,heldItem:{slot:0,name:'player_head'}}});
+      expect(light.inventory).toBeUndefined();
+      const full=JSON.parse((await r.runtime.call('mc_state',{detail:'summary'})).text);
+      expect(full.inventory.occupied[0]).toMatchObject({slot:0,name:'player_head',displayName:'大背包'});
+      const original=JSON.parse((await r.runtime.call('mc_evidence',{key:light.raw.key,sha256:light.raw.sha256,limit:16000})).text);
+      expect(JSON.parse(original.text).inventory).toEqual(r.state.inventory);
+    }finally{await r.runtime.disconnect();}
+  });
   it('reports verified native connection readiness through both the SDK and a composed console, without claiming control',async()=>{
     const r=rig();
     expect(r.runtime.status().connection).toEqual({ready:false,phase:'detached'});
@@ -445,6 +458,7 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
     await r.runtime.connect();
     try {
       expect(JSON.stringify(r.runtime.currentFacts())).not.toContain('large-book-payload');
+      expect(r.runtime.currentFacts().decisionStability).toMatchObject({ identity: expect.any(Array), health: r.state.health });
       const bag=await r.runtime.call('mc_bag',{});expect(bag.text.length).toBeLessThan(5000);expect(bag.text).not.toContain('large-book-payload');
       expect((await r.runtime.call('mc_bag',{item:'player_head',detail:'components',limit:1000})).text).toContain('large-book-payload');
       const snapshot=await r.runtime.call('mc_state',{}),compact=JSON.parse(snapshot.text);expect(snapshot.text.length).toBeLessThan(5000);

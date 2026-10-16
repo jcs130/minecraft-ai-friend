@@ -69,6 +69,21 @@ export function compactNativeState(state: Record<string, any>) {
   return out;
 }
 
+/** Current body/queue facts without inventory/menu duplication. Originals remain queryable. */
+export function compactNativeBody(state: Record<string, any>) {
+  const out = compactNativeState(state);
+  delete out.inventory; delete out.menuSlots;
+  out.detail = 'body';
+  out.inventorySummary = Array.isArray(state.inventory) ? { size: state.inventory.length,
+    occupiedStacks: state.inventory.filter((item: any) => !item.empty).length,
+    heldItem: Number.isInteger(state.selectedSlot) ? compactItem(state.inventory.find((item: any) => item.slot === state.selectedSlot) ?? null) : null,
+  } : null;
+  out.menuSummary = Array.isArray(state.menuSlots) ? { size: state.menuSlots.length,
+    occupiedStacks: state.menuSlots.filter((item: any) => !item.empty).length } : null;
+  out.inventoryQuery = 'mc_bag for current stacks/menu slots; mc_state detail:summary or mc_evidence raw for the complete observation';
+  return out;
+}
+
 function compactNavigation(value: any){
   if(!value||typeof value!=='object')return undefined;
   return Object.fromEntries(['protocol','navigator','actionId','phase','reason','goal','feet','onGround','cleanupPending'].filter(key=>key in value).map(key=>[key,typeof value[key]==='string'?value[key].slice(0,512):value[key]]));

@@ -19,6 +19,18 @@ function validate(versions: ReturnType<typeof procedureFixture>[]) {
 }
 
 describe('composed executable Minecraft methods', () => {
+  it('settles a short Mineflayer tool call on its original method identity', async () => {
+    const r = methodHarness();
+    try {
+      const tool = r.world.tools().find(t => t.name === 'mc_script')!;
+      const reply = await tool.handler({ name: 'short-observation', code: 'return (await mc.state()).snapshot.position;', waitMs: 2000 },
+        { role: 'main', log: r.host.log });
+      expect(reply.execution).toMatchObject({ kind: 'method', phase: 'completed', terminal: true, goalCompleted: false });
+      expect(r.runner.read()).toHaveLength(1);
+      expect(reply.execution?.id).toBe(r.host.events.find(e => e.type === 'minecraft.method')?.execution?.id);
+      expect(r.runner.read()[0].result).toEqual(expect.objectContaining({ x: expect.any(Number), y: expect.any(Number), z: expect.any(Number) }));
+    } finally { r.close(); }
+  });
   it('validates every pinned dependency without executing action code', async () => {
     const child = procedureFixture('child', 'await mc.do([{skill:"chat",text:"test"}]);');
     const root = procedureFixture('root', 'return await methods.run("child");', {dependencies: {child: procedureRef(child)}});

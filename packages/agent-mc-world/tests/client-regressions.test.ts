@@ -155,6 +155,7 @@ describe('live readouts and honest startup', () => {
       const first = facts!.text;
       r.bot.health = 8; r.bot.entity.position.x = 12;
       const current = r.world.requestFacts();
+      expect(current!.decisionStability).toMatchObject({ health: 8, position: [12, expect.any(Number), expect.any(Number)] });
       expect(current!.text).not.toBe(first);
       expect(current!.parts?.map(p => p.key)).toEqual(expect.arrayContaining(['body', 'place', 'queue']));
       const result = await observeVisual(r.world.tools().find(t => t.name === 'mc_visual')!, {},

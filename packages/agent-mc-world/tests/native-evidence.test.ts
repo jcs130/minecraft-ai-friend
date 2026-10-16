@@ -2,7 +2,17 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import { NativeEvidenceArchive, compactNativeState, compactNativeItems } from '../src/client/native-evidence.ts';
+import { NativeEvidenceArchive, compactNativeState, compactNativeItems, compactNativeBody } from '../src/client/native-evidence.ts';
+it('light body observations retain GUI/unknown action identities without repeating item lists or inventing absent inventory',()=>{
+  const state={connected:true,generation:3,health:11,food:12,screenToken:'current',screenTitle:'Chest',selectedSlot:0,
+    inventory:Array.from({length:41},(_,slot)=>({slot,count:64,name:'minecraft:stone',displayName:'s'.repeat(200),instanceHash:'a'.repeat(64)})),
+    menuSlots:[{slot:0,count:1,name:'minecraft:torch'}],cursor:{empty:true},actions:[{id:'unknown-original',phase:'unknown',updatedAt:1}]};
+  const body=compactNativeBody(state),full=compactNativeState(state);
+  expect(body).toMatchObject({generation:3,health:11,screenToken:'current',inventorySummary:{size:41,occupiedStacks:41,heldItem:{slot:0}},
+    menuSummary:{size:1,occupiedStacks:1},actions:[{id:'unknown-original',phase:'unknown'}],actionSummary:{unknown:1}});
+  expect(body.inventory).toBeUndefined();expect(body.menuSlots).toBeUndefined();expect(JSON.stringify(body).length).toBeLessThan(JSON.stringify(full).length/3);
+  expect(compactNativeBody({connected:false}).inventorySummary).toBeNull();expect(compactNativeBody({}).menuSummary).toBeNull();
+});
 it('keeps unresolved inventory exchange identity and confirmation boundaries in compact state',()=>{
   const result=compactNativeState({inventoryPick:'agent-mc-inventory-pick/v1',inventoryTransfer:{id:'original:1',actionId:'original',phase:'unknown',sourceSlot:30,dispatched:true,reason:'confirmation timed out',unboundedDetails:'x'.repeat(10000)},inventory:[{slot:30,count:23,name:'minecraft:wheat_seeds',instanceHash:'a'.repeat(64)}]});
   expect(result.inventoryTransfer).toEqual({id:'original:1',actionId:'original',phase:'unknown',sourceSlot:30,dispatched:true,reason:'confirmation timed out'});

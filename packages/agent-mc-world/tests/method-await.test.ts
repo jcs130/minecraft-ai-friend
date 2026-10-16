@@ -13,6 +13,19 @@ async function run(code: string, nativeMethods?: string[]) {
 }
 
 describe('asynchronous method result contract', () => {
+  it('settles multiple terminal waiters while cancellation and expiry leave the original program alive',async()=>{
+    let release!:(value:unknown)=>void,entered!:()=>void;
+    const called=new Promise<void>(resolve=>{entered=resolve;});let finishes=0;
+    const runner=new MethodRunner({nativeMethods:['read'],onFinish:()=>{finishes++;},call:async()=>{entered();return new Promise(resolve=>{release=resolve;});}});
+    const program=runner.start({name:'shared-wait',code:'return await bot.read("health");'});
+    try{
+      await called;await runner.wait(program.id,1);expect(runner.current?.id).toBe(program.id);
+      const abort=new AbortController(),cancelled=runner.wait(program.id,30000,abort.signal);
+      abort.abort(new Error('Wait ended'));await expect(cancelled).rejects.toThrow('Wait ended');expect(runner.current?.id).toBe(program.id);
+      const a=runner.wait(program.id,2000),b=runner.wait(program.id,2000);release({value:20});await Promise.all([a,b]);
+      expect(runner.read(program.id)[0]).toMatchObject({status:'completed',result:20});expect(finishes).toBe(1);
+    }finally{runner.stop('test cleanup');}
+  });
   it('reports missing await instead of accepting an invented absent snapshot', async () => {
     const result = await run("const s=mc.state(); if(!s.snapshot) return {why:'snapshot null'};");
     expect(result).toMatchObject({ status: 'failed', error: expect.stringContaining('await it before reading snapshot') });

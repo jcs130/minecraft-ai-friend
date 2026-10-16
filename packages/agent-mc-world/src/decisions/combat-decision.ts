@@ -34,15 +34,22 @@ const healthBand = (hp: number | null, max: number | null) => hp === null ? 'unk
 
 function sceneFacts(frame: CombatDecisionFrame, selected: CombatCandidate | null) {
   const f = frame.battlefield;
+  const targetId = selected?.kind === 'engage' || selected?.kind === 'track' ? selected.targetId : f.action.targetEntityId;
+  const protectedIds = new Set([f.self.entityId, ...f.actors.filter(a => a.relation === 'ally').map(a => a.entityId)]);
   return { connection: [f.connectionGeneration, f.dimension], tactic: frame.tacticRevision,
     self: [f.self.entityId, healthBand(f.self.health.current, f.self.health.max), f.self.health.max,
-      f.self.food === null ? null : f.self.food <= 6 ? 'hungry' : 'fed'],
+      f.self.food === null ? null : f.self.food <= 6 ? 'hungry' : 'fed', f.self.equipment],
+    omitted: f.omitted,
     action: [f.action.fighting, f.action.tracking, f.action.emergency, f.action.taskId, f.action.step, f.action.followTarget,
       f.action.targetEntityId, selected?.kind === 'step' ? f.action.canStep : null],
     skills: frame.skills.filter(s => selected?.kind === 'cast' && s.spell === selected.spell)
       .map(s => [s.spell, s.available, s.manaCost, s.block,
       s.cooldownRemainingMs === null ? null : s.cooldownRemainingMs > 0]),
-    actors: [...f.actors].sort((a, b) => (a.entityId ?? -1) - (b.entityId ?? -1)
+    // Neutral bystanders are not action dependencies. A new threat, selected target,
+    // ally, unknown relation or actor attacking the party still invalidates the choice.
+    actors: f.actors.filter(e => e.relation !== 'neutral' || e.entityId === targetId
+      || e.targetEntityId !== null && protectedIds.has(e.targetEntityId))
+      .sort((a, b) => (a.entityId ?? -1) - (b.entityId ?? -1)
       || (a.uuid ?? '').localeCompare(b.uuid ?? '')).map(e => [e.entityId, e.uuid, e.type, e.relation,
       e.relation === 'ally' ? healthBand(e.health.current, e.health.max)
         : e.health.current === null ? 'unknown' : e.health.current <= 0 ? 'dead' : 'alive',
