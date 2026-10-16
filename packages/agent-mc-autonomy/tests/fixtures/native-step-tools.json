@@ -1,0 +1,909 @@
+[
+  {
+    "name": "mc_do",
+    "description": "Queue an ordered group of Minecraft skills and return immediately with a task id. Known next steps in one intention can be submitted together; steps and queued tasks continue in the background without another model turn. Put a timed permission chat command and its planned movement in the same group, linked by needs. Flight waits up to 2 seconds for actual server permission; sending a command alone does not prove its effect. Use queue:\"now\" for immediate food or escape during combat; default submission waits for combat and replaces pending tasks. Start the group with eat, flee or surface to take control even during low-health combat. Environmental rescue still has priority. Use queue:\"append\" to add work after existing tasks. Use queue:\"afterCheckpoint\" to do this group at a safe checkpoint of current work, then resume that work; container and transaction groups wait until their operation is complete. Each task reports completion or obstruction as a minecraft.task event; a blocked task leaves later tasks queued. A single plain chat or vanilla /msg, /tell, /w to a named player, with default queue and no needs/expect, sends immediately while movement continues. Other slash commands and chat inside a multi-step group retain queue order.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "steps": {
+          "type": "array",
+          "description": "一步一个对象,skill 写技能名。* = 该字段适用的形态必填;? = 可选或条件参数。\n复杂形态、执行条件和完整示例用 mc_help {\"skill\":\"技能名\"} 查询。\ncontrol(keys*,durationMs?,mode?,yawDeg?,pitchDeg?)\nlook(at*)\ngoto(at*,dimension?,exact?,walkOnly?,dryRun?)\ntransit(at*)\ngoto_player(name*)\nfollow(name*)\nfind(target*,direction?,distance?,until?)\nflee(distance?)\nsurface()\nflight(at*,land?,dryRun?)\nland()\ncleanup(dryRun?)\ncollect(block*,count?,buried?,mature?,tool?)\nfish(at?)\ntunnel(at*,spiral?,dryRun?,tool?,until?)\nbuild(blueprint?,stopAfter?,rebindFrom?,confirm?,skipConflicts?,shape?,on?,anchors?,material*,temporary?,at?,fill?,dryRun?)\nexcavate(shape*,anchors*,fill?,dryRun?,tool?)\nprobe(shape*,anchors*,fill?,slice?,where?)\nobserve(mode*,sites?,bounds?,rays?)\nuse(item?,at?,target?,entityId?,index?,times?,open?,text?,back?,face?)\nride(target?,to?,off?)\nlead(target?,to?,tolerance?,tie?,keep?,off?)\ncraft(item?,grid?,count?)\nsmelt(input*,count?,fuel*,at?)\nbrew(input*,bottle*,count?,fuel*,at?)\nenchant(at*,item*,index?)\nanvil(op*,item*,with?,name?,pick?,withPick?,at?)\ngrindstone(item*,with?,pick?,withPick?,at?)\neat(item*)\nattack(target*,mode?)\nequip(item?,pick?,hand?)\npickup(item?)\ntoss(item*,count?,at?,pick?,target?)\nstow(item*,count?,pick?,at?,into?)\ncompact()\ntake(item?,count?,at?,from?,all?,pick?)\nserver_travel(command*,at*,within?)\nchat(text*)\ngesture(name*,motion*)\n坐标写成 [x,y,z];at 是一个坐标,anchors 是一串坐标。\n每个分量是绝对数字,或 \"~\"/\"~-3\" 相对写法——原点是**这一步开始执行那一刻**我脚下那一格,\n所以 goto 之后接 \"~\" 指的是那个 goto 的落点。没有前后左右的写法。\n回执一律报解析后的绝对坐标。\n方块/物品/实体一律用英文 id(oak_log、cobblestone、skeleton);target 也收玩家名。\n类别名有两套:target/block/material 认 log、planks、ore、wool 这样的裸名(它们本身不是物品 id),把所有同类算进去;\nuntil 名单认带井号的 #ores/#logs/#leaves/#chests/#liquids/#beds。\n**写一个真实物品 id 就只认它自己**:obsidian 不会拿哭泣的黑曜石顶,torch 不是灵魂火把,\nchest 不是末影箱,dirt 不是土径 —— 要\"随便哪种木板\"就写裸类别名 planks。\ncount 一律 1-64;distance:flee 1-128,find 1-1024(不给 direction 时站着扫,最远 48)。\n\"needs\" 声明这一步依赖哪些更早的步(序号 1 起);\"needs\":[] = 独立步。缺省见字段说明。\n容器窗口在每单结束时关闭；from/into:\"open\" 的搬运和开窗步骤须在同一次 mc_do.steps 中，不能跨单沿用窗口。\n每一步都会核验:判据由执行器按 (skill, 参数) 推,达成与落空都写进回执\n(「该步按『背包内原木 ≥5』核验:达成(实测 7)」)。",
+          "items": {
+            "type": "object",
+            "properties": {
+              "skill": {
+                "type": "string",
+                "enum": [
+                  "control",
+                  "look",
+                  "goto",
+                  "transit",
+                  "goto_player",
+                  "follow",
+                  "find",
+                  "flee",
+                  "surface",
+                  "flight",
+                  "land",
+                  "cleanup",
+                  "collect",
+                  "fish",
+                  "tunnel",
+                  "build",
+                  "excavate",
+                  "probe",
+                  "observe",
+                  "use",
+                  "ride",
+                  "lead",
+                  "craft",
+                  "smelt",
+                  "brew",
+                  "enchant",
+                  "anvil",
+                  "grindstone",
+                  "eat",
+                  "attack",
+                  "equip",
+                  "pickup",
+                  "toss",
+                  "stow",
+                  "compact",
+                  "take",
+                  "server_travel",
+                  "chat",
+                  "gesture"
+                ]
+              },
+              "keys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "forward",
+                    "back",
+                    "left",
+                    "right",
+                    "jump",
+                    "sneak",
+                    "sprint"
+                  ]
+                },
+                "description": "用于 control"
+              },
+              "durationMs": {
+                "type": "integer",
+                "minimum": 50,
+                "maximum": 2000,
+                "description": "用于 control"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "ground",
+                  "water",
+                  "flight",
+                  "sites",
+                  "voxels",
+                  "rays",
+                  "auto",
+                  "melee",
+                  "ranged",
+                  "kite"
+                ],
+                "description": "用于 control / observe / attack(不写 = auto)"
+              },
+              "yawDeg": {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180,
+                "description": "用于 control(相对视角，正数左转，单位度)"
+              },
+              "pitchDeg": {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "description": "用于 control(相对视角，正数抬头，单位度)"
+              },
+              "at": {
+                "type": [
+                  "array",
+                  "string"
+                ],
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3,
+                "description": "用于 look(要面向的目标格，支持相对坐标和已登记路标。) / goto(只写 [x,z] = 到附近可达落脚点(不强制爬屋顶);指定楼层请给 [x,y,z];给字符串 = mc_map 路标名) / transit(当前维度里的一格传送门方块;给字符串 = 当前维度的 mc_map 路标名) / flight / fish / tunnel(通道终点) / build(按蓝图施工时:蓝图 [0,0,0] 落在世界的哪一格) / use(世界里要点击的方块绝对坐标，点击已有方块不要求背包有同名物品；face 指它的表面；放置目标用 build.anchors；与 target 二选一) / smelt(指定用哪一座炉子) / brew(指定用哪一座酿造台) / enchant / anvil(指定用哪一座铁砧;不写用最近的) / grindstone(指定用哪一座砂轮;不写用最近的) / toss(朝那一格扔;不写 = 自己挑一个开阔方向) / stow(只存进指定箱子;与 into:open 二选一) / take(点名哪一格容器) / server_travel"
+              },
+              "dimension": {
+                "type": "string",
+                "description": "用于 goto(可选的当前维度前置条件(overworld/the_nether/the_end))"
+              },
+              "exact": {
+                "type": "boolean",
+                "description": "用于 goto(完整 [x,y,z] 的精确落脚格；缺省允许邻格到达)"
+              },
+              "walkOnly": {
+                "type": "boolean",
+                "description": "用于 goto(只沿现有通路走，不挖掘或垫脚；dryRun 也只试算这条走法)"
+              },
+              "dryRun": {
+                "type": "boolean",
+                "description": "用于 goto / flight(只试算当前已加载路线；回报预计毫秒、速度来源和当前许可) / cleanup / tunnel / build / excavate"
+              },
+              "name": {
+                "type": "string",
+                "description": "用于 goto_player / follow / anvil(rename 必写:新名字) / gesture"
+              },
+              "target": {
+                "type": "string",
+                "description": "用于 find(当前连接的方块或实体英文 id，方块可用 log 等名称匹配；不支持 hostile/tree 类别，# 名单只用于 until；未命中不能证明区域安全) / use(要右键的活物名称，不是方块或背包物品；与 at 二选一。点击世界里的方块只给 at，不填 target) / ride(骑上哪种(实体英文 id:pig/boat/horse…);已骑着时可省) / lead(拴哪种(实体英文 id);已经牵着时可省) / attack / toss(可见玩家的完整名字；与at互斥)"
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "north",
+                  "south",
+                  "east",
+                  "west",
+                  "northeast",
+                  "northwest",
+                  "southeast",
+                  "southwest"
+                ],
+                "description": "用于 find(给了就边走边找;不给就站着扫)"
+              },
+              "distance": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1024,
+                "description": "用于 find / flee(1-128)"
+              },
+              "until": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 12,
+                "description": "用于 find(边走边找时:路上碰到这里头任何一样就停) / tunnel(挖的路上碰到这里头任何一样就停)"
+              },
+              "land": {
+                "type": "boolean",
+                "description": "用于 flight(false=抵达后悬停；省略或true=平台落地)"
+              },
+              "block": {
+                "type": "string",
+                "description": "用于 collect"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 64,
+                "description": "用于 collect / craft(item=要新增的产物个数(按配方产量向上取整);grid=配方重复次数。不是原料数。) / smelt / brew(1-3;放几瓶(三个瓶位)) / toss / stow / take(定量取物必须显式写;不再默认成 1)"
+              },
+              "buried": {
+                "type": "boolean",
+                "description": "用于 collect"
+              },
+              "mature": {
+                "type": "boolean",
+                "description": "用于 collect"
+              },
+              "tool": {
+                "type": "string",
+                "description": "用于 collect(只覆盖本步;不写时节约耐久) / tunnel(只覆盖本步;不写时节约耐久) / excavate(只覆盖本步;不写时节约耐久)"
+              },
+              "spiral": {
+                "type": "boolean",
+                "description": "用于 tunnel(正上/正下时改挖 2×2 螺旋楼梯(上下都能走))"
+              },
+              "blueprint": {
+                "type": "string",
+                "description": "用于 build(按蓝图施工;形状与材料都在图里)"
+              },
+              "stopAfter": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "用于 build(按蓝图施工时:做到这个 y 层就收工(0 是最低层))"
+              },
+              "rebindFrom": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "用于 build(按蓝图施工改绑到新 at 时，给出当前绑定的绝对锚点；dryRun 可先试算新位置)"
+              },
+              "confirm": {
+                "type": "boolean",
+                "description": "用于 build(retrofit 有冲突时:确认清掉冲突格后施工)"
+              },
+              "skipConflicts": {
+                "type": "boolean",
+                "description": "用于 build(retrofit 有冲突时:留着冲突格,先放能放的)"
+              },
+              "shape": {
+                "type": "string",
+                "enum": [
+                  "line",
+                  "rect",
+                  "triangle",
+                  "arc",
+                  "box"
+                ],
+                "description": "用于 build(不写 = 就 anchors 那些格) / excavate / probe"
+              },
+              "on": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "at": {
+                      "type": [
+                        "array",
+                        "string"
+                      ],
+                      "items": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "face": {
+                      "type": "string",
+                      "enum": [
+                        "down",
+                        "up",
+                        "north",
+                        "south",
+                        "west",
+                        "east"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "at",
+                    "face"
+                  ]
+                },
+                "minItems": 1,
+                "maxItems": 16,
+                "description": "用于 build(贴着 at 那一格的 face 面放;与 anchors 二选一)"
+              },
+              "anchors": {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "array",
+                    "string"
+                  ],
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "minItems": 1,
+                "maxItems": 16,
+                "description": "用于 build(不写 shape = 就这些格;与 on 二选一) / excavate(数量由 shape 定) / probe(数量由 shape 定)"
+              },
+              "material": {
+                "type": "string",
+                "description": "用于 build"
+              },
+              "temporary": {
+                "type": "boolean",
+                "description": "用于 build(只用于材料/锚点或贴面形态；本次确认的临时支撑用完后 cleanup，已有方块不接管)"
+              },
+              "fill": {
+                "type": "string",
+                "enum": [
+                  "solid",
+                  "outline",
+                  "edges"
+                ],
+                "description": "用于 build(只对 box 有意义) / excavate / probe(只对 box 有意义)"
+              },
+              "slice": {
+                "type": "string",
+                "enum": [
+                  "x",
+                  "y",
+                  "z"
+                ],
+                "description": "用于 probe(box 空间切片；体积=(|dx|+1)(|dy|+1)(|dz|+1)≤512，不与 where 同用)"
+              },
+              "where": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 12,
+                "description": "用于 probe(只报这几样在这片里当前可见的坐标；遮挡、超距或未加载保持未知)"
+              },
+              "sites": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 4,
+                "items": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": {
+                    "type": "integer",
+                    "minimum": -30000000,
+                    "maximum": 30000000
+                  }
+                },
+                "description": "用于 observe(sites：绝对格 [x,y,z] 列表，短报占用/支撑高度/邻接面/0.6×1.8方块净空；非可达或放置许可)"
+              },
+              "bounds": {
+                "type": "array",
+                "minItems": 6,
+                "maxItems": 6,
+                "items": {
+                  "type": "integer",
+                  "minimum": -16,
+                  "maximum": 16
+                },
+                "description": "用于 observe(voxels 相对脚下格 [xmin,ymin,zmin,xmax,ymax,zmax]，含端点；三轴长度相乘≤512)"
+              },
+              "rays": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 64,
+                "items": {
+                  "$schema": "http://json-schema.org/draft-07/schema#",
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": [
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 64
+                    }
+                  ]
+                },
+                "description": "用于 observe(rays 的 [相对pitch角±90,相对yaw角±180,距离>0且≤64] 列表；相对执行时身体朝向，yaw=0 沿当前朝向)"
+              },
+              "item": {
+                "type": "string",
+                "description": "用于 use(从背包拿在手里使用的物品，不是被点击对象的名字。填原版英文 id 或 mc_bag 的自定义显示名；有 at 时不写 = 腾空主手右键方块，有 target 时不写 = 用当前手持物) / craft(已知目标物品优先使用;按游戏配方表摆;与 grid 二选一) / enchant / anvil / grindstone / eat / equip(自定义物品可用 mc_bag 中的显示名;不写 = 把指定手腾空，默认主手) / pickup(不写就近扫并避开2分钟内刚主动丢弃的已识别掉落物；明确写物品可取回) / toss / stow / take(定量取物时与 count 一起写)"
+              },
+              "entityId": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2147483647,
+                "description": "用于 use(可选；本连接里观察到的实体 ID，与 target 一起给，精确点该实体，不退回最近者)"
+              },
+              "index": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 99,
+                "description": "用于 use / enchant(1-3;不写 = 只看报价;写了 = 按那一档下手)"
+              },
+              "times": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16,
+                "description": "用于 use(连着右键几次;带 index 时是成交几次)"
+              },
+              "open": {
+                "type": "boolean",
+                "description": "用于 use(门、活板门、栅栏门的期望状态；true 开、false 关，已符合不点击；与 at 一起给)"
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 256,
+                "description": "用于 use(写在告示牌上的字,\\n 分行;最多 4 行、每行 45 字符) / chat"
+              },
+              "back": {
+                "type": "boolean",
+                "description": "用于 use(写在牌子背面;缺省正面)"
+              },
+              "face": {
+                "type": "string",
+                "enum": [
+                  "down",
+                  "up",
+                  "north",
+                  "south",
+                  "west",
+                  "east"
+                ],
+                "description": "用于 use(右键那一格的哪一面;缺省顶面)"
+              },
+              "to": {
+                "type": [
+                  "array",
+                  "string"
+                ],
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "用于 ride(驾着去哪;猪、炽足兽和船能驾，马科暂不支持驾驶) / lead(牵去哪)"
+              },
+              "off": {
+                "type": "boolean",
+                "description": "用于 ride(下坐骑;与 target/to 互斥) / lead(松开;与 target/to/tie/keep 互斥)"
+              },
+              "tolerance": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16,
+                "description": "用于 lead(牵到 to 多少格内算到)"
+              },
+              "tie": {
+                "type": [
+                  "array",
+                  "string"
+                ],
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "用于 lead(到了系在这一格的栅栏上)"
+              },
+              "keep": {
+                "type": "boolean",
+                "description": "用于 lead(到了继续牵着,不松开)"
+              },
+              "grid": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "description": "用于 craft(与 item 二选一)"
+              },
+              "input": {
+                "type": "string",
+                "description": "用于 smelt / brew"
+              },
+              "fuel": {
+                "type": "string",
+                "description": "用于 smelt / brew"
+              },
+              "bottle": {
+                "type": "string",
+                "description": "用于 brew"
+              },
+              "op": {
+                "type": "string",
+                "enum": [
+                  "repair",
+                  "combine",
+                  "rename"
+                ],
+                "description": "用于 anvil"
+              },
+              "with": {
+                "type": "string",
+                "description": "用于 anvil(repair/combine 必写:右格放什么) / grindstone(合修:同种的另一件)"
+              },
+              "pick": {
+                "type": "string",
+                "description": "用于 anvil(同 id 的几件里挑哪一件:写清单括号里的字(「无限」「效率IV」,英文附魔 id 也认);不写 = 撞上哪件算哪件。按内容匹配,不是序号,存掉一件不影响其余几件怎么写) / grindstone / equip / toss / stow / take"
+              },
+              "withPick": {
+                "type": "string",
+                "description": "用于 anvil(同 pick,筛的是 with 那一格) / grindstone"
+              },
+              "hand": {
+                "type": "string",
+                "enum": [
+                  "main",
+                  "off"
+                ],
+                "description": "用于 equip(不写 = 按物品分槽)"
+              },
+              "into": {
+                "type": "string",
+                "enum": [
+                  "open"
+                ],
+                "description": "用于 stow(open = 存进当前打开的窗口;不写 = 找附近箱子)"
+              },
+              "from": {
+                "type": "string",
+                "enum": [
+                  "open"
+                ],
+                "description": "用于 take(从当前打开的容器窗口取;不写 = 找附近箱子)"
+              },
+              "all": {
+                "type": "boolean",
+                "description": "用于 take(at+all:true 取指定容器;炉子有原料时保留原料和燃料)"
+              },
+              "command": {
+                "type": "string",
+                "maxLength": 256,
+                "description": "用于 server_travel"
+              },
+              "within": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16,
+                "description": "用于 server_travel"
+              },
+              "motion": {
+                "type": "string",
+                "enum": [
+                  "wave",
+                  "bow",
+                  "nod",
+                  "beckon",
+                  "shake_head"
+                ],
+                "description": "用于 gesture"
+              },
+              "needs": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "任何技能都可带:依赖本次 steps 数组内哪些更早的步(每次调用重新从 1 起，第一步只能省略或写 [])。不写=只拦因果:要用更早某步的产出、那一步又没做成时才跳过,其余照跑;[]=独立步"
+              }
+            },
+            "required": [
+              "skill"
+            ]
+          }
+        },
+        "queue": {
+          "type": "string",
+          "enum": [
+            "replace",
+            "append",
+            "now",
+            "afterCheckpoint"
+          ],
+          "description": "这一单跟队列的关系。不写 = replace:撤掉排着的那些,接在正在做的那件后面(回执点名撤了谁);append:排到队尾,排着的都保留;now:中断正在做的那件、插到队头立刻开做,排着的保留(低血战斗可让位给首步 eat/flee/surface;已在执行的逃命、进食或环境自保不抢);afterCheckpoint:当前任务到安全检查点后先做这一单,再续做原任务;容器存取、交易等完整操作段结束前等待,不抢救命动作"
+        }
+      },
+      "required": [
+        "steps"
+      ]
+    }
+  },
+  {
+    "name": "mc_scout",
+    "description": "Queue read-only observations in steps:[{skill,...}]. For probe, shape is required: line/rect/triangle/arc/box, together with that shape’s coordinates; use mc_help skill:probe for its exact signature. For a simple nearby scene use mc_visual or observe. Also supports observe (compact site geometry, voxels or collision rays), plus goto/flight/build/excavate/tunnel (always dry-run). Each trial uses the actual current position and world, without projecting an earlier trial destination or materials. needs gates on prior trial outcomes only, not hypothetical execution. Flight checks one segment before permission is granted; use mc_flight_plan for a projected multi-leg flight. Same queue and task events; does not change the world.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "steps": {
+          "type": "array",
+          "description": "一步一个对象,按顺序读取真实现场并试算,不动世界。每步从当时真实位置开始，不推进假定位置或材料；needs 只判断前步试算结果，不表示前步已执行。收 goto / flight / cleanup / tunnel / build / excavate / probe / observe 这几个技能,写法与参数跟 mc_do 的 steps 完全一样完整示例和条件用 mc_help 按技能查询;一律按试算跑,不用自己写 dryRun。",
+          "items": {
+            "type": "object",
+            "properties": {
+              "skill": {
+                "type": "string",
+                "enum": [
+                  "goto",
+                  "flight",
+                  "cleanup",
+                  "tunnel",
+                  "build",
+                  "excavate",
+                  "probe",
+                  "observe"
+                ]
+              },
+              "at": {
+                "type": [
+                  "array",
+                  "string"
+                ],
+                "items": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minItems": 2,
+                "maxItems": 3,
+                "description": "用于 goto(只写 [x,z] = 到附近可达落脚点(不强制爬屋顶);指定楼层请给 [x,y,z];给字符串 = mc_map 路标名) / flight / tunnel(通道终点) / build(按蓝图施工时:蓝图 [0,0,0] 落在世界的哪一格)"
+              },
+              "dimension": {
+                "type": "string",
+                "description": "用于 goto(可选的当前维度前置条件(overworld/the_nether/the_end))"
+              },
+              "exact": {
+                "type": "boolean",
+                "description": "用于 goto(完整 [x,y,z] 的精确落脚格；缺省允许邻格到达)"
+              },
+              "walkOnly": {
+                "type": "boolean",
+                "description": "用于 goto(只沿现有通路走，不挖掘或垫脚；dryRun 也只试算这条走法)"
+              },
+              "dryRun": {
+                "type": "boolean",
+                "description": "用于 goto / flight(只试算当前已加载路线；回报预计毫秒、速度来源和当前许可) / cleanup / tunnel / build / excavate"
+              },
+              "land": {
+                "type": "boolean",
+                "description": "用于 flight(false=抵达后悬停；省略或true=平台落地)"
+              },
+              "spiral": {
+                "type": "boolean",
+                "description": "用于 tunnel(正上/正下时改挖 2×2 螺旋楼梯(上下都能走))"
+              },
+              "tool": {
+                "type": "string",
+                "description": "用于 tunnel(只覆盖本步;不写时节约耐久) / excavate(只覆盖本步;不写时节约耐久)"
+              },
+              "until": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 12,
+                "description": "用于 tunnel(挖的路上碰到这里头任何一样就停)"
+              },
+              "blueprint": {
+                "type": "string",
+                "description": "用于 build(按蓝图施工;形状与材料都在图里)"
+              },
+              "stopAfter": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "用于 build(按蓝图施工时:做到这个 y 层就收工(0 是最低层))"
+              },
+              "rebindFrom": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "用于 build(按蓝图施工改绑到新 at 时，给出当前绑定的绝对锚点；dryRun 可先试算新位置)"
+              },
+              "confirm": {
+                "type": "boolean",
+                "description": "用于 build(retrofit 有冲突时:确认清掉冲突格后施工)"
+              },
+              "skipConflicts": {
+                "type": "boolean",
+                "description": "用于 build(retrofit 有冲突时:留着冲突格,先放能放的)"
+              },
+              "shape": {
+                "type": "string",
+                "enum": [
+                  "line",
+                  "rect",
+                  "triangle",
+                  "arc",
+                  "box"
+                ],
+                "description": "用于 build(不写 = 就 anchors 那些格) / excavate / probe"
+              },
+              "on": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "at": {
+                      "type": [
+                        "array",
+                        "string"
+                      ],
+                      "items": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "face": {
+                      "type": "string",
+                      "enum": [
+                        "down",
+                        "up",
+                        "north",
+                        "south",
+                        "west",
+                        "east"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "at",
+                    "face"
+                  ]
+                },
+                "minItems": 1,
+                "maxItems": 16,
+                "description": "用于 build(贴着 at 那一格的 face 面放;与 anchors 二选一)"
+              },
+              "anchors": {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "array",
+                    "string"
+                  ],
+                  "items": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "minItems": 1,
+                "maxItems": 16,
+                "description": "用于 build(不写 shape = 就这些格;与 on 二选一) / excavate(数量由 shape 定) / probe(数量由 shape 定)"
+              },
+              "material": {
+                "type": "string",
+                "description": "用于 build"
+              },
+              "temporary": {
+                "type": "boolean",
+                "description": "用于 build(只用于材料/锚点或贴面形态；本次确认的临时支撑用完后 cleanup，已有方块不接管)"
+              },
+              "fill": {
+                "type": "string",
+                "enum": [
+                  "solid",
+                  "outline",
+                  "edges"
+                ],
+                "description": "用于 build(只对 box 有意义) / excavate / probe(只对 box 有意义)"
+              },
+              "slice": {
+                "type": "string",
+                "enum": [
+                  "x",
+                  "y",
+                  "z"
+                ],
+                "description": "用于 probe(box 空间切片；体积=(|dx|+1)(|dy|+1)(|dz|+1)≤512，不与 where 同用)"
+              },
+              "where": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 12,
+                "description": "用于 probe(只报这几样在这片里当前可见的坐标；遮挡、超距或未加载保持未知)"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "sites",
+                  "voxels",
+                  "rays"
+                ],
+                "description": "用于 observe"
+              },
+              "sites": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 4,
+                "items": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": {
+                    "type": "integer",
+                    "minimum": -30000000,
+                    "maximum": 30000000
+                  }
+                },
+                "description": "用于 observe(sites：绝对格 [x,y,z] 列表，短报占用/支撑高度/邻接面/0.6×1.8方块净空；非可达或放置许可)"
+              },
+              "bounds": {
+                "type": "array",
+                "minItems": 6,
+                "maxItems": 6,
+                "items": {
+                  "type": "integer",
+                  "minimum": -16,
+                  "maximum": 16
+                },
+                "description": "用于 observe(voxels 相对脚下格 [xmin,ymin,zmin,xmax,ymax,zmax]，含端点；三轴长度相乘≤512)"
+              },
+              "rays": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 64,
+                "items": {
+                  "$schema": "http://json-schema.org/draft-07/schema#",
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": [
+                    {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 64
+                    }
+                  ]
+                },
+                "description": "用于 observe(rays 的 [相对pitch角±90,相对yaw角±180,距离>0且≤64] 列表；相对执行时身体朝向，yaw=0 沿当前朝向)"
+              },
+              "needs": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "任何技能都可带:依赖本次 steps 数组内哪些更早的步(每次调用重新从 1 起，第一步只能省略或写 [])。不写=只拦因果:要用更早某步的产出、那一步又没做成时才跳过,其余照跑;[]=独立步"
+              }
+            },
+            "required": [
+              "skill"
+            ]
+          }
+        },
+        "queue": {
+          "type": "string",
+          "enum": [
+            "replace",
+            "append",
+            "now",
+            "afterCheckpoint"
+          ],
+          "description": "这一单跟队列的关系。不写 = replace:撤掉排着的那些,接在正在做的那件后面(回执点名撤了谁);append:排到队尾,排着的都保留;now:中断正在做的那件、插到队头立刻开做,排着的保留(低血战斗可让位给首步 eat/flee/surface;已在执行的逃命、进食或环境自保不抢);afterCheckpoint:当前任务到安全检查点后先做这一单,再续做原任务;容器存取、交易等完整操作段结束前等待,不抢救命动作"
+        }
+      },
+      "required": [
+        "steps"
+      ]
+    }
+  }
+]

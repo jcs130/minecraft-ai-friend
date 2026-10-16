@@ -795,7 +795,7 @@ def test_action_and_observation_tools_keep_distinct_semantics(framework_module):
     assert "Execute real" in tools["mc_do"]["description"]
     assert "Read-only" in tools["mc_scout"]["description"]
     assert tools["mc_scout"]["parameters"]["properties"]["queue"] == {"enum": ["append", "afterCheckpoint", "now"]}
-    assert tools["mc_do"]["parameters"]["properties"]["steps"]["items"]["properties"]["block"] == {"type": "string"}
+    assert tools["mc_do"]["parameters"]["properties"]["steps"]["items"]["properties"]["block"] == props["block"]
     original_step = json.loads(module.tool_help(catalog, {"name": "mc_do", "path": "/inputSchema/properties/steps/items"})["text"])
     assert original_step["properties"]["block"] == props["block"]
     failure = module.failure_context(catalog, "mc_scout", {"steps": [{"skill": "craft"}, {"skill": "collect"}]}, {"text": "Invalid arguments"})

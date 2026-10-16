@@ -1,5 +1,6 @@
 """Bound request construction without losing the backend's original evidence handles."""
 
+import copy
 import json
 
 from .context_counter import BYTE_COUNTER_NAME, FRAMING_RESERVE, ContextCounter, CounterUnavailable, count_input, counter_name
@@ -69,6 +70,88 @@ def rejected_action_exchange(group):
         return False
 
 
+def rejected_exchange_key(group):
+    """Exact rejection semantics, excluding only documented exchange references.
+
+    Never rewrite native state: normalize a comparison copy of known function
+    envelopes only. Reasoning, signatures, nested arguments and errors compare
+    exactly; mixed/partial exchanges cannot enter this path.
+    """
+    if not isinstance(group, list) or len(group) != 2:
+        return None
+    try:
+        assistant, reply = group
+        calls = assistant.get("tool_calls")
+        if (assistant.get("role") != "assistant" or not isinstance(calls, list) or len(calls) != 1
+                or not isinstance(calls[0].get("id"), str) or not calls[0]["id"]
+                or not isinstance(calls[0].get("function"), dict)
+                or not isinstance(calls[0]["function"].get("name"), str)
+                or not isinstance(calls[0]["function"].get("arguments"), str)
+                or reply.get("role") != "tool" or reply.get("tool_call_id") != calls[0]["id"]):
+            return None
+        result = json.loads(reply["content"])
+        def unknown(value):
+            if isinstance(value, dict):
+                return any((key in {"uncertain", "outcome_unknown", "outcomeUnknown"} and item is True)
+                           or (key in {"outcomeKnown", "outcome_known"} and item is False)
+                           or unknown(item) for key, item in value.items())
+            return isinstance(value, list) and any(unknown(item) for item in value)
+        local = (result.get("failed") is True and result.get("dispatched") is False
+                 and result.get("origin") == "controller_validation" and result.get("execution") is None)
+        if result.get("dispatched") is True or unknown(result) or not (local or rejected_action_exchange(group)):
+            return None
+        normalized = copy.deepcopy(group)
+        proposal = normalized[0]
+        identifier = proposal["tool_calls"][0].pop("id")
+        normalized[1].pop("tool_call_id")
+        state = proposal.get("_provider_state", {}).get("data")
+        if isinstance(state, list):
+            for item in state:
+                if not isinstance(item, dict):
+                    continue
+                # Only provider function-envelope IDs, never nested user IDs.
+                if item.get("type") == "function_call" and item.get("call_id") == identifier:
+                    item.pop("call_id")
+                    item.pop("id", None)  # Responses output-item envelope ID.
+                elif item.get("type") == "tool_use" and item.get("id") == identifier:
+                    item.pop("id")
+                elif isinstance(item.get("functionCall"), dict) and item["functionCall"].get("id") == identifier:
+                    item["functionCall"].pop("id")
+        result.pop("original_chunks", None)  # Durable receipt artifact handles.
+        result.pop("repeated_rejections", None)  # Our bounded projection metadata.
+        normalized[1]["content"] = result
+        return encode(normalized)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+
+
+def coalesce_rejected(groups):
+    """Keep the latest complete identical rejection and bounded provenance."""
+    history, keys, removed = [], {}, []
+    for group in groups:
+        key = rejected_exchange_key(group)
+        if key is not None and key in keys:
+            previous = history[keys[key]]
+            old = json.loads(previous[-1]["content"])
+            result = json.loads(group[-1]["content"])
+            provenance = old.get("repeated_rejections", {})
+            count = min(999999, provenance.get("count", 0) + result.get("repeated_rejections", {}).get("count", 0) + 1)
+            originals = list(provenance.get("original_chunks", []))
+            originals += [handle for handle in old.get("original_chunks", [])
+                          if isinstance(handle, str) and len(handle) <= 256 and handle not in originals]
+            result["repeated_rejections"] = {"count": count, "original_chunks": originals[-8:],
+                                            "journals": ["decisions.jsonl", "receipts.jsonl"]}
+            retained = copy.deepcopy(group)
+            retained[-1]["content"] = encode(result)
+            removed.append(previous)
+            history[keys[key]] = None
+            group = retained
+        if key is not None:
+            keys[key] = len(history)
+        history.append(group)
+    return [group for group in history if group is not None], removed
+
+
 def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, native_outcomes=None, context_counter: ContextCounter | None = None, host_context=None, death_memory=None):
     """Use one counting mode throughout, restarting conservatively on failure."""
     options = {"context_tokens": context_tokens, "reserved_output": reserved_output,
@@ -94,18 +177,16 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
     history = list(groups)
     tail = {"current_facts": [], "omitted_facts": [], "events": [],
             "originals": "mc_protocol(protocol=agent-mc/v1,action=facts/archive); mc_original(handle=original,offset=0,limit=1000)"}
-    rejected = [i for i, group in enumerate(history) if rejected_action_exchange(group)] if tool_failure else []
-    superseded = set(rejected[:-1])
+    history, superseded = coalesce_rejected(history) if tool_failure else (history, [])
     if superseded:
         originals = []
-        for index in sorted(superseded):
-            result = json.loads(history[index][-1]["content"])
+        for group in superseded:
+            result = json.loads(group[-1]["content"])
             for handle in result.get("original_chunks", []):
                 query = {"tool": "mc_original", "handle": handle}
                 if isinstance(handle, str) and len(handle) <= 256 and query not in originals:
                     originals.append(query)
         tail["superseded_rejected_plans"] = {"count": len(superseded), "originals": originals[:8]}
-        history = [group for i, group in enumerate(history) if i not in superseded]
     if planner_notice:
         tail["planner_notice"] = planner_notice
     if fast_focus:

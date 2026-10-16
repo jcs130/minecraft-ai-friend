@@ -13,7 +13,7 @@ def rejected(index, *, name="mc_do", result=None, steps=None):
     call_id = f"call-{index}"
     return [{"role": "assistant", "content": None, "tool_calls": [{
         "id": call_id, "type": "function", "function": {"name": name, "arguments": encode({
-            "steps": steps or [{"skill": "craft", "item": "cooked_cod", "count": index + 1}]})}}]},
+            "steps": steps or [{"skill": "craft", "item": "cooked_cod", "count": 1}]})}}]},
         {"role": "tool", "tool_call_id": call_id, "content": encode(result or {
             "failed": True, "execution": None, "text": "Use smelt input/fuel; no crafting recipe.",
             "meta": {"admission": {"accepted": False, "rule": "craft.invalid", "kind": "repeat"}},
@@ -25,7 +25,7 @@ def request(groups, **options):
                     context_tokens=32768, reserved_output=2048, **options)
 
 
-def test_only_latest_known_rejected_plan_is_replayed_and_originals_stay_queryable():
+def test_only_latest_identical_rejected_plan_is_replayed_and_originals_stay_queryable():
     groups = [rejected(i) for i in range(6)]
     before = copy.deepcopy(groups)
     failure = {"tool": "mc_do", "error": "Cooking requires smelt", "recovery": [
@@ -44,6 +44,19 @@ def test_only_latest_known_rejected_plan_is_replayed_and_originals_stay_queryabl
     assert groups == before
     empty, _ = request([], tool_failure=failure)
     assert messages[:2] == empty[:2], "changing failures must not change the stable request prefix"
+
+
+def test_distinct_rejected_arguments_errors_and_correction_context_are_preserved():
+    groups = [rejected(0), rejected(1, steps=[{"skill": "craft", "item": "cooked_cod", "count": 2}])]
+    for index, extra in enumerate(({"text": "A different original failure"},
+                                   {"recovery": [{"text": "A different correction"}]},
+                                   {"meta": {"admission": {"accepted": False, "rule": "different"}}}), 2):
+        group = rejected(index)
+        group[-1]["content"] = encode({**json.loads(group[-1]["content"]), **extra})
+        groups.append(group)
+    messages, _ = request(groups, tool_failure={"error": "rejected"})
+    assert [m["tool_call_id"] for m in messages if m["role"] == "tool"] == [f"call-{i}" for i in range(5)]
+    assert "superseded_rejected_plans" not in json.loads(messages[-1]["content"])
 
 
 @pytest.mark.parametrize("result", [

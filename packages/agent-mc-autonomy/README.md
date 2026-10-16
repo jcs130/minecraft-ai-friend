@@ -617,6 +617,17 @@ attempts receive a changing request-tail notice to choose an action when facts
 suffice or query a specific unresolved fact. This is advisory and does not
 automatically move the body, interrupt work or claim progress.
 
+Flat steps also retain concise native scalar applicability (for example control
+duration and relative angles, and find/flee distance), plus the original shared
+target semantics. A rejected string-valued `steps` receives its genuine array
+shape and original schema pointer; JSON-looking text is never repaired or run.
+Exact repeated single-call, fully rejected exchanges retain the latest complete
+assistant/tool pair with bounded repeat provenance. Different arguments, errors,
+corrections, reasoning or opaque provider state remain distinct; mixed exchanges,
+successful work and uncertain outcomes are preserved. Original responses and
+receipts remain in their journals. This reduces repeated context without promising
+that a model will stop proposing invalid calls.
+
 ## Reuse attached viewer pages (0.1.42)
 
 An internal viewer reports its actual attached stream count. Startup allows a

@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .bridge import json_content, outcome, text_content
-from .context import assemble, encode
+from .context import assemble, coalesce_rejected, encode
 from .death_memory import TOOL as DEATH_REVIEW_TOOL
 from .death_memory import DeathMemory, identity, lifecycle, recovery_state
 from .stage_applicability import body_baseline, historical_proposal, inapplicable_reason
@@ -75,16 +75,6 @@ def admission_fingerprint(facts):
 
 
 def model_tools(catalogue):
-    def scalar_structure(value):
-        if not isinstance(value, dict):
-            return None
-        types = value.get("type", [])
-        types = [types] if isinstance(types, str) else types
-        scalar = bool(types) and set(types) <= {"string", "number", "integer", "boolean", "null"}
-        values = value.get("enum")
-        scalar |= isinstance(values, list) and all(not isinstance(item, (list, dict)) for item in values)
-        return {key: item for key, item in value.items() if key != "description"} if scalar else None
-
     def numeric_field(value):
         types = value.get("type", [])
         types = [types] if isinstance(types, str) else types
@@ -132,15 +122,14 @@ def model_tools(catalogue):
                 # anchors or recipes makes even basic tools impossible to infer.
                 # Keep every field's structure; manuals remain progressive.
                 # Dispatch still validates the ORIGINAL complete schema.
-                projected = {}
-                for key, value in properties.items():
-                    projected[key] = structural(value, descriptions=False)
-                    if isinstance(value, dict) and (key in {"target", "direction", "mode", "count", "anchors", "bounds", "needs"}
-                                                   or scalar_structure(value) is None and numeric_field(value)):
-                        meaning = value.get("description")
-                        if isinstance(meaning, str) and len(meaning) <= 240:
-                            projected[key]["description"] = meaning
-                step["properties"] = projected
+                # The first projection already keeps concise units/applicability.
+                # Do not strip them again for scalar flat-union arguments.
+                original = tool["inputSchema"]["properties"]["steps"]["items"]["properties"]
+                target = original.get("target", {}).get("description")
+                if isinstance(target, str) and len(target) <= 320:
+                    # The genuine shared target doc also describes use/ride/etc.
+                    # Retain it intact rather than inventing a find-only ID rule.
+                    properties["target"]["description"] = target
         description = tool.get("description", "")[:450]
         if tool["name"] == "mc_do" and "steps" in schema.get("properties", {}):
             description = "Execute real actions using flat steps. find requires target; direction makes it walk, otherwise it only observes. collect uses block; craft uses item/count. Read mc_help for exact skill parameters. Queue append preserves work; afterCheckpoint inserts safely, now interrupts. Task IDs mean accepted, not completed."
@@ -221,6 +210,10 @@ def failure_context(catalogue, name, arguments, result):
     properties = schema.get("properties", {})
     fields = [(key, properties.get(key, {})) for key in arguments if key != "steps"]
     steps = arguments.get("steps")
+    malformed_steps = ("steps" in arguments and not isinstance(steps, list)
+                       and properties.get("steps", {}).get("type") == "array")
+    if malformed_steps:
+        fields.insert(0, ("steps", properties.get("steps", {})))
     if isinstance(steps, list):
         step_properties = properties.get("steps", {}).get("items", {}).get("properties", {})
         keys = {key for step in steps if isinstance(step, dict) for key in step}
@@ -228,6 +221,8 @@ def failure_context(catalogue, name, arguments, result):
     notice = {"tool": name, "arguments": encode(arguments)[:1200], "error": str(result.get("text", ""))[:700],
               "next_step": "Do not repeat rejected arguments. Read mc_help for the selected skill and mc_tool_help for the tool schema; then correct the call or choose another useful action.",
               "parameter_help": {}, "original_receipts": "receipts.jsonl"}
+    if malformed_steps:
+        notice["next_step"] += " steps must be a JSON array of step objects; JSON text inside a string is not an array. No parsing, repair or dispatch was performed."
     if name == "mc_do" and not result.get("execution"):
         notice["next_step"] += " The batch was not accepted: earlier steps did not run either. Submit only the next feasible action; leave blocked optional searches and unverified dependent crafting out of that batch."
     admission = (result.get("meta") or {}).get("admission")
@@ -252,6 +247,12 @@ def failure_context(catalogue, name, arguments, result):
         short = {k: v for k, v in spec.items() if k in {"type", "enum", "minimum", "maximum", "minItems", "maxItems", "required"}}
         if spec.get("description"):
             short["description"] = spec["description"][:240]
+        if key == "steps":
+            short.pop("description", None)  # The full skill manual is progressive.
+            if isinstance(spec.get("items"), dict) and "type" in spec["items"]:
+                short["items"] = {"type": spec["items"]["type"]}
+            short["schema"] = {"tool": "mc_tool_help", "arguments": {
+                "name": name, "path": "/inputSchema/properties/steps"}}
         if not spec:
             short = {"documented": False, "lookup": "mc_tool_help"}
         notice["parameter_help"][key] = short
@@ -943,8 +944,20 @@ class Controller:
                 and len({call["id"] for call in calls}) == len(calls)):
             failure = encode({"failed": True, "dispatched": False, "origin": "controller_validation",
                               "text": self.planner_notice})
+            if len(calls) == 1:
+                try:
+                    arguments = json.loads(calls[0]["function"]["arguments"])
+                except ValueError:
+                    arguments = None
+                if isinstance(arguments, dict):
+                    correction = failure_context(self.bridge.tools, calls[0]["function"]["name"], arguments, {"text": str(error)})
+                    correction["original_receipts"] = "decisions.jsonl"
+                    failure = encode({**json.loads(failure), "correction": correction})
             self.groups.append([assistant_history(response), *[
                 {"role": "tool", "tool_call_id": call["id"], "content": failure} for call in calls]])
+            # Coalesce before the eight-group cap so exact validation loops do
+            # not evict distinct outcomes. Original responses remain journaled.
+            self.groups, _ = coalesce_rejected(self.groups)
             self.groups = self.groups[-8:]
         with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
             output.write(encode({"turnId": self.turn, "rejected": str(error), "dispatched": False}) + "\n")
