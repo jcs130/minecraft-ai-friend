@@ -964,6 +964,7 @@ export interface TaskReport {
 
 /** 中止标记；设置 aborted 的调用方同时记录抢占来源 by。 */
 interface AbortFlag {
+  controller: AbortController;
   aborted: boolean;
   by: string | null;
   /** 死亡边界推进后，旧异步执行即使迟到也不能写回或继续泵队列。 */
@@ -4076,6 +4077,7 @@ export class Executor {
     drain.phase = 'yielded';
     task.flag.aborted = true;
     task.flag.by = '安全检查点让位';
+    task.flag.controller.abort();
     this.opts.diag?.write({ lane: 'task', event: 'yield-draining', taskId: task.id,
       msg: '已保存检查点断点，等待当前执行实例完成收尾',
       data: { resumeFrom, boundary, count: task.count,
@@ -4179,7 +4181,7 @@ export class Executor {
     // 反射自保时会在没有任务的情况下下寻路目标;新任务一律接管,否则一边合成
     // 一边被上一轮的逃跑路线带着走
     dropGoal(this.opts.getBot(), 'task', `新任务#${next.id}接管身体`, this.opts.diag);
-    const flag: AbortFlag = { aborted: false, by: null, epoch: this.executionEpoch };
+    const flag: AbortFlag = { controller: new AbortController(), aborted: false, by: null, epoch: this.executionEpoch };
     const now = Date.now();
     // 打转账只记第一次开跑:断点续做是同一单接着跑,不是又下了一单
     if (next.startedAt === undefined) this.noteStarted(taskSignature(next.steps), next.id);
@@ -4554,6 +4556,7 @@ export class Executor {
     if (current) {
       current.flag.aborted = true;
       current.flag.by = reason;
+      current.flag.controller.abort();
     }
     if (this.activeAttack) this.activeAttack.disconnected = true;
     this.cancelActiveAttack();
@@ -4651,6 +4654,7 @@ export class Executor {
     if (current) {
       current.flag.aborted = true;
       current.flag.by = '死亡';
+      current.flag.controller.abort();
     }
     this.task = null;
     this.frozen = null;
@@ -4773,6 +4777,7 @@ export class Executor {
     if (t) {
       t.flag.aborted = true;
       t.flag.by = `自保反射:${reason}`;
+      t.flag.controller.abort();
       this.cancelActiveAttack();
       this.task = null;
     }
@@ -4891,6 +4896,7 @@ export class Executor {
   private abortTask(t: RunningTask, by: string): void {
     t.flag.aborted = true;
     t.flag.by = by;
+    t.flag.controller.abort();
     this.cancelActiveAttack();
     if (this.checkpointDrain?.task === t) this.checkpointDrain.continuation = null;
     this.task = null;
@@ -4912,6 +4918,7 @@ export class Executor {
     if (this.task) {
       this.task.flag.aborted = true;
       this.task.flag.by = 'World 停止';
+      this.task.flag.controller.abort();
     }
     this.task = null;
     this.queue = [];
@@ -4990,6 +4997,7 @@ export class Executor {
     const onWindowClose = (window: NonNullable<Bot['currentWindow']> | null): void => windows.onWindowClose(window);
     if (typeof bot.on === 'function') bot.on('windowClose', onWindowClose);
     const ctx: SkillContext = {
+      signal: flag.controller.signal,
       aborted: () => flag.aborted || this.stopped || flag.epoch !== this.executionEpoch,
       checkpoint: async (settle) => {
         if (windows.heldWindow || windows.hasUnconfirmedOpening()) return;

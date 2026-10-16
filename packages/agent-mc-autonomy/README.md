@@ -5,6 +5,27 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.73 defaults `context_tokens` to 65536 (64K); 131072 (128K) is optional when
+the configured service supports it. Explicit settings, including 32768, remain
+unchanged. Set the limit to the actual service capacity: this setting does not
+discover or enlarge the model server's context window. The fallback counter still
+uses a conservative UTF-8 byte upper bound plus output/framing reserves, not a
+measured model token count. The packed catalogue fails closed at an insufficient
+explicit 32K under that fallback. Tool schemas and argument validation are unchanged.
+
+This distribution packages the reviewed tool corrections, deep-water geometry, exact late
+death-episode hydration and dated contrary evidence with the current native GUI
+producer and interrupted stow accounting. Engine-only core 0.5.7-dev.20261016.32
+also preserves incoming host-selected retries, inventory policy and native Java
+readiness. Exact core source/archive/build/declaration receipts and the separately
+supplied shared viewer source c799ae1a (aquatic actors and inventory/recipe icons)
+are recorded in `core_distribution/source.json`, including actual archive and
+build hashes. The optional external viewer is built from its tracked source with
+the original YUI catalog; it is not embedded in this engine-only package. The
+core source retains its upstream bundled-viewer lock as provenance, disabled for
+this distribution. New installations remain disconnected; offline verification
+does not establish natural voice, complete entity/item coverage or survival.
+
 0.1.71 isolates optional viewer-state persistence failures from the game lifecycle.
 Failed writes preserve the last complete snapshot; the next ordinary publication
 attempts the latest state, and disposed or obsolete attachments cannot publish.

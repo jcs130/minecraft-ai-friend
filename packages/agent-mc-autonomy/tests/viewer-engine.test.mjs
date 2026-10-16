@@ -34,7 +34,7 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
   syncBuiltinESMExports();
   t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
 
-  const [{ MinecraftWorld, Bridge, MINECRAFT_DEFAULTS }, { TacticalMinecraftWorld }] = await Promise.all([
+  const [{ MinecraftWorld, Bridge, MINECRAFT_DEFAULTS, nativeGuiPresented }, { TacticalMinecraftWorld }] = await Promise.all([
     load('agent-mc-world/extension'), load('agent-mc-world/tactics'),
   ]);
   const directory = mkdtempSync(join(tmpdir(), 'mc-viewer-engine-'));
@@ -64,16 +64,22 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
     calls.push(['core-stop', this]); this.disposeExtension();
     if (stopFailure) throw Error('fake core stop failure');
   });
+  let attachFailure = false, listenFailure = false;
   const fixture = {
     prepare: async options => {
       calls.push(['prepare', options]);
       return { registrySha256: 'registry', attach: options => {
         calls.push(['attach', options]);
-        const view = { url: 'http://viewer.invalid/',
-          status: () => ({ viewer: { available: true, reason: 'READY' }, selfPlayer: { uuid: 'body-id' } }),
-          activeViewers: () => 1,
-          listen: async () => { calls.push(['listen', view]); },
-          close: async () => { calls.push(['view-close', view]); },
+        if (attachFailure) throw Error('fixture attach failed');
+        const view = { url: 'http://viewer.invalid/', clients: 1, ended: false, ready: true, playerUuid: 'body-id', statusReads: 0,
+          world: { epoch: 1, error: null, dimension: {}, pose: {} }, server: { listening: false },
+          status: () => { view.statusReads++; return { viewer: { available: view.ready, reason: 'READY', state: 'snapshot', epoch: view.world.epoch },
+            identity: { confirmed: true, playerUuid: view.playerUuid, epoch: view.world.epoch },
+            connection: { ended: view.ended }, selfPlayer: { uuid: view.playerUuid, name: 'FixtureBody', entityId: 1 },
+            presentation: { available: true, playerUuid: view.playerUuid, nativeState: { available: true } } }; },
+          activeViewers: () => view.clients,
+          listen: async () => { calls.push(['listen', view]); if (listenFailure) throw Error('fixture listen failed'); view.server.listening = true; },
+          close: async () => { calls.push(['view-close', view]); view.server.listening = false; },
         };
         views.push(view); return view;
       } };
@@ -127,7 +133,8 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
   const bridge = viewer.createBridge({ host: 'game.invalid', port: 0,
     onBotCreated: bot => { coreBot = bot; calls.push(['core-bot', bot]); } });
   assert.ok(bridge instanceof Bridge);
-  const bot = Object.assign(new EventEmitter(), { version: options.cfg.version, entity: {}, _client: { uuid: 'body-id' } });
+  const bot = Object.assign(new EventEmitter(), { version: options.cfg.version, username: 'FixtureBody',
+    entity: { id: 1, position: { x: 0, y: 64, z: 0 } }, inventory: { slots: [] }, _client: { uuid: 'body-id' } });
   const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
   bridge.opts.onBotCreated(bot); await flush();
   assert.equal(coreBot, bot);
@@ -135,13 +142,42 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
   assert.equal(calls.find(call => call[0] === 'stream')[1], bot);
   assert.equal(JSON.parse(readFileSync(config.stateFile)).available, true);
   assert.equal(intervals.size, 1);
-
-  bridge.opts.onBotCreated(bot); await flush();
+  assert.equal(nativeGuiPresented(bot), true);
+  const active = views[0];
+  const publish = () => { for (const timer of intervals) timer.callback(); };
+  const initialReads = active.statusReads;
+  for (let i = 0; i < 100; i++) assert.equal(nativeGuiPresented(bot), true);
+  assert.equal(active.statusReads, initialReads, 'pacing must not rebuild full viewer status');
+  for (const [key, value] of [['ready', false], ['ended', true], ['playerUuid', 'foreign']]) {
+    const before = active[key]; active[key] = value;
+    publish();
+    assert.equal(nativeGuiPresented(bot), false, `stale presentation admitted: ${key}`);
+    active[key] = before; publish();
+  }
+  for (const [owner, key, value] of [[active, 'clients', 0], [active.world, 'error', 'ended'],
+    [active.world, 'pose', null], [active.server, 'listening', false], [bot, 'username', 'foreign'],
+    [bot._client, 'uuid', 'foreign'], [bot, '_client', { uuid: 'body-id' }],
+    [bot, 'entity', { id: 1, position: { x: 0, y: 64, z: 0 } }],
+    [bot.entity, 'id', 2], [bot.entity, 'isValid', false], [bot.inventory, 'slots', null]]) {
+    const before = owner[key]; owner[key] = value;
+    assert.equal(nativeGuiPresented(bot), false, `current state not checked: ${key}`);
+    owner[key] = before; assert.equal(nativeGuiPresented(bot), true);
+  }
+  const now = Date.now(), clock = t.mock.method(Date, 'now', () => now + 1501);
+  assert.equal(nativeGuiPresented(bot), false, 'admission expires if publication stops');
+  clock.mock.restore(); publish();
+  assert.equal(nativeGuiPresented(Object.assign(new EventEmitter(), { entity: { id: 1 } })), false);
+  active.world.epoch++; assert.equal(nativeGuiPresented(bot), false); // revoke before next full admission
+  publish(); assert.equal(nativeGuiPresented(bot), true); // new operations bind the current epoch
+  bridge.opts.onBotCreated(bot);
+  assert.equal(nativeGuiPresented(bot), false); // old binding revoked before replacement listen
+  await flush();
   assert.equal(views.length, 2);
   assert.ok(calls.findIndex(call => call[0] === 'view-close' && call[1] === views[0])
     < calls.findIndex(call => call[0] === 'listen' && call[1] === views[1]));
   assert.equal(intervals.size, 1);
   await viewer.stop();
+  assert.equal(nativeGuiPresented(bot), false);
   assert.equal(intervals.size, 0);
   assert.equal(JSON.parse(readFileSync(config.stateFile)).reason, 'STOPPED');
   assert.ok(calls.some(call => call[0] === 'core-stop' && call[1] === viewer));
@@ -149,13 +185,27 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
   bridge.opts.onBotCreated(bot); await flush();
   assert.equal(views.length, 2); // A late bot callback cannot attach after explicit stop.
 
+  await viewer.start(host);
+  listenFailure = true;
+  bridge.opts.onBotCreated(bot); await flush();
+  assert.equal(nativeGuiPresented(bot), false);
+  assert.equal(intervals.size, 0);
+  assert.equal(JSON.parse(readFileSync(config.stateFile)).reason, 'VIEWER_LISTEN_FAILED');
+  assert.ok(calls.some(call => call[0] === 'view-close' && call[1] === views.at(-1)));
+  listenFailure = false; attachFailure = true;
+  bridge.opts.onBotCreated(bot); await flush();
+  assert.equal(nativeGuiPresented(bot), false);
+  assert.equal(JSON.parse(readFileSync(config.stateFile)).reason, 'VIEWER_ATTACH_FAILED');
+  attachFailure = false;
+  const viewCount = views.length;
+
   // The optional renderer failing still reaches the normal game startup path.
   fixture.prepare = async () => { throw Error('fake renderer unavailable'); };
   assert.equal(await viewer.start(host), 'core-started');
   assert.equal(JSON.parse(readFileSync(config.stateFile)).reason, 'VIEWER_PREPARE_FAILED');
   assert.ok(calls.some(call => call[0] === 'warn'));
   bridge.opts.onBotCreated(bot); await flush();
-  assert.equal(views.length, 2);
+  assert.equal(views.length, viewCount);
   stopFailure = true;
   await assert.rejects(viewer.stop(), /fake core stop failure/);
   assert.equal(JSON.parse(readFileSync(config.stateFile)).reason, 'STOPPED');

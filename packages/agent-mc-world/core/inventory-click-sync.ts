@@ -10,6 +10,7 @@ type Packet = Record<string, unknown>;
 type Window = NonNullable<Bot['currentWindow']>;
 type Phase = 'ready' | 'pending' | 'quarantined';
 interface PendingClick {
+  beforeDispatch?: () => void;
   window: Window;
   sent: boolean;
   sentSeq: number;
@@ -143,6 +144,9 @@ export function installInventoryClickSync(bot: Bot, diag?: MinecraftLog): void {
     const pending = state.pending;
     if (name === 'window_click' && state.phase === 'quarantined') assertInventoryClicksReady(bot);
     if (name === 'window_click' && pending) {
+      // A native click can wait (for example after digging) before writing.
+      // Revalidate the originating operation at this actual dispatch boundary.
+      pending.beforeDispatch?.();
       if (pending.sent || activeWindow(bot) !== pending.window || packet.windowId !== pending.window.id
         || packet.slot !== pending.slot || packet.mouseButton !== pending.button || packet.mode !== pending.mode) {
         state.phase = 'quarantined'; state.reason = '窗口变化或有并发库存点击';
@@ -287,7 +291,7 @@ function restoreUnsentInventoryClick(bot: Bot, state: SyncState, pending: Pendin
 }
 
 export async function clickInventoryConfirmed(bot: Bot, slot: number, button: number, mode: number,
-  expectedWindow?: Window): Promise<void> {
+  expectedWindow?: Window, beforeDispatch?: () => void): Promise<void> {
   installInventoryClickSync(bot);
   const state = states.get(bot);
   if (!state) { await bot.clickWindow(slot, button, mode); return; }
@@ -298,7 +302,7 @@ export async function clickInventoryConfirmed(bot: Bot, slot: number, button: nu
   const confirmation = new Promise<void>((resolve, reject) => {
     complete = (error): void => { if (error) reject(error); else resolve(); };
   });
-  const pending: PendingClick = { window, sent: false, sentSeq: 0, slot, button, mode,
+  const pending: PendingClick = { window, sent: false, sentSeq: 0, slot, button, mode, beforeDispatch,
     nativeSettled: false, createdSeq: state.packetSeq, expectedSlots: new Map(),
     expectedCursor: 'null', complete };
   state.phase = 'pending'; state.pending = pending;

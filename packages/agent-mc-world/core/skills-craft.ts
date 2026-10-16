@@ -1,3 +1,4 @@
+import { ShowPacer, withShowPacer } from './show.ts';
 /**
  * 合成、吃喝与换装:craft、eat、equip。
  *
@@ -6,7 +7,7 @@
 import type { Bot } from 'mineflayer';
 import { craftItemDef } from './craft-product.ts';
 export { craftItemDef } from './craft-product.ts';
-import { SkillBlocked, checkAbort, sleep, type SkillContext } from './skill-context.ts';
+import { Aborted, SkillBlocked, checkAbort, sleep, type SkillContext } from './skill-context.ts';
 import { type SkillCall } from './skills.ts';
 import { zhEffect, zhName } from './names.ts';
 import { gridText, zhErrorText } from './receipt.ts';
@@ -177,12 +178,21 @@ export async function skillCraft(
   const targetBefore = targetId === null ? 0 : invCountById(bot, targetId);
   /** 当场没读到入包的是第几次:槽位回灌会迟到,这是现场事实,不是判据(见下) */
   const lateRounds: number[] = [];
+  const show = new ShowPacer(() => {
+    const tempo = ctx.showTempo?.() ?? null;
+    return recipe.requiresTable || tempo?.inventory ? tempo : null;
+  }, { bot, ctx });
+  const inputs = recipe.inShape
+    ? recipe.inShape.flat().filter(cell => cell && cell.id !== -1).length
+    : recipe.ingredients?.length ?? 0;
+  show.planBeats({ open: times, close: times, result: times, click: inputs * times });
   for (let n = 0; n < times; n++) {
     checkAbort(ctx);
     const beforeOne = targetId === null ? null : invCountById(bot, targetId);
     try {
-      await bot.craft(recipe as never, 1, recipe.requiresTable ? table ?? undefined : undefined);
+      await withShowPacer(bot, show, () => bot.craft(recipe as never, 1, recipe.requiresTable ? table ?? undefined : undefined));
     } catch (err) {
+      if (err instanceof Aborted) throw err;
       const msg = zhErrorText((err as Error).message);
       throw new SkillBlocked(
         n === 0 ? `合成 ${label}: ${msg}` : `合成 ${label} 做到第 ${n + 1} 次时: ${msg}。${doneSoFar()}`,
