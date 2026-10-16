@@ -1,14 +1,24 @@
-# Optional survival references (0.1.75)
+# Optional survival references (0.1.76)
 
 This package consumes engine-only `agent-mc-world` 0.5.7-dev.20261016.39,
 source `3ee62ca25b60693132f7b7b8ae6bac3df7ad452f` at
 `packages/agent-mc-world` in the canonical repository. Its local companion
 archive has SHA-256
-`5915f451cf682465ed24baad5b0415801ca3a03ecb462ee2ef08bc675bc73f19`.
+`44c161edb81aad330aef57933716b31d329eb11506d6ba8e0b6c322f57285b56`.
 The archive, source revision, package, build, declarations and executable receipts
 are pinned in `core_distribution/source.json`; this is not an upstream npm release.
 The npm dependency graph is unchanged. Installation still validates every source,
 runtime and public declaration member against those receipts.
+
+Version 0.1.76 fixes the .75 pin's public-build mismatch. The documented builder
+extracts exact Git bytes before hashing source inputs. The earlier .75 archive
+used eight CRLF working-copy inputs; the new archive contains all 297 source
+inputs exactly as committed, with a matching build receipt. All 284 runtime files
+and 284 public declarations are byte-identical to the previously tested .39 build.
+The exact Git package also omits an inactive, untracked vendor viewer archive.
+Core version/source, the dependency graph and the separate default viewer receipt
+are unchanged. Neither source hashing nor installation verification is normalized
+or relaxed; the previous archive remains a distinct historical artifact.
 
 Through the existing read-only `mc_knowledge` help/search/get API, verified Java
 1.21.1 now has `guide/bed`, `guide/night_shelter`, `guide/equipment`, `guide/base`,

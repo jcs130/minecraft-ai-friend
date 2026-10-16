@@ -5,14 +5,14 @@
   "name": "agent-mc-world",
   "version": "0.5.7-dev.20261016.39",
   "archive": "agent-mc-world-0.5.7-dev.20261016.39.tgz",
-  "sha256": "5915f451cf682465ed24baad5b0415801ca3a03ecb462ee2ef08bc675bc73f19",
+  "sha256": "44c161edb81aad330aef57933716b31d329eb11506d6ba8e0b6c322f57285b56",
   "build_profile": "canonical-engine-only",
   "upstream_release": false,
   "minecraft_version": "1.21.1",
   "viewer_assets": null,
   "verification": {
     "package.json": "8f68e597f14ee018670e5db758d25fa3abb73d57759981cf39154124839a3f62",
-    "dist/build.json": "1d5eccea5a80b742cfc542b71549cd2f7a135e552d29aa47f2f9cc2db2f2dc0f",
+    "dist/build.json": "6997d44e02f548eb5e8f57b0a2b9e2a47b29b5af8a0f4eb9a5c9359b4b706036",
     "dist/types/manifest.json": "b4c941e75299fb4f7253de1de5f09ef1d5ee043df3d49c94495461bee62b637c",
     "bin/minecraft-agent-mcp.mjs": "161d2ebcc11726d655e2c204f412553bcc8ed6df6b7d20c2c6fcb82bf30760a8",
     "bin/minecraft-agent-client.mjs": "7cf81abccdcef5ad0aaf59340b233c3b5d398160e1c3d829a36fc25bfcbfb1bc"

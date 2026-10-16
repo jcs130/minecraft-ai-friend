@@ -5,6 +5,12 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.76 corrects the .75 artifact pin to the exact Git build produced by the public
+builder, retaining core 0.5.7-dev.20261016.39 and the same source revision. Raw Git
+source bytes and strict build receipts now agree; runtime and public declarations
+are byte-identical to the previously tested .39 package. Existing installation
+checks remain strict. The separate default viewer receipt remains unchanged.
+
 0.1.75 pins reviewed engine-only core 0.5.7-dev.20261016.39 from source
 `3ee62ca25b60693132f7b7b8ae6bac3df7ad452f`. Optional `mc_knowledge` help,
 search and get now expose six Java 1.21.1 survival references: bed, night shelter,
