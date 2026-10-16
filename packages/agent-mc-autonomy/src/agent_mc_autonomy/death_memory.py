@@ -129,6 +129,8 @@ class DeathMemory:
         if not latest or (pending and (latest.get("reflection") or latest.get("lesson"))):
             return None
         life = lifecycle(facts) if facts is not None else None
+        if isinstance(life, dict) and life.get("phase") == "alive" and not life.get("episodeId"):
+            return None  # A new native connection has no death episode to review.
         if isinstance(life, dict) and life.get("episodeId") not in {None, latest["id"]}:
             return None
         return latest

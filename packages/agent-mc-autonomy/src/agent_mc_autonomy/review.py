@@ -95,6 +95,7 @@ def review_observation(status, now):
     # task progress. Keep it separate from evidence refreshed during delivery.
     evidence["body_baseline"] = {
         "scope": scope_key(snapshot.get("game_identity")),
+        "run": snapshot.get("facts", {}).get("run"),
         "lifecycle": {"phase": life.get("phase"), "episodeId": life.get("episodeId")
                       or evidence.get("death_episode", {}).get("id")},
         "restriction": feedback["bodyRestriction"], "phase": snapshot["phase"],

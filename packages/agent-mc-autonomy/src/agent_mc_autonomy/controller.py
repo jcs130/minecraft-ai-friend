@@ -319,6 +319,7 @@ class Controller:
     def observe_game_facts(self, facts):
         self.game_facts = facts
         fresh_scope = identity(facts)
+        life = lifecycle(facts)
         if fresh_scope != self.game_scope:
             self.recent.clear()
             self.native_outcomes.clear()
@@ -326,11 +327,13 @@ class Controller:
             self.publish(native_outcomes=[], body_events=[])
             self.groups.clear()  # Tool replies/provider replay belong to the previous game identity too.
             if not self.death_recovery:
-                # Hydration must honor persisted actual death even when its event
-                # will not be delivered again after restart.
-                self.death_recovery = next(iter(self.death_memory.entries(fresh_scope)), None)
+                # History alone cannot fence a fresh connection, whose native
+                # lifecycle starts alive without any episode ID. Hydrate only
+                # an episode still attested by this actual body's lifecycle.
+                latest = next(iter(self.death_memory.entries(fresh_scope)), None)
+                if latest and isinstance(life, dict) and life.get("episodeId") == latest["id"]:
+                    self.death_recovery = latest
         self.game_scope = fresh_scope
-        life = lifecycle(facts)
         if self.death_recovery:
             body = recovery_state(facts)
             self.death_waiting = not (fresh_scope == self.death_recovery["scope"]

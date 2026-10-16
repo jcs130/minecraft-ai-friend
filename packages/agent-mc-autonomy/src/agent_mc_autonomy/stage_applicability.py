@@ -7,6 +7,7 @@ def body_baseline(facts, latest_death=None):
     life = lifecycle(facts)
     life = life if isinstance(life, dict) else {}
     return {"scope": scope_key(identity(facts)),
+            "run": facts.get("run"),
             "lifecycle": {"phase": life.get("phase"), "episodeId": life.get("episodeId")},
             "death_id": latest_death.get("id") if latest_death else None}
 
@@ -20,7 +21,8 @@ def inapplicable_reason(goal, baseline):
         return "body_episode_changed"
     if not baseline.get("scope") or baseline.get("lifecycle", {}).get("phase") != "alive":
         return "body_baseline_unavailable"
-    if baseline.get("death_id") and baseline["lifecycle"].get("episodeId") != baseline["death_id"]:
+    episode_id = baseline["lifecycle"].get("episodeId")
+    if baseline.get("death_id") and episode_id is not None and episode_id != baseline["death_id"]:
         return "body_baseline_unavailable"
     return None
 
