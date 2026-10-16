@@ -11,6 +11,7 @@ import os
 import re
 import sqlite3
 import uuid
+from contextlib import closing
 from datetime import datetime, timezone
 
 from .ownership import session_is_owned, session_lease
@@ -93,15 +94,35 @@ def require_no_pending_acknowledgement(host, *, same_id=None):
     for transaction in _transactions(host):
         if transaction.is_symlink():
             raise RuntimeError("outcome_unknown: recovery receipt requires inspection")
-        if not (transaction / "prepared.json").exists() and not (transaction / "prepared.json.staging").exists():
-            continue  # No durable intent and no state mutation yet.
         if (transaction / "committed.json").exists():
             try:
                 _receipt(transaction)
             except (OSError, ValueError, RuntimeError):
                 raise RuntimeError("outcome_unknown: recovery receipt requires inspection") from None
-        elif transaction.name != same_id:
+            continue
+        if transaction.name != same_id:
             raise RuntimeError("outcome_unknown: prepared operator acknowledgement requires its original receipt")
+        if (transaction / "prepared.json").exists() or (transaction / "prepared.json.staging").exists():
+            continue  # Only the same administrator retry; it validates the full audit below.
+        # Missing intent is not proof that state was never changed. A same-ID
+        # retry may continue only from demonstrably pre-mutation snapshots; it
+        # must never recreate lost post-mutation audit/commit evidence.
+        try:
+            allowed = {"before-state.json", "before-state.json.staging", "before-status.json", "before-status.json.staging"}
+            entries = list(transaction.iterdir())
+            if any(path.name not in allowed or not path.is_file() or path.is_symlink() for path in entries):
+                raise RuntimeError("recovery_incomplete_transaction")
+            state_raw, status_raw = _read(host / "host-state.json", 65536), _read(host / "status.json")
+            state, status = json.loads(state_raw), json.loads(status_raw)
+            if (not isinstance(state, dict) or not isinstance(status, dict) or status.get("phase") != "failed"
+                    or state.get("stopped") is not True or state.get("uncertain") is not True
+                    or state.get("pending") != [] or "inflight_request" not in state or state["inflight_request"] is not None):
+                raise RuntimeError("recovery_pre_mutation_not_established")
+            for path in entries:
+                if _read(path) != (state_raw if path.name.startswith("before-state.") else status_raw):
+                    raise RuntimeError("recovery_pre_mutation_not_established")
+        except (OSError, ValueError, RuntimeError):
+            raise RuntimeError("outcome_unknown: incomplete operator audit requires inspection") from None
 
 
 def _evidence(host, status, run, native_request_ids):
@@ -178,7 +199,7 @@ def assess(settings, data_root, *, native_request_ids=()):
     # and never use immutable=1 (which would silently ignore pending WAL rows).
     if database.is_symlink() or any(database.with_name(database.name + suffix).exists() for suffix in ("-wal", "-shm")):
         raise RuntimeError("recovery_quiescent_rollback_mailbox_required")
-    with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True) as db:
+    with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as db:
         dispatching = db.execute("SELECT count(*) FROM commands WHERE state='dispatching'").fetchone()[0]
     evidence = _evidence(host, status, run, native_request_ids)
     owner = session_is_owned(host)

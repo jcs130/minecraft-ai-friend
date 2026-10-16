@@ -347,3 +347,89 @@ def test_missing_inflight_field_is_not_proven_empty(tmp_path, framework_module):
     with pytest.raises(RuntimeError, match='empty_stopped_unknown_required'):
         acknowledge_unknown(settings, tmp_path, **options)
     assert json.loads(path.read_text())['uncertain'] is True
+
+
+@pytest.mark.parametrize('phase', ['committed', 'receipt_failed', 'commit_staged'])
+@pytest.mark.parametrize('damage', ['missing_prepared', 'missing_both', 'empty_transaction', 'partial_prepared'])
+def test_missing_post_mutation_audit_blocks_both_startup_paths_without_repair(
+        tmp_path, framework_module, monkeypatch, run_async, phase, damage):
+    import agent_mc_autonomy.recovery as recovery
+    from agent_mc_autonomy.controller import Controller
+    from agent_mc_autonomy.runner import run_session
+    settings, host, _, _, options = fixture(tmp_path, framework_module)
+    write = recovery._write_immutable
+    def fail_receipt(path, body):
+        if path.name == 'committed.json':
+            if phase == 'commit_staged':
+                path.with_name(path.name+'.staging').write_bytes(body)
+            raise PermissionError('fixture receipt failure')
+        write(path, body)
+    if phase == 'committed':
+        recovery.acknowledge_unknown(settings, tmp_path, **options)
+    else:
+        monkeypatch.setattr(recovery, '_write_immutable', fail_receipt)
+        with pytest.raises(OSError):
+            recovery.acknowledge_unknown(settings, tmp_path, **options)
+        monkeypatch.setattr(recovery, '_write_immutable', write)
+    transaction = host/'recovery-acknowledgements'/options['acknowledgement_id']
+    assert json.loads((host/'host-state.json').read_text())['uncertain'] is False
+    if damage == 'partial_prepared':
+        (transaction/'prepared.json').write_text('{', encoding='utf-8')
+    else:
+        (transaction/'prepared.json').unlink()
+        if damage in {'missing_both', 'empty_transaction'}:
+            for filename in ['committed.json', 'committed.json.staging']:
+                (transaction/filename).unlink(missing_ok=True)
+        if damage == 'empty_transaction':
+            for path in transaction.iterdir():
+                path.unlink()
+    before = {p.name:p.read_bytes() for p in transaction.iterdir()}
+    state_before, status_before = (host/'host-state.json').read_bytes(), (host/'status.json').read_bytes()
+    with pytest.raises(RuntimeError, match='outcome_unknown'):
+        recovery.require_no_pending_acknowledgement(host)
+    body = Bridge()
+    with pytest.raises(RuntimeError, match='outcome_unknown'):
+        run_async(Controller(body, None, settings, host, lambda **_:None, lambda:False).run('fixture'))
+    assert not body.opened and not body.calls
+    def forbidden(*_):
+        pytest.fail('Incomplete audit must block bridge construction')
+    with pytest.raises(RuntimeError, match='outcome_unknown'):
+        run_async(run_session(settings, tmp_path/'fake', tmp_path, None, 'fixture', lambda **_:None,
+                              lambda:False, bridge_factory=forbidden))
+    with pytest.raises((OSError, RuntimeError, ValueError)):
+        recovery.acknowledge_unknown(settings, tmp_path, **options)
+    assert before == {p.name:p.read_bytes() for p in transaction.iterdir()}
+    assert state_before == (host/'host-state.json').read_bytes()
+    assert status_before == (host/'status.json').read_bytes()
+    assert not (host/'client.json').exists()
+
+
+@pytest.mark.parametrize('query_failure', [False, True])
+def test_assessment_explicitly_closes_readonly_sqlite_handle(tmp_path, framework_module, monkeypatch, query_failure):
+    import agent_mc_autonomy.recovery as recovery
+    settings, _, _, _, options = fixture(tmp_path, framework_module)
+    connect, opened, closed = sqlite3.connect, [], []
+    class Tracked(sqlite3.Connection):
+        def execute(self, statement, *args, **kwargs):
+            if query_failure:
+                raise sqlite3.OperationalError('fixture readonly query failure')
+            return super().execute(statement, *args, **kwargs)
+        def close(self):
+            closed.append(self)
+            return super().close()
+    def tracked(*args, **kwargs):
+        result = connect(*args, **kwargs, factory=Tracked)
+        opened.append(result)
+        return result
+    monkeypatch.setattr(recovery.sqlite3, 'connect', tracked)
+    if query_failure:
+        with pytest.raises(sqlite3.OperationalError):
+            recovery.assess(settings, tmp_path, native_request_ids=options['native_request_ids'])
+    else:
+        recovery.assess(settings, tmp_path, native_request_ids=options['native_request_ids'])
+    try:
+        assert opened == closed
+    finally:
+        for connection in opened:
+            if connection not in closed:
+                connection.close()

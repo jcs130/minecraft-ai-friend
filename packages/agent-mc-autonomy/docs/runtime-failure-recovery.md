@@ -97,6 +97,12 @@ and native evidence, and exact original/resulting state hash. Its immutable
 snapshots must match. A different UUID cannot cross a pending record. Missing,
 partial, corrupt or conflicting evidence remains fenced and requires inspection;
 it is not deleted, repaired silently or treated as successful acknowledgement.
+Missing prepared evidence cannot hide a surviving committed or staged receipt.
+Even if both records disappear, surviving snapshots or an empty transaction
+directory keep startup fenced. Only the original administrator UUID may retry a
+demonstrably pre-mutation transaction: stopped/uncertain/empty current work and
+byte-matching original snapshots, with no commit evidence. Missing post-mutation
+audit is never silently recreated.
 Portable file fsync and atomic replacement are used; platform/power-loss
 durability beyond those primitives is not claimed.
 
