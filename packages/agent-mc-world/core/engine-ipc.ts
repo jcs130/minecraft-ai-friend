@@ -98,6 +98,8 @@ export type HostRequest =
       kind: 'push';
       evt: Omit<Parameters<WorldHost['pushEvent']>[0], 'blobs'> & { blobs?: IpcBlob[] };
       opts?: PushOptions;
+      /** Sampled at execution delivery, not the periodic console heartbeat. Null revokes an old sample. */
+      requestFacts?: WorldRequestFacts | null;
     }
   | { kind: 'drain' }
 ;
@@ -108,6 +110,6 @@ export type MainToChild =
   | { t: 'cast'; cast: EngineCast };
 
 export type ChildToMain =
-  | { t: 'rep'; id: number; ok: boolean; value?: unknown; error?: string }
+  | { t: 'rep'; id: number; ok: boolean; value?: unknown; error?: string; requestFacts?: WorldRequestFacts | null }
   | { t: 'hreq'; id: number; req: HostRequest }
   | { t: 'note'; note: EngineNote };

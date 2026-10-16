@@ -23,6 +23,7 @@ import type {
   Logger,
   StoragePart,
   ToolOutcome,
+  WorldRequestFacts,
 } from './support/host-contract.ts';
 
 function send(msg: ChildToMain): void {
@@ -79,7 +80,9 @@ function toolOutcomeOverIpc(out: string | ToolOutcome): string | IpcToolOutcome 
 
 const selectedBlobs = new AsyncLocalStorage<ReadonlyMap<string, {bytes: Uint8Array; mime: string}>>();
 const host: WorldHost = {
-  pushEvent: (e, opts) => hostRpc({ kind: 'push', evt: { ...e, blobs: encodeBlobs(e.blobs) }, opts }) as Promise<EventEnvelope>,
+  pushEvent: (e, opts) => hostRpc({ kind: 'push', evt: { ...e, blobs: encodeBlobs(e.blobs) }, opts,
+    ...(e.execution?.terminal ? { requestFacts: sampleRequestFacts() } : {}),
+  }) as Promise<EventEnvelope>,
   pushDeferred: (e, opts) => {
     const renderId = deferredRenders.arm(e.type, e.render);
     send({
@@ -113,6 +116,12 @@ let statusTimer: ReturnType<typeof setInterval> | null = null;
 let lastStatus = '';
 const activeRequests = new Map<number, AbortController>();
 let stopping = false;
+
+/** Evidence collection must not reject or repeat an already executed operation. */
+function sampleRequestFacts(): WorldRequestFacts | null {
+  try { return mod?.requestFacts() ?? null; }
+  catch { return null; }
+}
 
 function applyCfg(target: Record<string, unknown>, next: Record<string, unknown>): void {
   for (const [k, v] of Object.entries(next)) {
@@ -155,7 +164,7 @@ function pushStatus(): void {
     decl: { lamps: decl.lamps, badges: decl.badges, links: decl.links },
     storage: storageStats(decl.storage ?? []),
     promptVars: mod.envPromptRuntimeVars(),
-    requestFacts: mod.requestFacts(),
+    requestFacts: sampleRequestFacts(),
     ...(connection ? { connection: { ...connection, observedAt: Date.now() } } : {}),
   };
   const key = JSON.stringify(note);
@@ -238,9 +247,13 @@ process.on('message', (msg: MainToChild) => {
     void Promise.resolve()
       .then(() => handleRequest(msg.req, controller.signal))
       .then(
-        (value) => send({ t: 'rep', id: msg.id, ok: true, value }),
+        (value) => send({ t: 'rep', id: msg.id, ok: true, value,
+          ...(msg.req.kind === 'tool' ? { requestFacts: sampleRequestFacts() } : {}),
+        }),
         (err: unknown) =>
-          send({ t: 'rep', id: msg.id, ok: false, error: err instanceof Error ? err.message : String(err) }),
+          send({ t: 'rep', id: msg.id, ok: false, error: err instanceof Error ? err.message : String(err),
+            ...(msg.req.kind === 'tool' ? { requestFacts: sampleRequestFacts() } : {}),
+          }),
       ).finally(() => activeRequests.delete(msg.id));
     return;
   }

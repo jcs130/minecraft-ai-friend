@@ -41,6 +41,11 @@ The original game event archive still holds original game receipts, governed by 
 Before/after are observations, not causal proof. A decision row's after is the observation at recording
 time, not a reconstruction of the model input. Missing/stale/cross-realm samples stay null. Returned
 RPCs without terminal evidence stay unverified. Probability is not accuracy; completion is not success.
+The Mineflayer child samples facts with each tool reply and terminal event, and the proxy installs
+that sample before notifying observers. It does not reuse the one-second console heartbeat as the
+terminal observation. A failed read clears the sample to null without changing the actual outcome.
+This samples current client state at delivery; it does not wait for later server effects, prove that
+all inventory packets arrived, or repair historical rows collected by earlier versions.
 
 `mc_memory action:experience` exposes help/list/get/stats/reflect through existing SDK and MCP tools.
 Reflection checks scope-bound evidence IDs and preserves an attributed notebook lesson, with explicit
