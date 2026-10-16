@@ -18,6 +18,8 @@ public final class ReconnectSessionCheck {
         check(!retry.tick(failed, 8000), "fresh failed connection schedules next attempt");
         check(!retry.tick(failed, 17999), "backoff grows");
         check(retry.tick(failed, 18000), "second retry");
+        retry.arm(); retry.cancel();
+        check(retry.attempts() == 2, "auth-pending connection does not reset failed reconnect backoff");
         retry.block();
         check(!retry.tick(new Object(), 100000), "authentication failure stops reconnection");
         retry.arm();

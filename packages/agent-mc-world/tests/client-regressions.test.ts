@@ -198,11 +198,11 @@ describe('live readouts and honest startup', () => {
       expect(r.said).toEqual([]);
     } finally { r.close(); }
   });
-  it('documents mandatory probe shape and script name in the tool descriptions', () => {
+  it('documents mandatory probe shape and the optional stable script name in the tool descriptions', () => {
     const r = methodHarness();
     try {
       expect(r.world.tools().find(t => t.name === 'mc_scout')!.description).toMatch(/shape is required/);
-      expect(r.world.tools().find(t => t.name === 'mc_script')!.description).toMatch(/name is required/);
+      expect(r.world.tools().find(t => t.name === 'mc_script')!.description).toMatch(/name is optional.*stable source hash/);
     } finally { r.close(); }
   });
   it('waits for the footprint chunks and a quiet player list, then refreshes exactly once', async () => {

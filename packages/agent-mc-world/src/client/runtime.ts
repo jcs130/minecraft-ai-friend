@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createMinecraftChoiceTool } from './choice.ts';
+import { familiarStepAction } from './familiar-action.ts';
 import { ClientOperationLearning } from './operation-learning.ts';
 import { operationObservation, type OperationAttribution } from '../../core/operation-experience.ts';
 import { appendFileSync } from 'node:fs';
@@ -109,6 +110,13 @@ export class MinecraftAgentClient {
     this.executions.set(key, receipt);
   }
   get toolPrefix() { return this.binding.toolPrefix; }
+  /** Pure preparation on the selected tool; preserves backend-specific validation and exact IDs. */
+  prepareFastAction(name: string, args: Record<string, unknown>) {
+    if (this.phase !== 'started' || this.status().connection?.ready === false || name !== `${this.toolPrefix}_do`) return null;
+    const tool = this.tools().find(t => t.name === name); if (!tool) return null;
+    if (tool.familiarAction) return tool.familiarAction(structuredClone(args));
+    return this.options.cfg.provider === 'java-client' ? null : familiarStepAction(args);
+  }
   protected validateConfig(): void { assertMinecraftReady(this.options.cfg); }
 
   tools() {

@@ -8,6 +8,7 @@ import { translateJavaLegacy } from './java-legacy.ts';
 import { NativeEvidenceArchive, compactNativeState, compactNativeItems } from './native-evidence.ts';
 import { publicReadProjection, projectPublicRead } from '../../core/method-read.ts';
 import { navigationGoal } from '../../core/navigation-goal.ts';
+import { BLOCK_FIND_SCHEMA, blockFindRequest } from '../../core/block-find-method.ts';
 import { methodCapabilities, METHOD_CAPABILITIES_HELP, type BotMethod } from '../../core/method-capabilities.ts';
 import type { JavaClientState, JavaClientAction, JavaClientConfiguration } from '../contracts/java-client.ts';
 import type { ToolCallContext, ToolOutcome, WorldHost } from './contracts.ts';
@@ -24,13 +25,14 @@ export function javaMethodCapabilities(caps: Record<string, unknown>) {
 }
 const READS = new Set(['read','blockAt','findBlocks','findBlock','canSeeBlock','inventory.items','getControlState']);
 export const JAVA_METHOD_FIELDS = {
+  find: BLOCK_FIND_SCHEMA,
   name:{type:'string',minLength:1,maxLength:80}, params:{type:'object'}, durationMs:{type:'integer',minimum:1000,maximum:120000},
   waitMs:{type:'integer',minimum:0,maximum:30000},
   validate:{type:'boolean'}, stop:{type:'boolean'}, runId:{type:'integer',minimum:1}, call:{type:'integer',minimum:1,maximum:32},
   procedure:{type:'object',properties:{handle:{type:'string'},revision:{type:'string'}},required:['handle','revision'],additionalProperties:false}, library:METHOD_LIBRARY_SCHEMA,
 };
 export function javaMethodHelp(topic='index'):string {
-  const base='JavaScript uses the SAME mc_script {name,code,params,validate,runId,call,stop,library,procedure} and SES/Vec3/method version format as the Mineflayer backend. Use language:"javascript" (or legacy name+code); Python remains explicit language:"python" or legacy unnamed code. waitMs:0..30000 waits for the SAME run and cleanup within this tool reply (native default1000ms, configurable); zero returns admission immediately. A running reply retains its original runId; inspect that ID with waitMs instead of launching duplicate programs. Cancelling only this wait does not cancel accepted work; stop is explicit. Every bot call is awaited; Vec3 arithmetic and Block.getProperties() are synchronous. No Python translation, second connection, arbitrary imports/plugins or hidden model. Requires bridge methodAdapter agent-mc-method/v1 for execution; syntax validation is offline. Claim mc_control before body calls. First body call reserves the one native queue until program end; held keys survive SDK calls. Stop/timeout/disconnect cancels only the original action and releases keys; unknown cleanup blocks another program. Read runId/call to inspect actual terminals. A completed program is not goal completion.';
+  const base='JavaScript uses the SAME mc_script {name,code,params,validate,runId,call,stop,library,procedure} and SES/Vec3/method version format as the Mineflayer backend. Use language:"javascript" explicitly. Inline code has a stable source-hash default name; explicit names remain1..80 characters. Python requires an enabled executor and explicit language:"python" (legacy unnamed code is Python only when that executor is enabled). find:{names,maxDistance,count} is a bounded read-only recipe using actual registry IDs, default radius8/count8; native radius max16, Mineflayer max32. waitMs:0..30000 waits for the SAME run and cleanup within this tool reply (native default1000ms, configurable); zero returns admission immediately. A running reply retains its original runId; inspect that ID with waitMs instead of launching duplicate programs. Cancelling only this wait does not cancel accepted work; stop is explicit. Every bot call is awaited; Vec3 arithmetic and Block.getProperties() are synchronous. No Python translation, second connection, arbitrary imports/plugins or hidden model. Requires bridge methodAdapter agent-mc-method/v1 for execution; syntax validation is offline. Claim mc_control before body calls. First body call reserves the one native queue until program end; held keys survive SDK calls. Stop/timeout/disconnect cancels only the original action and releases keys; unknown cleanup blocks another program. Read runId/call to inspect actual terminals. A completed program is not goal completion.';
   const topics:Record<string,string>={
     index:`Known bot methods: ${JAVA_METHODS.join(', ')}. Reuse Mineflayer-shaped programs; await mc.capabilities() returns the actual supported subset before body calls. On-demand api: read, blockAt, findBlocks, inventory, movement, pathfinder, interaction, mc.capabilities, mc.state, mc.do, methods, compatibility. With language:python use the Minescript guide.`,
     'mc.capabilities': METHOD_CAPABILITIES_HELP,
@@ -103,6 +105,7 @@ export class JavaMethods {
   }
   private async reconcile(){if(!this.uncertain)return;const action:JavaClientAction=await this.port.rpc('result',{action_id:this.uncertain});if(['completed','partial','blocked','cancelled'].includes(action.phase)){this.owned.delete(this.uncertain);this.uncertain=null;for(const run of this.finishedRuns.values())run.unknown=false;}else throw new Error(`Cleanup unknown for ${this.uncertain}; reconcile original action, no replay`);}
   async execute(args:Record<string,unknown>,ctx:ToolCallContext):Promise<ToolOutcome>{
+    if(args.find!==undefined)args=blockFindRequest(args);
     const waitMs=args.waitMs??this.cfg.methodWaitMs??1000;
     if(typeof waitMs!=='number'||!Number.isInteger(waitMs)||waitMs<0||waitMs>30000)throw new Error('waitMs must be 0..30000');
     if(args.api)return {text:javaMethodHelp(String(args.api))+(args.code?'\nAPI query only: supplied code was not executed.':'')};
@@ -118,7 +121,9 @@ export class JavaMethods {
       const graph=reference?resolveProcedure(reference,METHOD_ADAPTER,handle=>handle.startsWith('mem:mc-method/')?this.library.blob(handle):this.port.host()?.blob(handle)??null):undefined;
       const root=graph?.versions[graph.root];
       ctx.signal?.throwIfAborted();
-      const run=this.runner.start({name:root?.id??args.name as string,code:root?.code??args.code as string,params:args.params as Record<string,unknown>|undefined,durationMs:args.durationMs as number|undefined,validate:args.validate===true,...(reference&&graph?{procedure:{reference,graph}}:{})});
+      const code=root?.code??args.code as string;
+      const name=root?.id??args.name??`inline-${createHash('sha256').update(String(code)).digest('hex').slice(0,12)}`;
+      const run=this.runner.start({name:name as string,code,params:args.params as Record<string,unknown>|undefined,durationMs:args.durationMs as number|undefined,validate:args.validate===true,...(reference&&graph?{procedure:{reference,graph}}:{})});
       const waitingCancelled=await this.settleRun(run.id,waitMs,ctx.signal);
       const current=this.runner.read(run.id)[0],finished=this.finishedRuns.get(run.id),terminal=current.status!=='running'&&!!finished&&!finished.unknown;
       const phase=terminal?finished!.phase:finished?.unknown?'blocked':'accepted';

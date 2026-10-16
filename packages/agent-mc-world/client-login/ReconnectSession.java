@@ -10,7 +10,7 @@ public final class ReconnectSession {
     private long due;
 
     public ReconnectSession() { delays = new long[] {3000, 10000, 30000, 60000}; }
-    public void arm() { enabled = true; online(); }
+    public void arm() { enabled = true; cancel(); }
     public void block() { enabled = false; cancel(); }
     public void online() { attempts = 0; screen = null; attemptedScreen = null; due = 0; }
     public void cancel() { screen = null; due = 0; }

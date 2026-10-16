@@ -14,6 +14,7 @@ final class NativeNavigation {
     private class_243 previous;
     private String owner;
     private boolean cleanupPending;
+    private boolean paused;
     NativeNavigation(class_310 client){this.client=client;}
     static NavigationSession.Goal validate(JsonObject goal){
         if(goal==null||goal.keySet().stream().anyMatch(k->!Set.of("x","y","z","rangeSq").contains(k)))throw new IllegalArgumentException("GoalBlock/GoalNear x/y/z/rangeSq required");
@@ -26,13 +27,19 @@ final class NativeNavigation {
     boolean available(){return BaritoneNavigation.available();}
     boolean unresolved(){return driver!=null&&(cleanupPending||session==null||session.phase().equals("unknown"));}
     String owner(){return owner;}
+    boolean mayPauseForReflex()throws Exception{return driver!=null?driver.owns():!BaritoneNavigation.busyForReflex();}
+    void paused(boolean value)throws Exception {
+        if(session==null||!paused&&!value)return;
+        if(client.field_1724!=player||client.field_1687!=world||client.field_1724==null||client.field_1724.method_19538().method_1022(previous)>8)throw new IllegalStateException("Paused body respawned, changed dimension or teleported");
+        previous=client.field_1724.method_19538();session.paused(value,System.currentTimeMillis());paused=value;
+    }
     void start(JsonObject goal,int timeoutMs,String actionId) throws Exception {
         NavigationSession.Goal target=validate(goal);
         if(!available())throw new IllegalStateException("Baritone navigation capability unavailable");
         if(timeoutMs<1000||timeoutMs>120000)throw new IllegalArgumentException("Navigation timeoutMs1000..120000");
         if(driver!=null&&!cancel())throw new IllegalStateException("Original navigation cleanup unknown; no new goal dispatched");
         if(client.field_1724==null||client.field_1687==null||client.field_1755!=null||client.field_1724.method_6032()<=0||!client.field_1724.method_24828())throw new IllegalStateException("Close GUI and verify a living grounded body before walking navigation");
-        player=client.field_1724;world=client.field_1687;previous=client.field_1724.method_19538();
+        player=client.field_1724;world=client.field_1687;previous=client.field_1724.method_19538();paused=false;
         driver=new BaritoneNavigation();owner=actionId;cleanupPending=false;
         try{session=new NavigationSession(driver,target,feet(),System.currentTimeMillis(),timeoutMs);}
         catch(Exception error){if(cancel())throw error;throw new IllegalStateException("Navigation start failed and cancellation unknown",error);}

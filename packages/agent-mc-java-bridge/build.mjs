@@ -35,7 +35,7 @@ rmSync(testClasses,{recursive:true,force:true});mkdirSync(testClasses,{recursive
 const testArgs=join(build,'test-compile.args'),testClasspath=classes+delimiter+classpath;
 writeFileSync(testArgs,['--release','21','-encoding','UTF-8','-proc:none','-classpath',testClasspath,'-d',testClasses,...walk(join(root,'src','test','java')).filter(path=>path.endsWith('.java'))].map(quote).join('\n'));
 run('javac',['@'+testArgs]);
-for(const check of ['ControlLedgerCheck','MethodCallsCheck','BlockSearchCheck','InventoryPickCheck','org.agentmc.bridge.NavigationSessionCheck'])run('java',['-cp',testClasses+delimiter+testClasspath,check]);
+for(const check of ['ControlLedgerCheck','MethodCallsCheck','BlockSearchCheck','InventoryPickCheck','org.agentmc.bridge.NavigationSessionCheck','org.agentmc.bridge.ServerAuthorizationCheck','org.agentmc.bridge.ReflexLeaseCheck'])run('java',['-cp',testClasses+delimiter+testClasspath,check]);
 run('java',['-cp',testClasses+delimiter+testClasspath,'org.agentmc.bridge.BaritoneApiCheck']);
 // An explicit API jar exercises optional discovery offline; it is never installed into the game.
 if(process.argv[5])run('java',['-cp',testClasses+delimiter+testClasspath+delimiter+resolve(process.argv[5]),'org.agentmc.bridge.BaritoneApiCheck','present']);

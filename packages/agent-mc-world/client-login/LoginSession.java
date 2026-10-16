@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 
 /** One password submission per challenge; optional renewal requires prior confirmation. */
 public final class LoginSession {
-    public enum Result { IGNORE, SUBMIT, CONFIRMED, BLOCKED }
+    public enum Result { IGNORE, SUBMIT, CONFIRMED, REQUIRED, BLOCKED }
     /** A server may send more than one join packet on the same transport. */
     public static final class ConnectionScope {
         private Object transport;
@@ -27,6 +27,7 @@ public final class LoginSession {
         }
 
         public long generation() { return generation; }
+        public boolean owns(Object current) { return current != null && current == transport; }
     }
     private static final Pattern FORMATTING = Pattern.compile("§[0-9A-FK-ORa-fk-or]");
     private final List<String> requests;
@@ -38,6 +39,8 @@ public final class LoginSession {
     private boolean blocked;
     private boolean renewed;
     private long lastRenewalMs;
+    private long submittedAtMs;
+    private boolean everConfirmed;
 
     public LoginSession(List<String> requests, List<String> confirmations, List<String> failures) {
         this(requests, confirmations, failures, List.of());
@@ -60,7 +63,7 @@ public final class LoginSession {
         // A player's quoted message cannot trigger password submission.
         if (matches(text, failures)) { blocked = true; return Result.BLOCKED; }
         if (confirmed) {
-            if (!matches(text, renewals)) return Result.IGNORE;
+            if (!matches(text, renewals) && !matches(text, requests)) return Result.IGNORE;
             confirmed = false;
             attempted = true;
             // Repeated successful-login/denial cycles must not leak credentials
@@ -71,12 +74,27 @@ public final class LoginSession {
             }
             renewed = true;
             lastRenewalMs = nowMs;
+            submittedAtMs = nowMs;
             return Result.SUBMIT;
         }
-        if (matches(text, confirmations)) { confirmed = true; return Result.CONFIRMED; }
-        if (!attempted && matches(text, requests)) { attempted = true; return Result.SUBMIT; }
+        if (matches(text, confirmations)) { confirmed = true; everConfirmed = true; return Result.CONFIRMED; }
+        if (!attempted && matches(text, requests)) {
+            if (everConfirmed && renewed && (nowMs < lastRenewalMs || nowMs-lastRenewalMs < 30_000)) { blocked=true; return Result.BLOCKED; }
+            if (everConfirmed) { renewed=true; lastRenewalMs=nowMs; }
+            attempted = true; submittedAtMs=nowMs; return Result.SUBMIT;
+        }
         return Result.IGNORE;
     }
+    /** Direct scoped system state only; caller validates source, JSON and account. No password submission. */
+    public Result authoritative(boolean authorized) {
+        if (blocked) return Result.IGNORE;
+        if (authorized) { confirmed=true; everConfirmed=true; return Result.CONFIRMED; }
+        if (confirmed) { confirmed=false; attempted=false; return Result.REQUIRED; }
+        return Result.IGNORE;
+    }
+    public boolean authorized() { return confirmed && !blocked; }
+    public String phase() { return blocked ? "blocked" : confirmed ? "confirmed" : attempted ? "submitted" : everConfirmed ? "required" : "armed"; }
+    public boolean confirmationTimedOut(long nowMs) { return attempted && !confirmed && !blocked && nowMs >= submittedAtMs && nowMs-submittedAtMs >= 45_000; }
 
     private static boolean matches(String text, List<String> markers) {
         return markers.stream().filter(marker -> !marker.isBlank())

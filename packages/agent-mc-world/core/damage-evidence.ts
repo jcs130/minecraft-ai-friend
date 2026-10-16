@@ -6,6 +6,8 @@ type Point = { x: number; y: number; z: number };
 type DamagePacket = {
   entityId: number; sourceTypeId: number; sourceCauseId: number;
   sourceDirectId: number; sourcePosition?: Point | null;
+  /** Trusted body adapter forwards original native names and decoded source IDs. */
+  nativeSourceType?: string; nativeDecodedIds?: true;
 };
 
 export interface DamageEvidence {
@@ -112,8 +114,9 @@ export function installDamageEvidence(bot: Bot): void {
   // This listener runs before the native plugin emits entityHurt for the same packet.
   bot._client?.prependListener('damage_event', (packet: DamagePacket) => {
     if (packet.entityId !== bot.entity?.id) return;
-    const causeId = decodedId(packet.sourceCauseId);
-    const directId = decodedId(packet.sourceDirectId);
+    const nativeId = (id: number) => Number.isSafeInteger(id) && id >= 0 ? id : null;
+    const causeId = packet.nativeDecodedIds ? nativeId(packet.sourceCauseId) : decodedId(packet.sourceCauseId);
+    const directId = packet.nativeDecodedIds ? nativeId(packet.sourceDirectId) : decodedId(packet.sourceDirectId);
     const cause = causeId === null ? undefined : bot.entities[causeId];
     const direct = directId === null ? undefined : bot.entities[directId];
     const projectile = !!direct && entityType(bot, direct) === 'projectile';
@@ -127,7 +130,8 @@ export function installDamageEvidence(bot: Bot): void {
     const sourcePosition = point(packet.sourcePosition) ?? (direct?.position ? point(direct.position) : null);
     const evidence: DamageEvidence = {
       origin: 'packet', sequence: ++state.sequence,
-      sourceType: Number.isSafeInteger(packet.sourceTypeId) ? state.types[packet.sourceTypeId] ?? null : null,
+      sourceType: packet.nativeDecodedIds && typeof packet.nativeSourceType === 'string' && /^[a-z0-9_:/.]+$/.test(packet.nativeSourceType)
+        ? packet.nativeSourceType : Number.isSafeInteger(packet.sourceTypeId) ? state.types[packet.sourceTypeId] ?? null : null,
       causeId, directId, actor, projectile, sourcePosition,
     };
     state.lastRawAt = Date.now();
@@ -136,7 +140,7 @@ export function installDamageEvidence(bot: Bot): void {
     state.legacyTimer = null;
     // Identical packets without any additional authoritative health loss are echoes,
     // not fresh hits. Keep the bound small even when a server supplies changing IDs.
-    const key = JSON.stringify([packet.sourceTypeId, causeId, directId, sourcePosition]);
+    const key = JSON.stringify([evidence.sourceType ?? packet.sourceTypeId, causeId, directId, sourcePosition]);
     state.pending.set(key, evidence);
     if (state.pending.size > 128) state.pending.delete(state.pending.keys().next().value!);
     if (!state.rawTimer) {

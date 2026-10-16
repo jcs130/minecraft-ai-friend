@@ -16,6 +16,10 @@ import { selectJavaViewer } from './java-viewer-selection.ts';
 import { nativeProbeInput, NATIVE_PROBE_PROGRAM } from './java-probe.ts';
 import { nativeInteractInput, nativeInteractProgram } from './java-interact.ts';
 import { JavaMethods, JAVA_METHOD_FIELDS, JAVA_METHOD_PROTOCOL, javaMethodHelp, javaMethodCapabilities } from './java-methods.ts';
+import { nativeFamiliarAction } from './familiar-action.ts';
+import { nativeAuthorization } from './native-authorization.ts';
+import { JavaReflexRuntime, JAVA_REFLEX_PROTOCOL } from './java-reflex.ts';
+import { COMBAT_TACTIC_TOOL } from '../../core/combat-tool.ts';
 import { createJavaMemoryAccess, type JavaClientServices } from './java-memory.ts';
 
 export const JAVA_CLIENT_ENVIRONMENT = `You control an actual rendered Minecraft Java client through agent-mc-java/v1. The host owns goals, personality, models and memory. The client bridge owns one actual body queue. It never launches a game, reconnects, simulates OS input or runs a model.
@@ -29,6 +33,8 @@ mc_visual returns the real client framebuffer, original textures, current animat
 function uuid(value: string) { return value.replaceAll('-', '').toLowerCase(); }
 function address(value: string) { return value.toLowerCase().replace(/:25565$/, ''); }
 export function validateJavaClientConfiguration(cfg: Partial<JavaClientConfiguration> | undefined): asserts cfg is JavaClientConfiguration {
+  if (cfg?.sharedReflexes !== undefined && typeof cfg.sharedReflexes !== 'boolean') throw new Error('Java sharedReflexes must be boolean');
+  if (cfg?.requireServerAuthorization !== undefined && typeof cfg.requireServerAuthorization !== 'boolean') throw new Error('Java requireServerAuthorization must be boolean');
   if (cfg?.actionWaitMs !== undefined && (!Number.isInteger(cfg.actionWaitMs) || cfg.actionWaitMs < 0 || cfg.actionWaitMs > 2000)) throw new Error('Java actionWaitMs must be 0..2000');
   if (cfg?.methodWaitMs !== undefined && (!Number.isInteger(cfg.methodWaitMs) || cfg.methodWaitMs < 0 || cfg.methodWaitMs > 30000)) throw new Error('Java methodWaitMs must be 0..30000');
   if (cfg?.stateDetail !== undefined && !['body', 'summary'].includes(cfg.stateDetail)) throw new Error('Java stateDetail must be body or summary');
@@ -64,6 +70,7 @@ export class JavaClientWorld implements World {
   private readonly memoryTool: ToolDef | null;
   private readonly memoryAccess: ReturnType<typeof createJavaMemoryAccess> | null;
   private nativeMethodsAvailable = false;
+  private reflex: JavaReflexRuntime | null = null;
   private knowledgeVersion: string | null = null;
   constructor(private readonly cfg: MinecraftClientConfig, private readonly http: typeof fetch = globalThis.fetch,
     private readonly services?: JavaClientServices) {
@@ -76,7 +83,7 @@ export class JavaClientWorld implements World {
     }, () => this.state) : null;
     this.memoryTool = this.memoryAccess?.tool ?? null;
     this.methods = cfg.javaClient ? new JavaMethods(cfg.javaClient,{rpc:(method,args,signal)=>this.rpc(method,args,signal),
-      state:async signal=>{const state=await this.rpc('state',{},signal) as JavaClientState;this.verify(state);return state;},owner:()=>this.owner(),host:()=>this.host}) : null;
+      state:async signal=>{const state=await this.rpc('state',{},signal) as JavaClientState;this.verify(state);this.state=state;return state;},owner:()=>this.owner(),host:()=>this.host}) : null;
     this.photos = new PhotographyService({ directory: dir ? join(dir, 'photos') : undefined,
       provider: () => createImageGenerationPort(cfg.photography), capture: async (_args, signal) => {
         const capture = await this.rpc('screenshot', {}, signal);
@@ -92,6 +99,8 @@ export class JavaClientWorld implements World {
     const items = compactNativeItems(state);
     const parts = [
       { key: 'sample', text: `Actual Java client readings sampled ${state.sampledAt}` },
+      { key: 'bodyRestriction', text: JSON.stringify({ connection: this.connectionReadiness(), authorizationRequired: nativeAuthorization(state, this.cfg.javaClient?.requireServerAuthorization).required,
+        instruction: 'Authorization is scoped to this connection; pending/required/blocked forbids body dispatch. The private login owner handles credentials. Read-only evidence remains available.' }) },
       { key: 'body', text: JSON.stringify({ uuid: state.uuid, username: state.username, server: state.server, dimension: state.dimension, position: state.position,
         health: state.health, food: state.food, yaw: state.yaw, pitch: state.pitch, generation: state.generation }) },
       { key: 'inventory', text: JSON.stringify({ selectedSlot: state.selectedSlot, inventory: items.inventory, cursor: compactItem(state.cursor), rawQuery: 'mc_bag' }) },
@@ -100,24 +109,29 @@ export class JavaClientWorld implements World {
       { key: 'queue', text: JSON.stringify(state.actions.filter(action => ['accepted', 'running', 'unknown'].includes(action.phase))) },
       { key: 'notices', text: JSON.stringify({ lastSeq: state.messages.at(-1)?.seq ?? 0, retained: state.messages.length, rawQuery: 'mc_notices', observationOnly: true }) },
       {key:'javascript',text:JSON.stringify({available:this.nativeMethodsAvailable,api:'mc_script language:javascript api:index / compatibility',contract:'shared name/code/params/validate/runId/call/library/procedure; bot/Vec3',execution:'capability-gated; program completion is not world progress'})},
+      {key:'reflex',text:JSON.stringify(this.reflex?.status()??{supported:false,reason:'Actual native bridge has no shared reflex body capability'})},
       ...(this.cfg.javaClient?.minescriptEnabled ? [{ key:'executor',text:JSON.stringify({provider:'java-client',scriptEngine:this.nativeMethodsAvailable?'shared JavaScript bot/Vec3 methods; optional Minescript 4.0 Python':'Minescript 4.0 Python',blockObservation:'mc_probe',blockInteraction:'mc_interact',scriptReference:this.nativeMethodsAvailable?'mc_script language:javascript api:index / compatibility; Python help requires language:python':'mc_script api:index / blocks / movement / interaction / inventory',pythonBlockReturn:'namespaced string, e.g. minecraft:carrots[age=7]',pythonAim:'minescript.player_look_at(x,y,z)',pythonWait:'time.sleep(seconds); JS bot.waitForTicks uses actual game ticks',archiveQuery:'mc_evidence part:script',shortActionWaitMs:this.cfg.javaClient.actionWaitMs??1000}) }] : []),
     ];
     const native=this.cfg.javaClient;
     return { text: parts.map(part => part.text).join('\n'), parts, snapshotTypes: ['minecraft.client.snapshot'],
       decisionStability: { sampledAtMs: Date.parse(state.sampledAt),
-        identity: [state.uuid, state.username, state.server, state.generation], dimension: typeof state.dimension === 'string' ? state.dimension : null,
+        identity: [state.uuid, state.username, state.server, state.generation,state.reflexScope??null], dimension: typeof state.dimension === 'string' ? state.dimension : null,
         position: state.position?.length === 3 && state.position.every(Number.isFinite) ? [state.position[0], state.position[1], state.position[2]] : null,
         health: typeof state.health === 'number' && Number.isFinite(state.health) ? state.health : null,
         food: typeof state.food === 'number' && Number.isFinite(state.food) ? state.food : null,
-        guards: { body: [state.uuid, state.username, state.server, state.generation, state.dimension] } },
+        guards: { body: [state.uuid, state.username, state.server, state.generation, state.dimension,state.reflexScope??null], authorization: this.connectionReadiness() } },
       ...(native ? {experience:{scope:{realm:`java:${native.expectedServer.toLowerCase().replace(/:25565$/, '')}`,
         account:`uuid:${native.expectedUuid.replaceAll('-', '').toLowerCase()}`,agent:this.services?.agentName??native.controllerId},
         observation:state.connected?{at:state.sampledAt,dimension:typeof state.dimension==='string'?state.dimension:null,
           position:state.position?.length===3?{x:state.position[0],y:state.position[1],z:state.position[2]}:null,
           health:typeof state.health==='number'?state.health:null,food:typeof state.food==='number'?state.food:null,inventory:null}:null}}:{}) };
   }
-  connectionReadiness() { return { ready: this.state?.connected === true,
-    phase: this.state?.connected ? 'online' : this.host ? 'offline' : 'detached' }; }
+  connectionReadiness() {
+    if (!this.state?.connected) return { ready: false, phase: this.host ? 'offline' : 'detached' };
+    const auth = nativeAuthorization(this.state, this.cfg.javaClient?.requireServerAuthorization);
+    return { ready: auth.ready, phase: auth.ready ? 'online' : auth.phase === 'blocked' ? 'auth-blocked'
+      : auth.phase === 'required' ? 'login-required' : 'authenticating' };
+  }
   console() { return { label: 'Real Java client', connection: this.connectionReadiness(), lamps: [{ label: '服务器', state: this.state?.connected ? 'online' as const : 'offline' as const },
     ...(this.cfg.viewerPort > 0 ? [{label:'画面',state:this.viewerError || (this.dataViewer && !this.dataViewer.status().ok) ? 'error' as const : this.dataViewer || this.viewer ? 'online' as const : 'offline' as const,
       hint:this.viewerError ?? (this.dataViewer?.status().error as string | undefined) ?? this.viewerSelection?.reason}] : [])],
@@ -146,6 +160,10 @@ export class JavaClientWorld implements World {
       const capabilities = await this.rpc('capabilities', {});
       this.knowledgeVersion = typeof capabilities.minecraftVersion === 'string' ? capabilities.minecraftVersion : null;
       this.nativeMethodsAvailable = capabilities.methodAdapter === JAVA_METHOD_PROTOCOL;
+      if(capabilities.reflexAdapter===JAVA_REFLEX_PROTOCOL&&this.cfg.javaClient.sharedReflexes!==false){
+        this.reflex=new JavaReflexRuntime(this.cfg,{rpc:(method,args,signal)=>this.rpc(method,args,signal),owner:()=>this.owner(),canControl:()=>!!this.lease,
+          verify:state=>this.verify(state),host:()=>this.host});this.reflex.start();
+      }
       if (this.cfg.viewerPort > 0) this.viewerSelection = selectJavaViewer(this.cfg.javaClient, capabilities);
       if (this.viewerSelection?.mode === 'data') {
         this.dataViewer = await createJavaDataViewer({port:this.cfg.viewerPort,assetsDir:this.cfg.viewerAssetsDir,minecraftVersion:String(capabilities.minecraftVersion),
@@ -169,6 +187,7 @@ export class JavaClientWorld implements World {
   }
   async stop(): Promise<void> {
     this.epoch++;
+    await this.reflex?.close();this.reflex=null;
     clearInterval(this.timer); this.timer = undefined; this.photos.stop();
     await this.methods?.stop('Java client adapter stopped');
     await this.dataViewer?.close(); this.dataViewer=undefined;
@@ -190,12 +209,14 @@ export class JavaClientWorld implements World {
   private owner() { if (!this.lease) throw new Error('Claim mc_control before body operations'); return { controllerId: this.cfg.javaClient!.controllerId, nonce: this.lease.nonce }; }
   private async rpc(method: string, params: Record<string, unknown>, signal?: AbortSignal, stopping = false): Promise<any> {
     if (!this.connection || (!this.host && !stopping)) throw new Error('Java client adapter is disconnected');
+    if (['do','method_claim','method_call','reflex_control','reflex_item'].includes(method) && !nativeAuthorization(this.state, this.cfg.javaClient?.requireServerAuthorization).ready)
+      throw new Error('Server authorization is not confirmed for this connection; no body request dispatched. Wait for the private login owner; read-only state/results remain available.');
     const combined = AbortSignal.any([...(stopping ? [] : [this.lifetime.signal]), AbortSignal.timeout(8000), ...(signal ? [signal] : [])]);
     combined.throwIfAborted();
     let response: Response;
     try { response = await this.http(this.connection.endpoint + '/v1/rpc', { method: 'POST', redirect: 'error',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + this.connection.token },
-      body: JSON.stringify({ protocol: JAVA_CLIENT_PROTOCOL, method, params: { ...params, expectedUuid: this.cfg.javaClient!.expectedUuid, expectedServer: this.cfg.javaClient!.expectedServer } }), signal: combined }); }
+      body: JSON.stringify({ protocol: JAVA_CLIENT_PROTOCOL, method, params: { ...params,...(['do','method_call'].includes(method)&&Number.isSafeInteger(this.state?.reflexScope)?{expectedBodyScope:this.state!.reflexScope}:{}), expectedUuid: this.cfg.javaClient!.expectedUuid, expectedServer: this.cfg.javaClient!.expectedServer } }), signal: combined }); }
     catch { combined.throwIfAborted(); throw new Error('Java client request outcome unknown; reconcile the original action_id, no automatic retry'); }
     const reader = response.body?.getReader(), chunks: Uint8Array[] = []; let size = 0;
     if (!reader) throw new Error('Empty Java client response');
@@ -212,6 +233,7 @@ export class JavaClientWorld implements World {
     combined.throwIfAborted();
     const result = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     if (!response.ok || result.error) throw new Error(typeof result.error === 'string' ? result.error : 'Java client operation rejected');
+    if(method==='do'&&params.operation==='method.run'&&['accepted','running'].includes(result.phase))await this.reflex?.beforeBody();
     return result;
   }
   private receipt(action: JavaClientAction, notification = false): ToolOutcome {
@@ -321,6 +343,8 @@ export class JavaClientWorld implements World {
       } });
     const result = async (args: Record<string, unknown>, ctx: ToolCallContext) => this.receipt(await this.rpc('result', { action_id: args.action_id }, ctx.signal));
     const tools: ToolDef[] = [
+      {...COMBAT_TACTIC_TOOL,runtimeAvailable:()=>this.reflex!==null,readOnlyCall:args=>args.battlefield===true||args.decisions===true||args.decision!==undefined||args.report!==undefined||!Object.keys(args).length,
+        handler:async(args,ctx)=>{try{if(!this.reflex)throw new Error('Shared native reflex body capability unavailable; no combat action dispatched');return await this.reflex.tool(args,ctx);}catch(error){return{text:String(error),failed:true};}}},
       { ...KNOWLEDGE_TOOL, handler: async (args, ctx) => {
         ctx.signal?.throwIfAborted();
         try {
@@ -371,6 +395,7 @@ export class JavaClientWorld implements World {
       }, false, true),
       tool('mc_do', 'Submit ONE discovered operation/input or ONE supported legacy steps command, using stable action_id. Accepted is not completed. Read mc_help for compatibility; no navigation/script emulation.',
         parameters({ action_id: str, operation: str, input: { type: 'object' }, waitMs: {type:'integer',minimum:0,maximum:2000}, steps: { type: 'array', minItems: 1, maxItems: 1, items: { type: 'object', properties: { skill: str }, required: ['skill'] } }, queue: { enum: ['append', 'now'] } }), async (args, ctx) => {
+          const firstStep=Array.isArray(args.steps)?args.steps[0]:undefined;
           if (args.steps !== undefined) {
             const state = await this.rpc('state', {}, ctx.signal) as JavaClientState; this.verify(state); this.state = state;
             args = translateJavaLegacy(args, state);
@@ -388,6 +413,7 @@ export class JavaClientWorld implements World {
               return this.staleGuiOutcome(actionId, args.operation, ctx.signal);
             throw error;
           }
+          await this.reflex?.beforeBody(firstStep);
           this.phases.set(action.id, action.phase); return this.receipt(await this.settle(action,Number(waitMs),ctx.signal));
         }, true),
       tool('mc_result', 'Reconcile the original action ID, including uncertain dispatch and archived terminals.', parameters({ action_id: str }, ['action_id']), result),
@@ -424,11 +450,11 @@ export class JavaClientWorld implements World {
           blobs: [{ bytes: Buffer.from(capture.base64, 'base64'), mime: 'image/png', fallbackText: 'Actual Java client framebuffer and GUI' }] };
       }),
       tool('mc_queue', 'Read actual client action queue and original action IDs.', parameters({}), async (_args, ctx) => ({ text: JSON.stringify((await this.rpc('state', {}, ctx.signal)).actions) })),
-      tool('mc_stop', 'Explicitly cancel this controller body queue and release held game inputs.', parameters({}), async (_args, ctx) => {await this.methods?.stop('mc_stop explicit cancellation');return { text: JSON.stringify(await this.rpc('stop', this.owner(), ctx.signal)) };}, true),
+      tool('mc_stop', 'Cancel the native task queue. Shared combat stops attacking and withdraws from active danger; configured environmental survival remains active.', parameters({}), async (_args, ctx) => {await this.methods?.stop('mc_stop explicit cancellation');const result=await this.rpc('stop',this.owner(),ctx.signal);const combat=await this.reflex?.requestStop();return{text:JSON.stringify({...result,combat:combat??null})};}, true),
       { ...PHOTO_TOOL, handler: (args, ctx) => this.photos.execute(args, ctx) },
     ];
-    tools.push(tool('mc_script', 'Shared JavaScript mc/bot/Vec3 methods with validate/runId/call/library/procedure; read language:javascript,api:index and compatibility. Requires matching native bridge for execution. Legacy name+code selects JS; unnamed code retains Python behavior when configured. Explicit Python Minescript has its own language:python guide. A program ending never proves the goal.', parameters({ ...JAVA_METHOD_FIELDS, api: str, language: { enum: ['python','javascript'] }, code: { type: 'string', minLength: 1, maxLength: 32768 }, input: {}, timeoutMs: { type: 'integer', minimum: 100, maximum: 30000 }, action_id: str }), async (args, ctx) => {
-      const js=args.language==='javascript'||args.language===undefined&&(args.name!==undefined||args.procedure!==undefined||args.library!==undefined||args.runId!==undefined||args.stop!==undefined||args.validate!==undefined||(!args.code&&!args.api));
+    tools.push(tool('mc_script', 'Shared JavaScript mc/bot/Vec3 methods with validate/runId/call/library/procedure; read language:javascript,api:index and compatibility. Requires matching native bridge for execution. Inline code defaults to JavaScript when Python is disabled; name is optional with a stable source-hash default. find:{names,maxDistance,count} is a bounded read-only block search. Legacy unnamed code remains Python only when that executor is enabled. Explicit Python Minescript has its own language:python guide. A program ending never proves the goal.', parameters({ ...JAVA_METHOD_FIELDS, api: str, language: { enum: ['python','javascript'] }, code: { type: 'string', minLength: 1, maxLength: 32768 }, input: {}, timeoutMs: { type: 'integer', minimum: 100, maximum: 30000 }, action_id: str }), async (args, ctx) => {
+      const js=args.language==='javascript'||args.language===undefined&&(!this.cfg.javaClient?.minescriptEnabled||args.name!==undefined||args.procedure!==undefined||args.library!==undefined||args.runId!==undefined||args.stop!==undefined||args.validate!==undefined||(!args.code&&!args.api));
       if(js){if(['input','timeoutMs','action_id'].some(k=>args[k]!==undefined))throw new Error('JS uses params/durationMs/runId; Python input/timeoutMs/action_id cannot be mixed');if(!this.methods)throw new Error('Configure javaClient first');return this.methods.execute(args,ctx);}
       if(!this.cfg.javaClient?.minescriptEnabled)throw new Error('Python Minescript is not enabled; select language:javascript for shared methods');
       if (args.api) return { text: javaScriptHelp(String(args.api)) + (args.api==='index'?'\n'+javaMethodHelp():'') + (args.code ? '\nAPI query only: supplied code was not executed. Omit api to run a program.' : '') };
@@ -450,6 +476,10 @@ export class JavaClientWorld implements World {
         const input=nativeInteractInput(args),code=nativeInteractProgram();
         return tools.find(t=>t.name==='mc_do')!.handler({action_id:args.action_id,operation:'minescript.run',waitMs:args.waitMs??this.cfg.javaClient?.actionWaitMs??2000,input:{code,input,timeoutMs:10000}},ctx);
       },true));
+    const action = tools.find(t => t.name === 'mc_do');
+    if (action) action.familiarAction = args => nativeFamiliarAction(args, this.state);
+    const script = tools.find(t => t.name === 'mc_script');
+    if (script) script.readOnlyCall = args => args.find !== undefined || !!args.api;
     if (this.memoryTool) tools.push(this.memoryTool);
     return tools;
   }

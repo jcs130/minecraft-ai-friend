@@ -46,6 +46,7 @@ import { blockAtCell, resolveAt } from './cell-facts.ts';
 import { FLIGHT_PLAN_MAX_POINTS, parseFlightPlan, previewFlightPlan } from './flight-preview.ts';
 import { MethodRunner, METHOD_LIMITS, METHOD_ADAPTER, type MethodOperation, type MethodRun } from './method-runner.ts';
 import { MethodLibrary, METHOD_LIBRARY_SCHEMA } from './method-library.ts';
+import { BLOCK_FIND_SCHEMA, blockFindRequest } from './block-find-method.ts';
 import { resolveProcedure, procedureReference, PROCEDURE_RECEIPT_SCHEMA, PROCEDURE_RECEIPT_MIME,
   type ProcedureReceipt } from './support/procedure.ts';
 import { MineflayerMethod, NATIVE_API } from './method-mineflayer.ts';
@@ -2205,8 +2206,9 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   {
     name: 'mc_script',
     tags: ['act'],
+    readOnlyCall: args => !!args.find || !!args.api,
     description: 'Run an agent-authored JavaScript async function body with params and a restricted mc SDK. '
-      + 'When supplying code (including validate:true), name is required: 1–80 characters. It is not required for index, api, runId or stop queries. '
+      + 'Nearby blocks: {find:{names:["water"],maxDistance:8,count:4},waitMs:1000} runs a bounded read recipe without scan loops. name is optional for code; omitted names use its stable source hash. Explicit names are1–80 characters. '
       + 'mc.state() returns {sampledAt,connectionGeneration,snapshot,flight,queue,combatActive,combat,method}. '
       + 'Read position, dimension, health, food, inventory and equipment under snapshot, which can be null. '
       + 'snapshot.entities is a bounded array of {entityId?,name,kind,distance,direction,dy,visible}; snapshot.entitiesOmitted reports truncation. '
@@ -2233,6 +2235,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     parameters: { type: 'object', properties: {
       name: { type: 'string', minLength: 1, maxLength: 80 },
       library: METHOD_LIBRARY_SCHEMA,
+      find: BLOCK_FIND_SCHEMA,
       code: { type: 'string', minLength: 1, maxLength: METHOD_LIMITS.sourceChars },
       procedure: { type: 'object', properties: { handle: { type: 'string' }, revision: { type: 'string' } }, required: ['handle', 'revision'] },
       params: { type: 'object', additionalProperties: true },
@@ -4420,6 +4423,7 @@ export class MinecraftWorld implements World {
 
       mc_script: async (args, ctx) => {
         try {
+          if (args.find !== undefined) args = blockFindRequest(args);
           if(args.waitMs!==undefined&&(typeof args.waitMs!=='number'||!Number.isInteger(args.waitMs)||args.waitMs<0||args.waitMs>30000))throw new Error('waitMs须为0至30000');
           if (args.library !== undefined) {
             if (Object.keys(args).some(key => key !== 'library')) throw new Error('library 须单独使用');

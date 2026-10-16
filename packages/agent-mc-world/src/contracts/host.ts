@@ -47,7 +47,16 @@ export interface ToolOutcome {
 }
 export interface ToolDef extends ToolSchema {
   tags: readonly ToolTag[]; barrierAfter?: boolean; endsTurn?: boolean; interruptible?: boolean;
+  /** Pure host hint; never invokes a model or dispatches/rewrites work. */
+  familiarAction?(args: Record<string, unknown>): FamiliarAction | null;
+  /** True only for a branch that cannot acquire/mutate the game body. */
+  readOnlyCall?(args: Record<string, unknown>): boolean;
+  /** Current backend capability, independent of the existence of the public tool schema. */
+  runtimeAvailable?(): boolean;
   handler(args: Record<string, unknown>, context: ToolCallContext): Promise<string | ToolOutcome>;
+}
+export interface FamiliarAction {
+  steps: Record<string, unknown>[]; command: Record<string, unknown>; label: string; condition: string;
 }
 export interface LLMUsage {
   promptTokens: number; completionTokens: number; cacheHitTokens: number; cacheMissTokens: number; reasoningTokens?: number;

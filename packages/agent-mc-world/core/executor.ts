@@ -6126,6 +6126,7 @@ export class Reflexes {
   }
 
   start(): void {
+    const bot=this.opts.getBot();if(bot?.entity)this.hookHurt(bot);
     if (this.timer) return;
     this.stopped = false;
     this.timer = setInterval(() => this.tick(), REFLEX_TICK_MS);

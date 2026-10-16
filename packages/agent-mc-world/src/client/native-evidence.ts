@@ -54,6 +54,7 @@ export function compactNativeState(state: Record<string, any>) {
   if(state.inventoryTransfer) out.inventoryTransfer=compactInventoryTransfer(state.inventoryTransfer);
   if(state.navigationCapability)out.navigationCapability=state.navigationCapability;
   if(state.navigation)out.navigation=compactNavigation(state.navigation);
+  if(state.serverAuthorization)out.serverAuthorization=Object.fromEntries(['protocol','required','generation','observedAt','phase','authorized','connectionMatched','username','server','confirmedAt'].filter(k=>k in state.serverAuthorization).map(k=>[k,state.serverAuthorization[k]]));
   out.notices = { retained: state.messages?.length ?? 0, lastSeq: state.messages?.at(-1)?.seq ?? 0 };
   if (Array.isArray(state.actions)) {
     // Past actions remain in the raw archive, not repeated in every input receipt/frame.

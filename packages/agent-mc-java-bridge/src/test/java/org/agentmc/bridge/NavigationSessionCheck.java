@@ -37,6 +37,11 @@ public final class NavigationSessionCheck {
         driver=new Driver();session=new NavigationSession(driver,GOAL,START,0,1000);
         session.tick(new double[]{1,64,.5},true,1000);check(session.phase().equals("blocked")&&session.reason().contains("timed out"),"Moving without arrival times out");
 
+        driver=new Driver();session=new NavigationSession(driver,GOAL,START,0,1000);
+        session.paused(true,100);session.paused(true,5000);session.paused(false,6100);
+        session.tick(START,true,6500);check(session.phase().equals("running")&&driver.cancellations==0,"Survival pause excludes wall time without changing the owned route");
+        session.tick(END,true,6600);check(session.phase().equals("completed"),"Original route resumes to measured arrival");
+
         driver=new Driver();driver.idle=false;driver.stops=false;session=new NavigationSession(driver,GOAL,START,0,1000);
         session.tick(START,true,1000);session.tick(START,true,3000);check(session.phase().equals("unknown")&&!driver.restored,"Unconfirmed cancellation retains policy and blocks reuse");
         driver.stops=true;driver.idle=true;check(session.cancel(3100)&&driver.restored&&session.phase().equals("cancelled"),"Original cancellation can reconcile");

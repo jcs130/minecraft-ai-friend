@@ -30,6 +30,18 @@ final class BaritoneNavigation implements NavigationSession.Driver {
         }catch(ReflectiveOperationException|LinkageError error){discoveryFailure=error;return false;}
     }
     private Object baritone,pathing,process,goal;
+    static boolean busyForReflex()throws Exception {
+        if(!available())return false;
+        Object provider=type("BaritoneAPI").getMethod("getProvider").invoke(null),baritone=type("IBaritoneProvider").getMethod("getPrimaryBaritone").invoke(provider);
+        Object manager=type("IBaritone").getMethod("getPathingControlManager").invoke(baritone);
+        Optional<?> controller=(Optional<?>)type("pathing.calc.IPathingControlManager").getMethod("mostRecentInControl").invoke(manager);
+        if(controller.isPresent()&&BaritoneReflex.owned(controller.get()))return false;
+        for(String getter:List.of("getCustomGoalProcess","getMineProcess","getBuilderProcess","getExploreProcess","getFarmProcess","getFollowProcess","getGetToBlockProcess","getElytraProcess")){
+            Object process=type("IBaritone").getMethod(getter).invoke(baritone);if((boolean)type("process.IBaritoneProcess").getMethod("isActive").invoke(process))return true;
+        }
+        Object path=type("IBaritone").getMethod("getPathingBehavior").invoke(baritone);
+        return type("behavior.IPathingBehavior").getMethod("getCurrent").invoke(path)!=null;
+    }
     private final SettingLease policy=new SettingLease();
     private Object invoke(String owner,String name,Object target) throws Exception {return type(owner).getMethod(name).invoke(target);}
     private Object get(String name) throws Exception {return invoke("IBaritone",name,baritone);}

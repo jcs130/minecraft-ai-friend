@@ -12,6 +12,8 @@ export { GameMemoryService, GAME_MEMORY_DEFAULTS, type GameMemoryConfig } from '
 export { KNOWLEDGE_TOOL, readMinecraftKnowledge } from '../../core/knowledge.ts';
 export { AgentMetrics, serveAgentMetrics, type HarnessTrace } from './metrics.ts';
 export type { ToolDef, ToolOutcome, ToolCallContext, EventEnvelope, WorldRequestFacts, Logger, ModelFacts } from './contracts.ts';
+export type { FamiliarAction } from '../contracts/host.ts';
+export { familiarStepAction, nativeFamiliarAction } from './familiar-action.ts';
 export { nullLogger } from '../../core/support/runtime.mjs';
 export { serveClientConsole, type ClientConsolePort } from './console-server.ts';
 export type { PublicAccountState, AuthenticationMode } from './authentication.ts';

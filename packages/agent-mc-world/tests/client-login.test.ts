@@ -21,8 +21,8 @@ it.skipIf(!javaAvailable)('keeps authentication scoped and optionally renews aft
     {stdio:'pipe', windowsHide:true});
   const result = execFileSync(executable('java'), ['-cp',output,'LoginSessionCheck'],
     {encoding:'utf8', windowsHide:true});
-  expect(result).toContain('45 authentication checks passed');
+  expect(result).toContain('revocation, transport scope and timeout checks passed');
   const reconnect = execFileSync(executable('java'), ['-cp',output,'ReconnectSessionCheck'],
     {encoding:'utf8', windowsHide:true});
-  expect(reconnect).toContain('15 checks passed');
+  expect(reconnect).toContain('16 checks passed');
 }, 20_000);

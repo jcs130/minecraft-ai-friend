@@ -15,7 +15,8 @@ public final class LoginSessionCheck {
         check(first.observe("§a[AUTH_LOGIN] use login") == Result.SUBMIT, "formatted request submitted");
         check(first.observe("[AUTH_LOGIN] use login") == Result.IGNORE, "duplicate prompt ignored");
         check(first.observe("AUTH_SUCCESS: entered") == Result.CONFIRMED, "explicit server confirmation");
-        check(first.observe("AUTH_LOGIN: again") == Result.IGNORE, "no submission after confirmation");
+        check(first.observe("AUTH_LOGIN: again") == Result.SUBMIT, "fresh server challenge revokes prior confirmation and renews once");
+        check(!first.authorized(), "pending renewal cannot reuse historical success");
         LoginSession second = session();
         check(second.observe("AUTH_LOGIN") == Result.SUBMIT, "new connection independent");
         check(second.observe("AUTH_FAILED") == Result.BLOCKED, "bad password stops");
@@ -54,7 +55,7 @@ public final class LoginSessionCheck {
         check(renewable.observe("AUTH_LOGIN", 1) == Result.SUBMIT, "initial login remains scoped");
         check(renewable.observe("AUTH_SUCCESS", 2) == Result.CONFIRMED, "initial authentication confirmed");
         check(renewable.observe("<player> [AUTH_EXPIRED]", 3) == Result.IGNORE, "quoted expiry ignored");
-        check(renewable.observe("AUTH_LOGIN", 4) == Result.IGNORE, "ordinary prompt cannot reset confirmed state");
+        check(renewable.observe("Ordinary information", 4) == Result.IGNORE, "ordinary information cannot reset confirmed state");
         check(renewable.observe("§e[AUTH_EXPIRED] login required", 5) == Result.SUBMIT, "explicit expiry renews once");
         check(renewable.observe("AUTH_EXPIRED", 6) == Result.IGNORE, "repeated expiry cannot resubmit while pending");
         check(renewable.observe("AUTH_LOGIN", 7) == Result.IGNORE, "pending renewal cannot resubmit password");
@@ -69,6 +70,15 @@ public final class LoginSessionCheck {
         check(failedRenewal.observe("AUTH_EXPIRED", 1) == Result.SUBMIT, "confirmed connection renewal submitted");
         check(failedRenewal.observe("AUTH_FAILED", 2) == Result.BLOCKED, "renewal password failure stops");
         check(failedRenewal.observe("AUTH_LOGIN", 3) == Result.IGNORE, "failed renewal never resubmits");
-        System.out.println("LoginSessionCheck: 45 authentication checks passed");
+        LoginSession scoped = session();
+        check(scoped.phase().equals("armed") && !scoped.authorized(), "armed is not authorization");
+        check(scoped.authoritative(true) == Result.CONFIRMED && scoped.authorized(), "scoped state can confirm existing authorization");
+        check(scoped.authoritative(false) == Result.REQUIRED && !scoped.authorized(), "scoped revocation removes old proof without submitting credentials");
+        check(scoped.observe("AUTH_LOGIN", 100) == Result.SUBMIT, "new challenge after revoked proof permits one submission");
+        check(!scoped.confirmationTimedOut(45099) && scoped.confirmationTimedOut(45100), "missing confirmation has a bounded timeout");
+        check(scoped.observe("AUTH_LOGIN", 45200) == Result.IGNORE, "timeout itself does not resubmit credentials");
+        check(scoped.observe("AUTH_SUCCESS", 46000) == Result.CONFIRMED && !scoped.confirmationTimedOut(999999), "confirmation clears pending timeout");
+        check(scope.owns(other) && !scope.owns(transport), "evidence belongs to current transport only");
+        System.out.println("LoginSessionCheck: authentication, renewal, revocation, transport scope and timeout checks passed");
     }
 }

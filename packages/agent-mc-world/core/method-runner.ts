@@ -21,7 +21,7 @@ export interface MethodRun {
     invocations: ProcedureInvocation[]; versions: Array<{ id: string; revision: string; sourceHash: string; parent: string | null; author: unknown }> };
 }
 export interface MethodRequest {
-  name: string; code: string; params?: Record<string, unknown>; durationMs?: number; validate?: boolean;
+  name?: string; code: string; params?: Record<string, unknown>; durationMs?: number; validate?: boolean;
   procedure?: { reference: ProcedureReference; graph: ProcedureGraph };
 }
 export interface MethodHost {
@@ -75,7 +75,7 @@ export class MethodRunner {
     if (!run) throw new Error(`方法#${id}不在本次进程的最近八次记录中`);
     if (call !== undefined) {
       const trace = run.trace.find(trace => trace.call === call);
-      if (!trace) throw new Error(`方法#${id}没有SDK调用#${call}`);
+      if (!trace) throw new Error(`方法#${id}没有SDK调用#${call}；状态 ${run.status}；可用调用 ${run.trace.map(t => t.call).join(',') || '无'}${run.error ? `；原错误 ${run.error.slice(0, 1000)}` : ''}。读取原 runId 的完整终态，不要猜调用编号或重开同一程序。`);
       return structuredClone({ ...summary(run), trace });
     }
     const result = JSON.stringify(run.result ?? null);
@@ -104,13 +104,14 @@ export class MethodRunner {
 
   start(request: MethodRequest): MethodRun {
     if (this.active) throw new Error(`方法#${this.active.run.id}仍在运行；先读取结果或明确取消`);
-    if (typeof request.name !== 'string' || !request.name.trim() || request.name.length > 80) throw new Error('name须为1至80字符');
     if (typeof request.code !== 'string' || !request.code.trim() || request.code.length > METHOD_LIMITS.sourceChars) throw new Error(`code须为1至${METHOD_LIMITS.sourceChars}字符的JavaScript函数体`);
+    const name = request.name ?? `inline-${createHash('sha256').update(request.code).digest('hex').slice(0,12)}`;
+    if (typeof name !== 'string' || !name.trim() || name.length > 80) throw new Error('name须为1至80字符；可以省略以使用稳定的源码哈希名称');
     const params = jsonValue(request.params ?? {}, METHOD_LIMITS.paramsChars);
     if (!params || typeof params !== 'object' || Array.isArray(params)) throw new Error('params须为JSON对象');
     const durationMs = request.durationMs ?? METHOD_LIMITS.durationMs;
     if (!Number.isInteger(durationMs) || durationMs < 1_000 || durationMs > METHOD_LIMITS.maxDurationMs) throw new Error(`durationMs须为1000至${METHOD_LIMITS.maxDurationMs}`);
-    const run: MethodRun = { id: ++this.serial, name: request.name,
+    const run: MethodRun = { id: ++this.serial, name,
       sourceHash: createHash('sha256').update(request.code).digest('hex'),
       startedAt: new Date().toISOString(), status: 'running', trace: [] };
     if (request.procedure) {

@@ -12,6 +12,8 @@ public final class MethodCalls {
     private Runnable deferred;
     private Supplier<Boolean> completion;
     private int tick,until;
+    public JsonObject existing(int id,String input){if(!inputs.containsKey(id))return null;if(!inputs.get(id).equals(input))throw new IllegalArgumentException("Method call ID payload changed");return replies.get(id);}
+    public int nextId(){return replies.size()+1;}
     public JsonObject call(int id,String input,int ticks,Supplier<JsonElement> invoke,Supplier<Runnable> afterTicks){
         return call(id,input,ticks,invoke,afterTicks,()->null);
     }

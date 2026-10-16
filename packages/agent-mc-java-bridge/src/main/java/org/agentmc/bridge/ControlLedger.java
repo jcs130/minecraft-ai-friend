@@ -11,6 +11,7 @@ public final class ControlLedger {
     public static final class Action {
         public String id, operation, signature, phase = "accepted", reason;
         public long acceptedAt, updatedAt;
+        public Integer bodyScope;
         public JsonObject evidence = new JsonObject();
         transient JsonObject input;
         transient int ticks;

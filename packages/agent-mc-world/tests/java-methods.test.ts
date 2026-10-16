@@ -46,6 +46,15 @@ it('folds a short native program and its confirmed cleanup into the default tool
   expect(r.stateReads).toBe(1);expect(r.calls.filter(c=>c.method==='method_read')).toHaveLength(1);
   expect(r.calls.some(c=>['do','claim','method_call'].includes(c.method))).toBe(false);
 });
+it('the shared find recipe uses native registry observations and one bounded search without claiming the body',async()=>{
+  const r=rig(),original=r.port.rpc;
+  r.port.rpc=async(method:string,args:any)=>method==='method_read'&&args.name==='read'&&args.args[0]==='registry.blocksByName.water'
+    ?{generation:1,value:{id:17,name:'water'}}:original(method,args);
+  const reply=await r.call({language:'javascript',find:{names:['water'],maxDistance:8,count:3},waitMs:2000});
+  expect(reply.failed).not.toBe(true);expect(JSON.parse(reply.text)).toMatchObject({status:'completed',result:{positions:[{x:0,y:63,z:2}],observedOnly:true,goalCompleted:false}});
+  expect(r.m.runner.read(1)[0].trace).toHaveLength(2);
+  expect(r.calls.some(c=>['do','method_call','claim'].includes(c.method))).toBe(false);
+});
 it('waits for owned body cleanup before returning a terminal and never claims goal completion',async()=>{
   const r=rig();const reply=await r.call({name:'bounded-input',code:'await bot.setControlState("forward",true);return {held:true};',waitMs:2000});
   expect(reply.execution).toMatchObject({phase:'completed',terminal:true,goalCompleted:false});expect(r.held.size).toBe(0);

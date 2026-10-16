@@ -36,22 +36,28 @@ public final class ClientBridge implements ClientModInitializer {
     private int generation;
     private long messageSeq;
     private boolean minescriptEnabled;
+    private boolean requireServerAuthorization;
     private MinescriptRunner scriptRunner;
     private boolean scriptStopUnconfirmed;
     private MethodSession methodSession;
+    private final ReflexFrames reflexFrames=new ReflexFrames();
+    private ReflexInputs reflexInputs;
+    private ControlLedger.Action reflexItem;
+    private MethodSession reflexItemSession;
+    public static void reflexDamage(class_634 handler,class_8143 packet){if(currentNetwork(handler))instance.reflexFrames.damage(packet);}
     private NativeNavigation navigation;
     private final InventoryPick inventoryPick = new InventoryPick();
     private static boolean currentNetwork(class_634 handler) { return instance != null && instance.client.method_1562() == handler; }
-    public static void inventorySlot(class_634 handler,int syncId,int slot) { if(currentNetwork(handler)) instance.inventoryPick.slot(syncId,slot); }
-    public static void inventoryFull(class_634 handler,int syncId) { if(currentNetwork(handler)) instance.inventoryPick.full(syncId); }
-    public static void inventorySelection(class_634 handler,int slot) { if(currentNetwork(handler)) instance.inventoryPick.selected(slot); }
+    public static void inventorySlot(class_634 handler,int syncId,int slot) { if(currentNetwork(handler)){instance.inventoryPick.slot(syncId,slot);instance.reflexFrames.invalidateInventory();} }
+    public static void inventoryFull(class_634 handler,int syncId) { if(currentNetwork(handler)){instance.inventoryPick.full(syncId);instance.reflexFrames.invalidateInventory();} }
+    public static void inventorySelection(class_634 handler,int slot) { if(currentNetwork(handler)){instance.inventoryPick.selected(slot);instance.reflexFrames.invalidateInventory();} }
     public static boolean hasController() { return instance != null && instance.ledger != null && instance.ledger.active(System.currentTimeMillis()); }
     @Override public void onInitializeClient() {
-        instance = this; client = class_310.method_1551(); visual = new VisualExport(client); navigation=new NativeNavigation(client);
+        instance = this; client = class_310.method_1551(); visual = new VisualExport(client); navigation=new NativeNavigation(client);reflexInputs=new ReflexInputs(client);
         try {
             Path directory = FabricLoader.getInstance().getGameDir().resolve("agent-mc-bridge");
             Path config = directory.resolve("config.json");
-            if (Files.isRegularFile(config)) minescriptEnabled = flag(JsonParser.parseString(Files.readString(config)).getAsJsonObject(), "minescriptEnabled");
+            if (Files.isRegularFile(config)) {var settings=JsonParser.parseString(Files.readString(config)).getAsJsonObject();minescriptEnabled=flag(settings,"minescriptEnabled");requireServerAuthorization=flag(settings,"requireServerAuthorization");}
             ledger = new ControlLedger(directory.resolve("actions"));
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             byte[] secret = new byte[32]; new SecureRandom().nextBytes(secret);
@@ -91,7 +97,8 @@ public final class ClientBridge implements ClientModInitializer {
             Path file = directory.resolve("connection.json"); Files.writeString(file, gson.toJson(connection)); restrict(file);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> { running = false; server.stop(0); }));
             ClientTickEvents.START_CLIENT_TICK.register(this::tick);
-            ClientPlayConnectionEvents.JOIN.register((handler, sender, c) -> { generation++; ledger.release(); cancelAll("connection changed"); inventoryPick.newConnection(); });
+            ClientTickEvents.END_CLIENT_TICK.register(c->reflexInputs.tick(reflexFrames.scope(c),c.field_1724!=null&&c.field_1687!=null&&ledger.active(System.currentTimeMillis())&&ServerAuthorization.ready(authorization())));
+            ClientPlayConnectionEvents.JOIN.register((handler, sender, c) -> { generation++; ledger.release(); cancelAll("connection changed"); inventoryPick.newConnection();reflexFrames.reset(); });
             ClientPlayConnectionEvents.DISCONNECT.register((handler, c) -> { generation++; ledger.release(); cancelAll("connection closed"); });
             ClientReceiveMessageEvents.GAME.register((message, overlay) -> receiveMessage(message.getString(), overlay, "system", null));
             ClientReceiveMessageEvents.CHAT.register((message, signed, sender, parameters, timestamp) ->
@@ -102,6 +109,7 @@ public final class ClientBridge implements ClientModInitializer {
     private void receiveMessage(String text, boolean overlay, String kind, String sender) {
         JsonObject entry = new JsonObject(); entry.addProperty("seq", ++messageSeq); entry.addProperty("text", text); entry.addProperty("overlay", overlay);
         entry.addProperty("kind", kind); if (sender != null) entry.addProperty("sender", sender); entry.addProperty("at", Instant.now().toString());
+        entry.addProperty("generation",generation);
         messages.add(entry); while (messages.size() > 50) messages.removeFirst();
     }
     private static void restrict(Path file) throws Exception {
@@ -114,7 +122,7 @@ public final class ClientBridge implements ClientModInitializer {
         long now = System.currentTimeMillis();
         if (method.equals("capabilities")) {
             JsonObject capabilities=gson.toJsonTree(Map.of("protocol", PROTOCOL, "minecraftVersion", MINECRAFT_VERSION, "realRendering", true, "visualData", "agent-mc-visual/v1", "systemInput", false, "minescript", minescriptAvailable(), "baritone", navigation.available(), "methodAdapter", MethodSession.PROTOCOL, "methodCalls", MethodSession.methods(navigation.available()), "inventoryPick", InventoryPick.PROTOCOL)).getAsJsonObject();
-            if(navigation.available())capabilities.addProperty("navigation",NativeNavigation.PROTOCOL);return capabilities;
+            if(navigation.available()){capabilities.addProperty("navigation",NativeNavigation.PROTOCOL);capabilities.addProperty("reflexAdapter",ReflexFrames.PROTOCOL);}return capabilities;
         }
         if (method.equals("operations")) return operations();
         if (method.equals("state")) return state();
@@ -123,11 +131,16 @@ public final class ClientBridge implements ClientModInitializer {
         String actualServer=client.method_1558()==null?"":client.method_1558().field_3761;
         if(!client.field_1724.method_5667().toString().replace("-", "").equalsIgnoreCase(text(args,"expectedUuid","").replace("-", "")) || !actualServer.toLowerCase().replaceAll(":25565$","").equals(text(args,"expectedServer","").toLowerCase().replaceAll(":25565$",""))) throw new IllegalStateException("Client UUID/server mismatch");
         if(args.has("expectedGeneration")&&args.get("expectedGeneration").getAsDouble()!=generation)throw new IllegalStateException("Method connection generation changed before dispatch");
+        if(args.has("expectedBodyScope")&&args.get("expectedBodyScope").getAsDouble()!=reflexFrames.scope(client))throw new IllegalStateException("Body lifecycle changed before dispatch; obtain fresh facts");
+        if(Set.of("do","method_claim","method_call","reflex_control","reflex_item").contains(method)&&!ServerAuthorization.ready(authorization()))
+            throw new IllegalStateException("Server authorization is not confirmed for this connection; no body operation dispatched. Wait for the private login channel.");
+        if(Set.of("do","method_call","reflex_control","reflex_item").contains(method)&&reflexInputs.unresolved())throw new IllegalStateException("Original reflex policy cleanup unknown; reconcile before body work");
         if (method.equals("visual_registry")) return visual.registry();
         if (method.equals("visual_frame")) return visual.frame(integer(args,"radius",2));
         if (method.equals("visual_skin")) return visual.skin(text(args,"resource",""));
         if (method.equals("visual_chunk")) return visual.chunk(integer(args,"x",0),integer(args,"z",0),text(args,"epoch",""));
         if (method.equals("method_read")) {JsonObject result=new JsonObject();result.add("value",MethodSession.read(client,text(args,"name",""),args.getAsJsonArray("args")));result.addProperty("sampledAt",Instant.now().toString());result.addProperty("generation",generation);return result;}
+        if(method.equals("reflex_frame"))return reflexFrames.sample(client,generation,reflexState(),current==null?null:current.id,current!=null||!queue.isEmpty());
         if (method.equals("screenshot")) {
             try (class_1011 image = class_318.method_1663(client.method_1522())) {
                 JsonObject shot = new JsonObject(); shot.addProperty("mime", "image/png"); shot.addProperty("base64", Base64.getEncoder().encodeToString(image.method_24036()));
@@ -137,6 +150,20 @@ public final class ClientBridge implements ClientModInitializer {
         if (method.equals("claim")) { connected(); if(scriptStopUnconfirmed||navigation.unresolved()) throw new IllegalStateException("Prior body cancellation unknown; explicit reconciliation required"); return ledger.claim(text(args, "controllerId", ""), integer(args, "ttlMs", 15000), now); }
         if (method.equals("renew")) return ledger.renew(text(args, "controllerId", ""), text(args, "nonce", ""), integer(args, "ttlMs", 15000), now);
         ledger.require(text(args, "controllerId", ""), text(args, "nonce", ""), now);
+        if(method.equals("reflex_control")){JsonObject control=object(args,"control");String owner=text(object(control,"input"),"owner","");
+            if(!owner.equals("idle")&&!reflexInputs.active(reflexFrames.scope(client))&&!navigation.mayPauseForReflex())throw new IllegalStateException("Foreign navigation owns the body; reflex did not replace or cancel it");
+            return reflexInputs.accept(control,reflexFrames.scope(client));}
+        if(method.equals("reflex_item")){
+            if(!reflexInputs.active(reflexFrames.scope(client)))throw new IllegalStateException("Reflex input lease is not active");
+            String id=text(args,"action_id","");var existing=ledger.get(id);if(existing!=null)return gson.toJsonTree(ledger.admit(id,"reflex.equip",object(args,"input"),now)).getAsJsonObject();
+            if(reflexItem!=null)throw new IllegalStateException("Reconcile original reflex item operation first");
+            JsonObject input=object(args,"input");validate("equip",input);inventoryPick.requireResolved();
+            JsonArray itemArgs=new JsonArray(),query=new JsonArray();query.add("inventory.slots");var slots=MethodSession.read(client,"read",query).getAsJsonArray();int slot=integer(input,"slot",-1);int standard=slot<9?slot+36:slot;
+            if(slots.get(standard).isJsonNull()||!text(slots.get(standard).getAsJsonObject(),"instanceHash","").equals(text(input,"instanceHash","")))throw new IllegalStateException("Reflex equipment identity changed");
+            reflexItem=ledger.admit(id,"reflex.equip",input,now);reflexItem.bodyScope=reflexFrames.scope(client);reflexItem.phase="running";ledger.save(reflexItem);
+            reflexItemSession=new MethodSession(client,10000,inventoryPick,id,navigation);
+            itemArgs.add(slots.get(standard));itemArgs.add("hand");reflexItemSession.call(1,"equip",itemArgs);return gson.toJsonTree(reflexItem).getAsJsonObject();
+        }
         if (Set.of("method_call","method_result","method_finish").contains(method)) {
             if(current==null||!current.id.equals(text(args,"action_id",""))||methodSession==null)throw new IllegalStateException("Original method session is not running; reconcile original action_id");
             if(method.equals("method_call"))return methodSession.call(integer(args,"call",0),text(args,"name",""),args.getAsJsonArray("args"));
@@ -148,7 +175,9 @@ public final class ClientBridge implements ClientModInitializer {
         if (method.equals("cancel")) {
             String id = text(args, "action_id", ""); ControlLedger.Action action = ledger.get(id);
             if (action == null) throw new IllegalArgumentException("Unknown action_id");
+            if(reflexItem==action){inventoryPick.unknown("Original reflex item operation cancelled");reflexItem=null;reflexItemSession=null;}
             queue.remove(action); if (current == action || id.equals(navigation.owner())) {
+                reflexInputs.stop();
                 cancelScript();try{releaseKeys();}catch(IllegalStateException error){ledger.finish(action,"unknown",error.getMessage(),state(),now);current=null;return gson.toJsonTree(action).getAsJsonObject();}current=null;
             }
             ledger.finish(action, inventoryPendingFor(action)?"unknown":"cancelled", "explicit cancellation; dispatched inventory requests are reconciled separately", state(), now); return gson.toJsonTree(action).getAsJsonObject();
@@ -161,7 +190,7 @@ public final class ClientBridge implements ClientModInitializer {
         String operation = text(args, "operation", ""); JsonObject input = object(args, "input"); validate(operation, input);
         String id = text(args, "action_id", ""); ControlLedger.Action existing = ledger.get(id);
         ControlLedger.Action action = ledger.admit(id, operation, input, now);
-        if (existing == null) { if(text(args,"queue","append").equals("now")) cancelAll("explicit queue replacement"); if (queue.size() >= 16) { ledger.finish(action, "blocked", "client action queue full", state(), now); } else queue.add(action); }
+        if (existing == null) {action.bodyScope=reflexFrames.scope(client);ledger.save(action);if(text(args,"queue","append").equals("now")) cancelAll("explicit queue replacement"); if (queue.size() >= 16) { ledger.finish(action, "blocked", "client action queue full", state(), now); } else queue.add(action); }
         return gson.toJsonTree(action).getAsJsonObject();
     }
     private JsonObject operations() {
@@ -221,9 +250,18 @@ public final class ClientBridge implements ClientModInitializer {
                 }
             }
             if (!ledger.active(System.currentTimeMillis()) || c.field_1724 == null || c.field_1687 == null) { if (current != null || !queue.isEmpty() || navigation.owner()!=null) cancelAll("lease expired or body disconnected"); return; }
+            if (!ServerAuthorization.ready(authorization())) { if(current!=null||!queue.isEmpty()||navigation.owner()!=null)cancelAll("Server authorization changed; original action stopped, no replay"); return; }
+            if(reflexInputs.active(reflexFrames.scope(c))){
+                navigation.paused(true);if(methodSession!=null){methodSession.paused(true);methodSession.tick();}
+                if(reflexItem!=null){try{reflexItemSession.tick();JsonObject reply=reflexItemSession.result(1);if(!reply.get("status").getAsString().equals("running")){ledger.finish(reflexItem,reply.get("status").getAsString().equals("completed")?"completed":inventoryPendingFor(reflexItem)?"unknown":"blocked","Reflex item readback; no goal completion",state(),System.currentTimeMillis());reflexItem=null;reflexItemSession=null;}}catch(Exception error){ledger.finish(reflexItem,inventoryPendingFor(reflexItem)?"unknown":"blocked",error.getMessage(),state(),System.currentTimeMillis());reflexItem=null;reflexItemSession=null;}}
+                return;
+            }
+            if(reflexItem!=null){inventoryPick.unknown("Reflex lease ended before confirmation; reconcile original item action");ledger.finish(reflexItem,inventoryPendingFor(reflexItem)?"unknown":"cancelled","Reflex input lease ended",state(),System.currentTimeMillis());reflexItem=null;reflexItemSession=null;}
+            navigation.paused(false);if(methodSession!=null)methodSession.paused(false);
             c.field_1690.field_1837 = false;
             if (current == null && !queue.isEmpty()) {
                 current = queue.remove(); inventoryPick.requireResolved(); validate(current.operation, current.input);
+                if(current.bodyScope!=null&&current.bodyScope!=reflexFrames.scope(c))throw new IllegalStateException("Body lifecycle changed before queued dispatch; original action was not replayed");
                 current.before = position(); current.phase = "running"; ledger.save(current); dispatch(current);
             }
             if (current == null) return;
@@ -304,6 +342,8 @@ public final class ClientBridge implements ClientModInitializer {
     }
     private boolean inventoryPendingFor(ControlLedger.Action action) { JsonObject receipt=inventoryPick.inspect();return inventoryPick.unresolved()&&receipt.has("actionId")&&receipt.get("actionId").getAsString().equals(action.id); }
     private boolean cancelAll(String reason) {
+        reflexInputs.stop();
+        if(reflexItem!=null){inventoryPick.unknown(reason);try{ledger.finish(reflexItem,inventoryPendingFor(reflexItem)?"unknown":"cancelled",reason,state(),System.currentTimeMillis());}catch(Exception ignored){}reflexItem=null;reflexItemSession=null;}
         ControlLedger.Action original=current!=null?current:navigation.owner()==null?null:ledger.get(navigation.owner());
         try{cancelScript();}catch(Exception ignored){}try{releaseKeys();}catch(Exception ignored){}
         boolean stopped=!scriptStopUnconfirmed&&!navigation.unresolved();
@@ -329,6 +369,8 @@ public final class ClientBridge implements ClientModInitializer {
         state.addProperty("inventoryPick",InventoryPick.PROTOCOL);state.add("inventoryTransfer",inventoryPick.inspect());
         if(navigation.available())state.addProperty("navigationCapability",NativeNavigation.PROTOCOL);if(navigation.owner()!=null)state.add("navigation",navigation.report());
         state.addProperty("connected",client.field_1724!=null&&client.field_1687!=null);state.addProperty("server",client.method_1558()==null?"":client.method_1558().field_3761);state.addProperty("controllerId",ledger.owner(System.currentTimeMillis()));
+        state.add("serverAuthorization",gson.toJsonTree(authorization()));
+        state.addProperty("reflexScope",reflexFrames.scope(client));state.add("reflex",reflexInputs.status(reflexFrames.scope(client)));if(reflexInputs.active(reflexFrames.scope(client))&&current!=null)state.addProperty("pausedActionId",current.id);
         state.addProperty("screenToken",screenToken);state.addProperty("screen",client.field_1755==null?"":client.field_1755.getClass().getName());state.addProperty("screenTitle",client.field_1755==null?"":client.field_1755.method_25440().getString());
         if(client.field_1755 instanceof class_419 disconnected){String reason=disconnected.method_25435().getString();state.addProperty("disconnectReason",reason.substring(0,Math.min(reason.length(),2048)));}
         JsonArray buttons=new JsonArray();int index=0;for(var button:buttons()){JsonObject b=new JsonObject();b.addProperty("index",index++);b.addProperty("label",button.method_25369().getString());b.addProperty("active",button.field_22763);buttons.add(b);}state.add("buttons",buttons);
@@ -342,6 +384,26 @@ public final class ClientBridge implements ClientModInitializer {
             var menu=player.field_7512;JsonArray slots=new JsonArray();for(int slot=0;slot<menu.field_7761.size();slot++) slots.add(item(menu.field_7761.get(slot).method_7677(),slot));state.add("menuSlots",slots);state.add("cursor",item(menu.method_34255(),-1));state.addProperty("syncId",menu.field_7763);state.addProperty("menuRevision",menu.method_37421());
         }
         return state;
+    }
+    /** Fast kernel samples exclude encoded stacks, GUI books, notices and historical actions. */
+    private JsonObject reflexState(){
+        JsonObject out=new JsonObject();out.addProperty("protocol",PROTOCOL);out.addProperty("sampledAt",Instant.now().toString());out.addProperty("generation",generation);
+        out.addProperty("connected",client.field_1724!=null&&client.field_1687!=null);out.addProperty("server",client.method_1558()==null?"":client.method_1558().field_3761);
+        var p=client.field_1724;out.addProperty("uuid",p.method_5667().toString());out.addProperty("username",p.method_5477().getString());out.add("position",gson.toJsonTree(position()));
+        out.addProperty("yaw",p.method_36454());out.addProperty("pitch",p.method_36455());out.addProperty("health",p.method_6032());out.addProperty("food",p.method_7344().method_7586());out.addProperty("selectedSlot",p.method_31548().field_7545);
+        out.addProperty("dimension",client.field_1687.method_27983().method_29177().toString());out.addProperty("screen",client.field_1755==null?"":client.field_1755.getClass().getName());out.addProperty("syncId",p.field_7512.field_7763);
+        out.addProperty("reflexScope",reflexFrames.scope(client));out.add("serverAuthorization",gson.toJsonTree(authorization()));out.add("reflex",reflexInputs.status(reflexFrames.scope(client)));out.add("actions",new JsonArray());out.add("messages",new JsonArray());out.addProperty("excluded","actions/messages/menu/encoded stacks; read full state explicitly");return out;
+    }
+    @SuppressWarnings({"rawtypes","unchecked"}) private Map<String,Object> authorization(){
+        List<Map<String,Object>> providers=new ArrayList<>();
+        try {
+            var entries=FabricLoader.getInstance().getEntrypoints("agent-mc-server-authorization",java.util.function.Supplier.class);
+            if(entries.size()>4)return ServerAuthorization.evaluate(List.of(),true,"","",generation);
+            for(var entry:entries){Object value=entry.get();if(value instanceof Map map)providers.add(map);}
+        }catch(Exception ignored){return ServerAuthorization.evaluate(List.of(),true,"","",generation);}
+        String user=client.field_1724==null?"":client.field_1724.method_5477().getString();
+        String server=client.method_1558()==null?"":client.method_1558().field_3761;
+        return ServerAuthorization.evaluate(providers,requireServerAuthorization,user,server,generation);
     }
     private static JsonObject object(JsonObject value,String key){return value.has(key)&&value.get(key).isJsonObject()?value.getAsJsonObject(key):new JsonObject();}
     private static String text(JsonObject value,String key,String fallback){return value.has(key)&&value.get(key).isJsonPrimitive()?value.get(key).getAsString():fallback;}

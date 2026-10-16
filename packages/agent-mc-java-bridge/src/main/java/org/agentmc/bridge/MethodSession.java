@@ -26,18 +26,23 @@ final class MethodSession {
     private int currentCall;
     private final Object player,world;
     private class_243 previousPosition;
-    private final long deadline;
+    private long deadline,pausedAt=-1;
+    private record Admission(int call,String name,JsonArray args){}
+    private Admission pausedAdmission;
+    void paused(boolean value){if(value&&pausedAt<0)pausedAt=System.currentTimeMillis();else if(!value&&pausedAt>=0){deadline+=System.currentTimeMillis()-pausedAt;pausedAt=-1;if(pausedAdmission!=null){var pending=pausedAdmission;pausedAdmission=null;call(pending.call,pending.name,pending.args);}}}
     MethodSession(class_310 client, int durationMs, InventoryPick pick, String id,NativeNavigation navigation) { c=client; inventoryPick=pick; actionId=id;this.navigation=navigation; player=c.field_1724;world=c.field_1687;previousPosition=c.field_1724.method_19538();deadline=System.currentTimeMillis()+durationMs; }
     void tick() {
-        if(System.currentTimeMillis()>deadline)throw new IllegalStateException("JavaScript body session expired");
+        if(pausedAt<0&&System.currentTimeMillis()>deadline)throw new IllegalStateException("JavaScript body session expired");
         if(c.field_1724!=player||c.field_1687!=world||c.field_1724.method_19538().method_1022(previousPosition)>8)throw new IllegalStateException("Body respawned, changed dimension or teleported; method revoked");
         previousPosition=c.field_1724.method_19538();
+        if(pausedAt>=0)return;
         if(c.field_1724.method_6032()<=0)throw new IllegalStateException("Player died; method revoked");
         if(c.field_1755!=null&&!held.isEmpty())throw new IllegalStateException("GUI took control; method revoked");
         held.forEach((name,value)->key(c,name).method_23481(value));
         calls.tick();
     }
     JsonObject call(int call,String name,JsonArray args) {
+        if(pausedAt>=0){var existing=calls.existing(call,name+args);if(existing!=null)return existing;if(calls.pending()||call!=calls.nextId()||call>32)throw new IllegalStateException("Await original method call, at most32 calls");if(pausedAdmission!=null&&(pausedAdmission.call!=call||!pausedAdmission.name.equals(name)||!pausedAdmission.args.equals(args)))throw new IllegalStateException("Await the original paused method call");if(pausedAdmission==null)pausedAdmission=new Admission(call,name,args.deepCopy());return pausedReply(call);}
         int ticks=name.equals("waitForTicks")?boundedInt(args.get(0),1,200):1;
         return calls.call(call,name+args,ticks,()->{
             deferred=null;completion=null;currentCall=call;
@@ -47,8 +52,9 @@ final class MethodSession {
             return invoke(name,args);
         },()->deferred,()->completion);
     }
-    JsonObject result(int call){JsonObject reply=calls.result(call).deepCopy();if(navigationReports.containsKey(call))reply.add("navigation",navigationReports.get(call));return reply;}
-    boolean pending(){return calls.pending();}
+    private static JsonObject pausedReply(int call){JsonObject reply=new JsonObject();reply.addProperty("call",call);reply.addProperty("status","running");reply.addProperty("paused",true);return reply;}
+    JsonObject result(int call){if(pausedAdmission!=null&&pausedAdmission.call==call)return pausedReply(call);JsonObject reply=calls.result(call).deepCopy();if(navigationReports.containsKey(call))reply.add("navigation",navigationReports.get(call));return reply;}
+    boolean pending(){return pausedAdmission!=null||calls.pending();}
     private JsonElement invoke(String name,JsonArray args) {
         if(!methods(navigation.available()).contains(name)||READS.contains(name))throw new IllegalArgumentException("Unsupported body method: "+name);
         switch(name) {

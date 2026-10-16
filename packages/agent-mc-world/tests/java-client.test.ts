@@ -40,6 +40,41 @@ function rig(scriptEnabled = false, minecraftVersion?: string, scriptFailure?: s
   return {cfg,state,world,runtime,http,calls,dataDir,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it('keeps native auth-pending reads attached, blocks body before RPC, and revokes stale confirmation',async()=>{
+    const r=rig();Object.assign(r.cfg.javaClient,{requireServerAuthorization:true});
+    const proof={protocol:'agent-mc-server-authorization/v1',required:true,generation:1,username:'Test',server:'fixture.test',phase:'submitted',authorized:false,connectionMatched:true};
+    Object.assign(r.state,{serverAuthorization:proof});await r.runtime.connect();
+    try{
+      expect(r.runtime.status().connection).toEqual({ready:false,phase:'authenticating'});
+      expect((await r.runtime.call('mc_state',{})).failed).not.toBe(true);
+      await r.runtime.call('mc_control',{action:'claim'});
+      const blocked=await r.runtime.call('mc_do',{action_id:'pending-body',operation:'move',input:{forward:1,ticks:1}});
+      expect(blocked.failed).toBe(true);expect(r.calls.filter(c=>c.method==='do')).toHaveLength(0);
+      Object.assign(proof,{phase:'confirmed',authorized:true});await r.runtime.call('mc_state',{});
+      expect(r.runtime.status().connection).toEqual({ready:true,phase:'online'});
+      const restriction=r.world.requestFacts()!.parts!.find(p=>p.key==='bodyRestriction')!.text;
+      Object.assign(proof,{observedAt:new Date().toISOString()});await r.runtime.call('mc_state',{});
+      expect(r.world.requestFacts()!.parts!.find(p=>p.key==='bodyRestriction')!.text).toBe(restriction);
+      Object.assign(r.state,{navigationCapability:'agent-mc-navigation/v1'});
+      const command={action_id:'native-id',operation:'navigate',input:{goal:{x:1,y:65,z:3}}};
+      await r.runtime.call('mc_state',{});const before=r.calls.length;
+      expect(r.runtime.prepareFastAction('mc_do',command)?.command).toEqual(command);expect(r.calls).toHaveLength(before);
+      Object.assign(proof,{phase:'required',authorized:false});await r.runtime.call('mc_state',{});
+      expect(r.runtime.status().connection).toEqual({ready:false,phase:'login-required'});
+      expect(r.runtime.prepareFastAction('mc_do',command)).toBeNull();
+      expect((await r.runtime.call('mc_do',{action_id:'revoked-body',operation:'look',input:{yaw:0,pitch:0}})).failed).toBe(true);
+      expect(r.calls.filter(c=>c.method==='do')).toHaveLength(0);
+    }finally{await r.runtime.disconnect();}
+  });
+  it('unnamed code selects shared JavaScript when Python is disabled, while explicit Python stays explicit',async()=>{
+    const r=rig();await r.runtime.connect();
+    try{
+      const reply=await r.runtime.call('mc_script',{code:'return 7;',validate:true});
+      expect(reply.failed).not.toBe(true);expect(reply.execution?.kind).toBe('method');
+      expect((await r.runtime.call('mc_script',{language:'python',code:'print(7)'})).failed).toBe(true);
+      expect(r.calls.some(c=>c.params.operation==='minescript.run')).toBe(false);
+    }finally{await r.runtime.disconnect();}
+  });
   it('makes light body state opt-in, keeps the original summary and archives exact inventory evidence',async()=>{
     const r=rig();Object.assign(r.cfg.javaClient,{stateDetail:'body'});Object.assign(r.state,{selectedSlot:0});
     await r.runtime.connect();

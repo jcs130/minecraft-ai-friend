@@ -14,6 +14,10 @@ export interface JavaClientConfiguration {
   methodWaitMs?: number;
   /** Preserve the original summary by default; body omits repeated inventory/menu stacks. */
   stateDetail?: 'body' | 'summary';
+  /** Require scoped native server-authorization evidence even if no provider is detected yet. */
+  requireServerAuthorization?: boolean;
+  /** Reuse the shared reflex/combat kernels when the actual native bridge advertises their body port. */
+  sharedReflexes?: boolean;
 }
 export interface JavaClientAction {
   id: string; operation: string; phase: 'accepted' | 'running' | 'completed' | 'partial' | 'blocked' | 'cancelled' | 'unknown';

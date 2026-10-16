@@ -17,7 +17,7 @@ final class NavigationSession {
     }
     private final Driver driver;
     private final Goal goal;
-    private final long deadline;
+    private long deadline,pausedAt=-1;
     private long progressAt;
     private double[] last;
     private String stopping,phase="running",reason;
@@ -29,6 +29,7 @@ final class NavigationSession {
     String phase(){return phase;}
     String reason(){return reason;}
     Goal goal(){return goal;}
+    void paused(boolean value,long now){if(value&&pausedAt<0)pausedAt=now;else if(!value&&pausedAt>=0){long elapsed=Math.max(0,now-pausedAt);deadline+=elapsed;progressAt+=elapsed;pausedAt=-1;}}
     void tick(double[] feet,boolean onGround,long now) throws Exception {
         if(!phase.equals("running"))return;
         if(!driver.owns()) { phase="blocked";reason="Navigation ownership changed; foreign goal was not cancelled";driver.restore();return; }
