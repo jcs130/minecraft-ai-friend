@@ -35,7 +35,10 @@ def _read(path, limit=4 * 1024 * 1024):
 
 
 def _json(path, limit=4 * 1024 * 1024):
-    return json.loads(_read(path, limit).decode("utf-8-sig"))
+    value = json.loads(_read(path, limit).decode("utf-8-sig"))
+    if not isinstance(value, dict):
+        raise RuntimeError("recovery_evidence_object_required")
+    return value
 
 
 def _uuid(value):
@@ -80,6 +83,9 @@ def _receipt(transaction):
             or committed.get("classification") != "acknowledged_unknown" or committed.get("verified") is not False
             or committed.get("native_replay") is not False or committed.get("autostart") is not False):
         raise RuntimeError("recovery_receipt_conflict")
+    if (_hash(_read(transaction / "before-state.json", 65536)) != prepared.get("before_state_sha256")
+            or _hash(_read(transaction / "before-status.json")) != prepared.get("before_status_sha256")):
+        raise RuntimeError("recovery_original_evidence_changed")
     return prepared, committed
 
 
@@ -112,6 +118,8 @@ def _evidence(host, status, run, native_request_ids):
         if not line.strip():
             continue
         event = json.loads(line)
+        if not isinstance(event, dict):
+            raise RuntimeError("recovery_archive_binding_invalid")
         cursor = event.get("cursor")
         if event.get("run") != run or type(cursor) is not int or cursor <= previous:
             raise RuntimeError("recovery_archive_binding_invalid")
@@ -124,12 +132,16 @@ def _evidence(host, status, run, native_request_ids):
     pending = status.get("pending", [])
     if not isinstance(pending, list) or len(pending) > 32:
         raise RuntimeError("recovery_status_pending_invalid")
-    pending_ids = {item.get("id") for item in pending if isinstance(item, dict)}
+    if any(not isinstance(item, dict) or not isinstance(item.get("id"), str) for item in pending):
+        raise RuntimeError("recovery_status_pending_invalid")
+    pending_ids = {item["id"] for item in pending}
     for request in ids:
         _uuid(request)
         path = client / "requests" / (_hash(request.encode()) + ".json")
         raw_request = _read(path, 1024 * 1024)
         record = json.loads(raw_request.decode("utf-8-sig"))
+        if not isinstance(record, dict) or not isinstance(record.get("outcome"), dict) or not isinstance(record["outcome"].get("execution"), dict):
+            raise RuntimeError("recovery_request_binding_invalid")
         execution = (record.get("outcome") or {}).get("execution") or {}
         execution_id = execution.get("id")
         if (record.get("requestId") != request or record.get("phase") != "returned"
@@ -155,17 +167,25 @@ def assess(settings, data_root, *, native_request_ids=()):
     host = _root(settings, data_root)
     state_raw, status_raw = _read(host / "host-state.json", 65536), _read(host / "status.json")
     state, status = json.loads(state_raw), json.loads(status_raw)
+    if not isinstance(state, dict) or not isinstance(status, dict):
+        raise RuntimeError("recovery_evidence_object_required")
     session, run = _uuid(status.get("runtime_session")), _uuid(status.get("native_run"))
     if status.get("settings_identity") != settings.identity:
         raise RuntimeError("recovery_settings_identity_mismatch")
-    with sqlite3.connect((host / "commands.sqlite3").as_uri() + "?mode=ro", uri=True) as db:
+    database = host / "commands.sqlite3"
+    # Canonical Mailbox uses rollback journaling. A readonly SQLite connection
+    # can create/update WAL shared-memory sidecars; never do that in assessment,
+    # and never use immutable=1 (which would silently ignore pending WAL rows).
+    if database.is_symlink() or any(database.with_name(database.name + suffix).exists() for suffix in ("-wal", "-shm")):
+        raise RuntimeError("recovery_quiescent_rollback_mailbox_required")
+    with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True) as db:
         dispatching = db.execute("SELECT count(*) FROM commands WHERE state='dispatching'").fetchone()[0]
     evidence = _evidence(host, status, run, native_request_ids)
     owner = session_is_owned(host)
     shape = (status.get("phase") == "failed" and status.get("game_connected") is False
              and status.get("autonomy_running") is False and state.get("stopped") is True
              and state.get("uncertain") is True and state.get("pending") == []
-             and state.get("inflight_request") is None and not dispatching and not owner)
+             and "inflight_request" in state and state["inflight_request"] is None and not dispatching and not owner)
     pending_ack = False
     try:
         require_no_pending_acknowledgement(host)
@@ -174,7 +194,7 @@ def assess(settings, data_root, *, native_request_ids=()):
     return {"identity": settings.identity, "runtime_session": session, "native_run": run,
             "state_sha256": _hash(state_raw), "status_sha256": _hash(status_raw),
             "stopped": state.get("stopped") is True, "uncertain": state.get("uncertain") is True,
-            "pending_empty": state.get("pending") == [], "inflight_empty": state.get("inflight_request") is None,
+            "pending_empty": state.get("pending") == [], "inflight_empty": "inflight_request" in state and state["inflight_request"] is None,
             "dispatching_count": dispatching, "owner_held": owner, "pending_acknowledgement": pending_ack,
             "eligible_shape": shape and not pending_ack, "classification": "unknown", "verified": False, **evidence}
 

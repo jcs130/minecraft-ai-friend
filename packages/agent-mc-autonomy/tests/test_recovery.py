@@ -195,8 +195,16 @@ def test_admin_cli_is_local_and_does_not_start_runtime(tmp_path, framework_modul
     monkeypatch.setattr(cli, 'play', forbidden)
     monkeypatch.setattr(cli, 'HttpPlannerConfig', forbidden)
     common = ['--config', str(config), '--data', str(tmp_path), '--native-request-id', options['native_request_ids'][0]]
+    tree_before = {str(p.relative_to(tmp_path)): p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
+    directories_before = {str(p.relative_to(tmp_path)) for p in tmp_path.rglob('*') if p.is_dir()}
     assert main(['recovery-assess', *common]) == 0
     assert json.loads(capsys.readouterr().out)['classification'] == 'unknown'
+    assert tree_before == {str(p.relative_to(tmp_path)): p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
+    assert directories_before == {str(p.relative_to(tmp_path)) for p in tmp_path.rglob('*') if p.is_dir()}
+    absent = tmp_path/'absent-data'
+    assert main(['recovery-assess', '--config', str(config), '--data', str(absent)]) == 1
+    assert json.loads(capsys.readouterr().out)['error'] == 'RuntimeError'
+    assert not absent.exists()
     args = ['acknowledge-unknown', *common, '--request-id', options['acknowledgement_id'], '--attest-prior-processes-exited', '--acknowledge-unknown']
     for key in ['expected_identity', 'expected_session', 'expected_run', 'expected_state_sha256', 'expected_status_sha256', 'operator', 'reason', 'evidence_id']:
         args.extend(['--'+key.replace('_', '-'), options[key]])
@@ -315,3 +323,27 @@ def test_other_body_provider_requires_its_own_reconciliation_contract(tmp_path, 
     settings, _, _, _, _ = fixture(tmp_path, framework_module)
     with pytest.raises(RuntimeError, match='generic_local_body_required'):
         assess(dataclasses.replace(settings, body_provider='java-client'), tmp_path)
+
+
+@pytest.mark.parametrize('suffix', ['-wal', '-shm'])
+def test_assessment_refuses_wal_without_creating_sqlite_sidecars(tmp_path, framework_module, suffix):
+    from agent_mc_autonomy.recovery import assess
+    settings, host, _, _, options = fixture(tmp_path, framework_module)
+    (host/('commands.sqlite3'+suffix)).write_bytes(b'fixture foreign WAL')
+    before = {str(p.relative_to(host)): p.read_bytes() for p in host.rglob('*') if p.is_file()}
+    with pytest.raises(RuntimeError, match='quiescent_rollback_mailbox_required'):
+        assess(settings, tmp_path, native_request_ids=options['native_request_ids'])
+    assert before == {str(p.relative_to(host)): p.read_bytes() for p in host.rglob('*') if p.is_file()}
+
+
+def test_missing_inflight_field_is_not_proven_empty(tmp_path, framework_module):
+    from agent_mc_autonomy.recovery import acknowledge_unknown
+    settings, host, _, _, options = fixture(tmp_path, framework_module)
+    path = host/'host-state.json'
+    state = json.loads(path.read_text())
+    del state['inflight_request']
+    path.write_text(json.dumps(state), encoding='utf-8')
+    options['expected_state_sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+    with pytest.raises(RuntimeError, match='empty_stopped_unknown_required'):
+        acknowledge_unknown(settings, tmp_path, **options)
+    assert json.loads(path.read_text())['uncertain'] is True

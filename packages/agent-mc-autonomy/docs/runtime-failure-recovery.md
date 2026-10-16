@@ -35,6 +35,10 @@ run's event archive is complete. An accepted-only RPC is `accepted_only_unknown`
 an actual terminal is `archived_terminal`, with its original phase. Neither
 verifies the goal or acknowledges uncertainty automatically. Overall assessment
 remains `unknown`. A new runtime's task=null cannot prove an old terminal.
+The mailbox must use the canonical rollback journal. WAL/SHM sidecars are
+refused: readonly SQLite can otherwise create/update shared-memory files, while
+immutable reads would incorrectly ignore WAL commands. Missing hosts/databases
+are not created by assessment; CLI Mailbox construction itself only stores a path.
 
 Before acknowledgement, the operator independently proves that every previously
 known owned body/launcher process has exited, using PID plus creation identity.
