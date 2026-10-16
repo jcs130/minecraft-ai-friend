@@ -1,11 +1,42 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { unwedgeBody } from '../core/travel.ts';
 import { Aborted, type SkillContext } from '../core/skill-context.ts';
 import { methodHarness } from './method-harness.ts';
 
 const context = (aborted = () => false) => ({ aborted } as SkillContext);
+// The first real physics tick can clear onGround before the next tick settles it.
+// Wall-clock warmup does not establish readiness when callbacks are delayed.
+const settledGround = (r: ReturnType<typeof methodHarness>) => new Promise<void>((resolve, reject) => {
+  const cleanup = () => { clearTimeout(timeout); r.bot.off('physicsTick', check); };
+  const check = () => {
+    if (r.bot.physicsEnabled && r.bot.entity.onGround && r.bot.entity.position.y === 64) {
+      cleanup(); resolve();
+    }
+  };
+  const timeout = setTimeout(() => { cleanup(); reject(new Error('fixture did not reach grounded physics')); }, 2000);
+  r.bot.on('physicsTick', check);
+});
 
 describe('unsticking uses supported ground and releases controls', () => {
+  it('waits for actual grounded physics when the next physics callback is delayed', async () => {
+    vi.useFakeTimers();
+    const r = methodHarness();
+    try {
+      let ready = false;
+      const waiting = settledGround(r).then(() => { ready = true; });
+      await vi.advanceTimersByTimeAsync(50);
+      expect(r.bot.entity.onGround).toBe(false);
+      r.bot.physicsEnabled = false;
+      await vi.advanceTimersByTimeAsync(150);
+      expect(ready).toBe(false);
+      r.bot.physicsEnabled = true;
+      await vi.advanceTimersByTimeAsync(100);
+      await waiting;
+      expect(ready).toBe(true);
+      expect(r.bot.entity.onGround).toBe(true);
+      expect(r.bot.entity.position.y).toBe(64);
+    } finally { r.close(); vi.useRealTimers(); }
+  });
   it('does not jump or retreat from a one-block island over a deep shaft', async () => {
     const r = methodHarness();
     try {
@@ -26,7 +57,7 @@ describe('unsticking uses supported ground and releases controls', () => {
   it('still moves on loaded flat ground using real Minecraft physics', async () => {
     const r = methodHarness();
     try {
-      await new Promise(resolve => setTimeout(resolve, 125));
+      await settledGround(r);
       const moved = await unwedgeBody(r.bot as never, context());
       expect(moved).toBeGreaterThan(0.2);
       expect(moved).toBeLessThan(1.6);
@@ -40,7 +71,7 @@ describe('unsticking uses supported ground and releases controls', () => {
     const r = methodHarness(); let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await new Promise(resolve => setTimeout(resolve, 125));
+      await settledGround(r);
       const control = r.bot.setControlState.bind(r.bot);
       r.bot.setControlState = (key, value) => {
         control(key, value);
@@ -57,7 +88,7 @@ describe('unsticking uses supported ground and releases controls', () => {
     const r = methodHarness(); let removed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await new Promise(resolve => setTimeout(resolve, 125));
+      await settledGround(r);
       const control = r.bot.setControlState.bind(r.bot);
       r.bot.setControlState = (key, value) => {
         control(key, value);
