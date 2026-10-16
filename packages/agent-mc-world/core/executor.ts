@@ -3442,7 +3442,21 @@ export class Executor {
     const dimension = dimensionOf(bot);
     this.tunnelSupportStops = this.tunnelSupportStops.filter((row) => now - row.at < EXACT_FAILURE_WINDOW_MS);
     let start = { x: Math.floor(pos.x), y: Math.floor(pos.y), z: Math.floor(pos.z) };
+    const plannedSupports = new Set<string>();
     for (const step of steps) {
+      if (step.skill === 'build' && !step.dryRun && !('blueprint' in step)) {
+        const anchors = 'on' in step ? step.on.map((row) => row.at) : step.anchors;
+        const material = bot.registry.blocksByName[step.material.replace(/^minecraft:/, '')];
+        // Only explicit cells with a known solid material can change this premise.
+        // Relative anchors depend on the actual future position, not a predicted goto.
+        if (material?.boundingBox === 'block' && anchors.every(absAnchor)) {
+          try {
+            for (const { cell } of buildSpots(bot, step)) {
+              plannedSupports.add(`${cell.x},${cell.y},${cell.z}`);
+            }
+          } catch { /* Invalid/unresolved geometry does not waive the repeat guard. */ }
+        }
+      }
       if (step.skill === 'goto') {
         const goal = lastAbsoluteGoto([step]);
         if (goal) start = goal;
@@ -3463,6 +3477,10 @@ export class Executor {
           this.tunnelSupportStops = this.tunnelSupportStops.filter((row) => row !== stop);
           continue;
         }
+        // Admit a concrete repair before traversal; do not erase failure evidence
+        // or credit the planned placement. Dependency gates and skillTunnel still
+        // check the actual result and footing when these steps execute.
+        if (plannedSupports.has(`${stop.cell.x},${stop.cell.y - 1},${stop.cell.z}`)) continue;
         const t = Math.max(0, Math.min(1, ((stop.cell.x - start.x) * dx
           + (stop.cell.y - start.y) * dy + (stop.cell.z - start.z) * dz) / len2));
         if (t <= 0.1) continue;
