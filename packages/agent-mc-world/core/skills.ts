@@ -917,12 +917,9 @@ function parseAnvil(c: Record<string, unknown>, at: string, marks?: MarkLookup):
   }
   if (op === 'rename') {
     if (!name) return { error: `${at} anvil 的 op:"rename" 要 name(新名字)` };
-    if (name.length > ANVIL_NAME_MAX) {
-      return { error: `${at} anvil 的 name 最多 ${ANVIL_NAME_MAX} 个字符,给了 ${name.length} 个` };
-    }
   }
-  if (op !== 'rename' && name !== null) {
-    return { error: `${at} anvil 的 name 只跟 op:"rename" 一起用;合修顺便改名分两步做` };
+  if (name && name.length > ANVIL_NAME_MAX) {
+    return { error: `${at} anvil 的 name 最多 ${ANVIL_NAME_MAX} 个字符,给了 ${name.length} 个` };
   }
   const anvilAt = c.at === undefined || c.at === null ? null : anchorOf(c.at, marks);
   if (c.at !== undefined && c.at !== null && !anvilAt) {
@@ -1602,6 +1599,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     doc: `{"skill":"anvil","op":"combine","item":"iron_pickaxe","with":"iron_pickaxe"}
                                                  铁砧:两件同种合修(耐久相加+12%),或本体+附魔书。
                                                  op:"repair" 与 combine 同义。**花的是经验等级**,回执报实扣几级;
+                                                 已有名字不限制修理；用 pick 点名那件装备，不填 name 保留服务端原名和属性。
+                                                 repair/combine 可同时填 name 改名，不必拆成两次。产物、附魔和花费以服务端为准。
                                                  等级不够时产出拿不走,回执会说门槛。铁砧每用一次有 12% 概率磨损一级
 {"skill":"anvil","op":"rename","item":"iron_sword","name":"新名字"}
                                                  改名(最多 ${ANVIL_NAME_MAX} 字符)。at 不写就用附近 16 格内的铁砧
@@ -1611,9 +1610,9 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     parse: parseAnvil,
     fields: [
       { key: 'op', kind: 'enum', values: ['repair', 'combine', 'rename'], required: true, error: 'anvil 的 op 只认 repair/combine/rename' },
-      { key: 'item', kind: 'string', required: true, hint: '左格物品英文 id' },
+      { key: 'item', kind: 'string', required: true, hint: '左格物品英文 id 或当前完整显示名' },
       { key: 'with', kind: 'string', doc: 'repair/combine 必写:右格放什么' },
-      { key: 'name', kind: 'string', doc: 'rename 必写:新名字' },
+      { key: 'name', kind: 'string', doc: 'rename 必写；repair/combine 可选:同时改成此名字，不写保留原名' },
       // 挑选词的说明只挂第一处:字段池按 (技能, doc) 逐条印,六个技能各写一遍就是印六遍
       { key: 'pick', kind: 'string', doc: PICK_DOC },
       { key: 'withPick', kind: 'string', doc: '同 pick,筛的是 with 那一格' },

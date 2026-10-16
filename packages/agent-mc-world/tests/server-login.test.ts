@@ -28,6 +28,29 @@ async function settle(check: () => boolean) {
   while (!check()) { if (Date.now() > end) throw new Error('authentication callback timeout'); await new Promise(r => setTimeout(r, 10)); }
 }
 describe('scoped automatic server authentication', () => {
+  it.each(['MC_AUTH_DENIED login required',
+    'MC_AUTH_STATE {"username":"Agent","authorized":false,"status":"login_required"}'])
+  ('observes revoked authorization after login without disconnecting or resending credentials: %s', async marker => {
+    const r = fixture(), login = installServerLogin(r.bot, r.options);
+    r.messages('AUTH_LOGIN'); await settle(() => r.sent.length === 1);
+    r.messages('MC_AUTH_STATE {"username":"Agent","authorized":true,"status":"authenticated"}');
+    expect(login.ready()).toBe(true);
+    r.messages(marker, 'chat'); expect(login.ready()).toBe(true);
+    r.messages('MC_AUTH_STATE {"username":"Else","authorized":false,"status":"login_required"}');
+    expect(login.ready()).toBe(true);
+    r.messages(marker); r.messages(marker);
+    expect(login.detail()).toMatchObject({stage:'required',reason:'authorization-revoked'});
+    expect(login.ready()).toBe(false);
+    expect(r.reports.filter((s: any) => s.status === 'required')).toHaveLength(1);
+    r.messages('AUTH_LOGIN'); await new Promise(resolve => setTimeout(resolve, 20));
+    expect(r.sent).toHaveLength(1);
+    expect(r.bot.listenerCount('message')).toBe(1);
+    r.messages('MC_AUTH_STATE {"username":"Agent","authorized":true,"status":"authenticated"}');
+    expect(login.ready()).toBe(true);
+    expect(JSON.stringify(r.reports)).not.toContain('fixture-pass');
+    login.stop();
+  });
+
   it.each([true, false])('accepts structured authorization with passwordSet=%s, without executing nextCommand', passwordSet => {
     const r = fixture(), login = installServerLogin(r.bot, r.options);
     r.messages('MC_AUTH_STATE ' + JSON.stringify({ username: 'Agent', authorized: true,

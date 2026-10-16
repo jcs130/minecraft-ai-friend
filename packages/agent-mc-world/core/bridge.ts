@@ -523,6 +523,9 @@ export class Bridge {
       report: status => {
         log.info(`minecraft authentication ${status.status}`, { username, server: `${host}:${port}`, reason: status.reason });
         if (status.status === 'confirmed') activate();
+        if (status.status === 'required') {
+          this.opts.onAlarm?.('服务器系统回执要求重新登录：网络连接保留，但当前操作授权未就绪。旧在线状态已经失效；保留目标，等待新的授权确认，不重复提交未生效的动作。');
+        }
         if (status.status === 'blocked') queueMicrotask(() => {
           // A wrong password/2FA/timeout needs operator attention. Reconnecting
           // here would repeatedly submit the same failed credential.

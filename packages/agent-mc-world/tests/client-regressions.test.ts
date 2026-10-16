@@ -107,6 +107,25 @@ describe('live readouts and honest startup', () => {
       expect(r.world.console().lamps?.find(l => l.label === '服务器')).toMatchObject({ state: 'loading' });
     } finally { r.close(); }
   });
+  it('reports revoked authorization without claiming a disconnect or admitting replacement work', async () => {
+    const r = methodHarness();
+    try {
+      Object.assign((r.world as any).bridge, {bot:null,connected:false,reconnects:0,
+        connectionState:{active:true,phase:'connecting',protocolState:'play',ready:false,
+          serverLogin:{stage:'required',reason:'authorization-revoked'}}});
+      const before = r.exec.status();
+      const bag = await r.world.tools().find(t => t.name === 'mc_bag')!.handler({}, {role:'test',log:r.host.log});
+      const text = typeof bag === 'string' ? bag : bag.text;
+      expect(text).toContain('网络连接仍保留');
+      expect(text).toContain('操作授权未就绪');
+      expect(text).not.toContain('自动重连');
+      const result = await r.world.tools().find(t => t.name === 'mc_do')!.handler(
+        {queue:'replace',steps:[{skill:'goto',at:[12,64,0]}]}, {role:'test',log:r.host.log});
+      expect(result).toMatchObject({failed:true,text:expect.stringContaining('操作授权未就绪')});
+      expect(r.exec.status()).toEqual(before);
+      expect(r.world.console().lamps?.find(l => l.label === '服务器')).toMatchObject({state:'error',hint:expect.stringContaining('操作授权未就绪')});
+    } finally {r.close();}
+  });
   it('delivers freshly checked scaffold obligations to tool facts and scripts, then replaces cleared facts', () => {
     const r = methodHarness();
     try {

@@ -3447,6 +3447,9 @@ export class MinecraftWorld implements World {
   protected unavailableConnectionText(): string {
     const connection = this.bridge?.connectionState;
     if (!connection || !connection.active) return 'Minecraft 连接尚未启用；当前世界读数不可用。';
+    if (connection.serverLogin?.stage === 'required') {
+      return '服务器当前要求重新登录；网络连接仍保留，但操作授权未就绪，旧在线状态已经失效。目标保留，等待新的授权确认；不要把消息发送成功当成施法或移动生效，也不要重复提交未生效的动作。';
+    }
     if (connection.phase === 'stopped') {
       const reasons: Record<string, string> = {
         'confirmation-timeout': '服务器登录确认超时（不等于密码错误）',
@@ -3495,6 +3498,8 @@ export class MinecraftWorld implements World {
               ? { state: 'offline' as const, hint: '未启动' }
               : connected
                 ? { state: 'online' as const, hint: `${this.cfg.host}:${this.cfg.port}` }
+                : this.bridge.connectionState?.serverLogin?.stage === 'required'
+                  ? { state: 'error' as const, hint: this.unavailableConnectionText() }
                 : this.bridge.connectionState?.phase === 'stopped'
                   ? { state: 'error' as const, hint: this.unavailableConnectionText() }
                 : this.bridge.reconnects <= 2
@@ -6283,7 +6288,8 @@ export class MinecraftWorld implements World {
     if (!this.executor) return { text: this.toolLog(name, args, `[${name} 失败] World 未启动`), failed: true };
     // A stopped login cannot execute a new body task. Reject before queue=replace
     // can cancel existing work or create a misleading accepted task receipt.
-    if (!this.bridge?.bot && this.bridge?.connectionState?.phase === 'stopped') {
+    if (!this.bridge?.bot && (this.bridge?.connectionState?.phase === 'stopped'
+      || this.bridge?.connectionState?.serverLogin?.stage === 'required')) {
       return { text: this.toolLog(name, args, `[${name} 未受理] ${this.unavailableConnectionText()} 当前任务和待办保留。`), failed: true };
     }
     const only = parsed.steps.length === 1 ? parsed.steps[0] : null;

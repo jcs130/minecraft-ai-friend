@@ -31,7 +31,7 @@ import { findEntity, gotoGoal, reachCell } from './travel.ts';
 import { type SkillCall } from './skills.ts';
 import { skillTrade } from './skills-gather.ts';
 import { consumeHeldFood, equipNamed } from './skills-craft.ts';
-import { matchItemName } from './chests.ts';
+import { isRealId, matchItemName } from './chests.ts';
 import {
   ANVIL_BLOCKS, STATION_FIND_R, WINDOW_SETTLE_MS, findStationCell, openStationWindow,
   containerStacks, putIntoStation, rememberWindow, stationItemFacts, type StationWindow,
@@ -1993,23 +1993,21 @@ export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'an
   const cell = call.at ? resolveAt(bot, call.at) : findStationCell(bot, ANVIL_BLOCKS);
   if (!cell) throw new SkillBlocked(`附近 ${STATION_FIND_R} 格内没有铁砧;放一个再来,或用 at 指一格`);
   const reg = bot.registry as never;
-  const mainPred: InvPred = (n, it) => n === call.item && itemMatchesPick(call.pick, it, reg);
-  const withPred: InvPred = (n, it) => n === call.with && itemMatchesPick(call.withPick, it, reg);
+  const matchesName = (want: string | undefined, name: string, it: Parameters<InvPred>[1]): boolean =>
+    want !== undefined && (name === want || (!isRealId(bot.registry, want) && itemCustomName(it) === want));
+  const mainPred: InvPred = (n, it) => matchesName(call.item, n, it) && itemMatchesPick(call.pick, it, reg);
+  const withPred: InvPred = (n, it) => matchesName(call.with, n, it) && itemMatchesPick(call.withPick, it, reg);
   const main = bot.inventory.items().find((i) => mainPred(i.name, i));
   if (!main) {
     throw noSuchItem(bot, call.item, call.pick, bot.inventory.items().filter((i) => i.name === call.item));
   }
   const withOne = call.with === undefined
     ? null
-    : bot.inventory.items().find((i) => withPred(i.name, i)) ?? null;
+    : bot.inventory.items().find((i) => withPred(i.name, i) && (i !== main || i.count > 1)) ?? null;
   if (call.op !== 'rename') {
-    // 两件同种合修:左右两格不能是同一件,所以要两件都符合
-    const twoOfAKind = call.with === call.item && call.pick === call.withPick;
-    const matched = bot.inventory.items().filter((i) => withPred(i.name, i)).length;
-    if (matched < (twoOfAKind ? 2 : 1)) {
-      throw twoOfAKind
-        ? new SkillBlocked(`包里只有一件${itemAsked(call.item, call.pick)},两件同种才能合`)
-        : noSuchItem(bot, call.with!, call.withPick, bot.inventory.items().filter((i) => i.name === call.with));
+    // 左右输入消耗不同物品；挑选词重叠也不能把同一件当成两件。
+    if (!withOne) {
+      throw new SkillBlocked(`包里没有可放右格的另一件${itemAsked(call.with!, call.withPick)}；左格选中的是${askedLabel(bot, call.item, call.pick, main)}`);
     }
   }
   const lvl0 = bot.experience.level;
@@ -2020,8 +2018,8 @@ export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'an
   const onProp = (p: { property?: number; value?: number } & { x: number; y: number; z: number }): void => {
     if (p.property === 0 && typeof p.value === 'number' && p.value > 0) costShown = p.value;
   };
-  (client as unknown as { on(n: string, f: unknown): void }).on('craft_progress_bar', onProp);
   const { win, blockName } = await openStationWindow(bot, ctx, cell, ANVIL_BLOCKS, '铁砧');
+  (client as unknown as { on(n: string, f: unknown): void }).on('craft_progress_bar', onProp);
   let out: { name: string } | null = null;
   /** shift 取出后产物落进的那一格(窗口里玩家背包段);没看到落格时为 null */
   let landed: { name: string } | null = null;
@@ -2030,9 +2028,11 @@ export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'an
     await sleep(300);
     if (call.op !== 'rename') {
       await putIntoStation(bot, win, withPred, 1, itemAsked(call.with!, call.withPick));
-    } else {
+    }
+    if (call.name !== undefined) {
       // 原版改名:客户端敲字发 name_item,服务端据此填产出槽
-      client.write('name_item', { name: call.name ?? '' });
+      // 未要求改名时不发送空名字，也不把显示用的去格式文本写回物品。
+      client.write('name_item', { name: call.name });
     }
     await sleep(WINDOW_SETTLE_MS);
     out = win.slots[2] as { name: string } | null;
@@ -2041,7 +2041,7 @@ export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'an
         call.op === 'rename'
           ? `铁砧不认这个名字:产出槽没出东西(写的是「${call.name}」)`
           : `铁砧的产出槽没出东西:${askedLabel(bot, call.item, call.pick, main)}`
-            + `+${askedLabel(bot, call.with!, call.withPick, withOne)} 这一对按原版做不出结果`,
+            + `+${askedLabel(bot, call.with!, call.withPick, withOne)}；当前服务端没有返回产物，具体原因未确认`,
         [], 'server',
       );
     }
@@ -2053,6 +2053,9 @@ export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'an
   await sleep(400);
   const lvl1 = bot.experience.level;
   const spent = lvl0 - lvl1;
+  if (!landed) {
+    throw new SkillBlocked(`铁砧产出槽有读数，但未确认产物落进背包；经验 ${lvl0} → ${lvl1}。结果待核对，不要据此重做同一单`, [], 'server');
+  }
   if (spent <= 0) {
     const gate = costShown !== null ? `这一单显示要 ${costShown} 级,你现在 ${lvl1} 级` : `你现在 ${lvl1} 级`;
     const changed = invGains(before, bot).length > 0 || invLosses(before, bot).length > 0;
@@ -2072,7 +2075,7 @@ export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'an
   const head = call.op === 'rename'
     ? `在 ${cellText(cell)} 的${zhName(blockName)}上把${askedLabel(bot, call.item, call.pick, main)}改名成「${call.name}」`
     : `在 ${cellText(cell)} 的${zhName(blockName)}上把${askedLabel(bot, call.item, call.pick, main)}`
-      + `和${askedLabel(bot, call.with!, call.withPick, withOne)}合了`;
+      + `和${askedLabel(bot, call.with!, call.withPick, withOne)}合了${call.name ? `，同时请求改名成「${call.name}」` : ''}`;
   return `${head}:产物${product};`
     + `花了 ${Math.max(spent, 0)} 级经验(${lvl0} → ${lvl1})${wear}`;
 }
