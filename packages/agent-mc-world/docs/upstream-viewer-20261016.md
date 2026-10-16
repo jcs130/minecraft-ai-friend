@@ -1,6 +1,6 @@
 # Reviewed renderer input
 
-This candidate consumes mc-visual-console source `e8a2255f4f70c3b7997716fa24f64ecd6654abc3`,
+This candidate consumes mc-visual-console source `4c0ffc06e84aed398721f2f6c5c6c140b928d6cc`,
 rebuilt from its locked original Java 1.21.1 and 1.20.6 asset packs with no server preset.
 The release input and SHA-256 live in `release-sources.json`; generated Java data host provenance
 stays beside `core/java-data-viewer.mjs`. The independent client console and metadata monitor
@@ -17,3 +17,5 @@ HTTP bundle hash. Updating the package alone is insufficient for such deployment
 Core source is based on `ec3b13c6`, including unknown filtered probe coverage, dry-run effect
 exclusion and explicit support repair admission. Planned placement does not erase real failure
 evidence or establish successful footing; normal dependency and execution checks remain active.
+
+The browser supports explicitly configured original Paper YSM resources and browser-local PNG skin choices. Source hashes, UUID binding, current-server appearance and local presentation stay separate. The generic archive contains no deployment profile or character files.
