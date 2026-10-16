@@ -6,7 +6,7 @@
 import type { Bot } from 'mineflayer';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { type SkillCall } from './skills.ts';
-import { Aborted, SkillBlocked, checkAbort, type SkillContext } from './skill-context.ts';
+import { Aborted, SkillBlocked, SkillNoop, checkAbort, type SkillContext } from './skill-context.ts';
 import {
   AIR_NAMES, EXCAVATE_CELL_CAP, LIQUIDS, SHAPE_ZH, blockAtCell, cellKeyOf, cellText, dimensionOf,
   feetOf, nearLavaAt, readRegion, resolveAt, shapeCells, type RegionReading,
@@ -345,7 +345,10 @@ export async function skillTunnel(bot: Bot, call: Extract<SkillCall, { skill: 't
   const vertical = run === 0;
   const spiral = call.spiral === true && vertical;
   const kind = spiral ? '螺旋楼梯' : !vertical ? '通道' : rise > 0 ? '塔' : '竖井';
-  if (vertical && rise === 0) throw new SkillBlocked('终点就是脚下这一格');
+  if (vertical && rise === 0) {
+    checkAbort(ctx);
+    throw new SkillNoop(`当前脚格已是终点 ${cellText(target)}；本次未挖掘、未移动，未验证此前整条通道`);
+  }
   if (call.spiral === true && !vertical) {
     throw new SkillBlocked(
       `spiral 是垂直升降用的螺旋楼梯,at 要放正上/正下(现在横向差着 ${run} 格);斜着走用不带 spiral 的通道`,

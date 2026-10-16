@@ -455,7 +455,9 @@ function precheckTunnel(bot: Bot, call: Extract<SkillCall, { skill: 'tunnel' }>,
   if (!target) return null;
   const run = Math.max(Math.abs(target.x - start.x), Math.abs(target.z - start.z));
   const rise = target.y - start.y;
-  if (run === 0 && rise === 0) return { level: 'hard', text: '终点就是脚下这一格', rule: 'tunnel.here' };
+  // A previous queued step may already have reached this cell. Let the skill
+  // report a no-op from its fresh position instead of inventing a blocked route.
+  if (run === 0 && rise === 0) return null;
   if (run !== 0 && Math.abs(rise) > run) {
     return { level: 'hard', text: `坡度超过 45°:横 ${run} 格要升降 ${Math.abs(rise)} 格`, rule: 'tunnel.slope' };
   }
