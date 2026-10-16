@@ -1,0 +1,4 @@
+# Archive desks use real, already placed lecterns. No world editing or account
+# migration happens on plugin startup. Configure the selected hall at deployment.
+# The ordinary compass menu and /mycli archive work without a physical desk.
+desks: []

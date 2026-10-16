@@ -171,6 +171,10 @@ final class AgentCommunication {
     void jsonCommand(Player p,String[] raw) {
         String[] args=Arrays.stream(raw).filter(s->!s.equals("--json")).toArray(String[]::new);
         String root=args.length==0?"status":args[0].toLowerCase(Locale.ROOT);
+        if(root.equals("archive")){
+            String[] query=Arrays.copyOf(args,args.length+1);query[args.length]="--json";
+            plugin.archives().command(p,query);return;
+        }
         if(root.equals("protect")||root.equals("保护")) {
             String[] query=Arrays.copyOf(args,args.length+1);query[args.length]="--json";
             plugin.protectionAdvisor().command(p,query);return;

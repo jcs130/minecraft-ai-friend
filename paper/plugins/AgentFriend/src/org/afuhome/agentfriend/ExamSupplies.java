@@ -75,15 +75,14 @@ final class ExamSupplies {
             out.addProperty("advice","摄影无需空地图或主背包空位；实际拍摄耗魔力，成片自动入个人奖励箱。已发旧地图保留，可继续用take photo取出。");
             out.addProperty("nextCommand","/mycli photo menu");return out;
         }
-        boolean relevant=d!=null&&(kind.equals("photo")?d.proofs().contains("survey_photo"):d.proofs().contains("survey"));
-        String key=d==null?"":kind.equals("photo")?photoKey(d):plugin.getConfig().getString(mapRunPath(p),"");
-        out.addProperty("name",kind.equals("photo")?"摄影备料 · 8张空地图":"遗迹探险图 · 带真实目标");
+        boolean relevant=d!=null&&d.proofs().contains("survey");
+        String key=d==null?"":plugin.getConfig().getString(mapRunPath(p),"");
+        out.addProperty("name","遗迹探险图 · 带真实目标");
         String reason=!enabled?"supplies_unavailable":!relevant?"not_required_by_exam":!key.isEmpty()&&issued(p,key)?"already_issued"
                 :kind.equals("map")&&nextMap(p)==null?"no_new_chart_destination":"requestable";
-        out.addProperty("status",reason);out.addProperty("required",kind.equals("photo")&&relevant);
-        out.addProperty("count",kind.equals("photo")?8:1);out.addProperty("item",kind.equals("photo")?"minecraft:map":"minecraft:filled_map");
-        out.addProperty("advice",kind.equals("photo")?"首次本题提供8张空地图；单张照片消耗1张。打开个人箱取出，主背包留1格。补领不会重复发放。"
-                :"仅原图寻宝路线需要；普通走查不需要。领取时核验公会已勘察的天然遗迹，发真正有目标标记的地图，非空白图。每人每个目的地提供一次。");
+        out.addProperty("status",reason);out.addProperty("required",false);
+        out.addProperty("count",1);out.addProperty("item","minecraft:filled_map");
+        out.addProperty("advice","仅原图寻宝路线需要；普通走查不需要。领取时核验公会已勘察的天然遗迹，发真正有目标标记的地图，非空白图。每人每个目的地提供一次。");
         if(reason.equals("requestable"))out.addProperty("claimCommand","/mycli guild exam supplies claim "+kind);
         if(!key.isEmpty()&&issued(p,key)) {
             JsonObject allocation=JsonParser.parseString(plugin.getConfig().getString(path(p,key))).getAsJsonObject();out.add("allocation",allocation);

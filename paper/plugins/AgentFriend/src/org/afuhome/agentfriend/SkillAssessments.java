@@ -675,7 +675,7 @@ final class SkillAssessments implements Listener {
     @EventHandler public void close(InventoryCloseEvent e) {menus.remove(e.getInventory());}
     String bookPage(Player p) {
         JsonObject a=academy(p.getUniqueId());String ids=a.has("certificates")?String.join("、",a.getAsJsonObject("certificates").keySet()):"未认证";
-        return "§6冒险者认证§r\n\n"+gradeName(p)+"\n声望 "+plugin.guild().reputation(p)+"\n\n能力证书："+ids+"\n\n公会→训练与考试\n→当前考试指引与材料\n分步骤完成；摄影空图和遗迹探险图在个人箱领取。\n\n/mycli guild exam guide\n旧资历保留，不自动花点。";
+        return "§6冒险者认证§r\n\n"+gradeName(p)+"\n声望 "+plugin.guild().reputation(p)+"\n\n能力证书："+ids+"\n\n公会→训练与考试\n→当前考试指引与材料\n摄影不用空地图，成片进个人奖励箱；遗迹探险图可按需领取。\n\n/mycli guild exam guide\n旧资历保留，不自动花点。";
     }
     void admin(CommandSender sender,String[] args) {
         if(args.length>2&&args[2].equals("reload"))sender.sendMessage(reload()?"考试与18阶目录已热加载；在途定义保持冻结。":"配置错误，已保留上次有效目录；修正两份配置后再加载。");

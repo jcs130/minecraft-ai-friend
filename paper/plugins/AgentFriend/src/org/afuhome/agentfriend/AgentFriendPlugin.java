@@ -185,7 +185,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             new CompassButton(14, Material.WRITABLE_BOOK, "任务市场", "工程、探索、职业试炼与居民事务", "market"),
             new CompassButton(15, Material.BELL, "居民事务板", "农耕补种、真实交易、照片与遗迹调查", "world:board"),
             new CompassButton(16, Material.OAK_SAPLING, "村庄新生活", "居民聊天、新手实习、商店与世界活动", "world:menu"),
-            new CompassButton(17, Material.SPYGLASS, "女神相机 · 拍照", "点击选择第一人称、第三人称、俯视或清晰海报；照片进入本人背包", "photo"),
+            new CompassButton(17, Material.SPYGLASS, "女神相机 · 拍照", "点击选择第一人称、第三人称、俯视或清晰海报；成片自动进入个人奖励箱", "photo"),
             new CompassButton(18, Material.BLAZE_POWDER, "战斗法术", "星芒箭、霜环与焰浪；按原规则消耗魔力", "menu:combat"),
             new CompassButton(19, Material.ELYTRA, "探索法术", "跃空、飞行、傀儡、心眼与支援传送", "menu:utility"),
             new CompassButton(20, Material.SPYGLASS, "探矿术", "选择矿种，成功扫描才消耗魔力", "menu:prospect"),
@@ -267,6 +267,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private PlayerNameTags playerNameTags;
     private TextBubbleManager textBubbles;
     private PhotoCameraManager photoCamera;
+    private PublicArchives archives;
+    PublicArchives archives(){return archives;}
     private InventoryFeedback inventoryFeedback;
     private ItemAppearances itemAppearances;
     private SoulboundGear soulboundGear;
@@ -337,6 +339,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         agentEntry = new AgentEntry(this);
         agentCoach = new AgentCoach(this);
         communication = new AgentCommunication(this);
+        archives = new PublicArchives(this);
         agentCoach.start();
         playerNameTags = new PlayerNameTags(this);
         playerNameTags.start();
@@ -398,6 +401,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (playerNameTags != null) playerNameTags.stop();
         if (textBubbles != null) textBubbles.stop();
         if (dungeon != null) dungeon.shutdown();
+        if (archives != null) archives.shutdown();
         if (trialRescue != null) trialRescue.shutdown();
         if (active) {
             lastRun = System.currentTimeMillis();
@@ -820,6 +824,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if(sender instanceof Player p&&args.length>0&&(args[0].equalsIgnoreCase("archive")||args[0].equals("档案"))){
+            // Preserve the archive's literal body after --, including examples
+            // containing --help/--json. Other legacy command parsing is unchanged.
+            String[] canonical=args.clone();canonical[0]="archive";
+            int literal=java.util.Arrays.asList(canonical).indexOf("--");
+            boolean help=false;for(int n=1;n<(literal<0?canonical.length:literal);n++)if(canonical[n].equals("--help")||canonical[n].equals("-h"))help=true;
+            if(help)AgentCliCatalog.commandHelp(p,canonical);else archives.command(p,canonical);return true;
+        }
         if(sender instanceof Player p && java.util.Arrays.stream(args).anyMatch(s->s.equals("--help")||s.equals("-h"))) {
             AgentCliCatalog.commandHelp(p,args);return true;
         }
@@ -1243,6 +1255,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "bubbles", "气泡" -> textBubbles.audit(player);
             case "say", "说话" -> textBubbles.say(player, tail(args, 1));
             case "photo", "拍照" -> photoCamera.command(player, args);
+            case "archive", "档案" -> archives.command(player,args);
             case "profession", "职业" -> professions.command(player, args);
             case "mastery", "熟练度" -> spellMastery.report(player);
             case "skillbook", "技能书" -> SkillTome.command(player, args, spellMastery);
@@ -1287,7 +1300,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage(ChatColor.GOLD + "千灯纪技能接口 /mycli" + ChatColor.GRAY + " · Java / 基岩 / Agent 共用");
         p.sendMessage("Agent：/mycli list [分类|命令] [页码] 发现能力；/mycli explain <ID> 或 /mycli help <ID> 查询准确用法，不会执行。");
         p.sendMessage("公开聊天或 /mycli say <话> 会显示8秒头顶气泡，附近24格可见；私聊不显示。/mycli bubbles 查看状态。");
-        p.sendMessage("拍照：技能罗盘→女神相机，或 /mycli photo menu 选择视角；单图1张空地图，清晰海报4张。照片自动放入本人背包，无需截图上传。/mycli photo status 查进度，/mycli photo cancel 取消。");
+        p.sendMessage("拍照：技能罗盘→女神相机，或 /mycli photo menu 选择视角；开始拍摄耗2魔力，无需空地图。单图或四张海报成片自动进入个人奖励箱。/mycli photo status 查进度，/mycli photo cancel 取消。");
         p.sendMessage("物品显示：/mycli inventory 查服务器随身背包和快捷栏；/mycli inventory refresh 重新同步。54格大背包、任务物品袋和个人奖励箱各自独立。");
         p.sendMessage("挑战区别：/mycli arena 是按层挑战的试炼塔；/mycli dungeon 是逐室探索的遗迹地下城。系统操作回执只发本人及对应观战者，世界公告标明当事人。");
         p.sendMessage("/mycli coach next|guide|lessons|enroll|cancel|menu|status|later|on|off  lessons只读；enroll报名，cancel停止特色实练，已有证明保留。");
@@ -2420,6 +2433,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(17, item(Material.SUNFLOWER, "§a⑦ 生活公会", "钓鱼、种田、烹饪、建筑、写书与红石机关", "每日小委托；不必打怪也能成长"));
             inv.setItem(18, item(Material.NAME_TAG, "§b新手入门与下一步", "本人进度：登记、实习、真实施法与委托", "点击打开入门页；不会自动学习或接单"));
             inv.setItem(19, item(Material.OAK_SAPLING, "§a⑧ 村庄新生活", "新手实操、村民对话、世界活动与照片展示", "原版菜单；Agent 可用 /mycli world list"));
+            inv.setItem(20, item(Material.BOOKSHELF,"§6公共档案馆","阅读大家的日记、公告与旅行记录","写书、恢复副本：/mycli archive --help"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能罗盘", "回到技能罗盘"));
         } else if (page.equals("combat")) {
             inv.setItem(11, item(Material.AMETHYST_SHARD, "§d星芒箭·自动锁敌", "优先准星 18 格；否则锁定 12 格内最近怪物", "瞬发；伤害 5；4 魔力；3 秒冷却"));
@@ -2674,6 +2688,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 17 -> openMenu(p, "life");
                     case 18 -> agentCoach.menu(p);
                     case 19 -> worldLife.command(p, new String[]{"world", "menu"});
+                    case 20 -> archives.command(p,new String[]{"archive","menu"});
                     case 22 -> openMenu(p, "skills");
                     default -> { }
                 }

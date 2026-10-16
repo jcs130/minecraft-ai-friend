@@ -891,6 +891,7 @@ final class GuildManager implements Listener {
         if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().abandoned(player);
         plugin.getConfig().set(base(player.getUniqueId()) + ".active", null);
         plugin.saveConfig();
+        plugin.archives().syncSources();
         player.sendMessage(ChatColor.YELLOW + "已放弃「" + quest.title() + "」，本次进度清零；可重新接单。");
         plugin.getLogger().info("Guild abandoned: player=" + player.getUniqueId() + ", contract=" + quest.id());
     }
@@ -984,6 +985,7 @@ final class GuildManager implements Listener {
         if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().completed(player);
         plugin.getConfig().set(path + ".active", null);
         plugin.saveConfig();
+        plugin.archives().syncSources();
         plugin.recordWorldLesson(player, "commission");
         if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().afterComplete(player, quest.id());
         player.sendMessage(ChatColor.GREEN + "委托交付成功！声望 +" + gain

@@ -9,7 +9,15 @@ public final class AgentCliContractTest {
     private static ChallengeCli.Request parse(String line){return ChallengeCli.parse(("challenge "+line).trim().split(" +"));}
     private static void invalid(String line){try{parse(line);throw new AssertionError("accepted: "+line);}catch(IllegalArgumentException expected){checks++;}}
     private static JsonObject help(String line){return AgentCliCatalog.helpData(line.split(" +"),List.of());}
-    public static void main(String[] args){
+    private static Map<String,Object> archive(String line)throws Exception{
+        var method=PublicArchives.class.getDeclaredMethod("parse",String[].class);method.setAccessible(true);
+        Object value;
+        try{value=method.invoke(null,(Object)("archive "+line).trim().split(" +"));}
+        catch(java.lang.reflect.InvocationTargetException e){if(e.getCause() instanceof IllegalArgumentException invalid)throw invalid;throw e;}
+        Map<String,Object> result=new HashMap<>();for(var component:value.getClass().getRecordComponents()){var read=component.getAccessor();read.setAccessible(true);result.put(component.getName(),read.invoke(value));}return result;
+    }
+    private static void invalidArchive(String line)throws Exception{try{archive(line);throw new AssertionError("accepted archive args: "+line);}catch(IllegalArgumentException expected){checks++;}}
+    public static void main(String[] args)throws Exception{
         check("default is an inexpensive read",parse("").action().equals("status")&&parse("").readOnly());
         for(String line:List.of("create backpack_roundtrip","start","join 00000000-0000-0000-0000-000000000001 maker","cancel","menu")){
             var plain=parse(line);var json=parse("--json "+line);
@@ -44,6 +52,19 @@ public final class AgentCliContractTest {
         check("detail flag can coexist with help",help("challenge status --verbose --help").has("usage"));
         check("ordinary status help is not legacy full mode",help("status --help").get("actionReadOnly").getAsBoolean());
         check("legacy JSON limitation is discoverable",!help("guild claim --help").get("jsonSupported").getAsBoolean());
+        for(String action:List.of("status","list","info","read","create","restore","notice","menu"))
+            check("archive JSON discovery: "+action,help("archive "+action+" --help --json").get("jsonSupported").getAsBoolean());
+        check("archive status is a pure query",help("archive status --help").get("actionReadOnly").getAsBoolean());
+        check("archive create has explicit consumption",help("archive create --help").get("consumption").getAsString().contains("书与笔")&&!help("archive create --help").get("actionReadOnly").getAsBoolean());
+        check("archive progressive help remains bounded",help("archive --help").getAsJsonArray("commands").size()<=7&&help("archive --help").get("pages").getAsInt()==2);
+        check("exam material discovery has no obsolete photo blank-map requirement",!help("guild exam supplies info photo --help").toString().contains("摄影空图")&&help("guild exam supplies info photo --help").toString().contains("无需空地图"));
+        check("archive format is independent of action",archive("create 书|正文 --json").get("action").equals("create")&&archive("create 书|正文 --json").get("json").equals(true));
+        check("archive pagination is parsed",archive("list book --page 2").get("page").equals(2));
+        check("archive explicit edition is parsed",archive("info 00000000-0000-0000-0000-000000000001 --version 2").get("version").equals(2));
+        check("literal diary preserves CLI examples",archive("create --json --request-id stable -- 书|请用 --help 或 --json").get("arguments").toString().contains("--help")&&archive("create --json --request-id stable -- 书|请用 --help 或 --json").get("arguments").toString().contains("--json"));
+        for(String line:List.of("list --page 0","list --page","list --page 2 --page 3","list --bogus","create 书|文 --page 2","create 书|文 --version 1","status --request-id stable","info a --version -1"))invalidArchive(line);
+        String unicode="字".repeat(599)+"📖"+"故事".repeat(500);var unicodePages=PublicArchives.splitText(unicode,600);
+        check("diary page boundaries retain emoji and complete text",String.join("",unicodePages).equals(unicode)&&unicodePages.stream().allMatch(p->p.length()<=600&&!Character.isHighSurrogate(p.charAt(p.length()-1))));
         System.out.println("PASS "+checks+" CLI contract checks");
     }
 }

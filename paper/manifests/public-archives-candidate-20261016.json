@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-16",
+  "status": "verified_candidate_not_deployed",
+  "target": "existing Paper Qiandengji",
+  "core": "Paper 1.21.1 build 133",
+  "agentFriend": "0.4.48",
+  "sha256": "3fa64c0c7c314a9c491523e6aeb11f647ff4c7f8f8cf60c4f2d40810f8b1be90",
+  "productionVersion": "0.4.47",
+  "changes": [
+    "public signed diary books and notices using existing vanilla items and private CLI replies",
+    "SQLite originals, editions, request deduplication and crash-safe print reservations",
+    "original ImageFrame PNG/tile bytes and saved guild history with source privacy retained",
+    "restore physical book copies without duplicating original quest or exam rewards",
+    "configurable native lectern directory and public book barrels in existing wayfarer hall"
+  ],
+  "checks": {
+    "archiveStoreRulesAndAbruptExitRecovery": 25,
+    "cliContract": 80,
+    "nativeJavaAndMineflayer": 23,
+    "inventoryRaceReconnectAndNativeSigning": 7,
+    "pairedEyeAndBedrock2193Protocol": 7,
+    "normalColdReadbackAndPublicDeskAccess": 11,
+    "hallPreimagesGeometryAndPermissions": 26,
+    "total": 179
+  },
+  "limitations": [
+    "No production archive database, books, hall furnishing or configuration has been installed.",
+    "Phone and Xbox pixels, touch/gamepad operation, and 16 autonomous Agent workload are untested.",
+    "Committed text is durable; an interrupted physical print may remain unconfirmed and must not be replayed automatically.",
+    "Source photographs without scene metadata remain explicitly incomplete; no location or exam proof is fabricated.",
+    "Game history means saved guild ending records, not all actions, private chat, voice or video.",
+    "Cold persistence and corrected public lectern access are both verified; the final five public container exceptions were applied with the existing land reload after the cold start.",
+    "Host blue screens are being diagnosed separately; candidate tests do not establish host stability."
+  ],
+  "deployment": {
+    "requiresPaperRestart": true,
+    "approval": "fresh approval required before production restart",
+    "noticeSeconds": [180, 60, 10],
+    "guard": "original maintenance task, human/activity checks and full fresh E/F cold backups before installation",
+    "queued": false,
+    "install": [
+      "plugins/AgentFriend-0.4.48.jar",
+      "plugins/AgentFriend/public-archives.yml"
+    ],
+    "worldStep": "After actual 0.4.48 readiness: guarded native block placement with E/F preimages; two barrels and three lecterns each receive a public-use exception.",
+    "forbidden": "Never copy isolated worlds, player inventories, archive database or test ledger into production."
+  },
+  "rollback": "Restore the previous JAR and config through the normal maintenance procedure; retain the archive database and original bytes. Reverse furnishing only against recorded preimages/current-value checks, never by rolling back whole player or world files."
+}

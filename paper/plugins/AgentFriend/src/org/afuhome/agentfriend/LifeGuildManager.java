@@ -413,6 +413,9 @@ final class LifeGuildManager implements Listener {
         String body = String.join("", meta.getPages()).replaceAll("\\s+", "");
         return body.codePointCount(0, body.length()) >= 40;
     }
+    void written(Player player,String body){
+        if(body.replaceAll("\\s+","").codePointCount(0,body.replaceAll("\\s+","").length())>=40)advance(player,"author_story",null);
+    }
 
     /** Mineflayer fallback: creates the same real, signed vanilla book as the client editor. */
     private void write(Player player, String[] args) {
@@ -427,20 +430,7 @@ final class LifeGuildManager implements Listener {
                 || body.replaceAll("\\s+", "").codePointCount(0, body.replaceAll("\\s+", "").length()) < 40) {
             player.sendMessage(ChatColor.RED + "书名需 1–32 字，正文需 40–256 字。"); return;
         }
-        if (player.getGameMode() == GameMode.SPECTATOR || player.getInventory().firstEmpty() < 0
-                || !player.getInventory().containsAtLeast(new ItemStack(Material.WRITABLE_BOOK), 1)) {
-            player.sendMessage(ChatColor.RED + "请准备一本书与笔，并空出一个背包格；旁观者不能写书。"); return;
-        }
-        ItemStack book = new ItemStack(Material.WRITTEN_BOOK);
-        BookMeta meta = (BookMeta) book.getItemMeta();
-        meta.setTitle(title);
-        meta.setAuthor(player.getName());
-        meta.setPages(body);
-        book.setItemMeta(meta);
-        player.getInventory().removeItem(new ItemStack(Material.WRITABLE_BOOK));
-        player.getInventory().addItem(book);
-        player.sendMessage(ChatColor.GREEN + "已写成游记《" + title + "》，留在你的背包里。");
-        if (validBook(meta)) advance(player, "author_story", null);
+        plugin.archives().legacyWrite(player,title,body);
     }
 
     void fillMenu(Player player, Inventory inventory) {

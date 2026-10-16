@@ -23,13 +23,22 @@ final class AgentCliCatalog {
 
     private static void add(Map<String, Spec> specs, String id, String category, String mode,
                             String usage, String summary, String requires, String returns) {
-        if((id.startsWith("challenge.")||id.startsWith("tasks"))&&!usage.contains("--json"))usage+=" [--json]";
+        if((id.startsWith("challenge.")||id.startsWith("tasks")||id.startsWith("archive"))&&!usage.contains("--json"))usage+=" [--json]";
         if (specs.putIfAbsent(id, new Spec(id, category, mode, usage, summary, requires, returns)) != null)
             throw new IllegalStateException("Duplicate /mycli catalog id: " + id);
     }
 
     private static Map<String, Spec> createSpecs() {
         Map<String, Spec> specs = new LinkedHashMap<>();
+        add(specs,"archive","life","read","/mycli archive <动作>","公开日记、公告、照片和真实公会履历；按需查目录","已登录本人；查询不写书、不消耗资源；现有奖励委托仍用commission","私有MC_ARCHIVE；实体书可放箱子/讲台公开阅读");
+        add(specs,"archive.status","life","read","/mycli archive status","查档案库是否就绪和下一步","免费只读；不产生写作或摄影证明","MC_ARCHIVE ready/state/nextCommand");
+        add(specs,"archive.list","life","read","/mycli archive list [book|photo|notice|event] [--page 页码]","分页查公开作品及本人未公开照片","免费只读；每页最多7项，不输出正文","MC_ARCHIVE items/page/hasNext；info/read看选中作品");
+        add(specs,"archive.info","life","read","/mycli archive info <作品UUID> [--version 版本]","查作者、标题、版本与保存状态","免费只读；旧私有照片只对作者开放","MC_ARCHIVE entry；read用原版分页书阅读正文");
+        add(specs,"archive.read","life","gui","/mycli archive read <作品UUID> [--version 版本]","打开原版书籍阅读公开正文，不生成物品","免费；Java、基岩和Mineflayer用原版书组件；只改变当前界面","MC_ARCHIVE与原版open_book；不发任务证明");
+        add(specs,"archive.create","life","write","/mycli archive create <书名>|<正文> [--request-id 标识]","写公开日记并持久归档，生成真实签名书","耗1本本人空白书与笔；书名1–32字；正文1–10000字；旁观者只读；原版编辑器也可签名归档","先落盘后扣物；MC_ARCHIVE durable/printed/id/requestId；重试用同标识，不重复打印");
+        add(specs,"archive.notice","life","write","/mycli archive notice <标题>|<正文> [--request-id 标识]","在公共档案目录发布署名公告并写成书","耗1本空白书与笔；公开正文是作者内容；有奖励的委托仍用commission托管","MC_ARCHIVE与真实书；不会向公屏广播正文或机器回执");
+        add(specs,"archive.restore","life","write","/mycli archive restore <作品UUID> [--version 版本] [--request-id 标识]","从数据库恢复遗失书籍的普通副本","耗1本本人空白书与笔；只支持book/notice；保留原作者/版本，不增加写作/照片/任务奖励","MC_ARCHIVE copyId/printed；结果未知先查背包与info，不能盲目重放");
+        add(specs,"archive.menu","life","gui","/mycli archive menu [book|photo|notice|event] [--page 页码]","打开公共档案目录，点击作品阅读","免费；浏览不打印、不报名；照片实物仍在原个人奖励箱","原版箱式菜单与MC_ARCHIVE");
         add(specs,"tasks","adventure","read","/mycli tasks <list|info|status|menu>","自选战斗、制造、探索、后勤、工程或生活委托；没有种田必修","已登录玩家；查看不报名、不选职业、不换任务；查询免费","私有MC_TASKS；接单和交付沿用guild accept/claim，任务进度查tasks status");
         add(specs,"tasks.list","adventure","read","/mycli tasks list [combat|crafting|exploration|supply|engineering|life|all] [--page 页码]","裸list列六条路线；指定路线分页查任务，入门任务优先","免费只读；每页最多7张；beginner只推荐，不限制选其他任务","MC_TASKS type=routes/list；items/page/pages/total/nextCommand");
         add(specs,"tasks.info","adventure","read","/mycli tasks info <任务ID>","查指定委托阶段、怪物/武器条件、奖励与本人可接状态","ID从tasks list取得；在途使用接单快照；超长详情按nextCommand无损续读","MC_TASKS type=info或MC_PAGE完整分片；acceptCommand接单、submitCommand交阶段、statusCommand复查");
@@ -259,9 +268,9 @@ final class AgentCliCatalog {
         add(specs,"guild.exam.start","adventure","write","/mycli guild exam start <ID>","主动开始一项能力考试；start promotion <ID>参加下一阶晋级","一人一场；学习准备施法由本人操作；只收技能本身魔力","MC_GUILD_EXAM；市场SKILL_ASSESSMENT使用guild claim交付");
         add(specs,"guild.exam.status","adventure","read","/mycli guild exam status [--json]","查本人考试、匹配且可接的委托与准确下一步；区分考证和晋级","只接收本人或实际附身对象；推荐不自动接单","MC_GUILD_EXAM；contractOptions含真实拒绝原因和nextCommand");
         add(specs,"guild.exam.guide","adventure","gui","/mycli guild exam guide [--json]","考试分步指引：准备、接单、实地调查、拍照、返程和交付","普通玩家打开原版菜单；Agent或--json读取步骤，不接单不发奖","MC_GUILD_EXAM；guide.steps/currentContract/supplies，实际冻结要求");
-        add(specs,"guild.exam.supplies.list","adventure","read","/mycli guild exam supplies list [--json]","列出本题提供的空地图和可选遗迹探险图","只读；首次摄影备料与每目的地地图一次，重复开考不重复发","MC_GUILD_EXAM type=supplies；本人材料清单");
+        add(specs,"guild.exam.supplies.list","adventure","read","/mycli guild exam supplies list [--json]","查摄影直接成片规则和可选遗迹探险图","只读；摄影无需空地图；遗迹图每人每目的地一次","MC_GUILD_EXAM type=supplies；本人材料清单");
         add(specs,"guild.exam.supplies.status","adventure","read","/mycli guild exam supplies status [--json]","查询材料发放和目标核验状态","只读不生成地图、不加载目的地区块","MC_GUILD_EXAM；allocation给出个人箱页码/全局槽位/待入箱状态");
-        add(specs,"guild.exam.supplies.info","adventure","read","/mycli guild exam supplies info <photo|map> [--json]","查看材料用途与领取条件","photo是摄影空图；map是带真实天然遗迹目标的filled_map","MC_GUILD_EXAM；缺项、领取命令及箱子入口");
+        add(specs,"guild.exam.supplies.info","adventure","read","/mycli guild exam supplies info <photo|map> [--json]","查看材料用途与领取条件","photo说明无需空地图、成片自动入个人奖励箱；map是带真实天然遗迹目标的filled_map","MC_GUILD_EXAM；缺项、领取命令及箱子入口");
         add(specs,"guild.exam.supplies.claim","adventure","write","/mycli guild exam supplies claim <photo|map> [--json]","领取考试材料到本人个人箱","在办生存考试；免费；map异步核验已勘察天然结构，绝不新生成地形；箱满入原待领队列","MC_GUILD_EXAM；pending不等于已发，最终allocated及saved=true后再取物");
         add(specs,"guild.exam.supplies.take","adventure","write","/mycli guild exam supplies take <photo|map|all> [--json]","免费将已发考试材料取到本人主背包","仅转移原发放记录中的完整物品；不授予其他个人箱访问、不要求传送术；背包满则保留原处","MC_GUILD_EXAM；taken_into_inventory与saved=true表示实物已取，重复调用不重发");
         add(specs,"guild.exam.submit","adventure","write","/mycli guild exam submit","复核并交付本场实操，授予证书或下一阶","实际条件齐全；固定场次结算去重；失败不降级","MC_GUILD_EXAM；不额外赠声望、技能点或物品");
@@ -396,7 +405,7 @@ final class AgentCliCatalog {
         return out;
     }
     private static int idEmptyPriority(String prefix,String id,List<String> order){return prefix.isEmpty()&&order.contains(id)?order.indexOf(id):order.size();}
-    private static boolean jsonSupported(String id){return id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -478,7 +487,7 @@ final class AgentCliCatalog {
     }
 
     private static JsonObject semantics(Spec spec) {
-        String id=spec.id();boolean mixed=(spec.root()&&Set.of("tasks","challenge","world","photo","profession","skills","spells","coach","arena","guild","life","land","landmark","waypoint","locate","commission","goddess","focus","imprint","trade","village","pvp","skillbook").contains(id))
+        String id=spec.id();boolean mixed=(spec.root()&&Set.of("archive","tasks","challenge","world","photo","profession","skills","spells","coach","arena","guild","life","land","landmark","waypoint","locate","commission","goddess","focus","imprint","trade","village","pvp","skillbook").contains(id))
                 ||Set.of("world.guide","world.practice","guild.exam","guild.exam.supplies","guild.stash","guild.rewards","arena.rewards","arena.shop","arena.recycle").contains(id);
         boolean evidence=Set.of("help","list","explain","status.full","skills.list","spells.list","skills.explain","spells.explain").contains(id);
         boolean legacyRefresh=Set.of("guild.board","guild.status","life.status","guild.exam.list","guild.exam.status","skills.mine","skills.info","skills.points","profession.status").contains(id);
@@ -500,6 +509,7 @@ final class AgentCliCatalog {
         String query=id.startsWith("skills.")||id.startsWith("cast.")||id.startsWith("profession")?"/mycli status；/mycli skills info <ID>；/mycli skills points":id.startsWith("photo")?"/mycli photo status":id.startsWith("inventory")?"/mycli inventory；重新打开对应容器核对":id.startsWith("arena.stash")||id.startsWith("guild.stash")||id.endsWith(".rewards")?"/mycli arena stash list；/mycli arena rewards list；关闭重开容器核对":id.startsWith("arena.recycle")||id.startsWith("arena.shop")||id.equals("arena.wallet")?"/mycli arena wallet；/mycli arena stash list；/mycli inventory":id.startsWith("arena")?"/mycli arena status；/mycli arena loot":id.startsWith("dungeon")?"/mycli dungeon status <ID>":id.startsWith("landmark")?"/mycli landmark info <领地ID>":id.startsWith("land.")||id.startsWith("admin.land")?"/mycli land info <ID>；/mycli land members <ID>":id.startsWith("waypoint")||id.equals("goto")?"/mycli waypoint list；本人最终 MC_TRAVEL/MC_WAYPOINT_RESULT":id.startsWith("trade")?"/mycli trade info <商人ID>":id.startsWith("commission")?"/mycli commission mine":id.startsWith("pvp")?"/mycli pvp status":id.startsWith("village")?"/mycli village threat":"/mycli progress";
         if(id.startsWith("challenge"))query="/mycli challenge status；/mycli challenge result [场次UUID]";
         if(id.startsWith("protect"))query="原命令重新查询当前权限；详情在原命令后加 --verbose；查询不代表操作完成";
+        if(id.startsWith("archive"))query="/mycli archive info <作品UUID>；/mycli archive list；物品操作核对本人背包，结果未知不重放";
         if(id.startsWith("tasks"))query="/mycli tasks status；/mycli progress guild 1";
         out.addProperty("resultQuery",query);out.addProperty("completionPolicy","命令发出或pending不等于完成；以本人最终回执和实际状态为准。超时/断线结果未知，先查询，不自动重放。");
         return out;

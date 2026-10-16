@@ -22,7 +22,7 @@ $classpath = @(
     Join-Path $ServerRoot 'plugins\EssentialsX-2.22.0.jar'
     Join-Path $ServerRoot 'plugins\ProtocolLib-5.3.0.jar'
 ) -join ';'
-$build = Join-Path $root "build-0.4.47-mc-$MinecraftVersion"
+$build = Join-Path $root "build-0.4.48-mc-$MinecraftVersion"
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 # The isolated server path plus both library generations can exceed Windows'
 # command-line limit. A UTF-8 argument file also handles paths containing spaces.
@@ -67,7 +67,26 @@ Copy-Item -LiteralPath (Join-Path $root 'resources\skill-visuals.yml') -Destinat
 Copy-Item -LiteralPath (Join-Path $root 'resources\structure-protection.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\text-bubbles.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\photo-camera.yml') -Destination $build -Force
-$out = Join-Path $root 'AgentFriend-0.4.47.jar'
+Copy-Item -LiteralPath (Join-Path $root 'resources\public-archives.yml') -Destination $build -Force
+# Pin the already installed official SQLite driver; the archive must also boot
+# offline, so do not ask Paper's library loader to download a new dependency.
+# Preserve its own namespace, native binaries, service entry and bundled notices.
+$archiveDriver = Join-Path $ServerRoot 'libraries\org\xerial\sqlite-jdbc\3.46.0.0\sqlite-jdbc-3.46.0.0.jar'
+if (-not (Test-Path -LiteralPath $archiveDriver) -or (Get-FileHash -LiteralPath $archiveDriver -Algorithm SHA256).Hash -ne 'E697DF15BE3F95219D80773C5F1002030E33E932ADDA186C1C86FD51DF6691A9') { throw 'Prepare the pinned official SQLite 3.46.0.0 JAR; do not substitute an unverified driver.' }
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archiveZip = [IO.Compression.ZipFile]::OpenRead($archiveDriver)
+try {
+    foreach ($archiveEntry in $archiveZip.Entries) {
+        if ($archiveEntry.FullName.EndsWith('/')) { continue }
+        if ($archiveEntry.FullName -notmatch '^(org/sqlite/|META-INF/services/java.sql.Driver$|META-INF/maven/org.xerial/sqlite-jdbc/|META-INF/(LICENSE|NOTICE))') { continue }
+        $archiveTarget = [IO.Path]::GetFullPath((Join-Path $build $archiveEntry.FullName))
+        $archiveBoundary = [IO.Path]::GetFullPath($build).TrimEnd('\') + '\'
+        if (-not $archiveTarget.StartsWith($archiveBoundary,[StringComparison]::OrdinalIgnoreCase)) { throw 'Driver entry escaped build directory' }
+        New-Item -ItemType Directory -Path (Split-Path -Parent $archiveTarget) -Force | Out-Null
+        [IO.Compression.ZipFileExtensions]::ExtractToFile($archiveEntry,$archiveTarget,$true)
+    }
+} finally { $archiveZip.Dispose() }
+$out = Join-Path $root 'AgentFriend-0.4.48.jar'
 & $jar --create --file $out -C $build .
 if ($LASTEXITCODE -ne 0) { throw 'jar failed' }
 Get-FileHash -LiteralPath $out -Algorithm SHA256 | Select-Object Path,Hash

@@ -77,6 +77,7 @@ final class PhotoJournal implements Listener {
         row.addProperty("qualified",review.qualified());row.addProperty("honour",review.honour());row.addProperty("reason",review.reason());row.addProperty("review",review.advice());row.addProperty("published",false);
         if(context!=null)row.add("context",context.deepCopy());if(scene!=null)row.add("scene",scene.deepCopy());if(image!=null)row.add("image",image.deepCopy());
         if(!ledger.write(data->rows(data,p.getUniqueId()).add(id.toString(),row))) {say(p,"照片已存入个人奖励箱，但纪念册保存失败，考试尚未计入；请联系管理员核对，勿重复领取。");return;}
+        plugin.archives().syncSources();
         say(p,review.advice()+" /mycli photo info "+name+" 查看作品。");
         if(context!=null)say(p,"探索照片进度：/mycli guild exam status；原来的走查和返程条件仍需完成。");
         else if(!plugin.skillAssessments().photoExam(p).isEmpty())say(p,"这张照片没有匹配当前考试的探索目的地，不计入考试。用 /mycli guild status 查当前阶段，先到该阶段的目标实地再拍。");
@@ -119,6 +120,7 @@ final class PhotoJournal implements Listener {
             }
             String id=row.get("id").getAsString();
             if(!ledger.write(data->rows(data,p.getUniqueId()).add(id,next)))throw new IllegalArgumentException("保存失败，原作品保持；请联系管理员检查存储。");
+            plugin.archives().syncSources();
             reconcile();say(p,action.equals("exhibit")?"作品已收入艺术厅目录；有合适的空展位时自动挂墙，photo info 可查展位。署名、地点和故事已公开。":action.equals("withdraw")?"作品已撤展，个人纪念册和原地图保留。":"作品说明已保存。");
             show(p,next);
         } catch(IllegalArgumentException e){say(p,e.getMessage());}
