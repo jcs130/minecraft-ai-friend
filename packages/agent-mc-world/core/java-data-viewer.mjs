@@ -1,17 +1,19 @@
-// host/java-data-viewer.mjs
+// Generated from mc-visual-console by tools/build-java-data-host.mjs. Edit the shared source.
+
+// packages/modern-viewer/renderer-src/host/java-data-viewer.mjs
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path2 from "node:path";
 import { createHash } from "node:crypto";
 import { Server as SocketServer } from "socket.io";
 
-// host/java-visual-data.mjs
+// packages/modern-viewer/renderer-src/host/java-visual-data.mjs
 import { createRequire } from "node:module";
 
-// host/viewer-version.mjs
+// packages/modern-viewer/renderer-src/host/viewer-version.mjs
 var PRIMARY_VIEWER_VERSION = "1.21.1";
 
-// host/java-visual-data.mjs
+// packages/modern-viewer/renderer-src/host/java-visual-data.mjs
 var require2 = createRequire(import.meta.url);
 var canonical = (props) => JSON.stringify(Object.entries(props).map(([k, v]) => [k, String(v)]).sort(([a], [b]) => a.localeCompare(b)));
 var identifier = /^minecraft:[a-z0-9_./-]+$/;
@@ -231,7 +233,7 @@ var JavaVisualData = class {
   }
 };
 
-// host/viewer-asset-server.mjs
+// packages/modern-viewer/renderer-src/host/viewer-asset-server.mjs
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
@@ -299,7 +301,7 @@ async function serveViewerAsset(res, root, relative, cacheControl = "public, max
   return true;
 }
 
-// host/java-data-viewer.mjs
+// packages/modern-viewer/renderer-src/host/java-data-viewer.mjs
 async function createJavaDataViewer({ port, assetsDir, rpc, uuid, server: expectedServer, radius = 2, minecraftVersion = PRIMARY_VIEWER_VERSION }) {
   if (!Number.isInteger(port) || port < 0 || port > 65535 || !Number.isInteger(radius) || radius < 0 || radius > 4) throw Error("JAVA_VIEWER_CONFIG_INVALID");
   const root = path2.resolve(assetsDir), source = JSON.parse(await readFile(path2.join(root, "public/asset-source.json"), "utf8"));
