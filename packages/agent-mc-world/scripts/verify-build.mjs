@@ -2,16 +2,20 @@ import { readFile, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 const root = new URL('../', import.meta.url);
+const packed = process.argv.includes('--packed');
 const manifest = JSON.parse(await readFile(new URL('dist/build.json', root), 'utf8'));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
-for (const entry of [...manifest.sourceFiles, ...manifest.files]) {
+// Source builds verify every input and both generated copies. Installed npm
+// consumers verify the complete shipped runtime, not an omitted build archive.
+const shipped = manifest.files.filter(entry => /^dist\/(?:runtime\/|monitor\/)/.test(entry.file));
+for (const entry of packed ? shipped : [...manifest.sourceFiles, ...manifest.files]) {
   if (entry.file.includes('..') || entry.file.startsWith('/')) throw new Error('Invalid build path');
   if (hash(await readFile(new URL(entry.file, root))) !== entry.sha256) throw new Error('Build differs from source: ' + entry.file);
 }
 const sources=JSON.parse(await readFile(new URL('release-sources.json',root),'utf8'));
-if (manifest.viewer.included !== false) {
+if (!packed && manifest.viewer.included !== false) {
   if(hash(await readFile(new URL(sources.viewer.artifact,root)))!==sources.viewer.sha256)throw new Error('Viewer input hash mismatch');
-} else if (manifest.files.some(entry => /^dist\/(?:runtime\/dist\/)?(?:viewer|client-console|monitor)\//.test(entry.file))) {
+} else if (manifest.viewer.included === false && manifest.files.some(entry => /^dist\/(?:runtime\/dist\/)?(?:viewer|client-console|monitor)\//.test(entry.file))) {
   throw new Error('Viewer assets leaked into an engine-only build');
 }
 const pkg = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
@@ -36,4 +40,4 @@ for (const entry of declarations.files) {
 const sdk = await import(new URL(pkg.exports['.'].default, root));
 if (typeof sdk.MinecraftAgentClient !== 'function' || sdk.PROTOCOL !== 'agent-mc/v1' || 'MC' in sdk)
   throw new Error('The default export must be the neutral SDK');
-console.log('Source, runtime, public declarations and default entry verified.');
+console.log(packed ? 'Complete packed runtime, public declarations and default entry verified.' : 'Source, runtime, public declarations and default entry verified.');
