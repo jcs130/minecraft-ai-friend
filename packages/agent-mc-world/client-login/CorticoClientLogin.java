@@ -23,7 +23,7 @@ import net.minecraft.class_639;
 public final class CorticoClientLogin implements ClientModInitializer {
     private record Account(String server, String username, String credentialFile, String command,
                            List<String> requestMarkers, List<String> successMarkers, List<String> failureMarkers,
-                           boolean reconnect) {}
+                           boolean reconnect, List<String> reauthMarkers) {}
     private record Config(boolean enabled, List<Account> accounts) {}
     private LoginSession session;
     private Account account;
@@ -59,7 +59,8 @@ public final class CorticoClientLogin implements ClientModInitializer {
                     account = entry;
                 }
                 if (account != null) {
-                    session = new LoginSession(account.requestMarkers, account.successMarkers, account.failureMarkers);
+                    session = new LoginSession(account.requestMarkers, account.successMarkers, account.failureMarkers,
+                        account.reauthMarkers == null ? List.of() : account.reauthMarkers);
                     reconnectServer = account.reconnect ? server : null;
                     if (account.reconnect) reconnect.arm(); else reconnect.block();
                     System.out.println("[CorticoClientLogin] Armed for " + account.username + " at " + account.server);
@@ -80,7 +81,7 @@ public final class CorticoClientLogin implements ClientModInitializer {
             client = null;
         });
         ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
-            if (session == null || account == null || client == null) return true;
+            if (overlay || session == null || account == null || client == null) return true;
             LoginSession.Result result = session.observe(message.getString());
             if (result == LoginSession.Result.CONFIRMED)
                 System.out.println("[CorticoClientLogin] Server confirmed login for " + account.username);

@@ -48,6 +48,27 @@ public final class LoginSessionCheck {
         check(scope.join(transport), "reconnect can arm a new login attempt");
         check(scope.join(other), "new transport starts a separate authentication session");
         check(!scope.disconnect(transport), "late old disconnect cannot disarm new connection");
-        System.out.println("LoginSessionCheck: 28 authentication checks passed");
+        LoginSession renewable = new LoginSession(List.of("AUTH_LOGIN"), List.of("AUTH_SUCCESS"),
+            List.of("AUTH_FAILED", "AUTH_2FA"), List.of("AUTH_EXPIRED"));
+        check(renewable.observe("AUTH_EXPIRED", 0) == Result.IGNORE, "renewal requires previous confirmed login");
+        check(renewable.observe("AUTH_LOGIN", 1) == Result.SUBMIT, "initial login remains scoped");
+        check(renewable.observe("AUTH_SUCCESS", 2) == Result.CONFIRMED, "initial authentication confirmed");
+        check(renewable.observe("<player> [AUTH_EXPIRED]", 3) == Result.IGNORE, "quoted expiry ignored");
+        check(renewable.observe("AUTH_LOGIN", 4) == Result.IGNORE, "ordinary prompt cannot reset confirmed state");
+        check(renewable.observe("§e[AUTH_EXPIRED] login required", 5) == Result.SUBMIT, "explicit expiry renews once");
+        check(renewable.observe("AUTH_EXPIRED", 6) == Result.IGNORE, "repeated expiry cannot resubmit while pending");
+        check(renewable.observe("AUTH_LOGIN", 7) == Result.IGNORE, "pending renewal cannot resubmit password");
+        check(renewable.observe("AUTH_SUCCESS", 8) == Result.CONFIRMED, "renewal must be confirmed");
+        check(renewable.observe("AUTH_EXPIRED", 30_005) == Result.SUBMIT, "later independent expiry can renew");
+        check(renewable.observe("AUTH_SUCCESS", 30_006) == Result.CONFIRMED, "second renewal confirmed");
+        check(renewable.observe("AUTH_EXPIRED", 30_007) == Result.BLOCKED, "rapid confirmed-expiry loop stops");
+        check(renewable.observe("AUTH_EXPIRED", 90_000) == Result.IGNORE, "blocked renewal does not retry later");
+        LoginSession failedRenewal = new LoginSession(List.of("AUTH_LOGIN"), List.of("AUTH_SUCCESS"),
+            List.of("AUTH_FAILED"), List.of("AUTH_EXPIRED"));
+        check(failedRenewal.observe("AUTH_SUCCESS", 0) == Result.CONFIRMED, "existing authenticated connection can arm renewal");
+        check(failedRenewal.observe("AUTH_EXPIRED", 1) == Result.SUBMIT, "confirmed connection renewal submitted");
+        check(failedRenewal.observe("AUTH_FAILED", 2) == Result.BLOCKED, "renewal password failure stops");
+        check(failedRenewal.observe("AUTH_LOGIN", 3) == Result.IGNORE, "failed renewal never resubmits");
+        System.out.println("LoginSessionCheck: 45 authentication checks passed");
     }
 }

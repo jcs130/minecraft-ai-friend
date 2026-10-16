@@ -37,6 +37,8 @@ POST `/v1/rpc`, `Authorization: Bearer <local token>`:
 
 Actual operations: bounded movement and held-item use, yaw/pitch, chat/commands, hotbar, inventory open, token-checked menu clicks/close and displayed native buttons. Snapshots include server UUID/address, real position/vitals, complete ItemStack encoding/components, cursor, menu slots/revision/token and raw game notices. Screenshots come from the rendered framebuffer, including current textures, animation and GUI.
 
+When the actual vanilla disconnected screen is open, `state.disconnectReason` exposes its narrated title/reason, bounded to2048 characters. This remains a read-only observation even without a world; it does not relax identity checks for screenshots or body input, inspect arbitrary GUI text fields, or infer that a reachable socket is a successful game login.
+
 Actions persist under `agent-mc-bridge/actions/` by hashed ID. Input text is transient rather than stored in this native ledger. Accepted/running records recovered after a client crash become unknown and are not replayed. Retain both the native ledger and the SDK/host ledger across upgrades. Host tool arguments may be logged: keep password login in a private operator path, not model prompts or normal chat history.
 
 ## Background behavior and limits

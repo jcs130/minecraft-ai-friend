@@ -11,7 +11,7 @@ const executable = (name: string): string => javaHome
 let javaAvailable = false;
 try { execFileSync(executable('javac'), ['--version'], {stdio:'pipe'}); javaAvailable = true; } catch {}
 
-it.skipIf(!javaAvailable)('keeps authentication scoped and submits once until reconnect', () => {
+it.skipIf(!javaAvailable)('keeps authentication scoped and optionally renews after confirmed expiry without duplicate submissions', () => {
   const scratch = join(root, 'scratch', 'client-login-checks');
   mkdirSync(scratch, {recursive:true});
   const output = mkdtempSync(join(scratch, 'run-'));
@@ -21,7 +21,7 @@ it.skipIf(!javaAvailable)('keeps authentication scoped and submits once until re
     {stdio:'pipe', windowsHide:true});
   const result = execFileSync(executable('java'), ['-cp',output,'LoginSessionCheck'],
     {encoding:'utf8', windowsHide:true});
-  expect(result).toContain('28 authentication checks passed');
+  expect(result).toContain('45 authentication checks passed');
   const reconnect = execFileSync(executable('java'), ['-cp',output,'ReconnectSessionCheck'],
     {encoding:'utf8', windowsHide:true});
   expect(reconnect).toContain('15 checks passed');
