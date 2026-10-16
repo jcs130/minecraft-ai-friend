@@ -1,2 +1,3 @@
 recursive-include tests *.py *.mjs *.json
 include standalone.example.toml
+include docs/runtime-failure-recovery.md
