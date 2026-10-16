@@ -309,11 +309,11 @@ tasks:
     scope: personal
     repeat: once
     title: 藤蔓后的机关旧址
-    description: 在丛林寻找神庙，深入上下通道调查机关遗迹，辨清安全路线；不要求拆毁古迹。
+    description: 先用 tasks info 查看已核实的神庙线索，再到同一座自然丛林神庙的上下通道实地调查；这是一趟长途探索，不要求拆毁古迹或触发机关。
     icon: MOSSY_COBBLESTONE
     reward: {fame: 16, emeralds: 6, bonus: BREAD, bonus-count: 5}
     steps:
-      - {title: 藤蔓神庙内部调查, description: 探索同一座自然丛林神庙的不同位置与高度，留意绊线与箭矢机关。, goal: structure, dimension: overworld, structure: 'minecraft:jungle_pyramid', target: 6, min-distance: 32, min-seconds: 20, min-sections: 1, min-height-span: 5}
+      - {title: 藤蔓神庙内部调查, description: 进入同一座自然丛林神庙；沿上下通道步行探索6个不同的4格分区并取得5格高差。分区不是6座神庙或6个固定打卡点；留意绊线，不要求触发或拆除机关。tasks status 只显示当前缺项与下一步。, goal: structure, dimension: overworld, structure: 'minecraft:jungle_pyramid', target: 6, min-distance: 32, min-seconds: 20, min-sections: 1, min-height-span: 5}
   shipwreck_lost_log:
     scope: personal
     repeat: once

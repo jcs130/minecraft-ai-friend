@@ -72,11 +72,15 @@ final class TaskRoutes implements Listener {
                     emit(p, detail(p, task), machine);
                 }
                 case "status" -> {
-                    JsonObject out = base("status"); out.add("adventure", plugin.guild().progressState(p));
+                    JsonObject out = base("status"); JsonObject adventure = plugin.guild().progressState(p); out.add("adventure", adventure);
                     JsonObject life = plugin.lifeGuild().onboardingState(p); life.remove("availableId");
                     out.add("life", life);
                     out.addProperty("nextCommand", "/mycli progress guild 1");
                     out.addProperty("advice", "委托按当前任务槽分别查询；每阶段交付，全部阶段完成才发最终奖。路线可随兴趣选择，不必先种田。");
+                    if (adventure.has("market") && adventure.getAsJsonObject("market").has("guidance")) {
+                        out.addProperty("nextCommand", adventure.get("nextCommand").getAsString());
+                        out.addProperty("advice", adventure.get("advice").getAsString());
+                    }
                     emit(p, out, machine);
                 }
                 case "menu" -> {
@@ -140,6 +144,7 @@ final class TaskRoutes implements Listener {
         out.addProperty("statusCommand", "/mycli tasks status"); out.addProperty("detailsCommand", "/mycli guild market " + task.id());
         out.addProperty("advice", "查看不接单、不换职业、不消耗资源。领取公共补给请到门口箱体，按需取用；回补按本单指定物资交付，满仓不扣物、不完成。");
         JsonArray steps = new JsonArray(); int n = 0;
+        JsonObject current = market.progressState(p);
         for (var step : task.steps()) {
             JsonObject row = new JsonObject(); row.addProperty("stage", ++n); row.addProperty("title", step.title());
             row.addProperty("condition", TaskGuidance.step(step.goal(), step.description()));
@@ -148,7 +153,12 @@ final class TaskRoutes implements Listener {
             if (step.chest() >= 0) row.addProperty("publicChest", step.chest());
             if (step.floor() > 0) row.addProperty("floor", step.floor());
             if (step.combat() != null) row.add("combat", step.combat().json());
-            if (step.exploration() != null) row.add("exploration", step.exploration().json());
+            if (step.exploration() != null) {
+                row.add("exploration", step.exploration().json());
+                row.addProperty("walkthrough", step.exploration().conditions(step.target()));
+                boolean active = current.has("id") && current.get("id").getAsString().equals(task.id()) && current.get("stage").getAsInt() == n;
+                row.add("guidance", active ? current.getAsJsonObject("guidance") : market.planningGuidance(p, step));
+            }
             if (step.map() != null) row.add("mapHunt", step.map().json());
             steps.add(row);
         }
@@ -171,6 +181,8 @@ final class TaskRoutes implements Listener {
         }
         if (out.has("steps")) for (var element : out.getAsJsonArray("steps")) {
             var step = element.getAsJsonObject(); p.sendMessage("§f" + step.get("stage").getAsInt() + ". " + step.get("condition").getAsString() + "（" + step.get("target").getAsInt() + "）");
+            if (step.has("walkthrough")) p.sendMessage("§7" + step.get("walkthrough").getAsString());
+            if (step.has("guidance")) TaskMarketManager.showGuidance(p, step.getAsJsonObject("guidance"));
         }
         if (out.has("adventure")) {
             var adventure = out.getAsJsonObject("adventure");
@@ -179,7 +191,10 @@ final class TaskRoutes implements Listener {
                     : adventure.get("activeId").getAsString().isEmpty() ? "：尚未接单" : "：在途记录暂不可读，请联系服主核对"));
             var life = out.getAsJsonObject("life"); p.sendMessage("§b【生活委托】" + (life.get("activeId").getAsString().isEmpty() ? "尚未接单" : life.get("title").getAsString() + " " + life.get("progress") + "/" + life.get("target")));
         }
-        if (out.has("advice")) p.sendMessage("§7" + out.get("advice").getAsString());
+        if (out.has("adventure") && out.getAsJsonObject("adventure").has("market")
+                && out.getAsJsonObject("adventure").getAsJsonObject("market").has("guidance"))
+            TaskMarketManager.showGuidance(p, out.getAsJsonObject("adventure").getAsJsonObject("market").getAsJsonObject("guidance"));
+        else if (out.has("advice")) p.sendMessage("§7" + out.get("advice").getAsString());
         if (out.has("acceptCommand")) p.sendMessage("§a接单：" + out.get("acceptCommand").getAsString() + "；进度 /mycli tasks status");
         if (out.has("nextCommand")) p.sendMessage("§7下一步：" + out.get("nextCommand").getAsString());
     }
@@ -218,7 +233,13 @@ final class TaskRoutes implements Listener {
         var task = market.find(p, id); if (task == null || !task.enabled()) return;
         Inventory inv = Bukkit.createInventory(null, 27, "委托详情 · " + task.title());
         List<String> lines = new ArrayList<>(); lines.add(task.description());
-        for (var step : task.steps()) lines.add(TaskGuidance.step(step.goal(), step.description()) + " ×" + step.target());
+        for (var step : task.steps()) {
+            lines.add(TaskGuidance.step(step.goal(), step.description()) + (step.exploration() == null ? " ×" + step.target() : ""));
+            if (step.exploration() != null) {
+                lines.add(step.exploration().conditions(step.target()));
+                lines.add(market.planningGuidance(p, step).get("nextAction").getAsString());
+            }
+        }
         inv.setItem(13, item(task.icon().name(), "§e" + task.title(), lines.toArray(String[]::new)));
         inv.setItem(11, item("EMERALD", "§a接取这张委托", "主动接单才占公会任务槽", "当前有任务时保留原任务，不会覆盖"));
         inv.setItem(15, item("ARROW", "§b返回任务列表", "仅浏览不接单"));

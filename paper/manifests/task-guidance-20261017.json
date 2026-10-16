@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "at": "2026-10-16T19:36:16.613Z",
+  "candidateVersion": "0.4.47.1",
+  "status": "verified_candidate_not_installed",
+  "baseCommit": "d37d672943b54bb2b718f072d187d15716c93231",
+  "unreleasedArchivesIncluded": false,
+  "jarSha256": "d8a21c8cd7f7b44eeaec21cb395f1ffcfcd85570e99d399b95b4cca0f01e798d",
+  "operationalMarketBeforeSha256": "a9e6b9c144ad3c4eea0770680f1f8e27632dbe3c25b72635ef9beb6d500e0fd1",
+  "installMarketSha256": "d8d0548ee2536cab5ccd09bfd594c01fb7f9ef87b69e5aea194aa88cf25d63e2",
+  "landmarksSha256": "fefb0ea95e8253f29eec164d7b58c2ea3ec8895a7c5e5b377336340aed12eb18",
+  "marketMutationScope": [
+    "tasks.jungle_temple_puzzle.description",
+    "tasks.jungle_temple_puzzle.steps[0].description"
+  ],
+  "tests": {
+    "javaRuleChecks": 29,
+    "nativeChecks": 23,
+    "nodeTestCases": 2
+  },
+  "sourceOverlays": [
+    {
+      "path": "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ExplorationGuidance.java",
+      "sha256": "7a8a019ed6ced20b1cc657a586f6c1bac8d433082051871fb4786c865f5c9772"
+    },
+    {
+      "path": "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ExplorationObjectives.java",
+      "sha256": "35e2001b4204f46f34d827b48d7a3ed3ad6a441f8c8842aa316bdc206e5df8d8"
+    },
+    {
+      "path": "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildManager.java",
+      "sha256": "e0643b1d471b25c50b7368fc970cfad5c9c0d792914dab1d407885a4ebcbe6fe"
+    },
+    {
+      "path": "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskMarketManager.java",
+      "sha256": "33f5f7004820e50e8e08498ff230e21d967a4f8e03b700ddce747af156582cd5"
+    },
+    {
+      "path": "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskRoutes.java",
+      "sha256": "7aacea29d4dfb60bf11c24a5d851ef527ef350c565d29e8e60c687ab326be1b0"
+    },
+    {
+      "path": "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ActionFeedback.java",
+      "sha256": "6589cbced19e8bf60278ad08f3d631899a7c77b86644fdedc5d5e2e49cf777db"
+    }
+  ],
+  "live": {
+    "paperVersion": "0.4.47",
+    "paperRestarted": false,
+    "goddessLandmarksHotApplied": true,
+    "goddessResourceHotApplied": true,
+    "playerLedgerModified": false,
+    "inventoryModified": false
+  },
+  "deployment": {
+    "approvalRequired": true,
+    "pendingManagerMarkerWritten": false,
+    "changes": [
+      "AgentFriend candidate JAR",
+      "two task display strings",
+      "plugin public landmark catalog"
+    ],
+    "rollback": "Restore the original JAR, task-market.yml and optional landmark file from the E/F cold backup; no player data rollback is needed for guidance-only changes."
+  }
+}

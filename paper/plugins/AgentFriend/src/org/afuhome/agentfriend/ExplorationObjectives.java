@@ -53,11 +53,15 @@ final class ExplorationObjectives {
             j.addProperty("minBiomes", minBiomes); j.addProperty("minHeightSpan", minHeightSpan); return j;
         }
         String conditions(int count) {
-            if (goal == GuildManager.Goal.RETURN) return "返回 " + dimension + "，服务器核查当前维度";
-            return dimension + (keys.isEmpty() ? "" : " / " + String.join(" 或 ", keys))
-                    + "；走查 " + count + " 个不同的 " + zoneSize + " 格区域，行进 ≥" + minDistance
-                    + " 格、有效行进 ≥" + minSeconds + " 秒；建筑区段 ≥" + minParts + "，生物群系 ≥" + minBiomes + "，探索高差 ≥" + minHeightSpan
-                    + "。原地等待、重复绕圈和传送位移不增加探索证据。";
+            if (goal == GuildManager.Goal.RETURN) return "返回" + dimensionLabel() + "，服务器核查当前维度";
+            return dimensionLabel() + (keys.isEmpty() ? "" : " / " + String.join(" 或 ", keys))
+                    + "；走查 " + count + " 个不同的 " + zoneSize + " 格分区，行进至少" + minDistance
+                    + " 格、有效行进至少" + minSeconds + " 秒"
+                    + (minParts > 0 ? "；内部区段至少" + minParts : "")
+                    + (minBiomes > 1 ? "；群系至少" + minBiomes + "种" : "")
+                    + (minHeightSpan > 0 ? "；上下高差至少" + minHeightSpan + "格" : "")
+                    + (goal == GuildManager.Goal.STRUCTURE ? "。分区是同一座建筑内的空间网格，不是多座遗迹或固定打卡点" : "")
+                    + "。原地等待、重复原路和传送位移不增加探索证据。";
         }
     }
     static Target parse(GuildManager.Goal goal, ConfigurationSection row, int count) {
@@ -222,6 +226,28 @@ final class ExplorationObjectives {
     void quit(Player p) { surveys.remove(p.getUniqueId()); flush(); }
     void flush() { if (dirty) { dirty = false; plugin.saveConfig(); } }
     void changed() { dirty = true; }
+    /** Live read without enrolling, sampling movement, touching the cursor/timer,
+     * persisting evidence or loading a chunk. Also sees unflushed in-memory evidence. */
+    EngineeringSites.Result snapshot(Player p, Target target, int required, String token) {
+        Survey s = surveys.get(p.getUniqueId());
+        if (s == null || !s.token.equals(token)) {
+            try { s = new Survey(token, plugin.getConfig().getString(path(p), "")); }
+            catch (RuntimeException invalid) { s = new Survey(token, ""); }
+        }
+        Location at = p.getLocation();
+        if (s.ready && target.goal != GuildManager.Goal.RETURN) return result(s, target, required, "ready");
+        if (p.getGameMode() != GameMode.SURVIVAL || p.isDead() || p.isFlying()
+                || !target.dimension.equals(dimension(at.getWorld()))) return result(s, target, required, "outside_survey_target");
+        if (!at.getWorld().isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4)) return result(s, target, required, "current_chunk_unloaded");
+        if (target.goal == GuildManager.Goal.RETURN) return result(s, target, required, s.ready ? "ready" : "survey_incomplete");
+        Place place = target.goal == GuildManager.Goal.STRUCTURE ? structure(at, target) : null;
+        if (target.goal == GuildManager.Goal.STRUCTURE && place == null) return result(s, target, required, "structure_unobserved_or_start_unloaded");
+        String biome = WorldBiomes.at(at);
+        if (!BiomeBorder.known(biome)) return result(s, target, required, "current_chunk_unloaded");
+        if (target.goal == GuildManager.Goal.BIOME && !target.keys.contains(biome)) return result(s, target, required, "outside_survey_biome");
+        String instance = place == null ? at.getWorld().getUID().toString() : place.instance;
+        return result(s, target, required, !s.instance.isEmpty() && !s.instance.equals(instance) ? "different_structure_or_world" : "survey_incomplete");
+    }
     EngineeringSites.Result observe(Player p, Target target, int required, String token) {
         return observe(p, target, required, token, "");
     }

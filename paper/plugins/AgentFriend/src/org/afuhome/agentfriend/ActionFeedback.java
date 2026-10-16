@@ -141,7 +141,11 @@ final class ActionFeedback {
                 case "project_completed", "project_reserved", "site_unavailable" -> a("工程已完工、被占用或场地尚未开放。", "用 /mycli guild engineering 查看场地；从 /mycli guild board 另选开放委托，不覆盖他人的工程。", "/mycli guild engineering", "/mycli guild board");
                 case "scan_busy", "area_unloaded", "site_changed_during_scan" -> a("验收正在忙、场地未加载或扫描中仍有改动。", "到场加载场地，暂停施工，等本次扫描完成后 /mycli guild verify 再验一次。", "/mycli guild engineering", "/mycli guild verify");
                 case "insufficient_road_coverage", "insufficient_new_blocks", "bridge_not_connected", "missing_components", "signal_not_observed" -> a("工程尚未达到验收条件。", "用 " + market + " 核对结构、材料、端点和机关条件；按 MC_MARKET_CHECK.evidence 补齐缺项，红石需实际切换输入，暂停施工后 guild verify。", market, "/mycli guild verify");
-                case "action_progress_incomplete", "different_structure_or_world" -> a("实际行动或同一遗迹走查记录尚未满足。", "用 " + market + " 查看条件，再 /mycli guild status 查进度；继续本阶段指定地点的真实探索，完成后返回验收。", market, "/mycli guild status");
+                case "structure_unobserved_or_start_unloaded" -> a("尚未识别到指定天然结构内部。", "先 /mycli tasks status 读取目标线索；核对维度与结构类型，进入实际通道后步行，不在庙外反复验收。", "/mycli tasks status");
+                case "different_structure_or_world" -> a("当前不在先前记录的同一座遗迹。", "已有证据保留；tasks status 查看上次走查位置，回原遗迹继续，不需要放弃重接。", "/mycli tasks status");
+                case "survey_incomplete", "action_progress_incomplete" -> a("本阶段实际行动尚未满足。", "用 /mycli tasks status 查看当前缺项和下一步；探索时走尚未经过的位置，缺高差则沿上下通道，不重复原路或连续交付。", "/mycli tasks status");
+                case "outside_survey_target", "outside_survey_biome" -> a("当前维度、群系或角色状态不符合探索要求。", "用 tasks status 核对本人本阶段要求；返回目标维度，在指定地点以生存模式落地步行。", "/mycli tasks status");
+                case "current_chunk_unloaded" -> a("现场区块数据尚未就绪。", "先等脚下地形加载，稍后 tasks status 再查；持续不恢复请联系服主，不连续重复提交。", "/mycli tasks status");
                 case "protected_site" -> a("工程范围与受保护建筑或私产冲突。", "停止施工，用 /mycli guild engineering 核对批准的场地；请服主另选无冲突场地，不拆现有建筑。", "/mycli guild engineering");
                 default -> fallback(reason, market);
             };

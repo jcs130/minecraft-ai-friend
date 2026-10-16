@@ -87,6 +87,7 @@ final class TaskMarketManager implements Listener {
     private final File file;
     private final TaskRoutes routes;
     private Map<String, Task> tasks = Map.of();
+    private List<ExplorationGuidance.Landmark> landmarks = List.of();
     private Map<String, EngineeringSites.Site> drafts = Map.of();
     private final Map<UUID, Menu> menus = new HashMap<>();
     private final Set<UUID> checking = new java.util.HashSet<>();
@@ -152,20 +153,29 @@ final class TaskMarketManager implements Listener {
         Step step = task.steps.get(index(player));
         if (step.map != null) { EngineeringSites.Result result = observe(player, task); player.sendMessage("§7" + MapObjectives.hint(result.reason())); mapInfo(player); return; }
         if (step.exploration == null) return;
-        JsonObject navigation=step.exploration.navigation(player.getLocation());
-        player.sendMessage("§7所需维度："+step.exploration.dimensionLabel()+"（"+navigation.get("requiredDimension").getAsString()+"）；当前："+navigation.get("currentDimension").getAsString()+"。");
-        if(!navigation.get("dimensionMatches").getAsBoolean())player.sendMessage("§e当前维度不匹配，请先返回"+step.exploration.dimensionLabel()+"；中转坐标不是任务目标，在这里走查不增加本阶段证据。");
-        if(step.goal==GuildManager.Goal.STRUCTURE)player.sendMessage("§7所需天然结构："+String.join(" 或 ",step.exploration.keys())+"；同名遗迹、砂岩和沙漠群系不能代替结构匹配。");
-        EngineeringSites.Result result = observe(player, task); JsonObject e = result.evidence();
-        if (step.goal == GuildManager.Goal.RETURN) {
-            player.sendMessage("§7返程目标：" + step.exploration.dimension() + "；" + (result.ready() ? "已返回，可 guild claim 完成委托。" : "请先实际返回目标维度。"));
-            return;
+        // Status is a query, not another exploration sample or implicit enrollment.
+        showGuidance(player, guidance(player, step, exploration.snapshot(player, step.exploration, step.target, run(player) + ":" + index(player))));
+    }
+    private JsonObject guidance(Player player, Step step, EngineeringSites.Result result) {
+        var at = player.getLocation();
+        return ExplorationGuidance.guide(step.exploration, step.target, step.exploration.navigation(at), result.evidence(), result.reason(), landmarks, at.getBlockX(), at.getBlockZ());
+    }
+    JsonObject planningGuidance(Player player, Step step) {
+        var at = player.getLocation(); JsonObject evidence = new JsonObject(); evidence.addProperty("validCurrentTarget", false);
+        JsonObject out = ExplorationGuidance.guide(step.exploration, step.target, step.exploration.navigation(at), evidence, "", landmarks, at.getBlockX(), at.getBlockZ());
+        out.addProperty("scope", "planning"); out.addProperty("ready", false);
+        out.addProperty("summary", "这是出发前的目标线索；浏览不会接单，也不证明已到场。");
+        out.addProperty("nextCommand", "/mycli tasks status"); return out;
+    }
+    static void showGuidance(Player player, JsonObject guide) {
+        player.sendMessage("§b【当前阶段】" + guide.get("summary").getAsString());
+        JsonArray missing = guide.getAsJsonArray("missingConditions");
+        if (!missing.isEmpty()) player.sendMessage("§7还缺：" + String.join("；", missing.asList().stream().map(JsonElement::getAsString).toList()));
+        if (guide.has("resumePosition")) {
+            JsonObject at = guide.getAsJsonObject("resumePosition");
+            player.sendMessage("§7上次走查位置：" + at.get("world").getAsString() + " X=" + (int)at.get("x").getAsDouble() + "、Z=" + (int)at.get("z").getAsDouble() + "，这是历史位置。");
         }
-        player.sendMessage("§7探索路线：不同区域 " + e.get("distinctZones") + "/" + step.target + "，有效行进 " + e.get("distance")
-                + "/" + step.exploration.minDistance() + " 格、" + e.get("movingSeconds") + "/" + step.exploration.minSeconds() + " 秒；区段 "
-                + e.get("distinctSections") + "/" + step.exploration.minParts() + "，群系 " + e.getAsJsonArray("biomes").size()
-                + "/" + step.exploration.minBiomes() + "，高差 " + e.get("heightSpan") + "/" + step.exploration.minHeightSpan() + "。");
-        if (!result.ready()) player.sendMessage("§7所有条件齐全才可交付；/mycli guild verify 读取完整证据与缺项。");
+        player.sendMessage("§a下一步：" + guide.get("nextAction").getAsString());
     }
     private void surveyPlayers() {
         List<Player> online = new ArrayList<>(Bukkit.getOnlinePlayers());
@@ -233,6 +243,7 @@ final class TaskMarketManager implements Listener {
 
     boolean reload() {
         try {
+            List<ExplorationGuidance.Landmark> nextLandmarks = ExplorationGuidance.load(new File(plugin.getDataFolder(), "exploration-landmarks.json").toPath());
             YamlConfiguration yaml = new YamlConfiguration(); yaml.load(file);
             if (yaml.getInt("schema-version") != 1) throw new IllegalArgumentException("schema-version");
             for (String resource : List.of("resident-contracts.yml", "route-contracts.yml")) {
@@ -278,6 +289,7 @@ final class TaskMarketManager implements Listener {
             }
             drafts = java.util.Collections.unmodifiableMap(nextSites);
             tasks = java.util.Collections.unmodifiableMap(nextTasks);
+            landmarks = nextLandmarks;
             plugin.getLogger().info("Task market loaded " + tasks.size() + " tasks, " + drafts.size() + " site definitions");
             publishAll();
             return true;
@@ -415,7 +427,8 @@ final class TaskMarketManager implements Listener {
         out.addProperty("goal",step.goal().name());out.addProperty("target",step.target());
         out.addProperty("route",task.route());
         out.addProperty("id",task.id());
-        if(step.exploration()!=null){out.add("exploration",step.exploration().json());out.add("navigation",step.exploration().navigation(player.getLocation()));}
+        if(step.exploration()!=null){out.add("exploration",step.exploration().json());out.add("navigation",step.exploration().navigation(player.getLocation()));
+            out.add("guidance",guidance(player,step,exploration.snapshot(player,step.exploration(),step.target(),run(player)+":"+stage)));}
         if(step.combat()!=null)out.add("combat",step.combat().json());
         out.addProperty("requiresVerification",EngineeringSites.GOALS.contains(step.goal()));
         return out;
@@ -645,16 +658,21 @@ final class TaskMarketManager implements Listener {
         data.add("evidence", result.evidence());
         ActionFeedback.Advice advice = result.ready() ? null : ActionFeedback.advice("market", result.reason(), task.id());
         if (advice != null) advice.add(data);
+        JsonObject guide = task.steps.get(step).exploration == null ? null : guidance(player, task.steps.get(step), result);
+        if (guide != null) {
+            data.add("guidance", guide); data.addProperty("nextAction", guide.get("nextAction").getAsString());
+            JsonArray commands = new JsonArray(); commands.add(guide.get("nextCommand").getAsString()); data.add("nextCommands", commands);
+        }
         send(player, "MC_MARKET_CHECK", data);
-        player.sendMessage((result.ready() ? "§a验收通过：" : "§e验收未通过：") + result.reason()
+        if (guide != null) showGuidance(player, guide);
+        else player.sendMessage((result.ready() ? "§a验收通过：" : "§e验收未通过：") + result.reason()
                 + "（" + result.progress() + "/" + task.steps.get(step).target + "）。");
-        if (advice != null) player.sendMessage("§a【正确做法】" + advice.next());
+        if (advice != null && guide == null) player.sendMessage("§a【正确做法】" + advice.next());
         if (task.steps.get(step).map != null) player.sendMessage("§7" + MapObjectives.hint(result.reason()));
         JsonObject evidence = result.evidence();
-        if (evidence.has("distinctZones") && task.steps.get(step).goal != GuildManager.Goal.RETURN) player.sendMessage("§7探索：不同区域 " + evidence.get("distinctZones") + "/" + task.steps.get(step).target
+        if (guide == null && evidence.has("distinctZones") && task.steps.get(step).goal != GuildManager.Goal.RETURN) player.sendMessage("§7探索：不同区域 " + evidence.get("distinctZones") + "/" + task.steps.get(step).target
                 + "，有效行进 " + evidence.get("distance") + " 格 / " + evidence.get("movingSeconds") + " 秒，建筑区段 "
                 + evidence.get("distinctSections") + "，高差 " + evidence.get("heightSpan") + "；生物群系 " + evidence.get("biomes") + "。条件见 guild market " + task.id());
-        if (result.reason().equals("different_structure_or_world")) player.sendMessage("§e本阶段记录属于同一座遗迹；要调查另一座，请放弃后重接，旧阶段路线会清空。");
         if (evidence.has("newBlocks")) player.sendMessage("§7施工证据：新增 " + evidence.get("newBlocks")
                 + " 格，可走路面覆盖 " + evidence.get("coveragePercent") + "%，两端连通=" + evidence.get("connected") + "。");
         if (evidence.has("missingComponents")) {
@@ -886,6 +904,7 @@ final class TaskMarketManager implements Listener {
     }
     private void detail(Player player, Task task) {
         JsonObject data = summary(task); JsonArray steps = new JsonArray();
+        JsonObject current = progressState(player);
         List<String> rewards = task.id().equals(plugin.getConfig().getString(activePath(player) + ".id"))
                 ? plugin.getConfig().getStringList(marketPath(player) + ".skill-rewards") : plugin.professions().rewards("guild_contract", task.id());
         data.add("skillRewards", new com.google.gson.Gson().toJsonTree(rewards));
@@ -912,6 +931,10 @@ final class TaskMarketManager implements Listener {
             if (step.exploration != null) {
                 row.add("exploration", step.exploration.json());
                 player.sendMessage("§7探索验收：" + step.exploration.conditions(step.target));
+                boolean active = current.has("id") && current.get("id").getAsString().equals(task.id()) && current.get("stage").getAsInt() == i + 1;
+                JsonObject guide = active ? current.getAsJsonObject("guidance") : planningGuidance(player, step);
+                row.add("guidance", guide);
+                if (active || i == 0) showGuidance(player, guide);
             }
             player.sendMessage("§b" + (i + 1) + ". " + step.title + "：" + TaskGuidance.step(step.goal, step.description) + "（" + step.target + "）");
             player.sendMessage("§7条件：goal=" + step.goal.name().toLowerCase(Locale.ROOT) + " target=" + step.target

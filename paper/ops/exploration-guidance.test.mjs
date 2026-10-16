@@ -10,6 +10,10 @@ test('verified public structures remain distinct from player dimension and from 
   const temple=catalog.places.find(p=>p.id==='desert_pyramid'),ruin=catalog.places.find(p=>p.id==='desert_ruins');
   assert.deepEqual([temple.world,temple.structureKey,temple.x,temple.z],['minecraft:overworld','minecraft:desert_pyramid',-1926,-966]);
   assert.equal(ruin.structureKey,'nova_structures:desert_ruins');assert.equal(temple.entranceVerified,false);assert.equal(temple.y,undefined);
+  const jungle=catalog.places.find(p=>p.id==='jungle_pyramid');
+  assert.deepEqual([jungle.world,jungle.structureKey,jungle.x,jungle.z],['minecraft:overworld','minecraft:jungle_pyramid',1607,2357]);
+  assert.equal(jungle.entranceVerified,false);assert.equal(jungle.y,undefined);
+  assert.ok(!catalog.places.some(p=>p.x===549&&p.z===2887),'a protochunk structure start is not a realized destination');
   for(const name of ['ag_ExamQA16','.Guest','OtherAgent']){
     const snapshot=await collectPlayerObservation(name,async()=> 'MC_OBSERVATION '+JSON.stringify({schemaVersion:1,status:'ok',player:name,position:{world:'minecraft:the_nether',x:-58,y:100,z:-78}}));
     assert.equal(snapshot.player,name);assert.equal(snapshot.position.world,'minecraft:the_nether');assert.deepEqual(snapshot.knownStructures,catalog);
@@ -30,7 +34,7 @@ test('catalog reload sees a correction while malformed or oversized files cannot
     await writeFile(file,'invalid');let seen=await collectPlayerObservation('Guest',execute,file);
     assert.equal(seen.status,'ok');assert.equal(seen.knownStructuresStatus,'unavailable');assert.equal(seen.knownStructures,undefined);
     const good=await loadExplorationLandmarks();await writeFile(file,JSON.stringify({schemaVersion:1,...good}));
-    seen=await collectPlayerObservation('Guest',execute,file);assert.equal(seen.knownStructures.places.length,2);
+    seen=await collectPlayerObservation('Guest',execute,file);assert.equal(seen.knownStructures.places.length,good.places.length);
     good.places=good.places.slice(0,1);await writeFile(file,JSON.stringify({schemaVersion:1,...good}));
     assert.equal((await collectPlayerObservation('Guest',execute,file)).knownStructures.places.length,1);
     good.places[0].y=70;good.places[0].entranceVerified=true;await writeFile(file,JSON.stringify({schemaVersion:1,...good}));

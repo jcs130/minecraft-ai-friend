@@ -183,6 +183,15 @@ final class GuildManager implements Listener {
         if(current<quest.target())missing.add("当前阶段还缺 "+(quest.target()-current)+" / "+quest.target()+"；"+out.get("condition").getAsString());
         if(verify)missing.add("工程需要显式 guild verify 验收，再 guild claim；查询不触发验收或结算");
         else if(current>=quest.target())missing.add("尚需 guild claim 交付本阶段；多阶段全部交付后才算整单完成");
+        if (out.has("market") && out.getAsJsonObject("market").has("guidance")) {
+            var guide = out.getAsJsonObject("market").getAsJsonObject("guidance");
+            // Keep the full guide only under market; duplicating it at every
+            // status layer makes the same instructions consume context repeatedly.
+            out.add("missingConditions", guide.getAsJsonArray("missingConditions").deepCopy());
+            out.addProperty("advice", guide.get("nextAction").getAsString());
+            out.addProperty("nextCommand", guide.get("nextCommand").getAsString());
+            out.addProperty("status", guide.get("ready").getAsBoolean() ? "ready_to_submit" : "active");
+        }
         return out;
     }
     private int fame(Player p) { return plugin.getConfig().getInt(base(p.getUniqueId()) + ".fame", 0); }
