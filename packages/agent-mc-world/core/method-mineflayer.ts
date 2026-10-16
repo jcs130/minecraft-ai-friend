@@ -12,6 +12,7 @@ import { permitPlacement } from './placement.ts';
 import { withPreparedInteractionHand } from './hand-interaction.ts';
 import { equipSlotConfirmed, unequipSlotConfirmed } from './equipment.ts';
 import { publicReadProjection, projectPublicRead } from './method-read.ts';
+import type { BotMethod } from './method-capabilities.ts';
 
 const nativeCalls = new AsyncLocalStorage<() => void>();
 const guarded = new WeakSet<object>();
@@ -41,7 +42,7 @@ export const NATIVE_API = Object.freeze({
   activateBlock: 'activateBlock(block,direction?,cursorPos?): native right click with the CURRENT hand, default up face and center cursor. Does not clear/equip the hand. Return confirms dispatch only; read actual block/inventory effects.',
   activateItem: 'activateItem(offHand=false): native held-item use (including buckets). Aim with lookAt first. Return confirms dispatch only; re-read world and inventory. Does not clear/equip the hand.',
   deactivateItem: 'deactivateItem(): native release of held use; releasing bow/crossbow/trident can fire it.',
-});
+} satisfies Record<BotMethod, string>);
 type NativeName = keyof typeof NATIVE_API;
 const READ_ONLY = new Set<NativeName>(['read', 'blockAt', 'findBlocks', 'findBlock', 'canSeeBlock',
   'canDigBlock', 'digTime', 'inventory.items', 'getControlState']);

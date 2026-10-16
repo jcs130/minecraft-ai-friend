@@ -50,6 +50,7 @@ import { resolveProcedure, procedureReference, PROCEDURE_RECEIPT_SCHEMA, PROCEDU
   type ProcedureReceipt } from './support/procedure.ts';
 import { MineflayerMethod, NATIVE_API } from './method-mineflayer.ts';
 import { methodApiHelp } from './method-api.ts';
+import { methodCapabilities } from './method-capabilities.ts';
 import { flightState } from './flight.ts';
 import { attachHearing, hearingReadout } from './perception-hearing.ts';
 import { AttentionReader, PERCEPTION_TOOLS, perceptionArgs, validDetection, type DetectionEvidence } from './perception-tools.ts';
@@ -4551,6 +4552,7 @@ export class MinecraftWorld implements World {
     signal.throwIfAborted();
     const bot = this.bridge?.bot;
     if (!bot?.entity || !this.executor) throw new Error('Minecraft尚未连接');
+    if (method === 'capabilities') return methodCapabilities('mineflayer', Object.keys(NATIVE_API));
     if (method === 'state') return this.methodState();
     if (method === 'mineflayer') {
       if (typeof args.name !== 'string' || !Array.isArray(args.args)) throw new Error('原生调用须包含 name 与 args 数组');
