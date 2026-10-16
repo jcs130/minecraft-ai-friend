@@ -33,9 +33,11 @@ def validate_start(settings: Settings, goal: str):
 
 async def run_session(settings: Settings, entry: Path, data_root: Path, planner: Planner | None, goal: str,
                       publish, stopped, *, bridge_factory=MinecraftBridge, viewer_opener=None, viewer_entry=None,
-                      context_counter=None):
+                      context_counter=None, host_context_provider=None, recent_context_provider=None):
     """Own the injected planner, lease, config, controller and all cleanup."""
-    state = {"phase": "starting", "game_connected": False, "autonomy_running": False, "standing_goal": goal}
+    runtime_session = str(uuid.uuid4())
+    state = {"phase": "starting", "game_connected": False, "autonomy_running": False, "standing_goal": goal,
+             "runtime_session": runtime_session, "settings_identity": settings.identity}
     directory = data_root / "sessions" / settings.identity / "host"
     system_one = None
     viewer = ViewerWindow(settings.external_viewer_url, settings.viewer_auto_open, opener=viewer_opener)
@@ -119,6 +121,11 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                 policy = FastPolicy(settings.fast, selector)
                 counter = context_counter if context_counter is not None else getattr(planner, "context_counter", None)
                 counter_options = {"context_counter": counter} if counter is not None else {}
+                counter_options["runtime_session"] = runtime_session
+                if host_context_provider is not None:
+                    counter_options["host_context_provider"] = host_context_provider
+                if recent_context_provider is not None:
+                    counter_options["recent_context_provider"] = recent_context_provider
                 if settings.decision_policy.enabled and callable(getattr(planner,'decide_profile',None)):
                     counter_options['profile_decide']=planner.decide_profile
                 await Controller(bridge, planner.decide if planner else None, settings, directory, update, stopped,

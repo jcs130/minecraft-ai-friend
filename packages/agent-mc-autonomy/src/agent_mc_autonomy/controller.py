@@ -262,12 +262,15 @@ def failure_context(catalogue, name, arguments, result):
 
 
 class Controller:
-    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None, *, context_counter=None, host_context_provider=None, profile_decide=None):
+    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None, *, context_counter=None, host_context_provider=None, recent_context_provider=None, runtime_session=None, profile_decide=None):
         self.bridge, self.decide, self.settings = bridge, decide, settings
         self.profile_decide=profile_decide
         self.profile_death_id=None
         from .host_context import HostContextPort
-        self.host_context_provider = host_context_provider or HostContextPort(data).read
+        self.host_context_port = HostContextPort(data)
+        self.host_context_provider = host_context_provider if host_context_provider is not None else self.host_context_port.read
+        self.recent_context_provider = recent_context_provider if recent_context_provider is not None else self.host_context_port.read_recent
+        self.runtime_session = runtime_session
         self.context_counter = context_counter
         self.data, self.publish = data, publish
         self.operator_stop = False
@@ -346,6 +349,7 @@ class Controller:
             self.death_waiting = life.get("phase") != "alive"
         self.synchronize_goals()
         self.publish(facts=facts, game_identity=self.game_scope,
+                     body_death_episode_id=life.get("episodeId") if isinstance(life, dict) else None,
                      death_episode=self.death_memory.current_episode(self.game_scope, facts, pending=True))
         return not self.death_waiting
 
@@ -467,7 +471,7 @@ class Controller:
                     self.death_waiting = True
                     self.continuation_needed = True
                     self.synchronize_goals()
-                    self.publish(death_episode=episode, game_identity=episode["scope"])
+                    self.publish(death_episode=episode, game_identity=episode["scope"], body_death_episode_id=episode["id"])
             if self.death_memory.append_combat(event):
                 current = self.death_memory.current_episode(self.game_scope, self.game_facts, pending=True)
                 life = lifecycle(self.game_facts)
@@ -502,6 +506,7 @@ class Controller:
             archived = await self.protocol("archive", run=page["run"], after=self.cursor, limit=64)
             page = {**archived, "run": page["run"]}
         self.event_run, self.cursor = page["run"], page["nextCursor"]
+        self.publish(native_run=self.event_run)
         wake, urgent = False, False
         for event in page["events"]:
             if event.get("contextDelivery") == "archive-only" or event.get("meta", {}).get("staleEpoch"):
@@ -570,6 +575,12 @@ class Controller:
         offset, limit = arguments.get("offset", 0), arguments.get("limit", 1000)
         if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 1000:
             raise ValueError("Invalid original artifact page")
+        from .host_recent import HANDLE_PREFIX
+        if isinstance(arguments.get("handle"), str) and arguments["handle"].startswith(HANDLE_PREFIX):
+            request = self.recent_request(self.current_host_context())
+            if self.stop_requested() or not request:
+                return {"text": encode({"status": "unavailable", "reason": "binding_unavailable"})}
+            return {"text": encode(self.host_context_port.original_page(arguments["handle"], request, offset, limit))}
         raw = outcome(await self.bridge.call("mc_artifact", {"action": "get", "handle": arguments["handle"]}))
         if raw.get("failed"):
             return raw
@@ -577,6 +588,107 @@ class Controller:
         end = min(len(text), offset + limit)
         return {"text": encode({"handle": arguments["handle"], "offset": offset, "text": text[offset:end],
                                 "next_offset": end, "has_more": end < len(text), "total_characters": len(text)})}
+
+    def current_host_context(self):
+        from .host_context import validate_host_context
+        try:
+            value = self.host_context_provider(self.commands.intent_revision() if self.commands else 0)
+            if value is None:
+                return None
+            if (not isinstance(value["stable"], dict) or not isinstance(value["dynamic"], dict)
+                    or value["stable"].keys() - {"agent_name", "persona", "persona_source"}
+                    or value["dynamic"].keys() - {"current_intent", "memories", "memories_selected"}):
+                return None
+            validated = validate_host_context({**value["stable"], **value["dynamic"]})
+            return {"stable": {k: validated[k] for k in ("agent_name", "persona", "persona_source")},
+                    "dynamic": {k: validated[k] for k in ("current_intent", "memories", "memories_selected")}}
+        except Exception:
+            return None  # Optional provider errors never expose private exception text.
+
+    def recent_request(self, host):
+        from .host_recent import binding
+        try:
+            life = lifecycle(self.game_facts)
+            if self.game_facts.get("run") not in {None, self.event_run}:
+                return None
+            episode_id = life.get("episodeId") if isinstance(life, dict) else None
+            if self.death_recovery and self.death_recovery.get("scope") == self.game_scope:
+                episode_id = self.death_recovery["id"]
+            request = {"identity": self.settings.identity, "actor": host["stable"]["agent_name"],
+                       "session": self.runtime_session, "run": self.event_run, "scope": self.game_scope,
+                       "intent_revision": self.commands.intent_revision() if self.commands else 0,
+                       "death_episode_id": episode_id,
+                       "as_of": time.time()}
+            binding(request, request=True)
+            return request
+        except (ValueError, TypeError, KeyError):
+            return None
+
+    async def recent_for_round(self, host):
+        """Read once per model round; an embedded await preserves event priority."""
+        import inspect
+        from . import host_recent
+        request = self.recent_request(host)
+        self.publish(host_recent_request=request)
+        if request is None:
+            return host_recent.unavailable("binding_unavailable")
+        epoch = self.death_epoch
+        task = None
+        try:
+            value = self.recent_context_provider(request)
+            if inspect.isawaitable(value):
+                task = asyncio.ensure_future(value)
+                deadline = time.monotonic() + 0.5
+                while True:
+                    done, _ = await asyncio.wait({task}, timeout=max(0, min(0.05, deadline - time.monotonic())))
+                    if self.stop_requested():
+                        return host_recent.unavailable("stopped")
+                    if self.commands and self.commands.ready(allow_goal=self.active_goal is None and not self.pending):
+                        self.preempted = True
+                        return host_recent.unavailable("feedback_changed")
+                    wake, urgent, more = await self.events()
+                    self.deferred_wake |= wake
+                    if urgent or epoch != self.death_epoch:
+                        self.preempted = True
+                        return host_recent.unavailable("body_changed")
+                    if done and not more:
+                        value = await task
+                        break
+                    if time.monotonic() >= deadline:
+                        if more:
+                            self.preempted = True  # Drain queued native pages before inference.
+                        return host_recent.unavailable("provider_timeout")
+            current = self.recent_request(self.current_host_context())
+            if (self.stop_requested() or self.preempted or current is None or epoch != self.death_epoch
+                    or host_recent.binding(current, request=True) != host_recent.binding(request, request=True)):
+                self.preempted = True
+                return host_recent.unavailable("binding_changed")
+            if isinstance(value, dict) and value.get("available") is False:
+                return host_recent.unavailable("snapshot_unavailable")
+            value = host_recent.validate(value, current, time.time())
+            return self.host_context_port.queryable_recent(value, current)
+        except asyncio.TimeoutError:
+            return host_recent.unavailable("provider_timeout")
+        except Exception:
+            return host_recent.unavailable("provider_invalid")
+        finally:
+            if task is not None:
+                if not task.done():
+                    task.cancel()
+                    await asyncio.sleep(0)  # Cooperative cleanup cannot extend the optional deadline.
+                def consume_result(completed):
+                    if not completed.cancelled():
+                        completed.exception()  # Consume errors without exposing private text.
+                if task.done():
+                    consume_result(task)
+                else:
+                    task.add_done_callback(consume_result)
+            # Timeout/error/cancellation cleanup may itself yield to fresh work.
+            current = self.recent_request(self.current_host_context())
+            if (self.stop_requested() or epoch != self.death_epoch or current is None
+                    or host_recent.binding(current, request=True) != host_recent.binding(request, request=True)
+                    or self.commands and self.commands.ready(allow_goal=self.active_goal is None and not self.pending)):
+                self.preempted = True
 
     async def decide_with_events(self, messages, tools, profile=None):
         death_epoch = self.death_epoch
@@ -1011,13 +1123,16 @@ class Controller:
                 _, image_ready = attach_frame([{"role": "user", "content": ""}], frame)
                 reserve = IMAGE_RESERVE if image_ready else 0
                 from .host_context import metadata as host_context_metadata
-                host_context = self.host_context_provider(self.commands.intent_revision() if self.commands else 0)
+                host_context = self.current_host_context()
                 self.publish(host_context=host_context_metadata(host_context))
+                recent_context = await self.recent_for_round(host_context)
+                if self.stop_requested() or self.preempted or self.turn_death_epoch != self.death_epoch:
+                    return
                 try:
                     messages, budget = assemble(prefix, tools, planning_goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
-                        context_counter=self.context_counter, host_context=host_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
+                        context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
                 except ValueError:
                     if not reserve:
                         raise
@@ -1025,7 +1140,7 @@ class Controller:
                     messages, budget = assemble(prefix, tools, planning_goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
-                        context_counter=self.context_counter, host_context=host_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
+                        context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
                 if reserve:
                     messages, _ = attach_frame(messages, frame)
                 budget.update(image_reserve=reserve, total=budget["total"] + reserve, limit=self.settings.context_tokens)

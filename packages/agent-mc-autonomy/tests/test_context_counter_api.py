@@ -62,6 +62,8 @@ def test_runner_passes_explicit_or_planner_counter_without_changing_default_call
     run_async(module.run_session(settings, tmp_path / "fake.mjs", tmp_path, planner, "survive",
                                  lambda **_: None, lambda: False, bridge_factory=lambda *_: object(), **options))
     expected = selected if explicit else attached if inherited else None
+    import uuid
+    uuid.UUID(seen[0].pop("runtime_session"))
     assert seen == ([{"context_counter": expected}] if expected is not None else [{}])
     assert planner.closed
 
@@ -73,6 +75,32 @@ def cli_inputs(tmp_path):
                       '[planner]\nbase_url="http://model.test/v1"\nmodel="test-model"\n', encoding="utf-8")
     entry.write_text("// offline fixture", encoding="utf-8")
     return ["--config", str(config), "--entry", str(entry), "--data", str(tmp_path / "data")]
+
+
+def test_runner_forwards_both_host_ports_and_exposes_the_same_runtime_session(
+        framework_module, tmp_path, monkeypatch, run_async):
+    import json
+    module = importlib.import_module("agent_mc_autonomy.runner")
+    seen, states = [], []
+    base = lambda revision: None
+    recent = lambda request: {"available": False}
+
+    class Controller:
+        def __init__(self, *args, **kwargs):
+            seen.append(kwargs)
+        async def run(self, goal):
+            assert goal == "survive"
+
+    monkeypatch.setattr(module, "Controller", Controller)
+    settings = dataclasses.replace(framework_module.Settings(), enabled=True, host="example.test",
+                                   username="OfflinePorts", viewer_auto_open=False)
+    run_async(module.run_session(settings, tmp_path / "fake.mjs", tmp_path, None, "survive",
+        lambda **values: states.append(values), lambda: False, bridge_factory=lambda *_: object(),
+        host_context_provider=base, recent_context_provider=recent))
+    assert seen[0]["host_context_provider"] is base and seen[0]["recent_context_provider"] is recent
+    assert all(s["runtime_session"] == seen[0]["runtime_session"] and s["settings_identity"] == settings.identity for s in states)
+    saved = json.loads((tmp_path / "sessions" / settings.identity / "host" / "status.json").read_text())
+    assert saved["runtime_session"] == seen[0]["runtime_session"]
 
 
 def test_cli_factory_runs_before_planner_and_receives_parsed_config(framework_module, tmp_path, monkeypatch):

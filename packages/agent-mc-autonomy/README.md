@@ -5,7 +5,7 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
-0.1.73 defaults `context_tokens` to 65536 (64K); 131072 (128K) is optional when
+0.1.74 defaults `context_tokens` to 65536 (64K); 131072 (128K) is optional when
 the configured service supports it. Explicit settings, including 32768, remain
 unchanged. Set the limit to the actual service capacity: this setting does not
 discover or enlarge the model server's context window. The fallback counter still
@@ -313,6 +313,11 @@ focus defaults to rules; `host` accepts an injected selector and `system_one`
 uses an explicit local/remote provider, with bounded fallback to rules.
 
 ## Host adapter contract
+
+Recent host language in 0.1.74 uses an independent, optional short lease and a
+fresh replacement tail on every actual model round. See
+[the generic host recent contract](docs/host-recent-context.md) for the public
+adapter API, exact binding, budgeting and scoped original paging.
 
 Embedded mode calls `run_session(settings, entry, data_root, planner, goal,
 publish, stopped)`. A planner implements `decide(messages, tools)` and `aclose()`;
