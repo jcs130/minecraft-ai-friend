@@ -1,0 +1,1325 @@
+locale-config-overrides: true
+command-help:
+  categories:
+    event:
+      enabled: true
+      title: '&6&lEtkinlik Komutları'
+      commands:
+        - '&e/olencounters baslat <tip> [dünya] [yarıçap] &7- Meteor başlatır'
+        - '&e/olencounters konumdabaslat <tip> <konum> [dünya] [mod] &7- Belirlenen konumda başlatır'
+        - '&e/olencounters durdur <id> &7- Güvenli biçimde bitirip alanı geri yükler'
+        - '&e/olencounters liste &7- Aktif meteorları gösterir'
+        - '&e/olencounters bilgi <id> &7- Meteor ayrıntılarını gösterir'
+        - '&e/olencounters gecmis [adet] &7- Çarpma saati, konumu ve sonucunu gösterir'
+    setup:
+      enabled: true
+      title: '&d&lKurulum Komutları'
+      commands:
+        - '&e/olencounters kurulum <tip> &7- Kurulum menüsünü açar'
+        - '&e/olencounters sematikduzenle <tip> <isim> &7- Kayıtlı kurulumu düzenler'
+        - '&e/olencounters sematik <isim> &7- Seçimi schematic olarak kaydeder'
+    rewards:
+      enabled: true
+      title: '&a&lÖdül Komutları'
+      commands:
+        - '&e/olencounters ganimet <tip> &7- Loot tablosunu düzenler'
+    admin:
+      enabled: true
+      title: '&c&lYönetim Komutları'
+      commands:
+        - '&e/olencounters yenile &7- Ayarları yeniler'
+        - '&e/olencounters iptal <id> &7- Etkinliği iptal eder'
+        - '&e/olencounters otomatik durum &7- Otomatik meteor planını gösterir'
+        - '&e/olencounters otomatik &7- Oyun içi otomatik ayar menüsünü açar'
+        - '&e/olencounters otomatik ac|kapat &7- Otomatik sistemi açar veya kapatır'
+        - '&e/olencounters otomatik simdi &7- Hemen rastgele meteor başlatır'
+        - '&e/olencounters kontrol &7- Entegrasyon ve kurtarma durumunu kontrol eder'
+        - '&e/olencounters onizleme <meteor> &7- Alanı blok koymadan önizler'
+        - '&e/olencounters istatistik [oyuncu] &7- Kalıcı meteor istatistiklerini gösterir'
+        - '&e/olencounters bilet <oyuncu> <meteor> [adet] &7- Güvenli çağırma bileti verir'
+        - '&e/olencounters otomatik ayarla <meteorlar> <dünya> <preset> <minDk> <maxDk> <minUzaklık> <maxUzaklık> [minY] [maxY]'
+        - '&e/olencounters otomatik kategori ekle <kategori> <meteor> [ağırlık] &7- Kategori oluşturur veya meteor ekler'
+        - '&e/olencounters otomatik kategori cikar <kategori> <meteor> &7- Meteoru kategoriden çıkarır'
+        - '&e/olencounters otomatik kategori sematikekle <kategori> <şematik> [ağırlık] &7- Özel şematik ekler'
+        - '&e/olencounters otomatik kategori sematikcikar <kategori> <şematik> &7- Özel şematiği çıkarır'
+        - '&e/olencounters otomatik kategori sil <kategori> &7- Otomatik kategoriyi siler'
+        - '&e/olencounters otomatik kategori liste &7- Otomatik kategorileri gösterir'
+        - '&e/olencounters konumpreseti <isim> [minY] [maxY] &7- Spawn konum presetini seçer'
+automatic-events:
+  min-distance-from-spawn: 600
+  max-distance-from-spawn: 3000
+  search-shape: CIRCLE
+  tps-guard:
+    enabled: true
+    minimum-tps: 18
+    retry-minutes: 5
+  location-cooldown:
+    enabled: true
+    radius: 1000
+    hours: 24
+  max-active-events: 1
+  default-location-preset: flat_surface
+  world-settings: {}
+location-finder:
+  presets:
+    flat_surface:
+      mode: surface
+      require-flat: true
+      allow-water: false
+      allow-lava: false
+      min-y: -64
+      max-y: 320
+      allowed-floor-blocks: []
+    water_surface:
+      mode: surface
+      require-flat: true
+      allow-water: true
+      allow-lava: false
+      min-y: 50
+      max-y: 320
+      allowed-floor-blocks: []
+    underground:
+      mode: underground
+      require-flat: false
+      allow-water: true
+      allow-lava: false
+      min-y: -48
+      max-y: 40
+      allowed-floor-blocks: []
+    air:
+      mode: air
+      require-flat: false
+      allow-water: true
+      allow-lava: true
+      min-y: 100
+      max-y: 220
+      allowed-floor-blocks: []
+    any_surface:
+      mode: surface
+      require-flat: false
+      allow-water: false
+      allow-lava: false
+      min-y: -64
+      max-y: 320
+      allowed-floor-blocks: []
+    grass_surface:
+      mode: surface
+      require-flat: true
+      allow-water: false
+      allow-lava: false
+      min-y: 55
+      max-y: 320
+      allowed-floor-blocks:
+        - GRASS_BLOCK
+        - DIRT
+        - COARSE_DIRT
+        - PODZOL
+        - MOSS_BLOCK
+    desert_surface:
+      mode: surface
+      require-flat: true
+      allow-water: false
+      allow-lava: false
+      min-y: 45
+      max-y: 320
+      allowed-floor-blocks:
+        - SAND
+        - RED_SAND
+        - SANDSTONE
+        - RED_SANDSTONE
+    nether_surface:
+      mode: surface
+      require-flat: false
+      allow-water: false
+      allow-lava: false
+      min-y: 20
+      max-y: 120
+      allowed-floor-blocks:
+        - NETHERRACK
+        - SOUL_SAND
+        - SOUL_SOIL
+        - BLACKSTONE
+        - BASALT
+    end_surface:
+      mode: surface
+      require-flat: true
+      allow-water: false
+      allow-lava: false
+      min-y: 0
+      max-y: 200
+      allowed-floor-blocks:
+        - END_STONE
+  advanced-search:
+    batch-size: 1
+    concurrent-candidate-hard-limit: 1
+    allow-chunk-generation: false
+    max-chunks-per-search: 32
+    timeout-millis: 8000
+    batch-delay-ticks: 5
+    sample-grid-size: 5
+    expansion-stages: 5
+    world-border-margin: 32
+    expand-any-surface-y: true
+event:
+  tickets:
+    material: FIRE_CHARGE
+    cooldown-seconds: 300
+  waves:
+    enabled: true
+    count: 3
+    interval-seconds: 15
+  recovery:
+    enabled: true
+    capture-padding:
+      horizontal: 1
+      below: 1
+      above: 3
+    max-snapshot-blocks: 64000
+  tracking:
+    enabled: true
+    max-distance: 2000
+  chunk-force-load-radius: 1
+  combat-feedback:
+    damage-actionbar-text: '&e本次伤害 %damage%'
+    kill-actionbar-text: '&a击败敌人，剩余 %remaining%'
+    leaderboard-title: '&6同行战绩'
+    leaderboard-entry: '&e%player% &7伤害 %damage%'
+    leaderboard-empty: '&7暂无参战记录'
+    leaderboard-size: 3
+  fall:
+    normal-height: 80
+    slow-height: 120
+    show-impact-core: false
+  schematic-animation:
+    enabled: false
+    max-display-blocks: 400
+    batch-size: 40
+    layer-stagger-ticks: 8
+    fallback-to-core: true
+  performance-guard:
+    animation-display-hard-limit: 500
+    animation-view-range: 96
+    max-animation-chunks: 32
+  hazards:
+    radiation-enabled: false
+    wind-enabled: false
+    radiation-damage-per-second: 2
+    wind-charge-knockback-multiplier: 1.5
+    wind-charge-interval-ticks: 100
+    disable-elytra: true
+    disable-ender-pearl: true
+  vault:
+    key-enabled: true
+    reward-mode: KEY
+    boss-damage-threshold-percent: 10
+    open-delay-ticks: 100
+messages:
+  command:
+    help:
+      title: '&6&l=== OlEncounters Help ==='
+      usage: |
+        &e/olencounters help &7- Display this help message
+        &e/olencounters setup <type> &7- Enter visual setup mode
+        &e/olencounters start <type> [world] [radius] &7- Start a meteor event
+        &e/olencounters spawnat <type> <xyz> [world] &7- Start at coordinates
+        &e/olencounters stop <id> &7- Stop and rollback an event
+        &e/olencounters cancel <id> &7- Cancel an event immediately
+        &e/olencounters reload &7- Reload configuration
+        &e/olencounters wand &7- Receive the setup wand
+        &e/olencounters list &7- List active events
+        &e/olencounters info <id> [target] &7- Show event details
+    reload:
+      success: '&a野外遭遇基础配置已重新读取；方案配置用 /worldvariety reload。'
+    wand:
+      success: '&aSetup wand has been added to your inventory.'
+    player_only: '&cThis command can only be executed by a player.'
+    no_permission: '&c这是房管操作。普通玩家用 /mycli world events 查看并到场参加。'
+    setup:
+      usage: '&eUsage: /olencounters setup <type>'
+      available_types: '&7Available types: %types%'
+      invalid_type: '&cInvalid meteor type: &e%type%'
+    start:
+      usage: '&eUsage: /olencounters start <type> [world]'
+      invalid_type: '&cInvalid meteor type: &e%type%'
+      scheduled: '&a野外遭遇 %eventId% 已安排在 %location%。'
+      error: '&cAn error occurred while starting the event: %error%'
+      fawe_required: '&c建筑与回退服务未就绪，本次没有生成遭遇；请房管检查 WorldEdit 服务。'
+      location_fail: '&e暂未找到安全空地，本次没有生成遭遇；稍后再查 /mycli world events。'
+      world_not_found: '&cWorld ''%world%'' not found.'
+    stop:
+      usage: '&eUsage: /olencounters stop <eventId>'
+      no_event: '&cNo active event found with ID: &e%eventId%'
+      success: '&a遭遇 %eventId% 正在安全收尾。'
+    cancel:
+      usage: '&eUsage: /olencounters cancel <eventId>'
+      no_event: '&cNo active event found with ID: &e%eventId%'
+      success: '&e遭遇 %eventId% 已取消。'
+    list:
+      title: '&6当前野外遭遇'
+      empty: '&7当前没有野外遭遇。'
+      entry: '&e%eventId% &f%world% %location%'
+    info:
+      title: '&6&l=== Meteor Event Info ==='
+      no_event: '&cNo active event found with ID: &e%eventId%'
+      id: '&7ID: &f%eventId%'
+      type: '&7Type: &f%type%'
+      phase: '&7Phase: &f%phase%'
+      world: '&7World: &f%world%'
+      location: '&7Location: &f%location%'
+      radius: '&7Radius: &f%radius% blocks'
+      radius_shape: '&7Radius shape: &f%shape%'
+      schematic: '&7Schematic: &f%schematic%'
+      distance: '&7Distance to &e%player%&7: &f%distance% blocks'
+    spawnat:
+      usage: '&eUsage: /olencounters spawnat <type> <x> <y> <z> [world]'
+  display:
+    vault_hologram: '&6&l✦ Vault &7| &eKeys: &f%count%'
+  item:
+    meteor_key:
+      name: '&6&l✦ Meteor Key'
+      lore: |
+        &7A key forged from celestial fragments.
+        &7Used to unlock the Meteor Vault.
+
+        &6✦ Meteor Type: &e%meteor_type%
+        &7✦ &8One-time use
+        &7✦ &8Personal loot only
+
+        &e&lRight-click on the Meteor Vault to open!
+    setup_wand:
+      name: '&6&l✦ Meteor Setup Wand'
+      lore: |
+        &6&l=== Region Selection Tool ===
+        &eLeft Click &7- Set position 1
+        &eRight Click &7- Set position 2
+
+        &7Select the area where the
+        &7meteor will impact.
+    mob_spawn_tool:
+      name: '&6&l✦ Spawn Point Marker'
+      lore: |
+        &6&l=== Mob Spawn Point Tool ===
+        &eRight Click &7- Set a spawn point
+
+        &7Mark locations where MythicMobs
+        &7or standard mobs will spawn.
+    loot_editor_item:
+      name: '&6&l✦ Loot Editor'
+      lore: |
+        &6&l=== Loot Editor ===
+        &ePlace on ground &7- Open loot GUI
+
+        &7Configure the loot table for
+        &7the meteor event rewards.
+
+        &8Click items in the GUI to
+        &8configure drop chances and amounts.
+    safe_exit:
+      name: '&a&l✦ Safe Exit'
+      lore: |
+        &6&l=== Safe Exit ===
+        &eRight Click &7- Save and exit setup mode
+
+        &7Your inventory will be restored
+        &7and all setup data will be saved.
+
+        &a&l✔ Click to safely exit!
+    meteor_core:
+      name: '&6&l★ Meteor Core'
+      lore: '&7The burning heart of a fallen star.'
+    wind_charge:
+      name: '&b&l✦ Gale Force Charge'
+      lore: |
+        &7A concentrated blast of wind,
+        &7capable of launching enemies skyward.
+    mace:
+      name: '&6&l✦ Meteorite Mace'
+      lore: |
+        &7Forged from the core of a fallen meteor,
+        &7this mace crackles with celestial energy.
+
+        &6Density %density_level%
+        &6Breach %breach_level%
+        &6Wind Burst %wind_burst_level%
+  event:
+    broadcast:
+      incoming: |-
+        %color%&l⚠ %name% &egeliyor! &c%seconds% saniye
+        &8➜ &b%world% &8• &7X: &f%x% &8• &7Y: &f%y% &8• &7Z: &f%z%
+      impacting: |-
+        %color%&l💥 %name% &eÇARPTI!
+        &8➜ &b%world% &8• &7X: &f%x% &8• &7Y: &f%y% &8• &7Z: &f%z%
+      active: '%color%&l⚔ %name% &eis now active! Defeat the boss to claim the vault!'
+      wave: '&6&l⚔ %name% &eDalga &f%wave%&7/&f%total% &ebaşladı!'
+      all_chests_opened: '&a&lTüm ödül sandıkları açıldı! &eMeteor alanı &c10 saniye &esonra silinecek.'
+      rollback: '%color%&l🔄 %name% &earea is being restored...'
+      restored: '%color%&l✅ %name% &aarea has been fully restored!'
+      cancelled: '%color%&l%name% &cevent has been cancelled!'
+  boss:
+    custom_name: '&6&l✦ Meteor Boss ✦'
+  hazard:
+    radiation:
+      actionbar: '&c&l☢ RADIATION &7| &e%health% &c❤'
+    wind:
+      actionbar: '&b&l🌪 WIND BLAST! &7You were pushed back!'
+    emp:
+      elytra: '&c&l⚡ EMP FIELD &7| &eElytra systems disabled!'
+      elytra_block: '&c&l⚡ EMP FIELD &7| &eElytra cannot be deployed here!'
+      pearl_block: '&c&l⚡ EMP FIELD &7| &eEnder Pearls are disabled in this zone!'
+  vault:
+    locked: '&e尚未完成本场战斗；先清理各波敌人，再右键领取。'
+    key_required: '&e本场需要钥匙，先查看活动规则；不要拆除战利品箱。'
+    already_opened: '&e你已经领取过本场战利品，不能重复领取。请参加下一场遭遇。'
+    opened: '&a已打开本人的战利品窗口。取走后请核对背包，空光标再关闭。'
+    opened_shared: '&a已打开共享战利品，请与同行者协商分配。'
+    mine_to_open: '&e本场需按活动规则采集奖励方块，其他建筑仍受保护。'
+    interact_to_open: '&e请空手右键战利品箱领取，不要拆箱。'
+    inactive: '&e战利品尚未开放，请先完成本场战斗。'
+    mobs_alive: '&e本场还有敌人存活。先清理敌人，再来右键战利品箱。'
+    top_only: '&e本场只向伤害贡献前%count%名开放奖励；参与战斗后查看自己的资格。'
+    ranking_reward: '&a已发放本场第%rank%名的贡献奖励，请核对背包。'
+    key_received: '&a已获得本场战利品钥匙，伤害贡献%damage%%。'
+    custom_reward_received: '&a已发放本场贡献奖励，贡献%damage%%。请核对背包。'
+    open_delay: '&e奖励还需%seconds%秒开放，请稍候再右键。'
+  setup:
+    entered: |
+      &6&l✦ METEOR SETUP MODE ✦
+      &7You are configuring: &e%type%
+      &7Use the items in your hotbar to configure the event.
+      &7Use &e/olencounters setup &7again or click the &aSafe Exit&7 item to exit.
+    exited: '&aInventory restored. Exited setup mode.'
+    exit_failed: '&eCould not restore inventory from backup. Your inventory has been cleared.'
+    backup_failed: '&cFailed to backup inventory. Setup mode aborted.'
+    pos1_set: '&aPosition 1 set: &e%location%'
+    pos2_set: '&aPosition 2 set: &e%location%'
+    region_selected: '&7Region selected: %size% blocks'
+    mob_spawn_added: '&aMob spawn point added at: &e%location%'
+    mob_spawn_total: '&7Total spawn points: &e%count%'
+    loot_editor_opened: '&7Loot Editor opened for &e%type%'
+    command_blocked: '&cThis command is disabled while in setup mode. Use &e/olencounters setup &7to exit.'
+    command_not_allowed: '&cThis command is not allowed while in setup mode.'
+    tool_slot_filler: '&7✦ Setup Tool Slot ✦'
+    actionbar:
+      template: '&eLMB: %pos1_status% &7| &eRMB: %pos2_status% &7| &dMobs: %mob_count% &7| &6Loot: %chest_count% &7| &e%type%'
+      pos1_saved: '&aP1 saved'
+      pos1_pending: '&7P1 pending'
+      pos2_saved: '&aP2 saved'
+      pos2_pending: '&7P2 pending'
+  loot_editor:
+    opened: '&7Loot Editor opened for &e%type%'
+    drag_hint: '&7Drag items into the grid to add them to the loot table.'
+    click_hint: '&7Click items in the grid to configure chances and amounts.'
+    cleared: '&aLoot table cleared.'
+    reset: '&aLoot table restored to this meteor type''s defaults. Press the green button to save.'
+    discarded: '&eClosed without saving changes.'
+    saved: '&aLoot table saved for &e%type%'
+    added: '&aItem added to loot table.'
+    removed: '&aItem removed from loot table.'
+    selected: '&7Selected item in slot %slot%. Use control panel to edit.'
+    select_first: '&eFirst click an item in the grid to select it.'
+    item_locked: '&aItem locked.'
+    item_unlocked: '&aItem unlocked.'
+    cancelled: '&7Edit cancelled. Reopening editor...'
+    no_longer_exists: '&cThe item you were editing no longer exists in the loot table.'
+    chance_changed: '&7Drop chance updated: &e%old%% &7→ &e%new%%'
+    amount_changed: '&7Amount range updated: &e%old% &7→ &e%new%'
+    chance_prompt: |
+
+      &6&l✦ Edit Drop Chance
+      &7Current: &e%current%%
+      &7Enter a value between &e0.1&7 and &e100.0&7:
+      &7Type &e0&7 to cancel.
+    amount_prompt: |
+
+      &6&l✦ Edit Amount Range
+      &7Current: &e%current%
+      &7Enter min and max separated by a space:
+      &7Example: &e1 5
+      &7Type &e0&7 to cancel.
+    chance_error: '&cInvalid chance value. Please enter a number between 0.1 and 100.0'
+    chance_retry: '&7Type the new chance or &e0&7 to cancel:'
+    amount_error: '&cInvalid amount range. Please enter two numbers separated by a space (e.g., &e1 5&c)'
+    amount_retry: '&7Type min and max amount or &e0&7 to cancel:'
+    unexpected_error: '&cAn unexpected error occurred. Please try again.'
+    gui:
+      title_prefix: '&6&l✦ Meteor Loot Editor &8- &7'
+      item_separator: '&8&m----------------------'
+      locked_yes: '&aYes'
+      locked_no: '&cNo'
+      locked_status: '&7Locked: %status%'
+      drop_chance: '&7Drop Chance: &e%chance%%'
+      amount_range: '&7Amount: &e%min% - &e%max%'
+      selected_status: '&a✔ Selected item'
+      left_click: '&7Left-click: Edit chance'
+      right_click: '&7Right-click: Edit amount'
+      shift_click: '&7Shift+Click: Toggle locked'
+      q_drop: '&7Q/Drop: Remove item'
+      info_name: '&6&lLoot Table Info'
+      info_type: '&7Type: &e%type%'
+      info_items: '&7Items: &e%count%'
+      info_difficulty: '&7Difficulty: %color%%difficulty%'
+      chance_name: '&6Edit Chance'
+      chance_lore: |
+        &7Click an item in the grid,
+        &7then click here to edit its
+        &7drop chance (&e0.1% - 100%&7).
+      amount_name: '&6Edit Amount'
+      amount_lore: |
+        &7Click an item in the grid,
+        &7then click here to edit its
+        &7minimum and maximum amount.
+      lock_name: '&6Toggle Lock'
+      lock_lore: |
+        &7Click an item in the grid,
+        &7then click here to toggle
+        &7whether it requires a special key.
+      reset_name: '&e&lRestore Defaults'
+      reset_lore: |
+        &7Reloads the starting loot for
+        &7this meteor type.
+      clear_name: '&c&lClear All Items'
+      clear_lore: |
+        &7Removes all items from
+        &7the loot table.
+      cancel_name: '&cClose Without Saving'
+      cancel_lore: |
+        &7Discards this session's changes
+        &7and closes the menu.
+      save_name: '&a&l✔ Save & Close'
+      save_lore: |
+        &7Saves the current loot table
+        &7and closes the editor.
+  message_prefix: '&8[&6野外遭遇&8] &r'
+  meteor_type:
+    small:
+      name: Small Meteor
+      color: '&a'
+    medium:
+      name: Medium Meteor
+      color: '&e'
+    large:
+      name: Large Meteor
+      color: '&c'
+    epic:
+      name: Epic Meteor
+      color: '&5'
+    legendary:
+      name: Legendary Meteor
+      color: '&6'
+    difficulty:
+      easy:
+        name: Easy
+        color: '&a'
+      normal:
+        name: Normal
+        color: '&e'
+      hard:
+        name: Hard
+        color: '&c'
+      epic:
+        name: Epic
+        color: '&5'
+      legendary:
+        name: Legendary
+        color: '&6'
+basic-settings:
+  integrations:
+    nbt-api-enabled: true
+  schematic:
+    default: qd_forest_camp.schem
+  location:
+    preset: any_surface
+    max-attempts: 40
+    terrain-variance: 5
+    claim-buffer: 50
+    block-worldguard-regions: true
+    require-towny-wilderness: true
+  event:
+    cleanup-delay-seconds: 60
+    unattended-timeout-minutes: 30
+    damage-actionbar: true
+    kill-actionbar: true
+    leaderboard: true
+    loot-block: ANCIENT_DEBRIS
+    reward-top-count: 3
+  performance-profile: SAFE
+  language: en
+  automatic-events:
+    interval-minutes:
+      minimum: 30
+      maximum: 60
+    worlds: []
+    meteor-types:
+      - small
+      - medium
+      - large
+    enabled: false
+    categories:
+      default:
+        enabled: true
+        weight: 1
+        meteors:
+          small: 1
+          medium: 1
+          large: 1
+          epic: 1
+          legendary: 1
+modules:
+  disabled: []
+  enabled: false
+meteor-types:
+  small:
+    restore-structure-on-finish: true
+    loot:
+      block: CHEST
+      access-mode: INTERACT
+      personal: true
+      inventory-title: 千灯纪 · 同行战利品
+    messages: {}
+    broadcasts:
+      incoming:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &f附近出现斥候营地：%world% %location%。可查询 /mycli world events，选择是否前往。'
+      impacting:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &f营地已出现。'
+      active:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &e到场后 /mycli world events join 参加。'
+      wave:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &e下一批敌人出现了。'
+      rollback:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7营地正在收尾，请离开临时建筑。'
+      restored:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7现场已恢复。'
+      cancelled:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7活动已取消，现场将恢复。'
+      all_chests_opened:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &a战利品已取完。'
+      leaderboard:
+        enabled: false
+        audience: NEARBY
+        radius: 96
+    combat-feedback:
+      damage-actionbar-text: '&e本次伤害 %damage%'
+      kill-actionbar-text: '&a击败敌人，剩余 %remaining%'
+      leaderboard-title: '&6同行战绩'
+      leaderboard-entry: '&e%player% &7伤害 %damage%'
+      leaderboard-empty: '&7暂无参战记录'
+      leaderboard-size: 3
+      damage-actionbar: true
+      kill-actionbar: true
+      broadcast-leaderboard: false
+    fall-mode: normal
+    normal-fall-duration-seconds: 8
+    slow-fall-duration-seconds: 18
+    arrival:
+      particle-density: 3
+      sound-enabled: true
+      normal:
+        duration-seconds: 8
+        distance: 80
+      slow:
+        duration-seconds: 18
+        distance: 120
+      underground:
+        duration-seconds: 10
+        distance: 18
+      portal:
+        duration-seconds: 12
+        distance: 8
+      materialize:
+        duration-seconds: 8
+        distance: 6
+      horizontal:
+        duration-seconds: 10
+        distance: 96
+    mob-arrival:
+      mode: instant
+      duration-seconds: 0
+      distance: 0
+      particle-density: 1
+      sound-enabled: true
+    pre-impact-duration-seconds: 5
+    event-duration-seconds: 600
+    rollback-duration-seconds: 5
+    impact-radius: 18
+    radius-shape: CIRCLE
+    boss-health-multiplier: 1
+    rewards-commands: []
+    rewards-items: []
+    ranking-rewards:
+      '1':
+        items: []
+        commands: []
+      '2':
+        items: []
+        commands: []
+      '3':
+        items: []
+        commands: []
+    boss-mythicmob: ''
+    mythicmobs: []
+    mob-spawn-offsets: []
+    boss-spawn-offset: []
+    hologram-offsets: []
+    chest-offsets: []
+    hologram-text: '&6林间遭遇 &7· 清敌后领取本人物资'
+    mythicmob-chances: {}
+    schematic: qd_forest_camp.schem
+    location:
+      max-distance-from-spawn: 3000
+      terrain-variance-tolerance: 5
+      worldguard-check-claims: true
+      preset: grass_surface
+      min-distance-from-spawn: 600
+      buffer-zone-from-claims: 50
+      towny-require-wilderness: true
+      max-attempts: 40
+    hazards:
+      radiation-enabled: false
+      wind-enabled: false
+      disable-elytra: false
+      disable-ender-pearl: false
+      wind-charge-knockback-multiplier: 1.5
+      radiation-damage-per-second: 2
+      wind-charge-interval-ticks: 100
+    completion:
+      unattended-timeout-minutes: 10
+      cleanup-delay-seconds: 90
+    tracking:
+      enabled: true
+      max-distance: 2000
+    fall:
+      normal-height: 80
+      show-impact-core: false
+      slow-height: 120
+    vault:
+      key-enabled: false
+      reward-mode: NONE
+      open-delay-ticks: 0
+      reward-top-count: 3
+      boss-damage-threshold-percent: 10
+    chunk-force-load-radius: 1
+    waves:
+      count: 3
+      interval-seconds: 15
+      enabled: true
+  medium:
+    restore-structure-on-finish: true
+    loot:
+      block: CHEST
+      access-mode: INTERACT
+      personal: true
+      inventory-title: 千灯纪 · 同行战利品
+    messages: {}
+    broadcasts:
+      incoming:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &f附近出现斥候营地：%world% %location%。可查询 /mycli world events，选择是否前往。'
+      impacting:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &f营地已出现。'
+      active:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &e到场后 /mycli world events join 参加。'
+      wave:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &e下一批敌人出现了。'
+      rollback:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7营地正在收尾，请离开临时建筑。'
+      restored:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7现场已恢复。'
+      cancelled:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7活动已取消，现场将恢复。'
+      all_chests_opened:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &a战利品已取完。'
+      leaderboard:
+        enabled: false
+        audience: NEARBY
+        radius: 96
+    combat-feedback:
+      damage-actionbar-text: '&e本次伤害 %damage%'
+      kill-actionbar-text: '&a击败敌人，剩余 %remaining%'
+      leaderboard-title: '&6同行战绩'
+      leaderboard-entry: '&e%player% &7伤害 %damage%'
+      leaderboard-empty: '&7暂无参战记录'
+      leaderboard-size: 3
+      damage-actionbar: true
+      kill-actionbar: true
+      broadcast-leaderboard: false
+    fall-mode: normal
+    normal-fall-duration-seconds: 8
+    slow-fall-duration-seconds: 18
+    arrival:
+      particle-density: 3
+      sound-enabled: true
+      normal:
+        duration-seconds: 8
+        distance: 80
+      slow:
+        duration-seconds: 18
+        distance: 120
+      underground:
+        duration-seconds: 10
+        distance: 18
+      portal:
+        duration-seconds: 12
+        distance: 8
+      materialize:
+        duration-seconds: 8
+        distance: 6
+      horizontal:
+        duration-seconds: 10
+        distance: 96
+    mob-arrival:
+      mode: instant
+      duration-seconds: 0
+      distance: 0
+      particle-density: 1
+      sound-enabled: true
+    pre-impact-duration-seconds: 5
+    event-duration-seconds: 600
+    rollback-duration-seconds: 5
+    impact-radius: 18
+    radius-shape: CIRCLE
+    boss-health-multiplier: 1.5
+    rewards-commands: []
+    rewards-items: []
+    ranking-rewards: {}
+    boss-mythicmob: ''
+    mythicmobs: []
+    mob-spawn-offsets: []
+    boss-spawn-offset: []
+    hologram-offsets: []
+    chest-offsets: []
+    hologram-text: '&6林间遭遇 &7· 清敌后领取本人物资'
+    mythicmob-chances: {}
+    schematic: ''
+    location:
+      max-distance-from-spawn: 3000
+      terrain-variance-tolerance: 5
+      worldguard-check-claims: true
+      preset: grass_surface
+      min-distance-from-spawn: 600
+      buffer-zone-from-claims: 50
+      towny-require-wilderness: true
+      max-attempts: 40
+    hazards:
+      radiation-enabled: false
+      wind-enabled: false
+      disable-elytra: false
+      disable-ender-pearl: false
+      wind-charge-knockback-multiplier: 1.5
+      radiation-damage-per-second: 2
+      wind-charge-interval-ticks: 100
+    completion:
+      unattended-timeout-minutes: 10
+      cleanup-delay-seconds: 90
+    tracking:
+      enabled: true
+      max-distance: 2000
+    fall:
+      normal-height: 80
+      show-impact-core: false
+      slow-height: 120
+    vault:
+      key-enabled: false
+      reward-mode: NONE
+      open-delay-ticks: 0
+      reward-top-count: 3
+      boss-damage-threshold-percent: 10
+    chunk-force-load-radius: 1
+    waves:
+      count: 3
+      interval-seconds: 15
+      enabled: true
+  large:
+    restore-structure-on-finish: true
+    loot:
+      block: CHEST
+      access-mode: INTERACT
+      personal: true
+      inventory-title: 千灯纪 · 同行战利品
+    messages: {}
+    broadcasts:
+      incoming:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &f附近出现斥候营地：%world% %location%。可查询 /mycli world events，选择是否前往。'
+      impacting:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &f营地已出现。'
+      active:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &e到场后 /mycli world events join 参加。'
+      wave:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &e下一批敌人出现了。'
+      rollback:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7营地正在收尾，请离开临时建筑。'
+      restored:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7现场已恢复。'
+      cancelled:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7活动已取消，现场将恢复。'
+      all_chests_opened:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &a战利品已取完。'
+      leaderboard:
+        enabled: false
+        audience: NEARBY
+        radius: 96
+    combat-feedback:
+      damage-actionbar-text: '&e本次伤害 %damage%'
+      kill-actionbar-text: '&a击败敌人，剩余 %remaining%'
+      leaderboard-title: '&6同行战绩'
+      leaderboard-entry: '&e%player% &7伤害 %damage%'
+      leaderboard-empty: '&7暂无参战记录'
+      leaderboard-size: 3
+      damage-actionbar: true
+      kill-actionbar: true
+      broadcast-leaderboard: false
+    fall-mode: normal
+    normal-fall-duration-seconds: 10
+    slow-fall-duration-seconds: 20
+    arrival:
+      particle-density: 3
+      sound-enabled: true
+      normal:
+        duration-seconds: 10
+        distance: 90
+      slow:
+        duration-seconds: 20
+        distance: 130
+      underground:
+        duration-seconds: 11
+        distance: 20
+      portal:
+        duration-seconds: 13
+        distance: 9
+      materialize:
+        duration-seconds: 9
+        distance: 7
+      horizontal:
+        duration-seconds: 11
+        distance: 112
+    mob-arrival:
+      mode: instant
+      duration-seconds: 0
+      distance: 0
+      particle-density: 1
+      sound-enabled: true
+    pre-impact-duration-seconds: 5
+    event-duration-seconds: 600
+    rollback-duration-seconds: 5
+    impact-radius: 18
+    radius-shape: CIRCLE
+    boss-health-multiplier: 2
+    rewards-commands: []
+    rewards-items: []
+    ranking-rewards: {}
+    boss-mythicmob: ''
+    mythicmobs: []
+    mob-spawn-offsets: []
+    boss-spawn-offset: []
+    hologram-offsets: []
+    chest-offsets: []
+    hologram-text: '&6林间遭遇 &7· 清敌后领取本人物资'
+    mythicmob-chances: {}
+    schematic: ''
+    location:
+      max-distance-from-spawn: 3000
+      terrain-variance-tolerance: 5
+      worldguard-check-claims: true
+      preset: grass_surface
+      min-distance-from-spawn: 600
+      buffer-zone-from-claims: 50
+      towny-require-wilderness: true
+      max-attempts: 40
+    hazards:
+      radiation-enabled: false
+      wind-enabled: false
+      disable-elytra: false
+      disable-ender-pearl: false
+      wind-charge-knockback-multiplier: 1.5
+      radiation-damage-per-second: 2
+      wind-charge-interval-ticks: 100
+    completion:
+      unattended-timeout-minutes: 10
+      cleanup-delay-seconds: 90
+    tracking:
+      enabled: true
+      max-distance: 2000
+    fall:
+      normal-height: 80
+      show-impact-core: false
+      slow-height: 120
+    vault:
+      key-enabled: false
+      reward-mode: NONE
+      open-delay-ticks: 0
+      reward-top-count: 3
+      boss-damage-threshold-percent: 10
+    chunk-force-load-radius: 1
+    waves:
+      count: 3
+      interval-seconds: 15
+      enabled: true
+  epic:
+    restore-structure-on-finish: true
+    loot:
+      block: CHEST
+      access-mode: INTERACT
+      personal: true
+      inventory-title: 千灯纪 · 同行战利品
+    messages: {}
+    broadcasts:
+      incoming:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &f附近出现斥候营地：%world% %location%。可查询 /mycli world events，选择是否前往。'
+      impacting:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &f营地已出现。'
+      active:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &e到场后 /mycli world events join 参加。'
+      wave:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &e下一批敌人出现了。'
+      rollback:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7营地正在收尾，请离开临时建筑。'
+      restored:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7现场已恢复。'
+      cancelled:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7活动已取消，现场将恢复。'
+      all_chests_opened:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &a战利品已取完。'
+      leaderboard:
+        enabled: false
+        audience: NEARBY
+        radius: 96
+    combat-feedback:
+      damage-actionbar-text: '&e本次伤害 %damage%'
+      kill-actionbar-text: '&a击败敌人，剩余 %remaining%'
+      leaderboard-title: '&6同行战绩'
+      leaderboard-entry: '&e%player% &7伤害 %damage%'
+      leaderboard-empty: '&7暂无参战记录'
+      leaderboard-size: 3
+      damage-actionbar: true
+      kill-actionbar: true
+      broadcast-leaderboard: false
+    fall-mode: slow
+    normal-fall-duration-seconds: 10
+    slow-fall-duration-seconds: 22
+    arrival:
+      particle-density: 4
+      sound-enabled: true
+      normal:
+        duration-seconds: 10
+        distance: 100
+      slow:
+        duration-seconds: 22
+        distance: 150
+      underground:
+        duration-seconds: 12
+        distance: 24
+      portal:
+        duration-seconds: 14
+        distance: 11
+      materialize:
+        duration-seconds: 10
+        distance: 8
+      horizontal:
+        duration-seconds: 12
+        distance: 128
+    mob-arrival:
+      mode: instant
+      duration-seconds: 0
+      distance: 0
+      particle-density: 1
+      sound-enabled: true
+    pre-impact-duration-seconds: 5
+    event-duration-seconds: 600
+    rollback-duration-seconds: 5
+    impact-radius: 18
+    radius-shape: CIRCLE
+    boss-health-multiplier: 3
+    rewards-commands: []
+    rewards-items: []
+    ranking-rewards: {}
+    boss-mythicmob: ''
+    mythicmobs: []
+    mob-spawn-offsets: []
+    boss-spawn-offset: []
+    hologram-offsets: []
+    chest-offsets: []
+    hologram-text: '&6林间遭遇 &7· 清敌后领取本人物资'
+    mythicmob-chances: {}
+    schematic: ''
+    location:
+      max-distance-from-spawn: 3000
+      terrain-variance-tolerance: 5
+      worldguard-check-claims: true
+      preset: grass_surface
+      min-distance-from-spawn: 600
+      buffer-zone-from-claims: 50
+      towny-require-wilderness: true
+      max-attempts: 40
+    hazards:
+      radiation-enabled: false
+      wind-enabled: false
+      disable-elytra: false
+      disable-ender-pearl: false
+      wind-charge-knockback-multiplier: 1.5
+      radiation-damage-per-second: 2
+      wind-charge-interval-ticks: 100
+    completion:
+      unattended-timeout-minutes: 10
+      cleanup-delay-seconds: 90
+    tracking:
+      enabled: true
+      max-distance: 2000
+    fall:
+      normal-height: 80
+      show-impact-core: false
+      slow-height: 120
+    vault:
+      key-enabled: false
+      reward-mode: NONE
+      open-delay-ticks: 0
+      reward-top-count: 3
+      boss-damage-threshold-percent: 10
+    chunk-force-load-radius: 1
+    waves:
+      count: 3
+      interval-seconds: 15
+      enabled: true
+  legendary:
+    restore-structure-on-finish: true
+    loot:
+      block: CHEST
+      access-mode: INTERACT
+      personal: true
+      inventory-title: 千灯纪 · 同行战利品
+    messages: {}
+    broadcasts:
+      incoming:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &f附近出现斥候营地：%world% %location%。可查询 /mycli world events，选择是否前往。'
+      impacting:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &f营地已出现。'
+      active:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &e到场后 /mycli world events join 参加。'
+      wave:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &e下一批敌人出现了。'
+      rollback:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7营地正在收尾，请离开临时建筑。'
+      restored:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7现场已恢复。'
+      cancelled:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &7活动已取消，现场将恢复。'
+      all_chests_opened:
+        enabled: true
+        audience: NEARBY
+        radius: 128
+        message: '&6[野外遭遇] &a战利品已取完。'
+      leaderboard:
+        enabled: false
+        audience: NEARBY
+        radius: 96
+    combat-feedback:
+      damage-actionbar-text: '&e本次伤害 %damage%'
+      kill-actionbar-text: '&a击败敌人，剩余 %remaining%'
+      leaderboard-title: '&6同行战绩'
+      leaderboard-entry: '&e%player% &7伤害 %damage%'
+      leaderboard-empty: '&7暂无参战记录'
+      leaderboard-size: 3
+      damage-actionbar: true
+      kill-actionbar: true
+      broadcast-leaderboard: false
+    fall-mode: slow
+    normal-fall-duration-seconds: 12
+    slow-fall-duration-seconds: 25
+    arrival:
+      particle-density: 5
+      sound-enabled: true
+      normal:
+        duration-seconds: 12
+        distance: 120
+      slow:
+        duration-seconds: 25
+        distance: 180
+      underground:
+        duration-seconds: 14
+        distance: 30
+      portal:
+        duration-seconds: 16
+        distance: 14
+      materialize:
+        duration-seconds: 12
+        distance: 10
+      horizontal:
+        duration-seconds: 14
+        distance: 160
+    mob-arrival:
+      mode: instant
+      duration-seconds: 0
+      distance: 0
+      particle-density: 1
+      sound-enabled: true
+    pre-impact-duration-seconds: 5
+    event-duration-seconds: 600
+    rollback-duration-seconds: 5
+    impact-radius: 18
+    radius-shape: CIRCLE
+    boss-health-multiplier: 4
+    rewards-commands: []
+    rewards-items: []
+    ranking-rewards: {}
+    boss-mythicmob: ''
+    mythicmobs: []
+    mob-spawn-offsets: []
+    boss-spawn-offset: []
+    hologram-offsets: []
+    chest-offsets: []
+    hologram-text: '&6林间遭遇 &7· 清敌后领取本人物资'
+    mythicmob-chances: {}
+    schematic: ''
+    location:
+      max-distance-from-spawn: 3000
+      terrain-variance-tolerance: 5
+      worldguard-check-claims: true
+      preset: grass_surface
+      min-distance-from-spawn: 600
+      buffer-zone-from-claims: 50
+      towny-require-wilderness: true
+      max-attempts: 40
+    hazards:
+      radiation-enabled: false
+      wind-enabled: false
+      disable-elytra: false
+      disable-ender-pearl: false
+      wind-charge-knockback-multiplier: 1.5
+      radiation-damage-per-second: 2
+      wind-charge-interval-ticks: 100
+    completion:
+      unattended-timeout-minutes: 10
+      cleanup-delay-seconds: 90
+    tracking:
+      enabled: true
+      max-distance: 2000
+    fall:
+      normal-height: 80
+      show-impact-core: false
+      slow-height: 120
+    vault:
+      key-enabled: false
+      reward-mode: NONE
+      open-delay-ticks: 0
+      reward-top-count: 3
+      boss-damage-threshold-percent: 10
+    chunk-force-load-radius: 1
+    waves:
+      count: 3
+      interval-seconds: 15
+      enabled: true
+config-version: 7

@@ -1,0 +1,19 @@
+language: en-US # The pinned plugin loads en_US.yml; its contents are Chinese.
+village:
+  villager-radius: 8
+  flood-fill-hop-radius: 32
+  max-villagers-per-village: 96
+  resource-extra-radius: 24
+  max-resource-distance: 2
+routine:
+  tick-interval: 200
+  sound-chance: 0.12
+  move-speed: 0.55
+reputation:
+  min-gossip: 0
+  # Fetch/work can bypass private resources in the upstream plugin. Keep these
+  # locked until a real ownership-aware transfer adapter is implemented.
+  min-fetch: 1000000
+  min-fetch-rare: 1000000
+  min-work-order: 1000000
+  min-escort: 25

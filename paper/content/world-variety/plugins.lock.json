@@ -1,0 +1,40 @@
+{
+  "plugins": [
+    {
+      "slug": "villagerlife",
+      "version": "1.0.0",
+      "artifact": "https://cdn.modrinth.com/data/h5DmpLhT/versions/PM26i5Bz/villagerlife-1.0.0.jar",
+      "sha256": "ea9e00f7bb9ab414d51fbd0b1d29a2fec1c383c33bc0d4eef84e5606628e2fa4",
+      "sha512": "d9e7d7cc3cce9616b45c31137ae57d5bdba53a7e248d1e6fdacc9f6fecce01140c0b95e329f168baa68d32ce492f292b890a0a5a4f860627d0e49c40da758bb3"
+    },
+    {
+      "slug": "olencounters",
+      "version": "1.7.0",
+      "artifact": "https://cdn.modrinth.com/data/k3YDgIH0/versions/1aYOJz1I/OlEncounters-1.7.0.jar",
+      "sha256": "1577935cc738f199719db7c1b4eaa1630a4ecaa208aba5f5d18943585075ab0f",
+      "sha512": "e50c9c1b974dd7269d6f390ebd2b28c11539786a72cb001cb808041374db5e451ba5cf88bc2c4811deb5240ddab2ac822760bcc85bc074a0a07511ae77e6fe9a"
+    },
+    {
+      "slug": "commandapi",
+      "version": "12.1.0",
+      "artifact": "https://cdn.modrinth.com/data/ExxvCi0y/versions/Niu5FiSP/CommandAPI-12.1.0-Paper.jar",
+      "sha256": "ab48e55fd06264dd239cf015b501936cb50eb6c38d967fbffca6c91a48064049",
+      "sha512": "fea7b0514c190fefa7772bed4d14b5c34b0e296d354df19bdfe193c558a63160fa15157f5bd2651181a846926b82a9fc0dc084b82b7dad4a013fd7642792e18c"
+    },
+    {
+      "slug": "fastasyncworldedit",
+      "version": "2.16.1",
+      "artifact": "https://cdn.modrinth.com/data/z4HZZnLr/versions/A1gBu4MM/FastAsyncWorldEdit-Paper-2.16.1.jar",
+      "sha256": "a1706c41412a108e3d2fdbd9e9dd0c60904f2ba45414c6edf11c1262812e1838",
+      "sha512": "711c7c358a5b4ec73160413a4aa08829d2cd474f75e1dc379c0ebc9b63b5b6458de8113c10bbaf3594497db558d7ae2519c7d7c37353be142a797a7eeee3ce43"
+    },
+    {
+      "version": "2.9.1-SNAPSHOT",
+      "build": "2.9.1-20241003.132722-3",
+      "source": "https://maven.citizensnpcs.co/repo/org/mcmonkey/sentinel/2.9.1-SNAPSHOT/sentinel-2.9.1-20241003.132722-3.jar",
+      "sha256": "3967a2f2f890a0990066927604a7463610bad4f863132b924a14a5f948cb9799",
+      "slug": "sentinel",
+      "artifact": "https://maven.citizensnpcs.co/repo/org/mcmonkey/sentinel/2.9.1-SNAPSHOT/sentinel-2.9.1-20241003.132722-3.jar"
+    }
+  ]
+}

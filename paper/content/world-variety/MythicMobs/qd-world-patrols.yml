@@ -1,0 +1,27 @@
+QD_PatrolPillager:
+  Type: PILLAGER
+  Display: '§6山道斥候'
+  Health: 24
+  Damage: 3
+  Equipment: [CROSSBOW HAND]
+  Options: {PreventOtherDrops: true, Despawn: true, PreventSunburn: true}
+QD_PatrolVindicator:
+  Type: VINDICATOR
+  Display: '§6营地护卫'
+  Health: 24
+  Damage: 4
+  Equipment: [IRON_AXE HAND]
+  Options: {PreventOtherDrops: true, Despawn: true}
+QD_PatrolZombie:
+  Type: ZOMBIE
+  Display: '§7游荡亡者'
+  Health: 20
+  Damage: 3
+  Options: {PreventOtherDrops: true, Despawn: true, PreventSunburn: true, PreventReinforcements: true}
+QD_PatrolSkeleton:
+  Type: SKELETON
+  Display: '§7骸骨斥候'
+  Health: 20
+  Damage: 3
+  Equipment: [BOW HAND]
+  Options: {PreventOtherDrops: true, Despawn: true, PreventSunburn: true}

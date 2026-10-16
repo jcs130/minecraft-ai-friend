@@ -29,13 +29,19 @@ function Deploy-PendingContent {
     # notes are UTF-8, including Chinese punctuation next to JSON quotes.
     $plan = Get-Content -LiteralPath $planPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($plan.schema -ne 1 -or $plan.id -notmatch '^[a-z0-9-]{8,80}$') { throw 'Invalid content deployment plan' }
-    $allowed = @('AgentFriend','BetonQuest','FancyNpcs','Citizens','Denizen','ConditionalEvents','WorldEvents','MythicMobs','Shopkeepers','NPCSpeak','ImageFrame','FancyAnalytics')
+    $allowed = @('AgentFriend','BetonQuest','FancyNpcs','Citizens','Denizen','ConditionalEvents','WorldEvents','MythicMobs','Shopkeepers','NPCSpeak','ImageFrame','FancyAnalytics','WorldVariety','VillagerLife','Sentinel','OlEncounters','CommandAPI','FastAsyncWorldEdit')
+    $worldVarietyPacks = @('more-chinese-structures','chinese-village','zhengsz-wonderland','aoe4mc','japanese-castle','castles-castles','grim-kingdoms-lost-structures-ruins','caleari-castle','ati-structures-vanilla-edition','towns-and-towers','ct-overhaul-village','lukis-grand-capitals','adorabuild-structures','dungeons-and-taverns-end-castle-standalone','hopo-better-ruined-portals','hopo-better-underwater-ruins','moogs-voyager-structures','when-dungeons-arise','when-dungeons-arise-seven-seas','sky-villages','peakscape','mss-moogs-soaring-structures','mes-moogs-end-structures','mmv-moogs-missing-villages','mtr-moogs-temples-reimagined','hopo-better-mineshaft')
     $entries = @(); $seen = @{}
     foreach ($file in @($plan.files)) {
         $relative = [string]$file.target
         if ($relative -match '^[A-Za-z0-9][A-Za-z0-9_.-]*\.jar$') {
-            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame)-') { throw 'Unexpected plugin JAR' }
+            if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit)-') { throw 'Unexpected plugin JAR' }
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
+        } elseif ($relative -match '^world/datapacks/(world-expansion--(?<slug>[a-z0-9-]+)|zz-qiandengji-world-variety)\.zip$') {
+            if ($Matches['slug'] -and $worldVarietyPacks -notcontains $Matches['slug']) { throw 'Unreviewed world variety pack' }
+            $target = Join-Path $serverDir $relative
+        } elseif ($relative -eq 'plugins/OlEncounters/schematics/qd_forest_camp.schem') {
+            $target = Join-Path $serverDir $relative
         } elseif ($relative -match '^ysm-proxy/((AgentAppearance|LibreLogin|LoginGuard|NanoLimboPlugin-velocity)-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
             $target = Content-YsmProxyTarget $Matches[1]
         } elseif ($relative -match '^ysm-model/(cormy|neko_yui)/ysm\.json$') {
@@ -88,6 +94,11 @@ function Deploy-PendingContent {
         if ($file.name -match '^ysm-proxy/((?:AgentAppearance|LoginGuard)-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
             $target = Content-YsmProxyTarget $Matches[1]
         } elseif ($file.name -match '^(AgentFriend|CortiEyeMirror)-[0-9]+\.[0-9]+\.[0-9]+\.jar$') {
+            $target = Join-Path (Join-Path $serverDir 'plugins') $file.name
+        } elseif ($file.name -eq 'worldedit-bukkit-7.3.9.jar') {
+            # This exact reviewed replacement is necessary: FAWE provides the
+            # WorldEdit API and may not run alongside the old WorldEdit JAR.
+            # Preserve its digest, stopped backup and atomic rollback gates.
             $target = Join-Path (Join-Path $serverDir 'plugins') $file.name
         } else { throw 'Only previous first-party plugin JAR may be removed' }
         if ($seen.ContainsKey($target.ToLowerInvariant())) { throw 'Duplicate content target' }

@@ -1,0 +1,738 @@
+{
+  "schemaVersion": 1,
+  "packs": [
+    {
+      "slug": "more-chinese-structures",
+      "title": "More Chinese Structures",
+      "sha256": "c994a6b4f1eced7d0564165be8840bc736b2d96cac6387f8baa7c636f210b564",
+      "source": "https://modrinth.com/project/more-chinese-structures",
+      "version": "1.1.1",
+      "profile": "native",
+      "pruneUnavailableAdvancements": true,
+      "functionReplacements": {
+        "data/mcs/function/mobs/explosive_chicken/blow.mcfunction": "execute at @e[type=creeper,tag=bomb_marker] run particle minecraft:explosion_emitter ~ ~1 ~ 0 0 0 0 1 force\nexecute at @e[type=creeper,tag=bomb_marker] run playsound minecraft:entity.generic.explode hostile @a[distance=..32] ~ ~ ~ 1 1\nexecute at @e[type=creeper,tag=bomb_marker] as @a[distance=..4,gamemode=!spectator] run damage @s 6 minecraft:explosion\nkill @e[type=creeper,tag=bomb_marker]\n",
+        "data/mcs/function/mobs/explosive_chicken/set_fuse.mcfunction": "kill @e[type=chicken,tag=explosive_chicken,distance=..5]\nsummon creeper ~ ~ ~ {Invulnerable:1b,NoAI:1b,Tags:[\"bomb_marker\"]}\ntellraw @s {\"text\":\"机关鸡即将爆发！10秒内离开周围4格。\",\"color\":\"red\"}\nschedule function mcs:mobs/explosive_chicken/blow 10s replace\n",
+        "data/mcs/function/mobs/thunder_god/change_weather.mcfunction": "execute at @e[tag=thunder_god] run particle minecraft:electric_spark ~ ~2 ~ 1 1 1 0.1 24 force\nschedule function mcs:mobs/thunder_god/update 10t replace\n",
+        "data/mcs/function/mobs/thunder_god/death.mcfunction": "schedule clear mcs:mobs/thunder_god/update\n",
+        "data/mcs/function/mobs/thunder_god/update.mcfunction": "execute if entity @e[tag=thunder_god] run schedule function mcs:mobs/thunder_god/update 10t replace\nexecute unless entity @e[tag=thunder_god] run function mcs:mobs/thunder_god/death\n"
+      },
+      "artifact": "https://cdn.modrinth.com/data/ggOpkrVq/versions/AQb5QWz2/mcs-v1.1.1.zip",
+      "artifactSha512": "66cc21b3ed19a6851d1346b21f4d8c71fa7d3756dfbe5103c3a65ea0727bab6d9a4f4d86de6d9a5be2d4152c78df2128049bfa297a0413f2024b072647db120a",
+      "license": {
+        "id": "MIT",
+        "name": "MIT License",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1"
+      ]
+    },
+    {
+      "slug": "chinese-village",
+      "title": "Chinese Village",
+      "sha256": "a6c63194ed81c3623d6087de63340679a84c61d710317b19d2840174c622b70e",
+      "source": "https://modrinth.com/project/chinese-village",
+      "version": "1.21.1",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/A54GXy28/versions/4BgCpo5l/Chinesevillage_1.21.1_v1.zip",
+      "artifactSha512": "c60bd67c29e38ce08bb73d4d659f7bdeed558932c17f579eb83d6131f87008255d63daa79335b25b6746ee4a4f3d817ca04d48322142a44c74cdd4c08269b0f3",
+      "license": {
+        "id": "LicenseRef-All-Rights-Reserved",
+        "name": "",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21.1"
+      ]
+    },
+    {
+      "slug": "zhengsz-wonderland",
+      "title": "ZhengSZ's Wonderland",
+      "sha256": "9e4e2f456eb5d90726d438a55bf79c5b9bc21cb7bd5cd1702217e73fa81caf00",
+      "source": "https://modrinth.com/project/zhengsz-wonderland",
+      "version": "1.0.0",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/QW9nYysC/versions/pzddrMem/%5B1.21.x%5DZhengSZ%27s%20Wonderland%20v1.0.0.zip",
+      "artifactSha512": "334308634bbd06435bf235d7be7be88845324e7607827de529248d49818bb0048da55c2338d6c337b1a9134123cf1946dc2b59076cafc774eb21a5432327fdef",
+      "license": {
+        "id": "LicenseRef-All-Rights-Reserved",
+        "name": "",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21"
+      ]
+    },
+    {
+      "slug": "aoe4mc",
+      "title": "Age Of Empires IV Minecraft Edition",
+      "sha256": "bf4480504a379a36f3d90feea298e663bef5727787dea21b38cdbb9c14974850",
+      "source": "https://modrinth.com/project/aoe4mc",
+      "version": "0.0.14",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/TAMoYI5E/versions/2lUWfldV/%5B1.21.x%5DAge%20Of%20Empires%20IV%20Minecraft%20Edition%20Ver0.0.14.zip",
+      "artifactSha512": "4c20c744c0b8497d2dd637ac65280d09e6374d67eaaedf08802b5f8d84a59e27fda66ed88af0b67a05a1342d1104d8d39f0ce7c223993c24b172f5c5ed086a78",
+      "license": {
+        "id": "CC-BY-NC-SA-4.0",
+        "name": "Creative Commons Attribution Non Commercial Share Alike 4.0 International",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21"
+      ]
+    },
+    {
+      "slug": "japanese-castle",
+      "title": "Japanese Castle - Structure ✅",
+      "sha256": "8cd6a6faca9bf0c32023469090747fc85b03533deb79bc4ffbab2946f45ce30b",
+      "source": "https://modrinth.com/project/japanese-castle",
+      "version": "1.0",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/Sb6aWvSZ/versions/PaJVk0aj/japanese-castle.zip",
+      "artifactSha512": "5bfeee05701149b58193ea4220304e3ad8438a79a822bbe8bf46bb5e701d49651eab84b5430c2762beedb1b7d097a97c37c7734e2372da2ea32ebbed0690b40a",
+      "license": {
+        "id": "LicenseRef-All-Rights-Reserved",
+        "name": "",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1",
+        "1.21.2",
+        "1.21.3",
+        "1.21.4",
+        "1.21.5",
+        "1.21.6",
+        "1.21.7",
+        "1.21.8",
+        "1.21.9",
+        "1.21.10",
+        "1.21.11"
+      ]
+    },
+    {
+      "slug": "castles-castles",
+      "title": "Castles & Castles",
+      "sha256": "395ae7e202610bc1c860263b988e9e413d0b001680c4ada614c6ceeba976fae6",
+      "source": "https://modrinth.com/project/castles-castles",
+      "version": "1.0",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/6YTaQHoz/versions/rYMLUo7Z/castles_1.21-.1.zip",
+      "artifactSha512": "f9b7fe2ad5d13940ea29d77880855e2d03742807d17663d54bfed52e9d310907b4f8259339970465345b397a81325a4666561abc0c13b811becc0197d584ff79",
+      "license": {
+        "id": "LicenseRef-All-Rights-Reserved",
+        "name": "",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1"
+      ]
+    },
+    {
+      "slug": "grim-kingdoms-lost-structures-ruins",
+      "title": "Grim kingdoms: Lost structures & ruins",
+      "sha256": "469a2702b6ecb360259d4edd1b5702af6dafe75fd0bc7c2582fe73ec87d5b177",
+      "source": "https://modrinth.com/project/grim-kingdoms-lost-structures-ruins",
+      "version": "2.0.3",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/f4d4E9De/versions/93eAocax/Grim%20kingdoms%20%281.21%2B26.2%2B%29.zip",
+      "artifactSha512": "6292507a4a5ca2b7894802e5699fc9f8bf97fc074c89fc1e424f0bf0034891e9a133d84e4069fe7af8115301cc3ab85cc9da96b17ac9fc647d3e963f163d529d",
+      "license": {
+        "id": "LicenseRef-All-Rights-Reserved",
+        "name": "",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1",
+        "1.21.2",
+        "1.21.3",
+        "1.21.4",
+        "1.21.5",
+        "1.21.6",
+        "1.21.7",
+        "1.21.8",
+        "1.21.9",
+        "1.21.10",
+        "1.21.11",
+        "26.1",
+        "26.1.1",
+        "26.1.2",
+        "26.2"
+      ]
+    },
+    {
+      "slug": "caleari-castle",
+      "title": "Caleari Castle",
+      "sha256": "9f921a5784f31b01da8fa258cc341a489ad9fc9b6d8248c2c838916aae4dae1a",
+      "source": "https://modrinth.com/project/caleari-castle",
+      "version": "1.0",
+      "profile": "native",
+      "processorPaletteSuffixes": [
+        "/oak/blue",
+        "/spruce/red",
+        "/dark_oak/white"
+      ],
+      "artifact": "https://cdn.modrinth.com/data/cwmUol4M/versions/S8A7QlUQ/Caleari%20Castle%201.21%20to%201.21.1.zip",
+      "artifactSha512": "26ab1dba893ffba4c1dd710cbfb38c753994ec0efe8f6717ea24611405e810180baf6fa10f6cf4b6f38c7d0d4ae316fdd04f0bc9aa1d137da063a568119f1588",
+      "license": {
+        "id": "LicenseRef-All-Rights-Reserved",
+        "name": "",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1"
+      ]
+    },
+    {
+      "slug": "ati-structures-vanilla-edition",
+      "title": "ATi Structures - Vanilla Edition",
+      "sha256": "56075de627efb1b537efb3304619c17496794acbb16a49bedd0143270881d8db",
+      "source": "https://modrinth.com/project/ati-structures-vanilla-edition",
+      "version": "1.4.7",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/YWVAO3wq/versions/wXOXEDaQ/ATi%20Structures%20Vanilla%20V1.4.7.zip",
+      "artifactSha512": "e514a1c25c2caf3311f754b00380c6f089cd247a74b238069780111f153c195574d1553a1d00676062a609a55e2f51f143b1f0cd432824a311cbd988d4d4bf48",
+      "license": {
+        "id": "LicenseRef-All-Rights-Reserved",
+        "name": "",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.19",
+        "1.19.1",
+        "1.19.2",
+        "1.19.3",
+        "1.19.4",
+        "1.20",
+        "1.20.1",
+        "1.20.2",
+        "1.20.3",
+        "1.20.4",
+        "1.21",
+        "1.21.1",
+        "1.21.2",
+        "1.21.3",
+        "1.21.4",
+        "1.21.5",
+        "1.21.6",
+        "1.21.7",
+        "1.21.8",
+        "1.21.9",
+        "1.21.10",
+        "1.21.11",
+        "26.1",
+        "26.1.1",
+        "26.1.2",
+        "26.2"
+      ]
+    },
+    {
+      "slug": "towns-and-towers",
+      "title": "Towns and Towers",
+      "sha256": "93e1706c4896bb3dfcf249db37a6643902e20429c03aa67682bc161f2b5ab992",
+      "source": "https://modrinth.com/project/towns-and-towers",
+      "version": "1.21.1-datapack",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/DjLobEOy/versions/cyBYEaKz/t_and_t-datapack-1.21.1.zip",
+      "artifactSha512": "afd66a2d5a93958b6fd54b8ab80d9c5e5b340f374f29ae0faec7c23ea21bb8f73b7a812b4ad213a6759b9da3ef25e3e5b4e5faf35544910c920893ef743a1f6c",
+      "license": {
+        "id": "CC-BY-NC-SA-4.0",
+        "name": "Creative Commons Attribution Non Commercial Share Alike 4.0 International",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21.1"
+      ]
+    },
+    {
+      "slug": "ct-overhaul-village",
+      "title": "ChoiceTheorem's Overhauled Village",
+      "sha256": "629f9f8675f3d3899428da6e0e6d4fff710d87aecd0fa0da61252498fd9d1ee4",
+      "source": "https://modrinth.com/project/ct-overhaul-village",
+      "version": "3.4.5",
+      "profile": "ctov",
+      "removeUnreferencedProcessors": true,
+      "excludeDataPrefixes": [
+        "data/wares/"
+      ],
+      "jsonReplacements": {
+        "data/ctov/loot_table/chests/village/village_forager.json": {
+          "type": "minecraft:chest",
+          "pools": [
+            {
+              "rolls": 1,
+              "entries": [
+                {
+                  "type": "minecraft:loot_table",
+                  "value": "minecraft:chests/village/village_fletcher"
+                }
+              ]
+            },
+            {
+              "rolls": {
+                "min": 2,
+                "max": 4
+              },
+              "entries": [
+                {
+                  "type": "minecraft:item",
+                  "name": "minecraft:sweet_berries"
+                },
+                {
+                  "type": "minecraft:item",
+                  "name": "minecraft:brown_mushroom"
+                },
+                {
+                  "type": "minecraft:item",
+                  "name": "minecraft:red_mushroom"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "manualOnlyStructures": [
+        "ctov:small/village_underground",
+        "ctov:medium/village_underground",
+        "ctov:large/village_underground"
+      ],
+      "artifact": "https://cdn.modrinth.com/data/fgmhI8kH/versions/b9dX0alZ/%5BNeoforge%5Dctov-3.5.jar",
+      "artifactSha512": "2860209d6b994352804981efc201f6000dbe5900a376e51acfc35627d08ab964c999475889e6e0fab52f2d1d020f9cea6112db700df1e074ff1855cb6b813ae1",
+      "license": {
+        "id": "CC-BY-NC-ND-4.0",
+        "name": "Creative Commons Attribution Non Commercial No Derivatives 4.0 International",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21"
+      ]
+    },
+    {
+      "slug": "lukis-grand-capitals",
+      "title": "Luki's Grand Capitals",
+      "sha256": "149cd0bf1d619bf8d852d62ba5f19e1dc95cb10fe67997ce402162094862738e",
+      "source": "https://modrinth.com/project/lukis-grand-capitals",
+      "version": "1.1.3",
+      "profile": "native",
+      "cloneVanillaStructures": true,
+      "artifact": "https://cdn.modrinth.com/data/8Lw09aLb/versions/5CrbasI6/lukis-grand-capitals-v1.1.3.zip",
+      "artifactSha512": "72104d36887e2e1a5317ce9b5f5fe53e6d0951881f35943d68acc450eab92a2f1a5822aec223fe48027639623d41134a470698f7d5a0e5d3ea2d2bc0e73a07fc",
+      "license": {
+        "id": "LicenseRef-All-Rights-Reserved",
+        "name": "",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.19",
+        "1.19.1",
+        "1.19.2",
+        "1.19.3",
+        "1.19.4",
+        "1.20",
+        "1.20.1",
+        "1.20.2",
+        "1.20.3",
+        "1.20.4",
+        "1.20.5",
+        "1.20.6",
+        "1.21",
+        "1.21.1",
+        "1.21.2",
+        "1.21.3",
+        "1.21.4",
+        "1.21.5",
+        "1.21.6",
+        "1.21.7",
+        "1.21.8",
+        "1.21.9",
+        "1.21.10",
+        "1.21.11"
+      ]
+    },
+    {
+      "slug": "adorabuild-structures",
+      "title": "AdoraBuild: Structures",
+      "sha256": "45b03ede3562388f0f6a84d2262c1f1e290f88b12bed625f5e01f18f4c8955fa",
+      "source": "https://modrinth.com/project/adorabuild-structures",
+      "version": "2.11.0",
+      "profile": "jigsaw",
+      "pruneUnavailableAdvancements": true,
+      "excludeStructures": [
+        "adorabuild_structures:blackstone_bastion_medium_1",
+        "adorabuild_structures:blackstone_bastion_medium_2",
+        "adorabuild_structures:blackstone_bastion_medium_3",
+        "adorabuild_structures:blackstone_bastion_small_1",
+        "adorabuild_structures:blackstone_temple_small_1",
+        "adorabuild_structures:crimson_house_medium_1",
+        "adorabuild_structures:crimson_house_medium_2",
+        "adorabuild_structures:nether_fortress_large_2",
+        "adorabuild_structures:nether_fortress_medium_1",
+        "adorabuild_structures:nether_fossil_1",
+        "adorabuild_structures:nether_portal_small_1",
+        "adorabuild_structures:nether_temple_medium_1",
+        "adorabuild_structures:warped_house_small_1",
+        "adorabuild_structures:warped_house_small_2"
+      ],
+      "artifact": "https://cdn.modrinth.com/data/rYlnn25U/versions/h2dvBPSi/adorabuild-structures-2.11.0-fabric-1.21.3.jar",
+      "artifactSha512": "12c6fb7326f618b6d7a536ff1370c868317fd29a6f35946620dc10a66ac8fdb8d728db3e440fbac636ffb21903de5a162c66fe0bc298c6d169c92323e8560a68",
+      "license": {
+        "id": "LicenseRef-All-Rights-Reserved",
+        "name": "",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21.1"
+      ]
+    },
+    {
+      "slug": "dungeons-and-taverns-end-castle-standalone",
+      "title": "[RETIRED] Dungeons and Taverns End Castle Standalone",
+      "sha256": "82a30def924e0f341335a524dde8af5617c86cd533a98311a710da871ad79076",
+      "source": "https://modrinth.com/project/dungeons-and-taverns-end-castle-standalone",
+      "version": "v1.1",
+      "profile": "native",
+      "pruneUnavailableAdvancements": true,
+      "renameNamespaces": {
+        "nova_structures": "qd_end_castle"
+      },
+      "artifact": "https://cdn.modrinth.com/data/WIs8E6hv/versions/3pVvREin/DnT%20End%20Castle%20Standalone%20v1.1.zip",
+      "artifactSha512": "19af44e0f5d7724c3727a85cb28969c81950abe774eeb2e4c093b44f3a1472ba0087b989abf2f966f3c413537ee26c5089cfc6fc2759a1ef0a58f9c23dac176b",
+      "license": {
+        "id": "LicenseRef-All-Rights-Reserved",
+        "name": "",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1"
+      ]
+    },
+    {
+      "slug": "hopo-better-ruined-portals",
+      "title": "Hopo Better Ruined Portals",
+      "sha256": "c1e68c98ea538167ca7d4ac530c254e9d5dd400bee408b0d72574b3c7f29e14b",
+      "source": "https://modrinth.com/project/hopo-better-ruined-portals",
+      "version": "1.4.4b-datapack",
+      "profile": "native",
+      "manualOnlyStructures": [
+        "minecraft:ruined_portal"
+      ],
+      "artifact": "https://cdn.modrinth.com/data/hIpLSyga/versions/LPzbrvx2/hopobetterruinedportals-1-21-3-1-4-4b.zip",
+      "artifactSha512": "5c19550c0d26490b329bf2fe0448dcac39e7a69954f80b7f6158472a4f9d4fffb20e0e71306ad222b18c8a9ba2444bd756df251f2e643a939a48ba4e826e561d",
+      "license": {
+        "id": "LGPL-3.0-only",
+        "name": "GNU Lesser General Public License v3.0 only",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21.1",
+        "1.21.2",
+        "1.21.3"
+      ]
+    },
+    {
+      "slug": "hopo-better-underwater-ruins",
+      "title": "Hopo Better Underwater Ruins",
+      "sha256": "818206b8a031fa16169428681cbebafbd20270b7b34331b5b20e15af34664563",
+      "source": "https://modrinth.com/project/hopo-better-underwater-ruins",
+      "version": "1.2.1b-datapack",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/BuWCQzqf/versions/6S40yywo/hopobetterunderwaterruins-1-21-3-1-2-1b.zip",
+      "artifactSha512": "a659df6cc3409c8c334e034ffb7da09af08b084e22d5cc7c5e99c609727c5034dd0f4c1dce8f75fe6c845edb9a85b31d2b6605dd4870b1da4c2e1445fda749f7",
+      "license": {
+        "id": "LGPL-3.0-or-later",
+        "name": "GNU Lesser General Public License v3.0 or later",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21.1",
+        "1.21.2",
+        "1.21.3"
+      ]
+    },
+    {
+      "slug": "moogs-voyager-structures",
+      "title": "MVS - Moog's Voyager Structures",
+      "sha256": "1ccf1ef2c63dae5a6a4ad80375a538e36d4ad9611e66569233d87d20c82465c9",
+      "source": "https://modrinth.com/project/moogs-voyager-structures",
+      "version": "4.2.6",
+      "profile": "jigsaw",
+      "excludeStructures": [
+        "mvs:other_decoration/crimson_enchanting_table",
+        "mvs:other_decoration/nether_devil",
+        "mvs:well/wells/nether_well"
+      ],
+      "artifact": "https://cdn.modrinth.com/data/OQAgZMH1/versions/ABq0F3uY/mvs-4.2.6-1.21.jar",
+      "artifactSha512": "285b8ea50bab5b08bc1543933c70eff99095a529ebd8263aff79630025b2a13e358de04cc939a26b2d76a9e6aff1774846b670d49202848662bbca173b1da759",
+      "license": {
+        "id": "MIT",
+        "name": "MIT License",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1"
+      ]
+    },
+    {
+      "slug": "when-dungeons-arise",
+      "title": "When Dungeons Arise",
+      "sha256": "914190f6f899fca0f4b67595c6f7c53f8c736f6d1049a48fef8cfba46871d865",
+      "source": "https://modrinth.com/project/when-dungeons-arise",
+      "version": "2.1.68",
+      "profile": "native",
+      "manualOnlyStructures": [
+        "dungeons_arise:giant_mushroom",
+        "dungeons_arise:mining_system"
+      ],
+      "artifact": "https://cdn.modrinth.com/data/8DfbfASn/versions/g8oglmT0/DungeonsArise-1.21.1-2.1.68-fabric-release.jar",
+      "artifactSha512": "2485d748ea4595e8735421c0be7249cc8af693d7c091b69e96319f3129c0cce70dec61c037d6687ac0aea502958d1b2eaa2fbcdc982ef3341897b16c76259ac3",
+      "license": {
+        "id": "LicenseRef-All-Rights-Reserved",
+        "name": "",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1"
+      ]
+    },
+    {
+      "slug": "when-dungeons-arise-seven-seas",
+      "title": "When Dungeons Arise: Seven Seas",
+      "sha256": "ea7ab0c46a2d7dfd51f8b08e4285583f43d5b818f98ad2ede45b63f159c96f33",
+      "source": "https://modrinth.com/project/when-dungeons-arise-seven-seas",
+      "version": "1.0.4",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/ZsrrjDbP/versions/tTpWP44G/DungeonsAriseSevenSeas-1.21.x-1.0.4-fabric.jar",
+      "artifactSha512": "a10aa9355c2f9eacab8fb016c20e69d871defb42cd407cc3fcf9cbab83d7b34b252c9fb7735727dcdf7ec3cacf01ef7dd095aa32d7718362329c557ed1c558fe",
+      "license": {
+        "id": "LicenseRef-All-Rights-Reserved",
+        "name": "",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.20",
+        "1.20.1",
+        "1.20.2",
+        "1.20.3",
+        "1.20.4",
+        "1.20.5",
+        "1.20.6",
+        "1.21",
+        "1.21.1",
+        "1.21.2",
+        "1.21.3",
+        "1.21.4",
+        "1.21.5",
+        "1.21.6",
+        "1.21.7",
+        "1.21.8",
+        "1.21.9",
+        "1.21.10"
+      ]
+    },
+    {
+      "slug": "sky-villages",
+      "title": "Sky Villages",
+      "sha256": "5ef7b63c6f1999a632085975afa14f00146369c142fd72980d760cbb617dd52f",
+      "source": "https://modrinth.com/project/sky-villages",
+      "version": "1.0.6",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/mb68eIfx/versions/3InSHTOp/SkyVillages-1.0.6-1.21.x-neoforge-release.jar",
+      "artifactSha512": "e5c1c2030714b2dfb2349edd1c2666df1b3d6b7644708089f6fda89cede3aa0390c357b912adc7a92adc33db0dcc272a7256af2a2299e159570791c8854666b4",
+      "license": {
+        "id": "LicenseRef-All-Rights-Reserved",
+        "name": "",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1"
+      ]
+    },
+    {
+      "slug": "peakscape",
+      "title": "叠山 peakscape",
+      "sha256": "3d03f9c58ecaefde001bbbaa6b0c561c41d949712f9f48990be49cf8e18495f2",
+      "source": "https://modrinth.com/project/peakscape",
+      "version": "0.1.1",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/wJUsVfuq/versions/9ozEUNyp/%E5%8F%A0%E5%B1%B1_peakscape_0.1.1.zip",
+      "artifactSha512": "cc92e9b8a692d16d6cd641483b51088469e4bc8d6779641cfa6916613e0c408ac36a9cfc6ed8d9ec98d88578ae387ede368e61d7ec4ea8b7e3f730df8ffa4f0d",
+      "license": {
+        "id": "CC-BY-NC-ND-4.0",
+        "name": "Creative Commons Attribution Non Commercial No Derivatives 4.0 International",
+        "url": "https://github.com/santisoler/cc-licenses/blob/main/LICENSE-CC-BY-NC-ND"
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1",
+        "24w33a",
+        "24w34a",
+        "24w35a",
+        "24w36a",
+        "24w37a",
+        "24w38a",
+        "24w39a",
+        "24w40a",
+        "1.21.2-pre1",
+        "1.21.2-pre2",
+        "1.21.2",
+        "1.21.3",
+        "24w44a",
+        "24w45a",
+        "24w46a",
+        "1.21.4",
+        "1.21.5",
+        "1.21.6",
+        "1.21.7",
+        "1.21.8",
+        "1.21.9",
+        "1.21.10",
+        "1.21.11",
+        "26.1",
+        "26.1.1",
+        "26.1.2",
+        "26.2"
+      ]
+    },
+    {
+      "slug": "mss-moogs-soaring-structures",
+      "title": "MSS - Moog's Soaring Structures",
+      "sha256": "acc2efa0d59ae6945477b04bfcb7bb616f870a17bbc5e0c6e61fb772a882eefd",
+      "source": "https://modrinth.com/project/mss-moogs-soaring-structures",
+      "version": "1.1.4-1.21-fabric",
+      "profile": "jigsaw",
+      "artifact": "https://cdn.modrinth.com/data/RJCLIx7k/versions/C6p0KHv2/mss-1.1.4-1.21.jar",
+      "artifactSha512": "b930520d54808f0b44ef3fa5ccde62cc2ffa07f1d55ed09e6c50b58dcaa3ee8adab4d591392e870141828778f34854f45a7a3717dd7847025cd22af211bb6ea7",
+      "license": {
+        "id": "GPL-3.0-only",
+        "name": "GNU General Public License v3.0 only",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1"
+      ]
+    },
+    {
+      "slug": "mes-moogs-end-structures",
+      "title": "MES - Moog's End Structures",
+      "sha256": "4e35527c905a427f2cd02263051a8abb8a370eeea5218cda06e5a32fd603bcf4",
+      "source": "https://modrinth.com/project/mes-moogs-end-structures",
+      "version": "1.4.6-1.21",
+      "profile": "jigsaw",
+      "artifact": "https://cdn.modrinth.com/data/r4PuRGfV/versions/cO2Hw6EY/mes-1.4.6-1.21.jar",
+      "artifactSha512": "425295029d0ec2e93b368708c2ac7e84fab9445d6e5dfcc7254331245792cf8d357fae942bba424181f1743317989f195d965c90333cb51e66e642f05d9907d3",
+      "license": {
+        "id": "LGPL-3.0-only",
+        "name": "GNU Lesser General Public License v3.0 only",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1"
+      ]
+    },
+    {
+      "slug": "mmv-moogs-missing-villages",
+      "title": "MMV - Moog's Missing Villages",
+      "sha256": "4a2ceba4e2a21211bedbe159aa6d81f2b9958780178ea296fff4d8ce1ab0a161",
+      "source": "https://modrinth.com/project/mmv-moogs-missing-villages",
+      "version": "1.0.0-1.21-fabric",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/spZb29SD/versions/WkCXj1Zk/mmv-1.0.0-1.21.jar",
+      "artifactSha512": "cebd944bb066515156516ebb1c7ab6aff227e9838182ac3f89b80df8be690ce7dd8d46d7103796074f33297e7a2320bce2cee5f59edd151482ba3b640635bca9",
+      "license": {
+        "id": "AGPL-3.0-only",
+        "name": "GNU Affero General Public License v3.0 only",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1"
+      ]
+    },
+    {
+      "slug": "mtr-moogs-temples-reimagined",
+      "title": "MTR - Moog's Temples Reimagined",
+      "sha256": "e4136480d19ad2a5acc8e9b6941211faa5d902672911c17623aa847cb2a52c3b",
+      "source": "https://modrinth.com/project/mtr-moogs-temples-reimagined",
+      "version": "1.1.3",
+      "profile": "jigsaw",
+      "excludeStructures": [
+        "mtr:nether_temple"
+      ],
+      "artifact": "https://cdn.modrinth.com/data/UNanzCXS/versions/pI3PZZrR/MoogsTemplesReimagined-1.21-1.1.3.jar",
+      "artifactSha512": "500a1eb2be4b41069c205666390aa58a99587322fc6c44c26a468e079019c6c8ac1e7c08294190e93bfbb66336db28aabbda21c1d90255bce9f2abf769399274",
+      "license": {
+        "id": "LGPL-3.0-only",
+        "name": "GNU Lesser General Public License v3.0 only",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21",
+        "1.21.1",
+        "1.21.2",
+        "1.21.3",
+        "1.21.4",
+        "1.21.5",
+        "1.21.6",
+        "1.21.7",
+        "1.21.8",
+        "1.21.9",
+        "1.21.10",
+        "1.21.11",
+        "26.1",
+        "26.1.1",
+        "26.1.2",
+        "26.2"
+      ]
+    },
+    {
+      "slug": "hopo-better-mineshaft",
+      "title": "Hopo Better Mineshaft",
+      "sha256": "abbb04d93e9dcb350f3415afc56f4566e47ad88e0f696bb6d11e04afdb538136",
+      "source": "https://modrinth.com/project/hopo-better-mineshaft",
+      "version": "1.3.0b-datapack",
+      "profile": "native",
+      "artifact": "https://cdn.modrinth.com/data/9IxCUYAP/versions/yCddRGiv/hopobettermineshaft-1-21-3-1-3-0b.zip",
+      "artifactSha512": "63086c2cc0a54ba28da8d0cd13863c0461c8352d88b9baf7ba100da7b2834d52cad039bada35818e4507511992b9837a07a990cb6b0c859fabb749c57b8ec09f",
+      "license": {
+        "id": "LGPL-3.0-or-later",
+        "name": "GNU Lesser General Public License v3.0 or later",
+        "url": null
+      },
+      "upstreamVersions": [
+        "1.21.1",
+        "1.21.2",
+        "1.21.3"
+      ]
+    }
+  ],
+  "newStartsPerSquareKilometre": 6.0,
+  "notSelected": [
+    {
+      "slug": "mns-moogs-nether-structures",
+      "version": "1.0.7-1.21-fabric",
+      "reason": "Native registry test rejected mod-specific Nether floor search or dynamic processors; Hopo/Ships/Dungeons alternatives provide these dimensions without silently dropping mechanics."
+    },
+    {
+      "slug": "mmr-moogs-mineshafts-reimagined",
+      "version": "1.0.3",
+      "reason": "Native registry test rejected mod-specific Nether floor search or dynamic processors; Hopo/Ships/Dungeons alternatives provide these dimensions without silently dropping mechanics."
+    },
+    {
+      "slug": "mos-moogs-ocean-structures",
+      "version": "1.1.1",
+      "reason": "Native registry test rejected mod-specific Nether floor search or dynamic processors; Hopo/Ships/Dungeons alternatives provide these dimensions without silently dropping mechanics."
+    }
+  ],
+  "minecraft": "1.21.1",
+  "notes": "Pinned personal-server inputs. Third-party binaries are downloaded privately, never committed."
+}

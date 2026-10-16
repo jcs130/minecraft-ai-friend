@@ -1,0 +1,15 @@
+name: WorldVariety
+version: 0.1.0
+main: org.afuhome.worldvariety.WorldVarietyPlugin
+api-version: '1.21'
+depend: [OlEncounters, VillagerLife, Citizens, Sentinel, WorldGuard]
+softdepend: [AgentFriend]
+description: 千灯纪居民生活、巡守与野外遭遇的轻量接入
+commands:
+  worldvariety:
+    description: 房管查看世界内容状态
+    permission: worldvariety.admin
+    permission-message: '§c这是房管命令；普通玩家用 /mycli world events 查看，并到现场参加。'
+permissions:
+  worldvariety.admin:
+    default: op

@@ -1,0 +1,89 @@
+settings:
+  enabled: true
+  content-packs: true
+  packages: true
+encounters:
+  qd_pillager_patrol:
+    name: 山道斥候营
+    kind: PORTAL
+    icon: CROSSBOW
+    base-type: SMALL
+    arrival: INSTANT
+    schematic: qd_forest_camp.schem
+    enabled: true
+    features:
+      messages: false
+      arrival-animation: false
+      chains: false
+    participation:
+      allow-join: true
+      join-radius: 96
+    conditions:
+      minimum-players: 1
+      worlds:
+        - minecraft:overworld
+    scaling:
+      enabled: true
+      per-player: 0.25
+      minimum: 1
+      maximum: 2
+      mob-count: true
+      mob-health: false
+      mob-damage: false
+      rewards: false
+    waves:
+      - name: 斥候
+        count: 3
+        delay-seconds: 2
+        mobs:
+          QD_PatrolPillager: 1
+      - name: 营地护卫
+        count: 1
+        delay-seconds: 3
+        mobs:
+          QD_PatrolVindicator: 1
+    goals:
+      daily: 1
+      weekly: 4
+  qd_undead_patrol:
+    name: 迷雾夜巡
+    kind: PORTAL
+    icon: BONE
+    base-type: SMALL
+    arrival: INSTANT
+    schematic: qd_forest_camp.schem
+    enabled: true
+    features:
+      messages: false
+      arrival-animation: false
+      chains: false
+    participation:
+      allow-join: true
+      join-radius: 96
+    conditions:
+      minimum-players: 1
+      worlds:
+        - minecraft:overworld
+    scaling:
+      enabled: true
+      per-player: 0.25
+      minimum: 1
+      maximum: 2
+      mob-count: true
+      mob-health: false
+      mob-damage: false
+      rewards: false
+    waves:
+      - name: 游荡亡者
+        count: 3
+        delay-seconds: 2
+        mobs:
+          QD_PatrolZombie: 1
+      - name: 骸骨斥候
+        count: 2
+        delay-seconds: 3
+        mobs:
+          QD_PatrolSkeleton: 1
+    goals:
+      daily: 1
+      weekly: 4

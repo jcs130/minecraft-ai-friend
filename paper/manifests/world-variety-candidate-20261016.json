@@ -1,0 +1,396 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate-not-deployed",
+  "target": "Paper 1.21.1 build 133",
+  "agentFriend": "0.4.42 unchanged",
+  "eyeMirror": "0.1.16 unchanged",
+  "packs": [
+    {
+      "slug": "more-chinese-structures",
+      "version": "1.1.1",
+      "file": "world-expansion--more-chinese-structures.zip",
+      "sha256": "c7da6cf2b2f377a759ece87635b8e0b94cef701354fbb0d6ae0a38b07ccb48a1",
+      "structures": 20,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "chinese-village",
+      "version": "1.21.1",
+      "file": "world-expansion--chinese-village.zip",
+      "sha256": "2740403fb784aeedf6828ee514e15785a244d5e8cf146ff2903086237eba828d",
+      "structures": 1,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "zhengsz-wonderland",
+      "version": "1.0.0",
+      "file": "world-expansion--zhengsz-wonderland.zip",
+      "sha256": "577224ceb7b66183b0e158d16af47654f696e31dcc856e1d1880a1398b439990",
+      "structures": 1,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "aoe4mc",
+      "version": "0.0.14",
+      "file": "world-expansion--aoe4mc.zip",
+      "sha256": "55c23843f8948a9a75fe9eae8c7a32e0e99283b9996c91c7fc791f8f38167a37",
+      "structures": 4,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "japanese-castle",
+      "version": "1.0",
+      "file": "world-expansion--japanese-castle.zip",
+      "sha256": "c91d2f202d3ea48d21751ce38c6fc8dc3f06b943ed42ff2a9a07eb948188c286",
+      "structures": 1,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "castles-castles",
+      "version": "1.0",
+      "file": "world-expansion--castles-castles.zip",
+      "sha256": "5c3cf7a2ddf61ebea3caf7935ef1280b23e9014546e4b14674a8cd3f243f70c5",
+      "structures": 8,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "grim-kingdoms-lost-structures-ruins",
+      "version": "2.0.3",
+      "file": "world-expansion--grim-kingdoms-lost-structures-ruins.zip",
+      "sha256": "b171434804699681945f2966fa9781be9b2316e71d9c4745e508d1256109b19b",
+      "structures": 65,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "caleari-castle",
+      "version": "1.0",
+      "file": "world-expansion--caleari-castle.zip",
+      "sha256": "e52a1401f3ad17c9995958938d73f06acbed246a88e705b3b1d24c6a2bc8b728",
+      "structures": 6,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "ati-structures-vanilla-edition",
+      "version": "1.4.7",
+      "file": "world-expansion--ati-structures-vanilla-edition.zip",
+      "sha256": "43789679563f70489d5d43e52cd8fe817d9b2e9e6916f4a96358c33286121be8",
+      "structures": 55,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "towns-and-towers",
+      "version": "1.21.1-datapack",
+      "file": "world-expansion--towns-and-towers.zip",
+      "sha256": "3f9208f692405bf66e5dfbd3df797001c59cdea2a573c6e0445d7b2a85c0d7cf",
+      "structures": 60,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "ct-overhaul-village",
+      "version": "3.4.5",
+      "file": "world-expansion--ct-overhaul-village.zip",
+      "sha256": "39345ade879fbbc6bb6736bdbd052f90bf2b6016e37e3243b8b93eef0e524d98",
+      "structures": 78,
+      "manualOnlyStructures": [
+        "ctov:large/village_underground",
+        "ctov:medium/village_underground",
+        "ctov:small/village_underground"
+      ]
+    },
+    {
+      "slug": "lukis-grand-capitals",
+      "version": "1.1.3",
+      "file": "world-expansion--lukis-grand-capitals.zip",
+      "sha256": "c18bef2611bb86b45911881d81db5536945c0d82762436a2dfda4412e6a01a90",
+      "structures": 7,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "adorabuild-structures",
+      "version": "2.11.0",
+      "file": "world-expansion--adorabuild-structures.zip",
+      "sha256": "b927a604d9db2654ed1986f6a5d8bde5f2023319d3759df5bb7158b034cd6d92",
+      "structures": 92,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "dungeons-and-taverns-end-castle-standalone",
+      "version": "v1.1",
+      "file": "world-expansion--dungeons-and-taverns-end-castle-standalone.zip",
+      "sha256": "936a339453bee3db53c7ba80fbf997bf68c05a55e05e5ea8a34c63409b892539",
+      "structures": 2,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "hopo-better-ruined-portals",
+      "version": "1.4.4b-datapack",
+      "file": "world-expansion--hopo-better-ruined-portals.zip",
+      "sha256": "83b082f35e3438a92b2f623285cf06af85cb7bf398da0067d2b18cd4be73118e",
+      "structures": 6,
+      "manualOnlyStructures": [
+        "minecraft:ruined_portal"
+      ]
+    },
+    {
+      "slug": "hopo-better-underwater-ruins",
+      "version": "1.2.1b-datapack",
+      "file": "world-expansion--hopo-better-underwater-ruins.zip",
+      "sha256": "6faebdcf149c4bafb4379d92812810c6e89b91df7cf076829ae5ba6f8cbadca2",
+      "structures": 6,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "moogs-voyager-structures",
+      "version": "4.2.6",
+      "file": "world-expansion--moogs-voyager-structures.zip",
+      "sha256": "5ac7460409018fc859ff4c458e19763563bf59fb20146592dc0ab3537080ed63",
+      "structures": 125,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "when-dungeons-arise",
+      "version": "2.1.68",
+      "file": "world-expansion--when-dungeons-arise.zip",
+      "sha256": "df398881f8bdb678257db9b0dc9305e1ff00fcf4ec51f4adbdee640dc8b5db04",
+      "structures": 40,
+      "manualOnlyStructures": [
+        "dungeons_arise:giant_mushroom",
+        "dungeons_arise:mining_system"
+      ]
+    },
+    {
+      "slug": "when-dungeons-arise-seven-seas",
+      "version": "1.0.4",
+      "file": "world-expansion--when-dungeons-arise-seven-seas.zip",
+      "sha256": "5c44ee6502cbbdd559defba63c0ba2e4654b3b6951af81dc6547e6381bb32a03",
+      "structures": 5,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "sky-villages",
+      "version": "1.0.6",
+      "file": "world-expansion--sky-villages.zip",
+      "sha256": "91d7e5de088613c78a1fb8871beb1159af4807ab33587a044a3dbec0c59bf9bd",
+      "structures": 1,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "peakscape",
+      "version": "0.1.1",
+      "file": "world-expansion--peakscape.zip",
+      "sha256": "a5d6f37b275ccb3346b1031e790087ce178cf16161124c02ea51415b69633f6f",
+      "structures": 2,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "mss-moogs-soaring-structures",
+      "version": "1.1.4-1.21-fabric",
+      "file": "world-expansion--mss-moogs-soaring-structures.zip",
+      "sha256": "85a947cde9523bde5103aaab7f693bdecb4d5243c67cfb4d9cbfa13f090c82d9",
+      "structures": 34,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "mes-moogs-end-structures",
+      "version": "1.4.6-1.21",
+      "file": "world-expansion--mes-moogs-end-structures.zip",
+      "sha256": "056c136a961646ecacd79bb863febd94707fe3b142d8f60c900142ba7c6f7257",
+      "structures": 25,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "mmv-moogs-missing-villages",
+      "version": "1.0.0-1.21-fabric",
+      "file": "world-expansion--mmv-moogs-missing-villages.zip",
+      "sha256": "1db33039b25a89fd92e2ab8afcd24bd95dc2c7f53652093862b38ed13b849aec",
+      "structures": 2,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "mtr-moogs-temples-reimagined",
+      "version": "1.1.3",
+      "file": "world-expansion--mtr-moogs-temples-reimagined.zip",
+      "sha256": "a96a237e96fda4809357acf30215fd6659195f3d927f7976af8c0b123da66739",
+      "structures": 5,
+      "manualOnlyStructures": []
+    },
+    {
+      "slug": "hopo-better-mineshaft",
+      "version": "1.3.0b-datapack",
+      "file": "world-expansion--hopo-better-mineshaft.zip",
+      "sha256": "fd1ee6556a91d09ab37e225b1dc6d59b8051dcdaa2ca53955414a5fbeaa155ef",
+      "structures": 14,
+      "manualOnlyStructures": []
+    }
+  ],
+  "overlay": {
+    "file": "zz-qiandengji-world-variety.zip",
+    "sha256": "bc27fa0a3e6c1d21eaaecf7e680145a35d006e2a3da13122fbaa04de0517b0d5",
+    "sharedVillageTypes": [
+      "ctov:large/village_beach",
+      "ctov:large/village_christmas",
+      "ctov:large/village_dark_forest",
+      "ctov:large/village_desert",
+      "ctov:large/village_desert_oasis",
+      "ctov:large/village_jungle",
+      "ctov:large/village_jungle_tree",
+      "ctov:large/village_mesa",
+      "ctov:large/village_mesa_fortified",
+      "ctov:large/village_mountain",
+      "ctov:large/village_mountain_alpine",
+      "ctov:large/village_mushroom",
+      "ctov:large/village_plains",
+      "ctov:large/village_plains_fortified",
+      "ctov:large/village_savanna",
+      "ctov:large/village_savanna_na",
+      "ctov:large/village_snowy_igloo",
+      "ctov:large/village_swamp",
+      "ctov:large/village_swamp_fortified",
+      "ctov:large/village_taiga",
+      "ctov:large/village_taiga_fortified",
+      "ctov:medium/village_beach",
+      "ctov:medium/village_christmas",
+      "ctov:medium/village_dark_forest",
+      "ctov:medium/village_desert",
+      "ctov:medium/village_desert_oasis",
+      "ctov:medium/village_jungle",
+      "ctov:medium/village_jungle_tree",
+      "ctov:medium/village_mesa",
+      "ctov:medium/village_mesa_fortified",
+      "ctov:medium/village_mountain",
+      "ctov:medium/village_mountain_alpine",
+      "ctov:medium/village_mushroom",
+      "ctov:medium/village_plains",
+      "ctov:medium/village_plains_fortified",
+      "ctov:medium/village_savanna",
+      "ctov:medium/village_savanna_na",
+      "ctov:medium/village_snowy_igloo",
+      "ctov:medium/village_swamp",
+      "ctov:medium/village_swamp_fortified",
+      "ctov:medium/village_taiga",
+      "ctov:medium/village_taiga_fortified",
+      "ctov:small/village_beach",
+      "ctov:small/village_christmas",
+      "ctov:small/village_dark_forest",
+      "ctov:small/village_desert",
+      "ctov:small/village_desert_oasis",
+      "ctov:small/village_jungle",
+      "ctov:small/village_jungle_tree",
+      "ctov:small/village_mesa",
+      "ctov:small/village_mesa_fortified",
+      "ctov:small/village_mountain",
+      "ctov:small/village_mountain_alpine",
+      "ctov:small/village_mushroom",
+      "ctov:small/village_plains",
+      "ctov:small/village_plains_fortified",
+      "ctov:small/village_savanna",
+      "ctov:small/village_savanna_na",
+      "ctov:small/village_snowy_igloo",
+      "ctov:small/village_swamp",
+      "ctov:small/village_swamp_fortified",
+      "ctov:small/village_taiga",
+      "ctov:small/village_taiga_fortified",
+      "minecraft:village_desert",
+      "minecraft:village_plains",
+      "minecraft:village_savanna",
+      "minecraft:village_snowy",
+      "minecraft:village_taiga",
+      "qiandeng_capitals:village_desert",
+      "qiandeng_capitals:village_plains",
+      "qiandeng_capitals:village_savanna",
+      "qiandeng_capitals:village_snowy",
+      "qiandeng_capitals:village_taiga"
+    ],
+    "newSetDensityUpperBound": 6,
+    "densityFrequencyMultiplier": 0.019259395155889196
+  },
+  "plugins": [
+    {
+      "slug": "villagerlife",
+      "version": "1.0.0",
+      "artifact": "https://cdn.modrinth.com/data/h5DmpLhT/versions/PM26i5Bz/villagerlife-1.0.0.jar",
+      "sha256": "ea9e00f7bb9ab414d51fbd0b1d29a2fec1c383c33bc0d4eef84e5606628e2fa4",
+      "sha512": "d9e7d7cc3cce9616b45c31137ae57d5bdba53a7e248d1e6fdacc9f6fecce01140c0b95e329f168baa68d32ce492f292b890a0a5a4f860627d0e49c40da758bb3"
+    },
+    {
+      "slug": "olencounters",
+      "version": "1.7.0",
+      "artifact": "https://cdn.modrinth.com/data/k3YDgIH0/versions/1aYOJz1I/OlEncounters-1.7.0.jar",
+      "sha256": "1577935cc738f199719db7c1b4eaa1630a4ecaa208aba5f5d18943585075ab0f",
+      "sha512": "e50c9c1b974dd7269d6f390ebd2b28c11539786a72cb001cb808041374db5e451ba5cf88bc2c4811deb5240ddab2ac822760bcc85bc074a0a07511ae77e6fe9a"
+    },
+    {
+      "slug": "commandapi",
+      "version": "12.1.0",
+      "artifact": "https://cdn.modrinth.com/data/ExxvCi0y/versions/Niu5FiSP/CommandAPI-12.1.0-Paper.jar",
+      "sha256": "ab48e55fd06264dd239cf015b501936cb50eb6c38d967fbffca6c91a48064049",
+      "sha512": "fea7b0514c190fefa7772bed4d14b5c34b0e296d354df19bdfe193c558a63160fa15157f5bd2651181a846926b82a9fc0dc084b82b7dad4a013fd7642792e18c"
+    },
+    {
+      "slug": "fastasyncworldedit",
+      "version": "2.16.1",
+      "artifact": "https://cdn.modrinth.com/data/z4HZZnLr/versions/A1gBu4MM/FastAsyncWorldEdit-Paper-2.16.1.jar",
+      "sha256": "a1706c41412a108e3d2fdbd9e9dd0c60904f2ba45414c6edf11c1262812e1838",
+      "sha512": "711c7c358a5b4ec73160413a4aa08829d2cd474f75e1dc379c0ebc9b63b5b6458de8113c10bbaf3594497db558d7ae2519c7d7c37353be142a797a7eeee3ce43"
+    },
+    {
+      "version": "2.9.1-SNAPSHOT",
+      "build": "2.9.1-20241003.132722-3",
+      "source": "https://maven.citizensnpcs.co/repo/org/mcmonkey/sentinel/2.9.1-SNAPSHOT/sentinel-2.9.1-20241003.132722-3.jar",
+      "sha256": "3967a2f2f890a0990066927604a7463610bad4f863132b924a14a5f948cb9799",
+      "slug": "sentinel",
+      "artifact": "https://maven.citizensnpcs.co/repo/org/mcmonkey/sentinel/2.9.1-SNAPSHOT/sentinel-2.9.1-20241003.132722-3.jar"
+    }
+  ],
+  "authoredPlugin": {
+    "name": "WorldVariety",
+    "version": "0.1.0",
+    "sha256": "0461df00648460bb17e6f591dd410fddfc0d808d0fd863d14be66554f645d126"
+  },
+  "patchedVillagerLifeSha256": "ae83e95991faa3bbf11408c67c2639e5c431e686d741f64688e668eb670261ab",
+  "compatibility": {
+    "java": "native blocks/entities/merchant/inventory",
+    "mineflayer": "4.39 / Minecraft 1.21.1 direct-backend tests",
+    "bedrock": "actual loopback UDP 1.26.51/Geyser/Floodgate; physical device not verified",
+    "clientCodeChanged": false,
+    "fomChanged": false
+  },
+  "tests": {
+    "conversionUnitTests": 12,
+    "deploymentGates": 15,
+    "nativePackSamples": 26,
+    "nativeGeometrySamples": 26,
+    "finalSchemaSamples": 2,
+    "nativeMineflayerInteraction": 10,
+    "encounterLifecycle": 10,
+    "bedrockUDP": 6,
+    "finalProductionSetColdStart": 5,
+    "naturalStructureEvidence": {
+      "located": true,
+      "protectedQuery": true,
+      "serverBlockRetained": true,
+      "independentDigControlCompleted": false
+    }
+  },
+  "notes": [
+    "Final natural-placement gate and production-set cold start are recorded separately before release.",
+    "Original failure evidence remains private and unchanged.",
+    "No autonomous combat or 16-Agent long-running load claim."
+  ],
+  "finalRuntime": {
+    "plugins": 36,
+    "enabledDataPacks": 39,
+    "automaticScheduler": "actual timer attempted once and persisted cooldown; location-not-found respected",
+    "guardRegistrations": 2,
+    "msptSample": "§6Server tick times §e(§7avg§e/§7min§e/§7max§e)§6 from last 5s§7,§6 10s§7,§6 1m§e:\n§6◴ §a13.6§7/§a3.6§7/§c102.1§e, §a9.2§7/§a3.1§7/§c102.1§e, §a5.1§7/§a2.8§7/§c102.1\n",
+    "structureAudit": "Generated structures enabled=true namespaces=[ships, sky_builders, mvs, explorify, mtr, mjstructure, mes, dungeons_arise_seven_seas, structure_, mcs, aoe4mc, qiandeng_capitals, skyvillages, chinesevillage, castles, dungeons_arise, ctov, structory_towers, zhengsz, nova_structures, structory, qd_end_castle, mss, grim_kingdoms, adorabuild_structures, towns_and_towers, ati_structures, mmv, peakscape] ids=50 managedSettlements=1 chunkCache=2/256 startCache=0/128 reads=2 unresolved=0 errors=0 loadPolicy=loaded_only\n",
+    "stageStoppedNormally": true
+  },
+  "deployment": {
+    "status": "candidate-not-deployed",
+    "files": 46,
+    "queued": false,
+    "productionChanged": false,
+    "freshStoppedBackupsRequired": true
+  }
+}

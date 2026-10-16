@@ -1,0 +1,11 @@
+automatic-encounters:
+  enabled: true # Lifecycle, personal loot and rollback verified on the isolated server.
+  interval-minutes: 50
+  minimum-tps: 18.0
+  world: world
+  profiles: [qd_pillager_patrol, qd_undead_patrol]
+guards:
+  enabled: true
+  locations:
+    - {id: camp, name: '驿站巡守·灯甲', world: world, x: -1112.5, y: 64, z: -599.5}
+    - {id: village, name: '村庄巡守·灯乙', world: world, x: -557.5, y: 67, z: -448.5}
