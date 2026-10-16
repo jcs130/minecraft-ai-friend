@@ -11,6 +11,7 @@ import zipfile
 from pathlib import Path
 
 from .manifest import INVENTORY, MANIFEST, NODE_VERSION, REGISTRY_SHA256, SCHEMA, digest, relative_path, source_pin, verify_bundle
+from .viewer_source import verify_viewer_input
 
 HERE = Path(__file__).parent
 
@@ -40,8 +41,9 @@ def build_bundle(destination: Path, *, node_directory: Path, backend_directory: 
     """Inputs are already installed exact runtime trees, never caches or developer junctions."""
     if destination.exists():
         raise ValueError("Bundle destination must be new; existing payloads are never replaced")
-    destination.mkdir(parents=True)
     pin = source_pin()
+    verify_viewer_input(viewer_directory, pin)
+    destination.mkdir(parents=True)
     omitted = frozenset({pin["archive"], "node_modules/agent-mc-world/docs/research/vanilla-1.21.1-survival-foundations-20261016.md"})
     for source, name in [(backend_directory, "backend"), (viewer_directory, "viewer/modern-viewer"),
                          (assets_directory, "resources/vanilla-1.21.1"), (appearances_directory, "resources/appearances"),
@@ -53,6 +55,7 @@ def build_bundle(destination: Path, *, node_directory: Path, backend_directory: 
     for name in ("prepare.cmd", "prepare.mjs"):
         shutil.copyfile(HERE / name, destination / name)
     (destination / "source.json").write_text(json.dumps(pin, indent=2) + "\n", encoding="utf-8")
+    shutil.copyfile(HERE.parent / "core_distribution/viewer-source.json", destination / "viewer-source.json")
     asset_directory = "resources/vanilla-1.21.1"
     catalog = {"schemaVersion": 1, "packs": [{"id": "vanilla-1.21.1", "minecraftVersion": "1.21.1", "registry": "vanilla",
                 "registrySha256": REGISTRY_SHA256, "assetDirectory": asset_directory}]}

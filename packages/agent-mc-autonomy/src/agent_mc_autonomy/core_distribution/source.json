@@ -36,7 +36,12 @@
       "world-preview.js": "6085fc38f46108e0d717a40bf5829e785e6125a30298bd8beaf0289da717d1e4",
       "native-console.js": "3464d2d985188fa97ee818e0a78dd549164794108adbb035b7e53ee1fb106047"
     },
-    "bundled_in_core": false
+    "bundled_in_core": false,
+    "source_inventory": {
+      "file": "viewer-source.json",
+      "sha256": "be62b13a56e749bc855dcbc4ea83331930d56fb084633a6f5efb42f1e27a72ba",
+      "files": 323
+    }
   },
   "offline_node": {
     "url": "https://nodejs.org/dist/v22.22.1/node-v22.22.1-win-x64.zip",

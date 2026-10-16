@@ -29,6 +29,15 @@ wrong source/platform/version and damaged bytes. SHA-256 detects corruption
 relative to the trusted distribution; this format is not a digital signature.
 Canonical core build/source/type receipts remain independently enforced.
 
+`source.json` also pins the SHA-256 of packaged `viewer-source.json`: an exact
+323-member public raw Git source inventory. Distributor preflight verifies it
+before creating a destination or copying dependencies. Full Python/Node checks
+require the complete viewer source projection to match, including parent
+package metadata, renderer files and sibling adapters. Only `node_modules`
+directories are excluded from this projection; resources live separately.
+Missing, modified or extra source files fail even if the bundle's own inventory
+is regenerated. Metadata-only resolution never reads this source map.
+
 `prepare.cmd` invokes only `node/node.exe` and `prepare.mjs`. It checks every
 payload byte and all core receipts, copies the payload once into its own
 versioned local cache, and verifies the copied bytes before publishing a

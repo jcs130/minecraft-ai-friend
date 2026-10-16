@@ -33,7 +33,8 @@ def bundle(tmp_path, monkeypatch):
     catalog = {"schemaVersion": 1, "packs": [{"id": "vanilla-1.21.1", "minecraftVersion": "1.21.1", "registry": "vanilla",
                "registrySha256": registry_hash, "assetDirectory": "assets"}]}
     contents = {"node/node.exe": b"node fixture", "browser/browser.exe": b"node fixture", "browser/LICENSE": b"license", "backend/package.json": b"{}", "viewer/package.json": b"{}",
-                "viewer/tools/native-world-preview-host.mjs": b"export {}", "assets/registry/block-states.jsonl": registry,
+                "viewer/renderer-src/package.json": b"{}", "viewer-source.json": b"{}",
+                "viewer/renderer-src/tools/native-world-preview-host.mjs": b"export {}", "viewer/src/adapter.ts": b"export {}", "assets/registry/block-states.jsonl": registry,
                 "assets/public/sounds/manifest.json": b'{"fileMetadata":{}}', "appearances/catalog.json": b'{"assets":{}}', "prepare.cmd": b"echo fixture",
                 "assets/native-assets.json": b'{"assets":{}}',
                 "prepare.mjs": b"// fixture", "source.json": b"{}", "LICENSE": b"license", "large-resource.ogg": b"resource",
@@ -42,12 +43,17 @@ def bundle(tmp_path, monkeypatch):
         target = root / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
+    from agent_mc_autonomy.runtime_bundle import viewer_source
+    expected = {name.removeprefix("viewer/"): {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+                for name, data in contents.items() if name.startswith("viewer/")}
+    monkeypatch.setattr(viewer_source, "pinned_viewer_files", lambda _: expected)
+    pin["external_viewer"]["source_inventory"] = {"file": "viewer-source.json", "sha256": hashlib.sha256(b"{}").hexdigest(), "files": len(expected)}
     manifest = {"schema": m.SCHEMA, "id": "test-1", "platform": "win32", "architecture": "x64",
                 "node": {"version": m.NODE_VERSION, "path": "node/node.exe", "sha256": node_hash},
                 "browser": {"path": "browser/browser.exe", "license": "browser/LICENSE", "sha256": node_hash,
                             "revision": "1243", "version": "153.0.8010.12", "playwrightVersion": "1.63.0"},
                 "core": {"version": "test", "sourceRevision": "a" * 40, "directory": "backend"},
-                "viewer": {"sourceRevision": "b" * 40, "sourceSha256": "c" * 64, "directory": "viewer"},
+                "viewer": {"sourceRevision": "b" * 40, "sourceSha256": "c" * 64, "directory": "viewer/renderer-src"},
                 "resources": resources, "licenses": ["LICENSE"], "files": {
                     name: {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()} for name, data in contents.items()}}
     update(root, manifest)
@@ -245,3 +251,40 @@ def test_extracted_source_selects_cached_installation_by_identity(bundle, tmp_pa
     # Removing only this test's extracted source cannot break the installed selection.
     shutil.rmtree(source)
     assert resolve_prepared_bundle(registration_file=selected).node == root / "node/node.exe"
+
+
+def test_rehashed_wrong_viewer_source_cannot_claim_the_pin(bundle):
+    root, manifest, _ = bundle
+    name = "viewer/renderer-src/tools/native-world-preview-host.mjs"
+    (root / name).write_bytes(b"export const unexpected = true;")
+    manifest["files"][name] = {"bytes": (root / name).stat().st_size, "sha256": m.digest(root / name)}
+    update(root, manifest)
+    with pytest.raises(m.BundleError, match="viewer_source_mismatch"):
+        m.verify_bundle(root)
+
+
+def test_builder_rejects_wrong_viewer_before_creating_or_copying(bundle, tmp_path, monkeypatch):
+    from agent_mc_autonomy.runtime_bundle import build
+    root, _, _ = bundle
+    destination = tmp_path / "new-output"
+    monkeypatch.setattr(build, "copy_tree", lambda *args, **kwargs: pytest.fail("copy before source verification"))
+    with pytest.raises(m.BundleError, match="viewer_source"):
+        build.build_bundle(destination, **{name + "_directory": root for name in ("node", "backend", "viewer", "assets", "appearances", "licenses", "browser")}, bundle_id="wrong-viewer")
+    assert not destination.exists()
+
+
+@pytest.mark.parametrize("change", ["missing", "extra_renderer", "extra_adapter"])
+def test_rehashed_viewer_source_fileset_must_be_exact(bundle, change):
+    root, manifest, _ = bundle
+    name = "viewer/src/adapter.ts" if change != "extra_renderer" else "viewer/renderer-src/extra.mjs"
+    if change == "missing":
+        (root / name).unlink()
+        del manifest["files"][name]
+    else:
+        if change == "extra_adapter":
+            name = "viewer/src/extra.ts"
+        (root / name).write_bytes(b"export {}")
+        manifest["files"][name] = {"bytes": 9, "sha256": m.digest(root / name)}
+    update(root, manifest)
+    with pytest.raises(m.BundleError, match="viewer_source_mismatch"):
+        m.verify_bundle(root)

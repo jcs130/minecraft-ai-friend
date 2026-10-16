@@ -139,6 +139,10 @@ def verify_bundle(root: Path, *, expected_manifest_sha256: str | None = None, fu
             fail("inventory_invalid")
         if len(files) != inventory["files"]:
             fail("inventory_invalid")
+        from .viewer_source import verify_viewer_inventory
+        verify_viewer_inventory(files, viewer["directory"], pin)
+        if files.get("viewer-source.json", {}).get("sha256") != pin["external_viewer"]["source_inventory"]["sha256"]:
+            fail("viewer_source_pin_mismatch")
         folded, total = set(), 0
         for name, row in files.items():
             relative_path(name)

@@ -54,6 +54,16 @@ function verify(requireRunningNode = true) {
       || browser.sha256 !== pin.offline_browser.executable_sha256 || browser.revision !== pin.offline_browser.revision
       || browser.version !== pin.offline_browser.browserVersion || browser.playwrightVersion !== '1.63.0'
       || resources.minecraftVersion !== '1.21.1' || resources.registrySha256 !== '55893d269459e1e05387903c77b2db877d7cece875ed31a5a6a2f965822ea546') fail('source_mismatch');
+  const sourcePin = pin.external_viewer.source_inventory;
+  if (sourcePin.file !== 'viewer-source.json' || fileHash(safe(sourcePin.file)) !== sourcePin.sha256) fail('viewer_source_pin_mismatch');
+  const sourceMap = read(safe(sourcePin.file), 128 * 1024);
+  if (sourceMap.schema !== 'agent-mc-viewer-source/v1' || sourceMap.sourceRevision !== viewer.sourceRevision
+      || Object.keys(sourceMap.files).length !== sourcePin.files || sourcePin.files < 1 || sourcePin.files > 2000) fail('viewer_source_pin_mismatch');
+  const prefix = path.posix.dirname(viewer.directory) + '/';
+  const projection = Object.fromEntries(Object.entries(files).filter(([name]) => name.startsWith(prefix)
+    && !name.slice(prefix.length).split('/').slice(0, -1).includes('node_modules')).map(([name, row]) => [name.slice(prefix.length), row]));
+  if (Object.keys(projection).length !== sourcePin.files || Object.entries(sourceMap.files).some(([name, row]) =>
+    projection[name]?.bytes !== row.bytes || projection[name]?.sha256 !== row.sha256)) fail('viewer_source_mismatch');
   if (!files || Array.isArray(files) || Object.keys(files).length < 1 || Object.keys(files).length > 100000) fail('inventory_invalid');
   const names = new Set(); let total = 0;
   for (const [name, row] of Object.entries(files)) {
@@ -68,7 +78,7 @@ function verify(requireRunningNode = true) {
     viewer.directory + '/tools/native-world-preview-host.mjs', resources.catalog, resources.appearanceCatalog,
     resources.assetDirectory + '/registry/block-states.jsonl', resources.assetDirectory + '/public/sounds/manifest.json',
     resources.assetDirectory + '/native-assets.json',
-    'prepare.cmd', 'prepare.mjs', 'source.json', ...manifest.licenses];
+    'prepare.cmd', 'prepare.mjs', 'source.json', 'viewer-source.json', ...manifest.licenses];
   if (!manifest.licenses.length || required.some(name => !Object.hasOwn(files, name)) || files[node.path].sha256 !== node.sha256
       || files[browser.path].sha256 !== browser.sha256
       || requireRunningNode && fs.realpathSync(safe(node.path)).toLowerCase() !== fs.realpathSync(process.execPath).toLowerCase()) fail('required_input_missing');
