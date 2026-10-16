@@ -10,6 +10,10 @@ export interface JavaClientConfiguration {
   minescriptEnabled?: boolean;
   /** Fold short action terminals into the tool reply; zero keeps admission-only replies. */
   actionWaitMs?: number;
+  /** Fold short JS execution/cleanup into one reply; zero preserves immediate admission. */
+  methodWaitMs?: number;
+  /** Preserve the original summary by default; body omits repeated inventory/menu stacks. */
+  stateDetail?: 'body' | 'summary';
 }
 export interface JavaClientAction {
   id: string; operation: string; phase: 'accepted' | 'running' | 'completed' | 'partial' | 'blocked' | 'cancelled' | 'unknown';

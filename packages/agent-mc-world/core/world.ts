@@ -2237,6 +2237,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       procedure: { type: 'object', properties: { handle: { type: 'string' }, revision: { type: 'string' } }, required: ['handle', 'revision'] },
       params: { type: 'object', additionalProperties: true },
       durationMs: { type: 'integer', minimum: 1000, maximum: METHOD_LIMITS.maxDurationMs },
+      waitMs: { type: 'integer', minimum: 0, maximum: 30000, description: 'Wait for the same run within this reply; zero keeps immediate admission. Expiring this wait does not cancel execution.' },
       validate: { type: 'boolean' }, runId: { type: 'integer', minimum: 1 },
       api: { type: 'string', description: 'index lists the program SDK and exposed Mineflayer API; mc.do/mc.state/mc.flightPlan or a native method name returns its result contract on demand.' },
       call: { type: 'integer', minimum: 1, maximum: METHOD_LIMITS.calls }, stop: { type: 'boolean' },
@@ -4408,6 +4409,7 @@ export class MinecraftWorld implements World {
 
       mc_script: async (args, ctx) => {
         try {
+          if(args.waitMs!==undefined&&(typeof args.waitMs!=='number'||!Number.isInteger(args.waitMs)||args.waitMs<0||args.waitMs>30000))throw new Error('waitMs须为0至30000');
           if (args.library !== undefined) {
             if (Object.keys(args).some(key => key !== 'library')) throw new Error('library 须单独使用');
             const input = args.library as Record<string, unknown>;
@@ -4440,15 +4442,22 @@ export class MinecraftWorld implements World {
             const graph = reference ? resolveProcedure(reference, METHOD_ADAPTER, handle => handle.startsWith('mem:mc-method/')
               ? this.methodLibrary().blob(handle) : this.host?.blob(handle) ?? null) : undefined;
             const root = graph?.versions[graph.root];
+            ctx.signal?.throwIfAborted();
             const run = this.methods.start({ name: root?.id ?? args.name as string, code: root?.code ?? args.code as string,
               params: args.params as Record<string, unknown> | undefined,
               durationMs: args.durationMs as number | undefined, validate: args.validate === true,
               ...(graph && reference ? { procedure: { reference, graph } } : {}) });
-            return {text:this.toolLog('mc_script', args, `方法#${run.id}已启动，尚无执行终态：${JSON.stringify(run)}`), execution: {kind:'method',id:`${this.executionEpoch}:${run.id}`,phase:'accepted',terminal:false,goalCompleted:false,evidence:{localId:run.id}}};
+            let waitingCancelled=false;
+            try{await this.methods.wait(run.id,Number(args.waitMs??0),ctx.signal);}catch(error){if(ctx.signal?.aborted)waitingCancelled=true;else throw error;}
+            const current=this.methods.read(run.id)[0],terminal=current.status!=='running';
+            return {text:this.toolLog('mc_script', args, `方法#${run.id}${terminal?'已取得程序终态':'已启动，尚无执行终态'}：${JSON.stringify({...(this.methods.inspect(run.id) as Record<string,unknown>),...(waitingCancelled?{waitingCancelled:true}:{})})}`),
+              ...(terminal&&['failed','cancelled'].includes(current.status)?{failed:true}:{}),
+              execution:{kind:'method',id:`${this.executionEpoch}:${run.id}`,phase:terminal?(current.status==='cancelled'?'cancelled':['completed','validated'].includes(current.status)?'completed':'blocked'):'accepted',terminal,goalCompleted:false,evidence:{localId:run.id}}};
           }
           if (args.runId !== undefined && (!Number.isInteger(args.runId) || Number(args.runId) <= 0)) throw new Error('runId须为正整数');
           if (args.call !== undefined && (args.runId === undefined || !Number.isInteger(args.call)
             || Number(args.call) < 1 || Number(args.call) > METHOD_LIMITS.calls)) throw new Error('call须配合runId，取1至32的调用编号');
+          if(args.runId!==undefined)await this.methods.wait(Number(args.runId),Number(args.waitMs??0),ctx.signal);
           return this.toolLog('mc_script', args, JSON.stringify(this.methods.inspect(args.runId as number | undefined, args.call as number | undefined)));
         } catch (error) { return { text: this.toolLog('mc_script', args, String(error)), failed: true }; }
       },

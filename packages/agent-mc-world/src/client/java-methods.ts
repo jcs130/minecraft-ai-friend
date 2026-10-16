@@ -25,11 +25,12 @@ export function javaMethodCapabilities(caps: Record<string, unknown>) {
 const READS = new Set(['read','blockAt','findBlocks','findBlock','canSeeBlock','inventory.items','getControlState']);
 export const JAVA_METHOD_FIELDS = {
   name:{type:'string',minLength:1,maxLength:80}, params:{type:'object'}, durationMs:{type:'integer',minimum:1000,maximum:120000},
+  waitMs:{type:'integer',minimum:0,maximum:30000},
   validate:{type:'boolean'}, stop:{type:'boolean'}, runId:{type:'integer',minimum:1}, call:{type:'integer',minimum:1,maximum:32},
   procedure:{type:'object',properties:{handle:{type:'string'},revision:{type:'string'}},required:['handle','revision'],additionalProperties:false}, library:METHOD_LIBRARY_SCHEMA,
 };
 export function javaMethodHelp(topic='index'):string {
-  const base='JavaScript uses the SAME mc_script {name,code,params,validate,runId,call,stop,library,procedure} and SES/Vec3/method version format as the Mineflayer backend. Use language:"javascript" (or legacy name+code); Python remains explicit language:"python" or legacy unnamed code. Every bot call is awaited; Vec3 arithmetic and Block.getProperties() are synchronous. No Python translation, second connection, arbitrary imports/plugins or hidden model. Requires bridge methodAdapter agent-mc-method/v1 for execution; syntax validation is offline. Claim mc_control before body calls. First body call reserves the one native queue until program end; held keys survive SDK calls. Stop/timeout/disconnect cancels only the original action and releases keys; unknown cleanup blocks another program. Read runId/call to inspect actual terminals. A completed program is not goal completion.';
+  const base='JavaScript uses the SAME mc_script {name,code,params,validate,runId,call,stop,library,procedure} and SES/Vec3/method version format as the Mineflayer backend. Use language:"javascript" (or legacy name+code); Python remains explicit language:"python" or legacy unnamed code. waitMs:0..30000 waits for the SAME run and cleanup within this tool reply (native default1000ms, configurable); zero returns admission immediately. A running reply retains its original runId; inspect that ID with waitMs instead of launching duplicate programs. Cancelling only this wait does not cancel accepted work; stop is explicit. Every bot call is awaited; Vec3 arithmetic and Block.getProperties() are synchronous. No Python translation, second connection, arbitrary imports/plugins or hidden model. Requires bridge methodAdapter agent-mc-method/v1 for execution; syntax validation is offline. Claim mc_control before body calls. First body call reserves the one native queue until program end; held keys survive SDK calls. Stop/timeout/disconnect cancels only the original action and releases keys; unknown cleanup blocks another program. Read runId/call to inspect actual terminals. A completed program is not goal completion.';
   const topics:Record<string,string>={
     index:`Known bot methods: ${JAVA_METHODS.join(', ')}. Reuse Mineflayer-shaped programs; await mc.capabilities() returns the actual supported subset before body calls. On-demand api: read, blockAt, findBlocks, inventory, movement, pathfinder, interaction, mc.capabilities, mc.state, mc.do, methods, compatibility. With language:python use the Minescript guide.`,
     'mc.capabilities': METHOD_CAPABILITIES_HELP,
@@ -66,6 +67,7 @@ export class JavaMethods {
   private generation:number|null=null;
   private availableMethods=new Set<string>();
   private renewAt=0;
+  private readonly finishedRuns=new Map<number,{unknown:boolean;phase:'completed'|'blocked'|'cancelled';error?:string;raw?:ReturnType<NativeEvidenceArchive['save']>}>();
   constructor(private readonly cfg:JavaClientConfiguration,private readonly port:Port){
     const scope=createHash('sha256').update(JSON.stringify([cfg.expectedServer.toLowerCase().replace(/:25565$/,''),cfg.expectedUuid.replaceAll('-','').toLowerCase(),cfg.controllerId])).digest('hex');
     this.library=new MethodLibrary(join(cfg.ledgerDir,'minecraft-methods',scope));
@@ -96,9 +98,13 @@ export class JavaMethods {
     const host=this.port.host();if(host)await host.pushEvent({type:'minecraft.method',source:'minecraft',ts:new Date().toISOString(),
       text:JSON.stringify({program:this.runner.inspect(run.id),backend:'java-client',cleanup:error??'confirmed',goalCompleted:false,raw}),
       execution:{kind:'method',id:`${this.epoch}:${run.id}`,phase,terminal:!this.uncertain,goalCompleted:false,evidence:{localId:run.id,sourceHash:run.sourceHash,cleanup:error??'confirmed',raw}}},{trigger:'flush'}).catch(()=>{});
+    this.finishedRuns.set(run.id,{unknown:!!this.uncertain,phase,error,raw});
+    while(this.finishedRuns.size>8)this.finishedRuns.delete(this.finishedRuns.keys().next().value!);
   }
-  private async reconcile(){if(!this.uncertain)return;const action:JavaClientAction=await this.port.rpc('result',{action_id:this.uncertain});if(['completed','partial','blocked','cancelled'].includes(action.phase)){this.owned.delete(this.uncertain);this.uncertain=null;}else throw new Error(`Cleanup unknown for ${this.uncertain}; reconcile original action, no replay`);}
+  private async reconcile(){if(!this.uncertain)return;const action:JavaClientAction=await this.port.rpc('result',{action_id:this.uncertain});if(['completed','partial','blocked','cancelled'].includes(action.phase)){this.owned.delete(this.uncertain);this.uncertain=null;for(const run of this.finishedRuns.values())run.unknown=false;}else throw new Error(`Cleanup unknown for ${this.uncertain}; reconcile original action, no replay`);}
   async execute(args:Record<string,unknown>,ctx:ToolCallContext):Promise<ToolOutcome>{
+    const waitMs=args.waitMs??this.cfg.methodWaitMs??1000;
+    if(typeof waitMs!=='number'||!Number.isInteger(waitMs)||waitMs<0||waitMs>30000)throw new Error('waitMs must be 0..30000');
     if(args.api)return {text:javaMethodHelp(String(args.api))+(args.code?'\nAPI query only: supplied code was not executed.':'')};
     if(args.library){if(Object.keys(args).some(k=>!['library','language'].includes(k)))throw new Error('Use library separately');const q=args.library as Record<string,unknown>;
       const value=q.op==='list'?this.library.list(q):q.op==='read'?this.library.read(String(q.id),q.revision as string|undefined):q.op==='save'?this.library.save(q,this.runner.read(Number(q.validationRunId))[0],ctx.role):null;
@@ -111,13 +117,36 @@ export class JavaMethods {
       const reference=args.procedure===undefined?undefined:procedureReference(args.procedure);
       const graph=reference?resolveProcedure(reference,METHOD_ADAPTER,handle=>handle.startsWith('mem:mc-method/')?this.library.blob(handle):this.port.host()?.blob(handle)??null):undefined;
       const root=graph?.versions[graph.root];
+      ctx.signal?.throwIfAborted();
       const run=this.runner.start({name:root?.id??args.name as string,code:root?.code??args.code as string,params:args.params as Record<string,unknown>|undefined,durationMs:args.durationMs as number|undefined,validate:args.validate===true,...(reference&&graph?{procedure:{reference,graph}}:{})});
-      return{text:JSON.stringify(run),execution:{kind:'method',id:`${this.epoch}:${run.id}`,phase:'accepted',terminal:false,goalCompleted:false,evidence:{localId:run.id}}};
+      const waitingCancelled=await this.settleRun(run.id,waitMs,ctx.signal);
+      const current=this.runner.read(run.id)[0],finished=this.finishedRuns.get(run.id),terminal=current.status!=='running'&&!!finished&&!finished.unknown;
+      const phase=terminal?finished!.phase:finished?.unknown?'blocked':'accepted';
+      return{text:JSON.stringify({...(this.runner.inspect(run.id) as Record<string,unknown>),cleanupPending:current.status!=='running'&&!finished,cleanupUnknown:finished?.unknown??false,cleanup:finished?.error??(finished?'confirmed':null),...(waitingCancelled?{waitingCancelled:true}:{}),...(finished?.raw?{raw:finished.raw}:{})}),
+        ...(terminal&&['blocked','cancelled'].includes(phase)?{failed:true}:{}),
+        execution:{kind:'method',id:`${this.epoch}:${run.id}`,phase,terminal,goalCompleted:false,evidence:{localId:run.id,sourceHash:current.sourceHash,...(finished?.raw?{raw:finished.raw}:{})}}};
     }
     if(args.runId!==undefined&&(!Number.isInteger(args.runId)||Number(args.runId)<1))throw new Error('runId must be positive integer');
     if(args.call!==undefined&&(!args.runId||!Number.isInteger(args.call)||Number(args.call)<1||Number(args.call)>METHOD_LIMITS.calls))throw new Error('call requires runId and range 1..32');
-    await this.reconcile();const program=this.runner.inspect(args.runId as number|undefined,args.call as number|undefined);
-    return{text:JSON.stringify(args.runId===undefined?program:{...(program as Record<string,unknown>),cleanupPending:!!this.cleanup,cleanupUnknown:this.uncertain})};
+    await this.reconcile();const waitingCancelled=args.runId===undefined?false:await this.settleRun(Number(args.runId),waitMs,ctx.signal);
+    const program=this.runner.inspect(args.runId as number|undefined,args.call as number|undefined),finished=args.runId===undefined?undefined:this.finishedRuns.get(Number(args.runId));
+    return{text:JSON.stringify(args.runId===undefined?program:{...(program as Record<string,unknown>),cleanupPending:(program as Record<string,unknown>).status!=='running'&&!finished,cleanupUnknown:finished?.unknown??false,...(waitingCancelled?{waitingCancelled:true}:{}),...(finished?.raw?{raw:finished.raw}:{})})};
+  }
+  private async settleRun(id:number,waitMs:number,signal?:AbortSignal){
+    const until=Date.now()+waitMs;
+    try{
+      await this.runner.wait(id,waitMs,signal);
+      if(this.runner.read(id)[0].status!=='running'&&!this.finishedRuns.has(id)&&this.cleanup&&Date.now()<until){
+        const cleanup=this.cleanup;
+        await new Promise<void>((resolve,reject)=>{
+          const finish=(error?:unknown)=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);error===undefined?resolve():reject(error);};
+          const abort=()=>finish(signal?.reason??new Error('Method wait cancelled'));
+          const timer=setTimeout(()=>finish(),Math.max(0,until-Date.now()));
+          void cleanup.then(()=>finish(),error=>finish(error));signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
+        });
+      }
+      return false;
+    }catch(error){if(signal?.aborted)return true;throw error;}
   }
   private async fresh(signal?:AbortSignal){const s=await this.port.state(signal);if(!s.connected||this.generation!==null&&s.generation!==this.generation)throw new Error('Method connection changed; no action dispatched');return s;}
   private async snapshot(signal:AbortSignal){const s=await this.fresh(signal);return{sampledAt:s.sampledAt,connectionGeneration:s.generation,snapshot:{position:s.position,dimension:s.dimension,health:s.health,food:s.food,inventory:compactNativeItems(s).inventory?.occupied??null},queue:s.actions,method:this.runner.current,flight:null,temporaryScaffolds:null,combatActive:null,combat:null,nativeState:compactNativeState(s)};}
@@ -129,7 +158,9 @@ export class JavaMethods {
     const result=await this.wait(id,signal,starting);if(!starting&&result.phase!=='unknown')this.owned.delete(id);return result;
   }
   private async call(method:MethodOperation,args:Record<string,unknown>,signal:AbortSignal):Promise<unknown>{
-    signal.throwIfAborted();await this.fresh(signal);
+    signal.throwIfAborted();
+    const readOnly=method==='mineflayer'&&typeof args.name==='string'&&READS.has(args.name);
+    if(!readOnly&&method!=='state')await this.fresh(signal);
     if(method==='capabilities')return methodCapabilities('java-client',[...this.availableMethods].filter(name=>JAVA_METHODS.includes(name as BotMethod)));
     if(method==='state')return this.snapshot(signal);
     if(method==='flightPlan')throw new Error('flightPlan is unavailable on the native Java backend');
@@ -147,6 +178,8 @@ export class JavaMethods {
     if(READS.has(args.name)){
       const projection=args.name==='read'?publicReadProjection(args.args[0]):null;
       const reply=await this.port.rpc('method_read',{name:args.name,args:projection?[projection.root]:args.args,expectedGeneration:this.generation},signal);
+      if(reply.generation===undefined)await this.fresh(signal);
+      else if(reply.generation!==this.generation)throw new Error('Method connection changed; read is not a current observation');
       return projection?{...reply,value:projectPublicRead(reply.value,projection.fields)}:reply;
     }
     if(!this.body){const action=await this.submit('method.run',{durationMs:METHOD_LIMITS.maxDurationMs},signal,true);if(action.phase!=='running')throw new Error(`Native body session ${action.id} did not start: ${action.phase}`);this.body=action.id;}
