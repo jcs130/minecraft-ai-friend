@@ -1,50 +1,69 @@
 {
   "repository": "https://github.com/jcs130/minecraft-ai-friend",
-  "source_revision": "3ee62ca25b60693132f7b7b8ae6bac3df7ad452f",
+  "source_revision": "41bed34ac5a3c1a73bb0be2f2457b260d7f2c47e",
   "source_path": "packages/agent-mc-world",
   "name": "agent-mc-world",
-  "version": "0.5.7-dev.20261016.39",
-  "archive": "agent-mc-world-0.5.7-dev.20261016.39.tgz",
-  "sha256": "44c161edb81aad330aef57933716b31d329eb11506d6ba8e0b6c322f57285b56",
+  "version": "0.5.7-dev.20261017.3",
+  "archive": "agent-mc-world-0.5.7-dev.20261017.3.tgz",
+  "sha256": "dad654b22683f7a0ffa265948ac7ca8bfbd62d8f071827196abf8f368c59fce4",
   "build_profile": "canonical-engine-only",
   "upstream_release": false,
   "minecraft_version": "1.21.1",
   "viewer_assets": null,
   "verification": {
-    "package.json": "8f68e597f14ee018670e5db758d25fa3abb73d57759981cf39154124839a3f62",
-    "dist/build.json": "6997d44e02f548eb5e8f57b0a2b9e2a47b29b5af8a0f4eb9a5c9359b4b706036",
-    "dist/types/manifest.json": "b4c941e75299fb4f7253de1de5f09ef1d5ee043df3d49c94495461bee62b637c",
-    "bin/minecraft-agent-mcp.mjs": "161d2ebcc11726d655e2c204f412553bcc8ed6df6b7d20c2c6fcb82bf30760a8",
-    "bin/minecraft-agent-client.mjs": "7cf81abccdcef5ad0aaf59340b233c3b5d398160e1c3d829a36fc25bfcbfb1bc"
+    "package.json": "041d0f025624022c7760facccbe78927ff2496d0a556b8e99bae9e9b3908bcf8",
+    "dist/build.json": "0054f295fb05e9fb9c936fcd892c6e722e14c45a1cab7a55f9bcf91d854c527c",
+    "dist/types/manifest.json": "9558325a5fe55219717b8a88817bca8c08a36a66486095801f94f4fd01871e21",
+    "bin/minecraft-agent-mcp.mjs": "1508f8ccd65f176b5d14999d57d4e61103beda106070e152e693380c75a701f7",
+    "bin/minecraft-agent-client.mjs": "49384a0a96b3509a6a9afc42d00953752deb41a946efd5e2db46e1de43d5c8d8"
   },
   "external_viewer": {
     "repository": "https://github.com/jcs130/mc-visual-console",
-    "source_revision": "c799ae1a71fd7a03f3404f67e33f2985eed8a7aa",
-    "archive": "modern-viewer-c799ae1a-source.tar.gz",
-    "sha256": "8acc9a51e1bf0a5115f381c4a18552752ac03866f53f1e5fed7230243ec3fb98",
+    "source_revision": "f0f2227e65ea05ea89dcd4954790ec787a3a2e7a",
+    "archive": "modern-viewer-f0f2227e-runtime-source.tar.gz",
+    "sha256": "be812d324ffd6208d0b3acceb8a84a6a759ef6baab286b10d7c5e71aeb3d3759",
     "archive_paths": [
       "modern-viewer/renderer-src",
       "modern-viewer/src"
     ],
     "source_receipt": {
-      "sourceSha256": "08ae93cb4510f201234b8c0111e517c7f10577e031e0cbae6ddb748285c1884a",
-      "sourceFiles": 315,
+      "sourceSha256": "550f929f6631fc2364c9832d54060d8e49c7848ac177013ba86a516fd6fce62f",
+      "sourceFiles": 322,
       "scope": "renderer_source_and_mineflayer_host_adapters"
     },
     "original_catalog_sha256": "e014078c1e0498fd70616cb951fb87b8091cea934cc3d26959b8b94394c5f353",
     "bundle_sha256": {
-      "world-preview.js": "c5e1510e0ce5748f2392495fec7afc61bc99d22459f7a21360782febd4237efd",
-      "native-console.js": "e9c1b86f4ae1fe4ec41c387204c1c0707dc507c9b50642fbdcdf4db390d52d45",
-      "ysm-review.js": "0a1680cb6ac51564a3400601767030e3c286760a0c05d28dc08ebf10adeba912"
+      "world-preview.js": "6085fc38f46108e0d717a40bf5829e785e6125a30298bd8beaf0289da717d1e4",
+      "native-console.js": "3464d2d985188fa97ee818e0a78dd549164794108adbb035b7e53ee1fb106047"
     },
-    "bundled_in_core": false,
-    "original_asset_packs": {
-      "archive": "viewer-original-packs-c799ae1a-exact.tar.gz",
-      "sha256": "cba6f1c01685a7d2bbd832a1bea5e0043c6677d07f71ba3caeac69253428a6c2",
-      "packs": [
-        "vanilla-1.21.1",
-        "native-1.21.1"
-      ]
-    }
+    "bundled_in_core": false
+  },
+  "offline_node": {
+    "url": "https://nodejs.org/dist/v22.22.1/node-v22.22.1-win-x64.zip",
+    "sha256": "877cb93829e14fffbbc7903e7d8037336c9a79f3ea43c5d0b8c2379b79da56de",
+    "shasumsUrl": "https://nodejs.org/dist/v22.22.1/SHASUMS256.txt",
+    "shasumsSha256": "b4e0a68b3fd205e27a000f5722d7932cf31c1e0b6b3d9101bcb153abfd5d8023",
+    "versionProbe": "v22.22.1",
+    "executable_sha256": "923a41f268ab49ede2e3363fbdd9e790609e385c6f3ca880b4ee9a56a8133e5a"
+  },
+  "offline_resources": {
+    "resources/vanilla-1.21.1/native-assets.json": "4430d725d7f663bc48fece65cde8ee9cbadc4f4df5b9aa4cfef01e7e3f122cf1",
+    "resources/vanilla-1.21.1/public/sounds/manifest.json": "bb6ba5d8c664cf975b245ba1593bb9c25624a975e72d147876d22527e4e4773e",
+    "resources/vanilla-1.21.1/public/sounds/source-index.json": "dc6b5b45a405a3c2bc81df6c62745027be2df4c9e1f982cf714bebed25e20cdd",
+    "resources/vanilla-1.21.1/public/sounds/source-sounds.json": "51b23584d267ba37d3a1bafd4f24d3dda07672ab91672ea6f7a1bc86067a1a6b",
+    "resources/vanilla-1.21.1/public/sounds/registry.json": "2eb389ccb5a94f604ab423e8f42c3db711ed62317a67a55b7e3f3829e3828724",
+    "resources/vanilla-1.21.1/public/sounds/block-sounds.json": "d43dc9e7862aac8acdf4d0723379dbb387b1e457a9ce4ca954a9100d7e0a2b80",
+    "resources/appearances/catalog.json": "87878dc22f1596e326a7268e167841e2bf594619161ede5e7c9ca0b573fad45f"
+  },
+  "offline_browser": {
+    "playwrightCore": "1.63.0",
+    "revision": "1243",
+    "browserVersion": "153.0.8010.12",
+    "url": "https://cdn.playwright.dev/builds/cft/153.0.8010.12/win64/chrome-headless-shell-win64.zip",
+    "sha256": "7aec872f3090e639c4237467624ea863c20fe2878914c93a6556bdbb52aa6c4c",
+    "bytes": 120200717,
+    "checksumAuthority": "locally computed SHA-256 over official HTTPS artifact; no separate upstream signed checksum claimed",
+    "seconds": 6.077999999979511,
+    "executable_sha256": "addfa79abb060e1e514e155ed745d4bf96140bca402735958bb4e223aea0b98c"
   }
 }

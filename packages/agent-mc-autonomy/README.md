@@ -5,6 +5,12 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.78 adds a neutral Windows x64 offline runtime bundle, explicit preparation
+and portable host defaults. It pins core `0.5.7-dev.20261017.3` and viewer
+`f0f2227e65ea05ea89dcd4954790ec787a3a2e7a`, retaining the reviewed Windows
+status-publication retry. Recipients use included Node 22.22.1 and need no Git,
+npm or Python builder. See [offline delivery and host integration](docs/offline-runtime.md).
+
 0.1.77 preserves private first-exception diagnostics across cleanup failures and
 adds explicit offline operator acknowledgement for a failed, empty local body
 ledger. Old native work remains unknown; acknowledgement never replays a request

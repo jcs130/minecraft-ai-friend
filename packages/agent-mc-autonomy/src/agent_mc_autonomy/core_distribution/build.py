@@ -17,7 +17,7 @@ def build(checkout: Path, destination: Path) -> Path:
         raise ValueError("Build destination must be empty; existing runtimes are never replaced.")
     destination.mkdir(parents=True, exist_ok=True)
     archive = destination / "source.tar"
-    subprocess.run(["git", "-C", str(checkout), "archive", "--format=tar", f"--output={archive}",
+    subprocess.run(["git", "-C", str(checkout), "-c", "core.autocrlf=false", "-c", "core.eol=lf", "archive", "--format=tar", f"--output={archive}",
                     f"{source_pin['source_revision']}:{source_pin['source_path']}"], check=True, timeout=60)
     with tarfile.open(archive) as source:
         for member in source.getmembers():

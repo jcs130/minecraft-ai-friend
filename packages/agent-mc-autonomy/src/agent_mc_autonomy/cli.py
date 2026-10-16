@@ -56,6 +56,8 @@ def main(argv=None, *, entry_resolver=None, viewer_entry=None, context_counter_f
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--entry", type=Path, help="Explicit built agent-mc-world MCP entry; no host checkout is required")
     parser.add_argument("--viewer-entry", type=Path, help="Optional separately installed viewer adapter entry")
+    parser.add_argument("--bundle-root", type=Path, help="Explicit prepared offline bundle; verify all bytes before use")
+    parser.add_argument("--bundle-registration", type=Path, help="Explicit offline bundle registration JSON")
     parser.add_argument("--data", type=Path, help="Same data root as the observer; overrides runtime.data_directory")
     parser.add_argument("--queue-only", action="store_true", help="Execute native tasks without invoking a model")
     parser.add_argument("--goal", default="survive")
@@ -101,6 +103,9 @@ def main(argv=None, *, entry_resolver=None, viewer_entry=None, context_counter_f
                 result = asyncio.run(list_models(config) if args.command == "model-list" else check_model(config, max_output_tokens=budget))
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
+        if args.bundle_root is not None or args.bundle_registration is not None:
+            from .runtime_bundle import apply_runtime_defaults
+            raw = apply_runtime_defaults(raw, bundle_root=args.bundle_root, registration_file=args.bundle_registration)
         settings = Settings.parse(raw)
         data = args.data.resolve() if args.data else settings.data_root(Path("runtime").resolve())
         directory = data / "sessions" / settings.identity / "host"
@@ -137,6 +142,9 @@ def main(argv=None, *, entry_resolver=None, viewer_entry=None, context_counter_f
         else:
             settings.require_server()
             entry = entry_resolver(settings.runtime_directory(Path("local").resolve())) if entry_resolver else args.entry
+            if entry is None and settings.bundle_root:
+                from .core_distribution.install import verify_runtime
+                entry = verify_runtime(Path(settings.backend_directory))
             if entry is None or not entry.is_file():
                 raise ValueError("explicit_core_entry_required")
             config = None if args.queue_only else HttpPlannerConfig.parse({k: v for k, v in raw.get("planner", {}).items() if k != "route"})

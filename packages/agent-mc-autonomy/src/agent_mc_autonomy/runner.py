@@ -136,6 +136,13 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
 
     try:
         validate_start(settings, goal)
+        bundle_env = {}
+        if settings.bundle_root:
+            from .runtime_bundle import verify_settings_runtime
+            bundle_env = verify_settings_runtime(settings)
+            from .core_distribution.install import runtime_entry
+            if entry.resolve() != runtime_entry(Path(settings.backend_directory)).resolve():
+                raise ValueError("runtime_bundle_core_entry_mismatch")
         validate_profiles=getattr(planner,'validate_profiles',None)
         if validate_profiles:
             validate_profiles(settings.decision_policy)
@@ -161,7 +168,7 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                 entry = Path(viewer_entry) if viewer_entry else Path(__file__).parent / "integrations" / "viewer-stdio.mjs"
             config.write_text(json.dumps(client_config, ensure_ascii=False), encoding="utf-8")
             update()
-            memory_env = settings.memory.environment()
+            memory_env = {**bundle_env, **settings.memory.environment()}
             bridge = bridge_factory(settings.node, entry, config, directory / "backend.log", **({"env": memory_env} if memory_env else {}))
             try:
                 if settings.fast.mode == "system_one" and planner:
