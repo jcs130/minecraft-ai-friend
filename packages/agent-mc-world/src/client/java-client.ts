@@ -10,7 +10,7 @@ import { serveNativeView } from './native-view.ts';
 import { createJavaDataViewer, type JavaDataViewerHandle } from '../../core/java-data-viewer.mjs';
 import type { Server } from 'node:http';
 import { JAVA_LEGACY_HELP, javaLegacySkillHelp, translateJavaLegacy } from './java-legacy.ts';
-import { NativeEvidenceArchive, compactNativeState, compactNativeBody, compactNativeItems, compactNativeActionEvent, compactItem, compactItems } from './native-evidence.ts';
+import { NativeEvidenceArchive, compactNativeState, compactNativeBody, compactNativeItems, compactNativeActionEvent, compactNativeActionReceipt, compactItem, compactItems } from './native-evidence.ts';
 import { javaScriptHelp, javaScriptErrorHelp } from './java-script-help.ts';
 import { selectJavaViewer } from './java-viewer-selection.ts';
 import { nativeProbeInput, NATIVE_PROBE_PROGRAM } from './java-probe.ts';
@@ -102,11 +102,17 @@ export class JavaClientWorld implements World {
       { key: 'bodyRestriction', text: JSON.stringify({ connection: this.connectionReadiness(), authorizationRequired: nativeAuthorization(state, this.cfg.javaClient?.requireServerAuthorization).required,
         instruction: 'Authorization is scoped to this connection; pending/required/blocked forbids body dispatch. The private login owner handles credentials. Read-only evidence remains available.' }) },
       { key: 'body', text: JSON.stringify({ uuid: state.uuid, username: state.username, server: state.server, dimension: state.dimension, position: state.position,
-        health: state.health, food: state.food, yaw: state.yaw, pitch: state.pitch, generation: state.generation }) },
+        health: state.health, food: state.food, onGround: state.onGround ?? null, yaw: state.yaw, pitch: state.pitch, generation: state.generation }) },
       { key: 'inventory', text: JSON.stringify({ selectedSlot: state.selectedSlot, inventory: items.inventory, cursor: compactItem(state.cursor), rawQuery: 'mc_bag' }) },
       { key: 'menu', text: JSON.stringify({ screen: state.screen, screenToken: state.screenToken, screenTitle: state.screenTitle, buttons: state.buttons,
         syncId: state.syncId, revision: state.menuRevision, slots: items.menuSlots, rawQuery: 'mc_bag' }) },
-      { key: 'queue', text: JSON.stringify(state.actions.filter(action => ['accepted', 'running', 'unknown'].includes(action.phase))) },
+      { key: 'queue', text: JSON.stringify({
+        active: state.actions.filter(action => ['accepted', 'running'].includes(action.phase)).slice(-8),
+        activeCount: state.actions.filter(action => ['accepted', 'running'].includes(action.phase)).length,
+        unresolved: state.actions.filter(action => action.phase === 'unknown').slice(-4),
+        unresolvedCount: state.actions.filter(action => action.phase === 'unknown').length,
+        bodyControl: this.reflex?.status().bodyControl ?? null,
+        instruction: 'active lists pending receipts; unresolved is historical unknown effect, not proof the current body is busy or that it is safe to replay. bodyControl is a separate fresh native task sample; null means unavailable. Query mc_queue / mc_result for original IDs.' }) },
       { key: 'notices', text: JSON.stringify({ lastSeq: state.messages.at(-1)?.seq ?? 0, retained: state.messages.length, rawQuery: 'mc_notices', observationOnly: true }) },
       {key:'javascript',text:JSON.stringify({available:this.nativeMethodsAvailable,api:'mc_script language:javascript api:index / compatibility',contract:'shared name/code/params/validate/runId/call/library/procedure; bot/Vec3',execution:'capability-gated; program completion is not world progress'})},
       {key:'reflex',text:JSON.stringify(this.reflex?.status()??{supported:false,reason:'Actual native bridge has no shared reflex body capability'})},
@@ -241,7 +247,7 @@ export class JavaClientWorld implements World {
     const script = state.script as any;
     const apiCorrection = javaScriptErrorHelp(script?.error);
     const result = script ? JSON.stringify(script.result ?? null) : '';
-    const compact = { ...action, evidence: { ...(notification ? compactNativeActionEvent(state) : compactNativeState(state)), ...(script ? { script: { ok: script.ok, jobId: script.jobId, programReport: true, error: script.error, ...(apiCorrection ? {apiCorrection} : {}),
+    const compact = { ...action, evidence: { ...(notification ? compactNativeActionEvent(state) : compactNativeActionReceipt(state)), ...(script ? { script: { ok: script.ok, jobId: script.jobId, programReport: true, error: script.error, ...(apiCorrection ? {apiCorrection} : {}),
       ...(result.length <= 4000 ? { result: script.result } : { preview: result.slice(0, 4000), truncated: true }) } } : {}), raw } };
     return { text: JSON.stringify(compact), meta: { javaClient: compact },
       ...(action.phase === 'blocked' || action.phase === 'unknown' ? { failed: true as const } : {}),

@@ -16,7 +16,12 @@ it('classifies native navigation losslessly and rejects unknown capability or am
   const command={action_id:'native-original',operation:'navigate',input:{goal:{x:-5,y:64,z:3,rangeSq:1},timeoutMs:45000},waitMs:1};
   const match=nativeFamiliarAction(command,state)!;expect(match.command).toEqual(command);expect(match.steps).toMatchObject([{skill:'goto',at:[-5,64,3]}]);
   expect(nativeFamiliarAction(command,{...state,navigationCapability:null})).toBeNull();
-  expect(nativeFamiliarAction({...command,input:{goal:{x:-5,y:64,z:3,rangeSq:4}}},state)).toBeNull();
+  for (const rangeSq of [0,4,16,256]) {
+    const nearby = {...command,input:{...command.input,goal:{x:-5,y:64,z:3,rangeSq}}};
+    expect(nativeFamiliarAction(nearby,state)?.command).toEqual(nearby);
+    expect(nativeFamiliarAction(nearby,state)?.steps[0].arrivalRange).toBe(Math.sqrt(rangeSq));
+  }
+  for (const rangeSq of [2,289,-1,'4',NaN]) expect(nativeFamiliarAction({...command,input:{goal:{x:-5,y:64,z:3,rangeSq}}},state)).toBeNull();
   expect(nativeFamiliarAction({...command,input:{goal:{x:'~1',y:64,z:3}}},state)).toBeNull();
 });
 it('uses current inventory identity for native equip and never promotes arbitrary inputs to familiar work',()=>{

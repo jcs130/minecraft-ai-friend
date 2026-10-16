@@ -1,6 +1,7 @@
 import type { FamiliarAction } from '../contracts/host.ts';
 import type { JavaClientState } from '../contracts/java-client.ts';
 import { translateJavaLegacy } from './java-legacy.ts';
+import { navigationGoal } from '../../core/navigation-goal.ts';
 const familiar = new Set(['goto', 'look', 'equip', 'eat', 'fish', 'surface', 'flee']);
 const riskyFood = new Set(['pufferfish', 'rotten_flesh', 'spider_eye', 'poisonous_potato', 'chicken', 'chorus_fruit']);
 const plain = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -39,9 +40,10 @@ export function nativeFamiliarAction(args: Record<string, unknown>, state: JavaC
       || Object.keys(input).some(k => !['goal', 'timeoutMs'].includes(k))
       || Object.keys(goal).some(k => !['x', 'y', 'z', 'rangeSq'].includes(k))
       || !['x', 'y', 'z'].every(k => finite(goal[k]) && Number.isInteger(goal[k]) && Math.abs(Number(goal[k])) <= 30_000_000)
-      || goal.rangeSq !== undefined && (!finite(goal.rangeSq) || ![0, 1].includes(goal.rangeSq))
       || input.timeoutMs !== undefined && (!Number.isInteger(input.timeoutMs) || Number(input.timeoutMs) < 1000 || Number(input.timeoutMs) > 120000)) return null;
+    try { navigationGoal(goal); } catch { return null; }
     step = { skill: 'goto', at: [goal.x, goal.y, goal.z], walkOnly: true, exact: !goal.rangeSq,
+      arrivalRange: Math.sqrt(Number(goal.rangeSq ?? 0)),
       ...(typeof state.dimension === 'string' ? { dimension: state.dimension } : {}) };
   } else if (args.operation === 'hotbar' || args.operation === 'equip') {
     if (args.operation === 'hotbar' && input.instanceHash !== undefined) return null;

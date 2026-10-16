@@ -8,7 +8,7 @@ import { translateJavaLegacy } from './java-legacy.ts';
 import { NativeEvidenceArchive, compactNativeState, compactNativeItems } from './native-evidence.ts';
 import { publicReadProjection, projectPublicRead } from '../../core/method-read.ts';
 import { navigationGoal } from '../../core/navigation-goal.ts';
-import { BLOCK_FIND_SCHEMA, blockFindRequest } from '../../core/block-find-method.ts';
+import { blockFindSchema, blockFindRequest } from '../../core/block-find-method.ts';
 import { methodCapabilities, METHOD_CAPABILITIES_HELP, type BotMethod } from '../../core/method-capabilities.ts';
 import type { JavaClientState, JavaClientAction, JavaClientConfiguration } from '../contracts/java-client.ts';
 import type { ToolCallContext, ToolOutcome, WorldHost } from './contracts.ts';
@@ -25,7 +25,7 @@ export function javaMethodCapabilities(caps: Record<string, unknown>) {
 }
 const READS = new Set(['read','blockAt','findBlocks','findBlock','canSeeBlock','inventory.items','getControlState']);
 export const JAVA_METHOD_FIELDS = {
-  find: BLOCK_FIND_SCHEMA,
+  find: blockFindSchema(16),
   name:{type:'string',minLength:1,maxLength:80}, params:{type:'object'}, durationMs:{type:'integer',minimum:1000,maximum:120000},
   waitMs:{type:'integer',minimum:0,maximum:30000},
   validate:{type:'boolean'}, stop:{type:'boolean'}, runId:{type:'integer',minimum:1}, call:{type:'integer',minimum:1,maximum:32},
@@ -105,7 +105,7 @@ export class JavaMethods {
   }
   private async reconcile(){if(!this.uncertain)return;const action:JavaClientAction=await this.port.rpc('result',{action_id:this.uncertain});if(['completed','partial','blocked','cancelled'].includes(action.phase)){this.owned.delete(this.uncertain);this.uncertain=null;for(const run of this.finishedRuns.values())run.unknown=false;}else throw new Error(`Cleanup unknown for ${this.uncertain}; reconcile original action, no replay`);}
   async execute(args:Record<string,unknown>,ctx:ToolCallContext):Promise<ToolOutcome>{
-    if(args.find!==undefined)args=blockFindRequest(args);
+    if(args.find!==undefined)args=blockFindRequest(args,16);
     const waitMs=args.waitMs??this.cfg.methodWaitMs??1000;
     if(typeof waitMs!=='number'||!Number.isInteger(waitMs)||waitMs<0||waitMs>30000)throw new Error('waitMs must be 0..30000');
     if(args.api)return {text:javaMethodHelp(String(args.api))+(args.code?'\nAPI query only: supplied code was not executed.':'')};

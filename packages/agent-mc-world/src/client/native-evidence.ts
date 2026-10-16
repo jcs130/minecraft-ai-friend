@@ -46,6 +46,14 @@ export function compactNativeActionEvent(state: Record<string, any>) {
   return { ...Object.fromEntries(keys.filter(key => key in state).map(key => [key, typeof state[key] === 'string' ? state[key].slice(0,512) : state[key]])),
     cursor: compactItem(state.cursor), inventoryTransfer: compactInventoryTransfer(state.inventoryTransfer), ...(state.navigation?{navigation:compactNavigation(state.navigation)}:{}),stateQuery: 'mc_state / mc_bag', originalQuery: 'mc_evidence with raw.key and raw.sha256' };
 }
+/** Focused action readback; complete inventory and action history stay in the immutable raw receipt. */
+export function compactNativeActionReceipt(state: Record<string, any>) {
+  return { ...compactNativeActionEvent(state),
+    inventorySummary: inventorySummary(state),
+    ...(state.inventoryPick ? { inventoryPick: state.inventoryPick } : {}),
+    inventoryQuery: 'mc_bag for current stacks; mc_evidence raw for the complete original receipt',
+  };
+}
 export function compactNativeState(state: Record<string, any>) {
   const keys = ['protocol','sampledAt','generation','connected','server','uuid','username','dimension','position','health','food','yaw','pitch','onGround','selectedSlot','weather','time','screen','screenToken','screenTitle','syncId','menuRevision','buttons'];
   const out: Record<string, unknown> = Object.fromEntries(keys.filter(key => key in state).map(key => [key, typeof state[key] === 'string' ? state[key].slice(0, 512) : state[key]]));
@@ -75,14 +83,18 @@ export function compactNativeBody(state: Record<string, any>) {
   const out = compactNativeState(state);
   delete out.inventory; delete out.menuSlots;
   out.detail = 'body';
-  out.inventorySummary = Array.isArray(state.inventory) ? { size: state.inventory.length,
-    occupiedStacks: state.inventory.filter((item: any) => !item.empty).length,
-    heldItem: Number.isInteger(state.selectedSlot) ? compactItem(state.inventory.find((item: any) => item.slot === state.selectedSlot) ?? null) : null,
-  } : null;
+  out.inventorySummary = inventorySummary(state);
   out.menuSummary = Array.isArray(state.menuSlots) ? { size: state.menuSlots.length,
     occupiedStacks: state.menuSlots.filter((item: any) => !item.empty).length } : null;
   out.inventoryQuery = 'mc_bag for current stacks/menu slots; mc_state detail:summary or mc_evidence raw for the complete observation';
   return out;
+}
+
+function inventorySummary(state: Record<string, any>) {
+  return Array.isArray(state.inventory) ? { size: state.inventory.length,
+    occupiedStacks: state.inventory.filter((item: any) => !item.empty).length,
+    heldItem: Number.isInteger(state.selectedSlot) ? compactItem(state.inventory.find((item: any) => item.slot === state.selectedSlot) ?? null) : null,
+  } : null;
 }
 
 function compactNavigation(value: any){

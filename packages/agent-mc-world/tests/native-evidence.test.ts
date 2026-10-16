@@ -2,7 +2,18 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import { NativeEvidenceArchive, compactNativeState, compactNativeItems, compactNativeBody } from '../src/client/native-evidence.ts';
+import { NativeEvidenceArchive, compactNativeState, compactNativeItems, compactNativeBody, compactNativeActionReceipt } from '../src/client/native-evidence.ts';
+
+it('action readbacks retain measured held item, navigation and uncertainty without repeating a full bag or history',()=>{
+  const state={position:[1,64,3],health:18,selectedSlot:8,inventory:Array.from({length:36},(_,slot)=>({slot,empty:false,name:'stone',count:64,instanceHash:'a'.repeat(64)})),
+    menuSlots:[],actions:Array.from({length:30},(_,i)=>({id:'old-'+i,phase:'completed'})),
+    inventoryTransfer:{phase:'unknown',dispatched:true,reason:'No confirmation'},navigation:{actionId:'original',phase:'running',goal:{x:1,y:64,z:8}}};
+  const before=structuredClone(state),compact=compactNativeActionReceipt(state);
+  expect(compact.inventorySummary).toMatchObject({size:36,occupiedStacks:36,heldItem:{slot:8,count:64}});
+  expect(compact).toMatchObject({health:18,inventoryTransfer:{phase:'unknown',dispatched:true},navigation:{actionId:'original',phase:'running'}});
+  expect('inventory' in compact).toBe(false);expect('actions' in compact).toBe(false);expect(JSON.stringify(compact).length).toBeLessThan(1500);
+  expect(state).toEqual(before);expect(compactNativeActionReceipt({}).inventorySummary).toBeNull();
+});
 it('light body observations retain GUI/unknown action identities without repeating item lists or inventing absent inventory',()=>{
   const state={connected:true,generation:3,health:11,food:12,screenToken:'current',screenTitle:'Chest',selectedSlot:0,
     inventory:Array.from({length:41},(_,slot)=>({slot,count:64,name:'minecraft:stone',displayName:'s'.repeat(200),instanceHash:'a'.repeat(64)})),

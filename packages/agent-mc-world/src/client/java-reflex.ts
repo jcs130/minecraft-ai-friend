@@ -95,6 +95,9 @@ export class JavaReflexRuntime {
     void this.port.rpc('cancel',{...this.port.owner(),action_id:id,expectedGeneration:this.generation}).catch(error=>{this.lastError=`Original task cancellation unknown: ${String(error)}`;});}
   start(){this.combat.start();this.reflexes.start();this.timer=setInterval(()=>{void this.poll();},100);this.timer.unref();}
   status(){return{supported:true,kernels:['CombatSession','Reflexes'],active:this.combat.active||this.reflexes.envActive,
+    bodyControl:this.sampledAt>0&&Date.now()-this.sampledAt<=500&&this.port.canControl()&&typeof this.frame?.taskRunning==='boolean'
+      ?{sampledAt:new Date(this.sampledAt).toISOString(),source:'native-reflex-frame',taskRunning:this.frame.taskRunning,
+        taskId:typeof this.frame.taskId==='string'?this.frame.taskId:null,generation:this.generation,bodyScope:this.bodyScope}:null,
     combat:this.combat.reactionState(),environment:this.reflexes.environmentOwnerKind,inputs:this.lastAck,unknown:this.lastError,programError:this.programError,
     gaps:['native block breaking in reflexes','native offhand equip/use','server spell provider'],goalCompleted:false};}
   async poll(){if(this.stopped||!this.port.canControl()||this.polling)return this.polling;const work=this.sampleAndApply();this.polling=work;try{await work;}finally{this.polling=null;}}

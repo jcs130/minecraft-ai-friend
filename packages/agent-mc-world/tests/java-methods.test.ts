@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { JavaMethods, JAVA_METHODS, JAVA_METHOD_REQUIRED, JAVA_METHOD_PROTOCOL, javaMethodHelp, javaMethodCapabilities } from '../src/client/java-methods.ts';
+import { JavaMethods, JAVA_METHODS, JAVA_METHOD_REQUIRED, JAVA_METHOD_PROTOCOL, JAVA_METHOD_FIELDS, javaMethodHelp, javaMethodCapabilities } from '../src/client/java-methods.ts';
 import { methodHarness, methodEnded } from './method-harness.ts';
 import { portableMethod } from '../examples/portable-method.mjs';
 const paths:string[]=[];const methods:JavaMethods[]=[];
@@ -54,6 +54,12 @@ it('the shared find recipe uses native registry observations and one bounded sea
   expect(reply.failed).not.toBe(true);expect(JSON.parse(reply.text)).toMatchObject({status:'completed',result:{positions:[{x:0,y:63,z:2}],observedOnly:true,goalCompleted:false}});
   expect(r.m.runner.read(1)[0].trace).toHaveLength(2);
   expect(r.calls.some(c=>['do','method_call','claim'].includes(c.method))).toBe(false);
+});
+it('native find advertises its actual radius and rejects an excessive radius before worker or registry calls',async()=>{
+  const r=rig();
+  expect(JAVA_METHOD_FIELDS.find.properties.maxDistance.maximum).toBe(16);
+  await expect(r.call({language:'javascript',find:{names:['water'],maxDistance:17}})).rejects.toThrow(/1\.\.16/);
+  expect(r.calls).toEqual([]);expect(r.stateReads).toBe(0);expect(r.m.runner.read()).toEqual([]);
 });
 it('waits for owned body cleanup before returning a terminal and never claims goal completion',async()=>{
   const r=rig();const reply=await r.call({name:'bounded-input',code:'await bot.setControlState("forward",true);return {held:true};',waitMs:2000});

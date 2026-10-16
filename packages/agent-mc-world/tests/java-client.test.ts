@@ -40,6 +40,14 @@ function rig(scriptEnabled = false, minecraftVersion?: string, scriptFailure?: s
   return {cfg,state,world,runtime,http,calls,dataDir,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it('keeps unknown historical effects separate from pending tasks and unavailable live body control',async()=>{
+    const r=rig();r.state.actions=[{id:'old-unknown',phase:'unknown',updatedAt:1},{id:'real-pending',phase:'running',updatedAt:2}];
+    await r.runtime.connect();try{
+      const queue=JSON.parse(r.world.requestFacts()!.parts!.find(p=>p.key==='queue')!.text);
+      expect(queue).toMatchObject({active:[{id:'real-pending'}],activeCount:1,unresolved:[{id:'old-unknown'}],unresolvedCount:1,bodyControl:null});
+      expect(JSON.parse(r.world.requestFacts()!.parts!.find(p=>p.key==='body')!.text).onGround).toBeNull();
+    }finally{await r.runtime.disconnect();}
+  });
   it('keeps native auth-pending reads attached, blocks body before RPC, and revokes stale confirmation',async()=>{
     const r=rig();Object.assign(r.cfg.javaClient,{requireServerAuthorization:true});
     const proof={protocol:'agent-mc-server-authorization/v1',required:true,generation:1,username:'Test',server:'fixture.test',phase:'submitted',authorized:false,connectionMatched:true};

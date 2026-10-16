@@ -7,6 +7,14 @@ import { JavaReflexRuntime, JAVA_REFLEX_PROTOCOL } from '../src/client/java-refl
 import { MINECRAFT_CLIENT_DEFAULTS } from '../src/client/index.ts';
 import { methodHarness } from './method-harness.ts';
 const rigs:ReturnType<typeof rig>[]=[];
+
+it('reports the measured native task separately from old receipts and makes stale samples unknown',async()=>{
+  const r=rig();expect(r.runtime.status().bodyControl).toBeNull();
+  await r.runtime.poll();expect(r.runtime.status().bodyControl).toMatchObject({taskRunning:false,taskId:null,source:'native-reflex-frame'});
+  r.task(true);await r.runtime.poll();expect(r.runtime.status().bodyControl).toMatchObject({taskRunning:true,taskId:'original-task'});
+  const future=Date.now()+501,clock=vi.spyOn(Date,'now').mockReturnValue(future);
+  try{expect(r.runtime.status().bodyControl).toBeNull();}finally{clock.mockRestore();}
+});
 afterEach(async()=>{for(const r of rigs.splice(0)){await r.runtime.close();r.physics.close();rmSync(r.dir,{recursive:true,force:true});}});
 function rig(options:{enemyDistance?:number;health?:number;oxygen?:number;water?:boolean;combat?:boolean}={}){
   const physics=methodHarness(),dir=mkdtempSync(join(tmpdir(),'native-reflex-'));
