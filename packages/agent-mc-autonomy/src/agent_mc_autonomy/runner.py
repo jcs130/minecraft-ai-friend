@@ -14,6 +14,7 @@ from .bridge import MinecraftBridge
 from .configuration import Settings
 from .controller import Controller
 from .fast import FastPolicy, SystemOne
+from .failure_diagnostics import FailureDiagnostics, current
 from .mailbox import Mailbox
 from .observations import runtime_error_code
 from .ownership import session_lease
@@ -39,6 +40,8 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
     state = {"phase": "starting", "game_connected": False, "autonomy_running": False, "standing_goal": goal,
              "runtime_session": runtime_session, "settings_identity": settings.identity}
     directory = data_root / "sessions" / settings.identity / "host"
+    diagnostics = FailureDiagnostics(directory, runtime_session)
+    diagnostic_context = current.set(diagnostics)
     system_one = None
     viewer = ViewerWindow(settings.external_viewer_url, settings.viewer_auto_open, opener=viewer_opener)
     viewer_task = None
@@ -54,6 +57,15 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
             update(viewer_window=result)
 
     def update(**values):
+        try:
+            if diagnostics.first is not None:
+                values.update(diagnostics.reference())
+            _update(**values)
+        except Exception as error:
+            diagnostics.capture(error, "status.publish")
+            raise
+
+    def _update(**values):
         nonlocal viewer_task
         record_playback(state, values)
         state.update(values)
@@ -135,14 +147,25 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                 update(phase="stopped")
                 raise
             except Exception as error:
+                diagnostics.capture(error, "controller.run")
                 update(phase="failed", error=runtime_error_code(error))
                 raise
             finally:
                 update(game_connected=False, autonomy_running=False)
+    except Exception as error:
+        diagnostics.capture(error, "session.run")
+        raise
     finally:
-        if viewer_task:
-            await viewer_task
-        if system_one:
-            await system_one.aclose()
-        if planner:
-            await planner.aclose()
+        try:
+            for operation, cleanup in (("viewer.close", (lambda: viewer_task) if viewer_task else None),
+                                       ("system_one.close", system_one.aclose if system_one else None),
+                                       ("planner.close", planner.aclose if planner else None)):
+                if cleanup is not None:
+                    try:
+                        await cleanup()
+                    except Exception as error:
+                        diagnostics.capture(error, operation)
+        finally:
+            current.reset(diagnostic_context)
+        if diagnostics.first is not None:
+            raise diagnostics.first

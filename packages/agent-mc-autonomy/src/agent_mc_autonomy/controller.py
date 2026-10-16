@@ -377,11 +377,16 @@ class Controller:
         self.publish(current_goal=self.active_goal, historical_goal=self.historical_goal)
 
     def persist(self, **changes):
-        self.data.mkdir(parents=True, exist_ok=True)
-        previous = json.loads(self.state_path.read_text(encoding="utf-8")) if self.state_path.exists() else {}
-        temporary = self.state_path.with_suffix(".tmp")
-        temporary.write_text(encode({**previous, **changes}), encoding="utf-8")
-        temporary.replace(self.state_path)
+        try:
+            self.data.mkdir(parents=True, exist_ok=True)
+            previous = json.loads(self.state_path.read_text(encoding="utf-8")) if self.state_path.exists() else {}
+            temporary = self.state_path.with_suffix(".tmp")
+            temporary.write_text(encode({**previous, **changes}), encoding="utf-8")
+            temporary.replace(self.state_path)
+        except Exception as error:
+            from .failure_diagnostics import capture_current
+            capture_current(error, "host_state.persist")
+            raise
 
     def record_tool_failure(self, name, arguments, result, request_id=None):
         failure = failure_context(self.bridge.tools, name, arguments, result)
@@ -1485,6 +1490,10 @@ class Controller:
                     self.publish(decisions=self.count, pending=list(self.pending.values()))
                 await asyncio.sleep(1)
             self.publish(phase="stopped" if self.stop_requested() else "budget_exhausted")
+        except Exception as error:
+            from .failure_diagnostics import capture_current
+            capture_current(error, "controller.run")
+            raise
         finally:
             try:
                 await self.close_event_poll()
