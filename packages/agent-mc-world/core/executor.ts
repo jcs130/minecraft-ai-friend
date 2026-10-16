@@ -3402,7 +3402,7 @@ export class Executor {
       return entry && entry.dimension === dimension && now - entry.at < 30_000
         && Math.hypot(pos.x - entry.from.x, pos.y - entry.from.y, pos.z - entry.from.z) < 3;
     });
-    return repeated ? '同一范围的点名探查刚回报一样都没有，站位也没有明显变化；30 秒内不再原样重查。可先移动或换探查范围，原队列保留' : null;
+    return repeated ? '同一范围的点名探查刚在全部已观察格内未命中指定方块，站位也没有明显变化；30 秒内不再原样重查。该结论不覆盖范围外或服务器隐藏的内容。可先移动或换探查范围，原队列保留' : null;
   }
 
   private recordEmptyProbeReads(steps: readonly SkillCall[], landings: readonly StepLanding[]): void {
@@ -3413,7 +3413,8 @@ export class Executor {
     for (const landing of landings) {
       const step = steps[landing.step - 1];
       if (step?.skill !== 'probe' || !step.where?.length || landing.outcome !== 'ok'
-        || !landing.line.includes(':一样都没有')) continue;
+        || !/:已观察全部 [1-9]\d* 格，未命中指定方块/.test(landing.line)
+        || landing.line.includes('认不出来') || landing.line.includes('实体')) continue;
       this.emptyProbeReads.set(exactTaskKey([step]), { at: Date.now(), dimension: dimensionOf(bot), from });
     }
   }
