@@ -19,6 +19,7 @@ import { normalizeDimension } from './escape.ts';
 import type { PositionXYZ } from './blueprint.ts';
 import { PROBE_SLICE_CELL_CAP, SPATIAL_SLICE_AXES, type SpatialSliceAxis } from './spatial-slices.ts';
 import { parseSpatialObservation, SPATIAL_OBSERVATION_LIMITS, type SpatialObserveInput } from './spatial-observation.ts';
+import { NAVIGATION_LIMITS } from './navigation-capabilities.ts';
 
 /** 步骤依赖与验收的可选覆写；省略时使用执行器推导的因果依赖和验收规则。 */
 export interface StepBounds {
@@ -1098,6 +1099,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  at 也收 mc_map 的路标名:{"skill":"goto","at":"家"}。
                                                  赶路可能挖方块或搭路；已绑定蓝图范围内不生成这些动作，完工后仍生效。
                                                  walkOnly:true 只沿现有通路走，不挖掘或垫脚；只靠走试算可达时，可用同一目标加此字段实际执行。与 dryRun 同用时只试算这条走法。
+                                                 单步规划落差最多 ${NAVIGATION_LIMITS.maxDropDown} 格，跑酷${NAVIGATION_LIMITS.allowParkour ? '开启' : '关闭'}；三种路线试算共享这些限制。挖掘按走法及实际可挖/保护规则，搭路依赖背包内可用垫脚料，诊断分别报告。
+                                                 算不出路仅表示在所列能力下未找到路线，不证明所有移动方式或显式改结构都不可行，也不确定是哪项限制导致失败。
                                                  梯子用可达下端进入，再沿连续梯段到出口平台；use 右键不爬梯。看见一格梯子不证明它已接到地面或通向顶部，probe 可核对整段。
                                                  走不通时核对门洞、通道与落点；改结构用显式 excavate/build，按现场和权限核验。`,
     parse: parseGoto,

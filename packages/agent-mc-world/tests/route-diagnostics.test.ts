@@ -23,7 +23,8 @@ function routeRig() {
   const reports: TaskReport[] = [];
   const probeTarget = vi.fn(() => ({ kind: 'noStand' as const }));
   const probes: RouteProbe[] = [
-    { profile: 'style', status: 'noPath', steps: 0, place: 0, breaks: 0, endDist: 48, visited: 5 },
+    { profile: 'style', status: 'noPath', steps: 0, place: 0, breaks: 0, endDist: 48, visited: 5,
+      capabilities: { maxDropDown: 2, allowParkour: false, canDig: true, scaffoldCount: 0 } },
   ];
   let nextId = 0;
   const exec = new Executor({
@@ -69,6 +70,8 @@ describe('long travel diagnostic scope', () => {
     await untilReport(reports, 1);
     expect(reports[0].kind).toBe('blocked');
     expect(reports[0].text).toContain('目标那一格站不进人');
+    expect(reports[0].text).toContain('规划落差≤2格、跑酷关闭、挖掘开启、垫脚料0块');
+    expect(reports[0].text).toContain('未确定具体受阻原因');
     expect(reports[0].text).not.toContain('尚未核实最终目标');
   });
 });

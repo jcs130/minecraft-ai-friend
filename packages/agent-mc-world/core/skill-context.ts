@@ -18,11 +18,14 @@ import type { BlueprintPlan, BlueprintStep, ItemTally } from './blueprint-plan.t
 import type { BowShotResult, RangedTarget } from './ranged.ts';
 import type { ShowTempo } from './show.ts';
 import type { FindObservationCache, SearchScope } from './search-observation.ts';
+import type { NavigationCapabilities } from './navigation-capabilities.ts';
 
 const { goals } = pathfinderPkg;
 
 /** 一份代价配置下的试算结果:寻路器自己就是地形扫描器 */
 export interface RouteProbe {
+  /** The movement configuration and inventory actually used by this probe. */
+  capabilities?: NavigationCapabilities;
   profile: 'style' | 'dig' | 'walk';
   status: 'complete' | 'partial' | 'noPath' | 'timeout';
   steps: number;

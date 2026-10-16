@@ -202,13 +202,18 @@ export function renderRouteMenu(
   opts?: { startDist?: number; diag?: TargetDiag | null; head?: string },
 ): string {
   const head = [opts?.head ?? `探路到 (${target.x}, ${target.y}, ${target.z}):`];
+  if (probes.some(p => p.capabilities && p.status === 'noPath')) {
+    head.push('算不出路仅表示在所列能力下未找到路线；未确定具体受阻原因，不证明所有移动方式或显式改结构都不可行。');
+  }
   const diagLine = diagText(probes.some((probe) => probe.status === 'complete') ? null : opts?.diag);
   if (diagLine) head.push(diagLine);
   // 已有目标格分诊结论时省略出发距离；超时不解释为距离过远或绕路。
   const near = diagLine || opts?.startDist === undefined ? null
     : `出发点离目标 ${Math.round(opts.startDist)} 格`;
   const lines = probes.map((p) => {
-    const label = `${PROBE_LABEL[p.profile]}:`;
+    const c = p.capabilities;
+    const capabilityText = c ? `（规划落差≤${c.maxDropDown}格、跑酷${c.allowParkour ? '开启' : '关闭'}、挖掘${c.canDig ? '开启' : '关闭'}、垫脚料${c.scaffoldCount}块）` : '';
+    const label = `${PROBE_LABEL[p.profile]}${capabilityText}:`;
     switch (p.status) {
       case 'complete': {
         const bits = [`走 ${p.steps} 步`];
