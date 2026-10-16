@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -12,42 +13,85 @@ const { simplify } = require('prismarine-nbt');
 export function createEngine(options) {
   const cfg = options.extension.config;
   let prepared, streamFactory, presentation, attached, stream, timer, stopped = false;
+  let logger, generation = 0, closing = Promise.resolve(), sequence = 0, failed = false;
+  const writer = `${process.pid}.${randomUUID()}`;
+  const diagnostics = new Map();
+  const warn = message => { try { logger?.warn(message); } catch {} };
+  const diagnostic = (operation, error) => {
+    // Never log paths, renderer payloads or arbitrary error text.
+    const code = ['EPERM', 'EACCES', 'EBUSY', 'ENOSPC', 'EROFS', 'ENOENT', 'EIO', 'EEXIST'].includes(error?.code)
+      ? error.code : 'OTHER';
+    const key = `${operation}:${code}`, now = Date.now();
+    if (now - (diagnostics.get(key) ?? -Infinity) < 60_000) return;
+    diagnostics.set(key, now);
+    warn(`Optional viewer persistence failed (${key}); last complete snapshot retained; next publication will try again`);
+  };
   let state = { available: false, reason: 'VIEWER_PREPARING', url: null };
   const record = patch => {
     state = { ...state, ...patch, session: cfg.session, updated_at: new Date().toISOString() };
-    const temporary = cfg.stateFile + '.tmp';
-    writeFileSync(temporary, JSON.stringify(state));
-    renameSync(temporary, cfg.stateFile);
+    const temporary = `${cfg.stateFile}.${writer}.${++sequence}.tmp`;
+    let descriptor, owned = false, operation = 'write';
+    try {
+      descriptor = openSync(temporary, 'wx'); owned = true;
+      writeFileSync(descriptor, JSON.stringify(state));
+      closeSync(descriptor); descriptor = undefined;
+      operation = 'rename';
+      renameSync(temporary, cfg.stateFile); owned = false;
+      if (failed) {
+        const now = Date.now();
+        if (now - (diagnostics.get('recovery') ?? -Infinity) >= 60_000) {
+          diagnostics.set('recovery', now);
+          warn('Optional viewer persistence recovered; latest snapshot persisted');
+        }
+      }
+      failed = false;
+    } catch (error) { failed = true; diagnostic(operation, error); }
+    finally {
+      if (descriptor !== undefined) { try { closeSync(descriptor); } catch (error) { diagnostic('cleanup', error); } }
+      if (owned) { try { unlinkSync(temporary); } catch (error) { diagnostic('cleanup', error); } }
+    }
   };
-  const close = async () => {
+  const close = () => {
     clearInterval(timer); timer = null;
     const previous = attached; attached = null;
-    stream?.close(); stream = null;
-    await previous?.close();
+    const previousStream = stream; stream = null;
+    try { previousStream?.close(); } catch { warn('Optional viewer stream close failed'); }
+    const cleanup = async () => {
+      // A pending listen must settle before close, and before the next listen.
+      try { await previous?.listening; } catch {}
+      try { await previous?.view.close(); } catch { warn('Optional viewer listener close failed'); }
+    };
+    closing = Promise.all([closing, cleanup()]).then(() => {});
+    return closing;
   };
   // Presentation decorates the default tactical body; it must retain its tools,
   // battlefield sampling, combat receipts and extension lifecycle hooks.
   return new class extends TacticalMinecraftWorld {
     async start(host) {
-      stopped = false;
+      stopped = false; logger = host.log;
+      const currentGeneration = ++generation;
       try {
         const load = relative => import(pathToFileURL(resolve(cfg.rendererDirectory, relative)).href);
         const [{ prepareNativeWorldPreviewHost }, { selectViewerPack }, vanilla] = await Promise.all([
           load('tools/native-world-preview-host.mjs'), load('host/viewer-pack-selection.mjs'), load('host/vanilla-native-stream.mjs')]);
+        if (stopped || generation !== currentGeneration) return;
         const catalog = JSON.parse(readFileSync(cfg.catalogFile, 'utf8'));
         const selected = selectViewerPack(catalog.packs, { minecraftVersion: options.cfg.version });
         if (!selected.available) throw Error(selected.reason);
-        prepared = await prepareNativeWorldPreviewHost({ assetDirectory: resolve(dirname(cfg.catalogFile), selected.pack.assetDirectory), port: cfg.port,
+        const preparedHost = await prepareNativeWorldPreviewHost({ assetDirectory: resolve(dirname(cfg.catalogFile), selected.pack.assetDirectory), port: cfg.port,
           bundledAppearanceCatalogFile: cfg.bundledAppearanceCatalogFile || '', defaultAppearance: cfg.defaultAppearance ?? 'server',
           selectionScope: cfg.selectionScope });
+        if (stopped || generation !== currentGeneration) return;
+        prepared = preparedHost;
         if (prepared.registrySha256 !== selected.pack.registrySha256) throw Error('VIEWER_CATALOG_REGISTRY_MISMATCH');
         streamFactory = vanilla.observeVanillaNativeStream;
         presentation = bot => vanilla.vanillaPlayerPresentation(bot, stream?.handState?.(), stream?.menuState?.(), stream?.selfState?.());
         record({ pack: selected.pack.id, minecraftVersion: selected.minecraftVersion, registrySha256: prepared.registrySha256 });
       } catch (error) {
+        if (stopped || generation !== currentGeneration) return;
         prepared = null;
         record({ available: false, reason: 'VIEWER_PREPARE_FAILED', detail: String(error.message).slice(0, 180) });
-        host.log.warn('Optional viewer unavailable; game execution continues');
+        warn('Optional viewer unavailable; game execution continues');
       }
       return super.start(host);
     }
@@ -59,28 +103,40 @@ export function createEngine(options) {
         // next connection. Never open a second Minecraft account for rendering.
         const oldClose = close();
         stream = streamFactory(bot, prepared.registrySha256, options.cfg.version);
-        const view = attached = prepared.attach({ bot, nativeStream: stream, simplifyNBT: simplify,
+        const view = prepared.attach({ bot, nativeStream: stream, simplifyNBT: simplify,
           expectedUsername: options.cfg.username, getAgentStatus: publicAgentReader(cfg.agentStateFile, cfg.session, options.cfg.username),
           getPresentationState: () => presentation(bot), logger: { error() {} } });
+        const attachment = attached = { view, listening: null };
         const publish = () => {
-          if (attached !== view || stopped) return;
+          if (attached !== attachment || stopped) return;
           const current = view.status();
           const connected = bot.version === options.cfg.version && !!bot.entity && !!bot._client.uuid;
           record({ available: connected && current.viewer.available && !!view.url, url: view.url ? view.url + '3dview/' : null,
             reason: current.viewer.reason, player: current.selfPlayer ?? null, status: current,
             active_viewers: typeof view.activeViewers === 'function' ? view.activeViewers() : null });
         };
-        void oldClose.then(() => view.listen()).then(() => {
-          if (attached !== view || stopped) return view.close();
+        attachment.listening = oldClose.then(() => {
+          if (attached !== attachment || stopped) return;
+          return view.listen();
+        });
+        void attachment.listening.then(() => {
+          if (attached !== attachment || stopped) return;
           publish(); timer = setInterval(publish, 1000); timer.unref();
-        }).catch(() => record({ available: false, reason: 'VIEWER_LISTEN_FAILED', url: null }));
+        }).catch(() => {
+          if (attached === attachment && !stopped) record({ available: false, reason: 'VIEWER_LISTEN_FAILED', url: null });
+        });
         bot.once('end', () => {
-          if (attached === view) { record({ available: false, reason: 'GAME_DISCONNECTED', url: null }); void close(); }
+          if (attached === attachment && !stopped) { record({ available: false, reason: 'GAME_DISCONNECTED', url: null }); void close(); }
         });
       } });
     }
+    disposeExtension() {
+      stopped = true; ++generation;
+      void close();
+      super.disposeExtension();
+    }
     async stop() {
-      stopped = true;
+      stopped = true; ++generation;
       try { await super.stop(); }
       finally { await close(); record({ available: false, reason: 'STOPPED', url: null }); }
     }

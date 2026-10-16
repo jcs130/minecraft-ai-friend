@@ -5546,7 +5546,8 @@ export class Executor {
           // its target stays unchanged; invisible server effects and missing reads stay unknown.
           const effectCell = tread ? [tread.x, tread.y, tread.z] as [number, number, number] : null;
           const effectDimension = normalizeDimension(dimensionOf(bot));
-          const effectBefore = ['chat', 'observe', 'probe', 'look', 'wait'].includes(call.skill) ? null : sampleEffect(bot, effectCell);
+          const effectBefore = ('dryRun' in call && call.dryRun)
+            || ['chat', 'observe', 'probe', 'look', 'wait'].includes(call.skill) ? null : sampleEffect(bot, effectCell);
           let skillResult: string;
           try { skillResult = await runSkill(bot, run, ctx).finally(() => releaseTread?.()); }
           finally {

@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { Executor, type TaskReport } from '../core/executor.ts';
+import { parseScoutSteps } from '../core/skills.ts';
 
 vi.mock('../core/skills-interact.ts', async original => ({
   ...await original<typeof import('../core/skills-interact.ts')>(),
@@ -12,7 +13,7 @@ vi.mock('../core/skills-interact.ts', async original => ({
 const require = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 const registry = require('minecraft-data')('1.21.1');
 afterEach(() => vi.useRealTimers());
-it('publishes unchanged effect evidence through the actual executor terminal report', async () => {
+it.each([false, true])('only publishes physical evidence for executed steps (scout preview: %s)', async preview => {
   vi.useFakeTimers(); let id = 0; const reports: TaskReport[] = [];
   const bot = Object.assign(new EventEmitter(), {
     registry, entity: { id: 1, position: new Vec3(.5, 64, .5), onGround: true },
@@ -23,11 +24,18 @@ it('publishes unchanged effect evidence through the actual executor terminal rep
   }) as unknown as Bot;
   const log = { child() { return this; }, info() {}, warn() {}, error() {}, debug() {}, trace() {}, emit() {} };
   const exec = new Executor({ getBot: () => bot, report: r => reports.push(r), log: log as never, nextId: () => ++id, fleeHealth: () => 0 });
-  expect(exec.submitDetailed([{ skill: 'use', at: [1, 63, 1] }], 'append').accepted).toBe(true);
+  const scout = parseScoutSteps([{ skill: 'cleanup' }]);
+  if ('error' in scout) throw Error(scout.error);
+  expect(scout.steps[0]).toMatchObject({ skill: 'cleanup', dryRun: true });
+  const admission = exec.submitDetailed(preview ? scout.steps : [{ skill: 'use', at: [1, 63, 1] }], 'append');
+  const returnedReceipt = structuredClone(admission);
+  expect(admission.accepted).toBe(true);
   await vi.runAllTimersAsync();
+  expect(admission).toEqual(returnedReceipt);
   const terminal = reports.find(r => r.kind === 'done');
   expect(terminal?.steps?.[0].outcome).toBe('ok');
-  expect(terminal?.steps?.[0].observedEffect).toMatchObject({ status: 'unchanged', goalVerified: false,
+  if (preview) expect(terminal?.steps?.[0]).not.toHaveProperty('observedEffect');
+  else expect(terminal?.steps?.[0].observedEffect).toMatchObject({ status: 'unchanged', goalVerified: false,
     changed: { target: false, inventory: false, position: false, window: false }, at: [1, 63, 1] });
   exec.shutdown();
 });
