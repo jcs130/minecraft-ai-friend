@@ -1396,8 +1396,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  每项 ±${SPATIAL_OBSERVATION_LIMITS.offset}；体积=(xmax-xmin+1)(ymax-ymin+1)(zmax-zmin+1)≤${SPATIAL_OBSERVATION_LIMITS.cells}，不是每个轴都可铺满。返回绝对坐标范围、读取时间、维度、眼位、朝向。
                                                  palette 保留方块状态、属性与真实格内碰撞箱；cells 按 y,z,x 展开(x 最快)，-1 是未知；无碰撞不证明安全可走或有支撑。
 {"skill":"observe","mode":"rays","rays":[[0,0,24],[15,30,16],[-15,-30,16]]}
-                                                 从执行时眼位发射碰撞射线，每组 [相对pitch角,相对yaw角,最大距离]；角度用度，pitch 正值向上，yaw 正值向左，yaw=0 朝北。
-                                                 最多 ${SPATIAL_OBSERVATION_LIMITS.rays} 条，每条 ≤${SPATIAL_OBSERVATION_LIMITS.range} 格；省略 rays 为三行五列、24 格的扇面。
+                                                 从执行时眼位发射碰撞射线，每组 [相对pitch角,相对yaw角,最大距离]；角度用度，相对执行时身体朝向叠加，pitch 正值向上，yaw 正值向左，yaw=0 沿当前朝向。
+                                                 pitch ±90、yaw ±180；最多 ${SPATIAL_OBSERVATION_LIMITS.rays} 条，每条距离 >0 且 ≤${SPATIAL_OBSERVATION_LIMITS.range} 格；省略 rays 为三行五列、24 格的扇面。
                                                  terrain 报首个方块碰撞或未知，entity 报本连接已知实体的最近包围箱交点，first 比较两者；未知区不能当无遮挡。
                                                  计入相邻格延伸的碰撞形状，邻格未知也停止确认；液体和纹理不遮挡碰撞射线，实体箱不是皮肤模型深度。
                                                  所有模式均只读，按需缩小范围；数据只在本次调用复用，不常驻全量地图。`,
@@ -1413,7 +1413,12 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
       { key: 'bounds', kind: 'opaque', schema: { type: 'array', minItems: 6, maxItems: 6,
         items: { type: 'integer', minimum: -SPATIAL_OBSERVATION_LIMITS.offset, maximum: SPATIAL_OBSERVATION_LIMITS.offset } }, doc: `voxels 相对脚下格 [xmin,ymin,zmin,xmax,ymax,zmax]，含端点；三轴长度相乘≤${SPATIAL_OBSERVATION_LIMITS.cells}` },
       { key: 'rays', kind: 'opaque', schema: { type: 'array', minItems: 1, maxItems: SPATIAL_OBSERVATION_LIMITS.rays,
-        items: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'number' } } }, doc: 'rays 的 [pitch角,yaw角,距离] 列表' },
+        // The MCP validator uses draft-07 tuples; declare the nested dialect so
+        // newer host validators interpret these positional bounds identically.
+        items: { $schema: 'http://json-schema.org/draft-07/schema#', type: 'array', minItems: 3, maxItems: 3,
+          items: [{ type: 'number', minimum: -90, maximum: 90 }, { type: 'number', minimum: -180, maximum: 180 },
+            { type: 'number', exclusiveMinimum: 0, maximum: SPATIAL_OBSERVATION_LIMITS.range }] } },
+        doc: `rays 的 [相对pitch角±90,相对yaw角±180,距离>0且≤${SPATIAL_OBSERVATION_LIMITS.range}] 列表；相对执行时身体朝向，yaw=0 沿当前朝向` },
     ],
   },
   {
