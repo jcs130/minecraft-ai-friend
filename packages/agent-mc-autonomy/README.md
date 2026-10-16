@@ -5,6 +5,14 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.75 pins reviewed engine-only core 0.5.7-dev.20261016.39 from source
+`3ee62ca25b60693132f7b7b8ae6bac3df7ad452f`. Optional `mc_knowledge` help,
+search and get now expose six Java 1.21.1 survival references: bed, night shelter,
+equipment, base, storage and farming. They are advisory and version-scoped;
+retrieval neither selects work nor writes personal memory. Existing food and
+recipe retrieval remains available. See [the integration note](docs/survival-context-pin-20261016.md)
+for the exact dependency boundary and offline verification limits.
+
 0.1.74 defaults `context_tokens` to 65536 (64K); 131072 (128K) is optional when
 the configured service supports it. Explicit settings, including 32768, remain
 unchanged. Set the limit to the actual service capacity: this setting does not
@@ -15,7 +23,7 @@ explicit 32K under that fallback. Tool schemas and argument validation are uncha
 
 This distribution packages the reviewed tool corrections, deep-water geometry, exact late
 death-episode hydration and dated contrary evidence with the current native GUI
-producer and interrupted stow accounting. Engine-only core 0.5.7-dev.20261016.32
+producer and interrupted stow accounting. Engine-only core 0.5.7-dev.20261016.39
 also preserves incoming host-selected retries, inventory policy and native Java
 readiness. Exact core source/archive/build/declaration receipts and the separately
 supplied shared viewer source c799ae1a (aquatic actors and inventory/recipe icons)
