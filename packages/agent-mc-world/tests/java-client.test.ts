@@ -574,8 +574,10 @@ describe('real Java client body provider, offline protocol fixtures',()=>{
   it('uses explicit local credentials, rejects remote endpoints, and preserves names independent of ledger paths',async()=>{
     const r=rig();writeFileSync(r.cfg.javaClient.credentialsFile,JSON.stringify({protocol:'agent-mc-java/v1',endpoint:'http://remote.test:1234',token:'a'.repeat(64),instanceId:'x'}));
     await expect(r.runtime.connect()).rejects.toThrow('nonlocal');expect(r.http).not.toHaveBeenCalled();
-    const config=join(directory(),'client.json');writeFileSync(config,JSON.stringify({dataDir:'./stable-ledger',world:{...r.cfg,javaClient:{...r.cfg.javaClient,credentialsFile:'./native/connection.json',ledgerDir:'./stable-ledger'}}}));
+    const config=join(directory(),'client.json');writeFileSync(config,JSON.stringify({dataDir:'./stable-ledger',world:{...r.cfg,combatOptions:{allowEngage:true,maxCandidates:4},javaClient:{...r.cfg.javaClient,credentialsFile:'./native/connection.json',ledgerDir:'./stable-ledger',requireServerAuthorization:true,sharedReflexes:true,methodWaitMs:1000,stateDetail:'body'}}}));
     const loaded=loadMinecraftClientConfig(config);expect(loaded.cfg.javaClient?.ledgerDir).toBe(join(config,'..','stable-ledger'));
+    expect(loaded.cfg.javaClient).toMatchObject({requireServerAuthorization:true,sharedReflexes:true,methodWaitMs:1000,stateDetail:'body'});
+    expect(loaded.cfg.combatOptions).toMatchObject({allowEngage:true,maxCandidates:4});
   });
   it('passes actual provider capabilities and neutral turn/task metadata through MCP',async()=>{
     const r=rig(),server=createMinecraftMcpServer(r.runtime,'test'),client=new Client({name:'java-parity',version:'1'});

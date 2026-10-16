@@ -1,10 +1,12 @@
 import type { ConfigGroup } from './support/host-contract.ts';
 import { GAME_MEMORY_DEFAULTS, GAME_MEMORY_CONFIG_SCHEMA } from './game-memory-service.ts';
+import { COMBAT_EXECUTION_DEFAULTS } from './combat-decision-types.ts';
 
 
 export const MINECRAFT_DEFAULTS = {
   provider: 'mineflayer' as 'mineflayer' | 'java-client',
-  javaClient: { expectedUuid: '', expectedServer: '', controllerId: '', credentialsFile: '', ledgerDir: '', leaseMs: 15000, viewerMode: 'auto', viewerPageFile: '', minescriptEnabled: false, actionWaitMs: 1000 } as import('../src/contracts/java-client.ts').JavaClientConfiguration,
+  javaClient: { expectedUuid: '', expectedServer: '', controllerId: '', credentialsFile: '', ledgerDir: '', leaseMs: 15000, viewerMode: 'auto', viewerPageFile: '', minescriptEnabled: false, actionWaitMs: 1000, methodWaitMs: 1000, stateDetail: 'summary', requireServerAuthorization: false, sharedReflexes: true } as import('../src/contracts/java-client.ts').JavaClientConfiguration,
+  combatOptions: structuredClone(COMBAT_EXECUTION_DEFAULTS),
   // enabled 由Persona的装配层显式开启。
   enabled: false,
   /** 服务器地址(私服 dry-run 默认本机) */
