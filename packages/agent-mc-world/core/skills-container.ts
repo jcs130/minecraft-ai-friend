@@ -535,7 +535,16 @@ async function stowIntoOne(
         - e.chestBefore);
       if (aborted) break;
     }
-    await show.beat('close');
+    // Interrupted transfers still need their per-entry receipts and batch absorb.
+    // Presentation must neither rethrow over the original abort nor bypass that
+    // accounting when cancellation first arrives during the close dwell.
+    if (!aborted) {
+      try { await show.beat('close'); }
+      catch (err) {
+        if (!(err instanceof Aborted)) throw err;
+        aborted = err;
+      }
+    }
   } finally {
     show.closeWindow(chest as never, () => chest.close());
   }
