@@ -108,6 +108,7 @@ final class DungeonManager implements Listener {
     int stashCapacity() { return PagedPersonalStash.CAPACITY; }
     ItemStack stashItem(UUID id,int slot) { return storage().item(id,slot); }
     ItemStack[] stashContents(UUID id) { return storage().contents(id); }
+    boolean storePhoto(UUID id,int image,List<ItemStack> items) { return PhotoRewards.accept(plugin,storage(),id,image,items); }
     void setStashItem(UUID id,int slot,ItemStack item) { storage().set(id,slot,item);storage().write(storage().page(id,slot/54),id); }
     void openStashPages(Player player) { storage().select(player); }
     private static final Material[] REWARD_TYPES = {
@@ -1582,7 +1583,8 @@ final class DungeonManager implements Listener {
                 player.sendMessage("MC_REWARD slot=" + (index + 9) + itemFields(item));
                 entries++;
             }
-            player.sendMessage("MC_REWARD_SUMMARY visible=" + entries + " queuedBonus=" + bonus.size());
+            player.sendMessage("MC_REWARD_SUMMARY visible=" + entries + " queuedBonus=" + bonus.size()+" queuedPhotos="+PhotoRewards.pending(plugin,id));
+            if(PhotoRewards.pending(plugin,id)>0)player.sendMessage("照片已安全存入个人奖励箱待入箱队列；腾出箱格后重新开箱会自动放入，不必重拍。");
             player.sendMessage("这些是箱满后尚未装入的奖励；清出箱格并重新开箱，或用 /mycli arena rewards take <槽位|all>。");
             return;
         }
@@ -1752,7 +1754,7 @@ final class DungeonManager implements Listener {
     }
     /** Move ledger rewards into the real chest before opening it. Keep overflow in the ledger. */
     private boolean materializeRewards(Inventory inv, UUID id) {
-        boolean moved = false;
+        boolean moved = PhotoRewards.materialize(plugin,storage(),inv,id);
         List<ItemStack> bonus = bonusItems(id);
         if (!bonus.isEmpty()) {
             List<ItemStack> overflow = new ArrayList<>();

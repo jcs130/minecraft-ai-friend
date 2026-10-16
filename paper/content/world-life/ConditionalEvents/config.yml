@@ -63,7 +63,7 @@ Events:
       default:
       - 'wait: 7'
       - 'message: &a[村庄生活季] &f青禾的农耕、集市供给、阿卷照片展、阿岚遗迹调查：/mycli world board；手柄用旅途指南→村庄新生活→居民事务板。'
-      - 'message: &a[照片] &f准备空地图，用 /mycli photo menu 选择第一人称、合影或俯视拍照；无游戏UI，操作说明 /photohelp。'
+      - 'message: &a[照片] &f用 /mycli photo menu 选角度；拍摄耗2魔力，无需空地图，成片自动入个人奖励箱。操作说明 /photohelp。'
   qd_photo_help:
     type: player_command
     conditions:
@@ -71,13 +71,13 @@ Events:
     actions:
       default:
       - 'cancel_event: true'
-      - 'message: &a[照片] &f拍照：/mycli photo take <名字> [first|third|top] [1|2]；单图1张空地图，2×2海报4张空地图/4个空格；也可 photo menu 选角度。'
+      - 'message: &a[照片] &f拍照：/mycli photo take <名字> [first|third|top] [1|2]；1为单张，2为四张海报；实际拍摄耗2魔力，无需空地图或主背包空位。'
       - 'message: &a[照片] &f面向景物站稳，女神会自动拍摄；无游戏UI，保留人物名字。无需打开网页或上传文件。'
-      - 'message: &a[照片] &f/mycli photo status 查进度，photo cancel 取消未上传请求；等创建成功且本人背包出现地图后再挂展示框。'
+      - 'message: &a[照片] &f/mycli photo status 查进度，photo cancel 取消未上传请求；成功后在 /mycli arena stash pages 取成片。箱满先腾位再打开，原片不会丢地。'
   qd_photo_discovery:
     type: player_command
     conditions:
     - '%command% equalsIgnoreCase /mycli world photos'
     actions:
       default:
-      - 'message: &a[照片] &f女神相机有三个角度；准备空地图和空背包格，在菜单选择拍摄。详细步骤 /photohelp。'
+      - 'message: &a[照片] &f女神相机有三个角度；备好2魔力，在菜单选择拍摄，成片自动入个人奖励箱。详细步骤 /photohelp。'

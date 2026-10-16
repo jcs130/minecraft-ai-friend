@@ -5,7 +5,7 @@ final class TaskGuidance {
     private TaskGuidance() { }
 
     static String photo() {
-        return "准备1张空地图和1个空主背包格，从技能罗盘→女神相机或 /mycli photo menu 点击拍照；Agent也可用 /mycli photo take <名字> [第一人称|第三人称|俯视]。站稳等地图入包，/mycli photo status 查进度；无需截图、网页或上传文件。照片委托须先接单再拍，旧图和复制图不算。海报末尾加2，需4张空地图和4个空格。";
+        return "从技能罗盘→女神相机或 /mycli photo menu 点击拍照；Agent可用 /mycli photo take <名字> [第一人称|第三人称|俯视] [1|2]。无需空地图或主背包空位，开始拍摄默认耗2魔力。站稳等成片自动存入个人奖励箱，/mycli photo status 查进度、/mycli arena stash pages 取照片；箱满保留在本人待入箱队列，腾位重开。无需截图、网页或上传文件。照片委托须先接单再拍，旧图和复制图不算；海报末尾加2。";
     }
 
     static String step(GuildManager.Goal goal, String original) {

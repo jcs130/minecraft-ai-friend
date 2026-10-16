@@ -486,7 +486,7 @@ final class SkillAssessments implements Listener {
         out.addProperty("title",r.definition.title());out.addProperty("currentCommand","/mycli guild exam status");
         if(r.definition.proofs().contains("survey")) {
             String active=plugin.getConfig().getString("guild-players."+p.getUniqueId()+".active.id","");
-            guideStep(steps,"prepare","取考试材料","摄影考试初次提供8张空地图；supplies take all免费取到主背包，再留1空格。普通走查不用藏宝图；想走原图寻宝路线，可领取真正的遗迹探险图。","/mycli guild exam supplies take all");
+            guideStep(steps,"prepare","核对考试路线","摄影无需空地图或主背包空位，成片自动入个人奖励箱。普通走查不用藏宝图；选择原图寻宝路线时，可领取真正的遗迹探险图。","/mycli guild exam supplies list");
             guideStep(steps,"contract","选择有效委托",active.isEmpty()?"按contractOptions中available的准确ID接单，推荐入门走查；不必先找到神庙。寻宝则主手拿带目标的图，guild map确认，再接tm_map_hunt。":"你正在做 "+active+"；保留这张委托，按下方currentContract的冻结条件继续，不用重接。",active.isEmpty()?"/mycli guild exam status":"/mycli guild status");
             guideStep(steps,"survey","实地调查","亲自走过不同地点，满足区域数、行进距离、有效行进时间；有建筑/群系/高差要求时也必须满足。重复绕圈、站着等待和传送不计路线。","/mycli guild verify");
             if(r.definition.proofs().contains("survey_photo"))guideStep(steps,"photograph","在目标现场拍照","每个探索阶段至少1张合格照片；要求多种群系时每种各1张。对准景物，photo menu或photo take 唯一名字 first 1；photo album核查，旧照片不能代本场。","/mycli photo menu");
@@ -638,7 +638,7 @@ final class SkillAssessments implements Listener {
             var row=value.getAsJsonObject();String text=row.get("instruction").getAsString();List<String> lore=new ArrayList<>();for(int i=0;i<text.length();i+=28)lore.add("§7"+text.substring(i,Math.min(text.length(),i+28)));
             lore.add("§a"+row.get("command").getAsString());inv.setItem(row.get("order").getAsInt()-1,icon(Material.BOOK,row.get("order")+". "+row.get("title").getAsString(),lore.toArray(String[]::new)));
         }
-        inv.setItem(20,icon(Material.MAP,"领取摄影空地图","首次本题8张，发到个人箱；重复点击不多发"));
+        inv.setItem(20,icon(Material.CHEST,"个人奖励箱·取照片","拍照直接成片入箱，无需准备空地图"));
         inv.setItem(21,icon(Material.FILLED_MAP,"领取遗迹探险图","仅原图寻宝路线需要；天然遗迹有真实目标"));
         inv.setItem(22,icon(Material.CHEST,"免费取出考试材料","只取本场已发的材料到主背包","无需学习传送术；不扣魔力；背包满则保留"));
         inv.setItem(23,icon(Material.SPYGLASS,"现场拍照","打开女神相机，拍完查看合格结果"));
@@ -653,7 +653,7 @@ final class SkillAssessments implements Listener {
         int slot=e.getRawSlot();p.closeInventory();
         if(m.detail.equals("@guide")) {
             Bukkit.getScheduler().runTask(plugin,()->{if(!p.isOnline())return;switch(slot){
-                case 20 -> suppliesCommand(p,new String[]{"guild","exam","supplies","claim","photo"},plugin.communication().compact(p));
+                case 20 -> plugin.dungeon().openStashPages(p);
                 case 21 -> suppliesCommand(p,new String[]{"guild","exam","supplies","claim","map"},plugin.communication().compact(p));
                 case 22 -> suppliesCommand(p,new String[]{"guild","exam","supplies","take","all"},plugin.communication().compact(p));
                 case 23 -> plugin.photoCamera().command(p,new String[]{"photo","menu"});

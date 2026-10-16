@@ -15,6 +15,7 @@ public class ExamSupplyQA extends JavaPlugin {
   JsonObject out=new JsonObject();try {
    var plugin=(JavaPlugin)Bukkit.getPluginManager().getPlugin("AgentFriend");
    switch(a[0]) {
+    case "tickets"->{out.addProperty("pluginTickets",Bukkit.getWorld("world").getPluginChunkTickets().getOrDefault(plugin,List.of()).size());}
     case "place"->{var world=Bukkit.getWorld("world");int x=Integer.parseInt(a[1]),y=Integer.parseInt(a[2]),z=Integer.parseInt(a[3]);
      var cls=Class.forName("org.afuhome.agentfriend.ExplorationObjectives",true,plugin.getClass().getClassLoader());var method=cls.getDeclaredMethod("mapPlace",org.bukkit.Location.class,int.class,int.class);method.setAccessible(true);
      out.addProperty("place",String.valueOf(method.invoke(null,new Location(world,x,y,z),x,z)));JsonArray starts=new JsonArray();var source=((CraftWorld)world).getHandle().getChunkSource();

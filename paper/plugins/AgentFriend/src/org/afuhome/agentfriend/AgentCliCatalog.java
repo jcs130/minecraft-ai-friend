@@ -53,7 +53,7 @@ final class AgentCliCatalog {
         add(specs,"page","info","read","/mycli page <快照ID> [页码]","续读本次连接的完整查询快照，大记录分片可无损拼回","只读；五分钟有效；每人保留最近两个快照；断线后重新查询","MC_PAGE含page/pages/total/snapshotObservedAt/nextCommand；不可把分片当完整任务");
         add(specs,"capabilities","info","read","/mycli capabilities [list [分类|命令|all] [页码]|info <ID>]","零副作用的能力发现；保留旧list/explain兼容入口","目录查询本身不会执行目标命令，也不记学习证明","MC_CLI_LIST、MC_CLI_ITEM、MC_CLI_DETAIL；discoveryReadOnly=true");
         add(specs,"inventory","info","read","/mycli inventory [status|refresh|item <0–35|hand>]","读取服务器本人随身背包与快捷栏，按准确物品名称识别特色道具，refresh同步原版物品栏","仅本人；不含54格大背包、任务物品袋或个人奖励箱；读取全部分页。player_head可能是大背包，须看name/customId/usage","私有 MC_INVENTORY分页，id/baseId是基础材质，name为展示名；MC_ITEM含单件物品名称、服务器标识、用法与说明");
-        add(specs,"world","life","read","/mycli world list|menu|npcs|talk <ID> <话>|end|guide start|practice start|status|stop|events|photos","世界生活内容入口：新手实习、开门爬梯实练、村民聊天、世界事件、村民交易和照片展示","查询免费；聊天须在NPC八格内；照片可由本机女神相机拍摄，消耗1张空地图","MC_WORLD JSON及NPC实际答复");
+        add(specs,"world","life","read","/mycli world list|menu|npcs|talk <ID> <话>|end|guide start|practice start|status|stop|events|photos","世界生活内容入口：新手实习、开门爬梯实练、村民聊天、世界事件、村民交易和照片展示","查询免费；聊天须在NPC八格内；女神相机无需空地图，开始拍摄默认2魔力，成片自动入个人奖励箱","MC_WORLD JSON及NPC实际答复");
         add(specs,"world.list","life","read","/mycli world list","查看各内容插件实际启用状态和入口","查询免费，不执行技能","MC_WORLD type=catalog");
         add(specs,"world.board","life","read","/mycli world board [menu]","居民事务：农耕集市、照片展与遗迹调查；查看真实步骤及本人状态","与公会共享任务槽；guild accept接单，每阶段guild claim；最终入个人箱","MC_WORLD type=board；可选45格原版菜单");
         add(specs,"world.shops","life","read","/mycli world shops","查看真实集市商人的位置、农产收购与旅行补给","亲自到场交易，实际消耗原版物品；选中配方还不算成交","MC_WORLD type=shops");
@@ -68,7 +68,7 @@ final class AgentCliCatalog {
         add(specs,"world.guide","life","write","/mycli world guide start|status","新手实习：读技能目录、成功施法、完整交付任选路线委托；旧生活证明保留","主动开始；tasks list看路线，不必种田；失败施法/自称完成不计进度；不代学不花点","MC_WORLD type=guide/guide_progress");
         add(specs,"world.practice","life","write","/mycli world practice start|status|stop","通行实练：亲手打开木门并穿过、沿现有梯子连续爬升3格；不拆墙、不垫方块","自愿报名；生存或冒险模式；本人原生交互与移动；飞行、传送、自称完成不算；没有额外奖励或代操作","MC_WORLD type=practice/practice_progress；真实坐标、时间及原生操作证明；一次通过不表示长期掌握");
         add(specs,"world.events","life","read","/mycli world events","查看正在进行的世界生活事件","查询免费；活动公告另发；活动不自动完成任务","MC_WORLD type=events与WorldEvents当前列表");
-        add(specs,"photo","life","write","/mycli photo menu；take <名字> [第一人称|第三人称|俯视] [1|2]；status|cancel","技能罗盘→女神相机点击拍照，站稳等待地图入包；无需截图或上传文件；原first/third/top参数继续可用","单图1张空地图和1个空主背包格；2×2海报4张地图和4个空格；每人60秒，串行排队","MC_PHOTO 含中文statusLabel；success才表示实际地图已交付");
+        add(specs,"photo","life","write","/mycli photo menu；take <名字> [第一人称|第三人称|俯视] [1|2]；status|cancel","技能罗盘→女神相机点击拍照，成片自动存入本人个人奖励箱；arena stash pages取照片；无需截图上传；原first/third/top参数继续可用","无需空地图或主背包空位；开始拍摄默认2魔力，每人60秒，串行排队；箱满安全排队，腾位重开","MC_PHOTO success表示照片已持久存入个人奖励箱或其待入箱队列；storage=personal_reward_box；storageCommand给取件入口");
         add(specs,"photo.album","life","read","/mycli photo album [页]；photo info <本人照片名|公开作品ID>","旅行纪念册：查询实地照片是否合格、重拍建议、署名与故事","只读，不自动报名或投稿；旧相册仍用 /imageframe list","私有 MC_PHOTO_ALBUM、MC_PHOTO_RECORD；照片质量不能代替走查与返程");
         add(specs,"photo.gallery","life","read","/mycli photo gallery [页]","艺术厅摄影展：查看公开作品、摄影者、地点和作者故事","原版地图菜单及成书，Java/基岩/Agent可读；故事为作者自述","MC_PHOTO_ALBUM、MC_PHOTO_RECORD；slot为空表示等待适合的实体展位");
         add(specs,"photo.title","life","write","/mycli photo title <本人照片名> <题目>","为自己的旅行照片起标题","1至64字普通文字；作者UUID、实际地点和原片不能更改；已投稿作品同步展签","photo info <照片名> 核对结果");

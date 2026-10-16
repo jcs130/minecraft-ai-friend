@@ -10,17 +10,19 @@ $paper = Join-Path $ServerRoot "versions\$MinecraftVersion\paper-$MinecraftVersi
 if (-not (Test-Path -LiteralPath $paper)) { throw "Prepare Paper $MinecraftVersion first, or pass -ServerRoot pointing to the isolated candidate." }
 $worldGuard = @(Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'plugins') -Filter 'worldguard-bukkit-*.jar' -File)
 if ($worldGuard.Count -ne 1) { throw 'Exactly one enabled WorldGuard JAR is required for a reproducible build.' }
+$worldEdit = @(Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'plugins') -File | Where-Object { $_.Name -match '^(worldedit-bukkit-|FastAsyncWorldEdit(?:-Paper)?-).*\.jar$' })
+if ($worldEdit.Count -ne 1) { throw 'Exactly one enabled WorldEdit or FastAsyncWorldEdit JAR is required.' }
 $classpath = @(
     $paper
     Get-ChildItem -LiteralPath (Join-Path $ServerRoot 'libraries') -Recurse -Filter '*.jar' -File | ForEach-Object { $_.FullName }
     Join-Path $ServerRoot 'plugins\MagicSpells-4.0-Beta-15.jar'
     Join-Path $ServerRoot 'plugins\AuraSkills-2.4.0.jar'
     $worldGuard[0].FullName
-    Join-Path $ServerRoot 'plugins\worldedit-bukkit-7.3.9.jar'
+    $worldEdit[0].FullName
     Join-Path $ServerRoot 'plugins\EssentialsX-2.22.0.jar'
     Join-Path $ServerRoot 'plugins\ProtocolLib-5.3.0.jar'
 ) -join ';'
-$build = Join-Path $root "build-0.4.45-mc-$MinecraftVersion"
+$build = Join-Path $root "build-0.4.47-mc-$MinecraftVersion"
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 # The isolated server path plus both library generations can exceed Windows'
 # command-line limit. A UTF-8 argument file also handles paths containing spaces.
@@ -65,7 +67,7 @@ Copy-Item -LiteralPath (Join-Path $root 'resources\skill-visuals.yml') -Destinat
 Copy-Item -LiteralPath (Join-Path $root 'resources\structure-protection.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\text-bubbles.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\photo-camera.yml') -Destination $build -Force
-$out = Join-Path $root 'AgentFriend-0.4.45.jar'
+$out = Join-Path $root 'AgentFriend-0.4.47.jar'
 & $jar --create --file $out -C $build .
 if ($LASTEXITCODE -ne 0) { throw 'jar failed' }
 Get-FileHash -LiteralPath $out -Algorithm SHA256 | Select-Object Path,Hash

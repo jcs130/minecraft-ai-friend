@@ -62,10 +62,10 @@ final class PhotoJournal implements Listener {
         }
         return null;
     }
-    /** Called only after the pinned ImageFrame adapter confirms every tile is in the owner's inventory. */
+    /** Called after every tile is durably stored in the owner's personal reward chest or private overflow. */
     void delivered(Player p,UUID id,String name,String mode,long captured,Location at,JsonObject context,JsonObject scene,JsonObject image,Object map) throws Exception {
         if(rows(p.getUniqueId()).has(id.toString()))return;
-        if(rows(p.getUniqueId()).size()>=64){say(p,"照片已入包，但纪念册达到64份上限；请联系管理员归档，考试尚未计入。");return;}
+        if(rows(p.getUniqueId()).size()>=64){say(p,"照片已存入个人奖励箱，但纪念册达到64份上限；请联系管理员归档，考试尚未计入。");return;}
         PhotoEvidence.Review review=PhotoEvidence.review(scene,image);
         JsonObject row=new JsonObject();row.addProperty("id",id.toString());row.addProperty("owner",p.getUniqueId().toString());row.addProperty("author",p.getName());
         row.addProperty("name",name);row.addProperty("title",name);row.addProperty("story","");row.addProperty("mode",mode);row.addProperty("capturedAt",captured);
@@ -76,7 +76,7 @@ final class PhotoJournal implements Listener {
         JsonArray ids=new JsonArray();for(Object tile:(List<?>)map.getClass().getMethod("getMapIds").invoke(map))ids.add(((Number)tile).intValue());row.add("mapIds",ids);
         row.addProperty("qualified",review.qualified());row.addProperty("honour",review.honour());row.addProperty("reason",review.reason());row.addProperty("review",review.advice());row.addProperty("published",false);
         if(context!=null)row.add("context",context.deepCopy());if(scene!=null)row.add("scene",scene.deepCopy());if(image!=null)row.add("image",image.deepCopy());
-        if(!ledger.write(data->rows(data,p.getUniqueId()).add(id.toString(),row))) {say(p,"照片已入包，但纪念册保存失败，考试尚未计入；请联系管理员核对，勿重复领取。");return;}
+        if(!ledger.write(data->rows(data,p.getUniqueId()).add(id.toString(),row))) {say(p,"照片已存入个人奖励箱，但纪念册保存失败，考试尚未计入；请联系管理员核对，勿重复领取。");return;}
         say(p,review.advice()+" /mycli photo info "+name+" 查看作品。");
         if(context!=null)say(p,"探索照片进度：/mycli guild exam status；原来的走查和返程条件仍需完成。");
         else if(!plugin.skillAssessments().photoExam(p).isEmpty())say(p,"这张照片没有匹配当前考试的探索目的地，不计入考试。用 /mycli guild status 查当前阶段，先到该阶段的目标实地再拍。");

@@ -69,7 +69,7 @@ tasks:
     icon: ITEM_FRAME
     reward: {fame: 6, emeralds: 2, bonus: PAPER, bonus-count: 4}
     steps:
-      - {title: 新建本人照片, description: 接单后准备1张空地图和空主背包格，用 /mycli photo take <名字> 拍照；站稳等地图入包，photo status查进度。无需截图或上传；旧图和复制图不算。, goal: photo, target: 1}
+      - {title: 新建本人照片, description: 接单后用 /mycli photo take <名字> 拍照；无需空地图或主背包空位，站稳等成片自动入个人奖励箱，photo status查进度。开始拍摄耗魔力，旧图和复制图不算。, goal: photo, target: 1}
       - {title: 把这一刻挂起来, description: 在本人或获准位置把本次新建的照片亲手放进空展示框；原版地图或别人的照片不算。, goal: photo_hang, target: 1}
   crypt_report:
     scope: personal
@@ -92,7 +92,7 @@ tasks:
     reward: {fame: 15, emeralds: 5, bonus: COMPASS, bonus-count: 1}
     steps:
       - {title: 蔓生地窖全程返程, description: 接单后清完 creeping_crypt 全部房间、返第一间并 dungeon claim creeping_crypt；亲自参与，难度自选。, goal: site_clear, site: creeping_crypt, target: 1}
-      - {title: 归来后的新照片, description: 本阶段用 /mycli photo take <名字> 再拍一张本人照片；备好空地图和空主背包格，站稳等地图入包。无需截图上传；不验证照片画面中的遗迹。, goal: photo, target: 1}
+      - {title: 归来后的新照片, description: 本阶段用 /mycli photo take <名字> 再拍一张本人照片；无需空地图或主背包空位，站稳等成片自动入个人奖励箱。无需截图上传；不验证照片画面中的遗迹。, goal: photo, target: 1}
       - {title: 本人旅途小展, description: 把本次新建照片亲手挂入自己或获准的空展示框，展品保留。, goal: photo_hang, target: 1}
   bunker_report:
     scope: personal

@@ -69,6 +69,12 @@ final class ExamSupplies {
     JsonObject status(Player p,AssessmentCatalog.Definition d,String kind) {
         JsonObject out=new JsonObject();out.addProperty("id",kind);out.addProperty("providedBy","exam");
         out.addProperty("storage","personal_chest");out.addProperty("free",true);
+        if(kind.equals("photo")) {
+            out.addProperty("name","摄影直接成片");out.addProperty("status","not_required");
+            out.addProperty("required",false);out.addProperty("count",0);
+            out.addProperty("advice","摄影无需空地图或主背包空位；实际拍摄耗魔力，成片自动入个人奖励箱。已发旧地图保留，可继续用take photo取出。");
+            out.addProperty("nextCommand","/mycli photo menu");return out;
+        }
         boolean relevant=d!=null&&(kind.equals("photo")?d.proofs().contains("survey_photo"):d.proofs().contains("survey"));
         String key=d==null?"":kind.equals("photo")?photoKey(d):plugin.getConfig().getString(mapRunPath(p),"");
         out.addProperty("name",kind.equals("photo")?"摄影备料 · 8张空地图":"遗迹探险图 · 带真实目标");
@@ -92,13 +98,14 @@ final class ExamSupplies {
         out.addProperty("nextCommand","/mycli guild exam supplies list");return out;
     }
     void automaticPhoto(Player p,AssessmentCatalog.Definition d,UUID run,Consumer<JsonObject> reply) {
-        if(enabled&&d.proofs().contains("survey_photo")&&!issued(p,photoKey(d)))claim(p,d,run,"photo",reply);
+        // Photography now creates original map tiles directly in the reward chest.
+        // Keep old allocation receipts and take-photo compatibility, but issue no new blank maps.
     }
     void claim(Player p,AssessmentCatalog.Definition d,UUID run,String kind,Consumer<JsonObject> reply) {
         JsonObject out=status(p,d,kind);out.addProperty("type","supplies");out.addProperty("action","claim");out.addProperty("runId",run.toString());
         if(!exams.canSupply(p,run)){finish(out,false,"active_exam_required",reply);return;}
+        if(kind.equals("photo")){out.addProperty("ok",true);out.addProperty("reason","photo_materials_not_required");out.addProperty("changed",false);reply.accept(out);return;}
         if(!out.get("status").getAsString().equals("requestable")){finish(out,out.get("status").getAsString().equals("already_issued"),out.get("status").getAsString(),reply);return;}
-        if(kind.equals("photo")){allocate(p,photoKey(d),run,List.of(new ItemStack(Material.MAP,8)),out,reply);return;}
         if(pending.containsKey(p.getUniqueId())){finish(out,false,"checking_destination",reply);return;}
         if(pending.size()>=4){finish(out,false,"destination_check_busy",reply);return;}
         Destination destination=nextMap(p);World world=Bukkit.getWorld(destination.world);
@@ -111,9 +118,20 @@ final class ExamSupplies {
         int cx=destination.x>>4,cz=destination.z>>4;
         for(int x=cx-2;x<=cx+2;x++)for(int z=cz-2;z<=cz+2;z++)loads.add(world.getChunkAtAsync(x,z,false));
         CompletableFuture.allOf(loads.toArray(CompletableFuture[]::new)).whenComplete((ignored,error)->Bukkit.getScheduler().runTask(plugin,()->{
+            List<Chunk> held=new ArrayList<>();
             try {
                 if(!p.isOnline()||!exams.canSupply(p,run)) {if(p.isOnline())finish(out,false,"exam_changed",reply);return;}
                 if(error!=null){finish(out,false,"destination_load_failed",reply);return;}
+                // Async completion alone does not keep a remote chunk available to
+                // the native structure reader. Hold only the 25 verified EXISTING
+                // chunks during this synchronous check; never generate or retain them.
+                // Main-thread callbacks cannot interleave, and only tickets we added
+                // are removed, preserving dungeon/waypoint tickets owned elsewhere.
+                for(CompletableFuture<Chunk> load:loads){
+                    Chunk chunk=load.join();
+                    if(chunk==null){finish(out,false,"destination_load_failed",reply);return;}
+                    if(chunk.addPluginChunkTicket(plugin))held.add(chunk);
+                }
                 Location at=new Location(world,destination.x,destination.y,destination.z);
                 var place=ExplorationObjectives.mapPlace(at,destination.x,destination.z);
                 if(place==null||!place.key().equals(destination.structure)||place.key().equals("minecraft:buried_treasure")) {
@@ -133,7 +151,7 @@ final class ExamSupplies {
                 target.addProperty("structure",place.key());target.addProperty("mapId",view.getId());target.addProperty("source","verified_public_natural_structure");
                 out.add("map",target);out.addProperty("nextCommand","/mycli guild map");
                 allocate(p,key,run,List.of(item),out,reply);
-            }finally{pending.remove(p.getUniqueId(),run);}
+            }finally{for(Chunk chunk:held)chunk.removePluginChunkTicket(plugin);pending.remove(p.getUniqueId(),run);}
         }));
     }
     private record Move(String key,int row,int slot,int queue,ItemStack item) { }
