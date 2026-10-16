@@ -578,6 +578,25 @@ including a scout submitted while user feedback is awaiting its first body plan.
 The coordinator waits for the native result instead of planning repeatedly from
 an acceptance. Observation work still does not consume the feedback queue policy.
 
+Compact main inspection selects at most three distinct retained native event
+sources, reserving the latest explicit failed action when newer observations
+would displace it. Selection uses terminal/action flags and structured results,
+never receipt prose. Original execution/run/cursor/time and mixed result counts
+remain; structured sample previews preserve failure and success within the
+existing 700-byte allocation. `native_outcome_selection` reports omitted and
+duplicate counts and the original detail path. No journal history is loaded.
+The existing 3200-byte facts limit and current queue/stage delivery remain.
+
+`prior_main_judgment` adds a small labeled historical view of the previous main
+decision, with 300-byte reason and 180-byte goal previews and its original detail
+path. It is model judgment, not world fact or user authorization. Current fresh
+facts and later real results take precedence over old failures or judgments;
+neither permits replay, automatic stage completion or revision. Changed
+scope/run/episode requires fresh evidence. Immutable detail queries retain the
+full original review projection, including all omitted rows and the prior
+decision; native raw receipt detail remains with the existing archive tools.
+This projection does not impose food rules or guarantee a better model decision.
+
 Run `python -m pytest -q` here. Tests deny host SDK imports, network and service
 launches; the isolated process test exercises both a fake autonomous planner and
 queue-only operation. These tests do not prove live survival, actual model

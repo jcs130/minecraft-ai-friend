@@ -103,7 +103,60 @@ def detail(directory, heartbeat_id, reference, path=None, offset=0):
             "encoding": "Concatenate json_chunk strings in offset order, then parse JSON."}
 
 
-def compact(evidence, reference):
+def outcome_selection(rows):
+    """Three recent sources, reserving one dated failed action when displaced.
+
+    Input is the existing bounded review history, never a journal lookup. Source
+    identity includes the execution and native event; different attempts survive.
+    """
+    unique = {}
+    for index, row in enumerate(rows):
+        event = row.get("original_event") or {}
+        identity = (row.get("execution_id"), event.get("run"), event.get("cursor"))
+        key = identity if identity[0] and identity[1] and identity[2] is not None else (index,)
+        unique[key] = (index, row)
+    candidates = sorted(unique.values())
+    selected = candidates[-3:]
+    for candidate in reversed(candidates):
+        row = candidate[1]
+        counts = (row.get("step_outcomes") or {}).get("counts") or {}
+        if (row.get("terminal") is True and row.get("observation_only") is False
+                and (row.get("phase") in {"blocked", "partial", "failed", "rejected"}
+                     or counts.get("fail", 0) > 0 or counts.get("partial", 0) > 0)):
+            if candidate not in selected:
+                selected = sorted([candidate, *selected[-2:]])
+            break
+    return selected, {"limit": 3, "duplicates": len(rows) - len(candidates),
+        "omitted": len(candidates) - len(selected),
+        "policy": "Latest sources plus latest explicit failed action; dated evidence, not a persistent constraint.",
+        "detail_path": ["evidence", "native_outcomes"]}
+
+
+def sample_preview(samples):
+    """Keep structured success/failure reasons within the existing 700 bytes."""
+    selected, seen = {}, set()
+    # One latest sample per group first, so an early successful prefix cannot
+    # erase a failure (or the reverse). Then fill from newest remaining samples.
+    priority = []
+    for index in range(len(samples) - 1, -1, -1):
+        outcome = samples[index].get("outcome")
+        if outcome not in seen:
+            seen.add(outcome)
+            priority.append(index)
+    priority.sort(key=lambda i: {"fail": 0, "ok": 1, "partial": 2}.get(samples[i].get("outcome"), 3))
+    for index in [*priority, *range(len(samples) - 1, -1, -1)]:
+        if index in selected:
+            continue
+        sample = {key: samples[index][key] for key in ("step", "outcome", "why") if key in samples[index]}
+        if "why" in sample:
+            sample["why"] = preview(sample["why"], 180)
+        proposed = {**selected, index: sample}
+        if len(encoded([row for _, row in sorted(proposed.items())]).encode()) <= 700:
+            selected = proposed
+    return [row for _, row in sorted(selected.items())]
+
+
+def compact(evidence, reference, last_decision=None):
     result = {key: preview(evidence[key], limit) for key, limit in (
         ("sampled_at", 100), ("phase", 60), ("connected", 30), ("standing_goal", 750),
         ("current_user_goal", 850), ("current_goal", 850), ("historical_goal", 850), ("pending", 750), ("facts", 3200),
@@ -114,13 +167,26 @@ def compact(evidence, reference):
     # Retain success and failure counts/samples together, rather than slicing a
     # long raw receipt before its successful tail. All outcomes remain in detail.
     result["native_outcomes"] = []
-    for index, row in list(enumerate(evidence.get("native_outcomes", [])))[-3:]:
+    selected, selection = outcome_selection(evidence.get("native_outcomes", []))
+    result["native_outcome_selection"] = selection
+    for index, row in selected:
         steps = row.get("step_outcomes") or {}
+        samples = sample_preview(steps.get("samples", []))
         result["native_outcomes"].append({
-            **{key: preview(row[key], 180) for key in ("execution_id", "phase", "terminal", "observation_only", "goal_verified", "tool", "original_event") if key in row},
+            **{key: preview(row[key], 180) for key in ("execution_id", "phase", "terminal", "observation_only", "goalCompleted", "goal_verified", "tool") if key in row},
+            "original_event": row.get("original_event", {}),
             "receipt": preview(row.get("receipt", ""), 420),
             "step_outcomes": {key: steps[key] for key in ("status", "counts", "mixed", "valid", "invalid", "omitted") if key in steps},
-            "samples": preview(steps.get("samples", []), 700), "detail_path": ["evidence", "native_outcomes", index]})
+            "samples": samples, "samples_omitted": len(steps.get("samples", [])) - len(samples),
+            "detail_path": ["evidence", "native_outcomes", index]})
+    result["evidence_precedence"] = ("Current fresh facts and later real native results take precedence. "
+        "Older failures are dated attempts; prior main judgment is not world fact or user authorization. "
+        "Neither authorizes replay or automatic stage completion/revision; changed scope/run/episode needs fresh evidence.")
+    if last_decision:
+        result["prior_main_judgment"] = {"source": "prior_main_model_judgment", "historical": True,
+            **{key: last_decision[key] for key in ("decision", "at", "heartbeat_id", "request_id") if key in last_decision},
+            **{key: preview(last_decision[key], limit) for key, limit in (("reason", 300), ("goal", 180)) if key in last_decision},
+            "detail_path": ["last_decision"]}
     result["body_events"] = preview(evidence.get("body_events", [])[-2:], 700)
     if episode := evidence.get("death_episode"):
         result["death_episode"] = {key: preview(episode[key], 300) for key in

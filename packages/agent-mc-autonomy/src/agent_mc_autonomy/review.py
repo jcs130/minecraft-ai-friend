@@ -536,7 +536,7 @@ class ReviewPort:
                         "goal_authority": "current_user_goal is explicitly user-sourced. host_review is a proposed stage subordinate to current user intent and the standing goal; unknown origin is not user authorization. last_decision is prior model judgment, not fresh world evidence. Query inspect with lineage_offset=0 for full original parent goals, four per page.",
                         "last_decision": state.get("last_decision")}
                 if compact:
-                    result = {"heartbeat_id": review_id, **review_evidence.compact(fresh, reference),
+                    result = {"heartbeat_id": review_id, **review_evidence.compact(fresh, reference, state.get("last_decision")),
                         "stage_delivery": stage, "acknowledged": False,
                         "legacy_reflection_completion": result["legacy_reflection_completion"],
                         "goal_authority": "User goal and standing goal govern; host_review is your subordinate stage. Planning is delivery, not actual work. Details include original goal_lineage.",
