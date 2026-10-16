@@ -16,6 +16,7 @@ from . import review_evidence
 from .mailbox import Mailbox, observation
 from .observations import body_feedback, feedback_signal, fact_preview, spatial_text, tool_failure_view, native_outcome_summary
 from .death_memory import DeathMemory, lifecycle, scope_key, recovery_context
+from .stage_applicability import body_baseline
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,7 @@ def review_observation(status, now):
                 "standing_goal": str(snapshot.get("standing_goal", ""))[:600],
                 "current_goal": {**{key: active.get(key) for key in ("id", "goal", "mode", "parent_id")},
                                  "origin": active.get("origin", "unknown")}, "pending": pending,
+                "historical_goal": snapshot.get("historical_goal"),
                 "facts": useful, "body_events": feedback["body_events"], "native_outcomes": feedback["native_outcomes"],
                 "outcome_precedence": feedback["outcome_precedence"],
                 "fact_originals": {part["key"]: part["original"] for part in snapshot.get("facts", {}).get("parts", [])
@@ -93,6 +95,7 @@ def review_observation(status, now):
     # task progress. Keep it separate from evidence refreshed during delivery.
     evidence["body_baseline"] = {
         "scope": scope_key(snapshot.get("game_identity")),
+        "run": snapshot.get("facts", {}).get("run"),
         "lifecycle": {"phase": life.get("phase"), "episodeId": life.get("episodeId")
                       or evidence.get("death_episode", {}).get("id")},
         "restriction": feedback["bodyRestriction"], "phase": snapshot["phase"],
@@ -121,6 +124,8 @@ def summary(evidence):
         goal += "；当前用户目标:" + brief(user["goal"], 360)
     if (active := evidence["current_goal"].get("goal")) and (not user or user["id"] != evidence["current_goal"].get("id")):
         goal += "；阶段(" + evidence["current_goal"]["origin"] + "):" + brief(active, 180)
+    if historical := evidence.get("historical_goal"):
+        goal += "；历史提案（须重新评估，非当前指令）:" + brief(historical["goal"], 180)
     readings = "；".join(brief(facts[key], size) for key, size in (
         ("body", 120), ("foodReserve", 120), ("gear", 420), ("queue", 150)))
     # A 70-byte inventory preview hid already-owned tools from the main brain.
@@ -153,9 +158,21 @@ class ReviewPort:
     def request_id(self, review_id):
         return str(uuid.uuid5(uuid.NAMESPACE_URL, self.directory.as_uri() + ":" + review_id))
 
+    def current_observation(self, status):
+        """Sanitize even pre-upgrade snapshots before any current-review operation."""
+        if not review_observation(status, self.now()):
+            return None
+        snapshot = status.get("observation", status)
+        episode = DeathMemory(self.directory).current_episode(
+            snapshot.get("game_identity"), snapshot.get("facts", {}), pending=True)
+        supplied = snapshot.get("death_episode")
+        if episode and isinstance(supplied, dict) and all(supplied.get(key) == episode.get(key) for key in ("id", "scope", "source_event")):
+            episode = supplied  # Preserve lossless receipts from the same verified episode.
+        return review_observation({**snapshot, "death_episode": episode}, self.now())
+
     def speech_current(self, correlation):
         """Validate output against this decision, allowing only its own new goal."""
-        current = review_observation(observation(self.directory), self.now())
+        current = self.current_observation(observation(self.directory))
         if (self.stopping() or not current or current["session"] != correlation["session"]
                 or current["scope"] != correlation["scope"] or current["baseline"] != correlation["baseline"]
                 or self.now() > correlation["expires_at"]):
@@ -178,8 +195,8 @@ class ReviewPort:
         with self.mailbox.connection() as db:
             row = db.execute("SELECT payload FROM commands WHERE id=?", (request_id,)).fetchone()
             payload = json.loads(row[0])
-        decision = "revise" if payload.get("revision_of") else "insert"
-        choice = {"decision": decision, "goal": payload["goal"], "reason": "recovered_mailbox_receipt"}
+        decision = payload.get("review_decision") or ("revise" if payload.get("revision_of") else "insert")
+        choice = {"decision": decision, "goal": "" if decision == "continue" else payload["goal"], "reason": "recovered_mailbox_receipt"}
         review.update(choice=choice, recovered=True, result={"acknowledged": True, "dispatched": True,
                       "decision": decision, "verified": False, "request_id": request_id,
                       "delivery": receipt["delivery"], "recovered": True})
@@ -260,25 +277,32 @@ class ReviewPort:
     def observe(self, snapshot):
         """Called by the existing runtime publish path, never by a frontend timer."""
         now = self.now()
-        observed = review_observation(snapshot, now)
+        observed = self.current_observation(snapshot)
         if not observed or self.stopping():
             return
         observed["evidence"]["current_user_goal"] = self.mailbox.current_user_goal(observed["evidence"]["current_goal"].get("id"))
-        if episode := observed["evidence"].get("death_episode"):
-            if not any(row["id"] == episode["id"] for row in DeathMemory(self.directory).entries(episode["scope"], pending=True)):
-                observed["evidence"].pop("death_episode")
-                if observed["urgent"] == "death:" + str(episode["id"]):
-                    observed["urgent"] = None
         with self.transaction() as state:
             self.reconcile(state)
             policy = ReviewPolicy.parse(state.get("policy", {}))
             if not policy.enabled:
                 return
             previous = state.get("review", {})
+            previous_episode = previous.get("evidence", {}).get("death_episode")
+            superseded_death = bool(previous_episode
+                and previous_episode["id"] != observed["evidence"].get("death_episode", {}).get("id")
+                and (not previous.get("result") or previous["result"].get("error") == "main_brain_not_acknowledged"
+                     or previous["result"].get("reflection_pending")))
+            if superseded_death:
+                state["last_superseded_review"] = {"id": previous["id"], "episode_id": previous_episode["id"],
+                    "reason": "death_episode_superseded", "acknowledged": previous.get("result", {}).get("acknowledged") is True,
+                    "inspected_at": previous.get("inspected_at"), "historical": True}
+                # Only the invalid current-death envelope loses its backoff. The
+                # unfinished episode and all actual delivery/lesson receipts stay.
+                state.pop("retry_after", None)
             revision = self.mailbox.intent_revision()
             same_session = previous.get("session") == observed["session"]
             same_intent = previous.get("revision") == revision and previous.get("intent") == observed["intent"]
-            urgent = bool(observed["urgent"] and observed["urgent"] != previous.get("urgent"))
+            urgent = superseded_death or bool(observed["urgent"] and observed["urgent"] != previous.get("urgent"))
             if state.get("material") != observed["material"] or not same_session:
                 state.update(material=observed["material"], material_since=now)
             observed["evidence"]["material_unchanged_seconds"] = int(now - state.get("material_since", now))
@@ -313,7 +337,7 @@ class ReviewPort:
 
     def offer(self):
         """Claim one bounded delivery attempt; does not manufacture a game event."""
-        current = review_observation(observation(self.directory), self.now())
+        current = self.current_observation(observation(self.directory))
         if not current or self.stopping():
             return {"offered": False, "reason": "no_fresh_running_observation"}
         with self.transaction() as state:
@@ -321,6 +345,8 @@ class ReviewPort:
             review = state.get("review", {})
             if not state.get("policy", {}).get("enabled") or not review or review.get("result"):
                 return {"offered": False, "reason": "no_pending_review"}
+            if (episode := review.get("evidence", {}).get("death_episode")) and episode["id"] != current["evidence"].get("death_episode", {}).get("id"):
+                return {"offered": False, "reason": "death_episode_superseded", "historical": True, "episode_id": episode["id"]}
             if current["session"] != review["session"] or current["intent"] != review["intent"] or self.mailbox.intent_revision() != review["revision"]:
                 return {"offered": False, "reason": "review_superseded"}
             now = self.now()
@@ -348,7 +374,7 @@ class ReviewPort:
 
     def defer(self, review_id, accepted):
         """Complete a quiet periodic context delivery without claiming a main decision."""
-        current = review_observation(observation(self.directory), self.now())
+        current = self.current_observation(observation(self.directory))
         if self.stopping():
             return {"is_error": True, "error": "disabled_or_stopped"}
         with self.transaction() as state:
@@ -375,7 +401,7 @@ class ReviewPort:
 
     def bind_character(self, review_id, reference, profile):
         """Static public identity after fresh inspection; no strategic effects."""
-        current = review_observation(observation(self.directory), self.now())
+        current = self.current_observation(observation(self.directory))
         with self.transaction() as state:
             review = state.get("review", {})
             if (not current or self.stopping() or not state.get("policy", {}).get("enabled")
@@ -419,7 +445,7 @@ class ReviewPort:
         if len(reason) > 600 or len(goal) > 2000 or (decision != "inspect" and not reason.strip()) or (decision in {"insert", "revise"} and not goal.strip()):
             return {"is_error": True, "error": "reason_and_stage_goal_required"}
         snapshot = observation(self.directory)
-        current = review_observation(snapshot, self.now())
+        current = self.current_observation(snapshot)
         choice = {"decision": decision, "reason": reason.strip(), "goal": goal.strip()}
         with self.transaction() as state:
             self.reconcile(state)
@@ -465,12 +491,17 @@ class ReviewPort:
                 return {"is_error": True, "error": "critical_baseline_changed",
                         "next": "Inspect this heartbeat again before deciding: death/respawn, scope, body restrictions or unknown outcomes changed. Earlier body evidence is historical."}
             previous = self.mailbox.get(state.get("last_request_id", ""))
-            can_revise = bool(previous and previous["delivery"] == "planning"
+            historical = current["evidence"].get("historical_goal") or {}
+            reassessable = bool(previous and previous["delivery"] == "needs_reassessment"
+                and previous["request_id"] == historical.get("id")
+                and (self.mailbox.current_user_goal(historical.get("id")) or {}).get("id")
+                    == (self.mailbox.current_user_goal(current["evidence"]["current_goal"].get("id")) or {}).get("id"))
+            can_revise = reassessable or bool(previous and previous["delivery"] == "planning"
                 and previous["request_id"] == current["evidence"]["current_goal"].get("id"))
             stage = {"request_id": previous["request_id"], "delivery": previous["delivery"], "can_revise": can_revise} if previous else None
             if decision == "inspect":
                 if lineage_offset is not None:
-                    chain = self.mailbox.goal_lineage(current["evidence"]["current_goal"].get("id"))
+                    chain = self.mailbox.goal_lineage(historical.get("id") or current["evidence"]["current_goal"].get("id"))
                     end = min(len(chain), lineage_offset + 4)
                     return {"heartbeat_id": review_id, "goal_lineage": chain[lineage_offset:end],
                             "next_offset": end, "has_more": end < len(chain)}
@@ -488,7 +519,7 @@ class ReviewPort:
                     return {"is_error": True, "error": "intent_or_scope_changed"}
                 review.update(evidence=fresh, scope=current["scope"], baseline=current["baseline"], inspected_at=self.now())
                 reference = review_evidence.save(self.directory, review,
-                    self.mailbox.goal_lineage(fresh["current_goal"].get("id")), state.get("last_decision"))
+                    self.mailbox.goal_lineage(historical.get("id") or fresh["current_goal"].get("id")), state.get("last_decision"))
                 review["inspected_evidence_ref"] = reference
                 if legacy_pending:
                     review["reflection_inspected_at"] = self.now()
@@ -496,7 +527,7 @@ class ReviewPort:
                         "legacy_reflection_completion": {"choice": review["choice"], "receipt": review["result"],
                             "reflection_already_saved": bool(recorded.get("reflection") or recorded.get("lesson")),
                             "next": "Resubmit this original choice to complete only this episode. Include death_reflection only if no reflection/lesson is already saved. Goal, speech and context will not be replayed."} if legacy_pending else None,
-                        "next": "Now call continue/insert/revise with your evidence-based reason. For death include death_reflection: lesson with evidence/applicability, or deferred with reason. Optional spoken_text belongs in that same decision; no extra tool round is needed. Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending. Keep stages within the standing goal and user intent; server-specific quests, exams or capabilities need fresh evidence from this world, not unrelated conversation memories.",
+                        "next": "Now call continue/insert/revise with your evidence-based reason. If stage_delivery.can_revise refers to historical_goal, continue explicitly revalidates that proposal against this fresh body baseline; revise replaces it. For death include death_reflection: lesson with evidence/applicability, or deferred with reason. Optional spoken_text belongs in that same decision; no extra tool round is needed. Planning means the stage is delivered, not that native work is running. Use the actual queue. Continue useful work; revise your active stage when evidence warrants a changed strategy; insert a new stage when none is pending. Keep stages within the standing goal and user intent; server-specific quests, exams or capabilities need fresh evidence from this world, not unrelated conversation memories.",
                         "goal_authority": "current_user_goal is explicitly user-sourced. host_review is a proposed stage subordinate to current user intent and the standing goal; unknown origin is not user authorization. last_decision is prior model judgment, not fresh world evidence. Query inspect with lineage_offset=0 for full original parent goals, four per page.",
                         "last_decision": state.get("last_decision")}
                 if compact:
@@ -504,7 +535,7 @@ class ReviewPort:
                         "stage_delivery": stage, "acknowledged": False,
                         "legacy_reflection_completion": result["legacy_reflection_completion"],
                         "goal_authority": "User goal and standing goal govern; host_review is your subordinate stage. Planning is delivery, not actual work. Details include original goal_lineage.",
-                        "next": "Final now: continue/insert/revise + short factual reason; goal only for insert/revise. Optional spoken_text is one natural sentence. For pending death add death_reflection with evidence_ref above: outcome=lesson + lesson/applicability, or outcome=deferred + honest reason. Do not invent a lesson. Context/memory is optional."}
+                        "next": "Final now: continue/insert/revise + short factual reason; goal only for insert/revise. With a reassessable historical_goal, continue explicitly revalidates it on this fresh baseline; revise replaces it. Optional spoken_text is one natural sentence. For pending death add death_reflection with evidence_ref above: outcome=lesson + lesson/applicability, or outcome=deferred + honest reason. Do not invent a lesson. Context/memory is optional."}
                 else:
                     result["evidence_ref"] = reference
                 return result
@@ -560,7 +591,8 @@ class ReviewPort:
             existing = self.mailbox.get(request_id)
             if not existing and (self.mailbox.intent_revision() != review["revision"] or current["intent"] != review["intent"]):
                 return {"is_error": True, "error": "intent_revision_changed"}
-            if decision in {"insert", "revise"} and not existing:
+            revalidate = decision == "continue" and reassessable
+            if (decision in {"insert", "revise"} or revalidate) and not existing:
                 if current["evidence"]["phase"] != "running" or not current["evidence"]["connected"]:
                     return {"is_error": True, "error": "game_not_running"}
                 if decision == "revise" and not can_revise:
@@ -568,7 +600,7 @@ class ReviewPort:
                 if decision == "insert" and previous and previous["delivery"] in {"queued", "dispatching", "planning", "paused"}:
                     return {"is_error": True, "error": "previous_intent_pending", "request_id": previous["request_id"],
                             "stage_delivery": stage, "next": "Use revise to adjust your delivered active stage; queued/paused stages must wait. Explicit user feedback uses the regular intent mailbox."}
-                if goal.strip() == (current["evidence"]["current_goal"].get("goal") or current["evidence"]["standing_goal"]):
+                if not revalidate and goal.strip() == (current["evidence"]["current_goal"].get("goal") or current["evidence"]["standing_goal"]):
                     return {"is_error": True, "error": "goal_already_active"}
             result = {"acknowledged": True, "dispatched": False, "decision": decision, "verified": False,
                       "reply": "已记录主脑判断，未新增任务。"}
@@ -579,13 +611,18 @@ class ReviewPort:
                         "expires_at": review["created_at"] + 180, "opportunity_id": review.get("opportunity", {}).get("id", review_id)})
                 except Exception:
                     result["speech"] = {"status": "enqueue_failed", "playback_verified": False}
-            if decision in {"insert", "revise"}:
+            if decision in {"insert", "revise"} or revalidate:
                 try:
-                    payload = {"goal": goal.strip(), "mode": "insert", "origin": "host_review"}
+                    facts = snapshot.get("observation", snapshot).get("facts", {})
+                    latest = next(iter(DeathMemory(self.directory).entries(snapshot.get("observation", snapshot).get("game_identity"))), None)
+                    payload = {"goal": historical["goal"] if revalidate else goal.strip(), "mode": "insert", "origin": "host_review",
+                               "stage_baseline": body_baseline(facts, latest), "review_decision": decision}
                     if parent := current["evidence"]["current_goal"].get("id"):
                         payload["parent_id"] = parent
-                    if decision == "revise":
+                    if decision == "revise" or revalidate:
                         payload["revision_of"] = previous["request_id"]
+                        if reassessable:
+                            payload["parent_id"] = previous["request_id"]
                     receipt = self.mailbox.submit("feedback", payload, request_id,
                                                   expected_revision=review["revision"])
                 except ValueError as error:

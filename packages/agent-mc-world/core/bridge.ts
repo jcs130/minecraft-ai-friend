@@ -34,6 +34,7 @@ import type { ShowTempo } from './show.ts';
 import { diagnoseTargetSpace, probeBlockInfo } from './terrain.ts';
 import { walkOnlyPath } from './travel.ts';
 import { installPartialBlockStartRepair } from './pathfinder-start.ts';
+import { NAVIGATION_LIMITS } from './navigation-capabilities.ts';
 
 import { watchFlightAbilities } from './flight.ts';
 import { trackWindowProps } from './containers.ts';
@@ -794,10 +795,10 @@ export class Bridge {
     const log = this.opts.log;
 
     /** 寻路单次落差上限 2 格(原版 3 格内摔落不掉血)。 */
-    movements.maxDropDown = 2;
+    movements.maxDropDown = NAVIGATION_LIMITS.maxDropDown;
     // 上游 parkour 会把屋门边的两格高墙当成捷径，插入 y+1 的跳跃首步；
     // 实际碰撞过不去，反复 reset stuck。普通走路/开门/搭桥仍由 Movements 规划。
-    movements.allowParkour = false;
+    movements.allowParkour = NAVIGATION_LIMITS.allowParkour;
 
     /**
      * 水路代价:游一步记 1 + 3,往水里跳也受 maxDropDown 约束(上游默认不限高)。
@@ -1007,6 +1008,8 @@ export class Bridge {
       m.allow1by1towers = profile === 'style';
       this.applyTuning(bot, m);
       if (profile !== 'style') m.scafoldingBlocks = [];
+      const capabilities = { maxDropDown: m.maxDropDown, allowParkour: m.allowParkour,
+        canDig: m.canDig, scaffoldCount: m.countScaffoldingItems() };
       let result: ProbePath | null = null;
       try {
         const gen = bot.pathfinder.getPathFromTo(m, me, goal, {
@@ -1021,7 +1024,7 @@ export class Bridge {
         this.opts.log.warn(`路线试算失败(${profile}): ${(err as Error).message}`);
       }
       if (!result) {
-        out.push({ profile, status: 'noPath', steps: 0, place: 0, interact: 0, breaks: 0, endDist: startDist });
+        out.push({ profile, status: 'noPath', steps: 0, place: 0, interact: 0, breaks: 0, endDist: startDist, capabilities });
         continue;
       }
       const path = result.path ?? [];
@@ -1047,7 +1050,7 @@ export class Bridge {
           ? result.status as RouteProbe['status']
           : 'noPath';
       out.push({
-        profile, status, steps: path.length, place, interact, breaks,
+        profile, status, steps: path.length, place, interact, breaks, capabilities,
         endDist: Math.round(endDist * 10) / 10,
         ...(typeof result.visitedNodes === 'number' ? { visited: result.visitedNodes } : {}),
       });

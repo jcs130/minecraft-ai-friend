@@ -86,6 +86,7 @@ def test_reject_then_valid_query_publishes_zero_and_feasible_correction(framewor
     module, bridge, controller = setup(framework_module, tmp_path, decide)
     mixed_tools(bridge)
     controller.settings = dataclasses.replace(controller.settings, max_tool_rounds=1)
+    controller.active_goal = {"id": "feedback", "goal": "Find a feasible next action", "mode": "insert", "origin": "user"}
     controller.feedback_pending = True
     controller.publish = lambda **value: status.update(value)
     original = bridge.call

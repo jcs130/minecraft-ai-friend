@@ -79,7 +79,7 @@ def detail(directory, heartbeat_id, reference, path=None, offset=0):
 def compact(evidence, reference):
     result = {key: preview(evidence[key], limit) for key, limit in (
         ("sampled_at", 100), ("phase", 60), ("connected", 30), ("standing_goal", 750),
-        ("current_user_goal", 850), ("current_goal", 850), ("pending", 750), ("facts", 3200),
+        ("current_user_goal", 850), ("current_goal", 850), ("historical_goal", 850), ("pending", 750), ("facts", 3200),
         ("body_baseline", 800), ("tool_failure", 1200), ("planner_error", 400),
         ("runtime_error", 400), ("read_activity", 400), ("death_recovery", 1500),
         ("unactioned_replies", 30), ("planner_retry_seconds", 30), ("material_unchanged_seconds", 30))

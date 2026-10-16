@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { createRequire } from 'node:module';
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -1336,20 +1337,23 @@ describe('战斗:隔着方块不出手', () => {
  * 水中撤退须按跳键向岸游；连续受击且敌人贴身时转为还手，血线不再阻止。
  */
 describe('战斗:水里与逃不掉', () => {
+  const require = createRequire(import.meta.url);
+  const Block = require('prismarine-block')('1.21.1');
+  const data = require('minecraft-data')('1.21.1');
+  const block = (name: string) => Block.fromProperties(data.blocksByName[name].id, name === 'water' ? { level: 0 } : {}, 0);
   /** 头在水面上、脚泡在水里的假 bot;x≥5 是岸 */
   function swimRigBot(foes: FakeFoe[] = []) {
     const r = combatRigBot(foes);
-    // The shared bank verifier now requires actual collision data; boundingBox alone
-    // intentionally leaves support/clearance unknown.
-    const air = { name: 'air', boundingBox: 'empty', shapes: [], getProperties: () => ({}) };
-    const water = { name: 'water', boundingBox: 'empty', shapes: [], getProperties: () => ({ level: 0 }) };
-    const stone = { name: 'stone', boundingBox: 'block', shapes: [[0,0,0,1,1,1]], getProperties: () => ({}) };
     (r.bot as unknown as Record<string, unknown>).blockAt = (p: { x: number; y: number }) => {
       const onLand = p.x >= 5;
-      if (p.y >= 65) return air;
-      if (p.y === 64) return onLand ? air : water;
-      if (p.y === 63) return onLand ? stone : water;
-      return stone;
+      if (p.y >= 65) return block('air');
+      if (p.y === 64) return onLand
+        ? block('air')
+        : block('water');
+      if (p.y === 63) return onLand
+        ? block('stone')
+        : block('water');
+      return block('stone');
     };
     return r;
   }

@@ -5,6 +5,27 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+Host review proposals carry an immutable game identity and body/death baseline.
+Actual death, scope changes, or missing legacy baselines retire their current
+applicability to `needs_reassessment`; original text, lineage and receipts stay
+in the command ledger. `current_goal` and planner intent resume retained user
+goals (or the standing goal), while `historical_goal` identifies the unreassessed
+proposal. Native cancellation, matching alive facts and inventory synchronization
+still govern recovery; host ACK, speech and learning do not gate local action.
+Delayed host admission rechecks that same baseline. After fresh inspection,
+`revise` can replace a reassessable historical proposal, or explicit `continue`
+can revalidate it under a new UUID/baseline without reporting old work complete.
+An unrelated new user intent requires a new subordinate proposal instead.
+This source repair does not change the packaged core input or prove live play.
+
+Current death review hydration selects only the newest real scoped episode that
+matches available lifecycle evidence and still needs reflection. Older unfinished
+episodes stay in `death_review search/get` as history, even when the newest episode
+already has a lesson or honest deferral. An obsolete current-review envelope is
+superseded without ACK or fabricated learning; its own retry backoff cannot block
+fresh ordinary presence/profile inspection. Historical inspection timestamps never
+count as a fresh inspection of a replacement envelope.
+
 0.1.67 adds optional compact host inspection (`compact=True`) and immutable
 review evidence snapshots. Query `decide(id, "inspect", evidence_ref=...,
 detail_path=["evidence", "death_episode", "receipts"], detail_offset=0)`;
