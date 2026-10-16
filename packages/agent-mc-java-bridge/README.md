@@ -19,6 +19,8 @@ For the explicit 1.21.1 target, both installed Minecraft and Fabric API inputs m
 
 ## Body protocol
 
+Walking handoff recognizes the exact registered shared-reflex process as the same body's temporary controller. Other custom goals and foreign processes remain protected. After an owned stop, both path/calculation idleness and process retirement must be observed; a deactivated process alone cannot retire an unknown path. Baritone's [`cancelEverything` return value](https://github.com/cabaletta/baritone/blob/master/src/api/java/baritone/api/behavior/IPathingBehavior.java) is a synchronous path-stop hint. A false return with a genuinely idle, retired path is not cancellation failure. Offline checks exercise this distinction against the actual optional API jar, including asynchronous drain, foreign takeover and shared-reflex handoff.
+
 The actual game writes owner-only `agent-mc-bridge/connection.json` containing a fresh loopback endpoint and Bearer token on each launch. Do not publish this file. `agent-mc-world` reads it through `provider: "java-client"`; see the core's `docs/java-client.md`.
 
 POST `/v1/rpc`, `Authorization: Bearer <local token>`:

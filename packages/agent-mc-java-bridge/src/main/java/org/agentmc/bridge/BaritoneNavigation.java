@@ -30,6 +30,10 @@ final class BaritoneNavigation implements NavigationSession.Driver {
         }catch(ReflectiveOperationException|LinkageError error){discoveryFailure=error;return false;}
     }
     private Object baritone,pathing,process,goal;
+    private boolean stopRequested;
+    BaritoneNavigation(){}
+    /** Public-API objects can be supplied by an offline contract check, without a live provider. */
+    BaritoneNavigation(Object baritone,Object pathing,Object process,Object goal){this.baritone=baritone;this.pathing=pathing;this.process=process;this.goal=goal;}
     static boolean busyForReflex()throws Exception {
         if(!available())return false;
         Object provider=type("BaritoneAPI").getMethod("getProvider").invoke(null),baritone=type("IBaritoneProvider").getMethod("getPrimaryBaritone").invoke(provider);
@@ -48,16 +52,25 @@ final class BaritoneNavigation implements NavigationSession.Driver {
     private boolean active(Object target) throws Exception {return (boolean)invoke("process.IBaritoneProcess","isActive",target);}
     private boolean foreignActive() throws Exception {
         Optional<?> controller=(Optional<?>)invoke("pathing.calc.IPathingControlManager","mostRecentInControl",get("getPathingControlManager"));
-        if(controller.isPresent()&&controller.get()!=process&&active(controller.get()))return true;
+        if(controller.isPresent()&&controller.get()!=process&&!BaritoneReflex.owned(controller.get())&&active(controller.get()))return true;
         for(String getter:List.of("getMineProcess","getBuilderProcess","getExploreProcess","getFarmProcess","getFollowProcess","getGetToBlockProcess","getElytraProcess"))if(active(get(getter)))return true;
         return false;
+    }
+    private boolean sharedReflexController() throws Exception {
+        Optional<?> controller=(Optional<?>)invoke("pathing.calc.IPathingControlManager","mostRecentInControl",get("getPathingControlManager"));
+        return controller.isPresent()&&BaritoneReflex.owned(controller.get());
+    }
+    boolean canStart() throws Exception {
+        // A shared reflex path may still be draining on the same game tick after its lease ended.
+        // The normal process manager transfers that path; arbitrary foreign paths stay protected.
+        return !active(process)&&!foreignActive()&&(idle()||sharedReflexController());
     }
     public void start(NavigationSession.Goal target) throws Exception {
         if(!available())throw new IllegalStateException("Matching Baritone public API unavailable; no navigation dispatched");
         Object provider=type("BaritoneAPI").getMethod("getProvider").invoke(null);
         baritone=invoke("IBaritoneProvider","getPrimaryBaritone",provider);
         pathing=get("getPathingBehavior");process=get("getCustomGoalProcess");
-        if(!idle()||active(process)||foreignActive())throw new IllegalStateException("Another navigator process owns the client; no goal replaced");
+        if(!canStart())throw new IllegalStateException("Another navigator process owns the client; no goal replaced");
         goal=target.range()==0?type("pathing.goals.GoalBlock").getConstructor(int.class,int.class,int.class).newInstance(target.x(),target.y(),target.z())
             :type("pathing.goals.GoalNear").getConstructor(class_2338.class,int.class).newInstance(new class_2338(target.x(),target.y(),target.z()),target.range());
         Object settings=type("BaritoneAPI").getMethod("getSettings").invoke(null);
@@ -74,9 +87,21 @@ final class BaritoneNavigation implements NavigationSession.Driver {
     private void set(Object settings,String name,Object value) throws Exception {
         policy.set(settings,name,value);
     }
-    public boolean owns() throws Exception {return process!=null&&goal!=null&&invoke("process.ICustomGoalProcess","mostRecentGoal",process)==goal&&!foreignActive();}
-    public boolean idle() throws Exception {return pathing==null||invoke("behavior.IPathingBehavior","getCurrent",pathing)==null&&invoke("behavior.IPathingBehavior","getNext",pathing)==null&&((Optional<?>)invoke("behavior.IPathingBehavior","getInProgress",pathing)).isEmpty();}
-    public boolean stop() throws Exception {return !owns()||(boolean)invoke("behavior.IPathingBehavior","cancelEverything",pathing);}
+    public boolean owns() throws Exception {
+        if(process==null||goal==null||foreignActive())return false;
+        Object binding=invoke("process.ICustomGoalProcess","mostRecentGoal",process);
+        // cancelEverything retires the process before its path/calculation necessarily drains.
+        // Keep our cleanup obligation until the measured path is idle; a different goal is foreign.
+        return binding==goal||stopRequested&&binding==null&&!active(process);
+    }
+    public boolean idle() throws Exception {return pathing==null||invoke("behavior.IPathingBehavior","getCurrent",pathing)==null&&invoke("behavior.IPathingBehavior","getNext",pathing)==null&&((Optional<?>)invoke("behavior.IPathingBehavior","getInProgress",pathing)).isEmpty()&&(!stopRequested||!active(process));}
+    public boolean stop() throws Exception {
+        if(stopRequested&&!active(process)||!owns())return true;
+        stopRequested=true;
+        // The API boolean is a synchronous path-stop hint, not cancellation acknowledgement.
+        // It may be false while already idle. NavigationSession independently checks idle().
+        invoke("behavior.IPathingBehavior","cancelEverything",pathing);return true;
+    }
     public void restore() throws Exception {
         policy.restore();
     }
