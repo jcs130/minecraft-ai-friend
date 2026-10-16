@@ -96,14 +96,18 @@ function localViewerOrigin(input: string): string {
 }
 
 function edgeExecutablePath(): string {
+  const explicit = process.env.AGENT_MC_BROWSER_EXECUTABLE;
+  if (explicit !== undefined) {
+    if (!explicit || !existsSync(explicit)) throw new VisualCaptureError('browser', 'AGENT_MC_BROWSER_EXECUTABLE 指定的浏览器不存在');
+    return explicit;
+  }
   const candidates = [
-    process.env.CORTICO_EDGE_EXECUTABLE,
     path.join(process.env['PROGRAMFILES(X86)'] ?? 'C:\\Program Files (x86)', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
     path.join(process.env.PROGRAMFILES ?? 'C:\\Program Files', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
     '/usr/bin/microsoft-edge', '/usr/bin/chromium', '/usr/bin/google-chrome',
   ];
   const found = candidates.find(candidate => candidate && existsSync(candidate));
-  if (!found) throw new VisualCaptureError('browser', '未找到 Edge/Chromium；可设置 CORTICO_EDGE_EXECUTABLE');
+  if (!found) throw new VisualCaptureError('browser', '未找到 Edge/Chromium；可设置 AGENT_MC_BROWSER_EXECUTABLE');
   return found;
 }
 
