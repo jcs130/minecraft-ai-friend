@@ -1,16 +1,11 @@
-/** 将服务端等待回执与客户端状态关联到目标，暂缓无新观察的重复交互。 */
+/** Only a correlated server wait blocks resubmission. */
 export class ServerActionWait {
   private recent: { key: string; at: number } | null = null;
   private waiting: { key: string; until: number; reason: string } | null = null;
-  private readonly recentUses = new Map<string, { at: number; observation: string }>();
-  private readonly repeatUseIntervalMs = 15_000;
   private readonly recentQueries = new Map<string, number>();
   private readonly queryFeedback = new Map<string, {
     count: number; lines: string[]; previousLines: string[]; stableCycles: number;
   }>();
-  private readonly queryIntervalMs = 60_000;
-  private lastChat: { key: string; at: number } | null = null;
-  private readonly repeatCommandIntervalMs = 2_000;
 
   private key(at: readonly number[]): string {
     return `use:${at.join(',')}`;
@@ -49,17 +44,12 @@ export class ServerActionWait {
   noteUse(at: readonly number[], now = Date.now(), observation?: string): void {
     const key = this.key(at);
     this.recent = { key, at: now };
-    for (const [oldKey, entry] of this.recentUses) {
-      if (now < entry.at || now - entry.at >= this.repeatUseIntervalMs) this.recentUses.delete(oldKey);
-    }
-    if (observation !== undefined) this.recentUses.set(key, { at: now, observation });
   }
 
   noteChat(command: string, now = Date.now()): void {
     if (!command.trim().startsWith('/')) return;
     const key = this.chatKey(command);
     this.recent = { key, at: now };
-    this.lastChat = { key, at: now };
     if (this.isReadOnlyQuery(command)) {
       for (const [oldKey, at] of this.recentQueries) {
         if (now - at > 60 * 60_000) {
@@ -106,16 +96,7 @@ export class ServerActionWait {
   }
 
   blockReason(at: readonly number[], now = Date.now(), observation?: string): string | null {
-    const key = this.key(at);
-    const wait = this.blockKey(key, now);
-    if (wait) return wait;
-    const last = this.recentUses.get(key);
-    if (!last || observation === undefined) return null;
-    if (now < last.at || now - last.at >= this.repeatUseIntervalMs || observation !== last.observation) {
-      this.recentUses.delete(key);
-      return null;
-    }
-    return `同一格刚右键过，现场可见状态没有变化；还需等 ${Math.ceil((this.repeatUseIntervalMs - (now - last.at)) / 1_000)} 秒再试，先核对实际回执或换做法`;
+    return this.blockKey(this.key(at), now);
   }
 
   blockChat(command: string, now = Date.now()): string | null {
@@ -123,24 +104,7 @@ export class ServerActionWait {
     const key = this.chatKey(command);
     const wait = this.blockKey(key, now);
     if (wait) return wait;
-    if (!this.isReadOnlyQuery(command)) {
-      const last = this.lastChat;
-      if (last?.key === key && now >= last.at && now - last.at < this.repeatCommandIntervalMs) {
-        return `相同游戏命令刚发送过；还需等 ${Math.ceil((this.repeatCommandIntervalMs - (now - last.at)) / 1_000)} 秒再试，先等待实际回执`;
-      }
-      return null;
-    }
-    const feedback = this.queryFeedback.get(key);
-    const interval = feedback?.stableCycles
-      ? feedback.stableCycles >= 2 ? 15 * 60_000 : 5 * 60_000
-      : this.queryIntervalMs;
-    const last = this.recentQueries.get(key);
-    if (last === undefined || now - last >= interval || now < last) return null;
-    const receipt = feedback?.count
-      ? `上次收到 ${feedback.count} 条服务端回执：${feedback.lines.join('；')}。`
-      : '上次查询尚无服务端回执。';
-    const stable = feedback?.stableCycles ? '服务端状态连续未变化；先做其他事，状态改变后再核对。' : '';
-    return `同一只读查询刚发送过；还需等 ${Math.ceil((interval - (now - last)) / 1_000)} 秒再查。${receipt}${stable}先根据回执行动`;
+    return null;
   }
 
   private blockKey(key: string, now: number): string | null {

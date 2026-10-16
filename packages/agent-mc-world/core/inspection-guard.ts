@@ -13,7 +13,7 @@ function inspectionTarget(steps: readonly SkillCall[]): string | null {
   return use.at.join(',');
 }
 
-/** A successful chest peek is information, not inventory progress. Repeated peeks are throttled. */
+/** A recent chest peek is historical information, never proof of current contents. */
 export class InspectionGuard {
   private readonly seen = new Map<string, number>();
 
@@ -25,7 +25,7 @@ export class InspectionGuard {
     const retryAfterMs = INSPECTION_COOLDOWN_MS - (now - at);
     return {
       text: `刚查看过 (${target}) 的箱内物品，结果已在上一单回执中；重复走过去开箱不会搬动物品。`
-        + '要存取请直接用 stow/take 并指定箱子坐标，稍后再复查',
+        + '这不证明当前物品仍相同，本次仍可重新开窗核验',
       retryAfterMs,
     };
   }

@@ -108,7 +108,9 @@ export class JavaClientWorld implements World {
           position:state.position?.length===3?{x:state.position[0],y:state.position[1],z:state.position[2]}:null,
           health:typeof state.health==='number'?state.health:null,food:typeof state.food==='number'?state.food:null,inventory:null}:null}}:{}) };
   }
-  console() { return { label: 'Real Java client', lamps: [{ label: '服务器', state: this.state?.connected ? 'online' as const : 'offline' as const },
+  connectionReadiness() { return { ready: this.state?.connected === true,
+    phase: this.state?.connected ? 'online' : this.host ? 'offline' : 'detached' }; }
+  console() { return { label: 'Real Java client', connection: this.connectionReadiness(), lamps: [{ label: '服务器', state: this.state?.connected ? 'online' as const : 'offline' as const },
     ...(this.cfg.viewerPort > 0 ? [{label:'画面',state:this.viewerError || (this.dataViewer && !this.dataViewer.status().ok) ? 'error' as const : this.dataViewer || this.viewer ? 'online' as const : 'offline' as const,
       hint:this.viewerError ?? (this.dataViewer?.status().error as string | undefined) ?? this.viewerSelection?.reason}] : [])],
     links: this.dataViewer ? [{label: '游戏三维画面',href:this.dataViewer.url}] : this.viewer ? [{ label: '原生截图预览', href: `http://127.0.0.1:${this.cfg.viewerPort}` }] : [] }; }

@@ -3,6 +3,15 @@
 Independent Minecraft execution core, maintained in `jcs130/minecraft-ai-friend`.
 Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.
 
+0.5.7-dev.20261016.29 admits caller-selected discard batches and subsequent
+pickups without requiring a container. Toss still checks observed space,
+ambiguous custom items and settled inventory loss. Generic pickups exclude
+recent identified discards, including explicitly aimed ones; named recipient
+deliveries retain their separate receipt semantics.
+Historical retries, storage oscillation, repeated peeks and successful-operation
+counts now produce evidence notes instead of admission cooldowns. Server-reported
+waits and execution checks remain authoritative. See [task admission](docs/task-admission.md).
+
 0.5.7-dev.20261016.9 clarifies that admission-time crafting previews use current
 confirmed stock without earlier unexecuted production or consumption. Tied
 recipe examples are explicitly non-exhaustive; recipe selection and queue

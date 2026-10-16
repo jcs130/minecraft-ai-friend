@@ -22,11 +22,14 @@ describe('ambiguous entity and item search names', () => {
         const last = r.world.requestFacts()!.parts!.find(p => p.key === 'lastTask')!.text;
         expect(last).toContain('没看见鸡');
         expect(last).not.toContain('生鸡肉');
-        clock += 21_000; // Stay outside the separate three-in-20s navigation guard.
+        clock += 21_000;
       }
-      const refused = await call();
-      expect(refused).toMatchObject({ failed: true, text: expect.stringContaining('没找到鸡') });
-      expect((refused as { text: string }).text).not.toContain('生鸡肉');
+      const retried = await call();
+      expect(retried).not.toHaveProperty('failed');
+      expect(retried).toMatchObject({ text: expect.stringContaining('搜索未命中鸡') });
+      expect((retried as { text: string }).text).not.toContain('生鸡肉');
+      await vi.waitFor(() => expect(r.exec.status().running).toBeNull(), { interval: 5, timeout: 1000 });
+      expect(r.world.requestFacts()!.parts!.find(p => p.key === 'lastTask')!.text).toContain('没看见鸡');
       expect(zhName('chicken')).toBe('生鸡肉');
     } finally { now.mockRestore(); r.close(); }
   });

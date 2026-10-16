@@ -40,6 +40,18 @@ function rig(scriptEnabled = false, minecraftVersion?: string, scriptFailure?: s
   return {cfg,state,world,runtime,http,calls,dataDir,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it('reports verified native connection readiness through both the SDK and a composed console, without claiming control',async()=>{
+    const r=rig();
+    expect(r.runtime.status().connection).toEqual({ready:false,phase:'detached'});
+    await r.runtime.connect();
+    try {
+      expect(r.runtime.status().connection).toEqual({ready:true,phase:'online'});
+      expect(r.world.console().connection).toEqual({ready:true,phase:'online'});
+      expect(r.calls.some(call=>call.method==='claim')).toBe(false);
+    } finally {await r.runtime.disconnect();}
+    expect(r.runtime.status().connection).toEqual({ready:false,phase:'detached'});
+    expect(r.world.console().connection).toEqual({ready:false,phase:'detached'});
+  });
   it.each(['server','uuid','agent'])('isolates offline notes by actual Java %s binding',async field=>{
     const r=rig(), services={dataDir:r.dataDir,agentName:'stable-agent'};
     const fresh=vi.fn(async()=>{throw Error('Offline memory must not read the body');});

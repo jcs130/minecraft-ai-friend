@@ -25,7 +25,7 @@ function rig() {
 }
 
 describe('storage rejection scheduling', () => {
-  it('returns the first closed-window error for immediate correction and yields on an unchanged repeat', async () => {
+  it('rejects a closed-window transfer without forcing the host turn to end on repetition', async () => {
     const r = rig();
     const steps = [{ skill: 'take', item: 'string', count: 12, from: 'open' }];
     const first = await r.call(steps);
@@ -33,7 +33,8 @@ describe('storage rejection scheduling', () => {
     expect(first).not.toHaveProperty('endsTurn');
     expect((first as { text: string }).text).toContain('当前没有打开容器窗口');
     const repeated = await r.call(steps);
-    expect(repeated).toMatchObject({ failed: true, endsTurn: true });
+    expect(repeated).toMatchObject({ failed: true });
+    expect(repeated).not.toHaveProperty('endsTurn');
     expect(r.exec.status()).toMatchObject({ running: null, waiting: [] });
   });
 
