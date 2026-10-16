@@ -52,6 +52,13 @@ queued predecessor reached that cell. It does not dig or move, and does not cert
 route or the enclosing goal. Cancellation and invalid-slope checks still apply. Repeated no-ops
 remain visible as no-progress evidence; they are not recorded as blocked digging failures.
 
+Filtered probes report the number of observed and unknown cells. A zero count in the observed
+portion cannot rule out targets in occluded or unloaded cells, outside the shape, or hidden by the
+server. Entirely unknown regions have an unknown target count. Only a fully observed empty query
+for recognized blocks enters the short duplicate-query hold; unknown coverage can be checked again
+when visibility or loaded data changes. Historical lessons must retain these limits instead of
+turning an unobserved region or a failed route into proof that no target or route exists.
+
 `mc_memory action:experience` exposes help/list/get/stats/reflect through existing SDK and MCP tools.
 Reflection checks scope-bound evidence IDs and preserves an attributed notebook lesson, with explicit
 conditions and counterexamples. Stable review IDs support local crash recovery without duplicate notes.

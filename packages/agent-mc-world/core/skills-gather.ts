@@ -1653,7 +1653,7 @@ function probeFluidText(bot: Bot, pre: readonly ProbeCellReading[]): string {
   }).join('。');
 }
 
-/** probe.where 直接检查指定区域的区块数据，不经过视线闸；零匹配也明确回报。 */
+/** probe.where 只统计视线确认的方块；未观察格不构成目标不存在的证据。 */
 export function probeWhereText(
   bot: Bot,
   call: Extract<SkillCall, { skill: 'probe' }>,
@@ -1693,14 +1693,19 @@ export function probeWhereText(
       ? `${zhEntity(n)}(实体)×${at.length}:${at.slice(0, PROBE_WHERE_SHOWN).map(cellText).join('、')}`
       : `${zhEntity(n)}是实体,不在区块方块数据里;客户端收到的实体里这片范围没有它(服务端只发来离自己一定距离内的实体)`;
   });
-  const head = `探查${SHAPE_ZH[call.shape]}(共 ${pre.length} 格)里点名的那几样`;
-  const body = lines.length > 0 ? `: ${lines.join(';')}` : entityNames.length > 0 ? ':方块一样都没有' : ':一样都没有';
+  const observed = pre.length - unloaded;
+  const head = `探查${SHAPE_ZH[call.shape]}(共 ${pre.length} 格，已观察 ${observed} 格)里点名的那几样`;
+  const body = names.size === 0 ? ':未指定可识别的方块目标'
+    : lines.length > 0 ? `: ${lines.join(';')}`
+      : observed === 0 ? ':没有可读的可见方块，目标数量未知'
+        : unloaded > 0 ? `:已观察的 ${observed} 格未命中指定方块，未知格不能排除目标存在`
+          : `:已观察全部 ${observed} 格，未命中指定方块`;
   const miss = names.size === 0 && entityNames.length === 0 ? '(点名的这几样一个都认不出来)' : '';
   const ents = entityLines.length > 0 ? `;${entityLines.join(';')}` : '';
   const unknownNote = unknown.length > 0 ? `(where 里的 ${unknown.join('、')} 认不出来,这几样没算进去)` : '';
-  const tail = unloaded > 0 ? `。${unloaded} 格未观察到（遮挡或未加载）` : '';
+  const tail = unloaded > 0 ? `。${unloaded} 格未观察到（遮挡或未加载），不能据此排除该范围内的目标` : '';
   const oreNote = lines.length === 0 && where.some((id) => /(?:^|:)\w+_ore$/.test(id))
-    ? '；零命中只代表客户端收到的区块数据没有目标，服务器可能隐藏未暴露的矿石'
+    ? '；未命中仅限已观察的格，服务器还可能隐藏未暴露的矿石'
     : '';
   const fluid = probeFluidText(bot, pre.filter((e) => e.name !== null && names.has(e.name)));
   return `${head}${miss}${body}${ents}${unknownNote}${fluid ? `。${fluid}` : ''}${tail}。仅视线确认的格；遮挡或未加载为未知${oreNote}`;
