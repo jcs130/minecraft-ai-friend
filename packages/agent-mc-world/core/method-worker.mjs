@@ -47,7 +47,7 @@ function capabilities(scope) {
     .filter(name => !name.includes('.')).map(name => [name, (...args) => rpc('mineflayer', { name, args }, scope)])) : undefined;
   if (bot) bot.inventory = { items: () => rpc('mineflayer', { name: 'inventory.items', args: [] }, scope) };
   if(bot&&workerData.nativeMethods.includes('pathfinder.goto')) bot.pathfinder={goto:goal=>rpc('mineflayer',{name:'pathfinder.goto',args:[goal]},scope)};
-  return { mc: harden({ state: () => rpc('state', {}, scope), do: steps => rpc('do', { steps }, scope),
+  return { mc: harden({ capabilities: () => rpc('capabilities', {}, scope), state: () => rpc('state', {}, scope), do: steps => rpc('do', { steps }, scope),
     flightPlan: args => rpc('flightPlan', args, scope) }), ...(bot ? { bot: harden(bot), Vec3: harden(Vec3),goals:harden({GoalBlock,GoalNear}) } : {}) };
 }
 

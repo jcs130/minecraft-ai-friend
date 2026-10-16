@@ -130,3 +130,7 @@ For storage equip the native client calls vanilla [pickFromInventory](https://ma
 The shared SES worker permits32 SDK calls per run, including reads, with default60s/max120s. `Date.now` and global timers are not available. Use bounded iterations and `await bot.waitForTicks`, then continue from a fresh observation in a subsequent run. A budget failure does not establish an impassable route.
 
 Separate native bridge builds target Fabric 1.20.6 and 1.21.1 with Java 21; install the build matching the actual game. HMCL may manage the instance; a NeoForge pack does not make a Fabric mod compatible. Optional trusted Python requires explicitly installed/enabled Minescript 4.0. General autonomous native combat and remaining Mineflayer navigation APIs remain follow-up work. Existing Mineflayer skills/reflexes and arbitrary plugins are not silently forwarded to native operations. Compilation/protocol fixtures are separate from acceptance in an actual connected game.
+
+## Shared control contract
+
+Reuse Mineflayer-shaped `bot`/`Vec3` programs through the shared method worker. `await mc.capabilities()` reports the actual supported subset without taking body control. See [the common control design and current gaps](mineflayer-client-control.md); native RPC operations are a documented escape hatch, not a replacement skill language.

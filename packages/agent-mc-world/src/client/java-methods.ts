@@ -8,13 +8,20 @@ import { translateJavaLegacy } from './java-legacy.ts';
 import { NativeEvidenceArchive, compactNativeState, compactNativeItems } from './native-evidence.ts';
 import { publicReadProjection, projectPublicRead } from '../../core/method-read.ts';
 import { navigationGoal } from '../../core/navigation-goal.ts';
+import { methodCapabilities, METHOD_CAPABILITIES_HELP, type BotMethod } from '../../core/method-capabilities.ts';
 import type { JavaClientState, JavaClientAction, JavaClientConfiguration } from '../contracts/java-client.ts';
 import type { ToolCallContext, ToolOutcome, WorldHost } from './contracts.ts';
 
 export const JAVA_METHOD_PROTOCOL = 'agent-mc-method/v1';
 // The v1 baseline stays usable on bridges built before optional methods were added.
-export const JAVA_METHOD_REQUIRED = ['read','blockAt','canSeeBlock','inventory.items','getControlState','look','lookAt','setControlState','clearControlStates','waitForTicks','equip','activateBlock','activateItem','deactivateItem'];
-export const JAVA_METHODS = [...JAVA_METHOD_REQUIRED,'findBlocks','findBlock','setQuickBarSlot','pathfinder.goto'];
+export const JAVA_METHOD_REQUIRED: BotMethod[] = ['read','blockAt','canSeeBlock','inventory.items','getControlState','look','lookAt','setControlState','clearControlStates','waitForTicks','equip','activateBlock','activateItem','deactivateItem'];
+export const JAVA_METHODS = [...JAVA_METHOD_REQUIRED,'findBlocks','findBlock','setQuickBarSlot','pathfinder.goto'] satisfies BotMethod[];
+export function javaMethodCapabilities(caps: Record<string, unknown>) {
+  const methods = caps.methodAdapter === JAVA_METHOD_PROTOCOL && Array.isArray(caps.methodCalls)
+    && JAVA_METHOD_REQUIRED.every(name => (caps.methodCalls as unknown[]).includes(name))
+    ? caps.methodCalls.filter(name => JAVA_METHODS.includes(name)) : [];
+  return methodCapabilities('java-client', methods);
+}
 const READS = new Set(['read','blockAt','findBlocks','findBlock','canSeeBlock','inventory.items','getControlState']);
 export const JAVA_METHOD_FIELDS = {
   name:{type:'string',minLength:1,maxLength:80}, params:{type:'object'}, durationMs:{type:'integer',minimum:1000,maximum:120000},
@@ -24,7 +31,8 @@ export const JAVA_METHOD_FIELDS = {
 export function javaMethodHelp(topic='index'):string {
   const base='JavaScript uses the SAME mc_script {name,code,params,validate,runId,call,stop,library,procedure} and SES/Vec3/method version format as the Mineflayer backend. Use language:"javascript" (or legacy name+code); Python remains explicit language:"python" or legacy unnamed code. Every bot call is awaited; Vec3 arithmetic and Block.getProperties() are synchronous. No Python translation, second connection, arbitrary imports/plugins or hidden model. Requires bridge methodAdapter agent-mc-method/v1 for execution; syntax validation is offline. Claim mc_control before body calls. First body call reserves the one native queue until program end; held keys survive SDK calls. Stop/timeout/disconnect cancels only the original action and releases keys; unknown cleanup blocks another program. Read runId/call to inspect actual terminals. A completed program is not goal completion.';
   const topics:Record<string,string>={
-    index:`Known bot methods: ${JAVA_METHODS.join(', ')}. Actual bridge methodCalls decides availability. On-demand api: read, blockAt, findBlocks, inventory, movement, pathfinder, interaction, mc.state, mc.do, methods, compatibility. With language:python use the Minescript guide.`,
+    index:`Known bot methods: ${JAVA_METHODS.join(', ')}. Reuse Mineflayer-shaped programs; await mc.capabilities() returns the actual supported subset before body calls. On-demand api: read, blockAt, findBlocks, inventory, movement, pathfinder, interaction, mc.capabilities, mc.state, mc.do, methods, compatibility. With language:python use the Minescript guide.`,
+    'mc.capabilities': METHOD_CAPABILITIES_HELP,
     read:'await bot.read(path): entity(position/velocity Vec3, yaw/pitch Mineflayer radians, onGround), health, food, game(dimension only), heldItem, inventory.slots, registry.itemsByName.<id>/blocksByName.<id>. Shared nested reads: entity.position/velocity (and .x/.y/.z), entity.id/yaw/pitch/onGround, heldItem.name/displayName/type/count/slot/instanceHash, game.dimension. Missing projected values are null. Registry entries contain actual client id/name, not assumed vanilla IDs. Other game/registry fields are unavailable, not zero.',
     blockAt:'await bot.blockAt(new Vec3(x,y,z)): observed Block|null within 32 blocks and loaded chunks. Native collision ray visibility; may be more conservative than Mineflayer. name/type/stateId/position/getProperties() are available; hardness/shapes/light/metadata are not yet projected. Properties retain numeric/boolean/string types. await bot.canSeeBlock(block) rechecks current visibility. Null is unknown, not air. Re-read after actions.',
     findBlocks:'await bot.findBlocks({point?,matching,maxDistance?,count?,useExtraInfo?}) returns observed Vec3 positions nearest first; await bot.findBlock(options) returns the nearest observed Block|null. matching is an actual numeric block registry ID or array of 1..64 IDs; function predicates are unavailable across JSON. Filter returned Block.getProperties() in your program. Native maxDistance is integer 1..16 (default16), count1..64 (default1); Mineflayer backend permits radius32. The entire search sphere must be within 32 blocks of your eyes. Only loaded, ray-visible blocks are returned; hidden/unloaded is unknown, not absent. At most256 matching candidates receive visibility tests; excess fails explicitly, so narrow radius/IDs rather than treating it as an empty result. useExtraInfo accepts a boolean; native block fields stay those listed in blockAt, no extra NBT. Read-only, no movement or body reservation.',
@@ -122,6 +130,7 @@ export class JavaMethods {
   }
   private async call(method:MethodOperation,args:Record<string,unknown>,signal:AbortSignal):Promise<unknown>{
     signal.throwIfAborted();await this.fresh(signal);
+    if(method==='capabilities')return methodCapabilities('java-client',[...this.availableMethods].filter(name=>JAVA_METHODS.includes(name as BotMethod)));
     if(method==='state')return this.snapshot(signal);
     if(method==='flightPlan')throw new Error('flightPlan is unavailable on the native Java backend');
     if(method==='do'){
@@ -132,7 +141,7 @@ export class JavaMethods {
       const raw=this.evidence.save(action.id,action),compact={...action,evidence:compactNativeState(action.evidence??{}),raw};
       return{accepted:true,taskId:action.id,kind:action.phase==='completed'?'done':action.phase,done:action.phase==='completed',receipt:JSON.stringify(compact),steps:[{step:1,outcome:action.phase==='completed'?'ok':action.phase==='partial'?'partial':'fail',why:action.reason??null}],state:await this.snapshot(signal)};
     }
-    if(typeof args.name!=='string'||!Array.isArray(args.args)||!JAVA_METHODS.includes(args.name))throw new Error('Unsupported native bot method; api:compatibility lists gaps');
+    if(typeof args.name!=='string'||!Array.isArray(args.args)||!JAVA_METHODS.includes(args.name as BotMethod))throw new Error('Unsupported native bot method; api:compatibility lists gaps');
     if(!this.availableMethods.has(args.name))throw new Error(`Actual Java bridge does not advertise bot.${args.name}; update the bridge or use its supported methods. No native call dispatched.`);
     if(args.name==='pathfinder.goto')navigationGoal(args.args[0]);
     if(READS.has(args.name)){
