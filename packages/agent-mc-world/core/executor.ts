@@ -198,7 +198,7 @@ import {
   ANVIL_BLOCKS, STATION_FIND_R, WINDOW_SETTLE_MS, containerStacks, findContainers, findStationCell,
   furnaceDoneAt, knownChestNote, noContainerNearby, openNearbyContainer, openStationWindow,
   openWindowGuarded, orderForStow, orderForTake, putIntoStation, rememberChest, rememberWindow,
-  recentStorageRouteFailure, storageSkipReason,
+  recentStorageRouteFailure, storageHistoryNote,
   slotStack, smeltPerItemMs, stationItemFacts, type GenericWindow,
 } from './containers.ts';
 import {
@@ -1380,7 +1380,6 @@ function repeatedSubmissionNote(round: RoundaboutSnapshot): string | null {
 }
 
 /** 拦截重生锚破坏后，在此窗口内原样重发同一任务视为确认。 */
-const SPAWN_CONFIRM_WINDOW_MS = 10 * 60_000;
 
 /** 重力方块头顶保护高度，单位为格；只限制自身列贴近身体的这一段。 */
 const GRAVITY_OVERHEAD = 3;
@@ -1940,11 +1939,8 @@ export class Executor {
   private readonly directionalSweeps: DirectionalSweepBook;
   /** 同一目的地反复快速自停的短期账；仅限制再次受理，不妨碍 mc_stop 本身。 */
   private readonly rapidStops = new Map<string, { times: number[]; until: number }>();
-  /** 跨任务的过早叫停滚动账；一次改主意后先让下一单跑出结局。 */
-  private earlyStops: number[] = [];
   /** 同一容器同种物品的反向转移账。 */
   private storageIntents: Array<{ kind: 'take' | 'stow'; item: string; source: string; at: number; x: number; y: number; z: number; dimension: string }> = [];
-  private storageOscillationHold: Array<{ item: string; source: string; until: number; x: number; y: number; z: number; dimension: string }> = [];
   /** 受阻理由的滚动账:归并键 → 发生时刻(见 blockedHeadline;头条只报次数,不留原文) */
   private readonly blockedReasons = new Map<string, { at: number[] }>();
   /**
@@ -1954,11 +1950,6 @@ export class Executor {
   private readonly blockedRecords: BlockedRecord[] = [];
   /** Real sightings are short-lived context, not PWSR or persisted memory. */
   private readonly findHistory = new FindObservationCache();
-  /**
-   * 重生锚闸的确认单槽:上一次被拦下的那一单是什么、什么时候拦的。
-   * 原样重发即确认(见 SPAWN_CONFIRM_WINDOW_MS);换了单就换这一槽。
-   */
-  private spawnConfirm: { key: string; at: number } | null = null;
   /**
    * 「包快满了」这条提醒的击发状态:true = 还没报过,跌破就报;报完置 false,
    * 空位回到 BAG_LOW_FREE 以上再重新上膛(见 `bagLowNote`)。
@@ -2045,7 +2036,7 @@ export class Executor {
     return nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE, new Date(ms)).slice(11, 19);
   }
 
-  /** 仅供 mc_do 受理前使用；不改队列，也不为其他工具设置全局退避。 */
+  /** Legacy entry for repeated-success history; never blocks or changes queued work. */
   repeatSuccessHold(steps: readonly SkillCall[], config: {
     enabled: boolean; skillsCsv: string; maxSuccesses: number; windowMinutes: number;
   }, now = Date.now()): string | null {
@@ -2061,11 +2052,7 @@ export class Executor {
       const recent = (this.successfulIntents.get(taskSignature([target])) ?? [])
         .filter((at) => now - at < windowMs);
       if (recent.length < config.maxSuccesses) continue;
-      const until = recent[recent.length - config.maxSuccesses] + windowMs;
-      const localUntil = nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE, new Date(until))
-        .replace('T', ' ').slice(0, 19);
-      return `[mc_do 暂缓] ${config.windowMinutes} 分钟内目标技能「${describeSkill(target)}」成功 ${recent.length} 次，`
-        + `同类新任务到 ${localUntil} 可再受理。当前任务和队列保留，其他目标技能照常可用`;
+      return `${config.windowMinutes} 分钟内同类目标技能「${describeSkill(target)}」有 ${recent.length} 次成功终态；终态次数不证明当前目标已完成，本次仍照常核验`;
     }
     return null;
   }
@@ -2146,54 +2133,38 @@ export class Executor {
     // 直接拒收，避免把一次已知必败的锄地+种地拆成两条零秒失败，再驱动快速重试。
     const soilPrecheckHold = this.definiteSoilPrecheckNote(task.steps);
     const takeEvidenceHold = this.takeEvidenceNote(task.steps, at);
-    const namedTakeHold = namedTakeRetryKey(task.steps, this.opts.getBot())
-      ? this.repeatFailedTaskNote(task.steps, at) : null;
     const storageCycleHold = this.storageCycleNote(task.steps);
-    const storageAccessHold = storageCycleHold ? null : this.storageAccessNote(task.steps);
+    const storageAccessHold = this.storageAccessNote(task.steps);
+    const history = [
+      emptyFindHold?.text, directionalSweep?.text, immatureFindHold, unmovedFindHold,
+      navigationBurst, inspectionHold?.text, farmingHold,
+      takeEvidenceHold?.proof === 'missing-item' ? takeEvidenceHold.text : null,
+      storageCycleHold, this.storageOscillationNote(task.steps, at),
+      this.fullOpenStorageNote(task.steps, at), this.spawnGuardNote(task.steps, at),
+      this.gravityGuardNote(task.steps), this.rapidStopNote(task.steps, at),
+      this.repeatStationaryGotoNote(task.steps, botForInspection, at),
+      this.spatialFailureNote(task.steps, at), storageAccessHold,
+      this.staleKnownContainerUseNote(task.steps), this.reacquiredTossNote(task.steps),
+      this.tunnelLiquidStopNote(task.steps, at), this.tunnelSupportStopNote(task.steps, at),
+      this.verticalTunnelOscillationNote(task.steps, at), this.repeatEmptyProbeNote(task.steps, at),
+      this.unseenCollectNote(task.steps.slice(0, 1), at), this.immatureCollectNote(task.steps, at),
+      this.repeatFailedTaskNote(task.steps, at),
+    ].filter((note): note is string => Boolean(note));
     // 受理刻驳回排在入队之前：队列一个字都不动；前置试算只报现场否定，不改变执行。
     const refusal = (text: string | null | undefined, rule: string,
       kind: TaskAdmissionRejection['kind'] = 'wait') => text ? { text, rule, kind } : null;
-    const refused = refusal(emptyFindHold?.text, 'find.empty', 'repeat')
-      ?? refusal(directionalSweepHold, 'find.sweep', 'repeat')
-      ?? refusal(immatureFindHold, 'find.immature')
-      ?? refusal(unmovedFindHold, 'find.unmoved', 'repeat')
-      ?? refusal(navigationBurst, 'navigation.burst', 'repeat')
-      ?? refusal(inspectionHold?.text, 'inspection.wait')
-      ?? refusal(farmingHold, 'farm.failed', 'repeat')
-      ?? refusal(soilPrecheckHold?.text, 'farm.soil', 'correction')
-      ?? refusal(namedTakeHold, 'task.failed', 'repeat')
-      ?? refusal(takeEvidenceHold?.text, `take.${takeEvidenceHold?.proof}`, 'correction')
-      ?? refusal(storageCycleHold, 'storage.cycle', 'repeat')
+    const refused = refusal(soilPrecheckHold?.text, 'farm.soil', 'correction')
+      ?? refusal(takeEvidenceHold?.proof === 'not-container' ? takeEvidenceHold.text : null, 'take.not-container', 'correction')
       ?? refusal(this.duplicatePendingNote(task.steps), 'queue.pending')
-      ?? refusal(this.storageOscillationNote(task.steps, at), 'storage.oscillation', 'repeat')
-      ?? refusal(this.fullOpenStorageNote(task.steps, at), 'storage.full', 'repeat')
-      ?? refusal(this.spawnGuardNote(task.steps, at), 'spawn.protected')
-      ?? refusal(this.gravityGuardNote(task.steps), 'build.gravity')
-      ?? refusal(this.rapidStopNote(task.steps, at), 'task.rapidStop', 'repeat')
-      ?? refusal(this.activeCombatAttackNote(task.steps, mode), 'combat.active')
       ?? refusal(this.immediateAttackTargetNote(task.steps, mode), 'attack.noTarget', 'correction')
-      ?? refusal(this.pendingAttackPlanNote(task.steps, mode), 'combat.pending')
-      ?? refusal(this.repeatStationaryGotoNote(task.steps, botForInspection, at), 'goto.stationary', 'repeat')
-      ?? refusal(this.spatialFailureNote(task.steps, at), 'navigation.failed', 'repeat')
-      ?? refusal(storageAccessHold, 'storage.access', 'correction')
-      ?? refusal(this.staleKnownContainerUseNote(task.steps), 'use.staleContainer', 'correction')
+      ?? refusal(this.storageWindowNote(task.steps), 'storage.access', 'correction')
       ?? refusal(this.opts.admissionCheck?.(task.steps) ?? null, 'extension.admission', 'correction')
       ?? refusal(this.protectedTossNote(task.steps), 'toss.protected')
-      ?? refusal(this.reacquiredTossNote(task.steps), 'toss.reacquired', 'repeat')
-      ?? refusal(this.bulkUnanchoredTossNote(task.steps), 'toss.unanchored')
       ?? refusal(this.missingStowItemNote(task.steps), 'stow.missingItem', 'correction')
       ?? refusal(this.missingUseItemNote(task.steps), 'use.missingItem', 'correction')
       ?? refusal(this.impossibleCraftStartNote(task.steps), 'craft.invalid', 'correction')
       ?? refusal(this.fullInventoryGridCraftNote(task.steps), 'craft.capacity', 'correction')
-      ?? refusal(this.fullInventoryTakeNote(task.steps), 'take.capacity', 'correction')
-      ?? refusal(this.tunnelLiquidStopNote(task.steps, at), 'tunnel.liquid', 'repeat')
-      ?? refusal(this.tunnelSupportStopNote(task.steps, at), 'tunnel.support', 'repeat')
-      ?? refusal(this.verticalTunnelOscillationNote(task.steps, at), 'tunnel.oscillation', 'repeat')
-      ?? refusal(this.repeatEmptyProbeNote(task.steps, at), 'probe.empty', 'repeat')
-      // Later steps observe the world after their predecessors actually finish.
-      ?? refusal(this.unseenCollectNote(task.steps.slice(0, 1), at), 'collect.unseen', 'repeat')
-      ?? refusal(this.immatureCollectNote(task.steps, at), 'collect.immature')
-      ?? refusal(this.repeatFailedTaskNote(task.steps, at), 'task.failed', 'repeat');
+      ?? refusal(this.fullInventoryTakeNote(task.steps), 'take.capacity', 'correction');
     const echo = echoDiff(task.steps, wrote);
     const echoText = [echo.hoist, echo.tail].filter(Boolean).join('。');
     if (refused) {
@@ -2209,15 +2180,6 @@ export class Executor {
       receipt: `[${this.clock(at)}] 这一单我没接:${refused.text}${echoText ? `\n${echoText}` : ''}`,
       accepted: false,
       rejection: { kind, rule: refused.rule },
-      ...(emptyFindHold ? { retryAfterMs: emptyFindHold.retryAfterMs }
-        : directionalSweepHold ? { retryAfterMs: 45_000 }
-        : immatureFindHold ? { retryAfterMs: 45_000 }
-        : navigationBurst ? { retryAfterMs: NAVIGATION_BURST_COOLDOWN_MS }
-        : inspectionHold ? { retryAfterMs: inspectionHold.retryAfterMs }
-          : farmingHold ? { retryAfterMs: 8_000 }
-          : soilPrecheckHold ? {}
-          : takeEvidenceHold ? { retryAfterMs: takeEvidenceHold.retryAfterMs }
-             : storageCycleHold || storageAccessHold ? { retryAfterMs: 5_000 } : {}),
       };
     }
     // 受理了才进打转账;没接的那几单不算她"下过一次"。快照要在 pump 之前取
@@ -2232,6 +2194,8 @@ export class Executor {
     }
     // 受理刻试算必须冻结在开工前。equip 会同步把装备移出背包，开工后重读会误报缺货。
     const precheck = this.precheckNote(task.steps);
+    if (history.length) this.opts.diag?.write({ lane: 'task', event: 'admission-advice', taskId: id,
+      msg: '复核历史与现场提示后受理任务', data: { advice: history } });
     // Release an idle body only after admission, before the new task can start.
     beforeEnqueue?.();
     const dropped = mode === 'replace' ? this.queue.splice(0) : [];
@@ -2299,7 +2263,6 @@ export class Executor {
         : null,
       // 带 direction 的 find 会行军；受理时报告距离及走满后的重生点距离。
       this.marchNote(task.steps),
-      directionalSweep?.refuse === false ? directionalSweep.text : null,
       // 长途 goto 的空间代价:直线多远、走路要多久。原点用她下这一单时站的那一格
       // (与第 1 步锚点冻结同源),不是 pump 之后的位置
       this.hikeNote(task.steps, frozen?.origin ?? null),
@@ -2308,6 +2271,7 @@ export class Executor {
     const warn = [
       // 受理试算只读并报告否定结果，不改变执行。
       precheck,
+      history.length ? `复核提示（本单照常受理）：${history.slice(0, 4).join('；')}` : null,
       // 同一件事上次的下场:补的是已经滑出上下文的那一段
       this.priorNote(task, at, round) ?? repeatedSubmissionNote(round),
       // 相对锚点转为绝对坐标的差异优先呈现。
@@ -2357,17 +2321,17 @@ export class Executor {
     if (now - entry.lastAlertAt > NAVIGATION_BURST_COOLDOWN_MS) {
       entry.lastAlertAt = now;
       this.opts.diag?.write({ lane: 'task', event: 'navigation-burst', incident: true,
-        msg: '同一位置连续提交同一寻路或观察计划，暂缓新任务',
+        msg: '同一位置连续提交同类寻路或观察计划',
         data: { key, attempts: entry.times.length, rapid, position: entry.from, dimension } });
     }
-    return `同一寻路或观察计划从这片区域已提交 ${entry.times.length} 次，位置仍未移动 ${NAVIGATION_BURST_RESET_DISTANCE} 格；这次不改队列。等原任务结局，或换目标/实际站位后再试`;
+    return `同一寻路或观察计划从这片区域已提交 ${entry.times.length} 次，位置仍未移动 ${NAVIGATION_BURST_RESET_DISTANCE} 格；这是提交历史，未据此判定当前路线不可达`;
   }
 
   private emptyFindKey(target: string, dimension: string): string {
     return `${dimension}\0${target.trim().toLowerCase()}`;
   }
 
-  /** 搜索历史注明实际路线；仅短期同起点、同方向且未延长的请求暂缓。 */
+  /** 搜索历史注明实际路线，不限制同起点或同方向的复查。 */
   private directionalSweepNote(steps: readonly SkillCall[], now: number): { text: string; refuse: boolean } | null {
     const i = steps.findIndex((step) => step.skill === 'find');
     if (i < 0 || steps.slice(0, i).some((step) => step.skill !== 'goto')) return null;
@@ -2397,7 +2361,7 @@ export class Executor {
       && from.x === entry.from.x && from.y === entry.from.y && from.z === entry.from.z);
     if (prior) return { refuse: true,
       text: `计划起点 ${cellText(from)}；${evidence(prior)}。本次同起点、同方向且声明距离未扩大，`
-        + `暂缓相同路线至 ${stamp(prior.at + DIRECTIONAL_SWEEP_REPEAT_MS)}；原队列保留` };
+        + `这是先前走查结果，当前目标是否出现仍需现场核验` };
     const shown = [...nearby].reverse().slice(0, 3);
     return { refuse: false,
       text: `搜索历史（计划起点 ${cellText(from)}，附近 ${nearby.length} 条记录${nearby.length > shown.length ? '，列最近 3 条' : ''}）：`
@@ -2434,11 +2398,11 @@ export class Executor {
       >= EMPTY_FIND_REGION_DISTANCE;
     const planned = lastAbsoluteGoto(steps);
     if (outside(pos) || (planned && outside(planned))) return null;
-    // The hold applies only to this search intent; other tasks remain available.
+    // This timestamp scopes the historical note; it does not schedule a retry.
     const retryAfterMs = Math.min(entry.until - now, 8_000);
     return {
-      text: `这片区域已连续 ${entry.count} 次没找到${zhEntity(find.target)}，继续逐格移动或改变搜索半径不会得到新线索。`
-        + `暂缓在周围 ${EMPTY_FIND_REGION_DISTANCE} 格内重复找它；去建筑入口、远处新区域，或改做其他任务`,
+      text: `这片区域先前 ${entry.count} 次搜索未命中${zhEntity(find.target)}。`
+        + `历史未命中不证明当前不存在；是否复查或换范围由调用方决定`,
       retryAfterMs,
     };
   }
@@ -2523,7 +2487,7 @@ export class Executor {
         const prior = taken.get(step.item) ?? [];
         if (destination && prior.length > 0 && prior.every((part) => part.source === destination)
           && prior.reduce((sum, part) => sum + part.count, 0) >= step.count) {
-          return `本单从同一容器取出${zhName(step.item)}又存回不多于取出的数量，无法保证随身净腾出一格。若要压缩容器请用 compact；若要腾随身格，直接把原本随身的物品存到有余量的容器；原队列保留`;
+          return `本单从同一容器取出${zhName(step.item)}又存回不多于取出的数量，无法保证随身净腾出一格。取存也可能用于核对、重新分堆或整理；实际空槽变化须在执行后核验`;
         }
       }
     }
@@ -2531,28 +2495,13 @@ export class Executor {
   }
 
   private storageOscillationNote(steps: readonly SkillCall[], at: number): string | null {
-    const items = this.opts.getBot()?.inventory?.items?.();
-    const free = items ? Math.max(0, PLAYER_SLOTS - items.length) : null;
-    const recovery = free !== null && free >= 6
-      ? `随身还有 ${free} 格空位；若收纳目标只是腾出至少 6 格，现在已经达标，应结束收纳去做别的事。`
-      : '若仍需腾位，先检查随身空格，再选另一处有空位的容器。';
     for (const next of this.storageIntentsOf(steps, at)) {
-      const nearby = (other: { x: number; y: number; z: number; dimension: string }) =>
-        other.dimension === next.dimension && Math.hypot(other.x - next.x, other.y - next.y, other.z - next.z) <= 5;
-      this.storageOscillationHold = this.storageOscillationHold.filter((hold) => at < hold.until);
-      if (this.storageOscillationHold.some((hold) => hold.item === next.item && hold.source === next.source && nearby(hold))) {
-        return `同一地点的${zhName(next.item)}刚出现取出/存回循环，暂缓 10 分钟。${recovery}不要再从这口容器取出同种物品给它腾位`;
-      }
-      const recent = this.storageIntents.filter((entry) => at - entry.at < 30_000
-        && entry.item === next.item && entry.source === next.source && nearby(entry));
-      const last = recent.at(-1);
-      if (last?.kind === 'take' && next.kind === 'stow') {
-        this.storageOscillationHold.push({ item: next.item, source: next.source, until: at + 600_000,
-          x: next.x, y: next.y, z: next.z, dimension: next.dimension });
-        this.opts.diag?.write({ lane: 'task', event: 'storage-oscillation', incident: true,
-          msg: `同一地点的${zhName(next.item)}出现取出/存回交替，暂停这类操作 10 分钟`,
-          data: { item: next.item, source: next.source, position: { x: next.x, y: next.y, z: next.z }, dimension: next.dimension } });
-        return `同一地点的${zhName(next.item)}已连续取出/存回，暂缓 10 分钟。${recovery}不要再从这口容器取出同种物品给它腾位`;
+      const recent = this.storageIntents.filter(entry => at - entry.at < 30_000
+        && entry.item === next.item && entry.source === next.source
+        && entry.dimension === next.dimension
+        && Math.hypot(entry.x - next.x, entry.y - next.y, entry.z - next.z) <= 5);
+      if (recent.at(-1)?.kind === 'take' && next.kind === 'stow') {
+        return `同一来源的${zhName(next.item)}最近提交过取出后存回的意图；这不证明已经执行或没有整理用途，实际空格变化在执行后核验`;
       }
     }
     return null;
@@ -2576,23 +2525,6 @@ export class Executor {
     return target ? null : `附近 32 格内没看见${zhEntity(first.target)}；即时攻击没有可执行目标，本次不打断当前任务或撤销待办。目标出现后再按现场决定`;
   }
 
-  /** 反射战斗占着身体时，排尾攻击会在战后读到过时目标。 */
-  private activeCombatAttackNote(steps: readonly SkillCall[], mode: QueueMode): string | null {
-    return mode !== 'now' && steps.length > 0 && steps.every((step) => step.skill === 'attack')
-      && this.opts.bodyState?.().combatActive
-      ? '反射战斗正在处理附近敌人；主动攻击任务现在不接。等战斗结束后再观察现场，原队列保留'
-      : null;
-  }
-
-  /** 一张攻击计划尚未结案时，新的排尾攻击只能堆积过时目标。 */
-  private pendingAttackPlanNote(steps: readonly SkillCall[], mode: QueueMode): string | null {
-    if (mode === 'now' || steps.length === 0 || !steps.every((step) => step.skill === 'attack')) return null;
-    const active = this.task?.steps.every((step) => step.skill === 'attack') ? this.task : null;
-    const pending = [this.frozen, ...this.queue].find((task) => task?.steps.every((step) => step.skill === 'attack'));
-    const prior = active ?? pending;
-    return prior ? `攻击任务#${prior.id} 还没结案；等它完成或受阻后重看敌人位置。原任务与队列保留` : null;
-  }
-
   /** 已观测到的窗口和访问失败，不再作为当前存物计划的可用目标。 */
   private storageAlternativeNote(bot: Bot, wrong: Cell): string {
     const visible = findContainers(bot, 32)
@@ -2606,11 +2538,14 @@ export class Executor {
       : '32 格内没观察到容器；先寻找或制作并放置储物箱，不要逐格猜坐标';
   }
 
-  private storageAccessNote(steps: readonly SkillCall[]): string | null {
+  private storageWindowNote(steps: readonly SkillCall[]): string | null {
     const bot = this.opts.getBot();
     if (!bot) return null;
     let canHaveOpenWindow = Boolean(bot.currentWindow);
     for (const step of steps) {
+      if (step.skill === 'stow' && step.at !== undefined && step.into === 'open') {
+        return 'stow 的 at 与 into:open 只能选一个；原队列保留';
+      }
       if ((step.skill === 'compact'
         || (step.skill === 'stow' && step.into === 'open')
         || (step.skill === 'take' && step.from === 'open')) && !canHaveOpenWindow) {
@@ -2620,7 +2555,12 @@ export class Executor {
         canHaveOpenWindow = true;
       }
     }
-    if (!steps.some((step) => step.skill === 'stow')) return null;
+    return null;
+  }
+
+  private storageAccessNote(steps: readonly SkillCall[]): string | null {
+    const bot = this.opts.getBot();
+    if (!bot || !steps.some((step) => step.skill === 'stow')) return null;
     let openedAt: { x: number; y: number; z: number } | null = null;
     for (const [stepIndex, step] of steps.entries()) {
       if (step.skill === 'use' && step.at) {
@@ -2629,7 +2569,7 @@ export class Executor {
       }
       if (step.skill !== 'stow') continue;
       if (step.at !== undefined && step.into === 'open') {
-        return 'stow 的 at 与 into:open 只能选一个；原队列保留';
+        return 'stow 的 at 与 into:open 只能选一个';
       }
       if (step.at !== undefined) {
         try {
@@ -2642,19 +2582,19 @@ export class Executor {
             && typeof bot.blockAt === 'function') {
             const block = bot.blockAt(position);
             if (!block) {
-              return `指定位置 (${target.x},${target.y},${target.z}) 已在附近，但方块还不可读，不能确认有储物箱；${this.storageAlternativeNote(bot, target)}；原队列保留`;
+              return `指定位置 (${target.x},${target.y},${target.z}) 附近方块尚不可读，容器是否存在仍未知；${this.storageAlternativeNote(bot, target)}`;
             }
             if (!CONTAINER_FIND.includes(block.name)) {
               this.opts.chests?.forget(dimensionOf(bot), target);
-              return `指定位置 (${target.x},${target.y},${target.z}) 实际是${zhName(block.name)}，不是储物箱；${this.storageAlternativeNote(bot, target)}；原队列保留`;
+              return `指定位置 (${target.x},${target.y},${target.z}) 实际是${zhName(block.name)}，不是储物箱；${this.storageAlternativeNote(bot, target)}`;
             }
           }
           const earlier = steps.slice(0, stepIndex);
           const full = this.recentFullChestNote(bot, target, step.item, step.count, earlier);
           if (full) return full;
-          const reason = storageSkipReason(bot, target,
+          const reason = storageHistoryNote(bot, target,
             this.plannedFreeSlots(bot, target, earlier) > 0 ? undefined : step.item);
-          if (reason) return `指定容器${reason}，当前不能存${zhName(step.item)}；原队列保留`;
+          if (reason) return `指定容器历史：${reason}；本次重新核验${zhName(step.item)}的存入条件`;
         } catch { /* 坐标读数待执行时确认 */ }
         continue;
       }
@@ -2662,14 +2602,14 @@ export class Executor {
         const earlier = steps.slice(0, stepIndex);
         const full = this.recentFullChestNote(bot, openedAt, step.item, step.count, earlier);
         if (full) return full;
-        const reason = storageSkipReason(bot, openedAt,
+        const reason = storageHistoryNote(bot, openedAt,
           this.plannedFreeSlots(bot, openedAt, earlier) > 0 ? undefined : step.item);
-        if (reason) return `指定容器${reason}，当前不能存${zhName(step.item)}；原队列保留`;
+        if (reason) return `指定容器历史：${reason}；本次重新核验${zhName(step.item)}的存入条件`;
       }
       if (step.into !== 'open') {
         const found = findContainers(bot, 32);
-        if (found.length > 0 && found.every((spot) => storageSkipReason(bot, spot, step.item))) {
-          return `附近可见容器都已有访问或存入失败记录，当前不能自动存${zhName(step.item)}。换站位或容器后可重试；原队列保留`;
+        if (found.length > 0 && found.every((spot) => storageHistoryNote(bot, spot, step.item))) {
+          return `附近容器都有访问或存入失败历史；记录只用于安排尝试顺序，本次仍可重新开窗核验`;
         }
       }
     }
@@ -2692,7 +2632,7 @@ export class Executor {
       const block = bot.blockAt(position);
       if (!block || CONTAINER_FIND.includes(block.name) || FURNACE_KINDS.has(block.name)) continue;
       this.opts.chests.forget(dimension, target);
-      return `账本里的容器 (${target.x},${target.y},${target.z}) 现场已是${zhName(block.name)}；已清除过期记录，本单不右键，也不再为它寻路。重新 find chest 找真实容器，或换目标；原队列保留`;
+      return `账本里的容器 (${target.x},${target.y},${target.z}) 现场已是${zhName(block.name)}；已清除过期记录；当前操作仍按实际方块核验`;
     }
     return null;
   }
@@ -2727,7 +2667,7 @@ export class Executor {
       if (!step.item) continue;
       const rec = this.opts.chests?.get(dimensionOf(bot), target);
       if (!rec?.observedAt || now - rec.observedAt > 30_000 || hasItem(rec, step.item, bot?.registry)) continue;
-      return { text: `容器 (${target.x},${target.y},${target.z}) 最近开窗确认没有${zhName(step.item)}。先查看其他容器或重新核验内容；本单不入队，原队列保留`,
+      return { text: `容器 (${target.x},${target.y},${target.z}) 上次开窗未见${zhName(step.item)}；这不是当前内容的确认，本次开窗会重新核验`,
         retryAfterMs: 8_000, step, proof: 'missing-item' };
     }
     return null;
@@ -2847,7 +2787,7 @@ export class Executor {
       // on possible room, so rejecting below it cannot mistake a usable box for full.
       const upperRoom = Math.max(0, (rec.slots - otherMinSlots) * stackMax - itemCount);
       if (upperRoom < count) {
-        return `目标箱子 (${target.x},${target.y},${target.z}) 最近开窗读数最多只能再容纳${zhName(item)}×${upperRoom}，本单却要从别处取出后存入×${count}；这会把物品留在随身而不会净腾格。先换有足够容量的容器，或直接存随身已有的物品；原队列保留`;
+        return `目标箱子 (${target.x},${target.y},${target.z}) 最近开窗读数最多只能再容纳${zhName(item)}×${upperRoom}，本单计划从别处取出后存入×${count}；旧读数不足以保证能容纳整批，本次执行仍需重新开窗核验`;
       }
     }
     if (rec.usedSlots < rec.slots) return null;
@@ -2861,7 +2801,7 @@ export class Executor {
     const hint = before.length > 0
       ? `本单前序取物扣除已计划存物后只保证空出 ${Math.max(0, free)} 格，本步至少需 ${needed} 格；只从一堆取走一件通常仍占原格。`
       : '只从一堆取走一件通常仍占原格。';
-    return `指定箱子 (${target.x},${target.y},${target.z}) 最近开窗证实已满 ${rec.usedSlots}/${rec.slots} 格，且没有${zhName(item)}可并堆；${hint}先整堆取走物品并转存到另一处，勿再存回原箱；开窗确认出现空格后再存，或直接改用其他容器。原队列保留`;
+    return `指定箱子 (${target.x},${target.y},${target.z}) 最近开窗证实已满 ${rec.usedSlots}/${rec.slots} 格，且没有${zhName(item)}可并堆；${hint}这些是上次容量与本单计划，不能替代本次开窗读数`;
   }
 
   private openStorageKey(steps: readonly SkillCall[]): string | null {
@@ -2886,16 +2826,16 @@ export class Executor {
     // The transfer still checks the live slots and reports insufficient room.
     if (before.slice(opener + 1).some((step) => step.skill === 'compact'
       || (step.skill === 'take' && step.from === 'open'))) return null;
-    return `同一打开方式的容器最近 ${entry.count} 次存入都因没有空位失败；换物品不会腾出格子。先从该容器取走物品、整理出可并堆格，或换另一处容器；原队列保留。上次:${entry.why}`;
+    return `同一打开方式的容器最近 ${entry.count} 次存入都因没有空位失败；换物品不会腾出格子。本次开窗仍须重读容量，先前失败不证明现在仍满。上次:${entry.why}`;
   }
 
-  /** 批量原地抛物只会被自动捡回，或把有用物品丢失；不让它成为腾背包格的计划。 */
+  /** Toss cannot select safely among ambiguous custom variants. */
   private protectedTossNote(steps: readonly SkillCall[]): string | null {
     const bot = this.opts.getBot();
     if (!bot) return null;
     for (const step of steps) {
       if (step.skill !== 'toss') continue;
-      const note = protectedTossItem(bot, step.item);
+      const note = protectedTossItem(bot, step.item, step.pick, step.count);
       if (note) return `${note}；原队列保留`;
     }
     return null;
@@ -2910,18 +2850,6 @@ export class Executor {
       if (note) return `${note}；原队列保留`;
     }
     return null;
-  }
-
-  /** 批量原地抛物只会被自动捡回，或把有用物品丢失；不让它成为腾背包格的计划。 */
-  private bulkUnanchoredTossNote(steps: readonly SkillCall[]): string | null {
-    const loose = steps.filter((step) => step.skill === 'toss' && step.at === undefined);
-    const firstLoose = steps.findIndex((step) => step.skill === 'toss' && step.at === undefined);
-    if (firstLoose >= 0 && steps.slice(firstLoose + 1).some((step) => step.skill === 'pickup')) {
-      return '这单要在原地抛物后捡另一件；抛出的东西可能自动捡回，也可能丢失。先把要腾出的物品存进容器，再单独捡取；原队列保留';
-    }
-    return loose.length >= 2
-      ? `这单要原地抛出 ${loose.length} 类物品，容易自动捡回或丢失；没有受理。整理背包请去普通储物箱，暂时没有箱子就先做其他事`
-      : null;
   }
 
   /** 空闲时已达成的单步 goto 直接返回事实，不创建任务或投递完成事件。 */
@@ -2967,7 +2895,7 @@ export class Executor {
     const movement = flightState(bot).flying ? 'flying' : 'ground';
     const key = `${JSON.stringify(steps[0])}@${normalizeDimension(dimensionOf(bot))}:${here}:${movement}`;
     if (this.recentGotoRequests.has(key)) {
-      return `同一个 goto 刚从 (${here}) 提交过，现在仍在同一格；重复走这个目标不会增加进展。先核对现场，换可站的三维落点或另一条路线`;
+      return `同一个 goto 刚从 (${here}) 提交过，目前仍在同一格；这只记录请求和位置，未证明本次路径或现场仍相同`;
     }
     this.recentGotoRequests.set(key, now);
     return null;
@@ -2998,7 +2926,7 @@ export class Executor {
       const resolved = resolveAnchors([step.at], { x: Math.floor(pos.x), y: Math.floor(pos.y), z: Math.floor(pos.z) });
       return Array.isArray(resolved) && !travelGoalReached(bot, gotoArrivalGoal(step, resolved[0]));
     })) return null;
-    return `刚才从这里朝${DIRECTION_ZH[find.direction!]}找${zhEntity(find.target)}时，出发点就命中同一可见目标，人并未沿指定方向走；原地重找不会产生新信息。先走离这处至少几格，或改查不同目标；原队列保留`;
+    return `刚才从这里朝${DIRECTION_ZH[find.direction!]}找${zhEntity(find.target)}时，出发点就命中同一可见目标，人并未沿指定方向走；上次没有行军进展，是否原地复查由调用方决定`;
   }
 
   private recordUnmovedFindHits(task: RunningTask): void {
@@ -3058,8 +2986,7 @@ export class Executor {
       this.immatureFindHits.delete(key);
       return null;
     }
-    const left = Math.ceil((IMMATURE_FIND_HOLD_MS - (now - prior.at)) / 1000);
-    return `这片${zhName(step.target)}上次已看见，但都未成熟；坐标和生长阶段仍相同，${left} 秒内不再重复原地 find。随机生长期间先做其他事；若作物长了一阶段、成熟或去了另一片田，立即可查`;
+    return `这片${zhName(step.target)}上次已看见，但都未成熟；坐标和生长阶段仍相同，本次可重读；此记录不禁止等待、观察或改用其他操作`;
   }
 
   private recordImmatureFindHits(task: RunningTask): void {
@@ -3096,8 +3023,7 @@ export class Executor {
     }
     const entry = this.rapidStops.get(this.rapidStopKey(steps));
     if (!entry || entry.until <= now) return null;
-    const left = Math.ceil((entry.until - now) / 1000);
-    return `同一目的地最近被你连续快速叫停 ${entry.times.length} 次，${left} 秒内不再受理这个目的地的新单；原队列保留。先换别的目标或任务`;
+    return `同一目的地最近被你连续快速叫停 ${entry.times.length} 次，停止记录不证明当前目的地无效，新的计划照常核验`;
   }
 
   private noteRapidStop(task: RunningTask, now: number): void {
@@ -3176,7 +3102,7 @@ export class Executor {
     return '随身 36/36 格已满，这次自摆配方的第一轮不会耗尽任何材料堆，产物没有可验证的空格。先存放、用完或整堆丢弃一格低价值物品；只丢一件圆石之类的堆叠物仍占一格。空格出现后再合成，原队列保留';
   }
 
-  /** 同一整单在相同现场连续失败后暂缓；换站位、维度或做法即可重新尝试。 */
+  /** 同一整单在相同现场连续失败后报告反例；调用方仍可选择重试。 */
   private repeatFailedTaskNote(steps: readonly SkillCall[], now: number): string | null {
     // 施工前置步骤会改变支撑与占位；失败历史不能冻结修正后的整单。
     if (steps.some((step) => step.skill === 'build') || !retryGuardApplies(steps)) return null;
@@ -3223,17 +3149,16 @@ export class Executor {
       this.exactFailures.delete(key);
       return null;
     }
-    const left = Math.ceil((EXACT_FAILURE_WINDOW_MS - (now - entry.at)) / 1000);
     if (namedTake) {
-      return `同一目标取同一物品已经连续失败 ${entry.count} 次；${left} 秒内原样重试不受理。上次卡在:${entry.why}。先换来源或重新核验目标内容`;
+      return `同一目标取同一物品已经连续失败 ${entry.count} 次；本次仍可重新核验。上次卡在:${entry.why}。先换来源或重新核验目标内容`;
     }
     if (windowTake) {
-      return `同一来源窗口取同一物品已经连续失败 ${entry.count} 次；${left} 秒内换站位或多走几步再取也不会受理。上次卡在:${entry.why}。先核对窗口实际内容，改取现有物品或换来源`;
+      return `同一来源窗口取同一物品已经连续失败 ${entry.count} 次；这不是对当前窗口内容的确认。上次卡在:${entry.why}。先核对窗口实际内容，改取现有物品或换来源`;
     }
-    return `同一整单已经连续失败 ${entry.count} 次，现场位置没明显变化；${left} 秒内原样重下不会受理。上次卡在:${entry.why}。请换站位、目标或做法`;
+    return `同一整单已经连续失败 ${entry.count} 次，现场位置没明显变化；本次是否重试由调用方决定。上次卡在:${entry.why}。请换站位、目标或做法`;
   }
 
-  /** 首步可立即拒收；组合任务的后续 collect 在执行到该步时重新读现场。 */
+  /** 首步可附上历史未命中记录；collect 在执行到该步时重新读现场。 */
   private unseenCollectNote(steps: readonly SkillCall[], now: number): string | null {
     const bot = this.opts.getBot();
     if (!bot?.entity) return null;
@@ -3253,7 +3178,7 @@ export class Executor {
         }
       } catch { continue; } // 感知读数不可用时交给技能本身裁决
       return `附近连续 ${miss.count} 次没有看得见的${zhName(call.block)}，现在仍未露出；`
-        + '当前采集暂缓。可以先执行挖掘或移动，再到 collect 步骤重读；目标露出、离开 16 格或本次 90 秒暂缓到期后恢复。';
+        + '这些是此前观察与本次可见范围，未证明遮挡后或未加载区块没有目标；执行时仍重读。';
     }
     return null;
   }
@@ -3288,7 +3213,7 @@ export class Executor {
       const prior = this.immatureCollects.get(key)?.find((entry) =>
         Math.hypot(destination.x - entry.from.x, destination.z - entry.from.z) <= 32);
       if (!prior) continue;
-      // 只用当前确实可见、且属于这片田的成熟作物解除暂缓；远处田的作物
+    // 当前确实可见、且属于这片田的成熟作物会使旧记录不再适用；远处田的作物
       // 或走向另一片田之前看到的成熟作物，不能证明目标农田已成熟。
       try {
         const ids = matchBlockIds(bot, step.block);
@@ -3303,9 +3228,9 @@ export class Executor {
           else this.immatureCollects.delete(key);
           continue;
         }
-      } catch { /* 现场读不到时保留刚才的失败事实，短时暂缓 */ }
-      return `这片区域的${zhName(step.block)}刚核实都未成熟；同一农田的 mature collect 暂缓。`
-        + '等观察到成熟作物，或换到 32 格外的另一片农田；不要在原地与农田之间反复往返';
+      } catch { /* 现场读不到时仅保留历史失败，不声称当前仍失败 */ }
+      return `这片区域的${zhName(step.block)}刚核实都未成熟；这是对先前作物的读数，当前成熟度仍需核验。`
+        + '是否复查、等待或换操作由调用方决定';
     }
     return null;
   }
@@ -3345,7 +3270,7 @@ export class Executor {
           if (block) this.tunnelLiquidStops = this.tunnelLiquidStops.filter((entry) => entry !== stop);
           continue;
         }
-        return `这片井筒刚在 (${stop.cell.x},${stop.cell.y},${stop.cell.z}) 遇到${zhName(stop.name)}，该格现在仍是${zhName(stop.name)}；附近下行通道会再碰上它。先排水、封水或换到水平 5 格外的井位；原队列保留`;
+        return `这片井筒刚在 (${stop.cell.x},${stop.cell.y},${stop.cell.z}) 遇到${zhName(stop.name)}，该格现在仍是${zhName(stop.name)}；附近下行通道会再碰上它。是否处理液体或换路线由调用方决定；执行仍核对停工条件与支撑`;
       }
     }
     return null;
@@ -3376,7 +3301,7 @@ export class Executor {
       const returned = traversals.find((row) => row !== went && row.at >= (went?.at ?? Infinity)
         && near(row.from, end) && near(row.to, start));
       if (went && returned) {
-        return `这段竖向通道刚走过 (${went.from.x},${went.from.y},${went.from.z}) → (${went.to.x},${went.to.y},${went.to.z})，又原路折回；短时间内再走同段只是上下打转。先选不同目的地或路线，原队列保留`;
+        return `这段竖向通道刚走过 (${went.from.x},${went.from.y},${went.from.z}) → (${went.to.x},${went.to.y},${went.to.z})，又原路折回；再次往返的用途由调用方判断，不能仅凭往返次数断言无效`;
       }
     }
     return null;
@@ -3402,7 +3327,7 @@ export class Executor {
       return entry && entry.dimension === dimension && now - entry.at < 30_000
         && Math.hypot(pos.x - entry.from.x, pos.y - entry.from.y, pos.z - entry.from.z) < 3;
     });
-    return repeated ? '同一范围的点名探查刚在全部已观察格内未命中指定方块，站位也没有明显变化；30 秒内不再原样重查。该结论不覆盖范围外或服务器隐藏的内容。可先移动或换探查范围，原队列保留' : null;
+    return repeated ? '同一范围的点名探查刚在全部已观察格内未命中指定方块，站位也没有明显变化；这是上次探查结论，不覆盖范围外、隐藏内容或之后的世界变化' : null;
   }
 
   private recordEmptyProbeReads(steps: readonly SkillCall[], landings: readonly StepLanding[]): void {
@@ -3487,7 +3412,7 @@ export class Executor {
         const distance = Math.hypot(stop.cell.x - (start.x + dx * t),
           stop.cell.y - (start.y + dy * t), stop.cell.z - (start.z + dz * t));
         if (distance > 1.5) continue;
-        return `这条通道会经过 (${stop.cell.x},${stop.cell.y},${stop.cell.z})，那里刚因脚下悬空且垫脚未获服务端确认而停工，底下仍没有实心支撑。先换路线或修好该格支撑；原队列保留`;
+        return `这条通道会经过 (${stop.cell.x},${stop.cell.y},${stop.cell.z})，那里刚因脚下悬空且垫脚未获服务端确认而停工，底下仍没有实心支撑。本次执行仍逐格核验真实支撑，不把过去失败或计划放置当成现在事实`;
       }
       start = end;
     }
@@ -3533,8 +3458,7 @@ export class Executor {
           : target.name === (step.item === 'nether_wart' ? 'soul_sand' : 'farmland'))) return null;
     } catch { /* 锚点暂不可读时沿用本地冷却。 */ }
     const last = nearby.at(-1)!;
-    const left = Math.ceil((LOCAL_FARM_FAILURE_WINDOW_MS - (now - last.at)) / 1000);
-    return `这片区域的锄地/种植已连续失败 ${nearby.length} 次，${left} 秒内暂停相同耕种尝试；上次卡在:${last.why}。先探查已加载的土格及其上方空间，找到可用耕地或换一件事`;
+    return `这片区域的锄地/种植已连续失败 ${nearby.length} 次，本次仍可核对或改变前提；上次卡在:${last.why}。先探查已加载的土格及其上方空间，找到可用耕地或换一件事`;
   }
 
   private recordLocalFarmOutcome(steps: readonly SkillCall[], landings: readonly StepLanding[]): void {
@@ -3566,7 +3490,7 @@ export class Executor {
     if (!target || !bot || !pos) return null;
     const dim = dimensionOf(bot);
     const storageRoute = recentStorageRouteFailure(bot, target);
-    if (storageRoute) return `这处容器刚才寻路失败，短时间内不再直走相同落点；先改走其他路径或目标。上次卡在:${storageRoute}`;
+    if (storageRoute) return `这处容器刚才寻路失败，这是旧路线回执，本次仍须重新核验。上次卡在:${storageRoute}`;
     this.spatialFailures = this.spatialFailures.filter((entry) => now - entry.at < EXACT_FAILURE_WINDOW_MS);
     const occupied = this.spatialFailures.find((entry) => entry.dimension === dim
       && entry.why.includes('目标那一格站不进人')
@@ -3576,7 +3500,7 @@ export class Executor {
       const stillOccupied = !this.opts.probeTarget || diag?.kind === 'noStand';
       const reachable = stillOccupied && this.opts.probeRoutes?.(target)
         ?.some((probe) => probe.status === 'complete');
-      if (stillOccupied && !reachable) return `目标格 (${target.x},${target.y},${target.z}) 已确认不可站；换出发位置仍进不去。先找可站的落点或使用已验证的入口。上次卡在:${occupied.why}${this.nearbyRouteHint(bot, target)}`;
+      if (stillOccupied && !reachable) return `目标格 (${target.x},${target.y},${target.z}) 上次读数不可站；该历史不能证明当前所有路线不可达。上次卡在:${occupied.why}${this.nearbyRouteHint(bot, target)}`;
       this.spatialFailures = this.spatialFailures.filter((entry) => entry !== occupied);
     }
     // A pinned body proves a failure at its departure, including a fall in the same column.
@@ -3589,8 +3513,7 @@ export class Executor {
       && Math.hypot(target.x - entry.target.x, target.y - entry.target.y, target.z - entry.target.z) <= PROVEN_TARGET_DISTANCE);
     const targetAttempts = targetFailures.reduce((count, entry) => count + entry.count, 0);
     if (targetAttempts >= 3) {
-      const left = Math.ceil((EXACT_FAILURE_WINDOW_MS - (now - Math.min(...targetFailures.map((entry) => entry.at)))) / 1000);
-      return `目标格 (${target.x},${target.y},${target.z}) 已连续走不通 ${targetAttempts} 次；${left} 秒内不再接原样靠近的路线。若找到不同入口，可先走新航点再靠近；目标附近方块改变或走通目标格后也可重试。上次卡在:${targetFailures.at(-1)!.why}${this.nearbyRouteHint(bot, target)}`;
+      return `目标格 (${target.x},${target.y},${target.z}) 已连续走不通 ${targetAttempts} 次；本次路线仍按实际现场核验。上次卡在:${targetFailures.at(-1)!.why}${this.nearbyRouteHint(bot, target)}`;
     }
     const pinned = this.spatialFailures.find((entry) => entry.dimension === dim
       && entry.why.includes('钉在原地')
@@ -3599,12 +3522,12 @@ export class Executor {
       // Falling away from the goal is movement, but it is not route progress.
       && Math.hypot(pos.x - target.x, pos.y - target.y, pos.z - target.z)
         >= Math.hypot(entry.from.x - target.x, entry.from.y - target.y, entry.from.z - target.z) - 1);
-    if (pinned) return `刚才走向同一目标时人被钉在原地，此后也没有接近目标；原样重走不会增加进展。先换路线、用即时传送脱困或核对现场。上次卡在:${pinned.why}`;
+    if (pinned) return `刚才走向同一目标时人被钉在原地，此后也没有接近目标；这是旧位置与执行记录，新的路线仍可尝试。上次卡在:${pinned.why}`;
     const stalled = this.spatialFailures.find((entry) => entry.count >= 2 && entry.dimension === dim
       && Math.hypot(target.x - entry.target.x, target.y - entry.target.y, target.z - entry.target.z) <= NEARBY_GOAL_DISTANCE
       && Math.hypot(pos.x - entry.from.x, pos.y - entry.from.y, pos.z - entry.from.z) < EXACT_FAILURE_RETRY_DISTANCE);
     if (!stalled) return null;
-    return `这片目标区域从当前站位已经连续走不通 ${stalled.count} 次；原样靠近或换旁边几格仍会重复卡住。先离开当前站位、改走另一条路线或使用已验证的传送方式。上次卡在:${stalled.why}${this.nearbyRouteHint(bot, target)}`;
+    return `这片目标区域从当前站位已经连续走不通 ${stalled.count} 次；先前失败不证明本次会失败。上次卡在:${stalled.why}${this.nearbyRouteHint(bot, target)}`;
   }
 
   /** 只给当前可读的入口线索；避免让模型在实心目标格上不断平移坐标。 */
@@ -3937,8 +3860,8 @@ export class Executor {
   }
 
   /**
-   * 受理时保护重生锚；返回提示则拒单，null 放行。
-   * 几何操作间接覆盖锚点时拒单；显式点名首次警告并拒单，确认窗口内同签名同锚点重发放行。
+   * Report the observed respawn anchor affected by the plan.
+   * Moving the anchor is a host decision; no repeated-submission confirmation is required.
    * 寻路保护由 bridge 处理，拾取后的状态由 pickup 回报。
    */
   private spawnGuardNote(steps: SkillCall[], now: number): string | null {
@@ -3962,44 +3885,25 @@ export class Executor {
       const call = steps[i];
       const where = steps.length > 1 ? `第 ${i + 1} 步` : '这一单';
       if (namesSpawnAnchor(bot, call, guard)) {
-        const key = `${taskSignature(steps)}@${cellKeyOf(guard[0])}`;
-        const prev = this.spawnConfirm;
-        if (prev && prev.key === key && now - prev.at <= SPAWN_CONFIRM_WINDOW_MS) {
-          this.spawnConfirm = null;
-          this.opts.diag?.write({
-            lane: 'task', event: 'spawn-anchor-confirmed',
-            msg: `重生锚 ${at}:同样的单再下一次,按确认放行`,
-            data: { key, steps },
-          });
-          return null;
-        }
-        this.spawnConfirm = { key, at: now };
-        this.opts.diag?.write({
-          lane: 'task', event: 'spawn-anchor-hold',
-          msg: `重生锚 ${at}:显式指名要动它,先警告等确认`,
-          data: { key, steps },
-        });
-        return `${where}要动的 ${at} 就是你的重生锚。它一离开地面,重生点当场作废,` +
-          '死了会回世界出生点。真要搬走就再下一次一模一样的单,我照做;换个目标的话这一单作废。';
+        return `${where}明确指向重生锚 ${at}；移走可能使当前重生点失效，是否搬迁由调用方决定，结果以服务端读数为准`;
       }
       const cells = shapeFootprint(bot, call, this.opts.blueprints?.() ?? null);
       const hit = cells?.find((c) => guard.some((g) => g.x === c.x && g.y === c.y && g.z === c.z));
       if (!hit) continue;
       this.opts.diag?.write({
-        lane: 'task', event: 'spawn-anchor-refused',
-        msg: `重生锚 ${at}:形状罩住 ${cellText(hit)},驳回`,
+        lane: 'task', event: 'spawn-anchor-observed',
+        msg: `重生锚 ${at}:形状覆盖 ${cellText(hit)}`,
         data: { step: i + 1, hit, anchor, steps },
       });
       return `${where}的形状罩住了 ${cellText(hit)} —— 你的重生锚在 ${at},` +
-        '罩住它或它脚下那一格,重生点就当场作废了。避开那几格重下这一单;' +
-        '真要拆,单独下一条只对准那一格的 excavate,我会先跟你确认。';
+        '可能影响当前重生点；是否调整范围或搬迁由调用方决定，结果以服务端读数为准。';
     }
     return null;
   }
 
   /**
-   * 受理时拒绝在自身碰撞箱正上方放置重力方块的整单任务。
-   * 必须先于 skillBuild 的移身操作检查，避免移身后放置绕过保护。
+   * Report a planned gravity block above the current body position.
+   * Earlier movement or construction can change the eventual risk.
    */
   private gravityGuardNote(steps: SkillCall[]): string | null {
     try {
@@ -4028,13 +3932,13 @@ export class Executor {
           .find((c) => isGravityBlock(c.item) && overheadCell(c.cell));
         if (!bad) continue;
         this.opts.diag?.write({
-          lane: 'task', event: 'gravity-overhead-refused',
-          msg: `蓝图「${call.blueprint}」要把 ${bad.item} 放在头顶 ${cellText(bad.cell)},驳回`,
+          lane: 'task', event: 'gravity-overhead-observed',
+          msg: `蓝图「${call.blueprint}」要把 ${bad.item} 计划放在当前站位上方 ${cellText(bad.cell)}`,
           data: { step: i + 1, blueprint: call.blueprint, material: bad.item, hit: bad.cell, feet },
         });
         return `${steps.length > 1 ? `第 ${i + 1} 步` : '这一单'}那张图会把${zhName(bad.item)}放在 `
           + `${cellText(bad.cell)},那是我头顶这一柱上的格子。${zhName(bad.item)}下面没有支撑就整块掉下来,`
-          + '落到头上会把我埋住闷死。挪一格锚点,或者先走开再让它盖那一层。';
+          + '无支撑时有掩埋风险；本单前置步骤可能改变支撑或站位，实际施工仍按现场核验。';
       }
       if (!isGravityBlock(call.material)) continue;
       const overhead = 'anchors' in call && call.anchors.some((a) => isOverheadAnchor(a));
@@ -4043,13 +3947,13 @@ export class Executor {
         : shapeFootprint(bot, call, desk)?.find(overheadCell);
       if (!hit) continue;
       this.opts.diag?.write({
-        lane: 'task', event: 'gravity-overhead-refused',
-        msg: `${call.material} 要放在头顶 ${cellText(hit)},驳回`,
+        lane: 'task', event: 'gravity-overhead-observed',
+        msg: `${call.material} 计划放在当前站位上方 ${cellText(hit)}`,
         data: { step: i + 1, material: call.material, hit, feet },
       });
       return `${steps.length > 1 ? `第 ${i + 1} 步` : '这一单'}要把${zhName(call.material)}放在 ${cellText(hit)},` +
         `那是我头顶这一柱上的格子。${zhName(call.material)}下面没有支撑就整块掉下来,` +
-        '落到头上会把我埋住闷死。换个不在我头顶的位置,或者换一种不会掉的材料。';
+        '无支撑时有掩埋风险；本单前置步骤可能改变支撑或站位，实际施工仍按现场核验。';
     }
     return null;
   }
@@ -4406,17 +4310,9 @@ export class Executor {
   /**
    * mc_stop：停止当前任务、撤销队列(挂起待续的也算)；全空返回 null。
    */
-  clear(force = false): string | null {
+  clear(_force = false): string | null {
     const t = this.task;
     const now = Date.now();
-    this.earlyStops = this.earlyStops.filter((at) => now - at < 120_000);
-    const stalledGoto = t?.steps[t.stepIndex]?.skill === 'goto'
-      && t.goalProgressAt !== undefined
-      && now - t.goalProgressAt >= STALLED_CANCEL_MS
-      && now - t.stepStartedAt >= STALLED_CANCEL_MS;
-    if (t && !force && !stalledGoto && now - t.startedAt < 30_000 && this.earlyStops.length >= 1) {
-      return `这次 mc_stop 没执行：近两分钟已过早叫停 ${this.earlyStops.length} 次；任务#${t.id} 仍在做，等它跑满 30 秒或等完成/受阻回执再判断。原队列保留`;
-    }
     const dropped = this.queue.splice(0);
     const continuation = this.takeDrainingContinuation();
     if (continuation) dropped.unshift(continuation);
@@ -4438,7 +4334,6 @@ export class Executor {
     }
     if (t) {
       const at = this.progressOf(t);
-      if (now - t.startedAt < 30_000) this.earlyStops.push(now);
       this.noteRapidStop(t, now);
       this.recordStalledCancel(t, now);
       this.abortTask(t, 'mc_stop');
@@ -5325,16 +5220,11 @@ export class Executor {
         if (call.skill === 'stow' && call.at !== undefined) {
           try {
             const target = resolveAt(bot, call.at);
-            const skipped = storageSkipReason(bot, target, call.item);
+            const skipped = storageHistoryNote(bot, target, call.item);
             if (skipped) {
-              const why = `指定容器${skipped}，本步不再重走同一条路线`;
-              const line = `${stepLabel(i)} 跳过(${why})`;
-              land(i, 'skip', why, line);
-              blockedSteps.push(line);
-              this.opts.diag?.write({ lane: 'skill', event: 'skip', taskId: id,
-                msg: `第 ${i + 1} 步「${describeSkill(call)}」跳过:${why}`,
+              this.opts.diag?.write({ lane: 'skill', event: 'storage-history', taskId: id,
+                msg: `第 ${i + 1} 步重新核验指定容器；历史:${skipped}`,
                 data: { call, target, reason: skipped } });
-              continue;
             }
           } catch { /* 坐标在技能执行时仍会校验 */ }
         }
@@ -5417,19 +5307,11 @@ export class Executor {
           : causal !== null && i > 0 && outcomes[i - 1] !== 'ok' && outcomes[i - 1] !== 'partial'
             ? `(第 ${i} 步没做成;这一步不用它的产出,照做了)`
             : '';
-        // 受理后排队的旧任务也在真正执行前重读额度；只跳过当前步骤，后续独立步骤继续。
+        // 排队任务执行前再附历史成功次数；这条提示不跳过或改变动作。
         const repeatedSuccess = this.opts.repeatSuccessFallback
           ? this.repeatSuccessHold([call], this.opts.repeatSuccessFallback()) : null;
-        if (repeatedSuccess) {
-          const line = `${stepLabel(i)} 没执行(${repeatedSuccess})`;
-          land(i, 'fail', repeatedSuccess, line);
-          firstWhy ??= repeatedSuccess;
-          blockedSteps.push(line);
-          this.opts.diag?.write({ lane: 'skill', event: 'blocked', taskId: id,
-            msg: `第 ${i + 1} 步「${describeSkill(call)}」暂缓:${repeatedSuccess}`,
-            data: { call, reason: 'repeat-success-fallback' } });
-          continue;
-        }
+        if (repeatedSuccess) this.opts.diag?.write({ lane: 'skill', event: 'repeat-success-advice', taskId: id,
+          msg: repeatedSuccess, data: { call } });
         // 断点续做的 collect:只挖打断前没挖到的那些;打断前就已挖够的不再进技能
         const carried = resumedCollect(task, i);
         if (carried && carried.remaining <= 0) {
@@ -5555,8 +5437,9 @@ export class Executor {
         }
         try {
           if (run.skill === 'collect') {
-            const hold = this.unseenCollectNote([run], Date.now());
-            if (hold) throw new SkillBlocked(hold, [], 'local', 'resource-unavailable');
+            const history = this.unseenCollectNote([run], Date.now());
+            if (history) this.opts.diag?.write({ lane: 'skill', event: 'collect-history-advice', taskId: id,
+              msg: history, data: { call: run } });
           }
           const tread = stepTargetCell(bot, call);
           const releaseTread = tread ? holdTreadWater(bot, tread) : null;

@@ -66,3 +66,16 @@ it('keeps ordinary admission unchanged and does not attach rejection evidence to
     expect(result).not.toHaveProperty('meta.admission');
   } finally { r.close(); }
 });
+
+it.each([
+  { steps: [{ skill: 'toss', item: 'dirt', count: 18 }, { skill: 'toss', item: 'wheat_seeds', count: 7 }] },
+  { steps: [{ skill: 'toss', item: 'dirt', count: 18 }, { skill: 'pickup', item: 'iron_pickaxe' }] },
+])('admits caller-selected discards without requiring a storage trip', async ({ steps }) => {
+  const r = methodHarness();
+  try {
+    const result = await r.world.tools().find(t => t.name === 'mc_do')!.handler({ steps }, { role: 'test', log: r.host.log });
+    expect(result).not.toHaveProperty('failed');
+    expect(result).not.toHaveProperty('meta.admission');
+    expect(result).toHaveProperty('execution');
+  } finally { r.close(); }
+});

@@ -25,7 +25,7 @@ import {
   AUTO_CONTAINER_OPEN_LIMIT, clearStorageMenu, clearStorageWriteFailure, containerStacks,
   findContainers, furnaceDoneAt, noContainerNearby, openNearbyContainer,
   openWindowGuarded, orderForStow, orderForTake, rememberChest, rememberNonStorageMenu,
-  rememberStorageAccessFailure, rememberStorageWriteFailure, storageSkipReason, slotStack, smeltPerItemMs,
+  rememberStorageAccessFailure, rememberStorageWriteFailure, slotStack, smeltPerItemMs,
   BREW_BOTTLE_SLOTS, BREW_FUEL_SLOT, BREW_INPUT_SLOT, BREW_PROP_FUEL, BREW_PROP_TIME,
   brewStandText, potionText, windowProp, WINDOW_SETTLE_MS,
   type GenericWindow,
@@ -37,7 +37,6 @@ import { FURNACE_STATION, ensureStation, type Station, type StationAt } from './
 import { readEnchants, type ItemEnchant } from './item-facts.ts';
 import { normalizeDimension } from './escape.ts';
 import { consumesOpenWindow, selectionMenuTitle } from './window-semantics.ts';
-import { itemCustomName, itemProfileSkinHash } from './item-display.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { withdrawStack } from './container-withdraw.ts';
 import { observedEntity } from './perception-sight.ts';
@@ -209,10 +208,9 @@ export async function skillToss(
   ctx: SkillContext,
 ): Promise<string> {
   const { item, count, pick } = call;
-  const protectedItem = protectedTossItem(bot, item);
+  const protectedItem = protectedTossItem(bot, item, pick, count);
   if (protectedItem) throw new SkillBlocked(protectedItem);
   const pickedBack = reacquiredTossNote(bot, item);
-  if (pickedBack) throw new SkillBlocked(pickedBack);
   const pred = itemPredOf(bot, item, pick);
   const registryName = bot.inventory.items().find((stack) => pred(stack.name, stack))?.name ?? item;
   const have = invCount(bot, pred);
@@ -261,7 +259,7 @@ export async function skillToss(
     const stack = droppedStackOf(entity);
     if (!existing.has(entity.id) && stack?.name === registryName && entity.position.distanceTo(origin) <= 2.5) {
       drops.add(entity.id);
-      if (!aim) rememberDiscard(bot, entity);
+      if (!recipient) rememberDiscard(bot, entity);
     }
   };
   const collect = (collector: Bot['entity'], entity: Bot['entity']) => { track(entity); if (drops.has(entity.id)) collectors.add(collector.id); };
@@ -285,7 +283,7 @@ export async function skillToss(
     const n = Math.min(it.count, left);
     const before = invCount(bot, (name) => name === it.name);
     // 点名的那一件按槽位扔(bot.toss 按类型找槽,同 id 的几件在它眼里没分别)
-    if (pick !== undefined && it.count === 1) await bot.tossStack(it as never);
+    if (it.count === n && typeof bot.tossStack === 'function') await bot.tossStack(it as never);
     else await bot.toss(it.type, it.metadata ?? null, n);
     const moved = before - invCount(bot, (name) => name === it.name);
     if (moved <= 0) break;
@@ -301,7 +299,7 @@ export async function skillToss(
   checkAbort(ctx);
   const netAway = have - invCount(bot, pred);
   if (netAway <= 0) {
-    throw new SkillBlocked(`${zhName(item)}确实抛出×${tossed},但稍等后背包同类物品没有净减少;可能已自动捡回或同时拾得同类物品。不要重复 toss 腾格,改用 stow 存进容器`);
+    throw new SkillBlocked(`${zhName(item)}确实抛出×${tossed},但稍等后背包同类物品没有净减少;可能已自动捡回或同时拾得同类物品。先核对距离和抛物空间，换位置或方式；不要重复原地 toss 腾格`);
   }
   const anchor = isSpawnAnchorBlock(item) ? anchorInHandNote(bot, ctx, [zhName(item)], '扔掉') : '';
   // Vanilla collect packets identify entities, not the thrower's ownership. Nearby matching drops can merge.
@@ -309,7 +307,7 @@ export async function skillToss(
   const selfCollected = collectors.has(bot.entity.id) ? '；观察到本人拾取同类掉落物' : '';
   const delivery = recipient ? (seenPickup ? `；${call.target}拾取过同类掉落物，本次交付数量未确认，不自动重投`
     : '；对方领取未确认，先查回执/询问，不自动重投') : '；走近仍可能捡回';
-  return `抛出${picked.length ? pickedText(picked) : zhName(item)}×${tossed}；4秒后净少${netAway}${selfCollected}${delivery}${anchor}。${where}`;
+  return `${pickedBack ? `上次记录：${pickedBack}。` : ''}抛出${picked.length ? pickedText(picked) : zhName(item)}×${tossed}；4秒后净少${netAway}${selfCollected}${delivery}${anchor}。${where}`;
   } finally { bot.off('entitySpawn', track); bot.off('entityUpdate', track); bot.off('playerCollect', collect); }
 }
 
@@ -336,15 +334,24 @@ function rememberToss(bot: Bot, name: string): void {
     x: pos.x, y: pos.y, z: pos.z });
 }
 
-/** 抛物按物品类型选槽；同类型有定制物品时无法保证扔的是普通那件。 */
-export function protectedTossItem(bot: Bot, item: string): string | null {
+/** Type-based partial toss must not select a stack excluded by the caller's pick. */
+export function protectedTossItem(bot: Bot, item: string, pick?: string, count = 1): string | null {
   if (typeof bot.inventory?.items !== 'function') return null;
-  const candidates = bot.inventory.items().filter((stack) => matchItemName(item, stack.name, bot?.registry));
-  const special = candidates.find((stack) => itemCustomName(stack)
-    || itemProfileSkinHash(stack as unknown as Parameters<typeof itemProfileSkinHash>[0]));
-  if (!special) return null;
-  const name = itemCustomName(special) ?? zhName(special.name);
-  return `${zhName(item)}中有带专属名称或纹理的${name}；抛物按类型选槽，可能误丢重要道具。这件物品不允许 toss，请改存到有空位的容器`;
+  const all = bot.inventory.items();
+  const pred = itemPredOf(bot, item, pick);
+  const candidates = all.filter(stack => pred(stack.name, stack));
+  let left = count;
+  for (const stack of candidates) {
+    if (left <= 0) break;
+    const amount = Math.min(left, stack.count);
+    const excludedVariant = all.some(other => other.type === stack.type
+      && (other.metadata ?? 0) === (stack.metadata ?? 0) && !pred(other.name, other));
+    if (excludedVariant && (amount < stack.count || typeof bot.tossStack !== 'function')) {
+      return `${zhName(item)}有未被 pick 选中的同类型槽位变体；部分抛物按类型取槽，不能保证选中的是哪一叠。请整叠抛出所选槽位，或先分叠；尚未抛出`;
+    }
+    left -= amount;
+  }
+  return null;
 }
 
 /** 一次开窗里存一样东西的账 */

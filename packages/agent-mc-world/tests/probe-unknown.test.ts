@@ -93,7 +93,7 @@ describe('probe admission after real execution', () => {
       } finally { exec.shutdown(); }
     },
   );
-  it('still bounds an unchanged, fully observed empty query to 30 seconds', async () => {
+  it('reports a fully observed empty query as history without imposing a 30-second retry ban', async () => {
     vi.useFakeTimers(); const { bot } = rig(['air', 'air']);
     const reports: TaskReport[] = []; let id = 0;
     const log = { child() { return this; }, info() {}, warn() {}, error() {}, debug() {}, trace() {}, emit() {} };
@@ -103,11 +103,11 @@ describe('probe admission after real execution', () => {
       expect(exec.submitDetailed([call], 'append').accepted).toBe(true);
       await vi.runAllTimersAsync();
       expect(reports.find(r => r.kind === 'done')?.text).toContain('已观察全部 2 格，未命中指定方块');
-      expect(exec.submitDetailed([call], 'append')).toMatchObject({ accepted: false,
-        rejection: { rule: 'probe.empty' } });
-      await vi.advanceTimersByTimeAsync(30_000);
-      expect(exec.submitDetailed([call], 'append').accepted).toBe(true);
+      const retried = exec.submitDetailed([call], 'append');
+      expect(retried.accepted).toBe(true);
+      expect(retried.receipt).toContain('上次探查结论');
       await vi.runAllTimersAsync();
+      expect(reports.filter(report => report.kind === 'done')).toHaveLength(2);
     } finally { exec.shutdown(); }
   });
 });

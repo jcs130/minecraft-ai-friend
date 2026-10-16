@@ -240,7 +240,7 @@ export interface MinecraftConfigSection {
   precheck: boolean;
   /** 受理回执附相同任务的上次终态；默认开启。 */
   priorOutcome: boolean;
-  /** 达到窗口内成功次数后，暂缓同目标技能的新 mc_do；默认关闭。 */
+  /** Legacy key for optional repeated-success evidence; never blocks a task. */
   repeatSuccessFallback: {
     enabled: boolean; skillsCsv: string; maxSuccesses: number; windowMinutes: number;
   };
@@ -420,17 +420,17 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
         description: '维度、受理站位和完整参数相同时，受理回执引用15分钟内的历史任务号、原目标与未达成结果；换坐标、方法或数量不借用旧原因。同类提交次数单独统计，不能据此判定有无进展。关闭时不引用历史原因。',
       },
       'worlds.minecraft.repeatSuccessFallback.enabled': {
-        type: 'boolean', title: '同类成功任务暂缓', 'x-hot': true,
-        description: '模型失效时的可选 fallback。窗口内同一目标技能成功达到次数后，只暂缓该类新 mc_do；不撤当前任务或队列，其他技能与聊天照常可用。默认关闭。',
+        type: 'boolean', title: '同类成功任务提示', 'x-hot': true,
+        description: '窗口内同类技能成功达到次数后附历史提示；不拒收任务或跳过步骤。默认关闭。保留旧配置键，不改变已存配置。',
       },
       'worlds.minecraft.repeatSuccessFallback.skillsCsv': {
         type: 'string',
-        title: '暂缓目标技能', 'x-hot': true,
-        description: '英文技能名用逗号分隔，例如 fish,collect。任务任一步包含名单内技能都会检查；赶路或装备步骤不能绕过额度。留空时不暂缓任何任务。',
+        title: '提示目标技能', 'x-hot': true,
+        description: '英文技能名用逗号分隔，例如 fish,collect。留空时不附此类历史提示。',
       },
       'worlds.minecraft.repeatSuccessFallback.maxSuccesses': {
-        type: 'integer', title: '窗口内允许成功次数', minimum: 2, maximum: 20, 'x-hot': true,
-        description: '同一目标技能在窗口内成功达到此数后，后续同类新单暂缓到最早一次成功过期。',
+        type: 'integer', title: '成功提示阈值', minimum: 2, maximum: 20, 'x-hot': true,
+        description: '达到此次数后附历史提示；不是成功次数额度。',
       },
       'worlds.minecraft.repeatSuccessFallback.windowMinutes': {
         type: 'integer', title: '成功计数窗口', minimum: 1, maximum: 60,

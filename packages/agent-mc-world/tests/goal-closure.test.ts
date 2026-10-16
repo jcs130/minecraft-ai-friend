@@ -15,10 +15,12 @@ function harness() {
 }
 
 describe('rejected goal closure', () => {
-  it('rechecks the environment and ends a turn after the same rejected closure', () => {
+  it('rechecks repeated closure without ending the host decision turn', () => {
     const h = harness();
     expect(h.call({ done: 3 })).toMatchObject({ failed: true });
-    expect(h.call({ done: 3 })).toMatchObject({ failed: true, endsTurn: true });
+    const repeated = h.call({ done: 3 });
+    expect(repeated).toMatchObject({ failed: true });
+    expect(repeated).not.toHaveProperty('endsTurn');
     expect(h.checks).toBe(2);
   });
   it('allows a revised milestone, a changed verdict and a replacement goal to be considered', () => {
@@ -48,7 +50,7 @@ describe('rejected goal closure', () => {
       log: (_args, text) => text,
     });
     call({ done: 1 });
-    expect(call({ done: 1 })).toHaveProperty('endsTurn', true);
+    expect(call({ done: 1 })).not.toHaveProperty('endsTurn');
     ready = true;
     expect(call({ done: 1 })).toBe('closed after fresh verification');
   });

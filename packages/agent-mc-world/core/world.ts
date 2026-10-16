@@ -55,7 +55,6 @@ import { attachHearing, hearingReadout } from './perception-hearing.ts';
 import { AttentionReader, PERCEPTION_TOOLS, perceptionArgs, validDetection, type DetectionEvidence } from './perception-tools.ts';
 import { IdleBehaviorController, IdlePresentationContext, type IdleBehaviorScene } from './idle-behavior.ts';
 import { sampleIdleActions, executeIdleAction } from './idle-actions.ts';
-import { RejectedRouteLedger, sameRejectedRouteOrigin, type RejectedRouteScope } from './rejected-route-ledger.ts';
 import { classifyBossBarTitle } from './boss-bar.ts';
 import { minecraftTextComponent } from './text-component.ts';
 import { MinecraftChatProvenance } from '../src/chat-provenance.ts';
@@ -2876,7 +2875,6 @@ export class MinecraftWorld implements World {
         lane as 'agent' | 'observer' | 'player')])) as typeof this.accountAuth;
     const ledger = (name: string): string | null => (opts.dataDir ? join(opts.dataDir, name) : null);
 
-    this.rejectedRoutes = new RejectedRouteLedger(ledger('minecraft-rejected-routes.json'));
     this.chests = new ChestBook(ledger('minecraft-chests.json'));
     this.directionalSweeps = new DirectionalSweepBook(ledger('minecraft-directional-sweeps.json'));
     this.explored = new ExploreBook(ledger('minecraft-explored.json'));
@@ -4655,7 +4653,7 @@ export class MinecraftWorld implements World {
     const host = this.host;
     if (this.shuttingDown || !host || !bot?.entity || !viewerUrl) {
       return { text: this.toolLog('mc_visual', args, '[mc_visual 暂不可用] 游戏或网页画面未连接；等画面恢复后再看'),
-        failed: true, endsTurn: true };
+        failed: true };
     }
     if (ctx.signal?.aborted) {
       return { text: this.toolLog('mc_visual', args, '[mc_visual 未受理] 本次调用已取消'), failed: true };
@@ -4663,8 +4661,8 @@ export class MinecraftWorld implements World {
     if (this.visualInFlight) {
       return { text: this.toolLog('mc_visual', args,
         `[mc_visual 未受理] 观察 job_id:${this.visualInFlight.id} 仍在收尾；本次没有拍摄或新建分析。`
-          + '本轮结束，等待原观察结果；游戏任务继续运行。不要重复调用轮询；结果回来后再选择下一步行动'),
-        failed: true, endsTurn: true };
+          + '原观察与游戏任务继续运行，结果通过事件返回；本次没有新建观察，可处理其他任务'),
+        failed: true };
     }
     const job: VisualObservationJob = {
       id: `vis_${randomUUID()}`, host, bot, viewerUrl,
@@ -4783,7 +4781,7 @@ export class MinecraftWorld implements World {
     }
     if (!bot?.entity || !viewerUrl) {
       return { text: this.toolLog(name, args, '[mc_visual 暂不可用] 游戏或网页画面未连接；等画面恢复后再看'),
-        failed: true, endsTurn: true };
+        failed: true };
     }
     const before = bot.entity.position.clone();
     const dimension = String(bot.game.dimension ?? 'unknown');
@@ -4854,8 +4852,7 @@ export class MinecraftWorld implements World {
       return outcome;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      return { text: this.toolLog(name, args, `[mc_visual 暂不可用] ${reason}`), failed: true,
-        endsTurn: true };
+      return { text: this.toolLog(name, args, `[mc_visual 暂不可用] ${reason}`), failed: true };
     }
   }
 
@@ -4885,10 +4882,6 @@ export class MinecraftWorld implements World {
 
   /** 一轮一答闸的账(见 round.ts);三个只读原语共用一本,各占一格 */
   protected readonly readGate = new RoundOnceGate();
-  protected queueReadBurst: { stamp: string; atMs: number; count: number } | null = null;
-  protected rejectedTravelBurst: { key: string; scope: RejectedRouteScope; atMs: number; count: number } | null = null;
-  protected lastRejectedTravelEscapeAt = 0;
-  protected readonly rejectedRoutes: RejectedRouteLedger;
 
   /**
    * 只读原语的公共外壳:算读数 → 与上一次比 → 决定真答还是指回上一条。
@@ -4903,24 +4896,6 @@ export class MinecraftWorld implements World {
   ): string | ToolOutcome {
     const { stamp, text } = compute();
     const round = roundTokenOf(ctx);
-    if (name === 'mc_queue' && round !== null) {
-      const now = Date.now();
-      const previous = this.queueReadBurst;
-      const count = previous?.stamp === stamp && now - previous.atMs <= 5_000
-        ? previous.count + 1 : 1;
-      this.queueReadBurst = { stamp, atMs: now, count };
-      if (count >= 3) {
-        return {
-          text: this.toolLog(name, {}, '[mc_queue] 队列状态未变；等任务或战斗结果事件再查。'),
-          endsTurn: true,
-        };
-      }
-      const q = this.executor?.status();
-      if (q && (q.running || q.waiting.length > 0)) {
-        const answer = this.readGate.answered(name, round, stamp) ? text : REPEATED_QUERY_RECEIPT;
-        return { text: this.toolLog(name, {}, answer), endsTurn: true };
-      }
-    }
     return this.readGate.answered(name, round, stamp)
       ? this.toolLog(name, {}, text)
       : this.toolLog(name, {}, REPEATED_QUERY_RECEIPT);
@@ -6311,8 +6286,7 @@ export class MinecraftWorld implements World {
           const rejection = this.executor.noteAdmissionRejection([only], invalid.rule, invalid.text);
           return { text: this.toolLog(name, args,
             `[${name} 未受理] ${invalid.text} 没有发送使用，也没有导航；当前任务和待办保留。`),
-            failed: true, meta: { admission: { accepted: false, dispatched: false, ...rejection } },
-            ...(rejection.kind === 'correction' ? {} : { endsTurn: true }) };
+            failed: true, meta: { admission: { accepted: false, dispatched: false, ...rejection } } };
         }
       }
     }
@@ -6344,31 +6318,18 @@ export class MinecraftWorld implements World {
     if (directUse) {
       const wait = this.serverActionWait.blockReason(directUse, Date.now(),
         this.useObservation(directUse, only?.skill === 'use' ? only.item ?? null : null));
-      if (wait) return { text: this.toolLog(name, args, `[${name} 暂缓] ${wait}`), failed: true, endsTurn: true };
+      if (wait) return { text: this.toolLog(name, args, `[${name} 暂缓] ${wait}`), failed: true };
     }
     if (directChat) {
       const wait = this.serverActionWait.blockChat(directChat);
-      if (wait) return { text: this.toolLog(name, args, `[${name} 暂缓] ${wait}`), failed: true, endsTurn: true };
+      if (wait) return { text: this.toolLog(name, args, `[${name} 暂缓] ${wait}`), failed: true };
     }
     // 解析结果与她写的不一致就明说:被静默吃掉的参数是这条链上最贵的一类失败
     const notes = parsed.notes?.map(parseNoteText) ?? [];
-    const routeOrigin = this.bridge?.bot?.entity?.position;
-    const routeScope: RejectedRouteScope | null = routeOrigin ? {
-      realm: this.realmKey(), dimension: normalizeDimension(this.bridge?.bot?.game?.dimension),
-      origin: [routeOrigin.x, routeOrigin.y, routeOrigin.z],
-    } : null;
-    const heldRoute = this.rejectedRoutes.match(parsed.steps, routeScope);
-    if (heldRoute && name === 'mc_do') {
-      return { text: this.toolLog(name, args,
-        `[${name} 暂缓] 当前出发地的这条路线或途经的液体井筒曾连续失败并触发自动脱困(${heldRoute})。核对前次回执，改变出发位置或路线后重新评估；限制只保留 15 分钟，不取消原目标。`),
-        failed: true, endsTurn: true };
-    }
     const repeatedSuccess = name === 'mc_do'
       ? this.executor.repeatSuccessHold(parsed.steps,
         this.cfg.repeatSuccessFallback ?? MINECRAFT_DEFAULTS.repeatSuccessFallback) : null;
-    if (repeatedSuccess) return {
-      text: this.toolLog(name, args, repeatedSuccess), failed: true, endsTurn: true,
-    };
+    if (repeatedSuccess) notes.push(repeatedSuccess);
     // 原文一并交过去:受理回执只回念解析+冻结之后与她所写不同的那几个字段
     let admitted = true;
     let admittedTaskId: number | undefined;
@@ -6389,45 +6350,6 @@ export class MinecraftWorld implements World {
       this.serverActionWait.noteChat(directChat);
       if (!this.serverActionWait.isReadOnlyQuery(directChat)) this.recentSystemMessages.clear();
     }
-    // 受理了查询或聊天并不代表原地打转的路线已经恢复；只按路线与时间聚合拒收。
-    const firstRejectedSkill = parsed.steps[0]?.skill;
-    // A rejected destination or repeated order is evidence about the goal, not
-    // evidence that the player is trapped. Only physical stall/support hazards
-    // can justify moving the player to a safety mark automatically.
-    const rejectedTravel = firstRejectedSkill === 'goto'
-      && /钉在原地|这条通道会经过|这片井筒刚在/.test(accepted);
-    const rejectedShaft = firstRejectedSkill === 'tunnel'
-      && /这片井筒刚在|同一整单已经连续失败|这条通道会经过/.test(accepted);
-    if (!admitted && name === 'mc_do' && routeScope && (rejectedTravel || rejectedShaft)) {
-      const now = Date.now();
-      const liquidCell = /这片井筒刚在 \((-?\d+),(-?\d+),(-?\d+)\) 遇到(水|岩浆)/.exec(accepted);
-      const supportCell = /这条通道会经过 \((-?\d+),(-?\d+),(-?\d+)\)/.exec(accepted);
-      const key = liquidCell ? `shaft-liquid:${liquidCell.slice(1).join(':')}`
-        : supportCell ? `tunnel-support:${supportCell.slice(1).join(':')}` : JSON.stringify(parsed.steps);
-      const previous = this.rejectedTravelBurst;
-      const count = previous?.key === key && sameRejectedRouteOrigin(previous.scope, routeScope)
-        && now - previous.atMs < 90_000 ? previous.count + 1 : 1;
-      this.rejectedTravelBurst = { key, scope: routeScope, atMs: now, count };
-      if (count >= 3 && now - this.lastRejectedTravelEscapeAt > 180_000) {
-        this.lastRejectedTravelEscapeAt = now;
-        this.rejectedTravelBurst = null;
-        this.rejectedRoutes.record(key, parsed.steps, routeScope, now);
-        this.diag.write({ lane: 'task', event: 'rejected-route-escape', incident: true,
-          msg: '同一条已拒收的无进展路线仍被连续提交，启动已有安全落点逃逸',
-          data: { steps: parsed.steps, count, position: this.bridge?.bot?.entity?.position } });
-        void this.doEscape().then((escape) => {
-          this.diag.write({ lane: 'task', event: 'rejected-route-escape-result', msg: escape });
-          this.emit('minecraft.task', `[自动脱困] ${escape}`, true);
-        }, (error) => {
-          this.diag.write({ lane: 'task', event: 'rejected-route-escape-failed',
-            msg: String(error), incident: true });
-          this.emit('minecraft.task', `[自动脱困] 没成功:${String(error)}`, true);
-        });
-        return { text: this.toolLog(name, args,
-          `${accepted}\n[自动脱困] 同一出发地的无进展路线已连续拒收，正在尝试已登记的安全落点。原目标保留；先核对新位置，再选择新的路线。`),
-          failed: true, endsTurn: true };
-      }
-    }
     // 受理回执附当前队列状态，与结局回执和世界快照共用渲染。
     const queue = renderQueue(this.executor.status());
     const receipt = this.toolLog(
@@ -6447,8 +6369,7 @@ export class MinecraftWorld implements World {
     const help = recoverySkill ? readSkillHelp({ skill: recoverySkill }) : null;
     const admission = !admitted && rejection ? { accepted: false, ...rejection,
       recovery: help && 'text' in help ? [{ tool: 'mc_help', arguments: { skill: recoverySkill }, text: help.text }] : [] } : null;
-    return {text:receipt, ...(admission ? { meta: { admission } } : {}), ...(execution ? {execution} : {}), ...(admitted ? completedImmediately ? {endsTurn:true} : {}
-      : {failed:true, ...(rejection?.kind === 'correction' ? {} : {endsTurn:true})})};
+    return {text:receipt, ...(admission ? { meta: { admission } } : {}), ...(execution ? {execution} : {}), ...(!admitted ? { failed: true } : {})};
   }
 
   protected perceptionReadout(name:string,args:Record<string,unknown>):ToolOutcome {

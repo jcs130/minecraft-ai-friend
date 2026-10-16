@@ -38,12 +38,14 @@ function rig(mode: 'confirmed' | 'failed' | 'unconfirmed' = 'confirmed') {
     blockAt: (position: Vec3) => {
       const name = cells.get(key(position)) ?? (position.y < 64 ? 'stone' : 'air');
       return { name, type: registry.blocksByName[name].id, stateId: registry.blocksByName[name].defaultState,
-        position, boundingBox: name === 'air' ? 'empty' : 'block', getProperties: () => ({}) };
+        position, boundingBox: registry.blocksByName[name].boundingBox, getProperties: () => ({}) };
     },
-    confirmBuild: vi.fn(async () => {
+    confirmBuild: vi.fn(async (call: Extract<SkillCall, { skill: 'build' }>) => {
+      if (call.dryRun) return 'preview only';
       stock = 0;
       if (mode === 'failed') throw new SkillBlocked('server rejected placement');
-      if (mode === 'confirmed') cells.set('1,63,0', 'netherrack');
+      if (!('material' in call) || !registry.blocksByName[call.material]) throw new SkillBlocked('unknown material');
+      if (mode === 'confirmed' && 'anchors' in call) for (const at of call.anchors) cells.set(at.join(','), call.material);
       return 'placement call returned';
     }),
     dig: vi.fn(), equip: vi.fn(), placeBlock: vi.fn(), setControlState: vi.fn(),
@@ -101,28 +103,29 @@ it.each([
   ['different cell', [{ skill: 'build', material: 'netherrack', anchors: [[1, 62, 0]] }]],
   ['non-support material', [{ skill: 'build', material: 'torch', anchors: [[1, 63, 0]] }]],
   ['unknown material', [{ skill: 'build', material: 'unknown_block', anchors: [[1, 63, 0]] }]],
-] as [string, SkillCall[]][])('retains the repeat guard for %s and preserves the existing queue', (_name, prefix) => {
+] as [string, SkillCall[]][])('admits %s with history while execution still checks actual support', async (_name, prefix) => {
+  vi.useFakeTimers();
   const r = rig();
   try {
     r.exec.submitDetailed([{ skill: 'wait', ticks: 100 }], 'append');
     const before = r.exec.status();
-    const result = r.exec.submitDetailed([...prefix, tunnel], 'replace');
-    expect(result).toMatchObject({ accepted: false, rejection: { rule: 'tunnel.support' } });
+    const result = r.exec.submitDetailed([...prefix, tunnel], 'append');
+    expect(result.accepted).toBe(true);
     expect(r.exec.status().running?.id).toBe(before.running?.id);
-    expect(r.exec.status().waiting.map(t => t.id)).toEqual(before.waiting.map(t => t.id));
-    expect(r.bot.confirmBuild).not.toHaveBeenCalled();
+    await vi.runAllTimersAsync();
+    expect(r.bot.moves).toEqual([]);
+    expect(r.reports.at(-1)?.kind).toBe('blocked');
   } finally { r.exec.shutdown(); }
 });
 
-it('does not let a later repair or a repair in another location bypass the guard', () => {
+it('a later repair cannot make an earlier unsupported crossing succeed', async () => {
+  vi.useFakeTimers();
   const r = rig();
   try {
-    expect(r.exec.submitDetailed([tunnel, repair], 'append')).toMatchObject({ accepted: false });
-    Object.assign(r.exec, { tunnelSupportStops: [...r.stops,
-      { at: Date.now(), dimension: 'overworld', cell: { x: 2, y: 64, z: 0 } }] });
-    r.cells.set('2,63,0', 'air');
-    expect(r.exec.submitDetailed([repair, tunnel], 'append')).toMatchObject({ accepted: false,
-      rejection: { rule: 'tunnel.support' } });
+    expect(r.exec.submitDetailed([tunnel, repair], 'append').accepted).toBe(true);
+    await vi.runAllTimersAsync();
+    expect(r.bot.moves).toEqual([]);
+    expect(r.reports.at(-1)?.steps?.[0].outcome).toBe('fail');
   } finally { r.exec.shutdown(); }
 });
 

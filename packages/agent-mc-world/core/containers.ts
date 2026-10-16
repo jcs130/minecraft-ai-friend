@@ -358,17 +358,18 @@ export function orderForStow(
   const farWithRoom: typeof found = [];
   const farUnseen: typeof found = [];
   const full: typeof found = [];
+  const recentFailures: typeof found = [];
   // 堆叠上限是物品自带的属性(原版:大多 64,鸡蛋/雪球 16,工具/桶 1),registry 里就有
   const stackMax = (bot.registry.itemsByName as Record<string, { stackSize?: number } | undefined>)
     ?.[item]?.stackSize ?? 64;
   for (const s of found) {
-    if (storageSkipReason(bot, s, item)) continue;
+    if (storageHistoryNote(bot, s, item)) { recentFailures.push(s); continue; }
     const rec = ctx.chests?.get(dim, s);
     if (rec && !hasRoom(rec, item, stackMax, bot?.registry)) full.push(s);
     else if (s.d <= 8) (rec ? nearWithRoom : nearUnseen).push(s);
     else (rec ? farWithRoom : farUnseen).push(s);
   }
-  return [...nearWithRoom, ...nearUnseen, ...farWithRoom, ...farUnseen, ...full];
+  return [...nearWithRoom, ...nearUnseen, ...farWithRoom, ...farUnseen, ...full, ...recentFailures];
 }
 
 interface StorageObservation {
@@ -408,7 +409,7 @@ function blockIdentity(bot: Bot, spot: { x: number; y: number; z: number }): { n
   return { name: block?.name ?? null, stateId: block?.stateId ?? null };
 }
 
-export function storageSkipReason(bot: Bot, spot: { x: number; y: number; z: number }, item?: string): string | null {
+export function storageHistoryNote(bot: Bot, spot: { x: number; y: number; z: number }, item?: string): string | null {
   const rec = storageObservations.get(bot)?.get(containerKey(bot, spot));
   if (!rec) return null;
   if (rec.menu) {
@@ -482,14 +483,15 @@ export function orderForTake(
   const fartherStocked: typeof found = [];
   const fartherUnseen: typeof found = [];
   const knownEmpty: typeof found = [];
+  const recentFailures: typeof found = [];
   for (const s of found) {
-    if (storageSkipReason(bot, s)) continue;
+    if (storageHistoryNote(bot, s)) { recentFailures.push(s); continue; }
     const rec = ctx.chests?.get(dim, s);
     if (rec && hasItem(rec, item, bot?.registry)) (s.d <= 8 ? nearbyStocked : fartherStocked).push(s);
     else if (!rec) (s.d <= 8 ? nearbyUnseen : fartherUnseen).push(s);
     else knownEmpty.push(s);
   }
-  return [...nearbyStocked, ...nearbyUnseen, ...fartherStocked, ...fartherUnseen, ...knownEmpty];
+  return [...nearbyStocked, ...nearbyUnseen, ...fartherStocked, ...fartherUnseen, ...knownEmpty, ...recentFailures];
 }
 
 /** mineflayer 拿错窗口身份时抛的话:「Non-container window used as a container」一族 */

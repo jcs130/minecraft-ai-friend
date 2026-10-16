@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import { Vec3 } from 'vec3';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { planTossThrow, skillToss, skillPickup, isRecentDiscard, reacquiredTossNote, TOSS_PITCH } from '../core/skills-container.ts';
+import { planTossThrow, skillToss, skillPickup, isRecentDiscard, reacquiredTossNote, protectedTossItem, TOSS_PITCH } from '../core/skills-container.ts';
 const req = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 const registry = req('prismarine-registry')('1.20.6');
 const ctx = { aborted: () => false } as any;
@@ -103,6 +103,17 @@ describe('toss receipt and aim', () => {
     await vi.advanceTimersByTimeAsync(501); await checked;
     await vi.advanceTimersByTimeAsync(120000); expect(isRecentDiscard(bot, drop)).toBe(false);
   });
+  it('keeps an explicitly aimed discard out of the generic pickup sweep', async () => {
+    vi.useFakeTimers(); const { bot } = rig();
+    const task = skillToss(bot, { skill: 'toss', item: 'cobblestone', count: 8, at: [4, 64, 0] }, ctx);
+    await vi.advanceTimersByTimeAsync(51);
+    const drop: any = { id: 3, name: 'item', position: new Vec3(.5,65,-.5), getDroppedItem: () => ({ name: 'cobblestone', count: 8 }) };
+    bot.entities[3] = drop; bot.emit('entitySpawn', drop);
+    await vi.advanceTimersByTimeAsync(4000); await task;
+    expect(isRecentDiscard(bot, drop)).toBe(true);
+    const checked = expect(skillPickup(bot, ctx)).rejects.toThrow('附近没有');
+    await vi.advanceTimersByTimeAsync(501); await checked;
+  });
   it('checks the first fractional metre instead of skipping a nearby wall', () => {
     const { bot } = rig(); bot.entity.position = new Vec3(.05,64,.05);
     const walls = new Set(['0,-1', '-1,0', '-1,-1']);
@@ -111,5 +122,33 @@ describe('toss receipt and aim', () => {
     const plan = planTossThrow(bot)!;
     expect(plan).not.toBeNull(); expect(Math.sin(plan.yaw)).toBeLessThan(0);
     expect(Math.cos(plan.yaw)).toBeLessThan(0);
+  });
+  it('allows a caller to discard a named full stack through its selected slot', async () => {
+    vi.useFakeTimers(); const { bot } = rig();
+    const keep = { name: 'cobblestone', customName: 'Retained variant', count: 1, type: registry.itemsByName.cobblestone.id, metadata: 0, slot: 9 };
+    const discard = { ...keep, customName: 'Discarded variant', slot: 10 };
+    let stock = [keep, discard];
+    bot.inventory.items = () => stock;
+    bot.tossStack = async stack => { stock = stock.filter(candidate => candidate !== stack); };
+    expect(protectedTossItem(bot, 'cobblestone', 'Discarded variant', 1)).toBeNull();
+    const task = skillToss(bot, { skill: 'toss', item: 'cobblestone', pick: 'Discarded variant', count: 1 }, ctx);
+    const checked = expect(task).resolves.toContain('净少1');
+    await vi.advanceTimersByTimeAsync(4100);
+    await checked;
+    expect(stock).toEqual([keep]);
+  });
+  it('still rejects ambiguous partial variant selection before changing inventory', async () => {
+    const { bot } = rig();
+    const a = { name: 'cobblestone', customName: 'A', count: 8, type: registry.itemsByName.cobblestone.id, metadata: 0, slot: 9 };
+    const b = { ...a, customName: 'B', slot: 10 };
+    bot.inventory.items = () => [a, b];bot.tossStack = async () => {};
+    await expect(skillToss(bot, { skill: 'toss', item: 'cobblestone', pick: 'A', count: 1 }, ctx)).rejects.toThrow('槽位变体');
+    expect(bot.inventory.items()).toEqual([a, b]);
+  });
+  it('allows partial discard when the caller accepts all same-type stacks, regardless of names', () => {
+    const { bot } = rig();
+    const a = { name: 'cobblestone', customName: 'A', count: 8, type: registry.itemsByName.cobblestone.id, metadata: 0, slot: 9 };
+    bot.inventory.items = () => [a, { ...a, customName: 'B', slot: 10 }];
+    expect(protectedTossItem(bot, 'cobblestone', undefined, 1)).toBeNull();
   });
 });
