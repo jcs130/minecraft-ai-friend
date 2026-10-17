@@ -5591,7 +5591,7 @@ export class Executor {
               data: { call, step: i + 1 } });
             return;
           }
-          const aborted = err instanceof Aborted || ctx.aborted();
+          const aborted = ctx.aborted();
           if (aborted) {
             // 顶替/叫停的汇报已由发起方发过;Aborted 不评估 expect
             const by = (err instanceof Aborted ? err.by : null) ?? ctx.abortedBy?.() ?? null;
@@ -5602,7 +5602,12 @@ export class Executor {
             });
             return;
           }
-          const blocked = err instanceof SkillBlocked ? err : null;
+          // A skill may lose its GUI/connection context without the executor
+          // cancelling this task. Only a real cancellation has an external
+          // terminal receipt; otherwise settle this step instead of orphaning it.
+          const blocked = err instanceof SkillBlocked ? err : err instanceof Aborted
+            ? new SkillBlocked(`动作被打断：${err.by ?? '原生操作上下文已失效'}；本步未重放`, [], 'local', 'execution-context-changed')
+            : null;
           if (call.skill === 'transit') transitBoundary = i + 1;
           const reason = blocked || err instanceof SkillNoop ? (err as Error).message : `技能内部错误: ${zhErrorText((err as Error).message)}`;
           // 技能报阻但期望已达成(战利品自己进了包、人已经在目的地):按达成算
@@ -5611,6 +5616,7 @@ export class Executor {
           const readAt = verdict ? this.clock(Date.now()) : undefined;
           const operationUnconfirmed = blocked?.code === 'container-window-changed'
             || blocked?.code === 'container-window-rollback' || blocked?.code === 'use-hand-changed'
+            || blocked?.code === 'execution-context-changed'
             || isInventoryClickError(err);
           if (!opensForNext && !operationUnconfirmed && verdict?.met
             && (call.expect !== undefined || mayOverturnBlocked(expect!))) {

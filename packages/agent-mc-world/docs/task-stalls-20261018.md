@@ -23,3 +23,23 @@ Model configuration is independent of this executor fix. A maintainer's LAN-only
 The observed deployment had a 262144-token context window and requests near 100000 input tokens; a full window was not demonstrated. Repeated history, stale interpretation and no-thinking output still need separate attention. A shorter request alone is not proof of a better choice, and enabling reasoning does not fix queue scheduling.
 
 Source, packed-consumer checks, authorized loading and live progress must be recorded separately. This correction does not itself load a production host, restart a World, change a model or prove that a live agent learned a reusable skill.
+
+## Interrupted GUI operations must settle their task (0.5.7-rc.20)
+
+A live craft task remained accepted for over 27 minutes after its diagnostic log
+reported `GUI 操作窗口已关闭或被替换`. The GUI guard correctly fenced further
+clicks, but the ordinary executor treated any `Aborted` exception as an external
+task cancellation and returned without a terminal receipt. Its task slot remained
+occupied and the host coordinator correctly waited for that missing terminal.
+
+The executor now distinguishes its actual cancellation flag from a skill-local
+context interruption. A revoked window/session with a still-active task ends as
+blocked, with `execution-context-changed`, without replaying inventory clicks or
+turning old matching inventory into success. An explicit stop, replacement or
+suspension keeps its original cancellation/continuation semantics.
+
+The regression goes through the real executor, crafting skill, pinned Mineflayer
+inventory plugin, confirmed click barrier and GUI pacer. It covers replaced
+windows, lifecycle invalidation, existing output stock, explicit cancellation,
+one terminal per task and execution of an already queued successor. These tests
+do not prove that a live player has resumed sustained autonomous survival.
