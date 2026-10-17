@@ -58,7 +58,7 @@ def test_permanent_http_errors_are_not_silently_retried(run_async, status):
     async def exercise():
         with pytest.raises(RuntimeError, match=f"brain_http_error_{status}") as caught:
             await planner.decide([], [])
-        assert type(caught.value) is RuntimeError
+        assert type(caught.value).__name__ == "PlannerRequestRejectedError"
         await planner.aclose()
     run_async(exercise())
 

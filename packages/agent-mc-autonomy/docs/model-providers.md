@@ -21,6 +21,12 @@
 
 ## 配置示例
 
+工具目录在发给模型之前按名称去重，保留与原生执行校验一致的首个声明。原生元组会投影为供应商兼容的 `items`，保留长度和逐位置说明；派发仍校验原始 schema。`$defs` / `$ref` 不会被盲目删除，也不会联网解析引用。旧 `items: [...]` 与新 `prefixItems` 的区别见 [JSON Schema 官方数组文档](https://json-schema.org/understanding-json-schema/reference/array)。
+
+HTTP 拒绝只保留状态码和受限原因类别，例如 `duplicate_tool_name`、`tool_schema_incompatible`、`context_limit`、`credentials_rejected`。错误体最多读取 16 KiB，不写入公共状态或异常文本；成功的 SSE 流继续逐步读取。已知拒绝不代表身体执行失败，原生队列继续运行，配置错误按 5 分钟退避；请修正配置，不要反复重连游戏。
+
+直连 API Key 的环境变量必须由启动 Neko 的进程继承。设置用户环境变量不会更新已运行的 Steam/Neko 进程；请由本人正常退出并重新打开对应启动器，或在启动前注入环境。插件不修改系统环境，也不要求在 TOML 中保存明文密钥。
+
 `context_tokens` 默认 65536（64K）；服务实际支持时可设为 131072（128K）。显式配置的其他有效数值会保留。该值不会探测或扩大服务的实际上下文容量；32K 服务应保留显式 32768。未注入模型计数器时，运行时使用 UTF-8 字节上界加输出与消息封装预留，预算不足会明确拒绝调用。
 
 ```toml

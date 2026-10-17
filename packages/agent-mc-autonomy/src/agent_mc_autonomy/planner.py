@@ -14,6 +14,7 @@ from .model_auth import Authorization
 from .model_config import HttpPlannerConfig, validate_parameters
 from .model_protocols import decode, request, scope, usage_metrics
 from .model_stream import collect
+from .http_diagnostics import rejection
 from .perception import has_images, text_only
 
 
@@ -41,6 +42,14 @@ class PlannerUnavailableError(RuntimeError):
         self.diagnostic = {"protocol": protocol, "reason": reason}
         if status_code is not None:
             self.diagnostic["status"] = status_code
+
+
+class PlannerRequestRejectedError(RuntimeError):
+    """Known HTTP rejection before dispatch; the body may continue safely."""
+
+    def __init__(self, protocol, status, diagnostic):
+        super().__init__(f"brain_http_error_{status}")
+        self.diagnostic = {"protocol": protocol, "reason": "request_rejected", "status": status, **diagnostic}
 
 
 def decision(message: dict) -> dict:
@@ -123,6 +132,12 @@ class HttpPlanner:
         url, body = request(self.config, messages, tools, self.max_output_tokens)
         headers = await self.auth.headers(self.client)
         async with self.client.stream("POST", url, headers=headers, json=body, follow_redirects=False) as response:
+            if response.is_error:
+                import httpx
+                try:
+                    response.extensions["agent_mc_rejection"] = await rejection(response)
+                except (httpx.HTTPError, TimeoutError):
+                    response.extensions["agent_mc_rejection"] = {"category": "provider_request_rejected", "body_read_failed": True}
             response.raise_for_status()
             if self.config.stream:
                 if "text/event-stream" not in response.headers.get("content-type", ""):
@@ -162,7 +177,8 @@ class HttpPlanner:
         except httpx.HTTPStatusError as error:
             if error.response.status_code in {408, 429, 500, 502, 503, 504}:
                 raise PlannerUnavailableError(self.config.protocol, error.response.status_code) from None
-            raise RuntimeError(f"brain_http_error_{error.response.status_code}") from None
+            raise PlannerRequestRejectedError(self.config.protocol, error.response.status_code,
+                error.response.extensions.get("agent_mc_rejection", {"category": "provider_request_rejected"})) from None
         except (httpx.HTTPError, TimeoutError):
             raise PlannerUnavailableError(self.config.protocol) from None
         except (ValueError, TypeError, KeyError, IndexError, AttributeError):

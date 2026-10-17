@@ -43,8 +43,11 @@ def test_real_catalogue_keeps_scalar_applicability_and_original_target_semantics
                     if k not in {"description", "title", "examples", "$comment", "default"}}
         return [constraints(v) for v in value] if isinstance(value, list) else value
     for tool in native:
+        from agent_mc_autonomy.tool_schema import provider_schema
+        # Provider tuples are homogeneous projections; original positional
+        # validation is covered separately through argument_error at dispatch.
         assert constraints(tools[tool["name"]]["parameters"]["properties"]["steps"]) == constraints(
-            tool["inputSchema"]["properties"]["steps"])
+            provider_schema(tool["inputSchema"]["properties"]["steps"]))
     for name, steps in (
         ("mc_do", [{"skill": "flee", "distance": 12}]),
         ("mc_do", [{"skill": "look", "at": [-53, 70, 313]}]),
@@ -57,9 +60,12 @@ def test_real_catalogue_keeps_scalar_applicability_and_original_target_semantics
         assert Draft202012Validator(next(t for t in native if t["name"] == name)["inputSchema"]).is_valid(arguments)
     scout = Draft202012Validator(tools["mc_scout"]["parameters"])
     for steps in (INVALID["steps"], [{"skill": "look"}],
-                  [{"skill": "observe", "mode": "voxels", "bounds": [-4, -2, -4, 4, 4]}],
-                  [{"skill": "observe", "mode": "rays", "rays": [[0, 0, -32]]}]):
+                  [{"skill": "observe", "mode": "voxels", "bounds": [-4, -2, -4, 4, 4]}]):
         assert not scout.is_valid({"steps": steps})
+    from agent_mc_autonomy.tool_schema import argument_error
+    # A provider homogeneous union cannot express index-specific ray ranges.
+    # The authoritative native schema still rejects them before dispatch.
+    assert argument_error(native, "mc_scout", {"steps": [{"skill": "observe", "mode": "rays", "rays": [[0, 0, -32]]}]})
 
 
 @pytest.mark.parametrize("steps", [INVALID["steps"], None, {}, 1])

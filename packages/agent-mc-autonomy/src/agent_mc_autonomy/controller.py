@@ -28,8 +28,8 @@ from .observations import (
     tool_failure_view,
 )
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
-from .planner import PlannerResponseError, PlannerUnavailableError
-from .tool_schema import argument_error
+from .planner import PlannerRequestRejectedError, PlannerResponseError, PlannerUnavailableError
+from .tool_schema import argument_error, provider_schema
 from .viewer_public import tool_receipt
 
 PROTOCOL = "agent-mc/v1"
@@ -88,6 +88,12 @@ def admission_fingerprint(facts):
 
 
 def model_tools(catalogue):
+    # Native catalogues can repeat a tool. Dispatch/help use the first schema;
+    # advertise that same contract exactly once to providers that reject names.
+    unique = {}
+    for tool in catalogue:
+        unique.setdefault(tool["name"], tool)
+    catalogue = list(unique.values())
     def numeric_field(value):
         types = value.get("type", [])
         types = [types] if isinstance(types, str) else types
@@ -148,7 +154,7 @@ def model_tools(catalogue):
             description = "Execute real actions using flat steps. find requires target; direction makes it walk, otherwise it only observes. collect uses block; craft uses item/count. Read mc_help for exact skill parameters. Queue append preserves work; afterCheckpoint inserts safely, now interrupts. Task IDs mean accepted, not completed."
         elif tool["name"] == "mc_scout":
             description = "Read-only observations/dry runs; use mc_do for real actions. observe requires mode: sites|voxels|rays. voxels bounds are six inclusive foot-relative integers with volume <=512; [-3,-2,-3,3,3,3] reads 294 cells. Copy the legal first-query example from an oversized rejection instead of repeatedly guessing smaller bounds."
-        tools.append({"type": "function", "function": {"name": tool["name"], "description": description, "parameters": schema}})
+        tools.append({"type": "function", "function": {"name": tool["name"], "description": description, "parameters": provider_schema(schema)}})
     if advanced:
         tools.append({"type": "function", "function": {"name": "mc_invoke",
                       "description": "Invoke an advanced Minecraft tool. First read its exact schema using mc_tool_help. The backend validates all arguments and returns the original execution receipt.",
@@ -1356,19 +1362,24 @@ class Controller:
                     profile=self.settings.decision_policy.select(focus=focus.get('choice'),failure=bool(self.tool_failure or self.planner_notice),feedback=self.feedback_pending,
                         death=bool(episode_id and episode_id!=self.profile_death_id))
                     response = await self.decide_with_events(messages, round_tools, profile)
-                except (PlannerResponseError, PlannerUnavailableError) as error:
+                except (PlannerResponseError, PlannerUnavailableError, PlannerRequestRejectedError) as error:
                     with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
                         output.write(encode({"turnId": self.turn, "rejected": error.diagnostic, "dispatched": False}) + "\n")
                     self.planner_failures += 1
-                    if isinstance(error, PlannerUnavailableError):
+                    if isinstance(error, PlannerRequestRejectedError):
+                        self.planner_notice = "The provider rejected the planning request before any dispatch. Check the configured model/provider compatibility. Native work and reflexes remain independent; do not replay pending actions."
+                    elif isinstance(error, PlannerUnavailableError):
                         self.planner_notice = "The previous planning request was temporarily unavailable. No tool from it was dispatched. Use the latest facts and original receipts to continue; do not assume an action ran or replay pending native work."
                     else:
                         self.planner_notice = "The previous model response was invalid or incomplete. No tool from it was dispatched. Return one concise, complete tool call or a short reply; split large plans into small batches."
-                    self.publish(planner_error=str(error), planner_failures=self.planner_failures)
+                    self.publish(planner_error=str(error), planner_failures=self.planner_failures,
+                                 planner_diagnostic=error.diagnostic if isinstance(error, PlannerRequestRejectedError) else None)
                     # This response has not dispatched a tool. Keep the native
                     # connection/reflexes alive while the planner backs off;
                     # a failed inference is not an unknown body outcome.
                     delay = min(300, max(5, self.settings.min_decision_seconds) * 2 ** min(self.planner_failures - 1, 6))
+                    if isinstance(error, PlannerRequestRejectedError):
+                        delay = 300  # Configuration errors must not cause an inference/reconnect loop.
                     self.planner_retry_at = time.monotonic() + delay
                     self.publish(planner_retry_seconds=delay)
                     self.continuation_needed = True

@@ -1,6 +1,6 @@
 {
   "schema": "agent-mc-viewer-source/v1",
-  "sourceRevision": "32e2edb9b2fc7f9806a4c11d2079e81be6a01b98",
+  "sourceRevision": "43e2325055d2ff565d9ffd14e43b8fe862eea746",
   "files": {
     "package.json": {
       "bytes": 1191,
@@ -751,8 +751,8 @@
       "sha256": "5b2a5242e784cf33b29b32012fb9ad86bfe3c9f87e46ca56ed45ff4b2ea5b229"
     },
     "renderer-src/src/native-viewer/native-entity-model-bedrock.js": {
-      "bytes": 9665,
-      "sha256": "3902ded4c7f810e60b65546fd08e9323144708aefccc6c8604b43b990bcfe334"
+      "bytes": 10241,
+      "sha256": "e53bfd457f44de3b16357d8dcef4df855d668d9cb5e35b7513de079d6505b1ba"
     },
     "renderer-src/src/native-viewer/native-entity-model.js": {
       "bytes": 4869,
@@ -1214,6 +1214,10 @@
       "bytes": 1175,
       "sha256": "f309c27b3662214f65ef156e41a147a2888c0541640378c60fc3ca26f1f21a3d"
     },
+    "renderer-src/tools/native-column-cache.mjs": {
+      "bytes": 3428,
+      "sha256": "8bd9bc118405f400bc646bc684d27d037e99b30aa97adff72538858af6797d10"
+    },
     "renderer-src/tools/native-occlusion.mjs": {
       "bytes": 1316,
       "sha256": "7d58cdd57621d821942b72ed4a8645b3afd690c964d3f46e222fc7ca16ea7c06"
@@ -1227,8 +1231,8 @@
       "sha256": "62b0d3ad93334650c190108b6cf516f80fe2368e4a9ac386e4e8c3d8748ce33e"
     },
     "renderer-src/tools/native-world-host.mjs": {
-      "bytes": 48885,
-      "sha256": "1a359ef9b76432fb3fbaa0eb329b575a4b8086b43c1235ddb4b86181299f3aec"
+      "bytes": 49709,
+      "sha256": "d69726f00fc950ad78bd0db478d3bac0e1009e27b1743041f32f2575170734a8"
     },
     "renderer-src/tools/native-world-preview-host.mjs": {
       "bytes": 61698,

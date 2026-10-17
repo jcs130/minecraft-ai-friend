@@ -5,6 +5,14 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.85 deduplicates discovered tools and projects native tuple arguments for
+providers requiring homogeneous `items`. Original schemas still validate every
+dispatch. HTTP rejections publish bounded reason categories and keep the native
+queue alive, with a five-minute configuration-error backoff. Successful streaming
+is unchanged; arbitrary provider bodies and credentials are never published.
+The shared viewer is pinned to `43e23250`, with bounded received/decoded column
+caches instead of permanent failure on a normal 625-column stream.
+
 0.1.84 pins shared viewer `32e2edb9`: exact written/writable book components,
 verified bottle/bone-meal/seed GUI item classes and upstream shorter trails.
 Unsupported dynamic or server-specific models remain explicitly unavailable;
