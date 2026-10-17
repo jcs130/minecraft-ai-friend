@@ -10,8 +10,9 @@ test('default standard body loads no server module; an explicit local provider m
   await assert.rejects(presentationFactory({...config,presentationSha256:'0'.repeat(64)}),/HASH_MISMATCH/);
 });
 test('extension may supplement own HUD only; never identity, pose, inventory or another player',()=>{
-  const bot={_client:{uuid:'body'}},base={playerUuid:'body',self:{playerUuid:'body',yaw:2},inventory:{original:true}};
-  const extra={schemaVersion:1,playerUuid:'body',self:{playerUuid:'body',health:14.97,maxHealth:20.8,yaw:8},inventory:{fake:true},skills:{mana:{current:28,max:28}}};
+  const bot={_client:{uuid:'body'}},base={playerUuid:'body',profile:'vanilla_1.21.1',self:{playerUuid:'body',yaw:2},inventory:{original:true}};
+  const extra={schemaVersion:1,playerUuid:'body',profile:'server_specific',self:{playerUuid:'body',health:14.97,maxHealth:20.8,yaw:8},inventory:{fake:true},skills:{mana:{current:28,max:28}}};
   const result=mergePresentation(base,extra,bot);assert.equal(result.self.maxHealth,20.8);assert.equal(result.self.yaw,2);assert.equal(result.inventory,base.inventory);
+  assert.equal(result.profile,'vanilla_1.21.1','an optional server HUD does not change the actual vanilla item/renderer registry');
   assert.equal(mergePresentation(base,{...extra,playerUuid:'other'},bot),base);
 });

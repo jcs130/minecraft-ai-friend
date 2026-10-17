@@ -23,6 +23,5 @@ export function mergePresentation(base,extension,bot) {
   const self=extension.self?.playerUuid===uuid?Object.fromEntries(
     ['health','maxHealth','food','armor','absorption','oxygen','inWater','experienceLevel','experienceProgress']
       .filter(key=>Object.hasOwn(extension.self,key)).map(key=>[key,extension.self[key]])):{};
-  return {...base,self:{...base.self,...self,playerUuid:uuid},skills:extension.skills??base.skills,
-    profile:typeof extension.profile==='string'?extension.profile:base.profile};
+  return {...base,self:{...base.self,...self,playerUuid:uuid},skills:extension.skills??base.skills};
 }

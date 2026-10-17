@@ -5,6 +5,10 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.83 preserves the body's actual rendering registry/profile when an optional
+server HUD supplies skills and vitals. Server metadata cannot relabel vanilla
+item decoding; the exact core and viewer pins from 0.1.82 remain unchanged.
+
 0.1.82 adds an optional, hash-checked local server presentation port. Configure
 `server_extension.presentation_module` and `presentation_sha256` together; both
 default to empty. The module receives the existing bot and can supplement its
