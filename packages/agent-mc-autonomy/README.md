@@ -790,3 +790,21 @@ changes do not resend the identity map. Unknown IDs are identity errors, not evi
 that a known item is absent. Craft failure guidance distinguishes crafting-grid
 recipes from furnace processing instead of recommending a guessed grid for every
 missing recipe. No alias substitution, body action or additional model call is added.
+
+## Optional same-decision narration (0.2.0)
+
+`NarrationPort` is an optional host-neutral output contract. A frontend subscribes
+to the owned actor/body binding and claims fresh lines for its own voice service.
+With a subscription, the existing planning response may carry exactly
+`{"spoken_text":"a short natural utterance"}` in assistant content alongside its
+normal tool call. Other analysis text is not implicitly speech. The supplied
+persona, selected memories and recent conversation stay in their existing context
+ports; no second model call, host SDK import or native queue is introduced.
+
+The durable outbox retains at most 32 records, paces ordinary lines, expires
+detached subscriptions after 15 seconds and unsent lines after 30 seconds, and
+binds delivery to actor, world/account, runtime, native run, intent revision and
+death episode. Claiming happens once before transport; unknown delivery is never
+replayed. Stop or changed bindings revoke the old line. Audio acceptance and
+playback evidence are separate from native work completion. A host without this
+optional subscription keeps the existing autonomous behavior and prompt.
