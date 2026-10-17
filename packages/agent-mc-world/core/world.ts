@@ -31,6 +31,7 @@ import { selfDamageText, takeSelfDamage } from './damage-source.ts';
 import { readMapDat } from './level-dat.ts';
 import { readMapId } from './item-facts.ts';
 import { Vec3 } from 'vec3';
+import { ServerFeedbackLedger } from './server-feedback.ts';
 import type { Bot } from 'mineflayer';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
@@ -3432,6 +3433,8 @@ export class MinecraftWorld implements World {
     }
     if (bot) parts.push({ key: 'temporaryScaffolds', text: temporaryScaffoldReadout(bot) });
     if (this.bodyInhibitReason) parts.push({ key: 'bodyRestriction', text: `身体当前受限：${this.bodyInhibitReason}；动作等待恢复回执，不能当作寻路失败。` });
+    const serverFeedback = this.serverFeedback.read();
+    if (serverFeedback) parts.push({ key: 'serverFeedback', text: serverFeedback });
     // 终态可能刚投递，而下一拍快照尚未发生。读取最新原文，避免只有受理回执
     // 留在历史里时重做已经完成或受阻的单；日期也保留，不能当成当前队列。
     const outcome = renderLastTaskReadout(last
@@ -6960,26 +6963,34 @@ export class MinecraftWorld implements World {
     bot.on('respawn', clearDeathCause);
     bot.on('spawn', clearDeathCause);
     this.lastServerFeedback = null;
+    this.serverFeedback.clear();
     this.recentSystemMessages.clear();
-    const noteActionFeedback = (value: unknown, keyHint = ''): void => {
+    const noteActionFeedback = (value: unknown, keyHint = ''): boolean => {
       const rendered = minecraftTextComponent(value);
       const key = keyHint || (rendered.startsWith('block.minecraft.bed.') ? rendered : '');
       const text = key && rendered === key
         ? (bot.registry?.language?.[key] ?? rendered) : rendered;
+      const noted = this.bridge?.bot === bot && this.hookedBots.has(bot)
+        && this.serverFeedback.note(text, 'actionBar', this.executor?.currentTask?.id ?? null);
       if (text && (key.startsWith('block.minecraft.bed.')
         || /(?:床.{0,12}太远|离床.{0,8}太远|bed is too far away)/i.test(text))) {
         this.lastServerFeedback = { text, at: Date.now() };
       }
+      return noted;
     };
     // Java 1.20.6 有独立 action_bar 包；Mineflayer 的高层 message 不一定转发它。
     bot._client.on('action_bar', (packet: { text?: unknown }) => {
-      noteActionFeedback(packet.text);
-      this.extensionMessage(minecraftTextComponent(packet.text));
+      const noted = noteActionFeedback(packet.text);
+      const text = minecraftTextComponent(packet.text);
+      this.extensionMessage(text);
+      if (noted) this.forwardServerMessage({ toString: () => text }, 'actionBar');
     });
     bot._client.on('system_chat', (packet: { content?: unknown; isActionBar?: boolean }) => {
       if (packet.isActionBar) {
-        noteActionFeedback(packet.content);
-        this.extensionMessage(minecraftTextComponent(packet.content));
+        const noted = noteActionFeedback(packet.content);
+        const text = minecraftTextComponent(packet.content);
+        this.extensionMessage(text);
+        if (noted) this.forwardServerMessage({ toString: () => text }, 'actionBar');
       }
     });
 
@@ -7049,6 +7060,15 @@ export class MinecraftWorld implements World {
       let unchangedQueryFeedback = false;
       if (position === 'system') {
         const reply = jsonMsg.toString().trim();
+        const taskId = this.executor?.currentTask?.id ?? null;
+        // Mineflayer may recognize a player/private chat only after `message`.
+        // Keep consumed extension errors too, without relabeling player quotes.
+        if (!loginMessage) queueMicrotask(() => {
+          if (this.bridge?.bot === bot && !matchedChatMessages.has(jsonMsg) && !this.chatClaimed.has(jsonMsg)
+            && !key.startsWith('commands.message.display.') && !key.startsWith('chat.type.')) {
+            this.serverFeedback.note(reply, 'system', taskId);
+          }
+        });
         // 服务器扩展可消费自己的机器可读回执。
         if (this.extensionMessage(reply)) return;
         unchangedQueryFeedback = this.serverActionWait.noteFeedback(reply);
@@ -7786,6 +7806,7 @@ export class MinecraftWorld implements World {
   protected readonly chatClaimed = new WeakSet<object>();
   /** 最近一条动作栏文字及收到时刻 */
   protected lastActionBar: { text: string; at: number } | null = null;
+  protected readonly serverFeedback = new ServerFeedbackLedger();
 
   /**
    * 服务器系统消息与动作栏原文以 piggyback 进 minecraft.chat,随下一批投递,不单独唤醒。
@@ -8321,7 +8342,9 @@ export class MinecraftWorld implements World {
             : '部分现场读数不可比'}；回执是否证明原目标达成需核对。`
         + `${r.repeatFailure.previousReceipt ? `上次回执：${r.repeatFailure.previousReceipt}` : ''}`
       : '';
-    const reportText = `${r.text}${repeatEvidence}`;
+    const feedback = r.taskId !== undefined && (r.kind === 'blocked' || r.kind === 'partial')
+      ? this.serverFeedback.forTask(r.taskId) : '';
+    const reportText = `${r.text}${repeatEvidence}${feedback}`;
     // 「最近一单是什么下场」的单槽:mc_queue 现读它(见 lastFinishedTask)
     this.lastFinishedTask = { at: Date.now(), kind: r.kind, text: reportText };
     // 任务终态只是采样时机；里程碑仍由独立世界现读判定，并先搭同一批事件。

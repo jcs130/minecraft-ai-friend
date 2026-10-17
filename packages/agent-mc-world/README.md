@@ -233,3 +233,10 @@ Proxy reconfiguration expires unanswered one-shot known-packs replies, suspends 
 The public SDK exposes optional metadata-only `status().connection` (`ready`, `phase`) separately from runtime startup. Engine proxy samples expire after five seconds; composed server packs retain this facet through `console()`. Missing or stale samples stay `null`. No authentication RPC or secret enters this facet. Source, packed-package verification and live scene evidence remain separate; this candidate is not published.
 
 `mc_photo` saves web screenshots with paired game readings without an image model. Optional native Alibaba Bailian and ByteDance Volcengine Ark adapters add photo enhancement and original artwork; the host Agent owns interpretation, prompts and creative decisions. Providers default to disabled. [Configuration, lifecycle and fallback guide](docs/PHOTOGRAPHY.md).
+
+
+### Contact and server feedback facts
+
+`standingOn` identifies a collision face touching the player's footprint, including block edges and fractional-height blocks. The feet's center cell can be air while an adjacent block supports the body. Unloaded or unresolved support remains unknown; it is never narrated as air. Airborne motion does not claim a block below as current support. The viewer surface readout uses the same calculation.
+
+`serverFeedback` retains up to three recent server rejection/error observations for ten minutes, including system messages and raw action-bar packets. It is historical server text with channel, receipt time and task identity, not a permission grant or proof of an action's effect. Matching blocked/partial task receipts also preserve text received during that task, without claiming causation. Full messages remain in the event archive. Repeated HUD values, player chat and duplicate raw/high-level packets do not create new error observations. Server-specific decoding and protection policy belong to optional extensions.
