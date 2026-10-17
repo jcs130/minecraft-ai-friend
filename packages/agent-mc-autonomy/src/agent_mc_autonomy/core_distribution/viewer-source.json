@@ -1,6 +1,6 @@
 {
   "schema": "agent-mc-viewer-source/v1",
-  "sourceRevision": "3553c60d49ff4874f663129a749d937632c6c759",
+  "sourceRevision": "b5a41c37d8f503df5344762bd5df5e61c1734f4b",
   "files": {
     "package.json": {
       "bytes": 1191,
@@ -305,6 +305,10 @@
     "renderer-src/src/modern-viewer/fishing-visuals.js": {
       "bytes": 10130,
       "sha256": "a054a7a4511074477510359964bdc0043bd490f00496892bdc4266cf890c8971"
+    },
+    "renderer-src/src/modern-viewer/held-map-preview.js": {
+      "bytes": 3076,
+      "sha256": "a44375b1643f1c2dce2d74f1fb382b55a26b1fa4449369ba04c9e80f1af54796"
     },
     "renderer-src/src/modern-viewer/inventory-player-preview.js": {
       "bytes": 21571,
@@ -1115,8 +1119,8 @@
       "sha256": "1546fa7aa2c921152d0a90a07c44e7ba576b7222c516bfb9573531db74be021a"
     },
     "renderer-src/tools/minecraft-viewer-content.js": {
-      "bytes": 12648,
-      "sha256": "7fe9074bd3631d8ffa963d4f9862543ce4461e0b206e6b44de2161cf50926a70"
+      "bytes": 11420,
+      "sha256": "9b9c68b23ed7881330cbb485d5d6cfd61226fd4c879c5847ad48f1209c5f3ce6"
     },
     "renderer-src/tools/minecraft-viewer-dropped-items.js": {
       "bytes": 4745,
