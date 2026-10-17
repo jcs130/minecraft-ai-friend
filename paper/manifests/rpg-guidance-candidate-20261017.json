@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "version": "0.4.47.3",
-  "status": "verified_candidate_not_deployed",
-  "productionVersion": "0.4.47",
-  "productionChanged": false,
+  "status": "deployed_and_verified",
+  "productionVersion": "0.4.47.3",
+  "productionChanged": true,
   "sourceBase": "d37d672943b54bb2b718f072d187d15716c93231",
   "sourceBackport": {
     "base": "d37d672943b54bb2b718f072d187d15716c93231",
@@ -42,10 +42,21 @@
     "No 16 autonomous LLM load test"
   ],
   "deployment": {
-    "restartApprovalRequired": true,
+    "restartApprovalRequired": false,
     "maintenanceQueued": false,
     "backup": "Existing stopped Paper pipeline must finish complete E/F backups before any replacement",
     "plan": "Private repairs/rpg-quest-guidance-20261017/content-plan.json",
-    "rollback": "Disable block-access policy and reload to remove owned WorldGuard overlays, then normal stop and restore previous JAR/config preimages. Retain player inventories, map bindings and progress. If startup failed before players connected, restore the corresponding WorldGuard files from that cold backup."
+    "rollback": "Disable block-access policy and reload to remove owned WorldGuard overlays, then normal stop and restore previous JAR/config preimages. Retain player inventories, map bindings and progress. If startup failed before players connected, restore the corresponding WorldGuard files from that cold backup.",
+    "approvedBy": "owner: 更新吧 不然她现在不知道在干啥",
+    "at": "2026-10-17T12:56:51.636Z",
+    "backupStamp": "20261017-204616",
+    "completeColdCopies": [
+      "E:/MC/backups/scheduled/20261017-204616",
+      "F:/MC-backups/scheduled/20261017-204616"
+    ],
+    "sourceCommit": "cb746e41c8f75ca32dd099634f943ebdb81fbf31",
+    "productionChecks": 38,
+    "nativeChecks": 8,
+    "backpackRowsPreserved": true
   }
 }

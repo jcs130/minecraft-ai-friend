@@ -24,3 +24,11 @@ test('invalid release notes cannot escape into chat',()=>{
  assert.throws(()=>messages({...plan,releaseNotes:['bad\ntext']},'updated'));
  assert.throws(()=>messages({...plan,releaseNotes:[]},'before',180));
 });
+
+test('numeric maintenance backport versions are accepted without weakening identity validation',()=>{
+ const backport={...plan,version:'0.4.47.3'};
+ assert.match(messages(backport,'before',180)[0],/0\.4\.47\.3/);
+ assert.match(messages(backport,'updated')[0],/0\.4\.47\.3/);
+ for(const version of ['0.4','0.4.47.3.1','0.4.47 @a','0.4.47\nstop','0.4.47-snapshot'])
+  assert.throws(()=>messages({...plan,version},'before',180));
+});

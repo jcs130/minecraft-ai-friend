@@ -4,7 +4,7 @@ import {pathToFileURL} from 'node:url';
 import {command} from './rcon-client.mjs';
 
 export function messages(plan,phase,remaining=0){
- if(!/^[a-z0-9-]{8,80}$/.test(plan.id)||!/^\d+\.\d+\.\d+$/.test(plan.version))throw Error('Invalid release identity');
+ if(!/^[a-z0-9-]{8,80}$/.test(plan.id)||!/^\d+(?:\.\d+){2,3}$/.test(plan.version))throw Error('Invalid release identity');
  if(!['before','updated','cancelled'].includes(phase)||!Number.isInteger(remaining)||remaining<0||remaining>3600)throw Error('Invalid notice phase or countdown');
  if(!Array.isArray(plan.releaseNotes)||!plan.releaseNotes.length||plan.releaseNotes.length>6||plan.releaseNotes.some(s=>typeof s!=='string'||s.length>140||/[\x00-\x1f\x7f§]/.test(s)))throw Error('Invalid short release notes');
  const heading=phase==='before'?`[维护预告] ${remaining>=60?Math.ceil(remaining/60)+'分钟':remaining+'秒'}后更新重启至 ${plan.version}。请回到安全处，结束当前操作，暂勿开启新副本。`:
