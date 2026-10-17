@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+0.2.11 tolerates a brief Windows reader lock when atomically publishing status:
+the same prepared snapshot is retried for at most 250 ms. A real Windows handle
+test covers a 100 ms lock; persistent permission and disk errors still fail with
+their original diagnostics. No retry dispatches Minecraft work or advances the
+snapshot timestamp. Authoritative dispatch/uncertainty handling is unchanged.
+
 0.2.10 adds opt-in `autonomy.context_mode = "full"`. It preserves supplied native
 event text/fields, tool results/manuals, host projections and complete planning
 exchanges without the compact mode's fixed 700-character/24-event/eight-exchange

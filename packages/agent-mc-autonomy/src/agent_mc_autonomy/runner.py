@@ -27,10 +27,13 @@ from .viewer_public import record_playback, viewer_projection
 
 def _replace_status(temporary: Path, destination: Path):
     """Brief Windows reader contention only; authoritative persistence is separate."""
-    deadline = time.monotonic() + .050
+    # Real Windows readers (including status observers) may retain a handle for
+    # longer than the former 35 ms schedule. Retry the SAME prepared bytes for
+    # at most 250 ms; never repeat a body action or hide persistent ACL/disk errors.
+    deadline = time.monotonic() + .250
     failures = []
     first_trace = None
-    for delay in (0, .005, .010, .020):
+    for delay in (0, .005, .010, .020, .040, .080, .080):
         if delay:
             remaining = deadline - time.monotonic()
             if remaining <= 0:

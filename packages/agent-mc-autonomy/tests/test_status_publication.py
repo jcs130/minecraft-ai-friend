@@ -56,12 +56,12 @@ def test_transient_candidate_replaces_same_prepared_snapshot(monkeypatch, code):
 
 def test_persistent_denial_raises_first_object_with_original_trace(monkeypatch):
     first = denied()
-    clock, prepared = setup(monkeypatch, [first, denied(32), denied(), denied(32)])
+    clock, prepared = setup(monkeypatch, [first, *[denied(32) for _ in range(6)]])
     with pytest.raises(PermissionError) as raised:
         runner._replace_status(prepared, "status.json")
     assert raised.value is first
-    assert clock.waits == [.005, .010, .020]
-    assert len(prepared.attempts) == 4 and clock.now == .035
+    assert clock.waits == [.005, .010, .020, .040, .080, .080]
+    assert len(prepared.attempts) == 7 and clock.now == pytest.approx(.235)
     trace = raised.value.__traceback__
     assert sum(frame.tb_frame.f_code.co_name == "replace" for frame in traceback_frames(trace)) == 1
 
@@ -74,7 +74,7 @@ def traceback_frames(trace):
 
 def test_scheduler_overshoot_does_not_issue_an_attempt_after_deadline(monkeypatch):
     first = denied()
-    clock, prepared = setup(monkeypatch, [first], overshoot=.060)
+    clock, prepared = setup(monkeypatch, [first], overshoot=.260)
     with pytest.raises(PermissionError) as raised:
         runner._replace_status(prepared, "status.json")
     assert raised.value is first
@@ -115,7 +115,7 @@ def test_slow_attempt_does_not_start_another_after_deadline(monkeypatch):
         try:
             replace(destination)
         finally:
-            clock.now += .060
+            clock.now += .260
 
     prepared.replace = slow
     with pytest.raises(PermissionError) as raised:
@@ -133,6 +133,32 @@ class Planner:
 
     async def aclose(self):
         pass
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows file sharing semantics")
+def test_real_reader_lock_longer_than_short_retry_window_recovers(tmp_path):
+    import ctypes
+    import threading
+    from ctypes import wintypes
+
+    destination, temporary = tmp_path / "status.json", tmp_path / "status.tmp"
+    destination.write_text('old', encoding='utf-8')
+    temporary.write_text('complete new snapshot', encoding='utf-8')
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                                  wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    kernel.CreateFileW.restype = wintypes.HANDLE
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    handle = kernel.CreateFileW(str(destination), 0x80000000, 3, None, 3, 0, None)
+    assert handle != ctypes.c_void_p(-1).value
+    release = threading.Timer(.100, lambda: kernel.CloseHandle(handle))
+    release.start()
+    try:
+        runner._replace_status(temporary, destination)
+        assert destination.read_text('utf-8') == 'complete new snapshot'
+        assert not temporary.exists()
+    finally:
+        release.join(timeout=1)
 
 
 def test_retry_does_not_rewrite_freshness_repeat_callbacks_or_dispatch(tmp_path, monkeypatch, run_async):
