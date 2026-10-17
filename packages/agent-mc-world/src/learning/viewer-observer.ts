@@ -21,6 +21,7 @@ export class ViewerGameplayObserver {
   private receivedAt=0;
   private connectedAt=0;
   private actorMatched=false;
+  private actorPosition:{x:number;y:number;z:number}|null=null;
   private scopeConfirmed=false;
   private epoch=randomUUID();
   private sequence=0;
@@ -29,6 +30,9 @@ export class ViewerGameplayObserver {
   private reconnects=0;
   private failures=0;
   private samples=0;
+  private receivedColumns=0;
+  private missingPositionColumns=0;
+  private oversizedColumns=0;
   private bindingAt=0;
   private bindingRead=false;
   private identityTimer?:ReturnType<typeof setInterval>;
@@ -43,6 +47,7 @@ export class ViewerGameplayObserver {
   }
   status(){return {connected:this.socket?.connected??false,actorMatched:this.actorMatched,scopeConfirmed:this.scopeConfirmed,
     samples:this.samples,sourceAgeMs:this.receivedAt?Date.now()-this.receivedAt:null,loadedColumns:this.chunks.size,failures:this.failures,reconnects:this.reconnects,
+    receivedColumns:this.receivedColumns,missingPositionColumns:this.missingPositionColumns,oversizedColumns:this.oversizedColumns,
     bindingSource:this.options.connectionRead?'host-connection-state-and-viewer-identity':'same-scope-live-operation',bindingAgeMs:this.bindingAt?Date.now()-this.bindingAt:null,
     exactControlsKnown:false,serverTruthKnown:false,motorImitationReady:false};}
   confirmScope(row:GameplayRecord){
@@ -52,7 +57,7 @@ export class ViewerGameplayObserver {
   }
   start(){if(this.timer||this.stopped)throw Error('Viewer observer is single use');this.timer=setInterval(()=>{void this.sample();},this.options.sampleMs??500);
     if(this.options.connectionRead)this.identityTimer=setInterval(()=>{void this.refreshBinding();},15000);void this.connect();}
-  private reset(){this.avatar=null;this.chunks.clear();this.actorMatched=false;this.scopeConfirmed=false;this.bindingAt=0;this.version=null;this.dimension=null;this.epoch=randomUUID();this.sequence=0;}
+  private reset(){this.avatar=null;this.actorPosition=null;this.chunks.clear();this.actorMatched=false;this.scopeConfirmed=false;this.bindingAt=0;this.version=null;this.dimension=null;this.epoch=randomUUID();this.sequence=0;}
   private async refreshBinding(){
     const check=this.options.connectionRead;if(!check||this.bindingRead||this.stopped||!this.socket?.connected)return;this.bindingRead=true;
     try{const method=check.method??'GET';const response=await fetch(check.url,{method,signal:AbortSignal.timeout(4000),
@@ -79,7 +84,7 @@ export class ViewerGameplayObserver {
         query:this.options.worldCells===false?{overlay:'1'}:{},extraHeaders:{Origin:new URL(this.options.url).origin}});
       socket.on('version',value=>{if(value!=='1.21.1')socket.disconnect();else{this.version=value;this.Chunk=require('prismarine-chunk')(value);}});
       socket.on('biome',value=>{if(typeof value?.dimension==='string'&&/^[\w:./-]{1,120}$/.test(value.dimension)){
-        if(this.dimension&&this.dimension!==value.dimension){this.chunks.clear();this.avatar=null;this.scopeConfirmed=false;}
+        if(this.dimension&&this.dimension!==value.dimension){this.chunks.clear();this.avatar=null;this.actorPosition=null;this.scopeConfirmed=false;}
         this.dimension=value.dimension;
       }});
       socket.on('playerEntity',entity=>this.match(entity));
@@ -90,7 +95,13 @@ export class ViewerGameplayObserver {
       });
       socket.once('connect',()=>{void this.refreshBinding();});
       socket.on('loadChunk',value=>{
-        const p=this.avatar?.entity?.pos;if(!p||!this.Chunk||typeof value?.chunk!=='string'||value.chunk.length>4*1024*1024||!Number.isInteger(value.x)||!Number.isInteger(value.z))return;
+        this.receivedColumns++;
+        // Cold registry initialization can make the first avatar stale. A pinned self
+        // position still bounds chunk caching, never substituting for a body sample.
+        const p=this.avatar?.entity?.pos??this.actorPosition;
+        if(!p){this.missingPositionColumns++;return;}
+        if(typeof value?.chunk==='string'&&value.chunk.length>4*1024*1024){this.oversizedColumns++;return;}
+        if(!this.Chunk||typeof value?.chunk!=='string'||!Number.isInteger(value.x)||!Number.isInteger(value.z))return;
         if(Math.abs(Math.floor(p.x/16)-value.x/16)>1||Math.abs(Math.floor(p.z/16)-value.z/16)>1)return;
         try{this.chunks.set(`${value.x/16},${value.z/16}`,this.Chunk.fromJson(value.chunk));
           for(const key of this.chunks.keys()){const [x,z]=key.split(',').map(Number);if(Math.abs(x-Math.floor(p.x/16))>1||Math.abs(z-Math.floor(p.z/16))>1)this.chunks.delete(key);}}
@@ -108,7 +119,8 @@ export class ViewerGameplayObserver {
   private match(entity:any):boolean {
     const valid=entity?.isSelf===true&&entity.username===this.options.expectedUsername&&typeof entity.uuid==='string'
       &&entity.uuid.replaceAll('-','').toLowerCase()===this.options.expectedUuid.replaceAll('-','').toLowerCase();
-    if(!valid){this.actorMatched=false;this.scopeConfirmed=false;this.avatar=null;this.chunks.clear();return false;}
+    if(!valid){this.actorMatched=false;this.scopeConfirmed=false;this.avatar=null;this.actorPosition=null;this.chunks.clear();return false;}
+    if(entity.pos&&[entity.pos.x,entity.pos.y,entity.pos.z].every(x=>typeof x==='number'&&Number.isFinite(x)))this.actorPosition={...entity.pos};
     this.actorMatched=true;if(this.options.connectionRead&&this.bindingAt&&Date.now()-this.bindingAt<=30000)this.scopeConfirmed=true;return true;
   }
   private schedule(){if(this.stopped||this.retry)return;this.reconnects++;this.retry=setTimeout(()=>{this.retry=undefined;void this.connect();},15000);}

@@ -33,6 +33,9 @@ An optional local 1.21.1 viewer subscriber records live avatar state and a
 7×5×7 grid of client-loaded cells at 2 Hz by default, including periods when
 the operation journal is quiet. It caches at most nine chunk columns and follows
 block updates; dimension/reset/disconnect boundaries clear the cache. Body
+samples require a fresh avatar. An already pinned self entity can bound initial
+chunk caching while a cold registry load makes the first avatar stale.
+Received/oversized/missing-position column counters expose coverage loss. Body
 capture, network receipt and world-grid sampling timestamps remain separate.
 Unknown voxels have occupancy bits `0`; unknown block state IDs are `-1`.
 Inventory absence remains unknown, not an empty bag.

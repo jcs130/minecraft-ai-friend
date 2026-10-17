@@ -12,7 +12,7 @@ import { GameplayArchive, decodeGameplay } from '../src/learning/archive.ts';
 import { ViewerGameplayObserver } from '../src/learning/viewer-observer.ts';
 
 const scope='a'.repeat(64),uuid='12345678-1234-1234-1234-123456789abc';
-async function fixture({actualUuid=uuid,address='test.invalid:25565'}={}) {
+async function fixture({actualUuid=uuid,address='test.invalid:25565',initialChunk=null as string|null}={}) {
   const directory=await mkdtemp(join(tmpdir(),'mc-gameplay-viewer-'));
   const requests:string[]=[],inbound:string[]=[];
   const http=createServer((req,res)=>{
@@ -27,7 +27,9 @@ async function fixture({actualUuid=uuid,address='test.invalid:25565'}={}) {
     inventory:[{name:'bread',count:2,nbt:'PRIVATE_CONTENT'},{name:'bread',count:1}],sprinting:true});
   io.on('connection',socket=>{
     socket.onAny(event=>inbound.push(event));
-    socket.emit('version','1.21.1');socket.emit('biome',{dimension});socket.emit('playerEntity',entity);socket.emit('avatarState',avatar());
+    socket.emit('version','1.21.1');socket.emit('biome',{dimension});socket.emit('playerEntity',entity);
+    socket.emit('avatarState',initialChunk?{...avatar(),capturedAt:Date.now()-5000}:avatar());
+    if(initialChunk)socket.emit('loadChunk',{x:0,z:0,chunk:initialChunk});
   });
   await new Promise<void>(done=>http.listen(0,'127.0.0.1',done));
   const url=`http://127.0.0.1:${(http.address() as any).port}`;
@@ -86,5 +88,15 @@ it('clears loaded world cells at a dimension boundary',async()=>{
     await new Promise(done=>setTimeout(done,150));
     const world=(await f.frames()).filter(x=>x.kind==='environment'&&x.observation?.dimension==='minecraft:the_nether');
     expect(world.length).toBeGreaterThan(0);expect(world.at(-1)!.observation!.stateIds).toEqual(Array(245).fill(-1));
+  }finally{await f.close();}
+});
+
+it('retains initial local columns when cold initialization makes the first avatar stale',async()=>{
+  const require=createRequire(import.meta.url),Chunk=require('prismarine-chunk')('1.21.1');
+  const chunk=new Chunk({minY:-64,worldHeight:384});chunk.setBlockStateId(new Vec3(0,64,0),1);
+  const f=await fixture({initialChunk:chunk.toJson()});try{
+    await expect.poll(()=>f.observer.status().samples,{timeout:4000}).toBeGreaterThan(0);
+    expect(f.observer.status().loadedColumns).toBe(1);expect(f.observer.status().missingPositionColumns).toBe(0);
+    expect((await f.frames()).some(row=>row.kind==='environment'&&row.observation?.stateIds?.[122]===1)).toBe(true);
   }finally{await f.close();}
 });

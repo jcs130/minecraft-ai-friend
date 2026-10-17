@@ -691,6 +691,44 @@ export async function gotoGoal(bot: Bot, goal: InstanceType<typeof goals.Goal>, 
   }
 }
 
+/** Offer pending work a grounded pause without detaching the original goto's cleanup. */
+async function navigateWithCheckpoints(bot: Bot, goal: InstanceType<typeof goals.Goal>, ctx: SkillContext): Promise<void> {
+  if (!ctx.checkpoint) return bot.pathfinder.goto(goal);
+  for (;;) {
+    const state = { settled: false, failed: false, error: undefined as unknown };
+    const navigation = Promise.resolve().then(() => bot.pathfinder.goto(goal)).then(
+      () => { state.settled = true; },
+      error => { state.settled = true; state.failed = true; state.error = error; },
+    );
+    let stopped = false;
+    while (!state.settled) {
+      await Promise.race([navigation, sleep(200)]);
+      checkAbort(ctx);
+      if (state.settled) break;
+      await ctx.checkpoint(async () => {
+        const owner = goalOwnerOf(bot);
+        if (bot.pathfinder.goal !== goal || owner?.kind !== 'task') throw new Aborted('寻路目标已由其他动作接管');
+        stopped = true;
+        dropGoal(bot, 'task', '安全检查点暂停寻路', ctx.diag);
+        // setGoal(null) may reject goto asynchronously. Its result must settle
+        // before a meal or another path can acquire the body.
+        await navigation;
+        await settleOnGround(bot, ctx, 1_500);
+      });
+      if (stopped) break;
+    }
+    if (stopped) {
+      checkAbort(ctx); // A successful yield exits through the executor's saved continuation.
+      if (bot.pathfinder.goal || goalOwnerKind(bot)) throw new Aborted('检查点收尾期间寻路已被接管');
+      // If fresh state invalidated the handoff, continue this original goal.
+      noteGoalOwner(bot, goal, 'task', '检查点暂缓后继续寻路', ctx.diag);
+      continue;
+    }
+    if (state.failed) throw state.error;
+    return;
+  }
+}
+
 export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goal>, ctx: SkillContext): Promise<void> {
   let done = false;
   let timedOut = false;
@@ -766,7 +804,7 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
   try {
     for (;;) {
       try {
-        await bot.pathfinder.goto(goal);
+        await navigateWithCheckpoints(bot, goal, ctx);
         break;
       } catch (err) {
         // A* 在 thinkTimeout 内没算到目标时,寻路器手里有一段朝目标最好的路且正照着走,

@@ -4026,7 +4026,7 @@ export class Executor {
     }
   }
 
-  private checkpointReady(task: RunningTask, bot: Bot, stable = true, boundary = false): boolean {
+  private checkpointReady(task: RunningTask, bot: Bot, stable = true, boundary = false, navigation = false): boolean {
     if (this.task !== task || task.flag.aborted || this.stopped
       || task.flag.epoch !== this.executionEpoch || this.opts.getBot() !== bot) return false;
     if (!this.queue.some((queued) => queued.checkpointOwnerId === task.id)) return false;
@@ -4036,7 +4036,7 @@ export class Executor {
     if (owner !== null && owner !== 'task') return false;
     if (bot.currentWindow || bot.inventory?.selectedItem || !inventoryReadConfirmed(bot)) return false;
     if (stable && bot.entity?.onGround !== true && !flightState(bot).flying) return false;
-    if (bot.pathfinder?.isMoving?.() || bot.pathfinder?.isMining?.() || bot.pathfinder?.isBuilding?.()) return false;
+    if ((!navigation && bot.pathfinder?.isMoving?.()) || bot.pathfinder?.isMining?.() || bot.pathfinder?.isBuilding?.()) return false;
     if (typeof bot.blockAt !== 'function' || !bot.entity?.position) return false;
     const foot = bot.blockAt(bot.entity.position.floored());
     const head = bot.blockAt(bot.entity.position.offset(0, 1.62, 0).floored());
@@ -4048,9 +4048,15 @@ export class Executor {
   private async checkpointTask(
     task: RunningTask, bot: Bot, resumeFrom: number, boundary: boolean, settle?: () => Promise<void>,
   ): Promise<void> {
-    if (!boundary && (!checkpointReplayable(task.steps[resumeFrom])
-      || (task.steps[resumeFrom].skill === 'collect' && !task.count))) return;
-    if (this.checkpointDrain || !this.checkpointReady(task, bot, !settle, boundary)) return;
+    const call = task.steps[resumeFrom];
+    // Native programs own an opaque continuation, not replayable skill steps.
+    if (!boundary && (!call || !checkpointReplayable(call)
+      || (call.skill === 'collect' && !task.count))) return;
+    // A fixed goto can stop its owned path at a grounded checkpoint. Other work
+    // retains its existing atomic boundaries; settling never interrupts a dig,
+    // placement, container operation or another body owner.
+    const navigation = !boundary && !!settle && call?.skill === 'goto';
+    if (this.checkpointDrain || !this.checkpointReady(task, bot, navigation || !settle, boundary, navigation)) return;
     const drain: CheckpointDrain = { task, bot, resumeFrom, boundary, phase: 'settling', continuation: null };
     this.checkpointDrain = drain;
     try {
