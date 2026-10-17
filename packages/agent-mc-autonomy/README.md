@@ -791,13 +791,16 @@ that a known item is absent. Craft failure guidance distinguishes crafting-grid
 recipes from furnace processing instead of recommending a guessed grid for every
 missing recipe. No alias substitution, body action or additional model call is added.
 
-## Optional same-decision narration (0.2.0)
+## Optional same-decision narration (0.2.1)
 
 `NarrationPort` is an optional host-neutral output contract. A frontend subscribes
 to the owned actor/body binding and claims fresh lines for its own voice service.
-With a subscription, the existing planning response may carry exactly
-`{"spoken_text":"a short natural utterance"}` in assistant content alongside its
-normal tool call. Other analysis text is not implicitly speech. The supplied
+With a subscription, the projected `mc_do` schema accepts optional
+`_spoken_text` metadata, including for tool-only models. It is stripped before
+validation/dispatch against the original native schema. The existing planning
+response may alternatively carry exactly `{"spoken_text":"a short natural utterance"}`
+in assistant content alongside its normal tool call. Other analysis text is not
+implicitly speech. The supplied
 persona, selected memories and recent conversation stay in their existing context
 ports; no second model call, host SDK import or native queue is introduced.
 
