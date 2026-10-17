@@ -104,7 +104,8 @@ class HostContextPort:
     def read_recent(self, request):
         try:
             expected = self._recent_status(request)
-            if self.recent_path.stat().st_size > recent.STORAGE_BYTES:
+            payload_limit = recent.FULL_STORAGE_BYTES if expected.get("context_mode") == "full" else recent.STORAGE_BYTES
+            if self.recent_path.stat().st_size > payload_limit:
                 return recent.unavailable("snapshot_too_large")
             value = json.loads(self.recent_path.read_text(encoding="utf-8"))
             validated = recent.validate(value, expected, self.now())

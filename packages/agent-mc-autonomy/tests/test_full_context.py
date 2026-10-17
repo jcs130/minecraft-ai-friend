@@ -83,6 +83,19 @@ def test_full_host_recent_contract_is_owned_and_keeps_all_selected_originals():
         host_recent.validate(value, request(), req["as_of"])
 
 
+def test_full_recent_file_roundtrip_and_originals_exceed_compact_limit(tmp_path):
+    from test_host_recent import message, port_fixture, projection, status
+    port, req, clock = port_fixture(tmp_path)
+    req["context_mode"] = "full"
+    status(tmp_path, req)
+    rows = [message(f"{i:02d}", text="Full historical wording. " * 150) for i in range(20)]
+    assert port.publish_recent(projection(req, messages=rows), binding=req)["messages"] == 20
+    value = port.read_recent(req)
+    assert value["recent_messages"] == rows
+    queryable = port.queryable_recent(value, req)
+    assert all(row["original_ref"]["body_queryable"] for row in queryable["recent_messages"])
+
+
 def test_full_counter_fallback_and_pending_events_are_explicit():
     class FailedCounter:
         name = "failed-counter"
