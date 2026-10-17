@@ -132,7 +132,7 @@ export class CombatDecisionLoop {
       program: frame.policy ? { name: frame.policy.name, sourceHash: frame.policy.sourceHash } : null };
     Object.assign(entry, scope, { frame: publicFrame });
     this.options.report('requested', { ...scope, mode: cfg.mode, frame: publicFrame,
-      inputFormat: 'combat-compact-v1', requestBytes: Buffer.byteLength(body) });
+      inputFormat: 'combat-compact-v2', requestBytes: Buffer.byteLength(body) });
     try {
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, cfg.timeoutMs);

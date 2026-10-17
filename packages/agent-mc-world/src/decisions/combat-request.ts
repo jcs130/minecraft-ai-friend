@@ -16,11 +16,14 @@ export function combatRequest(frame: CombatDecisionFrame) {
     // UUID is checked locally against the fresh entity; the model chooses an option, not an identity.
     const { uuid: _uuid, ...primitive } = parameters as typeof parameters & { uuid?: string | null };
     const action = candidate.kind === 'method' ? { kind: 'method', method: candidate.id } : primitive;
-    criteria[`option_${index}`] = intent;
+    criteria[`option_${index}`] = frame.policy || candidate.kind === 'method' ? intent : {
+      retreat: 'Withdraw without attacking.', engage: 'Attack the selected visible enemy.',
+      track: 'Maintain a safe distance without attacking.', step: 'Take the checked short step; continue attacking.',
+      cast: 'Cast this available ability.',
+    }[candidate.kind];
     options[`option_${index}`] = action;
   });
   return { state: {
-    sampledAtMs: b.sampledAtMs,
     battlefield: { dimension: b.dimension,
       self: { entityId: b.self.entityId, health: health(b.self.health), food: b.self.food,
         ...(frame.candidates.some(candidate => candidate.kind === 'step')
@@ -32,9 +35,10 @@ export function combatRequest(frame: CombatDecisionFrame) {
         lineOfSight: actor.lineOfSight, targetEntityId: actor.targetEntityId })),
       omitted: b.omitted,
     },
-    mana: approximate(frame.mana), skills: frame.skills, options, omittedCandidates: frame.omittedCandidates,
+    mana: approximate(frame.mana), skills: frame.skills.map(({ block, ...skill }) => ({ ...skill, blocked: block !== null })),
+    options, omittedCandidates: frame.omittedCandidates,
   }, questions: { tactic: { type: 'choice' as const,
-    instructions: 'Health≈[current,max,source,ageMs]; null is unknown. Choose an executable option or keep. Preserve useful actions, survive, assist confirmed allies. Proximity does not establish allies.'
+    instructions: 'Choose for survival or confirmed allies; keep an effective action. Health≈[current,max,source,ageMs]; null=unknown; blocked=cannot execute. Proximity does not establish allies.'
       + (frame.policy ? '\nAgent tactic: ' + frame.policy.instructions : ''), criteria,
   } } };
 }

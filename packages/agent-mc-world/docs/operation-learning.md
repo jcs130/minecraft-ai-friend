@@ -89,6 +89,10 @@ version in the current realm/account library; it neither runs the method nor fol
 version. `routines:[]` clears the menu. Registration adds no inference loop; an explicitly enabled host
 combat driver uses its existing independent clock and model connection. The model receives option
 labels, necessary battlefield facts and execution availability, without method source or history.
+The compact request omits the absolute sample timestamp and repeated built-in action prose. The host
+retains the original sample and deadline checks; entity health ages and unknown readings still reach
+the model. Ability blockers use a boolean veto beside availability, mana cost and cooldown. Their
+original text remains in the full frame. Authored method intents and tactic instructions are retained.
 
 An authored `program` can filter and order the registered method options in `frame.actionPool` before
 the fast model chooses. Its order is retained. Methods are offered only with a free body and no active
