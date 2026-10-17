@@ -6,6 +6,7 @@ import type { JavaClientState } from '../contracts/java-client.ts';
 import type { MinecraftClientConfig } from './config.ts';
 import type { ToolDef } from './contracts.ts';
 import { compactNativeItems } from './native-evidence.ts';
+import type { MessageInboxOptions } from './message-inbox.ts';
 
 /** Host-owned storage and identity binding; never creates or reconnects a body. */
 export interface JavaClientServices {
@@ -13,6 +14,9 @@ export interface JavaClientServices {
   agentName?: string;
   /** Optional display/cache alias; never used as authoritative player identity. */
   accountName?: string;
+  /** A facade already indexing these events can avoid a duplicate book. */
+  messageInbox?: false;
+  messageInboxOptions?: MessageInboxOptions;
 }
 
 const dimensionOf = (state: JavaClientState | null) => state?.connected

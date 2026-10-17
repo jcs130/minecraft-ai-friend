@@ -110,6 +110,7 @@ import {
 import { Aborted, SkillBlocked, sleep, type BlueprintPlacementIntent } from './skill-context.ts';
 import { worldStateAt } from './skills-build.ts';
 import { chatInputError, readSkillHelp, SKILL_HELP_MAX_SKILLS, SKILL_SIGNATURE_DOC } from './skills.ts';
+import { TOOL_HELP_TOOL, readToolHelp } from '../src/client/tool-help.ts';
 import {
   parsePolicy, policyNoteText, renderFightRollback, renderPolicy, renderPolicyChange, renderPolicyEnv,
   PolicyBook, POLICY_DOC, POLICY_SCHEMA, type TravelPrefer,
@@ -2180,6 +2181,7 @@ const MAP_ICON_ZH: Record<string, string> = {
 };
 
 export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
+  TOOL_HELP_TOOL,
   PHOTO_TOOL,
   GAME_MEMORY_TOOL,
   KNOWLEDGE_TOOL,
@@ -4420,6 +4422,7 @@ export class MinecraftWorld implements World {
 
   tools(): ToolDef[] {
     const handlers: Record<string, ToolDef['handler']> = {
+      mc_tool_help: async (args, ctx) => { ctx.signal?.throwIfAborted(); return readToolHelp(this.tools(), args); },
       mc_knowledge: async (args, ctx) => {
         ctx.signal?.throwIfAborted();
         try {

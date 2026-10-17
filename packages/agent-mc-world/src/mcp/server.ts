@@ -7,6 +7,7 @@ import type { MinecraftAgentClient } from '../client/runtime.ts';
 import { traceSchema } from '../client/metrics.ts';
 import { randomUUID } from 'node:crypto';
 import { PROTOCOL, requireProtocol, type ArchiveQuery } from '../contracts/protocol.ts';
+import { readToolHelp } from '../client/tool-help.ts';
 
 const protocolSpec: Tool = {
   name: 'mc_protocol', description: 'Versioned host protocol: explicitly begin/end a real decision turn, cancel a request, query execution state, replace current facts, read original archives, or budget request context. Tool RPC completion does not end a turn. Execution completion does not complete your goal.',
@@ -98,6 +99,9 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
       if (!validate) throw new Error(`Unknown tool: ${name}`);
       if (!validate(args)) throw new Error(`Invalid arguments: ${ajv.errorsText(validate.errors)}`);
       if (extra.signal.aborted) throw new Error('Request cancelled before submission.');
+      if (name === `${prefix}_tool_help`) return outcome(readToolHelp(tools.map(tool => ({
+        name: tool.name, description: tool.description ?? '', parameters: tool.inputSchema,
+      })), args));
       if (name === protocol.name) {
         requireProtocol(String(args.protocol));
         const id = () => { if (typeof args.id !== 'string' || !args.id) throw new Error('id is required'); return args.id; };

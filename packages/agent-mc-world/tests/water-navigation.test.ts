@@ -60,7 +60,9 @@ it.each(['water', 'kelp', 'tall_seagrass'] as const)('crosses the actual %s pool
   for (let i = 0; i < 200 && !reached; i++) await vi.advanceTimersByTimeAsync(50);
   expect(reached, JSON.stringify({ from, at: h.bot.entity.position, keys: h.keys })).toBe(true);
   expect(h.bot.entity.position.z).toBeLessThan(-4);
-  expect(h.bot.entity.position.y).toBeGreaterThanOrEqual(65);
+  // Reaching the path cell can coincide with a surface bob slightly below y=65.
+  // Verify the actual breathing space, rather than an arbitrary phase of that bob.
+  expect(h.bot.blockAt(h.bot.entity.position.offset(0, 1.62, 0)).name).toBe('air');
   expect(h.bot.physicsEnabled).toBe(true);
 });
 

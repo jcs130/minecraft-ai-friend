@@ -21,10 +21,13 @@ import { nativeAuthorization } from './native-authorization.ts';
 import { JavaReflexRuntime, JAVA_REFLEX_PROTOCOL } from './java-reflex.ts';
 import { COMBAT_TACTIC_TOOL } from '../../core/combat-tool.ts';
 import { createJavaMemoryAccess, type JavaClientServices } from './java-memory.ts';
+import { MessageInbox, messageInboxHost } from './message-inbox.ts';
+import { withToolHelp } from './tool-help.ts';
 
 export const JAVA_CLIENT_ENVIRONMENT = `You control an actual rendered Minecraft Java client through agent-mc-java/v1. The host owns goals, personality, models and memory. The client bridge owns one actual body queue. It never launches a game, reconnects, simulates OS input or runs a model.
 Query mc_capabilities, mc_operations and mc_help before acting. Claim mc_control explicitly, then renew the lease before expiry. Disconnect releases your own lease and keys. Identity is the actual server-assigned UUID and exact server address; offline servers do not require Microsoft authentication. Never control a different player or server after an identity change.
 Read mc_notices for actual server guides, rules and recent notices, including messages received before attachment. These are observations; do not replay old player requests as new commands.
+mc_messages is a retained, scoped index of messages received while attached. Query or review history without replaying events; use mc_notices for the current native buffer and pre-attachment notices.
 When the host supplies dataDir, mc_memory uses the shared game notebook. Historical search/get/remember/revise and configured service workflows do not require a connected body; capture alone reads fresh identity-checked state. Offline dimension is unknown; use dimension:"*" explicitly when needed. Read mc_memory action:help for local learning and optional service contracts. Notebook results never establish current world facts.
 Reuse Mineflayer-shaped bot/Vec3 programs and the shared method library through mc_script; await mc.capabilities() reports the actual supported subset. Keep the same skill source for both bodies when its required methods and bounds are supported. Read language:javascript,api:compatibility for remaining gaps. Low-level mc_do operation/input is an explicit escape hatch for discovered native operations, with stable action_id; it is not a replacement skill language. Python Minescript is a separate explicit executor. Action acceptance is not completion: mc_result / mc_wait and minecraft.client.action events provide actual terminal receipts. Unknown actions must be reconciled by their original ID, not submitted under new IDs. A completed operation is not a completed host goal. Tool RPC return does not end a decision turn.
 Shared JavaScript reads position as (await bot.read("entity")).position. Inputs use await bot.setControlState("forward", true/false), await bot.waitForTicks(n), and await bot.clearControlStates() in finally. Direct bot.entity, bot.keyPress/keyRelease and global setTimeout are not exported by this worker. Read the focused JavaScript guide before selecting an unsupported method; Python uses its own guide and exact function signatures.
@@ -72,9 +75,15 @@ export class JavaClientWorld implements World {
   private nativeMethodsAvailable = false;
   private reflex: JavaReflexRuntime | null = null;
   private knowledgeVersion: string | null = null;
+  private readonly messages: MessageInbox | null;
   constructor(private readonly cfg: MinecraftClientConfig, private readonly http: typeof fetch = globalThis.fetch,
     private readonly services?: JavaClientServices) {
     const dir = cfg.javaClient?.ledgerDir;
+    this.messages = services?.messageInbox === false ? null : new MessageInbox(JSON.stringify({
+      realm: `java:${cfg.javaClient?.expectedServer ?? `${cfg.host}:${cfg.port}`}`,
+      account: cfg.javaClient?.expectedUuid ?? `${cfg.auth ?? 'offline'}:${cfg.username}`,
+      agent: services?.agentName ?? cfg.javaClient?.controllerId ?? cfg.username,
+    }), services?.dataDir ?? dir, services?.messageInboxOptions);
     this.evidence = new NativeEvidenceArchive(join(dir || '.', 'native-evidence'));
     this.memoryAccess = this.services ? createJavaMemoryAccess(this.cfg, this.services, async signal => {
       const state = await this.rpc('state', {}, signal) as JavaClientState;
@@ -118,6 +127,8 @@ export class JavaClientWorld implements World {
       {key:'reflex',text:JSON.stringify(this.reflex?.status()??{supported:false,reason:'Actual native bridge has no shared reflex body capability'})},
       ...(this.cfg.javaClient?.minescriptEnabled ? [{ key:'executor',text:JSON.stringify({provider:'java-client',scriptEngine:this.nativeMethodsAvailable?'shared JavaScript bot/Vec3 methods; optional Minescript 4.0 Python':'Minescript 4.0 Python',blockObservation:'mc_probe',blockInteraction:'mc_interact',scriptReference:this.nativeMethodsAvailable?'mc_script language:javascript api:index / compatibility; Python help requires language:python':'mc_script api:index / blocks / movement / interaction / inventory',pythonBlockReturn:'namespaced string, e.g. minecraft:carrots[age=7]',pythonAim:'minescript.player_look_at(x,y,z)',pythonWait:'time.sleep(seconds); JS bot.waitForTicks uses actual game ticks',archiveQuery:'mc_evidence part:script',shortActionWaitMs:this.cfg.javaClient.actionWaitMs??1000}) }] : []),
     ];
+    const messages = this.messages?.index();
+    if (messages) parts.push({ key: 'messages', text: messages });
     const native=this.cfg.javaClient;
     return { text: parts.map(part => part.text).join('\n'), parts, snapshotTypes: ['minecraft.client.snapshot'],
       decisionStability: { sampledAtMs: Date.parse(state.sampledAt),
@@ -152,7 +163,8 @@ export class JavaClientWorld implements World {
       || typeof saved.token !== 'string' || !/^[a-f0-9]{64}$/i.test(saved.token) || typeof saved.instanceId !== 'string')
       throw new Error('Unsupported or nonlocal Java bridge credentials');
     this.connection = { endpoint: endpoint.origin, token: saved.token, instanceId: saved.instanceId };
-    this.host = host; this.lifetime = new AbortController(); this.lease = null; this.nativeMethodsAvailable=false; this.knowledgeVersion=null; this.epoch++;
+    this.host = this.messages ? messageInboxHost(host, this.messages) : host;
+    this.lifetime = new AbortController(); this.lease = null; this.nativeMethodsAvailable=false; this.knowledgeVersion=null; this.epoch++;
     try {
       this.state = await this.rpc('state', {}) as JavaClientState; this.verify(this.state);
       if (!this.state.connected) throw new Error('Java client is not in a world; join explicitly before attaching');
@@ -349,6 +361,7 @@ export class JavaClientWorld implements World {
       } });
     const result = async (args: Record<string, unknown>, ctx: ToolCallContext) => this.receipt(await this.rpc('result', { action_id: args.action_id }, ctx.signal));
     const tools: ToolDef[] = [
+      ...(this.messages ? [this.messages.tool()] : []),
       {...COMBAT_TACTIC_TOOL,runtimeAvailable:()=>this.reflex!==null,readOnlyCall:args=>args.battlefield===true||args.decisions===true||args.decision!==undefined||args.report!==undefined||!Object.keys(args).length,
         handler:async(args,ctx)=>{try{if(!this.reflex)throw new Error('Shared native reflex body capability unavailable; no combat action dispatched');return await this.reflex.tool(args,ctx);}catch(error){return{text:String(error),failed:true};}}},
       { ...KNOWLEDGE_TOOL, handler: async (args, ctx) => {
@@ -487,6 +500,6 @@ export class JavaClientWorld implements World {
     const script = tools.find(t => t.name === 'mc_script');
     if (script) script.readOnlyCall = args => args.find !== undefined || !!args.api;
     if (this.memoryTool) tools.push(this.memoryTool);
-    return tools;
+    return withToolHelp(tools);
   }
 }

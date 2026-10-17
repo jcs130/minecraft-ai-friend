@@ -40,6 +40,45 @@ function rig(scriptEnabled = false, minecraftVersion?: string, scriptFailure?: s
   return {cfg,state,world,runtime,http,calls,dataDir,complete:()=>{completed=true;state.actions[0].phase='completed';}};
 }
 describe('real Java client body provider, offline protocol fixtures',()=>{
+  it('lets naming adapters reuse one inbox without rewriting quoted tool names', async () => {
+    vi.useFakeTimers();
+    const r = rig();
+    const world = new JavaClientWorld(r.cfg, r.http, { dataDir: r.dataDir, messageInboxOptions: { toolName: 'custom_messages' } });
+    const pushEvent = vi.fn(async event => event);
+    try {
+      await world.start({ pushEvent, log: nullLogger() } as any);
+      r.state.messages.push({ seq: 1, at: '2026-10-17T01:00:01Z', text: 'I used mc_messages', kind: 'player', sender: 'Alex' } as never);
+      await vi.advanceTimersByTimeAsync(501);
+      const index = world.requestFacts()!.parts!.find(part => part.key === 'messages')!.text;
+      expect(index).toContain('custom_messages list/search');
+      expect(index).toContain('I used mc_messages');
+      expect(world.tools().filter(tool => /messages$/.test(tool.name)).map(tool => tool.name)).toEqual(['custom_messages']);
+    } finally { await world.stop(); vi.useRealTimers(); }
+  });
+  it('retains received native messages in the common scoped inbox without replaying old buffer messages', async () => {
+    vi.useFakeTimers();
+    const r = rig();
+    try {
+      r.state.messages.push({ seq: 1, at: '2026-10-17T01:00:00Z', text: 'Before attachment', kind: 'system' } as never);
+      await r.runtime.connect();
+      expect((await r.runtime.call('mc_messages', {})).text).toContain('匹配 0 条');
+      r.state.messages.push({ seq: 2, at: '2026-10-17T01:00:01Z', text: '[MC 系统] 我升级了', kind: 'player', sender: 'Alex' } as never);
+      r.state.messages.push({ seq: 3, at: '2026-10-17T01:00:02Z', text: 'Own speech', kind: 'player', sender: 'Test' } as never);
+      r.state.messages.push({ seq: 4, at: '2026-10-17T01:00:03Z', text: 'Repeated HUD', kind: 'system', overlay: true } as never);
+      await vi.advanceTimersByTimeAsync(501);
+      const messages = await r.runtime.call('mc_messages', { channel: 'public' });
+      expect(messages.text).toContain('匹配 1 条');
+      const original = await r.runtime.call('mc_messages', { id: 'message_1' });
+      expect(original.text).toContain('[MC 系统] 我升级了');
+      expect(original.text).toContain('senderKey=Alex');
+      expect(original.text).toContain('"sequence":2');
+      expect((await r.runtime.call('mc_messages', { channel: 'system' })).text).toContain('匹配 0 条');
+      expect(r.world.requestFacts()!.parts!.filter(part => part.key === 'messages')).toHaveLength(1);
+      const count = r.calls.filter(call => call.method === 'do').length;
+      await r.runtime.call('mc_messages', { action: 'review', ids: ['message_1'] });
+      expect(r.calls.filter(call => call.method === 'do')).toHaveLength(count);
+    } finally { await r.runtime.disconnect(); vi.useRealTimers(); }
+  });
   it('keeps unknown historical effects separate from pending tasks and unavailable live body control',async()=>{
     const r=rig();r.state.actions=[{id:'old-unknown',phase:'unknown',updatedAt:1},{id:'real-pending',phase:'running',updatedAt:2}];
     await r.runtime.connect();try{

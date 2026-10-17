@@ -83,6 +83,12 @@ to a marketplace or install/connect the runtime. See [the learning contract](doc
 
 Primary optimization and acceptance target: **Minecraft Java 1.21.1**. Other
 versions remain selectable; the public SDK keeps explicit/automatic negotiation.
+See the [information capability map](docs/information-capabilities.md) for SDK/MCP
+observation, original evidence, memory and optional server-pack boundaries.
+`mc_messages` now shares retained message search/review across normal client entry
+points. `mc_tool_help` reads actual tool schemas progressively, including MCP
+transport tools at the MCP boundary. Neither invokes a model or replays actions.
+
 The core supplies [versioned vanilla knowledge](docs/vanilla-knowledge.md) through
 `mc_knowledge`: search summaries, then read needed food/cooking/health, item,
 mining or crafting references locally without loading a manual into every turn.

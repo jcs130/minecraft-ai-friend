@@ -7,6 +7,7 @@ export { offlineUuid, buildClientLaunch } from '../../core/client-launch.ts';
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady, type MinecraftClientConfig } from './config.ts';
 export { loadMinecraftClientConfig } from './config-file.ts';
 export { AgentJournal } from './journal.ts';
+export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp } from './tool-help.ts';
 export { GameMemoryBook, GAME_MEMORY_TOOL, type GameMemoryScope, type GameMemorySource, type GameMemoryContext } from '../../core/game-memory.ts';
 export { GameMemoryService, GAME_MEMORY_DEFAULTS, type GameMemoryConfig } from '../../core/game-memory-service.ts';
 export { KNOWLEDGE_TOOL, readMinecraftKnowledge } from '../../core/knowledge.ts';
@@ -15,6 +16,8 @@ export type { ToolDef, ToolOutcome, ToolCallContext, EventEnvelope, WorldRequest
 export type { FamiliarAction } from '../contracts/host.ts';
 export { familiarStepAction, nativeFamiliarAction } from './familiar-action.ts';
 export { nullLogger } from '../../core/support/runtime.mjs';
+export { MessageInbox, MESSAGE_TOOL, MESSAGE_PARAMETERS, MESSAGE_LIMIT, MESSAGE_CHANNELS, messageChannel,
+  messageInboxHost, messageInboxFacts, type MessageInboxOptions, type ReceivedMessage, type MessageChannel } from './message-inbox.ts';
 export { serveClientConsole, type ClientConsolePort } from './console-server.ts';
 export type { PublicAccountState, AuthenticationMode } from './authentication.ts';
 

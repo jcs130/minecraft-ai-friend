@@ -24,6 +24,9 @@ export { observeVisual, acceptsImages, visualArgumentError, structuredVisual } f
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady } from './client/config.ts';
 export { MinecraftClientWorld } from './client/world.ts';
 export { WorldOperationLearning } from './client/world-learning.ts';
+export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp } from './client/tool-help.ts';
+export { MessageInbox, MESSAGE_TOOL, MESSAGE_PARAMETERS, MESSAGE_LIMIT, MESSAGE_CHANNELS, messageChannel,
+  messageInboxHost, messageInboxFacts, type MessageInboxOptions } from './client/message-inbox.ts';
 export { JavaClientWorld, validateJavaClientConfiguration } from './client/java-client.ts';
 export type { JavaClientServices } from './client/java-memory.ts';
 export * from './contracts/java-client.ts';
