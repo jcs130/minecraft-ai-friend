@@ -51,6 +51,7 @@
 
 - `selectPolicyProposal`：显式 `shadow / canary / active`；同 scope、experiment、episode 固定随机分组；可选候选比例；缺失／不适用／停止时用基线。它只返回提议，身体所有权、最新环境和取消交接仍由现有宿主与派发器验证。
 - `OperationAttribution.policy`：记录实际提交动作的来源、层次、策略版本和实验关联。SDK、MCP 的 `agent-mc/v1` 元数据及 World 工具包装共用该契约。S1/S2 仅表示推理职责，不能当作规则／学习来源。
+- SDK 可用 `client.learning.recordDecision` 携带 `OperationDecision.policy` 保存选择，或使用公开 `OperationExperienceBook.decision`；SDK／World 的 `mc_choose` 包装也保留显式传入的策略与会话元数据。即使没有派发操作，也保留这次选择。实际操作再携带相同 decisionId、sessionId 和策略来源，分别统计 `selected`、`selectedForSubmission` 与未关联执行的选择，不能只收成功采用的选项。
 - `summarizePolicyUsage`：按唯一操作和修订去重，分别统计选择、提交、准入、已开始、完成、进展信号与目标成功。未知有独立分母，来源不明时不伪装规则占比。每个策略／版本单列。
 - 目标成功必须有调用方提供的 `PolicyGoalWitness`：作用域、原操作、实际执行 ID、任务判据版本与证据引用。它是显式评估器提交的结论，统计器不自行核验外部证据。没有评估器时成功率为 null，完成率仍单列。
 - `MotorPolicyShadow`：只读取显式哈希锁定的本地最终目标模型，基于正在执行的单一 goto（可伴随 look）与新鲜局部体素推理；无有效目标／观测就跳过。建议写独立 `/gameplay/policy-shadow` FlatBuffers 通道。没有身体控制端口，不调用 LLM，不借用未来坐标或上轮目标，不为建议计算虚构的成功率。

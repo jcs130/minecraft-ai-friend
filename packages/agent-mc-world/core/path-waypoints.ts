@@ -17,6 +17,35 @@ export interface GroundPathIssue { sequence: number; from: { x: number; y: numbe
 const groundPathIssues = new WeakMap<object, GroundPathIssue>();
 export const groundPathIssueOf = (bot: object): GroundPathIssue | null => groundPathIssues.get(bot) ?? null;
 
+/** Compressed waypoints can span several real half-stair supports. Certify only
+ * a short, grounded, no-jump climb using the installed collision physics. Never
+ * apply this state or turn unknown collision into air. A tall wall still fails. */
+function hasContinuousWalkUp(bot: Pick<Bot, 'entity' | 'blockAt'>, from: Vec3, to: Waypoint): boolean {
+  const body = bot as Bot;
+  const simulate = body.physics as unknown as { simulatePlayer?: (state: any, world: { getBlock(p: Vec3): unknown }) => unknown };
+  const distance = Math.hypot(to.x - from.x, to.z - from.z);
+  if (!simulate?.simulatePlayer || !body.inventory || distance < .1 || distance > 4 || to.y - from.y > 3) return false;
+  const controls = { forward: true, back: false, left: false, right: false, jump: false, sprint: false, sneak: false };
+  try {
+    const state = new PlayerState(body, controls);
+    state.pos = new Vec3(from.x, from.y, from.z); state.vel = new Vec3(0, 0, 0); state.onGround = true;
+    state.yaw = Math.atan2(from.x - to.x, from.z - to.z); state.pitch = 0;
+    state.jumpTicks = 0; state.jumpQueued = false;
+    const world = { getBlock(p: Vec3) {
+      const block = bot.blockAt(p, false);
+      if (!block || !Array.isArray(block.shapes)) throw new Error('unknown collision');
+      return block;
+    } };
+    for (let tick = 0; tick < 48; tick++) {
+      simulate.simulatePlayer(state, world);
+      if (state.isInWater || state.isInLava || state.pos.y < from.y - .6) return false;
+      if (Math.hypot(state.pos.x - to.x, state.pos.z - to.z) <= .35 && Math.abs(state.pos.y - to.y) <= .1 && state.onGround) return true;
+      if (Math.hypot(state.pos.x - from.x, state.pos.z - from.z) > distance + .5) return false;
+    }
+  } catch { /* Incomplete physics/collision cannot certify this exception. */ }
+  return false;
+}
+
 /** Verify the final executable prefix after waypoint height adjustment, before any control input.
  * A later edge with dig/place depends on future geometry and is deliberately not certified here.
  */
@@ -44,7 +73,7 @@ export function checkGroundPath(bot: Pick<Bot, 'entity' | 'blockAt'> & Partial<P
     if (rise > 1.25 && (i > 0 || bot.entity.onGround)) {
       const start = bot.blockAt(new Vec3(from.x, from.y, from.z).floored());
       const end = bot.blockAt(new Vec3(to.x, to.y, to.z).floored());
-      if (start && end && !climb.has(start.name) && !climb.has(end.name)) {
+      if (start && end && !climb.has(start.name) && !climb.has(end.name) && !hasContinuousWalkUp(bot, from, to)) {
         return { from: { x: from.x, y: from.y, z: from.z }, to: { x: to.x, y: to.y, z: to.z }, rise,
           reason: `路径内部几何校验：脚高 ${from.y.toFixed(3)}→${to.y.toFixed(3)}，需直接升高 ${rise.toFixed(3)} 格，超过普通跳跃范围；该段未安排垫脚/挖掘，也未读到攀爬或水中条件。已拒绝这条路径，不能据此断言目标完全不可达；用 observe sites/voxels 检查台阶、净空和其他路线。` };
       }

@@ -3,6 +3,8 @@ import { Vec3 } from 'vec3';
 import { describe, expect, it } from 'vitest';
 import { checkGroundPath, groundPathIssueOf, installDoorWaypointRepair } from '../core/path-waypoints.ts';
 import { gotoGoalOnce, goals } from '../core/travel.ts';
+import { createRequire } from 'node:module';
+import { methodHarness } from './method-harness.ts';
 const node = (x: number,y: number,z=0.5) => ({x,y,z,toBreak:[],toPlace:[]});
 function rig() {
   const bot = Object.assign(new EventEmitter(), { entity: { position: new Vec3(.5,64,.5), onGround:true, effects:{} },
@@ -39,5 +41,36 @@ describe('executable waypoint guard', () => {
     expect(checkGroundPath(bot as never,[node(1.5,66)])?.rise).toBe(2);
     bot.entity.effects={2:{}};
     expect(checkGroundPath(bot as never,[node(1.5,66)])).toBeNull();
+  });
+  it('certifies compressed half-stairs using real physics, while rejecting a wall or unknown collision', () => {
+    const r=methodHarness('1.21.1');
+    const req=createRequire(createRequire(import.meta.url).resolve('mineflayer'));
+    const Block=req('prismarine-block')(r.bot.registry);
+    const def=r.bot.registry.blocksByName.stone_brick_stairs;
+    let stair:any;
+    for(let id=def.minStateId;id<=def.maxStateId;id++) {
+      const b=Block.fromStateId(id,0),p=b.getProperties();
+      if(p.facing==='south'&&p.half==='bottom'&&p.shape==='straight'&&p.waterlogged===false){stair=b;break;}
+    }
+    expect(stair).toBeTruthy();
+    const base=r.bot.blockAt;
+    r.bot.blockAt=p=>{
+      const cell=p.floored();
+      if(cell.x===0&&((cell.z===0&&cell.y===64)||(cell.z===1&&cell.y===65))){
+        const b=Block.fromStateId(stair.stateId,0);b.position=cell;return b;
+      }
+      return base(p);
+    };
+    r.bot.entity.position=new Vec3(.5,64.5,.15);r.bot.physicsEnabled=false;
+    const goal=node(.5,66,1.85),before=r.bot.entity.position.clone();
+    try {
+      expect(checkGroundPath(r.bot as never,[goal])).toBeNull();
+      expect(r.bot.entity.position).toEqual(before);expect(Object.values(r.keys).every(v=>!v)).toBe(true);
+      const stairs=r.bot.blockAt;
+      r.bot.blockAt=p=>p.floored().equals(new Vec3(0,65,1))?base(new Vec3(0,63,1)):stairs(p);
+      expect(checkGroundPath(r.bot as never,[goal])?.rise).toBe(1.5);
+      r.bot.blockAt=p=>p.floored().equals(new Vec3(0,65,1))?null as never:stairs(p);
+      expect(checkGroundPath(r.bot as never,[goal])?.rise).toBe(1.5);
+    } finally {r.close();}
   });
 });

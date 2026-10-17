@@ -53,6 +53,8 @@ export type IpcBlob =
 /** 主 → 子:单向投递 */
 export type EngineCast =
   | { kind: 'cancel'; requestId: number; reason: string }
+  /** Trusted, read-only host telemetry. Never dispatches tools or changes the body. */
+  | { kind: 'viewer-activity'; value: unknown }
   /** x-hot 配置快照(整段替换值,不换对象身份) */
   | { kind: 'config'; cfg: MinecraftConfigSection }
   /** 主进程可选宿主能力的当前状态；子进程据此提供或移除对应句柄。 */

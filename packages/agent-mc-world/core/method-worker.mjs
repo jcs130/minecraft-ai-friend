@@ -39,6 +39,7 @@ function revive(value) {
   }
   const result = Object.fromEntries(Object.entries(value).map(([key, child]) => [key, revive(child)]));
   if (value.properties && value.stateId !== undefined && value.position) result.getProperties = () => result.properties;
+  if (value.sign && value.stateId !== undefined && value.position) result.getSignText = () => [result.sign.front, result.sign.back];
   return result;
 }
 

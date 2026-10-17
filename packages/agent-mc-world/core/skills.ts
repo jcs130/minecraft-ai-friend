@@ -1079,7 +1079,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   {
     name: 'look',
     doc: `{"skill":"look","at":[100,68,-20]} 原地转头看向目标格中心，不移动、不右键或挖掘。换观察方向后可用 mc_visual 拍摄。
-                                                 朝向目标不证明目标可见；墙和遮挡仍须由实际画面核对。`,
+                                                 朝向目标不证明目标可见；墙和遮挡仍须由实际画面核对。若目标是当前可见告示牌，回执附已收到的正反面原文，null 是未收到，不是空白；读字不要 use 打开编辑框。`,
     fields: [{ key: 'at', kind: 'anchor', required: true,
       error: `look 要 at:[x,y,z](${RELATIVE_HINT}),或一个 mc_map 路标名`,
       doc: '要面向的目标格，支持相对坐标和已登记路标。' }],
@@ -1388,6 +1388,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     name: 'observe',
     doc: `{"skill":"observe","mode":"sites","sites":[[103,64,-31],[104,65,-31]]}
                                                  施工/落脚前的短诊断，1-${SPATIAL_OBSERVATION_LIMITS.sites} 个绝对整数格：target 实际占用，below.topY 下格最高碰撞面，topArea 在目标底面的面积比。
+                                                 告示牌目标另附 sign：已收到的正反面原文；null 未收到/不支持，不是空白。只读，不开编辑框、不写字。
                                                  faces 是邻格碰撞面：ref+face方向=目标格；area 为格边界上的面积比，0 省略，null 未知。几何面积不代替物品放置规则或权限。
                                                  body 是以目标格水平中心为脚点的 0.6×1.8 净空；计入邻格延伸形状，clear:null 表示未知。blockers/fluids 为总数，hits/fluidHits 各最多3项；液体按格另报，实体不在此检查。
                                                  不试走、不试放、不验证支撑稳定性；每格检查当前实况，不投影先前施工。需要原始形状再查 voxels，长距离遮挡用 rays，地形剖面用 probe.slice，外观用 mc_visual。

@@ -975,7 +975,7 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
       await activateBlock(target);
       await sleep(USE_SETTLE_MS);
       checkAbort(ctx);
-      return `空手右键了 ${cellText(cell)} 的${zhName(target.name)}:这一下把编辑框打开了,没写字;要写字就在同一条 use 里给 text`;
+      return `空手右键了 ${cellText(cell)} 的${zhName(target.name)}:这一下把编辑框打开了,没写字；打开编辑框不证明原牌面为空白。读字用 look 指向该格或 observe sites，不需要右键；要写字才在同一条 use 里给 text`;
     }
     // (item, 目标方块) 表决定去哪儿读;表外那一对退回「报事实不下结论」
     const probe = desiredProbe ?? useProbeAt(bot, held, cell, target.name, ctx, call.face);

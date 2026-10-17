@@ -3,6 +3,7 @@ export { metaOf } from '../core/animal-state.ts';
 export { publishViewerCastCommand, observeViewerCastCommands } from '../core/command-events.ts';
 export { BREAK_ACL_CHANNEL } from '../core/break-permissions.ts';
 export { Bridge, type BridgeOptions } from '../core/bridge.ts';
+export { normalizeAgentActivity, type AgentActivityRecord } from '../core/viewer-activity.mjs';
 export { type CombatResult, type CombatScene } from '../core/combat-observation.ts';
 export { MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_CONFIG_GROUP, MINECRAFT_DEFAULTS, MINECRAFT_PLAYER_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP, type MinecraftConfigSection } from '../core/config.ts';
 export { setFlightExpiry } from '../core/flight.ts';
@@ -42,6 +43,10 @@ export type { PlayerObservation } from '../core/player-observation.ts';
 export type { Bot as MinecraftBot } from 'mineflayer';
 export type { DetectionEvidence } from '../core/perception-tools.ts';
 export { observedEntity } from '../core/perception-sight.ts';
+export { signTextSnapshot, observedSignText, type SignTextSnapshot } from '../core/sign-read.ts';
+export { OPTIONS_TOOL, minecraftOptionsFromSnapshot, extendMinecraftOptions, relevantMinecraftOptionIntents,
+  renderMinecraftOptionIndex, readMinecraftOptions } from '../core/options.ts';
+export * from './contracts/options.ts';
 export { createMinecraftChoiceTool } from './client/choice.ts';
 export { minecraftLifeTool } from './client/life.ts';
 export { PhotographyService, PHOTO_TOOL, PHOTO_PLANNER_SYSTEM, preparePhotoContext } from '../core/photography.ts';

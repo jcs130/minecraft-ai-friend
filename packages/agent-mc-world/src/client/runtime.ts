@@ -354,7 +354,8 @@ export class MinecraftAgentClient {
           const decisionId=chosen.decisionId??callId;
           const decision=this.learning.recordDecision({id:decisionId,category:String(args.category),selected:chosen.choice??null,status:chosen.status??'unknown',
             candidates:candidates.map(c=>({id:c.id,ready:c.ready,probability:c.id===chosen.choice?chosen.probability:null})),
-            model:chosen.model??null,elapsedMs:chosen.elapsedMs??null,inputTokens:chosen.inputTokens??null,recalledMemoryRefs:chosen.recalledMemoryRefs??[]});
+            model:chosen.model??null,elapsedMs:chosen.elapsedMs??null,inputTokens:chosen.inputTokens??null,recalledMemoryRefs:chosen.recalledMemoryRefs??[],
+            sessionId:attribution?.sessionId,policy:attribution?.policy});
           if(decision) outcome.meta={...outcome.meta,decisionId,experience:{id:decision.id,protocol:decision.schema}};
         } catch { /* Unrecognized advice stays unknown; no inferred decision. */ }
       }

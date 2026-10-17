@@ -4,6 +4,7 @@ import { Vec3 } from 'vec3';
 import { cellText, resolveAt } from './cell-facts.ts';
 import { SkillBlocked, checkAbort, type SkillContext } from './skill-context.ts';
 import type { SkillCall } from './skills.ts';
+import { observedSignText, signTextReceipt } from './sign-read.ts';
 
 export async function skillLook(bot: Bot, call: Extract<SkillCall, { skill: 'look' }>, ctx: SkillContext): Promise<string> {
   checkAbort(ctx);
@@ -14,5 +15,6 @@ export async function skillLook(bot: Bot, call: Extract<SkillCall, { skill: 'loo
   await bot.lookAt(point, true);
   await bot.waitForTicks(1);
   checkAbort(ctx);
-  return `已原地转头朝向 ${cellText(cell)} 的中心；没有移动或交互，目标是否可见须查看实际画面`;
+  const sign = observedSignText(bot, cell);
+  return `已原地转头朝向 ${cellText(cell)} 的中心；没有移动或交互，目标是否可见须查看实际画面${sign ? `。${signTextReceipt(sign)}` : ''}`;
 }

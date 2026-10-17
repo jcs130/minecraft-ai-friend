@@ -6,6 +6,7 @@ import { AIR_NAMES, LIQUIDS } from './cell-facts.ts';
 import { SkillBlocked } from './skill-context.ts';
 import { spatialBoxBudgetNote, partitionSpatialBox } from './spatial-slices.ts';
 import { spatialSites } from './spatial-site.ts';
+import { signTextSnapshot, type SignTextSnapshot } from './sign-read.ts';
 
 type Point = [number, number, number];
 type Box = [number, number, number, number, number, number];
@@ -74,6 +75,7 @@ interface Material {
   liquid: boolean;
   /** Local boxes; null means the collision geometry was not supplied. */
   collision: Box[] | null;
+  sign?: SignTextSnapshot;
 }
 type Sample = { material: Material } | { unknown: 'unloaded' | 'read-budget' | 'occluded' };
 interface EntityObservation {
@@ -166,18 +168,23 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
     if (cache.size >= SPATIAL_OBSERVATION_LIMITS.reads) return { unknown: 'read-budget' };
     if (input.mode !== 'rays' && !observedBlock(bot,{x:cell[0],y:cell[1],z:cell[2]})) return {unknown:'occluded'};
     const block = bot.blockAt(new Vec3(...cell));
+    const sign = input.mode === 'sites' ? signTextSnapshot(block) : null;
     const sample: Sample = block ? { material: {
       name: block.name, stateId: block.stateId,
       properties: typeof block.getProperties === 'function' ? block.getProperties() : null,
       air: AIR_NAMES.has(block.name), liquid: LIQUIDS.has(block.name),
       collision: block.shapes === undefined ? null : block.shapes.map(s => [...s] as Box),
+      ...(sign ? { sign } : {}),
     } } : { unknown: 'unloaded' };
     cache.set(key, sample);
     return sample;
   };
   if (input.mode === 'sites') return {
     source: common.source, observedAt: common.observedAt, dimension: common.dimension, position,
-    kind: 'sites' as const, sites: spatialSites(read, input.sites), blockReads: cache.size,
+    kind: 'sites' as const, sites: spatialSites(read, input.sites).map(site => {
+      const target = read(site.at), sign = 'material' in target ? target.material.sign : null;
+      return sign ? { ...site, sign } : site;
+    }), blockReads: cache.size,
     geometry: 'absolute cells; faces: ref+face=target, boundary area 0..1 (0 omitted, null unknown); body=0.6x1.8 centered, block collisions + 1-cell collar, first 3 hits/count, fluids by cell; not reachability, placement permission or safe footing',
   };
   const entities: EntityObservation[] = Object.values(bot.entities).filter(e => e !== bot.entity && e.id !== bot.entity.id && observedEntity(bot,e)).map(e => {

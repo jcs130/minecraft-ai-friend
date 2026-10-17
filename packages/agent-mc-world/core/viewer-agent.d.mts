@@ -9,3 +9,4 @@ export function createViewerAgentBridge(bot: unknown, options?: {
   getViewerSession?: () => unknown;
   getFlightState?: () => unknown;
 }): ViewerAgentBridge;
+export function publishAgentActivity(bot: unknown, value: unknown): boolean;

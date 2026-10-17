@@ -25,12 +25,20 @@ export function summarizePolicyUsage(records:Iterable<GameplayRecord>, options:{
     if(row.scopeKey!==options.scopeKey)throw Error('Mixed game scopes');
     if(Date.parse(row.at)<start||Date.parse(row.at)>end)continue;
     if(row.kind==='policy-shadow'){if(!shadowIds.has(row.id)){shadow++;shadowIds.add(row.id);}continue;}
-    if(row.kind!=='operation')continue;
+    if(row.kind!=='operation'&&row.kind!=='decision')continue;
     const old=latest.get(row.sourceId);
     if(!old||row.revision===old.revision||row.previousRevision===old.revision||Date.parse(row.updatedAt)>Date.parse(old.updatedAt))latest.set(row.sourceId,row);
     else if(Date.parse(row.updatedAt)===Date.parse(old.updatedAt)&&old.previousRevision!==row.revision)conflicts.add(row.sourceId);
   }
-  const count=empty(),admitted=empty(),started=empty(),completed=empty(),terminal=empty(),progress=empty(),selected=empty();
+  const count=empty(),admitted=empty(),started=empty(),completed=empty(),terminal=empty(),progress=empty(),selected=empty(),submittedSelections=empty();
+  let selectionEvents=0,unadoptedSelections=0;
+  const adoptedDecisionKeys=new Set([...latest.entries()].filter(([id,r])=>!conflicts.has(id)&&r.kind==='operation'&&r.decisionId&&r.dispatch==='returned'&&r.executionId)
+    .map(([,r])=>JSON.stringify([r.run,r.sessionId,r.decisionId])));
+  for(const [id,row] of latest)if(row.kind==='decision'&&row.decision?.selected&&!conflicts.has(id)) {
+    selectionEvents++;
+    const source=row.policy?.mode==='shadow'&&row.policy.selectedSource==='learned'?'unknown':row.policy?.selectedSource??'unknown';selected[source]++;
+    if(!adoptedDecisionKeys.has(JSON.stringify([row.run,row.sessionId,row.decisionId])))unadoptedSelections++;
+  }
   const verified=empty(),success=empty();
   const byVersion:Record<string,{source:string;layer:string;policyId:string|null;revision:string|null;operations:number;started:number;completed:number;terminal:number;goalVerified:number;goalSuccesses:number}>={};
   let unknownSelection=0,overrides=0,unmeasured=0,startEvidenceUnknown=0;
@@ -43,12 +51,12 @@ export function summarizePolicyUsage(records:Iterable<GameplayRecord>, options:{
     else if(old===null||old.success!==w.success||old.executionId!==w.executionId)linkedWitnesses.set(w.sourceId,null);
   }
   for(const [id,row] of latest) {
-    if(conflicts.has(id))continue;
+    if(conflicts.has(id)||row.kind!=='operation')continue;
     const p=row.policy;
     // A shadow tag accidentally attached to an operation is not proof of real provenance.
-    const source=p&&p.mode!=='shadow'?p.source:'unknown';
+    const source=p&&!(p.mode==='shadow'&&p.source==='learned')?p.source:'unknown';
     count[source]++;
-    if(p?.selectedSource&&p.selectedSource!=='unknown'&&p.mode!=='shadow'){selected[p.selectedSource]++;if(source!=='unknown'&&p.selectedSource!==source)overrides++;}else unknownSelection++;
+    if(p?.selectedSource&&p.selectedSource!=='unknown'&&!(p.mode==='shadow'&&p.selectedSource==='learned')){submittedSelections[p.selectedSource]++;if(source!=='unknown'&&p.selectedSource!==source)overrides++;}else unknownSelection++;
     const accepted=row.dispatch==='returned';
     const receipt=accepted&&!!row.executionId&&!!row.phase&&row.phase!=='unknown';
     if(receipt)admitted[source]++;
@@ -68,7 +76,8 @@ export function summarizePolicyUsage(records:Iterable<GameplayRecord>, options:{
   const operationCount=Object.values(count).reduce((a,b)=>a+b,0),known=operationCount-count.unknown;
   return {protocol:'agent-mc-policy-usage/v1',scopeKey:options.scopeKey,from:options.from,to:options.to,
     operationCount,shadowRecommendations:shadow,conflictingOperations:conflicts.size,startEvidenceUnknown,policyAttributionCoverage:fraction(known,operationCount),
-    submitted:count,selected,unknownSelection,admitted,started,terminal,completed,progressWitnessed:progress,overrides,
+    submitted:count,selected,selectionEvents,unadoptedSelections,selectedForSubmission:submittedSelections,unknownSelection,admitted,started,terminal,completed,progressWitnessed:progress,overrides,
+    selectedShare:Object.fromEntries(sources.map(s=>[s,s!=='unknown'&&selected.unknown?null:fraction(selected[s],selectionEvents)])),
     // Missing provenance cannot masquerade as a 0% learned/rule share of all real actions.
     submittedShare:Object.fromEntries(sources.map(s=>[s,s!=='unknown'&&count.unknown?null:fraction(count[s],operationCount)])),
     submittedKnownSourceShare:Object.fromEntries(sources.filter(s=>s!=='unknown').map(s=>[s,fraction(count[s],known)])),
@@ -91,9 +100,9 @@ export class PolicyUsageWindow {
   }
   observe(row:GameplayRecord) {
     if(row.scopeKey!==this.scopeKey)throw Error('Mixed policy monitor scopes');
-    if(!['operation','policy-shadow'].includes(row.kind))return;
+    if(!['operation','decision','policy-shadow'].includes(row.kind))return;
     if(Date.parse(row.at)<Date.now()-3600000)return;
-    const key=row.kind==='operation'?row.sourceId:row.id;
+    const key=row.kind==='policy-shadow'?row.id:row.sourceId;
     const old=this.rows.get(key);
     if(old) {
       if(row.revision===old.revision||old.previousRevision===row.revision||Date.parse(row.updatedAt)<Date.parse(old.updatedAt))return;
@@ -102,7 +111,8 @@ export class PolicyUsageWindow {
       }
     }
     // Keep metadata only; grids/inventories are already stored in the archive.
-    this.rows.delete(key);this.rows.set(key,{...row,before:null,after:null,observation:null,intents:[],effects:[],decision:null});
+    this.rows.delete(key);this.rows.set(key,{...row,before:null,after:null,observation:null,intents:[],effects:[],
+      decision:row.decision?{...row.decision,candidates:[],recalledMemoryRefs:[]}:null});
     while(this.rows.size>this.maxRows){const first=this.rows.keys().next().value!;this.rows.delete(first);this.conflicts.delete(first);this.evicted++;}
   }
   status(now=Date.now()) {

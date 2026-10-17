@@ -2,6 +2,7 @@ import { operationInventory } from './operation-experience.ts';
 import { observationView, observedEntity } from './perception-sight.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
 import { KNOWLEDGE_TOOL, readMinecraftKnowledge } from './knowledge.ts';
+import { OPTIONS_TOOL, minecraftOptionsFromSnapshot, readMinecraftOptions, renderMinecraftOptionIndex } from './options.ts';
 import { FOOD_COOKING } from './vanilla-food.ts';
 import { PlayerMemoryRecall } from './game-memory-player.ts';
 import { GameMemoryService } from './game-memory-service.ts';
@@ -36,6 +37,8 @@ import type { Bot } from 'mineflayer';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
 import { Bridge } from './bridge.ts';
+import { normalizeAgentActivity, AgentActivityHistory } from './viewer-activity.mjs';
+import { publishAgentActivity as publishViewerActivity } from './viewer-agent.mjs';
 import { captureMinecraftView, closeMinecraftViewCapture, warmMinecraftViewCapture } from './visual-capture.ts';
 import { PhotographyService, PHOTO_TOOL } from './photography.ts';
 import { createImageGenerationPort } from './image-generation.ts';
@@ -2189,6 +2192,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   PHOTO_TOOL,
   GAME_MEMORY_TOOL,
   KNOWLEDGE_TOOL,
+  OPTIONS_TOOL,
   ...PERCEPTION_TOOLS,
   RAILWAY_TOOL_DECL,
   {
@@ -2701,6 +2705,7 @@ export class MinecraftWorld implements World {
   protected readonly dataDir: string;
   protected readonly photography: PhotographyService;
   protected bridge: Bridge | null = null;
+  private readonly viewerActivity = new AgentActivityHistory();
   protected itemBreak: ItemBreakDecoder | null = null;
   protected executor: Executor | null = null;
   protected readonly methodTasks = new Map<number, (report: TaskReport) => void>();
@@ -3425,6 +3430,13 @@ export class MinecraftWorld implements World {
       { key: 'foodReserve', text: this.currentFoodReserve(snap, true) }];
     const last = this.lastFinishedTask;
     const bot = this.bridge.bot;
+    const running = this.executor?.status().running;
+    const options = minecraftOptionsFromSnapshot(snap, bot?.registry?.foodsByName ?? {}, {
+      freeSlots: snap.invSynced && typeof bot?.inventory?.emptySlotCount === 'function' ? bot.inventory.emptySlotCount() : null,
+      task: running?.step ?? null, travelling: !!running?.skill && ['goto', 'find', 'follow', 'ride', 'transit'].includes(running.skill),
+      restriction: this.bodyInhibitReason,
+    });
+    parts.splice(1, 0, { key: 'options', text: renderMinecraftOptionIndex(options) });
     if (bot) {
       parts.unshift({ key: 'identity', text: JSON.stringify({ realm: this.realmKey(),
         account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.botName }) });
@@ -3448,7 +3460,7 @@ export class MinecraftWorld implements World {
     parts.push({ key: 'lastTask', text: outcome });
     const queue = this.executor?.status();
     const threats = snap.entities.filter(entity => entity.kind === 'hostile');
-    return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts,
+    return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, options,
       decision: { sampledAtMs: Date.now(), state: {
         connection: this.connectionReadiness(), dimension: normalizeDimension(snap.dimension),
         position: [snap.position.x, snap.position.y, snap.position.z].map(value => Math.round(value * 10) / 10),
@@ -4435,6 +4447,13 @@ export class MinecraftWorld implements World {
         try {
           const result = readMinecraftKnowledge(args, this.bridge?.bot?.version ?? this.cfg.version);
           return { text: this.toolLog('mc_knowledge', args, JSON.stringify(result)), meta: { knowledge: result } };
+        } catch (error) { return { text: String(error), failed: true }; }
+      },
+      mc_options: async (args, ctx) => {
+        ctx.signal?.throwIfAborted();
+        try {
+          const result = readMinecraftOptions(this.requestFacts()?.options, args);
+          return { text: this.toolLog('mc_options', args, JSON.stringify(result)), meta: { discovery: result } };
         } catch (error) { return { text: String(error), failed: true }; }
       },
       mc_railway: async (args, ctx) => {
@@ -6315,6 +6334,12 @@ export class MinecraftWorld implements World {
         status: accepted ? 'accepted' : 'rejected', from: bot.entity?.position ?? null, target });
     } catch { /* Read-only presentation cannot change task admission or execution. */ }
   }
+  /** Read-only activity from an explicit host adapter; renderer validates and redacts it. */
+  publishAgentActivity(value: unknown): void {
+    const record = normalizeAgentActivity(value); if (!record) return;
+    this.viewerActivity.put(record);
+    try { publishViewerActivity(this.bridge?.bot, record); } catch { /* Telemetry cannot interrupt play. */ }
+  }
   protected enqueueTool(
     name: 'mc_do' | 'mc_scout',
     args: Record<string, unknown>,
@@ -6501,6 +6526,7 @@ export class MinecraftWorld implements World {
     this.setPersonalSpawn(undefined, '重连,等待核实', { announce: false });
     this.hydratePersonalSpawn();
     this.hookBotEvents(bot);
+    for (const record of this.viewerActivity.snapshot()) publishViewerActivity(bot, record);
     this.extensionSpawn(bot);
     this.diag.write({
       lane: 'link', event: 'spawn',

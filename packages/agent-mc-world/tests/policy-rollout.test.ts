@@ -48,6 +48,9 @@ describe('incremental learned policy rollout and evidence',()=>{
       const book=new OperationExperienceBook(dir),gameScope={realm:'test',account:'test',agent:'test'};
       const entry=book.begin(gameScope,'run','req','mc_do',{skill:'goto'},null,{controller:'system2',policy:{...policy,private:'PRIVATE'} as any});
       expect(entry.attribution.policy).not.toHaveProperty('private');
+      const decision=book.decision(gameScope,'run',{id:'decision-1',category:'motor',selected:'jump',status:'chosen',
+        candidates:[{id:'jump',ready:true}],policy},null);
+      expect(decision.attribution.policy).toMatchObject(policy);
       const restored=decodeGameplay(encodeGameplay(project(raw())));
       expect(restored.policy).toMatchObject(policy);expect(restored.policy!.featureHash).toBeNull();
       expect(Buffer.from(encodeGameplay(restored)).includes(Buffer.from('PRIVATE'))).toBe(false);
@@ -75,6 +78,18 @@ describe('incremental learned policy rollout and evidence',()=>{
     const rejected=project(raw({dispatch:'rejected'}));
     expect(summarizePolicyUsage([rejected],window).started.learned).toBe(0);
     expect(()=>summarizePolicyUsage([{...rows[0],scopeKey:'c'.repeat(64)}],window)).toThrow(/scope/);
+  });
+  it('counts selections that never become an operation, independently of submitted choices',()=>{
+    const make=(id:string)=>project(raw({id,kind:'decision',execution:null,decision:{category:'motor',selected:'jump',status:'chosen',candidates:[{id:'jump',ready:true}]},
+      attribution:{controller:'system1',decisionId:id,policy}}));
+    const one=make('c'.repeat(64)),two=make('d'.repeat(64)),op=project(raw({attribution:{controller:'system1',decisionId:one.decisionId,policy}}));
+    const stats=summarizePolicyUsage([one,two,op],window);
+    expect(stats).toMatchObject({selectionEvents:2,selected:{learned:2},selectedForSubmission:{learned:1},unadoptedSelections:1,operationCount:1});
+    expect(stats.selectedShare.learned).toBe(1);
+    const monitor=new PolicyUsageWindow(scope);monitor.observe(one);monitor.observe(two);monitor.observe(op);
+    expect(monitor.status(now)).toMatchObject({selectionEvents:2,unadoptedSelections:1});
+    const baselineOp={...op,policy:{...policy,mode:'shadow' as const,source:'rule' as const,selectedSource:'rule' as const}};
+    expect(summarizePolicyUsage([baselineOp],window).submitted.rule).toBe(1);
   });
   it('quarantines conflicting revisions and reports bounded window truncation',()=>{
     const r=project(raw()),other={...r,revision:'d'.repeat(64),phase:'failed'};

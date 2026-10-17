@@ -29,6 +29,7 @@ export type OperationDecision = {
   model?: string | null; elapsedMs?: number | null; inputTokens?: number | null; outputTokens?: number | null;
   sessionId?: string; contextHash?: string;
   recalledMemoryRefs?: string[];
+  policy?: import('./policy-evidence.ts').PolicyEvidence;
 };
 export type OperationExperience = {
   schema: 'agent-mc-experience/v1'; id: string; scopeKey: string; run: string; requestId: string;
@@ -118,7 +119,8 @@ function normalizedDecision(v: OperationDecision): OperationDecision {
     model: v.model ? bounded(v.model,'model',160) : null, elapsedMs:count(v.elapsedMs), inputTokens:count(v.inputTokens), outputTokens:count(v.outputTokens),
     ...(v.sessionId ? {sessionId:bounded(v.sessionId,'sessionId')} : {}),
     ...(v.contextHash && /^[a-f0-9]{64}$/.test(v.contextHash) ? {contextHash:v.contextHash} : {}),
-    ...(v.recalledMemoryRefs ? {recalledMemoryRefs:v.recalledMemoryRefs.slice(0,12).map(x=>bounded(x,'recalledMemoryRef',180))} : {}) };
+    ...(v.recalledMemoryRefs ? {recalledMemoryRefs:v.recalledMemoryRefs.slice(0,12).map(x=>bounded(x,'recalledMemoryRef',180))} : {}),
+    ...(v.policy ? {policy:normalizePolicyEvidence(v.policy)} : {}) };
 }
 
 /** One immutable identity per run/request; rows update atomically. A bounded recent index never deletes evidence files. */
@@ -183,7 +185,7 @@ export class OperationExperienceBook {
   }
   decision(scope: GameMemoryScope, run: string, value: OperationDecision, before: OperationObservation | null) {
     const decision=normalizedDecision(value);
-    const row=this.begin(scope,run,`decision:${decision.id}`, 'host-decision', {},before,{controller:'system1',sessionId:decision.sessionId,decisionId:decision.id});
+    const row=this.begin(scope,run,`decision:${decision.id}`, 'host-decision', {},before,{controller:'system1',sessionId:decision.sessionId,decisionId:decision.id,policy:decision.policy});
     if (row.decision) {if(experienceHash(row.decision)!==experienceHash(decision)) throw new Error('Decision ID conflict');return row;}
     return this.save(scope,{...row,kind:'decision',decision,before:null,after:row.before,dispatch:'returned',elapsedMs:decision.elapsedMs??null,updatedAt:new Date().toISOString()});
   }

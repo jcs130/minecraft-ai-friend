@@ -69,6 +69,7 @@ export class WorldOperationLearning {
         try {
           const chosen = JSON.parse(outcome.text);
           const row = collector.recordDecision({ id: chosen.decisionId ?? callId,
+            sessionId:ctx.attribution?.sessionId,policy:ctx.attribution?.policy,
             category: String(args.category), selected: chosen.choice ?? null, status: chosen.status ?? 'unknown',
             candidates: Array.isArray(args.candidates) ? args.candidates.map(c => ({ id: c.id, ready: c.ready,
               probability: c.id === chosen.choice ? chosen.probability : null })) : [],
