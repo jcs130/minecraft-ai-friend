@@ -36,6 +36,8 @@ import type { Bot } from 'mineflayer';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
 import { Bridge } from './bridge.ts';
+import { normalizeAgentActivity, AgentActivityHistory } from './viewer-activity.mjs';
+import { publishAgentActivity as publishViewerActivity } from './viewer-agent.mjs';
 import { captureMinecraftView, closeMinecraftViewCapture, warmMinecraftViewCapture } from './visual-capture.ts';
 import { PhotographyService, PHOTO_TOOL } from './photography.ts';
 import { createImageGenerationPort } from './image-generation.ts';
@@ -2701,6 +2703,7 @@ export class MinecraftWorld implements World {
   protected readonly dataDir: string;
   protected readonly photography: PhotographyService;
   protected bridge: Bridge | null = null;
+  private readonly viewerActivity = new AgentActivityHistory();
   protected itemBreak: ItemBreakDecoder | null = null;
   protected executor: Executor | null = null;
   protected readonly methodTasks = new Map<number, (report: TaskReport) => void>();
@@ -6315,6 +6318,12 @@ export class MinecraftWorld implements World {
         status: accepted ? 'accepted' : 'rejected', from: bot.entity?.position ?? null, target });
     } catch { /* Read-only presentation cannot change task admission or execution. */ }
   }
+  /** Read-only activity from an explicit host adapter; renderer validates and redacts it. */
+  publishAgentActivity(value: unknown): void {
+    const record = normalizeAgentActivity(value); if (!record) return;
+    this.viewerActivity.put(record);
+    try { publishViewerActivity(this.bridge?.bot, record); } catch { /* Telemetry cannot interrupt play. */ }
+  }
   protected enqueueTool(
     name: 'mc_do' | 'mc_scout',
     args: Record<string, unknown>,
@@ -6501,6 +6510,7 @@ export class MinecraftWorld implements World {
     this.setPersonalSpawn(undefined, '重连,等待核实', { announce: false });
     this.hydratePersonalSpawn();
     this.hookBotEvents(bot);
+    for (const record of this.viewerActivity.snapshot()) publishViewerActivity(bot, record);
     this.extensionSpawn(bot);
     this.diag.write({
       lane: 'link', event: 'spawn',

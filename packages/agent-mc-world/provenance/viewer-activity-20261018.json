@@ -1,0 +1,19 @@
+{
+  "repository": "https://github.com/jcs130/mc-visual-console",
+  "commit": "40c5106d78c485f32b4fc67b06221f9069dcc1f6",
+  "transformation": "esbuild ESM host bundles; no game assets or host-specific code",
+  "files": [
+    {
+      "source": "host/viewer-agent.mjs",
+      "local": "core/viewer-agent.mjs",
+      "sourceSha256": "45a9940f7dbba17d12ec4c38452ef1173aa8c4e8b5f2762146b20f57f94bd661",
+      "sha256": "4833ad88c6e0b919f9f5bd5c9d23dd10be73b7b9658bd1a03a0e9787db24151c"
+    },
+    {
+      "source": "src/modern-viewer/agent-activity.js",
+      "local": "core/viewer-activity.mjs",
+      "sourceSha256": "9659af43daa521de7964d2b7fdcb8497c0bb360b43c36215b085fec92c8891b6",
+      "sha256": "ad63b706b1d45037e1be9da0425dd12e6a5c9fade58b29e72b3ca8478d2fb48e"
+    }
+  ]
+}

@@ -1,6 +1,73 @@
 // ../../../mc-visual-console/packages/modern-viewer/renderer-src/host/viewer-agent.mjs
 import { randomUUID } from "node:crypto";
 
+// ../../../mc-visual-console/packages/modern-viewer/renderer-src/src/modern-viewer/agent-activity.js
+var ACTIVITY_LIMIT = 80;
+var ACTIVITY_BYTES = 256 * 1024;
+var kinds = /* @__PURE__ */ new Set(["reasoning", "message", "tool", "execution", "decision", "phase"]);
+var states = /* @__PURE__ */ new Set(["started", "accepted", "running", "completed", "failed", "cancelled", "unknown"]);
+var secret = /^(?:api[-_]?key|access[-_]?token|refresh[-_]?token|secret|password|authorization|headers|cookie|encrypted_content)$/i;
+function activityText(value, limit = 12e3) {
+  return String(value ?? "").replace(/\/(?:login|register)\s+[^\s"\\]+(?:\s+[^\s"\\]+)?/gi, "/[\u8BA4\u8BC1\u4FE1\u606F\u5DF2\u9690\u85CF]").replace(/Bearer\s+[^\s"\\]+/gi, "Bearer [\u5DF2\u9690\u85CF]").replace(/\b(?:sk-[\w.\-]{12,}|AIza[\w-]{20,})/g, "[\u51ED\u636E\u5DF2\u9690\u85CF]").replace(/\[console\|PIN:[^\]]+\]/gi, "[\u64CD\u4F5C\u5458]").slice(0, limit);
+}
+function clean(value, depth = 0) {
+  if (depth > 6) return "[\u5185\u5BB9\u5DF2\u6298\u53E0]";
+  if (typeof value === "string") return activityText(value, 6e3);
+  if (Array.isArray(value)) return value.slice(0, 40).map((row) => clean(row, depth + 1));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).slice(0, 50).map(([key, item]) => [activityText(key, 100), secret.test(key) ? "[\u5DF2\u9690\u85CF]" : clean(item, depth + 1)]));
+  return typeof value === "number" && !Number.isFinite(value) ? null : value ?? null;
+}
+function normalizeAgentActivity(value) {
+  if (!value || !kinds.has(value.kind) || typeof value.id !== "string" || !value.id || !Number.isFinite(Date.parse(value.at))) return null;
+  const record = {
+    schema: "agent-activity/v1",
+    id: activityText(value.id, 160),
+    at: value.at,
+    kind: value.kind,
+    source: ["system1", "system2", "human"].includes(value.source) ? value.source : "unknown",
+    status: states.has(value.status) ? value.status : "unknown",
+    title: activityText(value.title || value.tool || value.kind, 160)
+  };
+  for (const key of ["run", "session", "callId", "taskId", "tool", "model"]) if (value[key] !== void 0 && value[key] !== null) record[key] = activityText(value[key], 160);
+  for (const key of ["round", "durationMs"]) if (Number.isFinite(value[key]) && value[key] >= 0) record[key] = value[key];
+  if (value.text) record.text = activityText(value.text);
+  for (const key of ["arguments", "result"]) if (value[key] !== void 0) {
+    const text = JSON.stringify(clean(value[key]));
+    record[key] = text.length <= 12e3 ? JSON.parse(text) : { excerpt: activityText(text, 12e3), truncated: true };
+  }
+  return record;
+}
+var AgentActivityHistory = class {
+  constructor({ limit = ACTIVITY_LIMIT, bytes = ACTIVITY_BYTES } = {}) {
+    this.limit = Math.min(ACTIVITY_LIMIT, Math.max(1, limit));
+    this.bytes = Math.min(ACTIVITY_BYTES, Math.max(1024, bytes));
+    this.rows = /* @__PURE__ */ new Map();
+    this.revision = 0;
+  }
+  put(value) {
+    const row = normalizeAgentActivity(value);
+    if (!row) return false;
+    const previous = this.rows.get(row.id), next = { ...previous, ...row };
+    if (JSON.stringify(previous) === JSON.stringify(next)) return false;
+    this.rows.set(row.id, next);
+    let size = [...this.rows.values()].reduce((n, item) => n + JSON.stringify(item).length * 2, 0);
+    while (this.rows.size > this.limit || size > this.bytes && this.rows.size > 1) {
+      const key = this.rows.keys().next().value;
+      size -= JSON.stringify(this.rows.get(key)).length * 2;
+      this.rows.delete(key);
+    }
+    this.revision++;
+    return true;
+  }
+  snapshot() {
+    return [...this.rows.values()];
+  }
+  clear() {
+    this.rows.clear();
+    this.revision++;
+  }
+};
+
 // ../../../mc-visual-console/packages/modern-viewer/renderer-src/src/modern-viewer/agent-visual-protocol.js
 var AGENT_VISUAL_COLORS = Object.freeze({
   path: "#4ee6b1",
@@ -11,6 +78,8 @@ var AGENT_VISUAL_COLORS = Object.freeze({
   interact: "#c59aff",
   info: "#b7e7ff"
 });
+var AGENT_DECISION_COLORS = Object.freeze({ system1: "#ffb454", system2: "#63b8ff", human: "#d5a6ff", unknown: "#a6b7d4" });
+var AGENT_DECISION_LABELS = Object.freeze({ system1: "\u7CFB\u7EDF\u4E00", system2: "\u7CFB\u7EDF\u4E8C", human: "\u4EBA\u5DE5", unknown: "\u6765\u6E90\u672A\u63D0\u4F9B" });
 var AGENT_VISUAL_LIMITS = Object.freeze({
   markers: 48,
   vertices: 1024,
@@ -28,6 +97,21 @@ function visualSubject(v) {
   return v && UUID.test(v.playerUuid ?? "") && /^[\w.]{1,32}$/.test(v.playerName ?? "") && Number.isSafeInteger(v.entityId) ? { playerUuid: v.playerUuid.toLowerCase(), playerName: v.playerName, entityId: v.entityId } : null;
 }
 var sameVisualSubject = (a, b) => !!a && !!b && a.playerUuid.toLowerCase() === b.playerUuid.toLowerCase() && a.entityId === b.entityId;
+function normalizeVisualDecision(v) {
+  if (!v || typeof v !== "object" || !["accepted", "rejected"].includes(v.status)) return null;
+  const id = visualText(v.id, 80), label = visualText(v.label, 100);
+  if (!id || !label) return null;
+  const source = Object.hasOwn(AGENT_DECISION_COLORS, v.source) ? v.source : "unknown";
+  return {
+    id,
+    source,
+    status: v.status,
+    label,
+    from: visualPoint(v.from),
+    target: visualPoint(v.target),
+    ttlMs: visualTtl(v.ttlMs, 8e3, 15e3)
+  };
+}
 function normalizeVisualFlight(v) {
   if (!v || typeof v.allowed !== "boolean" || typeof v.flying !== "boolean") return null;
   const flying = v.allowed && v.flying;
@@ -218,6 +302,18 @@ function createViewerAgentHub({ maximum = 64 } = {}) {
 var viewerAgentHub = createViewerAgentHub();
 var publishers = /* @__PURE__ */ new WeakMap();
 var dispatchers = /* @__PURE__ */ new WeakMap();
+var activityHistories = /* @__PURE__ */ new WeakMap();
+function publishAgentActivity(bot, value) {
+  if (!bot || typeof bot.emit !== "function") return false;
+  let history = activityHistories.get(bot);
+  if (!history) {
+    history = new AgentActivityHistory();
+    activityHistories.set(bot, history);
+  }
+  if (!history.put(value)) return false;
+  bot.emit("viewer:activity", value);
+  return true;
+}
 function publishAgentVisualization(bot, update) {
   return publishers.get(bot)?.(update) ?? { ok: false, code: "AGENT_VISUAL_HOST_NOT_ATTACHED" };
 }
@@ -286,6 +382,8 @@ function createViewerAgentBridge(bot, {
     }
     if (!sameVisualSubject(record?.subject, subject)) {
       hub.remove(owner);
+      const activity = activityHistories.get(bot) ?? new AgentActivityHistory();
+      activityHistories.set(bot, activity);
       record = {
         subject,
         epoch: randomUUID(),
@@ -294,6 +392,8 @@ function createViewerAgentBridge(bot, {
         route: null,
         candidates: [],
         markers: [],
+        decisions: [],
+        activity,
         pointer: null,
         camera: null,
         presentation: null,
@@ -319,7 +419,8 @@ function createViewerAgentBridge(bot, {
     r.candidates = r.candidates.filter((v) => v.until > time);
     r.markers = r.markers.filter((v) => v.until > time);
     r.operations = r.operations.filter((v) => v.until > time);
-    r.trail = r.trail.filter((v) => time - v.at <= 3e4);
+    r.decisions = r.decisions.filter((v) => v.until > time);
+    r.trail = r.trail.filter((v) => time - v.at <= 8e3);
   }
   function publish(update) {
     if (closed) return { ok: false, code: "AGENT_VISUAL_HOST_CLOSED" };
@@ -336,6 +437,15 @@ function createViewerAgentBridge(bot, {
     return { ok: true, code: "AGENT_VISUAL_ACCEPTED", subject: { ...r.subject }, accepted: Object.keys(parsed.value) };
   }
   publishers.set(bot, publish);
+  on("viewer:decision", (value) => {
+    const decision = normalizeVisualDecision(value), r = refreshRecord();
+    if (!decision || !r) return;
+    r.decisions = [...r.decisions.filter((row) => row.source !== decision.source), { ...decision, until: now() + decision.ttlMs }].slice(-4);
+  });
+  on("viewer:activity", (value) => {
+    const r = refreshRecord();
+    if (r) r.activity.put(value);
+  });
   on("viewer:agent", (update, acknowledge) => {
     const result = publish(update);
     if (typeof acknowledge === "function") acknowledge(result);
@@ -394,10 +504,14 @@ function createViewerAgentBridge(bot, {
       id: ++operationId,
       kind,
       button: kind === "attack" || kind === "gather" ? "left" : kind === "inventory" && data.mouseButton !== 1 ? "left" : "right",
+      ...kind === "inventory" ? {
+        slot: Number.isSafeInteger(data.slot) ? data.slot : null,
+        windowId: Number.isSafeInteger(data.windowId) ? data.windowId : null
+      } : {},
       detail,
       target,
       from: visualPoint(bot.entity.position),
-      until: now() + 1800
+      until: now() + (kind === "inventory" ? 3200 : 1800)
     });
     r.operations = r.operations.slice(-6);
   });
@@ -413,6 +527,7 @@ function createViewerAgentBridge(bot, {
       r.route = null;
       r.candidates = [];
       r.markers = [];
+      r.decisions = [];
       r.operations = [];
       r.pointer = null;
       r.camera = null;
@@ -422,7 +537,7 @@ function createViewerAgentBridge(bot, {
     if (position && (!previous || Math.hypot(previous.x - position.x, previous.y - position.y, previous.z - position.z) >= 0.3)) {
       if (previous && Math.hypot(previous.x - position.x, previous.y - position.y, previous.z - position.z) > 16) r.trail = [];
       r.trail.push({ ...position, at: time });
-      r.trail = r.trail.slice(-64);
+      r.trail = r.trail.slice(-24);
     }
     if (r.route?.source === "pathfinder" && r.route.status === "moving" && bot.pathfinder?.isMoving?.() === true) r.route.until = time + 1e4;
     let flight = null;
@@ -464,6 +579,7 @@ function createViewerAgentBridge(bot, {
       camera: remaining(r.camera, time),
       candidates: r.candidates.map((v) => remaining(v, time)),
       markers: r.markers.map((v) => remaining(v, time)),
+      decisions: r.decisions.map((v) => remaining(v, time)),
       trail: r.trail.map(({ at, ...p }) => p),
       input: { ...r.input, operations: r.operations.map((v) => remaining(v, time)), pointer: remaining(r.pointer, time) },
       presentation: presentation ? {
@@ -478,6 +594,22 @@ function createViewerAgentBridge(bot, {
     const signature = JSON.stringify(frame);
     for (const [socket, sent] of sockets) {
       if (socket.connected === false) continue;
+      const activityRevision = r?.activity.revision ?? -1, activityEpoch = r?.epoch ?? "";
+      if (sent.activityRevision !== activityRevision || sent.activityEpoch !== activityEpoch) {
+        const records = r?.activity.snapshot() ?? [], reset = sent.activityEpoch !== activityEpoch;
+        const signatures = new Map(records.map((row) => [row.id, JSON.stringify(row)]));
+        socket.emit("agentActivity", {
+          schema: "agent-activity-frame/v1",
+          available: !!r && records.length > 0,
+          subject,
+          epoch: activityEpoch,
+          reset,
+          records: reset ? records : records.filter((row) => sent.activityRows.get(row.id) !== signatures.get(row.id))
+        });
+        sent.activityRows = signatures;
+        sent.activityRevision = activityRevision;
+        sent.activityEpoch = activityEpoch;
+      }
       if (force || sent.signature !== signature || time - sent.at >= 1e3) {
         socket.emit("agentVisualization", { ...frame, sequence: ++sequence });
         sent.signature = signature;
@@ -529,7 +661,7 @@ function createViewerAgentBridge(bot, {
         socket.off?.("disconnect", off);
         socket.off?.("agentVisualUpdate", incoming);
       };
-      sockets.set(socket, { signature: "", at: -Infinity, presentation: "", off });
+      sockets.set(socket, { signature: "", at: -Infinity, presentation: "", activityRevision: -2, activityEpoch: null, activityRows: /* @__PURE__ */ new Map(), off });
       socket.on("disconnect", off);
       socket.on("agentVisualUpdate", incoming);
       flush(true);
@@ -545,6 +677,7 @@ function createViewerAgentBridge(bot, {
       hub.remove(owner);
       record = null;
       for (const [socket, row] of sockets) {
+        socket.emit("agentActivity", { schema: "agent-activity-frame/v1", available: false, reset: false, records: [] });
         socket.emit("agentVisualization", { schemaVersion: 1, subject: null, available: false, reason: "AGENT_VISUAL_HOST_CLOSED", sequence: ++sequence, ttlMs: 3500 });
         row.off();
       }
@@ -555,6 +688,8 @@ function createViewerAgentBridge(bot, {
 export {
   createViewerAgentBridge,
   createViewerAgentHub,
+  observeSentPackets,
+  publishAgentActivity,
   publishAgentVisualization,
   viewerAgentHub
 };

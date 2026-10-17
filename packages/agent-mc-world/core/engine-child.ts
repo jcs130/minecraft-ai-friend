@@ -268,6 +268,7 @@ process.on('message', (msg: MainToChild) => {
   }
   const cast = msg.cast;
   if (cast.kind === 'cancel') { activeRequests.get(cast.requestId)?.abort(new Error(cast.reason)); return; }
+  if (cast.kind === 'viewer-activity') { mod?.publishAgentActivity(cast.value); return; }
   if (cast.kind === 'config' && cfg) {
     applyCfg(cfg as unknown as Record<string, unknown>, cast.cfg as unknown as Record<string, unknown>);
   }

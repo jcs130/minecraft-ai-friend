@@ -34,6 +34,7 @@ import { decodeBlobs } from './engine-blobs.ts';
 import { resolveProcedure, procedureReference } from './support/procedure.ts';
 import { COMBAT_TACTIC_TOOL } from './combat-tool.ts';
 import { METHOD_ADAPTER } from './method-runner.ts';
+import { normalizeAgentActivity } from './viewer-activity.mjs';
 
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
 const CAMERA_NOTE_FILE = fileURLToPath(new URL('./ENV_PROMPT_CAMERA.md', import.meta.url));
@@ -71,6 +72,8 @@ function ipcToolOutcome(out: string | IpcToolOutcome): string | ToolOutcome {
 
 export class MinecraftWorldProxy implements World {
   readonly id = 'minecraft';
+  /** Optional host activity port; no model calls, history reads or game actions. */
+  publishAgentActivity(value: unknown): void { const record = normalizeAgentActivity(value); if (record) this.cast({ kind: 'viewer-activity', value: record }); }
 
   private host: WorldHost | null = null;
   private child: ChildProcess | null = null;
