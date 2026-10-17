@@ -1,7 +1,8 @@
 /** Identity evidence for Mineflayer's text-pattern chat events. */
 interface ChatMessage {
   translate?: string;
-  json?: { translate?: string };
+  with?: Array<string | { toString(): string }>;
+  json?: { translate?: string; with?: Array<string | { toString(): string }> };
   toString?(): string;
 }
 
@@ -37,6 +38,17 @@ export class MinecraftChatProvenance {
     if (!source || source.position === 'game_info' || key.startsWith('chat.type.')
       || key === 'commands.message.display.outgoing'
       || (source.position === 'chat' && key !== 'commands.message.display.incoming')) return null;
+    // Translation arguments carry the sender/body independently of the client's
+    // language. Parsing only the English rendered sentence lost private identity
+    // on localized 1.21.1 messages delivered through system_chat.
+    const parts = message.with ?? message.json?.with;
+    if (key === 'commands.message.display.incoming' && parts && parts.length >= 2) {
+      const username = parts[0]?.toString() ?? '';
+      const body = parts[1]?.toString() ?? '';
+      if (!/^\w{1,16}$/.test(username)) return null;
+      const identity = this.identify(username, message, players);
+      return identity ? { username, message: body, identity } : null;
+    }
     const text = message.toString?.().replace(/§[0-9A-FK-ORX]/gi, '') ?? '';
     if (/^\s*</.test(text)) return null;
     const match = /(?:^|\s)(\w{1,16}) whispers to you: ?([^\r\n]*)$/i.exec(text);

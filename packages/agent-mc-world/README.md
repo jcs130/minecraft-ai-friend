@@ -1,5 +1,10 @@
 # Agent MC World
 
+`0.5.7-rc.13` reads standard incoming private messages from translation
+arguments, preserving sender evidence across localized Java 1.21.1 chat and
+system-chat transports. English plugin formats remain supported; public quotes
+and mismatched packet identities cannot acquire verified private identity.
+
 `0.5.7-rc.12` preserves decision attribution across the real engine-child IPC
 boundary. Agent names and permissions stay unchanged; anonymous tool arguments
 cannot claim provenance. The protocol regression covers MCP, SDK and the child

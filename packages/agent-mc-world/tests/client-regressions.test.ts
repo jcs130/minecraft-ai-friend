@@ -14,6 +14,28 @@ afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 const players = { ag_CorMy: { username: 'ag_CorMy', uuid: 'uuid-cormy' }, Jojo: { username: 'Jojo', uuid: 'uuid-jojo' } };
 
 describe('whisper identity from raw messages', () => {
+  it.each(['chat', 'system'])('keeps the sender and channel of a translated incoming whisper on %s', async position => {
+    const r = methodHarness('1.21.1');
+    try {
+      Object.assign(r.bot, { players });
+      (r.world as any).hookMessageEvents(r.bot);
+      const msg = { translate: 'commands.message.display.incoming',
+        with: [{ toString: () => 'ag_CorMy' }, { toString: () => '去河对岸，别挖这里的保护方块。' }],
+        toString: () => 'ag_CorMy 悄悄地对你说：去河对岸，别挖这里的保护方块。' };
+      r.bot.emit('message', msg, position, 'uuid-cormy');
+      await Promise.resolve();
+      expect(r.host.events).toHaveLength(1);
+      expect(r.host.events[0]).toMatchObject({ text: '[MC 私聊] ag_CorMy: 去河对岸，别挖这里的保护方块。',
+        senderKey: 'ag_CorMy', meta: { uname: 'ag_CorMy', channel: 'private', identityEvidence: 'packet-sender' } });
+    } finally { r.close(); }
+  });
+  it('does not accept translated private identity with a mismatched packet sender', () => {
+    const provenance = new MinecraftChatProvenance();
+    const msg = { translate: 'commands.message.display.incoming',
+      with: [{ toString: () => 'ag_CorMy' }, { toString: () => 'hello' }], toString: () => '本地化私聊' };
+    provenance.observe(msg, 'system', 'uuid-jojo');
+    expect(provenance.incomingWhisper(msg, players)).toBeNull();
+  });
   it.each(['◆黑铁 [Agent] ', '[Agent] ', ''])('recognizes optional prefix %j and keeps the full body', prefix => {
     const provenance = new MinecraftChatProvenance();
     const msg = { toString: () => `${prefix}ag_CorMy whispers to you: jojo也来啦～` };

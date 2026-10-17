@@ -7066,7 +7066,7 @@ export class MinecraftWorld implements World {
         if (whisper.username === this.chatName()) return;
         this.interruptIdle('whisper');
         this.emit('minecraft.chat', `[MC 私聊] ${whisper.username}: ${whisper.message}`, true,
-          { meta: { uname: whisper.username, socialScope: 'minecraft-server', ...whisper.identity } }, whisper.username);
+          { meta: { uname: whisper.username, channel: 'private', socialScope: 'minecraft-server', ...whisper.identity } }, whisper.username);
         return;
       }
       let unchangedQueryFeedback = false;
@@ -7156,7 +7156,8 @@ export class MinecraftWorld implements World {
         this.emit('minecraft.chat', `[MC ${privateMessage ? '私聊' : serverNotice ? '插件' : loginMessage ? '登录消息' : '系统'}] ${text}`,
           privateMessage || serverNotice,
           { ...(privateMessage || serverNotice ? {} : { trigger: 'piggyback' as const }),
-            ...(loginMessage ? { meta: { phase: 'login', server: `${this.cfg.host}:${this.cfg.port}` } } : {}) },
+            ...(privateMessage ? { meta: { channel: 'private' } }
+              : loginMessage ? { meta: { phase: 'login', server: `${this.cfg.host}:${this.cfg.port}` } } : {}) },
           serverNotice ? 'server-extension' : undefined);
       });
     });
