@@ -1,6 +1,6 @@
 /** Public, timestamped observations for agent-authored diving programs; no action policy. */
 import type { Bot } from 'mineflayer';
-import { WATER_BLOCKS } from './terrain.ts';
+import { WATER_BLOCKS } from './fluid-blocks.ts';
 
 const sensors = new WeakMap<Bot, { oxygenAt: string | null; healthAt: string | null;
   lastHealth: number | null; healthLoss: number; healthRecovered: number; epoch: number; dispose(): void }>();

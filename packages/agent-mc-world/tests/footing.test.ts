@@ -55,4 +55,12 @@ describe('actual footing in world facts', () => {
     expect(snapshot.footing?.kind).toBe('fluid');
     expect(place(snapshot)).toContain('脚部位于水中');
   });
+
+  it.each(['kelp', 'kelp_plant', 'seagrass', 'tall_seagrass'])('shares the same water-cell classification for %s', name => {
+    const bot = botAt(new Vec3(0.5, 64, 0.5), () => ({ name, shapes: [] }), false);
+    const snapshot = snapshotFromBot(bot, { scanBlocks: false });
+    expect(snapshot.footing).toMatchObject({ kind: 'fluid', block: name, grounded: false });
+    expect(snapshot.inWater).toBe(true);
+    expect(place(snapshot)).not.toContain('未接地');
+  });
 });

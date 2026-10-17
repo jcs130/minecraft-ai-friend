@@ -27,6 +27,8 @@ import type { TargetDiag } from './skill-context.ts';
 import { flightState, type FlightState } from './flight.ts';
 import { inventoryReadState, narrateInventorySync, type InventoryReadState } from './inventory-window-sync.ts';
 import { footingFromBot, narrateFooting, type FootingReading } from './footing.ts';
+import { WATER_BLOCKS } from './fluid-blocks.ts';
+export { WATER_BLOCKS } from './fluid-blocks.ts';
 export { BURNING_BLOCKS, SCORCHING_FLOOR } from './hazard-geometry.ts';
 
 /** 八方位罗盘。北=-z 南=+z 东=+x 西=-x,与 move 技能同一套词。 */
@@ -945,9 +947,6 @@ const CONTAINER_BLOCKS = new Set([
   'furnace', 'smoker', 'blast_furnace',
 ]);
 const CONTAINER_NEARBY_CAP = 4;
-
-/** 头部所在方块是不是水体(含气泡柱与自带水的水草/海带):溺水判定的前提 */
-export const WATER_BLOCKS = new Set(['water', 'bubble_column', 'kelp', 'kelp_plant', 'seagrass', 'tall_seagrass']);
 
 /** 自动摘要的近景预算；听觉独立消费真实声音包。 */
 const SNAPSHOT_ENTITY_RANGE = 16;

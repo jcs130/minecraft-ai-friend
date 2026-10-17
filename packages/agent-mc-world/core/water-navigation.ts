@@ -2,7 +2,7 @@
 import type { Bot } from 'mineflayer';
 import type { Movements } from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
-import { WATER_BLOCKS } from './terrain.ts';
+import { WATER_BLOCKS } from './fluid-blocks.ts';
 
 /** Pathfinder 2.4.5 only registers water/lava, while physics also floats in aquatic plants. */
 export function configureWaterMovements(bot: Pick<Bot, 'registry'>, movements: Movements): void {

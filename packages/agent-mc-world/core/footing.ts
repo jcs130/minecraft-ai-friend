@@ -1,4 +1,5 @@
 import { Vec3 } from 'vec3';
+import { WATER_BLOCKS } from './fluid-blocks.ts';
 
 export interface FootingReading {
   kind: 'support' | 'fluid' | 'air' | 'unknown';
@@ -15,7 +16,7 @@ export function footingFromBot(bot: any): FootingReading {
   const pos = bot.entity.position;
   const grounded = typeof bot.entity.onGround === 'boolean' ? bot.entity.onGround : null;
   const feet = bot.blockAt(pos);
-  if (feet && ['water', 'lava', 'bubble_column'].includes(feet.name)) {
+  if (feet && (WATER_BLOCKS.has(feet.name) || feet.name === 'lava')) {
     return { kind: 'fluid', block: feet.name, grounded };
   }
   const half = Number.isFinite(bot.entity.width) && bot.entity.width > 0
