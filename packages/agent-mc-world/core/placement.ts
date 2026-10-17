@@ -572,7 +572,7 @@ export function singlePlaceScene(bot: Bot, center: Cell, material: string): stri
   const shown = fits.slice(0, FOOTPRINT_SPOTS_MAX);
   return [`${R} 格内实测几何空位 ${fits.length} 处:${shown.map((f) => cellText(f.cell)).join('、')}`
     + (fits.length > shown.length ? `(按距离只列前 ${shown.length} 处)` : '')
-    + `；仅是空位，放置前仍要核对服务端保护许可`];
+    + `；仅是空位，是否放成以实际回读为准；未生效后可查询保护原因`];
 }
 
 /** 候选位置一次列几处;排序判据是离她多远,越靠前越近 */

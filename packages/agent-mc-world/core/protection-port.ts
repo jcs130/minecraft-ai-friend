@@ -90,5 +90,18 @@ export interface BlockProtectionPort {
   verdict(action: ProtectAction, dimension: string, cell: ProtectCell): ProtectStatus | null;
 }
 
+/** Cached denials remain binding; ordinary actions query only after an unconfirmed effect. */
+export function protectionCheck(
+  port: BlockProtectionPort, dimension: () => string, preflight: () => boolean,
+): (action: ProtectAction, cell: ProtectCell, phase?: 'before' | 'after_failure') => Promise<ProtectReply | null> {
+  return (action, cell, phase = 'before') => {
+    const dim = dimension();
+    if (phase === 'after_failure' || port.verdict(action, dim, cell) === 'deny') {
+      return port.check(action, dim, cell);
+    }
+    return preflight() ? port.check(action, dim, cell, true) : Promise.resolve(null);
+  };
+}
+
 const normDimension = (s: string): string => s.replace(/^minecraft:/, '');
 const keyOf = (action: ProtectAction, dimension: string, cell: ProtectCell): string => `${action}|${normDimension(dimension)}|${cell.x},${cell.y},${cell.z}`;

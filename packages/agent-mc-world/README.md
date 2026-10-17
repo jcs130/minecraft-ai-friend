@@ -3,6 +3,12 @@
 Independent Minecraft execution core, maintained in `jcs130/minecraft-ai-friend`.
 Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.
 
+`protectionPreflight` defaults to false. With a server protection port, normal
+digging, placing and path planning do not query permissions. An unconfirmed block
+effect triggers a query for that target; explicit cached denials still apply.
+Enable the setting for proactive per-block checks. The passive ACL remains a
+source of known denials; missing coverage is unknown, not a denial.
+
 `0.5.7-rc.4` prepares the complete shared Java 1.21.1 viewer with explicit
 1.20.6 compatibility: version-matched original sounds, sound registry metadata,
 and the eight-track shared original BGM library. The locked input records its

@@ -6,6 +6,7 @@ import type { Block } from 'prismarine-block';
 import { Vec3 } from 'vec3';
 import { Aborted, type SkillContext } from '../core/skill-context.ts';
 import { installMineflayerFixes } from '../core/mineflayer-fixes.ts';
+import { protectionCheck } from '../core/protection-port.ts';
 import { armTemporaryScaffoldPlacement, beginTemporaryScaffold, closeTemporaryScaffold, prepareTemporaryScaffoldPlacement,
   recordTemporaryScaffold, reclaimTemporaryScaffold, reclaimPendingTemporaryScaffold,
   pendingTemporaryScaffolds, promoteTemporaryScaffold, scaffoldCleanupCheckpoint } from '../core/temporary-scaffold.ts';
@@ -94,6 +95,57 @@ function rig() {
 }
 
 describe('temporary path support provenance and bounded cleanup', () => {
+  it.each([true, false])('diagnoses an unconfirmed dig without querying a successful dig (confirmed=%s)', async confirmed => {
+    vi.useFakeTimers();
+    try {
+      const r = rig(); const queries: unknown[] = [];
+      Object.assign(r.bot, {
+        _client: Object.assign(new EventEmitter(), { write: () => undefined }),
+        _updateBlockState: () => undefined,
+        dig: async (block: Block) => {
+          if (confirmed) r.events.emit('blockUpdate', block, r.seed('air', block.position));
+        },
+        cortiProtectionPreflight: () => false,
+        cortiBreakVerdict: () => 'unknown',
+        cortiProtectCheck: protectionCheck({ verdict: () => null,
+          check: async (action, dimension, cell) => {
+            queries.push({ action, dimension, cell });
+            return { action, dimension, ...cell, status: 'deny', reason: 'server denied' };
+          } }, () => 'overworld', () => false),
+      });
+      installMineflayerFixes(r.bot, { error() {}, info() {}, warn() {}, debug() {} } as never);
+      const dig = r.bot.dig(r.seed('stone'));
+      const checked = confirmed ? expect(dig).resolves.toBeUndefined()
+        : expect(dig).rejects.toThrow('失败后保护查询 deny');
+      await vi.runAllTimersAsync(); await checked;
+      expect(queries).toHaveLength(confirmed ? 0 : 1);
+      expect(r.bot.blockAt(r.at())?.name).toBe(confirmed ? 'air' : 'stone');
+    } finally { vi.useRealTimers(); }
+  });
+  it.each([true, false])('queries protection only after an unconfirmed placement (confirmed=%s)', async confirmed => {
+    vi.useFakeTimers();
+    try {
+      const r = rig(); const queries: unknown[] = [];
+      Object.assign(r.bot, {
+        _client: Object.assign(new EventEmitter(), { write: () => undefined }),
+        craft: async () => undefined, placeBlock: async () => undefined,
+        _genericPlace: async () => { if (confirmed) r.seed('oak_planks'); },
+        pathfinder: { isBuilding: () => false, setGoal: () => undefined },
+        cortiProtectCheck: protectionCheck({ verdict: () => null,
+          check: async (action, dimension, cell) => {
+            queries.push({ action, dimension, cell });
+            return { action, dimension, ...cell, status: 'deny', reason: 'server denied' };
+          } }, () => 'overworld', () => false),
+      });
+      installMineflayerFixes(r.bot, { error() {}, info() {}, warn() {}, debug() {} } as never);
+      const placement = r.bot.placeBlock(r.seed('stone', r.at(2, 63)), new Vec3(0, 1, 0));
+      const checked = confirmed ? expect(placement).resolves.toBeUndefined()
+        : expect(placement).rejects.toThrow('放置未确认后的保护查询 deny');
+      await vi.runAllTimersAsync(); await checked;
+      expect(queries).toHaveLength(confirmed ? 0 : 1);
+      if (!confirmed) expect(queries[0]).toMatchObject({ action: 'place', cell: { x: 2, y: 64, z: 0 } });
+    } finally { vi.useRealTimers(); }
+  });
   it('places explicitly temporary work through native confirmation, preserves it for use, then reclaims only that work', async () => {
     vi.useFakeTimers();
     try {

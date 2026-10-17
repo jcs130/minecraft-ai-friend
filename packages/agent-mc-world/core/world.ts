@@ -4225,6 +4225,7 @@ export class MinecraftWorld implements World {
       movementCosts: () => TRAVEL_COSTS[this.policy.get().travel],
       taskId: () => this.executor?.currentTask?.id ?? null,
       protectionFile: this.dataDir ? join(this.dataDir, 'minecraft-break-permissions.json') : null,
+      protectionPreflight: () => this.cfg.protectionPreflight === true,
 
       // 工地绑定持续约束自动寻路；显式施工与拆改仍通过各自权限检查。
       blueprintZones: () => this.blueprintPathZones(),

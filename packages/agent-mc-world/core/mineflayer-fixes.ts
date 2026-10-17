@@ -87,9 +87,10 @@ interface WindowLike {
 interface PatchedBot extends Bot {
   /** Bridge 的服务端挖掘权限缓存；覆盖路径挖掘和显式 dig/tunnel。 */
   cortiBreakVerdict?: (block: NonNullable<DigBlock>) => 'allowed' | 'protected' | 'unknown';
-  cortiProtectCheck?: (action: 'break' | 'place', cell: { x: number; y: number; z: number }) => Promise<{
+  cortiProtectionPreflight?: () => boolean;
+  cortiProtectCheck?: (action: 'break' | 'place', cell: { x: number; y: number; z: number }, phase?: 'before' | 'after_failure') => Promise<{
     status: 'deny' | 'unknown' | 'allow_likely'; reason: string;
-  }>;
+  } | null>;
   _genericPlace(
     referenceBlock: unknown, faceVector: unknown, options: Record<string, unknown>,
   ): Promise<unknown>;
@@ -876,6 +877,12 @@ function installConfirmedPlace(
               .emit('blockPlaced', before, bot.blockAt(dest));
             return;
           }
+          if (attempt === 1) {
+            const diagnosis = await bot.cortiProtectCheck?.('place', dest, 'after_failure');
+            if (diagnosis && diagnosis.status !== 'allow_likely') {
+              throw new SkillBlocked(`放置未确认后的保护查询 ${diagnosis.status}: (${dest.x}, ${dest.y}, ${dest.z}) ${diagnosis.reason}`, [], 'server');
+            }
+          }
         }
       } finally {
         setTracing(-1);
@@ -1089,6 +1096,7 @@ function installConfirmedDig(bot: PatchedBot, log: Logger, diag?: MinecraftLog):
   const checkBreakPermission = (block: NonNullable<DigBlock>): void => {
     const permission = bot.cortiBreakVerdict?.(block);
     if (permission !== 'protected' && permission !== 'unknown') return;
+    if (permission === 'unknown' && bot.cortiProtectionPreflight?.() === false) return;
     const pos = block.position;
     diag?.write({ lane: 'skill', event: 'dig-permission-blocked', incident: true,
       msg: permission === 'protected' ? '服务端标记目标方块受保护，停止挖掘' : '目标区块的保护清单尚未同步，停止挖掘',
@@ -1155,9 +1163,11 @@ function installConfirmedDig(bot: PatchedBot, log: Logger, diag?: MinecraftLog):
             data: { at: { x: pos.x, y: pos.y, z: pos.z }, was: before?.name ?? null, digMs, budgetMs: budget },
           });
           (bot as unknown as { emit(event: string, block: DigBlock): void }).emit(DIG_UNCONFIRMED_EVENT, block);
+          const diagnosis = await bot.cortiProtectCheck?.('break', pos, 'after_failure');
           throw new Error(
             `服务端没认这一下:等了 ${(budget / 1000).toFixed(1)} 秒,${at} 还是${was}` +
-            '(可能够不着、被保护,或者服务端那头还在自己补挖)',
+            (diagnosis ? `；失败后保护查询 ${diagnosis.status}: ${diagnosis.reason}`
+              : '(可能够不着、被保护,或者服务端那头还在自己补挖)'),
           );
         }
         await sleep(20);

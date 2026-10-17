@@ -77,6 +77,8 @@ export const MINECRAFT_DEFAULTS = {
   scaffoldBlocks: ['dirt', 'cobblestone'],
   /** 受理时报告前置试算的否定结果，出队时重查并阻断 hard；关闭后不执行这两次试算。 */
   precheck: true,
+  /** Server permission queries are diagnostic by default; cached explicit denials still apply. */
+  protectionPreflight: false,
   /** 受理回执附上相同任务的上次终态。 */
   priorOutcome: true,
   /** 反复成功任务的可选模型失效 fallback；只作用于列出的目标技能。 */
@@ -240,6 +242,7 @@ export interface MinecraftConfigSection {
   scaffoldBlocks: readonly string[];
   /** 前置试算：受理时报告否定，出队时阻断 hard；默认开启。 */
   precheck: boolean;
+  protectionPreflight?: boolean;
   /** 受理回执附相同任务的上次终态；默认开启。 */
   priorOutcome: boolean;
   /** Legacy key for optional repeated-success evidence; never blocks a task. */
@@ -342,6 +345,10 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.visual.background': {
         type: 'boolean', title: '后台观察画面', 'x-hot': true,
         description: '未指定 background 的看图调用立即受理，结果通过事件返回；显式 background:false 仍等待结果。',
+      },
+      'worlds.minecraft.protectionPreflight': {
+        type: 'boolean', title: '操作前查询方块保护', 'x-hot': true,
+        description: '默认关闭：正常挖掘、放置和寻路不发保护查询；操作未获服务端确认后按目标诊断。已明确拒绝的目标仍跳过。',
       },
       'worlds.minecraft.photography.provider': { type: 'string', title: '绘图服务', enum: ['none', 'bailian', 'volcengine'], 'x-hot': true,
         description: '默认关闭生成，仍可拍摄网页原图。阿里百炼或字节火山只在明确请求增强/创作时调用。' },

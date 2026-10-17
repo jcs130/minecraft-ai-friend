@@ -26,7 +26,7 @@ import {
 import { BREAK_ACL_CHANNEL, BreakPermissions } from './break-permissions.ts';
 import {
   type BlockProtectionPort, type ProtectReply, NearbyProtectionBackoff, holdUnverifiedPathAction,
-  selectHeldPathAction, type ProtectAction, type ProtectCell, type ProtectStatus,
+  selectHeldPathAction, protectionCheck, type ProtectAction, type ProtectCell, type ProtectStatus,
 } from './protection-port.ts';
 import { isGravityBlock, isSpawnAnchorBlock } from './policy.ts';
 import { isStableScaffoldMaterial } from './scaffold-material.ts';
@@ -74,6 +74,8 @@ export interface BridgeOptions {
   taskId?: () => number | null;
   /** 本服务端拒绝过的方块持久缓存；无目录时只保存在本次连接。 */
   protectionFile?: string | null;
+  /** Optional proactive server permission queries; default is diagnosis after a failed effect. */
+  protectionPreflight?: () => boolean;
   /** 由服务器扩展显式配置的按格保护频道。 */
   protectionChannel?: string;
   /** 已绑定蓝图范围，含完工建筑；自动寻路不在范围内挖掘或搭路。每次搜索现取。 */
@@ -556,6 +558,10 @@ export class Bridge {
       }, 75);
     };
     const queryHeldAction = (): void => {
+      if (this.opts.protectionPreflight?.() !== true) {
+        if (heldPathAction) { heldPathAction = null; scheduleProtectionReplan(); }
+        return;
+      }
       const gate = heldPathAction;
       const protect = this.serverProtection;
       if (!gate || gate.querying || !protect || this._bot !== bot) return;
@@ -616,11 +622,14 @@ export class Bridge {
       });
     if (this.serverProtection) this.opts.diag?.write({
       lane: 'path', event: 'agentfriend-protect-ready',
-      msg: '千灯纪方块保护预检已接入寻路、挖掘和放置',
+      msg: '方块保护回执已接入；默认仅在操作未生效后查询',
     });
-    (bot as mineflayer.Bot & { cortiProtectCheck?: (action: ProtectAction, cell: ProtectCell) => Promise<{ status: string; reason: string }> })
+    (bot as mineflayer.Bot & { cortiProtectionPreflight?: () => boolean }).cortiProtectionPreflight =
+      () => this.opts.protectionPreflight?.() === true;
+    (bot as mineflayer.Bot & { cortiProtectCheck?: ReturnType<typeof protectionCheck> })
       .cortiProtectCheck = this.serverProtection
-        ? (action, cell) => this.serverProtection!.check(action, String(bot.game.dimension), cell, true)
+        ? protectionCheck(this.serverProtection, () => String(bot.game.dimension),
+          () => this.opts.protectionPreflight?.() === true)
         : undefined;
     (bot as mineflayer.Bot & { cortiBreakVerdict?: (block: { position: { x: number; y: number; z: number }; type: number }) =>
       'allowed' | 'protected' | 'unknown' }).cortiBreakVerdict = (block) =>
@@ -646,6 +655,7 @@ export class Bridge {
       bot.on('path_stop', clearHeldRoute);
       bot.on('path_update', (result) => {
         if (this._bot !== bot) return;
+        if (this.opts.protectionPreflight?.() !== true) { heldPathAction = null; return; }
         const dimension = String(bot.game.dimension);
         const gate = holdUnverifiedPathAction(result, bot.entity.position,
           (action, cell): ProtectStatus | null => protect.verdict(action, dimension, cell));
@@ -907,12 +917,15 @@ export class Bridge {
     // 成果登记格同挖不动的格一样排出寻路的挖掘计划;显式挖掘不经这里
     setDigBackoff(movements, (x, y, z) => this.digBackedOff(x, y, z) || (workCell?.(x, y, z) ?? false));
     setProtectedCells(movements, (x, y, z, type) =>
-      this.protection.denied(String(bot.game.dimension), x, y, z, type)
+      (this.opts.protectionPreflight?.() === true
+        ? this.protection.denied(String(bot.game.dimension), x, y, z, type)
+        : this.protection.verdict(String(bot.game.dimension), x, y, z, type) === 'protected')
       || (this.serverProtection?.verdict('break', String(bot.game.dimension), { x, y, z }) === 'deny')
-      || (this.serverProtection?.verdict('break', String(bot.game.dimension), { x, y, z }) === 'unknown'));
+      || (this.opts.protectionPreflight?.() === true
+        && this.serverProtection?.verdict('break', String(bot.game.dimension), { x, y, z }) === 'unknown'));
     setProtectedPlaceCells(movements, (x, y, z) => {
       const verdict = this.serverProtection?.verdict('place', String(bot.game.dimension), { x, y, z });
-      return verdict === 'deny' || verdict === 'unknown';
+      return verdict === 'deny' || (this.opts.protectionPreflight?.() === true && verdict === 'unknown');
     });
     const costs = this.opts.movementCosts?.();
     if (costs) {

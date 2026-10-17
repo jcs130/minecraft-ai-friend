@@ -938,6 +938,8 @@ export function breakPermissionNote(bot: Bot, block: NonNullable<ReturnType<Bot[
   const verdict = (bot as Bot & { cortiBreakVerdict?: (value: typeof block) => 'allowed' | 'protected' | 'unknown' })
     .cortiBreakVerdict?.(block);
   if (verdict !== 'protected' && verdict !== 'unknown') return null;
+  if (verdict === 'unknown' && (bot as Bot & { cortiProtectionPreflight?: () => boolean })
+    .cortiProtectionPreflight?.() === false) return null;
   const { x, y, z } = block.position;
   return verdict === 'protected'
     ? `服务端标记 (${x}, ${y}, ${z}) 的${zhName(block.name)}受保护，不能挖`
