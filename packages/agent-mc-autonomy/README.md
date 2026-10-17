@@ -5,6 +5,12 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.88 waits for an already-active native connection retry without calling
+connect again, replaying work or running the planner on unavailable facts. Exact
+terminal receipts continue draining; fresh queue/body facts are required on
+recovery. Explicit stop wins, and stopped/unknown authentication states still
+fail closed. This is separate from a server's reason for disconnecting clients.
+
 0.1.87 pins viewer `3553c60d`: native terrain preparation yields to browser tasks
 instead of waiting for painting frames, retaining coherent staged scene commits
 even when RAF is throttled. Original resources and the existing scene budgets are

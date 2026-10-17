@@ -215,7 +215,12 @@ def uncertain(receipt):
 
 def online(status):
     # `phase: started` means engine started, not Mineflayer joined.
-    return status.get("phase") == "started" and any(lamp.get("label") == "服务器" and lamp.get("state") == "online" for lamp in status.get("lamps", []))
+    if status.get("phase") != "started":
+        return False
+    connection = status.get("connection")
+    if isinstance(connection, dict) and type(connection.get("ready")) is bool:
+        return connection["ready"]
+    return any(lamp.get("label") == "服务器" and lamp.get("state") == "online" for lamp in status.get("lamps", []))
 
 
 def failure_context(catalogue, name, arguments, result):
@@ -1046,6 +1051,33 @@ class Controller:
                 self.turn = None
         return True
 
+    async def wait_for_native_reconnect(self, status):
+        """Wait for an already-active body retry; never reconnect or replay work."""
+        self.frame = None
+        while not online(status):
+            await self.external_command(stop_only=True)
+            if self.stop_requested():
+                return False
+            connection = status.get("connection") or {}
+            if (status.get("phase") != "started" or connection.get("ready") is not False
+                    or connection.get("phase") not in {"connecting", "retrying"}):
+                raise RuntimeError("connection_lost: native retry is not active; inspect authentication and connection logs")
+            self.publish(phase="reconnecting", game_connected=False, autonomy_running=False,
+                         connection_wait={"ready": False, "phase": connection["phase"]})
+            # Continue owning native event pages and exact terminal receipts,
+            # including partial work cancelled by the connection loss.
+            _, _, more = await self.events()
+            await asyncio.sleep(0 if more else 1)
+            status = json_content(await self.bridge.call("mc_connection", {"action": "status"}))
+        if self.stop_requested():
+            return False
+        self.read_answers.clear()
+        self.last_facts = None
+        await self.observe_queue()  # Fresh body facts before another model round.
+        self.publish(phase="running", game_connected=True, autonomy_running=self.decide is not None,
+                     connection_wait=None)
+        return True
+
     async def observe_queue(self):
         # Native readout is authoritative. Do not infer execution from inbox order.
         self.publish(native_queue=outcome(await self.bridge.call("mc_queue", {})),
@@ -1565,10 +1597,14 @@ class Controller:
                 if more:
                     await asyncio.sleep(0)
                     continue
-                if time.monotonic() - last_status_check >= 10:
+                if (time.monotonic() - last_status_check >= 10 or
+                        (self.decide and wake and (not self.current_work() or urgent)
+                         and time.monotonic() - self.last_decision >= self.settings.min_decision_seconds)):
                     status = json_content(await self.bridge.call("mc_connection", {"action": "status"}))
                     if not online(status):
-                        raise RuntimeError("connection_lost: stopped decisions; inspect authentication and connection logs")
+                        if not await self.wait_for_native_reconnect(status):
+                            break
+                        wake = True
                     last_status_check = time.monotonic()
                     if self.commands:
                         await self.observe_queue()
