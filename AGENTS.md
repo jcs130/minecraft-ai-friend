@@ -1,3 +1,13 @@
+# 当前架构优先级（2026-10-17）
+
+- `packages/agent-mc-world` 是本项目的首要交付物，也是通用 Minecraft Agent 能力的唯一源码。面向不同大模型和宿主提供同一套公开 SDK、MCP 与扩展接口，不以某个角色、服务器或框架作为默认依赖。
+- 通用感知、动作、导航、背包/合成、脚本/技能库、游戏记忆、学习评估、快决策状态与候选契约都归核心。需求或缺陷即使由可米、Cortico、DSH、N.E.K.O 等消费端发现，也先在核心实现或修复并公开导出，不维护宿主专用副本。
+- 宿主负责模型连接、人格、个人记忆和推理/采用决策；核心提供可复用的游戏学习及技能演化机制。适配器只映射宿主接口与生命周期，千灯纪规则、协议和资料作为显式可选包。可视化源码归 `mc-visual-console`，由核心消费锁定产物；演出/TTS/音乐独立。
+- 按核心公开契约、独立打包、SDK/MCP/宿主消费验证，再更新消费端锁定依赖的顺序交付。代码提交、发布、加载和实服效果分别留证；架构调整不授权重载或启动任何历史角色。
+- 下列日期记录保留各自历史范围，不能覆盖本节的核心优先原则。详细边界见 `packages/agent-mc-world/AGENTS.md` 与 `packages/agent-mc-world/docs/component-boundaries.md`。
+
+## 历史部署与审计记录
+
 2026-09-28 当前开发入口：生产引擎在 world/survival/（survivor 容器读写挂载），service.py/controller.py 编排，motor_mailbox.py/motor_loop.py 异步驱动，NumenGateway 结算原生动作；world/survival/AGENT.md 是桐人角色提示，不是开发指令。与桐人对照的现役鸣人运行于仓库外 C:\Users\lzl19\Documents\mindcraft；仓库内 world/naruto-lite 计划任务已禁用。详细源码、运行证据与未完成目标见 docs/AGENT-FRAMEWORK-COMPARISON-2026-09-28.md。不要从容器健康、轮次更新或竞速代理计数推断持续游玩、目标完成或框架胜负。合并时保留生产目录未提交的 compose.yml 改动，不覆盖生产状态。
 
 2026-09-24 深夜持续站定仍未整体验收：四个自然10分钟窗口均失败，不能以单步/健康通过声称持续游玩。已部署持续navigate、真实终态实践释放、短程撤离和原UUID死亡恢复；第四窗仍困于旧恢复选中的水景落点。最新补给/近地干燥落点/drain竞态已通过919具身+38实践、153原生契约+28真实MC并部署，main 6e0581a。维护death-surface-landing-20260924于23:09恢复并已结束勿重放，原drain由正常循环完成。仅一次审计纠正旧落点至(-554.5,64,866.5)，14字段保持，不计自主脱困；16profiles/16原关闭Cron及其它服务保持，观察者持续跟随/失焦暂停关闭。第五自然窗已失败：净1.903格、最长118.307秒同点、两程序replan，6个goto到达和2次自然音频完成不能替代整体目标。已复现同步slowHandoff 8.81s让5s导航观察过期，最小同tick消费修复正在隔离测试，尚未部署。证据详见docs/SURVIVOR-CONTINUOUS-NAVIGATION-2026-09-24.md，旧维护/失败证据全部保留。

@@ -1,9 +1,14 @@
-# 异世界千灯纪 · 本地整合项目
+# Agent MC World / Minecraft AI Friend
 
 ## 通用 Minecraft Agent 核心
 
-独立客户端核心位于 [packages/agent-mc-world](packages/agent-mc-world)。Cortico World、DSH 与服务器资料包通过版本化 SDK/MCP 引用同一份核心。它拥有独立构建、公开类型和离线测试，不启动主模型循环，也不要求运行本仓库的服务器服务。
+**核心包是本项目的首要交付物**，唯一源码位于 [packages/agent-mc-world](packages/agent-mc-world)。通用 Minecraft 感知、动作、导航、背包与合成、脚本与技能库、游戏记忆、学习评估和快决策的状态/候选契约，由核心统一提供，供不同大模型和宿主复用。
 
+SDK、MCP 和公开扩展接口共享同一实现；Cortico World、DSH 等宿主适配器消费版本化核心包。核心拥有独立构建、公开类型和离线测试，不启动主模型循环，也不要求运行本仓库的服务器服务。模型连接、人格和个人记忆由宿主提供；服务器玩法包显式选择。能力所属位置见 [组件边界](packages/agent-mc-world/docs/component-boundaries.md)，信息获取入口见 [能力清单](packages/agent-mc-world/docs/information-capabilities.md)。
+
+## 可选服务器与历史部署记录
+
+以下介绍千灯纪整合环境和历史部署，不是使用核心包的前置条件。
 
 一个运行在本机的 **Minecraft 多 Agent 共生服务器**：真人玩家、房主女神、运营 Agent 团队、自主生存
 Agent 与女仆妖精 Agent 共享同一个世界，各自有独立职责与入口。

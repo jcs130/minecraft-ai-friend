@@ -1,7 +1,18 @@
 # Agent MC World
 
-Independent Minecraft execution core, maintained in `jcs130/minecraft-ai-friend`.
+The primary product in `jcs130/minecraft-ai-friend`: a model-neutral, host-neutral
+Minecraft execution and learning toolkit.
 Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.
+
+General Minecraft capabilities belong in this package: observation and discovery,
+actions/navigation, inventory/crafting, scripts and skill libraries, game memory,
+learning/evaluation evidence, and fast-decision state/candidate contracts. Models
+and hosts reuse the same implementation through SDK, MCP or public extension
+ports. Host adapters map interfaces and lifecycle; server packs supply explicitly
+selected protocols/rules. Hosts supply model connections, personality, personal
+memory and decisions. See [component boundaries](docs/component-boundaries.md)
+and the [information capability map](docs/information-capabilities.md) for current
+entry points and backend/evidence limits.
 
 `0.5.7-dev.20261017.3` aligns water-containing plant routing with the
 installed collision physics and restores liquid waypoints from their original

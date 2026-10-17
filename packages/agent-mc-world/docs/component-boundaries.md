@@ -1,19 +1,42 @@
 # Minecraft component boundaries
 
-`agent-mc-world` is the reusable game runtime. A host is the application running
+`agent-mc-world` is the primary product and single owner of general Minecraft
+Agent capabilities. Different models and hosts reuse the same implementation
+through its SDK, MCP and public extension ports. A host is the application running
 an Agent: for example Cortico or DSH. Hosts supply personality, personal long-term memory,
 goals, model connections and decisions. A host adapter translates their tool,
 event and lifecycle interfaces; it must not maintain another game implementation.
 
 | Component | Owns |
 | --- | --- |
-| `agent-mc-world` | Connections, inventory synchronization, navigation, water/flight controls, following, combat execution, perception, scripts, body leases, cancellation, task terminals and evidence receipts |
+| `agent-mc-world` | Connections, inventory/crafting and GUI state, navigation, water/flight controls, following, combat execution, perception/information discovery, scripts/skill libraries, body leases, cancellation, task terminals and evidence receipts |
 | `agent-mc-world/tactics` | Native battlefield observations, bounded candidate generation, authored tactic workers, ability state, rules, versioned tactic storage and encounter receipts |
 | `agent-mc-world/decisions` | Optional host-side selector helpers, explicitly constructed and started by a host; the game process never starts them |
 | `agent-mc-world` game memory | Server/account/agent isolation, historical notes, revisions and evidence, local keyword/vector retrieval and explicit external memory providers; no host personal-memory import or hidden planning loop |
+| `agent-mc-world` learning mechanisms | Versioned methods, operation evidence, explicit reflection/retrieval/evaluation, links between decisions/adoption/execution, negative evidence and revision/rollback records; hosts/models choose and adopt methods |
 | Host adapter | Tool/event names, host model connection selection, lifecycle forwarding and configuration UI |
 | Optional server pack | Server command syntax, authenticated custom protocols, ability catalogues and game-specific rules/guides |
 | `mc-visual-console` | Shared renderer source and visual assets; the core consumes a versioned build |
+
+## Core-first delivery
+
+1. Classify the capability by meaning, even when a need first appears in Cormy or
+   a host plugin. General Minecraft behavior belongs in the core; server command
+   formats and custom rules belong in explicitly selected server packs.
+2. Implement and test the common behavior once in the core, including its facts,
+   contracts, help, receipts and backend capability declarations. Do not copy it
+   into each adapter or require a particular model, persona or server.
+3. Export it through the appropriate public SDK/MCP/extension ports and verify
+   packed consumers in isolation. Keep backend limitations and unknown state
+   explicit; a shared tool name alone does not prove equivalent execution.
+4. Update consumer pins and thin mappings after the core is ready. Source,
+   package, deployment and live effects remain separate evidence stages.
+
+Learning mechanisms and skill libraries follow the same ownership rule. The
+core makes them reusable; a host/model supplies reasoning, authors candidates
+and decides what to adopt. Saving code or a receipt does not establish an
+improvement. Personal memory, model credentials and VTuber TTS/music remain
+outside the generic game toolkit.
 
 ## Generic tactics are available without a server pack
 
