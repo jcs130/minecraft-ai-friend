@@ -922,7 +922,7 @@ class Controller:
                 task.cancel()
             await asyncio.gather(task, return_exceptions=True)
 
-    async def dispatch(self, name, arguments, request_id):
+    async def dispatch(self, name, arguments, request_id, *, attribution=None):
         if error := argument_error(self.bridge.tools, name, arguments):
             result = {"protocol": PROTOCOL, "failed": True, "execution": None,
                       "dispatched": False, "origin": "controller_validation", "text": error}
@@ -991,7 +991,8 @@ class Controller:
             except ValueError as error:
                 raw = {"structuredContent": {"protocol": PROTOCOL, "failed": True, "text": str(error)}}
         else:
-            raw = await self.bridge.call(name, arguments, request_id=request_id, turn_id=self.turn)
+            raw = await self.bridge.call(name, arguments, request_id=request_id, turn_id=self.turn,
+                                        **({"attribution": attribution} if attribution is not None else {}))
         result = outcome(raw)
         if self.settings.vision_enabled:
             frame = latest_png(raw, name)
@@ -1101,7 +1102,8 @@ class Controller:
         self.turn = str(uuid.uuid4())
         await self.protocol("begin_turn", id=self.turn)
         try:
-            result, _ = await self.dispatch("mc_do", command["payload"], command["id"])
+            result, _ = await self.dispatch("mc_do", command["payload"], command["id"],
+                                           attribution={"controller": "human", "decisionId": command["id"]})
             self.publish(viewer_action=tool_receipt("mc_do", command["payload"], result))
             self.commands.finish(command["id"], result)
         finally:
@@ -1298,7 +1300,8 @@ class Controller:
             result = queue_error
             compact = await self.archive_receipt(request_id, name, result)
         else:
-            result, compact = await self.dispatch(name, arguments, request_id)
+            result, compact = await self.dispatch(name, arguments, request_id,
+                attribution={"controller": "system2", **({"decisionId": self.turn} if self.turn else {})})
         self.publish(viewer_action=tool_receipt(name, arguments, result))
         read_only = observation_call(name, arguments)
         if not result.get("failed"):

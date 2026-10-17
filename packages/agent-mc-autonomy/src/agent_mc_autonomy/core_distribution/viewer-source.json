@@ -1,6 +1,6 @@
 {
   "schema": "agent-mc-viewer-source/v1",
-  "sourceRevision": "1e2a9cb9e925e8a65b33e16412ab20ee331eda67",
+  "sourceRevision": "16263531586d8ce6ceca561757f4b75806d50855",
   "files": {
     "package.json": {
       "bytes": 1191,
@@ -563,8 +563,8 @@
       "sha256": "d78e8fb0fb08aa64222b2556d3574da624d52349610db1167537c8ea48d1e326"
     },
     "renderer-src/src/modern-viewer/viewer-layout.js": {
-      "bytes": 7963,
-      "sha256": "7905f7475f3ac163f1dad43a7290e48584150c8715663f301abceaf0eb3c0f08"
+      "bytes": 8365,
+      "sha256": "93b16003166130a43addd376e6abda79ca40d1834d23e38c05be55df6bbf02b9"
     },
     "renderer-src/src/modern-viewer/viewer-performance.d.ts": {
       "bytes": 1492,
@@ -1111,8 +1111,8 @@
       "sha256": "3dc1f52be6727bf3b3cb007bf941a3e94385ab0de3802132a4c37f9f72e53a8d"
     },
     "renderer-src/tools/minecraft-viewer-biome-style.js": {
-      "bytes": 11283,
-      "sha256": "755e2f783752a7abe8a243fbeb2710066cc6f3a66dae441657ff101730e220fc"
+      "bytes": 12139,
+      "sha256": "f00da07d377d62de16db87a99aba04e2c5b4958ac11b4674b19a5f859b10025f"
     },
     "renderer-src/tools/minecraft-viewer-block-entity-geometry.json": {
       "bytes": 24575,

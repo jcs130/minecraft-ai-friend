@@ -60,3 +60,19 @@ def test_protocol_metadata_and_failed_execution_are_preserved(run_async, tmp_pat
         await bridge.close()
     run_async(exercise())
 
+
+def test_explicit_decision_attribution_reaches_mcp_metadata(run_async, tmp_path):
+    async def exercise():
+        bridge = bridge_module.MinecraftBridge('node', tmp_path/'entry', tmp_path/'config', tmp_path/'log')
+        bridge.tools = [{'name': 'mc_do'}]
+        async def consume():
+            _, args, future = await bridge._queue.get()
+            assert args[2] == {'agent-mc/v1': {'requestId': 'r', 'turnId': 't',
+                'attribution': {'controller': 'system2', 'decisionId': 't'}}}
+            future.set_result({'content': []})
+        bridge._owner = asyncio.create_task(consume())
+        await bridge.call('mc_do', {}, request_id='r', turn_id='t',
+                          attribution={'controller': 'system2', 'decisionId': 't'})
+        await bridge.close()
+    run_async(exercise())
+

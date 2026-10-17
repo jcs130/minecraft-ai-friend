@@ -105,6 +105,7 @@ def test_accepted_receipt_preserves_action_and_acknowledges_barrier(framework_mo
     assert phases == ["begin_turn", "facts", "ack_barrier", "end_turn"]
     call = next(row for row in bridge.calls if row[0] == "mc_do")
     assert call[2]["turn_id"] and call[2]["request_id"]
+    assert call[2]["attribution"] == {"controller": "system2", "decisionId": call[2]["turn_id"]}
     assert json.loads((tmp_path / "receipts.jsonl").read_text())["result"]["execution"]["goalCompleted"] is False
 
 

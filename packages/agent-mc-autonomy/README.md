@@ -1,5 +1,10 @@
 # Agent MC Autonomy
 
+0.2.7 forwards actual planner and operator attribution through MCP metadata.
+Planner tool calls carry `system2`; direct operator actions carry `human`.
+Fast focus advice does not relabel planner actions as system one. Viewer
+and core source pins identify the matching attribution and panel-order fixes.
+
 0.2.6 consumes validated native `observedEffect` step readbacks in decisions and
 host reviews. Accepted work and build previews no longer erase read history;
 measured movement, inventory or other terminal effects can reset it. Two exact

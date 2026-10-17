@@ -102,10 +102,13 @@ class MinecraftBridge:
             raise RuntimeError("Minecraft request timed out; delivery is uncertain. Stop and inspect receipts before retrying.") from error
 
     async def call(self, name: str, arguments: dict, *, timeout: float = 45,
-                   request_id: str | None = None, turn_id: str | None = None) -> dict:
+                   request_id: str | None = None, turn_id: str | None = None,
+                   attribution: dict | None = None) -> dict:
         if name not in {tool["name"] for tool in self.tools}:
             raise ValueError("Unknown Minecraft tool; discover the actual tool catalogue first")
         control = {key: value for key, value in (("requestId", request_id), ("turnId", turn_id)) if value is not None}
+        if attribution is not None:
+            control["attribution"] = dict(attribution)
         return await self._request("tool", name, arguments, {"agent-mc/v1": control} if control else None, timeout=timeout)
 
     async def resource(self, uri: str) -> dict:
