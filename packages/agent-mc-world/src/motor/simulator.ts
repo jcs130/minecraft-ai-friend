@@ -1,7 +1,7 @@
 /** Offline Prismarine physics fixture. This module has no network or live-client dependency. */
 import { createRequire } from 'node:module';
 import { Vec3 } from 'vec3';
-import { MOTOR_ACTIONS, ACTION_TICKS, GRID, MOTOR_PROTOCOL, MOTOR_VERSION, type Point, type MotorObservation } from './policy.ts';
+import { MOTOR_ACTIONS, ACTION_TICKS, MOTOR_PROTOCOL, MOTOR_VERSION, type Point, type MotorObservation, type MotorGoalMode } from './policy.ts';
 const require = createRequire(import.meta.url);
 const { Physics, PlayerState } = require('prismarine-physics');
 const data = require('minecraft-data')(MOTOR_VERSION);
@@ -30,11 +30,14 @@ export class MotorSimulator {
   followTicks = 0;
   goal: Point;
   private route: Point[] = [];
+  /** Audit counter: independent student rollouts must leave this at zero. */
+  teacherRouteCalls = 0;
   private readonly heading: number;
   private readonly offset: [number, number];
   private readonly wall: number;
-  constructor(task: MotorTask, seed: number) {
+  constructor(task: MotorTask, seed: number, readonly goalMode: MotorGoalMode = 'final-target') {
     if (!TASKS.includes(task) || !Number.isSafeInteger(seed) || seed < 0 || seed >= 2 ** 32) throw Error('Invalid training scenario');
+    if (!['final-target', 'teacher-waypoint'].includes(goalMode)) throw Error('Invalid motor goal mode');
     this.task = task; this.seed = seed;
     const rand = random(seed); for (let i = 0; i < 8; i++) rand();
     this.heading = Math.floor(rand() * 4); this.offset = [Math.floor(rand() * 21) - 10, Math.floor(rand() * 21) - 10];
@@ -65,28 +68,18 @@ export class MotorSimulator {
     const id = this.blocks.get(key(p.x, p.y, p.z)) ?? data.blocksByName.air.defaultState;
     const block = Block.fromStateId(id, 0); block.position = p; return block;
   }
-  private clone(state = this.state) { return Object.assign(Object.create(Object.getPrototypeOf(state)), state, { pos: state.pos.clone(), vel: state.vel.clone(), control: { ...state.control } }); }
   private controls(action: number) {
     const a = MOTOR_ACTIONS[action];
     if (!a) throw Error('Invalid motor action');
     return { forward: !!a.forward, back: false, left: false, right: false, jump: !!a.jump, sprint: !!a.sprint, sneak: false };
   }
-  private predict(action: number, ticks: number, goal?: Point) {
-    const state = this.clone(); state.yaw += MOTOR_ACTIONS[action].yawDelta; state.control = this.controls(action);
-    let collisions = 0, closest = Infinity;
-    for (let i = 0; i < ticks; i++) {
-      this.physics.simulatePlayer(state, this.world);
-      if (state.isCollidedHorizontally) collisions++;
-      if (goal) closest = Math.min(closest, distance([state.pos.x, state.pos.y, state.pos.z], goal));
-    }
-    return { state, collisions, closest };
-  }
   private support(x: number, z: number): number | null {
     for (let y = 67; y >= 62; y--) if (this.blockAt(x, y, z).shapes.length && !this.blockAt(x, y + 1, z).shapes.length && !this.blockAt(x, y + 2, z).shapes.length) return y + 1;
     return null;
   }
-  /** Shared known-map route for teacher and student: the learned policy is a motor follower, not a learned global planner. */
+  /** Privileged expert only. A final-target student observation never invokes this method. */
   private findRoute(): Point[] {
+    this.teacherRouteCalls++;
     const start: Point = [Math.floor(this.state.pos.x) + .5, Math.round(this.state.pos.y), Math.floor(this.state.pos.z) + .5];
     const target = this.goal;
     type Node = { p: Point; g: number; parent?: Node };
@@ -108,8 +101,11 @@ export class MotorSimulator {
     const path: Point[] = []; for (let n: Node | undefined = end; n; n = n.parent) path.push(n.p);
     return path.reverse();
   }
-  observation(): MotorObservation {
+  private updateGoal() {
     if (this.task === 'follow') this.goal = this.point(4.5 + Math.min(7, this.tick / 45), 64, .5 + Math.sin(this.tick / 55) * 1.5);
+  }
+  private teacherGoal(): Point {
+    this.updateGoal();
     if (!this.route.length || (this.tick % 10 === 0 && this.state.onGround)) this.route = this.findRoute();
     const p = this.state.pos;
     while (this.route.length > 1 && distance([p.x, p.y, p.z], this.route[0]) < .8) this.route.shift();
@@ -122,6 +118,12 @@ export class MotorSimulator {
       goal = next;
     }
     if (distance([p.x, p.y, p.z], this.goal) < 2) goal = this.goal;
+    return [...goal];
+  }
+  observation(): MotorObservation {
+    this.updateGoal();
+    const goal = this.goalMode === 'teacher-waypoint' ? this.teacherGoal() : [...this.goal] as Point;
+    const p = this.state.pos;
     const voxels: number[] = [], bx = Math.floor(p.x), by = Math.floor(p.y), bz = Math.floor(p.z);
     for (let x = -3; x <= 3; x++) for (let y = -2; y <= 2; y++) for (let z = -3; z <= 3; z++) {
       const b = this.blockAt(bx + x, by + y, bz + z);
@@ -129,23 +131,12 @@ export class MotorSimulator {
       voxels.push(1 | (b.shapes.length ? 2 : 0) | (b.name === 'lava' ? 4 : 0) | (b.name === 'water' || b.name === 'lava' ? 8 : 0));
     }
     return { protocol: MOTOR_PROTOCOL, minecraftVersion: MOTOR_VERSION, tick: this.tick, position: [p.x, p.y, p.z],
-      velocity: [this.state.vel.x, this.state.vel.y, this.state.vel.z], yaw: this.state.yaw, onGround: this.state.onGround, goal: [...goal], voxels };
+      velocity: [this.state.vel.x, this.state.vel.y, this.state.vel.z], yaw: this.state.yaw, onGround: this.state.onGround, goal: [...goal], goalMode: this.goalMode, voxels };
   }
   teacher(observation = this.observation()): number {
-    const goal = observation.goal;
-    let best = 0, cost = Infinity;
-    for (let action = 0; action < MOTOR_ACTIONS.length; action++) {
-      const { state: s, collisions, closest } = this.predict(action, 16, goal), a = MOTOR_ACTIONS[action];
-      const dx = goal[0] - s.pos.x, dz = goal[2] - s.pos.z;
-      const desired = Math.atan2(-dx, -dz), error = Math.atan2(Math.sin(desired - s.yaw), Math.cos(desired - s.yaw));
-      let value = closest + Math.abs(s.pos.y - goal[1]) * .2 + Math.abs(error) * .1
-        + collisions * .08 + (a.jump ? .12 : 0) + Math.abs(a.yawDelta) * .015;
-      if (closest > .6 && Math.hypot(s.pos.x - this.state.pos.x, s.pos.z - this.state.pos.z) < .05) value += 1;
-      if (s.pos.y < 63.4 || s.isInLava) value += 100;
-      if (!Number.isFinite(value)) throw Error('Invalid physics prediction');
-      if (value < cost) { cost = value; best = action; }
-    }
-    return best;
+    // Labels can use privileged routes; the recorded student input keeps the final target.
+    const goal = this.goalMode === 'final-target' ? this.teacherGoal() : observation.goal;
+    return physicsTeacherAction(this.state, this.physics, this.world, goal);
   }
   step(action: number) {
     if (this.terminal) throw Error('Episode already terminal');
@@ -172,5 +163,31 @@ export class MotorSimulator {
       terminal: this.terminal, success: this.success, failure: this.failure };
   }
   truth() { return { task: this.task, seed: this.seed, tick: this.tick, goal: this.goal, blocks: [...this.blocks].map(([k, stateId]) => ({ position: k.split(',').map(Number), stateId })),
-    travelled: this.travelled, collisionTicks: this.collisionTicks, longestStillTicks: this.longestStillTicks, success: this.success, failure: this.failure }; }
+    travelled: this.travelled, collisionTicks: this.collisionTicks, longestStillTicks: this.longestStillTicks, teacherRouteCalls: this.teacherRouteCalls,
+    goalMode: this.goalMode, success: this.success, failure: this.failure }; }
+}
+
+/** Expert labels only; never used by a raw learned-policy step. */
+export function physicsTeacherAction(playerState: any, physics: any, world: any, goal: Point): number {
+  const predict = (action: number) => {
+    const state = Object.assign(Object.create(Object.getPrototypeOf(playerState)), playerState, { pos: playerState.pos.clone(), vel: playerState.vel.clone() });
+    const a = MOTOR_ACTIONS[action];
+    state.yaw += a.yawDelta; state.control = { forward: !!a.forward, back: false, left: false, right: false, jump: !!a.jump, sprint: !!a.sprint, sneak: false };
+    let collisions = 0, closest = Infinity;
+    for (let i = 0; i < 16; i++) { physics.simulatePlayer(state, world); if (state.isCollidedHorizontally) collisions++; closest = Math.min(closest, distance([state.pos.x, state.pos.y, state.pos.z], goal)); }
+    return { state, collisions, closest };
+  };
+  let best = 0, cost = Infinity;
+  for (let action = 0; action < MOTOR_ACTIONS.length; action++) {
+    const { state: s, collisions, closest } = predict(action), a = MOTOR_ACTIONS[action];
+    const dx = goal[0] - s.pos.x, dz = goal[2] - s.pos.z;
+    const desired = Math.atan2(-dx, -dz), error = Math.atan2(Math.sin(desired - s.yaw), Math.cos(desired - s.yaw));
+    let value = closest + Math.abs(s.pos.y - goal[1]) * .2 + Math.abs(error) * .1
+      + collisions * .08 + (a.jump ? .12 : 0) + Math.abs(a.yawDelta) * .015;
+    if (closest > .6 && Math.hypot(s.pos.x - playerState.pos.x, s.pos.z - playerState.pos.z) < .05) value += 1;
+    if (s.pos.y < 63.4 || s.isInLava) value += 100;
+    if (!Number.isFinite(value)) throw Error('Invalid physics prediction');
+    if (value < cost) { cost = value; best = action; }
+  }
+  return best;
 }

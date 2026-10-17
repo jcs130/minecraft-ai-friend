@@ -32,6 +32,15 @@ table MotorFrame {
   nextOnGround:bool;
   nextVoxels:[ubyte];
   expertIntervention:bool = null;
+  goalMode:string;
+  nextGoal:[double];
+  // Server position evidence belongs exclusively to EnvironmentTruth, never the policy input.
+  serverPosition:[double];
+  serverClientDistance:double = null;
+  proposedActionIndex:int = -1;
+  terminated:bool = null;
+  truncated:bool = null;
+  serverGoalConfirmed:bool = null;
 }
 root_type MotorFrame;
 file_identifier "MCM1";

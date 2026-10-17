@@ -24,7 +24,7 @@ export function motorObservationFromNative(sample: NativeMotorSample, goal: Poin
   }
   const observation: MotorObservation = { protocol: MOTOR_PROTOCOL, minecraftVersion: MOTOR_VERSION, tick: null,
     position: [...sample.state.position], velocity: [...sample.velocity], yaw: Math.PI - sample.state.yaw * Math.PI / 180,
-    onGround: sample.onGround, goal: [...goal], voxels };
+    onGround: sample.onGround, goal: [...goal], goalMode: 'final-target', voxels };
   motorFeatures(observation);
   return observation;
 }

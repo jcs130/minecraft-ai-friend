@@ -40,7 +40,7 @@ for (const path of inputs) {
   files.push({ file: relative(root, target).replaceAll('\\', '/'), sha256: digest(emitted) });
 }
 // Training remains source-shipped; hash only declared inputs, excluding runs, environments and local tools.
-for (const source of ['training/runner.py', 'training/trajectory.py', 'training/worker.ts', 'training/test_trajectory.py',
+for (const source of ['training/runner.py', 'training/trajectory.py', 'training/worker.ts', 'training/gym_env.py', 'training/ppo.py', 'training/test_ppo.py', 'training/test_trajectory.py',
   'training/requirements.txt', 'training/schema', 'training/generated']) {
   const path = join(root, source);
   const declared = source.includes('.') ? [path] : (await walk(path)).filter(file => !file.includes('__pycache__') && !file.endsWith('.pyc'));

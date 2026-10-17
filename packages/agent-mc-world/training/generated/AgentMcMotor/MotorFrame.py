@@ -458,8 +458,104 @@ class MotorFrame(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return None
 
+    # MotorFrame
+    def GoalMode(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(64))
+        if o != 0:
+            return self._tab.String(o + self._tab.Pos)
+        return None
+
+    # MotorFrame
+    def NextGoal(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(66))
+        if o != 0:
+            a = self._tab.Vector(o)
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 8))
+        return 0
+
+    # MotorFrame
+    def NextGoalAsNumpy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(66))
+        if o != 0:
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Float64Flags, o)
+        return 0
+
+    # MotorFrame
+    def NextGoalLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(66))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # MotorFrame
+    def NextGoalIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(66))
+        return o == 0
+
+    # MotorFrame
+    def ServerPosition(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(68))
+        if o != 0:
+            a = self._tab.Vector(o)
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 8))
+        return 0
+
+    # MotorFrame
+    def ServerPositionAsNumpy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(68))
+        if o != 0:
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Float64Flags, o)
+        return 0
+
+    # MotorFrame
+    def ServerPositionLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(68))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # MotorFrame
+    def ServerPositionIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(68))
+        return o == 0
+
+    # MotorFrame
+    def ServerClientDistance(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(70))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
+        return None
+
+    # MotorFrame
+    def ProposedActionIndex(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(72))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
+        return -1
+
+    # MotorFrame
+    def Terminated(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(74))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return None
+
+    # MotorFrame
+    def Truncated(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(76))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return None
+
+    # MotorFrame
+    def ServerGoalConfirmed(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(78))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return None
+
 def MotorFrameStart(builder):
-    builder.StartObject(30)
+    builder.StartObject(38)
 
 def Start(builder):
     MotorFrameStart(builder)
@@ -710,6 +806,66 @@ def MotorFrameAddExpertIntervention(builder, expertIntervention):
 def AddExpertIntervention(builder, expertIntervention):
     MotorFrameAddExpertIntervention(builder, expertIntervention)
 
+def MotorFrameAddGoalMode(builder, goalMode):
+    builder.PrependUOffsetTRelativeSlot(30, flatbuffers.number_types.UOffsetTFlags.py_type(goalMode), 0)
+
+def AddGoalMode(builder, goalMode):
+    MotorFrameAddGoalMode(builder, goalMode)
+
+def MotorFrameAddNextGoal(builder, nextGoal):
+    builder.PrependUOffsetTRelativeSlot(31, flatbuffers.number_types.UOffsetTFlags.py_type(nextGoal), 0)
+
+def AddNextGoal(builder, nextGoal):
+    MotorFrameAddNextGoal(builder, nextGoal)
+
+def MotorFrameStartNextGoalVector(builder, numElems):
+    return builder.StartVector(8, numElems, 8)
+
+def StartNextGoalVector(builder, numElems):
+    return MotorFrameStartNextGoalVector(builder, numElems)
+
+def MotorFrameAddServerPosition(builder, serverPosition):
+    builder.PrependUOffsetTRelativeSlot(32, flatbuffers.number_types.UOffsetTFlags.py_type(serverPosition), 0)
+
+def AddServerPosition(builder, serverPosition):
+    MotorFrameAddServerPosition(builder, serverPosition)
+
+def MotorFrameStartServerPositionVector(builder, numElems):
+    return builder.StartVector(8, numElems, 8)
+
+def StartServerPositionVector(builder, numElems):
+    return MotorFrameStartServerPositionVector(builder, numElems)
+
+def MotorFrameAddServerClientDistance(builder, serverClientDistance):
+    builder.PrependFloat64Slot(33, serverClientDistance, None)
+
+def AddServerClientDistance(builder, serverClientDistance):
+    MotorFrameAddServerClientDistance(builder, serverClientDistance)
+
+def MotorFrameAddProposedActionIndex(builder, proposedActionIndex):
+    builder.PrependInt32Slot(34, proposedActionIndex, -1)
+
+def AddProposedActionIndex(builder, proposedActionIndex):
+    MotorFrameAddProposedActionIndex(builder, proposedActionIndex)
+
+def MotorFrameAddTerminated(builder, terminated):
+    builder.PrependBoolSlot(35, terminated, None)
+
+def AddTerminated(builder, terminated):
+    MotorFrameAddTerminated(builder, terminated)
+
+def MotorFrameAddTruncated(builder, truncated):
+    builder.PrependBoolSlot(36, truncated, None)
+
+def AddTruncated(builder, truncated):
+    MotorFrameAddTruncated(builder, truncated)
+
+def MotorFrameAddServerGoalConfirmed(builder, serverGoalConfirmed):
+    builder.PrependBoolSlot(37, serverGoalConfirmed, None)
+
+def AddServerGoalConfirmed(builder, serverGoalConfirmed):
+    MotorFrameAddServerGoalConfirmed(builder, serverGoalConfirmed)
+
 def MotorFrameEnd(builder):
     return builder.EndObject()
 
@@ -756,6 +912,14 @@ class MotorFrameT(object):
         nextOnGround = False,
         nextVoxels = None,
         expertIntervention = None,
+        goalMode = None,
+        nextGoal = None,
+        serverPosition = None,
+        serverClientDistance = None,
+        proposedActionIndex = -1,
+        terminated = None,
+        truncated = None,
+        serverGoalConfirmed = None,
     ):
         self.protocol = protocol  # type: Optional[str]
         self.episodeId = episodeId  # type: Optional[str]
@@ -787,6 +951,14 @@ class MotorFrameT(object):
         self.nextOnGround = nextOnGround  # type: bool
         self.nextVoxels = nextVoxels  # type: Optional[List[int]]
         self.expertIntervention = expertIntervention  # type: Optional[bool]
+        self.goalMode = goalMode  # type: Optional[str]
+        self.nextGoal = nextGoal  # type: Optional[List[float]]
+        self.serverPosition = serverPosition  # type: Optional[List[float]]
+        self.serverClientDistance = serverClientDistance  # type: Optional[float]
+        self.proposedActionIndex = proposedActionIndex  # type: int
+        self.terminated = terminated  # type: Optional[bool]
+        self.truncated = truncated  # type: Optional[bool]
+        self.serverGoalConfirmed = serverGoalConfirmed  # type: Optional[bool]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -905,6 +1077,26 @@ class MotorFrameT(object):
             else:
                 self.nextVoxels = motorFrame.NextVoxelsAsNumpy()
         self.expertIntervention = motorFrame.ExpertIntervention()
+        self.goalMode = motorFrame.GoalMode()
+        if not motorFrame.NextGoalIsNone():
+            if np is None:
+                self.nextGoal = []
+                for i in range(motorFrame.NextGoalLength()):
+                    self.nextGoal.append(motorFrame.NextGoal(i))
+            else:
+                self.nextGoal = motorFrame.NextGoalAsNumpy()
+        if not motorFrame.ServerPositionIsNone():
+            if np is None:
+                self.serverPosition = []
+                for i in range(motorFrame.ServerPositionLength()):
+                    self.serverPosition.append(motorFrame.ServerPosition(i))
+            else:
+                self.serverPosition = motorFrame.ServerPositionAsNumpy()
+        self.serverClientDistance = motorFrame.ServerClientDistance()
+        self.proposedActionIndex = motorFrame.ProposedActionIndex()
+        self.terminated = motorFrame.Terminated()
+        self.truncated = motorFrame.Truncated()
+        self.serverGoalConfirmed = motorFrame.ServerGoalConfirmed()
 
     # MotorFrameT
     def Pack(self, builder):
@@ -1006,6 +1198,24 @@ class MotorFrameT(object):
                 for i in reversed(range(len(self.nextVoxels))):
                     builder.PrependUint8(self.nextVoxels[i])
                 nextVoxels = builder.EndVector()
+        if self.goalMode is not None:
+            goalMode = builder.CreateString(self.goalMode)
+        if self.nextGoal is not None:
+            if np is not None and type(self.nextGoal) is np.ndarray:
+                nextGoal = builder.CreateNumpyVector(self.nextGoal)
+            else:
+                MotorFrameStartNextGoalVector(builder, len(self.nextGoal))
+                for i in reversed(range(len(self.nextGoal))):
+                    builder.PrependFloat64(self.nextGoal[i])
+                nextGoal = builder.EndVector()
+        if self.serverPosition is not None:
+            if np is not None and type(self.serverPosition) is np.ndarray:
+                serverPosition = builder.CreateNumpyVector(self.serverPosition)
+            else:
+                MotorFrameStartServerPositionVector(builder, len(self.serverPosition))
+                for i in reversed(range(len(self.serverPosition))):
+                    builder.PrependFloat64(self.serverPosition[i])
+                serverPosition = builder.EndVector()
         MotorFrameStart(builder)
         if self.protocol is not None:
             MotorFrameAddProtocol(builder, protocol)
@@ -1053,5 +1263,16 @@ class MotorFrameT(object):
         if self.nextVoxels is not None:
             MotorFrameAddNextVoxels(builder, nextVoxels)
         MotorFrameAddExpertIntervention(builder, self.expertIntervention)
+        if self.goalMode is not None:
+            MotorFrameAddGoalMode(builder, goalMode)
+        if self.nextGoal is not None:
+            MotorFrameAddNextGoal(builder, nextGoal)
+        if self.serverPosition is not None:
+            MotorFrameAddServerPosition(builder, serverPosition)
+        MotorFrameAddServerClientDistance(builder, self.serverClientDistance)
+        MotorFrameAddProposedActionIndex(builder, self.proposedActionIndex)
+        MotorFrameAddTerminated(builder, self.terminated)
+        MotorFrameAddTruncated(builder, self.truncated)
+        MotorFrameAddServerGoalConfirmed(builder, self.serverGoalConfirmed)
         motorFrame = MotorFrameEnd(builder)
         return motorFrame

@@ -15,8 +15,11 @@ TASKS = ("walk", "step", "obstacle", "gap", "follow", "recovery")
 
 
 class Simulator:
-    def __init__(self, node: str):
-        self.process = subprocess.Popen([node, "--import", "tsx", str(ROOT / "worker.ts")],
+    def __init__(self, node: str, environment=None):
+        command = [node, "--import", "tsx", str(ROOT / "worker.ts")]
+        if environment:
+            command.append(str(Path(environment).resolve()))
+        self.process = subprocess.Popen(command,
                                         cwd=ROOT.parent, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         encoding="utf-8", errors="strict", bufsize=1)
         self.contract = self.call(op="hello")
@@ -33,12 +36,16 @@ class Simulator:
         return response
 
     def close(self):
+        if self.process.stdin.closed:
+            return
         self.process.stdin.close()
         try:
-            self.process.wait(timeout=10)
+            self.process.wait(timeout=30)
         except subprocess.TimeoutExpired:
             self.process.terminate()
             self.process.wait(timeout=10)
+        finally:
+            self.process.stdout.close()
 
     def __enter__(self):
         return self
@@ -54,7 +61,7 @@ def sha(path):
 
 def write_json(path, value):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
+    Path(path).write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
 
 
 def window(started):
@@ -91,6 +98,10 @@ def rollout(sim, task, seed, selector="teacher", record=None, split="test", teac
                     "longestStillSeconds": truth["longestStillTicks"] / 20,
                     "decisionCount": truth["tick"] // 2,
                     "expertActions": expert_actions, "studentActions": student_actions,
+                    "teacherRouteCalls": truth.get("teacherRouteCalls"), "goalMode": truth.get("goalMode"),
+                    "serverPosition": truth.get("serverPosition"), "serverClientDistance": truth.get("serverClientDistance"),
+                    "positionCorrections": truth.get("positionCorrections"),
+                    "serverGoalConfirmed": truth.get("serverGoalConfirmed"),
                     "inferenceMsP95": sorted(inference_ms)[int(.95 * (len(inference_ms) - 1))] if inference_ms else None}
 
 
@@ -98,9 +109,11 @@ def evaluate(args):
     from collections import defaultdict
     started = time.time()
     results = []
-    with Simulator(args.node) as sim:
+    with Simulator(args.node, args.environment) as sim:
         if args.policy:
             policy_data = json.loads(Path(args.policy).read_text(encoding="utf-8"))
+            if policy_data.get("goalMode", "teacher-waypoint") != sim.contract["goalMode"]:
+                raise ValueError("Policy and environment goal modes differ; legacy results require explicit teacher-waypoint config")
             if set(range(args.seed, args.seed + args.episodes)) & set(policy_data["training"].get("scenarioSeeds", [])):
                 raise ValueError("Evaluation seeds overlap the policy training split")
             sim.call(op="load", path=str(Path(args.policy).resolve()))
@@ -115,12 +128,14 @@ def evaluate(args):
     for r in results:
         grouped[r["task"]].append(r)
     report = {"protocol": contract["protocol"], "simulation": contract["simulation"],
-              "minecraftVersion": contract["minecraftVersion"], "engine": "offline-physics-not-live-Minecraft",
+              "minecraftVersion": contract["minecraftVersion"], "engine": contract["simulation"],
+              "backend": contract["backend"], "goalMode": contract["goalMode"], "serverJarSha256": contract["serverJarSha256"],
               "controller": "learned-raw" if args.policy else "physics-lookahead-teacher",
               "policySha256": sha(args.policy) if args.policy else None,
               "wallSeconds": time.time() - started, "seedStart": args.seed, "episodes": len(results),
               "successRate": sum(r["success"] for r in results) / len(results),
               "expertInterventions": sum(r["expertActions"] for r in results),
+              "teacherRouteCalls": sum(r["teacherRouteCalls"] for r in results),
               "byTask": {task: {"episodes": len(rows), "successRate": sum(r["success"] for r in rows) / len(rows)} for task, rows in grouped.items()},
               "liveValidated": False, "deploymentApproved": False, "results": results, **window(started)}
     write_json(args.output, report)
@@ -133,7 +148,7 @@ def collect(args):
     output = Path(args.output)
     if output.exists():
         raise FileExistsError(f"Refusing to replace trajectory archive: {output}")
-    with Simulator(args.node) as sim, TrajectoryWriter(output, sim.contract) as writer:
+    with Simulator(args.node, args.environment) as sim, TrajectoryWriter(output, sim.contract) as writer:
         if args.policy:
             if args.split != "train":
                 raise ValueError("Dataset aggregation may only collect the training split")
@@ -149,6 +164,7 @@ def collect(args):
                 "episodes": len(outcomes), "transitions": writer.count, "wallSeconds": time.time() - started,
                 "observationTopic": "/motor/observation_action", "truthTopic": "/motor/environment_truth",
                 "engine": sim.contract["simulation"], "minecraftVersion": sim.contract["minecraftVersion"],
+                "goalMode": sim.contract["goalMode"], "backend": sim.contract["backend"], "serverJarSha256": sim.contract["serverJarSha256"],
                 "actionNames": sim.contract["actionNames"], "featureCount": sim.contract["featureCount"], "sourceHashes": sim.contract["sourceHashes"],
                 "schemaSha256": sha(ROOT / "schema/motor.bfbs"),
                 "collectionPolicySha256": sha(args.policy) if args.policy else None,
@@ -170,13 +186,17 @@ def train(args):
     if any(m["split"] != "train" or m["datasetSha256"] != sha(p) for m, p in zip(manifests, datasets)):
         raise ValueError("Only integrity-checked training-split trajectories may update weights")
     first = manifests[0]
+    if any(m.get("goalMode", "teacher-waypoint") != first.get("goalMode", "teacher-waypoint") for m in manifests):
+        raise ValueError("Cannot mix final targets and expert waypoint inputs")
     if any(m["actionNames"] != first["actionNames"] or m["featureCount"] != first["featureCount"] for m in manifests):
         raise ValueError("Mixed feature/action schemas")
-    xs, ys = zip(*(training_arrays(p, "train") for p in datasets))
+    xs, ys = zip(*(training_arrays(p, "train", first.get("goalMode", "teacher-waypoint")) for p in datasets))
     x, y = torch.from_numpy(np.concatenate(xs)), torch.from_numpy(np.concatenate(ys))
     if x.shape[1] != first["featureCount"] or y.min() < 0 or y.max() >= len(first["actionNames"]):
         raise ValueError("Training observations do not match their manifest")
     previous = json.loads(Path(args.resume).read_text(encoding="utf-8")) if args.resume else None
+    if previous and previous.get("goalMode", "teacher-waypoint") != first.get("goalMode", "teacher-waypoint"):
+        raise ValueError("Resume policy and dataset goal modes differ")
     transform = previous.get("inputTransform") if previous else "goal-heading-v1"
     if transform == "goal-heading-v1":
         offset = x.shape[1] - 13
@@ -221,6 +241,7 @@ def train(args):
               for layer in model if isinstance(layer, torch.nn.Linear)]
     model_data = {"protocol": first["protocol"], "minecraftVersion": first["minecraftVersion"],
                   "featureCount": first["featureCount"], "actionNames": first["actionNames"], "layers": layers,
+                  "goalMode": first.get("goalMode", "teacher-waypoint"),
                   "normalization": {"mean": mean.tolist(), "scale": scale.tolist()},
                   "training": {"method": "behavioural-cloning" if not args.resume else "dataset-aggregation",
                                "datasetSha256": first["datasetSha256"], "datasetHashes": [m["datasetSha256"] for m in manifests],
@@ -241,7 +262,9 @@ def replay(args):
     from trajectory import MotorFrame
     episode = None
     episodes = transitions = checked = 0
-    with Simulator(args.node) as sim, Path(args.dataset).open("rb") as stream:
+    with Simulator(args.node, args.environment) as sim, Path(args.dataset).open("rb") as stream:
+        if sim.contract["backend"] != "offline":
+            raise ValueError("Exact physics replay is offline-only; actual Minecraft requires statistical reevaluation")
         for _, _, message in make_reader(stream, validate_crcs=True).iter_messages(topics=["/motor/observation_action"]):
             frame = MotorFrame.GetRootAs(message.data, 0)
             current = frame.EpisodeId().decode()
@@ -296,6 +319,8 @@ def verify_policy(args):
             observation = {"protocol": "agent-mc-motor/v1", "minecraftVersion": "1.21.1", "tick": frame.Tick(),
                            "position": frame.PositionAsNumpy().tolist(), "velocity": frame.VelocityAsNumpy().tolist(),
                            "yaw": frame.Yaw(), "onGround": frame.OnGround(), "goal": frame.GoalAsNumpy().tolist(), "voxels": frame.VoxelsAsNumpy().tolist()}
+            if frame.GoalMode():
+                observation["goalMode"] = frame.GoalMode().decode()
             result = sim.call(op="infer", observation=observation)
             matched += int(result["action"] == values.argmax().item())
             durations.append(result["elapsedMs"])
@@ -316,6 +341,7 @@ def main():
     for name, function in (("collect", collect), ("evaluate", evaluate)):
         p = sub.add_parser(name)
         p.add_argument("--node", default="node")
+        p.add_argument("--environment", help="Optional JSON worker configuration; defaults to offline final-target inputs")
         p.add_argument("--tasks", nargs="+", choices=TASKS, default=list(TASKS))
         p.add_argument("--episodes", type=int, default=4)
         p.add_argument("--seed", type=int, default=1000 if name == "collect" else 2000)
@@ -335,6 +361,7 @@ def main():
     p.add_argument("--resume")
     p.set_defaults(function=train)
     p = sub.add_parser("replay")
+    p.add_argument("--environment")
     p.add_argument("--node", default="node")
     p.add_argument("--dataset", required=True)
     p.add_argument("--episodes", type=int, default=6)

@@ -23,6 +23,30 @@ describe('offline motor fixtures', () => {
     for (let i = 0; i < 12; i++) { const action = a.teacher(); a.step(action); b.step(action); }
     expect(a.observation()).toEqual(b.observation());
   });
+  it('exposes the final target without invoking A* even around obstacles', () => {
+    const env = new MotorSimulator('obstacle', 9103);
+    for (let i = 0; i < 12; i++) {
+      expect(env.observation().goal).toEqual(env.goal);
+      expect(env.observation().goalMode).toBe('final-target');
+      env.step(7);
+    }
+    expect(env.teacherRouteCalls).toBe(0);
+    const raw = env.observation();
+    env.teacher(raw);
+    expect(env.teacherRouteCalls).toBeGreaterThan(0);
+    expect(raw.goal).toEqual(env.goal);
+  });
+  it('retains explicit historical waypoint mode without silently mixing policy semantics', () => {
+    const env = new MotorSimulator('obstacle', 9103, 'teacher-waypoint');
+    const observation = env.observation();
+    expect(observation.goal).not.toEqual(env.goal);
+    expect(env.teacherRouteCalls).toBe(1);
+    const model: MotorPolicy = { protocol: MOTOR_PROTOCOL, minecraftVersion: '1.21.1', featureCount: FEATURE_COUNT,
+      goalMode: 'final-target', actionNames: MOTOR_ACTIONS.map(a => a.name),
+      training: { method: 'test', datasetSha256: 'b'.repeat(64), deploymentApproved: false },
+      layers: [{ weight: MOTOR_ACTIONS.map(() => Array(FEATURE_COUNT).fill(0)), bias: MOTOR_ACTIONS.map(() => 0) }] };
+    expect(() => loadMotorPolicy(model)(observation)).toThrow(/goal mode/);
+  });
 });
 
 it('preserves unknown native voxels and excludes unrelated sample data', () => {
