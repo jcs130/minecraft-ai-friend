@@ -77,6 +77,8 @@ export interface BridgeOptions {
   protectionFile?: string | null;
   /** Optional proactive server permission queries; default is diagnosis after a failed effect. */
   protectionPreflight?: () => boolean;
+  /** Explicit live permission for passive water ascent; omitted means no automatic treading. */
+  antiDrown?: () => boolean;
   /** 由服务器扩展显式配置的按格保护频道。 */
   protectionChannel?: string;
   /** 已绑定蓝图范围，含完工建筑；自动寻路不在范围内挖掘或搭路。每次搜索现取。 */
@@ -835,7 +837,7 @@ export class Bridge {
     bot.pathfinder.setMovements(movements);
     bot.pathfinder.tickTimeout = 60;
     suppressSprintNearWater(bot, movements);
-    installTreadWater(bot);
+    installTreadWater(bot, this.opts.antiDrown);
     trackWindowProps(bot);
     this.installDigBackoff(bot);
     installDoorWaypointRepair(bot);

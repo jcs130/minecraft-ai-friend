@@ -22,7 +22,7 @@ const SDK_API = Object.freeze({
   'mc.flightPlan': 'await mc.flightPlan(args): the same read-only geometry and budget preview as mc_flight_plan. '
     + 'It does not move, cast, grant permission or prove arrival. Read mc_flight_plan schema for arguments; execution revalidates geometry and permission.',
   diving: 'Mineflayer 潜水程序：await bot.read("breathing") 按需取带采样/更新时刻的氧气、生命、浸水状态、位置与速度。'
-    + '在同一原生程序中 await bot.setControlState("jump",false) 接管输入，await bot.waitForTicks(n) 和连续读取期间保持；结束/取消会释放，危急环境接管仍可撤销程序。不要在采样间隙结束再重开，否则被动踩水会恢复。'
+    + '在同一原生程序中 await bot.setControlState("jump",false) 接管输入，await bot.waitForTicks(n) 和连续读取期间保持；结束/取消会释放。自动踩水与防溺水共用 reflex.antiDrown 开关；关闭后不自动上浮、找岸或冻结任务，手动上浮仍可用。启用时危急环境接管仍可撤销程序，程序结束后也可能恢复踩水。'
     + '按实际时间差比较多次读数；headWet=true 且有多次氧气递减才估计消耗率，读数不变或缺失不等于无限氧气。生命下降和回复分别留证据，不以回血抵消伤害。'
     + '返程预算=已核验呼吸点路线耗时+实际上浮/横移耗时+控制延迟与不确定性余量；剩余氧气秒数=当前氧气/实测保守消耗率。'
     + '预计返程时间接近氧气余量、生命余量不足、通路变化或读数失效时，脚本自行决定返程；不以入水或固定水下秒数直接判定必须上浮。'

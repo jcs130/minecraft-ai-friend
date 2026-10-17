@@ -62,7 +62,7 @@ import { farmingClickCell, isHoeUseItem } from './farming-target.ts';
 import { publishViewerCastCommand } from './command-events.ts';
 import { skillGesture } from './skills-social.ts';
 import { skillLook } from './skills-look.ts';
-import { skillControl } from './skills-control.ts';
+import { skillControl, waterControlActive } from './skills-control.ts';
 import { taggedCraftChoice } from './tagged-crafting.ts';
 import { flyToLanding, flyToPosition, landFlight, flightState, previewFlight } from './flight.ts';
 import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold, temporaryScaffoldReadout, scaffoldCleanupCheckpoint } from './temporary-scaffold.ts';
@@ -6190,6 +6190,8 @@ export class Reflexes {
     if (!bot?.entity) return;
     const slow = this.ticks++ % SLOW_EVERY === 0;
     if (slow) this.hookHurt(bot);
+    // Turning a reflex off also releases its existing input, path and queue hold.
+    if (!this.opts.antiDrown()) this.endDrown(bot);
     // 防溺水与防烧在各自开关启用时逐心跳检查；关闭防烧时调用 endLavaEscape 收尾。
     // 执行器清空冻结后，持续危机会重申环境租约，仍受 beginEnvironment 的超时放弃限制。
     if (this.environmentHoldStale) {
@@ -7286,6 +7288,31 @@ export class Reflexes {
   private oxygenSeen: number | null = null;
   /** 本轮溺水里零推进撤销过的目标格,登岸/换气点都不再选它;危机解除清空 */
   private readonly drownExcluded = new Set<string>();
+
+  private endDrown(bot: Bot): void {
+    const active = this.drowning;
+    const escape = this.escapeGoal;
+    this.drowning = false;
+    this.waterTrap = null;
+    this.submergedAt = 0;
+    this.surfacedAt = 0;
+    this.drownExcluded.clear();
+    this.drownRouteTold = null;
+    if (escape?.kind === 'drown') {
+      this.escapeGoal = null;
+      if (bot.pathfinder?.goal === escape.goal) {
+        dropGoal(bot, 'escape', '自动上浮已关闭', this.opts.diag);
+      }
+    }
+    if (!active && escape?.kind !== 'drown') return;
+    if (this.lavaEscape === null && this.buried === null && !waterControlActive(bot)) {
+      bot.setControlState('jump', false);
+    }
+    this.releaseEnvironmentHoldNow(bot, '自动上浮已关闭，交还控制权');
+    this.opts.diag?.write({ lane: 'reflex', event: 'drown-disabled',
+      msg: '自动上浮已关闭，撤销本反射的按键、寻路与冻结租约',
+      data: { position: bot.entity.position, oxygen: bot.oxygenLevel ?? null } });
+  }
 
   private async antiDrown(bot: Bot): Promise<void> {
     const now = Date.now();
