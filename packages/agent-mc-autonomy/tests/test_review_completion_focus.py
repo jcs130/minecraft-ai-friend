@@ -18,7 +18,16 @@ def test_long_inventory_never_hides_current_place_body_or_queue():
     assert result["facts"]["queue"] == facts["queue"]
     assert result["facts"]["foodReserve"] == facts["foodReserve"]
     assert len(encoded(result["facts"]).encode()) <= 3200
-    assert result["facts"]["gear"]["abridged"]  # Lossless original stays in evidence pages.
+    assert isinstance(result["facts"]["gear"], str) and "abridged" in result["facts"]["gear"]
+
+
+def test_field_limits_count_escaped_quotes_and_unicode():
+    facts = {key: '雪"\\' * 500 for key in ("body", "place", "queue", "clock", "bodyRestriction",
+        "foodReserve", "gear", "life", "structure", "terrain", "lastTask")}
+    result = compact({"facts": facts}, "a" * 24)
+    assert set(result["facts"]) == set(facts)
+    assert len(encoded(result["facts"]).encode()) <= 3200
+    assert all(isinstance(value, str) and "abridged" in value for value in result["facts"].values())
 
 
 def test_recovery_completion_is_before_large_evidence_and_has_a_short_output_contract(tmp_path):

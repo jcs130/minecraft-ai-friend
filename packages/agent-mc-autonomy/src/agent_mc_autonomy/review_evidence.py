@@ -51,6 +51,17 @@ def preview(value, limit):
     return {"preview": text, "abridged": True}
 
 
+def fact_preview(value, limit):
+    """Keep the existing fact string contract while marking an abridged field."""
+    if not isinstance(value, str) or len(encoded(value).encode()) <= limit:
+        return preview(value, limit)
+    suffix = "… [abridged; use details]"
+    text = value.encode()[:max(0, limit - len(encoded(suffix).encode()))].decode("utf-8", errors="ignore")
+    while len(encoded(text + suffix).encode()) > limit:
+        text = text[:-1]
+    return text + suffix
+
+
 def save(directory, review, lineage, last_decision):
     value = {"heartbeat_id": review["id"], "session": review["session"], "scope": review["scope"],
              "intent_revision": review["revision"], "evidence": review["evidence"],
@@ -170,7 +181,7 @@ def compact(evidence, reference, last_decision=None):
     # clipped JSON string: the host needs the current position after a respawn.
     # Bound each field instead; the immutable evidence page retains every byte.
     if isinstance(evidence.get("facts"), dict):
-        result["facts"] = {key: preview(evidence["facts"][key], limit) for key, limit in (
+        result["facts"] = {key: fact_preview(evidence["facts"][key], limit) for key, limit in (
             ("body", 160), ("place", 220), ("queue", 260), ("clock", 100),
             ("bodyRestriction", 300), ("foodReserve", 240), ("gear", 420), ("life", 200),
             ("structure", 180), ("terrain", 180), ("lastTask", 300))
