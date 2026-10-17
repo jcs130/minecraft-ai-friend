@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-17",
+  "status": "deployed_online",
+  "server": {
+    "minecraft": "1.21.1",
+    "agentFriend": "0.4.47",
+    "paperRestarted": false,
+    "clientChangesRequired": false
+  },
+  "publicMine": {
+    "world": "minecraft:overworld",
+    "title": "村西公共矿坑",
+    "entrance": [
+      -652,
+      68,
+      -484
+    ],
+    "landing": [
+      -701,
+      36,
+      -484
+    ],
+    "miningStart": {
+      "xMax": -702,
+      "y": 36,
+      "z": -484
+    },
+    "landId": "village_public_mine",
+    "bounds": {
+      "min": [
+        -701,
+        34,
+        -490
+      ],
+      "max": [
+        -653,
+        76,
+        -478
+      ]
+    },
+    "containers": [
+      [
+        -657,
+        68,
+        -487
+      ],
+      [
+        -657,
+        68,
+        -481
+      ]
+    ],
+    "publicContainers": [
+      [
+        -657,
+        68,
+        -487
+      ],
+      [
+        -657,
+        68,
+        -481
+      ],
+      [
+        -659,
+        68,
+        -480
+      ]
+    ]
+  },
+  "construction": {
+    "targets": 1839,
+    "sparseTemplates": 10,
+    "routeNodes": 51,
+    "lights": 9,
+    "signs": 3,
+    "newChunkGeneration": false
+  },
+  "undergroundGuard": {
+    "bounds": {
+      "minX": -634,
+      "maxX": -458,
+      "minZ": -530,
+      "maxZ": -365,
+      "minY": -64
+    },
+    "columns": 29382,
+    "regions": 848,
+    "layout": "adaptive 4x4, split 2x2/1x1 on slopes; round down by 2; merge adjacent equal-height cells",
+    "editableDepthFromFrozenBaseline": {
+      "depth50": 4,
+      "depth95": 7,
+      "depth99": 9,
+      "maxDepth": 10
+    },
+    "existingCropsOrFarmlandDenied": 0,
+    "noPhysicalBedrockAdded": true,
+    "allowsEscapePlacementSubjectToOriginalRules": true
+  },
+  "protection": {
+    "newRoadRegions": 51,
+    "newLandDefinitions": 1,
+    "newManagedLandRegionsIncludingPublicContainers": 4,
+    "totalWorldGuardRegions": 1216,
+    "originalLandDefinitionsPreserved": 16,
+    "originalWorldGuardRegionsPreserved": 313,
+    "originalStructureMaskPreserved": true
+  },
+  "guidance": {
+    "welcomeRevision": 13,
+    "hotReloaded": true,
+    "goddessResourceFilesSynced": [
+      "GODDESS_CURRENT_RULES.md",
+      "SERVER_UPDATES.md",
+      "VILLAGE_GROUND_SAFETY.md",
+      "VILLAGE_PUBLIC_MINE.md"
+    ],
+    "noNewCommands": true,
+    "publicBoundsAreNotEntrance": true
+  },
+  "verification": {
+    "isolatedChecks": 27,
+    "liveChecks": 21,
+    "savedStateChecks": 12,
+    "allPassed": true,
+    "livePublicPlaceLookupAndWelcomeReloadVerified": true,
+    "walks": [
+      "shop road to entrance",
+      "down stairs to Y36",
+      "return upstairs"
+    ],
+    "storage": "isolated ordinary deposit/close/reopen/withdraw, current window player slots and native inventory counts",
+    "liveDig": "pre-existing village cave, completed attempt, native protected stone unchanged and mine denial received",
+    "temporaryLoadsReleased": true,
+    "automaticSavingRestored": true,
+    "shortTickSample": "20 TPS / 13.0 ms; not a 16 autonomous-agent capacity test",
+    "bedrockDeviceVisualsTested": false
+  },
+  "backup": {
+    "kind": "targeted online world/config snapshot; not a complete cold server backup",
+    "beforeFiles": 19,
+    "afterFiles": 29,
+    "twoDisksVerified": true,
+    "conditionalPerBlockRollbackJournal": true
+  },
+  "remainingLimits": [
+    "Existing historical shafts are not all filled by this change.",
+    "Subsoil protection retains a conservative variable shallow band, not exactly three blocks everywhere.",
+    "Existing physical bedrock can remain above the permission guard and is still unbreakable."
+  ],
+  "guide": "paper/docs/VILLAGE_PUBLIC_MINE.md"
+}

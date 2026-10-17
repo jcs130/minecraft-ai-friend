@@ -1,5 +1,5 @@
 schema-version: 1
-welcome-revision: 12
+welcome-revision: 13
 enabled: true
 agents-only: false
 poll-seconds: 60
@@ -16,7 +16,7 @@ welcome:
   - 欢迎来到千灯纪！城西营地地坪、地基和地标受保护，采集建造请到石质边线外。右键引路人·阿晴（-1099,65,-601）或技能罗盘看旅途指南；/mycli intro、rules、status 入门，progress 分别看主线、实练和委托。
   - /mycli rules 所有已登录普通玩家可读；/mycli capabilities info <ID> 查参数、权限、消耗和最终结果查询。查询不报名、不接单；coach lessons 只读，coach enroll 主动报名特色实练。
   - 你有54格大背包：右键黄色大背包或 /minepacks:backpack open。存入后关闭重开核对；不是/questbag任务袋，也不是540格个人奖励箱。超时或断线先查询，不自动重放存取、交易、施法或领奖。
-  - 本服中文交流，系统回执只属于本人。主村庄 X=-634..-458、Z=-530..-365（含边界），普通地面保留上3层改造，岩基层不可挖；深采到范围外，建筑仍按原保护。技能/出行耗魔力，拍照用罗盘女神相机，无需截图上传。coach later 暂停提醒、off 关闭提醒。
+  - 本服中文交流，系统回执只属于本人。主村庄 X=-634..-458、Z=-530..-365 可少量整地，地下禁止深挖。村西矿坑(-652,68,-484)：沿台阶下到Y36，向西X≤-702采矿；入口有公共箱、工作台和炉子。技能/出行耗魔力，拍照用罗盘相机，无需上传。coach later 暂停提醒、off 关闭。
 steps:
   register:
     title: 先登记为冒险者
