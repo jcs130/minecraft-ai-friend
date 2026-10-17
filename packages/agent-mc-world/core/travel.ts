@@ -84,7 +84,8 @@ function targetSubmerged(bot: Bot): boolean {
   return false;
 }
 
-export function installTreadWater(bot: Bot): void {
+/** Passive ascent is opt-in and shares the host's live anti-drowning switch. */
+export function installTreadWater(bot: Bot, enabled: () => boolean = () => false): void {
   let path: Array<{ y: number; toBreak?: unknown[]; toPlace?: unknown[] }> = [];
   let treading = false;
   bot.on('path_update', (r: { path: typeof path }) => { path = r.path; });
@@ -105,6 +106,11 @@ export function installTreadWater(bot: Bot): void {
     if (wet && walking) {
       treading = false;
       if (next.y < Math.floor(bot.entity.position.y)) bot.setControlState('jump', false);
+      return;
+    }
+    if (!enabled()) {
+      if (treading) bot.setControlState('jump', false);
+      treading = false;
       return;
     }
     const below = bot.blockAt(bot.entity.position.offset(0, -0.5, 0));

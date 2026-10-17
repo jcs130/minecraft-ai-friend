@@ -13,14 +13,14 @@ const fixtures: ReturnType<typeof methodHarness>[] = [];
 afterEach(() => { for (const h of fixtures.splice(0)) h.close(); });
 
 /** Actual pinned Prismarine collision/water physics; no manual coordinate advancement. */
-function pool(y = 69) {
+function pool(y = 69, ascent = () => true) {
   const h = methodHarness(); fixtures.push(h);
   for (let x = -8; x <= 8; x++) for (let z = -8; z <= 8; z++) for (let y = 64; y <= 69; y++) h.set(x, y, z, 'water');
   h.bot.entity.position = new Vec3(.5, y, .5);
   h.bot.entity.onGround = false;
   Object.assign(h.bot.pathfinder, { isMoving: () => false });
   const bot = h.bot as unknown as Bot;
-  installTreadWater(bot);
+  installTreadWater(bot, ascent);
   const ctx = { aborted: () => false } as SkillContext;
   const move = (keys: ('jump' | 'forward' | 'sneak')[], durationMs = 1000) =>
     skillControl(bot, { skill: 'control', mode: 'water', keys, durationMs }, ctx);
@@ -44,6 +44,36 @@ it('sinks using unchanged game physics while passive tread yields, then resumes 
   expect(h.keys.jump).toBe(true);
   expect(h.bot.entity.position.y).toBeGreaterThan(bottom);
   expect(h.bot.physicsEnabled).toBe(true);
+});
+
+it('stops passive ascent after a live disable and does not restore it after a water program', async () => {
+  let enabled = true;
+  const h = pool(67, () => enabled);
+  h.bot.emit('physicsTick');
+  expect(h.keys.jump).toBe(true);
+  enabled = false;
+  h.bot.emit('physicsTick');
+  expect(h.keys.jump).toBe(false);
+  const from = h.bot.entity.position.y;
+  await vi.advanceTimersByTimeAsync(1500);
+  expect(h.bot.entity.position.y).toBeLessThan(from - .5);
+  const up = h.move(['jump'], 100);
+  await vi.advanceTimersByTimeAsync(50);
+  expect(h.keys.jump).toBe(true);
+  await vi.advanceTimersByTimeAsync(50); await up;
+  await vi.advanceTimersByTimeAsync(200);
+  expect(h.keys.jump).toBe(false);
+});
+
+it('does not install implicit ascent when no permission callback is supplied', async () => {
+  const h = methodHarness(); fixtures.push(h);
+  for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) for (let y = 64; y <= 69; y++) h.set(x, y, z, 'water');
+  h.bot.entity.position = new Vec3(.5, 67, .5); h.bot.entity.onGround = false;
+  Object.assign(h.bot.pathfinder, { isMoving: () => false });
+  installTreadWater(h.bot as unknown as Bot);
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(h.keys.jump).toBe(false);
+  expect(h.bot.entity.position.y).toBeLessThan(66.5);
 });
 
 it('retains explicit upward input and measured horizontal motion without a pathfinder goal', async () => {

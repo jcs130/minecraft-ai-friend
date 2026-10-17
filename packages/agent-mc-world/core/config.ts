@@ -481,7 +481,8 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.reflex.reactCooldownSec': {
         type: 'integer', title: '受击反应冷却', minimum: 1, maximum: 120, 'x-suffix': 's', 'x-hot': true,
       },
-      'worlds.minecraft.reflex.antiDrown': { type: 'boolean', title: '防溺水上浮', 'x-hot': true },
+      'worlds.minecraft.reflex.antiDrown': { type: 'boolean', title: '自动踩水与防溺水上浮', 'x-hot': true,
+        description: '关闭后不再自动按跳跃、找岸或冻结水中任务，并释放已发生的上浮接管。手动游泳、潜水程序与正常寻路继续可用；氧气和伤害观测仍保留。' },
       'worlds.minecraft.reflex.antiLava': {
         type: 'boolean', title: '挨烧自动逃离', 'x-hot': true,
         description: '碰到岩浆/火就立刻手动冲出去,再交给寻路器。判定看碰撞箱压着什么,'

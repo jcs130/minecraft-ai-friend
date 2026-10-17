@@ -11,6 +11,7 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-17T00:
 afterEach(() => vi.useRealTimers());
 
 function rescue() {
+  let waterAscent = true;
   const h = methodHarness('1.21.1');
   for (let x = -8; x <= 8; x++) for (let z = -8; z <= 8; z++) {
     for (let y = 64; y <= 66; y++) h.set(x, y, z, 'water');
@@ -31,13 +32,34 @@ function rescue() {
     resumeEnvironment: token => h.exec.resumeAfterEnvironment(token),
     stopFallTask: why => h.exec.stopCurrent(why), resumeAfterFall: token => h.exec.resumeQueue(token),
     escapeActive: () => false, fightBack: () => false, fleeHealth: () => 6,
-    reactCooldownSec: () => 10, antiDrown: () => true, antiLava: () => false,
+    reactCooldownSec: () => 10, antiDrown: () => waterAscent, antiLava: () => false,
     diag: { write: row => diagnostics.push(row) } as never,
   });
   reflexes.start();
-  return { ...h, reflexes, reports, diagnostics,
+  return { ...h, reflexes, reports, diagnostics, disableAscent() { waterAscent = false; },
     close() { reflexes.stop(); h.close(); } };
 }
+
+it('releases a running drowning reflex and its queue hold on live disable while still underwater', async () => {
+  const r = rescue();
+  try {
+    await vi.advanceTimersByTimeAsync(2300);
+    expect(r.reflexes.environmentOwnerKind).toBe('drown');
+    expect(r.bot.pathfinder.goal).not.toBeNull();
+    r.disableAscent();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(r.reflexes.envActive).toBe(false);
+    expect(r.bot.pathfinder.goal).toBeNull();
+    expect(r.keys.jump).toBe(false);
+    expect(r.diagnostics.some(row => row.event === 'drown-disabled')).toBe(true);
+    r.exec.submit([{ skill: 'chat', text: 'queue released' }], 'append');
+    await vi.advanceTimersByTimeAsync(200);
+    expect(r.said).toContain('queue released');
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(r.reflexes.envActive).toBe(false);
+    expect(r.keys.jump).toBe(false);
+  } finally { r.close(); }
+});
 
 it('rejects the same water rescue target after recorded collision oscillation instead of renewing it forever', async () => {
   const r = rescue();

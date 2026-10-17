@@ -56,7 +56,7 @@ describe('agent programs using Mineflayer public primitives', () => {
     const r = rig('1.21.1');
     for (let x=-2;x<=2;x++) for (let z=-2;z<=2;z++) for (let y=64;y<=69;y++) r.set(x,y,z,'water');
     r.live.entity.position = new Vec3(.5,66,.5); r.live.entity.onGround = false;
-    Object.assign(r.live.pathfinder,{isMoving:()=>false}); installTreadWater(r.live);
+    Object.assign(r.live.pathfinder,{isMoving:()=>false}); installTreadWater(r.live, () => true);
     const run=r.runner.start({name:'observe-diving-rates',code:`
       await bot.setControlState('jump',false);
       const before=await bot.read('breathing');
@@ -82,7 +82,7 @@ describe('agent programs using Mineflayer public primitives', () => {
     for(let x=-2;x<=2;x++)for(let z=-2;z<=2;z++)for(let y=64;y<=69;y++)r.set(x,y,z,'water');
     r.live.entity.position=new Vec3(.5,66,.5);r.live.entity.onGround=false;
     Object.assign(r.live.pathfinder,{isMoving:()=>false});
-    installTreadWater(r.live);r.live.emit('physicsTick');
+    installTreadWater(r.live, () => true);r.live.emit('physicsTick');
     expect(r.live.getControlState('jump')).toBe(true);
     const run=r.runner.start({name:'native-water-descent',code:
       "await bot.setControlState('jump',false);const before=await bot.read('entity.position');"

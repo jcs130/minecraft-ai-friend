@@ -4211,6 +4211,7 @@ export class MinecraftWorld implements World {
     });
 
     this.bridge = this.createBridge({
+      antiDrown: () => this.cfg.reflex.antiDrown,
       host: this.cfg.host,
       port: this.cfg.port,
       username: this.cfg.username || this.botName,
