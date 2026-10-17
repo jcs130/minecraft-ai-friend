@@ -1,5 +1,10 @@
 # Agent MC World
 
+`0.5.7-rc.14` recognizes modern Java private chat after the actual registry
+has resolved translation keys to format templates. The registered incoming
+type supplies sender/content positions; public quotes remain public. Private
+identity evidence also survives historical message indexing and viewer delivery.
+
 `0.5.7-rc.13` reads standard incoming private messages from translation
 arguments, preserving sender evidence across localized Java 1.21.1 chat and
 system-chat transports. English plugin formats remain supported; public quotes

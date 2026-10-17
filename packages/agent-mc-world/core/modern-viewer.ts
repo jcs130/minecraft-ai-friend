@@ -40,6 +40,7 @@ import { flightState } from './flight.ts';
 import { createViewerContentBridge } from './viewer-content.mjs';
 import { viewerPhotoPage } from './viewer-photo-page.mjs';
 import { minecraftTextComponent } from './text-component.ts';
+import { incomingPrivateParts } from '../src/chat-provenance.ts';
 import type { EventEmitter } from 'node:events';
 import { isRaining } from './terrain.ts';
 import { observeStatusEffects, remainingEffectTicks } from './status-effects.ts';
@@ -47,11 +48,11 @@ import { viewerPlayerSkin } from './viewer-player-skin.ts';
 import type { ViewerRelay } from './relay-port.ts';
 export { viewerItem } from './viewer-state.ts';
 
-export function viewerMessageKind(message: { translate?: string; toString(): string }, position: string): string | null {
+export function viewerMessageKind(message: { translate?: string; toString(): string }, position: string, registry?: unknown): string | null {
   if (position !== 'chat' && position !== 'system') return null;
   if (message.translate === 'commands.message.display.outgoing') return null;
   if (position === 'system' && /^(?:MC_[A-Z0-9_]+(?:\s|$)|\{\s*"(?:schemaVersion|action|type)"\s*:)/.test(message.toString().trimStart())) return null;
-  return message.translate === 'commands.message.display.incoming' ? 'whisper'
+  return message.translate === 'commands.message.display.incoming' || incomingPrivateParts(message, registry) ? 'whisper'
     : message.translate === 'chat.type.advancement' ? 'advancement' : position;
 }
 
@@ -537,7 +538,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     for (const socket of viewerSockets) if (socket.connected) socket.emit('skillsState', latestSkills);
   };
   const onViewerMessage = (message: { translate?: string; toString(): string }, position: string) => {
-    const kind = viewerMessageKind(message, position);
+    const kind = viewerMessageKind(message, position, bot.registry);
     if (kind) publishGameMessage(kind, message);
     // An explicitly configured extension may extract state from its system replies.
     if (position === 'chat' || position === 'system') {
