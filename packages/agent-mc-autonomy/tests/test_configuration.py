@@ -61,6 +61,30 @@ def test_explicit_optional_bundled_viewer_catalog_is_not_part_of_account_or_body
     assert settings.client_config(tmp_path) == default.client_config(tmp_path)
 
 
+def test_optional_server_presentation_is_default_off_and_not_a_body_dependency(tmp_path):
+    base = {"server": {"host": "fixture.test", "username": "Alice"}}
+    default = Settings.parse(base)
+    settings = Settings.parse({**base, "server_extension": {
+        "presentation_module": "C:/packs/example/presentation.mjs", "presentation_sha256": "a" * 64}})
+    assert default.server_presentation_module == default.server_presentation_sha256 == ""
+    assert settings.server_presentation_module.endswith("presentation.mjs")
+    assert settings.identity == default.identity
+    assert settings.client_config(tmp_path) == default.client_config(tmp_path)
+    assert not settings.enabled
+
+
+@pytest.mark.parametrize("port", [
+    {"presentation_module": "C:/port.mjs"}, {"presentation_sha256": "a" * 64},
+    {"presentation_module": "https://example.invalid/port.mjs", "presentation_sha256": "a" * 64},
+    {"presentation_module": "C:/port.py", "presentation_sha256": "a" * 64},
+    {"presentation_module": "C:/port.mjs", "presentation_sha256": "bad"},
+    {"channel": "server-specific"},
+])
+def test_unbound_or_implicit_server_presentation_is_rejected(port):
+    with pytest.raises(ValueError):
+        Settings.parse({"server_extension": port})
+
+
 @pytest.mark.parametrize("appearance", ["server", "bundled:yui-ysm", "native:misc/3_default_boy:red"])
 def test_local_viewer_default_preserves_account_body_and_disabled_start(tmp_path, appearance):
     base = {"server": {"host": "fixture.test", "username": "Alice"}}

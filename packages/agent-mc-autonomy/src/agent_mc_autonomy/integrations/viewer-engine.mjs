@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { publicAgentReader } from './viewer-public.mjs';
+import { presentationFactory, mergePresentation } from './server-presentation.mjs';
 
 const require = createRequire(resolve(new URL(import.meta.url).searchParams.get('package'), 'package.json'));
 const { Bridge, bindNativeGuiPresentation } = await import(pathToFileURL(require.resolve('agent-mc-world/extension')).href);
@@ -13,9 +14,18 @@ const { simplify } = require('prismarine-nbt');
 export function createEngine(options) {
   const cfg = options.extension.config;
   let prepared, streamFactory, presentation, attached, stream, timer, stopped = false;
+  let createServerObserver=null,serverObserver=null;
   let logger, generation = 0, closing = Promise.resolve(), sequence = 0, failed = false;
   const writer = `${process.pid}.${randomUUID()}`;
   const diagnostics = new Map();
+  const closeServerObserver = () => {
+    const observer=serverObserver;serverObserver=null;
+    try{observer?.close();}catch{warn('Optional server presentation cleanup failed');}
+  };
+  const serverCapabilities = () => {
+    try{return serverObserver?.capabilities?.()??{active:false};}
+    catch{closeServerObserver();warn('Optional server presentation failed; standard presentation retained');return {active:false};}
+  };
   const warn = message => { try { logger?.warn(message); } catch {} };
   const diagnostic = (operation, error) => {
     // Never log paths, renderer payloads or arbitrary error text.
@@ -54,6 +64,7 @@ export function createEngine(options) {
   const close = () => {
     clearInterval(timer); timer = null;
     const previous = attached; attached = null;
+    closeServerObserver();
     previous?.revokeGui?.();
     const previousStream = stream; stream = null;
     try { previousStream?.close(); } catch { warn('Optional viewer stream close failed'); }
@@ -71,6 +82,8 @@ export function createEngine(options) {
     async start(host) {
       stopped = false; logger = host.log;
       const currentGeneration = ++generation;
+      try{createServerObserver=await presentationFactory(cfg);}
+      catch{createServerObserver=null;record({server_extension:{active:false,reason:'SERVER_PRESENTATION_UNAVAILABLE'}});warn('Optional server presentation unavailable; standard gameplay and viewer remain independent');}
       try {
         const load = relative => import(pathToFileURL(resolve(cfg.rendererDirectory, relative)).href);
         const [{ prepareNativeWorldPreviewHost }, { selectViewerPack }, vanilla] = await Promise.all([
@@ -106,9 +119,15 @@ export function createEngine(options) {
         let view;
         try {
           stream = streamFactory(bot, prepared.registrySha256, options.cfg.version);
+          try{serverObserver=createServerObserver?.(bot)??null;}
+          catch{serverObserver=null;warn('Optional server presentation could not attach; standard viewer continues');}
           view = prepared.attach({ bot, nativeStream: stream, simplifyNBT: simplify,
             expectedUsername: options.cfg.username, getAgentStatus: publicAgentReader(cfg.agentStateFile, cfg.session, options.cfg.username),
-            getPresentationState: () => presentation(bot), logger: { error() {} } });
+            getPresentationState: () => {
+              const base=presentation(bot);let extra=null;
+              try{extra=serverObserver?.snapshot();}catch{closeServerObserver();warn('Optional server presentation failed; standard presentation retained');}
+              return mergePresentation(base,extra,bot);
+            }, logger: { error() {} } });
         } catch {
           record({ available: false, reason: 'VIEWER_ATTACH_FAILED', url: null });
           warn('Optional viewer attachment unavailable; game execution continues');
@@ -134,7 +153,8 @@ export function createEngine(options) {
           }
           const connected = bot.version === options.cfg.version && !!bot.entity && !!bot._client.uuid;
           record({ available: connected && current.viewer.available && !!view.url, url: view.url ? view.url + '3dview/' : null,
-            reason: current.viewer.reason, player: current.selfPlayer ?? null, status: current,
+            reason: current.viewer.reason, player: current.presentation?.self ?? current.selfPlayer ?? null, status: current,
+            server_extension:serverCapabilities(),
             active_viewers: typeof view.activeViewers === 'function' ? view.activeViewers() : null });
         };
         attachment.listening = oldClose.then(() => {

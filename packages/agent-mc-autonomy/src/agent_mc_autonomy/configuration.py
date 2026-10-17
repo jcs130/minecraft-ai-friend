@@ -139,6 +139,8 @@ class Settings:
     viewer_bundled_appearance_catalog_file: str = ""
     viewer_default_appearance: str = "server"
     viewer_listen_port: int = 28985
+    server_presentation_module: str = ""
+    server_presentation_sha256: str = ""
     min_decision_seconds: int = 10
     idle_decision_seconds: int = 60
     max_tool_rounds: int = 6
@@ -219,6 +221,15 @@ class Settings:
         appearance = _text(viewer, "default_appearance", "server")
         if len(appearance) > 128 or not re.fullmatch(r"(?:server|bundled:[A-Za-z0-9_-]+|native:[A-Za-z0-9_/-]+:[A-Za-z0-9_-]+)", appearance):
             raise SettingsValidationError("viewer.default_appearance", "invalid_default_appearance")
+        extension = raw.get("server_extension", {})
+        if not isinstance(extension, dict) or set(extension) - {"presentation_module", "presentation_sha256"}:
+            raise ValueError("server_extension supports only an explicit optional presentation port")
+        presentation_module = _text(extension, "presentation_module")
+        presentation_sha256 = _text(extension, "presentation_sha256")
+        if (bool(presentation_module) != bool(presentation_sha256) or len(presentation_module) > 4096
+                or presentation_module and ("://" in presentation_module or not presentation_module.endswith((".mjs", ".js")))
+                or presentation_sha256 and not re.fullmatch(r"[a-f0-9]{64}", presentation_sha256)):
+            raise SettingsValidationError("server_extension.presentation_module", "invalid_presentation_port")
         return cls(
             enabled=_boolean(autonomy, "enabled", False), host=host,
             port=_integer(server, "port", 25565, 1, 65535, "server.port"), username=username, auth=auth, version=version, connection_type=connection_type,
@@ -232,6 +243,7 @@ class Settings:
             viewer_bundled_appearance_catalog_file=_text(viewer, "bundled_appearance_catalog_file"),
             viewer_default_appearance=appearance,
             viewer_listen_port=_integer(viewer, "listen_port", 28985, 1024, 65535),
+            server_presentation_module=presentation_module, server_presentation_sha256=presentation_sha256,
             idle_decision_seconds=_integer(autonomy, "idle_decision_seconds", 60, minimum, 3600),
             max_tool_rounds=_integer(autonomy, "max_tool_rounds", 6, 1, 12),
             max_output_tokens=maximum_output,

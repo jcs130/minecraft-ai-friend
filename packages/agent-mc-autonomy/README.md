@@ -5,6 +5,21 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.83 preserves the body's actual rendering registry/profile when an optional
+server HUD supplies skills and vitals. Server metadata cannot relabel vanilla
+item decoding; the exact core and viewer pins from 0.1.82 remain unchanged.
+
+0.1.82 adds an optional, hash-checked local server presentation port. Configure
+`server_extension.presentation_module` and `presentation_sha256` together; both
+default to empty. The module receives the existing bot and can supplement its
+own HUD through `createPresentationObserver(bot)` / `snapshot()` / `close()`.
+Detection, plugin-channel names and server schemas belong in the optional
+resource pack, never this runtime. An unavailable port does not stop standard
+gameplay; it cannot replace pose, inventory or another player's identity. This
+version pins core `0.5.7-rc.5` (`78b67164`) and shared viewer `bc8539ae`, including
+upstream compact combat evidence, container observations and named-item icons.
+Source/dependency checks do not establish live server, speech or survival success.
+
 0.1.81 also reuses exact answered bag, queue and blocked queries under unchanged
 observed state. After a redundant read, only that tool is absent for one recovery
 decision; previous evidence, originals and other tools remain available. Fresh
