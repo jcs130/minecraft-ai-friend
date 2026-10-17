@@ -38,6 +38,7 @@ HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_cont
 DIRECT_TOOLS = {"mc_help", "mc_knowledge", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape"}
 READ_ACTIVITY_TOOLS = {"mc_help", "mc_knowledge", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original", "mc_capabilities", "mc_operations", "mc_result", "mc_notices"}
 IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout"}
+REUSABLE_IMMEDIATE_READS = {"mc_bag", "mc_queue", "mc_blocked"}
 
 
 def observation_call(name, arguments):
@@ -320,6 +321,8 @@ class Controller:
         self.read_activity = {}
         self.observation_reads = {}
         self.observation_requests = {}
+        self.read_answers = {}
+        self.read_recovery_tools = set()
         self.action_requests = {}
         self.action_scopes = {}
         self.native_outcomes = []
@@ -343,6 +346,8 @@ class Controller:
         if fresh_scope != self.game_scope:
             self.observation_reads.clear()
             self.observation_requests.clear()
+            self.read_answers.clear()
+            self.read_recovery_tools.clear()
             self.recent.clear()
             self.native_outcomes.clear()
             self.body_events.clear()
@@ -1111,6 +1116,21 @@ class Controller:
                 elif name == "mc_do" and self.feedback_pending:
                     arguments["queue"] = "append"
         request_id = str(uuid.uuid4())
+        read_key = json.dumps([name, arguments], sort_keys=True, ensure_ascii=False)
+        answer = self.read_answers.get(read_key) if name in REUSABLE_IMMEDIATE_READS else None
+        if (answer and not self.pending and self.last_admission_facts is not None
+                and answer["facts"] == self.last_admission_facts and answer["scope"] == self.game_scope
+                and time.monotonic() - answer["at"] < 60):
+            self.read_recovery_tools.add(name)
+            result = {"failed": True, "dispatched": False, "origin": "controller_validation",
+                "code": "read_already_answered",
+                "text": "This exact read was already answered with unchanged observed state. It was NOT dispatched again. The dated answer and original handles remain below. This tool will be unavailable for one recovery decision; use another unresolved query, choose useful native work, or wait for a stated condition. Repeating the query cannot open a container or change the inventory.",
+                "previous_answer": {"fresh": False, "answer": answer["answer"]}}
+            self.planner_notice = result["text"]
+            self.continuation_needed = True
+            self.publish(read_recovery={"code": result["code"], "tool": name,
+                "read_activity": dict(self.read_activity), "action_progress_verified": False})
+            return result, await self.archive_receipt(request_id, name, result), True
         spatial_key = spatial_read_key(name, arguments)
         previous = self.observation_reads.get(spatial_key) if spatial_key else None
         if (previous and not self.pending and self.last_admission_facts is not None
@@ -1126,6 +1146,7 @@ class Controller:
                     "original_event": previous["original_event"], "execution_id": previous["execution_id"],
                     "query": "mc_protocol(action=archive,run=original_event.run,after=original_event.cursor-1)"}}
             self.planner_notice = result["text"]
+            self.read_recovery_tools.add(name)
             self.continuation_needed = True
             self.publish(read_recovery={"code": result["code"], "read_activity": dict(self.read_activity),
                 "original_event": previous["original_event"], "action_progress_verified": False})
@@ -1165,12 +1186,19 @@ class Controller:
         self.publish(viewer_action=tool_receipt(name, arguments, result))
         read_only = observation_call(name, arguments)
         if not result.get("failed"):
+            if name in REUSABLE_IMMEDIATE_READS and not result.get("execution"):
+                if len(self.read_answers) >= 32:
+                    self.read_answers.pop(next(iter(self.read_answers)))
+                self.read_answers[read_key] = {"facts": self.last_admission_facts, "scope": self.game_scope,
+                    "at": time.monotonic(), "answer": json.loads(compact)}
             if read_only:
                 self.read_activity[name] = min(999, self.read_activity.get(name, 0) + 1)
             elif result.get("execution") and (name == "mc_do" or "act" in next(
                     (t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])):
                 self.read_activity.clear()
                 self.observation_reads.clear()
+                self.read_answers.clear()
+                self.read_recovery_tools.clear()
                 self.unactioned_replies = 0
                 self.publish(unactioned_replies=0, read_recovery=None)
             self.publish(read_activity=dict(self.read_activity))
@@ -1269,6 +1297,12 @@ class Controller:
                     self.continuation_needed = True
                     return
                 planning_goal = self.goal_prompt(goal)
+                # A redundant read cannot monopolize the next planning request.
+                # This is one decision, not a permanent ban or a scripted action:
+                # full evidence and all other tools (including originals) remain.
+                excluded = set(self.read_recovery_tools)
+                round_tools = [tool for tool in tools if tool["function"]["name"] not in excluded]
+                self.read_recovery_tools.difference_update(excluded)
                 state = focus_state(planning_goal, facts, self.pending)
                 if round_index == 0:
                     focus = await self.fast_policy.choose(state)
@@ -1297,7 +1331,7 @@ class Controller:
                 if self.stop_requested() or self.preempted or self.turn_death_epoch != self.death_epoch or self._event_poll is not None or self._deferred_event_drain:
                     return
                 try:
-                    messages, budget = assemble(prefix, tools, planning_goal, facts, self.recent, self.groups,
+                    messages, budget = assemble(prefix, round_tools, planning_goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
@@ -1305,7 +1339,7 @@ class Controller:
                     if not reserve:
                         raise
                     reserve = 0
-                    messages, budget = assemble(prefix, tools, planning_goal, facts, self.recent, self.groups,
+                    messages, budget = assemble(prefix, round_tools, planning_goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
@@ -1318,7 +1352,7 @@ class Controller:
                     episode_id=death_context.get('latest_episode',{}).get('id') if death_context else None
                     profile=self.settings.decision_policy.select(focus=focus.get('choice'),failure=bool(self.tool_failure or self.planner_notice),feedback=self.feedback_pending,
                         death=bool(episode_id and episode_id!=self.profile_death_id))
-                    response = await self.decide_with_events(messages, tools, profile)
+                    response = await self.decide_with_events(messages, round_tools, profile)
                 except (PlannerResponseError, PlannerUnavailableError) as error:
                     with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
                         output.write(encode({"turnId": self.turn, "rejected": error.diagnostic, "dispatched": False}) + "\n")
@@ -1379,7 +1413,7 @@ class Controller:
                     self.planner_notice = f"{self.unactioned_replies} replies without a subsequent accepted game action. The previous reply had no tool calls; no game action was dispatched from it. The standing goal remains active. Use current facts and receipts to choose useful next work; if waiting, explain the condition preventing action."
                     return
                 try:
-                    prepared = self.prepare_calls(calls, tools)
+                    prepared = self.prepare_calls(calls, round_tools)
                 except ModelCallRejected as error:
                     self.reject_model_call(error, response)
                     return

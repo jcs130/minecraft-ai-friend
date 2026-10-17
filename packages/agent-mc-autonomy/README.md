@@ -5,6 +5,13 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.81 also reuses exact answered bag, queue and blocked queries under unchanged
+observed state. After a redundant read, only that tool is absent for one recovery
+decision; previous evidence, originals and other tools remain available. Fresh
+state, different arguments and the bounded expiry permit querying it again.
+This addresses the live same-turn large-backpack query loop without opening a
+container, choosing a task or fabricating progress on the player's behalf.
+
 0.1.80 retains structured results from every spatial observation in a terminal
 batch before truncating its long title. Exact completed spatial-only batches at
 unchanged observed state reuse dated evidence for up to 60 seconds instead of

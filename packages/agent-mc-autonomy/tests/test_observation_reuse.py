@@ -1,5 +1,6 @@
 """Replay the live repeated four-quadrant voxel scout across native turns."""
 import copy
+import dataclasses
 import json
 
 import pytest
@@ -111,3 +112,48 @@ def test_mixed_body_steps_are_never_reused_as_observation(framework_module, tmp_
     observed(controller, run_async, "mc_do", plan)
     assert observed(controller, run_async, "mc_do", plan).get("execution")
     assert len([call for call in bridge.calls if call[0] == "mc_do"]) == 2
+
+
+def test_repeated_inventory_read_yields_one_recovery_decision_with_other_tools(
+        framework_module, tmp_path, run_async):
+    seen = []
+
+    async def decide(messages, tools):
+        available = {tool["function"]["name"] for tool in tools}
+        seen.append((messages, available))
+        name = "mc_bag" if "mc_bag" in available else "mc_do"
+        return {"content": None, "tool_calls": [{"id": "call-" + str(len(seen)), "type": "function",
+            "function": {"name": name, "arguments": json.dumps(
+                {"item": "大背包"} if name == "mc_bag" else {"steps": [{"skill": "goto", "at": [1, 65, 1]}]})}}]}
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    controller.settings = dataclasses.replace(controller.settings, max_tool_rounds=4)
+    bridge.tools.append({"name": "mc_bag", "inputSchema": {"type": "object"}})
+    tools = module.model_tools(bridge.tools)
+    run_async(controller.turn_once("survive", "rules", tools))
+    run_async(controller.turn_once("survive", "rules", tools))
+    assert len([call for call in bridge.calls if call[0] == "mc_bag"]) == 1
+    assert len([call for call in bridge.calls if call[0] == "mc_do"]) == 1
+    assert "mc_bag" not in seen[-1][1] and {"mc_do", "mc_original"} <= seen[-1][1]
+    assert "read_already_answered" in json.dumps(seen[-1][0])
+    assert controller.pending[("task", "body-1")]["terminal"] is False
+
+
+@pytest.mark.parametrize("change", ["facts", "arguments", "scope", "expiry"])
+def test_inventory_reuse_does_not_hide_changed_state(framework_module, tmp_path, run_async, monkeypatch, change):
+    import agent_mc_autonomy.controller as module
+    ticks = [100.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: ticks[0])
+    bridge, controller = prepare(framework_module, tmp_path)
+    args = {"item": "大背包"}
+    run_async(controller.execute_model_call("mc_bag", args))
+    if change == "facts":
+        controller.last_admission_facts = "inventory changed"
+    elif change == "arguments":
+        args = {"item": "chest"}
+    elif change == "scope":
+        controller.game_scope = "other-account"
+    else:
+        ticks[0] += 61
+    run_async(controller.execute_model_call("mc_bag", args))
+    assert len([call for call in bridge.calls if call[0] == "mc_bag"]) == 2
