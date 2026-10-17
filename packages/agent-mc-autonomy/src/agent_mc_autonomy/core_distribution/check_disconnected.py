@@ -76,9 +76,20 @@ async def check(directory: Path, node: str) -> dict:
             await bridge.open()
             names = {tool["name"] for tool in bridge.tools}
             assert {"mc_connection", "mc_do", "mc_events", "mc_script", "mc_queue", "mc_visual", "mc_memory", "mc_combat_tactic", "mc_knowledge"} <= names
+            assert {"mc_tool_help", "mc_messages"} <= names
             assert not any(name.startswith("mymc_") for name in names)
             status = module.json_content(await bridge.call("mc_connection", {"action": "status"}))
             assert status["phase"] == "disconnected" and status["facts"] is None
+            shared_controller = controller.Controller(bridge, None, Settings.parse({}), data / "autonomy",
+                                                       lambda **_: None, lambda: False)
+            result, _ = await shared_controller.dispatch("mc_tool_help", {"name": "mc_messages", "full": True}, "offline-shared-help")
+            help_result = json.loads(result["text"])
+            assert help_result["protocol"] == "agent-mc-tool-help/v1" and help_result["complete"] is True
+            assert help_result["schema"] == next(tool["inputSchema"] for tool in bridge.tools if tool["name"] == "mc_messages")
+            index = module.outcome(await bridge.call("mc_messages", {"action": "list"}))
+            # The MCP connection gate still fences game-scoped message reads.
+            # Discovering their schema is not proof of a live inbox or permission.
+            assert index["failed"] and "disconnected" in index["text"] and not index.get("execution"), index
             reference = module.json_content(await bridge.call("mc_knowledge", {"action": "get", "id": "food/beef"}))
             assert reference["version"] == "1.21.1" and reference["currentWorldVerified"] is False
             assert reference["entry"]["nutrition"] == {"foodPoints": 3, "saturation": 1.8}
@@ -150,6 +161,8 @@ async def check(directory: Path, node: str) -> dict:
                     "service_learning_contract": True, "service_learning_opt_in": True,
                     "game_memory_write_recall": True, "game_memory_restart_recall": True,
                     "disconnected_capture_refused": True, "shared_tactics_discovered": True,
+                    "shared_message_schema_and_help": True,
+                    "disconnected_message_query_refused": True,
                     "cortico_installed": (directory / "node_modules/cortico").exists()}
         finally:
             await bridge.close()

@@ -36,8 +36,8 @@ from .viewer_public import tool_receipt
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
 HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_control"}
-DIRECT_TOOLS = {"mc_help", "mc_knowledge", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape"}
-READ_ACTIVITY_TOOLS = {"mc_help", "mc_knowledge", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original", "mc_capabilities", "mc_operations", "mc_result", "mc_notices"}
+DIRECT_TOOLS = {"mc_help", "mc_knowledge", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape", "mc_tool_help", "mc_messages"}
+READ_ACTIVITY_TOOLS = {"mc_help", "mc_knowledge", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original", "mc_capabilities", "mc_operations", "mc_result", "mc_notices", "mc_messages"}
 IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout"}
 REUSABLE_IMMEDIATE_READS = {"mc_bag", "mc_queue", "mc_blocked"}
 
@@ -167,10 +167,13 @@ def model_tools(catalogue):
                   "parameters": {"type": "object", "properties": {"handle": {"type": "string"},
                                  "offset": {"type": "integer", "minimum": 0}, "limit": {"type": "integer", "minimum": 1, "maximum": 1000}},
                                  "required": ["handle"], "additionalProperties": False}}})
-    tools.append({"type": "function", "function": {"name": "mc_tool_help",
-                 "description": "Read the original tool description/schema on demand. Large nodes list JSON-pointer child paths; request a specific path for full detail.",
-                 "parameters": {"type": "object", "properties": {"name": {"enum": available},
-                    "path": {"type": "string", "description": "JSON pointer, e.g. /inputSchema/properties/steps"}}, "required": ["name"], "additionalProperties": False}}})
+    if "mc_tool_help" not in available:
+        # Compatibility for older/native bodies only. New cores own discovery;
+        # preserve their exact full/path/index contract instead of shadowing it.
+        tools.append({"type": "function", "function": {"name": "mc_tool_help",
+                     "description": "Read the original tool description/schema on demand. Large nodes list JSON-pointer child paths; request a specific path for full detail.",
+                     "parameters": {"type": "object", "properties": {"name": {"enum": available},
+                        "path": {"type": "string", "description": "JSON pointer, e.g. /inputSchema/properties/steps"}}, "required": ["name"], "additionalProperties": False}}})
     tools.append({"type": "function", "function": {"name": "goal_report",
                   "description": "Report the current user goal as reported_done or blocked only after native tasks end. Supply observed evidence and remaining uncertainty. This is a planner report, not independently verified goal success; it yields to the next goal.",
                   "parameters": {"type": "object", "properties": {"outcome": {"enum": ["reported_done", "blocked"]},
@@ -277,7 +280,8 @@ def failure_context(catalogue, name, arguments, result):
             if isinstance(spec.get("items"), dict) and "type" in spec["items"]:
                 short["items"] = {"type": spec["items"]["type"]}
             short["schema"] = {"tool": "mc_tool_help", "arguments": {
-                "name": name, "path": "/inputSchema/properties/steps"}}
+                "name": name, "path": ("/properties/steps" if any(tool.get("name") == "mc_tool_help" for tool in catalogue)
+                                        else "/inputSchema/properties/steps")}}
         if not spec:
             short = {"documented": False, "lookup": "mc_tool_help"}
         notice["parameter_help"][key] = short
@@ -894,7 +898,12 @@ class Controller:
                           "text": "Fresh body facts invalidated the reported stage. No goal was completed; reassess against current intent and original receipts."}
                 return result, await self.archive_receipt(request_id, name, result)
         documentation = None
-        if name == "mc_tool_help":
+        shared_help = any(tool["name"] == "mc_tool_help" for tool in self.bridge.tools)
+        if name == "mc_tool_help" and shared_help and arguments.get("name") in HIDDEN_TOOLS:
+            result = {"protocol": PROTOCOL, "failed": True, "execution": None, "dispatched": False,
+                      "text": "That transport/control tool belongs to the runtime coordinator; it is not a planner capability."}
+            return result, await self.archive_receipt(request_id, name, result)
+        if name == "mc_tool_help" and not shared_help:
             # This is a local schema lookup. A guessed field/index has not sent
             # anything to the body and must not poison its uncertainty journal.
             available = {tool["name"] for tool in self.bridge.tools} - HIDDEN_TOOLS
@@ -925,7 +934,7 @@ class Controller:
             raw = {"structuredContent": {"protocol": PROTOCOL, "text": encode(report), "endsTurn": True}}
         elif name == "mc_original":
             raw = {"structuredContent": {"protocol": PROTOCOL, **await self.original_page(arguments)}}
-        elif name == "mc_tool_help":
+        elif name == "mc_tool_help" and not shared_help:
             raw = {"structuredContent": {"protocol": PROTOCOL, **documentation}}
         elif name == "death_review":
             try:
