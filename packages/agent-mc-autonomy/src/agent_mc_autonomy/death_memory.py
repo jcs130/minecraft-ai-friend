@@ -55,11 +55,18 @@ def recovery_context(episode, facts, objective=None):
 
 
 TOOL = {"type": "function", "function": {"name": "death_review",
-    "description": "Local scoped death history: search/get factual episodes; report an inferred lesson with applicability and evidence. No model, body or network call. Improvement remains unverified.",
+    "description": "Local scoped death history: search/get factual episodes; report an inferred lesson with applicability and evidence. "
+                   "get and report require the full exact id from search or death_memory.latest_episode.id; never omit or abbreviate it. "
+                   "No model, body or network call. Improvement remains unverified.",
     "parameters": {"type": "object", "additionalProperties": False, "required": ["action"], "properties": {
-        "action": {"enum": ["search", "get", "report"]}, "id": {"type": "string", "maxLength": 80},
+        "action": {"enum": ["search", "get", "report"]}, "id": {"type": "string", "minLength": 1, "maxLength": 80},
         "query": {"type": "string", "maxLength": 200}, "lesson": {"type": "string", "maxLength": 1200},
-        "applicability": {"type": "string", "maxLength": 600}, "evidence": {"type": "string", "maxLength": 600}}}}}
+        "applicability": {"type": "string", "maxLength": 600}, "evidence": {"type": "string", "maxLength": 600}},
+        "oneOf": [
+            {"properties": {"action": {"enum": ["search"]}}},
+            {"properties": {"action": {"enum": ["get"]}}, "required": ["id"]},
+            {"properties": {"action": {"enum": ["report"]}},
+             "required": ["id", "lesson", "applicability", "evidence"]}]}}}
 
 
 def combat_summary(value):
@@ -270,10 +277,13 @@ class DeathMemory:
         if not rows:
             return None
         return {"latest_episode": {k: rows[0][k] for k in ("id", "source_event", "observed_at", "position", "health", "food", "cause")},
+                "inspect": {"action": "get", "id": rows[0]["id"]}, "report_episode_id": rows[0]["id"],
                 **({"recovery": recovery_context(rows[0], facts, objective)} if facts is not None else {}),
                 "lessons": [{"episode_id": r["id"], **r["lesson"]} for r in rows if r.get("lesson")][:3],
                 "historical": True, "behavioral_improvement_verified": False,
-                "next": "Use death_review get(id) to inspect facts and receipts. Review the death in this existing planning turn; record an inferred lesson only with applicability and evidence. Evaluate applicability against fresh facts before reuse."}
+                "next": "Use death_review with inspect arguments to read facts and receipts. Review the death in this existing planning turn; "
+                        "report requires the full report_episode_id plus lesson, applicability and evidence. "
+                        "Evaluate applicability against fresh facts before reuse."}
 
     def execute(self, scope, args):
         if not scope_key(scope):
@@ -282,6 +292,9 @@ class DeathMemory:
         allowed = {"search": {"action", "query"}, "get": {"action", "id"}, "report": {"action", "id", "lesson", "applicability", "evidence"}}
         if action not in allowed or set(args) - allowed[action]:
             raise ValueError("Invalid death_review arguments")
+        if action != "search" and (not isinstance(args.get("id"), str) or not 1 <= len(args["id"]) <= 80 or not args["id"].strip()):
+            raise ValueError('id is required for death_review get/report; use death_review {"action":"search"} '
+                             'or death_memory.latest_episode.id and copy the full exact id. No lesson was saved.')
         rows = self.entries(scope)
         if action == "search":
             query = args.get("query", "")

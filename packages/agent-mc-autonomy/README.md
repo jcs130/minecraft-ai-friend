@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+0.2.14 makes the death-review tool require an explicit episode ID for get/report,
+including in its published schema. Missing IDs return an argument correction;
+fresh scoped context supplies exact read arguments. A malformed report never
+selects an episode or saves a lesson implicitly. The body/viewer pins and host
+interfaces remain unchanged; saved lessons still do not prove better survival.
+
 0.2.13 pins shared viewer `ef251a6c`: retired viewer HTTP sockets, including
 incomplete browser requests, cannot hold the next same-port connection behind
 shutdown. Browser bundles use their source directory for stable receipts across
