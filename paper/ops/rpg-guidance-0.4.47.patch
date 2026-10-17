@@ -1,0 +1,1776 @@
+diff --git a/paper/ops/exploration-landmarks.json b/paper/ops/exploration-landmarks.json
+--- a/paper/ops/exploration-landmarks.json
++++ b/paper/ops/exploration-landmarks.json
+@@ -1,9 +1,10 @@
+ {
+   "schemaVersion": 1,
+-  "verifiedAt": "2026-10-16T05:24:00Z",
++  "verifiedAt": "2026-10-16T19:02:46Z",
+   "source": "formal_anvil_structure_and_block_records",
+   "places": [
+     {"id":"desert_pyramid","name":"原版沙漠神殿","world":"minecraft:overworld","x":-1926,"z":-966,"structureKey":"minecraft:desert_pyramid","precision":"horizontal_structure_reference","entranceVerified":false},
+-    {"id":"desert_ruins","name":"模组沙漠遗迹","world":"minecraft:overworld","x":-3296,"z":-2096,"structureKey":"nova_structures:desert_ruins","precision":"horizontal_structure_reference","entranceVerified":false}
++    {"id":"desert_ruins","name":"模组沙漠遗迹","world":"minecraft:overworld","x":-3296,"z":-2096,"structureKey":"nova_structures:desert_ruins","precision":"horizontal_structure_reference","entranceVerified":false},
++    {"id":"jungle_pyramid","name":"原版丛林神庙","world":"minecraft:overworld","x":1607,"z":2357,"structureKey":"minecraft:jungle_pyramid","precision":"horizontal_structure_reference","entranceVerified":false}
+   ]
+ }
+diff --git a/paper/plugins/AgentFriend/build.ps1 b/paper/plugins/AgentFriend/build.ps1
+--- a/paper/plugins/AgentFriend/build.ps1
++++ b/paper/plugins/AgentFriend/build.ps1
+@@ -22,7 +22,7 @@
+     Join-Path $ServerRoot 'plugins\EssentialsX-2.22.0.jar'
+     Join-Path $ServerRoot 'plugins\ProtocolLib-5.3.0.jar'
+ ) -join ';'
+-$build = Join-Path $root "build-0.4.47-mc-$MinecraftVersion"
++$build = Join-Path $root "build-0.4.47.3-mc-$MinecraftVersion"
+ New-Item -ItemType Directory -Path $build -Force | Out-Null
+ # The isolated server path plus both library generations can exceed Windows'
+ # command-line limit. A UTF-8 argument file also handles paths containing spaces.
+@@ -65,9 +65,10 @@
+ Copy-Item -LiteralPath (Join-Path $root 'resources\agent-guide.yml') -Destination $build -Force
+ Copy-Item -LiteralPath (Join-Path $root 'resources\skill-visuals.yml') -Destination $build -Force
+ Copy-Item -LiteralPath (Join-Path $root 'resources\structure-protection.yml') -Destination $build -Force
++Copy-Item -LiteralPath (Join-Path $root 'resources\block-access.yml') -Destination $build -Force
+ Copy-Item -LiteralPath (Join-Path $root 'resources\text-bubbles.yml') -Destination $build -Force
+ Copy-Item -LiteralPath (Join-Path $root 'resources\photo-camera.yml') -Destination $build -Force
+-$out = Join-Path $root 'AgentFriend-0.4.47.jar'
++$out = Join-Path $root 'AgentFriend-0.4.47.3.jar'
+ & $jar --create --file $out -C $build .
+ if ($LASTEXITCODE -ne 0) { throw 'jar failed' }
+ Get-FileHash -LiteralPath $out -Algorithm SHA256 | Select-Object Path,Hash
+diff --git a/paper/plugins/AgentFriend/resources/block-access.yml b/paper/plugins/AgentFriend/resources/block-access.yml
+new file mode 100644
+--- /dev/null
++++ b/paper/plugins/AgentFriend/resources/block-access.yml
+@@ -0,0 +1,8 @@
++schema-version: 1
++# Explicit opt-in: disabled retains previous protection behavior on other servers.
++enabled: false
++# Exact authenticated player UUIDs, never display names or prefixes.
++editors: []
++# Inclusive X/Z ranges for villages whose existing building rules stay active.
++# Outside these ranges, block breaking/placing is open; other permissions remain.
++villages: []
+diff --git a/paper/plugins/AgentFriend/resources/exam-supplies.yml b/paper/plugins/AgentFriend/resources/exam-supplies.yml
+--- a/paper/plugins/AgentFriend/resources/exam-supplies.yml
++++ b/paper/plugins/AgentFriend/resources/exam-supplies.yml
+@@ -17,6 +17,8 @@
+     y: 4
+     z: 677
+     structure: nova_structures:undead_crypt
++    approach: underground
++    approach-hint: 这是一处地下遗迹，地表标记不代表入口。需先寻找可通行的洞口或楼梯；入口路线未勘察时可向女神求助。
+   - id: creeping_crypt
+     title: 蔓生墓穴遗迹
+     world: world
+@@ -24,3 +26,5 @@
+     y: 45
+     z: 209
+     structure: nova_structures:creeping_crypt
++    approach: underground
++    approach-hint: 这是一处地下遗迹，地表标记不代表入口。需先寻找可通行的洞口或楼梯；入口路线未勘察时可向女神求助。
+diff --git a/paper/plugins/AgentFriend/resources/plugin.yml b/paper/plugins/AgentFriend/resources/plugin.yml
+--- a/paper/plugins/AgentFriend/resources/plugin.yml
++++ b/paper/plugins/AgentFriend/resources/plugin.yml
+@@ -1,5 +1,5 @@
+ name: AgentFriend
+-version: '0.4.47'
++version: '0.4.47.3'
+ main: org.afuhome.agentfriend.AgentFriendPlugin
+ api-version: '1.21.1'
+ description: Agent-friendly /mycli, Goddess skill path, vanilla compass, and village trial arena.
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ActionFeedback.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ActionFeedback.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ActionFeedback.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ActionFeedback.java
+@@ -141,7 +141,11 @@
+                 case "project_completed", "project_reserved", "site_unavailable" -> a("工程已完工、被占用或场地尚未开放。", "用 /mycli guild engineering 查看场地；从 /mycli guild board 另选开放委托，不覆盖他人的工程。", "/mycli guild engineering", "/mycli guild board");
+                 case "scan_busy", "area_unloaded", "site_changed_during_scan" -> a("验收正在忙、场地未加载或扫描中仍有改动。", "到场加载场地，暂停施工，等本次扫描完成后 /mycli guild verify 再验一次。", "/mycli guild engineering", "/mycli guild verify");
+                 case "insufficient_road_coverage", "insufficient_new_blocks", "bridge_not_connected", "missing_components", "signal_not_observed" -> a("工程尚未达到验收条件。", "用 " + market + " 核对结构、材料、端点和机关条件；按 MC_MARKET_CHECK.evidence 补齐缺项，红石需实际切换输入，暂停施工后 guild verify。", market, "/mycli guild verify");
+-                case "action_progress_incomplete", "different_structure_or_world" -> a("实际行动或同一遗迹走查记录尚未满足。", "用 " + market + " 查看条件，再 /mycli guild status 查进度；继续本阶段指定地点的真实探索，完成后返回验收。", market, "/mycli guild status");
++                case "structure_unobserved_or_start_unloaded" -> a("尚未识别到指定天然结构内部。", "先 /mycli tasks status 读取目标线索；核对维度与结构类型，进入实际通道后步行，不在庙外反复验收。", "/mycli tasks status");
++                case "different_structure_or_world" -> a("当前不在先前记录的同一座遗迹。", "已有证据保留；tasks status 查看上次走查位置，回原遗迹继续，不需要放弃重接。", "/mycli tasks status");
++                case "survey_incomplete", "action_progress_incomplete" -> a("本阶段实际行动尚未满足。", "用 /mycli tasks status 查看当前缺项和下一步；探索时走尚未经过的位置，缺高差则沿上下通道，不重复原路或连续交付。", "/mycli tasks status");
++                case "outside_survey_target", "outside_survey_biome" -> a("当前维度、群系或角色状态不符合探索要求。", "用 tasks status 核对本人本阶段要求；返回目标维度，在指定地点以生存模式落地步行。", "/mycli tasks status");
++                case "current_chunk_unloaded" -> a("现场区块数据尚未就绪。", "先等脚下地形加载，稍后 tasks status 再查；持续不恢复请联系服主，不连续重复提交。", "/mycli tasks status");
+                 case "protected_site" -> a("工程范围与受保护建筑或私产冲突。", "停止施工，用 /mycli guild engineering 核对批准的场地；请服主另选无冲突场地，不拆现有建筑。", "/mycli guild engineering");
+                 default -> fallback(reason, market);
+             };
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentCliCatalog.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentCliCatalog.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentCliCatalog.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentCliCatalog.java
+@@ -138,6 +138,8 @@
+         add(specs,"land.trust","safety","write","/mycli land trust <ID> <玩家名或UUID>","主人或领地超管授权协作者在这块领地拆建并取放私有物品","当前非观战主人或显式超管；女神OP观战身份可跨领地管理；普通OP/成员不能转授权；已登录完整身份；最多64人","MC_LAND_MEMBER_RESULT；success才生效，unchanged无需重试；含actorUuid/authority，失败说明下一步");
+         add(specs,"land.untrust","safety","write","/mycli land untrust <ID> <玩家名或UUID>","主人或领地超管撤销协作者权限并关闭失权的私有箱","可撤销离线成员；不改变主人和公共箱规则；普通成员不能转授权","MC_LAND_MEMBER_RESULT；撤权立即生效并持久保存");
+         add(specs,"land.manage","safety","gui","/mycli land manage <ID>","主人或领地超管打开原版协作者管理页","选择玩家后显示权限范围，再确认；其他人可从公告牌查看名单","27格原版菜单，Java/基岩/Agent共用");
++        add(specs,"admin.blockaccess.status","safety","read","mycli admin blockaccess status [--json]","查看当前拆建范围策略和精确建设者人数","仅控制台/RCON；不加载区块、不编辑方块；玩家用protect查询本人目标","MC_BLOCK_ACCESS；只读，零游戏内消耗");
++        add(specs,"admin.blockaccess.reload","safety","write","mycli admin blockaccess reload [--json]","加载block-access.yml的建设者UUID和保留村庄范围","仅控制台/RCON；完整验证所有世界后保存WorldGuard方块规则；错误保留上一有效配置；不授予OP或库存权限","MC_BLOCK_ACCESS；success才生效；超时先用status查询，零游戏内消耗");
+         add(specs,"admin.land.members","safety","read","mycli admin land members <ID>","女神运营工具读取指定领地完整主人和协作者名单","仅控制台/RCON适配；不读取箱内物品；玩家用land members分页","MC_LAND_MEMBERS；只读，不改变权限");
+         add(specs,"admin.land.member","safety","write","mycli admin land member trust|untrust <ID> <玩家名或UUID>","女神运营工具以在线女神身份管理指定领地协作者","仅控制台/RCON；必须已核实女神OP观战身份在线；和玩家入口共用持久事务；不接受自由命令或任意操作者","MC_LAND_MEMBER_RESULT；含女神actorUuid和administrator；未知结果先读名单，不盲目重试");
+         add(specs,"land.board","safety","read","/mycli land board <ID>","查看实体公告牌位置；走近右键查看主人和协作者","不自动传送；未加载或无安全空位显示待建，不覆盖已有建筑","MC_LAND_BOARD；原版双面上蜡牌，完整名单在原版27格页");
+@@ -396,7 +398,7 @@
+         return out;
+     }
+     private static int idEmptyPriority(String prefix,String id,List<String> order){return prefix.isEmpty()&&order.contains(id)?order.indexOf(id):order.size();}
+-    private static boolean jsonSupported(String id){return id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
++    private static boolean jsonSupported(String id){return id.startsWith("admin.blockaccess.")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+ 
+     static void list(Player player, String[] args) {
+         list(player,args,true);
+@@ -499,6 +501,7 @@
+         out.add("parameters",parameters);
+         String query=id.startsWith("skills.")||id.startsWith("cast.")||id.startsWith("profession")?"/mycli status；/mycli skills info <ID>；/mycli skills points":id.startsWith("photo")?"/mycli photo status":id.startsWith("inventory")?"/mycli inventory；重新打开对应容器核对":id.startsWith("arena.stash")||id.startsWith("guild.stash")||id.endsWith(".rewards")?"/mycli arena stash list；/mycli arena rewards list；关闭重开容器核对":id.startsWith("arena.recycle")||id.startsWith("arena.shop")||id.equals("arena.wallet")?"/mycli arena wallet；/mycli arena stash list；/mycli inventory":id.startsWith("arena")?"/mycli arena status；/mycli arena loot":id.startsWith("dungeon")?"/mycli dungeon status <ID>":id.startsWith("landmark")?"/mycli landmark info <领地ID>":id.startsWith("land.")||id.startsWith("admin.land")?"/mycli land info <ID>；/mycli land members <ID>":id.startsWith("waypoint")||id.equals("goto")?"/mycli waypoint list；本人最终 MC_TRAVEL/MC_WAYPOINT_RESULT":id.startsWith("trade")?"/mycli trade info <商人ID>":id.startsWith("commission")?"/mycli commission mine":id.startsWith("pvp")?"/mycli pvp status":id.startsWith("village")?"/mycli village threat":"/mycli progress";
+         if(id.startsWith("challenge"))query="/mycli challenge status；/mycli challenge result [场次UUID]";
++        if(id.startsWith("admin.blockaccess."))query="mycli admin blockaccess status --json";
+         if(id.startsWith("protect"))query="原命令重新查询当前权限；详情在原命令后加 --verbose；查询不代表操作完成";
+         if(id.startsWith("tasks"))query="/mycli tasks status；/mycli progress guild 1";
+         out.addProperty("resultQuery",query);out.addProperty("completionPolicy","命令发出或pending不等于完成；以本人最终回执和实际状态为准。超时/断线结果未知，先查询，不自动重放。");
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentFriendPlugin.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentFriendPlugin.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentFriendPlugin.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AgentFriendPlugin.java
+@@ -260,6 +260,7 @@
+     private AgentStatePublisher agentStatePublisher;
+     private SkillEventPublisher skillEventPublisher;
+     private ProtectionAdvisor protectionAdvisor;
++    private BlockAccessPolicy blockAccess;
+     private GoddessObservation goddessObservation;
+     private AgentCoach agentCoach;
+     private AgentEntry agentEntry;
+@@ -325,6 +326,7 @@
+         professions = new ProfessionManager(this);
+         skillAssessments = new SkillAssessments(this);
+         skillVisuals = new SkillVisuals(this);
++        blockAccess = new BlockAccessPolicy(this);
+         villageStructureProtection = new VillageStructureProtection(this);
+         lifeBuildings = new LifeGuildBuildings(this, lifeGuild);
+         protectionAdvisor = new ProtectionAdvisor(this);
+@@ -436,6 +438,9 @@
+     GuildSharedStorage guildShared() { return guildShared; }
+     GuildStorageOwnership guildStorage() { return guildStorage; }
+     ProtectionAdvisor protectionAdvisor() { return protectionAdvisor; }
++    boolean bypassBlockProtection(Player player, Location at) {
++        return blockAccess != null && blockAccess.allows(player, at);
++    }
+     GeneratedStructureProtection generatedStructures() { return generatedStructures; }
+     NativeTraversalPractice traversalPractice() { return traversalPractice; }
+     LandManager lands() { return lands; }
+@@ -822,6 +827,16 @@
+     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+         if(sender instanceof Player p && java.util.Arrays.stream(args).anyMatch(s->s.equals("--help")||s.equals("-h"))) {
+             AgentCliCatalog.commandHelp(p,args);return true;
++        }
++        if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("blockaccess")) {
++            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
++                sender.sendMessage("仅控制台可维护拆建范围；玩家用 /mycli protect break|place 查询本人权限。"); return true;
++            }
++            if (!(args.length == 3 || args.length == 4 && args[3].equalsIgnoreCase("--json"))
++                    || !Set.of("reload", "status", "audit").contains(args[2].toLowerCase(Locale.ROOT))) {
++                sender.sendMessage("用法：mycli admin blockaccess status|reload [--json]；查询只读，编辑 block-access.yml 后 reload。"); return true;
++            }
++            blockAccess.admin(sender, args[2].toLowerCase(Locale.ROOT)); return true;
+         }
+         if(sender instanceof Player p && java.util.Arrays.asList(args).contains("--json")) {
+             communication.jsonCommand(p,args);return true;
+@@ -3017,6 +3032,7 @@
+                 && event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.CUSTOM) event.setCancelled(true);
+     }
+     @EventHandler(priority = EventPriority.LOWEST) public void onWeedStart(BlockDamageEvent event) {
++        if (bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         Block block = event.getBlock();
+         if (event.getPlayer().getGameMode() != GameMode.SURVIVAL
+                 || !inVillage(block.getLocation()) || !VILLAGE_WEEDS.contains(block.getType())) return;
+@@ -3028,6 +3044,7 @@
+         block.breakNaturally(event.getPlayer().getInventory().getItemInMainHand());
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
++        if (bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if (arenaBuilt && inBuild(event.getBlock().getLocation())) {
+             event.setCancelled(true);
+             protectionAdvisor.denied(event.getPlayer(), "break", event.getBlock().getLocation(), "arena", arenaProtectionArea(event.getBlock().getLocation()));
+@@ -3038,6 +3055,7 @@
+             event.setCancelled(true);
+     }
+     @EventHandler public void onPlace(BlockPlaceEvent event) {
++        if (bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if (arenaBuilt && inBuild(event.getBlock().getLocation())) {
+             event.setCancelled(true);
+             protectionAdvisor.denied(event.getPlayer(), "place", event.getBlock().getLocation(), "arena", arenaProtectionArea(event.getBlock().getLocation()));
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/BlockAccessPolicy.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/BlockAccessPolicy.java
+new file mode 100644
+--- /dev/null
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/BlockAccessPolicy.java
+@@ -0,0 +1,130 @@
++package org.afuhome.agentfriend;
++
++import com.google.gson.JsonObject;
++import com.sk89q.worldedit.bukkit.BukkitAdapter;
++import com.sk89q.worldedit.math.BlockVector3;
++import com.sk89q.worldguard.WorldGuard;
++import com.sk89q.worldguard.domains.DefaultDomain;
++import com.sk89q.worldguard.protection.flags.Flags;
++import com.sk89q.worldguard.protection.flags.RegionGroup;
++import com.sk89q.worldguard.protection.flags.StateFlag;
++import com.sk89q.worldguard.protection.managers.RegionManager;
++import com.sk89q.worldguard.protection.regions.ProtectedCuboidRegion;
++import com.sk89q.worldguard.protection.regions.ProtectedRegion;
++import java.io.File;
++import java.util.*;
++import org.bukkit.*;
++import org.bukkit.command.CommandSender;
++import org.bukkit.configuration.file.YamlConfiguration;
++import org.bukkit.entity.Player;
++import org.bukkit.event.*;
++import org.bukkit.event.world.WorldLoadEvent;
++
++/** One explicit policy shared by actual block events, preflight and WorldGuard.
++ * Only BUILD/BLOCK_BREAK/BLOCK_PLACE are overridden. No OP, permission wildcard,
++ * inventory grant, event un-cancellation, chunk loading or terrain editing.
++ */
++final class BlockAccessPolicy implements Listener {
++    static final String PREFIX = "qd_block_access_";
++    private final AgentFriendPlugin plugin;
++    private final File file;
++    private BlockAccessRules rules = new BlockAccessRules(false, Set.of(), List.of());
++    BlockAccessPolicy(AgentFriendPlugin plugin) {
++        this.plugin = plugin;
++        file = new File(plugin.getDataFolder(), "block-access.yml");
++        if (!file.exists()) plugin.saveResource("block-access.yml", false);
++        reload(Bukkit.getConsoleSender());
++        Bukkit.getPluginManager().registerEvents(this, plugin);
++    }
++    boolean allows(Player player, Location at) {
++        if (player == null || at == null || at.getWorld() == null || plugin.isObserver(player)) return false;
++        return rules.open(player.getUniqueId(), at.getWorld().getName(), at.getBlockX(), at.getBlockZ());
++    }
++    private static int integer(Map<?, ?> row, String key) {
++        if (!(row.get(key) instanceof Integer value)) throw new IllegalArgumentException(key + " 需要整数");
++        return value;
++    }
++    private BlockAccessRules parse() throws Exception {
++        YamlConfiguration yaml = new YamlConfiguration(); yaml.load(file);
++        if (yaml.getInt("schema-version") != 1 || !yaml.isBoolean("enabled"))
++            throw new IllegalArgumentException("需要 schema-version: 1 和 enabled: true/false");
++        Set<UUID> editors = new LinkedHashSet<>();
++        if (!yaml.isList("editors") || !yaml.isList("villages")) throw new IllegalArgumentException("editors/villages 需要列表");
++        for (Object value : yaml.getList("editors")) {
++            String text = String.valueOf(value); UUID id = UUID.fromString(text);
++            if (!id.toString().equalsIgnoreCase(text) || id.equals(new UUID(0, 0)) || !editors.add(id))
++                throw new IllegalArgumentException("建设者需要不重复的完整非零 UUID，不能填玩家显示名");
++        }
++        List<BlockAccessRules.Area> areas = new ArrayList<>();
++        for (Object value : yaml.getList("villages")) {
++            if (!(value instanceof Map<?, ?> row) || !(row.get("world") instanceof String world)
++                    || Bukkit.getWorld(world) == null) throw new IllegalArgumentException("村庄的 world 必须是已加载世界");
++            areas.add(new BlockAccessRules.Area(world, integer(row,"min-x"), integer(row,"min-z"), integer(row,"max-x"), integer(row,"max-z")));
++        }
++        return new BlockAccessRules(yaml.getBoolean("enabled"), editors, areas);
++    }
++    private static ProtectedCuboidRegion region(String id, World world, BlockAccessRules.Area a, int priority, Set<UUID> members) {
++        ProtectedCuboidRegion r = new ProtectedCuboidRegion(id,
++                BlockVector3.at(a.minX(), world.getMinHeight(), a.minZ()),
++                BlockVector3.at(a.maxX(), world.getMaxHeight() - 1, a.maxZ()));
++        r.setPriority(priority); r.setFlag(Flags.PASSTHROUGH, StateFlag.State.ALLOW);
++        if (members != null) { DefaultDomain domain = new DefaultDomain(); members.forEach(domain::addPlayer); r.setMembers(domain); }
++        for (StateFlag flag : List.of(Flags.BUILD, Flags.BLOCK_BREAK, Flags.BLOCK_PLACE)) {
++            r.setFlag(flag, StateFlag.State.ALLOW);
++            r.setFlag(flag.getRegionGroupFlag(), members == null ? RegionGroup.ALL : RegionGroup.MEMBERS);
++        }
++        return r;
++    }
++    boolean reload(CommandSender sender) {
++        Map<RegionManager, Map<String, ProtectedRegion>> before = new LinkedHashMap<>();
++        try {
++            BlockAccessRules proposed = parse();
++            Map<RegionManager, Map<String, ProtectedRegion>> after = new LinkedHashMap<>();
++            for (World world : Bukkit.getWorlds()) {
++                RegionManager manager = WorldGuard.getInstance().getPlatform().getRegionContainer().get(BukkitAdapter.adapt(world));
++                if (manager == null) throw new IllegalStateException("WorldGuard 世界尚未就绪：" + world.getName());
++                before.put(manager, new HashMap<>(manager.getRegions()));
++                Map<String, ProtectedRegion> next = new HashMap<>(manager.getRegions());
++                next.keySet().removeIf(id -> id.startsWith(PREFIX));
++                if (proposed.enabled) {
++                    int index = 0;
++                    for (var area : proposed.outside(world.getName())) {
++                        ProtectedRegion r = region(PREFIX + "outside_" + index++, world, area, 1_000_000, null);
++                        next.put(r.getId(), r);
++                    }
++                    if (!proposed.editors.isEmpty()) {
++                        var all = new BlockAccessRules.Area(world.getName(), -BlockAccessRules.LIMIT, -BlockAccessRules.LIMIT, BlockAccessRules.LIMIT, BlockAccessRules.LIMIT);
++                        ProtectedRegion r = region(PREFIX + "editors", world, all, 1_000_001, proposed.editors);
++                        next.put(r.getId(), r);
++                    }
++                }
++                after.put(manager, next);
++            }
++            // Validate all worlds before touching any live manager; retain original
++            // region objects/ownership/other flags, including container restrictions.
++            for (var entry : after.entrySet()) entry.getKey().setRegions(entry.getValue());
++            for (RegionManager manager : after.keySet()) manager.save();
++            rules = proposed;
++            emit(sender, "success", null); return true;
++        } catch (Exception error) {
++            for (var entry : before.entrySet()) {
++                entry.getKey().setRegions(entry.getValue());
++                try { entry.getKey().save(); } catch (Exception failure) { plugin.getLogger().severe("Block access rollback could not save: " + failure.getClass().getSimpleName()); }
++            }
++            plugin.getLogger().warning("Block access reload rejected: " + error.getMessage());
++            emit(sender, "denied", "invalid_configuration"); return false;
++        }
++    }
++    private void emit(CommandSender sender, String status, String reason) {
++        JsonObject out = new JsonObject(); out.addProperty("schemaVersion",1);
++        out.addProperty("status",status); out.addProperty("enabled",rules.enabled);
++        out.addProperty("editors",rules.editors.size()); out.addProperty("villages",rules.villages.size());
++        out.addProperty("scope","block_break_and_place");
++        if (reason != null) { out.addProperty("reason",reason); out.addProperty("nextAction","修正 block-access.yml 后重载；当前有效权限已保留。"); }
++        sender.sendMessage("MC_BLOCK_ACCESS " + out);
++    }
++    void admin(CommandSender sender, String action) {
++        if (action.equals("reload")) reload(sender); else emit(sender,"ready",null);
++    }
++    @EventHandler public void worldLoaded(WorldLoadEvent event) { reload(Bukkit.getConsoleSender()); }
++}
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/BlockAccessRules.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/BlockAccessRules.java
+new file mode 100644
+--- /dev/null
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/BlockAccessRules.java
+@@ -0,0 +1,55 @@
++package org.afuhome.agentfriend;
++
++import java.util.*;
++
++/** Pure block authorization geometry. Inclusive village edges remain protected. */
++final class BlockAccessRules {
++    static final int LIMIT = 29_999_984;
++    record Area(String world, int minX, int minZ, int maxX, int maxZ) {
++        Area {
++            if (world == null || world.isBlank() || minX > maxX || minZ > maxZ
++                    || minX < -LIMIT || maxX > LIMIT || minZ < -LIMIT || maxZ > LIMIT)
++                throw new IllegalArgumentException("村庄范围需要有效世界名和含边界的 X/Z 整数范围");
++        }
++        boolean contains(String w, int x, int z) {
++            return world.equals(w) && x >= minX && x <= maxX && z >= minZ && z <= maxZ;
++        }
++    }
++    final boolean enabled;
++    final Set<UUID> editors;
++    final List<Area> villages;
++    BlockAccessRules(boolean enabled, Set<UUID> editors, List<Area> villages) {
++        if (enabled && villages.isEmpty()) throw new IllegalArgumentException("启用时必须明确至少一个保留保护的村庄");
++        if (villages.size() > 8 || editors.size() > 16) throw new IllegalArgumentException("最多8个村庄、16位建设者");
++        this.enabled = enabled;
++        this.editors = Set.copyOf(editors);
++        this.villages = List.copyOf(villages);
++    }
++    boolean open(UUID player, String world, int x, int z) {
++        return enabled && (editors.contains(player) || villages.stream().noneMatch(a -> a.contains(world, x, z)));
++    }
++    static boolean blockAction(String action) {
++        return Set.of("break", "place", "harvest", "damage", "bucket", "fertilize").contains(action);
++    }
++    /** Exact complement, without covering any retained village or loading chunks. */
++    List<Area> outside(String world) {
++        List<Area> retained = villages.stream().filter(a -> a.world.equals(world)).toList();
++        TreeSet<Integer> cuts = new TreeSet<>(List.of(-LIMIT, LIMIT + 1));
++        for (Area a : retained) { cuts.add(a.minX); cuts.add(a.maxX + 1); }
++        List<Integer> xs = new ArrayList<>(cuts);
++        List<Area> result = new ArrayList<>();
++        for (int i = 1; i < xs.size(); i++) {
++            int left = xs.get(i - 1), right = xs.get(i) - 1;
++            List<Area> blocked = retained.stream().filter(a -> left <= a.maxX && right >= a.minX)
++                    .sorted(Comparator.comparingInt(Area::minZ)).toList();
++            int z = -LIMIT;
++            for (Area a : blocked) {
++                if (a.minZ > z) result.add(new Area(world, left, z, right, a.minZ - 1));
++                z = Math.max(z, a.maxZ + 1);
++            }
++            if (z <= LIMIT) result.add(new Area(world, left, z, right, LIMIT));
++        }
++        if (result.size() > 256) throw new IllegalArgumentException("村庄划分过于复杂，最多256个开放区域");
++        return List.copyOf(result);
++    }
++}
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonManager.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonManager.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonManager.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonManager.java
+@@ -2501,12 +2501,14 @@
+                 && event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.CUSTOM) event.setCancelled(true);
+     }
+     @EventHandler public void onBreak(BlockBreakEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if (inBuild(event.getBlock().getLocation())) {
+             event.setCancelled(true);
+             plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "dungeon", protectionArea(event.getBlock().getLocation()));
+         }
+     }
+     @EventHandler public void onPlace(BlockPlaceEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if (inBuild(event.getBlock().getLocation())) {
+             event.setCancelled(true);
+             plugin.protectionAdvisor().denied(event.getPlayer(), "place", event.getBlock().getLocation(), "dungeon", protectionArea(event.getBlock().getLocation()));
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ExamSupplies.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ExamSupplies.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ExamSupplies.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ExamSupplies.java
+@@ -22,7 +22,7 @@
+ /** Exam prerequisites use the existing personal chest, with one atomic allocation receipt. */
+ final class ExamSupplies {
+     private static final String ROOT="exam-supplies-issued.";
+-    private record Destination(String id,String title,String world,int x,int y,int z,String structure) { }
++    private record Destination(String id,String title,String world,int x,int y,int z,String structure,String approach,String hint) { }
+     private final AgentFriendPlugin plugin;
+     private final SkillAssessments exams;
+     private final Map<UUID,UUID> pending=new HashMap<>();
+@@ -45,7 +45,9 @@
+                 for(String field:List.of("x","y","z"))if(!q.isInt(field))throw new IllegalArgumentException("integer coordinates required");
+                 int x=q.getInt("x"),y=q.getInt("y"),z=q.getInt("z");
+                 if(Math.abs((long)x)>29_999_984||Math.abs((long)z)>29_999_984||y< -64||y>319)throw new IllegalArgumentException("coordinates");
+-                rows.add(new Destination(id,title,world,x,y,z,structure));
++                String approach=q.getString("approach","unknown"),hint=q.getString("approach-hint","");
++                if(!Set.of("unknown","surface","underground").contains(approach)||hint.length()>160||hint.chars().anyMatch(c->c<32))throw new IllegalArgumentException("approach hint");
++                rows.add(new Destination(id,title,world,x,y,z,structure,approach,hint));
+             }
+             destinations=List.copyOf(rows);enabled=cfg.getBoolean("enabled",true);
+         }catch(Exception invalid){plugin.getLogger().warning("Exam supplies unavailable; catalog retained on disk: "+invalid.getMessage());}
+@@ -66,6 +68,27 @@
+         }
+         return null;
+     }
++    /** A display clue only when an original, validated issuance matches this exact map.
++     * Never infer structure type from red crosses, names, copies or a map centre. */
++    JsonObject mapClue(Player p,int mapId,UUID world,int x,int z) {
++        var issued=plugin.getConfig().getConfigurationSection(ROOT+p.getUniqueId());
++        if(issued==null||issued.getKeys(false).size()>40)return null;
++        for(String key:issued.getKeys(false))try {
++            String raw=issued.getString(key,"");if(raw.length()>16384)continue;
++            JsonObject row=JsonParser.parseString(raw).getAsJsonObject();if(!row.has("map"))continue;
++            JsonObject map=row.getAsJsonObject("map");
++            if(!map.get("source").getAsString().equals("verified_public_natural_structure")||map.get("mapId").getAsInt()!=mapId
++                    ||!map.get("worldUuid").getAsString().equals(world.toString())||map.get("x").getAsInt()!=x||map.get("z").getAsInt()!=z)continue;
++            String structure=map.get("structure").getAsString();if(!structure.matches("[a-z0-9_.-]+:[a-z0-9_/.-]+"))continue;
++            JsonObject out=new JsonObject();out.addProperty("structure",structure);out.addProperty("source","verified_exam_allocation");
++            out.addProperty("entranceVerified",false);
++            for(Destination d:destinations)if(d.x==x&&d.z==z&&d.structure.equals(structure)&&Bukkit.getWorld(d.world)!=null&&Bukkit.getWorld(d.world).getUID().equals(world)) {
++                out.addProperty("approach",d.approach);if(!d.hint.isEmpty())out.addProperty("approachHint",d.hint);break;
++            }
++            return out;
++        }catch(RuntimeException invalid){/* Keep invalid legacy bytes; no clue is safer than a guessed route. */}
++        return null;
++    }
+     JsonObject status(Player p,AssessmentCatalog.Definition d,String kind) {
+         JsonObject out=new JsonObject();out.addProperty("id",kind);out.addProperty("providedBy","exam");
+         out.addProperty("storage","personal_chest");out.addProperty("free",true);
+@@ -75,15 +98,14 @@
+             out.addProperty("advice","摄影无需空地图或主背包空位；实际拍摄耗魔力，成片自动入个人奖励箱。已发旧地图保留，可继续用take photo取出。");
+             out.addProperty("nextCommand","/mycli photo menu");return out;
+         }
+-        boolean relevant=d!=null&&(kind.equals("photo")?d.proofs().contains("survey_photo"):d.proofs().contains("survey"));
+-        String key=d==null?"":kind.equals("photo")?photoKey(d):plugin.getConfig().getString(mapRunPath(p),"");
+-        out.addProperty("name",kind.equals("photo")?"摄影备料 · 8张空地图":"遗迹探险图 · 带真实目标");
++        boolean relevant=d!=null&&d.proofs().contains("survey");
++        String key=d==null?"":plugin.getConfig().getString(mapRunPath(p),"");
++        out.addProperty("name","遗迹探险图 · 带真实目标");
+         String reason=!enabled?"supplies_unavailable":!relevant?"not_required_by_exam":!key.isEmpty()&&issued(p,key)?"already_issued"
+                 :kind.equals("map")&&nextMap(p)==null?"no_new_chart_destination":"requestable";
+-        out.addProperty("status",reason);out.addProperty("required",kind.equals("photo")&&relevant);
+-        out.addProperty("count",kind.equals("photo")?8:1);out.addProperty("item",kind.equals("photo")?"minecraft:map":"minecraft:filled_map");
+-        out.addProperty("advice",kind.equals("photo")?"首次本题提供8张空地图；单张照片消耗1张。打开个人箱取出，主背包留1格。补领不会重复发放。"
+-                :"仅原图寻宝路线需要；普通走查不需要。领取时核验公会已勘察的天然遗迹，发真正有目标标记的地图，非空白图。每人每个目的地提供一次。");
++        out.addProperty("status",reason);out.addProperty("required",false);
++        out.addProperty("count",1);out.addProperty("item","minecraft:filled_map");
++        out.addProperty("advice","仅原图寻宝路线需要；普通走查不需要。领取时核验公会已勘察的天然遗迹，发真正有目标标记的地图，非空白图。每人每个目的地提供一次。");
+         if(reason.equals("requestable"))out.addProperty("claimCommand","/mycli guild exam supplies claim "+kind);
+         if(!key.isEmpty()&&issued(p,key)) {
+             JsonObject allocation=JsonParser.parseString(plugin.getConfig().getString(path(p,key))).getAsJsonObject();out.add("allocation",allocation);
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ExplorationGuidance.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ExplorationGuidance.java
+new file mode 100644
+--- /dev/null
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ExplorationGuidance.java
+@@ -0,0 +1,135 @@
++package org.afuhome.agentfriend;
++
++import com.google.gson.JsonArray;
++import com.google.gson.JsonObject;
++import com.google.gson.JsonParser;
++import java.io.IOException;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.time.Instant;
++import java.util.ArrayList;
++import java.util.Comparator;
++import java.util.HashSet;
++import java.util.List;
++
++/** Short, read-only instructions derived from frozen rules and real survey evidence.
++ * Public coordinates are hints, never arrival evidence or a verified safe entrance. */
++final class ExplorationGuidance {
++    record Landmark(String id, String name, String world, int x, int z, String structureKey, String verifiedAt) {
++        JsonObject json() {
++            JsonObject j = new JsonObject();
++            j.addProperty("id", id); j.addProperty("name", name); j.addProperty("world", world);
++            j.addProperty("x", x); j.addProperty("z", z); j.addProperty("structureKey", structureKey);
++            j.addProperty("verifiedAt", verifiedAt); j.addProperty("entranceVerified", false);
++            j.addProperty("precision", "horizontal_structure_reference"); return j;
++        }
++    }
++    private ExplorationGuidance() { }
++
++    // Same bounded schema as the Goddess's hot-read public catalog. No world scan,
++    // locate, chunk loading, file watching or per-tick disk reads.
++    static List<Landmark> load(Path file) throws IOException {
++        if (!Files.exists(file)) return List.of();
++        if (Files.size(file) > 16384) throw new IllegalArgumentException("landmark catalog exceeds 16 KiB");
++        byte[] bytes;
++        try (var stream = Files.newInputStream(file)) { bytes = stream.readNBytes(16385); }
++        if (bytes.length > 16384) throw new IllegalArgumentException("landmark catalog exceeds 16 KiB");
++        JsonObject raw = JsonParser.parseString(new String(bytes, java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
++        if (raw.get("schemaVersion").getAsInt() != 1
++                || !raw.get("source").getAsString().equals("formal_anvil_structure_and_block_records"))
++            throw new IllegalArgumentException("landmark schema/source");
++        String verified = raw.get("verifiedAt").getAsString(); Instant.parse(verified);
++        JsonArray rows = raw.getAsJsonArray("places");
++        if (rows.size() > 24) throw new IllegalArgumentException("max 24 landmarks");
++        List<Landmark> result = new ArrayList<>(); HashSet<String> ids = new HashSet<>();
++        for (var value : rows) {
++            JsonObject p = value.getAsJsonObject(); String id = p.get("id").getAsString(), name = p.get("name").getAsString();
++            String world = p.get("world").getAsString(), key = p.get("structureKey").getAsString();
++            if (!id.matches("[a-z0-9_-]{1,64}") || !ids.add(id) || name.isBlank() || name.length() > 40
++                    || name.chars().anyMatch(c -> c < 32 || c == 127 || c == '§')
++                    || !world.matches("[a-z0-9_.-]+:[a-z0-9_./-]+") || !key.matches("[a-z0-9_.-]+:[a-z0-9_./-]+")
++                    || !p.get("precision").getAsString().equals("horizontal_structure_reference")
++                    || !p.get("entranceVerified").isJsonPrimitive()
++                    || !p.get("entranceVerified").getAsJsonPrimitive().isBoolean()
++                    || p.get("entranceVerified").getAsBoolean() || p.has("y"))
++                throw new IllegalArgumentException("invalid horizontal landmark");
++            int x = coordinate(p, "x"), z = coordinate(p, "z");
++            result.add(new Landmark(id, name, world, x, z, key, verified));
++        }
++        return List.copyOf(result);
++    }
++    private static int coordinate(JsonObject p, String key) {
++        var value = p.get(key);
++        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) throw new IllegalArgumentException("landmark coordinate");
++        double n = value.getAsDouble();
++        if (!Double.isFinite(n) || n != Math.rint(n) || Math.abs(n) >= 29999000) throw new IllegalArgumentException("landmark coordinate");
++        return (int) n;
++    }
++    static JsonObject guide(ExplorationObjectives.Target target, int count, JsonObject navigation,
++            JsonObject evidence, String reason, List<Landmark> places, int x, int z) {
++        JsonObject out = new JsonObject(); JsonArray missing = new JsonArray();
++        out.addProperty("readOnly", true); out.addProperty("observedAt", System.currentTimeMillis());
++        out.add("missingConditions", missing);
++        boolean ready = flag(evidence, "ready"), matches = flag(navigation, "dimensionMatches");
++        out.addProperty("ready", ready); out.addProperty("targetMatch", flag(evidence, "validCurrentTarget"));
++        out.addProperty("nextCommand", ready ? "/mycli guild claim" : "/mycli tasks status");
++        // Completed surveys survive the return journey; a new world must not undo them.
++        if (ready) return phase(out, "ready_to_submit", "本阶段探索已完成。", "用 /mycli guild claim 交付；多阶段委托会继续下一阶段。");
++        if (!matches) {
++            missing.add("返回" + target.dimensionLabel());
++            return phase(out, "return_to_required_dimension", "当前维度不符合本阶段要求。",
++                    "先经已知门户或本人地点回" + target.dimensionLabel() + "；中转坐标不是探索目标。");
++        }
++        if (reason.equals("outside_survey_target")) return phase(out, "resume_survival", "当前状态不能记录探索。", "存活后以生存模式落地步行，已有进度保留。");
++        if (reason.equals("current_chunk_unloaded")) return phase(out, "wait_for_terrain", "脚下区块或现场数据尚未就绪。", "先等现场加载；持续不恢复请联系服主，不连续重复交付。");
++        boolean started = number(evidence, "distinctZones") > 0 || !text(evidence, "structureInstance").isEmpty();
++        if (target.goal() == GuildManager.Goal.STRUCTURE && !flag(evidence, "validCurrentTarget")) {
++            if (started) {
++                JsonObject last = evidence.has("lastSurveyPosition") && evidence.get("lastSurveyPosition").isJsonObject() ? evidence.getAsJsonObject("lastSurveyPosition") : new JsonObject();
++                if (last.has("world") && last.has("x") && last.has("z")) out.add("resumePosition", last.deepCopy());
++                missing.add("回到原先记录的同一座遗迹内部");
++                return phase(out, "resume_same_structure", "已有走查证据保留，目前不在原遗迹的有效区域。", "回到上次记录地点，进入原遗迹的通道继续走查；不要换一座凑数，也不必放弃重接。");
++            }
++            missing.add("进入任务指定的天然结构内部");
++            Landmark hint = nearest(target, navigation, places, x, z);
++            String next = "先向女神询问已核实的目标线索；没有线索时不要盲找或反复交付。";
++            if (hint != null) {
++                JsonObject landmark = hint.json(); int distance = (int) Math.ceil(Math.hypot((double)hint.x - x, (double)hint.z - z));
++                landmark.addProperty("horizontalDistance", distance); out.add("landmark", landmark);
++                next = "前往" + target.dimensionLabel() + " X=" + hint.x + "、Z=" + hint.z + " 的" + hint.name
++                        + "（直线约" + distance + "格）；这是建筑参考位置，入口与安全路线未验证，抵达后找实际入口。";
++            }
++            return phase(out, "find_target", "还未记录到目标内部探索；到同名群系或庙外不算。", next);
++        }
++        if (target.goal() == GuildManager.Goal.RETURN) return phase(out, "confirm_return", "已回目标维度，等待服务器记录。", "稍后 tasks status 查询；状态就绪后只交付一次。");
++        if (reason.equals("outside_survey_biome")) {
++            missing.add("进入指定群系 " + String.join(" 或 ", target.keys()));
++            return phase(out, "find_target_biome", "当前位置不是本阶段要求的群系。", "先找到指定群系再步行调查；普通森林不能代替丛林等其他群系。");
++        }
++        deficit(missing, "不同分区", number(evidence, "distinctZones"), count, "个");
++        deficit(missing, "有效行进", number(evidence, "distance"), target.minDistance(), "格");
++        deficit(missing, "有效行进时间", number(evidence, "movingSeconds"), target.minSeconds(), "秒");
++        deficit(missing, "内部区段", number(evidence, "distinctSections"), target.minParts(), "段");
++        deficit(missing, "群系", evidence.has("biomes") ? evidence.getAsJsonArray("biomes").size() : 0, target.minBiomes(), "种");
++        deficit(missing, "上下高差", number(evidence, "heightSpan"), target.minHeightSpan(), "格");
++        String next = number(evidence, "heightSpan") < target.minHeightSpan()
++                ? "沿可通行的上下通道探索不同高度，再走未经过的区域；不要只在同一层绕圈。"
++                : "步行进入尚未走过的区域；站着等、重复原路和传送位移不补足行进证据。";
++        if (target.goal() == GuildManager.Goal.STRUCTURE) next += "分区是同一座建筑内的" + target.zoneSize() + "格空间网格，不是多座建筑或固定打卡方块。";
++        return phase(out, "survey", "正在记录实际探索；只需补齐下列缺项。", next);
++    }
++    private static Landmark nearest(ExplorationObjectives.Target t, JsonObject nav, List<Landmark> places, int x, int z) {
++        String world = text(nav, "requiredDimension");
++        return places.stream().filter(p -> p.world.equals(world) && t.keys().contains(p.structureKey))
++                .min(Comparator.comparingDouble(p -> Math.hypot((double)p.x - x, (double)p.z - z))).orElse(null);
++    }
++    private static JsonObject phase(JsonObject out, String phase, String summary, String next) {
++        out.addProperty("phase", phase); out.addProperty("summary", summary); out.addProperty("nextAction", next); return out;
++    }
++    private static void deficit(JsonArray out, String label, double current, int required, String unit) {
++        if (current < required) out.add(label + "还缺" + (int)Math.ceil(required - current) + unit + "（" + current + "/" + required + "）");
++    }
++    private static boolean flag(JsonObject obj, String name) { return obj.has(name) && obj.get(name).getAsBoolean(); }
++    private static String text(JsonObject obj, String name) { return obj.has(name) ? obj.get(name).getAsString() : ""; }
++    private static double number(JsonObject obj, String name) { return obj.has(name) ? obj.get(name).getAsDouble() : 0; }
++}
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ExplorationObjectives.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ExplorationObjectives.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ExplorationObjectives.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ExplorationObjectives.java
+@@ -53,11 +53,15 @@
+             j.addProperty("minBiomes", minBiomes); j.addProperty("minHeightSpan", minHeightSpan); return j;
+         }
+         String conditions(int count) {
+-            if (goal == GuildManager.Goal.RETURN) return "返回 " + dimension + "，服务器核查当前维度";
+-            return dimension + (keys.isEmpty() ? "" : " / " + String.join(" 或 ", keys))
+-                    + "；走查 " + count + " 个不同的 " + zoneSize + " 格区域，行进 ≥" + minDistance
+-                    + " 格、有效行进 ≥" + minSeconds + " 秒；建筑区段 ≥" + minParts + "，生物群系 ≥" + minBiomes + "，探索高差 ≥" + minHeightSpan
+-                    + "。原地等待、重复绕圈和传送位移不增加探索证据。";
++            if (goal == GuildManager.Goal.RETURN) return "返回" + dimensionLabel() + "，服务器核查当前维度";
++            return dimensionLabel() + (keys.isEmpty() ? "" : " / " + String.join(" 或 ", keys))
++                    + "；走查 " + count + " 个不同的 " + zoneSize + " 格分区，行进至少" + minDistance
++                    + " 格、有效行进至少" + minSeconds + " 秒"
++                    + (minParts > 0 ? "；内部区段至少" + minParts : "")
++                    + (minBiomes > 1 ? "；群系至少" + minBiomes + "种" : "")
++                    + (minHeightSpan > 0 ? "；上下高差至少" + minHeightSpan + "格" : "")
++                    + (goal == GuildManager.Goal.STRUCTURE ? "。分区是同一座建筑内的空间网格，不是多座遗迹或固定打卡点" : "")
++                    + "。原地等待、重复原路和传送位移不增加探索证据。";
+         }
+     }
+     static Target parse(GuildManager.Goal goal, ConfigurationSection row, int count) {
+@@ -179,6 +183,7 @@
+         Location previous;
+         long previousAt;
+         JsonObject position = new JsonObject();
++        final SurveyMovement movement = new SurveyMovement();
+         Survey(String token, String json) {
+             this.token = token;
+             if (json.isBlank()) return;
+@@ -222,6 +227,30 @@
+     void quit(Player p) { surveys.remove(p.getUniqueId()); flush(); }
+     void flush() { if (dirty) { dirty = false; plugin.saveConfig(); } }
+     void changed() { dirty = true; }
++    /** Live read without enrolling, sampling movement, touching the cursor/timer,
++     * persisting evidence or loading a chunk. Also sees unflushed in-memory evidence. */
++    EngineeringSites.Result snapshot(Player p, Target target, int required, String token) { return snapshot(p, target, required, token, ""); }
++    EngineeringSites.Result snapshot(Player p, Target target, int required, String token, String boundInstance) {
++        Survey s = surveys.get(p.getUniqueId());
++        if (s == null || !s.token.equals(token)) {
++            try { s = new Survey(token, plugin.getConfig().getString(path(p), "")); }
++            catch (RuntimeException invalid) { s = new Survey(token, ""); }
++        }
++        Location at = p.getLocation();
++        if (s.ready && target.goal != GuildManager.Goal.RETURN) return result(s, target, required, "ready");
++        if (p.getGameMode() != GameMode.SURVIVAL || p.isDead() || p.isFlying()
++                || !target.dimension.equals(dimension(at.getWorld()))) return result(s, target, required, "outside_survey_target");
++        if (!at.getWorld().isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4)) return result(s, target, required, "current_chunk_unloaded");
++        if (target.goal == GuildManager.Goal.RETURN) return result(s, target, required, s.ready ? "ready" : "survey_incomplete");
++        Place place = target.goal == GuildManager.Goal.STRUCTURE ? structure(at, target) : null;
++        if (target.goal == GuildManager.Goal.STRUCTURE && place == null) return result(s, target, required, "structure_unobserved_or_start_unloaded");
++        if (place != null && !boundInstance.isEmpty() && !place.instance.equals(boundInstance)) return result(s, target, required, "different_map_structure");
++        String biome = WorldBiomes.at(at);
++        if (!BiomeBorder.known(biome)) return result(s, target, required, "current_chunk_unloaded");
++        if (target.goal == GuildManager.Goal.BIOME && !target.keys.contains(biome)) return result(s, target, required, "outside_survey_biome");
++        String instance = place == null ? at.getWorld().getUID().toString() : place.instance;
++        return result(s, target, required, !s.instance.isEmpty() && !s.instance.equals(instance) ? "different_structure_or_world" : "survey_incomplete");
++    }
+     EngineeringSites.Result observe(Player p, Target target, int required, String token) {
+         return observe(p, target, required, token, "");
+     }
+@@ -275,9 +304,10 @@
+                 + "," + Math.floorDiv(at.getBlockZ(), target.zoneSize);
+         String point = at.getBlockX() + "," + at.getBlockY() + "," + at.getBlockZ();
+         boolean fresh = s.trail.size() < 2048 && s.trail.add(point);
+-        if (fresh) {
++        SurveyMovement.Credit credit = s.movement.sample(point, fresh, moved, elapsed);
++        if (fresh || credit.distance() > 0) {
+             if (s.zones.size() < 256) s.zones.add(zone);
+-            s.instance = instance; s.distance = Math.min(10000, s.distance + moved); s.movingMs = Math.min(3600000, s.movingMs + elapsed);
++            s.instance = instance; s.distance = Math.min(10000, s.distance + credit.distance()); s.movingMs = Math.min(3600000, s.movingMs + credit.milliseconds());
+             if (place != null) { s.structure = place.key; s.bounds = place.bounds; }
+             s.minY = Math.min(s.minY, at.getBlockY()); s.maxY = Math.max(s.maxY, at.getBlockY());
+             if (s.biomes.size() < 64) s.biomes.add(biome);
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GeneratedStructureProtection.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GeneratedStructureProtection.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GeneratedStructureProtection.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GeneratedStructureProtection.java
+@@ -192,25 +192,32 @@
+         String reason = reason(block.getLocation());
+         if (reason != null) plugin.protectionAdvisor().denied(player, action, block.getLocation(), reason, protectionArea(block.getLocation()));
+     }
+-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void damage(BlockDamageEvent e) { if (deniesEdit(e.getBlock())) { e.setCancelled(true); deny(e.getPlayer(), "break", e.getBlock()); } }
+-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void broken(BlockBreakEvent e) { if (deniesEdit(e.getBlock())) { e.setCancelled(true); deny(e.getPlayer(), "break", e.getBlock()); } }
++    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void damage(BlockDamageEvent e) {
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return; if (deniesEdit(e.getBlock())) { e.setCancelled(true); deny(e.getPlayer(), "break", e.getBlock()); } }
++    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void broken(BlockBreakEvent e) {
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return; if (deniesEdit(e.getBlock())) { e.setCancelled(true); deny(e.getPlayer(), "break", e.getBlock()); } }
+     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void placed(BlockPlaceEvent e) {
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;
+         if ((!plant(e.getBlock().getType()) || !crop(e.getBlockReplacedState().getType()) && !e.getBlockReplacedState().getType().isAir()) && reason(e.getBlock().getLocation()) != null) {
+             e.setCancelled(true); deny(e.getPlayer(), "place", e.getBlock());
+         }
+     }
+     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void multi(BlockMultiPlaceEvent e) {
++        if (e.getReplacedBlockStates().stream().allMatch(s -> plugin.bypassBlockProtection(e.getPlayer(), s.getLocation()))) return;
+         for (var state : e.getReplacedBlockStates()) if (reason(state.getLocation()) != null) { e.setCancelled(true); deny(e.getPlayer(), "place", state.getBlock()); return; }
+     }
+     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void empty(PlayerBucketEmptyEvent e) {
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation()) && plugin.bypassBlockProtection(e.getPlayer(), e.getBlockClicked().getRelative(e.getBlockFace()).getLocation())) return;
+         Block b = e.getBlock();
+         if (reason(b.getLocation()) == null) b = e.getBlockClicked().getRelative(e.getBlockFace());
+         if (reason(b.getLocation()) != null) { e.setCancelled(true); deny(e.getPlayer(), "bucket", b); }
+     }
+     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void fill(PlayerBucketFillEvent e) {
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;
+         Block b = e.getBlock(); if (reason(b.getLocation()) != null) { e.setCancelled(true); deny(e.getPlayer(), "bucket", b); }
+     }
+     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void tool(PlayerInteractEvent e) {
++        if (e.getClickedBlock() != null && plugin.bypassBlockProtection(e.getPlayer(), e.getClickedBlock().getLocation())) return;
+         Block b = e.getClickedBlock(); if (b == null || e.getAction() != Action.RIGHT_CLICK_BLOCK || e.getItem() == null || crop(b.getType())) return;
+         String tool = e.getItem().getType().name();
+         boolean changes = tool.endsWith("_AXE") || tool.endsWith("_SHOVEL") || tool.endsWith("_HOE") || tool.equals("HONEYCOMB") || tool.equals("SHEARS");
+@@ -225,7 +232,7 @@
+     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void explode(EntityExplodeEvent e) { e.blockList().removeIf(this::deniesEdit); }
+     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void explode(BlockExplodeEvent e) { e.blockList().removeIf(this::deniesEdit); }
+     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void burn(BlockBurnEvent e) { if (deniesEdit(e.getBlock())) e.setCancelled(true); }
+-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void ignite(BlockIgniteEvent e) { if (reason(e.getBlock().getLocation()) != null) { e.setCancelled(true); if (e.getPlayer() != null) deny(e.getPlayer(), "place", e.getBlock()); } }
++    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void ignite(BlockIgniteEvent e) { if (e.getPlayer() != null && plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return; if (reason(e.getBlock().getLocation()) != null) { e.setCancelled(true); if (e.getPlayer() != null) deny(e.getPlayer(), "place", e.getBlock()); } }
+     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void flow(BlockFromToEvent e) {
+         Hit to = hit(e.getToBlock().getLocation()); if (to.area == null && !to.unknown) return;
+         Hit from = hit(e.getBlock().getLocation());
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildHallManager.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildHallManager.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildHallManager.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildHallManager.java
+@@ -641,15 +641,18 @@
+     private boolean failClosed(Block b) { return built && !ready && inHall(b) || servicesFailClosed(b); }
+     boolean deniesEdit(Block block) { return protectedFabric(block) || failClosed(block); }
+     boolean deniesEdit(Player player, Block block) {
++        if (plugin.bypassBlockProtection(player, block.getLocation())) return false;
+         return deniesEdit(block) && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(player, block));
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if (deniesEdit(event.getPlayer(), event.getBlock())) {
+             event.setCancelled(true);
+             plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "guild_hall", protectionArea(event.getBlock().getLocation()));
+         }
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if ((protectedFabric(event.getBlockReplacedState()) || failClosed(event.getBlock()))
+                 && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), event.getBlock()))) {
+             event.setCancelled(true);
+@@ -657,6 +660,7 @@
+         }
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
++        if (event.getReplacedBlockStates().stream().allMatch(s -> plugin.bypassBlockProtection(event.getPlayer(), s.getLocation()))) return;
+         for (org.bukkit.block.BlockState state : event.getReplacedBlockStates())
+             if ((protectedFabric(state) || failClosed(state.getBlock()))
+                     && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), state.getBlock()))) {
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildManager.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildManager.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildManager.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildManager.java
+@@ -183,6 +183,15 @@
+         if(current<quest.target())missing.add("当前阶段还缺 "+(quest.target()-current)+" / "+quest.target()+"；"+out.get("condition").getAsString());
+         if(verify)missing.add("工程需要显式 guild verify 验收，再 guild claim；查询不触发验收或结算");
+         else if(current>=quest.target())missing.add("尚需 guild claim 交付本阶段；多阶段全部交付后才算整单完成");
++        if (out.has("market") && out.getAsJsonObject("market").has("guidance")) {
++            var guide = out.getAsJsonObject("market").getAsJsonObject("guidance");
++            // Keep the full guide only under market; duplicating it at every
++            // status layer makes the same instructions consume context repeatedly.
++            out.add("missingConditions", guide.getAsJsonArray("missingConditions").deepCopy());
++            out.addProperty("advice", guide.get("nextAction").getAsString());
++            out.addProperty("nextCommand", guide.get("nextCommand").getAsString());
++            out.addProperty("status", guide.get("ready").getAsBoolean() ? "ready_to_submit" : "active");
++        }
+         return out;
+     }
+     private int fame(Player p) { return plugin.getConfig().getInt(base(p.getUniqueId()) + ".fame", 0); }
+@@ -891,6 +900,7 @@
+         if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().abandoned(player);
+         plugin.getConfig().set(base(player.getUniqueId()) + ".active", null);
+         plugin.saveConfig();
++
+         player.sendMessage(ChatColor.YELLOW + "已放弃「" + quest.title() + "」，本次进度清零；可重新接单。");
+         plugin.getLogger().info("Guild abandoned: player=" + player.getUniqueId() + ", contract=" + quest.id());
+     }
+@@ -984,6 +994,7 @@
+         if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().completed(player);
+         plugin.getConfig().set(path + ".active", null);
+         plugin.saveConfig();
++
+         plugin.recordWorldLesson(player, "commission");
+         if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().afterComplete(player, quest.id());
+         player.sendMessage(ChatColor.GREEN + "委托交付成功！声望 +" + gain
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildStorageOwnership.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildStorageOwnership.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildStorageOwnership.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/GuildStorageOwnership.java
+@@ -91,7 +91,8 @@
+     boolean owns(Player player) { return plugin.lands().guildOwner() != null ? plugin.lands().guildMember(player)
+             : owner() != null && owner().equals(player.getUniqueId()); }
+     private boolean inside(Location at) { return plugin.guildHall().containsProperty(at); }
+-    boolean deniesEdit(Player player, Block block) { return inside(block.getLocation()) && !owns(player); }
++    boolean deniesEdit(Player player, Block block) {
++        if (plugin.bypassBlockProtection(player, block.getLocation())) return false; return inside(block.getLocation()) && !owns(player); }
+ 
+     private Location protectedHolder(InventoryHolder holder) {
+         if (holder instanceof DoubleChest chest) {
+@@ -172,11 +173,13 @@
+         }
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if (deniesEdit(event.getPlayer(), event.getBlock())) {
+             event.setCancelled(true); denied(event.getPlayer(), "break", event.getBlock().getLocation());
+         }
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if (deniesEdit(event.getPlayer(), event.getBlock())) {
+             event.setCancelled(true); denied(event.getPlayer(), "place", event.getBlock().getLocation());
+         }
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/LandManager.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/LandManager.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/LandManager.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/LandManager.java
+@@ -398,6 +398,7 @@
+     }
+ 
+     boolean allows(Player player, String action, Location at) {
++        if (BlockAccessRules.blockAction(action) && plugin.bypassBlockProtection(player, at)) return true;
+         Land land = find(at);
+         if (land == null) return true;
+         if (!ready || player.getGameMode() == GameMode.SPECTATOR) return false;
+@@ -405,6 +406,7 @@
+     }
+ 
+     boolean stateAllows(Player player, String action, Location at) {
++        if (BlockAccessRules.blockAction(action) && plugin.bypassBlockProtection(player, at)) return true;
+         ApplicableRegionSet set = manager(at.getWorld()).getApplicableRegions(BlockVector3.at(at.getBlockX(), at.getBlockY(), at.getBlockZ()));
+         var local = WorldGuardPlugin.inst().wrapPlayer(player);
+         StateFlag flag = switch (action) {
+@@ -425,6 +427,7 @@
+     }
+ 
+     boolean fabricAllowed(Player player, Block block) {
++        if (plugin.bypassBlockProtection(player, block.getLocation())) return true;
+         Land land = find(block.getLocation());
+         return ready && land != null && member(player, land) && allows(player, "break", block.getLocation());
+     }
+@@ -525,15 +528,19 @@
+     }
+ 
+     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent e) {
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;
+         if (denyIfNeeded(e.getPlayer(), "break", e.getBlock().getLocation())) e.setCancelled(true);
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onDamageBlock(BlockDamageEvent e) {
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;
+         if (denyIfNeeded(e.getPlayer(), "break", e.getBlock().getLocation())) e.setCancelled(true);
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent e) {
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;
+         if (denyIfNeeded(e.getPlayer(), "place", e.getBlock().getLocation())) e.setCancelled(true);
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent e) {
++        if (e.getReplacedBlockStates().stream().allMatch(s -> plugin.bypassBlockProtection(e.getPlayer(), s.getLocation()))) return;
+         for (BlockState b : e.getReplacedBlockStates()) if (denyIfNeeded(e.getPlayer(), "place", b.getLocation())) { e.setCancelled(true); break; }
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onUse(PlayerInteractEvent e) {
+@@ -579,8 +586,10 @@
+         if(e.getWhoClicked() instanceof Player p){Denial d=deniedInventory(p,e.getView().getTopInventory());if(d!=null){e.setCancelled(true);deny(p,"inventory",d.at(),d.land());}}
+     }
+     @EventHandler public void onClose(InventoryCloseEvent e){menus.remove(e.getInventory());}
+-    @EventHandler(priority=EventPriority.HIGHEST) public void onBucket(PlayerBucketEmptyEvent e){if(denyIfNeeded(e.getPlayer(),"bucket",e.getBlock().getLocation()))e.setCancelled(true);}
+-    @EventHandler(priority=EventPriority.HIGHEST) public void onBucketFill(PlayerBucketFillEvent e){if(denyIfNeeded(e.getPlayer(),"bucket",e.getBlock().getLocation()))e.setCancelled(true);}
++    @EventHandler(priority=EventPriority.HIGHEST) public void onBucket(PlayerBucketEmptyEvent e){
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation()) && plugin.bypassBlockProtection(e.getPlayer(), e.getBlockClicked().getRelative(e.getBlockFace()).getLocation())) return;if(denyIfNeeded(e.getPlayer(),"bucket",e.getBlock().getLocation()))e.setCancelled(true);}
++    @EventHandler(priority=EventPriority.HIGHEST) public void onBucketFill(PlayerBucketFillEvent e){
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;if(denyIfNeeded(e.getPlayer(),"bucket",e.getBlock().getLocation()))e.setCancelled(true);}
+     @EventHandler(priority=EventPriority.HIGHEST) public void onFertilize(BlockFertilizeEvent e){if(e.getPlayer()!=null)for(BlockState b:e.getBlocks())if(denyIfNeeded(e.getPlayer(),"fertilize",b.getLocation())){e.setCancelled(true);break;}}
+     @EventHandler(priority=EventPriority.HIGHEST) public void onHarvest(PlayerHarvestBlockEvent e){if(denyIfNeeded(e.getPlayer(),"harvest",e.getHarvestedBlock().getLocation()))e.setCancelled(true);}
+     @EventHandler(priority=EventPriority.HIGHEST) public void onInteract(PlayerInteractEntityEvent e){
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/LandNoticeBoards.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/LandNoticeBoards.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/LandNoticeBoards.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/LandNoticeBoards.java
+@@ -147,10 +147,13 @@
+         e.setCancelled(true);String id=marked(b);Player p=e.getPlayer();if(p.getWorld()!=b.getWorld()||p.getLocation().distanceSquared(b.getLocation().add(.5,.5,.5))>49)return;
+         Bukkit.getScheduler().runTask(plugin,()->{if(p.isOnline()){text(id,spot(b));access.openPublic(p,id);}});
+     }
+-    @EventHandler(priority=EventPriority.HIGHEST) public void breakBlock(BlockBreakEvent e){if(protects(e.getBlock())){e.setCancelled(true);e.getPlayer().sendMessage("§c领地公告牌及支撑方块受保护；右键查看归属和协作者，用 /mycli land board <ID> 查位置。调整位置请联系服主。");}}
+-    @EventHandler(priority=EventPriority.HIGHEST) public void damage(BlockDamageEvent e){if(protects(e.getBlock())){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"break",e.getBlock().getLocation(),"land_notice_board");}}
++    @EventHandler(priority=EventPriority.HIGHEST) public void breakBlock(BlockBreakEvent e){
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;if(protects(e.getBlock())){e.setCancelled(true);e.getPlayer().sendMessage("§c领地公告牌及支撑方块受保护；右键查看归属和协作者，用 /mycli land board <ID> 查位置。调整位置请联系服主。");}}
++    @EventHandler(priority=EventPriority.HIGHEST) public void damage(BlockDamageEvent e){
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;if(protects(e.getBlock())){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"break",e.getBlock().getLocation(),"land_notice_board");}}
+     @EventHandler(priority=EventPriority.HIGHEST) public void flow(BlockFromToEvent e){if(protects(e.getToBlock()))e.setCancelled(true);}
+-    @EventHandler(priority=EventPriority.HIGHEST) public void bucket(PlayerBucketEmptyEvent e){if(protects(e.getBlock())||protects(e.getBlockClicked().getRelative(e.getBlockFace())))e.setCancelled(true);}
++    @EventHandler(priority=EventPriority.HIGHEST) public void bucket(PlayerBucketEmptyEvent e){
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation()) && plugin.bypassBlockProtection(e.getPlayer(), e.getBlockClicked().getRelative(e.getBlockFace()).getLocation())) return;if(protects(e.getBlock())||protects(e.getBlockClicked().getRelative(e.getBlockFace())))e.setCancelled(true);}
+     @EventHandler(priority=EventPriority.HIGHEST) public void entityExplosion(EntityExplodeEvent e){e.blockList().removeIf(this::protects);}
+     @EventHandler(priority=EventPriority.HIGHEST) public void blockExplosion(BlockExplodeEvent e){e.blockList().removeIf(this::protects);}
+     @EventHandler(priority=EventPriority.HIGHEST) public void burn(BlockBurnEvent e){if(protects(e.getBlock()))e.setCancelled(true);}
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/LifeGuildBuildings.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/LifeGuildBuildings.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/LifeGuildBuildings.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/LifeGuildBuildings.java
+@@ -677,18 +677,21 @@
+                 || fabric.get(key(state.getX(), state.getY(), state.getZ())) == state.getType());
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if (deniesEdit(event.getBlock())) {
+             event.setCancelled(true);
+             plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "life_guild_building", protectionArea(event.getBlock().getLocation()));
+         }
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if (deniesEdit(event.getBlockReplacedState())) {
+             event.setCancelled(true);
+             plugin.protectionAdvisor().denied(event.getPlayer(), "place", event.getBlock().getLocation(), "life_guild_building", protectionArea(event.getBlock().getLocation()));
+         }
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
++        if (event.getReplacedBlockStates().stream().allMatch(s -> plugin.bypassBlockProtection(event.getPlayer(), s.getLocation()))) return;
+         for (var state : event.getReplacedBlockStates()) if (deniesEdit(state)) {
+             event.setCancelled(true);
+             plugin.protectionAdvisor().denied(event.getPlayer(), "place", state.getLocation(), "life_guild_building", protectionArea(state.getLocation())); break;
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/MapObjectives.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/MapObjectives.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/MapObjectives.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/MapObjectives.java
+@@ -42,7 +42,7 @@
+             j.addProperty("minSections", minParts); j.addProperty("minHeightSpan", minHeight);
+             j.addProperty("treasureSurveyRadius", treasureRadius); j.addProperty("returnRadius", returnRadius);
+             j.addProperty("returnRequired", true); j.addProperty("destinationOncePerPlayer", true);
+-            j.addProperty("freshNaturalTreasureRequired", true); return j;
++            j.addProperty("freshNaturalTreasureRequired", true); j.addProperty("freshNaturalTreasureAppliesTo", "treasure_only"); return j;
+         }
+     }
+     static Rules parse(ConfigurationSection row, int count) {
+@@ -169,6 +169,9 @@
+         try {
+             Marker m = s == null ? held(p) : s.marker; j.addProperty("success", true); j.add("map", m.json());
+             j.addProperty("reason", s == null ? denial(p) : "bound_to_active_contract");
++            JsonObject clue = plugin.skillAssessments() == null ? null : plugin.skillAssessments().mapClue(p, m.mapId, m.world, m.x, m.z);
++            if (clue != null) j.add("clue", clue);
++            j.addProperty("targetKind", s != null && !s.mode.isEmpty() ? s.mode : clue != null ? "structure" : "unknown");
+             if (s != null) { j.add("returnTo", position(s.origin)); j.addProperty("mode", s.mode); j.addProperty("structure", s.structure); j.addProperty("treasureOpened", s.opened); j.addProperty("surveyed", s.surveyed); }
+         } catch (IllegalArgumentException invalid) { j.addProperty("success", false); j.addProperty("reason", invalid.getMessage()); }
+         j.addProperty("acceptCommand", "/mycli guild accept tm_map_hunt");
+@@ -188,46 +191,66 @@
+         JsonObject out=new JsonObject();out.addProperty("bounds",place.bounds());out.addProperty("structureInstance",place.instance());
+         out.addProperty("structure",place.key());out.addProperty("biome",WorldBiomes.at(at));return out;
+     }
+-    EngineeringSites.Result observe(Player p, Rules rules, int count, String run) {
++    EngineeringSites.Result observe(Player p, Rules rules, int count, String run) { return evaluate(p, rules, count, run, true); }
++    /** Query uses a detached binding and live survey snapshot: no samples, timer reset,
++     * persisted progress, chunk loads, enrollment or replacement of the held map. */
++    EngineeringSites.Result snapshot(Player p, Rules rules, int count, String run) {
++        EngineeringSites.Result result = evaluate(p, rules, count, run, false);
++        result.evidence().addProperty("validCurrentTarget", photoPlace(p, rules, run) != null);
++        return result;
++    }
++    private EngineeringSites.Result evaluate(Player p, Rules rules, int count, String run, boolean record) {
+         State s = state(p);
+         if (!current(p, s) || !s.run.equals(run)) return unavailable("map_binding_missing_or_invalid", count);
++        if (!record) s = new State(s.json());
+         JsonObject evidence = s.survey.deepCopy(); evidence.addProperty("source", "server_map_hunt"); evidence.add("map", s.marker.json());
+         evidence.add("returnTo", position(s.origin)); evidence.add("requirements", rules.json());
+         evidence.addProperty("structure", s.structure); evidence.addProperty("structureInstance", s.instance);
+         evidence.addProperty("mode", s.mode); evidence.addProperty("treasureOpened", s.opened); evidence.add("treasureProof", s.proof);
++        evidence.addProperty("surveyed", s.surveyed);
++        evidence.addProperty("returned", p.getWorld().equals(s.origin.getWorld()) && p.getLocation().distanceSquared(s.origin) <= rules.returnRadius * rules.returnRadius);
++        contextualRequirements(p, evidence, s, rules);
+         if (claimed(p, "targets", s.marker.key()) || !s.instance.isEmpty() && claimed(p, "structures", digest(s.instance)))
+             return result(false, 0, "map_destination_already_completed", evidence);
+         if (!s.surveyed) {
+             Location at = p.getLocation();
+-            if (!at.getWorld().getUID().equals(s.marker.world)) { exploration.resetMovement(p); return result(false, 0, "travel_to_map_world", evidence); }
++            if (!at.getWorld().getUID().equals(s.marker.world)) { if (record) exploration.resetMovement(p); return result(false, 0, "travel_to_map_world", evidence); }
+             if (s.instance.isEmpty()) {
+                 var place = ExplorationObjectives.mapPlace(at, s.marker.x, s.marker.z);
+                 if (place != null && !place.key().equals("minecraft:buried_treasure")) {
+-                    s.instance = place.instance(); s.structure = place.key(); s.bounds = place.bounds(); s.mode = "structure"; persist(p, s);
++                    s.instance = place.instance(); s.structure = place.key(); s.bounds = place.bounds(); s.mode = "structure"; if (record) persist(p, s);
+                 }
+             }
+-            if (s.instance.isEmpty()) { exploration.resetMovement(p); return result(false, 0, "find_natural_map_target_or_fresh_treasure", evidence); }
++            if (s.instance.isEmpty()) { if (record) exploration.resetMovement(p); return result(false, 0, "find_natural_map_target_or_fresh_treasure", evidence); }
+             if (claimed(p, "structures", digest(s.instance))) return result(false, 0, "map_destination_already_completed", evidence);
+             boolean treasure = s.mode.equals("treasure");
+             if (treasure && (!s.opened || Math.hypot(at.getX() - s.marker.x, at.getZ() - s.marker.z) > rules.treasureRadius)) {
+-                exploration.resetMovement(p); return result(false, 0, "survey_near_opened_treasure", evidence);
++                if (record) exploration.resetMovement(p); return result(false, 0, "survey_near_opened_treasure", evidence);
+             }
+             var target = new ExplorationObjectives.Target(treasure ? GuildManager.Goal.DIMENSION : GuildManager.Goal.STRUCTURE,
+                     environment(at.getWorld()), treasure ? List.of() : List.of(s.structure), rules.zoneSize, rules.minDistance,
+                     rules.minSeconds, treasure ? 0 : rules.minParts, 1, treasure ? 0 : rules.minHeight);
+-            EngineeringSites.Result route = exploration.observe(p, target, count, s.run + ":map:" + s.step, treasure ? "" : s.instance);
++            EngineeringSites.Result route = record ? exploration.observe(p, target, count, s.run + ":map:" + s.step, treasure ? "" : s.instance)
++                    : exploration.snapshot(p, target, count, s.run + ":map:" + s.step, treasure ? "" : s.instance);
+             s.survey = route.evidence().deepCopy();
+-            if (route.ready()) { s.surveyed = true; persist(p, s); }
++            if (route.ready()) { s.surveyed = true; if (record) persist(p, s); }
+             // Merge current route evidence while keeping map identity and return conditions separate.
+             evidence = s.survey.deepCopy(); evidence.addProperty("source", "server_map_hunt"); evidence.add("map", s.marker.json());
+             evidence.add("returnTo", position(s.origin)); evidence.add("requirements", rules.json());
+             evidence.addProperty("structure", s.structure); evidence.addProperty("structureInstance", s.instance);
+             evidence.addProperty("mode", s.mode); evidence.addProperty("treasureOpened", s.opened); evidence.add("treasureProof", s.proof);
++            evidence.addProperty("surveyed", s.surveyed); contextualRequirements(p, evidence, s, rules);
+             if (!s.surveyed) return result(false, Math.min(count - 1, route.progress()), route.reason(), evidence);
+         }
+         boolean returned = p.getWorld().equals(s.origin.getWorld()) && p.getLocation().distanceSquared(s.origin) <= rules.returnRadius * rules.returnRadius;
+         evidence.addProperty("surveyed", true); evidence.addProperty("returned", returned);
+         return result(returned, returned ? count : count - 1, returned ? "ready" : "return_to_acceptance_point", evidence);
++    }
++    private void contextualRequirements(Player p, JsonObject evidence, State s, Rules rules) {
++        JsonObject clue = plugin.skillAssessments() == null ? null : plugin.skillAssessments().mapClue(p, s.marker.mapId, s.marker.world, s.marker.x, s.marker.z);
++        JsonObject terms = rules.json();
++        if (s.mode.equals("structure") || clue != null) terms.addProperty("freshNaturalTreasureRequired", false);
++        evidence.add("requirements", terms);
+     }
+     private EngineeringSites.Result unavailable(String reason, int count) {
+         JsonObject j = new JsonObject(); j.addProperty("source", "server_map_hunt"); return result(false, 0, reason, j);
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ProtectionAdvisor.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ProtectionAdvisor.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ProtectionAdvisor.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/ProtectionAdvisor.java
+@@ -402,6 +402,7 @@
+             return "unknown_out_of_range";
+         if (!player.getWorld().isChunkLoaded(x >> 4, z >> 4)) return "unknown_unloaded_chunk";
+         Block block = player.getWorld().getBlockAt(x, y, z);
++        if (BlockAccessRules.blockAction(action) && plugin.bypassBlockProtection(player, block.getLocation())) return null;
+         if (plugin.lands().access() != null) {
+             if (action.equals("use") && plugin.lands().access().isBoard(block)) return null;
+             if (!action.equals("use") && !action.equals("container") && plugin.lands().access().protectsBoard(block)) return "land_notice_board";
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/PvpArenaManager.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/PvpArenaManager.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/PvpArenaManager.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/PvpArenaManager.java
+@@ -472,6 +472,7 @@
+         return area.contains(at) ? area : null;
+     }
+     @EventHandler public void onBreak(BlockBreakEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         ProtectionArea area = protectionArea(event.getBlock().getLocation());
+         if (area != null) {
+             event.setCancelled(true);
+@@ -479,6 +480,7 @@
+         }
+     }
+     @EventHandler public void onPlace(BlockPlaceEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         ProtectionArea area = protectionArea(event.getBlock().getLocation());
+         if (area != null) {
+             event.setCancelled(true);
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/QuestGuidance.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/QuestGuidance.java
+new file mode 100644
+--- /dev/null
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/QuestGuidance.java
+@@ -0,0 +1,99 @@
++package org.afuhome.agentfriend;
++
++import com.google.gson.JsonArray;
++import com.google.gson.JsonElement;
++import com.google.gson.JsonObject;
++
++/** Presentation only: build an RPG journal from native evidence, never award progress.
++ * A map marker, a public clue and a completed objective are deliberately distinct. */
++final class QuestGuidance {
++    private QuestGuidance() { }
++    static JsonObject map(JsonObject info, JsonObject evidence, String reason, int count,
++            String world, double x, double y, double z, boolean survival, JsonObject photo) {
++        JsonObject out = base();
++        if (!info.has("map") || !info.has("returnTo") || reason.equals("map_binding_missing_or_invalid"))
++            return phase(out, "check_map_binding", "核对地图接单记录", "原地图绑定暂不可读，保留当前委托，请服主核对；不要反复放弃重接。", "/mycli guild map");
++        JsonObject map = info.getAsJsonObject("map"), home = info.getAsJsonObject("returnTo");
++        boolean sameWorld = text(map, "worldUuid").equals(world);
++        double distance = sameWorld ? Math.hypot(number(map,"x")-x, number(map,"z")-z) : -1;
++        boolean surveyed = flag(evidence,"surveyed"), inside = flag(evidence,"validCurrentTarget");
++        boolean arrived = sameWorld && (distance <= 64 || inside || surveyed);
++        boolean photos = !flag(photo,"required") || flag(photo,"ready");
++        boolean returned = surveyed && flag(evidence,"returned");
++        String kind = text(evidence,"mode").isEmpty()?text(info,"targetKind"):text(evidence,"mode");
++        JsonObject nav = map.deepCopy(); nav.remove("title"); nav.remove("icon");
++        nav.addProperty("dimensionMatches",sameWorld); nav.addProperty("horizontalDistance",Math.ceil(distance));
++        nav.addProperty("precision","map_marker"); nav.addProperty("entranceVerified",false);
++        out.add("navigation",nav); out.add("returnTo",home.deepCopy());
++        out.addProperty("targetMatch",inside); out.addProperty("ready",survival && surveyed && photos && returned);
++        objective(out,"travel","抵达地图标记附近",arrived);
++        objective(out,"enter",kind.equals("treasure")?"亲自打开新的天然藏宝箱":"找到入口并进入目标遗迹",inside || surveyed);
++        objective(out,"survey","实地走查",surveyed);
++        if(flag(photo,"required")) objective(out,"photograph","拍摄合格的现场照片",photos);
++        objective(out,"return","回接单点交回记录",returned && photos);
++        objective(out,"claim","交付本阶段",false);
++        if (!survival) return phase(out,"resume_survival","恢复可调查状态","存活后以生存模式落地步行；已有走查记录保留。","/mycli tasks status");
++        if(reason.equals("current_chunk_unloaded")){out.addProperty("ready",false);return phase(out,"wait_for_terrain","等待现场数据就绪","先等地形加载，再查当前任务；未知不能当作遗迹不存在，也不用重新接单。","/mycli tasks status");}
++        if(reason.equals("map_destination_already_completed")) {
++            out.addProperty("ready",false);return phase(out,"destination_completed","该目的地已经结算","保留旧记录；查看其他可接任务，复制地图不能重复领奖。","/mycli tasks list exploration");
++        }
++        if(!sameWorld) return phase(out,"travel_to_map_world","前往地图所属世界","先经本人已知门户或地点回地图所属世界；异维度的同坐标不是目标。","/mycli guild map");
++        if(!arrived) return phase(out,"travel_to_marker","前往地图标记附近","按地图前往 X="+integer(map,"x")+"、Z="+integer(map,"z")+"，直线约"+(int)Math.ceil(distance)+"格；这是目标参考位置，抵达后还要找入口。","/mycli tasks status");
++        if(!surveyed && !inside) {
++            boolean started = number(evidence,"distinctZones")>0 || !text(evidence,"structureInstance").isEmpty();
++            String hint = info.has("clue") ? text(info.getAsJsonObject("clue"),"approachHint") : "";
++            String action = started ? "回到已记录的同一座遗迹内部继续；不必放弃重接，也不要换一座凑数。"
++                    : "已到标记附近，尚未确认进入目标。标记不是入口；先勘察周围洞口、楼梯和通道，避免脚下直挖。";
++            if(!hint.isEmpty()) action += hint;
++            if(kind.equals("unknown")) action += "目标类型待现场核实：遗迹需进入走查，埋藏宝藏需亲自新开天然宝箱；红叉本身不能区分。";
++            out.getAsJsonArray("missingConditions").add(started?"返回原遗迹的有效调查区域":"进入原图对应的真实目标");
++            return phase(out,started?"resume_same_structure":"find_entrance",started?"回到原遗迹继续":"寻找实际入口",action,"/mycli tasks status");
++        }
++        if(!surveyed) {
++            JsonObject rules=evidence.getAsJsonObject("requirements");
++            if(rules==null) return phase(out,"check_survey","核对走查条件","当前条件暂不可读，请核查原委托，不凭空报告完成。","/mycli tasks status");
++            deficit(out,"不同分区",number(evidence,"distinctZones"),count,"处");
++            deficit(out,"新路线",number(evidence,"distance"),number(rules,"minDistance"),"格");
++            deficit(out,"有效行进",number(evidence,"movingSeconds"),number(rules,"minMovingSeconds"),"秒");
++            deficit(out,"内部区段",number(evidence,"distinctSections"),kind.equals("treasure")?0:number(rules,"minSections"),"段");
++            deficit(out,"上下高差",number(evidence,"heightSpan"),kind.equals("treasure")?0:number(rules,"minHeightSpan"),"格");
++            String action=number(evidence,"heightSpan")<number(rules,"minHeightSpan")?"沿可走通道探索上下层，再走未经过的位置。":"沿通道步行走到未经过的位置，边调查边核对缺项。";
++            action += "分区是同一目标内每"+integer(rules,"zoneSize")+"格划分的位置，不是多座遗迹；站着等、反复原路和传送不计新路线。";
++            if(kind.equals("structure")) action += "本路线不要求开启新宝箱，也不要求拆毁或清空遗迹。";
++            return phase(out,"survey","在同一目标内走查",action,"/mycli tasks status");
++        }
++        if(!photos) {
++            out.getAsJsonArray("missingConditions").add("合格现场照片 "+integer(photo,"photographedRegions")+"/"+integer(photo,"requiredRegions"));
++            return phase(out,"photograph","走查已完成，补拍现场照片",inside?"对准当地景物拍照；用相册核对合格结果，成片自动进入个人奖励箱。":"先回原目标现场再拍照；走查证据已保留，返程点或旧照片不能代替本场实拍。","/mycli photo menu");
++        }
++        if(!returned) {
++            int radius=integer(evidence.getAsJsonObject("requirements"),"returnRadius");
++            out.getAsJsonArray("missingConditions").add("回接单点"+radius+"格内（含高度差）");
++            return phase(out,"return_to_acceptance_point","走查与照片已齐，返回交付","回接单点 X="+integer(home,"x")+"、Y="+integer(home,"y")+"、Z="+integer(home,"z")+" 的"+radius+"格内；这是接单时实测位置，不是遗迹入口。","/mycli guild map");
++        }
++        return phase(out,"ready_to_submit","本阶段就绪，交付记录","用 /mycli guild claim 交付本阶段；整张委托完成后，再查看考试是否可以交卷。","/mycli guild claim");
++    }
++    /** Extend ordinary structure/biome/dimension surveys with the same journal presentation. */
++    static JsonObject exploration(JsonObject original, JsonObject photo) {
++        JsonObject out=original.deepCopy();out.addProperty("readOnly",true);
++        boolean done=flag(out,"ready"),photos=!flag(photo,"required")||flag(photo,"ready");
++        out.add("objectives",new JsonArray());
++        objective(out,"enter","抵达本阶段有效调查区域",flag(out,"targetMatch")||done);
++        objective(out,"survey","完成实际走查",done);
++        if(flag(photo,"required"))objective(out,"photograph","拍摄合格的现场照片",photos);
++        objective(out,"claim","交付本阶段",false);
++        if(done&&!photos){out.addProperty("ready",false);out.getAsJsonArray("missingConditions").add("本阶段合格现场照片");
++            return phase(out,"photograph","走查已完成，补拍现场照片","在本阶段目标现场对准景物拍照；走查记录保留，旧照片不能代替本场实拍。","/mycli photo menu");}
++        return finish(out,text(out,"phase"));
++    }
++    private static JsonObject base(){JsonObject out=new JsonObject();out.addProperty("readOnly",true);out.addProperty("ready",false);out.addProperty("targetMatch",false);out.add("objectives",new JsonArray());out.add("missingConditions",new JsonArray());return out;}
++    private static void objective(JsonObject out,String id,String title,boolean done){JsonObject row=new JsonObject();row.addProperty("id",id);row.addProperty("title",title);row.addProperty("state",done?"completed":"pending");out.getAsJsonArray("objectives").add(row);}
++    private static void deficit(JsonObject out,String title,double current,double required,String unit){if(current<required)out.getAsJsonArray("missingConditions").add(title+" "+Math.round(current*10)/10.0+"/"+Math.round(required*10)/10.0+unit);}
++    private static JsonObject phase(JsonObject out,String phase,String title,String action,String command){out.addProperty("phase",phase);out.addProperty("summary",title);out.addProperty("nextAction",action);out.addProperty("nextCommand",command);return finish(out,phase);}
++    private static JsonObject finish(JsonObject out,String phase){int completed=0;boolean current=false;for(JsonElement value:out.getAsJsonArray("objectives")){JsonObject row=value.getAsJsonObject();if(text(row,"state").equals("completed")){completed++;continue;}if(!current){row.addProperty("state","current");current=true;}}
++        out.addProperty("completedObjectives",completed);out.addProperty("totalObjectives",out.getAsJsonArray("objectives").size());out.addProperty("progress",out.getAsJsonArray("objectives").isEmpty()?0:completed/(double)out.getAsJsonArray("objectives").size());return out;}
++    static boolean flag(JsonObject j,String k){return j!=null&&j.has(k)&&!j.get(k).isJsonNull()&&j.get(k).getAsBoolean();}
++    static String text(JsonObject j,String k){return j!=null&&j.has(k)&&!j.get(k).isJsonNull()?j.get(k).getAsString():"";}
++    private static double number(JsonObject j,String k){return j!=null&&j.has(k)&&!j.get(k).isJsonNull()?j.get(k).getAsDouble():0;}
++    private static int integer(JsonObject j,String k){return (int)Math.floor(number(j,k));}
++}
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/QuestTracker.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/QuestTracker.java
+new file mode 100644
+--- /dev/null
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/QuestTracker.java
+@@ -0,0 +1,70 @@
++package org.afuhome.agentfriend;
++
++import com.google.gson.JsonObject;
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.Map;
++import java.util.Set;
++import java.util.UUID;
++import org.bukkit.Bukkit;
++import org.bukkit.GameMode;
++import org.bukkit.boss.BarColor;
++import org.bukkit.boss.BarStyle;
++import org.bukkit.boss.BossBar;
++import org.bukkit.entity.Player;
++import org.bukkit.event.EventHandler;
++import org.bukkit.event.Listener;
++import org.bukkit.event.player.PlayerQuitEvent;
++import org.bukkit.scheduler.BukkitTask;
++
++/** One private, stable native task bar per explorer. No chat polling or scoreboard replacement. */
++final class QuestTracker implements Listener {
++    private record Tracked(String run, BossBar bar) { }
++    private final AgentFriendPlugin plugin;
++    private final Map<UUID,Tracked> bars=new HashMap<>();
++    private final Map<UUID,Long> refreshed=new HashMap<>();
++    private final BukkitTask cleanup;
++    QuestTracker(AgentFriendPlugin plugin) {
++        this.plugin=plugin;Bukkit.getPluginManager().registerEvents(this,plugin);
++        cleanup=Bukkit.getScheduler().runTaskTimer(plugin,this::prune,20L,20L);
++    }
++    boolean due(Player p) {return System.currentTimeMillis()-refreshed.getOrDefault(p.getUniqueId(),0L)>=1000;}
++    private boolean visible(Player p) {
++        return p!=null&&p.isOnline()&&!p.isDead()&&!plugin.isObserver(p)&&p.getGameMode()==GameMode.SURVIVAL
++                &&!plugin.isDowned(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p)
++                &&plugin.getConfig().getBoolean("task-tracking.enabled",true);
++    }
++    void update(Player p,String run,String title,JsonObject guide) {
++        if(!visible(p)){remove(p.getUniqueId());return;}
++        refreshed.put(p.getUniqueId(),System.currentTimeMillis());
++        Tracked current=bars.get(p.getUniqueId());
++        if(current!=null&&!current.run.equals(run)){remove(p.getUniqueId());current=null;}
++        if(current==null){current=new Tracked(run,Bukkit.createBossBar("任务追踪",BarColor.BLUE,BarStyle.SOLID));bars.put(p.getUniqueId(),current);}
++        String label="§b任务 · "+title+" §f｜"+QuestGuidance.text(guide,"summary");
++        if(guide.has("completedObjectives"))label+=" §7"+guide.get("completedObjectives").getAsInt()+"/"+guide.get("totalObjectives").getAsInt();
++        if(guide.has("missingConditions")&&!guide.getAsJsonArray("missingConditions").isEmpty())label+=" · "+guide.getAsJsonArray("missingConditions").get(0).getAsString();
++        if(label.length()>112)label=label.substring(0,112);
++        if(!current.bar.getTitle().equals(label))current.bar.setTitle(label);
++        double progress=guide.has("progress")?guide.get("progress").getAsDouble():0;
++        progress=Math.max(0,Math.min(1,progress));if(current.bar.getProgress()!=progress)current.bar.setProgress(progress);
++        BarColor color=QuestGuidance.flag(guide,"ready")?BarColor.GREEN:BarColor.BLUE;
++        if(current.bar.getColor()!=color)current.bar.setColor(color);
++        audience(p,current.bar);
++    }
++    private void audience(Player owner,BossBar bar) {
++        Set<Player> wanted=new HashSet<>();wanted.add(owner);wanted.addAll(plugin.attachedEyes(owner));
++        Set<Player> before=new HashSet<>(bar.getPlayers());
++        for(Player old:before)if(!wanted.contains(old))bar.removePlayer(old);
++        for(Player p:wanted)if(!before.contains(p))bar.addPlayer(p);
++    }
++    private void prune() {
++        for(var entry:Set.copyOf(bars.entrySet())) {
++            Player p=Bukkit.getPlayer(entry.getKey());
++            String run=plugin.getConfig().getString("guild-players."+entry.getKey()+".active.market.run","");
++            if(!visible(p)||!entry.getValue().run.equals(run))remove(entry.getKey());else audience(p,entry.getValue().bar);
++        }
++    }
++    void remove(UUID id) {Tracked old=bars.remove(id);if(old!=null)old.bar.removeAll();refreshed.remove(id);}
++    @EventHandler public void quit(PlayerQuitEvent e) {remove(e.getPlayer().getUniqueId());prune();}
++    void close() {cleanup.cancel();bars.values().forEach(t->t.bar.removeAll());bars.clear();refreshed.clear();}
++}
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SiteDungeonManager.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SiteDungeonManager.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SiteDungeonManager.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SiteDungeonManager.java
+@@ -558,8 +558,10 @@
+     @EventHandler public void death(EntityDeathEvent e){Run r=owner(e.getEntity());if(r!=null){r.mobs.remove(e.getEntity().getUniqueId());e.getDrops().clear();e.setDroppedExp(0);}}
+     @EventHandler public void load(EntitiesLoadEvent e){for(Entity entity:e.getEntities())if((owned(entity)||entity.getScoreboardTags().contains(SHOT_TAG))&&owner(entity)==null)entity.remove();}
+     @EventHandler public void rejoin(PlayerJoinEvent e){Run r=own(e.getPlayer());if(r!=null)e.getPlayer().sendMessage("§e地下城进度保留；dungeon status 查看当前室，5分钟内步行返回即可续打，不自动免费传送。");}
+-    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void breakBlock(BlockBreakEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getBlock().getLocation()))){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"break",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
+-    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void placeBlock(BlockPlaceEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getBlock().getLocation()))){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"place",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
++    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void breakBlock(BlockBreakEvent e){
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;if(runs.values().stream().anyMatch(r->r.site.contains(e.getBlock().getLocation()))){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"break",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
++    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void placeBlock(BlockPlaceEvent e){
++        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;if(runs.values().stream().anyMatch(r->r.site.contains(e.getBlock().getLocation()))){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"place",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
+     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnNatural(SpawnerSpawnEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
+     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnWild(CreatureSpawnEvent e){if(e.getSpawnReason()==CreatureSpawnEvent.SpawnReason.NATURAL&&runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
+     private ItemStack icon(Material material,String name,String... lore){ItemStack item=new ItemStack(material);var meta=item.getItemMeta();meta.setDisplayName(name);meta.setLore(List.of(lore));item.setItemMeta(meta);return item;}
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SkillAssessments.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SkillAssessments.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SkillAssessments.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SkillAssessments.java
+@@ -115,6 +115,7 @@
+     }
+     AssessmentCatalog.Definition definition(String id) {return catalog==null?null:catalog.definitions.get(id);}
+     String photoExam(Player p) {Run r=runs.get(p.getUniqueId());return r!=null&&r.state.equals("active")&&r.definition.proofs().contains("survey_photo")?r.id.toString():"";}
++    JsonObject mapClue(Player p,int mapId,UUID world,int x,int z) {return supplies.mapClue(p,mapId,world,x,z);}
+     long photoStarted(Player p) {Run r=runs.get(p.getUniqueId());return r==null?Long.MAX_VALUE:r.started;}
+     private String eligibility(Player p,AssessmentCatalog.Definition d) {
+         if(!available())return "data_unavailable";
+@@ -437,7 +438,13 @@
+     JsonObject summary(Player p) {
+         JsonObject out=new JsonObject();out.addProperty("available",available());out.addProperty("gradeIndex",readGrade(p));out.addProperty("division",3-readGrade(p)%3);
+         out.addProperty("gradeName",gradeName(p));Run r=runs.get(p.getUniqueId());
+-        if(r!=null){out.addProperty("examId",r.definition.id());out.addProperty("runId",r.id.toString());out.addProperty("state",r.state);out.addProperty("reason",r.reason);out.addProperty("nextAction",next(r));}
++        if(r!=null){out.addProperty("examId",r.definition.id());out.addProperty("runId",r.id.toString());out.addProperty("state",r.state);out.addProperty("reason",r.reason);out.addProperty("nextAction",next(r));
++            if(durableSurvey(r)&&r.state.equals("active")) {
++                JsonObject contract=plugin.taskMarket().progressState(p);
++                if(contract.has("guidance")){JsonObject g=contract.getAsJsonObject("guidance");out.addProperty("reason",g.get("phase").getAsString());out.addProperty("phase",g.get("phase").getAsString());out.addProperty("summary",g.get("summary").getAsString());out.addProperty("nextAction",g.get("nextAction").getAsString());out.addProperty("nextCommand",g.get("nextCommand").getAsString());}
++                else {out.addProperty("reason","awaiting_contract");out.addProperty("phase","choose_contract");out.addProperty("nextAction","选择当前可接的调查委托，先从入门走查开始；普通走查不需要藏宝图。");out.addProperty("nextCommand","/mycli guild exam status");}
++            }
++        }
+         JsonObject a=academy(p.getUniqueId());out.addProperty("certificateCount",a.has("certificates")?a.getAsJsonObject("certificates").size():0);return out;
+     }
+     private String next(Run r) {
+@@ -492,7 +499,8 @@
+             if(r.definition.proofs().contains("survey_photo"))guideStep(steps,"photograph","在目标现场拍照","每个探索阶段至少1张合格照片；要求多种群系时每种各1张。对准景物，photo menu或photo take 唯一名字 first 1；photo album核查，旧照片不能代本场。","/mycli photo menu");
+             guideStep(steps,"return","按本单返程交付","原图寻宝要回接单点16格内；其他委托只按本单要求返程。guild verify查缺项，齐全后guild claim逐阶段交付。","/mycli guild verify");
+             guideStep(steps,"submit","取得证书或晋级","完成整张委托及照片后，考试state=ready才exam submit；purpose=promotion才是本次晋级，单拿证书不自动升段。","/mycli guild exam submit");
+-            JsonObject contract=plugin.taskMarket().examRequirements(p);if(contract!=null)out.add("currentContract",contract);
++            JsonObject contract=plugin.taskMarket().examRequirements(p);if(contract!=null){out.add("currentContract",contract);if(contract.has("guidance")){out.add("current",contract.get("guidance"));out.addProperty("nextCommand",contract.getAsJsonObject("guidance").get("nextCommand").getAsString());}}
++            if(!out.has("current")){JsonObject current=new JsonObject();current.addProperty("phase",r.state.equals("ready")?"submit_exam":"choose_contract");current.addProperty("summary",r.state.equals("ready")?"实操证明已齐，交付考试":"选择一张可接的调查委托");current.addProperty("nextAction",r.state.equals("ready")?"提交本场考试，取得证书或晋级。":"优先选择入门走查；普通走查无需藏宝图，地下墓穴适合作为进阶路线。");current.addProperty("nextCommand",r.state.equals("ready")?"/mycli guild exam submit":"/mycli guild exam status");out.add("current",current);}
+             out.add("supplies",supplies.all(p,r.definition));
+         } else {
+             guideStep(steps,"prepare","查看准备条件",r.definition.description(),"/mycli guild exam info "+r.definition.id());
+@@ -510,7 +518,8 @@
+         JsonObject options = plugin.taskMarket().assessmentContracts(p, d.proofs());
+         out.add("contractOptions", options);
+         String active = plugin.getConfig().getString("guild-players."+p.getUniqueId()+".active.id", "");
+-        if (!active.isEmpty()) { out.addProperty("nextCommand", "/mycli guild status"); return; }
++        if (!active.isEmpty()) {JsonObject current=plugin.taskMarket().progressState(p);
++            out.addProperty("nextCommand",current.has("guidance")?current.getAsJsonObject("guidance").get("nextCommand").getAsString():"/mycli guild status");return;}
+         for (var item : options.getAsJsonArray("items")) {
+             JsonObject row = item.getAsJsonObject();
+             if (row.has("acceptCommand")) { out.addProperty("nextCommand", row.get("acceptCommand").getAsString()); return; }
+@@ -539,7 +548,7 @@
+                 if(!machine)p.sendMessage("§b摄影实考：每个探索阶段至少1张合格实地照片；要求多种群系时，每种各拍一张。走查、返程照常；好构图额外纪念荣誉，不影响晋级。/mycli photo menu");
+             }
+             AssessmentCatalog.Point target=target(r);if(target!=null){JsonObject at=AssessmentCatalog.JSON.toJsonTree(target).getAsJsonObject();at.addProperty("worldUuid",r.definition.course().world().toString());out.add("target",at);}
+-            if(!machine){p.sendMessage("§b"+r.definition.title()+"："+r.state+"；"+next(r));
++            if(!machine){p.sendMessage("§b"+r.definition.title()+"："+(r.state.equals("active")?"进行中":r.state.equals("ready")?"可交卷":r.state.equals("submitted")?"已交卷":r.state.equals("interrupted")?"已中断":"已取消")+"；"+out.get("nextAction").getAsString());
+                 p.sendMessage("§e完整步骤与材料：公会→训练与考试→当前考试指引；或 /mycli guild exam guide。");
+                 if(out.has("nextCommand"))p.sendMessage("§a下一步："+out.get("nextCommand").getAsString()+"；只推荐，不自动接单或消费。");
+                 if(target!=null)p.sendMessage("§e当前目标 "+r.definition.course().world()+" X="+target.x()+" Y="+target.y()+" Z="+target.z()+"，距离 "+Math.round(point(p).distance(target))+"格；测量 "+measurements(r));}
+@@ -629,7 +638,8 @@
+     private ItemStack icon(Material type,String name,String... lore) {ItemStack item=new ItemStack(type);var meta=item.getItemMeta();meta.setDisplayName(name);meta.setLore(List.of(lore));item.setItemMeta(meta);return item;}
+     private void guideReply(Player p,boolean machine) {
+         Run r=current(p);if(r==null){show(p,machine);return;}JsonObject out=new JsonObject();out.addProperty("type","guide");out.addProperty("examId",r.definition.id());out.addProperty("runId",r.id.toString());out.add("guide",guide(p,r));
+-        if(!machine)for(var value:out.getAsJsonObject("guide").getAsJsonArray("steps")){var row=value.getAsJsonObject();p.sendMessage("§e"+row.get("order")+". "+row.get("title").getAsString()+"："+row.get("instruction").getAsString());}
++        if(!machine){JsonObject g=out.getAsJsonObject("guide");if(g.has("current")){JsonObject c=g.getAsJsonObject("current");if(c.has("objectives"))TaskMarketManager.showGuidance(p,c);else p.sendMessage("§e【当前阶段】"+c.get("summary").getAsString()+"；"+c.get("nextAction").getAsString());}
++            else for(var value:g.getAsJsonArray("steps")){var row=value.getAsJsonObject();p.sendMessage("§e"+row.get("order")+". "+row.get("title").getAsString()+"："+row.get("instruction").getAsString());}}
+         send(p,"MC_GUILD_EXAM",out);
+     }
+     private void guideMenu(Player p) {
+@@ -637,6 +647,15 @@
+         for(var value:g.getAsJsonArray("steps")) {
+             var row=value.getAsJsonObject();String text=row.get("instruction").getAsString();List<String> lore=new ArrayList<>();for(int i=0;i<text.length();i+=28)lore.add("§7"+text.substring(i,Math.min(text.length(),i+28)));
+             lore.add("§a"+row.get("command").getAsString());inv.setItem(row.get("order").getAsInt()-1,icon(Material.BOOK,row.get("order")+". "+row.get("title").getAsString(),lore.toArray(String[]::new)));
++        }
++        if(g.has("current")) {
++            JsonObject current=g.getAsJsonObject("current");
++            List<String> currentLore=new ArrayList<>();String action=current.get("nextAction").getAsString();
++            for(int i=0;i<action.length();i+=26)currentLore.add("§7"+action.substring(i,Math.min(action.length(),i+26)));
++            currentLore.add("§a"+current.get("nextCommand").getAsString());
++            inv.setItem(13,icon(Material.SPYGLASS,"➤ "+current.get("summary").getAsString(),currentLore.toArray(String[]::new)));
++            if(current.has("objectives")){int slot=0;for(var value:current.getAsJsonArray("objectives")){JsonObject row=value.getAsJsonObject();String state=row.get("state").getAsString();
++                inv.setItem(slot++,icon(state.equals("completed")?Material.LIME_DYE:state.equals("current")?Material.YELLOW_DYE:Material.GRAY_DYE,(state.equals("completed")?"§a✓ ":state.equals("current")?"§e➤ ":"§7○ ")+row.get("title").getAsString(),state.equals("completed")?"已完成；不必重做":state.equals("current")?"当前目标；下方望远镜查看下一步":"后续目标；完成当前步骤后继续"));}}
+         }
+         inv.setItem(20,icon(Material.CHEST,"个人奖励箱·取照片","拍照直接成片入箱，无需准备空地图"));
+         inv.setItem(21,icon(Material.FILLED_MAP,"领取遗迹探险图","仅原图寻宝路线需要；天然遗迹有真实目标"));
+@@ -675,7 +694,7 @@
+     @EventHandler public void close(InventoryCloseEvent e) {menus.remove(e.getInventory());}
+     String bookPage(Player p) {
+         JsonObject a=academy(p.getUniqueId());String ids=a.has("certificates")?String.join("、",a.getAsJsonObject("certificates").keySet()):"未认证";
+-        return "§6冒险者认证§r\n\n"+gradeName(p)+"\n声望 "+plugin.guild().reputation(p)+"\n\n能力证书："+ids+"\n\n公会→训练与考试\n→当前考试指引与材料\n分步骤完成；摄影空图和遗迹探险图在个人箱领取。\n\n/mycli guild exam guide\n旧资历保留，不自动花点。";
++        return "§6冒险者认证§r\n\n"+gradeName(p)+"\n声望 "+plugin.guild().reputation(p)+"\n\n能力证书："+ids+"\n\n公会→训练与考试\n→当前考试指引与材料\n摄影不用空地图，成片进个人奖励箱；遗迹探险图可按需领取。\n\n/mycli guild exam guide\n旧资历保留，不自动花点。";
+     }
+     void admin(CommandSender sender,String[] args) {
+         if(args.length>2&&args[2].equals("reload"))sender.sendMessage(reload()?"考试与18阶目录已热加载；在途定义保持冻结。":"配置错误，已保留上次有效目录；修正两份配置后再加载。");
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SurveyMovement.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SurveyMovement.java
+new file mode 100644
+--- /dev/null
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SurveyMovement.java
+@@ -0,0 +1,20 @@
++package org.afuhome.agentfriend;
++
++/** Credits a new cell's continuous visit, rather than only its first sampled frame.
++ * Per-cell caps prevent pacing inside one block from manufacturing an entire route.
++ * Visited-cell ownership stays in the existing durable trail, so a return visit,
++ * teleport or restart cannot renew the credit. This object itself is transient. */
++final class SurveyMovement {
++    record Credit(double distance,double milliseconds) { }
++    private String point="";
++    private boolean freshVisit;
++    private double distance,milliseconds;
++    Credit sample(String next,boolean fresh,double moved,long elapsed) {
++        if(!next.equals(point)){point=next;freshVisit=fresh;distance=0;milliseconds=0;}
++        if(!freshVisit||!Double.isFinite(moved)||moved<=0||elapsed<=0)return new Credit(0,0);
++        double credited=Math.min(moved,Math.max(0,2-distance));
++        double time=Math.min(elapsed*credited/moved,Math.max(0,2000-milliseconds));
++        distance+=credited;milliseconds+=time;
++        return new Credit(credited,time);
++    }
++}
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskGuidance.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskGuidance.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskGuidance.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskGuidance.java
+@@ -12,6 +12,7 @@
+         return switch (goal) {
+             case PEAK -> "到达 Y≥120 的高处，天然山峰、建筑屋顶和高塔均可；不要求积雪或全程徒步。横向走过一格记录，再 guild status 查询、guild claim 交付。";
+             case PHOTO -> photo();
++            case MAP_HUNT -> original.replace("天然藏宝箱须亲自新开，旧空箱、自制箱或只到坐标不算。", "遗迹图需进入原目标走查，不要求开箱；仅埋藏宝藏须亲自新开天然箱。地表标记不是入口，旧空箱、自制箱或只到坐标不算。");
+             default -> original;
+         };
+     }
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskMarketManager.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskMarketManager.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskMarketManager.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskMarketManager.java
+@@ -87,12 +87,14 @@
+     private final File file;
+     private final TaskRoutes routes;
+     private Map<String, Task> tasks = Map.of();
++    private List<ExplorationGuidance.Landmark> landmarks = List.of();
+     private Map<String, EngineeringSites.Site> drafts = Map.of();
+     private final Map<UUID, Menu> menus = new HashMap<>();
+     private final Set<UUID> checking = new java.util.HashSet<>();
+     private final Map<UUID, Long> lastCheck = new HashMap<>();
+     private final Map<UUID, Frozen> frozenTasks = new HashMap<>();
+     private int surveyCursor;
++    private final QuestTracker tracker;
+ 
+     TaskMarketManager(AgentFriendPlugin plugin) {
+         this.plugin = plugin; engineering = new EngineeringSites(plugin); exploration = new ExplorationObjectives(plugin); maps = new MapObjectives(plugin, exploration);
+@@ -103,6 +105,7 @@
+         if (!new File(plugin.getDataFolder(), "route-contracts.yml").exists()) plugin.saveResource("route-contracts.yml", false);
+         reload(); Bukkit.getPluginManager().registerEvents(this, plugin);
+         routes = new TaskRoutes(plugin, this);
++        tracker = new QuestTracker(plugin);
+         Bukkit.getPluginManager().registerEvents(new CombatObjectiveEvents(plugin), plugin);
+         Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, CHANNEL);
+         registerStartupSites();
+@@ -110,7 +113,7 @@
+         Bukkit.getScheduler().runTaskTimer(plugin, this::surveyPlayers, 5L, 5L);
+         Bukkit.getScheduler().runTaskTimer(plugin, exploration::flush, 600L, 600L);
+     }
+-    void shutdown() { exploration.flush(); }
++    void shutdown() { tracker.close(); exploration.flush(); }
+     private static boolean photoStep(Step step){return step.map!=null||step.exploration!=null&&step.goal!=GuildManager.Goal.RETURN;}
+     /** Capture-time native location, independent of cached/completed survey success. */
+     JsonObject photoContext(Player p) {
+@@ -150,22 +153,49 @@
+         Task task = frozen(player);
+         if (task == null) return;
+         Step step = task.steps.get(index(player));
+-        if (step.map != null) { EngineeringSites.Result result = observe(player, task); player.sendMessage("§7" + MapObjectives.hint(result.reason())); mapInfo(player); return; }
+-        if (step.exploration == null) return;
+-        JsonObject navigation=step.exploration.navigation(player.getLocation());
+-        player.sendMessage("§7所需维度："+step.exploration.dimensionLabel()+"（"+navigation.get("requiredDimension").getAsString()+"）；当前："+navigation.get("currentDimension").getAsString()+"。");
+-        if(!navigation.get("dimensionMatches").getAsBoolean())player.sendMessage("§e当前维度不匹配，请先返回"+step.exploration.dimensionLabel()+"；中转坐标不是任务目标，在这里走查不增加本阶段证据。");
+-        if(step.goal==GuildManager.Goal.STRUCTURE)player.sendMessage("§7所需天然结构："+String.join(" 或 ",step.exploration.keys())+"；同名遗迹、砂岩和沙漠群系不能代替结构匹配。");
+-        EngineeringSites.Result result = observe(player, task); JsonObject e = result.evidence();
+-        if (step.goal == GuildManager.Goal.RETURN) {
+-            player.sendMessage("§7返程目标：" + step.exploration.dimension() + "；" + (result.ready() ? "已返回，可 guild claim 完成委托。" : "请先实际返回目标维度。"));
+-            return;
+-        }
+-        player.sendMessage("§7探索路线：不同区域 " + e.get("distinctZones") + "/" + step.target + "，有效行进 " + e.get("distance")
+-                + "/" + step.exploration.minDistance() + " 格、" + e.get("movingSeconds") + "/" + step.exploration.minSeconds() + " 秒；区段 "
+-                + e.get("distinctSections") + "/" + step.exploration.minParts() + "，群系 " + e.getAsJsonArray("biomes").size()
+-                + "/" + step.exploration.minBiomes() + "，高差 " + e.get("heightSpan") + "/" + step.exploration.minHeightSpan() + "。");
+-        if (!result.ready()) player.sendMessage("§7所有条件齐全才可交付；/mycli guild verify 读取完整证据与缺项。");
++        if (step.exploration == null && step.map == null) return;
++        // Both map and ordinary status are queries, never movement samples.
++        showGuidance(player, guidance(player, step, snapshot(player, step)));
++    }
++    private EngineeringSites.Result snapshot(Player player, Step step) {
++        return step.map != null ? maps.snapshot(player,step.map,step.target,run(player))
++                : exploration.snapshot(player,step.exploration,step.target,run(player)+":"+index(player));
++    }
++    private JsonObject guidance(Player player, Step step, EngineeringSites.Result result) {
++        var at=player.getLocation();JsonObject photo=new JsonObject();
++        boolean required=photoStep(step)&&!plugin.skillAssessments().photoExam(player).isEmpty();photo.addProperty("required",required);
++        if(required){photo=photoStepStatus(player,frozen(player),index(player),result.evidence());photo.addProperty("required",true);}
++        if(step.map!=null) {
++            // A fresh readonly location check prevents a latched completed survey
++            // from claiming that the traveller is still at the photo location.
++            EngineeringSites.Result current=maps.snapshot(player,step.map,step.target,run(player));
++            return QuestGuidance.map(maps.info(player),current.evidence(),current.reason(),step.target,
++                    at.getWorld().getUID().toString(),at.getX(),at.getY(),at.getZ(),
++                    player.getGameMode()==GameMode.SURVIVAL&&!player.isDead()&&!player.isFlying(),photo);
++        }
++        JsonObject guide=ExplorationGuidance.guide(step.exploration,step.target,step.exploration.navigation(at),result.evidence(),result.reason(),landmarks,at.getBlockX(),at.getBlockZ());
++        return QuestGuidance.exploration(guide,photo);
++    }
++    JsonObject planningGuidance(Player player, Step step) {
++        var at = player.getLocation(); JsonObject evidence = new JsonObject(); evidence.addProperty("validCurrentTarget", false);
++        JsonObject out = ExplorationGuidance.guide(step.exploration, step.target, step.exploration.navigation(at), evidence, "", landmarks, at.getBlockX(), at.getBlockZ());
++        out.addProperty("scope", "planning"); out.addProperty("ready", false);
++        out.addProperty("summary", "这是出发前的目标线索；浏览不会接单，也不证明已到场。");
++        out.addProperty("nextCommand", "/mycli tasks status"); return out;
++    }
++    static void showGuidance(Player player, JsonObject guide) {
++        player.sendMessage("§b【当前阶段】" + guide.get("summary").getAsString());
++        if(guide.has("objectives"))for(JsonElement value:guide.getAsJsonArray("objectives")) {
++            JsonObject row=value.getAsJsonObject();String state=row.get("state").getAsString();
++            player.sendMessage((state.equals("completed")?"§a✓ ":state.equals("current")?"§e➤ ":"§7○ ")+row.get("title").getAsString());
++        }
++        JsonArray missing = guide.getAsJsonArray("missingConditions");
++        if (!missing.isEmpty()) player.sendMessage("§7还缺：" + String.join("；", missing.asList().stream().map(JsonElement::getAsString).toList()));
++        if (guide.has("resumePosition")) {
++            JsonObject at = guide.getAsJsonObject("resumePosition");
++            player.sendMessage("§7上次走查位置：" + at.get("world").getAsString() + " X=" + (int)at.get("x").getAsDouble() + "、Z=" + (int)at.get("z").getAsDouble() + "，这是历史位置。");
++        }
++        player.sendMessage("§a下一步：" + guide.get("nextAction").getAsString());
+     }
+     private void surveyPlayers() {
+         List<Player> online = new ArrayList<>(Bukkit.getOnlinePlayers());
+@@ -174,7 +204,10 @@
+         for (int n = 0; n < Math.min(4, online.size()); n++) {
+             Player player = online.get(Math.floorMod(surveyCursor++, online.size()));
+             Task task = frozen(player);
+-            if (task != null && player.getGameMode() == GameMode.SURVIVAL && !player.isDead()) observe(player, task);
++            if (task != null && player.getGameMode() == GameMode.SURVIVAL && !player.isDead()) {
++                EngineeringSites.Result result=observe(player,task);
++                if(result!=null&&tracker.due(player))tracker.update(player,run(player),task.title,guidance(player,task.steps.get(index(player)),result));
++            } else tracker.remove(player.getUniqueId());
+             if (System.nanoTime() >= deadline) break;
+         }
+     }
+@@ -187,8 +220,9 @@
+         plugin.getConfig().set(activePath(player) + ".progress", result.progress());
+         if (result.ready() && previous < step.target) {
+             JsonObject data = new JsonObject(); data.addProperty("task", task.id()); data.addProperty("step", index(player) + 1);
+-            data.add("evidence", result.evidence()); send(player, "MC_MARKET_SURVEY", data);
+-            player.sendMessage("§a本阶段探索证据已齐全。/mycli guild claim 交付阶段并查看后续行程。");
++            data.add("evidence", result.evidence());
++            JsonObject guide=guidance(player,step,result);data.add("guidance",guide);send(player,"MC_MARKET_SURVEY",data);
++            player.sendMessage("§a走查证据已齐全。"+guide.get("summary").getAsString()+"；下一步 "+guide.get("nextCommand").getAsString());
+         }
+         return result;
+     }
+@@ -233,6 +267,7 @@
+ 
+     boolean reload() {
+         try {
++            List<ExplorationGuidance.Landmark> nextLandmarks = ExplorationGuidance.load(new File(plugin.getDataFolder(), "exploration-landmarks.json").toPath());
+             YamlConfiguration yaml = new YamlConfiguration(); yaml.load(file);
+             if (yaml.getInt("schema-version") != 1) throw new IllegalArgumentException("schema-version");
+             for (String resource : List.of("resident-contracts.yml", "route-contracts.yml")) {
+@@ -278,6 +313,7 @@
+             }
+             drafts = java.util.Collections.unmodifiableMap(nextSites);
+             tasks = java.util.Collections.unmodifiableMap(nextTasks);
++            landmarks = nextLandmarks;
+             plugin.getLogger().info("Task market loaded " + tasks.size() + " tasks, " + drafts.size() + " site definitions");
+             publishAll();
+             return true;
+@@ -416,6 +452,8 @@
+         out.addProperty("route",task.route());
+         out.addProperty("id",task.id());
+         if(step.exploration()!=null){out.add("exploration",step.exploration().json());out.add("navigation",step.exploration().navigation(player.getLocation()));}
++        if(step.map()!=null){JsonObject map=maps.info(player);if(map.has("map"))out.add("map",map.get("map"));out.addProperty("targetKind",QuestGuidance.text(map,"targetKind"));}
++        if(step.map()!=null||step.exploration()!=null)out.add("guidance",guidance(player,step,snapshot(player,step)));
+         if(step.combat()!=null)out.add("combat",step.combat().json());
+         out.addProperty("requiresVerification",EngineeringSites.GOALS.contains(step.goal()));
+         return out;
+@@ -541,6 +579,11 @@
+         JsonObject data = maps.info(player);
+         Task task = frozen(player);
+         if (task != null) for (Step step : task.steps) if (step.map != null) data.add("requirements", step.map.json());
++        if(task!=null&&task.steps.get(index(player)).map!=null) {
++            Step step=task.steps.get(index(player));EngineeringSites.Result current=snapshot(player,step);
++            data.add("guidance",guidance(player,step,current));
++            if(current.evidence().has("requirements"))data.add("requirements",current.evidence().get("requirements"));
++        }
+         if (data.get("success").getAsBoolean()) {
+             JsonObject map = data.getAsJsonObject("map");
+             player.sendMessage("§6地图目标：" + map.get("title").getAsString() + "；" + map.get("dimension").getAsString()
+@@ -619,7 +662,10 @@
+                 JsonObject status=photoStepStatus(player,task,i,i==step?result.evidence():savedSurvey(player,i));photos.add(status);complete&=status.get("ready").getAsBoolean();
+             }
+             result.evidence().add("photography",photos);
+-            if(!complete&&result.ready()) {
++            // A completed map survey still needs its photo before the return
++            // journey. Report that actionable blocker rather than sending the
++            // traveller home and only then revealing the missing photograph.
++            if(!complete&&(result.ready()||task.steps.get(step).map!=null&&QuestGuidance.flag(result.evidence(),"surveyed"))) {
+                 player.sendMessage("§e探索记录保留，还缺本次实地照片。先在目标地用 /mycli photo menu 拍景物；photo album 看检查与重拍建议，guild exam status 看各阶段数量。");
+                 result=new EngineeringSites.Result(false,result.progress(),"exploration_photo_required",result.evidence());
+             }
+@@ -645,16 +691,21 @@
+         data.add("evidence", result.evidence());
+         ActionFeedback.Advice advice = result.ready() ? null : ActionFeedback.advice("market", result.reason(), task.id());
+         if (advice != null) advice.add(data);
++        JsonObject guide = task.steps.get(step).exploration == null && task.steps.get(step).map == null ? null : guidance(player, task.steps.get(step), result);
++        if (guide != null) {
++            data.add("guidance", guide); data.addProperty("nextAction", guide.get("nextAction").getAsString());
++            JsonArray commands = new JsonArray(); commands.add(guide.get("nextCommand").getAsString()); data.add("nextCommands", commands);
++        }
+         send(player, "MC_MARKET_CHECK", data);
+-        player.sendMessage((result.ready() ? "§a验收通过：" : "§e验收未通过：") + result.reason()
++        if (guide != null) {if(!plugin.communication().compact(player))showGuidance(player,guide);else for(Player eye:plugin.attachedEyes(player))showGuidance(eye,guide);}
++        else player.sendMessage((result.ready() ? "§a验收通过：" : "§e验收未通过：") + result.reason()
+                 + "（" + result.progress() + "/" + task.steps.get(step).target + "）。");
+-        if (advice != null) player.sendMessage("§a【正确做法】" + advice.next());
+-        if (task.steps.get(step).map != null) player.sendMessage("§7" + MapObjectives.hint(result.reason()));
++        if (advice != null && guide == null) player.sendMessage("§a【正确做法】" + advice.next());
++        if (task.steps.get(step).map != null && guide == null) player.sendMessage("§7" + MapObjectives.hint(result.reason()));
+         JsonObject evidence = result.evidence();
+-        if (evidence.has("distinctZones") && task.steps.get(step).goal != GuildManager.Goal.RETURN) player.sendMessage("§7探索：不同区域 " + evidence.get("distinctZones") + "/" + task.steps.get(step).target
++        if (guide == null && evidence.has("distinctZones") && task.steps.get(step).goal != GuildManager.Goal.RETURN) player.sendMessage("§7探索：不同区域 " + evidence.get("distinctZones") + "/" + task.steps.get(step).target
+                 + "，有效行进 " + evidence.get("distance") + " 格 / " + evidence.get("movingSeconds") + " 秒，建筑区段 "
+                 + evidence.get("distinctSections") + "，高差 " + evidence.get("heightSpan") + "；生物群系 " + evidence.get("biomes") + "。条件见 guild market " + task.id());
+-        if (result.reason().equals("different_structure_or_world")) player.sendMessage("§e本阶段记录属于同一座遗迹；要调查另一座，请放弃后重接，旧阶段路线会清空。");
+         if (evidence.has("newBlocks")) player.sendMessage("§7施工证据：新增 " + evidence.get("newBlocks")
+                 + " 格，可走路面覆盖 " + evidence.get("coveragePercent") + "%，两端连通=" + evidence.get("connected") + "。");
+         if (evidence.has("missingComponents")) {
+@@ -886,6 +937,7 @@
+     }
+     private void detail(Player player, Task task) {
+         JsonObject data = summary(task); JsonArray steps = new JsonArray();
++        JsonObject current = progressState(player);
+         List<String> rewards = task.id().equals(plugin.getConfig().getString(activePath(player) + ".id"))
+                 ? plugin.getConfig().getStringList(marketPath(player) + ".skill-rewards") : plugin.professions().rewards("guild_contract", task.id());
+         data.add("skillRewards", new com.google.gson.Gson().toJsonTree(rewards));
+@@ -912,6 +964,10 @@
+             if (step.exploration != null) {
+                 row.add("exploration", step.exploration.json());
+                 player.sendMessage("§7探索验收：" + step.exploration.conditions(step.target));
++                boolean active = current.has("id") && current.get("id").getAsString().equals(task.id()) && current.get("stage").getAsInt() == i + 1;
++                JsonObject guide = active ? current.getAsJsonObject("guidance") : planningGuidance(player, step);
++                row.add("guidance", guide);
++                if (active || i == 0) showGuidance(player, guide);
+             }
+             player.sendMessage("§b" + (i + 1) + ". " + step.title + "：" + TaskGuidance.step(step.goal, step.description) + "（" + step.target + "）");
+             player.sendMessage("§7条件：goal=" + step.goal.name().toLowerCase(Locale.ROOT) + " target=" + step.target
+@@ -973,11 +1029,20 @@
+                     new DiscardedPayload(ResourceLocation.tryParse(CHANNEL), Unpooled.wrappedBuffer(bytes))));
+         }
+         JsonObject shortNotice = new JsonObject(); shortNotice.addProperty("type", type);
+-        shortNotice.addProperty("schemaVersion", 1); shortNotice.addProperty("command", "/mycli guild engineering");
++        shortNotice.addProperty("schemaVersion", 1);
++        String command="/mycli tasks status";
++        if(data.has("task")){Task current=find(player,data.get("task").getAsString());
++            if(current!=null&&current.sites().size()>0)command="/mycli guild engineering "+current.id();}
++        if(data.has("guidance")) {
++            JsonObject guide=data.getAsJsonObject("guidance");command=guide.get("nextCommand").getAsString();
++            shortNotice.addProperty("phase",guide.get("phase").getAsString());shortNotice.addProperty("summary",guide.get("summary").getAsString());
++            shortNotice.addProperty("nextAction",guide.get("nextAction").getAsString());
++        }
++        shortNotice.addProperty("command",command);shortNotice.addProperty("nextCommand",command);
+         if (data.has("task")) shortNotice.add("task", data.get("task"));
+         if (data.has("ready")) shortNotice.add("ready", data.get("ready"));
+         if (data.has("reason")) shortNotice.add("reason", data.get("reason"));
+-        if (shortNotice.toString().length() <= 256) player.sendMessage(shortNotice.toString());
++        if (plugin.communication().compact(player) && shortNotice.toString().length() <= 1000) player.sendMessage(shortNotice.toString());
+     }
+     void admin(CommandSender sender, String[] args) {
+         String action = args.length > 2 ? args[2].toLowerCase(Locale.ROOT) : "list";
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskRoutes.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskRoutes.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskRoutes.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TaskRoutes.java
+@@ -72,11 +72,15 @@
+                     emit(p, detail(p, task), machine);
+                 }
+                 case "status" -> {
+-                    JsonObject out = base("status"); out.add("adventure", plugin.guild().progressState(p));
++                    JsonObject out = base("status"); JsonObject adventure = plugin.guild().progressState(p); out.add("adventure", adventure);
+                     JsonObject life = plugin.lifeGuild().onboardingState(p); life.remove("availableId");
+                     out.add("life", life);
+                     out.addProperty("nextCommand", "/mycli progress guild 1");
+                     out.addProperty("advice", "委托按当前任务槽分别查询；每阶段交付，全部阶段完成才发最终奖。路线可随兴趣选择，不必先种田。");
++                    if (adventure.has("market") && adventure.getAsJsonObject("market").has("guidance")) {
++                        out.addProperty("nextCommand", adventure.get("nextCommand").getAsString());
++                        out.addProperty("advice", adventure.get("advice").getAsString());
++                    }
+                     emit(p, out, machine);
+                 }
+                 case "menu" -> {
+@@ -140,6 +144,7 @@
+         out.addProperty("statusCommand", "/mycli tasks status"); out.addProperty("detailsCommand", "/mycli guild market " + task.id());
+         out.addProperty("advice", "查看不接单、不换职业、不消耗资源。领取公共补给请到门口箱体，按需取用；回补按本单指定物资交付，满仓不扣物、不完成。");
+         JsonArray steps = new JsonArray(); int n = 0;
++        JsonObject current = market.progressState(p);
+         for (var step : task.steps()) {
+             JsonObject row = new JsonObject(); row.addProperty("stage", ++n); row.addProperty("title", step.title());
+             row.addProperty("condition", TaskGuidance.step(step.goal(), step.description()));
+@@ -148,8 +153,16 @@
+             if (step.chest() >= 0) row.addProperty("publicChest", step.chest());
+             if (step.floor() > 0) row.addProperty("floor", step.floor());
+             if (step.combat() != null) row.add("combat", step.combat().json());
+-            if (step.exploration() != null) row.add("exploration", step.exploration().json());
+-            if (step.map() != null) row.add("mapHunt", step.map().json());
++            if (step.exploration() != null) {
++                row.add("exploration", step.exploration().json());
++                row.addProperty("walkthrough", step.exploration().conditions(step.target()));
++                boolean active = current.has("id") && current.get("id").getAsString().equals(task.id()) && current.get("stage").getAsInt() == n;
++                row.add("guidance", active ? current.getAsJsonObject("guidance") : market.planningGuidance(p, step));
++            }
++            if (step.map() != null) {
++                row.add("mapHunt", step.map().json());
++                if(current.has("id")&&current.get("id").getAsString().equals(task.id())&&current.get("stage").getAsInt()==n&&current.has("guidance"))row.add("guidance",current.get("guidance"));
++            }
+             steps.add(row);
+         }
+         out.add("steps", steps); return out;
+@@ -171,6 +184,8 @@
+         }
+         if (out.has("steps")) for (var element : out.getAsJsonArray("steps")) {
+             var step = element.getAsJsonObject(); p.sendMessage("§f" + step.get("stage").getAsInt() + ". " + step.get("condition").getAsString() + "（" + step.get("target").getAsInt() + "）");
++            if (step.has("walkthrough")) p.sendMessage("§7" + step.get("walkthrough").getAsString());
++            if (step.has("guidance")) TaskMarketManager.showGuidance(p, step.getAsJsonObject("guidance"));
+         }
+         if (out.has("adventure")) {
+             var adventure = out.getAsJsonObject("adventure");
+@@ -179,7 +194,10 @@
+                     : adventure.get("activeId").getAsString().isEmpty() ? "：尚未接单" : "：在途记录暂不可读，请联系服主核对"));
+             var life = out.getAsJsonObject("life"); p.sendMessage("§b【生活委托】" + (life.get("activeId").getAsString().isEmpty() ? "尚未接单" : life.get("title").getAsString() + " " + life.get("progress") + "/" + life.get("target")));
+         }
+-        if (out.has("advice")) p.sendMessage("§7" + out.get("advice").getAsString());
++        if (out.has("adventure") && out.getAsJsonObject("adventure").has("market")
++                && out.getAsJsonObject("adventure").getAsJsonObject("market").has("guidance"))
++            TaskMarketManager.showGuidance(p, out.getAsJsonObject("adventure").getAsJsonObject("market").getAsJsonObject("guidance"));
++        else if (out.has("advice")) p.sendMessage("§7" + out.get("advice").getAsString());
+         if (out.has("acceptCommand")) p.sendMessage("§a接单：" + out.get("acceptCommand").getAsString() + "；进度 /mycli tasks status");
+         if (out.has("nextCommand")) p.sendMessage("§7下一步：" + out.get("nextCommand").getAsString());
+     }
+@@ -218,7 +236,13 @@
+         var task = market.find(p, id); if (task == null || !task.enabled()) return;
+         Inventory inv = Bukkit.createInventory(null, 27, "委托详情 · " + task.title());
+         List<String> lines = new ArrayList<>(); lines.add(task.description());
+-        for (var step : task.steps()) lines.add(TaskGuidance.step(step.goal(), step.description()) + " ×" + step.target());
++        for (var step : task.steps()) {
++            lines.add(TaskGuidance.step(step.goal(), step.description()) + (step.exploration() == null ? " ×" + step.target() : ""));
++            if (step.exploration() != null) {
++                lines.add(step.exploration().conditions(step.target()));
++                lines.add(market.planningGuidance(p, step).get("nextAction").getAsString());
++            }
++        }
+         inv.setItem(13, item(task.icon().name(), "§e" + task.title(), lines.toArray(String[]::new)));
+         inv.setItem(11, item("EMERALD", "§a接取这张委托", "主动接单才占公会任务槽", "当前有任务时保留原任务，不会覆盖"));
+         inv.setItem(15, item("ARROW", "§b返回任务列表", "仅浏览不接单"));
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TrialRoadManager.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TrialRoadManager.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TrialRoadManager.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/TrialRoadManager.java
+@@ -382,12 +382,14 @@
+     boolean deniesBreak(Block block) { return protectedFabric(block) || failClosed(block); }
+     boolean deniesPlace(Block block) { return deniesBreak(block) || pathHeadroom(block); }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if (deniesBreak(event.getBlock())) {
+             event.setCancelled(true);
+             plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "trial_road", protectionArea(event.getBlock().getLocation()));
+         }
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if (protectedFabric(event.getBlockReplacedState()) || pathHeadroom(event.getBlock())
+                 || failClosed(event.getBlock())) {
+             event.setCancelled(true);
+@@ -395,6 +397,7 @@
+         }
+     }
+     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
++        if (event.getReplacedBlockStates().stream().allMatch(s -> plugin.bypassBlockProtection(event.getPlayer(), s.getLocation()))) return;
+         for (org.bukkit.block.BlockState state : event.getReplacedBlockStates())
+             if (protectedFabric(state) || pathHeadroom(state.getBlock()) || failClosed(state.getBlock())) {
+                 event.setCancelled(true);
+diff --git a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/VillageStructureProtection.java b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/VillageStructureProtection.java
+--- a/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/VillageStructureProtection.java
++++ b/paper/plugins/AgentFriend/src/org/afuhome/agentfriend/VillageStructureProtection.java
+@@ -185,6 +185,7 @@
+ 
+     boolean deniesEdit(Block block) { return failClosed(block) || protectedOriginal(block); }
+     boolean deniesEdit(org.bukkit.entity.Player player, Block block) {
++        if (plugin.bypassBlockProtection(player, block.getLocation())) return false;
+         return deniesEdit(block) && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(player, block));
+     }
+ 
+@@ -201,6 +202,7 @@
+     }
+ 
+     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if (deniesEdit(event.getPlayer(), event.getBlock())) {
+             event.setCancelled(true);
+             plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "village_structure", protectionArea(event.getBlock().getLocation()));
+@@ -208,6 +210,7 @@
+     }
+ 
+     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
++        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
+         if ((failClosed(event.getBlock()) || protectedOriginal(event.getBlockReplacedState()))
+                 && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), event.getBlock())))
+         {
+@@ -217,6 +220,7 @@
+     }
+ 
+     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
++        if (event.getReplacedBlockStates().stream().allMatch(s -> plugin.bypassBlockProtection(event.getPlayer(), s.getLocation()))) return;
+         for (BlockState replaced : event.getReplacedBlockStates())
+             if ((failClosed(replaced.getBlock()) || protectedOriginal(replaced))
+                     && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), replaced.getBlock()))) {

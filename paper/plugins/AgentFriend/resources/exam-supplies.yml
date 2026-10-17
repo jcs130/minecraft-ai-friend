@@ -17,6 +17,8 @@ map-targets:
     y: 4
     z: 677
     structure: nova_structures:undead_crypt
+    approach: underground
+    approach-hint: 这是一处地下遗迹，地表标记不代表入口。需先寻找可通行的洞口或楼梯；入口路线未勘察时可向女神求助。
   - id: creeping_crypt
     title: 蔓生墓穴遗迹
     world: world
@@ -24,3 +26,5 @@ map-targets:
     y: 45
     z: 209
     structure: nova_structures:creeping_crypt
+    approach: underground
+    approach-hint: 这是一处地下遗迹，地表标记不代表入口。需先寻找可通行的洞口或楼梯；入口路线未勘察时可向女神求助。

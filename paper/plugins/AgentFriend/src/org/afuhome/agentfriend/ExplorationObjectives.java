@@ -183,6 +183,7 @@ final class ExplorationObjectives {
         Location previous;
         long previousAt;
         JsonObject position = new JsonObject();
+        final SurveyMovement movement = new SurveyMovement();
         Survey(String token, String json) {
             this.token = token;
             if (json.isBlank()) return;
@@ -228,7 +229,8 @@ final class ExplorationObjectives {
     void changed() { dirty = true; }
     /** Live read without enrolling, sampling movement, touching the cursor/timer,
      * persisting evidence or loading a chunk. Also sees unflushed in-memory evidence. */
-    EngineeringSites.Result snapshot(Player p, Target target, int required, String token) {
+    EngineeringSites.Result snapshot(Player p, Target target, int required, String token) { return snapshot(p, target, required, token, ""); }
+    EngineeringSites.Result snapshot(Player p, Target target, int required, String token, String boundInstance) {
         Survey s = surveys.get(p.getUniqueId());
         if (s == null || !s.token.equals(token)) {
             try { s = new Survey(token, plugin.getConfig().getString(path(p), "")); }
@@ -242,6 +244,7 @@ final class ExplorationObjectives {
         if (target.goal == GuildManager.Goal.RETURN) return result(s, target, required, s.ready ? "ready" : "survey_incomplete");
         Place place = target.goal == GuildManager.Goal.STRUCTURE ? structure(at, target) : null;
         if (target.goal == GuildManager.Goal.STRUCTURE && place == null) return result(s, target, required, "structure_unobserved_or_start_unloaded");
+        if (place != null && !boundInstance.isEmpty() && !place.instance.equals(boundInstance)) return result(s, target, required, "different_map_structure");
         String biome = WorldBiomes.at(at);
         if (!BiomeBorder.known(biome)) return result(s, target, required, "current_chunk_unloaded");
         if (target.goal == GuildManager.Goal.BIOME && !target.keys.contains(biome)) return result(s, target, required, "outside_survey_biome");
@@ -301,9 +304,10 @@ final class ExplorationObjectives {
                 + "," + Math.floorDiv(at.getBlockZ(), target.zoneSize);
         String point = at.getBlockX() + "," + at.getBlockY() + "," + at.getBlockZ();
         boolean fresh = s.trail.size() < 2048 && s.trail.add(point);
-        if (fresh) {
+        SurveyMovement.Credit credit = s.movement.sample(point, fresh, moved, elapsed);
+        if (fresh || credit.distance() > 0) {
             if (s.zones.size() < 256) s.zones.add(zone);
-            s.instance = instance; s.distance = Math.min(10000, s.distance + moved); s.movingMs = Math.min(3600000, s.movingMs + elapsed);
+            s.instance = instance; s.distance = Math.min(10000, s.distance + credit.distance()); s.movingMs = Math.min(3600000, s.movingMs + credit.milliseconds());
             if (place != null) { s.structure = place.key; s.bounds = place.bounds; }
             s.minY = Math.min(s.minY, at.getBlockY()); s.maxY = Math.max(s.maxY, at.getBlockY());
             if (s.biomes.size() < 64) s.biomes.add(biome);

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "version": "0.4.47.3",
+  "status": "verified_candidate_not_deployed",
+  "productionVersion": "0.4.47",
+  "productionChanged": false,
+  "sourceBase": "d37d672943b54bb2b718f072d187d15716c93231",
+  "sourceBackport": {
+    "base": "d37d672943b54bb2b718f072d187d15716c93231",
+    "path": "paper/ops/rpg-guidance-0.4.47.patch",
+    "sha256": "2e927cb9ccfb655bcb842e24b2cdcac1baedeaec02ccaf23479e4ce006bd705e",
+    "bytes": 152383,
+    "appliedAndVerified": true,
+    "unchangedBlockPolicyClassEntries": 61
+  },
+  "jarSha256": "3a7b8e09b4c4be38f5a18add7223a24074bfb813dbc4d55102e70c84863c889d",
+  "jarBytes": 1559367,
+  "unrelatedOriginalEntriesByteIdentical": 264,
+  "includes": [
+    "RPG map/exploration task journal, private native progress bar and examination menu",
+    "Readonly map status and accurate next commands",
+    "Continuous fresh-cell movement credit with per-cell limits",
+    "Previously pending exploration guidance and two-village block-access policy"
+  ],
+  "excludes": [
+    "Unreleased public archives 0.4.48",
+    "Agent client changes",
+    "Login, YSM, gateway or FOM changes",
+    "Automatic task, inventory or reward migrations"
+  ],
+  "tests": {
+    "questRules": 38,
+    "movementRules": 12,
+    "existingExplorationRules": 29,
+    "blockGeometryAssertions": 18290,
+    "nativeInitial": 22,
+    "nativeNormalRestartAndHandover": 24
+  },
+  "limits": [
+    "Photo worker was disabled in this fixture: missing-photo blocking and return/claim were tested, not a new rendered photograph",
+    "Native Java protocol, ordinary menu and actual attached Eye verified; phone/Xbox pixels not tested",
+    "No 16 autonomous LLM load test"
+  ],
+  "deployment": {
+    "restartApprovalRequired": true,
+    "maintenanceQueued": false,
+    "backup": "Existing stopped Paper pipeline must finish complete E/F backups before any replacement",
+    "plan": "Private repairs/rpg-quest-guidance-20261017/content-plan.json",
+    "rollback": "Disable block-access policy and reload to remove owned WorldGuard overlays, then normal stop and restore previous JAR/config preimages. Retain player inventories, map bindings and progress. If startup failed before players connected, restore the corresponding WorldGuard files from that cold backup."
+  }
+}

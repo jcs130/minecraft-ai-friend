@@ -22,7 +22,7 @@ import org.bukkit.inventory.meta.MapMeta;
 /** Exam prerequisites use the existing personal chest, with one atomic allocation receipt. */
 final class ExamSupplies {
     private static final String ROOT="exam-supplies-issued.";
-    private record Destination(String id,String title,String world,int x,int y,int z,String structure) { }
+    private record Destination(String id,String title,String world,int x,int y,int z,String structure,String approach,String hint) { }
     private final AgentFriendPlugin plugin;
     private final SkillAssessments exams;
     private final Map<UUID,UUID> pending=new HashMap<>();
@@ -45,7 +45,9 @@ final class ExamSupplies {
                 for(String field:List.of("x","y","z"))if(!q.isInt(field))throw new IllegalArgumentException("integer coordinates required");
                 int x=q.getInt("x"),y=q.getInt("y"),z=q.getInt("z");
                 if(Math.abs((long)x)>29_999_984||Math.abs((long)z)>29_999_984||y< -64||y>319)throw new IllegalArgumentException("coordinates");
-                rows.add(new Destination(id,title,world,x,y,z,structure));
+                String approach=q.getString("approach","unknown"),hint=q.getString("approach-hint","");
+                if(!Set.of("unknown","surface","underground").contains(approach)||hint.length()>160||hint.chars().anyMatch(c->c<32))throw new IllegalArgumentException("approach hint");
+                rows.add(new Destination(id,title,world,x,y,z,structure,approach,hint));
             }
             destinations=List.copyOf(rows);enabled=cfg.getBoolean("enabled",true);
         }catch(Exception invalid){plugin.getLogger().warning("Exam supplies unavailable; catalog retained on disk: "+invalid.getMessage());}
@@ -64,6 +66,27 @@ final class ExamSupplies {
             World world=Bukkit.getWorld(d.world);
             if(world!=null&&!issued(p,mapKey(world,d))&&!MapObjectives.destinationClaimed(plugin,p,world.getUID(),d.x,d.z))return d;
         }
+        return null;
+    }
+    /** A display clue only when an original, validated issuance matches this exact map.
+     * Never infer structure type from red crosses, names, copies or a map centre. */
+    JsonObject mapClue(Player p,int mapId,UUID world,int x,int z) {
+        var issued=plugin.getConfig().getConfigurationSection(ROOT+p.getUniqueId());
+        if(issued==null||issued.getKeys(false).size()>40)return null;
+        for(String key:issued.getKeys(false))try {
+            String raw=issued.getString(key,"");if(raw.length()>16384)continue;
+            JsonObject row=JsonParser.parseString(raw).getAsJsonObject();if(!row.has("map"))continue;
+            JsonObject map=row.getAsJsonObject("map");
+            if(!map.get("source").getAsString().equals("verified_public_natural_structure")||map.get("mapId").getAsInt()!=mapId
+                    ||!map.get("worldUuid").getAsString().equals(world.toString())||map.get("x").getAsInt()!=x||map.get("z").getAsInt()!=z)continue;
+            String structure=map.get("structure").getAsString();if(!structure.matches("[a-z0-9_.-]+:[a-z0-9_/.-]+"))continue;
+            JsonObject out=new JsonObject();out.addProperty("structure",structure);out.addProperty("source","verified_exam_allocation");
+            out.addProperty("entranceVerified",false);
+            for(Destination d:destinations)if(d.x==x&&d.z==z&&d.structure.equals(structure)&&Bukkit.getWorld(d.world)!=null&&Bukkit.getWorld(d.world).getUID().equals(world)) {
+                out.addProperty("approach",d.approach);if(!d.hint.isEmpty())out.addProperty("approachHint",d.hint);break;
+            }
+            return out;
+        }catch(RuntimeException invalid){/* Keep invalid legacy bytes; no clue is safer than a guessed route. */}
         return null;
     }
     JsonObject status(Player p,AssessmentCatalog.Definition d,String kind) {

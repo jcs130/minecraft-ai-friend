@@ -115,6 +115,7 @@ final class SkillAssessments implements Listener {
     }
     AssessmentCatalog.Definition definition(String id) {return catalog==null?null:catalog.definitions.get(id);}
     String photoExam(Player p) {Run r=runs.get(p.getUniqueId());return r!=null&&r.state.equals("active")&&r.definition.proofs().contains("survey_photo")?r.id.toString():"";}
+    JsonObject mapClue(Player p,int mapId,UUID world,int x,int z) {return supplies.mapClue(p,mapId,world,x,z);}
     long photoStarted(Player p) {Run r=runs.get(p.getUniqueId());return r==null?Long.MAX_VALUE:r.started;}
     private String eligibility(Player p,AssessmentCatalog.Definition d) {
         if(!available())return "data_unavailable";
@@ -437,7 +438,13 @@ final class SkillAssessments implements Listener {
     JsonObject summary(Player p) {
         JsonObject out=new JsonObject();out.addProperty("available",available());out.addProperty("gradeIndex",readGrade(p));out.addProperty("division",3-readGrade(p)%3);
         out.addProperty("gradeName",gradeName(p));Run r=runs.get(p.getUniqueId());
-        if(r!=null){out.addProperty("examId",r.definition.id());out.addProperty("runId",r.id.toString());out.addProperty("state",r.state);out.addProperty("reason",r.reason);out.addProperty("nextAction",next(r));}
+        if(r!=null){out.addProperty("examId",r.definition.id());out.addProperty("runId",r.id.toString());out.addProperty("state",r.state);out.addProperty("reason",r.reason);out.addProperty("nextAction",next(r));
+            if(durableSurvey(r)&&r.state.equals("active")) {
+                JsonObject contract=plugin.taskMarket().progressState(p);
+                if(contract.has("guidance")){JsonObject g=contract.getAsJsonObject("guidance");out.addProperty("reason",g.get("phase").getAsString());out.addProperty("phase",g.get("phase").getAsString());out.addProperty("summary",g.get("summary").getAsString());out.addProperty("nextAction",g.get("nextAction").getAsString());out.addProperty("nextCommand",g.get("nextCommand").getAsString());}
+                else {out.addProperty("reason","awaiting_contract");out.addProperty("phase","choose_contract");out.addProperty("nextAction","选择当前可接的调查委托，先从入门走查开始；普通走查不需要藏宝图。");out.addProperty("nextCommand","/mycli guild exam status");}
+            }
+        }
         JsonObject a=academy(p.getUniqueId());out.addProperty("certificateCount",a.has("certificates")?a.getAsJsonObject("certificates").size():0);return out;
     }
     private String next(Run r) {
@@ -492,7 +499,8 @@ final class SkillAssessments implements Listener {
             if(r.definition.proofs().contains("survey_photo"))guideStep(steps,"photograph","在目标现场拍照","每个探索阶段至少1张合格照片；要求多种群系时每种各1张。对准景物，photo menu或photo take 唯一名字 first 1；photo album核查，旧照片不能代本场。","/mycli photo menu");
             guideStep(steps,"return","按本单返程交付","原图寻宝要回接单点16格内；其他委托只按本单要求返程。guild verify查缺项，齐全后guild claim逐阶段交付。","/mycli guild verify");
             guideStep(steps,"submit","取得证书或晋级","完成整张委托及照片后，考试state=ready才exam submit；purpose=promotion才是本次晋级，单拿证书不自动升段。","/mycli guild exam submit");
-            JsonObject contract=plugin.taskMarket().examRequirements(p);if(contract!=null)out.add("currentContract",contract);
+            JsonObject contract=plugin.taskMarket().examRequirements(p);if(contract!=null){out.add("currentContract",contract);if(contract.has("guidance")){out.add("current",contract.get("guidance"));out.addProperty("nextCommand",contract.getAsJsonObject("guidance").get("nextCommand").getAsString());}}
+            if(!out.has("current")){JsonObject current=new JsonObject();current.addProperty("phase",r.state.equals("ready")?"submit_exam":"choose_contract");current.addProperty("summary",r.state.equals("ready")?"实操证明已齐，交付考试":"选择一张可接的调查委托");current.addProperty("nextAction",r.state.equals("ready")?"提交本场考试，取得证书或晋级。":"优先选择入门走查；普通走查无需藏宝图，地下墓穴适合作为进阶路线。");current.addProperty("nextCommand",r.state.equals("ready")?"/mycli guild exam submit":"/mycli guild exam status");out.add("current",current);}
             out.add("supplies",supplies.all(p,r.definition));
         } else {
             guideStep(steps,"prepare","查看准备条件",r.definition.description(),"/mycli guild exam info "+r.definition.id());
@@ -510,7 +518,8 @@ final class SkillAssessments implements Listener {
         JsonObject options = plugin.taskMarket().assessmentContracts(p, d.proofs());
         out.add("contractOptions", options);
         String active = plugin.getConfig().getString("guild-players."+p.getUniqueId()+".active.id", "");
-        if (!active.isEmpty()) { out.addProperty("nextCommand", "/mycli guild status"); return; }
+        if (!active.isEmpty()) {JsonObject current=plugin.taskMarket().progressState(p);
+            out.addProperty("nextCommand",current.has("guidance")?current.getAsJsonObject("guidance").get("nextCommand").getAsString():"/mycli guild status");return;}
         for (var item : options.getAsJsonArray("items")) {
             JsonObject row = item.getAsJsonObject();
             if (row.has("acceptCommand")) { out.addProperty("nextCommand", row.get("acceptCommand").getAsString()); return; }
@@ -539,7 +548,7 @@ final class SkillAssessments implements Listener {
                 if(!machine)p.sendMessage("§b摄影实考：每个探索阶段至少1张合格实地照片；要求多种群系时，每种各拍一张。走查、返程照常；好构图额外纪念荣誉，不影响晋级。/mycli photo menu");
             }
             AssessmentCatalog.Point target=target(r);if(target!=null){JsonObject at=AssessmentCatalog.JSON.toJsonTree(target).getAsJsonObject();at.addProperty("worldUuid",r.definition.course().world().toString());out.add("target",at);}
-            if(!machine){p.sendMessage("§b"+r.definition.title()+"："+r.state+"；"+next(r));
+            if(!machine){p.sendMessage("§b"+r.definition.title()+"："+(r.state.equals("active")?"进行中":r.state.equals("ready")?"可交卷":r.state.equals("submitted")?"已交卷":r.state.equals("interrupted")?"已中断":"已取消")+"；"+out.get("nextAction").getAsString());
                 p.sendMessage("§e完整步骤与材料：公会→训练与考试→当前考试指引；或 /mycli guild exam guide。");
                 if(out.has("nextCommand"))p.sendMessage("§a下一步："+out.get("nextCommand").getAsString()+"；只推荐，不自动接单或消费。");
                 if(target!=null)p.sendMessage("§e当前目标 "+r.definition.course().world()+" X="+target.x()+" Y="+target.y()+" Z="+target.z()+"，距离 "+Math.round(point(p).distance(target))+"格；测量 "+measurements(r));}
@@ -629,7 +638,8 @@ final class SkillAssessments implements Listener {
     private ItemStack icon(Material type,String name,String... lore) {ItemStack item=new ItemStack(type);var meta=item.getItemMeta();meta.setDisplayName(name);meta.setLore(List.of(lore));item.setItemMeta(meta);return item;}
     private void guideReply(Player p,boolean machine) {
         Run r=current(p);if(r==null){show(p,machine);return;}JsonObject out=new JsonObject();out.addProperty("type","guide");out.addProperty("examId",r.definition.id());out.addProperty("runId",r.id.toString());out.add("guide",guide(p,r));
-        if(!machine)for(var value:out.getAsJsonObject("guide").getAsJsonArray("steps")){var row=value.getAsJsonObject();p.sendMessage("§e"+row.get("order")+". "+row.get("title").getAsString()+"："+row.get("instruction").getAsString());}
+        if(!machine){JsonObject g=out.getAsJsonObject("guide");if(g.has("current")){JsonObject c=g.getAsJsonObject("current");if(c.has("objectives"))TaskMarketManager.showGuidance(p,c);else p.sendMessage("§e【当前阶段】"+c.get("summary").getAsString()+"；"+c.get("nextAction").getAsString());}
+            else for(var value:g.getAsJsonArray("steps")){var row=value.getAsJsonObject();p.sendMessage("§e"+row.get("order")+". "+row.get("title").getAsString()+"："+row.get("instruction").getAsString());}}
         send(p,"MC_GUILD_EXAM",out);
     }
     private void guideMenu(Player p) {
@@ -637,6 +647,15 @@ final class SkillAssessments implements Listener {
         for(var value:g.getAsJsonArray("steps")) {
             var row=value.getAsJsonObject();String text=row.get("instruction").getAsString();List<String> lore=new ArrayList<>();for(int i=0;i<text.length();i+=28)lore.add("§7"+text.substring(i,Math.min(text.length(),i+28)));
             lore.add("§a"+row.get("command").getAsString());inv.setItem(row.get("order").getAsInt()-1,icon(Material.BOOK,row.get("order")+". "+row.get("title").getAsString(),lore.toArray(String[]::new)));
+        }
+        if(g.has("current")) {
+            JsonObject current=g.getAsJsonObject("current");
+            List<String> currentLore=new ArrayList<>();String action=current.get("nextAction").getAsString();
+            for(int i=0;i<action.length();i+=26)currentLore.add("§7"+action.substring(i,Math.min(action.length(),i+26)));
+            currentLore.add("§a"+current.get("nextCommand").getAsString());
+            inv.setItem(13,icon(Material.SPYGLASS,"➤ "+current.get("summary").getAsString(),currentLore.toArray(String[]::new)));
+            if(current.has("objectives")){int slot=0;for(var value:current.getAsJsonArray("objectives")){JsonObject row=value.getAsJsonObject();String state=row.get("state").getAsString();
+                inv.setItem(slot++,icon(state.equals("completed")?Material.LIME_DYE:state.equals("current")?Material.YELLOW_DYE:Material.GRAY_DYE,(state.equals("completed")?"§a✓ ":state.equals("current")?"§e➤ ":"§7○ ")+row.get("title").getAsString(),state.equals("completed")?"已完成；不必重做":state.equals("current")?"当前目标；下方望远镜查看下一步":"后续目标；完成当前步骤后继续"));}}
         }
         inv.setItem(20,icon(Material.CHEST,"个人奖励箱·取照片","拍照直接成片入箱，无需准备空地图"));
         inv.setItem(21,icon(Material.FILLED_MAP,"领取遗迹探险图","仅原图寻宝路线需要；天然遗迹有真实目标"));

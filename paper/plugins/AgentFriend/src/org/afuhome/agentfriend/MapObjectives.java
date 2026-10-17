@@ -42,7 +42,7 @@ final class MapObjectives implements Listener {
             j.addProperty("minSections", minParts); j.addProperty("minHeightSpan", minHeight);
             j.addProperty("treasureSurveyRadius", treasureRadius); j.addProperty("returnRadius", returnRadius);
             j.addProperty("returnRequired", true); j.addProperty("destinationOncePerPlayer", true);
-            j.addProperty("freshNaturalTreasureRequired", true); return j;
+            j.addProperty("freshNaturalTreasureRequired", true); j.addProperty("freshNaturalTreasureAppliesTo", "treasure_only"); return j;
         }
     }
     static Rules parse(ConfigurationSection row, int count) {
@@ -169,6 +169,9 @@ final class MapObjectives implements Listener {
         try {
             Marker m = s == null ? held(p) : s.marker; j.addProperty("success", true); j.add("map", m.json());
             j.addProperty("reason", s == null ? denial(p) : "bound_to_active_contract");
+            JsonObject clue = plugin.skillAssessments() == null ? null : plugin.skillAssessments().mapClue(p, m.mapId, m.world, m.x, m.z);
+            if (clue != null) j.add("clue", clue);
+            j.addProperty("targetKind", s != null && !s.mode.isEmpty() ? s.mode : clue != null ? "structure" : "unknown");
             if (s != null) { j.add("returnTo", position(s.origin)); j.addProperty("mode", s.mode); j.addProperty("structure", s.structure); j.addProperty("treasureOpened", s.opened); j.addProperty("surveyed", s.surveyed); }
         } catch (IllegalArgumentException invalid) { j.addProperty("success", false); j.addProperty("reason", invalid.getMessage()); }
         j.addProperty("acceptCommand", "/mycli guild accept tm_map_hunt");
@@ -188,46 +191,66 @@ final class MapObjectives implements Listener {
         JsonObject out=new JsonObject();out.addProperty("bounds",place.bounds());out.addProperty("structureInstance",place.instance());
         out.addProperty("structure",place.key());out.addProperty("biome",WorldBiomes.at(at));return out;
     }
-    EngineeringSites.Result observe(Player p, Rules rules, int count, String run) {
+    EngineeringSites.Result observe(Player p, Rules rules, int count, String run) { return evaluate(p, rules, count, run, true); }
+    /** Query uses a detached binding and live survey snapshot: no samples, timer reset,
+     * persisted progress, chunk loads, enrollment or replacement of the held map. */
+    EngineeringSites.Result snapshot(Player p, Rules rules, int count, String run) {
+        EngineeringSites.Result result = evaluate(p, rules, count, run, false);
+        result.evidence().addProperty("validCurrentTarget", photoPlace(p, rules, run) != null);
+        return result;
+    }
+    private EngineeringSites.Result evaluate(Player p, Rules rules, int count, String run, boolean record) {
         State s = state(p);
         if (!current(p, s) || !s.run.equals(run)) return unavailable("map_binding_missing_or_invalid", count);
+        if (!record) s = new State(s.json());
         JsonObject evidence = s.survey.deepCopy(); evidence.addProperty("source", "server_map_hunt"); evidence.add("map", s.marker.json());
         evidence.add("returnTo", position(s.origin)); evidence.add("requirements", rules.json());
         evidence.addProperty("structure", s.structure); evidence.addProperty("structureInstance", s.instance);
         evidence.addProperty("mode", s.mode); evidence.addProperty("treasureOpened", s.opened); evidence.add("treasureProof", s.proof);
+        evidence.addProperty("surveyed", s.surveyed);
+        evidence.addProperty("returned", p.getWorld().equals(s.origin.getWorld()) && p.getLocation().distanceSquared(s.origin) <= rules.returnRadius * rules.returnRadius);
+        contextualRequirements(p, evidence, s, rules);
         if (claimed(p, "targets", s.marker.key()) || !s.instance.isEmpty() && claimed(p, "structures", digest(s.instance)))
             return result(false, 0, "map_destination_already_completed", evidence);
         if (!s.surveyed) {
             Location at = p.getLocation();
-            if (!at.getWorld().getUID().equals(s.marker.world)) { exploration.resetMovement(p); return result(false, 0, "travel_to_map_world", evidence); }
+            if (!at.getWorld().getUID().equals(s.marker.world)) { if (record) exploration.resetMovement(p); return result(false, 0, "travel_to_map_world", evidence); }
             if (s.instance.isEmpty()) {
                 var place = ExplorationObjectives.mapPlace(at, s.marker.x, s.marker.z);
                 if (place != null && !place.key().equals("minecraft:buried_treasure")) {
-                    s.instance = place.instance(); s.structure = place.key(); s.bounds = place.bounds(); s.mode = "structure"; persist(p, s);
+                    s.instance = place.instance(); s.structure = place.key(); s.bounds = place.bounds(); s.mode = "structure"; if (record) persist(p, s);
                 }
             }
-            if (s.instance.isEmpty()) { exploration.resetMovement(p); return result(false, 0, "find_natural_map_target_or_fresh_treasure", evidence); }
+            if (s.instance.isEmpty()) { if (record) exploration.resetMovement(p); return result(false, 0, "find_natural_map_target_or_fresh_treasure", evidence); }
             if (claimed(p, "structures", digest(s.instance))) return result(false, 0, "map_destination_already_completed", evidence);
             boolean treasure = s.mode.equals("treasure");
             if (treasure && (!s.opened || Math.hypot(at.getX() - s.marker.x, at.getZ() - s.marker.z) > rules.treasureRadius)) {
-                exploration.resetMovement(p); return result(false, 0, "survey_near_opened_treasure", evidence);
+                if (record) exploration.resetMovement(p); return result(false, 0, "survey_near_opened_treasure", evidence);
             }
             var target = new ExplorationObjectives.Target(treasure ? GuildManager.Goal.DIMENSION : GuildManager.Goal.STRUCTURE,
                     environment(at.getWorld()), treasure ? List.of() : List.of(s.structure), rules.zoneSize, rules.minDistance,
                     rules.minSeconds, treasure ? 0 : rules.minParts, 1, treasure ? 0 : rules.minHeight);
-            EngineeringSites.Result route = exploration.observe(p, target, count, s.run + ":map:" + s.step, treasure ? "" : s.instance);
+            EngineeringSites.Result route = record ? exploration.observe(p, target, count, s.run + ":map:" + s.step, treasure ? "" : s.instance)
+                    : exploration.snapshot(p, target, count, s.run + ":map:" + s.step, treasure ? "" : s.instance);
             s.survey = route.evidence().deepCopy();
-            if (route.ready()) { s.surveyed = true; persist(p, s); }
+            if (route.ready()) { s.surveyed = true; if (record) persist(p, s); }
             // Merge current route evidence while keeping map identity and return conditions separate.
             evidence = s.survey.deepCopy(); evidence.addProperty("source", "server_map_hunt"); evidence.add("map", s.marker.json());
             evidence.add("returnTo", position(s.origin)); evidence.add("requirements", rules.json());
             evidence.addProperty("structure", s.structure); evidence.addProperty("structureInstance", s.instance);
             evidence.addProperty("mode", s.mode); evidence.addProperty("treasureOpened", s.opened); evidence.add("treasureProof", s.proof);
+            evidence.addProperty("surveyed", s.surveyed); contextualRequirements(p, evidence, s, rules);
             if (!s.surveyed) return result(false, Math.min(count - 1, route.progress()), route.reason(), evidence);
         }
         boolean returned = p.getWorld().equals(s.origin.getWorld()) && p.getLocation().distanceSquared(s.origin) <= rules.returnRadius * rules.returnRadius;
         evidence.addProperty("surveyed", true); evidence.addProperty("returned", returned);
         return result(returned, returned ? count : count - 1, returned ? "ready" : "return_to_acceptance_point", evidence);
+    }
+    private void contextualRequirements(Player p, JsonObject evidence, State s, Rules rules) {
+        JsonObject clue = plugin.skillAssessments() == null ? null : plugin.skillAssessments().mapClue(p, s.marker.mapId, s.marker.world, s.marker.x, s.marker.z);
+        JsonObject terms = rules.json();
+        if (s.mode.equals("structure") || clue != null) terms.addProperty("freshNaturalTreasureRequired", false);
+        evidence.add("requirements", terms);
     }
     private EngineeringSites.Result unavailable(String reason, int count) {
         JsonObject j = new JsonObject(); j.addProperty("source", "server_map_hunt"); return result(false, 0, reason, j);

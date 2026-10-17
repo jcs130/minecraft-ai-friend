@@ -159,7 +159,10 @@ final class TaskRoutes implements Listener {
                 boolean active = current.has("id") && current.get("id").getAsString().equals(task.id()) && current.get("stage").getAsInt() == n;
                 row.add("guidance", active ? current.getAsJsonObject("guidance") : market.planningGuidance(p, step));
             }
-            if (step.map() != null) row.add("mapHunt", step.map().json());
+            if (step.map() != null) {
+                row.add("mapHunt", step.map().json());
+                if(current.has("id")&&current.get("id").getAsString().equals(task.id())&&current.get("stage").getAsInt()==n&&current.has("guidance"))row.add("guidance",current.get("guidance"));
+            }
             steps.add(row);
         }
         out.add("steps", steps); return out;

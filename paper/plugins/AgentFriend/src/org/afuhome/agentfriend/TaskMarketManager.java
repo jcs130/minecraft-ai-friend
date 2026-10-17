@@ -94,6 +94,7 @@ final class TaskMarketManager implements Listener {
     private final Map<UUID, Long> lastCheck = new HashMap<>();
     private final Map<UUID, Frozen> frozenTasks = new HashMap<>();
     private int surveyCursor;
+    private final QuestTracker tracker;
 
     TaskMarketManager(AgentFriendPlugin plugin) {
         this.plugin = plugin; engineering = new EngineeringSites(plugin); exploration = new ExplorationObjectives(plugin); maps = new MapObjectives(plugin, exploration);
@@ -104,6 +105,7 @@ final class TaskMarketManager implements Listener {
         if (!new File(plugin.getDataFolder(), "route-contracts.yml").exists()) plugin.saveResource("route-contracts.yml", false);
         reload(); Bukkit.getPluginManager().registerEvents(this, plugin);
         routes = new TaskRoutes(plugin, this);
+        tracker = new QuestTracker(plugin);
         Bukkit.getPluginManager().registerEvents(new CombatObjectiveEvents(plugin), plugin);
         Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, CHANNEL);
         registerStartupSites();
@@ -111,7 +113,7 @@ final class TaskMarketManager implements Listener {
         Bukkit.getScheduler().runTaskTimer(plugin, this::surveyPlayers, 5L, 5L);
         Bukkit.getScheduler().runTaskTimer(plugin, exploration::flush, 600L, 600L);
     }
-    void shutdown() { exploration.flush(); }
+    void shutdown() { tracker.close(); exploration.flush(); }
     private static boolean photoStep(Step step){return step.map!=null||step.exploration!=null&&step.goal!=GuildManager.Goal.RETURN;}
     /** Capture-time native location, independent of cached/completed survey success. */
     JsonObject photoContext(Player p) {
@@ -151,14 +153,28 @@ final class TaskMarketManager implements Listener {
         Task task = frozen(player);
         if (task == null) return;
         Step step = task.steps.get(index(player));
-        if (step.map != null) { EngineeringSites.Result result = observe(player, task); player.sendMessage("§7" + MapObjectives.hint(result.reason())); mapInfo(player); return; }
-        if (step.exploration == null) return;
-        // Status is a query, not another exploration sample or implicit enrollment.
-        showGuidance(player, guidance(player, step, exploration.snapshot(player, step.exploration, step.target, run(player) + ":" + index(player))));
+        if (step.exploration == null && step.map == null) return;
+        // Both map and ordinary status are queries, never movement samples.
+        showGuidance(player, guidance(player, step, snapshot(player, step)));
+    }
+    private EngineeringSites.Result snapshot(Player player, Step step) {
+        return step.map != null ? maps.snapshot(player,step.map,step.target,run(player))
+                : exploration.snapshot(player,step.exploration,step.target,run(player)+":"+index(player));
     }
     private JsonObject guidance(Player player, Step step, EngineeringSites.Result result) {
-        var at = player.getLocation();
-        return ExplorationGuidance.guide(step.exploration, step.target, step.exploration.navigation(at), result.evidence(), result.reason(), landmarks, at.getBlockX(), at.getBlockZ());
+        var at=player.getLocation();JsonObject photo=new JsonObject();
+        boolean required=photoStep(step)&&!plugin.skillAssessments().photoExam(player).isEmpty();photo.addProperty("required",required);
+        if(required){photo=photoStepStatus(player,frozen(player),index(player),result.evidence());photo.addProperty("required",true);}
+        if(step.map!=null) {
+            // A fresh readonly location check prevents a latched completed survey
+            // from claiming that the traveller is still at the photo location.
+            EngineeringSites.Result current=maps.snapshot(player,step.map,step.target,run(player));
+            return QuestGuidance.map(maps.info(player),current.evidence(),current.reason(),step.target,
+                    at.getWorld().getUID().toString(),at.getX(),at.getY(),at.getZ(),
+                    player.getGameMode()==GameMode.SURVIVAL&&!player.isDead()&&!player.isFlying(),photo);
+        }
+        JsonObject guide=ExplorationGuidance.guide(step.exploration,step.target,step.exploration.navigation(at),result.evidence(),result.reason(),landmarks,at.getBlockX(),at.getBlockZ());
+        return QuestGuidance.exploration(guide,photo);
     }
     JsonObject planningGuidance(Player player, Step step) {
         var at = player.getLocation(); JsonObject evidence = new JsonObject(); evidence.addProperty("validCurrentTarget", false);
@@ -169,6 +185,10 @@ final class TaskMarketManager implements Listener {
     }
     static void showGuidance(Player player, JsonObject guide) {
         player.sendMessage("§b【当前阶段】" + guide.get("summary").getAsString());
+        if(guide.has("objectives"))for(JsonElement value:guide.getAsJsonArray("objectives")) {
+            JsonObject row=value.getAsJsonObject();String state=row.get("state").getAsString();
+            player.sendMessage((state.equals("completed")?"§a✓ ":state.equals("current")?"§e➤ ":"§7○ ")+row.get("title").getAsString());
+        }
         JsonArray missing = guide.getAsJsonArray("missingConditions");
         if (!missing.isEmpty()) player.sendMessage("§7还缺：" + String.join("；", missing.asList().stream().map(JsonElement::getAsString).toList()));
         if (guide.has("resumePosition")) {
@@ -184,7 +204,10 @@ final class TaskMarketManager implements Listener {
         for (int n = 0; n < Math.min(4, online.size()); n++) {
             Player player = online.get(Math.floorMod(surveyCursor++, online.size()));
             Task task = frozen(player);
-            if (task != null && player.getGameMode() == GameMode.SURVIVAL && !player.isDead()) observe(player, task);
+            if (task != null && player.getGameMode() == GameMode.SURVIVAL && !player.isDead()) {
+                EngineeringSites.Result result=observe(player,task);
+                if(result!=null&&tracker.due(player))tracker.update(player,run(player),task.title,guidance(player,task.steps.get(index(player)),result));
+            } else tracker.remove(player.getUniqueId());
             if (System.nanoTime() >= deadline) break;
         }
     }
@@ -197,8 +220,9 @@ final class TaskMarketManager implements Listener {
         plugin.getConfig().set(activePath(player) + ".progress", result.progress());
         if (result.ready() && previous < step.target) {
             JsonObject data = new JsonObject(); data.addProperty("task", task.id()); data.addProperty("step", index(player) + 1);
-            data.add("evidence", result.evidence()); send(player, "MC_MARKET_SURVEY", data);
-            player.sendMessage("§a本阶段探索证据已齐全。/mycli guild claim 交付阶段并查看后续行程。");
+            data.add("evidence", result.evidence());
+            JsonObject guide=guidance(player,step,result);data.add("guidance",guide);send(player,"MC_MARKET_SURVEY",data);
+            player.sendMessage("§a走查证据已齐全。"+guide.get("summary").getAsString()+"；下一步 "+guide.get("nextCommand").getAsString());
         }
         return result;
     }
@@ -427,8 +451,9 @@ final class TaskMarketManager implements Listener {
         out.addProperty("goal",step.goal().name());out.addProperty("target",step.target());
         out.addProperty("route",task.route());
         out.addProperty("id",task.id());
-        if(step.exploration()!=null){out.add("exploration",step.exploration().json());out.add("navigation",step.exploration().navigation(player.getLocation()));
-            out.add("guidance",guidance(player,step,exploration.snapshot(player,step.exploration(),step.target(),run(player)+":"+stage)));}
+        if(step.exploration()!=null){out.add("exploration",step.exploration().json());out.add("navigation",step.exploration().navigation(player.getLocation()));}
+        if(step.map()!=null){JsonObject map=maps.info(player);if(map.has("map"))out.add("map",map.get("map"));out.addProperty("targetKind",QuestGuidance.text(map,"targetKind"));}
+        if(step.map()!=null||step.exploration()!=null)out.add("guidance",guidance(player,step,snapshot(player,step)));
         if(step.combat()!=null)out.add("combat",step.combat().json());
         out.addProperty("requiresVerification",EngineeringSites.GOALS.contains(step.goal()));
         return out;
@@ -554,6 +579,11 @@ final class TaskMarketManager implements Listener {
         JsonObject data = maps.info(player);
         Task task = frozen(player);
         if (task != null) for (Step step : task.steps) if (step.map != null) data.add("requirements", step.map.json());
+        if(task!=null&&task.steps.get(index(player)).map!=null) {
+            Step step=task.steps.get(index(player));EngineeringSites.Result current=snapshot(player,step);
+            data.add("guidance",guidance(player,step,current));
+            if(current.evidence().has("requirements"))data.add("requirements",current.evidence().get("requirements"));
+        }
         if (data.get("success").getAsBoolean()) {
             JsonObject map = data.getAsJsonObject("map");
             player.sendMessage("§6地图目标：" + map.get("title").getAsString() + "；" + map.get("dimension").getAsString()
@@ -632,7 +662,10 @@ final class TaskMarketManager implements Listener {
                 JsonObject status=photoStepStatus(player,task,i,i==step?result.evidence():savedSurvey(player,i));photos.add(status);complete&=status.get("ready").getAsBoolean();
             }
             result.evidence().add("photography",photos);
-            if(!complete&&result.ready()) {
+            // A completed map survey still needs its photo before the return
+            // journey. Report that actionable blocker rather than sending the
+            // traveller home and only then revealing the missing photograph.
+            if(!complete&&(result.ready()||task.steps.get(step).map!=null&&QuestGuidance.flag(result.evidence(),"surveyed"))) {
                 player.sendMessage("§e探索记录保留，还缺本次实地照片。先在目标地用 /mycli photo menu 拍景物；photo album 看检查与重拍建议，guild exam status 看各阶段数量。");
                 result=new EngineeringSites.Result(false,result.progress(),"exploration_photo_required",result.evidence());
             }
@@ -658,17 +691,17 @@ final class TaskMarketManager implements Listener {
         data.add("evidence", result.evidence());
         ActionFeedback.Advice advice = result.ready() ? null : ActionFeedback.advice("market", result.reason(), task.id());
         if (advice != null) advice.add(data);
-        JsonObject guide = task.steps.get(step).exploration == null ? null : guidance(player, task.steps.get(step), result);
+        JsonObject guide = task.steps.get(step).exploration == null && task.steps.get(step).map == null ? null : guidance(player, task.steps.get(step), result);
         if (guide != null) {
             data.add("guidance", guide); data.addProperty("nextAction", guide.get("nextAction").getAsString());
             JsonArray commands = new JsonArray(); commands.add(guide.get("nextCommand").getAsString()); data.add("nextCommands", commands);
         }
         send(player, "MC_MARKET_CHECK", data);
-        if (guide != null) showGuidance(player, guide);
+        if (guide != null) {if(!plugin.communication().compact(player))showGuidance(player,guide);else for(Player eye:plugin.attachedEyes(player))showGuidance(eye,guide);}
         else player.sendMessage((result.ready() ? "§a验收通过：" : "§e验收未通过：") + result.reason()
                 + "（" + result.progress() + "/" + task.steps.get(step).target + "）。");
         if (advice != null && guide == null) player.sendMessage("§a【正确做法】" + advice.next());
-        if (task.steps.get(step).map != null) player.sendMessage("§7" + MapObjectives.hint(result.reason()));
+        if (task.steps.get(step).map != null && guide == null) player.sendMessage("§7" + MapObjectives.hint(result.reason()));
         JsonObject evidence = result.evidence();
         if (guide == null && evidence.has("distinctZones") && task.steps.get(step).goal != GuildManager.Goal.RETURN) player.sendMessage("§7探索：不同区域 " + evidence.get("distinctZones") + "/" + task.steps.get(step).target
                 + "，有效行进 " + evidence.get("distance") + " 格 / " + evidence.get("movingSeconds") + " 秒，建筑区段 "
@@ -996,11 +1029,20 @@ final class TaskMarketManager implements Listener {
                     new DiscardedPayload(ResourceLocation.tryParse(CHANNEL), Unpooled.wrappedBuffer(bytes))));
         }
         JsonObject shortNotice = new JsonObject(); shortNotice.addProperty("type", type);
-        shortNotice.addProperty("schemaVersion", 1); shortNotice.addProperty("command", "/mycli guild engineering");
+        shortNotice.addProperty("schemaVersion", 1);
+        String command="/mycli tasks status";
+        if(data.has("task")){Task current=find(player,data.get("task").getAsString());
+            if(current!=null&&current.sites().size()>0)command="/mycli guild engineering "+current.id();}
+        if(data.has("guidance")) {
+            JsonObject guide=data.getAsJsonObject("guidance");command=guide.get("nextCommand").getAsString();
+            shortNotice.addProperty("phase",guide.get("phase").getAsString());shortNotice.addProperty("summary",guide.get("summary").getAsString());
+            shortNotice.addProperty("nextAction",guide.get("nextAction").getAsString());
+        }
+        shortNotice.addProperty("command",command);shortNotice.addProperty("nextCommand",command);
         if (data.has("task")) shortNotice.add("task", data.get("task"));
         if (data.has("ready")) shortNotice.add("ready", data.get("ready"));
         if (data.has("reason")) shortNotice.add("reason", data.get("reason"));
-        if (shortNotice.toString().length() <= 256) player.sendMessage(shortNotice.toString());
+        if (plugin.communication().compact(player) && shortNotice.toString().length() <= 1000) player.sendMessage(shortNotice.toString());
     }
     void admin(CommandSender sender, String[] args) {
         String action = args.length > 2 ? args[2].toLowerCase(Locale.ROOT) : "list";
