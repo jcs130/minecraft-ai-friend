@@ -5,6 +5,12 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.89 renews an expired request only when its recorded history proves it was
+never offered or inspected. Reconnection time cannot then become an unanswered
+host decision and an extra five-minute silence. New evidence receives a new ID;
+real, rejected and unknown delivery attempts retain their existing limits and
+backoff. No renewal dispatches a body action or acknowledges an old request.
+
 0.1.88 waits for an already-active native connection retry without calling
 connect again, replaying work or running the planner on unavailable facts. Exact
 terminal receipts continue draining; fresh queue/body facts are required on
