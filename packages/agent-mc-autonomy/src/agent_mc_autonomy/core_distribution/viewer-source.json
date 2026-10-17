@@ -1,6 +1,6 @@
 {
   "schema": "agent-mc-viewer-source/v1",
-  "sourceRevision": "43e2325055d2ff565d9ffd14e43b8fe862eea746",
+  "sourceRevision": "3553c60d49ff4874f663129a749d937632c6c759",
   "files": {
     "package.json": {
       "bytes": 1191,
@@ -887,8 +887,8 @@
       "sha256": "e23c85fab24d366885c0c4937b7631e328b2268c9b887057e45fbe3bb0a7576b"
     },
     "renderer-src/src/native-viewer/native-rebuild-work.js": {
-      "bytes": 4389,
-      "sha256": "4b9fadc0a181afbea1fc556e093b0b19a6be3952b4775cabff71d0e66657ad4b"
+      "bytes": 4950,
+      "sha256": "ffc979878f29a3a7d849bf81363fac7e7c7105f7e72af50a2b5b42cc3a9a0f58"
     },
     "renderer-src/src/native-viewer/native-recipe-reference.js": {
       "bytes": 2257,

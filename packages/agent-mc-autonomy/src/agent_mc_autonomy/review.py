@@ -306,6 +306,23 @@ class ReviewPort:
             if state.get("material") != observed["material"] or not same_session:
                 state.update(material=observed["material"], material_since=now)
             observed["evidence"]["material_unchanged_seconds"] = int(now - state.get("material_since", now))
+            # A disconnected body cannot offer a review. Its first delivery
+            # must use fresh evidence, rather than charging unavailable time to
+            # a host which was never asked. Actual/unknown offers and direct
+            # inspections retain their bounded acknowledgement backoff.
+            never_offered = (previous.get("attempts") == 0 and "last_attempt" not in previous
+                and previous.get("notification_status") is None and not previous.get("notification_accepted")
+                and "inspected_at" not in previous and "choice" not in previous)
+            unoffered_expired = (same_session and same_intent and never_offered
+                and now - previous.get("created_at", now) > 180
+                and (not previous.get("result")
+                     or previous["result"].get("error") == "main_brain_not_acknowledged"))
+            if unoffered_expired:
+                state["last_expired_unoffered_review"] = {"id": previous["id"],
+                    "created_at": previous["created_at"], "expired_at": now,
+                    "reason": "unoffered_review_expired", "acknowledged": False, "historical": True}
+                state.pop("retry_after", None)
+                urgent = True  # One fresh envelope, never a body action or old acknowledgement.
             if now < state.get("retry_after", 0) and not urgent and same_session and same_intent:
                 return
             pending = previous and not previous.get("result") and same_session and same_intent and not urgent
@@ -546,7 +563,10 @@ class ReviewPort:
                 result["completion_contract"] = review_evidence.completion_contract(
                     review_id, reference, pending_death=bool(fresh.get("death_episode")),
                     legacy=result["legacy_reflection_completion"])
-                return result
+                # Put the atomic completion requirements before optional detail.
+                # Small host output budgets otherwise repeatedly truncate the
+                # final recovery call while the native body keeps querying.
+                return {"heartbeat_id": review_id, "completion_contract": result["completion_contract"], **result}
             if require_inspection and not review.get("inspected_at"):
                 return {"is_error": True, "error": "fresh_inspection_required"}
             if isinstance(death_reflection, dict) and "evidence_ref" in death_reflection:
@@ -563,6 +583,11 @@ class ReviewPort:
             reflection = None
             saved_completion = bool(legacy_pending and (recorded.get("reflection") or recorded.get("lesson")))
             if episode and death_reflection is None and not saved_completion:
+                if reference := review.get("inspected_evidence_ref"):
+                    return {"is_error": True, "error": "death_reflection_required",
+                        "completion_contract": review_evidence.completion_contract(review_id, reference, pending_death=True),
+                        "next": "Retry this same choice using the same inspection and its bound death_reflection contract. "
+                            "No delivery, speech or acknowledgement occurred. Inspect again only if freshness or baseline validation requires it."}
                 return {"is_error": True, "error": "death_reflection_required",
                         "next": "Inspect this heartbeat, then include death_reflection with episode_id and either lesson/applicability/evidence referencing the episode or source run, or outcome=deferred with an honest reason. Retry this same choice; this call has no delivery or acknowledgement effects."}
             if saved_completion and death_reflection is None:

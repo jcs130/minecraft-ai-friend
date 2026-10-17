@@ -5,6 +5,30 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.89 renews an expired request only when its recorded history proves it was
+never offered or inspected. Reconnection time cannot then become an unanswered
+host decision and an extra five-minute silence. New evidence receives a new ID;
+real, rejected and unknown delivery attempts retain their existing limits and
+backoff. No renewal dispatches a body action or acknowledges an old request.
+
+0.1.88 waits for an already-active native connection retry without calling
+connect again, replaying work or running the planner on unavailable facts. Exact
+terminal receipts continue draining; fresh queue/body facts are required on
+recovery. Explicit stop wins, and stopped/unknown authentication states still
+fail closed. This is separate from a server's reason for disconnecting clients.
+
+0.1.87 pins viewer `3553c60d`: native terrain preparation yields to browser tasks
+instead of waiting for painting frames, retaining coherent staged scene commits
+even when RAF is throttled. Original resources and the existing scene budgets are
+unchanged. Source checks are separate from live browser and FPS acceptance.
+
+0.1.86 keeps live body/location/queue facts as individually bounded fields even
+when inventory and observation receipts are long. Recovery completion requirements
+appear first, use short control text, and missing reflections return the existing
+bound contract without requiring another inspection. Freshness, death provenance,
+user priority and unknown-dispatch checks remain in force; this does not prove
+sustained survival or a host's spoken output.
+
 0.1.85 deduplicates discovered tools and projects native tuple arguments for
 providers requiring homogeneous `items`. Original schemas still validate every
 dispatch. HTTP rejections publish bounded reason categories and keep the native
