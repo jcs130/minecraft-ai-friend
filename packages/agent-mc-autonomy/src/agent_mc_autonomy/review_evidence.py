@@ -14,7 +14,9 @@ def completion_contract(review_id, reference, *, pending_death, legacy=None):
     """Describe the smallest final transaction without choosing for the host."""
     contract = {
         "required": {"heartbeat_id": review_id, "decision": ["continue", "insert", "revise"],
-                     "reason": "One short factual clause from inspected evidence."},
+                     "reason": "One short factual clause from inspected evidence (about 12 words)."},
+        "output_guidance": "Keep text fields short. Finish this final tool call before elaborating. "
+            "Additional persona material and narration are not completion requirements; a natural reply can follow acknowledgement.",
         "goal": "Required only for insert/revise; a concise stage within user intent and standing goal.",
         "constraints": "World-specific capabilities require fresh evidence, not unrelated memories. "
             "Revise requires stage_delivery.can_revise. "
@@ -29,8 +31,8 @@ def completion_contract(review_id, reference, *, pending_death, legacy=None):
         contract["death_reflection"] = {
             "required": {"evidence_ref": reference},
             "one_of": [
-                {"outcome": "lesson", "lesson": "Short evidence-based lesson.",
-                 "applicability": "Short condition where it applies."},
+                {"outcome": "lesson", "lesson": "One short evidence-based clause.",
+                 "applicability": "One short condition where it applies."},
                 {"outcome": "deferred", "reason": "Short honest reason evidence is insufficient."},
             ],
         }
@@ -159,11 +161,20 @@ def sample_preview(samples):
 def compact(evidence, reference, last_decision=None):
     result = {key: preview(evidence[key], limit) for key, limit in (
         ("sampled_at", 100), ("phase", 60), ("connected", 30), ("standing_goal", 750),
-        ("current_user_goal", 850), ("current_goal", 850), ("historical_goal", 850), ("pending", 750), ("facts", 3200),
+        ("current_user_goal", 850), ("current_goal", 850), ("historical_goal", 850), ("pending", 750),
         ("body_baseline", 800), ("tool_failure", 1200), ("planner_error", 400),
         ("runtime_error", 400), ("read_activity", 400), ("death_recovery", 1500),
         ("unactioned_replies", 30), ("planner_retry_seconds", 30), ("material_unchanged_seconds", 30))
         if key in evidence and evidence[key] not in (None, "", [], {})}
+    # A large inventory must never turn the entire live scene into an opaque
+    # clipped JSON string: the host needs the current position after a respawn.
+    # Bound each field instead; the immutable evidence page retains every byte.
+    if isinstance(evidence.get("facts"), dict):
+        result["facts"] = {key: preview(evidence["facts"][key], limit) for key, limit in (
+            ("body", 160), ("place", 220), ("queue", 260), ("clock", 100),
+            ("bodyRestriction", 300), ("foodReserve", 240), ("gear", 420), ("life", 200),
+            ("structure", 180), ("terrain", 180), ("lastTask", 300))
+            if evidence["facts"].get(key) not in (None, "", [], {})}
     # Retain success and failure counts/samples together, rather than slicing a
     # long raw receipt before its successful tail. All outcomes remain in detail.
     result["native_outcomes"] = []

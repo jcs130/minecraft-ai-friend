@@ -546,7 +546,10 @@ class ReviewPort:
                 result["completion_contract"] = review_evidence.completion_contract(
                     review_id, reference, pending_death=bool(fresh.get("death_episode")),
                     legacy=result["legacy_reflection_completion"])
-                return result
+                # Put the atomic completion requirements before optional detail.
+                # Small host output budgets otherwise repeatedly truncate the
+                # final recovery call while the native body keeps querying.
+                return {"heartbeat_id": review_id, "completion_contract": result["completion_contract"], **result}
             if require_inspection and not review.get("inspected_at"):
                 return {"is_error": True, "error": "fresh_inspection_required"}
             if isinstance(death_reflection, dict) and "evidence_ref" in death_reflection:
@@ -563,6 +566,11 @@ class ReviewPort:
             reflection = None
             saved_completion = bool(legacy_pending and (recorded.get("reflection") or recorded.get("lesson")))
             if episode and death_reflection is None and not saved_completion:
+                if reference := review.get("inspected_evidence_ref"):
+                    return {"is_error": True, "error": "death_reflection_required",
+                        "completion_contract": review_evidence.completion_contract(review_id, reference, pending_death=True),
+                        "next": "Retry this same choice using the same inspection and its bound death_reflection contract. "
+                            "No delivery, speech or acknowledgement occurred. Inspect again only if freshness or baseline validation requires it."}
                 return {"is_error": True, "error": "death_reflection_required",
                         "next": "Inspect this heartbeat, then include death_reflection with episode_id and either lesson/applicability/evidence referencing the episode or source run, or outcome=deferred with an honest reason. Retry this same choice; this call has no delivery or acknowledgement effects."}
             if saved_completion and death_reflection is None:

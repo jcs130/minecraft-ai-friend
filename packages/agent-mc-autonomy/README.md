@@ -5,6 +5,13 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.86 keeps live body/location/queue facts as individually bounded fields even
+when inventory and observation receipts are long. Recovery completion requirements
+appear first, use short control text, and missing reflections return the existing
+bound contract without requiring another inspection. Freshness, death provenance,
+user priority and unknown-dispatch checks remain in force; this does not prove
+sustained survival or a host's spoken output.
+
 0.1.85 deduplicates discovered tools and projects native tuple arguments for
 providers requiring homogeneous `items`. Original schemas still validate every
 dispatch. HTTP rejections publish bounded reason categories and keep the native
