@@ -1,5 +1,12 @@
 # Agent MC Autonomy
 
+0.2.12 pins core 0.5.7-rc.20, including the interrupted-GUI task terminal
+repair and the upstream navigation checkpoint, water-observation and private-chat
+corrections. A GUI-local interruption ends as blocked instead of leaving the
+native queue occupied forever; real cancellation and unknown-click safeguards
+remain intact. Viewer resources and host model/persona boundaries are unchanged.
+Source/package checks do not establish live autonomous survival.
+
 0.2.11 tolerates a brief Windows reader lock when atomically publishing status:
 the same prepared snapshot is retried for at most 250 ms. A real Windows handle
 test covers a 100 ms lock; persistent permission and disk errors still fail with
