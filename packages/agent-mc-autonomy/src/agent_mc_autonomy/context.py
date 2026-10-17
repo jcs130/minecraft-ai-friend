@@ -56,7 +56,15 @@ def event_priority(event):
     return 1 if execution.get("terminal") else 0
 
 
-def retain_events(events, limit=64):
+def retain_events(events, limit=64, *, byte_limit=None):
+    if byte_limit is not None:
+        selected, size = [], 0
+        for index in sorted(range(len(events)), key=lambda i: (event_priority(events[i]), i), reverse=True):
+            weight = len(encode(events[index]).encode("utf-8"))
+            if size + weight <= byte_limit:
+                selected.append(index)
+                size += weight
+        return [events[index] for index in sorted(selected)]
     selected = sorted(range(len(events)), key=lambda index: (event_priority(events[index]), index), reverse=True)[:limit]
     return [events[index] for index in sorted(selected)]
 
@@ -199,15 +207,21 @@ def coalesce_rejected(groups):
     return [group for group in history if group is not None], removed
 
 
-def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, native_outcomes=None, context_counter: ContextCounter | None = None, host_context=None, recent_context=None, death_memory=None):
+def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, context_mode="compact", planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, native_outcomes=None, context_counter: ContextCounter | None = None, host_context=None, recent_context=None, death_memory=None):
     """Use one counting mode throughout, restarting conservatively on failure."""
     options = {"context_tokens": context_tokens, "reserved_output": reserved_output,
                "planner_notice": planner_notice, "fast_focus": fast_focus,
                "tool_failure": tool_failure, "read_activity": read_activity, "native_outcomes": native_outcomes, "host_context": host_context, "recent_context": recent_context, "death_memory": death_memory}
+    if context_mode not in {"compact", "full"}:
+        raise ValueError("invalid_context_mode")
+    assembler = _assemble
+    if context_mode == "full":
+        from .context_full import assemble_full
+        assembler = assemble_full
     try:
-        return _assemble(prefix, tools, goal, facts, events, groups, context_counter=context_counter, **options)
+        return assembler(prefix, tools, goal, facts, events, groups, context_counter=context_counter, **options)
     except CounterUnavailable as error:
-        messages, budget = _assemble(prefix, tools, goal, facts, events, groups, **options)
+        messages, budget = assembler(prefix, tools, goal, facts, events, groups, **options)
         budget["counter_fallback"] = str(error)
         return messages, budget
 

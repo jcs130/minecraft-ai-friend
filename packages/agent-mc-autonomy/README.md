@@ -1,5 +1,15 @@
 # Agent MC Autonomy
 
+0.2.10 adds opt-in `autonomy.context_mode = "full"`. It preserves supplied native
+event text/fields, tool results/manuals, host projections and complete planning
+exchanges without the compact mode's fixed 700-character/24-event/eight-exchange
+limits. Buffers follow the configured window; only whole records/exchanges are
+evicted at its measured limit, with explicit omission diagnostics. Output,
+framing and image reserves still apply. Stable identity stays at the prefix and
+changing facts/recent messages at the tail. Host provenance/freshness/selection
+contracts and dispatch safety are unchanged; full mode cannot recreate language
+the host never supplied. Public viewer status remains bounded.
+
 0.2.9 pins the Java registered-chat-format repair. Decision receipts retain
 the native run/cursor references actually shown to the planner, including
 rejected inference attempts, without copying private messages into diagnostics.

@@ -147,6 +147,7 @@ class Settings:
     max_output_tokens: int = 1024
     model_timeout_seconds: int = 180
     context_tokens: int = DEFAULT_CONTEXT_TOKENS
+    context_mode: str = "compact"
     max_decisions: int = 100
     runtime_mode: str = "embedded"
     data_directory: str = ""
@@ -218,6 +219,9 @@ class Settings:
         if bool(renderer) != bool(catalog):
             raise SettingsValidationError("viewer.renderer_directory", "renderer_catalog_pair_required")
         maximum_output = _integer(autonomy, "max_output_tokens", 1024, 128, 131072)
+        context_mode = _text(autonomy, "context_mode", "compact")
+        if context_mode not in {"compact", "full"}:
+            raise SettingsValidationError("autonomy.context_mode", "invalid_context_mode")
         appearance = _text(viewer, "default_appearance", "server")
         if len(appearance) > 128 or not re.fullmatch(r"(?:server|bundled:[A-Za-z0-9_-]+|native:[A-Za-z0-9_/-]+:[A-Za-z0-9_-]+)", appearance):
             raise SettingsValidationError("viewer.default_appearance", "invalid_default_appearance")
@@ -249,6 +253,7 @@ class Settings:
             max_output_tokens=maximum_output,
             model_timeout_seconds=_integer(autonomy, "model_timeout_seconds", 180, 10, 300),
             context_tokens=_integer(autonomy, "context_tokens", DEFAULT_CONTEXT_TOKENS, 4096, 2097152),
+            context_mode=context_mode,
             max_decisions=_integer(autonomy, "max_decisions", 100, 0, 10000),
             runtime_mode=_text(runtime, "mode", "embedded"), data_directory=_text(runtime, "data_directory"),
             bundle_root=_text(runtime, "bundle_root"), bundle_manifest_sha256=_text(runtime, "bundle_manifest_sha256"),

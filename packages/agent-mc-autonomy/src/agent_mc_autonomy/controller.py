@@ -90,7 +90,7 @@ def admission_fingerprint(facts):
     return encode(parts) if parts else None
 
 
-def model_tools(catalogue):
+def model_tools(catalogue, *, context_mode="compact"):
     # Native catalogues can repeat a tool. Dispatch/help use the first schema;
     # advertise that same contract exactly once to providers that reject names.
     unique = {}
@@ -104,6 +104,9 @@ def model_tools(catalogue):
             "array" in types and isinstance(value.get("items"), dict) and numeric_field(value["items"]))
 
     def structural(value, descriptions=True):
+        if context_mode == "full":
+            import copy
+            return copy.deepcopy(value)
         if isinstance(value, list):
             return [structural(item, descriptions) for item in value]
         if isinstance(value, dict):
@@ -152,11 +155,13 @@ def model_tools(catalogue):
                     # The genuine shared target doc also describes use/ride/etc.
                     # Retain it intact rather than inventing a find-only ID rule.
                     properties["target"]["description"] = target
-        description = tool.get("description", "")[:450]
+        description = tool.get("description", "") if context_mode == "full" else tool.get("description", "")[:450]
         if tool["name"] == "mc_do" and "steps" in schema.get("properties", {}):
             description = "Execute real actions using flat steps. find requires target; direction makes it walk, otherwise it only observes. collect uses block; craft uses item/count. Read mc_help for exact skill parameters. Queue append preserves work; afterCheckpoint inserts safely, now interrupts. Task IDs mean accepted, not completed."
         elif tool["name"] == "mc_scout":
             description = "Read-only observations/dry runs; use mc_do for real actions. observe requires mode: sites|voxels|rays. voxels bounds are six inclusive foot-relative integers with volume <=512; [-3,-2,-3,3,3,3] reads 294 cells. Copy the legal first-query example from an oversized rejection instead of repeatedly guessing smaller bounds."
+        if context_mode == "full" and tool["name"] in {"mc_do", "mc_scout"}:
+            description += "\n" + tool.get("description", "")
         tools.append({"type": "function", "function": {"name": tool["name"], "description": description, "parameters": provider_schema(schema)}})
     if advanced:
         tools.append({"type": "function", "function": {"name": "mc_invoke",
@@ -478,13 +483,20 @@ class Controller:
                             self.observation_reads.pop(next(iter(self.observation_reads)))
                         self.observation_reads[sampled["key"]] = {**sampled, "at": time.monotonic(),
                             "observations": observations, "original_event": reference, "execution_id": execution["id"]}
-                    self.native_outcomes.append(native_outcome_view({"tool": name, "execution_id": execution["id"], "phase": phase,
+                    native_outcome = {"tool": name, "execution_id": execution["id"], "phase": phase,
                         "observation_only": read_only, "goal_verified": False,
                         "terminal": True, "goalCompleted": execution.get("goalCompleted"),
                         "step_outcomes": terminal_step_outcomes(execution, arguments),
-                        "receipt": spatial_text(receipt), "observations": observations, "original_event": reference}))
-                    self.native_outcomes = self.native_outcomes[-6:]
-                    self.publish(native_outcomes=list(self.native_outcomes))
+                        "receipt": receipt if self.settings.context_mode == "full" else spatial_text(receipt),
+                        "observations": observations, "original_event": reference}
+                    self.native_outcomes.append(native_outcome if self.settings.context_mode == "full" else native_outcome_view(native_outcome))
+                    if self.settings.context_mode == "full":
+                        while len(self.native_outcomes) > 1 and len(encode(self.native_outcomes).encode("utf-8")) > self.settings.context_tokens:
+                            self.native_outcomes.pop(0)
+                    else:
+                        self.native_outcomes = self.native_outcomes[-6:]
+                    # The public HUD keeps its small projection even when the private planner uses full evidence.
+                    self.publish(native_outcomes=[native_outcome_view(row) for row in self.native_outcomes[-6:]])
                     if not read_only and self.effect_recovery.record(arguments, execution, self.game_scope, self.death_epoch, reference):
                         self.clear_read_activity()
                     if not read_only and phase == "completed":
@@ -546,7 +558,7 @@ class Controller:
                     self.publish(death_episode=current)
         self.recent.extend(e for e in value.get("events", []) if e.get("contextDelivery") != "archive-only" and not e.get("meta", {}).get("staleEpoch")
                            and (foreign_execution_id is None or (e.get("execution") or {}).get("id") != foreign_execution_id))
-        self.recent = retain_events(self.recent)
+        self.recent = retain_events(self.recent, byte_limit=self.settings.context_tokens if self.settings.context_mode == "full" else None)
 
     def clear_read_activity(self):
         self.read_activity.clear()
@@ -690,8 +702,8 @@ class Controller:
             output.write(encode({"requestId": request_id, "turnId": self.turn, "tool": name, "result": result}) + "\n")
         if not hasattr(self, "_read_once_answers") or self._read_once_turn != self.turn:
             self._read_once_turn, self._read_once_answers = self.turn, {}
-        view = receipt_view(result)
-        if not local_only and len(original.encode("utf-8")) > 6000:
+        view = json.loads(original) if self.settings.context_mode == "full" else receipt_view(result)
+        if self.settings.context_mode != "full" and not local_only and len(original.encode("utf-8")) > 6000:
             # Chunks remain queryable through the existing artifact tool. JavaScript
             # measures maxLength in UTF-16; 16000 Python characters fit even with emoji.
             refs = []
@@ -1384,14 +1396,23 @@ class Controller:
                 {"role": "tool", "tool_call_id": call["id"], "content": failure} for call in calls]])
             # Coalesce before the eight-group cap so exact validation loops do
             # not evict distinct outcomes. Original responses remain journaled.
-            self.groups, _ = coalesce_rejected(self.groups)
-            self.groups = self.groups[-8:]
+            if self.settings.context_mode != "full":
+                self.groups, _ = coalesce_rejected(self.groups)
+            self.retain_history()
         with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
             output.write(encode({"turnId": self.turn, "rejected": str(error), "dispatched": False}) + "\n")
         delay = min(60, max(1, self.settings.min_decision_seconds) * 2 ** min(6, self.invalid_tool_calls - 1))
         self.planner_retry_at = time.monotonic() + delay
         self.continuation_needed = True
         self.publish(planner_error="invalid_model_tool_call", invalid_tool_calls=self.invalid_tool_calls)
+
+    def retain_history(self):
+        if self.settings.context_mode != "full":
+            self.groups = self.groups[-8:]
+        else:
+            # Bound resident memory by the requested window, not a fixed turn count.
+            while len(self.groups) > 1 and len(encode(self.groups).encode("utf-8")) > self.settings.context_tokens:
+                self.groups.pop(0)
 
     async def turn_once(self, goal, prefix, tools):
         if self._event_poll is not None or self._deferred_event_drain:
@@ -1464,6 +1485,7 @@ class Controller:
                 try:
                     messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, consumed, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
+                        context_mode=self.settings.context_mode,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
                 except ValueError:
@@ -1472,6 +1494,7 @@ class Controller:
                     reserve = 0
                     messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, consumed, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
+                        context_mode=self.settings.context_mode,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
                 if reserve:
@@ -1544,7 +1567,7 @@ class Controller:
                     # A plain plan is still model history. Dropping it gives an
                     # unchanged world the same request on every idle wakeup.
                     self.groups.append([assistant_history(response)])
-                    self.groups = self.groups[-8:]
+                    self.retain_history()
                     # Text is not a native task or a completed standing goal.
                     # Revisit it even when an idle world never emits a change,
                     # with a growing pause instead of an inference busy-loop.
@@ -1582,7 +1605,7 @@ class Controller:
                     # suffix. Never silently drop calls or cross native barriers.
                     exchange.append({"role": "tool", "tool_call_id": call["id"], "content": compact})
                 self.groups.append(exchange)
-                self.groups = self.groups[-8:]
+                self.retain_history()
                 if boundary:
                     return
             # A bounded documentation/read chain can continue in a fresh turn;
@@ -1660,7 +1683,7 @@ class Controller:
                 self.body_lease_due = time.monotonic() + lease_ms / 2000
             self.publish(phase="running", game_connected=True, autonomy_running=self.decide is not None, current_goal=None)
             prefix = text_content(await self.bridge.resource("mc://environment"))
-            tools = model_tools(self.bridge.tools)
+            tools = model_tools(self.bridge.tools, context_mode=self.settings.context_mode)
             wake, urgent = True, False
             last_status_check = time.monotonic()
             if self.commands:
