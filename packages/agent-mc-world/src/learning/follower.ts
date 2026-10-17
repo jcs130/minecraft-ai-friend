@@ -43,9 +43,10 @@ export class OperationFollower {
       this.readCount++;
       const digest=createHash('sha256').update(text).digest('hex'),id=name.slice(0,-5);
       this.seen.set(name,`${info.mtimeMs}:${info.size}`);
-      if(this.archive.cursor(id)===digest){this.duplicates++;return;}
-      const row=gameplayFromExperience(JSON.parse(text),this.scopeKey,digest,this.archive.cursor(id));
+      const cursor=this.archive.cursor(id);
+      const row=gameplayFromExperience(JSON.parse(text),this.scopeKey,digest,cursor===digest?null:cursor);
       if(row.sourceId!==id)throw Error('Source file/row identity mismatch');
+      if(cursor===digest){this.duplicates++;this.onRecord?.(row);return;}
       await this.archive.append(row);if(!this.lastSourceAt||Date.parse(row.updatedAt)>Date.parse(this.lastSourceAt))this.lastSourceAt=row.updatedAt;this.lastSourceReadAt=new Date().toISOString();
       this.onRecord?.(row);
     }catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')this.failures++;}

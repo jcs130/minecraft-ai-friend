@@ -2,10 +2,15 @@
 
 Opt-in [continuous gameplay evidence](docs/gameplay-learning.md) follows an
 existing Agent's operation journal and local viewer without controlling its
-body or calling a model. Typed MCAP/FlatBuffers records retain progress, risk,
+body or calling a language model. Typed MCAP/FlatBuffers records retain progress, risk,
 failure, method and memory attribution across movement, crafting, gathering,
 combat and other operations. Review candidates remain separate from approved
 training examples; missing controls or independent server truth stay unknown.
+
+The [embodied learning plan](docs/embodied-learning.md) compares Minecraft and
+robot-learning projects and provides episode-stable policy rollout, honest
+rule/learned attribution statistics and opt-in local motor shadow inference.
+Shadow recommendations never count as adopted actions or task successes.
 
 Opt-in [local motor training](docs/motor-training.md) provides voxel/state inputs,
 offline physics and an explicitly owned Minecraft 1.21.1 training server,

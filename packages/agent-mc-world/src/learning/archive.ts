@@ -14,6 +14,8 @@ import { AssessmentT } from './generated/agent-mc-learning/assessment.js';
 import { SignalT } from './generated/agent-mc-learning/signal.js';
 import { DecisionT } from './generated/agent-mc-learning/decision.js';
 import { CandidateT } from './generated/agent-mc-learning/candidate.js';
+import { PolicyT } from './generated/agent-mc-learning/policy.js';
+import { normalizePolicyEvidence } from '../../core/policy-evidence.ts';
 import { GAMEPLAY_PROTOCOL, sanitizeGameObservation, type GameObservation, type GameplayRecord } from './assessment.ts';
 import { AgentConnectionLease } from '../client/connection-lease.ts';
 const hash=(x:Uint8Array|string)=>createHash('sha256').update(x).digest('hex');
@@ -26,7 +28,8 @@ export function encodeGameplay(record:GameplayRecord):Uint8Array {
     intents:record.intents.map(x=>Object.assign(new IntentT(),x)),effects:record.effects.map(x=>Object.assign(new EffectT(),x,{at:x.at??[]})),
     before:observation(record.before),after:observation(record.after),observation:observation(record.observation),
     assessment:Object.assign(new AssessmentT(),record.assessment,{signals:record.assessment.signals.map(x=>new SignalT(x.name,x.value))}),
-    decision:record.decision?Object.assign(new DecisionT(),record.decision,{candidates:record.decision.candidates.map(x=>new CandidateT(x.id,x.ready,x.probability))}):null });
+    decision:record.decision?Object.assign(new DecisionT(),record.decision,{candidates:record.decision.candidates.map(x=>new CandidateT(x.id,x.ready,x.probability))}):null,
+    policy:record.policy?Object.assign(new PolicyT(),normalizePolicyEvidence(record.policy)):null });
   const builder=new flatbuffers.Builder(4096);builder.finish(frame.pack(builder),'MCL1');return builder.asUint8Array();
 }
 export function decodeGameplay(bytes:Uint8Array):GameplayRecord {
@@ -107,7 +110,7 @@ export class GameplayArchive {
     }},useChunks:true,chunkSize:64*1024,...(compress?{compressChunk:(data:Uint8Array)=>({compression:'zstd',compressedData:compress(data)})}:{})});
     await this.writer.start({profile:GAMEPLAY_PROTOCOL,library:'agent-mc-world passive gameplay learning'});
     const schema=await this.writer.registerSchema({name:'AgentMcLearning.GameplayRecord',encoding:'flatbuffer',data:await readFile(new URL('./schema/gameplay.bfbs',import.meta.url))});
-    for(const topic of ['/gameplay/experience','/gameplay/observation','/gameplay/environment'])this.channels.set(topic,await this.writer.registerChannel({topic,schemaId:schema,messageEncoding:'flatbuffer',metadata:new Map([
+    for(const topic of ['/gameplay/experience','/gameplay/observation','/gameplay/environment','/gameplay/policy-shadow'])this.channels.set(topic,await this.writer.registerChannel({topic,schemaId:schema,messageEncoding:'flatbuffer',metadata:new Map([
       ['authority','observations-and-review-signals-not-causal-proof'],['scope_key',this.options.scopeKey],['training','deduplicate-by-sourceId-and-revision; no automatic adoption'],
       ['world_truth','client-loaded-cells-only; independent-server-truth-unavailable'],['clock','Unix observation time; not game tick'],
     ])}));
@@ -125,7 +128,7 @@ export class GameplayArchive {
       if(track&&this.latest[row.sourceId]===row.revision)return false;
       if(!this.writer)await this.begin();
       const data=encodeGameplay(row);if(data.length>256000)throw Error('Gameplay record size limit');
-      const topic=row.kind==='environment'?'/gameplay/environment':row.kind==='observation'?'/gameplay/observation':'/gameplay/experience';
+      const topic=row.kind==='environment'?'/gameplay/environment':row.kind==='observation'?'/gameplay/observation':row.kind==='policy-shadow'?'/gameplay/policy-shadow':'/gameplay/experience';
       await this.writer!.addMessage({channelId:this.channels.get(topic)!,sequence:this.count,logTime:BigInt(Date.now())*1000000n,
         publishTime:BigInt(Date.parse(row.updatedAt))*1000000n,data});
       const label=`${row.kind}:${row.assessment.label}`;

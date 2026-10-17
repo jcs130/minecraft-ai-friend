@@ -341,8 +341,19 @@ class GameplayRecord(object):
             return self._tab.String(o + self._tab.Pos)
         return None
 
+    # GameplayRecord
+    def Policy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(70))
+        if o != 0:
+            x = self._tab.Indirect(o + self._tab.Pos)
+            from AgentMcLearning.Policy import Policy
+            obj = Policy()
+            obj.Init(self._tab.Bytes, x)
+            return obj
+        return None
+
 def GameplayRecordStart(builder):
-    builder.StartObject(33)
+    builder.StartObject(34)
 
 def Start(builder):
     GameplayRecordStart(builder)
@@ -569,6 +580,12 @@ def GameplayRecordAddRequestId(builder, requestId):
 def AddRequestId(builder, requestId):
     GameplayRecordAddRequestId(builder, requestId)
 
+def GameplayRecordAddPolicy(builder, policy):
+    builder.PrependUOffsetTRelativeSlot(33, flatbuffers.number_types.UOffsetTFlags.py_type(policy), 0)
+
+def AddPolicy(builder, policy):
+    GameplayRecordAddPolicy(builder, policy)
+
 def GameplayRecordEnd(builder):
     return builder.EndObject()
 
@@ -580,6 +597,7 @@ import AgentMcLearning.Decision
 import AgentMcLearning.Effect
 import AgentMcLearning.Intent
 import AgentMcLearning.Observation
+import AgentMcLearning.Policy
 try:
     from typing import List, Optional
 except:
@@ -623,6 +641,7 @@ class GameplayRecordT(object):
         effects = None,
         decision = None,
         requestId = None,
+        policy = None,
     ):
         self.protocol = protocol  # type: Optional[str]
         self.id = id  # type: Optional[str]
@@ -657,6 +676,7 @@ class GameplayRecordT(object):
         self.effects = effects  # type: Optional[List[AgentMcLearning.Effect.EffectT]]
         self.decision = decision  # type: Optional[AgentMcLearning.Decision.DecisionT]
         self.requestId = requestId  # type: Optional[str]
+        self.policy = policy  # type: Optional[AgentMcLearning.Policy.PolicyT]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -737,6 +757,8 @@ class GameplayRecordT(object):
         if gameplayRecord.Decision() is not None:
             self.decision = AgentMcLearning.Decision.DecisionT.InitFromObj(gameplayRecord.Decision())
         self.requestId = gameplayRecord.RequestId()
+        if gameplayRecord.Policy() is not None:
+            self.policy = AgentMcLearning.Policy.PolicyT.InitFromObj(gameplayRecord.Policy())
 
     # GameplayRecordT
     def Pack(self, builder):
@@ -826,6 +848,8 @@ class GameplayRecordT(object):
             decision = self.decision.Pack(builder)
         if self.requestId is not None:
             requestId = builder.CreateString(self.requestId)
+        if self.policy is not None:
+            policy = self.policy.Pack(builder)
         GameplayRecordStart(builder)
         if self.protocol is not None:
             GameplayRecordAddProtocol(builder, protocol)
@@ -891,5 +915,7 @@ class GameplayRecordT(object):
             GameplayRecordAddDecision(builder, decision)
         if self.requestId is not None:
             GameplayRecordAddRequestId(builder, requestId)
+        if self.policy is not None:
+            GameplayRecordAddPolicy(builder, policy)
         gameplayRecord = GameplayRecordEnd(builder)
         return gameplayRecord

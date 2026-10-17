@@ -40,7 +40,8 @@ export class ViewerGameplayObserver {
   private bindingAt=0;
   private bindingRead=false;
   private identityTimer?:ReturnType<typeof setInterval>;
-  constructor(private readonly options:ViewerObserverOptions,private readonly scopeKey:string,private readonly archive:GameplayArchive){
+  constructor(private readonly options:ViewerObserverOptions,private readonly scopeKey:string,private readonly archive:GameplayArchive,
+    private readonly onObservation?:(row:GameplayRecord)=>Promise<void>){
     const url=new URL(options.url);
     if(url.protocol!=='http:'||url.hostname!=='127.0.0.1'||url.username||url.password||url.search||!['','/'].includes(url.pathname))throw Error('Select one explicit localhost viewer URL');
     if(!/^[\w.-]{1,64}$/.test(options.expectedUsername)||!/^[a-f0-9-]{32,36}$/i.test(options.expectedUuid))throw Error('Actual viewer player identity required');
@@ -183,6 +184,7 @@ export class ViewerGameplayObserver {
       await this.archive.append(record);
       const environment=sanitizeGameObservation({at:observation.worldAt,dimension:this.dimension,position:p,health:null,food:null,inventory:null,stateIds,coverage:'client-loaded-only-not-independent-server-truth',receivedAt:observation.receivedAt});
       await this.archive.append({...record,id:experienceHash([id,'environment']),kind:'environment',at:environment!.at,updatedAt:environment!.at,observation:environment});this.samples++;
+      await this.onObservation?.(record);
     }catch{this.failures++;}finally{this.busy=false;}
   }
   async stop(){this.stopped=true;if(this.timer)clearInterval(this.timer);if(this.identityTimer)clearInterval(this.identityTimer);if(this.retry)clearTimeout(this.retry);this.socket?.disconnect();while(this.busy||this.bindingRead)await new Promise(done=>setTimeout(done,10));this.reset();}

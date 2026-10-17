@@ -18,6 +18,11 @@ table Effect { step:uint; skill:string; status:string; at:[double]; target:bool=
 table Candidate { id:string; ready:bool=null; probability:double=null; }
 table Decision { category:string; selected:string; status:string; candidates:[Candidate]; model:string;
   elapsedMs:double=null; inputTokens:double=null; outputTokens:double=null; recalledMemoryRefs:[string]; contextHash:string; }
+table Policy {
+  layer:string; source:string; policyId:string; revision:string; mode:string;
+  experimentId:string; episodeId:string; action:string; baselineAction:string;
+  selectedSource:string; candidateProbability:double=null; featureHash:string; inputRef:string; inferenceMs:double=null;
+}
 table GameplayRecord {
   protocol:string; id:string; sourceId:string; revision:string; scopeKey:string; run:string;
   at:string; updatedAt:string; kind:string; tool:string; operations:[string]; intents:[Intent];
@@ -25,7 +30,7 @@ table GameplayRecord {
   phase:string; terminal:bool=null; dispatch:string; elapsedMs:double=null;
   before:Observation; after:Observation; observation:Observation; assessment:Assessment;
   sourceHash:string; previousRevision:string; boundary:string; executionId:string;
-  effects:[Effect]; decision:Decision; requestId:string;
+  effects:[Effect]; decision:Decision; requestId:string; policy:Policy;
 }
 root_type GameplayRecord;
 file_identifier "MCL1";

@@ -101,6 +101,14 @@ it('reflection from real receipts is recalled as history without claiming adopti
   expect(row.attribution.memoryRefs).toBeUndefined();
 });
 
+it('preserves explicit host policy/session attribution through the World adapter', async () => {
+  const f=setup();
+  const policy={layer:'skill' as const,source:'learned' as const,policyId:'skill-selector',revision:'v2',mode:'canary' as const};
+  const out=await f.wrap(async()=>({text:'accepted',execution:accepted})).handler({steps:[{skill:'goto',at:[3,64,0]}]},
+    {...f.ctx,attribution:{controller:'system1',sessionId:'agent:conversation',decisionId:'decision-7',policy}});
+  expect(f.book.get(scope,experienceId(out)).attribution).toMatchObject({controller:'system1',sessionId:'agent:conversation',decisionId:'decision-7',policy});
+});
+
 it('missing identity or a storage failure never changes the body result or guesses a scope', async () => {
   const f = setup(); f.disconnect();
   const original = { text: 'body completed', execution: completed };

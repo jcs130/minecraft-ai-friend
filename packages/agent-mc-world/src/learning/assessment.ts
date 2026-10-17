@@ -1,5 +1,6 @@
 /** Observable outcome signals, not causal proof or automatic policy/skill adoption. */
 import { experienceHash } from '../../core/operation-experience.ts';
+import { normalizePolicyEvidence, type PolicyEvidence } from '../../core/policy-evidence.ts';
 export const GAMEPLAY_PROTOCOL = 'agent-mc-gameplay/v1';
 export type Point = [number, number, number];
 export type GameObservation = {
@@ -22,7 +23,7 @@ export type GameplayRecord = {
   memoryRefs: string[]; phase: string | null; terminal: boolean | null; dispatch: string | null; elapsedMs: number | null;
   before: GameObservation | null; after: GameObservation | null; observation: GameObservation | null;
   assessment: Assessment; sourceHash: string; previousRevision: string | null; boundary: string | null; executionId: string | null;
-  effects:GameEffect[];decision:GameDecision|null;requestId:string|null;
+  effects:GameEffect[];decision:GameDecision|null;requestId:string|null;policy?:PolicyEvidence|null;
 };
 const numeric = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 const token = (x: unknown, max=160): string | null => typeof x === 'string' && !['__proto__','constructor','prototype'].includes(x) && new RegExp(`^[\\w:./@#-]{1,${max}}$`).test(x) ? x : null;
@@ -121,7 +122,7 @@ export function gameplayFromExperience(raw:any,expectedScope:string,sourceHash:s
     effects:(Array.isArray(raw.stepEffects)?raw.stepEffects:[]).slice(0,16).flatMap((e:any)=>{
       const skill=token(e?.skill);if(!skill||!Number.isSafeInteger(e.step)||e.step<0||!['changed','unchanged','unknown'].includes(e.status)||e.coverage!=='client-visible-only')return [];
       return [{step:e.step,skill,status:e.status,at:point(e.at),...Object.fromEntries(['target','inventory','position','window'].map(key=>[key,typeof e.changed?.[key]==='boolean'?e.changed[key]:null]))}] as GameEffect[];
-    }),decision:null};
+    }),decision:null,policy:meta.policy?normalizePolicyEvidence(meta.policy):null};
   if(raw.decision&&row.kind==='decision'){
     const d=raw.decision;
     row.decision={category:token(d.category),selected:token(d.selected),status:token(d.status),model:token(d.model),

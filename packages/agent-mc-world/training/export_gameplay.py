@@ -56,7 +56,7 @@ def read_reviews(directory):
                 row = plain(GameplayRecordT.InitFromObj(frame))
                 if row['scopeKey'] != owner['scopeKey'] or row['protocol'] != owner['protocol'] or row['assessment']['goalVerified']:
                     raise ValueError('Gameplay identity or evidence authority mismatch')
-                expected_topic = '/gameplay/observation' if row['kind'] == 'observation' else '/gameplay/environment' if row['kind'] == 'environment' else '/gameplay/experience'
+                expected_topic = {'observation': '/gameplay/observation', 'environment': '/gameplay/environment', 'policy-shadow': '/gameplay/policy-shadow'}.get(row['kind'], '/gameplay/experience')
                 if channel.topic != expected_topic:
                     raise ValueError('Gameplay topic/kind mismatch')
                 messages += 1
@@ -81,6 +81,11 @@ def read_reviews(directory):
             counts['conflictingRevisions'] += 1
             continue
         counts['latest:' + row['kind']] += 1
+        if row['kind'] == 'operation':
+            policy = row.get('policy')
+            counts['policy:' + (policy['source'] if policy and policy['mode'] != 'shadow' else 'unknown')] += 1
+            if row.get('decisionId'):
+                counts['operationWithDecisionId'] += 1
         counts['label:' + row['assessment']['label']] += 1
         counts['use:' + row['assessment']['trainingUse']] += 1
         if row['kind'] != 'operation' or row['terminal'] is not True or row['dispatch'] == 'unknown':
@@ -96,6 +101,14 @@ def read_reviews(directory):
         'protocol': owner['protocol'], 'scopeKey': owner['scopeKey'], 'counts': dict(counts), 'archiveHashes': hashes,
         'partialFilesExcluded': len(list(directory.glob('*.partial'))), 'independentServerTruthAvailable': False,
         'exactControlsAvailable': False, 'motorImitationReady': False, 'split': 'unassigned',
+        'trainingReadiness': {
+            'motor': 'blocked: exact executed actions and episode goals are not reconstructed from viewer movement',
+            'decisionDistillation': 'requires joined decision/menu, actual adopted action, task state, outcome and reviewed labels',
+            'onlineRL': 'requires explicit task evaluator, reward contract and resettable owned simulation',
+            'policyAttributionCount': sum(counts['policy:' + s] for s in ['rule', 'learned', 'human']),
+            'operationWithDecisionId': counts['operationWithDecisionId'],
+            'shadowIsTrainingTarget': False,
+        },
         'warning': 'Outcome/progress signals are not causal proof, complete task success, demonstrations or approved preference pairs.',
     }
 

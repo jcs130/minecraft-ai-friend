@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { ExecutionReceipt, ToolOutcome } from '../src/contracts/host.ts';
 import type { GameMemoryScope, GameMemoryContext } from './game-memory.ts';
 import { GameMemoryBook } from './game-memory.ts';
+import { normalizePolicyEvidence } from './policy-evidence.ts';
 
 export type OperationObservation = {
   at: string; dimension: string | null; position: { x: number; y: number; z: number } | null;
@@ -20,6 +21,7 @@ export function operationInventory(stacks: readonly { name: string; count: numbe
 export type OperationAttribution = {
   controller?: 'system1' | 'system2' | 'human' | 'unknown'; sessionId?: string; decisionId?: string;
   method?: { id: string; revision: string }; memoryRefs?: string[];
+  policy?: import('./policy-evidence.ts').PolicyEvidence;
 };
 export type OperationDecision = {
   id: string; category: string; selected: string | null; status: string;
@@ -103,7 +105,8 @@ function attribution(v: OperationAttribution = {}): OperationAttribution {
   return { controller, ...(v.sessionId ? {sessionId:bounded(v.sessionId,'sessionId')} : {}),
     ...(v.decisionId ? {decisionId:bounded(v.decisionId,'decisionId')} : {}),
     ...(v.method ? {method:{id:bounded(v.method.id,'method',180),revision:bounded(v.method.revision,'revision',128)}} : {}),
-    ...(v.memoryRefs ? {memoryRefs:[...new Set(v.memoryRefs.map(x => bounded(x,'memoryRef',180)))]} : {}) };
+    ...(v.memoryRefs ? {memoryRefs:[...new Set(v.memoryRefs.map(x => bounded(x,'memoryRef',180)))]} : {}),
+    ...(v.policy ? {policy:normalizePolicyEvidence(v.policy)} : {}) };
 }
 function normalizedDecision(v: OperationDecision): OperationDecision {
   if (!Array.isArray(v.candidates) || v.candidates.length > 32) throw new Error('At most 32 decision candidates');

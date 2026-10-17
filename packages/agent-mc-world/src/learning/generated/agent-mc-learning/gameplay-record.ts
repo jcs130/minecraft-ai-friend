@@ -9,6 +9,7 @@ import { Decision, DecisionT } from '../agent-mc-learning/decision.js';
 import { Effect, EffectT } from '../agent-mc-learning/effect.js';
 import { Intent, IntentT } from '../agent-mc-learning/intent.js';
 import { Observation, ObservationT } from '../agent-mc-learning/observation.js';
+import { Policy, PolicyT } from '../agent-mc-learning/policy.js';
 
 
 export class GameplayRecord implements flatbuffers.IUnpackableObject<GameplayRecordT> {
@@ -266,8 +267,13 @@ requestId(optionalEncoding?:any):string|Uint8Array|null {
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
 
+policy(obj?:Policy):Policy|null {
+  const offset = this.bb!.__offset(this.bb_pos, 70);
+  return offset ? (obj || new Policy()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
 static startGameplayRecord(builder:flatbuffers.Builder) {
-  builder.startObject(33);
+  builder.startObject(34);
 }
 
 static addProtocol(builder:flatbuffers.Builder, protocolOffset:flatbuffers.Offset) {
@@ -450,6 +456,10 @@ static addRequestId(builder:flatbuffers.Builder, requestIdOffset:flatbuffers.Off
   builder.addFieldOffset(32, requestIdOffset, 0);
 }
 
+static addPolicy(builder:flatbuffers.Builder, policyOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(33, policyOffset, 0);
+}
+
 static endGameplayRecord(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   return offset;
@@ -498,7 +508,8 @@ unpack(): GameplayRecordT {
     this.executionId(),
     this.bb!.createObjList<Effect, EffectT>(this.effects.bind(this), this.effectsLength()),
     (this.decision() !== null ? this.decision()!.unpack() : null),
-    this.requestId()
+    this.requestId(),
+    (this.policy() !== null ? this.policy()!.unpack() : null)
   );
 }
 
@@ -537,6 +548,7 @@ unpackTo(_o: GameplayRecordT): void {
   _o.effects = this.bb!.createObjList<Effect, EffectT>(this.effects.bind(this), this.effectsLength());
   _o.decision = (this.decision() !== null ? this.decision()!.unpack() : null);
   _o.requestId = this.requestId();
+  _o.policy = (this.policy() !== null ? this.policy()!.unpack() : null);
 }
 }
 
@@ -574,7 +586,8 @@ constructor(
   public executionId: string|Uint8Array|null = null,
   public effects: (EffectT)[] = [],
   public decision: DecisionT|null = null,
-  public requestId: string|Uint8Array|null = null
+  public requestId: string|Uint8Array|null = null,
+  public policy: PolicyT|null = null
 ){}
 
 
@@ -610,6 +623,7 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const effects = GameplayRecord.createEffectsVector(builder, builder.createObjectOffsetList(this.effects));
   const decision = (this.decision !== null ? this.decision!.pack(builder) : 0);
   const requestId = (this.requestId !== null ? builder.createString(this.requestId!) : 0);
+  const policy = (this.policy !== null ? this.policy!.pack(builder) : 0);
 
   GameplayRecord.startGameplayRecord(builder);
   GameplayRecord.addProtocol(builder, protocol);
@@ -647,6 +661,7 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   GameplayRecord.addEffects(builder, effects);
   GameplayRecord.addDecision(builder, decision);
   GameplayRecord.addRequestId(builder, requestId);
+  GameplayRecord.addPolicy(builder, policy);
 
   return GameplayRecord.endGameplayRecord(builder);
 }

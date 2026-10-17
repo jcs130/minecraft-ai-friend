@@ -3,8 +3,14 @@
 `agent-mc-world/learning` and `minecraft-agent-record <private-profile.json>`
 provide an opt-in, model-neutral recorder beside an already running Agent.
 Importing the module starts nothing. Starting it does not connect another game
-account, acquire the body, dispatch inputs, call a model, restart a host, train
+account, acquire the body, dispatch inputs, call a language model, restart a host, train
 a policy, write personal memory or promote a method.
+
+An explicitly configured `motorShadow` may evaluate a hash-pinned local motor
+network beside live play, without dispatching its suggestions. Policy provenance,
+usage statistics and the staged training plan are described in
+[embodied-learning.md](embodied-learning.md). Missing policy attribution remains
+unknown, independent of the system1/system2 controller tag.
 
 The recorder follows the existing [operation journal](operation-learning.md)
 read-only. A source scope must be selected explicitly; it never discovers

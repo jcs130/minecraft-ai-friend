@@ -3,7 +3,9 @@ import { dirname, resolve, relative, isAbsolute, basename, join, sep } from 'nod
 import { GameplayArchive, type ArchiveOptions } from './archive.ts';
 import { OperationFollower } from './follower.ts';
 import { ViewerGameplayObserver, type ViewerObserverOptions } from './viewer-observer.ts';
-export type GameplayRecordingConfig=ArchiveOptions & { sourceDirectory:string;statusFile:string;viewer?:ViewerObserverOptions;sealEveryMs?:number };
+import { MotorPolicyShadow, type MotorShadowOptions } from './motor-shadow.ts';
+import { PolicyUsageWindow } from './policy-statistics.ts';
+export type GameplayRecordingConfig=ArchiveOptions & { sourceDirectory:string;statusFile:string;viewer?:ViewerObserverOptions;sealEveryMs?:number;motorShadow?:MotorShadowOptions };
 async function canonicalTarget(path:string):Promise<string>{
   const target=resolve(path);try{return await realpath(target);}catch(error){
     if((error as NodeJS.ErrnoException).code!=='ENOENT'||dirname(target)===target)throw error;
@@ -17,13 +19,18 @@ export async function startGameplayRecording(config:GameplayRecordingConfig) {
   const source=await realpath(config.sourceDirectory);
   if(basename(source)!==config.scopeKey||inside(source,await canonicalTarget(config.directory))||inside(source,await canonicalTarget(config.statusFile)))
     throw Error('Archive/status must be separate from the read-only scoped operation journal');
-  const archive=new GameplayArchive(config),observer=config.viewer?new ViewerGameplayObserver(config.viewer,config.scopeKey,archive):undefined;
-  const follower=new OperationFollower(config.sourceDirectory,config.scopeKey,archive,config.directory,row=>observer?.confirmScope(row));
+  if(config.motorShadow&&!config.viewer)throw Error('Motor shadow requires the explicit passive viewer');
+  const archive=new GameplayArchive(config),usage=new PolicyUsageWindow(config.scopeKey);
+  const shadow=config.motorShadow?await MotorPolicyShadow.load(config.motorShadow,async row=>{await archive.append(row);usage.observe(row);}):undefined;
+  const observer=config.viewer?new ViewerGameplayObserver(config.viewer,config.scopeKey,archive,row=>shadow?.observe(row)??Promise.resolve()):undefined;
+  const follower=new OperationFollower(config.sourceDirectory,config.scopeKey,archive,config.directory,row=>{
+    observer?.confirmScope(row);usage.observe(row);shadow?.observeOperation(row);
+  });
   let stopped=false,errors=0,sealing=false,reconciling=false;
   const timers:ReturnType<typeof setInterval>[]=[];
   const statusFile=resolve(config.statusFile);
   const status=()=>({protocol:'agent-mc-gameplay-recorder/v1',pid:process.pid,at:new Date().toISOString(),state:stopped?'stopped':archive.status().storageFailed?'storage-stopped':'recording',
-    errors,archive:archive.status(),source:follower.status(),viewer:observer?.status()??null,
+    errors,archive:archive.status(),source:follower.status(),viewer:observer?.status()??null,policyUsage:usage.status(),motorShadow:shadow?.status()??null,
     llmCalls:0,bodyControlCalls:0,personalMemoryWrites:0,automaticTraining:false,automaticSkillAdoption:false});
   let statusChain:Promise<void>=Promise.resolve();
   const save=()=>{statusChain=statusChain.then(async()=>{await mkdir(dirname(statusFile),{recursive:true});const temporary=statusFile+'.partial';await writeFile(temporary,JSON.stringify(status(),null,2));await rename(temporary,statusFile);}).catch(()=>{errors++;});return statusChain;};

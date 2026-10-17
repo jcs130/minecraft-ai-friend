@@ -10,4 +10,5 @@ export { GameplayRecord, GameplayRecordT } from './agent-mc-learning/gameplay-re
 export { Intent, IntentT } from './agent-mc-learning/intent.js';
 export { ItemCount, ItemCountT } from './agent-mc-learning/item-count.js';
 export { Observation, ObservationT } from './agent-mc-learning/observation.js';
+export { Policy, PolicyT } from './agent-mc-learning/policy.js';
 export { Signal, SignalT } from './agent-mc-learning/signal.js';

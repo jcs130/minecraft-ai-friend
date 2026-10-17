@@ -4,3 +4,6 @@ export * from './archive.ts';
 export * from './follower.ts';
 export * from './viewer-observer.ts';
 export * from './recording.ts';
+export * from './rollout.ts';
+export * from './policy-statistics.ts';
+export * from './motor-shadow.ts';

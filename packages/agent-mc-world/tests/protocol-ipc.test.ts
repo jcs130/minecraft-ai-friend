@@ -23,7 +23,8 @@ it('carries turn boundaries, receipt bytes and cancellation through SDK, MCP and
     const initial=await runtime.events();
     const image=initial.events.find(e=>e.type==='fixture.deferred')!.blobs![0];
     expect([...runtime.journal.blob(image.handle)!.bytes]).toEqual([4,5,6]);
-    const attribution={controller:'system2' as const,decisionId:'turn-a'};
+    const attribution={controller:'system2' as const,decisionId:'turn-a',
+      policy:{layer:'skill' as const,source:'learned' as const,policyId:'selector',revision:'v2',mode:'canary' as const}};
     const response=await client.callTool({name:'mc_fixture',arguments:{},_meta:{[PROTOCOL]:{requestId:'bytes',turnId:'turn-a',attribution}}});
     expect(response.structuredContent).toMatchObject({endsTurn:true,execution:{terminal:true,goalCompleted:false},
       control:{turnEnded:false,turnId:'turn-a'},events:[{text:'raw',trigger:'preempt'}]});
