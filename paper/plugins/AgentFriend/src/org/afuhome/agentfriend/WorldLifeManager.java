@@ -35,6 +35,7 @@ final class WorldLifeManager implements Listener {
     private final YamlConfiguration ledger;
     private final File contentFile;
     private YamlConfiguration content;
+    private RpgCampaign story;
     private static final List<String> DEPENDENCIES = List.of("BetonQuest", "FancyNpcs", "Citizens", "Denizen",
             "ConditionalEvents", "WorldEvents", "MythicMobs", "Shopkeepers", "NPCSpeak", "ImageFrame");
     private static final List<String> LESSONS = List.of("catalog", "cast", "life");
@@ -52,6 +53,8 @@ final class WorldLifeManager implements Listener {
         if (!contentFile.exists()) plugin.saveResource("world-life.yml", false);
         reload();
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        try { story = new RpgCampaign(plugin); }
+        catch (Exception invalid) { plugin.getLogger().warning("RPG story unavailable; existing world life retained: " + invalid.getMessage()); }
     }
     String reload() {
         try {
@@ -60,7 +63,9 @@ final class WorldLifeManager implements Listener {
                     || next.getStringList("contracts").size() > 36 || next.getMapList("shops").size() > 16)
                 throw new IllegalArgumentException("content_limits");
             for (String id : next.getStringList("contracts")) if (!id.matches("tm_[a-z0-9_]{2,40}")) throw new IllegalArgumentException("contract_id");
-            content = next; return "success";
+            content = next;
+            if (story != null && !story.reload().equals("success")) return "invalid_story_configuration";
+            return "success";
         } catch (Exception error) {
             if (content == null) content = new YamlConfiguration();
             plugin.getLogger().warning("World life configuration retained: " + error.getClass().getSimpleName());
@@ -68,6 +73,7 @@ final class WorldLifeManager implements Listener {
         }
     }
     private boolean enabled(String name) { return Bukkit.getPluginManager().isPluginEnabled(name); }
+    RpgCampaign story() { return story; }
     private void emit(Player p, String type, JsonObject data) {
         data.addProperty("type", type);
         p.sendMessage("MC_WORLD " + data);
@@ -83,6 +89,10 @@ final class WorldLifeManager implements Listener {
             switch (sub) {
                 case "list", "status" -> list(p);
                 case "menu" -> menu(p);
+                case "story" -> {
+                    if (story == null) { denied(p, "story_unavailable"); return; }
+                    story.command(p, args);
+                }
                 case "board" -> board(p, args.length > 2 && args[2].equals("menu"));
                 case "shops" -> shops(p);
                 case "trades" -> plugin.tradeDirectory().command(p, new String[]{"trade", "menu"});
@@ -125,6 +135,8 @@ final class WorldLifeManager implements Listener {
         }
         out.add("components", components);
         out.addProperty("guideCommand", "/mycli world guide start");
+        out.addProperty("storyCommand", "/mycli world story status");
+        out.addProperty("storyMenuCommand", "/mycli world story menu");
         out.addProperty("practiceCommand", "/mycli world practice start");
         out.addProperty("npcCommand", "/mycli world npcs");
         out.addProperty("eventsCommand", "/mycli world events");
@@ -162,6 +174,7 @@ final class WorldLifeManager implements Listener {
     JsonArray observationPlaces() {
         JsonArray out=new JsonArray();for(java.util.Map<?,?> row:content.getMapList("shops")){JsonObject j=new JsonObject();for(String k:List.of("name","world","x","y","z")){Object value=row.get(k);if(value instanceof Number n)j.addProperty(k,n);else if(value!=null)j.addProperty(k,value.toString());}j.addProperty("kind","registered_shop");out.add(j);}
         try{int count=0;for(Object npc:(Collection<?>)property(manager(),"getAll")){if(++count>32)break;Location at=(Location)property(npc,"getSpawnLocation");if(at==null||at.getWorld()==null)continue;JsonObject j=new JsonObject();j.addProperty("id",String.valueOf(property(npc,"getId")));j.addProperty("name",String.valueOf(property(npc,"getDisplayName")));j.addProperty("kind","registered_npc");j.addProperty("world",at.getWorld().getKey().toString());j.addProperty("x",at.getX());j.addProperty("y",at.getY());j.addProperty("z",at.getZ());out.add(j);}}catch(ReflectiveOperationException|RuntimeException unavailable){ /* Registered shops remain available when NPCSpeak is not ready. */ }
+        if (story != null) for (var place : story.places()) out.add(place);
         return out;
     }
     private void shops(Player p) {
@@ -308,6 +321,7 @@ final class WorldLifeManager implements Listener {
         inv.setItem(15, item(Material.LADDER, "§a开门与爬梯实练", "亲手开门穿过、沿现有梯子爬升3格", "不拆墙、不垫块，不代操作或授予技能", "/mycli world practice start"));
         inv.setItem(16, item(Material.OAK_DOOR, "§7结束聊天", "恢复普通公屏聊天"));
         inv.setItem(22, item(Material.BELL, "§6居民事务板", "农耕、集市、照片和遗迹调查", "/mycli world board"));
+        inv.setItem(20, item(Material.WRITTEN_BOOK, "§e灯火归途 · RPG旅途手记", "剧情章节、人物对话、六条路线与居民支线", "按真实进度给出下一步；自愿开始", "/mycli world story menu"));
         inv.setItem(24, item(Material.WRITABLE_BOOK, "§b生活能力挑战", "行囊存取、木匠互助、同队救援", "自愿报名；查看真实进度与证据", "/mycli challenge menu"));
         p.openInventory(inv);
     }
@@ -324,7 +338,7 @@ final class WorldLifeManager implements Listener {
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p) || !holder.owner().equals(p.getUniqueId()) || event.getRawSlot() < 0 || event.getRawSlot() >= 27) return;
         if(event.getRawSlot()==24){p.closeInventory();plugin.lifeChallenges().command(p,new String[]{"challenge","menu"});return;}
-        String action = switch (event.getRawSlot()) { case 10 -> "guide start"; case 11 -> "npcs"; case 12 -> "events"; case 13 -> "photos"; case 14 -> "trades"; case 15 -> "practice start"; case 16 -> "end"; case 22 -> "board menu"; default -> ""; };
+        String action = switch (event.getRawSlot()) { case 10 -> "guide start"; case 11 -> "npcs"; case 12 -> "events"; case 13 -> "photos"; case 14 -> "trades"; case 15 -> "practice start"; case 16 -> "end"; case 20 -> "story menu"; case 22 -> "board menu"; default -> ""; };
         if (!action.isEmpty()) { p.closeInventory(); command(p, ("world " + action).split(" ")); }
     }
     @EventHandler public void onDrag(InventoryDragEvent event) {

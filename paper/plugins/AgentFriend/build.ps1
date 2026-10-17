@@ -68,6 +68,7 @@ Copy-Item -LiteralPath (Join-Path $root 'resources\structure-protection.yml') -D
 Copy-Item -LiteralPath (Join-Path $root 'resources\block-access.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\text-bubbles.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\photo-camera.yml') -Destination $build -Force
+Copy-Item -LiteralPath (Join-Path $root 'resources\rpg-story.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\public-archives.yml') -Destination $build -Force
 # Pin the already installed official SQLite driver; the archive must also boot
 # offline, so do not ask Paper's library loader to download a new dependency.

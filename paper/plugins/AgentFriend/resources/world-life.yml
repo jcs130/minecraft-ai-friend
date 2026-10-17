@@ -19,7 +19,7 @@ shops:
     x: -547
     y: 67
     z: -442
-    description: 面包、纸、空地图；给旅人和照片创作准备补给。
+    description: 面包、纸和制图材料，给旅人准备补给；女神相机不需要空地图。
   - id: 4e2dc6c5-9128-4d0a-9c20-3caee63324d2
     name: 田野收购商·禾仓
     world: world

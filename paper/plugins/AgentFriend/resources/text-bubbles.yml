@@ -13,7 +13,7 @@ replace-cooldown-ms: 650
 require-line-of-sight: true
 npc-enabled: true
 # NPCSpeak stable IDs; two reserved IDs enable the built-in receptionist and seven life mentors.
-npc-speakers: [storyteller, botanist, guild-receptionist, life-mentors]
+npc-speakers: [storyteller, botanist, guild-receptionist, life-mentors, story-npcs]
 # 半透明白底与高对比文字；旧配置缺少这些字段时也使用此默认配色。
 # 只接受带引号的 #RRGGBB，热重载可调整，聊天格式码不会覆盖这里的颜色。
 background-color: '#ffffff'

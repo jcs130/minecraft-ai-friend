@@ -40,6 +40,7 @@ final class AgentEntry {
         out.addProperty("capabilitiesCommand","/mycli capabilities");out.addProperty("progressCommand","/mycli progress");
         out.addProperty("helpCommand","/mycli --help");
         out.addProperty("routesCommand","/mycli tasks list");
+        if(plugin.worldLife()!=null&&plugin.worldLife().story()!=null){out.addProperty("storyCommand","/mycli world story status");out.addProperty("storyMenuCommand","/mycli world story menu");}
         out.addProperty("nextCommand",onboarding.has("nextCommand")?onboarding.get("nextCommand").getAsString():"/mycli rules");
         out.addProperty("nextAdvice",onboarding.has("message")?onboarding.get("message").getAsString():"这是观战账号；在对应生存角色的连接上进行任务和存取。");
         out.addProperty("mainlineGraduated",flag(onboarding,"completed"));
@@ -74,7 +75,7 @@ final class AgentEntry {
     }
     void progress(Player p,String[] args) {
         String filter=args.length>1?args[1].toLowerCase(Locale.ROOT):"all";
-        if(args.length>3||!Set.of("all","main","training","guild","challenge").contains(filter)){plugin.communication().error(p,"INVALID_ARGUMENT","/mycli progress [all|main|training|guild|challenge] [页码]：第三个参数启用按需分页；查询不接单、不领奖。",false,"/mycli progress all 1");return;}
+        if(args.length>3||!Set.of("all","main","training","guild","challenge","story").contains(filter)){plugin.communication().error(p,"INVALID_ARGUMENT","/mycli progress [all|main|training|guild|challenge|story] [页码]：第三个参数启用按需分页；查询不接单、不领奖。",false,"/mycli progress all 1");return;}
         List<JsonObject> rows=progressRows(p,filter);
         if(args.length==3) {
             try{plugin.communication().list(p,"progress","/mycli progress "+filter+" 1",rows,Integer.parseInt(args[2]));}
@@ -132,6 +133,7 @@ final class AgentEntry {
         if(filter.equals("all")||filter.equals("challenge")) {
             JsonObject challenge=plugin.lifeChallenges().summary(p);challenge.addProperty("section","challenge");rows.add(challenge);
         }
+        if((filter.equals("all")||filter.equals("story"))&&plugin.worldLife()!=null&&plugin.worldLife().story()!=null){var story=plugin.worldLife().story().state(p);story.addProperty("section","story");story.addProperty("meaning","自愿剧情手记；章节完成与原新手毕业、公会领奖分别核验。查看不会报名或接单。");rows.add(story);}
         return rows;
     }
 }

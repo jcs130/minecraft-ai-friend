@@ -1,0 +1,391 @@
+# Authored RPG presentation over existing server proofs. Queries never enrol or accept.
+# Keep stable chapter/stage/NPC IDs. Accepted chapter definitions are frozen per player.
+# Reload with the existing admin worldlife reload after validating content.
+schema-version: 1
+enabled: true
+revision: 1
+title: 灯火归途
+npcs:
+  yingdeng:
+    name: 营地书记·映灯
+    role: 迎新、旅途手记、物资与城镇生活
+    profession: LIBRARIAN
+    world: world
+    x: -1115.5
+    'y': 64
+    z: -615.5
+    greeting: 欢迎来到千灯纪。我给旅人记名字，也记那些让人有地方回去的小事。先选你想聊的，不急着接所有任务。
+    topics:
+      origin:
+        title: 千灯纪是怎样的地方？
+        text: 这里的灯不是一个人点亮的。有人巡夜，有人制器，有人种粮，也有人带回远方的故事。你做成的小事，可能就是别人回家的路。
+        action: none
+      journey:
+        title: 从哪里开始我的旅途？
+        text: 旅途手记会按真实进度给下一步。看目录不会报名；愿意开始时再选“开始本章”。已经完成的登记和实习证明会被认出来。
+        action: progress
+      supplies:
+        title: 出发前能到哪里领补给？
+        text: 冒险者工会门口有公共箱，武器、护甲、食物和工具按需领取。门内储物是萌萌的私产。公共箱位置先查guild shared。
+        action: supplies
+      backpack:
+        title: 我还有一个大背包？
+        text: 有，黄色大背包有54格，用 /minepacks:backpack open 存随身物资。存取后关开核对；超时先查，不重复搬运。它和个人奖励箱分开。
+        action: backpack
+      rewards:
+        title: 奖励和照片放在哪里？
+        text: 个人奖励箱用 /mycli arena stash pages。奖励、装备和自动照片在这里；箱满安全排队。远程开箱需先学travel并耗2魔力；也可到试炼场实体箱旁免费开。提示未学先查skills info travel，不要重复领奖。
+        action: rewards
+      rules:
+        title: 城里有什么需要注意？
+        text: 公共建筑、矿道台阶和村庄地下要保留；田地按实际权限收割补种。拒绝后先停，用 protect 查询附近目标，去合规的位置做。
+        action: rules
+      kitchen:
+        title: 今天有人需要帮忙吗？
+        text: 厨房想给后来者留一份口粮。这是一张后勤委托；喜欢战斗、制作或探索也有自己的路线，不必先种田。
+        action: tasks
+        target: tm_trail_supply
+    offers:
+      - tm_trail_supply
+      - tm_restock_light
+      - tm_field_cycle
+  gufeng:
+    name: 巡路人·顾风
+    role: 巡夜、弓术、野外讨伐与营地情报
+    profession: CARTOGRAPHER
+    world: world
+    x: -1105.5
+    'y': 64
+    z: -599.5
+    greeting: 北边林道的炊烟不太对。想帮忙的话，先备好装备，侦察入口和退路，再决定是否挑战营地头目。
+    topics:
+      patrol:
+        title: 为什么要巡夜？
+        text: 旅人的灯照得不远，巡夜人替他们多看一段路。先从三只僵尸或尸壳练起，最后一击和使用的武器都会实际核对。
+        action: tasks
+        target: tm_starter_blade
+      bow:
+        title: 我想练远程战斗
+        text: 弓手可以独立走自己的路线。箭要由你发射并完成最后一击；拿着弓看队友击杀不算。出发前别忘了箭、护甲和食物。
+        action: tasks
+        target: tm_starter_archer
+      camp:
+        title: 林道营地出了什么事？
+        text: 营地在主世界(-1072,67,-1120)，从西侧(-1080,68,-1117)靠近。先调查外哨与退路、交侦察阶段；再到(-1077,67,-1117)外哨报名。沿北侧空地绕过木栏进入火堆阵地，两段清场后回外哨结算，再交公会委托。
+        action: encounter
+        target: illager_camp
+      prepare:
+        title: 讨伐前要准备什么？
+        text: 建议带盾牌、剑或弓、护甲、食物和照明。战士顶住近战，远程清守卫，牧师留好群体治愈和祝福。公共补给按需取，技能照常耗魔力。
+        action: supplies
+      rescue:
+        title: 试炼里怎样救队友？
+        text: 试炼塔和已报名的遗迹、黑旗营地挑战中，同队存活者在倒地者4格内连续停留10秒能扶起；清完当前层或阵地也会救起。普通野外战斗不自动组队，先确认自己的活动状态。
+        action: none
+      crypt:
+        title: 墓穴上层前厅没有宝箱，往哪走？
+        text: 亡灵墓穴侧门(-445,28,653)只到前厅。先向南到Z657，再向东到X-439，沿内圈台阶经Y20下到Y12，再向北到(-440,12,640)进天然墓室。入口灯路旁有行路簿；遗迹图任务按走查验收，搜箱自愿。
+        action: none
+      route_combat:
+        title: 把我的旅途偏好记成战斗
+        text: 好。先看这条路线的委托，按自己装备和队伍情况选择；不会替你换职业或覆盖正在做的任务。
+        action: route
+        target: combat
+      stuck:
+        title: 我现在卡住了，先做什么？
+        text: 先看你真实的在途委托和缺项；不用为了我的推荐放弃原单。
+        action: progress
+    offers:
+      - tm_starter_blade
+      - tm_starter_archer
+      - tm_spider_patrol
+      - tm_field_camp_report
+  yantie:
+    name: 旅途工匠·砚铁
+    role: 工具、装备制作与工程路线
+    profession: WEAPONSMITH
+    world: world
+    x: -1090.5
+    'y': 66
+    z: -621.5
+    greeting: 手艺不只在锻台上。给自己做一套能用的装备，再为别人留下一段好走的路，都是工匠的本事。
+    topics:
+      tools:
+        title: 先做哪些工具合适？
+        text: 先亲手做工具，成品留下自己用。合成才有制作证明，从箱里拿现成的不算。每阶段达标后记得guild claim再做下一步。
+        action: tasks
+        target: tm_starter_tools
+      gear:
+        title: 怎样准备第一套战备？
+        text: 石剑和盾牌够你练基本功。木板、圆石和铁锭可以自备或按需取公共材料；只拿自己需要的，别动私产。
+        action: tasks
+        target: tm_starter_equipment
+      route_crafting:
+        title: 我想走装备制造路线
+        text: 我记下了。路线偏好能换，不会自动学习技能；先看任务条件，再接一张适合自己的。
+        action: route
+        target: crafting
+      route_engineering:
+        title: 我想修路、架桥或造建筑
+        text: 工程委托按实际结构验收。先看场地、权限、材料和验收条件，入口与退路也算设计的一部分。
+        action: route
+        target: engineering
+      skill:
+        title: 能把技能一起练起来吗？
+        text: 可以。基础技能按自己的资格学，升级花技能点，实际施放照常耗魔力并受冷却。先查技能条件，不因为一句“学会了”就算成功。
+        action: skills
+      active:
+        title: 先看看我当前做得怎么样
+        text: 工具不必一口气全造完。按你当前任务缺的那一步来，做完再交阶段。
+        action: progress
+    offers:
+      - tm_starter_tools
+      - tm_starter_equipment
+      - tm_restock_shield
+  muchen:
+    name: 司灯人·沐辰
+    role: 主城回报、技能见习与旅途方向
+    profession: CLERIC
+    world: world
+    x: -541.5
+    'y': 67
+    z: -435.5
+    greeting: 欢迎平安回来。灯会记住你真正做成的事；但还没做完的，也可以慢慢学。
+    topics:
+      report:
+        title: 我来报个平安
+        text: 我在听。旅途手记会核对你的登记、实习和已交付委托；到这一步的实际交谈才记作回报，不会提前替你盖章。
+        action: progress
+      magic:
+        title: 我想认识技能和职业
+        text: 先读基础技能目录，再按本人资格亲手施放。战法牧是成长方向，技能点有限也能洗点；我不会替你花点。
+        action: skills
+      practice:
+        title: 怎样报名实习？
+        text: 原实习保留三项证明：读技能目录、成功施法、完整交付任选路线委托。失败施法不算，生活、战斗、制造和探索都可以。
+        action: guide
+      route_exploration:
+        title: 我想走探索路线
+        text: 探索不是只碰一下坐标。读任务的分区、走查、照片和返程条件；入口不清楚时查地标和实际路线，不在建筑里直挖竖井。
+        action: route
+        target: exploration
+      route_supply:
+        title: 我更想做后勤支援
+        text: 留灯、备粮、补盾，都是队友会记住的事情。保留当前委托，按需选择下一张后勤单。
+        action: route
+        target: supply
+      route_life:
+        title: 我想过田园、交易和建造生活
+        text: 这也是千灯纪的一条正路。先认清公共物资、自家领地和别人的财产，再选你想照顾的事情。
+        action: route
+        target: life
+    offers:
+      - tm_first_spell
+      - tm_starter_trail
+      - tm_trail_supply
+  zhiyuan:
+    name: 旅行画师·纸鸢
+    role: 摄影、旅行故事与艺术厅展览
+    profession: LIBRARIAN
+    world: world
+    x: -615.5
+    'y': 67
+    z: -377.5
+    greeting: 有些路走过就忘了，有些瞬间适合留下。先拍一张属于自己的生活照，再给它一个名字。
+    topics:
+      camera:
+        title: 怎样拍一张照片？
+        text: 用技能罗盘的女神相机或 /mycli photo menu。无需空地图、截图或上传，开始默认耗2魔力；站稳等成片自动进个人奖励箱。
+        action: photo
+      commission:
+        title: 我想完成生活照委托
+        text: 先接tm_photo_album，再拍新照片。成片后先guild claim交摄影阶段，再从个人奖励箱取照片，亲手挂进本人或获准的空展示框，最后再claim。
+        action: tasks
+        target: tm_photo_album
+      exhibit:
+        title: 照片能给别人看吗？
+        text: 可以给作品起题目、写故事，再按实际相册和艺术厅展位规则主动投稿。作品有作者；我不会擅自公开别人的私有照片。
+        action: none
+      storage:
+        title: 我拍了，却没在背包看见？
+        text: 用 /mycli arena stash pages 查个人奖励箱。成片不要求主背包空位，满箱安全排队。远程开箱需先学travel并耗2魔力；或到试炼场实体箱旁免费开。未学先查skills info travel，不要重复拍照。
+        action: rewards
+      field:
+        title: 讨伐也能留下故事吗？
+        text: 当然。先安全完成行动，再站稳取景。照片、侦察与战斗分别验收；一张照片不能代替真正打败头目。
+        action: none
+    offers:
+      - tm_photo_album
+      - tm_creeping_report
+  shiyan:
+    name: 采矿领班·石砚
+    role: 公共矿道、采掘与工具补给
+    profession: TOOLSMITH
+    world: world
+    x: -659.5
+    'y': 68
+    z: -487.5
+    greeting: 下矿走台阶，上来走原路。矿不是不能挖，只是别把大家回家的楼梯也挖了。
+    topics:
+      entrance:
+        title: 从哪里开始挖矿？
+        text: 矿棚入口(-652,68,-484)，沿三格宽台阶下到Y36平台，向西X≤-702的采矿面继续开挖。入口、台阶、照明和平台要保留。
+        action: none
+      protection:
+        title: 为什么脚下的石砖挖不动？
+        text: 那是公共矿道地基，拆掉会断回程。下到Y36再向西进入采矿面；具体目标被拒就先停，靠近后protect break查清边界。
+        action: rules
+      tools:
+        title: 能先学做一套工具吗？
+        text: 可以，接工具委托亲手合成。材料从自家或获准位置采集，公共箱按需取用；成品是你自己的。
+        action: tasks
+        target: tm_starter_tools
+      bag:
+        title: 矿石太多装不下怎么办？
+        text: 先整理54格大背包，再决定带哪些矿石回去。存取一次完成后核对服务器槽位与光标，超时先查询，别反复重放。
+        action: backpack
+      share:
+        title: 有多余工具可以捐吗？
+        text: 欢迎把耐用工具、火把和食物留到公共补给箱。这里的公共桶也能用，但别把共享物资当作私人仓库。
+        action: supplies
+    offers:
+      - tm_starter_tools
+      - tm_restock_light
+chapters:
+  arrival:
+    title: 序章 · 借一盏灯
+    introduction: 先认识营地，登记自己的名字，再看看能用的技能。老旅人已有的真实证明会被承认。
+    requires: []
+    stages:
+      welcome:
+        title: 与映灯认识一下
+        kind: talk_or_graduate
+        reference: yingdeng
+        description: 到营地书记映灯8格内实际交谈；已经完成原入门实习的老玩家沿用资格。
+        next-command: /mycli world story talk yingdeng
+      register:
+        title: 登记为冒险者
+        kind: member
+        description: 免费登记公会，不会自动接取委托。
+        next-command: /mycli guild join
+      apprenticeship:
+        title: 自愿报名原见习
+        kind: enrolled
+        description: 报名小满的原三证实习；旧资格与证明保留。
+        next-command: /mycli world guide start
+      catalog:
+        title: 看看自己的技能目录
+        kind: catalog
+        description: 读取基础技能目录，按需查看条件；查询不会自动学习。
+        next-command: /mycli skills list common
+  first_light:
+    title: 第一章 · 为城镇点一盏灯
+    introduction: 战斗、制作、探索、后勤、工程与田园都能帮助城镇。选一条路，做成一件事，再回来报个平安。
+    requires:
+      - arrival
+    stages:
+      choose:
+        title: 选择旅途偏好
+        kind: route
+        description: 选择一条旅途偏好，随时可以更换；不代选职业、不替换当前委托。
+        next-command: /mycli world story choose combat
+      cast:
+        title: 让一项技能真正生效
+        kind: cast
+        description: 按本人资格成功施法；旧见习的有效证明沿用，失败和查询不算。
+        next-command: /mycli skills list common
+      commission:
+        title: 完整交付任选一张委托
+        kind: commission
+        description: 继续已有委托或从六条路线自选；每阶段实际达标并交付，全部完成才记证明。
+        next-command: /mycli tasks status
+      report:
+        title: 回主城向沐辰报平安
+        kind: talk
+        reference: muchen
+        description: 前面条件齐全后，亲自到司灯人沐辰8格内交谈；不能用早先一次聊天代替这次回报。
+        next-command: /mycli world story talk muchen report
+  frontier:
+    title: 支章 · 林道的黑旗
+    introduction: 有人把掠夺者扎营的消息带回了营地。侦察入口与退路，再决定是否结伴迎战营地头目。
+    requires:
+      - first_light
+    stages:
+      report:
+        title: 完成林道营地讨伐委托
+        kind: contract
+        reference: tm_field_camp_report
+        description: 实际侦察、交付阶段、参加营地头目战，再主动交付。喜欢其他生活的旅人可以暂不开始本支章。
+        next-command: /mycli tasks info tm_field_camp_report
+      return:
+        title: 把林道的消息带给顾风
+        kind: talk
+        reference: gufeng
+        description: 讨伐委托结算后亲自回巡路人顾风8格内交谈。
+        next-command: /mycli world story talk gufeng camp
+side-stories:
+  night_watch:
+    title: 夜路上有人值守
+    npc: gufeng
+    introduction: 先学持剑应敌，替夜行旅人留出路。
+    contracts:
+      - tm_starter_blade
+    requires: []
+  bow_watch:
+    title: 弦上也有灯火
+    npc: gufeng
+    introduction: 弓手可以独立接下自己的巡守，不必先走剑士路线。
+    contracts:
+      - tm_starter_archer
+    requires: []
+  forged_tools:
+    title: 先有一套好工具
+    npc: yantie
+    introduction: 工匠亲手做出工具，成品由自己保留。
+    contracts:
+      - tm_starter_tools
+    requires: []
+  forged_gear:
+    title: 一面盾的分量
+    npc: yantie
+    introduction: 再做石剑和盾牌，明白准备也是冒险的一部分。
+    contracts:
+      - tm_starter_equipment
+    requires:
+      - forged_tools
+  frontier_notes:
+    title: 第一张路线笔记
+    npc: muchen
+    introduction: 从附近的实际探索开始，学会看目标、缺项和返程要求。
+    contracts:
+      - tm_starter_trail
+    requires: []
+  shared_light:
+    title: 给后来者留灯
+    npc: yingdeng
+    introduction: 为公共补给留下火把和口粮，让别人的下一次出发容易一些。
+    contracts:
+      - tm_restock_light
+      - tm_trail_supply
+    requires: []
+  living_field:
+    title: 给田地留明天
+    npc: yingdeng
+    introduction: 愿意下田的旅人可以去找青禾；收割、补种和交易都要真实完成。
+    contracts:
+      - tm_field_cycle
+    requires: []
+  photo_memory:
+    title: 把这一刻挂起来
+    npc: zhiyuan
+    introduction: 拍一张新生活照，交摄影阶段，再把本人作品挂到获准展示框。
+    contracts:
+      - tm_photo_album
+    requires: []
+  black_banner:
+    title: 林道的黑旗
+    npc: gufeng
+    introduction: 先侦察，再与守卫和头目交手；把真正的战果带回城镇。
+    contracts:
+      - tm_field_camp_report
+    requires: []

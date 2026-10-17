@@ -107,3 +107,27 @@ tasks:
     steps:
       - {title: 制作备用盾牌, description: 接单后亲手合成一个盾牌，然后 guild claim 确认制作阶段；直接拿公共成品来回交不能跳过制作。, goal: craft, item: SHIELD, target: 1}
       - {title: 备用盾牌入库, description: 主背包保留一面无附魔无自定义名的普通盾牌，用 guild claim 实际放入公共护甲库存；满仓不扣物，原任务保留。, goal: donate, item: SHIELD, target: 1, chest: armor}
+  field_camp_report:
+    route: combat
+    repeat: once
+    title: 顾风的黑旗营地密令
+    description: 巡路人顾风发现林道北边的掠夺者营地。先实地调查外哨与退路，再自愿结伴挑战两处阵地和执斧头目，最后回来报告；普通难度即可。先从公会公共箱准备护甲、盾牌、武器和食物。
+    beneficiary: 巡路人·顾风
+    icon: CROSSBOW
+    reward: {fame: 8, emeralds: 3, bonus: BREAD, bonus-count: 4}
+    steps:
+      - title: 先看清营地与退路
+        description: 主世界营地在(-1072,67,-1120)；从西侧(-1080,68,-1117)靠近。进入天然营地，在外哨、营火附近走过两个四格分区、至少十六格新路线与五秒有效行进；随后 guild claim 交侦察阶段。仅到坐标不算，暂时不必开战。
+        goal: structure
+        dimension: overworld
+        structure: nova_structures:illager_camp
+        target: 2
+        zone-size: 4
+        min-distance: 16
+        min-seconds: 5
+        min-sections: 1
+      - title: 黑旗头目的最后一道命令
+        description: 到(-1077,67,-1117)外哨 /mycli dungeon start illager_camp；队友十秒内 /mycli dungeon join illager_camp。清完两段回外哨 /mycli dungeon claim illager_camp，再 /mycli guild claim。全程参战，普通即可。
+        goal: site_clear
+        site: illager_camp
+        target: 1

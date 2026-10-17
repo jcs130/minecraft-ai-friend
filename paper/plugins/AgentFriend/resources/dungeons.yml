@@ -84,3 +84,27 @@ sites:
           - {type: PILLAGER, count: 2, health: 38}
           - {type: WITCH, count: 1, health: 40, mythic: QD_Hexer}
           - {type: VINDICATOR, count: 1, health: 90, name: 战团执斧长}
+  illager_camp:
+    name: 黑旗林营·火堆下的密令
+    world: world
+    expedition: illager_camp
+    outdoor: true
+    entry: [-1080, 68, -1117]
+    icon: CROSSBOW
+    hint: 已核实的天然掠夺者营地。先到(-1077,67,-1117)外哨集结，沿北侧空地绕过木栏，再进火堆阵地(-1069,67,-1116)。推荐盾、弓箭和同伴；清场回外哨结算，保留天然怪物与宝箱
+    reward: {emeralds: 4, item: ARROW, count: 8}
+    rooms:
+      - name: 林缘外哨
+        center: [-1077, 67, -1117]
+        radius: 4
+        # Walkability was checked through the existing camp. Avoid sealed cages.
+        spawn-points: [[-1077, 67, -1113], [-1077, 67, -1121], [-1073, 67, -1115], [-1073, 67, -1118], [-1073, 67, -1117], [-1074, 67, -1114]]
+        mobs:
+          - {type: PILLAGER, count: 2, health: 20, name: 黑旗弩哨}
+      - name: 营火指挥阵地
+        center: [-1069, 67, -1116]
+        radius: 5
+        spawn-points: [[-1065, 67, -1117], [-1069, 67, -1113], [-1073, 67, -1115], [-1066, 67, -1120], [-1071, 67, -1112], [-1065, 67, -1114]]
+        mobs:
+          - {type: PILLAGER, count: 1, health: 20, name: 黑旗近卫}
+          - {type: VINDICATOR, count: 1, health: 60, name: 黑旗执斧头目}

@@ -58,11 +58,21 @@ final class AgentCliCatalog {
         add(specs,"challenge.menu","life","gui","/mycli challenge menu","打开生活挑战的原版菜单，查看说明或自愿加入分工","普通Java和基岩玩家可用；点击报名/开始/取消才改变挑战状态","原版箱式菜单；/mycli challenge status复核");
         add(specs,"intro","info","read","/mycli intro","一屏入门：规则、本人状态、能力目录、我的进度和安全下一步","已登录普通玩家可用；只读，不报名、不接单","MC_INTRO；可用 /mycli 或 /mycli help 进入");
         add(specs,"rules","info","read","/mycli rules [页码]","普通玩家可读的中文服务器规则","已登录玩家，无OP要求，查询免费","MC_RULES page/pages/rules/nextCommand");
-        add(specs,"progress","info","read","/mycli progress [all|main|training|guild|challenge] [页码]","统一分项查看主线、专项实练、公会委托、认证和生活挑战；缺少条件及下一步","只读；加页码按需返回一页，用nextCommand续读；不加页码保留旧协议","MC_PAGE或兼容MC_PROGRESS；主线graduated、专项done和本轮挑战独立");
+        add(specs,"progress","info","read","/mycli progress [all|main|training|guild|challenge|story] [页码]","统一分项查看主线、专项实练、公会委托、认证和生活挑战；缺少条件及下一步","只读；加页码按需返回一页，用nextCommand续读；不加页码保留旧协议","MC_PAGE或兼容MC_PROGRESS；主线graduated、专项done和本轮挑战独立");
         add(specs,"page","info","read","/mycli page <快照ID> [页码]","续读本次连接的完整查询快照，大记录分片可无损拼回","只读；五分钟有效；每人保留最近两个快照；断线后重新查询","MC_PAGE含page/pages/total/snapshotObservedAt/nextCommand；不可把分片当完整任务");
         add(specs,"capabilities","info","read","/mycli capabilities [list [分类|命令|all] [页码]|info <ID>]","零副作用的能力发现；保留旧list/explain兼容入口","目录查询本身不会执行目标命令，也不记学习证明","MC_CLI_LIST、MC_CLI_ITEM、MC_CLI_DETAIL；discoveryReadOnly=true");
         add(specs,"inventory","info","read","/mycli inventory [status|refresh|item <0–35|hand>]","读取服务器本人随身背包与快捷栏，按准确物品名称识别特色道具，refresh同步原版物品栏","仅本人；不含54格大背包、任务物品袋或个人奖励箱；读取全部分页。player_head可能是大背包，须看name/customId/usage","私有 MC_INVENTORY分页，id/baseId是基础材质，name为展示名；MC_ITEM含单件物品名称、服务器标识、用法与说明");
         add(specs,"world","life","read","/mycli world list|menu|npcs|talk <ID> <话>|end|guide start|practice start|status|stop|events|photos","世界生活内容入口：新手实习、开门爬梯实练、村民聊天、世界事件、村民交易和照片展示","查询免费；聊天须在NPC八格内；女神相机无需空地图，开始拍摄默认2魔力，成片自动入个人奖励箱","MC_WORLD JSON及NPC实际答复");
+        add(specs,"world.story","life","read","/mycli world story <动作> [--json]","灯火归途：人物、章节与居民支线","自愿开始；查询不报名、不换委托、不选职业；menu为原版界面","私有MC_STORY或MC_PAGE；原任务仍用tasks status");
+        add(specs,"world.story.status","life","read","/mycli world story status [--json]","查本人剧情章节、缺项和下一步","免费只读；不推进采样、不保存剧情、不代接单","MC_STORY readOnly=true；旧主线毕业独立");
+        add(specs,"world.story.list","life","read","/mycli world story list [chapter|npc|side] [--page 页码] [--json]","按需分页查章节、人物或支线","免费只读；NPC登记位置与实时实体位置明确区分；查询不生成NPC或加载远处区块","私有MC_PAGE；info查看选中ID");
+        add(specs,"world.story.info","life","read","/mycli world story info <ID> [--json]","查章节步骤、人物话题或支线关联委托","免费只读；在办章节使用已接受的冻结定义；人物查询不算交谈","MC_STORY或MC_PAGE；返回明确后续命令");
+        add(specs,"world.story.start","life","write","/mycli world story start [章节ID] [--json]","自愿开始符合前置的章节","免费；冻结阶段要求；重复开始同章保留原场次；不接公会单、不发物","MC_STORY；保存后确认，status核对");
+        add(specs,"world.story.choose","life","write","/mycli world story choose <combat|crafting|exploration|supply|engineering|life> [--json]","选择可随时改选的旅途偏好","免费；不改变战法牧职业，不代接任务，不覆盖在办单","MC_STORY route；tasks list查对应任务");
+        add(specs,"world.story.talk","life","write","/mycli world story talk <人物ID> [话题ID] [--json]","与八格内的真实剧情NPC私下交谈","免费；话题由info给出；对话可能记录当前剧情步骤或选择旅途偏好，不能授予战利品或战斗证明","MC_STORY与私有短对话；查询人物请用info");
+        add(specs,"world.story.track","life","write","/mycli world story track [on|off] [--json]","开启或关闭本人剧情追踪","免费；只有本人和实际附身Eye看到；有公会任务或副本时避让原进度条","MC_STORY tracking；不取消章节或任务");
+        add(specs,"world.story.cancel","life","write","/mycli world story cancel [--json]","主动取消当前剧情章节","免费；当前剧情步骤停止，已完成章节保留；不放弃公会委托或清物品","MC_STORY；再次start会重新接受当前章节定义");
+        add(specs,"world.story.menu","life","gui","/mycli world story menu [人物ID]","打开旅途手记或人物原版菜单","查看免费；开始、选择、接单都需明确点击；人物对话需八格内","原版箱式GUI；不要求客户端模组");
         add(specs,"world.list","life","read","/mycli world list","查看各内容插件实际启用状态和入口","查询免费，不执行技能","MC_WORLD type=catalog");
         add(specs,"world.board","life","read","/mycli world board [menu]","居民事务：农耕集市、照片展与遗迹调查；查看真实步骤及本人状态","与公会共享任务槽；guild accept接单，每阶段guild claim；最终入个人箱","MC_WORLD type=board；可选45格原版菜单");
         add(specs,"world.shops","life","read","/mycli world shops","查看真实集市商人的位置、农产收购与旅行补给","亲自到场交易，实际消耗原版物品；选中配方还不算成交","MC_WORLD type=shops");
@@ -407,7 +417,7 @@ final class AgentCliCatalog {
         return out;
     }
     private static int idEmptyPriority(String prefix,String id,List<String> order){return prefix.isEmpty()&&order.contains(id)?order.indexOf(id):order.size();}
-    private static boolean jsonSupported(String id){return id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return (id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -490,10 +500,10 @@ final class AgentCliCatalog {
 
     private static JsonObject semantics(Spec spec) {
         String id=spec.id();boolean mixed=(spec.root()&&Set.of("archive","tasks","challenge","world","photo","profession","skills","spells","coach","arena","guild","life","land","landmark","waypoint","locate","commission","goddess","focus","imprint","trade","village","pvp","skillbook").contains(id))
-                ||Set.of("world.guide","world.practice","guild.exam","guild.exam.supplies","guild.stash","guild.rewards","arena.rewards","arena.shop","arena.recycle").contains(id);
+                ||Set.of("world.story","world.guide","world.practice","guild.exam","guild.exam.supplies","guild.stash","guild.rewards","arena.rewards","arena.shop","arena.recycle").contains(id);
         boolean evidence=Set.of("help","list","explain","status.full","skills.list","spells.list","skills.explain","spells.explain").contains(id);
         boolean legacyRefresh=Set.of("guild.board","guild.status","life.status","guild.exam.list","guild.exam.status","skills.mine","skills.info","skills.points","profession.status").contains(id);
-        boolean enroll=Set.of("challenge.create","coach.enroll","world.guide.start","world.practice.start","guild.exam.start").contains(id)||id.endsWith(".accept")||id.endsWith(".join");
+        boolean enroll=Set.of("world.story.start","challenge.create","coach.enroll","world.guide.start","world.practice.start","guild.exam.start").contains(id)||id.endsWith(".accept")||id.endsWith(".join");
         boolean cancel=id.endsWith(".cancel")||id.endsWith(".abandon")||id.endsWith(".stop")||id.endsWith(".leave");
         boolean action=Set.of("guild.verify","trade.locate","arena.recycle.quote","world.photos","skills.learnmenu").contains(id);
         String operation=mixed?"group":enroll?"enroll":cancel?"cancel":action?"execute":spec.mode().equals("read")?"query":"execute";

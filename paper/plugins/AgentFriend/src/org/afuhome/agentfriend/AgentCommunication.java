@@ -69,6 +69,7 @@ final class AgentCommunication {
         out.addProperty("rulesCommand", "/mycli rules"); out.addProperty("capabilitiesCommand", "/mycli capabilities");
         out.addProperty("detailCommand", "/mycli coach guide"); out.addProperty("authCommand", "/authstatus");
         out.addProperty("backpackCommand","/minepacks:backpack open");
+        out.addProperty("storyCommand","/mycli world story status");
         out.addProperty("backpackAdvice","54格个人大背包可普通存取，独立于任务袋和奖励箱。等待服务端槽位与光标确认，关闭重开核对；超时先查询，不自动重放。");
         send(p, "MC_GUIDE", out); state(p,true);
     }
@@ -91,6 +92,7 @@ final class AgentCommunication {
         } else { out.addProperty("mainStage", "observer"); out.addProperty("nextCommand", "/mycli intro"); }
         out.addProperty("progressCommand", "/mycli progress all 1");
         out.addProperty("routesCommand", "/mycli tasks list");
+        out.addProperty("storyCommand", "/mycli world story status");
         out.addProperty("skillsCommand", "/mycli skills status"); out.addProperty("inventoryCommand", "/mycli inventory status");
         out.addProperty("fullCommand", "/mycli status full");
         out.addProperty("downed", plugin.isDowned(p)); out.addProperty("inDungeon", plugin.dungeonParticipant(p));
@@ -169,6 +171,7 @@ final class AgentCommunication {
         }
     }
     void jsonCommand(Player p,String[] raw) {
+        if(raw.length>=2&&raw[0].equalsIgnoreCase("world")&&raw[1].equalsIgnoreCase("story")){plugin.worldLife().command(p,raw);return;}
         String[] args=Arrays.stream(raw).filter(s->!s.equals("--json")).toArray(String[]::new);
         String root=args.length==0?"status":args[0].toLowerCase(Locale.ROOT);
         if(root.equals("archive")){

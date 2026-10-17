@@ -1,4 +1,10 @@
 # Loaded by manage-server.ps1. This is executed only after both stopped snapshots.
+function Content-FirstPartyPreviousJar([string]$name) {
+    # Deployed hotfixes such as 0.4.47.3 use a fourth numeric component.
+    # Keep the first-party filename boundary; deployment still pins its SHA256.
+    return $name -match '^(AgentFriend|CortiEyeMirror)-[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\.jar$'
+}
+
 function Content-YsmProxyTarget([string]$name) {
     if ($name -notmatch '^(AgentAppearance|LibreLogin|LoginGuard|NanoLimboPlugin-velocity)-[0-9]+\.[0-9]+\.[0-9]+\.jar$') { throw 'Unexpected proxy plugin JAR' }
     $config = Ysm-Config
@@ -93,7 +99,7 @@ function Deploy-PendingContent {
     foreach ($file in @($plan.removeJars)) {
         if ($file.name -match '^ysm-proxy/((?:AgentAppearance|LoginGuard)-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
             $target = Content-YsmProxyTarget $Matches[1]
-        } elseif ($file.name -match '^(AgentFriend|CortiEyeMirror)-[0-9]+\.[0-9]+\.[0-9]+\.jar$') {
+        } elseif (Content-FirstPartyPreviousJar $file.name) {
             $target = Join-Path (Join-Path $serverDir 'plugins') $file.name
         } elseif ($file.name -eq 'worldedit-bukkit-7.3.9.jar') {
             # This exact reviewed replacement is necessary: FAWE provides the
