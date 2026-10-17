@@ -1,0 +1,9 @@
+{
+  "compiler": "flatc 25.9.23",
+  "source": "https://github.com/google/flatbuffers/releases/tag/v25.9.23",
+  "windowsArchive": "https://github.com/google/flatbuffers/releases/download/v25.9.23/Windows.flatc.binary.zip",
+  "windowsArchiveSha256": "3d6383193ecd274f5de544a6e03464a87f581befb9fc1dda9cf508fa3cce3127",
+  "schemaEncoding": "flatbuffer",
+  "messageEncoding": "flatbuffer",
+  "fileIdentifier": "MCM1"
+}

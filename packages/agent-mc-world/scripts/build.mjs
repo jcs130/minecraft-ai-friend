@@ -1,10 +1,11 @@
-import { readdir, readFile, mkdir, writeFile, cp, rm, link, copyFile } from 'node:fs/promises';
+import { readdir, readFile, mkdir, writeFile, cp, rm } from 'node:fs/promises';
 import { dirname, join, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { transform } from 'esbuild';
 import { readViewerInput } from './viewer-input.mjs';
+import { copyViewerAssets } from './copy-viewer-assets.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = join(root, 'dist/runtime');
@@ -14,24 +15,7 @@ await rm(output, {recursive:true,force:true});
 export const digest = data => createHash('sha256').update(data).digest('hex');
 const walk = async path => (await Promise.all((await readdir(path, { withFileTypes: true })).map(async e =>
   e.isDirectory() ? walk(join(path, e.name)) : [join(path, e.name)]))).flat();
-// Both trees are generated within this checkout. Link immutable viewer files
-// rather than making a second physical copy of the complete original audio.
-// npm ships only dist/runtime's viewer; the build input archive stays local.
-const linkTree = async (source, target) => {
-  await mkdir(target, { recursive: true });
-  for (const entry of await readdir(source, { withFileTypes: true })) {
-    if (entry.isDirectory()) await linkTree(join(source, entry.name), join(target, entry.name));
-    else if (entry.isFile()) {
-      try { await link(join(source, entry.name), join(target, entry.name)); }
-      catch (error) {
-        if (!['EXDEV', 'EPERM', 'ENOTSUP', 'EOPNOTSUPP'].includes(error.code)) throw error;
-        await copyFile(join(source, entry.name), join(target, entry.name));
-      }
-    }
-    else throw new Error('Unexpected non-file viewer build input: ' + entry.name);
-  }
-};
-const sources = ['core', 'src/decisions', 'src/client', 'src/contracts', 'src/runtime', 'src/mcp/server.ts', 'src/mcp/stdio.ts',
+const sources = ['core', 'src/decisions', 'src/motor', 'src/client', 'src/contracts', 'src/runtime', 'src/mcp/server.ts', 'src/mcp/stdio.ts',
   'src/index.ts', 'src/extension.ts', 'src/tactics.ts', 'src/chat-provenance.ts', 'src/collect-contract.ts', 'src/mounted-look.ts', 'src/vehicle-state.ts',
   'src/railway.ts', 'src/blueprint-railway.ts', 'bridges/performance'];
 const inputs = [];
@@ -55,6 +39,13 @@ for (const path of inputs) {
   await mkdir(dirname(target), { recursive: true }); await writeFile(target, emitted);
   files.push({ file: relative(root, target).replaceAll('\\', '/'), sha256: digest(emitted) });
 }
+// Training remains source-shipped; hash only declared inputs, excluding runs, environments and local tools.
+for (const source of ['training/runner.py', 'training/trajectory.py', 'training/worker.ts', 'training/test_trajectory.py',
+  'training/requirements.txt', 'training/schema', 'training/generated']) {
+  const path = join(root, source);
+  const declared = source.includes('.') ? [path] : (await walk(path)).filter(file => !file.includes('__pycache__') && !file.endsWith('.pyc'));
+  for (const file of declared) sourceFiles.push({ file: relative(root, file).replaceAll('\\', '/'), sha256: digest(await readFile(file)) });
+}
 const lock = JSON.parse(await readFile(join(root, 'release-sources.json'), 'utf8'));
 const archive = join(root, lock.viewer.artifact);
 const viewerInput = await readViewerInput(archive, lock.viewer.sha256, {
@@ -73,7 +64,7 @@ execFileSync('tar', ['-xzf', archive, '-C', join(root, 'dist'),
   '--exclude=__pycache__', '--exclude=*.pyc', '--exclude=monitor/outputs',
   '--exclude=.gitignore', '--exclude=.npmignore'], { stdio: 'inherit' });
 // Emitted config URLs remain valid when SDK and child processes run from dist/runtime.
-await linkTree(join(root, 'dist/viewer'), join(output, 'dist/viewer'));
+await copyViewerAssets(join(root, 'dist/viewer'), join(output, 'dist/viewer'));
 await cp(join(root, 'dist/client-console'), join(output, 'dist/client-console'), { recursive: true });
 for (const directory of ['dist/viewer','dist/client-console','dist/monitor','dist/runtime/dist/viewer','dist/runtime/dist/client-console'])
   for (const path of await walk(join(root,directory))) files.push({file:relative(root,path).replaceAll('\\','/'),sha256:digest(await readFile(path))});
