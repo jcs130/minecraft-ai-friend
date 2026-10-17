@@ -88,7 +88,7 @@ function parameters(args:Record<string,unknown>):Record<string,unknown>[] {
   return steps.slice(0,16).map(s=>{
     if(!s||typeof s!=='object')return {};
     const result:Record<string,unknown>={};
-    for(const key of ['skill','operation','spell','kind','item','mode']) if(name(s[key]))result[key]=s[key];
+    for(const key of ['skill','operation','spell','kind','item','block','recipe','mode']) if(name(s[key]))result[key]=s[key];
     for(const key of ['durationMs','count','targetId','distance','yawDeg','pitchDeg']) if(number(s[key])!==null)result[key]=s[key];
     for(const key of ['at','toward']) if(Array.isArray(s[key])&&s[key].length===3&&s[key].every((v:unknown)=>number(v)!==null))result[key]=s[key];
     if(Array.isArray(s.keys))result.keys=s.keys.filter((k:unknown)=>['forward','back','left','right','jump','sneak','sprint'].includes(String(k))).slice(0,7);

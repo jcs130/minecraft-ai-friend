@@ -15,7 +15,7 @@ await rm(output, {recursive:true,force:true});
 export const digest = data => createHash('sha256').update(data).digest('hex');
 const walk = async path => (await Promise.all((await readdir(path, { withFileTypes: true })).map(async e =>
   e.isDirectory() ? walk(join(path, e.name)) : [join(path, e.name)]))).flat();
-const sources = ['core', 'src/decisions', 'src/motor', 'src/client', 'src/contracts', 'src/runtime', 'src/mcp/server.ts', 'src/mcp/stdio.ts',
+const sources = ['core', 'src/decisions', 'src/motor', 'src/learning', 'src/client', 'src/contracts', 'src/runtime', 'src/mcp/server.ts', 'src/mcp/stdio.ts',
   'src/index.ts', 'src/extension.ts', 'src/tactics.ts', 'src/chat-provenance.ts', 'src/collect-contract.ts', 'src/mounted-look.ts', 'src/vehicle-state.ts',
   'src/railway.ts', 'src/blueprint-railway.ts', 'bridges/performance'];
 const inputs = [];
@@ -40,7 +40,7 @@ for (const path of inputs) {
   files.push({ file: relative(root, target).replaceAll('\\', '/'), sha256: digest(emitted) });
 }
 // Training remains source-shipped; hash only declared inputs, excluding runs, environments and local tools.
-for (const source of ['training/runner.py', 'training/trajectory.py', 'training/worker.ts', 'training/gym_env.py', 'training/ppo.py', 'training/test_ppo.py', 'training/test_trajectory.py',
+for (const source of ['training/runner.py', 'training/trajectory.py', 'training/worker.ts', 'training/gym_env.py', 'training/ppo.py', 'training/test_ppo.py', 'training/test_trajectory.py', 'training/export_gameplay.py', 'training/test_export_gameplay.py',
   'training/requirements.txt', 'training/schema', 'training/generated']) {
   const path = join(root, source);
   const declared = source.includes('.') ? [path] : (await walk(path)).filter(file => !file.includes('__pycache__') && !file.endsWith('.pyc'));

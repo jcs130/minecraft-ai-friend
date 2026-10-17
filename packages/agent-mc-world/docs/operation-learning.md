@@ -1,5 +1,9 @@
 # Shared operation learning contract
 
+For continuous read-only archival and outcome-signal review beside an existing
+host, see [continuous gameplay evidence](gameplay-learning.md). It reuses this
+journal and the original IDs; it does not install another operation collector.
+
 The core supplies a game evidence substrate for every Agent using its SDK/MCP. Pi is one consumer;
 no Pi schema, model or persona is imported. Direct legacy World integrations may use the public
 OperationExperienceBook/ClientOperationLearning ports explicitly; they must not claim automatic
