@@ -1,5 +1,11 @@
 # Agent MC World
 
+`0.5.7-rc.10` preserves build approach failures: an unreachable placement reports
+the navigation cause, measured foot cell and height difference, and says the
+target placement was not sent. It does not turn an approach failure into a
+server placement denial. Other reachable cells can still be placed, cancellation
+still propagates, and no plan is rewritten or automatically retried.
+
 Direct system/action-bar results that explicitly deny a block action with a
 dimension and exact coordinates now update native admission memory. A matching
 active dig ends with the complete server reason; later actions and pathfinding

@@ -240,6 +240,8 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
   const stuck = new Map<string, string>();
   /** 这一趟真动过手的那些格:没放上时才说得出"都试过了" */
   const tried = new Set<string>();
+  // 接近目标失败时尚未尝试目标放置，不能把空气回读写成服务端不认放置。
+  const approachFailures = new Map<string, string>();
   let placed = 0;
   /** 收不了工时的原因;空串 = 全放完了 */
   let halt = '';
@@ -291,9 +293,14 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
       checkAbort(ctx);
       const c = s.cell;
       const key = cellKeyOf(c);
+      const approach = () => gotoPlaceable(bot, s, ctx, cause => {
+        const reason = cause instanceof Error ? cause.message : String(cause);
+        approachFailures.set(key, `${cellText(c)} 接近阶段受阻，尚未发出对该目标的放置：${reason};` +
+          `接近结束时脚格 ${cellText(feetOf(bot))}，目标方块比脚格高 ${c.y - feetOf(bot).y} 格`);
+      });
       if (occupiedByMe(bot, c)) {
         // 脚或头占据落点时，距离近仍须重新落位，避免身体阻挡放置。
-        await gotoPlaceable(bot, s, ctx);
+        await approach();
         feet = feetOf(bot);
       }
       if (occupiedByMe(bot, c)) {
@@ -321,7 +328,7 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
       }
       const p = bot.entity.position;
       if (Math.hypot(c.x + 0.5 - p.x, c.y - p.y, c.z + 0.5 - p.z) > PLACE_REACH
-        && !(await gotoPlaceable(bot, s, ctx))) continue;
+        && !(await approach())) continue;
       // 对占身位的材料，中心格外的碰撞箱擦边也须避开；gotoPlaceable 只保证可及距离。
       if (materialCollides(bot, call.material) && hitboxBlocks(bot, c)
         && !(await stepOffCell(bot, ctx, c))) { tried.add(key); continue; }
@@ -329,6 +336,7 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
       const permit = permitPlacement(ctx, bot.heldItem?.name ?? item.name, false, c);
       if (!permit.ok) { halt = permit.reason; haltCode = 'resource-unavailable'; break; }
       tried.add(key);
+      approachFailures.delete(key);
       let landed: BlockFace | null = null;
       const temporaryProof = call.temporary ? prepareTemporaryScaffoldPlacement(bot, blockAtCell(bot, c)) : null;
       try {
@@ -358,8 +366,11 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
       break;
     } else {
       // 点名占位的是谁:"剩 N 格放不上"读不出下一步该拆什么
-      halt = `剩 ${remaining.size} 格放不上,${faceGiven ? '指名的那一面' : '可用参照面'}未确认放置成功:` +
-        `${frontier.slice(0, 3).map((s) => placementReadback(bot, s.cell)).join('、')}`;
+      const unapproached = frontier.filter(s => !tried.has(cellKeyOf(s.cell)) && approachFailures.has(cellKeyOf(s.cell)));
+      halt = unapproached.length === frontier.length
+        ? `剩 ${remaining.size} 格尚未尝试目标放置:${unapproached.slice(0, 3).map(s => approachFailures.get(cellKeyOf(s.cell))).join('、')}`
+        : `剩 ${remaining.size} 格放不上,${faceGiven ? '指名的那一面' : '可用参照面'}未确认放置成功:` +
+          `${frontier.slice(0, 3).map((s) => approachFailures.get(cellKeyOf(s.cell)) ?? placementReadback(bot, s.cell)).join('、')}`;
       break;
     }
   }
@@ -375,6 +386,8 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
       const b = blockAtCell(bot, ref);
       return `${cellText(s.cell)} 贴不住:${cellText(ref)} 是${b ? zhName(b.name) : '没加载的区块'},不是实心方块`;
     }
+    const approachFailure = approachFailures.get(key);
+    if (!tried.has(key) && approachFailure) return approachFailure;
     if (!tried.has(key)) return `${cellText(s.cell)} 没轮到:${halt}`;
     return `${cellText(s.cell)} ${s.face ? `${FACE_ZH[s.face]}面` : '可用参照面'}未确认放置成功:` +
       occupantOf(bot, s.cell);
@@ -397,7 +410,7 @@ export async function skillBuild(bot: Bot, call: PlaceCall, ctx: SkillContext): 
     const fp = footprintOf(bot, call.material);
     const scene = fp === 'single' ? [] : footprintScene(bot, first.todo[0].cell, call.material, fp);
     throw new SkillBlocked(`一块都没放上:${halt}${tail}`, [...spotLines, ...scene],
-      haltCode === 'resource-unavailable' ? 'local' : 'server', haltCode);
+      haltCode === 'resource-unavailable' || tried.size === 0 ? 'local' : 'server', haltCode);
   }
   // 缺口以 remaining 中计划放置但未完成的格计；原已存在的目标方块不计缺口。
   const gap = [...remaining.values()].map((s) => cellText(s.cell));

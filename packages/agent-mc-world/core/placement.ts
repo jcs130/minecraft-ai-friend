@@ -612,7 +612,9 @@ export function buildSpots(bot: Bot, call: PlaceCall): BuildSpot[] {
  * 目标格上站着,服务端随即以"那儿有个玩家"拒掉这一次放置。GoalPlaceBlock 的 `isStandingIn`
  * 把脚与脑袋两格都算作站在里面,并按视线求交挑落脚点,与服务端那一次射线判定同口径。
  */
-export async function gotoPlaceable(bot: Bot, s: BuildSpot, ctx: SkillContext): Promise<boolean> {
+export async function gotoPlaceable(
+  bot: Bot, s: BuildSpot, ctx: SkillContext, onBlocked?: (cause: unknown) => void,
+): Promise<boolean> {
   // GoalPlaceBlock 的 faces 是"参照方块相对落点的方位",与面向量正好反向;
   // 不指名面时由它自己兜六个面。facing 也一律兜默认(不限朝向)
   const opts: Record<string, unknown> = { range: PLACE_REACH, LOS: true };
@@ -643,6 +645,7 @@ export async function gotoPlaceable(bot: Bot, s: BuildSpot, ctx: SkillContext): 
     return true;
   } catch (err) {
     if (err instanceof Aborted) throw err;
+    onBlocked?.(err);
     return false;
   }
 }
