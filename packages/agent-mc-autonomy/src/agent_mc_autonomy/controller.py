@@ -1486,7 +1486,8 @@ class Controller:
                     response = await self.decide_with_events(messages, round_tools, profile)
                 except (PlannerResponseError, PlannerUnavailableError, PlannerRequestRejectedError) as error:
                     with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
-                        output.write(encode({"turnId": self.turn, "rejected": error.diagnostic, "dispatched": False}) + "\n")
+                        output.write(encode({"turnId": self.turn, "rejected": error.diagnostic, "dispatched": False,
+                                             "context_delivery": budget["event_delivery"]}) + "\n")
                     self.planner_failures += 1
                     if isinstance(error, PlannerRequestRejectedError):
                         self.planner_notice = "The provider rejected the planning request before any dispatch. Check the configured model/provider compatibility. Native work and reflexes remain independent; do not replay pending actions."
@@ -1523,7 +1524,8 @@ class Controller:
                 # Retain the exact model result before validation, including rejected
                 # calls. Runtime diagnostics must not require replaying a game action.
                 with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
-                    output.write(encode({"turnId": self.turn, "response": response}) + "\n")
+                    output.write(encode({"turnId": self.turn, "response": response,
+                                         "context_delivery": budget["event_delivery"]}) + "\n")
                 # Events arriving during inference belong to the next request.
                 consumed_ids = {id(consumed[index]) for index in budget["event_delivery"]["included_indices"]}
                 self.recent = [event for event in self.recent if id(event) not in consumed_ids]

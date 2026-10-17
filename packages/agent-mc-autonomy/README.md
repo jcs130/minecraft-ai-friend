@@ -1,5 +1,10 @@
 # Agent MC Autonomy
 
+0.2.9 pins the Java registered-chat-format repair. Decision receipts retain
+the native run/cursor references actually shown to the planner, including
+rejected inference attempts, without copying private messages into diagnostics.
+Shown events are delivery evidence, not proof of consideration or response.
+
 0.2.8 pins the engine-child IPC attribution repair and the shared viewer's
 bounded delivery-cadence interpolation. YSM animation keeps the displayed
 heading; raw player observations, gameplay and host interfaces are unchanged.

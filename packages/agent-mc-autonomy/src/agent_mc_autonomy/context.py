@@ -497,5 +497,7 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
                         "output_reserve": reserved_output, "framing_reserve": FRAMING_RESERVE,
                          "total": total, "limit": context_tokens, "omitted": omitted,
                          "event_delivery": {"available": len(events), "included": len(included_events),
-                             "omitted": len(events) - len(included_events), "included_indices": sorted(included_events)},
+                             "omitted": len(events) - len(included_events), "included_indices": sorted(included_events),
+                             "included_refs": [{"run": events[index].get("run"), "cursor": events[index].get("cursor")}
+                                               for index in sorted(included_events)]},
                          "superseded_rejected_plans": len(superseded), "host_context": included_host_context, "host_recent_context": recent_diagnostic}
