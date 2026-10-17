@@ -162,6 +162,8 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                     "bundledAppearanceCatalogFile": settings.viewer_bundled_appearance_catalog_file,
                     "defaultAppearance": settings.viewer_default_appearance,
                     "selectionScope": settings.identity,
+                    "presentationModule": settings.server_presentation_module,
+                    "presentationSha256": settings.server_presentation_sha256,
                     "stateFile": str(directory / "viewer-state.json"), "session": viewer_session,
                     "agentStateFile": str(directory / "viewer-agent.json"),
                 }
