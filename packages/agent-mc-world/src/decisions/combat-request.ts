@@ -14,7 +14,8 @@ export function combatRequest(frame: CombatDecisionFrame) {
   frame.candidates.forEach((candidate, index) => {
     const { id: _id, intent, ...parameters } = candidate;
     // UUID is checked locally against the fresh entity; the model chooses an option, not an identity.
-    const { uuid: _uuid, ...action } = parameters as typeof parameters & { uuid?: string | null };
+    const { uuid: _uuid, ...primitive } = parameters as typeof parameters & { uuid?: string | null };
+    const action = candidate.kind === 'method' ? { kind: 'method', method: candidate.id } : primitive;
     criteria[`option_${index}`] = intent;
     options[`option_${index}`] = action;
   });

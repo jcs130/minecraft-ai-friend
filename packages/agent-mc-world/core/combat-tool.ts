@@ -1,5 +1,6 @@
 import type { ToolDef } from './support/host-contract.ts';
 import { COMBAT_RULES_SCHEMA } from './combat-rules.ts';
+import { COMBAT_ROUTINES_SCHEMA } from './combat-routines.ts';
 export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
     name: 'mc_combat_tactic',
     tags: ['write'],
@@ -11,8 +12,12 @@ export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
        + 'The host selects candidates from {battlefield:true}; submit {choice:{candidate,tacticRevision,connectionGeneration}} for fresh validation. No inference runs in this extension. '
       + 'program:{name,code,params?} installs your JavaScript synchronous function body with frame and params; return {candidates,instructions}. '
       + 'frame.actionPool contains currently executable casts, engagements and collision-checked directions; you may select, reorder or relabel them, or construct step destinations 0.5 to 1.6 blocks away. '
-      + 'Read actors from frame.battlefield.actors (relation, health, distance, lineOfSight); candidate kinds are cast, engage, step, retreat and track. Track maintains a bounded distance lease without attacking, including before combat starts. There is no frame.snapshot.enemies or melee candidate. '
+      + 'Read actors from frame.battlefield.actors (relation, health, distance, lineOfSight); candidate kinds are cast, engage, step, retreat, track and method. Track maintains a bounded distance lease without attacking, including before combat starts. There is no frame.snapshot.enemies or melee candidate. '
       + 'The program constructs choices from fresh battlefield facts independently of the main model; the fast model chooses and the combat controller executes. '
+      + 'routines:[{id,intent,procedure,params?,durationMs?}] registers exact saved mc_script library references in the fast menu; routines:[] removes them. '
+      + 'Read and validate/save a method first. Registration checks its immutable version and does not execute it or claim it effective. '
+      + 'A method option starts that existing script only when the body is free; its original run ID, SDK trace and terminal remain readable with mc_script. '
+      + 'An installed program may filter/reorder method options from actionPool; its returned priority order is preserved. '
       + 'Direct steps last at most 700ms and share the combat body lease; survival, task ownership and collisions remain checked. '
       + 'Use program:null to remove it. No imports, files, network or raw bot; 50ms worker execution budget, separate 500ms response deadline. Runtime failure revokes that program until updated; built-in choices remain a fallback. '
       + '{decisions:true} lists recent submitted choices; {decision:id} reads the receipt. Sending an action does not prove a successful encounter. '
@@ -25,12 +30,14 @@ export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
       type: 'object',
       properties: {
         choice: { type:'object',additionalProperties:false,required:['candidate','tacticRevision','connectionGeneration'],
-          properties:{candidate:{type:'object'},tacticRevision:{type:'integer'},connectionGeneration:{type:'integer'}} },
+          properties:{candidate:{type:'object'},tacticRevision:{type:'integer'},connectionGeneration:{type:'integer'},
+            decisionId:{type:'string',minLength:1,maxLength:128}} },
         enabled: { type: 'boolean' },
         spells: { type: 'array', minItems: 1, maxItems: 8, uniqueItems: true,
           items: { type: 'string', pattern: '^[a-z][a-z0-9_:-]{0,63}$' } },
         healAtOrBelow: { type: 'integer', minimum: 1, maximum: 20 },
         rules: COMBAT_RULES_SCHEMA,
+        routines: COMBAT_ROUTINES_SCHEMA,
         program: { anyOf: [{ type: 'null' }, { type: 'object', additionalProperties: false,
           properties: { name: { type: 'string', minLength: 1, maxLength: 80 },
             code: { type: 'string', minLength: 1, maxLength: 12000 }, params: { type: 'object' } }, required: ['name', 'code'] }] },

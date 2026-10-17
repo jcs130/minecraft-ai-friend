@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import type { CombatTactic } from './combat-abilities.ts';
 import { validCombatRules } from './combat-rules.ts';
 import { validCombatProgram } from './combat-program.ts';
+import { validCombatRoutines } from './combat-routines.ts';
 
 import { sanitizeCombatResult } from './combat-observation.ts';
 import type {CombatScene,CombatResult} from './combat-observation.ts';
@@ -74,7 +75,8 @@ export function validCombatTactic(value: unknown): value is CombatTactic {
     && new Set(v.spells).size === v.spells.length))
     && (v.healAtOrBelow === null || (Number.isInteger(v.healAtOrBelow) && v.healAtOrBelow >= 1 && v.healAtOrBelow <= 20))
     && (v.rules === undefined || validCombatRules(v.rules))
-    && (v.program === undefined || v.program === null || validCombatProgram(v.program));
+    && (v.program === undefined || v.program === null || validCombatProgram(v.program))
+    && (v.routines === undefined || validCombatRoutines(v.routines));
 }
 
 export class CombatTacticBook {

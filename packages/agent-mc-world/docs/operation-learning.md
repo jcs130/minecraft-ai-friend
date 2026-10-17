@@ -82,3 +82,26 @@ Method versions use the existing `mc_script` library and explicit validation/sel
 versions remain experimental until real outcomes support them. Skills are progressive guidance around
 these interfaces, not a second runtime. Package both minecraft-agent and minecraft-learning with MIT
 license and per-file hashes; marketplace publication is a separate reviewed action.
+
+`mc_combat_tactic.routines` registers a bounded fast menu of exact saved method references. Each entry
+has `id`, `intent`, `procedure` and optional `params`/`durationMs`. Registration resolves the immutable
+version in the current realm/account library; it neither runs the method nor follows a newer same-name
+version. `routines:[]` clears the menu. Registration adds no inference loop; an explicitly enabled host
+combat driver uses its existing independent clock and model connection. The model receives option
+labels, necessary battlefield facts and execution availability, without method source or history.
+
+An authored `program` can filter and order the registered method options in `frame.actionPool` before
+the fast model chooses. Its order is retained. Methods are offered only with a free body and no active
+combat controller; casts, withdrawal, target changes and short steps reuse that controller during an
+encounter. A selected hostile target remains selected while the same visible entity is available.
+Fresh connection, task, tactic version, identity and physical eligibility checks still precede dispatch.
+The decision config's `minConfidence` is applied to the chosen option's probability; a service's
+above-chance confidence is retained separately in the receipt and does not create a second threshold.
+The native reflex port does not yet resolve this saved-method catalog; its explicit `mc_script` remains
+separate, and unsupported registration returns an error.
+
+Fast method admission returns the original method execution ID and exact revision/source hash. Its
+terminal event and SDK calls use the existing method channel. Operation evidence retains the fast
+decision ID and method reference, so reflection can cite actual outcomes, revise a method through the
+ordinary library parent check, register the revised reference, and restore the previous one. Completed
+methods, registration and test fixtures remain insufficient evidence of improved gameplay or mastery.

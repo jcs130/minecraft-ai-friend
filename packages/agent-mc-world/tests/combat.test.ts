@@ -2164,8 +2164,35 @@ describe('异步战术动作共用战斗控制器', () => {
     expect(r.calls.suspended).toBe(0);
     expect(r.session.react({ kind: 'engage', targetId: 7 })).toBe(false);
     expect(r.session.react({ kind: 'engage', targetId: 8 })).toBe(true);
-    expect(r.session.engagementTargets()).toEqual([]);
+    expect(r.session.engagementTargets()).toEqual([8]);
     r.session.stop();
+  });
+
+  it('keeps an explicitly selected valid target through controller ticks and permits retargeting', async () => {
+    const { bot } = combatRigBot([foe(7, 'zombie', 2.5), foe(8, 'zombie', 5.5)]);
+    const r = rig(bot);
+    try {
+      expect(r.session.react({ kind: 'engage', targetId: 8 })).toBe(true);
+      await drive(bot, 200);
+      expect(r.session.reactionState().targetId).toBe(8);
+      expect(r.session.react({ kind: 'engage', targetId: 7 })).toBe(true);
+      await drive(bot, 100);
+      expect(r.session.reactionState().targetId).toBe(7);
+      expect(r.calls.suspended).toBe(1);
+    } finally { r.session.stop(); }
+  });
+
+  it('does not keep a selected unknown-UUID entity after its numeric ID is reused', async () => {
+    const { bot } = combatRigBot([foe(7, 'zombie', 2.5), foe(8, 'zombie', 5.5)]);
+    const r = rig(bot);
+    try {
+      expect(r.session.react({ kind: 'engage', targetId: 8 })).toBe(true);
+      await drive(bot, 100);
+      expect(r.session.reactionState().targetId).toBe(8);
+      bot.entities[8] = foe(8, 'zombie', 5.5);
+      await drive(bot, 100);
+      expect(r.session.reactionState().targetId).toBe(7);
+    } finally { r.session.stop(); }
   });
 
   it('接敌候选在身体占用、低血、未武装和策略关闭时均不提供', () => {

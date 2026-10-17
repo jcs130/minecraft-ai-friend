@@ -1,5 +1,6 @@
 /** Optional HOST-side selector. The game engine never imports or starts this loop. */
 import { parseTypedChoice } from '../../core/support/typed-decision.ts';
+import { randomUUID } from 'node:crypto';
 import { combatRequest } from './combat-request.ts';
 import type { CombatExecutionPolicy, CombatCandidate, CombatDecisionFrame } from '../../core/combat-decision-types.ts';
 export type { CombatExecutionPolicy, CombatCandidate, CombatDecisionFrame } from '../../core/combat-decision-types.ts';
@@ -13,7 +14,7 @@ export interface CombatDecisionConfig extends CombatExecutionPolicy {
 export interface CombatDecisionOptions {
   config: () => CombatDecisionConfig;
   sample: () => CombatDecisionFrame | null;
-  apply: (candidate: CombatCandidate, frame: CombatDecisionFrame) => boolean | Promise<boolean>;
+  apply: (candidate: CombatCandidate, frame: CombatDecisionFrame, decision: { id: number; decisionId: string }) => boolean | Promise<boolean>;
   /** Refresh through a host tool/SDK port immediately before applying a remote choice. */
   refresh?: () => Promise<CombatDecisionFrame | null>;
   prepare?: (frame: CombatDecisionFrame) => Promise<CombatDecisionFrame>;
@@ -69,6 +70,7 @@ function sceneChanges(before: CombatDecisionFrame, after: CombatDecisionFrame, s
 }
 
 export class CombatDecisionLoop {
+  private readonly runId = randomUUID();
   private stopped = false;
   private readonly lifetime = new AbortController();
   private readonly observations = new Set<ReturnType<typeof setTimeout>>();
@@ -125,7 +127,7 @@ export class CombatDecisionLoop {
     const criteria = compact.questions.tactic.criteria;
     const { program: _program, actionPool: _pool, ...publicFrame } = frame;
     const body = JSON.stringify({ ...(cfg.model ? { model: cfg.model } : {}), ...compact });
-    const scope = { id, startedAtMs, connectionGeneration: frame.battlefield.connectionGeneration,
+    const scope = { id, decisionId: `${this.runId}:${id}`, startedAtMs, connectionGeneration: frame.battlefield.connectionGeneration,
       sampledAtMs: frame.battlefield.sampledAtMs, tacticRevision: frame.tacticRevision,
       program: frame.policy ? { name: frame.policy.name, sourceHash: frame.policy.sourceHash } : null };
     Object.assign(entry, scope, { frame: publicFrame });
@@ -165,7 +167,10 @@ export class CombatDecisionLoop {
       const executable = selected && current?.candidates.find(c => c.id === selected.id && c.kind === selected.kind
         && (selected.kind !== 'cast' || (c.kind === 'cast' && c.spell === selected.spell && c.ruleId === selected.ruleId))
         && (selected.kind !== 'engage' || (c.kind === 'engage' && c.targetId === selected.targetId && c.uuid === selected.uuid))
-        && (selected.kind !== 'track' || (c.kind === 'track' && c.targetId === selected.targetId && c.uuid === selected.uuid)));
+        && (selected.kind !== 'track' || (c.kind === 'track' && c.targetId === selected.targetId && c.uuid === selected.uuid))
+        && (selected.kind !== 'method' || c.kind === 'method' && c.procedure.handle === selected.procedure.handle
+          && c.procedure.revision === selected.procedure.revision && JSON.stringify(c.params) === JSON.stringify(selected.params)
+          && c.durationMs === selected.durationMs));
       const changed = current ? sceneChanges(frame, current, selected ?? null) : ['unavailable'];
       let outcome: string;
       if (!liveCfg.enabled || liveCfg.mode !== cfg.mode || liveCfg.endpoint !== cfg.endpoint
@@ -175,18 +180,17 @@ export class CombatDecisionLoop {
       else if (!current || changed.length) outcome = 'scene-changed';
       else if ((!selected || selected.kind === 'step' || selected.kind === 'cast')
         && Math.hypot(...current.battlefield.self.position.map((v, i) => v - frame.battlefield.self.position[i])) > 1.5) outcome = 'moved';
-      else if (answer.confidence < Math.max(cfg.minConfidence, liveCfg.minConfidence)
-        || answer.choiceProbability < Math.max(cfg.minConfidence, liveCfg.minConfidence)
+      else if (answer.choiceProbability < Math.max(cfg.minConfidence, liveCfg.minConfidence)
         || margin < Math.max(cfg.minMargin ?? 0, liveCfg.minMargin ?? 0)) outcome = 'uncertain';
       else if (!selected) outcome = 'keep';
       else if (!executable) outcome = 'no-longer-executable';
       else if (cfg.mode === 'shadow') outcome = 'shadow';
       // Movement prose includes measured distance; apply the freshly checked candidate.
-      else outcome = await this.options.apply(executable, current) ? 'sent' : 'rejected';
+      else outcome = await this.options.apply(executable, current, scope) ? 'sent' : 'rejected';
       if (this.stopped) return;
       if (outcome === 'uncertain' && cfg.mode === 'act') this.options.fallback?.();
       const result = { ...scope, elapsedMs, choice: answer.choice,
-        probability: answer.choiceProbability, probabilities: answer.probabilities, margin, outcome,
+        probability: answer.choiceProbability, confidence: answer.confidence, probabilities: answer.probabilities, margin, outcome,
         sceneChanges: changed,
         modelMs: payload.latency_ms ?? null, usage: payload.usage ?? null,
         candidate: (outcome === 'sent' ? executable : selected) ?? null };

@@ -180,13 +180,14 @@ export class JavaReflexRuntime {
     const program=this.tactics.getTactic()?.program;if(program)frame.program=program;return frame;
   }
   async tool(args:Record<string,unknown>,ctx:ToolCallContext):Promise<ToolOutcome>{
+    if(args.routines!==undefined)return{text:'Native reflex has no saved-method execution port; routines were not registered or run. Use the native mc_script interface explicitly.',failed:true};
     if(args.battlefield===true){let frame=this.decisionFrame();if(frame?.program){const hash=combatProgramHash(frame.program);if(hash!==this.failedProgram)try{const result=combatProgramCandidates(await this.program.run(frame.program,frame),frame,to=>corridorSafe(this.currentBot()!,this.bot.entity.position,new Vec3(...to)));frame={...frame,candidates:diverseCombatOptions(result.candidates,({...COMBAT_EXECUTION_DEFAULTS,...this.cfg.combatOptions}).maxCandidates),policy:{name:frame.program.name,sourceHash:hash,instructions:result.instructions}};this.programError=null;}catch(error){this.failedProgram=hash;this.programError=`Program ${hash} unavailable: ${String(error).slice(0,240)}`;}}
       return{text:JSON.stringify({frame,capabilities:this.status()}),meta:{protocol:'agent-mc-tactics/v1',frame}};}
     if(args.choice){const choice=args.choice as any,frame=this.decisionFrame();const candidate=choice.candidate as CombatCandidate;
       let eligible=!!frame&&frame.battlefield.connectionGeneration===choice.connectionGeneration&&frame.tacticRevision===choice.tacticRevision&&!frame.battlefield.action.emergency;
       if(eligible&&frame?.program){try{combatProgramCandidates({candidates:[candidate],instructions:''},frame,to=>corridorSafe(this.currentBot()!,this.bot.entity.position,new Vec3(...to)));}catch{eligible=false;}}
       else eligible=eligible&&!!frame?.candidates.some(c=>JSON.stringify(c)===JSON.stringify(candidate));
-      const accepted=eligible&&candidate.kind!=='cast'&&this.combat.react(candidate);if(accepted){this.choiceRequestId=ctx.callId??null;await this.flush(false);}
+      const accepted=eligible&&candidate.kind!=='cast'&&candidate.kind!=='method'&&this.combat.react(candidate);if(accepted){this.choiceRequestId=ctx.callId??null;await this.flush(false);}
       const receipt={id:++this.receiptSerial,at:new Date().toISOString(),accepted,candidate,tacticRevision:choice.tacticRevision,goalCompleted:false,meaning:accepted?'shared-controller-armed; inspect native inputs and observed effects':'stale-or-ineligible'};
       this.receipts.push(receipt);if(this.receipts.length>32)this.receipts.shift();return{text:JSON.stringify(receipt),meta:{protocol:'agent-mc-tactics/v1',receipt}};}
     if(args.decisions===true||args.decision!==undefined)return{text:JSON.stringify(args.decision?this.receipts.find(r=>r.id===args.decision)??null:this.receipts)};

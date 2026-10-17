@@ -65,6 +65,23 @@ it('records later terminals, failed dispatches, inline hashes and host-controlle
   expect(f.book.list(scope).entries.find(r => r.requestId === 'unknown')?.dispatch).toBe('unknown');
 });
 
+it('links a fast selected saved method to its original terminal and measured after-state', async () => {
+  const f = setup(), revision = 'a'.repeat(64);
+  const methodAccepted = { ...accepted, kind: 'method' as const, id: 'body:method-1' };
+  const out = await f.wrap(async () => ({ text: 'method started', execution: methodAccepted }), 'mc_combat_tactic')
+    .handler({ choice: { decisionId: 'fast-run:1', candidate: { kind: 'method', id: 'supported-step',
+      procedure: { handle: `mem:mc-method/short-step/${revision}`, revision } } } },
+    { ...f.ctx, role: 'host-decision', callId: 'fast-method' });
+  const id = experienceId(out);
+  expect(f.book.get(scope, id)).toMatchObject({ attribution: { controller: 'system1', decisionId: 'fast-run:1',
+    method: { id: 'short-step', revision } }, execution: { kind: 'method', terminal: false }, goalVerified: false });
+  f.move(2);
+  await f.host.pushEvent({ source: 'minecraft', type: 'minecraft.method', text: 'method terminal',
+    execution: { ...methodAccepted, phase: 'completed', terminal: true } });
+  expect(f.book.get(scope, id)).toMatchObject({ execution: { id: methodAccepted.id, phase: 'completed', terminal: true },
+    after: { position: { x: 2 } }, goalVerified: false });
+});
+
 it('reflection from real receipts is recalled as history without claiming adoption or mastery', async () => {
   const f = setup(), memory = new GameMemoryBook(join(f.data, 'minecraft-memory'));
   const out = await f.wrap(async () => { f.move(2); return { text: 'done', execution: completed }; })

@@ -43,12 +43,18 @@ export class WorldOperationLearning {
       if (!active) return tool.handler(args, ctx);
       const { collector } = active;
       const callId = ctx.callId ?? randomUUID();
+      const decisionId = (args.choice as { decisionId?: unknown } | undefined)?.decisionId;
+      const candidate = (args.choice as { candidate?: { kind?: string; procedure?: { handle?: string; revision?: string } } } | undefined)?.candidate;
+      const method = candidate?.kind === 'method' && candidate.procedure
+        ? /^mem:mc-method\/([a-z][a-z0-9-]{0,63})\/([a-f0-9]{64})$/.exec(candidate.procedure.handle ?? '') : null;
       const attribution: OperationAttribution = {
         controller: controller ?? (ctx.role === 'main' ? 'system2' : ctx.role === 'host-decision' ? 'system1' : 'unknown'),
         ...(typeof args.code === 'string' && tool.name.endsWith('_script') ? {
           method: { id: typeof args.name === 'string' ? args.name : 'inline-script',
             revision: createHash('sha256').update(args.code).digest('hex') },
         } : {}),
+        ...(method && candidate?.procedure?.revision === method[2] ? { method: { id: method[1], revision: method[2] } } : {}),
+        ...(typeof decisionId === 'string' ? { decisionId } : {}),
       };
       const pending = collector.begin(tool, args, callId, attribution);
       let result;
