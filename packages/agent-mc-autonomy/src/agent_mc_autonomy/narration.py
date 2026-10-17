@@ -5,6 +5,7 @@ subscribes to the current body/actor, then claims each fresh line at most once.
 Unknown deliveries are not retried. This queue never owns native work.
 """
 
+import copy
 import hashlib
 import json
 import sqlite3
@@ -18,15 +19,42 @@ from .host_recent import binding
 from .mailbox import Mailbox, observation
 
 GUIDANCE = """
-A host voice output is available. In this SAME decision, you may put exactly
-{"spoken_text":"one short natural utterance"} in assistant content, alongside
-the normal action tool call. Use the supplied persona and recent conversation:
+A host voice output is available. In this SAME decision, include a short natural
+utterance in mc_do._spoken_text when choosing meaningful work. This optional
+host-only field is removed before dispatch to Minecraft. Alternatively put exactly
+{"spoken_text":"one short natural utterance"} in assistant content alongside
+the normal tool call. Use the supplied persona and recent conversation:
 react, joke, wonder or explain a meaningful intention in your own voice. Speak
 in the conversation's language. Do not read inventory lists, diagnostics, JSON,
 tool workflow, tone instructions or silence placeholders aloud. An intention
 is not success; reflect outcomes only from observed receipts. Omit content when
 there is nothing worth saying. Speech neither replaces nor delays useful work.
 """
+
+
+def tool_contract(tools):
+    result = copy.deepcopy(tools)
+    for tool in result:
+        function = tool["function"]
+        if function["name"] == "mc_do":
+            function["parameters"].setdefault("properties", {})["_spoken_text"] = {
+                "type": "string", "maxLength": 600,
+                "description": "Optional short persona-aware intention or reaction for host voice; never sent to game chat."}
+    return result
+
+
+def response_line(response):
+    content = response.get("content")
+    if spoken_line(content):
+        return content
+    for call in response.get("tool_calls") or []:
+        if call.get("function", {}).get("name") == "mc_do":
+            try:
+                args = json.loads(call["function"]["arguments"])
+                return json.dumps({"spoken_text": args.get("_spoken_text")}, ensure_ascii=False)
+            except (ValueError, TypeError, AttributeError):
+                return None
+    return None
 
 
 def spoken_line(content):

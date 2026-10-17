@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timezone
 
 import pytest
+
 from agent_mc_autonomy.death_memory import scope_key
 from agent_mc_autonomy.host_context import HostContextPort
 from agent_mc_autonomy.narration import NarrationPort, binding_key, spoken_line
@@ -134,3 +135,26 @@ def test_one_existing_planner_call_offers_line_before_native_dispatch(voice, fra
     assert len(captured) == 1
     assert "SAME decision" in captured[0][0]["content"]
     assert len([call for call in bridge.calls if call[0] == "mc_do"]) == 1
+
+
+def test_tool_only_model_keeps_narration_out_of_native_arguments(voice, framework_module, run_async, monkeypatch):
+    from test_controller import choose, setup
+    port, expected, _ = voice
+    assert port.subscribe(expected)
+    captured = []
+
+    async def decide(messages, tools):
+        captured.append(tools)
+        response = choose()
+        response["tool_calls"][0]["function"]["arguments"] = '{"steps":[],"_spoken_text":"山边搭个小窝吧。"}'
+        return response  # No assistant content, as with some tool-only models.
+
+    module, bridge, controller = setup(framework_module, port.directory, decide)
+    controller.host_context_provider = lambda _: HostContextPort(port.directory, now=port.now).read(0)
+    controller.recent_request = lambda _: {**expected, "as_of": port.now()}
+    run_async(controller.turn_once("survive", "body contract", module.model_tools(bridge.tools)))
+    assert len(captured) == 1
+    assert "_spoken_text" in next(t["function"]["parameters"]["properties"] for t in captured[0] if t["function"]["name"] == "mc_do")
+    assert all("_spoken_text" not in args for _, args, _ in bridge.calls)
+    assert port.take(expected)["line"] == "山边搭个小窝吧。"
+    assert "_spoken_text" not in bridge.tools[0]["inputSchema"].get("properties", {})

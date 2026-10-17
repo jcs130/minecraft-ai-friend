@@ -1103,6 +1103,11 @@ class Controller:
             raise ModelCallRejected("Tool arguments must be one complete JSON object.") from None
         if not isinstance(arguments, dict):
             raise ModelCallRejected("Tool arguments must be a JSON object.")
+        if name == "mc_do" and "_spoken_text" in arguments:
+            declaration = next(t["function"] for t in tools if t["function"]["name"] == name)
+            if "_spoken_text" not in declaration.get("parameters", {}).get("properties", {}):
+                raise ModelCallRejected("Host speech was not advertised for this request.")
+            arguments.pop("_spoken_text")  # Host metadata never reaches the native body/schema.
         available = {t["name"] for t in self.bridge.tools} - HIDDEN_TOOLS
         if name == "mc_invoke":
             target = arguments.get("name")
@@ -1371,7 +1376,7 @@ class Controller:
                 host_context = self.current_host_context()
                 self.publish(host_context=host_context_metadata(host_context))
                 recent_context = await self.recent_for_round(host_context)
-                from .narration import GUIDANCE, NarrationPort
+                from .narration import GUIDANCE, NarrationPort, response_line, tool_contract
                 narration = NarrationPort(self.data)
                 narration_request = self.recent_request(host_context)
                 narration_binding = ({k: v for k, v in narration_request.items() if k != "as_of"}
@@ -1381,6 +1386,8 @@ class Controller:
                 except (OSError, sqlite3.Error):
                     narration_enabled = False
                 round_prefix = prefix + (GUIDANCE if narration_enabled else "")
+                if narration_enabled:
+                    round_tools = tool_contract(round_tools)
                 if self.stop_requested() or self.preempted or self.turn_death_epoch != self.death_epoch or self._event_poll is not None or self._deferred_event_drain:
                     return
                 try:
@@ -1454,7 +1461,7 @@ class Controller:
                 def offer_narration():
                     if narration_enabled and not self.stop_requested() and not self.preempted:
                         try:
-                            self.publish(narration=narration.offer(response.get("content"), narration_binding))
+                            self.publish(narration=narration.offer(response_line(response), narration_binding))
                         except (OSError, sqlite3.Error):
                             self.publish(narration={"offered": False, "reason": "outbox_unavailable"})
                 if not calls:
