@@ -1,7 +1,8 @@
 # Agent MC Autonomy
 
 0.2.5 pins the native protection-receipt repair and the shared inventory-icon
-renderer. An explicitly selected, SHA-checked server presentation may provide a
+renderer, including exact server profile-head icons and native health-packet
+evidence. An explicitly selected, SHA-checked server presentation may provide a
 separate item catalog and bounded read-only status refresh options. The default
 body loads no server code or resources and adds no server polling/model loop.
 
