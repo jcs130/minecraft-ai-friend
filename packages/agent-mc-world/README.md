@@ -3,6 +3,18 @@
 Independent Minecraft execution core, maintained in `jcs130/minecraft-ai-friend`.
 Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.
 
+`0.5.7-dev.20261017.3` aligns water-containing plant routing with the
+installed collision physics and restores liquid waypoints from their original
+A* cells instead of silently lowering them through kelp/seagrass. Route probes
+and real navigation share the correction; no position/velocity or server
+attribute is changed. Explicit native input still owns the entire program.
+`bot.read("breathing")` adds timestamped oxygen/health observations and separate
+damage/recovery counters for agent-authored diving budgets. See the focused
+`api:"diving"` guide and `examples/adaptive-diving.mjs`: the latter only proposes
+a decision from supplied observations/return costs, never performs a dive or
+automatically promotes a learned skill. Simulation and contract tests do not
+establish live route recovery or autonomous learning.
+
 `protectionPreflight` defaults to false. With a server protection port, normal
 digging, placing and path planning do not query permissions. An unconfirmed block
 effect triggers a query for that target; explicit cached denials still apply.

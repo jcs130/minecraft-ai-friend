@@ -21,6 +21,14 @@ const SDK_API = Object.freeze({
     + 'Server transactions still need authoritative replies. Expand mc_script {runId,call} for the complete task result before saving a claim.',
   'mc.flightPlan': 'await mc.flightPlan(args): the same read-only geometry and budget preview as mc_flight_plan. '
     + 'It does not move, cast, grant permission or prove arrival. Read mc_flight_plan schema for arguments; execution revalidates geometry and permission.',
+  diving: 'Mineflayer 潜水程序：await bot.read("breathing") 按需取带采样/更新时刻的氧气、生命、浸水状态、位置与速度。'
+    + '在同一原生程序中 await bot.setControlState("jump",false) 接管输入，await bot.waitForTicks(n) 和连续读取期间保持；结束/取消会释放，危急环境接管仍可撤销程序。不要在采样间隙结束再重开，否则被动踩水会恢复。'
+    + '按实际时间差比较多次读数；headWet=true 且有多次氧气递减才估计消耗率，读数不变或缺失不等于无限氧气。生命下降和回复分别留证据，不以回血抵消伤害。'
+    + '返程预算=已核验呼吸点路线耗时+实际上浮/横移耗时+控制延迟与不确定性余量；剩余氧气秒数=当前氧气/实测保守消耗率。'
+    + '预计返程时间接近氧气余量、生命余量不足、通路变化或读数失效时，脚本自行决定返程；不以入水或固定水下秒数直接判定必须上浮。'
+    + '先观察上方/返程通路和呼吸点，低顶不能按垂直距离当上浮时间。仅凭跳跃输入、程序结束或头出水不证明登岸/目标完成。'
+    + '既有 surface/防溺水是应急兜底，不是完整潜水规划器。原生身体程序取得队列后不要嵌套 mc.do 等待自己的身体；用原生按键并在终态后核验。'
+    + '维护者资料不是已学会的方法；由 Agent 自己构造、校验、保存版本，记录实际效果/失败边界，下次检索后再评估复用。',
   methods: '通过 mc_script 工具操作自己的方法库（不是 mc 对象的方法）：'
     + '先 library:{op:"list",query:"关键词",limit:8} 找适用条件，再 library:{op:"read",id:"method-id"} 读取源码/版本。'
     + '编写或修改后提交 {name:"method-id",code:"…",validate:true}，再用 {runId} 等待 validated；校验不执行动作。'

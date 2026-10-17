@@ -14,12 +14,13 @@ import { equipSlotConfirmed, unequipSlotConfirmed } from './equipment.ts';
 import { publicReadProjection, projectPublicRead } from './method-read.ts';
 import type { BotMethod } from './method-capabilities.ts';
 import { ownNativeControlInput } from './skills-control.ts';
+import { breathingReadout } from './breathing.ts';
 
 const nativeCalls = new AsyncLocalStorage<() => void>();
 const guarded = new WeakSet<object>();
 
 export const NATIVE_API = Object.freeze({
-  read: 'read(path): JSON read of entity, health, food, game, heldItem, inventory.slots, or registry.itemsByName.<id>/blocksByName.<id>. Also entity.position/velocity (and .x/.y/.z), entity.id/yaw/pitch/onGround, heldItem.name/displayName/type/count/slot/instanceHash, game.dimension. Missing projected values are null. No client, credentials or private fields.',
+  read: 'read(path): JSON read of entity, health, food, game, heldItem, inventory.slots, breathing, or registry.itemsByName.<id>/blocksByName.<id>. breathing returns sampledAt, source, dimension/entityId/observationEpoch, oxygen (0..20 or null), oxygenRaw, oxygenUpdatedAt, health, healthUpdatedAt, healthLoss/healthRecovered (separate cumulative received changes in this epoch), headWet/bodyWet, position and velocity. Update timestamps mark received breath/health events, not the read time; null means unverified age. Out-of-range oxygen stays unknown, never full. Also entity.position/velocity (and .x/.y/.z), entity.id/yaw/pitch/onGround, heldItem.name/displayName/type/count/slot/instanceHash, game.dimension. Missing projected values are null. No client, credentials or private fields.',
   blockAt: 'blockAt(point, extraInfos=true): Block|null. Occluded or unloaded is null; observation does not reveal hidden block state. Block.getProperties() synchronously reads this returned snapshot, preserving native string|number|boolean values. Numeric-looking enum properties may be strings (for example age:"7", level:"0"); inspect their types and explicitly convert only a property known to be numeric before a numeric comparison. Re-read blockAt for current values. A completed read-only program does not prove any block or inventory changed.',
   findBlocks: 'findBlocks({point?,matching,maxDistance?,count?,useExtraInfo?}): Vec3[]. matching is a numeric block id or array of ids; maxDistance 1..32 and count 1..64. Function predicates stay in the program: filter returned blocks there.',
   findBlock: 'findBlock(options): Block|null, with the same options and bounds as findBlocks.',
@@ -184,6 +185,7 @@ export class MineflayerMethod {
           velocity: bot.entity.velocity, yaw: bot.entity.yaw, pitch: bot.entity.pitch, onGround: bot.entity.onGround } : null;
         if (a === 'health') return bot.health;
         if (a === 'food') return bot.food;
+        if (a === 'breathing') return breathingReadout(bot);
         if (a === 'game') return bot.game;
         if (a === 'heldItem') return packItem(bot.heldItem);
         if (a === 'inventory.slots') return bot.inventory.slots.map(packItem);

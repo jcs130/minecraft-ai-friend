@@ -854,7 +854,13 @@ export function writeStallProbe(
       goalStillMine: pf?.goal === goal,
       // 此刻这张目标记在谁名下(见 goalOwners):"目标被别人换走了"从此在案卷里认得出来
       goalOwner: goalOwnerKind(bot),
-      controlState: (bot as unknown as { controlState?: Record<string, boolean> }).controlState ?? null,
+      // Mineflayer exposes non-enumerable accessors: serializing the object
+      // directly records {}, losing whether swimming actually held jump/forward.
+      controlState: bot.controlState ? Object.fromEntries(
+        ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak'].map(key => {
+          const value = bot.controlState[key as keyof typeof bot.controlState];
+          return [key, typeof value === 'boolean' ? value : null];
+        })) : null,
       onGround: e?.onGround ?? null,
       isInWater: e?.isInWater ?? null,
       velocity: e?.velocity

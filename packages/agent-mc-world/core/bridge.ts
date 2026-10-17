@@ -39,6 +39,7 @@ import { NAVIGATION_LIMITS } from './navigation-capabilities.ts';
 import { watchFlightAbilities } from './flight.ts';
 import { trackWindowProps } from './containers.ts';
 import { installTreadWater } from './travel.ts';
+import { installBreathingReadings } from './breathing.ts';
 import { trackMaps } from './map-view.ts';
 import { trackDamageSources } from './damage-source.ts';
 import { MinecraftAuthentication, protocolVersion } from '../src/client/authentication.ts';
@@ -519,6 +520,7 @@ export class Bridge {
     this.spawnedBot = null;
     this.protocolSpawned = false;
     this.opts.onBotCreated?.(bot);
+    this.bagFor(gen).register('breathing-readings', installBreathingReadings(bot));
     let activate = () => {};
     const login = installServerLogin(bot, { server: `${host}:${port}`, username,
       configFile: this.opts.loginConfigFile?.(),

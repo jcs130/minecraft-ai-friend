@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import type { Bot } from 'mineflayer';
 import type { Move, Movements } from 'mineflayer-pathfinder';
 import type { Vec3 } from 'vec3';
+import { configureWaterMovements, repairWaterWaypoints } from './water-navigation.ts';
 
 const require = createRequire(import.meta.url);
 const pfRequire = createRequire(require.resolve('mineflayer-pathfinder/package.json'));
@@ -35,15 +36,19 @@ export function partialBlockStartMove(
 
 const installed = new WeakSet<object>();
 
-/** Apply to one Mineflayer connection; covers both route probes and goto. */
+/** Apply to one connection; route probes and goto share start/fluid/waypoint semantics. */
 export function installPartialBlockStartRepair(bot: Bot): void {
   const finder = bot.pathfinder;
   if (installed.has(finder)) return;
   installed.add(finder);
   const original = finder.getPathFromTo.bind(finder);
   finder.getPathFromTo = function* (movements, startPos, goal, options = {}) {
+    configureWaterMovements(bot, movements);
     const corrected = options.startMove ? null : partialBlockStartMove(bot, movements, startPos);
-    yield* original(movements, startPos, goal,
-      corrected ? { ...options, startMove: corrected } : options);
+    for (const probe of original(movements, startPos, goal,
+      corrected ? { ...options, startMove: corrected } : options)) {
+      if (options.optimizePath !== false) repairWaterWaypoints(bot, probe.result.path);
+      yield probe;
+    }
   };
 }

@@ -52,6 +52,31 @@ async function until(check: () => boolean) {
 }
 
 describe('agent programs using Mineflayer public primitives', () => {
+  it('reads time-stamped oxygen and health through the actual worker without relinquishing dive input', async () => {
+    const r = rig('1.21.1');
+    for (let x=-2;x<=2;x++) for (let z=-2;z<=2;z++) for (let y=64;y<=69;y++) r.set(x,y,z,'water');
+    r.live.entity.position = new Vec3(.5,66,.5); r.live.entity.onGround = false;
+    Object.assign(r.live.pathfinder,{isMoving:()=>false}); installTreadWater(r.live);
+    const run=r.runner.start({name:'observe-diving-rates',code:`
+      await bot.setControlState('jump',false);
+      const before=await bot.read('breathing');
+      await bot.waitForTicks(8);
+      const after=await bot.read('breathing');
+      const seconds=(Date.parse(after.sampledAt)-Date.parse(before.sampledAt))/1000;
+      return {before,after,seconds,airPerSec:(before.oxygen-after.oxygen)/seconds,
+        healthLossPerSec:Math.max(0,before.health-after.health)/seconds,
+        jump:await bot.getControlState('jump')};
+    `});
+    await until(()=>r.runner.read(run.id)[0]?.trace.some(t=>t.args.name==='waitForTicks'));
+    r.live.oxygenLevel=18; r.live.health=19; r.live.emit('breath'); r.live.emit('health');
+    const result=await methodEnded(r,run.id);
+    expect(result.status).toBe('completed');
+    expect(result.result).toMatchObject({before:{oxygen:20,headWet:true},after:{oxygen:18,health:19,oxygenUpdatedAt:expect.any(String)},jump:false});
+    const value=result.result as {seconds:number;airPerSec:number;healthLossPerSec:number};
+    expect(value.seconds).toBeGreaterThan(.1); expect(value.airPerSec).toBeGreaterThan(0); expect(value.healthLossPerSec).toBeGreaterThan(0);
+    await until(()=>r.exec.currentTask===null); expect(waterControlActive(r.live)).toBe(false);
+    r.live.emit('physicsTick'); expect(r.live.getControlState('jump')).toBe(true);
+  });
   it.each(['1.21.1','1.20.6'])('lets a native key program sink without passive treading rewriting jump in %s', async version => {
     const r=rig(version);
     for(let x=-2;x<=2;x++)for(let z=-2;z<=2;z++)for(let y=64;y<=69;y++)r.set(x,y,z,'water');
