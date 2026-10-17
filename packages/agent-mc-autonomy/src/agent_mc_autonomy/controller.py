@@ -15,6 +15,7 @@ from .context import assemble, coalesce_rejected, encode
 from .death_memory import TOOL as DEATH_REVIEW_TOOL
 from .death_memory import DeathMemory, identity, lifecycle, recovery_state
 from .decision_profiles import profile_view
+from .effects import EffectRecovery, body_changed
 from .fast import FastPolicy, focus_state, rule_focus
 from .model_protocols import assistant_history
 from .observations import (
@@ -51,6 +52,7 @@ def observation_call(name, arguments):
     steps = arguments.get("steps")
     return isinstance(steps, list) and bool(steps) and all(
         isinstance(step, dict) and (step.get("skill") in {"observe", "check", "probe"}
+                                   or (step.get("skill") == "build" and step.get("dryRun") is True)
                                    or (step.get("skill") == "find" and not step.get("direction")))
         for step in steps)
 
@@ -339,6 +341,8 @@ class Controller:
         self.observation_requests = {}
         self.read_answers = {}
         self.read_recovery_tools = set()
+        self.effect_recovery = EffectRecovery()
+        self.skill_references = {}
         self.action_requests = {}
         self.action_scopes = {}
         self.native_outcomes = []
@@ -356,10 +360,13 @@ class Controller:
         self.turn_death_epoch = 0
 
     def observe_game_facts(self, facts):
+        if body_changed(self.game_facts, facts):
+            self.clear_read_activity()
         self.game_facts = facts
         fresh_scope = identity(facts)
         life = lifecycle(facts)
         if fresh_scope != self.game_scope:
+            self.read_activity.clear()
             self.observation_reads.clear()
             self.observation_requests.clear()
             self.read_answers.clear()
@@ -478,6 +485,8 @@ class Controller:
                         "receipt": spatial_text(receipt), "observations": observations, "original_event": reference}))
                     self.native_outcomes = self.native_outcomes[-6:]
                     self.publish(native_outcomes=list(self.native_outcomes))
+                    if not read_only and self.effect_recovery.record(arguments, execution, self.game_scope, self.death_epoch, reference):
+                        self.clear_read_activity()
                     if not read_only and phase == "completed":
                         # A known body task has finished. Its next useful decision
                         # need not wait for the unrelated ordinary event throttle.
@@ -486,6 +495,13 @@ class Controller:
                         failure = self.record_tool_failure(name, arguments, {"text": receipt, "execution": execution}, request_id)
                         failure["native_execution"] = {k: execution[k] for k in ("kind", "id", "phase")}
                         failure["native_event"] = reference
+                        failure["step_outcomes"] = terminal_step_outcomes(execution, arguments)
+                        failure["failed_skills"] = list(dict.fromkeys(
+                            arguments["steps"][row["step"] - 1]["skill"]
+                            for row in failure["step_outcomes"]["samples"] if row["outcome"] == "fail"
+                            and isinstance(arguments.get("steps"), list)
+                            and isinstance(arguments["steps"][row["step"] - 1], dict)
+                            and isinstance(arguments["steps"][row["step"] - 1].get("skill"), str)))[:2]
                         failure["next_step"] = ("The native task was accepted and has now ended with this actual outcome. "
                             "Earlier successful steps may have run. Use the latest world facts and this receipt to change the next feasible action; "
                             "do not resubmit the whole failed batch or repeat observations already answered. "
@@ -531,6 +547,38 @@ class Controller:
         self.recent.extend(e for e in value.get("events", []) if e.get("contextDelivery") != "archive-only" and not e.get("meta", {}).get("staleEpoch")
                            and (foreign_execution_id is None or (e.get("execution") or {}).get("id") != foreign_execution_id))
         self.recent = self.recent[-64:]
+
+    def clear_read_activity(self):
+        self.read_activity.clear()
+        self.observation_reads.clear()
+        self.read_answers.clear()
+        self.read_recovery_tools.clear()
+        self.publish(read_activity={}, read_recovery=None, action_recovery=None)
+
+    async def recovery_reference(self):
+        """Carry the failed skill's native documentation into the next decision.
+
+        This is one cached read, not another inference, task, or guessed recipe.
+        A known rejected lookup is cached; unknown dispatch retains its fence.
+        """
+        failure = self.tool_failure
+        if not failure or not failure.get("native_execution") or not any(t["name"] == "mc_help" for t in self.bridge.tools):
+            return
+        references = []
+        for skill in failure.get("failed_skills", [])[:2]:
+            if skill not in self.skill_references:
+                if len(self.skill_references) >= 16:
+                    self.skill_references.pop(next(iter(self.skill_references)))
+                result, _ = await self.dispatch("mc_help", {"skill": skill}, str(uuid.uuid4()))
+                self.skill_references[skill] = None if result.get("failed") else fact_preview(result.get("text", ""), 1600)
+            if self.skill_references[skill]:
+                references.append({"tool": "mc_help", "arguments": {"skill": skill}, "text": self.skill_references[skill]})
+        if references:
+            failure["recovery"] = references
+            failure["next_step"] += (" Native recovery contains the actual skill reference, not verified prerequisites. "
+                "Check its inputs and the user's objective; do not keep trying different wrappers or fuels for an unverified recipe. "
+                "A proposed stage may be reported blocked with evidence instead of repeated indefinitely.") if not failure.get("reference_loaded") else ""
+            failure["reference_loaded"] = True
 
     def current_work(self):
         if self.active_goal and self.active_goal.get("mode") == "insert":
@@ -1170,6 +1218,18 @@ class Controller:
                 elif name == "mc_do" and self.feedback_pending:
                     arguments["queue"] = "append"
         request_id = str(uuid.uuid4())
+        repeat = self.effect_recovery.repeated(arguments, self.game_facts, self.game_scope, self.death_epoch) if name == "mc_do" and not self.pending and not queue_error else None
+        if repeat and not observation_call(name, arguments):
+            self.planner_notice = ("The same native plan already ended twice without any measured change, and position/inventory/dimension are still unchanged. "
+                "It was NOT dispatched again. Use the original terminal evidence and native skill help to correct the prerequisites, choose different useful work, "
+                "or report this proposed stage blocked. This dated client-visible evidence does not prove permissions or goal success.")
+            self.continuation_needed = True
+            delay = max(30, self.settings.min_decision_seconds)
+            self.planner_retry_at = time.monotonic() + delay
+            self.publish(action_recovery=repeat, planner_error="repeated_no_effect", planner_retry_seconds=delay)
+            result = {"failed": True, "dispatched": False, "origin": "controller_validation", "code": "repeated_no_effect",
+                      "text": self.planner_notice, "previous_outcome": repeat}
+            return result, await self.archive_receipt(request_id, name, result), True
         read_key = json.dumps([name, arguments], sort_keys=True, ensure_ascii=False)
         answer = self.read_answers.get(read_key) if name in REUSABLE_IMMEDIATE_READS else None
         if (answer and not self.pending and self.last_admission_facts is not None
@@ -1252,12 +1312,10 @@ class Controller:
                 self.read_activity[name] = min(999, self.read_activity.get(name, 0) + 1)
             elif result.get("execution") and (name == "mc_do" or "act" in next(
                     (t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])):
-                self.read_activity.clear()
-                self.observation_reads.clear()
-                self.read_answers.clear()
-                self.read_recovery_tools.clear()
+                # Acceptance owns a task, not physical progress. Only validated
+                # terminal effect readbacks above may reset the read history.
                 self.unactioned_replies = 0
-                self.publish(unactioned_replies=0, read_recovery=None)
+                self.publish(unactioned_replies=0)
             self.publish(read_activity=dict(self.read_activity))
         if result.get("failed"):
             failure_notice = self.record_tool_failure(name, arguments, result, request_id)
@@ -1375,6 +1433,7 @@ class Controller:
                     focus = {"source": "rules", "choice": rule_focus(state), "advisory_only": True}
                 self.last_facts = fact_fingerprint(facts)
                 self.last_admission_facts = admission_fingerprint(facts)
+                await self.recovery_reference()
                 consumed = tuple(self.recent)
                 self.deferred_wake = False
                 frame = self.frame
@@ -1549,6 +1608,7 @@ class Controller:
             text += "\nSubmitted stage (origin unknown): " + active["goal"]
             text += "\nUnknown origin is not evidence of a new user instruction; preserve the standing goal and any explicit current user goal."
         text += "\nWhen observed facts satisfy this stage, use goal_report after native work ends to resume its parent goal or the standing goal; do not keep repeating a satisfied stage."
+        text += "\nIf receipts disprove the proposed method or its prerequisites, revise the method or report the stage blocked with observed evidence; repeating reads or ineffective work does not satisfy it."
         if self.feedback_pending:
             if origin == "user":
                 text += "\nCurrent user feedback takes priority."

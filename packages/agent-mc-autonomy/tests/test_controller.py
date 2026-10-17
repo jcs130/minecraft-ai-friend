@@ -121,7 +121,7 @@ def test_bounded_read_round_can_continue_without_unrelated_world_change(framewor
     assert len(controller.groups) == 1
 
 
-def test_read_activity_survives_pruned_history_until_a_body_action_is_accepted(framework_module, tmp_path, run_async):
+def test_read_activity_survives_acceptance_and_pruned_history_until_observed_change(framework_module, tmp_path, run_async):
     seen = []
     selected = ["mc_help"]
 
@@ -143,6 +143,9 @@ def test_read_activity_survives_pruned_history_until_a_body_action_is_accepted(f
     selected[0] = "mc_do"
     run_async(controller.turn_once("survive", "prefix", tools))
     controller.receipt({"execution": action(terminal=True)})
+    assert controller.read_activity == {"mc_help": 10}  # Completion without an effect is still unknown.
+    controller.game_facts = {"observation": {"dimension": "overworld", "inventory": {"oak_log": 1}}}
+    controller.observe_game_facts({"observation": {"dimension": "overworld", "inventory": {"oak_log": 2}}})
     selected[0] = "mc_help"
     run_async(controller.turn_once("survive", "prefix", tools))
     assert "read_activity" not in seen[-1]

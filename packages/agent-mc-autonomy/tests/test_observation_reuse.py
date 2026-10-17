@@ -95,6 +95,9 @@ def test_fresh_evidence_and_new_work_allow_scout_again(framework_module, tmp_pat
         ticks[0] += 61
     else:
         observed(controller, run_async, "mc_do", {"steps": [{"skill": "goto", "at": [1, 65, 1]}]})
+        # A terminal without physical readbacks proves no motion by itself.
+        controller.game_facts = {"observation": {"dimension": "overworld", "position": {"x": 0, "y": 65, "z": 0}}}
+        controller.observe_game_facts({"observation": {"dimension": "overworld", "position": {"x": 1, "y": 65, "z": 1}}})
     assert observed(controller, run_async, arguments=arguments).get("execution")
     assert len([call for call in bridge.calls if call[0] == "mc_do"]) == (3 if change == "body_action" else 2)
 

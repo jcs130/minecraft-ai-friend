@@ -1,5 +1,14 @@
 # Agent MC Autonomy
 
+0.2.6 consumes validated native `observedEffect` step readbacks in decisions and
+host reviews. Accepted work and build previews no longer erase read history;
+measured movement, inventory or other terminal effects can reset it. Two exact
+ineffective attempts under unchanged measured body state receive a bounded
+recovery response instead of another dispatch. The failed skill's native help
+is read once and retained at the dynamic request tail. Dated client-visible
+effects remain separate from verified goal success; unknown dispatch still
+blocks replay. Core and viewer pins remain those of 0.2.5.
+
 0.2.5 pins the native protection-receipt repair and the shared inventory-icon
 renderer, including exact server profile-head icons and native health-packet
 evidence. An explicitly selected, SHA-checked server presentation may provide a

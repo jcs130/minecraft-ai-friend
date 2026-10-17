@@ -7,12 +7,12 @@ import time
 from . import host_recent
 
 from .context_counter import BYTE_COUNTER_NAME, FRAMING_RESERVE, ContextCounter, CounterUnavailable, count_input, counter_name
-from .observations import fact_preview, spatial_text
+from .observations import fact_preview, spatial_text, terminal_step_outcomes
 
 RULES = """You are an autonomous Minecraft player. Pursue the user's goal through observed world changes.
 Backend version/operations: read mc_help; do not assume mods or permissions.
 Obey schemas. mc_tool_help(name,path) gives full descriptions/defaults.
-read_activity counts reads since the last accepted action, not progress. Query unresolved facts; use mc_do when facts suffice.
+read_activity resets on measured change, never acceptance. observed_effect is changed/unchanged/unknown, not goal verification.
 Advanced capabilities use mc_invoke(name,arguments) after reading that tool's schema; the backend validates it.
 Only call advertised functions.
 Keep useful running work. Acceptance and terminal completion do not prove goal success.
@@ -364,7 +364,9 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
             # repeating full voxel/ray arrays in every event. Preserve measured
             # direction/coordinates and the native archive entry for full data.
             projected = spatial_text(evidence["receipt"])
-            item["execution"] = {**execution, "evidence": {**evidence, "receipt": fact_preview(projected, 1800),
+            item["execution"] = {**execution, "evidence": {**{k: v for k, v in evidence.items() if k != "steps"},
+                **({"step_outcomes": terminal_step_outcomes(execution, {})} if "steps" in evidence else {}),
+                "receipt": fact_preview(projected, 1800),
                 "abridged": len(projected.encode("utf-8")) > 1800}}
         item["text"] = spatial_text(str(event.get("text", "")))[:700]
         item["original"] = {"tool": "mc_protocol", "action": "archive", "run": event.get("run"), "after": max(0, event.get("cursor", 1) - 1), "limit": 1}

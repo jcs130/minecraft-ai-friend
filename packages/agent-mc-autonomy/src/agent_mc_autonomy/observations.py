@@ -5,6 +5,8 @@ import json
 import re
 from collections import Counter
 
+from .effects import effect_view, projected_effect
+
 
 def runtime_error_code(error):
     """Only explicitly supported controller causes may escape exception text."""
@@ -99,6 +101,9 @@ def terminal_step_outcomes(execution, arguments):
         # First and latest sample per outcome; reasons are bounded UTF-8 bytes.
         sample = {"step": row["step"], "outcome": outcome,
                   **({"why": _bounded(row["why"], 120) if row["why"] is not None else None} if "why" in row else {})}
+        effect = effect_view(row.get("observedEffect"))
+        if effect:
+            sample["observed_effect"] = effect
         if len(small) < 8:
             small.append(sample)
         if len(groups[outcome]) < 2:
@@ -141,6 +146,9 @@ def step_outcomes_view(value):
         seen.add(row["step"])
         projected.append({"step": row["step"], "outcome": row["outcome"],
                           **({"why": _bounded(row["why"], 120) if row["why"] is not None else None} if "why" in row else {})})
+        effect = projected_effect(row.get("observed_effect"))
+        if effect:
+            projected[-1]["observed_effect"] = effect
     if any(sum(row["outcome"] == key for row in projected) > counts[key] for key in STEP_OUTCOMES):
         return unknown
     return {"status": ("partial" if value["invalid"] else "available") if value["valid"] else "unknown",
@@ -197,6 +205,7 @@ def tool_failure_view(value):
     receipt = value.get("receipt") if isinstance(value.get("receipt"), dict) else {}
     return {"tool": brief(value.get("tool", ""), 80), "error": brief(value["error"], 900),
             "next_step": brief(value.get("next_step", ""), 400),
+            **({"step_outcomes": step_outcomes_view(value["step_outcomes"])} if "step_outcomes" in value else {}),
             **({"native_execution": {key: brief(value["native_execution"].get(key, ""), 160)
                                       for key in ("kind", "id", "phase")},
                 "native_event": event_reference(value.get("native_event"))}
