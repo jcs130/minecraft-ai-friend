@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "publishedAt": "2026-10-17T04:31:58.369020+00:00",
+  "status": "deployed",
+  "minecraft": "1.21.1",
+  "agentFriend": "0.4.47",
+  "model": {
+    "id": "neko_yui",
+    "texture": "default",
+    "revision": "1.0.1",
+    "bones": 49,
+    "cubesBefore": 168,
+    "cubesAfter": 172,
+    "renderedFacesBefore": 1008,
+    "renderedFacesAfter": 1008,
+    "textureAndAnimationsPreserved": true,
+    "nativeAppearanceBindingsPreserved": 51,
+    "files": [
+      {
+        "path": "animations/arm.animation.json",
+        "bytes": 1958,
+        "beforeSha256": "b1973bb324b9e4cc805937dcd6d6baa809507814ba522b7424d1da322671c0c6",
+        "afterSha256": "b1973bb324b9e4cc805937dcd6d6baa809507814ba522b7424d1da322671c0c6",
+        "changed": false
+      },
+      {
+        "path": "animations/extra.animation.json",
+        "bytes": 1560,
+        "beforeSha256": "5c39123acf2008ec6682a298086a3096f9a3646acdbfb4e66b7252e4f16ae922",
+        "afterSha256": "5c39123acf2008ec6682a298086a3096f9a3646acdbfb4e66b7252e4f16ae922",
+        "changed": false
+      },
+      {
+        "path": "animations/main.animation.json",
+        "bytes": 17120,
+        "beforeSha256": "0cbd59d07acfa203438855d678e077da0af88e751d00e6fba713b1e775771ef5",
+        "afterSha256": "0cbd59d07acfa203438855d678e077da0af88e751d00e6fba713b1e775771ef5",
+        "changed": false
+      },
+      {
+        "path": "models/arm.json",
+        "bytes": 6297,
+        "beforeSha256": "1ca1332dac123c6c72966660a694b770caea895ea41b95964c6866a27ab6c9e5",
+        "afterSha256": "1ca1332dac123c6c72966660a694b770caea895ea41b95964c6866a27ab6c9e5",
+        "changed": false
+      },
+      {
+        "path": "models/main.json",
+        "bytes": 324390,
+        "beforeSha256": "1feb1121e6946a899c75ea020b32d01809672010ac043c410e2d049426e58205",
+        "afterSha256": "d30e26772ea5d400dd46b88cbc7ae8883fc0ecf17b5d5773b982a84fd4c26956",
+        "changed": true
+      },
+      {
+        "path": "textures/default.png",
+        "bytes": 5610,
+        "beforeSha256": "f8ed6510dec8647895fb633dde7cad0d3338fe7b39f78e2566d389e4ec33709f",
+        "afterSha256": "f8ed6510dec8647895fb633dde7cad0d3338fe7b39f78e2566d389e4ec33709f",
+        "changed": false
+      },
+      {
+        "path": "ysm.json",
+        "bytes": 1364,
+        "beforeSha256": "b72eb8d5e038b29ce76c6839451159ab3cb9df910c2fff434f948c43aef6a0f4",
+        "afterSha256": "5a890d6fab2d7792bc22cb9f595c70142ac71e2f7d53d279b55ea927a37d996f",
+        "changed": true
+      }
+    ],
+    "assetSha256": "66d756e4ad2af90863cafa6947ca4b2cace52971483abdd03274dc6518bdcf81",
+    "assetBytes": 27224,
+    "packageSha256": "142b502628401087ff130179ba04a756d0b953e8317d29c3964d17726159cb1e",
+    "packageBytes": 18167
+  },
+  "viewer": {
+    "repository": "jcs130/mc-visual-console",
+    "branch": "main",
+    "fixCommit": "70f3a3f5d6e7e6b0bb8333d580d781bc9b94cd95",
+    "remoteConsumerPixelsVerified": false
+  },
+  "camera": {
+    "minecraftConnection": "1.20.6",
+    "preset": "qiandengji",
+    "sourceBaseline": "153730cac1dfbd421715cc592aa4337bd6fabd0d",
+    "sourceChanges": [
+      "vertical UV conversion",
+      "existing shared reactive module build deduplication"
+    ],
+    "bundleSha256": "9ebcf07a5e732420f7c23e12b72a752e25e7da7f0ac50ceb7daf38b692a8fe4f",
+    "sourceSha256": "403da4640df634ba146a487f9f0d64c65f703335c06100e0a5d735eb06bf7338",
+    "userApprovedBridgeReconnect": true,
+    "ready": true
+  },
+  "verification": {
+    "relatedAppearanceTests": 68,
+    "sharedBuildRegression": 1,
+    "headTransformTests": 3,
+    "originalResourceGeometryChecks": 12,
+    "liveCameraAndWebChecks": 5,
+    "java1211ResourceChecks": 3,
+    "legacyWebModelReview": true,
+    "nativeConverters": [
+      "AgentAppearance0.3.2",
+      "AgentAppearance-Bedrock0.1.0"
+    ],
+    "maxOriginalSurfaceFloat32Error": 5.960464477539063e-08,
+    "nativeJavaPixelsVerified": false,
+    "bedrockDevicePixelsVerified": false
+  },
+  "deployment": {
+    "modelHotReload": true,
+    "goddessBridgeReconnected": true,
+    "paperRestarted": false,
+    "proxyRestarted": false,
+    "workerRestarted": false,
+    "newPublicPort": false
+  },
+  "backup": {
+    "eAndFMirrored": true,
+    "scope": [
+      "original and revised model resources",
+      "native appearance preimage",
+      "camera configuration and fixed runtime"
+    ]
+  },
+  "rollback": "Hash-gated restore of the two model source files; model selection/player databases untouched. Camera restores old fixed runtime configuration after an approved Goddess bridge reconnect."
+}
