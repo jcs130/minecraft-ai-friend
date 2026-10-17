@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "id": "undead_crypt_access",
+  "world": "world",
+  "structure": "nova_structures:undead_crypt",
+  "mapReference": {
+    "x": -425,
+    "z": 677
+  },
+  "entrance": [
+    -460,
+    65,
+    679
+  ],
+  "sideDoor": [
+    -445,
+    28,
+    653
+  ],
+  "mainFloor": 12,
+  "book": {
+    "id": "crypt_route_book",
+    "position": [
+      -455,
+      66,
+      685
+    ],
+    "facing": "north",
+    "title": "亡灵墓穴行路簿",
+    "author": "千灯纪巡路人",
+    "pages": [
+      "亡灵墓穴行路簿\n\n原图标记 -425 677\n指向真实天然遗迹。\n\n木棚入口\n-460 65 679\n侧门\n-445 28 653\n主墓室层：Y=12\n\n先备好装备和食物。",
+      "第一段：进入侧门\n\n沿石砖灯路到木棚。\n开栅栏门沿台阶下行。\n第一处平台向东转。\n第二段台阶向南到底。\n底部向西→向北→向东。\n侧门 -445 28 653\n\nY28只是上层前厅。\n继续看下一页。",
+      "第二段：内部旋转台阶\n\nY28前厅先向南走。\n到Z657，再向东到X-439。\n沿内圈台阶向西、\n再向北下降到Y20。\n\n绕回南侧同一台阶。\n再下一层到Y12。\n\n避开中央竖井。",
+      "第三段：天然墓室\n\n到Y12后向北。\n先经 -440 12 648\n再到 -440 12 640\n\n前方连着墓室与石棺。\n有原生宝箱，可自愿搜寻。\n战利品可以自留。\n\n怪物与刷怪笼保留。\n请穿护甲、带食物。",
+      "委托怎样完成\n\n/mycli tasks status\n查看本人实际缺项。\n\n遗迹图：进入原目标走查。\n埋藏宝藏：新开天然箱。\n\n完成现场条件后，\n回原接单点主动交付：\n/mycli guild claim\n\n原图、原单继续用。",
+      "返程与补给\n\n从Y12沿原台阶上两层。\nY28经西侧门回灯路。\n沿原路上行回木棚。\n\n公会公共补给\n/mycli guild shared\n大背包 /backpack open\n个人奖励箱可从罗盘打开。\n\n每层有往返路牌。"
+    ]
+  },
+  "signs": [
+    {
+      "id": "entry_floor",
+      "position": [
+        -444,
+        29,
+        655
+      ],
+      "facing": "east",
+      "lines": [
+        "这里是上层前厅",
+        "主墓室在 Y=12",
+        "沿内圈台阶下两层",
+        "沿台阶下行探索"
+      ]
+    },
+    {
+      "id": "upper_stair",
+      "position": [
+        -438,
+        29,
+        657
+      ],
+      "facing": "north",
+      "lines": [
+        "下行台阶在内圈",
+        "先沿这一圈下降",
+        "中层 Y=20 继续下",
+        "不要跳进中央竖井"
+      ]
+    },
+    {
+      "id": "middle_floor",
+      "position": [
+        -444,
+        21,
+        651
+      ],
+      "facing": "east",
+      "lines": [
+        "中层 Y=20",
+        "尚未到主墓室",
+        "绕回南侧台阶下行",
+        "下一层 Y=12"
+      ]
+    },
+    {
+      "id": "middle_stair",
+      "position": [
+        -439,
+        21,
+        657
+      ],
+      "facing": "north",
+      "lines": [
+        "继续沿台阶下降",
+        "下到 Y=12 停下",
+        "向北进入墓室",
+        "回程仍走这段台阶"
+      ]
+    },
+    {
+      "id": "main_floor",
+      "position": [
+        -441,
+        13,
+        648
+      ],
+      "facing": "east",
+      "lines": [
+        "主墓室层 Y=12",
+        "向北沿通道探索",
+        "宝箱在墓室与石棺旁",
+        "怪物仍在 请备战"
+      ]
+    },
+    {
+      "id": "main_exit",
+      "position": [
+        -444,
+        13,
+        652
+      ],
+      "facing": "east",
+      "lines": [
+        "返回地表 ↑",
+        "沿内圈台阶上两层",
+        "Y=28 从西侧门出去",
+        "跟石砖灯路回木棚"
+      ]
+    },
+    {
+      "id": "main_corridor",
+      "position": [
+        -440,
+        13,
+        642
+      ],
+      "facing": "east",
+      "lines": [
+        "北面是天然墓室",
+        "沿通道继续调查",
+        "箱子不必挖出或提交",
+        "看本人任务缺项"
+      ]
+    },
+    {
+      "id": "grave_room",
+      "position": [
+        -437,
+        13,
+        638
+      ],
+      "facing": "south",
+      "lines": [
+        "天然墓室与宝箱",
+        "搜箱战利品可自留",
+        "遗迹图任务只需走查",
+        "完成后回接单点交付"
+      ]
+    }
+  ],
+  "operatorNotes": [
+    "Merge only after validating actual generated terrain and empty preimages.",
+    "The public lectern is outside the private hut land, within the protected road.",
+    "Keep original natural chests, loot tables, mob spawners and stairs untouched.",
+    "Do not replace world regions, player inventories or frozen task progress."
+  ]
+}

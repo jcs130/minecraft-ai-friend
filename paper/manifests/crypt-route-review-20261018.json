@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "crypt-route-review-20261018",
+  "status": "deployed_and_verified",
+  "at": "2026-10-17T18:29:07.541Z",
+  "paper": "1.21.1 build 133",
+  "agentFriend": "0.4.47.3",
+  "paperRestarted": false,
+  "rootCause": "previous guide ended at Y28 antechamber; original spiral route continues through Y20 to Y12 main tombs",
+  "changes": {
+    "signs": 8,
+    "publicLectern": [
+      -455,
+      66,
+      685
+    ],
+    "bookPages": 6,
+    "originalTerrainRemoved": 0
+  },
+  "verification": {
+    "nativeNaturalLootAndReturnStageOnly": 8,
+    "signsBookAndReturnStage": 28,
+    "signsBookAndReturnLive": 28,
+    "saved": 14,
+    "originalContainers": 129,
+    "originalCryptLootTables": 112,
+    "originalStairBlocks": 318,
+    "liveGeometry": "dedicated creative QA, flight disabled; not survival combat safety",
+    "bedrockDevicePixels": false
+  },
+  "preserved": {
+    "playerContractAndMap": true,
+    "playerInventories": true,
+    "originalContainers": true,
+    "naturalSpawners": true,
+    "productionLootNotOpenedByQA": true
+  },
+  "clueResource": "source updated, existing ExamSupplies instance does not hot reload; merge runtime hint at next approved initialization",
+  "backup": "E/F MC/ops/repairs/crypt-route-review-20261018; targeted online snapshots, not full cold backup",
+  "rollback": "check each of nine exact positions and authored NBT before reverting to its saved air preimage; preserve later player changes; never replace whole region files"
+}

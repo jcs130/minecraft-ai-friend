@@ -18,7 +18,7 @@ map-targets:
     z: 677
     structure: nova_structures:undead_crypt
     approach: underground
-    approach-hint: 这是一处地下遗迹，地表标记不代表入口。需先寻找可通行的洞口或楼梯；入口路线未勘察时可向女神求助。
+    approach-hint: 木棚入口(-460,65,679)，沿石砖灯路下到侧门(-445,28,653)。Y28只是前厅；沿内圈台阶连续下两层，经Y20到Y12，再向北进入天然墓室。入口讲台有行路簿，各层有往返路牌；沿台阶通行，避开中央竖井。
   - id: creeping_crypt
     title: 蔓生墓穴遗迹
     world: world
