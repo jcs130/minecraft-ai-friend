@@ -125,4 +125,25 @@ describe('durable isolated gameplay archive',()=>{
       expect(rows[1].previousRevision).toBe(rows[0].revision);
     }finally{await follower.stop();await archive.close();await cleanup(root);}
   });
+  it('reconciles every stable changed source after a burst exceeds the watch queue',async()=>{
+    const root=await mkdtemp(join(tmpdir(),'mc-gameplay-burst-')),source=join(root,scope),output=join(root,'output');await mkdir(source);
+    const ids=Array.from({length:2060},(_,i)=>createHash('sha256').update('burst-'+i).digest('hex'));
+    const write=async(terminal:boolean)=>{for(let offset=0;offset<ids.length;offset+=128)await Promise.all(ids.slice(offset,offset+128).map(id=>writeFile(join(source,id+'.json'),JSON.stringify(raw({id,
+      updatedAt:terminal?new Date().toISOString():at,after:terminal?{...observation,inventory:{bread:1}}:null,
+      execution:{kind:'task',id:'task-'+id,phase:terminal?'completed':'accepted',terminal}})))));};
+    await write(false);const archive=new GameplayArchive({directory:output,scopeKey:scope,maxRecords:10000}),follower=new OperationFollower(source,scope,archive,output);
+    try{
+      await archive.start();await follower.start();await write(true);await new Promise(done=>setTimeout(done,50));
+      await follower.reconcile();expect(archive.status().records).toBe(ids.length*2);expect(follower.status().sourceErrors).toBe(0);
+    }finally{await follower.stop();await archive.close();await cleanup(root);}
+  },30000);
+  it('does not keep deleted source files queued forever',async()=>{
+    const root=await mkdtemp(join(tmpdir(),'mc-gameplay-deleted-')),source=join(root,scope),output=join(root,'output');await mkdir(source);
+    const value=raw(),file=join(source,value.id+'.json');await writeFile(file,JSON.stringify(value));
+    const archive=new GameplayArchive({directory:output,scopeKey:scope}),follower=new OperationFollower(source,scope,archive,output);
+    try{
+      await archive.start();await follower.start();await rm(file);await new Promise(done=>setTimeout(done,50));await follower.reconcile();await follower.drain();
+      expect(follower.status().pendingSources).toBe(0);expect(follower.status().sourceErrors).toBe(0);expect(archive.status().records).toBe(1);
+    }finally{await follower.stop();await archive.close();await cleanup(root);}
+  });
 });

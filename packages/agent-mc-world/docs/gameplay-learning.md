@@ -31,8 +31,13 @@ missing historical arguments or replay operations to obtain them.
 
 An optional local 1.21.1 viewer subscriber records live avatar state and a
 7×5×7 grid of client-loaded cells at 2 Hz by default, including periods when
-the operation journal is quiet. It caches at most nine chunk columns and follows
-block updates; dimension/reset/disconnect boundaries clear the cache. Body
+the operation journal is quiet. It retains up to 256 serialized columns / 64 MiB
+from the viewer footprint and decodes at most nine local columns. This matters
+when walking: the viewer sends new edge columns, not previously streamed columns
+as they become nearby. Sparse block updates are retained while columns are not
+decoded (4,096 cells/column, 16,384 total); overflow evicts the affected column and
+leaves unknown cells until a new snapshot. Eviction counters remain visible.
+Dimension/reset/disconnect boundaries clear both cache levels. Body
 samples require a fresh avatar. An already pinned self entity can bound initial
 chunk caching while a cold registry load makes the first avatar stale.
 Received/oversized/missing-position column counters expose coverage loss. Body
@@ -109,6 +114,14 @@ budget stops archival writes, retains existing data and exposes an unhealthy
 status. There is no automatic deletion; the byte budget can exceed by at most
 one bounded pending segment plus metadata. Archive integrity is checked on
 restart; large archives require proportionate startup I/O.
+
+Watch notifications are bounded and may include repeated metadata-only events.
+A full reconciliation drains changes in bounded batches, so a burst larger than
+the queue does not truncate recovery to its first batch. Deleted source files
+leave the queue; a later creation is picked up by watch/reconciliation. Notification
+overflow counts are not counts of lost operations. Audit sealed cursors against
+stable source hashes to establish actual coverage; intermediate source revisions
+not retained by the original mutable journal cannot be reconstructed.
 
 `status.json` is updated every five seconds. Its label counts are **record
 revisions**, including observations; use the exporter for unique operations.

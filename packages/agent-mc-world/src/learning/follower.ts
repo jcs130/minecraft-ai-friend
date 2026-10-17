@@ -48,7 +48,7 @@ export class OperationFollower {
       if(row.sourceId!==id)throw Error('Source file/row identity mismatch');
       await this.archive.append(row);if(!this.lastSourceAt||Date.parse(row.updatedAt)>Date.parse(this.lastSourceAt))this.lastSourceAt=row.updatedAt;this.lastSourceReadAt=new Date().toISOString();
       this.onRecord?.(row);
-    }catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')this.failures++;else this.enqueue(name);}
+    }catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')this.failures++;}
   }
   drain():Promise<void>{
     this.reading=this.reading.then(async()=>{for(const name of [...this.queue]){if(!this.running)break;this.queue.delete(name);await this.read(name);}});
@@ -57,7 +57,11 @@ export class OperationFollower {
   async reconcile(){
     for(const name of await readdir(this.sourceDirectory)){
       if(!/^[a-f0-9]{64}\.json$/.test(name))continue;
-      try{const s=await stat(join(this.sourceDirectory,name));if(this.seen.get(name)!==`${s.mtimeMs}:${s.size}`)this.enqueue(name);}catch{this.failures++;}
+      try{const s=await stat(join(this.sourceDirectory,name));if(this.seen.get(name)!==`${s.mtimeMs}:${s.size}`){
+        // A complete reconciliation must drain bounded batches, not drop every
+        // changed source after the first full queue. Deleted files need no retry.
+        if(this.queue.size>=2048)await this.drain();this.enqueue(name);
+      }}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')this.failures++;}
     }
     await this.drain();
   }

@@ -48,6 +48,7 @@ async function fixture({actualUuid=uuid,address='test.invalid:25565',initialChun
   };
   return {observer,io,requests,inbound,frames,
     dimension:(value:string)=>{dimension=value;io.emit('biome',{dimension});},
+    move:(x:number,z:number)=>{entity.pos={x,y:64,z};io.emit('playerEntity',entity);io.emit('avatarState',avatar());},
     close:async()=>{clearInterval(tick);await observer.stop();await archive.close();await new Promise<void>(done=>io.close(()=>done()));
       if(dirname(resolve(directory))!==resolve(tmpdir())||!directory.split(/[\\/]/).at(-1)?.startsWith('mc-gameplay-'))throw Error('Unexpected cleanup');
       await rm(directory,{recursive:true,force:true});},
@@ -100,3 +101,36 @@ it('retains initial local columns when cold initialization makes the first avata
     expect((await f.frames()).some(row=>row.kind==='environment'&&row.observation?.stateIds?.[122]===1)).toBe(true);
   }finally{await f.close();}
 });
+
+it('keeps previously streamed columns and their updates when walking beyond the decoded window',async()=>{
+  const require=createRequire(import.meta.url),Chunk=require('prismarine-chunk')('1.21.1');
+  const local=new Chunk({minY:-64,worldHeight:384});local.setBlockStateId(new Vec3(0,64,0),1);
+  const distant=new Chunk({minY:-64,worldHeight:384});distant.setBlockStateId(new Vec3(0,64,0),2);
+  const f=await fixture();try{
+    await expect.poll(()=>f.observer.status().samples,{timeout:4000}).toBeGreaterThan(0);
+    f.io.emit('loadChunk',{x:0,z:0,chunk:local.toJson()});f.io.emit('loadChunk',{x:32,z:0,chunk:distant.toJson()});
+    f.io.emit('blockUpdate',{pos:{x:32,y:64,z:0},stateId:3});
+    await expect.poll(()=>f.observer.status().serializedColumns,{timeout:4000}).toBe(2);
+    const first=f.observer.status().samples;f.move(32.5,.5);
+    await expect.poll(()=>f.observer.status().samples,{timeout:4000}).toBeGreaterThan(first+1);
+    let worlds=(await f.frames()).filter(x=>x.kind==='environment'&&x.observation?.position?.[0]===32.5);
+    expect(worlds.at(-1)!.observation!.stateIds![122]).toBe(3);
+    f.io.emit('blockUpdate',{pos:{x:0,y:64,z:0},stateId:4});f.io.emit('unloadChunk',{x:32,z:0});
+    const second=f.observer.status().samples;f.move(.5,.5);
+    await expect.poll(()=>f.observer.status().samples,{timeout:4000}).toBeGreaterThan(second+1);
+    worlds=(await f.frames()).filter(x=>x.kind==='environment'&&x.observation?.position?.[0]===.5);
+    expect(worlds.at(-1)!.observation!.stateIds![122]).toBe(4);expect(f.observer.status().serializedColumns).toBe(1);
+    expect(f.inbound).toEqual([]);
+  }finally{await f.close();}
+});
+
+it('bounds serialized footprint and decodes only the local nine columns',async()=>{
+  const require=createRequire(import.meta.url),Chunk=require('prismarine-chunk')('1.21.1');
+  const bytes=new Chunk({minY:-64,worldHeight:384}).toJson(),f=await fixture();try{
+    await expect.poll(()=>f.observer.status().samples,{timeout:4000}).toBeGreaterThan(0);
+    for(let x=0;x<280;x++)f.io.emit('loadChunk',{x:x*16,z:0,chunk:bytes});
+    await expect.poll(()=>f.observer.status().receivedColumns,{timeout:4000}).toBe(280);
+    const status=f.observer.status();expect(status.serializedColumns).toBeLessThanOrEqual(256);expect(status.serializedBytes).toBeLessThanOrEqual(64*1024*1024);
+    expect(status.evictedColumns).toBeGreaterThan(0);expect(status.loadedColumns).toBeLessThanOrEqual(9);
+  }finally{await f.close();}
+},10000);
