@@ -13,6 +13,11 @@ import { CombatProgramRunner, combatProgramCandidates, combatProgramHash, validC
 import { validCombatRules, type CombatRule } from './combat-rules.ts';
 import { combatMayTakeTask, diverseCombatOptions } from './combat-options.ts';
 import { COMBAT_TACTIC_TOOL } from './combat-tool.ts';
+import { validCombatRoutines, type CombatRoutine } from './combat-routines.ts';
+import { METHOD_ADAPTER } from './method-runner.ts';
+import { resolveProcedure, type ProcedureGraph } from './support/procedure.ts';
+type RoutineAdmission = { method: { id: string; revision: string; sourceHash: string }; runId: number;
+  execution: NonNullable<ToolOutcome['execution']> };
 /** Shared game execution; model requests stay on the explicit host decision port. */
 export class TacticalMinecraftWorld extends MinecraftWorld {
 protected readonly battlefield = new BattlefieldObserver();
@@ -24,6 +29,9 @@ protected combatProgramRetryAt = 0;
 protected combatProgramTimeoutRetriedHash: string | null = null;
 protected lastCombatProgramFeedbackAt = 0;
 protected lastCombatDecision: { atMs: number; generation: number; outcome: unknown; elapsedMs: unknown } | null = null;
+private readonly routineGraphs = new Map<string, ProcedureGraph | Error>();
+private routineAdmission: RoutineAdmission | null = null;
+private routineError: string | null = null;
   constructor(options: MinecraftWorldOptions, protected readonly tactics = new CombatAbilities(new CombatTacticBook(options.dataDir ? join(options.dataDir,'minecraft-combat-tactics.json') : null))) { super(options); }
   protected combatHealingUrgent(_bot: Bot): boolean { return false; }
   protected sendAutoCombatSpell(_bot: Bot, _spell: CombatSpell, _ruleId?: string): boolean { return false; }
@@ -33,23 +41,32 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
     const tool = 'mc_combat_tactic';
     this.syncRealm();
     if (args.choice !== undefined) {
-      const choice = args.choice as { candidate?: CombatCandidate; tacticRevision?: number; connectionGeneration?: number };
-      if (Object.keys(args).length !== 1 || !choice || !choice.candidate || !Number.isSafeInteger(choice.tacticRevision))
+      this.routineAdmission = null; this.routineError = null;
+      const choice = args.choice as { candidate?: CombatCandidate; tacticRevision?: number; connectionGeneration?: number; decisionId?: string };
+      if (Object.keys(args).length !== 1 || !choice || !choice.candidate || !Number.isSafeInteger(choice.tacticRevision)
+        || choice.decisionId !== undefined && (typeof choice.decisionId !== 'string' || !choice.decisionId.length
+          || choice.decisionId.length > 128 || /[\x00-\x1f]/.test(choice.decisionId)))
         return this.toolLog(tool,args,'未执行：choice 需要当前 candidate、tacticRevision 和 connectionGeneration。');
       const frame=this.sampleCombatDecision();
       const accepted=!!frame && frame.battlefield.connectionGeneration===choice.connectionGeneration
         && this.applyCombatDecision(choice.candidate,choice.tacticRevision!);
+      const admission = this.routineAdmission as RoutineAdmission | null;
       const receipt={id: (this.choiceReceipts.at(-1)?.id as number ?? 0)+1,at:new Date().toISOString(),accepted,
         candidate:choice.candidate,tacticRevision:choice.tacticRevision,goalCompleted:false,
-        meaning: accepted ? 'action-sent; inspect server receipts and refreshed scene' : 'stale-or-ineligible'};
+        ...(choice.decisionId ? { decisionId: choice.decisionId } : {}),
+        ...(admission ? { method: admission.method, runId: admission.runId } : {}),
+        ...(this.routineError ? { error: this.routineError } : {}),
+        meaning: accepted ? admission ? 'method-started; inspect original method terminal and SDK calls'
+          : 'action-sent; inspect server receipts and refreshed scene' : 'stale-or-ineligible'};
       this.choiceReceipts.push(receipt);if(this.choiceReceipts.length>32)this.choiceReceipts.shift();
       const candidate = choice.candidate;
       const target = ('targetId' in candidate && typeof candidate.targetId === 'number')
         ? this.bridge?.bot?.entities[candidate.targetId]?.position ?? null : null;
-      const label = { engage: '接敌', retreat: '撤离', track: '跟踪', step: '短步移动', cast: '施法' }[candidate.kind];
+      const label = { engage: '接敌', retreat: '撤离', track: '跟踪', step: '短步移动', cast: '施法', method: '运行方法' }[candidate.kind];
       this.reportViewerDecision(role, `choice:${this.connectionGeneration}:${receipt.id}`, label, accepted, target);
       this.emit('minecraft.tactic',JSON.stringify(receipt),false,{trigger:'piggyback',meta:receipt});
-      return { text: this.toolLog(tool,args,JSON.stringify(receipt)), meta: { protocol: 'agent-mc-tactics/v1', receipt } };
+      return { text: this.toolLog(tool,args,JSON.stringify(receipt)), meta: { protocol: 'agent-mc-tactics/v1', receipt },
+        ...(accepted && admission ? { execution: admission.execution } : {}) };
     }
     if (args.decisions === true || args.decision !== undefined) {
       if (Object.keys(args).length !== 1 || (args.decision !== undefined
@@ -81,6 +98,7 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
         + (tactic?.rules?.length ? `\n条件分支启用，共${tactic.rules.length}项；上述法术列表仅为停用分支后的备用顺序。` : '')
         + '\n' + this.tactics.readout(undefined, Date.now(), this.bridge?.bot ?? undefined)
         + '\n' + this.combatDecisionReadout()
+        + '\n快脚本菜单：' + JSON.stringify(tactic?.routines ?? [])
         + '\n自主战术程序：' + JSON.stringify({ program: tactic?.program ?? null,
           ...this.combatProgram.status(), error: this.combatProgramError ?? this.combatProgram.status().error }));
     }
@@ -88,14 +106,16 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
       this.tactics.setTactic(null);
       this.combatProgram.close(); this.combatProgramErrorHash = null; this.combatProgramError = null;
       this.combatProgramRetryAt = 0; this.combatProgramTimeoutRetriedHash = null;
+      this.routineGraphs.clear();
       return this.toolLog(tool, args, '已清除并保存自定战术，恢复默认即时战斗控制。');
     }
     const rawSpells = args.spells;
     const rawHeal = args.healAtOrBelow;
     const rawRules = args.rules;
     const rawProgram = args.program;
-    if (rawSpells === undefined && rawHeal === undefined && rawRules === undefined && rawProgram === undefined) {
-      return this.toolLog(tool, args, '未设置：请给 spells、rules 或 healAtOrBelow；用 enabled:false 清除。');
+    const rawRoutines = args.routines;
+    if (rawSpells === undefined && rawHeal === undefined && rawRules === undefined && rawProgram === undefined && rawRoutines === undefined) {
+      return this.toolLog(tool, args, '未设置：请给 spells、rules、program、routines 或 healAtOrBelow；用 enabled:false 清除。');
     }
     if (rawSpells !== undefined && (!Array.isArray(rawSpells) || rawSpells.length < 1
       || rawSpells.length > 8 || rawSpells.some((spell) => typeof spell !== 'string'
@@ -110,6 +130,12 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
     if (rawRules !== undefined && !validCombatRules(rawRules)) {
       return this.toolLog(tool, args, '未设置：rules 最多16项，id须唯一；每项给 id、spell、when，条件须符合工具定义且上下界相容。');
     }
+    if (rawRoutines !== undefined) {
+      if (!validCombatRoutines(rawRoutines)) return this.toolLog(tool, args, '未设置：routines 须给唯一id、intent和已保存方法的精确procedure引用。');
+      this.routineGraphs.clear();
+      try { for (const routine of rawRoutines) this.routineGraph(routine); }
+      catch (error) { return this.toolLog(tool, args, '未设置：快脚本版本不可用。' + String(error)); }
+    }
     if (rawProgram !== undefined && rawProgram !== null) {
       if (!validCombatProgram(rawProgram)) return this.toolLog(tool, args, '未设置：program须给name、code及可选JSON对象params。');
       try { await this.combatProgram.configure(rawProgram); }
@@ -120,8 +146,9 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
     const healAtOrBelow = rawHeal as number | undefined ?? previous?.healAtOrBelow ?? null;
     const rules = rawRules as CombatRule[] | undefined ?? previous?.rules;
     const program = rawProgram === undefined ? previous?.program : rawProgram as import('./combat-program.ts').CombatProgram | null;
+    const routines = rawRoutines === undefined ? previous?.routines : rawRoutines as CombatRoutine[];
     this.tactics.setTactic({ spells, healAtOrBelow, ...(rules !== undefined ? { rules } : {}),
-      ...(program !== undefined ? { program } : {}) });
+      ...(program !== undefined ? { program } : {}), ...(routines !== undefined ? { routines } : {}) });
     if (rawProgram === null) this.combatProgram.close();
     if (rawProgram !== undefined) { this.combatProgramErrorHash = null; this.combatProgramError = null;
       this.combatProgramRetryAt = 0; this.combatProgramTimeoutRetriedHash = null; }
@@ -133,11 +160,28 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
       + (healAtOrBelow === null ? '治疗血线未设置。'
         : `生命 ≤${healAtOrBelow}/20 时向已安装的治疗能力提供方提出请求。`)
       + (rules?.length ? `已启用${rules.length}项条件分支；法术列表仅作分支停用后的备用，未命中不自动进攻施法。` : '')
+      + (rawRoutines !== undefined ? `快脚本菜单已登记${routines?.length ?? 0}个精确版本，尚未运行。` : '')
       + (program ? `自主程序「${program.name}」SHA256 ${programHash}；`
         + (programError ? `已停止采用：${programError}。当前使用默认候选，需修订 program 后重新核验。`
           : '已编译，实战效果待核验。') : '')
       + '已按当前世界保存；保存不代表程序已采用。只在交战时按目标、魔力和冷却尝试，效果以服务端回执为准。'
       + '\n' + this.tactics.readout(undefined, Date.now(), this.bridge?.bot ?? undefined));
+  }
+private routineGraph(routine: CombatRoutine): ProcedureGraph {
+    const key = JSON.stringify([this.realmKey(), this.cfg.auth, this.cfg.username, routine.procedure]);
+    const cached = this.routineGraphs.get(key);
+    if (cached instanceof Error) throw cached;
+    if (cached) return cached;
+    try {
+      const graph = resolveProcedure(routine.procedure, METHOD_ADAPTER, handle => this.methodLibrary().blob(handle));
+      this.routineGraphs.set(key, graph);
+      return graph;
+    } catch (cause) {
+      const error = cause instanceof Error ? cause : new Error(String(cause));
+      this.routineGraphs.set(key, error);
+      this.emit('minecraft.tactic', `快脚本「${routine.id}」版本不可用：${error.message}；未执行。`, false, { trigger: 'piggyback' });
+      throw error;
+    }
   }
 protected combatDecisionConfig(): CombatExecutionPolicy {
     return { ...COMBAT_EXECUTION_DEFAULTS, ...this.cfg.combatOptions };
@@ -179,11 +223,16 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
     const executableReaction = (candidate: CombatCandidate) => candidate.kind !== 'engage'
       || engagementTargets.has(candidate.targetId);
     const reactions = combatReactions(bot, battlefield, cfg, control).filter(executableReaction);
+    const routines: CombatCandidate[] = !emergency && control.bodyFree && !this.combat?.active
+      ? (this.tactics.getTactic()?.routines ?? []).flatMap(routine => {
+        try { this.routineGraph(routine); return [{ ...routine, kind: 'method' as const }]; }
+        catch { return []; }
+      }) : [];
     if (program) {
       frame.program = program;
-      frame.actionPool = [...combatReactions(bot, battlefield, cfg, control, true).filter(executableReaction), ...frame.candidates];
+      frame.actionPool = [...combatReactions(bot, battlefield, cfg, control, true).filter(executableReaction), ...frame.candidates, ...routines];
     }
-    const choices = [...reactions, ...frame.candidates];
+    const choices = [...reactions, ...frame.candidates, ...routines];
     frame.omittedCandidates += Math.max(0, choices.length - cfg.maxCandidates);
     frame.candidates = diverseCombatOptions(choices, cfg.maxCandidates);
     return frame;
@@ -203,7 +252,7 @@ protected async prepareCombatProgram(frame: CombatDecisionFrame): Promise<Combat
         to => this.combatDecisionConfig().allowMovement && corridorSafe(bot, new Vec3(...frame.battlefield.self.position), new Vec3(...to)));
       const max = this.combatDecisionConfig().maxCandidates;
       this.combatProgramErrorHash = null; this.combatProgramError = null;
-      return { ...frame, candidates: diverseCombatOptions(result.candidates, max),
+      return { ...frame, candidates: result.candidates.slice(0, max),
         omittedCandidates: Math.max(0, result.candidates.length - max),
         policy: { name: program.name, sourceHash: hash, instructions: result.instructions } };
     } catch (error) {
@@ -220,11 +269,12 @@ protected async prepareCombatProgram(frame: CombatDecisionFrame): Promise<Combat
     }
   }
 protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number): boolean {
+    this.routineAdmission = null; this.routineError = null;
     const current = this.sampleCombatDecision(), bot = this.bridge?.bot;
     if (!current || !bot || current.battlefield.action.emergency || current.tacticRevision !== tacticRevision) return false;
     if (current.program) {
-      try { combatProgramCandidates({ candidates: [candidate], instructions: '' }, current,
-        to => this.combatDecisionConfig().allowMovement && corridorSafe(bot, bot.entity.position, new Vec3(...to))); }
+      try { candidate = combatProgramCandidates({ candidates: [candidate], instructions: '' }, current,
+        to => this.combatDecisionConfig().allowMovement && corridorSafe(bot, bot.entity.position, new Vec3(...to))).candidates[0]; }
       catch { return false; }
     } else {
       const checked = current.candidates.find(c => JSON.stringify(c) === JSON.stringify(candidate));
@@ -234,6 +284,18 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
     if (candidate.kind === 'cast') {
       if (!current.battlefield.action.fighting || this.tactics.manualCastBlock(candidate.spell)) return false;
       return this.sendAutoCombatSpell(bot, candidate.spell, candidate.ruleId);
+    }
+    if (candidate.kind === 'method') {
+      try {
+        const graph = this.routineGraph(candidate), root = graph.versions[graph.root];
+        this.interruptIdle('fast-method');
+        const run = this.methods.start({ name: root.id, code: root.code, params: candidate.params,
+          durationMs: candidate.durationMs, procedure: { reference: candidate.procedure, graph } });
+        this.routineAdmission = { runId: run.id, method: { id: root.id, revision: root.revision, sourceHash: root.sourceHash },
+          execution: { kind: 'method', id: `${this.executionEpoch}:${run.id}`, phase: 'accepted', terminal: false,
+            goalCompleted: false, evidence: { localId: run.id, sourceHash: root.sourceHash, reference: candidate.procedure } } };
+        return true;
+      } catch (error) { this.routineError = String(error); return false; }
     }
     this.interruptIdle('combat-decision');
     return this.combat?.react(candidate) ?? false;

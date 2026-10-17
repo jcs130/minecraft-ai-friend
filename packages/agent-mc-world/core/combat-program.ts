@@ -140,6 +140,9 @@ export function combatProgramCandidates(result: unknown, frame: CombatDecisionFr
       ? a.kind === 'cast' && a.spell === c.spell && a.ruleId === c.ruleId
       : c.kind === 'engage' ? a.kind === 'engage' && a.targetId === c.targetId && a.uuid === c.uuid
         : c.kind === 'track' ? a.kind === 'track' && a.targetId === c.targetId && a.uuid === c.uuid
+        : c.kind === 'method' ? a.kind === 'method' && a.procedure.handle === c.procedure.handle
+          && a.procedure.revision === c.procedure.revision
+          && JSON.stringify(a.params) === JSON.stringify(c.params) && a.durationMs === c.durationMs
         : c.kind === 'retreat'));
     if (!eligible) throw new Error(`Unavailable candidate: ${c.id}`);
     return { ...eligible, id: c.id, intent: c.intent };

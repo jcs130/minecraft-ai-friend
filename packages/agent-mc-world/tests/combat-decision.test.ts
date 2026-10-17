@@ -54,6 +54,26 @@ function rig() {
 afterEach(() => vi.useRealTimers());
 
 describe('independent asynchronous combat choices', () => {
+  it('thresholds the selected probability consistently when the service reports above-chance confidence', async () => {
+    vi.useFakeTimers(); const r = rig(); r.loop.tick();
+    r.resolve(new Response(JSON.stringify({ answers: { tactic: { choice: 'option_0', confidence: .6,
+      probabilities: { keep: .2, option_0: .8 } } } })));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(r.sent).toHaveLength(1);
+    expect(r.reports.at(-1)?.data).toMatchObject({ outcome: 'sent', probability: .8, confidence: .6 });
+    r.loop.stop();
+  });
+
+  it('offers alternative visible enemies while the current combat controller is already fighting', () => {
+    const r = rig(); r.cfg.allowEngage = true; r.cfg.allowMovement = true; r.cfg.engageScope = 'hostile';
+    r.f!.battlefield.actors.push(...[4, 5].map(entityId => ({ ...r.f!.battlefield.actors[0], entityId,
+      uuid: String(entityId), distance: entityId })));
+    const choices = combatReactions(flatBot(), r.f!.battlefield, r.cfg, { bodyFree: false, canStep: false,
+      targetId: 3, sinceHitMs: 100, fight: 'auto', fleeHealth: 6, chaseMax: 12 });
+    expect(choices.filter(c => c.kind === 'engage').map(c => c.kind === 'engage' && c.targetId)).toEqual([4, 5]);
+    expect(choices.some(c => c.kind === 'retreat')).toBe(true);
+    r.loop.stop();
+  });
   it('tolerates unrelated neutral bystander visibility and departure', async () => {
     vi.useFakeTimers(); const r = rig();
     r.f!.battlefield.actors.push({ ...r.f!.battlefield.actors[1], entityId: 8, uuid: 'neutral', relation: 'neutral', targetEntityId: null });

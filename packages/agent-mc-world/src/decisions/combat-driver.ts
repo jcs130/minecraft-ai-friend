@@ -48,9 +48,9 @@ export class HostCombatDriver {
     this.loop = new CombatDecisionLoop({ config: () => hostCombatConfig(cfg()), sample: () => this.frame,
       refresh: () => this.refresh(), fetchImpl,
       request: port.decisions ? (input, options) => port.decisions!.request(input, options) : undefined,
-      apply: async (candidate, frame) => {
+      apply: async (candidate, frame, decision) => {
         if (this.lifetime.signal.aborted) return false;
-        const value = await port.call({ choice: { candidate, tacticRevision: frame.tacticRevision,
+        const value = await port.call({ choice: { candidate, decisionId: decision.decisionId, tacticRevision: frame.tacticRevision,
           connectionGeneration: frame.battlefield.connectionGeneration } }, this.lifetime.signal);
         return !this.lifetime.signal.aborted && typeof value !== 'string'
           && (value.meta?.receipt as { accepted?: boolean } | undefined)?.accepted === true;

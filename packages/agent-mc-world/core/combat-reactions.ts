@@ -29,12 +29,12 @@ export function combatReactions(bot: Bot, field: Battlefield, cfg: CombatExecuti
         minDistance: 5, maxDistance: 8, leaseMs: 4000,
         intent: 'Follow without attacking; stop on lost sight or unsafe ground.' });
   }
-  if (cfg.allowEngage && control.bodyFree && control.fight !== 'off'
+  if (cfg.allowEngage && (control.bodyFree || field.action.fighting) && control.fight !== 'off'
     && (field.self.health.current ?? 0) >= control.fleeHealth + 3) {
     const enemies = hostiles.filter(e => e.distance! <= control.chaseMax
       && (cfg.engageScope === 'hostile' || (e.relationSource === 'server'
         && e.targetEntityId !== null && partyIds.has(e.targetEntityId))));
-    for (const enemy of programmable ? enemies : enemies.slice(0, 1))
+    for (const enemy of enemies.filter(e => e.entityId !== control.targetId || !field.action.fighting))
       candidates.push({ id: `engage_${enemy.entityId}`, kind: 'engage', targetId: enemy.entityId!, uuid: enemy.uuid,
         intent: `Engage visible ${enemy.type ?? 'hostile'} at ${enemy.distance} blocks; continue attacking and approaching through the body controller.` });
   }

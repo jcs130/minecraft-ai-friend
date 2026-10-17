@@ -7,9 +7,8 @@
  * 2.88 几乎无敌,画面上"站在三十只僵尸中间毫发无伤"比冷却完美更不像人,
  * 2.6 会偶尔挨打,是"人味"旋钮,不是性能旋钮)。
  *
- * 这几条是拿数据换来的,别改(依据在 RESULTS.md / RESULTS2.md):
- * 1. 打最近的 + 1.3 倍粘性。威胁排序实测有害(9 只混合怪群 0/3 全死 → 改最近 3/3)。
- *    **任何让她离开身上那只、穿过怪堆去打另一只的策略都输。**
+ * 默认自保控制(依据在 RESULTS.md / RESULTS2.md):
+ * 1. 没有显式目标时，打最近的 + 1.3 倍粘性。已受理的显式目标在同一可见实体仍有效时保持，失效后恢复默认选择。
  * 2. 贴身 ≥2 只切横扫,否则暴击;冷却一律等满(≥84.8% 才有暴击/横扫/冲刺击退)。
  * 3. 距离用「眼睛 → AABB 最近点」,上限 3.0(服务端判定),不是脚底距离。
  * 4. 移动走上下文图(combat-context.ts):行为只往 interest/danger 图写,硬约束走
@@ -355,6 +354,7 @@ export class CombatSession {
   private lastFoodAttemptAt = Number.NEGATIVE_INFINITY;
   private lastSelfHurtAt = Number.NEGATIVE_INFINITY;
   private targetId = -1;
+  private selectedTarget: { id: number; uuid: string | null; entity: Bot['entity'] } | null = null;
   private pathing = false;
   private pathUntil = 0;
   private lastReach = 99;
@@ -444,7 +444,7 @@ export class CombatSession {
   /** Read-only target eligibility shared by candidate construction and execution. */
   engagementTargets(): number[] {
     const bot = this.opts.getBot(), t = this.opts.tuning();
-    if (!bot?.entity || (this.active && !this.tracking) || !t.enabled || t.fight === 'off'
+    if (!bot?.entity || (this.active && !this.tracking && !this.fighting) || !t.enabled || t.fight === 'off'
       || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()
       || (bot.health ?? 0) < t.fleeHealth + ENGAGE_MARGIN
       || (t.fight === 'armed' && !bestWeapon(bot) && !this.rangedReady(bot))
@@ -517,8 +517,16 @@ export class CombatSession {
     if (this.tracking) {
       this.trackingLease = null; this.state = 'fighting'; this.rangedOwner = {}; this.armMelee(bot);
       this.lastLandedAt = this.lastProgressAt = this.lastRealProgressAt = Date.now();
-    } else if (!this.engage(foe.name ?? '', false)) return false;
-    if (this.fighting) this.targetId = action.targetId;
+    } else if (!this.fighting && !this.engage(foe.name ?? '', false)) return false;
+    if (this.fighting) {
+      if (this.targetId !== action.targetId) {
+        this.cancelRanged(); this.tacticalMove = null;
+        if (this.pathing) dropOwnedGoal(bot, 'combat', '切换已选择目标', this.opts.diag);
+        this.pathing = false; this.release(bot);
+      }
+      this.targetId = action.targetId;
+      this.selectedTarget = { id: action.targetId, uuid: foe.uuid ?? null, entity: foe };
+    }
     return true;
   }
 
@@ -729,6 +737,7 @@ export class CombatSession {
     this.lastLandedAt = now;
     this.lastReach = 99;
     this.targetId = -1;
+    this.selectedTarget = null;
     this.swingPhase = 'idle';
     this.desperate = false;
     this.retreatBank = null;
@@ -874,9 +883,14 @@ export class CombatSession {
     return foes.filter((f) => f.flat <= near || this.provoked.has(f.id));
   }
 
-  /** 最近的 + 1.3 倍粘性。就这一条,威胁排序实测有害 */
+  /** An admitted explicit target stays selected while present and visible. */
   private pick(foes: Foe[]): Foe | null {
     const pool = foes.filter((f) => !NO_FIGHT.has(f.name));
+    const selected = this.selectedTarget && pool.find(f => f.id === this.selectedTarget!.id && f.visible
+      && (this.selectedTarget!.uuid === null ? this.bot?.entities[f.id] === this.selectedTarget!.entity
+        : this.bot?.entities[f.id]?.uuid === this.selectedTarget!.uuid));
+    if (selected) { this.targetId = selected.id; return selected; }
+    this.selectedTarget = null;
     if (pool.length === 0) return null;
     const best = [...pool].sort((a, b) => a.reach - b.reach)[0];
     const cur = pool.find((f) => f.id === this.targetId);

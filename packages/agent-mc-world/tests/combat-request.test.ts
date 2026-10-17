@@ -15,13 +15,16 @@ describe('compact combat inference evidence', () => {
       candidates: [{ id: 'watch', intent: 'Observe without attacking.', kind: 'track', targetId: 2, uuid: 'identity-checked-locally', minDistance: 5, maxDistance: 8, leaseMs: 1000 }],
       omittedCandidates: 2, policy: { name: 'method', sourceHash: 'version', instructions: 'Never engage unknown players.' } };
     const input = combatRequest(frame);
-    expect(input.state).toMatchObject({ sampledAtMs: 5000, mana: null,
+    expect(input.state).toMatchObject({ mana: null,
       battlefield: { self: { health: [6, null, 'native', 10], equipment: { held: 'wooden_sword' } },
         action: { taskId: 9, canStep: false }, omitted: 3,
         actors: [{ relation: 'unknown', relationSource: 'unknown', distance: null, lineOfSight: null, health: [null, null, 'unknown', null] }] },
-      skills: [{ available: false, cooldownRemainingMs: null }], omittedCandidates: 2,
+      skills: [{ available: false, cooldownRemainingMs: null, blocked: true }], omittedCandidates: 2,
       options: { option_0: { kind: 'track', targetId: 2, minDistance: 5, maxDistance: 8, leaseMs: 1000 } } });
     expect(input.questions.tactic.instructions).toContain('Never engage unknown players.');
+    expect(input.state).not.toHaveProperty('sampledAtMs');
+    expect(frame.skills[0].block).toBe('No confirmed cooldown');
+    expect(input.state.skills[0]).not.toHaveProperty('block');
     expect(JSON.stringify(input)).not.toContain('identity-checked-locally');
     expect(frame.candidates[0]).toHaveProperty('uuid', 'identity-checked-locally');
     frame.battlefield.self.health.current = 0.0000345678;

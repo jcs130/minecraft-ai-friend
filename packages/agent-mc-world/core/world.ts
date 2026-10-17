@@ -2763,7 +2763,7 @@ export class MinecraftWorld implements World {
   protected readonly gameMemoryService: GameMemoryService;
   private readonly methodLibraries = new Map<string, MethodLibrary>();
 
-  private methodLibrary(): MethodLibrary {
+  protected methodLibrary(): MethodLibrary {
     const scope = createHash('sha256').update(JSON.stringify([this.realmKey(), this.cfg.auth ?? 'offline', this.cfg.username, this.botName])).digest('hex');
     let library = this.methodLibraries.get(scope);
     if (!library) {

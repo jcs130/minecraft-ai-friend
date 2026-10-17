@@ -15,7 +15,7 @@ const req = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 const { Physics, PlayerState } = req('prismarine-physics');
 
 /** Real executor and physics with a local block grid, without a server connection. */
-export function methodHarness(version = '1.20.6') {
+export function methodHarness(version = '1.20.6', createWorld = () => new MinecraftWorld({ cfg: structuredClone(MINECRAFT_DEFAULTS) })) {
   const registry = req('prismarine-registry')(version);
   const Blocks = req('prismarine-block')(registry);
   const host = new FakeHost();
@@ -45,11 +45,11 @@ export function methodHarness(version = '1.20.6') {
     stopDigging() {}, chat(text: string) { said.push(text); },
     pathfinder: { goal: null, setGoal(goal: unknown) { this.goal = goal as null; bot.clearControlStates(); }, stop() {} },
   });
-  const world = new MinecraftWorld({ cfg: structuredClone(MINECRAFT_DEFAULTS) });
+  const world = createWorld();
   const internals = world as unknown as { onTaskReport: ConstructorParameters<typeof Executor>[0]['report']; methods: MethodRunner };
   const exec = new Executor({ getBot: () => bot as unknown as Bot,
     report: report => internals.onTaskReport(report), log: host.log, nextId: nextTaskId() });
-  Object.assign(world, { host, executor: exec, bridge: { bot, invSynced: true } });
+  Object.assign(world, { host, executor: exec, bridge: { bot, invSynced: true, connected: true } });
   const timer = setInterval(() => {
     if (bot.physicsEnabled) { const state = new PlayerState(bot, bot.controlState); bot.physics.simulatePlayer(state, blockWorld); state.apply(bot); }
     bot.emit('physicsTick');
