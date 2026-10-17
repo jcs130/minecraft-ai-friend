@@ -223,7 +223,7 @@ async function handleRequest(req: EngineRequest, signal: AbortSignal): Promise<u
     const out = await selectedBlobs.run(blobs, () => withAnchors({ sess: req.role, ...(req.callId ? { call: req.callId } : {}), ...(req.round !== null ? { round: req.round } : {}) }, () => tool.handler(req.args, {
       role: req.role,
       log,
-      signal, turnId: req.turnId, queueExternalEvents: queued => events.push(...queued),
+      signal, turnId: req.turnId, attribution: req.attribution, queueExternalEvents: queued => events.push(...queued),
       ...(req.callId ? { callId: req.callId } : {}),
       ...(req.round !== null ? { round: req.round } : {}),
     })));

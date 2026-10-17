@@ -27,6 +27,7 @@ export type EngineRequest =
   | {
       kind: 'tool'; name: string; args: Record<string, unknown>; role: string;
       callId: string | null; round: number | null; turnId?: string;
+      attribution?: import('./operation-experience.ts').OperationAttribution;
       /** Parent resolves only the explicitly selected procedure graph. */
       selectedBlobs?: Array<{ handle: string; b64: string; mime: string }>;
     }

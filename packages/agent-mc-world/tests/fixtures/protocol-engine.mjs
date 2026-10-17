@@ -16,7 +16,7 @@ export function createEngine() {
       }
       if(stopped)throw new Error('stopped');
       ctx.queueExternalEvents([{cursor:8,type:'fixture.reply',ts:'now',source:'minecraft',origin:'external',text:'raw',trigger:'preempt'}]);
-      return {text:JSON.stringify({turnId:ctx.turnId,round:ctx.round}),endsTurn:true,
+      return {text:JSON.stringify({turnId:ctx.turnId,round:ctx.round,role:ctx.role,attribution:ctx.attribution??null}),endsTurn:true,
         execution:{kind:'observation',id:'fixture:1',phase:'completed',terminal:true,goalCompleted:false},
         blobs:[{bytes:new Uint8Array([1,2,3]),mime:'application/octet-stream',fallbackText:'original bytes'}]};
     }}],

@@ -162,6 +162,7 @@ export class MinecraftWorldProxy implements World {
               callId: ctx.callId ?? null,
               round: roundTokenOf(ctx),
               turnId: ctx.turnId,
+              attribution: ctx.attribution,
               ...(selected.size ? {selectedBlobs: [...selected.values()]} : {}),
             },
             RPC_TIMEOUT_MS,

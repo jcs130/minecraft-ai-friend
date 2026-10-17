@@ -1,5 +1,10 @@
 # Agent MC World
 
+`0.5.7-rc.12` preserves decision attribution across the real engine-child IPC
+boundary. Agent names and permissions stay unchanged; anonymous tool arguments
+cannot claim provenance. The protocol regression covers MCP, SDK and the child
+process together, including receipt replay, turn boundaries and cancellation.
+
 `0.5.7-rc.11` carries explicit host-selected decision attribution through SDK
 and MCP calls to viewer events. Controller identity stays separate from agent
 names and roles. Anonymous calls remain unknown; tool arguments cannot claim
