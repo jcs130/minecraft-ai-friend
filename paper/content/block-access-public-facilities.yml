@@ -20,11 +20,6 @@ villages:
     max-x: -570
     max-z: -270
   - world: world
-    min-x: -593
-    min-z: -328
-    max-x: -587
-    max-z: -318
-  - world: world
     min-x: -530
     min-z: -325
     max-x: -490
@@ -39,3 +34,16 @@ villages:
     min-z: -566
     max-x: -684
     max-z: -534
+  # Natural crypt access hut, lit road and staircase.
+  - world: world
+    min-x: -468
+    min-z: 650
+    max-x: -423
+    max-z: 686
+  # Public village mine and its road up to the village edge.
+  # Mining west of the landing (X <= -702) remains outside this exception.
+  - world: world
+    min-x: -701
+    min-z: -490
+    max-x: -635
+    max-z: -472

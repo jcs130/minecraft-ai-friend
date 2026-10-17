@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "id": "mine-stair-guard-20261018",
+  "status": "deployed_online_and_verified",
+  "at": "2026-10-17T17:47:17.463Z",
+  "server": {
+    "minecraft": "1.21.1",
+    "agentFriend": "0.4.47.3",
+    "restarted": false
+  },
+  "landId": "village_public_mine",
+  "entrance": [
+    -652,
+    68,
+    -484
+  ],
+  "landing": [
+    -701,
+    36,
+    -484
+  ],
+  "miningStart": {
+    "xMax": -702,
+    "y": 36,
+    "z": -484
+  },
+  "restored": {
+    "blocks": 18,
+    "stairs": 4,
+    "evidence": "original saved construction result and exact CoreProtect break records",
+    "containersReplaced": 0
+  },
+  "policy": {
+    "retainedArea": {
+      "world": "world",
+      "min-x": -701,
+      "min-z": -490,
+      "max-x": -635,
+      "max-z": -472
+    },
+    "retainedCount": 8,
+    "redundantContainedTrialEntryRemoved": true,
+    "oldRetainedCoveragePreserved": true,
+    "originalEditorsPreserved": true
+  },
+  "verification": {
+    "isolated": 20,
+    "live": 19,
+    "saved": 8,
+    "sourceRegression": 14,
+    "unionAssertions": 321555,
+    "originalConstructionTargets": 1839,
+    "originalStaticRegionsPreserved": 1256,
+    "originalBlockEntitiesPreserved": 79,
+    "bedrockDevicePixels": false
+  },
+  "backup": {
+    "targetedOnline": true,
+    "fullColdBackup": false,
+    "mirrored": true,
+    "privateDirectory": "E/F MC/ops/repairs/mine-stair-guard-20261018"
+  },
+  "rollback": "merge-remove only this retained mine rectangle; preserve later policy/ownership/container contents and do not replace region files"
+}
