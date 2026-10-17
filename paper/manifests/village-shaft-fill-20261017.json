@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-17",
+  "status": "deployed_online",
+  "server": {
+    "minecraft": "1.21.1",
+    "agentFriend": "0.4.47",
+    "restarted": false,
+    "clientChangesRequired": false
+  },
+  "scope": {
+    "world": "world",
+    "bounds": {
+      "minX": -634,
+      "maxX": -458,
+      "minZ": -530,
+      "maxZ": -365
+    },
+    "historyDays": 30,
+    "inspectedColumns": 29382,
+    "repairedSites": 9,
+    "repairedColumns": 34,
+    "backfillTargets": 500,
+    "maximumObservedOpenDepth": 22
+  },
+  "sites": [
+    {
+      "id": 1,
+      "referencePositions": [
+        [
+          -632,
+          66,
+          -444
+        ]
+      ]
+    },
+    {
+      "id": 3,
+      "referencePositions": [
+        [
+          -598,
+          63,
+          -428
+        ]
+      ]
+    },
+    {
+      "id": 5,
+      "referencePositions": [
+        [
+          -569,
+          66,
+          -461
+        ]
+      ]
+    },
+    {
+      "id": 6,
+      "referencePositions": [
+        [
+          -560,
+          66,
+          -455
+        ]
+      ]
+    },
+    {
+      "id": 7,
+      "referencePositions": [
+        [
+          -556,
+          66,
+          -462
+        ]
+      ]
+    },
+    {
+      "id": 8,
+      "referencePositions": [
+        [
+          -504,
+          62,
+          -380
+        ]
+      ]
+    },
+    {
+      "id": 9,
+      "referencePositions": [
+        [
+          -491,
+          68,
+          -454
+        ]
+      ]
+    },
+    {
+      "id": 11,
+      "referencePositions": [
+        [
+          -465,
+          66,
+          -524
+        ]
+      ]
+    },
+    {
+      "id": 13,
+      "referencePositions": [
+        [
+          -462,
+          89,
+          -453
+        ],
+        [
+          -461,
+          90,
+          -453
+        ]
+      ]
+    }
+  ],
+  "protection": {
+    "newFoundationRegions": 34,
+    "minY": -64,
+    "maxY": "individual repaired ground height minus one",
+    "surfaceGrassEditable": true,
+    "repairPlacementNotAdditionallyDenied": true,
+    "previousRegionsPreserved": 1216,
+    "totalRegions": 1250,
+    "originalLandOwnershipAndCollaboratorsPreserved": true
+  },
+  "residents": {
+    "originalVillagersRescued": 13,
+    "alreadyLeftOriginalPit": 1,
+    "replacementEntitiesSpawned": 0,
+    "healthModified": false,
+    "uuidHealthProfessionTradesInventoryAiAndPersistentDataAssertions": 91
+  },
+  "verification": {
+    "isolatedChecks": 20,
+    "isolatedSiteWalks": 9,
+    "liveChecks": 31,
+    "savedStateChecks": 12,
+    "allPassed": true,
+    "originalBuildingBlocksRetained": 8096,
+    "originalBlockEntitiesRetained": 494,
+    "originalRailsRetained": 233,
+    "publicMineTargetsRetained": 1839,
+    "temporaryLoadsReleased": true,
+    "automaticSavingRestored": true,
+    "shortTickSample": "20 TPS / 12.4 ms; not a 16 autonomous-agent endurance test",
+    "bedrockDeviceScreenshotTested": false
+  },
+  "backup": {
+    "beforeFiles": 18,
+    "afterFiles": 39,
+    "twoDisksVerified": true,
+    "kind": "targeted online world/config snapshot, plus original entity audit and per-block journals; not a full cold server backup"
+  },
+  "guidance": {
+    "goddessResourceFilesSynced": [
+      "GODDESS_CURRENT_RULES.md",
+      "SERVER_UPDATES.md",
+      "VILLAGE_GROUND_SAFETY.md",
+      "VILLAGE_PUBLIC_MINE.md",
+      "VILLAGE_SHAFT_REPAIR.md"
+    ],
+    "newCommands": false,
+    "noBroadWelcomeReissueNeeded": true
+  },
+  "limits": [
+    "Repair targets confirmed hazardous excavated openings, not all natural caverns or purposeful underground routes.",
+    "The 34 repaired columns protect foundations one layer below the editable surface; other village subsoil rules are unchanged."
+  ],
+  "documentation": "paper/docs/VILLAGE_SHAFT_REPAIR.md"
+}
