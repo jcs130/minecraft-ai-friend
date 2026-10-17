@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.17",
+  "version": "0.5.7-rc.18",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -69,6 +69,10 @@
     "./motor/simulator": {
       "types": "./dist/types/src/motor/simulator.d.ts",
       "default": "./dist/runtime/src/motor/simulator.js"
+    },
+    "./motor/minecraft": {
+      "types": "./dist/types/src/motor/minecraft-simulation.d.ts",
+      "default": "./dist/runtime/src/motor/minecraft-simulation.js"
     },
     "./decisions": {
       "types": "./dist/types/src/decisions/index.d.ts",

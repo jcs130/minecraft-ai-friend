@@ -29,7 +29,9 @@ class TrajectoryWriter:
         schema = self.writer.register_schema(name="AgentMcMotor.MotorFrame", encoding="flatbuffer", data=(ROOT / "schema/motor.bfbs").read_bytes())
         metadata = {"simulation": contract["simulation"], "minecraft_version": contract["minecraftVersion"],
                     "tick_ns": "50000000", "action_ticks": "2", "log_time": "Unix wall-clock nanoseconds",
-                    "observation_source": "generated local voxel/state fixture; not rendered camera perception",
+                    "tick_source": "stepped client physics ticks; server continues at wall time" if contract.get("backend") == "minecraft" else "offline physics ticks",
+                    "observation_source": contract.get("observationSource", "generated local voxel/state fixture; not rendered camera perception"),
+                    "backend": contract.get("backend", "offline"), "goal_mode": contract.get("goalMode", "teacher-waypoint"),
                     "actions": json.dumps(contract["actionNames"])}
         self.observation = self.writer.register_channel(topic="/motor/observation_action", message_encoding="flatbuffer", schema_id=schema, metadata=metadata)
         self.truth = self.writer.register_channel(topic="/motor/environment_truth", message_encoding="flatbuffer", schema_id=schema,
@@ -41,25 +43,29 @@ class TrajectoryWriter:
         now = time.time_ns()
         self.writer.add_message(channel_id=channel, log_time=now, publish_time=now, data=encode(frame))
 
-    def truth_frame(self, task, seed, split, truth):
-        episode = f"{split}/{task}/{seed}"
+    def truth_frame(self, task, seed, split, truth, episode=None):
+        episode = episode or f"{split}/{task}/{seed}"
         cells = [int(value) for cell in truth["blocks"] for value in (*cell["position"], cell["stateId"])]
-        if self.scenes.get(episode) == cells:
+        snapshot = (cells, truth["goal"], truth.get("serverPosition"), truth.get("serverGoalConfirmed"))
+        if self.scenes.get(episode) == snapshot:
             return
-        self.scenes[episode] = cells
+        self.scenes[episode] = snapshot
         frame = MotorFrameT(protocol="agent-mc-motor/v1", episodeId=episode, task=task, seed=seed, split=split,
                             tick=truth["tick"], simTimeNs=truth["tick"] * 50_000_000, kind=1,
-                            goal=truth["goal"], truthCells=cells)
+                            goal=truth["goal"], truthCells=cells, serverPosition=truth.get("serverPosition"),
+                            serverClientDistance=truth.get("serverClientDistance"), serverGoalConfirmed=truth.get("serverGoalConfirmed"))
         self.write(self.truth, frame)
 
     def add(self, task, seed, split, before, action, after):
         o = before["observation"]
+        episode = f"{split}/{before['episodeId']}" if before.get("episodeId") else f"{split}/{task}/{seed}"
         if before.get("truth"):
-            self.truth_frame(task, seed, split, before["truth"])
+            self.truth_frame(task, seed, split, before["truth"], episode)
         if after.get("truth"):
-            self.truth_frame(task, seed, split, after["truth"])
+            # A real server position changes even while static map cells remain identical.
+            self.truth_frame(task, seed, split, after["truth"], episode)
         n = after["observation"]
-        frame = MotorFrameT(protocol=o["protocol"], episodeId=f"{split}/{task}/{seed}", task=task, seed=seed, split=split,
+        frame = MotorFrameT(protocol=o["protocol"], episodeId=episode, task=task, seed=seed, split=split,
                             tick=o["tick"], simTimeNs=o["tick"] * 50_000_000, kind=0, position=o["position"],
                             velocity=o["velocity"], yaw=o["yaw"], onGround=o["onGround"], goal=o["goal"],
                             gridShape=[7, 5, 7], voxels=o["voxels"], features=before["features"],
@@ -67,7 +73,10 @@ class TrajectoryWriter:
                             reward=after["reward"], terminal=after["terminal"], success=after["success"] if after["terminal"] else None,
                             failure=after.get("failure"), nextFeatures=after["features"], nextPosition=n["position"],
                             nextVelocity=n["velocity"], nextYaw=n["yaw"], nextOnGround=n["onGround"], nextVoxels=n["voxels"],
-                            expertIntervention=before.get("executedByTeacher"))
+                            expertIntervention=before.get("executedByTeacher"), goalMode=o.get("goalMode"), nextGoal=n["goal"],
+                            proposedActionIndex=before.get("policyProposal", -1),
+                            terminated=after["terminal"] and after.get("failure") != "timeout",
+                            truncated=after.get("failure") == "timeout")
         self.write(self.observation, frame)
         self.count += 1
 
@@ -79,15 +88,18 @@ class TrajectoryWriter:
         self.output.close()
 
 
-def training_arrays(path, split):
+def training_arrays(path, split, goal_mode=None):
     features, actions = [], []
     with Path(path).open("rb") as stream:
         for schema, channel, message in make_reader(stream, validate_crcs=True).iter_messages(topics=["/motor/observation_action"]):
             if schema.encoding != "flatbuffer" or channel.message_encoding != "flatbuffer" or not MotorFrame.MotorFrameBufferHasIdentifier(message.data, 0):
                 raise ValueError("Unexpected trajectory encoding")
             frame = MotorFrame.GetRootAs(message.data, 0)
-            if frame.Split().decode() != split or frame.Kind() != 0 or frame.TruthCellsLength():
+            if frame.Split().decode() != split or frame.Kind() != 0 or frame.TruthCellsLength() or frame.ServerPositionLength():
                 raise ValueError("Trajectory split or truth isolation violation")
+            if goal_mode and ((frame.GoalMode().decode() if frame.GoalMode() else "teacher-waypoint") != goal_mode
+                              or channel.metadata.get("goal_mode", "teacher-waypoint") != goal_mode):
+                raise ValueError("Trajectory goal mode differs from its manifest")
             if frame.TeacherIndex() < 0:
                 continue
             features.append(frame.FeaturesAsNumpy())

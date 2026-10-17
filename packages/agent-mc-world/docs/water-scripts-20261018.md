@@ -2,6 +2,8 @@
 
 Base: main `2161c79a` / core 0.5.7-rc.16. The changes are generic core behavior and on-demand guides, without changing the host framework or injecting a fixed activity into an agent.
 
+The combined 0.5.7-rc.18 candidate also integrates upstream `b9e152db` (optional final-target motor training and isolated simulation). Its new backend is opt-in; this water review does not start training, launch a server, or activate a motor policy for the live agent.
+
 ## Findings and corrections
 
 | Finding | Correction | Evidence |
