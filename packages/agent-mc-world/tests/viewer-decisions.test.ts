@@ -43,3 +43,14 @@ it.each([true, false])('shows actual host combat choice admission %s without cha
   expect(outcome.meta.receipt.accepted).toBe(accepted);
   expect(events).toMatchObject([{ source: 'system1', status: accepted ? 'accepted' : 'rejected', target: { x: 4, y: 64, z: 5 } }]);
 });
+
+it.each(['system1','system2','human','unknown'] as const)('uses explicit %s attribution independently of the host role/name', async source => {
+  const h=methodHarness(),events:unknown[]=[];h.bot.on('viewer:decision',value=>events.push(value));
+  try {
+    const result=await h.world.tools().find(t=>t.name==='mc_scout')!.handler({
+      source:'human',steps:[{skill:'observe',mode:'sites',sites:[[1,64,1]]}],
+    },{role:'named-agent',attribution:{controller:source,decisionId:'test-turn'},log:h.host.log});
+    expect(result).toHaveProperty('execution.phase','accepted');
+    expect(events).toMatchObject([{source,status:'accepted'}]);
+  } finally {h.close();}
+});

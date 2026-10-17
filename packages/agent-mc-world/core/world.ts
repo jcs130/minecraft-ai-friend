@@ -4503,8 +4503,8 @@ export class MinecraftWorld implements World {
         } catch (error) { return { text: this.toolLog('mc_script', args, String(error)), failed: true }; }
       },
       // 路标表在受理这一刻取一次:at 写名字时按当刻登记解析
-      mc_do: async (args, ctx) => this.enqueueTool('mc_do', args, (raw) => parseSteps(raw, this.markLookup()), undefined, ctx.role),
-      mc_scout: async (args, ctx) => this.enqueueTool('mc_scout', args, (raw) => parseScoutSteps(raw, this.markLookup()), undefined, ctx.role),
+      mc_do: async (args, ctx) => this.enqueueTool('mc_do', args, (raw) => parseSteps(raw, this.markLookup()), undefined, ctx.role, ctx.attribution?.controller),
+      mc_scout: async (args, ctx) => this.enqueueTool('mc_scout', args, (raw) => parseScoutSteps(raw, this.markLookup()), undefined, ctx.role, ctx.attribution?.controller),
       mc_attention: async (args) => this.perceptionReadout('mc_attention',args),
       mc_hear: async (args) => this.perceptionReadout('mc_hear',args),
       mc_risk: async (args) => this.perceptionReadout('mc_risk',args),
@@ -6302,12 +6302,14 @@ export class MinecraftWorld implements World {
 
   /** mc_do / mc_scout 共用:校验 → 受理。参数错误优先于「World 未启动」。 */
   protected reportViewerDecision(role: string | undefined, id: string, label: string, accepted: boolean,
-    target: { x: number; y: number; z: number } | null = null): void {
+    target: { x: number; y: number; z: number } | null = null,
+    controller?: 'system1' | 'system2' | 'human' | 'unknown'): void {
     const bot = this.bridge?.bot;
     if (!bot) return;
     try {
       (bot as unknown as EventEmitter).emit('viewer:decision', { id, label,
-        source: role === 'host-decision' ? 'system1' : role === 'main' ? 'system2' : 'unknown',
+        source: controller === undefined ? role === 'host-decision' ? 'system1' : role === 'main' ? 'system2' : 'unknown'
+          : ['system1', 'system2', 'human', 'unknown'].includes(controller) ? controller : 'unknown',
         status: accepted ? 'accepted' : 'rejected', from: bot.entity?.position ?? null, target });
     } catch { /* Read-only presentation cannot change task admission or execution. */ }
   }
@@ -6317,6 +6319,7 @@ export class MinecraftWorld implements World {
     parse: (raw: unknown) => { steps: SkillCall[]; notes?: ParseNote[] } | { error: string },
     methodAdmission?: (decision: TaskAdmissionDecision) => void,
     role?: string,
+    controller?: 'system1' | 'system2' | 'human' | 'unknown',
   ): string | ToolOutcome {
     // Proven pre-dispatch rejection: no queue mutation, navigation or interaction took place.
     const invalidArguments = (rule: string, text: string): ToolOutcome => ({
@@ -6431,7 +6434,7 @@ export class MinecraftWorld implements World {
         build: '建造', tunnel: '挖掘通道', excavate: '挖掘', pickup: '拾取', flight: '飞行', move: '移动',
         chat: '发送消息', wait: '等待', observe: '观察', probe: '探查' };
       this.reportViewerDecision(role, `${this.executionEpoch}:${admittedTaskId}`,
-        `任务 #${admittedTaskId} · ${parsed.steps.slice(0, 3).map(step => labels[step.skill] ?? '动作').join(' / ')}`, admitted, point);
+        `任务 #${admittedTaskId} · ${parsed.steps.slice(0, 3).map(step => labels[step.skill] ?? '动作').join(' / ')}`, admitted, point, controller);
     }
     // Preserve machine-readable admission evidence instead of requiring a host
     // to classify a localized receipt. A processing correction carries the

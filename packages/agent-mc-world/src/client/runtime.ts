@@ -342,7 +342,7 @@ export class MinecraftAgentClient {
       const result = await cancellable(offlineKnowledge
         ? Promise.resolve({ text: JSON.stringify(readMinecraftKnowledge(args, this.options.cfg.version)) })
         : offlineMemory && this.options.cfg.provider !== 'java-client' ? this.callOfflineMemory(args, combined) : tool.handler(args, {
-        role: this.options.agentName ?? 'agent', log: this.options.log, callId, signal: combined,
+        role: this.options.agentName ?? 'agent', log: this.options.log, callId, signal: combined, attribution,
         ...(turn ? { turnId: turn.id, round: turn.round } : {}), queueExternalEvents: events => queued.push(...events) }), combined);
       const outcome: ToolOutcome = typeof result === 'string' ? { text: result } : { ...result };
       const recorded = this.learning.finish(experience,outcome);

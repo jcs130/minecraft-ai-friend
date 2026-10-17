@@ -39,6 +39,8 @@ export type ToolTag = 'read' | 'write' | 'speak' | 'act' | 'flow' | 'snapshot';
 export interface ToolSchema { name: string; description: string; parameters: Record<string, unknown> }
 export interface ToolCallContext {
   role: string; log: Logger; callId?: string; turnId?: string; round?: number; signal?: AbortSignal;
+  /** Actual host-selected decision provenance, independent of the agent name/role. */
+  attribution?: import('../../core/operation-experience.ts').OperationAttribution;
   queueExternalEvents?: (events: EventEnvelope[]) => void;
 }
 export interface ToolOutcome {

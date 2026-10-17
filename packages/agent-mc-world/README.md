@@ -1,5 +1,10 @@
 # Agent MC World
 
+`0.5.7-rc.11` carries explicit host-selected decision attribution through SDK
+and MCP calls to viewer events. Controller identity stays separate from agent
+names and roles. Anonymous calls remain unknown; tool arguments cannot claim
+decision provenance. Existing named host-role attribution remains compatible.
+
 `0.5.7-rc.10` preserves build approach failures: an unreachable placement reports
 the navigation cause, measured foot cell and height difference, and says the
 target placement was not sent. It does not turn an approach failure into a
