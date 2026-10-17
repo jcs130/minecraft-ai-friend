@@ -120,6 +120,42 @@ it.each(['window', 'respawn', 'end'] as const)('fences real craft %s replacement
   if (replacement === 'window') expect(r.bot.currentWindow?.id).toBe(7);
 });
 
+it.each(['window', 'respawn', 'end', 'operator', 'existing-stock'] as const)(
+  'settles an interrupted GUI craft (%s) and lets the next native task run without replaying clicks', async replacement => {
+  const r = craftRig(), reports: any[] = [];
+  let id = 0;
+  Object.assign(r.bot, { findBlocks: () => [], recipesAll: () => [r.recipe],
+    chat: vi.fn(), health: 20, food: 20,
+    pathfinder: { goal: null, setGoal() {} } });
+  if (replacement === 'existing-stock') {
+    const items = r.bot.inventory.slots.map(item => r.Item.toNotch(item));
+    items[10] = r.raw('oak_planks', 4);
+    r.client.emit('window_items', { windowId: 0, stateId: 2, items, carriedItem: r.Item.toNotch(null) });
+  }
+  const exec = new Executor({ getBot: () => r.bot, nextId: () => ++id,
+    log: { info() {}, warn() {}, error() {}, debug() {} } as never,
+    showTempo: () => ({ ...MINECRAFT_DEFAULTS.show, inventory: true }),
+    report: report => reports.push(report) });
+  try {
+    exec.submit([{ skill: 'craft', item: 'oak_planks', count: 4 }], 'append');
+    exec.submit([{ skill: 'chat', text: 'next task' }], 'append');
+    await vi.advanceTimersByTimeAsync(800);
+    expect(r.clicks.length).toBeGreaterThan(0);
+    const sent = r.clicks.length;
+    if (replacement === 'operator') exec.cancelTask(1, 'operator');
+    else if (replacement === 'window' || replacement === 'existing-stock') r.client.emit('open_window', { windowId: 7, inventoryType: 12, windowTitle: 'Replacement' });
+    else r.bot.emit(replacement);
+    await vi.advanceTimersByTimeAsync(1500);
+    const terminals = reports.filter(report => report.taskId === 1 && ['blocked', 'done', 'cancelled'].includes(report.kind));
+    expect(terminals).toHaveLength(1);
+    expect(terminals[0].kind).toBe(replacement === 'operator' ? 'cancelled' : 'blocked');
+    if (replacement === 'window') expect(terminals[0].text).toContain('窗口');
+    expect(reports.some(report => report.taskId === 2 && report.kind === 'done')).toBe(true);
+    expect(exec.status().running).toBeNull();
+    expect(r.clicks).toHaveLength(sent);
+  } finally { exec.shutdown(); }
+});
+
 it('keeps all ten actual craft iterations paced within one bounded budget', async () => {
   const r = craftRig();
   let finishedAt = 0;
