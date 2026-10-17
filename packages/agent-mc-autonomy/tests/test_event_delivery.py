@@ -52,6 +52,11 @@ def test_only_events_in_actual_model_request_are_consumed(framework_module, tmp_
     shown_ids = {e["cursor"] for e in shown}
     assert 1 in shown_ids
     assert {e["cursor"] for e in controller.recent} == {e["cursor"] for e in supplied} - shown_ids
+    recorded = json.loads((tmp_path / "decisions.jsonl").read_text(encoding="utf-8"))
+    refs = recorded["context_delivery"]["included_refs"]
+    assert {ref["cursor"] for ref in refs} == shown_ids
+    assert all(ref["run"] == "run-1" for ref in refs)
+    assert "河对岸" not in json.dumps(recorded["context_delivery"], ensure_ascii=False)
 
 
 def test_pending_private_message_survives_bounded_backlog(framework_module, tmp_path):

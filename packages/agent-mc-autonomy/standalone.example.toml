@@ -8,6 +8,7 @@ enabled = false
 max_decisions = 0 # Run until explicit stop/error; set a positive number for a bounded trial.
 max_tool_rounds = 6
 context_tokens = 65536 # Default 64K; 131072 (128K) is optional when the configured service supports it.
+context_mode = "compact" # "full" preserves supplied evidence up to the actual request window, without fixed previews/count caps.
 max_output_tokens = 1024
 model_timeout_seconds = 180
 

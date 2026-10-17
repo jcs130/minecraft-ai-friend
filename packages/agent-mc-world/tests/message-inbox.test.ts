@@ -51,13 +51,15 @@ describe('received Minecraft messages', () => {
     try {
       const inbox = new MessageInbox('example.test:25565:ag_Player', dir);
       inbox.observe(event('[MC 系统] [活动] 居民事务板已更新。'));
-      inbox.observe(event('[MC 私聊] Alex: 一起去看看', '2026-01-01T00:01:00Z', 'Alex'));
+      inbox.observe({ ...event('[MC 私聊] Alex: 一起去看看', '2026-01-01T00:01:00Z', 'Alex'),
+        meta: { channel: 'private', uname: 'Alex', identityEvidence: 'packet-sender', chatTransport: 'chat', senderUuid: 'uuid-alex' } });
       inbox.readout({ action: 'read', id: 'message_1' });
       expect(inbox.readout({ action: 'review', ids: ['message_1', 'missing'] }).failed).toBe(true);
       expect(inbox.index()).toContain('2 条未标记已考虑');
       expect(inbox.readout({ action: 'review', ids: ['message_1'] }).text).toContain('不表示已执行');
       const restored = new MessageInbox('example.test:25565:ag_Player', dir);
       expect(restored.index()).toContain('1 条未标记已考虑');
+      expect(restored.readout({ id: 'message_2' }).text).toContain('"identityEvidence":"packet-sender"');
       expect(restored.readout({ query: '居民事务板' }).text).toContain('匹配 0 条');
       expect(restored.readout({ action: 'search', status: 'all', query: '居民事务板' }).text).toContain('message_1');
       expect(new MessageInbox('other.test:25565:ag_Player', dir).index()).toBe('');

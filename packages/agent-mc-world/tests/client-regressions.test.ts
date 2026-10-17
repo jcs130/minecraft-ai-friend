@@ -1,7 +1,9 @@
 import { EventEmitter } from 'node:events';
+import { createRequire } from 'node:module';
 import { Vec3 } from 'vec3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MinecraftChatProvenance } from '../src/chat-provenance.ts';
+import { viewerMessageKind } from '../core/modern-viewer.ts';
 import { observeInitialScene } from '../core/initial-scene.ts';
 import { methodHarness } from './method-harness.ts';
 import { observeVisual } from '../src/client/visual.ts';
@@ -14,6 +16,45 @@ afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 const players = { ag_CorMy: { username: 'ag_CorMy', uuid: 'uuid-cormy' }, Jojo: { username: 'Jojo', uuid: 'uuid-jojo' } };
 
 describe('whisper identity from raw messages', () => {
+  it.each(['packet', 'profileless'])('recognizes actual 1.21.1 registered incoming formatting (%s)', async transport => {
+    const r = methodHarness('1.21.1');
+    try {
+      const req = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
+      const nbt = req('prismarine-nbt');
+      const entry = (key: string, translation: string) => ({ key, value: nbt.comp({ chat: nbt.comp({
+        translation_key: nbt.string(translation), parameters: nbt.list(nbt.string(['sender', 'content'])) }) }) });
+      r.bot.registry.loadDimensionCodec({ id: 'minecraft:chat_type', entries: [
+        entry('minecraft:chat', 'chat.type.text'),
+        entry('minecraft:msg_command_incoming', 'commands.message.display.incoming'),
+        entry('minecraft:msg_command_outgoing', 'commands.message.display.outgoing')] });
+      const ChatMessage = req('prismarine-chat')(r.bot.registry);
+      const typeId = (name: string) => Number(Object.entries(r.bot.registry.chatFormattingById)
+        .find(([, value]) => (value as { name: string }).name === name)![0]);
+      Object.assign(r.bot, { players });
+      (r.world as any).hookMessageEvents(r.bot);
+      // The real registry resolves the translation key to a printf template.
+      // Testing only commands.message.display.incoming misses this normal path.
+      const incoming = ChatMessage.fromNetwork(typeId('minecraft:msg_command_incoming'), { sender: { text: 'ag_CorMy' }, content: { text: '铜有消息吗？' } });
+      expect(incoming.translate).toBe('%s whispers to you: %s');
+      expect(viewerMessageKind(incoming, 'chat', r.bot.registry)).toBe('whisper');
+      r.bot.emit('message', incoming, 'chat', transport === 'packet' ? 'uuid-cormy' : undefined);
+      await Promise.resolve();
+      expect(r.host.events.at(-1)).toMatchObject({ text: '[MC 私聊] ag_CorMy: 铜有消息吗？', senderKey: 'ag_CorMy',
+        meta: { channel: 'private', identityEvidence: transport === 'packet' ? 'packet-sender' : 'player-list-format' } });
+      expect(r.host.pushOpts.at(-1)?.trigger).toBe('flush');
+      const count = r.host.events.length;
+      const quote = ChatMessage.fromNetwork(typeId('minecraft:chat'), { sender: { text: 'Jojo' }, content: { text: 'ag_CorMy whispers to you: quoted' } });
+      r.bot.emit('message', quote, 'chat', 'uuid-jojo');
+      await Promise.resolve();
+      expect(r.host.events.slice(count).some(e => e.text.startsWith('[MC 私聊]'))).toBe(false);
+      const mismatched = ChatMessage.fromNetwork(typeId('minecraft:msg_command_incoming'),
+        { sender: { text: 'ag_CorMy' }, content: { text: 'wrong packet sender' } });
+      r.bot.emit('message', mismatched, 'chat', 'uuid-jojo');
+      await Promise.resolve();
+      expect(r.host.events.at(-1)?.meta?.identityEvidence).toBeUndefined();
+      expect(r.host.events.at(-1)?.meta?.uname).toBeUndefined();
+    } finally { r.close(); }
+  });
   it.each(['chat', 'system'])('keeps the sender and channel of a translated incoming whisper on %s', async position => {
     const r = methodHarness('1.21.1');
     try {

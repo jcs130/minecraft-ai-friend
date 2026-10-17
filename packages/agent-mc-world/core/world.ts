@@ -60,7 +60,7 @@ import { IdleBehaviorController, IdlePresentationContext, type IdleBehaviorScene
 import { sampleIdleActions, executeIdleAction } from './idle-actions.ts';
 import { classifyBossBarTitle } from './boss-bar.ts';
 import { minecraftTextComponent } from './text-component.ts';
-import { MinecraftChatProvenance } from '../src/chat-provenance.ts';
+import { MinecraftChatProvenance, incomingPrivateParts } from '../src/chat-provenance.ts';
 import { RAILWAY_TOOL_DECL, railwayReadout } from '../src/railway.ts';
 import {
   REPEATED_QUERY_RECEIPT, RoundOnceGate, roundTokenOf,
@@ -7060,7 +7060,7 @@ export class MinecraftWorld implements World {
         return;
       }
       if (position !== 'chat' && position !== 'system') return;
-      const whisper = chatProvenance.incomingWhisper(jsonMsg, bot.players);
+      const whisper = chatProvenance.incomingWhisper(jsonMsg, bot.players, bot.registry);
       if (whisper) {
         // Claim this component before the default regex can mistake a tag for a name.
         markMatched(jsonMsg); this.chatClaimed.add(jsonMsg);
@@ -7124,20 +7124,23 @@ export class MinecraftWorld implements World {
         const text = jsonMsg.toString().trim();
         if (!text) return;
         if (unchangedQueryFeedback) return;
-        const privateMessage = key === 'commands.message.display.incoming';
+        const privateMessage = key === 'commands.message.display.incoming' || !!incomingPrivateParts(jsonMsg, bot.registry);
         if (key === 'commands.message.display.outgoing') {
           this.emit('minecraft.chat', `[MC 私聊发出] ${text}`, false);
           return;
         }
         if (position === 'chat') {
           const sender = jsonMsg.with?.[0]?.toString();
+          const identity = sender && /^\w{1,16}$/.test(sender) ? chatProvenance.identify(sender, jsonMsg, bot.players) : null;
           const self = this.chatName();
           const fromSelf = sender === self || text.startsWith(`<${self}> `)
             || text.startsWith(`${self}: `) || text.startsWith(`[${self}] `);
           this.emit('minecraft.chat', `[MC${privateMessage ? ' 私聊' : ''}] ${text}`,
             !fromSelf && (privateMessage || mentionedInChat(text)), fromSelf ? { deliver: false }
-              : sender && /^\w{1,16}$/.test(sender) ? { meta: { uname: sender, socialScope: 'minecraft-server' } } : undefined,
-            !fromSelf && sender && /^\w{1,16}$/.test(sender) ? sender : undefined);
+              : identity ? { meta: { uname: sender, socialScope: 'minecraft-server', ...identity,
+                ...(privateMessage ? { channel: 'private' } : {}) } }
+              : privateMessage ? { meta: { channel: 'private' } } : undefined,
+            !fromSelf && identity ? sender : undefined);
           return;
         }
         // 明确的方块保护拒绝会终止当前任务；其他插件回执按文本识别并即时投递。

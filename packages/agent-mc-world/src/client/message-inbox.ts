@@ -151,7 +151,7 @@ export class MessageInbox {
         senderKey: event.senderKey, firstAt: event.ts, lastAt: event.ts, text, digest,
         originalChars: event.text.length, repeats: 1, eventType: event.type,
         provenance: Object.fromEntries(Object.entries(event.meta ?? {}).filter(([key, value]) =>
-          ['kind', 'sender', 'senderUuid', 'sequence', 'generation', 'socialScope'].includes(key)
+          ['kind', 'sender', 'senderUuid', 'sequence', 'generation', 'socialScope', 'uname', 'channel', 'identityEvidence', 'chatTransport'].includes(key)
           && ['string', 'number', 'boolean'].includes(typeof value))) as MessageObservation['provenance'] });
       if (this.state.messages.length > MESSAGE_LIMIT) {
         const reviewed = this.state.messages.findIndex(row => !!row.reviewedAt);
