@@ -644,6 +644,13 @@ function gotoArrivalGoal(call: Extract<SkillCall, { skill: 'goto' }>, target: Ce
       : new goals.GoalNear(target.x, target.y, target.z, 1);
 }
 
+function gotoArrivalNote(call: Extract<SkillCall, { skill: 'goto' }>, target: Cell, actual: Cell): string {
+  if (call.groundY) return ';本次只满足水平接近条件，高度未作为到达条件';
+  if (call.exact) return ';已满足精确落脚格到达条件';
+  return actual.x !== target.x || actual.y !== target.y || actual.z !== target.z
+    ? `;本次满足目标 ${cellText(target)} 的 1 格邻域条件，未精确站上目标格；精确站位用 exact:true` : '';
+}
+
 async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<string> {
   // An unresolved click is a protocol transaction barrier, independent of item
   // dependencies. Observing, walking and speaking remain available; the lower
@@ -729,10 +736,10 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
         releaseWalkOnly?.();
       }
       const water = headInWater(bot) || bodyInWater(bot);
-      const arrival = call.groundY ? ';本次只满足水平接近条件，高度未作为到达条件'
-        : call.exact ? ';已满足精确落脚格到达条件' : '';
+      const actual = feetOf(bot);
+      const arrival = gotoArrivalNote(call, target, actual);
       const footing = water ? ';仍在水中，未确认登岸' : '';
-      return `到了 ${cellText(feetOf(bot))}${arrival}${footing}${call.walkOnly ? ';沿现有通路到达，未挖掘或垫脚' : ''}${note ? `。\n${note}` : ''}`;
+      return `到了 ${cellText(actual)}${arrival}${footing}${call.walkOnly ? ';沿现有通路到达，未挖掘或垫脚' : ''}${note ? `。\n${note}` : ''}`;
     }
     case 'transit': return skillTransit(bot, call, ctx);
     case 'find': return skillFind(bot, call.target, call.direction, call.distance, ctx, call.until);
@@ -2868,7 +2875,7 @@ export class Executor {
     const target = resolved[0];
     if (!travelGoalReached(bot, gotoArrivalGoal(call, target))) return null;
     const where = call.groundY ? `水平 (${target.x},${target.z})` : cellText(target);
-    return `goto 已达成：当前位置已满足目标 ${where} 的寻路到达条件，实测脚下 ${cellText(here)}；`
+    return `goto 已达成：当前位置已满足目标 ${where} 的寻路到达条件，实测脚下 ${cellText(here)}${gotoArrivalNote(call, target, here)}；`
       + '本次无移动、未创建新任务。';
   }
 

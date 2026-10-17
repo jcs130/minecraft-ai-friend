@@ -14,6 +14,14 @@ memory and decisions. See [component boundaries](docs/component-boundaries.md)
 and the [information capability map](docs/information-capabilities.md) for current
 entry points and backend/evidence limits.
 
+`0.5.7-rc.8` distinguishes nearby navigation success from exact foot-cell arrival.
+Spiral preview/execution share measured alignment feedback and the existing
+`exact:true` contract. Batch previews do not treat approximate navigation or a
+requested tunnel endpoint as a verified next starting cell. Rejected goal fields
+return the supported names without accepting or mutating a goal. These changes
+do not rewrite plans or add movement; live improvement requires deployment and
+observed gameplay evidence.
+
 `0.5.7-dev.20261017.3` aligns water-containing plant routing with the
 installed collision physics and restores liquid waypoints from their original
 A* cells instead of silently lowering them through kelp/seagrass. Route probes

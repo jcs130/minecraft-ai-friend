@@ -738,9 +738,11 @@ export function parseGoal(args: Record<string, unknown>): GoalOp | { error: stri
       return { error: 'add 要一个 {text, plan, kind?, target?, blueprint?, current?, total?, unit?} 对象' };
     }
     const body = obj as Record<string, unknown>;
+    const fields = ['text', 'plan', 'blueprint', 'kind', 'target', 'current', 'total', 'unit'];
     const extras = Object.keys(body)
-      .filter((key) => !['text', 'plan', 'blueprint', 'kind', 'target', 'current', 'total', 'unit'].includes(key));
-    if (extras.length > 0) return { error: `add 有未知字段: ${extras.join(', ')}` };
+      .filter((key) => !fields.includes(key));
+    if (extras.length > 0) return { error: `add 有未知字段: ${extras.join(', ')}；支持字段：${fields.join(', ')}。`
+      + (extras.includes('type') ? '追踪类型使用 kind，不能写 type；本次未登记新目标。' : '本次未登记新目标。') };
     const { text, plan, blueprint, kind, target, current, total, unit } = body;
     if (typeof text !== 'string' || text.trim() === '') return { error: 'add.text 要一句话,不能空' };
     if (blueprint !== undefined && blueprint !== null && typeof blueprint !== 'string') {

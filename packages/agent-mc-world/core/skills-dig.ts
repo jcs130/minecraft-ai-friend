@@ -25,6 +25,7 @@ import { LEDGER_GUARD_BLOCKS, ledgerBlockFact } from './placed-ledger.ts';
 import { CONTAINER_FIND, FURNACE_KINDS } from './chests.ts';
 import { chooseTool, equipToolFor, miningToolPlan, nearBreak } from './tools.ts';
 import { UNTIL_DIG_RADIUS, type UntilHit, untilBlockIds, untilHit, untilUnknownNote } from './until.ts';
+import { spiralAlignmentError } from './tunnel-alignment.ts';
 
 const { goals } = pathfinderPkg;
 
@@ -350,9 +351,7 @@ export async function skillTunnel(bot: Bot, call: Extract<SkillCall, { skill: 't
     throw new SkillNoop(`当前脚格已是终点 ${cellText(target)}；本次未挖掘、未移动，未验证此前整条通道`);
   }
   if (call.spiral === true && !vertical) {
-    throw new SkillBlocked(
-      `spiral 是垂直升降用的螺旋楼梯,at 要放正上/正下(现在横向差着 ${run} 格);斜着走用不带 spiral 的通道`,
-    );
+    throw new SkillBlocked(spiralAlignmentError(start, target)!);
   }
   if (!vertical && Math.abs(rise) > run) {
     throw new SkillBlocked(

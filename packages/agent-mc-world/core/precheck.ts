@@ -29,6 +29,7 @@ import { HOE_TILLED } from './blueprint-registry.ts';
 import { farmingClickCell, floodedCropSpace, isHoeUseItem } from './farming-target.ts';
 import { SEED_CROP } from './placed-ledger.ts';
 import { AIR_NAMES, LIQUIDS, PLACE_REACH, cellText } from './cell-facts.ts';
+import { spiralAlignmentError } from './tunnel-alignment.ts';
 
 type PrecheckLevel = 'hard' | 'soft';
 
@@ -458,6 +459,8 @@ function precheckTunnel(bot: Bot, call: Extract<SkillCall, { skill: 'tunnel' }>,
   // A previous queued step may already have reached this cell. Let the skill
   // report a no-op from its fresh position instead of inventing a blocked route.
   if (run === 0 && rise === 0) return null;
+  const alignment = call.spiral ? spiralAlignmentError(start, target, projectedStart !== undefined) : null;
+  if (alignment) return { level: 'hard', text: alignment, rule: 'tunnel.spiralAlignment' };
   if (run !== 0 && Math.abs(rise) > run) {
     return { level: 'hard', text: `坡度超过 45°:横 ${run} 格要升降 ${Math.abs(rise)} 格`, rule: 'tunnel.slope' };
   }
@@ -790,12 +793,22 @@ export function precheckSteps(bot: Bot, steps: SkillCall[], deps: PrecheckDeps):
     }
     const relativeTunnelAfterMove = current.skill === 'tunnel' && projectedStart !== undefined
       && (!Array.isArray(current.at) || !current.at.every((n) => typeof n === 'number'));
+    if (current.skill === 'tunnel' && current.spiral && !current.dryRun
+      && previous?.skill === 'goto' && !previous.exact && !previous.dryRun) {
+      out.push({ index: i, note: { level: 'soft', rule: 'tunnel.nearApproach',
+        text: '前一步 goto 允许在目标邻域结束，尚未确认螺旋起点的 X/Z 对齐；'
+          + '需要精确起点时可用 exact:true，执行时仍按实际脚格核对，不自动改动这组步骤。' } });
+    }
     const note = precheckStep(bot, current, deps, relativeTunnelAfterMove ? null : projectedStart);
     if (note?.rule === 'use.emptyTarget' && i > 0) continue; // Earlier steps may change hand or cell.
-    if (current.skill === 'goto' || current.skill === 'tunnel') {
+    if (current.skill === 'goto' && !current.dryRun) {
       const at = current.at;
-      projectedStart = Array.isArray(at) && at.length === 3 && at.every((n) => Number.isInteger(n))
+      projectedStart = current.exact && !current.groundY && Array.isArray(at) && at.length === 3 && at.every((n) => Number.isInteger(n))
         ? deps.resolve(at) : null;
+    } else if (current.skill === 'tunnel' && !current.dryRun) {
+      // A spiral rotates through its shaft, and until may stop any tunnel early.
+      // The requested endpoint is not a verified next starting cell.
+      projectedStart = null;
     }
     if (!note) continue;
     // 受理刻只看得见当前背包；同单前面的取物/制作成功后才会有的材料，
