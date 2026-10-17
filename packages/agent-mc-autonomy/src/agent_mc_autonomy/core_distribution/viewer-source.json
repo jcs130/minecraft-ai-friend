@@ -1,6 +1,6 @@
 {
   "schema": "agent-mc-viewer-source/v1",
-  "sourceRevision": "8e72a5549ac738f2b183306619004d6f319d94d7",
+  "sourceRevision": "ef251a6cf3ff2c57930cca2f577e9b6dcfa56119",
   "files": {
     "package.json": {
       "bytes": 1191,
@@ -67,8 +67,8 @@
       "sha256": "f42878e339d6bc9ddec17a8e88cb8e4eb86a598b8147271c5da1aa6471e2604e"
     },
     "renderer-src/host/viewer-agent.mjs": {
-      "bytes": 14192,
-      "sha256": "f9053531b917a6ee4f25188124acfaf0dca201fcb36036cf76d991e515b076ae"
+      "bytes": 16012,
+      "sha256": "01c716f655c793c4c82ce2a0afaee17e7e9c80993fc350b0b5bd16a1c2e94155"
     },
     "renderer-src/host/viewer-appearance.d.mts": {
       "bytes": 588,
@@ -170,6 +170,14 @@
       "bytes": 1137,
       "sha256": "a9d150412d0203e382850642f61bdedf32413c715f347275f8739c12db16f8af"
     },
+    "renderer-src/src/modern-viewer/agent-activity-ui.js": {
+      "bytes": 6633,
+      "sha256": "c7545a1c2570d5f155ab7c624e1029623a8b8582a63eb97a2286eef7af23ed2c"
+    },
+    "renderer-src/src/modern-viewer/agent-activity.js": {
+      "bytes": 3570,
+      "sha256": "9659af43daa521de7964d2b7fdcb8497c0bb360b43c36215b085fec92c8891b6"
+    },
     "renderer-src/src/modern-viewer/agent-pointer.js": {
       "bytes": 3237,
       "sha256": "c777b4e3261cc0ba72d8e2bd9460a983f50d1062954ecff085926d2f436218cf"
@@ -247,8 +255,8 @@
       "sha256": "62229f17d1530081ef7712c06cee7a7114424a94edeaa0d06db070de0f0e98bd"
     },
     "renderer-src/src/modern-viewer/client.js": {
-      "bytes": 272411,
-      "sha256": "fb3420ccd0206d642463ff9688c8a815886f3c1ef8f56fd5cc24936339b279d1"
+      "bytes": 272623,
+      "sha256": "e362991ed5af0c6830f823fb9933ad8b5ed81c1826fdb2e680b45081124194b1"
     },
     "renderer-src/src/modern-viewer/custom-characters.d.ts": {
       "bytes": 2455,
@@ -367,8 +375,8 @@
       "sha256": "9211e267680a3a001212dbb4d478a1314f6a165f3f3a2326544c206a04e29e0b"
     },
     "renderer-src/src/modern-viewer/obs-layout.js": {
-      "bytes": 14576,
-      "sha256": "d9449322f6b578feb3bd3a69f3d2c4162eef3efcc2a360969108462808f31970"
+      "bytes": 14641,
+      "sha256": "254b08b2a21f59af5d5f93d3d02c12036e26af6519cb38f84c5748c6d33560a6"
     },
     "renderer-src/src/modern-viewer/observer-section-culling.js": {
       "bytes": 5083,
@@ -563,8 +571,8 @@
       "sha256": "d78e8fb0fb08aa64222b2556d3574da624d52349610db1167537c8ea48d1e326"
     },
     "renderer-src/src/modern-viewer/viewer-layout.js": {
-      "bytes": 8365,
-      "sha256": "93b16003166130a43addd376e6abda79ca40d1834d23e38c05be55df6bbf02b9"
+      "bytes": 8383,
+      "sha256": "f251370208a9dbc48f6dd21eb420d5ebf6336d0402db6563d82e70335b41f3ff"
     },
     "renderer-src/src/modern-viewer/viewer-performance.d.ts": {
       "bytes": 1492,
@@ -1074,13 +1082,25 @@
       "bytes": 2681,
       "sha256": "a9a4511967d4a84ee1ce5d9e5beaa70eccdc28b2fc3e28b5ac824627e9fc515e"
     },
+    "renderer-src/tools/export-minecraft-viewer-assets.py": {
+      "bytes": 31653,
+      "sha256": "f19aca63b6713eebb6bd65d4c39410bb76dabc638379a69fe46c4fcfed98700b"
+    },
     "renderer-src/tools/export-minecraft-viewer-block-sounds.mjs": {
       "bytes": 4364,
       "sha256": "ad3f2b31f3663187a70d9da87aeec1d19d31168e040e5ef1a37117c818d71ead"
     },
+    "renderer-src/tools/export-minecraft-viewer-content.py": {
+      "bytes": 5448,
+      "sha256": "e91dbad34f038261977c27eb99bc4795555676e99f17dc864e6b307e858093dd"
+    },
     "renderer-src/tools/export-minecraft-viewer-sounds.mjs": {
       "bytes": 3095,
       "sha256": "146986e52826528b350044168ae8cf380c993640760e4413012263049779285a"
+    },
+    "renderer-src/tools/export-text-display-font.py": {
+      "bytes": 4261,
+      "sha256": "a90f5d11cb745307fd3d24353bad2bca47c5be38f363105a557d15c13f77332f"
     },
     "renderer-src/tools/fixtures/native-bundled-ysm-review.js": {
       "bytes": 4316,
@@ -1230,6 +1250,10 @@
       "bytes": 21360,
       "sha256": "86a7ff08e617a8b08972674e635c2cbe1cf4c85696d8e330988eac8d4e70d51e"
     },
+    "renderer-src/tools/minecraft_viewer_icons.py": {
+      "bytes": 10335,
+      "sha256": "93fc2232490f8a0c93889995b11bc5c1d64407eb999196b2d3848a5a8d6221cc"
+    },
     "renderer-src/tools/native-biome-worker.mjs": {
       "bytes": 1175,
       "sha256": "f309c27b3662214f65ef156e41a147a2888c0541640378c60fc3ca26f1f21a3d"
@@ -1255,8 +1279,12 @@
       "sha256": "d69726f00fc950ad78bd0db478d3bac0e1009e27b1743041f32f2575170734a8"
     },
     "renderer-src/tools/native-world-preview-host.mjs": {
-      "bytes": 63722,
-      "sha256": "be820fbcc20baa4dae897b5d9bd97bd7fcde87d7e8f750c9f59e20423c14ff9d"
+      "bytes": 64211,
+      "sha256": "dae6e73623bb22ee2024eeb38de2b22f247cfaee5c2c34110f3beb714beb3992"
+    },
+    "renderer-src/tools/native_viewer_assets.py": {
+      "bytes": 25186,
+      "sha256": "aaa0b29c7980c92f3bea4f09a7c0b4c14e27fd1d127984d22be16fb82236b14c"
     },
     "renderer-src/tools/presets/qiandengji-guild.js": {
       "bytes": 2830,

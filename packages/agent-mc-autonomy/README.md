@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+0.2.13 pins shared viewer `ef251a6c`: retired viewer HTTP sockets, including
+incomplete browser requests, cannot hold the next same-port connection behind
+shutdown. Browser bundles use their source directory for stable receipts across
+consumer working directories. The Minecraft core remains 0.5.7-rc.20; gameplay,
+native task ownership and host model/persona settings are unchanged.
+
 0.2.12 pins core 0.5.7-rc.20, including the interrupted-GUI task terminal
 repair and the upstream navigation checkpoint, water-observation and private-chat
 corrections. A GUI-local interruption ends as blocked instead of leaving the
