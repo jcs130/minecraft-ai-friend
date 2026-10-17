@@ -3438,7 +3438,24 @@ export class MinecraftWorld implements World {
       ? { at: nowIso(this.timezone, new Date(last.at)), kind: last.kind, text: last.text }
       : null);
     parts.push({ key: 'lastTask', text: outcome });
+    const queue = this.executor?.status();
+    const threats = snap.entities.filter(entity => entity.kind === 'hostile');
     return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts,
+      decision: { sampledAtMs: Date.now(), state: {
+        connection: this.connectionReadiness(), dimension: normalizeDimension(snap.dimension),
+        position: [snap.position.x, snap.position.y, snap.position.z].map(value => Math.round(value * 10) / 10),
+        health: snap.health, food: snap.food, air: snap.inWater ? snap.oxygen : null, motion: snap.motion,
+        danger: { water: snap.inWater, environment: this.reflexes?.environmentOwnerKind ?? null,
+          hostileCount: threats.length, nearestHostile: threats.length ? Math.min(...threats.map(entity => entity.distance)) : null,
+          unreportedEntities: snap.entitiesOmitted, effects: snap.effects.map(effect => [effect.name, effect.level]) },
+        action: { fighting: this.combat?.active ?? false,
+          task: queue?.running ? { id: queue.running.id, step: queue.running.step,
+            index: queue.running.stepIndex, total: queue.running.stepCount, elapsedMs: queue.running.elapsedMs } : null,
+          queued: queue?.waiting.length ?? 0 },
+        constraints: { body: this.bodyInhibitReason, support: snap.standingOn, grounded: snap.onGround },
+        lastTask: last ? { kind: last.kind, at: last.at, text: last.text.length <= 160 ? last.text
+          : last.text.slice(0, 50) + '…[abridged]…' + last.text.slice(-100) } : null,
+      } },
       decisionStability: { sampledAtMs: Date.now(),
         identity: [this.realmKey(), bot?.player?.uuid ?? bot?.username ?? null], dimension: normalizeDimension(snap.dimension),
         position: [snap.position.x, snap.position.y, snap.position.z], health: snap.health, food: snap.food,

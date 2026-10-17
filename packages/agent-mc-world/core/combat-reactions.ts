@@ -21,13 +21,13 @@ export function combatReactions(bot: Bot, field: Battlefield, cfg: CombatExecuti
   // Spacing/withdrawal are useful BEFORE the first hit, including while the planner thinks.
   if (cfg.allowMovement && (control.bodyFree || field.action.fighting || field.action.tracking)) {
     if (control.retreatAvailable !== false)
-      candidates.push({ id: 'retreat', kind: 'retreat', intent: 'Move away from visible danger now without starting an attack; keep retreating using the body controller.' });
+      candidates.push({ id: 'retreat', kind: 'retreat', intent: 'Withdraw without attacking; continue through the body controller.' });
     const trackable = hostiles.filter(e => !control.trackingTargets || control.trackingTargets.has(e.entityId!));
     const tracked = trackable.find(e => e.entityId === control.targetId) ?? trackable[0];
     if (tracked?.position && tracked.distance! <= control.chaseMax + 4)
       candidates.push({ id: `track_${tracked.entityId}`, kind: 'track', targetId: tracked.entityId!, uuid: tracked.uuid,
         minDistance: 5, maxDistance: 8, leaseMs: 4000,
-        intent: 'Follow this visible hostile at 5–8 blocks without attacking; maintain that distance continuously while the planner thinks. Stop on lost sight or unsafe ground.' });
+        intent: 'Follow without attacking; stop on lost sight or unsafe ground.' });
   }
   if (cfg.allowEngage && control.bodyFree && control.fight !== 'off'
     && (field.self.health.current ?? 0) >= control.fleeHealth + 3) {
@@ -36,7 +36,7 @@ export function combatReactions(bot: Bot, field: Battlefield, cfg: CombatExecuti
         && e.targetEntityId !== null && partyIds.has(e.targetEntityId))));
     for (const enemy of programmable ? enemies : enemies.slice(0, 1))
       candidates.push({ id: `engage_${enemy.entityId}`, kind: 'engage', targetId: enemy.entityId!, uuid: enemy.uuid,
-        intent: `Engage visible ${enemy.type ?? 'hostile'} #${enemy.entityId} at ${enemy.distance} blocks using the existing attack controller. Continue attacking and approaching without waiting for the main model.` });
+        intent: `Engage visible ${enemy.type ?? 'hostile'} at ${enemy.distance} blocks; continue attacking and approaching through the body controller.` });
   }
   if (!cfg.allowMovement || !field.action.fighting || !control.canStep || target.position === null
     || (!programmable && (control.sinceHitMs ?? 0) < cfg.movementStallMs)) return candidates;

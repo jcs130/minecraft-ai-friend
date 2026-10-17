@@ -87,8 +87,8 @@ describe('independent asynchronous combat choices', () => {
     expect(r.loop.tick()).toBe(true);
     expect(r.requests).toHaveLength(1);
     expect((r.requests[0].state as CombatDecisionFrame).battlefield.actors).toMatchObject([
-      { type: 'skeleton', health: { current: 12 }, targetEntityId: 1 },
-      { relation: 'ally', health: { current: 5, max: 30 } },
+      { type: 'skeleton', health: [12, 20, 'server', expect.any(Number)], targetEntityId: 1 },
+      { relation: 'ally', health: [5, 30, 'server', expect.any(Number)] },
     ]);
     expect((r.requests[0].state as CombatDecisionFrame).battlefield.action).toMatchObject({ targetEntityId: 3, sinceHitMs: 3000, canStep: true });
     r.f!.battlefield.action.sinceHitMs = 3050;

@@ -156,6 +156,11 @@ describe('live readouts and honest startup', () => {
       r.bot.health = 8; r.bot.entity.position.x = 12;
       const current = r.world.requestFacts();
       expect(current!.decisionStability).toMatchObject({ health: 8, position: [12, expect.any(Number), expect.any(Number)] });
+      expect(current!.decision).toMatchObject({ sampledAtMs: expect.any(Number), state: {
+        health: 8, position: [12, expect.any(Number), expect.any(Number)],
+        danger: { hostileCount: expect.any(Number), unreportedEntities: expect.any(Number) },
+        action: { task: null }, constraints: { support: expect.any(String) },
+      } });
       expect(current!.text).not.toBe(first);
       expect(current!.parts?.map(p => p.key)).toEqual(expect.arrayContaining(['body', 'place', 'queue']));
       const result = await observeVisual(r.world.tools().find(t => t.name === 'mc_visual')!, {},

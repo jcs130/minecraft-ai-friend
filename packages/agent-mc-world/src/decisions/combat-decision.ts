@@ -1,5 +1,6 @@
 /** Optional HOST-side selector. The game engine never imports or starts this loop. */
 import { parseTypedChoice } from '../../core/support/typed-decision.ts';
+import { combatRequest } from './combat-request.ts';
 import type { CombatExecutionPolicy, CombatCandidate, CombatDecisionFrame } from '../../core/combat-decision-types.ts';
 export type { CombatExecutionPolicy, CombatCandidate, CombatDecisionFrame } from '../../core/combat-decision-types.ts';
 export interface CombatDecisionConfig extends CombatExecutionPolicy {
@@ -120,22 +121,16 @@ export class CombatDecisionLoop {
     }
     if (this.stopped) return;
     if (!frame.candidates.length) { entry.outcome = 'program-idle'; return; }
-    const criteria: Record<string, string> = { keep: frame.battlefield.action.fighting
-      ? 'Continue the current attack and movement without an extra action.'
-        : frame.battlefield.action.tracking ? 'Continue distance tracking only until its existing short lease expires. Choose the track candidate to renew the lease.'
-        : 'Do not take a body action; no attack or distance-tracking controller is running.' };
-    frame.candidates.forEach((c, i) => { criteria[`option_${i}`] = c.kind === 'cast'
-      ? `${c.intent} Cast ${c.spell}, mana cost ${c.manaCost}.` : c.intent; });
+    const compact = combatRequest(frame);
+    const criteria = compact.questions.tactic.criteria;
     const { program: _program, actionPool: _pool, ...publicFrame } = frame;
-    const body = JSON.stringify({ ...(cfg.model ? { model: cfg.model } : {}), state: { ...publicFrame, objective: 'Assist the party against eligible visible enemies, survive and preserve useful ongoing attacks.' }, questions: { tactic: {
-      type: 'choice', instructions: 'Choose whether to fight, withdraw, or track at a distance from the executable candidates. Decide BEFORE the first hit, independently of the slow planner. Engage only an eligible hostile when the situation favors combat; retreat from unfavorable threats; track follows without attacking when distance and observation are preferable. Keep preserves a useful controller, not a promise to move. Continue through model wait time. Use health, numbers, reach, line of sight, equipment and mana; null is unknown. Never infer a team from proximity.'
-        + (frame.policy ? '\nAgent-authored tactic: ' + frame.policy.instructions : ''), criteria,
-    } } });
+    const body = JSON.stringify({ ...(cfg.model ? { model: cfg.model } : {}), ...compact });
     const scope = { id, startedAtMs, connectionGeneration: frame.battlefield.connectionGeneration,
       sampledAtMs: frame.battlefield.sampledAtMs, tacticRevision: frame.tacticRevision,
       program: frame.policy ? { name: frame.policy.name, sourceHash: frame.policy.sourceHash } : null };
     Object.assign(entry, scope, { frame: publicFrame });
-    this.options.report('requested', { ...scope, mode: cfg.mode, frame: publicFrame, requestBytes: Buffer.byteLength(body) });
+    this.options.report('requested', { ...scope, mode: cfg.mode, frame: publicFrame,
+      inputFormat: 'combat-compact-v1', requestBytes: Buffer.byteLength(body) });
     try {
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, cfg.timeoutMs);
