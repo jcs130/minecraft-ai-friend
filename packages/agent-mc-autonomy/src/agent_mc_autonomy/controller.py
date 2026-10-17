@@ -24,6 +24,7 @@ from .observations import (
     fact_preview,
     receipt_view,
     spatial_text,
+    spatial_observations,
     tool_failure_view,
 )
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
@@ -55,6 +56,17 @@ def observation_call(name, arguments):
 def empty_catalogue_query(name, arguments):
     """Only the two native mixed tools' exact empty calls are catalogue reads."""
     return name in {"mc_blueprint", "mc_map"} and arguments == {}
+
+
+def spatial_read_key(name, arguments):
+    """Only exact spatial-only batches may reuse an already completed sample."""
+    steps = arguments.get("steps")
+    if name not in {"mc_do", "mc_scout"} or not isinstance(steps, list) or not steps:
+        return None
+    if not all(isinstance(step, dict) and step.get("skill") == "observe"
+               and step.get("mode") in {"voxels", "sites", "rays"} for step in steps):
+        return None
+    return json.dumps(steps, sort_keys=True, ensure_ascii=False)
 
 
 class ModelCallRejected(ValueError):
@@ -306,6 +318,8 @@ class Controller:
         self.invalid_tool_calls = 0
         self.unactioned_replies = 0
         self.read_activity = {}
+        self.observation_reads = {}
+        self.observation_requests = {}
         self.action_requests = {}
         self.action_scopes = {}
         self.native_outcomes = []
@@ -327,10 +341,12 @@ class Controller:
         fresh_scope = identity(facts)
         life = lifecycle(facts)
         if fresh_scope != self.game_scope:
+            self.observation_reads.clear()
+            self.observation_requests.clear()
             self.recent.clear()
             self.native_outcomes.clear()
             self.body_events.clear()
-            self.publish(native_outcomes=[], body_events=[])
+            self.publish(native_outcomes=[], body_events=[], read_recovery=None)
             self.groups.clear()  # Tool replies/provider replay belong to the previous game identity too.
             if not self.death_recovery:
                 # History alone cannot fence a fresh connection, whose native
@@ -419,6 +435,7 @@ class Controller:
             if execution.get("terminal") is True:
                 submitted = self.action_requests.pop(key, None)
                 submitted_scope = self.action_scopes.pop(key, None)
+                sampled = self.observation_requests.pop(key, None)
                 if submitted and submitted_scope != self.game_scope:
                     foreign_execution_id = execution["id"]
                 if submitted and submitted_scope == self.game_scope:
@@ -427,11 +444,17 @@ class Controller:
                     event = next((e for e in value.get("events", []) if (e.get("execution") or {}).get("id") == execution["id"]), {})
                     reference = {k: event[k] for k in ("run", "cursor", "ts") if k in event}
                     receipt = str((execution.get("evidence") or {}).get("receipt", ""))
+                    observations = spatial_observations(receipt)
+                    if read_only and phase == "completed" and sampled and observations:
+                        if len(self.observation_reads) >= 32:
+                            self.observation_reads.pop(next(iter(self.observation_reads)))
+                        self.observation_reads[sampled["key"]] = {**sampled, "at": time.monotonic(),
+                            "observations": observations, "original_event": reference, "execution_id": execution["id"]}
                     self.native_outcomes.append(native_outcome_view({"tool": name, "execution_id": execution["id"], "phase": phase,
                         "observation_only": read_only, "goal_verified": False,
                         "terminal": True, "goalCompleted": execution.get("goalCompleted"),
                         "step_outcomes": terminal_step_outcomes(execution, arguments),
-                        "receipt": spatial_text(receipt), "original_event": reference}))
+                        "receipt": spatial_text(receipt), "observations": observations, "original_event": reference}))
                     self.native_outcomes = self.native_outcomes[-6:]
                     self.publish(native_outcomes=list(self.native_outcomes))
                     if not read_only and phase == "completed":
@@ -913,8 +936,13 @@ class Controller:
                 old = next(iter(self.action_requests))
                 self.action_requests.pop(old)
                 self.action_scopes.pop(old, None)
+                self.observation_requests.pop(old, None)
             self.action_requests[key] = (name, json.loads(encode(arguments)), request_id, observation_call(name, arguments))
             self.action_scopes[key] = self.game_scope
+            spatial_key = spatial_read_key(name, arguments)
+            if spatial_key is not None:
+                self.observation_requests[key] = {"key": spatial_key, "facts": self.last_admission_facts,
+                                                  "scope": self.game_scope}
         if execution and not execution.get("terminal"):
             self.action_owners[(execution["kind"], execution["id"])] = self.active_goal["id"] if self.active_goal else "base-goal"
         self.receipt(result)
@@ -1083,6 +1111,25 @@ class Controller:
                 elif name == "mc_do" and self.feedback_pending:
                     arguments["queue"] = "append"
         request_id = str(uuid.uuid4())
+        spatial_key = spatial_read_key(name, arguments)
+        previous = self.observation_reads.get(spatial_key) if spatial_key else None
+        if (previous and not self.pending and self.last_admission_facts is not None
+                and previous["facts"] == self.last_admission_facts and previous["scope"] == self.game_scope
+                and time.monotonic() - previous["at"] < 60):
+            # This is a dated read reference, not fresh world evidence or a new
+            # native task. Never replay actions, invent a terminal ID or cache an
+            # acceptance. Different geometry, changed facts and expiry re-read.
+            result = {"failed": True, "dispatched": False, "origin": "controller_validation",
+                "code": "observation_already_answered",
+                "text": "This exact spatial batch already completed at the same observed place/state. It was NOT queued again. Use its measured results below. Unknown means occluded/unloaded, not empty or safe. Repeating unchanged scans is not progress: choose a different useful viewpoint/method, one feasible local action, or report a genuinely blocked stage. These are previous samples, not a fresh scan.",
+                "previous_observation": {"fresh": False, "observations": previous["observations"],
+                    "original_event": previous["original_event"], "execution_id": previous["execution_id"],
+                    "query": "mc_protocol(action=archive,run=original_event.run,after=original_event.cursor-1)"}}
+            self.planner_notice = result["text"]
+            self.continuation_needed = True
+            self.publish(read_recovery={"code": result["code"], "read_activity": dict(self.read_activity),
+                "original_event": previous["original_event"], "action_progress_verified": False})
+            return result, await self.archive_receipt(request_id, name, result), True
         rejected_key = json.dumps([name, arguments], sort_keys=True, ensure_ascii=False)
         prior_admission = self.admission_failures.get(rejected_key)
         if prior_admission and (prior_admission["facts"] != self.last_admission_facts
@@ -1123,8 +1170,9 @@ class Controller:
             elif result.get("execution") and (name == "mc_do" or "act" in next(
                     (t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])):
                 self.read_activity.clear()
+                self.observation_reads.clear()
                 self.unactioned_replies = 0
-                self.publish(unactioned_replies=0)
+                self.publish(unactioned_replies=0, read_recovery=None)
             self.publish(read_activity=dict(self.read_activity))
         if result.get("failed"):
             failure_notice = self.record_tool_failure(name, arguments, result, request_id)

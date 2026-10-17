@@ -272,7 +272,7 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
     # cost. Fit newest rows without evicting the current failure or world facts.
     if native_outcomes:
         before_outcomes = cost()
-        allowance = min(1400, max(0, (context_tokens - before_outcomes) // 5))
+        allowance = min(3000, max(0, (context_tokens - before_outcomes) // 5))
         tail["recent_native_outcomes"] = []
         for row in reversed(native_outcomes[-6:]):
             tail["recent_native_outcomes"].insert(0, row)

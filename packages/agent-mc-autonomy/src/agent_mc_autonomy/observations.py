@@ -45,11 +45,15 @@ def native_outcome_view(value):
     if (not isinstance(value, dict) or not isinstance(value.get("execution_id"), str)
             or value.get("terminal") is False):
         return None
+    observations = spatial_observations(value.get("receipt", "")) if "observations" not in value else value["observations"]
     return {"tool": _bounded(value.get("tool"), 80), "execution_id": _bounded(value["execution_id"], 160),
             "phase": _bounded(value.get("phase"), 40), "observation_only": value.get("observation_only") is True,
             "terminal": value.get("terminal") if type(value.get("terminal")) is bool else None,
             "goalCompleted": value.get("goalCompleted") if type(value.get("goalCompleted")) is bool else None,
             "goal_verified": False, "receipt": _bounded(value.get("receipt"), 450),
+            **({"observations": observations,
+                "observation_guidance": "Observed samples only. An unknown cell is occluded or unloaded, not air or safe ground. Repeating the same scan from the same place cannot establish missing support; change viewpoint/method or choose feasible local work."}
+               if isinstance(observations, list) and observations else {}),
             **({"step_outcomes": step_outcomes_view(value["step_outcomes"])} if "step_outcomes" in value else {}),
             "original_event": event_reference(value.get("original_event"))}
 
@@ -269,6 +273,32 @@ def spatial_summary(value):
     else:
         return None
     return result
+
+
+def spatial_observations(text):
+    """Keep each measured result before a terminal receipt's header is truncated."""
+    if not isinstance(text, str):
+        return []
+    decoder, results = json.JSONDecoder(), []
+    for match in re.finditer(r'\{"source"\s*:\s*"client-(?:loaded|visible)-world"', text):
+        try:
+            value, _ = decoder.raw_decode(text[match.start():])
+            summary = spatial_summary(value)
+        except (ValueError, TypeError, AttributeError):
+            continue
+        if summary is not None:
+            # All spatial coordinates here are the native absolute result, never
+            # the request's foot-relative bounds. Full geometry stays archived.
+            results.append({key: summary[key] for key in (
+                "kind", "bounds", "unknownCells", "feet", "frame", "materials", "rays", "observedAt") if key in summary})
+        elif value.get("kind") == "sites" and isinstance(value.get("sites"), list):
+            results.append({"kind": "sites", "observedAt": value.get("observedAt"),
+                "sites": [{key: row[key] for key in ("at", "target", "below", "body") if key in row}
+                          for row in value["sites"][:8] if isinstance(row, dict)]})
+        if len(results) == 8:
+            break
+    # Avoid turning malformed or future large receipts into unbounded context.
+    return results if len(json.dumps(results, ensure_ascii=False).encode("utf-8")) <= 6000 else []
 
 
 def spatial_text(text):

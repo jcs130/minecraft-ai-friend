@@ -5,6 +5,15 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.80 retains structured results from every spatial observation in a terminal
+batch before truncating its long title. Exact completed spatial-only batches at
+unchanged observed state reuse dated evidence for up to 60 seconds instead of
+queuing the same scan again. Changed facts, query geometry, game scope, accepted
+body work or expiry permit fresh reads. Unknown cells remain unknown; the
+planner chooses a different observation, feasible action or blocked report.
+No movement, user goal or native completion is fabricated. This retains the
+0.1.79 water-rescue core pin; independent tests do not prove sustained survival.
+
 0.1.78 adds a neutral Windows x64 offline runtime bundle, explicit preparation
 and portable host defaults. It pins core `0.5.7-dev.20261017.3` and viewer
 `f0f2227e65ea05ea89dcd4954790ec787a3a2e7a`, retaining the reviewed Windows
