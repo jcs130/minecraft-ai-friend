@@ -9,6 +9,7 @@
     "src/index.ts",
     "src/tactics.ts",
     "src/decisions/**/*.ts",
+    "src/motor/**/*.ts",
     "core/**/*.ts"
   ],
   "exclude": [

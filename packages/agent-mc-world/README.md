@@ -1,5 +1,10 @@
 # Agent MC World
 
+Opt-in [local motor training](docs/motor-training.md) provides voxel/state inputs,
+an offline Minecraft 1.21.1 physics fixture, MCAP/FlatBuffers trajectories,
+behavioural cloning, dataset aggregation and portable policy inference through
+`agent-mc-world/motor`. Training and evaluation do not enable live body control.
+
 `0.5.7-rc.14` recognizes modern Java private chat after the actual registry
 has resolved translation keys to format templates. The registered incoming
 type supplies sender/content positions; public quotes remain public. Private
