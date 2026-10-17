@@ -26,7 +26,22 @@ public final class BlockAccessRulesTest {
         for (String action : List.of("container","inventory","pickup","drop","display","use","interact"))
             check(!BlockAccessRules.blockAction(action),"does not grant other action "+action);
         var overlap = new BlockAccessRules.Area("world",-1120,-620,-1050,-540);
-        for (List<BlockAccessRules.Area> retained : List.of(List.of(camp), List.of(camp,town), List.of(camp,overlap))) {
+        var trial = new BlockAccessRules.Area("world",-610,-338,-570,-270);
+        var entrance = new BlockAccessRules.Area("world",-593,-328,-587,-318);
+        var deep = new BlockAccessRules.Area("world",-530,-325,-490,-285);
+        var challenge = new BlockAccessRules.Area("world",-374,-329,-326,-281);
+        var pvp = new BlockAccessRules.Area("world",-716,-566,-684,-534);
+        var facilities = List.of(camp,town,trial,entrance,deep,challenge,pvp);
+        var publicRules = new BlockAccessRules(true,Set.of(owner),facilities);
+        check(!publicRules.open(guest,"world",-590,-317),"trial ground must not use wilderness bypass");
+        check(!publicRules.open(guest,"world",-581,-275),"outer trial damage corridor remains protected");
+        check(!publicRules.open(guest,"world",-590,-328),"entrance overlap remains protected");
+        check(!publicRules.open(guest,"world",-510,-305),"deep trial wing remains protected");
+        check(!publicRules.open(guest,"world",-350,-305),"challenge trial wing remains protected");
+        check(!publicRules.open(guest,"world",-700,-550),"public PvP arena remains protected");
+        check(publicRules.open(guest,"world",-1068,-600),"NEKO field outside new spawn stays editable");
+        check(publicRules.open(owner,"world",-590,-317),"exact trusted builder still edits public facilities");
+        for (List<BlockAccessRules.Area> retained : List.of(List.of(camp), List.of(camp,town), List.of(camp,overlap),facilities)) {
             var selected = new BlockAccessRules(true,Set.of(owner),retained);
             List<BlockAccessRules.Area> outside = selected.outside("world");
             for(int x=-1150;x<=-450;x+=7) for(int z=-645;z<=-350;z+=5) {

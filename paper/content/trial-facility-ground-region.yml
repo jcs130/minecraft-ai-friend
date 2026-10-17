@@ -1,0 +1,28 @@
+# Merge this one region into existing regions; keep all owners and other regions.
+# Registered builder overlay priority 1000001 remains above this guard.
+regions:
+  qd_trial_facility_ground:
+    type: cuboid
+    priority: 1000000
+    min:
+      x: -610
+      'y': -64
+      z: -338
+    max:
+      x: -570
+      'y': 101
+      z: -270
+    owners: {}
+    members: {}
+    flags:
+      passthrough: allow
+      block-break: deny
+      block-place: deny
+      other-explosion: deny
+      creeper-explosion: deny
+      enderman-grief: deny
+      pistons: deny
+      tnt: deny
+      wither-damage: deny
+      ghast-fireball: deny
+      deny-message: 试炼场及外围为公共设施保护区：X=-610..-570、Z=-338..-270。请到范围外采集、建造；入口按钮、门和正常试炼可以使用。

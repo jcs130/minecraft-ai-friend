@@ -1,0 +1,41 @@
+# Merge with existing editor UUIDs; never replace the registered builder list.
+# Legacy key "villages" retains original protection in villages AND public facilities.
+schema-version: 1
+enabled: true
+editors: []
+villages:
+  - world: world
+    min-x: -634
+    min-z: -530
+    max-x: -458
+    max-z: -365
+  - world: world
+    min-x: -1146
+    min-z: -638
+    max-x: -1078
+    max-z: -567
+  - world: world
+    min-x: -610
+    min-z: -338
+    max-x: -570
+    max-z: -270
+  - world: world
+    min-x: -593
+    min-z: -328
+    max-x: -587
+    max-z: -318
+  - world: world
+    min-x: -530
+    min-z: -325
+    max-x: -490
+    max-z: -285
+  - world: world
+    min-x: -374
+    min-z: -329
+    max-x: -326
+    max-z: -281
+  - world: world
+    min-x: -716
+    min-z: -566
+    max-x: -684
+    max-z: -534
