@@ -1,5 +1,12 @@
 # Agent MC World
 
+Direct system/action-bar results that explicitly deny a block action with a
+dimension and exact coordinates now update native admission memory. A matching
+active dig ends with the complete server reason; later actions and pathfinding
+skip that cell. A late denial does not abort unrelated work, and player quotes,
+malformed results and other dimensions cannot create protection. Region rules,
+custom channels and server guides remain optional server-pack responsibilities.
+
 The primary product in `jcs130/minecraft-ai-friend`: a model-neutral, host-neutral
 Minecraft execution and learning toolkit.
 Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.

@@ -31,7 +31,7 @@ import { selfDamageText, takeSelfDamage } from './damage-source.ts';
 import { readMapDat } from './level-dat.ts';
 import { readMapId } from './item-facts.ts';
 import { Vec3 } from 'vec3';
-import { ServerFeedbackLedger } from './server-feedback.ts';
+import { ServerFeedbackLedger, parseServerActionDenial } from './server-feedback.ts';
 import type { Bot } from 'mineflayer';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
@@ -6977,6 +6977,10 @@ export class MinecraftWorld implements World {
         ? (bot.registry?.language?.[key] ?? rendered) : rendered;
       const noted = this.bridge?.bot === bot && this.hookedBots.has(bot)
         && this.serverFeedback.note(text, 'actionBar', this.executor?.currentTask?.id ?? null);
+      if (this.bridge?.bot===bot && this.hookedBots.has(bot)) {
+        const denial=parseServerActionDenial(text);
+        if (denial && this.bridge?.noteServerActionDenied?.(denial)) this.executor?.blockCurrentFromServer(text);
+      }
       if (text && (key.startsWith('block.minecraft.bed.')
         || /(?:床.{0,12}太远|离床.{0,8}太远|bed is too far away)/i.test(text))) {
         this.lastServerFeedback = { text, at: Date.now() };
@@ -7072,6 +7076,11 @@ export class MinecraftWorld implements World {
           if (this.bridge?.bot === bot && !matchedChatMessages.has(jsonMsg) && !this.chatClaimed.has(jsonMsg)
             && !key.startsWith('commands.message.display.') && !key.startsWith('chat.type.')) {
             this.serverFeedback.note(reply, 'system', taskId);
+            const denial=parseServerActionDenial(reply);
+            if (denial && this.bridge?.noteServerActionDenied?.(denial)
+              && taskId!==null && this.executor?.currentTask?.id===taskId) {
+              this.executor.blockCurrentFromServer(reply);
+            }
           }
         });
         // 服务器扩展可消费自己的机器可读回执。
@@ -7128,7 +7137,7 @@ export class MinecraftWorld implements World {
           return;
         }
         // 明确的方块保护拒绝会终止当前任务；其他插件回执按文本识别并即时投递。
-        if (/can't break that block here|你不能破坏这里的方块|不能在这里破坏方块|不许破坏|不允许破坏|这块属于村庄原有建筑|受保护.*(?:破坏|挖掘)/i.test(text)) {
+        if (/can't break that block here|你不能破坏这里的方块|不能在这里破坏方块|不许破坏|不允许破坏|禁止.{0,12}(?:深挖|破坏|挖掘)|这块属于村庄原有建筑|受保护.*(?:破坏|挖掘)/i.test(text)) {
           const notice = `[MC 系统] ${text}`;
           this.bridge?.noteServerBreakDenied(text);
           if (this.executor?.currentTask) {

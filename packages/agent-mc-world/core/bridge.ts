@@ -248,6 +248,7 @@ class ResourceBag {
 export class Bridge {
   protected readonly protection: BreakPermissions;
   protected serverProtection: BlockProtectionPort | null = null;
+  private readonly observedPlaceDenials = new Map<string, { reply: ProtectReply; until: number }>();
   protected agentMana: { current: number; max: number } | null | undefined;
   protected _bot: mineflayer.Bot | null = null;
   /** An entity can exist before login/first spawn; it is not yet an operable body. */
@@ -312,6 +313,35 @@ export class Bridge {
       msg: `服务端拒绝破坏 (${x}, ${y}, ${z})；寻路以后不再把这格列为可挖`,
       data: { cell: { x, y, z }, type, reason, protection: this.protection.status(String(bot.game.dimension)) },
       incident: true, taskId: this.opts.taskId?.() ?? undefined });
+  }
+
+  /** Cache exactly the denied action/cell. A late result cannot abort unrelated work. */
+  noteServerActionDenied(reply: ProtectReply): boolean {
+    const bot=this._bot;
+    if (!bot || reply.status!=='deny' || reply.dimension.replace(/^minecraft:/,'')!==String(bot.game.dimension).replace(/^minecraft:/,'')) return false;
+    if (reply.action==='place') {
+      const key=`${reply.dimension.replace(/^minecraft:/,'')}|${reply.x},${reply.y},${reply.z}`;
+      this.observedPlaceDenials.set(key,{reply,until:Date.now()+300_000});
+      if (this.observedPlaceDenials.size>1024) this.observedPlaceDenials.delete(this.observedPlaceDenials.keys().next().value!);
+      return false;
+    }
+    const cell=bot.blockAt(new Vec3(reply.x,reply.y,reply.z),false);
+    if (!cell || cell.name==='air' || cell.name==='cave_air' || cell.name==='void_air') return false;
+    this.protection.noteDenied(String(bot.game.dimension),reply.x,reply.y,reply.z,cell.type);
+    const target=bot.targetDigBlock;
+    const matches=!!target && target.position.x===reply.x && target.position.y===reply.y && target.position.z===reply.z;
+    if (matches) bot.stopDigging();
+    this.opts.diag?.write({lane:'path',event:'server-action-denied',incident:true,
+      msg:`服务端拒绝 ${reply.action} (${reply.x}, ${reply.y}, ${reply.z})；保留原话并阻止同格重试`,
+      data:{...reply,activeDig:matches},taskId:this.opts.taskId?.()??undefined});
+    return matches;
+  }
+
+  protected observedPlaceDenial(dimension: string, cell: ProtectCell): ProtectReply | null {
+    const key=`${dimension.replace(/^minecraft:/,'')}|${cell.x},${cell.y},${cell.z}`;
+    const entry=this.observedPlaceDenials.get(key);
+    if (entry && Date.now()<entry.until) return entry.reply;
+    this.observedPlaceDenials.delete(key); return null;
   }
 
   /** 当前连接的 bot;未连接或重连中为 null。 */
@@ -628,11 +658,13 @@ export class Bridge {
     });
     (bot as mineflayer.Bot & { cortiProtectionPreflight?: () => boolean }).cortiProtectionPreflight =
       () => this.opts.protectionPreflight?.() === true;
+    const serverCheck=this.serverProtection ? protectionCheck(this.serverProtection, () => String(bot.game.dimension),
+      () => this.opts.protectionPreflight?.() === true) : null;
     (bot as mineflayer.Bot & { cortiProtectCheck?: ReturnType<typeof protectionCheck> })
-      .cortiProtectCheck = this.serverProtection
-        ? protectionCheck(this.serverProtection, () => String(bot.game.dimension),
-          () => this.opts.protectionPreflight?.() === true)
-        : undefined;
+      .cortiProtectCheck = async (action,cell,phase) => {
+        const denied=action==='place'?this.observedPlaceDenial(String(bot.game.dimension),cell):null;
+        return denied ?? (serverCheck ? serverCheck(action,cell,phase) : null);
+      };
     (bot as mineflayer.Bot & { cortiBreakVerdict?: (block: { position: { x: number; y: number; z: number }; type: number }) =>
       'allowed' | 'protected' | 'unknown' }).cortiBreakVerdict = (block) =>
       this.serverProtection?.verdict('break', String(bot.game.dimension), block.position) === 'deny'
@@ -926,6 +958,7 @@ export class Bridge {
       || (this.opts.protectionPreflight?.() === true
         && this.serverProtection?.verdict('break', String(bot.game.dimension), { x, y, z }) === 'unknown'));
     setProtectedPlaceCells(movements, (x, y, z) => {
+      if (this.observedPlaceDenial(String(bot.game.dimension),{x,y,z})) return true;
       const verdict = this.serverProtection?.verdict('place', String(bot.game.dimension), { x, y, z });
       return verdict === 'deny' || (this.opts.protectionPreflight?.() === true && verdict === 'unknown');
     });

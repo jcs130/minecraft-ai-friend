@@ -1,3 +1,27 @@
+import type { ProtectReply } from './protection-port.ts';
+
+/** A direct server result, not a server-specific channel or region decoder.
+ * Call only after excluding player chat/quotes. Conflicting or incomplete
+ * claims stay text evidence; they cannot grant permissions or create an ACL.
+ */
+export function parseServerActionDenial(text: string): ProtectReply | null {
+  if (text.length > 32768) return null;
+  const start=text.indexOf('{');
+  if (start<0 || !/^(?:[\w:.-]+\s+)?$/.test(text.slice(0,start))) return null;
+  let value: Record<string, unknown>;
+  try { value=JSON.parse(text.slice(start)); } catch { return null; }
+  if (!value || Array.isArray(value) || value.status!=='deny' || value.allowed!==false
+    || !['break','place'].includes(String(value.action))) return null;
+  const dimension=value.dimension ?? value.world;
+  if (typeof dimension!=='string' || !/^(?:[a-z0-9_.-]+:)?[a-z0-9_./-]{1,128}$/.test(dimension)
+    || (typeof value.dimension==='string' && typeof value.world==='string'
+      && value.dimension.replace(/^minecraft:/,'')!==value.world.replace(/^minecraft:/,''))
+    || ![value.x,value.y,value.z].every(n=>typeof n==='number' && Number.isSafeInteger(n) && Math.abs(n)<=30_000_000)) return null;
+  return { action:value.action as 'break'|'place', dimension:dimension.replace(/^minecraft:/,''),
+    x:value.x as number,y:value.y as number,z:value.z as number,status:'deny',
+    reason:typeof value.reason==='string'?value.reason.slice(0,512):'server denied this action' };
+}
+
 /** Historical server error observations, never permissions or proof of effects. */
 export class ServerFeedbackLedger {
   private rows: Array<{ text: string; channel: string; receivedAt: string; taskId: number | null; at: number }> = [];
@@ -7,7 +31,7 @@ export class ServerFeedbackLedger {
     if (text.length > 8000) text = text.slice(0, 7900) + '…[完整原文见服务端消息事件归档]';
     // Generic language / structured result conventions only. Server-specific
     // channel decoding and ACL policy remain in optional extension ports.
-    if (!text || !/(?:denied|not allowed|cannot|can't|failed|error|invalid|too far|not enough|缺少|不足|失败|错误|无效|不能|无法|不允许|拒绝|未授权|太远|受保护|保护区)|"(?:allowed|success|ok)"\s*:\s*false|"status"\s*:\s*"(?:deny|error|failed)"/i.test(text)) return false;
+    if (!text || !/(?:denied|not allowed|no permission|don't have permission|cannot|can't|failed|error|invalid|too far|not enough|缺少|不足|失败|错误|无效|不能|无法|不允许|没有权限|无权|禁止|拒绝|未授权|太远|受保护|保护区)|"(?:allowed|success|ok)"\s*:\s*false|"status"\s*:\s*"(?:deny|error|failed)"/i.test(text)) return false;
     this.rows = this.rows.filter(row => now - row.at < 600_000);
     const same = this.rows.find(row => row.text === text);
     if (same) { same.at = now; same.taskId = taskId; return false; }
