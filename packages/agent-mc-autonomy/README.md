@@ -5,6 +5,11 @@ Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
 package itself stays model-free; the planner is an explicitly configured port.
 
+0.1.84 pins shared viewer `32e2edb9`: exact written/writable book components,
+verified bottle/bone-meal/seed GUI item classes and upstream shorter trails.
+Unsupported dynamic or server-specific models remain explicitly unavailable;
+this does not establish complete rendering parity or sustained survival.
+
 0.1.83 preserves the body's actual rendering registry/profile when an optional
 server HUD supplies skills and vitals. Server metadata cannot relabel vanilla
 item decoding; the exact core and viewer pins from 0.1.82 remain unchanged.
