@@ -1,0 +1,8 @@
+schema-version: 1
+# Explicit opt-in: disabled retains previous protection behavior on other servers.
+enabled: false
+# Exact authenticated player UUIDs, never display names or prefixes.
+editors: []
+# Inclusive X/Z ranges for villages whose existing building rules stay active.
+# Outside these ranges, block breaking/placing is open; other permissions remain.
+villages: []

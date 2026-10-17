@@ -472,6 +472,7 @@ final class PvpArenaManager implements Listener {
         return area.contains(at) ? area : null;
     }
     @EventHandler public void onBreak(BlockBreakEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         ProtectionArea area = protectionArea(event.getBlock().getLocation());
         if (area != null) {
             event.setCancelled(true);
@@ -479,6 +480,7 @@ final class PvpArenaManager implements Listener {
         }
     }
     @EventHandler public void onPlace(BlockPlaceEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         ProtectionArea area = protectionArea(event.getBlock().getLocation());
         if (area != null) {
             event.setCancelled(true);

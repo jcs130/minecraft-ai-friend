@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-17",
+  "status": "validated_candidate_awaiting_paper_restart_approval",
+  "candidateVersion": "0.4.47.2",
+  "baseVersion": "0.4.47",
+  "baseCommit": "d37d672943b54bb2b718f072d187d15716c93231",
+  "jar": {
+    "sha256": "574973086d8a5efbce3dc8fb6565bc47e32949347fa3257b224de250d3f85eb3",
+    "bytes": 1532070,
+    "baseSha256": "5976f2c823328c41dd045dd360e59fba5e5ee4e8ac861251e49a680533d65ed2",
+    "unrelatedEntriesByteIdentical": 300
+  },
+  "scope": {
+    "world": "minecraft:overworld",
+    "villages": [
+      {
+        "name": "主村庄",
+        "minX": -634,
+        "maxX": -458,
+        "minZ": -530,
+        "maxZ": -365
+      },
+      {
+        "name": "千灯新村／旅人营地",
+        "minX": -1146,
+        "maxX": -1078,
+        "minZ": -638,
+        "maxZ": -567
+      }
+    ],
+    "boundsInclusive": true,
+    "editors": [
+      ".MicroKQ",
+      "LittleFish0510"
+    ],
+    "identity": "verified_exact_uuid",
+    "outsideVillageBlockEdits": "open_to_all",
+    "containerOwnershipChanged": false,
+    "operatorPermissionsGranted": false
+  },
+  "sourceBackportPatch": {
+    "baseCommit": "d37d672943b54bb2b718f072d187d15716c93231",
+    "patch": "paper/ops/block-access-0.4.47.patch",
+    "sha256": "2339baa4eb356f90783082ef8ffb9867de763644a42c846bfc6c03863ac89d10",
+    "files": 19,
+    "appliedAndVerified": true
+  },
+  "verification": {
+    "geometryAssertions": 18290,
+    "nativeConnections": 56,
+    "normalRestartAndPlacement": 27,
+    "authoritativeBlockAttempts": 27,
+    "fullSha256": "574973086d8a5efbce3dc8fb6565bc47e32949347fa3257b224de250d3f85eb3",
+    "nativeForwardedMengmengAndLittleFishUuids": true,
+    "privateContainerAccessPreserved": true,
+    "bedrockOrXboxDeviceOperated": false,
+    "productionDeployed": false
+  },
+  "preparation": {
+    "dualDiskCandidateAndRollback": true,
+    "fullColdWorldBackupPerformed": false,
+    "productionPermissionsChanged": false,
+    "maintenanceQueued": false
+  },
+  "instructions": "paper/docs/BLOCK_ACCESS_POLICY.md"
+}

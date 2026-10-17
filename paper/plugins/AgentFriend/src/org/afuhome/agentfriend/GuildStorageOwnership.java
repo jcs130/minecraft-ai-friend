@@ -91,7 +91,8 @@ final class GuildStorageOwnership implements Listener {
     boolean owns(Player player) { return plugin.lands().guildOwner() != null ? plugin.lands().guildMember(player)
             : owner() != null && owner().equals(player.getUniqueId()); }
     private boolean inside(Location at) { return plugin.guildHall().containsProperty(at); }
-    boolean deniesEdit(Player player, Block block) { return inside(block.getLocation()) && !owns(player); }
+    boolean deniesEdit(Player player, Block block) {
+        if (plugin.bypassBlockProtection(player, block.getLocation())) return false; return inside(block.getLocation()) && !owns(player); }
 
     private Location protectedHolder(InventoryHolder holder) {
         if (holder instanceof DoubleChest chest) {
@@ -172,11 +173,13 @@ final class GuildStorageOwnership implements Listener {
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if (deniesEdit(event.getPlayer(), event.getBlock())) {
             event.setCancelled(true); denied(event.getPlayer(), "break", event.getBlock().getLocation());
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if (deniesEdit(event.getPlayer(), event.getBlock())) {
             event.setCancelled(true); denied(event.getPlayer(), "place", event.getBlock().getLocation());
         }

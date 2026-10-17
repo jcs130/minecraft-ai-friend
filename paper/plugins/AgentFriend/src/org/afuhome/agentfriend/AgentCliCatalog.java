@@ -147,6 +147,8 @@ final class AgentCliCatalog {
         add(specs,"land.trust","safety","write","/mycli land trust <ID> <玩家名或UUID>","主人或领地超管授权协作者在这块领地拆建并取放私有物品","当前非观战主人或显式超管；女神OP观战身份可跨领地管理；普通OP/成员不能转授权；已登录完整身份；最多64人","MC_LAND_MEMBER_RESULT；success才生效，unchanged无需重试；含actorUuid/authority，失败说明下一步");
         add(specs,"land.untrust","safety","write","/mycli land untrust <ID> <玩家名或UUID>","主人或领地超管撤销协作者权限并关闭失权的私有箱","可撤销离线成员；不改变主人和公共箱规则；普通成员不能转授权","MC_LAND_MEMBER_RESULT；撤权立即生效并持久保存");
         add(specs,"land.manage","safety","gui","/mycli land manage <ID>","主人或领地超管打开原版协作者管理页","选择玩家后显示权限范围，再确认；其他人可从公告牌查看名单","27格原版菜单，Java/基岩/Agent共用");
+        add(specs,"admin.blockaccess.status","safety","read","mycli admin blockaccess status [--json]","查看当前拆建范围策略和精确建设者人数","仅控制台/RCON；不加载区块、不编辑方块；玩家用protect查询本人目标","MC_BLOCK_ACCESS；只读，零游戏内消耗");
+        add(specs,"admin.blockaccess.reload","safety","write","mycli admin blockaccess reload [--json]","加载block-access.yml的建设者UUID和保留村庄范围","仅控制台/RCON；完整验证所有世界后保存WorldGuard方块规则；错误保留上一有效配置；不授予OP或库存权限","MC_BLOCK_ACCESS；success才生效；超时先用status查询，零游戏内消耗");
         add(specs,"admin.land.members","safety","read","mycli admin land members <ID>","女神运营工具读取指定领地完整主人和协作者名单","仅控制台/RCON适配；不读取箱内物品；玩家用land members分页","MC_LAND_MEMBERS；只读，不改变权限");
         add(specs,"admin.land.member","safety","write","mycli admin land member trust|untrust <ID> <玩家名或UUID>","女神运营工具以在线女神身份管理指定领地协作者","仅控制台/RCON；必须已核实女神OP观战身份在线；和玩家入口共用持久事务；不接受自由命令或任意操作者","MC_LAND_MEMBER_RESULT；含女神actorUuid和administrator；未知结果先读名单，不盲目重试");
         add(specs,"land.board","safety","read","/mycli land board <ID>","查看实体公告牌位置；走近右键查看主人和协作者","不自动传送；未加载或无安全空位显示待建，不覆盖已有建筑","MC_LAND_BOARD；原版双面上蜡牌，完整名单在原版27格页");
@@ -405,7 +407,7 @@ final class AgentCliCatalog {
         return out;
     }
     private static int idEmptyPriority(String prefix,String id,List<String> order){return prefix.isEmpty()&&order.contains(id)?order.indexOf(id):order.size();}
-    private static boolean jsonSupported(String id){return id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -508,6 +510,7 @@ final class AgentCliCatalog {
         out.add("parameters",parameters);
         String query=id.startsWith("skills.")||id.startsWith("cast.")||id.startsWith("profession")?"/mycli status；/mycli skills info <ID>；/mycli skills points":id.startsWith("photo")?"/mycli photo status":id.startsWith("inventory")?"/mycli inventory；重新打开对应容器核对":id.startsWith("arena.stash")||id.startsWith("guild.stash")||id.endsWith(".rewards")?"/mycli arena stash list；/mycli arena rewards list；关闭重开容器核对":id.startsWith("arena.recycle")||id.startsWith("arena.shop")||id.equals("arena.wallet")?"/mycli arena wallet；/mycli arena stash list；/mycli inventory":id.startsWith("arena")?"/mycli arena status；/mycli arena loot":id.startsWith("dungeon")?"/mycli dungeon status <ID>":id.startsWith("landmark")?"/mycli landmark info <领地ID>":id.startsWith("land.")||id.startsWith("admin.land")?"/mycli land info <ID>；/mycli land members <ID>":id.startsWith("waypoint")||id.equals("goto")?"/mycli waypoint list；本人最终 MC_TRAVEL/MC_WAYPOINT_RESULT":id.startsWith("trade")?"/mycli trade info <商人ID>":id.startsWith("commission")?"/mycli commission mine":id.startsWith("pvp")?"/mycli pvp status":id.startsWith("village")?"/mycli village threat":"/mycli progress";
         if(id.startsWith("challenge"))query="/mycli challenge status；/mycli challenge result [场次UUID]";
+        if(id.startsWith("admin.blockaccess."))query="mycli admin blockaccess status --json";
         if(id.startsWith("protect"))query="原命令重新查询当前权限；详情在原命令后加 --verbose；查询不代表操作完成";
         if(id.startsWith("archive"))query="/mycli archive info <作品UUID>；/mycli archive list；物品操作核对本人背包，结果未知不重放";
         if(id.startsWith("tasks"))query="/mycli tasks status；/mycli progress guild 1";

@@ -2501,12 +2501,14 @@ final class DungeonManager implements Listener {
                 && event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.CUSTOM) event.setCancelled(true);
     }
     @EventHandler public void onBreak(BlockBreakEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if (inBuild(event.getBlock().getLocation())) {
             event.setCancelled(true);
             plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "dungeon", protectionArea(event.getBlock().getLocation()));
         }
     }
     @EventHandler public void onPlace(BlockPlaceEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if (inBuild(event.getBlock().getLocation())) {
             event.setCancelled(true);
             plugin.protectionAdvisor().denied(event.getPlayer(), "place", event.getBlock().getLocation(), "dungeon", protectionArea(event.getBlock().getLocation()));

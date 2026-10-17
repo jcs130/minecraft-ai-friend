@@ -192,25 +192,32 @@ final class GeneratedStructureProtection implements Listener {
         String reason = reason(block.getLocation());
         if (reason != null) plugin.protectionAdvisor().denied(player, action, block.getLocation(), reason, protectionArea(block.getLocation()));
     }
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void damage(BlockDamageEvent e) { if (deniesEdit(e.getBlock())) { e.setCancelled(true); deny(e.getPlayer(), "break", e.getBlock()); } }
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void broken(BlockBreakEvent e) { if (deniesEdit(e.getBlock())) { e.setCancelled(true); deny(e.getPlayer(), "break", e.getBlock()); } }
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void damage(BlockDamageEvent e) {
+        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return; if (deniesEdit(e.getBlock())) { e.setCancelled(true); deny(e.getPlayer(), "break", e.getBlock()); } }
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void broken(BlockBreakEvent e) {
+        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return; if (deniesEdit(e.getBlock())) { e.setCancelled(true); deny(e.getPlayer(), "break", e.getBlock()); } }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void placed(BlockPlaceEvent e) {
+        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;
         if ((!plant(e.getBlock().getType()) || !crop(e.getBlockReplacedState().getType()) && !e.getBlockReplacedState().getType().isAir()) && reason(e.getBlock().getLocation()) != null) {
             e.setCancelled(true); deny(e.getPlayer(), "place", e.getBlock());
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void multi(BlockMultiPlaceEvent e) {
+        if (e.getReplacedBlockStates().stream().allMatch(s -> plugin.bypassBlockProtection(e.getPlayer(), s.getLocation()))) return;
         for (var state : e.getReplacedBlockStates()) if (reason(state.getLocation()) != null) { e.setCancelled(true); deny(e.getPlayer(), "place", state.getBlock()); return; }
     }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void empty(PlayerBucketEmptyEvent e) {
+        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation()) && plugin.bypassBlockProtection(e.getPlayer(), e.getBlockClicked().getRelative(e.getBlockFace()).getLocation())) return;
         Block b = e.getBlock();
         if (reason(b.getLocation()) == null) b = e.getBlockClicked().getRelative(e.getBlockFace());
         if (reason(b.getLocation()) != null) { e.setCancelled(true); deny(e.getPlayer(), "bucket", b); }
     }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void fill(PlayerBucketFillEvent e) {
+        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;
         Block b = e.getBlock(); if (reason(b.getLocation()) != null) { e.setCancelled(true); deny(e.getPlayer(), "bucket", b); }
     }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void tool(PlayerInteractEvent e) {
+        if (e.getClickedBlock() != null && plugin.bypassBlockProtection(e.getPlayer(), e.getClickedBlock().getLocation())) return;
         Block b = e.getClickedBlock(); if (b == null || e.getAction() != Action.RIGHT_CLICK_BLOCK || e.getItem() == null || crop(b.getType())) return;
         String tool = e.getItem().getType().name();
         boolean changes = tool.endsWith("_AXE") || tool.endsWith("_SHOVEL") || tool.endsWith("_HOE") || tool.equals("HONEYCOMB") || tool.equals("SHEARS");
@@ -225,7 +232,7 @@ final class GeneratedStructureProtection implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void explode(EntityExplodeEvent e) { e.blockList().removeIf(this::deniesEdit); }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void explode(BlockExplodeEvent e) { e.blockList().removeIf(this::deniesEdit); }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void burn(BlockBurnEvent e) { if (deniesEdit(e.getBlock())) e.setCancelled(true); }
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void ignite(BlockIgniteEvent e) { if (reason(e.getBlock().getLocation()) != null) { e.setCancelled(true); if (e.getPlayer() != null) deny(e.getPlayer(), "place", e.getBlock()); } }
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void ignite(BlockIgniteEvent e) { if (e.getPlayer() != null && plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return; if (reason(e.getBlock().getLocation()) != null) { e.setCancelled(true); if (e.getPlayer() != null) deny(e.getPlayer(), "place", e.getBlock()); } }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void flow(BlockFromToEvent e) {
         Hit to = hit(e.getToBlock().getLocation()); if (to.area == null && !to.unknown) return;
         Hit from = hit(e.getBlock().getLocation());

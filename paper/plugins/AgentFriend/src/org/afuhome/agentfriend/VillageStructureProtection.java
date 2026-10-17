@@ -185,6 +185,7 @@ final class VillageStructureProtection implements Listener {
 
     boolean deniesEdit(Block block) { return failClosed(block) || protectedOriginal(block); }
     boolean deniesEdit(org.bukkit.entity.Player player, Block block) {
+        if (plugin.bypassBlockProtection(player, block.getLocation())) return false;
         return deniesEdit(block) && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(player, block));
     }
 
@@ -201,6 +202,7 @@ final class VillageStructureProtection implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if (deniesEdit(event.getPlayer(), event.getBlock())) {
             event.setCancelled(true);
             plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "village_structure", protectionArea(event.getBlock().getLocation()));
@@ -208,6 +210,7 @@ final class VillageStructureProtection implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if ((failClosed(event.getBlock()) || protectedOriginal(event.getBlockReplacedState()))
                 && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), event.getBlock())))
         {
@@ -217,6 +220,7 @@ final class VillageStructureProtection implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
+        if (event.getReplacedBlockStates().stream().allMatch(s -> plugin.bypassBlockProtection(event.getPlayer(), s.getLocation()))) return;
         for (BlockState replaced : event.getReplacedBlockStates())
             if ((failClosed(replaced.getBlock()) || protectedOriginal(replaced))
                     && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), replaced.getBlock()))) {

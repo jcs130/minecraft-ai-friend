@@ -382,12 +382,14 @@ final class TrialRoadManager implements Listener {
     boolean deniesBreak(Block block) { return protectedFabric(block) || failClosed(block); }
     boolean deniesPlace(Block block) { return deniesBreak(block) || pathHeadroom(block); }
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if (deniesBreak(event.getBlock())) {
             event.setCancelled(true);
             plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "trial_road", protectionArea(event.getBlock().getLocation()));
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if (protectedFabric(event.getBlockReplacedState()) || pathHeadroom(event.getBlock())
                 || failClosed(event.getBlock())) {
             event.setCancelled(true);
@@ -395,6 +397,7 @@ final class TrialRoadManager implements Listener {
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
+        if (event.getReplacedBlockStates().stream().allMatch(s -> plugin.bypassBlockProtection(event.getPlayer(), s.getLocation()))) return;
         for (org.bukkit.block.BlockState state : event.getReplacedBlockStates())
             if (protectedFabric(state) || pathHeadroom(state.getBlock()) || failClosed(state.getBlock())) {
                 event.setCancelled(true);

@@ -398,6 +398,7 @@ final class LandManager implements Listener {
     }
 
     boolean allows(Player player, String action, Location at) {
+        if (BlockAccessRules.blockAction(action) && plugin.bypassBlockProtection(player, at)) return true;
         Land land = find(at);
         if (land == null) return true;
         if (!ready || player.getGameMode() == GameMode.SPECTATOR) return false;
@@ -405,6 +406,7 @@ final class LandManager implements Listener {
     }
 
     boolean stateAllows(Player player, String action, Location at) {
+        if (BlockAccessRules.blockAction(action) && plugin.bypassBlockProtection(player, at)) return true;
         ApplicableRegionSet set = manager(at.getWorld()).getApplicableRegions(BlockVector3.at(at.getBlockX(), at.getBlockY(), at.getBlockZ()));
         var local = WorldGuardPlugin.inst().wrapPlayer(player);
         StateFlag flag = switch (action) {
@@ -425,6 +427,7 @@ final class LandManager implements Listener {
     }
 
     boolean fabricAllowed(Player player, Block block) {
+        if (plugin.bypassBlockProtection(player, block.getLocation())) return true;
         Land land = find(block.getLocation());
         return ready && land != null && member(player, land) && allows(player, "break", block.getLocation());
     }
@@ -525,15 +528,19 @@ final class LandManager implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent e) {
+        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;
         if (denyIfNeeded(e.getPlayer(), "break", e.getBlock().getLocation())) e.setCancelled(true);
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onDamageBlock(BlockDamageEvent e) {
+        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;
         if (denyIfNeeded(e.getPlayer(), "break", e.getBlock().getLocation())) e.setCancelled(true);
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent e) {
+        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;
         if (denyIfNeeded(e.getPlayer(), "place", e.getBlock().getLocation())) e.setCancelled(true);
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent e) {
+        if (e.getReplacedBlockStates().stream().allMatch(s -> plugin.bypassBlockProtection(e.getPlayer(), s.getLocation()))) return;
         for (BlockState b : e.getReplacedBlockStates()) if (denyIfNeeded(e.getPlayer(), "place", b.getLocation())) { e.setCancelled(true); break; }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onUse(PlayerInteractEvent e) {
@@ -579,8 +586,10 @@ final class LandManager implements Listener {
         if(e.getWhoClicked() instanceof Player p){Denial d=deniedInventory(p,e.getView().getTopInventory());if(d!=null){e.setCancelled(true);deny(p,"inventory",d.at(),d.land());}}
     }
     @EventHandler public void onClose(InventoryCloseEvent e){menus.remove(e.getInventory());}
-    @EventHandler(priority=EventPriority.HIGHEST) public void onBucket(PlayerBucketEmptyEvent e){if(denyIfNeeded(e.getPlayer(),"bucket",e.getBlock().getLocation()))e.setCancelled(true);}
-    @EventHandler(priority=EventPriority.HIGHEST) public void onBucketFill(PlayerBucketFillEvent e){if(denyIfNeeded(e.getPlayer(),"bucket",e.getBlock().getLocation()))e.setCancelled(true);}
+    @EventHandler(priority=EventPriority.HIGHEST) public void onBucket(PlayerBucketEmptyEvent e){
+        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation()) && plugin.bypassBlockProtection(e.getPlayer(), e.getBlockClicked().getRelative(e.getBlockFace()).getLocation())) return;if(denyIfNeeded(e.getPlayer(),"bucket",e.getBlock().getLocation()))e.setCancelled(true);}
+    @EventHandler(priority=EventPriority.HIGHEST) public void onBucketFill(PlayerBucketFillEvent e){
+        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;if(denyIfNeeded(e.getPlayer(),"bucket",e.getBlock().getLocation()))e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST) public void onFertilize(BlockFertilizeEvent e){if(e.getPlayer()!=null)for(BlockState b:e.getBlocks())if(denyIfNeeded(e.getPlayer(),"fertilize",b.getLocation())){e.setCancelled(true);break;}}
     @EventHandler(priority=EventPriority.HIGHEST) public void onHarvest(PlayerHarvestBlockEvent e){if(denyIfNeeded(e.getPlayer(),"harvest",e.getHarvestedBlock().getLocation()))e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST) public void onInteract(PlayerInteractEntityEvent e){

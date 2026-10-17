@@ -402,6 +402,7 @@ final class ProtectionAdvisor implements Listener {
             return "unknown_out_of_range";
         if (!player.getWorld().isChunkLoaded(x >> 4, z >> 4)) return "unknown_unloaded_chunk";
         Block block = player.getWorld().getBlockAt(x, y, z);
+        if (BlockAccessRules.blockAction(action) && plugin.bypassBlockProtection(player, block.getLocation())) return null;
         if (plugin.lands().access() != null) {
             if (action.equals("use") && plugin.lands().access().isBoard(block)) return null;
             if (!action.equals("use") && !action.equals("container") && plugin.lands().access().protectsBoard(block)) return "land_notice_board";

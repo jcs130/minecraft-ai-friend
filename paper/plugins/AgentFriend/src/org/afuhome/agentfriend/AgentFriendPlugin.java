@@ -260,6 +260,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private AgentStatePublisher agentStatePublisher;
     private SkillEventPublisher skillEventPublisher;
     private ProtectionAdvisor protectionAdvisor;
+    private BlockAccessPolicy blockAccess;
     private GoddessObservation goddessObservation;
     private AgentCoach agentCoach;
     private AgentEntry agentEntry;
@@ -327,6 +328,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         professions = new ProfessionManager(this);
         skillAssessments = new SkillAssessments(this);
         skillVisuals = new SkillVisuals(this);
+        blockAccess = new BlockAccessPolicy(this);
         villageStructureProtection = new VillageStructureProtection(this);
         lifeBuildings = new LifeGuildBuildings(this, lifeGuild);
         protectionAdvisor = new ProtectionAdvisor(this);
@@ -440,6 +442,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     GuildSharedStorage guildShared() { return guildShared; }
     GuildStorageOwnership guildStorage() { return guildStorage; }
     ProtectionAdvisor protectionAdvisor() { return protectionAdvisor; }
+    boolean bypassBlockProtection(Player player, Location at) {
+        return blockAccess != null && blockAccess.allows(player, at);
+    }
     GeneratedStructureProtection generatedStructures() { return generatedStructures; }
     NativeTraversalPractice traversalPractice() { return traversalPractice; }
     LandManager lands() { return lands; }
@@ -834,6 +839,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         if(sender instanceof Player p && java.util.Arrays.stream(args).anyMatch(s->s.equals("--help")||s.equals("-h"))) {
             AgentCliCatalog.commandHelp(p,args);return true;
+        }
+        if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("blockaccess")) {
+            if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
+                sender.sendMessage("仅控制台可维护拆建范围；玩家用 /mycli protect break|place 查询本人权限。"); return true;
+            }
+            if (!(args.length == 3 || args.length == 4 && args[3].equalsIgnoreCase("--json"))
+                    || !Set.of("reload", "status", "audit").contains(args[2].toLowerCase(Locale.ROOT))) {
+                sender.sendMessage("用法：mycli admin blockaccess status|reload [--json]；查询只读，编辑 block-access.yml 后 reload。"); return true;
+            }
+            blockAccess.admin(sender, args[2].toLowerCase(Locale.ROOT)); return true;
         }
         if(sender instanceof Player p && java.util.Arrays.asList(args).contains("--json")) {
             communication.jsonCommand(p,args);return true;
@@ -3032,6 +3047,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 && event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.CUSTOM) event.setCancelled(true);
     }
     @EventHandler(priority = EventPriority.LOWEST) public void onWeedStart(BlockDamageEvent event) {
+        if (bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         Block block = event.getBlock();
         if (event.getPlayer().getGameMode() != GameMode.SURVIVAL
                 || !inVillage(block.getLocation()) || !VILLAGE_WEEDS.contains(block.getType())) return;
@@ -3043,6 +3059,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         block.breakNaturally(event.getPlayer().getInventory().getItemInMainHand());
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
+        if (bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if (arenaBuilt && inBuild(event.getBlock().getLocation())) {
             event.setCancelled(true);
             protectionAdvisor.denied(event.getPlayer(), "break", event.getBlock().getLocation(), "arena", arenaProtectionArea(event.getBlock().getLocation()));
@@ -3053,6 +3070,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             event.setCancelled(true);
     }
     @EventHandler public void onPlace(BlockPlaceEvent event) {
+        if (bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if (arenaBuilt && inBuild(event.getBlock().getLocation())) {
             event.setCancelled(true);
             protectionAdvisor.denied(event.getPlayer(), "place", event.getBlock().getLocation(), "arena", arenaProtectionArea(event.getBlock().getLocation()));

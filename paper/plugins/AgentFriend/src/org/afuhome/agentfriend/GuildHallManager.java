@@ -641,15 +641,18 @@ final class GuildHallManager implements Listener {
     private boolean failClosed(Block b) { return built && !ready && inHall(b) || servicesFailClosed(b); }
     boolean deniesEdit(Block block) { return protectedFabric(block) || failClosed(block); }
     boolean deniesEdit(Player player, Block block) {
+        if (plugin.bypassBlockProtection(player, block.getLocation())) return false;
         return deniesEdit(block) && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(player, block));
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if (deniesEdit(event.getPlayer(), event.getBlock())) {
             event.setCancelled(true);
             plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "guild_hall", protectionArea(event.getBlock().getLocation()));
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if ((protectedFabric(event.getBlockReplacedState()) || failClosed(event.getBlock()))
                 && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), event.getBlock()))) {
             event.setCancelled(true);
@@ -657,6 +660,7 @@ final class GuildHallManager implements Listener {
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
+        if (event.getReplacedBlockStates().stream().allMatch(s -> plugin.bypassBlockProtection(event.getPlayer(), s.getLocation()))) return;
         for (org.bukkit.block.BlockState state : event.getReplacedBlockStates())
             if ((protectedFabric(state) || failClosed(state.getBlock()))
                     && !(ready && plugin.lands() != null && plugin.lands().fabricAllowed(event.getPlayer(), state.getBlock()))) {

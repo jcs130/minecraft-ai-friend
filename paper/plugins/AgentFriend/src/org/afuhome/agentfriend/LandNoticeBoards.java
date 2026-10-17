@@ -147,10 +147,13 @@ final class LandNoticeBoards implements Listener {
         e.setCancelled(true);String id=marked(b);Player p=e.getPlayer();if(p.getWorld()!=b.getWorld()||p.getLocation().distanceSquared(b.getLocation().add(.5,.5,.5))>49)return;
         Bukkit.getScheduler().runTask(plugin,()->{if(p.isOnline()){text(id,spot(b));access.openPublic(p,id);}});
     }
-    @EventHandler(priority=EventPriority.HIGHEST) public void breakBlock(BlockBreakEvent e){if(protects(e.getBlock())){e.setCancelled(true);e.getPlayer().sendMessage("§c领地公告牌及支撑方块受保护；右键查看归属和协作者，用 /mycli land board <ID> 查位置。调整位置请联系服主。");}}
-    @EventHandler(priority=EventPriority.HIGHEST) public void damage(BlockDamageEvent e){if(protects(e.getBlock())){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"break",e.getBlock().getLocation(),"land_notice_board");}}
+    @EventHandler(priority=EventPriority.HIGHEST) public void breakBlock(BlockBreakEvent e){
+        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;if(protects(e.getBlock())){e.setCancelled(true);e.getPlayer().sendMessage("§c领地公告牌及支撑方块受保护；右键查看归属和协作者，用 /mycli land board <ID> 查位置。调整位置请联系服主。");}}
+    @EventHandler(priority=EventPriority.HIGHEST) public void damage(BlockDamageEvent e){
+        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;if(protects(e.getBlock())){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"break",e.getBlock().getLocation(),"land_notice_board");}}
     @EventHandler(priority=EventPriority.HIGHEST) public void flow(BlockFromToEvent e){if(protects(e.getToBlock()))e.setCancelled(true);}
-    @EventHandler(priority=EventPriority.HIGHEST) public void bucket(PlayerBucketEmptyEvent e){if(protects(e.getBlock())||protects(e.getBlockClicked().getRelative(e.getBlockFace())))e.setCancelled(true);}
+    @EventHandler(priority=EventPriority.HIGHEST) public void bucket(PlayerBucketEmptyEvent e){
+        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation()) && plugin.bypassBlockProtection(e.getPlayer(), e.getBlockClicked().getRelative(e.getBlockFace()).getLocation())) return;if(protects(e.getBlock())||protects(e.getBlockClicked().getRelative(e.getBlockFace())))e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST) public void entityExplosion(EntityExplodeEvent e){e.blockList().removeIf(this::protects);}
     @EventHandler(priority=EventPriority.HIGHEST) public void blockExplosion(BlockExplodeEvent e){e.blockList().removeIf(this::protects);}
     @EventHandler(priority=EventPriority.HIGHEST) public void burn(BlockBurnEvent e){if(protects(e.getBlock()))e.setCancelled(true);}

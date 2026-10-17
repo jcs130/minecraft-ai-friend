@@ -65,6 +65,7 @@ Copy-Item -LiteralPath (Join-Path $root 'resources\onboarding.yml') -Destination
 Copy-Item -LiteralPath (Join-Path $root 'resources\agent-guide.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\skill-visuals.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\structure-protection.yml') -Destination $build -Force
+Copy-Item -LiteralPath (Join-Path $root 'resources\block-access.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\text-bubbles.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\photo-camera.yml') -Destination $build -Force
 Copy-Item -LiteralPath (Join-Path $root 'resources\public-archives.yml') -Destination $build -Force

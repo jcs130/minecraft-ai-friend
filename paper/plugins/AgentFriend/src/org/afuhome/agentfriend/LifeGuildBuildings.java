@@ -677,18 +677,21 @@ final class LifeGuildBuildings implements Listener {
                 || fabric.get(key(state.getX(), state.getY(), state.getZ())) == state.getType());
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onBreak(BlockBreakEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if (deniesEdit(event.getBlock())) {
             event.setCancelled(true);
             plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "life_guild_building", protectionArea(event.getBlock().getLocation()));
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onPlace(BlockPlaceEvent event) {
+        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
         if (deniesEdit(event.getBlockReplacedState())) {
             event.setCancelled(true);
             plugin.protectionAdvisor().denied(event.getPlayer(), "place", event.getBlock().getLocation(), "life_guild_building", protectionArea(event.getBlock().getLocation()));
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onMultiPlace(BlockMultiPlaceEvent event) {
+        if (event.getReplacedBlockStates().stream().allMatch(s -> plugin.bypassBlockProtection(event.getPlayer(), s.getLocation()))) return;
         for (var state : event.getReplacedBlockStates()) if (deniesEdit(state)) {
             event.setCancelled(true);
             plugin.protectionAdvisor().denied(event.getPlayer(), "place", state.getLocation(), "life_guild_building", protectionArea(state.getLocation())); break;
