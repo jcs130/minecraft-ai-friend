@@ -1,3 +1,4 @@
+import { onConnectionEnd } from './connection-end.ts';
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { SkillBlocked, sleep } from './skill-context.ts';
@@ -51,6 +52,7 @@ export interface FlightPreview {
   timeEnough: boolean | null;
 }
 const abilities = new WeakMap<Bot, FlightAbilities>();
+const watchers = new WeakMap<Bot, () => void>();
 const controls = new WeakMap<Bot, FlightControl>();
 const moving = new WeakSet<Bot>();
 const timings = new WeakMap<Bot, { elapsedMs: number; ticks: number; atMs: number }[]>();
@@ -67,6 +69,7 @@ const HAZARDS = /^(lava|water|magma_block|cactus|fire|soul_fire|campfire|soul_ca
 
 /** Permission remains valid until the server revokes it or an adapter supplies an expiry. */
 export function watchFlightAbilities(bot: Bot): () => void {
+  const existing = watchers.get(bot);if (existing) return existing;
   timingEpochs.set(bot, {});
   const onAbilities = (packet: { flags?: number; flyingSpeed?: number }): void => {
     const old = abilities.get(bot);
@@ -105,15 +108,18 @@ export function watchFlightAbilities(bot: Bot): () => void {
   bot.on('forcedMove', forcedMove);
   bot.on('respawn', reset);
   bot.on('death', reset);
-  bot.on('end', reset);
-  return () => {
+  const detachEnd = onConnectionEnd(bot, () => dispose());
+  const dispose = () => {
+    if (watchers.get(bot) !== dispose) return;
+    watchers.delete(bot);
     bot._client.off('abilities', onAbilities);
     bot.off('forcedMove', forcedMove);
     bot.off('respawn', reset);
     bot.off('death', reset);
-    bot.off('end', reset);
+    detachEnd();
     reset();
   };
+  watchers.set(bot, dispose);return dispose;
 }
 
 /** A server adapter may provide an explicit deadline. No duration is inferred from a spell name. */

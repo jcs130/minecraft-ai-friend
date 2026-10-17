@@ -1,3 +1,4 @@
+import { onConnectionEnd } from './connection-end.ts';
 /** Real sound receipts, deliberately separated from tracked entity knowledge. */
 import type { Bot } from 'mineflayer';
 import type { EventEmitter } from 'node:events';
@@ -40,22 +41,25 @@ export class HearingLedger {
   }
 }
 const ledgers=new WeakMap<object,HearingLedger>();
+const subscriptions=new WeakMap<object,{assetsDir:string;dispose:()=>void}>();
 export function hearingOf(bot: object | null | undefined): HearingLedger | undefined { return bot?ledgers.get(bot):undefined; }
 
 /** Immediately returns a disposer, including while the exact registry is loading.
  * No messages, logs, timers or model calls; consumers explicitly query the ring. */
 export function attachHearing(bot: Bot, assetsDir: string): () => void {
+  const old=subscriptions.get(bot);if(old?.assetsDir===assetsDir)return old.dispose;old?.dispose();
   const ledger=new HearingLedger();ledgers.set(bot,ledger);
   let stopped=false, detach: (()=>void)|undefined;
   const lifecycle=bot as unknown as EventEmitter;
   const reset=()=>ledger.clear();
   const dispose=()=>{
-    if(stopped)return;stopped=true;detach?.();ledger.clear();ledger.source='unavailable';
+    if(stopped)return;stopped=true;subscriptions.delete(bot);detach?.();ledger.clear();ledger.source='unavailable';
     for(const event of ['respawn','death'])lifecycle.off(event,reset);
-    lifecycle.off('end',dispose);
+    detachEnd();
   };
   for(const event of ['respawn','death'])lifecycle.on(event,reset);
-  lifecycle.once('end',dispose);
+  const detachEnd=onConnectionEnd(lifecycle,dispose);
+  subscriptions.set(bot,{assetsDir,dispose});
   void loadViewerSoundRegistry(assetsDir,bot.version,bot.registry as never).then(result=>{
     if(stopped)return;
     ledger.source=result.source==='unavailable'?'named-only':result.source;

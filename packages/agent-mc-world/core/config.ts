@@ -20,6 +20,7 @@ export const MINECRAFT_DEFAULTS = {
   loginConfigFile: '',
   /** Maximum gap between server keepalive packets; not an action retry budget. */
   keepAliveTimeoutMs: 60_000,
+  chatDuplicateWindowMs: 120_000,
   deathRespawnDelayMs: 4000,
   /**
    * 全链路的版本约定:服务器(Paper)、观察者客户端(Fabric+SpectatorPlus)、
@@ -216,6 +217,8 @@ export interface MinecraftConfigSection {
   loginConfigFile: string;
   /** Keepalive packet timeout in milliseconds, default 60 seconds. */
   keepAliveTimeoutMs?: number;
+  /** Exact player-facing reply deduplication; 0 disables it, new inbound messages release it. */
+  chatDuplicateWindowMs?: number;
   /** Connection-owned death display delay, 0..15000 milliseconds. */
   deathRespawnDelayMs?: number;
   version: string;
@@ -470,6 +473,8 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
         type: 'boolean', title: '允许空闲短步', 'x-hot': true,
         description: '只走已加载、连续实心平地上的短步，不挖掘、搭路或进入水中。',
       },
+      'worlds.minecraft.chatDuplicateWindowMs': { type: 'integer', title: '相同回复去重窗口', minimum: 0, 'x-suffix': 'ms', 'x-hot': true,
+        description: '只去重同频道/同私聊接收人的相同文字；收到对方新消息即允许回复。0 关闭。不限制新内容，不拦业务命令。' },
       'worlds.minecraft.reflex.fightBack': {
         type: 'boolean', title: '受击反击', 'x-hot': true,
         description: '关掉则挨打不还手,打不打交给主脑决定;血线以下的脱离不受它影响。',

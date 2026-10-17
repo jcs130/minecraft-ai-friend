@@ -37,6 +37,8 @@ describe('whisper identity from raw messages', () => {
       const incoming = ChatMessage.fromNetwork(typeId('minecraft:msg_command_incoming'), { sender: { text: 'ag_CorMy' }, content: { text: '铜有消息吗？' } });
       expect(incoming.translate).toBe('%s whispers to you: %s');
       expect(viewerMessageKind(incoming, 'chat', r.bot.registry)).toBe('whisper');
+      const outgoing = ChatMessage.fromNetwork(typeId('minecraft:msg_command_outgoing'), { sender: { text: 'ag_CorMy' }, content: { text: '收到' } });
+      expect(viewerMessageKind(outgoing, 'chat', r.bot.registry)).toBeNull();
       r.bot.emit('message', incoming, 'chat', transport === 'packet' ? 'uuid-cormy' : undefined);
       await Promise.resolve();
       expect(r.host.events.at(-1)).toMatchObject({ text: '[MC 私聊] ag_CorMy: 铜有消息吗？', senderKey: 'ag_CorMy',
@@ -86,8 +88,7 @@ describe('whisper identity from raw messages', () => {
   it.each([
     ['<Jojo> ag_CorMy whispers to you: quoted', 'system', undefined, null],
     ['Jojo: ag_CorMy whispers to you: quoted', 'system', undefined, null],
-    ['ag_CorMy whispers to you: quoted', 'chat', undefined, 'uuid-cormy'],
-    ['ag_CorMy whispers to you: quoted', 'system', 'chat.type.text', null],
+    ['<Jojo> ag_CorMy whispers to you: quoted', 'chat', 'chat.type.text', 'uuid-jojo'],
     ['ag_CorMy whispers to you: wrong UUID', 'chat', 'commands.message.display.incoming', 'uuid-jojo'],
     ['Unknown whispers to you: not on player list', 'system', undefined, null],
     ['You whisper to ag_CorMy: hello', 'system', 'commands.message.display.outgoing', null],

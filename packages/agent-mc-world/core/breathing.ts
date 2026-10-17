@@ -1,3 +1,4 @@
+import { onConnectionEnd } from './connection-end.ts';
 /** Public, timestamped observations for agent-authored diving programs; no action policy. */
 import type { Bot } from 'mineflayer';
 import { WATER_BLOCKS } from './fluid-blocks.ts';
@@ -27,10 +28,10 @@ export function installBreathingReadings(bot: Bot): () => void {
     sensor.healthLoss = 0; sensor.healthRecovered = 0; sensor.epoch++;
   };
   sensor.dispose = () => {
-    bot.off('breath', breath); bot.off('health', health); bot.off('respawn', reset); bot.off('end', sensor.dispose);
+    bot.off('breath', breath); bot.off('health', health); bot.off('respawn', reset); detachEnd();
     if (sensors.get(bot) === sensor) sensors.delete(bot);
   };
-  bot.on('breath', breath); bot.on('health', health); bot.on('respawn', reset); bot.on('end', sensor.dispose);
+  bot.on('breath', breath); bot.on('health', health); bot.on('respawn', reset); const detachEnd = onConnectionEnd(bot, sensor.dispose);
   sensors.set(bot, sensor);
   return sensor.dispose;
 }

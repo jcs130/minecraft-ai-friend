@@ -61,6 +61,7 @@ import { sampleIdleActions, executeIdleAction } from './idle-actions.ts';
 import { classifyBossBarTitle } from './boss-bar.ts';
 import { minecraftTextComponent } from './text-component.ts';
 import { MinecraftChatProvenance, incomingPrivateParts } from '../src/chat-provenance.ts';
+import { configureChatDedup, noteChatInput } from './chat-dedup.ts';
 import { RAILWAY_TOOL_DECL, railwayReadout } from '../src/railway.ts';
 import {
   REPEATED_QUERY_RECEIPT, RoundOnceGate, roundTokenOf,
@@ -6411,7 +6412,9 @@ export class MinecraftWorld implements World {
       methodAdmission?.({ accepted: value, receipt: '', retryAfterMs, completedImmediately: completed,
         rejection: rejected, taskId });
     }, () => {
-      if (!methodAdmission) this.methods.stop('新的身体任务已受理，原方法取消');
+      const currentMethod = this.methods.current;
+      const ownsNativeBody = currentMethod && this.nativeMethod?.runId === currentMethod.id && this.nativeMethod.session.ownsBody;
+      if (!methodAdmission && (ownsNativeBody || this.methodTasks.size > 0)) this.methods.stop('新的身体任务已受理，原身体方法取消');
       this.interruptIdle('task');
     });
     if (admitted && directChat) {
@@ -6965,6 +6968,7 @@ export class MinecraftWorld implements World {
 
   /** 聊天、欢迎说明与屏幕大字可早于 spawn；不依赖实体或背包装配。 */
   protected hookMessageEvents(bot: any): void {
+    configureChatDedup(bot, () => this.cfg.chatDuplicateWindowMs ?? MINECRAFT_DEFAULTS.chatDuplicateWindowMs);
     if (this.hookedMessageBots.has(bot)) return;
     this.hookedMessageBots.add(bot);
     this.pendingDeathCause = null;
@@ -7033,6 +7037,7 @@ export class MinecraftWorld implements World {
         this.emit('minecraft.chat', `[MC] ${username}: ${message}`, false, { deliver: false });
         return;
       }
+      noteChatInput(bot, username, false);
       this.interruptIdle('chat');
       this.emit('minecraft.chat', `[MC] ${username}: ${message}`, mentionedInChat(message),
         { meta: { uname: username, socialScope: 'minecraft-server', ...identity } }, username);
@@ -7060,11 +7065,20 @@ export class MinecraftWorld implements World {
         return;
       }
       if (position !== 'chat' && position !== 'system') return;
+      const outgoing = chatProvenance.outgoingWhisper(jsonMsg, bot.players, this.chatName(), bot.player?.uuid, bot.registry);
+      if (outgoing) {
+        markMatched(jsonMsg); this.chatClaimed.add(jsonMsg);
+        this.emit('minecraft.chat', `[MC 私聊发出] ${outgoing.username} → ${outgoing.recipient}: ${outgoing.message}`, false,
+          { deliver: false, meta: { uname: outgoing.username, channel: 'private', direction: 'outgoing', outgoing: true,
+            recipient: outgoing.recipient, socialScope: 'minecraft-server', ...outgoing.identity } }, outgoing.username);
+        return;
+      }
       const whisper = chatProvenance.incomingWhisper(jsonMsg, bot.players, bot.registry);
       if (whisper) {
         // Claim this component before the default regex can mistake a tag for a name.
         markMatched(jsonMsg); this.chatClaimed.add(jsonMsg);
         if (whisper.username === this.chatName()) return;
+        noteChatInput(bot, whisper.username, true);
         this.interruptIdle('whisper');
         this.emit('minecraft.chat', `[MC 私聊] ${whisper.username}: ${whisper.message}`, true,
           { meta: { uname: whisper.username, channel: 'private', socialScope: 'minecraft-server', ...whisper.identity } }, whisper.username);
@@ -7126,7 +7140,8 @@ export class MinecraftWorld implements World {
         if (unchangedQueryFeedback) return;
         const privateMessage = key === 'commands.message.display.incoming' || !!incomingPrivateParts(jsonMsg, bot.registry);
         if (key === 'commands.message.display.outgoing') {
-          this.emit('minecraft.chat', `[MC 私聊发出] ${text}`, false);
+          this.emit('minecraft.chat', `[MC 私聊发出] ${text}`, false,
+            { deliver: false, meta: { uname: this.chatName(), channel: 'private', direction: 'outgoing', outgoing: true } }, this.chatName());
           return;
         }
         if (position === 'chat') {

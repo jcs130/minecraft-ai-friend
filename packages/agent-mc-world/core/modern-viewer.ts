@@ -1,3 +1,4 @@
+import { onConnectionEnd } from './connection-end.ts';
 import { createViewerHeadTextures } from './viewer-head-textures.mjs';
 import { viewerVersionRegistry, viewerVersionCss, viewerVersionAssets, viewerVersionTexture } from './viewer-version.mjs';
 import { viewerBodyState } from './viewer-body-state.ts';
@@ -40,7 +41,7 @@ import { flightState } from './flight.ts';
 import { createViewerContentBridge } from './viewer-content.mjs';
 import { viewerPhotoPage } from './viewer-photo-page.mjs';
 import { minecraftTextComponent } from './text-component.ts';
-import { incomingPrivateParts } from '../src/chat-provenance.ts';
+import { incomingPrivateParts, outgoingPrivateParts, MinecraftChatProvenance } from '../src/chat-provenance.ts';
 import type { EventEmitter } from 'node:events';
 import { isRaining } from './terrain.ts';
 import { observeStatusEffects, remainingEffectTicks } from './status-effects.ts';
@@ -48,9 +49,15 @@ import { viewerPlayerSkin } from './viewer-player-skin.ts';
 import type { ViewerRelay } from './relay-port.ts';
 export { viewerItem } from './viewer-state.ts';
 
-export function viewerMessageKind(message: { translate?: string; toString(): string }, position: string, registry?: unknown): string | null {
+export function viewerMessageKind(message: { translate?: string; toString(): string }, position: string, registry?: unknown,
+  identity?: {players: mineflayer.Bot['players']; self: string; uuid?: string; sender?: string | null}): string | null {
   if (position !== 'chat' && position !== 'system') return null;
-  if (message.translate === 'commands.message.display.outgoing') return null;
+  if (message.translate === 'commands.message.display.outgoing' || outgoingPrivateParts(message, registry)) return null;
+  if (identity) {
+    const provenance = new MinecraftChatProvenance();provenance.observe(message, position, identity.sender);
+    if (provenance.outgoingWhisper(message, identity.players, identity.self, identity.uuid, registry)) return null;
+    if (provenance.incomingWhisper(message, identity.players, registry)) return 'whisper';
+  }
   if (position === 'system' && /^(?:MC_[A-Z0-9_]+(?:\s|$)|\{\s*"(?:schemaVersion|action|type)"\s*:)/.test(message.toString().trimStart())) return null;
   return message.translate === 'commands.message.display.incoming' || incomingPrivateParts(message, registry) ? 'whisper'
     : message.translate === 'chat.type.advancement' ? 'advancement' : position;
@@ -537,8 +544,8 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     latestSkills = mergeViewerSpellCatalogue(latestSkills, abilities, agentStateSeen);
     for (const socket of viewerSockets) if (socket.connected) socket.emit('skillsState', latestSkills);
   };
-  const onViewerMessage = (message: { translate?: string; toString(): string }, position: string) => {
-    const kind = viewerMessageKind(message, position, bot.registry);
+  const onViewerMessage = (message: { translate?: string; toString(): string }, position: string, sender?: string | null) => {
+    const kind = viewerMessageKind(message, position, bot.registry, {players:bot.players,self:bot.username,uuid:bot.player?.uuid,sender});
     if (kind) publishGameMessage(kind, message);
     // An explicitly configured extension may extract state from its system replies.
     if (position === 'chat' || position === 'system') {
@@ -1313,7 +1320,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       if (!closed) for (const socket of viewerSockets) if (socket.connected) socket.emit('worldSound', event);
     }, publishSoundStop);
   bot.on('respawn', resetSound);
-  bot.on('end', resetSound);
+  const detachEnd = onConnectionEnd(bot, resetSound);
 
   const stopArmAnimation = observeViewerArmAnimation(protocol, (hand) => {
     if (closed || !bot.entity) return;
@@ -1381,7 +1388,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       bot.off('actionBar', onViewerActionBar);
       bot.off('death', onViewerDeath);
       bot.off('respawn', resetSound);
-      bot.off('end', resetSound);
+      detachEnd();
       publishSoundStop({});
       stopSounds();
       (bot as unknown as EventEmitter).off('perceptionFocus',focusEvent);

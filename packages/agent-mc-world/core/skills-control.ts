@@ -1,3 +1,4 @@
+import { onConnectionEnd } from './connection-end.ts';
 /** Short input sequences share the executor's body ownership and report observed movement. */
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
@@ -83,7 +84,7 @@ export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: '
   const onDeath = (): void => cancel('玩家已死亡', 'server');
   const onRespawn = (): void => cancel('维度或出生位置已变化', 'server');
   const onForcedMove = (): void => cancel('服务端修正了位置；重新观察后再控制', 'server');
-  bot.on('end', onEnd);
+  const detachEnd = onConnectionEnd(bot, onEnd);
   bot.on('death', onDeath);
   bot.on('respawn', onRespawn);
   bot.on('forcedMove', onForcedMove);
@@ -150,7 +151,7 @@ export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: '
     ctx.diag?.write({ lane: 'body', event: 'control-ended', taskId: ctx.taskId,
       msg: observed(), data: { call, interruptedBy: lease.reason ?? ctx.abortedBy?.() ?? null } });
     cancel('直接控制结束');
-    bot.off('end', onEnd);
+    detachEnd();
     bot.off('death', onDeath);
     bot.off('respawn', onRespawn);
     bot.off('forcedMove', onForcedMove);

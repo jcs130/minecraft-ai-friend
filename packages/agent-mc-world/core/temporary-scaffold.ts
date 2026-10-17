@@ -1,3 +1,4 @@
+import { onConnectionEnd } from './connection-end.ts';
 /** Confirmed temporary support proofs survive action scopes until safe cleanup or explicit promotion. */
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
@@ -63,7 +64,7 @@ function trackerOf(bot: Bot): Tracker {
   };
   bot.on('respawn', () => invalidate('维度或出生位置已重置'));
   bot.on('spawn', () => invalidate('连接状态已重置'));
-  bot.on('end', () => invalidate('连接已结束'));
+  onConnectionEnd(bot, () => invalidate('连接已结束'));
   bot.on('blockUpdate', (_old, next) => {
     if (!next?.position) return;
     const key = cellKeyOf(next.position);

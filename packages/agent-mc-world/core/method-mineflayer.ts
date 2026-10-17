@@ -1,3 +1,4 @@
+import { onConnectionEnd } from './connection-end.ts';
 import { observedBlock, observationView } from './perception-sight.ts';
 /** JSON transport for Mineflayer's public primitives; the executor owns the program's body. */
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -15,12 +16,13 @@ import { publicReadProjection, projectPublicRead } from './method-read.ts';
 import type { BotMethod } from './method-capabilities.ts';
 import { ownNativeControlInput } from './skills-control.ts';
 import { breathingReadout } from './breathing.ts';
+import { entitySnapshot } from './entity-snapshot.ts';
 
 const nativeCalls = new AsyncLocalStorage<() => void>();
 const guarded = new WeakSet<object>();
 
 export const NATIVE_API = Object.freeze({
-  read: 'read(path): JSON read of entity, health, food, game, heldItem, inventory.slots, breathing, or registry.itemsByName.<id>/blocksByName.<id>. breathing returns sampledAt, source, dimension/entityId/observationEpoch, oxygen (0..20 or null), oxygenRaw, oxygenUpdatedAt, health, healthUpdatedAt, healthLoss/healthRecovered (separate cumulative received changes in this epoch), headWet/bodyWet, position and velocity. Update timestamps mark received breath/health events, not the read time; null means unverified age. Out-of-range oxygen stays unknown, never full. Also entity.position/velocity (and .x/.y/.z), entity.id/yaw/pitch/onGround, heldItem.name/displayName/type/count/slot/instanceHash, game.dimension. Missing projected values are null. No client, credentials or private fields.',
+  read: 'read(path): JSON read of entity, entities, players, entitySnapshot, health, food, game, heldItem, inventory.slots, breathing, or registry.itemsByName.<id>/blocksByName.<id>. entitySnapshot returns {sampledAt,source,dimension,coverage,availability,self,entities,players}; entities is keyed by tracked entity id and players by online name. Online does not mean nearby or visible. Snapshots are detached and read-only; use await bot.read("entitySnapshot"), not synchronous bot.entities. breathing returns sampledAt, source, dimension/entityId/observationEpoch, oxygen (0..20 or null), oxygenRaw, oxygenUpdatedAt, health, healthUpdatedAt, healthLoss/healthRecovered (separate cumulative received changes in this epoch), headWet/bodyWet, position and velocity. Update timestamps mark received breath/health events, not the read time; null means unverified age. Out-of-range oxygen stays unknown, never full. Also entity.position/velocity (and .x/.y/.z), entity.id/yaw/pitch/onGround, heldItem.name/displayName/type/count/slot/instanceHash, game.dimension. Missing projected values are null. No client, credentials or private fields.',
   blockAt: 'blockAt(point, extraInfos=true): Block|null. Occluded or unloaded is null; observation does not reveal hidden block state. Block.getProperties() synchronously reads this returned snapshot, preserving native string|number|boolean values. Numeric-looking enum properties may be strings (for example age:"7", level:"0"); inspect their types and explicitly convert only a property known to be numeric before a numeric comparison. Re-read blockAt for current values. A completed read-only program does not prove any block or inventory changed.',
   findBlocks: 'findBlocks({point?,matching,maxDistance?,count?,useExtraInfo?}): Vec3[]. matching is a numeric block id or array of ids; maxDistance 1..32 and count 1..64. Function predicates stay in the program: filter returned blocks there.',
   findBlock: 'findBlock(options): Block|null, with the same options and bounds as findBlocks.',
@@ -47,7 +49,7 @@ export const NATIVE_API = Object.freeze({
 } satisfies Record<BotMethod, string>);
 type NativeName = keyof typeof NATIVE_API;
 const READ_ONLY = new Set<NativeName>(['read', 'blockAt', 'findBlocks', 'findBlock', 'canSeeBlock',
-  'canDigBlock', 'digTime', 'inventory.items', 'getControlState']);
+  'canDigBlock', 'digTime', 'inventory.items', 'getControlState', 'waitForTicks']);
 
 export function nativeApiHelp(name?: string): string {
   const lead = 'mc_script 提供 bot 与 Vec3。Mineflayer 4.37.1 公共接口通过 Worker JSON 传输，所有 bot 调用须逐个 await；返回 Block.getProperties() 与 Vec3 运算在 Worker 内同步。属性保留原生 string/number/boolean，不自动转数字；具体见 api:"blockAt"。'
@@ -135,10 +137,11 @@ export class MineflayerMethod {
     this.taskId = this.opts.executor.enqueueProgram({ name: this.opts.name,
       run: async (bot, ctx) => {
         const revoke = () => this.opts.revoke('原生程序的连接、位置或身体状态已变化');
-        const events = ['end', 'death', 'respawn', 'forcedMove'] as const;
+        const events = ['death', 'respawn', 'forcedMove'] as const;
+        const detachEnd = onConnectionEnd(bot, revoke);
         for (const event of events) bot.on(event, revoke);
         try { enter({ bot, ctx }); await untilFinished; }
-        finally { this.releaseNativeInput(); for (const event of events) bot.off(event, revoke); }
+        finally { this.releaseNativeInput(); detachEnd(); for (const event of events) bot.off(event, revoke); }
       },
       cancel: reason => {
         if (this.terminalError) return;
@@ -179,6 +182,8 @@ export class MineflayerMethod {
     const [a, b, c] = args;
     switch (name) {
       case 'read': {
+        if (a === 'entitySnapshot') return entitySnapshot(bot);
+        if (a === 'entities' || a === 'players') return entitySnapshot(bot)[a];
         const projection = publicReadProjection(a);
         if (projection) return projectPublicRead(await this.invoke(bot, ctx, 'read', [projection.root]), projection.fields);
         if (a === 'entity') return bot.entity ? { id: bot.entity.id, position: bot.entity.position,

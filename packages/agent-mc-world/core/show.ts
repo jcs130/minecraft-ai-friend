@@ -1,3 +1,4 @@
+import { onConnectionEnd } from './connection-end.ts';
 /** Ordinary GUI presentation. No timer owns or cancels a native inventory receipt. */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Bot } from 'mineflayer';
@@ -20,10 +21,17 @@ type TempoSource = ShowTempo | null | (() => ShowTempo | null);
 /** The producer owns current player/session/epoch readiness, never a saved URL. */
 export interface NativeGuiPresentation { ready: boolean; epoch: number; playerUuid: string }
 const presentations = new WeakMap<Bot, () => NativeGuiPresentation | null>();
+const presentationDisposers = new WeakMap<Bot, () => void>();
 export function bindNativeGuiPresentation(bot: Bot, ready: () => NativeGuiPresentation | null): () => void {
+  presentationDisposers.get(bot)?.();
   presentations.set(bot, ready);
-  const revoke = () => { if (presentations.get(bot) === ready) presentations.delete(bot); bot.off('end', revoke); };
-  bot.once('end', revoke);
+  const revoke = () => {
+    if (presentations.get(bot) === ready) presentations.delete(bot);
+    if (presentationDisposers.get(bot) === revoke) presentationDisposers.delete(bot);
+    detachEnd();
+  };
+  const detachEnd = onConnectionEnd(bot, revoke);
+  presentationDisposers.set(bot, revoke);
   return revoke;
 }
 export function nativeGuiPresented(bot: Bot | null | undefined): boolean {
@@ -39,7 +47,9 @@ function sceneFor(bot: Bot): Scene {
   scene = { closedAt: null, epoch: 0 }; scenes.set(bot, scene);
   const current = scene;
   bot.on('windowClose', () => { current.closedAt = Date.now(); });
-  for (const event of ['end', 'death', 'respawn'] as const) bot.on(event, () => { current.epoch++; });
+  const reset = () => { current.epoch++; };
+  for (const event of ['death', 'respawn'] as const) bot.on(event, reset);
+  onConnectionEnd(bot, reset);
   return scene;
 }
 export function markShowWindowClosed(bot: Bot, now = Date.now()): void { sceneFor(bot).closedAt = now; }

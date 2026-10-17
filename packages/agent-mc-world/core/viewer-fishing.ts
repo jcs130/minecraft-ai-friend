@@ -1,3 +1,4 @@
+import { onConnectionEnd } from './connection-end.ts';
 /** Catch receipts inferred from an owned hook, reel, loot flight and confirmed pickup. */
 import type mineflayer from 'mineflayer';
 import type { EventEmitter } from 'node:events';
@@ -204,7 +205,7 @@ export function observeViewerFishingCatch(bot: mineflayer.Bot,
   bot.on('itemDrop', onEntity);
   bot.inventory.on('updateSlot', confirmed);
   bot.on('respawn', reset);
-  bot.on('end', reset);
+  const detachEnd = onConnectionEnd(bot, reset);
   return () => {
     disposeWrite();
     protocol.off('spawn_entity', onSpawn);
@@ -216,7 +217,7 @@ export function observeViewerFishingCatch(bot: mineflayer.Bot,
     bot.off('itemDrop', onEntity);
     bot.inventory.off('updateSlot', confirmed);
     bot.off('respawn', reset);
-    bot.off('end', reset);
+    detachEnd();
     reset();
   };
 }

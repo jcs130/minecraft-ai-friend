@@ -63,6 +63,7 @@ import { publishViewerCastCommand } from './command-events.ts';
 import { skillGesture } from './skills-social.ts';
 import { skillLook } from './skills-look.ts';
 import { skillControl, waterControlActive } from './skills-control.ts';
+import { sendDeduplicatedChat } from './chat-dedup.ts';
 import { taggedCraftChoice } from './tagged-crafting.ts';
 import { flyToLanding, flyToPosition, landFlight, flightState, previewFlight } from './flight.ts';
 import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold, temporaryScaffoldReadout, scaffoldCleanupCheckpoint } from './temporary-scaffold.ts';
@@ -634,7 +635,8 @@ function fleeTimeoutText(
 export function sendChat(bot: Bot, text: string): void {
   const error = chatInputError(text);
   if (error) throw new SkillBlocked(error);
-  bot.chat(text);
+  const result = sendDeduplicatedChat(bot, text, () => bot.chat(text));
+  if (!result.sent) throw new SkillNoop(`相同接收范围和内容已于 ${new Date(result.previousAt!).toISOString()} 发送；期间没有新的对方消息，本次未重复发送。去重窗口 ${result.windowMs} 毫秒，可由 chatDuplicateWindowMs 配置。`);
 }
 
 function gotoArrivalGoal(call: Extract<SkillCall, { skill: 'goto' }>, target: Cell): InstanceType<typeof goals.Goal> {
@@ -5596,7 +5598,7 @@ export class Executor {
           }
           const blocked = err instanceof SkillBlocked ? err : null;
           if (call.skill === 'transit') transitBoundary = i + 1;
-          const reason = blocked ? blocked.message : `技能内部错误: ${zhErrorText((err as Error).message)}`;
+          const reason = blocked || err instanceof SkillNoop ? (err as Error).message : `技能内部错误: ${zhErrorText((err as Error).message)}`;
           // 技能报阻但期望已达成(战利品自己进了包、人已经在目的地):按达成算
           const expect = call.expect ?? deriveExpect(bot, call);
           const verdict = expect ? evaluateExpect(bot, expect, gainBase) : null;

@@ -29,4 +29,6 @@ export function assertMinecraftReady(cfg: MinecraftClientConfig): void {
   protocolVersion(cfg.version);
   if (cfg.keepAliveTimeoutMs !== undefined && (!Number.isInteger(cfg.keepAliveTimeoutMs) || cfg.keepAliveTimeoutMs < 1000 || cfg.keepAliveTimeoutMs > 300000))
     throw new Error('keepAliveTimeoutMs must be an integer from 1000 to 300000 milliseconds.');
+  if (cfg.chatDuplicateWindowMs !== undefined && (!Number.isSafeInteger(cfg.chatDuplicateWindowMs) || cfg.chatDuplicateWindowMs < 0))
+    throw new Error('chatDuplicateWindowMs must be a non-negative safe integer in milliseconds (0 disables it).');
 }

@@ -1,3 +1,4 @@
+import { onConnectionEnd } from './connection-end.ts';
 import { randomUUID } from 'node:crypto';
 
 export interface DeathLifecycle {
@@ -72,13 +73,13 @@ export function installDeathLifecycle(bot: DeathBot, delayMs: number | undefined
   bot.on('respawn', respawn); // Native packet precedes spawn/positive health; it already satisfies the dispatch.
   bot._client?.on('window_items', inventory);
   bot.on('spawn', spawn);
-  bot.on('end', cancel);
+  const detachEnd = onConnectionEnd(bot, cancel);
   return { cancel, dispose: () => {
     cancel();
     bot.removeListener('death', death);
     bot.removeListener('respawn', respawn);
     bot._client?.removeListener('window_items', inventory);
     bot.removeListener('spawn', spawn);
-    bot.removeListener('end', cancel);
+    detachEnd();
   } };
 }

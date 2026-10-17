@@ -13,7 +13,7 @@
 | 5. 退出信号 | `core/support/child-signals.ts`、`core/engine-child.ts`、`core/proxy.ts` | `tests/client-regressions.test.ts`、`tests/proxy-lifecycle.test.ts`、`tests/protocol-ipc.test.ts`：子进程保留 SIGINT/SIGTERM，父进程负责 shutdown RPC；中断/主动退出不自动重启，迟到旧 IPC 不能复活连接 |
 | 6. visual 读数 | `core/world.ts`、`core/engine-child.ts` | `tests/client-regressions.test.ts`、`tests/visual-overview.test.ts`：不消费 deferred 事件也能读取现场；健康、位置与队列随实际状态变化，没画面不声称看过图 |
 | 7. 欢迎过早 | `core/initial-scene.ts`、`core/world.ts`、`core/terrain.ts` | `tests/client-regressions.test.ts`：等待出生点周围区块和名单安静窗口，再补一次摘要；断线/死亡/换维度丢弃迟到摘要；不声称服务器只有自己 |
-| 8. 参数说明 | `core/world.ts` | `tests/client-regressions.test.ts`：明确 `mc_scout.steps[].probe.shape` 必填，`mc_script` 带 code（包括 validate）时 name 为 1–80 字符。查询 index/api/runId/stop 不要求 name |
+| 8. 参数说明 | `core/world.ts`、`core/method-runner.ts` | `mc_scout.steps[].probe.shape` 必填。`mc_script` 的 name 可省略，按源码 SHA-256 自动生成稳定的 `inline-xxxxxxxxxxxx`；显式 name 为 1–80 字符。validate 同样适用。查询 index/api/runId/stop 不要求 name |
 | 9. 可选查看器 | `scripts/viewer-input.mjs`、`scripts/build.mjs`、`scripts/verify-build.mjs`、`package.json`、`src/client/console-server.ts` | `tests/viewer-input.test.ts`、`tests/client-console.test.ts`：缺失可跳过，损坏文件仍报错；不遗留旧资源；没有 UI 时本机 API/SDK/MCP 仍可用，网页返回明确 503 |
 | 10. 自定义日志 | `core/support/runtime.mjs` | `tests/client-regressions.test.ts`：IPC 日志优先 emit，缺少时调用对应级别方法，再缺则忽略；不因 emit/child 缺失崩溃 |
 | 11. 末影人误报调查 | 核对 `core/viewer-sound-registry.ts`、`core/viewer-sound-packets.ts`、`core/perception-hearing.ts`，保留已有不匹配注册表保护 | `tests/entity-sound-1206.test.ts`：真实实体包编解码进入 Mineflayer，村民/展示实体不变成末影人；不匹配声音表不产生声音提示；声音不生成实体数量 |

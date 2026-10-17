@@ -47,6 +47,10 @@ function capabilities(scope) {
     .filter(name => !name.includes('.')).map(name => [name, (...args) => rpc('mineflayer', { name, args }, scope)])) : undefined;
   if (bot) bot.inventory = { items: () => rpc('mineflayer', { name: 'inventory.items', args: [] }, scope) };
   if(bot&&workerData.nativeMethods.includes('pathfinder.goto')) bot.pathfinder={goto:goal=>rpc('mineflayer',{name:'pathfinder.goto',args:[goal]},scope)};
+  if (bot) for (const key of ['entity', 'entities', 'players']) Object.defineProperty(bot, key, {
+    get() { throw new TypeError(`bot.${key} is not a live object in this worker. Use await bot.read("${key}") or await bot.read("entitySnapshot") for a detached, read-only observation.`); },
+    enumerable: false,
+  });
   return { mc: harden({ capabilities: () => rpc('capabilities', {}, scope), state: () => rpc('state', {}, scope), do: steps => rpc('do', { steps }, scope),
     flightPlan: args => rpc('flightPlan', args, scope) }), ...(bot ? { bot: harden(bot), Vec3: harden(Vec3),goals:harden({GoalBlock,GoalNear}) } : {}) };
 }

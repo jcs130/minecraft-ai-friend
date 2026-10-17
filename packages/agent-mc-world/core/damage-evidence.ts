@@ -1,3 +1,4 @@
+import { onConnectionEnd } from './connection-end.ts';
 /** Preserve server damage provenance before Mineflayer reduces it to entityHurt. */
 import type { Bot } from 'mineflayer';
 import type { HurtSource } from './melee.ts';
@@ -90,7 +91,7 @@ export function installDamageEvidence(bot: Bot): void {
   };
   bot.on('death', clearLife);
   bot.on('respawn', clearLife);
-  bot.on('end', () => { clearLife(); state.listeners.clear(); });
+  onConnectionEnd(bot, () => { clearLife(); state.listeners.clear(); });
 
   bot._client?.on('registry_data', (packet: { id?: string; entries?: Array<{ key: string }> }) => {
     if (packet.id === 'minecraft:damage_type' && Array.isArray(packet.entries)) {

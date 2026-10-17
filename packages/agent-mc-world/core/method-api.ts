@@ -4,6 +4,11 @@ import { METHOD_CAPABILITIES_HELP } from './method-capabilities.ts';
 
 const SDK_API = Object.freeze({
   'mc.capabilities': METHOD_CAPABILITIES_HELP,
+  entities: 'Mineflayer: await bot.read("entitySnapshot") returns {sampledAt,source,dimension,coverage,availability,self,entities,players}. '
+    + 'entities is keyed by entity id and players by online name. Entries are detached, read-only observations, not live bot objects. '
+    + 'await bot.read("entity"), await bot.read("entities") and await bot.read("players") read the corresponding fresh projection. '
+    + 'Online does not mean nearby; a tracked entity is not proof of line of sight. Compare positions yourself and preserve sampledAt. availability:false means the corresponding source is unavailable, not an empty world. '
+    + 'Synchronous bot.entity/bot.entities/bot.players are unavailable in the isolated worker; never infer an empty world from that TypeError.',
   'mc.state': 'await mc.state(): {sampledAt,connectionGeneration,snapshot,flight,queue,temporaryScaffolds,combatActive,combat,method}. '
     + 'snapshot can be null; position/dimension/health/food/inventory/equipment are under snapshot. '
     + 'No block scan is performed. Missing readings are unknown. Preserve sampledAt and connectionGeneration when comparing observations.',

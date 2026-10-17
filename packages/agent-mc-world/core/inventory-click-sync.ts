@@ -1,3 +1,4 @@
+import { onConnectionEnd } from './connection-end.ts';
 /** Inventory clicks complete only after a server snapshot includes their slots and cursor. */
 import { createRequire } from 'node:module';
 import type { Bot } from 'mineflayer';
@@ -267,7 +268,7 @@ export function installInventoryClickSync(bot: Bot, diag?: MinecraftLog): void {
     record(state, 'window-packet-raw', { transportSeq: seq, packetName: meta?.name, windowId: packet.windowId,
       windowSerial: window ? windowSerial(state, window) : null });
   });
-  bot.on('end', () => {
+  onConnectionEnd(bot, () => {
     if (!state.pending) return;
     state.phase = 'quarantined'; state.reason = '连接结束，库存点击未完成';
     state.pending.complete(new InventoryClickSyncError(state.reason, 'quarantined'));
