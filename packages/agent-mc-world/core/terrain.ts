@@ -26,6 +26,7 @@ import { remainingEffectTicks } from './status-effects.ts';
 import type { TargetDiag } from './skill-context.ts';
 import { flightState, type FlightState } from './flight.ts';
 import { inventoryReadState, narrateInventorySync, type InventoryReadState } from './inventory-window-sync.ts';
+import { footingFromBot, narrateFooting, type FootingReading } from './footing.ts';
 export { BURNING_BLOCKS, SCORCHING_FLOOR } from './hazard-geometry.ts';
 
 /** 八方位罗盘。北=-z 南=+z 东=+x 西=-x,与 move 技能同一套词。 */
@@ -181,8 +182,9 @@ export interface WorldSnapshot {
   entities: EntityInfo[];
   /** 截断掉了几条:她无从分辨"没报"是没有还是没给,这个数把两者分开 */
   entitiesOmitted: number;
-  /** 脚下方块 */
+  /** 实际脚部接触的支撑/流体；null 为未知，air 为未接地。 */
   standingOn: string | null;
+  footing?: FootingReading;
   /** 周围可见方块种类摘要(种类 → 最近的那一块;容器可多块);带绝对坐标 */
   nearbyBlocks: Array<{
     name: string; distance: number; direction: Direction | null; dy: number;
@@ -366,7 +368,7 @@ export function snapshotFingerprint(s: WorldSnapshot): string {
     // 快照不报她就无从知道。耐久与剩余秒不进(每秒都在动,进了这道闸就等于没有)
     s.equipment.map((p) => `${p.slot}:${p.name}:${p.displayName ?? ''}x${p.count ?? '?'}`).sort().join(','),
     s.effects.map((e) => `${e.name}${e.level}`).sort().join(','),
-    s.standingOn ?? 'air', s.biome,
+    s.standingOn ?? 'unknown', s.footing?.kind ?? '', s.onGround, s.biome,
     `hostile${hostiles.length}${nearest ? `@${nearest.direction ?? '-'}${distBucket(nearest.distance)}` : ''}`,
   ].join('|');
 }
@@ -391,7 +393,8 @@ export function narrateWorldSegments(
   // 路标是她投影进来的暂态语义,不是世界读数,进不了 WorldSnapshot(与重生点、
   // 目标尾行同一个待遇)。没有近处路标时这一段一个字都不占。
   const place =
-    `我在${zhBiome(s.biome)}，脚下是${s.standingOn ? zhName(s.standingOn) : '空的'}，` +
+    `我在${zhBiome(s.biome)}，${s.footing ? narrateFooting(s.footing, zhName)
+      : s.standingOn ? `脚下是${zhName(s.standingOn)}` : '脚下支撑未知'}，` +
     `${s.vehicle ? '位于格' : '站在格'} (${Math.floor(p.x)}, ${Math.floor(p.y)}, ${Math.floor(p.z)})${near ? `，${near}` : ''}，` +
     `${zhDimension(s.dimension)}。` +
     `${motionPhrase(s)}，面朝${DIRECTION_ZH[s.facing]}。`;
@@ -1190,9 +1193,6 @@ export function isRaining(bot: any): boolean {
   return true;
 }
 
-/** 脚**所在**那一格是这些时,快照的「脚下是X」报它而不是脚下那一格(见 standingOn) */
-const LIQUID_UNDERFOOT = new Set(['water', 'lava', 'bubble_column']);
-
 /** 头部(脚上一格)在水中。氧气元数据只有此时可信:上岸后服务器不再推,旧值一直残留。 */
 export function headInWater(bot: any): boolean {
   const head = bot.blockAt(bot.entity.position.offset(0, 1, 0));
@@ -1856,11 +1856,7 @@ export function snapshotFromBot(
   nearbyBlocks.push(...containers.slice(0, CONTAINER_NEARBY_CAP));
   nearbyBlocks.sort((a, b) => a.distance - b.distance);
 
-  // 脚所在格为液体时报告该格，否则报告脚下格；inWater 只检查头部，不能识别浅水。
-  const feetBlock = bot.blockAt(pos);
-  const below = feetBlock && LIQUID_UNDERFOOT.has(feetBlock.name)
-    ? feetBlock
-    : bot.blockAt(pos.offset(0, -1, 0));
+  const footing = footingFromBot(bot);
   const biome = biomeAt(bot, pos);
 
   const inWater = headInWater(bot);
@@ -1920,7 +1916,8 @@ export function snapshotFromBot(
     effects: readEffects(bot),
     entities: entities.slice(0, maxEntities),
     entitiesOmitted: Math.max(0, entities.length - maxEntities),
-    standingOn: below ? below.name : null,
+    standingOn: footing.block,
+    footing,
     nearbyBlocks,
     blocksScanned: opts?.scanBlocks !== false,
     players: Object.keys(bot.players ?? {}),

@@ -11,6 +11,7 @@ import path from 'node:path';
 import { Server as SocketServer, type Socket } from 'socket.io';
 import type mineflayer from 'mineflayer';
 import { Vec3 } from 'vec3';
+import { footingFromBot } from './footing.ts';
 import { biomeIdMap, remapViewerChunkBiomes } from './viewer-biome.ts';
 import { viewerLight } from './viewer-light.ts';
 import { minimapSnapshot } from './viewer-minimap.ts';
@@ -373,8 +374,10 @@ function avatarState(bot: mineflayer.Bot, sequence: number, shieldRaised = false
   const oxygen = Number((bot as mineflayer.Bot & { oxygenLevel?: number }).oxygenLevel);
   const sprinting = bot.controlState?.sprint === true;
   const sneaking = bot.controlState?.sneak === true;
-  const feet = bot.entity.position;
-  const surface = bot.blockAt(new Vec3(Math.floor(feet.x), Math.floor(feet.y - .05), Math.floor(feet.z)));
+  const footing = footingFromBot(bot);
+  const surface = footing.kind === 'support' && footing.at
+    ? bot.blockAt(new Vec3(footing.at.x, footing.at.y, footing.at.z))
+    : footing.kind === 'fluid' ? bot.blockAt(bot.entity.position) : null;
   const foodRegistry = (bot.registry as unknown as { foodsByName?: Record<string, unknown> }).foodsByName;
   const held = bot.heldItem as unknown as { name?: string; components?: Array<{ type?: string }> } | null;
   return {

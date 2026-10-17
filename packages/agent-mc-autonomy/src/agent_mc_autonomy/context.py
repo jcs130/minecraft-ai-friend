@@ -314,7 +314,7 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
         raise ValueError("context_budget_exceeded: stable rules, goal, tool schemas and output reserve do not fit")
     # Current state replaces by key; omit old keys that are absent in this sample.
     unique = {part["key"]: part for part in facts.get("parts", [])}
-    priority = {key: rank for rank, key in enumerate(("body", "health", "place", "gear", "inventoryIds", "foodReserve", "queue", "life", "terrain", "structure", "lastTask"))}
+    priority = {key: rank for rank, key in enumerate(("body", "health", "place", "gear", "inventoryIds", "foodReserve", "queue", "life", "serverFeedback", "terrain", "structure", "lastTask"))}
     omitted = []
     for key, fact in sorted(unique.items(), key=lambda item: priority.get(item[0], len(priority))):
         # The internal change-detection hash is not gameplay evidence. Repeating
@@ -322,6 +322,8 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
         fact = {name: value for name, value in fact.items() if name != "revision"}
         if key == "lastTask":
             fact = {**fact, "text": spatial_text(fact.get("text", ""))}
+        if key == "serverFeedback" and len(fact.get("text", "").encode("utf-8")) > 1800:
+            fact = {**fact, "text": fact_preview(fact["text"], 1800), "abridged": True}
         tail["current_facts"].append(fact)
         if cost() > context_tokens and key == "lastTask" and fact.get("original"):
             # Native JSON is escaped again inside the request. Subtracting its

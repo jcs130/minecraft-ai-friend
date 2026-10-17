@@ -55,7 +55,7 @@ def review_observation(status, now):
     pending = [{key: task.get(key) for key in ("kind", "id", "phase", "terminal")} for task in snapshot.get("pending", [])[:16]]
     useful = {key: facts.get(key, "")[:size] for key, size in (
         ("body", 180), ("gear", 420), ("foodReserve", 160), ("life", 250), ("place", 180),
-        ("clock", 80), ("queue", 350), ("structure", 300), ("terrain", 250), ("bodyRestriction", 400))}
+        ("clock", 80), ("queue", 350), ("structure", 300), ("terrain", 250), ("bodyRestriction", 400), ("serverFeedback", 1800))}
     useful["lastTask"] = fact_preview(spatial_text(facts.get("lastTask", "")), 1000)
     reads = snapshot.get("read_activity") or {}
     reads = {key: min(999, reads[key]) for key in (
@@ -79,7 +79,7 @@ def review_observation(status, now):
                 "unactioned_replies": snapshot.get("unactioned_replies", 0),
                 "planner_retry_seconds": snapshot.get("planner_retry_seconds", 0)}
     # Clocks, sight direction, repeated observation task IDs and positional chatter are not urgent changes.
-    material = {key: useful[key] for key in ("body", "gear", "foodReserve")}
+    material = {key: useful[key] for key in ("body", "gear", "foodReserve", "serverFeedback")}
     terminal = useful["lastTask"]
     if re.search(r'"skill"\s*:\s*"observe"', facts.get("lastTask", "")) and "完成" in facts.get("lastTask", ""):
         terminal = ""  # Repeated successful look-only tasks are not new survival progress.
@@ -140,6 +140,8 @@ def summary(evidence):
         activity += "；" + native_outcome_summary(terminal[-1])
     if failure := evidence.get("tool_failure"):
         activity += "；最近未解工具错误:" + failure["tool"] + " " + brief(failure["error"], 210)
+    if server_feedback := facts.get("serverFeedback"):
+        activity += "；" + brief(server_feedback, 1200)
     if episode := evidence.get("death_episode"):
         activity += "；实际死亡事件:" + episode["id"] + "（可选叙述；本次历史事实不证明学会或改进）"
         activity += "；重生后须按当前位置和物资重新判断原阶段是否适用，并说明继续、修改或暂缓的理由"
