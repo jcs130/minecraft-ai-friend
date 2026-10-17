@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 import time
 import uuid
 from datetime import datetime, timezone
@@ -13,22 +14,22 @@ from .bridge import json_content, outcome, text_content
 from .context import assemble, coalesce_rejected, encode
 from .death_memory import TOOL as DEATH_REVIEW_TOOL
 from .death_memory import DeathMemory, identity, lifecycle, recovery_state
-from .stage_applicability import body_baseline, historical_proposal, inapplicable_reason
 from .decision_profiles import profile_view
 from .fast import FastPolicy, focus_state, rule_focus
 from .model_protocols import assistant_history
 from .observations import (
     body_event_view,
-    native_outcome_view,
-    terminal_step_outcomes,
     fact_preview,
+    native_outcome_view,
     receipt_view,
-    spatial_text,
     spatial_observations,
+    spatial_text,
+    terminal_step_outcomes,
     tool_failure_view,
 )
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .planner import PlannerRequestRejectedError, PlannerResponseError, PlannerUnavailableError
+from .stage_applicability import body_baseline, historical_proposal, inapplicable_reason
 from .tool_schema import argument_error, provider_schema
 from .viewer_public import tool_receipt
 
@@ -730,6 +731,7 @@ class Controller:
     async def recent_for_round(self, host):
         """Bound optional work without recovering authoritative native failures."""
         import inspect
+
         from . import host_recent
         request = self.recent_request(host)
         self.publish(host_recent_request=request)
@@ -1369,10 +1371,20 @@ class Controller:
                 host_context = self.current_host_context()
                 self.publish(host_context=host_context_metadata(host_context))
                 recent_context = await self.recent_for_round(host_context)
+                from .narration import GUIDANCE, NarrationPort
+                narration = NarrationPort(self.data)
+                narration_request = self.recent_request(host_context)
+                narration_binding = ({k: v for k, v in narration_request.items() if k != "as_of"}
+                                     if narration_request else None)
+                try:
+                    narration_enabled = bool(narration_binding and narration.consumer(narration_binding))
+                except (OSError, sqlite3.Error):
+                    narration_enabled = False
+                round_prefix = prefix + (GUIDANCE if narration_enabled else "")
                 if self.stop_requested() or self.preempted or self.turn_death_epoch != self.death_epoch or self._event_poll is not None or self._deferred_event_drain:
                     return
                 try:
-                    messages, budget = assemble(prefix, round_tools, planning_goal, facts, self.recent, self.groups,
+                    messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
@@ -1380,7 +1392,7 @@ class Controller:
                     if not reserve:
                         raise
                     reserve = 0
-                    messages, budget = assemble(prefix, round_tools, planning_goal, facts, self.recent, self.groups,
+                    messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
@@ -1439,7 +1451,14 @@ class Controller:
                 self.recent = [event for event in self.recent if id(event) not in consumed_ids]
                 calls = response.get("tool_calls") or []
                 self.publish(last_message=(response.get("content") or "")[:1200], viewer_decision_at=datetime.now(timezone.utc).isoformat())
+                def offer_narration():
+                    if narration_enabled and not self.stop_requested() and not self.preempted:
+                        try:
+                            self.publish(narration=narration.offer(response.get("content"), narration_binding))
+                        except (OSError, sqlite3.Error):
+                            self.publish(narration={"offered": False, "reason": "outbox_unavailable"})
                 if not calls:
+                    offer_narration()
                     self.invalid_tool_calls = 0
                     self.publish(invalid_tool_calls=0)
                     # A plain plan is still model history. Dropping it gives an
@@ -1463,6 +1482,7 @@ class Controller:
                 except ModelCallRejected as error:
                     self.reject_model_call(error, response)
                     return
+                offer_narration()
                 self.invalid_tool_calls = 0
                 self.publish(invalid_tool_calls=0)
                 exchange = [assistant_history(response)]
