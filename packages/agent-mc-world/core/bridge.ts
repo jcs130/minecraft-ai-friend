@@ -837,7 +837,7 @@ export class Bridge {
     bot.pathfinder.setMovements(movements);
     bot.pathfinder.tickTimeout = 60;
     suppressSprintNearWater(bot, movements);
-    installTreadWater(bot, this.opts.antiDrown);
+    this.bagFor(gen).register('passive-water-input', installTreadWater(bot, this.opts.antiDrown));
     trackWindowProps(bot);
     this.installDigBackoff(bot);
     installDoorWaypointRepair(bot);

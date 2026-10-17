@@ -21,6 +21,7 @@ import { flightState } from './flight.ts';
 import { cancelControlInput, waterControlActive } from './skills-control.ts';
 import { groundPathIssueOf } from './path-waypoints.ts';
 import { corridorSafe } from './idle-actions.ts';
+import { onConnectionEnd } from './connection-end.ts';
 
 export const { goals } = pathfinderPkg;
 
@@ -63,6 +64,7 @@ export function walkOnlyPath(bot: Bot): () => void {
  * 这个监听要装在寻路器之后,同一个物理刻里后跑的那一个说了算。
  */
 const treadHolds = new WeakMap<object, Map<symbol, Cell>>();
+const treadControllers = new WeakMap<Bot, { enabled: () => boolean; dispose: () => void }>();
 
 /**
  * 这一步点名了一格:那一格泡在水下(它头顶那格是水)时不踩水,人才待得住。
@@ -85,13 +87,20 @@ function targetSubmerged(bot: Bot): boolean {
 }
 
 /** Passive ascent is opt-in and shares the host's live anti-drowning switch. */
-export function installTreadWater(bot: Bot, enabled: () => boolean = () => false): void {
+export function installTreadWater(bot: Bot, enabled: () => boolean = () => false): () => void {
+  const existing = treadControllers.get(bot);
+  if (existing) { existing.enabled = enabled; return existing.dispose; }
   let path: Array<{ y: number; toBreak?: unknown[]; toPlace?: unknown[] }> = [];
   let treading = false;
-  bot.on('path_update', (r: { path: typeof path }) => { path = r.path; });
-  bot.on('goal_reached', () => { path = []; });
-  bot.on('path_reset', () => { path = []; });
-  bot.on('physicsTick', () => {
+  let disposed = false;
+  const release = () => {
+    if (treading && !waterControlActive(bot)) bot.setControlState('jump', false);
+    treading = false;
+  };
+  const onPath = (r: { path: typeof path }) => { path = r.path; };
+  const resetPath = () => { path = []; };
+  const resetBody = () => { resetPath(); release(); };
+  const tick = () => {
     if (!bot.entity) return;
     if (waterControlActive(bot)) {
       // Do not clear jump here: it may be an explicit ascent or a rescue input.
@@ -108,7 +117,7 @@ export function installTreadWater(bot: Bot, enabled: () => boolean = () => false
       if (next.y < Math.floor(bot.entity.position.y)) bot.setControlState('jump', false);
       return;
     }
-    if (!enabled()) {
+    if (!controller.enabled()) {
       if (treading) bot.setControlState('jump', false);
       treading = false;
       return;
@@ -126,7 +135,21 @@ export function installTreadWater(bot: Bot, enabled: () => boolean = () => false
       bot.setControlState('jump', false);
       treading = false;
     }
-  });
+  };
+  const dispose = () => {
+    if (disposed) return; disposed = true;
+    bot.off('physicsTick', tick); bot.off('path_update', onPath);
+    bot.off('goal_reached', resetPath); bot.off('path_reset', resetPath);
+    bot.off('death', resetBody); bot.off('respawn', resetBody);
+    detachEnd(); release(); path = [];
+    if (treadControllers.get(bot) === controller) treadControllers.delete(bot);
+  };
+  const controller = {enabled, dispose};
+  treadControllers.set(bot, controller);
+  bot.on('path_update', onPath); bot.on('goal_reached', resetPath); bot.on('path_reset', resetPath);
+  bot.on('death', resetBody); bot.on('respawn', resetBody); bot.on('physicsTick', tick);
+  const detachEnd = onConnectionEnd(bot, dispose);
+  return dispose;
 }
 
 /** 单次寻路上限；超时按不可达处理。 */

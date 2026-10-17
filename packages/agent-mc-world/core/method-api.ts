@@ -1,9 +1,15 @@
 /** On-demand contracts for the program SDK; native primitives retain their own guide. */
 import { nativeApiHelp } from './method-mineflayer.ts';
 import { METHOD_CAPABILITIES_HELP } from './method-capabilities.ts';
+import { adaptiveDivingDecision } from './diving-budget.mjs';
 
 const SDK_API = Object.freeze({
   'mc.capabilities': METHOD_CAPABILITIES_HELP,
+  'diving-budget': '维护者编写的纯计算参考代码，不是已学会的方法、不执行身体动作。'
+    + '可在 mc_script 中校验/改写。params: samples（本次 bot.read("breathing") 的样本）, returnSeconds（实测返程秒数）, '
+    + 'reserveSeconds, minHealth, sampleMaxAgeMs（调用者选择的新鲜度容忍值）, nowMs?（默认当前时间，仅离线回放才覆盖）。'
+    + '只用最后连续的同一 observationId/实体/维度/epoch 水下段；旧读数、换气和未知身份不能证明还能继续。'
+    + '\n```js\n' + adaptiveDivingDecision + '\n```',
   entities: 'Mineflayer: await bot.read("entitySnapshot") returns {sampledAt,source,dimension,coverage,availability,self,entities,players}. '
     + 'entities is keyed by entity id and players by online name. Entries are detached, read-only observations, not live bot objects. '
     + 'await bot.read("entity"), await bot.read("entities") and await bot.read("players") read the corresponding fresh projection. '
@@ -27,13 +33,14 @@ const SDK_API = Object.freeze({
   'mc.flightPlan': 'await mc.flightPlan(args): the same read-only geometry and budget preview as mc_flight_plan. '
     + 'It does not move, cast, grant permission or prove arrival. Read mc_flight_plan schema for arguments; execution revalidates geometry and permission.',
   diving: 'Mineflayer 潜水程序：await bot.read("breathing") 按需取带采样/更新时刻的氧气、生命、浸水状态、位置与速度。'
+    + '浸水按实际眼高和已加载流体高度读取；eyeHeightSource=standing-default 时是站姿默认眼高。控制工具不再用固定氧气 6 的阈值禁止下潜。'
     + '在同一原生程序中 await bot.setControlState("jump",false) 接管输入，await bot.waitForTicks(n) 和连续读取期间保持；结束/取消会释放。自动踩水与防溺水共用 reflex.antiDrown 开关；关闭后不自动上浮、找岸或冻结任务，手动上浮仍可用。启用时危急环境接管仍可撤销程序，程序结束后也可能恢复踩水。'
     + '按实际时间差比较多次读数；headWet=true 且有多次氧气递减才估计消耗率，读数不变或缺失不等于无限氧气。生命下降和回复分别留证据，不以回血抵消伤害。'
     + '返程预算=已核验呼吸点路线耗时+实际上浮/横移耗时+控制延迟与不确定性余量；剩余氧气秒数=当前氧气/实测保守消耗率。'
     + '预计返程时间接近氧气余量、生命余量不足、通路变化或读数失效时，脚本自行决定返程；不以入水或固定水下秒数直接判定必须上浮。'
     + '先观察上方/返程通路和呼吸点，低顶不能按垂直距离当上浮时间。仅凭跳跃输入、程序结束或头出水不证明登岸/目标完成。'
     + '既有 surface/防溺水是应急兜底，不是完整潜水规划器。原生身体程序取得队列后不要嵌套 mc.do 等待自己的身体；用原生按键并在终态后核验。'
-    + '维护者资料不是已学会的方法；由 Agent 自己构造、校验、保存版本，记录实际效果/失败边界，下次检索后再评估复用。',
+    + 'api:"diving-budget" 按需读可改写的预算参考；维护者资料不是已学会的方法。由 Agent 自己构造、校验、保存版本，记录实际效果/失败边界，下次检索后再评估复用。',
   methods: '通过 mc_script 工具操作自己的方法库（不是 mc 对象的方法）：'
     + '先 library:{op:"list",query:"关键词",limit:8} 找适用条件，再 library:{op:"read",id:"method-id"} 读取源码/版本。'
     + '编写或修改后提交 {name:"method-id",code:"…",validate:true}，再用 {runId} 等待 validated；校验不执行动作。'

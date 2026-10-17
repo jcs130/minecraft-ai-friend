@@ -7,6 +7,7 @@
  * 渲染出口是 `narrateWorld`:一律中文、写成话,进世界快照事件与其余事件正文。
  */
 import { Vec3 } from 'vec3';
+import { headWaterObservation } from './water-observation.ts';
 import { observedEntity, observationView } from './perception-sight.ts';
 import { spatialSites } from './spatial-site.ts';
 import { vehicleStateFromBot, vehicleFingerprint, narrateVehicleState, type VehicleReading } from '../src/vehicle-state.ts';
@@ -1192,11 +1193,8 @@ export function isRaining(bot: any): boolean {
   return true;
 }
 
-/** 头部(脚上一格)在水中。氧气元数据只有此时可信:上岸后服务器不再推,旧值一直残留。 */
-export function headInWater(bot: any): boolean {
-  const head = bot.blockAt(bot.entity.position.offset(0, 1, 0));
-  return head != null && WATER_BLOCKS.has(head.name);
-}
+/** 当前呼吸点已测得浸水；未知覆盖不证明已出水。 */
+export function headInWater(bot: any): boolean { return headWaterObservation(bot).wet === true; }
 
 /** 身子泡在水里(脚所在格或头所在格是水)。水里 onGround 恒假、疾跑无效,战斗姿态与撤退选路都要认它 */
 export function bodyInWater(bot: any): boolean {

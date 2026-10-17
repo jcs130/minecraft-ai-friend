@@ -1,7 +1,7 @@
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cancelControlInput, skillControl, waterControlActive } from '../core/skills-control.ts';
+import { cancelControlInput, skillControl, waterControlActive, ownNativeControlInput } from '../core/skills-control.ts';
 import { type SkillContext, SkillBlocked } from '../core/skill-context.ts';
 import { parseSteps } from '../core/skills.ts';
 import { goals, installTreadWater, releaseBody, underwaterRouteNote, withRouteScene } from '../core/travel.ts';
@@ -97,21 +97,45 @@ it('collides with the pool floor and does not describe elapsed inputs as arrival
   expect(receipt).toContain('到达目标须按现场或 expect 另行核验');
 });
 
-it('preserves unknown oxygen and stops sinking when a real low reading arrives', async () => {
-  const h = pool(67);
+it('preserves unknown oxygen and reports a low reading without an unconditional six-point dive veto', async () => {
+  const h = pool(67, () => false);
   h.bot.oxygenLevel = undefined as never;
   const unknown = h.move([], 100);
   await vi.advanceTimersByTimeAsync(100);
   expect(await unknown).toContain('氧气:未知→未知/20');
-  h.bot.oxygenLevel = 8;
-  const done = h.move([], 1000).catch(e => e);
-  await vi.advanceTimersByTimeAsync(100); h.bot.oxygenLevel = 5;
+  h.bot.oxygenLevel = 8; h.bot.emit('breath');
+  const from = h.bot.entity.position.y;
+  const done = h.move([], 1000);
+  await vi.advanceTimersByTimeAsync(100); h.bot.oxygenLevel = 5; h.bot.emit('breath');
   await vi.advanceTimersByTimeAsync(50);
-  expect((await done).message).toContain('氧气 5/20');
+  expect(waterControlActive(h.bot)).toBe(true); expect(h.keys.jump).toBe(false);
+  await vi.advanceTimersByTimeAsync(850);
+  const receipt = await done;
+  expect(receipt).toContain('氧气:8→5/20'); expect(receipt).toContain('生命:20→20');
+  expect(h.bot.entity.position.y).toBeLessThan(from);
   expect(waterControlActive(h.bot)).toBe(false);
-  await vi.advanceTimersByTimeAsync(50); expect(h.keys.jump).toBe(true);
+  await vi.advanceTimersByTimeAsync(50); expect(h.keys.jump).toBe(false);
   const up = h.move(['jump'], 100);
   await vi.advanceTimersByTimeAsync(100); await up;
+});
+
+it('updates a single passive-water subscription and releases it on disconnect', async () => {
+  const h=pool(67),before=h.bot.listenerCount('physicsTick');
+  h.bot.emit('physicsTick');expect(h.keys.jump).toBe(true);
+  const dispose=installTreadWater(h.bot,()=>false);
+  for(let i=0;i<12;i++) expect(installTreadWater(h.bot,()=>false)).toBe(dispose);
+  expect(h.bot.listenerCount('physicsTick')).toBe(before);
+  await vi.advanceTimersByTimeAsync(100);expect(h.keys.jump).toBe(false);
+  h.bot.emit('end');expect(h.bot.listenerCount('physicsTick')).toBe(before-1);
+  dispose();expect(h.bot.listenerCount('physicsTick')).toBe(before-1);
+});
+
+it('does not let disposal of passive floating clear a newer native upward input',()=>{
+  const h=pool(67);h.bot.emit('physicsTick');
+  const dispose=installTreadWater(h.bot,()=>true),release=ownNativeControlInput(h.bot);
+  h.bot.setControlState('jump',true);dispose();
+  expect(h.keys.jump).toBe(true);
+  release();h.bot.setControlState('jump',false);
 });
 
 it.each(['end', 'death', 'respawn', 'forcedMove'] as const)('%s revokes the water lease immediately', async event => {
@@ -120,6 +144,7 @@ it.each(['end', 'death', 'respawn', 'forcedMove'] as const)('%s revokes the wate
   await vi.advanceTimersByTimeAsync(100); h.bot.emit(event);
   expect(waterControlActive(h.bot)).toBe(false); expect(h.keys.forward).toBe(false);
   await vi.advanceTimersByTimeAsync(100); expect(await done).toBeInstanceOf(SkillBlocked);
+  if(event==='end')expect(h.bot.listenerCount('breath')).toBe(0);
 });
 
 it('hands the body back to a rescue and does not let an old finally clear new keys', async () => {

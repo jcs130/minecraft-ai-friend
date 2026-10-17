@@ -49,6 +49,13 @@ it('attaches only once and disposes with the original connection', () => {
   h.live.emit('end', 'test');
   expect(h.live.listenerCount('breath')).toBe(before);
 });
+it('gives a reconnected observation a new identity even when realm, entity id and epoch repeat',()=>{
+  const first=rig(),second=rig();
+  const a=breathingReadout(first.live),b=breathingReadout(second.live);
+  expect(a.entityId).toBe(b.entityId);expect(a.observationEpoch).toBe(b.observationEpoch);
+  expect(a.observationId).not.toBe(b.observationId);
+  first.live.emit('respawn');expect(breathingReadout(first.live).observationId).toBe(a.observationId);
+});
 
 it('keeps damage separate from healing and resets both counters on respawn', () => {
   const h = rig(); installBreathingReadings(h.live);

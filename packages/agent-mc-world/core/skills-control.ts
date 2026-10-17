@@ -5,7 +5,8 @@ import { Vec3 } from 'vec3';
 import { flightState, flyWithInput } from './flight.ts';
 import { SkillBlocked, checkAbort, sleep, type SkillContext } from './skill-context.ts';
 import type { ControlKey, SkillCall } from './skills.ts';
-import { bodyInWater, headInWater } from './terrain.ts';
+import { bodyInWater } from './terrain.ts';
+import { breathingReadout } from './breathing.ts';
 
 interface InputLease {
   keys: ControlKey[];
@@ -33,12 +34,6 @@ export function waterControlActive(bot: Bot): boolean {
   return inputs.get(bot)?.mode === 'water' || (nativeInputs.get(bot)?.size ?? 0) > 0;
 }
 
-function waterReadout(bot: Bot): { headWet: boolean; oxygen: number | null } {
-  const value = bot.oxygenLevel;
-  return { headWet: headInWater(bot),
-    oxygen: typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 20 ? value : null };
-}
-
 /** Release before another owner presses keys; a late continuation cannot release that owner's input. */
 export function cancelControlInput(bot: Bot, reason: string, source: 'server' | 'local' = 'local'): void {
   const lease = inputs.get(bot);
@@ -62,7 +57,7 @@ export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: '
   }
   const start = bot.entity.position.clone();
   const startedAt = Date.now();
-  const waterStart = call.mode === 'water' ? waterReadout(bot) : null;
+  const waterStart = call.mode === 'water' ? breathingReadout(bot) : null;
   let waterEnd = waterStart;
   let maxDistance = 0;
   let stoppedAt: number | undefined;
@@ -72,7 +67,7 @@ export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: '
     if (stoppedAt !== undefined || !bot.entity?.position) return;
     last = { position: bot.entity.position.clone(), onGround: bot.entity.onGround, flying: flightState(bot).flying,
       yaw: bot.entity.yaw, pitch: bot.entity.pitch, at: Date.now() };
-    if (waterStart) waterEnd = waterReadout(bot);
+    if (waterStart) waterEnd = breathingReadout(bot, {attach:false});
     maxDistance = Math.max(maxDistance, last.position.distanceTo(start));
   };
   const lease: InputLease = { keys: [], mode: call.mode, finish: () => { sample(); stoppedAt = Date.now(); } };
@@ -94,20 +89,23 @@ export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: '
     checkAbort(ctx);
     if (call.mode === 'water') {
       if (!bodyInWater(bot)) throw new SkillBlocked('已离开水体，停止水中输入；重新观察');
-      const water = waterReadout(bot);
-      if (!call.keys.includes('jump') && water.headWet && water.oxygen !== null && water.oxygen <= 6) {
-        throw new SkillBlocked(`氧气 ${water.oxygen}/20，停止下潜；先上浮换气（surface）`);
-      }
     }
   };
   const observed = (): string => {
     sample();
     const end = last.position;
     const xyz = (p: Vec3): string => `(${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)})`;
+    const damage = waterStart && waterEnd && waterStart.observationId === waterEnd.observationId
+      && waterStart.observationEpoch === waterEnd.observationEpoch
+      && waterStart.entityId === waterEnd.entityId && waterStart.dimension === waterEnd.dimension
+      && waterStart.healthLoss !== null && waterEnd.healthLoss !== null && waterEnd.healthLoss >= waterStart.healthLoss
+      ? waterEnd.healthLoss - waterStart.healthLoss : '未知';
     return `实际起点${xyz(start)}→终点${xyz(end)}；位移${xyz(end.minus(start))}，最远偏移${maxDistance.toFixed(2)}格；`
       + `耗时${(stoppedAt ?? Date.now()) - startedAt}毫秒；观测于${new Date(last.at).toISOString()}；onGround:${last.onGround}，flying:${last.flying}；`
       + `当前朝向 yaw:${(last.yaw * 180 / Math.PI).toFixed(1)}° pitch:${(last.pitch * 180 / Math.PI).toFixed(1)}°`
-      + (waterStart && waterEnd ? `；头部浸水:${waterStart.headWet}→${waterEnd.headWet}；氧气:${waterStart.oxygen ?? '未知'}→${waterEnd.oxygen ?? '未知'}/20` : '');
+      + (waterStart && waterEnd ? `；头部浸水:${waterStart.headWet ?? '未知'}→${waterEnd.headWet ?? '未知'}；氧气:${waterStart.oxygen ?? '未知'}→${waterEnd.oxygen ?? '未知'}/20`
+        + `；生命:${waterStart.health ?? '未知'}→${waterEnd.health ?? '未知'}；期间收到伤害:${damage}`
+        + `；氧气更新时间:${waterEnd.oxygenUpdatedAt ?? '未知'}` : '');
   };
   try {
     if (call.yawDeg !== undefined || call.pitchDeg !== undefined) {
@@ -149,7 +147,8 @@ export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: '
     throw error;
   } finally {
     ctx.diag?.write({ lane: 'body', event: 'control-ended', taskId: ctx.taskId,
-      msg: observed(), data: { call, interruptedBy: lease.reason ?? ctx.abortedBy?.() ?? null } });
+      msg: observed(), data: { call, interruptedBy: lease.reason ?? ctx.abortedBy?.() ?? null,
+        ...(waterStart ? {waterReadings:{start:waterStart,end:waterEnd}} : {}) } });
     cancel('直接控制结束');
     detachEnd();
     bot.off('death', onDeath);
