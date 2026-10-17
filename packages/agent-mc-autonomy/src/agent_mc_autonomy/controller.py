@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .bridge import json_content, outcome, text_content
-from .context import assemble, coalesce_rejected, encode
+from .context import assemble, coalesce_rejected, encode, retain_events
 from .death_memory import TOOL as DEATH_REVIEW_TOOL
 from .death_memory import DeathMemory, identity, lifecycle, recovery_state
 from .decision_profiles import profile_view
@@ -546,7 +546,7 @@ class Controller:
                     self.publish(death_episode=current)
         self.recent.extend(e for e in value.get("events", []) if e.get("contextDelivery") != "archive-only" and not e.get("meta", {}).get("staleEpoch")
                            and (foreign_execution_id is None or (e.get("execution") or {}).get("id") != foreign_execution_id))
-        self.recent = self.recent[-64:]
+        self.recent = retain_events(self.recent)
 
     def clear_read_activity(self):
         self.read_activity.clear()
@@ -1462,7 +1462,7 @@ class Controller:
                 if self.stop_requested() or self.preempted or self.turn_death_epoch != self.death_epoch or self._event_poll is not None or self._deferred_event_drain:
                     return
                 try:
-                    messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, self.recent, self.groups,
+                    messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, consumed, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
@@ -1470,7 +1470,7 @@ class Controller:
                     if not reserve:
                         raise
                     reserve = 0
-                    messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, self.recent, self.groups,
+                    messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, consumed, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
@@ -1525,7 +1525,7 @@ class Controller:
                 with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
                     output.write(encode({"turnId": self.turn, "response": response}) + "\n")
                 # Events arriving during inference belong to the next request.
-                consumed_ids = {id(event) for event in consumed}
+                consumed_ids = {id(consumed[index]) for index in budget["event_delivery"]["included_indices"]}
                 self.recent = [event for event in self.recent if id(event) not in consumed_ids]
                 calls = response.get("tool_calls") or []
                 self.publish(last_message=(response.get("content") or "")[:1200], viewer_decision_at=datetime.now(timezone.utc).isoformat())

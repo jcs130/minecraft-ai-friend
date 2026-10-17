@@ -1,5 +1,14 @@
 # Agent MC Autonomy
 
+0.2.8 pins the engine-child IPC attribution repair and the shared viewer's
+bounded delivery-cadence interpolation. YSM animation keeps the displayed
+heading; raw player observations, gameplay and host interfaces are unchanged.
+Private messages and blocked actions take priority over routine event noise.
+Request diagnostics record which events were included; only those events are
+consumed after a valid response. Omitted events remain pending within the bounded
+backlog and retain native archive access. Delivery does not mark messages as
+considered, authorize their content or prove a successful response.
+
 0.2.7 forwards actual planner and operator attribution through MCP metadata.
 Planner tool calls carry `system2`; direct operator actions carry `human`.
 Fast focus advice does not relabel planner actions as system one. Viewer

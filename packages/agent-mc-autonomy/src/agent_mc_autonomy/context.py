@@ -41,6 +41,50 @@ def encode(value) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def event_priority(event):
+    """Delivery salience only; a message never gains action authority here."""
+    meta = event.get("meta") or {}
+    trigger = event.get("trigger")
+    trigger = trigger.get("type") if isinstance(trigger, dict) else trigger
+    if (trigger in {"interrupt", "preempt"} or meta.get("channel") == "private"
+            or str(event.get("text", "")).startswith("[MC 私聊] ")):
+        return 3
+    execution = event.get("execution") or {}
+    if (meta.get("death") or event.get("type") in {"minecraft.damage", "minecraft.death"}
+            or execution.get("terminal") and execution.get("phase") in {"blocked", "failed", "partial"}):
+        return 2
+    return 1 if execution.get("terminal") else 0
+
+
+def retain_events(events, limit=64):
+    selected = sorted(range(len(events)), key=lambda index: (event_priority(events[index]), index), reverse=True)[:limit]
+    return [events[index] for index in sorted(selected)]
+
+
+def project_event(event):
+    item = {key: event[key] for key in ("run", "cursor", "type", "trigger", "execution", "source", "senderKey") if key in event}
+    meta = event.get("meta") or {}
+    identity = {key: meta[key] for key in ("uname", "channel", "socialScope", "identityEvidence", "chatTransport",
+                "senderUuid", "phase", "kind", "nativeType", "directMention") if key in meta}
+    if identity:
+        item["meta"] = identity
+    execution = item.get("execution")
+    evidence = execution.get("evidence") if isinstance(execution, dict) else None
+    if isinstance(evidence, dict) and isinstance(evidence.get("receipt"), str):
+        projected = spatial_text(evidence["receipt"])
+        item["execution"] = {**execution, "evidence": {**{k: v for k, v in evidence.items() if k != "steps"},
+            **({"step_outcomes": terminal_step_outcomes(execution, {})} if "steps" in evidence else {}),
+            "receipt": fact_preview(projected, 1800),
+            "abridged": len(projected.encode("utf-8")) > 1800}}
+    text = spatial_text(str(event.get("text", "")))
+    item["text"] = text[:700]
+    if len(text) > 700:
+        item["abridged"] = True
+    item["original"] = {"tool": "mc_protocol", "action": "archive", "run": event.get("run"),
+                        "after": max(0, event.get("cursor", 1) - 1), "limit": 1}
+    return item
+
+
 def rejected_action_exchange(group):
     """Recognize one fully answered proposal proven to have done no body work."""
     # Mixed read/action batches and opaque provider history remain intact.
@@ -291,6 +335,23 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
             memory["latest_episode"] = {key: memory["latest_episode"][key] for key in ("id", "source_event")}
         if cost() - before_memory > allowance:
             tail.pop("death_memory")
+    # Reserve bounded room for urgent messages and failed actions before history
+    # and bulk facts. A later periodic HUD must not hide an earlier private reply.
+    event_order = sorted(range(len(events)), key=lambda index: (event_priority(events[index]), index), reverse=True)[:24]
+    included_events = []
+
+    def add_event(index, ceiling):
+        included_events.append(index)
+        tail["events"] = [project_event(events[i]) for i in sorted(included_events)]
+        if cost() > ceiling:
+            included_events.remove(index)
+            tail["events"] = [project_event(events[i]) for i in sorted(included_events)]
+
+    event_base = cost()
+    event_allowance = min(4500, max(0, (context_tokens - event_base) // 4))
+    for index in event_order:
+        if event_priority(events[index]) >= 2:
+            add_event(index, event_base + event_allowance)
     base_cost = cost()
     history = saved_history
     evicted = []
@@ -355,24 +416,9 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
             tail["omitted_facts"].append({"key": key, "original": fact.get("original")})
             if cost() > context_tokens:
                 tail["omitted_facts"].pop()
-    for event in reversed(events[-24:]):
-        item = {key: event[key] for key in ("run", "cursor", "type", "trigger", "execution") if key in event}
-        execution = item.get("execution")
-        evidence = execution.get("evidence") if isinstance(execution, dict) else None
-        if isinstance(evidence, dict) and isinstance(evidence.get("receipt"), str):
-            # Terminal receipts were bypassing the dispatch projection and
-            # repeating full voxel/ray arrays in every event. Preserve measured
-            # direction/coordinates and the native archive entry for full data.
-            projected = spatial_text(evidence["receipt"])
-            item["execution"] = {**execution, "evidence": {**{k: v for k, v in evidence.items() if k != "steps"},
-                **({"step_outcomes": terminal_step_outcomes(execution, {})} if "steps" in evidence else {}),
-                "receipt": fact_preview(projected, 1800),
-                "abridged": len(projected.encode("utf-8")) > 1800}}
-        item["text"] = spatial_text(str(event.get("text", "")))[:700]
-        item["original"] = {"tool": "mc_protocol", "action": "archive", "run": event.get("run"), "after": max(0, event.get("cursor", 1) - 1), "limit": 1}
-        tail["events"].insert(0, item)
-        if cost() > context_tokens:
-            tail["events"].pop(0)
+    for index in event_order:
+        if index not in included_events:
+            add_event(index, context_tokens)
     # The reserve protects fresh facts before their actual size is known. Return
     # unused space to the newest complete exchanges after facts/events fit.
     # Explicitly superseded scout acceptances were not added to this list.
@@ -450,4 +496,6 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
                         "input": total - reserved_output - FRAMING_RESERVE,
                         "output_reserve": reserved_output, "framing_reserve": FRAMING_RESERVE,
                          "total": total, "limit": context_tokens, "omitted": omitted,
+                         "event_delivery": {"available": len(events), "included": len(included_events),
+                             "omitted": len(events) - len(included_events), "included_indices": sorted(included_events)},
                          "superseded_rejected_plans": len(superseded), "host_context": included_host_context, "host_recent_context": recent_diagnostic}

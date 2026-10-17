@@ -1,6 +1,6 @@
 {
   "schema": "agent-mc-viewer-source/v1",
-  "sourceRevision": "16263531586d8ce6ceca561757f4b75806d50855",
+  "sourceRevision": "8e72a5549ac738f2b183306619004d6f319d94d7",
   "files": {
     "package.json": {
       "bytes": 1191,
@@ -711,8 +711,8 @@
       "sha256": "c09e716f9629b8188c7370021065b275633dba3060bb61bce369c14fadc7cebe"
     },
     "renderer-src/src/native-viewer/native-console.js": {
-      "bytes": 29657,
-      "sha256": "7ae548685f058b89c4167aa0912484fd5a84e6dd358db8f6b09cbe80520a5d6c"
+      "bytes": 29943,
+      "sha256": "fbd3ce5a726751ca4653a38d41e5e1558d8ac420c38be89cf3e71ebec3e751d5"
     },
     "renderer-src/src/native-viewer/native-contraption.js": {
       "bytes": 5793,
@@ -727,8 +727,8 @@
       "sha256": "5921f774dde4627911ab1b923ffa4d5c2968a8c560ed3674c7e5afbb3d449f96"
     },
     "renderer-src/src/native-viewer/native-display-performance.js": {
-      "bytes": 4704,
-      "sha256": "21d524fe0b203c15c4665028c0775881732634d5eae2ce91ce9a67ab902a1dbe"
+      "bytes": 5651,
+      "sha256": "26ae1ab84d51b935ceaea57fb0201633ce14f362eb2fe27e8176c13c0588fd7a"
     },
     "renderer-src/src/native-viewer/native-domum-item-icons.js": {
       "bytes": 14301,
@@ -919,12 +919,12 @@
       "sha256": "a930dd6afdb597e0e40fba1e85ef285cf4db480beaecc1e6428a2514c980750e"
     },
     "renderer-src/src/native-viewer/native-scene.js": {
-      "bytes": 42891,
-      "sha256": "91dfa356e802e8866143925f95f5dbf9ef762c77c81f250a7023ec0f937a3b76"
+      "bytes": 42921,
+      "sha256": "b0449cec0171dedfe9013ae375b89444a6d409dec1480f9db75704c428b20659"
     },
     "renderer-src/src/native-viewer/native-self-player.js": {
-      "bytes": 7913,
-      "sha256": "253f403b412e0c7a3af0b1ca650e1cdcf49ca021ca9f4f170cf3c5c92f098bf3"
+      "bytes": 8159,
+      "sha256": "66648b5a27f9c36428fe745110c82de4f1327656c97c380cac9fbb76cabecf6e"
     },
     "renderer-src/src/native-viewer/native-session.js": {
       "bytes": 5281,
