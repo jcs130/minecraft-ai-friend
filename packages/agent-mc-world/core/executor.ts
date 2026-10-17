@@ -6051,6 +6051,10 @@ const HOLD_WATCHDOG_MS = 60_000;
 const ESCAPE_STALL_MS = 5_000;
 /** 与 FALL_SAFE_MOVE 同口径:小于这个数的位移是站桩时的抖动,不算推进 */
 const ESCAPE_STALL_MOVE = 0.08;
+/** Collision bobbing in water can exceed eight centimetres without leaving the same block. */
+const DROWN_STALL_MOVE = 0.5;
+/** A looping route must expire even when repeated sideways motion resets its progress clock. */
+const DROWN_ROUTE_MAX_MS = 45_000;
 const WATER_TRAP_MS = 90_000;
 const WATER_TRAP_MOVE = 3;
 const FALL_SAFE_MOVE = 0.08;
@@ -6102,6 +6106,7 @@ export class Reflexes {
     kind: 'drown' | 'lava' | 'burn' | 'flee';
     goal: InstanceType<typeof goals.Goal>;
     since: number;
+    startedAt: number;
     at: { x: number; y: number; z: number };
     /** 目标格(登岸/换气点/灭火的水):零推进撤销后进本轮的排除集,不再重选 */
     target?: Cell;
@@ -6208,7 +6213,8 @@ export class Reflexes {
     // 下达与登记是同一处(setOwnedGoal 记的就是 escape 这一档),两本账合成一本
     setOwnedGoal(bot, goal, 'escape', escapeIntent(kind), { diag: this.opts.diag });
     const p = bot.entity.position;
-    this.escapeGoal = { kind, goal, since: Date.now(), at: { x: p.x, y: p.y, z: p.z }, target, drownPhase };
+    const now = Date.now();
+    this.escapeGoal = { kind, goal, since: now, startedAt: now, at: { x: p.x, y: p.y, z: p.z }, target, drownPhase };
   }
 
   /**
@@ -6229,27 +6235,29 @@ export class Reflexes {
     const now = Date.now();
     const p = bot.entity.position;
     const moved = Math.hypot(p.x - esc.at.x, p.y - esc.at.y, p.z - esc.at.z);
-    if (moved > ESCAPE_STALL_MOVE) {
+    const expired = esc.kind === 'drown' && now - esc.startedAt >= DROWN_ROUTE_MAX_MS;
+    if (!expired && moved > (esc.kind === 'drown' ? DROWN_STALL_MOVE : ESCAPE_STALL_MOVE)) {
       esc.since = now;
       esc.at = { x: p.x, y: p.y, z: p.z };
       return;
     }
-    if (now - esc.since < ESCAPE_STALL_MS) return;
+    if (!expired && now - esc.since < ESCAPE_STALL_MS) return;
     this.escapeGoal = null;
-    dropGoal(bot, 'escape', `${escapeIntent(esc.kind)}零推进,撤了重下`, this.opts.diag);
+    const failure = expired ? '超过单条路线时限仍未脱离水体' : '零推进';
+    dropGoal(bot, 'escape', `${escapeIntent(esc.kind)}${failure},撤了重下`, this.opts.diag);
     const what = escapeIntent(esc.kind);
     this.opts.diag?.write({
       lane: 'reflex', event: 'escape-goal-stalled',
-      msg: `${what}的逃生目标 ${Math.round(ESCAPE_STALL_MS / 1000)} 秒零推进,已撤销重下`,
+      msg: `${what}的逃生目标${failure},已撤销重下`,
       data: {
-        kind: esc.kind, stallMs: now - esc.since,
+        kind: esc.kind, stallMs: now - esc.since, routeMs: now - esc.startedAt, expired,
         position: bot.entity.position, health: bot.health,
       },
     });
     this.opts.report({
       kind: 'reflex',
       text: `[反射] ${what}的寻路${esc.target ? `(去 ${cellText(esc.target)})` : ''}`
-        + `${fmtDur(now - esc.since)}没挪动,人在 ${cellText(feetOf(bot))},已撤掉目标`
+        + `${expired ? fmtDur(now - esc.startedAt) + '仍未脱离水体' : fmtDur(now - esc.since) + '没有实质推进'},人在 ${cellText(feetOf(bot))},已撤掉目标`
         + (esc.kind === 'flee' ? ',原地重下同一个目标。' : esc.kind === 'lava' ? ',改回手动冲刺。' : ',换一个目标重找。'),
     });
     if (esc.kind === 'drown') {
@@ -7381,6 +7389,9 @@ export class Reflexes {
    * 两级都排除本轮零推进过的格,登岸点还要求头高那一层到它之间没有实心阻隔。
    */
   private routeDrownToLand(bot: Bot, now: number, oxygen: number): void {
+    // Keep the same attempt and its watchdog clock. Refreshing every eight seconds
+    // used to renew a blocked route indefinitely and lose its failed-target evidence.
+    if (this.escapeGoal?.kind === 'drown' && bot.pathfinder?.goal === this.escapeGoal.goal) return;
     if (now - this.lastDrownEscapeAt <= 8_000) return;
     this.lastDrownEscapeAt = now;
     const up = landSearchUp(bot);
