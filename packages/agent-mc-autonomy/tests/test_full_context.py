@@ -69,6 +69,20 @@ def test_full_pending_event_buffer_uses_window_instead_of_count():
     assert len(retain_events(events)) == 64
 
 
+def test_full_host_recent_contract_is_owned_and_keeps_all_selected_originals():
+    from agent_mc_autonomy import host_recent
+    from test_host_recent import message, projection, request
+    req = {**request(), "context_mode": "full"}
+    rows = [message(f"{i:02d}", text="Long attributed language " * 150) for i in range(20)]
+    selected = host_recent.select_recent_messages(rows, binding=host_recent.binding(req, request=True),
+        sampled_at=req["as_of"], source="public")
+    assert selected == rows
+    value = projection(req, messages=selected)
+    assert host_recent.validate(value, req, req["as_of"])["recent_messages"] == rows
+    with pytest.raises(ValueError, match="binding_mismatch"):
+        host_recent.validate(value, request(), req["as_of"])
+
+
 def test_full_counter_fallback_and_pending_events_are_explicit():
     class FailedCounter:
         name = "failed-counter"

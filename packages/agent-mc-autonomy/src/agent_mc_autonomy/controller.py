@@ -787,6 +787,8 @@ class Controller:
                        "intent_revision": self.commands.intent_revision() if self.commands else 0,
                        "death_episode_id": episode_id,
                        "as_of": time.time()}
+            if self.settings.context_mode == "full":
+                request["context_mode"] = "full"
             binding(request, request=True)
             return request
         except (ValueError, TypeError, KeyError):

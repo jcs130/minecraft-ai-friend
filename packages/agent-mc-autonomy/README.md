@@ -7,7 +7,10 @@ limits. Buffers follow the configured window; only whole records/exchanges are
 evicted at its measured limit, with explicit omission diagnostics. Output,
 framing and image reserves still apply. Stable identity stays at the prefix and
 changing facts/recent messages at the tail. Host provenance/freshness/selection
-contracts and dispatch safety are unchanged; full mode cannot recreate language
+contracts and dispatch safety are unchanged. An explicitly full-mode request
+also retains all eligible public host candidates (up to the public query's 60
+records) and original text within a 1 MiB publication envelope; the choice is
+bound to the exact owning request. Full mode cannot recreate language
 the host never supplied. Public viewer status remains bounded.
 
 0.2.9 pins the Java registered-chat-format repair. Decision receipts retain

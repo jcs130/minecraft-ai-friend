@@ -8,6 +8,7 @@ import re
 
 SCHEMA = "agent-mc-host-recent/v1"
 STORAGE_BYTES = 8192
+FULL_STORAGE_BYTES = 1048576
 TAIL_BYTES = 2400
 HANDLE_PREFIX = "host-context:"
 BINDING_FIELDS = {"identity", "actor", "session", "run", "scope", "intent_revision", "death_episode_id"}
@@ -45,7 +46,9 @@ def timestamp(value):
 
 
 def binding(value, *, request=False):
-    fields(value, BINDING_FIELDS | ({"as_of"} if request else set()))
+    fields(value, BINDING_FIELDS | ({"as_of"} if request else set()), {"context_mode"})
+    if "context_mode" in value and value["context_mode"] != "full":
+        raise ValueError("recent_context_mode_invalid")
     for key in ("identity", "actor", "session", "run"):
         text(value[key])
     text(value["death_episode_id"], nullable=True)
@@ -56,7 +59,7 @@ def binding(value, *, request=False):
         raise ValueError("recent_revision_invalid")
     if request:
         timestamp(value["as_of"])
-    return copy.deepcopy({k: value[k] for k in BINDING_FIELDS})
+    return copy.deepcopy({k: value[k] for k in BINDING_FIELDS | ({"context_mode"} if "context_mode" in value else set())})
 
 
 def unavailable(reason):
@@ -68,9 +71,9 @@ def digest(value):
         raise ValueError("recent_hash_invalid")
 
 
-def content(value):
+def content(value, limit=STORAGE_BYTES):
     # Newlines are legitimate utterance content; provenance tokens are stricter.
-    if not isinstance(value, str) or "\x00" in value or len(value.encode("utf-8")) > STORAGE_BYTES:
+    if not isinstance(value, str) or "\x00" in value or len(value.encode("utf-8")) > limit:
         raise ValueError("recent_content_invalid")
 
 
@@ -86,6 +89,8 @@ def validate(projection, expected, now, *, fit=False):
     Reads must already satisfy the persisted bound.
     """
     expected = binding(expected, request="as_of" in expected)
+    full = expected.get("context_mode") == "full"
+    payload_limit = FULL_STORAGE_BYTES if full else STORAGE_BYTES
     fields(projection, {"schema", "binding", "source", "sampled_at", "expires_at", "coverage", "recent_messages", "recent_speech"})
     if projection["schema"] != SCHEMA:
         raise ValueError("recent_schema_invalid")
@@ -110,7 +115,7 @@ def validate(projection, expected, now, *, fit=False):
         if not isinstance(reason, str) or not re.fullmatch(r"[a-z0-9_]{1,64}", reason):
             raise ValueError("recent_reason_invalid")
     messages, speech = projection["recent_messages"], projection["recent_speech"]
-    if not isinstance(messages, list) or len(messages) > 4 or not isinstance(speech, list) or len(speech) > 3:
+    if not isinstance(messages, list) or len(messages) > (60 if full else 4) or not isinstance(speech, list) or len(speech) > (60 if full else 3):
         raise ValueError("recent_record_limit")
     if (coverage["selected_count"] != len(messages) + len(speech)
             or coverage["received_count"] != coverage["selected_count"] + coverage["omitted_count"]
@@ -138,7 +143,7 @@ def validate(projection, expected, now, *, fit=False):
         if key in seen:
             raise ValueError("recent_duplicate_identity")
         seen.add(key)
-        content(row["text"])
+        content(row["text"], payload_limit)
         digest(row["text_sha256"])
         if not row["truncated"] and hashlib.sha256(row["text"].encode()).hexdigest() != row["text_sha256"]:
             raise ValueError("recent_hash_mismatch")
@@ -147,7 +152,7 @@ def validate(projection, expected, now, *, fit=False):
         text(row["original_ref"]["source_id"])
         if type(row["original_ref"]["full_text_available"]) is not bool or row["original_ref"]["full_text_available"] == row["truncated"]:
             raise ValueError("recent_original_invalid")
-        if len(row["text"].encode()) > 1600:
+        if not full and len(row["text"].encode()) > 1600:
             if not fit:
                 raise ValueError("recent_text_limit")
             row["text"], row["truncated"] = clip(row["text"], 1600), True
@@ -173,10 +178,10 @@ def validate(projection, expected, now, *, fit=False):
         if row["text_available"]:
             if row.get("text_boundary") != "owned_sanitized_submission" or type(row.get("truncated", False)) is not bool:
                 raise ValueError("recent_speech_boundary_invalid")
-            content(row.get("text"))
+            content(row.get("text"), payload_limit)
             if not row.get("truncated") and hashlib.sha256(row["text"].encode()).hexdigest() != row["text_sha256"]:
                 raise ValueError("recent_hash_mismatch")
-            if len(row["text"].encode()) > 600:
+            if not full and len(row["text"].encode()) > 600:
                 if not fit:
                     raise ValueError("recent_text_limit")
                 row["text"], row["truncated"] = clip(row["text"], 600), True
@@ -185,9 +190,9 @@ def validate(projection, expected, now, *, fit=False):
     value["recent_messages"].sort(key=lambda r: (r["occurred_at"], r["source"], r["id"]))
     value["recent_speech"].sort(key=lambda r: (r["offered_at"], r["opportunity_id"], r["decision_id"]))
     if fit:
-        while size(value) > STORAGE_BYTES and drop_oldest(value):
+        while size(value) > payload_limit and drop_oldest(value):
             pass
-    if size(value) > STORAGE_BYTES:
+    if size(value) > payload_limit:
         raise ValueError("recent_payload_limit")
     return value
 
@@ -229,7 +234,7 @@ def select_recent_messages(records, *, binding, sampled_at, source):
                   "recent_messages": [row], "recent_speech": []}
         validated.extend(validate(single, binding, sampled_at, fit=True)["recent_messages"])
     validated.sort(key=lambda r: (r["occurred_at"], r["source"], r["id"]))
-    selected = validated[-4:]
+    selected = validated if binding.get("context_mode") == "full" else validated[-4:]
     latest_user = next((r for r in reversed(validated) if r["role"] == "user"), None)
     if latest_user is not None and latest_user not in selected:
         selected[0] = latest_user

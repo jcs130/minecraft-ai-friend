@@ -127,7 +127,8 @@ class HostContextPort:
                 self._originals[handle] = stored
             row["original_ref"] = {"tool": "mc_original", "handle": handle, "body_queryable": True,
                                    "full_text_available": not row["truncated"]}
-        while recent.size(self._originals) > recent.STORAGE_BYTES:
+        payload_limit = recent.FULL_STORAGE_BYTES if request.get("context_mode") == "full" else recent.STORAGE_BYTES
+        while recent.size(self._originals) > payload_limit:
             self._originals.pop(next(iter(self._originals)))
         for row in value["recent_messages"]:
             if row["original_ref"]["handle"] not in self._originals:
