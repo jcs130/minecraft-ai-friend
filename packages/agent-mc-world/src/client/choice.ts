@@ -14,8 +14,8 @@ const guidance = {
   goal: '尊重用户最新意向与当前未完目标，挑一段有可验收里程碑的生活目标；勿反复准备或为多样性强行换目标。',
 };
 const focus = {
-  route: ['terrain', 'structure', 'flight', 'life'], survival: ['foodReserve', 'life', 'gear', 'equip'],
-  skill: ['combat', 'flight', 'life', 'equip'], method: ['lastTask', 'gear', 'structure', 'goals'],
+  route: ['terrain', 'structure', 'flight', 'life', 'options'], survival: ['foodReserve', 'life', 'gear', 'equip', 'options'],
+  skill: ['combat', 'flight', 'life', 'equip', 'options'], method: ['lastTask', 'gear', 'structure', 'goals', 'options'],
   goal: ['goals', 'lastTask', 'foodReserve', 'gear', 'explored'],
 };
 const timing = {

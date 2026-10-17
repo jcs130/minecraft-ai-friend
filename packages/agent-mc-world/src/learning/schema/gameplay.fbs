@@ -1,0 +1,31 @@
+namespace AgentMcLearning;
+table ItemCount { name:string; count:double; }
+table Observation {
+  at:string; dimension:string; position:[double]; velocity:[double]; yaw:double=null;
+  onGround:bool=null; health:double=null; food:double=null; oxygen:double=null;
+  inventory:[ItemCount]; inventoryKnown:bool; voxels:[ubyte]; stateIds:[int];
+  controls:[string]; controlsKnown:bool; coverage:string;
+  receivedAt:string; worldAt:string;
+}
+table Intent {
+  skill:string; operation:string; item:string; kind:string; mode:string; block:string; recipe:string; spell:string;
+  count:double=null; durationMs:double=null; targetId:double=null; at:[double]; toward:[double];
+  distance:double=null; yawDeg:double=null; pitchDeg:double=null; keys:[string]; land:bool=null;
+}
+table Signal { name:string; value:double=null; }
+table Assessment { label:string; reasons:[string]; signals:[Signal]; trainingUse:string; goalVerified:bool; }
+table Effect { step:uint; skill:string; status:string; at:[double]; target:bool=null; inventory:bool=null; position:bool=null; window:bool=null; }
+table Candidate { id:string; ready:bool=null; probability:double=null; }
+table Decision { category:string; selected:string; status:string; candidates:[Candidate]; model:string;
+  elapsedMs:double=null; inputTokens:double=null; outputTokens:double=null; recalledMemoryRefs:[string]; contextHash:string; }
+table GameplayRecord {
+  protocol:string; id:string; sourceId:string; revision:string; scopeKey:string; run:string;
+  at:string; updatedAt:string; kind:string; tool:string; operations:[string]; intents:[Intent];
+  controller:string; sessionId:string; decisionId:string; methodId:string; methodRevision:string; memoryRefs:[string];
+  phase:string; terminal:bool=null; dispatch:string; elapsedMs:double=null;
+  before:Observation; after:Observation; observation:Observation; assessment:Assessment;
+  sourceHash:string; previousRevision:string; boundary:string; executionId:string;
+  effects:[Effect]; decision:Decision; requestId:string;
+}
+root_type GameplayRecord;
+file_identifier "MCL1";

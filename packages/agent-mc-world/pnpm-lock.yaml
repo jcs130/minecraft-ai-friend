@@ -11,12 +11,18 @@ importers:
 
   .:
     dependencies:
+      '@mcap/core':
+        specifier: 2.3.0
+        version: 2.3.0
       '@modelcontextprotocol/sdk':
         specifier: 1.32.1
         version: 1.32.1(zod@4.6.5)
       ajv:
         specifier: 8.20.0
         version: 8.20.0
+      flatbuffers:
+        specifier: 25.9.23
+        version: 25.9.23
       minecraft-data:
         specifier: 3.112.0
         version: 3.112.0
@@ -50,6 +56,9 @@ importers:
       socket.io:
         specifier: 4.8.3
         version: 4.8.3
+      socket.io-client:
+        specifier: 4.8.3
+        version: 4.8.3
       tsx:
         specifier: 4.23.15
         version: 4.23.15
@@ -66,9 +75,6 @@ importers:
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
-      socket.io-client:
-        specifier: 4.8.3
-        version: 4.8.3
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -383,6 +389,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@foxglove/crc@0.0.3':
+    resolution: {integrity: sha512-DjIZsnL3CyP/yQ/vUYA9cjrD0a/8YXejI5ZmsaOiT16cLfZcTwaCxIN01/ys4jsy+dZCQ/9DnWFn7AEFbiMDaA==}
+
   '@hono/node-server@2.1.4':
     resolution: {integrity: sha512-2g1qeHl4BduwDn6L8nkAvDrPUWPMlkQ//a5NhP/zIyaXKMjZNRV+cG9Csu+BiJFf6+68pqzjf4Hi5sJGKHuS1g==}
     engines: {node: '>=20'}
@@ -391,6 +400,9 @@ packages:
 
   '@jridgewell/sourcemap-codec@1.6.0':
     resolution: {integrity: sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw==}
+
+  '@mcap/core@2.3.0':
+    resolution: {integrity: sha512-W28kxMOi3QmkhpnZv/45Hme5bTrJ2cNJ1y3Ti/BrWPdwVPa3Z0e4g87sadS2k2nm1tuTl+Ggxj38S4kfVVDJnA==}
 
   '@modelcontextprotocol/sdk@1.32.1':
     resolution: {integrity: sha512-2DdE+SJDtzLEEWzY1ZjY7Q+VcPhcV1KisD3zI4u0XZyktsjHum1mwbMI+JaulUBi2OZk+KJAi2uPXzxichPkdw==}
@@ -892,6 +904,9 @@ packages:
     resolution: {integrity: sha512-S8KoZgRZN+a5rNwqTxlZZePjT/4cnm0ROV70LedRHZ0p8u9fRID0hJUZQpkKLzro8LfmC8sx23bY6tVNxv8pQA==}
     engines: {node: '>= 18.0.0'}
 
+  flatbuffers@25.9.23:
+    resolution: {integrity: sha512-MI1qs7Lo4Syw0EOzUl0xjs2lsoeqFku44KpngfIduHBYvzm8h2+7K8YMQh1JtVVVrUvhLpNwqVi4DERegUJhPQ==}
+
   forwarded@0.2.0:
     resolution: {integrity: sha512-buRG0fpBtRHSTCOASe6hD258tEubFoRLb4ZNA6NxMVHNw2gOcwHo9wyablzMzOA5z9xA9L1KNjk/Nt6MT9aYow==}
     engines: {node: '>= 0.6'}
@@ -931,6 +946,10 @@ packages:
   hasown@2.0.4:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
+
+  heap-js@2.7.1:
+    resolution: {integrity: sha512-EQfezRg0NCZGNlhlDR3Evrw1FVL2G3LhU7EgPoxufQKruNBSYA8MiRPHeWbU+36o+Fhel0wMwM+sLEiBAlNLJA==}
+    engines: {node: '>=10.0.0'}
 
   hono@4.13.13:
     resolution: {integrity: sha512-CQ46U0ZkAGmbT/4UxdzzGJpacP2IeKgY4a5/tOI9AABbpOMfK739wfDXmv1usCk+3RkKj1hQy4/fjhiwa2xlrA==}
@@ -1801,11 +1820,19 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
+  '@foxglove/crc@0.0.3': {}
+
   '@hono/node-server@2.1.4(hono@4.13.13)':
     dependencies:
       hono: 4.13.13
 
   '@jridgewell/sourcemap-codec@1.6.0': {}
+
+  '@mcap/core@2.3.0':
+    dependencies:
+      '@foxglove/crc': 0.0.3
+      heap-js: 2.7.1
+      tslib: 2.8.1
 
   '@modelcontextprotocol/sdk@1.32.1(zod@4.6.5)':
     dependencies:
@@ -2385,6 +2412,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  flatbuffers@25.9.23: {}
+
   forwarded@0.2.0: {}
 
   fresh@0.5.2: {}
@@ -2421,6 +2450,8 @@ snapshots:
   hasown@2.0.4:
     dependencies:
       function-bind: 1.1.2
+
+  heap-js@2.7.1: {}
 
   hono@4.13.13: {}
 
@@ -3134,8 +3165,7 @@ snapshots:
 
   tr46@0.0.3: {}
 
-  tslib@2.8.1:
-    optional: true
+  tslib@2.8.1: {}
 
   tsx@4.23.15:
     dependencies:

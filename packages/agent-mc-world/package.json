@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.21",
+  "version": "0.5.7-rc.22",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -26,7 +26,8 @@
   "main": "./dist/runtime/src/index.js",
   "bin": {
     "minecraft-agent-client": "./bin/minecraft-agent-client.mjs",
-    "minecraft-agent-mcp": "./bin/minecraft-agent-mcp.mjs"
+    "minecraft-agent-mcp": "./bin/minecraft-agent-mcp.mjs",
+    "minecraft-agent-record": "./bin/minecraft-agent-record.mjs"
   },
   "exports": {
     ".": {
@@ -77,6 +78,10 @@
     "./decisions": {
       "types": "./dist/types/src/decisions/index.d.ts",
       "default": "./dist/runtime/src/decisions/index.js"
+    },
+    "./learning": {
+      "types": "./dist/types/src/learning/index.d.ts",
+      "default": "./dist/runtime/src/learning/index.js"
     }
   },
   "files": [
@@ -95,6 +100,7 @@
     "src/blueprint-railway.ts",
     "bin/minecraft-agent-client.mjs",
     "bin/minecraft-agent-mcp.mjs",
+    "bin/minecraft-agent-record.mjs",
     "dist/runtime",
     "dist/types",
     "dist/build.json",
@@ -125,7 +131,8 @@
     "src/tactics.ts",
     "src/decisions",
     "src/motor",
-    "training"
+    "training",
+    "src/learning"
   ],
   "scripts": {
     "build": "node scripts/build.mjs && node scripts/build-types.mjs && node scripts/verify-build.mjs",
@@ -141,8 +148,10 @@
     "build:types": "node scripts/build-types.mjs"
   },
   "dependencies": {
+    "@mcap/core": "2.3.0",
     "@modelcontextprotocol/sdk": "1.32.1",
     "ajv": "8.20.0",
+    "flatbuffers": "25.9.23",
     "minecraft-data": "3.112.0",
     "mineflayer": "4.37.1",
     "mineflayer-pathfinder": "2.4.5",
@@ -154,6 +163,7 @@
     "prismarine-viewer": "1.33.0",
     "ses": "2.3.0",
     "socket.io": "4.8.3",
+    "socket.io-client": "4.8.3",
     "tsx": "4.23.15",
     "vec3": "0.2.0",
     "zod": "4.6.5"
@@ -161,7 +171,6 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "esbuild": "^0.28.2",
-    "socket.io-client": "4.8.3",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },

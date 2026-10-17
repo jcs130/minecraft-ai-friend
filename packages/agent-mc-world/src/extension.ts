@@ -44,6 +44,9 @@ export type { Bot as MinecraftBot } from 'mineflayer';
 export type { DetectionEvidence } from '../core/perception-tools.ts';
 export { observedEntity } from '../core/perception-sight.ts';
 export { signTextSnapshot, observedSignText, type SignTextSnapshot } from '../core/sign-read.ts';
+export { OPTIONS_TOOL, minecraftOptionsFromSnapshot, extendMinecraftOptions, relevantMinecraftOptionIntents,
+  renderMinecraftOptionIndex, readMinecraftOptions } from '../core/options.ts';
+export * from './contracts/options.ts';
 export { createMinecraftChoiceTool } from './client/choice.ts';
 export { minecraftLifeTool } from './client/life.ts';
 export { PhotographyService, PHOTO_TOOL, PHOTO_PLANNER_SYSTEM, preparePhotoContext } from '../core/photography.ts';

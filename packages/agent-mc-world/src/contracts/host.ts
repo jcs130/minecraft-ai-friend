@@ -81,6 +81,8 @@ export interface WorldHost {
 }
 export interface WorldRequestFacts {
   text: string; snapshotTypes: readonly string[]; parts?: readonly { key: string; text: string }[];
+  /** Bounded current capability discovery; not execution eligibility or a model-selected plan. */
+  options?: import('./options.ts').MinecraftOptionsSnapshot;
   /** World-owned compact current facts for optional fast classification; complete evidence remains in text/parts. */
   decision?: { sampledAtMs: number; state: Readonly<Record<string, unknown>> };
   experience?: { scope: import('../../core/game-memory.ts').GameMemoryScope; observation: import('../../core/operation-experience.ts').OperationObservation | null };

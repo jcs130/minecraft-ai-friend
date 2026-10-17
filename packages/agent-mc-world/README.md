@@ -1,5 +1,12 @@
 # Agent MC World
 
+Opt-in [continuous gameplay evidence](docs/gameplay-learning.md) follows an
+existing Agent's operation journal and local viewer without controlling its
+body or calling a model. Typed MCAP/FlatBuffers records retain progress, risk,
+failure, method and memory attribution across movement, crafting, gathering,
+combat and other operations. Review candidates remain separate from approved
+training examples; missing controls or independent server truth stay unknown.
+
 Opt-in [local motor training](docs/motor-training.md) provides voxel/state inputs,
 offline physics and an explicitly owned Minecraft 1.21.1 training server,
 MCAP/FlatBuffers trajectories, behavioural cloning, dataset aggregation, Gymnasium/PPO

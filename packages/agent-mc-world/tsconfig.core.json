@@ -10,7 +10,8 @@
     "src/tactics.ts",
     "src/decisions/**/*.ts",
     "src/motor/**/*.ts",
-    "core/**/*.ts"
+    "core/**/*.ts",
+    "src/learning/**/*.ts"
   ],
   "exclude": [
     "node_modules",
