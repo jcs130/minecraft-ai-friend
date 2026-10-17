@@ -3,7 +3,7 @@
 Independent Minecraft execution core, maintained in `jcs130/minecraft-ai-friend`.
 Package name: `agent-mc-world`. Protocol: `agent-mc/v1`.
 
-`0.5.7-rc.2` prepares the complete shared Java 1.21.1 viewer with explicit
+`0.5.7-rc.4` prepares the complete shared Java 1.21.1 viewer with explicit
 1.20.6 compatibility: version-matched original sounds, sound registry metadata,
 and the eight-track shared original BGM library. The locked input records its
 upstream commit and SHA-256. The npm package ships one compiled viewer tree;
@@ -14,6 +14,15 @@ deployment credentials and personal memory are not release inputs.
 Includes the water input lease correction: an explicit key program retains
 ownership until cleanup, so passive treading cannot overwrite its inputs.
 These source and packaging checks do not establish live gameplay recovery.
+
+The viewer keeps YSM/native body ownership consistent at final draw, shows
+confirmed inventory operations, and labels brief closed-crafting snapshots.
+Third-person and 2.5D observation omit the full-scene underwater tint;
+actual water-medium observations and water meshes remain intact.
+Confirmed window open/close events are collected immediately; slot packets
+are coalesced before publication and detached on viewer teardown. Includes
+the upstream bounded water-rescue progress correction from `bfa3882f`.
+These are maintenance fixes, not evidence of autonomous learning.
 
 0.5.7-dev.20261016.29 admits caller-selected discard batches and subsequent
 pickups without requiring a container. Toss still checks observed space,

@@ -22,6 +22,7 @@ type ViewerCastCommand = { id: string; name: string };
 import { parseViewerCombatHit } from './viewer-combat.ts';
 import { viewerBlockEntities, viewerChunkBlockEntities } from './viewer-block-entities.ts';
 import { observeViewerBossBars } from './viewer-boss-bars.ts';
+import { observeViewerContainer } from './viewer-container-observation.ts';
 import { viewerBiomeClimate, viewerExplosion, viewerPacketLane, viewerParticle, viewerWorldEvent } from './viewer-presentation.ts';
 import { ViewerAdvancementTracker } from './viewer-advancements.ts';
 import { viewerRenderableMetadata } from './viewer-render-metadata.ts';
@@ -933,6 +934,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       containerSignature = signature;
       socket.emit('containerState', state);
     };
+    const stopContainerObservation = observeViewerContainer(bot, publishContainer);
     const containerTimer = setInterval(publishContainer, 150);
     let scoreboardSignature = '';
     const publishScoreboard = () => {
@@ -1194,6 +1196,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       clearInterval(entityTimer);
       clearInterval(biomeTimer);
       clearInterval(containerTimer);
+      stopContainerObservation();
       clearInterval(scoreboardTimer);
       clearInterval(minimapTimer);
       clearInterval(lightTimer);
