@@ -136,6 +136,10 @@ def test_repeated_inventory_read_yields_one_recovery_decision_with_other_tools(
     assert len([call for call in bridge.calls if call[0] == "mc_do"]) == 1
     assert "mc_bag" not in seen[-1][1] and {"mc_do", "mc_original"} <= seen[-1][1]
     assert "read_already_answered" in json.dumps(seen[-1][0])
+    recovery = next(json.loads(message["content"])["previous_answer"] for message in seen[-1][0]
+                    if message.get("role") == "tool" and "read_already_answered" in message.get("content", ""))
+    assert recovery["received_at"] and recovery["request_id"] and recovery["turn_id"]
+    assert recovery["journal"] == "receipts.jsonl" and recovery["fresh"] is False
     assert controller.pending[("task", "body-1")]["terminal"] is False
 
 

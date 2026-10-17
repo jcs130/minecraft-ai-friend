@@ -1125,7 +1125,9 @@ class Controller:
             result = {"failed": True, "dispatched": False, "origin": "controller_validation",
                 "code": "read_already_answered",
                 "text": "This exact read was already answered with unchanged observed state. It was NOT dispatched again. The dated answer and original handles remain below. This tool will be unavailable for one recovery decision; use another unresolved query, choose useful native work, or wait for a stated condition. Repeating the query cannot open a container or change the inventory.",
-                "previous_answer": {"fresh": False, "answer": answer["answer"]}}
+                "previous_answer": {"fresh": False, "answer": answer["answer"],
+                    **{key: answer[key] for key in ("received_at", "request_id", "turn_id")},
+                    "journal": "receipts.jsonl"}}
             self.planner_notice = result["text"]
             self.continuation_needed = True
             self.publish(read_recovery={"code": result["code"], "tool": name,
@@ -1190,7 +1192,8 @@ class Controller:
                 if len(self.read_answers) >= 32:
                     self.read_answers.pop(next(iter(self.read_answers)))
                 self.read_answers[read_key] = {"facts": self.last_admission_facts, "scope": self.game_scope,
-                    "at": time.monotonic(), "answer": json.loads(compact)}
+                    "at": time.monotonic(), "answer": json.loads(compact),
+                    "received_at": datetime.now(timezone.utc).isoformat(), "request_id": request_id, "turn_id": self.turn}
             if read_only:
                 self.read_activity[name] = min(999, self.read_activity.get(name, 0) + 1)
             elif result.get("execution") and (name == "mc_do" or "act" in next(
