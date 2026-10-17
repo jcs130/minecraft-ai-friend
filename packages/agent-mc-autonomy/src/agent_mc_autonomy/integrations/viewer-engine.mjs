@@ -94,6 +94,7 @@ export function createEngine(options) {
         if (!selected.available) throw Error(selected.reason);
         const preparedHost = await prepareNativeWorldPreviewHost({ assetDirectory: resolve(dirname(cfg.catalogFile), selected.pack.assetDirectory), port: cfg.port,
           bundledAppearanceCatalogFile: cfg.bundledAppearanceCatalogFile || '', defaultAppearance: cfg.defaultAppearance ?? 'server',
+          serverItemCatalogFile:createServerObserver?.itemCatalogFile??'',serverItemCatalogSha256:createServerObserver?.itemCatalogSha256??'',
           selectionScope: cfg.selectionScope });
         if (stopped || generation !== currentGeneration) return;
         prepared = preparedHost;

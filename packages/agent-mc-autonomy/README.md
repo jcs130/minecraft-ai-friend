@@ -1,5 +1,10 @@
 # Agent MC Autonomy
 
+0.2.5 pins the native protection-receipt repair and the shared inventory-icon
+renderer. An explicitly selected, SHA-checked server presentation may provide a
+separate item catalog and bounded read-only status refresh options. The default
+body loads no server code or resources and adds no server polling/model loop.
+
 `minecraft-ai-friend` owns the complete Minecraft autonomous runtime. This optional
 Python package composes the sibling `agent-mc-world` body through its public MCP
 protocol. It has **no Neko, Cortico or other persona SDK dependency**. The body
