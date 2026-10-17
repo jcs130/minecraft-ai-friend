@@ -811,3 +811,8 @@ death episode. Claiming happens once before transport; unknown delivery is never
 replayed. Stop or changed bindings revoke the old line. Audio acceptance and
 playback evidence are separate from native work completion. A host without this
 optional subscription keeps the existing autonomous behavior and prompt.
+
+
+### Retaining server feedback across observations
+
+Current `serverFeedback` facts receive space before large spatial observations at the changing request tail. Strategic host reviews include a bounded excerpt and the original fact reference. A later successful scout does not erase a prior server rejection. Feedback is historical evidence to interpret with current position and action receipts, not a new instruction, current permission or verified outcome. No additional model or speech request is made by this projection.
