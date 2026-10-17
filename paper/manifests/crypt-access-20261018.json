@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "crypt-access-20261018",
+  "status": "deployed_and_verified",
+  "at": "2026-10-17T17:36:23.039Z",
+  "paper": "1.21.1 build 133",
+  "agentFriend": "0.4.47.3",
+  "paperRestarted": false,
+  "structure": "nova_structures:undead_crypt",
+  "mapReference": {
+    "x": -425,
+    "z": 677
+  },
+  "entrance": {
+    "x": -460,
+    "y": 65,
+    "z": 679
+  },
+  "threshold": {
+    "x": -445,
+    "y": 28,
+    "z": 653
+  },
+  "landId": "undead_crypt_entrance",
+  "construction": {
+    "width": 3,
+    "steps": 36,
+    "changedBlocks": 3729,
+    "originalCryptWallChanges": 12,
+    "originalBlockEntitiesPreserved": 106,
+    "monstersPreserved": true,
+    "antiMonsterCandidateDeployed": false
+  },
+  "verification": {
+    "isolatedOrdinaryWalk": 33,
+    "isolatedOriginalFrozenSurveyAndReturn": 21,
+    "liveGeometry": 29,
+    "liveGeometryMode": "dedicated creative QA, native flight bit disabled, walked both directions",
+    "liveSurvivalCombat": "QA killed by zombie villager; dungeon risk accepted by owner, failure preserved",
+    "savedWorldAndRules": 10,
+    "bedrockDevicePixels": false
+  },
+  "backup": {
+    "kind": "targeted online region/entities/POI/config preimages, not full cold backup",
+    "mirrored": true,
+    "privateDirectory": "E/F MC/ops/repairs/cormy-exploration-entrance-20261018"
+  },
+  "playerProgress": "no manual task reset, reward, inventory edits, or player teleport"
+}
