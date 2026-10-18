@@ -129,6 +129,7 @@
     "scripts/build-client-appearances.mjs",
     "scripts/client-appearance-targets.mjs",
     "scripts/build-client-graphics.mjs",
+    "scripts/build-mesa-presentation.mjs",
     "scripts/client-graphics-loader.mjs",
     "client-graphics",
     "client-appearance",

@@ -3,7 +3,8 @@ import {copyFileSync,existsSync,mkdirSync,readdirSync,readFileSync,writeFileSync
 import {delimiter,dirname,join,resolve,sep} from 'node:path';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {aliasGlfwOpenGlLibrary} from './client-graphics-loader.mjs';
+import {aliasGlfwOpenGlLibrary,aliasGlfwPresentationLibrary} from './client-graphics-loader.mjs';
+import {buildMesaPresentation} from './build-mesa-presentation.mjs';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),args=process.argv.slice(2);
 const value=name=>{const i=args.indexOf(name);return i<0?undefined:args[i+1];};
@@ -29,13 +30,16 @@ run('jar',['--create','--file',output,'-C',classes,'org','-C',owner,'fabric.mod.
 const native=value('--glfw-native')?resolve(value('--glfw-native')):join(game,'natives','fabric-loader-0.19.5-1.21.1','glfw.dll');
 const original=readFileSync(native),hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 if(hash(original)!=='affa7e54eb0dedce4a5721c327c1a16035edbbd039cd402e08107d6d2d55eb1a')throw Error('GLFW input is not the verified Minecraft 1.21.1 LWJGL 3.3.3 artifact');
-const patched=aliasGlfwOpenGlLibrary(original);
+const patched=aliasGlfwPresentationLibrary(aliasGlfwOpenGlLibrary(original));
+const presentation=buildMesaPresentation(owner,join(work,'native'),{vcvars64:value('--vcvars64')});
 const deployment=join(game,'agentmc-graphics');mkdirSync(deployment,{recursive:true});
 const glfw=join(deployment,'glfw-mesa.dll'),opengl=join(deployment,'mesaGL32.dll');
 writeFileSync(glfw,patched);
+copyFileSync(presentation,join(deployment,'agGDI.dll'));
 for(const name of ['opengl32.dll','libgallium_wgl.dll','dxil.dll'])copyFileSync(join(mesa,name),join(deployment,name==='opengl32.dll'?'mesaGL32.dll':name));
 const mesaFiles=Object.fromEntries(['opengl32.dll','libgallium_wgl.dll','dxil.dll'].map(name=>[name,hash(readFileSync(join(mesa,name)))]));
 const launch={schema:'agent-mc-client-graphics/v1',jvmArgs:[`-Dorg.lwjgl.glfw.libname=${glfw}`,`-Dagentmc.graphics.openglLibrary=${opengl}`,...(mesaDriver?[`-Dagentmc.graphics.mesaDriver=${mesaDriver}`]:[]),...(vulkanDriverFile?[`-Dagentmc.graphics.vulkanDriverFile=${vulkanDriverFile}`]:[])],modSha256:hash(readFileSync(output)),originalGlfwSha256:hash(original),glfwSha256:hash(patched),mesaSha256:hash(readFileSync(opengl)),mesaFiles,originalNativesModified:false};
+launch.presentation={module:'agGDI.dll',sha256:hash(readFileSync(presentation)),method:'deferred-mesa-wglSwapBuffers',systemGdiCallsPreserved:true};
 writeFileSync(join(deployment,'launch.json'),JSON.stringify(launch,null,2)+'\n');
 if(args.includes('--install'))copyFileSync(output,join(game,'mods','agentmc-client-graphics.jar'));
 console.log(JSON.stringify({output,launch:join(deployment,'launch.json'),originalNativesModified:false}));

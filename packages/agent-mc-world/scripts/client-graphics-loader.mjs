@@ -7,3 +7,11 @@ export function aliasGlfwOpenGlLibrary(original) {
   if(count!==2)throw Error('Unexpected GLFW library-name references');
   return patched;
 }
+
+/** The bridge retains all system GDI functions except Mesa's presentation. */
+export function aliasGlfwPresentationLibrary(original) {
+  const before=Buffer.from('GDI32.dll\0'),after=Buffer.from('agGDI.dll\0');
+  const first=original.indexOf(before);
+  if(first<0||original.indexOf(before,first+before.length)>=0)throw Error('Unexpected GLFW GDI import references');
+  const patched=Buffer.from(original);after.copy(patched,first);return patched;
+}
