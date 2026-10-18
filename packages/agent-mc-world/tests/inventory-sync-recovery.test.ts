@@ -152,6 +152,40 @@ describe('inventory read recovery', () => {
 });
 
 describe('failed inventory click recovery', () => {
+  it.each(['cursor', 'slot'] as const)('confirms a fresh complete server frame when its delayed %s packet completes the expected click', async delayed => {
+    const r = rig('1.21.1');
+    const operation = clickInventoryConfirmed(r.bot, 9, 0, 0);
+    await Promise.resolve();
+    expect(r.write.mock.calls.filter(([name]) => name === 'window_click')).toHaveLength(1);
+    r.full(0, 46, delayed === 'slot' ? { 9: r.raw('oak_log', 8) } : {},
+      delayed === 'cursor' ? undefined : r.raw('oak_log', 8));
+    expect(inventoryClickState(r.bot).phase).toBe('pending');
+    if (delayed === 'cursor') r.slot(-1, -1, r.raw('oak_log', 8));
+    else r.slot(0, 9);
+    const afterPacket = inventoryClickState(r.bot).phase;
+    // Also settle the pre-fix promise so the regression fails without a leaked timer.
+    r.full(0, 46, {}, r.raw('oak_log', 8));
+    await operation;
+    expect(afterPacket).toBe('ready');
+    expect(inventoryReadConfirmed(r.bot)).toBe(true);
+    expect(r.bot.inventory.selectedItem?.count).toBe(8);
+    expect(r.write.mock.calls.filter(([name]) => name === 'window_click')).toHaveLength(1);
+  });
+
+  it('does not confirm a cursor update against an old full frame or an unmatched cursor', async () => {
+    const r = rig('1.21.1');
+    const operation = clickInventoryConfirmed(r.bot, 9, 0, 0);
+    await Promise.resolve();
+    r.slot(-1, -1, r.raw('oak_log', 8));
+    expect(inventoryClickState(r.bot).phase).toBe('pending'); // Full frame predates dispatch.
+    r.full(0, 46);
+    r.slot(-1, -1, r.raw('oak_log', 7));
+    expect(inventoryClickState(r.bot).phase).toBe('pending');
+    r.full(0, 46, {}, r.raw('oak_log', 8));
+    await operation;
+    expect(inventoryClickState(r.bot).phase).toBe('ready');
+  });
+
   it('accepts a fresh full snapshot after a sent crafting click times out while native result-slot wait remains pending', async () => {
     vi.useFakeTimers(); const r = rig();
     // Placing into a crafting input makes native Mineflayer wait for updateSlot:0.

@@ -30,7 +30,7 @@ export function inventoryReadConfirmed(bot: Bot): boolean {
 export function narrateInventorySync(state?: InventoryReadState): string {
   switch (state?.phase) {
     case 'pending': return '上一笔背包操作正在等待服务器确认槽位和光标，请稍后查询，不要重复存取或合成。';
-    case 'quarantined': return `上一笔背包操作结果未知，已暂停后续物品操作。${state.reason ? `原因：${state.reason}。` : ''}等待新的完整槽位和光标数据后重新查询；持续未恢复可重新连接，不要重放上一笔操作。`;
+    case 'quarantined': return `上一笔背包操作结果未知，已暂停后续物品操作。${state.reason ? `原因：${state.reason}。` : ''}等待新的完整槽位和光标数据后重新查询；持续未恢复可重新连接，不要重放上一笔操作。此等待只限制物品操作，仍可只读观察、交流或在安全条件下无需用物品的行走。`;
     case 'partial': return '容器的玩家槽位数据尚不完整，已保留上次读数但暂不作为当前清单。请关闭后重新打开容器查询；仍未恢复可重新连接，不要重复存取。';
     default: return '尚未收到首次完整背包数据，请稍后查询；持续未恢复可重新连接。';
   }

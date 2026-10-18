@@ -111,6 +111,26 @@ function record(state: SyncState, event: string, data: Record<string, unknown>):
 
 function activeWindow(bot: Bot): Window { return bot.currentWindow ?? bot.inventory; }
 
+/** A complete authoritative frame may be finished by later slot/cursor packets. */
+function confirmPendingClick(bot: Bot, state: SyncState, source: 'window_items' | 'set_slot', stateId: unknown): void {
+  const pending = state.pending, window = activeWindow(bot), frame = state.authority.get(window);
+  if (state.phase !== 'pending' || !pending?.sent || pending.window !== window || !frame
+    || frame.fullSeq <= pending.sentSeq) return;
+  const mismatchedSlots = [...pending.expectedSlots].filter(([slot, key]) => stackKey(frame.items[slot]) !== key)
+    .map(([slot]) => slot);
+  const cursorMatches = stackKey(frame.cursor) === pending.expectedCursor;
+  if (mismatchedSlots.length || !cursorMatches) {
+    if (source === 'window_items') record(state, 'click-snapshot-mismatch', { packetSeq: frame.seq,
+      sentSeq: pending.sentSeq, windowId: window.id, windowSerial: windowSerial(state, window),
+      slot: pending.slot, stateId, mismatchedSlots, cursorMatches });
+    return;
+  }
+  state.phase = 'ready'; state.reason = undefined; state.pending = null;
+  record(state, 'click-confirmed', { packetSeq: frame.seq, sentSeq: pending.sentSeq,
+    windowId: window.id, windowSerial: windowSerial(state, window), slot: pending.slot, stateId, source });
+  pending.complete();
+}
+
 /** Cursor-only packets use signed -1 or unsigned 255 in the 1.20.6 protocol. */
 export function isInventoryCursorPacket(packet: { windowId?: number; slot?: number }): boolean {
   return (packet.windowId === -1 || packet.windowId === 255) && packet.slot === -1;
@@ -176,11 +196,13 @@ export function installInventoryClickSync(bot: Bot, diag?: MinecraftLog): void {
       window.selectedItem = decode(packet.item);
       const frame = state.authority.get(window);
       if (frame) { frame.cursor = structuredClone(packet.item); frame.seq = seq; }
+      confirmPendingClick(bot, state, 'set_slot', packet.stateId);
     } else {
       const target = packet.windowId === 0 ? bot.inventory : packet.windowId === window.id ? window : null;
       const frame = target ? state.authority.get(target) : undefined;
       if (frame && typeof packet.slot === 'number' && packet.slot >= 0 && packet.item !== undefined) {
         frame.items[packet.slot] = structuredClone(packet.item); frame.seq = seq;
+        if (target === window) confirmPendingClick(bot, state, 'set_slot', packet.stateId);
       }
     }
   });
@@ -219,22 +241,9 @@ export function installInventoryClickSync(bot: Bot, diag?: MinecraftLog): void {
       return;
     }
     if (pending && target === pending.window) {
-      const mismatchedSlots = [...pending.expectedSlots].filter(([slot, key]) => stackKey(items[slot]) !== key)
-        .map(([slot]) => slot);
-      const cursorMatches = stackKey(packet.carriedItem) === pending.expectedCursor;
-      if (mismatchedSlots.length > 0 || !cursorMatches) {
-        // A previous click can send more than one full snapshot. Arrival after
-        // this click was sent does not identify which click produced the frame.
-        record(state, 'click-snapshot-mismatch', { packetSeq: seq, sentSeq: pending.sentSeq,
-          windowId: window.id, windowSerial: windowSerial(state, window), slot: pending.slot,
-          stateId: packet.stateId, mismatchedSlots, cursorMatches });
-        return;
-      }
-      state.phase = 'ready'; state.reason = undefined; state.pending = null;
-      record(state, 'click-confirmed', {
-        packetSeq: seq, sentSeq: pending.sentSeq, windowId: window.id,
-        windowSerial: windowSerial(state, window), slot: pending.slot, stateId: packet.stateId });
-      pending.complete();
+      // A late frame from an earlier click is insufficient until its touched
+      // slots and cursor match this click, including later server updates.
+      confirmPendingClick(bot, state, 'window_items', packet.stateId);
     } else if (state.phase === 'quarantined') {
       state.phase = 'ready'; state.reason = undefined; state.pending = null;
       record(state, 'click-recovered', { packetSeq: seq, windowId: window.id, windowSerial: windowSerial(state, window) });
