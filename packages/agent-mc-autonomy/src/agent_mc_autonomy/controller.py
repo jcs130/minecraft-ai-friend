@@ -13,6 +13,7 @@ from pathlib import Path
 from .bridge import json_content, outcome, text_content
 from .context import assemble, coalesce_rejected, encode, outcome_eviction_index, retain_events
 from .context_counter import CounterUnavailable, count_input
+from .context_evidence import outcome_id, outcome_message, project_values
 from .death_memory import TOOL as DEATH_REVIEW_TOOL
 from .death_memory import DeathMemory, identity, lifecycle, recovery_state
 from .decision_profiles import profile_view
@@ -321,6 +322,7 @@ class Controller:
         self.action_owners = {}
         self.recent = []
         self.groups = []
+        self.outcome_history_ids = set()
         self.turn = None
         self.event_run = None
         self._event_poll = None
@@ -383,6 +385,7 @@ class Controller:
             self.body_events.clear()
             self.publish(native_outcomes=[], body_events=[], read_recovery=None)
             self.groups.clear()  # Tool replies/provider replay belong to the previous game identity too.
+            self.outcome_history_ids.clear()
             if not self.death_recovery:
                 # History alone cannot fence a fresh connection, whose native
                 # lifecycle starts alive without any episode ID. Hydrate only
@@ -423,6 +426,7 @@ class Controller:
                 self.active_goal = None
         if changed:
             self.groups.clear()  # Old exchanges remain archived, not current instructions.
+            self.outcome_history_ids.clear()
             self.continuation_needed = True
         self.feedback_pending = bool(self.active_goal and self.active_goal.get("mode") and not self.active_goal.get("queue_policy_consumed"))
         self.publish(current_goal=self.active_goal, historical_goal=self.historical_goal)
@@ -760,7 +764,7 @@ class Controller:
                   and not (name == "mc_queue" and result["text"] == "[mc_queue] 队列状态未变；等任务或战斗结果事件再查。")):
                 self._read_once_answers[name] = {"request_id": request_id, "turn_id": self.turn,
                                                  "answer": json.loads(encode(view))}
-        return encode(view)
+        return encode(project_values(view) if self.settings.context_mode == "full" else view)
 
     async def original_page(self, arguments):
         offset, limit = arguments.get("offset", 0), arguments.get("limit", 1000)
@@ -1121,6 +1125,7 @@ class Controller:
             # exact help/failure exchanges. New intent discards old-goal context.
             if not (revised and command["payload"].get("origin") == "host_review"):
                 self.groups = []
+                self.outcome_history_ids.clear()
             self.last_decision = 0
             self.publish(current_goal=self.active_goal, unactioned_replies=0, planner_retry_seconds=0)
             return True
@@ -1133,6 +1138,7 @@ class Controller:
                 self.unactioned_replies = 0
                 self.planner_notice = None
                 self.groups = []  # Keep original receipts on disk; discard old-goal context.
+                self.outcome_history_ids.clear()
                 self.last_decision = 0
                 self.publish(current_goal=self.active_goal, unactioned_replies=0, planner_retry_seconds=0)
             return True
@@ -1449,6 +1455,18 @@ class Controller:
                     break
                 self.groups.pop(0)
 
+    def freeze_native_history(self):
+        """Append each newly observed terminal once, between complete exchanges."""
+        if self.settings.context_mode != "full":
+            return
+        rows=[(outcome_id(row),row) for row in self.native_outcomes]
+        self.outcome_history_ids.intersection_update(key for key,_ in rows if key)
+        for key,row in rows:
+            if key and key not in self.outcome_history_ids:
+                self.groups.append([outcome_message(row)])
+                self.outcome_history_ids.add(key)
+        self.retain_history()
+
     async def turn_once(self, goal, prefix, tools):
         if self._event_poll is not None or self._deferred_event_drain:
             self.preempted = True
@@ -1516,6 +1534,7 @@ class Controller:
                     round_tools = tool_contract(round_tools)
                 if self.stop_requested() or self.preempted or self.turn_death_epoch != self.death_epoch or self._event_poll is not None or self._deferred_event_drain:
                     return
+                self.freeze_native_history()
                 try:
                     messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, consumed, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,

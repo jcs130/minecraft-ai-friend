@@ -1,5 +1,19 @@
 # Agent MC Autonomy
 
+0.2.21 reuses exact evidence in full context. A native terminal outcome is
+appended once as immutable historical evidence between complete exchanges;
+the changing tail references that same value only while its source is included
+in the actual request. Window eviction restores the complete row rather than
+leaving a dangling reference. Different executions/events remain distinct.
+The native wrapper's exact long `execution.evidence.receipt` copy can reference
+its readable `text` in the same model-facing tool result. Originals and receipt
+journals are unchanged. Current facts, chat, selected memories, persona, tool
+arguments and opaque provider replay are not deduplicated or summarized.
+`context.evidence_reuse` reports included sources and referenced/inline rows
+without private text. Compact mode and the configured context limit are
+unchanged. Full-window retirement and changing tool catalogues can still move
+the cache prefix; this optimization does not prove live latency or survival.
+
 0.2.20 also checks completed, successful native tasks for independently measured
 effects. Two identical plans with validated unchanged state receive the same
 bounded recovery evidence as failed/noop attempts, including when requested
