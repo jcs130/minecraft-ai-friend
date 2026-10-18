@@ -410,7 +410,7 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       },
       'worlds.minecraft.deathRespawnDelayMs': {
         type: 'integer', title: '死亡后重生等待', minimum: 0, maximum: 15000, 'x-suffix': 'ms', 'x-hot': false,
-        description: '连接内实际重生前的等待时间；服务端主动重生优先。停止会取消尚未派发的重生。',
+        description: '连接内实际重生前的等待时间；服务端主动重生优先。停止 World 或断开连接会取消尚未派发的重生；mc_stop 仅清理任务。',
       },
       'worlds.minecraft.world.moveThreshold': {
         type: 'integer', title: '位移播报阈值', minimum: 4, maximum: 200, 'x-suffix': '格', 'x-hot': true,

@@ -6,6 +6,7 @@ import { Vec3 } from 'vec3';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Bridge } from '../core/bridge.ts';
 import { MinecraftWorld } from '../core/world.ts';
+import { Executor } from '../core/executor.ts';
 import { biomeAt, type WorldSnapshot } from '../core/terrain.ts';
 import { nullLogger } from '../src/client/index.ts';
 
@@ -226,4 +227,23 @@ it('uses the first initial-spawn position but ignores packets from a disconnecte
   r.world.lastReported.position = { x: 500, y: 64, z: 0 };
   r.bot._client.emit('respawn', {}); r.position(900);
   expect(r.world.lastReported.position.x).toBe(500);
+});
+
+it.each([0, 4001])('keeps death recovery independent of a task stop at %i ms', async stopAt => {
+  const r = rig(); r.die();
+  const write = vi.spyOn(r.bot._client, 'write');
+  const executor = new Executor({ getBot: () => r.bot, report() {}, log: nullLogger(), nextId: () => 1 });
+  r.world.executor = executor;
+  try {
+    await vi.advanceTimersByTimeAsync(stopAt);
+    const stop = r.world.tools().find((tool: { name: string }) => tool.name === 'mc_stop')!;
+    await stop.handler({}, { role: 'main', log: nullLogger() });
+    await vi.advanceTimersByTimeAsync(5000);
+    const commands = write.mock.calls.filter(([name]) => name === 'client_command');
+    expect(commands).toEqual([['client_command', { actionId: 0 }]]);
+    r.bot._client.emit('respawn', {}); r.position(121); r.full(); r.health(20);
+    expect(r.bot.deathLifecycle).toMatchObject({ phase: 'alive', respawnAt: null, inventorySynced: true });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(write.mock.calls.filter(([name]) => name === 'client_command')).toEqual(commands);
+  } finally { executor.shutdown(); }
 });
