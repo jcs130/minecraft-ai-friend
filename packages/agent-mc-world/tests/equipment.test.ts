@@ -2,14 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import type { Bot } from 'mineflayer';
-import { clearOffHandConfirmed, equipSlotConfirmed, unequipSlotConfirmed } from '../core/equipment.ts';
+import { clearOffHandConfirmed, equipHandConfirmed, equipSlotConfirmed, unequipSlotConfirmed } from '../core/equipment.ts';
 import { skillEquip } from '../core/skills-craft.ts';
 import { installInventoryClickSync, INVENTORY_CLICK_CONFIRM_MS } from '../core/inventory-click-sync.ts';
 
 const require = createRequire(import.meta.url);
 const dependency = (name: string) => require(require.resolve(name, { paths: [require.resolve('mineflayer')] }));
 
-function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; silent?: boolean; version?: string } = {}) {
+function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; denyHandSwap?: boolean; silent?: boolean; version?: string } = {}) {
   const registry = require('minecraft-data')(options.version ?? '1.20.6');
   const Item = dependency('prismarine-item')(registry);
   const windows = dependency('prismarine-windows')(registry.version.minecraftVersion);
@@ -19,13 +19,16 @@ function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; si
   const bot = Object.assign(new EventEmitter(), {
     registry, inventory, currentWindow: null, _client: client,
     supportFeature: (feature: string) => registry.supportFeature(feature),
-    getEquipmentDestSlot: (dest: string) => ({ head: 5, torso: 6, legs: 7, feet: 8, 'off-hand': 45 })[dest],
+    quickBarSlot: 8,
+    getEquipmentDestSlot: (dest: string) => ({ head: 5, torso: 6, legs: 7, feet: 8, 'off-hand': 45, hand: 44 })[dest],
     equip: async () => { throw new Error('Modern equipment must use confirmed clicks'); },
     unequip: async () => { throw new Error('Modern equipment must use confirmed clicks'); },
     clickWindow: async () => {},
   }) as unknown as Bot;
   let stateId = 40;
   const sent: number[] = [];
+  const cursorHistory: (string | null)[] = [];
+  Object.defineProperty(bot, 'heldItem', { get: () => inventory.slots[44] });
   const full = () => client.emit('window_items', { windowId: 0, stateId: ++stateId,
     items: server.slots.map((item: unknown) => Item.toNotch(item)), carriedItem: Item.toNotch(server.selectedItem) });
   client.on('window_items', packet => {
@@ -34,9 +37,12 @@ function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; si
   client.write = (name, packet) => {
     if (name !== 'window_click') return;
     sent.push(packet.slot);
-    const denied = packet.slot === 45 && (options.denyPickup || (options.denySwap && server.slots[45] && (server.selectedItem || packet.mode === 2)));
+    const denied = (packet.slot === 45 && (options.denyPickup || (options.denySwap && server.slots[45] && (server.selectedItem || packet.mode === 2))))
+      || (options.denyHandSwap && ((packet.mode === 2 && packet.mouseButton === 8)
+        || (packet.mode === 0 && packet.slot === 44)));
     if (!denied) server.acceptClick({ slot: packet.slot, mouseButton: packet.mouseButton, mode: packet.mode,
       item: server.slots[packet.slot] });
+    cursorHistory.push(server.selectedItem?.name ?? null);
     if (!options.silent) setTimeout(full, 166);
   };
   bot.clickWindow = async (slot, mouseButton, mode) => {
@@ -48,17 +54,47 @@ function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; si
       changedSlots: changed.map((location: number) => ({ location, item: Item.toNotch(inventory.slots[location]) })),
       cursorItem: Item.toNotch(inventory.selectedItem) });
   };
-  const seed = (slot: number, name: string) => {
-    inventory.updateSlot(slot, new Item(registry.itemsByName[name].id, 1));
-    server.updateSlot(slot, new Item(registry.itemsByName[name].id, 1));
+  const seed = (slot: number, name: string, count = 1) => {
+    inventory.updateSlot(slot, new Item(registry.itemsByName[name].id, count));
+    server.updateSlot(slot, new Item(registry.itemsByName[name].id, count));
   };
   installInventoryClickSync(bot);
-  return { bot, inventory, server, seed, sent };
+  return { bot, inventory, server, seed, sent, cursorHistory };
 }
 
 afterEach(() => vi.useRealTimers());
 
 describe('equipment server confirmation', () => {
+  it('changes main-hand stacks in a full 1.21.1 inventory without borrowing the cursor', async () => {
+    vi.useFakeTimers();
+    const rig = equipmentServer({ version: '1.21.1' });
+    for (let slot = 9; slot < 45; slot++) rig.seed(slot, 'cobblestone', 64);
+    rig.seed(9, 'torch', 64); rig.seed(44, 'torch', 11);
+    const equip = equipHandConfirmed(rig.bot, rig.inventory.slots[9]);
+    await vi.runAllTimersAsync();
+    await equip;
+    expect(rig.cursorHistory.every(item => item === null)).toBe(true);
+    expect(rig.inventory.selectedItem).toBeNull();
+    expect(rig.server.selectedItem).toBeNull();
+    expect(rig.server.slots[44]).toMatchObject({ name: 'torch', count: 64 });
+    expect(rig.server.slots[9]).toMatchObject({ name: 'torch', count: 11 });
+    expect(rig.server.items()).toHaveLength(36);
+    expect(rig.sent).not.toContain(-999);
+  });
+
+  it('keeps a refused main-hand swap unconfirmed without cursor or follow-up clicks', async () => {
+    vi.useFakeTimers();
+    const rig = equipmentServer({ version: '1.21.1', denyHandSwap: true });
+    rig.seed(9, 'torch', 64); rig.seed(44, 'stone_pickaxe');
+    const equip = equipHandConfirmed(rig.bot, rig.inventory.slots[9]);
+    const failed = expect(equip).rejects.toMatchObject({ source: 'server', code: 'inventory-click-sync' });
+    await vi.runAllTimersAsync(); await failed;
+    expect(rig.server.slots[44].name).toBe('stone_pickaxe');
+    expect(rig.server.slots[9]).toMatchObject({ name: 'torch', count: 64 });
+    expect(rig.cursorHistory.every(item => item === null)).toBe(true);
+    expect(rig.sent).toHaveLength(1);
+  });
+
   it('returns armor to inventory only after server pickup and cursor recovery are confirmed', async () => {
     vi.useFakeTimers();
     const rig = equipmentServer();

@@ -932,6 +932,11 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     if (call.item && held && bot.heldItem?.name !== held) held = await equipNamed(bot, call.item);
     const target = blockAtCell(bot, cell);
     if (!target) throw new SkillBlocked(`${cellText(cell)} 所在区块没加载`);
+    if (bareBlockUse && (AIR_NAMES.has(target.name) || LIQUIDS.has(target.name))) {
+      // A failed placement can leave a later bare-use target empty. Report the
+      // actual cell before full-bag hand preparation masks it as an equip error.
+      throw nothingThere(bot, cell, target.name, '空手');
+    }
     const desiredProbe = call.open !== undefined ? desiredOpenProbe(bot, cell, target.name, call.open) : null;
     if (desiredProbe && call.open !== undefined) {
       const satisfied = satisfiedOpenNote(cell, target.name, call.open, desiredProbe);

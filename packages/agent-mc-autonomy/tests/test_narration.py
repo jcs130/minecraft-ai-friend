@@ -137,6 +137,55 @@ def test_one_existing_planner_call_offers_line_before_native_dispatch(voice, fra
     assert len([call for call in bridge.calls if call[0] == "mc_do"]) == 1
 
 
+@pytest.mark.parametrize("explicit_speech", [False, True])
+def test_repetitive_unacted_response_is_rejected_before_speech_and_event_consumption(
+    voice, framework_module, run_async, explicit_speech
+):
+    from test_controller import choose, setup
+
+    port, expected, _ = voice
+    assert port.subscribe(expected)
+    repeated = "我只剩一点生命！" + "先离开水面站稳！" * 16
+    content = json.dumps({"spoken_text": repeated}, ensure_ascii=False) if explicit_speech else repeated
+    selected = [{"content": content, "tool_calls": []}]
+    seen, published = [], {}
+
+    async def decide(messages, _):
+        seen.append(messages)
+        return selected[0]
+
+    module, bridge, controller = setup(framework_module, port.directory, decide)
+    controller.host_context_provider = lambda _: HostContextPort(port.directory, now=port.now).read(0)
+    controller.recent_request = lambda _: {**expected, "as_of": port.now()}
+    controller.publish = lambda **values: published.update(values)
+    event = {"run": "run-1", "cursor": 1, "text": "Observed body is in water"}
+    controller.recent.append(event)
+    tools = module.model_tools(bridge.tools)
+
+    run_async(controller.turn_once("survive", "body contract", tools))
+
+    assert published["planner_error"] == "repetitive_model_reply"
+    assert published["planner_diagnostic"]["dispatched"] is False
+    assert published["last_message"] == ""
+    assert port.take(expected) is None
+    assert controller.recent == [event]
+    assert not controller.groups and not controller.pending
+    assert controller.continuation_needed
+    assert 0 < controller.planner_retry_at - module.time.monotonic() <= 300
+    assert not any(name == "mc_do" for name, _, _ in bridge.calls)
+    journal = [json.loads(line) for line in (port.directory / "decisions.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert any(row.get("response", {}).get("content") == content for row in journal)
+    assert any(row.get("rejected", {}).get("code") == "repetitive_model_reply" for row in journal)
+
+    selected[0] = choose()
+    run_async(controller.turn_once("survive", "body contract", tools))
+    assert "repetitive" in json.loads(seen[-1][-1]["content"])["planner_notice"]
+    assert published["planner_error"] is None and published["planner_diagnostic"] is None
+    assert len([call for call in bridge.calls if call[0] == "mc_do"]) == 1
+    assert controller.pending[("task", "body-1")]["terminal"] is False
+    assert controller.recent == []
+
+
 def test_tool_only_model_keeps_narration_out_of_native_arguments(voice, framework_module, run_async, monkeypatch):
     from test_controller import choose, setup
     port, expected, _ = voice

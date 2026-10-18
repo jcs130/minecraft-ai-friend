@@ -43,6 +43,7 @@ from .planner import (
     PlannerResponseError,
     PlannerUnavailableError,
 )
+from .reply_quality import repeated_plain_reply
 from .stage_applicability import body_baseline, historical_proposal, inapplicable_reason
 from .tool_schema import argument_error, provider_schema
 from .viewer_public import tool_receipt
@@ -55,6 +56,16 @@ READ_ACTIVITY_TOOLS = {"mc_help", "mc_knowledge", "mc_scout", "mc_protocol", "mc
 IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout"}
 REUSABLE_IMMEDIATE_READS = {"mc_bag", "mc_queue", "mc_blocked"}
 READ_RECOVERY_SECONDS = 300
+
+
+def conversation_event(event):
+    """Only native conversation wakeups, never progress or telemetry snapshots."""
+    trigger = event.get("trigger")
+    trigger = trigger.get("type") if isinstance(trigger, dict) else trigger
+    return (event.get("type") in {"minecraft.chat", "chat"}
+            and trigger in {"flush", "debounce", "preempt", "interrupt"}
+            and event.get("contextDelivery") != "archive-only"
+            and not (event.get("meta") or {}).get("staleEpoch"))
 
 
 def observation_call(name, arguments):
@@ -346,6 +357,7 @@ class Controller:
         self.deferred_wake = False
         self.continuation_needed = False
         self.continuation_ready = False
+        self.conversation_continuation = False
         self.planner_failures = 0
         self.planner_retry_at = 0.0
         self.planner_notice = None
@@ -639,6 +651,11 @@ class Controller:
             # not prevent the inserted goal from observing/reporting its own result.
             return any(self.action_owners.get(key) in {None, self.active_goal["id"]} for key in self.pending)
         return bool(self.pending)
+
+    def conversation_ready(self):
+        # Native following may never publish a terminal. Its ownership must not
+        # prevent a new conversation from receiving a bounded decision/read chain.
+        return self.conversation_continuation or any(conversation_event(event) for event in self.recent)
 
     async def protocol(self, action, **arguments):
         result = json_content(await self.bridge.call("mc_protocol", {"protocol": PROTOCOL, "action": action, **arguments}))
@@ -1416,9 +1433,12 @@ class Controller:
                 self.publish(tool_failure=tool_failure_view(self.tool_failure))
         control = result.get("control") or {}
         execution = result.get("execution") or {}
+        if (not read_only and not result.get("failed")
+                and execution.get("phase") in {"accepted", "running", "completed"}):
+            self.conversation_continuation = False  # Model chose a real native plan; no automatic cancellation.
         queued = bool(execution and execution.get("terminal") is not True)
         boundary = bool(queued or control.get("endTurnRequested") or result.get("endsTurn")
-                        or (self.current_work() and not self.feedback_pending))
+                        or (self.current_work() and not self.feedback_pending and not self.conversation_continuation))
         return result, compact, boundary
 
     def reject_model_call(self, error, response=None):
@@ -1590,6 +1610,8 @@ class Controller:
                     if history["available"] == len(self.groups) and history["evicted"]:
                         self.groups = self.groups[history["evicted"]:]
                 self.publish(context=budget)
+                self.conversation_continuation |= any(
+                    conversation_event(consumed[index]) for index in budget["event_delivery"]["included_indices"])
                 try:
                     death_context=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal) if self.settings.decision_policy.enabled else None
                     episode_id=death_context.get('latest_episode',{}).get('id') if death_context else None
@@ -1621,12 +1643,37 @@ class Controller:
                     return
                 if self.stop_requested() or response is None or self.turn_death_epoch != self.death_epoch:
                     return
+                repetitive = repeated_plain_reply(response)
+                if repetitive:
+                    # Preserve the original response and fresh events, but never
+                    # feed a runaway phrase back as ordinary history or speech.
+                    with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
+                        output.write(encode({"turnId": self.turn, "response": response, "rejected": repetitive,
+                                             "dispatched": False, "context_delivery": budget["event_delivery"]}) + "\n")
+                    self.planner_failures += 1
+                    delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
+                                * 2 ** min(self.planner_failures - 1, 6))
+                    self.planner_retry_at = time.monotonic() + delay
+                    self.continuation_needed = True
+                    self.planner_notice = (
+                        "The previous response was rejected as repetitive_model_reply: a long repeated phrase "
+                        "without a structured tool call. It dispatched no action or speech. Do not copy that "
+                        "phrase. Use the retained fresh facts and receipts for one complete tool call or a "
+                        "concise non-repetitive reply explaining a real waiting condition. Existing native "
+                        "work remains independent; never replay an unknown or pending action."
+                    )
+                    self.publish(planner_error=repetitive["code"], planner_diagnostic=repetitive,
+                                 planner_failures=self.planner_failures, planner_retry_seconds=delay,
+                                 last_message="", narration={"offered": False, "reason": repetitive["code"]})
+                    if response.get("model_status"):
+                        self.publish(model_status=response["model_status"])
+                    return
                 if profile and profile['reason']=='death_review':
                     self.profile_death_id=episode_id
                 self.planner_failures = 0
                 self.planner_retry_at = 0.0
                 self.planner_notice = None
-                self.publish(planner_error=None, planner_failures=0, planner_retry_seconds=0)
+                self.publish(planner_error=None, planner_diagnostic=None, planner_failures=0, planner_retry_seconds=0)
                 model_status = response.get("model_status", {})
                 if model_status:
                     self.publish(model_status=model_status, autonomy_running=model_status.get("route") != "unavailable")
@@ -1650,6 +1697,8 @@ class Controller:
                         except (OSError, sqlite3.Error):
                             self.publish(narration={"offered": False, "reason": "outbox_unavailable"})
                 if not calls:
+                    if (response.get("content") or "").strip():
+                        self.conversation_continuation = False
                     offer_narration()
                     self.invalid_tool_calls = 0
                     self.publish(invalid_tool_calls=0)
@@ -1809,7 +1858,7 @@ class Controller:
                     await asyncio.sleep(0)
                     continue
                 if (time.monotonic() - last_status_check >= 10 or
-                        (self.decide and wake and (not self.current_work() or urgent)
+                        (self.decide and wake and (not self.current_work() or urgent or self.conversation_ready())
                          and time.monotonic() - self.last_decision >= self.settings.min_decision_seconds)):
                     status = json_content(await self.bridge.call("mc_connection", {"action": "status"}))
                     if not online(status):
@@ -1823,7 +1872,7 @@ class Controller:
                 if self.decide and not self.current_work() and elapsed >= self.settings.idle_decision_seconds:
                     # Poll state without a model request when nothing has changed.
                     wake |= fact_fingerprint(await self.protocol("facts")) != self.last_facts
-                if (self.decide and wake and (not self.current_work() or urgent)
+                if (self.decide and wake and (not self.current_work() or urgent or self.conversation_ready())
                         and not self.death_waiting
                         and self.death_recovery is None
                         and (elapsed >= self.settings.min_decision_seconds or self.continuation_ready)
