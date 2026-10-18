@@ -6204,6 +6204,9 @@ export class Reflexes {
     if (!bot?.entity) return;
     const slow = this.ticks++ % SLOW_EVERY === 0;
     if (slow) this.hookHurt(bot);
+    // The entity and oxygen metadata survive the death/respawn delay. They do
+    // not authorize a new rescue while Mineflayer still reports a dead body.
+    if ((bot as Bot & { isAlive?: boolean }).isAlive === false || bot.health <= 0) return;
     // Turning a reflex off also releases its existing input, path and queue hold.
     if (!this.opts.antiDrown()) this.endDrown(bot);
     // 防溺水与防烧在各自开关启用时逐心跳检查；关闭防烧时调用 endLavaEscape 收尾。
@@ -6522,6 +6525,11 @@ export class Reflexes {
       void this.onHurt(bot, evidence);
     });
     this.deathHandler = () => {
+      const escape = this.escapeGoal;
+      if (escape && bot.pathfinder?.goal === escape.goal) {
+        dropGoal(bot, 'escape', '身体死亡，撤销本轮救援目标', this.opts.diag);
+      }
+      bot.clearControlStates();
       this.fall = null;
       this.environmentHold = null;
       this.environmentHoldSince = 0;
@@ -6532,6 +6540,11 @@ export class Reflexes {
       this.submergedAt = 0;
       this.surfacedAt = 0;
       this.drownExcluded.clear();
+      this.waterTrap = null;
+      this.hurtUnderwaterAt = 0;
+      this.lastDrownEscapeAt = 0;
+      this.lastDrownReportAt = 0;
+      this.drownRouteTold = null;
       // 氧气元数据死后停在旧值,复活后服务端不一定补发:读数再变之前只信水下计时
       this.oxygenTrusted = false;
       this.lavaEscape = null;
@@ -7512,6 +7525,7 @@ export class Reflexes {
     bot: Bot,
     evidence: DamageEvidence,
   ): Promise<void> {
+    if ((bot as Bot & { isAlive?: boolean }).isAlive === false || bot.health <= 0) return;
     const now = Date.now();
     const actor = evidence.actor;
     if (!actor) {
