@@ -1,4 +1,4 @@
-<!-- Owner: CorticoClientLogin.java, LoginSession.java, ReconnectSession.java, fabric.mod.json, ../scripts/build-client-login.mjs -->
+<!-- Owner: CorticoClientLogin.java, LoginSession.java, ReconnectSession.java, InitialPerspective.java, fabric.mod.json, ../scripts/build-client-login.mjs -->
 
 # 原生观察者自动登录与重连
 
@@ -26,12 +26,15 @@ node scripts/build-client-login.mjs <gameDir> --minecraft 1.21.1 --java-home <JD
     "successMarkers": ["AUTH_SUCCESS"],
     "failureMarkers": ["AUTH_FAILED", "AUTH_2FA"],
     "reauthMarkers": ["AUTH_EXPIRED"],
-    "reconnect": true
+    "reconnect": true,
+    "initialPerspective": "third_person_back"
   }]
 }
 ```
 
 标记必须是系统消息的开头或方括号前缀，不能把玩家名称、转述或一般聊天当作服务端认证。配置按新的网络连接重新读取；同一连接重复收到进世界事件不会重置认证或重复提交。启动日志中的 `Submitted` 只证明提交；`Server confirmed login` 才是认证成功证据。移除 jar 或关闭配置后重启该观察者可回退。
+
+1.2.1 增加可选的每账号 `initialPerspective`：`first_person`、`third_person_back` 或 `third_person_front`。省略、空值和未知值保持现有视角。只有配置中服务器与账号都匹配的新连接才应用一次；不逐帧锁视角，用户之后仍可按 F5 切换。同一游戏目录的其他账号不受影响。此设置只控制镜头视角，不授权附身、传送、认证或改变服务器规则。YSM 仍需安装与实际 Minecraft/Fabric 版本匹配的客户端模组，并另外验证服务端模型同步与真实渲染；第三人称日志不等于模型已显示。
 
 1.1.2 增加可选 `reauthMarkers`。只有此前已有服务端成功确认，且随后收到匹配的真实系统失效提示，才再次提交一次私有登录。等待确认期间忽略重复提示；再次成功后才允许下一次独立失效。连续再认证之间至少30秒，过快的“成功—失效”循环会停止；明确失败仍停止，不把它当成新的挑战。省略或空列表保留原来每连接一次的行为，不增加定时登录，也不会让模型读取或发送密码。45项认证状态机检查覆盖默认行为、失效恢复、重复提示、失败和快速循环；原生实测需另行记录。
 

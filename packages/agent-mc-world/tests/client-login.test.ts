@@ -16,7 +16,7 @@ it.skipIf(!javaAvailable)('keeps authentication scoped and optionally renews aft
   mkdirSync(scratch, {recursive:true});
   const output = mkdtempSync(join(scratch, 'run-'));
   execFileSync(executable('javac'), ['--release','21','-encoding','UTF-8','-d',output,
-    ...['LoginSession.java', 'LoginSessionCheck.java', 'ReconnectSession.java', 'ReconnectSessionCheck.java']
+    ...['LoginSession.java', 'LoginSessionCheck.java', 'ReconnectSession.java', 'ReconnectSessionCheck.java', 'InitialPerspective.java', 'InitialPerspectiveCheck.java']
       .map(file => join(root, 'client-login', file))],
     {stdio:'pipe', windowsHide:true});
   const result = execFileSync(executable('java'), ['-cp',output,'LoginSessionCheck'],
@@ -25,4 +25,7 @@ it.skipIf(!javaAvailable)('keeps authentication scoped and optionally renews aft
   const reconnect = execFileSync(executable('java'), ['-cp',output,'ReconnectSessionCheck'],
     {encoding:'utf8', windowsHide:true});
   expect(reconnect).toContain('16 checks passed');
+  const perspective = execFileSync(executable('java'), ['-cp',output,'InitialPerspectiveCheck'],
+    {encoding:'utf8', windowsHide:true});
+  expect(perspective).toContain('7 checks passed');
 }, 20_000);

@@ -21,13 +21,15 @@ import net.minecraft.class_642;
 import net.minecraft.class_412;
 import net.minecraft.class_419;
 import net.minecraft.class_639;
+import net.minecraft.class_5498;
 
 /** Submits a scoped private credential only after the server requests login. */
 public final class CorticoClientLogin implements ClientModInitializer, Supplier<Map<String,Object>> {
     private static volatile CorticoClientLogin active;
     private record Account(String server, String username, String credentialFile, String command,
                            List<String> requestMarkers, List<String> successMarkers, List<String> failureMarkers,
-                           boolean reconnect, List<String> reauthMarkers, List<String> stateMarkers) {}
+                           boolean reconnect, List<String> reauthMarkers, List<String> stateMarkers,
+                           String initialPerspective) {}
     private record Config(boolean enabled, List<Account> accounts) {}
     private LoginSession session;
     private Account account;
@@ -70,6 +72,16 @@ public final class CorticoClientLogin implements ClientModInitializer, Supplier<
                         account.reauthMarkers == null ? List.of() : account.reauthMarkers);
                     reconnectServer = account.reconnect ? server : null;
                     if (account.reconnect) reconnect.arm(); else reconnect.block();
+                    int perspective = InitialPerspective.select(account.initialPerspective);
+                    if (perspective >= 0) {
+                        current.field_1690.method_31043(switch (perspective) {
+                            case 1 -> class_5498.field_26665;
+                            case 2 -> class_5498.field_26666;
+                            default -> class_5498.field_26664;
+                        });
+                        System.out.println("[CorticoClientLogin] Initial perspective " + account.initialPerspective
+                            + "; current=" + current.field_1690.method_31044().name() + "; applied once, manual view changes remain available");
+                    }
                     System.out.println("[CorticoClientLogin] Armed for " + account.username + " at " + account.server);
                 }
             } catch (Exception error) {
