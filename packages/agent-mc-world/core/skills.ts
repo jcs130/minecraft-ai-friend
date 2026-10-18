@@ -1701,7 +1701,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   },
   {
     name: 'toss',
-    doc: `{"skill":"toss","item":"cobblestone","count":64} 把物品抛到地上,不会销毁。不写 at = 朝开阔方向抛,
+    doc: `{"skill":"toss","item":"cobblestone","count":64} 把物品抛到地上,不会销毁。不写 at = 优先朝已测较开阔方向抛,
                                                  由你判断保留、储存或丢弃哪些物品；可连续丢弃多类不再需要的物品，不必先存箱子。
                                                  实际落点由服务端计算;走近仍可能自动捡回。用库存净减少与空槽变化核验腾格，不把抛出当销毁。
                                                  未点名玩家的主动抛物会暂时排除于未指定物品的 pickup；明确点名物品可取回。
@@ -1711,13 +1711,14 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  抛物线的落点由服务端算,回执只说朝哪儿扔的。
 {"skill":"toss","item":"cobblestone","count":8,"target":"玩家名"}
                                                  赠物点名当前可见玩家，距离2–4格；与at互斥。领取须拾取事件确认，未知不重投。
-                                                 无开阔方向或目标在自己2格内会拒绝，不再丢脚下。不代表放置矿车/方块。`,
+                                                 普通丢弃不要求4格空隙，也允许近距离at；没有已测空隙时按当前朝向丢弃并明确报告未知，可能碰壁或捡回。
+                                                 赠物target仍按可见性和2–4格距离核对。不代表放置矿车/方块。`,
     fields: [
       { key: 'item', kind: 'string', required: true, hint: '物品英文 id' },
       { key: 'count', kind: 'int', lo: 1, hi: 64, def: 1 },
       {
         key: 'at', kind: 'anchor', error: `toss 的 at 要 [x,y,z](${RELATIVE_HINT})`,
-        doc: '朝那一格扔;不写 = 自己挑一个开阔方向',
+        doc: '朝那一格扔；不写优先选已测较开阔方向，没有已测空隙则按当前朝向丢弃并报告未知',
       },
       { key: 'pick', kind: 'string' },
       { key: 'target', kind: 'string', doc: '可见玩家的完整名字；与at互斥' },

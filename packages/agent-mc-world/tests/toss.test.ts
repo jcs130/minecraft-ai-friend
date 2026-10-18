@@ -8,7 +8,8 @@ const registry = req('prismarine-registry')('1.20.6');
 const ctx = { aborted: () => false } as any;
 const clocks: ReturnType<typeof setInterval>[] = [];
 afterEach(() => { for (const timer of clocks.splice(0)) clearInterval(timer); vi.useRealTimers(); });
-function rig(blocked = false) {
+function rig(blocked = false, version = '1.20.6') {
+  const registry = req('prismarine-registry')(version);
   let count = 32;
   const bot: any = Object.assign(new EventEmitter(), { registry, entities: {},
     entity: { id: 1, position: new Vec3(.5, 64, .5), yaw: 0, pitch: 0, eyeHeight: 1.62 },
@@ -22,11 +23,17 @@ function rig(blocked = false) {
   return { bot, clock, count: (n: number) => { count = n; } };
 }
 describe('toss receipt and aim', () => {
-  it('uses positive Mineflayer pitch and refuses a measured enclosed scene without dropping', async () => {
+  it.each(['1.21.1', '1.20.6'])('uses positive pitch but permits deliberate discard in an enclosed %s scene', async version => {
+    vi.useFakeTimers();
     expect(TOSS_PITCH).toBeGreaterThan(0); expect(planTossThrow(rig().bot)?.pitch).toBe(TOSS_PITCH);
-    const { bot } = rig(true);
-    await expect(skillToss(bot, { skill: 'toss', item: 'cobblestone', count: 32 }, ctx)).rejects.toThrow('尚未抛出');
-    expect(bot.toss).not.toHaveBeenCalled();
+    const { bot } = rig(true, version);
+    expect(planTossThrow(bot)).toBeNull();
+    const result = skillToss(bot, { skill: 'toss', item: 'cobblestone', count: 32 }, ctx);
+    await vi.advanceTimersByTimeAsync(4100);
+    expect(await result).toContain('净少32');
+    expect(await result).toContain('当前朝向');
+    expect(bot.toss).toHaveBeenCalledOnce();
+    expect(bot.look).not.toHaveBeenCalled();
   });
   it('does not report a transient inventory decrease as success', async () => {
     vi.useFakeTimers(); const r = rig();
@@ -37,11 +44,40 @@ describe('toss receipt and aim', () => {
     expect(reacquiredTossNote(r.bot, 'cobblestone')).toContain('又回到背包');
     expect(r.bot.listenerCount('playerCollect')).toBe(0);
   });
-  it('does not toss toward unknown/occluded players or its own feet', async () => {
+  it('does not toss toward unknown/occluded players', async () => {
     const { bot } = rig();
     await expect(skillToss(bot, { skill: 'toss', item: 'cobblestone', count: 8, target: 'Friend' }, ctx)).rejects.toThrow('看不见');
-    await expect(skillToss(bot, { skill: 'toss', item: 'cobblestone', count: 8, at: [0,64,0] }, ctx)).rejects.toThrow('不足2格');
     expect(bot.toss).not.toHaveBeenCalled();
+  });
+  it.each(['1.21.1', '1.20.6'])('allows a nearby discard point without claiming an exact landing (%s)', async version => {
+    vi.useFakeTimers(); const { bot } = rig(false, version);
+    const result = skillToss(bot, { skill: 'toss', item: 'cobblestone', count: 8, at: [0,64,0] }, ctx);
+    await vi.advanceTimersByTimeAsync(4100);
+    expect(await result).toContain('净少8');
+    expect(await result).toContain('落点未核验');
+    expect(bot.toss).toHaveBeenCalledOnce();
+  });
+  it.each(['1.21.1', '1.20.6'])('uses the best direction even if the %s corridor is shorter than four blocks', async version => {
+    vi.useFakeTimers(); const { bot } = rig(false, version);
+    bot.blockAt = p => {
+      const air = p.y < 66 && p.x >= 0 && p.x < 1 && p.z >= -2 && p.z <= 0;
+      return { name: air ? 'air' : 'stone', boundingBox: air ? 'empty' : 'block' };
+    };
+    const plan = planTossThrow(bot);
+    expect(plan?.distance).toBeGreaterThan(0);
+    expect(plan!.distance).toBeLessThan(4);
+    const result = skillToss(bot, { skill: 'toss', item: 'cobblestone', count: 8 }, ctx);
+    await vi.advanceTimersByTimeAsync(4100);
+    expect(await result).toContain('净少8');
+    expect(bot.look).toHaveBeenCalledWith(plan!.yaw, plan!.pitch, true);
+  });
+  it.each(['1.21.1', '1.20.6'])('labels unknown clearance without refusing caller-selected discard (%s)', async version => {
+    vi.useFakeTimers(); const { bot } = rig(false, version); bot.blockAt = () => null;
+    const result = skillToss(bot, { skill: 'toss', item: 'cobblestone', count: 8 }, ctx);
+    await vi.advanceTimersByTimeAsync(4100);
+    expect(await result).toContain('抛物空间未确认');
+    expect(await result).toContain('净少8');
+    expect(bot.toss).toHaveBeenCalledOnce();
   });
   it('requires a matching recipient pickup event, not just inventory loss', async () => {
     vi.useFakeTimers(); const { bot } = rig();

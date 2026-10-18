@@ -2142,6 +2142,7 @@ export class Executor {
     // 对当前已加载且不会被前置步骤改变的土格，试算已有确定的否定结论。
     // 直接拒收，避免把一次已知必败的锄地+种地拆成两条零秒失败，再驱动快速重试。
     const soilPrecheckHold = this.definiteSoilPrecheckNote(task.steps);
+    const tunnelPrecheckHold = this.immediateTunnelPrecheckNote(task.steps, mode);
     const takeEvidenceHold = this.takeEvidenceNote(task.steps, at);
     const storageCycleHold = this.storageCycleNote(task.steps);
     const storageAccessHold = this.storageAccessNote(task.steps);
@@ -2163,7 +2164,8 @@ export class Executor {
     // 受理刻驳回排在入队之前：队列一个字都不动；前置试算只报现场否定，不改变执行。
     const refusal = (text: string | null | undefined, rule: string,
       kind: TaskAdmissionRejection['kind'] = 'wait') => text ? { text, rule, kind } : null;
-    const refused = refusal(soilPrecheckHold?.text, 'farm.soil', 'correction')
+    const refused = refusal(tunnelPrecheckHold?.text, tunnelPrecheckHold?.rule ?? 'tunnel.geometry', 'correction')
+      ?? refusal(soilPrecheckHold?.text, 'farm.soil', 'correction')
       ?? refusal(takeEvidenceHold?.proof === 'not-container' ? takeEvidenceHold.text : null, 'take.not-container', 'correction')
       ?? refusal(this.duplicatePendingNote(task.steps), 'queue.pending')
       ?? refusal(this.immediateAttackTargetNote(task.steps, mode), 'attack.noTarget', 'correction')
@@ -3985,6 +3987,28 @@ export class Executor {
         text: `第 ${hit.index + 1} 步的目标格已确认不适合耕种：${hit.note.text}。这单未入队；按现场读数修正后可立即提交，不需要等待`,
         step: steps[hit.index],
       };
+    } catch { return null; }
+  }
+
+  /** Reject only a first tunnel whose immediate, stable start already proves its geometry invalid. */
+  private immediateTunnelPrecheckNote(steps: readonly SkillCall[], mode: QueueMode): { text: string; rule: string } | null {
+    const first = steps[0];
+    if (this.opts.precheck?.() === false || first?.skill !== 'tunnel' || first.dryRun) return null;
+    // A queued predecessor, checkpoint, combat or environment owner can change the starting cell.
+    // Keep those plans admissible and recheck from the real position when their step starts.
+    if ((mode !== 'now' && (this.task || this.frozen || this.queue.length > 0))
+      || this.checkpointDrain || this.escaping || this.holdReason() !== null || this.opts.busyWith?.()) return null;
+    const body = this.opts.bodyState?.();
+    if (body?.combatActive || body?.environmentOwnerKind) return null;
+    const bot = this.opts.getBot();
+    if (!bot || bot.entity?.onGround !== true || bodyInWater(bot) || flightState(bot).flying
+      || bot.pathfinder?.isMoving?.() || goalOwnerKind(bot) !== null) return null;
+    try {
+      const hit = precheckSteps(bot, [first], this.precheckDeps(bot)).find(({ note }) =>
+        note.level === 'hard' && ['tunnel.slope', 'tunnel.spiralAlignment'].includes(note.rule));
+      if (!hit) return null;
+      return { rule: hit.note.rule,
+        text: `第 1 步的通道几何与当前脚格不符：${hit.note.text}。这单未入队，原任务与待办保留；按实际起点修正后可立即提交` };
     } catch { return null; }
   }
 

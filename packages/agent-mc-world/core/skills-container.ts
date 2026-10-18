@@ -119,8 +119,8 @@ export async function skillPickup(bot: Bot, ctx: SkillContext, item?: string): P
 /**
  * 抛远的落点找多远(格)。原版丢出的物品初速 0.3 格/刻沿视线、另加 0.1 向上,空中每刻
  * 重力 0.04、阻力 0.98,落地摩擦 0.6:平扔停在约 3.3 格外,抬头 40° 约 3.7 格外,所以
- * 一路要空出 4 格。拾取判定是玩家碰撞箱水平外扩 1 格,离身体中心约 1.4 格,停在 4 格外
- * 站着不动捡不回来。远端只用来在几个方向里挑更开阔的那个。
+ * 4 格是优先选择的开阔长度，不是允许丢弃的前提；狭窄或未知现场仍允许调用方丢弃。
+ * 拾取和库存净变化由服务端结算，远端读数仅帮助选择方向，不能保证不会捡回。
  */
 export const TOSS_RANGE = { min: 4, max: 8 } as const;
 /** Mineflayer lookAt uses atan2(delta.y, horizontal): positive pitch looks UP. */
@@ -154,11 +154,11 @@ function rememberDiscard(bot: Bot, entity: Bot['entity']): void {
  * toss 按当前 yaw/pitch 给物品初速度，须预先转向。
  * 纯读已加载格。先找抬头抛的方向:齐眼与头上一层从 1 格起连续为空;抬头抛的物品
  * 升到脚下约 2.4 格高,两格高的通道顶会挡住。没有就找平扔的方向:脚下与齐眼两层为空,
- * 平扔最高到脚下约 1.8 格,两格高的通道够用。连续畅通满 min 格才算合格,选最长的,
- * 同距取首。都没有返回 null,调用方拒绝抛出;不寻路或修改方块。
+ * 平扔最高到脚下约 1.8 格,两格高的通道够用。选择已测空隙最长的方向，同距取首。
+ * 没有已测空隙返回 null；这是方向建议，不是丢弃许可，不寻路或修改方块。
  */
 export function planTossThrow(bot: Bot): { yaw: number; pitch: number; distance: number } | null {
-  // Unknown geometry is not permission to drop at the player's feet.
+  // Unknown geometry cannot establish a clear throw; the caller may still discard.
   if (typeof bot.blockAt !== 'function' || typeof bot.look !== 'function') return null;
   const me = bot.entity.position;
   const feetY = Math.floor(me.y);
@@ -168,8 +168,8 @@ export function planTossThrow(bot: Bot): { yaw: number; pitch: number; distance:
     { pitch: TOSS_PITCH, layers: [1, 2] },
     { pitch: 0, layers: [0, 1] },
   ];
+  let best: { yaw: number; pitch: number; distance: number } | null = null;
   for (const { pitch, layers } of throws) {
-    let best: { yaw: number; pitch: number; distance: number } | null = null;
     for (let deg = 0; deg < 360; deg += TOSS_YAW_STEP) {
       const rad = (deg * Math.PI) / 180;
       // mineflayer 的 yaw:0 = -Z(北),向 -X 增大。这两行与 skillFish 的算法同一套
@@ -185,11 +185,10 @@ export function planTossThrow(bot: Bot): { yaw: number; pitch: number; distance:
         }))))) break;
         reach = d;
       }
-      if (reach >= TOSS_RANGE.min && (!best || reach > best.distance)) best = { yaw: rad, pitch, distance: reach };
+      if (reach > 0 && (!best || reach > best.distance)) best = { yaw: rad, pitch, distance: reach };
     }
-    if (best) return best;
   }
-  return null;
+  return best;
 }
 
 /** yaw 弧度 → 八向汉字。只用来在回执里说清「往哪边扔的」 */
@@ -231,7 +230,7 @@ export async function skillToss(
     const me = bot.entity.position;
     const offset = recipient ? 0 : 0.5;
     const flat = Math.hypot(aim.x + offset - me.x, aim.z + offset - me.z);
-    if (flat < 2) throw new SkillBlocked('抛物目标距自己不足2格，容易自己捡回；先拉开距离或用容器交接，尚未抛出');
+    if (recipient && flat < 2) throw new SkillBlocked('交付对象距自己不足2格；先拉开距离，避免把本人拾取当作对方领取，尚未抛出');
     if (recipient && flat > 4) throw new SkillBlocked('交付对象超过4格；先走近到2–4格并看向对方，尚未抛出');
     if (flat > TOSS_AIM_MAX) {
       throw new SkillBlocked(
@@ -246,10 +245,13 @@ export async function skillToss(
     where = `朝${cellText(aim)}，相距${flat.toFixed(1)}格；落点未核验`;
   } else {
     const throwTo = planTossThrow(bot);
-    if (!throwTo) throw new SkillBlocked('未测得连续4格的抛物空间，尚未抛出；赠物请用 target 点名可见玩家，腾格用 stow 或先换开阔位置');
     checkAbort(ctx);
-    await bot.look(throwTo.yaw, throwTo.pitch, true);
-    where = `朝${yawCompass(throwTo.yaw)}${throwTo.pitch > 0 ? '抬头抛' : '平抛'}，已测${throwTo.distance}格空隙；落点未核验`;
+    if (throwTo) {
+      await bot.look(throwTo.yaw, throwTo.pitch, true);
+      where = `朝${yawCompass(throwTo.yaw)}${throwTo.pitch > 0 ? '抬头抛' : '平抛'}，已测${throwTo.distance}格空隙；落点未核验`;
+    } else {
+      where = '按当前朝向丢弃，抛物空间未确认，可能碰壁或被捡回；落点未核验';
+    }
   }
   const existing = new Set(Object.keys(bot.entities ?? {}).map(Number));
   const collectors = new Set<number>();
