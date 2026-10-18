@@ -195,6 +195,11 @@ terminal receipts continue draining; fresh queue/body facts are required on
 recovery. Explicit stop wins, and stopped/unknown authentication states still
 fail closed. This is separate from a server's reason for disconnecting clients.
 
+0.2.31 applies that same recovery path to the initial connection. An active,
+typed native retry can outlast server maintenance without the former two-minute
+startup deadline terminating the coordinator. Event receipts and operator stop
+remain live while waiting; planning starts only after fresh online body facts.
+
 0.1.87 pins viewer `3553c60d`: native terrain preparation yields to browser tasks
 instead of waiting for painting frames, retaining coherent staged scene commits
 even when RAF is throttled. Original resources and the existing scene budgets are

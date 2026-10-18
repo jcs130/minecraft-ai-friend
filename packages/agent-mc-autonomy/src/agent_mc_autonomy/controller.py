@@ -1752,14 +1752,12 @@ class Controller:
                     raise RuntimeError("java_client_backend_required: use an explicit core build advertising native client control; refusing Mineflayer fallback")
             self.publish(phase="connecting")
             json_content(await self.bridge.call("mc_connection", {"action": "connect"}, timeout=120))
-            deadline = time.monotonic() + 120
-            while not self.stop_requested():
-                status = json_content(await self.bridge.call("mc_connection", {"action": "status"}))
-                if online(status):
-                    break
-                if time.monotonic() >= deadline:
-                    raise RuntimeError("Minecraft did not report an online connection within 120 seconds")
-                await asyncio.sleep(1)
+            status = json_content(await self.bridge.call("mc_connection", {"action": "status"}))
+            # Native startup retries have the same ownership and stop semantics
+            # as a later connection loss. Do not discard a healthy retry loop
+            # just because maintenance lasts longer than two minutes.
+            if not online(status) and not await self.wait_for_native_reconnect(status):
+                return
             if self.stop_requested():
                 return
             if self.settings.body_provider == "java-client":

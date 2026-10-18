@@ -84,3 +84,76 @@ def test_explicit_stop_wins_during_reconnection_without_clearing_original_pendin
     assert not run_async(controller.wait_for_native_reconnect({"phase": "started",
         "connection": {"ready": False, "phase": "stopped"}}))
     assert controller.pending[("task", "body-1")]["terminal"] is False and not bridge.calls
+
+
+@pytest.mark.parametrize("waiting_phase", ["connecting", "retrying"])
+def test_initial_native_retry_can_exceed_two_minutes_then_resume_once(
+        framework_module, tmp_path, run_async, monkeypatch, waiting_phase):
+    clock, decisions, published = [0], [], []
+
+    async def decide(*_):
+        decisions.append(clock[0])
+        result = choose()
+        result["tool_calls"][0]["function"] = {"name": "mc_help", "arguments": "{}"}
+        return result
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    controller.settings = dataclasses.replace(controller.settings, max_decisions=1, max_tool_rounds=1)
+    controller.publish = lambda **row: published.append(row)
+    original_call, original_sleep = bridge.call, asyncio.sleep
+
+    async def call(name, args, **kwargs):
+        if name == "mc_connection" and args["action"] == "status":
+            bridge.calls.append((name, args, kwargs))
+            waiting = clock[0] < 185
+            return packed({"phase": "started", "connection": {"ready": not waiting,
+                "phase": waiting_phase if waiting else "online"}})
+        return await original_call(name, args, **kwargs)
+
+    async def tick(_):
+        clock[0] += 1
+        await original_sleep(0)
+
+    monkeypatch.setattr(bridge, "call", call)
+    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    monkeypatch.setattr(module.asyncio, "sleep", tick)
+    run_async(controller.run("survive"))
+    assert decisions == [185]
+    assert any(row.get("phase") == "reconnecting" and row.get("game_connected") is False for row in published)
+    assert any(name == "mc_events" for name, *_ in bridge.calls)
+    connections = [args["action"] for name, args, _ in bridge.calls if name == "mc_connection"]
+    assert connections.count("connect") == connections.count("disconnect") == 1
+    assert not any(name == "mc_do" for name, *_ in bridge.calls)
+    assert bridge.closed and not controller.pending
+
+
+def test_mailbox_stop_is_admitted_while_initial_connection_retries(
+        framework_module, tmp_path, run_async, monkeypatch):
+    import uuid
+
+    from agent_mc_autonomy.mailbox import Mailbox
+
+    clock = [0]
+    module, bridge, controller = setup(framework_module, tmp_path, None)
+    controller.commands = Mailbox(tmp_path)
+    original_call, original_sleep = bridge.call, asyncio.sleep
+
+    async def call(name, args, **kwargs):
+        if name == "mc_connection" and args["action"] == "status":
+            bridge.calls.append((name, args, kwargs))
+            return packed({"phase": "started", "connection": {"ready": False, "phase": "retrying"}})
+        return await original_call(name, args, **kwargs)
+
+    async def tick(_):
+        clock[0] += 1
+        if clock[0] == 3:
+            controller.commands.submit("stop", {"reason": "operator stop while server is down"}, str(uuid.uuid4()))
+        await original_sleep(0)
+
+    monkeypatch.setattr(bridge, "call", call)
+    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    monkeypatch.setattr(module.asyncio, "sleep", tick)
+    run_async(controller.run("survive"))
+    assert clock[0] == 3 and controller.operator_stop
+    assert not any(name in {"mc_do", "mc_help"} for name, *_ in bridge.calls)
+    assert bridge.closed and not controller.pending
