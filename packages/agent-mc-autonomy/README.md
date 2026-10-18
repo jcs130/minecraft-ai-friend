@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+0.2.26 pins the independently built `agent-mc-world@0.5.7-rc.31` body.
+Existing-path navigation, split inventory acknowledgements, offhand equipment
+and occupied-feet coordinates now reach pinned consumers as well as core users.
+The external viewer remains separately pinned. This dependency update does not
+start a game, change model/context settings or establish live survival success.
+
 0.2.25 adds an explicit Chat-only `planner.reasoning_history="current_turn"`
 policy for compatible providers. The default `"all"` keeps existing native
 replay unchanged. The opt-in omits only `reasoning_content` from assistant
