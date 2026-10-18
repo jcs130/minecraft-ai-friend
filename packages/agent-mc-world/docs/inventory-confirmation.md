@@ -23,3 +23,34 @@ Regression coverage uses the pinned native Mineflayer inventory plugin and
 1.21.1 packets, including delayed cursor/slot completion and stale or mismatched
 frames. This establishes the protocol failure mode; it does not identify an
 unrecorded live packet sequence or prove improved gameplay after deployment.
+
+## Occupied offhand replacement
+
+Modern player-inventory offhand equipment uses ordinary number-key swaps
+(`window_click` mode 2, button 0–8), rather than holding the requested item on the
+mouse cursor while replacing an occupied offhand. A hotbar source needs one
+confirmed exchange. A source in main inventory borrows a hotbar slot for three
+confirmed exchanges, restores that hotbar slot, and leaves the previous offhand
+item in the requested item's original slot. This also works with a full
+inventory; no free slot, item discard, name filter or server-specific rule is
+introduced. Other equipment and legacy paths retain their existing contract.
+
+Each exchange still requires the actual server slots and cursor to match. A
+denied exchange stops the sequence without retry, cursor pickup or reporting
+success. The latest known source slot may have changed if an earlier exchange
+succeeded, so query actual inventory before deciding another operation. Existing
+unknown-outcome recovery remains in force; this does not bypass server rules.
+
+Timeout diagnostics distinguish a missing post-dispatch full snapshot from an
+already received snapshot with mismatched slots or cursor. Both preserve the
+failed operation and its evidence; a later recovery does not promote it to a
+successful equip.
+
+`equipment-offhand-native.test.ts` uses the actual pinned Mineflayer inventory
+plugin on 1.20.6 and 1.21.1, including named item data, full inventories, restored
+hotbar contents, rejection and no replay. Its simulated server reproduces the
+cursor-swap failure mode; production acceptance requires a separate live equip
+and fresh post-operation inventory read.
+
+Protocol implementation reference:
+[PrismarineJS window click handling](https://github.com/PrismarineJS/prismarine-windows/blob/master/lib/Window.js).

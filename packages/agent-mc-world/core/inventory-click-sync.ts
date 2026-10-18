@@ -318,8 +318,16 @@ export async function clickInventoryConfirmed(bot: Bot, slot: number, button: nu
   state.phase = 'pending'; state.pending = pending;
   const timer = setTimeout(() => {
     if (state.pending !== pending) return;
-    state.phase = 'quarantined'; state.reason = `点击窗口${window.id}槽${slot}后服务端未在 ${INVENTORY_CLICK_CONFIRM_MS}ms 内完整同步`;
-    record(state, 'click-quarantined', { packetSeq: state.packetSeq, sentSeq: pending.sentSeq, slot, windowId: window.id });
+    const frame = state.authority.get(window);
+    const fullAfterDispatch = pending.sent && !!frame && frame.fullSeq > pending.sentSeq;
+    const mismatchedSlots = fullAfterDispatch
+      ? [...pending.expectedSlots].filter(([index, key]) => stackKey(frame!.items[index]) !== key).map(([index]) => index) : [];
+    const cursorMatches = fullAfterDispatch ? stackKey(frame!.cursor) === pending.expectedCursor : null;
+    state.phase = 'quarantined'; state.reason = `点击窗口${window.id}槽${slot}后服务端未在 ${INVENTORY_CLICK_CONFIRM_MS}ms 内确认预期结果`;
+    if (fullAfterDispatch) state.reason += `；已收到完整快照，但${mismatchedSlots.length ? `槽位${mismatchedSlots.join('、')}不一致` : '槽位已匹配'}、${cursorMatches ? '光标已匹配' : '光标不一致'}`;
+    else state.reason += '；尚缺本次派发后的完整槽位和光标快照';
+    record(state, 'click-quarantined', { packetSeq: state.packetSeq, sentSeq: pending.sentSeq, slot, windowId: window.id,
+      fullAfterDispatch, fullSnapshotSeq: frame?.fullSeq ?? null, mismatchedSlots, cursorMatches });
     complete(new InventoryClickSyncError(`${state.reason}，暂停库存点击并保留材料游标`, 'quarantined'));
   }, INVENTORY_CLICK_CONFIRM_MS);
   // Mineflayer can resolve optimistically or keep waiting for an unchanged result slot.

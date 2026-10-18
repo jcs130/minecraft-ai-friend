@@ -23,7 +23,27 @@ async function equipmentMove(bot: Bot, slot: number, move: () => Promise<void>):
   }
 }
 
-/** Each pickup, swap and cursor return has its own authoritative confirmation. */
+/** Ordinary number-key swaps keep the cursor empty, including occupied offhands. */
+async function swapOffHandConfirmed(bot: Bot, source: number, destination: number): Promise<void> {
+  const window = bot.inventory, start = window.hotbarStart;
+  const quickBar = Array.from({ length: 9 }, (_, i) => start + i);
+  if (quickBar.includes(source)) {
+    await clickInventoryConfirmed(bot, destination, source - start, 2, window);
+    return;
+  }
+  // Borrow one hotbar slot without requiring free storage. Every permutation
+  // is server-confirmed; the third exchange restores the original hotbar stack
+  // and puts the old offhand in the requested item's original inventory slot.
+  const selected = start + (bot.quickBarSlot ?? -1);
+  const scratch = quickBar.find(slot => slot !== selected && !window.slots[slot])
+    ?? quickBar.find(slot => slot !== selected) ?? start;
+  const button = scratch - start;
+  await clickInventoryConfirmed(bot, source, button, 2, window);
+  await clickInventoryConfirmed(bot, destination, button, 2, window);
+  await clickInventoryConfirmed(bot, source, button, 2, window);
+}
+
+/** Each inventory move has its own authoritative slot and cursor confirmation. */
 export async function equipSlotConfirmed(bot: Bot, item: Item, dest: EquipmentDestination): Promise<void> {
   requirePlayerInventory(bot);
   const slot = bot.getEquipmentDestSlot(dest);
@@ -39,6 +59,10 @@ export async function equipSlotConfirmed(bot: Bot, item: Item, dest: EquipmentDe
     const found = window.slots[source];
     if (!found || !sameInventoryStack(found, item)) {
       throw new SkillBlocked('待穿装备所在槽位已经变化，先重新核对背包');
+    }
+    if (dest === 'off-hand' && source >= window.inventoryStart && source < window.inventoryEnd) {
+      await swapOffHandConfirmed(bot, source, slot);
+      return;
     }
     await clickInventoryConfirmed(bot, source, 0, 0, window);
     await clickInventoryConfirmed(bot, slot, 0, 0, window);

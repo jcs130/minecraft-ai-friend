@@ -34,13 +34,16 @@ function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; si
   client.write = (name, packet) => {
     if (name !== 'window_click') return;
     sent.push(packet.slot);
-    const denied = packet.slot === 45 && (options.denyPickup || (options.denySwap && server.slots[45] && server.selectedItem));
+    const denied = packet.slot === 45 && (options.denyPickup || (options.denySwap && server.slots[45] && (server.selectedItem || packet.mode === 2)));
     if (!denied) server.acceptClick({ slot: packet.slot, mouseButton: packet.mouseButton, mode: packet.mode,
       item: server.slots[packet.slot] });
     if (!options.silent) setTimeout(full, 166);
   };
   bot.clickWindow = async (slot, mouseButton, mode) => {
-    const changed = inventory.acceptClick({ slot, mouseButton, mode, item: inventory.slots[slot] });
+    const before = inventory.slots.map((item: unknown) => Item.toNotch(item));
+    const nativeChanged = inventory.acceptClick({ slot, mouseButton, mode, item: inventory.slots[slot] });
+    const changed = nativeChanged ?? inventory.slots.flatMap((item: unknown, index: number) =>
+      JSON.stringify(Item.toNotch(item)) === JSON.stringify(before[index]) ? [] : [index]);
     client.write('window_click', { windowId: 0, stateId, slot, mouseButton, mode,
       changedSlots: changed.map((location: number) => ({ location, item: Item.toNotch(inventory.slots[location]) })),
       cursorItem: Item.toNotch(inventory.selectedItem) });
@@ -88,7 +91,7 @@ describe('equipment server confirmation', () => {
     expect(rig.server.selectedItem).toBeNull();
   });
 
-  it('a denied offhand swap rolls back after 166ms and never reports success or sends the next click', async () => {
+  it('a denied offhand swap preserves server state and never reports success or sends the next click', async () => {
     vi.useFakeTimers();
     const rig = equipmentServer({ denySwap: true });
     rig.seed(9, 'shield'); rig.seed(45, 'player_head');
@@ -99,7 +102,8 @@ describe('equipment server confirmation', () => {
     await vi.runAllTimersAsync(); await failed;
     expect(rig.sent).toEqual([9, 45]);
     expect(rig.server.slots[45].name).toBe('player_head');
-    expect(rig.server.selectedItem.name).toBe('shield');
+    expect(rig.server.selectedItem).toBeNull();
+    expect(rig.server.slots[36].name).toBe('shield');
   });
 
   it('clears a shortcut into storage before equipping a shield without dropping either item', async () => {
