@@ -1,0 +1,23 @@
+package org.agentmc.appearance;
+
+import java.util.Locale;
+import java.util.UUID;
+
+/** Optional client display policy. No player, model or server defaults. */
+public final class AppearancePolicy {
+    private AppearancePolicy() {}
+    public static boolean matches(String configuredServer, String actualServer, String configuredObserver, String actualObserver) {
+        return configuredServer != null && configuredObserver != null && !configuredServer.isBlank()
+            && configuredServer.trim().equalsIgnoreCase(actualServer == null ? "" : actualServer.trim())
+            && configuredObserver.equalsIgnoreCase(actualObserver == null ? "" : actualObserver);
+    }
+    public static String uuid(String value) {
+        try {
+            if (value == null || !value.matches("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")) return null;
+            return UUID.fromString(value).toString().toLowerCase(Locale.ROOT);
+        } catch (IllegalArgumentException error) { return null; }
+    }
+    public static boolean validAssetId(String value) {
+        return value != null && value.length() <= 160 && value.matches("[a-zA-Z0-9_-][a-zA-Z0-9_.-]*") && !value.contains("..");
+    }
+}
