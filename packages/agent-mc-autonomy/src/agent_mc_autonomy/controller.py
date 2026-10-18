@@ -11,7 +11,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .bridge import json_content, outcome, text_content
-from .context import assemble, coalesce_rejected, encode, outcome_eviction_index, retain_events
+from .context import (
+    assemble,
+    coalesce_rejected,
+    encode,
+    outcome_eviction_index,
+    retain_events,
+)
 from .context_counter import CounterUnavailable, count_input
 from .context_evidence import outcome_id, outcome_message, project_values
 from .death_memory import TOOL as DEATH_REVIEW_TOOL
@@ -31,7 +37,11 @@ from .observations import (
     tool_failure_view,
 )
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
-from .planner import PlannerRequestRejectedError, PlannerResponseError, PlannerUnavailableError
+from .planner import (
+    PlannerRequestRejectedError,
+    PlannerResponseError,
+    PlannerUnavailableError,
+)
 from .stage_applicability import body_baseline, historical_proposal, inapplicable_reason
 from .tool_schema import argument_error, provider_schema
 from .viewer_public import tool_receipt
@@ -1520,7 +1530,12 @@ class Controller:
                 host_context = self.current_host_context()
                 self.publish(host_context=host_context_metadata(host_context))
                 recent_context = await self.recent_for_round(host_context)
-                from .narration import GUIDANCE, NarrationPort, response_line, tool_contract
+                from .narration import (
+                    GUIDANCE,
+                    NarrationPort,
+                    response_line,
+                    tool_contract,
+                )
                 narration = NarrationPort(self.data)
                 narration_request = self.recent_request(host_context)
                 narration_binding = ({k: v for k, v in narration_request.items() if k != "as_of"}

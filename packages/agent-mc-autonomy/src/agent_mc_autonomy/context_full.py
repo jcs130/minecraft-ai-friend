@@ -4,8 +4,19 @@ import hashlib
 import time
 
 from . import host_recent
-from .context import RULES, encode, event_priority, outcome_eviction_index, read_progress
-from .context_counter import BYTE_COUNTER_NAME, FRAMING_RESERVE, count_input, counter_name
+from .context import (
+    RULES,
+    encode,
+    event_priority,
+    outcome_eviction_index,
+    read_progress,
+)
+from .context_counter import (
+    BYTE_COUNTER_NAME,
+    FRAMING_RESERVE,
+    count_input,
+    counter_name,
+)
 from .context_evidence import GUIDANCE, history_sources, outcome_id
 
 
