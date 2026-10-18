@@ -16,6 +16,8 @@ import meow.kikir.freesia.velocity.FreesiaConstants;
 import meow.kikir.freesia.velocity.Freesia;
 import meow.kikir.freesia.velocity.FreesiaConfig;
 import meow.kikir.freesia.velocity.YsmProtocolMetaFile;
+import meow.kikir.freesia.velocity.events.PlayerEntityStateChangeEvent;
+import meow.kikir.freesia.velocity.network.backend.MasterServerMessageHandler;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import org.geysermc.mcprotocollib.auth.GameProfile;
@@ -58,8 +60,10 @@ public class YsmMapperPayloadManager {
     private final Map<UUID, MapperSessionProcessor> observersResynced = Maps.newConcurrentMap();
     private final YsmPlayGate playGate = new YsmPlayGate();
     private final Set<MapperSessionProcessor> startedMappers = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final WorkerStateRestoreGate stateRestore = new WorkerStateRestoreGate();
 
     public void beginBackendChange(Player player, String backend) {
+        this.stateRestore.remove(player.getUniqueId());
         this.playGate.begin(player.getUniqueId(), backend);
         this.backendEntityIds.remove(player.getUniqueId());
         this.unavailableMappers.remove(player.getUniqueId());
@@ -334,6 +338,82 @@ public class YsmMapperPayloadManager {
             this.onBackendReady(player);
             attempted++;
         }
+        this.recoverMissingHeadlessStates();
+    }
+
+    /** Query the existing private Worker, never emulate a YSM client handshake. */
+    private void recoverMissingHeadlessStates() {
+        // This installation has one Worker. Refuse ambiguous multi-worker routing.
+        if (Freesia.registedWorkers.size() != 1 || Freesia.PROXY_SERVER.getAllPlayers().size() > 40) return;
+        final MasterServerMessageHandler worker = Freesia.registedWorkers.values().iterator().next();
+        int issued = 0;
+        for (Player owner : Freesia.PROXY_SERVER.getAllPlayers()) {
+            if (issued >= 4) break;
+            final long epoch = this.backendEpoch(owner);
+            final MapperSessionProcessor mapper = this.mapperSessions.get(owner);
+            if (mapper == null || !this.acceptsWorkerPayload(mapper) || this.isPlayerInstalledYsm(owner)
+                    || this.unavailableMappers.contains(owner.getUniqueId())) continue;
+            final YsmPacketProxy proxy = mapper.getPacketProxy();
+            if (proxy.getCurrentEntityState() != null) continue;
+            final var ticket = this.stateRestore.issue(owner.getUniqueId(), epoch, mapper, worker,
+                    proxy.getPlayerEntityId(), proxy.getPlayerWorkerEntityId(), System.nanoTime());
+            if (ticket == null) continue;
+            issued++;
+            // Vanilla readback serializes the actual Worker entity. Freesia's existing
+            // save hook then sends its current YSM data through savePlayerData below.
+            // The selected model/texture/mandatory flag is never changed by a command.
+            // Fabric's vanilla Brigadier root is "data", not Paper's "minecraft:data".
+            worker.dispatchCommandToWorker("data get entity " + owner.getUniqueId() + " ysm.model_id", ignored -> {});
+        }
+    }
+
+    public WorkerStateRestoreGate.Ticket captureWorkerStateReadback(UUID player, MasterServerMessageHandler worker) {
+        return this.stateRestore.pending(player, worker, System.nanoTime());
+    }
+
+    private boolean currentReadback(WorkerStateRestoreGate.Ticket ticket, MasterServerMessageHandler worker, Player owner) {
+        final MapperSessionProcessor mapper = this.mapperSessions.get(owner);
+        if (mapper == null || !this.acceptsWorkerPayload(mapper) || this.unavailableMappers.contains(owner.getUniqueId())
+                || Freesia.registedWorkers.size() != 1 || !Freesia.registedWorkers.containsValue(worker)) return false;
+        final YsmPacketProxy proxy = mapper.getPacketProxy();
+        return this.stateRestore.current(ticket, this.backendEpoch(owner), mapper, worker,
+                proxy.getPlayerEntityId(), proxy.getPlayerWorkerEntityId(), System.nanoTime());
+    }
+
+    /** Only a current Worker's native readback can fill a previously empty cache. */
+    public void acceptWorkerStateReadback(WorkerStateRestoreGate.Ticket ticket, MasterServerMessageHandler worker, byte[] content) {
+        if (ticket == null || content == null || content.length > 128 * 1024) return;
+        final Player owner = Freesia.PROXY_SERVER.getPlayer(ticket.player()).orElse(null);
+        if (owner == null || !this.currentReadback(ticket, worker, owner)) return;
+        try {
+            final NBTCompound full = (NBTCompound) new DefaultNBTSerializer().deserializeTag(
+                    NBTLimiter.forBuffer(content, 128 * 1024), new DataInputStream(new ByteArrayInputStream(content)), false);
+            final NBTCompound state = full.getCompoundTagOrNull("model_id");
+            if (state == null || state.getStringTagValueOrDefault("model_id", "").isBlank()) return;
+            Freesia.PROXY_SERVER.getEventManager().fire(new PlayerEntityStateChangeEvent(owner, ticket.workerEntityId(), state.copy()))
+                    .thenAccept(event -> {
+                        if (event.getEntityState() == null || !this.currentReadback(ticket, worker, owner)) return;
+                        // Keep the exact captured mapper. A transfer between this check
+                        // and the write must not redirect old data into the new mapper.
+                        final YsmPacketProxyLayer proxy = (YsmPacketProxyLayer) ((MapperSessionProcessor) ticket.mapper()).getPacketProxy();
+                        boolean restored = false;
+                        proxy.acquireWriteReference();
+                        try {
+                            // A real native packet arriving meanwhile always wins.
+                            if (this.currentReadback(ticket, worker, owner) && proxy.getCurrentEntityState() == null) {
+                                YsmPacketProxyLayer.LAST_YSM_ENTITY_DATA_HANDLE.setVolatile(proxy, event.getEntityState().copy());
+                                restored = true;
+                            }
+                        } finally { proxy.releaseWriteReference(); }
+                        this.stateRestore.finish(ticket);
+                        if (restored) {
+                            proxy.notifyFullTrackerUpdates();
+                            Freesia.LOGGER.info("Restored native Worker model state for {} without a client YSM handshake", owner.getUsername());
+                        }
+                    });
+        } catch (Exception invalidReadback) {
+            Freesia.LOGGER.debug("Ignoring invalid Worker model readback for {}", ticket.player(), invalidReadback);
+        }
     }
 
     /** Read-only, real backend entity binding for the optional appearance bridge. */
@@ -361,6 +441,7 @@ public class YsmMapperPayloadManager {
     private final Map<UUID, Integer> backendEntityIds = new java.util.concurrent.ConcurrentHashMap<>();
 
     public void onPlayerDisconnect(@NotNull Player player) {
+        this.stateRestore.remove(player.getUniqueId());
         this.playGate.remove(player.getUniqueId());
         this.unavailableMappers.remove(player.getUniqueId());
         this.backendEntityIds.remove(player.getUniqueId());

@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-18",
+  "status": "verified_candidate_not_deployed",
+  "version": "2.5.1+2.4.1.af4",
+  "production": {
+    "freesia": "2.5.1+2.4.1.af3",
+    "agentFriend": "0.4.47.6",
+    "changed": false
+  },
+  "artifact": {
+    "file": "Freesia-Velocity-2.5.1+2.4.1-af4.jar",
+    "sha256": "b2205bfb76fe8923752fdb125fd883835d2a7ba2f68a66d3011d0f6ac2946412",
+    "baseSha256": "593f06f6005d55772ef578c013db8cae733ec051d43f1ab9035b9e20338b6b38",
+    "onlyThisProxyJarProposed": true,
+    "otherBuildOutputsNotProposed": true,
+    "binaryDiff": {
+      "changed": [
+        "meow/kikir/freesia/velocity/network/backend/MasterServerMessageHandler.class",
+        "meow/kikir/freesia/velocity/network/ysm/YsmMapperPayloadManager$AppearanceState.class",
+        "meow/kikir/freesia/velocity/network/ysm/YsmMapperPayloadManager.class",
+        "velocity-plugin.json"
+      ],
+      "added": [
+        "meow/kikir/freesia/velocity/network/ysm/WorkerStateRestoreGate$Slot.class",
+        "meow/kikir/freesia/velocity/network/ysm/WorkerStateRestoreGate$Ticket.class",
+        "meow/kikir/freesia/velocity/network/ysm/WorkerStateRestoreGate.class"
+      ],
+      "removed": []
+    }
+  },
+  "scope": [
+    "Recover uninitialized real-owner state from current Worker native serialization after original save success",
+    "Preserve nonmandatory model selection and real gameplay entity mapping",
+    "Reject stale mapper, backend epoch, controller and entity readbacks; never overwrite a newer native state"
+  ],
+  "budgets": {
+    "online": 40,
+    "queriesPerFiveSecondSweep": 4,
+    "attemptsPerSession": 3,
+    "snapshotBytes": 131072,
+    "ticketLifetimeSeconds": 20
+  },
+  "tests": {
+    "jdk": {
+      "recoveryTickets": 66,
+      "existingPlayLifecycle": 17,
+      "total": 83
+    },
+    "baseline": {
+      "checks": 9,
+      "report": "baseline-1792336262807.json",
+      "sha256": "f676b22acdf44e2345bb2babc2bf4649a6bb1d65b6e5776e27e921e6eb92737d"
+    },
+    "native": {
+      "checks": 9,
+      "report": "candidate-1792336342994.json",
+      "sha256": "19146946d00e8f7c403c685f3b0808fe0075a0fc15ab9c9a5f36e7c681f66462",
+      "coldStart": true,
+      "ownerReconnect": true,
+      "observerReconnect": true,
+      "mandatoryFalsePreserved": true,
+      "syntheticNativeObserver": true,
+      "realFabricPixelsVerified": false,
+      "attackEatingHeldItemPixelsVerified": false
+    },
+    "originalBindingFieldsPreserved": true,
+    "failedAttemptsRetained": true,
+    "labStoppedNormally": true
+  },
+  "deployment": {
+    "queued": false,
+    "productionRestartAllowed": false,
+    "currentInstruction": "keep isolated; current visible observer fault recovered by separate client hotfix",
+    "requiresFreshApproval": true,
+    "requiresAdvanceNoticeAndExistingEFColdBackup": true
+  },
+  "privateEvidence": {
+    "root": "E:/MC/ops/repairs/ysm-saved-state-20261018",
+    "mirror": "F:/MC-backups/repairs/ysm-saved-state-20261018"
+  },
+  "rollback": {
+    "proxyJar": "Freesia-Velocity-2.5.1+2.4.1-af3.jar",
+    "sha256": "593f06f6005d55772ef578c013db8cae733ec051d43f1ab9035b9e20338b6b38",
+    "preserveWorldAndPlayerData": true
+  }
+}
