@@ -22,7 +22,8 @@ from .context_evidence import GUIDANCE, history_sources, outcome_id
 
 def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output,
                   planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None,
-                  native_outcomes=None, context_counter=None, host_context=None, recent_context=None, death_memory=None):
+                  native_outcomes=None, context_counter=None, host_context=None, recent_context=None, death_memory=None,
+                  context_history_headroom_tokens=0):
     """Preserve supplied text/fields, complete exchanges and stable-prefix caching.
 
     Public host ports still enforce their identity, provenance, freshness and
@@ -72,7 +73,12 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
         size = count_input(context_counter, current, tools) if context_counter is not None else len(encode({"messages": current, "tools": tools}).encode("utf-8"))
         return size + reserved_output + FRAMING_RESERVE
 
-    while history and cost() > context_tokens:
+    # Only a real overflow activates the opt-in cache margin. Retire a whole
+    # prefix once, leaving room for new exchanges instead of shifting it each
+    # decision. Fresh evidence remains governed by the actual window.
+    headroom = min(max(0, context_history_headroom_tokens), context_tokens // 4)
+    history_target = context_tokens - headroom if cost() > context_tokens else context_tokens
+    while history and cost() > history_target:
         history.pop(0)
         tail["context_omissions"]["history_groups"] += 1
     # An oversized read batch must not delete all native feedback or selected
@@ -116,7 +122,9 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
         "units": "tokens" if context_counter is not None else "token_upper_bound",
         "input": total - reserved_output - FRAMING_RESERVE, "output_reserve": reserved_output, "framing_reserve": FRAMING_RESERVE,
         "total": total, "limit": context_tokens, "omitted": [part["key"] for part in tail["omitted_facts"]],
-        "omitted_sections": tail["context_omissions"]["sections"], "history": {"available": len(groups), "included": len(history)},
+        "omitted_sections": tail["context_omissions"]["sections"],
+        "history": {"available": len(groups), "included": len(history),
+                    "evicted": len(groups) - len(history), "cache_headroom_tokens": headroom},
         "evidence_reuse": {"history_sources": len(available), "native_outcomes": len(terminal),
                            "referenced": referenced, "inline": len(terminal) - referenced},
         "layout": {"stable_head_sha256": hashlib.sha256(encode(head).encode()).hexdigest(),

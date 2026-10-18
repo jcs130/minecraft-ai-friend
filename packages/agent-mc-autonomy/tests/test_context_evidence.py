@@ -171,7 +171,7 @@ def test_window_eviction_restores_original_instead_of_leaving_a_reference():
         context_mode="full",
         native_outcomes=[row],
     )
-    assert budget["history"] == {"available": 2, "included": 1}
+    assert {key: budget["history"][key] for key in ("available", "included")} == {"available": 2, "included": 1}
     assert json.loads(messages[-1]["content"])["recent_native_outcomes"] == [row]
     assert messages[2:-1] == exchange
     assert original == [source, exchange]

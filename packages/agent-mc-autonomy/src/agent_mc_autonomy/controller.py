@@ -1567,7 +1567,7 @@ class Controller:
                 try:
                     messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, consumed, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
-                        context_mode=self.settings.context_mode,
+                        context_mode=self.settings.context_mode, context_history_headroom_tokens=self.settings.context_history_headroom_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
                 except ValueError:
@@ -1576,12 +1576,19 @@ class Controller:
                     reserve = 0
                     messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, consumed, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
-                        context_mode=self.settings.context_mode,
+                        context_mode=self.settings.context_mode, context_history_headroom_tokens=self.settings.context_history_headroom_tokens,
                         planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
                 if reserve:
                     messages, _ = attach_frame(messages, frame)
                 budget.update(image_reserve=reserve, total=budget["total"] + reserve, limit=self.settings.context_tokens)
+                if self.settings.context_mode == "full":
+                    # Do not resurrect the old prefix evicted by this request.
+                    # Original journals/handles remain intact, as do all current
+                    # body facts, terminal outcomes and pending-event fences.
+                    history = budget["history"]
+                    if history["available"] == len(self.groups) and history["evicted"]:
+                        self.groups = self.groups[history["evicted"]:]
                 self.publish(context=budget)
                 try:
                     death_context=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal) if self.settings.decision_policy.enabled else None

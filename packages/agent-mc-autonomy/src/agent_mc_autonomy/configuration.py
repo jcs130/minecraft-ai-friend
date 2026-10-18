@@ -148,6 +148,7 @@ class Settings:
     model_timeout_seconds: int = 180
     context_tokens: int = DEFAULT_CONTEXT_TOKENS
     context_mode: str = "compact"
+    context_history_headroom_tokens: int = 0
     max_decisions: int = 100
     runtime_mode: str = "embedded"
     data_directory: str = ""
@@ -254,6 +255,7 @@ class Settings:
             model_timeout_seconds=_integer(autonomy, "model_timeout_seconds", 180, 10, 300),
             context_tokens=_integer(autonomy, "context_tokens", DEFAULT_CONTEXT_TOKENS, 4096, 2097152),
             context_mode=context_mode,
+            context_history_headroom_tokens=_integer(autonomy, "context_history_headroom_tokens", 0, 0, 131072),
             max_decisions=_integer(autonomy, "max_decisions", 100, 0, 10000),
             runtime_mode=_text(runtime, "mode", "embedded"), data_directory=_text(runtime, "data_directory"),
             bundle_root=_text(runtime, "bundle_root"), bundle_manifest_sha256=_text(runtime, "bundle_manifest_sha256"),
