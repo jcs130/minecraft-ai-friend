@@ -950,15 +950,25 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
       if (!call.command.startsWith('/')) throw new SkillBlocked('server_travel 只接受 / 开头的服务端命令');
       const target = resolveAt(bot, call.at);
       const distance = (): number => bot.entity.position.distanceTo(new Vec3(target.x, target.y, target.z));
-      if (distance() <= call.within) return `已在服务端传送落点 ${cellText(target)} 附近，无需重复传送`;
-      sendChat(bot, call.command);
-      const until = Date.now() + 6_000;
-      while (Date.now() < until) {
-        checkAbort(ctx);
-        if (distance() <= call.within) return `服务端传送已核验:来到 ${cellText(feetOf(bot))}`;
-        await sleep(100);
+      const destination = call.dimension ? normalizeDimension(call.dimension) : null;
+      const arrived = (): boolean => (!destination || normalizeDimension(dimensionOf(bot)) === destination)
+        && distance() <= call.within;
+      if (arrived()) return `已在服务端传送落点 ${cellText(target)} 附近，无需重复传送`;
+      // Own the transition only for the actual dispatched command, not for an
+      // accepted or waiting step. Synchronous game events from chat are covered.
+      const endTransition = ctx.beginDimensionTransition?.(destination ?? undefined);
+      try {
+        sendChat(bot, call.command);
+        const until = Date.now() + 6_000;
+        while (Date.now() < until) {
+          checkAbort(ctx);
+          if (arrived()) return `服务端传送已核验:来到${zhDimension(dimensionOf(bot))} ${cellText(feetOf(bot))}`;
+          await sleep(100);
+        }
+        throw new SkillBlocked(`已发 ${call.command}，但 6 秒内没有抵达 ${destination ? zhDimension(destination) : ''}${cellText(target)} 附近；查看服务端回执再决定下一步`);
+      } finally {
+        endTransition?.();
       }
-      throw new SkillBlocked(`已发 ${call.command}，但 6 秒内没有抵达 ${cellText(target)} 附近；查看服务端回执再决定下一步`);
     }
     case 'gesture': return skillGesture(bot, call, ctx);
     case 'chat': {
@@ -1217,6 +1227,8 @@ function resumedCollect(
 }
 
 interface RunningTask extends QueuedTask {
+  /** One command-scoped transition; queued old-world work is never covered. */
+  dimensionTransition?: { stepIndex: number; from: string; destination?: string; observed: boolean };
   /** 当前执行实例的尾步提示；恢复后的新实例不继承旧提示。 */
   queueTailNotice?: TaskQueueTail;
   /** 在跑的那一件账本一定在场(pump 建的时候补齐) */
@@ -4782,13 +4794,19 @@ export class Executor {
   }
 
   /**
-   * 维度变了而手上那一步不是 transit:当前、冻结和排队的计划都按旧维度坐标写的,
+   * 非预期维度变化撤销旧坐标计划；已发出的 server_travel 只保留自身并继续核验。
    * 当刻撤单并撤掉寻路目标(包括逃生目标),每一件各自投递取消终态。
    * 返回给 bot 的说明;没有可撤的东西时为 null。
    */
   cancelForDimensionChange(from: string, to: string): string | null {
     const t = this.task;
     if (t?.steps[t.stepIndex]?.skill === 'transit') return null;
+    const transition = t?.dimensionTransition;
+    const expected = !!t && !t.flag.aborted && t.flag.epoch === this.executionEpoch
+      && t.steps[t.stepIndex]?.skill === 'server_travel'
+      && !!transition && transition.stepIndex === t.stepIndex && !transition.observed
+      && transition.from === normalizeDimension(from)
+      && (!transition.destination || transition.destination === normalizeDimension(to));
     const bot = this.opts.getBot();
     const goal = bot?.pathfinder?.goal ?? null;
     // 寻路目标的坐标同样属于旧维度,不管是谁下的都作废
@@ -4799,8 +4817,17 @@ export class Executor {
       this.frozen = null;
     }
     if (!t && dropped.length === 0) return goal ? '旧维度的寻路目标已撤' : null;
-    const by = `维度变化中止(没经 transit 从${zhDimension(from)}进入了${zhDimension(to)},`
+    const by = `维度变化中止(从${zhDimension(from)}进入了${zhDimension(to)},`
       + `计划里的坐标是按${zhDimension(from)}写的)`;
+    if (expected) {
+      transition!.observed = true;
+      for (const d of dropped) this.reportCancelled(d, by, Executor.frozenProgress(d));
+      this.opts.diag?.write({ lane: 'task', event: 'dimension-transition-observed', taskId: t!.id,
+        msg: '服务端传送发生维度变化，当前任务继续核验落点；其他旧维度排队任务已撤',
+        data: { from, to, taskId: t!.id, dropped: dropped.map(d => d.id) } });
+      return `任务#${t!.id}的服务端传送正在核验落点`
+        + (dropped.length ? `；旧维度排队的 ${dropped.map(d => `任务#${d.id}`).join('、')} 已撤` : '');
+    }
     if (t) {
       const at = this.progressOf(t);
       this.abortTask(t, by);
@@ -5083,6 +5110,13 @@ export class Executor {
     const ctx: SkillContext = {
       signal: flag.controller.signal,
       aborted: () => flag.aborted || this.stopped || flag.epoch !== this.executionEpoch,
+      beginDimensionTransition: (destination) => {
+        checkAbort(ctx);
+        const transition = { stepIndex: task.stepIndex, from: normalizeDimension(dimensionOf(bot)),
+          ...(destination ? { destination: normalizeDimension(destination) } : {}), observed: false };
+        task.dimensionTransition = transition;
+        return () => { if (task.dimensionTransition === transition) delete task.dimensionTransition; };
+      },
       checkpoint: async (settle) => {
         if (windows.heldWindow || windows.hasUnconfirmedOpening()) return;
         await this.checkpointTask(task, bot, task.stepIndex, false, settle);
@@ -5213,7 +5247,7 @@ export class Executor {
         const heldBefore = this.holdReason();
         if (heldBefore !== null && this.freezeBeforeStep(task, i, `环境冻结:${heldBefore}`)) return;
         if (transitBoundary !== null) {
-          const why = `第 ${transitBoundary} 步没有完成可信的维度穿越，后续步骤不能在错误维度继续`;
+          const why = `第 ${transitBoundary} 步没有核验传送落点，后续步骤不能在未知位置或错误维度继续`;
           const line = `${stepLabel(i)} 跳过(${why})`;
           land(i, 'skip', why, line);
           blockedSteps.push(line);
@@ -5262,7 +5296,7 @@ export class Executor {
             : `${stepLabel(i)} 做到一半被打断,没重做(这一步重做会重复扣料),按没做成算`;
           land(i, 'fail', why, line);
           blockedSteps.push(line);
-          if (call.skill === 'transit') transitBoundary = i + 1;
+          if (call.skill === 'transit' || call.skill === 'server_travel') transitBoundary = i + 1;
           continue;
         }
         if (i < (task.resumeFrom ?? 0)) {
@@ -5377,7 +5411,7 @@ export class Executor {
             msg: `第 ${i + 1} 步「${describeSkill(call)}」跳过:${why}`,
             data: { call, needs, failed: unmet, root, causal: causal?.find((c) => c.step === unmet)?.items ?? null },
           });
-          if (call.skill === 'transit') transitBoundary = i + 1;
+          if (call.skill === 'transit' || call.skill === 'server_travel') transitBoundary = i + 1;
           continue;
         }
         if (consumesOpenWindow(call) && (windows.hasUnconfirmedOpening()
@@ -5579,7 +5613,9 @@ export class Executor {
           }
           if (opensForNext) await windows.awaitOpeningReady(ctx);
           const afterDimension = normalizeDimension(dimensionOf(bot));
-          if (call.skill === 'transit') {
+          // server_travel has already verified its command-scoped arrival,
+          // including the destination dimension when supplied.
+          if (call.skill === 'transit' || call.skill === 'server_travel') {
             expectedDimension = afterDimension;
           } else if (afterDimension !== expectedDimension) {
             transitBoundary = i + 1;
@@ -5614,7 +5650,7 @@ export class Executor {
             land(i, 'fail', note, line);
             bagDue ||= blockedOnItems(note);
             blockedSteps.push(line);
-            if (call.skill === 'transit') transitBoundary = i + 1;
+            if (call.skill === 'transit' || call.skill === 'server_travel') transitBoundary = i + 1;
             continue;
           }
           if (opensForNext) windows.commitOpening();
@@ -5677,7 +5713,7 @@ export class Executor {
           const blocked = err instanceof SkillBlocked ? err : err instanceof Aborted
             ? new SkillBlocked(`动作被打断：${err.by ?? '原生操作上下文已失效'}；本步未重放`, [], 'local', 'execution-context-changed')
             : null;
-          if (call.skill === 'transit') transitBoundary = i + 1;
+          if (call.skill === 'transit' || call.skill === 'server_travel') transitBoundary = i + 1;
           const reason = blocked || err instanceof SkillNoop ? (err as Error).message : `技能内部错误: ${zhErrorText((err as Error).message)}`;
           // 技能报阻但期望已达成(战利品自己进了包、人已经在目的地):按达成算
           const expect = call.expect ?? deriveExpect(bot, call);

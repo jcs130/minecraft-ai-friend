@@ -2606,8 +2606,13 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       'Read the Minecraft work queue right now: the task being executed and which step it is on, '
       + 'the tasks waiting behind it, and how the most recent finished task ended. Read-only and '
       + 'instant — it changes nothing. Ask this instead of re-submitting a task to check progress. '
+      + 'Default output includes a compact historical terminal summary; taskId reads that task’s full original receipt (latest 64 tasks in this World), '
+      + 'or detail:"full" expands the latest receipt. Task terminal events arrive automatically; queued work continues without polling or another model turn. '
       + 'Once per turn: asking again in the same turn returns a one-line pointer to the answer above.',
-    parameters: { type: 'object', properties: {}, required: [] },
+    parameters: { type: 'object', properties: {
+      taskId: { type: 'integer', minimum: 1, description: 'Optional task identity for its complete historical terminal receipt.' },
+      detail: { type: 'string', enum: ['summary', 'full'], description: 'Default summary; full expands the latest terminal receipt.' },
+    }, required: [] },
   },
   {
     name: 'mc_blocked',
@@ -3457,7 +3462,7 @@ export class MinecraftWorld implements World {
     // 终态可能刚投递，而下一拍快照尚未发生。读取最新原文，避免只有受理回执
     // 留在历史里时重做已经完成或受阻的单；日期也保留，不能当成当前队列。
     const outcome = renderLastTaskReadout(last
-      ? { at: nowIso(this.timezone, new Date(last.at)), kind: last.kind, text: last.text }
+      ? { ...last, at: nowIso(this.timezone, new Date(last.at)) }
       : null);
     parts.push({ key: 'lastTask', text: outcome });
     const queue = this.executor?.status();
@@ -4336,6 +4341,8 @@ export class MinecraftWorld implements World {
     this.disposeExtension();
     this.methods.stop('Minecraft World 已停止');
     this.methodTerminals.clear();
+    this.taskReadouts.clear();
+    this.lastFinishedTask = null;
     this.visualInFlight?.controller.abort(new Error('Minecraft World 已停止'));
     this.requestFactsCache = null;
     this.idleBehavior?.stop();
@@ -4593,7 +4600,7 @@ export class MinecraftWorld implements World {
       mc_bag: async (args, ctx) => this.readOnce('mc_bag', ctx,
         () => this.bagReadout(typeof args.item === 'string' ? args.item : undefined)),
       mc_view_map: async (args) => this.viewMap(args),
-      mc_queue: async (_args, ctx) => this.readOnce('mc_queue', ctx, () => this.queueReadout()),
+      mc_queue: async (args, ctx) => this.readOnce('mc_queue', ctx, () => this.queueReadout(args)),
       mc_blocked: async (_args, ctx) => this.readOnce('mc_blocked', ctx, () => this.blockedReadout()),
       mc_stop: async () => {
         this.bridge?.cancelRespawn();
@@ -5052,17 +5059,26 @@ export class MinecraftWorld implements World {
   }
 
   /** mc_queue:队列现读 + 最近一单的终态 */
-  protected queueReadout(): { stamp: string; text: string } {
+  protected queueReadout(args: Record<string, unknown> = {}): { stamp: string; text: string } {
     const ex = this.executor;
     if (!ex) return { stamp: 'nomod', text: '[mc_queue 失败] World 未启动' };
     const q = ex.status();
-    const last = this.lastFinishedTask;
+    if (args.taskId !== undefined && (!Number.isSafeInteger(args.taskId) || Number(args.taskId) < 1)) {
+      return { stamp: `invalid:${String(args.taskId)}`, text: '[mc_queue 失败] taskId 必须是正整数；未改变队列。' };
+    }
+    const requestedId = args.taskId as number | undefined;
+    const last = requestedId === undefined ? this.lastFinishedTask : this.taskReadouts.get(requestedId);
+    if (requestedId !== undefined && !last) {
+      return { stamp: `missing:${requestedId}:${queueStamp(q, this.lastFinishedTask?.at ?? null)}`,
+        text: `[队列] ${renderQueue(q)}\n[历史终态未找到] 任务#${requestedId}尚无终态或已超出本场最近 64 个任务的保留范围；不能据此判定成功或失败。` };
+    }
+    const detail = requestedId !== undefined || args.detail === 'full' ? 'full' : 'summary';
     const method = this.methods.current;
     return {
-      stamp: queueStamp(q, last?.at ?? null) + `:${method?.id ?? ''}`,
+      stamp: queueStamp(q, last?.at ?? null) + `:${method?.id ?? ''}:${requestedId ?? 'latest'}:${detail}`,
       text: renderQueueReadout(
         q,
-        last ? { at: this.clock(last.at), kind: last.kind, text: last.text } : null,
+        last ? { ...last, at: this.clock(last.at) } : null, detail,
       ) + (method ? `\n[自主方法] #${method.id}「${method.name}」仍在运行；它会按代码继续提交后续动作，mc_script可查结果或取消。` : ''),
     };
   }
@@ -5087,7 +5103,8 @@ export class MinecraftWorld implements World {
    * 最近一单的终态。onTaskReport 每收一条非反射汇报就换掉这一格 —— 那条回执本身
    * 早被后续事件挤出上下文,而「我刚才那一单到底怎么了」正是她最常拿重下单去问的事。
    */
-  protected lastFinishedTask: { at: number; kind: string; text: string } | null = null;
+  protected lastFinishedTask: { at: number; kind: string; text: string; taskId?: number; steps?: TaskReport['steps'] } | null = null;
+  protected readonly taskReadouts = new Map<number, NonNullable<MinecraftWorld['lastFinishedTask']>>();
 
   /** mc_policy 同步修改常驻设置，不进队列或产生任务事件；回执报告实际变更和未收下的字段。 */
   protected setPolicy(args: Record<string, unknown>): string {
@@ -8430,7 +8447,11 @@ export class MinecraftWorld implements World {
       ? this.serverFeedback.forTask(r.taskId) : '';
     const reportText = `${r.text}${repeatEvidence}${feedback}`;
     // 「最近一单是什么下场」的单槽:mc_queue 现读它(见 lastFinishedTask)
-    this.lastFinishedTask = { at: Date.now(), kind: r.kind, text: reportText };
+    this.lastFinishedTask = { at: Date.now(), kind: r.kind, taskId: r.taskId, text: reportText, steps: r.steps };
+    if (r.taskId !== undefined) {
+      this.taskReadouts.set(r.taskId, this.lastFinishedTask);
+      while (this.taskReadouts.size > 64) this.taskReadouts.delete(this.taskReadouts.keys().next().value!);
+    }
     // 任务终态只是采样时机；里程碑仍由独立世界现读判定，并先搭同一批事件。
     this.publishGoalPlanEdges('piggyback');
     // 「在干活却没记账」的分子:做完与做了一半都算干了活,受阻/顶替/撤单不算

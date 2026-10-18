@@ -5,3 +5,4 @@ export * from './decision.ts';
 export * from './photography.ts';
 export * from './java-client.ts';
 export * from './options.ts';
+export * from './work-state.ts';

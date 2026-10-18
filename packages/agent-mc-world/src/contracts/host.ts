@@ -81,6 +81,8 @@ export interface WorldHost {
 }
 export interface WorldRequestFacts {
   text: string; snapshotTypes: readonly string[]; parts?: readonly { key: string; text: string }[];
+  /** Optional typed server work lifecycle. Host-owned intentions require explicit matching references. */
+  workStates?: readonly import('./work-state.ts').WorkState[];
   /** Bounded current capability discovery; not execution eligibility or a model-selected plan. */
   options?: import('./options.ts').MinecraftOptionsSnapshot;
   /** World-owned compact current facts for optional fast classification; complete evidence remains in text/parts. */

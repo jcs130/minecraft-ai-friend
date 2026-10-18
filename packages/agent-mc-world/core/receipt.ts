@@ -173,7 +173,7 @@ export function describeSkill(c: SkillCall, heldItem?: string | null): string {
     }
     case 'stow': return `把 ${c.count} 个${zhName(c.item)}存进${c.into === 'open' ? '当前打开的容器' : '箱子'}`;
     case 'compact': return '整理当前打开的容器';
-    case 'server_travel': return `使用服务端命令抵达 ${c.at.join(',')}`;
+    case 'server_travel': return `使用服务端命令抵达 ${c.dimension ? `${zhDimension(c.dimension)} ` : ''}${c.at.join(',')}`;
     case 'take': {
       if (!c.at) return `从箱子取出 ${c.count ?? 1} 个${zhName(c.item!)}`;
       const spot = anchorsText([c.at]);

@@ -134,7 +134,7 @@ export type SkillCall = StepBounds & (
   | { skill: 'stow'; item: string; count: number; pick?: string; at?: Anchor; into?: 'open' }
   | { skill: 'compact' }
   | { skill: 'take'; item?: string; count?: number; at?: Anchor; all?: true; pick?: string; from?: 'open' }
-  | { skill: 'server_travel'; command: string; at: Anchor; within: number }
+  | { skill: 'server_travel'; command: string; at: Anchor; within: number; dimension?: string }
   | { skill: 'chat'; text: string }
   | { skill: 'gesture'; name: string; motion: 'wave' | 'bow' | 'nod' | 'beckon' | 'shake_head' }
   | {
@@ -1770,11 +1770,12 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   {
     name: 'server_travel',
     doc: `{"skill":"server_travel","command":"/spawn","at":[103,64,-31],"within":3}
-                                                 发服务端传送命令并等待位置确认；成功后下一步才开始。仅使用服务端已验证可用的单行命令，最多 256 字符。`,
+                                                 发服务端传送命令并等待位置确认；成功后下一步才开始。dimension 可声明落点维度，避免另一维度同坐标误算抵达；省略时仅核对坐标。仅使用服务端已验证可用的单行命令，最多 256 字符。`,
     fields: [
       { key: 'command', kind: 'string', required: true, schema: { type: 'string', maxLength: CHAT_LENGTH_LIMIT } },
       { key: 'at', kind: 'anchor', required: true, error: `server_travel 的 at 要 [x,y,z](${RELATIVE_HINT})` },
       { key: 'within', kind: 'int', lo: 1, hi: 16, def: 3 },
+      { key: 'dimension', kind: 'string', doc: '可选的落点维度(overworld/the_nether/the_end)；与 goto 的当前维度前置条件不同' },
     ],
   },
   {

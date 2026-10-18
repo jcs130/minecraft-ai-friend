@@ -185,6 +185,8 @@ export interface SkillContext {
   /** Existing task revocation wakes presentation waits without canceling native receipts. */
   signal?: AbortSignal;
   aborted: () => boolean;
+  /** A dispatched travel command may own one dimension change while its arrival is verified. */
+  beginDimensionTransition?: (destination?: string) => () => void;
   /**
    * 在可按现场续做的原子动作边界请求让位。没有排队请求时不执行 settle；有请求时
    * 先等待 settle 完成，再复验身体与库存状态。让位抛出 Yielded，技能须透传 Aborted。

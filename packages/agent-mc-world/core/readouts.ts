@@ -146,22 +146,33 @@ export function bagStamp(s: WorldSnapshot | null): string {
   ].join('|');
 }
 
-/**
- * 队列现状:在做的那件与它跑到第几步、排队的、最近一单的终态。
- *
- * 最近一单的终态是这份读数里唯一"过去时"的东西 —— 它正是「我刚才那一单到底怎么了」
- * 这个问题的答案,而那条终态回执早被交接或后续事件挤出上下文了。
- */
-export function renderQueueReadout(
-  q: QueueStatus,
-  last: { at: string; kind: string; text: string } | null,
-): string {
-  return [`[队列] ${renderQueue(q)}`, renderLastTaskReadout(last)].join('\n');
+export interface TaskReadout {
+  at: string;
+  kind: string;
+  taskId?: number;
+  text: string;
+  steps?: Array<{ step: number; why: string | null }>;
 }
 
-/** 只搬运已有执行终态；当前请求事实和按需队列查询使用同一份原文。 */
-export function renderLastTaskReadout(last: { at: string; kind: string; text: string } | null): string {
-  return last ? `[最近一单] ${last.at} ${last.text}` : '[最近一单] 这一场还没有跑完过任何一单。';
+/** Current progress stays separate from historical terminal evidence. */
+export function renderQueueReadout(
+  q: QueueStatus,
+  last: TaskReadout | null,
+  detail: 'summary' | 'full' = 'summary',
+): string {
+  return [`[队列] ${renderQueue(q)}`, renderLastTaskReadout(last, detail)].join('\n');
+}
+
+/** The exact receipt remains available on demand; no model-generated rewrite. */
+export function renderLastTaskReadout(last: TaskReadout | null, detail: 'summary' | 'full' = 'summary'): string {
+  if (!last) return '[最近一单] 这一场还没有跑完过任何一单。';
+  if (detail === 'full' || last.taskId === undefined) return `[历史终态原文] ${last.at} ${last.text}`;
+  const clip = (text: string, limit: number): string => text.length > limit ? `${text.slice(0, limit)}…` : text;
+  const head = clip(last.text.split('\n')[0], 240);
+  const cause = last.steps?.find(step => step.why)?.why;
+  return `[最近一单，历史终态] ${last.at} 任务#${last.taskId} ${last.kind}: ${head}`
+    + (cause && !head.includes(cause) ? `\n[原因摘要] ${clip(cause, 160)}` : '')
+    + `\n完整原文：mc_queue {"taskId":${last.taskId}}（本场保留最近 64 个任务；不是当前现场）。`;
 }
 
 /** 队列读数的指纹。**不含时钟** —— 已跑多少秒每次都在变,进了指纹这道闸等于不存在 */
