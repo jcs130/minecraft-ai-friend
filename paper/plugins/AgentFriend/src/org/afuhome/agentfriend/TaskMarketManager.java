@@ -93,6 +93,8 @@ final class TaskMarketManager implements Listener {
     private final Set<UUID> checking = new java.util.HashSet<>();
     private final Map<UUID, Long> lastCheck = new HashMap<>();
     private final Map<UUID, Frozen> frozenTasks = new HashMap<>();
+    private final Map<UUID, JsonObject> lastActions = new HashMap<>();
+    private final Map<UUID, TaskProgressGuidance.Notice> actionNotices = new HashMap<>();
     private int surveyCursor;
     private final QuestTracker tracker;
 
@@ -152,10 +154,13 @@ final class TaskMarketManager implements Listener {
     void surveyStatus(Player player) {
         Task task = frozen(player);
         if (task == null) return;
-        Step step = task.steps.get(index(player));
-        if (step.exploration == null && step.map == null) return;
-        // Both map and ordinary status are queries, never movement samples.
-        showGuidance(player, guidance(player, step, snapshot(player, step)));
+        JsonObject state = progressState(player), guide = state.getAsJsonObject("guidance");
+        if (plugin.communication().compact(player)) {
+            JsonObject notice = new JsonObject(); notice.addProperty("task", task.id());
+            notice.add("progress", state.get("progress")); notice.add("target", state.get("target"));
+            notice.add("remaining", state.get("remaining")); notice.add("guidance", guide);
+            send(player, "MC_MARKET_STATUS", notice);
+        } else showGuidance(player, guide);
     }
     private EngineeringSites.Result snapshot(Player player, Step step) {
         return step.map != null ? maps.snapshot(player,step.map,step.target,run(player))
@@ -449,12 +454,25 @@ final class TaskMarketManager implements Listener {
         out.addProperty("title",task.title());out.addProperty("stageTitle",step.title());
         out.addProperty("condition",TaskGuidance.step(step.goal(),step.description()));
         out.addProperty("goal",step.goal().name());out.addProperty("target",step.target());
+        int progress = step.goal() == GuildManager.Goal.DONATE ? plugin.guild().marketProgress(player)
+                : plugin.getConfig().getInt(activePath(player) + ".progress", 0);
+        out.addProperty("progress", progress); out.addProperty("remaining", Math.max(0, step.target() - progress));
+        out.addProperty("progressSource", step.goal() == GuildManager.Goal.DONATE ? "current_player_inventory" : "server_action_ledger");
         out.addProperty("route",task.route());
         out.addProperty("id",task.id());
         if(step.exploration()!=null){out.add("exploration",step.exploration().json());out.add("navigation",step.exploration().navigation(player.getLocation()));}
         if(step.map()!=null){JsonObject map=maps.info(player);if(map.has("map"))out.add("map",map.get("map"));out.addProperty("targetKind",QuestGuidance.text(map,"targetKind"));}
         if(step.map()!=null||step.exploration()!=null)out.add("guidance",guidance(player,step,snapshot(player,step)));
+        else out.add("guidance", TaskProgressGuidance.guide(task.contract(stage), progress,
+                step.combat() == null ? null : step.combat().json(),
+                plugin.getConfig().getString(marketPath(player) + ".last-reason", ""), savedSurvey(player, stage)));
         if(step.combat()!=null)out.add("combat",step.combat().json());
+        JsonObject guide = out.getAsJsonObject("guidance");
+        out.addProperty("ready", guide.get("ready").getAsBoolean());
+        out.add("nextCommand", guide.get("nextCommand"));
+        JsonObject last = lastActions.get(player.getUniqueId());
+        if (last != null && last.get("stepToken").getAsString().equals(stepToken(player))
+                && System.currentTimeMillis() - last.get("observedAtMs").getAsLong() < 300_000) out.add("lastAttempt", last.deepCopy());
         out.addProperty("requiresVerification",EngineeringSites.GOALS.contains(step.goal()));
         return out;
     }
@@ -691,7 +709,9 @@ final class TaskMarketManager implements Listener {
         data.add("evidence", result.evidence());
         ActionFeedback.Advice advice = result.ready() ? null : ActionFeedback.advice("market", result.reason(), task.id());
         if (advice != null) advice.add(data);
-        JsonObject guide = task.steps.get(step).exploration == null && task.steps.get(step).map == null ? null : guidance(player, task.steps.get(step), result);
+        JsonObject guide = task.steps.get(step).exploration == null && task.steps.get(step).map == null
+                ? TaskProgressGuidance.guide(task.contract(step), result.progress(), task.steps.get(step).combat == null ? null : task.steps.get(step).combat.json(), result.reason(), result.evidence())
+                : guidance(player, task.steps.get(step), result);
         if (guide != null) {
             data.add("guidance", guide); data.addProperty("nextAction", guide.get("nextAction").getAsString());
             JsonArray commands = new JsonArray(); commands.add(guide.get("nextCommand").getAsString()); data.add("nextCommands", commands);
@@ -790,6 +810,56 @@ final class TaskMarketManager implements Listener {
         // Keep UUID as the dedup key; a kill cannot be submitted twice with different labels.
         action(player, GuildManager.Goal.KILLS, 1, entity.toString(), true);
     }
+    void combatRejected(Player player, String mob, String weapon, String attack, String reason) {
+        Task task = frozen(player); CombatObjectives.Spec spec = combat(player);
+        if (task == null || spec == null || player.isDead() || player.getGameMode() != GameMode.SURVIVAL) return;
+        JsonObject observed = new JsonObject(); observed.addProperty("mob", mob);
+        observed.addProperty("weapon", weapon == null ? "unknown" : weapon); observed.addProperty("attack", attack);
+        actionFeedback(player, task, "not_counted", reason,
+                plugin.getConfig().getInt(activePath(player) + ".progress", 0), observed);
+    }
+    void worldRejected(Player player, GuildManager.Goal goal, String subject, String reason) {
+        Task task=frozen(player);
+        if(task==null||task.steps.get(index(player)).goal()!=goal)return;
+        String expected=task.steps.get(index(player)).site();
+        if(expected!=null&&!expected.equals(subject))reason="WRONG_ITEM_OR_SITE";
+        JsonObject observed=new JsonObject();observed.addProperty("itemOrSite",subject);
+        actionFeedback(player,task,"not_counted",reason,plugin.getConfig().getInt(activePath(player)+".progress",0),observed);
+    }
+    /** A native legacy adapter already changed the ledger; this method only reports it. */
+    void progressRecorded(Player player, GuildManager.Goal goal, int previous) {
+        Task task=frozen(player);
+        if(task!=null&&task.steps.get(index(player)).goal()==goal)
+            actionFeedback(player,task,"counted","PROGRESS_RECORDED",previous,null);
+    }
+    private void actionFeedback(Player player, Task task, String status, String reason, int previous, JsonObject observed) {
+        if (player.isDead() || player.getGameMode() != GameMode.SURVIVAL) return;
+        Step step = task.steps.get(index(player));
+        int current = plugin.getConfig().getInt(activePath(player) + ".progress", 0);
+        // Completed stages do not need repeated warnings about unrelated combat.
+        if (status.equals("not_counted") && current >= step.target()) return;
+        long now = System.currentTimeMillis(); String token = stepToken(player);
+        JsonObject data = new JsonObject(); data.addProperty("task", task.id()); data.addProperty("stage", index(player) + 1);
+        data.addProperty("stepToken", token); data.addProperty("observedAtMs", now);
+        data.addProperty("trigger", "server_observation"); data.addProperty("status", status); data.addProperty("reason", reason);
+        data.addProperty("previousProgress", previous); data.addProperty("progress", current);
+        data.addProperty("target", step.target()); data.addProperty("remaining", Math.max(0, step.target() - current));
+        if (observed != null) data.add("observed", observed);
+        JsonObject guide = TaskProgressGuidance.guide(task.contract(index(player)), current,
+                step.combat() == null ? null : step.combat().json(), "", new JsonObject());
+        if (status.equals("not_counted")) guide.addProperty("nextAction", TaskProgressGuidance.rejectedHint(reason,
+                step.combat() == null ? null : step.combat().json()));
+        data.add("guidance", guide); lastActions.put(player.getUniqueId(), data.deepCopy());
+        var notice = new TaskProgressGuidance.Notice(token, reason, current, now);
+        if (!(current >= step.target() && previous < step.target())
+                && !TaskProgressGuidance.shouldNotify(actionNotices.get(player.getUniqueId()), notice)) return;
+        actionNotices.put(player.getUniqueId(), notice);
+        String human = "§e【委托" + (status.equals("counted") ? "进度" : "未计数") + "】" + task.title()
+                + " " + current + "/" + step.target() + "；" + guide.get("nextAction").getAsString();
+        if (!plugin.communication().compact(player)) player.sendMessage(human);
+        send(player, "MC_MARKET_ACTION", data);
+        for (Player eye : plugin.attachedEyes(player)) eye.sendMessage(human);
+    }
     /** Only native event adapters call this. No command or NPC/model text can submit proof. */
     void worldAction(Player player, GuildManager.Goal goal, String subject, String evidence, long occurredAt) {
         worldAction(player, goal, subject, evidence, occurredAt, true);
@@ -798,14 +868,22 @@ final class TaskMarketManager implements Listener {
         Task task = frozen(player);
         if (task == null || occurredAt < stepStarted(player)) return;
         Step step = task.steps.get(index(player));
-        if (step.goal != goal || step.site != null && !step.site.equals(subject)) return;
+        if (step.goal != goal) return;
+        if (step.site != null && !step.site.equals(subject)) {
+            JsonObject observed = new JsonObject(); observed.addProperty("itemOrSite", subject);
+            actionFeedback(player, task, "not_counted", "WRONG_ITEM_OR_SITE",
+                    plugin.getConfig().getInt(activePath(player) + ".progress", 0), observed); return;
+        }
         action(player, goal, 1, evidence, persist);
     }
     boolean harvest(Player player, String crop, String location) {
         Task task = frozen(player);
         if (task == null || player.getGameMode() != GameMode.SURVIVAL || player.isDead()) return false;
         Step step = task.steps.get(index(player));
-        if (step.goal != GuildManager.Goal.HARVEST || !crop.equals(step.site)) return false;
+        if (step.goal != GuildManager.Goal.HARVEST) return false;
+        if (!crop.equals(step.site)) {
+            worldAction(player, GuildManager.Goal.HARVEST, crop, location, System.currentTimeMillis()); return false;
+        }
         String path = marketPath(player) + ".harvested";
         List<String> harvested = new ArrayList<>(plugin.getConfig().getStringList(path));
         String key = crop + ":" + location;
@@ -845,7 +923,8 @@ final class TaskMarketManager implements Listener {
         plugin.getConfig().set(path + ".action-amount", total);
         plugin.getConfig().set(activePath(player) + ".progress", (int) Math.floor(total + .0001));
         if (persist) plugin.saveConfig();
-        if (persist && before < target && total >= target) player.sendMessage("§a本阶段实际行动已达成；/mycli guild claim 交付。");
+        if (persist && before != (int) Math.floor(total + .0001))
+            actionFeedback(player, task, "counted", "PROGRESS_RECORDED", before, null);
     }
     void abandoned(Player player) {
         Task task = frozen(player); if (task == null) return;
@@ -1022,6 +1101,7 @@ final class TaskMarketManager implements Listener {
     }
     private void send(Player player, String type, JsonObject data) {
         data.addProperty("schemaVersion", 1); data.addProperty("type", type);
+        plugin.communication().stamp(player, data);
         byte[] bytes = data.toString().getBytes(StandardCharsets.UTF_8);
         if (bytes.length <= 32_768) {
             if (player.getListeningPluginChannels().contains(CHANNEL)) player.sendPluginMessage(plugin, CHANNEL, bytes);
@@ -1042,7 +1122,15 @@ final class TaskMarketManager implements Listener {
         if (data.has("task")) shortNotice.add("task", data.get("task"));
         if (data.has("ready")) shortNotice.add("ready", data.get("ready"));
         if (data.has("reason")) shortNotice.add("reason", data.get("reason"));
-        if (plugin.communication().compact(player) && shortNotice.toString().length() <= 1000) player.sendMessage(shortNotice.toString());
+        for (String key : List.of("status", "stage", "previousProgress", "progress", "target", "remaining", "observedAtMs"))
+            if (data.has(key)) shortNotice.add(key, data.get(key));
+        if (plugin.communication().compact(player)) {
+            if (shortNotice.toString().length() > 1000) {
+                shortNotice.remove("summary"); shortNotice.remove("nextAction");
+                shortNotice.addProperty("nextAction", "详细条件按 nextCommand 查询；本回执不证明其他条件已满足。");
+            }
+            player.sendMessage(shortNotice.toString());
+        }
     }
     void admin(CommandSender sender, String[] args) {
         String action = args.length > 2 ? args[2].toLowerCase(Locale.ROOT) : "list";
@@ -1137,5 +1225,6 @@ final class TaskMarketManager implements Listener {
         maps.forget(event.getPlayer());
         exploration.quit(event.getPlayer());
         UUID id = event.getPlayer().getUniqueId(); menus.remove(id); lastCheck.remove(id); frozenTasks.remove(id);
+        lastActions.remove(id); actionNotices.remove(id);
     }
 }

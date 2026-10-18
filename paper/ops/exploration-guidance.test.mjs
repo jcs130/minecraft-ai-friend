@@ -13,6 +13,11 @@ test('verified public structures remain distinct from player dimension and from 
   const jungle=catalog.places.find(p=>p.id==='jungle_pyramid');
   assert.deepEqual([jungle.world,jungle.structureKey,jungle.x,jungle.z],['minecraft:overworld','minecraft:jungle_pyramid',1607,2357]);
   assert.equal(jungle.entranceVerified,false);assert.equal(jungle.y,undefined);
+  const city=catalog.places.find(p=>p.id==='ancient_city');
+  assert.deepEqual([city.world,city.structureKey,city.x,city.z],['minecraft:overworld','minecraft:ancient_city',5469,630]);
+  assert.equal(city.entranceVerified,false);assert.equal(city.y,undefined);
+  for(const key of ['minecraft:fortress','minecraft:bastion_remnant','minecraft:end_city','minecraft:stronghold','minecraft:monument','minecraft:shipwreck','minecraft:mineshaft','nova_structures:illager_camp'])
+    assert.ok(catalog.places.some(p=>p.structureKey===key),key+' has a saved-world reference');
   assert.ok(!catalog.places.some(p=>p.x===549&&p.z===2887),'a protochunk structure start is not a realized destination');
   for(const name of ['ag_ExamQA16','.Guest','OtherAgent']){
     const snapshot=await collectPlayerObservation(name,async()=> 'MC_OBSERVATION '+JSON.stringify({schemaVersion:1,status:'ok',player:name,position:{world:'minecraft:the_nether',x:-58,y:100,z:-78}}));

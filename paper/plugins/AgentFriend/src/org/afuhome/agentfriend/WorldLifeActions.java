@@ -97,9 +97,11 @@ final class WorldLifeActions implements Listener {
         Material crop = block.getType(); String location = key(block), token = plugin.taskMarket().stepToken(player);
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (eligible(player) && token.equals(plugin.taskMarket().stepToken(player)) && block.getType() == crop
-                    && block.getBlockData() instanceof Ageable data && data.getAge() == 0
-                    && plugin.taskMarket().harvested(player, crop.name(), location))
-                plugin.taskMarket().worldAction(player, GuildManager.Goal.REPLANT, crop.name(), location, System.currentTimeMillis());
+                    && block.getBlockData() instanceof Ageable data && data.getAge() == 0) {
+                if (plugin.taskMarket().harvested(player, crop.name(), location))
+                    plugin.taskMarket().worldAction(player, GuildManager.Goal.REPLANT, crop.name(), location, System.currentTimeMillis());
+                else plugin.taskMarket().worldRejected(player, GuildManager.Goal.REPLANT, crop.name(), "REPLANT_SITE_NOT_HARVESTED");
+            }
         });
     }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

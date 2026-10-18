@@ -1,10 +1,137 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-10-16T19:02:46Z",
+  "verifiedAt": "2026-10-18T12:35:43.940Z",
   "source": "formal_anvil_structure_and_block_records",
   "places": [
-    {"id":"desert_pyramid","name":"原版沙漠神殿","world":"minecraft:overworld","x":-1926,"z":-966,"structureKey":"minecraft:desert_pyramid","precision":"horizontal_structure_reference","entranceVerified":false},
-    {"id":"desert_ruins","name":"模组沙漠遗迹","world":"minecraft:overworld","x":-3296,"z":-2096,"structureKey":"nova_structures:desert_ruins","precision":"horizontal_structure_reference","entranceVerified":false},
-    {"id":"jungle_pyramid","name":"原版丛林神庙","world":"minecraft:overworld","x":1607,"z":2357,"structureKey":"minecraft:jungle_pyramid","precision":"horizontal_structure_reference","entranceVerified":false}
+    {
+      "id": "desert_pyramid",
+      "name": "原版沙漠神殿",
+      "world": "minecraft:overworld",
+      "x": -1926,
+      "z": -966,
+      "structureKey": "minecraft:desert_pyramid",
+      "precision": "horizontal_structure_reference",
+      "entranceVerified": false
+    },
+    {
+      "id": "desert_ruins",
+      "name": "模组沙漠遗迹",
+      "world": "minecraft:overworld",
+      "x": -3296,
+      "z": -2096,
+      "structureKey": "nova_structures:desert_ruins",
+      "precision": "horizontal_structure_reference",
+      "entranceVerified": false
+    },
+    {
+      "id": "jungle_pyramid",
+      "name": "原版丛林神庙",
+      "world": "minecraft:overworld",
+      "x": 1607,
+      "z": 2357,
+      "structureKey": "minecraft:jungle_pyramid",
+      "precision": "horizontal_structure_reference",
+      "entranceVerified": false
+    },
+    {
+      "id": "nether_fortress",
+      "name": "原版下界要塞",
+      "world": "minecraft:the_nether",
+      "x": 214,
+      "z": -172,
+      "structureKey": "minecraft:fortress",
+      "precision": "horizontal_structure_reference",
+      "entranceVerified": false
+    },
+    {
+      "id": "bastion_remnant",
+      "name": "原版堡垒遗迹",
+      "world": "minecraft:the_nether",
+      "x": -152,
+      "z": -204,
+      "structureKey": "minecraft:bastion_remnant",
+      "precision": "horizontal_structure_reference",
+      "entranceVerified": false
+    },
+    {
+      "id": "end_city",
+      "name": "原版末地城",
+      "world": "minecraft:the_end",
+      "x": 979,
+      "z": 2383,
+      "structureKey": "minecraft:end_city",
+      "precision": "horizontal_structure_reference",
+      "entranceVerified": false
+    },
+    {
+      "id": "stronghold",
+      "name": "原版地下要塞",
+      "world": "minecraft:overworld",
+      "x": 908,
+      "z": 2313,
+      "structureKey": "minecraft:stronghold",
+      "precision": "horizontal_structure_reference",
+      "entranceVerified": false
+    },
+    {
+      "id": "ocean_monument",
+      "name": "原版海底神殿",
+      "world": "minecraft:overworld",
+      "x": 319,
+      "z": 783,
+      "structureKey": "minecraft:monument",
+      "precision": "horizontal_structure_reference",
+      "entranceVerified": false
+    },
+    {
+      "id": "ancient_city",
+      "name": "原版远古城市已生成区",
+      "world": "minecraft:overworld",
+      "x": 5469,
+      "z": 630,
+      "structureKey": "minecraft:ancient_city",
+      "precision": "horizontal_structure_reference",
+      "entranceVerified": false
+    },
+    {
+      "id": "shipwreck",
+      "name": "原版沉船",
+      "world": "minecraft:overworld",
+      "x": -236,
+      "z": -1024,
+      "structureKey": "minecraft:shipwreck",
+      "precision": "horizontal_structure_reference",
+      "entranceVerified": false
+    },
+    {
+      "id": "mineshaft",
+      "name": "原版废弃矿井",
+      "world": "minecraft:overworld",
+      "x": -447,
+      "z": -395,
+      "structureKey": "minecraft:mineshaft",
+      "precision": "horizontal_structure_reference",
+      "entranceVerified": false
+    },
+    {
+      "id": "ruined_portal",
+      "name": "原版废弃传送门",
+      "world": "minecraft:overworld",
+      "x": -398,
+      "z": 87,
+      "structureKey": "minecraft:ruined_portal",
+      "precision": "horizontal_structure_reference",
+      "entranceVerified": false
+    },
+    {
+      "id": "illager_camp",
+      "name": "掠夺者野外营地",
+      "world": "minecraft:overworld",
+      "x": -269,
+      "z": 45,
+      "structureKey": "nova_structures:illager_camp",
+      "precision": "horizontal_structure_reference",
+      "entranceVerified": false
+    }
   ]
 }

@@ -175,6 +175,7 @@ final class GuildManager implements Listener {
         boolean verify=EngineeringSites.GOALS.contains(quest.goal());
         out.addProperty("title",quest.title());out.addProperty("condition",TaskGuidance.step(quest.goal(),quest.description()));
         out.addProperty("progress",current);out.addProperty("target",quest.target());
+        out.addProperty("remaining",Math.max(0,quest.target()-current));
         out.addProperty("progressSource",quest.goal()==Goal.DONATE?"current_player_inventory":"server_action_ledger");
         out.addProperty("requiresVerification",verify);
         out.addProperty("status",verify?"needs_verification":current>=quest.target()?"ready_to_submit":"active");
@@ -183,6 +184,11 @@ final class GuildManager implements Listener {
         if(current<quest.target())missing.add("当前阶段还缺 "+(quest.target()-current)+" / "+quest.target()+"；"+out.get("condition").getAsString());
         if(verify)missing.add("工程需要显式 guild verify 验收，再 guild claim；查询不触发验收或结算");
         else if(current>=quest.target())missing.add("尚需 guild claim 交付本阶段；多阶段全部交付后才算整单完成");
+        if (!out.has("market")) {
+            var guide=TaskProgressGuidance.guide(quest,current,null,"",new com.google.gson.JsonObject());
+            out.add("guidance",guide);out.addProperty("advice",guide.get("nextAction").getAsString());
+            out.addProperty("nextCommand",guide.get("nextCommand").getAsString());
+        }
         if (out.has("market") && out.getAsJsonObject("market").has("guidance")) {
             var guide = out.getAsJsonObject("market").getAsJsonObject("guidance");
             // Keep the full guide only under market; duplicating it at every
@@ -382,7 +388,11 @@ final class GuildManager implements Listener {
             player.sendMessage(ChatColor.GRAY + "工程进度为上次验收快照；/mycli guild verify 重新验收实际结构。");
         showPeakRequirement(player, quest);
         showBiomeBorderRequirement(player, quest);
-        if (quest != null && (ExplorationObjectives.GOALS.contains(quest.goal()) || quest.goal() == Goal.MAP_HUNT)) plugin.taskMarket().surveyStatus(player);
+        if (quest != null && plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().surveyStatus(player);
+        else if (quest != null) {
+            var guide=TaskProgressGuidance.guide(quest,progress(player),null,"",new com.google.gson.JsonObject());
+            player.sendMessage("§a下一步："+guide.get("nextAction").getAsString());
+        }
     }
 
     private boolean examBlocks(Player player, String id) {
@@ -600,6 +610,8 @@ final class GuildManager implements Listener {
         Contract quest = active(player);
         if (quest != null && quest.goal() == Goal.CRAFT
                 && event.getCurrentItem().getType().name().equals(quest.siteId())) advance(player, quest);
+        else if (quest != null && quest.goal() == Goal.CRAFT && plugin.taskMarket().isMarket(quest.id()))
+            plugin.taskMarket().worldRejected(player,Goal.CRAFT,event.getCurrentItem().getType().name(),"WRONG_ITEM_OR_SITE");
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -612,6 +624,8 @@ final class GuildManager implements Listener {
         Contract quest = active(event.getPlayer());
         if (quest != null && quest.goal() == Goal.FISH
                 && (quest.siteId() == null || quest.siteId().equals(type.name()))) advance(event.getPlayer(), quest);
+        else if (quest != null && quest.goal() == Goal.FISH && plugin.taskMarket().isMarket(quest.id()))
+            plugin.taskMarket().worldRejected(event.getPlayer(),Goal.FISH,type.name(),"WRONG_ITEM_OR_SITE");
     }
 
     @EventHandler
@@ -889,7 +903,8 @@ final class GuildManager implements Listener {
         int next = current + 1;
         plugin.getConfig().set(base(player.getUniqueId()) + ".active.progress", next);
         plugin.saveConfig();
-        if (next >= quest.target()) player.sendMessage(ChatColor.GOLD + "公会委托「" + quest.title()
+        if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().progressRecorded(player,quest.goal(),current);
+        else if (next >= quest.target()) player.sendMessage(ChatColor.GOLD + "公会委托「" + quest.title()
                 + "」已达成！/mycli guild claim 交付，奖励进入个人试炼箱。");
         else player.sendMessage(ChatColor.AQUA + "公会委托「" + quest.title() + "」进度 " + next + "/" + quest.target());
     }

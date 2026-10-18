@@ -79,25 +79,36 @@ final class CombatObjectiveEvents implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void death(EntityDeathEvent event) {
         var enemy = event.getEntity(); Player killer = enemy.getKiller();
-        if (killer == null || killer.isDead() || killer.getGameMode() != GameMode.SURVIVAL
-                || !(enemy.getLastDamageCause() instanceof EntityDamageByEntityEvent lethal)) return;
+        if (killer == null || killer.isDead() || killer.getGameMode() != GameMode.SURVIVAL) return;
         CombatObjectives.Spec spec = plugin.taskMarket().combat(killer);
         if (spec == null) return;
+        if (!(enemy.getLastDamageCause() instanceof EntityDamageByEntityEvent lethal)) {
+            plugin.taskMarket().combatRejected(killer, enemy.getType().name(), null, "environment", "ATTACK_METHOD_MISMATCH"); return;
+        }
         String token = plugin.taskMarket().stepToken(killer), weapon, attack;
         if (lethal.getDamager() == killer) {
             var data = enemy.getPersistentDataContainer();
             if (!killer.getUniqueId().toString().equals(data.get(hitOwnerKey, PersistentDataType.STRING))
-                    || !token.equals(data.get(hitTokenKey, PersistentDataType.STRING))) return;
+                    || !token.equals(data.get(hitTokenKey, PersistentDataType.STRING))) {
+                plugin.taskMarket().combatRejected(killer, enemy.getType().name(), null, lethal.getCause().name(), "MELEE_EVIDENCE_MISSING"); return;
+            }
             weapon = data.get(hitWeaponKey, PersistentDataType.STRING); attack = "melee";
         } else if (lethal.getDamager() instanceof Projectile arrow && arrow.getShooter() instanceof Player shooter
                 && shooter.getUniqueId().equals(killer.getUniqueId())) {
             var data = arrow.getPersistentDataContainer();
             if (!killer.getUniqueId().toString().equals(data.get(ownerKey, PersistentDataType.STRING))
                     || !token.equals(data.get(tokenKey, PersistentDataType.STRING))
-                    || data.getOrDefault(shotKey, PersistentDataType.LONG, 0L) < plugin.taskMarket().stepStarted(killer)) return;
+                    || data.getOrDefault(shotKey, PersistentDataType.LONG, 0L) < plugin.taskMarket().stepStarted(killer)) {
+                plugin.taskMarket().combatRejected(killer, enemy.getType().name(), null, "projectile", "PROJECTILE_EVIDENCE_MISSING"); return;
+            }
             weapon = data.get(weaponKey, PersistentDataType.STRING); attack = "projectile";
-        } else return; // Lava, pets, reflected projectiles and unverified custom damage do not prove weapon skill.
+        } else {
+            // The gameplay action may succeed while this commission receives no proof.
+            plugin.taskMarket().combatRejected(killer, enemy.getType().name(), null, lethal.getCause().name(), "ATTACK_METHOD_MISMATCH"); return;
+        }
         if (spec.matches(enemy.getType().name(), weapon, attack))
             plugin.taskMarket().combatKill(killer, enemy.getUniqueId(), enemy.getType().name(), weapon, attack, token);
+        else plugin.taskMarket().combatRejected(killer, enemy.getType().name(), weapon, attack,
+                spec.mismatch(enemy.getType().name(), weapon, attack));
     }
 }

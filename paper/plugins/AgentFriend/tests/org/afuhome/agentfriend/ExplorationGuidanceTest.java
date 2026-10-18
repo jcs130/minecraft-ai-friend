@@ -17,7 +17,7 @@ public final class ExplorationGuidanceTest {
     }
     public static void main(String[] args) throws Exception {
         var places = ExplorationGuidance.load(java.nio.file.Path.of(args[0]));
-        check("three verified destinations", places.size() == 3);
+        check("original verified destinations retained", places.size() >= 3);
         var nav = json("{\"dimensionMatches\":true,\"requiredDimension\":\"minecraft:overworld\"}");
         var empty = json("{\"ready\":false,\"validCurrentTarget\":false,\"distinctZones\":0}");
         var g = guide(nav, empty, "structure_unobserved_or_start_unloaded", places);
@@ -30,6 +30,10 @@ public final class ExplorationGuidanceTest {
         check("catalog is not arrival evidence", !g.get("targetMatch").getAsBoolean() && !g.get("ready").getAsBoolean());
         check("one missing arrival rather than six zero counters", g.getAsJsonArray("missingConditions").size() == 1);
         check("unknown target never invented", !guide(nav, empty, "", List.of()).has("landmark"));
+        var unknown = guide(nav, empty, "", List.of());
+        check("unknown location explicit instead of asking an uninformed NPC", unknown.get("reason").getAsString().equals("TARGET_LOCATION_UNKNOWN")
+                && unknown.get("nextAction").getAsString().contains("暂未核实") && !unknown.get("nextAction").getAsString().contains("向女神"));
+        check("reference does not invite vertical digging", g.get("nextAction").getAsString().contains("不沿坐标竖挖"));
         var wrong = nav.deepCopy(); wrong.addProperty("dimensionMatches", false);
         g = guide(wrong, empty, "outside_survey_target", places);
         check("return dimension first", g.get("phase").getAsString().equals("return_to_required_dimension") && !g.has("landmark"));
@@ -53,10 +57,15 @@ public final class ExplorationGuidanceTest {
         check("completed stages not entire multi-stage task", g.get("nextAction").getAsString().contains("多阶段"));
         check("frozen stage description retained", TaskGuidance.step(GuildManager.Goal.STRUCTURE, "旧规则").equals("旧规则"));
         check("conditions use human world and zone explanation", temple().conditions(6).contains("主世界") && temple().conditions(6).contains("同一座建筑"));
+        var forest=new ExplorationObjectives.Target(GuildManager.Goal.BIOME,"nether",List.of("minecraft:crimson_forest"),16,128,30,1,1,0);
+        var nether=json("{\"dimensionMatches\":true,\"requiredDimension\":\"minecraft:the_nether\"}");
+        var biomeGuide=ExplorationGuidance.guide(forest,6,nether,empty,"outside_survey_biome",places,0,0);
+        check("wrong biome names target and an explicit search phase",biomeGuide.get("reason").getAsString().equals("TARGET_BIOME_NOT_ENTERED")&&biomeGuide.get("nextAction").getAsString().contains("minecraft:crimson_forest"));
+        check("structure coordinates cannot masquerade as a biome destination",!biomeGuide.has("landmark")&&biomeGuide.get("nextAction").getAsString().contains("暂未登记"));
         var temporary = Files.createTempFile("guidance-catalog-", ".json");
         try {
             String original = Files.readString(java.nio.file.Path.of(args[0]));
-            for (String invalid : List.of("{broken", " ".repeat(16385), original.replace("\"x\":1607", "\"x\":1607.5"), original.replace("\"entranceVerified\":false", "\"entranceVerified\":true"), original.replace("\"x\":1607", "\"y\":80,\"x\":1607"))) {
+            for (String invalid : List.of("{broken", " ".repeat(16385), original.replaceAll("\"x\"\\s*:\\s*1607", "\"x\":1607.5"), original.replaceAll("\"entranceVerified\"\\s*:\\s*false", "\"entranceVerified\":true"), original.replaceAll("\"x\"\\s*:\\s*1607", "\"y\":80,\"x\":1607"))) {
                 Files.writeString(temporary, invalid);
                 try { ExplorationGuidance.load(temporary); throw new AssertionError("invalid catalog accepted"); }
                 catch (RuntimeException expected) { checks++; }

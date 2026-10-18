@@ -72,11 +72,19 @@ final class GoddessObservation {
     // existing chunk's quart biome holder directly, never request another chunk.
     private static String biome(Block b){return WorldBiomes.at(b);}
     private JsonObject detail(Block b){var j=new JsonObject();j.add("position",pos(b.getX(),b.getY(),b.getZ()));j.addProperty("type",b.getType().getKey().toString());j.addProperty("data",b.getBlockData().getAsString());j.addProperty("biome",biome(b));j.addProperty("biomeResolution","loaded_quart_cell_4x4x4");j.addProperty("passable",b.isPassable());j.addProperty("liquid",b.isLiquid());j.addProperty("hazard",DANGER.contains(b.getType()));j.addProperty("light",b.getLightLevel());plugin.lands().fields(j,b.getLocation());return j;}
-    private void player(JsonObject out,JsonObject q,Scan scan){Player p=target(q);Location at=p.getLocation();out.addProperty("player",p.getName());out.addProperty("uuid",p.getUniqueId().toString());out.add("position",location(at));out.addProperty("yaw",at.getYaw());out.addProperty("pitch",at.getPitch());out.addProperty("gameMode",p.getGameMode().name());out.addProperty("health",p.getHealth());out.addProperty("food",p.getFoodLevel());out.addProperty("onGround",p.isOnGround());Block b=block(p.getWorld(),at.getBlockX(),at.getBlockY()-1,at.getBlockZ(),scan);if(b!=null)out.add("underfoot",detail(b));out.add("currentContract",plugin.taskMarket().progressState(p));out.addProperty("inventoryIncluded",false);
+    private void player(JsonObject out,JsonObject q,Scan scan){Player p=target(q);Location at=p.getLocation();out.addProperty("player",p.getName());out.addProperty("uuid",p.getUniqueId().toString());out.add("position",location(at));out.addProperty("yaw",at.getYaw());out.addProperty("pitch",at.getPitch());out.addProperty("gameMode",p.getGameMode().name());out.addProperty("health",p.getHealth());out.addProperty("food",p.getFoodLevel());out.addProperty("onGround",p.isOnGround());Block b=block(p.getWorld(),at.getBlockX(),at.getBlockY()-1,at.getBlockZ(),scan);if(b!=null)out.add("underfoot",detail(b));out.add("currentContract",currentContract(p));out.addProperty("inventoryIncluded",false);
         if(plugin.worldLife()!=null&&plugin.worldLife().story()!=null){
             try{out.add("story",plugin.worldLife().story().state(p));}
             catch(IllegalStateException unreadable){var story=new JsonObject();story.addProperty("status","unavailable");story.addProperty("reason","story_record_unreadable");story.addProperty("nextCommand","/mycli world story status");out.add("story",story);}
         }
+    }
+    private JsonObject currentContract(Player p) {
+        JsonObject market=plugin.taskMarket().progressState(p);
+        if(market.get("available").getAsBoolean())return market;
+        JsonObject guild=plugin.guild().progressState(p);
+        if(guild.get("activeId").getAsString().isEmpty())return market;
+        guild.addProperty("available",guild.has("progress"));
+        guild.add("id",guild.get("activeId"));return guild;
     }
     private static Set<Material> filter(JsonObject q){if(!q.has("blocks")||!q.get("blocks").isJsonArray()||q.getAsJsonArray("blocks").isEmpty()||q.getAsJsonArray("blocks").size()>8)throw new IllegalArgumentException("blocks_requires_1_to_8_ids");Set<Material> wanted=new HashSet<>();for(JsonElement e:q.getAsJsonArray("blocks")){if(!e.isJsonPrimitive()||!e.getAsJsonPrimitive().isString()||!e.getAsString().matches("(?:minecraft:)?[a-z0-9_]{1,60}"))throw new IllegalArgumentException("invalid_block_id");Material m=Material.matchMaterial(e.getAsString());if(m==null||!m.isBlock()||m.isAir())throw new IllegalArgumentException("invalid_block_id");wanted.add(m);}return wanted;}
     private void area(JsonObject out,JsonObject q,World w,int x,int y,int z,Scan scan,boolean search){

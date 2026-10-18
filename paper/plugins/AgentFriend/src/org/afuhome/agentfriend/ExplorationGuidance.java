@@ -92,19 +92,25 @@ final class ExplorationGuidance {
             }
             missing.add("进入任务指定的天然结构内部");
             Landmark hint = nearest(target, navigation, places, x, z);
-            String next = "先向女神询问已核实的目标线索；没有线索时不要盲找或反复交付。";
+            out.addProperty("reason", hint == null ? "TARGET_LOCATION_UNKNOWN" : "TARGET_NOT_ENTERED");
+            String next = "本服公开线索暂未核实这个目标的位置；这不是已找到的任务地点。" + discovery(target)
+                    + " 保留本单和已有进度，不在无依据处反复竖挖或交付。";
             if (hint != null) {
                 JsonObject landmark = hint.json(); int distance = (int) Math.ceil(Math.hypot((double)hint.x - x, (double)hint.z - z));
                 landmark.addProperty("horizontalDistance", distance); out.add("landmark", landmark);
                 next = "前往" + target.dimensionLabel() + " X=" + hint.x + "、Z=" + hint.z + " 的" + hint.name
-                        + "（直线约" + distance + "格）；这是建筑参考位置，入口与安全路线未验证，抵达后找实际入口。";
+                        + "（直线约" + distance + "格）；这是建筑参考位置，入口与安全路线未验证。先在地表辨认洞口或侧向通道，不沿坐标竖挖。"
+                        + (target.keys().contains("minecraft:ancient_city") ? "古城在地下；抵达结构内再潜行走查，不要求召唤或击杀监守者。" : "抵达后找实际入口，再查任务状态确认结构匹配。");
             }
-            return phase(out, "find_target", "还未记录到目标内部探索；到同名群系或庙外不算。", next);
+            return phase(out, "find_target", "还未记录到目标内部探索；到同名群系、相同高度或结构边界外都不算。", next);
         }
         if (target.goal() == GuildManager.Goal.RETURN) return phase(out, "confirm_return", "已回目标维度，等待服务器记录。", "稍后 tasks status 查询；状态就绪后只交付一次。");
         if (reason.equals("outside_survey_biome")) {
             missing.add("进入指定群系 " + String.join(" 或 ", target.keys()));
-            return phase(out, "find_target_biome", "当前位置不是本阶段要求的群系。", "先找到指定群系再步行调查；普通森林不能代替丛林等其他群系。");
+            out.addProperty("reason", "TARGET_BIOME_NOT_ENTERED");
+            return phase(out, "find_target_biome", "当前位置不是本阶段要求的群系，旧进度保留。",
+                    "本指引暂未登记该群系坐标。先沿" + target.dimensionLabel() + "的可通行地形寻找 " + String.join(" 或 ", target.keys())
+                    + "，跨过群系边界后 tasks status 核对是否匹配，再调查新区域；不靠相似外观认定，不在原地等计数或反复交付。");
         }
         deficit(missing, "不同分区", number(evidence, "distinctZones"), count, "个");
         deficit(missing, "有效行进", number(evidence, "distance"), target.minDistance(), "格");
@@ -117,6 +123,13 @@ final class ExplorationGuidance {
                 : "步行进入尚未走过的区域；站着等、重复原路和传送位移不补足行进证据。";
         if (target.goal() == GuildManager.Goal.STRUCTURE) next += "分区是同一座建筑内的" + target.zoneSize() + "格空间网格，不是多座建筑或固定打卡方块。";
         return phase(out, "survey", "正在记录实际探索；只需补齐下列缺项。", next);
+    }
+    private static String discovery(ExplorationObjectives.Target t) {
+        if (t.keys().contains("minecraft:mansion")) return "可向制图师购买林地探险家地图，先核对原图目标，再规划行程。";
+        if (t.keys().contains("minecraft:monument")) return "可向制图师购买海洋探险家地图，先核对原图目标，并准备水下呼吸。";
+        if (t.keys().contains("minecraft:stronghold")) return "可从安全地表使用末影之眼定位，保留回程点，再沿自然洞口寻找内部通道。";
+        if (t.keys().contains("minecraft:end_city")) return "需在末地外岛寻找真实城楼；中央主岛和普通末地石不是目标。";
+        return "先收集探险地图、已有探险记录或核实过的地形线索；暂时找不到可先做其他独立活动。";
     }
     private static Landmark nearest(ExplorationObjectives.Target t, JsonObject nav, List<Landmark> places, int x, int z) {
         String world = text(nav, "requiredDimension");

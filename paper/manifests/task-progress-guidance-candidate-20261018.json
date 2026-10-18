@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-18",
+  "version": "0.4.47.5",
+  "state": "candidate_verified_not_deployed",
+  "baseline": "0.4.47.4",
+  "baselineSha256": "f1e3dc814fda2651b46e5ebfae5c90f0346b9b10fc3acd8968739422d338ba7c",
+  "sha256": "36f6a8bf7acd5fb652ddf87d6def0e412cfb4d14554b4fade64db9890c5cc56a",
+  "binaryEntriesChanged": 14,
+  "unrelatedBinaryEntriesIdentical": true,
+  "publicArchives048Included": false,
+  "liveChange": "13_public_structure_references_hot_reloaded_only",
+  "paperRestarted": false,
+  "taskRulesAndAcceptedSnapshotsChanged": false,
+  "playerItemsChanged": false,
+  "audit": { "goals": 40, "configuredTasks": 53, "configuredStages": 91, "legacyTasks": 37 },
+  "tests": { "ruleAssertions": 550, "publicCatalogNodeTests": 2, "nativeInitial": 28, "nativeColdResume": 10 },
+  "nativeArtifactSha256": "36f6a8bf7acd5fb652ddf87d6def0e412cfb4d14554b4fade64db9890c5cc56a",
+  "releaseGate": "fresh_restart_approval_then_notice_and_existing_E_F_full_cold_backup"
+}

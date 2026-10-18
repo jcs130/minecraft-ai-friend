@@ -27,6 +27,13 @@ final class CombatObjectives {
                     && weapon != null && !weapon.isEmpty() && (weapons.contains("ANY") || weapons.contains(weapon)
                     || weapons.contains(family(weapon)));
         }
+        String mismatch(String mob, String weapon, String actualAttack) {
+            if (!mobs.contains(mob)) return "TARGET_MISMATCH";
+            if (!attack.equals("any") && !attack.equals(actualAttack)) return "ATTACK_METHOD_MISMATCH";
+            if (weapon == null || weapon.isEmpty() || !(weapons.contains("ANY") || weapons.contains(weapon)
+                    || weapons.contains(family(weapon)))) return "WEAPON_MISMATCH";
+            return "";
+        }
         JsonObject json() {
             JsonObject out = new JsonObject(); JsonArray m = new JsonArray(), w = new JsonArray();
             mobs.stream().sorted().forEach(m::add); weapons.stream().sorted().forEach(w::add);
