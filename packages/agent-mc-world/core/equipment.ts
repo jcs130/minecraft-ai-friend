@@ -60,6 +60,14 @@ export async function equipSlotConfirmed(bot: Bot, item: Item, dest: EquipmentDe
     if (!found || !sameInventoryStack(found, item)) {
       throw new SkillBlocked('待穿装备所在槽位已经变化，先重新核对背包');
     }
+    if (dest === 'hand' && slot >= window.hotbarStart && slot < window.hotbarStart + 9
+      && ((source >= window.inventoryStart && source < window.inventoryEnd)
+        || source === bot.getEquipmentDestSlot('off-hand'))) {
+      // A number-key swap preserves both complete stacks and an empty cursor,
+      // even with a full bag or compatible stacks already in the selected hand.
+      await clickInventoryConfirmed(bot, source, slot - window.hotbarStart, 2, window);
+      return;
+    }
     if (dest === 'off-hand' && source >= window.inventoryStart && source < window.inventoryEnd) {
       await swapOffHandConfirmed(bot, source, slot);
       return;

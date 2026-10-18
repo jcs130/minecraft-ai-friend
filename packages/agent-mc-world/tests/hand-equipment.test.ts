@@ -21,7 +21,7 @@ function rig(denySwap = false) {
   const bot = Object.assign(new EventEmitter(), {
     registry, inventory, currentWindow: null, _client: client, quickBarSlot: 0,
     supportFeature: (f: string) => registry.supportFeature(f),
-    getEquipmentDestSlot: () => 36 + bot.quickBarSlot,
+    getEquipmentDestSlot: (dest: string) => dest === 'off-hand' ? 45 : 36 + bot.quickBarSlot,
     setQuickBarSlot: (slot: number) => { bot.quickBarSlot = slot; },
   }) as unknown as Bot;
   Object.defineProperty(bot, 'heldItem', { get: () => inventory.slots[36 + bot.quickBarSlot] });
@@ -31,14 +31,18 @@ function rig(denySwap = false) {
   client.write = (name, p) => {
     if (name !== 'window_click') return;
     sent.push(p.slot);
-    const denied = denySwap && p.slot === 36 && server.selectedItem && server.slots[36];
+    const denied = denySwap && ((p.mode === 2 && p.mouseButton === 0)
+      || (p.slot === 36 && server.selectedItem && server.slots[36]));
     if (!denied) server.acceptClick({ slot: p.slot, mouseButton: p.mouseButton, mode: p.mode,
       item: server.slots[p.slot] });
     setTimeout(() => client.emit('window_items', { windowId: 0, stateId: ++stateId,
       items: server.slots.map((x: unknown) => Item.toNotch(x)), carriedItem: Item.toNotch(server.selectedItem) }), 166);
   };
   bot.clickWindow = async (slot, mouseButton, mode) => {
-    const changed = inventory.acceptClick({ slot, mouseButton, mode, item: inventory.slots[slot] });
+    const before = inventory.slots.map((item: unknown) => Item.toNotch(item));
+    const nativeChanged = inventory.acceptClick({ slot, mouseButton, mode, item: inventory.slots[slot] });
+    const changed = nativeChanged ?? inventory.slots.flatMap((item: unknown, index: number) =>
+      JSON.stringify(Item.toNotch(item)) === JSON.stringify(before[index]) ? [] : [index]);
     client.write('window_click', { windowId: 0, stateId, slot, mouseButton, mode,
       changedSlots: changed.map((location: number) => ({ location, item: Item.toNotch(inventory.slots[location]) })),
       cursorItem: Item.toNotch(inventory.selectedItem) });
@@ -76,7 +80,7 @@ describe('hand material server confirmation', () => {
     expect(r.server.selectedItem).toBeNull();
   });
 
-  it('stops a refused material swap without returning or dropping its cursor', async () => {
+  it('stops a refused material swap without picking up or dropping a cursor item', async () => {
     vi.useFakeTimers();
     const r = rig(true);
     const result = ensureHolding(r.bot, 'green_bed');
@@ -84,8 +88,9 @@ describe('hand material server confirmation', () => {
     await vi.runAllTimersAsync();
     await failed;
     expect(r.server.slots[36].name).toBe('player_head');
-    expect(r.server.selectedItem.name).toBe('green_bed');
-    expect(r.sent).toEqual([9, 36]);
+    expect(r.server.slots[9].name).toBe('green_bed');
+    expect(r.server.selectedItem).toBeNull();
+    expect(r.sent).toEqual([9]);
   });
 
   it('does not report a named main-hand equip before the server confirms its final slots', async () => {
@@ -94,7 +99,7 @@ describe('hand material server confirmation', () => {
     let finished = false;
     const result = skillEquip(r.bot, { skill: 'equip', item: 'green_bed', hand: 'main' })
       .then(v => { finished = true; return v; });
-    await vi.advanceTimersByTimeAsync(331);
+    await vi.advanceTimersByTimeAsync(165);
     expect(finished).toBe(false);
     await vi.runAllTimersAsync();
     expect(await result).toContain('手里拿起了');
