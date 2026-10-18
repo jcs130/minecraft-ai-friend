@@ -197,6 +197,7 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
   if (input.mode === 'voxels') {
     const bounds = input.bounds.map((n, i) => n + feet[i % 3]) as Box;
     const palette: Material[] = [], paletteIds = new Map<string, number>(), cells: number[] = [];
+    const counts: number[] = [], landmarks: Array<{ at: Point; palette: number; distance: number }> = [];
     let unknownCells = 0;
     for (let y = bounds[1]; y <= bounds[4]; y++) for (let z = bounds[2]; z <= bounds[5]; z++) for (let x = bounds[0]; x <= bounds[3]; x++) {
       const sample = read([x, y, z]);
@@ -205,13 +206,33 @@ export function observeSpatial(bot: Bot, input: SpatialObserveInput) {
       let id = paletteIds.get(key);
       if (id === undefined) { id = palette.length; paletteIds.set(key, id); palette.push(sample.material); }
       cells.push(id);
+      counts[id] = (counts[id] ?? 0) + 1;
+      if (/(?:^|_)(?:stairs|slab|ladder|door|trapdoor|fence_gate|sign)$/.test(sample.material.name)) {
+        landmarks.push({ at: [x,y,z], palette: id, distance: round(Math.hypot(x-feet[0],y-feet[1],z-feet[2])) });
+      }
     }
     const region = [...bounds] as Box;
     for (let i = 3; i < 6; i++) region[i]++;
     const nearby = entities.filter(e => e.bounds
       ? [0, 1, 2].every(i => e.bounds![i] < region[i + 3] && e.bounds![i + 3] > region[i])
       : [0, 1, 2].every(i => e.position[i] >= region[i] && e.position[i] < region[i + 3]));
-    return { ...common, kind: 'voxels' as const, bounds, order: 'y,z,x; x fastest', palette, cells, unknownCells, entities: nearby,
+    landmarks.sort((a,b) => a.distance-b.distance || a.at[1]-b.at[1] || a.at[2]-b.at[2] || a.at[0]-b.at[0]);
+    const materialCounts = palette.map((p,id) => ({ palette:id, name:p.name, cells:counts[id] })).sort((a,b) => b.cells-a.cells);
+    let signPreviews = 0;
+    const summary = { observedCells: cells.length-unknownCells, totalCells: cells.length, unknownCells,
+      unknownMeaning: '-1=未观察（遮挡或未加载），不是空气或实心，也不能排除目标或通道',
+      headLayerIncluded: bounds[1] <= feet[1]+1 && bounds[4] >= feet[1]+1,
+      materials: materialCounts.slice(0,16), omittedMaterials: Math.max(0,materialCounts.length-16),
+      landmarks: landmarks.slice(0,12).map(({ at,palette:id }) => {
+        const sign = /(?:^|_)sign$/.test(palette[id].name) && signPreviews++ < 3
+          ? signTextSnapshot(bot.blockAt(new Vec3(...at))) : null;
+        return { at, name:palette[id].name, properties:palette[id].properties,
+          ...(sign ? { sign:{...sign,front:sign.front?.slice(0,160)??null,back:sign.back?.slice(0,160)??null,
+            truncated:sign.truncated||(sign.front?.length??0)>160||(sign.back?.length??0)>160} } : {}) };
+      }),
+      omittedLandmarks: Math.max(0,landmarks.length-12),
+      note: '仅列实际观察到的地标；门、楼梯、牌子是核验线索，不证明入口、整条路线可达或施工权限。' };
+    return { ...common, kind: 'voxels' as const, bounds, summary, order: 'y,z,x; x fastest', palette, cells, unknownCells, entities: nearby,
       geometry: 'collision boxes in local block coordinates; null=unread, []=no collision; liquids remain materials; no support/passability judgement' };
   }
   const unreadEntityIds = entities.filter(e => !e.bounds).map(e => e.id);
