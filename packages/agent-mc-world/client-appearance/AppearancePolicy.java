@@ -8,7 +8,11 @@ public final class AppearancePolicy {
     private AppearancePolicy() {}
     public static boolean matches(String configuredServer, String actualServer, String configuredObserver, String actualObserver) {
         return configuredServer != null && configuredObserver != null && !configuredServer.isBlank()
-            && configuredServer.trim().equalsIgnoreCase(actualServer == null ? "" : actualServer.trim())
+            // Minecraft may omit its default port in ServerInfo after a reconnect.
+            // Compare that equivalent spelling only; never resolve aliases or broaden host/port scope.
+            && configuredServer.trim().replaceFirst("^([^:\\[\\]\\s]+|\\[[^\\]]+\\]):25565$", "$1")
+                .equalsIgnoreCase(actualServer == null ? "" : actualServer.trim()
+                    .replaceFirst("^([^:\\[\\]\\s]+|\\[[^\\]]+\\]):25565$", "$1"))
             && configuredObserver.equalsIgnoreCase(actualObserver == null ? "" : actualObserver);
     }
     public static String uuid(String value) {

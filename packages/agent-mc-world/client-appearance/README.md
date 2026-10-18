@@ -18,7 +18,7 @@ Create the private `config/agentmc-client-appearances.json`:
 }
 ```
 
-Both server and signed-in observer name must match. Only the configured player UUIDs are overridden locally. The model and exact texture key must already be provided by the server's model catalogue; this module does not download, grant, install or publish models, change server selections or send YSM commands. Missing model bytes can still produce a renderer fallback; the logged selection is not render verification.
+Both server and signed-in observer name must match. An omitted default Java port and explicit `:25565` are equivalent, including after Minecraft reconnects; non-default ports, other hosts and other observer accounts remain distinct. This comparison performs no DNS lookup. Only the configured player UUIDs are overridden locally. The model and exact texture key must already be provided by the server's model catalogue; this module does not download, grant, install or publish models, change server selections or send YSM commands. Missing model bytes can still produce a renderer fallback; the logged selection is not render verification.
 
 The profile is authoritative for this client's display while connected; a later server selection for the same UUID is overridden. Remove a binding or disable the profile and reconnect **only this client** to return to server-controlled appearances. Players with no binding retain the server's appearance. Credentials, personal model files and role-specific names belong in the private deployment, never this package.
 

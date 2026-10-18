@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "agentmc-client-appearances",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "name": "Agent MC Client Appearances",
   "environment": "client",
   "entrypoints": {"client": ["org.agentmc.appearance.ClientAppearances"]},
