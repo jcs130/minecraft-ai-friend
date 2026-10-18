@@ -41,12 +41,20 @@
 
 - [x] Clone the local Git repository into the private inspection directory without a checkout; check out the currently deployed source revision from `core_distribution/source.json` and cherry-pick Task 1's commit. Stamp a distinct `0.5.7-rc.20.env.1` candidate version.
 - [x] Verify the exact diff against that deployed source contains only the lifecycle fix/tests and version stamp. Run full package checks, pack, and test a separate installed consumer. Push the candidate source branch normally so the dependency remains fetchable.
-- [ ] Generate actual source/build/type/archive hashes from this package; retain the current external viewer inputs. Update the autonomy pin and dependency lock, run its full tests and isolated installed-wheel probe, then commit/push main.
-- [ ] Update only the adapter dependency/version and corresponding docs/tests; verify isolated vendor installation, pytest, Ruff and the official release-structure check before committing/pushing.
+- [x] Generate actual source/build/type/archive hashes from this package; retain the current external viewer inputs. Update the autonomy pin and dependency lock, run its full tests and isolated installed-wheel probe, then commit/push main.
+- [x] Update only the adapter dependency/version and corresponding docs/tests; verify isolated vendor installation, pytest, Ruff and the official release-structure check before committing/pushing.
 
 ### Task 3: Scoped activation and evidence
 
-- [ ] Re-read Settings identity, operator stop state, owner lease and process creation times. Use a new normal mailbox stop UUID; require stopped/drained/non-uncertain state before swapping only the owned runtime packages.
-- [ ] Preserve configuration bytes and protected processes; start the same independent executor through its normal guarded CLI. Check actual loaded receipts, connection, fresh facts and browser rendering.
-- [ ] Observe natural activity without extra model probes or synthetic speech. If HTTP 402 persists, record planning as blocked by provider account state; a connected process is not autonomous survival success.
-- [ ] Append the full inspection and honest source/deployed/live verification states to maintenance logs. Keep release acceptance blocked by real deaths and unavailable planning.
+- [x] Re-read Settings identity, operator stop state, owner lease and process creation times. Use a new normal mailbox stop UUID; require stopped/drained/non-uncertain state before swapping only the owned runtime packages.
+- [x] Preserve every configuration field except the verified backend directory and preserve protected processes; start the same independent executor through its normal guarded CLI. Check actual loaded receipts, connection, fresh facts and browser rendering.
+- [x] Observe natural activity without extra model probes or synthetic speech. If HTTP 402 persists, record planning as blocked by provider account state; a connected process is not autonomous survival success.
+- [x] Append the full inspection and honest source/deployed/live verification states to maintenance logs. Keep release acceptance blocked by real deaths and unavailable planning.
+
+## Rollout evidence
+
+- Canonical fix: `50e9837b`; minimal rc.20 candidate: `aac8e47d`; autonomy 0.2.15 pin: `4b8fa039`; adapter 0.6.18 pin: `a58680d2`.
+- Canonical core: 1,443 tests passed, two skipped; candidate baseline: 1,390 passed, two skipped; water/lifecycle selection: 36 passed. Three new regression cases failed before the fix.
+- Autonomy: 1,063 passed; installed-wheel selection: 86 passed; installed Node integration: 10 passed; adapter: 369 passed. Ruff and official release-structure checks passed. No release tag or Market submission was made.
+- Candidate package archive SHA256: `d9d89f9e7167dfaf13e6998d174fe2eba8e0816e6510e40a5d4b0ecfa246158a`. The running engine child and viewer wrapper use this verified package root.
+- A three-minute connected observation retained the provider's HTTP 402 blocker and produced no new body tasks. No post-deployment death cycle or desktop speech playback was verified. Repeated environmental deaths and sustained survival remain open acceptance work.
