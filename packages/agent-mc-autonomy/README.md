@@ -1,5 +1,9 @@
 # Agent MC Autonomy
 
+0.2.27 pins core `0.5.7-rc.32`, including the official Java 1.21.1 ingredient
+tag reference for mixed-material crafting. Grid proposals still require actual
+server output; full context, host personality and queue semantics are unchanged.
+
 0.2.26 pins the independently built `agent-mc-world@0.5.7-rc.31` body.
 Existing-path navigation, split inventory acknowledgements, offhand equipment
 and occupied-feet coordinates now reach pinned consumers as well as core users.
