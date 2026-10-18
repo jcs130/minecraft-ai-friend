@@ -1,5 +1,13 @@
 # Agent MC Autonomy
 
+0.2.22 also moves the complete current planning goal to the changing full-context
+tail. Updated host proposals no longer alter the prefix before retained history;
+user/standing-goal priority and original wording remain intact. Layout digests
+of the stable head, tool catalogue and first retained history group distinguish
+goal updates from catalogue changes or real-window retirement without logging
+private prompts. No context capacity, dispatch permission or compact-mode
+projection is changed.
+
 0.2.21 reuses exact evidence in full context. A native terminal outcome is
 appended once as immutable historical evidence between complete exchanges;
 the changing tail references that same value only while its source is included

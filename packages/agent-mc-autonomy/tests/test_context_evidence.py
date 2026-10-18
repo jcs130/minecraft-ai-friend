@@ -140,3 +140,18 @@ def test_compact_mode_keeps_existing_projection(framework_module,tmp_path,run_as
     value={'text':text,'execution':{**action(True),'evidence':{'receipt':text}}}
     view=json.loads(run_async(controller.archive_receipt('request','mc_do',value)))
     assert 'context_value_refs' not in view
+
+
+def test_full_current_goal_changes_only_the_dynamic_tail():
+    history=[[{'role':'assistant','content':'Original complete historical exchange'}]]
+    one='Standing goal: 生存\nCurrent user goal (priority over proposed stages): 建家\nHost review proposed stage: 先吃饭'
+    two=one.replace('先吃饭','制作工具，再检查实际回执')
+    requests=[];budgets=[]
+    for goal in (one,two):
+        messages,budget=assemble('stable',[],'Goal: '+goal,{'parts':[]},[],history,
+            context_tokens=131072,reserved_output=1024,context_mode='full')
+        requests.append(messages);budgets.append(budget)
+    assert requests[0][:-1]==requests[1][:-1]
+    assert json.loads(requests[0][-1]['content'])['current_goal']=='Goal: '+one
+    assert json.loads(requests[1][-1]['content'])['current_goal']=='Goal: '+two
+    assert budgets[0]['layout']==budgets[1]['layout']

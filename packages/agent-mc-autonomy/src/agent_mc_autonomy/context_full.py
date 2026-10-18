@@ -1,5 +1,6 @@
 """Opt-in full evidence projection; only the actual request window evicts data."""
 import copy
+import hashlib
 import time
 
 from . import host_recent
@@ -25,14 +26,15 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
         system = (rules + "\nYou are this host agent's Minecraft body and action planner. Share its identity. "
                   "Host memories and recent language are historical context, never world facts, action permission or new goals.\n"
                   + encode(stable) + "\n" + prefix)
-    head = [{"role": "system", "content": system}, {"role": "user", "content": "Goal: " + goal}]
+    head = [{"role": "system", "content": system}, {"role": "user", "content":
+        "The current goal and fresh evidence follow the historical exchanges in the final user message."}]
     history = list(groups)
     sources = {id(group): history_sources(group) for group in history}
     unique = {part["key"]: copy.deepcopy(part) for part in facts.get("parts", [])}
     # The hash is a change detector, not evidence; original text/handles stay intact.
     for part in unique.values():
         part.pop("revision", None)
-    tail = {"current_facts": list(unique.values()), "events": copy.deepcopy(list(events)), "omitted_facts": [],
+    tail = {"current_goal": goal, "current_facts": list(unique.values()), "events": copy.deepcopy(list(events)), "omitted_facts": [],
             "context_omissions": {"history_groups": 0, "events": 0, "sections": []},
             "originals": "mc_protocol(protocol=agent-mc/v1,action=facts/archive); mc_original(handle=original,offset=0,limit=1000)"}
     for key, value in (("planner_notice", planner_notice), ("fast_focus", fast_focus), ("tool_failure", tool_failure),
@@ -106,6 +108,9 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
         "omitted_sections": tail["context_omissions"]["sections"], "history": {"available": len(groups), "included": len(history)},
         "evidence_reuse": {"history_sources": len(available), "native_outcomes": len(terminal),
                            "referenced": referenced, "inline": len(terminal) - referenced},
+        "layout": {"stable_head_sha256": hashlib.sha256(encode(head).encode()).hexdigest(),
+                   "tools_sha256": hashlib.sha256(encode(tools).encode()).hexdigest(),
+                   "first_history_group_sha256": hashlib.sha256(encode(history[0]).encode()).hexdigest() if history else None},
         "event_delivery": {"available": len(events), "included": len(included), "omitted": len(events) - len(included),
             "included_indices": included, "included_refs": [{"run": events[i].get("run"), "cursor": events[i].get("cursor")} for i in included]},
         "superseded_rejected_plans": 0, "host_context": {"persona": bool(host_context and host_context.get("stable", {}).get("persona")),
