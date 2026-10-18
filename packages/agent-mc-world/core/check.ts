@@ -630,7 +630,7 @@ export function evalAssert(assert: CheckAssert, world: CheckWorld): CheckResult 
   }
 }
 
-/** 符合项合并计数，其余逐条报告。 */
+/** Preserve every bounded assertion, including the support that did match. */
 export function renderChecks(parsed: readonly CheckParsed[], world: CheckWorld): string {
   const lines: Array<{ n: number; result: CheckResult }> = parsed.map((item, i) => ({
     n: i + 1,
@@ -652,8 +652,9 @@ export function renderChecks(parsed: readonly CheckParsed[], world: CheckWorld):
     ].filter(Boolean).join('、'),
   ].join(':');
 
-  const body = [...bad, ...unknown, ...errored]
-    .sort((l, r) => l.n - r.n)
-    .map((l) => `#${l.n} ${l.result.text}`);
-  return body.length === 0 ? `${head}。` : `${head}。\n${body.join('\n')}`;
+  const body = lines.map((l) => `#${l.n} ${l.result.verdict === 'ok' ? '符合：' : ''}${l.result.text}`);
+  const position = parsed.some(item => item.ok && item.assert.kind !== 'inv') ? world.position?.() : null;
+  const feet = position?.length === 3 && position.every(Number.isFinite)
+    ? `当前脚格 ${posText(position.map(Math.floor) as PositionXYZ)}。\n` : '';
+  return `${feet}${head}。${body.length ? `\n${body.join('\n')}` : ''}`;
 }

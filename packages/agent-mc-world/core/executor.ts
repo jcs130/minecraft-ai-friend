@@ -2058,7 +2058,10 @@ export class Executor {
             elapsedMs: Date.now() - t.stepStartedAt,
             taskElapsedMs: Date.now() - t.startedAt,
             count: t.count,
-            pos: p ? { x: Math.round(p.x), y: Math.round(p.y), z: Math.round(p.z) } : null,
+            // Queue positions identify the occupied feet cell, as do task
+            // terminals and world snapshots. Rounding points at a neighboring
+            // cell at x/z >= .5 and may make a supported player appear over air.
+            pos: p ? { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) } : null,
           }
         : null,
       waiting: [
@@ -5459,7 +5462,7 @@ export class Executor {
           msg: `第 ${i + 1} 步 ${describeSkill(call)}`,
           data: {
             call,
-            from: at ? { x: Math.round(at.x), y: Math.round(at.y), z: Math.round(at.z) } : null,
+            from: at ? { x: Math.floor(at.x), y: Math.floor(at.y), z: Math.floor(at.z) } : null,
           },
         });
         let lastProgressPos = at ? { x: at.x, y: at.y, z: at.z } : null;
@@ -5478,7 +5481,7 @@ export class Executor {
             stepCount: task.steps.length,
             step: describeSkill(call),
             elapsedS: Math.round((Date.now() - startedAt) / 1000),
-            pos: p ? { x: Math.round(p.x), y: Math.round(p.y), z: Math.round(p.z) } : null,
+            pos: p ? { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) } : null,
             movedBlocks: moved === null ? null : Math.round(moved * 10) / 10,
             count: task.count,
             ...(ctx.progressDetail ? { detail: ctx.progressDetail() } : {}),

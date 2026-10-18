@@ -1,5 +1,13 @@
 # Agent MC World
 
+`0.5.7-rc.31` uses the occupied feet cell consistently in task queues,
+progress and world snapshots. Continuous positions are floored, including
+negative coordinates; they are not rounded into a neighboring air cell.
+`mc_check` keeps successful assertions with their named coordinates as well
+as failures and unknowns, and labels the current feet cell when available.
+Checking a front cell or an unobserved region does not establish that the
+player's current support or the entire surrounding terrain is empty.
+
 Opt-in [continuous gameplay evidence](docs/gameplay-learning.md) follows an
 existing Agent's operation journal and local viewer without controlling its
 body or calling a language model. Typed MCAP/FlatBuffers records retain progress, risk,

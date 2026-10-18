@@ -4,6 +4,33 @@ import { renderChecks, type CheckWorld } from '../core/check.ts';
 import { observationView } from '../core/perception-sight.ts';
 
 describe('check unknown observations', () => {
+  it('keeps the occupied support and tested front cells distinct, including successful assertions', () => {
+    const world: CheckWorld = { position: () => [49.7, 90, 149.7],
+      cell: (x, y, z) => x === 49 && y === 89 && z === 149 ? { state: 'netherrack', solid: true }
+        : x === 51 ? null : { state: 'air', solid: false },
+      inventory: () => new Map(), site: () => null, mark: () => null };
+    const result = renderChecks([
+      { ok: true, assert: { kind: 'at', at: [49, 89, 149], is: 'netherrack' } },
+      { ok: true, assert: { kind: 'at', at: [50, 89, 150], is: 'netherrack' } },
+      { ok: true, assert: { kind: 'at', at: [51, 89, 150], is: 'netherrack' } },
+    ], world);
+    expect(result).toContain('当前脚格 (49, 90, 149)');
+    expect(result).toContain('#1 符合：');
+    expect(result).toContain('(49, 89, 149)');
+    expect(result).toContain('下界岩');
+    expect(result).toContain('#2 (50, 89, 150)');
+    expect(result).toContain('现在是空气');
+    expect(result).toContain('#3 (51, 89, 150) 尚未观察');
+    expect(result).not.toContain('全是空');
+  });
+  it('reports an all-matching air query as named cells and floors negative feet coordinates', () => {
+    const world: CheckWorld = { position: () => [-.1, 64.5, -439.5],
+      cell: () => ({ state: 'air', solid: false }), inventory: () => new Map(), site: () => null, mark: () => null };
+    const result = renderChecks([{ ok: true, assert: { kind: 'at', at: [0, 64, 0], is: 'air' } }], world);
+    expect(result).toContain('当前脚格 (-1, 64, -440)');
+    expect(result).toContain('#1 符合：');
+    expect(result).toContain('(0, 64, 0)');
+  });
   it('keeps an occluded but loaded cell unknown without diagnosing an unloaded chunk', () => {
     const bot = { entity: { id: 1, position: new Vec3(.5, 64, .5), yaw: 0, pitch: 0 },
       blockAt: (p: Vec3) => p.z === -2 || p.z === -5
