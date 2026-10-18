@@ -5,6 +5,7 @@ import { SkillBlocked } from './skill-context.ts';
 import { itemCustomName } from './item-display.ts';
 
 const MECHANISM = /(^|_)(?:door|trapdoor|fence_gate|button)$/;
+const BED = /(^|_)bed$/;
 const UTILITY = new Set([
   'lever', 'chest', 'trapped_chest', 'barrel', 'ender_chest',
   'furnace', 'blast_furnace', 'smoker', 'crafting_table',
@@ -25,7 +26,9 @@ export function needsBareHandToInteract(name: string, heldItemName?: string | nu
   // 剑、镐等普通工具可以直接按原版机制开门和按按钮。只对可能把右键
   // 截走的道具腾手；否则满包时连受保护区域的门都打不开。
   if (MECHANISM.test(name)) return !heldItemName || !ORDINARY_TOOL.test(heldItemName);
-  return UTILITY.has(name);
+  // Beds also accept ordinary tools. A full bag must not turn the optional
+  // empty-hand preparation into a blanket refusal to attempt sleep.
+  return UTILITY.has(name) || BED.test(name);
 }
 
 /** 已知有空背包格才 unequip；不能让 Mineflayer 在满包时把主手物品扔掉。 */
