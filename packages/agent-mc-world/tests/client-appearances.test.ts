@@ -16,5 +16,5 @@ it.skipIf(!javaAvailable)('scopes client appearances by server, observer and UUI
     ...['AppearancePolicy.java','AppearancePolicyCheck.java'].map(file => join(root,'client-appearance',file))],
     {stdio:'pipe',windowsHide:true});
   expect(execFileSync(executable('java'), ['-cp',output,'AppearancePolicyCheck'], {encoding:'utf8',windowsHide:true}))
-    .toContain('14 checks passed');
+    .toContain('22 checks passed');
 }, 20_000);

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "agentmc-client-graphics",
+  "version": "0.1.0",
+  "name": "Agent MC Client Graphics",
+  "environment": "client",
+  "entrypoints": {"preLaunch": ["org.agentmc.graphics.GraphicsEnvironment"]},
+  "mixins": ["agentmc-client-graphics.mixins.json"],
+  "depends": {"fabricloader": ">=0.16.13", "minecraft": "1.21.1", "java": ">=21"}
+}
