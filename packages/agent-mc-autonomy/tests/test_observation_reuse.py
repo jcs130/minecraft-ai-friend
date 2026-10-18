@@ -4,10 +4,9 @@ import dataclasses
 import json
 
 import pytest
-
-from agent_mc_autonomy.context import assemble
 from test_controller import action, setup
 
+from agent_mc_autonomy.context import assemble
 
 PLAN = {"steps": [{"skill": "observe", "mode": "voxels", "bounds": bounds} for bounds in (
     [-16, -1, -16, -9, 1, -9], [-8, -1, -16, -1, 1, -9],
@@ -75,6 +74,91 @@ def test_completed_voxels_and_route_scout_reuses_its_original_receipt(framework_
     assert len([row for row in bridge.calls if row[0] == "mc_do"]) == 1
 
 
+def test_slow_full_context_inference_does_not_expire_answered_scout(
+        framework_module, tmp_path, run_async, monkeypatch):
+    import agent_mc_autonomy.controller as module
+    ticks = [100.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: ticks[0])
+    bridge, controller = prepare(framework_module, tmp_path)
+    plan = {"steps": [{"skill": "observe", "mode": "voxels", "bounds": [-3, -2, -3, 3, 4, 3]},
+                      {"skill": "build", "anchors": [[10, 64, 20], [12, 64, 22]],
+                       "material": "bamboo", "shape": "rect", "dryRun": True}]}
+    assert observed(controller, run_async, arguments=plan).get("execution")
+    ticks[0] += 75  # Actual full-window response plus host review/dispatch overhead.
+    result = observed(controller, run_async, arguments=plan)
+    assert result.get("code") == "observation_already_answered"
+    assert result.get("dispatched") is False
+    assert len([row for row in bridge.calls if row[0] == "mc_do"]) == 1
+    assert result["previous_observation"]["fresh"] is False
+
+
+def test_dry_run_body_port_does_not_bypass_answered_scout(framework_module, tmp_path, run_async):
+    bridge, controller = prepare(framework_module, tmp_path)
+    plan = {"steps": [{"skill": "observe", "mode": "voxels", "bounds": [-3, -2, -3, 3, 4, 3]},
+                      {"skill": "build", "material": "bamboo", "anchors": [[1, 64, 1]], "dryRun": True}]}
+    assert observed(controller, run_async, arguments=plan).get("execution")
+    result = observed(controller, run_async, "mc_do", plan)
+    assert result.get("code") == "observation_already_answered"
+    assert result.get("dispatched") is False
+    assert len([row for row in bridge.calls if row[0] == "mc_do"]) == 1
+
+
+def test_preview_without_voxel_json_reuses_receipt_but_real_build_stays_available(
+        framework_module, tmp_path, run_async):
+    bridge, controller = prepare(framework_module, tmp_path)
+    preview = {"steps": [{"skill": "build", "anchors": [[1, 64, 1]], "material": "bamboo", "dryRun": True}]}
+    assert run_async(controller.execute_model_call("mc_scout", preview))[0].get("execution")
+    text = "试算：需要一块竹子，当前有十块。没有放置、移动或挖掘。"
+    end = {**action(True), "evidence": {"receipt": text, "steps": [{"step": 1, "outcome": "ok"}]}}
+    controller.receipt({"execution": end, "events": [{"run": "run-1", "cursor": 9, "execution": end}]})
+    repeated = run_async(controller.execute_model_call("mc_do", copy.deepcopy(preview)))[0]
+    assert repeated.get("code") == "observation_already_answered" and repeated["dispatched"] is False
+    assert repeated["previous_observation"]["receipt"] == text
+    assert repeated["previous_observation"]["original_event"] == {"run": "run-1", "cursor": 9}
+    real = copy.deepcopy(preview)
+    real["steps"][0]["dryRun"] = False
+    assert run_async(controller.execute_model_call("mc_do", real))[0].get("execution")
+    assert len([row for row in bridge.calls if row[0] == "mc_do"]) == 2
+
+
+def test_completed_task_without_any_answer_does_not_block_a_real_read(framework_module, tmp_path, run_async):
+    _, controller = prepare(framework_module, tmp_path)
+    assert run_async(controller.execute_model_call("mc_scout", copy.deepcopy(PLAN)))[0].get("execution")
+    controller.receipt({"execution": {**action(True), "evidence": {"steps": [{"step": 1, "outcome": "ok"}]}}})
+    assert run_async(controller.execute_model_call("mc_scout", copy.deepcopy(PLAN)))[0].get("execution")
+
+
+def test_slow_repeated_scout_yields_a_recovery_round_with_body_work(
+        framework_module, tmp_path, run_async, monkeypatch):
+    import agent_mc_autonomy.controller as module
+    ticks, seen = [100.0], []
+    monkeypatch.setattr(module.time, "monotonic", lambda: ticks[0])
+    bridge, controller = prepare(framework_module, tmp_path)
+    controller.settings = dataclasses.replace(controller.settings, max_tool_rounds=1)
+
+    async def decide(messages, tools):
+        available = {tool["function"]["name"] for tool in tools}
+        seen.append((messages, available))
+        ticks[0] += 75
+        name = "mc_scout" if "mc_scout" in available else "mc_do"
+        args = PLAN if name == "mc_scout" else {"steps": [{"skill": "goto", "at": [1, 65, 1]}]}
+        return {"tool_calls": [{"id": "round-" + str(len(seen)), "type": "function",
+                                "function": {"name": name, "arguments": json.dumps(args)}}]}
+
+    controller.decide = decide
+    tools = module.model_tools(bridge.tools)
+    run_async(controller.turn_once("survive", "rules", tools))
+    end = {**action(True), "evidence": {"receipt": spatial_receipt(),
+           "steps": [{"step": index, "outcome": "ok"} for index in range(1, 5)]}}
+    controller.receipt({"execution": end, "events": [{"run": "run-1", "cursor": 7, "execution": end}]})
+    run_async(controller.turn_once("survive", "rules", tools))
+    run_async(controller.turn_once("survive", "rules", tools))
+    assert "mc_scout" not in seen[-1][1] and {"mc_do", "mc_original"} <= seen[-1][1]
+    assert "observation_already_answered" in json.dumps(seen[-1][0])
+    native = [row for row in bridge.calls if row[0] == "mc_do"]
+    assert len(native) == 2 and native[-1][1]["steps"][0]["skill"] == "goto"
+
+
 def test_terminal_read_retains_each_result_after_long_batch_header(framework_module, tmp_path, run_async):
     _, controller = prepare(framework_module, tmp_path)
     observed(controller, run_async)
@@ -103,7 +187,7 @@ def test_fresh_evidence_and_new_work_allow_scout_again(framework_module, tmp_pat
     elif change == "scope":
         controller.game_scope = "other connection"
     elif change == "expiry":
-        ticks[0] += 61
+        ticks[0] += 301
     else:
         observed(controller, run_async, "mc_do", {"steps": [{"skill": "goto", "at": [1, 65, 1]}]})
         # A terminal without physical readbacks proves no motion by itself.
@@ -190,6 +274,6 @@ def test_inventory_reuse_does_not_hide_changed_state(framework_module, tmp_path,
     elif change == "scope":
         controller.game_scope = "other-account"
     else:
-        ticks[0] += 61
+        ticks[0] += 301
     run_async(controller.execute_model_call("mc_bag", args))
     assert len([call for call in bridge.calls if call[0] == "mc_bag"]) == 2

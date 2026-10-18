@@ -77,12 +77,11 @@ def empty_catalogue_query(name, arguments):
 
 
 def spatial_read_key(name, arguments):
-    """Reuse exact scouts, including mixed observation/route dry runs, never body plans."""
+    """Reuse queued reads/previews across ports, never a mixed body-action plan."""
     steps = arguments.get("steps")
     if name not in {"mc_do", "mc_scout"} or not isinstance(steps, list) or not steps:
         return None
-    if name != "mc_scout" and not all(isinstance(step, dict) and step.get("skill") == "observe"
-                                      and step.get("mode") in {"voxels", "sites", "rays"} for step in steps):
+    if name != "mc_scout" and not observation_call(name, arguments):
         return None
     return json.dumps(steps, sort_keys=True, ensure_ascii=False)
 
@@ -496,11 +495,12 @@ class Controller:
                     reference = {k: event[k] for k in ("run", "cursor", "ts") if k in event}
                     receipt = str((execution.get("evidence") or {}).get("receipt", ""))
                     observations = spatial_observations(receipt)
-                    if read_only and phase == "completed" and sampled and observations:
+                    if read_only and phase == "completed" and sampled and (observations or receipt.strip()):
                         if len(self.observation_reads) >= 32:
                             self.observation_reads.pop(next(iter(self.observation_reads)))
                         self.observation_reads[sampled["key"]] = {**sampled, "at": time.monotonic(),
-                            "observations": observations, "original_event": reference, "execution_id": execution["id"]}
+                            "observations": observations, **({"receipt": receipt} if not observations else {}),
+                            "original_event": reference, "execution_id": execution["id"]}
                     native_outcome = {"tool": name, "execution_id": execution["id"], "phase": phase,
                         "observation_only": read_only, "goal_verified": False,
                         "terminal": True, "goalCompleted": execution.get("goalCompleted"),
@@ -1302,7 +1302,7 @@ class Controller:
         answer = self.read_answers.get(read_key) if name in REUSABLE_IMMEDIATE_READS else None
         if (answer and not self.pending and self.last_admission_facts is not None
                 and answer["facts"] == self.last_admission_facts and answer["scope"] == self.game_scope
-                and time.monotonic() - answer["at"] < 60):
+                and time.monotonic() - answer["at"] < READ_RECOVERY_SECONDS):
             self.defer_answered_read(name)
             result = {"failed": True, "dispatched": False, "origin": "controller_validation",
                 "code": "read_already_answered",
@@ -1319,7 +1319,7 @@ class Controller:
         previous = self.observation_reads.get(spatial_key) if spatial_key else None
         if (previous and not self.pending and self.last_admission_facts is not None
                 and previous["facts"] == self.last_admission_facts and previous["scope"] == self.game_scope
-                and time.monotonic() - previous["at"] < 60):
+                and time.monotonic() - previous["at"] < READ_RECOVERY_SECONDS):
             # This is a dated read reference, not fresh world evidence or a new
             # native task. Never replay actions, invent a terminal ID or cache an
             # acceptance. Different geometry, changed facts and expiry re-read.
@@ -1327,6 +1327,7 @@ class Controller:
                 "code": "observation_already_answered",
                 "text": "This exact spatial batch already completed at the same observed place/state. It was NOT queued again. Use its measured results below. Unknown means occluded/unloaded, not empty or safe. Repeating unchanged scans is not progress: choose a different useful viewpoint/method, one feasible local action, or report a genuinely blocked stage. These are previous samples, not a fresh scan.",
                 "previous_observation": {"fresh": False, "observations": previous["observations"],
+                    **({"receipt": previous["receipt"]} if "receipt" in previous else {}),
                     "original_event": previous["original_event"], "execution_id": previous["execution_id"],
                     "query": "mc_protocol(action=archive,run=original_event.run,after=original_event.cursor-1)"}}
             self.planner_notice = result["text"]

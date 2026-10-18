@@ -1,5 +1,14 @@
 # Agent MC Autonomy
 
+0.2.24 reuses completed queued reads and dry runs across both native read and
+body-tool entry points. Dated answers share the bounded five-minute recovery
+window, so a 60+ second inference does not expire the answer before the model
+can use it. Exact preview repeats yield to a recovery decision with real body
+work still available; changed facts/geometry, running work and expiry permit
+new reads. Non-spatial previews retain their original receipt and query
+reference too. Acceptance and successful previews remain distinct from actual
+movement, inventory changes or verified goals. Context capacity is unchanged.
+
 0.2.23 retains measured failed withdrawals separately from whole-batch effects.
 Two failures for the same item/quantity and explicitly opened container can
 refuse another matching batch for at most 120 seconds, even if walking, window
@@ -215,7 +224,7 @@ container, choosing a task or fabricating progress on the player's behalf.
 
 0.1.80 retains structured results from every spatial observation in a terminal
 batch before truncating its long title. Exact completed spatial-only batches at
-unchanged observed state reuse dated evidence for up to 60 seconds instead of
+unchanged observed state reuse dated evidence for up to five minutes instead of
 queuing the same scan again. Changed facts, query geometry, game scope, accepted
 body work or expiry permit fresh reads. Unknown cells remain unknown; the
 planner chooses a different observation, feasible action or blocked report.
