@@ -51,10 +51,10 @@ final class TaskRoutes implements Listener {
             words.add(word);
         }
         String action = words.isEmpty() ? "list" : words.removeFirst().toLowerCase(Locale.ROOT);
-        if (!List.of("list", "info", "status", "menu").contains(action) || words.size() > 1 || page < 1
-                || List.of("info", "status").contains(action) && pageSet
-                || action.equals("info") && words.size() != 1 || action.equals("status") && !words.isEmpty())
-            throw new IllegalArgumentException("格式：tasks list [路线|all] [--page 页码]；info <任务ID>；status；menu [路线]");
+        if (!List.of("list", "info", "status", "menu", "pause", "resume").contains(action) || words.size() > 1 || page < 1
+                || List.of("info", "status", "pause", "resume").contains(action) && pageSet
+                || action.equals("info") && words.size() != 1 || List.of("status", "pause", "resume").contains(action) && !words.isEmpty())
+            throw new IllegalArgumentException("格式：tasks list [路线|all] [--page 页码]；info <任务ID>；status；menu [路线]；pause；resume");
         String value = words.isEmpty() ? "" : words.getFirst().toLowerCase(Locale.ROOT);
         if (!action.equals("info") && !value.isEmpty() && !value.equals("all") && TaskRouteCatalog.find(value) == null)
             throw new IllegalArgumentException("路线为 combat/crafting/exploration/supply/engineering/life");
@@ -81,6 +81,7 @@ final class TaskRoutes implements Listener {
                                 : life.get("instruction").getAsString() + "；" + (life.has("missingAdvice") ? life.get("missingAdvice").getAsString() : "按真实行动累计，库存搬运不能代替；完成后 life claim。"));
                     }
                     out.add("life", life);
+                    out.add("pausedExploration", market.pausedState(p));
                     out.addProperty("nextCommand", "/mycli progress guild 1");
                     out.addProperty("advice", "委托按当前任务槽分别查询；每阶段交付，全部阶段完成才发最终奖。路线可随兴趣选择，不必先种田。");
                     if (adventure.has("market") && adventure.getAsJsonObject("market").has("guidance")) {
@@ -89,6 +90,7 @@ final class TaskRoutes implements Listener {
                     }
                     emit(p, out, machine);
                 }
+                case "pause", "resume" -> emit(p, market.pauseOrResume(p, q.action.equals("pause")), machine);
                 case "menu" -> {
                     open(p, q.value, q.page);
                     JsonObject out = base("menu"); out.addProperty("status", "opened");
@@ -146,7 +148,7 @@ final class TaskRoutes implements Listener {
         out.addProperty("title", task.title());
         out.addProperty("description", TaskGuidance.description(task.description()));
         out.addProperty("beneficiary", task.beneficiary()); out.addProperty("repeat", task.project() || task.repeatOnce() ? "once" : task.repeatDestination() ? "destination" : "daily");
-        out.addProperty("acceptCommand", "/mycli guild accept " + task.id()); out.addProperty("submitCommand", "/mycli guild claim");
+        out.addProperty("acceptCommand", market.offerState(task, p).equals("paused") ? "/mycli tasks resume" : "/mycli guild accept " + task.id()); out.addProperty("submitCommand", "/mycli guild claim");
         out.addProperty("statusCommand", "/mycli tasks status"); out.addProperty("detailsCommand", "/mycli guild market " + task.id());
         out.addProperty("advice", "查看不接单、不换职业、不消耗资源。领取公共补给请到门口箱体，按需取用；回补按本单指定物资交付，满仓不扣物、不完成。");
         JsonArray steps = new JsonArray(); int n = 0;
@@ -163,7 +165,11 @@ final class TaskRoutes implements Listener {
                 row.add("exploration", step.exploration().json());
                 row.addProperty("walkthrough", step.exploration().conditions(step.target()));
                 boolean active = current.has("id") && current.get("id").getAsString().equals(task.id()) && current.get("stage").getAsInt() == n;
-                row.add("guidance", active ? current.getAsJsonObject("guidance") : market.planningGuidance(p, step));
+                // Local chains already expose the route in condition and the
+                // frozen bounds/thresholds in exploration. Don't repeat a full
+                // journal for every future stage in one info response.
+                if (active || step.exploration().area() == null)
+                    row.add("guidance", active ? current.getAsJsonObject("guidance") : market.planningGuidance(p, step));
             }
             if (step.map() != null) {
                 row.add("mapHunt", step.map().json());
@@ -208,6 +214,8 @@ final class TaskRoutes implements Listener {
             var life = out.getAsJsonObject("life"); p.sendMessage("§b【生活委托】" + (life.get("activeId").getAsString().isEmpty() ? "尚未接单" : life.get("title").getAsString() + " " + life.get("progress") + "/" + life.get("target")));
             if (life.has("nextAction")) p.sendMessage("§a生活下一步：" + life.get("nextAction").getAsString());
         }
+        JsonObject paused = out.has("pausedExploration") ? out.getAsJsonObject("pausedExploration") : out.has("paused") ? out.getAsJsonObject("paused") : null;
+        if (paused != null && paused.has("title")) p.sendMessage("§e【暂存远征】" + paused.get("title").getAsString() + "，第" + paused.get("stage") + "阶段；完成当前委托后 /mycli tasks resume 继续。");
         if (out.has("adventure") && out.getAsJsonObject("adventure").has("market")
                 && out.getAsJsonObject("adventure").getAsJsonObject("market").has("guidance"))
             TaskMarketManager.showGuidance(p, out.getAsJsonObject("adventure").getAsJsonObject("market").getAsJsonObject("guidance"));
@@ -262,6 +270,8 @@ final class TaskRoutes implements Listener {
         inv.setItem(13, item(task.icon().name(), "§e" + task.title(), lines.toArray(String[]::new)));
         inv.setItem(11, item("EMERALD", "§a接取这张委托", "主动接单才占公会任务槽", "当前有任务时保留原任务，不会覆盖"));
         inv.setItem(15, item("ARROW", "§b返回任务列表", "仅浏览不接单"));
+        if (market.pausedState(p).has("id")) inv.setItem(22, item("BOOK", "§e恢复暂存远征", "仅空任务槽可恢复，保留原规则和进度", "/mycli tasks resume"));
+        else if (market.frozen(p) != null) inv.setItem(22, item("BOOK", "§e暂存当前远征", "仅一次性纯探索个人委托可用", "先结束本人考试；不放弃、不清进度", "/mycli tasks pause"));
         p.openInventory(inv); menus.put(p.getUniqueId(), new Menu(inv, "detail", route, page, List.of(id)));
     }
     @EventHandler public void click(InventoryClickEvent event) {
@@ -286,6 +296,7 @@ final class TaskRoutes implements Listener {
             } else if (m.kind.equals("detail")) {
                 if (slot == 11) { p.closeInventory(); plugin.guild().command(p, new String[]{"guild", "accept", m.ids.getFirst()}); }
                 else if (slot == 15) open(p, m.route, m.page);
+                else if (slot == 22 && m.inventory.getItem(slot) != null) { p.closeInventory(); command(p, new String[]{"tasks", market.pausedState(p).has("id") ? "resume" : "pause"}); }
             }
         });
     }

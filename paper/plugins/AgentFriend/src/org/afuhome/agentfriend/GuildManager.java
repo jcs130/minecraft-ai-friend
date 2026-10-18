@@ -406,7 +406,7 @@ final class GuildManager implements Listener {
         if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能接单；请使用生存角色，/mycli guild board 查看委托。"); return; }
         boolean market = plugin.taskMarket().isMarket(id);
         if (!dungeon.isBuilt() && !market) { player.sendMessage(ChatColor.RED + "地下城暂未建成；/mycli guild board 选择其他开放任务，或联系服主检查场地。"); return; }
-        if (active(player) != null) { player.sendMessage(ChatColor.YELLOW + "已有在途任务；先 /mycli guild status 查进度，完成后 guild claim；若决定换单可 guild abandon，当前进度会清零。"); return; }
+        if (active(player) != null) { player.sendMessage(ChatColor.YELLOW + "已有在途任务；先 /mycli tasks status 查进度，完成后 guild claim。一次性纯探索远征可 tasks pause 保留进度后换单；其他单如主动 guild abandon 会清零，不会自动替换。"); return; }
         if (plugin.taskMarket().isMarket(plugin.getConfig().getString(base(player.getUniqueId()) + ".active.id", ""))) {
             player.sendMessage(ChatColor.RED + "在途任务快照异常，已保留记录；请联系服主修复，不能覆盖任务。"); return;
         }

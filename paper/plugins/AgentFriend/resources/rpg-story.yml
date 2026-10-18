@@ -3,7 +3,7 @@
 # Reload with the existing admin worldlife reload after validating content.
 schema-version: 1
 enabled: true
-revision: 1
+revision: 2
 title: 灯火归途
 npcs:
   yingdeng:
@@ -166,7 +166,7 @@ npcs:
         action: guide
       route_exploration:
         title: 我想走探索路线
-        text: 探索不是只碰一下坐标。读任务的分区、走查、照片和返程条件；入口不清楚时查地标和实际路线，不在建筑里直挖竖井。
+        text: 先看附近的村路与画廊、矿路手记；都在主村庄一两百格附近，每段交付后再走下一段。古城约六千格，是高阶可选远征。已有远征可本人tasks pause暂存；考试先查guild exam status，不会替你取消。探索不是碰一下坐标，按tasks status的本阶段范围和缺项走。
         action: route
         target: exploration
       route_supply:
@@ -180,6 +180,8 @@ npcs:
         action: route
         target: life
     offers:
+      - tm_local_village_notes
+      - tm_local_mine_journal
       - tm_first_spell
       - tm_starter_trail
       - tm_trail_supply
@@ -227,6 +229,11 @@ npcs:
     z: -487.5
     greeting: 下矿走台阶，上来走原路。矿不是不能挖，只是别把大家回家的楼梯也挖了。
     topics:
+      journal:
+        title: 我想先做短途下矿实练
+        text: 近郊手记只有五小段：合成一批火把、到矿棚外认路、沿现有照明台阶下行、在Y36平台认清开采方向，再回沐辰旁交付。每段达标后guild claim才进入下一段；成品留下自用，不用找到天然矿井或古城。
+        action: tasks
+        target: tm_local_mine_journal
       entrance:
         title: 从哪里开始挖矿？
         text: 矿棚入口(-652,68,-484)，沿三格宽台阶下到Y36平台，向西X≤-702的采矿面继续开挖。入口、台阶、照明和平台要保留。
@@ -249,6 +256,7 @@ npcs:
         text: 欢迎把耐用工具、火把和食物留到公共补给箱。这里的公共桶也能用，但别把共享物资当作私人仓库。
         action: supplies
     offers:
+      - tm_local_mine_journal
       - tm_starter_tools
       - tm_restock_light
 chapters:
@@ -324,6 +332,20 @@ chapters:
         description: 讨伐委托结算后亲自回巡路人顾风8格内交谈。
         next-command: /mycli world story talk gufeng camp
 side-stories:
+  village_notes:
+    title: 村路不必通向远方
+    npc: muchen
+    introduction: 从主村庄走到矿棚外村路、河畔艺术厅，再回沐辰身旁。三段分别交付，只走地面；不必去六千格外找古城。先tasks info查看每段位置与缺项。
+    contracts:
+      - tm_local_village_notes
+    requires: []
+  mine_journal:
+    title: 一盏灯下矿
+    npc: shiyan
+    introduction: 公共矿坑就在村西。合成照明、认入口、走台阶、认平台、返村，五段分别验收。入口(-652,68,-484)，沿现有台阶到(-701,36,-484)；不挖村内竖井、不把普通矿坑当天然遗迹。
+    contracts:
+      - tm_local_mine_journal
+    requires: []
   night_watch:
     title: 夜路上有人值守
     npc: gufeng

@@ -179,6 +179,10 @@ final class TaskMarketManager implements Listener {
                     player.getGameMode()==GameMode.SURVIVAL&&!player.isDead()&&!player.isFlying(),photo);
         }
         JsonObject guide=ExplorationGuidance.guide(step.exploration,step.target,step.exploration.navigation(at),result.evidence(),result.reason(),landmarks,at.getBlockX(),at.getBlockZ());
+        if (step.exploration.area() != null && !result.ready()) {
+            guide.addProperty("nextAction", step.description + "；" + guide.get("nextAction").getAsString());
+            guide.addProperty("stageTitle", step.title);
+        }
         return QuestGuidance.exploration(guide,photo);
     }
     JsonObject planningGuidance(Player player, Step step) {
@@ -186,7 +190,8 @@ final class TaskMarketManager implements Listener {
         JsonObject out = ExplorationGuidance.guide(step.exploration, step.target, step.exploration.navigation(at), evidence, "", landmarks, at.getBlockX(), at.getBlockZ());
         out.addProperty("scope", "planning"); out.addProperty("ready", false);
         out.addProperty("summary", "这是出发前的目标线索；浏览不会接单，也不证明已到场。");
-        out.addProperty("nextCommand", "/mycli tasks status"); return out;
+        if (step.exploration.area() != null) out.addProperty("nextAction", step.description + "；" + out.get("nextAction").getAsString());
+        if (!out.has("optionalExpedition")) out.addProperty("nextCommand", "/mycli tasks status"); return out;
     }
     static void showGuidance(Player player, JsonObject guide) {
         player.sendMessage("§b【当前阶段】" + guide.get("summary").getAsString());
@@ -401,8 +406,9 @@ final class TaskMarketManager implements Listener {
                 throw new IllegalArgumentException(key + " combat conditions require goal kills");
             if (goal == GuildManager.Goal.RETURN && (steps.isEmpty() || steps.getLast().exploration == null
                     || steps.getLast().exploration.goal() == GuildManager.Goal.RETURN
-                    || steps.getLast().exploration.dimension().equals(survey.dimension())))
-                throw new IllegalArgumentException(key + " return must follow exploration in another dimension");
+                    || survey.area() == null && steps.getLast().exploration.dimension().equals(survey.dimension())))
+                throw new IllegalArgumentException(key + " return must follow exploration in another dimension or have explicit local bounds");
+            if (stepYaml.contains("area") && survey == null) throw new IllegalArgumentException(key + " area requires an exploration goal");
             steps.add(new Step(text(stepYaml, "title", 50), TaskGuidance.legacyDescription(text(stepYaml, "description", 180), raw), goal, target, floor,
                     site == null || site.isBlank() ? null : site, chest, survey, map,assessment,combat));
             frozenSteps.add(stepYaml.getValues(false));
@@ -553,6 +559,7 @@ final class TaskMarketManager implements Listener {
         return "available";
     }
     private String state(Task task, Player player) {
+        if (task.id().equals(plugin.getConfig().getString(ExplorationPauseStore.root(player.getUniqueId()) + ".paused-exploration.id", ""))) return "paused";
         String gate = gate(task);
         if (task.id().equals(plugin.getConfig().getString(activePath(player) + ".id", ""))) return "in_progress";
         if (task.repeatOnce && onceCompleted(player, task.id())) return "completed_once";
@@ -563,6 +570,10 @@ final class TaskMarketManager implements Listener {
     boolean canAccept(Player player, GuildManager.Contract contract) {
         Task task = tasks.get(contract.id());
         if (task == null || !task.enabled) return false;
+        JsonObject paused = pausedState(player);
+        if (paused.has("id") && contract.id().equals(paused.get("id").getAsString())) {
+            player.sendMessage("§e这张远征已暂存；用 /mycli tasks resume 继续原阶段，不用重新接单。"); return false;
+        }
         String qualification = plugin.professions().taskDenial(player, task.definition);
         if (!qualification.equals("available")) { ActionFeedback.advice("market", qualification, task.id()).send(player); return false; }
         if (task.repeatOnce && onceCompleted(player, task.id())) { player.sendMessage("§e这张远行履历已完成；每人仅结算一次。可以选择其他探索委托。"); return false; }
@@ -930,6 +941,48 @@ final class TaskMarketManager implements Listener {
         Task task = frozen(player); if (task == null) return;
         finishRun(player, task, "abandoned"); release(player, task, false); exploration.clear(player);
         maps.clear(player);
+    }
+    JsonObject pausedState(Player p) {
+        JsonObject out = new JsonObject(); boolean present = ExplorationPauseStore.present(plugin.getConfig(), p.getUniqueId());
+        out.addProperty("present", present); if (!present) return out;
+        try {
+            var saved = ExplorationPauseStore.read(plugin.getConfig(), p.getUniqueId());
+            var yaml = new YamlConfiguration(); yaml.loadFromString(saved.getString("market.definition", ""));
+            Task task = parse(saved.getString("id", "").substring(3), yaml.getConfigurationSection("task"));
+            out.addProperty("id", task.id()); out.addProperty("title", task.title());
+            out.addProperty("stage", saved.getInt("market.step") + 1); out.addProperty("progress", saved.getInt("progress"));
+            out.addProperty("nextCommand", "/mycli tasks resume");
+        } catch (Exception invalid) { out.addProperty("errorCode", "PAUSED_RECORD_INVALID"); out.addProperty("nextCommand", "/mycli tasks status"); }
+        return out;
+    }
+    JsonObject pauseOrResume(Player p, boolean pause) {
+        JsonObject out = new JsonObject(); out.addProperty("schemaVersion", 1); out.addProperty("type", pause ? "pause" : "resume");
+        out.addProperty("readOnly", false); out.addProperty("scope", "self");
+        String denial = "", advice = ""; JsonObject paused = pausedState(p); Task task = frozen(p);
+        boolean occupied = plugin.getConfig().contains(activePath(p));
+        if (plugin.isObserver(p) || p.getGameMode() != GameMode.SURVIVAL || p.isDead()) { denial="SURVIVAL_REQUIRED"; advice="使用存活的生存角色，再查 tasks status。"; }
+        else if (checking.contains(p.getUniqueId()) || plugin.dungeonParticipant(p) || plugin.pvpParticipant(p)) { denial="ACTIVITY_BUSY"; advice="先等待当前验收或副本结束，再处理委托。"; }
+        else if (!plugin.skillAssessments().photoExam(p).isEmpty() || plugin.skillAssessments().busy(p)) { denial="EXAM_ACTIVE"; advice="本场考试仍在进行；先 /mycli guild exam status 核对。决定暂停考试时本人用 guild exam cancel；不会替你取消，原委托记录保留。"; }
+        else if (pause && paused.get("present").getAsBoolean()) {
+            if (!occupied && !paused.has("errorCode")) { out.addProperty("status", "already_paused"); out.add("paused", paused); out.addProperty("nextCommand", "/mycli tasks list exploration"); return out; }
+            denial="PAUSED_SLOT_OCCUPIED"; advice="只能暂存一张远征；先完成当前委托，再 tasks resume 处理原远征，不能覆盖暂存记录。";
+        } else if (pause && (task == null || task.project || !task.repeatOnce || task.steps.stream().anyMatch(s -> s.exploration == null))) {
+            denial="TASK_NOT_PAUSABLE"; advice="仅一次性、纯探索的个人远征可暂存；日常、工程、原图和动作混合任务保持原流程。用 tasks status 核对当前单。";
+        } else if (!pause && !paused.get("present").getAsBoolean()) {
+            if (occupied && task != null) { out.addProperty("status", "already_active"); out.addProperty("nextCommand", "/mycli tasks status"); return out; }
+            denial="NO_PAUSED_TASK"; advice="没有暂存远征；tasks list exploration 查看可选任务。";
+        } else if (!pause && (occupied || paused.has("errorCode"))) { denial=occupied?"ACTIVE_SLOT_OCCUPIED":"PAUSED_RECORD_INVALID"; advice="先完成当前委托，再 tasks resume；异常暂存记录请服主检查，不能覆盖。"; }
+        if (!denial.isEmpty()) {
+            out.addProperty("status", "denied"); out.addProperty("errorCode", denial); out.addProperty("advice", advice); out.addProperty("nextCommand", "/mycli tasks status"); return out;
+        }
+        boolean saved = ExplorationPauseStore.move(plugin.getConfig(), plugin.getDataFolder().toPath().resolve("config.yml"), p.getUniqueId(), pause);
+        out.addProperty("status", saved ? "success" : "denied"); out.addProperty("durable", saved);
+        out.addProperty("nextCommand", pause && saved ? "/mycli tasks list exploration" : "/mycli tasks status");
+        if (saved) {
+            exploration.forget(p); frozenTasks.remove(p.getUniqueId()); lastActions.remove(p.getUniqueId()); actionNotices.remove(p.getUniqueId()); tracker.remove(p.getUniqueId());
+            out.addProperty("advice", pause ? "原远征、接单规则和走查记录已保存；现在可自选附近委托，之后 tasks resume 继续。没有领奖或重接。" : "已恢复原远征、原阶段和走查记录；继续 tasks status 的下一步。没有发物或重接。");
+        } else { out.addProperty("errorCode", "SAVE_FAILED"); out.addProperty("advice", "保存未确认，本次操作未生效；先 tasks status 核对，不覆盖或重接。请服主检查存储。"); }
+        out.add("paused", pausedState(p)); return out;
     }
     private void release(Player player, Task task, boolean complete) {
         if (!task.project) return;

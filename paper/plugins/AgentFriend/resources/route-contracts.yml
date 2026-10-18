@@ -4,6 +4,85 @@
 # only the real killer and lethal weapon; target is entity count, never damage or clicks.
 schema-version: 1
 tasks:
+  local_village_notes:
+    route: exploration
+    beginner: true
+    repeat: once
+    title: 近郊手记·村路与画廊
+    description: 从主村庄出发，只在附近约一百格巡访公共矿棚外的村路、河畔艺术厅，再回司灯人处报平安。不必下矿、打怪或寻找稀有遗迹；每段实际走查后主动交阶段。
+    beneficiary: 司灯人·沐辰
+    icon: COMPASS
+    reward: {fame: 5, emeralds: 2, bonus: BREAD, bonus-count: 3}
+    steps:
+      - title: 西边的公共矿路
+        description: 从主村庄沿地面道路向西到矿棚(-652,68,-484)外，辨认入口与回村道路；在本阶段范围走过两个四格分区、八格新路线、五秒有效行进。只认地面，不需开挖。达标后 guild claim。
+        goal: dimension
+        dimension: overworld
+        target: 2
+        zone-size: 4
+        min-distance: 8
+        min-seconds: 5
+        area: {name: 矿棚外村路, min-x: -666, min-y: 65, min-z: -496, max-x: -642, max-y: 76, max-z: -472}
+      - title: 河畔艺术厅的来路
+        description: 沿地面村路去艺术厅入口(-616,67,-378)，辨认河畔外观与回村方向；在本阶段范围走过两个四格分区、八格新路线、五秒有效行进。门可用，别拆展框或作品；达标后 guild claim。
+        goal: dimension
+        dimension: overworld
+        target: 2
+        zone-size: 4
+        min-distance: 8
+        min-seconds: 5
+        area: {name: 河畔艺术厅及门外村路, min-x: -638, min-y: 64, min-z: -395, max-x: -600, max-y: 77, max-z: -365}
+      - title: 把路线记回村里
+        description: 沿地面道路回司灯人沐辰(-541,67,-435)附近，本人进入范围后 guild claim 完整交付。只在同维度不算返程；奖励进入本人个人奖励箱。
+        goal: return
+        dimension: overworld
+        target: 1
+        area: {name: 司灯人旁的村庄广场, min-x: -548, min-y: 65, min-z: -443, max-x: -534, max-y: 73, max-z: -428}
+  local_mine_journal:
+    route: exploration
+    beginner: true
+    repeat: once
+    title: 近郊手记·一盏灯下矿
+    description: 主村庄西侧公共矿坑实练，最远约两百格。准备照明→辨认矿棚→沿现有台阶走查→看清地下平台→回村报告；不要求找到天然矿井、稀有矿石或古城，不必破坏公共设施。
+    beneficiary: 采矿领班·石砚
+    icon: STONE_PICKAXE
+    reward: {fame: 7, emeralds: 3, bonus: TORCH, bonus-count: 8}
+    steps:
+      - {title: 带一盏自己的灯, description: 接单后用煤炭或木炭加木棍亲手合成一批火把；材料可按需从公会门口公共箱取，guild shared 查位置。火把留下自用，不扣物。大背包先整理，再 guild claim 交准备阶段。, goal: craft, item: TORCH, target: 1}
+      - title: 找对矿棚入口
+        description: 走地面村路到(-652,68,-484)矿棚，辨认云杉栅栏门与门外退路；在范围内步行两个四格分区、八格新路线、五秒有效行进。不要在村庄脚下挖洞；达标后 guild claim。
+        goal: dimension
+        dimension: overworld
+        target: 2
+        zone-size: 4
+        min-distance: 8
+        min-seconds: 5
+        area: {name: 公共矿棚入口, min-x: -666, min-y: 65, min-z: -496, max-x: -642, max-y: 76, max-z: -472}
+      - title: 沿照明台阶下行
+        description: 打开矿棚栅栏门，沿现有三格宽台阶向西下行，平台在(-701,36,-484)。走过至少三个八格分区、二十四格新路线、十秒有效行进和二十四格上下高差。别拆台阶、灯和顶棚；达标后 guild claim。
+        goal: dimension
+        dimension: overworld
+        target: 3
+        zone-size: 8
+        min-distance: 24
+        min-seconds: 10
+        min-height-span: 24
+        area: {name: 公共矿坑照明台阶, min-x: -704, min-y: 35, min-z: -489, max-x: -648, max-y: 71, max-z: -479}
+      - title: 平台与开采面的区别
+        description: 到地下平台(-701,36,-484)附近横向走查两个四格分区、八格新路线、五秒有效行进。平台与台阶受保护；真正开采从X≤-702向西，先protect查询。本单只需认路，不要求挖矿；达标后 guild claim。
+        goal: dimension
+        dimension: overworld
+        target: 2
+        zone-size: 4
+        min-distance: 8
+        min-seconds: 5
+        area: {name: 矿坑地下公共平台, min-x: -705, min-y: 35, min-z: -490, max-x: -691, max-y: 40, max-z: -478}
+      - title: 沿原路回村报平安
+        description: 从平台沿东侧照明台阶上行，出矿棚关门，再走村路回司灯人(-541,67,-435)附近。本人进入交付范围后 guild claim 结算；奖励进个人奖励箱，arena stash pages查看，非大背包。
+        goal: return
+        dimension: overworld
+        target: 1
+        area: {name: 司灯人旁的村庄广场, min-x: -548, min-y: 65, min-z: -443, max-x: -534, max-y: 73, max-z: -428}
   starter_blade:
     route: combat
     beginner: true

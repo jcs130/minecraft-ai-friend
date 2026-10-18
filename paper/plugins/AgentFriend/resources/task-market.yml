@@ -290,8 +290,9 @@ tasks:
   ancient_city_silence:
     scope: personal
     repeat: once
-    title: 古城沉默的回声
-    description: 深入幽匿之下的远古城市，勘察遗迹不同区段与撤离路线；谨慎潜行，不要求召出或击杀监守者。
+    min-rank: 3
+    title: 高阶远征·古城沉默的回声（可选）
+    description: 可选高阶长途远征；已知参考点距主村庄约六千格，入口与安全路线未核实。先完成近郊手记、备好装备与回程点，再自愿调查古城；不要求召唤或击杀监守者，新手不必接取。
     icon: SCULK_SENSOR
     reward: {fame: 32, emeralds: 12, bonus: GOLDEN_APPLE, bonus-count: 2}
     steps:

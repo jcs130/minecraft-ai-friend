@@ -62,6 +62,19 @@ public final class ExplorationGuidanceTest {
         var biomeGuide=ExplorationGuidance.guide(forest,6,nether,empty,"outside_survey_biome",places,0,0);
         check("wrong biome names target and an explicit search phase",biomeGuide.get("reason").getAsString().equals("TARGET_BIOME_NOT_ENTERED")&&biomeGuide.get("nextAction").getAsString().contains("minecraft:crimson_forest"));
         check("structure coordinates cannot masquerade as a biome destination",!biomeGuide.has("landmark")&&biomeGuide.get("nextAction").getAsString().contains("暂未登记"));
+        var city=new ExplorationObjectives.Target(GuildManager.Goal.STRUCTURE,"overworld",List.of("minecraft:ancient_city"),4,128,75,4,1,0);
+        var longTrip=ExplorationGuidance.guide(city,12,nav,empty,"structure_unobserved_or_start_unloaded",places,-544,-438);
+        check("distant city is optional, not a mandatory blind journey",longTrip.get("phase").getAsString().equals("plan_optional_expedition")&&longTrip.get("optionalExpedition").getAsBoolean());
+        check("offer nearby alternative with canonical entry",longTrip.get("nextCommand").getAsString().equals("/mycli tasks info tm_local_mine_journal")&&longTrip.get("nextAction").getAsString().contains("暂存"));
+        check("optional does not count as completed",!longTrip.get("ready").getAsBoolean()&&!longTrip.get("targetMatch").getAsBoolean());
+        var part=empty.deepCopy();part.addProperty("distinctZones",1);part.addProperty("structureInstance","original_city");
+        var resumeCity=ExplorationGuidance.guide(city,12,nav,part,"different_structure_or_world",places,-544,-438);
+        check("existing remote evidence still resumes same city",resumeCity.get("phase").getAsString().equals("resume_same_structure"));
+        var area=new SurveyArea("矿棚入口",-666,65,-496,-642,76,-472);
+        var local=new ExplorationObjectives.Target(GuildManager.Goal.DIMENSION,"overworld",List.of(),4,8,5,0,1,0,area);
+        var near=ExplorationGuidance.guide(local,2,nav,empty,"outside_survey_area",places,-544,-438);
+        check("wrong local place gives actual stage boundaries",near.get("phase").getAsString().equals("travel_to_stage_area")&&near.get("nextAction").getAsString().contains("-666..-642"));
+        check("no survey credit from an area hint",!near.get("ready").getAsBoolean()&&!near.get("targetMatch").getAsBoolean());
         var temporary = Files.createTempFile("guidance-catalog-", ".json");
         try {
             String original = Files.readString(java.nio.file.Path.of(args[0]));

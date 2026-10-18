@@ -2,6 +2,8 @@
 
 ## 当前状态
 
+后续近郊分段任务候选 0.4.47.6 包含本修复，见 [近郊分段委托](LOCAL_TASK_CHAINS.md)。0.4.47.5 的固定构建需使用本页所属提交 `75696c6`；当前源码请使用 `build-local-task-chains-backport.ps1`，正式服状态仍按下面的说明读取。
+
 正式服仍为 Paper 1.21.1 / AgentFriend **0.4.47.4**。公开结构线索表已备份到 E/F 两盘并热更新；下面的进度反馈代码是 **0.4.47.5 候选，尚未替换正式插件或重启 Paper**。
 
 候选 SHA256：`36f6a8bf7acd5fb652ddf87d6def0e412cfb4d14554b4fade64db9890c5cc56a`。以 `paper/manifests/task-progress-guidance-candidate-20261018.json` 为发布依据。

@@ -5,6 +5,7 @@ param(
     [string]$JavaHome='E:/MC/jdk/jdk-21.0.12.1+1'
 )
 $ErrorActionPreference='Stop'
+if(Test-Path -LiteralPath (Join-Path $PSScriptRoot 'src/org/afuhome/agentfriend/SurveyArea.java')){throw '0.4.47.5 is pinned to commit 75696c6. Current sources require build-local-task-chains-backport.ps1 (0.4.47.6).'}
 # The full source tree includes unpublished archives (0.4.48). Release only this
 # reviewed patch onto the exact deployed 0.4.47.4 binary, preserving other entries.
 $taskExpected='f1e3dc814fda2651b46e5ebfae5c90f0346b9b10fc3acd8968739422d338ba7c'

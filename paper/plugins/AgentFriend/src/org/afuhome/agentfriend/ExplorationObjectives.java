@@ -30,7 +30,12 @@ final class ExplorationObjectives {
     static final Set<GuildManager.Goal> GOALS = Set.of(GuildManager.Goal.DIMENSION,
             GuildManager.Goal.STRUCTURE, GuildManager.Goal.BIOME, GuildManager.Goal.RETURN);
     record Target(GuildManager.Goal goal, String dimension, List<String> keys, int zoneSize,
-            int minDistance, int minSeconds, int minParts, int minBiomes, int minHeightSpan) {
+            int minDistance, int minSeconds, int minParts, int minBiomes, int minHeightSpan, SurveyArea area) {
+        // Keep the deployed constructor for maps, exams and old frozen tasks.
+        Target(GuildManager.Goal goal, String dimension, List<String> keys, int zoneSize,
+                int minDistance, int minSeconds, int minParts, int minBiomes, int minHeightSpan) {
+            this(goal, dimension, keys, zoneSize, minDistance, minSeconds, minParts, minBiomes, minHeightSpan, null);
+        }
         String dimensionLabel() { return switch(dimension) { case "nether" -> "下界"; case "end" -> "末地"; default -> "主世界"; }; }
         JsonObject navigation(Location at) {
             JsonObject j=new JsonObject();String required="minecraft:"+switch(dimension){case "nether"->"the_nether";case "end"->"the_end";default->"overworld";};
@@ -43,6 +48,7 @@ final class ExplorationObjectives {
             j.add("requiredStructureKeys",structures);j.add("requiredBiomeKeys",biomes);
             j.addProperty("nextAction",!matches?"return_to_required_dimension":goal==GuildManager.Goal.STRUCTURE?"check_structure_type_then_survey":goal==GuildManager.Goal.RETURN?"verify_return":"continue_survey");
             j.addProperty("structureMatchStatus","not_checked"); // A matching dimension alone never proves arrival at a structure.
+            if (area != null) { j.add("area", area.json()); j.addProperty("areaMatches", area.contains(at.getWorld().getName(), at.getX(), at.getY(), at.getZ())); }
             return j;
         }
         JsonObject json() {
@@ -50,11 +56,12 @@ final class ExplorationObjectives {
             JsonArray a = new JsonArray(); keys.forEach(a::add); j.add("keys", a);
             j.addProperty("zoneSize", zoneSize); j.addProperty("minDistance", minDistance);
             j.addProperty("minMovingSeconds", minSeconds); j.addProperty("minSections", minParts);
-            j.addProperty("minBiomes", minBiomes); j.addProperty("minHeightSpan", minHeightSpan); return j;
+            j.addProperty("minBiomes", minBiomes); j.addProperty("minHeightSpan", minHeightSpan);
+            if (area != null) j.add("area", area.json()); return j;
         }
         String conditions(int count) {
-            if (goal == GuildManager.Goal.RETURN) return "返回" + dimensionLabel() + "，服务器核查当前维度";
-            return dimensionLabel() + (keys.isEmpty() ? "" : " / " + String.join(" 或 ", keys))
+            if (goal == GuildManager.Goal.RETURN) return "返回" + dimensionLabel() + (area == null ? "，服务器核查当前维度" : "的" + area.conditions() + "，服务器核查本人实际位置");
+            return dimensionLabel() + (area == null ? "" : " / " + area.conditions()) + (keys.isEmpty() ? "" : " / " + String.join(" 或 ", keys))
                     + "；走查 " + count + " 个不同的 " + zoneSize + " 格分区，行进至少" + minDistance
                     + " 格、有效行进至少" + minSeconds + " 秒"
                     + (minParts > 0 ? "；内部区段至少" + minParts : "")
@@ -87,16 +94,18 @@ final class ExplorationObjectives {
         int parts = row.getInt("min-sections", goal == GuildManager.Goal.STRUCTURE ? 1 : 0);
         int biomes = row.getInt("min-biomes", 1);
         int height = row.getInt("min-height-span", 0);
+        SurveyArea area = SurveyArea.parse(row);
         if (goal == GuildManager.Goal.RETURN) {
             if (count != 1) throw new IllegalArgumentException("return target must be 1");
-            return new Target(goal, dimension, List.of(), 0, 0, 0, 0, 0, 0);
+            return new Target(goal, dimension, List.of(), 0, 0, 0, 0, 0, 0, area);
         }
         if (count < 2 || count > 128 || size < 4 || size > 64 || distance < 8 || distance > 8192
                 || seconds < 5 || seconds > 900 || height < 0 || height > 128 || parts < 0 || parts > 32 || biomes < 1 || biomes > 16
                 || goal != GuildManager.Goal.STRUCTURE && parts != 0 || goal == GuildManager.Goal.STRUCTURE && parts < 1
                 || goal == GuildManager.Goal.BIOME && biomes > keys.size())
             throw new IllegalArgumentException("exploration needs distinct zones, distance and moving time");
-        return new Target(goal, dimension, List.copyOf(keys), size, distance, seconds, parts, biomes, height);
+        if (area != null && height > area.maxY() - area.minY()) throw new IllegalArgumentException("survey height exceeds local area");
+        return new Target(goal, dimension, List.copyOf(keys), size, distance, seconds, parts, biomes, height, area);
     }
     private static String dimension(World world) {
         return switch (world.getEnvironment()) { case NETHER -> "nether"; case THE_END -> "end"; default -> "overworld"; };
@@ -105,6 +114,7 @@ final class ExplorationObjectives {
     /** Read-only capture context; unlike a completed survey, it checks the current location again. */
     static JsonObject photoPlace(Location at,Target target) {
         if(target.goal==GuildManager.Goal.RETURN||!target.dimension.equals(dimension(at.getWorld()))
+                ||target.area!=null&&!target.area.contains(at.getWorld().getName(),at.getX(),at.getY(),at.getZ())
                 ||!at.getWorld().isChunkLoaded(at.getBlockX()>>4,at.getBlockZ()>>4))return null;
         String biome=WorldBiomes.at(at);
         if(!BiomeBorder.known(biome))return null;
@@ -240,6 +250,7 @@ final class ExplorationObjectives {
         if (s.ready && target.goal != GuildManager.Goal.RETURN) return result(s, target, required, "ready");
         if (p.getGameMode() != GameMode.SURVIVAL || p.isDead() || p.isFlying()
                 || !target.dimension.equals(dimension(at.getWorld()))) return result(s, target, required, "outside_survey_target");
+        if (target.area != null && !target.area.contains(at.getWorld().getName(), at.getX(), at.getY(), at.getZ())) return result(s, target, required, "outside_survey_area");
         if (!at.getWorld().isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4)) return result(s, target, required, "current_chunk_unloaded");
         if (target.goal == GuildManager.Goal.RETURN) return result(s, target, required, s.ready ? "ready" : "survey_incomplete");
         Place place = target.goal == GuildManager.Goal.STRUCTURE ? structure(at, target) : null;
@@ -265,6 +276,9 @@ final class ExplorationObjectives {
         boolean valid = p.getGameMode() == GameMode.SURVIVAL && !p.isDead() && !p.isFlying()
                 && target.dimension.equals(dimension(at.getWorld()));
         if (!valid) { s.previous = null; return result(s, target, required, "outside_survey_target"); }
+        if (target.area != null && !target.area.contains(at.getWorld().getName(), at.getX(), at.getY(), at.getZ())) {
+            s.previous = null; return result(s, target, required, "outside_survey_area");
+        }
         if (!s.ready && !at.getWorld().isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4)) {
             s.previous = null; return result(s, target, required, "current_chunk_unloaded");
         }

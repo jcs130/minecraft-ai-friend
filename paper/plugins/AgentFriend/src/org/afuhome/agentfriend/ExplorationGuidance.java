@@ -82,6 +82,14 @@ final class ExplorationGuidance {
         }
         if (reason.equals("outside_survey_target")) return phase(out, "resume_survival", "当前状态不能记录探索。", "存活后以生存模式落地步行，已有进度保留。");
         if (reason.equals("current_chunk_unloaded")) return phase(out, "wait_for_terrain", "脚下区块或现场数据尚未就绪。", "先等现场加载；持续不恢复请联系服主，不连续重复交付。");
+        if (target.area() != null) {
+            out.add("area", target.area().json());
+            if (reason.equals("outside_survey_area") || navigation.has("areaMatches") && !flag(navigation, "areaMatches")) {
+                missing.add("进入本阶段的" + target.area().conditions());
+                return phase(out, "travel_to_stage_area", "先到本阶段调查范围，其他地点的行走不计入。",
+                        "按本阶段路线前往" + target.area().conditions() + "；沿现有道路或台阶通行，不在村里另挖竖井。抵达后以生存模式步行走查。");
+            }
+        }
         boolean started = number(evidence, "distinctZones") > 0 || !text(evidence, "structureInstance").isEmpty();
         if (target.goal() == GuildManager.Goal.STRUCTURE && !flag(evidence, "validCurrentTarget")) {
             if (started) {
@@ -98,6 +106,13 @@ final class ExplorationGuidance {
             if (hint != null) {
                 JsonObject landmark = hint.json(); int distance = (int) Math.ceil(Math.hypot((double)hint.x - x, (double)hint.z - z));
                 landmark.addProperty("horizontalDistance", distance); out.add("landmark", landmark);
+                if (target.keys().contains("minecraft:ancient_city") && distance > 2048) {
+                    out.addProperty("optionalExpedition", true);
+                    out.addProperty("nearbyTask", "tm_local_mine_journal");
+                    out.addProperty("nextCommand", "/mycli tasks info tm_local_mine_journal");
+                    return phase(out, "plan_optional_expedition", "古城是高阶可选远征，不是新手必须完成的短途任务。",
+                            "已知古城参考点离当前约" + distance + "格，入口和安全路线尚未核实。可以先暂存本单（/mycli tasks pause；若有考试先查 guild exam status），改做附近的矿路手记；原阶段和走查记录保留。准备充分后 tasks resume 再远征，不在当前村庄盲目下挖。");
+                }
                 next = "前往" + target.dimensionLabel() + " X=" + hint.x + "、Z=" + hint.z + " 的" + hint.name
                         + "（直线约" + distance + "格）；这是建筑参考位置，入口与安全路线未验证。先在地表辨认洞口或侧向通道，不沿坐标竖挖。"
                         + (target.keys().contains("minecraft:ancient_city") ? "古城在地下；抵达结构内再潜行走查，不要求召唤或击杀监守者。" : "抵达后找实际入口，再查任务状态确认结构匹配。");
