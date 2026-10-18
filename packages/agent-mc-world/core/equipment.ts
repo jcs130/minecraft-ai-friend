@@ -31,16 +31,16 @@ async function swapOffHandConfirmed(bot: Bot, source: number, destination: numbe
     await clickInventoryConfirmed(bot, destination, source - start, 2, window);
     return;
   }
-  // Borrow one hotbar slot without requiring free storage. Every permutation
-  // is server-confirmed; the third exchange restores the original hotbar stack
-  // and puts the old offhand in the requested item's original inventory slot.
+  // Use an unselected hotbar slot without requiring free storage. The old
+  // hotbar item remains in the source slot and the displaced offhand stays in
+  // this hotbar slot. Once equipment and empty cursor are confirmed, do not
+  // issue another click merely to restore a preferred inventory arrangement.
   const selected = start + (bot.quickBarSlot ?? -1);
   const scratch = quickBar.find(slot => slot !== selected && !window.slots[slot])
     ?? quickBar.find(slot => slot !== selected) ?? start;
   const button = scratch - start;
   await clickInventoryConfirmed(bot, source, button, 2, window);
   await clickInventoryConfirmed(bot, destination, button, 2, window);
-  await clickInventoryConfirmed(bot, source, button, 2, window);
 }
 
 /** Each inventory move has its own authoritative slot and cursor confirmation. */

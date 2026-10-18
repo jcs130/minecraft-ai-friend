@@ -87,7 +87,8 @@ describe('equipment server confirmation', () => {
     await vi.runAllTimersAsync();
     expect(await equip).toContain('盾牌挂上了副手');
     expect(rig.server.slots[45].name).toBe('shield');
-    expect(rig.server.slots[9].name).toBe('totem_of_undying');
+    expect(rig.server.slots[36].name).toBe('totem_of_undying');
+    expect(rig.server.slots[9]).toBeNull();
     expect(rig.server.selectedItem).toBeNull();
   });
 

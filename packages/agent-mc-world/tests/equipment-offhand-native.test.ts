@@ -7,7 +7,7 @@ import { installInventoryClickSync, inventoryClickState } from '../core/inventor
 import { installInventoryWindowSyncGuard } from '../core/inventory-window-sync.ts';
 
 const require = createRequire(import.meta.url), mf = createRequire(require.resolve('mineflayer'));
-function nativeServer(version: string, denyNumberSwap = false) {
+function nativeServer(version: string, denyNumberSwap = false, rejectPostEquip = false) {
   const registry = require('minecraft-data')(version), Item = mf('prismarine-item')(registry);
   const windows = mf('prismarine-windows')(version), server = windows.createWindow(0, 'minecraft:inventory', 'Inventory');
   let stateId = 0;
@@ -27,7 +27,8 @@ function nativeServer(version: string, denyNumberSwap = false) {
     if (name !== 'window_click') return;
     clicks.push(structuredClone(packet));
     const cursorSwap = packet.slot === 45 && packet.mode === 0 && server.slots[45] && server.selectedItem;
-    if (!cursorSwap && !(denyNumberSwap && packet.slot === 45 && packet.mode === 2)) {
+    const unnecessaryCleanup = rejectPostEquip && server.slots[45]?.name === 'shield' && packet.slot !== 45;
+    if (!cursorSwap && !unnecessaryCleanup && !(denyNumberSwap && packet.slot === 45 && packet.mode === 2)) {
       server.acceptClick({ slot: packet.slot, mouseButton: packet.mouseButton, mode: packet.mode, item: server.slots[packet.slot] });
     }
     setTimeout(full, 50);
@@ -43,6 +44,19 @@ function nativeServer(version: string, denyNumberSwap = false) {
 }
 afterEach(() => vi.useRealTimers());
 
+it('finishes at confirmed offhand placement instead of issuing a refused post-goal hotbar restoration', async () => {
+  vi.useFakeTimers(); const r = nativeServer('1.21.1', false, true);
+  for (let slot = 9; slot < 45; slot++) r.seed(slot, 'stone');
+  r.server.updateSlot(40, null); r.seed(11, 'shield'); r.seed(45, 'player_head', true); r.full();
+  const before = structuredClone(r.raw()); let error: unknown;
+  const operation = equipSlotConfirmed(r.bot, r.bot.inventory.slots[11]!, 'off-hand').catch(e => { error = e; });
+  await vi.runAllTimersAsync(); await operation;
+  expect(error).toBeUndefined(); expect(r.server.slots[45]?.name).toBe('shield');
+  expect(r.raw()[40]).toEqual(before[45]); expect(r.server.slots[11]).toBeNull();
+  expect(r.clicks.map(p => p.slot)).toEqual([11, 45]);
+  expect(r.server.selectedItem).toBeNull(); expect(inventoryClickState(r.bot).phase).toBe('ready');
+});
+
 it.each(['1.20.6', '1.21.1'])('replaces an occupied offhand without ever carrying a cursor stack on %s', async version => {
   vi.useFakeTimers(); const r = nativeServer(version);
   r.seed(9, 'shield'); r.seed(45, 'player_head', true); r.seed(36, 'diamond_sword'); r.full();
@@ -52,11 +66,13 @@ it.each(['1.20.6', '1.21.1'])('replaces an occupied offhand without ever carryin
   await vi.runAllTimersAsync(); await operation;
   expect(error).toBeUndefined();
   expect(r.server.slots[45]?.name).toBe('shield');
-  expect(r.raw()[9]).toEqual(original[45]);
+  expect(r.raw()[37]).toEqual(original[45]);
+  expect(r.server.slots[9]).toBeNull();
   expect(r.raw()[36]).toEqual(original[36]);
   expect(r.server.selectedItem).toBeNull(); expect(r.bot.inventory.selectedItem).toBeNull();
   expect(r.clicks.every(p => p.mode === 2 && p.cursorItem.itemCount === 0)).toBe(true);
-  expect(r.clicks).toHaveLength(3);
+  expect(r.clicks).toHaveLength(2);
+  expect(r.raw().map(x => JSON.stringify(x)).sort()).toEqual(original.map(x => JSON.stringify(x)).sort());
   expect(r.bot.quickBarSlot).toBe(0);
   expect(inventoryClickState(r.bot).phase).toBe('ready');
 });
@@ -76,7 +92,7 @@ it('uses one confirmed number-key swap for a hotbar source, even with a full inv
   expect(r.server.selectedItem).toBeNull();
 });
 
-it('restores a borrowed hotbar slot with a full inventory and preserves custom item data', async () => {
+it('preserves every item and the selected hotbar while replacing offhand with a full inventory', async () => {
   vi.useFakeTimers(); const r = nativeServer('1.21.1');
   for (let slot = 9; slot < 45; slot++) r.seed(slot, 'stone');
   r.seed(9, 'shield'); r.seed(45, 'player_head', true); r.full();
@@ -85,9 +101,10 @@ it('restores a borrowed hotbar slot with a full inventory and preserves custom i
   const operation = equipSlotConfirmed(r.bot, r.bot.inventory.slots[9]!, 'off-hand').catch(e => { error = e; });
   await vi.runAllTimersAsync(); await operation;
   expect(error).toBeUndefined();
-  const after = r.raw(); expect(after[9]).toEqual(before[45]); expect(after[45]).toEqual(before[9]);
-  for (let slot = 0; slot < before.length; slot++) if (slot !== 9 && slot !== 45) expect(after[slot]).toEqual(before[slot]);
-  expect(r.clicks).toHaveLength(3); expect(r.clicks.every(p => p.mode === 2)).toBe(true);
+  const after = r.raw(); expect(after[9]).toEqual(before[37]); expect(after[37]).toEqual(before[45]); expect(after[45]).toEqual(before[9]);
+  for (let slot = 0; slot < before.length; slot++) if (![9, 37, 45].includes(slot)) expect(after[slot]).toEqual(before[slot]);
+  expect(after.map(x => JSON.stringify(x)).sort()).toEqual(before.map(x => JSON.stringify(x)).sort());
+  expect(r.clicks).toHaveLength(2); expect(r.clicks.every(p => p.mode === 2)).toBe(true);
   expect(r.server.selectedItem).toBeNull();
 });
 

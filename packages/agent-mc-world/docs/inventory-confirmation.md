@@ -29,11 +29,19 @@ unrecorded live packet sequence or prove improved gameplay after deployment.
 Modern player-inventory offhand equipment uses ordinary number-key swaps
 (`window_click` mode 2, button 0–8), rather than holding the requested item on the
 mouse cursor while replacing an occupied offhand. A hotbar source needs one
-confirmed exchange. A source in main inventory borrows a hotbar slot for three
-confirmed exchanges, restores that hotbar slot, and leaves the previous offhand
-item in the requested item's original slot. This also works with a full
-inventory; no free slot, item discard, name filter or server-specific rule is
-introduced. Other equipment and legacy paths retain their existing contract.
+confirmed exchange. A source in main inventory uses an unselected hotbar slot
+for two confirmed exchanges. The previous hotbar item stays in the original
+source slot and the displaced offhand stays in the hotbar. Both items remain
+available; a full inventory needs no extra space, discard, name filter or
+server-specific rule. The selected hotbar slot is preserved. Other equipment
+and legacy paths retain their existing contract.
+
+After the requested offhand and empty cursor have been server-confirmed, the
+equipment operation is done. Do not send a third click to restore a preferred
+inventory layout: the live 2026-10-18 task reached the requested shield at
+13:55:32.553, then an unnecessary restoration produced mismatched slots and a
+false overall failure/quarantine. The original failed task remains failed in
+the audit; later state recovery does not rewrite that history.
 
 Each exchange still requires the actual server slots and cursor to match. A
 denied exchange stops the sequence without retry, cursor pickup or reporting
@@ -47,8 +55,8 @@ failed operation and its evidence; a later recovery does not promote it to a
 successful equip.
 
 `equipment-offhand-native.test.ts` uses the actual pinned Mineflayer inventory
-plugin on 1.20.6 and 1.21.1, including named item data, full inventories, restored
-hotbar contents, rejection and no replay. Its simulated server reproduces the
+plugin on 1.20.6 and 1.21.1, including named item data, full inventories, retained
+items and selected hotbar, rejection and no replay. Its simulated server reproduces the
 cursor-swap failure mode; production acceptance requires a separate live equip
 and fresh post-operation inventory read.
 
