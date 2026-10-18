@@ -53,8 +53,8 @@ describe('verified inventory identities and craft correction', () => {
     expect(result.receipt).toContain('试算(还没动工)');
     expect(result.receipt).toContain('仅按受理时当前已确认库存');
     expect(result.receipt).toContain('未计入前面尚未执行步骤的产出或消耗');
-    expect(result.receipt).toContain('配方示例，不是仅允许这些材料');
-    expect(result.receipt).toContain('还有 8 条配方缺口一样多');
+    expect(result.receipt).toContain('第 2 步做工作台需要 任意木板×4');
+    expect(result.receipt).toContain('第 3 步做木斧需要 任意木板×3');
     expect(r.exec.status().waiting).toHaveLength(1);
     expect(r.craft).not.toHaveBeenCalled();
     const deps = { resolve: () => null, blockAt: () => null, cellsOf: () => null };
@@ -69,7 +69,8 @@ describe('verified inventory identities and craft correction', () => {
     // Actual stock loss is respected, even when the submitted prefix names planks.
     r.slots[9] = null;
     const current = renderPrecheckNotes(precheckSteps(r.bot as never, [...steps] as never, deps));
-    expect(current).toContain('第 2 步做工作台还差');
+    expect(current).toContain('第 3 步做木斧需要 任意木板×3');
+    expect(current).not.toContain('第 2 步做工作台'); // The confirmed table already satisfies this step.
     expect(current).toContain('未计入前面尚未执行步骤');
   });
   it('advises about carried cooked food without replacing an explicit raw-food request', () => {

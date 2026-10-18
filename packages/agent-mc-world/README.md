@@ -1,5 +1,12 @@
 # Agent MC World
 
+`0.5.7-rc.32` uses exact Java 1.21.1 ingredient tags for crafting and
+preflight material checks, including mixed plank species in chests and beds.
+The versioned reference is extracted from the hash-verified official client by
+`scripts/extract-crafting-tags.py`; 1.20.6 keeps its own data and unsupported
+versions keep the registry fallback. These are grid proposals, not permission
+or a server-result claim: actual inventory gains still determine success.
+
 `0.5.7-rc.31` uses the occupied feet cell consistently in task queues,
 progress and world snapshots. Continuous positions are floored, including
 negative coordinates; they are not rounded into a neighboring air cell.

@@ -1,11 +1,13 @@
 /**
- * 1.20.6 官方配方中的物品标签。minecraft-data 的 recipesAll 把标签压成
+ * 按确切版本读取官方配方的物品标签。minecraft-data 的 recipesAll 把标签压成
  * 一种代表材料（例如所有木板都变成橡木木板）；这里在现有背包中展开标签，
  * 只产生摆格方案。合成结果仍以服务端实际回包为准。
  */
 import type { Bot } from 'mineflayer';
-import data from './data/crafting-tags-1.20.6.json' with { type: 'json' };
+import legacy from './data/crafting-tags-1.20.6.json' with { type: 'json' };
+import current from './data/crafting-tags-1.21.1.json' with { type: 'json' };
 import type { CraftRecipeLike } from './skills-craft.ts';
+import { zhName } from './names.ts';
 
 type Ingredient = { item?: string; tag?: string } | Array<{ item?: string; tag?: string }>;
 type TaggedRecipe = {
@@ -16,7 +18,7 @@ type TaggedRecipe = {
   result: { count: number; id: string };
 };
 type TaggedData = { version: string; recipes: Record<string, TaggedRecipe[]>; tags: Record<string, string[]> };
-const vanilla = data as TaggedData;
+const versions: Record<string, TaggedData> = { [legacy.version]: legacy as TaggedData, [current.version]: current as TaggedData };
 
 const unnamespace = (id: string): string => id.startsWith('minecraft:') ? id.slice(10) : id;
 
@@ -46,7 +48,8 @@ export interface TaggedCraftChoice {
 /** null:此版本/物品没有带标签的官方配方，应使用通常的 recipesAll。 */
 export function taggedCraftChoice(bot: Bot, item: string): TaggedCraftChoice | null {
   const version = (bot.registry.version as { minecraftVersion?: string } | undefined)?.minecraftVersion;
-  if (version !== vanilla.version) return null;
+  const vanilla = version ? versions[version] : undefined;
+  if (!vanilla) return null;
   const recipes = vanilla.recipes[item];
   if (!recipes?.length) return null;
   const have = new Map<number, number>();
@@ -63,7 +66,7 @@ export function taggedCraftChoice(bot: Bot, item: string): TaggedCraftChoice | n
       if (!spec) continue;
       const parts = Array.isArray(spec) ? spec : [spec];
       const label = parts.map((part) => part.tag === 'minecraft:planks'
-        ? '任意木板' : part.tag ? `#${part.tag}` : unnamespace(part.item ?? '')).join(' 或 ');
+        ? '任意木板' : part.tag ? `#${part.tag}` : zhName(unnamespace(part.item ?? ''))).join(' 或 ');
       required.set(label, (required.get(label) ?? 0) + 1);
     }
     fallbackNeeds = [...required].map(([name, count]) => `${name}×${count}`).join(' + ');
