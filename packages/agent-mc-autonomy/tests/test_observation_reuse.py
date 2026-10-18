@@ -128,6 +128,24 @@ def test_mixed_body_steps_are_never_reused_as_observation(framework_module, tmp_
     assert len([call for call in bridge.calls if call[0] == "mc_do"]) == 2
 
 
+def test_repeated_read_through_mc_do_keeps_actual_body_actions_available(framework_module, tmp_path, run_async):
+    bridge, controller = prepare(framework_module, tmp_path)
+    import agent_mc_autonomy.controller as module
+    controller.last_admission_facts = module.admission_fingerprint(
+        {"parts": [{"key": "world", "text": "health=20", "original": "log:health"}]})
+    observed(controller, run_async, "mc_do", PLAN)
+    assert observed(controller, run_async, "mc_do", PLAN)["dispatched"] is False
+
+    async def decide(_messages, tools):
+        assert "mc_do" in {tool["function"]["name"] for tool in tools}, "A read cannot hide the body action port"
+        return {"tool_calls": [{"id": "actual-work", "type": "function", "function": {
+            "name": "mc_do", "arguments": json.dumps({"steps": [{"skill": "goto", "at": [1, 65, 1]}]})}}]}
+
+    controller.decide = decide
+    run_async(controller.turn_once("survive", "native contract", module.model_tools(bridge.tools)))
+    assert len([call for call in bridge.calls if call[0] == "mc_do"]) == 2
+
+
 def test_repeated_inventory_read_yields_one_recovery_decision_with_other_tools(
         framework_module, tmp_path, run_async):
     seen = []

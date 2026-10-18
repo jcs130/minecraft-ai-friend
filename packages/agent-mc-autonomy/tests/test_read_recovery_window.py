@@ -70,7 +70,7 @@ def test_recovery_window_releases_for_fresh_state_or_bounded_expiry(
     elif change == 'scope':
         controller.game_scope = 'new connection/account'
     else:
-        ticks[0] += 61
+        ticks[0] += 301
     run_async(controller.turn_once('survive', 'native contract', tools))
     assert 'mc_bag' in available[-1]
     assert len([row for row in bridge.calls if row[0] == 'mc_bag']) == 2
@@ -109,3 +109,37 @@ def test_running_native_work_can_still_read_its_real_queue(framework_module, tmp
     assert 'mc_queue' in offered[-1]
     assert len([row for row in bridge.calls if row[0] == 'mc_queue']) == 2
     assert controller.read_activity == {'mc_queue': 2}
+
+
+def test_recovery_window_outlasts_slow_alternating_query_decisions(
+        framework_module, tmp_path, run_async, monkeypatch):
+    import agent_mc_autonomy.controller as module
+    ticks, offered = [100.0], []
+    monkeypatch.setattr(module.time, 'monotonic', lambda: ticks[0])
+
+    async def decide(_messages, tools):
+        available = {tool['function']['name'] for tool in tools}
+        offered.append(available)
+        # Replay inference/scheduling latency; no sleeping or actual model call.
+        ticks[0] += 20
+        name = next((n for n in ('mc_bag', 'mc_queue', 'mc_blocked') if n in available), 'mc_do')
+        return {'tool_calls': [{'id': f'call-{len(offered)}', 'type': 'function', 'function': {
+            'name': name, 'arguments': json.dumps({'steps': [{'skill': 'goto', 'at': [1, 65, 1]}]}
+                                                  if name == 'mc_do' else {})}}]}
+
+    _, bridge, controller = setup(framework_module, tmp_path, decide)
+    controller.settings = dataclasses.replace(controller.settings, max_tool_rounds=1)
+    bridge.tools.extend({'name': n, 'inputSchema': {'type': 'object'}} for n in ('mc_bag', 'mc_queue', 'mc_blocked'))
+    original = bridge.call
+    async def call(name, arguments, **metadata):
+        if name == 'mc_blocked':
+            bridge.calls.append((name, arguments, metadata))
+            return packed({'text': 'No new failed task'})
+        return await original(name, arguments, **metadata)
+    bridge.call = call
+    for _ in range(9):
+        run_async(controller.turn_once('survive', 'native contract', module.model_tools(bridge.tools)))
+        if controller.pending:
+            break
+    assert controller.pending, 'Answered tools reopened before the slow recovery decision could choose work'
+    assert len([row for row in bridge.calls if row[0] == 'mc_bag']) == 1

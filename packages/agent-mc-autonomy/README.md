@@ -1,5 +1,13 @@
 # Agent MC Autonomy
 
+0.2.17 preserves the shared `mc_do` action port when a repeated read used it.
+The identical observation is still rejected with its retained evidence, while
+the planner can choose a different real body action immediately. Read-only
+ports retain the recovery window added in 0.2.16, now bounded at five minutes
+so slower inference/scheduling cannot reopen the first redundant tool before
+other answered queries have yielded. Fresh state and running work still restore
+reads immediately; original evidence remains queryable.
+
 0.2.16 keeps answered reads deferred together for a bounded recovery window,
 instead of letting inventory/queue queries alternate across one-turn exclusions.
 Changed evidence, connection changes or expiry restore availability; running

@@ -41,6 +41,7 @@ DIRECT_TOOLS = {"mc_help", "mc_knowledge", "mc_do", "mc_scout", "mc_protocol", "
 READ_ACTIVITY_TOOLS = {"mc_help", "mc_knowledge", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original", "mc_capabilities", "mc_operations", "mc_result", "mc_notices", "mc_messages"}
 IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout"}
 REUSABLE_IMMEDIATE_READS = {"mc_bag", "mc_queue", "mc_blocked"}
+READ_RECOVERY_SECONDS = 300
 
 
 def observation_call(name, arguments):
@@ -568,10 +569,14 @@ class Controller:
         self.publish(read_activity={}, read_recovery=None, action_recovery=None)
 
     def defer_answered_read(self, name):
+        if name == "mc_do":
+            # This port also owns real body actions. Reject the identical cached
+            # observation above, but keep other mc_do plans available.
+            return
         # Accumulate a bounded opportunity to choose other work. Clearing each
         # name after one request lets two answered queries alternate forever.
         self.read_recovery_tools[name] = {"facts": self.last_admission_facts, "scope": self.game_scope,
-                                          "until": time.monotonic() + 60}
+                                          "until": time.monotonic() + READ_RECOVERY_SECONDS}
 
     def deferred_read_tools(self, facts):
         fingerprint = admission_fingerprint(facts)
@@ -1270,7 +1275,7 @@ class Controller:
             self.defer_answered_read(name)
             result = {"failed": True, "dispatched": False, "origin": "controller_validation",
                 "code": "read_already_answered",
-                "text": "This exact read was already answered with unchanged observed state. It was NOT dispatched again. The dated answer and original handles remain below. Answered tools yield for a bounded recovery window (at most 60 seconds), restored by changed facts or connection. Use the retained answers to choose useful native work, query a specific unresolved fact through available tools, or wait for a stated condition. Repeating the query cannot open a container or change the inventory.",
+                "text": "This exact read was already answered with unchanged observed state. It was NOT dispatched again. The dated answer and original handles remain below. Answered tools yield for a bounded recovery window (at most 300 seconds), restored by changed facts or connection. Use the retained answers to choose useful native work, query a specific unresolved fact through available tools, or wait for a stated condition. Repeating the query cannot open a container or change the inventory.",
                 "previous_answer": {"fresh": False, "answer": answer["answer"],
                     **{key: answer[key] for key in ("received_at", "request_id", "turn_id")},
                     "journal": "receipts.jsonl"}}
