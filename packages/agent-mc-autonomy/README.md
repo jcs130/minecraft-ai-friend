@@ -1,5 +1,14 @@
 # Agent MC Autonomy
 
+0.2.23 retains measured failed withdrawals separately from whole-batch effects.
+Two failures for the same item/quantity and explicitly opened container can
+refuse another matching batch for at most 120 seconds, even if walking, window
+closure, narration or later steps changed. It requires correlated native
+terminal samples and the same connection, world, death epoch and inventory.
+Changed stock/container/item/quantity or preceding acquisition work remains
+available. This is dated client-visible recovery evidence, not a statement of
+current container contents, server permissions or verified goal completion.
+
 0.2.22 also moves the complete current planning goal to the changing full-context
 tail. Updated host proposals no longer alter the prefix before retained history;
 user/standing-goal priority and original wording remain intact. Layout digests

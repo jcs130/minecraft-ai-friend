@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .bridge import json_content, outcome, text_content
+from .container_recovery import ContainerRecovery
 from .context import (
     assemble,
     coalesce_rejected,
@@ -361,6 +362,7 @@ class Controller:
         self.read_answers = {}
         self.read_recovery_tools = {}
         self.effect_recovery = EffectRecovery()
+        self.container_recovery = ContainerRecovery()
         self.skill_references = {}
         self.action_requests = {}
         self.action_scopes = {}
@@ -516,6 +518,8 @@ class Controller:
                     self.publish(native_outcomes=[native_outcome_view(row) for row in self.native_outcomes[-6:]])
                     if not read_only and self.effect_recovery.record(arguments, execution, self.game_scope, self.death_epoch, reference):
                         self.clear_read_activity()
+                    if not read_only:
+                        self.container_recovery.record(arguments, execution, self.game_scope, self.death_epoch, reference)
                     if not read_only and phase == "completed":
                         # A known body task has finished. Its next useful decision
                         # need not wait for the unrelated ordinary event throttle.
@@ -1274,15 +1278,24 @@ class Controller:
                     arguments["queue"] = "append"
         request_id = str(uuid.uuid4())
         repeat = self.effect_recovery.repeated(arguments, self.game_facts, self.game_scope, self.death_epoch) if name == "mc_do" and not self.pending and not queue_error else None
+        if not repeat and name == "mc_do" and not self.pending and not queue_error:
+            repeat = self.container_recovery.repeated(arguments, self.game_facts, self.game_scope, self.death_epoch)
         if repeat and not observation_call(name, arguments):
-            self.planner_notice = ("The same native plan already ended twice without any measured change, and position/inventory/dimension are still unchanged. "
+            container_failure = repeat.get("kind") == "failed_container_take"
+            code = "repeated_container_failure" if container_failure else "repeated_no_effect"
+            self.planner_notice = (("This withdrawal from the same explicitly opened container already failed twice without inventory change. "
+                "Walking, reopening it, new narration or a different later batch do not resolve that failure. "
+                "The entire proposed batch was NOT dispatched. Use the dated native evidence to correct the item/container, "
+                "obtain prerequisites through real work, query a specific missing fact, choose different work, or wait for changed conditions. "
+                "The refusal expires within 120 seconds and does not establish current contents, permissions or goal success.") if container_failure else
+                ("The same native plan already ended twice without any measured change, and position/inventory/dimension are still unchanged. "
                 "It was NOT dispatched again. Use the original terminal evidence and native skill help to correct the prerequisites, choose different useful work, "
-                "or report this proposed stage blocked. This dated client-visible evidence does not prove permissions or goal success.")
+                "or report this proposed stage blocked. This dated client-visible evidence does not prove permissions or goal success."))
             self.continuation_needed = True
             delay = max(30, self.settings.min_decision_seconds)
             self.planner_retry_at = time.monotonic() + delay
-            self.publish(action_recovery=repeat, planner_error="repeated_no_effect", planner_retry_seconds=delay)
-            result = {"failed": True, "dispatched": False, "origin": "controller_validation", "code": "repeated_no_effect",
+            self.publish(action_recovery=repeat, planner_error=code, planner_retry_seconds=delay)
+            result = {"failed": True, "dispatched": False, "origin": "controller_validation", "code": code,
                       "text": self.planner_notice, "previous_outcome": repeat}
             return result, await self.archive_receipt(request_id, name, result), True
         read_key = json.dumps([name, arguments], sort_keys=True, ensure_ascii=False)
