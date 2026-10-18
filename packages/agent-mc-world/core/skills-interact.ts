@@ -1124,11 +1124,15 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     ctx.holdWindow?.(bot.currentWindow!);
   }
   await sleep(1_200);
-  assertUseHand(bot, hand, ctx);
-  bot.deactivateItem();
+  checkAbort(ctx);
+  // The packet boundary already validated the selected hand. A server response
+  // can replace or consume that item; it cannot make the original send unsent.
+  const handChangedAfterUse = !isDeepStrictEqual(useHandOf(bot.heldItem), hand);
+  if (!handChangedAfterUse) bot.deactivateItem();
   await sleep(200);
   checkAbort(ctx);
   const note = useInvNote(beforeInv, bot);
+  const handNote = handChangedAfterUse ? ';使用请求发送后主手发生变化，未对新主手发送松开使用' : '';
   if (bot.currentWindow && bot.currentWindow !== beforeWindow) {
     const opened = windowSnapshot(bot.currentWindow as unknown as Parameters<typeof windowSnapshot>[0]);
     const menu = selectionMenuTitle(bot.currentWindow.title);
@@ -1142,14 +1146,14 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     const omitted = occupied.length > contents.length ? `（另 ${occupied.length - contents.length} 个非空槽位未列出）` : '';
     if (menu) {
       return `用了${label};打开了${menu}选择菜单。槽位里的图标是菜单选项，不是箱内物品，不能用 take from:"open" 取走；当前工具没有菜单槽位点击步骤，可查询服务端文字命令`
-        + `${contents.length > 0 ? `;看到选项:${contents.join('、')}${omitted}` : ''}${note ? `;${note}` : ''}`;
+        + `${contents.length > 0 ? `;看到选项:${contents.join('、')}${omitted}` : ''}${note ? `;${note}` : ''}${handNote}`;
     }
     const capacity = opened ? `，占用 ${occupied.length}/${opened.containerCount} 格，空 ${opened.containerCount - occupied.length} 格` : '';
-    return `用了${label};打开了${opened?.title ?? '交互窗口'}${capacity}${contents.length > 0 ? `,里面有:${contents.join('、')}${omitted}` : ',里面暂时是空的'}${note ? `;${note}` : ''}`;
+    return `用了${label};打开了${opened?.title ?? '交互窗口'}${capacity}${contents.length > 0 ? `,里面有:${contents.join('、')}${omitted}` : ',里面暂时是空的'}${note ? `;${note}` : ''}${handNote}`;
   }
   return note
-    ? `拿着${label}发送了使用请求;${note};没有登记的使用效果，背包变化不能单独证明本次使用生效`
-    : `拿着${label}按了一下使用;包里一样没动,这样东西没有登记的使用效果,光凭库存读不出有没有发生什么`;
+    ? `拿着${label}发送了使用请求;${note};没有登记的使用效果，背包变化不能单独证明本次使用生效${handNote}`
+    : `拿着${label}发送了使用请求;包里一样没动,这样东西没有登记的使用效果,光凭库存读不出有没有发生什么${handNote}`;
 }
 
 /**

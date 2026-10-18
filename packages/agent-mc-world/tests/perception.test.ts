@@ -10,6 +10,20 @@ const air={name:'air',shapes:[]},stone={name:'stone',shapes:[[0,0,0,1,1,1]]};
 const sound={name:'entity.zombie.ambient',category:'hostile',volume:1,pitch:1,position:{x:6,y:64,z:-6},entityId:9};
 const self={id:1,position:new Vec3(.5,64,.5),yaw:0,pitch:0};
 const rig=()=>({entity:self,entities:{9:{id:9,name:'zombie',height:1.8,position:new Vec3(.5,64,-6)}},registry:{},blockAt:()=>air});
+it.each([
+  { attributes: { 'minecraft:max_health': { value: 20, modifiers: [{ amount: 2.8, operation: 0 }] } }, expected: 22.8 },
+  { attributes: { 'generic.max_health': { value: 20 } }, expected: 20 },
+  { attributes: undefined, expected: null },
+])('keeps native maximum health in planner body facts: $expected', ({attributes,expected})=>{
+  const bot={...rig(),entity:{...self,attributes},registry:{items:{},blocksByName:{}},
+    game:{dimension:'overworld'},time:{},health:21,food:18,
+    inventory:{items:()=>[],slots:[]},players:{},blockAt:()=>stone,findBlocks:()=>[]};
+  const snapshot=snapshotFromBot(bot,{scanBlocks:false});
+  expect(snapshot).toHaveProperty('maxHealth',expected);
+  const body=narrateWorldSegments(snapshot).find(part=>part.key==='body')!.text;
+  expect(body).toContain(expected===null?'上限未同步':`21/${expected}`);
+});
+
 describe('perception evidence boundaries',()=>{
   it('observes loaded voxels and entities through known empty grass, fern and near-eye vine shapes',()=>{
     const bot={...rig(),game:{dimension:'overworld'},blockAt:(p:Vec3)=>{

@@ -30,6 +30,7 @@ import { inventoryReadState, narrateInventorySync, type InventoryReadState } fro
 import { footingFromBot, narrateFooting, type FootingReading } from './footing.ts';
 import { WATER_BLOCKS } from './fluid-blocks.ts';
 import { signTextSnapshot, type SignTextSnapshot } from './sign-read.ts';
+import { entityMaxHealth } from './entity-max-health.ts';
 export { WATER_BLOCKS } from './fluid-blocks.ts';
 export { BURNING_BLOCKS, SCORCHING_FLOOR } from './hazard-geometry.ts';
 
@@ -152,6 +153,8 @@ export interface WorldSnapshot {
   dimension: string;
   /** 未收到生命或饥饿读数时为 null；0 是有效读数。 */
   health: number | null;
+  /** Native attribute value with server modifiers; null=unobserved. Omitted by legacy snapshot producers. */
+  maxHealth?: number | null;
   food: number | null;
   oxygen: number;
   /** 头部在水中(氧气只有此时才有意义,元数据在旱地上会残留旧值) */
@@ -432,8 +435,11 @@ export function narrateWorldSegments(
   segs.push({ key: 'realclock', text: real, cmp: real });
 
   const oxygen = s.inWater && s.oxygen < 20 ? `，泡在水里，氧气还剩 ${Math.round(s.oxygen)}/20` : '';
+  const maximum = s.maxHealth === undefined ? 20
+    : typeof s.maxHealth === 'number' && Number.isFinite(s.maxHealth) && s.maxHealth > 0 ? s.maxHealth : null;
   const health = s.health === null ? '生命正在从服务器同步'
-    : `${healthPhrase(s.health)}（生命 ${Math.ceil(s.health)}/20）`;
+    : maximum === null ? `生命 ${Math.ceil(s.health)}（上限未同步）`
+      : `${healthPhrase(s.health / maximum * 20)}（生命 ${Math.ceil(s.health)}/${fmt(maximum)}）`;
   const food = s.food === null ? '饥饿正在从服务器同步'
     : `${foodPhrase(s.food)}（饥饿 ${Math.round(s.food)}/20）`;
   const body = `${health}，${food}${oxygen}。`;
@@ -1907,6 +1913,7 @@ export function snapshotFromBot(
     vehicle: vehicleStateFromBot(bot),
     dimension: String(bot.game.dimension ?? 'overworld'),
     health: typeof bot.health === 'number' && Number.isFinite(bot.health) ? bot.health : null,
+    maxHealth: entityMaxHealth(bot.entity),
     food: typeof bot.food === 'number' && Number.isFinite(bot.food) ? bot.food : null,
     // 旱地上的氧气读数是残留旧值,一律按满算;水下才用真实值(截到 0–20)
     oxygen: inWater ? Math.max(0, Math.min(20, bot.oxygenLevel ?? 20)) : 20,

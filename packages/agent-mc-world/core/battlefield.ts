@@ -6,6 +6,7 @@ import { piglinIsHostile } from './piglin.ts';
 import { canSeeEntity } from './terrain.ts';
 import { observedEntity } from './perception-sight.ts';
 import { loadedSight } from './idle-actions.ts';
+import { entityMaxHealth as maxHealth } from './entity-max-health.ts';
 
 export const BATTLEFIELD_CHANNEL = 'mcagent:battlefield';
 type Relation = 'ally' | 'hostile' | 'neutral' | 'unknown';
@@ -77,20 +78,6 @@ function serverFrame(data: unknown, now: number): ServerFrame | null {
         health: { current: e.health.current, max: e.health.max }, targetEntityId: e.targetEntityId,
       })) };
   } catch { return null; }
-}
-
-/** Attribute values include the server's modifiers; an absent maximum stays unknown. */
-function maxHealth(entity: Bot['entity']): number | null {
-  const attrs = (entity as unknown as { attributes?: Record<string,
-    { value: number; modifiers?: Array<{ amount: number; operation: number }> }> }).attributes;
-  const attr = Object.entries(attrs ?? {}).find(([key]) => /(?:^|[.:])max_health$/.test(key))?.[1];
-  if (!attr || !number(attr.value)) return null;
-  const mods = attr.modifiers ?? [];
-  let value = attr.value + mods.filter(m => m.operation === 0).reduce((n, m) => n + m.amount, 0);
-  const base = value;
-  value += mods.filter(m => m.operation === 1).reduce((n, m) => n + base * m.amount, 0);
-  for (const m of mods) if (m.operation === 2) value *= 1 + m.amount;
-  return number(value) && value > 0 ? value : null;
 }
 
 /** No chat parsing, main-model output or proximity inference establishes party membership. */
