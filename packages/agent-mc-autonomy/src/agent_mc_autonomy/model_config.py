@@ -145,6 +145,7 @@ class HttpPlannerConfig:
     project: str = ""
     anthropic_version: str = "2023-06-01"
     anthropic_beta: str = ""
+    reasoning_history: str = "all"
 
     @classmethod
     def parse(cls, raw, *, require_model=True):
@@ -163,6 +164,7 @@ class HttpPlannerConfig:
         result = cls(**values)
         if not isinstance(result.protocol, str) or result.protocol not in PARAMETERS:
             raise ValueError("brain_protocol_invalid")
+        result.validate_reasoning_history()
         endpoint(result.base_url)
         text(result.model, "model", empty=not require_model)
         environment(result.api_key_env)
@@ -189,7 +191,14 @@ class HttpPlannerConfig:
     def key(self):
         return secret(self.api_key_env) if self.auth.mode in {"api_key", "bearer"} else ""
 
+    def validate_reasoning_history(self):
+        if not isinstance(self.reasoning_history, str) or self.reasoning_history not in {"all", "current_turn"}:
+            raise ValueError("brain_reasoning_history_invalid")
+        if self.reasoning_history != "all" and self.protocol != "chat":
+            raise ValueError("brain_reasoning_history_requires_chat")
+
     def validate_budget(self, budget):
+        self.validate_reasoning_history()
         if type(budget) is not int or not 1 <= budget <= 131072:
             raise ValueError("brain_output_budget_invalid")
         if self.protocol == "anthropic" and self.parameters.get("thinking", {}).get("budget_tokens", 0) >= budget:

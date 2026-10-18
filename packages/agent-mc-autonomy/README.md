@@ -1,5 +1,15 @@
 # Agent MC Autonomy
 
+0.2.25 adds an explicit Chat-only `planner.reasoning_history="current_turn"`
+policy for compatible providers. The default `"all"` keeps existing native
+replay unchanged. The opt-in omits only `reasoning_content` from assistant
+messages before the latest user message; a current tool-call continuation keeps
+its reasoning. Public answers, tool calls/results, persona, selected memories,
+the context-window setting and original provider journals remain intact.
+Other native protocols reject this opt-in to preserve signed/encrypted replay.
+This is an explicit provider compatibility choice, not a universal speed or
+reasoning-quality guarantee.
+
 0.2.24 reuses completed queued reads and dry runs across both native read and
 body-tool entry points. Dated answers share the bounded five-minute recovery
 window, so a 60+ second inference does not expire the answer before the model

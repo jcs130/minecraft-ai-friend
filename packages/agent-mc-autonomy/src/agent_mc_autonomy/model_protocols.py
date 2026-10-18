@@ -46,6 +46,7 @@ def image_data(part):
 
 
 def request(config, messages, tools, budget):
+    config.validate_reasoning_history()
     p = config.protocol
     options = copy.deepcopy(config.parameters)
     if not tools:
@@ -53,10 +54,12 @@ def request(config, messages, tools, budget):
     base = config.base_url.rstrip("/")
     if p == "chat":
         rows = []
-        for message in messages:
+        last_user = max((index for index, message in enumerate(messages) if message.get("role") == "user"), default=-1)
+        for index, message in enumerate(messages):
             row = {k: copy.deepcopy(v) for k, v in message.items() if k in {"role", "content", "tool_calls", "tool_call_id", "name"}}
             state = native(message, config)
-            if state and "reasoning_content" in state:
+            if (state and "reasoning_content" in state
+                    and (config.reasoning_history == "all" or index > last_user)):
                 row["reasoning_content"] = state["reasoning_content"]
             rows.append(row)
         body = {**options, "model": config.model, "messages": rows, "stream": config.stream, config.output_parameter: budget, "parallel_tool_calls": False}
