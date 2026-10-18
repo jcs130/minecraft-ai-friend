@@ -1,6 +1,6 @@
 {
   "schema": "agent-mc-viewer-source/v1",
-  "sourceRevision": "ef251a6cf3ff2c57930cca2f577e9b6dcfa56119",
+  "sourceRevision": "1cbd5574660c99a6c72a55224e84f4460778fd6a",
   "files": {
     "package.json": {
       "bytes": 1191,
@@ -411,8 +411,8 @@
       "sha256": "a64bdd31ed1e4eb86c920efbde2088dc2b5f905cb2e750c122e2685a6bf9fdce"
     },
     "renderer-src/src/modern-viewer/paper-ysm-items.js": {
-      "bytes": 12556,
-      "sha256": "051d6da90703c3d3a36296e063ff99e64579f224cf871a67e96ade3d1785916c"
+      "bytes": 12991,
+      "sha256": "abfd787a36eaae2d6635d9fa31e25e6c16eb1ffec11a6a62f9b2a3ec0254d4c8"
     },
     "renderer-src/src/modern-viewer/paper-ysm-molang.js": {
       "bytes": 6642,
@@ -695,8 +695,8 @@
       "sha256": "0516c9571eca37cdc03509e2a4ab965f3c4d58c4756957e7baf749e8d5909d37"
     },
     "renderer-src/src/native-viewer/native-bundled-ysm-items.js": {
-      "bytes": 4766,
-      "sha256": "d540074b744b1fb7644eee98ead2340742d70784660c36fb2cafba6818823d19"
+      "bytes": 5761,
+      "sha256": "9856d683db9e26cfb79503aecf4221487dca8c58d1fbe1609e408e169e71e79a"
     },
     "renderer-src/src/native-viewer/native-bundled-ysm-motion.js": {
       "bytes": 8525,
@@ -719,8 +719,8 @@
       "sha256": "c09e716f9629b8188c7370021065b275633dba3060bb61bce369c14fadc7cebe"
     },
     "renderer-src/src/native-viewer/native-console.js": {
-      "bytes": 29943,
-      "sha256": "fbd3ce5a726751ca4653a38d41e5e1558d8ac420c38be89cf3e71ebec3e751d5"
+      "bytes": 30008,
+      "sha256": "d03cc1a60c6d5753fed7cc65194c6945f24515939d838471eb54c77b409ae388"
     },
     "renderer-src/src/native-viewer/native-contraption.js": {
       "bytes": 5793,
@@ -807,8 +807,8 @@
       "sha256": "ab35f8d56286c211082467163c6122112cd91ce08240d50fb09f3cb8332f9315"
     },
     "renderer-src/src/native-viewer/native-held-items.js": {
-      "bytes": 43581,
-      "sha256": "b6b7009e3f6c2f8861eb771223cf5bc74542b022c1e6f249943bdb0a227dfa67"
+      "bytes": 44440,
+      "sha256": "49d3fe7a88f7f2921b2f5b89e73b2e23c381584d0c1fb730eead7f8a8b006224"
     },
     "renderer-src/src/native-viewer/native-hidden-solids.js": {
       "bytes": 1125,
@@ -822,13 +822,21 @@
       "bytes": 6745,
       "sha256": "f8b8c1fa38ce4422d65726eb50011ed6a521afc3f2d2fc0ed1df30cf1552b107"
     },
+    "renderer-src/src/native-viewer/native-icon-glint.js": {
+      "bytes": 7496,
+      "sha256": "8d6e6d0106d2810c4d161ab9c8721545e362707509ca433e5773b60503c9b706"
+    },
     "renderer-src/src/native-viewer/native-item-appearance.js": {
-      "bytes": 9208,
-      "sha256": "33a67927f836040f2f3a26f6e991c9752c55e085d3d5c921be350cbd46960b56"
+      "bytes": 10198,
+      "sha256": "18c24ca376367df56bc69d72d254bda7291b2990a17cfe618a23e6a991b29817"
+    },
+    "renderer-src/src/native-viewer/native-item-glint.js": {
+      "bytes": 7385,
+      "sha256": "ad10a07167641368425e83ce2a2e7d5dc470921eb9ffde3d18fc230f76f67cb4"
     },
     "renderer-src/src/native-viewer/native-item-icons.js": {
-      "bytes": 11241,
-      "sha256": "f8b74f47da22ecf95567b35c8397532458ac1324f061e4539492bce07601b3a3"
+      "bytes": 12499,
+      "sha256": "bf6579104df5b7c273232a432d796e3324ad9715adb648347cb8e4eccd819de8"
     },
     "renderer-src/src/native-viewer/native-item-stack.js": {
       "bytes": 11470,
@@ -871,8 +879,8 @@
       "sha256": "2623ff6ad86c23293469ef5ee9b1ace27dbeea7212e5299baa9809c98e05be1d"
     },
     "renderer-src/src/native-viewer/native-player-bundled-ysm.js": {
-      "bytes": 10303,
-      "sha256": "95c6e3af9bc13de0ee769df67d7113c62f901aac3b9c226e06493bd16161ed14"
+      "bytes": 10232,
+      "sha256": "3c51abbba16f4770f991b4677c278b1148c84f40b19c47d69b3dc1fdf978595b"
     },
     "renderer-src/src/native-viewer/native-player-motion.js": {
       "bytes": 9029,
@@ -938,6 +946,14 @@
       "bytes": 5281,
       "sha256": "29fb5f19822692d663137e17f7bf7d0d1a3c87c8ae27bce2f257fe164077a521"
     },
+    "renderer-src/src/native-viewer/native-shield-items.js": {
+      "bytes": 2583,
+      "sha256": "16c502dd801348f199b88374b1ae1217783f2c36df57c46c4f10043f069599d4"
+    },
+    "renderer-src/src/native-viewer/native-skill-panel.js": {
+      "bytes": 2806,
+      "sha256": "d775e7ab28e7bf954ca249b65e7e131c1ca6a4b31980a3052dad3f86ad363184"
+    },
     "renderer-src/src/native-viewer/native-soul-slab-icons.js": {
       "bytes": 6921,
       "sha256": "9f7bc9babcfda088027b1022bd8819623966af771e01bc181bbdeb3efa62a33e"
@@ -951,8 +967,8 @@
       "sha256": "a397792510f21d1d60de94f27e0f6ef4f2f2f6a6f2993a4e5daf8fcd1f7db041"
     },
     "renderer-src/src/native-viewer/native-static-item-providers.js": {
-      "bytes": 26689,
-      "sha256": "2fb42d8154c5b6217f485a5341bf602655e8d794a65b25ce7d9f1cd6ab938ea2"
+      "bytes": 27153,
+      "sha256": "5d838d0de25bef0481ae85fbf41623668f20455e5678627ec9c479b32ebf56ba"
     },
     "renderer-src/src/native-viewer/native-survival-ui.js": {
       "bytes": 5151,
@@ -975,12 +991,16 @@
       "sha256": "053770d06338e772a10af345e3aec2813c9f4162f0888790abf2f7e3df06277c"
     },
     "renderer-src/src/native-viewer/native-ui-adapter.js": {
-      "bytes": 72335,
-      "sha256": "a9a3ab753c58cc11e858fd0e64a369d2b25e3ab00b1582e2391dd34cfe0bf6a3"
+      "bytes": 72227,
+      "sha256": "362053d3ab14e9e17856722098649539c948d7a7ac332aaab78764e5c346977c"
     },
     "renderer-src/src/native-viewer/native-url.js": {
       "bytes": 245,
       "sha256": "a7584a5d09d521a5a6a5c8182e759af6565bf5b2e075c0fbd87e397c98fc7b0b"
+    },
+    "renderer-src/src/native-viewer/native-vanilla-item-atlas.json": {
+      "bytes": 344132,
+      "sha256": "3b0f039a1f5e2c97bcbcd2910e5b76f01f553d3073336b958130bfd3382fc4a5"
     },
     "renderer-src/src/native-viewer/native-vanilla-menus.js": {
       "bytes": 5410,
@@ -1039,8 +1059,8 @@
       "sha256": "1089c7990985b680eb72a37066035fd480f2334703005d7c425c8abc0ff0bc0a"
     },
     "renderer-src/src/viewer.css": {
-      "bytes": 64848,
-      "sha256": "f95875589acc6a2b62dafcebe5c5f65baccb9bca2deb194580b86f5f4d65bc29"
+      "bytes": 66181,
+      "sha256": "5ba04e512888729339b78582051d32237d22f45497b40c0a0afd5bdf49511883"
     },
     "renderer-src/tools/audit-native-item-gui.mjs": {
       "bytes": 11867,
@@ -1097,6 +1117,10 @@
     "renderer-src/tools/export-minecraft-viewer-sounds.mjs": {
       "bytes": 3095,
       "sha256": "146986e52826528b350044168ae8cf380c993640760e4413012263049779285a"
+    },
+    "renderer-src/tools/export-native-glint-atlas.py": {
+      "bytes": 8092,
+      "sha256": "08218a866e30f4e22722f8b8293b985b16a6a2555af32c802ec61c6ca50a8896"
     },
     "renderer-src/tools/export-text-display-font.py": {
       "bytes": 4261,
