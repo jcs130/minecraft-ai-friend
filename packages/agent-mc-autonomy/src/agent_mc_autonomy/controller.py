@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .bridge import json_content, outcome, text_content
-from .context import assemble, coalesce_rejected, encode, retain_events
+from .context import assemble, coalesce_rejected, encode, outcome_eviction_index, retain_events
 from .death_memory import TOOL as DEATH_REVIEW_TOOL
 from .death_memory import DeathMemory, identity, lifecycle, recovery_state
 from .decision_profiles import profile_view
@@ -493,9 +493,10 @@ class Controller:
                     self.native_outcomes.append(native_outcome if self.settings.context_mode == "full" else native_outcome_view(native_outcome))
                     if self.settings.context_mode == "full":
                         while len(self.native_outcomes) > 1 and len(encode(self.native_outcomes).encode("utf-8")) > self.settings.context_tokens:
-                            self.native_outcomes.pop(0)
+                            self.native_outcomes.pop(outcome_eviction_index(self.native_outcomes))
                     else:
-                        self.native_outcomes = self.native_outcomes[-6:]
+                        while len(self.native_outcomes) > 6:
+                            self.native_outcomes.pop(outcome_eviction_index(self.native_outcomes))
                     # The public HUD keeps its small projection even when the private planner uses full evidence.
                     self.publish(native_outcomes=[native_outcome_view(row) for row in self.native_outcomes[-6:]])
                     if not read_only and self.effect_recovery.record(arguments, execution, self.game_scope, self.death_epoch, reference):

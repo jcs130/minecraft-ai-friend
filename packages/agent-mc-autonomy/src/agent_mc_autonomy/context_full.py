@@ -3,7 +3,7 @@ import copy
 import time
 
 from . import host_recent
-from .context import RULES, encode, event_priority, read_progress
+from .context import RULES, encode, event_priority, outcome_eviction_index, read_progress
 from .context_counter import BYTE_COUNTER_NAME, FRAMING_RESERVE, count_input, counter_name
 
 
@@ -53,6 +53,14 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
     while history and cost() > context_tokens:
         history.pop(0)
         tail["context_omissions"]["history_groups"] += 1
+    # An oversized read batch must not delete all native feedback or selected
+    # host memory as one section. Retire whole old observations first, retaining
+    # actual body receipts and explicit omissions within the same real window.
+    outcomes = tail.get("recent_native_outcomes", [])
+    while len(outcomes) > 1 and cost() > context_tokens:
+        outcomes.pop(outcome_eviction_index(outcomes))
+        omissions = tail["context_omissions"]
+        omissions["native_outcomes"] = omissions.get("native_outcomes", 0) + 1
     for key in ("host_recent_context", "host_context", "recent_native_outcomes", "death_memory", "tool_failure", "fast_focus", "planner_notice", "read_activity"):
         if cost() <= context_tokens:
             break

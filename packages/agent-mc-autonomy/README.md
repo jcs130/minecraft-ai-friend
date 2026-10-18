@@ -1,5 +1,12 @@
 # Agent MC Autonomy
 
+0.2.18 retains real body receipts ahead of repeated observation traffic under
+window pressure. Full context retires whole old native records before dropping
+the entire feedback section or selected host memory, and records the omission
+count. Compact/full resident feedback also evicts observations before body
+outcomes. Original journals remain intact; acceptance/completion still does not
+prove the goal, and no action or recipe is selected by this policy.
+
 0.2.17 preserves the shared `mc_do` action port when a repeated read used it.
 The identical observation is still rejected with its retained evidence, while
 the planner can choose a different real body action immediately. Read-only

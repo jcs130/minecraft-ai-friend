@@ -207,6 +207,11 @@ def coalesce_rejected(groups):
     return [group for group in history if group is not None], removed
 
 
+def outcome_eviction_index(rows):
+    """Window pressure retires old read traffic before real body receipts."""
+    return next((index for index, row in enumerate(rows) if row.get("observation_only") is True), 0)
+
+
 def read_progress(read_activity):
     if not read_activity:
         return None
