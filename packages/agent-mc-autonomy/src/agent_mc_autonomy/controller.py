@@ -63,12 +63,12 @@ def empty_catalogue_query(name, arguments):
 
 
 def spatial_read_key(name, arguments):
-    """Only exact spatial-only batches may reuse an already completed sample."""
+    """Reuse exact scouts, including mixed observation/route dry runs, never body plans."""
     steps = arguments.get("steps")
     if name not in {"mc_do", "mc_scout"} or not isinstance(steps, list) or not steps:
         return None
-    if not all(isinstance(step, dict) and step.get("skill") == "observe"
-               and step.get("mode") in {"voxels", "sites", "rays"} for step in steps):
+    if name != "mc_scout" and not all(isinstance(step, dict) and step.get("skill") == "observe"
+                                      and step.get("mode") in {"voxels", "sites", "rays"} for step in steps):
         return None
     return json.dumps(steps, sort_keys=True, ensure_ascii=False)
 
@@ -345,7 +345,7 @@ class Controller:
         self.observation_reads = {}
         self.observation_requests = {}
         self.read_answers = {}
-        self.read_recovery_tools = set()
+        self.read_recovery_tools = {}
         self.effect_recovery = EffectRecovery()
         self.skill_references = {}
         self.action_requests = {}
@@ -566,6 +566,22 @@ class Controller:
         self.read_answers.clear()
         self.read_recovery_tools.clear()
         self.publish(read_activity={}, read_recovery=None, action_recovery=None)
+
+    def defer_answered_read(self, name):
+        # Accumulate a bounded opportunity to choose other work. Clearing each
+        # name after one request lets two answered queries alternate forever.
+        self.read_recovery_tools[name] = {"facts": self.last_admission_facts, "scope": self.game_scope,
+                                          "until": time.monotonic() + 60}
+
+    def deferred_read_tools(self, facts):
+        fingerprint = admission_fingerprint(facts)
+        for name, binding in list(self.read_recovery_tools.items()):
+            if (binding["facts"] != fingerprint or binding["scope"] != self.game_scope
+                    or time.monotonic() >= binding["until"]):
+                self.read_recovery_tools.pop(name)
+        # Running work may change inventory/queue without a published terminal;
+        # its real status remains readable. Acceptance itself clears no history.
+        return set(self.read_recovery_tools) if not self.pending else set()
 
     async def recovery_reference(self):
         """Carry the failed skill's native documentation into the next decision.
@@ -1251,10 +1267,10 @@ class Controller:
         if (answer and not self.pending and self.last_admission_facts is not None
                 and answer["facts"] == self.last_admission_facts and answer["scope"] == self.game_scope
                 and time.monotonic() - answer["at"] < 60):
-            self.read_recovery_tools.add(name)
+            self.defer_answered_read(name)
             result = {"failed": True, "dispatched": False, "origin": "controller_validation",
                 "code": "read_already_answered",
-                "text": "This exact read was already answered with unchanged observed state. It was NOT dispatched again. The dated answer and original handles remain below. This tool will be unavailable for one recovery decision; use another unresolved query, choose useful native work, or wait for a stated condition. Repeating the query cannot open a container or change the inventory.",
+                "text": "This exact read was already answered with unchanged observed state. It was NOT dispatched again. The dated answer and original handles remain below. Answered tools yield for a bounded recovery window (at most 60 seconds), restored by changed facts or connection. Use the retained answers to choose useful native work, query a specific unresolved fact through available tools, or wait for a stated condition. Repeating the query cannot open a container or change the inventory.",
                 "previous_answer": {"fresh": False, "answer": answer["answer"],
                     **{key: answer[key] for key in ("received_at", "request_id", "turn_id")},
                     "journal": "receipts.jsonl"}}
@@ -1278,7 +1294,7 @@ class Controller:
                     "original_event": previous["original_event"], "execution_id": previous["execution_id"],
                     "query": "mc_protocol(action=archive,run=original_event.run,after=original_event.cursor-1)"}}
             self.planner_notice = result["text"]
-            self.read_recovery_tools.add(name)
+            self.defer_answered_read(name)
             self.continuation_needed = True
             self.publish(read_recovery={"code": result["code"], "read_activity": dict(self.read_activity),
                 "original_event": previous["original_event"], "action_progress_verified": False})
@@ -1438,12 +1454,11 @@ class Controller:
                     self.continuation_needed = True
                     return
                 planning_goal = self.goal_prompt(goal)
-                # A redundant read cannot monopolize the next planning request.
-                # This is one decision, not a permanent ban or a scripted action:
-                # full evidence and all other tools (including originals) remain.
-                excluded = set(self.read_recovery_tools)
+                # Keep answered queries deferred across alternating read attempts,
+                # scoped to current evidence with bounded expiry. The model still
+                # chooses its own work; originals and unresolved tools remain.
+                excluded = self.deferred_read_tools(facts)
                 round_tools = [tool for tool in tools if tool["function"]["name"] not in excluded]
-                self.read_recovery_tools.difference_update(excluded)
                 state = focus_state(planning_goal, facts, self.pending)
                 if round_index == 0:
                     focus = await self.fast_policy.choose(state)

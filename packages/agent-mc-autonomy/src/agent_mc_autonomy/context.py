@@ -207,6 +207,19 @@ def coalesce_rejected(groups):
     return [group for group in history if group is not None], removed
 
 
+def read_progress(read_activity):
+    if not read_activity:
+        return None
+    result = {"calls_since_body_action": dict(read_activity), "action_progress_verified": False}
+    if sum(read_activity.values()) >= 5:
+        result["next_decision"] = (
+            "Several read attempts have not constituted a body action. If the needed facts are already observed, "
+            "choose one bounded mc_do with the selected skill's required parameters. Otherwise query a specific "
+            "unresolved fact or report genuine blocked evidence; avoid rescanning unchanged space."
+        )
+    return result
+
+
 def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, context_mode="compact", planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, native_outcomes=None, context_counter: ContextCounter | None = None, host_context=None, recent_context=None, death_memory=None):
     """Use one counting mode throughout, restarting conservatively on failure."""
     options = {"context_tokens": context_tokens, "reserved_output": reserved_output,
@@ -253,13 +266,7 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
     if fast_focus:
         tail["fast_focus"] = fast_focus
     if read_activity:
-        tail["read_activity"] = {"calls_since_body_action": read_activity, "action_progress_verified": False}
-        if sum(read_activity.values()) >= 5:
-            tail["read_activity"]["next_decision"] = (
-                "Several read attempts have not constituted a body action. If the needed facts are already observed, "
-                "choose one bounded mc_do with the selected skill's required parameters. Otherwise query a specific "
-                "unresolved fact or report genuine blocked evidence; avoid rescanning unchanged space."
-            )
+        tail["read_activity"] = read_progress(read_activity)
     if events:
         tail["recent_events_archive"] = {"run": events[0].get("run"), "after": max(0, events[0].get("cursor", 1) - 1)}
 

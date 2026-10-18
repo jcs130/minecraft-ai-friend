@@ -3,7 +3,7 @@ import copy
 import time
 
 from . import host_recent
-from .context import RULES, encode, event_priority
+from .context import RULES, encode, event_priority, read_progress
 from .context_counter import BYTE_COUNTER_NAME, FRAMING_RESERVE, count_input, counter_name
 
 
@@ -33,7 +33,7 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
             "context_omissions": {"history_groups": 0, "events": 0, "sections": []},
             "originals": "mc_protocol(protocol=agent-mc/v1,action=facts/archive); mc_original(handle=original,offset=0,limit=1000)"}
     for key, value in (("planner_notice", planner_notice), ("fast_focus", fast_focus), ("tool_failure", tool_failure),
-                       ("read_activity", {"calls_since_body_action": read_activity, "action_progress_verified": False} if read_activity else None),
+                       ("read_activity", read_progress(read_activity)),
                        ("recent_native_outcomes", native_outcomes), ("death_memory", death_memory),
                        ("host_context", host_context.get("dynamic") if host_context else None)):
         if value:

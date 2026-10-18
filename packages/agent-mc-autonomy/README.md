@@ -1,5 +1,15 @@
 # Agent MC Autonomy
 
+0.2.16 keeps answered reads deferred together for a bounded recovery window,
+instead of letting inventory/queue queries alternate across one-turn exclusions.
+Changed evidence, connection changes or expiry restore availability; running
+native work can still refresh its status. Mixed voxel/route scouts reuse their
+completed observation rather than submitting the same read again. Full and
+compact context modes carry the same persistent read-progress guidance. The
+planner continues to choose actions; no recipe, movement or goal is scripted.
+Body/viewer pins and host interfaces remain unchanged. Offline replay is not
+proof of sustained autonomous survival.
+
 0.2.15 pins the minimal `0.5.7-rc.20.env.1` body backport: a dead or
 respawning body cannot restart an environment reflex. Death retires its own
 escape controls and water history, so respawn is not reported as successful

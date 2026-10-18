@@ -64,6 +64,17 @@ def test_completed_scout_is_not_queued_again_under_unchanged_facts(framework_mod
     assert not controller.pending
 
 
+def test_completed_voxels_and_route_scout_reuses_its_original_receipt(framework_module, tmp_path, run_async):
+    bridge, controller = prepare(framework_module, tmp_path)
+    plan = {"steps": [{"skill": "observe", "mode": "voxels", "bounds": [-3, -1, -3, 3, 4, 3]},
+                      {"skill": "goto", "at": [10, 70, 10], "dryRun": True}]}
+    assert observed(controller, run_async, arguments=plan).get("execution")
+    result = observed(controller, run_async, arguments=plan)
+    assert result.get("code") == "observation_already_answered"
+    assert result["dispatched"] is False and result["previous_observation"]["execution_id"] == "body-1"
+    assert len([row for row in bridge.calls if row[0] == "mc_do"]) == 1
+
+
 def test_terminal_read_retains_each_result_after_long_batch_header(framework_module, tmp_path, run_async):
     _, controller = prepare(framework_module, tmp_path)
     observed(controller, run_async)
