@@ -2628,7 +2628,8 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_stop',
     tags: ['act'],
     description:
-      'Clear the Minecraft work queue: stop what is being done right now and drop everything waiting behind it.',
+      'Clear the Minecraft work queue: stop what is being done right now and drop everything waiting behind it. '
+      + 'Death recovery continues on this connection; stopping the World or disconnecting cancels it.',
     parameters: { type: 'object', properties: {}, required: [] }
   },
   {
@@ -4603,7 +4604,6 @@ export class MinecraftWorld implements World {
       mc_queue: async (args, ctx) => this.readOnce('mc_queue', ctx, () => this.queueReadout(args)),
       mc_blocked: async (_args, ctx) => this.readOnce('mc_blocked', ctx, () => this.blockedReadout()),
       mc_stop: async () => {
-        this.bridge?.cancelRespawn();
         this.methods.stop('mc_stop取消方法');
         this.interruptIdle('stop-command');
         if (!this.executor) return this.toolLog('mc_stop', {}, '[mc_stop 失败] World 未启动');

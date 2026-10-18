@@ -37,7 +37,7 @@ function scopedLoginRig() {
 }
 
 describe('login readiness', () => {
-  it('owns real respawn dispatch and cancels it on explicit stop instead of native auto-respawn', async () => {
+  it('owns respawn dispatch and cancels it when the connection stops', async () => {
     vi.useFakeTimers();
     const bot = Object.assign(new EventEmitter(), { _client: new EventEmitter(), loadPlugin() {}, quit() {},
       health: 20, respawn: vi.fn(), entity: { position: { x: 0, y: 64, z: 0 } } });
@@ -58,9 +58,8 @@ describe('login readiness', () => {
       bot.health = 20; bot.emit('spawn');
       expect(onRespawn).toHaveBeenCalledOnce();
       bot.health = 0; bot.emit('death');
-      bridge.cancelRespawn(); await vi.advanceTimersByTimeAsync(5000);
-      expect(bot.respawn).toHaveBeenCalledOnce();
-      await bridge.stop(); bot.emit('death'); await vi.advanceTimersByTimeAsync(5000);
+      await bridge.stop(); await vi.advanceTimersByTimeAsync(5000);
+      bot.emit('death'); await vi.advanceTimersByTimeAsync(5000);
       expect(bot.respawn).toHaveBeenCalledOnce();
     } finally { vi.useRealTimers(); }
   });

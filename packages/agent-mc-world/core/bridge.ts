@@ -278,8 +278,6 @@ export class Bridge {
   protected aclReplanTimer: ReturnType<typeof setTimeout> | null = null;
   private deathRecovery: ReturnType<typeof installDeathLifecycle> | null = null;
 
-  cancelRespawn(): void { this.deathRecovery?.cancel(); }
-
   /**
    * 挖掘失败按格坐标记账；连续失败 DIG_BACKOFF_TRIES 次进入退避，
    * DIG_BACKOFF_MS 后过期。
