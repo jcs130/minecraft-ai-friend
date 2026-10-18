@@ -195,6 +195,11 @@ terminal receipts continue draining; fresh queue/body facts are required on
 recovery. Explicit stop wins, and stopped/unknown authentication states still
 fail closed. This is separate from a server's reason for disconnecting clients.
 
+0.2.32 pins core 0.5.7-rc.36: post-send item changes retain honest use receipts,
+planner body facts carry the native maximum health, and the current scoped work
+and server-travel lifecycle improvements are included. The viewer and third-party
+dependencies remain pinned separately.
+
 0.2.31 applies that same recovery path to the initial connection. An active,
 typed native retry can outlast server maintenance without the former two-minute
 startup deadline terminating the coordinator. Event receipts and operator stop
