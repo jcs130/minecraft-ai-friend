@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-18",
+  "version": "0.4.47.6",
+  "status": "deployed",
+  "supersedesCandidate": "0.4.47.5",
+  "production": {
+    "paper": "1.21.1 build 133",
+    "agentFriend": "0.4.47.6",
+    "sha256": "e9f2c8b41d6117d7deba318c81d0a4aa43894dc95f0c887b40968a5626c035a7",
+    "restarted": true,
+    "backupStamp": "20261018-221932"
+  },
+  "artifact": {
+    "file": "AgentFriend-0.4.47.6.jar",
+    "sha256": "e9f2c8b41d6117d7deba318c81d0a4aa43894dc95f0c887b40968a5626c035a7",
+    "buildRecipe": "paper/plugins/AgentFriend/build-local-task-chains-backport.ps1",
+    "changedEntries": [
+      "org/afuhome/agentfriend/AgentCliCatalog.class",
+      "org/afuhome/agentfriend/CombatObjectiveEvents.class",
+      "org/afuhome/agentfriend/CombatObjectives.class",
+      "org/afuhome/agentfriend/CombatObjectives$Spec.class",
+      "org/afuhome/agentfriend/ExplorationGuidance.class",
+      "org/afuhome/agentfriend/ExplorationObjectives.class",
+      "org/afuhome/agentfriend/ExplorationObjectives$1.class",
+      "org/afuhome/agentfriend/ExplorationObjectives$MapPlace.class",
+      "org/afuhome/agentfriend/ExplorationObjectives$Place.class",
+      "org/afuhome/agentfriend/ExplorationObjectives$Survey.class",
+      "org/afuhome/agentfriend/ExplorationObjectives$Target.class",
+      "org/afuhome/agentfriend/ExplorationPauseStore.class",
+      "org/afuhome/agentfriend/GoddessObservation.class",
+      "org/afuhome/agentfriend/GuildManager.class",
+      "org/afuhome/agentfriend/SurveyArea.class",
+      "org/afuhome/agentfriend/TaskMarketManager.class",
+      "org/afuhome/agentfriend/TaskMarketManager$1.class",
+      "org/afuhome/agentfriend/TaskProgressGuidance.class",
+      "org/afuhome/agentfriend/TaskProgressGuidance$1.class",
+      "org/afuhome/agentfriend/TaskProgressGuidance$Notice.class",
+      "org/afuhome/agentfriend/TaskRoutes.class",
+      "org/afuhome/agentfriend/WorldLifeActions.class",
+      "plugin.yml",
+      "route-contracts.yml",
+      "rpg-story.yml",
+      "task-market.yml"
+    ],
+    "unrelatedEntriesIdentical": true,
+    "excludesUnreleasedArchives": true
+  },
+  "changes": [
+    "two configurable local chains with 3 and 5 independently verified stages",
+    "frozen world and XYZ survey areas; actual bounded local return",
+    "ancient city is a high-rank optional offer; existing snapshots retained",
+    "one explicit paused pure exploration expedition per player with durable atomic pause/resume",
+    "existing 0.4.47.5 task progress feedback included"
+  ],
+  "configuration": {
+    "previousTasks": 53,
+    "candidateTasks": 55,
+    "files": [
+      {
+        "name": "task-market.yml",
+        "beforeSha256": "a9e6b9c144ad3c4eea0770680f1f8e27632dbe3c25b72635ef9beb6d500e0fd1",
+        "afterSha256": "2a94d3de1499108a178233ab262ee9823cb4c8a2d37a2f6cc7cff831373b086b",
+        "beforeTasks": 35,
+        "afterTasks": 35
+      },
+      {
+        "name": "route-contracts.yml",
+        "beforeSha256": "491753fbd888f2ce8fd6477d685a88206de47b262ad5f55828500443bf629ca7",
+        "afterSha256": "7f13a6f14e8f8c01d052c2ec18f3d0e9fef146493f87bacc43b92f8e1e5425cf",
+        "beforeTasks": 9,
+        "afterTasks": 11
+      },
+      {
+        "name": "rpg-story.yml",
+        "beforeSha256": "ac6927c6b006774e75d0a6f8374b2edd1486a91505fb306b930bee142d3e42f2",
+        "afterSha256": "04422fe569cc9ce044499148b3e5d82d49984ca52c412cccc9db3a10c78f861c",
+        "beforeTasks": null,
+        "afterTasks": null
+      }
+    ],
+    "merge": "retain existing operational definitions; add two local routes, change three ancient-city offer fields, append NPC topics/offers and side stories"
+  },
+  "tests": {
+    "rules": {
+      "TaskProgressGuidanceTest": 489,
+      "CombatObjectivesTest": 28,
+      "ExplorationGuidanceTest": 39,
+      "LocalTaskChainsTest": 57,
+      "LocalTaskCliTest": 18,
+      "total": 631
+    },
+    "native": {
+      "loopbackOnly": true,
+      "reports": {
+        "initial": {
+          "checks": 37,
+          "report": "initial-1792331962824.json",
+          "sha256": "e6ebac2502318a2b44a00c31707cea656e4d9ea56cc6484aeea16ec22dd289c5"
+        },
+        "repark": {
+          "checks": 3,
+          "report": "repark-1792332165653.json",
+          "sha256": "8bff74bfbdb0e4b3519138e1b8b18460b968451dabcdac3fb05657dc6afff46f"
+        },
+        "resume": {
+          "checks": 15,
+          "report": "resume-1792332211819.json",
+          "sha256": "b98e86feb00fa39ba81058f834571f6f168f17ec345e83eee393552cca394726"
+        }
+      },
+      "total": 55,
+      "normalRestartVerified": true,
+      "manualControlledMovement": true,
+      "autonomousAgentCompletion": false,
+      "clients": [
+        "Mineflayer 4.37.1 / Java 1.21.1 protocol",
+        "ordinary survival player identity",
+        "actual attached Eye"
+      ],
+      "bedrockDeviceTested": false,
+      "remoteWebTested": false
+    },
+    "failedAttemptsRetained": true,
+    "production": {
+      "stateAndPersistence": 38,
+      "authenticatedClients": 13,
+      "javaVersions": [
+        "1.21.1",
+        "1.20.6"
+      ],
+      "backpackDataPreserved": true
+    }
+  },
+  "dataSafety": {
+    "existingPlayerTaskSnapshotsChanged": false,
+    "playerItemsChanged": false,
+    "productionMessage": "one previously authorized native private reminder to ag_CorMy; no public broadcast",
+    "automaticEnrolment": false,
+    "automaticClaim": false,
+    "pausedSlotCompatibility": "Do not downgrade while paused or bounded tasks still need the new code; use compatible resume first."
+  },
+  "deployment": {
+    "requiresCurrentRestartApproval": true,
+    "requiresAdvanceNotice": true,
+    "requiresExistingEFCompleteColdBackup": true,
+    "queued": false,
+    "privateReleaseRoot": "E:/MC/ops/repairs/local-task-chains-20261018",
+    "mirrorRoot": "F:/MC-backups/repairs/local-task-chains-20261018",
+    "completed": true,
+    "approvedByCurrentHuman": true,
+    "notices": [
+      180,
+      60,
+      10
+    ],
+    "backupStamp": "20261018-221932",
+    "completeColdBackups": [
+      "E:/MC/backups/scheduled/20261018-221932",
+      "F:/MC-backups/scheduled/20261018-221932"
+    ],
+    "productionChecks": 38,
+    "nativeChecks": 13,
+    "backpackDataPreserved": true
+  }
+}
