@@ -373,11 +373,13 @@ type StepNote =
   | { field: string; given: unknown; kind: 'dropped'; why: string }
   | { field: string; given: unknown; kind: 'rewritten'; as: string };
 
-/** 解析提示附带从 1 起的步骤编号，由受理回执报告参数调整。 */
-export type ParseNote = StepNote & { step: number };
+/** 单步调整带从 1 起的编号；完整 JSON 解码是整批提示，不伪造步骤号。 */
+export type ParseNote = (StepNote & { step: number })
+  | { field: 'steps'; given: string; kind: 'decoded'; step?: never };
 
 /** 这些改动只有一份渲染,回执与日志都用它。 */
 export function parseNoteText(n: ParseNote): string {
+  if (n.kind === 'decoded') return 'steps 原为 JSON 字符串，已完整解码为数组；没有猜补、删尾、重排或重试步骤';
   const wrote = `第 ${n.step} 步写的 ${n.field}:${JSON.stringify(n.given)}`;
   return n.kind === 'dropped' ? `${wrote},${n.why},忽略了` : `${wrote},按${n.as}理解`;
 }
@@ -419,6 +421,8 @@ interface SkillSpec {
   name: SkillCall['skill'];
   /** 完整示例与执行条件，供按需帮助与解析错误引用。 */
   doc: string;
+  /** 常见形态的短约束；签名、schema 与错误纠正共用，不常驻展开完整手册。 */
+  inputHint?: string;
   fields: FieldSpec[];
   /** 横向规则钩子:接管整步校验与规范化;没给钩子的技能走表驱动 */
   parse?: (c: Record<string, unknown>, at: string, marks?: MarkLookup) => ParseResult;
@@ -611,6 +615,11 @@ function parseShaped(skill: 'build' | 'excavate' | 'probe') {
     if (skill === 'build' && c.blueprint !== undefined && c.blueprint !== null) {
       return parseBuildBlueprint(c, at);
     }
+    // 单格 at 的含义唯一时才作为 anchors 别名；不盖过另一种目标或形状。
+    const singleAt = skill === 'build' && c.at !== undefined && c.at !== null;
+    if (singleAt && (c.on != null || c.anchors != null || c.shape != null)) {
+      return { error: `${at} build 的单格 at 与 on/anchors/shape 不能同用；材料放置选一个目标形态，蓝图原点另用 blueprint+at` };
+    }
     if (skill === 'build' && c.on !== undefined && c.on !== null) return parseBuildOnFaces(c, at);
     // build 不写 shape = 就这些格,一步放 N 处、各报各的;写了 shape 才按形状连片铺
     const listed = skill === 'build' && (c.shape === undefined || c.shape === null);
@@ -619,7 +628,7 @@ function parseShaped(skill: 'build' | 'excavate' | 'probe') {
       return { error: `${at} ${skill} 的 shape 要是 ${SHAPE_NAMES.join('/')} 之一` };
     }
     const anchors = listed
-      ? anchorListOf(c.anchors, PLACE_SPOTS_MAX, marks)
+      ? anchorListOf(singleAt ? [c.at] : c.anchors, PLACE_SPOTS_MAX, marks)
       : anchorsOf(c.anchors, ANCHOR_COUNT[shape as ShapeName], marks);
     if (!anchors) {
       return {
@@ -655,6 +664,8 @@ function parseShaped(skill: 'build' | 'excavate' | 'probe') {
           ...(shape ? { shape: shape as ShapeName } : {}),
           ...(fill ? { fill } : {}), ...(dryRun ? { dryRun } : {}), ...(c.temporary === true ? { temporary: true } : {}),
         },
+        ...(singleAt ? { notes: [{ field: 'at', given: c.at, kind: 'rewritten' as const,
+          as: `anchors:${JSON.stringify(anchors)}（单格材料放置）` }] } : {}),
       };
     }
     if (skill === 'excavate') {
@@ -686,6 +697,9 @@ function parseShaped(skill: 'build' | 'excavate' | 'probe') {
         skill, shape: shape as ShapeName, anchors,
         ...(fill ? { fill } : {}), ...(where ? { where: where.names } : {}), ...(slice ? { slice } : {}),
       },
+      ...(where && JSON.stringify(c.where) !== JSON.stringify(where.names)
+        ? { notes: [{ field: 'where', given: c.where, kind: 'rewritten' as const,
+          as: `${JSON.stringify(where.names)}（去重后的过滤集合）` }] } : {}),
     };
   };
 }
@@ -698,8 +712,9 @@ function nameListOf(
   if (!Array.isArray(v) || v.some((s) => typeof s !== 'string')) {
     return { error: `${at} ${what} 要是一串英文 id(数组)` };
   }
-  if (v.length > UNTIL_NAMES_MAX) return { error: `${at} ${what} 最多 ${UNTIL_NAMES_MAX} 项` };
-  const names = (v as string[]).map((s) => s.trim()).filter(Boolean);
+  // where 是同一片有限区域的过滤集合，不是 until 的行动停止名单。
+  // 区域体积、可见性和每种材质的坐标展示上限仍由探查执行器约束。
+  const names = [...new Set((v as string[]).map((s) => s.trim()).filter(Boolean))];
   return names.length > 0 ? { names } : null;
 }
 
@@ -1255,11 +1270,13 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   },
   {
     name: 'build',
+    inputHint: '材料放置：material+anchors（坐标数组）或 material+on（参照格/面）；单格可用 material+at，不能再给 anchors/on/shape。蓝图施工：blueprint+at，at 是蓝图原点。',
     doc: `{"skill":"build","material":"torch","on":[{"at":[103,63,-31],"face":"up"}]}
                                                  贴着 at 那一格的 face 面放,新方块落在那一面的外侧;
                                                  face 认 ${FACE_NAMES.join('/')},一步最多 ${PLACE_SPOTS_MAX} 处
 {"skill":"build","material":"torch","anchors":[[103,64,-31]]}
                                                  直接点格子:**不写 shape = 就这些格**(1-${PLACE_SPOTS_MAX} 个),贴哪一面由我挑;
+                                                 单格也收 material+at:[x,y,z]，受理时明说转成 anchors；不与 anchors/on/shape 同用。
                                                  那一格已经是这个方块就直接算做好。
                                                  给 shape + 多锚点就按形状连片搭:line 2 个、rect 2 个(轴对齐的面,
                                                  两锚点须有一轴相等)、triangle 3 个、arc 3 个(过三点的弧)、
@@ -1324,7 +1341,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
       {
         key: 'at', kind: 'anchor',
         error: `build 的 at 要 [x,y,z](蓝图 [0,0,0] 落在世界的哪一格;${RELATIVE_HINT})`,
-        doc: '按蓝图施工时:蓝图 [0,0,0] 落在世界的哪一格',
+        doc: '蓝图施工时是原点；无 blueprint 的单格材料放置可作 anchors:[at] 别名，不与 anchors/on/shape 同用',
       },
       { key: 'fill', kind: 'enum', values: ['solid', 'outline', 'edges'], error: 'fill 只认 solid/outline/edges', doc: '只对 box 有意义' },
       { key: 'dryRun', kind: 'flag' },
@@ -1354,6 +1371,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   },
   {
     name: 'probe',
+    inputHint: '定位目标用 shape+anchors+where；空间切片用 shape:"box"+anchors+slice（x/y/z），不带 where，fill 省略或 solid。不要把两种观察混在同一步。',
     doc: `{"skill":"probe","shape":"line","anchors":[["~","~2","~"],["~","~80","~"]]}
                                                  只看不动:读出你圈的这片形状里的材质构成与液体;27 格以内
                                                  逐格报「(x,y,z):方块」,作物带 age，耕地带 moisture，水/岩浆带 level/source；梯子、台阶、门等带朝向、开合等已读通行属性。短 line 同时列空气坐标，可核对梯段或支撑的断档。
@@ -1380,7 +1398,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
       { key: 'slice', kind: 'enum', values: SPATIAL_SLICE_AXES, error: 'slice 只认 x/y/z', doc: `box 空间切片；体积=(|dx|+1)(|dy|+1)(|dz|+1)≤${PROBE_SLICE_CELL_CAP}，不与 where 同用` },
       {
         key: 'where', kind: 'names', hint: `方块英文 id 或类别 ${UNTIL_CATEGORY_DOC};实体 id 按收到的实体表报`,
-        doc: '只报这几样在这片里当前可见的坐标；遮挡、超距或未加载保持未知',
+        schema: { type: 'array', items: { type: 'string' } },
+        doc: '定位模式：只报指定种类在范围内当前可见的坐标，不与 slice 同用；名单去重，不套用 until 的项数上限；遮挡、超距或未加载保持未知',
       },
     ],
   },
@@ -1808,7 +1827,7 @@ count 一律 1-64;distance:flee 1-128,find 1-1024(不给 direction 时站着扫,
 (「该步按『背包内原木 ≥5』核验:达成(实测 7)」)。`;
 
 function skillDocOf(skills: readonly SkillSpec[], lead: string): string {
-  return [lead, ...skills.map((s) => s.doc), SKILL_DOC_TAIL].join('\n');
+  return [lead, ...skills.map((s) => [s.inputHint, s.doc].filter(Boolean).join('\n')), SKILL_DOC_TAIL].join('\n');
 }
 
 /** 全部技能的完整说明；按需帮助与注册表共用原文。 */
@@ -1817,12 +1836,12 @@ export const SKILL_DOC = skillDocOf(SKILLS, '一步一个对象,按顺序执行:
 function skillSignature(skill: SkillSpec): string {
   const fields = skill.fields.map((field) => field.key
     + ('required' in field && field.required ? '*' : '?'));
-  return `${skill.name}(${fields.join(',')})`;
+  return `${skill.name}(${fields.join(',')})${skill.inputHint ? ' — ' + skill.inputHint : ''}`;
 }
 
 /** 常驻目录保留字段签名；完整示例与执行条件按技能查询。 */
 export const SKILL_SIGNATURE_DOC = [
-  '一步一个对象,skill 写技能名。* = 该字段适用的形态必填;? = 可选或条件参数。',
+  'steps 必须是实际 JSON 数组 [{"skill":...},...]，不要 stringify 成字符串。一步一个对象,skill 写技能名。* = 该字段适用的形态必填;? = 可选或条件参数。',
   '复杂形态、执行条件和完整示例用 mc_help {"skill":"技能名"} 查询。',
   ...SKILLS.map(skillSignature),
   SKILL_DOC_TAIL,
@@ -1851,6 +1870,7 @@ export function readSkillHelp(args: Record<string, unknown>): { text: string } |
 
 /** 试算目录只列支持的技能；完整动作说明由 mc_help 读取。 */
 export const SCOUT_SKILL_DOC = [
+  'steps 使用实际 JSON 数组，不要写成转义字符串。',
   '一步一个对象,按顺序读取真实现场并试算,不动世界。每步从当时真实位置开始，不推进假定位置或材料；needs 只判断前步试算结果，不表示前步已执行。',
   `收 ${SCOUT_SKILLS.map((s) => s.name).join(' / ')} 这几个技能,写法与参数跟 mc_do 的 steps 完全一样`,
   '完整示例和条件用 mc_help 按技能查询;一律按试算跑,不用自己写 dryRun。',
@@ -1910,7 +1930,7 @@ function fieldUse(skill: string, f: FieldSpec, merged: Record<string, unknown>):
  * steps.items schema:一份扁平字段池,description 写明每个字段用于哪些技能。
  * 每技能自己的必填与横向规则不进 schema:判别式 oneOf 不能用,有的 provider 解工具参数
  * 约束只认顶层 properties,分支里的字段会被整个吃掉,她填了也传不出来。硬约束改由
- * 注册表签名与按需说明陈述、parseSteps 裁决,报错回执带整张技能表。
+ * 注册表签名与按需说明陈述、parseSteps 裁决；报错只带相关技能的短约束和帮助入口。
  */
 function stepSchemaOf(skills: readonly SkillSpec[]): Record<string, unknown> {
   const pool = new Map<string, { schema: Record<string, unknown>; uses: Array<[string, FieldSpec]> }>();
@@ -1929,6 +1949,7 @@ function stepSchemaOf(skills: readonly SkillSpec[]): Record<string, unknown> {
   });
   return {
     type: 'object',
+    description: skills.filter(s => s.inputHint).map(s => `${s.name}: ${s.inputHint}`).join('\n'),
     properties: {
       skill: { type: 'string', enum: skills.map((s) => s.name) },
       ...Object.fromEntries(fields),
@@ -2049,9 +2070,14 @@ export function parseSteps(
   raw: unknown,
   marks?: MarkLookup,
 ): { steps: SkillCall[]; notes?: ParseNote[] } | { error: string } {
+  const serialized = typeof raw === 'string' ? raw : null;
+  if (serialized !== null) {
+    try { raw = JSON.parse(serialized); }
+    catch { return { error: 'steps 字符串不是完整 JSON 数组；请发送实际数组，不要 stringify，也不要带多余括号或代码围栏。没有修剪或执行合法前缀' }; }
+  }
   if (!Array.isArray(raw) || raw.length === 0) return { error: 'steps 要是一个非空的技能数组' };
   const steps: SkillCall[] = [];
-  const notes: ParseNote[] = [];
+  const notes: ParseNote[] = serialized === null ? [] : [{ field: 'steps', given: serialized, kind: 'decoded' }];
   for (const [i, item] of raw.entries()) {
     const at = `第 ${i + 1} 步`;
     if (typeof item !== 'object' || item === null || Array.isArray(item)) {
@@ -2090,6 +2116,25 @@ export function parseSteps(
     steps.push(step);
   }
   return notes.length > 0 ? { steps, notes } : { steps };
+}
+
+/** Read-only diagnosis from the same registry; never edits, submits or retries an action. */
+export function describeSkillInputCorrection(raw: unknown, error: string): {
+  path: string; hint: string; helpArguments: { skill?: SkillCall['skill'] }; suppliedExcerpt: string;
+} {
+  let value = raw;
+  if (typeof value === 'string') { try { value = JSON.parse(value); } catch { /* Keep malformed input opaque. */ } }
+  const match = /^第 (\d+) 步/.exec(error), index = match ? Number(match[1]) - 1 : -1;
+  const item = Array.isArray(value) && index >= 0 ? value[index] : null;
+  const spec = item && typeof item === 'object' && !Array.isArray(item)
+    ? SKILL_INDEX.get(String(item.skill)) : undefined;
+  const hint = spec ? spec.inputHint ?? skillSignature(spec)
+    : 'steps 写成真正的 JSON 数组；只可完整解码一次，损坏的 JSON 不补括号、不截取前缀。保留原来全部步骤的顺序和依赖，再纠正参数。';
+  const supplied = JSON.stringify(raw) ?? String(raw);
+  return { path: index >= 0 ? `/steps/${index}` : '/steps', hint,
+    helpArguments: spec ? { skill: spec.name } : {},
+    suppliedExcerpt: supplied.length <= 180 ? supplied
+      : `${supplied.slice(0, 180)}…（原参数 ${supplied.length} 字符，完整值保留在本次调用记录）` };
 }
 
 function asScoutStep(step: SkillCall): SkillCall {

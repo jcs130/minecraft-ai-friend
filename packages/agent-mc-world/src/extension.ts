@@ -13,7 +13,8 @@ export { HOSTILE } from '../core/melee.ts';
 export { piglinIsHostile } from '../core/piglin.ts';
 export { type ProtectReply } from '../core/protection-port.ts';
 export { MinecraftWorldProxy } from '../core/proxy.ts';
-export { chatInputError } from '../core/skills.ts';
+export { chatInputError, parseSteps, parseScoutSteps, parseNoteText, describeSkillInputCorrection,
+  type ParseNote } from '../core/skills.ts';
 export { renderTemplate } from '../core/support/runtime.mjs';
 export { canSeeEntity } from '../core/terrain.ts';
 export { type ViewerServerProtocol } from '../core/viewer-extension.ts';
@@ -25,7 +26,7 @@ export { observeVisual, acceptsImages, visualArgumentError, structuredVisual } f
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady } from './client/config.ts';
 export { MinecraftClientWorld } from './client/world.ts';
 export { WorldOperationLearning } from './client/world-learning.ts';
-export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp } from './client/tool-help.ts';
+export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './client/tool-help.ts';
 export { MessageInbox, MESSAGE_TOOL, MESSAGE_PARAMETERS, MESSAGE_LIMIT, MESSAGE_CHANNELS, messageChannel,
   messageInboxHost, messageInboxFacts, type MessageInboxOptions } from './client/message-inbox.ts';
 export { JavaClientWorld, validateJavaClientConfiguration } from './client/java-client.ts';

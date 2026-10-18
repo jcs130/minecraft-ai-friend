@@ -114,7 +114,7 @@ import {
 } from './executor.ts';
 import { Aborted, SkillBlocked, sleep, type BlueprintPlacementIntent } from './skill-context.ts';
 import { worldStateAt } from './skills-build.ts';
-import { chatInputError, readSkillHelp, SKILL_HELP_MAX_SKILLS, SKILL_SIGNATURE_DOC } from './skills.ts';
+import { chatInputError, describeSkillInputCorrection, readSkillHelp, SKILL_HELP_MAX_SKILLS, SKILL_SIGNATURE_DOC } from './skills.ts';
 import { TOOL_HELP_TOOL, readToolHelp } from '../src/client/tool-help.ts';
 import {
   parsePolicy, policyNoteText, renderFightRollback, renderPolicy, renderPolicyChange, renderPolicyEnv,
@@ -6349,16 +6349,23 @@ export class MinecraftWorld implements World {
     controller?: 'system1' | 'system2' | 'human' | 'unknown',
   ): string | ToolOutcome {
     // Proven pre-dispatch rejection: no queue mutation, navigation or interaction took place.
-    const invalidArguments = (rule: string, text: string): ToolOutcome => ({
+    const invalidArguments = (rule: string, text: string,
+      correction?: ReturnType<typeof describeSkillInputCorrection>): ToolOutcome => ({
       text: this.toolLog(name, args, `[${name} 失败] ${text}`), failed: true,
       meta: { admission: { accepted: false, dispatched: false, kind: 'correction', rule,
-        recovery: [{ tool: 'mc_help', arguments: {}, text: '按工具签名纠正参数；整批未提交，前面的步骤也未执行。' }] } },
+        ...(correction ? { fieldPath: correction.path } : {}),
+        recovery: [{ tool: 'mc_help', arguments: correction?.helpArguments ?? {},
+          text: correction?.hint ?? '按工具签名纠正参数；整批未提交，前面的步骤也未执行。' }] } },
     });
     const mode = parseQueueMode(args.queue);
     if ('error' in mode) return invalidArguments('arguments.queue', mode.error);
     const parsed = parse(args.steps);
     if ('error' in parsed) {
-      return invalidArguments('arguments.steps', `${parsed.error}。你写的是 ${JSON.stringify(args.steps)}`);
+      const correction = describeSkillInputCorrection(args.steps, parsed.error);
+      return invalidArguments('arguments.steps', `${parsed.error}\n[参数纠正] ${correction.hint}`
+        + `\n按需帮助：mc_help ${JSON.stringify(correction.helpArguments)}`
+        + `\n整批未提交，前面的步骤也未执行；当前任务和待办保留。`
+        + `\n原参数摘要：${correction.suppliedExcerpt}`, correction);
     }
     if (!this.executor) return { text: this.toolLog(name, args, `[${name} 失败] World 未启动`), failed: true };
     // A stopped login cannot execute a new body task. Reject before queue=replace

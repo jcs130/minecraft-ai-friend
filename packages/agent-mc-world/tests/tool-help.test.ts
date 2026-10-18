@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { createToolHelpTool, readToolHelp, withToolHelp, TOOL_HELP_TOOL, nullLogger } from '../src/client/index.ts';
+import { createToolHelpTool, readToolHelp, withToolHelp, mapToolRecovery, TOOL_HELP_TOOL, nullLogger } from '../src/client/index.ts';
 import { MinecraftWorld, MINECRAFT_TOOL_DECLS, MINECRAFT_DEFAULTS } from '../src/extension.ts';
 
 const schema = { type: 'object', additionalProperties: false, required: ['steps'], properties: {
@@ -48,4 +48,25 @@ it('uses the same actual declaration in the lower-level engine and returns cance
   expect(JSON.parse((outcome as any).text).schema).toEqual(tools.find(tool => tool.name === 'mc_blueprint')!.parameters);
   const abort = new AbortController(); abort.abort();
   await expect(createToolHelpTool(() => [target]).handler({}, { role: 'test', log: nullLogger(), signal: abort.signal })).rejects.toThrow();
+});
+
+it('maps recovery calls and tool-help selectors while preserving game arguments, evidence and original results', () => {
+  const outcome = { text: 'Rejected', failed: true, meta: { admission: { accepted: false, dispatched: false,
+    recovery: [
+      { tool: 'mc_help', arguments: { skill: 'probe' }, text: 'read mc_help' },
+      { tool: 'mc_tool_help', arguments: { name: 'mc_do', path: '/properties/steps' } },
+      { tool: 'mc_follow', arguments: { name: 'mc_Alex', code: 'mc_help' } },
+    ] }, evidence: { tool: 'mc_do', source: 'unchanged' } } };
+  const original = structuredClone(outcome);
+  const rename = (name: string) => name.replace(/^mc_/, 'mounted_');
+  const result = mapToolRecovery(outcome, rename, text => text.replaceAll('mc_help', 'mounted_help'));
+  expect(result).toMatchObject({ failed: true, meta: { admission: { accepted: false, dispatched: false,
+    recovery: [
+      { tool: 'mounted_help', arguments: { skill: 'probe' }, text: 'read mounted_help' },
+      { tool: 'mounted_tool_help', arguments: { name: 'mounted_do', path: '/properties/steps' } },
+      { tool: 'mounted_follow', arguments: { name: 'mc_Alex', code: 'mc_help' } },
+    ] }, evidence: original.meta.evidence } });
+  expect(outcome).toEqual(original);
+  expect(mapToolRecovery({ text: 'ordinary result' }, rename)).toEqual({ text: 'ordinary result' });
+  expect(handler).not.toHaveBeenCalled();
 });

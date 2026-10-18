@@ -80,3 +80,27 @@ export function withToolHelp(tools: readonly ToolDef[], name = TOOL_HELP_TOOL.na
   result.push(createToolHelpTool(() => result, name));
   return result;
 }
+
+/** Map callable recovery identities at a host mount boundary, without editing action arguments. */
+export function mapToolRecovery(
+  outcome: ToolOutcome,
+  mapName: (name: string) => string,
+  mapText: (text: string) => string = text => text,
+): ToolOutcome {
+  const record = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+  const meta = outcome.meta, admission = record(meta) ? meta.admission : undefined;
+  if (!record(admission) || !Array.isArray(admission.recovery)) return outcome;
+  const recovery = admission.recovery.map(value => {
+    if (!record(value) || typeof value.tool !== 'string') return value;
+    const args = value.arguments;
+    // name identifies a tool only in the tool-help selector. In an ordinary
+    // recovery it may be a real player or object name and must stay untouched.
+    const mappedArgs = value.tool === TOOL_HELP_TOOL.name && record(args) && typeof args.name === 'string'
+      ? { ...args, name: mapName(args.name) } : args;
+    return { ...value, tool: mapName(value.tool),
+      ...(mappedArgs === undefined ? {} : { arguments: mappedArgs }),
+      ...(typeof value.text === 'string' ? { text: mapText(value.text) } : {}) };
+  });
+  return { ...outcome, meta: { ...meta, admission: { ...admission, recovery } } };
+}
