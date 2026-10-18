@@ -1,5 +1,12 @@
 # Agent MC Autonomy
 
+0.2.20 also checks completed, successful native tasks for independently measured
+effects. Two identical plans with validated unchanged state receive the same
+bounded recovery evidence as failed/noop attempts, including when requested
+stock was already present. Missing or unknown effect samples do not prohibit
+work; a changed inventory, position or scope allows another attempt. Completion
+still does not establish goal progress, and the planner chooses subsequent work.
+
 0.2.19 uses the injected model token counter for resident full-context history,
 so a UTF-8 byte count no longer evicts a reusable request prefix prematurely.
 Unavailable counters retain the conservative byte bound; the complete request

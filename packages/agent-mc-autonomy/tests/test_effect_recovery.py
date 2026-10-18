@@ -87,6 +87,45 @@ def test_identical_no_effect_plan_cannot_loop_by_changing_narration_or_queue(fra
     assert result["previous_outcome"]["goal_verified"] is False
 
 
+def test_completed_existing_stock_does_not_bypass_exact_plan_recovery(framework_module, tmp_path, run_async):
+    bridge, controller = prepare(framework_module, tmp_path)
+    args = {"steps": [{"skill": "goto", "at": [1, 61, 2]},
+                      {"skill": "craft", "item": "bread", "count": 1}]}
+    inventory = {"bread": 1, "cobblestone": 31}
+    controller.game_facts["observation"]["inventory"] = inventory
+    samples = []
+    for index, skill in enumerate(("goto", "craft"), 1):
+        value = effect()
+        value["skill"] = skill
+        value["before"]["inventory"] = copy.deepcopy(inventory)
+        value["after"]["inventory"] = copy.deepcopy(inventory)
+        samples.append({"step": index, "outcome": "ok", "observedEffect": value})
+    for _ in range(2):
+        run_async(controller.execute_model_call("mc_do", copy.deepcopy(args)))
+        terminal = {**action(True), "phase": "completed", "evidence": {
+            "receipt": "Already holding the requested stock; no new item was crafted.",
+            "steps": copy.deepcopy(samples)}}
+        controller.receipt({"execution": terminal, "events": [{"run": "native-run", "cursor": 96, "execution": terminal}]})
+    result = run_async(controller.execute_model_call("mc_do", {**args, "_spoken_text": "Another line"}))[0]
+    assert result.get("dispatched") is False
+    assert result["code"] == "repeated_no_effect"
+    assert len([call for call in bridge.calls if call[0] == "mc_do"]) == 2
+    assert result["previous_outcome"]["goal_verified"] is False
+    assert result["previous_outcome"]["original_event"] == {"run": "native-run", "cursor": 96}
+    # Consuming that stock is new evidence: the same plan can be useful again.
+    controller.game_facts["observation"]["inventory"] = {"cobblestone": 31}
+    assert run_async(controller.execute_model_call("mc_do", copy.deepcopy(args)))[0].get("execution")
+
+
+def test_completed_without_effect_samples_does_not_prohibit_real_work(framework_module, tmp_path, run_async):
+    bridge, controller = prepare(framework_module, tmp_path)
+    for _ in range(3):
+        run_async(controller.execute_model_call("mc_do", copy.deepcopy(PLAN)))
+        controller.receipt({"execution": {**action(True), "phase": "completed", "evidence": {
+            "receipt": "Completed without measurements", "steps": [{"step": 1, "outcome": "ok"}]}}})
+    assert len([call for call in bridge.calls if call[0] == "mc_do"]) == 3
+
+
 @pytest.mark.parametrize("change", ["inventory", "position", "dimension", "scope", "death", "plan", "expiry"])
 def test_changed_evidence_and_different_work_stay_available(framework_module, tmp_path, run_async, monkeypatch, change):
     import agent_mc_autonomy.effects as module

@@ -111,7 +111,7 @@ def projected_effect(value):
 
 
 class EffectRecovery:
-    """At most 16 dated exact-plan failures; no body action or automatic replay."""
+    """At most 16 dated ineffective plans; no body action or automatic replay."""
     def __init__(self):
         self.rows = {}
 
@@ -139,7 +139,9 @@ class EffectRecovery:
             return True
         if (scope is None or execution.get("phase") not in {"blocked", "completed", "partial"}
                 or any(e["status"] != "unchanged" for e in effects)
-                or any(row.get("outcome") not in {"fail", "noop"} for row in raw)):
+                # A completed skill may have found its target already satisfied.
+                # Its ok receipt still does not establish a measured effect.
+                or any(row.get("outcome") not in {"fail", "noop", "ok"} for row in raw)):
             return False
         key = self.key(arguments)
         previous = self.rows.get(key, {})
