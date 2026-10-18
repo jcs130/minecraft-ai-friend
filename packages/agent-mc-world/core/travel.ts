@@ -207,6 +207,20 @@ export const PROBE_LABEL: Record<RouteProbe['profile'], string> = {
   style: '按当前风格', dig: '只挖不垫', walk: '只靠走',
 };
 
+export interface TravelRoutePreference {
+  walkOnly: boolean;
+  evidence: 'complete' | 'partial' | 'unconfirmed' | 'no-path';
+}
+
+/** A bounded failed search permits the configured fallback; timeout/absence never proves no existing route. */
+export function preferExistingRoute(probes: readonly RouteProbe[] | null | undefined): TravelRoutePreference {
+  const walk = probes?.find(p => p.profile === 'walk');
+  if (walk?.status === 'noPath' && Number.isFinite(walk.visited)) return { walkOnly: false, evidence: 'no-path' };
+  if (walk?.status === 'complete' && walk.breaks === 0 && walk.place === 0) return { walkOnly: true, evidence: 'complete' };
+  if (walk?.status === 'partial' && walk.steps > 0 && walk.breaks === 0 && walk.place === 0) return { walkOnly: true, evidence: 'partial' };
+  return { walkOnly: true, evidence: 'unconfirmed' };
+}
+
 /** 与判决同口径的距离文案:2.4 显示 2.4,别四舍五入成"2 格却不放行"的自相矛盾 */
 export function fmtDist(d: number): string {
   return Number.isInteger(d) ? String(d) : d.toFixed(1);
@@ -733,6 +747,13 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
   let done = false;
   let timedOut = false;
   let stalled: Stall | null = null;
+  let noPath = false;
+  // Upstream goto resolves an empty noPath result before checking its status.
+  // Keep only the result of this owned goal, without changing the path or retrying here.
+  const onPath = (result: { status?: string }) => {
+    if (bot.pathfinder.goal === goal && goalOwnerKind(bot) === 'task') noPath = result.status === 'noPath';
+  };
+  bot.on?.('path_update', onPath);
   /** 钉住的那一档抛 `Wedged` 交给外层解卡;绕远路那一档照实受阻 */
   const stallError = (s: Stall): Error => (s.wedged ? new Wedged(s) : stallBlocked(bot, s));
   const deadline = Date.now() + GOTO_DEADLINE_MS;
@@ -818,6 +839,8 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
   } catch (err) {
     // 中止时目标可能已归抢占方；此处不撤目标，撤销由 abortTask/pump 负责。
     if (ctx.aborted()) throw new Aborted(ctx.abortedBy?.() ?? null);
+    const searchFailed = (noPath || (err as Error).name === 'NoPath')
+      && bot.pathfinder.goal === goal && goalOwnerOf(bot)?.goal === goal;
     dropGoal(bot, 'task', '寻路报错,技能退出', ctx.diag);
     if (geometryBlocked()) throw new SkillBlocked(geometryBlocked()!);
     const support = supportBlocked();
@@ -832,9 +855,11 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
     }
     if (stalled) throw stallError(stalled);
     if (timedOut) throw new SkillBlocked(`走不过去: 走了 ${Math.round(GOTO_DEADLINE_MS / 1000)} 秒还没到`);
-    throw new SkillBlocked(`走不过去: ${zhErrorText((err as Error).message)}`);
+    throw new SkillBlocked(`走不过去: ${zhErrorText((err as Error).message)}`, [], 'local',
+      searchFailed ? 'pathfinder-no-path' : undefined);
   } finally {
     done = true;
+    bot.off?.('path_update', onPath);
   }
   checkAbort(ctx);
   const support = supportBlocked();
@@ -852,11 +877,13 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
   // 撤目标之后 goto 也可能是 resolve 而不是 reject,两条路都要认这份卡住
   if (stalled) throw stallError(stalled);
   if (!travelGoalReached(bot, goal)) {
+    const searchFailed = noPath && bot.pathfinder.goal === goal && goalOwnerOf(bot)?.goal === goal;
     dropGoal(bot, 'task', '收尾校验没到目标格', ctx.diag);
     const target = goalCell(goal);
     throw new SkillBlocked(`走不过去: 寻路停止但尚未满足${target ? `这一段目标 ${cellText(target)}` : '到达条件'}；`
       + `实测脚格 ${cellText(feetOf(bot))}，脚高 ${bot.entity.position.y.toFixed(3)}，`
-      + `${bot.entity.onGround === true ? '已着地' : '未确认着地'}；核对高度、支撑与通路后再选动作`);
+      + `${bot.entity.onGround === true ? '已着地' : '未确认着地'}；核对高度、支撑与通路后再选动作`,
+      [], 'local', searchFailed ? 'pathfinder-no-path' : undefined);
   }
 }
 

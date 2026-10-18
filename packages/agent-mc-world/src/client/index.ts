@@ -16,6 +16,8 @@ export type { ToolDef, ToolOutcome, ToolCallContext, EventEnvelope, WorldRequest
 export type { FamiliarAction } from '../contracts/host.ts';
 export { familiarStepAction, nativeFamiliarAction } from './familiar-action.ts';
 export { nullLogger } from '../../core/support/runtime.mjs';
+export { preferExistingRoute, type TravelRoutePreference } from '../../core/travel.ts';
+export type { RouteProbe } from '../../core/skill-context.ts';
 export { MessageInbox, MESSAGE_TOOL, MESSAGE_PARAMETERS, MESSAGE_LIMIT, MESSAGE_CHANNELS, messageChannel,
   messageInboxHost, messageInboxFacts, type MessageInboxOptions, type ReceivedMessage, type MessageChannel } from './message-inbox.ts';
 export { serveClientConsole, type ClientConsolePort } from './console-server.ts';

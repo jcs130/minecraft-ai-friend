@@ -4079,7 +4079,7 @@ export class MinecraftWorld implements World {
       },
       permitResourcePlacement: (item, intent) => this.permitBlueprintResourcePlacement(item, intent),
       previewResourcePlacement: (item) => this.previewBlueprintResourcePlacement(item),
-      probeRoutes: (target, goal) => this.bridge?.probeRoutes(target, goal) ?? null,
+      probeRoutes: (target, goal, profiles) => this.bridge?.probeRoutes(target, goal, profiles) ?? null,
       probeTarget: (target) => this.bridge?.probeTarget(target) ?? null,
       digBackoffSince: (ts) => this.bridge?.digBackoffSince(ts) ?? [],
       // 战斗会话在场时队列闸住:受理照收,腾出手(resume)再跑

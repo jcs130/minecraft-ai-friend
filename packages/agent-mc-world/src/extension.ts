@@ -9,6 +9,8 @@ export { MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_CONFIG_GROUP, MINECRAFT_DEFAUL
 export { setFlightExpiry } from '../core/flight.ts';
 export type { QueueStatus } from '../core/executor.ts';
 export { corridorSafe, loadedSight } from '../core/idle-actions.ts';
+export { preferExistingRoute, type TravelRoutePreference } from '../core/travel.ts';
+export type { RouteProbe } from '../core/skill-context.ts';
 export { HOSTILE } from '../core/melee.ts';
 export { piglinIsHostile } from '../core/piglin.ts';
 export { type ProtectReply } from '../core/protection-port.ts';

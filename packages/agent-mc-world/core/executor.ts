@@ -158,7 +158,7 @@ import { fmtDur } from './receipt.ts';
 import {
   FLEE_DEADLINE_MS, clearEscapeGoalOwner, digBackoffScene, digBlock, dropGoal, escapeIntent,
   findEntity, fmtDist, gotoGoal, holdTreadWater, onEscapeGoal, goalOwnerKind, goalOwnerOf, levelTravelGoal, nextLongTravelLeg, matchBlockIds, releaseBody,
-  renderRouteMenu, routeNote, setOwnedGoal, travelGoalReached, type DistanceMetric, walkOnlyPath, withRouteScene, underwaterRouteNote,
+  renderRouteMenu, routeNote, setOwnedGoal, travelGoalReached, type DistanceMetric, walkOnlyPath, withRouteScene, underwaterRouteNote, preferExistingRoute,
 } from './travel.ts';
 import {
   HOSTILE, MELEE_CHASE, MELEE_REACH,
@@ -690,7 +690,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
       const target = call.groundY ? { ...resolved, y: feetOf(bot).y } : resolved;
       const finalGoal = gotoArrivalGoal(call, target);
       const travelContext: SkillContext = call.walkOnly && ctx.probeRoutes ? {
-        ...ctx, probeRoutes: (at, goal) => ctx.probeRoutes!(at, goal)?.filter((route) => route.profile === 'walk') ?? null,
+        ...ctx, probeRoutes: (at, goal) => ctx.probeRoutes!(at, goal, ['walk'])?.filter((route) => route.profile === 'walk') ?? null,
       } : ctx;
       if (call.dryRun) {
         const probes = travelContext.probeRoutes?.(target, call.groundY || call.exact ? finalGoal : undefined);
@@ -704,10 +704,52 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
           startDist, diag: call.groundY || waterNote ? null : ctx.probeTarget?.(target) ?? null,
         })].filter(Boolean).join('\n');
       }
-      const note = routeNote(bot, travelContext, target, call.groundY || call.exact ? finalGoal : undefined);
       const startedAt = Date.now();
       let sceneTarget = target;
-      const releaseWalkOnly = call.walkOnly ? walkOnlyPath(bot) : undefined;
+      let note: string | null = null;
+      let configuredLegs = 0;
+      const runLeg = async (at: Cell, goal: InstanceType<typeof goals.Goal>, diagnoseTarget = false): Promise<void> => {
+        const movements = bot.pathfinder?.movements;
+        const permitsTerrain = movements?.canDig === true || (movements?.scafoldingBlocks?.length ?? 0) > 0;
+        let walkProbes = travelContext.probeRoutes?.(at, goal, ['walk'])?.filter(p => p.profile === 'walk') ?? null;
+        const preference = preferExistingRoute(walkProbes);
+        let evidence: string = preference.evidence;
+        let walk = call.walkOnly === true || !permitsTerrain || preference.walkOnly;
+        let fallbackUsed = false;
+        for (;;) {
+          checkAbort(ctx);
+          let probes = walk ? walkProbes : travelContext.probeRoutes?.(at, goal) ?? null;
+          const freshPreference = !walk ? preferExistingRoute(probes) : null;
+          if (freshPreference?.evidence === 'complete' || freshPreference?.evidence === 'partial') {
+            // A chunk or obstacle can change while the first attempt settles.
+            // Fresh existing-route evidence takes priority over the old failure.
+            walk = true; walkProbes = probes?.filter(p => p.profile === 'walk') ?? null; probes = walkProbes;
+            evidence = 'existing-route-refreshed';
+          }
+          if (!walk) configuredLegs += 1;
+          const planning = { ...travelContext, probeRoutes: () => probes };
+          note = routeNote(bot, planning, at, diagnoseTarget ? undefined : goal);
+          ctx.diag?.write({ lane: 'path', event: 'route-choice', taskId: ctx.taskId,
+            msg: walk ? '本段优先走现有通路，不挖掘或垫脚' : '本段现有通路搜索无路，按已配置移动能力继续',
+            data: { target: at, strategy: walk ? 'existing' : 'configured', evidence,
+              walkStatus: walkProbes?.[0]?.status ?? null, walkSteps: walkProbes?.[0]?.steps ?? null,
+              permitsTerrain, strictWalkOnly: call.walkOnly === true } });
+          const release = walk ? walkOnlyPath(bot) : undefined;
+          try {
+            await gotoGoal(bot, goal, travelContext);
+            return;
+          } catch (error) {
+            // Only this owned path's explicit noPath result permits one fallback.
+            // Timeout, stalls, cancellation and external ownership are not that evidence.
+            if (!walk || fallbackUsed || call.walkOnly || !permitsTerrain || !(error instanceof SkillBlocked)
+              || error.code !== 'pathfinder-no-path') throw error;
+            checkAbort(ctx);
+            walk = false;
+            fallbackUsed = true;
+            evidence = 'execution-no-path';
+          } finally { release?.(); }
+        }
+      };
       try {
         let legs = 0;
         for (;;) {
@@ -716,12 +758,12 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
           if (!leg) break;
           if (++legs > 64) throw new SkillBlocked('长途分段超过 64 段仍未到目标附近，停止这条路线');
           sceneTarget = { x: leg.x, y: Math.floor(from.y), z: leg.z };
-          await gotoGoal(bot, levelTravelGoal(leg.x, leg.z), travelContext);
+          await runLeg(sceneTarget, levelTravelGoal(leg.x, leg.z));
           const moved = Math.hypot(bot.entity.position.x - from.x, bot.entity.position.z - from.z);
           if (moved < 4) throw new SkillBlocked('长途这一段没有足够位移，停止原路线');
         }
         sceneTarget = target;
-        await gotoGoal(bot, finalGoal, travelContext);
+        await runLeg(target, finalGoal, !call.groundY && !call.exact);
       } catch (err) {
         // 长途失败只试算当前短段，避免再次用远处终点耗尽寻路预算。
         throw withRouteScene(
@@ -734,14 +776,14 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
           sceneTarget !== target ? levelTravelGoal(sceneTarget.x, sceneTarget.z)
             : call.groundY || call.exact ? finalGoal : undefined,
         );
-      } finally {
-        releaseWalkOnly?.();
       }
       const water = headInWater(bot) || bodyInWater(bot);
       const actual = feetOf(bot);
       const arrival = gotoArrivalNote(call, target, actual);
       const footing = water ? ';仍在水中，未确认登岸' : '';
-      return `到了 ${cellText(actual)}${arrival}${footing}${call.walkOnly ? ';沿现有通路到达，未挖掘或垫脚' : ''}${note ? `。\n${note}` : ''}`;
+      const route = configuredLegs === 0 ? ';沿现有通路到达，未挖掘或垫脚'
+        : ';部分路段现有通路搜索未找到路线，已按配置允许的挖掘/垫脚能力继续；不代表这些动作实际发生';
+      return `到了 ${cellText(actual)}${arrival}${footing}${route}${note ? `。\n${note}` : ''}`;
     }
     case 'transit': return skillTransit(bot, call, ctx);
     case 'find': return skillFind(bot, call.target, call.direction, call.distance, ctx, call.until);

@@ -59,7 +59,7 @@ export class SkillBlocked extends Error {
   readonly scene: string[];
   /** 机器可读原因；调用方不靠中文回执做重复失败判定。 */
   readonly code?: 'target-not-visible' | 'target-not-ready' | 'container-window-changed' | 'container-window-rollback' | 'inventory-click-sync' | 'use-hand-changed' | 'resource-unavailable'
-    | 'fishing-loot-unconfirmed' | 'fishing-reel-unconfirmed' | 'fishing-no-bite' | 'execution-context-changed';
+    | 'fishing-loot-unconfirmed' | 'fishing-reel-unconfirmed' | 'fishing-no-bite' | 'execution-context-changed' | 'pathfinder-no-path';
   /**
    * 受阻来源：server 表示操作后的回读或服务端结果，local 表示本地前置判断。
    * 仅写入 World 诊断日志。
@@ -238,6 +238,8 @@ export interface SkillContext {
   probeRoutes?: (
     target: { x: number; y: number; z: number },
     goal?: InstanceType<typeof goals.Goal>,
+    /** Optional bounded subset; omitted keeps the complete comparison menu. */
+    profiles?: readonly RouteProbe['profile'][],
   ) => RouteProbe[] | null;
   /** 目标点分诊(落脚预检+死角灌水);没连上服务器时 null */
   probeTarget?: (target: { x: number; y: number; z: number }) => TargetDiag | null;

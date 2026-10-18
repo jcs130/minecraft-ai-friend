@@ -55,4 +55,18 @@ describe('configured navigation capability disclosure', () => {
     expect(help.text).toContain('背包内可用垫脚料');
     expect(help.text).toContain('不证明所有移动方式或显式改结构都不可行');
   });
+
+  it('runs only the requested distinct route profiles without changing live movements', () => {
+    const require = createRequire(import.meta.url), registry = require('minecraft-data')('1.21.1');
+    const profiles: boolean[] = [];
+    const bot = { registry, entity: { position: new Vec3(.5, 64, .5) }, inventory: { items: () => [] },
+      blockAt: () => null, entities: {}, pathfinder: { movements: { canDig: true },
+        *getPathFromTo(movements: Movements) { profiles.push(movements.canDig); yield { result: { status: 'noPath', path: [], visitedNodes: 2 } }; } } } as unknown as Bot;
+    class FixtureBridge extends Bridge { attach() { this._bot = bot; } }
+    const bridge = new FixtureBridge({ host: 'fixture.invalid', port: 25565, username: 'Fixture', log: nullLogger(),
+      onSnapshot() {}, onEvent() {}, onMessage() {} } as never);
+    bridge.attach();
+    expect(bridge.probeRoutes({ x: 10, y: 64, z: 0 }, undefined, ['walk', 'walk'])?.map(p => p.profile)).toEqual(['walk']);
+    expect(profiles).toEqual([false]); expect(bot.pathfinder.movements.canDig).toBe(true);
+  });
 });

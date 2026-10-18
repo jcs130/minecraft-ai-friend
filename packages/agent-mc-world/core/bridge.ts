@@ -1052,6 +1052,7 @@ export class Bridge {
     target: { x: number; y: number; z: number },
     /** 试算与执行须使用同一目标。省略时使用以 target 为中心、半径 1 的 GoalNear；水平寻路显式传入 GoalNearXZ。 */
     goal: InstanceType<typeof goals.Goal> = new goals.GoalNear(target.x, target.y, target.z, 1),
+    profiles: readonly RouteProbe['profile'][] = ['style', 'dig', 'walk'],
   ): RouteProbe[] | null {
     const bot = this._bot;
     if (!bot?.entity || typeof bot.pathfinder?.getPathFromTo !== 'function') return null;
@@ -1061,7 +1062,8 @@ export class Bridge {
       ? Math.hypot(me.x - target.x, me.z - target.z)
       : Math.hypot(me.x - target.x, me.y - target.y, me.z - target.z);
     const out: RouteProbe[] = [];
-    for (const profile of ['style', 'dig', 'walk'] as const) {
+    for (const profile of [...new Set(profiles)]) {
+      if (!['style', 'dig', 'walk'].includes(profile)) continue;
       const m = new Movements(bot);
       m.canDig = profile !== 'walk';
       m.allow1by1towers = profile === 'style';
