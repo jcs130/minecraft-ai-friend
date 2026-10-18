@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .bridge import json_content, outcome, text_content
 from .context import assemble, coalesce_rejected, encode, outcome_eviction_index, retain_events
+from .context_counter import CounterUnavailable, count_input
 from .death_memory import TOOL as DEATH_REVIEW_TOOL
 from .death_memory import DeathMemory, identity, lifecycle, recovery_state
 from .decision_profiles import profile_view
@@ -1434,8 +1435,18 @@ class Controller:
         if self.settings.context_mode != "full":
             self.groups = self.groups[-8:]
         else:
-            # Bound resident memory by the requested window, not a fixed turn count.
-            while len(self.groups) > 1 and len(encode(self.groups).encode("utf-8")) > self.settings.context_tokens:
+            # Use the selected model's units here too. A byte cap prematurely
+            # shifts an otherwise reusable history prefix in a token window.
+            # Assembly still accounts for rules/tools, facts and output reserve.
+            while len(self.groups) > 1:
+                try:
+                    if self.context_counter is None:
+                        raise CounterUnavailable("not_configured")
+                    size = count_input(self.context_counter, [m for group in self.groups for m in group], [])
+                except CounterUnavailable:
+                    size = len(encode(self.groups).encode("utf-8"))
+                if size <= self.settings.context_tokens:
+                    break
                 self.groups.pop(0)
 
     async def turn_once(self, goal, prefix, tools):

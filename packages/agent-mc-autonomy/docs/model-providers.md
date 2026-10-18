@@ -61,12 +61,16 @@ mode = "api_key"
 
 | 协议 | `parameters` 中可配置的主要字段 |
 | --- | --- |
-| Chat | `temperature`, `top_p`, `top_k`, `seed`, `stop`, `presence_penalty`, `frequency_penalty`, `reasoning_effort`, `thinking`, `enable_thinking`, `thinking_budget`, `response_format`, `min_p`, `repetition_penalty`, `chat_template_kwargs` |
+| Chat | `temperature`, `top_p`, `top_k`, `seed`, `stop`, `presence_penalty`, `frequency_penalty`, `reasoning_effort`, `thinking`, `enable_thinking`, `thinking_budget`, `reasoning_budget_tokens`, `response_format`, `min_p`, `repetition_penalty`, `chat_template_kwargs` |
 | Responses | `temperature`, `top_p`, `reasoning`, `text`, `service_tier`, `prompt_cache_key`, `prompt_cache_retention` |
 | Claude Messages | `temperature`, `top_p`, `top_k`, `stop_sequences`, `thinking`, `output_config`, `service_tier` |
 | Gemini | `temperature`, `topP`, `topK`, `seed`, `stopSequences`, `presencePenalty`, `frequencyPenalty`, `thinkingConfig`, `responseMimeType`, `responseSchema`, `responseJsonSchema`, `mediaResolution` |
 
 使用 HTTP 原生字段。不要将参数包在 SDK 的 `extra_body` 里。每个具体模型支持的字段和组合以厂商文档为准，例如 Claude 手动 thinking 的 `budget_tokens` 至少 1024 且小于输出预算；支持 adaptive 的模型可使用 `thinking={type="adaptive"}` 和 `output_config={effort="high"}`。Gemini 在 `thinkingConfig` 中设置预算或等级。DeepSeek 思考模式可能忽略部分采样参数，这并不代表参数起效。
+
+某些兼容 Chat 的本地服务另支持 `reasoning_budget_tokens` 硬预算；只有确认服务支持后才显式配置，例如 512，并保留更大的 `max_output_tokens` 供最终工具参数使用。它与 `reasoning_effort` 的等级提示、其他服务的 `thinking_budget` 不等价。必须为非负整数，正值须小于输出预算，0 表示不设该硬预算；未配置时不发送，不改变其他用户或服务的默认值。预算到达后如何收束思考由所选服务实现，仍需验证完整终态与实际动作质量。
+
+完整上下文的驻留历史与请求装配都使用注入的模型 token 计数器；没有可用计数器时才采用保守字节上界。动态事实仍在请求末尾，未满窗口时追加历史不会因字节/token 单位混用提前挤掉可缓存前缀。窗口真正不足时仍整体移除旧交换，原始日志不删除。
 
 - 输出预算由 `autonomy.max_output_tokens` 统一提供；Chat 可选 `max_tokens` 或 `max_completion_tokens`。其他协议自动使用各自字段。
 - 上下文预算仍由共享调度器计算，包含原生重放数据；保留完整工具交换，整体裁剪。预算上限可配置到 2,097,152，默认仍为 32,768。输出配置上限 131,072，默认仍为 1,024；这些是配置范围，不承诺所选模型有此容量。

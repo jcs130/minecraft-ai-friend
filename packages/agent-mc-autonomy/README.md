@@ -1,5 +1,13 @@
 # Agent MC Autonomy
 
+0.2.19 uses the injected model token counter for resident full-context history,
+so a UTF-8 byte count no longer evicts a reusable request prefix prematurely.
+Unavailable counters retain the conservative byte bound; the complete request
+assembler still enforces the window and reports omitted exchanges. Compatible
+Chat endpoints can explicitly accept `reasoning_budget_tokens` to bound thinking
+while reserving final-answer space. It is never enabled or sent by default.
+Body/viewer pins, host SDKs and action permission boundaries are unchanged.
+
 0.2.18 retains real body receipts ahead of repeated observation traffic under
 window pressure. Full context retires whole old native records before dropping
 the entire feedback section or selected host memory, and records the omission

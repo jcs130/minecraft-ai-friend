@@ -118,6 +118,40 @@ def test_native_parameters_exact_not_silently_dropped(provider, parameters, key)
     assert "extra_body" not in body
 
 
+@pytest.mark.parametrize("budget", [0, 512, 1024])
+def test_chat_reasoning_budget_is_explicit_and_preserves_answer_room(budget):
+    parameters = {"reasoning_effort": "low", "reasoning_budget_tokens": budget,
+                  "chat_template_kwargs": {"enable_thinking": True}}
+    cfg = config("openai-compatible", base_url="http://127.0.0.1:8000/v1", parameters=parameters)
+    cfg.validate_budget(8192)
+    _, body = request(cfg, BASE, [TOOL], 8192)
+    assert body["reasoning_budget_tokens"] == budget
+    assert body["max_tokens"] == 8192 and body["reasoning_effort"] == "low"
+    assert body["chat_template_kwargs"] == {"enable_thinking": True}
+    parameters["reasoning_budget_tokens"] = 1234
+    assert cfg.parameters["reasoning_budget_tokens"] == budget
+    assert "reasoning_budget_tokens" not in request(config("deepseek"), BASE, [TOOL], 8192)[1]
+
+
+@pytest.mark.parametrize("budget", [True, False, -1, 1.5, 512.0, "512", None])
+def test_chat_reasoning_budget_rejects_invalid_values_before_network(budget):
+    with pytest.raises(ValueError, match="brain_integer_parameter_invalid"):
+        config("deepseek", parameters={"reasoning_budget_tokens": budget})
+
+
+@pytest.mark.parametrize("budget", [8192, 9000])
+def test_chat_reasoning_budget_must_leave_final_output_room(budget):
+    cfg = config("deepseek", parameters={"reasoning_budget_tokens": budget})
+    with pytest.raises(ValueError, match="brain_reasoning_budget_must_be_less_than_output"):
+        cfg.validate_budget(8192)
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic", "google"])
+def test_chat_reasoning_budget_is_not_forwarded_to_other_protocols(provider):
+    with pytest.raises(ValueError, match="brain_parameters_unsupported_for_protocol"):
+        config(provider, parameters={"reasoning_budget_tokens": 512})
+
+
 @pytest.mark.parametrize("provider,header", [("openai", "authorization"), ("anthropic", "x-api-key"), ("google", "x-goog-api-key")])
 def test_keys_headers_and_rotation_from_environment(provider, header, monkeypatch):
     cfg = config(provider, api_key_env="TEST_PROVIDER_KEY", auth={"mode": "api_key"})

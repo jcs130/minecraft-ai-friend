@@ -128,3 +128,60 @@ def test_controller_full_receipts_and_more_than_eight_exchanges(framework_module
     run_async(controller.turn_once("survive", "body contract", module.model_tools(bridge.tools, context_mode="full")))
     assert len(controller.groups) == 13
     assert len(captured[0][2:-1]) == 24
+
+
+def test_full_controller_keeps_cache_prefix_until_real_token_window_is_full(framework_module, tmp_path, run_async):
+    captured = []
+
+    async def decide(messages, tools):
+        captured.append(copy.deepcopy(messages))
+        return {"content": "A complete plan", "tool_calls": []}
+
+    class Counter:
+        name = "offline-four-bytes-per-token"
+
+        def __bool__(self):
+            return False
+
+        def __call__(self, messages, tools):
+            return len(encode({"messages": messages, "tools": tools}).encode()) // 4
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    controller.settings = dataclasses.replace(controller.settings, context_mode="full", context_tokens=131072)
+    controller.context_counter = Counter()
+    original = [exchange(i, 8000) for i in range(20)]
+    assert len(encode(original).encode()) > controller.settings.context_tokens
+    controller.groups = copy.deepcopy(original)
+    tools = module.model_tools(bridge.tools, context_mode="full")
+    for _ in range(2):
+        run_async(controller.turn_once("survive", "body contract", tools))
+    # Appending an exchange must not evict the prefix merely because UTF-8
+    # bytes outnumber tokens. Reusing that prefix avoids a long prompt refill.
+    assert controller.groups[:20] == original
+    assert captured[1][:len(captured[0])-1] == captured[0][:-1]
+    assert len(controller.groups) == 22
+
+
+@pytest.mark.parametrize("broken", [False, True])
+def test_full_resident_history_remains_bounded_with_or_without_counter(framework_module, tmp_path, broken):
+    _, _, controller = setup(framework_module, tmp_path, None)
+    controller.settings = dataclasses.replace(controller.settings, context_mode="full", context_tokens=131072)
+
+    class Counter:
+        name = "offline-counter-unavailable" if broken else "offline-tokens"
+
+        def __call__(self, messages, tools):
+            if broken:
+                raise ValueError("private failure details")
+            return len(messages) * 20000
+
+    controller.context_counter = Counter()
+    original = [exchange(i, 8000) for i in range(20)]
+    controller.groups = copy.deepcopy(original)
+    controller.retain_history()
+    assert 1 <= len(controller.groups) < len(original)
+    assert controller.groups == original[-len(controller.groups):]
+    if broken:
+        assert len(encode(controller.groups).encode()) <= controller.settings.context_tokens
+    else:
+        assert len(controller.groups) * 2 * 20000 <= controller.settings.context_tokens
