@@ -43,6 +43,7 @@ from .planner import (
     PlannerResponseError,
     PlannerUnavailableError,
 )
+from .reply_quality import repeated_plain_reply
 from .stage_applicability import body_baseline, historical_proposal, inapplicable_reason
 from .tool_schema import argument_error, provider_schema
 from .viewer_public import tool_receipt
@@ -1621,12 +1622,37 @@ class Controller:
                     return
                 if self.stop_requested() or response is None or self.turn_death_epoch != self.death_epoch:
                     return
+                repetitive = repeated_plain_reply(response)
+                if repetitive:
+                    # Preserve the original response and fresh events, but never
+                    # feed a runaway phrase back as ordinary history or speech.
+                    with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
+                        output.write(encode({"turnId": self.turn, "response": response, "rejected": repetitive,
+                                             "dispatched": False, "context_delivery": budget["event_delivery"]}) + "\n")
+                    self.planner_failures += 1
+                    delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
+                                * 2 ** min(self.planner_failures - 1, 6))
+                    self.planner_retry_at = time.monotonic() + delay
+                    self.continuation_needed = True
+                    self.planner_notice = (
+                        "The previous response was rejected as repetitive_model_reply: a long repeated phrase "
+                        "without a structured tool call. It dispatched no action or speech. Do not copy that "
+                        "phrase. Use the retained fresh facts and receipts for one complete tool call or a "
+                        "concise non-repetitive reply explaining a real waiting condition. Existing native "
+                        "work remains independent; never replay an unknown or pending action."
+                    )
+                    self.publish(planner_error=repetitive["code"], planner_diagnostic=repetitive,
+                                 planner_failures=self.planner_failures, planner_retry_seconds=delay,
+                                 last_message="", narration={"offered": False, "reason": repetitive["code"]})
+                    if response.get("model_status"):
+                        self.publish(model_status=response["model_status"])
+                    return
                 if profile and profile['reason']=='death_review':
                     self.profile_death_id=episode_id
                 self.planner_failures = 0
                 self.planner_retry_at = 0.0
                 self.planner_notice = None
-                self.publish(planner_error=None, planner_failures=0, planner_retry_seconds=0)
+                self.publish(planner_error=None, planner_diagnostic=None, planner_failures=0, planner_retry_seconds=0)
                 model_status = response.get("model_status", {})
                 if model_status:
                     self.publish(model_status=model_status, autonomy_running=model_status.get("route") != "unavailable")
