@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "verified_candidate_not_deployed",
+  "status": "deployed_and_verified",
   "version": "0.4.47.4",
   "paperVersion": "1.21.1 build 133",
   "sha256": "f1e3dc814fda2651b46e5ebfae5c90f0346b9b10fc3acd8968739422d338ba7c",
@@ -24,8 +24,16 @@
     "contract": "tm_field_camp_report",
     "naturalStructure": "nova_structures:illager_camp",
     "world": "world",
-    "approach": [-1080, 68, -1117],
-    "muster": [-1077, 67, -1117],
+    "approach": [
+      -1080,
+      68,
+      -1117
+    ],
+    "muster": [
+      -1077,
+      67,
+      -1117
+    ],
     "stages": 2,
     "nativeEnemies": 4,
     "usesExistingDungeonAndGuildSettlement": true,
@@ -39,7 +47,11 @@
     "realCampReconnaissanceBattleDisconnectAndReturnVerified": true,
     "pendingReceiptSurvivedColdStart": true,
     "dungeonAndGuildRepeatedClaimsDidNotDuplicateRewards": true,
-    "actualRewardGuiItems": {"emerald": 7, "arrow": 8, "bread": 4},
+    "actualRewardGuiItems": {
+      "emerald": 7,
+      "arrow": 8,
+      "bread": 4
+    },
     "rewardGuiCursorEmpty": true,
     "storyChaptersSurvivedAnotherColdStart": true,
     "maintenanceFilenameBoundaryCases": 12,
@@ -47,18 +59,28 @@
     "physicalBedrockOrXboxRenderingVerified": false,
     "remoteWebRenderingVerified": false,
     "longRunningAutonomousAgentOrBalanceEvaluation": false,
-    "notes": "Failed probes were retained. The first test chase stalled; explicit native path replanning completed the same paused operation. Reward GUI initially refused an unlearned travel skill; the QA explicitly learned it, then verified all persisted items. Neither case was hidden by resetting a player or fabricating a clear."
+    "notes": "Failed probes were retained. The first test chase stalled; explicit native path replanning completed the same paused operation. Reward GUI initially refused an unlearned travel skill; the QA explicitly learned it, then verified all persisted items. Neither case was hidden by resetting a player or fabricating a clear.",
+    "productionChecks": 41,
+    "productionNativeChecks": 16
   },
   "deployment": {
     "queued": false,
     "currentPaperRestartApprovalRequired": true,
-    "advanceNoticeSeconds": [180, 60, 10],
+    "advanceNoticeSeconds": [
+      180,
+      60,
+      10
+    ],
     "useExistingMaintenanceAndFullDualDiskColdBackup": true,
     "runtimeConfigurationFiles": 7,
     "requiresReviewedFirstPartyFourPartVersionFilenameSupport": true,
     "preserveExistingTasksSkillsInventoryRewardLedgersAndOriginalDungeonDefinitions": true,
-    "rollback": "Stop normally, restore pinned prior JAR and seven configuration before-images; retain new story records and original player/reward data. Do not roll back world regions."
+    "rollback": "Stop normally, restore pinned prior JAR and seven configuration before-images; retain new story records and original player/reward data. Do not roll back world regions.",
+    "deployedAt": "2026-10-18T01:11:05.393Z",
+    "backupStamp": "20261018-085743",
+    "currentApprovalRecorded": true
   },
   "documentation": "paper/docs/RPG_STORY.md",
-  "build": "paper/plugins/AgentFriend/scripts/build-rpg-release.py"
+  "build": "paper/plugins/AgentFriend/scripts/build-rpg-release.py",
+  "sourceCommitBeforeRuntimePublication": "7cf851d13aa714f6cb27419f54b80d49c71ee230"
 }
