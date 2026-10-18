@@ -1768,7 +1768,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   {
     name: 'server_travel',
     doc: `{"skill":"server_travel","command":"/spawn","at":[103,64,-31],"within":3}
-                                                 发服务端传送命令并等待位置确认；成功后下一步才开始。仅使用服务端已验证可用的单行命令，最多 256 字符。`,
+                                                 发服务端传送命令并等待位置确认；成功后下一步才开始。at 必须来自服务端已确认的目标落点，不是当前站位。当前已在所填范围时拒绝发送，不能由此推断命令目的地。仅使用服务端已验证可用的单行命令，最多 256 字符。`,
     fields: [
       { key: 'command', kind: 'string', required: true, schema: { type: 'string', maxLength: CHAT_LENGTH_LIMIT } },
       { key: 'at', kind: 'anchor', required: true, error: `server_travel 的 at 要 [x,y,z](${RELATIVE_HINT})` },
