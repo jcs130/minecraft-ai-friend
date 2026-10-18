@@ -8,7 +8,7 @@ const executable = (name: string): string => process.env.JAVA_HOME
   ? join(process.env.JAVA_HOME, 'bin', name + (process.platform === 'win32' ? '.exe' : '')) : name;
 let javaAvailable = false;
 try { execFileSync(executable('javac'), ['--version'], {stdio:'pipe'}); javaAvailable = true; } catch {}
-it.skipIf(!javaAvailable)('scopes optional client appearances by exact server, observer and UUID without path-like asset ids', () => {
+it.skipIf(!javaAvailable)('scopes client appearances by server, observer and UUID while retaining opaque Unicode catalogue ids', () => {
   const scratch = join(root, 'scratch', 'client-appearance-checks');
   mkdirSync(scratch, {recursive:true});
   const output = mkdtempSync(join(scratch, 'run-'));

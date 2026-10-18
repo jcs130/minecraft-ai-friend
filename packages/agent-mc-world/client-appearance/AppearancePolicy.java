@@ -18,6 +18,7 @@ public final class AppearancePolicy {
         } catch (IllegalArgumentException error) { return null; }
     }
     public static boolean validAssetId(String value) {
-        return value != null && value.length() <= 160 && value.matches("[a-zA-Z0-9_-][a-zA-Z0-9_.-]*") && !value.contains("..");
+        // Opaque catalogue identifiers, not file paths. Preserve Unicode and namespaced IDs.
+        return value != null && !value.isBlank() && value.chars().noneMatch(Character::isISOControl);
     }
 }

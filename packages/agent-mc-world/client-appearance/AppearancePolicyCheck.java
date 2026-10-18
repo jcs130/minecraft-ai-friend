@@ -13,9 +13,9 @@ public final class AppearancePolicyCheck {
         check(AppearancePolicy.uuid("other-player") == null);
         check(AppearancePolicy.validAssetId("custom-model"));
         check(AppearancePolicy.validAssetId("custom-texture.png"));
-        check(!AppearancePolicy.validAssetId("../model"));
-        check(!AppearancePolicy.validAssetId("file:/model"));
-        check(!AppearancePolicy.validAssetId("model/texture"));
+        check(AppearancePolicy.validAssetId("自定义模型"));
+        check(AppearancePolicy.validAssetId("namespace:model/texture"));
+        check(!AppearancePolicy.validAssetId("bad\nmodel"));
         check(!AppearancePolicy.validAssetId(null));
         System.out.println("Appearance policy: " + checks + " checks passed");
     }

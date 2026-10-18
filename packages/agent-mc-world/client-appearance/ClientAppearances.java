@@ -16,12 +16,16 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
  * No server packets, gameplay input, credentials, broad default-model replacement or assets.
  */
 public final class ClientAppearances implements ClientModInitializer {
+    private static ClientAppearances instance;
+    public static volatile String lastHudTargetUuid;
+    public static volatile long hudFrames;
     private record Binding(String uuid, String model, String texture) {}
-    private record Config(boolean enabled, String server, String observer, List<Binding> bindings) {}
+    private record Config(boolean enabled, String server, String observer, List<Binding> bindings, boolean followCameraInHud) {}
     private Config active;
     private int tick;
     private final Map<String, String> lastApplied = new HashMap<>();
     @Override public void onInitializeClient() {
+        instance = this;
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             active = null;
             lastApplied.clear();
@@ -64,5 +68,22 @@ public final class ClientAppearances implements ClientModInitializer {
                 });
             }
         });
+    }
+
+    /** Render the actual camera player's existing pose, equipment and animation capability.
+     * Selecting a subject never mutates player state or copies observer flight/teleport flags.
+     */
+    public static net.minecraft.class_1297 hudTarget(net.minecraft.class_1297 original) {
+        var client = net.minecraft.class_310.method_1551();
+        if (instance == null || instance.active == null || !instance.active.followCameraInHud
+                || !(client.method_1560() instanceof net.minecraft.class_742 target)) return original;
+        return target;
+    }
+
+    public static net.minecraft.class_1297 recordHudTarget(net.minecraft.class_1297 original) {
+        var target = hudTarget(original);
+        lastHudTargetUuid = target == null ? null : target.method_5667().toString();
+        hudFrames++;
+        return target;
     }
 }
