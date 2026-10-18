@@ -43,7 +43,7 @@ function rig(initialX = 0, positionFirst = false) {
   });
   const world: any = Object.assign(Object.create(MinecraftWorld.prototype), {
     cfg: { world: { moveThreshold: 5 }, auth: 'offline' }, botName: 'tester', connectionGeneration: 1,
-    hookedBots: new WeakSet(), bossQuarter: new Map(), activeEffects: new Map(), lastHealth: null,
+    hookedBots: new WeakSet(), bossQuarter: new Map(), bossTitles: new Map(), activeEffects: new Map(), lastHealth: null,
     lastDeathEpisodeId: null, pendingDeathCause: null, personalSpawn: undefined,
     diag: { write: vi.fn() }, emit: vi.fn(), attachExtension() {}, hookMessageEvents() {},
     serverActionWait: { observeUses: () => () => {} }, scheduleBlueprintResourceObservation() {},

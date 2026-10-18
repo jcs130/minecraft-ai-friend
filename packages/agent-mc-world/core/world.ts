@@ -61,7 +61,7 @@ import { attachHearing, hearingReadout } from './perception-hearing.ts';
 import { AttentionReader, PERCEPTION_TOOLS, perceptionArgs, validDetection, type DetectionEvidence } from './perception-tools.ts';
 import { IdleBehaviorController, IdlePresentationContext, type IdleBehaviorScene } from './idle-behavior.ts';
 import { sampleIdleActions, executeIdleAction } from './idle-actions.ts';
-import { classifyBossBarTitle } from './boss-bar.ts';
+import { classifyBossBarTitle, readBossBarHud, renderBossBarHud } from './boss-bar.ts';
 import { minecraftTextComponent } from './text-component.ts';
 import { MinecraftChatProvenance, incomingPrivateParts } from '../src/chat-provenance.ts';
 import { configureChatDedup, noteChatInput } from './chat-dedup.ts';
@@ -3430,6 +3430,8 @@ export class MinecraftWorld implements World {
       { key: 'foodReserve', text: this.currentFoodReserve(snap, true) }];
     const last = this.lastFinishedTask;
     const bot = this.bridge.bot;
+    const hud = renderBossBarHud(readBossBarHud((bot as (Bot & { bossBars?: unknown }) | undefined)?.bossBars));
+    if (hud) parts.push({ key: 'hud', text: hud });
     const running = this.executor?.status().running;
     const options = minecraftOptionsFromSnapshot(snap, bot?.registry?.foodsByName ?? {}, {
       freeSlots: snap.invSynced && typeof bot?.inventory?.emptySlotCount === 'function' ? bot.inventory.emptySlotCount() : null,
@@ -7220,6 +7222,7 @@ export class MinecraftWorld implements World {
     this.hookedBots.add(bot);
 
     this.bossQuarter.clear();
+    this.bossTitles.clear();
     observeStatusEffects(bot);
     this.attachExtension(bot);
     this.hookMessageEvents(bot);
@@ -7448,7 +7451,7 @@ export class MinecraftWorld implements World {
       const what = String(soundName).includes('lightning') ? '雷击声' : '爆炸声';
       this.emit('minecraft.event', `[Minecraft] 听见${what}${dir ? ',在' + DIRECTION_ZH[dir] + '边' : ''}。`, true);
     });
-    bot.on('bossBarCreated', (bar: { entityUUID?: string; title?: unknown }) => {
+    bot.on('bossBarCreated', (bar: { entityUUID?: string; title?: unknown; health?: number }) => {
       const title = minecraftTextComponent(bar?.title);
       const kind = classifyBossBarTitle(title);
       if (kind === 'skillExperience') {
@@ -7456,26 +7459,36 @@ export class MinecraftWorld implements World {
         this.diag.write({ lane: 'world', event: 'skill-experience-hud', msg: title });
         return;
       }
-      this.bossQuarter.set(bar.entityUUID ?? bar, 4);
+      const key = bar.entityUUID ?? bar;
+      this.bossTitles.set(key, title);
+      this.bossQuarter.set(key, Math.ceil((typeof bar.health === 'number' ? bar.health : 1) * 4));
       this.emit('minecraft.event', `[Minecraft] 出现了${kind === 'boss' ? ' Boss 血条' : '顶部状态条'}:${title}。`, true);
     });
     bot.on('bossBarUpdated', (bar: { entityUUID?: string; title?: unknown; health?: number }) => {
       const title = minecraftTextComponent(bar?.title);
       const kind = classifyBossBarTitle(title);
-      if (kind === 'skillExperience') return;
+      if (kind === 'skillExperience') {
+        this.bossTitles.delete(bar.entityUUID ?? bar); this.bossQuarter.delete(bar.entityUUID ?? bar);
+        return;
+      }
       const health = typeof bar?.health === 'number' ? bar.health : 1;
       // 每跌破一个 25% 档报一次,逐点进度变化不吵。
       const quarter = Math.ceil(health * 4);
       const key = bar.entityUUID ?? bar;
       const prev = this.bossQuarter.get(key) ?? 4;
-      if (quarter < prev) {
-        this.bossQuarter.set(key, quarter);
+      const previousTitle = this.bossTitles.get(key);
+      this.bossTitles.set(key, title);
+      this.bossQuarter.set(key, quarter);
+      // Status bars may advance, reset or change phase with unchanged progress.
+      // Boss health keeps its existing damage threshold; identical updates stay quiet.
+      if (title !== previousTitle || (kind === 'boss' ? quarter < prev : quarter !== prev)) {
         this.emit('minecraft.event', `[Minecraft] ${title} ${kind === 'boss' ? '血量剩' : '状态条进度为'} ${Math.round(health * 100)}%。`, false);
       }
     });
     bot.on('bossBarDeleted', (bar: { entityUUID?: string; title?: unknown }) => {
       const title = minecraftTextComponent(bar?.title);
       this.bossQuarter.delete(bar.entityUUID ?? bar);
+      this.bossTitles.delete(bar.entityUUID ?? bar);
       const kind = classifyBossBarTitle(title);
       if (kind !== 'skillExperience') {
         this.emit('minecraft.event', `[Minecraft] ${title} 的${kind === 'boss' ? '血条' : '顶部状态条'}已移除。`, false);
@@ -7871,6 +7884,7 @@ export class MinecraftWorld implements World {
   protected lastLevel: number | null = null;
   /** 顶部状态条已报过的 25% 档位(按标题) */
   protected readonly bossQuarter = new Map<string | object, number>();
+  protected readonly bossTitles = new Map<string | object, string>();
   protected lastBoomAt = 0;
   /** mineflayer 聊天模式已派发成 chat/whisper 的消息对象 */
   protected readonly chatClaimed = new WeakSet<object>();

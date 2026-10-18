@@ -23,7 +23,7 @@ export function visualArgumentError(args: Record<string, unknown>, prefix = 'mc'
 }
 
 const SCENE_PARTS = new Set(['sample', 'place', 'flight', 'body', 'life', 'structure', 'terrain', 'players', 'queue']);
-const HUD_PARTS = new Set(['gear', 'equip', 'foodReserve']);
+const HUD_PARTS = new Set(['gear', 'equip', 'foodReserve', 'hud']);
 const MAX_READOUT_CHARS = 4800;
 
 /** Reuse timestamped engine observations; do not invent a picture or stop body work. */
