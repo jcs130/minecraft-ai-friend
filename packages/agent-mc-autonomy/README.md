@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+0.2.15 pins the minimal `0.5.7-rc.20.env.1` body backport: a dead or
+respawning body cannot restart an environment reflex. Death retires its own
+escape controls and water history, so respawn is not reported as successful
+rescue. Viewer, dependency graph and host model/persona settings keep their
+verified baseline. Package tests do not establish sustained survival.
+
 0.2.14 makes the death-review tool require an explicit episode ID for get/report,
 including in its published schema. Missing IDs return an argument correction;
 fresh scoped context supplies exact read arguments. A malformed report never
