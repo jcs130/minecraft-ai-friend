@@ -6,6 +6,7 @@ import { Vec3 } from 'vec3';
 import { experienceHash } from '../../core/operation-experience.ts';
 import { GAMEPLAY_PROTOCOL, sanitizeGameObservation, type GameplayRecord } from './assessment.ts';
 import { GameplayArchive } from './archive.ts';
+import { captureVoxelScene, type VoxelScene } from '../../core/voxel-scene.ts';
 const require=createRequire(import.meta.url);
 export type ViewerObserverOptions={url:string;expectedUsername:string;expectedUuid:string;sampleMs?:number;worldCells?:boolean;
   connectionRead?:{url:string;method?:'GET'|'POST';expectedAddress:string}};
@@ -40,7 +41,7 @@ export class ViewerGameplayObserver {
   private bindingAt=0;
   private bindingRead=false;
   private identityTimer?:ReturnType<typeof setInterval>;
-  constructor(private readonly options:ViewerObserverOptions,private readonly scopeKey:string,private readonly archive:GameplayArchive,
+  constructor(private readonly options:ViewerObserverOptions,private readonly scopeKey:string,private readonly archive:GameplayArchive|null,
     private readonly onObservation?:(row:GameplayRecord)=>Promise<void>){
     const url=new URL(options.url);
     if(url.protocol!=='http:'||url.hostname!=='127.0.0.1'||url.username||url.password||url.search||!['','/'].includes(url.pathname))throw Error('Select one explicit localhost viewer URL');
@@ -71,17 +72,34 @@ export class ViewerGameplayObserver {
       this.dropColumn(farthest);this.evictedColumns++;
     }
   }
-  private hydrateColumns(p:{x:number;z:number}){
+  private hydrateColumns(p:{x:number;z:number},radius=1){
     const cx=Math.floor(p.x/16),cz=Math.floor(p.z/16);
-    for(const key of this.chunks.keys()){const [x,z]=key.split(',').map(Number);if(Math.abs(x-cx)>1||Math.abs(z-cz)>1)this.chunks.delete(key);}
+    for(const key of this.chunks.keys()){const [x,z]=key.split(',').map(Number);if(Math.abs(x-cx)>radius||Math.abs(z-cz)>radius)this.chunks.delete(key);}
     if(!this.Chunk)return;
-    for(let x=cx-1;x<=cx+1;x++)for(let z=cz-1;z<=cz+1;z++){
+    for(let x=cx-radius;x<=cx+radius;x++)for(let z=cz-radius;z<=cz+radius;z++){
       const key=`${x},${z}`,raw=this.serialized.get(key);if(this.chunks.has(key)||!raw)continue;
       try{const column=this.Chunk.fromJson(raw.bytes.toString('utf8'));
         for(const u of raw.updates.values())column.setBlockStateId(new Vec3((u.x%16+16)%16,u.y,(u.z%16+16)%16),u.stateId);
         this.chunks.set(key,column);
       }catch{this.failures++;this.dropColumn(key);}
     }
+  }
+  /** Passive illustration/perception export; realm verification remains explicit evidence. */
+  readScene(options:{radius:number;below:number;above:number;eyeHeight:number;fovDegrees:number}):VoxelScene {
+    if(this.stopped||!this.socket?.connected||!this.actorMatched||!this.avatar||!this.version||!this.dimension||Date.now()-this.receivedAt>2000)
+      throw Error('A fresh pinned viewer player and loaded scene are required');
+    const {radius,below,above}=options;
+    if(![radius,below,above].every(n=>Number.isInteger(n)&&n>=0&&n<=64))throw Error('Explicit scene extents must be 0..64');
+    if((2*radius+1)**2*(below+above+1)>250000)throw Error('Scene volume exceeds 250000 cells');
+    const p=this.avatar.entity.pos;
+    this.hydrateColumns(p,Math.ceil(radius/16)+1);
+    return captureVoxelScene({source:{kind:'client-loaded-chunks',minecraftVersion:this.version,dimension:this.dimension,
+      username:this.options.expectedUsername,uuid:this.options.expectedUuid,realmVerified:this.scopeConfirmed,connectionEpoch:this.epoch},
+      feet:[p.x,p.y,p.z],yaw:this.avatar.entity.yaw,pitch:this.avatar.entity.pitch,
+      eyeHeight:options.eyeHeight,fovDegrees:options.fovDegrees,
+      bounds:{min:[Math.floor(p.x)-radius,Math.floor(p.y)-below,Math.floor(p.z)-radius],
+        max:[Math.floor(p.x)+radius,Math.floor(p.y)+above,Math.floor(p.z)+radius]},
+      blockAt:(x,y,z)=>this.chunks.get(`${Math.floor(x/16)},${Math.floor(z/16)}`)?.getBlock(new Vec3((x%16+16)%16,y,(z%16+16)%16))});
   }
   private reset(){this.avatar=null;this.actorPosition=null;this.clearColumns();this.actorMatched=false;this.scopeConfirmed=false;this.bindingAt=0;this.version=null;this.dimension=null;this.epoch=randomUUID();this.sequence=0;}
   private async refreshBinding(){
@@ -158,6 +176,7 @@ export class ViewerGameplayObserver {
   private schedule(){if(this.stopped||this.retry)return;this.reconnects++;this.retry=setTimeout(()=>{this.retry=undefined;void this.connect();},15000);}
   private async sample(){
     if(this.options.connectionRead&&Date.now()-this.bindingAt>30000)this.scopeConfirmed=false;
+    if(!this.archive)return;
     if(this.busy||this.stopped||!this.socket?.connected||this.version!=='1.21.1'||!this.dimension||!this.scopeConfirmed||!this.actorMatched||!this.avatar||Date.now()-this.receivedAt>2000)return;
     this.busy=true;
     try{

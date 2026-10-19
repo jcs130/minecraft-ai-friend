@@ -12,7 +12,7 @@ import { GameplayArchive, decodeGameplay } from '../src/learning/archive.ts';
 import { ViewerGameplayObserver } from '../src/learning/viewer-observer.ts';
 
 const scope='a'.repeat(64),uuid='12345678-1234-1234-1234-123456789abc';
-async function fixture({actualUuid=uuid,address='test.invalid:25565',initialChunk=null as string|null,viewers=0,maxSessions=2}={}) {
+async function fixture({actualUuid=uuid,address='test.invalid:25565',initialChunk=null as string|null,viewers=0,maxSessions=2,recording=true}={}) {
   const directory=await mkdtemp(join(tmpdir(),'mc-gameplay-viewer-'));
   const requests:string[]=[],inbound:string[]=[];
   const http=createServer((req,res)=>{
@@ -22,7 +22,7 @@ async function fixture({actualUuid=uuid,address='test.invalid:25565',initialChun
   });
   const io=new Server(http);
   let dimension='minecraft:overworld';
-  const entity={isSelf:true,username:'Test',uuid:actualUuid,pos:{x:.5,y:64,z:.5},yaw:0};
+  const entity={isSelf:true,username:'Test',uuid:actualUuid,pos:{x:.5,y:64,z:.5},yaw:0,pitch:0};
   const avatar=()=>({capturedAt:Date.now(),entity,velocity:{x:0,y:0,z:0},onGround:true,health:20,food:18,
     inventory:[{name:'bread',count:2,nbt:'PRIVATE_CONTENT'},{name:'bread',count:1}],sprinting:true});
   io.on('connection',socket=>{
@@ -35,7 +35,7 @@ async function fixture({actualUuid=uuid,address='test.invalid:25565',initialChun
   const url=`http://127.0.0.1:${(http.address() as any).port}`;
   const archive=new GameplayArchive({directory,scopeKey:scope});await archive.start();
   const observer=new ViewerGameplayObserver({url,expectedUsername:'Test',expectedUuid:uuid,sampleMs:100,
-    connectionRead:{url:url+'/state',expectedAddress:'test.invalid:25565'}},scope,archive);
+    connectionRead:{url:url+'/state',expectedAddress:'test.invalid:25565'}},scope,recording?archive:null);
   const tick=setInterval(()=>io.emit('avatarState',avatar()),40);
   observer.start();
   const frames=async()=>{
@@ -54,6 +54,24 @@ async function fixture({actualUuid=uuid,address='test.invalid:25565',initialChun
       await rm(directory,{recursive:true,force:true});},
   };
 }
+
+it('exports a passive scene without archive writes, controls or restart after stop',async()=>{
+  const f=await fixture({recording:false});try{
+    await expect.poll(()=>f.observer.status().actorMatched,{timeout:4000}).toBe(true);
+    const require=createRequire(import.meta.url),Chunk=require('prismarine-chunk')('1.21.1');
+    const chunk=new Chunk({minY:-64,worldHeight:384});chunk.setBlockStateId(new Vec3(0,64,0),1);
+    f.io.emit('loadChunk',{x:0,z:0,chunk:chunk.toJson()});
+    await expect.poll(()=>f.observer.status().serializedColumns,{timeout:4000}).toBe(1);
+    const scene=f.observer.readScene({radius:2,below:0,above:0,eyeHeight:1.62,fovDegrees:75});
+    expect(scene.palette.some(p=>p.name==='minecraft:stone'&&p.stateId===1)).toBe(true);
+    expect(scene.coverage.unknown).toBeGreaterThan(0);expect(f.observer.status().samples).toBe(0);
+    expect(await f.frames()).toEqual([]);expect(f.inbound).toEqual([]);
+    await f.observer.stop();
+    expect(()=>f.observer.readScene({radius:0,below:0,above:0,eyeHeight:1.62,fovDegrees:75})).toThrow('fresh pinned viewer');
+    expect(()=>f.observer.start()).toThrow('single use');
+    await new Promise(done=>setTimeout(done,150));expect(f.observer.status().connected).toBe(false);
+  }finally{await f.close();}
+});
 
 it('observes a pinned player during an idle operation journal, with no control messages or invented exact keys',async()=>{
   const f=await fixture();try{
