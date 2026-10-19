@@ -11,6 +11,7 @@ export const TOOL_HELP_TOOL = {
 } satisfies Omit<ToolDef, 'handler'>;
 
 type CatalogTool = ToolSchema & Partial<Pick<ToolDef, 'tags'>>;
+const fullParameterSchemas = new WeakMap<object, ToolSchema['parameters']>();
 const pointer = (base: string, key: string) => `${base}/${key.replaceAll('~', '~0').replaceAll('/', '~1')}`;
 const container = (value: unknown): value is Record<string, unknown> | unknown[] => value !== null && typeof value === 'object';
 
@@ -60,7 +61,7 @@ export function readToolHelp(tools: readonly CatalogTool[], args: Record<string,
     const tool = tools.find(tool => tool.name === args.name);
     if (!tool) throw new Error(`Unknown Minecraft tool ${args.name}; omit name for the actual catalogue`);
     const path = args.path as string ?? '';
-    const node = schemaAt(tool.parameters, path);
+    const node = schemaAt(fullParameterSchemas.get(tool.parameters) ?? tool.parameters, path);
     return { text: JSON.stringify({ protocol, name: tool.name, description: tool.description, tags: tool.tags ?? [], path,
       ...(args.full ? { schema: node, complete: true } : { schemaSummary: summarize(node, path) }) }) };
   } catch (error) {
@@ -93,10 +94,13 @@ function withoutParameterDescriptions(value: unknown): unknown {
 export function withToolHelp(tools: readonly ToolDef[], name = TOOL_HELP_TOOL.name, options: ToolHelpOptions = {}): ToolDef[] {
   const result = tools.filter(tool => tool.name !== name);
   result.push(createToolHelpTool(() => result, name));
-  return options.parameterDescriptions !== 'on-demand' ? result : result.map(tool => tool.name === name ? tool : {
-    ...tool,
-    description: `${tool.description}\nParameter notes: ${name} {"name":${JSON.stringify(tool.name)},"full":true}.`,
-    parameters: withoutParameterDescriptions(tool.parameters) as ToolDef['parameters'],
+  return options.parameterDescriptions !== 'on-demand' ? result : result.map(tool => {
+    if (tool.name === name) return tool;
+    const original = fullParameterSchemas.get(tool.parameters) ?? tool.parameters;
+    const parameters = withoutParameterDescriptions(original) as ToolDef['parameters'];
+    fullParameterSchemas.set(parameters, original);
+    return { ...tool,
+      description: `${tool.description}\nParameter notes: ${name} {"name":${JSON.stringify(tool.name)},"full":true}.`, parameters };
   });
 }
 
