@@ -78,6 +78,37 @@ mode = "api_key"
 
 完整上下文的驻留历史与请求装配都使用注入的模型 token 计数器；没有可用计数器时才采用保守字节上界。动态事实仍在请求末尾，未满窗口时追加历史不会因字节/token 单位混用提前挤掉可缓存前缀。窗口真正不足时仍整体移除旧交换，原始日志不删除。
 
+### 显式本地 NInfer Chat 计数器
+
+0.2.40 增加 `planner.context_counter`，由共享 HttpPlanner 自动接入现有计数端口。
+它只使用本机 CPU，不调用推理、计数 HTTP 接口、游戏或宿主 SDK。依赖可选的
+`agent-mc-autonomy[context]`（tokenizers、Jinja2）；未配置时不加载这些库。
+
+```toml
+[planner.context_counter]
+mode = "ninfer_chat"
+model = "与 planner.model 完全相同的模型 ID"
+base_url = "http://127.0.0.1:8000/v1" # 必须与 planner.base_url 相同
+tokenizer = {path = "/absolute/path/tokenizer.json", sha256 = "该文件的64位小写SHA256"}
+template = {path = "/absolute/path/chat_template.jinja", sha256 = "该文件的64位小写SHA256"}
+
+[planner.context_counter.template_parameters]
+enable_thinking = true
+preserve_thinking = true
+reasoning_effort = "low"
+```
+
+两个资源必须来自**当前实际提供服务的 NInfer 模型产物**，并核对该服务的模板默认参数；
+不能凭模型名复用另一部署的 tokenizer。参数使用真实请求值覆盖上述服务默认值。
+模型或端点不匹配会拒绝配置；资源散列不符、运行期间文件替换、可选库缺失、未知模板语义、
+媒体历史或数据中的特殊控制 token 会整轮回退保守计数，并在 `context.counter_fallback`
+显示无私有内容的原因类型。替换服务产物时也必须重新核对绑定，散列本身不是远端鉴权证明。
+
+NInfer 的工具定义规范化（含默认 `strict=false`）、JSON 参数和原生思考历史都纳入计数。
+所选模型的 128K 上限仍是 token 上限，不能当成 128K UTF-8 字节。full 模式还会在同一条
+事件内部复用完全相同的回执文本，附相对该事件对象的 `context_value_refs`；不同玩家、事件、
+尝试仍分别保留，原始归档和查询入口不变。以上优化不改变思考预算或动作判定。
+
 - 输出预算由 `autonomy.max_output_tokens` 统一提供；Chat 可选 `max_tokens` 或 `max_completion_tokens`。其他协议自动使用各自字段。
 - 上下文预算仍由共享调度器计算，包含原生重放数据；保留完整工具交换，整体裁剪。预算上限可配置到 2,097,152，默认仍为 32,768。输出配置上限 131,072，默认仍为 1,024；这些是配置范围，不承诺所选模型有此容量。
 - 四协议均支持非流式与 SSE 流式。流式仅用于接收和测量首个输出时间；全部回复完成、参数校验后才允许执行工具。截断、内容过滤、错误事件和缺少终态会拒绝整条结果，不能执行半个工具。

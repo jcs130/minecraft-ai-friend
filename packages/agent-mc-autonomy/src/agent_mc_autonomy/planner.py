@@ -85,7 +85,8 @@ class HttpPlanner:
         import httpx
 
         self.config, self.max_output_tokens, self.timeout = config, max_output_tokens, timeout
-        self.context_counter = context_counter
+        from .local_counter import configured_counter
+        self.context_counter = context_counter if context_counter is not None else configured_counter(config)
         config.validate_budget(max_output_tokens)
         config.key()  # Fail before starting a body when an explicitly named key is missing.
         self.auth = authorization or Authorization(config)

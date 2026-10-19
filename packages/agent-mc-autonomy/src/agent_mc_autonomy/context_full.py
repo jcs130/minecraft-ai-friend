@@ -17,7 +17,7 @@ from .context_counter import (
     count_input,
     counter_name,
 )
-from .context_evidence import GUIDANCE, history_sources, outcome_id
+from .context_evidence import GUIDANCE, history_sources, outcome_id, project_values
 
 
 def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output,
@@ -46,7 +46,8 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
     # The hash is a change detector, not evidence; original text/handles stay intact.
     for part in unique.values():
         part.pop("revision", None)
-    tail = {"current_goal": goal, "current_facts": list(unique.values()), "events": copy.deepcopy(list(events)), "omitted_facts": [],
+    event_copies = [project_values(event) for event in events]
+    tail = {"current_goal": goal, "current_facts": list(unique.values()), "events": event_copies, "omitted_facts": [],
             "context_omissions": {"history_groups": 0, "events": 0, "sections": []},
             "originals": "mc_protocol(protocol=agent-mc/v1,action=facts/archive); mc_original(handle=original,offset=0,limit=1000)"}
     for key, value in (("planner_notice", planner_notice), ("fast_focus", fast_focus), ("tool_failure", tool_failure),
@@ -106,7 +107,7 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
         if cost() <= context_tokens:
             break
         included.remove(index)
-        tail["events"] = [events[i] for i in included]
+        tail["events"] = [event_copies[i] for i in included]
         tail["context_omissions"]["events"] += 1
     total = cost()
     if total > context_tokens:

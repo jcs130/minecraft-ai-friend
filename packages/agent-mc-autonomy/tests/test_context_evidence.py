@@ -11,6 +11,24 @@ from agent_mc_autonomy.context import assemble, encode
 from agent_mc_autonomy.context_evidence import outcome_message, project_values
 
 
+def test_full_events_reuse_only_their_own_exact_receipt_value():
+    text = '服务器原始动作回执，完整保留。' * 250
+    events = [{'run': 'body', 'cursor': i, 'senderKey': actor, 'text': text,
+               'execution': {'id': f'task-{i}', 'terminal': True, 'evidence': {'receipt': text}}}
+              for i, actor in [(1, 'first'), (2, 'second')]]
+    original = copy.deepcopy(events)
+    messages, budget = assemble('stable', [], 'survive', {'parts': []}, events, [],
+                                context_tokens=131072, reserved_output=8192, context_mode='full')
+    shown = json.loads(messages[-1]['content'])['events']
+    assert len(shown) == 2 and budget['event_delivery']['included'] == 2
+    for actual, expected in zip(shown, original):
+        assert actual['text'] == text and actual['senderKey'] == expected['senderKey']
+        assert actual['execution']['id'] == expected['execution']['id']
+        assert actual['execution']['evidence']['receipt'] == {'context_same_as': '/text'}
+        assert actual['context_value_refs'] == {'/execution/evidence/receipt': '/text'}
+    assert events == original
+
+
 def outcome(identifier="body-1"):
     return {
         "tool": "mc_do",

@@ -147,6 +147,7 @@ class HttpPlannerConfig:
     anthropic_beta: str = ""
     reasoning_history: str = "all"
     cache_strategy: str = "none"
+    context_counter: dict = field(default_factory=dict)
 
     @classmethod
     def parse(cls, raw, *, require_model=True):
@@ -169,6 +170,9 @@ class HttpPlannerConfig:
         result.validate_cache_strategy()
         endpoint(result.base_url)
         text(result.model, "model", empty=not require_model)
+        from .local_counter import validate_configuration
+        result = replace(result, context_counter=validate_configuration(result.context_counter,
+            model=result.model, base_url=result.base_url, protocol=result.protocol))
         environment(result.api_key_env)
         for name in ("organization", "project", "anthropic_version", "anthropic_beta"):
             text(getattr(result, name), name)
