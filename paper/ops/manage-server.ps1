@@ -268,19 +268,32 @@ function PlayerRoster {
     }
     $count = [int]$Matches[1]
     $names = @()
+    $uuids = @{}
     $text = $Matches[2].Trim()
     if ($text) {
         foreach ($entry in @($text -split ',\s*')) {
-            if ($entry -notmatch '^([A-Za-z0-9_.-]{1,16}) \([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\)$') {
+            if ($entry -notmatch '^([^\s(),<>\r\n]{1,16}) \(([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})\)$') {
                 throw "Minecraft player roster is incomplete or malformed: $reply"
             }
             $names += $Matches[1]
+            $uuids[$Matches[1]] = $Matches[2].ToLowerInvariant()
         }
     }
     if ($names.Count -ne $count) {
         throw "Minecraft player roster is incomplete or malformed: $reply"
     }
-    return [pscustomobject]@{ Count = $count; Names = $names }
+    return [pscustomobject]@{ Count = $count; Names = $names; Uuids = $uuids }
+}
+
+function NumenBodyUuids {
+    # NumenOwner is serialized by NumenPlayer itself, not a name convention.
+    # Match its current UUID against the live roster; an unknown/missing reply
+    # leaves players behind the human gate. No plugin API or login bypass.
+    $reply = Rcon 'minecraft:execute as @a if data entity @s NumenOwner run minecraft:data get entity @s UUID'
+    foreach ($body in [regex]::Matches($reply, 'has the following entity data: \[I; (-?\d+), (-?\d+), (-?\d+), (-?\d+)\]')) {
+        $hex = (1..4 | ForEach-Object { ([int]$body.Groups[$_].Value).ToString('x8') }) -join ''
+        '{0}-{1}-{2}-{3}-{4}' -f $hex.Substring(0,8), $hex.Substring(8,4), $hex.Substring(12,4), $hex.Substring(16,4), $hex.Substring(20,12)
+    }
 }
 
 function HumanPlayers {
@@ -294,7 +307,10 @@ function HumanPlayers {
     # ag_NarutoPi is the Naruto Agent identified by the owner on 2026-10-14.
     $serviceNames = @('CortiLan', 'CortiEye', 'Goddess', 'fulumu', 'fulumu_eye', 'feiyu_bot', 'ag_Kirito', 'ag_NEKO', 'ag_neko_eye', 'ag_CorMy', 'ag_cormy_eye', 'ag_cormyeye', 'ag_NarutoPi', 'live', 'yubeen')
     $roster = PlayerRoster
-    @($roster.Names | Where-Object { $serviceNames -notcontains $_ })
+    $unknown = @($roster.Names | Where-Object { $serviceNames -notcontains $_ })
+    if (-not $unknown.Count) { return }
+    $bodies = @(NumenBodyUuids)
+    @($unknown | Where-Object { $bodies -notcontains $roster.Uuids[$_] })
 }
 
 function Probe {

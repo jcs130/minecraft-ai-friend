@@ -1,0 +1,15 @@
+diff --git a/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperBodyAdmission.java b/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperBodyAdmission.java
+index 7991c8d..e5d9108 100644
+--- a/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperBodyAdmission.java
++++ b/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperBodyAdmission.java
+@@ -9,2 +9,4 @@ import io.papermc.paper.adventure.PaperAdventure;
+ import net.minecraft.network.chat.Component;
++import net.minecraft.network.Connection;
++import net.minecraft.network.protocol.PacketFlow;
+ import net.minecraft.server.MinecraftServer;
+@@ -37,2 +39,5 @@ public final class PaperBodyAdmission implements IBodyAdmission {
+     public void admit(NumenPlayer body, FakeConnection connection, Consumer<Component> verdict) {
++        // 内存连接也要有原版协议处理器:placeNewPlayer 会切换它们,ProtocolLib 等插件也据此安装自己的监听。
++        // 沿用 Paper 的内存通道初始化,没有套接字;真正的出站包仍由 FakeConnection.send 交给 FakeClient。
++        Connection.configureInMemoryPipeline(connection.channel.pipeline(), PacketFlow.SERVERBOUND);
+         connection.deliverOutboundTo(body.fakeClient()::onOutbound);

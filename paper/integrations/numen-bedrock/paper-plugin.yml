@@ -1,0 +1,23 @@
+name: NumenBedrock
+version: 0.1.0
+main: org.afuhome.numen.NumenBedrock
+api-version: '1.21'
+description: Owner-scoped Bedrock forms for Numen model profiles and keys
+dependencies:
+  server:
+    floodgate:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    numen_api:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    numen:
+      load: BEFORE
+      required: true
+      join-classpath: true
+permissions:
+  numenbedrock.use:
+    description: Open personal Numen Bedrock settings
+    default: true
