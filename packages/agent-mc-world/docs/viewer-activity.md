@@ -8,4 +8,4 @@ The proxy validates/redacts before IPC, the engine validates again, and the shar
 
 The optional Cortico consumer observes the existing local console debug stream only when configured with an explicit loopback origin. The core has no dependency on Cortico, no console address, no credentials and no provider selection. Native Java consumers without this port must report it unavailable.
 
-Renderer source/protocol: `jcs130/mc-visual-console` commit `5f2576b3`. Bundles and source hashes are recorded in `provenance/viewer-activity-20261018.json`. Source, packaging and live loading are separate acceptance stages.
+Renderer source/protocol: `jcs130/mc-visual-console` commit `1cbd5574`. Bundles and source hashes are recorded in `provenance/viewer-activity-20261018.json`. Source, packaging and live loading are separate acceptance stages.

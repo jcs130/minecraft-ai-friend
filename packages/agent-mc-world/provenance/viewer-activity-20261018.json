@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/jcs130/mc-visual-console",
-  "commit": "40c5106d78c485f32b4fc67b06221f9069dcc1f6",
+  "commit": "1cbd5574660c99a6c72a55224e84f4460778fd6a",
   "transformation": "esbuild ESM host bundles; no game assets or host-specific code",
   "files": [
     {
