@@ -13,6 +13,7 @@ export type { ToolHelpOptions } from './tool-help.ts';
 export { classifyWake, WAKE_DEFAULT, WAKE_ACTIVE_GOAL, compactEvents, capModelText, condenseText, compactToolSchema, compactFacts, observationDigest, terseField, type CompactFacts,
   type WakeCategory, type WakeOptions, type WakeDecision, type CompactEvent, type CompactCatalogOptions,
   MovementProgress, type MovementProgressOptions, type MovementVerdict } from './context-budget.ts';
+export { EventCondenser, DEFAULT_CONDENSE_RULES, type CondenseRule, type CondenseAction, type EventCondenserOptions, type CondenserStats } from './event-condenser.ts';
 export { GameMemoryBook, GAME_MEMORY_TOOL, type GameMemoryScope, type GameMemorySource, type GameMemoryContext } from '../../core/game-memory.ts';
 export { GameMemoryService, GAME_MEMORY_DEFAULTS, type GameMemoryConfig } from '../../core/game-memory-service.ts';
 export { KNOWLEDGE_TOOL, readMinecraftKnowledge } from '../../core/knowledge.ts';
