@@ -338,7 +338,17 @@ def test_optional_async_provider_is_bounded_and_preserves_preemption(framework_m
     start = time.monotonic()
     run_async(controller.turn_once("survive", "body", module.model_tools(bridge.tools)))
     assert time.monotonic() - start < 2
-    assert bool(inferred) == (change in {"timeout", "error"})
+    if change == "timeout" and not inferred:
+        # The 500ms optional-provider deadline can race a native poll's
+        # scheduling. Deferral preserves native ownership instead of allowing
+        # inference before the poll is drained; it must resume next round.
+        assert controller._deferred_event_drain
+        controller.recent_context_provider = lambda _: {"available": False}
+        run_async(controller.turn_once("survive", "body", module.model_tools(bridge.tools)))
+        assert inferred == [True]
+        assert not controller._deferred_event_drain and controller._event_poll is None
+    else:
+        assert bool(inferred) == (change in {"timeout", "error"})
     assert controller.turn is None
 
 
