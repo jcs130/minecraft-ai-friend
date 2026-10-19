@@ -19,7 +19,7 @@ export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
       + 'A method option starts that existing script only when the body is free; its original run ID, SDK trace and terminal remain readable with mc_script. '
       + 'An installed program may filter/reorder method options from actionPool; its returned priority order is preserved. '
       + 'Direct steps last at most 700ms and share the combat body lease; survival, task ownership and collisions remain checked. '
-      + 'Use program:null to remove it. No imports, files, network or raw bot; 50ms worker execution budget, separate 500ms response deadline. Runtime failure revokes that program until updated; built-in choices remain a fallback. '
+      + 'Use program:null to remove it. No imports, files, network or raw bot; 50ms worker execution budget, separate 500ms response deadline. A scheduling timeout (including cold startup) allows only one retry on a new sample at least one second later; otherwise revise the program. Built-in choices remain a fallback; budgets are not raised. '
       + '{decisions:true} lists recent submitted choices; {decision:id} reads the receipt. Sending an action does not prove a successful encounter. '
       + 'Keep source and previous versions in your own methods library; compare combat reports before calling a revision an improvement. '
       + 'The World checks observed spell availability, mana, targets and announced cooldowns; '

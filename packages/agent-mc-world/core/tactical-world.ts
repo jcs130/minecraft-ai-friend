@@ -258,7 +258,7 @@ protected async prepareCombatProgram(frame: CombatDecisionFrame): Promise<Combat
     } catch (error) {
       this.combatProgramErrorHash = hash;
       this.combatProgramError = String(error);
-      const timeout = /Combat program (?:exceeded evaluation budget|worker response timed out)/.test(String(error));
+      const timeout = /Combat program (?:startup timed out|exceeded evaluation budget|worker response timed out)/.test(String(error));
       if (timeout && this.combatProgramTimeoutRetriedHash !== hash) {
         this.combatProgramTimeoutRetriedHash = hash; this.combatProgramRetryAt = Date.now() + 1000;
       } else this.combatProgramRetryAt = 0;

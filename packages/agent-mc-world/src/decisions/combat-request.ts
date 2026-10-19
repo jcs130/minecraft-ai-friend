@@ -16,11 +16,13 @@ export function combatRequest(frame: CombatDecisionFrame) {
     // UUID is checked locally against the fresh entity; the model chooses an option, not an identity.
     const { uuid: _uuid, ...primitive } = parameters as typeof parameters & { uuid?: string | null };
     const action = candidate.kind === 'method' ? { kind: 'method', method: candidate.id } : primitive;
-    criteria[`option_${index}`] = frame.policy || candidate.kind === 'method' ? intent : {
-      retreat: 'Withdraw without attacking.', engage: 'Attack the selected visible enemy.',
-      track: 'Maintain a safe distance without attacking.', step: 'Take the checked short step; continue attacking.',
-      cast: 'Cast this available ability.',
-    }[candidate.kind];
+    // The scorer must distinguish targets, directions, spells and authored methods.
+    // Replacing every same-kind intent with one sentence made distinct choices indistinguishable.
+    const binding = candidate.kind === 'engage' || candidate.kind === 'track' ? ` Target entityId:${candidate.targetId}.`
+      : candidate.kind === 'cast' ? ` Spell:${candidate.spell}.`
+        : candidate.kind === 'method' ? ` Method:${candidate.id}.`
+          : candidate.kind === 'step' ? ` Step:${candidate.id}.` : '';
+    criteria[`option_${index}`] = intent + binding;
     options[`option_${index}`] = action;
   });
   return { state: {

@@ -25,20 +25,21 @@ class StatusWorld extends QiandengjiEngine {
   runner() { return this.combatProgram; }
 }
 
-it('retries a timed-out program only once on a later sample while ordinary fallback stays available', async () => {
+it.each(['exceeded evaluation budget', 'worker response timed out', 'startup timed out'])
+('retries a program after %s only once on a later sample while ordinary fallback stays available', async reason => {
   const world = new StatusWorld({ cfg: structuredClone(MINECRAFT_DEFAULTS) });
   const program={name:'bounded-recovery',code:'return {candidates:[],instructions:"fresh"};'};
   let now=Date.now(); const clock=vi.spyOn(Date,'now').mockImplementation(()=>now);
   const run=vi.spyOn(world.runner(),'run');
   try {
     await world.update({program});
-    run.mockRejectedValueOnce(new Error('Combat program exceeded evaluation budget'));
+    run.mockRejectedValueOnce(new Error('Combat program '+reason));
     expect((await world.evaluate(program)).policy).toBeUndefined();
     expect((await world.evaluate(program)).policy).toBeUndefined();
     expect(run).toHaveBeenCalledTimes(1);
     now+=1001;
     expect((await world.evaluate(program)).policy?.name).toBe(program.name);
-    run.mockRejectedValueOnce(new Error('Combat program exceeded evaluation budget'));
+    run.mockRejectedValueOnce(new Error('Combat program '+reason));
     expect((await world.evaluate(program)).policy).toBeUndefined();
     now+=10001;
     expect((await world.evaluate(program)).policy).toBeUndefined();

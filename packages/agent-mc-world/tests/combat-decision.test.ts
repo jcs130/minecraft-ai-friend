@@ -1,7 +1,7 @@
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CombatDecisionLoop, type CombatDecisionFrame, type CombatCandidate, type CombatDecisionConfig } from '../src/decisions/combat-decision.ts';
+import { CombatDecisionLoop, assessCombatDecisionScene, type CombatDecisionFrame, type CombatCandidate, type CombatDecisionConfig } from '../src/decisions/combat-decision.ts';
 import { COMBAT_DECISION_DEFAULTS } from '../src/decisions/defaults.ts';
 import { combatReactions } from '../core/combat-reactions.ts';
 import { combatMayTakeTask, diverseCombatOptions } from '../core/combat-options.ts';
@@ -97,6 +97,76 @@ describe('independent asynchronous combat choices', () => {
         probabilities: { option_0: scores[0], option_1: scores[1], option_2: scores[2], keep: scores[3] } } } })));
       await vi.advanceTimersByTimeAsync(1);
       expect(r.reports.at(-1)?.data.outcome).toBe(expected); expect(r.sent).toHaveLength(expected === 'sent' ? 1 : 0);
+    });
+  it('uses a ranked lead by default, with explicit probability floors and live stricter gates preserved', async () => {
+    vi.useFakeTimers(); const r = rig();
+    r.f!.candidates.push({ id: 'withdraw', kind: 'retreat', intent: 'Withdraw.' },
+      { id: 'follow', kind: 'track', targetId: 3, uuid: 'target', minDistance: 5, maxDistance: 8, leaseMs: 4000, intent: 'Observe at distance.' });
+    const choose = () => r.resolve(new Response(JSON.stringify({ answers: { tactic: { choice: 'option_0', confidence: .45,
+      probabilities: { option_0: .45, option_1: .3, option_2: .2, keep: .05 } } } })));
+    r.loop.tick(); choose(); await vi.advanceTimersByTimeAsync(1);
+    expect(r.sent).toHaveLength(1);
+    expect(r.reports.at(-1)?.data).toMatchObject({ application: { attempted: true, dispatched: true, keptCurrent: false },
+      validation: { ranking: { accepted: true, minProbability: 0, minMargin: .1 } } });
+    await vi.advanceTimersByTimeAsync(r.cfg.minIntervalMs); r.cfg.minConfidence = .75;
+    r.loop.tick(); choose(); await vi.advanceTimersByTimeAsync(1);
+    expect(r.sent).toHaveLength(1);
+    expect(r.reports.at(-1)?.data).toMatchObject({ outcome: 'uncertain', validation: { ranking: { reason: 'probability-floor' } } });
+    await vi.advanceTimersByTimeAsync(r.cfg.minIntervalMs); r.cfg.minConfidence = 0;
+    r.loop.tick(); r.cfg.minMargin = .3; choose(); await vi.advanceTimersByTimeAsync(1);
+    expect(r.sent).toHaveLength(1);
+    expect(r.reports.at(-1)?.data).toMatchObject({ outcome: 'uncertain', validation: { ranking: { minMargin: .3 } } });
+    r.loop.stop();
+  });
+  it('abstains on tied or near-tied ranks instead of manufacturing a useful choice', async () => {
+    vi.useFakeTimers(); const r = rig();
+    for (const p of [.5, .52]) {
+      r.loop.tick(); r.resolve(response('option_0', p)); await vi.advanceTimersByTimeAsync(1);
+      expect(r.sent).toHaveLength(0); expect(r.reports.at(-1)?.data).toMatchObject({ outcome: 'uncertain',
+        application: { attempted: false, dispatched: false }, validation: { ranking: { reason: 'ambiguous-ranking' } } });
+      await vi.advanceTimersByTimeAsync(r.cfg.minIntervalMs);
+    }
+    r.loop.stop();
+  });
+  it('tolerates visibility changes of an unknown bystander without treating it as an ally', async () => {
+    vi.useFakeTimers(); const r = rig();
+    r.f!.battlefield.actors.push({ ...r.f!.battlefield.actors[1], entityId: 7, uuid: 'unknown', relation: 'unknown', relationSource: 'unknown' });
+    r.loop.tick(); r.f!.battlefield.actors[2].lineOfSight = false;
+    r.resolve(); await vi.advanceTimersByTimeAsync(1);
+    expect(r.sent).toHaveLength(1); expect(r.f!.battlefield.actors[2].relation).toBe('unknown');
+    expect(r.reports.at(-1)?.data).toMatchObject({ outcome: 'sent', validation: { toleratedSceneChanges: ['non-target-unknown-visibility'] } });
+    r.loop.stop();
+  });
+  it.each(['departed', 'died', 'hidden'] as const)('refreshes a chosen target when an unrelated threat %s', async change => {
+    vi.useFakeTimers(); const r = rig();
+    r.f!.battlefield.actors.push({ ...r.f!.battlefield.actors[0], health: {...r.f!.battlefield.actors[0].health}, entityId: 7, uuid: 'other-threat', targetEntityId: null });
+    r.loop.tick();
+    if (change === 'departed') r.f!.battlefield.actors.pop();
+    if (change === 'died') r.f!.battlefield.actors[2].health.current = 0;
+    if (change === 'hidden') r.f!.battlefield.actors[2].lineOfSight = false;
+    r.resolve(); await vi.advanceTimersByTimeAsync(1);
+    expect(r.sent).toHaveLength(1);expect(r.reports.at(-1)?.data.outcome).toBe('sent');r.loop.stop();
+  });
+  it('retains strict actor dependencies for opaque authored methods', () => {
+    const before=frame();before.battlefield.actors.push({...before.battlefield.actors[1],entityId:7,uuid:'unknown',relation:'unknown'});
+    const after=structuredClone(before);after.battlefield.actors[2].lineOfSight=false;
+    // No method executes here; comparison must not assume what a user program reads.
+    expect(assessCombatDecisionScene(before,after,{kind:'method'} as CombatCandidate).changed).toContain('actors');
+  });
+  it.each(['unknown-attacks', 'ally-hidden', 'threat-visible', 'target-identity', 'relation-changed'] as const)
+    ('keeps critical dependency checks for %s', async change => {
+      vi.useFakeTimers(); const r = rig();
+      r.f!.battlefield.actors.push({ ...r.f!.battlefield.actors[0], entityId: 7, uuid: 'other',
+        relation: change === 'unknown-attacks' ? 'unknown' : 'hostile', targetEntityId: null,
+        lineOfSight: change !== 'threat-visible' });
+      r.loop.tick();
+      if (change === 'unknown-attacks') r.f!.battlefield.actors[2].targetEntityId = 1;
+      if (change === 'ally-hidden') r.f!.battlefield.actors[1].lineOfSight = false;
+      if (change === 'threat-visible') r.f!.battlefield.actors[2].lineOfSight = true;
+      if (change === 'target-identity') r.f!.battlefield.actors[0].uuid = 'replacement';
+      if (change === 'relation-changed') r.f!.battlefield.actors[2].relation = 'unknown';
+      r.resolve();await vi.advanceTimersByTimeAsync(1);
+      expect(r.sent).toHaveLength(0);expect(r.reports.at(-1)?.data.outcome).toBe('scene-changed');r.loop.stop();
     });
   it('sends game health/type facts and applies a choice while the main-model request is still pending', async () => {
     vi.useFakeTimers();
@@ -247,12 +317,14 @@ describe('independent asynchronous combat choices', () => {
     r.f!.battlefield.self.position[0] += 2;
     r.resolve(); await vi.advanceTimersByTimeAsync(1);
     expect(r.reports.at(-1)?.data.outcome).toBe('moved'); expect(r.sent).toHaveLength(0);
+    expect(r.reports.at(-1)?.data.application).toEqual({attempted:false,dispatched:false,keptCurrent:false,reason:'origin-moved'});
   });
 
   it('preserves keep and falls back on low probability using selected-option probability', async () => {
-    vi.useFakeTimers(); const r = rig(); r.loop.tick(); r.resolve(response('keep'));
+    vi.useFakeTimers(); const r = rig(); r.cfg.minConfidence = .75; r.loop.tick(); r.resolve(response('keep'));
     await vi.advanceTimersByTimeAsync(1);
     expect(r.reports.at(-1)?.data.outcome).toBe('keep'); expect(r.fallbacks).toBe(0);
+    expect(r.reports.at(-1)?.data.application).toMatchObject({attempted:false,dispatched:false,keptCurrent:true});
     await vi.advanceTimersByTimeAsync(r.cfg.minIntervalMs); r.loop.tick(); r.resolve(response('option_0', .6));
     await vi.advanceTimersByTimeAsync(1);
     expect(r.reports.at(-1)?.data.outcome).toBe('uncertain'); expect(r.fallbacks).toBe(1); expect(r.sent).toHaveLength(0);

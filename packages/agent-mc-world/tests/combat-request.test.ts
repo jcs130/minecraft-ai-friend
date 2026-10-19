@@ -3,6 +3,27 @@ import { combatRequest } from '../src/decisions/combat-request.ts';
 import type { CombatDecisionFrame } from '../core/combat-decision-types.ts';
 
 describe('compact combat inference evidence', () => {
+  it('preserves distinct candidate intent for two targets and two short-step directions', () => {
+    const f = { battlefield: { sampledAtMs: 100, connectionGeneration: 1, dimension: 'overworld',
+      self: { entityId: 1, health: { current: 20, max: 20, source: 'native', updatedAtMs: 100 }, food: 20,
+        position: [0,64,0], scoreboardTeam: null }, action: { fighting: true, emergency: false, taskId: null, step: null },
+      actors: [], omitted: 0, server: null }, tacticRevision: 1, mana: null, skills: [], omittedCandidates: 0,
+      candidates: [
+        { id:'a',kind:'engage',targetId:2,uuid:'a',intent:'Attack the ranged skeleton at 6 blocks.' },
+        { id:'b',kind:'engage',targetId:3,uuid:'b',intent:'Attack the zombie at 2 blocks.' },
+        { id:'c',kind:'step',destination:[0,64,1],intent:'Step sideways while attacking.' },
+        { id:'d',kind:'step',destination:[0,64,-1],intent:'Step away while attacking.' },
+      ] } as CombatDecisionFrame;
+    const input = combatRequest(f);
+    f.candidates.forEach((candidate,index)=>expect(input.questions.tactic.criteria[`option_${index}`]).toContain(candidate.intent));
+    expect(input.questions.tactic.criteria.option_0).toContain('entityId:2');
+    expect(input.questions.tactic.criteria.option_1).toContain('entityId:3');
+    f.candidates[1].intent=f.candidates[0].intent;
+    const sameWords=combatRequest(f).questions.tactic.criteria;
+    expect(sameWords.option_0).not.toEqual(sameWords.option_1);
+    expect(input.state.options.option_0).toMatchObject({targetId:2});
+    expect(input.state.options.option_1).toMatchObject({targetId:3});
+  });
   it('preserves unknown sight/health, relation provenance, controller and option constraints without method source', () => {
     const frame: CombatDecisionFrame = { battlefield: { sampledAtMs: 5000, connectionGeneration: 4, dimension: 'overworld',
       self: { entityId: 1, health: { current: 6, max: null, source: 'native', updatedAtMs: 4990 }, food: 8,
