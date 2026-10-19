@@ -1,5 +1,11 @@
 # Agent MC World
 
+`0.5.7-rc.50` fixes the shared skill-field schema union: an enum from one
+skill no longer restricts another skill's free-text field. In particular,
+`organize.target=inventory/open` cannot reject `find.target=oak_log` or an
+attack/entity target. The native per-skill parser still enforces each skill's
+own enum, quantity and dependency rules before dispatch.
+
 `0.5.7-rc.49` protects player/private chat, unknown chat, task and goal evidence
 from the event condenser's built-in tutorial text filters. Full journals and
 explicit caller rules are unchanged. These helpers remain opt-in. Movement

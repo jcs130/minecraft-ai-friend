@@ -1969,7 +1969,8 @@ function fieldSchema(f: FieldSpec): Record<string, unknown> {
 }
 
 /**
- * 同名字段跨技能的合并:区间取并集,枚举取并集,其余(type/items)本就一致,
+ * 同名字段跨技能的合并:区间取并集,枚举取并集;任一技能未限制则保持未限制。
+ * 其余(type/items)本就一致,
  * 留先出场的那份。放宽到并集不丢约束——真校验在 parseSteps,schema 只管别把
  * 合法值挡在门外。
  */
@@ -1980,10 +1981,17 @@ function widenField(
   const out = { ...into };
   for (const [k, v] of Object.entries(add)) {
     const prev = out[k];
+    if (['minimum', 'maximum', 'minItems', 'maxItems', 'enum'].includes(k)) continue;
     if (prev === undefined) out[k] = v;
-    else if (k === 'minimum' || k === 'minItems') out[k] = Math.min(prev as number, v as number);
-    else if (k === 'maximum' || k === 'maxItems') out[k] = Math.max(prev as number, v as number);
-    else if (k === 'enum') out[k] = [...new Set([...(prev as string[]), ...(v as string[])])];
+  }
+  for (const k of ['minimum', 'minItems', 'maximum', 'maxItems', 'enum']) {
+    const prev = into[k], next = add[k];
+    // Missing means unrestricted, not that a later skill may add a restriction.
+    // In particular organize.target must not restrict find/attack/use targets.
+    if (prev === undefined || next === undefined) delete out[k];
+    else if (k === 'minimum' || k === 'minItems') out[k] = Math.min(prev as number, next as number);
+    else if (k === 'maximum' || k === 'maxItems') out[k] = Math.max(prev as number, next as number);
+    else out[k] = [...new Set([...(prev as unknown[]), ...(next as unknown[])])];
   }
   return out;
 }
@@ -2011,7 +2019,7 @@ function stepSchemaOf(skills: readonly SkillSpec[]): Record<string, unknown> {
     for (const f of s.fields) {
       const prev = pool.get(f.key);
       pool.set(f.key, {
-        schema: widenField(prev?.schema ?? {}, fieldSchema(f)),
+        schema: prev ? widenField(prev.schema, fieldSchema(f)) : fieldSchema(f),
         uses: [...(prev?.uses ?? []), [s.name, f]],
       });
     }
