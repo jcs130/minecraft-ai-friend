@@ -80,6 +80,10 @@ export interface CompactCatalogOptions {
   parameterChars?: number;
   /** Object schemas with more properties than this collapse to required/enum discriminators. Default 24. */
   collapseProperties?: number;
+  /** Objects nested at least nestedLevel property levels deep with more properties than this collapse too. Default 8. */
+  nestedCollapseProperties?: number;
+  /** Property depth at which nestedCollapseProperties applies (add.plan[].verify is level 3). Default 3. */
+  nestedLevel?: number;
   /** Description kept on a node whose items collapsed (e.g. a skill signature list). Default 3000. */
   signatureChars?: number;
   /** Tool that serves the exact schema and full text. */
@@ -98,18 +102,29 @@ function collapse(schema: Schema): Schema {
     [key, slim(value as Schema, 0, {})])), ...(required.length ? { required } : {}), additionalProperties: true };
 }
 
-function slim(schema: unknown, depth: number, o: Required<Omit<CompactCatalogOptions, 'helpTool'>> | Record<string, never>): unknown {
-  if (Array.isArray(schema)) return schema.map(item => slim(item, depth, o));
+/** Deep wide object (e.g. a verify condition union): keep type, required/discriminator fields, and the same for items. */
+function collapseNested(schema: Schema): Schema {
+  const out = collapse(schema);
+  if (schema.type !== undefined) out.type = schema.type;
+  if (isObject(schema.items)) out.items = isObject(schema.items.properties) ? collapse(schema.items) : slim(schema.items, 0, {});
+  return out;
+}
+
+type SlimOptions = Required<Omit<CompactCatalogOptions, 'helpTool'>> | Record<string, never>;
+function slim(schema: unknown, depth: number, o: SlimOptions, level = 0): unknown {
+  if (Array.isArray(schema)) return schema.map(item => slim(item, depth, o, level));
   if (!isObject(schema)) return schema;
+  if ('nestedLevel' in o && level >= o.nestedLevel && isObject(schema.properties)
+    && Object.keys(schema.properties).length > o.nestedCollapseProperties) return collapseNested(schema);
   const out: Schema = {};
   for (const [key, value] of Object.entries(schema)) {
     if (key === 'description' || key === 'title' || key === 'examples') continue;
     if (['const', 'enum', 'default'].includes(key)) { out[key] = value; continue; }
     if (key === 'properties' && isObject(value)) {
-      out.properties = Object.fromEntries(Object.entries(value).map(([name, child]) => [name, slim(child, depth + 1, o)]));
+      out.properties = Object.fromEntries(Object.entries(value).map(([name, child]) => [name, slim(child, depth + 1, o, level + 1)]));
       continue;
     }
-    out[key] = slim(value, depth + 1, o);
+    out[key] = slim(value, depth + 1, o, level);
   }
   if ('collapseProperties' in o && isObject(schema.items) && isObject(schema.items.properties)
     && Object.keys(schema.items.properties).length > o.collapseProperties) {
@@ -128,9 +143,89 @@ function slim(schema: unknown, depth: number, o: Required<Omit<CompactCatalogOpt
  */
 export function compactToolSchema<T extends { name: string; description?: string }>(tool: T, schema: unknown, options: CompactCatalogOptions = {}): { description: string; schema: unknown } {
   const o = { descriptionChars: options.descriptionChars ?? 300, parameterChars: options.parameterChars ?? 80,
-    collapseProperties: options.collapseProperties ?? 24, signatureChars: options.signatureChars ?? 3000 };
+    collapseProperties: options.collapseProperties ?? 24,
+    nestedCollapseProperties: options.nestedCollapseProperties ?? 8, nestedLevel: options.nestedLevel ?? 3, signatureChars: options.signatureChars ?? 3000 };
   const full = tool.description ?? '';
   const short = condenseText(full, o.descriptionChars);
   const help = options.helpTool && tool.name !== options.helpTool ? `（完整说明与参数：${options.helpTool} {"name":"${tool.name}"}）` : '';
   return { description: short === full ? full : short + help, schema: slim(schema, 0, o) };
+}
+
+export interface MovementProgressOptions {
+  /** Consecutive movement-only calls before a verdict. Default 6. */
+  window?: number;
+  /** Points of the last `window` calls all within this distance of their centroid count as one area. Default 24. */
+  radius?: number;
+  /** Grid cell size used to detect newly visited ground. Default 16. */
+  cellSize?: number;
+  /** Skills that only move or look. Anything else (except chat) is real work and resets the streak. */
+  movementSkills?: readonly string[];
+}
+
+export interface MovementVerdict {
+  /** Consecutive movement-only calls. */
+  streak: number;
+  /** Max distance of recent targets from their centroid, in blocks. */
+  spread: number;
+  /** Grid cells first visited within the last `window` movement calls. */
+  newCells: number;
+  /** Many movement-only calls with no new ground or within one small area. */
+  repetitive: boolean;
+}
+
+const MOVEMENT_SKILLS = ['goto', 'look', 'observe', 'walk', 'wander', 'face'];
+const point = (value: unknown): [number, number, number] | undefined =>
+  Array.isArray(value) && value.length === 3 && value.every(n => typeof n === 'number') ? value as [number, number, number] : undefined;
+
+/**
+ * Host-side detector for wandering without progress: e.g. dozens of goto/look calls inside one plaza.
+ * Feed it each action's steps; hosts decide how to nudge or close the goal.
+ */
+export class MovementProgress {
+  private readonly window: number;
+  private readonly radius: number;
+  private readonly cellSize: number;
+  private readonly movement: Set<string>;
+  private readonly cells = new Set<string>();
+  private recent: { points: [number, number, number][]; newCells: number }[] = [];
+  streak = 0;
+
+  constructor(options: MovementProgressOptions = {}) {
+    this.window = options.window ?? 6;
+    this.radius = options.radius ?? 24;
+    this.cellSize = options.cellSize ?? 16;
+    this.movement = new Set(options.movementSkills ?? MOVEMENT_SKILLS);
+  }
+
+  reset(): void { this.streak = 0; this.recent = []; this.cells.clear(); }
+
+  record(steps: readonly unknown[]): MovementVerdict {
+    const skills = steps.map(step => isObject(step) && typeof step.skill === 'string' ? step.skill : '');
+    const work = skills.filter(skill => skill !== 'chat');
+    if (!work.length || work.some(skill => !this.movement.has(skill))) {
+      if (work.length) { this.streak = 0; this.recent = []; }
+      return this.verdict();
+    }
+    const points = steps.map(step => isObject(step) ? point(step.at) : undefined).filter((p): p is [number, number, number] => !!p);
+    let newCells = 0;
+    for (const [x, , z] of points) {
+      const key = `${Math.floor(x / this.cellSize)},${Math.floor(z / this.cellSize)}`;
+      if (!this.cells.has(key)) { this.cells.add(key); newCells++; }
+    }
+    this.streak++;
+    this.recent = [...this.recent, { points, newCells }].slice(-this.window);
+    return this.verdict();
+  }
+
+  private verdict(): MovementVerdict {
+    const points = this.recent.flatMap(entry => entry.points);
+    const newCells = this.recent.reduce((sum, entry) => sum + entry.newCells, 0);
+    let spread = 0;
+    if (points.length) {
+      const cx = points.reduce((s, p) => s + p[0], 0) / points.length, cz = points.reduce((s, p) => s + p[2], 0) / points.length;
+      spread = Math.round(Math.max(...points.map(p => Math.hypot(p[0] - cx, p[2] - cz))));
+    }
+    const full = this.streak >= this.window;
+    return { streak: this.streak, spread, newCells, repetitive: full && (spread <= this.radius || newCells === 0) };
+  }
 }

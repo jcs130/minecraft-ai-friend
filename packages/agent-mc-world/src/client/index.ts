@@ -11,7 +11,8 @@ export { AgentJournal, EventCursorError } from './journal.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './tool-help.ts';
 export type { ToolHelpOptions } from './tool-help.ts';
 export { classifyWake, WAKE_DEFAULT, WAKE_ACTIVE_GOAL, compactEvents, capModelText, condenseText, compactToolSchema,
-  type WakeCategory, type WakeOptions, type WakeDecision, type CompactEvent, type CompactCatalogOptions } from './context-budget.ts';
+  type WakeCategory, type WakeOptions, type WakeDecision, type CompactEvent, type CompactCatalogOptions,
+  MovementProgress, type MovementProgressOptions, type MovementVerdict } from './context-budget.ts';
 export { GameMemoryBook, GAME_MEMORY_TOOL, type GameMemoryScope, type GameMemorySource, type GameMemoryContext } from '../../core/game-memory.ts';
 export { GameMemoryService, GAME_MEMORY_DEFAULTS, type GameMemoryConfig } from '../../core/game-memory-service.ts';
 export { KNOWLEDGE_TOOL, readMinecraftKnowledge } from '../../core/knowledge.ts';

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger, classifyWake, compactEvents, capModelText,
-  compactToolSchema, WAKE_ACTIVE_GOAL } from '../src/client/index.ts';
+  compactToolSchema, WAKE_ACTIVE_GOAL, MovementProgress } from '../src/client/index.ts';
 import { createMinecraftMcpServer } from '../src/mcp/server.ts';
 import { SKILL_STEP_SCHEMA, SKILL_SIGNATURE_DOC } from '../core/skills.ts';
 
@@ -85,4 +85,34 @@ it('compact MCP catalogue advertises small schemas but validates and documents t
   } finally {
     await full.close(); await compact.close(); await runtime.disconnect(); await rm(dir, { recursive: true, force: true });
   }
+});
+
+describe('MovementProgress', () => {
+  const goto = (x: number, z: number) => [{ skill: 'goto', at: [x, 67, z] }];
+  it('flags many movement-only calls inside one small area', () => {
+    const progress = new MovementProgress();
+    let verdict;
+    for (let i = 0; i < 6; i++) verdict = progress.record(goto(-536 + (i % 3) * 6, -450 + (i % 2) * 6));
+    expect(verdict).toMatchObject({ streak: 6, repetitive: true });
+    expect(verdict!.spread).toBeLessThanOrEqual(24);
+  });
+  it('does not flag a long straight walk to new ground, and real work or chat-only calls behave', () => {
+    const progress = new MovementProgress();
+    let verdict;
+    for (let i = 0; i < 8; i++) verdict = progress.record(goto(i * 40, 0));
+    expect(verdict!.repetitive).toBe(false);
+    expect(progress.record([{ skill: 'chat', text: 'hi' }]).streak).toBe(8);
+    expect(progress.record([{ skill: 'mine', at: [0, 60, 0] }]).streak).toBe(0);
+  });
+});
+
+it('compact catalogue collapses deep wide unions such as goal verify conditions', () => {
+  const condition = { type: ['object', 'array', 'null'], required: ['source'], properties: {
+    source: { type: 'string', enum: ['block', 'inventory'] }, ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`k${i}`, { type: 'string', description: 'long note' }])) } };
+  const schema = { type: 'object', properties: { add: { type: 'object', properties: { text: { type: 'string' },
+    plan: { type: 'array', items: { type: 'object', properties: { do: { type: 'string' }, verify: { ...condition, items: { type: 'object', required: ['source'], properties: condition.properties } } } } } } } } };
+  const { schema: slim } = compactToolSchema({ name: 'mc_goal' }, schema);
+  const verify = (slim as any).properties.add.properties.plan.items.properties.verify;
+  expect(verify).toEqual({ type: ['object', 'array', 'null'], properties: { source: { type: 'string', enum: ['block', 'inventory'] } }, required: ['source'], additionalProperties: true,
+    items: { type: 'object', properties: { source: { type: 'string', enum: ['block', 'inventory'] } }, required: ['source'], additionalProperties: true } });
 });
