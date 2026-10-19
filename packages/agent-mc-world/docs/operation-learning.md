@@ -108,8 +108,11 @@ the fast model chooses. Its order is retained. Methods are offered only with a f
 combat controller; casts, withdrawal, target changes and short steps reuse that controller during an
 encounter. A selected hostile target remains selected while the same visible entity is available.
 Fresh connection, task, tactic version, identity and physical eligibility checks still precede dispatch.
-The decision config's `minConfidence` is applied to the chosen option's probability; a service's
-above-chance confidence is retained separately in the receipt and does not create a second threshold.
+An explicit decision config `minConfidence` applies to the chosen option's probability; the default
+uses a 0.1 lead over the runner-up rather than an implicit 0.75 probability floor for every choice count.
+A service's above-chance confidence is retained separately and does not create a second threshold.
+Application metadata separates keeping the existing controller, attempted dispatch and accepted dispatch.
+See [combat decision adoption](combat-decision-adoption.md) for freshness checks and evaluation boundaries.
 The native reflex port does not yet resolve this saved-method catalog; its explicit `mc_script` remains
 separate, and unsupported registration returns an error.
 

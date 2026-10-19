@@ -3,6 +3,7 @@ import { parseTypedChoice } from '../../core/support/typed-decision.ts';
 import { randomUUID } from 'node:crypto';
 import { combatRequest } from './combat-request.ts';
 import type { CombatExecutionPolicy, CombatCandidate, CombatDecisionFrame } from '../../core/combat-decision-types.ts';
+import type { TypedChoice } from '../../core/support/typed-decision.ts';
 export type { CombatExecutionPolicy, CombatCandidate, CombatDecisionFrame } from '../../core/combat-decision-types.ts';
 export interface CombatDecisionConfig extends CombatExecutionPolicy {
   connection?: 'auto' | 'host' | 'endpoint'; decisionProvider?: string;
@@ -58,15 +59,69 @@ function sceneFacts(frame: CombatDecisionFrame, selected: CombatCandidate | null
       e.lineOfSight, e.targetEntityId]) };
 }
 
-function sceneChanges(before: CombatDecisionFrame, after: CombatDecisionFrame, selected: CombatCandidate | null): string[] {
+/** Pure dependency comparison. It starts no inference and does not authorize an action. */
+export function assessCombatDecisionScene(before: CombatDecisionFrame, after: CombatDecisionFrame, selected: CombatCandidate | null): { changed: string[]; tolerated: string[] } {
   const prior = sceneFacts(before, selected), current = sceneFacts(after, selected);
   const changed: string[] = (Object.keys(prior) as Array<keyof typeof prior>)
-    .filter(key => JSON.stringify(prior[key]) !== JSON.stringify(current[key]));
+    .filter(key => key !== 'actors' && JSON.stringify(prior[key]) !== JSON.stringify(current[key]));
+  const tolerated: string[] = [];
+  const targetId = selected?.kind === 'engage' || selected?.kind === 'track' ? selected.targetId
+    : selected?.kind === 'retreat' ? null : before.battlefield.action.targetEntityId;
+  const protectedIds = new Set([before.battlefield.self.entityId,
+    ...before.battlefield.actors.filter(a => a.relation === 'ally').map(a => a.entityId)]);
+  const key = (a: (typeof prior.actors)[number]) => JSON.stringify(a.slice(0, 2));
+  const afterActors = new Map(current.actors.map(a => [key(a), a]));
+  let actorsChanged = false;
+  // Ambiguous identities cannot be relaxed by matching array positions or names.
+  if (selected?.kind === 'method' || prior.actors.some(a => a[0] === null) || current.actors.some(a => a[0] === null)) {
+    actorsChanged = JSON.stringify(prior.actors) !== JSON.stringify(current.actors);
+  } else {
+    for (const a of prior.actors) {
+      const b = afterActors.get(key(a));
+      afterActors.delete(key(a));
+      if (JSON.stringify(a) === JSON.stringify(b)) continue;
+      const targeted = a[0] === targetId, ally = a[3] === 'ally';
+      const attacksParty = typeof a[6] === 'number' && protectedIds.has(a[6])
+        || b !== undefined && typeof b[6] === 'number' && protectedIds.has(b[6]);
+      if (!b) {
+        if (!targeted && a[3] === 'hostile' && !attacksParty) tolerated.push('non-target-threat-departed');
+        else actorsChanged = true;
+        continue;
+      }
+      const identityAndRelation = JSON.stringify(a.slice(0, 4)) === JSON.stringify(b.slice(0, 4));
+      const sameTarget = a[6] === b[6];
+      if (!targeted && !ally && !attacksParty && identityAndRelation && sameTarget) {
+        if (a[3] === 'unknown' && a[4] === b[4]) {
+          // Visibility of an unclassified bystander is not an attack permission or an ally fact.
+          tolerated.push('non-target-unknown-visibility'); continue;
+        }
+        if (a[3] === 'hostile' && (b[4] === 'dead' || a[4] === b[4] && a[5] === true && b[5] === false)) {
+          tolerated.push('non-target-threat-reduced'); continue;
+        }
+      }
+      actorsChanged = true;
+    }
+    // New relevant actors, newly visible threats, new attacks and relation changes still recheck.
+    if (afterActors.size) actorsChanged = true;
+  }
+  if (actorsChanged) changed.push('actors');
   // Only a cast consumes mana. Eligibility (including rule reserves) is recomputed by the engine.
   if (selected?.kind === 'cast' && before.mana !== after.mana
     && (after.mana === null || after.mana < selected.manaCost))
     changed.push('mana');
-  return changed;
+  return { changed, tolerated: [...new Set(tolerated)] };
+}
+
+/** Compare ranked alternatives without interpreting their softmax scores as win probabilities. */
+export function assessCombatChoice(answer: TypedChoice<string>, config: Pick<CombatDecisionConfig, 'minConfidence' | 'minMargin'>,
+  live = config) {
+  const runnerUp = Math.max(0, ...Object.entries(answer.probabilities).filter(([key]) => key !== answer.choice).map(([, p]) => p));
+  const margin = answer.choiceProbability - runnerUp;
+  const minProbability = Math.max(config.minConfidence, live.minConfidence);
+  const minMargin = Math.max(config.minMargin ?? 0, live.minMargin ?? 0);
+  const reason = answer.choiceProbability < minProbability ? 'probability-floor'
+    : margin <= 0.000001 || margin + 0.000001 < minMargin ? 'ambiguous-ranking' : 'eligible';
+  return { accepted: reason === 'eligible', reason, probability: answer.choiceProbability, runnerUp, margin, minProbability, minMargin };
 }
 
 export class CombatDecisionLoop {
@@ -133,6 +188,7 @@ export class CombatDecisionLoop {
     Object.assign(entry, scope, { frame: publicFrame });
     this.options.report('requested', { ...scope, mode: cfg.mode, frame: publicFrame,
       inputFormat: 'combat-compact-v2', requestBytes: Buffer.byteLength(body) });
+    let dispatchAttempted = false;
     try {
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, cfg.timeoutMs);
@@ -156,9 +212,9 @@ export class CombatDecisionLoop {
       if (this.stopped) return;
       const answer = parseTypedChoice(payload.answers?.tactic, Object.keys(criteria));
       if (!answer) throw new Error('invalid-response');
-      const margin = answer.choiceProbability - Math.max(0, ...Object.entries(answer.probabilities)
-        .filter(([key]) => key !== answer.choice).map(([, value]) => value));
       const liveCfg = this.options.config();
+      const ranking = assessCombatChoice(answer, cfg, liveCfg);
+      const margin = ranking.margin;
       let current = this.options.refresh ? await this.options.refresh() : this.options.sample();
       if (current?.program && this.options.prepare) current = await this.options.prepare(current);
       if (this.stopped) return;
@@ -171,7 +227,8 @@ export class CombatDecisionLoop {
         && (selected.kind !== 'method' || c.kind === 'method' && c.procedure.handle === selected.procedure.handle
           && c.procedure.revision === selected.procedure.revision && JSON.stringify(c.params) === JSON.stringify(selected.params)
           && c.durationMs === selected.durationMs));
-      const changed = current ? sceneChanges(frame, current, selected ?? null) : ['unavailable'];
+      const scene = current ? assessCombatDecisionScene(frame, current, selected ?? null) : { changed: ['unavailable'], tolerated: [] };
+      const changed = scene.changed;
       let outcome: string;
       if (!liveCfg.enabled || liveCfg.mode !== cfg.mode || liveCfg.endpoint !== cfg.endpoint
         || liveCfg.connection !== cfg.connection || liveCfg.decisionProvider !== cfg.decisionProvider
@@ -180,19 +237,21 @@ export class CombatDecisionLoop {
       else if (!current || changed.length) outcome = 'scene-changed';
       else if ((!selected || selected.kind === 'step' || selected.kind === 'cast')
         && Math.hypot(...current.battlefield.self.position.map((v, i) => v - frame.battlefield.self.position[i])) > 1.5) outcome = 'moved';
-      else if (answer.choiceProbability < Math.max(cfg.minConfidence, liveCfg.minConfidence)
-        || margin < Math.max(cfg.minMargin ?? 0, liveCfg.minMargin ?? 0)) outcome = 'uncertain';
+      else if (!ranking.accepted) outcome = 'uncertain';
       else if (!selected) outcome = 'keep';
       else if (!executable) outcome = 'no-longer-executable';
       else if (cfg.mode === 'shadow') outcome = 'shadow';
       // Movement prose includes measured distance; apply the freshly checked candidate.
-      else outcome = await this.options.apply(executable, current, scope) ? 'sent' : 'rejected';
+      else { dispatchAttempted = true; outcome = await this.options.apply(executable, current, scope) ? 'sent' : 'rejected'; }
       if (this.stopped) return;
       if (outcome === 'uncertain' && cfg.mode === 'act') this.options.fallback?.();
       const result = { ...scope, elapsedMs, choice: answer.choice,
         probability: answer.choiceProbability, confidence: answer.confidence, probabilities: answer.probabilities, margin, outcome,
         sceneChanges: changed,
         modelMs: payload.latency_ms ?? null, usage: payload.usage ?? null,
+        validation: { ranking, toleratedSceneChanges: scene.tolerated, selectedExecutable: !!executable },
+        application: { attempted: dispatchAttempted,
+          dispatched: outcome === 'sent', keptCurrent: outcome === 'keep', reason: outcome === 'moved' ? 'origin-moved' : outcome },
         candidate: (outcome === 'sent' ? executable : selected) ?? null };
       Object.assign(entry, result);
       this.options.report('result', result);
@@ -225,6 +284,7 @@ export class CombatDecisionLoop {
         && live.connection === cfg.connection && live.decisionProvider === cfg.decisionProvider)
         this.options.fallback?.();
       const failure = { ...scope, outcome: 'error', elapsedMs: now() - startedAtMs,
+        application: { attempted: dispatchAttempted, dispatched: dispatchAttempted ? null : false, keptCurrent: false },
         reason: controller.signal.aborted ? 'timeout' : error instanceof Error ? error.message : 'transport' };
       Object.assign(entry, failure); this.options.report('error', failure);
     } finally { if (timer !== undefined) clearTimeout(timer); }
