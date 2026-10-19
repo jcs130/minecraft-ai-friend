@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.50 — 2026-10-20
+
+- Keep native body failures and observation-attempt counts after a completed
+  camera-only look/inspection task. Turning the view does not establish recovery
+  of a blocked movement, item operation or survival goal.
+- Execute requested camera turns through the native queue instead of reusing
+  cached look results; mixed batches with actual body work retain their action
+  semantics. Raw receipts and unknown-operation barriers remain preserved.
+
 ## 0.2.48 — 2026-10-20
 
 - Pin the independently built core candidate containing the upstream context

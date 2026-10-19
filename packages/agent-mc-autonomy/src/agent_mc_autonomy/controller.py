@@ -77,7 +77,7 @@ def observation_call(name, arguments):
         return False
     steps = arguments.get("steps")
     return isinstance(steps, list) and bool(steps) and all(
-        isinstance(step, dict) and (step.get("skill") in {"observe", "check", "probe"}
+        isinstance(step, dict) and (step.get("skill") in {"observe", "check", "probe", "look"}
                                    or (step.get("skill") == "build" and step.get("dryRun") is True)
                                    or (step.get("skill") == "find" and not step.get("direction")))
         for step in steps)
@@ -92,6 +92,10 @@ def spatial_read_key(name, arguments):
     """Reuse queued reads/previews across ports, never a mixed body-action plan."""
     steps = arguments.get("steps")
     if name not in {"mc_do", "mc_scout"} or not isinstance(steps, list) or not steps:
+        return None
+    # Turning to inspect is read activity, but it still changes the camera.
+    # Never replace that native operation with a previously cached view.
+    if any(isinstance(step, dict) and step.get("skill") == "look" for step in steps):
         return None
     if name != "mc_scout" and not observation_call(name, arguments):
         return None

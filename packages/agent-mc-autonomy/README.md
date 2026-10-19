@@ -1,5 +1,13 @@
 # Agent MC Autonomy
 
+0.2.50 counts camera-only `look`/inspection batches as observation activity.
+Completing one keeps the preceding native body failure and its recovery details
+available to the next decision, including under context pressure. Camera turns
+still execute through the native queue and are never substituted by a cached
+view. A batch that also walks, interacts or gathers remains body work. This
+corrects failure-context retirement; it does not establish that a blocked route
+or an inventory synchronization failure has recovered.
+
 0.2.49 pins core `0.5.7-rc.50`, which fixes shared skill-field declarations
 rejecting valid entity/block targets. Per-skill native validation remains in
 place. The model-provider guide also documents a verified vLLM parameter-order

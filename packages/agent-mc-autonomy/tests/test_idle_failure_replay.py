@@ -56,7 +56,7 @@ def test_queued_observation_does_not_erase_rejected_survival_plan(
     ([{"skill": "find", "target": "chicken"}], True),
     ([{"skill": "find", "target": "chicken", "direction": "south"}], False),
     ([{"skill": "observe"}, {"skill": "collect", "block": "oak_log", "count": 1}], False),
-    ([{"skill": "look"}], False),
+    ([{"skill": "look"}], True),
     ([{"skill": "new_native_skill"}], False),
     ([], False),
     ("bad steps", False),
