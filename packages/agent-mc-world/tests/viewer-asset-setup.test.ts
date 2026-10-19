@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { prepareMinecraftViewerAssets, type ViewerAssetProgress } from '../src/client/viewer-assets.ts';
+// @ts-expect-error The build helper has no SDK declaration surface.
+import { deferViewerAudio } from '../scripts/defer-viewer-audio.mjs';
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
@@ -15,7 +17,7 @@ async function fixture() {
   const bytes = Buffer.from('OggS test fixture resource');
   const source = { sha1: hash(bytes, 'sha1'), sha256: hash(bytes, 'sha256'), bytes: bytes.length };
   const files = ['public/sounds/note/a.ogg', 'versions/1.20.6/public/sounds/note/a.ogg'].map(file => ({ file, ...source }));
-  await writeFile(join(templateDir, 'audio-downloads.json'), JSON.stringify({ schema: 'agent-mc-viewer-audio/v1', files }));
+  await writeFile(join(templateDir, 'audio-downloads.json'), JSON.stringify({ schema: 'agent-mc-viewer-audio/v1', viewerArchiveSha256: 'a'.repeat(64), files }));
   await writeFile(join(templateDir, 'index.html'), 'viewer fixture');
   return { templateDir, cacheDir, bytes, files };
 }
@@ -67,7 +69,7 @@ describe('explicit complete viewer resource preparation', () => {
   });
   it('rejects traversal or arbitrary URLs before a download', async () => {
     const f = await fixture();
-    await writeFile(join(f.templateDir, 'audio-downloads.json'), JSON.stringify({ schema: 'agent-mc-viewer-audio/v1', files: [{ ...f.files[0], file: 'public/sounds/../../secret.ogg' }] }));
+    await writeFile(join(f.templateDir, 'audio-downloads.json'), JSON.stringify({ schema: 'agent-mc-viewer-audio/v1', viewerArchiveSha256: 'a'.repeat(64), files: [{ ...f.files[0], file: 'public/sounds/../../secret.ogg' }] }));
     const fetch = vi.fn();
     await expect(prepareMinecraftViewerAssets({ ...f, fetch })).rejects.toThrow('catalog entry'); expect(fetch).not.toHaveBeenCalled();
   });
@@ -78,5 +80,19 @@ describe('explicit complete viewer resource preparation', () => {
     const fetch = vi.fn();
     await expect(prepareMinecraftViewerAssets({ ...f, fetch })).rejects.toThrow('symbolic links');
     expect(fetch).not.toHaveBeenCalled(); expect(await readFile(join(outside, 'untouched.txt'), 'utf8')).toBe('fixture');
+  });
+  it('changes the prepared viewer when its archive changes even when all audio stays identical', async () => {
+    const f = await fixture(), versions = [];
+    for (const [label, sha] of [['first', 'a'], ['updated', 'b']]) {
+      const template = join(f.templateDir, label); await mkdir(join(template, 'public/sounds/note'), { recursive: true });
+      await writeFile(join(template, 'public/sounds/note/a.ogg'), f.bytes);
+      await writeFile(join(template, 'public/sounds/manifest.json'), JSON.stringify({ files: { 'note/a.ogg': f.files[0].sha1 } }));
+      await writeFile(join(template, 'index.html'), label);
+      await deferViewerAudio(template, sha.repeat(64));
+      versions.push(await prepareMinecraftViewerAssets({ templateDir: template, cacheDir: f.cacheDir, fetch: vi.fn(async () => new Response(f.bytes)) }));
+    }
+    expect(versions[1].directory).not.toBe(versions[0].directory);
+    expect(await readFile(join(versions[1].directory, 'index.html'), 'utf8')).toBe('updated');
+    expect(versions[1].downloaded).toBe(0);
   });
 });

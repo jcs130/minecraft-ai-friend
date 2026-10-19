@@ -10,6 +10,10 @@ The regular `build:viewer` profile is still a complete offline bundle. The relea
 profile has a network prerequisite on its first run; it must not be described as
 an offline-ready bundle or as having already downloaded audio.
 
+Prepared directory identities include the verified viewer archive SHA-256 as well
+as the audio catalog. A renderer/resource update gets a new template directory
+even when its audio is identical; verified audio objects remain reusable.
+
 ```js
 import { MINECRAFT_CLIENT_DEFAULTS, prepareMinecraftViewerAssets,
   parseMinecraftServerAddress } from 'agent-mc-world/client';
@@ -36,8 +40,10 @@ actions occur. Hosts should present progress and keep failure visible rather tha
 calling acceptance a successful connection. Full templates without the deferred
 catalog are returned unchanged and cause no download.
 
-The Cortico adapter invokes this port on explicit World startup, persists the cache
-path in that deployment and then connects the game. Other SDK/MCP hosts may choose
+The Cortico adapter invokes this port on explicit World startup, supplies the cache
+path only to that runtime and then connects the game. Its empty resource setting
+follows the installed package on upgrade instead of persisting an old template or
+cache path in operator configuration. Other SDK/MCP hosts may choose
 their own setup UI and call the same public port before connecting. A custom viewer
 directory remains an explicit operator choice. Back up the deployment's configuration
 and data together; cache directories can be recreated by selecting the bundled

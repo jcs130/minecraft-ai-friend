@@ -35,8 +35,9 @@ export async function prepareMinecraftViewerAssets(options: ViewerAssetOptions):
   let text: string;
   try { text = await readFile(marker, 'utf8'); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { directory: options.templateDir, downloaded: 0, total: 0 }; throw error; }
-  const catalog = JSON.parse(text) as { schema: string; files: AudioEntry[] };
-  if (catalog.schema !== 'agent-mc-viewer-audio/v1' || !Array.isArray(catalog.files) || catalog.files.length > 20000)
+  const catalog = JSON.parse(text) as { schema: string; viewerArchiveSha256: string; files: AudioEntry[] };
+  if (catalog.schema !== 'agent-mc-viewer-audio/v1' || !/^[a-f0-9]{64}$/.test(catalog.viewerArchiveSha256)
+    || !Array.isArray(catalog.files) || catalog.files.length > 20000)
     throw new Error('Unsupported viewer audio catalog.');
   for (const entry of catalog.files) {
     if (!/^(?:versions\/[0-9.]+\/)?public\/sounds\/[A-Za-z0-9_./-]+\.ogg$/.test(entry.file)

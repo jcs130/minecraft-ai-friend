@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 
 /** Keep the full resource index; obtain exact Mojang audio on explicit first setup instead of npm. */
-export async function deferViewerAudio(viewer) {
+export async function deferViewerAudio(viewer, viewerArchiveSha256) {
+  if (!/^[a-f0-9]{64}$/.test(viewerArchiveSha256)) throw new Error('A verified viewer archive identity is required');
   const roots = [''];
   for (const entry of await readdir(join(viewer, 'versions'), { withFileTypes: true }).catch(() => []))
     if (entry.isDirectory() && /^[0-9.]+$/.test(entry.name)) roots.push(`versions/${entry.name}/`);
@@ -19,7 +20,7 @@ export async function deferViewerAudio(viewer) {
       await rm(path);
     }
   }
-  await writeFile(join(viewer, 'audio-downloads.json'), JSON.stringify({ schema: 'agent-mc-viewer-audio/v1',
+  await writeFile(join(viewer, 'audio-downloads.json'), JSON.stringify({ schema: 'agent-mc-viewer-audio/v1', viewerArchiveSha256,
     source: 'https://resources.download.minecraft.net', files }) + '\n');
   return { mode: 'explicit-first-setup', files: files.length, uniqueFiles: new Set(files.map(file => file.sha1)).size };
 }
