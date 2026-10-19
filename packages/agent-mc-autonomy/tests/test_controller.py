@@ -415,7 +415,9 @@ def test_repeated_incomplete_inference_backs_off_without_disconnecting_body(fram
     tools = module.model_tools(bridge.tools)
     for _ in range(10):
         run_async(controller.turn_once("survive", "prefix", tools))
-        assert 0 < controller.planner_retry_at - module.time.monotonic() <= 300
+        # Same-tick Windows readings can subtract a few floating-point ULPs
+        # above 300, without extending the configured backoff.
+        assert 0 < controller.planner_retry_at - module.time.monotonic() <= 300.000001
     assert controller.planner_failures == 10 and controller.inflight_request is None
     assert controller.planner_retry_at - module.time.monotonic() >= 299
     assert controller.continuation_needed and not bridge.closed

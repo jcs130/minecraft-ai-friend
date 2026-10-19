@@ -1,5 +1,13 @@
 # Agent MC Autonomy
 
+0.2.47 flushes and synchronizes each host-state write before publishing the
+atomic replacement. Failed writeback preserves the previous dispatch/stop
+record; unreadable state still blocks startup and is never silently reset.
+The pinned core is `0.5.7-rc.47`, built from `c484edbd`, with opt-in viewer
+audience limits and host-facing compact catalog/wake-classification helpers.
+The catalog helpers remain explicit opt-ins; this update does not discard
+chat, receipts or history, start gameplay, or verify survival.
+
 0.2.46 accepts explicit `planner.parameters.thinking_token_budget` for vLLM
 Chat endpoints: non-negative integers set the reasoning limit; `-1` leaves it
 unlimited within the total output limit. A finite budget must leave room for the

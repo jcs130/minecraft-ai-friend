@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sqlite3
 import time
 import uuid
@@ -459,7 +460,12 @@ class Controller:
             self.data.mkdir(parents=True, exist_ok=True)
             previous = json.loads(self.state_path.read_text(encoding="utf-8")) if self.state_path.exists() else {}
             temporary = self.state_path.with_suffix(".tmp")
-            temporary.write_text(encode({**previous, **changes}), encoding="utf-8")
+            # A rename is atomic for readers, but does not flush buffered file
+            # contents. Publish dispatch/stop state only after durable writeback.
+            with temporary.open("w", encoding="utf-8") as stream:
+                stream.write(encode({**previous, **changes}))
+                stream.flush()
+                os.fsync(stream.fileno())
             temporary.replace(self.state_path)
         except Exception as error:
             from .failure_diagnostics import capture_current
