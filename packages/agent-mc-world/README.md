@@ -1,11 +1,18 @@
 # Agent MC World
 
-`0.5.7-rc.43` adds [inventory organization](docs/inventory-organization.md)
+`0.5.7-rc.44` adds [inventory organization](docs/inventory-organization.md)
 through the shared `organize` action: merge and sort personal or open storage,
 optionally stow/discard explicitly selected surplus while retaining caller-chosen
 quantities. Mouse operations use confirmed server slots/cursor and exact modern
 item components. Default organization preserves the quickbar and all items.
 No timer, model call or implicit junk policy is installed.
+
+`0.5.7-rc.43` adds the shared game/connection/model panel and an explicit
+loopback host embedding policy. `serveClientConsole(..., undefined, undefined,
+{ embedOrigins: ['http://127.0.0.1:17850'] })` permits that exact local host page
+to embed the console; it does not authorize cross-origin API calls. Default
+embedding remains disabled. Optional host metadata labels the configured model,
+requested effort and operator pause without exposing prompts or credentials.
 
 `0.5.7-rc.42` completes the core [authored-action lifecycle](docs/method-learning.md):
 write new JavaScript actions, compose pinned child methods, retain original

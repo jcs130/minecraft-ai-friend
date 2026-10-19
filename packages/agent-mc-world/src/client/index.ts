@@ -22,7 +22,7 @@ export { classifyBossBarTitle, readBossBarHud, renderBossBarHud, type BossBarRea
 export type { RouteProbe } from '../../core/skill-context.ts';
 export { MessageInbox, MESSAGE_TOOL, MESSAGE_PARAMETERS, MESSAGE_LIMIT, MESSAGE_CHANNELS, messageChannel,
   messageInboxHost, messageInboxFacts, type MessageInboxOptions, type ReceivedMessage, type MessageChannel } from './message-inbox.ts';
-export { serveClientConsole, type ClientConsolePort } from './console-server.ts';
+export { serveClientConsole, type ClientConsolePort, type ClientConsolePresentation } from './console-server.ts';
 export type { PublicAccountState, AuthenticationMode } from './authentication.ts';
 
 export { planLegacyConfiguration, copyLegacyData } from './migration.ts';

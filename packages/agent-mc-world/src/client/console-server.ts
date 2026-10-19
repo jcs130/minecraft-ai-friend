@@ -12,10 +12,23 @@ export interface ClientConsolePort {
   status(): { phase: string };
 }
 const actions = new Set(['connect', 'disconnect', 'observer.start', 'observer.stop', 'player.start', 'player.stop']);
+export interface ClientConsolePresentation {
+  /** Explicit local host pages allowed to embed this UI. Control APIs keep their own Origin/nonce checks. */
+  embedOrigins?: readonly string[];
+}
+function embeddingPolicy(origins: readonly string[] = []) {
+  for (const origin of origins) {
+    const value = new URL(origin);
+    if (value.origin !== origin || value.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(value.hostname)
+      || !value.port || value.username || value.password) throw new Error('Console embedding requires an exact loopback HTTP origin.');
+  }
+  return origins.length ? [...new Set(origins)].join(' ') : "'none'";
+}
 /** Loopback operator UI. It cannot execute arbitrary commands, edit credentials or expose token caches. */
 export async function serveClientConsole(port: number, runtime: ClientConsolePort,
   assets = fileURLToPath(new URL('../../dist/client-console/', import.meta.url)),
-  binding?: { directory: string; identity: string }) {
+  binding?: { directory: string; identity: string }, presentation?: ClientConsolePresentation) {
+  const ancestors = embeddingPolicy(presentation?.embedOrigins);
   const token = randomBytes(32).toString('hex');
   const instanceId = randomBytes(32).toString('hex');
   if (binding && !/^[a-f0-9]{24}$/.test(binding.identity)) throw new Error('Invalid operator identity');
@@ -62,7 +75,7 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
         response.writeHead(200, { 'content-type': request.url === '/' || request.url === '/metrics' || request.url === accountPath ? 'text/html; charset=utf-8'
           : request.url?.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8',
           'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer',
-          'content-security-policy': "default-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" });
+          'content-security-policy': `default-src 'self'; connect-src 'self'; frame-src http://127.0.0.1:*; frame-ancestors ${request.url === '/' ? ancestors : "'none'"}; base-uri 'none'; form-action 'none'` });
         response.end(file); return;
       }
       if (request.method !== 'POST' || request.url !== '/api/client/action') { json(405, { error: 'Method not allowed.' }); return; }
