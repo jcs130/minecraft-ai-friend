@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+0.2.48 pins core `0.5.7-rc.48`, including the upstream compact facts/catalog,
+event-window and repeated-observation SDK helpers. These are explicit host-facing
+APIs: this dependency update does not activate server-specific filtering, alter
+the Python planner's context policy or establish a latency improvement. Raw
+events, receipts, private history and the native queue remain preserved.
+
 0.2.47 flushes and synchronizes each host-state write before publishing the
 atomic replacement. Failed writeback preserves the previous dispatch/stop
 record; unreadable state still blocks startup and is never silently reset.

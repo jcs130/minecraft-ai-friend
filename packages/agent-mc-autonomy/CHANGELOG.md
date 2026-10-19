@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.48 — 2026-10-20
+
+- Pin the independently built core candidate containing the upstream context
+  schema/facts/event helpers and repeated-observation progress API.
+- Keep these host-facing SDK helpers opt-in. The Python planner's context
+  selection, original journals, native queue and model route are unchanged;
+  installing this dependency alone is not a measured latency improvement.
+
+## 0.2.47 — 2026-10-20
+
+- Flush and synchronize host-state writes before atomic replacement. A failed
+  write preserves the previous dispatch/stop state; unreadable state blocks
+  startup instead of silently resetting or replaying unknown actions.
+
 ## 0.2.46 — 2026-10-19
 
 - Accept the explicit vLLM chat parameter `thinking_token_budget`, preserving its
