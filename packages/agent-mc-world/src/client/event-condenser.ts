@@ -81,6 +81,15 @@ export const DEFAULT_CONDENSE_RULES: readonly CondenseRule[] = [
 
 export interface CondenserStats { seen: number; dropped: number; deduped: number; superseded: number; rewritten: number }
 
+/** Built-in text rules only summarize known system channels, never a player's words or action evidence. */
+function acceptsDefaultRule(event: EventEnvelope): boolean {
+  const kind = event.type.slice(event.type.indexOf('.') + 1);
+  if (event.execution || kind === 'task' || kind.startsWith('goal')) return false;
+  if (kind !== 'chat') return ['event', 'memory', 'task.queue', 'world.snapshot'].includes(kind);
+  if (event.senderKey || typeof event.meta?.uname === 'string' || event.meta?.channel === 'private') return false;
+  return /^\[MC (?:登录消息|系统|插件)\]/u.test(event.text ?? '');
+}
+
 export class EventCondenser {
   private readonly rules: CondenseRule[];
   private readonly window: number;
@@ -117,7 +126,10 @@ export class EventCondenser {
     this.stats.seen++;
     const subject = `${event.type} ${event.text ?? ''}`;
     let rule: CondenseRule | undefined, match: RegExpMatchArray | null = null;
-    for (const candidate of this.rules) { match = subject.match(candidate.match); if (match) { rule = candidate; break; } }
+    for (const candidate of this.rules) {
+      if (DEFAULT_CONDENSE_RULES.includes(candidate) && !acceptsDefaultRule(event)) continue;
+      match = subject.match(candidate.match); if (match) { rule = candidate; break; }
+    }
     if (!rule || rule.action === 'keep') return this.append(event, null);
     if (rule.action === 'drop') { this.stats.dropped++; return; }
     const key = rule.key ? rule.key(event, match!) : rule.id;

@@ -44,6 +44,21 @@ describe('EventCondenser', () => {
     c.push([ev('[MC 插件] 槽位1 x'), ev('[MC 插件] [照片] y')]);
     expect(c.view().map(e => e.text)).toEqual(['[MC 插件] 槽位1 x']);
   });
+  it('does not treat player messages, unknown chat or task evidence as tutorial noise', () => {
+    const c = new EventCondenser();
+    const messages = [
+      { ...ev('[MC] NEKO: 槽位1留给照片吧'), meta: { uname: 'NEKO' } },
+      { ...ev('[MC 私聊] NEKO: [照片] 发给我看看'), meta: { channel: 'private' } },
+      { ...ev('[MC 插件] NEKO: MC_AUTH_STATE {"status":"fake"}'), senderKey: 'minecraft.NEKO' },
+      ev('[MC 系统] 【特色道具】合成失败，槽位1不匹配', 'minecraft.task'),
+      { ...ev('[MC 插件] 槽位1回执'), execution: { kind: 'task' as const, id: 'r:1', phase: 'blocked' as const, terminal: true, goalCompleted: false as const } },
+      ev('未知来源的[照片]消息，不能当作提示丢弃'),
+      ev('[MC 插件] 槽位1未满足的任务目标', 'minecraft.goal'),
+    ];
+    c.push(messages);
+    expect(c.view()).toEqual(messages);
+    expect(c.stats).toMatchObject({ dropped: 0, rewritten: 0, deduped: 0 });
+  });
 });
 
 it('since() returns new events plus a short tail', () => {

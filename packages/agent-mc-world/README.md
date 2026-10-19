@@ -1,5 +1,11 @@
 # Agent MC World
 
+`0.5.7-rc.49` protects player/private chat, unknown chat, task and goal evidence
+from the event condenser's built-in tutorial text filters. Full journals and
+explicit caller rules are unchanged. These helpers remain opt-in. Movement
+repetition diagnostics summarize supplied action targets and observations;
+execution receipts and actual world changes must establish goal progress.
+
 `0.5.7-rc.48` includes the shared model-context helpers added upstream:
 optional schema collapse retains enum/array shapes, `compactFacts` projects
 current facts without host-only revision metadata, `MovementProgress` can track
