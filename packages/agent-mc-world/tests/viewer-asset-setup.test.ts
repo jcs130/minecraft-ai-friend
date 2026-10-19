@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -70,5 +70,13 @@ describe('explicit complete viewer resource preparation', () => {
     await writeFile(join(f.templateDir, 'audio-downloads.json'), JSON.stringify({ schema: 'agent-mc-viewer-audio/v1', files: [{ ...f.files[0], file: 'public/sounds/../../secret.ogg' }] }));
     const fetch = vi.fn();
     await expect(prepareMinecraftViewerAssets({ ...f, fetch })).rejects.toThrow('catalog entry'); expect(fetch).not.toHaveBeenCalled();
+  });
+  it('rejects template links instead of copying or writing outside the cache', async () => {
+    const f = await fixture(), outside = join(f.cacheDir, '../outside'); await mkdir(outside);
+    await writeFile(join(outside, 'untouched.txt'), 'fixture');
+    await symlink(outside, join(f.templateDir, 'public'), process.platform === 'win32' ? 'junction' : 'dir');
+    const fetch = vi.fn();
+    await expect(prepareMinecraftViewerAssets({ ...f, fetch })).rejects.toThrow('symbolic links');
+    expect(fetch).not.toHaveBeenCalled(); expect(await readFile(join(outside, 'untouched.txt'), 'utf8')).toBe('fixture');
   });
 });

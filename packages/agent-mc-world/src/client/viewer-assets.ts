@@ -1,4 +1,4 @@
-import { cp, link, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, link, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { dirname, join, resolve, sep } from 'node:path';
 
@@ -21,7 +21,11 @@ const inside = (base: string, name: string) => {
   return target;
 };
 async function matches(file: string, entry: AudioEntry): Promise<boolean> {
-  try { const bytes = await readFile(file); return bytes.length === entry.bytes && hash(bytes, 'sha256') === entry.sha256; }
+  try {
+    const info = await lstat(file);
+    if (!info.isFile() || info.isSymbolicLink()) throw new Error('Viewer cache must contain regular files, not symbolic links.');
+    const bytes = await readFile(file); return bytes.length === entry.bytes && hash(bytes, 'sha256') === entry.sha256;
+  }
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw error; }
 }
 
@@ -47,9 +51,15 @@ export async function prepareMinecraftViewerAssets(options: ViewerAssetOptions):
   const report = () => { try { options.onProgress?.({ ...progress }); } catch { /* Observation does not change preparation. */ } };
   options.signal?.throwIfAborted(); report();
   await mkdir(directory, { recursive: true }); await mkdir(objects, { recursive: true });
+  for (const folder of [directory, objects]) if ((await lstat(folder)).isSymbolicLink()) throw new Error('Viewer cache directories must not be symbolic links.');
   // Copy only package-owned viewer templates. Downloaded files live in the deployment cache, never node_modules.
   if (resolve(options.templateDir) !== directory)
-    await cp(options.templateDir, directory, { recursive: true, force: false, errorOnExist: false });
+    await cp(options.templateDir, directory, { recursive: true, force: false, errorOnExist: false, filter: async (source, target) => {
+      if ((await lstat(source)).isSymbolicLink()) throw new Error('Viewer templates must not contain symbolic links.');
+      try { if ((await lstat(target)).isSymbolicLink()) throw new Error('Viewer cache must not contain symbolic links.'); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+      return true;
+    } });
   const controller = new AbortController();
   const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
   const groups = new Map<string, AudioEntry[]>();
