@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+0.2.49 pins core `0.5.7-rc.50`, which fixes shared skill-field declarations
+rejecting valid entity/block targets. Per-skill native validation remains in
+place. The model-provider guide also documents a verified vLLM parameter-order
+constraint incompatibility and its independent service configuration; no model
+service setting is changed automatically by installing this package.
+
 0.2.48 pins core `0.5.7-rc.48`, including the upstream compact facts/catalog,
 event-window and repeated-observation SDK helpers. These are explicit host-facing
 APIs: this dependency update does not activate server-specific filtering, alter
