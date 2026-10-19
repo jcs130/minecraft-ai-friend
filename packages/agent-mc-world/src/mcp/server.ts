@@ -1,4 +1,5 @@
 import { Ajv } from 'ajv';
+import { compactToolSchema, type CompactCatalogOptions } from '../client/context-budget.ts';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, ReadResourceRequestSchema,
   type CallToolResult, type Tool } from '@modelcontextprotocol/sdk/types.js';
@@ -56,7 +57,13 @@ const metricsSpec: Tool = { name: 'mc_metrics', description: 'Read runtime-measu
 const traceSpec: Tool = { name: 'mc_trace', description: 'Optional HOST instrumentation: report measured model request metadata or an attributed method lifecycle event linked to saved artifacts. Do not invent token counts, timings, authorship or improvement. Stores metadata, not Agent memory. Each transport attempt uses a unique id.',
   inputSchema: traceSchema as Tool['inputSchema'] };
 
-export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version: string): Server {
+export interface MinecraftMcpServerOptions {
+  /** 'compact' advertises condensed tool text and collapsed wide field pools; validation and *_tool_help keep the exact schemas. */
+  catalog?: 'full' | 'compact';
+  compact?: CompactCatalogOptions;
+}
+
+export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version: string, options: MinecraftMcpServerOptions = {}): Server {
   const prefix = runtime.toolPrefix;
   const translate = (text: string) => text.replaceAll('mc_', prefix + '_');
   const [connection, events, artifact, metrics, trace, protocol] = [connectionSpec, eventsSpec, artifactSpec, metricsSpec, traceSpec, protocolSpec]
@@ -77,6 +84,11 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
   }))];
   const ajv = new Ajv({ strict: false, allErrors: true, validateFormats: false });
   const validators = new Map(tools.map(tool => [tool.name, ajv.compile(tool.inputSchema)]));
+  const helpName = `${prefix}_tool_help`;
+  const advertised: Tool[] = options.catalog !== 'compact' ? tools : tools.map(tool => {
+    const compact = compactToolSchema(tool, tool.inputSchema, { helpTool: helpName, ...options.compact });
+    return { ...tool, description: compact.description, inputSchema: compact.schema as Tool['inputSchema'] };
+  });
 
   const contents = (refs: readonly BlobRef[]): CallToolResult['content'] => refs.flatMap<CallToolResult['content'][number]>(ref => {
     const saved = runtime.journal.blob(ref.handle);
@@ -93,7 +105,7 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
     ...(result.failed ? { isError: true } : {}),
   });
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: advertised }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra): Promise<CallToolResult> => {
     const { name, arguments: args = {} } = request.params;
     try {
