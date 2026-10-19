@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.51 — 2026-10-20
+
+- Require validated native effect samples before a completed body request can
+  retire preceding failure context. Request-only completion, unchanged/unknown
+  effects and forged change flags keep the actual failure available.
+- Keep later actions enabled and preserve original failed receipts. Retiring
+  context after real change does not certify the earlier objective as achieved.
+
 ## 0.2.50 — 2026-10-20
 
 - Keep native body failures and observation-attempt counts after a completed

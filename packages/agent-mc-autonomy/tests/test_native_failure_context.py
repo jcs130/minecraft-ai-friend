@@ -105,7 +105,14 @@ def test_accepted_body_failure_remains_actionable_after_read_and_next_acceptance
     bridge.result = {**bridge.result, 'execution': {**action(), 'id': 'body-2'}}
     run_async(controller.execute_model_call('mc_do', {'steps': [{'skill': 'goto', 'at': [1, 64, 0]}]}))
     assert controller.tool_failure['native_execution']['phase'] == 'blocked', 'new acceptance is not recovery'
-    controller.receipt({'execution': {**action(True), 'id': 'body-2'}})
+    from test_effect_recovery import effect
+    moved = effect()
+    moved.update(skill='goto', at=[1, 64, 0], status='changed')
+    moved['before']['position'] = [0, 64, 0]
+    moved['after']['position'] = [1, 64, 0]
+    moved['changed']['position'] = True
+    controller.receipt({'execution': {**action(True), 'id': 'body-2', 'evidence': {
+        'steps': [{'step': 1, 'outcome': 'ok', 'observedEffect': moved}]}}})
     assert controller.tool_failure is None
     assert controller.native_outcomes[-1]['phase'] == 'completed'
     assert controller.native_outcomes[-1]['goal_verified'] is False

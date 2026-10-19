@@ -538,7 +538,9 @@ class Controller:
                             self.native_outcomes.pop(outcome_eviction_index(self.native_outcomes))
                     # The public HUD keeps its small projection even when the private planner uses full evidence.
                     self.publish(native_outcomes=[native_outcome_view(row) for row in self.native_outcomes[-6:]])
-                    if not read_only and self.effect_recovery.record(arguments, execution, self.game_scope, self.death_epoch, reference):
+                    effect_changed = not read_only and self.effect_recovery.record(
+                        arguments, execution, self.game_scope, self.death_epoch, reference)
+                    if effect_changed:
                         self.clear_read_activity()
                     if not read_only:
                         self.container_recovery.record(arguments, execution, self.game_scope, self.death_epoch, reference)
@@ -562,7 +564,10 @@ class Controller:
                             "do not resubmit the whole failed batch or repeat observations already answered. "
                             "Query mc_protocol(action=archive,run=original_event.run,after=original_event.cursor-1) for the full native event.")
                         self.retain_tool_failure(failure)
-                    elif not read_only and phase == "completed" and self.tool_failure and self.tool_failure.get("native_execution"):
+                    elif effect_changed and phase == "completed" and self.tool_failure and self.tool_failure.get("native_execution"):
+                        # Native completion may mean only that a request was sent.
+                        # Unknown, missing or unchanged effects do not retire an
+                        # earlier body failure; the samples must attest change.
                         self.tool_failure = None
                         self.publish(tool_failure=None)
                 self.pending.pop(key, None)

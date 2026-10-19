@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+0.2.51 also keeps a preceding native failure after a completed body request
+whose effect is unchanged, unknown, absent or inconsistent with its samples.
+Only validated native change can retire that context. Later actions remain
+available and old receipts remain unchanged; this is not automatic retry or
+proof that the earlier failed objective succeeded.
+
 0.2.50 counts camera-only `look`/inspection batches as observation activity.
 Completing one keeps the preceding native body failure and its recovery details
 available to the next decision, including under context pressure. Camera turns

@@ -182,6 +182,38 @@ def test_build_preview_does_not_reset_observation_history(framework_module, tmp_
     assert controller.read_activity == {"mc_scout": 5, "mc_do": 1}
 
 
+@pytest.mark.parametrize("sample,cleared", [
+    ("unchanged", False), ("unknown", False), ("missing", False),
+    ("forged_change", False), ("changed", True),
+])
+def test_completed_item_request_only_retires_a_native_failure_after_validated_change(
+        framework_module, tmp_path, run_async, sample, cleared):
+    bridge, controller = prepare(framework_module, tmp_path)
+    finish(controller, run_async)
+    failure = copy.deepcopy(controller.tool_failure)
+    task = {**action(), "id": "later-item-use"}
+    bridge.result = {"protocol": "agent-mc/v1", "text": "queued", "execution": task}
+    run_async(controller.execute_model_call("mc_do", {"steps": [{"skill": "use", "item": "player_head"}]}))
+    assert controller.tool_failure == failure, "an accepted request is not recovery"
+    value = effect(changed=sample == "changed")
+    value.update(skill="use", at=None)
+    value["changed"]["target"] = None
+    if sample == "unknown":
+        value["after"]["inventory"] = None
+        value["changed"]["inventory"] = None
+        value["status"] = "unknown"
+    if sample == "forged_change":
+        value["changed"]["inventory"] = True
+        value["status"] = "changed"  # The before/after samples disprove it.
+    row = {"step": 1, "outcome": "ok", **({"observedEffect": value} if sample != "missing" else {})}
+    controller.receipt({"execution": {**task, "phase": "completed", "terminal": True,
+        "evidence": {"receipt": "Item-use request sent; its completion alone is not an observed effect.", "steps": [row]}}})
+    assert (controller.tool_failure is None) is cleared
+    if not cleared:
+        assert controller.tool_failure == failure
+    assert controller.native_outcomes[-1]["goal_verified"] is False
+
+
 def test_failed_skill_reference_is_read_once_and_retained_for_recovery(framework_module, tmp_path, run_async):
     bridge, controller = prepare(framework_module, tmp_path)
     bridge.tools.append({"name": "mc_help", "inputSchema": {"type": "object"}})
