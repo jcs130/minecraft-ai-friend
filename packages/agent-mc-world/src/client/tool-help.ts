@@ -74,11 +74,30 @@ export function createToolHelpTool(catalogue: () => readonly CatalogTool[], name
   } };
 }
 
+export interface ToolHelpOptions {
+  /** Keep every parameter constraint; move prose annotations to the exact on-demand schema. */
+  parameterDescriptions?: 'inline' | 'on-demand';
+}
+
+function withoutParameterDescriptions(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutParameterDescriptions);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).flatMap(([key, child]) => {
+    if (key === 'description' && typeof child === 'string') return [];
+    // These values are application data, including objects with a field named description.
+    return [[key, ['const', 'enum', 'default', 'examples'].includes(key) ? child : withoutParameterDescriptions(child)]];
+  }));
+}
+
 /** Rebuild after a host renames/mounts tools, so advertised names stay callable. */
-export function withToolHelp(tools: readonly ToolDef[], name = TOOL_HELP_TOOL.name): ToolDef[] {
+export function withToolHelp(tools: readonly ToolDef[], name = TOOL_HELP_TOOL.name, options: ToolHelpOptions = {}): ToolDef[] {
   const result = tools.filter(tool => tool.name !== name);
   result.push(createToolHelpTool(() => result, name));
-  return result;
+  return options.parameterDescriptions !== 'on-demand' ? result : result.map(tool => tool.name === name ? tool : {
+    ...tool,
+    description: `${tool.description}\nParameter notes: ${name} {"name":${JSON.stringify(tool.name)},"full":true}.`,
+    parameters: withoutParameterDescriptions(tool.parameters) as ToolDef['parameters'],
+  });
 }
 
 /** Map callable recovery identities at a host mount boundary, without editing action arguments. */

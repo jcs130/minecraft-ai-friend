@@ -12,6 +12,34 @@ const handler = vi.fn(async () => 'Never call this');
 const target = { name: 'mc_do', description: 'Actual body contract', tags: ['act'] as const, parameters: schema, handler };
 const read = (args: Record<string, unknown>) => JSON.parse(readToolHelp([target], args).text);
 
+it('moves parameter notes on demand without changing constraints, data values or execution', async () => {
+  const execute = vi.fn(async (args: Record<string, unknown>) => ({ text: JSON.stringify(args) }));
+  const original = { type: 'object', additionalProperties: false, description: 'Root notes', properties: {
+    steps: { type: 'array', minItems: 1, description: 'Read exact skill notes first', items: {
+      type: 'object', required: ['skill'], properties: { skill: { enum: ['walk', 'look'], description: 'Action name' },
+        description: { type: 'string', description: 'User-authored method description' },
+        data: { const: { description: 'literal payload' }, default: { description: 'literal default' } } },
+    } },
+  }, required: ['steps'] };
+  const tools = withToolHelp([{ ...target, name: 'mounted_do', parameters: original, handler: execute }],
+    'mounted_tool_help', { parameterDescriptions: 'on-demand' });
+  const projected = tools.find(tool => tool.name === 'mounted_do')!;
+  expect(projected.parameters).toEqual({ type: 'object', additionalProperties: false, properties: {
+    steps: { type: 'array', minItems: 1, items: { type: 'object', required: ['skill'], properties: {
+      skill: { enum: ['walk', 'look'] }, description: { type: 'string' },
+      data: { const: { description: 'literal payload' }, default: { description: 'literal default' } },
+    } } },
+  }, required: ['steps'] });
+  const help = await tools.find(tool => tool.name === 'mounted_tool_help')!.handler(
+    { name: 'mounted_do', path: '/properties/steps', full: true }, { role: 'test', log: nullLogger() });
+  expect(JSON.parse((help as any).text).schema).toEqual(original.properties.steps);
+  expect(execute).not.toHaveBeenCalled();
+  const args = { steps: [{ skill: 'walk', description: 'keep this value' }] };
+  expect(await projected.handler(args, { role: 'test', log: nullLogger() })).toEqual({ text: JSON.stringify(args) });
+  expect(original.description).toBe('Root notes');
+  expect(original.properties.steps.description).toBe('Read exact skill notes first');
+});
+
 it('progressively expands the effective schema without inventing fields or dispatching an action', async () => {
   expect(read({}).tools[0]).toMatchObject({ name: 'mc_do', tags: ['act'] });
   const root = read({ name: 'mc_do' });
