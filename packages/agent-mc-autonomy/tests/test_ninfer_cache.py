@@ -27,8 +27,32 @@ def test_changed_facts_keep_checkpointed_tool_history_and_originals():
     assert checkpoint["content"] == [{"type": "text", "text": "complete original receipt",
                                       "prompt_cache_breakpoint": {"mode": "explicit"}}]
     assert wires[1]["messages"][-1] == {"role": "user", "content": "fresh hunger=18"}
-    assert wires[0]["prompt_cache_key"] == wires[1]["prompt_cache_key"]
+    assert 'prompt_cache_key' not in wires[0] and 'prompt_cache_key' not in wires[1]
     assert history == original
+
+
+def test_growing_history_repeats_stable_boundaries_without_caching_replaced_facts():
+    history = [{'role': 'system', 'content': 'immutable identity'}]
+    for index in range(8):
+        history.extend([{'role': 'assistant', 'content': None},
+                        {'role': 'tool', 'tool_call_id': str(index), 'content': f'original receipt {index}'}])
+    before = copy.deepcopy(history)
+    first = request(config(cache_strategy='ninfer'), history + [{'role': 'user', 'content': 'replaced scene A'}], [], 2048)[1]
+    second = request(config(cache_strategy='ninfer'), history + [
+        {'role': 'assistant', 'content': None}, {'role': 'tool', 'tool_call_id': '8', 'content': 'original receipt 8'},
+        {'role': 'user', 'content': 'replaced scene B'}], [], 2048)[1]
+
+    def marked(body):
+        return [part['text'] for row in body['messages'] for part in row.get('content') or []
+                if isinstance(part, dict) and part.get('prompt_cache_breakpoint')]
+
+    assert marked(first) == ['immutable identity', 'original receipt 5', 'original receipt 6', 'original receipt 7']
+    assert marked(second) == ['immutable identity', 'original receipt 6', 'original receipt 7', 'original receipt 8']
+    assert first['prompt_cache_options'] == second['prompt_cache_options'] == {'mode': 'explicit'}
+    assert 'prompt_cache_key' not in first and 'prompt_cache_key' not in second
+    assert first['messages'][-1]['content'] == 'replaced scene A'
+    assert second['messages'][-1]['content'] == 'replaced scene B'
+    assert history == before
 
 
 def test_defaults_and_explicit_chat_key_do_not_add_vendor_markers():
@@ -37,6 +61,13 @@ def test_defaults_and_explicit_chat_key_do_not_add_vendor_markers():
     keyed = request(config(parameters={"prompt_cache_key": "selected-session"}), messages, [], 2048)[1]
     assert normal["messages"] == keyed["messages"] == messages
     assert "prompt_cache_key" not in normal and keyed["prompt_cache_key"] == "selected-session"
+
+
+def test_tool_only_history_keeps_supported_checkpoint_hints():
+    messages = [{'role': 'assistant', 'content': None},
+                {'role': 'tool', 'tool_call_id': 'c', 'content': 'complete original tool result'}]
+    wire = request(config(cache_strategy='ninfer'), messages, [], 2048)[1]
+    assert wire['messages'][-1]['content'][0]['prompt_cache_breakpoint'] == {'mode': 'explicit'}
 
 
 def test_images_and_empty_assistant_remain_intact_without_marking_current_scene():

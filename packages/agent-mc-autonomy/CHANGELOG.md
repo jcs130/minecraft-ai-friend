@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.41 — 2026-10-19
+
+- Keep a fixed NInfer checkpoint plus overlapping recent history boundaries so
+  real repeated demand can replace stale cache entries under memory pressure.
+- Do not implicitly checkpoint the controller's replaced scene or automatically
+  create a private prompt-end anchor. Explicit user cache keys remain supported.
+
 ## 0.2.40 — 2026-10-19
 
 - Fix premature full-context history retirement for explicitly configured local

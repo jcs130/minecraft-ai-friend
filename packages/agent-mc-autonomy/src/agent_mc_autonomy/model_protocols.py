@@ -64,10 +64,11 @@ def request(config, messages, tools, budget):
                 row["reasoning_content"] = state["reasoning_content"]
             rows.append(row)
         if config.cache_strategy == "ninfer":
-            # Hybrid recurrent states need a saved boundary, not merely matching
-            # KV tokens. Mark immutable history before the fresh user tail.
-            # Wire copies only: never alter archives or native receipts.
-            for row in reversed(rows[:max(0, last_user)]):
+            # Keep a stable anchor AND overlapping recent history boundaries.
+            # A moving last-only marker is never demanded twice when the cache
+            # is full; repeatedly saving the replaced scene also wastes room.
+            candidates = []
+            for row in rows[:last_user if last_user >= 0 else len(rows)]:
                 content = row.get("content")
                 if isinstance(content, str):
                     content = [{"type": "text", "text": content}] if content else []
@@ -75,12 +76,15 @@ def request(config, messages, tools, budget):
                     continue
                 part = next((part for part in reversed(content) if part.get("type") == "text" and part.get("text")), None)
                 if part is not None:
-                    part["prompt_cache_breakpoint"] = {"mode": "explicit"}
-                    row["content"] = content
-                    break
-            # Nonempty keys also enable prompt-end checkpoints for append-only
-            # exchanges. This hint is never evidence or action authority.
-            options.setdefault("prompt_cache_key", scope(config))
+                    candidates.append((row, content, part))
+            selected = candidates[:1] + candidates[max(1, len(candidates) - 3):]
+            for row, content, part in selected:
+                part["prompt_cache_breakpoint"] = {"mode": "explicit"}
+                row["content"] = content
+            options["prompt_cache_options"] = {"mode": "explicit"}
+            # An explicitly supplied key remains supported for append-only
+            # clients. Do not auto-create prompt-end private anchors for the
+            # controller's replaced current-facts tail.
         body = {**options, "model": config.model, "messages": rows, "stream": config.stream, config.output_parameter: budget, "parallel_tool_calls": False}
         if tools:
             body.update(tools=tools, parallel_tool_calls=False)
