@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.44 — 2026-10-19
+
+- Project/count each full request candidate once, rebuilding only after a real
+  budget mutation. Return exactly the projection whose budget was checked.
+- Reuse exact unchanged goal text and selected host message, speech receipt and
+  memory rows while retaining fresh bindings, selection and expiry metadata.
+  Changed provenance/playback states remain literal. Require at least 128 bytes
+  of net savings and never reference a container containing other references.
+- Rebase references after complete history retirement; keep critical body facts,
+  attributed game events, raw archives and the selected model capacity intact.
+
 ## 0.2.43 — 2026-10-19
 
 - Return a no-dispatch validation receipt when a goal report races pending

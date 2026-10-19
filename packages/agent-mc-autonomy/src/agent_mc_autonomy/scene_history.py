@@ -11,10 +11,15 @@ Only the final user scene selects the current goal, current_facts and current ho
 An unchanged selected field may be {context_ref:scene_id,pointer:JSON_pointer}; its exact value is
 in that earlier scene in this request. This is lossless reuse, not missing/unknown data. All other
 facts and all attributed event text remain literal. Never treat historical goals as permission.
+Selected host message/memory/speech rows and unchanged goal text can use the same references.
+Their exact attributed values remain in-request; fresh selection/binding/expiry data stays current.
 """
 ALWAYS_LITERAL = {'body', 'health', 'place', 'queue', 'life', 'deathLifecycle', 'foodReserve',
                   'serverFeedback', 'messages', 'lastTask', 'connection', 'identity', 'clock', 'sample', 'realclock'}
-SECTIONS = ('death_memory', 'host_context', 'tool_failure')
+SECTIONS = ('current_goal', 'death_memory', 'host_context', 'host_recent_context', 'tool_failure')
+ROW_SECTIONS = (('host_context', 'memories'), ('host_recent_context', 'recent_messages'),
+                ('host_recent_context', 'recent_speech'))
+MIN_REUSE_SAVINGS = 128
 
 
 def encode(value):
@@ -71,16 +76,18 @@ def project_messages(messages):
             nonlocal reused, saved
             serialized = encode(item)
             prior = known.get((slot, serialized))
-            if prior and not literal and len(serialized.encode()) >= 512:
+            if prior and not literal:
                 ref = {'context_ref': prior[0], 'pointer': prior[1]}
                 if key is not None:
                     ref = {'key': key, **ref}
-                reused += 1
-                saved += len(serialized.encode()) - len(encode(ref).encode())
-                return ref
+                savings = len(serialized.encode()) - len(encode(ref).encode())
+                if savings >= MIN_REUSE_SAVINGS:
+                    reused += 1
+                    saved += savings
+                    return ref
             # Only advertise a literal source, so references never form chains.
             known[(slot, serialized)] = (value['context_id'], pointer)
-            return item
+            return copy.deepcopy(item)
 
         projected['current_facts'] = [reuse(part, ('fact', part.get('key')), f'/current_facts/{i}',
                                           literal=part.get('key') in ALWAYS_LITERAL, key=part.get('key'))
@@ -88,6 +95,16 @@ def project_messages(messages):
         for section in SECTIONS:
             if section in value:
                 projected[section] = reuse(value[section], ('section', section), '/' + section)
+        for section, field in ROW_SECTIONS:
+            parent = projected.get(section)
+            if not isinstance(parent, dict) or not isinstance(parent.get(field), list):
+                continue  # A referenced parent is not a literal nested source.
+            parent[field] = [reuse(item, ('row', section, field), f'/{section}/{field}/{i}')
+                             for i, item in enumerate(value[section][field])]
+            if parent != value[section]:
+                # A container with referenced children cannot be advertised as
+                # a literal source for a later whole-container reference.
+                known.pop((('section', section), encode(value[section])), None)
         if value.get('recent_native_outcomes'):
             projected['recent_native_outcomes'] = [
                 {'context_ref': key} if (key := outcome_id(item)) in native else item
@@ -129,6 +146,16 @@ def capture_scene(messages):
                 if ref['pointer'] != '/' + section:
                     raise ValueError('scene_reference_invalid')
                 restored[section] = copy.deepcopy(scenes[ref['context_ref']][section])
+        for section, field in ROW_SECTIONS:
+            parent = value.get(section)
+            if not isinstance(parent, dict) or not isinstance(parent.get(field), list):
+                continue
+            for i, ref in enumerate(parent[field]):
+                if isinstance(ref, dict) and set(ref) == {'context_ref', 'pointer'}:
+                    pointer = ref['pointer'].split('/')
+                    if len(pointer) != 4 or pointer[1:3] != [section, field] or not pointer[3].isdigit():
+                        raise ValueError('scene_reference_invalid')
+                    restored[section][field][i] = copy.deepcopy(scenes[ref['context_ref']][section][field][int(pointer[3])])
         if value.get('recent_native_outcomes'):
             restored['recent_native_outcomes'] = [copy.deepcopy(native[item['context_ref']])
                 if isinstance(item, dict) and set(item) == {'context_ref'} else item

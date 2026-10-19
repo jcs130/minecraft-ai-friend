@@ -37,3 +37,26 @@ Regression tests cover the real controller request boundary, whole tool-call
 exchange integrity, unchanged fitting history, retained current refusal facts,
 configuration validation and bounded opt-in margins. No game, model or network
 is invoked by those tests.
+
+## Lossless selected-value reuse
+
+Full scenes retain the exact input, model response and tool results as a complete
+exchange. Unchanged larger facts, current goal text, selected host memories,
+recent host messages and speech receipt rows may refer to a literal value in an
+earlier retained scene. At least 128 UTF-8 bytes must be saved by a reference.
+Actor, record ID, source, text and playback state must all match; equal wording
+from different people is not the same row. Fresh binding, selection and expiry
+envelopes remain current. Health, location, queue, server feedback/message facts
+and attributed game events stay literal.
+
+The projector never points to another reference or a container whose children
+are references. It rebuilds from complete raw retained scenes after retirement,
+so the first surviving source becomes literal instead of leaving a dangling
+pointer. `capture_scene` verifies the recovered complete scene's hash before it
+enters input history. No original journal or query handle is deleted.
+
+The full assembler measures a candidate once and reuses that exact projection.
+Only an actual removal of a history group, section, fact or event requires a new
+measurement. A counter failure still restarts the whole request in conservative
+byte mode. These CPU and input-volume savings do not establish real cache hits
+or live inference latency; those require a separately observed game trial.

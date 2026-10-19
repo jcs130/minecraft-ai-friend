@@ -62,52 +62,57 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
     if recent_context and recent_context.get("available") is not False:
         tail["host_recent_context"] = host_recent.tail_projection(recent_context, time.time())
 
-    def messages():
-        current = dict(tail)
-        return project_messages(head + [m for group in history for m in group] +
-                                [{"role": "user", "content": encode(make_scene(current))}])[0]
+    projected, scene_reuse, total = [], {}, 0
 
-    def cost():
-        current = messages()
-        size = count_input(context_counter, current, tools) if context_counter is not None else len(encode({"messages": current, "tools": tools}).encode("utf-8"))
-        return size + reserved_output + FRAMING_RESERVE
+    def measure():
+        nonlocal projected, scene_reuse, total
+        projected, scene_reuse = project_messages(head + [m for group in history for m in group] +
+            [{"role": "user", "content": encode(make_scene(dict(tail)))}])
+        size = count_input(context_counter, projected, tools) if context_counter is not None else len(encode({"messages": projected, "tools": tools}).encode("utf-8"))
+        total = size + reserved_output + FRAMING_RESERVE
+
+    measure()
 
     # Only a real overflow activates the opt-in cache margin. Retire a whole
     # prefix once, leaving room for new exchanges instead of shifting it each
     # decision. Fresh evidence remains governed by the actual window.
     headroom = min(max(0, context_history_headroom_tokens), context_tokens // 4)
-    history_target = context_tokens - headroom if cost() > context_tokens else context_tokens
-    while history and cost() > history_target:
+    history_target = context_tokens - headroom if total > context_tokens else context_tokens
+    while history and total > history_target:
         history.pop(0)
         tail["context_omissions"]["history_groups"] += 1
+        measure()
     # An oversized read batch must not delete all native feedback or selected
     # host memory as one section. Retire whole old observations first, retaining
     # actual body receipts and explicit omissions within the same real window.
     outcomes = tail.get("recent_native_outcomes", [])
-    while len(outcomes) > 1 and cost() > context_tokens:
+    while len(outcomes) > 1 and total > context_tokens:
         outcomes.pop(outcome_eviction_index(outcomes))
         omissions = tail["context_omissions"]
         omissions["native_outcomes"] = omissions.get("native_outcomes", 0) + 1
+        measure()
     for key in ("host_recent_context", "host_context", "recent_native_outcomes", "death_memory", "tool_failure", "fast_focus", "planner_notice", "read_activity"):
-        if cost() <= context_tokens:
+        if total <= context_tokens:
             break
         if key in tail:
             del tail[key]
             tail["context_omissions"]["sections"].append(key)
+            measure()
     priority = {key: rank for rank, key in enumerate(("body", "health", "place", "gear", "inventoryIds", "foodReserve", "queue", "life", "serverFeedback", "messages", "lastTask"))}
     for part in sorted(list(tail["current_facts"]), key=lambda p: priority.get(p["key"], len(priority)), reverse=True):
-        if cost() <= context_tokens:
+        if total <= context_tokens:
             break
         tail["current_facts"].remove(part)
         tail["omitted_facts"].append({"key": part["key"], "original": part.get("original")})
+        measure()
     included = list(range(len(events)))
     for index in sorted(included, key=lambda i: (event_priority(events[i]), i)):
-        if cost() <= context_tokens:
+        if total <= context_tokens:
             break
         included.remove(index)
         tail["events"] = [event_copies[i] for i in included]
         tail["context_omissions"]["events"] += 1
-    total = cost()
+        measure()
     if total > context_tokens:
         raise ValueError("context_budget_exceeded: stable rules, identity, goal, tool schemas and output reserve do not fit")
     shown = tail.get("host_recent_context", {})
@@ -117,8 +122,6 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
     available = set().union(*(sources[id(group)] for group in history))
     terminal = tail.get("recent_native_outcomes", [])
     referenced = sum(outcome_id(row) in available for row in terminal)
-    projected, scene_reuse = project_messages(head + [m for group in history for m in group] +
-        [{"role": "user", "content": encode(make_scene(dict(tail)))}])
     return projected, {"mode": "full", "counter": counter_name(context_counter) if context_counter is not None else BYTE_COUNTER_NAME,
         "scene_reuse": scene_reuse,
         "units": "tokens" if context_counter is not None else "token_upper_bound",
