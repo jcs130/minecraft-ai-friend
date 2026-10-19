@@ -17,6 +17,8 @@ export interface CondenseRule {
   action: CondenseAction;
   /** Dedupe/supersede key; defaults to the rule id. */
   key?: (event: Pick<EventEnvelope, 'type' | 'text'>, match: RegExpMatchArray) => string;
+  /** With 'latest': combine the superseded event's text with the new one (e.g. a running name list). */
+  merge?: (previous: string, current: string) => string;
   /** Shorter text for the model. Return null to drop. */
   rewrite?: (text: string) => string | null;
 }
@@ -62,6 +64,14 @@ export const DEFAULT_CONDENSE_RULES: readonly CondenseRule[] = [
   { id: 'event-countdown', match: /\[村庄活动\] (\S+) 还有 \d+ 秒结束/, action: 'latest', key: (_e, m) => 'countdown:' + m[1] },
   // Per-session tutorial and UI tips.
   { id: 'tips', match: /槽位\d|【特色道具】|\[照片\]|\[村庄生活季\]|SkinsRestorer|^mymc\.chat \[MC (插件|系统)\] (守护\/恢复|战斗咏唱|探矿术|探索咏唱|Agent 用 \/mycli|附魔台旁|可学习|每项可用|魔力统一|技能分|逐项说明)/, action: 'drop' },
+  // "No local notes" for several accounts at login: one running line instead of ~90 chars each.
+  { id: 'player-history-none', match: /\[游戏玩家历史\] 账号 (\S+?)；本地未找到/, action: 'latest',
+    rewrite: text => `[玩家历史] 无本地关系笔记：${text.match(/账号 (\S+?)；/)?.[1] ?? '?'}（不代表初次见面，可查 mymc_memory）`,
+    merge: (previous, current) => {
+      const names = (t: string) => t.match(/无本地关系笔记：([^（]*)/)?.[1].split('、') ?? [];
+      const all = [...new Set([...names(previous), ...names(current)])];
+      return current.replace(/无本地关系笔记：[^（]*/, `无本地关系笔记：${all.join('、')}`);
+    } },
   { id: 'player-history', match: /\[游戏玩家历史\] 账号 (\S+?)；/, action: 'once', key: (_e, m) => 'history:' + m[1] },
   // Queue progress notes restate the latest tool receipt; only the newest matters.
   { id: 'task-queue', match: /^mymc\.task\.queue /, action: 'latest' },
@@ -123,7 +133,10 @@ export class EventCondenser {
     }
     if (rule.action === 'latest') {
       const index = this.keys.indexOf(key);
-      if (index >= 0) { this.events.splice(index, 1); this.keys.splice(index, 1); this.stats.superseded++; }
+      if (index >= 0) {
+        if (rule.merge) text = rule.merge(this.events[index].text ?? '', text ?? '');
+        this.events.splice(index, 1); this.keys.splice(index, 1); this.stats.superseded++;
+      }
     }
     this.append(text === event.text ? event : { ...event, text }, rule.action === 'latest' ? key : null);
   }

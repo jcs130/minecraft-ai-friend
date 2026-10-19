@@ -31,12 +31,12 @@ describe('EventCondenser', () => {
       '[服务器状态] 青铜 III；魔力 20/20；主线 register；下一步 /mycli guild join',
       '[服务器引导] 先登记为冒险者；旅人营地的石质地坪受保护。；下一步 /mycli guild join',
       '[Minecraft] ☾ 星灯夜巡 | 1:30 状态条进度为 50%。',
-      '[游戏玩家历史] 账号 ag_CorMy；本地未找到该账号已绑定且未过期的关系笔记。',
+      '[玩家历史] 无本地关系笔记：ag_CorMy（不代表初次见面，可查 mymc_memory）',
       '[Minecraft] 西南边有村民的动静。',
       '[MC] ag_CorMy: 欢迎回来 Jojo！',
       '[Minecraft] 濒死!生命只剩 3/20',
     ]);
-    expect(c.stats).toMatchObject({ seen: 16, dropped: 3, deduped: 1 });
+    expect(c.stats).toMatchObject({ seen: 16, dropped: 3 });
     expect(compactEvents(c.view()).length).toBeLessThanOrEqual(10);
   });
   it('rules are configurable', () => {
@@ -51,4 +51,17 @@ it('since() returns new events plus a short tail', () => {
   const batch = [ev('[MC] a: 1'), ev('[MC] a: 2'), ev('[MC] a: 3'), ev('[MC] a: 4')];
   c.push(batch);
   expect(c.since(batch[2].cursor, 1).map(e => e.text)).toEqual(['[MC] a: 3', '[MC] a: 4']);
+});
+
+it('merges "no local notes" player-history lines into one', () => {
+  const c = new EventCondenser();
+  for (const name of ['Goddess', 'ag_CorMy', 'ag_NEKO'])
+    c.push([ev(`[游戏玩家历史] 账号 ${name}；本地未找到该账号已绑定且未过期的关系笔记；这不证明初次见面。按已确认账号回查已有宿主档案或 mymc_memory，身份不明时保留未知。`, 'mymc.memory')]);
+  expect(c.view().map(e => e.text)).toEqual(['[玩家历史] 无本地关系笔记：Goddess、ag_CorMy、ag_NEKO（不代表初次见面，可查 mymc_memory）']);
+});
+
+it('compactEvents prints clock time in the requested zone for Z and offset stamps', async () => {
+  const { compactEvents: ce } = await import('../src/client/index.ts');
+  const out = ce([{ ...ev('a'), ts: '2026-10-19T17:17:34.000Z' }, { ...ev('b'), ts: '2026-10-20T01:17:35.000+08:00' }], 10, 200, 'Asia/Shanghai');
+  expect(out.map(e => e.at)).toEqual(['01:17:34', '01:17:35']);
 });

@@ -61,9 +61,16 @@ export function condenseText(text: string, max: number): string {
 
 export interface CompactEvent { cursor: number; at: string; type: string; from?: string; text?: string }
 /** Bounded, readable event tail for a per-request snapshot; full events stay in the journal. */
-export function compactEvents(events: readonly EventEnvelope[], limit = 10, textChars = 200): CompactEvent[] {
+/** HH:MM:SS of an ISO timestamp in `timeZone` (default: host zone); events carry mixed Z / +08:00 stamps. */
+export function clockTime(ts: unknown, timeZone?: string): string {
+  const ms = typeof ts === 'number' ? ts : Date.parse(String(ts));
+  if (!Number.isFinite(ms)) return String(ts);
+  return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', ...(timeZone ? { timeZone } : {}) }).format(ms);
+}
+
+export function compactEvents(events: readonly EventEnvelope[], limit = 10, textChars = 200, timeZone?: string): CompactEvent[] {
   return events.slice(-limit).map(event => ({ cursor: event.cursor,
-    at: typeof event.ts === 'string' ? event.ts.slice(11, 19) : String(event.ts), type: event.type,
+    at: clockTime(event.ts, timeZone), type: event.type,
     ...(event.senderKey ? { from: event.senderKey } : {}),
     ...(event.text ? { text: condenseText(event.text.replace(/\s+/g, ' '), textChars) } : {}) }));
 }
