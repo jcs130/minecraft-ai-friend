@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger, classifyWake, compactEvents, capModelText,
-  compactToolSchema, WAKE_ACTIVE_GOAL, MovementProgress } from '../src/client/index.ts';
+  compactToolSchema, WAKE_ACTIVE_GOAL, MovementProgress, compactFacts } from '../src/client/index.ts';
 import { createMinecraftMcpServer } from '../src/mcp/server.ts';
 import { SKILL_STEP_SCHEMA, SKILL_SIGNATURE_DOC } from '../core/skills.ts';
 
@@ -115,4 +115,35 @@ it('compact catalogue collapses deep wide unions such as goal verify conditions'
   const verify = (slim as any).properties.add.properties.plan.items.properties.verify;
   expect(verify).toEqual({ type: ['object', 'array', 'null'], properties: { source: { type: 'string', enum: ['block', 'inventory'] } }, required: ['source'], additionalProperties: true,
     items: { type: 'object', properties: { source: { type: 'string', enum: ['block', 'inventory'] } }, required: ['source'], additionalProperties: true } });
+});
+
+it('compactFacts drops host hashes and duplicates and inlines JSON parts', () => {
+  const facts = { protocol: 'agent-mc/v1', run: 'r1', decisionStability: { sampledAtMs: 1, position: [1.23456, 2, 3] },
+    observation: { at: 'T', dimension: 'minecraft:overworld', position: { x: -491.505999, y: 69, z: -451.5 }, health: 20, food: 19, inventory: { compass: 1 } },
+    parts: [{ key: 'clock', text: '{"night":true}', revision: 'a'.repeat(64), original: 'log:' + 'b'.repeat(64) },
+      { key: 'life', text: '', revision: 'c', original: 'd' }, { key: 'messages', text: '没有新消息', revision: 'e', original: 'f' }] };
+  expect(compactFacts(facts)).toEqual({ run: 'r1', at: 'T', dimension: 'minecraft:overworld', position: [-491.5, 69, -451.5], health: 20, food: 19,
+    inventory: { compass: 1 }, clock: { night: true }, messages: '没有新消息' });
+});
+
+it('collapsed field pools keep enums and array shapes of optional fields', () => {
+  const pool = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`f${i}`, { type: 'string', description: 'x' }]));
+  const schema = { type: 'object', properties: { steps: { type: 'array', items: { type: 'object', required: ['skill'], properties: { skill: { type: 'string', enum: ['observe'] },
+    mode: { type: 'string', enum: ['sites', 'voxels'], description: 'long' }, bounds: { type: 'array', minItems: 6, maxItems: 6, items: { type: 'integer' } },
+    keys: { type: 'array', items: { type: 'string', enum: ['jump'] } }, ...pool } } } } };
+  const items = (compactToolSchema({ name: 't' }, schema).schema as any).properties.steps.items;
+  expect(items.properties).toEqual({ skill: { type: 'string', enum: ['observe'] }, mode: { type: 'string', enum: ['sites', 'voxels'] },
+    bounds: { type: 'array', minItems: 6, maxItems: 6, items: { type: 'integer' } }, keys: { type: 'array', items: { enum: ['jump'] } } });
+});
+
+it('MovementProgress counts repeated look-arounds that report nothing new', async () => {
+  const { observationDigest } = await import('../src/client/index.ts');
+  const progress = new MovementProgress();
+  progress.record([{ skill: 'goto', at: [0, 64, 0] }]);
+  expect(progress.recordObservation(observationDigest('[00:01] 附近: 村民 3, 铁傀儡 1 at (-5, 64, 2)')).streak).toBe(1);
+  let verdict;
+  for (let i = 0; i < 5; i++) verdict = progress.recordObservation(observationDigest(`[00:0${i + 2}] 附近: 村民 3, 铁傀儡 1 at (-${i}, 64, 2)`));
+  expect(verdict).toMatchObject({ streak: 6, repetitive: true });
+  expect(progress.recordObservation(observationDigest('发现一个洞穴入口')).streak).toBe(6);
+  expect(progress.record([{ skill: 'mine', at: [0, 60, 0] }]).streak).toBe(0);
 });

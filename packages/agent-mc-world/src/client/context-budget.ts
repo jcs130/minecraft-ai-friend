@@ -93,13 +93,37 @@ export interface CompactCatalogOptions {
 interface Schema { [key: string]: unknown }
 const isObject = (value: unknown): value is Schema => !!value && typeof value === 'object' && !Array.isArray(value);
 
+/** Terse shape of a collapsed optional field: enums and array/tuple shapes the model must get right; undefined = omit. */
+export function terseField(schema: unknown, depth = 0): Schema | undefined {
+  if (!isObject(schema)) return undefined;
+  const variants = schema.anyOf ?? schema.oneOf;
+  if (Array.isArray(variants) && depth === 0) {
+    const kept = variants.map(v => terseField(v, 1) ?? (isObject(v) && v.type ? { type: v.type } : undefined));
+    return kept.every(Boolean) && kept.some(v => v!.enum || v!.type === 'array') ? { anyOf: kept } : undefined;
+  }
+  if (Array.isArray(schema.enum)) return { ...(schema.type ? { type: schema.type } : {}), enum: schema.enum };
+  const isArray = schema.type === 'array' || (Array.isArray(schema.type) && schema.type.includes('array'));
+  if (!isArray) return undefined;
+  const out: Schema = { type: schema.type };
+  for (const k of ['minItems', 'maxItems']) if (schema[k] !== undefined) out[k] = schema[k];
+  const items = schema.items;
+  if (isObject(items)) {
+    const inner = Array.isArray(items.enum) ? { enum: items.enum } : items.type === 'array' && depth < 2 ? terseField(items, depth + 1)
+      : ['integer', 'number', 'string', 'boolean'].includes(items.type as string) ? { type: items.type } : undefined;
+    if (inner) out.items = inner;
+  }
+  return out;
+}
+
 function collapse(schema: Schema): Schema {
   const properties = isObject(schema.properties) ? schema.properties : {};
   const required = Array.isArray(schema.required) ? schema.required as string[] : [];
-  const kept = Object.fromEntries(Object.entries(properties).filter(([key, value]) =>
-    required.includes(key) || (isObject(value) && Array.isArray(value.enum) && key === required[0])));
-  return { type: 'object', properties: Object.fromEntries(Object.entries(kept).map(([key, value]) =>
-    [key, slim(value as Schema, 0, {})])), ...(required.length ? { required } : {}), additionalProperties: true };
+  const kept: Schema = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (required.includes(key)) kept[key] = slim(value as Schema, 0, {});
+    else { const terse = terseField(value); if (terse) kept[key] = terse; }
+  }
+  return { type: 'object', properties: kept, ...(required.length ? { required } : {}), additionalProperties: true };
 }
 
 /** Deep wide object (e.g. a verify condition union): keep type, required/discriminator fields, and the same for items. */
@@ -173,6 +197,14 @@ export interface MovementVerdict {
   repetitive: boolean;
 }
 
+/** Digest of an observation's text with timestamps, coordinates and counters stripped. */
+export function observationDigest(text: string): string {
+  const norm = String(text).replace(/\d+(\.\d+)?/g, '#').replace(/\s+/g, ' ').trim().slice(0, 4000);
+  let h = 2166136261;
+  for (let i = 0; i < norm.length; i++) { h ^= norm.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(16);
+}
+
 const MOVEMENT_SKILLS = ['goto', 'look', 'observe', 'walk', 'wander', 'face'];
 const point = (value: unknown): [number, number, number] | undefined =>
   Array.isArray(value) && value.length === 3 && value.every(n => typeof n === 'number') ? value as [number, number, number] : undefined;
@@ -187,6 +219,7 @@ export class MovementProgress {
   private readonly cellSize: number;
   private readonly movement: Set<string>;
   private readonly cells = new Set<string>();
+  // seen: observation digests
   private recent: { points: [number, number, number][]; newCells: number }[] = [];
   streak = 0;
 
@@ -197,7 +230,22 @@ export class MovementProgress {
     this.movement = new Set(options.movementSkills ?? MOVEMENT_SKILLS);
   }
 
-  reset(): void { this.streak = 0; this.recent = []; this.cells.clear(); }
+  reset(): void { this.streak = 0; this.recent = []; this.cells.clear(); this.seen.clear(); }
+
+  private readonly seen = new Set<string>();
+
+  /**
+   * A look-around call (scout, visual, observe…). `digest` identifies what it reported, with volatile
+   * numbers stripped by the caller or via observationDigest(). A repeat of something already seen
+   * counts like an idle move; something new is neutral.
+   */
+  recordObservation(digest: string): MovementVerdict {
+    if (this.seen.has(digest)) {
+      this.streak++;
+      this.recent = [...this.recent, { points: [], newCells: 0 }].slice(-this.window);
+    } else this.seen.add(digest);
+    return this.verdict();
+  }
 
   record(steps: readonly unknown[]): MovementVerdict {
     const skills = steps.map(step => isObject(step) && typeof step.skill === 'string' ? step.skill : '');
@@ -228,4 +276,46 @@ export class MovementProgress {
     const full = this.streak >= this.window;
     return { streak: this.streak, spread, newCells, repetitive: full && (spread <= this.radius || newCells === 0) };
   }
+}
+
+export interface CompactFacts {
+  run?: string;
+  at?: string;
+  dimension?: string | null;
+  position?: number[];
+  health?: number;
+  food?: number;
+  inventory?: unknown;
+  [part: string]: unknown;
+}
+
+const round1 = (n: unknown) => typeof n === 'number' ? Math.round(n * 10) / 10 : n;
+
+/**
+ * Model-facing view of currentFacts(): drops host-only revision/origin hashes and the
+ * decision-stability duplicate, inlines JSON part text (no double escaping), omits empty parts.
+ * Hosts keep the full facts for verification; this is only what the model reads each step.
+ */
+export function compactFacts(facts: { run?: string; observation?: Record<string, unknown> | null; parts?: readonly { key: string; text: string }[] } | null | undefined): CompactFacts {
+  const out: CompactFacts = {};
+  if (!facts) return out;
+  if (facts.run) out.run = facts.run;
+  const o = facts.observation;
+  if (o) {
+    if (typeof o.at === 'string') out.at = o.at;
+    if (o.dimension !== undefined) out.dimension = o.dimension as string | null;
+    const p = o.position as { x?: number; y?: number; z?: number } | undefined;
+    if (p) out.position = [p.x, p.y, p.z].map(round1) as number[];
+    if (o.health !== undefined) out.health = o.health as number;
+    if (o.food !== undefined) out.food = o.food as number;
+    if (o.inventory !== undefined) out.inventory = o.inventory;
+  }
+  for (const part of facts.parts ?? []) {
+    const text = String(part.text ?? '').trim();
+    if (!text || text === '{}' || text === '[]' || text === 'null') continue;
+    let value: unknown = text;
+    if (/^[[{]/.test(text)) { try { value = JSON.parse(text); } catch { /* keep text */ } }
+    out[part.key in out ? `part:${part.key}` : part.key] = value;
+  }
+  return out;
 }
