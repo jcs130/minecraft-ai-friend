@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.43 — 2026-10-19
+
+- Return a no-dispatch validation receipt when a goal report races pending
+  native work. Preserve the submitted goal and action ownership instead of
+  crashing and disconnecting the independent runtime.
+
 ## 0.2.42 — 2026-10-19
 
 - Retain the actual selected input scene with its reply and tool results in full

@@ -1008,7 +1008,13 @@ class Controller:
             return result, await self.archive_receipt(request_id, name, result)
         if name == "goal_report" and (not self.active_goal or self.current_work() or arguments.get("outcome") not in {"reported_done", "blocked"}
                 or not isinstance(arguments.get("evidence"), str) or not 1 <= len(arguments["evidence"]) <= 1200):
-            raise ValueError("goal_report_requires_active_goal_no_pending_actions_and_evidence")
+            # A stale/local report has not mutated the goal or native body.
+            # Give its exact rejection back to the planner; do not turn pending
+            # work into a fatal runtime error or an unknown native dispatch.
+            result = {"protocol": PROTOCOL, "failed": True, "execution": None,
+                      "dispatched": False, "origin": "controller_validation", "code": "goal_report_not_ready",
+                      "text": "goal_report requires an active submitted goal, no pending native work for that goal, and observed evidence. No goal was completed or changed. Wait for the native terminal receipt, then reassess; current work continues."}
+            return result, await self.archive_receipt(request_id, name, result)
         reported_facts = None
         if name == "goal_report":
             target = self.active_goal["id"]

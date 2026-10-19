@@ -243,8 +243,10 @@ def test_natural_goals_are_planned_serially_and_reports_are_not_verification(fra
     run_async(controller.turn_once(controller.active_goal["goal"], "prefix", module.model_tools(controller.bridge.tools)))
     assert controller.pending and box.get(first)["delivery"] == "planning"
     assert not run_async(controller.external_command())
-    with pytest.raises(ValueError, match="no_pending_actions"):
-        run_async(controller.dispatch("goal_report", {"outcome": "reported_done", "evidence": "wood observed"}, str(uuid.uuid4())))
+    refused, _ = run_async(controller.dispatch("goal_report", {"outcome": "reported_done", "evidence": "wood observed"}, str(uuid.uuid4())))
+    assert refused["failed"] and refused["dispatched"] is False
+    assert controller.pending and controller.active_goal["id"] == first
+    assert box.get(first)["delivery"] == "planning"
     bridge = controller.bridge
     bridge.event_pages.append([{"execution": {**bridge.result["execution"], "terminal": True, "phase": "completed"}}])
     run_async(controller.events())

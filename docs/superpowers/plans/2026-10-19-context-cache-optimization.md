@@ -38,6 +38,16 @@ package still has existing lint failures outside this change; do not claim its
 global CI is green. Real latency after deploying complete scene history is still
 pending and must be recorded separately from this offline evidence.
 
+**Runtime follow-up:** The previous executor exited with
+`goal_report_requires_active_goal_no_pending_actions_and_evidence` before the
+next deployment. Its state is stopped, with no pending/unknown action. Replayed
+the pending-report race in two failing tests, then changed only that local
+pre-dispatch guard into a failed, no-dispatch receipt. The mailbox's original
+goal and native work remain intact. The full package passed 1,225 tests, changed
+files passed Ruff, and the 0.2.43 packed consumer passed. Keep this stopped
+runtime stopped until resumption is explicitly authorized; latency remains
+unverified for the complete-scene build.
+
 ## Constraints and review focus
 
 - Keep raw messages, receipts, event cursors, user feedback, original queries,
