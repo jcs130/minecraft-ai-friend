@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.46 — 2026-10-19
+
+- Accept the explicit vLLM chat parameter `thinking_token_budget`, preserving its
+  integer, zero and `-1` (unlimited) semantics. Reject invalid types and budgets
+  that consume all configured output space before sending a request.
+- Preserve newer Chat servers' `reasoning` in streamed/nonstreamed private
+  history and the first-output metric. Replay the original field name under the
+  existing provider scope and explicit history policy; never promote it to
+  spoken content. Keep `reasoning_content` providers compatible.
+- Keep other protocols and unconfigured backends unchanged. This adds a model
+  compatibility setting; it does not change the selected model, host SDK or
+  ongoing game session, and does not establish live inference performance.
+
 ## 0.2.44 — 2026-10-19
 
 - Project/count each full request candidate once, rebuilding only after a real

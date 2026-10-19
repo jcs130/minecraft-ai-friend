@@ -51,9 +51,9 @@ async def collect(protocol, response):
                 if choice.get("index", 0) != 0:
                     raise ValueError("brain_stream_multiple_choices")
                 delta = choice.get("delta", {})
-                if delta.get("content") or delta.get("reasoning_content") or delta.get("tool_calls"):
+                if delta.get("content") or delta.get("reasoning_content") or delta.get("reasoning") or delta.get("tool_calls"):
                     first_output = first_output or time.monotonic()
-                for key in ("content", "reasoning_content", "refusal"):
+                for key in ("content", "reasoning_content", "reasoning", "refusal"):
                     if delta.get(key) is not None:
                         message[key] = message.get(key, "") + delta[key]
                 for call in delta.get("tool_calls", []):

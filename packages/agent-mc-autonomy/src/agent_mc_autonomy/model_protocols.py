@@ -18,8 +18,9 @@ def assistant_history(response):
         result["tool_calls"] = response["tool_calls"]
     if response.get("_provider_state"):
         result["_provider_state"] = response["_provider_state"]
-    if isinstance(response.get("reasoning_content"), str):
-        result["reasoning_content"] = response["reasoning_content"]
+    for key in ("reasoning_content", "reasoning"):
+        if isinstance(response.get(key), str):
+            result[key] = response[key]
     return copy.deepcopy(result)
 
 
@@ -59,9 +60,9 @@ def request(config, messages, tools, budget):
         for index, message in enumerate(messages):
             row = {k: copy.deepcopy(v) for k, v in message.items() if k in {"role", "content", "tool_calls", "tool_call_id", "name"}}
             state = native(message, config)
-            if (state and "reasoning_content" in state
-                    and (config.reasoning_history == "all" or index > last_user)):
-                row["reasoning_content"] = state["reasoning_content"]
+            if isinstance(state, dict) and (config.reasoning_history == "all" or index > last_user):
+                row.update({key: state[key] for key in ("reasoning_content", "reasoning")
+                            if isinstance(state.get(key), str)})
             rows.append(row)
         if config.cache_strategy == "ninfer":
             # Keep a stable anchor AND overlapping recent history boundaries.
@@ -215,7 +216,7 @@ def decode(config, payload):
         message = choices[0]["message"]
         if message.get("refusal"):
             raise ValueError("brain_response_refused")
-        state = {"reasoning_content": message["reasoning_content"]} if isinstance(message.get("reasoning_content"), str) else {}
+        state = {key: message[key] for key in ("reasoning_content", "reasoning") if isinstance(message.get(key), str)}
         return message, state, usage
     if p == "responses":
         if payload.get("status") != "completed" or payload.get("error"):

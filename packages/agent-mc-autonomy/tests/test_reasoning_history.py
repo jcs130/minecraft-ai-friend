@@ -93,3 +93,23 @@ def test_opt_in_cannot_strip_signed_or_other_native_protocol_replay(protocol):
 def test_direct_dataclass_construction_cannot_bypass_budget_admission():
     with pytest.raises(ValueError, match="reasoning_history"):
         replace(config(), reasoning_history="invalid").validate_budget(1024)
+
+
+def test_vllm_reasoning_replay_respects_turn_policy_scope_and_keeps_original_history():
+    cfg = config()
+    original = messages(cfg)
+    for row in original:
+        if "_provider_state" in row:
+            state = row["_provider_state"]["data"]
+            state["reasoning"] = state.pop("reasoning_content")
+    unchanged = copy.deepcopy(original)
+    full = request(cfg, original, [], 1024)[1]["messages"]
+    assert full[1]["reasoning"] == "old reasoning" and full[3]["reasoning"] == "current reasoning"
+    current = replace(cfg, reasoning_history="current_turn")
+    reduced = request(current, original, [], 1024)[1]["messages"]
+    assert "reasoning" not in reduced[1] and reduced[3]["reasoning"] == "current reasoning"
+    fresh = request(current, original + [{"role": "user", "content": "fresh facts"}], [], 1024)[1]["messages"]
+    assert all("reasoning" not in row for row in fresh)
+    assert original == unchanged
+    original[3]["_provider_state"]["scope"] = "foreign"
+    assert "reasoning" not in request(cfg, original, [], 1024)[1]["messages"][3]

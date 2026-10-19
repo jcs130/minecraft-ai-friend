@@ -1,5 +1,13 @@
 # Agent MC Autonomy
 
+0.2.46 accepts explicit `planner.parameters.thinking_token_budget` for vLLM
+Chat endpoints: non-negative integers set the reasoning limit; `-1` leaves it
+unlimited within the total output limit. A finite budget must leave room for the
+answer. Omission and other protocols retain their existing behavior. This setting
+does not select a backend or change a host SDK. Newer Chat servers' `reasoning`
+field and the existing `reasoning_content` field both remain private scoped
+history, with their original wire names and the explicit replay policy retained.
+
 0.2.27 pins core `0.5.7-rc.32`, including the official Java 1.21.1 ingredient
 tag reference for mixed-material crafting. Grid proposals still require actual
 server output; full context, host personality and queue semantics are unchanged.

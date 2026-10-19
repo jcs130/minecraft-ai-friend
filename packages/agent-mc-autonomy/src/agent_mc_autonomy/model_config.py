@@ -25,7 +25,7 @@ PRESETS = {
 
 PARAMETERS = {
     "chat": {"temperature", "top_p", "top_k", "seed", "stop", "presence_penalty", "frequency_penalty",
-             "reasoning_effort", "thinking", "enable_thinking", "thinking_budget", "reasoning_budget_tokens", "response_format",
+             "reasoning_effort", "thinking", "enable_thinking", "thinking_budget", "thinking_token_budget", "reasoning_budget_tokens", "response_format",
              "min_p", "repetition_penalty", "chat_template_kwargs", "tool_choice", "prompt_cache_key"},
     "responses": {"temperature", "top_p", "reasoning", "text", "service_tier", "prompt_cache_key", "prompt_cache_retention", "tool_choice"},
     "anthropic": {"temperature", "top_p", "top_k", "stop_sequences", "thinking", "output_config", "service_tier"},
@@ -107,8 +107,9 @@ def validate_parameters(protocol, raw):
             lo, hi = bounds[name]
             if type(value) not in {int, float} or not math.isfinite(value) or not lo <= value <= hi:
                 raise ValueError("brain_sampling_parameter_invalid")
-        elif name in {"top_k", "topK", "seed", "thinking_budget", "reasoning_budget_tokens"}:
-            if type(value) is not int or (name != "seed" and value < 0):
+        elif name in {"top_k", "topK", "seed", "thinking_budget", "thinking_token_budget", "reasoning_budget_tokens"}:
+            minimum = -1 if name == "thinking_token_budget" else 0
+            if type(value) is not int or (name != "seed" and value < minimum):
                 raise ValueError("brain_integer_parameter_invalid")
         elif name == "enable_thinking" and type(value) is not bool:
             raise ValueError("brain_thinking_parameter_invalid")
@@ -212,6 +213,8 @@ class HttpPlannerConfig:
             raise ValueError("brain_thinking_budget_must_be_less_than_output")
         if self.parameters.get("reasoning_budget_tokens", 0) >= budget:
             raise ValueError("brain_reasoning_budget_must_be_less_than_output")
+        if self.parameters.get("thinking_token_budget", -1) >= budget:
+            raise ValueError("brain_thinking_token_budget_must_be_less_than_output")
 
 
     def validate_cache_strategy(self):

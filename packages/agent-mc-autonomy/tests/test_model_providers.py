@@ -152,6 +152,38 @@ def test_chat_reasoning_budget_is_not_forwarded_to_other_protocols(provider):
         config(provider, parameters={"reasoning_budget_tokens": 512})
 
 
+@pytest.mark.parametrize("budget", [-1, 0, 512])
+def test_vllm_thinking_token_budget_reaches_chat_wire_without_changing_other_backends(budget):
+    cfg = config("openai-compatible", base_url="http://127.0.0.1:8000/v1",
+                 parameters={"thinking_token_budget": budget, "reasoning_effort": "low"})
+    cfg.validate_budget(8192)
+    _, body = request(cfg, BASE, [TOOL], 8192)
+    assert body["thinking_token_budget"] == budget
+    assert body["max_tokens"] == 8192 and body["reasoning_effort"] == "low"
+    assert "thinking_token_budget" not in request(config("deepseek"), BASE, [TOOL], 8192)[1]
+
+
+@pytest.mark.parametrize("budget", [True, False, -2, 1.5, 512.0, "512", None])
+def test_vllm_thinking_token_budget_rejects_invalid_values_before_network(budget):
+    with pytest.raises(ValueError, match="brain_integer_parameter_invalid"):
+        config("openai-compatible", base_url="http://127.0.0.1:8000/v1",
+               parameters={"thinking_token_budget": budget})
+
+
+@pytest.mark.parametrize("budget", [8192, 9000])
+def test_vllm_thinking_token_budget_must_leave_final_output_room(budget):
+    cfg = config("openai-compatible", base_url="http://127.0.0.1:8000/v1",
+                 parameters={"thinking_token_budget": budget})
+    with pytest.raises(ValueError, match="brain_thinking_token_budget_must_be_less_than_output"):
+        cfg.validate_budget(8192)
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic", "google"])
+def test_vllm_thinking_token_budget_cannot_cross_protocol_boundaries(provider):
+    with pytest.raises(ValueError, match="brain_parameters_unsupported_for_protocol"):
+        config(provider, parameters={"thinking_token_budget": 512})
+
+
 @pytest.mark.parametrize("provider,header", [("openai", "authorization"), ("anthropic", "x-api-key"), ("google", "x-goog-api-key")])
 def test_keys_headers_and_rotation_from_environment(provider, header, monkeypatch):
     cfg = config(provider, api_key_env="TEST_PROVIDER_KEY", auth={"mode": "api_key"})
@@ -164,6 +196,49 @@ def test_keys_headers_and_rotation_from_environment(provider, header, monkeypatc
 
 def sse(rows):
     return "".join("data: " + (r if isinstance(r, str) else json.dumps(r)) + "\n\n" for r in rows)
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_vllm_reasoning_is_private_native_history_and_replayed_without_renaming(stream):
+    cfg, seen = config("openai-compatible", base_url="http://127.0.0.1:8000/v1", stream=stream), []
+    def serve(req):
+        seen.append(json.loads(req.content))
+        if stream:
+            rows = [{"choices": [{"delta": {"reasoning": "private fixture", "content": "安全处见"}, "finish_reason": "stop"}]}, "[DONE]"]
+            return httpx.Response(200, text=sse(rows), headers={"content-type": "text/event-stream"})
+        return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": "安全处见", "reasoning": "private fixture"}}]})
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(serve)) as client:
+            brain = HttpPlanner(cfg, 1024, 5, client=client)
+            first = await brain.decide(BASE, [])
+            assert first["content"] == "安全处见"
+            assert "reasoning" not in first and "reasoning_content" not in first
+            assert first["_provider_state"]["data"] == {"reasoning": "private fixture"}
+            await brain.decide(BASE + [assistant_history(first), {"role": "user", "content": "继续"}], [])
+            assert seen[-1]["messages"][2]["reasoning"] == "private fixture"
+            assert "reasoning_content" not in seen[-1]["messages"][2]
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("field", ["reasoning_content", "reasoning"])
+def test_chat_first_output_includes_private_reasoning_before_spoken_content(field, monkeypatch):
+    from types import SimpleNamespace
+    from agent_mc_autonomy import model_stream
+    clock = [11]
+    monkeypatch.setattr(model_stream, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    class Response:
+        async def aiter_lines(self):
+            yield 'data: ' + json.dumps({"choices": [{"delta": {field: "private fixture"}}]})
+            yield ''
+            clock[0] = 22
+            yield 'data: ' + json.dumps({"choices": [{"delta": {"content": "回答"}, "finish_reason": "stop"}]})
+            yield ''
+            yield 'data: [DONE]'
+            yield ''
+    result, first = asyncio.run(model_stream.collect("chat", Response()))
+    assert first == 11
+    assert result["choices"][0]["message"][field] == "private fixture"
+    assert result["choices"][0]["message"]["content"] == "回答"
 
 
 def stream_rows(p):
