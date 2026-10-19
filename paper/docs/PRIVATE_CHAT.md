@@ -1,8 +1,8 @@
 # 原版私聊与命令权限
 
-## 2026-10-20 显式原版路由候选
+## 2026-10-20 显式原版路由已上线
 
-本轮隔离冷启动发现 Essentials 的禁用 `/msg` 仍可能占据命令名，因此 `paper/config/commands.yml` 把 `/msg`、`/tell`、`/w` 显式绑定 `minecraft:msg`，沿用原玩家权限与认证门禁。不再依赖插件注册先后。候选实际收发包已核对最终聊天类型表及发送者 UUID，不拼接英文或中文文本来冒充 whisper。现有 `/whisper` 的 Denizen 入口保留。部署结果与降噪协议见 [AGENT_MESSAGE_TRANSPORT.md](AGENT_MESSAGE_TRANSPORT.md)。
+本轮隔离冷启动发现 Essentials 的禁用 `/msg` 仍可能占据命令名，因此 `paper/config/commands.yml` 把 `/msg`、`/tell`、`/w` 显式绑定 `minecraft:msg`，沿用原玩家权限与认证门禁。不再依赖插件注册先后。正式1.20.6／1.21.1经原登录网关的实际收发包已核对最终聊天类型表及发送者 UUID，不拼接英文或中文文本来冒充 whisper。现有 `/whisper` 的 Denizen 入口保留。部署结果与降噪协议见 [AGENT_MESSAGE_TRANSPORT.md](AGENT_MESSAGE_TRANSPORT.md)。
 
 ## 2026-10-17 原版数据包复核
 

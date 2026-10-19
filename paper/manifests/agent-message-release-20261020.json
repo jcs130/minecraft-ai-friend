@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "status": "deployed",
+  "productionChanged": true,
+  "agentFriend": {
+    "version": "0.4.47.8",
+    "sha256": "cca58b89a9495274e842ed99c70b989ca24490d9b93d6b18becb3a1b4126b086"
+  },
+  "loginGuard": {
+    "version": "0.1.3",
+    "sha256": "1c881cecb47218a58f96c5c2c074d81a945cadaaf882dac7c4e0749e3a6183c1"
+  },
+  "numenManifest": "paper/manifests/numen-paper-candidate-20261019.json",
+  "files": [
+    {
+      "target": "AgentFriend-0.4.47.8.jar",
+      "sha256": "cca58b89a9495274e842ed99c70b989ca24490d9b93d6b18becb3a1b4126b086"
+    },
+    {
+      "target": "ysm-proxy/LoginGuard-0.1.3.jar",
+      "sha256": "1c881cecb47218a58f96c5c2c074d81a945cadaaf882dac7c4e0749e3a6183c1"
+    },
+    {
+      "target": "commands.yml",
+      "sha256": "95973dad049a7a3d2efe9a4cb3242368659a834b1f454a7be7aa378c6f2dee41",
+      "beforeSha256": "cb9641eec940aaba44062499e7eff69d214dfc0a5d66e2f1cb00467123867a93"
+    },
+    {
+      "target": "plugins/WorldEvents/config.yml",
+      "sha256": "9c8b9726a4c322a3b98ee705efba27bcaafb7e38e2548ee87ef6f110cf03c3d2",
+      "beforeSha256": "889642506fb602856c22b4009279195edd21fb107c91bee72bc1bf569efcaf85"
+    },
+    {
+      "target": "plugins/ConditionalEvents/config.yml",
+      "sha256": "19101b901f0219fbddc4ad163e90cc4f80be24e24cba977f967f35edd4a9af5c",
+      "beforeSha256": "98e483136d1e313506aa732ad7e69017fc71615337145b2ca9a085e4f31b6d55"
+    },
+    {
+      "target": "numen_api-paper-1.21.1-0.1.4.jar",
+      "sha256": "3179afb4d5b6cc9f83588cce18eb5141c5f7f0876c790b78a80f1a168ec5a693"
+    },
+    {
+      "target": "numen-paper-1.21.1-0.1.4.jar",
+      "sha256": "bfe6040eefb3cac792dc70513ae150c5e25f76f9b869fd3d9bb8eff088cb37a4"
+    },
+    {
+      "target": "NumenBedrock-0.1.0.jar",
+      "sha256": "08ace492d5b7758d8316c66dd839e0d14b7017465d98c2ec855ed33f9d4cab96"
+    },
+    {
+      "target": "plugins/numen/server/server.json",
+      "sha256": "8d1a6d976d09a82226a766ae3b3eed4b241cd14e411880ee5a33f2adf7a43d5a"
+    },
+    {
+      "target": "plugins/numen/server/mcp_server.json",
+      "sha256": "1e2c1280e08e4653463c06e8f06d41184304a0c7509370fa72582b2c4df2539b"
+    }
+  ],
+  "removeJars": [
+    {
+      "name": "AgentFriend-0.4.47.6.jar",
+      "sha256": "e9f2c8b41d6117d7deba318c81d0a4aa43894dc95f0c887b40968a5626c035a7"
+    },
+    {
+      "name": "ysm-proxy/LoginGuard-0.1.2.jar",
+      "sha256": "f32f55603e91903ae24bc4b094fede678122fd5fde419bed622de271d47b6a70"
+    }
+  ],
+  "requiredLifecycle": "original 180/60/10 notices, human/activity gates, normal stop, full E/F cold backups, pinned deployment, verification",
+  "clientSDKChangesRequired": false,
+  "payloadOptIn": true,
+  "validation": {
+    "messagePolicy": 59,
+    "authenticationUnit": 62,
+    "nativePackets": 35,
+    "coldNativeNumen": 10,
+    "proxyAuthentication": 10,
+    "coldProxyAuthentication": 10,
+    "windowsPs51Maintenance": 33,
+    "total": 219,
+    "worldEventPacketsBefore": 94,
+    "worldEventPacketsAfter": 9,
+    "eventSeconds": 45,
+    "unrelatedAgentFriendEntriesIdentical": 382,
+    "phoneXboxGuiTested": false,
+    "autonomous16AgentLoadTested": false,
+    "native1211MineflayerAuthLimitationRecorded": true
+  },
+  "buildScript": "paper/plugins/AgentFriend/scripts/build-message-release.py",
+  "privateEvidence": "E:/MC/ops/repairs/agent-messages-20261020",
+  "privateMirror": "F:/MC-backups/repairs/agent-messages-20261020",
+  "deployment": {
+    "completed": true,
+    "queued": false,
+    "approvedByCurrentHuman": true,
+    "notices": [
+      180,
+      60,
+      10
+    ],
+    "backupStamp": "20261020-023549",
+    "completeColdBackups": [
+      "E:/MC/backups/scheduled/20261020-023549",
+      "F:/MC-backups/scheduled/20261020-023549"
+    ],
+    "scheduledTaskResult": 0,
+    "stateAndPersistenceChecks": 53,
+    "authenticatedClientChecks": 60,
+    "javaVersions": [
+      "1.20.6",
+      "1.21.1"
+    ],
+    "backpackDataPreserved": true,
+    "phoneXboxGuiTested": false,
+    "autonomous16AgentLoadTested": false
+  },
+  "releaseDate": "2026-10-20",
+  "sourceCandidate": "agent-message-candidate-20261020.json"
+}

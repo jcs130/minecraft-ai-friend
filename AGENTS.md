@@ -1,3 +1,7 @@
+## 2026-10-20 消息降噪与 Numen 已正式上线
+
+Paper 1.21.1 build 133 / AgentFriend 0.4.47.8 / LoginGuard 0.1.3。服主“部署运行吧”批准后，180/60/10秒预告、真人/试炼/地下城/PvP门禁通过；原Afu-MC-DailyBackup正常停启，E/F完整冷备份20261020-023549均先于替换。正式53项状态与保存核对、60项实际登录网关1.20.6/1.21.1原生联机检查及Minepacks存档对账通过。ag_首次登录不推整段说明，未适配客户端保留本人精简回执；可选qiandengji:agent协议1发送完整私人JSON，显式--json保留关联信息。认证最终成功只报一次，授权条件保持。仅三种村庄活动条按25%更新、一次30秒提醒，战斗/救援条保持。/msg、/tell、/w显式走原版类型和真实UUID。Numen0.1.4固定源码及NumenBedrock0.1.0已启用，无新增公网端口/共享Key；Java同源模组后用/numen settings，基岩/numenmenu配置本人模型和Key。Numen不自动接管已有Agent，无可用模型时不代表已能自主行动。其他382个AgentFriend条目及原任务/技能/领地/物品数据保持；未发布档案馆0.4.48、格挡0.4.47.7和Freesia af4不在本次。手机/Xbox真机画面、远端Web部署和16自主Agent负载未作本次验收。见paper/docs/AGENT_MESSAGE_TRANSPORT.md、NUMEN_PAPER.md及agent-message-release-20261020.json。
+
 ## 2026-10-20 消息降噪与 Numen 同批候选，等待本次维护确认
 
 正式仍 Paper 1.21.1 build 133 / AgentFriend 0.4.47.6，未排队重启。候选 AgentFriend 0.4.47.8 仅回补消息传输、首次欢迎去重、村庄活动条限制；其余382条目与正式二进制保持。LoginGuard 0.1.3 保留认证条件与原成功标记，自动只报最终状态，显式查询和插件通道保留关联信息。ag_ 可选择 qiandengji:agent UTF-8 JSON；未选择或未登记频道时保留私人聊天回执，不自动执行任何动作。原版/msg、/tell、/w显式路由；Numen三JAR和配置沿此前固定候选同批安装。E/F安装与回退文件已准备，等待此前“重启先确认”的本次答复；不得先写pending计划或热载JAR。源码全量0.4.48、旧格挡0.4.47.7及Freesia af4不能混入。详见paper/docs/AGENT_MESSAGE_TRANSPORT.md和paper/manifests/agent-message-candidate-20261020.json。

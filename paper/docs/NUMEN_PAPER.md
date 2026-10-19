@@ -2,7 +2,7 @@
 
 ## 当前状态（2026-10-20）
 
-候选已构建并完成隔离验证，**正式服尚未安装，也未排队重启**。安装需服主确认本次 Paper 维护。当前正式核心为 Paper **1.21.1 build 133 / Java 21**，AgentFriend 保持 **0.4.47.6**。
+**已正式安装并启用**：Paper **1.21.1 build 133 / Java 21**、AgentFriend **0.4.47.8**、Numen **0.1.4** 和 NumenBedrock **0.1.0**。本次批准后完成预告、原维护正常停启与 E/F 完整冷备份 `20261020-023549`。实际登录网关的 Mineflayer 1.20.6／1.21.1 均收到协议3非管理员 ACK；基岩表单此前通过实际隔离协议验证，手机／Xbox画面仍待真机确认。配置个人模型与Key后才能运行自主模型，没有预置共享Key或额外公网端口。发布记录见 `paper/manifests/numen-paper-release-20261020.json`。
 
 上游 [minecraft-numen](https://github.com/Dwinovo/minecraft-numen) 的 `1.21.1` 分支提交 `7c931600c2269d21216bb6f9090588cdbe0beb01` 已包含 Paper 实现；源码版本为 `0.1.4`。这是固定源码构建，带本仓库的 Paper 内存连接兼容补丁；不是声称已有官方稳定 Paper Release。协议与安装范围见[该提交的 Paper 文档](https://github.com/Dwinovo/minecraft-numen/blob/7c931600c2269d21216bb6f9090588cdbe0beb01/docs/paper.md)。
 
@@ -29,7 +29,7 @@
 
 ### 基岩版（手机／Windows／Xbox）
 
-同批候选另含自研 **NumenBedrock 0.1.0**，通过现有 Floodgate/Cumulus 发送原生表单，不要求玩家安装 Java 模组或新增公网端口。
+本次已启用自研 **NumenBedrock 0.1.0**，通过现有 Floodgate/Cumulus 发送原生表单，不要求玩家安装 Java 模组或新增公网端口。
 
 1. 从原基岩入口进入，完成原账号认证后输入 **`/numenmenu`**。基岩版的 `/numen settings` 也会打开同一菜单，Java 原命令保持原样。
 2. 选择“模型与个人Key”，新建或修改个人档案：名称、服务商、模型、协议（Chat／Responses／Anthropic）、基础地址及个人 Key。
@@ -97,6 +97,6 @@ git apply <本仓库>/paper/integrations/numen-paper/patches/paper-memory-pipeli
 
 当前只准备候选。服主确认本次维护后，沿用原 `Afu-MC-DailyBackup` 生命周期：180／60／10 秒提醒，真人与活动副本检查，正常停服，完成 E/F 全量冷备份后才安装。不能用 `/reload` 或动态插件加载器代替重启。
 
-部署只涉及三个 JAR、两份上述配置及两个运维助手；不混入其他 AgentFriend／Freesia 待发布版本。部署器限定精确文件名和 SHA256，拒绝错加载器、未记录覆盖与运行中替换。运维名册只按服务端 `NumenOwner` 原生 NBT 与当前 UUID 的双重证据识别假玩家，未知或损坏证据仍按真人阻止维护；不按 `ag_` 名字前缀放行。
+Numen安装增量涉及三个 JAR、两份上述配置及两个运维助手；不混入其他 AgentFriend／Freesia 待发布版本。部署器限定精确文件名和 SHA256，拒绝错加载器、未记录覆盖与运行中替换。运维名册只按服务端 `NumenOwner` 原生 NBT 与当前 UUID 的双重证据识别假玩家，未知或损坏证据仍按真人阻止维护；不按 `ag_` 名字前缀放行。
 
-运行失败时先正常停服并保存本次最新数据，将新增三个 JAR 移出 `plugins`、恢复助手前像，再按原流程启动；**保留 Numen 数据目录和假玩家 playerdata**，不要为回退插件而覆盖整个世界。若确认需要恢复整套存档，只能使用同一次 E/F 完整快照，且会回退快照之后的玩家进度。上线后记录正式验证及实际冷备份号，再把本页的“候选”改成“已上线”。
+运行失败时先正常停服并保存本次最新数据，将新增三个 JAR 移出 `plugins`、恢复助手前像，再按原流程启动；**保留 Numen 数据目录和假玩家 playerdata**，不要为回退插件而覆盖整个世界。若确认需要恢复整套存档，只能使用同一次 E/F 完整快照，且会回退快照之后的玩家进度。本次已随消息降噪版本正常上线，E/F冷备份 `20261020-023549`；原候选清单保留发布前历史。

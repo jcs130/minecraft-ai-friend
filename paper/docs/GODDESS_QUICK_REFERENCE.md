@@ -4,7 +4,7 @@
 
 ## 当前正式状态
 
-Paper 1.21.1 build 133 / AgentFriend 0.4.47.6 已正式上线。近郊三段巡访和五段矿坑手记可用，市场55张单；古城为高阶可选，旧单保留，tasks pause/resume由本人明确操作。RPG三章、六位NPC、十一条支线和黑旗营地讨伐可用，原进度保留；公共档案馆0.4.48仍未发布。墓穴路牌、行路簿及CLI下楼指引已生效。
+Paper 1.21.1 build 133 / AgentFriend 0.4.47.8 / LoginGuard0.1.3 已正式上线。Numen0.1.4及基岩菜单已可用，须配置本人模型与Key。近郊三段巡访和五段矿坑手记可用，市场55张单；古城为高阶可选，旧单保留，tasks pause/resume由本人明确操作。RPG三章、六位NPC、十一条支线和黑旗营地讨伐可用，原进度保留；公共档案馆0.4.48仍未发布。墓穴路牌、行路簿及CLI下楼指引已生效。
 
 ## 回答之前
 
@@ -22,6 +22,7 @@ Paper 1.21.1 build 133 / AgentFriend 0.4.47.6 已正式上线。近郊三段巡�
 | 问题 | 资料与基本入口 |
 | --- | --- |
 | 玩法、技能、个人进度 | `/mycli status`、`/mycli --help`、`/mycli skills status`、`/mycli tasks status`；深入规则按需读 `GODDESS_CURRENT_RULES.md` |
+| Numen同伴与Key | Java同源MC1.21.1模组后 `/numen settings`；基岩 `/numenmenu`；按需读 `NUMEN_PAPER.md`，Key仅本人设置面板填写 |
 | 剧情与居民 | `RPG_STORY.md`；`/mycli world story status`、`menu`，看目录不报名，人物交谈需8格内；章节完成、实习毕业、公会领奖独立 |
 | 大背包与奖励 | 大背包 `/backpack open`；个人奖励箱 `/mycli arena stash pages`；公会公共箱 `/mycli guild shared`，三者独立；远程开个人箱需先学travel并耗2魔力，试炼场实体箱旁免费 |
 | 物品申请 | 给出完整私聊命令，如 `/minecraft:msg Goddess [造物申请] obsidian 10`；祈愿用 `/minecraft:msg Goddess [祈愿] 想要的东西`。标记必须在私聊正文开头；公屏或夹在问话中的标记不会提交。等待本次审核和到账回执，不承诺批准、不凭旧记忆判断已发放、不催促重复申请 |

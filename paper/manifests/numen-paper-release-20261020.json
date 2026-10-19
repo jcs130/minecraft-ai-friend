@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "status": "deployed",
+  "productionChanged": true,
+  "upstream": {
+    "repository": "https://github.com/Dwinovo/minecraft-numen",
+    "branch": "1.21.1",
+    "commit": "7c931600c2269d21216bb6f9090588cdbe0beb01",
+    "sourceVersion": "0.1.4",
+    "officialPaperRelease": false,
+    "patch": "paper/integrations/numen-paper/patches/paper-memory-pipeline.patch",
+    "patchSha256": "034b6d70df19516bcfec036d509151aec2affbb6460ad5976682d7c63cf218f6",
+    "buildAppliedPatchSha256": "e2690826b3c46006fb2eeaa19484281a3b2bac89a5764d391537cbb25f1c87f5",
+    "publishedPatchReproducesTestedSource": true,
+    "sourceComparison": "LF-normalized; checkout CRLF difference only"
+  },
+  "runtime": {
+    "paper": "1.21.1",
+    "paperBuild": 133,
+    "java": 21,
+    "agentFriend": "0.4.47.8",
+    "agentFriendSha256": "cca58b89a9495274e842ed99c70b989ca24490d9b93d6b18becb3a1b4126b086",
+    "publicPortsAdded": false,
+    "externalMcpEnabled": false
+  },
+  "files": [
+    {
+      "target": "numen_api-paper-1.21.1-0.1.4.jar",
+      "sha256": "3179afb4d5b6cc9f83588cce18eb5141c5f7f0876c790b78a80f1a168ec5a693"
+    },
+    {
+      "target": "numen-paper-1.21.1-0.1.4.jar",
+      "sha256": "bfe6040eefb3cac792dc70513ae150c5e25f76f9b869fd3d9bb8eff088cb37a4"
+    },
+    {
+      "target": "NumenBedrock-0.1.0.jar",
+      "sha256": "08ace492d5b7758d8316c66dd839e0d14b7017465d98c2ec855ed33f9d4cab96"
+    },
+    {
+      "target": "plugins/numen/server/server.json",
+      "sha256": "8d1a6d976d09a82226a766ae3b3eed4b241cd14e411880ee5a33f2adf7a43d5a"
+    },
+    {
+      "target": "plugins/numen/server/mcp_server.json",
+      "sha256": "1e2c1280e08e4653463c06e8f06d41184304a0c7509370fa72582b2c4df2539b"
+    },
+    {
+      "target": "ops/content-deploy.ps1",
+      "sha256": "31021db13b88859fcd380bd3b194416c498cd83730769bce2782d4125987a23e",
+      "beforeSha256": "b45abd95ac1a20aefd39b7e2e31100a81ee93a47607c99be265d664748d108ce"
+    },
+    {
+      "target": "ops/manage-server.ps1",
+      "sha256": "0e8b3a2e9841ee0daf71bd33a3750be3eb0570fa263a1e3e2803f3a702bacdd0",
+      "beforeSha256": "629f78a36d33035620cd8141d2d786033e0ba904ebe3f6ea5f113c79b4bfaab5"
+    }
+  ],
+  "clientPackages": [
+    {
+      "name": "Numen-client-MC1.21.1-fabric-0.1.4-7c93160.zip",
+      "bytes": 6907341,
+      "sha256": "36c2f5177ad4fd4b2ee39afcaec92bddc56b9d3d5c7e79e45c216d0cefe02191",
+      "minecraft": "1.21.1",
+      "java": 21,
+      "loader": "fabric",
+      "requirements": "Fabric Loader 0.18.1 或以上；Fabric API 0.116.7+1.21.1（本包已附）",
+      "version": "0.1.4",
+      "sourceCommit": "7c931600c2269d21216bb6f9090588cdbe0beb01",
+      "files": [
+        {
+          "name": "numen-fabric-1.21.1-0.1.4.jar",
+          "bytes": 4582845,
+          "sha256": "b76122d470f728975c9f57ae6044a77a131eb856440d862d87144f04d3dc392a"
+        },
+        {
+          "name": "fabric-api-0.116.7+1.21.1.jar",
+          "bytes": 2424884,
+          "sha256": "08018cc48c97415a38016a00dbd5a2c7a460ba6b7a051690a8cb3dbb5e8482a4"
+        }
+      ],
+      "graphicalClientTested": false
+    },
+    {
+      "name": "Numen-client-MC1.21.1-neoforge-0.1.4-7c93160.zip",
+      "bytes": 4720773,
+      "sha256": "69fc4aa5def817f28664ae85d6c39768fa26a4f1e37d5a72374bb6b9c071e2c5",
+      "minecraft": "1.21.1",
+      "java": 21,
+      "loader": "neoforge",
+      "requirements": "NeoForge 21.1.233（不要与 Fabric Loader 混装）",
+      "version": "0.1.4",
+      "sourceCommit": "7c931600c2269d21216bb6f9090588cdbe0beb01",
+      "files": [
+        {
+          "name": "numen-neoforge-1.21.1-0.1.4.jar",
+          "bytes": 4821979,
+          "sha256": "f628c067dc9853f26ec6f3cbac0f1febf3f5cb00f7609dd1fa3dd2f268de5f50"
+        }
+      ],
+      "graphicalClientTested": false
+    }
+  ],
+  "validation": {
+    "jvmUnitTests": 1721,
+    "upstreamPaperE2E": 6,
+    "nativeMineflayerChecks": 23,
+    "mineflayerVersion": "4.37.1",
+    "bedrockFormJvmChecks": 25,
+    "bedrockProtocolChecks": 14,
+    "bedrockVersion": "1.26.51",
+    "bedrockFixtureAuthentication": "loopback-only self-signed Floodgate fixture; production signature validation unchanged",
+    "opsChecks": 45,
+    "opsShell": "Windows PowerShell 5.1",
+    "proxyProtocolHandshake": 3,
+    "proxyFullProductionPluginChainTested": false,
+    "phoneXboxTested": false,
+    "javaGraphicalClientTested": false,
+    "realModelCallTested": false,
+    "sixteenAutonomousAgentsLoadTested": false
+  },
+  "release": {
+    "currentApprovalRequired": true,
+    "pendingPlanQueued": false,
+    "requiredLifecycle": "original maintenance notice, human/activity gates, normal stop, full E/F cold snapshots, pinned content install, start, verify",
+    "privateEvidence": "E:/MC/ops/repairs/numen-paper-20261019",
+    "privateMirror": "F:/MC-backups/repairs/numen-paper-20261019",
+    "rollbackDocument": "paper/docs/NUMEN_PAPER.md"
+  },
+  "deployment": {
+    "completed": true,
+    "queued": false,
+    "approvedByCurrentHuman": true,
+    "notices": [
+      180,
+      60,
+      10
+    ],
+    "backupStamp": "20261020-023549",
+    "completeColdBackups": [
+      "E:/MC/backups/scheduled/20261020-023549",
+      "F:/MC-backups/scheduled/20261020-023549"
+    ],
+    "scheduledTaskResult": 0,
+    "stateAndPersistenceChecks": 53,
+    "authenticatedClientChecks": 60,
+    "javaVersions": [
+      "1.20.6",
+      "1.21.1"
+    ],
+    "backpackDataPreserved": true,
+    "phoneXboxGuiTested": false,
+    "autonomous16AgentLoadTested": false
+  },
+  "releaseDate": "2026-10-20",
+  "sourceCandidate": "numen-paper-candidate-20261019.json"
+}

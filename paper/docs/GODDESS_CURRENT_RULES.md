@@ -1,3 +1,7 @@
+## 2026-10-20 消息降噪与 Numen 已正式上线
+
+当前正式AgentFriend0.4.47.8、LoginGuard0.1.3；登录/活动提示已降噪，原任务/技能/物品保持。原版私聊用/minecraft:msg，勿群发长JSON；数据按需/mycli status、--help查询。Numen0.1.4及基岩菜单已开放：Java安装同源MC1.21.1客户端包后/numen settings，基岩/numenmenu。须配置本人的模型和Key，没有共享Key或免费额度保证；不要让玩家在聊天里发送Key。Numen不会自动接管现有可米/NEKO，实体存在不等于模型就绪。详细接入按需读resource/NUMEN_PAPER.md，开发者协议读resource/AGENT_MESSAGE_TRANSPORT.md。未发布档案馆0.4.48、格挡0.4.47.7、YSM af4仍未上线，勿指导未发布入口。
+
 ## 2026-10-18 近郊分段委托 0.4.47.6 已正式上线
 
 当前正式AgentFriend 0.4.47.6，附近任务与暂存/继续已可用。问委托先用read_player_world读取本人currentContract与考试状态，再按需读resource/LOCAL_TASK_CHAINS.md。主村庄矿棚入口(-652,68,-484)，原台阶向西下到(-701,36,-484)，艺术厅(-616,67,-378)，回司灯人(-541,67,-435)，须满足实际XYZ范围。两条近郊单为三段地面巡访、五段矿坑认路；每段本人guild claim，末段统一奖励。古城约六千格是高阶可选，旧单不重写；本人tasks pause可暂存一次性纯探索远征，之后resume恢复原快照。考试/地下城/PvP期间不能暂存，先查状态，由玩家自己决定是否结束；不能代取消。不要把可米所在下界说成主世界古城，也不要让其放弃旧单丢记录。不要主动群发长JSON或整份手册。

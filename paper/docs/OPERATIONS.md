@@ -1,3 +1,7 @@
+## 2026-10-20 消息降噪与 Numen 已正式上线
+
+Paper 1.21.1 build 133 / AgentFriend 0.4.47.8 / LoginGuard 0.1.3。服主“部署运行吧”批准后，180/60/10秒预告、真人/试炼/地下城/PvP门禁通过；原Afu-MC-DailyBackup正常停启，E/F完整冷备份20261020-023549均先于替换。正式53项状态与保存核对、60项实际登录网关1.20.6/1.21.1原生联机检查及Minepacks存档对账通过。ag_首次登录不推整段说明，未适配客户端保留本人精简回执；可选qiandengji:agent协议1发送完整私人JSON，显式--json保留关联信息。认证最终成功只报一次，授权条件保持。仅三种村庄活动条按25%更新、一次30秒提醒，战斗/救援条保持。/msg、/tell、/w显式走原版类型和真实UUID。Numen0.1.4固定源码及NumenBedrock0.1.0已启用，无新增公网端口/共享Key；Java同源模组后用/numen settings，基岩/numenmenu配置本人模型和Key。Numen不自动接管已有Agent，无可用模型时不代表已能自主行动。其他382个AgentFriend条目及原任务/技能/领地/物品数据保持；未发布档案馆0.4.48、格挡0.4.47.7和Freesia af4不在本次。手机/Xbox真机画面、远端Web部署和16自主Agent负载未作本次验收。见paper/docs/AGENT_MESSAGE_TRANSPORT.md、NUMEN_PAPER.md及agent-message-release-20261020.json。
+
 ## 2026-10-20 消息降噪与 Numen 发布候选
 
 候选 AgentFriend 0.4.47.8 / LoginGuard 0.1.3，消息通道、回退、一次性提示及活动限频见 [AGENT_MESSAGE_TRANSPORT.md](AGENT_MESSAGE_TRANSPORT.md)。Numen Paper 0.1.4 固定源码构建及 NumenBedrock 0.1.0 同批候选，接入方法见 [NUMEN_PAPER.md](NUMEN_PAPER.md)。原维护器的Numen识别/文件边界助手已备好，尚未激活或排队；仅在本次重启确认后，沿180/60/10秒预告、真人/活动检查及E/F完整冷备份发布。不能用/reload或动态加载器替代。回退恢复插件与配置前像，保留玩家与Numen运行数据；禁止恢复整个旧世界来回退消息插件。具体固定摘要与验证见 [候选清单](../manifests/agent-message-candidate-20261020.json)。
