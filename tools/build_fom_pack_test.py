@@ -98,6 +98,13 @@ class FomPackTest(unittest.TestCase):
         build(self.base, self.downloads, second, lock=self.lock, content_lock=self.content_lock)
         self.assertEqual(self.output.read_bytes(), second.read_bytes())
 
+    def test_unchanged_loader_preserves_author_dependency_key_order(self):
+        self.index['dependencies']=dict(reversed(list(self.index['dependencies'].items())))
+        self.save();self.build()
+        with zipfile.ZipFile(self.output) as archive:
+            index=json.loads(archive.read('modrinth.index.json'))
+            self.assertEqual(list(index['dependencies']),list(self.index['dependencies']))
+
     def test_existing_game_or_release_is_never_overwritten(self):
         self.output.write_bytes(b'keep')
         with self.assertRaisesRegex(ValueError, 'new output'):
@@ -178,6 +185,44 @@ class FomPackTest(unittest.TestCase):
         self.save()
         with self.assertRaisesRegex(ValueError, 'targets differ'):
             self.build()
+
+    def test_reviewed_loader_patch_preserves_upstream_and_targets_derivative(self):
+        self.pack['upstreamDependencies']=copy.deepcopy(self.index['dependencies'])
+        self.pack['dependencies']={'minecraft':'1.21.1','neoforge':'21.1.250'}
+        self.content['testedNeoForge']='21.1.250'
+        self.save();self.build()
+        with zipfile.ZipFile(self.output) as archive:
+            index=json.loads(archive.read('modrinth.index.json'))
+            self.assertEqual(index['dependencies']['neoforge'],'21.1.250')
+            self.assertEqual(index['files'][:2],self.index['files'])
+        self.assertTrue(verify(self.output)['ok'])
+
+    def test_pinned_redistributable_mod_and_notices_can_be_bundled_without_new_download_hosts(self):
+        self.content['mods'][0]['distribution']='override'
+        self.content['mods'][0]['url']='https://mediafilez.forgecdn.net/files/example.jar'
+        notice=b'GPL license and public source notice';(self.downloads/'LICENSE.txt').write_bytes(notice)
+        self.content['bundledNotices']=[{'file':'LICENSE.txt',**hashes(notice)}]
+        self.save();self.build()
+        with zipfile.ZipFile(self.output) as archive:
+            self.assertEqual(archive.read('overrides/mods/addition.jar'),b'content JAR fixture')
+            self.assertEqual(archive.read('client-overrides/FOM-QiandengJi/LICENSE.txt'),notice)
+            self.assertEqual(len(json.loads(archive.read('modrinth.index.json'))['files']),2)
+        self.assertTrue(verify(self.output)['ok'])
+
+    def test_download_domain_allowlist_cannot_be_bypassed(self):
+        for url in ('https://mediafilez.forgecdn.net/a.jar','https://cdn.modrinth.com.evil.test/a.jar','http://cdn.modrinth.com/a.jar','https://key@cdn.modrinth.com/a.jar','https://cdn.modrinth.com:444/a.jar'):
+            with self.subTest(url=url):
+                self.content['mods'][0]['url']=url;self.save()
+                with self.assertRaisesRegex(ValueError,'Unsupported download URL'):self.build()
+
+    def test_bundled_mod_never_overwrites_author_override(self):
+        row=self.content['mods'][0];row.update(file='author-extra.jar',distribution='override')
+        (self.downloads/row['file']).write_bytes(b'content JAR fixture');self.save()
+        with self.assertRaisesRegex(ValueError,'Conflicting game path'):self.build()
+
+    def test_instructions_cannot_escape_docs(self):
+        self.pack['instructions']='../private.txt';self.save()
+        with self.assertRaisesRegex(ValueError,'Unsafe relative path'):self.build()
 
     def test_rejects_missing_hash_http_url_and_wrong_side(self):
         original = copy.deepcopy(self.index['files'][0])

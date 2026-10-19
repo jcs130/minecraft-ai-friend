@@ -14,6 +14,7 @@ import maw_bedrock_resources as resources
 
 DEFAULT=Path('E:/MC/servers/fom-2.42/ops/fom-bedrock.json')
 PORTS={'lan':(28988,28994,28995,28996),'offline_qa':(28993,28991,28992,28997)}
+QA_ROOT=Path('E:/MC/staging').resolve()
 
 def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -28,12 +29,18 @@ def load_config(path,*,verify_hashes=True):
     raw=service.read_json(Path(path));mode=raw.get('mode')
     if raw.get('schemaVersion')!=1 or mode not in PORTS or set(raw)!={'schemaVersion','mode','mainConfig','bridgeDir','gatewayRelease'}:raise ValueError('Invalid FOM Bedrock configuration')
     main_path=Path(raw['mainConfig']).resolve();main=fom.load_config(main_path,verify_hashes=verify_hashes)
-    if Path(main['serverDir']).resolve()!=fom.PRODUCTION or main['gamePort']!=28976:raise ValueError('FOM Bedrock must target the selected FOM world')
+    upstream=Path(main['serverDir']).resolve()
+    production=upstream==fom.PRODUCTION and main['gamePort']==28976
+    # Only the explicitly loopback QA mode may exercise a private candidate.
+    # fom.load_config still checks its root, bind, auth and exact release hashes.
+    research=(upstream.is_relative_to(fom.RESEARCH) and 39000<=main['gamePort']<=39999
+              and main['networkExposure']['publicGameAccess'] is False)
+    if not production and not (mode=='offline_qa' and research):raise ValueError('FOM Bedrock must target the selected FOM world')
     directory=Path(raw['bridgeDir']).resolve()
     if mode=='lan':
         if directory.parent!=(fom.PRODUCTION.parent/'ops').resolve() or not directory.name.startswith('bedrock-'):raise ValueError('Production bridge must stay in FOM ops')
     else:
-        if not directory.is_relative_to(Path('E:/MC/staging').resolve()) or (directory/'.fom-bedrock-qa').read_text().strip()!='loopback-only':raise ValueError('Offline QA must stay in marked staging')
+        if not directory.is_relative_to(QA_ROOT) or (directory/'.fom-bedrock-qa').read_text().strip()!='loopback-only':raise ValueError('Offline QA must stay in marked staging')
     udp,gate,tcp,health=PORTS[mode];address='192.168.3.163' if mode=='lan' else '127.0.0.1'
     expected={directory/name:digest for name,digest in original.ARTIFACTS.items()}
     expected[directory/'plugins/Geyser/config.yml']=hashlib.sha256(geyser_config(mode).encode()).hexdigest()
@@ -78,7 +85,7 @@ def load_config(path,*,verify_hashes=True):
     return {'serverDir':str(directory),'runtimeDir':str(directory/'ops'),'gamePort':tcp,'healthPort':health,'validator':validate,
         'fomRunConfig':str(main_path),'mode':mode,'udpPort':udp,'udpAddress':address,'resourceContract':contract,
         'networkExposure':{'mode':mode,'address':address,'udpPort':udp,'javaListenHost':'127.0.0.1'},
-        'services':[{'id':'compat_gate','command':[str(release/'node.exe'),str(release/'gate/gate.cjs'),str(gate),'127.0.0.1','28976'],'cwd':str(release),'env':env,'host':'127.0.0.1','listenHost':'127.0.0.1','port':gate,'dependsOn':[],'readiness':'minecraft','startupTimeoutSeconds':90,'stopMode':'stdin','stopText':'{"kind":"shutdown"}'},
+        'services':[{'id':'compat_gate','command':[str(release/'node.exe'),str(release/'gate/gate.cjs'),str(gate),'127.0.0.1',str(main['gamePort'])],'cwd':str(release),'env':env,'host':'127.0.0.1','listenHost':'127.0.0.1','port':gate,'dependsOn':[],'readiness':'minecraft','startupTimeoutSeconds':90,'stopMode':'stdin','stopText':'{"kind":"shutdown"}','fomHealthPort':main['healthPort'],'fomServerDir':str(upstream)},
             {'id':'bedrock','command':command,'cwd':str(directory),'env':{},'host':'127.0.0.1','listenHost':'127.0.0.1','port':tcp,'dependsOn':['compat_gate'],'readiness':'minecraft','startupTimeoutSeconds':90,'stopMode':'stdin','stopText':'stop'}]}
 
 class BedrockChild(service.Child):
@@ -87,8 +94,8 @@ class BedrockChild(service.Child):
         if self.ready and self.spec['id']=='compat_gate':
             try:
                 from urllib.request import urlopen
-                with urlopen('http://127.0.0.1:28985/healthz',timeout=1) as response:main=json.load(response)
-                if not main['healthy'] or not 0<=time.time()-main['heartbeatEpoch']<15 or Path(main['serverDir']).resolve()!=fom.PRODUCTION:raise ValueError('FOM world is not ready')
+                with urlopen('http://127.0.0.1:'+str(self.spec['fomHealthPort'])+'/healthz',timeout=1) as response:main=json.load(response)
+                if not main['healthy'] or not 0<=time.time()-main['heartbeatEpoch']<15 or Path(main['serverDir']).resolve()!=Path(self.spec['fomServerDir']).resolve():raise ValueError('FOM world is not ready')
             except Exception as error:self.ready=False;self.problem='fom_upstream_unavailable: '+str(error)
         if self.ready and self.spec['id']=='bedrock':
             try:

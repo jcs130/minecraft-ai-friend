@@ -15,13 +15,14 @@ def allowed(lib):
         value=rule['action']=='allow'
     return value
 
-def launch(minecraft:Path,game:Path,java:Path,username:str,server:str,*,qa_quit=False,memory='2304M'):
+def launch(minecraft:Path,game:Path,java:Path,username:str,server:str,*,qa_quit=False,memory='2304M',neoforge='21.1.248'):
     minecraft=minecraft.resolve();game=game.resolve()
     if game==minecraft or not re.fullmatch('[A-Za-z0-9_]{3,16}',username) or not re.fullmatch(r'127\.0\.0\.1:\d{1,5}',server):
         raise ValueError('Offline QA requires a separate game directory, explicit identity and loopback server')
     if not (game/'mods').is_dir():raise ValueError('Prepare the isolated client mods explicitly')
     base=json.loads((minecraft/'versions/1.21.1/1.21.1.json').read_bytes())
-    neo=json.loads((minecraft/'versions/neoforge-21.1.248/neoforge-21.1.248.json').read_bytes())
+    if not re.fullmatch(r'21\.1\.\d+',neoforge):raise ValueError('Explicit NeoForge 1.21.1 patch required')
+    neo=json.loads((minecraft/f'versions/neoforge-{neoforge}'/f'neoforge-{neoforge}.json').read_bytes())
     if neo['inheritsFrom']!='1.21.1':raise ValueError('Unexpected NeoForge cache')
     jars=[];natives=game/'bridge-launch/natives';natives.mkdir(parents=True,exist_ok=True)
     for lib in neo['libraries']+base['libraries']:
@@ -64,6 +65,7 @@ if __name__=='__main__':
     ap=argparse.ArgumentParser(description=__doc__)
     for name in ('minecraft','game','java'):ap.add_argument('--'+name,type=Path,required=True)
     ap.add_argument('--username',required=True);ap.add_argument('--server',required=True);ap.add_argument('--qa-quit',action='store_true')
-    a=ap.parse_args();child,log=launch(a.minecraft,a.game,a.java,a.username,a.server,qa_quit=a.qa_quit)
+    ap.add_argument('--neoforge',default='21.1.248',help='Explicit reviewed 1.21.1 loader patch')
+    a=ap.parse_args();child,log=launch(a.minecraft,a.game,a.java,a.username,a.server,qa_quit=a.qa_quit,neoforge=a.neoforge)
     try:print(json.dumps({'clientExitCode':child.wait()}))
     finally:log.close()

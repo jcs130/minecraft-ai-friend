@@ -44,6 +44,8 @@ def check_server(server,port,host):
         raise ValueError('FOM server bind, mixed-login, world or local management properties differ')
 
 def check_policies(server):
+    from fom_smart_npc import check_policy
+    check_policy(server)
     common=tomllib.loads((server/'config/sable-common.toml').read_text('utf-8'))
     if common.get('attempt_udp_networking') is not False or common.get('disable_udp_pipeline') is not True:raise ValueError('This FOM release uses explicit TCP physics synchronization')
     auth=tomllib.loads((server/'world/serverconfig/mixauth-server.toml').read_text('utf-8'))

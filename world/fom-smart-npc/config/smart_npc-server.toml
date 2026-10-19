@@ -1,0 +1,20 @@
+# FOM 2.42 / Smart NPC 2.0.1: bounded initial rollout.
+turnOnNpcChat = true
+showNpcChatPrefix = true
+npcChatLocale = "zh_cn"
+forceTickManage = 0
+maxNaturalPlayerNpcs = 4
+spawnPlayerNpc = [2, 1, 1]
+blacklistCompatModWeapon = []
+
+[remoteNpcDeparture]
+enabled = true
+minMinutes = 10
+maxMinutes = 30
+
+[aiScheduler]
+processingNpcLimit = 2
+targetServerMspt = 40.0
+
+[performanceMonitor]
+enabled = false

@@ -9,6 +9,8 @@ def probe(file=DEFAULT):
     checks={};result={'schemaVersion':1,'scope':'fom_public_server','checks':checks,'modelRequests':0,'worldActions':0,'allModGameplayVerified':False}
     try:
         cfg=load_config(file);checks['release_files_and_login_policy_verified']=True
+        from fom_smart_npc import check_policy
+        checks.update(check_policy(Path(cfg['serverDir'])))
         with urlopen('http://127.0.0.1:'+str(cfg['healthPort'])+'/healthz',timeout=6) as response:state=json.load(response)
         checks['correct_server_owner']=state['serverDir']==cfg['serverDir'] and [r['id'] for r in state['services']]==[r['id'] for r in cfg['services']]
         checks['owner_heartbeat']=0<=time.time()-state['heartbeatEpoch']<15

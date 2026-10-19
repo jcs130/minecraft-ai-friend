@@ -1,0 +1,30 @@
+FOM 2.42 千灯纪 · Smart NPC 扩展（2026-10-20）
+
+Java 21 / Minecraft 1.21.1 / NeoForge 21.1.250
+玩家版 128 个启用模组，Agent 完整客户端版 131 个；各保留作者禁用的 10 个模组。
+从旧包更新：升级 NeoForge 到 21.1.250，在 mods 放入 SmartNpc-1.21.1-2.0.1.jar。
+其他机械动力/航空学/生活/RPG 模组保持原版，不另行替换 Create、Sable 或 Aeronautics。
+
+完整 Java 客户端：micro.kangqiang.site:28976。
+国际基岩版：micro.kangqiang.site，UDP 28988；保留 Xbox 身份验证。
+基础 Mineflayer：局域网 192.168.3.163:28977，1.21.1 协议，账号以 ag_ 开头。
+Agent 在服务器 MC_AUTH_STATE 授权后再执行任务。/fom help、/fom status、/fom inventory、/fom nearby 可查询。
+Mineflayer 和基岩使用原版投影；Smart NPC 的原生外观、AI 检查界面需要完整 Java 客户端，不能把桥接成功当作全模组画面兼容。
+
+Smart NPC 采用中文生活对白，[NPC] 前缀区分真人与机器人。
+遇到组队邀请，可在游戏聊天回复 ok 或 okay（这是原模组要求的接受词）。
+营地工匠、林间矿工、河畔渔夫、田园农夫、巡林剑士和远行旅人使用原模组行为。
+不需要配置大模型 Key。初期限自然 NPC 4 个、日常 AI 工作者 2 个，不强制加载远处 NPC 区块。
+正常日常工作仍可能采矿、砍树或建设；这不是 Paper 的公会 NPC 和任务系统。
+
+启动器的 Java 参数保留已验证的 FOM 单方法 JIT 排除：
+-XX:CompileCommand=exclude,net.caffeinemc.mods.lithium.common.shapes.VoxelShapeMatchesAnywhere::cuboidMatchesAnywhere
+mrpack 不会自动设置此参数，请在实例 JVM 参数中添加。
+
+Agent 版额外的客户端桥、Minescript、Baritone 都是客户端可选组件。
+首次启动自动生成本机控制凭据，不要共享 connection.json、账号令牌、存档或动作账本。
+不恢复旧角色控制器，不重试结果未知的动作。
+
+Smart NPC 官方版本和源码：
+https://www.curseforge.com/minecraft/mc-mods/smart-npc/files/9125288
+https://github.com/PlaIsMe/SmartNpc

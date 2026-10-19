@@ -25,13 +25,13 @@ def projection_catalog(output):
     (directory/'fom-projection-contract.json').write_bytes(resources.encoded({'schemaVersion':1,'nativeCatalogSha256':sha(native),'iconCatalogSha256':sha(icons),'projectionSha256':sha(target),'itemCount':len(rows)}))
     return len(rows)
 
-def prepare(output,assets_root=None):
+def prepare(output,assets_root=None,main_config=MAIN):
     output=Path(output).resolve()
     if output.exists():raise ValueError('Prepare in a new private workspace')
     if not output.is_relative_to(Path('E:/MC/research').resolve()):raise ValueError('Preparation stays in the private research directory')
-    main=fom.load_config(MAIN);raw=main['_raw'];source=Path(raw['agentGateway']['releaseDir'])
+    main=fom.load_config(main_config);raw=main['_raw'];source=Path(raw['agentGateway']['releaseDir']);server=Path(main['serverDir'])
     output.mkdir(parents=True);assets=Path(assets_root).resolve() if assets_root else output/'assets';manifest={}
-    archives=[VANILLA,*sorted((fom.PRODUCTION/'mods').glob('*.jar'))]
+    archives=[VANILLA,*sorted((server/'mods').glob('*.jar'))]
     if assets_root:
         previous=json.loads((assets.parent/'prepare.json').read_text(encoding='utf-8'))
         if previous['jarInputs']!={jar.name:sha(jar) for jar in archives}:raise ValueError('Reused asset export belongs to a different exact mod set')
@@ -69,7 +69,7 @@ def prepare(output,assets_root=None):
     source_record['files']['gate/gate.cjs']=sha(gateway);source_record['files']['gate/bedrock-account.cjs']=sha(release/'gate/bedrock-account.cjs')
     source_record['scope']='partial_vanilla_bedrock_projection';source_record['sourceGatewayManifestSha256']=sha(source/'release.json')
     (release/'release.json').write_text(json.dumps(source_record,indent=2)+'\n',encoding='utf-8')
-    native=fom.PRODUCTION/'dump/maw-registry-ids/items.tsv'
+    native=server/'dump/maw-registry-ids/items.tsv'
     if sha(native)!=source_record['nativeExport']['items.tsv']:raise ValueError('Native item export differs from gateway')
     labels={row['nativeItem']:row['displayName'] for row in json.loads((release/'registry/items.json').read_text(encoding='utf-8'))['items']}
     contract=resources.build(assets,native,release/'registry/idmap.json',output/'resources',identity='fom-2.42-'+sha(release/'registry/idmap.json')[:12],display_names=labels)
@@ -83,10 +83,11 @@ def prepare(output,assets_root=None):
     shutil.copy2(output/'resources'/resources.CONTRACT,prototype/'plugins/Geyser'/resources.CONTRACT)
     (prototype/'plugins/Geyser/config.yml').write_bytes(geyser_config('lan').encode('utf-8'))
     projection_count=projection_catalog(output)
-    receipt={'schemaVersion':1,'mainConfigSha256':sha(MAIN),'gatewayRelease':str(release),'gatewayManifestSha256':sha(release/'release.json'),'assetFiles':len(manifest),'jarInputs':{jar.name:sha(jar) for jar in archives},'resourceContract':contract,'productionModified':False}
+    receipt={'schemaVersion':1,'mainConfigSha256':sha(main_config),'gatewayRelease':str(release),'gatewayManifestSha256':sha(release/'release.json'),'assetFiles':len(manifest),'jarInputs':{jar.name:sha(jar) for jar in archives},'resourceContract':contract,'productionModified':False}
     (output/'prepare.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2),encoding='utf-8')
     return {'workspace':str(output),'assetFiles':len(manifest),'customItems':contract['itemCount'],'namedNativeItems':projection_count,'perNamespace':contract['perNamespace'],'productionModified':False}
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--output',type=Path,required=True);parser.add_argument('--projection-only',action='store_true');parser.add_argument('--assets',type=Path)
-    args=parser.parse_args();print(json.dumps({'namedNativeItems':projection_catalog(args.output)} if args.projection_only else prepare(args.output,args.assets),ensure_ascii=False))
+    parser.add_argument('--main-config',type=Path,default=MAIN)
+    args=parser.parse_args();print(json.dumps({'namedNativeItems':projection_catalog(args.output)} if args.projection_only else prepare(args.output,args.assets,args.main_config),ensure_ascii=False))

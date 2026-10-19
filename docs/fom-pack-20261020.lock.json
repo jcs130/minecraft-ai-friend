@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "name": "命运齿轮 FOM 2.42 · 千灯纪内容扩展",
+  "summary": "保留 FOM 航空学、农夫乐事、车万女仆和 Iron 法术，增加 Smart NPC 中文生活角色。",
+  "dependencies": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.250"
+  },
+  "upstream": {
+    "project": "https://modrinth.com/modpack/fom",
+    "version": "2.42",
+    "url": "https://cdn.modrinth.com/data/fom4Ovsz/versions/wWYmnFIR/%E5%91%BD%E8%BF%90%E9%BD%BF%E8%BD%AEFOM%20%E8%88%AA%E7%A9%BA%E5%AD%A6%202.42.mrpack",
+    "sha256": "4bff3942056a83bce9887bc9156505a15ee65f0c396e6107314e3c7fd9c5ef79",
+    "sha512": "7bea9654d89d2eada5e69ee6409aef404aa9634a24daedae97eca3de6f06dd26a67214c36f4de1c0af7e57b63b21794e292d3e186c5f977523eb7eda7e62e85f",
+    "downloadReferences": 137,
+    "enabledJars": 121,
+    "authorDisabled": 10
+  },
+  "profiles": {
+    "player": {
+      "versionId": "2.42-qiandengji-20261020.1-player",
+      "counts": {
+        "enabledJars": 128,
+        "authorDisabled": 10
+      }
+    },
+    "agent": {
+      "versionId": "2.42-qiandengji-20261020.1-agent",
+      "counts": {
+        "enabledJars": 131,
+        "authorDisabled": 10
+      }
+    }
+  },
+  "contentLock": "fom-content-20261020.lock.json",
+  "agentMods": [
+    {
+      "file": "maw-client-bridge-0.5.0-neoforge-1.21.1.jar",
+      "sha256": "fef3447ed9c620d01a1e899a2ddec33c756da76a144aca412fd1a0774fb91aa1",
+      "project": "https://github.com/jcs130/minecraft-ai-friend/tree/experiment/agent-society-1.21.1/world/java-client-bridge-src",
+      "license": "MIT",
+      "sides": [
+        "client"
+      ],
+      "distribution": "separate original client-only JAR in client-overrides; no configured RPC state"
+    },
+    {
+      "file": "minescript-neoforge-1.21.1-4.0.jar",
+      "sha256": "4e421ed49e38f7453178ce7d8cc8415367cb513e2d837d648ae844c1d8e4b351",
+      "sha512": "6055837f2b5222c42b75f85eb3731b5fbe5acf96f166586b49d15909626a78c4ebdbe8a69f7322721dd070441da19bef81f11c8f9ae1abe1cffbca2382e675e5",
+      "url": "https://cdn.modrinth.com/data/KcpXWngB/versions/l71kqsDA/minescript-neoforge-1.21.1-4.0.jar",
+      "source": "https://github.com/maxuser0/minescript/tree/4f09f7a46347bafbef9fd77a34ce08bb442b7555",
+      "license": "GPL-3.0-only",
+      "sides": [
+        "client"
+      ]
+    },
+    {
+      "file": "baritone-api-neoforge-1.11.3.jar",
+      "sha256": "7f9f40952c49e78388e4e9ceaa6fd91a5b662238e06c997b3de5438177f99d8d",
+      "url": "https://github.com/cabaletta/baritone/releases/download/v1.11.3/baritone-api-neoforge-1.11.3.jar",
+      "source": "https://github.com/cabaletta/baritone/tree/v1.11.3",
+      "license": "LGPL-3.0-or-later",
+      "sides": [
+        "client"
+      ]
+    }
+  ],
+  "upstreamDependencies": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.248"
+  },
+  "instructions": "FOM-SMART-NPC-QUICKSTART.txt"
+}

@@ -1,7 +1,7 @@
 """Build importable FOM derivatives from a pinned author archive, never a played instance.
 
 The .mrpack keeps upstream download references and clean author overrides.
-Only the six locked additions and explicit client-only Agent components are
+Only locked additions and explicit client-only Agent components are
 eligible. No launcher state, credentials, worlds or local RPC state are read.
 Format: https://support.modrinth.com/en/articles/8802351-modrinth-modpack-format-mrpack
 """
@@ -70,7 +70,7 @@ def index_paths(index):
             raise ValueError('Missing official download: ' + name)
         for url in row['downloads']:
             parsed = urlsplit(url)
-            if parsed.scheme != 'https' or parsed.hostname not in ('cdn.modrinth.com', 'github.com', 'raw.githubusercontent.com', 'gitlab.com') or re.search(r'\s', url):
+            if parsed.scheme != 'https' or parsed.hostname not in ('cdn.modrinth.com', 'github.com', 'raw.githubusercontent.com', 'gitlab.com') or parsed.username or parsed.password or parsed.port not in (None,443) or re.search(r'\s', url):
                 raise ValueError('Unsupported download URL: ' + name)
         if any(value not in ('required', 'optional', 'unsupported') for value in row.get('env', {}).values()):
             raise ValueError('Invalid side declaration: ' + name)
@@ -188,7 +188,9 @@ def build(base, downloads, output, *, profile='player', agent_bundle=None, lock=
     raw, _ = pinned_file(Path(base).parent, {**pack['upstream'], 'file': Path(base).name})
     entries = archive_files(base)
     index = json.loads(entries['modrinth.index.json'])
-    if index['versionId'] != pack['upstream']['version'] or index['dependencies'] != pack['dependencies']:
+    # The author pack remains hash-pinned at its original loader. A reviewed
+    # derivative can explicitly target a later patch without relabelling it.
+    if index['versionId'] != pack['upstream']['version'] or index['dependencies'] != pack.get('upstreamDependencies', pack['dependencies']):
         raise ValueError('Wrong upstream pack version/loader')
     if len(index['files']) != pack['upstream']['downloadReferences']:
         raise ValueError('Wrong upstream download inventory')
@@ -196,9 +198,23 @@ def build(base, downloads, output, *, profile='player', agent_bundle=None, lock=
     if sum(p.startswith('mods/') and p.endswith('.jar') for p in original_paths) != pack['upstream']['enabledJars']:
         raise ValueError('Wrong upstream mod inventory')
     index = copy.deepcopy(index)
+    if index['dependencies'] != pack['dependencies']:
+        index['dependencies'] = copy.deepcopy(pack['dependencies'])
     for row in content['mods']:
         raw, actual = pinned_file(downloads, row)
-        index['files'].append(download_entry(row, raw, actual))
+        if row.get('distribution') == 'override':
+            # Preserve the standard launcher download-domain allowlist. An
+            # explicitly redistributable, pinned original may be bundled instead.
+            name=game_path('mods/'+row['file'])
+            if name.casefold() in effective_paths(index,entries):raise ValueError('Conflicting game path: '+name)
+            entries['overrides/'+name]=raw
+        else:
+            index['files'].append(download_entry(row, raw, actual))
+    for row in content.get('bundledNotices', []):
+        raw, _=pinned_file(downloads,row)
+        name=game_path('FOM-QiandengJi/'+row['file'])
+        if name.casefold() in effective_paths(index,entries):raise ValueError('Conflicting game path: '+name)
+        entries['client-overrides/'+name]=raw
     if profile == 'agent':
         if agent_bundle is None:
             raise ValueError('Agent profile requires the explicit locked client bundle')
@@ -213,7 +229,9 @@ def build(base, downloads, output, *, profile='player', agent_bundle=None, lock=
                  versionId=selected['versionId'], summary=pack['summary'])
     entries['modrinth.index.json'] = json_bytes(index)
     # Static project text only. Never read instance config, account or SDK ledgers.
-    text = (ROOT / 'docs/FOM-UNIFIED-QUICKSTART.txt').read_bytes().replace(b'\r\n', b'\n')
+    instructions = pack.get('instructions', 'FOM-UNIFIED-QUICKSTART.txt')
+    relative(instructions)
+    text = (ROOT / 'docs' / instructions).read_bytes().replace(b'\r\n', b'\n')
     entries['client-overrides/FOM-QiandengJi/开始这里.txt'] = text
     entries['client-overrides/FOM-QiandengJi/content.lock.json'] = json_bytes(content)
     if profile == 'agent':
@@ -255,11 +273,13 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path)
     parser.add_argument('--profile', choices=('player', 'agent'), default='player')
     parser.add_argument('--agent-bundle', type=Path)
+    parser.add_argument('--lock', type=Path, default=LOCK)
+    parser.add_argument('--content-lock', type=Path, default=CONTENT_LOCK)
     args = parser.parse_args()
     if args.verify:
         result = verify(args.verify, args.cache)
     else:
         if not all((args.base, args.downloads, args.output)):
             parser.error('--base, --downloads and --output are required when building')
-        result = build(args.base, args.downloads, args.output, profile=args.profile, agent_bundle=args.agent_bundle)
+        result = build(args.base, args.downloads, args.output, profile=args.profile, agent_bundle=args.agent_bundle, lock=args.lock, content_lock=args.content_lock)
     print(json.dumps(result, ensure_ascii=False, indent=2))

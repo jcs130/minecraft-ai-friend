@@ -1,0 +1,8 @@
+# Native Smart NPC roles; no player/villager hunting or chest-looting interests.
+[playerNpcNames]
+"Steve:营地工匠" = ["BUILDING", "CAUTIOUS", "TEAMUP"]
+"Alex:林间矿工" = ["MINING", "HUNT_MONSTERS", "TEAMUP"]
+"GeorgeNotFound:河畔渔夫" = ["FISHING", "CAUTIOUS", "TEAMUP"]
+"Tubbo:田园农夫" = ["FARMING", "CAUTIOUS", "TEAMUP"]
+"Technoblade:巡林剑士" = ["EXPLORING", "HUNT_MONSTERS", "TEAMUP"]
+"Philza:远行旅人" = ["EXPLORING", "HUNT_MONSTERS", "TEAMUP"]
