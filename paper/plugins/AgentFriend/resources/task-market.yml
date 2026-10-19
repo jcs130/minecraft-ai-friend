@@ -21,13 +21,14 @@ tasks:
     scope: personal
     repeat: once
     profession: warrior
+    requires-skills: [sword_parry]
     title: 剑路初试
-    description: 用真实近战与正面格挡证明剑士基础，学会保护同行的弧光斩。
+    description: 先学会并准备架势格挡sword_parry（一级2技能点），再以近战和职业减伤完成考验；普通举盾不计。
     icon: IRON_SWORD
     reward: {fame: 8, emeralds: 3, bonus: BREAD, bonus-count: 2}
     steps:
       - {title: 持剑迎敌, description: 持剑在四格内亲自击败三名不同敌人；只计真实击杀，不计查询和挥空。, goal: melee_kills, target: 3}
-      - {title: 两次有效格挡, description: 架势准备后挡住两次正面怪物近战；仅准备不算进度。, goal: parry, target: 2}
+      - {title: 两次有效格挡, description: 主手持剑正对近身怪物，施放sword_parry后2秒内承受一次有效近战减伤；冷却12秒后重复一轮。普通举盾、箭和药水不计。, goal: parry, target: 2}
   sword_road_trial:
     scope: personal
     repeat: once
@@ -44,7 +45,7 @@ tasks:
     scope: personal
     repeat: once
     profession: warrior
-    requires-skills: [sword_arc, sword_step]
+    requires-skills: [sword_arc, sword_step, sword_parry]
     title: 传承·星流双剑
     description: 经历有效格挡、组队首领和深层首领后，获得有来历的双剑觉醒。
     icon: NETHERITE_SWORD

@@ -64,6 +64,54 @@ final class TaskProgressGuidance {
         return out;
     }
 
+    /** Adds live skill prerequisites to old and new PARRY snapshots without supplying combat evidence. */
+    static JsonObject parry(JsonObject original, JsonObject skill) {
+        if (original.get("ready").getAsBoolean()) return original;
+        JsonObject out = original.deepCopy(); out.add("actionSkill", skill.deepCopy());
+        String reason = QuestGuidance.text(skill, "reason"), id = QuestGuidance.text(skill, "id");
+        String command = "/mycli skills status", action;
+        String title = QuestGuidance.text(skill, "name");
+        if (title.isBlank()) title = id;
+        switch (reason) {
+            case "not_learned" -> {
+                int remaining = skill.get("remainingPoints").getAsInt(), cost = skill.get("nextPointCost").getAsInt();
+                command = remaining < cost ? "/mycli skills points" : "/mycli skills info " + id;
+                action = "尚未学习「" + title + "」；一级需 " + cost + " 技能点，当前可用 " + remaining + "。"
+                        + (remaining < cost ? "先查技能点上限，尚未达上限可继续成长攒点；或本人了解洗点费用后自行决定重新分配。洗点消耗 "
+                        + skill.get("respecMana").getAsInt() + " 魔力，会清除付费学习和准备，不自动执行。"
+                        : "核对技能说明后，由本人执行 " + QuestGuidance.text(skill, "learnCommand") + "，再准备技能。");
+            }
+            case "not_prepared" -> { command = QuestGuidance.text(skill, "prepareCommand"); action = "已学会「" + title + "」但尚未准备；执行 " + command + "，槽满先查看 skills mine 后自行取舍。"; }
+            case "profession_required" -> { command = "/mycli profession status"; action = "当前职业不符合「" + title + "」；用 skills info " + id + " 核对职业，由本人决定是否切换；原进度保留。"; }
+            case "equipment_required" -> { command = "/mycli skills status " + id; action = "「" + title + "」手持装备不合要求；按 skills info " + id + " 更换主手武器后再施放。"; }
+            case "cooldown" -> { command = "/mycli skills status " + id; action = "「" + title + "」仍在冷却，等待 " + skill.get("cooldownRemainingMs").getAsLong() + " 毫秒后再核对；不要连发命令。"; }
+            case "insufficient_mana" -> { command = "/mycli status"; action = "「" + title + "」本次需 " + skill.get("manaCost").getAsInt() + " 魔力，当前不足；先恢复魔力，进度保留。"; }
+            case "target_or_context_not_checked", "ready" -> {
+                out.addProperty("nextCommand", QuestGuidance.text(skill, "command"));
+                out.addProperty("nextAction", (skill.get("frontalMelee").getAsBoolean()
+                        ? "主手持剑，先正对近身怪物再施放；施放时的朝向决定正面，不能用箭或女巫药水代替近战。"
+                        : "施放已准备的防护技能，让保护目标承受怪物实际攻击。")
+                        + "有效窗口 " + skill.get("windowMs").getAsLong() / 1000.0 + " 秒；"
+                        + (skill.get("frontalMelee").getAsBoolean() ? "每次架势最多计一次实际减伤，累计所需次数要分轮施法；" : "每位受保护者每次施法各抵挡一次，按实际减伤次数记录；")
+                        + "冷却 " + skill.get("cooldownMs").getAsLong() / 1000.0 + " 秒。普通举盾、完全挡掉伤害、空施法不计；看有效格挡回执，再查 tasks status。");
+                return out;
+            }
+            default -> { action = "暂不能确认所需防护技能状态（" + reason + "）；先查询技能与角色状态，不把普通举盾或反复挨打当成任务证据。"; }
+        }
+        out.addProperty("phase", "prepare_skill"); out.addProperty("reason", "SKILL_" + reason.toUpperCase(java.util.Locale.ROOT));
+        out.addProperty("summary", original.get("summary").getAsString() + "；需先解决技能条件");
+        out.getAsJsonArray("missingConditions").add(action);
+        out.addProperty("nextAction", action); out.addProperty("nextCommand", command);
+        JsonArray objectives = new JsonArray(); objective(objectives, "skill", action, false, true);
+        for (var value : out.getAsJsonArray("objectives")) {
+            JsonObject objective = value.getAsJsonObject();
+            if ("current".equals(QuestGuidance.text(objective, "state"))) objective.addProperty("state", "pending");
+            objectives.add(objective);
+        }
+        out.add("objectives", objectives); out.addProperty("totalObjectives", objectives.size());
+        return out;
+    }
+
     static String requirement(GuildManager.Contract quest, JsonObject combat) {
         return quest.goal() == GuildManager.Goal.KILLS && combat != null ? combatRequirement(combat)
                 : TaskGuidance.step(quest.goal(), quest.description());

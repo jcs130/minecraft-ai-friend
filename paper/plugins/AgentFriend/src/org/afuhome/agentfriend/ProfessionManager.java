@@ -348,6 +348,40 @@ final class ProfessionManager implements Listener {
         JsonObject p = ledger.profile(player);
         return p.get("combat").getAsString().equals(role) || ProfessionLedger.strings(p, "life").contains(role);
     }
+    /** Read-only task preflight. Never learns, prepares, synchronizes points or changes a frozen task. */
+    JsonObject readGuardSkill(Player p, String definition) {
+        JsonObject unavailable = new JsonObject(); unavailable.addProperty("reason", "data_unavailable");
+        unavailable.addProperty("nextCommand", "/mycli skills status");
+        if (!available()) return unavailable;
+        try {
+            YamlConfiguration task = new YamlConfiguration(); task.loadFromString(definition);
+            String role = task.getString("task.profession", "");
+            List<String> required = task.getStringList("task.requires-skills");
+            var guards = skills().stream().filter(s -> Set.of("sword_parry", "ward").contains(s.effect()))
+                    .filter(s -> role.isEmpty() ? selected(p.getUniqueId(), s.role()) : role.equals(s.role())).toList();
+            boolean explicit = guards.stream().anyMatch(s -> required.contains(s.id()));
+            var selected = guards.stream().filter(s -> !explicit || required.contains(s.id()))
+                    .sorted(Comparator.comparingInt((ProfessionCatalog.Skill s) -> learned(p.getUniqueId(), s.id()) ? 0 : 1)
+                            .thenComparingInt(s -> unlocked(p, s.id()) ? 0 : 1)
+                            .thenComparingInt(s -> s.effect().equals("sword_parry") ? 0 : 1)
+                            .thenComparing(ProfessionCatalog.Skill::id)).findFirst();
+            if (selected.isEmpty()) return unavailable;
+            var skill = selected.get(); JsonObject out = readSkillState(p, skill.id());
+            JsonObject points = ledger.profile(p.getUniqueId()).getAsJsonObject("points");
+            out.addProperty("remainingPoints", points.get("earned").getAsInt() - points.get("spent").getAsInt());
+            out.addProperty("nextPointCost", nextCost(p, skill.id()));
+            out.addProperty("respecMana", catalog.progression.respecMana);
+            out.addProperty("respecClearsPaidLearning", true);
+            out.addProperty("learnCommand", "/mycli skills learn " + skill.id());
+            out.addProperty("prepareCommand", "/mycli skills prepare " + skill.id());
+            out.addProperty("equipment", skill.equipment());
+            var effect = effective(p, skill);
+            out.addProperty("windowMs", effect.ticks() * 50L);
+            out.addProperty("cooldownMs", effect.cooldown());
+            out.addProperty("frontalMelee", effect.effect().equals("sword_parry"));
+            return out;
+        } catch (Exception error) { return unavailable; }
+    }
     boolean learned(UUID player, String id) { return available() && ledger.profile(player).getAsJsonObject("learned").has(id); }
     boolean learnedEffect(UUID player, String effect) {
         return skills().stream().anyMatch(skill -> skill.effect().equals(effect) && selected(player, skill.role()) && learned(player, skill.id()));

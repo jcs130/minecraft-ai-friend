@@ -30,6 +30,8 @@ final class ActionFeedback {
         String contract = id.isEmpty() ? "/mycli commission mine" : "/mycli commission info " + id;
         String dungeon = id.isEmpty() ? "/mycli dungeon list" : "/mycli dungeon info " + id;
         String market = id.isEmpty() ? "/mycli guild status" : "/mycli guild market " + id;
+        String requiredSkill = reason.startsWith("skill_required:") && reason.substring(15).matches("[a-z0-9_]{1,64}")
+                ? reason.substring(15) : "";
         if (scope.equals("waypoint") && reason.equals("activity_area"))
             return a("该地点属于试炼、遗迹地下城或竞技场的固定场地。",
                     "这里不能登记或用作自定义传送落点；未参战访客可返回已有安全地点，走出场地后再新建点；进入挑战请用对应官方入口。",
@@ -137,7 +139,9 @@ final class ActionFeedback {
             case "market" -> switch (reason.split(":", 2)[0]) {
                 case "exploration_photo_required" -> a("本次探索的合格实地照片还未齐全。","用 /mycli guild exam status 查看缺照片的阶段；回到该目标，面向当地景物 photo menu 拍摄，多群系分别拍。photo album 查看合格检查与重拍建议；已有走查进度保留。","/mycli guild exam status","/mycli photo menu","/mycli photo album");
                 case "profession_required" -> a("此委托需要指定职业。", "用 " + market + " 核对要求的职业，再 /mycli profession list 查看方向，自己决定是否切换职业。", market, "/mycli profession list");
-                case "skill_required" -> a("此委托需要尚未学会的技能。", "用 " + market + " 查所需技能ID，再 skills info <ID> 核对学习条件和费用，学习后接单。", market, "/mycli skills list");
+                case "skill_required" -> requiredSkill.isEmpty()
+                        ? a("此委托需要尚未学会的技能。", "用 " + market + " 查所需技能ID，再 skills info <ID> 核对学习条件和费用，学习后接单。", market, "/mycli skills list")
+                        : a("此委托需要先学会技能 " + requiredSkill + "。", "先用 /mycli skills info " + requiredSkill + " 核对费用和资格，skills points 查余额；由本人学习后再接单。" + (requiredSkill.equals("sword_parry") ? "普通举盾不能代替职业格挡。" : ""), "/mycli skills info " + requiredSkill, "/mycli skills points");
                 case "project_completed", "project_reserved", "site_unavailable" -> a("工程已完工、被占用或场地尚未开放。", "用 /mycli guild engineering 查看场地；从 /mycli guild board 另选开放委托，不覆盖他人的工程。", "/mycli guild engineering", "/mycli guild board");
                 case "scan_busy", "area_unloaded", "site_changed_during_scan" -> a("验收正在忙、场地未加载或扫描中仍有改动。", "到场加载场地，暂停施工，等本次扫描完成后 /mycli guild verify 再验一次。", "/mycli guild engineering", "/mycli guild verify");
                 case "insufficient_road_coverage", "insufficient_new_blocks", "bridge_not_connected", "missing_components", "signal_not_observed" -> a("工程尚未达到验收条件。", "用 " + market + " 核对结构、材料、端点和机关条件；按 MC_MARKET_CHECK.evidence 补齐缺项，红石需实际切换输入，暂停施工后 guild verify。", market, "/mycli guild verify");

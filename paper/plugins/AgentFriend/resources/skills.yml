@@ -54,8 +54,8 @@ skills:
     mana: 4
     cooldown-seconds: 12
     limits: {range: 3, targets: 1, power: 6, duration-seconds: 2}
-    description: "持剑准备2秒，抵挡一次正面怪物近战并减半伤害；一/二/三级减免上限2/4/6点，魔力4/5/6；准备成功即收费。"
-    origin: 选择战士解锁学习资格；实际挡住攻击才能计入格挡试炼。
+    description: "主手持剑，先正对怪物再施放；随后2秒内可化解一次正面怪物近战，最多减半伤害。冷却12秒；一/二/三级减免上限2/4/6点，魔力4/5/6，施放成功即收费。普通举盾、箭和药水不计格挡试炼。"
+    origin: 选择战士仅解锁资格；一级需2技能点学习，准备后施放，实际减伤才计入任务。
   sword_arc:
     title: 弧光斩
     profession: warrior

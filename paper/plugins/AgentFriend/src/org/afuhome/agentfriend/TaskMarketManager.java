@@ -473,7 +473,8 @@ final class TaskMarketManager implements Listener {
                 step.combat() == null ? null : step.combat().json(),
                 plugin.getConfig().getString(marketPath(player) + ".last-reason", ""), savedSurvey(player, stage)));
         if(step.combat()!=null)out.add("combat",step.combat().json());
-        JsonObject guide = out.getAsJsonObject("guidance");
+        JsonObject guide = actionGuidance(player, task, out.getAsJsonObject("guidance"));
+        out.add("guidance", guide);
         out.addProperty("ready", guide.get("ready").getAsBoolean());
         out.add("nextCommand", guide.get("nextCommand"));
         JsonObject last = lastActions.get(player.getUniqueId());
@@ -481,6 +482,10 @@ final class TaskMarketManager implements Listener {
                 && System.currentTimeMillis() - last.get("observedAtMs").getAsLong() < 300_000) out.add("lastAttempt", last.deepCopy());
         out.addProperty("requiresVerification",EngineeringSites.GOALS.contains(step.goal()));
         return out;
+    }
+    private JsonObject actionGuidance(Player player, Task task, JsonObject guide) {
+        return task.steps().get(index(player)).goal() == GuildManager.Goal.PARRY
+                ? TaskProgressGuidance.parry(guide, plugin.professions().readGuardSkill(player, task.definition())) : guide;
     }
     JsonObject examRequirements(Player player) {
         Task task=frozen(player);if(task==null)return null;Step step=task.steps().get(index(player));
@@ -724,6 +729,7 @@ final class TaskMarketManager implements Listener {
                 ? TaskProgressGuidance.guide(task.contract(step), result.progress(), task.steps.get(step).combat == null ? null : task.steps.get(step).combat.json(), result.reason(), result.evidence())
                 : guidance(player, task.steps.get(step), result);
         if (guide != null) {
+            guide = actionGuidance(player, task, guide);
             data.add("guidance", guide); data.addProperty("nextAction", guide.get("nextAction").getAsString());
             JsonArray commands = new JsonArray(); commands.add(guide.get("nextCommand").getAsString()); data.add("nextCommands", commands);
         }
@@ -860,6 +866,7 @@ final class TaskMarketManager implements Listener {
                 step.combat() == null ? null : step.combat().json(), "", new JsonObject());
         if (status.equals("not_counted")) guide.addProperty("nextAction", TaskProgressGuidance.rejectedHint(reason,
                 step.combat() == null ? null : step.combat().json()));
+        guide = actionGuidance(player, task, guide);
         data.add("guidance", guide); lastActions.put(player.getUniqueId(), data.deepCopy());
         var notice = new TaskProgressGuidance.Notice(token, reason, current, now);
         if (!(current >= step.target() && previous < step.target())

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-19",
+  "status": "verified_candidate_not_deployed",
+  "version": "0.4.47.7",
+  "formalVersion": "0.4.47.6",
+  "sha256": "934dd0a6d39f97d4be1a9a0874fa42eee346b85e46c8d76ebd4565246902bdcf",
+  "baselineSha256": "e9f2c8b41d6117d7deba318c81d0a4aa43894dc95f0c887b40968a5626c035a7",
+  "changedEntries": [
+    "org/afuhome/agentfriend/ProfessionManager.class",
+    "skills.yml",
+    "org/afuhome/agentfriend/ActionFeedback.class",
+    "plugin.yml",
+    "org/afuhome/agentfriend/TaskMarketManager.class",
+    "org/afuhome/agentfriend/TaskProgressGuidance.class",
+    "org/afuhome/agentfriend/TaskProgressGuidance$1.class",
+    "task-market.yml"
+  ],
+  "unrelatedEntriesIdentical": true,
+  "archiveIncluded": false,
+  "ysmCandidateIncluded": false,
+  "hotConfigurationApplied": [
+    {
+      "name": "task-market.yml",
+      "beforeSha256": "2a94d3de1499108a178233ab262ee9823cb4c8a2d37a2f6cc7cff831373b086b",
+      "afterSha256": "9243c504d823af732e3c905ced1878f43cd602370a54cff83892e60812dee199"
+    },
+    {
+      "name": "skills.yml",
+      "beforeSha256": "456508bf799ab57ac572593f2e2a3db658621163d4046513d47558addd99f8a8",
+      "afterSha256": "1118217d1ee199141803e71cb6d267770e803663d7f1b9fe19286a789cf9bfef"
+    }
+  ],
+  "formalJarDeployed": false,
+  "productionRestarted": false,
+  "verification": {
+    "parryRuleChecks": 27,
+    "existingTaskGuidanceChecks": 505,
+    "nativeControlledEventChecks": 33,
+    "coldRestartChecks": 5,
+    "formalNativeQueryChecks": 5,
+    "controlledNativeDamage": true,
+    "autonomousLlmCombat": false,
+    "bedrockHardware": false,
+    "remoteWebPixels": false
+  },
+  "preserved": [
+    "frozen active contracts and recorded progress",
+    "player learning and point allocation",
+    "original guard effects, mana cost and cooldown",
+    "private native chat and protocol transports",
+    "unreleased archives and YSM isolation"
+  ],
+  "deployment": {
+    "requiresFreshPaperRestartApproval": true,
+    "procedure": "OPERATIONS.md notices, verified online identities and activities, normal maintenance and complete E/F cold backups"
+  },
+  "rollback": {
+    "restoreBaselineJar": true,
+    "retainCurrentWorldAndPlayerData": true,
+    "retainGiftAndTaskReceipts": true,
+    "optionalRevertOnlyTwoTemplatePrerequisitesAndParryDescription": true
+  },
+  "evidence": "Private E/F repairs/parry-task-guidance-20261019; failed fixture rounds retained"
+}
