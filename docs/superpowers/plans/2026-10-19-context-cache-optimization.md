@@ -22,6 +22,22 @@ plus private read-only request metrics (latest ten requests: median 20.807 s,
 private requests can be counted exactly on CPU using the served artifact's files.
 Private requests, personas, reasoning, resources and runtime files stay outside Git.
 
+**Field follow-up:** CPU counting fixed premature retirement, but the first
+deployments still reused only ~13K tokens. Two isolated replays of identical
+37,389-token input reused 37,382 tokens on the second attempt. The controller
+discarded its actual scene input while retaining only output/tool exchanges,
+so live turns did not extend the cached prompt. Preserve complete text scenes
+with their replies; use lossless selected-field references, rebased from raw
+retained snapshots after eviction. Re-enable prompt-end anchors only for this
+actual append-only path. Check persona invalidation and current-only images.
+
+**Verification before the scene-history deployment:** 1,223 package tests passed
+serially; the packed wheel passed the independent network/host-denied consumer
+probe and CPU counter check. Ruff passed for all changed Python files. The wider
+package still has existing lint failures outside this change; do not claim its
+global CI is green. Real latency after deploying complete scene history is still
+pending and must be recorded separately from this offline evidence.
+
 ## Constraints and review focus
 
 - Keep raw messages, receipts, event cursors, user feedback, original queries,

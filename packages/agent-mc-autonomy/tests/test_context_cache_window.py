@@ -36,7 +36,8 @@ def test_full_window_retires_only_complete_evicted_groups_at_controller_seam(
     shown = [m["tool_call_id"] for m in captured[0] if m["role"] == "tool"]
     assert 0 < len(shown) < len(original), "fixture must exceed the actual request window"
     assert controller.groups[:-1] == original[-len(shown):]
-    assert controller.groups[-1] == [{"role": "assistant", "content": "Waiting for a meaningful event"}]
+    assert controller.groups[-1][-1] == {"role": "assistant", "content": "Waiting for a meaningful event"}
+    assert json.loads(controller.groups[-1][0]['content'])['kind'] == 'agent_mc_scene/v1'
     assert all(len(group) == 2 for group in controller.groups[:-1])
     assert original[0][1]["content"].endswith("x" * 1800)
     assert bridge.calls and all(name in {"mc_protocol", "mc_events"} for name, _, _ in bridge.calls)

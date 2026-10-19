@@ -8,9 +8,9 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 from collections import OrderedDict
 from pathlib import Path
-import re
 
 from .model_protocols import request
 

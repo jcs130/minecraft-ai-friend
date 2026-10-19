@@ -85,6 +85,12 @@ def request(config, messages, tools, budget):
             # An explicitly supplied key remains supported for append-only
             # clients. Do not auto-create prompt-end private anchors for the
             # controller's replaced current-facts tail.
+            from .scene_history import is_scene
+            if rows and isinstance(rows[-1].get('content'), str) and is_scene(rows[-1]):
+                # Full scenes are now retained verbatim with their replies.
+                # The next request genuinely extends this entire prompt.
+                options['prompt_cache_options'] = {'mode': 'implicit'}
+                options.setdefault('prompt_cache_key', scope(config))
         body = {**options, "model": config.model, "messages": rows, "stream": config.stream, config.output_parameter: budget, "parallel_tool_calls": False}
         if tools:
             body.update(tools=tools, parallel_tool_calls=False)

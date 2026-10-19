@@ -79,7 +79,8 @@ def test_completed_outcome_becomes_immutable_history_once(
         == 1
     )
     assert second[: len(first) - 1] == first[:-1]
-    assert len([m for g in controller.groups for m in g if m["role"] == "user"]) == 1
+    assert len([m for g in controller.groups for m in g if m["role"] == "user"
+                and json.loads(m['content']).get('kind') == 'native_outcome/v1']) == 1
     assert controller.native_outcomes == [row]
 
 

@@ -1441,7 +1441,7 @@ class Controller:
                         or (self.current_work() and not self.feedback_pending and not self.conversation_continuation))
         return result, compact, boundary
 
-    def reject_model_call(self, error, response=None):
+    def reject_model_call(self, error, response=None, input_scene=None):
         # Validation is not an uncertain action. Keep the exact response above,
         # let the next bounded decision correct it, and leave the body connected.
         self.invalid_tool_calls += 1
@@ -1467,7 +1467,7 @@ class Controller:
                     correction = failure_context(self.bridge.tools, calls[0]["function"]["name"], arguments, {"text": str(error)})
                     correction["original_receipts"] = "decisions.jsonl"
                     failure = encode({**json.loads(failure), "correction": correction})
-            self.groups.append([assistant_history(response), *[
+            self.groups.append([*([input_scene] if input_scene else []), assistant_history(response), *[
                 {"role": "tool", "tool_call_id": call["id"], "content": failure} for call in calls]])
             # Coalesce before the eight-group cap so exact validation loops do
             # not evict distinct outcomes. Original responses remain journaled.
@@ -1489,15 +1489,30 @@ class Controller:
             # shifts an otherwise reusable history prefix in a token window.
             # Assembly still accounts for rules/tools, facts and output reserve.
             while len(self.groups) > 1:
+                from .scene_history import project_messages
+                retained, _ = project_messages([m for group in self.groups for m in group])
                 try:
                     if self.context_counter is None:
                         raise CounterUnavailable("not_configured")
-                    size = count_input(self.context_counter, [m for group in self.groups for m in group], [])
+                    size = count_input(self.context_counter, retained, [])
                 except CounterUnavailable:
-                    size = len(encode(self.groups).encode("utf-8"))
+                    size = len(encode(retained).encode("utf-8"))
                 if size <= self.settings.context_tokens:
                     break
                 self.groups.pop(0)
+
+    def synchronize_host_history(self, context):
+        if self.settings.context_mode != 'full':
+            return
+        scope = encode(context.get('stable', {}) if context else {})
+        previous = getattr(self, '_host_history_scope', None)
+        if previous is not None and previous != scope:
+            # Raw selected host memory now belongs to input history. Never
+            # replay it across a persona/source change. Native ledgers and
+            # pending work remain authoritative and are not touched here.
+            self.groups.clear()
+            self.outcome_history_ids.clear()
+        self._host_history_scope = scope
 
     def freeze_native_history(self):
         """Append each newly observed terminal once, between complete exchanges."""
@@ -1562,6 +1577,7 @@ class Controller:
                 reserve = IMAGE_RESERVE if image_ready else 0
                 from .host_context import metadata as host_context_metadata
                 host_context = self.current_host_context()
+                self.synchronize_host_history(host_context)
                 self.publish(host_context=host_context_metadata(host_context))
                 recent_context = await self.recent_for_round(host_context)
                 from .narration import (
@@ -1601,6 +1617,8 @@ class Controller:
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
                 if reserve:
                     messages, _ = attach_frame(messages, frame)
+                from .scene_history import capture_scene
+                input_scene = capture_scene(messages) if self.settings.context_mode == "full" else None
                 budget.update(image_reserve=reserve, total=budget["total"] + reserve, limit=self.settings.context_tokens)
                 if self.settings.context_mode == "full":
                     # Do not resurrect the old prefix evicted by this request.
@@ -1704,7 +1722,7 @@ class Controller:
                     self.publish(invalid_tool_calls=0)
                     # A plain plan is still model history. Dropping it gives an
                     # unchanged world the same request on every idle wakeup.
-                    self.groups.append([assistant_history(response)])
+                    self.groups.append([*([input_scene] if input_scene else []), assistant_history(response)])
                     self.retain_history()
                     # Text is not a native task or a completed standing goal.
                     # Revisit it even when an idle world never emits a change,
@@ -1721,12 +1739,12 @@ class Controller:
                 try:
                     prepared = self.prepare_calls(calls, round_tools)
                 except ModelCallRejected as error:
-                    self.reject_model_call(error, response)
+                    self.reject_model_call(error, response, input_scene)
                     return
                 offer_narration()
                 self.invalid_tool_calls = 0
                 self.publish(invalid_tool_calls=0)
-                exchange = [assistant_history(response)]
+                exchange = [*([input_scene] if input_scene else []), assistant_history(response)]
                 boundary = False
                 for call, name, arguments in prepared:
                     if boundary or self.stop_requested():

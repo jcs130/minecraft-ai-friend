@@ -18,6 +18,8 @@ from .context_counter import (
     counter_name,
 )
 from .context_evidence import GUIDANCE, history_sources, outcome_id, project_values
+from .scene_history import GUIDANCE as SCENE_GUIDANCE
+from .scene_history import make_scene, project_messages
 
 
 def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output,
@@ -31,7 +33,7 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
     treats historical conversation as a command. Window eviction is explicit;
     unshown native events remain pending at the controller.
     """
-    rules = RULES + "\n" + GUIDANCE
+    rules = RULES + "\n" + GUIDANCE + "\n" + SCENE_GUIDANCE
     system = rules + "\n" + prefix
     if host_context:
         stable = {k: v for k, v in host_context.get("stable", {}).items() if k not in {"memories", "current_intent"}}
@@ -61,13 +63,9 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
         tail["host_recent_context"] = host_recent.tail_projection(recent_context, time.time())
 
     def messages():
-        available = set().union(*(sources[id(group)] for group in history))
         current = dict(tail)
-        if current.get('recent_native_outcomes'):
-            current['recent_native_outcomes'] = [
-                {'context_ref':key} if (key:=outcome_id(row)) in available else row
-                for row in current['recent_native_outcomes']]
-        return head + [m for group in history for m in group] + [{"role": "user", "content": encode(current)}]
+        return project_messages(head + [m for group in history for m in group] +
+                                [{"role": "user", "content": encode(make_scene(current))}])[0]
 
     def cost():
         current = messages()
@@ -119,7 +117,10 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
     available = set().union(*(sources[id(group)] for group in history))
     terminal = tail.get("recent_native_outcomes", [])
     referenced = sum(outcome_id(row) in available for row in terminal)
-    return messages(), {"mode": "full", "counter": counter_name(context_counter) if context_counter is not None else BYTE_COUNTER_NAME,
+    projected, scene_reuse = project_messages(head + [m for group in history for m in group] +
+        [{"role": "user", "content": encode(make_scene(dict(tail)))}])
+    return projected, {"mode": "full", "counter": counter_name(context_counter) if context_counter is not None else BYTE_COUNTER_NAME,
+        "scene_reuse": scene_reuse,
         "units": "tokens" if context_counter is not None else "token_upper_bound",
         "input": total - reserved_output - FRAMING_RESERVE, "output_reserve": reserved_output, "framing_reserve": FRAMING_RESERVE,
         "total": total, "limit": context_tokens, "omitted": [part["key"] for part in tail["omitted_facts"]],

@@ -10,11 +10,11 @@ from dataclasses import replace
 from typing import Protocol
 
 from .decision_profiles import base_output_budget, profile_view, validate_policy
+from .http_diagnostics import rejection
 from .model_auth import Authorization
 from .model_config import HttpPlannerConfig, validate_parameters
 from .model_protocols import decode, request, scope, usage_metrics
 from .model_stream import collect
-from .http_diagnostics import rejection
 from .perception import has_images, text_only
 
 

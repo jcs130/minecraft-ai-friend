@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.42 — 2026-10-19
+
+- Retain the actual selected input scene with its reply and tool results in full
+  mode. The next round extends the prior request instead of replacing its input.
+- Reuse exact unchanged inventory/knowledge/selected-memory values by in-request
+  references; keep current health, location, queue and attributed events literal.
+  Rebase retained raw scenes after retirement so references never dangle.
+- Enable NInfer prompt-end anchors only for these actual append-only text scenes.
+  Persona/source changes retire selected private history; native ownership and
+  pending work are preserved. Camera frames remain current-only.
+
 ## 0.2.41 — 2026-10-19
 
 - Keep a fixed NInfer checkpoint plus overlapping recent history boundaries so

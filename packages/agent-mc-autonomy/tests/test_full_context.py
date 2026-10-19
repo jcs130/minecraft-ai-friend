@@ -4,12 +4,12 @@ import dataclasses
 import json
 
 import pytest
+from test_context_retention import exchange
+from test_controller import setup
 
 from agent_mc_autonomy.configuration import Settings
 from agent_mc_autonomy.context import assemble, encode
 from agent_mc_autonomy.controller import model_tools
-from test_context_retention import exchange
-from test_controller import setup
 
 
 def test_full_context_keeps_all_supplied_evidence_and_history():
@@ -70,8 +70,9 @@ def test_full_pending_event_buffer_uses_window_instead_of_count():
 
 
 def test_full_host_recent_contract_is_owned_and_keeps_all_selected_originals():
-    from agent_mc_autonomy import host_recent
     from test_host_recent import message, projection, request
+
+    from agent_mc_autonomy import host_recent
     req = {**request(), "context_mode": "full"}
     rows = [message(f"{i:02d}", text="Long attributed language " * 150) for i in range(20)]
     selected = host_recent.select_recent_messages(rows, binding=host_recent.binding(req, request=True),
@@ -158,7 +159,7 @@ def test_full_controller_keeps_cache_prefix_until_real_token_window_is_full(fram
     # Appending an exchange must not evict the prefix merely because UTF-8
     # bytes outnumber tokens. Reusing that prefix avoids a long prompt refill.
     assert controller.groups[:20] == original
-    assert captured[1][:len(captured[0])-1] == captured[0][:-1]
+    assert captured[1][:len(captured[0])] == captured[0]
     assert len(controller.groups) == 22
 
 
