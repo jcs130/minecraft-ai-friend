@@ -41,6 +41,8 @@ export const MINECRAFT_CLIENT_DEFAULTS: MinecraftClientConfig = {
 };
 export function assertMinecraftReady(cfg: MinecraftClientConfig): void {
   respawnDelay(cfg.deathRespawnDelayMs);
+  if (cfg.viewerMaxSessions !== undefined && (!Number.isSafeInteger(cfg.viewerMaxSessions) || cfg.viewerMaxSessions < 0))
+    throw new Error('viewerMaxSessions must be a non-negative safe integer (0 disables the audience cap).');
   if (cfg.provider !== undefined && !['mineflayer', 'java-client'].includes(cfg.provider)) throw new Error('Unknown Minecraft body provider');
   if (cfg.provider === 'java-client') validateJavaClientConfiguration(cfg.javaClient);
   if (!cfg.host.trim() || !cfg.username.trim()) throw new Error('Configure a Minecraft server address and account.');

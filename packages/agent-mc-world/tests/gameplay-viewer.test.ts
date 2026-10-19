@@ -12,11 +12,11 @@ import { GameplayArchive, decodeGameplay } from '../src/learning/archive.ts';
 import { ViewerGameplayObserver } from '../src/learning/viewer-observer.ts';
 
 const scope='a'.repeat(64),uuid='12345678-1234-1234-1234-123456789abc';
-async function fixture({actualUuid=uuid,address='test.invalid:25565',initialChunk=null as string|null}={}) {
+async function fixture({actualUuid=uuid,address='test.invalid:25565',initialChunk=null as string|null,viewers=0,maxSessions=2}={}) {
   const directory=await mkdtemp(join(tmpdir(),'mc-gameplay-viewer-'));
   const requests:string[]=[],inbound:string[]=[];
   const http=createServer((req,res)=>{
-    if(req.url==='/healthz'){res.setHeader('content-type','application/json');res.end(JSON.stringify({ok:true,version:'1.21.1',viewers:0,maxSessions:2}));}
+    if(req.url==='/healthz'){res.setHeader('content-type','application/json');res.end(JSON.stringify({ok:true,version:'1.21.1',viewers,maxSessions}));}
     else if(req.url==='/state'){requests.push(req.method!);res.setHeader('content-type','application/json');res.end(JSON.stringify({address,reachable:true}));}
     else{res.writeHead(404);res.end();}
   });
@@ -64,6 +64,13 @@ it('observes a pinned player during an idle operation journal, with no control m
     expect(world.observation!.stateIds).toEqual(Array(245).fill(-1));
     expect(body.observation!.voxels).toEqual(Array(245).fill(0));expect(body.observation!.receivedAt).toBeTruthy();expect(body.observation!.worldAt).toBeTruthy();
     expect(JSON.stringify(rows)).not.toContain('PRIVATE_CONTENT');expect(f.requests).toEqual(['GET']);expect(f.inbound).toEqual([]);
+  }finally{await f.close();}
+});
+
+it('observes with multiple existing audience sessions when the advertised cap is disabled',async()=>{
+  const f=await fixture({viewers:4,maxSessions:0});try{
+    await expect.poll(()=>f.observer.status().samples,{timeout:4000}).toBeGreaterThan(0);
+    expect(f.observer.status().connected).toBe(true);expect(f.inbound).toEqual([]);
   }finally{await f.close();}
 });
 

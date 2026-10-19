@@ -1,12 +1,16 @@
-/** ViewerSessionSlots keeps temporary capture connections separate from audience connections. */
+/** Audience limit 0 is unlimited; temporary captures retain their independent limit. */
 export class ViewerSessionSlots {
   private viewers = 0;
   private captures = 0;
 
-  constructor(readonly maxViewers: number, readonly maxCaptures: number) {}
+  constructor(readonly maxViewers = 0, readonly maxCaptures = 1) {
+    for (const limit of [maxViewers, maxCaptures]) {
+      if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError('Viewer session limits must be non-negative safe integers');
+    }
+  }
 
   reserve(capture: boolean): (() => void) | null {
-    if (capture ? this.captures >= this.maxCaptures : this.viewers >= this.maxViewers) return null;
+    if (capture ? this.captures >= this.maxCaptures : this.maxViewers > 0 && this.viewers >= this.maxViewers) return null;
     if (capture) this.captures++;
     else this.viewers++;
     let active = true;
@@ -18,8 +22,9 @@ export class ViewerSessionSlots {
     };
   }
 
-  status(): { viewers: number; maxSessions: number; captureSessions: number; maxCaptureSessions: number } {
-    return { viewers: this.viewers, maxSessions: this.maxViewers,
+  status(): { viewers: number; maxSessions: number; audienceUnlimited: boolean; captureSessions: number; maxCaptureSessions: number } {
+    // Legacy observers compare viewers >= maxSessions without recognizing 0.
+    return { viewers: this.viewers, maxSessions: this.maxViewers || Number.MAX_SAFE_INTEGER, audienceUnlimited: this.maxViewers === 0,
       captureSessions: this.captures, maxCaptureSessions: this.maxCaptures };
   }
 }

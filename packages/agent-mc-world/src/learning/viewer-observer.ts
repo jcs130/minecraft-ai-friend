@@ -103,7 +103,9 @@ export class ViewerGameplayObserver {
       const response=await fetch(new URL('/healthz',this.options.url),{signal:AbortSignal.timeout(4000)});
       if(!response.ok)throw Error('Viewer unavailable');
       const info=await response.json() as any;
-      if(info.ok!==true||info.version!=='1.21.1'||!Number.isInteger(info.viewers)||info.viewers>=info.maxSessions)throw Error('Viewer unavailable/busy or incompatible');
+      if(info.ok!==true||info.version!=='1.21.1'||!Number.isInteger(info.viewers)||info.viewers<0
+        ||!Number.isSafeInteger(info.maxSessions)||info.maxSessions<0
+        ||(info.maxSessions>0&&info.viewers>=info.maxSessions))throw Error('Viewer unavailable/busy or incompatible');
       if(this.stopped)return;
       this.reset();this.connectedAt=Date.now();
       const socket=this.socket=io(this.options.url,{transports:['websocket'],reconnection:false,timeout:4000,

@@ -30,6 +30,8 @@ export const MINECRAFT_DEFAULTS = {
   version: '1.21.1',
   /** 网页画面端口(OBS 浏览器源 + 画面源之一);0=不开 */
   viewerPort: 0,
+  /** 0 = unlimited audience connections; captures retain their independent lane. */
+  viewerMaxSessions: 0,
   /** 现代画面资源包根目录；空 = 使用自带 prismarine-viewer */
   viewerAssetsDir: '',
   /** 网页画面中语音气泡显示的称呼；空 = 游戏内用户名 */
@@ -223,6 +225,7 @@ export interface MinecraftConfigSection {
   deathRespawnDelayMs?: number;
   version: string;
   viewerPort: number;
+  viewerMaxSessions?: number;
   viewerAssetsDir: string;
   viewerSpeakerName: string;
   /** Human-opened metrics dashboard; no polling or discovery is performed by the core. */
@@ -331,6 +334,10 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.viewerPort': {
         type: 'integer', title: 'viewer 端口', minimum: 0, maximum: 65535, 'x-hot': false,
         description: '0=不开。OBS 浏览器源与"viewer"帧源都使用这个端口。',
+      },
+      'worlds.minecraft.viewerMaxSessions': {
+        type: 'integer', title: '观战连接上限', minimum: 0, 'x-hot': false,
+        description: '默认 0=不限制普通观战连接；也可填写正整数。后台只读录制连接同样计数；截图有独立名额，不占普通观战名额。',
       },
       'worlds.minecraft.viewerAssetsDir': {
         type: 'string', title: '现代画面资源目录', 'x-hot': false,

@@ -59,6 +59,7 @@ export interface BridgeOptions {
   loginConfigFile?: () => string;
   /** prismarine-viewer 网页端口;0=不开 viewer */
   viewerPort: number;
+  viewerMaxSessions?: number;
   viewerAssetsDir?: string;
   viewerSpeakerName?: string;
   viewerSpeechSourceId?: string;
@@ -1227,7 +1228,7 @@ export class Bridge {
           if (this.stopped || this._bot !== bot || this.generation !== gen) { relay?.close(); return; }
           const handle = await startModernViewer(bot, {
             relay, remoteTextures: this.opts.remoteTextures,
-            port, assetsDir: modernAssets, speakerName: this.opts.viewerSpeakerName,
+            port, maxSessions: this.opts.viewerMaxSessions, assetsDir: modernAssets, speakerName: this.opts.viewerSpeakerName,
             speechSourceId: this.opts.viewerSpeechSourceId,
             agentMana: () => this.agentMana, serverProtocol: this.viewerServerProtocol(),
           }).catch(error => {relay?.close();throw error;});

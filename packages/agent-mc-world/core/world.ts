@@ -4248,6 +4248,7 @@ export class MinecraftWorld implements World {
       authentication: this.accountAuth.agent,
       loginConfigFile: () => this.cfg.loginConfigFile,
       viewerPort: this.cfg.viewerPort,
+      viewerMaxSessions: this.cfg.viewerMaxSessions,
       viewerAssetsDir: this.cfg.viewerAssetsDir,
       viewerSpeakerName: this.cfg.viewerSpeakerName,
       viewerSpeechSourceId: this.botName,

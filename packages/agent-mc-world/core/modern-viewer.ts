@@ -76,7 +76,6 @@ const STATUS_VIGNETTE_CSS = `.corti-status-vignette{position:fixed;inset:0;z-ind
 const PRESENTATION_CSS = `:root{--mc-viewer-vfx-fire:#ffa05b;--mc-viewer-vfx-arcane:#c5a5ff;--mc-viewer-vfx-life:#a9eeb8;--mc-viewer-vfx-water:#a6e5ff;--mc-viewer-vfx-combat:#fff4af;--mc-viewer-vfx-neutral:#d9e0d7;--mc-viewer-ui-bg:#11242cde;--mc-viewer-ui-border:#b0ccb5a8;--mc-viewer-ui-text:#f3f5f6}body[data-viewer-theme="corti-arcane"]{--mc-viewer-vfx-arcane:#e6a3ff;--mc-viewer-vfx-combat:#ffd580;--mc-viewer-ui-bg:#201a36e8;--mc-viewer-ui-border:#d2a8f0b0;--mc-viewer-ui-text:#fbf1ff}.corti-presentation-toasts{position:fixed;z-index:9;top:14px;left:250px;display:grid;gap:7px;width:min(300px,25vw);pointer-events:none}.corti-presentation-toast{display:grid;gap:2px;padding:9px 12px;border:1px solid var(--mc-viewer-ui-border);border-left:4px solid #b5d8ea;border-radius:7px;background:var(--mc-viewer-ui-bg);box-shadow:0 4px 18px #0008;color:var(--mc-viewer-ui-text);animation:corti-toast-enter .25s ease-out}.corti-presentation-toast strong{font:800 15px/1.3 system-ui}.corti-presentation-toast span{font:12px/1.35 system-ui;overflow-wrap:anywhere}.corti-presentation-toast[data-tone="arcane"]{border-left-color:#d5a6ff}.corti-presentation-toast[data-tone="positive"]{border-left-color:#9be0ac}.corti-presentation-toast[data-tone="warning"]{border-left-color:#f0ce75}.corti-presentation-toast[data-tone="danger"]{border-left-color:#f49a9a}@keyframes corti-toast-enter{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}.corti-effects{position:fixed;z-index:7;right:14px;bottom:66px;display:grid;gap:4px;max-width:220px;max-height:25vh;overflow:hidden;pointer-events:none}.corti-effect{display:flex;align-items:center;gap:5px;min-width:125px;padding:3px 6px;border:1px solid var(--mc-viewer-ui-border);border-radius:5px;background:var(--mc-viewer-ui-bg);color:var(--mc-viewer-ui-text);font:12px/1.2 system-ui}.corti-effect[data-type="bad"]{border-color:#e09c9caf}.corti-effect img{position:static;width:19px;height:19px;image-rendering:pixelated}.corti-effect span{flex:1}.corti-effect small{font:11px monospace}.corti-scoreboard{position:fixed;z-index:7;top:252px;left:14px;width:220px;max-height:min(34vh,300px);overflow:hidden;box-sizing:border-box;padding:8px;border:1px solid var(--mc-viewer-ui-border);border-radius:7px;background:var(--mc-viewer-ui-bg);color:var(--mc-viewer-ui-text);pointer-events:none}.corti-scoreboard>strong{display:block;margin-bottom:5px;font:700 13px system-ui}.corti-scoreboard>div{display:flex;justify-content:space-between;gap:8px;font:11px/1.4 system-ui}.corti-scoreboard b{color:#d6efac}.corti-cooldown{position:absolute;z-index:4;left:4px;right:4px;bottom:2px;background:#1119;pointer-events:none}@media(max-width:900px){.corti-presentation-toasts{left:50%;top:72px;transform:translateX(-50%);width:min(280px,42vw)}.corti-scoreboard{top:180px;width:150px;max-height:26vh}}@media(max-width:420px){.corti-minimap{width:116px}.corti-minimap canvas{width:104px;height:104px}.corti-skills{width:116px}.corti-scoreboard{top:155px;width:116px}.corti-presentation-toasts{top:146px;width:min(210px,70vw)}}@media(prefers-reduced-motion:reduce){.corti-presentation-toast{animation:none}}`;
 const THEME_SURFACE_CSS = `.corti-minimap,.corti-skills,.corti-menu{background:var(--mc-viewer-ui-bg);border-color:var(--mc-viewer-ui-border);color:var(--mc-viewer-ui-text)}.corti-night-vision-toggle,.corti-sound-toggle,.corti-inventory-toggle{border-color:var(--mc-viewer-ui-border);color:var(--mc-viewer-ui-text)}`;
 const SKILL_TONE_CSS = `.corti-cast[data-phase="succeeded"][data-tone="healing"]{border-color:#91efae;background:linear-gradient(125deg,#102a24f0,#24503bee 65%,#142a37ee)}.corti-cast[data-phase="succeeded"][data-tone="healing"] .corti-cast-line{background:#91efae}.corti-cast[data-phase="succeeded"][data-tone="frost"]{border-color:#88e5ff;background:linear-gradient(125deg,#102b3af0,#265068ee 65%,#142a37ee)}.corti-cast[data-phase="succeeded"][data-tone="frost"] .corti-cast-line{background:#88e5ff}.corti-cast[data-phase="succeeded"][data-tone="fire"]{border-color:#ffad6e;background:linear-gradient(125deg,#351b1cf0,#63352aee 65%,#142a37ee)}.corti-cast[data-phase="succeeded"][data-tone="fire"] .corti-cast-line{background:#ffad6e}.corti-cast[data-phase="succeeded"][data-tone="movement"]{border-color:#96e1df;background:linear-gradient(125deg,#102b30f0,#275256ee 65%,#142a37ee)}.corti-cast[data-phase="succeeded"][data-tone="movement"] .corti-cast-line{background:#96e1df}`;
-const MAX_SESSIONS = 2;
 const MAX_CAPTURE_SESSIONS = 1;
 const CAPTURE_SESSION_MS = 60_000;
 type ViewerEntity = mineflayer.Bot['entity'];
@@ -99,6 +98,8 @@ export interface ModernViewerHandle {
 
 export interface ModernViewerOptions {
   port: number;
+  /** 0 or omitted: no audience connection cap. Captures use their own lane. */
+  maxSessions?: number;
   assetsDir: string;
   speakerName?: string;
   speechSourceId?: string;
@@ -477,7 +478,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
 
   const origin = `http://127.0.0.1:${options.port}`;
   const sessions = new Set<() => void>();
-  const sessionSlots = new ViewerSessionSlots(MAX_SESSIONS, MAX_CAPTURE_SESSIONS);
+  const sessionSlots = new ViewerSessionSlots(options.maxSessions ?? 0, MAX_CAPTURE_SESSIONS);
   const viewerSockets = new Set<Socket>();
   let latestRoute: ViewerRoute = { points: [], goal: viewerGoal(bot.pathfinder?.goal), status: 'pending' };
   const publishRoute = (route: ViewerRoute) => {
@@ -839,7 +840,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     const overlay = socket.handshake.query.overlay === '1';
     const releaseSlot = !closed && bot.entity ? sessionSlots.reserve(capture) : null;
     if (!releaseSlot) {
-      socket.emit('viewerBusy', { maximum: capture ? MAX_CAPTURE_SESSIONS : MAX_SESSIONS });
+      socket.emit('viewerBusy', { maximum: capture ? MAX_CAPTURE_SESSIONS : sessionSlots.maxViewers });
       socket.disconnect(true); return;
     }
     const stopContent = content?.subscribeSocket(socket);
