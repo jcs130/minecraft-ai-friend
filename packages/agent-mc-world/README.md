@@ -1,5 +1,14 @@
 # Agent MC World
 
+`0.5.7-rc.48` includes the shared model-context helpers added upstream:
+optional schema collapse retains enum/array shapes, `compactFacts` projects
+current facts without host-only revision metadata, `MovementProgress` can track
+repeated observations, and `EventCondenser` offers explicit configurable event
+windows. Event clocks use the local or configured time zone. These SDK helpers
+do not install a model loop or silently filter a host's event/history stream;
+callers opt in and retain original evidence. Existing native task and queue
+semantics remain unchanged.
+
 `0.5.7-rc.47` adds the shared `parseMinecraftServerAddress` and explicit
 `prepareMinecraftViewerAssets` SDK/extension ports. `npm run build:release`
 keeps viewer geometry, textures, original BGM and the complete versioned audio
