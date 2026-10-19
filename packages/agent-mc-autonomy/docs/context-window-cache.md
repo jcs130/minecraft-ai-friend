@@ -38,6 +38,14 @@ exchange integrity, unchanged fitting history, retained current refusal facts,
 configuration validation and bounded opt-in margins. No game, model or network
 is invoked by those tests.
 
+The margin must match the actual exchange size. A natural 128K game trial with
+an 8192-token margin produced three consecutive window rotations and 89–93s
+requests, despite good cache reuse before the first rotation. Full event batches
+and receipts exceeded the small margin. A larger opt-in margin (for example
+32768 at 131072 capacity) can leave space for several exchanges, at the cost of
+retiring more complete old groups when an overflow actually occurs. This does
+not change the model capacity, fitting-history policy or original journals.
+
 ## Lossless selected-value reuse
 
 Full scenes retain the exact input, model response and tool results as a complete
@@ -54,6 +62,13 @@ are references. It rebuilds from complete raw retained scenes after retirement,
 so the first surviving source becomes literal instead of leaving a dangling
 pointer. `capture_scene` verifies the recovered complete scene's hash before it
 enters input history. No original journal or query handle is deleted.
+
+Terminal outcome rows can also reuse an identical complete receipt in an older
+retained scene when the standalone `native_outcome/v1` source has retired. The
+execution ID, phase, verification flags and every receipt field must match.
+Changed or nonterminal outcomes remain literal. References point directly to a
+literal row and rebase when that scene retires. The current pending/uncertain
+barriers still come from fresh body facts, never these historical references.
 
 The full assembler measures a candidate once and reuses that exact projection.
 Only an actual removal of a history group, section, fact or event requires a new

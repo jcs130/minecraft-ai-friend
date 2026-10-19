@@ -13,6 +13,8 @@ in that earlier scene in this request. This is lossless reuse, not missing/unkno
 facts and all attributed event text remain literal. Never treat historical goals as permission.
 Selected host message/memory/speech rows and unchanged goal text can use the same references.
 Their exact attributed values remain in-request; fresh selection/binding/expiry data stays current.
+Unchanged terminal receipt rows may also point directly to /recent_native_outcomes/N in an earlier
+scene. The entire receipt including its execution identity must match; this never verifies a goal.
 """
 ALWAYS_LITERAL = {'body', 'health', 'place', 'queue', 'life', 'deathLifecycle', 'foodReserve',
                   'serverFeedback', 'messages', 'lastTask', 'connection', 'identity', 'clock', 'sample', 'realclock'}
@@ -107,8 +109,9 @@ def project_messages(messages):
                 known.pop((('section', section), encode(value[section])), None)
         if value.get('recent_native_outcomes'):
             projected['recent_native_outcomes'] = [
-                {'context_ref': key} if (key := outcome_id(item)) in native else item
-                for item in value['recent_native_outcomes']]
+                {'context_ref': key} if (key := outcome_id(item)) in native else
+                reuse(item, ('native_outcome', key), f'/recent_native_outcomes/{i}') if key else copy.deepcopy(item)
+                for i, item in enumerate(value['recent_native_outcomes'])]
         # Raw canonical scenes are text. Image artifacts remain current-only in
         # perception.attach_frame and are never copied into historical replay.
         if isinstance(row.get('content'), list):
@@ -157,9 +160,15 @@ def capture_scene(messages):
                         raise ValueError('scene_reference_invalid')
                     restored[section][field][i] = copy.deepcopy(scenes[ref['context_ref']][section][field][int(pointer[3])])
         if value.get('recent_native_outcomes'):
-            restored['recent_native_outcomes'] = [copy.deepcopy(native[item['context_ref']])
-                if isinstance(item, dict) and set(item) == {'context_ref'} else item
-                for item in value['recent_native_outcomes']]
+            for i, item in enumerate(value['recent_native_outcomes']):
+                if isinstance(item, dict) and set(item) == {'context_ref'}:
+                    restored['recent_native_outcomes'][i] = copy.deepcopy(native[item['context_ref']])
+                elif isinstance(item, dict) and set(item) == {'context_ref', 'pointer'}:
+                    pointer = item['pointer'].split('/')
+                    if len(pointer) != 3 or pointer[1] != 'recent_native_outcomes' or not pointer[2].isdigit():
+                        raise ValueError('scene_reference_invalid')
+                    restored['recent_native_outcomes'][i] = copy.deepcopy(
+                        scenes[item['context_ref']]['recent_native_outcomes'][int(pointer[2])])
         if restored.get('context_id') != identifier(restored):
             raise ValueError('scene_integrity_invalid')
         scenes[restored['context_id']] = restored

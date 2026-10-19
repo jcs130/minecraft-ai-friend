@@ -1,6 +1,7 @@
 """Opt-in full evidence projection; only the actual request window evicts data."""
 import copy
 import hashlib
+import json
 import time
 
 from . import host_recent
@@ -17,7 +18,7 @@ from .context_counter import (
     count_input,
     counter_name,
 )
-from .context_evidence import GUIDANCE, history_sources, outcome_id, project_values
+from .context_evidence import GUIDANCE, history_sources, project_values
 from .scene_history import GUIDANCE as SCENE_GUIDANCE
 from .scene_history import make_scene, project_messages
 
@@ -121,7 +122,9 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
     dynamic = tail.get("host_context", {})
     available = set().union(*(sources[id(group)] for group in history))
     terminal = tail.get("recent_native_outcomes", [])
-    referenced = sum(outcome_id(row) in available for row in terminal)
+    projected_terminal = json.loads(projected[-1]['content']).get('recent_native_outcomes', [])
+    referenced = sum(isinstance(row, dict) and set(row) in ({'context_ref'}, {'context_ref', 'pointer'})
+                     for row in projected_terminal)
     return projected, {"mode": "full", "counter": counter_name(context_counter) if context_counter is not None else BYTE_COUNTER_NAME,
         "scene_reuse": scene_reuse,
         "units": "tokens" if context_counter is not None else "token_upper_bound",
