@@ -12,14 +12,14 @@ import { startMcpStdio } from '../src/mcp/stdio.ts';
 
 const cleanups: Array<() => Promise<void> | void> = [];
 afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close(); });
-async function setup(action: (name: string) => Promise<void> = async () => {}, withAssets = true) {
+async function setup(action: (name: string) => Promise<void> = async () => {}, withAssets = true, embedOrigins?: string[]) {
   const assets = mkdtempSync(join(tmpdir(), 'mc-console-test-'));
   cleanups.push(() => rmSync(assets, { recursive: true, force: true }));
   if (withAssets) for (const file of ['index.html', 'console.js', 'console.css', 'metrics.html', 'metrics.js', 'metrics.css']) writeFileSync(join(assets, file), 'fixture');
   const runtime = { operatorState: async () => ({ schema: 'minecraft-client-console/v1', runtime: { phase: 'disconnected' },
     connection: { accounts: { agent: { mode: 'microsoft', phase: 'awaiting-user', challenge: { userCode: 'FIXTURE-1234' } } } } }),
     operatorAction: vi.fn(action), metrics: { snapshot: () => ({ schema: 'metrics', phase: 'disconnected' }) }, status: () => ({ phase: 'disconnected' }) };
-  const server = await serveClientConsole(0, runtime, assets); cleanups.push(() => server.close());
+  const server = await serveClientConsole(0, runtime, assets, undefined, {embedOrigins}); cleanups.push(() => server.close());
   const state = await (await fetch(server.url + 'api/client')).json() as { controlToken: string };
   const post = (body: string, headers = {}) => fetch(server.url + 'api/client/action', { method: 'POST', body,
     headers: { 'content-type': 'application/json', origin: server.url.slice(0, -1), 'x-mc-control': state.controlToken, ...headers } });
@@ -33,6 +33,19 @@ it('serves the operator UI and private challenge separately from read-only model
   expect(JSON.stringify(metrics)).not.toMatch(/FIXTURE|controlToken/);
   expect((await fetch(app.url + 'auth/agent')).status).toBe(404);
   expect((await fetch(app.url + 'metrics')).headers.get('content-type')).toContain('text/html');
+});
+it('embeds only for explicit local host pages without authorizing cross-origin control', async () => {
+  const app = await setup(undefined, true, ['http://127.0.0.1:17850']);
+  const policy = (await fetch(app.url)).headers.get('content-security-policy');
+  expect(policy).toContain('frame-ancestors http://127.0.0.1:17850;');
+  expect(policy).toContain('frame-src http://127.0.0.1:*;');
+  expect((await fetch(app.url+'metrics')).headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+  expect((await app.post('{"action":"connect"}', {origin:'http://127.0.0.1:17850'})).status).toBe(403);
+  expect((await fetch(app.url+'api/client', {headers:{origin:'http://127.0.0.1:17850'}})).status).toBe(403);
+  expect(app.runtime.operatorAction).not.toHaveBeenCalled();
+});
+it.each(['*','http://remote.test:17850','http://127.0.0.1:17850/','http://127.0.0.1:17850; script-src *', 'https://127.0.0.1:17850'])('refuses unsafe embedding policy %s before opening a port', async origin => {
+  await expect(serveClientConsole(0, {} as never, undefined, undefined, {embedOrigins:[origin]})).rejects.toThrow();
 });
 it('keeps the local control API usable without optional viewer assets', async () => {
   const app = await setup(undefined, false);
