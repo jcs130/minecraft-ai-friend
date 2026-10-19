@@ -40,6 +40,7 @@ export { OperationExperienceBook, experienceHash, operationObservation, operatio
 export { PhotographyService, PHOTO_TOOL, PHOTO_PLANNER_SYSTEM, preparePhotoContext, type PhotographyOptions } from '../../core/photography.ts';
 export { createImageGenerationPort, PHOTOGRAPHY_DEFAULTS } from '../../core/image-generation.ts';
 export * from '../contracts/photography.ts';
+export * from '../../core/voxel-scene.ts';
 export { learningHelp, type ArtifactRef, type SourceRef } from '../../core/game-memory-learning-contract.ts';
 export { planInventoryOrganization, inventoryOrganizationKey, inventoryOrganizationLimit, inventoryOrganizationTotals,
   type InventoryOrganization, type InventoryDisposition, type OrganizationStack, type OrganizationMove,
