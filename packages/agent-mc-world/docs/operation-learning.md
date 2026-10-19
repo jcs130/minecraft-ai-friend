@@ -87,6 +87,11 @@ versions remain experimental until real outcomes support them. Skills are progre
 these interfaces, not a second runtime. Package both minecraft-agent and minecraft-learning with MIT
 license and per-file hashes; marketplace publication is a separate reviewed action.
 
+The [authored action lifecycle](method-learning.md) adds fixed-version composition,
+persisted actual execution lookup, explicit reviews, and an optimistic preferred-version
+selection to that same core library. Candidate, selected version and Agent interpretation
+remain distinct; no other host's personal method library is assumed to have been searched.
+
 `mc_combat_tactic.routines` registers a bounded fast menu of exact saved method references. Each entry
 has `id`, `intent`, `procedure` and optional `params`/`durationMs`. Registration resolves the immutable
 version in the current realm/account library; it neither runs the method nor follows a newer same-name

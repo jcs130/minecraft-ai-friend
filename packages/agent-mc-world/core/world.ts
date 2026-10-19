@@ -2216,8 +2216,10 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   {
     name: 'mc_script',
     tags: ['act'],
-    readOnlyCall: args => !!args.find || !!args.api,
+    readOnlyCall: args => !!args.find || !!args.api || ['list', 'read', 'evidence'].includes(String((args.library as { op?: unknown } | undefined)?.op)),
     description: 'Run an agent-authored JavaScript async function body with params and a restricted mc SDK. '
+      + 'Write new feedback-controlled actions when persistent inputs, calculations or conditional sequencing are useful; this is not limited to existing named scripts. '
+      + '{api:"authoring"} gives the short write/validate/save/execute/review/reuse path. {library:{op:"list",query:"purpose"}} searches only this scoped game-method library; a host procedure_find may use a different library. '
       + 'Nearby blocks: {find:{names:["water"],maxDistance:8,count:4},waitMs:1000} runs a bounded read recipe without scan loops. name is optional for code; omitted names use its stable source hash. Explicit names are1–80 characters. '
       + 'mc.state() returns {sampledAt,connectionGeneration,snapshot,flight,queue,combatActive,combat,method}. '
       + 'Read position, dimension, health, food, inventory and equipment under snapshot, which can be null. '
@@ -2241,7 +2243,9 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'Procedure terminal events carry an execution UUID and persistent receipt for explicit goal review/adoption by the owning Persona; completion alone is not proof of improvement. '
       + '{library:{op:"list"}} lists your scoped editable methods; read uses id and optional revision. '
       + 'After a validated syntax run, save uses id, code, description, conditions, parent (null for new; current revision for edits), validationRunId. '
-      + 'Returns a pinned procedure reference; execution is explicit. Earlier revisions remain runnable for rollback. Library saves never edit engine files or claim verified improvement.',
+      + 'dependencies maps aliases to exact saved references for methods.run; existing parents retain old child versions. '
+      + 'evidence reads persisted actual executionId/call; review links an explicit outcome/assessment/context to that version and receipt; adopt selects an assessed version for later retrieval, without changing a running program. '
+      + 'Returns a pinned procedure reference; execution is explicit. Earlier revisions and negative assessments remain readable for revision/rollback. Library saves never edit engine files or claim verified improvement.',
     parameters: { type: 'object', properties: {
       name: { type: 'string', minLength: 1, maxLength: 80 },
       library: METHOD_LIBRARY_SCHEMA,
@@ -3445,6 +3449,8 @@ export class MinecraftWorld implements World {
       restriction: this.bodyInhibitReason,
     });
     parts.splice(1, 0, { key: 'options', text: renderMinecraftOptionIndex(options) });
+    try { parts.push({ key: 'methods', text: this.methodLibrary().facts() }); }
+    catch { parts.push({ key: 'methods', text: '[动作方法索引] 读取失败，已有方法状态未验证；mc_script {api:"authoring"} 可读编写及恢复入口。' }); }
     if (bot) {
       parts.unshift({ key: 'identity', text: JSON.stringify({ realm: this.realmKey(),
         account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.botName }) });
@@ -4493,7 +4499,10 @@ export class MinecraftWorld implements World {
             else if (input.op === 'save') {
               if (!Number.isInteger(input.validationRunId) || Number(input.validationRunId) < 1) throw new Error('validationRunId 须为已完成的语法校验编号');
               result = library.save(input, this.methods.read(Number(input.validationRunId))[0], ctx.role);
-            } else throw new Error('library.op 只认 list/read/save');
+            } else if (input.op === 'evidence') result = library.evidence(input);
+            else if (input.op === 'review') result = library.review(input, ctx.role);
+            else if (input.op === 'adopt') result = library.adopt(input, ctx.role);
+            else throw new Error('library.op 只认 list/read/save/evidence/review/adopt');
             return this.toolLog('mc_script', args, JSON.stringify(result));
           }
           if (args.api !== undefined) {
@@ -4695,11 +4704,21 @@ export class MinecraftWorld implements World {
       adapter: procedure.adapter, mode: procedure.mode, status: run.status, startedAt: run.startedAt, endedAt: run.endedAt!,
       invocations: procedure.invocations, trace: run.trace, result: run.result, error: run.error,
     } : undefined;
+    let libraryEvidence = '';
+    if (receipt) {
+      try {
+        if (this.methodLibrary().recordExecution(receipt)) libraryEvidence = `本作用域方法库已保留原回执；mc_script {library:{op:"evidence",id:"${run.name}",executionId:"${receipt.executionId}"}}按需读取，review记录条件与反例，adopt显式选择复用版本。`;
+      } catch (error) {
+        libraryEvidence = '方法库回执保存失败；原终态和事件回执仍有效，勿因记录失败重放动作。';
+        this.diag.write({ lane: 'task', event: 'method-evidence-failed', msg: '方法库回执未保存', data: { runId: run.id, error: String(error).slice(0,500) } });
+      }
+    }
     const blobs: BlobInput[] | undefined = receipt ? [{ bytes: new TextEncoder().encode(JSON.stringify({ ...receipt, versions: procedure!.versions })),
       mime: PROCEDURE_RECEIPT_MIME, name: 'procedure-run.json', fallbackText: '方法完整执行回执；按执行 UUID 查询摘要，再按调用编号展开。' }] : undefined;
     this.emit('minecraft.method', `方法#${run.id}「${run.name}」终态${run.status}；源码SHA256 ${run.sourceHash}；`
       + `${run.trace.length}次SDK调用。${run.error ?? ''}用 mc_script {runId:${run.id}}读取各次真实回执；`
       + (receipt ? `执行UUID ${receipt.executionId}，方法版本 ${receipt.root.revision}；完整回执已随事件保存。` : '')
+      + libraryEvidence
       + '脚本结束不等于原目标已达成。核对执行后状态，修订方法并记录已验证范围。', true,
     { execution:{kind:'method',id:`${this.executionEpoch}:${run.id}`,phase:run.status==='validated'?'validated':run.status==='completed'?'completed':run.status==='cancelled'?'cancelled':'blocked',terminal:true,goalCompleted:false,evidence:{sourceHash:run.sourceHash,receipt:receipt??null}}, meta: { runId: run.id, sourceHash: run.sourceHash, status: run.status, ...(receipt ? { procedureReceipt: {
       schema: receipt.schema, executionId: receipt.executionId, root: receipt.root, status: receipt.status } } : {}) }, blobs });

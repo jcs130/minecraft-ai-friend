@@ -4,6 +4,25 @@ import { METHOD_CAPABILITIES_HELP } from './method-capabilities.ts';
 import { adaptiveDivingDecision } from './diving-budget.mjs';
 
 const SDK_API = Object.freeze({
+  authoring: '可以直接写新的 JavaScript async 函数体，不必等待现有脚本提供所需动作。'
+    + '保持按键、按实际读数计算、条件分支或重复编排适合写成有界方法；一次普通动作仍可直接用 mc_do。'
+    + '先 library:{op:"list",query:"当前目的"} 检索本作用域的小索引；没有适用方法就按 api:"index" 和具体原生方法帮助构造候选。'
+    + '例如同一程序内持续蹲走：await bot.setControlState("sneak",true); await bot.setControlState("forward",true); '
+    + 'try { await bot.waitForTicks(20); return await bot.read("entity.position"); } finally { await bot.clearControlStates(); }。'
+    + '按键跨 await 保持，正常结束/取消/超时释放；先核验支撑、净空、方向和当前身体任务，再按反馈调整。示例只是维护者资料，不是已学会的动作。'
+    + '\n积累：{name:"method-id",code:"候选源码",validate:true}→{runId}读 validated；'
+    + '{library:{op:"save",id:"method-id",code:"同一源码",description:"目的、参数与结果字段",conditions:["适用条件和失败边界"],parent:null,validationRunId:实际校验编号}}。'
+    + '保存返回 reference，再 {procedure:reference,params:{...}} 显式执行；可用 waitMs 等同一运行，不能因等待超时重新发动作。'
+    + '\n组合：save 可带 dependencies:{alias:已有reference}，代码 await methods.run("alias",params)。只解析精确子版本；同一身体和预算，不复制整段源码，不随子方法新版本自动改变父方法。'
+    + '修订先 read 当前候选 revision，save 的 parent 填它；已有选择继续指向旧版，直到你明确采用新版本。'
+    + '\n核验：终态给 executionId。{library:{op:"evidence",id:"method-id",executionId:"原UUID"}}读摘要，加 call:实际编号 展开原始 SDK 回执；跨重载仍能按 UUID 读。'
+    + '比较原目标、前后位置/生命/方块/库存和外部回执，不用 return {ok:true} 或 completed 代替净变化。'
+    + '{library:{op:"review",id:"method-id",revision:"实际版本",executionId:"原UUID",outcome:"achieved|not-achieved|unknown",assessment:"核验依据",context:"场景/样本边界",measurements:{"distance-blocks":实际数值或null},counterexamples:["失败/不适用条件"]}}。'
+    + '语法回执不能作为执行复盘。你的评估与原回执分开保留，不自动证明因果或长期改善。'
+    + '\n采用/回退：{library:{op:"adopt",id:"method-id",revision:"已评估版本",reviewId:"复盘UUID",expectedAdopted:null,reason:"选择理由"}}；'
+    + '已有选择时 expectedAdopted 填其 revision。以后 list 返回 selected.reference，核对本次前提后显式复用。'
+    + '失败也保留回执与反例，改源码并另存父版本；候选仍可显式试用，不因未采用而禁止运行。'
+    + '只有下一次相似场景实际检索、采用并得到可比较的世界净变化，才有复用/改善证据；不为学习凑次数制造危险或打断伙伴。',
   'mc.capabilities': METHOD_CAPABILITIES_HELP,
   'diving-budget': '维护者编写的纯计算参考代码，不是已学会的方法、不执行身体动作。'
     + '可在 mc_script 中校验/改写。params: samples（本次 bot.read("breathing") 的样本）, returnSeconds（实测返程秒数）, '
@@ -42,13 +61,17 @@ const SDK_API = Object.freeze({
     + '既有 surface/防溺水是应急兜底，不是完整潜水规划器。原生身体程序取得队列后不要嵌套 mc.do 等待自己的身体；用原生按键并在终态后核验。'
     + 'api:"diving-budget" 按需读可改写的预算参考；维护者资料不是已学会的方法。由 Agent 自己构造、校验、保存版本，记录实际效果/失败边界，下次检索后再评估复用。',
   methods: '通过 mc_script 工具操作自己的方法库（不是 mc 对象的方法）：'
+    + 'api:"authoring" 给完整编写、组合、执行、复盘和采用路径。'
     + '先 library:{op:"list",query:"关键词",limit:8} 找适用条件，再 library:{op:"read",id:"method-id"} 读取源码/版本。'
     + '编写或修改后提交 {name:"method-id",code:"…",validate:true}，再用 {runId} 等待 validated；校验不执行动作。'
     + '保存 {library:{op:"save",id:"method-id",code:"同一源码",description:"目的",conditions:["适用条件/失败边界"],parent:null,validationRunId:1}}。'
     + '新建 parent:null，修订 parent 必须是 read 返回的当前 revision，冲突先重读；作者、时间、源码哈希和父版本自动保留。'
+    + 'dependencies:{alias:已有reference} 组合固定子版本，await methods.run("alias",params) 共用身体与预算；父方法不会自动跟随子方法的新版本。'
     + '保存不安装、不执行；用 {procedure:保存返回的reference} 显式运行，旧 reference 可回退。'
     + '读取 runId 并按 call 展开实际 SDK 终态，再比较位置/方块/库存净变化。只把有证据的适用性记入 mc_memory 或宿主记忆，记录版本和失败条件。'
     + '下次先检索再复用；程序结束不等于方法有效。运行保留身体占用、取消清理和资源限额，不开放任意文件/网络/引擎源码。'
+    + '核心库的 procedure 原执行回执跨重启保留；library evidence 按 executionId/call 读，review 保存明确的结果/场景/反例，adopt 选择已评估版本供后来显式调用，失败候选不覆盖已选择版本。'
+    + '宿主的 procedure_find 可能是另一套人物/跨World库；本游戏库以 mc_script library 为准，不把一处无命中当作另一处也为空。'
     + '库按服务器与账号隔离；有 dataDir 才跨重启持久化，persistent:false 时须由宿主另存。每库128方法、每方法64版本，list最多20项，源码按需读。',
   building: '临时垫脚由核心记录实际放置证据，当前事实和 await mc.state().temporaryScaffolds 持续列出待办。'
     + '自行搭临时支撑用 build 的 material/on/anchors 形态并加 temporary:true；blueprint 形态是作品，不能整体标为临时。'

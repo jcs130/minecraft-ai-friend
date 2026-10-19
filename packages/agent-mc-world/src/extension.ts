@@ -28,6 +28,7 @@ export { observeVisual, acceptsImages, visualArgumentError, structuredVisual } f
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady } from './client/config.ts';
 export { MinecraftClientWorld } from './client/world.ts';
 export { WorldOperationLearning } from './client/world-learning.ts';
+export { MethodLibrary, METHOD_LIBRARY_SCHEMA, type MethodReview } from '../core/method-library.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './client/tool-help.ts';
 export type { ToolHelpOptions } from './client/tool-help.ts';
 export { MessageInbox, MESSAGE_TOOL, MESSAGE_PARAMETERS, MESSAGE_LIMIT, MESSAGE_CHANNELS, messageChannel,

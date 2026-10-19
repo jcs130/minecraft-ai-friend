@@ -82,6 +82,18 @@ it('links a fast selected saved method to its original terminal and measured aft
     after: { position: { x: 2 } }, goalVerified: false });
 });
 
+it('attributes an explicitly reused game method while excluding syntax and evidence reads from physical trials', async()=>{
+  const f=setup(),revision='b'.repeat(64),procedure={handle:`mem:mc-method/sneak-step/${revision}`,revision};
+  for(const [i,args] of [{procedure,validate:true},{runId:1,call:1},{library:{op:'evidence',id:'sneak-step'}}].entries()){
+    const reply=await f.wrap(async()=>({text:'read only'}),'mymc_script').handler(args,{...f.ctx,callId:`read-${i}`});
+    expect(reply).not.toHaveProperty('meta.experience');
+  }
+  expect(f.book.list(scope).entries).toHaveLength(0);
+  const reply=await f.wrap(async()=>({text:'accepted',execution:accepted}),'mymc_script')
+    .handler({procedure},{...f.ctx,callId:'reuse-1'});
+  expect(f.book.get(scope,experienceId(reply))).toMatchObject({attribution:{method:{id:'sneak-step',revision}},goalVerified:false});
+});
+
 it('reflection from real receipts is recalled as history without claiming adoption or mastery', async () => {
   const f = setup(), memory = new GameMemoryBook(join(f.data, 'minecraft-memory'));
   const out = await f.wrap(async () => { f.move(2); return { text: 'done', execution: completed }; })

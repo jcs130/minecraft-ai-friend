@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { OperationExperienceBook, operationScopeKey, type OperationAttribution, type OperationDecision, type OperationObservation } from '../../core/operation-experience.ts';
 import { GameMemoryBook } from '../../core/game-memory.ts';
 import type { GameMemoryScope } from '../../core/game-memory.ts';
@@ -39,11 +40,18 @@ export class ClientOperationLearning {
   begin(tool:ToolDef,args:Record<string,unknown>,requestId:string,attribution?:OperationAttribution):Pending|null {
     // Inspection, notebook maintenance and repeated battlefield sampling are not physical trials.
     if (tool.name.endsWith('_memory') || tool.name.endsWith('_choose')) return null;
-    const active = tool.name.endsWith('_script') ? args.code!==undefined||args.procedure!==undefined||args.call!==undefined
+    const script = tool.name.endsWith('_script');
+    const active = script ? args.validate!==true&&(args.code!==undefined||args.procedure!==undefined)
       : tool.name.endsWith('_combat_tactic') ? args.choice!==undefined
       : tool.name.endsWith('_photo') && ['read','list','status','help'].includes(String(args.action)) ? false : tool.tags?.includes('act');
     if(!active)return null;
-    return this.safe(()=>{const scope=this.scope();const row=this.book.begin(scope,this.run,requestId,tool.name,args,this.sample(),attribution);
+    const candidate = (args.choice as {candidate?:{procedure?:{handle?:unknown;revision?:unknown}}}|undefined)?.candidate;
+    const reference = (script ? args.procedure : candidate?.procedure) as {handle?:unknown;revision?:unknown}|undefined;
+    const own = typeof reference?.handle==='string' ? /^mem:mc-method\/([a-z][a-z0-9-]{0,63})\/([a-f0-9]{64})$/.exec(reference.handle) : null;
+    const method = own&&reference?.revision===own[2] ? {id:own[1],revision:own[2]}
+      : script&&typeof args.code==='string' ? {id:typeof args.name==='string'?args.name:'inline-script',revision:createHash('sha256').update(args.code).digest('hex')} : undefined;
+    return this.safe(()=>{const scope=this.scope();const row=this.book.begin(scope,this.run,requestId,tool.name,args,this.sample(),
+      {...attribution,...(!attribution?.method&&method?{method}:{})});
       return {id:row.id,scope,started:performance.now()};});
   }
   finish(p:Pending|null,outcome:ToolOutcome|null) {

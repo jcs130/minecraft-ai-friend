@@ -1,5 +1,11 @@
 # Agent MC World
 
+`0.5.7-rc.42` completes the core [authored-action lifecycle](docs/method-learning.md):
+write new JavaScript actions, compose pinned child methods, retain original
+execution receipts, review outcomes and select versions for later explicit reuse.
+Current facts carry a small method index instead of whole sources. Stored code,
+selected versions and verified gameplay improvement remain separate.
+
 `0.5.7-rc.32` uses exact Java 1.21.1 ingredient tags for crafting and
 preflight material checks, including mixed plank species in chests and beds.
 The versioned reference is extracted from the hash-verified official client by
