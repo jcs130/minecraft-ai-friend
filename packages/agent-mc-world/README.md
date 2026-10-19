@@ -1,5 +1,14 @@
 # Agent MC World
 
+`0.5.7-rc.47` adds the shared `parseMinecraftServerAddress` and explicit
+`prepareMinecraftViewerAssets` SDK/extension ports. `npm run build:release`
+keeps viewer geometry, textures, original BGM and the complete versioned audio
+catalog, then obtains original Minecraft audio from Mojang on first setup.
+Preparation uses a deployment cache, verifies SHA-1/SHA-256 and size, shares
+identical objects across versions and resumes after failure. It does not connect
+to a game or model, and never writes into the installed package. Full private
+builds continue to include audio and need no download. See [viewer setup](docs/viewer-setup.md).
+
 `0.5.7-rc.46` exposes `EventCursorError` through the shared SDK. Event reads
 with a missing/wrong run or a cursor ahead of the journal remain rejected;
 MCP returns the error code, current run/cursor metadata and an explicit bounded

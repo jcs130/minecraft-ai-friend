@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { transform } from 'esbuild';
 import { readViewerInput } from './viewer-input.mjs';
 import { copyViewerAssets } from './copy-viewer-assets.mjs';
+import { deferViewerAudio } from './defer-viewer-audio.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = join(root, 'dist/runtime');
@@ -63,6 +64,7 @@ if (viewerInput.included) {
 execFileSync('tar', ['-xzf', archive, '-C', join(root, 'dist'),
   '--exclude=__pycache__', '--exclude=*.pyc', '--exclude=monitor/outputs',
   '--exclude=.gitignore', '--exclude=.npmignore'], { stdio: 'inherit' });
+if (process.argv.includes('--deferred-audio')) viewerInput.audio = await deferViewerAudio(join(root, 'dist/viewer'));
 // Emitted config URLs remain valid when SDK and child processes run from dist/runtime.
 await copyViewerAssets(join(root, 'dist/viewer'), join(output, 'dist/viewer'));
 await cp(join(root, 'dist/client-console'), join(output, 'dist/client-console'), { recursive: true });

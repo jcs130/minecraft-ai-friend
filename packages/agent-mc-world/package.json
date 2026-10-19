@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.46",
+  "version": "0.5.7-rc.47",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -114,6 +114,7 @@
     "bridges",
     "scripts/build.mjs",
     "scripts/copy-viewer-assets.mjs",
+    "scripts/defer-viewer-audio.mjs",
     "scripts/viewer-input.mjs",
     "scripts/build-types.mjs",
     "scripts/verify-build.mjs",
@@ -145,6 +146,7 @@
     "build": "node scripts/build.mjs && node scripts/build-types.mjs && node scripts/verify-build.mjs",
     "build:engine": "node scripts/build.mjs --without-viewer && node scripts/build-types.mjs && node scripts/verify-build.mjs",
     "build:viewer": "node scripts/build.mjs --require-viewer && node scripts/build-types.mjs && node scripts/verify-build.mjs",
+    "build:release": "node scripts/build.mjs --require-viewer --deferred-audio && node scripts/build-types.mjs && node scripts/verify-build.mjs",
     "build:client-login": "node scripts/build-client-login.mjs",
     "build:client-appearances": "node scripts/build-client-appearances.mjs",
     "build:client-graphics": "node scripts/build-client-graphics.mjs",
