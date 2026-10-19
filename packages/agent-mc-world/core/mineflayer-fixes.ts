@@ -1400,7 +1400,10 @@ async function craftOnce(
         const src = window.findInventoryItem(id, null, false);
         if (!src) throw new Error(`包里没有可用的${itemLabel(bot, id)}`);
         from = src.slot;
-        await click(bot, src.slot, 0, 0, window); // 左键拿起整摞
+        // Keep part of the source stack in its slot until it is fully needed.
+        // Otherwise a delayed pickup can fill the temporarily empty slot and
+        // strand surplus ingredients on the cursor in a full inventory.
+        await click(bot, src.slot, 1, 0, window);
       }
       await click(bot, dest, 1, 0, window); // 右键放一个进格子
       await show?.beat('click');
@@ -1423,13 +1426,7 @@ async function craftOnce(
   await show?.beat('result'); // 产出槽在摄像机画面上亮一拍再收
   // Count capacity after placing ingredients: consuming the last ingredient can free a slot.
   // The server's actual result also covers explicit grids and component-bearing products.
-  let room = 0;
-  const max = result.stackSize ?? bot.registry.items[result.type]?.stackSize ?? 64;
-  for (let slot = window.inventoryStart; slot < window.inventoryEnd; slot++) {
-    const item = window.slots[slot];
-    if (!item) room += max;
-    else if (sameInventoryStack(item, result)) room += Math.max(0, (item.stackSize ?? max) - item.count);
-  }
+  const room = inventoryRoomFor(bot, window, result);
   if (room < result.count) {
     trace('output-no-room', '背包容量不足，未取出合成产物', { item: result.type, count: result.count, room });
     throw new Error(`背包容量不足：${itemLabel(bot, result.type)}×${result.count} 只有 ${room} 个存放余量；产物尚未取出，先腾出空间`);
@@ -1437,6 +1434,18 @@ async function craftOnce(
   await click(bot, 0, 0, 0, window); // 拿起真产物;不伪造,changedSlots 才和服务端对得上
   if (!window.selectedItem) throw new Error('产物槽点了,产物没到手上');
   await stashCursor(bot, window, null);
+}
+
+/** Capacity in the confirmed player slots; grid/cursor contents are not storage. */
+function inventoryRoomFor(bot: Bot, window: WindowLike, stack: NonNullable<WindowLike['selectedItem']>): number {
+  let room = 0;
+  const max = stack.stackSize ?? bot.registry.items[stack.type]?.stackSize ?? 64;
+  for (let slot = window.inventoryStart; slot < window.inventoryEnd; slot++) {
+    const item = window.slots[slot];
+    if (!item) room += max;
+    else if (sameInventoryStack(item, stack)) room += Math.max(0, (item.stackSize ?? max) - item.count);
+  }
+  return room;
 }
 
 /**
@@ -1507,6 +1516,9 @@ async function clearGrid(
     const left = window.slots[slot];
     if (!left) continue;
     await stashCursor(bot, window, null);
+    if (inventoryRoomFor(bot, window, left) < left.count) {
+      throw new Error(`合成格 ${slot} 的${itemLabel(bot, left.type)}×${left.count}保留原位：背包没有足够空间归还，先腾出空间`);
+    }
     await click(bot, slot, 0, 0, window);
     await stashCursor(bot, window, null);
     trace('grid-clear', `合成格 ${slot} 里还剩着上次的物品 #${left.type}×${left.count},先拿出来`, {
