@@ -47,6 +47,7 @@ def image_data(part):
 
 def request(config, messages, tools, budget):
     config.validate_reasoning_history()
+    config.validate_cache_strategy()
     p = config.protocol
     options = copy.deepcopy(config.parameters)
     if not tools:
@@ -62,6 +63,24 @@ def request(config, messages, tools, budget):
                     and (config.reasoning_history == "all" or index > last_user)):
                 row["reasoning_content"] = state["reasoning_content"]
             rows.append(row)
+        if config.cache_strategy == "ninfer":
+            # Hybrid recurrent states need a saved boundary, not merely matching
+            # KV tokens. Mark immutable history before the fresh user tail.
+            # Wire copies only: never alter archives or native receipts.
+            for row in reversed(rows[:max(0, last_user)]):
+                content = row.get("content")
+                if isinstance(content, str):
+                    content = [{"type": "text", "text": content}] if content else []
+                if not isinstance(content, list):
+                    continue
+                part = next((part for part in reversed(content) if part.get("type") == "text" and part.get("text")), None)
+                if part is not None:
+                    part["prompt_cache_breakpoint"] = {"mode": "explicit"}
+                    row["content"] = content
+                    break
+            # Nonempty keys also enable prompt-end checkpoints for append-only
+            # exchanges. This hint is never evidence or action authority.
+            options.setdefault("prompt_cache_key", scope(config))
         body = {**options, "model": config.model, "messages": rows, "stream": config.stream, config.output_parameter: budget, "parallel_tool_calls": False}
         if tools:
             body.update(tools=tools, parallel_tool_calls=False)

@@ -26,7 +26,7 @@ PRESETS = {
 PARAMETERS = {
     "chat": {"temperature", "top_p", "top_k", "seed", "stop", "presence_penalty", "frequency_penalty",
              "reasoning_effort", "thinking", "enable_thinking", "thinking_budget", "reasoning_budget_tokens", "response_format",
-             "min_p", "repetition_penalty", "chat_template_kwargs", "tool_choice"},
+             "min_p", "repetition_penalty", "chat_template_kwargs", "tool_choice", "prompt_cache_key"},
     "responses": {"temperature", "top_p", "reasoning", "text", "service_tier", "prompt_cache_key", "prompt_cache_retention", "tool_choice"},
     "anthropic": {"temperature", "top_p", "top_k", "stop_sequences", "thinking", "output_config", "service_tier"},
     "gemini": {"temperature", "topP", "topK", "seed", "stopSequences", "presencePenalty", "frequencyPenalty",
@@ -146,6 +146,7 @@ class HttpPlannerConfig:
     anthropic_version: str = "2023-06-01"
     anthropic_beta: str = ""
     reasoning_history: str = "all"
+    cache_strategy: str = "none"
 
     @classmethod
     def parse(cls, raw, *, require_model=True):
@@ -165,6 +166,7 @@ class HttpPlannerConfig:
         if not isinstance(result.protocol, str) or result.protocol not in PARAMETERS:
             raise ValueError("brain_protocol_invalid")
         result.validate_reasoning_history()
+        result.validate_cache_strategy()
         endpoint(result.base_url)
         text(result.model, "model", empty=not require_model)
         environment(result.api_key_env)
@@ -199,12 +201,20 @@ class HttpPlannerConfig:
 
     def validate_budget(self, budget):
         self.validate_reasoning_history()
+        self.validate_cache_strategy()
         if type(budget) is not int or not 1 <= budget <= 131072:
             raise ValueError("brain_output_budget_invalid")
         if self.protocol == "anthropic" and self.parameters.get("thinking", {}).get("budget_tokens", 0) >= budget:
             raise ValueError("brain_thinking_budget_must_be_less_than_output")
         if self.parameters.get("reasoning_budget_tokens", 0) >= budget:
             raise ValueError("brain_reasoning_budget_must_be_less_than_output")
+
+
+    def validate_cache_strategy(self):
+        if not isinstance(self.cache_strategy, str) or self.cache_strategy not in {"none", "ninfer"}:
+            raise ValueError("brain_cache_strategy_invalid")
+        if self.cache_strategy != "none" and self.protocol != "chat":
+            raise ValueError("brain_cache_strategy_requires_chat")
 
 
 def planner_settings(raw):
