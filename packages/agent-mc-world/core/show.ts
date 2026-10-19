@@ -3,6 +3,7 @@ import { onConnectionEnd } from './connection-end.ts';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Bot } from 'mineflayer';
 import { Aborted, type SkillContext } from './skill-context.ts';
+import { inventoryClickState } from './inventory-click-sync.ts';
 
 export interface ShowTempo {
   clickMs: number;
@@ -115,7 +116,7 @@ export class ShowPacer {
       && (bot.currentWindow ?? bot.inventory) === window;
   }
   closeWindow(window: Window, close: () => void): void {
-    if (this.ownsWindow(window)) close();
+    if (this.ownsWindow(window) && this.options.bot && inventoryClickState(this.options.bot).phase === 'ready') close();
     this.releaseWindow();
   }
   private async wait(ms: number): Promise<void> {

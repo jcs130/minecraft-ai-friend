@@ -211,6 +211,7 @@ import { skillAttack } from './melee.ts';
 import {
   LEAD_ITEM, USE_SETTLE_MS, aimThenUse, isBoat, skillAnvil, skillGrindstone, skillLead, skillRide, skillUse,
 } from './skills-interact.ts';
+import { skillOrganize } from './skills-organize.ts';
 import {
   LAPIS, protectedTossItem, reacquiredTossNote, skillBrew, skillCompact, skillEnchant, skillPickup, skillSmelt, skillStow, skillTake, skillToss,
   skillTransit,
@@ -659,7 +660,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
   // click guard also covers inventory changes initiated by background actions.
   let inventoryMutation = false;
   switch (call.skill) {
-    case 'craft': case 'take': case 'stow': case 'compact': case 'toss':
+    case 'craft': case 'take': case 'stow': case 'compact': case 'organize': case 'toss':
     case 'equip': case 'eat': case 'smelt': case 'brew': case 'enchant':
     case 'anvil': case 'grindstone':
       inventoryMutation = true;
@@ -945,6 +946,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
     case 'lead': return skillLead(bot, call, ctx);
     case 'stow': return skillStow(bot, call, ctx);
     case 'compact': return skillCompact(bot, ctx);
+    case 'organize': return skillOrganize(bot, call, ctx);
     case 'take': return withBlueprintGain(bot, ctx, () => skillTake(bot, call, ctx));
     case 'server_travel': {
       if (!call.command.startsWith('/')) throw new SkillBlocked('server_travel 只接受 / 开头的服务端命令');
@@ -2616,9 +2618,10 @@ export class Executor {
         return 'stow 的 at 与 into:open 只能选一个；原队列保留';
       }
       if ((step.skill === 'compact'
+        || (step.skill === 'organize' && (step.target === 'open' || step.into === 'open'))
         || (step.skill === 'stow' && step.into === 'open')
         || (step.skill === 'take' && step.from === 'open')) && !canHaveOpenWindow) {
-        return '当前没有打开容器窗口；单独 use 查看的窗口会在任务结束时自动关闭。请把 use 和 take/stow/compact 写在同一单连续步骤里，再操作 into/from:"open"；原队列保留';
+        return '当前没有打开容器窗口；单独 use 查看的窗口会在任务结束时自动关闭。请把 use 和 take/stow/compact/organize 写在同一单连续步骤里，再操作 into/from/target:"open"；原队列保留';
       }
       if (step.skill === 'use' || (step.skill === 'chat' && step.text.startsWith('/'))) {
         canHaveOpenWindow = true;
@@ -2894,6 +2897,7 @@ export class Executor {
     // Earlier changes to this window invalidate its old capacity failure.
     // The transfer still checks the live slots and reports insufficient room.
     if (before.slice(opener + 1).some((step) => step.skill === 'compact'
+      || (step.skill === 'organize' && step.target === 'open')
       || (step.skill === 'take' && step.from === 'open'))) return null;
     return `同一打开方式的容器最近 ${entry.count} 次存入都因没有空位失败；换物品不会腾出格子。本次开窗仍须重读容量，先前失败不证明现在仍满。上次:${entry.why}`;
   }

@@ -67,7 +67,7 @@ export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Rec
     { id: 'core.inventory', intents: ['inventory'], title: '使用、整理、转存或丢弃', purpose: '按物品实际用途和补给需求取舍，核对净空位变化。',
       support: 'supported', evidence: [`随身空位=${context.freeSlots ?? '未知'}；这不是远处箱子或扩展背包容量`],
       checks: ['保留当前目标需要的物品；自定义物品先读说明；抛出后可能自动捡回'],
-      read: [{ tool: 'mc_bag', args: {} }, guide({ skills: ['take', 'stow', 'toss'] })], source },
+      read: [{ tool: 'mc_bag', args: {} }, guide({ skills: ['organize', 'take', 'stow', 'toss'] })], source },
     { id: 'core.explore', intents: ['explore'], title: '读现场线索再选择交互', purpose: '查看牌文、容器、实体或局部几何，沿新证据推进探索。',
       support: 'supported', evidence: ['本索引没有额外扫描；没报告的地点与文字保持未知'],
       checks: ['文字保留外部来源；看、开编辑器和真正读到文字不同；操作拒绝不等于路线封死'],

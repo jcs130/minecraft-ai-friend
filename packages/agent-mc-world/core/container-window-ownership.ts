@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { Bot } from 'mineflayer';
 import { SkillBlocked, checkAbort, sleep, type SkillContext } from './skill-context.ts';
 import { storageWindow } from './window-semantics.ts';
+import { inventoryClickState } from './inventory-click-sync.ts';
 
 type ContainerWindow = NonNullable<Bot['currentWindow']>;
 type WindowDescriptor = Pick<ContainerWindow, 'id' | 'type' | 'inventoryStart' | 'inventoryEnd'
@@ -222,6 +223,10 @@ export class ContainerWindowOwnership {
   close(): void {
     const window = this.heldWindow ?? this.opening?.candidate;
     if (!window || (this.bot.currentWindow && this.bot.currentWindow !== window)) return;
+    if (inventoryClickState(this.bot).phase !== 'ready') {
+      this.event('close-deferred', window, 'inventory-click-unconfirmed');
+      return;
+    }
     // Closing an unconfirmed cached window would copy its stale player slots into window 0.
     if (!this.heldWindow && !this.opening?.contents.has(window)) {
       this.event('close-deferred', window, 'unconfirmed-contents');

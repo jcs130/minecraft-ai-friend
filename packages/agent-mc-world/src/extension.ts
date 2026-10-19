@@ -59,3 +59,6 @@ export { createImageGenerationPort, PHOTOGRAPHY_DEFAULTS } from '../core/image-g
 export * from './contracts/photography.ts';
 
 export { bindNativeGuiPresentation, nativeGuiPresented, type NativeGuiPresentation } from '../core/show.ts';
+export { planInventoryOrganization, inventoryOrganizationKey, inventoryOrganizationLimit, inventoryOrganizationTotals,
+  type InventoryOrganization, type InventoryDisposition, type OrganizationStack, type OrganizationMove,
+  type InventoryOrganizationPlan } from '../core/inventory-organization.ts';

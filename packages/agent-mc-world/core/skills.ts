@@ -20,6 +20,7 @@ import type { PositionXYZ } from './blueprint.ts';
 import { PROBE_SLICE_CELL_CAP, SPATIAL_SLICE_AXES, type SpatialSliceAxis } from './spatial-slices.ts';
 import { parseSpatialObservation, SPATIAL_OBSERVATION_LIMITS, type SpatialObserveInput } from './spatial-observation.ts';
 import { NAVIGATION_LIMITS } from './navigation-capabilities.ts';
+import type { InventoryOrganization, InventoryDisposition } from './inventory-organization.ts';
 
 /** 步骤依赖与验收的可选覆写；省略时使用执行器推导的因果依赖和验收规则。 */
 export interface StepBounds {
@@ -133,6 +134,7 @@ export type SkillCall = StepBounds & (
   | { skill: 'toss'; item: string; count: number; at?: Anchor; target?: string; pick?: string }
   | { skill: 'stow'; item: string; count: number; pick?: string; at?: Anchor; into?: 'open' }
   | { skill: 'compact' }
+  | ({ skill: 'organize' } & InventoryOrganization)
   | { skill: 'take'; item?: string; count?: number; at?: Anchor; all?: true; pick?: string; from?: 'open' }
   | { skill: 'server_travel'; command: string; at: Anchor; within: number; dimension?: string }
   | { skill: 'chat'; text: string }
@@ -981,6 +983,50 @@ function parseGrindstone(c: Record<string, unknown>, at: string, marks?: MarkLoo
   };
 }
 
+/** Explicit disposition rules are atomic input: do not silently drop a retention condition. */
+function parseOrganize(c: Record<string, unknown>, at: string, marks?: MarkLookup): ParseResult {
+  const out: Extract<SkillCall, { skill: 'organize' }> = { skill: 'organize' };
+  if (c.target != null) {
+    if (c.target !== 'inventory' && c.target !== 'open') return { error: `${at} organize 的 target 只认 inventory 或 open` };
+    out.target = c.target;
+  }
+  for (const flag of ['includeHotbar', 'sort', 'dryRun'] as const) if (c[flag] != null) {
+    if (typeof c[flag] !== 'boolean') return { error: `${at} organize 的 ${flag} 要布尔值` };
+    out[flag] = c[flag] as boolean;
+  }
+  if (c.rules != null) {
+    if (!Array.isArray(c.rules)) return { error: `${at} organize 的 rules 要数组` };
+    const rules: InventoryDisposition[] = [];
+    for (const [index, raw] of c.rules.entries()) {
+      const err = (why: string): ParseResult => ({ error: `${at} organize rules[${index}] ${why}` });
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return err('要 item、keep 和 action');
+      const r = raw as Record<string, unknown>, item = str(r.item), pick = str(r.pick);
+      if (Object.keys(r).some(k => !['item', 'keep', 'action', 'pick'].includes(k))) return err('包含不支持的字段；取舍规则不能忽略字段');
+      if (!item) return err('item 要物品 id 或类别');
+      if (!Number.isSafeInteger(r.keep) || (r.keep as number) < 0) return err('keep 要大于等于 0 的整数');
+      if (r.action !== 'stow' && r.action !== 'toss') return err('action 只认 stow 或 toss');
+      if (r.pick != null && !pick) return err('pick 要非空挑选词');
+      rules.push({ item, keep: r.keep as number, action: r.action, ...(pick ? { pick } : {}) });
+    }
+    if (rules.length) out.rules = rules;
+  }
+  if (c.at != null) {
+    const a = anchorOf(c.at, marks);
+    if (!a) return { error: `${at} organize 的 at 要 [x,y,z](${RELATIVE_HINT})${markMissNote(c.at, marks)}` };
+    out.at = a;
+  }
+  if (c.into != null) {
+    if (c.into !== 'open') return { error: `${at} organize 的 into 只认 open` };
+    out.into = 'open';
+  }
+  if (out.at && out.into) return { error: `${at} organize 的 at 与 into:open 只能选一个` };
+  if (out.target === 'open' && (out.rules?.length || out.at || out.into || out.includeHotbar !== undefined))
+    return { error: `${at} target:open 只整理已打开容器，不收玩家取舍 rules、at、into 或 includeHotbar` };
+  if ((out.at || out.into) && !out.rules?.some(r => r.action === 'stow'))
+    return { error: `${at} organize 的 at/into 只用于 rules 中的 stow` };
+  return { step: out };
+}
+
 /** `take` 的两种操作必须显式区分：定量取物，或取指定容器的可取物。 */
 function parseTake(c: Record<string, unknown>, at: string, marks?: MarkLookup): ParseResult {
   const item = str(c.item);
@@ -1750,6 +1796,29 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     fields: [],
   },
   {
+    name: 'organize',
+    doc: `{"skill":"organize"} 自动合堆并按物品 id 和数据排序随身背包；默认不动快捷栏、装备、副手及合成格，不丢东西。
+{"skill":"organize","sort":false,"includeHotbar":true} 只合堆，包含快捷栏。
+{"skill":"organize","rules":[{"item":"cobblestone","keep":64,"action":"stow"},{"item":"rotten_flesh","keep":0,"action":"toss"}],"at":[103,63,-31]}
+                                                 先按给出的顺序处理随身多余物品，再整理；keep 是此选择范围的保留数量，核心没有垃圾名单。存放默认附近箱子，可给 at 点名箱子，或在同一单 use 后 into:open 存进自定义背包。
+                                                 规则可按 pick 选具体标签；取舍会使用随身所有主背包槽（包括快捷栏），不脱装备或副手。没有规则就不会存放或丢弃。
+{"skill":"use","item":"大背包"},{"skill":"organize","target":"open"} 整理当前真实储物容器，不是选择菜单或工作站输入/输出格；不自动跨容器搬物。
+                                                 dryRun:true 只读当前方案；正式执行重读槽位。每次交换等待服务端槽位和光标确认，取消或确认不明会停止，保留已发生的结果；终态核对空位及物品总量。`,
+    parse: parseOrganize,
+    fields: [
+      { key: 'target', kind: 'enum', values: ['inventory', 'open'], error: 'target 只认 inventory/open', doc: '默认 inventory；open 整理当前真实储物窗口' },
+      { key: 'includeHotbar', kind: 'flag', retainFalse: true, doc: '默认 false：只整理 27 格背包；true 包含 9 格快捷栏' },
+      { key: 'sort', kind: 'flag', retainFalse: true, doc: '默认 true；false 只合堆' },
+      { key: 'dryRun', kind: 'flag', retainFalse: true, doc: '只读计划，不点击、不存放或丢弃' },
+      { key: 'rules', kind: 'opaque', schema: { type: 'array', items: { type: 'object', additionalProperties: false,
+        required: ['item', 'keep', 'action'], properties: { item: { type: 'string', minLength: 1 },
+          keep: { type: 'integer', minimum: 0 }, action: { type: 'string', enum: ['stow', 'toss'] }, pick: { type: 'string', minLength: 1 } } } },
+        doc: '按顺序执行显式取舍；未指定的物品不会存放或丢弃' },
+      { key: 'at', kind: 'anchor', error: 'at 要 [x,y,z]', doc: 'rules 的 stow 只存指定箱子；与 into 互斥' },
+      { key: 'into', kind: 'enum', values: ['open'], error: 'into 只认 open', doc: 'rules 的 stow 存进当前容器；不写则找附近箱子' },
+    ],
+  },
+  {
     name: 'take',
     doc: `{"skill":"take","item":"coal","count":16}        从当前楼层附近箱子或运输矿车取出。先查近处有货/未查的箱子，再去较远有货的；最多 3 个
  {"skill":"take","item":"iron_ingot","count":1,"at":[103,63,-31]} 从指定熔炉/箱子直接取；无需先 use at 开窗
@@ -2149,6 +2218,7 @@ function asScoutStep(step: SkillCall): SkillCall {
     case 'excavate':
     case 'tunnel':
     case 'cleanup':
+    case 'organize':
       return { ...step, dryRun: true };
     default:
       return step;

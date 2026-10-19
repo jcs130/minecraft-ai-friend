@@ -4,6 +4,7 @@ import type { SkillCall } from './skills.ts';
 /** Steps that consume the same open window, including explicitly dependent steps. */
 export function consumesOpenWindow(call: SkillCall | undefined): boolean {
   return call?.skill === 'compact'
+    || call?.skill === 'organize'
     || (call?.skill === 'stow' && call.into === 'open')
     || (call?.skill === 'take' && call.from === 'open');
 }

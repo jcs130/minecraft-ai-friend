@@ -3,6 +3,7 @@ import { onConnectionEnd } from './connection-end.ts';
 import { createRequire } from 'node:module';
 import type { Bot } from 'mineflayer';
 import type { MinecraftLog } from './log.ts';
+import { installInventoryComponentPrediction } from './inventory-component-prediction.ts';
 
 // A complete container round trip can include several server ticks and plugin hooks.
 export const INVENTORY_CLICK_CONFIRM_MS = 3_000;
@@ -308,6 +309,7 @@ export async function clickInventoryConfirmed(bot: Bot, slot: number, button: nu
   assertInventoryClicksReady(bot);
   const window = activeWindow(bot);
   if (expectedWindow && expectedWindow !== window) throw new InventoryClickSyncError('合成期间窗口实例被替换，停止后续点击', 'window-replaced');
+  installInventoryComponentPrediction(bot, window);
   let complete!: (error?: Error) => void;
   const confirmation = new Promise<void>((resolve, reject) => {
     complete = (error): void => { if (error) reject(error); else resolve(); };

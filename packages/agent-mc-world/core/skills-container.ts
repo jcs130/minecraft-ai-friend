@@ -4,6 +4,8 @@
  * 每一次存取都以回读槽位为准;开窗与账本在 containers.ts。
  */
 import type { Bot } from 'mineflayer';
+import { transferInventoryStackConfirmed, discardInventorySlotConfirmed } from './inventory-transfer.ts';
+import { inventoryClickState, isInventoryClickError } from './inventory-click-sync.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
 import {
@@ -285,7 +287,9 @@ export async function skillToss(
     const n = Math.min(it.count, left);
     const before = invCount(bot, (name) => name === it.name);
     // 点名的那一件按槽位扔(bot.toss 按类型找槽,同 id 的几件在它眼里没分别)
-    if (it.count === n && typeof bot.tossStack === 'function') await bot.tossStack(it as never);
+    if (typeof bot.clickWindow === 'function' && bot.inventory?.slots)
+      await discardInventorySlotConfirmed(bot, it.slot, n, ctx);
+    else if (it.count === n && typeof bot.tossStack === 'function') await bot.tossStack(it as never);
     else await bot.toss(it.type, it.metadata ?? null, n);
     const moved = before - invCount(bot, (name) => name === it.name);
     if (moved <= 0) break;
@@ -339,6 +343,7 @@ function rememberToss(bot: Bot, name: string): void {
 /** Type-based partial toss must not select a stack excluded by the caller's pick. */
 export function protectedTossItem(bot: Bot, item: string, pick?: string, count = 1): string | null {
   if (typeof bot.inventory?.items !== 'function') return null;
+  if (typeof bot.clickWindow === 'function' && bot.inventory?.slots) return null;
   const all = bot.inventory.items();
   const pred = itemPredOf(bot, item, pick);
   const candidates = all.filter(stack => pred(stack.name, stack));
@@ -514,16 +519,18 @@ async function stowIntoOne(
           const before = invCountIn(view, (name) => name === it.name);
           // undefined = 按类型搬(没点名,或这一摞不止一件);数字 = 点名搬进这一格;
           // null = 该点名搬,可箱里没有空格了
-          const into = e.pick !== undefined && it.count === 1 ? chest.firstEmptyContainerSlot() : undefined;
+          const into = e.pick !== undefined && typeof bot.clickWindow !== 'function' && it.count === 1 ? chest.firstEmptyContainerSlot() : undefined;
           if (into === null) {
             e.failure = '箱子里没有空格了,点名的那件放不进去';
             break;
           }
           try {
-            if (into === undefined) await chest.deposit(it.type, it.metadata ?? null, n);
+            if (e.pick !== undefined && typeof bot.clickWindow === 'function')
+              await transferInventoryStackConfirmed(bot, chest, it.slot, 0, chest.inventoryStart, n, ctx);
+            else if (into === undefined) await chest.deposit(it.type, it.metadata ?? null, n);
             else await moveExactSlot(bot, it.slot, into);
           } catch (err) {
-            if (err instanceof Aborted) throw err;
+            if (err instanceof Aborted || (isInventoryClickError(err) && !ctx.aborted())) throw err;
             e.failure = zhErrorText((err as Error).message);
             break;
           }
@@ -619,7 +626,7 @@ export async function skillStow(
   if (call.at !== undefined && call.into === 'open') {
     throw new SkillBlocked('stow 的 at 与 into:open 只能选一个');
   }
-  if (invCount(bot, itemPredOf(bot, item, pick)) === 0) throw noSuchItem(bot, item, pick);
+  if (invCountIn(playerInvIn(bot, bot.currentWindow ?? bot.inventory), itemPredOf(bot, item, pick)) === 0) throw noSuchItem(bot, item, pick);
   if (call.into === 'open') return stowIntoOpenWindow(bot, call, ctx);
   const found = call.at === undefined ? findContainers(bot, 32) : (() => {
     const cell = resolveAt(bot, call.at!);
@@ -822,7 +829,9 @@ export async function stowIntoOpenWindow(
         const amount = Math.min(next.count, entry.wanted - entry.moved);
         const old = invCountIn(view, pred);
         try {
-          if (entry.pick && next.count === 1) {
+          if (entry.pick && typeof bot.clickWindow === 'function') {
+            await transferInventoryStackConfirmed(bot, win, next.slot, 0, win.inventoryStart, amount, ctx);
+          } else if (entry.pick && next.count === 1) {
             const empty = win.slots.slice(0, win.inventoryStart).findIndex((it) => it === null);
             if (empty < 0) { entry.failure = '容器没有空格了'; break; }
             await moveExactSlot(bot, next.slot, empty);
@@ -832,7 +841,7 @@ export async function stowIntoOpenWindow(
               destStart: 0, destEnd: win.inventoryStart });
           }
         } catch (err) {
-          if (err instanceof Aborted || (err instanceof SkillBlocked && err.code === 'container-window-changed')) throw err;
+          if (err instanceof Aborted || (isInventoryClickError(err) && !ctx.aborted()) || (err instanceof SkillBlocked && err.code === 'container-window-changed')) throw err;
           entry.failure = zhErrorText((err as Error).message);
           break;
         }
@@ -846,7 +855,7 @@ export async function stowIntoOpenWindow(
   } finally {
     retained &&= transfersCompleted && !ctx.aborted()
       && entries.every((entry) => entry.moved > 0 && entry.failure === null);
-    if (bot.currentWindow === win && !retained) bot.closeWindow(win);
+    if (bot.currentWindow === win && !retained && inventoryClickState(bot).phase === 'ready') bot.closeWindow(win);
   }
   let first: { text: string; ok: boolean } | null = null;
   let completed = false;
@@ -880,7 +889,7 @@ export async function stowIntoOpenWindow(
     if (retained && allOk) ctx.holdWindow?.(win);
     return first.text;
   } finally {
-    if (bot.currentWindow === win && (!completed || !allOk || ctx.aborted())) bot.closeWindow(win);
+    if (bot.currentWindow === win && (!completed || !allOk || ctx.aborted()) && inventoryClickState(bot).phase === 'ready') bot.closeWindow(win);
   }
 }
 

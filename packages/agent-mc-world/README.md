@@ -1,5 +1,12 @@
 # Agent MC World
 
+`0.5.7-rc.43` adds [inventory organization](docs/inventory-organization.md)
+through the shared `organize` action: merge and sort personal or open storage,
+optionally stow/discard explicitly selected surplus while retaining caller-chosen
+quantities. Mouse operations use confirmed server slots/cursor and exact modern
+item components. Default organization preserves the quickbar and all items.
+No timer, model call or implicit junk policy is installed.
+
 `0.5.7-rc.42` completes the core [authored-action lifecycle](docs/method-learning.md):
 write new JavaScript actions, compose pinned child methods, retain original
 execution receipts, review outcomes and select versions for later explicit reuse.

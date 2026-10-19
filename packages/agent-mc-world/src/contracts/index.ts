@@ -6,3 +6,5 @@ export * from './photography.ts';
 export * from './java-client.ts';
 export * from './options.ts';
 export * from './work-state.ts';
+export type { InventoryOrganization, InventoryDisposition, OrganizationStack, OrganizationMove,
+  InventoryOrganizationPlan } from '../../core/inventory-organization.ts';

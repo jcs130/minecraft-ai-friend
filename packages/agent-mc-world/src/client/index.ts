@@ -37,3 +37,6 @@ export { PhotographyService, PHOTO_TOOL, PHOTO_PLANNER_SYSTEM, preparePhotoConte
 export { createImageGenerationPort, PHOTOGRAPHY_DEFAULTS } from '../../core/image-generation.ts';
 export * from '../contracts/photography.ts';
 export { learningHelp, type ArtifactRef, type SourceRef } from '../../core/game-memory-learning-contract.ts';
+export { planInventoryOrganization, inventoryOrganizationKey, inventoryOrganizationLimit, inventoryOrganizationTotals,
+  type InventoryOrganization, type InventoryDisposition, type OrganizationStack, type OrganizationMove,
+  type InventoryOrganizationPlan } from '../../core/inventory-organization.ts';
