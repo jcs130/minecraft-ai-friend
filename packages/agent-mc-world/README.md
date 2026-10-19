@@ -1,5 +1,11 @@
 # Agent MC World
 
+`0.5.7-rc.46` exposes `EventCursorError` through the shared SDK. Event reads
+with a missing/wrong run or a cursor ahead of the journal remain rejected;
+MCP returns the error code, current run/cursor metadata and an explicit bounded
+`mc_events` recovery read. Consumers choose whether to take that read. The core
+never silently rebinds an old cursor, creates game events or replays an action.
+
 `0.5.7-rc.44` adds [inventory organization](docs/inventory-organization.md)
 through the shared `organize` action: merge and sort personal or open storage,
 optionally stow/discard explicitly selected surplus while retaining caller-chosen

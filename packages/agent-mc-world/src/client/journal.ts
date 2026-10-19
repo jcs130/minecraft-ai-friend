@@ -5,6 +5,21 @@ import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import type { ArchiveQuery, BlobInput, BlobRef, EventEnvelope, EventStoreReader, WorldHost } from './contracts.ts';
 
+/** A cursor belongs to exactly one run. Recovery is an explicit read, never a hidden reset. */
+export class EventCursorError extends Error {
+  readonly recovery: { after: 0; run: string; waitMs: 0 };
+  constructor(readonly code: 'EVENT_RUN_REQUIRED' | 'EVENT_RUN_CHANGED' | 'EVENT_CURSOR_AHEAD',
+    readonly currentRun: string, readonly after: number, readonly suppliedRun: string | undefined,
+    readonly latestCursor: number) {
+    super(code === 'EVENT_RUN_REQUIRED'
+      ? 'Reading after >0 requires the run returned with that cursor. Include that exact run, or use the explicit recovery read after:0.'
+      : code === 'EVENT_RUN_CHANGED' ? 'Event run changed; read after:0 to obtain the new run and cursor.'
+      : 'Event cursor is ahead of this runtime; use the explicit recovery read after:0.');
+    this.name = 'EventCursorError';
+    this.recovery = { after: 0, run: currentRun, waitMs: 0 };
+  }
+}
+
 /** An adapter-owned execution journal. Agent memory and interpretation remain with the caller. */
 export class AgentJournal {
   readonly run = randomUUID();
@@ -95,8 +110,8 @@ export class AgentJournal {
   read(after: number, limit: number, run?: string, includeArchived = false) {
     if (!Number.isSafeInteger(after) || after < 0 || !Number.isInteger(limit) || limit < 1 || limit > 256)
       throw new Error('Invalid event page');
-    if (after > 0 && run !== this.run) throw new Error('Event run changed; read after:0 to obtain the new run and cursor.');
-    if (after > this.cursor) throw new Error('Event cursor is ahead of this runtime.');
+    if (after > 0 && run !== this.run) throw new EventCursorError(run === undefined ? 'EVENT_RUN_REQUIRED' : 'EVENT_RUN_CHANGED', this.run, after, run, this.cursor);
+    if (after > this.cursor) throw new EventCursorError('EVENT_CURSOR_AHEAD', this.run, after, run, this.cursor);
     const oldestCursor = this.events[0]?.cursor ?? this.cursor + 1;
     const selected = this.events.filter(event => event.cursor > after);
     const scanned = selected.slice(0, limit);

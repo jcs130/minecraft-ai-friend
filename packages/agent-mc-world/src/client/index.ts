@@ -6,7 +6,7 @@ export * from '../contracts/java-client.ts';
 export { offlineUuid, buildClientLaunch } from '../../core/client-launch.ts';
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady, type MinecraftClientConfig } from './config.ts';
 export { loadMinecraftClientConfig } from './config-file.ts';
-export { AgentJournal } from './journal.ts';
+export { AgentJournal, EventCursorError } from './journal.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './tool-help.ts';
 export type { ToolHelpOptions } from './tool-help.ts';
 export { GameMemoryBook, GAME_MEMORY_TOOL, type GameMemoryScope, type GameMemorySource, type GameMemoryContext } from '../../core/game-memory.ts';

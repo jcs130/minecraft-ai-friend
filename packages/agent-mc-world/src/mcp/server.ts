@@ -8,6 +8,7 @@ import { traceSchema } from '../client/metrics.ts';
 import { randomUUID } from 'node:crypto';
 import { PROTOCOL, requireProtocol, type ArchiveQuery } from '../contracts/protocol.ts';
 import { readToolHelp } from '../client/tool-help.ts';
+import { EventCursorError } from '../client/journal.ts';
 
 const protocolSpec: Tool = {
   name: 'mc_protocol', description: 'Versioned host protocol: explicitly begin/end a real decision turn, cancel a request, query execution state, replace current facts, read original archives, or budget request context. Tool RPC completion does not end a turn. Execution completion does not complete your goal.',
@@ -31,10 +32,11 @@ const connectionSpec: Tool = {
 const eventsSpec: Tool = {
   name: 'mc_events', description: 'Read bounded Minecraft events after a cursor: chat, announcements, task completion, '
     + 'damage and observed state. Poll while an accepted action is running; acceptance alone is not completion. '
-    + 'Use the returned run and nextCursor on the next read. A gap means some events have left the recent buffer. '
+    + 'For after >0, include BOTH the exact returned run and nextCursor. A cursor error returns an explicit recovery read; do not repeat the invalid cursor. A gap means some events have left the recent buffer. '
     + 'Archived events are excluded unless explicitly requested. Reading does not prove the Agent has acted on a message.',
   inputSchema: { type: 'object', properties: {
-    after: { type: 'integer', minimum: 0 }, run: { type: 'string' },
+    after: { type: 'integer', minimum: 0, description: 'nextCursor from the previous event page; when >0, run is required.' },
+    run: { type: 'string', description: 'Exact run from the same page as after. Never borrow a cursor across runs.' },
     limit: { type: 'integer', minimum: 1, maximum: 256 },
     waitMs: { type: 'integer', minimum: 0, maximum: 30000 }, includeArchived: { type: 'boolean' },
   }, additionalProperties: false }, annotations: { readOnlyHint: true },
@@ -169,6 +171,10 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
       return outcome(await runtime.call(name, args, { requestId: metadata?.requestId ?? `${session}:${extra.requestId}`,
         turnId: metadata?.turnId, attribution:metadata?.attribution, signal: extra.signal }));
     } catch (error) {
+      if (error instanceof EventCursorError) return outcome({ text: error.message, failed: true,
+        meta: { eventCursor: { code: error.code, after: error.after, suppliedRun: error.suppliedRun ?? null,
+          currentRun: error.currentRun, latestCursor: error.latestCursor },
+          recovery: [{ tool: events.name, arguments: error.recovery }] } });
       return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
     }
   });
