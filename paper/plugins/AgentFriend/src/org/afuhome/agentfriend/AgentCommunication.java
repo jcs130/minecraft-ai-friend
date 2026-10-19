@@ -19,6 +19,7 @@ final class AgentCommunication {
     }
     private record Snapshot(String id, long at, String kind, String query, int total, List<AgentReplyPages.Page> pages) { }
     private final AgentFriendPlugin plugin;
+    private final AgentMessageTransport transport;
     private final Map<UUID, Session> sessions = new HashMap<>();
     private final Path authFile;
     private JsonObject authHeartbeat;private long authReadAt;
@@ -28,6 +29,7 @@ final class AgentCommunication {
         Path configured=null;
         try{if(!path.isBlank())configured=Path.of(path);}catch(InvalidPathException invalid){plugin.getLogger().warning("Invalid auth observation file path; authentication observations remain unknown.");}
         authFile=configured;
+        transport=new AgentMessageTransport(plugin);
     }
     // Local, operator-configured file: no client chat or plugin-message claim is trusted.
     // One bounded read per second across all players. The proxy replaces it atomically.
@@ -44,8 +46,8 @@ final class AgentCommunication {
         unknown.addProperty("reason","认证代理尚未提供本连接的新鲜观测；不能据此判断未登录");unknown.addProperty("queryCommand","/authstatus");return unknown;
     }
     private Session session(Player p) { return sessions.computeIfAbsent(p.getUniqueId(), ignored -> new Session()); }
-    void joined(Player p) { sessions.put(p.getUniqueId(), new Session()); }
-    void forget(Player p) { sessions.remove(p.getUniqueId()); }
+    void joined(Player p) { sessions.put(p.getUniqueId(), new Session()); transport.joined(p); }
+    void forget(Player p) { sessions.remove(p.getUniqueId()); transport.forget(p); }
     boolean compact(Player p) { return p.getName().toLowerCase(Locale.ROOT).startsWith("ag_") || plugin.isRegisteredAgent(p); }
     JsonObject envelope(Player p, String kind) {
         Session session = session(p); JsonObject out = new JsonObject();
@@ -102,7 +104,7 @@ final class AgentCommunication {
             p.sendMessage("§b【当前状态】生命 "+Math.round(p.getHealth())+" · 饱食 "+p.getFoodLevel()+" · 魔力 "+(manaKnown?Math.round(user.getMana())+"/"+Math.round(user.getMaxMana()):"尚未加载"));
             p.sendMessage("§e【下一步】"+out.get("nextCommand").getAsString()+"；详情 /mycli progress all 1，技能 /mycli skills status。");
         }
-        send(p, "MC_STATUS", out);
+        if(jsonOnly)send(p, "MC_STATUS", out);
     }
     void reminder(Player p, JsonObject state, String type) {
         JsonObject out = envelope(p, "next"); out.addProperty("trigger", type);

@@ -1,3 +1,7 @@
+## 2026-10-20 消息降噪与 Numen 同批候选，等待本次维护确认
+
+正式仍 Paper 1.21.1 build 133 / AgentFriend 0.4.47.6，未排队重启。候选 AgentFriend 0.4.47.8 仅回补消息传输、首次欢迎去重、村庄活动条限制；其余382条目与正式二进制保持。LoginGuard 0.1.3 保留认证条件与原成功标记，自动只报最终状态，显式查询和插件通道保留关联信息。ag_ 可选择 qiandengji:agent UTF-8 JSON；未选择或未登记频道时保留私人聊天回执，不自动执行任何动作。原版/msg、/tell、/w显式路由；Numen三JAR和配置沿此前固定候选同批安装。E/F安装与回退文件已准备，等待此前“重启先确认”的本次答复；不得先写pending计划或热载JAR。源码全量0.4.48、旧格挡0.4.47.7及Freesia af4不能混入。详见paper/docs/AGENT_MESSAGE_TRANSPORT.md和paper/manifests/agent-message-candidate-20261020.json。
+
 ## 2026-10-18 近郊分段委托 0.4.47.6 已正式上线
 
 Paper 1.21.1 build 133 / AgentFriend 0.4.47.6。服主本次“更新吧”批准后，180/60/10秒预告、原维护任务正常停启，E/F完整冷备份20261018-221932均先于替换。固定JAR SHA256 e9f2c8b41d6117d7deba318c81d0a4aa43894dc95f0c887b40968a5626c035a7。正式38项状态/保存检查、13项真实Java/Agent入口与菜单检查及原Minepacks数据对账通过；候选631项规则/CLI、55项原生与冷重启检查保留。原53张运营任务保留，市场现55张，新增地面三段巡访和矿坑五段实练；古城新单为高阶可选、明确约六千格，旧冻结资格和证据保留。本人tasks pause/resume可暂存一份合规纯探索远征；考试/地下城/PvP进行中拒绝，不代取消、换单或领奖。任务实际缺项/下一步、原NPC菜单和私有任务条同步更新。公共档案馆0.4.48不含在此次产物；源码默认全量构建不可直接上线。手机/Xbox画面、远端Web和长期自主Agent负载未作本次验收。见paper/docs/LOCAL_TASK_CHAINS.md及local-task-chains-release-20261018.json。

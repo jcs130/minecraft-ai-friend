@@ -1,3 +1,7 @@
+## 2026-10-20 消息降噪与 Numen 同批候选，等待本次维护确认
+
+正式仍 Paper 1.21.1 build 133 / AgentFriend 0.4.47.6，未排队重启。候选 AgentFriend 0.4.47.8 仅回补消息传输、首次欢迎去重、村庄活动条限制；其余382条目与正式二进制保持。LoginGuard 0.1.3 保留认证条件与原成功标记，自动只报最终状态，显式查询和插件通道保留关联信息。ag_ 可选择 qiandengji:agent UTF-8 JSON；未选择或未登记频道时保留私人聊天回执，不自动执行任何动作。原版/msg、/tell、/w显式路由；Numen三JAR和配置沿此前固定候选同批安装。E/F安装与回退文件已准备，等待此前“重启先确认”的本次答复；不得先写pending计划或热载JAR。源码全量0.4.48、旧格挡0.4.47.7及Freesia af4不能混入。详见paper/docs/AGENT_MESSAGE_TRANSPORT.md和paper/manifests/agent-message-candidate-20261020.json。
+
 ## 2026-10-20 Numen Paper／基岩设置候选，尚未部署
 
 固定上游1.21.1分支7c931600c2269d21216bb6f9090588cdbe0beb01，源码版本0.1.4；两个Paper插件与同源Fabric／NeoForge客户端已构建，并补Paper原生内存协议管线以兼容ProtocolLib。NumenBedrock0.1.0使用现役Floodgate表单，/numenmenu及基岩/numen settings可管理本人的模型、个人Key与同伴绑定，复用上游库／钥匙串，写后回读，不经聊天命令、不回填Key。1721单元、6上游E2E、23原生联机／冷重启、25表单边界、14基岩协议及45 WindowsPS5.1运维检查通过。代理只验同核心隔离频道握手，未冒称正式公网完整认证、Java图形客户端／手机Xbox或16自主模型负载；基岩自签夹具仅回环地址放宽校验，正式Geyser不改。E/F候选、助手前像与未排队计划备齐，正式仍Paper1.21.1／AgentFriend0.4.47.6，未换JAR、未改玩家数据或排队重启。新增插件需服主本次Paper维护确认，沿原通知、真人／副本门禁、双盘完整冷备份生命周期；不混入0.4.47.7、0.4.48或Freesia af4。见docs/NUMEN_PAPER.md及manifests/numen-paper-candidate-20261019.json。

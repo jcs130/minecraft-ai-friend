@@ -128,20 +128,19 @@ final class OnboardingGuide implements Listener {
         if (!target(p) || now < time(p, mutedUntil)) {
             session.nextCheck = now + ms("poll-seconds"); return false;
         }
-        boolean welcomeDue = p.getPersistentDataContainer().getOrDefault(welcomeRevision, PersistentDataType.INTEGER, 0) != revision()
-                || now - time(p, welcomeAt) >= ms("welcome-cooldown-seconds");
+        boolean welcomeDue = time(p, welcomeAt) == 0;
         // A new arrival closing their first menu should not have to wait a whole polling minute.
         // This only checks a player's safety/PDC; ledgers are read after the checks pass.
         session.nextCheck = now + (welcomeDue ? 1000L : ms("poll-seconds"));
         if (!safe(p, now, quietUntil) || !gapReady(p, now)) return false;
         boolean compact=plugin.communication().compact(p), justEntered=!session.entrySent;
-        if(justEntered){session.entrySent=true;if(compact)plugin.communication().welcome(p);else plugin.agentEntry().intro(p);}
+        // Join discovery is one persistent, short human hint. Agents query help
+        // themselves. Never push GUIDE + STATUS + NEXT on each reconnect.
+        if(justEntered)session.entrySent=true;
         session.nextCheck = now + ms("poll-seconds");
         JsonObject state = state(p); String current = state.get("step").getAsString();
         String stored = p.getPersistentDataContainer().getOrDefault(lastStep, PersistentDataType.STRING, "");
         if (welcomeDue) {
-            if(!compact)show(p, state, "welcome", true);
-            else if(!justEntered)plugin.communication().reminder(p,state,"welcome");
             p.getPersistentDataContainer().set(welcomeRevision, PersistentDataType.INTEGER, revision());
             p.getPersistentDataContainer().set(welcomeAt, PersistentDataType.LONG, now);
         } else {
@@ -149,7 +148,7 @@ final class OnboardingGuide implements Listener {
             if (!stored.equals(current)) {
                 if (!session.pendingStep.equals(current)) { session.pendingStep = current; session.changedAt = now; return false; }
                 if (now - session.changedAt < ms("progress-delay-seconds")) return false;
-            } else if (now - time(p, reminderAt) < ms(current.equals("complete") ? "complete-reminder-seconds" : "reminder-seconds")) return false;
+            } else return false; // Same stage is not new information; do not repeat it on a timer.
             if(compact)plugin.communication().reminder(p,state,"reminder");else show(p, state, "reminder", false);
         }
         p.getPersistentDataContainer().set(lastStep, PersistentDataType.STRING, current);

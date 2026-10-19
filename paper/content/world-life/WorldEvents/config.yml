@@ -15,7 +15,7 @@ scheduling:
   pause-events-tps-threshold: 18.0
 boss-bar:
   enabled: true
-  update-interval-ticks: 20
+  update-interval-ticks: 1200
   rotation-interval-ticks: 100
   multiple-events-suffix: ' &7(+{count} others)'
 announcements:
@@ -30,8 +30,6 @@ countdown-warnings:
   enabled: true
   times:
   - 30
-  - 10
-  - 5
   message: <gold>[村庄活动]</gold> <yellow>%event%</yellow> <gray>还有 %time% 秒结束。</gray>
 performance:
   async-event-selection: true

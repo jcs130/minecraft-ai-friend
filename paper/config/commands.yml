@@ -1,6 +1,14 @@
 command-block-overrides: []
 ignore-vanilla-permissions: false
 aliases:
+  # Keep all three vanilla private-message names independent of plugin load
+  # order. Essentials may retain a disabled /msg command in the command map.
+  msg:
+  - minecraft:msg $1-
+  tell:
+  - minecraft:msg $1-
+  w:
+  - minecraft:msg $1-
   icanhasbukkit:
   - version $1-
   backpack:

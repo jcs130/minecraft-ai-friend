@@ -17,10 +17,10 @@ assert hashlib.sha256(packet_events[0].read_bytes()).hexdigest() in {
 deps=[a.proxy/'velocity.jar',libre,*packet_events,*sorted((a.proxy/'plugins/librelogin/lib').rglob('*.jar'))]
 cp=';'.join(map(str,deps))
 subprocess.run([str(a.jdk/'bin/javac.exe'),'-proc:none','-encoding','UTF-8','--release','21','-cp',cp,'-d',str(classes),*map(str,(root/'src').rglob('*.java')),str(root/'HashAccounts.java')],check=True)
-jar=a.output/'LoginGuard-0.1.2.jar'
+jar=a.output/'LoginGuard-0.1.3.jar'
 with zipfile.ZipFile(jar,'w',zipfile.ZIP_DEFLATED) as z:
     for f in (classes/'org').rglob('*.class'):z.write(f,f.relative_to(classes).as_posix())
-    z.writestr('velocity-plugin.json',json.dumps({'id':'login-guard','name':'LoginGuard','version':'0.1.2','main':'org.afuhome.auth.LoginGuard','dependencies':[{'id':'librelogin','optional':True},{'id':'packetevents','optional':False}]}))
+    z.writestr('velocity-plugin.json',json.dumps({'id':'login-guard','name':'LoginGuard','version':'0.1.3','main':'org.afuhome.auth.LoginGuard','dependencies':[{'id':'librelogin','optional':True},{'id':'packetevents','optional':False}]}))
 (a.output/'classpath.txt').write_text(str(classes)+';'+cp,encoding='utf-8')
 (a.output/'build.json').write_text(json.dumps({'jar':hashlib.sha256(jar.read_bytes()).hexdigest(),'dependencies':{str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in deps},'sources':{str(f.relative_to(root)):hashlib.sha256(f.read_bytes()).hexdigest() for f in root.rglob('*') if f.is_file()}},indent=2),encoding='utf-8')
-print('Built LoginGuard 0.1.2')
+print('Built LoginGuard 0.1.3')

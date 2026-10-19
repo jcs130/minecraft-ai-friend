@@ -56,14 +56,6 @@ Messages:
   commandInterruptCorrect: '&aActions of event &7%event% &ainterrupted.'
   commandInterruptCorrectPlayer: '&aActions of event &7%event% &ainterrupted for player &7%player%&a.'
 Events:
-  qd_welcome:
-    type: player_join
-    conditions: []
-    actions:
-      default:
-      - 'wait: 7'
-      - 'message: &a[村庄生活季] &f青禾的农耕、集市供给、阿卷照片展、阿岚遗迹调查：/mycli world board；手柄用旅途指南→村庄新生活→居民事务板。'
-      - 'message: &a[照片] &f用 /mycli photo menu 选角度；拍摄耗2魔力，无需空地图，成片自动入个人奖励箱。操作说明 /photohelp。'
   qd_photo_help:
     type: player_command
     conditions:

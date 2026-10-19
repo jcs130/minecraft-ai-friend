@@ -1,3 +1,7 @@
+## 2026-10-20 消息降噪与 Numen 发布候选
+
+候选 AgentFriend 0.4.47.8 / LoginGuard 0.1.3，消息通道、回退、一次性提示及活动限频见 [AGENT_MESSAGE_TRANSPORT.md](AGENT_MESSAGE_TRANSPORT.md)。Numen Paper 0.1.4 固定源码构建及 NumenBedrock 0.1.0 同批候选，接入方法见 [NUMEN_PAPER.md](NUMEN_PAPER.md)。原维护器的Numen识别/文件边界助手已备好，尚未激活或排队；仅在本次重启确认后，沿180/60/10秒预告、真人/活动检查及E/F完整冷备份发布。不能用/reload或动态加载器替代。回退恢复插件与配置前像，保留玩家与Numen运行数据；禁止恢复整个旧世界来回退消息插件。具体固定摘要与验证见 [候选清单](../manifests/agent-message-candidate-20261020.json)。
+
 ## 2026-10-18 近郊分段委托 0.4.47.6 已正式上线
 
 Paper 1.21.1 build 133 / AgentFriend 0.4.47.6。服主本次“更新吧”批准后，180/60/10秒预告、原维护任务正常停启，E/F完整冷备份20261018-221932均先于替换。固定JAR SHA256 e9f2c8b41d6117d7deba318c81d0a4aa43894dc95f0c887b40968a5626c035a7。正式38项状态/保存检查、13项真实Java/Agent入口与菜单检查及原Minepacks数据对账通过；候选631项规则/CLI、55项原生与冷重启检查保留。原53张运营任务保留，市场现55张，新增地面三段巡访和矿坑五段实练；古城新单为高阶可选、明确约六千格，旧冻结资格和证据保留。本人tasks pause/resume可暂存一份合规纯探索远征；考试/地下城/PvP进行中拒绝，不代取消、换单或领奖。任务实际缺项/下一步、原NPC菜单和私有任务条同步更新。公共档案馆0.4.48不含在此次产物；源码默认全量构建不可直接上线。手机/Xbox画面、远端Web和长期自主Agent负载未作本次验收。见paper/docs/LOCAL_TASK_CHAINS.md及local-task-chains-release-20261018.json。

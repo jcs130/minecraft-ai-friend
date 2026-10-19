@@ -21,6 +21,8 @@ import com.velocitypowered.api.event.player.PlayerChatEvent;
 import com.velocitypowered.api.event.player.ServerPreConnectEvent;
 import com.velocitypowered.api.event.player.ServerPostConnectEvent;
 import com.velocitypowered.api.event.player.GameProfileRequestEvent;
+import com.velocitypowered.api.event.connection.PluginMessageEvent;
+import com.velocitypowered.api.proxy.messages.MinecraftChannelIdentifier;
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.*;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
@@ -63,6 +65,8 @@ public final class LoginGuard {
     private final Map<Player,String> observationSessions=new ConcurrentHashMap<>();
     private final Map<Player,String> authenticationMethods=new ConcurrentHashMap<>();
     private final Set<Player> authenticationNotified=ConcurrentHashMap.newKeySet();
+    private static final MinecraftChannelIdentifier AGENT_CHANNEL=MinecraftChannelIdentifier.create("qiandengji","agent");
+    private final Set<Player> payloadPeers=ConcurrentHashMap.newKeySet();
 
     @Inject public LoginGuard(ProxyServer server, Logger logger) { this.server=server; this.logger=logger; }
     private static String key(String name) { return name.toLowerCase(Locale.ROOT); }
@@ -77,6 +81,7 @@ public final class LoginGuard {
         catch (Exception e) { ready=false; return false; }
     }
     @Subscribe(order=PostOrder.LAST) public void start(ProxyInitializeEvent event) throws Exception {
+        server.getChannelRegistrar().register(AGENT_CHANNEL);
         var cfg = new Properties();
         try (var in=Files.newInputStream(Path.of("plugins/login-guard/config.properties"))) { cfg.load(in); }
         heartbeat=Path.of(cfg.getProperty("heartbeat"));
@@ -192,7 +197,20 @@ public final class LoginGuard {
     private void publishAuthentication(Player p) {
         if(!p.isActive())return;
         JsonObject out=authenticationState(p);
-        p.sendMessage(text("MC_AUTH_STATE "+out));
+        sendAuthentication(p,out,true);
+    }
+    private void sendAuthentication(Player p,JsonObject state,boolean explicit) {
+        if(AuthMessages.agent(p.getUsername()) && payloadPeers.contains(p)) {
+            if(p.sendPluginMessage(AGENT_CHANNEL,AuthMessages.payload(state)))return;
+        }
+        if(explicit || AuthMessages.agent(p.getUsername()))
+            p.sendMessage(text("MC_AUTH_STATE "+(explicit?state:AuthMessages.compact(state))));
+    }
+    @Subscribe public void agentTransport(PluginMessageEvent e) {
+        // Client-selected presentation only. Leave forwarding intact so Paper
+        // receives the same hello; server-originated packets cannot opt in a player.
+        if(e.getIdentifier().equals(AGENT_CHANNEL) && e.getSource() instanceof Player p
+                && AuthMessages.agent(p.getUsername()) && AuthMessages.hello(e.getData()))payloadPeers.add(p);
     }
     private void notifyAuthenticated(Player p) {
         if(!p.isActive() || !inPaper(p))return;
@@ -200,7 +218,7 @@ public final class LoginGuard {
         if(!state.get("status").getAsString().equals("authenticated")
                 || !state.get("authorized").getAsBoolean() || !authenticationNotified.add(p))return;
         p.sendMessage(text("[MC_AUTH_SUCCESS] 登录成功，可以开始游戏。"));
-        p.sendMessage(text("MC_AUTH_STATE "+state));
+        sendAuthentication(p,state,false);
     }
     private static boolean inPaper(Player p) {
         return p.getCurrentServer().filter(c->c.getServerInfo().getName().equals("paper")).isPresent();
@@ -357,7 +375,8 @@ public final class LoginGuard {
     }
     @Subscribe(order=PostOrder.LAST) public void joined(ServerPostConnectEvent e) {
         notifyAuthenticated(e.getPlayer());
-        if(!authenticationNotified.contains(e.getPlayer()))publishAuthentication(e.getPlayer());
+        // Pending is available via /authstatus, not pushed again on each limbo
+        // or backend switch. The final success marker remains once per session.
     }
     @Subscribe(order=PostOrder.LAST) public void command(CommandExecuteEvent e) {
         if(!(e.getCommandSource() instanceof Player p)) return;
@@ -397,6 +416,7 @@ public final class LoginGuard {
         firstPasswordSessions.remove(e.getPlayer());passwordReminders.remove(e.getPlayer());
         observationSessions.remove(e.getPlayer());authenticationMethods.remove(e.getPlayer());
         authenticationNotified.remove(e.getPlayer());
+        payloadPeers.remove(e.getPlayer());
     }
     @Subscribe public void stop(ProxyShutdownEvent event) {
         ready=false; try { if(heartbeat!=null) Files.deleteIfExists(heartbeat); } catch(Exception ignored) { }
