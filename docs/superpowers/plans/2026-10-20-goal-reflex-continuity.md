@@ -17,4 +17,10 @@ The current full-mode catalogue still hides native project, memory, tactic and m
 
 ## Limits to report
 
+Live follow-up revealed that the external viewer was working but its bridge
+camera URL was null, causing repeated visual text fallbacks. Add red/green
+same-body camera binding/lifecycle tests and native capture route/readiness
+tests; keep unsupported coordinate-overview/FOV requests explicit. This fixes
+an observation port, not proof that new goals or methods were completed.
+
 Source/tool availability is not autonomous adoption. Built-in combat and environmental rescue work without a model. Authored combat candidate programs still need an explicit selector; ordinary methods are bounded native programs, not an implicit permanent background controller. Agent learning requires actual execution evidence, interpretation, selection and later comparable outcomes, rather than counts of saves or model statements.

@@ -1,5 +1,10 @@
 # Agent MC Autonomy
 
+0.2.70 also binds the optional native viewer to the core camera port for the
+same live body. It revokes stale attachments before reconnect/stop; no second
+viewer or game connection is started. Actual native photographs support
+first/third/3dview; unsupported coordinate-overview/FOV requests remain explicit.
+
 0.2.69 pins core rc.55 so its current goal ledger reaches every native facts
 request. The optional isolated practice SDK is included, with no implicit
 worker/model installation or activation.

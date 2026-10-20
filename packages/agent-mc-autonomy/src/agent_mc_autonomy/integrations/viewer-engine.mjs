@@ -76,6 +76,11 @@ export function createEngine(options) {
     closing = Promise.all([closing, cleanup()]).then(() => {});
     return closing;
   };
+  const captureView = bridge => {
+    const current = attached;
+    return !stopped && current?.bridge === bridge && current.bot === bridge.bot
+      && current.ready && current.view.server?.listening === true ? current.view : null;
+  };
   // Presentation decorates the default tactical body; it must retain its tools,
   // battlefield sampling, combat receipts and extension lifecycle hooks.
   return new class extends TacticalMinecraftWorld {
@@ -111,7 +116,12 @@ export function createEngine(options) {
       return super.start(host);
     }
     createBridge(bridgeOptions) {
-      return new Bridge({ ...bridgeOptions, onBotCreated: bot => {
+      // The optional renderer replaces the built-in viewer, so the original
+      // core camera port must point at this same body's live attachment too.
+      const bridge = new class extends Bridge {
+        get viewerUrl() { return captureView(this)?.url ?? null; }
+        get viewerKind() { return captureView(this) ? 'modern' : null; }
+      }({ ...bridgeOptions, onBotCreated: bot => {
         bridgeOptions.onBotCreated?.(bot);
         if (!prepared || stopped) return;
         // Reconnects must release the old listener before binding this same body's
@@ -134,7 +144,7 @@ export function createEngine(options) {
           warn('Optional viewer attachment unavailable; game execution continues');
           void close(); return;
         }
-        const attachment = attached = { view, listening: null, revokeGui: null };
+        const attachment = attached = { view, bot, bridge, ready: false, listening: null, revokeGui: null };
         let admission = null;
         const publish = () => {
           if (attached !== attachment || stopped) return;
@@ -164,6 +174,7 @@ export function createEngine(options) {
         });
         void attachment.listening.then(() => {
           if (attached !== attachment || stopped) return;
+          attachment.ready = true;
           attachment.revokeGui = bindNativeGuiPresentation(bot, () => {
             if (attached !== attachment || stopped) return null;
             // status() serializes entities/inventory and reads agent state. Reuse
@@ -192,6 +203,7 @@ export function createEngine(options) {
           if (attached === attachment && !stopped) { record({ available: false, reason: 'GAME_DISCONNECTED', url: null }); void close(); }
         });
       } });
+      return bridge;
     }
     disposeExtension() {
       stopped = true; ++generation;

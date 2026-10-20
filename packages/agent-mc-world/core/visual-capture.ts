@@ -49,6 +49,9 @@ interface CaptureDependencies {
 
 interface ViewerHealth {
   ok?: boolean;
+  schemaVersion?: number;
+  mode?: string;
+  readOnly?: boolean;
   version?: string;
   viewers?: number;
   maxSessions?: number;
@@ -141,10 +144,13 @@ export function viewerCaptureState(): false | string {
   if (boot?.classList.contains('is-error')) return `error:${boot.textContent?.trim() ?? ''}`;
   if (!boot?.classList.contains('is-compact')) return false;
   const world = browserWindow.world;
+  // Native exact-resource scenes publish their committed render through the
+  // same boot/error marker; they do not contain legacy prismarine chunk maps.
+  const native = !!browserWindow.document.querySelector('meta[name="native-viewer-build"]');
   const loaded = Object.keys(world?.loadedChunks ?? {});
   const meshed = Object.keys(world?.finishedChunks ?? {}).sort();
-  if (meshed.length === 0 || loaded.some(key => !world?.finishedChunks?.[key])
-      || (world?.sectionsWaiting?.size ?? 0) > 0 || (world?.messageQueue?.length ?? 0) > 0) {
+  if (!native && (meshed.length === 0 || loaded.some(key => !world?.finishedChunks?.[key])
+      || (world?.sectionsWaiting?.size ?? 0) > 0 || (world?.messageQueue?.length ?? 0) > 0)) {
     delete browserWindow.__corticoCapture;
     return false;
   }
@@ -155,7 +161,7 @@ export function viewerCaptureState(): false | string {
       && candidate.width >= browserWindow.innerWidth / 2 && candidate.height >= browserWindow.innerHeight / 2;
   });
   if (!canvas) return false;
-  const chunks = meshed.join(';');
+  const chunks = native ? `native:${boot?.textContent ?? ''}` : meshed.join(';');
   const previous = browserWindow.__corticoCapture;
   if (!previous || previous.chunks !== chunks) {
     browserWindow.__corticoCapture = { chunks, since: performance.now() };
@@ -206,7 +212,7 @@ export class MinecraftViewCaptureManager {
     const origin = localViewerOrigin(options.viewerUrl);
     const mode = options.mode === 'dungeon' ? '3dview' : options.mode ?? 'first';
     if (!['first', 'third', '3dview', 'overview'].includes(mode)) throw new RangeError('invalid Minecraft view mode');
-    const fov = visualFov(mode, options.fov);
+    let fov = visualFov(mode, options.fov);
     const overviewError = overviewArgumentError(mode, options.overview, options.includeHud);
     if (overviewError) throw new RangeError(overviewError);
     const width = viewportDimension(options.width, DEFAULT_WIDTH, 640, 1920);
@@ -255,6 +261,13 @@ export class MinecraftViewCaptureManager {
         throw new VisualCaptureError('unavailable', '本地 viewer 健康检查失败', { cause: error });
       }
       if (!health.ok) throw new VisualCaptureError('unavailable', '本地 viewer 尚未就绪');
+      const native = health.schemaVersion === 1 && health.mode === 'live_same_player_connection' && health.readOnly === true;
+      if (native && (mode === 'overview' || options.fov !== undefined)) {
+        throw new VisualCaptureError('unavailable', '当前原生观战支持 first、third、3dview 实景截图；坐标俯视照片和自定义视野角度尚未接入。请改用这些实际视角，精确地形用 mc_scout 核对。');
+      }
+      // Native cameras keep their actual configured angle. Do not claim the
+      // legacy default was applied when no explicit angle was requested.
+      if (native) fov = undefined;
       const captureLane = Number.isInteger(health.maxCaptureSessions) && health.maxCaptureSessions! > 0;
       if (session?.page && session.captureLane !== captureLane) await this.closePage(origin, session);
       if (session?.page && session.renewable && !await this.renewLease(origin, session)) await this.closePage(origin, session);
@@ -289,7 +302,8 @@ export class MinecraftViewCaptureManager {
         session.mode = mode; session.fov = fov; session.width = width; session.height = height;
         session.includeHud = options.includeHud === true;
         session.captureLane = captureLane;
-        const pagePath = mode === 'overview' ? '/third/?photo=1' : fov === undefined ? `/${mode}/?photo=1`
+        const pagePath = native && mode === 'first' ? '/?photo=1'
+          : mode === 'overview' ? '/third/?photo=1' : fov === undefined ? `/${mode}/?photo=1`
           : `${mode === 'first' ? '/' : '/third/'}?photo=1&fov=${fov}`;
         await session.page.goto(`${origin}${pagePath}${options.includeHud === true ? '' : '&clean=1'}`, { waitUntil: 'domcontentloaded', timeout: remaining(deadlineAtMs) });
         session.openedAtMs = Date.now();

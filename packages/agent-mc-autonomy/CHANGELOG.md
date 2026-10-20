@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.70
+
+- Bind the optional native viewer to the original core camera port for the same connected body; revoke the binding on replacement, disconnection and stop. No second viewer or game connection.
+- Native first/third/3dview captures use the actual renderer route and committed scene; unsupported coordinate-overview/FOV requests remain explicit and do not manufacture images.
+
 ## 0.2.69 — 2026-10-20
 
 - Pin the independently built core rc.55 with fresh scoped goal milestones in
