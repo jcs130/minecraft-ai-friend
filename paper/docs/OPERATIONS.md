@@ -1,3 +1,7 @@
+## 2026-10-20 原桐人 / QwenPaw 已正式上线
+
+服主批准“那就切换到线上吧”后，180/60/10秒预告和原 Afu-MC-DailyBackup 正常停启完成；E/F完整冷备份20261020-203729均先于安装。原ag_Kirito保留UUID、33条物品、末影箱、大背包原blob、战士职业和技能点；首次登录补齐旧学院等级已逐字段核验，旧星灯离场保档。API 77da82ad、Appearance0.3.3、Freesia af3和AgentFriend0.4.47.8保持对应候选。正式36项健康、10项角色保存、9项外观协议/资源、3次真实QwenPaw查询、4项私聊唤醒/回复及5项召回保持检查通过；完整39项技能33383字符收到。两次验收恢复失败和旧探针连接失败保留，最终通过原主人召回既有身体继续；未重建背包或令牌。QwenPaw原生循环/MCP/会话在用，原生计划、游戏Skill与自动记忆检索尚未启用，不能宣称已全量使用。无Fabric/远端Web/手机Xbox像素或16自主模型负载验收。见paper/docs/KIRITO_QWENPAW.md、KIRITO_NATIVE_QWENPAW.md及发布清单；下方候选是历史记录。
+
 ## 2026-10-20 桐人信息链路补齐，仍为隔离候选
 
 原桐人/QwenPaw候选已补首查接管竞态、6000字长回执截断、后台任务/满背包通知和接管旧账号的Bukkit权限。API SHA256 77da82ad3241f39fee878e5e51f855bdc5fe7777cabd1ed863a213af5bd60dea，适配器 SHA256 30e85620590c0daa6f3ef2c4279229ff2107c86574f29f8006629f2bb358422f；Appearance仍0.3.3、Freesia仍af3、AgentFriend仍0.4.47.8。952 common、17适配器、6真实联机信息/54格窗口检查，以及QwenPaw两项查询、普通私聊和私有系统事件通过；39条技能33383字符完整解析，原33物品条目/职业与Minepacks292字节原blob核对。18组核心能力按需查help，任务与技能沿用原/mycli；资格不等于已学或已准备。Native采用可选structuredContent而非放大全局Lua展示限额，超限/未知结果不重放。旧账号通过管理员adopt的精确UUID/owner标记保留原LuckPerms权限，新同伴沿原委托；不加OP或权限节点。已完成E/F候选与回退更新，测试服务和新QwenPaw角色停用，正式仍星灯、无pending；继续等待本次维护确认及原完整双盘冷备份流程。下方初版候选为本轮扩展前记录。见paper/docs/KIRITO_SERVER_INFORMATION.md。
