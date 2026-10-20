@@ -1,0 +1,48 @@
+{
+  "status": "candidate_awaiting_qwenpaw_restart_approval",
+  "at": 1792507858.7812207,
+  "plugin": "0.2.0",
+  "files": {
+    "AGENTS.md": "cb051d2cc3d39762fa97a5c6dc26bcdadaa463483245a57d5b70a2b3cf3985ba",
+    "cognition_profile.py": "a4b656a967c9bc6e57d92e0a9e152fc99254f3b02731adcaf28c7054e2fed8f7",
+    "numen_controller.py": "ae1e17e6286d6b9027026c3c17ae90e4176c5ac010cae14237f88b1692efd48b",
+    "options.json": "1660ddebe20e611aaf6b9610d0b80d0ffbfd98d0645fc6fcf3bf3f8111988552",
+    "native_plugin/plugin.json": "7d088275b2dc1891cae1f22d8e2449cc11fecd37dd1fbc30d6812f730aafd9b4",
+    "native_plugin/plugin.py": "c85a1d8889e3c20471f4fe47a1c695e40a35d07f4897a55df884f16ee0ca094c",
+    "skills/qiandengji-start/SKILL.md": "bddc06998c42d59ccbf560ce768db26a24f778732e351a4d6f0aeebd1557e364"
+  },
+  "tests": {
+    "unitPassed": 68,
+    "liveTestsSkipped": 6,
+    "nativeSubagent": true,
+    "parallelAfterColdStart": true,
+    "historyCrossSession": true,
+    "powercontextFreshProcess": true
+  },
+  "liveChanged": false,
+  "paperRestartRequired": false,
+  "qwenpawProcessRestartRequired": true,
+  "sourceFiles": {
+    "paper/integrations/numen-paper/qwenpaw/native_plugin/plugin.py": "c85a1d8889e3c20471f4fe47a1c695e40a35d07f4897a55df884f16ee0ca094c",
+    "paper/integrations/numen-paper/qwenpaw/native_plugin/plugin.json": "7d088275b2dc1891cae1f22d8e2449cc11fecd37dd1fbc30d6812f730aafd9b4",
+    "paper/integrations/numen-paper/qwenpaw/cognition_profile.py": "a4b656a967c9bc6e57d92e0a9e152fc99254f3b02731adcaf28c7054e2fed8f7",
+    "paper/integrations/numen-paper/qwenpaw/skills/qiandengji-start/SKILL.md": "bddc06998c42d59ccbf560ce768db26a24f778732e351a4d6f0aeebd1557e364",
+    "paper/integrations/numen-paper/qwenpaw/test_cognition.py": "fc94b03cf2045c8f04f6559ad7e141308b84f7305a88729c8a5d5a192f92ba9a",
+    "paper/integrations/numen-paper/qwenpaw/test_native_game.py": "ff0db91cdbc136a63d393c7559796144e63a0f0c4cbb9a903b3713320492a31c"
+  },
+  "limits": {
+    "analysisSessions": 2,
+    "analysisIterations": 6,
+    "analysisTimeoutSeconds": 180,
+    "requestedSharedModelConcurrency": 3,
+    "sharedModelQpmUnchanged": 12,
+    "memoryMaxResults": 2,
+    "memoryMaxBytes": 6000
+  },
+  "knownLimits": [
+    "ReMe notes preserved, not bulk migrated",
+    "No 16 autonomous Agent load test",
+    "No remote Web consumer deployment",
+    "Native shared model limiter caches first settings; verify after restart"
+  ]
+}

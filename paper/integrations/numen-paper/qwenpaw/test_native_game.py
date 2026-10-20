@@ -53,7 +53,7 @@ class NativeGame(unittest.IsolatedAsyncioTestCase):
         api = Mock()
         game.plugin.register(api)
         self.assertEqual(api.register_channel.call_args.args[0].channel, "qiandengji")
-        self.assertEqual(api.register_runtime_hook.call_count, 2)
+        self.assertEqual(api.register_runtime_hook.call_count, 3)
         self.assertEqual(api.register_middleware.call_count, 1)
 
     async def test_all_sessions_are_canonical_before_hydration(self):

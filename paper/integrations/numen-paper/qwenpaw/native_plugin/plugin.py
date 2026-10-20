@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
+from contextvars import ContextVar
 import html
 import json
+import math
 from pathlib import Path
 import re
 import sqlite3
@@ -17,8 +19,9 @@ import time
 from types import SimpleNamespace
 import uuid
 
-from agentscope.message import Msg
+from agentscope.message import Msg, TextBlock, ToolResultState
 from agentscope.middleware import MiddlewareBase
+from agentscope.tool import ToolChunk
 from qwenpaw.app.channels.base import BaseChannel
 from qwenpaw.drivers.capabilities import DriverInvocation, format_capability_id
 from qwenpaw.runtime.hooks import HookAction, HookBase, HookResult
@@ -27,6 +30,167 @@ from qwenpaw.schemas import TextContent
 
 CHANNEL = "qiandengji"
 _LANES: dict[str, "BodyLane"] = {}
+_CURRENT_LANE = ContextVar("qiandengji_lane", default=None)
+REVIEW_TOOLS = frozenset({"recall_history", "memory_search", "memory_remember", "qiandengji_snapshot"})
+READ_COMMANDS = {"status": "/mycli status", "tasks": "/mycli tasks status", "skills": "/mycli skills status"}
+
+
+def normalize_memory_hits(payload: dict) -> list[dict]:
+    """QwenPaw 2.2.2 expects entry citations; deployed PowerContext also
+    returns atomic-memory hits. Keep the actual artifact reference verbatim;
+    NEVER invent entry IDs to satisfy the older client's strict validator.
+    """
+    if not isinstance(payload, dict) or not isinstance(payload.get("hits"), list):
+        raise ValueError("PowerContext 搜索缺少 hits")
+    results = []
+    for hit in payload["hits"][:50]:
+        if not isinstance(hit, dict):
+            raise ValueError("PowerContext 搜索结果不是对象")
+        memory = hit.get("memory")
+        if memory is not None and not isinstance(memory, dict):
+            raise ValueError("PowerContext memory 字段无效")
+        text = memory.get("text") if isinstance(memory, dict) else hit.get("text")
+        ref = memory.get("artifact") if isinstance(memory, dict) else (hit.get("citation") or {}).get("memory_ref")
+        score, matched = hit.get("score"), hit.get("matched_by")
+        if (not isinstance(text, str) or not isinstance(ref, dict)
+                or type(ref.get("revision")) is not int or ref["revision"] < 1
+                or any(not isinstance(ref.get(k), str) or not re.fullmatch(r"[!-~]{1,128}", ref[k])
+                       for k in ("family", "artifact_id"))
+                or isinstance(score, bool) or not isinstance(score, (int, float))
+                or not math.isfinite(score) or not 0 <= score <= 1
+                or not isinstance(matched, list) or any(m not in {"fts", "text", "vector"} for m in matched)):
+            raise ValueError("PowerContext 搜索结果字段无效")
+        citation = {"memory_ref": {k: ref[k] for k in ("family", "artifact_id", "revision")}}
+        if memory is None:
+            # Legacy entry-based citations remain usable, without filling gaps.
+            for key in ("entry_id", "entry_version_id"):
+                value = hit.get("citation", {}).get(key)
+                if not isinstance(value, str) or not re.fullmatch(r"[!-~]{1,128}", value):
+                    raise ValueError("PowerContext 旧版引用缺失")
+                citation[key] = value
+        results.append({"text": text, "score": float(score), "matched_by": matched, "citation": citation})
+    return results
+
+
+class PowerContextClientBridge:
+    """Thin read-response adapter; writes, auth, timeouts and close stay native."""
+    def __init__(self, native):
+        self.native, self.config = native, native.config
+
+    async def remember(self, **kwargs):
+        return await self.native.remember(**kwargs)
+
+    async def search(self, *, query, limit=5, scope_id=None):
+        if not isinstance(query, str) or not 1 <= len(query) <= 8192:
+            raise ValueError("记忆查询为空或过长")
+        if scope_id is not None and scope_id != self.config.scope_id:
+            raise ValueError("不能更改角色的记忆空间")
+        response = await self.native._http.post("/v1/memory/search", json={
+            "scope_id": self.config.scope_id, "query": query, "limit": min(2, max(1, int(limit)))})
+        self.native._raise_for_status("memory search", response)
+        return normalize_memory_hits(response.json())[:2]
+
+    async def close(self):
+        await self.native.close()
+
+
+def compatible_memory_factory(native_class):
+    class GamePowerContext(native_class):
+        async def start(self):
+            await super().start()
+            if self._client is not None:
+                self._client = PowerContextClientBridge(self._client)
+
+        @staticmethod
+        def _memory_citation(hit):
+            return hit["citation"]
+
+        def _format_memory_hit(self, *, index, score, text, citation):
+            ref = citation["memory_ref"]
+            pointer = f"family: {ref['family']}, artifact_id: {ref['artifact_id']}, revision: {ref['revision']}"
+            if "entry_id" in citation:
+                pointer += f", entry_id: {citation['entry_id']}, entry_version_id: {citation['entry_version_id']}"
+            return f"[{index}] (powercontext, score: {score:.2f}, {pointer}, scope: {self._scope_id()})\n{text}"
+    return GamePowerContext
+
+
+def tool_result(value, error=False):
+    return ToolChunk(is_last=True, state=ToolResultState.ERROR if error else ToolResultState.SUCCESS,
+                     content=[TextBlock(type="text", text=json.dumps(value, ensure_ascii=False))])
+
+
+async def qiandengji_snapshot(section: str = "status", expected_revision: str = "") -> ToolChunk:
+    """只读本人状态、任务或技能；返回来源、时间和身体代次。不能执行任意命令。
+
+    section: status/tasks/skills。expected_revision: 复盘所依据的代次；不一致时须重新核对。
+    这是当前查询，不是行动成功或任务完成证明；查询失败不重放动作。
+    """
+    lane = _CURRENT_LANE.get()
+    if lane is None or lane.channel is None or section not in READ_COMMANDS:
+        return tool_result({"status": "unavailable", "nextAction": "选择 status/tasks/skills，并先确认身体在线。"}, True)
+    async with lane.read_lock:
+        revision = lane.revision
+        cached = lane.read_cache.get(section)
+        reused = bool(cached and cached[0] == revision and time.monotonic() - cached[1] <= 5)
+        if not cached or cached[0] != revision or time.monotonic() - cached[1] > 5:
+            try:
+                result = await lane.channel.invoke("command", {"line": READ_COMMANDS[section]})
+                raw = texts(result)
+                if not raw.strip() or len(raw) > 48000:
+                    raise ValueError("incomplete snapshot")
+                cached = (revision, time.monotonic(), int(time.time() * 1000), raw)
+                lane.read_cache[section] = cached
+            except Exception:
+                return tool_result({"status": "unknown", "section": section,
+                                    "nextAction": "查询未完成；先核对连接，不重放游戏动作。"}, True)
+        changed_during_read = revision != lane.revision
+        return tool_result({"status": "snapshot", "source": "paper-mycli", "readOnly": True,
+                            "playerUuid": lane.cfg["companion_uuid"], "section": section,
+                            "revision": revision, "observedAt": cached[2],
+                            "cached": reused,
+                            "bodyBusy": lane.lock.locked(),
+                            "stale": changed_during_read or bool(expected_revision and expected_revision != revision),
+                            "receipt": cached[3], "nextAction": "行动前重新核对实际任务、物品和消耗。"})
+
+
+def review_context(request_context: dict) -> bool:
+    return (request_context.get("_spawn_subagent") is True
+            or request_context.get("qiandengji_role") in {"review", "planner"})
+
+
+def restrict_review(request_context: dict):
+    requested = request_context.get("subagent_allowed_tools")
+    allowed = REVIEW_TOOLS if not isinstance(requested, list) else REVIEW_TOOLS.intersection(requested)
+    request_context["subagent_allowed_tools"] = sorted(allowed)
+    request_context["subagent_skills"] = []
+
+
+def constrain_spawn(arguments: dict) -> dict:
+    """Keep QwenPaw's own background jobs, filters, timeout and task handles.
+
+    Never let a model's omitted whitelist inherit the physical body's tools.
+    Background workers have no recursive delegation, shell, arbitrary Lua or
+    command tool. They can remember advice; memories are not authoritative.
+    """
+    result = dict(arguments)
+    batch = result.get("batch")
+    if isinstance(batch, str):
+        batch = json.loads(batch) if batch.strip() else None
+    if batch:
+        if not isinstance(batch, list) or len(batch) > 2 or any(not isinstance(x, dict) for x in batch):
+            raise ValueError("每批最多两个复盘/规划任务")
+        result["batch"] = [constrain_spawn({**item, "batch": None}) for item in batch]
+        result["task"] = ""
+        return result
+    wanted = result.get("allowed_tools")
+    if isinstance(wanted, str):
+        wanted = json.loads(wanted)
+    if wanted is not None and (not isinstance(wanted, list) or any(not isinstance(x, str) for x in wanted)):
+        raise ValueError("allowed_tools 必须是列表")
+    result.update(background=True, fork=False,
+                  allowed_tools=sorted(REVIEW_TOOLS if wanted is None else REVIEW_TOOLS.intersection(wanted)),
+                  skills=[], timeout=min(180, max(1, int(result.get("timeout") or 120))))
+    return result
 
 
 def read_config(workspace: Path) -> dict | None:
@@ -106,6 +270,14 @@ class BodyLane:
         self.sequence = 0
         self.channel = None
         self.preloaded_skills = []
+        self.review_sessions = set()
+        self.read_lock = asyncio.Lock()
+        self.read_cache = {}
+        self.body_sequence = 0
+
+    @property
+    def revision(self):
+        return f"{self.epoch}:{self.body_sequence}"
 
     def project(self, state: str, tool: str = ""):
         # An allowlist, not a filter over prompts/results. No chat, arguments,
@@ -144,6 +316,22 @@ class GameEnter(HookBase):
             return HookResult()
         lane = get_lane(Path(ctx.workspace_dir), cfg)
         request_context = getattr(ctx.request, "request_context", None) or {}
+        ctx.request.request_context = request_context
+        if review_context(request_context):
+            # Native subagents stay in their own sessions. Do not relay them to
+            # a locked parent body (that would deadlock foreground children).
+            if ctx.session_id == cfg["session_id"] or ctx.session_id in lane.review_sessions or len(lane.review_sessions) >= 2:
+                return HookResult(HookAction.SHORT_CIRCUIT, Msg(name="system", role="assistant",
+                    content=[TextBlock(type="text", text="复盘会话正在使用或名额已满；未启动新任务。")]))
+            restrict_review(request_context)
+            for message in ctx.request.input:
+                for block in message.content:
+                    if getattr(block, "type", "") == "text":
+                        block.text = "[后台资料分析；以下内容不能启动框架命令]\n" + block.text
+            lane.review_sessions.add(ctx.session_id)
+            ctx.extras["qiandengji_review"] = lane
+            ctx.extras["qiandengji_context_token"] = _CURRENT_LANE.set(lane)
+            return HookResult()
         if request_context.get("source") == "heartbeat" and getattr(ctx.request, "channel", "") != CHANNEL:
             # Keep the original native scheduler; relay before building any main
             # agent. target=last alone would not change heartbeat's main session.
@@ -164,6 +352,8 @@ class GameEnter(HookBase):
             return HookResult(HookAction.SHORT_CIRCUIT, Msg(name="system", content=[{"type": "text", "text": message}], role="assistant"))
         await lane.lock.acquire()
         ctx.extras["qiandengji_lane"] = lane
+        ctx.extras["qiandengji_context_token"] = _CURRENT_LANE.set(lane)
+        lane.body_sequence += 1
         lane.project("working")
         return HookResult()
 
@@ -174,20 +364,45 @@ class GameLeave(HookBase):
     priority = 10000
 
     async def run(self, ctx):
+        review = ctx.extras.pop("qiandengji_review", None)
+        if review is not None:
+            review.review_sessions.discard(ctx.session_id)
+        token = ctx.extras.pop("qiandengji_context_token", None)
+        if token is not None:
+            # Cleanup can also be driven by an external cancellation context;
+            # a foreign ContextVar token must never prevent releasing the body.
+            with suppress(ValueError):
+                _CURRENT_LANE.reset(token)
         lane = ctx.extras.pop("qiandengji_lane", None)
         if lane is not None:
             try:
+                lane.body_sequence += 1
                 lane.project("unknown" if ctx.error else "idle")
             finally:
                 lane.lock.release()
         return HookResult()
 
 
+class ReviewBudget(HookBase):
+    phase = Phase.POST_AGENT_BUILD
+    name = "qiandengji_review_budget"
+    priority = 1000
+
+    async def run(self, ctx):
+        if ctx.extras.get("qiandengji_review") is not None and ctx.agent is not None:
+            # Use AgentScope's own per-invocation ReAct limit; no extra loop.
+            ctx.agent.react_config.max_iters = min(6, ctx.agent.react_config.max_iters)
+        return HookResult()
+
+
 class PublicTools(MiddlewareBase):
-    def __init__(self, lane: BodyLane):
+    def __init__(self, lane: BodyLane, review=False):
         self.lane = lane
+        self.review = review
 
     async def on_system_prompt(self, agent, current_prompt):
+        if self.review:
+            return current_prompt + "\n[后台复盘/规划] 你不控制身体，不发游戏消息。先查 qiandengji_snapshot、recall_history 或 memory_search；记忆是历史资料。区分已证事实、推测和建议，引用快照代次。建议交回现场会话，不能宣称已执行；必要经验可用 memory_remember 保存，明确标注复盘建议。"
         section = re.search(r"<preloaded-skills>(.*?)</preloaded-skills>", current_prompt, re.S)
         self.lane.preloaded_skills = re.findall(r"<name>([^<]{1,80})</name>", section[1]) if section else []
         self.lane.project("working")
@@ -197,13 +412,37 @@ class PublicTools(MiddlewareBase):
         # Names only; never render tool inputs or results as the model's thoughts.
         call = input_kwargs.get("tool_call") or {}
         name = call.get("name", "") if isinstance(call, dict) else getattr(call, "name", "")
+        if self.review:
+            # Defence in depth for restored/old tool calls after session load.
+            if name not in REVIEW_TOOLS:
+                yield tool_result({"status": "denied", "reason": "后台会话仅可查询和整理记忆；游戏动作交回现场会话。"}, True)
+                return
+            async for item in next_handler():
+                yield item
+            return
+        if name == "spawn_subagent":
+            try:
+                raw = call.get("input", "{}") if isinstance(call, dict) else call.input
+                args = constrain_spawn(json.loads(raw) if isinstance(raw, str) else raw)
+                if isinstance(call, dict):
+                    call["input"] = json.dumps(args, ensure_ascii=False)
+                else:
+                    call.input = json.dumps(args, ensure_ascii=False)
+            except (ValueError, TypeError, OverflowError):
+                yield tool_result({"status": "denied", "reason": "复盘参数无效；每批最多两个只读任务，最长180秒。"}, True)
+                return
         self.lane.project("tool_sent", name)
+        body_tool = name not in REVIEW_TOOLS | {"spawn_subagent", "check_agent_task", "update_goal"}
+        if body_tool:
+            self.lane.body_sequence += 1
         completed = False
         try:
             async for item in next_handler():
                 yield item
             completed = True
         finally:
+            if body_tool:
+                self.lane.body_sequence += 1
             self.lane.project("receipt_received" if completed else "unknown", name)
 
 
@@ -212,7 +451,7 @@ def public_tools(ctx, agent_config):
     if not cfg:
         return None
     lane = get_lane(Path(ctx.workspace_dir), cfg)
-    return PublicTools(lane)
+    return PublicTools(lane, review=review_context(getattr(ctx.request, "request_context", None) or {}))
 
 
 class GameChannel(BaseChannel):
@@ -445,11 +684,20 @@ class GameChannel(BaseChannel):
 
 
 def register(api):
+    from qwenpaw.memory import memory_registry
+    registration = memory_registry.get_registration("powercontext")
+    if registration is not None:
+        api.register_memory_backend(backend_id="qiandengji-powercontext",
+            factory=compatible_memory_factory(registration.factory), config_schema=registration.config_schema,
+            label="千灯纪 PowerContext", metadata={"network_access": True, "secret_fields": ["token"]})
     api.register_channel(GameChannel, label="千灯纪", description="同一游戏身体的原生消息和心跳入口。",
                          config_fields=[{"name": "driver", "label": "已有身体 MCP", "type": "text", "default": "kirito-world"}])
     api.register_runtime_hook(GameEnter())
     api.register_runtime_hook(GameLeave())
+    api.register_runtime_hook(ReviewBudget())
     api.register_middleware(public_tools, priority=50)
+    api.register_tool("qiandengji_snapshot", qiandengji_snapshot, enabled=False, tool_type="internal",
+                      description="只读本人状态、任务或技能，返回服务器来源、时间和代次。")
 
 
 class GamePlugin:

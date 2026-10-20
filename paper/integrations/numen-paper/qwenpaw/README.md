@@ -1,5 +1,7 @@
 # QwenPaw ↔ Numen
 
+0.2.0候选增加原生异步子任务、独立复盘会话、只读快照、Scroll跨会话检索和当前PowerContext接口适配；正式尚未切换。配置、权限、验证和需要正常重启QwenPaw的原因见 [多会话认知接入](../../../docs/QWENPAW_COGNITION.md)。只重启QwenPaw，Paper不需重启。
+
 原生游戏频道候选位于 `native_plugin/`，入门Skill在 `skills/qiandengji-start/`。固定QwenPaw2.2.2；接入、限制、隔离验证和回退见 [原生游戏接入](../../../docs/QWENPAW_NATIVE_GAME.md)。常规检查可用该版本的Python执行 `python -m unittest discover -s . -p "test_*.py"`，6项独立联机检查默认跳过。
 
 私有 stdio MCP 适配器，让一个 QwenPaw Agent 独占控制一个已有 Numen 身体。详细接管和发布规则见 [原桐人与外脑](../../../docs/KIRITO_QWENPAW.md)。

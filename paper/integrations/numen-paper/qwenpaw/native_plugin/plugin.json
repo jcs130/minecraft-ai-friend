@@ -1,11 +1,11 @@
 {
   "id": "qiandengji-game",
   "name": "千灯纪游戏频道",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "channel",
   "description": "复用现有身体 MCP、原生队列、Goal、记忆和心跳；不启动第二个游戏客户端或模型循环。",
   "author": "千灯纪",
   "entry": {"backend": "plugin.py"},
-  "dependencies": [],
+  "dependencies": ["memory-powercontext"],
   "qwenpaw_version": {"min": "2.2.2", "max": "2.2.2"}
 }
