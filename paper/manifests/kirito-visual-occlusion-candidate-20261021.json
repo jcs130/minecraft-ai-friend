@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "preparedAt": 1792522853.0585144,
+  "status": "validated_candidate_not_deployed",
+  "restartApproved": false,
+  "pendingQueued": false,
+  "productionJarReplaced": false,
+  "paper": "1.21.1 build 133",
+  "agentFriend": "0.4.47.8",
+  "artifact": {
+    "name": "numen-paper-1.21.1-0.1.4.jar",
+    "currentSha256": "39887be162507a1588dc5cb5af5bddcb4e47a4f9de79fd7a4447646c689f9fb6",
+    "candidateSha256": "5e6bba843f54357bc89955165e70d704f7a174ee175bbb2c9e829eeb01a48ecb",
+    "addedEntries": [
+      "com/dwinovo/numen/scan/NearbyEntities$View.class",
+      "com/dwinovo/numen/scan/NearbyEntities$VisualRay.class"
+    ],
+    "instructionChanges": [
+      "com/dwinovo/numen/scan/NearbyEntities.class",
+      "com/dwinovo/numen/tools/perception/ScanApi.class"
+    ],
+    "sourceDebugOnly": [
+      "com/dwinovo/numen/tools/perception/ScanApi$BlockInfo.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Cell.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Look.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Sight.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Storage.class"
+    ]
+  },
+  "numenApiPreservedSha256": "77da82ad3241f39fee878e5e51f855bdc5fe7777cabd1ed863a213af5bd60dea",
+  "numenCommonUnit": {
+    "tests": 204,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "isolatedPaperTests": {
+    "passed": 28,
+    "newRegressionTests": 7,
+    "sameArtifactVerified": true
+  },
+  "initialTestFailures": [
+    "fence outline included air between rails",
+    "Paper skipped fluid shape with Fluid.NONE"
+  ],
+  "initialFailuresRetained": true,
+  "rules": [
+    "visual shapes instead of collision rays",
+    "glass, stained/tinted glass, panes, ice, slime, honey, foliage and water are see-through",
+    "fence render-occlusion shape keeps openings",
+    "eye ray first, then at most 27 points inside entity bounding box",
+    "fully opaque cover, lava, invisibility and spectators remain filtered",
+    "entity scan, entity sight and automatic targeting share the same result"
+  ],
+  "scopeLimits": [
+    "shape/material approximation, not pixel-perfect resource-pack texture occlusion",
+    "no FOV restriction",
+    "block/container queries not changed",
+    "physical reach, attacks and permissions not changed",
+    "no live performance or 16-agent load validation in this candidate"
+  ],
+  "sourcePatch": "paper/integrations/numen-paper/patches/ordinary-entity-vision.patch",
+  "sourcePatchSha256": "a70d6209dea2fe446ef5c2c75cec0f9f2f038e48de1647d988a67070d4f2d61d",
+  "upstreamBase": "7c931600c2269d21216bb6f9090588cdbe0beb01",
+  "dualDiskCandidateAndRollback": true,
+  "originalBodyUuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+  "productionDailyRemainsEnabled": true,
+  "servicesRestarted": false,
+  "fullColdBackupRequiredBeforeInstall": true
+}

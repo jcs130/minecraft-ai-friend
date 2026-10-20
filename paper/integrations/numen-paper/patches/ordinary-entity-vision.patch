@@ -1,8 +1,8 @@
 diff --git a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/CombatGameTests.java b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/CombatGameTests.java
-index 7b457f8..0910a0d 100644
+index 7b457f8..8f53115 100644
 --- a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/CombatGameTests.java
 +++ b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/CombatGameTests.java
-@@ -29,6 +29,47 @@ public class CombatGameTests {
+@@ -29,6 +29,87 @@ public class CombatGameTests {
          settleWorld(level, Difficulty.NORMAL, MIDNIGHT);
      }
  
@@ -47,14 +47,62 @@ index 7b457f8..0910a0d 100644
 +        return zombie;
 +    }
 +
++    /** 自动索敌与普通扫描同样允许透明遮挡、局部露出的身体,封死后下一次就不可见。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_combat")
++    public static void ordinary_threats_include_glass_and_partial_exposure(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_seen", new BlockPos(3, 2, 3), false);
++        companion.setNoGravity(true);
++        Zombie zombie = visionZombie(helper, new BlockPos(10, 2, 3));
++        for (int y = 1; y <= 5; y++) {
++            for (int z = 0; z <= 6; z++) {
++                helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(7, y, z)),
++                        net.minecraft.world.level.block.Blocks.GLASS.defaultBlockState());
++            }
++        }
++        helper.assertTrue(Menace.hostilesAround(companion, 16).contains(zombie), "glass hides hostile from instincts");
++        for (int y = 3; y <= 5; y++) {
++            for (int z = 0; z <= 6; z++) {
++                helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(7, y, z)),
++                        net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());
++            }
++        }
++        helper.assertTrue(!companion.hasLineOfSight(zombie), "fixture does not hide zombie's eyes");
++        helper.assertTrue(Menace.hostilesAround(companion, 16).contains(zombie), "exposed legs missing from instincts");
++        ToolRun scan = lua(companion, "numen.scan.entities('hostile', {radius = 16})");
++        steps(helper).thenWaitUntil(() -> {
++            helper.assertTrue(scan.succeeded(), "hostile scan has not finished");
++            boolean listed = false;
++            for (var row : valueIn(scan.reply()).getAsJsonArray()) {
++                listed |= row.getAsJsonObject().get("id").getAsInt() == zombie.getId();
++            }
++            helper.assertTrue(listed, "scan disagrees with instincts: " + scan.reply());
++        }).thenExecute(() -> {
++            for (int z = 0; z <= 6; z++) {
++                helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(7, 2, z)),
++                        net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());
++            }
++            helper.assertTrue(!Menace.hostilesAround(companion, 16).contains(zombie), "closed wall leaks hostile");
++            zombie.discard();
++            CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        }).thenSucceed();
++    }
++
      /**
       * 走位带:她该稳在「它够不着我」与「我够得着它」之间,而且真的能砍到。
       *
 diff --git a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java
-index 17080fd..1494be4 100644
+index 17080fd..3f96b31 100644
 --- a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java
 +++ b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java
-@@ -154,6 +154,88 @@ public class PerceptionGameTests {
+@@ -2,6 +2,7 @@ package com.dwinovo.numen.gametest;
+ 
+ import com.dwinovo.numen.api.entity.CompanionFactory;
+ import com.dwinovo.numen.api.entity.NumenPlayer;
++import com.dwinovo.numen.scan.NearbyEntities;
+ import com.google.gson.JsonObject;
+ import com.google.gson.JsonParser;
+ import java.util.List;
+@@ -154,6 +155,211 @@ public class PerceptionGameTests {
          return rowOf(scan, entity) != null;
      }
  
@@ -140,6 +188,129 @@ index 17080fd..1494be4 100644
 +        return pig;
 +    }
 +
++    /** 透明方块能碰撞也能透视,不能把碰撞体当成不透明墙。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_perception")
++    public static void entity_vision_sees_through_transparent_materials(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_glass", new BlockPos(3, 2, 3), false);
++        companion.setNoGravity(true);
++        Pig pig = visionPig(helper, new BlockPos(10, 2, 3));
++        for (var block : List.of(Blocks.GLASS, Blocks.RED_STAINED_GLASS, Blocks.TINTED_GLASS,
++                Blocks.GLASS_PANE, Blocks.BLUE_STAINED_GLASS_PANE, Blocks.ICE, Blocks.SLIME_BLOCK,
++                Blocks.HONEY_BLOCK, Blocks.OAK_LEAVES, Blocks.WATER)) {
++            visionWall(helper, 7, 1, 5, 0, 6, block.defaultBlockState());
++            helper.assertTrue(NearbyEntities.visibleTo(companion, pig), "transparent material hides pig: " + block);
++        }
++        visionWall(helper, 7, 1, 5, 0, 6, Blocks.TINTED_GLASS.defaultBlockState());
++        ToolRun scan = lua(companion, "numen.scan.entities('passive', {radius = 16})");
++        ToolRun sight = lua(companion, "numen.scan.sight(" + pig.getId() + ")");
++        succeedWhen(helper, () -> {
++            helper.assertTrue(listsEntity(scan, pig), "transparent pig missing from scan: " + scan.reply());
++            JsonObject seen = json(sight);
++            helper.assertTrue(seen.get("visible").getAsBoolean() && !seen.has("blocked_by"),
++                    "entity sight disagrees through glass: " + sight.reply());
++            pig.discard();
++            CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        });
++    }
++
++    /** 栅栏和铁栏的空隙放行,不是把所有非整块方块一律忽略。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_perception")
++    public static void entity_vision_sees_through_fence_and_bar_gaps(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_gaps", new BlockPos(3, 2, 3), false);
++        companion.setNoGravity(true);
++        Pig pig = visionPig(helper, new BlockPos(10, 2, 3));
++        for (var block : List.of(Blocks.OAK_FENCE, Blocks.NETHER_BRICK_FENCE, Blocks.IRON_BARS)) {
++            visionWall(helper, 7, 1, 5, 0, 6, block.defaultBlockState());
++            helper.assertTrue(NearbyEntities.visibleTo(companion, pig), "gaps hide pig: " + block);
++        }
++        pig.discard();
++        CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        helper.succeed();
++    }
++
++    /** 眼睛被挡住但腿露在外面时仍可见,扫描和单体查询必须一致。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_perception")
++    public static void entity_vision_reports_partly_exposed_body(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_body", new BlockPos(3, 2, 3), false);
++        companion.setNoGravity(true);
++        Pig pig = visionPig(helper, new BlockPos(10, 2, 3));
++        visionWall(helper, 7, 3, 5, 0, 6, Blocks.STONE.defaultBlockState());
++        helper.assertTrue(!companion.hasLineOfSight(pig), "fixture does not cover the pig's eyes");
++        ToolRun scan = lua(companion, "numen.scan.entities('passive', {radius = 16})");
++        ToolRun sight = lua(companion, "numen.scan.sight(" + pig.getId() + ")");
++        succeedWhen(helper, () -> {
++            helper.assertTrue(listsEntity(scan, pig), "exposed body missing: " + scan.reply());
++            helper.assertTrue(json(sight).get("visible").getAsBoolean(), "exposed body called hidden: " + sight.reply());
++            pig.discard();
++            CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        });
++    }
++
++    /** 正中央的视线被墙边挡住,身体侧边露出时仍列出。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_perception")
++    public static void entity_vision_reports_body_beside_wall_edge(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_edge", new BlockPos(3, 2, 3), false);
++        companion.setNoGravity(true);
++        Pig pig = visionPig(helper, new BlockPos(10, 2, 4));
++        BlockPos at = helper.absolutePos(new BlockPos(10, 2, 4));
++        pig.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.2, 0, 0);
++        visionWall(helper, 7, 1, 5, 0, 3, Blocks.STONE.defaultBlockState());
++        helper.assertTrue(!companion.hasLineOfSight(pig), "fixture does not cover the pig's center");
++        helper.assertTrue(NearbyEntities.visibleTo(companion, pig), "exposed side of pig missing");
++        pig.discard();
++        CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        helper.succeed();
++    }
++
++    /** 半砖留下的窄窗可以看穿,换成双层半砖后立即遮挡,并返回真正的挡路方块。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_perception")
++    public static void entity_vision_respects_partial_block_geometry_and_changes(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_slab", new BlockPos(3, 2, 3), false);
++        companion.setNoGravity(true);
++        Pig pig = visionPig(helper, new BlockPos(10, 2, 3));
++        visionWall(helper, 7, 1, 5, 0, 6, Blocks.STONE.defaultBlockState());
++        BlockPos slit = helper.absolutePos(new BlockPos(7, 2, 3));
++        helper.getLevel().setBlockAndUpdate(slit, Blocks.STONE_SLAB.defaultBlockState());
++        helper.assertTrue(!companion.hasLineOfSight(pig), "fixture does not cover the pig's eyes");
++        helper.assertTrue(NearbyEntities.visibleTo(companion, pig), "opening above slab hides body");
++        helper.getLevel().setBlockAndUpdate(slit, Blocks.STONE_SLAB.defaultBlockState().setValue(
++                net.minecraft.world.level.block.SlabBlock.TYPE, net.minecraft.world.level.block.state.properties.SlabType.DOUBLE));
++        helper.assertTrue(!NearbyEntities.visibleTo(companion, pig), "double slab is treated as transparent");
++        ToolRun sight = lua(companion, "numen.scan.sight(" + pig.getId() + ")");
++        succeedWhen(helper, () -> {
++            JsonObject seen = json(sight);
++            helper.assertTrue(!seen.get("visible").getAsBoolean() && seen.has("blocked_by"),
++                    "closed window does not report blocker: " + sight.reply());
++            pig.discard();
++            CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        });
++    }
++
++    /** 前面的玻璃放行不能跳过后面的整墙;岩浆同样不能当透明水。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_perception")
++    public static void entity_vision_does_not_leak_through_opaque_cover(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_cover", new BlockPos(3, 2, 3), false);
++        companion.setNoGravity(true);
++        Pig pig = visionPig(helper, new BlockPos(10, 2, 3));
++        visionWall(helper, 6, 1, 5, 0, 6, Blocks.GLASS.defaultBlockState());
++        for (var block : List.of(Blocks.STONE, Blocks.DIRT, Blocks.OAK_PLANKS, Blocks.LAVA)) {
++            visionWall(helper, 8, 1, 5, 0, 6, block.defaultBlockState());
++            helper.assertTrue(!NearbyEntities.visibleTo(companion, pig), "opaque cover leaks pig: " + block);
++        }
++        pig.discard();
++        CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        helper.succeed();
++    }
++
++    private static void visionWall(GameTestHelper helper, int x, int minY, int maxY, int minZ, int maxZ,
++                                   net.minecraft.world.level.block.state.BlockState state) {
++        for (int y = minY; y <= maxY; y++) {
++            for (int z = minZ; z <= maxZ; z++) {
++                helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, y, z)), state);
++            }
++        }
++    }
++
      /** {@code numen.scan.entities} 的这一页里这只实体的那一行;没列出为 null。 */
      private static com.google.gson.JsonObject rowOf(ToolRun scan, net.minecraft.world.entity.Entity entity) {
          for (var row : valueIn(scan.reply()).getAsJsonArray()) {
@@ -164,33 +335,112 @@ index 8eba9b8..b91ba24 100644
  
      /**
 diff --git a/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java b/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java
-index f2eab4b..12b8693 100644
+index f2eab4b..ff2de1e 100644
 --- a/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java
 +++ b/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java
-@@ -1,6 +1,8 @@
+@@ -1,6 +1,23 @@
  package com.dwinovo.numen.scan;
  
++import net.minecraft.core.BlockPos;
++import net.minecraft.tags.FluidTags;
  import net.minecraft.world.entity.Entity;
 +import net.minecraft.world.entity.LivingEntity;
 +import net.minecraft.world.entity.player.Player;
++import net.minecraft.world.level.BlockGetter;
++import net.minecraft.world.level.ClipContext;
++import net.minecraft.world.level.block.FenceBlock;
++import net.minecraft.world.level.block.HalfTransparentBlock;
++import net.minecraft.world.level.block.LeavesBlock;
++import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.level.material.FluidState;
++import net.minecraft.world.phys.AABB;
++import net.minecraft.world.phys.BlockHitResult;
++import net.minecraft.world.phys.HitResult;
++import net.minecraft.world.phys.Vec3;
++import net.minecraft.world.phys.shapes.Shapes;
++import net.minecraft.world.phys.shapes.VoxelShape;
  
  import java.util.List;
  import java.util.function.Predicate;
-@@ -16,6 +18,12 @@ public final class NearbyEntities {
+@@ -16,6 +33,76 @@ public final class NearbyEntities {
  
      private NearbyEntities() {}
  
-+    /** 普通视觉不报告隔墙、隐身或观战实体;在生成坐标与数量之前过滤,不把隐藏目标交给模型。 */
++    /** 普通视觉不报告完全遮挡、隐身或观战实体;透光材质与局部露出的身体仍看得见。 */
 +    public static boolean visibleTo(LivingEntity self, Entity target) {
++        return viewOf(self, target).visible();
++    }
++
++    /** 实体的视觉结果;完全遮挡时附眼睛方向上第一格遮挡,隐身和观战不编造挡路方块。 */
++    public record View(boolean visible, BlockPos blockedBy) {}
++
++    private static final View VISIBLE = new View(true, null);
++    private static final View HIDDEN = new View(false, null);
++
++    /**
++     * 先看眼睛,再看身体盒内的 3×3×3 个点,任意一点露出即可。点往盒内收最多一厘米,
++     * 不用盒外的点绕过完整墙面;通常第一条就返回,只有被遮住才继续检查,不缓存移动或方块变化。
++     */
++    public static View viewOf(LivingEntity self, Entity target) {
 +        boolean invisible = self instanceof Player player ? target.isInvisibleTo(player) : target.isInvisible();
-+        return !target.isSpectator() && !invisible && self.hasLineOfSight(target);
++        if (self.level() != target.level() || target.isSpectator() || invisible) {
++            return HIDDEN;
++        }
++        Vec3 eye = self.getEyePosition();
++        BlockHitResult first = self.level().clip(new VisualRay(eye, target.getEyePosition(), self));
++        if (first.getType() == HitResult.Type.MISS) {
++            return VISIBLE;
++        }
++        AABB box = target.getBoundingBox();
++        double insetX = Math.min(0.01, box.getXsize() / 4);
++        double insetY = Math.min(0.01, box.getYsize() / 4);
++        double insetZ = Math.min(0.01, box.getZsize() / 4);
++        for (int y = 0; y < 3; y++) {
++            for (int x = 0; x < 3; x++) {
++                for (int z = 0; z < 3; z++) {
++                    Vec3 point = new Vec3(box.minX + insetX + (box.getXsize() - 2 * insetX) * x / 2,
++                            box.minY + insetY + (box.getYsize() - 2 * insetY) * y / 2,
++                            box.minZ + insetZ + (box.getZsize() - 2 * insetZ) * z / 2);
++                    if (self.level().clip(new VisualRay(eye, point, self)).getType() == HitResult.Type.MISS) {
++                        return VISIBLE;
++                    }
++                }
++            }
++        }
++        return new View(false, first.getBlockPos());
++    }
++
++    /**
++     * 沿原版视觉形状穿过玻璃、铁栏和栅栏缝,不用碰撞体把栅栏上方也挡死。
++     * 冰、黏液、蜂蜜与树叶材质能透视,其整块碰撞体不作视觉墙;水可透视,岩浆遮挡。
++     * 这里只决定看见谁,不改变攻击、交互或挖掘的物理可达性。
++     */
++    private static final class VisualRay extends ClipContext {
++        private VisualRay(Vec3 from, Vec3 to, Entity observer) {
++            super(from, to, ClipContext.Block.VISUAL, ClipContext.Fluid.ANY, observer);
++        }
++
++        @Override
++        public VoxelShape getBlockShape(BlockState state, BlockGetter level, BlockPos pos) {
++            // 栅栏的视觉/选择轮廓把横杆间的空气也包进去了,遮面形状才保留下面的开口。
++            if (state.getBlock() instanceof FenceBlock) {
++                return state.getOcclusionShape(level, pos);
++            }
++            return state.getBlock() instanceof HalfTransparentBlock || state.getBlock() instanceof LeavesBlock
++                    ? Shapes.empty() : super.getBlockShape(state, level, pos);
++        }
++
++        @Override
++        public VoxelShape getFluidShape(FluidState state, BlockGetter level, BlockPos pos) {
++            return state.is(FluidTags.LAVA) ? state.getShape(level, pos) : Shapes.empty();
++        }
 +    }
 +
      /** {@code self} 半径 {@code radius} 格以内(按两者位置的距离)、类型为 {@code type} 且满足 {@code filter} 的实体,不含她自己。 */
      public static <T extends Entity> List<T> within(Entity self, double radius, Class<T> type,
                                                      Predicate<? super T> filter) {
 diff --git a/numen/common/src/main/java/com/dwinovo/numen/tools/perception/ScanApi.java b/numen/common/src/main/java/com/dwinovo/numen/tools/perception/ScanApi.java
-index 1ee55b4..fd4a063 100644
+index 1ee55b4..fc4cd6b 100644
 --- a/numen/common/src/main/java/com/dwinovo/numen/tools/perception/ScanApi.java
 +++ b/numen/common/src/main/java/com/dwinovo/numen/tools/perception/ScanApi.java
 @@ -143,7 +143,7 @@ public final class ScanApi {
@@ -202,16 +452,17 @@ index 1ee55b4..fd4a063 100644
      @Example("numen.scan.entities(\"hostile\")")
      @Example("numen.scan.entities({radius = 12})")
      @Example("numen.scan.entities(\"item\", {radius = 8})")
-@@ -152,6 +152,8 @@ public final class ScanApi {
+@@ -152,6 +152,9 @@ public final class ScanApi {
      @Note("Instant and read-only. All of them, nearest first: each is an Entity (id, type, category, pos, distance, "
              + "hp); a dropped item is an Item (also item, count and pickup_delay, ticks before anyone can pick it up); "
              + "a tamed one has owner: you, your owner, or the other player's name.")
-+    @Note("Ordinary vision only: blocks obstruct the line from your eyes. Hidden underground, invisible and "
-+            + "spectator entities are not listed or counted. An empty list does not prove the area is clear.")
++    @Note("Ordinary vision: transparent materials and gaps do not hide an entity; a visible part of its body is "
++            + "enough. Fully occluded underground, invisible and spectator entities are not listed or counted. "
++            + "An empty list does not prove the area is clear.")
      @Note("Hand one on as it is: `local e = numen.scan.entities(\"hostile\")[1]; numen.fight.attack(e)`, and the same "
              + "with numen.use.entity(e) or numen.move.to(e.pos). The ids are runtime ids and do not survive a "
              + "restart.")
-@@ -161,7 +163,8 @@ public final class ScanApi {
+@@ -161,7 +164,8 @@ public final class ScanApi {
          double radius = Math.clamp(args.radius().orElse((double) DEFAULT_ENTITY_RADIUS), MIN_ENTITY_RADIUS,
                  MAX_ENTITY_RADIUS);
          Kind filter = args.typeFilter().orElse(Kind.ALL);
@@ -221,3 +472,34 @@ index 1ee55b4..fd4a063 100644
          raw = new ArrayList<>(raw);
          raw.sort(Comparator.comparingDouble(self::distanceTo));
          List<Seen> out = new ArrayList<>();
+@@ -322,14 +326,15 @@ public final class ScanApi {
+ 
+     /**
+      * 她看不看得见:一格是从她的眼睛朝那一格冲着她的各面打视线({@link com.dwinovo.numen.api.entity.Sight},看不看得见一格只在那里判),
+-     * 有一面碰上它、路上没隔着东西就看得见;空着的一格(没有轮廓)是视线到它中心不隔东西;一只实体照原版的视线判(看它的眼睛)。看不见时说
++     * 有一面碰上它、路上没隔着东西就看得见;空着的一格(没有轮廓)是视线到它中心不隔东西;实体与普通扫描共用视觉形状与身体采样。看不见时说
+      * 挡着的第一格:先说要挖开的硬遮挡,只隔着草这类软遮挡时是那一格。
+      */
+     @Fn("Whether you can see a cell or an entity from where you stand, and what is in the way when you cannot.")
+     @Example("local s = numen.scan.sight({x = 120, y = 64, z = -35})\nprint(s.visible, s.blocked_by)")
+     @Example("numen.scan.sight(184)")
+     @Note("Instant and read-only. A cell is seen when a line from your eyes reaches one of its faces turned to you (an "
+-            + "empty cell: its middle) with nothing in between; an entity, when you see its eyes.")
++            + "empty cell: its middle) with nothing in between. For entities, transparent materials and gaps let "
++            + "you see through, and any sampled visible part of the body is enough; invisible and spectators stay hidden.")
+     @SeeAlso({"numen.scan.block", "numen.scan.entities"})
+     public static Sight sight(ServerCall call, Look args) {
+         NumenPlayer her = call.her();
+@@ -346,8 +351,10 @@ public final class ScanApi {
+                         Call.of("numen.scan.entities"));
+             }
+             to = entity.getEyePosition();
+-            visible = her.hasLineOfSight(entity);
+-            seen = com.dwinovo.numen.api.entity.Sight.trace(level, eye, to, null);
++            NearbyEntities.View view = NearbyEntities.viewOf(her, entity);
++            BlockPos blocker = view.blockedBy();
++            return new Sight(view.visible(), Math.round(eye.distanceTo(to) * 10.0) / 10.0,
++                    blocker == null ? Optional.empty() : Optional.of(BlockAt.of(blocker, level.getBlockState(blocker))));
+         } else {
+             BlockPos cell = target.cell();
+             boolean solid = com.dwinovo.numen.api.entity.Sight.clickable(level, cell);
