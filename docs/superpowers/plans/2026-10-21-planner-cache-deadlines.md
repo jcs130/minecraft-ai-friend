@@ -56,8 +56,8 @@ history/fresh evidence and keeps the latest fitting exchange. Full regression:
 CPU replay distinguishes this from the first tool-policy defect. Model and host
 remain protected; connection reset/timeout evidence is a separate live boundary.
 
-- [ ] Update the thin plugin's explicit source pin and development version, without a second implementation.
-- [ ] Follow fresh normal lifecycle controls, preserving ongoing project evidence and original failed methods; no old action replay.
-- [ ] Observe natural ordinary/ahead transitions and real queue outcomes. Compare cache and timeouts across sufficient samples without treating a short empty conversation as proof.
-- [ ] Save actual source/package/deployment/live evidence; update maintenance offsets separately from the last completed full inspection.
-- [ ] Push verified changes normally. Report improvements, remaining uncertainty and no publication.
+- [x] Update the thin plugin's explicit source pin and development version, without a second implementation: 0.6.78 pins autonomy 0.2.74 at `7ac713e5b517e082b71213023ca9eada4ab4299a`.
+- [x] Follow fresh normal lifecycle controls, preserving ongoing project evidence and original failed methods; no old action replay. Both stages used distinct new stop ledgers, verified drain/exit/lease release, and kept host/model/config unchanged.
+- [x] Observe natural ordinary/ahead transitions and real queue outcomes. Stage one kept declarations stable across ordinary/ahead work, then exposed the independent rotation timeout. Final stage reached 121,454 actual input tokens; its first adaptive rotated request and three following replies returned, with 13 model responses and no deadline rejection over about 11 minutes. This is a bounded trial, not long-term performance or survival acceptance.
+- [x] Save actual source/package/deployment/live evidence; update maintenance offsets separately from the last completed full inspection. Final record `deadline-root-cause-20261021T0148/rotation-final/maintenance-result.json` is private; full inspection time remains 2026-10-20T17:34:07.923324+00:00.
+- [x] Push verified changes normally. Code commits are `1369c56f` and `7ac713e5`; adapter commits `e276db7` and `71c1a8a`. No publication. Keep monitoring cold rotations, actual project progress and shared-service pressure; queries/blocked work are not completed survival goals.

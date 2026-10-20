@@ -29,6 +29,16 @@ regression passed 1,389 tests, including selected-memory rebasing and counter
 failure; the first full run caught over-retirement of the last fitting exchange
 and that counterexample remains covered.
 
+One subsequent natural local-model trial retained 128K capacity and the existing
+180-second deadline. Over about 11 minutes it recorded 13 model responses and
+no deadline rejections. Actual input reached 121,454 tokens. Its first adaptive
+rotation measured a 21,726-token exchange, selected the bounded 32,768 margin,
+and returned the resulting 79,751-token cold request in 123.203 seconds; three
+later responses followed. The earlier fixed-margin 106,549-token rotated
+request had hit its deadline. Inputs and service conditions differ, so this is
+finite deployment evidence rather than a controlled speed comparison, a
+guarantee against future timeouts, or evidence of survival-goal completion.
+
 ## Stable capabilities and current admission
 
 In full mode, temporary read deferral and native lookahead no longer change the
