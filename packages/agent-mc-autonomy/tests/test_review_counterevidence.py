@@ -138,6 +138,40 @@ def test_unknown_null_and_readonly_failure_are_not_invented_action_constraints()
     assert direct["terminal"] is None and direct["step_outcomes"]["status"] == "unknown"
 
 
+def test_real_review_preserves_failed_target_when_why_is_abridged(runtime):
+    from test_effect_recovery import effect
+    raw_effect = effect()
+    raw_effect.update(skill="goto", at=[-540, 67, -486])
+    rows = [outcome(154, 900, fail=True, samples=[
+        {"step": 1, "outcome": "fail", "why": "路面高度与支撑不符；" * 50,
+         "observedEffect": raw_effect}])]
+    original = deepcopy(rows)
+    value, rid = inspect(runtime, rows)
+    sample = value["native_outcomes"][0]["samples"][0]
+    assert sample["observed_effect"]["skill"] == "goto"
+    assert sample["observed_effect"]["at"] == [-540, 67, -486]
+    assert sample["observed_effect"]["changed"]["position"] is False
+    assert sample["observed_effect"]["goal_verified"] is False
+    assert len(encoded(value["native_outcomes"][0]["samples"]).encode()) <= 700
+    assert rows == original
+    assert read_original(runtime[0], rid, value["evidence_ref"], ["evidence", "native_outcomes"])[0]["step_outcomes"]["samples"][0]["observed_effect"]["at"] == [-540, 67, -486]
+
+
+def test_review_effect_projection_keeps_mixed_outcomes_without_private_stack_data():
+    from test_effect_recovery import effect
+    rows = [outcome(161, 906, fail=True, samples=[
+        {"step": 1, "outcome": "ok", "observedEffect": effect(True)},
+        {"step": 2, "outcome": "fail", "why": "目标仍被占据；" * 30,
+         "observedEffect": effect()}])]
+    rows[0]["step_outcomes"]["samples"][1]["observed_effect"]["private_nbt"] = "never-copy-this"
+    value = compact({"native_outcomes": rows}, "reference")
+    samples = value["native_outcomes"][0]["samples"]
+    assert {s["outcome"] for s in samples} == {"ok", "fail"}
+    assert all(s["observed_effect"]["goal_verified"] is False for s in samples)
+    assert "never-copy-this" not in encoded(value)
+    assert len(encoded(samples).encode()) <= 700
+
+
 def test_field_preview_reserves_success_and_failure_before_other_groups():
     samples = [{"step": i, "outcome": group, "why": "边界雪\"\\" * 500} for i, group in
                enumerate(["fail", "ok", "partial", "noop", "skip", "cut"], 1)]

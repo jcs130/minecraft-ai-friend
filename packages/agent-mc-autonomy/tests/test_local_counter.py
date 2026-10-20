@@ -131,3 +131,59 @@ def test_literal_special_tokens_cannot_undercount_server_data(configured):
                          context_tokens=131072, reserved_output=8192, context_mode='full',
                          context_counter=planner(configured).context_counter)
     assert budget['counter_fallback'] == 'ValueError' and budget['units'] == 'token_upper_bound'
+
+
+def test_vllm_counter_retains_exchange_that_only_exceeds_byte_window(configured):
+    configured['context_counter']['mode'] = 'vllm_chat'
+    p = planner(configured)
+    groups = [[{'role': 'assistant', 'content': '已经核对过的失败原文 ' * 8000}]]
+    kwargs = dict(context_tokens=131072, reserved_output=8192, context_mode='full')
+    _, byte_budget = assemble('rules', [], 'live', {'parts': []}, [], groups, **kwargs)
+    messages, actual = assemble('rules', [], 'live', {'parts': []}, [], groups,
+                                context_counter=p.context_counter, **kwargs)
+    assert byte_budget['history']['included'] == 0
+    assert actual['history']['included'] == 1 and actual['units'] == 'tokens'
+    assert actual['counter'].startswith('vllm-chat-local/')
+    assert messages[2] == groups[0][0]
+
+
+def test_vllm_effort_and_tool_defaults_do_not_use_ninfer_normalization(configured):
+    from agent_mc_autonomy.local_counter import render_input
+    configured['context_counter']['mode'] = 'vllm_chat'
+    configured['parameters']['reasoning_effort'] = 'high'
+    cfg = HttpPlannerConfig.parse(configured)
+    _, declared, parameters = render_input(cfg, [{'role': 'user', 'content': 'fresh'}],
+        [{'type': 'function', 'function': {'name': 'do', 'parameters': {'type': 'object'}}}])
+    assert parameters['reasoning_effort'] == 'high'
+    assert parameters['enable_thinking'] is True
+    assert 'strict' not in declared[0]['function']
+    assert 'description' not in declared[0]['function']
+    assert 'defer_loading' not in declared[0]
+
+
+def test_vllm_preserves_schema_nulls_and_explicit_false(configured):
+    from agent_mc_autonomy.local_counter import render_input
+    configured['context_counter']['mode'] = 'vllm_chat'
+    cfg = HttpPlannerConfig.parse(configured)
+    tools = [{'type': 'function', 'defer_loading': False, 'function': {
+        'name': 'do', 'strict': False, 'description': '',
+        'parameters': {'type': 'object', 'properties': {'value': {'default': None}}}}}]
+    _, declared, _ = render_input(cfg, [{'role': 'user', 'content': 'fresh'}], tools)
+    assert declared == tools
+
+
+@pytest.mark.parametrize('change', ['hash', 'media', 'external_template_input'])
+def test_vllm_unsupported_binding_falls_back_instead_of_undercounting(configured, change):
+    configured['context_counter']['mode'] = 'vllm_chat'
+    if change == 'hash':
+        configured['context_counter']['template']['sha256'] = '0' * 64
+    elif change == 'external_template_input':
+        resource = configured['context_counter']['template']
+        with open(resource['path'], 'w', encoding='utf-8') as f:
+            f.write('{{ bos_token }}{{ messages }}')
+        with open(resource['path'], 'rb') as f:
+            resource['sha256'] = hashlib.sha256(f.read()).hexdigest()
+    groups = [[{'role': 'user', 'content': [{'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,YQ=='}}]}]] if change == 'media' else []
+    _, budget = assemble('rules', [], 'live', {'parts': []}, [], groups, context_tokens=131072,
+        reserved_output=8192, context_mode='full', context_counter=planner(configured).context_counter)
+    assert budget['units'] == 'token_upper_bound' and budget['counter_fallback']

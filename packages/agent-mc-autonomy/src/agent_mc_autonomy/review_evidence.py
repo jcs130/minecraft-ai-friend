@@ -5,6 +5,8 @@ import json
 import re
 import uuid
 
+from .effects import projected_effect
+
 
 def encoded(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -161,8 +163,11 @@ def sample_preview(samples):
         if index in selected:
             continue
         sample = {key: samples[index][key] for key in ("step", "outcome", "why") if key in samples[index]}
+        effect = projected_effect(samples[index].get("observed_effect"))
+        if effect:
+            sample["observed_effect"] = effect
         if "why" in sample:
-            sample["why"] = preview(sample["why"], 180)
+            sample["why"] = preview(sample["why"], 96 if effect else 180)
         proposed = {**selected, index: sample}
         if len(encoded([row for _, row in sorted(proposed.items())]).encode()) <= 700:
             selected = proposed

@@ -149,7 +149,7 @@ def test_tool_receipt_duplicates_reuse_exact_text_but_journal_stays_original(
     assert view["context_value_refs"] == {"/execution/evidence/receipt": "/text"}
     assert len(encode(view).encode()) < len(encode(result).encode()) * 0.6
     assert (
-        json.loads((tmp_path / "receipts.jsonl").read_text().splitlines()[-1])["result"]
+        json.loads((tmp_path / "receipts.jsonl").read_text(encoding="utf-8").splitlines()[-1])["result"]
         == original
     )
     assert result == original

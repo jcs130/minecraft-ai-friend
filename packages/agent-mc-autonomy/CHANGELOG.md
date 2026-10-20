@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.66 — 2026-10-20
+
+- Add explicit hash-bound CPU counting for vLLM Chat templates, preserving its
+  serialized tool defaults and effort semantics separately from NInfer.
+  Unsupported inputs still fall back conservatively; no model discovery or
+  network calls occur inside the counter.
+- Retain validated observed-effect coordinates and change flags in compact
+  strategic review samples. Raw details and uncertainty remain unchanged.
+- Separate strategic `review_max_output_tokens` (default 3072) from body output
+  capacity. Total output includes any provider reasoning, and truncated reviews
+  must still be rejected without effects.
+- Read the archived UTF-8 receipt explicitly in the Windows regression test.
+
 ## 0.2.65 — 2026-10-20
 
 - Pin renderer `dd7c4011`: decode the protocol-767 banner component layers

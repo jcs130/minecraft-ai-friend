@@ -1,5 +1,18 @@
 # Agent MC Autonomy
 
+0.2.66 adds an explicitly bound `vllm_chat` CPU context counter alongside the
+existing `ninfer_chat` mode. Tokenizer/template files, hashes, endpoint and model
+must match the selected deployment; unsupported template inputs or media retain
+the conservative byte fallback. Install the `context` extra to use local
+counting. A configured capacity does not establish retained history or speed.
+
+Compact strategic reviews now preserve validated step-effect target coordinates
+and change flags within the existing sample budget. These remain dated client
+observations, never verified stage completion or permanent retry constraints.
+`ReviewPolicy.review_max_output_tokens` defaults to 3072 and is independent of
+the body planner output limit. Adapters should use the smaller of both limits;
+truncated outputs still must not be acknowledged or applied.
+
 0.2.55 reports a rejected tool JSON's exact parser location and bounded raw
 excerpt in the next selected planner notice, so window eviction cannot leave
 only a generic error. One first, known no-dispatch syntax error can request an

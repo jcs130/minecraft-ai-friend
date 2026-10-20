@@ -25,13 +25,15 @@ class ReviewPolicy:
     min_interval_seconds: int = 60
     review_interval_seconds: int = 180
     idle_presence_seconds: int = 45
+    review_max_output_tokens: int = 3072
 
     @classmethod
     def parse(cls, raw):
         minimum = _integer(raw, "min_interval_seconds", 60, 30, 900)
         return cls(_boolean(raw, "enabled", False), minimum,
                    _integer(raw, "review_interval_seconds", 180, minimum, 1800),
-                   _integer(raw, "idle_presence_seconds", 45, 30, 900))
+                   _integer(raw, "idle_presence_seconds", 45, 30, 900),
+                   _integer(raw, "review_max_output_tokens", 3072, 128, 32768))
 
 
 def digest(value):

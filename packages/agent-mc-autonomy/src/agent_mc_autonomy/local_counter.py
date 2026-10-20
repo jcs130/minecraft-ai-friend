@@ -1,4 +1,4 @@
-"""Explicit, CPU-only counting for an operator-bound NInfer Chat template.
+"""Explicit CPU-only counting for an operator-bound Chat template.
 
 Resources belong to the selected model deployment, not the game or host SDK.
 Unsupported input raises into context.assemble's existing conservative fallback.
@@ -21,7 +21,7 @@ def validate_configuration(value, *, model, base_url, protocol):
     if value == {}:
         return {}
     fields = {'mode', 'model', 'base_url', 'tokenizer', 'template', 'template_parameters'}
-    if (not isinstance(value, dict) or set(value) - fields or value.get('mode') != 'ninfer_chat'
+    if (not isinstance(value, dict) or set(value) - fields or value.get('mode') not in {'ninfer_chat', 'vllm_chat'}
             or protocol != 'chat' or value.get('model') != model
             or not isinstance(value.get('base_url'), str)
             or value['base_url'].rstrip('/') != base_url.rstrip('/')):
@@ -43,8 +43,9 @@ def validate_configuration(value, *, model, base_url, protocol):
 
 
 def render_input(config, messages, tools):
-    """Use the real wire projection, then NInfer's documented normalization."""
+    """Use the real wire projection and the explicitly bound server semantics."""
     _, body = request(config, messages, tools, 1)
+    vllm = config.context_counter['mode'] == 'vllm_chat'
     params = copy.deepcopy(config.context_counter.get('template_parameters', {}))
     kwargs = body.get('chat_template_kwargs', {})
     if set(kwargs) - TEMPLATE_PARAMETERS:
@@ -53,11 +54,13 @@ def render_input(config, messages, tools):
     for key in TEMPLATE_PARAMETERS:
         if key in body:
             params[key] = body[key]
-    if 'reasoning_effort' in params:
+    if not vllm and 'reasoning_effort' in params:
         effort = params['reasoning_effort']
         params['reasoning_effort'] = {'minimal': 'low', 'high': 'xhigh', 'max': 'xhigh'}.get(effort, effort)
         if effort == 'none':
             params['enable_thinking'] = False
+    if vllm and 'reasoning_effort' in body and 'enable_thinking' not in kwargs:
+        params['enable_thinking'] = body['reasoning_effort'] != 'none'
     params.update(add_generation_prompt=True, continue_final_message=False)
     rows = body['messages']
     for row in rows:
@@ -68,6 +71,8 @@ def render_input(config, messages, tools):
             row['content'] = ''.join(part['text'] for part in content)
         elif content is None:
             row['content'] = ''
+        if vllm and 'reasoning_content' in row:
+            row.setdefault('reasoning', row.pop('reasoning_content'))
         for call in row.get('tool_calls', []):
             function = call['function']
             function['arguments'] = json.loads(function['arguments']) if function['arguments'] else {}
@@ -76,12 +81,24 @@ def render_input(config, messages, tools):
         if tool.get('type') != 'function':
             raise ValueError('counter_tool_kind_not_supported')
         value = tool['function']
-        function = {'name': value['name'], 'parameters': copy.deepcopy(value.get('parameters', {})),
-                    'strict': value.get('strict', False)}
-        for key in ('description', 'input_examples'):
-            if value.get(key):
-                function[key] = copy.deepcopy(value[key])
-        declared.append({'type': 'function', 'function': function})
+        if vllm:
+            if set(value) - {'name', 'description', 'parameters', 'strict'}:
+                raise ValueError('counter_tool_fields_not_supported')
+            # vLLM's public protocol dumps exclude None fields; nested JSON
+            # Schema nulls remain actual schema data and must not be stripped.
+            function = {key: copy.deepcopy(value[key]) for key in ('name', 'description', 'parameters', 'strict')
+                        if value.get(key) is not None}
+            declaration = {'type': 'function', 'function': function}
+            if tool.get('defer_loading') is not None:
+                declaration['defer_loading'] = tool['defer_loading']
+            declared.append(declaration)
+        else:
+            function = {'name': value['name'], 'parameters': copy.deepcopy(value.get('parameters', {})),
+                        'strict': value.get('strict', False)}
+            for key in ('description', 'input_examples'):
+                if value.get(key):
+                    function[key] = copy.deepcopy(value[key])
+            declared.append({'type': 'function', 'function': function})
     return rows, declared, params
 
 
@@ -103,7 +120,8 @@ class LocalChatCounter:
     def __init__(self, config):
         self.config = config
         self.resources = copy.deepcopy(config.context_counter)
-        self.name = 'ninfer-chat-local/' + self.resources['tokenizer']['sha256'][:12] + '/' + self.resources['template']['sha256'][:12]
+        prefix = 'vllm-chat-local/' if self.resources['mode'] == 'vllm_chat' else 'ninfer-chat-local/'
+        self.name = prefix + self.resources['tokenizer']['sha256'][:12] + '/' + self.resources['template']['sha256'][:12]
         self._loaded = False
         self._counts = OrderedDict()
 
@@ -132,6 +150,15 @@ class LocalChatCounter:
         env = ImmutableSandboxedEnvironment(trim_blocks=True, lstrip_blocks=True)
         env.filters['tojson'] = _json
         env.globals['raise_exception'] = _reject
+        if self.resources['mode'] == 'vllm_chat':
+            from jinja2 import meta, nodes
+            allowed = {'messages', 'tools', 'add_generation_prompt', 'continue_final_message', *TEMPLATE_PARAMETERS}
+            tree = env.parse(content['template'])
+            # Conditional/loop assignments appear as undeclared to Jinja's
+            # static analysis, but are local template work, not server inputs.
+            assigned = {node.target.name for node in tree.find_all(nodes.Assign) if isinstance(node.target, nodes.Name)}
+            if meta.find_undeclared_variables(tree) - assigned - allowed - env.globals.keys():
+                raise ValueError('counter_template_semantics_unsupported')
         self._template = env.from_string(content['template'])
         self._loaded = True
 
