@@ -80,6 +80,15 @@ class ControllerTests(unittest.TestCase):
             c = Controller(dict(upstream_url="http://localhost:8765/mcp", qwenpaw_url="http://localhost:8088", companion_uuid="one", journal_dir=d))
             with self.assertRaises(ValueError): asyncio.run(c.call("delete_companion", {}))
 
+    def test_production_conversation_can_be_separate_from_isolated_testing(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg=dict(upstream_url="http://localhost:8765/mcp",qwenpaw_url="http://localhost:8088",companion_uuid="one",journal_dir=d)
+            self.assertEqual(Controller(cfg).event_session_id,"kirito-world-resident")
+            cfg['event_session_id']='kirito-production-one'
+            self.assertEqual(Controller(cfg).event_session_id,'kirito-production-one')
+            cfg['event_session_id']=''
+            with self.assertRaises(ValueError):Controller(cfg)
+
     def test_cached_tools_cannot_add_admin_capabilities(self):
         with tempfile.TemporaryDirectory() as d:
             (Path(d)/'upstream-tools.json').write_text(json.dumps({'v':1,'tools':[{'name':'delete_companion','inputSchema':{'type':'object'}}]}),encoding='utf-8')

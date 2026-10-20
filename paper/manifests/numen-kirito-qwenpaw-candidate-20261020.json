@@ -17,7 +17,8 @@
     "maxIterations": 12,
     "eventPollSeconds": 10,
     "eventTurnIntervalSeconds": 15,
-    "automaticActionRetry": false
+    "automaticActionRetry": false,
+    "separateProductionEventSession": true
   },
   "numen": {
     "version": "0.1.4",
@@ -40,11 +41,11 @@
     "armCubes": 11,
     "originalPngUnchanged": true
   },
-  "controllerSha256": "e3127dc99d56666d11959dc9c0c4ae131af2bd57c83185fc62627dcb863d066d",
+  "controllerSha256": "30e85620590c0daa6f3ef2c4279229ff2107c86574f29f8006629f2bb358422f",
   "tests": {
     "common": 952,
     "adoptionNew": 8,
-    "adapter": 16,
+    "adapter": 17,
     "informationLive": 6,
     "informationQwenPawQueries": 2,
     "informationPrivateSystemMessage": true,

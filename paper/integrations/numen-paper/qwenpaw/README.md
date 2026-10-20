@@ -4,6 +4,8 @@
 
 启动参数：Python 3.12（已安装 `mcp`、`httpx`）运行 `numen_controller.py <私有配置JSON>`。配置包含 `upstream_url`、`token_file`、`companion_uuid`、`agent_id`、`qwenpaw_url`、`journal_dir`、`auto_wake`。两个服务 URL 必须是本机 HTTP 回环地址；不要把令牌写入配置模板、日志或仓库。
 
+`event_session_id` 可指定稳定的事件会话；正式启用时使用与隔离测试不同的值，避免沿用测试对话。未配置时保留旧默认值，重连不会更换会话或重放动作。
+
 原生端开启 MCP 后，由角色配置账号执行 `/numen token create brain <角色名> 30`，保存只覆盖该角色的原生令牌。QwenPaw 建立独立 Agent 和 stdio MCP 驱动，启用本适配器返回的八个工具；不修改其他 Agent 的模型或工具策略。
 
 ```text

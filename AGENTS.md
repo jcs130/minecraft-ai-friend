@@ -1,6 +1,6 @@
 ## 2026-10-20 桐人信息链路补齐，仍为隔离候选
 
-原桐人/QwenPaw候选已补首查接管竞态、6000字长回执截断、后台任务/满背包通知和接管旧账号的Bukkit权限。API SHA256 77da82ad3241f39fee878e5e51f855bdc5fe7777cabd1ed863a213af5bd60dea，适配器 SHA256 e3127dc99d56666d11959dc9c0c4ae131af2bd57c83185fc62627dcb863d066d；Appearance仍0.3.3、Freesia仍af3、AgentFriend仍0.4.47.8。952 common、16适配器、6真实联机信息/54格窗口检查，以及QwenPaw两项查询、普通私聊和私有系统事件通过；39条技能33383字符完整解析，原33物品条目/职业与Minepacks292字节原blob核对。18组核心能力按需查help，任务与技能沿用原/mycli；资格不等于已学或已准备。Native采用可选structuredContent而非放大全局Lua展示限额，超限/未知结果不重放。旧账号通过管理员adopt的精确UUID/owner标记保留原LuckPerms权限，新同伴沿原委托；不加OP或权限节点。已完成E/F候选与回退更新，测试服务和新QwenPaw角色停用，正式仍星灯、无pending；继续等待本次维护确认及原完整双盘冷备份流程。下方初版候选为本轮扩展前记录。见paper/docs/KIRITO_SERVER_INFORMATION.md。
+原桐人/QwenPaw候选已补首查接管竞态、6000字长回执截断、后台任务/满背包通知和接管旧账号的Bukkit权限。API SHA256 77da82ad3241f39fee878e5e51f855bdc5fe7777cabd1ed863a213af5bd60dea，适配器 SHA256 30e85620590c0daa6f3ef2c4279229ff2107c86574f29f8006629f2bb358422f；Appearance仍0.3.3、Freesia仍af3、AgentFriend仍0.4.47.8。952 common、17适配器、6真实联机信息/54格窗口检查，以及QwenPaw两项查询、普通私聊和私有系统事件通过；39条技能33383字符完整解析，原33物品条目/职业与Minepacks292字节原blob核对。18组核心能力按需查help，任务与技能沿用原/mycli；资格不等于已学或已准备。Native采用可选structuredContent而非放大全局Lua展示限额，超限/未知结果不重放。旧账号通过管理员adopt的精确UUID/owner标记保留原LuckPerms权限，新同伴沿原委托；不加OP或权限节点。已完成E/F候选与回退更新，测试服务和新QwenPaw角色停用，正式仍星灯、无pending；继续等待本次维护确认及原完整双盘冷备份流程。下方初版候选为本轮扩展前记录。见paper/docs/KIRITO_SERVER_INFORMATION.md。
 
 ## 2026-10-20 原桐人与 QwenPaw 候选，未切换正式服
 
