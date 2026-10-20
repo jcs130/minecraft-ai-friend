@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.61 — 2026-10-20
+
+- Pin shared renderer `d13246f7` and its exact source inventory/builds. Native
+  literal custom item names no longer fall back to the base item description;
+  the original stack, profile identity and item ID remain unchanged. Optional
+  server resource activation remains a separate pack-owned concern.
+
 ## 0.2.60 — 2026-10-20
 
 - Permit validated `mc_messages` list/search/read calls while a fresh feedback

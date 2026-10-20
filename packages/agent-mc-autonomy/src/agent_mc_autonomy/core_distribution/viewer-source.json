@@ -1,6 +1,6 @@
 {
   "schema": "agent-mc-viewer-source/v1",
-  "sourceRevision": "05b8fefb73b8b9f824e36caa4f0f2a9980b3067a",
+  "sourceRevision": "d13246f72182d39de0c572c70c8be9b0157252de",
   "files": {
     "package.json": {
       "bytes": 1191,
@@ -847,8 +847,8 @@
       "sha256": "417e637c4a5240e8b8af2e1a69cad9bc03245a453ef0e9c031e42ba861421050"
     },
     "renderer-src/src/native-viewer/native-language.js": {
-      "bytes": 9949,
-      "sha256": "fe39c6ffc07303d574e99f96cffb6d13096d76401f4cf0f9627e5be9cd4b7ee9"
+      "bytes": 10184,
+      "sha256": "c080646e2149b983cfbc5fa46c84cd12f68547a2ae32b6ee569ea767053941f3"
     },
     "renderer-src/src/native-viewer/native-living-state.js": {
       "bytes": 5521,
