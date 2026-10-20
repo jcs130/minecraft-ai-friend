@@ -1,6 +1,6 @@
 # Agent MC World
 
-`0.5.7-rc.57` waits for a nonempty native terrain commit before admitting a
+`0.5.7-rc.58` waits for a nonempty native terrain commit before admitting a
 photograph. The early hands/entities-only frame is a loading counterexample,
 not an image of an empty or safe world. Unsupported/empty scenes stay explicit.
 
