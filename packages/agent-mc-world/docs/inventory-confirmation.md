@@ -26,15 +26,23 @@ unrecorded live packet sequence or prove improved gameplay after deployment.
 
 ## Occupied offhand replacement
 
-Modern player-inventory offhand equipment uses ordinary number-key swaps
-(`window_click` mode 2, button 0–8), rather than holding the requested item on the
-mouse cursor while replacing an occupied offhand. A hotbar source needs one
-confirmed exchange. A source in main inventory uses an unselected hotbar slot
-for two confirmed exchanges. The previous hotbar item stays in the original
-source slot and the displaced offhand stays in the hotbar. Both items remain
-available; a full inventory needs no extra space, discard, name filter or
-server-specific rule. The selected hotbar slot is preserved. Other equipment
-and legacy paths retain their existing contract.
+Modern player-inventory offhand equipment uses one confirmed exchange, rather
+than holding the requested item on the mouse cursor. A hotbar source uses the
+ordinary number-key action on the offhand slot. A stored source uses the
+protocol's F-key action (`window_click` mode 2, button 40) directly on that source.
+The displaced offhand goes to the source slot. All unrelated hotbar slots and
+the selected hotbar remain unchanged, including with a full inventory. This
+needs no free space, discard, item-name filter or server-specific rule. The
+pinned window library omits F-key prediction; the core supplies it only for the
+modern player inventory, before the existing server-confirmation barrier.
+
+Borrowing an unrelated hotbar slot can fail when a server protects a shortcut
+item there. A simulated server independently reproduces that refusal and the
+resulting source/hotbar mismatch on 1.20.6 and 1.21.1. The F-key path avoids
+moving that unrelated item; it does not bypass a refusal affecting either
+intended slot. There is no fallback click or retry after a denied F-key swap.
+Historical live mismatch logs did not record stack values, so this reproduction
+does not by itself establish the exact cause of every earlier live refusal.
 
 After the requested offhand and empty cursor have been server-confirmed, the
 equipment operation is done. Do not send a third click to restore a preferred
@@ -50,9 +58,13 @@ succeeded, so query actual inventory before deciding another operation. Existing
 unknown-outcome recovery remains in force; this does not bypass server rules.
 
 Timeout diagnostics distinguish a missing post-dispatch full snapshot from an
-already received snapshot with mismatched slots or cursor. Both preserve the
-failed operation and its evidence; a later recovery does not promote it to a
-successful equip.
+already received snapshot with mismatched slots or cursor. For up to eight
+mismatched slots they now retain the authoritative pre-dispatch, predicted and
+actual item IDs/counts/damage and a SHA-256 identity digest, plus mode/button and
+cursor differences. Missing pre-dispatch evidence stays missing. Digests cover
+components/NBT without logging custom names, lore, profiles or their raw data;
+omitted detail counts are explicit. Both failures preserve the original result;
+a later recovery does not promote it to a successful equip.
 
 `equipment-offhand-native.test.ts` uses the actual pinned Mineflayer inventory
 plugin on 1.20.6 and 1.21.1, including named item data, full inventories, retained
@@ -61,4 +73,6 @@ cursor-swap failure mode; production acceptance requires a separate live equip
 and fresh post-operation inventory read.
 
 Protocol implementation reference:
-[PrismarineJS window click handling](https://github.com/PrismarineJS/prismarine-windows/blob/master/lib/Window.js).
+[PrismarineJS window click handling](https://github.com/PrismarineJS/prismarine-windows/blob/master/lib/Window.js),
+[MCProtocolLib offhand action](https://github.com/GeyserMC/MCProtocolLib/blob/master/protocol/src/main/java/org/geysermc/mcprotocollib/protocol/data/game/inventory/MoveToHotbarAction.java),
+and [Minepacks shortcut protection](https://github.com/GeorgH93/Minepacks/blob/de3be4a46814ac83580a0edbbadbba7b6456d26f/Minepacks/src/at/pcgamingfreaks/Minepacks/Bukkit/Listener/ItemShortcut.java).

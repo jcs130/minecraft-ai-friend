@@ -1,9 +1,11 @@
 import { onConnectionEnd } from './connection-end.ts';
 /** Inventory clicks complete only after a server snapshot includes their slots and cursor. */
 import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
 import type { Bot } from 'mineflayer';
 import type { MinecraftLog } from './log.ts';
 import { installInventoryComponentPrediction } from './inventory-component-prediction.ts';
+import { installInventoryOffhandPrediction } from './inventory-offhand-prediction.ts';
 
 // A complete container round trip can include several server ticks and plugin hooks.
 export const INVENTORY_CLICK_CONFIRM_MS = 3_000;
@@ -23,6 +25,8 @@ interface PendingClick {
   createdSeq: number;
   expectedSlots: Map<number, string>;
   expectedCursor: string;
+  beforeSlots: Map<number, string>;
+  beforeCursor?: string;
   complete(error?: Error): void;
 }
 interface SyncState {
@@ -100,6 +104,26 @@ function stackKey(value: unknown): string {
     removed: [...(item.removeComponents ?? [])].sort() }));
 }
 
+/** Bounded identity evidence; custom names, lore, profiles and other item data stay private. */
+function stackSummary(key: string | undefined): unknown {
+  if (key === undefined) return undefined;
+  if (key === 'null') return null;
+  const stack = JSON.parse(key) as { id: number; count: number; damage: number; nbt: unknown;
+    components: unknown[]; removed: unknown[] };
+  return { itemId: stack.id, count: stack.count, damage: stack.damage,
+    identitySha256: createHash('sha256').update(JSON.stringify({ nbt: stack.nbt,
+      components: stack.components, removed: stack.removed })).digest('hex') };
+}
+
+function mismatchDetails(pending: PendingClick, frame: { items: unknown[]; cursor: unknown }, slots: number[], cursorMatches: boolean) {
+  return { mode: pending.mode, button: pending.button,
+    slotDetails: slots.slice(0, 8).map(slot => ({ slot, before: stackSummary(pending.beforeSlots.get(slot)),
+      expected: stackSummary(pending.expectedSlots.get(slot)), actual: stackSummary(stackKey(frame.items[slot])) })),
+    omittedSlotDetails: Math.max(0, slots.length - 8),
+    ...(!cursorMatches ? { cursorDetails: { before: stackSummary(pending.beforeCursor),
+      expected: stackSummary(pending.expectedCursor), actual: stackSummary(stackKey(frame.cursor)) } } : {}) };
+}
+
 function windowSerial(state: SyncState, window: object): number {
   let serial = state.windows.get(window);
   if (serial === undefined) { serial = ++state.windowSerial; state.windows.set(window, serial); }
@@ -123,7 +147,8 @@ function confirmPendingClick(bot: Bot, state: SyncState, source: 'window_items' 
   if (mismatchedSlots.length || !cursorMatches) {
     if (source === 'window_items') record(state, 'click-snapshot-mismatch', { packetSeq: frame.seq,
       sentSeq: pending.sentSeq, windowId: window.id, windowSerial: windowSerial(state, window),
-      slot: pending.slot, stateId, mismatchedSlots, cursorMatches });
+      slot: pending.slot, stateId, mismatchedSlots, cursorMatches,
+      ...mismatchDetails(pending, frame, mismatchedSlots, cursorMatches) });
     return;
   }
   state.phase = 'ready'; state.reason = undefined; state.pending = null;
@@ -180,13 +205,16 @@ export function installInventoryClickSync(bot: Bot, diag?: MinecraftLog): void {
       const slots = packet.changedSlots as Array<{ location: number; item: unknown }>;
       pending.expectedSlots = new Map(slots.map((slot) => [slot.location, stackKey(slot.item)]));
       pending.expectedCursor = stackKey(packet.cursorItem);
+      const frame = state.authority.get(pending.window);
+      pending.beforeSlots = new Map(frame ? slots.map(slot => [slot.location, stackKey(frame.items[slot.location])]) : []);
+      pending.beforeCursor = frame ? stackKey(frame.cursor) : undefined;
       const previousStateId = packet.stateId;
       // A state mismatch executes the click and asks Vanilla/Paper for the complete result.
       // This is the same click, with no retry or additional inventory operation.
       packet.stateId = -1;
       record(state, 'click-barrier', { packetSeq: seq, windowId: pending.window.id,
         windowSerial: windowSerial(state, pending.window), slot: pending.slot, previousStateId,
-        touchedSlots: [...pending.expectedSlots.keys()] });
+        mode: pending.mode, button: pending.button, touchedSlots: [...pending.expectedSlots.keys()] });
     }
     write(name, packet);
   };
@@ -310,12 +338,13 @@ export async function clickInventoryConfirmed(bot: Bot, slot: number, button: nu
   const window = activeWindow(bot);
   if (expectedWindow && expectedWindow !== window) throw new InventoryClickSyncError('合成期间窗口实例被替换，停止后续点击', 'window-replaced');
   installInventoryComponentPrediction(bot, window);
+  installInventoryOffhandPrediction(bot, window);
   let complete!: (error?: Error) => void;
   const confirmation = new Promise<void>((resolve, reject) => {
     complete = (error): void => { if (error) reject(error); else resolve(); };
   });
   const pending: PendingClick = { window, sent: false, sentSeq: 0, slot, button, mode, beforeDispatch,
-    nativeSettled: false, createdSeq: state.packetSeq, expectedSlots: new Map(),
+    nativeSettled: false, createdSeq: state.packetSeq, expectedSlots: new Map(), beforeSlots: new Map(),
     expectedCursor: 'null', complete };
   state.phase = 'pending'; state.pending = pending;
   const timer = setTimeout(() => {
@@ -329,7 +358,8 @@ export async function clickInventoryConfirmed(bot: Bot, slot: number, button: nu
     if (fullAfterDispatch) state.reason += `；已收到完整快照，但${mismatchedSlots.length ? `槽位${mismatchedSlots.join('、')}不一致` : '槽位已匹配'}、${cursorMatches ? '光标已匹配' : '光标不一致'}`;
     else state.reason += '；尚缺本次派发后的完整槽位和光标快照';
     record(state, 'click-quarantined', { packetSeq: state.packetSeq, sentSeq: pending.sentSeq, slot, windowId: window.id,
-      fullAfterDispatch, fullSnapshotSeq: frame?.fullSeq ?? null, mismatchedSlots, cursorMatches });
+      fullAfterDispatch, fullSnapshotSeq: frame?.fullSeq ?? null, mismatchedSlots, cursorMatches,
+      ...(fullAfterDispatch ? mismatchDetails(pending, frame!, mismatchedSlots, cursorMatches!) : {}) });
     complete(new InventoryClickSyncError(`${state.reason}，暂停库存点击并保留材料游标`, 'quarantined'));
   }, INVENTORY_CLICK_CONFIRM_MS);
   // Mineflayer can resolve optimistically or keep waiting for an unchanged result slot.

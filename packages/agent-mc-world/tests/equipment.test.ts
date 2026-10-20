@@ -37,11 +37,18 @@ function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; de
   client.write = (name, packet) => {
     if (name !== 'window_click') return;
     sent.push(packet.slot);
-    const denied = (packet.slot === 45 && (options.denyPickup || (options.denySwap && server.slots[45] && (server.selectedItem || packet.mode === 2))))
+    const denied = (packet.slot === 45 && options.denyPickup)
+      || (options.denySwap && server.slots[45] && ((packet.slot === 45 && server.selectedItem)
+        || (packet.mode === 2 && (packet.slot === 45 || packet.mouseButton === 40))))
       || (options.denyHandSwap && ((packet.mode === 2 && packet.mouseButton === 8)
         || (packet.mode === 0 && packet.slot === 44)));
-    if (!denied) server.acceptClick({ slot: packet.slot, mouseButton: packet.mouseButton, mode: packet.mode,
-      item: server.slots[packet.slot] });
+    if (!denied) {
+      if (packet.mode === 2 && packet.mouseButton === 40) {
+        const source = server.slots[packet.slot], offhand = server.slots[45];
+        server.updateSlot(packet.slot, offhand); server.updateSlot(45, source);
+      } else server.acceptClick({ slot: packet.slot, mouseButton: packet.mouseButton, mode: packet.mode,
+        item: server.slots[packet.slot] });
+    }
     cursorHistory.push(server.selectedItem?.name ?? null);
     if (!options.silent) setTimeout(full, 166);
   };
@@ -111,20 +118,20 @@ describe('equipment server confirmation', () => {
     expect(rig.sent).not.toContain(-999);
   });
 
-  it('finishes a shield swap only after pickup, placement and cursor return are confirmed', async () => {
+  it('finishes a direct shield swap only after the server slot and cursor snapshot is confirmed', async () => {
     vi.useFakeTimers();
     const rig = equipmentServer();
     rig.seed(9, 'shield'); rig.seed(45, 'totem_of_undying');
     let finished = false;
     const equip = skillEquip(rig.bot, { skill: 'equip', item: 'shield', hand: 'off' }).then(text => { finished = true; return text; });
-    await vi.advanceTimersByTimeAsync(331);
+    await vi.advanceTimersByTimeAsync(165);
     expect(finished).toBe(false);
-    expect(rig.sent).toEqual([9, 45]);
+    expect(rig.sent).toEqual([9]);
     await vi.runAllTimersAsync();
     expect(await equip).toContain('盾牌挂上了副手');
     expect(rig.server.slots[45].name).toBe('shield');
-    expect(rig.server.slots[36].name).toBe('totem_of_undying');
-    expect(rig.server.slots[9]).toBeNull();
+    expect(rig.server.slots[9].name).toBe('totem_of_undying');
+    expect(rig.server.slots[36]).toBeNull();
     expect(rig.server.selectedItem).toBeNull();
   });
 
@@ -137,10 +144,11 @@ describe('equipment server confirmation', () => {
     await vi.advanceTimersByTimeAsync(332);
     expect(rig.inventory.slots[45].name).toBe('player_head');
     await vi.runAllTimersAsync(); await failed;
-    expect(rig.sent).toEqual([9, 45]);
+    expect(rig.sent).toEqual([9]);
     expect(rig.server.slots[45].name).toBe('player_head');
     expect(rig.server.selectedItem).toBeNull();
-    expect(rig.server.slots[36].name).toBe('shield');
+    expect(rig.server.slots[9].name).toBe('shield');
+    expect(rig.server.slots[36]).toBeNull();
   });
 
   it('clears a shortcut into storage before equipping a shield without dropping either item', async () => {
