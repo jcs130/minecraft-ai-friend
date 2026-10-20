@@ -15,7 +15,9 @@ def test_answered_read_survives_history_eviction_at_real_request_boundary(
     answer = 'Inventory 36/36 occupied; zero empty slots; cursor empty. Original answer.'
 
     async def decide(messages, tools):
-        captured.append((messages, {tool['function']['name'] for tool in tools}))
+        available = ({tool['function']['name'] for tool in tools} if context_mode != 'full'
+                     else set(json.loads(messages[-1]['content'])['current_tool_policy']['allowed_tools']))
+        captured.append((messages, available))
         return {'tool_calls': [{'id': f'call-{len(captured)}', 'type': 'function',
                                'function': {'name': 'mc_bag', 'arguments': '{}'}}]}
 
@@ -95,8 +97,9 @@ def test_alternating_answered_reads_keep_a_recovery_window(
         framework_module, tmp_path, run_async, context_mode):
     offered = []
 
-    async def decide(_messages, tools):
-        available = {tool['function']['name'] for tool in tools}
+    async def decide(messages, tools):
+        available = ({tool['function']['name'] for tool in tools} if context_mode != 'full'
+                     else set(json.loads(messages[-1]['content'])['current_tool_policy']['allowed_tools']))
         offered.append(available)
         # The planner chooses work once both redundant reads have yielded.
         name = next((n for n in ('mc_bag', 'mc_queue') if n in available), 'mc_do')

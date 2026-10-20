@@ -240,7 +240,7 @@ def read_progress(read_activity):
     return result
 
 
-def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, context_mode="compact", context_history_headroom_tokens=0, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, answered_reads=None, native_outcomes=None, context_counter: ContextCounter | None = None, host_context=None, recent_context=None, death_memory=None):
+def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, context_mode="compact", context_history_headroom_tokens=0, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, answered_reads=None, native_outcomes=None, context_counter: ContextCounter | None = None, host_context=None, recent_context=None, death_memory=None, current_tool_policy=None):
     """Use one counting mode throughout, restarting conservatively on failure."""
     options = {"context_tokens": context_tokens, "reserved_output": reserved_output,
                "planner_notice": planner_notice, "fast_focus": fast_focus,
@@ -252,6 +252,7 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
         from .context_full import assemble_full
         assembler = assemble_full
         options["context_history_headroom_tokens"] = context_history_headroom_tokens
+        options["current_tool_policy"] = current_tool_policy
     try:
         return assembler(prefix, tools, goal, facts, events, groups, context_counter=context_counter, **options)
     except CounterUnavailable as error:

@@ -1,5 +1,39 @@
 # Full-window history and cache continuity
 
+## Stable capabilities and current admission
+
+In full mode, temporary read deferral and native lookahead no longer change the
+provider's function declarations. Some selected Chat templates prepend those
+declarations to the entire conversation; removing one read tool or narrowing a
+queue enum therefore invalidated almost all of an otherwise reusable prefix.
+
+The final user scene now contains a literal `current_tool_policy` with its
+`allowed_tools` and `native_queue` (`normal` or `append_only`). Declarations
+describe capabilities, not permission. The controller still validates calls
+against its restricted per-round schemas before dispatch. A declared but
+deferred read, disallowed lookahead mutation, or queue replacement is rejected;
+no second queue or weaker barrier is introduced. This mandatory current policy
+is not replaced by a historical reference or evicted as a hint. Compact mode
+keeps its existing declaration filtering.
+
+Decision, cancellation and timeout journals include bounded `request_context`
+counts, history retirement and prefix/policy hashes. They contain no request
+text, selected memories, headers or credentials. Comparing these with actual
+provider cache/latency distinguishes schema churn, history retirement and
+service contention. A CPU replay with the operator-bound template demonstrated
+the prefix defect; it does not by itself establish live performance improvement
+or that every timeout has this cause.
+
+The 0.2.73 regression used the real controller with fake body/provider ports and
+the selected local Chat template/tokenizer. With the same synthetic retained
+history, the old ordinary/ahead and ordinary/deferred pairs shared only 83 and
+112 leading tokens. The fixed pairs retained 77,335 and 77,332 leading tokens
+while the current policy changed. This is CPU prefix evidence, not GPU cache
+occupancy or a measured game speedup. The 1,387-test package regression passed;
+100 targeted tests also passed from the isolated wheel. The SDK-free probe
+passed after its source example configuration was copied into the isolated test
+harness; the initial missing-fixture failure was not a production failure.
+
 In full mode, the request assembler can retire old complete exchanges when the
 selected model's real context window fills. The controller now commits that
 retirement to its retained history. Previously, it rebuilt each request from

@@ -26,7 +26,7 @@ from .scene_history import make_scene, project_messages
 def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output,
                   planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, answered_reads=None,
                   native_outcomes=None, context_counter=None, host_context=None, recent_context=None, death_memory=None,
-                  context_history_headroom_tokens=0):
+                  context_history_headroom_tokens=0, current_tool_policy=None):
     """Preserve supplied text/fields, complete exchanges and stable-prefix caching.
 
     Public host ports still enforce their identity, provenance, freshness and
@@ -34,7 +34,11 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
     treats historical conversation as a command. Window eviction is explicit;
     unshown native events remain pending at the controller.
     """
-    rules = rules_for(tools) + "\n" + GUIDANCE + "\n" + SCENE_GUIDANCE
+    rules = rules_for(tools) + "\n" + GUIDANCE + "\n" + SCENE_GUIDANCE + (
+        "\nFunction declarations describe capabilities, not permission for this round. "
+        "The final user scene's current_tool_policy selects the allowed tools and native_queue policy. "
+        "Use only its allowed_tools; append_only prohibits stopping, replacing or inserting into running work. "
+        "Earlier scenes' policies are historical and do not grant current permission.\n")
     system = rules + "\n" + prefix
     if host_context:
         stable = {k: v for k, v in host_context.get("stable", {}).items() if k not in {"memories", "current_intent"}}
@@ -53,6 +57,10 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
     tail = {"current_goal": goal, "current_facts": list(unique.values()), "events": event_copies, "omitted_facts": [],
             "context_omissions": {"history_groups": 0, "events": 0, "sections": []},
             "originals": "mc_protocol(protocol=agent-mc/v1,action=facts/archive); mc_original(handle=original,offset=0,limit=1000)"}
+    if current_tool_policy is not None:
+        # Admission is fresh and never replaced by a historical scene reference.
+        # It is mandatory like the current goal, not an evictable hint section.
+        tail["current_tool_policy"] = copy.deepcopy(current_tool_policy)
     for key, value in (("planner_notice", planner_notice), ("fast_focus", fast_focus), ("tool_failure", tool_failure),
                        ("read_activity", read_progress(read_activity)),
                        ("answered_reads", answered_reads),
@@ -141,6 +149,7 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
                            "referenced": referenced, "inline": len(terminal) - referenced},
         "layout": {"stable_head_sha256": hashlib.sha256(encode(head).encode()).hexdigest(),
                    "tools_sha256": hashlib.sha256(encode(tools).encode()).hexdigest(),
+                   "tool_policy_sha256": hashlib.sha256(encode(current_tool_policy).encode()).hexdigest(),
                    "first_history_group_sha256": hashlib.sha256(encode(history[0]).encode()).hexdigest() if history else None},
         "event_delivery": {"available": len(events), "included": len(included), "omitted": len(events) - len(included),
             "included_indices": included, "included_refs": [{"run": events[i].get("run"), "cursor": events[i].get("cursor")} for i in included]},

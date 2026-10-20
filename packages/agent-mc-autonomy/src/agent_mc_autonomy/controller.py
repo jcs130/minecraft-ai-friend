@@ -783,7 +783,8 @@ class Controller:
     def model_timing(self):
         return {"at": datetime.now(timezone.utc).isoformat(), "request_started_at": self.model_started_at,
                 "planning_mode": "native_lookahead" if self.lookahead_anchor else "ordinary",
-                "native_pending": [key[1] for key in self.pending]}
+                "native_pending": [key[1] for key in self.pending],
+                **({"request_context": self.model_request_info} if getattr(self, "model_request_info", None) else {})}
 
     async def protocol(self, action, **arguments):
         result = json_content(await self.bridge.call("mc_protocol", {"protocol": PROTOCOL, "action": action, **arguments}))
@@ -1792,24 +1793,35 @@ class Controller:
                 round_prefix = prefix + (GUIDANCE if narration_enabled else "")
                 if narration_enabled:
                     round_tools = tool_contract(round_tools)
+                # A temporary admission restriction must not rewrite a provider's
+                # leading tool-schema block and invalidate the whole cached prompt.
+                # Keep validation on round_tools; declaration is not permission.
+                wire_tools = round_tools
+                current_tool_policy = None
+                if self.settings.context_mode == "full":
+                    wire_tools = tool_contract(tools) if narration_enabled else tools
+                    current_tool_policy = {
+                        "allowed_tools": [tool["function"]["name"] for tool in round_tools],
+                        "native_queue": "append_only" if self.lookahead_anchor else "normal",
+                    }
                 if self.stop_requested() or self.preempted or self.turn_death_epoch != self.death_epoch or self._event_poll is not None or self._deferred_event_drain:
                     return
                 self.freeze_native_history()
                 try:
-                    messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, consumed, self.groups,
+                    messages, budget = assemble(round_prefix, wire_tools, planning_goal, facts, consumed, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
                         context_mode=self.settings.context_mode, context_history_headroom_tokens=self.settings.context_history_headroom_tokens,
                         planner_notice=notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, answered_reads=self.current_answered_reads(facts), native_outcomes=self.native_outcomes,
-                        context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
+                        context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal), current_tool_policy=current_tool_policy)
                 except ValueError:
                     if not reserve:
                         raise
                     reserve = 0
-                    messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, consumed, self.groups,
+                    messages, budget = assemble(round_prefix, wire_tools, planning_goal, facts, consumed, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
                         context_mode=self.settings.context_mode, context_history_headroom_tokens=self.settings.context_history_headroom_tokens,
                         planner_notice=notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, answered_reads=self.current_answered_reads(facts), native_outcomes=self.native_outcomes,
-                        context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
+                        context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal), current_tool_policy=current_tool_policy)
                 if reserve:
                     messages, _ = attach_frame(messages, frame)
                 from .scene_history import capture_scene
@@ -1823,6 +1835,13 @@ class Controller:
                     if history["available"] == len(self.groups) and history["evicted"]:
                         self.groups = self.groups[history["evicted"]:]
                 self.publish(context=budget)
+                # Non-content request evidence survives completion/cancellation/
+                # timeout, instead of being overwritten by the next live status.
+                self.model_request_info = {
+                    "input": budget["input"], "counter": budget["counter"],
+                    "units": budget["units"], "limit": budget["limit"],
+                    "history": budget.get("history"), "layout": budget.get("layout"),
+                }
                 self.conversation_continuation |= any(
                     conversation_event(consumed[index]) for index in budget["event_delivery"]["included_indices"])
                 try:
@@ -1832,7 +1851,7 @@ class Controller:
                     episode_id=death_context.get('latest_episode',{}).get('id') if death_context else None
                     profile=self.settings.decision_policy.select(focus=focus.get('choice'),failure=bool(self.tool_failure or self.planner_notice),feedback=self.feedback_pending,
                         death=bool(episode_id and episode_id!=self.profile_death_id))
-                    response = await self.decide_with_events(messages, round_tools, profile)
+                    response = await self.decide_with_events(messages, wire_tools, profile)
                 except (PlannerResponseError, PlannerUnavailableError, PlannerRequestRejectedError) as error:
                     with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
                         output.write(encode({**self.model_timing(), "turnId": self.turn, "rejected": error.diagnostic, "dispatched": False,
