@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.58 — 2026-10-20
+
+- Adopt queued revisions of the active host stage at the next coordinator boundary
+  instead of cancelling a current inference. Human/unknown feedback, explicit
+  replacement, new host stages, stop, native danger, death and failed ahead anchors retain their
+  interruption semantics. Advisory requests stay durable and unclaimed until
+  normal admission; body work and its queue remain unchanged.
+- Journal controller-cancelled inference with its timing and actual reason,
+  separately from provider errors and native work. No tool from that inference
+  was dispatched; an already running body task is not declared cancelled.
+
 ## 0.2.57 — 2026-10-20
 
 - Keep malformed tool-argument originals and exact syntax diagnostics in the

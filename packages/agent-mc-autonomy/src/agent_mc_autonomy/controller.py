@@ -727,6 +727,12 @@ class Controller:
         # prevent a new conversation from receiving a bounded decision/read chain.
         return self.conversation_continuation or any(conversation_event(event) for event in self.recent)
 
+    def command_interrupt_pending(self):
+        if self.commands is None:
+            return False
+        ready = getattr(self.commands, 'interrupt_ready', self.commands.ready)
+        return ready(allow_goal=self.active_goal is None and not self.pending)
+
     def lookahead_candidate(self):
         """One planning opportunity behind one known finite native body task.
 
@@ -977,7 +983,7 @@ class Controller:
         def interrupted():
             if self.stop_requested():
                 return "stopped"
-            if self.commands and self.commands.ready(allow_goal=self.active_goal is None and not self.pending):
+            if self.command_interrupt_pending():
                 self.preempted = True
                 return "feedback_changed"
             if epoch != self.death_epoch:
@@ -1081,17 +1087,18 @@ class Controller:
             while True:
                 done, _ = await asyncio.wait({task}, timeout=1)
                 if self.stop_requested():
-                    return None
-                if self.commands and self.commands.ready(allow_goal=self.active_goal is None and not self.pending):
+                    return self.cancelled_decision('stopped')
+                if self.command_interrupt_pending():
                     # Close this decision turn before delivering external work;
                     # a stale model completion must not replace a newly inserted job.
                     self.preempted = True
-                    return None
+                    return self.cancelled_decision('explicit_command')
                 wake, urgent, more = await self.events()
                 self.deferred_wake |= wake
                 if urgent or death_epoch != self.death_epoch or self.lookahead_invalidated:
                     self.preempted = True
-                    return None
+                    reason = 'anchor_failed' if self.lookahead_invalidated else 'death' if death_epoch != self.death_epoch else 'native_preempt'
+                    return self.cancelled_decision(reason)
                 if more:
                     continue  # A completed inference cannot outrun a queued death event page.
                 if done:
@@ -1103,6 +1110,14 @@ class Controller:
             if not task.done():
                 task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+
+    def cancelled_decision(self, reason):
+        record = {**self.model_timing(), 'turnId': self.turn, 'controller_cancelled': reason,
+                  'dispatched': False, 'scope': 'this_inference_only'}
+        with (self.data / 'decisions.jsonl').open('a', encoding='utf-8') as output:
+            output.write(encode(record) + '\n')
+        self.publish(planner_activity={**record, 'phase': 'cancelled'})
+        return None
 
     async def dispatch(self, name, arguments, request_id, *, attribution=None):
         if error := argument_error(self.bridge.tools, name, arguments):
