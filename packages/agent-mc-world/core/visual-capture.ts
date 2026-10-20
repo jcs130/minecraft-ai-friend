@@ -95,7 +95,7 @@ function localViewerOrigin(input: string): string {
   return url.origin;
 }
 
-function edgeExecutablePath(): string {
+export function edgeExecutablePath(): string {
   const explicit = process.env.AGENT_MC_BROWSER_EXECUTABLE;
   if (explicit !== undefined) {
     if (!explicit || !existsSync(explicit)) throw new VisualCaptureError('browser', 'AGENT_MC_BROWSER_EXECUTABLE 指定的浏览器不存在');
@@ -177,6 +177,7 @@ interface CaptureSession {
   captureLane?: boolean;
   leaseKey?: string;
   renewable?: boolean;
+  includeHud?: boolean;
   leaseTimer?: ReturnType<typeof setInterval>;
 }
 
@@ -236,7 +237,7 @@ export class MinecraftViewCaptureManager {
         closePromise = undefined;
         session = undefined;
       }
-      if (session?.page && (session.page.isClosed() || session.mode !== mode || session.fov !== fov || session.width !== width || session.height !== height
+      if (session?.page && (session.page.isClosed() || session.mode !== mode || session.fov !== fov || session.width !== width || session.height !== height || session.includeHud !== (options.includeHud === true)
           || (!session.renewable && Date.now() - session.openedAtMs! >= LEGACY_SESSION_MS))) {
         await this.closePage(origin, session);
       }
@@ -286,10 +287,11 @@ export class MinecraftViewCaptureManager {
         session.page = await session.browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1,
           ...(captureLane ? { extraHTTPHeaders: { 'x-mc-viewer-capture': '1', 'x-mc-viewer-capture-key': session.leaseKey } } : {}) });
         session.mode = mode; session.fov = fov; session.width = width; session.height = height;
+        session.includeHud = options.includeHud === true;
         session.captureLane = captureLane;
         const pagePath = mode === 'overview' ? '/third/?photo=1' : fov === undefined ? `/${mode}/?photo=1`
           : `${mode === 'first' ? '/' : '/third/'}?photo=1&fov=${fov}`;
-        await session.page.goto(`${origin}${pagePath}`, { waitUntil: 'domcontentloaded', timeout: remaining(deadlineAtMs) });
+        await session.page.goto(`${origin}${pagePath}${options.includeHud === true ? '' : '&clean=1'}`, { waitUntil: 'domcontentloaded', timeout: remaining(deadlineAtMs) });
         session.openedAtMs = Date.now();
         await session.page.addStyleTag({ content: 'body[data-cortico-capture-hide-hud="true"] *{visibility:hidden!important}body[data-cortico-capture-hide-hud="true"] canvas[data-cortico-capture-scene="true"]{visibility:visible!important}' });
         timings.pageMs = performance.now() - pageStarted;

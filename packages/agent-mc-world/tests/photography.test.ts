@@ -8,6 +8,7 @@ import { PhotographyService, PHOTO_TOOL, preparePhotoContext } from '../core/pho
 import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger } from '../src/client/index.ts';
 import { createMinecraftMcpServer } from '../src/mcp/server.ts';
 import { PHOTOGRAPHY_PROTOCOL, type ImageGenerationPort, type PhotoCapture } from '../src/contracts/photography.ts';
+import { captureVoxelScene } from '../core/voxel-scene.ts';
 import type { WorldHost, ToolCallContext } from '../src/contracts/host.ts';
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6NQAAAABJRU5ErkJggg==', 'base64');
@@ -35,6 +36,37 @@ async function finished(service: PhotographyService, id: string) {
 }
 
 describe('generic photography/art lifecycle', () => {
+  it('keeps ordinary photos ordinary, archives optional voxel evidence, and selects it only when requested', async () => {
+    const dir = directory(), proxy = { ...image, bytes: Buffer.concat([png, Buffer.from('proxy-fixture')]) };
+    const scene = captureVoxelScene({ source: { kind: 'client-loaded-chunks', minecraftVersion: '1.21.1', dimension: 'overworld', username: 'Test', uuid: 'fixture', realmVerified: false },
+      feet: [1, 65, 3], yaw: 0, pitch: 0, eyeHeight: 1.62, fovDegrees: 75, bounds: { min: [1, 64, 3], max: [1, 65, 3] },
+      blockAt: (_x, y) => y === 64 ? { name: 'stone', properties: { fixture: true } } : null });
+    const generate = vi.fn(async () => ({ ...image, model: 'flux3' }));
+    const service = new PhotographyService({ directory: dir, voxelAvailable: () => true,
+      capture: async args => ({ ...fixture(), ...(args.scene === 'voxel' ? { scene: { ...scene, sampledAt: new Date().toISOString() }, proxy, sceneRender: { visible: [{ name: 'minecraft:stone' }] } } : {}) }),
+      provider: () => ({ capabilities: { generate: true, edit: true, maxReferences: 3 }, generate }) }); service.start(host());
+    const caps = JSON.parse((await service.execute({ action: 'capabilities' }, ctx)).text);
+    expect(caps).toMatchObject({ voxel: true, voxelDefault: false, enhancementDefault: false });
+    const ordinary = JSON.parse((await service.execute({ action: 'capture', request_id: 'ordinary' }, ctx)).text);
+    expect(ordinary.scene).toBeUndefined(); expect(generate).not.toHaveBeenCalled();
+    const rejected = await service.execute({ action: 'enhance', source_id: ordinary.id, scene_input: 'voxel', prompt: 'x', request_id: 'bad-voxel' }, ctx);
+    expect(rejected.failed).toBe(true); expect(generate).not.toHaveBeenCalled();
+    const captured = JSON.parse((await service.execute({ action: 'capture', scene: 'voxel', request_id: 'voxel' }, ctx)).text);
+    expect(captured.scene.coverage).toMatchObject({ known: 1, unknown: 1, complete: false });
+    expect(captured.sceneRender.proxySha256).toMatch(/^[a-f0-9]{64}$/);
+    const rawScene = await service.execute({ action: 'scene', id: captured.id }, ctx);
+    expect(JSON.parse(Buffer.from((rawScene.blobs![0] as any).bytes).toString()).cells).toEqual([0, -1]);
+    const regularEdit = await service.execute({ action: 'enhance', source_id: captured.id, prompt: 'Polish the ordinary photo', request_id: 'edit-original' }, ctx);
+    await finished(service, regularEdit.execution!.id); expect(generate.mock.calls[0][0].images[0].bytes).toEqual(png);
+    const voxelEdit = await service.execute({ action: 'enhance', source_id: captured.id, scene_input: 'voxel', prompt: 'Polish the supplied voxel layout', request_id: 'edit-voxel' }, ctx);
+    const done = await finished(service, voxelEdit.execution!.id);
+    expect(JSON.parse(done.text).sceneInput).toBe('voxel'); expect(generate.mock.calls[1][0].images[0].bytes).toEqual(proxy.bytes);
+    expect(generate.mock.calls[1][0].requestId).toBe(voxelEdit.execution!.id);
+    service.stop();
+    const restored = new PhotographyService({ directory: dir, capture: async () => fixture(), provider: () => null }); restored.start(host());
+    expect((await restored.execute({ action: 'scene', id: captured.id }, ctx)).blobs?.[0]).toHaveProperty('mime', 'application/json');
+    expect((await restored.execute({ action: 'read', id: captured.id }, ctx)).blobs?.[0]).toHaveProperty('bytes', png); restored.stop();
+  });
   it('works without any model, preserves paired originals and reports explicit enhancement fallback', async () => {
     const { service, capture } = setup();
     expect(JSON.parse((await service.execute({ action: 'capabilities' }, ctx)).text)).toMatchObject({ capture: true, generate: false, enhance: false, planner: 'host' });
@@ -126,6 +158,33 @@ describe('generic photography/art lifecycle', () => {
 });
 
 describe('photography SDK / MCP parity', () => {
+  it('exposes optional raw voxel evidence and its separate proxy through SDK and MCP without generation', async () => {
+    const scene = captureVoxelScene({ source: { kind: 'client-loaded-chunks', minecraftVersion: '1.21.1', dimension: 'overworld', username: 'Test', uuid: 'fixture', realmVerified: false },
+      feet: [0, 65, 0], yaw: 0, pitch: 0, eyeHeight: 1.62, fovDegrees: 75, bounds: { min: [0, 64, 0], max: [0, 65, 0] }, blockAt: () => null });
+    const service = new PhotographyService({ directory: directory(), voxelAvailable: () => true, provider: () => null,
+      capture: async () => ({ ...fixture(), scene: { ...scene, sampledAt: new Date().toISOString() }, proxy: image, sceneRender: { self: null } }) });
+    const runtime = new MinecraftAgentClient({ dataDir: directory(), cfg: { ...structuredClone(MINECRAFT_CLIENT_DEFAULTS), host: 'offline.invalid', username: 'Test' }, log: nullLogger() }, {
+      id: 'minecraft', envPromptVars: () => ({}), tools: () => [{ ...PHOTO_TOOL, handler: (args, ctx) => service.execute(args, ctx) }],
+      start: async h => service.start(h), stop: async () => service.stop(),
+    });
+    const server = createMinecraftMcpServer(runtime, 'voxel-photo-test'), client = new Client({ name: 'voxel-photo-test', version: '1' });
+    const [a,b] = InMemoryTransport.createLinkedPair(); await server.connect(a); await client.connect(b); await runtime.connect();
+    try {
+      const capture = await runtime.call('mc_photo', { action: 'capture', scene: 'voxel', request_id: 'voxel-sdk' });
+      const id = capture.execution!.id;
+      if (capture.control?.requestId) await client.callTool({ name: 'mc_protocol', arguments: { protocol: 'agent-mc/v1', action: 'ack_barrier', id: capture.control.requestId } });
+      const viaMcp = await client.callTool({ name: 'mc_photo', arguments: { action: 'scene', id } });
+      expect(viaMcp, JSON.stringify(viaMcp.content)).not.toHaveProperty('isError', true);
+      const meta = viaMcp.structuredContent as any;
+      expect(meta.control.turnEnded).toBe(false);
+      expect((viaMcp.content as any[]).some(v => v.type === 'image')).toBe(true);
+      expect(JSON.parse((viaMcp.content as any[]).find(v => v.type === 'text').text)).toMatchObject({ scene: { coverage: { unknown: 2, complete: false } }, historical: true });
+      if (meta.control?.requestId) await client.callTool({ name: 'mc_protocol', arguments: { protocol: 'agent-mc/v1', action: 'ack_barrier', id: meta.control.requestId } });
+      const sdk = await runtime.call('mc_photo', { action: 'scene', id });
+      expect(sdk.blobs).toHaveLength(2);
+      expect(JSON.parse(sdk.text)).toMatchObject({ photoId: id, scene: { source: { realmVerified: false } } });
+    } finally { await runtime.disconnect(); await client.close(); await server.close(); }
+  });
   it('keeps a fast background terminal receipt when the admission RPC returns later', async () => {
     let attached!: WorldHost;
     const terminal = { kind: 'observation' as const, id: 'fast-photo', phase: 'completed' as const, terminal: true, goalCompleted: false as const };

@@ -41,6 +41,8 @@ import { normalizeAgentActivity, AgentActivityHistory } from './viewer-activity.
 import { publishAgentActivity as publishViewerActivity } from './viewer-agent.mjs';
 import { captureMinecraftView, closeMinecraftViewCapture, warmMinecraftViewCapture } from './visual-capture.ts';
 import { PhotographyService, PHOTO_TOOL } from './photography.ts';
+import { captureVoxelScene } from './voxel-scene.ts';
+import { renderVoxelPhoto } from './voxel-photo.ts';
 import { createImageGenerationPort } from './image-generation.ts';
 import { OVERVIEW_SCHEMA, overviewArgumentError, type OverviewOptions } from './visual-overview.ts';
 import { visualFovError } from './visual-fov.ts';
@@ -2891,6 +2893,7 @@ export class MinecraftWorld implements World {
       directory: this.dataDir ? join(this.dataDir, 'minecraft-photos') : undefined,
       provider: () => createImageGenerationPort(this.cfg.photography),
       capture: (args, signal) => this.capturePhoto(args, signal),
+      voxelAvailable: () => !!(this.cfg.photography?.voxel?.rendererSource && this.cfg.photography.voxel.assetPack && this.cfg.photography.voxel.threeModule),
     });
     const account = (lane: 'agent' | 'observer' | 'player') => {
       const config = lane === 'agent' ? this.cfg : lane === 'observer' ? this.cfg.client : this.cfg.player;
@@ -4862,12 +4865,33 @@ export class MinecraftWorld implements World {
       throw new Error('Connection or dimension changed during photograph');
     const snapshot = this.snapshot({ scanBlocks: false });
     if (!snapshot) throw new Error('Fresh game readings unavailable; photograph was not archived as paired evidence');
-    return { bytes: frame.png, mime: 'image/png', capturedAt: frame.capturedAt, sampledAt: new Date().toISOString(), captureId: randomUUID(),
-      facts: { snapshot, server: { host: this.cfg.host, port: this.cfg.port }, account: bot.username,
-        connectionGeneration: generation, camera: { mode, fov: frame.fov, width: frame.width, height: frame.height,
-          sampledYaw: bot.entity.yaw, sampledPitch: bot.entity.pitch },
-        movedDuringCapture: before.distanceTo(bot.entity.position), sampling: 'game state sampled immediately after frame; not atomic',
-        visibility: 'Snapshot nearby/online entities are not guaranteed to be visible in the frame' } };
+    const sampledAt = new Date().toISOString();
+    const facts = { snapshot, server: { host: this.cfg.host, port: this.cfg.port }, account: bot.username,
+      connectionGeneration: generation, camera: { mode, fov: frame.fov, width: frame.width, height: frame.height,
+        sampledYaw: bot.entity.yaw, sampledPitch: bot.entity.pitch },
+      movedDuringCapture: before.distanceTo(bot.entity.position), sampling: 'game state sampled immediately after frame; not atomic',
+      visibility: 'Snapshot nearby/online entities are not guaranteed to be visible in the frame' };
+    let voxel;
+    if (args.scene === 'voxel') {
+      const config = this.cfg.photography?.voxel;
+      if (!config?.rendererSource || !config.assetPack || !config.threeModule) throw new Error('Optional voxel photography is not configured; ordinary capture remains available');
+      const { radius, below, above } = config;
+      if (![radius, below, above].every(n => Number.isInteger(n) && n >= 0 && n <= 64)) throw new Error('Explicit voxel bounds must be 0..64');
+      const p = bot.entity.position;
+      const scene = captureVoxelScene({ source: { kind: 'client-loaded-chunks', minecraftVersion: bot.version,
+        dimension, username: bot.username, uuid: bot.entity.uuid ?? '', realmVerified: true, connectionEpoch: String(generation) },
+        sampledAt, feet: [p.x, p.y, p.z], yaw: bot.entity.yaw, pitch: bot.entity.pitch, eyeHeight: 1.62, fovDegrees: Number(args.fov ?? 75),
+        bounds: { min: [Math.floor(p.x) - radius, Math.floor(p.y) - below, Math.floor(p.z) - radius],
+          max: [Math.floor(p.x) + radius, Math.floor(p.y) + above, Math.floor(p.z) + radius] },
+        blockAt: (x, y, z) => bot.blockAt(new Vec3(x, y, z)) });
+      const renderConfig = args.camera_offset !== undefined ? { ...config, cameraOffset: args.camera_offset as [number, number, number] } : config;
+      const rendered = await renderVoxelPhoto(scene, renderConfig, mode, signal);
+      if (this.shuttingDown || this.host !== host || this.connectionGeneration !== generation || this.bridge?.bot !== bot
+        || String(bot.game.dimension) !== dimension) throw new Error('Connection changed while rendering voxel photo');
+      voxel = { scene, proxy: rendered.image, sceneRender: rendered.semantics };
+    }
+    return { bytes: frame.png, mime: 'image/png', capturedAt: frame.capturedAt, sampledAt, captureId: randomUUID(), ...voxel,
+      facts };
   }
 
   protected async visualReadout(args: Record<string, unknown>, ctx: ToolCallContext): Promise<ToolOutcome> {

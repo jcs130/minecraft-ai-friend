@@ -43,7 +43,7 @@ export class ClientOperationLearning {
     const script = tool.name.endsWith('_script');
     const active = script ? args.validate!==true&&(args.code!==undefined||args.procedure!==undefined)
       : tool.name.endsWith('_combat_tactic') ? args.choice!==undefined
-      : tool.name.endsWith('_photo') && ['read','list','status','help'].includes(String(args.action)) ? false : tool.tags?.includes('act');
+      : tool.name.endsWith('_photo') && ['read','list','status','scene','capabilities','help'].includes(String(args.action)) ? false : tool.tags?.includes('act');
     if(!active)return null;
     const candidate = (args.choice as {candidate?:{procedure?:{handle?:unknown;revision?:unknown}}}|undefined)?.candidate;
     const reference = (script ? args.procedure : candidate?.procedure) as {handle?:unknown;revision?:unknown}|undefined;

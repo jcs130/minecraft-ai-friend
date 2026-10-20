@@ -13,7 +13,7 @@ export function readVanillaBlockRegistry(minecraftVersion:string):VanillaBlockRe
 }
 
 export interface SceneBlockReading {
-  name: string; stateId?: number; material?: string; boundingBox?: string; transparent?: boolean;
+  name: string; stateId?: number; material?: string | null; boundingBox?: string; transparent?: boolean;
   shapes?: readonly (readonly number[])[];
   getProperties?(): Record<string, unknown>;
   properties?: Record<string, unknown>;

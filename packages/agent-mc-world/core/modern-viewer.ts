@@ -728,8 +728,9 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       }
       if (pathname === '/' || pathname === '/third/' || pathname === '/3dview/' || pathname === '/photo/') {
         const viewMode = pathname === '/third/' ? 'third' : pathname === '/3dview/' ? '3dview' : 'first';
-        const photo = pathname === '/photo/';
-        const page = photo ? await viewerPhotoPage(root) : await viewerPageHtml(root, viewMode, PAGE,
+        const query = new URL(req.url ?? '/', origin).searchParams;
+        const photo = pathname === '/photo/' || query.get('photo') === '1' && query.get('clean') === '1';
+        const page = photo ? await viewerPhotoPage(root, viewMode) : await viewerPageHtml(root, viewMode, PAGE,
           '<iframe class="corti-speech-bubble" id="corti-speech-bubble" title="主播语音气泡" aria-label="主播语音气泡" hidden></iframe>',
           '<script src="/speech-bubble.js" defer></script>');
         const readyScript = photo ? page.match(/<script>([\s\S]*?)<\/script>/)?.[1] : undefined;

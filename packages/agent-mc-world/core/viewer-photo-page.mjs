@@ -1,8 +1,9 @@
 import { viewerPageHtml } from './viewer-page-assets.mjs';
 
 /** A read-only still camera. No inventory, chat history, controls or extra account. */
-export async function viewerPhotoPage(root) {
-  const page = await viewerPageHtml(root, 'first', '');
+export async function viewerPhotoPage(root, mode = 'first') {
+  if (!['first', 'third', '3dview'].includes(mode)) throw Error('PHOTO_VIEW_MODE_INVALID');
+  const page = await viewerPageHtml(root, mode, '');
   if (!page.includes('/index.js')) throw Error('PHOTO_VIEWER_ASSETS_MISSING');
   return page.replace('</head>', `<style>
     body > :not(#viewer-canvas):not(script):not(style) { display:none !important }
@@ -21,7 +22,9 @@ export async function viewerPhotoPage(root) {
         && canvas?.width && canvas?.height && d?.received >= footprint
         && d.meshed >= footprint && d.masked === 0 && d.pendingSections === 0
         && __photoSkinTasks.size === 0 && !__photoSkinFailed
-        && (!ysm || ysm.pending === 0 && ysm.failed === 0 && ysm.unavailable === 0 && ysm.rendered === ysm.states)
+        // Received states also include the hidden first-person self and culled actors.
+        // Actual render jobs must be drained; total states need not equal visible actors.
+        && (!ysm || ysm.pending === 0 && ysm.failed === 0 && ysm.unavailable === 0)
         && document.fonts.status === 'loaded');
     };
   </script></body>`);

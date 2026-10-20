@@ -40,6 +40,8 @@ export { OperationExperienceBook, experienceHash, operationObservation, operatio
   type OperationExperience, type OperationObservation, type OperationDecision, type OperationAttribution } from '../../core/operation-experience.ts';
 export { PhotographyService, PHOTO_TOOL, PHOTO_PLANNER_SYSTEM, preparePhotoContext, type PhotographyOptions } from '../../core/photography.ts';
 export { createImageGenerationPort, PHOTOGRAPHY_DEFAULTS } from '../../core/image-generation.ts';
+export { buildFlux3Graph, validateFlux3Configuration } from '../../core/comfy-flux3.ts';
+export { renderVoxelPhoto } from '../../core/voxel-photo.ts';
 export * from '../contracts/photography.ts';
 export * from '../../core/voxel-scene.ts';
 export { learningHelp, type ArtifactRef, type SourceRef } from '../../core/game-memory-learning-contract.ts';

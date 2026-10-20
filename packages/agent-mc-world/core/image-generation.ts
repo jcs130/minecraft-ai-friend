@@ -1,8 +1,12 @@
 import type { PhotographyConfig, ImageGenerationPort, ImageGenerationRequest, ImageGenerationResult, PhotoImage } from '../src/contracts/photography.ts';
+import { createComfyFlux3Port } from './comfy-flux3.ts';
 
 export const PHOTOGRAPHY_DEFAULTS: PhotographyConfig = {
   provider: 'none', endpoint: '', model: '', apiKeyEnv: '',
   generate: true, edit: true, maxReferences: 3, timeoutMs: 600_000, resultHosts: '',
+  flux3: { unet: '', clip: '', vae: '', steps: 16, width: 1280, height: 704, seed: 7 },
+  voxel: { rendererSource: '', assetPack: '', threeModule: '', radius: 24, below: 8, above: 24,
+    cameraOffset: [3, 3.1, 4], surfaceStyle: 'original', geometryStyle: 'original', allowDocumentedApproximations: false },
 };
 const MAX_IMAGE = 24 * 1024 * 1024;
 const MAX_INPUT = 10 * 1024 * 1024;
@@ -25,7 +29,7 @@ export function validatePhotoImage(image: PhotoImage, max = MAX_INPUT): void {
   if (!image.bytes.length || image.bytes.length > max) throw new Error('Image exceeds the configured input/output byte limit');
   if (imageMime(image.bytes) !== image.mime) throw new Error('Image MIME does not match its bytes');
 }
-async function boundedBody(response: Response, max: number, signal: AbortSignal): Promise<Uint8Array> {
+export async function boundedBody(response: Response, max: number, signal: AbortSignal): Promise<Uint8Array> {
   if (Number(response.headers.get('content-length')) > max) { await response.body?.cancel(); throw new Error('Image response too large'); }
   if (!response.body) throw new Error('Empty image response');
   const reader = response.body.getReader(), chunks: Uint8Array[] = [];
@@ -51,11 +55,12 @@ function apiUrl(raw: string): URL {
   return url;
 }
 
-/** Native provider adapters. No retry, model discovery, ComfyUI, VLM or planner calls. */
+/** Explicit provider adapters. No retry, endpoint discovery, VLM or planner calls. */
 export function createImageGenerationPort(config: Partial<PhotographyConfig> | undefined,
   options: { fetch?: typeof fetch; env?: Record<string, string | undefined> } = {}): ImageGenerationPort | null {
   const cfg = { ...PHOTOGRAPHY_DEFAULTS, ...config };
   if (cfg.provider === 'none') return null;
+  if (cfg.provider === 'comfyui-flux3') return createComfyFlux3Port(cfg, options);
   if (!['bailian', 'volcengine'].includes(cfg.provider)) throw new Error('Unsupported image provider');
   const endpoint = apiUrl(cfg.endpoint);
   if (!cfg.model.trim() || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(cfg.apiKeyEnv)) throw new Error('Image model and API key environment variable are required');

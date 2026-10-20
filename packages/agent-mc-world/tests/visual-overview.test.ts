@@ -70,7 +70,7 @@ describe('coordinate overview contract', () => {
         expect(result.png.subarray(1,4).toString()).toBe('PNG');
         expect(result.capturedAt).toBe(metadata.capturedAt);expect(result.overview).toEqual(metadata);
       }
-      expect(inputs).toEqual(requests);expect(opened).toBe(1);expect(url).toBe('http://127.0.0.1:7793/third/?photo=1');
+      expect(inputs).toEqual(requests);expect(opened).toBe(1);expect(url).toBe('http://127.0.0.1:7793/third/?photo=1&clean=1');
     } finally {await manager.stop();}
     expect(closed).toBe(1);
   });

@@ -94,7 +94,8 @@ export class JavaClientWorld implements World {
     this.methods = cfg.javaClient ? new JavaMethods(cfg.javaClient,{rpc:(method,args,signal)=>this.rpc(method,args,signal),
       state:async signal=>{const state=await this.rpc('state',{},signal) as JavaClientState;this.verify(state);this.state=state;return state;},owner:()=>this.owner(),host:()=>this.host}) : null;
     this.photos = new PhotographyService({ directory: dir ? join(dir, 'photos') : undefined,
-      provider: () => createImageGenerationPort(cfg.photography), capture: async (_args, signal) => {
+      provider: () => createImageGenerationPort(cfg.photography), capture: async (args, signal) => {
+        if (args.scene === 'voxel') throw new Error('This Java-client screenshot backend does not export voxel scenes; use ordinary capture or an explicitly configured scene port');
         const capture = await this.rpc('screenshot', {}, signal);
         this.verify(capture.state as JavaClientState);
         return { bytes: Buffer.from(String(capture.base64), 'base64'), mime: 'image/png', capturedAt: String(capture.capturedAt),

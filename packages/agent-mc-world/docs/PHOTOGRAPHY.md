@@ -64,9 +64,50 @@ Use a model ID or your own endpoint ID, with the capability/reference limit appr
 
 ## Other services and local models
 
-The public `ImageGenerationPort` accepts an explicit prompt plus ordered byte images and returns image bytes, measured usage and provider request ID. Hosts can implement it for other native cloud APIs or a local backend and pass it to the public `PhotographyService` through `provider()`. ComfyUI is not required by the contracts, build or native cloud adapters. The bundled World currently exposes the two native adapters above; a custom port is an SDK integration, not a claim that arbitrary APIs are wire-compatible.
+The public `ImageGenerationPort` accepts an explicit prompt plus ordered byte images and returns image bytes, measured usage and provider request ID. Hosts can implement it for other native cloud APIs or a local backend and pass it to the public `PhotographyService` through `provider()`. ComfyUI is not required by the contracts, build or native cloud adapters. The bundled World exposes the two cloud adapters above and the opt-in FLUX 3 profile below; a custom port is an SDK integration, not a claim that arbitrary APIs are wire-compatible.
 
 The service and pure context helper are exported by `agent-mc-world`, `agent-mc-world/client` and the extension surface; contracts are exported by `agent-mc-world/contracts`. Image generation remains opt-in, with an explicit request and host-selected prompt. No extra autonomous reasoning loop is introduced.
+
+## Optional local FLUX 3 and voxel photography
+
+These are **Agent capabilities**, not a server-wide photo filter. Ordinary `capture` never calls an image model or renders a voxel proxy. `enhance` is a separate explicit action; `scene_input` defaults to `screenshot`. Merely configuring a model does not activate automatic enhancement. Server camera commands keep their own normal capture behavior.
+
+```json
+{
+  "photography": {
+    "provider": "comfyui-flux3",
+    "endpoint": "http://127.0.0.1:8191",
+    "model": "FLUX.3-Image-Klein-bf16",
+    "apiKeyEnv": "",
+    "generate": true, "edit": true, "maxReferences": 3,
+    "timeoutMs": 900000,
+    "flux3": {
+      "unet": "flux3-image-klein-bf16.safetensors",
+      "clip": "qwen3vl_4b_bf16.safetensors",
+      "vae": "flux2-vae.safetensors",
+      "steps": 16, "width": 1280, "height": 704, "seed": 8
+    }
+  }
+}
+```
+
+The configured ComfyUI must already support `CLIPLoader type=flux3` and `ReferenceMultiLatent` and contain the exact licensed weights. This adapter downloads nothing, discovers no other endpoint, enables no custom nodes and calls no prompt upsampler. The host supplies the finished prompt verbatim. The distilled sixteen-step, CFG=1 schedule follows the official workflow. The node named `EmptyFlux2LatentImage` and VAE filename `flux2-vae` are also used by the official FLUX 3 workflow; they do not select a FLUX.2 diffusion model. Explicit pixel sizes must be multiples of sixteen, 256..2048. Text-only `create` needs no reference; references use ordered multi-image conditioning without batching/cropping mismatched reference-sheet shapes.
+
+Only explicit generation preflights exact configured node/model capabilities, uploads ordered references, submits **one** prompt, waits on its prompt ID and downloads its single final output node. Acceptance is not completion. Transport uncertainty never triggers a second POST. The private photo archive retains the caller's prompt, reference handles and the provider prompt ID on completion/failure/cancellation. Cancel/stop abort local waiting, and late images cannot resurrect a job. The adapter never issues global `/interrupt` or `/free`; a remotely accepted job may continue computing. Reconcile the original provider ID before any new request. Use loopback HTTP or an explicitly protected HTTPS endpoint; API keys, when needed, remain in an operator-selected environment variable.
+
+### Explicit voxel capture
+
+On the Mineflayer backend, configure optional `photography.voxel` with explicit absolute `rendererSource` (the shared `mc-visual-console` renderer source), `assetPack` (matching original Java 1.21.1 pack including its integrity manifest), `threeModule`, `radius`, `below`, `above`, and a virtual third-person `cameraOffset`. Optional `surfaceStyle=material-hints` / `geometryStyle=organic-hints` enable the documented artistic abstractions; defaults retain original geometry/material cues. `allowDocumentedApproximations=true` explicitly accepts the recorded fluid, banner, tint and seed limitations. No renderer/model directory is scanned.
+
+1. `capture` saves an ordinary screenshot and game readings.
+2. **Only when requested**, `capture` with `scene:"voxel"` also freezes bounded loaded block states and renders a separate artistic proxy. It does not move the player. `camera_offset:[x,y,z]` may override the virtual framing for this capture; inspect the returned occlusion warning and `sceneRender.self.placementFacing`. A neutral marker is not observed limb animation. Unknown cells remain unknown, and collision boxes are not substituted for the original visual models.
+3. `scene` with the capture `id` returns the raw versioned JSON and proxy image as artifacts. Original screenshot, source scene, proxy hashes, known/unknown coverage, source identity, camera and rendering approximations remain archived separately. Large raw cell arrays are retrieved on demand instead of inserted in every prompt.
+4. The host interprets the original image, proxy and semantic readings, chooses a composition and matching front/back/side character reference, and writes the final prompt. It may use its own VLM. No extra planner loop runs inside the core.
+5. `enhance` with `source_id`, `scene_input:"voxel"`, `prompt`, optional `reference_handles` and stable `request_id` explicitly generates from that proxy. Without `scene_input:"voxel"`, enhancement uses the original screenshot even if the capture has voxel evidence. Original `create` remains an imagined composition and does not fabricate voxel evidence.
+
+No model: normal capture still works, enhancement returns the **original screenshot** with `fallback=original`, and original drawing is unavailable. No voxel renderer: normal screenshot capture remains available and explicit voxel capture fails clearly. The Java-client framebuffer backend currently rejects voxel capture rather than ignoring the option. Hosts may supply a separate scene port through the public `PhotographyService` / `PhotoCapture` contract.
+
+Official workflow: [FLUX 3 distilled multi-reference editing](https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_flux3_klein_distilled_image_edit.json), [official weights and license](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy). Operator-only Windows troubleshooting: the upstream [HostBuffer/pinned-memory issue](https://github.com/Comfy-Org/ComfyUI/issues/15255) documents a workaround; core does not alter someone else's ComfyUI flags or restart a service.
 
 ## Official API references and verification
 
