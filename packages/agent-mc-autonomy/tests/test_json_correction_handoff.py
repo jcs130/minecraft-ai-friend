@@ -49,7 +49,7 @@ def test_json_syntax_error_gets_one_immediate_correction_then_normal_backoff(
     assert not controller.pending and controller.inflight_request is None
 
 
-def test_error_location_and_rejected_excerpt_survive_window_eviction(
+def test_error_location_survives_eviction_without_replaying_the_bad_example(
         framework_module, tmp_path, run_async):
     captured = []
 
@@ -58,8 +58,8 @@ def test_error_location_and_rejected_excerpt_survive_window_eviction(
         if len(captured) == 1:
             return tool(BAD)
         notice = json.loads(messages[-1]['content'])['planner_notice']
-        assert 'column' in notice and 'offset' in notice and 'queue' in notice
-        assert '::' in notice and 'No tool was dispatched' in notice
+        assert 'column' in notice and 'offset' in notice and 'mc_do' in notice
+        assert '::' not in notice and 'No tool was dispatched' in notice
         return tool('{"steps":[{"skill":"goto","at":[1,65,1]}],"queue":"append"}', 2)
 
     module, bridge, controller = setup(framework_module, tmp_path, decide)
@@ -75,3 +75,4 @@ def test_error_location_and_rejected_excerpt_survive_window_eviction(
     assert controller.pending and controller.invalid_tool_calls == 0
     journal = [json.loads(line) for line in (tmp_path / 'decisions.jsonl').read_text(encoding='utf-8').splitlines()]
     assert journal[0]['response']['tool_calls'][0]['function']['arguments'] == BAD
+    assert '::' in next(row['json_diagnostic']['rejected_raw_excerpt'] for row in journal if 'json_diagnostic' in row)

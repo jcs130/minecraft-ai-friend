@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.57 — 2026-10-20
+
+- Keep malformed tool-argument originals and exact syntax diagnostics in the
+  private journal, instead of replaying them as valid assistant tool examples.
+  The next model request receives explicit no-dispatch validation feedback and
+  the error location/source reference, without copying the malformed snippet.
+- Preserve ordinary valid tool exchanges, exact archived responses, one bounded
+  idle JSON correction, repeated-error backoff and all native/stop fences.
+  This prevents a runtime-created bad-example loop; it does not identify the
+  source of the first malformed provider response or certify live error rates.
+
 ## 0.2.56 — 2026-10-20
 
 - Let one known, finite native body task receive one bounded planning opportunity

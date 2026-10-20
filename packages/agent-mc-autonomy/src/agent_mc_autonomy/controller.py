@@ -110,6 +110,10 @@ class ModelCallRejected(ValueError):
 class ToolJSONRejected(ModelCallRejected):
     """A complete tool envelope whose argument JSON failed before dispatch."""
 
+    def __init__(self, message, diagnostic=None):
+        super().__init__(message)
+        self.diagnostic = diagnostic or {}
+
 
 def fact_fingerprint(facts):
     # The sample timestamp is useful context, but is not a decision trigger.
@@ -1350,9 +1354,10 @@ class Controller:
             raise ToolJSONRejected(
                 f"Tool arguments for {name} must be one complete JSON object: {error.msg} "
                 f"at line {error.lineno}, column {error.colno}, offset {error.pos}. "
-                f"Rejected raw excerpt: {encode(excerpt)}. This is rejected input, not a call to replay. "
                 "Write a new valid JSON object using the advertised field names and values; "
-                "no arguments were repaired or dispatched."
+                "no arguments were repaired or dispatched. Do not copy malformed historical output.",
+                {"tool": name, "error": error.msg, "line": error.lineno, "column": error.colno,
+                 "offset": error.pos, "rejected_raw_excerpt": excerpt},
             ) from None
         except (ValueError, TypeError):
             raise ModelCallRejected("Tool arguments must be one complete JSON object.") from None
@@ -1573,9 +1578,17 @@ class Controller:
         self.invalid_tool_calls += 1
         self.planner_notice = "No tool was dispatched. " + str(error)
         calls = response.get("tool_calls") if isinstance(response, dict) else None
+        if isinstance(error, ToolJSONRejected):
+            # A rejected argument string is not a valid assistant tool example.
+            # Preserve it in the original journal, but project ordinary user
+            # validation feedback with no orphaned or malformed tool exchange.
+            self.groups.append([*([input_scene] if input_scene else []), {"role": "user", "content": encode({
+                "rejected_model_call": {"dispatched": False, "error": str(error),
+                    "original": {"journal": "decisions.jsonl", "turn_id": self.turn}}})}])
+            self.retain_history()
         # Complete wire envelopes can carry their exact rejection into the next
         # request. Never serialize malformed IDs/functions as model tool history.
-        if (isinstance(calls, list) and 1 <= len(calls) <= 8
+        if (not isinstance(error, ToolJSONRejected) and isinstance(calls, list) and 1 <= len(calls) <= 8
                 and all(isinstance(call, dict) and call.get("type", "function") == "function"
                         and isinstance(call.get("id"), str) and call["id"]
                         and isinstance(call.get("function"), dict)
@@ -1601,7 +1614,8 @@ class Controller:
                 self.groups, _ = coalesce_rejected(self.groups)
             self.retain_history()
         with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
-            output.write(encode({**self.model_timing(), "turnId": self.turn, "rejected": str(error), "dispatched": False}) + "\n")
+            output.write(encode({**self.model_timing(), "turnId": self.turn, "rejected": str(error), "dispatched": False,
+                **({"json_diagnostic": error.diagnostic} if isinstance(error, ToolJSONRejected) else {})}) + "\n")
         immediate = (isinstance(error, ToolJSONRejected) and self.invalid_tool_calls == 1
                      and not self.pending and self.inflight_request is None and not self.stop_requested())
         delay = 0 if immediate else min(60, max(1, self.settings.min_decision_seconds) * 2 ** min(6, self.invalid_tool_calls - 1))
