@@ -23,7 +23,7 @@ async function equipmentMove(bot: Bot, slot: number, move: () => Promise<void>):
   }
 }
 
-/** Ordinary number-key swaps keep the cursor empty, including occupied offhands. */
+/** Direct slot exchanges keep the cursor empty without moving unrelated hotbar items. */
 async function swapOffHandConfirmed(bot: Bot, source: number, destination: number): Promise<void> {
   const window = bot.inventory, start = window.hotbarStart;
   const quickBar = Array.from({ length: 9 }, (_, i) => start + i);
@@ -31,16 +31,10 @@ async function swapOffHandConfirmed(bot: Bot, source: number, destination: numbe
     await clickInventoryConfirmed(bot, destination, source - start, 2, window);
     return;
   }
-  // Use an unselected hotbar slot without requiring free storage. The old
-  // hotbar item remains in the source slot and the displaced offhand stays in
-  // this hotbar slot. Once equipment and empty cursor are confirmed, do not
-  // issue another click merely to restore a preferred inventory arrangement.
-  const selected = start + (bot.quickBarSlot ?? -1);
-  const scratch = quickBar.find(slot => slot !== selected && !window.slots[slot])
-    ?? quickBar.find(slot => slot !== selected) ?? start;
-  const button = scratch - start;
-  await clickInventoryConfirmed(bot, source, button, 2, window);
-  await clickInventoryConfirmed(bot, destination, button, 2, window);
+  // F over the source swaps it directly with offhand. An unrelated hotbar
+  // shortcut may be protected by the server even when both intended slots are
+  // movable; it must not be borrowed as scratch storage. A denial stops here.
+  await clickInventoryConfirmed(bot, source, 40, 2, window);
 }
 
 /** Each inventory move has its own authoritative slot and cursor confirmation. */

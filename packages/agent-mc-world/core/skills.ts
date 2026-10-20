@@ -1800,7 +1800,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     doc: `{"skill":"organize"} 自动合堆并按物品 id 和数据排序随身背包；默认不动快捷栏、装备、副手及合成格，不丢东西。
 {"skill":"organize","sort":false,"includeHotbar":true} 只合堆，包含快捷栏。
 {"skill":"organize","rules":[{"item":"cobblestone","keep":64,"action":"stow"},{"item":"rotten_flesh","keep":0,"action":"toss"}],"at":[103,63,-31]}
-                                                 先按给出的顺序处理随身多余物品，再整理；keep 是此选择范围的保留数量，核心没有垃圾名单。存放默认附近箱子，可给 at 点名箱子，或在同一单 use 后 into:open 存进自定义背包。
+                                                 仅按给出的顺序处理指定多余物品，不额外挪动其它物品；keep 是此选择范围的保留数量，核心没有垃圾名单。存放默认附近箱子，可给 at 点名箱子，或在同一单 use 后 into:open 存进自定义背包。
+                                                 带 rules 还要合堆须显式 sort:false；还要合堆并排序须显式 sort:true。服务器可能固定入口道具的位置，不应为一次取舍附带整包排序。
                                                  规则可按 pick 选具体标签；取舍会使用随身所有主背包槽（包括快捷栏），不脱装备或副手。没有规则就不会存放或丢弃。
 {"skill":"use","item":"大背包"},{"skill":"organize","target":"open"} 整理当前真实储物容器，不是选择菜单或工作站输入/输出格；不自动跨容器搬物。
                                                  dryRun:true 只读当前方案；正式执行重读槽位。每次交换等待服务端槽位和光标确认，取消或确认不明会停止，保留已发生的结果；终态核对空位及物品总量。`,
@@ -1808,7 +1809,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     fields: [
       { key: 'target', kind: 'enum', values: ['inventory', 'open'], error: 'target 只认 inventory/open', doc: '默认 inventory；open 整理当前真实储物窗口' },
       { key: 'includeHotbar', kind: 'flag', retainFalse: true, doc: '默认 false：只整理 27 格背包；true 包含 9 格快捷栏' },
-      { key: 'sort', kind: 'flag', retainFalse: true, doc: '默认 true；false 只合堆' },
+      { key: 'sort', kind: 'flag', retainFalse: true, doc: '无 rules 默认 true；有 rules 时省略则只取舍；显式 false 额外合堆、true 额外合堆和排序' },
       { key: 'dryRun', kind: 'flag', retainFalse: true, doc: '只读计划，不点击、不存放或丢弃' },
       { key: 'rules', kind: 'opaque', schema: { type: 'array', items: { type: 'object', additionalProperties: false,
         required: ['item', 'keep', 'action'], properties: { item: { type: 'string', minLength: 1 },

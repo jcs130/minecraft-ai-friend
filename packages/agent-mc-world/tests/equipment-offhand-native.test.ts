@@ -3,11 +3,11 @@ import { createRequire } from 'node:module';
 import type { Bot } from 'mineflayer';
 import { afterEach, expect, it, vi } from 'vitest';
 import { equipSlotConfirmed } from '../core/equipment.ts';
-import { installInventoryClickSync, inventoryClickState } from '../core/inventory-click-sync.ts';
+import { clickInventoryConfirmed, installInventoryClickSync, inventoryClickState } from '../core/inventory-click-sync.ts';
 import { installInventoryWindowSyncGuard } from '../core/inventory-window-sync.ts';
 
 const require = createRequire(import.meta.url), mf = createRequire(require.resolve('mineflayer'));
-function nativeServer(version: string, denyNumberSwap = false, rejectPostEquip = false) {
+function nativeServer(version: string, denyNumberSwap = false, rejectPostEquip = false, protectedHotbar: number | null = null) {
   const registry = require('minecraft-data')(version), Item = mf('prismarine-item')(registry);
   const windows = mf('prismarine-windows')(version), server = windows.createWindow(0, 'minecraft:inventory', 'Inventory');
   let stateId = 0;
@@ -28,21 +28,84 @@ function nativeServer(version: string, denyNumberSwap = false, rejectPostEquip =
     clicks.push(structuredClone(packet));
     const cursorSwap = packet.slot === 45 && packet.mode === 0 && server.slots[45] && server.selectedItem;
     const unnecessaryCleanup = rejectPostEquip && server.slots[45]?.name === 'shield' && packet.slot !== 45;
-    if (!cursorSwap && !unnecessaryCleanup && !(denyNumberSwap && packet.slot === 45 && packet.mode === 2)) {
-      server.acceptClick({ slot: packet.slot, mouseButton: packet.mouseButton, mode: packet.mode, item: server.slots[packet.slot] });
+    const protectedSwap = packet.mode === 2 && packet.mouseButton !== 40 && packet.mouseButton === protectedHotbar;
+    const denied = denyNumberSwap && packet.mode === 2 && (packet.slot === 45 || packet.mouseButton === 40);
+    if (!cursorSwap && !unnecessaryCleanup && !protectedSwap && !denied) {
+      if (packet.mode === 2 && packet.mouseButton === 40) {
+        // Independent server-side F-key behavior; the pinned client prediction
+        // does not implement this protocol action yet.
+        const source = server.slots[packet.slot], offhand = server.slots[45];
+        server.updateSlot(packet.slot, offhand); server.updateSlot(45, source);
+      } else {
+        server.acceptClick({ slot: packet.slot, mouseButton: packet.mouseButton, mode: packet.mode, item: server.slots[packet.slot] });
+      }
     }
     setTimeout(full, 50);
   };
-  installInventoryWindowSyncGuard(bot); installInventoryClickSync(bot);
+  const notes: any[] = [];
+  installInventoryWindowSyncGuard(bot); installInventoryClickSync(bot, { write: (note: unknown) => notes.push(note) } as never);
   const seed = (slot: number, name: string, custom = false) => {
     const item = new Item(registry.itemsByName[name].id, 1);
     if (custom) item.customName = { type: 'string', value: 'Named backpack' };
     server.updateSlot(slot, item);
   };
   const raw = () => server.slots.map((item: unknown) => Item.toNotch(item));
-  return { bot, server, clicks, full, seed, raw };
+  return { bot, server, clicks, full, seed, raw, notes };
 }
 afterEach(() => vi.useRealTimers());
+
+it.each(['1.20.6', '1.21.1'])('swaps a stored item directly with offhand without touching a protected unrelated hotbar on %s', async version => {
+  vi.useFakeTimers(); const r = nativeServer(version, false, false, 0);
+  for (let slot = 9; slot < 45; slot++) r.seed(slot, 'stone');
+  r.seed(36, 'player_head', true); r.seed(22, 'trident'); r.seed(45, 'shield');
+  r.bot.quickBarSlot = 6; r.full();
+  const before = structuredClone(r.raw()); let error: unknown;
+  const operation = equipSlotConfirmed(r.bot, r.bot.inventory.slots[22]!, 'off-hand').catch(e => { error = e; });
+  await vi.runAllTimersAsync(); await operation;
+  expect(error).toBeUndefined();
+  expect(r.clicks).toHaveLength(1);
+  expect(r.clicks[0]).toMatchObject({ slot: 22, mode: 2, mouseButton: 40 });
+  const after = r.raw();
+  expect(after[22]).toEqual(before[45]); expect(after[45]).toEqual(before[22]);
+  for (let slot = 0; slot < before.length; slot++) if (![22, 45].includes(slot)) expect(after[slot]).toEqual(before[slot]);
+  expect(after.map(x => JSON.stringify(x)).sort()).toEqual(before.map(x => JSON.stringify(x)).sort());
+  expect(r.bot.quickBarSlot).toBe(6); expect(r.bot.inventory.selectedItem).toBeNull();
+  expect(inventoryClickState(r.bot).phase).toBe('ready');
+});
+
+it('does not fall back through a hotbar or cursor when a direct offhand exchange is denied', async () => {
+  vi.useFakeTimers(); const r = nativeServer('1.21.1', true);
+  r.seed(22, 'trident'); r.seed(45, 'shield'); r.seed(36, 'player_head', true); r.full();
+  const before = structuredClone(r.raw());
+  const operation = equipSlotConfirmed(r.bot, r.bot.inventory.slots[22]!, 'off-hand');
+  const rejected = expect(operation).rejects.toMatchObject({ code: 'inventory-click-sync' });
+  await vi.runAllTimersAsync(); await rejected;
+  expect(r.clicks).toHaveLength(1);
+  expect(r.clicks[0]).toMatchObject({ slot: 22, mouseButton: 40, mode: 2 });
+  expect(r.raw()).toEqual(before); expect(r.bot.inventory.selectedItem).toBeNull();
+  expect(inventoryClickState(r.bot).phase).toBe('quarantined');
+  r.full(); expect(inventoryClickState(r.bot).phase).toBe('ready');
+  await vi.runAllTimersAsync(); expect(r.clicks).toHaveLength(1);
+});
+
+it('records authoritative before/expected/actual stack differences without custom item data', async () => {
+  vi.useFakeTimers(); const r = nativeServer('1.21.1', false, false, 0);
+  r.seed(22, 'trident'); r.seed(36, 'player_head', true); r.full();
+  const operation = clickInventoryConfirmed(r.bot, 22, 0, 2, r.bot.inventory);
+  const rejected = expect(operation).rejects.toMatchObject({ code: 'inventory-click-sync' });
+  await vi.runAllTimersAsync(); await rejected;
+  const data = r.notes.findLast(n => n.event === 'click-quarantined').data;
+  expect(data).toMatchObject({ mode: 2, button: 0, mismatchedSlots: [22, 36], omittedSlotDetails: 0 });
+  expect(data.slotDetails.map((s: any) => s.slot)).toEqual([22, 36]);
+  const [source, hotbar] = data.slotDetails;
+  expect(source.before).toMatchObject({ itemId: r.bot.registry.itemsByName.trident.id, count: 1 });
+  expect(source.actual).toEqual(source.before);
+  expect(source.expected).toEqual(hotbar.before);
+  expect(hotbar.actual).toEqual(hotbar.before);
+  expect(hotbar.expected).toEqual(source.before);
+  expect(source.before.identitySha256).toMatch(/^[a-f0-9]{64}$/);
+  expect(JSON.stringify(r.notes)).not.toContain('Named backpack');
+});
 
 it('finishes at confirmed offhand placement instead of issuing a refused post-goal hotbar restoration', async () => {
   vi.useFakeTimers(); const r = nativeServer('1.21.1', false, true);
@@ -52,8 +115,8 @@ it('finishes at confirmed offhand placement instead of issuing a refused post-go
   const operation = equipSlotConfirmed(r.bot, r.bot.inventory.slots[11]!, 'off-hand').catch(e => { error = e; });
   await vi.runAllTimersAsync(); await operation;
   expect(error).toBeUndefined(); expect(r.server.slots[45]?.name).toBe('shield');
-  expect(r.raw()[40]).toEqual(before[45]); expect(r.server.slots[11]).toBeNull();
-  expect(r.clicks.map(p => p.slot)).toEqual([11, 45]);
+  expect(r.raw()[11]).toEqual(before[45]); expect(r.server.slots[40]).toBeNull();
+  expect(r.clicks.map(p => p.slot)).toEqual([11]);
   expect(r.server.selectedItem).toBeNull(); expect(inventoryClickState(r.bot).phase).toBe('ready');
 });
 
@@ -66,12 +129,12 @@ it.each(['1.20.6', '1.21.1'])('replaces an occupied offhand without ever carryin
   await vi.runAllTimersAsync(); await operation;
   expect(error).toBeUndefined();
   expect(r.server.slots[45]?.name).toBe('shield');
-  expect(r.raw()[37]).toEqual(original[45]);
-  expect(r.server.slots[9]).toBeNull();
+  expect(r.raw()[9]).toEqual(original[45]);
+  expect(r.server.slots[37]).toBeNull();
   expect(r.raw()[36]).toEqual(original[36]);
   expect(r.server.selectedItem).toBeNull(); expect(r.bot.inventory.selectedItem).toBeNull();
   expect(r.clicks.every(p => p.mode === 2 && p.cursorItem.itemCount === 0)).toBe(true);
-  expect(r.clicks).toHaveLength(2);
+  expect(r.clicks).toHaveLength(1);
   expect(r.raw().map(x => JSON.stringify(x)).sort()).toEqual(original.map(x => JSON.stringify(x)).sort());
   expect(r.bot.quickBarSlot).toBe(0);
   expect(inventoryClickState(r.bot).phase).toBe('ready');
@@ -101,10 +164,10 @@ it('preserves every item and the selected hotbar while replacing offhand with a 
   const operation = equipSlotConfirmed(r.bot, r.bot.inventory.slots[9]!, 'off-hand').catch(e => { error = e; });
   await vi.runAllTimersAsync(); await operation;
   expect(error).toBeUndefined();
-  const after = r.raw(); expect(after[9]).toEqual(before[37]); expect(after[37]).toEqual(before[45]); expect(after[45]).toEqual(before[9]);
-  for (let slot = 0; slot < before.length; slot++) if (![9, 37, 45].includes(slot)) expect(after[slot]).toEqual(before[slot]);
+  const after = r.raw(); expect(after[9]).toEqual(before[45]); expect(after[45]).toEqual(before[9]);
+  for (let slot = 0; slot < before.length; slot++) if (![9, 45].includes(slot)) expect(after[slot]).toEqual(before[slot]);
   expect(after.map(x => JSON.stringify(x)).sort()).toEqual(before.map(x => JSON.stringify(x)).sort());
-  expect(r.clicks).toHaveLength(2); expect(r.clicks.every(p => p.mode === 2)).toBe(true);
+  expect(r.clicks).toHaveLength(1); expect(r.clicks.every(p => p.mode === 2)).toBe(true);
   expect(r.server.selectedItem).toBeNull();
 });
 

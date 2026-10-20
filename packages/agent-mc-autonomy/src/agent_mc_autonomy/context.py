@@ -225,11 +225,11 @@ def read_progress(read_activity):
     return result
 
 
-def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, context_mode="compact", context_history_headroom_tokens=0, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, native_outcomes=None, context_counter: ContextCounter | None = None, host_context=None, recent_context=None, death_memory=None):
+def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, context_mode="compact", context_history_headroom_tokens=0, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, answered_reads=None, native_outcomes=None, context_counter: ContextCounter | None = None, host_context=None, recent_context=None, death_memory=None):
     """Use one counting mode throughout, restarting conservatively on failure."""
     options = {"context_tokens": context_tokens, "reserved_output": reserved_output,
                "planner_notice": planner_notice, "fast_focus": fast_focus,
-               "tool_failure": tool_failure, "read_activity": read_activity, "native_outcomes": native_outcomes, "host_context": host_context, "recent_context": recent_context, "death_memory": death_memory}
+               "tool_failure": tool_failure, "read_activity": read_activity, "answered_reads": answered_reads, "native_outcomes": native_outcomes, "host_context": host_context, "recent_context": recent_context, "death_memory": death_memory}
     if context_mode not in {"compact", "full"}:
         raise ValueError("invalid_context_mode")
     assembler = _assemble
@@ -245,7 +245,7 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
         return messages, budget
 
 
-def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, native_outcomes=None, context_counter=None, host_context=None, recent_context=None, death_memory=None):
+def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, answered_reads=None, native_outcomes=None, context_counter=None, host_context=None, recent_context=None, death_memory=None):
     """Use an injected input counter or the conservative UTF-8 byte bound.
 
     Account for messages/tools plus separate output and framing reserves.
@@ -275,6 +275,8 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
         tail["read_activity"] = read_progress(read_activity)
     if events:
         tail["recent_events_archive"] = {"run": events[0].get("run"), "after": max(0, events[0].get("cursor", 1) - 1)}
+    if answered_reads:
+        tail["answered_reads"] = json.loads(encode(answered_reads))
 
     def messages():
         return head + [message for group in history for message in group] + [{"role": "user", "content": encode(tail)}]
@@ -320,6 +322,8 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
             tail["superseded_rejected_plans"]["originals"].pop()
         if cost() > context_tokens:
             del tail["superseded_rejected_plans"]
+    while tail.get("answered_reads") and cost() > context_tokens:
+        tail["answered_reads"].pop(0)
     stable_cost = cost()
     if tool_failure:
         # Failure diagnostics are dynamic evidence, not part of the immutable
@@ -527,4 +531,5 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
                              "omitted": len(events) - len(included_events), "included_indices": sorted(included_events),
                              "included_refs": [{"run": events[index].get("run"), "cursor": events[index].get("cursor")}
                                                for index in sorted(included_events)]},
-                         "superseded_rejected_plans": len(superseded), "host_context": included_host_context, "host_recent_context": recent_diagnostic}
+                          "answered_reads": {"available": len(answered_reads or []), "included": len(tail.get("answered_reads", []))},
+                          "superseded_rejected_plans": len(superseded), "host_context": included_host_context, "host_recent_context": recent_diagnostic}

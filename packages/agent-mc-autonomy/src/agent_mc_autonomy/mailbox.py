@@ -115,6 +115,30 @@ class Mailbox:
         with self.connection() as db:
             return db.execute("SELECT 1 FROM commands WHERE state='queued' AND (kind!='goal' OR ?) LIMIT 1", (allow_goal,)).fetchone() is not None
 
+    def interrupt_ready(self, allow_goal=True):
+        """Human/new stages interrupt; ordinary host revisions wait a boundary.
+
+        Do not claim, reorder or discard advisory requests here. The ordinary
+        coordinator still adopts them through ready/claim after this turn.
+        Unknown provenance and explicit replacement remain conservative.
+        """
+        if not self.path.exists():
+            return False
+        with self.connection() as db:
+            rows = db.execute("SELECT kind,payload FROM commands WHERE state='queued' AND (kind!='goal' OR ?)", (allow_goal,))
+            for row in rows:
+                payload = json.loads(row['payload'])
+                advisory = False
+                if (row['kind'] == 'feedback' and payload.get('origin') == 'host_review'
+                        and payload.get('mode') == 'insert' and payload.get('review_decision') == 'revise'
+                        and payload.get('revision_of')):
+                    parent = db.execute("SELECT payload FROM commands WHERE id=? AND state='planning'",
+                                        (payload['revision_of'],)).fetchone()
+                    advisory = bool(parent and json.loads(parent['payload']).get('origin') == 'host_review')
+                if not advisory:
+                    return True
+        return False
+
     def check_uncertain(self):
         if self.path.exists():
             with self.connection() as db:

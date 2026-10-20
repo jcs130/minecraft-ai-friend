@@ -1,4 +1,4 @@
-"""Rejected batches stay visible to the next model request as complete pairs."""
+"""Rejected evidence stays visible without promoting malformed wire examples."""
 import copy
 import json
 
@@ -26,17 +26,25 @@ def test_rejected_call_and_exact_failure_survive_into_next_request(framework_mod
     run_async(controller.turn_once("survive", "prefix", tools))
     assert not any(name == "mc_do" for name, *_ in bridge.calls)
     run_async(controller.turn_once("survive", "prefix", tools))
-    previous = next(m for m in seen[1] if m.get("tool_calls"))
-    assert previous["tool_calls"] == original["tool_calls"]
-    failure = next(m for m in seen[1] if m.get("tool_call_id") == "call-1")
-    receipt = json.loads(failure["content"])
-    assert receipt["dispatched"] is False and receipt["failed"] is True
-    assert receipt["origin"] == "controller_validation" and receipt["text"]
+    if function['arguments'] == '{':
+        assert not any(m.get('tool_calls') or m.get('tool_call_id') for m in seen[1])
+        failure = next(json.loads(m['content'])['rejected_model_call'] for m in seen[1]
+                       if m['role'] == 'user' and 'rejected_model_call' in m.get('content', ''))
+        assert failure['dispatched'] is False and 'column' in failure['error']
+        records = [json.loads(line) for line in (tmp_path/'decisions.jsonl').read_text(encoding='utf-8').splitlines()]
+        assert records[0]['response'] == original
+    else:
+        previous = next(m for m in seen[1] if m.get("tool_calls"))
+        assert previous["tool_calls"] == original["tool_calls"]
+        failure = next(m for m in seen[1] if m.get("tool_call_id") == "call-1")
+        receipt = json.loads(failure["content"])
+        assert receipt["dispatched"] is False and receipt["failed"] is True
+        assert receipt["origin"] == "controller_validation" and receipt["text"]
     assert invalid == original
     assert sum(name == "mc_do" for name, *_ in bridge.calls) == 1
 
 
-def test_rejected_whole_batch_has_one_failure_result_per_call(framework_module, tmp_path, run_async):
+def test_malformed_whole_batch_stays_archived_without_dispatch_or_wire_replay(framework_module, tmp_path, run_async):
     response = choose()
     response["tool_calls"].insert(0, {"id": "read", "type": "function", "function": {"name": "mc_help", "arguments": "{}"}})
     response["tool_calls"][1]["function"]["arguments"] = "{"
@@ -46,9 +54,10 @@ def test_rejected_whole_batch_has_one_failure_result_per_call(framework_module, 
     bridge.tools.append({"name": "mc_help", "inputSchema": {"type": "object"}})
     run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
     exchange = controller.groups[-1]
-    assert exchange[0]["tool_calls"] == response["tool_calls"]
-    assert [m["tool_call_id"] for m in exchange[1:]] == ["read", "call-1"]
-    assert all(json.loads(m["content"])["dispatched"] is False for m in exchange[1:])
+    assert len(exchange) == 1 and exchange[0]['role'] == 'user'
+    assert json.loads(exchange[0]['content'])['rejected_model_call']['dispatched'] is False
+    records = [json.loads(line) for line in (tmp_path/'decisions.jsonl').read_text(encoding='utf-8').splitlines()]
+    assert records[0]['response'] == response
     assert not any(name in {"mc_help", "mc_do"} for name, *_ in bridge.calls)
 
 

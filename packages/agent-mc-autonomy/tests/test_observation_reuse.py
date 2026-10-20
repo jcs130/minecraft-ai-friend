@@ -45,6 +45,50 @@ def prepare(framework_module, tmp_path):
     return bridge, controller
 
 
+def test_first_two_new_spatial_answers_can_handoff_without_ordinary_event_delay(
+        framework_module, tmp_path, run_async):
+    _, controller = prepare(framework_module, tmp_path)
+    for index in range(3):
+        controller.continuation_ready = False
+        plan = {"steps": [{"skill": "observe", "mode": "sites", "sites": [[index, 64, 0]]}]}
+        assert observed(controller, run_async, arguments=plan).get("execution")
+        assert controller.continuation_ready is (index < 2), (
+            "A requested new answer must reach the planner promptly, but successive scans must remain bounded"
+        )
+        assert not controller.pending
+    assert controller.read_activity == {"mc_scout": 3}
+
+
+def test_documentation_and_inventory_reads_do_not_consume_spatial_handoff_slots(
+        framework_module, tmp_path, run_async):
+    _, controller = prepare(framework_module, tmp_path)
+    controller.read_activity = {"mc_help": 3, "mc_bag": 1}
+    assert observed(controller, run_async).get("execution")
+    assert controller.continuation_ready
+    assert controller.read_activity == {"mc_help": 3, "mc_bag": 1, "mc_scout": 1}
+
+
+@pytest.mark.parametrize("phase", ["blocked", "partial", "rejected"])
+def test_failed_spatial_read_does_not_bypass_planner_backoff(
+        framework_module, tmp_path, run_async, phase):
+    _, controller = prepare(framework_module, tmp_path)
+    assert run_async(controller.execute_model_call("mc_scout", copy.deepcopy(PLAN)))[0].get("execution")
+    end = {**action(True), "phase": phase, "evidence": {"receipt": "The query did not complete"}}
+    controller.receipt({"execution": end})
+    assert not controller.continuation_ready
+
+
+def test_spatial_answer_cannot_create_handoff_while_other_native_work_is_pending(
+        framework_module, tmp_path, run_async):
+    _, controller = prepare(framework_module, tmp_path)
+    assert run_async(controller.execute_model_call("mc_scout", copy.deepcopy(PLAN)))[0].get("execution")
+    controller.pending[("task", "other-body-work")] = {"terminal": False}
+    end = {**action(True), "evidence": {"receipt": spatial_receipt()}}
+    controller.receipt({"execution": end})
+    assert not controller.continuation_ready
+    assert ("task", "other-body-work") in controller.pending
+
+
 def test_completed_scout_is_not_queued_again_under_unchanged_facts(framework_module, tmp_path, run_async):
     bridge, controller = prepare(framework_module, tmp_path)
     assert observed(controller, run_async).get("execution")

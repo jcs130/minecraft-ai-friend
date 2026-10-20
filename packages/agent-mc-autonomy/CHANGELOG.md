@@ -1,5 +1,116 @@
 # Changelog
 
+## 0.2.65 — 2026-10-20
+
+- Pin renderer `dd7c4011`: decode the protocol-767 banner component layers
+  container before preserving its SNBT list. Registry/SlotComponent binary
+  round trips and the actual Prismarine Item constructor cover this boundary.
+
+## 0.2.64 — 2026-10-20
+
+- Pin renderer `5ad51dce`: preserve and render received original banner patterns
+  using this body connection's configuration registry, exact textures, dyes,
+  source-alpha layers and native display limit. Unknown mappings stay explicit.
+
+## 0.2.63 — 2026-10-20
+
+- Pin shared renderer `ce60351c` with original trident GUI icons and the native
+  compass random-spin branch. Preserve exact source/build hashes, stack
+  identity, enchantment glint and bounded original-frame caches. Include all
+  sixteen original plain banner dye models and preserve observed empty pattern
+  components; unsupported decorated patterns remain explicit.
+
+## 0.2.62 — 2026-10-20
+
+- Preserve omitted native presentation fields when merging an appearance-only
+  optional pack. A missing skills reading no longer inserts `undefined` and
+  causes the bounded viewer codec to reject the complete same-player inventory.
+
+## 0.2.61 — 2026-10-20
+
+- Pin shared renderer `d13246f7` and its exact source inventory/builds. Native
+  literal custom item names no longer fall back to the base item description;
+  the original stack, profile identity and item ID remain unchanged. Optional
+  server resource activation remains a separate pack-owned concern.
+
+## 0.2.60 — 2026-10-20
+
+- Permit validated `mc_messages` list/search/read calls while a fresh feedback
+  goal awaits its first native plan. The tool has shared read/write tags because
+  marking a message reviewed writes metadata; that tag previously blocked even
+  pure searches, forcing a body plan before the agent could read its instructions.
+- Message review/writes, unknown operations and action/speech tags stay blocked
+  at this boundary. Reading does not consume feedback queue policy or count as
+  body progress. Native confirmation, unknown receipts and stop fences remain.
+
+## 0.2.59 — 2026-10-20
+
+- Keep bounded server feedback, recent Minecraft messages, equipment/observed
+  item IDs and optional-method query entries in the compact strategic review.
+  The structured host consumes this view, so retaining them only in the full
+  evidence and notification summary left it disconnected from the body.
+- Preserve source handles and paged originals. Messages remain dated external
+  observations, never user authority or permission; method entries do not impose
+  quests or a survival checklist. Record notice/method reads with other queries.
+- Pin shared renderer `05b8fefb` and its exact runtime source inventory, including
+  the current-health HUD and matrix-authored inventory shield grip fixes. Native
+  Java 1.21.1 assets and the bundled original YSM remain separate verified inputs.
+
+## 0.2.58 — 2026-10-20
+
+- Adopt queued revisions of the active host stage at the next coordinator boundary
+  instead of cancelling a current inference. Human/unknown feedback, explicit
+  replacement, new host stages, stop, native danger, death and failed ahead anchors retain their
+  interruption semantics. Advisory requests stay durable and unclaimed until
+  normal admission; body work and its queue remain unchanged.
+- Journal controller-cancelled inference with its timing and actual reason,
+  separately from provider errors and native work. No tool from that inference
+  was dispatched; an already running body task is not declared cancelled.
+
+## 0.2.57 — 2026-10-20
+
+- Keep malformed tool-argument originals and exact syntax diagnostics in the
+  private journal, instead of replaying them as valid assistant tool examples.
+  The next model request receives explicit no-dispatch validation feedback and
+  the error location/source reference, without copying the malformed snippet.
+- Preserve ordinary valid tool exchanges, exact archived responses, one bounded
+  idle JSON correction, repeated-error backoff and all native/stop fences.
+  This prevents a runtime-created bad-example loop; it does not identify the
+  source of the first malformed provider response or certify live error rates.
+
+## 0.2.56 — 2026-10-20
+
+- Let one known, finite native body task receive one bounded planning opportunity
+  before it finishes. The model can read and append one continuation through the
+  existing native queue; it cannot cancel, insert into or replace running work.
+  Two owned tasks, explicit follow/wait, unknown dispatch, feedback, death and
+  provider backoff keep their existing fences. A failed anchor invalidates an
+  unfinished ahead inference.
+- Do not treat conversation while the body is already working as an idle failure.
+  Its reply no longer leaves a no-action timer behind the eventual terminal.
+- Count spatial-answer handoffs separately from help/inventory reads, so those
+  useful reads cannot consume the two prompt spatial continuation slots.
+- Timestamp actual model requests and responses, including rejected/truncated
+  replies, and distinguish ordinary and ahead planning in the existing journal.
+  Offline regressions do not establish live continuity or completed goals.
+
+## 0.2.53 — 2026-10-20
+
+- Pin core 0.5.7-rc.52: a rules-only organization request handles only the
+  specified surplus, without implicitly merging or sorting unrelated stacks.
+- Preserve ordinary organization, explicit merge/sort, strict server slot and
+  cursor confirmation, original failed receipts and no replay of unknown work.
+  The host-neutral planner and model configuration are unchanged.
+
+## 0.2.52 — 2026-10-20
+
+- Pin the independently verified core offhand exchange repair. Stored items use
+  one direct F-key swap, leaving unrelated hotbar shortcuts and selected slots
+  untouched. Refused or unknown exchanges keep the existing strict barrier.
+- Include bounded before/predicted/server stack diagnostics using identity
+  hashes rather than raw private item data. Original receipts are preserved;
+  this dependency update does not change planner policy or restart any host.
+
 ## 0.2.51 — 2026-10-20
 
 - Require validated native effect samples before a completed body request can

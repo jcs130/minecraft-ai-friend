@@ -36,7 +36,18 @@ Rules run in order using fresh player stock. `keep` is the number retained among
 items matching `item` and optional `pick`. Selectors use the same item/category
 and label contracts as existing stow/toss. Disposition includes the 36 carried
 slots, including quickbar, but does not unequip armor or offhand. With no rules,
-nothing is stowed or discarded. Unmentioned items are retained.
+nothing is stowed or discarded. With rules and no explicit `sort` field, only
+those dispositions run: there is no additional whole-bag merging or sorting,
+including when every rule is already satisfied. Unmentioned stacks keep their
+slots. This avoids turning a discard/storage request into an unrelated exchange
+with a server-controlled shortcut item. The core does not infer which items a
+server locks from their name, texture or Minecraft item ID.
+
+To explicitly add arrangement after the rules, use `sort:false` for merging or
+`sort:true` for merging and sorting. Ordinary `organize` without rules keeps its
+existing merge-and-sort default. The preview uses the same choice and shows no
+arrangement moves for a rules-only request; it does not predict the slots freed
+by unexecuted dispositions.
 
 Stow uses normal nearby storage discovery, or `at` for one specified chest,
 or `into:"open"` for the current custom container. `at` and `into` are mutually
@@ -72,3 +83,22 @@ Portable planning is exported from `agent-mc-world/client` and `/extension`:
 `inventoryOrganizationLimit`, `inventoryOrganizationTotals` and their interfaces.
 `/contracts` exports the data interfaces. These functions do not acquire a body,
 click, discover a server or choose a storage/discard policy.
+
+## Rules-only scope correction (0.5.7-rc.52)
+
+A live discard of eleven rotten flesh completed, but the old action then
+implicitly sorted the whole bag. It picked up fourteen bread and attempted an
+unrequested exchange with another occupied slot. The server's complete frame
+kept that slot and the carried bread unchanged; strict confirmation correctly
+stopped subsequent item clicks. No server plugin or lock rule is inferred from
+that response alone.
+
+Rules-only calls now finish after their requested dispositions, including when
+no surplus exists. Native 1.21.1 and 1.20.6 tests reproduce the original rejected
+exchange with an authoritative server fixture, then verify only the requested
+discard occurs. Stow, preview, explicit merge/sort, empty cursor and unchanged
+unrelated slots are checked separately. Pure organize and explicit sorting are
+still available; a server may legitimately reject a requested item move.
+The strict confirmation barrier, unknown-operation quarantine and no-replay
+contract are unchanged. Source tests do not establish deployment, live recovery
+or long-term survival.

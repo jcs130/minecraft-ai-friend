@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from test_controller import choose, setup
+from test_shared_information import MESSAGES
 
 
 def invoke(name, arguments):
@@ -16,6 +17,41 @@ def mixed_tools(bridge):
     bridge.tools.extend([{"name": name, "inputSchema": {"type": "object", "properties": {
         "unload" if name == "mc_blueprint" else "drop": {"type": "string"}}, "additionalProperties": False},
         "_meta": {"agent-mc/v1": {"tags": ["write"]}}} for name in ("mc_blueprint", "mc_map")])
+
+
+@pytest.mark.parametrize('arguments', [{}, {'action': 'list'},
+    {'action': 'search', 'query': 'commission', 'limit': 15}, {'action': 'read', 'id': 'message_42'}, {'id': 'message_42'}])
+def test_feedback_can_read_mixed_tag_message_tool_before_body_plan(framework_module, tmp_path, run_async, arguments):
+    module, bridge, controller = setup(framework_module, tmp_path, None)
+    bridge.tools.append(MESSAGES)
+    controller.feedback_pending = True
+    original = bridge.call
+    async def call(name, args, **metadata):
+        if name == 'mc_messages':
+            bridge.calls.append((name, args, metadata))
+            return {'structuredContent': {'protocol': 'agent-mc/v1', 'text': 'dated server commission instructions'}}
+        return await original(name, args, **metadata)
+    bridge.call = call
+    query = {'id': 'message-query', 'type': 'function', 'function': {'name': 'mc_messages', 'arguments': json.dumps(arguments)}}
+    _, name, args = controller.prepare_call([query], module.model_tools(bridge.tools))
+    result, _, _ = run_async(controller.execute_model_call(name, args))
+    assert not result.get('failed') and controller.read_activity == {'mc_messages': 1}
+    assert bridge.calls[-1][1] == arguments
+    assert controller.feedback_pending and not controller.pending and not controller.native_outcomes
+
+
+@pytest.mark.parametrize('arguments,tags', [({'action': 'review', 'ids': ['message_42']}, ['read', 'write']),
+    ({'action': 'delete'}, ['read', 'write']), ({'action': 'list'}, ['read', 'write', 'act']),
+    ({'action': 'list'}, ['read', 'write', 'speak'])])
+def test_feedback_message_read_exception_keeps_writes_and_effects_blocked(framework_module, tmp_path, arguments, tags):
+    from copy import deepcopy
+    module, bridge, controller = setup(framework_module, tmp_path, None)
+    tool = deepcopy(MESSAGES); tool['_meta']['agent-mc/v1']['tags'] = tags
+    bridge.tools.append(tool); controller.feedback_pending = True
+    call = {'id': 'message-query', 'type': 'function', 'function': {'name': 'mc_messages', 'arguments': json.dumps(arguments)}}
+    with pytest.raises(module.ModelCallRejected):
+        controller.prepare_call([call], module.model_tools(bridge.tools))
+    assert controller.feedback_pending and not bridge.calls
 
 
 @pytest.mark.parametrize("name", ["mc_blueprint", "mc_map"])

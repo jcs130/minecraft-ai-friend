@@ -1,4 +1,5 @@
 import copy
+import json
 
 import pytest
 
@@ -70,7 +71,9 @@ def test_stop_arriving_with_repetitive_response_is_respected(framework_module, t
     module, bridge, controller = setup(framework_module, tmp_path, decide, lambda: stopped[0])
     controller.publish = lambda **values: published.update(values)
     run_async(controller.turn_once("survive", "body contract", module.model_tools(bridge.tools)))
-    assert not (tmp_path / "decisions.jsonl").exists()
+    records = [json.loads(line) for line in (tmp_path / 'decisions.jsonl').read_text(encoding='utf-8').splitlines()]
+    assert len(records) == 1 and records[0]['controller_cancelled'] == 'stopped'
+    assert records[0]['dispatched'] is False and 'response' not in records[0]
     assert not published.get("narration", {}).get("offered")
     assert not controller.pending and not controller.groups
     assert not any(name == "mc_do" for name, _, _ in bridge.calls)

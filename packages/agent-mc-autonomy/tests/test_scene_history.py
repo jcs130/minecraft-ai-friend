@@ -9,6 +9,22 @@ from test_controller import setup
 from agent_mc_autonomy.context import assemble
 
 
+def test_dated_read_answers_reuse_exact_values_and_rebase_after_eviction():
+    from agent_mc_autonomy.scene_history import capture_scene
+    answers = [{'tool': 'mc_bag', 'arguments': {}, 'fresh': False,
+                'answer': {'text': 'Original full inventory. ' * 50}, 'request_id': 'original-read'}]
+    options = dict(context_tokens=131072, reserved_output=8192, context_mode='full', answered_reads=answers)
+    first, _ = assemble('rules', [], 'survive', {'parts': []}, [], [], **options)
+    previous = capture_scene(first)
+    second, _ = assemble('rules', [], 'survive', {'parts': []}, [], [[previous]], **options)
+    assert json.loads(second[-1]['content'])['answered_reads']['pointer'] == '/answered_reads'
+    restored = capture_scene(second)
+    assert json.loads(restored['content'])['answered_reads'] == answers
+    retired, _ = assemble('rules', [], 'survive', {'parts': []}, [], [[restored]], **options)
+    assert json.loads(capture_scene(retired)['content'])['answered_reads'] == answers
+    assert answers[0]['fresh'] is False
+
+
 def test_full_controller_preserves_the_actual_input_scene(framework_module, tmp_path, run_async):
     captured = []
 

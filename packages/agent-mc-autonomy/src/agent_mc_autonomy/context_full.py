@@ -24,7 +24,7 @@ from .scene_history import make_scene, project_messages
 
 
 def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output,
-                  planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None,
+                  planner_notice=None, fast_focus=None, tool_failure=None, read_activity=None, answered_reads=None,
                   native_outcomes=None, context_counter=None, host_context=None, recent_context=None, death_memory=None,
                   context_history_headroom_tokens=0):
     """Preserve supplied text/fields, complete exchanges and stable-prefix caching.
@@ -55,6 +55,7 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
             "originals": "mc_protocol(protocol=agent-mc/v1,action=facts/archive); mc_original(handle=original,offset=0,limit=1000)"}
     for key, value in (("planner_notice", planner_notice), ("fast_focus", fast_focus), ("tool_failure", tool_failure),
                        ("read_activity", read_progress(read_activity)),
+                       ("answered_reads", answered_reads),
                        ("recent_native_outcomes", native_outcomes), ("death_memory", death_memory),
                        ("host_context", host_context.get("dynamic") if host_context else None)):
         if value:
@@ -99,6 +100,9 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
             del tail[key]
             tail["context_omissions"]["sections"].append(key)
             measure()
+    while tail.get("answered_reads") and total > context_tokens:
+        tail["answered_reads"].pop(0)
+        measure()
     priority = {key: rank for rank, key in enumerate(("body", "health", "place", "gear", "inventoryIds", "foodReserve", "queue", "life", "serverFeedback", "messages", "lastTask"))}
     for part in sorted(list(tail["current_facts"]), key=lambda p: priority.get(p["key"], len(priority)), reverse=True):
         if total <= context_tokens:
@@ -140,5 +144,6 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
                    "first_history_group_sha256": hashlib.sha256(encode(history[0]).encode()).hexdigest() if history else None},
         "event_delivery": {"available": len(events), "included": len(included), "omitted": len(events) - len(included),
             "included_indices": included, "included_refs": [{"run": events[i].get("run"), "cursor": events[i].get("cursor")} for i in included]},
+        "answered_reads": {"available": len(answered_reads or []), "included": len(tail.get("answered_reads", []))},
         "superseded_rejected_plans": 0, "host_context": {"persona": bool(host_context and host_context.get("stable", {}).get("persona")),
             "memories": len(dynamic.get("memories", [])), "current_intent": bool(dynamic.get("current_intent"))}, "host_recent_context": recent_diagnostic}

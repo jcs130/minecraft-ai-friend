@@ -1,5 +1,30 @@
 # Agent MC Autonomy
 
+0.2.55 reports a rejected tool JSON's exact parser location and bounded raw
+excerpt in the next selected planner notice, so window eviction cannot leave
+only a generic error. One first, known no-dispatch syntax error can request an
+immediate correction when the body is idle; repeated invalid replies retain
+normal bounded backoff. Native pending/unknown work and stop still fence it.
+Arguments are never repaired, guessed or executed automatically.
+
+0.2.54 carries still-applicable, dated generic bag/queue/failure answers in the
+selected context even when their original conversation exchange was evicted.
+State, scope, expiry and running-work fences remain intact; a retained answer
+does not reopen a window or establish current permissions. The first two new
+completed spatial reads since measured body progress can hand off without the
+ordinary event throttle. Longer scan chains and failure backoff remain bounded;
+no action is selected or replayed automatically. Original journals stay intact.
+
+0.2.53 pins the shared core's rules-only organization correction. Discard/stow
+rules no longer imply rearranging unrelated inventory slots. Explicit merging
+and sorting remain available; server confirmation and unknown-operation
+quarantine are unchanged. This update does not itself recover an old cursor,
+restart a host or establish a survival/performance improvement.
+
+0.2.52 pins the shared core's direct stored-item/offhand exchange and bounded
+stack-difference diagnostics. No unrelated hotbar slot is borrowed; server
+confirmation, unknown-result protection and original receipts remain strict.
+
 0.2.51 also keeps a preceding native failure after a completed body request
 whose effect is unchanged, unknown, absent or inconsistent with its samples.
 Only validated native change can retire that context. Later actions remain

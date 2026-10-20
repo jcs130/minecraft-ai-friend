@@ -16,6 +16,22 @@ test('extension may supplement own HUD only; never identity, pose, inventory or 
   assert.equal(result.profile,'vanilla_1.21.1','an optional server HUD does not change the actual vanilla item/renderer registry');
   assert.equal(mergePresentation(base,{...extra,playerUuid:'other'},bot),base);
 });
+
+test('an appearance-only pack projection does not manufacture live server vitals or skills',()=>{
+  const bot={_client:{uuid:'body'}},base={playerUuid:'body',self:{playerUuid:'body',health:22,maxHealth:1},
+    inventory:{original:true},skills:null};
+  const extra={schemaVersion:1,playerUuid:'body',source:'same_player_observed_item_profile',serverItemPackId:'fixture-items'};
+  const result=mergePresentation(base,extra,bot);
+  assert.deepEqual(result.self,base.self);assert.equal(result.skills,null);assert.equal(result.inventory,base.inventory);
+  assert.equal(result.serverItemPackId,'fixture-items');
+  assert.equal(mergePresentation(base,{...extra,playerUuid:'other'},bot),base);
+  // The real vanilla provider omits skills entirely. An own undefined field is
+  // rejected by the viewer's bounded presentation codec, losing the inventory.
+  const vanilla={...base};delete vanilla.skills;
+  const literal=mergePresentation(vanilla,extra,bot);
+  assert.equal(Object.hasOwn(literal,'skills'),false,'absent extension data must remain absent, never undefined');
+  assert.deepEqual(literal,JSON.parse(JSON.stringify(literal)),'every value must survive the actual JSON transport');
+});
 test('resource catalog and bounded read-only refresh options are bound to the selected module',async t=>{
   const dir=await mkdtemp(join(tmpdir(),'mc-server-resource-port-'));t.after(()=>rm(dir,{recursive:true,force:true}));
   const catalog='{"schemaVersion":1,"items":[]}',catalogHash=createHash('sha256').update(catalog).digest('hex');

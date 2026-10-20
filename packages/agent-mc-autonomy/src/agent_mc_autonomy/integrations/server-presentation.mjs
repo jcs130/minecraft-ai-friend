@@ -37,5 +37,6 @@ export function mergePresentation(base,extension,bot) {
     ['health','maxHealth','food','armor','absorption','oxygen','inWater','experienceLevel','experienceProgress']
       .filter(key=>Object.hasOwn(extension.self,key)).map(key=>[key,extension.self[key]])):{};
   const pack=typeof extension.serverItemPackId==='string'&&/^[a-z0-9_.-]{1,80}$/.test(extension.serverItemPackId)?extension.serverItemPackId:null;
-  return {...base,self:{...base.self,...self,playerUuid:uuid},skills:extension.skills??base.skills,serverItemPackId:pack};
+  return {...base,self:{...base.self,...self,playerUuid:uuid},
+    ...(extension.skills!=null?{skills:extension.skills}:{}),serverItemPackId:pack};
 }
