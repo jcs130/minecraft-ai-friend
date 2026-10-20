@@ -1,5 +1,11 @@
 # Agent MC World
 
+`0.5.7-rc.54` includes the current scoped goal ledger and its milestones in
+`requestFacts().parts` as `goals`. SDK/MCP hosts no longer need an environment
+prompt refresh to observe a newly registered or revised project. This reads the
+existing table without a scan, model call, task dispatch or completion claim;
+the table remains session-local and durable project notes belong in game memory.
+
 `0.5.7-rc.50` fixes the shared skill-field schema union: an enum from one
 skill no longer restricts another skill's free-text field. In particular,
 `organize.target=inventory/open` cannot reject `find.target=oak_log` or an
