@@ -616,6 +616,11 @@ class Controller:
                            for row in self.native_outcomes):
                     self.pending[key] = execution
             self.persist(pending=list(self.pending.values()))
+            # Facts/voice heartbeats can keep status.json fresh while its old
+            # request-start pending projection remains accepted for minutes.
+            # Publish only after the durable barrier, without waiting for LLM
+            # completion or issuing a new native queue read.
+            self.publish(pending=list(self.pending.values()))
         for event in value.get("events", []):
             if event.get("contextDelivery") == "archive-only" or event.get("meta", {}).get("staleEpoch"):
                 continue

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.72
+
+- Publish the actual pending set immediately after persisting a native receipt. A completed task no longer remains publicly accepted during the next slow inference; late acceptances still cannot resurrect it and unknown/barrier semantics are unchanged.
+
 ## 0.2.71
 
 - Pin the native capture terrain-readiness correction: early hands/entities-only frames do not establish a rendered world. The 0/N loading counter is a rejection, not a successful photograph.

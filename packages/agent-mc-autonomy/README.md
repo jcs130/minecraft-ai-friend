@@ -1,5 +1,9 @@
 # Agent MC Autonomy
 
+0.2.72 refreshes the public pending set immediately after durable native
+receipt processing, including while an unrelated model request is still slow.
+It does not read a second queue, retire unknown outcomes or replay work.
+
 0.2.70 also binds the optional native viewer to the core camera port for the
 same live body. It revokes stale attachments before reconnect/stop; no second
 viewer or game connection is started. Actual native photographs support
