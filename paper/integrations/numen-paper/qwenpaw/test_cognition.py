@@ -3,7 +3,7 @@ import asyncio
 import json
 import unittest
 from types import SimpleNamespace as NS
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from agentscope.message import ToolCallBlock
 from qwenpaw.runtime.builder import AgentBuilder
@@ -26,6 +26,41 @@ class Cognition(unittest.IsolatedAsyncioTestCase):
         if tools is not None:
             ctx.request.request_context["subagent_allowed_tools"] = tools
         return ctx
+
+    async def test_late_enabled_workspace_gets_snapshot_with_native_config_gates(self):
+        from qwenpaw.app.workspace.local_workspace import QwenPawLocalWorkspace
+        from qwenpaw.runtime.tool_registry import ToolDescriptor, ToolRegistry
+        descriptor = ToolDescriptor(name="qiandengji_snapshot", func=game.qiandengji_snapshot,
+                                    enabled_by_default=False)
+        with patch.object(game.qiandengji_snapshot, "_tool_descriptor", descriptor, create=True):
+            for enabled in (True, False):
+                registry = ToolRegistry()
+                ctx = self.review("late-"+str(enabled))
+                ctx.workspace = NS(plugins=NS(tool_registry=registry))
+                await game.GameEnter().run(ctx)
+                adapter = QwenPawLocalWorkspace(registry, workdir=str(self.workspace))
+                tools = await adapter.list_tools(agent_config=NS(tools=NS(builtin_tools={
+                    "qiandengji_snapshot": NS(enabled=enabled)})),
+                    request_context=ctx.request.request_context)
+                self.assertEqual([tool.name for tool in tools], ["qiandengji_snapshot"] if enabled else [])
+                self.assertIs(registry.get("qiandengji_snapshot").func, game.qiandengji_snapshot)
+                await game.GameLeave().run(ctx)
+
+    async def test_reloaded_workspace_replaces_only_stale_snapshot_descriptor(self):
+        from qwenpaw.runtime.tool_registry import ToolDescriptor, ToolRegistry
+        registry = ToolRegistry()
+        old = lambda: None
+        other = ToolDescriptor(name="other_plugin", func=old)
+        registry.register(ToolDescriptor(name="qiandengji_snapshot", func=old))
+        registry.register(other)
+        descriptor = ToolDescriptor(name="qiandengji_snapshot", func=game.qiandengji_snapshot,
+                                    enabled_by_default=False)
+        with patch.object(game.qiandengji_snapshot, "_tool_descriptor", descriptor, create=True):
+            workspace = NS(plugins=NS(tool_registry=registry))
+            game.ensure_snapshot_registration(workspace)
+            game.ensure_snapshot_registration(workspace)
+        self.assertIs(registry.get("qiandengji_snapshot"), descriptor)
+        self.assertIs(registry.get("other_plugin"), other)
 
     async def test_review_does_not_wait_for_body_and_keeps_own_session(self):
         body = self.context()

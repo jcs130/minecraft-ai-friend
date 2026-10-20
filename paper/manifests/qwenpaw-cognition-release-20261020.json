@@ -1,0 +1,60 @@
+{
+  "status": "released",
+  "at": 1792512082.0491033,
+  "qwenpaw": "2.2.2",
+  "plugin": "0.2.1",
+  "paperRestarted": false,
+  "qwenpawNormallyRestarted": true,
+  "nativeApiPatchReload": true,
+  "deployedPayloadFiles": {
+    "AGENTS.md": "cb051d2cc3d39762fa97a5c6dc26bcdadaa463483245a57d5b70a2b3cf3985ba",
+    "cognition_profile.py": "a4b656a967c9bc6e57d92e0a9e152fc99254f3b02731adcaf28c7054e2fed8f7",
+    "numen_controller.py": "ae1e17e6286d6b9027026c3c17ae90e4176c5ac010cae14237f88b1692efd48b",
+    "options.json": "4ad12d671cdf0ffa40c5144e8a4a3b9948166ab07329d50c409a5845c4ce2b67",
+    "native_plugin/plugin.json": "157f13026b88414c3299d90c8f58af6620b12bf9a7821a283d42b2eabe016cd7",
+    "native_plugin/plugin.py": "5ce7c5b11576adf5d0e9212a5b7724fa7e4283a561e6f8a4579df1cae7fcd4dd",
+    "skills/qiandengji-start/SKILL.md": "bddc06998c42d59ccbf560ce768db26a24f778732e351a4d6f0aeebd1557e364"
+  },
+  "sourceFiles": {
+    "paper/integrations/numen-paper/qwenpaw/native_plugin/plugin.py": "5ce7c5b11576adf5d0e9212a5b7724fa7e4283a561e6f8a4579df1cae7fcd4dd",
+    "paper/integrations/numen-paper/qwenpaw/native_plugin/plugin.json": "157f13026b88414c3299d90c8f58af6620b12bf9a7821a283d42b2eabe016cd7",
+    "paper/integrations/numen-paper/qwenpaw/test_cognition.py": "61c442d80f88fd3b80e89c1b1a40051c510f43f3b76a9b70eefc11246c0a0a17"
+  },
+  "tests": {
+    "unitPassed": 70,
+    "oldLiveTestsSkipped": 6,
+    "productionBodyChecks": 12,
+    "bodyMcpTools": 8,
+    "readCommands": 3,
+    "nativeBackgroundSnapshotsAndMemory": true,
+    "independentReviewTasksSkillsMemory": true,
+    "sharedModelConcurrentRequests": true,
+    "fastRequestSeconds": 4.04,
+    "reviewRequestSeconds": 14.59,
+    "nativeMemoryFreshProcess": true,
+    "scrollHistoryCrossSessionIsolated": true,
+    "coldDualDiskBackupsVerified": 3
+  },
+  "limits": {
+    "analysisSessions": 2,
+    "analysisIterations": 6,
+    "analysisTimeoutSeconds": 180,
+    "requestedSharedModelConcurrency": 3,
+    "sharedModelQpmUnchanged": 12,
+    "memoryMaxResults": 2,
+    "memoryMaxBytes": 6000
+  },
+  "earlyFailuresPreserved": [
+    "Windows session-local graceful event and elevation cancellation",
+    "Older role baseline differs by recorded gameplay progress and wand presentation; no save rollback",
+    "Skills receipt is MC_PAGE kind=skills, not MC_SKILL",
+    "Late workspace plugin descriptor omission fixed in 0.2.1"
+  ],
+  "knownLimits": [
+    "ReMe notes preserved, not bulk migrated",
+    "No 16 autonomous Agent endurance test",
+    "No remote Web/OBS consumer deployment",
+    "Snapshots can become stale; revalidate before action",
+    "Shared model limits are not per-role reserved slots"
+  ]
+}

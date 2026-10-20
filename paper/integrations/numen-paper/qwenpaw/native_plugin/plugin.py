@@ -305,6 +305,24 @@ def get_lane(workspace: Path, cfg: dict) -> BodyLane:
     return _LANES[key]
 
 
+def ensure_snapshot_registration(workspace):
+    # QwenPaw 2.2.2's startup bridge injects plugin tools only into already
+    # published workspaces. A role enabled later (or a replacement not yet
+    # published during reload) can retain its config but lose this descriptor.
+    # Restore this plugin's governed descriptor before native toolkit building;
+    # normal config/whitelist gates still decide whether it is exposed.
+    registry = getattr(getattr(workspace, "plugins", None), "tool_registry", None)
+    descriptor = getattr(qiandengji_snapshot, "_tool_descriptor", None)
+    if registry is None or descriptor is None:
+        return
+    current = registry.get("qiandengji_snapshot")
+    if current is not None and current.func is qiandengji_snapshot:
+        return
+    if current is not None:
+        registry.unregister("qiandengji_snapshot")
+    registry.register(descriptor)
+
+
 class GameEnter(HookBase):
     phase = Phase.PRE_DISPATCH
     name = "qiandengji_body_enter"
@@ -314,6 +332,7 @@ class GameEnter(HookBase):
         cfg = read_config(Path(ctx.workspace_dir)) if ctx.workspace_dir else None
         if not cfg:
             return HookResult()
+        ensure_snapshot_registration(getattr(ctx, "workspace", None))
         lane = get_lane(Path(ctx.workspace_dir), cfg)
         request_context = getattr(ctx.request, "request_context", None) or {}
         ctx.request.request_context = request_context
