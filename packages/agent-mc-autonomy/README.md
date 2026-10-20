@@ -1,5 +1,9 @@
 # Agent MC Autonomy
 
+0.2.52 pins the shared core's direct stored-item/offhand exchange and bounded
+stack-difference diagnostics. No unrelated hotbar slot is borrowed; server
+confirmation, unknown-result protection and original receipts remain strict.
+
 0.2.51 also keeps a preceding native failure after a completed body request
 whose effect is unchanged, unknown, absent or inconsistent with its samples.
 Only validated native change can retire that context. Later actions remain

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.52 — 2026-10-20
+
+- Pin the independently verified core offhand exchange repair. Stored items use
+  one direct F-key swap, leaving unrelated hotbar shortcuts and selected slots
+  untouched. Refused or unknown exchanges keep the existing strict barrier.
+- Include bounded before/predicted/server stack diagnostics using identity
+  hashes rather than raw private item data. Original receipts are preserved;
+  this dependency update does not change planner policy or restart any host.
+
 ## 0.2.51 — 2026-10-20
 
 - Require validated native effect samples before a completed body request can
