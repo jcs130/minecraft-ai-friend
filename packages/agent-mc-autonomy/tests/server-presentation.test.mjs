@@ -25,6 +25,12 @@ test('an appearance-only pack projection does not manufacture live server vitals
   assert.deepEqual(result.self,base.self);assert.equal(result.skills,null);assert.equal(result.inventory,base.inventory);
   assert.equal(result.serverItemPackId,'fixture-items');
   assert.equal(mergePresentation(base,{...extra,playerUuid:'other'},bot),base);
+  // The real vanilla provider omits skills entirely. An own undefined field is
+  // rejected by the viewer's bounded presentation codec, losing the inventory.
+  const vanilla={...base};delete vanilla.skills;
+  const literal=mergePresentation(vanilla,extra,bot);
+  assert.equal(Object.hasOwn(literal,'skills'),false,'absent extension data must remain absent, never undefined');
+  assert.deepEqual(literal,JSON.parse(JSON.stringify(literal)),'every value must survive the actual JSON transport');
 });
 test('resource catalog and bounded read-only refresh options are bound to the selected module',async t=>{
   const dir=await mkdtemp(join(tmpdir(),'mc-server-resource-port-'));t.after(()=>rm(dir,{recursive:true,force:true}));

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.62 — 2026-10-20
+
+- Preserve omitted native presentation fields when merging an appearance-only
+  optional pack. A missing skills reading no longer inserts `undefined` and
+  causes the bounded viewer codec to reject the complete same-player inventory.
+
 ## 0.2.61 — 2026-10-20
 
 - Pin shared renderer `d13246f7` and its exact source inventory/builds. Native
