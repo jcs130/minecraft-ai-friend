@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.53 — 2026-10-20
+
+- Pin core 0.5.7-rc.52: a rules-only organization request handles only the
+  specified surplus, without implicitly merging or sorting unrelated stacks.
+- Preserve ordinary organization, explicit merge/sort, strict server slot and
+  cursor confirmation, original failed receipts and no replay of unknown work.
+  The host-neutral planner and model configuration are unchanged.
+
 ## 0.2.52 — 2026-10-20
 
 - Pin the independently verified core offhand exchange repair. Stored items use

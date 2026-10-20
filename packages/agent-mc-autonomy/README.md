@@ -1,5 +1,11 @@
 # Agent MC Autonomy
 
+0.2.53 pins the shared core's rules-only organization correction. Discard/stow
+rules no longer imply rearranging unrelated inventory slots. Explicit merging
+and sorting remain available; server confirmation and unknown-operation
+quarantine are unchanged. This update does not itself recover an old cursor,
+restart a host or establish a survival/performance improvement.
+
 0.2.52 pins the shared core's direct stored-item/offhand exchange and bounded
 stack-difference diagnostics. No unrelated hotbar slot is borrowed; server
 confirmation, unknown-result protection and original receipts remain strict.
