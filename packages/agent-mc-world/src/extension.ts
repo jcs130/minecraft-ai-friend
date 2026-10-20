@@ -56,8 +56,6 @@ export * from './contracts/options.ts';
 export { createMinecraftChoiceTool } from './client/choice.ts';
 export { minecraftLifeTool } from './client/life.ts';
 export { PhotographyService, PHOTO_TOOL, PHOTO_PLANNER_SYSTEM, preparePhotoContext } from '../core/photography.ts';
-export { createImageGenerationPort, PHOTOGRAPHY_DEFAULTS } from '../core/image-generation.ts';
-export { buildFlux3Graph, validateFlux3Configuration } from '../core/comfy-flux3.ts';
 export { renderVoxelPhoto } from '../core/voxel-photo.ts';
 export * from './contracts/photography.ts';
 export * from '../core/voxel-scene.ts';
@@ -66,3 +64,5 @@ export { bindNativeGuiPresentation, nativeGuiPresented, type NativeGuiPresentati
 export { planInventoryOrganization, inventoryOrganizationKey, inventoryOrganizationLimit, inventoryOrganizationTotals,
   type InventoryOrganization, type InventoryDisposition, type OrganizationStack, type OrganizationMove,
   type InventoryOrganizationPlan } from '../core/inventory-organization.ts';
+
+export { PHOTOGRAPHY_DEFAULTS } from '../core/photo-image.ts';

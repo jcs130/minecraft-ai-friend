@@ -8,7 +8,7 @@ import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger } from '../
 import { MinecraftClientWorld } from '../src/client/world.ts';
 import { createMinecraftMcpServer } from '../src/mcp/server.ts';
 
-it('transfers uploaded reference images, originals and native completion receipts through a real offline engine child', async () => {
+it('transfers originals and artifact handles, and rejects relocated creation through a real offline engine child', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'mc-photo-ipc-')), previous = process.env.NODE_OPTIONS;
   process.env.NODE_OPTIONS = `--import=${new URL('./fixtures/deny-network.mjs', import.meta.url).href}`;
   const cfg = { ...structuredClone(MINECRAFT_CLIENT_DEFAULTS), host: 'offline.invalid', username: 'Fixture',
@@ -26,21 +26,13 @@ it('transfers uploaded reference images, originals and native completion receipt
     const uploaded = await client.callTool({ name: 'mc_artifact', arguments: { action: 'put', mime: image.mimeType, base64: image.data } });
     expect(uploaded.isError).not.toBe(true);
     const reference = JSON.parse((uploaded.content as any[])[0].text);
-    const request = { action: 'enhance', source_id: body.execution.id, prompt: 'Improve the captured village, preserving its scene', reference_handles: [reference.handle], request_id: 'photo-ipc-2' };
-    const accepted = await client.callTool({ name: 'mc_photo', arguments: request });
-    expect(accepted.isError).not.toBe(true);
-    const job = (accepted.structuredContent as any).execution;
-    expect(job).toMatchObject({ terminal: false, goalCompleted: false });
-    let cursor = 0, completion: any;
-    for (let i = 0; i < 20 && !completion; i++) {
-      const events = await runtime.events({ after: cursor, run: runtime.journal.run, waitMs: 100 }); cursor = events.nextCursor;
-      completion = events.events.find(event => event.type === 'minecraft.photo');
-    }
-    expect(completion).toMatchObject({ execution: { id: job.id, terminal: true, phase: 'completed', goalCompleted: false },
-      meta: { photography: { providerRequestId: 'native-ipc-request', usage: { generated_images: 1 } } } });
-    expect(runtime.journal.blob(completion.blobs[0].handle)?.mime).toBe('image/png');
-    const dedup = await client.callTool({ name: 'mc_photo', arguments: request });
-    expect((dedup.structuredContent as any).meta.photography.usage.generated_images).toBe(1);
+    expect(runtime.journal.blob(reference.handle)?.mime).toBe('image/png');
+    const original = await client.callTool({ name: 'mc_photo', arguments: { action: 'read', id: body.execution.id } });
+    expect(original.isError).not.toBe(true);
+    expect((original.content as any[]).find(v => v.type === 'image').data).toBe(image.data);
+    const moved = await client.callTool({ name: 'mc_photo', arguments: { action: 'enhance', source_id: body.execution.id, request_id: 'old-call', prompt: 'a village' } });
+    expect(moved.isError).toBe(true);
+    expect(JSON.parse((moved.content as any[]).find(v => v.type === 'text').text).code).toBe('capability_moved');
     const invalid = await client.callTool({ name: 'mc_artifact', arguments: { action: 'put', mime: 'image/png', base64: Buffer.from('not an image').toString('base64') } });
     expect(invalid.isError).toBe(true);
   } finally {

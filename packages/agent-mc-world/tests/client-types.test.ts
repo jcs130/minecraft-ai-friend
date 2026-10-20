@@ -50,7 +50,7 @@ it.each(['Bundler','NodeNext'] as const)('consumes published declarations in %s 
     const nativeAction: JavaClientAction = {id:'id',operation:'move',phase:'unknown',acceptedAt:0,updatedAt:0};
     const nativeState: JavaClientState = {protocol:JAVA_CLIENT_PROTOCOL,connected:false,server:'',sampledAt:'now',generation:0,actions:[nativeAction],messages:[]};
     void body;void nativeState;
-    import { PhotographyService, createImageGenerationPort, preparePhotoContext,
+    import { PhotographyService, preparePhotoContext,
       type PhotoRecord, type ImageGenerationPort, type PhotographyConfig } from '../dist/types/src/client/index.js';
     import { PHOTOGRAPHY_PROTOCOL, type PhotoCapture } from '../dist/types/src/contracts/index.js';
     const config: PhotographyConfig = { provider:'none', endpoint:'', model:'', apiKeyEnv:'', generate:true, edit:true, maxReferences:3, timeoutMs:600000, resultHosts:'' };
@@ -58,7 +58,7 @@ it.each(['Bundler','NodeNext'] as const)('consumes published declarations in %s 
       flux3:{unet:'unet.safetensors',clip:'clip.safetensors',vae:'vae.safetensors',steps:16,width:1280,height:704},
       voxel:{rendererSource:'/explicit/shared-renderer',assetPack:'/explicit/original-assets',threeModule:'/explicit/three.module.js',radius:24,below:8,above:24,cameraOffset:[3,3,4]}};
     void localPhoto;
-    const port: ImageGenerationPort | null = createImageGenerationPort(config);
+    const port: ImageGenerationPort | null = null;
     const photo: PhotoRecord = { schema:PHOTOGRAPHY_PROTOCOL, id:'id', action:'capture', phase:'completed', createdAt:'now', updatedAt:'now' };
     const capture: PhotoCapture = { bytes:new Uint8Array(), mime:'image/png', captureId:'id', capturedAt:'now', sampledAt:'now', facts:{} };
     const photos = new PhotographyService({capture:async()=>capture,provider:()=>port});

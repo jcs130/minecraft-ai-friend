@@ -1,5 +1,5 @@
 import type { VoxelScene } from './voxel-scene.ts';
-/** Host-neutral image generation port. Calling it is always an explicit host action. */
+/** Minecraft captures and legacy archive types. Creation execution lives in cortico-world-aigc. */
 export const PHOTOGRAPHY_PROTOCOL = 'agent-mc-photo/v1' as const;
 export interface PhotoImage { bytes: Uint8Array; mime: string }
 export interface PhotoCapture extends PhotoImage {
@@ -11,6 +11,7 @@ export interface PhotoCapture extends PhotoImage {
   proxy?: PhotoImage;
   sceneRender?: Record<string, unknown>;
 }
+/** @deprecated Import image creation contracts from cortico-world-aigc/contracts. */
 export interface ImageGenerationRequest {
   prompt: string;
   /** Ordered inputs: scene first for enhancement, then character references. */
@@ -26,13 +27,14 @@ export interface ImageGenerationPort {
   capabilities: { generate: boolean; edit: boolean; maxReferences: number };
   generate(request: ImageGenerationRequest, signal: AbortSignal): Promise<ImageGenerationResult>;
 }
+/** Legacy provider fields are accepted for migration only and never used for inference. Configure generation in AIGC. */
 export interface PhotographyConfig {
-  provider: 'none' | 'bailian' | 'volcengine' | 'comfyui-flux3';
+  provider?: 'none' | 'bailian' | 'volcengine' | 'comfyui-flux3';
   /** Full API URL, not a guessed/discovered service address. */
-  endpoint: string; model: string; apiKeyEnv: string;
-  generate: boolean; edit: boolean; maxReferences: number; timeoutMs: number;
+  endpoint?: string; model?: string; apiKeyEnv?: string;
+  generate?: boolean; edit?: boolean; maxReferences?: number; timeoutMs?: number;
   /** Comma-separated exact output download hosts; required for URL-only responses. */
-  resultHosts: string;
+  resultHosts?: string;
   /** Explicit installed models. No download, checkpoint guessing or prompt upsampler. */
   flux3?: Flux3Configuration;
   /** Enables availability only. Ordinary capture/enhance still defaults to screenshots. */

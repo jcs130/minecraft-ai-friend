@@ -39,8 +39,6 @@ export { MethodLibrary, METHOD_LIBRARY_SCHEMA, type MethodReview } from '../../c
 export { OperationExperienceBook, experienceHash, operationObservation, operationScopeKey,
   type OperationExperience, type OperationObservation, type OperationDecision, type OperationAttribution } from '../../core/operation-experience.ts';
 export { PhotographyService, PHOTO_TOOL, PHOTO_PLANNER_SYSTEM, preparePhotoContext, type PhotographyOptions } from '../../core/photography.ts';
-export { createImageGenerationPort, PHOTOGRAPHY_DEFAULTS } from '../../core/image-generation.ts';
-export { buildFlux3Graph, validateFlux3Configuration } from '../../core/comfy-flux3.ts';
 export { renderVoxelPhoto } from '../../core/voxel-photo.ts';
 export * from '../contracts/photography.ts';
 export * from '../../core/voxel-scene.ts';
@@ -48,3 +46,5 @@ export { learningHelp, type ArtifactRef, type SourceRef } from '../../core/game-
 export { planInventoryOrganization, inventoryOrganizationKey, inventoryOrganizationLimit, inventoryOrganizationTotals,
   type InventoryOrganization, type InventoryDisposition, type OrganizationStack, type OrganizationMove,
   type InventoryOrganizationPlan } from '../../core/inventory-organization.ts';
+
+export { PHOTOGRAPHY_DEFAULTS } from '../../core/photo-image.ts';

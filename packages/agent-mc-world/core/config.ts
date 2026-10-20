@@ -1,7 +1,7 @@
 import type { ConfigGroup } from './support/host-contract.ts';
 import { GAME_MEMORY_DEFAULTS, GAME_MEMORY_CONFIG_SCHEMA } from './game-memory-service.ts';
 import { COMBAT_EXECUTION_DEFAULTS } from './combat-decision-types.ts';
-import { PHOTOGRAPHY_DEFAULTS } from './image-generation.ts';
+import { PHOTOGRAPHY_DEFAULTS } from './photo-image.ts';
 
 
 export const MINECRAFT_DEFAULTS = {
@@ -360,25 +360,6 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
         type: 'boolean', title: '操作前查询方块保护', 'x-hot': true,
         description: '默认关闭：正常挖掘、放置和寻路不发保护查询；操作未获服务端确认后按目标诊断。已明确拒绝的目标仍跳过。',
       },
-      'worlds.minecraft.photography.provider': { type: 'string', title: '绘图服务', enum: ['none', 'bailian', 'volcengine', 'comfyui-flux3'], 'x-hot': true,
-        description: '默认关闭生成。FLUX 3、阿里或字节只在明确选择增强/创作时调用，普通拍照不受影响。' },
-      'worlds.minecraft.photography.endpoint': { type: 'string', title: '绘图 API 完整地址', 'x-hot': true },
-      'worlds.minecraft.photography.model': { type: 'string', title: '绘图模型 / 接入点 ID', 'x-hot': true },
-      'worlds.minecraft.photography.apiKeyEnv': { type: 'string', title: '绘图 Key 的环境变量名', 'x-hot': true,
-        description: '填写变量名，密钥放在运行进程的环境中；不在配置或提示词中保存密钥。' },
-      'worlds.minecraft.photography.generate': { type: 'boolean', title: '允许原创绘图', 'x-hot': true },
-      'worlds.minecraft.photography.edit': { type: 'boolean', title: '允许照片增强 / 参考图', 'x-hot': true },
-      'worlds.minecraft.photography.maxReferences': { type: 'integer', title: '模型参考图上限', minimum: 1, maximum: 14, 'x-hot': true },
-      'worlds.minecraft.photography.timeoutMs': { type: 'integer', title: '绘图等待上限', minimum: 1000, maximum: 1800000, 'x-hot': true },
-      'worlds.minecraft.photography.resultHosts': { type: 'string', title: '绘图结果下载域名', 'x-hot': true,
-        description: '逗号分隔的精确域名。阿里返回临时 URL 时需要；下载不携带 API Key，不跟随跳转。' },
-      'worlds.minecraft.photography.flux3.unet': { type: 'string', title: 'FLUX 3 UNET 文件名', 'x-hot': true },
-      'worlds.minecraft.photography.flux3.clip': { type: 'string', title: 'FLUX 3 文本编码器文件名', 'x-hot': true },
-      'worlds.minecraft.photography.flux3.vae': { type: 'string', title: 'FLUX 3 VAE 文件名', 'x-hot': true },
-      'worlds.minecraft.photography.flux3.steps': { type: 'integer', minimum: 16, maximum: 16, title: 'FLUX 3 蒸馏步数', 'x-hot': true },
-      'worlds.minecraft.photography.flux3.width': { type: 'integer', minimum: 256, maximum: 2048, title: 'FLUX 3 宽度（16的倍数）', 'x-hot': true },
-      'worlds.minecraft.photography.flux3.height': { type: 'integer', minimum: 256, maximum: 2048, title: 'FLUX 3 高度（16的倍数）', 'x-hot': true },
-      'worlds.minecraft.photography.flux3.seed': { type: 'integer', minimum: 0, title: 'FLUX 3 种子', 'x-hot': true },
       'worlds.minecraft.photography.voxel.rendererSource': { type: 'string', title: '可选体素摄影：共享渲染器源码目录', 'x-hot': true },
       'worlds.minecraft.photography.voxel.assetPack': { type: 'string', title: '可选体素摄影：匹配原版素材目录', 'x-hot': true },
       'worlds.minecraft.photography.voxel.threeModule': { type: 'string', title: '可选体素摄影：Three.js 模块路径', 'x-hot': true },

@@ -43,7 +43,6 @@ import { captureMinecraftView, closeMinecraftViewCapture, warmMinecraftViewCaptu
 import { PhotographyService, PHOTO_TOOL } from './photography.ts';
 import { captureVoxelScene } from './voxel-scene.ts';
 import { renderVoxelPhoto } from './voxel-photo.ts';
-import { createImageGenerationPort } from './image-generation.ts';
 import { OVERVIEW_SCHEMA, overviewArgumentError, type OverviewOptions } from './visual-overview.ts';
 import { visualFovError } from './visual-fov.ts';
 import { PlayerObservations, playerObservationMeta, renderPlayerObservation, type PlayerObservation } from './player-observation.ts';
@@ -2891,7 +2890,6 @@ export class MinecraftWorld implements World {
     this.dataDir = opts.dataDir ?? '';
     this.photography = new PhotographyService({
       directory: this.dataDir ? join(this.dataDir, 'minecraft-photos') : undefined,
-      provider: () => createImageGenerationPort(this.cfg.photography),
       capture: (args, signal) => this.capturePhoto(args, signal),
       voxelAvailable: () => !!(this.cfg.photography?.voxel?.rendererSource && this.cfg.photography.voxel.assetPack && this.cfg.photography.voxel.threeModule),
     });

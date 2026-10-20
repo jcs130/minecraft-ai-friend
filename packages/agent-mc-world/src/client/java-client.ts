@@ -5,7 +5,6 @@ import type { ToolDef, ToolOutcome, ToolCallContext, WorldHost, WorldRequestFact
 import type { MinecraftClientConfig } from './config.ts';
 import { PhotographyService, PHOTO_TOOL } from '../../core/photography.ts';
 import { KNOWLEDGE_TOOL, readMinecraftKnowledge } from '../../core/knowledge.ts';
-import { createImageGenerationPort } from '../../core/image-generation.ts';
 import { serveNativeView } from './native-view.ts';
 import { createJavaDataViewer, type JavaDataViewerHandle } from '../../core/java-data-viewer.mjs';
 import type { Server } from 'node:http';
@@ -31,7 +30,7 @@ mc_messages is a retained, scoped index of messages received while attached. Que
 When the host supplies dataDir, mc_memory uses the shared game notebook. Historical search/get/remember/revise and configured service workflows do not require a connected body; capture alone reads fresh identity-checked state. Offline dimension is unknown; use dimension:"*" explicitly when needed. Read mc_memory action:help for local learning and optional service contracts. Notebook results never establish current world facts.
 Reuse Mineflayer-shaped bot/Vec3 programs and the shared method library through mc_script; await mc.capabilities() reports the actual supported subset. Keep the same skill source for both bodies when its required methods and bounds are supported. Read language:javascript,api:compatibility for remaining gaps. Low-level mc_do operation/input is an explicit escape hatch for discovered native operations, with stable action_id; it is not a replacement skill language. Python Minescript is a separate explicit executor. Action acceptance is not completion: mc_result / mc_wait and minecraft.client.action events provide actual terminal receipts. Unknown actions must be reconciled by their original ID, not submitted under new IDs. A completed operation is not a completed host goal. Tool RPC return does not end a decision turn.
 Shared JavaScript reads position as (await bot.read("entity")).position. Inputs use await bot.setControlState("forward", true/false), await bot.waitForTicks(n), and await bot.clearControlStates() in finally. Direct bot.entity, bot.keyPress/keyRelease and global setTimeout are not exported by this worker. Read the focused JavaScript guide before selecting an unsupported method; Python uses its own guide and exact function signatures.
-mc_visual returns the real client framebuffer, original textures, current animation frame and GUI. mc_photo can save it with paired real game readings and optional explicitly configured enhancement. mc_bag includes actual components, cursor and menu slots. To close a GUI, read mc_state and submit mc_do operation:close_screen with that current screenToken. There is no generic Escape/key operation or server chat command for closing a client menu. A stale token rejection supplies a fresh GUI observation when available; never reuse historical tokens or attribute an already closed screen to a rejected action. A click/use/chat dispatch does not prove the server accepted its effect: inspect fresh inventory/menu/system notices. World facts replace older facts by key; archived evidence is historical.`;
+mc_visual returns the real client framebuffer, original textures, current animation frame and GUI. mc_photo saves it with paired real game readings; optional creation is provided by the independent AIGC World. mc_bag includes actual components, cursor and menu slots. To close a GUI, read mc_state and submit mc_do operation:close_screen with that current screenToken. There is no generic Escape/key operation or server chat command for closing a client menu. A stale token rejection supplies a fresh GUI observation when available; never reuse historical tokens or attribute an already closed screen to a rejected action. A click/use/chat dispatch does not prove the server accepted its effect: inspect fresh inventory/menu/system notices. World facts replace older facts by key; archived evidence is historical.`;
 
 function uuid(value: string) { return value.replaceAll('-', '').toLowerCase(); }
 function address(value: string) { return value.toLowerCase().replace(/:25565$/, ''); }
@@ -94,7 +93,7 @@ export class JavaClientWorld implements World {
     this.methods = cfg.javaClient ? new JavaMethods(cfg.javaClient,{rpc:(method,args,signal)=>this.rpc(method,args,signal),
       state:async signal=>{const state=await this.rpc('state',{},signal) as JavaClientState;this.verify(state);this.state=state;return state;},owner:()=>this.owner(),host:()=>this.host}) : null;
     this.photos = new PhotographyService({ directory: dir ? join(dir, 'photos') : undefined,
-      provider: () => createImageGenerationPort(cfg.photography), capture: async (args, signal) => {
+      capture: async (args, signal) => {
         if (args.scene === 'voxel') throw new Error('This Java-client screenshot backend does not export voxel scenes; use ordinary capture or an explicitly configured scene port');
         const capture = await this.rpc('screenshot', {}, signal);
         this.verify(capture.state as JavaClientState);

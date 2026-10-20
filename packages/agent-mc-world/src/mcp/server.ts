@@ -159,7 +159,7 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
           if (mime.startsWith('image/')) {
             if (args.text !== undefined || typeof args.base64 !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(args.base64)) throw new Error('Image put requires base64 only');
             bytes = Buffer.from(args.base64, 'base64');
-            const { validatePhotoImage } = await import('../../core/image-generation.ts');
+            const { validatePhotoImage } = await import('../../core/photo-image.ts');
             validatePhotoImage({ bytes, mime });
           } else {
             if (typeof args.text !== 'string' || args.base64 !== undefined) throw new Error('Text put requires text only');

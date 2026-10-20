@@ -35,125 +35,42 @@ async function finished(service: PhotographyService, id: string) {
   return service.execute({ action: 'read', id }, ctx);
 }
 
-describe('generic photography/art lifecycle', () => {
-  it('keeps ordinary photos ordinary, archives optional voxel evidence, and selects it only when requested', async () => {
-    const dir = directory(), proxy = { ...image, bytes: Buffer.concat([png, Buffer.from('proxy-fixture')]) };
-    const scene = captureVoxelScene({ source: { kind: 'client-loaded-chunks', minecraftVersion: '1.21.1', dimension: 'overworld', username: 'Test', uuid: 'fixture', realmVerified: false },
-      feet: [1, 65, 3], yaw: 0, pitch: 0, eyeHeight: 1.62, fovDegrees: 75, bounds: { min: [1, 64, 3], max: [1, 65, 3] },
-      blockAt: (_x, y) => y === 64 ? { name: 'stone', properties: { fixture: true } } : null });
-    const generate = vi.fn(async () => ({ ...image, model: 'flux3' }));
-    const service = new PhotographyService({ directory: dir, voxelAvailable: () => true,
-      capture: async args => ({ ...fixture(), ...(args.scene === 'voxel' ? { scene: { ...scene, sampledAt: new Date().toISOString() }, proxy, sceneRender: { visible: [{ name: 'minecraft:stone' }] } } : {}) }),
-      provider: () => ({ capabilities: { generate: true, edit: true, maxReferences: 3 }, generate }) }); service.start(host());
-    const caps = JSON.parse((await service.execute({ action: 'capabilities' }, ctx)).text);
-    expect(caps).toMatchObject({ voxel: true, voxelDefault: false, enhancementDefault: false });
-    const ordinary = JSON.parse((await service.execute({ action: 'capture', request_id: 'ordinary' }, ctx)).text);
-    expect(ordinary.scene).toBeUndefined(); expect(generate).not.toHaveBeenCalled();
-    const rejected = await service.execute({ action: 'enhance', source_id: ordinary.id, scene_input: 'voxel', prompt: 'x', request_id: 'bad-voxel' }, ctx);
-    expect(rejected.failed).toBe(true); expect(generate).not.toHaveBeenCalled();
-    const captured = JSON.parse((await service.execute({ action: 'capture', scene: 'voxel', request_id: 'voxel' }, ctx)).text);
-    expect(captured.scene.coverage).toMatchObject({ known: 1, unknown: 1, complete: false });
-    expect(captured.sceneRender.proxySha256).toMatch(/^[a-f0-9]{64}$/);
-    const rawScene = await service.execute({ action: 'scene', id: captured.id }, ctx);
-    expect(JSON.parse(Buffer.from((rawScene.blobs![0] as any).bytes).toString()).cells).toEqual([0, -1]);
-    const regularEdit = await service.execute({ action: 'enhance', source_id: captured.id, prompt: 'Polish the ordinary photo', request_id: 'edit-original' }, ctx);
-    await finished(service, regularEdit.execution!.id); expect(generate.mock.calls[0][0].images[0].bytes).toEqual(png);
-    const voxelEdit = await service.execute({ action: 'enhance', source_id: captured.id, scene_input: 'voxel', prompt: 'Polish the supplied voxel layout', request_id: 'edit-voxel' }, ctx);
-    const done = await finished(service, voxelEdit.execution!.id);
-    expect(JSON.parse(done.text).sceneInput).toBe('voxel'); expect(generate.mock.calls[1][0].images[0].bytes).toEqual(proxy.bytes);
-    expect(generate.mock.calls[1][0].requestId).toBe(voxelEdit.execution!.id);
-    service.stop();
-    const restored = new PhotographyService({ directory: dir, capture: async () => fixture(), provider: () => null }); restored.start(host());
-    expect((await restored.execute({ action: 'scene', id: captured.id }, ctx)).blobs?.[0]).toHaveProperty('mime', 'application/json');
-    expect((await restored.execute({ action: 'read', id: captured.id }, ctx)).blobs?.[0]).toHaveProperty('bytes', png); restored.stop();
-  });
-  it('works without any model, preserves paired originals and reports explicit enhancement fallback', async () => {
-    const { service, capture } = setup();
-    expect(JSON.parse((await service.execute({ action: 'capabilities' }, ctx)).text)).toMatchObject({ capture: true, generate: false, enhance: false, planner: 'host' });
-    const raw = await service.execute({ action: 'capture' }, ctx), record = JSON.parse(raw.text);
-    expect(raw.execution).toMatchObject({ phase: 'completed', terminal: true, goalCompleted: false });
-    expect(raw.blobs?.[0]).toMatchObject({ bytes: png, mime: 'image/png' });
-    expect(record).toMatchObject({ captureId: 'paired-capture', facts: { position: [1, 65, 3] } });
-    expect(await service.execute({ action: 'capture' }, ctx)).toEqual(raw); expect(capture).toHaveBeenCalledOnce();
-    const fallback = await service.execute({ action: 'enhance', source_id: record.id, prompt: 'Warm village' }, { ...ctx, callId: 'enhance-1' });
-    expect(JSON.parse(fallback.text)).toMatchObject({ enhanced: false, fallback: 'original' });
-    expect(fallback.blobs?.[0]).toMatchObject({ bytes: png, mime: 'image/png' });
-    expect(await service.execute({ action: 'create', prompt: 'A forest' }, { ...ctx, callId: 'create-1' })).toMatchObject({ failed: true });
-    service.stop();
-  });
-  it('does not turn a deduplicated fallback into a paid generation when configuration changes', async () => {
-    const generate = vi.fn(async () => ({ ...image, model: 'paid-fixture' }));
-    let provider: ImageGenerationPort | null = null;
-    const service = new PhotographyService({ capture: async () => fixture(), provider: () => provider }); service.start(host());
-    const raw = await service.execute({ action: 'capture' }, ctx);
-    const request = { action: 'enhance', prompt: 'test', source_id: raw.execution!.id };
-    const fallback = await service.execute(request, { ...ctx, callId: 'fallback' });
-    provider = { capabilities: { generate: true, edit: true, maxReferences: 3 }, generate };
-    const repeated = await service.execute(request, { ...ctx, callId: 'fallback' });
-    expect(repeated.execution).toEqual(fallback.execution); expect(JSON.parse(repeated.text).enhanced).toBe(false);
-    expect(generate).not.toHaveBeenCalled(); service.stop();
-  });
-  it('keeps the screenshot first, multiple references next and emits an actual terminal result', async () => {
-    const generate = vi.fn(async () => ({ ...image, model: 'fixture', providerRequestId: 'native-req', usage: { image_count: 1 } }));
-    const { service, attached } = setup({ capabilities: { generate: true, edit: true, maxReferences: 10 }, generate });
-    const raw = await service.execute({ action: 'capture' }, ctx);
-    const args = { action: 'enhance', source_id: raw.execution!.id, prompt: 'Natural stone village, identifiable anime character', reference_handles: ['mem:front', 'mem:back'] };
-    const accepted = await service.execute(args, { ...ctx, callId: 'enhance' });
-    expect(accepted.execution).toMatchObject({ phase: 'accepted', terminal: false, goalCompleted: false });
-    const result = await finished(service, accepted.execution!.id);
-    expect(result.execution).toMatchObject({ phase: 'completed', terminal: true, goalCompleted: false });
-    expect(generate.mock.calls[0][0]).toMatchObject({ prompt: args.prompt, images: [image, image, image] });
-    expect(attached.pushEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'minecraft.photo', blobs: expect.any(Array),
-      execution: expect.objectContaining({ terminal: true, goalCompleted: false }) }), { trigger: 'interrupt' });
-    await service.execute(args, { ...ctx, callId: 'enhance' }); expect(generate).toHaveBeenCalledOnce();
-    expect(await service.execute({ ...args, prompt: 'changed' }, { ...ctx, callId: 'enhance' })).toMatchObject({ failed: true });
-    service.stop();
-  });
-  it('cancels HTTP waiting and never revives a stopped job, even if the backend ignores abort', async () => {
-    let release!: (value: any) => void, signal!: AbortSignal;
-    const generate = vi.fn((_request, abort: AbortSignal) => { signal = abort; return new Promise<any>(resolve => { release = resolve; }); });
-    const { service, attached } = setup({ capabilities: { generate: true, edit: true, maxReferences: 3 }, generate });
-    const accepted = await service.execute({ action: 'create', prompt: 'Imagined forest' }, ctx);
-    await vi.waitFor(() => expect(generate).toHaveBeenCalledOnce());
-    const cancelled = await service.execute({ action: 'cancel', id: accepted.execution!.id }, ctx);
-    expect(cancelled.execution).toMatchObject({ phase: 'cancelled', terminal: true }); expect(signal.aborted).toBe(true);
-    service.stop(); service.start(attached);
-    release({ ...image, model: 'late' });
-    await new Promise(resolve => setTimeout(resolve, 10));
-    const final = await service.execute({ action: 'read', id: accepted.execution!.id }, ctx);
-    expect(final.execution?.phase).toBe('cancelled'); expect(final.blobs).toBeUndefined(); expect(attached.pushEvent).not.toHaveBeenCalled();
-    service.stop();
-  });
-  it('rejects stale paired readings, missing/too many references and concurrent submissions', async () => {
-    const attached = host();
-    const service = new PhotographyService({ capture: async () => ({ ...fixture(), sampledAt: '2000-01-01T00:00:00Z' }), provider: () => null });
-    service.start(attached);
-    expect((await service.execute({ action: 'capture' }, ctx)).text).toContain('paired'); service.stop();
-    const generate = vi.fn(() => new Promise<any>(() => {}));
-    const rig = setup({ capabilities: { generate: true, edit: true, maxReferences: 1 }, generate });
-    expect(await rig.service.execute({ action: 'create', prompt: 'test', reference_handles: ['mem:1', 'mem:2'] }, ctx)).toMatchObject({ failed: true });
-    const accepted = await rig.service.execute({ action: 'create', prompt: 'test' }, { ...ctx, callId: 'create' });
-    expect(accepted.execution?.terminal).toBe(false);
-    expect((await rig.service.execute({ action: 'create', prompt: 'again' }, { ...ctx, callId: 'another' })).text).toContain('draining');
-    rig.service.stop();
-  });
-  it('archives raw facts/prompts, recovers uncertain jobs without resubmission, and keeps stable budgeted prefixes', async () => {
-    const path = directory(), attached = host();
-    const service = new PhotographyService({ directory: path, capture: async () => fixture(), provider: () => null }); service.start(attached);
-    const raw = await service.execute({ action: 'capture' }, ctx), record = JSON.parse(raw.text);
-    const budget = { contextTokens: 30000, reservedOutputTokens: 2000, imageInputTokens: 1000, toolDescriptions: JSON.stringify(PHOTO_TOOL) };
-    const a = preparePhotoContext(record, 'A warm village', budget), b = preparePhotoContext(record, 'A rainy village', budget);
-    expect(a.system).toBe(b.system); expect(a.user).not.toBe(b.user); expect(a.user).toContain('held');
-    expect(() => preparePhotoContext(record, 'test', { ...budget, contextTokens: 1000 })).toThrow('budget');
-    expect(() => preparePhotoContext(record, 'test', { ...budget, imageInputTokens: 0 })).toThrow('budget');
-    const disk = JSON.parse(readFileSync(join(path, record.id + '.json'), 'utf8'));
-    expect(disk.facts).toEqual(record.facts);
-    disk.phase = 'running'; disk.action = 'create'; disk.prompt = 'Unknown remote submission';
-    writeFileSync(join(path, record.id + '.json'), JSON.stringify(disk)); service.stop();
+describe('Minecraft capture ownership and legacy archives', () => {
+  it('captures and deduplicates originals without touching a legacy provider', async () => {
+    const provider = vi.fn(() => { throw Error('must not construct a generator'); });
     const capture = vi.fn(async () => fixture());
-    const restored = new PhotographyService({ directory: path, capture, provider: () => null }); restored.start(attached);
-    const outcome = await restored.execute({ action: 'capture' }, ctx);
-    expect(outcome.execution?.phase).toBe('blocked'); expect(outcome.text).toContain('unknown remote outcome'); expect(capture).not.toHaveBeenCalled(); restored.stop();
+    const service = new PhotographyService({ directory: directory(), capture, provider }); service.start(host());
+    try {
+      const a = await service.execute({ action: 'capture' }, ctx);
+      const b = await service.execute({ action: 'capture' }, ctx);
+      expect(a.execution).toEqual(b.execution); expect(a.blobs).toEqual(b.blobs); expect(capture).toHaveBeenCalledTimes(1);
+      expect(JSON.parse((await service.execute({ action: 'capabilities' }, ctx)).text)).toMatchObject({ capture: true, generate: false, enhance: false, generationOwner: 'cortico-world-aigc' });
+      expect(provider).not.toHaveBeenCalled();
+    } finally { service.stop(); }
+  });
+  it('returns explicit relocation for creative calls before dispatch or hidden fallback', async () => {
+    const rig = setup();
+    try {
+      for (const action of ['create', 'enhance']) {
+        const out = await rig.service.execute({ action, prompt: 'a village', request_id: 'legacy-' + action }, ctx);
+        expect(out.failed).toBe(true); expect(JSON.parse(out.text)).toMatchObject({ code: 'capability_moved', package: 'cortico-world-aigc', tool: 'aigc_create' });
+      }
+      expect(rig.capture).not.toHaveBeenCalled();
+    } finally { rig.service.stop(); }
+  });
+  it('preserves raw capture, legacy unknown jobs and stable budgeted factual context', async () => {
+    const dir = directory(), service = new PhotographyService({ directory: dir, capture: async () => fixture() }); service.start(host());
+    const out = await service.execute({ action: 'capture' }, ctx), record = JSON.parse(out.text);
+    const budget = { contextTokens: 30000, reservedOutputTokens: 2000, imageInputTokens: 1000, toolDescriptions: JSON.stringify(PHOTO_TOOL) };
+    expect(preparePhotoContext(record, 'a', budget).system).toEqual(preparePhotoContext(record, 'b', budget).system);
+    expect(() => preparePhotoContext(record, 'a', { ...budget, contextTokens: 10 })).toThrow('budget');
+    service.stop(); record.action = 'create'; record.phase = 'running'; record.prompt = 'legacy original prompt';
+    writeFileSync(join(dir, record.id + '.json'), JSON.stringify(record));
+    const restored = new PhotographyService({ directory: dir, capture: async () => fixture() }); restored.start(host());
+    try {
+      const legacy = JSON.parse((await restored.execute({ action: 'read', id: record.id }, ctx)).text);
+      expect(legacy).toMatchObject({ phase: 'blocked', prompt: 'legacy original prompt' }); expect(legacy.reason).toContain('unknown');
+    } finally { restored.stop(); }
   });
 });
 

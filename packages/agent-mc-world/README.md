@@ -379,7 +379,7 @@ Proxy reconfiguration expires unanswered one-shot known-packs replies, suspends 
 
 The public SDK exposes optional metadata-only `status().connection` (`ready`, `phase`) separately from runtime startup. Engine proxy samples expire after five seconds; composed server packs retain this facet through `console()`. Missing or stale samples stay `null`. No authentication RPC or secret enters this facet. Source, packed-package verification and live scene evidence remain separate; this candidate is not published.
 
-`mc_photo` saves web screenshots with paired game readings without an image model. Optional native Alibaba Bailian and ByteDance Volcengine Ark adapters add photo enhancement and original artwork; the host Agent owns interpretation, prompts and creative decisions. Providers default to disabled. [Configuration, lifecycle and fallback guide](docs/PHOTOGRAPHY.md).
+`mc_photo` saves web screenshots with paired game readings without an image model. Image, video and music generation belongs to the independent cortico-world-aigc extension. This core captures screenshots/voxel evidence and retains legacy archives without model adapters or hidden inference; the host selects references and creative intent. [Configuration, lifecycle and fallback guide](docs/PHOTOGRAPHY.md).
 
 
 ### Contact and server feedback facts
