@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.65 — 2026-10-20
+
+- Pin renderer `dd7c4011`: decode the protocol-767 banner component layers
+  container before preserving its SNBT list. Registry/SlotComponent binary
+  round trips and the actual Prismarine Item constructor cover this boundary.
+
 ## 0.2.64 — 2026-10-20
 
 - Pin renderer `5ad51dce`: preserve and render received original banner patterns
