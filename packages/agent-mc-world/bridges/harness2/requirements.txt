@@ -1,0 +1,3 @@
+# Optional offline optimizer. Install explicitly in an isolated Linux Python 3.12+ environment.
+# No provider CLI, render dependency or model credentials are required by this bridge.
+harness2 @ git+https://github.com/google-research/harness2.git@1cfe254e8d25b15f37048c3730134686abe60335
