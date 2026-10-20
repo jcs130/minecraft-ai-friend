@@ -1399,9 +1399,17 @@ class Controller:
             raise ModelCallRejected("Planning ahead may only read or append to the native queue; running work cannot be stopped or inserted into.")
         if self.feedback_pending:
             tags = next((t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])
-            if name != "mc_do" and not empty_catalogue_query(name, arguments) and {"act", "write", "speak"}.intersection(tags):
+            effects = {"act", "write", "speak"}.intersection(tags)
+            # mc_messages shares a read/write declaration because review marks
+            # consideration. Its validated list/search/read forms do not write
+            # or act; new user goals often need these before choosing any work.
+            message_query = (name == "mc_messages" and "read" in tags
+                             and arguments.get("action", "list") in {"list", "search", "read"})
+            query = empty_catalogue_query(name, arguments) or message_query
+            if name != "mc_do" and effects and not (effects == {"write"} and query):
                 raise ModelCallRejected("Pending feedback must submit its body plan through mc_do. "
                     "Read-only catalogue queries mc_blueprint({}) and mc_map({}) are allowed; "
+                    "mc_messages list/search/read can inspect dated observations before planning. "
                     "metadata writes remain blocked until the body plan is accepted.")
         return call, name, arguments
 

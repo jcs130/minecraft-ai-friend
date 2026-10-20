@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.60 — 2026-10-20
+
+- Permit validated `mc_messages` list/search/read calls while a fresh feedback
+  goal awaits its first native plan. The tool has shared read/write tags because
+  marking a message reviewed writes metadata; that tag previously blocked even
+  pure searches, forcing a body plan before the agent could read its instructions.
+- Message review/writes, unknown operations and action/speech tags stay blocked
+  at this boundary. Reading does not consume feedback queue policy or count as
+  body progress. Native confirmation, unknown receipts and stop fences remain.
+
 ## 0.2.59 — 2026-10-20
 
 - Keep bounded server feedback, recent Minecraft messages, equipment/observed
