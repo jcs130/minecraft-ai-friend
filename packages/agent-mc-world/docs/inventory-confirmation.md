@@ -76,3 +76,14 @@ Protocol implementation reference:
 [PrismarineJS window click handling](https://github.com/PrismarineJS/prismarine-windows/blob/master/lib/Window.js),
 [MCProtocolLib offhand action](https://github.com/GeyserMC/MCProtocolLib/blob/master/protocol/src/main/java/org/geysermc/mcprotocollib/protocol/data/game/inventory/MoveToHotbarAction.java),
 and [Minepacks shortcut protection](https://github.com/GeorgH93/Minepacks/blob/de3be4a46814ac83580a0edbbadbba7b6456d26f/Minepacks/src/at/pcgamingfreaks/Minepacks/Bukkit/Listener/ItemShortcut.java).
+
+## Bounded live validation
+
+On 2026-10-20, a new native-queue request after a fresh Java 1.21.1 inventory
+read equipped a stored trident and restored the original shield. Both exchanges
+used mode 2/button 40; each changed only source slot 22 and offhand slot 45 and
+received a matching server confirmation. After the round trip all inventory
+slots, counts, selected hotbar and empty cursor matched the pre-test snapshot.
+The old unknown operation was not replayed. This validates the new exchange
+path on that live connection, not the exact cause of earlier unrecorded stack
+mismatches, autonomous decision quality or long-term survival.
