@@ -42,6 +42,13 @@ it.each(['Bundler','NodeNext'] as const)('consumes published declarations in %s 
     const result: Promise<ToolOutcome> = client.call('mc_script', {api:'index'});
     const events: EventEnvelope[] = client.journal.read(0, 8).events;
     void result; void events;
+    import { MinecraftViewCaptureManager, type MinecraftViewCapturePolicy, type CaptureRendererInfo,
+      type MinecraftViewCapture } from '../dist/types/src/client/index.js';
+    const capturePolicy: MinecraftViewCapturePolicy = {gpuPreference:'low-power',idleTimeoutMs:30000,expectedRenderer:'AMD'};
+    const camera = new MinecraftViewCaptureManager({},capturePolicy);
+    const image: Promise<MinecraftViewCapture> = camera.capture({viewerUrl:'http://127.0.0.1:19761'});
+    const gpu: CaptureRendererInfo = {requestedPreference:'low-power',renderer:null,vendor:null,software:null};
+    void image;void gpu;
     import { JavaClientWorld, validateJavaClientConfiguration, JAVA_CLIENT_PROTOCOL,
       type JavaClientConfiguration, type JavaClientAction, type JavaClientState } from '../dist/types/src/client/index.js';
     const native: JavaClientConfiguration = {expectedUuid:'12345678-1234-1234-1234-123456789abc',expectedServer:'fixture.test',controllerId:'consumer',credentialsFile:'./connection.json',ledgerDir:'./ledger',leaseMs:15000};

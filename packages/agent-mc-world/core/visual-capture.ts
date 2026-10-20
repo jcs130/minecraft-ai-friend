@@ -8,6 +8,22 @@ import { visualFov } from './visual-fov.ts';
 
 export type MinecraftViewMode = 'first' | 'third' | '3dview' | 'dungeon' | 'overview';
 
+export type CaptureGpuPreference = 'default' | 'low-power' | 'high-performance';
+export interface MinecraftViewCapturePolicy {
+  /** Screenshot-only browser; does not change the user's browser or Java client. Default: low-power. */
+  gpuPreference?: CaptureGpuPreference;
+  /** Optional, case-insensitive substring of the actual WebGL renderer. Mismatch fails explicitly. */
+  expectedRenderer?: string;
+  /** Close idle browser and release its connection/context. Default: 30 seconds; range 1–300 seconds. */
+  idleTimeoutMs?: number;
+}
+export interface CaptureRendererInfo {
+  requestedPreference: CaptureGpuPreference;
+  renderer: string | null;
+  vendor: string | null;
+  software: boolean | null;
+}
+
 export interface MinecraftViewCaptureOptions {
   viewerUrl: string;
   mode?: MinecraftViewMode;
@@ -29,6 +45,9 @@ export interface MinecraftViewCapture {
   capturedAt: string;
   viewerVersion?: string;
   includesHud?: boolean;
+  renderer?: CaptureRendererInfo;
+  /** Actual lifecycle used after this photograph, including older-viewer fallback. */
+  idleRendering?: 'paused' | 'page-closed';
   overview?: OverviewMetadata;
   timings?: { warmupMs: number; healthMs: number; browserMs: number; pageMs: number; sceneMs: number; pngMs: number; reusedPage: boolean };
 }
@@ -77,6 +96,57 @@ const MAX_PNG_BYTES = 12 * 1024 * 1024;
 const LEGACY_SESSION_MS = 50_000;
 const LEASE_INTERVAL_MS = 15_000;
 const activeOrigins = new Set<string>();
+
+function capturePolicy(input: MinecraftViewCapturePolicy) {
+  const gpuPreference = input.gpuPreference ?? process.env.AGENT_MC_CAPTURE_GPU ?? 'low-power';
+  if (!['default', 'low-power', 'high-performance'].includes(gpuPreference))
+    throw new RangeError('AGENT_MC_CAPTURE_GPU / gpuPreference must be default, low-power or high-performance');
+  const expectedRenderer = input.expectedRenderer ?? process.env.AGENT_MC_CAPTURE_EXPECT_RENDERER;
+  if (expectedRenderer !== undefined && (typeof expectedRenderer !== 'string' || !expectedRenderer.trim() || expectedRenderer.length > 256))
+    throw new RangeError('expectedRenderer must be a non-empty renderer substring (at most 256 characters)');
+  const idleTimeoutMs = input.idleTimeoutMs ?? (process.env.AGENT_MC_CAPTURE_IDLE_MS === undefined
+    ? 30_000 : Number(process.env.AGENT_MC_CAPTURE_IDLE_MS));
+  if (!Number.isInteger(idleTimeoutMs) || idleTimeoutMs < 1_000 || idleTimeoutMs > 300_000)
+    throw new RangeError('AGENT_MC_CAPTURE_IDLE_MS / idleTimeoutMs must be an integer from 1000 to 300000');
+  return { gpuPreference: gpuPreference as CaptureGpuPreference, expectedRenderer, idleTimeoutMs };
+}
+
+/** These switches apply to this owned Chromium process only. Device selection is
+ * a preference; the reported WebGL renderer is the evidence of the result. */
+export function captureBrowserArgs(preference: CaptureGpuPreference, platform = process.platform): string[] {
+  return ['--enable-webgl', '--use-gl=angle', '--enable-unsafe-swiftshader',
+    ...(platform === 'win32' ? ['--use-angle=d3d11'] : []),
+    ...(preference === 'low-power' ? ['--force_low_power_gpu=1'] : preference === 'high-performance' ? ['--force_high_performance_gpu=1'] : [])];
+}
+
+/** Serialized by Playwright: keep independent of Node modules and closures. */
+export async function setViewerCaptureActive(input: { active: boolean; timeoutMs: number }): Promise<boolean> {
+  const scope = globalThis as unknown as {
+    __mcCaptureControl?: { schema: string; setActive(active: boolean): boolean };
+    requestAnimationFrame(callback: () => void): void;
+  };
+  const control = scope.__mcCaptureControl;
+  if (control?.schema !== 'mc-viewer-capture/v1') return false;
+  if (control.setActive(input.active) !== input.active) throw new Error('Capture render control did not acknowledge state');
+  if (input.active) await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Capture renderer resume timed out')), input.timeoutMs);
+    scope.requestAnimationFrame(() => scope.requestAnimationFrame(() => { clearTimeout(timer); resolve(); }));
+  });
+  return true;
+}
+
+/** Query the existing scene context; never create another renderer/device. */
+export function viewerCaptureRenderer(): Omit<CaptureRendererInfo, 'requestedPreference'> {
+  const scope = globalThis as unknown as { world?: { renderer?: { getContext(): {
+    getExtension(name: string): { UNMASKED_RENDERER_WEBGL: number; UNMASKED_VENDOR_WEBGL: number } | null;
+    getParameter(name: number): unknown;
+  } } } };
+  const gl = scope.world?.renderer?.getContext();
+  const extension = gl?.getExtension('WEBGL_debug_renderer_info');
+  const renderer = extension ? String(gl!.getParameter(extension.UNMASKED_RENDERER_WEBGL)) : null;
+  const vendor = extension ? String(gl!.getParameter(extension.UNMASKED_VENDOR_WEBGL)) : null;
+  return { renderer, vendor, software: renderer === null ? null : /swiftshader|llvmpipe|softpipe|basic render|\bwarp\b/i.test(renderer) };
+}
 
 function viewportDimension(value: number | undefined, fallback: number, minimum: number, maximum: number): number {
   if (value === undefined) return fallback;
@@ -178,6 +248,8 @@ interface CaptureSession {
   leaseKey?: string;
   renewable?: boolean;
   leaseTimer?: ReturnType<typeof setInterval>;
+  idleTimer?: ReturnType<typeof setTimeout>;
+  policyKey: string;
 }
 
 async function waitForWarmup(pending: Promise<void>, deadlineAtMs: number, signal?: AbortSignal): Promise<void> {
@@ -199,7 +271,7 @@ export class MinecraftViewCaptureManager {
   private readonly warming = new Map<string, Promise<void>>();
   private generation = 0;
 
-  constructor(private readonly dependencies: CaptureDependencies = {}) {}
+  constructor(private readonly dependencies: CaptureDependencies = {}, private readonly policy: MinecraftViewCapturePolicy = {}) {}
 
   async capture(options: MinecraftViewCaptureOptions): Promise<MinecraftViewCapture> {
     const origin = localViewerOrigin(options.viewerUrl);
@@ -211,6 +283,8 @@ export class MinecraftViewCaptureManager {
     const width = viewportDimension(options.width, DEFAULT_WIDTH, 640, 1920);
     const height = viewportDimension(options.height, DEFAULT_HEIGHT, 360, 1080);
     const timeoutMs = viewportDimension(options.timeoutMs, DEFAULT_TIMEOUT_MS, 1_000, 60_000);
+    const policy = capturePolicy(this.policy);
+    const policyKey = JSON.stringify([policy.gpuPreference, policy.expectedRenderer]);
     const generation = this.generation;
     const deadlineAtMs = Date.now() + timeoutMs;
     const timings = { warmupMs: 0, healthMs: 0, browserMs: 0, pageMs: 0, sceneMs: 0, pngMs: 0, reusedPage: false };
@@ -225,13 +299,14 @@ export class MinecraftViewCaptureManager {
     activeOrigins.add(origin);
     const signal = options.signal;
     let session = this.sessions.get(origin);
+    clearTimeout(session?.idleTimer);
     let closePromise: Promise<void> | undefined;
     const close = () => this.sessions.has(origin) ? closePromise ??= this.closeSession(origin) : Promise.resolve();
     const onAbort = () => { void close(); };
     signal?.addEventListener('abort', onAbort, { once: true });
     try {
       assertNotAborted(signal);
-      if (session && !session.browser.isConnected()) {
+      if (session && (!session.browser.isConnected() || session.policyKey !== policyKey)) {
         await close();
         closePromise = undefined;
         session = undefined;
@@ -269,13 +344,13 @@ export class MinecraftViewCaptureManager {
         const browserStarted = performance.now();
         const browser = await (this.dependencies.launchBrowser ?? (() => chromium.launch({
           executablePath: edgeExecutablePath(), headless: true, timeout: remaining(deadlineAtMs),
-          args: ['--enable-webgl', '--use-gl=angle', '--enable-unsafe-swiftshader'],
+          args: captureBrowserArgs(policy.gpuPreference),
         })))();
         if (this.generation !== generation) {
           await browser.close().catch(() => undefined);
           throw new VisualCaptureError('cancelled', 'viewer 截图已取消');
         }
-        session = { browser };
+        session = { browser, policyKey };
         this.sessions.set(origin, session);
         timings.browserMs = performance.now() - browserStarted;
         assertNotAborted(signal);
@@ -289,7 +364,7 @@ export class MinecraftViewCaptureManager {
         session.captureLane = captureLane;
         const pagePath = mode === 'overview' ? '/third/?photo=1' : fov === undefined ? `/${mode}/?photo=1`
           : `${mode === 'first' ? '/' : '/third/'}?photo=1&fov=${fov}`;
-        await session.page.goto(`${origin}${pagePath}`, { waitUntil: 'domcontentloaded', timeout: remaining(deadlineAtMs) });
+        await session.page.goto(`${origin}${pagePath}&capture=1`, { waitUntil: 'domcontentloaded', timeout: remaining(deadlineAtMs) });
         session.openedAtMs = Date.now();
         await session.page.addStyleTag({ content: 'body[data-cortico-capture-hide-hud="true"] *{visibility:hidden!important}body[data-cortico-capture-hide-hud="true"] canvas[data-cortico-capture-scene="true"]{visibility:visible!important}' });
         timings.pageMs = performance.now() - pageStarted;
@@ -298,6 +373,7 @@ export class MinecraftViewCaptureManager {
       }
       const page = session.page!;
       const sceneStarted = performance.now();
+      await page.evaluate(setViewerCaptureActive, { active: true, timeoutMs: Math.min(2_000, remaining(deadlineAtMs)) });
       const state = await page.waitForFunction(viewerCaptureState, undefined, { polling: 100, timeout: remaining(deadlineAtMs) });
       const result = await state.jsonValue();
       await state.dispose();
@@ -305,6 +381,9 @@ export class MinecraftViewCaptureManager {
       if (typeof result === 'string' && result.startsWith('error:')) {
         throw new VisualCaptureError(result.includes('连接已满') ? 'busy' : 'renderer', result.slice(6) || 'viewer 渲染失败');
       }
+      const renderer: CaptureRendererInfo = { ...await page.evaluate(viewerCaptureRenderer), requestedPreference: policy.gpuPreference };
+      if (policy.expectedRenderer && !renderer.renderer?.toLowerCase().includes(policy.expectedRenderer.trim().toLowerCase()))
+        throw new VisualCaptureError('renderer', `截图 GPU 与 expectedRenderer 不符；实际 WebGL renderer: ${renderer.renderer ?? 'unknown'}`);
       if (fov !== undefined) {
         const actualFov = await page.evaluate(() =>
           (globalThis as unknown as { world?: { camera?: { fov?: number } } }).world?.camera?.fov);
@@ -354,9 +433,17 @@ export class MinecraftViewCaptureManager {
       }
       timings.pngMs = performance.now() - pngStarted;
       if (png.length === 0 || png.length > MAX_PNG_BYTES) throw new VisualCaptureError('renderer', 'viewer 截图大小异常');
-      if (!captureLane) await this.closePage(origin, session);
+      const paused = captureLane && await page.evaluate(setViewerCaptureActive, { active: false, timeoutMs: Math.min(2_000, remaining(deadlineAtMs)) });
+      if (!paused) await this.closePage(origin, session);
+      if (this.generation !== generation || signal?.aborted) throw new VisualCaptureError('cancelled', 'viewer 截图已取消');
+      const current = session;
+      session.idleTimer = setTimeout(() => {
+        if (this.sessions.get(origin) === current) void this.closeSession(origin);
+      }, policy.idleTimeoutMs);
+      session.idleTimer.unref();
       return { png, mode, fov, width, height, capturedAt: overview?.capturedAt ?? new Date().toISOString(), viewerVersion: health.version,
-        includesHud: options.includeHud === true, ...(overview ? { overview } : {}), timings };
+        includesHud: options.includeHud === true, ...(overview ? { overview } : {}), timings, renderer,
+        idleRendering: paused ? 'paused' : 'page-closed' };
     } catch (error) {
       await close();
       if (this.generation !== generation) throw new VisualCaptureError('cancelled', 'viewer 截图已取消', { cause: error });
@@ -425,6 +512,7 @@ export class MinecraftViewCaptureManager {
     const session = this.sessions.get(origin);
     if (!session) return;
     this.sessions.delete(origin);
+    clearTimeout(session.idleTimer);
     await this.closePage(origin, session);
     await session.browser.close().catch(() => undefined);
   }

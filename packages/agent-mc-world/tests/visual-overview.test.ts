@@ -57,7 +57,9 @@ describe('coordinate overview contract', () => {
     const metadata={schema:'mc-overview/v3',capturedAt:'2026-10-13T04:00:00.000Z',width:1280,height:720};
     const page={isClosed:()=>false,close:async()=>{closed++;},goto:async(value:string)=>{url=value;},addStyleTag:async()=>{},
       waitForFunction:async()=>({jsonValue:async()=>'ready',dispose:async()=>{}}),
-      evaluate:async(_fn:unknown,input:unknown)=>{
+      evaluate:async(fn:{name:string},input:unknown)=>{
+        if(fn.name==='setViewerCaptureActive')return true;
+        if(fn.name==='viewerCaptureRenderer')return {renderer:'fixture',vendor:'fixture',software:false};
         if(typeof input==='boolean')return undefined;
         inputs.push(input);return {png:'data:image/png;base64,iVBORw0KGgo=',metadata};
       },screenshot:()=>{throw new Error('must not lose annotations via ordinary screenshot');}};
@@ -70,7 +72,7 @@ describe('coordinate overview contract', () => {
         expect(result.png.subarray(1,4).toString()).toBe('PNG');
         expect(result.capturedAt).toBe(metadata.capturedAt);expect(result.overview).toEqual(metadata);
       }
-      expect(inputs).toEqual(requests);expect(opened).toBe(1);expect(url).toBe('http://127.0.0.1:7793/third/?photo=1');
+      expect(inputs).toEqual(requests);expect(opened).toBe(1);expect(url).toBe('http://127.0.0.1:7793/third/?photo=1&capture=1');
     } finally {await manager.stop();}
     expect(closed).toBe(1);
   });
@@ -81,7 +83,9 @@ describe('coordinate overview contract', () => {
       launchBrowser:async()=>({isConnected:()=>true,close:async()=>{},newPage:async()=>({
         isClosed:()=>false,close:async()=>{closed=true;},goto:async()=>{},addStyleTag:async()=>{},
         waitForFunction:async()=>({jsonValue:async()=>'ready',dispose:async()=>{}}),
-        evaluate:async(_fn:unknown,input:unknown)=>{if(typeof input!=='boolean')throw new Error('overview renderer unavailable');},
+        evaluate:async(fn:{name:string},input:unknown)=>{if(fn.name==='setViewerCaptureActive')return false;
+          if(fn.name==='viewerCaptureRenderer')return {renderer:'fixture',vendor:'fixture',software:false};
+          if(typeof input!=='boolean')throw new Error('overview renderer unavailable');},
       })}) as never});
     await expect(manager.capture({viewerUrl:'http://127.0.0.1:7793',mode:'overview'})).rejects.toThrow('overview renderer unavailable');
     expect(closed).toBe(true);
@@ -92,7 +96,9 @@ describe('coordinate overview contract', () => {
       launchBrowser:async()=>({isConnected:()=>true,close:async()=>{},newPage:async()=>({
         isClosed:()=>false,close:async()=>{},goto:async()=>{},addStyleTag:async()=>{},
         waitForFunction:async()=>({jsonValue:async()=>'ready',dispose:async()=>{}}),
-        evaluate:async(_fn:unknown,input:unknown)=>typeof input==='boolean'?undefined:{png:'data:image/png;base64,iVBORw0KGgo=',metadata:{schema:'mc-overview/v1'}},
+        evaluate:async(fn:{name:string},input:unknown)=>fn.name==='setViewerCaptureActive'?false
+          :fn.name==='viewerCaptureRenderer'?{renderer:'fixture',vendor:'fixture',software:false}
+          :typeof input==='boolean'?undefined:{png:'data:image/png;base64,iVBORw0KGgo=',metadata:{schema:'mc-overview/v1'}},
       })}) as never});
     try { await expect(manager.capture({viewerUrl:'http://127.0.0.1:7793',mode:'overview'})).rejects.toThrow('坐标协议版本不匹配'); }
     finally { await manager.stop(); }

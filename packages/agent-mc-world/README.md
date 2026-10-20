@@ -290,6 +290,8 @@ Consumers depend on the package, never on another host's checkout:
 - Other hosts: use `agent-mc-world`, `/client`, `/contracts` or `/mcp`.
 
 The modern visualization remains maintained in `jcs130/mc-visual-console`.
+
+Automatic screenshot browser GPU selection and idle rendering are documented in [capture performance](docs/capture-performance.md).
 Server packs and performance services require explicit configuration.
 
 Generic battlefield sampling, authored tactics, combat receipts and ability state

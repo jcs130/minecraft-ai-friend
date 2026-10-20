@@ -7,6 +7,9 @@ export { offlineUuid, buildClientLaunch } from '../../core/client-launch.ts';
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady, parseMinecraftServerAddress, type MinecraftClientConfig } from './config.ts';
 export { loadMinecraftClientConfig } from './config-file.ts';
 export { prepareMinecraftViewerAssets, type ViewerAssetProgress, type ViewerAssetOptions } from './viewer-assets.ts';
+export { MinecraftViewCaptureManager, captureMinecraftView, closeMinecraftViewCapture, warmMinecraftViewCapture,
+  type MinecraftViewCaptureOptions, type MinecraftViewCapture, type MinecraftViewCapturePolicy,
+  type CaptureGpuPreference, type CaptureRendererInfo } from '../../core/visual-capture.ts';
 export { AgentJournal, EventCursorError } from './journal.ts';
 export { TOOL_HELP_TOOL, readToolHelp, createToolHelpTool, withToolHelp, mapToolRecovery } from './tool-help.ts';
 export type { ToolHelpOptions } from './tool-help.ts';
