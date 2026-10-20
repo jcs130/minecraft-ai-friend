@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "status": "deployed_daily_resumed_verified",
+  "approvedByUser": "可以",
+  "paper": "1.21.1 build 133",
+  "paperPid": 32284,
+  "agentFriend": "0.4.47.8",
+  "numen": "0.1.4 with local ordinary vision patch",
+  "qwenpawPlugin": "0.3.0",
+  "artifact": {
+    "name": "numen-paper-1.21.1-0.1.4.jar",
+    "currentSha256": "bfe6040eefb3cac792dc70513ae150c5e25f76f9b869fd3d9bb8eff088cb37a4",
+    "candidateSha256": "39887be162507a1588dc5cb5af5bddcb4e47a4f9de79fd7a4447646c689f9fb6",
+    "changedEntries": [
+      "com/dwinovo/numen/combat/Menace.class",
+      "com/dwinovo/numen/scan/NearbyEntities.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$BlockInfo.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Cell.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Look.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Sight.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Storage.class",
+      "com/dwinovo/numen/tools/perception/ScanApi.class"
+    ],
+    "instructionChanges": [
+      "com/dwinovo/numen/combat/Menace.class",
+      "com/dwinovo/numen/scan/NearbyEntities.class",
+      "com/dwinovo/numen/tools/perception/ScanApi.class"
+    ],
+    "sourceDebugOnly": [
+      "com/dwinovo/numen/tools/perception/ScanApi$BlockInfo.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Cell.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Look.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Sight.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Storage.class"
+    ]
+  },
+  "numenApiPreservedSha256": "77da82ad3241f39fee878e5e51f855bdc5fe7777cabd1ed863a213af5bd60dea",
+  "backupStamp": "20261021-021900",
+  "dualDiskComplete": true,
+  "productionChecks": 27,
+  "gatewayClientChecks": 6,
+  "isolatedPaperChecks": 21,
+  "numenCommonUnit": {
+    "tests": 204,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "qwenpawUnit": {
+    "passed": 79,
+    "skipped": 6
+  },
+  "originalUuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+  "inventoryEnderBackpackProfessionVerifiedBeforeAutonomy": true,
+  "nativeExclusiveBody": true,
+  "nativeHeartbeat": "2m",
+  "dailyEnabled": true,
+  "otherRoleSettingsPreserved": true,
+  "qwenpawProcessRestarted": false,
+  "newExternalPortOpened": false,
+  "clientModificationRequired": false,
+  "observedGameplay": {
+    "action": "ordinary navigation reached -499,70,-450",
+    "normalCobblestoneUsed": 9,
+    "hostileScanAfterMovement": 0,
+    "questCompletionVerified": false,
+    "nativeHeartbeatEvidence": {
+      "manualTaskCompletedAt": "2026-10-20T18:31:06+00:00",
+      "subsequentMoveStartedAt": 1792521154.898881,
+      "separateNativeHeartbeatVerified": true
+    }
+  },
+  "scope": [
+    "ordinary entity scans",
+    "automatic hostile targeting and threat field"
+  ],
+  "notCovered": [
+    "block and container query visibility",
+    "complete adversarial script sandbox",
+    "long term autonomous survival",
+    "16 autonomous models"
+  ],
+  "privateEvidence": "E/F repairs/kirito-daily-20261021"
+}

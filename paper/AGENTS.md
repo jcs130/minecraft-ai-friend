@@ -1,6 +1,6 @@
-## 2026-10-21 桐人日常已实现，普通索敌候选待重启确认
+## 2026-10-21 桐人日常与普通索敌修复已上线
 
-QwenPaw原生插件0.3.0、显式autonomy.enabled授权与两分钟心跳已热更新；79项单元通过/6项独立联机默认跳过。正式已完成引导/目录实练、归乡耗6魔力并接初级剑士委托，不能宣称完成三次击杀。发现Numen未做视线过滤，桐人日常/角色/常驻均已暂停，原生task.status确认无任务。ordinary-entity-vision.patch补普通实体扫描及自动索敌的遮挡/隐身/观战过滤；内容204项JVM和21项最终Paper感知GameTest通过，3类指令变化+5类仅调试行号变化。E/F候选/回退已核验，正式仍旧内容JAR，未排队或重启；需本次批准后走OPERATIONS完整维护流程，再按原UUID恢复自主日常。不是所有方块/容器接口的防作弊沙箱。见paper/docs/QWENPAW_COGNITION.md及paper/manifests/kirito-daily-vision-candidate-20261021.json；不得混入AgentFriend0.4.48或Freesia af4。
+服主“可以”批准后，180/60/10秒提醒、原Afu-MC-DailyBackup正常停启与E/F完整冷备份20261021-021900完成。只替换Numen内容JAR为39887be162507a1588dc5cb5af5bddcb4e47a4f9de79fd7a4447646c689f9fb6；Paper1.21.1 build133、AgentFriend0.4.47.8、API77da82ad及其余38个JAR保持。27项正式核验在恢复日常前对账原库存/末影箱/大背包blob/战士技能点，实际5个扫描实体全可见；1.20.6/1.21.1网关另6项通过。原生插件0.3.0、显式autonomy授权、两分钟心跳及原UUID外脑已恢复，观察到实际寻路成功并正常消耗9圆石，其后敌对扫描为0；不能宣称三次击杀或委托完成。79项Qwen单元/6跳过、204内容JVM、21同摘要Paper感知检查通过。视线过滤只覆盖普通实体与自动索敌，不是所有方块/容器接口的完整反作弊沙箱。Qwen进程/其他角色不改，无新端口/客户端修改；不混入AgentFriend0.4.48或Freesia af4。见paper/docs/QWENPAW_COGNITION.md和paper/manifests/kirito-daily-vision-release-20261021.json。
 
 ## 2026-10-20 桐人原生多会话与 PowerContext 已正式上线
 
