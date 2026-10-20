@@ -176,10 +176,18 @@ class Controller:
         self.qwenpaw = local_url(cfg["qwenpaw_url"])
         self.companion = cfg["companion_uuid"]
         self.event_session_id = cfg.get("event_session_id", "kirito-world-resident")
+        # A native QwenPaw channel owns delivery in channel mode. Keep the
+        # deployed Console transport as an explicit rollback, never run both.
+        self.event_transport = cfg.get("event_transport", "console")
+        if self.event_transport not in {"console", "channel"}:
+            raise ValueError("事件入口必须是 console 或 channel")
+        self.outbound_epoch = 0
+        self.controller_epoch = uuid.uuid4().hex
         if not isinstance(self.event_session_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", self.event_session_id):
             raise ValueError("请配置有效且稳定的事件会话标识")
         self.journal = Journal(Path(cfg["journal_dir"]))
         self.session: ClientSession | None = None
+        self.body_available = False
         self.tools: list[types.Tool] = []
         self.pending: list[tuple[str, str]] = []
         self.last_action = 0.0
@@ -204,9 +212,13 @@ class Controller:
 
     async def call(self, name: str, arguments: dict) -> types.CallToolResult:
         if name == "events":
-            rows, self.pending = self.pending, []
+            rows = list(self.pending)
+            if self.event_transport == "console":
+                self.pending = []
             return types.CallToolResult(content=[types.TextContent(type="text", text=json.dumps(
-                {"events": [{"id": key, "text": text} for key, text in rows]}, ensure_ascii=False))])
+                {"transport": self.event_transport, "connected": self.session is not None and self.body_available,
+                 "outboundEpoch": self.outbound_epoch, "controllerEpoch": self.controller_epoch,
+                 "events": [{"id": key, "text": text, "wake": should_wake(text)} for key, text in rows]}, ensure_ascii=False))])
         if name not in ALLOWED:
             raise ValueError("未开放的操作")
         if not self.session:
@@ -219,6 +231,11 @@ class Controller:
             upstream_args = {"companion": self.companion, "code": command_script(args.get("line"))}
         async with self.action_lock:
             self.last_action = time.monotonic()
+            # Conservative: arbitrary Lua can already have spoken. The channel
+            # must not send its final text again after an uncertain/body reply.
+            if name in {"lua", "say"} or (name == "command" and re.match(
+                    r"^/?(?:minecraft:)?(?:msg|tell|w|say)\s", args.get("line", ""), re.I)):
+                self.outbound_epoch += 1
             self.journal.write("tool_started", tool=name, arguments=args)
             try:
                 # One request only. An interrupted action is unknown, never retried.
@@ -238,9 +255,11 @@ class Controller:
                                                       read_timeout_seconds=timedelta(seconds=60))
                 text = result_text(result)
                 if result.isError:
+                    self.body_available = False
                     self.status("waiting_for_body")
                     await asyncio.sleep(10)
                     continue
+                self.body_available = True
                 self.status("connected", auto_wake=bool(self.cfg.get("auto_wake")))
                 if has_events(text):
                     key = self.journal.accept(text)
@@ -254,6 +273,8 @@ class Controller:
                 raise
 
     async def dispatch_events(self):
+        if self.event_transport == "channel":
+            return  # The sole native channel reads snapshots through this MCP driver.
         next_turn = 0.0
         while True:
             await asyncio.sleep(5)
@@ -329,6 +350,7 @@ class Controller:
                 self.status("reconnecting", error=type(exc).__name__, backoff=backoff)
             finally:
                 self.session = None
+                self.body_available = False
             await asyncio.sleep(backoff)
             backoff = min(30, backoff * 2)
 

@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-20",
+  "status": "candidate_not_deployed",
+  "qwenpawVersion": "2.2.2",
+  "paperRestartRequired": false,
+  "officialPluginInstallReloadsAllQwenPawAgents": true,
+  "files": {
+    "AGENTS.md": "fb1fc1a28d4a9e8cfbcf5448cb83e6c05f423f87eced398017b7ad8d856f6788",
+    "numen_controller.py": "ae1e17e6286d6b9027026c3c17ae90e4176c5ac010cae14237f88b1692efd48b",
+    "options.json": "1f6596088ca1e72f5288db573c33793c8d233fd68a559a5d81f69727f87ad875",
+    "native_plugin/plugin.json": "3dace53ea26769843db934df899da18ecc5da75f72149d35faec4dcaa4c1042c",
+    "native_plugin/plugin.py": "20ab47659877da0760bc82143563c4e95aaf3b078230435fb78df9887619cb3d",
+    "skills/qiandengji-start/SKILL.md": "563419f332e08bbac5ef1b696ddf7ac89ff0cba0874840d9e95f1079bbc2f9c4"
+  },
+  "verification": {
+    "unitPassed": 46,
+    "unitSkippedOldLive": 6,
+    "goalCommands": [
+      "/mycli status",
+      "/mycli tasks status",
+      "/mycli skills status"
+    ],
+    "nativeGoalCompleted": true,
+    "privateTwoPlayers": "passed",
+    "memoryFreshProcess": {
+      "passed": true,
+      "freshProcessWithoutAgentContext": true,
+      "nativeSearchCalled": true,
+      "queryContainsSecretMarker": false,
+      "markerRecalled": true,
+      "sourcePathPresent": true,
+      "maxResults": 2,
+      "resultCharacters": 3933
+    },
+    "idleHeartbeat": {
+      "passed": true,
+      "authoritativeReads": 1,
+      "modelTurns": 0,
+      "noPublicOrPrivateChat": true
+    },
+    "productionChanged": false
+  }
+}
