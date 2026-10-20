@@ -454,7 +454,11 @@ def test_invalid_model_call_is_not_dispatched_and_can_recover(framework_module, 
     controller.persist(stopped=False)
     tools = module.model_tools(bridge.tools)
     run_async(controller.turn_once("survive", "prefix", tools))
-    assert controller.continuation_needed and controller.planner_retry_at > module.time.monotonic()
+    assert controller.continuation_needed
+    if bad_call['arguments'] == '{':
+        assert controller.continuation_ready  # One known pre-dispatch JSON correction can run promptly.
+    else:
+        assert controller.planner_retry_at > module.time.monotonic()
     assert not bridge.closed and controller.inflight_request is None
     assert not json.loads(controller.state_path.read_text()).get("uncertain")
     assert all(name == "mc_events" or (name == "mc_protocol" and args["action"] in {"begin_turn", "facts", "end_turn"})

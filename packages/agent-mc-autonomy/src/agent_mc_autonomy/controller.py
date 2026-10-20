@@ -106,6 +106,10 @@ class ModelCallRejected(ValueError):
     """Known local rejection before any dispatch or uncertainty journal."""
 
 
+class ToolJSONRejected(ModelCallRejected):
+    """A complete tool envelope whose argument JSON failed before dispatch."""
+
+
 def fact_fingerprint(facts):
     # The sample timestamp is useful context, but is not a decision trigger.
     return encode([(p["key"], p["text"]) for p in facts.get("parts", []) if p["key"] not in {"sample", "realclock"}])
@@ -1285,6 +1289,16 @@ class Controller:
             raise ModelCallRejected("Unavailable Minecraft tool. Use mc_tool_help, then mc_invoke(name,arguments) for advanced capabilities; never call their names directly.")
         try:
             arguments = json.loads(function.get("arguments", ""))
+        except json.JSONDecodeError as error:
+            raw = function["arguments"]
+            excerpt = raw[max(0, error.pos - 80):error.pos + 100]
+            raise ToolJSONRejected(
+                f"Tool arguments for {name} must be one complete JSON object: {error.msg} "
+                f"at line {error.lineno}, column {error.colno}, offset {error.pos}. "
+                f"Rejected raw excerpt: {encode(excerpt)}. This is rejected input, not a call to replay. "
+                "Write a new valid JSON object using the advertised field names and values; "
+                "no arguments were repaired or dispatched."
+            ) from None
         except (ValueError, TypeError):
             raise ModelCallRejected("Tool arguments must be one complete JSON object.") from None
         if not isinstance(arguments, dict):
@@ -1529,10 +1543,15 @@ class Controller:
             self.retain_history()
         with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
             output.write(encode({"turnId": self.turn, "rejected": str(error), "dispatched": False}) + "\n")
-        delay = min(60, max(1, self.settings.min_decision_seconds) * 2 ** min(6, self.invalid_tool_calls - 1))
+        immediate = (isinstance(error, ToolJSONRejected) and self.invalid_tool_calls == 1
+                     and not self.pending and self.inflight_request is None and not self.stop_requested())
+        delay = 0 if immediate else min(60, max(1, self.settings.min_decision_seconds) * 2 ** min(6, self.invalid_tool_calls - 1))
         self.planner_retry_at = time.monotonic() + delay
+        self.continuation_ready = immediate
         self.continuation_needed = True
-        self.publish(planner_error="invalid_model_tool_call", invalid_tool_calls=self.invalid_tool_calls)
+        self.publish(planner_error="invalid_model_tool_call", invalid_tool_calls=self.invalid_tool_calls,
+                     planner_retry_seconds=delay, planner_correction={"kind": "json_syntax" if isinstance(error, ToolJSONRejected) else "validation",
+                         "attempt": self.invalid_tool_calls, "immediate": immediate, "dispatched": False})
 
     def retain_history(self):
         if self.settings.context_mode != "full":
@@ -1744,7 +1763,7 @@ class Controller:
                 self.planner_failures = 0
                 self.planner_retry_at = 0.0
                 self.planner_notice = None
-                self.publish(planner_error=None, planner_diagnostic=None, planner_failures=0, planner_retry_seconds=0)
+                self.publish(planner_error=None, planner_diagnostic=None, planner_failures=0, planner_retry_seconds=0, planner_correction=None)
                 model_status = response.get("model_status", {})
                 if model_status:
                     self.publish(model_status=model_status, autonomy_running=model_status.get("route") != "unavailable")

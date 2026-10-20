@@ -344,6 +344,9 @@ def test_optional_async_provider_is_bounded_and_preserves_preemption(framework_m
         # inference before the poll is drained; it must resume next round.
         assert controller._deferred_event_drain
         controller.recent_context_provider = lambda _: {"available": False}
+        # run() joins the owned native poll before admitting another turn.
+        # Calling turn_once directly here races its still-pending event task.
+        run_async(controller.join_deferred_events())
         run_async(controller.turn_once("survive", "body", module.model_tools(bridge.tools)))
         assert inferred == [True]
         assert not controller._deferred_event_drain and controller._event_poll is None

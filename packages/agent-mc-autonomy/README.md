@@ -1,5 +1,12 @@
 # Agent MC Autonomy
 
+0.2.55 reports a rejected tool JSON's exact parser location and bounded raw
+excerpt in the next selected planner notice, so window eviction cannot leave
+only a generic error. One first, known no-dispatch syntax error can request an
+immediate correction when the body is idle; repeated invalid replies retain
+normal bounded backoff. Native pending/unknown work and stop still fence it.
+Arguments are never repaired, guessed or executed automatically.
+
 0.2.54 carries still-applicable, dated generic bag/queue/failure answers in the
 selected context even when their original conversation exchange was evicted.
 State, scope, expiry and running-work fences remain intact; a retained answer
