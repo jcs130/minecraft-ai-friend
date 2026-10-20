@@ -1,5 +1,11 @@
 # Agent MC World
 
+`0.5.7-rc.56` captures the optional native renderer's real first/third/3dview
+routes and committed scene without requiring legacy chunk-map globals. Native
+coordinate-overview and custom FOV remain explicit unsupported requests;
+existing legacy renderer behavior is preserved. Images do not establish full
+scene parity or action success.
+
 `0.5.7-rc.55` includes the current scoped goal ledger and its milestones in
 `requestFacts().parts` as `goals`. SDK/MCP hosts no longer need an environment
 prompt refresh to observe a newly registered or revised project. This reads the

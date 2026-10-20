@@ -135,6 +135,11 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
   assert.ok(bridge instanceof Bridge);
   const bot = Object.assign(new EventEmitter(), { version: options.cfg.version, username: 'FixtureBody',
     entity: { id: 1, position: { x: 0, y: 64, z: 0 } }, inventory: { slots: [] }, _client: { uuid: 'body-id' } });
+  // Fake only the established game connection; the bridge's actual viewer
+  // accessors must bind the same presentation used by the core visual tool.
+  let connectedBot = bot;
+  Object.defineProperty(bridge, 'bot', { get: () => connectedBot });
+  assert.equal(bridge.viewerUrl, null);
   const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
   bridge.opts.onBotCreated(bot); await flush();
   assert.equal(coreBot, bot);
@@ -144,6 +149,13 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
   assert.equal(intervals.size, 1);
   assert.equal(nativeGuiPresented(bot), true);
   const active = views[0];
+  assert.equal(bridge.viewerUrl, active.url, 'core photography must see the actual same-body viewer');
+  assert.equal(bridge.viewerKind, 'modern');
+  connectedBot = null; assert.equal(bridge.viewerUrl, null);
+  connectedBot = Object.assign({}, bot); assert.equal(bridge.viewerUrl, null);
+  connectedBot = bot;
+  active.server.listening = false; assert.equal(bridge.viewerUrl, null);
+  active.server.listening = true;
   const publish = () => { for (const timer of intervals) timer.callback(); };
   const initialReads = active.statusReads;
   for (let i = 0; i < 100; i++) assert.equal(nativeGuiPresented(bot), true);
@@ -171,12 +183,15 @@ test('viewer preserves the default tactical engine and same-body lifecycle', asy
   publish(); assert.equal(nativeGuiPresented(bot), true); // new operations bind the current epoch
   bridge.opts.onBotCreated(bot);
   assert.equal(nativeGuiPresented(bot), false); // old binding revoked before replacement listen
+  assert.equal(bridge.viewerUrl, null, 'obsolete capture binding is revoked before replacement listen');
   await flush();
   assert.equal(views.length, 2);
   assert.ok(calls.findIndex(call => call[0] === 'view-close' && call[1] === views[0])
     < calls.findIndex(call => call[0] === 'listen' && call[1] === views[1]));
   assert.equal(intervals.size, 1);
   await viewer.stop();
+  assert.equal(bridge.viewerUrl, null);
+  assert.equal(bridge.viewerKind, null);
   assert.equal(nativeGuiPresented(bot), false);
   assert.equal(intervals.size, 0);
   assert.equal(JSON.parse(readFileSync(config.stateFile)).reason, 'STOPPED');
