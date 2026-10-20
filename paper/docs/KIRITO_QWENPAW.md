@@ -4,7 +4,7 @@
 
 正式检查通过：36项健康、10项角色保存、9项YSM/Web资源协议、3次真实模型读取和4项普通玩家私聊唤醒/原版私聊回复。39项技能33383字符完整返回。首次登录新增 `academy.grade=3 / migrationRank=1` 是现有插件按旧公会等级补齐，原职业字段、技能和点数逐项一致。
 
-原生能力使用程度另见 [QwenPaw 原生能力核验](KIRITO_NATIVE_QWENPAW.md)。目前核心推理是原生 Agent，原生计划、游戏 Skill 和自动记忆检索仍有待配置。
+原生能力使用程度另见 [QwenPaw 原生能力核验](KIRITO_NATIVE_QWENPAW.md) 与 [结合研究](QWENPAW_GAME_INTEGRATION.md)。核心推理是原生 Agent；2.2.2 的 Plan Mode 实际暂不可用，应先评估原生 Goal。游戏 Skill 和自动记忆检索仍有待配置。
 
 ## 身份和控制链
 

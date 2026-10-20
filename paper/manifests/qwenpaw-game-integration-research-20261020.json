@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-20",
+  "status": "research_verified_not_enabled",
+  "framework": "QwenPaw 2.2.2",
+  "role": "mc-kirito",
+  "checks": 8,
+  "modelCalls": 0,
+  "gameActions": 0,
+  "productionProfileChanged": false,
+  "planMode": "temporarily_unavailable",
+  "goalMode": "native_abi_present_gameplay_not_validated",
+  "memoryRuntime": {
+    "worker": {
+      "status": "idle",
+      "queue_pending": 0,
+      "tasks_running": 0
+    },
+    "auto_memory": {
+      "enabled": true,
+      "interval": 5
+    },
+    "tasks": [],
+    "recent": {
+      "last_error": null
+    },
+    "reindexing": false,
+    "embedding_reindex_required": false,
+    "embedding_reindex_undo_available": false
+  },
+  "automaticMemoryRetrievalEnabled": false,
+  "architecture": "native_channel_single_body_session_native_goal_reme_existing_mcp",
+  "document": "paper/docs/QWENPAW_GAME_INTEGRATION.md",
+  "installedSourceSha256": {
+    "agents/command_handler.py": "34c5f6a4870eb90d832f6dd1d7a14bf6851cfa87906b319a4d5f69ff481ffd03",
+    "agents/middlewares.py": "24f9cbf5bb939f4120c8cf71db0308e1d80d07a9e93b6a075ac33a08c7abc1bf",
+    "app/crons/heartbeat.py": "f852963874e7cef79b0343a2703acc1469fbc7d2df50d41e52835f198d0ad01a",
+    "plugins/api.py": "148078d97e7d53dc76ad071139567f90272aa3a7bcd2afd3b0508b0cb68b11c8",
+    "modes/goal/goal_mode.py": "375e861f5b78325fb90e5745f461b7e3ffeea4bd3718cdb606dbc0943e718fac",
+    "runtime/builder.py": "9f4f107bf7fd544392ef304da4c18ca573a6abde02747d87456c61357024ee10"
+  }
+}
