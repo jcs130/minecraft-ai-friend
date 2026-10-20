@@ -33,6 +33,20 @@ function Content-AuthTarget([string]$relative) {
     return (Join-Path $config.root ('proxy/plugins/' + $path))
 }
 
+function Content-KiritoAppearanceTarget([string]$relative) {
+    # Only this reviewed model and its server-owned bridge config are eligible.
+    # Reuse the existing stopped Proxy/Worker gate and subsequent E/F snapshot/hash checks.
+    $null = Content-YsmProxyTarget 'AgentAppearance-0.3.3.jar'
+    $config = Ysm-Config
+    if ($relative -ceq 'ysm-appearance/models.json') {
+        return (Join-Path $config.root 'proxy/plugins/agentappearance/models.json')
+    }
+    if ($relative -cmatch '^ysm-model/qiandengji_kirito/(?<asset>ysm\.json|models/(?:main|arm)\.json|animations/(?:main|tac)\.animation\.json|textures/skin\.png|avatar/(?:dm|gsl|tzz)\.png|lang/(?:zh_cn|en_us)\.json|CREDITS\.txt|\.qiandengji-generated\.json)$') {
+        return (Join-Path $config.root ('worker/config/yes_steve_model/custom/qiandengji_kirito/' + $Matches['asset']))
+    }
+    throw 'Unexpected Kirito appearance target'
+}
+
 function Deploy-PendingContent {
     $planPath = Join-Path $opsDir 'content-plugins.pending.json'
     if (-not (Test-Path -LiteralPath $planPath)) { return }
@@ -56,6 +70,8 @@ function Deploy-PendingContent {
             $target = Join-Path $serverDir $relative
         } elseif ($relative -match '^ysm-proxy/((AgentAppearance|LibreLogin|LoginGuard|NanoLimboPlugin-velocity)-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
             $target = Content-YsmProxyTarget $Matches[1]
+        } elseif ($relative -eq 'ysm-appearance/models.json' -or $relative.StartsWith('ysm-model/qiandengji_kirito/')) {
+            $target = Content-KiritoAppearanceTarget $relative
         } elseif ($relative -match '^ysm-model/(cormy|neko_yui)/ysm\.json$') {
             $modelId = $Matches[1]
             # These two approved size corrections share the stopped services,
@@ -74,7 +90,7 @@ function Deploy-PendingContent {
             # This one root file uses the same stopped E/F snapshots, pinned hashes,
             # atomic replacement and rollback as plugin configuration below.
             $target = Join-Path $serverDir $relative
-        } elseif ($relative -in @('plugins/CortiEyeMirror/config.yml','plugins/WorldGuard/worlds/world/regions.yml','plugins/MagicSpells/general.yml','plugins/MagicSpells/spells-agentfriend.yml','plugins/SpectatorPlus/config.yml','plugins/Geyser-Spigot/extensions/ysmbedrock/config.json','plugins/Geyser-Spigot/extensions/AgentAppearance-Bedrock-0.1.0.jar','plugins/Freesia-Backend-2.5.1+2.4.1-all.jar','plugins/numen/server/server.json','plugins/numen/server/mcp_server.json')) {
+        } elseif ($relative -in @('plugins/CortiEyeMirror/config.yml','plugins/WorldGuard/worlds/world/regions.yml','plugins/MagicSpells/general.yml','plugins/MagicSpells/spells-agentfriend.yml','plugins/SpectatorPlus/config.yml','plugins/Geyser-Spigot/extensions/ysmbedrock/config.json','plugins/Geyser-Spigot/extensions/AgentAppearance-Bedrock-0.1.0.jar','plugins/Freesia-Backend-2.5.1+2.4.1-all.jar','plugins/numen/server/server.json','plugins/numen/server/mcp_server.json','plugins/numen/server/appearance_bindings.json')) {
             # Only the two server-owned spell files are eligible; the same
             # pinned hashes, stopped snapshots and rollback apply below.
             $target = Join-Path $serverDir $relative
@@ -89,7 +105,7 @@ function Deploy-PendingContent {
         } elseif ($relative -match '^plugins/([A-Za-z0-9]+)/(.+)$' -and $allowed -contains $Matches[1]) {
             if ($relative -match '(^|/)\.\.(/|$)|:|\\' -or $relative -notmatch '\.(yml|yaml|json|dsc)$') { throw 'Unsafe plugin configuration path' }
             $target = Join-Path $serverDir $relative
-        } elseif ($relative -in @('ops/agent-auth.json','ops/auth-proxy.mjs','ops/mineflayer-login-gate.mjs','ops/mineflayer-client-compat.mjs','ops/manage-server.ps1','ops/content-deploy.ps1','ops/ysm-services.mjs','ops/ysm-services.json','ops/goddess-bridge.mjs','ops/goddess-photo-camera.mjs','ops/goddess-photo-camera.json','ops/goddess-mcp.py','ops/goddess-perception.mjs','ops/maintenance-notice.mjs','ops/npc-dialogue-adapter.mjs','ops/npc-adapter.private.json','ops/agent-eye-names.mjs','ops/agent-eye-pairs.json','ops/agent-eye-watcher.mjs','ops/agent-lan-gateway.mjs','ops/agent-gateway-access.json')) {
+        } elseif ($relative -in @('ops/agent-auth.json','ops/auth-proxy.mjs','ops/mineflayer-login-gate.mjs','ops/mineflayer-client-compat.mjs','ops/manage-server.ps1','ops/content-deploy.ps1','ops/numen-qwenpaw-controller.py','ops/ysm-services.mjs','ops/ysm-services.json','ops/goddess-bridge.mjs','ops/goddess-photo-camera.mjs','ops/goddess-photo-camera.json','ops/goddess-mcp.py','ops/goddess-perception.mjs','ops/maintenance-notice.mjs','ops/npc-dialogue-adapter.mjs','ops/npc-adapter.private.json','ops/agent-eye-names.mjs','ops/agent-eye-pairs.json','ops/agent-eye-watcher.mjs','ops/agent-lan-gateway.mjs','ops/agent-gateway-access.json')) {
             $target = Join-Path $opsDir $relative.Substring(4)
         } else { throw "Unexpected content target: $relative" }
         $source = [IO.Path]::GetFullPath([string]$file.source)

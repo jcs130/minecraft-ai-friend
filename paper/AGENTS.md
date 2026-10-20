@@ -1,3 +1,7 @@
+## 2026-10-20 原桐人与 QwenPaw 候选，未切换正式服
+
+服主明确选择接管旧 ag_Kirito（8e7b99e0-595d-3402-935c-7139ac6814e3），沿用背包与战士职业。候选 Numen API SHA256 14785cfdd1a2895b4c88e35d97330a0905709ed766f7d1d82fd291f0de3a7321、AgentAppearance0.3.3 SHA256 1644074b881225c927d9ad0c2e080432c48a875691bf6e1c166dec5f172dcd26；Freesia仍af3、AgentFriend仍0.4.47.8。QwenPaw独立mc-kirito通过单角色原生MCP实际完成行走、CLI与私聊，内脑EXTERNAL；旧星灯停驻保档，不能永久遣散。新增受限原账号adopt命令与虚拟身体YSM/Web投影。945 common、12适配器、8投影、最终9联机及21发布目标检查通过，31载荷类保持；原UUID、33物品槽位、职业与Minepacks原blob及正常冷重连已核对。E/F候选与前像备好，正式仍星灯，未写pending；必须取得本次维护确认，再走预告、真人/活动门禁和完整双盘冷备份。无手机/Xbox、实际Fabric模型像素、远端Web或16自主模型负载验收。见paper/docs/KIRITO_QWENPAW.md与对应候选清单。
+
 ## 2026-10-20 Numen 常驻角色已上线
 
 服主明确选择实验服继续使用CodingPlan qwen3.7-plus并批准上线。180/60/10秒预告、原Afu-MC-DailyBackup正常停启与E/F完整冷备份20261020-131200完成后，只替换Numen API为49256bec2ae8621bdb048c7d88eea0547767e8adc9273eccf16596b84df31f02；AgentFriend仍0.4.47.8。常驻旅人星灯ag_StarLantern（04dfee4f-3bc3-495d-9269-6ae3323adb27）归独立非OP配置账号NumenKeeper20管理，管理连接已退出；真实模型只读工具与离线中文回复、原生存档已验证。Key仅在专用主人私有钥匙串，不是全服共享custom Key，输出上限4096、主动性10；上游服主Key日限额不覆盖私有Key，不得宣称已配置日硬限额。网关禁止外部冒用角色名，保留既有身份授权。候选1726 JVM/11 E2E/19联机与两次正常退出保持，追加真实模型6项、正式角色15项、健康26项和两种原登录网关协议共60项通过。初版模型探针误匹配请求正文及固定文案超时均保留并由正确角色/模型/工具结果断言取代。其他玩家私聊仍按原生旁听，不自动取得主人操控权。无16自主模型或新手机/Xbox画面验收，不混入档案馆0.4.48、格挡0.4.47.7和Freesia af4。见paper/docs/NUMEN_PAPER.md与numen-resident-release-20261020.json。

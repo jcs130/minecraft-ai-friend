@@ -1,0 +1,218 @@
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentAdoption.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentAdoption.java
+new file mode 100644
+index 0000000..b1410b3
+--- /dev/null
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentAdoption.java
+@@ -0,0 +1,34 @@
++package com.dwinovo.numen.api.brain;
++
++import net.minecraft.core.BlockPos;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.Tag;
++
++import java.util.UUID;
++
++/** Read-only validation of an existing player save. Adoption never rewrites the player's save. */
++final class ResidentAdoption {
++    private ResidentAdoption() {}
++
++    record Saved(String dimension, BlockPos position) {}
++
++    static Saved inspect(CompoundTag tag, UUID id, String name) {
++        if (!name.matches("[A-Za-z0-9_]{1,16}")) throw new IllegalArgumentException("角色名格式无效");
++        if (!tag.hasUUID("UUID") || !id.equals(tag.getUUID("UUID")))
++            throw new IllegalArgumentException("存档 UUID 与指定账号不一致");
++        String savedName = tag.getCompound("bukkit").getString("lastKnownName");
++        if (!savedName.equalsIgnoreCase(name))
++            throw new IllegalArgumentException("存档角色名与指定账号不一致");
++        if (tag.hasUUID("NumenOwner")) throw new IllegalArgumentException("已有同伴归属，不能重复接管");
++        if (!tag.contains("Health", Tag.TAG_ANY_NUMERIC) || !(tag.getFloat("Health") > 0))
++            throw new IllegalArgumentException("角色已死亡，请先按正常流程复活");
++        var pos = tag.getList("Pos", Tag.TAG_DOUBLE);
++        if (pos.size() != 3 || !Double.isFinite(pos.getDouble(0)) || !Double.isFinite(pos.getDouble(1))
++                || !Double.isFinite(pos.getDouble(2)) || Math.abs(pos.getDouble(0)) > 29999984
++                || Math.abs(pos.getDouble(2)) > 29999984 || Math.abs(pos.getDouble(1)) > 2048)
++            throw new IllegalArgumentException("存档位置无效");
++        String dimension = tag.getString("Dimension");
++        if (dimension.isBlank()) throw new IllegalArgumentException("存档没有维度");
++        return new Saved(dimension, BlockPos.containing(pos.getDouble(0), pos.getDouble(1), pos.getDouble(2)));
++    }
++}
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentCommand.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentCommand.java
+index a643861..78e9c37 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentCommand.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentCommand.java
+@@ -29,9 +29,51 @@ public final class ResidentCommand {
+         }).then(argument().executes(ctx -> run(ctx, null))));
+         root.then(Commands.literal("enable").then(argument().executes(ctx -> run(ctx, true))));
+         root.then(Commands.literal("disable").then(argument().executes(ctx -> run(ctx, false))));
++        root.then(Commands.literal("adopt").then(Commands.argument("playerUuid", StringArgumentType.word())
++                .then(Commands.argument("playerName", StringArgumentType.word())
++                        .then(Commands.argument("ownerUuid", StringArgumentType.word()).executes(ResidentCommand::adopt)))));
+         return root;
+     }
+ 
++    /** Explicit administrator operation; only registers an offline, verified existing account. */
++    private static int adopt(CommandContext<CommandSourceStack> ctx) {
++        var source = ctx.getSource();
++        var server = source.getServer();
++        try {
++            UUID id = UUID.fromString(StringArgumentType.getString(ctx, "playerUuid"));
++            UUID owner = UUID.fromString(StringArgumentType.getString(ctx, "ownerUuid"));
++            String name = StringArgumentType.getString(ctx, "playerName");
++            var registry = CompanionRegistry.get(server);
++            if (id.equals(owner) || registry.find(owner) != null)
++                throw new IllegalArgumentException("主人必须是独立的配置账号");
++            if (server.getPlayerList().getPlayer(id) != null || server.getPlayerList().getPlayerByName(name) != null)
++                throw new IllegalArgumentException("角色仍在线，请先正常退出");
++            if (registry.find(id) != null || registry.all().stream().anyMatch(u -> registry.find(u).name().equalsIgnoreCase(name)))
++                throw new IllegalArgumentException("该角色已登记，请用 resident status 查看");
++            var profile = server.getProfileCache().get(id).orElseThrow(() -> new IllegalArgumentException("角色不在账号缓存中"));
++            if (!profile.getName().equalsIgnoreCase(name) || server.getPlayerList().isOp(profile))
++                throw new IllegalArgumentException("角色身份不匹配，或属于管理员账号");
++            var ownerProfile = server.getProfileCache().get(owner).orElseThrow(() -> new IllegalArgumentException("主人账号尚未登录登记"));
++            if (server.getPlayerList().isOp(ownerProfile))
++                throw new IllegalArgumentException("请使用非 OP 的专用配置账号");
++            var path = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR).resolve(id + ".dat");
++            var tag = net.minecraft.nbt.NbtIo.readCompressed(path, net.minecraft.nbt.NbtAccounter.create(16L * 1024 * 1024));
++            var saved = ResidentAdoption.inspect(tag, id, name);
++            var location = net.minecraft.resources.ResourceLocation.tryParse(saved.dimension());
++            var dimension = location == null ? null : net.minecraft.resources.ResourceKey.create(
++                    net.minecraft.core.registries.Registries.DIMENSION, location);
++            if (dimension == null || server.getLevel(dimension) == null)
++                throw new IllegalArgumentException("存档维度未加载");
++            registry.put(id, new CompanionRegistry.Entry(name, owner, dimension, saved.position()));
++            say(source, "[常驻] 已登记原角色 " + name + "，UUID=" + id
++                    + "；未修改背包、职业或位置，尚未启用常驻。命令：/numen resident enable " + id);
++            return 1;
++        } catch (java.io.IOException | IllegalArgumentException e) {
++            source.sendFailure(Component.literal("[常驻] 接管未完成：" + e.getMessage() + "。请核对离线账号与原 UUID 后重试。"));
++            return 0;
++        }
++    }
++
+     private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> argument() {
+         return Commands.argument("companion", StringArgumentType.string()).suggests((ctx, builder) ->
+                 SharedSuggestionProvider.suggest(CompanionRegistry.get(ctx.getSource().getServer()).all().stream()
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/ResidentAdoptionTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/ResidentAdoptionTest.java
+new file mode 100644
+index 0000000..c8b5425
+--- /dev/null
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/ResidentAdoptionTest.java
+@@ -0,0 +1,35 @@
++package com.dwinovo.numen.api.brain;
++
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.DoubleTag;
++import net.minecraft.nbt.ListTag;
++import org.junit.jupiter.api.Test;
++import java.util.UUID;
++import static org.junit.jupiter.api.Assertions.*;
++
++class ResidentAdoptionTest {
++    private static final UUID ID = UUID.fromString("8e7b99e0-595d-3402-935c-7139ac6814e3");
++    private CompoundTag save() {
++        var tag = new CompoundTag();
++        tag.putUUID("UUID", ID);
++        tag.putFloat("Health", 20);
++        tag.putString("Dimension", "minecraft:overworld");
++        var bukkit = new CompoundTag(); bukkit.putString("lastKnownName", "ag_Kirito"); tag.put("bukkit", bukkit);
++        var pos = new ListTag(); for (double p : new double[]{-545.01, 67, -440.52}) pos.add(DoubleTag.valueOf(p)); tag.put("Pos", pos);
++        tag.putString("Inventory", "opaque original inventory including custom items");
++        return tag;
++    }
++    @Test void validatesWithoutChangingTheOriginalSaveOrInventory() {
++        var tag = save(); var before = tag.copy();
++        var result = ResidentAdoption.inspect(tag, ID, "ag_Kirito");
++        assertEquals(-546, result.position().getX()); assertEquals(-441, result.position().getZ());
++        assertEquals("minecraft:overworld", result.dimension()); assertEquals(before, tag);
++    }
++    @Test void refusesWrongUuid() { assertThrows(IllegalArgumentException.class, () -> ResidentAdoption.inspect(save(), UUID.randomUUID(), "ag_Kirito")); }
++    @Test void refusesWrongName() { assertThrows(IllegalArgumentException.class, () -> ResidentAdoption.inspect(save(), ID, "ag_Other")); }
++    @Test void refusesMissingIdentity() { var t=save(); t.remove("UUID"); assertThrows(IllegalArgumentException.class, () -> ResidentAdoption.inspect(t, ID, "ag_Kirito")); }
++    @Test void refusesAlreadyOwnedSave() { var t=save(); t.putUUID("NumenOwner", UUID.randomUUID()); assertThrows(IllegalArgumentException.class, () -> ResidentAdoption.inspect(t, ID, "ag_Kirito")); }
++    @Test void refusesDeadSave() { var t=save(); t.putFloat("Health", 0); assertThrows(IllegalArgumentException.class, () -> ResidentAdoption.inspect(t, ID, "ag_Kirito")); }
++    @Test void refusesInvalidPosition() { var t=save(); t.getList("Pos", 6).set(0, DoubleTag.valueOf(Double.NaN)); assertThrows(IllegalArgumentException.class, () -> ResidentAdoption.inspect(t, ID, "ag_Kirito")); }
++    @Test void refusesMissingDimension() { var t=save(); t.remove("Dimension"); assertThrows(IllegalArgumentException.class, () -> ResidentAdoption.inspect(t, ID, "ag_Kirito")); }
++}
+diff --git a/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java b/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java
+index f235edc..5d84760 100644
+--- a/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java
++++ b/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java
+@@ -25,6 +25,7 @@ public final class NumenApiPlugin extends JavaPlugin {
+         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> PaperCommands.register(event.registrar()));
+ 
+         CommonClass.init();
++        ServerLifecycle.onStarted(server -> PaperAppearance.start(this));
+ 
+         // 翻译源在服务器起好之后才登记:语言表按语言缓存,要等所有带 Numen 内容的插件都启用了才读,免得缓存里缺它们的键
+         NumenTranslator translator = new NumenTranslator();
+diff --git a/numen-api/paper/src/main/java/com/dwinovo/numen/api/PaperAppearance.java b/numen-api/paper/src/main/java/com/dwinovo/numen/api/PaperAppearance.java
+new file mode 100644
+index 0000000..43fa70f
+--- /dev/null
++++ b/numen-api/paper/src/main/java/com/dwinovo/numen/api/PaperAppearance.java
+@@ -0,0 +1,63 @@
++package com.dwinovo.numen.api;
++
++import com.dwinovo.numen.api.entity.NumenPlayer;
++import com.google.gson.*;
++import net.minecraft.server.MinecraftServer;
++import org.bukkit.Bukkit;
++import org.bukkit.plugin.java.JavaPlugin;
++
++import java.nio.file.*;
++import java.util.UUID;
++
++/** Opt-in public appearance facts for server-side bodies which have no proxy login session. */
++final class PaperAppearance {
++    private static final Gson JSON = new Gson();
++    private final Path config = NumenPaths.config().resolve("server/appearance_bindings.json");
++    private final Path state = NumenPaths.config().resolve("server/appearance_state.json");
++    private final String epoch = UUID.randomUUID().toString();
++
++    static void start(JavaPlugin plugin) {
++        var projection = new PaperAppearance();
++        Bukkit.getScheduler().runTaskTimer(plugin, projection::write, 40, 40);
++    }
++
++    private void write() {
++        try {
++            if (!Files.isRegularFile(config) || Files.size(config) > 8192) return;
++            var options = JsonParser.parseString(Files.readString(config)).getAsJsonObject();
++            var bindings = options.getAsJsonObject("bindings");
++            if (bindings == null || bindings.size() > 16) return;
++            String backend = options.has("backend") ? options.get("backend").getAsString() : "paper";
++            if (!backend.matches("[a-zA-Z0-9_-]{1,64}")) return;
++            var rows = new JsonArray();
++            var server = MinecraftServer.getServer();
++            for (var binding : bindings.entrySet()) {
++                UUID id = UUID.fromString(binding.getKey());
++                var player = NumenPlayer.findByUuid(server, id);
++                if (player == null || !player.isAlive()) continue;
++                var entry = binding.getValue().getAsJsonObject();
++                String model = entry.get("modelId").getAsString(), texture = entry.get("texture").getAsString();
++                if (!model.matches("[a-zA-Z0-9_-]{1,96}") || !texture.matches("[a-zA-Z0-9_.-]{1,96}")) continue;
++                var row = new JsonObject();
++                row.addProperty("playerUuid", id.toString());
++                row.addProperty("playerName", player.getGameProfile().getName());
++                row.addProperty("entityId", player.getId());
++                row.addProperty("dimension", player.level().dimension().location().toString());
++                row.addProperty("backend", backend);
++                row.addProperty("modelId", model); row.addProperty("texture", texture);
++                rows.add(row);
++            }
++            var root = new JsonObject();
++            root.addProperty("schemaVersion", 1); root.addProperty("source", "numen_server");
++            root.addProperty("epoch", epoch); root.addProperty("observedAt", System.currentTimeMillis());
++            root.add("players", rows);
++            Files.createDirectories(state.getParent());
++            Path temporary = state.resolveSibling(state.getFileName() + ".tmp");
++            Files.writeString(temporary, JSON.toJson(root));
++            Files.move(temporary, state, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
++        } catch (Exception invalid) {
++            // Do not publish guessed identities or retain a fresh timestamp on failure.
++            // Consumers expire the last valid snapshot after 15 seconds.
++        }
++    }
++}

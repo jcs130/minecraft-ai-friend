@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-20",
+  "status": "validated_candidate_not_deployed",
+  "role": {
+    "name": "ag_Kirito",
+    "uuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+    "profession": "warrior",
+    "existingPlayer": true
+  },
+  "controller": {
+    "framework": "QwenPaw",
+    "agentId": "mc-kirito",
+    "model": "qwen3.7-plus",
+    "credentials": "existing encrypted provider reference",
+    "privateMcp": true,
+    "maxIterations": 12,
+    "eventPollSeconds": 10,
+    "eventTurnIntervalSeconds": 15,
+    "automaticActionRetry": false
+  },
+  "numen": {
+    "version": "0.1.4",
+    "sha256": "14785cfdd1a2895b4c88e35d97330a0905709ed766f7d1d82fd291f0de3a7321",
+    "previousSha256": "49256bec2ae8621bdb048c7d88eea0547767e8adc9273eccf16596b84df31f02",
+    "upstreamCommit": "7c931600c2269d21216bb6f9090588cdbe0beb01",
+    "sourceTree": "cd0d2cb1a117a272dd3fc53cbe7c5d7010f6bb41",
+    "patchSha256": "04332c13d29420c19b8f6cf6c15c33a45b9b0b8b7627071aeed3860c1139217c",
+    "unchangedPayloadClasses": 31
+  },
+  "appearance": {
+    "version": "0.3.3",
+    "sha256": "1644074b881225c927d9ad0c2e080432c48a875691bf6e1c166dec5f172dcd26",
+    "model": "qiandengji_kirito",
+    "texture": "skin",
+    "signedSkin": "afu_kirito",
+    "mainBones": 67,
+    "mainCubes": 55,
+    "armBones": 14,
+    "armCubes": 11,
+    "originalPngUnchanged": true
+  },
+  "controllerSha256": "9c6ef60e331ce0f79a74a90b31bf23845eec02060d898958d551117bea6c68fb",
+  "tests": {
+    "common": 945,
+    "adoptionNew": 8,
+    "adapter": 12,
+    "projection": 8,
+    "finalWire": 9,
+    "deploymentTargets": 21,
+    "realModelMovement": true,
+    "nativeEventWake": true,
+    "nonOwnerPrivateReply": true,
+    "fullStatusJson": true,
+    "warriorStatus": true,
+    "coldReconnectWithoutActionReplay": true,
+    "backpackBlobUnchanged": true
+  },
+  "boundaries": {
+    "paperVersion": "1.21.1 build 133",
+    "agentFriend": "0.4.47.8 unchanged",
+    "freesia": "af3 unchanged",
+    "productionQueued": false,
+    "productionRoleChanged": false,
+    "fabricPixelsVerified": false,
+    "remoteWebPixelsVerified": false,
+    "bedrockDevicePixelsVerified": false,
+    "sixteenAutonomousAgentsLoadVerified": false
+  },
+  "deployment": {
+    "files": 21,
+    "freshMaintenanceApprovalRequired": true,
+    "fullStoppedDualDiskBackupRequired": true,
+    "plan": "local repairs/numen-kirito-qwenpaw-20261020/deployment-plan.not-queued.json"
+  }
+}

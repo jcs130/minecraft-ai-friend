@@ -25,13 +25,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.nio.file.Path;
 
 /** Server-authoritative metadata; no client handshake emulation or gameplay action. */
-@Plugin(id="agentappearance", name="AgentAppearance", version="0.3.2",
+@Plugin(id="agentappearance", name="AgentAppearance", version="0.3.3",
     dependencies={@Dependency(id="freesia"), @Dependency(id="packetevents")})
 public final class AppearanceBridge {
     private static final MinecraftChannelIdentifier CHANNEL = MinecraftChannelIdentifier.from("mcagent:appearance");
     private static final MinecraftChannelIdentifier ASSETS = MinecraftChannelIdentifier.from("mcagent:ysm_asset");
     private final ModelCatalog models = new ModelCatalog(Path.of("plugins/agentappearance/models.json"));
     private final BedrockProjection bedrock = new BedrockProjection(Path.of("plugins/agentappearance/models.json"));
+    private final NativeCompanions companions = new NativeCompanions(Path.of("plugins/agentappearance/models.json"));
     private final Map<UUID,Transfer> transfers = new ConcurrentHashMap<>();
     private final Map<UUID,Long> requested = new ConcurrentHashMap<>();
     private record Transfer(ModelCatalog.Asset asset, String request, int index) { }
@@ -87,7 +88,7 @@ public final class AppearanceBridge {
         } catch(RuntimeException ignored) { }
     }
     private boolean mayRead(Player recipient,String id) {
-        return server.getAllPlayers().stream().anyMatch(owner->{
+        return companions.mayRead(recipient,id) || server.getAllPlayers().stream().anyMatch(owner->{
             Map<String,Object> state=states.get(owner.getUniqueId());
             return sameBackend(owner,recipient) && state!=null && Boolean.TRUE.equals(state.get("available")) && id.equals(state.get("modelId"));
         });
@@ -144,14 +145,16 @@ public final class AppearanceBridge {
             String serial=JSON.toJson(row);
             if(!serial.equals(last.put(owner.getUniqueId(),serial))) for(Set<UUID> set:delivered.values()) set.remove(owner.getUniqueId());
         }
-        Set<UUID> online=new HashSet<>();for(Player p:players)online.add(p.getUniqueId());
+        var companionStates=companions.poll(models,epoch);
+        states.putAll(companionStates);
+        Set<UUID> online=new HashSet<>(companionStates.keySet());for(Player p:players)online.add(p.getUniqueId());
         states.keySet().removeIf(uuid->!online.contains(uuid));
         // Geyser on the original Paper route consumes this private local projection.
         // It still binds UUID and the actual Java entity ID on each Bedrock session.
         try { bedrock.write(epoch,List.copyOf(states.values())); } catch(Exception ignored) { /* Geyser expires stale state. */ }
         for(Player recipient:players) {
             Set<UUID> sent=delivered.computeIfAbsent(recipient.getUniqueId(),uuid->ConcurrentHashMap.newKeySet());
-            for(UUID uuid:Set.copyOf(sent)) if(!online.contains(uuid) || server.getPlayer(uuid).filter(owner->sameBackend(owner,recipient)).isEmpty()) {
+            for(UUID uuid:Set.copyOf(sent)) if(!online.contains(uuid) || !visibleTo(uuid,recipient)) {
                 send(recipient,Map.of("schemaVersion",1,"source","freesia_worker","epoch",epoch,"type","remove","playerUuid",uuid.toString()));sent.remove(uuid);
             }
             long now=System.nanoTime();
@@ -160,12 +163,13 @@ public final class AppearanceBridge {
             }
             // Metadata is public appearance. The viewer may bind only a native entity
             // that its own connection currently tracks; this is not a tracker proof.
-            for(Player owner:players) {
-                if(sent.contains(owner.getUniqueId()) || !sameBackend(owner,recipient)) continue;
-                Map<String,Object> state=states.get(owner.getUniqueId());if(state==null)continue;
+            for(UUID id:online) {
+                if(sent.contains(id) || !visibleTo(id,recipient)) continue;
+                Map<String,Object> state=states.get(id);if(state==null)continue;
                 Map<String,Object> row=new LinkedHashMap<>(state);row.put("type","state");
-                if(send(recipient,row))sent.add(owner.getUniqueId());
+                if(send(recipient,row))sent.add(id);
             }
+            companions.refresh(recipient);
         }
     }
     private static String stateMessage(Map<String,Object> state) {
@@ -182,6 +186,9 @@ public final class AppearanceBridge {
     private boolean sameBackend(Player a,Player b) {
         return a.getCurrentServer().isPresent() && b.getCurrentServer().isPresent() &&
             a.getCurrentServer().get().getServerInfo().equals(b.getCurrentServer().get().getServerInfo());
+    }
+    private boolean visibleTo(UUID id,Player recipient) {
+        return server.getPlayer(id).map(owner->sameBackend(owner,recipient)).orElseGet(()->companions.visible(id,recipient));
     }
     private boolean send(Player player,Map<String,Object> row) {
         byte[] bytes=JSON.toJson(row).getBytes(StandardCharsets.UTF_8);
