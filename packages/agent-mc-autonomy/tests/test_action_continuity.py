@@ -9,14 +9,16 @@ import pytest
 from test_controller import action, choose, setup
 
 
-@pytest.mark.parametrize("phase,read_only,retry_until,early", [
-    ("completed", False, 0, True),
-    ("completed", True, 0, False),
-    ("blocked", False, 0, False),
-    ("completed", False, 1020, False),
+@pytest.mark.parametrize("phase,read_only,retry_until,early,prior_reads", [
+    ("completed", False, 0, True, 0),
+    ("completed", True, 0, True, 0),
+    ("completed", True, 0, False, 2),
+    ("completed", True, 1020, False, 0),
+    ("blocked", False, 0, False, 0),
+    ("completed", False, 1020, False, 0),
 ])
 def test_native_completion_handoff_timing(
-        framework_module, tmp_path, run_async, monkeypatch, phase, read_only, retry_until, early):
+        framework_module, tmp_path, run_async, monkeypatch, phase, read_only, retry_until, early, prior_reads):
     clock, decisions, delivered = [1000], [], [False]
 
     async def decide(*_):
@@ -29,6 +31,7 @@ def test_native_completion_handoff_timing(
 
     module, bridge, controller = setup(framework_module, tmp_path, decide, lambda: clock[0] >= 1030)
     controller.settings = dataclasses.replace(controller.settings, min_decision_seconds=10, max_tool_rounds=1)
+    controller.read_activity = {"mc_scout": prior_reads} if prior_reads else {}
     monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
     original_sleep = asyncio.sleep
 

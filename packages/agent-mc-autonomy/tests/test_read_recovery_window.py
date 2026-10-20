@@ -9,6 +9,88 @@ from test_controller import packed, setup
 
 
 @pytest.mark.parametrize('context_mode', ['compact', 'full'])
+def test_answered_read_survives_history_eviction_at_real_request_boundary(
+        framework_module, tmp_path, run_async, context_mode):
+    captured, budgets = [], []
+    answer = 'Inventory 36/36 occupied; zero empty slots; cursor empty. Original answer.'
+
+    async def decide(messages, tools):
+        captured.append((messages, {tool['function']['name'] for tool in tools}))
+        return {'tool_calls': [{'id': f'call-{len(captured)}', 'type': 'function',
+                               'function': {'name': 'mc_bag', 'arguments': '{}'}}]}
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    controller.settings = dataclasses.replace(controller.settings, max_tool_rounds=1,
+        context_mode=context_mode, context_tokens=16384, max_output_tokens=512)
+    controller.publish = lambda **value: budgets.append(value)
+    bridge.tools.append({'name': 'mc_bag', 'inputSchema': {'type': 'object'}})
+    original = bridge.call
+
+    async def call(name, arguments, **metadata):
+        if name == 'mc_bag':
+            bridge.calls.append((name, arguments, metadata))
+            return {'structuredContent': {'protocol': 'agent-mc/v1', 'text': answer}}
+        return await original(name, arguments, **metadata)
+
+    bridge.call = call
+    tools = module.model_tools(bridge.tools, context_mode=context_mode)
+    for _ in range(2):
+        run_async(controller.turn_once('survive', 'native contract', tools))
+    assert 'mc_bag' in controller.read_recovery_tools
+    # Real full-window pressure can evict the whole tool exchange while the
+    # answer cache/deferred tool still survives. The dated answer must remain
+    # selected input, not merely a hidden dictionary or an archive handle.
+    controller.groups = [[{'role': 'user', 'content': 'large old observation ' * 2000}]]
+    run_async(controller.turn_once('survive', 'native contract', tools))
+    assert 'mc_bag' not in captured[-1][1]
+    tail = json.loads(captured[-1][0][-1]['content'])
+    selected = next((row for row in tail.get('answered_reads', []) if row['tool'] == 'mc_bag'), None)
+    assert selected, 'Answered tool hidden after eviction, but its answer is absent from the model request'
+    assert selected['answer']['text'] == answer
+    assert selected['fresh'] is False and selected['arguments'] == {}
+    assert selected['request_id'] and selected['received_at']
+    assert len([row for row in bridge.calls if row[0] == 'mc_bag']) == 1
+    assert 'large old observation' not in json.dumps(captured[-1][0])
+    if context_mode == 'full':
+        assert any(value.get('context', {}).get('history', {}).get('evicted', 0) for value in budgets)
+
+
+@pytest.mark.parametrize('invalidate', ['facts', 'scope', 'expiry', 'pending'])
+def test_retained_answer_never_crosses_its_read_reuse_fence(
+        framework_module, tmp_path, run_async, monkeypatch, invalidate):
+    import agent_mc_autonomy.controller as module
+    ticks = [100.0]
+    monkeypatch.setattr(module.time, 'monotonic', lambda: ticks[0])
+    _, bridge, controller = setup(framework_module, tmp_path, None)
+    bridge.tools.append({'name': 'mc_bag', 'inputSchema': {'type': 'object'}})
+    facts = {'parts': [{'key': 'world', 'text': 'unchanged inventory'}]}
+    controller.last_admission_facts = module.admission_fingerprint(facts)
+    run_async(controller.execute_model_call('mc_bag', {}))
+    before = controller.current_answered_reads(facts)
+    assert len(before) == 1 and before[0]['fresh'] is False
+    if invalidate == 'facts':
+        facts['parts'][0]['text'] = 'inventory changed'
+    elif invalidate == 'scope':
+        controller.game_scope = 'different account/realm'
+    elif invalidate == 'expiry':
+        ticks[0] += 301
+    else:
+        controller.pending[('task', 'body-work')] = {'terminal': False}
+    assert controller.current_answered_reads(facts) == []
+    assert len([row for row in bridge.calls if row[0] == 'mc_bag']) == 1
+
+
+@pytest.mark.parametrize('context_mode', ['compact', 'full'])
+def test_oversized_retained_answers_obey_window_and_report_omission(context_mode):
+    answer = {'tool': 'mc_bag', 'fresh': False, 'answer': {'text': 'old result ' * 10000}}
+    messages, budget = assemble('rules', [], 'survive', {'parts': []}, [], [],
+        context_mode=context_mode, context_tokens=16384, reserved_output=512, answered_reads=[answer])
+    assert budget['total'] <= 16384
+    assert budget['answered_reads'] == {'available': 1, 'included': 0}
+    assert 'old result' not in messages[-1]['content']
+
+
+@pytest.mark.parametrize('context_mode', ['compact', 'full'])
 def test_alternating_answered_reads_keep_a_recovery_window(
         framework_module, tmp_path, run_async, context_mode):
     offered = []

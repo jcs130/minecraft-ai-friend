@@ -18,7 +18,7 @@ scene. The entire receipt including its execution identity must match; this neve
 """
 ALWAYS_LITERAL = {'body', 'health', 'place', 'queue', 'life', 'deathLifecycle', 'foodReserve',
                   'serverFeedback', 'messages', 'lastTask', 'connection', 'identity', 'clock', 'sample', 'realclock'}
-SECTIONS = ('current_goal', 'death_memory', 'host_context', 'host_recent_context', 'tool_failure')
+SECTIONS = ('current_goal', 'death_memory', 'host_context', 'host_recent_context', 'tool_failure', 'answered_reads')
 ROW_SECTIONS = (('host_context', 'memories'), ('host_recent_context', 'recent_messages'),
                 ('host_recent_context', 'recent_speech'))
 MIN_REUSE_SAVINGS = 128

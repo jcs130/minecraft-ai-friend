@@ -523,6 +523,13 @@ class Controller:
                         self.observation_reads[sampled["key"]] = {**sampled, "at": time.monotonic(),
                             "observations": observations, **({"receipt": receipt} if not observations else {}),
                             "original_event": reference, "execution_id": execution["id"]}
+                        # A requested answer can complete in milliseconds. Give
+                        # the first two reads a prompt model handoff instead of
+                        # adding the ordinary event throttle after each query.
+                        # This is not body progress: keep failure/read ledgers,
+                        # limit scan chains, and never interrupt other work.
+                        if sum(self.read_activity.values()) <= 2 and not (set(self.pending) - {key}):
+                            self.continuation_ready = True
                     native_outcome = {"tool": name, "execution_id": execution["id"], "phase": phase,
                         "observation_only": read_only, "goal_verified": False,
                         "terminal": True, "goalCompleted": execution.get("goalCompleted"),
@@ -634,6 +641,31 @@ class Controller:
         # Running work may change inventory/queue without a published terminal;
         # its real status remains readable. Acceptance itself clears no history.
         return set(self.read_recovery_tools) if not self.pending else set()
+
+    def current_answered_reads(self, facts):
+        """Keep dated generic answers visible even if their exchange was evicted.
+
+        This uses the same scope/state/expiry fence as read reuse. It does not
+        query the body, assert freshness or restore a previous container window.
+        Specific task lookups remain progressive, rather than filling the tail
+        with every cached queue request.
+        """
+        if self.pending:
+            return []
+        fingerprint, now = admission_fingerprint(facts), time.monotonic()
+        selected = {}
+        for key, answer in self.read_answers.items():
+            name, arguments = json.loads(key)
+            if (arguments or answer["facts"] != fingerprint or answer["scope"] != self.game_scope
+                    or now - answer["at"] >= READ_RECOVERY_SECONDS):
+                continue
+            selected[name] = {"tool": name, "arguments": arguments, "fresh": False,
+                "answer": answer["answer"],
+                **{field: answer[field] for field in ("received_at", "request_id", "turn_id")},
+                "journal": "receipts.jsonl",
+                "validity": "Dated answer retained under unchanged observed state, not a new server read. "
+                            "It does not reopen a window, prove permissions or complete a goal."}
+        return list(selected.values())
 
     async def recovery_reference(self):
         """Carry the failed skill's native documentation into the next decision.
@@ -1625,7 +1657,7 @@ class Controller:
                     messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, consumed, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
                         context_mode=self.settings.context_mode, context_history_headroom_tokens=self.settings.context_history_headroom_tokens,
-                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
+                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, answered_reads=self.current_answered_reads(facts), native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
                 except ValueError:
                     if not reserve:
@@ -1634,7 +1666,7 @@ class Controller:
                     messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, consumed, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
                         context_mode=self.settings.context_mode, context_history_headroom_tokens=self.settings.context_history_headroom_tokens,
-                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, native_outcomes=self.native_outcomes,
+                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, answered_reads=self.current_answered_reads(facts), native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
                 if reserve:
                     messages, _ = attach_frame(messages, frame)

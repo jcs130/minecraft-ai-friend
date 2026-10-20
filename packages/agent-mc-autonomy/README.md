@@ -1,5 +1,13 @@
 # Agent MC Autonomy
 
+0.2.54 carries still-applicable, dated generic bag/queue/failure answers in the
+selected context even when their original conversation exchange was evicted.
+State, scope, expiry and running-work fences remain intact; a retained answer
+does not reopen a window or establish current permissions. The first two new
+completed spatial reads since measured body progress can hand off without the
+ordinary event throttle. Longer scan chains and failure backoff remain bounded;
+no action is selected or replayed automatically. Original journals stay intact.
+
 0.2.53 pins the shared core's rules-only organization correction. Discard/stow
 rules no longer imply rearranging unrelated inventory slots. Explicit merging
 and sorting remain available; server confirmation and unknown-operation
