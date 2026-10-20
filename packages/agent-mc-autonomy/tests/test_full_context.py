@@ -55,6 +55,49 @@ def test_full_mode_retains_native_tool_manual():
     assert tool["function"]["parameters"]["properties"]["target"]["description"] == description
 
 
+@pytest.mark.parametrize('name', ['mc_goal', 'mc_script', 'mc_combat_tactic', 'mc_memory'])
+def test_full_catalogue_exposes_native_project_and_learning_contracts(name):
+    from agent_mc_autonomy.controller import HIDDEN_TOOLS
+    schema = {'type': 'object', 'properties': {'operation': {'enum': ['inspect', 'write']}}}
+    catalogue = [{'name': name, 'description': 'Native full contract', 'inputSchema': schema}]
+    catalogue += [{'name': hidden, 'description': 'Host lifecycle only', 'inputSchema': schema} for hidden in HIDDEN_TOOLS]
+    before = copy.deepcopy(catalogue)
+    tools = {row['function']['name']: row['function'] for row in model_tools(catalogue, context_mode='full')}
+    assert tools[name]['parameters'] == schema
+    assert tools[name]['description'] == 'Native full contract'
+    assert not set(HIDDEN_TOOLS).intersection(tools)
+    assert name in tools['mc_invoke']['parameters']['properties']['name']['enum']
+    assert catalogue == before
+
+
+def test_full_native_goal_entry_dispatches_once_and_still_validates(framework_module, tmp_path, run_async):
+    from agent_mc_autonomy.controller import ModelCallRejected
+    module, bridge, controller = setup(framework_module, tmp_path, None)
+    controller.settings = dataclasses.replace(controller.settings, context_mode='full')
+    bridge.tools.append({'name': 'mc_goal', 'description': 'Native goal ledger',
+        'inputSchema': {'type': 'object', 'properties': {'read': {'type': 'boolean'}}, 'additionalProperties': False},
+        '_meta': {'agent-mc/v1': {'tags': ['write']}}})
+    calls = []
+    original = bridge.call
+    async def native(name, args, **metadata):
+        if name == 'mc_goal':
+            calls.append((args, metadata))
+            return {'structuredContent': {'protocol': 'agent-mc/v1', 'text': 'Native project still pending'}}
+        return await original(name, args, **metadata)
+    bridge.call = native
+    tools = module.model_tools(bridge.tools, context_mode='full')
+    raw = {'id': 'native-goal', 'type': 'function', 'function': {'name': 'mc_goal', 'arguments': '{"read":true}'}}
+    _, name, arguments = controller.prepare_call([raw], tools)
+    run_async(controller.dispatch(name, arguments, 'original-request'))
+    assert len(calls) == 1 and calls[0][0] == {'read': True}
+    assert calls[0][1]['request_id'] == 'original-request'
+    bad = copy.deepcopy(raw)
+    bad['function']['arguments'] = '{"unknown":true}'
+    with pytest.raises(ModelCallRejected):
+        controller.prepare_call([bad], tools)
+    assert len(calls) == 1
+
+
 def test_full_setting_is_explicit_and_validated():
     assert Settings.parse({}).context_mode == "compact"
     assert Settings.parse({"autonomy": {"context_mode": "full", "context_tokens": 1048576}}).context_mode == "full"

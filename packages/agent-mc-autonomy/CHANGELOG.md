@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.68 — 2026-10-20
+
+- Full mode exposes every available native non-lifecycle tool, preserving the
+  core's direct goal, script, combat-tactic and memory contracts. Compact mode
+  and the advanced alias remain available; native validation and fences apply.
+- Preserve bounded core `goals` and `methods` summaries and original query
+  references in strategic review. A selected script is not verified learning.
+- Add capability-aware guidance for continuing projects, milestones, scoped
+  notes and the existing method validation/execution/review/version path.
+  No fixed activity order, extra model loop or script-writing quota is added.
+
 ## 0.2.67 — 2026-10-20
 
 - Count retained reasoning with the complete vLLM Chat request and renderer

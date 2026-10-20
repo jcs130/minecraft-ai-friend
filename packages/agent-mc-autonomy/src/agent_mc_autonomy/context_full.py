@@ -6,7 +6,7 @@ import time
 
 from . import host_recent
 from .context import (
-    RULES,
+    rules_for,
     encode,
     event_priority,
     outcome_eviction_index,
@@ -34,7 +34,7 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
     treats historical conversation as a command. Window eviction is explicit;
     unshown native events remain pending at the controller.
     """
-    rules = RULES + "\n" + GUIDANCE + "\n" + SCENE_GUIDANCE
+    rules = rules_for(tools) + "\n" + GUIDANCE + "\n" + SCENE_GUIDANCE
     system = rules + "\n" + prefix
     if host_context:
         stable = {k: v for k, v in host_context.get("stable", {}).items() if k not in {"memories", "current_intent"}}
