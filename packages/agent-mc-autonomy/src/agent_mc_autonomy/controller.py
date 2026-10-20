@@ -44,6 +44,7 @@ from .planner import (
     PlannerRequestRejectedError,
     PlannerResponseError,
     PlannerUnavailableError,
+    PlannerDeadlineError,
 )
 from .reply_quality import repeated_plain_reply
 from .stage_applicability import body_baseline, historical_proposal, inapplicable_reason
@@ -1102,7 +1103,13 @@ class Controller:
                 if more:
                     continue  # A completed inference cannot outrun a queued death event page.
                 if done:
-                    result=await task
+                    try:
+                        result=await task
+                    except TimeoutError:
+                        # Only the model task is covered here. Native polling
+                        # errors and explicit cancellation retain their own
+                        # failure/preemption semantics; no action is replayed.
+                        raise PlannerDeadlineError() from None
                     if profile and not self.profile_decide and isinstance(result,dict):
                         result.setdefault('model_status',{})['decision_profile']=profile_view(profile,parameters_applied=False,fallback='planner_profile_port_unavailable',budget_applied=False)
                     return result

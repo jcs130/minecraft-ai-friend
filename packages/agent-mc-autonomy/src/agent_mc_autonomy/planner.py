@@ -44,6 +44,14 @@ class PlannerUnavailableError(RuntimeError):
             self.diagnostic["status"] = status_code
 
 
+class PlannerDeadlineError(PlannerUnavailableError):
+    """The controller's total inference deadline elapsed before any dispatch."""
+
+    def __init__(self):
+        RuntimeError.__init__(self, "brain_planning_timeout")
+        self.diagnostic = {"reason": "decision_deadline_exceeded"}
+
+
 class PlannerRequestRejectedError(RuntimeError):
     """Known HTTP rejection before dispatch; the body may continue safely."""
 

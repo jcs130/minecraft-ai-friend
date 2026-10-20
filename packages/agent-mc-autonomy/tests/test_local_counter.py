@@ -172,6 +172,43 @@ def test_vllm_preserves_schema_nulls_and_explicit_false(configured):
     assert declared == tools
 
 
+@pytest.mark.parametrize('native,expected', [
+    ({'reasoning_content': 'retained legacy thinking'}, 'retained legacy thinking'),
+    ({'reasoning': 'retained canonical thinking'}, 'retained canonical thinking'),
+    ({'reasoning': 'canonical wins', 'reasoning_content': 'legacy loses'}, 'canonical wins'),
+    ({'reasoning': '', 'reasoning_content': 'legacy loses'}, ''),
+])
+def test_vllm_chat_normalizes_reasoning_for_the_rendered_template(configured, native, expected):
+    from agent_mc_autonomy.local_counter import render_input
+    from agent_mc_autonomy.model_protocols import scope
+    configured['context_counter']['mode'] = 'vllm_chat'
+    cfg = HttpPlannerConfig.parse(configured)
+    messages = [{'role': 'assistant', 'content': 'visible response',
+                 '_provider_state': {'scope': scope(cfg), 'data': native}},
+                {'role': 'user', 'content': 'next request'}]
+    original = copy.deepcopy(messages)
+    rows, _, _ = render_input(cfg, messages, [])
+    # ChatCompletionRequest normalizes the legacy field to `reasoning`, then
+    # parse_chat_messages supplies BOTH aliases to the HF template. Tokenize's
+    # raw request has no first step, so it alone is not a Chat wire oracle.
+    assert rows[0]['reasoning'] == expected
+    assert rows[0]['reasoning_content'] == expected
+    assert messages == original
+
+
+def test_vllm_history_count_includes_private_reasoning_without_exposing_it(configured):
+    from agent_mc_autonomy.model_protocols import scope
+    configured['context_counter']['mode'] = 'vllm_chat'
+    cfg = HttpPlannerConfig.parse(configured)
+    p = planner(configured)
+    messages = [{'role': 'assistant', 'content': 'visible response',
+                 '_provider_state': {'scope': scope(cfg), 'data': {'reasoning_content': 'private reasoning ' * 512}}},
+                {'role': 'user', 'content': 'next request'}]
+    without = copy.deepcopy(messages)
+    without[0].pop('_provider_state')
+    assert p.context_counter(messages, []) > p.context_counter(without, []) + 500
+
+
 @pytest.mark.parametrize('change', ['hash', 'media', 'external_template_input'])
 def test_vllm_unsupported_binding_falls_back_instead_of_undercounting(configured, change):
     configured['context_counter']['mode'] = 'vllm_chat'

@@ -150,3 +150,42 @@ def test_repeated_outage_caps_backoff_without_native_replay(framework_module, tm
     assert not bridge.closed and controller.inflight_request is None
     assert not any(name in {"mc_do", "mc_connection"} for name, *_ in bridge.calls)
     run_async(planner.aclose())
+
+
+def test_controller_deadline_keeps_body_and_history_then_next_decision_recovers(framework_module, tmp_path, run_async):
+    attempts, cancelled = [], []
+    async def slow_first(messages, tools):
+        attempts.append(copy.deepcopy(messages))
+        if len(attempts) == 1:
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.append(True)
+        return choose()
+    module, bridge, controller = setup(framework_module, tmp_path, slow_first)
+    controller.settings = dataclasses.replace(controller.settings, model_timeout_seconds=.01)
+    controller.persist(stopped=False)
+    controller.pending[("task", "body-1")] = action()
+    controller.groups = [[{"role": "assistant", "content": "Prior verified observation"}]]
+    controller.recent = [{"cursor": 7, "text": "Fresh chat before slow inference"}]
+    before = copy.deepcopy((controller.groups, controller.recent, controller.pending))
+    tools = module.model_tools(bridge.tools)
+    run_async(controller.turn_once("survive", "prefix", tools))
+    assert cancelled == [True]
+    assert (controller.groups, controller.recent, controller.pending) == before
+    assert controller.continuation_needed and controller.planner_failures == 1
+    assert controller.inflight_request is None and not bridge.closed
+    assert not json.loads(controller.state_path.read_text())["stopped"]
+    assert 0 < controller.planner_retry_at - module.time.monotonic() <= 300
+    assert not any(name in {"mc_do", "mc_connection"} for name, *_ in bridge.calls)
+    rows = [json.loads(line) for line in (tmp_path / "decisions.jsonl").read_text(encoding='utf-8').splitlines()]
+    assert rows[0]["rejected"] == {"reason": "decision_deadline_exceeded"}
+    assert rows[0]["dispatched"] is False
+    bridge.event_pages.append([{"cursor": 8, "execution": action(terminal=True), "text": "Prior native task completed"}])
+    run_async(controller.events())
+    run_async(controller.turn_once("survive", "prefix", tools))
+    assert controller.planner_failures == 0 and controller.planner_retry_at == 0
+    assert "Fresh chat before slow inference" in json.dumps(attempts[1])
+    assert "Prior native task completed" in json.dumps(attempts[1])
+    assert "Prior verified observation" in json.dumps(attempts[1])
+    assert len([name for name, *_ in bridge.calls if name == "mc_do"]) == 1

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.67 — 2026-10-20
+
+- Count retained reasoning with the complete vLLM Chat request and renderer
+  normalization. Raw `/tokenize` alone omits the legacy-field normalization
+  and is not a valid Chat reference for such history.
+- Treat the controller inference deadline as a typed, pre-dispatch planning
+  outage. Keep native work and receipts alive with the existing bounded
+  backoff; stop, native faults and unknown-action barriers remain unchanged.
+
 ## 0.2.66 — 2026-10-20
 
 - Add explicit hash-bound CPU counting for vLLM Chat templates, preserving its

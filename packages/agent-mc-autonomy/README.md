@@ -1,6 +1,7 @@
 # Agent MC Autonomy
 
-0.2.66 adds an explicitly bound `vllm_chat` CPU context counter alongside the
+0.2.67 corrects retained-reasoning normalization for that counter and keeps the
+body alive when the total inference deadline expires. 0.2.66 adds an explicitly bound `vllm_chat` CPU context counter alongside the
 existing `ninfer_chat` mode. Tokenizer/template files, hashes, endpoint and model
 must match the selected deployment; unsupported template inputs or media retain
 the conservative byte fallback. Install the `context` extra to use local

@@ -71,8 +71,16 @@ def render_input(config, messages, tools):
             row['content'] = ''.join(part['text'] for part in content)
         elif content is None:
             row['content'] = ''
-        if vllm and 'reasoning_content' in row:
-            row.setdefault('reasoning', row.pop('reasoning_content'))
+        if vllm and row.get('role') == 'assistant':
+            # ChatCompletionRequest first renames the deprecated wire alias;
+            # parse_chat_messages then supplies both aliases to the template.
+            # /tokenize does not perform that first normalization itself.
+            legacy = row.pop('reasoning_content', None)
+            reasoning = row.get('reasoning')
+            if reasoning is None:
+                reasoning = legacy
+            if reasoning is not None:
+                row.update(reasoning=reasoning, reasoning_content=reasoning)
         for call in row.get('tool_calls', []):
             function = call['function']
             function['arguments'] = json.loads(function['arguments']) if function['arguments'] else {}
