@@ -9,12 +9,16 @@ it('admits the committed native scene without inventing legacy chunk maps', () =
   const marked: string[] = [];
   const canvas = { id: 'native-scene', width: 1280, height: 720, closest: () => null,
     getBoundingClientRect: () => ({ width: 1280, height: 720 }), setAttribute: (key: string) => marked.push(key) };
-  const boot = { classList: { contains: (name: string) => name === 'is-compact' }, textContent: '原生模型 100/100' };
+  const boot = { classList: { contains: (name: string) => name === 'is-compact' }, textContent: '原生模型 0/100' };
   vi.stubGlobal('document', { querySelector: (selector: string) => selector === '.boot' ? boot
     : selector === 'meta[name="native-viewer-build"]' ? {} : null, querySelectorAll: () => [canvas] });
   vi.stubGlobal('innerWidth', 1280); vi.stubGlobal('innerHeight', 720);
   expect(viewerCaptureState()).toBe(false);
   now = 351;
+  expect(viewerCaptureState()).toBe(false); // Hands-only first frames are not terrain readiness.
+  boot.textContent = '原生模型 100/100';
+  expect(viewerCaptureState()).toBe(false);
+  now = 702;
   expect(viewerCaptureState()).toBe('ready');
   expect(marked).toEqual(['data-cortico-capture-scene']);
 });

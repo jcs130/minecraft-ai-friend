@@ -147,6 +147,16 @@ export function viewerCaptureState(): false | string {
   // Native exact-resource scenes publish their committed render through the
   // same boot/error marker; they do not contain legacy prismarine chunk maps.
   const native = !!browserWindow.document.querySelector('meta[name="native-viewer-build"]');
+  // This pinned native console emits its boot counter on scene diagnostics,
+  // including an early 0/N before terrain is committed. Hands/entities can
+  // already be painted then; accepting it would present an empty world.
+  if (native) {
+    const terrain = /^原生模型 (\d+)\/(\d+)/.exec(boot?.textContent?.trim() ?? '');
+    if (!terrain || Number(terrain[1]) <= 0 || Number(terrain[2]) <= 0) {
+      delete browserWindow.__corticoCapture;
+      return false;
+    }
+  }
   const loaded = Object.keys(world?.loadedChunks ?? {});
   const meshed = Object.keys(world?.finishedChunks ?? {}).sort();
   if (!native && (meshed.length === 0 || loaded.some(key => !world?.finishedChunks?.[key])

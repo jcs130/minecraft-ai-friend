@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.71
+
+- Pin the native capture terrain-readiness correction: early hands/entities-only frames do not establish a rendered world. The 0/N loading counter is a rejection, not a successful photograph.
+
 ## 0.2.70
 
 - Bind the optional native viewer to the original core camera port for the same connected body; revoke the binding on replacement, disconnection and stop. No second viewer or game connection.

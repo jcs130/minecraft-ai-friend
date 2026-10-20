@@ -1,5 +1,9 @@
 # Agent MC World
 
+`0.5.7-rc.57` waits for a nonempty native terrain commit before admitting a
+photograph. The early hands/entities-only frame is a loading counterexample,
+not an image of an empty or safe world. Unsupported/empty scenes stay explicit.
+
 `0.5.7-rc.56` captures the optional native renderer's real first/third/3dview
 routes and committed scene without requiring legacy chunk-map globals. Native
 coordinate-overview and custom FOV remain explicit unsupported requests;
