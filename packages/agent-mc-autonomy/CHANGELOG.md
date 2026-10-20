@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.64 — 2026-10-20
+
+- Pin renderer `5ad51dce`: preserve and render received original banner patterns
+  using this body connection's configuration registry, exact textures, dyes,
+  source-alpha layers and native display limit. Unknown mappings stay explicit.
+
 ## 0.2.63 — 2026-10-20
 
 - Pin shared renderer `ce60351c` with original trident GUI icons and the native

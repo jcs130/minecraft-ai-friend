@@ -1,6 +1,6 @@
 {
   "schema": "agent-mc-viewer-source/v1",
-  "sourceRevision": "ce60351cb4acb4419b036a8342ba355cfc6e9163",
+  "sourceRevision": "5ad51dce9430d537ae91df8f4aa78906a616a74f",
   "files": {
     "package.json": {
       "bytes": 1191,
@@ -42,6 +42,10 @@
       "bytes": 15066,
       "sha256": "cf8694f2a1a208fb584a9ed5d92c951b57780107e46b8448af5b989dab0ff1c7"
     },
+    "renderer-src/host/vanilla-banner-components.mjs": {
+      "bytes": 2394,
+      "sha256": "82ce487b57fb48c15e6f303e330a0bd538fd8f132907b0b1c64683234a6f9c4a"
+    },
     "renderer-src/host/vanilla-book-components.mjs": {
       "bytes": 1724,
       "sha256": "df3347c77ebf9d2970a0db438b68b2a08cc7f201922e771553766f22e85aeac8"
@@ -55,16 +59,16 @@
       "sha256": "94d4f3aaa2b723ba8ea1b74d8df80aa84c89369e2d20e23edc3e42be1395a9c5"
     },
     "renderer-src/host/vanilla-item-stack.mjs": {
-      "bytes": 9607,
-      "sha256": "34ae7b4557286b2ff55eb273495a9d2affa39850eea80ceba6ae50ea230518a5"
+      "bytes": 9461,
+      "sha256": "ce48da1e369569ab9ff726bf514c96b5d37e6ef4d82fe0125c71228e9bdf7873"
     },
     "renderer-src/host/vanilla-menu-state.mjs": {
       "bytes": 2355,
       "sha256": "9df3de717658f5189f0bc4396f22e5163d103615614e68096b0be643d2aa7020"
     },
     "renderer-src/host/vanilla-native-stream.mjs": {
-      "bytes": 9791,
-      "sha256": "f42878e339d6bc9ddec17a8e88cb8e4eb86a598b8147271c5da1aa6471e2604e"
+      "bytes": 10223,
+      "sha256": "602ab1bae32694e6f9851d587ec3f3841ebae89471f801c491d6cac78ba340c3"
     },
     "renderer-src/host/viewer-agent.mjs": {
       "bytes": 16012,
@@ -674,17 +678,21 @@
       "bytes": 14015,
       "sha256": "d395cf28c009f41737d0ec27140887c43e459c1809de0be1c54199da25b7b057"
     },
+    "renderer-src/src/native-viewer/native-banner-data.js": {
+      "bytes": 2151,
+      "sha256": "8f3a9d1174935f0212187581b0ba0b6aac5b84a014c540edb0f1cf38a67d7d3e"
+    },
     "renderer-src/src/native-viewer/native-banner-items.js": {
-      "bytes": 3346,
-      "sha256": "3f6841705f05b42724691d0a1321d712df9cdf8fd09271e3a47aad27d2267e96"
+      "bytes": 3649,
+      "sha256": "aabea61b2bd4104f018827d34a50a068c66d46ae770690d2523742cc3b013c23"
     },
     "renderer-src/src/native-viewer/native-bed.js": {
       "bytes": 5013,
       "sha256": "04a7db9c7f95bf8abfa14a9e6e8b6e987d64cb061f731d2fa2361e7feae5f14e"
     },
     "renderer-src/src/native-viewer/native-block-item-icons.js": {
-      "bytes": 20533,
-      "sha256": "d7a00fb51bfa52780d5da3edfc6a8735b7e570d4f6af8fe69112f2e73b5814de"
+      "bytes": 21159,
+      "sha256": "82ee94bc9580aa0ba5d56cae4746b7d94fb9702861ecc3403a4f6e6973abba9f"
     },
     "renderer-src/src/native-viewer/native-bundled-appearance.js": {
       "bytes": 2783,
@@ -831,16 +839,16 @@
       "sha256": "8d6e6d0106d2810c4d161ab9c8721545e362707509ca433e5773b60503c9b706"
     },
     "renderer-src/src/native-viewer/native-item-appearance.js": {
-      "bytes": 10502,
-      "sha256": "57197b3b865a8156fe89c65433e54177e5ac1794362f2a760386b9e0fbff0517"
+      "bytes": 10508,
+      "sha256": "aa645405443a87b5e0277a70e9f65ff8dbab566ae46b522afe42a8ce44474fb3"
     },
     "renderer-src/src/native-viewer/native-item-glint.js": {
       "bytes": 7385,
       "sha256": "ad10a07167641368425e83ce2a2e7d5dc470921eb9ffde3d18fc230f76f67cb4"
     },
     "renderer-src/src/native-viewer/native-item-icons.js": {
-      "bytes": 12842,
-      "sha256": "52b3ec21e4317df3205a2ac3a21f2c81a550652886427642443638015d9a51ed"
+      "bytes": 12870,
+      "sha256": "0a10b0399fef8c8944036a9b22cabffe68da62553574bbeb313c88fde1abaefd"
     },
     "renderer-src/src/native-viewer/native-item-stack.js": {
       "bytes": 11470,
@@ -971,8 +979,8 @@
       "sha256": "a397792510f21d1d60de94f27e0f6ef4f2f2f6a6f2993a4e5daf8fcd1f7db041"
     },
     "renderer-src/src/native-viewer/native-static-item-providers.js": {
-      "bytes": 27935,
-      "sha256": "3ff1a6343657dbe9ef501d39460e7f4c55ddf22a95be5d8ec3de4917f2bfcc3c"
+      "bytes": 27976,
+      "sha256": "401ccb037184ca5cea5d0c26af2f4d1b81b9d55e3195781f0029f4746f457e40"
     },
     "renderer-src/src/native-viewer/native-survival-ui.js": {
       "bytes": 5151,
