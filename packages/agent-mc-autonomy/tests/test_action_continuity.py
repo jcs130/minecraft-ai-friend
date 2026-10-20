@@ -32,6 +32,10 @@ def test_native_completion_handoff_timing(
     module, bridge, controller = setup(framework_module, tmp_path, decide, lambda: clock[0] >= 1030)
     controller.settings = dataclasses.replace(controller.settings, min_decision_seconds=10, max_tool_rounds=1)
     controller.read_activity = {"mc_scout": prior_reads} if prior_reads else {}
+    controller.spatial_handoffs = prior_reads
+    # This test isolates terminal handoff after the one ahead opportunity was
+    # already spent. Native lookahead admission has its own run-loop tests.
+    controller.lookahead_used.add(("task", "body-1"))
     monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
     original_sleep = asyncio.sleep
 

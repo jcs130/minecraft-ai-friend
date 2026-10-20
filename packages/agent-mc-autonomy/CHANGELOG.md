@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.56 — 2026-10-20
+
+- Let one known, finite native body task receive one bounded planning opportunity
+  before it finishes. The model can read and append one continuation through the
+  existing native queue; it cannot cancel, insert into or replace running work.
+  Two owned tasks, explicit follow/wait, unknown dispatch, feedback, death and
+  provider backoff keep their existing fences. A failed anchor invalidates an
+  unfinished ahead inference.
+- Do not treat conversation while the body is already working as an idle failure.
+  Its reply no longer leaves a no-action timer behind the eventual terminal.
+- Count spatial-answer handoffs separately from help/inventory reads, so those
+  useful reads cannot consume the two prompt spatial continuation slots.
+- Timestamp actual model requests and responses, including rejected/truncated
+  replies, and distinguish ordinary and ahead planning in the existing journal.
+  Offline regressions do not establish live continuity or completed goals.
+
 ## 0.2.53 — 2026-10-20
 
 - Pin core 0.5.7-rc.52: a rules-only organization request handles only the

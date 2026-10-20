@@ -59,6 +59,15 @@ def test_first_two_new_spatial_answers_can_handoff_without_ordinary_event_delay(
     assert controller.read_activity == {"mc_scout": 3}
 
 
+def test_documentation_and_inventory_reads_do_not_consume_spatial_handoff_slots(
+        framework_module, tmp_path, run_async):
+    _, controller = prepare(framework_module, tmp_path)
+    controller.read_activity = {"mc_help": 3, "mc_bag": 1}
+    assert observed(controller, run_async).get("execution")
+    assert controller.continuation_ready
+    assert controller.read_activity == {"mc_help": 3, "mc_bag": 1, "mc_scout": 1}
+
+
 @pytest.mark.parametrize("phase", ["blocked", "partial", "rejected"])
 def test_failed_spatial_read_does_not_bypass_planner_backoff(
         framework_module, tmp_path, run_async, phase):

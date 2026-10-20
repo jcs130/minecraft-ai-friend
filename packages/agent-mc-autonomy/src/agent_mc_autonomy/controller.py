@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import os
 import sqlite3
@@ -367,6 +368,10 @@ class Controller:
         self.continuation_needed = False
         self.continuation_ready = False
         self.conversation_continuation = False
+        self.lookahead_used = set()
+        self.lookahead_anchor = None
+        self.lookahead_invalidated = False
+        self.model_started_at = None
         self.planner_failures = 0
         self.planner_retry_at = 0.0
         self.planner_notice = None
@@ -377,6 +382,7 @@ class Controller:
         self.invalid_tool_calls = 0
         self.unactioned_replies = 0
         self.read_activity = {}
+        self.spatial_handoffs = 0
         self.observation_reads = {}
         self.observation_requests = {}
         self.read_answers = {}
@@ -409,6 +415,9 @@ class Controller:
         if fresh_scope != self.game_scope:
             self.read_activity.clear()
             self.observation_reads.clear()
+            self.spatial_handoffs = 0
+            self.lookahead_used.clear()
+            self.lookahead_invalidated |= self.lookahead_anchor is not None
             self.observation_requests.clear()
             self.read_answers.clear()
             self.read_recovery_tools.clear()
@@ -509,6 +518,10 @@ class Controller:
         if execution:
             key = (execution["kind"], execution["id"])
             if execution.get("terminal") is True:
+                self.lookahead_used.discard(key)
+                if key == self.lookahead_anchor and execution.get("phase") != "completed":
+                    self.lookahead_invalidated = True
+                    self.continuation_ready = True
                 submitted = self.action_requests.pop(key, None)
                 submitted_scope = self.action_scopes.pop(key, None)
                 sampled = self.observation_requests.pop(key, None)
@@ -532,7 +545,8 @@ class Controller:
                         # adding the ordinary event throttle after each query.
                         # This is not body progress: keep failure/read ledgers,
                         # limit scan chains, and never interrupt other work.
-                        if sum(self.read_activity.values()) <= 2 and not (set(self.pending) - {key}):
+                        self.spatial_handoffs += 1
+                        if self.spatial_handoffs <= 2 and not (set(self.pending) - {key}):
                             self.continuation_ready = True
                     native_outcome = {"tool": name, "execution_id": execution["id"], "phase": phase,
                         "observation_only": read_only, "goal_verified": False,
@@ -621,6 +635,7 @@ class Controller:
 
     def clear_read_activity(self):
         self.read_activity.clear()
+        self.spatial_handoffs = 0
         self.observation_reads.clear()
         self.read_answers.clear()
         self.read_recovery_tools.clear()
@@ -707,6 +722,46 @@ class Controller:
         # Native following may never publish a terminal. Its ownership must not
         # prevent a new conversation from receiving a bounded decision/read chain.
         return self.conversation_continuation or any(conversation_event(event) for event in self.recent)
+
+    def lookahead_candidate(self):
+        """One planning opportunity behind one known finite native body task.
+
+        This stores no future action. Any selected successor goes through the
+        existing native append queue and its ordinary validation/barriers.
+        """
+        if (len(self.pending) != 1 or self.inflight_request or self.feedback_pending
+                or self.death_waiting or self.death_recovery or self.stop_requested()):
+            return None
+        key = next(iter(self.pending))
+        submitted = self.action_requests.get(key)
+        if (key in self.lookahead_used or not submitted or submitted[3]
+                or self.action_scopes.get(key) != self.game_scope
+                or self.pending[key].get("phase") not in {"accepted", "running"}):
+            return None
+        name, arguments, _, _ = submitted
+        steps = arguments.get("steps")
+        if (name != "mc_do" or not isinstance(steps, list) or not steps
+                or any(not isinstance(step, dict) or step.get("skill") in {"follow", "wait"} for step in steps)):
+            return None
+        if self.active_goal and self.action_owners.get(key) != self.active_goal["id"]:
+            return None
+        return key
+
+    def lookahead_tools(self, tools):
+        selected = copy.deepcopy([tool for tool in tools
+            if tool["function"]["name"] in IMMEDIATE_READ_TOOLS | {"mc_do", "mc_scout"}])
+        for tool in selected:
+            function = tool["function"]
+            if function["name"] in {"mc_do", "mc_scout"}:
+                function["parameters"].setdefault("properties", {})["queue"] = {
+                    "type": "string", "enum": ["append"],
+                    "description": "Planning ahead preserves the existing native task; append only."}
+        return selected
+
+    def model_timing(self):
+        return {"at": datetime.now(timezone.utc).isoformat(), "request_started_at": self.model_started_at,
+                "planning_mode": "native_lookahead" if self.lookahead_anchor else "ordinary",
+                "native_pending": [key[1] for key in self.pending]}
 
     async def protocol(self, action, **arguments):
         result = json_content(await self.bridge.call("mc_protocol", {"protocol": PROTOCOL, "action": action, **arguments}))
@@ -1030,7 +1085,7 @@ class Controller:
                     return None
                 wake, urgent, more = await self.events()
                 self.deferred_wake |= wake
-                if urgent or death_epoch != self.death_epoch:
+                if urgent or death_epoch != self.death_epoch or self.lookahead_invalidated:
                     self.preempted = True
                     return None
                 if more:
@@ -1319,6 +1374,9 @@ class Controller:
         if error := argument_error(self.bridge.tools, name, arguments):
             self.record_tool_failure(name, arguments, {"text": error})
             raise ModelCallRejected(error)
+        if self.lookahead_anchor and (name not in IMMEDIATE_READ_TOOLS | {"mc_do", "mc_scout"}
+                or name in {"mc_do", "mc_scout"} and arguments.get("queue", "append") != "append"):
+            raise ModelCallRejected("Planning ahead may only read or append to the native queue; running work cannot be stopped or inserted into.")
         if self.feedback_pending:
             tags = next((t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])
             if name != "mc_do" and not empty_catalogue_query(name, arguments) and {"act", "write", "speak"}.intersection(tags):
@@ -1505,7 +1563,8 @@ class Controller:
             self.conversation_continuation = False  # Model chose a real native plan; no automatic cancellation.
         queued = bool(execution and execution.get("terminal") is not True)
         boundary = bool(queued or control.get("endTurnRequested") or result.get("endsTurn")
-                        or (self.current_work() and not self.feedback_pending and not self.conversation_continuation))
+                        or (self.current_work() and not self.feedback_pending
+                            and not self.conversation_continuation and not self.lookahead_anchor))
         return result, compact, boundary
 
     def reject_model_call(self, error, response=None, input_scene=None):
@@ -1542,7 +1601,7 @@ class Controller:
                 self.groups, _ = coalesce_rejected(self.groups)
             self.retain_history()
         with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
-            output.write(encode({"turnId": self.turn, "rejected": str(error), "dispatched": False}) + "\n")
+            output.write(encode({**self.model_timing(), "turnId": self.turn, "rejected": str(error), "dispatched": False}) + "\n")
         immediate = (isinstance(error, ToolJSONRejected) and self.invalid_tool_calls == 1
                      and not self.pending and self.inflight_request is None and not self.stop_requested())
         delay = 0 if immediate else min(60, max(1, self.settings.min_decision_seconds) * 2 ** min(6, self.invalid_tool_calls - 1))
@@ -1625,6 +1684,15 @@ class Controller:
                 # chooses its own work; originals and unresolved tools remain.
                 excluded = self.deferred_read_tools(facts)
                 round_tools = [tool for tool in tools if tool["function"]["name"] not in excluded]
+                if self.lookahead_anchor:
+                    round_tools = self.lookahead_tools(round_tools)
+                notice = self.planner_notice
+                if self.lookahead_anchor:
+                    notice = (notice + "\n" if notice else "") + (
+                        f"Planning ahead of still-owned native execution {self.lookahead_anchor[1]}. "
+                        "It is not finished or verified successful. Keep it running. You may append one small "
+                        "independent continuation using observed facts, or wait for its terminal if prerequisites "
+                        "depend on an unknown outcome. Do not repeat, cancel or replace existing work to fill time.")
                 state = focus_state(planning_goal, facts, self.pending)
                 if round_index == 0:
                     focus = await self.fast_policy.choose(state)
@@ -1676,7 +1744,7 @@ class Controller:
                     messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, consumed, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
                         context_mode=self.settings.context_mode, context_history_headroom_tokens=self.settings.context_history_headroom_tokens,
-                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, answered_reads=self.current_answered_reads(facts), native_outcomes=self.native_outcomes,
+                        planner_notice=notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, answered_reads=self.current_answered_reads(facts), native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
                 except ValueError:
                     if not reserve:
@@ -1685,7 +1753,7 @@ class Controller:
                     messages, budget = assemble(round_prefix, round_tools, planning_goal, facts, consumed, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
                         context_mode=self.settings.context_mode, context_history_headroom_tokens=self.settings.context_history_headroom_tokens,
-                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, answered_reads=self.current_answered_reads(facts), native_outcomes=self.native_outcomes,
+                        planner_notice=notice, fast_focus=focus, tool_failure=self.tool_failure, read_activity=self.read_activity, answered_reads=self.current_answered_reads(facts), native_outcomes=self.native_outcomes,
                         context_counter=self.context_counter, host_context=host_context, recent_context=recent_context, death_memory=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal))
                 if reserve:
                     messages, _ = attach_frame(messages, frame)
@@ -1703,6 +1771,8 @@ class Controller:
                 self.conversation_continuation |= any(
                     conversation_event(consumed[index]) for index in budget["event_delivery"]["included_indices"])
                 try:
+                    self.model_started_at = datetime.now(timezone.utc).isoformat()
+                    self.publish(planner_activity={"phase": "model", **self.model_timing()})
                     death_context=self.death_memory.context(self.game_scope, self.game_facts, self.active_goal) if self.settings.decision_policy.enabled else None
                     episode_id=death_context.get('latest_episode',{}).get('id') if death_context else None
                     profile=self.settings.decision_policy.select(focus=focus.get('choice'),failure=bool(self.tool_failure or self.planner_notice),feedback=self.feedback_pending,
@@ -1710,7 +1780,7 @@ class Controller:
                     response = await self.decide_with_events(messages, round_tools, profile)
                 except (PlannerResponseError, PlannerUnavailableError, PlannerRequestRejectedError) as error:
                     with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
-                        output.write(encode({"turnId": self.turn, "rejected": error.diagnostic, "dispatched": False,
+                        output.write(encode({**self.model_timing(), "turnId": self.turn, "rejected": error.diagnostic, "dispatched": False,
                                              "context_delivery": budget["event_delivery"]}) + "\n")
                     self.planner_failures += 1
                     if isinstance(error, PlannerRequestRejectedError):
@@ -1738,7 +1808,7 @@ class Controller:
                     # Preserve the original response and fresh events, but never
                     # feed a runaway phrase back as ordinary history or speech.
                     with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
-                        output.write(encode({"turnId": self.turn, "response": response, "rejected": repetitive,
+                        output.write(encode({**self.model_timing(), "turnId": self.turn, "response": response, "rejected": repetitive,
                                              "dispatched": False, "context_delivery": budget["event_delivery"]}) + "\n")
                     self.planner_failures += 1
                     delay = min(300, max(5, self.settings.idle_decision_seconds, self.settings.min_decision_seconds)
@@ -1773,7 +1843,7 @@ class Controller:
                 # Retain the exact model result before validation, including rejected
                 # calls. Runtime diagnostics must not require replaying a game action.
                 with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
-                    output.write(encode({"turnId": self.turn, "response": response,
+                    output.write(encode({**self.model_timing(), "turnId": self.turn, "response": response,
                                          "context_delivery": budget["event_delivery"]}) + "\n")
                 # Events arriving during inference belong to the next request.
                 consumed_ids = {id(consumed[index]) for index in budget["event_delivery"]["included_indices"]}
@@ -1796,6 +1866,11 @@ class Controller:
                     # unchanged world the same request on every idle wakeup.
                     self.groups.append([*([input_scene] if input_scene else []), assistant_history(response)])
                     self.retain_history()
+                    # The body is already acting. A conversation or a lookahead
+                    # reply is not idle failure, and must not leave a 60-second
+                    # no-action timer behind its eventual native terminal.
+                    if self.current_work():
+                        return
                     # Text is not a native task or a completed standing goal.
                     # Revisit it even when an idle world never emits a change,
                     # with a growing pause instead of an inference busy-loop.
@@ -1959,15 +2034,27 @@ class Controller:
                     if self.commands:
                         await self.observe_queue()
                 elapsed = time.monotonic() - self.last_decision
+                lookahead = self.lookahead_candidate() if not (urgent or self.conversation_ready()) else None
+                wake |= lookahead is not None
                 if self.decide and not self.current_work() and elapsed >= self.settings.idle_decision_seconds:
                     # Poll state without a model request when nothing has changed.
                     wake |= fact_fingerprint(await self.protocol("facts")) != self.last_facts
-                if (self.decide and wake and (not self.current_work() or urgent or self.conversation_ready())
+                if (self.decide and wake and (not self.current_work() or urgent or self.conversation_ready() or lookahead)
                         and not self.death_waiting
                         and self.death_recovery is None
-                        and (elapsed >= self.settings.min_decision_seconds or self.continuation_ready)
+                        and (elapsed >= self.settings.min_decision_seconds or self.continuation_ready or lookahead)
                         and time.monotonic() >= self.planner_retry_at):
-                    await self.turn_once(goal, prefix, tools)
+                    self.lookahead_anchor = lookahead
+                    self.lookahead_invalidated = False
+                    if lookahead:
+                        self.lookahead_used.add(lookahead)
+                    self.publish(planning_handoff={"mode": "native_lookahead" if lookahead else "ordinary",
+                        "anchor": lookahead[1] if lookahead else None, "native_work_continues": bool(self.pending)})
+                    try:
+                        await self.turn_once(goal, prefix, tools)
+                    finally:
+                        self.lookahead_anchor = None
+                        self.lookahead_invalidated = False
                     self.count += 1
                     self.last_decision = time.monotonic()
                     wake, urgent = self.preempted or self.deferred_wake or self.continuation_needed, self.preempted
