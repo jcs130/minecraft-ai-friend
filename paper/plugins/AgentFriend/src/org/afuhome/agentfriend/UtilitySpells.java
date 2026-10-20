@@ -305,6 +305,7 @@ final class UtilitySpells implements Listener {
                 || viewer.getWorld() != entity.getWorld()) return false;
         Byte flags = WrappedDataWatcher.getEntityWatcher(entity).getByte(0);
         if (flags == null) return false;
+        AgentVisionBridge.senseOutline(viewer, entity, glowing);
         byte visibleFlags = (byte) (glowing ? flags | GLOWING_FLAG : flags);
         PacketContainer packet = protocol.createPacket(PacketType.Play.Server.ENTITY_METADATA);
         packet.getIntegers().write(0, entity.getEntityId());

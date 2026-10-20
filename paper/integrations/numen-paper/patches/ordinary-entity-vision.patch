@@ -91,7 +91,7 @@ index 7b457f8..8f53115 100644
       * 走位带:她该稳在「它够不着我」与「我够得着它」之间,而且真的能砍到。
       *
 diff --git a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java
-index 17080fd..3f96b31 100644
+index 17080fd..705cbb6 100644
 --- a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java
 +++ b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java
 @@ -2,6 +2,7 @@ package com.dwinovo.numen.gametest;
@@ -102,7 +102,7 @@ index 17080fd..3f96b31 100644
  import com.google.gson.JsonObject;
  import com.google.gson.JsonParser;
  import java.util.List;
-@@ -154,6 +155,211 @@ public class PerceptionGameTests {
+@@ -154,6 +155,231 @@ public class PerceptionGameTests {
          return rowOf(scan, entity) != null;
      }
  
@@ -311,6 +311,26 @@ index 17080fd..3f96b31 100644
 +        }
 +    }
 +
++    /** 整墙遮住一个目标时复用已经命中的遮挡,不为27个身体点反复遍历整条世界视线。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_perception")
++    public static void entity_vision_reuses_blockers_without_stale_world_cache(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_cost", new BlockPos(3, 2, 3), false);
++        companion.setNoGravity(true);
++        Pig pig = visionPig(helper, new BlockPos(10, 2, 3));
++        visionWall(helper, 7, 1, 5, 0, 6, Blocks.STONE.defaultBlockState());
++        var before = NearbyEntities.work();
++        helper.assertTrue(!NearbyEntities.visibleTo(companion, pig), "wall leaked target");
++        var after = NearbyEntities.work();
++        helper.assertTrue(after.worldRays() - before.worldRays() <= 3,
++                "solid wall caused excessive full-world rays: " + (after.worldRays() - before.worldRays()));
++        helper.assertTrue(after.shapeSkips() - before.shapeSkips() >= 25, "blockers were not reused");
++        visionWall(helper, 7, 1, 5, 0, 6, Blocks.GLASS.defaultBlockState());
++        helper.assertTrue(NearbyEntities.visibleTo(companion, pig), "same-tick block change used stale cache");
++        pig.discard();
++        CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        helper.succeed();
++    }
++
      /** {@code numen.scan.entities} 的这一页里这只实体的那一行;没列出为 null。 */
      private static com.google.gson.JsonObject rowOf(ToolRun scan, net.minecraft.world.entity.Entity entity) {
          for (var row : valueIn(scan.reply()).getAsJsonArray()) {
@@ -335,10 +355,10 @@ index 8eba9b8..b91ba24 100644
  
      /**
 diff --git a/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java b/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java
-index f2eab4b..ff2de1e 100644
+index f2eab4b..0f6c916 100644
 --- a/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java
 +++ b/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java
-@@ -1,6 +1,23 @@
+@@ -1,7 +1,25 @@
  package com.dwinovo.numen.scan;
  
 +import net.minecraft.core.BlockPos;
@@ -360,9 +380,11 @@ index f2eab4b..ff2de1e 100644
 +import net.minecraft.world.phys.shapes.Shapes;
 +import net.minecraft.world.phys.shapes.VoxelShape;
  
++import java.util.ArrayList;
  import java.util.List;
  import java.util.function.Predicate;
-@@ -16,6 +33,76 @@ public final class NearbyEntities {
+ 
+@@ -16,6 +34,113 @@ public final class NearbyEntities {
  
      private NearbyEntities() {}
  
@@ -376,21 +398,35 @@ index f2eab4b..ff2de1e 100644
 +
 +    private static final View VISIBLE = new View(true, null);
 +    private static final View HIDDEN = new View(false, null);
++    private static long queries;
++    private static long worldRays;
++    private static long shapeSkips;
++
++    /** 服务端主线程上的累计工作量,用于检查遮挡判断的实际成本,不记录实体或玩家资料。 */
++    public record Work(long queries, long worldRays, long shapeSkips) {}
++    public static Work work() { return new Work(queries, worldRays, shapeSkips); }
++
++    private record Occluder(BlockPos pos, VoxelShape shape) {}
 +
 +    /**
 +     * 先看眼睛,再看身体盒内的 3×3×3 个点,任意一点露出即可。点往盒内收最多一厘米,
 +     * 不用盒外的点绕过完整墙面;通常第一条就返回,只有被遮住才继续检查,不缓存移动或方块变化。
 +     */
 +    public static View viewOf(LivingEntity self, Entity target) {
++        queries++;
 +        boolean invisible = self instanceof Player player ? target.isInvisibleTo(player) : target.isInvisible();
 +        if (self.level() != target.level() || target.isSpectator() || invisible) {
 +            return HIDDEN;
 +        }
 +        Vec3 eye = self.getEyePosition();
-+        BlockHitResult first = self.level().clip(new VisualRay(eye, target.getEyePosition(), self));
++        VisualRay ray = new VisualRay(eye, target.getEyePosition(), self);
++        worldRays++;
++        BlockHitResult first = self.level().clip(ray);
 +        if (first.getType() == HitResult.Type.MISS) {
 +            return VISIBLE;
 +        }
++        List<Occluder> occluders = new ArrayList<>(4);
++        rememberBlocker(self, ray, first, occluders);
 +        AABB box = target.getBoundingBox();
 +        double insetX = Math.min(0.01, box.getXsize() / 4);
 +        double insetY = Math.min(0.01, box.getYsize() / 4);
@@ -401,13 +437,36 @@ index f2eab4b..ff2de1e 100644
 +                    Vec3 point = new Vec3(box.minX + insetX + (box.getXsize() - 2 * insetX) * x / 2,
 +                            box.minY + insetY + (box.getYsize() - 2 * insetY) * y / 2,
 +                            box.minZ + insetZ + (box.getZsize() - 2 * insetZ) * z / 2);
-+                    if (self.level().clip(new VisualRay(eye, point, self)).getType() == HitResult.Type.MISS) {
++                    boolean blocked = false;
++                    for (Occluder occluder : occluders) {
++                        if (occluder.shape().clip(eye, point, occluder.pos()) != null) {
++                            blocked = true;
++                            shapeSkips++;
++                            break;
++                        }
++                    }
++                    if (blocked) continue;
++                    ray = new VisualRay(eye, point, self);
++                    worldRays++;
++                    BlockHitResult hit = self.level().clip(ray);
++                    if (hit.getType() == HitResult.Type.MISS) {
 +                        return VISIBLE;
 +                    }
++                    rememberBlocker(self, ray, hit, occluders);
 +                }
 +            }
 +        }
 +        return new View(false, first.getBlockPos());
++    }
++
++    /** 同一次只读判断内复用已经撞上的形状,其余身体点若仍撞上它,不必重新遍历整条世界射线。 */
++    private static void rememberBlocker(LivingEntity self, VisualRay ray, BlockHitResult hit, List<Occluder> out) {
++        BlockPos pos = hit.getBlockPos();
++        if (out.size() >= 8 || out.stream().anyMatch(o -> o.pos().equals(pos))) return;
++        BlockState state = self.level().getBlockState(pos);
++        VoxelShape shape = Shapes.or(ray.getBlockShape(state, self.level(), pos),
++                ray.getFluidShape(state.getFluidState(), self.level(), pos));
++        if (!shape.isEmpty()) out.add(new Occluder(pos.immutable(), shape));
 +    }
 +
 +    /**

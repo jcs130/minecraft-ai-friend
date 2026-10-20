@@ -1,0 +1,22 @@
+name: AgentVision
+version: '0.1.0'
+main: org.afuhome.agentvision.AgentVisionPlugin
+api-version: '1.21'
+description: Shared ordinary entity vision for Numen and network Agents.
+dependencies:
+  server:
+    AgentFriend:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    numen:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    numen_api:
+      load: BEFORE
+      required: true
+      join-classpath: true
+permissions:
+  agentvision.admin:
+    default: op

@@ -1,0 +1,6 @@
+# World entities only. Tab-list names, chat, terrain and sound are not an anti-cheat sandbox.
+radius: 64
+check-interval-ticks: 4
+max-checks-per-tick: 128
+max-visits-per-tick: 512
+time-budget-micros: 2000

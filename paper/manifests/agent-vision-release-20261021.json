@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "status": "deployed_daily_resumed_verified",
+  "date": "2026-10-21",
+  "paper": "1.21.1 build133",
+  "agentFriend": "0.4.47.9",
+  "numenApiPreserved": "77da82ad3241f39fee878e5e51f855bdc5fe7777cabd1ed863a213af5bd60dea",
+  "files": [
+    {
+      "target": "AgentFriend-0.4.47.9.jar",
+      "source": "E:\\MC\\ops\\repairs\\agent-vision-release-20261021\\candidate\\AgentFriend-0.4.47.9.jar",
+      "sha256": "6b14294c7759873ab775e2cbd43f70ecbf9737fdf761a1ae43d03d7782b54b89"
+    },
+    {
+      "target": "AgentVision-0.1.0.jar",
+      "source": "E:\\MC\\ops\\repairs\\agent-vision-release-20261021\\candidate\\AgentVision-0.1.0.jar",
+      "sha256": "4a092854cf5769d39342b3db07c02e921684acaa4a8b664dcece4b188891d345"
+    },
+    {
+      "target": "numen-paper-1.21.1-0.1.4.jar",
+      "source": "E:\\MC\\ops\\repairs\\agent-vision-release-20261021\\candidate\\numen-paper-1.21.1-0.1.4.jar",
+      "sha256": "c6cfe448bc69cebe27c0c0e807c1cb7a1b674a534cf2e21f824d8c8e56a7ce58",
+      "beforeSha256": "39887be162507a1588dc5cb5af5bddcb4e47a4f9de79fd7a4447646c689f9fb6"
+    }
+  ],
+  "removeJars": [
+    {
+      "name": "AgentFriend-0.4.47.8.jar",
+      "sha256": "cca58b89a9495274e842ed99c70b989ca24490d9b93d6b18becb3a1b4126b086"
+    }
+  ],
+  "tests": {
+    "numenGameTests": 29,
+    "numenUnit": {
+      "tests": 204,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "protocol1211": 25,
+    "protocol1206": 25,
+    "load": 8,
+    "deploymentHelper": 11
+  },
+  "load": {
+    "clients": 16,
+    "hiddenRelationships": 512,
+    "notLLMLoad": true,
+    "mspt": "§6Server tick times §e(§7avg§e/§7min§e/§7max§e)§6 from last 5s§7,§6 10s§7,§6 1m§e:\n§6◴ §a1.8§7/§a1.1§7/§a9.0§e, §a1.7§7/§a1.0§7/§a9.0§e, §a1.1§7/§a0.2§7/§a18.5\n",
+    "tps": "§6TPS from last 1m, 5m, 15m: §a20.0§r, §a20.0§r, §a20.0\n",
+    "peakChecks": 128,
+    "maxChecks": 128,
+    "worldRays": 54079,
+    "shapeSkips": 435771,
+    "steadyShows": 0,
+    "maxTickMicros": 9420,
+    "timeBudgetIsCooperative": true
+  },
+  "scope": [
+    "all Numen ordinary scans and instincts",
+    "network Agents identified by registered identity or ag_ prefix",
+    "network living entities, players and dropped items",
+    "tab-list names and vanilla whisper UUIDs retained",
+    "observers and human clients unchanged",
+    "paid sense reveal with normal mana and cooldown"
+  ],
+  "limits": [
+    "shape/material approximation, not texture-pixel visibility",
+    "no FOV restriction",
+    "no block/container/sound sandbox",
+    "64-block ordinary network radius",
+    "no 16-model autonomous load claim"
+  ],
+  "helperBeforeSha256": "2e8d7c49883d4bdea0a15eb26b14b74f0ad39a8dd6eab882ea98ee144f3fb4f9",
+  "helperCandidateSha256": "a60781e531d18512e2bbbf6eb4f028ad6e4409c81f211fb957407f8783558db4",
+  "dualDiskCandidateRollback": true,
+  "restartApproved": true,
+  "productionRestarted": true,
+  "pendingQueued": false,
+  "patchSha256": "d3e6cab1388ba6c567641017ee98d8e93c90d2c969fa0afd39dc863a9a882ac0",
+  "sourcePatch": "paper/integrations/numen-paper/patches/ordinary-entity-vision.patch",
+  "backupStamp": "20261021-034228",
+  "dualDiskComplete": true,
+  "productionChecks": 29,
+  "gatewayChecks": 6,
+  "inventoryEnderBackpackProfessionVerifiedBeforeAutonomy": true,
+  "dailyEnabled": true,
+  "nativeBodyExclusive": true,
+  "qwenpawPlugin": "0.3.0",
+  "nativeHeartbeat": "2m",
+  "otherRolesPreserved": true,
+  "observedNativePlay": "queried task routes, accepted spider patrol, cast paid sense (3 mana), started normal movement; arrival or quest completion not asserted",
+  "liveVision": {
+    "managedNetworkViewers": 2,
+    "trackedRelations": 302,
+    "peakChecks": 100,
+    "maxChecks": 128
+  },
+  "scheduledBackupChange": "not changed; optional one-run deferral requires Windows administrator confirmation",
+  "clientModificationRequired": false,
+  "newPublicPortOpened": false,
+  "privateEvidence": "E/F repairs/agent-vision-release-20261021"
+}
