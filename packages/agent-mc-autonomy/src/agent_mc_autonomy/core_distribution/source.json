@@ -19,28 +19,28 @@
   },
   "external_viewer": {
     "repository": "https://github.com/jcs130/mc-visual-console",
-    "source_revision": "d13246f72182d39de0c572c70c8be9b0157252de",
-    "archive": "modern-viewer-d13246f7-runtime-source.tar.gz",
-    "sha256": "0a894546cc864fb2a9b0a993b0c3730179bd0cd6dca685779ae6ef26e87231b1",
+    "source_revision": "ce60351cb4acb4419b036a8342ba355cfc6e9163",
+    "archive": "modern-viewer-ce60351c-runtime-source.tar.gz",
+    "sha256": "d6d9874aa67c8cf19577eac282811eb80a898e263422d343c7bd72c8cc357b1a",
     "archive_paths": [
       "modern-viewer/renderer-src",
       "modern-viewer/src"
     ],
     "source_receipt": {
-      "sourceSha256": "51b8d39b1877c3ea0ee74987417ae4fb76d5f404c3f500975377e2b43d3b7e35",
-      "sourceFiles": 337,
+      "sourceSha256": "b1cc5fc8e765d6c260157c6426d5211a373e40519009c36143327e77c620640d",
+      "sourceFiles": 338,
       "scope": "renderer_source_host_adapters_and_asset_preparation"
     },
     "original_catalog_sha256": "e014078c1e0498fd70616cb951fb87b8091cea934cc3d26959b8b94394c5f353",
     "bundle_sha256": {
-      "world-preview.js": "47a92494cf1e3873931f2aff8a410982be53ae142c5ef9131adce50d0203159f",
-      "native-console.js": "5cced241f94fa5a482af66c24ef2057a7f10d7c85eb8f368790d75f099d95010"
+      "world-preview.js": "6cfae46b2ab997f7644044321adf1b2e432c8bd845b674851fe8589dd93ffdac",
+      "native-console.js": "9e0a6b52139b91089808945a5af8c5ccee6cde3d6e9c4795350f2c9097ab341b"
     },
     "bundled_in_core": false,
     "source_inventory": {
       "file": "viewer-source.json",
-      "sha256": "82a653b2779a15056a872850eaf2b359f50fdd8b3ee132dc811c66e8221992b6",
-      "files": 344
+      "sha256": "13ca89852d7f7824350998ffdc54eef2604075282353e729fad61963ba8b424b",
+      "files": 345
     }
   },
   "offline_node": {

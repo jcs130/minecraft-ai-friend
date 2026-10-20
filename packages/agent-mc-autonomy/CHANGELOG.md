@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.63 — 2026-10-20
+
+- Pin shared renderer `ce60351c` with original trident GUI icons and the native
+  compass random-spin branch. Preserve exact source/build hashes, stack
+  identity, enchantment glint and bounded original-frame caches. Include all
+  sixteen original plain banner dye models and preserve observed empty pattern
+  components; unsupported decorated patterns remain explicit.
+
 ## 0.2.62 — 2026-10-20
 
 - Preserve omitted native presentation fields when merging an appearance-only
