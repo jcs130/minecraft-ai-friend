@@ -170,6 +170,12 @@ def model_tools(catalogue, *, context_mode="compact"):
     direct = DIRECT_TOOLS | ({"mc_capabilities", "mc_operations", "mc_result", "mc_wait", "mc_cancel", "mc_notices"} if native else set())
     available = sorted(tool["name"] for tool in catalogue if tool["name"] not in HIDDEN_TOOLS)
     advanced = [name for name in available if name not in direct]
+    if context_mode == "full":
+        # The native manuals use native names for goals, methods, memory and
+        # tactics. Full mode must expose those actual contracts, not silently
+        # replace all of them with one opaque router. Keep the old router as a
+        # compatibility entry; original validation/ownership still applies.
+        direct |= set(available)
     for tool in sorted(catalogue, key=lambda row: row["name"]):
         if tool["name"] not in direct:
             continue
@@ -1367,7 +1373,7 @@ class Controller:
             raise ModelCallRejected("A tool call needs a function name.")
         name = function["name"]
         if name not in {tool["function"]["name"] for tool in tools}:
-            raise ModelCallRejected("Unavailable Minecraft tool. Use mc_tool_help, then mc_invoke(name,arguments) for advanced capabilities; never call their names directly.")
+            raise ModelCallRejected("Unavailable Minecraft tool. Only call advertised functions; use mc_tool_help and the advertised mc_invoke(name,arguments) entry when a native name is not exposed directly.")
         try:
             arguments = json.loads(function.get("arguments", ""))
         except json.JSONDecodeError as error:

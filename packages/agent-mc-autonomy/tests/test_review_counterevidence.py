@@ -206,3 +206,34 @@ def test_unicode_assembled_budget_and_full_retained_details(runtime):
     assert all_rows[0]["step_outcomes"]["samples"][0]["why"] == "鸡蛋不是可进食物品"
     # Detail is lossless for the owning retained review projection, not original raw journal text.
     assert len(all_rows[0]["receipt"].encode()) <= 450
+
+
+def test_real_inspect_retains_native_projects_and_method_evidence(runtime):
+    port, _, publish = runtime
+    publish(facts={'parts': [{'key': 'body', 'text': 'health=20 food=20'},
+                            {'key': 'gear', 'text': 'bread x4'},
+                            {'key': 'goals', 'text': 'Project farm; milestone 1 verified; next sow seeds', 'original': 'log:goals'},
+                            {'key': 'methods', 'text': 'Method planting v2; selected v1; last outcome unknown', 'original': 'log:methods'}]})
+    rid = port.offer()['review']['id']
+    value = port.decide(rid, 'inspect', compact=True)
+    assert value['facts']['goals'] == 'Project farm; milestone 1 verified; next sow seeds'
+    assert value['facts']['methods'] == 'Method planting v2; selected v1; last outcome unknown'
+    assert value['fact_originals']['goals'] == 'log:goals'
+    assert value['fact_originals']['methods'] == 'log:methods'
+    full = port.decide(rid, 'inspect')
+    assert full['facts']['goals'] == value['facts']['goals']
+    assert full['facts']['methods'] == value['facts']['methods']
+
+
+def test_long_project_and_method_summaries_are_bounded_and_keep_query_handles(runtime):
+    port, _, publish = runtime
+    publish(facts={'parts': [{'key': 'body', 'text': 'health=20'}, {'key': 'gear', 'text': 'bread x4'},
+        {'key': 'goals', 'text': '目标雪' * 1000, 'original': 'log:goals'},
+        {'key': 'methods', 'text': '方法雪' * 1000, 'original': 'log:methods'}]})
+    rid = port.offer()['review']['id']
+    value = port.decide(rid, 'inspect', compact=True)
+    assert len(encoded(value['facts']['goals']).encode()) <= 900
+    assert len(encoded(value['facts']['methods']).encode()) <= 700
+    assert 'abridged' in encoded(value['facts']['goals'])
+    assert value['fact_originals']['goals'] == 'log:goals'
+    assert value['fact_originals']['methods'] == 'log:methods'

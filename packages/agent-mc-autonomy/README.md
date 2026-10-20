@@ -1,5 +1,18 @@
 # Agent MC Autonomy
 
+0.2.68 exposes native goal/method/tactic/memory contracts directly in full mode
+and retains core project/method summaries in strategic review. Native reflexes
+remain independent. Goals, method saves and candidate programs are evidence to
+inspect, not automatic learning, execution or goal achievement.
+
+For a continuing project, retain its purpose, milestone, actual outcome and next
+condition in the existing core goal table and scoped game notes as applicable.
+The table alone is session-local. Use `mc_script`'s `api:authoring` guide for the
+write/validate/run/review/adopt/reuse cycle and keep negative evidence and older
+versions. Combat candidate programs require their documented selector; current
+rules-only operation does not imply a fast model or local program selector was
+enabled. No host-specific controller or personal-memory implementation is added.
+
 0.2.67 corrects retained-reasoning normalization for that counter and keeps the
 body alive when the total inference deadline expires. 0.2.66 adds an explicitly bound `vllm_chat` CPU context counter alongside the
 existing `ninfer_chat` mode. Tokenizer/template files, hashes, endpoint and model

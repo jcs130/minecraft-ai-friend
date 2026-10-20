@@ -60,6 +60,10 @@ def review_observation(status, now):
         ("clock", 80), ("queue", 350), ("structure", 300), ("terrain", 250), ("bodyRestriction", 400), ("serverFeedback", 1800), ("messages", 800),
         ("inventoryIds", 1200), ("equip", 240), ("options", 500))}
     useful["lastTask"] = fact_preview(spatial_text(facts.get("lastTask", "")), 1000)
+    # These are the core's project/method summaries, not host personal memory.
+    # Keep explicit abridgement and original query handles for longer entries.
+    for key, size in (("goals", 1200), ("methods", 900)):
+        useful[key] = fact_preview(facts.get(key, ""), size)
     reads = snapshot.get("read_activity") or {}
     reads = {key: min(999, reads[key]) for key in (
         "mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original",

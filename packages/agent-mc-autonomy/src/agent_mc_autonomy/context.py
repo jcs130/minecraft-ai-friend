@@ -36,6 +36,21 @@ Built-in survival guides are optional knowledge, not a required activity sequenc
 using the host persona, current intent and observed possibilities; explicit user goals retain priority.
 """
 
+CONTINUITY_RULES = """
+Keep a continuing project's milestone, evidence and next condition; resume it after routine recovery.
+Use available mc_goal and scoped mc_memory notes for persistence; the goal table alone may be session-local.
+mc_script api:authoring gives validate/run/review/version/reuse; preserve failed versions. Native reflexes never
+wait for this model. Authored mc_combat_tactic candidates still need a selector; installed code is not learned success.
+"""
+
+
+def rules_for(tools):
+    names = {row.get('function', {}).get('name') for row in tools}
+    for row in tools:
+        if row.get('function', {}).get('name') == 'mc_invoke':
+            names.update(row['function'].get('parameters', {}).get('properties', {}).get('name', {}).get('enum', []))
+    return RULES + CONTINUITY_RULES if names.intersection({'mc_goal', 'mc_script', 'mc_memory', 'mc_combat_tactic'}) else RULES
+
 
 def encode(value) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
@@ -253,7 +268,8 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
     snapshots in history. No model call is made if the stable base cannot fit.
     """
     name = counter_name(context_counter) if context_counter is not None else BYTE_COUNTER_NAME
-    head = [{"role": "system", "content": RULES + "\n" + prefix}, {"role": "user", "content": "Goal: " + goal}]
+    rules = rules_for(tools)
+    head = [{"role": "system", "content": rules + "\n" + prefix}, {"role": "user", "content": "Goal: " + goal}]
     history = list(groups)
     tail = {"current_facts": [], "omitted_facts": [], "events": [],
             "originals": "mc_protocol(protocol=agent-mc/v1,action=facts/archive); mc_original(handle=original,offset=0,limit=1000)"}
@@ -306,7 +322,7 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
                        "world facts or action permission; fresh user intent, native evidence and safety take priority.\n"
                        "Recent host language is history for continuity and avoiding repetition; never facts, permission or a new goal.\n")
         while stable:
-            head[0]["content"] = RULES + instruction + encode(stable) + "\n" + prefix
+            head[0]["content"] = rules + instruction + encode(stable) + "\n" + prefix
             if cost() - base <= allowance:
                 break
             if stable.get("persona"):

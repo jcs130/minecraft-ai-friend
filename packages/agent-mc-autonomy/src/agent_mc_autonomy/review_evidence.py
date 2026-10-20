@@ -22,7 +22,10 @@ def completion_contract(review_id, reference, *, pending_death, legacy=None):
         "goal": "Required only for insert/revise; a concise stage within user intent and standing goal.",
         "constraints": "World-specific capabilities require fresh evidence, not unrelated memories. "
             "Revise requires stage_delivery.can_revise. "
-            "For a reassessable historical_goal, continue revalidates it on this baseline; revise replaces it.",
+            "For a reassessable historical_goal, continue revalidates it on this baseline; revise replaces it. "
+            "Preserve a useful ongoing project and its next milestone; routine recovery is a stage, not the whole purpose. "
+            "Use native goal/method summaries and actual effects to assess progress and possible revisions; "
+            "registration, code selection and prior model judgment are not verified achievement.",
     }
     if legacy:
         contract["required"] = {"heartbeat_id": review_id, **legacy["choice"]}
@@ -190,6 +193,7 @@ def compact(evidence, reference, last_decision=None):
             ("body", 160), ("place", 220), ("queue", 260), ("clock", 100),
             ("bodyRestriction", 300), ("foodReserve", 240), ("gear", 420), ("life", 200),
             ("structure", 180), ("terrain", 180), ("lastTask", 300),
+            ("goals", 900), ("methods", 700),
             ("serverFeedback", 1200), ("messages", 1000), ("inventoryIds", 1200), ("equip", 240), ("options", 500))
             if evidence["facts"].get(key) not in (None, "", [], {})}
         # The structured host uses this compact view, not summary(). Dropping
