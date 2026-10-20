@@ -1,3 +1,99 @@
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/agent/tool/CompanionToolPort.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/agent/tool/CompanionToolPort.java
+index 68b1884..c93f9d7 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/agent/tool/CompanionToolPort.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/agent/tool/CompanionToolPort.java
+@@ -185,7 +185,18 @@ public final class CompanionToolPort implements ToolPort, SerialCalls.Port {
+ 
+     /** 程序交回的结局:回执、每次调用的结局、是不是被叫停的。 */
+     private static SerialCalls.Settled settled(Program.Outcome outcome) {
+-        return new SerialCalls.Settled(outcome.receipt(), outcome.ending(), outcome.calls(), outcome.stoppedFor());
++        String receipt = outcome.receipt();
++        // Trusted command adapters opt into the original return value. Keep the
++        // normal Lua/model display bounded, but do not cut JSON in mid-string.
++        if (outcome.returned() instanceof java.util.Map<?, ?> returned
++                && returned.size() == 1 && returned.get("numen_command_receipt") instanceof java.util.Map<?, ?> command) {
++            var data = new com.google.gson.Gson().toJsonTree(command);
++            var envelope = com.google.gson.JsonParser.parseString(receipt).getAsJsonObject();
++            if (data.toString().length() <= 262144) envelope.add("commandReceipt", data);
++            else envelope.addProperty("commandReceiptError", "too_large");
++            receipt = envelope.toString();
++        }
++        return new SerialCalls.Settled(receipt, outcome.ending(), outcome.calls(), outcome.stoppedFor());
+     }
+ 
+     /** 一个调用的回报口:记一笔,交给 {@code done};在飞时它也是 {@link #failInFlight} 用的那一个。 */
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/AdoptedPermissions.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/AdoptedPermissions.java
+new file mode 100644
+index 0000000..7ac94e5
+--- /dev/null
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/AdoptedPermissions.java
+@@ -0,0 +1,32 @@
++package com.dwinovo.numen.api.brain;
++
++import com.dwinovo.numen.api.store.Atomic;
++import com.google.gson.JsonObject;
++import com.google.gson.JsonParser;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.UUID;
++
++/** Explicit admin adoption keeps the original account's Bukkit permissions.
++ * This server-owned marker grants no node and never trusts a client payload. */
++public final class AdoptedPermissions {
++    public static final String FILE = "adopted-permissions.json";
++    private AdoptedPermissions() { }
++
++    public static void record(Path file, UUID player, UUID owner) {
++        JsonObject value = new JsonObject(); value.addProperty("v", 1);
++        value.addProperty("player", player.toString()); value.addProperty("owner", owner.toString());
++        value.addProperty("identity", "self");
++        Atomic.write(file, value.toString());
++    }
++
++    public static boolean usesOriginal(Path file, UUID player, UUID owner) {
++        try {
++            if (!Files.isRegularFile(file) || Files.size(file) > 1024) return false;
++            var value = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
++            return value.get("v").getAsInt() == 1 && value.get("identity").getAsString().equals("self")
++                    && value.get("player").getAsString().equals(player.toString())
++                    && value.get("owner").getAsString().equals(owner.toString());
++        } catch (java.io.IOException | RuntimeException invalid) { return false; }
++    }
++}
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java
+index 822efbf..04e169d 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java
+@@ -403,6 +403,11 @@ public final class CompanionLoop {
+ 
+     /** 每个服务器刻一次:驾驶席翻转、停牌变化的播报,和"攒够时长"的熟度。 */
+     public void tick() {
++        updateDriving();
++        loop.tick();
++    }
++
++    private void updateDriving() {
+         // 驾驶席翻成外接的那一下作废在飞的回合:接管之后内脑的回复不该再派工具、整理不该再换历史。
+         // 交还不用做什么——停牌是现算的,内核下一次推进自己看得见。
+         boolean driving = parts.driving().getAsBoolean();
+@@ -410,7 +415,6 @@ public final class CompanionLoop {
+             loop.halt(HaltReason.EXTERNAL);
+         }
+         wasDriving = driving;
+-        loop.tick();
+     }
+ 
+     // ---- 外接大脑 ----
+@@ -448,6 +452,9 @@ public final class CompanionLoop {
+      * @return 收下了;内脑正在干活、或已有一个外接调用在跑时为 false,什么都没记
+      */
+     public boolean runExternal(LlmToolCall call, Consumer<String> done) {
++        // MCP can dispatch between ticks. Settle takeover before accepting its
++        // first call, or the next tick cancels that external call as old AI work.
++        updateDriving();
+         if (!loop.asideFree()) {
+             return false;
+         }
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentAdoption.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentAdoption.java
 new file mode 100644
 index 0000000..b1410b3
@@ -39,10 +135,10 @@ index 0000000..b1410b3
 +    }
 +}
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentCommand.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentCommand.java
-index a643861..78e9c37 100644
+index a643861..7fad7ac 100644
 --- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentCommand.java
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentCommand.java
-@@ -29,9 +29,51 @@ public final class ResidentCommand {
+@@ -29,9 +29,53 @@ public final class ResidentCommand {
          }).then(argument().executes(ctx -> run(ctx, null))));
          root.then(Commands.literal("enable").then(argument().executes(ctx -> run(ctx, true))));
          root.then(Commands.literal("disable").then(argument().executes(ctx -> run(ctx, false))));
@@ -81,11 +177,13 @@ index a643861..78e9c37 100644
 +                    net.minecraft.core.registries.Registries.DIMENSION, location);
 +            if (dimension == null || server.getLevel(dimension) == null)
 +                throw new IllegalArgumentException("存档维度未加载");
++            AdoptedPermissions.record(com.dwinovo.numen.api.home.Homes.of(server).companion(id)
++                    .file(AdoptedPermissions.FILE), id, owner);
 +            registry.put(id, new CompanionRegistry.Entry(name, owner, dimension, saved.position()));
 +            say(source, "[常驻] 已登记原角色 " + name + "，UUID=" + id
 +                    + "；未修改背包、职业或位置，尚未启用常驻。命令：/numen resident enable " + id);
 +            return 1;
-+        } catch (java.io.IOException | IllegalArgumentException e) {
++        } catch (java.io.IOException | IllegalArgumentException | com.dwinovo.numen.api.store.StoreException e) {
 +            source.sendFailure(Component.literal("[常驻] 接管未完成：" + e.getMessage() + "。请核对离线账号与原 UUID 后重试。"));
 +            return 0;
 +        }
@@ -94,6 +192,190 @@ index a643861..78e9c37 100644
      private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> argument() {
          return Commands.argument("companion", StringArgumentType.string()).suggests((ctx, builder) ->
                  SharedSuggestionProvider.suggest(CompanionRegistry.get(ctx.getSource().getServer()).all().stream()
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/McpServer.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/McpServer.java
+index de4509a..ef36278 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/McpServer.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/McpServer.java
+@@ -903,7 +903,7 @@ public final class McpServer {
+                     .get(config.callTimeoutSeconds(), TimeUnit.SECONDS);
+             // the external agent reads what the built-in brain reads: the result's message, never its structured data
+             String events = hands.takeEvents(companion).get(CONTROL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+-            return receipt(ToolOutcome.modelText(result), ToolOutcome.failed(result), events);
++            return toolReceipt(result, events);
+         }
+ 
+         /** 把 {@code companion} 参数(名字或 UUID)解析成这张令牌管得着的、活着的同伴;没有是 null。 */
+@@ -942,6 +942,19 @@ public final class McpServer {
+         return out;
+     }
+ 
++    /** Optional original command data; ordinary Lua receipts keep their display limits. */
++    static JsonObject toolReceipt(String result, String events) {
++        JsonObject out = receipt(ToolOutcome.modelText(result), ToolOutcome.failed(result), events);
++        try {
++            JsonObject envelope = com.google.gson.JsonParser.parseString(result).getAsJsonObject();
++            JsonObject data = new JsonObject();
++            if (envelope.has("commandReceipt")) data.add("commandReceipt", envelope.get("commandReceipt"));
++            if (envelope.has("commandReceiptError")) data.add("commandReceiptError", envelope.get("commandReceiptError"));
++            if (!data.isEmpty()) out.add("structuredContent", data);
++        } catch (RuntimeException plainText) { /* Other tools can return plain text. */ }
++        return out;
++    }
++
+     // ---- 征询(elicitation) ----
+     // 外部大脑驾驶时,要问主人的事问的是坐在电脑前的人,不是驾驶席上的模型:经这个会话里客户端开的流发
+     // elicitation/create,客户端弹给人,人的选择作为 JSON-RPC 答复 POST 回来。客户端没声明会答 elicitation、
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/agent/tool/CompanionToolPortTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/agent/tool/CompanionToolPortTest.java
+index 679ad82..2bf9cca 100644
+--- a/numen-api/common/src/test/java/com/dwinovo/numen/api/agent/tool/CompanionToolPortTest.java
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/agent/tool/CompanionToolPortTest.java
+@@ -117,6 +117,18 @@ class CompanionToolPortTest {
+         return new Program.Outcome(receipt, new ScriptCall.Ending(ScriptCall.Status.OK, null), List.of(), List.of(), null);
+     }
+ 
++    @Test
++    void commandAdapterKeepsOriginalLongDataWithoutExpandingTheLuaDisplay() {
++        port.run(List.of(program("command-data")), sink);
++        String line = "MC_SKILL {\"description\":\"" + "技".repeat(12000) + "\"}";
++        var returned = Map.of("numen_command_receipt", Map.of("command", "/mycli skills mine", "output", List.of(line), "result", 1));
++        host.deliver("command-data", new Program.Outcome(ToolOutcome.success("short display"),
++                new ScriptCall.Ending(ScriptCall.Status.OK, null), List.of(), List.of(), null, returned, null));
++        var envelope = com.google.gson.JsonParser.parseString(finished.getFirst().substring("command-data ".length())).getAsJsonObject();
++        assertEquals("short display", envelope.get("message").getAsString());
++        assertEquals(line, envelope.getAsJsonObject("commandReceipt").getAsJsonArray("output").get(0).getAsString());
++    }
++
+     @Test
+     void aProgramIsHandedOverWholeAndItsReceiptIsTheCallsResult() {
+         port.run(List.of(program("c1")), sink);
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/AdoptedPermissionsTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/AdoptedPermissionsTest.java
+new file mode 100644
+index 0000000..5fae4f3
+--- /dev/null
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/AdoptedPermissionsTest.java
+@@ -0,0 +1,29 @@
++package com.dwinovo.numen.api.brain;
++
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.UUID;
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.io.TempDir;
++import static org.junit.jupiter.api.Assertions.*;
++
++class AdoptedPermissionsTest {
++    @Test void onlyTheExplicitOriginalIdentityAndOwnerMatch(@TempDir Path dir) {
++        Path file = dir.resolve(AdoptedPermissions.FILE);
++        UUID player = UUID.randomUUID(), owner = UUID.randomUUID();
++        assertFalse(AdoptedPermissions.usesOriginal(file, player, owner));
++        AdoptedPermissions.record(file, player, owner);
++        assertTrue(AdoptedPermissions.usesOriginal(file, player, owner));
++        assertFalse(AdoptedPermissions.usesOriginal(file, UUID.randomUUID(), owner));
++        assertFalse(AdoptedPermissions.usesOriginal(file, player, UUID.randomUUID()));
++    }
++
++    @Test void invalidMarkersCannotChangePermissionIdentity(@TempDir Path dir) throws Exception {
++        Path file = dir.resolve(AdoptedPermissions.FILE);
++        UUID player = UUID.randomUUID(), owner = UUID.randomUUID();
++        for (String text : new String[]{"{}", "not json", "x".repeat(1025)}) {
++            Files.writeString(file, text);
++            assertFalse(AdoptedPermissions.usesOriginal(file, player, owner));
++        }
++    }
++}
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/ExternalTakeoverTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/ExternalTakeoverTest.java
+new file mode 100644
+index 0000000..702f416
+--- /dev/null
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/ExternalTakeoverTest.java
+@@ -0,0 +1,87 @@
++package com.dwinovo.numen.api.brain;
++
++import com.dwinovo.numen.api.agent.http.CancelToken;
++import com.dwinovo.numen.api.agent.llm.LlmEndpoint;
++import com.dwinovo.numen.api.agent.loop.*;
++import com.dwinovo.numen.api.agent.memory.NoteBook;
++import com.dwinovo.numen.api.agent.provider.LlmToolCall;
++import com.dwinovo.numen.api.agent.tool.*;
++import com.dwinovo.numen.api.home.Home;
++import com.dwinovo.numen.api.program.ProgramHost;
++import com.dwinovo.numen.api.store.Io;
++import com.dwinovo.numen.script.ScriptCall;
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.io.TempDir;
++import java.nio.file.Path;
++import java.util.*;
++import java.util.concurrent.atomic.AtomicBoolean;
++import java.util.function.Consumer;
++import static org.junit.jupiter.api.Assertions.*;
++
++class ExternalTakeoverTest {
++    private final AtomicBoolean driving = new AtomicBoolean(false);
++    private final List<String> cut = new ArrayList<>();
++    private final Map<String, Consumer<Program.Outcome>> waiting = new HashMap<>();
++
++    private CompanionLoop loop(Path dir) {
++        UUID id = UUID.randomUUID();
++        Io io = Io.direct(error -> { throw error; });
++        NoteBook.init(uuid -> new Home(dir.resolve("memory/" + uuid), io), () -> 0);
++        Mind mind = new Mind() {
++            public Cause unavailable(String p) { return Cause.of(Cause.UNBOUND); }
++            public LlmEndpoint endpoint(String p) { throw new AssertionError("no model call"); }
++            public void ask(String p, UUID u, ModelRequest r, CancelToken c, Consumer<ModelPort.Delta> d, Consumer<ModelOutcome> done) { throw new AssertionError("no model call"); }
++        };
++        ProgramHost programs = new ProgramHost() {
++            public void run(UUID u, String p, String code, Consumer<Program.Outcome> done) { waiting.put(p, done); }
++            public void afterwards(String p, Consumer<Program.Outcome> done) { waiting.computeIfPresent(p, (k, old) -> done); }
++            public void forget(String p) { waiting.remove(p); }
++            public void interrupt(UUID u, String p, String why) { }
++            public void cutOff(UUID u, String p, boolean body) { cut.add(p); }
++            public void stopBody(UUID u) { throw new AssertionError("takeover must not stop body"); }
++        };
++        ScriptTool script = new ScriptTool();
++        ToolBook tools = new ToolBook() {
++            public List<NumenTool> all() { return List.of(script); }
++            public NumenTool resolve(String name) { return name.equals("lua") ? script : null; }
++        };
++        return new CompanionLoop(new CompanionLoop.Parts(id, new Home(dir, io), Runnable::run, mind, programs, tools,
++                () -> null, () -> null, () -> null, () -> false, driving::get, () -> 1,
++                p -> null, () -> 0, (u, room) -> ""));
++    }
++
++    private LlmToolCall query(String id) { return new LlmToolCall(id, "lua", ScriptTool.args("return 1").toString()); }
++
++    private void finish(String id) {
++        Consumer<Program.Outcome> done = waiting.remove(id);
++        assertNotNull(done);
++        done.accept(new Program.Outcome("{\"message\":\"ok\",\"isError\":false}",
++                new ScriptCall.Ending(ScriptCall.Status.OK, null), List.of(), List.of(), null));
++    }
++
++    @Test void firstQueryBeforeNextTickKeepsItsCallbackAndDoesNotBlockLaterQueries(@TempDir Path dir) {
++        CompanionLoop loop = loop(dir);
++        driving.set(true); // MCP initialized after the previous server tick.
++        List<String> answers = new ArrayList<>();
++        assertTrue(loop.runExternal(query("first"), answers::add));
++        loop.tick();
++        assertTrue(cut.isEmpty(), "the first external query is not old internal work");
++        finish("first");
++        assertEquals(1, answers.size());
++        assertTrue(loop.runExternal(query("second"), answers::add));
++        finish("second");
++        assertEquals(2, answers.size());
++    }
++
++    @Test void ordinaryTickTakeoverStillLeavesSubsequentExternalWorkAlone(@TempDir Path dir) {
++        CompanionLoop loop = loop(dir);
++        driving.set(true);
++        loop.tick();
++        List<String> answers = new ArrayList<>();
++        assertTrue(loop.runExternal(query("normal"), answers::add));
++        loop.tick(); loop.tick();
++        assertTrue(cut.isEmpty());
++        finish("normal");
++        assertEquals(1, answers.size());
++    }
++}
 diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/ResidentAdoptionTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/ResidentAdoptionTest.java
 new file mode 100644
 index 0000000..c8b5425
@@ -134,6 +416,39 @@ index 0000000..c8b5425
 +    @Test void refusesDeadSave() { var t=save(); t.putFloat("Health", 0); assertThrows(IllegalArgumentException.class, () -> ResidentAdoption.inspect(t, ID, "ag_Kirito")); }
 +    @Test void refusesInvalidPosition() { var t=save(); t.getList("Pos", 6).set(0, DoubleTag.valueOf(Double.NaN)); assertThrows(IllegalArgumentException.class, () -> ResidentAdoption.inspect(t, ID, "ag_Kirito")); }
 +    @Test void refusesMissingDimension() { var t=save(); t.remove("Dimension"); assertThrows(IllegalArgumentException.class, () -> ResidentAdoption.inspect(t, ID, "ag_Kirito")); }
++}
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/mcp/server/CommandReceiptTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/mcp/server/CommandReceiptTest.java
+new file mode 100644
+index 0000000..cce2598
+--- /dev/null
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/mcp/server/CommandReceiptTest.java
+@@ -0,0 +1,27 @@
++package com.dwinovo.numen.api.mcp.server;
++
++import com.google.gson.JsonObject;
++import org.junit.jupiter.api.Test;
++import static org.junit.jupiter.api.Assertions.*;
++
++class CommandReceiptTest {
++    @Test void originalCommandJsonTravelsSeparatelyFromTheAbbreviatedDisplay() {
++        var command = new JsonObject();
++        command.addProperty("command", "/mycli skills mine");
++        var lines = new com.google.gson.JsonArray();
++        String line = "MC_SKILL {\"description\":\"" + "技".repeat(12000) + "\"}";
++        lines.add(line); command.add("output", lines); command.addProperty("result", 1);
++        var envelope = new JsonObject(); envelope.addProperty("success", true);
++        envelope.addProperty("message", "short Lua display"); envelope.add("commandReceipt", command);
++        var response = McpServer.toolReceipt(envelope.toString(), "<events>real inbox</events>");
++        assertEquals(line, response.getAsJsonObject("structuredContent").getAsJsonObject("commandReceipt")
++                .getAsJsonArray("output").get(0).getAsString());
++        assertEquals(2, response.getAsJsonArray("content").size());
++        assertEquals("short Lua display", response.getAsJsonArray("content").get(0).getAsJsonObject().get("text").getAsString());
++    }
++
++    @Test void plainTextAndOrdinaryLuaKeepTheirExistingContract() {
++        assertFalse(McpServer.toolReceipt("plain result", null).has("structuredContent"));
++        assertTrue(McpServer.toolReceipt("{\"success\":false,\"message\":\"refused\"}", null).get("isError").getAsBoolean());
++    }
 +}
 diff --git a/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java b/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java
 index f235edc..5d84760 100644
@@ -216,3 +531,21 @@ index 0000000..43fa70f
 +        }
 +    }
 +}
+diff --git a/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperBodyAdmission.java b/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperBodyAdmission.java
+index e5d9108..674597c 100644
+--- a/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperBodyAdmission.java
++++ b/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperBodyAdmission.java
+@@ -79,7 +79,12 @@ public final class PaperBodyAdmission implements IBodyAdmission {
+     @Override
+     public void joined(NumenPlayer body) {
+         exitPlayerChunkLoading(body);
+-        OwnerPermissible.injectInto(body.getBukkitEntity(), body.getOwnerUuid());
++        // A verified existing account keeps its original LuckPerms/Bukkit
++        // identity. New companions retain upstream owner-delegated permissions.
++        var marker = com.dwinovo.numen.api.home.Homes.of(body.server).companion(body.getUUID())
++                .file(com.dwinovo.numen.api.brain.AdoptedPermissions.FILE);
++        if (!com.dwinovo.numen.api.brain.AdoptedPermissions.usesOriginal(marker, body.getUUID(), body.getOwnerUuid()))
++            OwnerPermissible.injectInto(body.getBukkitEntity(), body.getOwnerUuid());
+     }
+ 
+     /**

@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock
 
-from numen_controller import Controller, Journal, ProcessLease, bound_arguments, has_events, local_url, should_wake, command_script
+from mcp import types
+from numen_controller import Controller, Journal, ProcessLease, bound_arguments, has_events, local_url, should_wake, command_script, command_result
 
 
 class ControllerTests(unittest.TestCase):
@@ -38,6 +39,16 @@ class ControllerTests(unittest.TestCase):
             self.assertIsNotNone(first.accept("event-id-12: go"))
             self.assertIsNone(first.accept("event-id-12: go"))
             self.assertIsNone(Journal(Path(d)).accept("event-id-12: go"))
+
+    def test_background_job_end_wakes_without_replaying_it(self):
+        for status in ("done", "failed", "timeout", "interrupted"):
+            self.assertTrue(should_wake(f'<events><event kind="task_finished" id="job-1" status="{status}">result</event></events>'))
+        self.assertFalse(should_wake('<event kind="task_finished" status="stopped">owner stopped</event>'))
+        self.assertFalse(should_wake('<event kind="server_message">task_finished status="done"</event>'))
+
+    def test_full_inventory_and_dimension_change_require_replanning(self):
+        self.assertTrue(should_wake('<event kind="inventory_full">item left on ground</event>'))
+        self.assertTrue(should_wake('<event kind="dimension_change">minecraft:the_nether</event>'))
 
     def test_later_identical_user_message_is_a_new_event(self):
         with tempfile.TemporaryDirectory() as d:
@@ -92,6 +103,25 @@ class ControllerTests(unittest.TestCase):
             self.assertTrue(result.isError)
             self.assertIn("结果未知", result.content[0].text)
             self.assertEqual(c.session.call_tool.await_count, 1)
+
+    def test_full_command_data_replaces_cut_display_and_keeps_later_events(self):
+        line='MC_SKILL '+json.dumps({'description':'技能'*16000},ensure_ascii=False)
+        raw={'command':'/mycli skills mine','output':[line],'result':1}
+        value=types.CallToolResult(content=[types.TextContent(type='text',text='[stdout cut at 6000 characters]'),
+            types.TextContent(type='text',text='<event kind="timer">ready</event>')],structuredContent={'commandReceipt':raw})
+        actual=command_result(value)
+        self.assertFalse(actual.isError)
+        self.assertEqual(json.loads(actual.content[0].text.partition(' ')[2])['description'],'技能'*16000)
+        self.assertIn('timer',actual.content[1].text)
+        self.assertTrue(actual.structuredContent['complete'])
+        self.assertEqual(actual.structuredContent['outputLines'],1)
+        self.assertNotIn('output',actual.structuredContent)
+
+    def test_cut_legacy_receipt_is_unknown_and_never_claimed_complete(self):
+        value=types.CallToolResult(content=[types.TextContent(type='text',text='MC_SKILL {"id":"x\n[stdout cut at 6000 characters; 12000 more were not shown]')])
+        actual=command_result(value)
+        self.assertTrue(actual.isError)
+        self.assertIn('不要重放',actual.content[0].text)
 
 
 if __name__ == "__main__": unittest.main()

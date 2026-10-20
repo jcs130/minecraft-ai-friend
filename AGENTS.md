@@ -1,3 +1,7 @@
+## 2026-10-20 桐人信息链路补齐，仍为隔离候选
+
+原桐人/QwenPaw候选已补首查接管竞态、6000字长回执截断、后台任务/满背包通知和接管旧账号的Bukkit权限。API SHA256 77da82ad3241f39fee878e5e51f855bdc5fe7777cabd1ed863a213af5bd60dea，适配器 SHA256 e3127dc99d56666d11959dc9c0c4ae131af2bd57c83185fc62627dcb863d066d；Appearance仍0.3.3、Freesia仍af3、AgentFriend仍0.4.47.8。952 common、16适配器、6真实联机信息/54格窗口检查，以及QwenPaw两项查询、普通私聊和私有系统事件通过；39条技能33383字符完整解析，原33物品条目/职业与Minepacks292字节原blob核对。18组核心能力按需查help，任务与技能沿用原/mycli；资格不等于已学或已准备。Native采用可选structuredContent而非放大全局Lua展示限额，超限/未知结果不重放。旧账号通过管理员adopt的精确UUID/owner标记保留原LuckPerms权限，新同伴沿原委托；不加OP或权限节点。已完成E/F候选与回退更新，测试服务和新QwenPaw角色停用，正式仍星灯、无pending；继续等待本次维护确认及原完整双盘冷备份流程。下方初版候选为本轮扩展前记录。见paper/docs/KIRITO_SERVER_INFORMATION.md。
+
 ## 2026-10-20 原桐人与 QwenPaw 候选，未切换正式服
 
 服主明确选择接管旧 ag_Kirito（8e7b99e0-595d-3402-935c-7139ac6814e3），沿用背包与战士职业。候选 Numen API SHA256 14785cfdd1a2895b4c88e35d97330a0905709ed766f7d1d82fd291f0de3a7321、AgentAppearance0.3.3 SHA256 1644074b881225c927d9ad0c2e080432c48a875691bf6e1c166dec5f172dcd26；Freesia仍af3、AgentFriend仍0.4.47.8。QwenPaw独立mc-kirito通过单角色原生MCP实际完成行走、CLI与私聊，内脑EXTERNAL；旧星灯停驻保档，不能永久遣散。新增受限原账号adopt命令与虚拟身体YSM/Web投影。945 common、12适配器、8投影、最终9联机及21发布目标检查通过，31载荷类保持；原UUID、33物品槽位、职业与Minepacks原blob及正常冷重连已核对。E/F候选与前像备好，正式仍星灯，未写pending；必须取得本次维护确认，再走预告、真人/活动门禁和完整双盘冷备份。无手机/Xbox、实际Fabric模型像素、远端Web或16自主模型负载验收。见paper/docs/KIRITO_QWENPAW.md与对应候选清单。

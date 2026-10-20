@@ -21,11 +21,11 @@
   },
   "numen": {
     "version": "0.1.4",
-    "sha256": "14785cfdd1a2895b4c88e35d97330a0905709ed766f7d1d82fd291f0de3a7321",
+    "sha256": "77da82ad3241f39fee878e5e51f855bdc5fe7777cabd1ed863a213af5bd60dea",
     "previousSha256": "49256bec2ae8621bdb048c7d88eea0547767e8adc9273eccf16596b84df31f02",
     "upstreamCommit": "7c931600c2269d21216bb6f9090588cdbe0beb01",
-    "sourceTree": "cd0d2cb1a117a272dd3fc53cbe7c5d7010f6bb41",
-    "patchSha256": "04332c13d29420c19b8f6cf6c15c33a45b9b0b8b7627071aeed3860c1139217c",
+    "sourceTree": "d7e41ef8195883224bf1286092626d7e0f793566",
+    "patchSha256": "7df9efe23c43c85c538dfbb4a60b026b8380dfe552cd752e22f2a4213952359c",
     "unchangedPayloadClasses": 31
   },
   "appearance": {
@@ -40,11 +40,15 @@
     "armCubes": 11,
     "originalPngUnchanged": true
   },
-  "controllerSha256": "9c6ef60e331ce0f79a74a90b31bf23845eec02060d898958d551117bea6c68fb",
+  "controllerSha256": "e3127dc99d56666d11959dc9c0c4ae131af2bd57c83185fc62627dcb863d066d",
   "tests": {
-    "common": 945,
+    "common": 952,
     "adoptionNew": 8,
-    "adapter": 12,
+    "adapter": 16,
+    "informationLive": 6,
+    "informationQwenPawQueries": 2,
+    "informationPrivateSystemMessage": true,
+    "informationFullSkills": 39,
     "projection": 8,
     "finalWire": 9,
     "deploymentTargets": 21,
@@ -72,5 +76,19 @@
     "freshMaintenanceApprovalRequired": true,
     "fullStoppedDualDiskBackupRequired": true,
     "plan": "local repairs/numen-kirito-qwenpaw-20261020/deployment-plan.not-queued.json"
+  },
+  "informationAudit": {
+    "document": "paper/docs/KIRITO_SERVER_INFORMATION.md",
+    "coreGroups": 18,
+    "fullSkillRows": 39,
+    "fullSkillTextCharacters": 33383,
+    "liveCases": 6,
+    "extraReadQueries": 4,
+    "preservesOriginalBukkitPermissionIdentity": true,
+    "rawCommandReceiptCharactersLimit": 262144,
+    "normalLuaLimitsUnchanged": true,
+    "genuineInventoryEntries": 33,
+    "shortcutMayBeRepositionedByMinepacks": true,
+    "artifactNote": "appearance/protocol checks refer to the unchanged 0.3.3 bridge; native 31 payload classes stay identical"
   }
 }

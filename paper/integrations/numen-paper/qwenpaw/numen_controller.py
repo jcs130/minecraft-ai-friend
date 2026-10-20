@@ -55,7 +55,23 @@ def command_script(line: str) -> str:
     if not isinstance(line, str) or not 1 <= len(line.strip()) <= 512 or any(ord(c) < 32 for c in line):
         raise ValueError("请提供一条不超过 512 字的游戏命令")
     # Printing strings preserves complete CLI JSON; returning the table abbreviates each long string.
-    return "local r=numen.mc.run(" + json.dumps(line.strip(), ensure_ascii=False) + "); for _,line in ipairs(r.output) do print(line) end; return r.result"
+    return "local r=numen.mc.run(" + json.dumps(line.strip(), ensure_ascii=False) + "); for _,line in ipairs(r.output) do print(line) end; return {numen_command_receipt=r}"
+
+
+def command_result(result: types.CallToolResult) -> types.CallToolResult:
+    """Prefer the original single execution result over Lua's 6000-character stdout."""
+    structured = result.structuredContent or {}
+    raw = structured.get("commandReceipt")
+    if isinstance(raw, dict) and isinstance(raw.get("output"), list) and all(isinstance(x, str) for x in raw["output"]):
+        # The first content block is the Lua display; later blocks are real inbox
+        # events appended by Numen. Preserve them without duplicating the display.
+        return types.CallToolResult(isError=bool(result.isError), structuredContent={
+            "command": raw.get("command"), "commandResult": raw.get("result"), "complete": True, "outputLines": len(raw["output"])},
+            content=[types.TextContent(type="text", text="\n".join(raw["output"])), *result.content[1:]])
+    if structured.get("commandReceiptError") or re.search(r"\[(?:stdout|returned value) cut at \d+", result_text(result)):
+        return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text=
+            "命令已执行，但完整回执超出传输上限，不能据此判断最终结果；不要重放原动作。请按 /mycli --help 使用分页或单项只读查询确认。")])
+    return result
 
 
 def result_text(result: types.CallToolResult) -> str:
@@ -70,8 +86,14 @@ def should_wake(text: str) -> bool:
     """Server receipts and incidental chatter never start another model turn."""
     if re.search(r"(?:^|\n)<query>", text):
         return True
-    if re.search(r'<event kind="(?:death|removed|hungry|owner_hurt|timer|woke)"', text):
+    if re.search(r'<event kind="(?:death|removed|hungry|inventory_full|owner_hurt|timer|woke|dimension_change)"', text):
         return True
+    # A background body job may finish after its Lua caller was interrupted.
+    # Wake for its real end state; an intentional stop does not restart planning.
+    for attrs in re.findall(r'<event\s+([^>]+)>', text):
+        if re.search(r'(?:^|\s)kind="task_finished"', attrs) and re.search(
+                r'(?:^|\s)status="(?:done|failed|timeout|interrupted)"', attrs):
+            return True
     talks = re.findall(r'<event kind="talk"[^>]*>(.*?)</event>', text, re.S)
     return any(re.search(r"(?:→\s*ag_Kirito\]|ag_Kirito|桐人)", line, re.I) for line in talks)
 
@@ -201,6 +223,8 @@ class Controller:
             except Exception as exc:
                 self.journal.write("tool_unknown", tool=name, error=type(exc).__name__)
                 return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text="操作结果未知：连接或等待中断。先查询实际状态，禁止直接重复执行。")])
+            if name == "command":
+                result = command_result(result)
             self.journal.write("tool_result", tool=name, result=result.model_dump(mode="json"))
             return result
 
