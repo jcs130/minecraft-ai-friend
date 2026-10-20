@@ -113,6 +113,37 @@ def test_headroom_does_not_remove_fitting_history_or_fresh_terminal_evidence():
     assert (groups, facts) == source
 
 
+@pytest.mark.parametrize("short_exchanges", [1, 2, 3])
+def test_small_followup_does_not_hide_recent_large_exchange_growth(
+        framework_module, tmp_path, run_async, short_exchanges):
+    captured, diagnostics = [], []
+
+    async def decide(messages, _):
+        captured.append(copy.deepcopy(messages))
+        return {"content": "Waiting", "tool_calls": []}
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    controller.settings = dataclasses.replace(controller.settings, context_mode="full", context_tokens=131072,
+                                             context_history_headroom_tokens=8192)
+    controller.publish = lambda **row: diagnostics.append(row)
+    controller.groups = [exchange(i, 12000) for i in range(16)]
+    controller.groups.extend(exchange(200 + i, 80) for i in range(short_exchanges))
+    original = copy.deepcopy(controller.groups)
+    tools = module.model_tools(bridge.tools)
+    for i in range(3):
+        run_async(controller.turn_once("survive", "stable", tools))
+        controller.groups.append(exchange(300 + i, 12000))
+    budgets = [row["context"] for row in diagnostics if "context" in row]
+    assert budgets[0]["history"]["evicted"] > 0
+    assert [row["history"]["evicted"] for row in budgets[1:]] == [0, 0], (
+        "A short follow-up hid the large exchange and rotated the prefix again")
+    assert budgets[0]["history"]["retirement_growth_units"] > 8192
+    assert captured[1][:len(captured[0]) - 1] == captured[0][:-1]
+    assert captured[2][:len(captured[1]) - 1] == captured[1][:-1]
+    assert original[-1][-1]["content"].endswith("x" * 80)
+    assert all(not row["omitted"] for row in budgets)
+
+
 def test_headroom_is_bounded_and_never_drops_facts_to_meet_a_cache_target():
     facts = {"parts": [{"key": "body", "text": "h" * 12000}]}
     messages, budget = assemble("stable", [], "survive", facts, [], [exchange(1, 6000)],
@@ -124,7 +155,8 @@ def test_headroom_is_bounded_and_never_drops_facts_to_meet_a_cache_target():
     assert len(encode(messages)) > 12000
 
 
-def test_adaptive_retirement_counter_failure_restarts_in_one_conservative_mode():
+@pytest.mark.parametrize("fail_on", [2, 3, 5])
+def test_adaptive_retirement_counter_failure_restarts_in_one_conservative_mode(fail_on):
     class Broken:
         name = 'offline-overflow-counter'
 
@@ -133,7 +165,7 @@ def test_adaptive_retirement_counter_failure_restarts_in_one_conservative_mode()
 
         def __call__(self, messages, tools):
             self.calls += 1
-            if self.calls == 2:
+            if self.calls == fail_on:
                 raise RuntimeError('private diagnostic')
             return len(encode([messages, tools]).encode())
 

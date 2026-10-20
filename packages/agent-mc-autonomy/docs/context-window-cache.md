@@ -148,3 +148,22 @@ Only an actual removal of a history group, section, fact or event requires a new
 measurement. A counter failure still restarts the whole request in conservative
 byte mode. These CPU and input-volume savings do not establish real cache hits
 or live inference latency; those require a separately observed game trial.
+
+## Mixed-size exchange growth
+
+From 0.2.75, an opted-in overflow estimates growth from the largest marginal
+size among the last four complete exchanges. Measuring only the final exchange
+underestimated growth when a large terrain or action receipt was followed by a
+short speech/help exchange. The next large receipt then rotated the prefix
+again. A controller replay reproduced three additional group retirements on
+the following request; the bounded recent sample preserves the next two
+requests' leading history in that replay.
+
+Every sample uses the same selected counter and full scene projection as the
+actual request. Counter failure restarts the whole assembly in conservative
+mode. The existing three-exchange multiplier and quarter-window cap remain;
+zero headroom still disables adaptation, fitting history remains intact, and
+the newest fitting exchange and fresh evidence retain their protections.
+`retirement_growth_units` now reports the largest sampled marginal size.
+These input/cache boundaries do not prove that shared GPU pressure, transport
+cancellation, or all live deadlines have been resolved.

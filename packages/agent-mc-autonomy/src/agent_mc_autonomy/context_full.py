@@ -91,13 +91,16 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
     retirement_growth = None
     if total > context_tokens and history and headroom:
         # A fixed margin smaller than one real exchange keeps retiring the
-        # prefix on every turn. Measure the latest complete exchange in this
-        # request's counting mode and amortize that work, bounded to 1/4 window.
+        # prefix on every turn. A short speech/help follow-up must not hide a
+        # recent large tool reply. Measure the marginal size of up to four
+        # recent complete exchanges in this request's counting mode.
         original_projection = projected, scene_reuse, total
-        last = history.pop()
-        measure()
-        retirement_growth = max(0, original_projection[2] - total)
-        history.append(last)
+        retirement_growth = 0
+        for index in range(max(0, len(history) - 4), len(history)):
+            group = history.pop(index)
+            measure()
+            retirement_growth = max(retirement_growth, original_projection[2] - total)
+            history.insert(index, group)
         projected, scene_reuse, total = original_projection
         headroom = min(context_tokens // 4, max(headroom, 3 * retirement_growth))
     history_target = context_tokens - headroom if total > context_tokens else context_tokens

@@ -103,3 +103,32 @@ New MTP defaults are guarded out with this deployment's `VISION=1`; benchmark
 timing and documentation updates do not justify changing the fixed image here.
 The deployed source/image remain `95ac251b` and the original checked digest.
 No additional synthetic model requests, driver changes or publication occurred.
+
+### Task 5: Mixed-size exchange follow-up
+
+The next complete inspection reopened the timeout investigation. Its natural
+records also show overflow estimates as low as 83/87 units after large replies.
+The latest single exchange can be short speech/help rather than representative
+of the preceding action/terrain exchange. This is separate from requests that
+time out without any prefix change.
+
+Files: `packages/agent-mc-autonomy/src/agent_mc_autonomy/context_full.py`,
+`tests/test_context_cache_window.py`, `pyproject.toml`, and the package's
+`docs/context-window-cache.md`. The thin consumer must pin the resulting exact
+source snapshot; no controller implementation belongs in that consumer.
+
+- [x] At the real controller seam, place one/two short complete follow-ups after large exchanges and verify the next two requests retain the prefix. The old code failed both cases with retirement counts `[3, 0]` instead of `[0, 0]`. The initial interpreter-path failure is retained separately and is not the red regression.
+- [x] Measure the largest marginal growth among at most four recent complete exchanges, using the same counter/projector; keep actual-overflow-only activation, zero default, quarter-window cap and fresh-evidence protections. Extend the replay to three short follow-ups and counter failures on multiple sample positions. The focused file passes 16 cases.
+- [ ] Run the full package regression, build and consume an isolated wheel, then commit and ordinarily push the source change. Command: `.venv/Scripts/python.exe -I -m pytest tests -q`; no real models/network/processes in those tests.
+- [ ] Pin the exact 0.2.75 source in the thin consumer, validate its package and official lifecycle, and deploy only after a fresh known-empty native boundary, owner exit and lease release. Preserve project/failed-action evidence; never replay old work.
+- [ ] Record natural live outcomes separately from the already-running same-session GPU-headroom comparison. A restarted short context cannot demonstrate long-history performance, and the source fix cannot explain no-retirement timeouts.
+
+The separate owned-model trial changes only `GPU_UTIL=0.93` to `0.85`, leaving
+the 128K limit, same weights/image, MTP/FP8, vision, strict=function and two
+admissions intact. Its actual pool is 155,316 equivalent tokens, 204 usable
+blocks and 173 blocks at full 128K. The game body and history remain continuous
+for that comparison. The first 107,422-token cold request returned in 173.375s;
+this is not long-term acceptance. The prior container's stop reached its
+45-second grace deadline and exited 137 despite GPU running/waiting counters
+being zero. HTTP/pre-admission work and clean exit must be distinguished from
+those counters; the failed clean-exit assertion and raw shutdown trace remain.
