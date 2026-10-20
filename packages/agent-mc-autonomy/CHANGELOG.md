@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.59 — 2026-10-20
+
+- Keep bounded server feedback, recent Minecraft messages, equipment/observed
+  item IDs and optional-method query entries in the compact strategic review.
+  The structured host consumes this view, so retaining them only in the full
+  evidence and notification summary left it disconnected from the body.
+- Preserve source handles and paged originals. Messages remain dated external
+  observations, never user authority or permission; method entries do not impose
+  quests or a survival checklist. Record notice/method reads with other queries.
+- Pin shared renderer `05b8fefb` and its exact runtime source inventory, including
+  the current-health HUD and matrix-authored inventory shield grip fixes. Native
+  Java 1.21.1 assets and the bundled original YSM remain separate verified inputs.
+
 ## 0.2.58 — 2026-10-20
 
 - Adopt queued revisions of the active host stage at the next coordinator boundary

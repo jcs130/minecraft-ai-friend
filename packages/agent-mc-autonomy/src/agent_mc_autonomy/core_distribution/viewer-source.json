@@ -1,6 +1,6 @@
 {
   "schema": "agent-mc-viewer-source/v1",
-  "sourceRevision": "1cbd5574660c99a6c72a55224e84f4460778fd6a",
+  "sourceRevision": "05b8fefb73b8b9f824e36caa4f0f2a9980b3067a",
   "files": {
     "package.json": {
       "bytes": 1191,
@@ -323,8 +323,8 @@
       "sha256": "a44375b1643f1c2dce2d74f1fb382b55a26b1fa4449369ba04c9e80f1af54796"
     },
     "renderer-src/src/modern-viewer/inventory-player-preview.js": {
-      "bytes": 21571,
-      "sha256": "8284691e57a8220d06533e0bbfff5b7b8e05de66f3c4a10dc66e6e24b7894112"
+      "bytes": 21905,
+      "sha256": "32931af9241b8c4ad36f866e7e5e1c8a50c5580240081a6bbc00b3e8f8e6d0e0"
     },
     "renderer-src/src/modern-viewer/item-appearances.js": {
       "bytes": 13867,
@@ -991,8 +991,8 @@
       "sha256": "053770d06338e772a10af345e3aec2813c9f4162f0888790abf2f7e3df06277c"
     },
     "renderer-src/src/native-viewer/native-ui-adapter.js": {
-      "bytes": 72227,
-      "sha256": "362053d3ab14e9e17856722098649539c948d7a7ac332aaab78764e5c346977c"
+      "bytes": 72602,
+      "sha256": "ee128be41ff6b437de1e6dbc4ae07bcffb4a32b8ddf7452668d955220d4a7049"
     },
     "renderer-src/src/native-viewer/native-url.js": {
       "bytes": 245,
