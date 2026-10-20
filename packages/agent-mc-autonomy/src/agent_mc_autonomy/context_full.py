@@ -87,8 +87,25 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
     # prefix once, leaving room for new exchanges instead of shifting it each
     # decision. Fresh evidence remains governed by the actual window.
     headroom = min(max(0, context_history_headroom_tokens), context_tokens // 4)
+    configured_headroom = headroom
+    retirement_growth = None
+    if total > context_tokens and history and headroom:
+        # A fixed margin smaller than one real exchange keeps retiring the
+        # prefix on every turn. Measure the latest complete exchange in this
+        # request's counting mode and amortize that work, bounded to 1/4 window.
+        original_projection = projected, scene_reuse, total
+        last = history.pop()
+        measure()
+        retirement_growth = max(0, original_projection[2] - total)
+        history.append(last)
+        projected, scene_reuse, total = original_projection
+        headroom = min(context_tokens // 4, max(headroom, 3 * retirement_growth))
     history_target = context_tokens - headroom if total > context_tokens else context_tokens
     while history and total > history_target:
+        # Keep the latest whole exchange if it fits the real window, even when
+        # a large fresh scene prevents reaching the optional cache target.
+        if len(history) == 1 and total <= context_tokens:
+            break
         history.pop(0)
         tail["context_omissions"]["history_groups"] += 1
         measure()
@@ -144,7 +161,9 @@ def assemble_full(prefix, tools, goal, facts, events, groups, *, context_tokens,
         "total": total, "limit": context_tokens, "omitted": [part["key"] for part in tail["omitted_facts"]],
         "omitted_sections": tail["context_omissions"]["sections"],
         "history": {"available": len(groups), "included": len(history),
-                    "evicted": len(groups) - len(history), "cache_headroom_tokens": headroom},
+                    "evicted": len(groups) - len(history), "cache_headroom_tokens": headroom,
+                    "configured_cache_headroom_tokens": configured_headroom,
+                    "retirement_growth_units": retirement_growth},
         "evidence_reuse": {"history_sources": len(available), "native_outcomes": len(terminal),
                            "referenced": referenced, "inline": len(terminal) - referenced},
         "layout": {"stable_head_sha256": hashlib.sha256(encode(head).encode()).hexdigest(),

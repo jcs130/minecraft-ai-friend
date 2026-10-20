@@ -46,6 +46,16 @@ Potential files: `controller.py`, `context.py`, `context_full.py`, targeted test
 
 ### Task 3: Pin, deploy and observe
 
+Live 0.2.73 follow-up exposed a second trigger: unchanged head/tool hashes but
+two retired history groups preceded a 106,549-token request deadline. A new red
+controller regression reproduced repeated rotation with large complete
+exchanges. The 0.2.74 follow-up adapts only the existing nonzero overflow margin
+to measured exchange growth, caps it at one quarter window, preserves fitting
+history/fresh evidence and keeps the latest fitting exchange. Full regression:
+1,389 passed after repairing the selected-memory counterexample. Exact-template
+CPU replay distinguishes this from the first tool-policy defect. Model and host
+remain protected; connection reset/timeout evidence is a separate live boundary.
+
 - [ ] Update the thin plugin's explicit source pin and development version, without a second implementation.
 - [ ] Follow fresh normal lifecycle controls, preserving ongoing project evidence and original failed methods; no old action replay.
 - [ ] Observe natural ordinary/ahead transitions and real queue outcomes. Compare cache and timeouts across sufficient samples without treating a short empty conversation as proof.

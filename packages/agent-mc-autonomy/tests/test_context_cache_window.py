@@ -72,6 +72,34 @@ def test_opt_in_batch_retirement_keeps_the_next_small_exchanges_cacheable(
             assert message["content"].startswith("Original inventory receipt")
 
 
+def test_opt_in_retirement_adapts_to_large_observed_exchanges(
+        framework_module, tmp_path, run_async):
+    diagnostics = []
+
+    async def decide(*_):
+        return {"content": "Waiting", "tool_calls": []}
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    controller.settings = dataclasses.replace(controller.settings, context_mode="full", context_tokens=131072,
+                                             context_history_headroom_tokens=8192)
+    controller.publish = lambda **row: diagnostics.append(row)
+    controller.groups = [exchange(i, 12000) for i in range(16)]
+    original = copy.deepcopy(controller.groups)
+    tools = module.model_tools(bridge.tools)
+    for i in range(3):
+        run_async(controller.turn_once("survive", "stable", tools))
+        controller.groups.append(exchange(100 + i, 12000))
+    budgets = [row['context'] for row in diagnostics if 'context' in row]
+    assert budgets[0]['history']['evicted'] > 0
+    assert [b['history']['evicted'] for b in budgets[1:]] == [0, 0], 'Each large exchange shifts the cached prefix again'
+    first = budgets[0]['history']
+    assert 8192 < first['cache_headroom_tokens'] <= 131072 // 4
+    assert first['configured_cache_headroom_tokens'] == 8192
+    assert first['retirement_growth_units'] > 8192
+    assert all(b['limit'] == 131072 and not b['omitted'] for b in budgets)
+    assert original[0][1]['content'].endswith('x' * 12000)
+
+
 def test_headroom_does_not_remove_fitting_history_or_fresh_terminal_evidence():
     groups = [exchange(1, 500)]
     facts = {"parts": [{"key": "serverFeedback", "text": "Protection denied; choose a different action."}]}
@@ -94,6 +122,31 @@ def test_headroom_is_bounded_and_never_drops_facts_to_meet_a_cache_target():
     assert budget["total"] <= 23000
     assert budget["history"]["cache_headroom_tokens"] <= 23000 // 4
     assert len(encode(messages)) > 12000
+
+
+def test_adaptive_retirement_counter_failure_restarts_in_one_conservative_mode():
+    class Broken:
+        name = 'offline-overflow-counter'
+
+        def __init__(self):
+            self.calls = 0
+
+        def __call__(self, messages, tools):
+            self.calls += 1
+            if self.calls == 2:
+                raise RuntimeError('private diagnostic')
+            return len(encode([messages, tools]).encode())
+
+    groups = [exchange(i, 12000) for i in range(16)]
+    messages, budget = assemble('stable', [], 'survive', {'parts': [{'key': 'body', 'text': 'health 20'}]}, [], groups,
+        context_tokens=131072, reserved_output=8192, context_mode='full',
+        context_history_headroom_tokens=8192, context_counter=Broken())
+    expected_messages, expected = assemble('stable', [], 'survive', {'parts': [{'key': 'body', 'text': 'health 20'}]}, [], groups,
+        context_tokens=131072, reserved_output=8192, context_mode='full', context_history_headroom_tokens=8192)
+    assert messages == expected_messages and budget['total'] == expected['total']
+    assert budget['units'] == 'token_upper_bound' and budget['counter_fallback'] == 'RuntimeError'
+    assert budget['history']['retirement_growth_units'] > 8192
+    assert 'private diagnostic' not in encode(budget)
 
 
 @pytest.mark.parametrize("value", [-1, True, 2.5, 131073])

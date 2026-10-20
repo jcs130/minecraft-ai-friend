@@ -1,5 +1,34 @@
 # Full-window history and cache continuity
 
+## Exchange-sized retirement margin
+
+With an operator-selected nonzero history margin, 0.2.74 treats that setting as
+the minimum. Only when the actual request overflows, it measures the latest
+complete exchange's contribution using the same selected counter and chooses
+the larger of the configured margin or three such exchanges, capped at one
+quarter of the selected window. A fitting request keeps every supplied exchange;
+the default zero margin still disables batching. Current facts, refusals,
+pending receipts and current tool policy are not discarded to meet this cache
+target. Complete old groups retire through the existing explicit window logic,
+and original journals stay unchanged. The newest complete exchange is retained
+if it fits the actual window, even when the optional margin cannot be reached.
+
+The fixed 8K margin was smaller than large game exchanges. The regression
+reproduced prefix retirement on both following turns; the adaptive margin kept
+both turns' historical prefixes. Diagnostics distinguish configured/actual
+margin and measured growth in the budget's stated units. Counter failure
+restarts the entire request conservatively, including that measurement.
+This amortizes window rotation; it cannot guarantee a cold request will finish
+before every provider deadline or remove shared-service pressure.
+
+The bound local-template CPU replay initially retained only 1,791 common
+leading tokens after the next rotation. Adaptive retirement left the following
+two requests unrotated, sharing 78,530 and 90,935 leading tokens. These are
+synthetic-history prefix counts, not GPU performance results. The final full
+regression passed 1,389 tests, including selected-memory rebasing and counter
+failure; the first full run caught over-retirement of the last fitting exchange
+and that counterexample remains covered.
+
 ## Stable capabilities and current admission
 
 In full mode, temporary read deferral and native lookahead no longer change the
