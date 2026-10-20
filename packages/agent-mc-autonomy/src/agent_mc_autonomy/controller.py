@@ -1945,6 +1945,14 @@ class Controller:
                     # no-action timer behind its eventual native terminal.
                     if self.current_work():
                         return
+                    if self.lookahead_anchor:
+                        # The known finite task completed while this one ahead
+                        # request was in flight. Its now-stale waiting text is
+                        # not an idle failure. Revisit the actual terminal at
+                        # the next normal decision boundary, without dispatching
+                        # this text or granting another ahead opportunity.
+                        self.continuation_needed = True
+                        return
                     # Text is not a native task or a completed standing goal.
                     # Revisit it even when an idle world never emits a change,
                     # with a growing pause instead of an inference busy-loop.

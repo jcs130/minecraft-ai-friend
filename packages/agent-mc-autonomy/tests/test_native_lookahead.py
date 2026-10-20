@@ -76,6 +76,24 @@ def test_conversation_while_body_is_running_does_not_delay_its_later_completion(
     assert not controller.pending and controller.planner_retry_at == 0
 
 
+def test_waiting_reply_after_anchor_completed_during_inference_does_not_pause(
+        framework_module, tmp_path, run_async):
+    async def decide(*_):
+        controller.receipt({'execution': action(True)})
+        return {'content': '等正在播种的任务完成，再核对作物。', 'tool_calls': []}
+
+    module, bridge, controller = setup(framework_module, tmp_path, decide)
+    run_async(controller.execute_model_call('mc_do', {'steps': [{'skill': 'collect', 'block': 'oak_log'}]}))
+    controller.lookahead_anchor = controller.lookahead_candidate()
+    assert controller.lookahead_anchor == ('task', 'body-1')
+    run_async(controller.turn_once('survive', 'body contract', module.model_tools(bridge.tools)))
+    assert not controller.pending
+    assert controller.planner_retry_at == 0, 'A stale ahead reply delays an already completed body task'
+    assert controller.unactioned_replies == 0
+    assert controller.continuation_needed
+    assert sum(name == 'mc_do' for name, _, _ in bridge.calls) == 1
+
+
 @pytest.mark.parametrize('skill', ['follow', 'wait'])
 def test_explicit_follow_or_wait_does_not_create_background_planning(
         framework_module, tmp_path, run_async, monkeypatch, skill):

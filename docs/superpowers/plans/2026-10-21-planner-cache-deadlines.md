@@ -119,9 +119,9 @@ source snapshot; no controller implementation belongs in that consumer.
 
 - [x] At the real controller seam, place one/two short complete follow-ups after large exchanges and verify the next two requests retain the prefix. The old code failed both cases with retirement counts `[3, 0]` instead of `[0, 0]`. The initial interpreter-path failure is retained separately and is not the red regression.
 - [x] Measure the largest marginal growth among at most four recent complete exchanges, using the same counter/projector; keep actual-overflow-only activation, zero default, quarter-window cap and fresh-evidence protections. Extend the replay to three short follow-ups and counter failures on multiple sample positions. The focused file passes 16 cases.
-- [ ] Run the full package regression, build and consume an isolated wheel, then commit and ordinarily push the source change. Command: `.venv/Scripts/python.exe -I -m pytest tests -q`; no real models/network/processes in those tests.
-- [ ] Pin the exact 0.2.75 source in the thin consumer, validate its package and official lifecycle, and deploy only after a fresh known-empty native boundary, owner exit and lease release. Preserve project/failed-action evidence; never replay old work.
-- [ ] Record natural live outcomes separately from the already-running same-session GPU-headroom comparison. A restarted short context cannot demonstrate long-history performance, and the source fix cannot explain no-retirement timeouts.
+- [x] Run the full package regression, build and consume an isolated wheel, then commit and ordinarily push the source change. The package passed 1,394 tests and the isolated wheel 189 targeted cases plus the SDK-free probe. Source `c8269ca1` was normally pushed; no real models/network/processes were used by these tests.
+- [x] Pin the exact 0.2.75 source in thin consumer 0.6.79 (`127e7d3c`), validate the official candidate and lifecycle, and deploy after a fresh known-empty native boundary, owner exit and lease release. Neko/model/private configuration stayed unchanged; old work was not replayed.
+- [x] Record natural live outcomes separately from the same-session GPU-headroom comparison. The source trial reached a real 116,507-token prompt, overflow-retired once, then retained the next two complete exchanges with zero further retirement. Cold rotation still cost 133.141 seconds; following warm replies were 28.782 and 14.687 seconds. This finite window is not permanent timeout or survival acceptance.
 
 The separate owned-model trial changes only `GPU_UTIL=0.93` to `0.85`, leaving
 the 128K limit, same weights/image, MTP/FP8, vision, strict=function and two
@@ -132,3 +132,15 @@ this is not long-term acceptance. The prior container's stop reached its
 45-second grace deadline and exited 137 despite GPU running/waiting counters
 being zero. HTTP/pre-admission work and clean exit must be distinguished from
 those counters; the failed clean-exit assertion and raw shutdown trace remain.
+
+### Task 6: Completed-anchor waiting reply race
+
+Natural task 4 completed at 2026-10-20T22:50:06.720Z. An ahead request started
+at 22:50:01.526Z and returned waiting text at 22:50:16.276Z. The old no-action
+branch saw the now-empty queue and imposed a 120-second pause despite the
+successful terminal. This is distinct from model latency and review expiry.
+
+- [x] Preserve this same-run timing and reproduce it at the controller seam: complete the known anchor during inference, then return a waiting reply. The old code wrongly sets `planner_retry_at`.
+- [x] Exempt only the existing known ahead request from the idle no-action penalty when its anchor has completed. Schedule the next ordinary boundary; preserve failed-anchor cancellation, user/stop gates, strict queue admission and ordinary idle backoff.
+- [ ] Run the related and complete regression, build/consume the exact wheel, normally push, pin the thin consumer and perform a separately journaled normal handover.
+- [ ] Record new-version natural terminals and any recurrence separately from the 0.2.75 context trial; do not claim a stale-text exemption proves persistent goals or all timeouts solved.
