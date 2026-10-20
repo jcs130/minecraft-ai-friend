@@ -1,3 +1,7 @@
+## 2026-10-20 Numen 常驻候选，未部署
+
+已完成固定上游0.1.4的指定身体常驻、主人离线运行、启动恢复、离线死亡复活与管理员开关；默认不开启，不替其他同伴或可米/NEKO接管。候选API SHA256为49256bec2ae8621bdb048c7d88eea0547767e8adc9273eccf16596b84df31f02，只替换Numen API JAR，内容/基岩插件与31个网络载荷类保持。1726 JVM、11 Paper E2E、19实际Mineflayer/冷启动检查和两次正常停服通过；首次关闭阶段读取已停模型服务、原生未签名私聊漏接与Paper关闭类加载器后保存权限数据的问题均修复，旧失败证据保留。E/F候选与回退文件准备好，未写pending或重启正式服务。当前模型未配；CodingPlan官方限制自定义后端，本轮仅本地模拟端点，无真实模型调用或共享Key，待用户选择普通API/本地模型及当次Paper重启确认。勿混入0.4.48档案馆、0.4.47.7格挡或Freesia af4。见paper/docs/NUMEN_PAPER.md、numen-resident-candidate-20261020.json。
+
 ## 2026-10-20 消息降噪与 Numen 已正式上线
 
 Paper 1.21.1 build 133 / AgentFriend 0.4.47.8 / LoginGuard 0.1.3。服主“部署运行吧”批准后，180/60/10秒预告、真人/试炼/地下城/PvP门禁通过；原Afu-MC-DailyBackup正常停启，E/F完整冷备份20261020-023549均先于替换。正式53项状态与保存核对、60项实际登录网关1.20.6/1.21.1原生联机检查及Minepacks存档对账通过。ag_首次登录不推整段说明，未适配客户端保留本人精简回执；可选qiandengji:agent协议1发送完整私人JSON，显式--json保留关联信息。认证最终成功只报一次，授权条件保持。仅三种村庄活动条按25%更新、一次30秒提醒，战斗/救援条保持。/msg、/tell、/w显式走原版类型和真实UUID。Numen0.1.4固定源码及NumenBedrock0.1.0已启用，无新增公网端口/共享Key；Java同源模组后用/numen settings，基岩/numenmenu配置本人模型和Key。Numen不自动接管已有Agent，无可用模型时不代表已能自主行动。其他382个AgentFriend条目及原任务/技能/领地/物品数据保持；未发布档案馆0.4.48、格挡0.4.47.7和Freesia af4不在本次。手机/Xbox真机画面、远端Web部署和16自主Agent负载未作本次验收。见paper/docs/AGENT_MESSAGE_TRANSPORT.md、NUMEN_PAPER.md及agent-message-release-20261020.json。

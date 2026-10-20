@@ -1,0 +1,672 @@
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/CommonClass.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/CommonClass.java
+index 62e933d..0bacf9c 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/CommonClass.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/CommonClass.java
+@@ -23,6 +23,7 @@ public class CommonClass {
+         registerApi();
+         // 管理员查服主的 key 今天每个人用了多少
+         com.dwinovo.numen.api.entity.NumenCommands.plug(com.dwinovo.numen.api.brain.UsageCommand.node());
++        com.dwinovo.numen.api.entity.NumenCommands.plug(com.dwinovo.numen.api.brain.ResidentCommand.node());
+         wireTaskMachine();
+         com.dwinovo.numen.api.brain.ServerBrains.register();
+     }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionBrains.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionBrains.java
+index fd456c9..51e8cb6 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionBrains.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionBrains.java
+@@ -102,7 +102,7 @@ public final class CompanionBrains {
+         CompanionLoop loop = create(server, companion, owner, homes.companion(companion),
+                 new LlmMind(ModelServices.of(server).providers(owner), owner, ModelServices.of(server).quota()),
+                 Replies.link(server, owner),
+-                () -> OwnerPresence.present(server, owner),
++                () -> OwnerPresence.mayRun(server, owner, companion),
+                 () -> com.dwinovo.numen.api.mcp.server.McpMode.instance().driving(owner, companion));
+         return loop;
+     }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java
+index 0088894..822efbf 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java
+@@ -479,7 +479,7 @@ public final class CompanionLoop {
+         // 死亡是急件——她关于自己处境的认知几乎每一条都作废了:物品掉在死亡地点、位置从矿洞变成了主人身边、
+         // 手上的任务没了、血量装备全变了。这不分"任务中死"还是"空闲死",所以这里没有任何判据。
+         loop.push(List.of(NumenEvents.entry(parts.dayTime().getAsLong(), EventTypes.DEATH, null,
+-                "你刚才死了(" + cause + "),背包里的东西全掉在死亡地点了;现已在主人身边复活。先看看状况再决定下一步。",
++                "你刚才死了(" + cause + "),现已在安全复活点复活。物品是否保留取决于世界死亡规则,先查看当前位置和背包再决定下一步。",
+                 System.currentTimeMillis(), true)));
+         loop.respawned();
+     }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoops.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoops.java
+index 1912251..1b67223 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoops.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoops.java
+@@ -190,9 +190,9 @@ public final class CompanionLoops {
+     }
+ 
+     /** 这位主人不在了({@link OwnerPresence}):他名下各大脑作废在飞的回应、放弃未决调用,待命。 */
+-    static void ownerGone(UUID owner) {
++    static void ownerGone(UUID owner, java.util.function.Predicate<UUID> retained) {
+         for (Entry entry : LOOPS.values()) {
+-            if (entry.owner.equals(owner)) {
++            if (entry.owner.equals(owner) && !retained.test(entry.loop.companion())) {
+                 entry.loop.ownerLeft();
+             }
+         }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/OwnerPresence.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/OwnerPresence.java
+index 485c69d..8105d7b 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/OwnerPresence.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/OwnerPresence.java
+@@ -7,12 +7,12 @@ import net.minecraft.server.MinecraftServer;
+ import java.util.UUID;
+ 
+ /**
+- * 主人在不在——<b>只在这一处算</b>。她的身体(循环的 {@code HostPort.ownerPresent})、征询台({@code ConsentDesk})、
+- * 远程端点都问 {@link #present},谁也不自己判。
++ * 主人在不在——<b>只在这一处算</b>。征询台({@code ConsentDesk})与远程端点问 {@link #present};
++ * 大脑的运行资格问 {@link #mayRun},常驻只给这一只身体离线运行的资格,不代表主人在场。
+  *
+  * <p>主人在 = 他人在游戏里,或者他的外部大脑连着(远程端点上持他大脑令牌的会话),或者渠道上他的话正由服务端大脑
+  * 想着({@link Visits},想完就不算)。都没有就是不在:
+- * 内脑待命({@code Hold.AWAY}),她的程序收掉,收件箱照收。外部大脑连回来就算他回来了。
++ * 普通同伴内脑待命({@code Hold.AWAY}),程序收掉,收件箱照收;服主登记的常驻者继续。外部大脑连回来就算他回来了。
+  *
+  * <p>不在的那一刻要收拾一次({@link #collect}):作废在飞的回应、收掉程序。收拾的触发有两个——他的玩家下线
+  * ({@link #playerLeft},没有外部大脑接着)与另外两样撑着他在场的东西没了({@link #settle}:外部大脑断开、来访做完,
+@@ -30,26 +30,34 @@ public final class OwnerPresence {
+                 || Visits.visiting(owner);
+     }
+ 
++    /** 她的大脑可运行:主人在场,或服主明确把这一只设为常驻。权限征询仍只问 present。 */
++    public static boolean mayRun(MinecraftServer server, UUID owner, UUID companion) {
++        return com.dwinovo.numen.api.platform.ServerLifecycle.isRunning(server)
++                && (present(server, owner) || ModelServices.of(server).settings().resident(companion));
++    }
++
+     /**
+      * 他的玩家下线了(登出事件)。客户端那一头的东西总要放掉;还有外部大脑连着就算他还在,不收拾,
+      * 它断开时再收({@link #settle})。
+      */
+-    public static void playerLeft(UUID owner) {
++    public static void playerLeft(MinecraftServer server, UUID owner) {
+         CompanionLoops.clientLeft(owner);
+-        if (!McpMode.instance().brainConnected(owner) && !Visits.visiting(owner)) {
+-            collect(owner);
++        if (com.dwinovo.numen.api.platform.ServerLifecycle.isRunning(server)
++                && !McpMode.instance().brainConnected(owner) && !Visits.visiting(owner)) {
++            collect(server, owner);
+         }
+     }
+ 
+     /** 撑着他在场的外部大脑断开了、渠道来访做完了:人也不在游戏里、别的也没撑着,就和他登出一样收拾一次。 */
+     public static void settle(MinecraftServer server, UUID owner) {
+-        if (!present(server, owner)) {
+-            collect(owner);
++        if (com.dwinovo.numen.api.platform.ServerLifecycle.isRunning(server) && !present(server, owner)) {
++            collect(server, owner);
+         }
+     }
+ 
+-    private static void collect(UUID owner) {
+-        ServerPrograms.ownerLeft(owner);
+-        CompanionLoops.ownerGone(owner);
++    private static void collect(MinecraftServer server, UUID owner) {
++        var settings = ModelServices.of(server).settings();
++        ServerPrograms.ownerLeft(owner, settings::resident);
++        CompanionLoops.ownerGone(owner, settings::resident);
+     }
+ }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentCommand.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentCommand.java
+new file mode 100644
+index 0000000..a643861
+--- /dev/null
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ResidentCommand.java
+@@ -0,0 +1,90 @@
++package com.dwinovo.numen.api.brain;
++
++import com.dwinovo.numen.api.entity.CompanionRegistry;
++import com.dwinovo.numen.api.entity.Companions;
++import com.dwinovo.numen.api.entity.NumenPlayer;
++import com.dwinovo.numen.api.platform.Services;
++import com.dwinovo.numen.api.program.ServerPrograms;
++import com.mojang.brigadier.arguments.StringArgumentType;
++import com.mojang.brigadier.builder.LiteralArgumentBuilder;
++import com.mojang.brigadier.context.CommandContext;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.commands.Commands;
++import net.minecraft.commands.SharedSuggestionProvider;
++import net.minecraft.network.chat.Component;
++
++import java.util.UUID;
++
++/** 服主管的常驻开关:只改指定身体,不授 OP、不改变世界权限和主人是否在场。回执只给操作者。 */
++public final class ResidentCommand {
++    private ResidentCommand() {}
++
++    public static LiteralArgumentBuilder<CommandSourceStack> node() {
++        var root = Commands.literal("resident").requires(source -> Services.permissions().isAdmin(source));
++        root.then(Commands.literal("status").executes(ctx -> {
++            var registry = CompanionRegistry.get(ctx.getSource().getServer());
++            registry.all().forEach(id -> status(ctx.getSource(), id));
++            if (registry.all().isEmpty()) say(ctx.getSource(), "[常驻] 尚无同伴。先召唤并配置模型，再启用常驻。");
++            return registry.all().size();
++        }).then(argument().executes(ctx -> run(ctx, null))));
++        root.then(Commands.literal("enable").then(argument().executes(ctx -> run(ctx, true))));
++        root.then(Commands.literal("disable").then(argument().executes(ctx -> run(ctx, false))));
++        return root;
++    }
++
++    private static com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> argument() {
++        return Commands.argument("companion", StringArgumentType.string()).suggests((ctx, builder) ->
++                SharedSuggestionProvider.suggest(CompanionRegistry.get(ctx.getSource().getServer()).all().stream()
++                        .map(UUID::toString), builder));
++    }
++
++    private static int run(CommandContext<CommandSourceStack> ctx, Boolean enabled) {
++        var source = ctx.getSource();
++        var server = source.getServer();
++        var registry = CompanionRegistry.get(server);
++        String target = StringArgumentType.getString(ctx, "companion");
++        var matches = registry.all().stream().filter(id -> id.toString().equals(target)
++                || registry.find(id).name().equalsIgnoreCase(target)).toList();
++        if (matches.size() != 1) {
++            source.sendFailure(Component.literal(matches.isEmpty()
++                    ? "[常驻] 未找到该同伴。命令：/numen resident status"
++                    : "[常驻] 名字重名，请用 status 显示的身体 UUID。命令：/numen resident status"));
++            return 0;
++        }
++        UUID id = matches.getFirst();
++        if (enabled != null) {
++            ModelServices.of(server).settings().setResident(id, enabled);
++            if (enabled) {
++                CompanionBrains.ensure(server, id);
++                Companions.scheduleResidentRestore(id);
++            } else if (!OwnerPresence.present(server, registry.find(id).owner())) {
++                var body = NumenPlayer.findByUuid(server, id);
++                if (body != null) ServerPrograms.stop(body);
++                CompanionLoops.get(id).ifPresent(CompanionLoop::ownerLeft);
++            }
++        }
++        status(source, id);
++        return 1;
++    }
++
++    private static void status(CommandSourceStack source, UUID id) {
++        var server = source.getServer();
++        var entry = CompanionRegistry.get(server).find(id);
++        var loop = CompanionLoops.get(id).orElse(null);
++        var body = NumenPlayer.findByUuid(server, id);
++        String bodyState = entry.removed() ? "REMOVED" : entry.diedAt() > 0 ? "DEAD"
++                : body != null ? "PRESENT" : "DORMANT";
++        String state = loop == null ? "未建脑" : String.valueOf(loop.status().hold());
++        String reason = loop == null || loop.status().holdReason() == null ? ""
++                : "，原因=" + loop.status().holdReason().forModel();
++        say(source, "[常驻] " + entry.name() + "，enabled=" + ModelServices.of(server).settings().resident(id)
++                + "，body=" + (body != null) + "，bodyState=" + bodyState
++                + (entry.removed() ? "，离场原因=" + entry.removedFor() : "")
++                + "，hold=" + state + reason + "，UUID=" + id
++                + "。命令：/numen resident " + (ModelServices.of(server).settings().resident(id) ? "disable " : "enable ") + id);
++    }
++
++    private static void say(CommandSourceStack source, String text) {
++        source.sendSuccess(() -> Component.literal(text), false);
++    }
++}
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ServerBrains.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ServerBrains.java
+index 5db807b..35d44af 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ServerBrains.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ServerBrains.java
+@@ -61,6 +61,9 @@ public final class ServerBrains {
+         for (UUID companion : registry.all()) {
+             try {
+                 CompanionBrains.ensure(server, companion);
++                if (ModelServices.of(server).settings().resident(companion)) {
++                    com.dwinovo.numen.api.entity.Companions.scheduleResidentRestore(companion);
++                }
+             } catch (RuntimeException ex) {
+                 Constants.LOG.error("[numen] 同伴 {} 的大脑没能起来,跳过", companion, ex);
+             }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/config/ServerSettings.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/config/ServerSettings.java
+index 121993f..5ee0335 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/config/ServerSettings.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/config/ServerSettings.java
+@@ -5,6 +5,10 @@ import com.dwinovo.numen.api.home.Home;
+ import com.dwinovo.numen.api.store.JsonDoc;
+ import com.google.gson.JsonObject;
+ 
++import java.util.Set;
++import java.util.TreeSet;
++import java.util.UUID;
++
+ /**
+  * 服主管的服务器设置,{@code config/numen/server/server.json}。管理员拿编辑器改,{@link #reload}(随 {@code /reload})读到。
+  * 读不通就当缺省并记一笔,不阻断服务器起来。
+@@ -27,6 +31,7 @@ public final class ServerSettings {
+     private volatile int maxCompanions;
+     private volatile boolean hardRules;
+     private volatile boolean unknownAsOther;
++    private volatile Set<UUID> residentCompanions = Set.of();
+ 
+     /** @param dedicated 是不是专用服务器:有的设置缺省值随它而不同 */
+     public ServerSettings(Home server, boolean dedicated) {
+@@ -41,6 +46,7 @@ public final class ServerSettings {
+         maxCompanions = 0;
+         hardRules = true;
+         unknownAsOther = dedicated;
++        residentCompanions = Set.of();
+         try {
+             JsonObject root = doc.read().orElse(null);
+             if (root == null) {
+@@ -59,6 +65,13 @@ public final class ServerSettings {
+             if (root.get("unknownAsOther") instanceof com.google.gson.JsonPrimitive other && other.isBoolean()) {
+                 unknownAsOther = other.getAsBoolean();
+             }
++            if (root.has("residentCompanions")) {
++                Set<UUID> residents = new TreeSet<>();
++                for (var id : root.getAsJsonArray("residentCompanions")) {
++                    residents.add(UUID.fromString(id.getAsString()));
++                }
++                residentCompanions = Set.copyOf(residents);
++            }
+         } catch (RuntimeException unreadable) {
+             Constants.LOG.warn("[numen-server] {} 读不了,用缺省设置: {}", doc.file(), unreadable.toString());
+         }
+@@ -74,6 +87,24 @@ public final class ServerSettings {
+         return maxCompanions;
+     }
+ 
++    /** 只有服主明确登记的身体可在主人离线后继续,不改变主人在权限征询台上的在场状态。 */
++    public boolean resident(UUID companion) {
++        return residentCompanions.contains(companion);
++    }
++
++    public Set<UUID> residents() {
++        return residentCompanions;
++    }
++
++    /** 按身体 UUID 登记,同一主人名下的其他同伴不继承。 */
++    public synchronized void setResident(UUID companion, boolean enabled) {
++        Set<UUID> next = new TreeSet<>(residentCompanions);
++        if (enabled) next.add(companion);
++        else next.remove(companion);
++        residentCompanions = Set.copyOf(next);
++        doc.write(toJson());
++    }
++
+     /** 改每人最多几只并写回文件。 */
+     public synchronized void setMaxCompanions(int max) {
+         this.maxCompanions = Math.max(0, max);
+@@ -103,6 +134,9 @@ public final class ServerSettings {
+         root.addProperty("maxCompanions", maxCompanions);
+         root.addProperty("hardRules", hardRules);
+         root.addProperty("unknownAsOther", unknownAsOther);
++        var residents = new com.google.gson.JsonArray();
++        new TreeSet<>(residentCompanions).forEach(id -> residents.add(id.toString()));
++        root.add("residentCompanions", residents);
+         return root;
+     }
+ }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/Companions.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/Companions.java
+index a1f0bb9..d82b429 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/Companions.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/Companions.java
+@@ -277,9 +277,17 @@ public final class Companions {
+     /** 排队等恢复的主人。世界作废时一并清掉——排的是上一个存档的账。 */
+     private static final java.util.Set<UUID> PENDING_RESTORE =
+             java.util.concurrent.ConcurrentHashMap.newKeySet();
++    private static final java.util.Set<UUID> PENDING_RESIDENTS =
++            java.util.concurrent.ConcurrentHashMap.newKeySet();
++
++    /** 常驻身体的恢复也排在下一刻,不嵌进启动/登录/命令调用栈,且每次请求只试一次。 */
++    public static void scheduleResidentRestore(UUID companion) {
++        PENDING_RESIDENTS.add(companion);
++    }
+ 
+     static {
+         com.dwinovo.numen.api.platform.ServerLifecycle.onStopped(PENDING_RESTORE::clear);
++        com.dwinovo.numen.api.platform.ServerLifecycle.onStopped(PENDING_RESIDENTS::clear);
+     }
+ 
+     /**
+@@ -289,6 +297,13 @@ public final class Companions {
+      */
+     public static void restorePending(MinecraftServer server) {
+         drainPending(ownerUuid -> respawnAllOwnedBy(server, ownerUuid));
++        drain(PENDING_RESIDENTS, companion -> {
++            CompanionRegistry.Entry entry = CompanionRegistry.get(server).find(companion);
++            if (entry != null && entry.diedAt() == 0L && !entry.removed()
++                    && com.dwinovo.numen.api.brain.ModelServices.of(server).settings().resident(companion)) {
++                bringBack(server, companion);
++            }
++        });
+     }
+ 
+     /**
+@@ -300,11 +315,15 @@ public final class Companions {
+      * <p>纯逻辑,不碰 Minecraft——留这个缝是为了这两条能被单测钉住。
+      */
+     static void drainPending(java.util.function.Consumer<UUID> restore) {
+-        if (PENDING_RESTORE.isEmpty()) {
++        drain(PENDING_RESTORE, restore);
++    }
++
++    private static void drain(java.util.Set<UUID> pending, java.util.function.Consumer<UUID> restore) {
++        if (pending.isEmpty()) {
+             return;
+         }
+-        List<UUID> due = new ArrayList<>(PENDING_RESTORE);
+-        PENDING_RESTORE.removeAll(due);
++        List<UUID> due = new ArrayList<>(pending);
++        pending.removeAll(due);
+         for (UUID ownerUuid : due) {
+             try {
+                 restore.accept(ownerUuid);
+@@ -422,9 +441,9 @@ public final class Companions {
+     }
+ 
+     /**
+-     * Bring back any companion whose post-death timer has elapsed, AT ITS OWNER (covers dimension
+-     * follow too — it returns in whatever dimension the owner is now in). Owner offline → keep waiting
+-     * (their client-side brain can't run anyway); it respawns the moment they're back. Called each tick.
++     * Bring back any companion whose post-death timer has elapsed, at its owner when present.
++     * A resident whose owner is offline returns near the registry's respawn hint; other companions wait.
++     * Called each tick.
+      */
+     public static void tickRespawns(MinecraftServer server) {
+         long now = server.overworld().getGameTime();
+@@ -433,7 +452,15 @@ public final class Companions {
+             if (now - entry.diedAt() < RESPAWN_DELAY_TICKS) continue;
+             if (entry.removed()) continue;                          // 被请出去或被服务器拒了:等主人再召唤
+             ServerPlayer owner = server.getPlayerList().getPlayer(entry.owner());
+-            if (owner == null) continue;                            // owner offline — wait for login
++            if (owner == null) {
++                if (com.dwinovo.numen.api.brain.ModelServices.of(server).settings().resident(e.getKey())
++                        && !CompanionFactory.isArriving(e.getKey())) {
++                    ServerLevel level = server.getLevel(entry.dimension());
++                    if (level != null) respawnDead(server, e.getKey(), entry, level,
++                            Vec3.atBottomCenterOf(entry.pos()), null);
++                }
++                continue;
++            }
+             // No safe spot right now → quietly retry next tick until the owner reaches open
+             // space (the maid/vanilla-pet convention: never nag about a transient squeeze).
+             respawnDead(server, e.getKey(), entry, owner);
+@@ -454,6 +481,18 @@ public final class Companions {
+             pos = owner.position();   // non-full-block floor (slab/carpet): the owner's own spot fits
+         }
+         if (pos == null) return false;
++        return respawnDeadAt(server, uuid, entry, level, pos, owner);
++    }
++
++    /** 主人离线时常驻者回名册中的复活点,仍经安全落脚与原版死亡/背包保存流程。 */
++    private static boolean respawnDead(MinecraftServer server, UUID uuid, CompanionRegistry.Entry entry,
++                                       ServerLevel level, Vec3 hint, ServerPlayer owner) {
++        Vec3 pos = SafeSpawn.findNear(level, hint);
++        return pos != null && respawnDeadAt(server, uuid, entry, level, pos, owner);
++    }
++
++    private static boolean respawnDeadAt(MinecraftServer server, UUID uuid, CompanionRegistry.Entry entry,
++                                         ServerLevel level, Vec3 pos, ServerPlayer owner) {
+         CompanionRegistry reg = CompanionRegistry.get(server);
+         CompanionFactory.spawn(server, uuid, entry.name(), entry.owner(), level, pos,
+                 () -> reg.find(uuid) != null && reg.find(uuid).diedAt() > 0L, arrival -> {
+@@ -465,7 +504,7 @@ public final class Companions {
+             body.setHealth(body.getMaxHealth());
+             body.clearFire();
+             reg.markAlive(uuid);
+-            syncRosterToOwner(server, owner);
++            if (owner != null) syncRosterToOwner(server, owner);
+             com.dwinovo.numen.api.brain.CompanionLoops.get(uuid).ifPresent(brain -> brain.onRespawned(entry.deathCause()));
+         });
+         return true;
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/platform/PlayerSessions.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/platform/PlayerSessions.java
+index aa33120..5fdc164 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/platform/PlayerSessions.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/platform/PlayerSessions.java
+@@ -56,7 +56,7 @@ public final class PlayerSessions {
+     /** 主人断线:他名下在服务端跑着的程序收掉,等他答复的反向请求失败,他的模块缓存清掉。 */
+     public static void left(ServerPlayer player) {
+         if (!(player instanceof NumenPlayer)) {
+-            OwnerPresence.playerLeft(player.getUUID());
++            OwnerPresence.playerLeft(player.server, player.getUUID());
+             ANNOUNCED.remove(player.getUUID());
+         }
+     }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/platform/ServerLifecycle.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/platform/ServerLifecycle.java
+index d86c353..3e095d3 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/platform/ServerLifecycle.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/platform/ServerLifecycle.java
+@@ -43,6 +43,11 @@ public final class ServerLifecycle {
+ 
+     private ServerLifecycle() {}
+ 
++    /** 是否仍处于这个世界的运行期;停止通知开始前就变成否,收尾事件不能再启动大脑。 */
++    public static boolean isRunning(MinecraftServer server) {
++        return server != null && running == server;
++    }
++
+     /**
+      * 报到:{@code drop} 会在每次服务器停止时被调用,把这份世界作用域的状态清空。
+      *
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ServerPrograms.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ServerPrograms.java
+index 638b88a..64dea52 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ServerPrograms.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ServerPrograms.java
+@@ -261,7 +261,13 @@ public final class ServerPrograms {
+ 
+     /** 这位主人断线了:他名下的程序收掉,等他答复的反向请求都失败,没收完的分片消息丢掉。 */
+     public static void ownerLeft(UUID owner) {
+-        RUNNING.values().stream().filter(r -> r.owner.equals(owner)).forEach(r -> r.program.cancel(false));
++        ownerLeft(owner, companion -> false);
++    }
++
++    /** 常驻身体保留服务端程序;已断开的客户端反向请求仍失败,不会假装主人在线。 */
++    public static void ownerLeft(UUID owner, java.util.function.Predicate<UUID> retained) {
++        RUNNING.values().stream().filter(r -> r.owner.equals(owner) && !retained.test(r.companion))
++                .forEach(r -> r.program.cancel(false));
+         NetworkTransport.INSTANCE.ownerLeft(owner);
+         NumenNetwork.disconnected(owner);
+     }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/task/CompanionTickDispatcher.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/task/CompanionTickDispatcher.java
+index a7e4a72..cbf5918 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/task/CompanionTickDispatcher.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/task/CompanionTickDispatcher.java
+@@ -124,14 +124,15 @@ public final class CompanionTickDispatcher {
+                 // system only calls while the companion's chunk is already entity-ticking. Doing it here
+                 // breaks the chicken-and-egg: a companion whose chunk fell out of ticking range still gets
+                 // its pad refreshed, which pulls its chunk back into range so it resumes ticking. Gated on
+-                // the owner being online — an owner-less companion (owner logged off on a server) shouldn't
+-                // hold chunks loaded; its pad lapses and it idles until the owner returns. In single-player
++                // the owner being online or this particular body being registered as a server resident.
++                // Other owner-less companions release their pad until the owner returns. In single-player
+                 // the owner is always online while the world runs, so this never gates there. See
+                 // CompanionChunkLoader.
+                 UUID owner = ap.getOwnerUuid();
+                 net.minecraft.server.level.ServerPlayer ownerPlayer =
+                         owner == null ? null : server.getPlayerList().getPlayer(owner);
+-                if (ownerPlayer != null) {
++                if (ownerPlayer != null || com.dwinovo.numen.api.brain.ModelServices.of(server)
++                        .settings().resident(ap.getUUID())) {
+                     CompanionChunkLoader.refresh(ap);
+                 }
+                 // 背包变了就推给主人一份。变化由原版的 ContainerListener 报,这里每 tick
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/config/ServerSettingsTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/config/ServerSettingsTest.java
+index 2110326..1a5731b 100644
+--- a/numen-api/common/src/test/java/com/dwinovo/numen/api/config/ServerSettingsTest.java
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/config/ServerSettingsTest.java
+@@ -11,6 +11,8 @@ import org.junit.jupiter.api.io.TempDir;
+ import java.io.IOException;
+ import java.nio.file.Files;
+ import java.nio.file.Path;
++import java.util.Set;
++import java.util.UUID;
+ 
+ import static org.junit.jupiter.api.Assertions.assertEquals;
+ import static org.junit.jupiter.api.Assertions.assertFalse;
+@@ -66,4 +68,49 @@ class ServerSettingsTest {
+         assertTrue(settings.hardRules());
+         assertTrue(settings.unknownAsOther());
+     }
++
++    @Test
++    void residentsAreOptInPerBodyAndSurviveRestart(@TempDir Path dir) {
++        UUID a = UUID.randomUUID(), sibling = UUID.randomUUID();
++        ServerSettings settings = new ServerSettings(home(dir), true);
++        assertTrue(settings.residents().isEmpty());
++        settings.setResident(a, true);
++        settings.setResident(a, true);
++        assertEquals(Set.of(a), settings.residents());
++        assertFalse(settings.resident(sibling));
++        ServerSettings restarted = new ServerSettings(home(dir), true);
++        assertTrue(restarted.resident(a));
++        assertFalse(restarted.resident(sibling));
++        restarted.setResident(a, false);
++        assertTrue(new ServerSettings(home(dir), true).residents().isEmpty());
++    }
++
++    @Test
++    void oldSettingsDoNotOptAnyoneIn(@TempDir Path dir) throws IOException {
++        Files.writeString(dir.resolve(ServerSettings.FILE), "{\"maxCompanions\":2,\"dailyTokenLimit\":12345}");
++        ServerSettings settings = new ServerSettings(home(dir), true);
++        assertTrue(settings.residents().isEmpty());
++        settings.setResident(UUID.randomUUID(), true);
++        ServerSettings reread = new ServerSettings(home(dir), true);
++        assertEquals(2, reread.maxCompanions());
++        assertEquals(12345, reread.dailyTokenLimit());
++        assertTrue(reread.hardRules());
++        assertTrue(reread.unknownAsOther());
++    }
++
++    @Test
++    void malformedResidentListDoesNotEnableItsValidPrefix(@TempDir Path dir) throws IOException {
++        Files.writeString(dir.resolve(ServerSettings.FILE), "{\"residentCompanions\":[\""
++                + UUID.randomUUID() + "\",\"broken-uuid\"]}");
++        assertTrue(new ServerSettings(home(dir), true).residents().isEmpty());
++    }
++
++    @Test
++    void removingListOnReloadDisablesResidency(@TempDir Path dir) throws IOException {
++        ServerSettings settings = new ServerSettings(home(dir), true);
++        settings.setResident(UUID.randomUUID(), true);
++        Files.writeString(dir.resolve(ServerSettings.FILE), "{}");
++        settings.reload();
++        assertTrue(settings.residents().isEmpty());
++    }
+ }
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/program/ServerProgramsTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/program/ServerProgramsTest.java
+index dc7f911..cd6639f 100644
+--- a/numen-api/common/src/test/java/com/dwinovo/numen/api/program/ServerProgramsTest.java
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/program/ServerProgramsTest.java
+@@ -273,6 +273,29 @@ class ServerProgramsTest {
+ 
+     // ---- 停止与打断 ----
+ 
++    @Test
++    void ownerLogoutRetainsOnlyTheSelectedResidentsProgram() {
++        UUID owner = UUID.randomUUID(), resident = UUID.randomUUID(), ordinary = UUID.randomUUID();
++        Held residentTransport = new Held(), ordinaryTransport = new Held();
++        Started first = start(resident, owner, "return gt.gt_mix.twice(4)", residentTransport);
++        Started second = start(ordinary, owner, "return gt.gt_mix.twice(7)", ordinaryTransport);
++        pumpUntil(() -> !residentTransport.held.isEmpty() && !ordinaryTransport.held.isEmpty());
++        try {
++            ServerPrograms.ownerLeft(owner, resident::equals);
++            pumpUntil(() -> second.outcome() != null);
++            assertTrue(ServerPrograms.running(resident), "同一主人断线只保留登记的那一只");
++            assertNull(first.outcome());
++            assertEquals(com.dwinovo.numen.script.ScriptCall.Status.STOPPED, second.outcome().ending().status());
++            residentTransport.answer(0, 8);
++            pumpUntil(() -> first.outcome() != null);
++            assertEquals(com.dwinovo.numen.script.ScriptCall.Status.OK, first.outcome().ending().status());
++            assertEquals(8, first.returned().getAsInt());
++        } finally {
++            ServerPrograms.ownerLeft(owner);
++            pumpUntil(() -> !ServerPrograms.running(resident) && !ServerPrograms.running(ordinary));
++        }
++    }
++
+     @Test
+     void anInterruptStopsTheProgramWhenTheCallInFlightIsAnswered() {
+         UUID companion = UUID.randomUUID();
+diff --git a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ResidentTest.java b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ResidentTest.java
+new file mode 100644
+index 0000000..ace63e2
+--- /dev/null
++++ b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ResidentTest.java
+@@ -0,0 +1,78 @@
++package com.dwinovo.numen.e2e;
++
++import org.junit.jupiter.api.Test;
++
++import static com.dwinovo.numen.e2e.FakeModel.lua;
++import static com.dwinovo.numen.e2e.FakeModel.say;
++import static org.junit.jupiter.api.Assertions.assertFalse;
++import static org.junit.jupiter.api.Assertions.assertTrue;
++
++/** 真服务端、原版连接、本地假模型:主人离线后常驻者继续,同主人的普通同伴待命,命令不给普通玩家。 */
++class ResidentTest extends Scenario {
++    @Test
++    void an_admin_kick_is_reported_as_removal_and_does_not_restart_the_resident() throws Exception {
++        Bot owner = join("e2e_removal", "zh_cn");
++        summon(owner, "ResidentK");
++        console("numen resident enable ResidentK");
++        console("kick ResidentK resident-kick-proof");
++        Thread.sleep(1000);
++        String status = console("numen resident status ResidentK");
++        assertTrue(status.contains("body=false") && status.contains("bodyState=REMOVED"), status);
++        assertTrue(status.contains("resident-kick-proof"), status);
++        Thread.sleep(1500);
++        assertFalse(console("list").contains("ResidentK"), "被踢出后不能自行重入");
++    }
++
++    @Test
++    void residencyIsAdminOnlyAndStatusDoesNotChangeIt() throws Exception {
++        Bot owner = join("e2e_resident", "zh_cn");
++        summon(owner, "ResidentA");
++        String before = console("numen resident status ResidentA");
++        assertTrue(before.contains("enabled=false"), before);
++        owner.command("numen resident enable ResidentA");
++        Thread.sleep(250);
++        assertTrue(console("numen resident status ResidentA").contains("enabled=false"));
++        assertTrue(console("numen resident enable ResidentA").contains("enabled=true"));
++        assertTrue(console("numen resident enable ResidentA").contains("enabled=true"));
++        assertTrue(console("list").split("ResidentA", -1).length == 2, "重复开启不能造出第二具身体");
++        assertTrue(console("numen resident status ResidentA").contains("enabled=true"));
++        assertTrue(console("numen resident disable ResidentA").contains("enabled=false"));
++    }
++
++    @Test
++    void theResidentFinishesAProgramAndThinksAgainAfterOwnerLogout() throws Exception {
++        Bot owner = join("e2e_away", "zh_cn");
++        summon(owner, "ResidentB");
++        summon(owner, "OrdinaryB");
++        console("numen resident enable ResidentB");
++        // Lua 等待真实服务器时间,下一次请求只有程序完成、回执进了模型才会出现。
++        MODEL.whenHeard("resident-offline-proof", lua("numen.time.wait(4); return 'resident-task-finished'"),
++                say("resident-model-finished"));
++        MODEL.whenHeard("ordinary-offline-proof", say("ordinary-model-finished"));
++        owner.command("msg ResidentB resident-offline-proof");
++        long deadline = System.nanoTime() + WAIT.toNanos();
++        while (!MODEL.wasToldAbout("resident-offline-proof")) {
++            assertTrue(System.nanoTime() < deadline, "常驻请求没进模型");
++            Thread.sleep(50);
++        }
++        owner.close();
++        try {
++            deadline = System.nanoTime() + WAIT.toNanos();
++            while (MODEL.asked().stream().noneMatch(a -> a.lastToolCallId() != null
++                    && a.body().contains("resident-task-finished"))) {
++                assertTrue(System.nanoTime() < deadline, "离线后没有收到实际程序的完成回执");
++                Thread.sleep(100);
++            }
++            assertTrue(console("numen resident status ResidentB").contains("body=true"));
++            assertFalse(console("numen resident status ResidentB").contains("hold=AWAY"));
++            assertTrue(console("numen resident status OrdinaryB").contains("hold=AWAY"));
++            console("numen resident disable ResidentB");
++            assertTrue(console("numen resident status ResidentB").contains("hold=AWAY"));
++        } finally {
++            // Scenario 用主人命令遣散,收场前重新连回来,只用于关闭本用例的两具身体。
++            owner = join("e2e_away", "zh_cn");
++            owner.command("numen player despawn ResidentB");
++            owner.command("numen player despawn OrdinaryB");
++        }
++    }
++}

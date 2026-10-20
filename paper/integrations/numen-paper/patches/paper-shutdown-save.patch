@@ -1,0 +1,16 @@
+diff --git a/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java b/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java
+index ccfba22..f235edc 100644
+--- a/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java
++++ b/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java
+@@ -37,6 +37,11 @@ public final class NumenApiPlugin extends JavaPlugin {
+     @Override
+     public void onDisable() {
+         ServerLifecycle.fireStopped();
++        // Paper 在插件停用并关闭类加载器之后才保存世界。SavedData 的编码器属于插件,
++        // 必须趁它仍可加载类时同步写完(含权限命中账的首次序列化),不能把脏数据留给后面的存档。
++        for (var level : net.minecraft.server.MinecraftServer.getServer().getAllLevels()) {
++            level.getDataStorage().save(false);
++        }
+         PluginJars.closeAll();
+     }
+ }

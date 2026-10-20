@@ -1,0 +1,92 @@
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/Whispers.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/Whispers.java
+index e7d424a..0e0b90b 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/Whispers.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/Whispers.java
+@@ -2,6 +2,7 @@ package com.dwinovo.numen.api.brain;
+ 
+ import com.dwinovo.numen.api.agent.inbox.EventTypes;
+ import com.dwinovo.numen.api.entity.NumenPlayer;
++import net.minecraft.network.chat.Component;
+ 
+ import java.util.UUID;
+ 
+@@ -21,6 +22,18 @@ public final class Whispers {
+ 
+     private Whispers() {}
+ 
++    /** 原版未签名私聊:包里只有显示名。只接唯一匹配的在线账号,不把称号或正文当用户名。 */
++    public static void heard(NumenPlayer companion, Component senderName, Component text) {
++        String name = senderName.getString();
++        var senders = companion.server.getPlayerList().getPlayers().stream()
++                .filter(sender -> sender.getGameProfile().getName().equals(name)
++                        || sender.getDisplayName().getString().equals(name)).toList();
++        if (senders.size() == 1) {
++            var sender = senders.getFirst();
++            heard(companion, sender.getUUID(), senderName.getString(), text.getString());
++        }
++    }
++
+     /**
+      * @param companion  收到私聊的她
+      * @param sender     发话的玩家
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/FakeClient.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/FakeClient.java
+index e554aa4..138196f 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/FakeClient.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/FakeClient.java
+@@ -6,6 +6,7 @@ import net.minecraft.network.chat.ChatType;
+ import net.minecraft.network.chat.Component;
+ import net.minecraft.network.protocol.Packet;
+ import net.minecraft.network.protocol.game.ClientboundPlayerChatPacket;
++import net.minecraft.network.protocol.game.ClientboundDisguisedChatPacket;
+ import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
+ import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
+ import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
+@@ -120,6 +121,10 @@ public final class FakeClient {
+             Component text = chat.unsignedContent();
+             Whispers.heard(player, chat.sender(), chat.chatType().name().getString(),
+                     text != null ? text.getString() : chat.body().content());
++        } else if (arrived && packet instanceof ClientboundDisguisedChatPacket chat
++                && chat.chatType().chatType().is(ChatType.MSG_COMMAND_INCOMING)) {
++            // 未签名的原版 /msg 不带 sender UUID;必须和在线名册核对,不从正文猜谁是主人。
++            Whispers.heard(player, chat.chatType().name(), chat.message());
+         }
+     }
+ 
+diff --git a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/WhisperTest.java b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/WhisperTest.java
+index e029e65..f0e10cb 100644
+--- a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/WhisperTest.java
++++ b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/WhisperTest.java
+@@ -11,6 +11,33 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
+  */
+ class WhisperTest extends Scenario {
+ 
++    @Test
++    void an_unsigned_namespaced_vanilla_whisper_reaches_the_companions_brain() throws Exception {
++        Bot owner = join("e2e_unsigned", "zh_cn");
++        summon(owner, "UnsignedMia");
++        MODEL.whenHeard("unsigned-native-whisper", say("unsigned-whisper-accepted"));
++        int mark = owner.mark();
++        // Bot 只为 msg/tell/w 发送签名指令包。带命名空间的这个发送原版 unsigned command 包,
++        // 与 Mineflayer 和服务器终止签名的代理路径一样,不依赖 Numen 客户端。
++        owner.command("minecraft:msg UnsignedMia unsigned-native-whisper");
++        owner.await(mark, m -> m.text().contains("unsigned-whisper-accepted"), WAIT, "未签名原版私聊的回复");
++        assertTrue(MODEL.wasToldAbout("unsigned-native-whisper"));
++    }
++
++    @Test
++    void unsigned_whispers_with_team_prefixes_keep_the_real_owner_identity() throws Exception {
++        Bot owner = join("e2e_titled", "zh_cn");
++        summon(owner, "TitledMia");
++        console("team add whisper_title");
++        console("team modify whisper_title prefix {\"text\":\"◆黑铁 [Agent] \"}");
++        console("team join whisper_title e2e_titled");
++        MODEL.whenHeard("titled-unsigned-whisper", say("titled-owner-confirmed"));
++        int mark = owner.mark();
++        owner.command("minecraft:msg TitledMia titled-unsigned-whisper");
++        owner.await(mark, m -> m.text().contains("titled-owner-confirmed"), WAIT, "有称号的真实主人私聊回复");
++        assertTrue(MODEL.wasToldAbout("titled-unsigned-whisper"));
++    }
++
+     @Test
+     void a_summoned_companion_is_a_player_who_answers_a_private_message() throws Exception {
+         Bot owner = join("e2e_whisperer", "zh_cn");

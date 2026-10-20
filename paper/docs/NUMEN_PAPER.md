@@ -6,6 +6,35 @@
 
 上游 [minecraft-numen](https://github.com/Dwinovo/minecraft-numen) 的 `1.21.1` 分支提交 `7c931600c2269d21216bb6f9090588cdbe0beb01` 已包含 Paper 实现；源码版本为 `0.1.4`。这是固定源码构建，带本仓库的 Paper 内存连接兼容补丁；不是声称已有官方稳定 Paper Release。协议与安装范围见[该提交的 Paper 文档](https://github.com/Dwinovo/minecraft-numen/blob/7c931600c2269d21216bb6f9090588cdbe0beb01/docs/paper.md)。
 
+## 服务端常驻候选（2026-10-20，尚未上线）
+
+这次扩展只替换 Numen API 的服务端 JAR，Numen 内容 JAR、NumenBedrock、玩家客户端与网络协议保持。普通同伴仍在主人离线后待命；只有管理员按**身体 UUID**登记的同伴能离线运行，并在 Paper 启动后的下一刻按原名册恢复，不新建第二具身体。
+
+管理员入口（回执只给操作者）：
+
+```text
+/numen resident status
+/numen resident status <同伴名或UUID>
+/numen resident enable <同伴名或UUID>
+/numen resident disable <同伴名或UUID>
+```
+
+重名时必须用 UUID。`status` 只查询，不启用、不召唤；它显示身体是否存在、大脑停牌及原因。`bodyState` 区分 `PRESENT`、`DORMANT`、`DEAD`、`REMOVED`，被踢出还显示实际离场原因；上游的 `hold=DEAD` 同时涵盖死亡和被移除，不能单看它判断死因。启用后没有模型、Key 或额度时仍如实显示 `BLOCKED`，不能把身体存在当作模型已正常工作。`disable` 恢复普通同伴的离线规则，不是永久遣散；原 `/numen player despawn` 仍会永久遣散。
+
+配置沿用 `plugins/numen/server/server.json`，新增 `residentCompanions: ["身体UUID"]`，缺省空列表；原模型档案、人设、记忆、收件箱、背包与身体 UUID 都沿用原生存储。先用一个**没有 OP 的专用账号**按上文召唤、配置模型，再由管理员开启常驻；该账号随后可以退出，不需要保留客户端进程。常驻角色不会因此获得管理员身份或自动接管可米、NEKO。角色的生活目标仍由原生会话和目标功能设置。
+
+常驻继续使用原有的小范围区块加载垫（3×3 实体活动区、7×7 加载区）；世界拆建保护与权限征询保持。主人离线不等于有人能批准权限；客户端专属的反向请求仍会失败。离线死亡者按原死亡规则在名册记录的安全位置附近复活，被踢出或被登录插件拒绝者保持 `REMOVED`，不会自动反复重连。停止通知一开始便停止大脑运行资格，防止关闭模型服务后的收尾消息重新触发决策。
+
+另修正 Numen 漏收**未签名的原版私聊包**：保留原版 `msg_command_incoming` 类型，只用在线名册中的真实名字／显示名做唯一匹配，再交给原有 UUID 归属判断；不从聊天正文或称号猜主人。签名私聊、公屏、旁听权限与原版 `/msg` 路由保持。
+
+最终同摘要候选已通过 1,726 项 JVM 测试、11 项原生 Paper 端到端测试，以及完整插件组合的 19 项实际 Mineflayer 4.37.1 联机／冷启动检查。主人离线后实际移动、死亡按规则复活、原 UUID 与完整物品元数据恢复、模型绑定与收件箱恢复、保护区真实挖掘拒绝、被踢后不自行重入与停用后的待命均通过；两次正常停服退出，并核对最后权限设置已落盘。模型端点为本地模拟服务，不是 qwen3.7-plus 的真实运行证明。31 个原网络载荷类字节保持；本轮没有重新操作 Fabric／NeoForge 图形客户端或基岩真机表单，也没有验证 16 个自主模型负载。隔离服 EssentialsX 2.22.0 原有的版本不受支持告警保留，没有把全部第三方日志称为全绿。候选摘要和最终证据见 `paper/manifests/numen-resident-candidate-20261020.json`。
+
+**模型尚未配置、正式服尚未部署。**用户选定的 CodingPlan `qwen3.7-plus` 已核对名称，但[官方订阅说明](https://help.aliyun.com/zh/model-studio/coding-plan)限制套餐用于编程工具，禁止自定义应用后端与非交互式批量调用。因此本轮没有读取或写入 CodingPlan Key，没有改用按量计费 Key；常驻的真实接入待选择普通 API 或本地模型。启用服主 Key 前应设置 `dailyTokenLimit`（0 表示不限额，统计服主 Key 每位主人每天的 token；本人 Key 不在该上游限额内）。生产部署与 Paper 重启另行确认。
+
+重建当前候选时，在上文固定源码提交上依次应用 `paper-memory-pipeline.patch`、`server-resident.patch`、`native-unsigned-whisper.patch`、`paper-shutdown-save.patch`，执行本文后面的原构建命令，再运行 `:numen:paper:e2eTest`。最后一个补丁在 Paper 关闭插件类加载器前同步写完世界 SavedData，避免权限命中账首次序列化时出现 `zip file closed` 并中断存档。补丁遵循上游 LGPL-3.0。
+
+回退：正常维护停服并完成原 E/F 冷备份后，恢复原 Numen API JAR（SHA256 `3179afb4d5b6cc9f83588cce18eb5141c5f7f0876c790b78a80f1a168ec5a693`）；清除或保留新配置字段都不会让旧版启用常驻。保留原同伴名册、玩家 `.dat` 和 `world/numen`，不要用永久遣散作为回退操作。
+
 ## 公网玩家怎么用
 
 复用现有服务器域名和游戏端口。Numen 面板通过 Minecraft 自定义频道通信，不要求另开网站、MCP 或公网端口。

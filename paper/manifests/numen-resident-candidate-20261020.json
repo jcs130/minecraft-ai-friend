@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "id": "numen-resident-candidate-20261020",
+  "status": "validated_not_deployed",
+  "createdAt": "2026-10-20T04:29:24.129805+00:00",
+  "productionChanged": false,
+  "source": {
+    "repository": "https://github.com/Dwinovo/minecraft-numen",
+    "branch": "1.21.1",
+    "commit": "7c931600c2269d21216bb6f9090588cdbe0beb01",
+    "version": "0.1.4",
+    "localRevision": "resident-20261020",
+    "license": "LGPL-3.0",
+    "tree": "dab41a2a274f52f3f1fb2e6c22d5059c3f5aed01",
+    "patches": [
+      {
+        "path": "paper/integrations/numen-paper/patches/paper-memory-pipeline.patch",
+        "sha256": "034b6d70df19516bcfec036d509151aec2affbb6460ad5976682d7c63cf218f6"
+      },
+      {
+        "path": "paper/integrations/numen-paper/patches/server-resident.patch",
+        "sha256": "118ea9f07431e13d9e7070edfc4a5e6be19b92896e85e18188ab47260b4b585e"
+      },
+      {
+        "path": "paper/integrations/numen-paper/patches/native-unsigned-whisper.patch",
+        "sha256": "d3736ea59b4bfb111b18702c6a09afbeff4f12f1527bd863fba1f21eec09daaa"
+      },
+      {
+        "path": "paper/integrations/numen-paper/patches/paper-shutdown-save.patch",
+        "sha256": "689076e4e6ff5b112892047a74d9d72aaa5228be4b9dd202b9da9b532dd80586"
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "target": "plugins/numen_api-paper-1.21.1-0.1.4.jar",
+      "sha256": "49256bec2ae8621bdb048c7d88eea0547767e8adc9273eccf16596b84df31f02",
+      "bytes": 2436953,
+      "beforeSha256": "3179afb4d5b6cc9f83588cce18eb5141c5f7f0876c790b78a80f1a168ec5a693"
+    }
+  ],
+  "unchanged": {
+    "numenContentJarSha256": "bfe6040eefb3cac792dc70513ae150c5e25f76f9b869fd3d9bb8eff088cb37a4",
+    "numenBedrockJarSha256": "08ace492d5b7758d8316c66dd839e0d14b7017465d98c2ec855ed33f9d4cab96",
+    "wireClassesUnchanged": 31,
+    "agentClientsChanged": false,
+    "publicPortAdded": false
+  },
+  "behavior": {
+    "residentDefault": false,
+    "keyedBy": "companion UUID",
+    "adminPermission": "numen.admin",
+    "ownerPresenceConsentUnchanged": true,
+    "ownerOfflineBrainAndProgramsContinue": true,
+    "restoreAfterStartup": true,
+    "kickDoesNotAutoRetry": true,
+    "deathUsesExistingRules": true,
+    "storage": "native Numen Homes and Minecraft playerdata",
+    "settingsFile": "plugins/numen/server/server.json",
+    "settingsField": "residentCompanions"
+  },
+  "model": {
+    "requested": "CodingPlan qwen3.7-plus",
+    "configured": false,
+    "realModelCalls": 0,
+    "testEndpoint": "loopback scripted OpenAI-compatible mock",
+    "codingPlanRestrictionSource": "https://help.aliyun.com/zh/model-studio/coding-plan",
+    "nextStep": "Choose a normal API or local model before enabling a production resident; do not silently substitute a metered key"
+  },
+  "verification": {
+    "jvmTests": 1726,
+    "e2eTests": 11,
+    "nativeCompatibilityChecks": 19,
+    "normalStoppedExits": 2,
+    "permissionModeDurable": true,
+    "patchReplayExact": true,
+    "paper": "1.21.1 build 133",
+    "mineflayer": "4.37.1 / protocol 1.21.1",
+    "noFixtureListenersRemain": true,
+    "baselineNotice": "EssentialsX 2.22.0 reports unsupported server version at fixture startup; no new Numen shutdown error remains",
+    "notVerified": [
+      "real qwen3.7-plus behavior",
+      "16 autonomous model agents",
+      "fresh Fabric/NeoForge graphical client and Xbox handset forms"
+    ]
+  },
+  "evidence": {
+    "primary": "E:/MC/ops/repairs/numen-resident-20261020",
+    "mirror": "F:/MC-backups/repairs/numen-resident-20261020",
+    "reports": [
+      "unit-results.json",
+      "e2e-results.json",
+      "native-initial.json",
+      "native-restart.json",
+      "normal-stop-final-initial.json",
+      "normal-stop-final-restart.json",
+      "permission-after-stop.json",
+      "wire-compatibility.json",
+      "patch-replay-release.json"
+    ],
+    "earlierFailuresPreserved": true
+  },
+  "deployment": {
+    "queued": false,
+    "requiresCurrentPaperRestartApproval": true,
+    "requiresOriginalMaintenanceAndFullColdBackups": true,
+    "oneApiJarOnly": true,
+    "noProductionAccountOrKeyPrepared": true
+  },
+  "rollback": {
+    "apiSha256": "3179afb4d5b6cc9f83588cce18eb5141c5f7f0876c790b78a80f1a168ec5a693",
+    "preserve": [
+      "world/data/numen_companions.dat",
+      "world/playerdata",
+      "world/numen"
+    ],
+    "neverUseDespawnAsRollback": true
+  }
+}
