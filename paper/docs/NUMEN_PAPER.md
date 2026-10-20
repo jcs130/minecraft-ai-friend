@@ -6,7 +6,7 @@
 
 上游 [minecraft-numen](https://github.com/Dwinovo/minecraft-numen) 的 `1.21.1` 分支提交 `7c931600c2269d21216bb6f9090588cdbe0beb01` 已包含 Paper 实现；源码版本为 `0.1.4`。这是固定源码构建，带本仓库的 Paper 内存连接兼容补丁；不是声称已有官方稳定 Paper Release。协议与安装范围见[该提交的 Paper 文档](https://github.com/Dwinovo/minecraft-numen/blob/7c931600c2269d21216bb6f9090588cdbe0beb01/docs/paper.md)。
 
-## 服务端常驻候选（2026-10-20，尚未上线）
+## 服务端常驻（2026-10-20，已上线）
 
 这次扩展只替换 Numen API 的服务端 JAR，Numen 内容 JAR、NumenBedrock、玩家客户端与网络协议保持。普通同伴仍在主人离线后待命；只有管理员按**身体 UUID**登记的同伴能离线运行，并在 Paper 启动后的下一刻按原名册恢复，不新建第二具身体。
 
@@ -27,9 +27,13 @@
 
 另修正 Numen 漏收**未签名的原版私聊包**：保留原版 `msg_command_incoming` 类型，只用在线名册中的真实名字／显示名做唯一匹配，再交给原有 UUID 归属判断；不从聊天正文或称号猜主人。签名私聊、公屏、旁听权限与原版 `/msg` 路由保持。
 
-最终同摘要候选已通过 1,726 项 JVM 测试、11 项原生 Paper 端到端测试，以及完整插件组合的 19 项实际 Mineflayer 4.37.1 联机／冷启动检查。主人离线后实际移动、死亡按规则复活、原 UUID 与完整物品元数据恢复、模型绑定与收件箱恢复、保护区真实挖掘拒绝、被踢后不自行重入与停用后的待命均通过；两次正常停服退出，并核对最后权限设置已落盘。模型端点为本地模拟服务，不是 qwen3.7-plus 的真实运行证明。31 个原网络载荷类字节保持；本轮没有重新操作 Fabric／NeoForge 图形客户端或基岩真机表单，也没有验证 16 个自主模型负载。隔离服 EssentialsX 2.22.0 原有的版本不受支持告警保留，没有把全部第三方日志称为全绿。候选摘要和最终证据见 `paper/manifests/numen-resident-candidate-20261020.json`。
+最终同摘要候选已通过 1,726 项 JVM 测试、11 项原生 Paper 端到端测试，以及完整插件组合的 19 项实际 Mineflayer 4.37.1 联机／冷启动检查。主人离线后实际移动、死亡按规则复活、原 UUID 与完整物品元数据恢复、模型绑定与收件箱恢复、保护区真实挖掘拒绝、被踢后不自行重入与停用后的待命均通过；两次正常停服退出，并核对最后权限设置已落盘。上述候选初验使用本地模拟服务；追加的真实 qwen3.7-plus 模型6项、正式角色验证与两种原登录协议回归见下方发布说明。31 个原网络载荷类字节保持；本轮没有重新操作 Fabric／NeoForge 图形客户端或基岩真机表单，也没有验证 16 个自主模型负载。隔离服 EssentialsX 2.22.0 原有的版本不受支持告警保留，没有把全部第三方日志称为全绿。候选摘要和最终证据见 `paper/manifests/numen-resident-candidate-20261020.json`。
 
-**模型尚未配置、正式服尚未部署。**用户选定的 CodingPlan `qwen3.7-plus` 已核对名称，但[官方订阅说明](https://help.aliyun.com/zh/model-studio/coding-plan)限制套餐用于编程工具，禁止自定义应用后端与非交互式批量调用。因此本轮没有读取或写入 CodingPlan Key，没有改用按量计费 Key；常驻的真实接入待选择普通 API 或本地模型。启用服主 Key 前应设置 `dailyTokenLimit`（0 表示不限额，统计服主 Key 每位主人每天的 token；本人 Key 不在该上游限额内）。生产部署与 Paper 重启另行确认。
+**常驻已上线。**服主明确要求本实验服使用 CodingPlan `qwen3.7-plus`，实际端点为 `https://coding.dashscope.aliyuncs.com/v1`。常驻旅人 **星灯 `ag_StarLantern`**，身体 UUID `04dfee4f-3bc3-495d-9269-6ae3323adb27`，由独立非 OP 配置账号 `NumenKeeper20` 管理；临时管理连接已经退出。API 与原生 Numen 循环的真实调用均已验证，模型在主人离线后完成只读位置查询和中文回复，原生身体与绑定保存成功。完整发布记录见 `paper/manifests/numen-resident-release-20261020.json`。
+
+Key从现有QwenPaw加密配置读取，只存专用主人的私有钥匙串；不经聊天传Key、不写仓库或日志，也不设全服共享custom服务Key。该主人的档案、人设和偏好在 `plugins/numen/players/<主人UUID>/`，身体、记忆和聊天在 `world/numen/companions/<身体UUID>/`，背包沿原玩家存档保存。输出上限4096、主动性10，减少空闲频繁思考；`dailyTokenLimit`是上游服主共享Key的每人日额度，**不覆盖本次私有Key，没有另设日硬限额**。管理者密码已随机设置，角色名禁止从外部登录，原有玩家入口规则保留。
+
+查看：`/numen resident status ag_StarLantern`。暂停离线运行：`/numen resident disable ag_StarLantern`；重新启用：`/numen resident enable ag_StarLantern`。这些命令需要管理员权限。普通玩家仍用原Numen界面配置自己的同伴。本次保留上游沟通权限：主人私聊可以立即唤醒，其他人的私聊作为旁听收集，不能把它宣传成任何人均可即时操控的公共客服。
 
 重建当前候选时，在上文固定源码提交上依次应用 `paper-memory-pipeline.patch`、`server-resident.patch`、`native-unsigned-whisper.patch`、`paper-shutdown-save.patch`，执行本文后面的原构建命令，再运行 `:numen:paper:e2eTest`。最后一个补丁在 Paper 关闭插件类加载器前同步写完世界 SavedData，避免权限命中账首次序列化时出现 `zip file closed` 并中断存档。补丁遵循上游 LGPL-3.0。
 

@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "id": "numen-resident-release-20261020",
+  "status": "deployed",
+  "deployedAt": "2026-10-20T05:28:15.661125+00:00",
+  "authorization": "这就是我的实验服务器 就用codingplan的这个就行了 上线吧",
+  "codeCommit": "8b46b27503846b0b855a6be30d880d27a2bd4223",
+  "source": {
+    "repository": "https://github.com/Dwinovo/minecraft-numen",
+    "branch": "1.21.1",
+    "commit": "7c931600c2269d21216bb6f9090588cdbe0beb01",
+    "version": "0.1.4",
+    "localRevision": "resident-20261020",
+    "license": "LGPL-3.0",
+    "tree": "dab41a2a274f52f3f1fb2e6c22d5059c3f5aed01",
+    "patches": [
+      {
+        "path": "paper/integrations/numen-paper/patches/paper-memory-pipeline.patch",
+        "sha256": "034b6d70df19516bcfec036d509151aec2affbb6460ad5976682d7c63cf218f6"
+      },
+      {
+        "path": "paper/integrations/numen-paper/patches/server-resident.patch",
+        "sha256": "118ea9f07431e13d9e7070edfc4a5e6be19b92896e85e18188ab47260b4b585e"
+      },
+      {
+        "path": "paper/integrations/numen-paper/patches/native-unsigned-whisper.patch",
+        "sha256": "d3736ea59b4bfb111b18702c6a09afbeff4f12f1527bd863fba1f21eec09daaa"
+      },
+      {
+        "path": "paper/integrations/numen-paper/patches/paper-shutdown-save.patch",
+        "sha256": "689076e4e6ff5b112892047a74d9d72aaa5228be4b9dd202b9da9b532dd80586"
+      }
+    ]
+  },
+  "runtime": {
+    "paper": "1.21.1 build 133",
+    "java": 21,
+    "agentFriend": "0.4.47.8",
+    "numen": "0.1.4",
+    "residentRevision": "resident-20261020",
+    "apiSha256": "49256bec2ae8621bdb048c7d88eea0547767e8adc9273eccf16596b84df31f02",
+    "oneApiJarOnly": true,
+    "wireClassesUnchanged": 31
+  },
+  "model": {
+    "provider": "CodingPlan",
+    "model": "qwen3.7-plus",
+    "endpoint": "https://coding.dashscope.aliyuncs.com/v1",
+    "userConfirmedExperimentalUse": true,
+    "credentialSource": "existing encrypted QwenPaw provider; never committed or printed",
+    "keyScope": "dedicated owner only; no shared custom-provider key",
+    "maxOutputTokens": 4096,
+    "initiative": 10,
+    "nativeSharedKeyDailyQuotaApplies": false,
+    "privateKeyDailyHardCapConfigured": false
+  },
+  "resident": {
+    "name": "ag_StarLantern",
+    "displayName": "星灯",
+    "uuid": "04dfee4f-3bc3-495d-9269-6ae3323adb27",
+    "owner": "NumenKeeper20",
+    "ownerUuid": "7f76fdce-630a-38f7-9493-368a3cc69f0d",
+    "nonOpOwnerAndBody": true,
+    "ownerConnectionClosed": true,
+    "nativeStateAndInventorySaved": true,
+    "externalBodyLoginDenied": true,
+    "otherPlayersWhisperPolicy": "upstream passive overheard TALK, not immediate authoritative owner commands"
+  },
+  "verification": {
+    "jvmTests": 1726,
+    "paperE2eTests": 11,
+    "nativeCandidateChecks": 19,
+    "normalStoppedExits": 2,
+    "actualModelStageChecks": 6,
+    "productionRoleChecks": 15,
+    "productionHealthChecks": 26,
+    "nativeIdentityProtectionChecks": 4,
+    "actualGatewayNativeProtocols": [
+      {
+        "version": "1.20.6",
+        "checks": 30,
+        "report": "native-production-1792473968852.json"
+      },
+      {
+        "version": "1.21.1",
+        "checks": 30,
+        "report": "native-production-1792474015882.json"
+      }
+    ],
+    "notVerified": [
+      "16 autonomous model agents",
+      "fresh Fabric/NeoForge GUI and Xbox forms",
+      "a second production cold restart with the newly created role; cold restore verified in isolated server"
+    ]
+  },
+  "maintenance": {
+    "noticesSeconds": [
+      180,
+      60,
+      10
+    ],
+    "lifecycle": "original Afu-MC-DailyBackup",
+    "backupStamp": "20261020-131200",
+    "fullStoppedBackupPrimary": "E:/MC/backups/scheduled/20261020-131200",
+    "fullStoppedBackupMirror": "F:/MC-backups/scheduled/20261020-131200",
+    "pendingConsumed": true,
+    "postActivationSupplement": {
+      "files": 7,
+      "bothDisksVerified": true,
+      "liveSupplementOnly": true,
+      "fullColdBackupBeforeDeployment": "20261020-131200"
+    },
+    "privateRoleCredentialsBothDisksVerified": true
+  },
+  "evidence": {
+    "primary": "E:/MC/ops/repairs/numen-resident-20261020",
+    "mirror": "F:/MC-backups/repairs/numen-resident-20261020",
+    "reports": [
+      "real-model-stage-1792472865740.json",
+      "real-model-validation.json",
+      "role-production-1792473892554.json",
+      "production-verify-1792473918205.json",
+      "identity-native-1792473920864.json",
+      "native-production-1792473968852.json",
+      "native-production-1792474015882.json",
+      "identity-access.applied.json"
+    ],
+    "earlierFailuresAndInvalidatedProbePreserved": true
+  },
+  "rollback": {
+    "apiSha256": "3179afb4d5b6cc9f83588cce18eb5141c5f7f0876c790b78a80f1a168ec5a693",
+    "disableCommand": "numen resident disable 04dfee4f-3bc3-495d-9269-6ae3323adb27",
+    "requiresNormalMaintenanceAndBackup": true,
+    "preserve": [
+      "world/data/numen_companions.dat",
+      "world/playerdata",
+      "world/numen",
+      "plugins/numen/players"
+    ],
+    "neverUseDespawnAsRollback": true
+  }
+}
