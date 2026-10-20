@@ -1,5 +1,10 @@
 # Agent MC World
 
+`0.5.7-rc.54` adds optional [Harness² practice](docs/harness2.md): host-injected models,
+isolated core method execution, an independent baseline/held-out gate and evidence-linked
+game memory. The pinned Google algorithm is optional; imports start no model or game.
+Practice results never automatically train weights, adopt a skill or take over a live body.
+
 `0.5.7-rc.50` fixes the shared skill-field schema union: an enum from one
 skill no longer restricts another skill's free-text field. In particular,
 `organize.target=inventory/open` cannot reject `find.target=oak_log` or an
