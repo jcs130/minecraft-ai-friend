@@ -61,3 +61,45 @@ remain protected; connection reset/timeout evidence is a separate live boundary.
 - [x] Observe natural ordinary/ahead transitions and real queue outcomes. Stage one kept declarations stable across ordinary/ahead work, then exposed the independent rotation timeout. Final stage reached 121,454 actual input tokens; its first adaptive rotated request and three following replies returned, with 13 model responses and no deadline rejection over about 11 minutes. This is a bounded trial, not long-term performance or survival acceptance.
 - [x] Save actual source/package/deployment/live evidence; update maintenance offsets separately from the last completed full inspection. Final record `deadline-root-cause-20261021T0148/rotation-final/maintenance-result.json` is private; full inspection time remains 2026-10-20T17:34:07.923324+00:00.
 - [x] Push verified changes normally. Code commits are `1369c56f` and `7ac713e5`; adapter commits `e276db7` and `71c1a8a`. No publication. Keep monitoring cold rotations, actual project progress and shared-service pressure; queries/blocked work are not completed survival goals.
+
+### Task 4: Reopened shared-cache capacity follow-up
+
+The finite 13-response window above ended before a later 115,802-token request
+exceeded the same deadline. Its retained head/tool/first-history hashes stayed
+unchanged and no group was retired. Subsequent requests also encountered
+deadlines. This is new evidence, not proof that the two source fixes failed
+their reproductions or that the short window established a general solution.
+
+The installed engine reports 386 usable FP8 cache blocks. CPU replay through
+that engine's own specs reproduces its budget: one full 131,072-token request
+uses 360 blocks and a 6,400-token review uses 78. Their combined 438-block
+admission cap exceeds the pool. Four configured sequence admissions never
+meant four resident 128K contexts. Actual gateway reviews and queued engine
+work corroborate contention, without a request-ID-level wire trace assigning
+every timeout to that cause.
+
+The human explicitly requested more actual residency. This adds a narrow
+exception to this plan's original model-continuity constraint: a normal,
+owned-service configuration replacement may be evaluated after body/adapter
+drain. Neko/SDK, Java, driver, power, weights and paid-fallback restrictions
+remain unchanged. The pinned HyperQwen image already contains its KVarN
+backend. Its DFlash2/huge profile predicts room for a full game request and a
+small review with the same 128K per-request capacity; two full 128K requests
+still do not fit. It uses a lossy cache and sparse recurrent-state retention,
+so startup, natural inference, cache reuse and queue outcomes require separate
+validation. No synthetic pressure campaign is authorized by this follow-up.
+
+- [x] Replay both budgets on CPU; preserve the later failed requests.
+- [x] Prepare a fresh normal stop/drain and exact environment rollback ledger.
+- [x] Confirm actual KVarN geometry and healthy initialization. The engine reported 209,132 equivalent tokens, 358 usable blocks and the predicted 225-block full-request cost. Two simultaneous natural requests were observed, with no preemption.
+- [x] Reject KVarN as the timeout solution: the reviewed trial had five successful body replies and four deadline rejections. Some warm replies reused 43K/52K tokens, but a 99,233-token request still took 201.41 seconds in the engine and missed the 180-second client deadline. Shared-memory usage and missing periodic log lines alone did not prove paging, a GPU fault or a cancellation root cause. No host/provider code was changed on those hypotheses.
+- [x] Use a separately journaled normal operation for the same pinned model's MTP/FP8 profile. It keeps vision, 128K, strict=function and the full draft vocabulary. Its actual budget is 275 usable blocks with 15 fixed blocks per active request and 173 blocks at 128K, compared with DFlash2's 54 fixed blocks. This allows a long game request plus a short review with more room, without additional 4/2-bit KV compression. Admissions remain two for this evaluation; two full 128K requests still do not fit.
+- [x] Resume the same 0.2.74 runtime without replaying actions; keep Neko/SDK and private game settings unchanged. Natural MTP replies have reached 101,451 prompt tokens with 91,520 cached and a 47.938-second response. This single finite sample is not a controlled cross-profile speed benchmark or long-term acceptance.
+- [x] Complete the due full inspection separately at 2026-10-20T19:37:16.247514+00:00, reading the original full journal offsets and every known old-run tail. Fresh ownership, local bindings, stream/image and natural audio receipts were checked. Long-term survival, actual desktop playback and complete visual parity remain unverified.
+- [x] Finish the bounded MTP observation and update the monitor. Fourteen body responses were recorded with zero body deadlines; ten completed before an announced server disconnect. Successful-response median was 47.2895 seconds and first output 32.9845 seconds. The official review gateway separately had one success and one timeout, so the whole chain is not timeout-free. The body reached 116,224 prompt tokens with real cache reuse, but the following smaller/cold contexts were caused by a server-connection/identity transition rather than overflow retirement. That boundary is not an adaptive-retirement acceptance test. The same body later reconnected naturally without a local restart. Remaining movement, persistent-project and long-term acceptance limits are retained.
+
+HyperQwen upstream was fetched read-only through `63f7581804afe05f23f240c2f584a00ac18c488b`.
+New MTP defaults are guarded out with this deployment's `VISION=1`; benchmark
+timing and documentation updates do not justify changing the fixed image here.
+The deployed source/image remain `95ac251b` and the original checked digest.
+No additional synthetic model requests, driver changes or publication occurred.
