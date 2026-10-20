@@ -93,8 +93,15 @@ export async function skillOrganize(bot: Bot, call: Call, ctx: SkillContext): Pr
   sameWindow(bot, initial);
   if (initial.selectedItem) throw new SkillBlocked('当前材料仍在光标上，先完成上一笔存取再整理');
   const initialRange = rangeOf(initial, call);
-  const preview = planInventoryOrganization(cells(initial), initialRange.start, initialRange.end, call.sort !== false);
   const rules = call.rules ?? [];
+  // Disposition is not permission to move unrelated stacks or server-owned shortcut items.
+  // Preserve ordinary organize and explicit true/false arrangement semantics.
+  const arrange = rules.length === 0 || call.sort !== undefined;
+  const preview = arrange
+    ? planInventoryOrganization(cells(initial), initialRange.start, initialRange.end, call.sort !== false)
+    : { range: initialRange, beforeFree: cells(initial).slice(initialRange.start, initialRange.end).filter(x => !x).length,
+      expectedFree: cells(initial).slice(initialRange.start, initialRange.end).filter(x => !x).length,
+      merges: 0, swaps: 0, moves: [] };
   if ((call.target ?? 'inventory') === 'open' && rules.length) throw new SkillBlocked('取舍 rules 针对随身背包；target:open 只整理当前容器');
   if (call.dryRun) return JSON.stringify({ schema: 'minecraft-inventory-organization/v1', dryRun: true,
     target: call.target ?? 'inventory', includeHotbar: call.includeHotbar ?? false, plan: preview,
@@ -136,6 +143,14 @@ export async function skillOrganize(bot: Bot, call: Call, ctx: SkillContext): Pr
   }
   const win = activeWindow(bot); sameWindow(bot, win);
   if (win.selectedItem) throw new SkillBlocked('取舍后光标仍持有物品，整理未继续', notes);
+  if (!arrange) {
+    const next = ctx.batch?.steps[ctx.batch.index + 1];
+    if (bot.currentWindow === win && !consumesOpenWindow(next)) bot.closeWindow(win);
+    const result = '随身背包整理完成：仅执行指定取舍规则，未额外合堆或排序';
+    ctx.diag?.write({ lane: 'skill', event: 'inventory-organize', taskId: ctx.taskId,
+      msg: result, data: { target: 'inventory', rules: rules.length, merges: 0, swaps: 0, notes } });
+    return [...notes, result].join('\n');
+  }
   const range = rangeOf(win, call), plan = planInventoryOrganization(cells(win), range.start, range.end, call.sort !== false);
   const beforeTotals = inventoryOrganizationTotals(cells(win));
   const untouched = cells(win).map((stack, index) => index < range.start || index >= range.end ? organizationSlotState(stack) : null);

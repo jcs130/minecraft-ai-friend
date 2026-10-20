@@ -17,13 +17,19 @@ function rig(version = '1.21.1') {
   vi.useFakeTimers(); vi.setSystemTime(100000);
   const registry = mf('prismarine-registry')(version), Item = mf('prismarine-item')(registry);
   const controller = new AbortController(), clicks: any[] = [], closes: number[] = [], notes: any[] = [];
-  let stateId = 0, afterAck: (() => void) | undefined, acknowledge = true;
+  let stateId = 0, afterAck: (() => void) | undefined, acknowledge = true, rejectedSlot: number | undefined;
+  let authoritative: { items: unknown[]; carriedItem: unknown };
   const client = Object.assign(new EventEmitter(), { write(name: string, packet: any) {
     if (name === 'close_window') closes.push(packet.windowId);
     if (name !== 'window_click') return;
     clicks.push(packet);
     queueMicrotask(() => {
       if (!acknowledge) return;
+      if (packet.slot === rejectedSlot) {
+        client.emit('window_items', { windowId: (bot.currentWindow ?? bot.inventory).id,
+          stateId: ++stateId, ...structuredClone(authoritative) });
+        return;
+      }
       full(bot.currentWindow ?? bot.inventory, packet.cursorItem);
       afterAck?.();
     });
@@ -35,8 +41,10 @@ function rig(version = '1.21.1') {
   });
   mf('mineflayer/lib/plugins/inventory.js')(bot, { hideErrors: true });
   installInventoryWindowSyncGuard(bot); installInventoryClickSync(bot);
-  const full = (win: any, cursor: any = Item.toNotch(win.selectedItem)) => client.emit('window_items', {
-    windowId: win.id, stateId: ++stateId, items: win.slots.map((it: any) => Item.toNotch(it)), carriedItem: cursor });
+  const full = (win: any, cursor: any = Item.toNotch(win.selectedItem)) => {
+    authoritative = structuredClone({ items: win.slots.map((it: any) => Item.toNotch(it)), carriedItem: cursor });
+    client.emit('window_items', { windowId: win.id, stateId: ++stateId, ...structuredClone(authoritative) });
+  };
   const item = (name: string, count = 1) => new Item(registry.itemsByName[name].id, count);
   const named = (name: string, title: string, count = 1) => Item.fromNotch({ itemCount: count,
     itemId: registry.itemsByName[name].id, addedComponentCount: 1, removedComponentCount: 0, removeComponents: [],
@@ -59,6 +67,7 @@ function rig(version = '1.21.1') {
   return { bot, ctx, item, named, put, full, open, clicks, closes, notes, controller,
     onAck: (callback: () => void) => { afterAck = callback; },
     acknowledge: (enabled: boolean) => { acknowledge = enabled; },
+    rejectSlot: (slot: number) => { rejectedSlot = slot; },
     start: (args: any = {}) => skillOrganize(bot, { skill: 'organize', ...args }, ctx),
   };
 }
@@ -91,6 +100,60 @@ describe('portable organization planner', () => {
 });
 
 describe('native organization with server-confirmed slots and cursor', () => {
+  it.each(['1.21.1', '1.20.6'])('does not reorder unrelated slots after a toss-only rule on %s', async version => {
+    const r = rig(version), bag = r.bot.inventory;
+    r.put(9, 'player_head'); r.put(15, 'rotten_flesh', 11); r.put(18, 'bread', 14); r.full(bag);
+    r.rejectSlot(9);
+    const head = inventoryOrganizationKey(bag.slots[9]);
+    const operation = r.start({ rules: [{ item: 'rotten_flesh', keep: 0, action: 'toss' }] })
+      .then(value => ({ value, error: null }), error => ({ value: null, error }));
+    setTimeout(() => r.bot.emit('physicsTick'), 20);
+    const result = await complete(operation) as Awaited<typeof operation>;
+    expect(result.error).toBeNull();
+    expect(result.value).toContain('抛出腐肉×11');
+    expect(r.clicks.map(c => [c.slot, c.mode])).toEqual([[15, 4]]);
+    expect(inventoryOrganizationKey(bag.slots[9])).toBe(head);
+    expect(bag.slots[18].name).toBe('bread'); expect(bag.slots[18].count).toBe(14);
+    expect(bag.slots[15]).toBeNull(); expect(bag.selectedItem).toBeNull();
+    expect(inventoryClickState(r.bot).phase).toBe('ready');
+  });
+  it('does not merge unrelated stacks when all disposition rules are already satisfied', async () => {
+    const r = rig(); r.put(9, 'stone', 12); r.put(10, 'stone', 12); r.full(r.bot.inventory);
+    await complete(r.start({ rules: [{ item: 'rotten_flesh', keep: 0, action: 'toss' }] }));
+    expect(r.clicks).toEqual([]);
+    expect(r.bot.inventory.slots[9].count).toBe(12); expect(r.bot.inventory.slots[10].count).toBe(12);
+  });
+  it('previews only explicit disposition unless arrangement was explicitly requested', async () => {
+    const r = rig(); r.put(9, 'stone', 12); r.put(10, 'dirt', 8); r.put(11, 'stone', 12); r.full(r.bot.inventory);
+    const rules = [{ item: 'rotten_flesh', keep: 0, action: 'toss' }];
+    const implicit = JSON.parse(await complete(r.start({ rules, dryRun: true })) as string);
+    expect(implicit.plan.moves).toEqual([]); expect(implicit.plan.expectedFree).toBe(implicit.plan.beforeFree);
+    const merge = JSON.parse(await complete(r.start({ rules, sort: false, dryRun: true })) as string);
+    expect(merge.plan.merges).toBe(1); expect(merge.plan.swaps).toBe(0);
+    const sort = JSON.parse(await complete(r.start({ rules, sort: true, dryRun: true })) as string);
+    expect(sort.plan.merges).toBe(1); expect(sort.plan.swaps).toBeGreaterThan(0);
+    expect(r.clicks).toEqual([]);
+  });
+  it('stows the selected surplus without then moving an unrelated server shortcut or food', async () => {
+    const r = rig(), bag = r.bot.inventory;
+    r.put(9, 'player_head'); r.put(10, 'cobblestone', 11); r.put(18, 'bread', 14); r.full(bag);
+    r.rejectSlot(9);
+    await complete(r.start({ rules: [{ item: 'cobblestone', keep: 0, action: 'stow' }], at: [1, 64, 0] }));
+    expect(bag.slots[9].name).toBe('player_head'); expect(bag.slots[18].name).toBe('bread');
+    expect(bag.slots[18].count).toBe(14); expect(bag.selectedItem).toBeNull();
+    expect(inventoryClickState(r.bot).phase).toBe('ready'); expect(r.closes).toEqual([1]);
+    expect(r.clicks.every(c => c.windowId === 1)).toBe(true);
+  });
+  it.each([false, true])('still executes explicitly selected sort:%s after rules', async sort => {
+    const r = rig(), bag = r.bot.inventory;
+    r.put(9, 'stone', 12); r.put(10, 'dirt', 8); r.put(11, 'stone', 12); r.full(bag);
+    const totals = inventoryOrganizationTotals(bag.slots);
+    await complete(r.start({ sort, rules: [{ item: 'rotten_flesh', keep: 0, action: 'toss' }] }));
+    expect(r.notes.at(-1).data.merges).toBe(1);
+    expect(r.notes.at(-1).data.swaps).toBe(sort ? 1 : 0);
+    expect(bag.slots[9].name).toBe(sort ? 'dirt' : 'stone');
+    expect(inventoryOrganizationTotals(bag.slots)).toBe(totals); expect(bag.selectedItem).toBeNull();
+  });
   it.each(['1.21.1', '1.20.6'])('merges and sorts the main bag on %s without changing quickbar, equipment or totals', async version => {
     const r = rig(version);
     r.put(9, 'dirt', 12); r.put(10, 'stone', 55); r.put(11, 'stone', 15);
