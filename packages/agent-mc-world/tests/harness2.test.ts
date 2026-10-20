@@ -4,6 +4,7 @@ import {tmpdir} from 'node:os';
 import {describe,it,expect} from 'vitest';
 import {assessPracticeTrial,gatePracticeCandidate,MethodPracticeExecutor,PracticeUnknownEffect,type PracticeTrial} from '../src/learning/practice.ts';
 import {Harness2Runner,type Harness2Job} from '../src/decisions/harness2.ts';
+import {createHarness2Monitor} from '../src/decisions/harness2-monitor.ts';
 import {physicsPractice,STEP_CODE} from './harness2-fixture.ts';
 import {procedureHash} from '../core/support/procedure.ts';
 import {GameMemoryBook} from '../core/game-memory.ts';
@@ -95,6 +96,12 @@ describe('host bridge lifecycle',()=>{
       const before=p.stats();expect(await new Harness2Runner(options).run(job)).toEqual(result);expect(p.stats()).toEqual(before);expect(calls).toBe(1);
       const journal=readFileSync(join(dir,job.id,'journal.json'),'utf8');
       expect(JSON.parse(journal).status).toBe('completed');expect(journal).not.toContain('Only game metadata');
+      const view=createHarness2Monitor({directory:dir,jobs:[job]}).snapshot().jobs[0];
+      expect(view).toMatchObject({status:'completed',phase:'settled',memory:'stored',modelCalls:1,trials:4,
+        result:{eligible:true,adopted:false},usage:{inputTokens:null,outputTokens:null,cachedTokens:null}});
+      expect(view.timeline.filter(t=>t.role==='baseline')).toHaveLength(2);
+      expect(view.timeline.filter(t=>t.group==='holdout')).toHaveLength(2);
+      expect(JSON.stringify(view)).not.toContain('return 42');
       await expect(runner.run({...job,task:'changed'})).rejects.toThrow('identity/configuration changed');
       expect(await new Harness2Runner(options).run(job)).toEqual(result);
     }finally{rmSync(dir,{recursive:true,force:true});}

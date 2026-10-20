@@ -54,11 +54,18 @@ export interface Harness2Options {
   /** Optional explicit bridge into the host's existing game-memory system. No auto-adoption. */
   remember?(result: Harness2Result, signal: AbortSignal): Promise<void>;
 }
-interface RpcRecord { kind: 'model' | 'trial'; phase: 'pending' | 'returned'; hash: string; value?: unknown }
+interface RpcRecord { kind: 'model' | 'trial'; phase: 'pending' | 'returned'; hash: string; value?: unknown;
+  startedAt?: number; endedAt?: number; caseId?: string; group?: 'train' | 'holdout'; role?: 'baseline' | 'candidate' }
+export type Harness2Phase = 'preparing' | 'propose' | 'probe' | 'compose' | 'select' | 'reflect' | 'holdout' | 'remember' | 'settled';
+export interface Harness2Progress {
+  scopeHash: string; configurationHash: string; startedAt: number; updatedAt: number; endedAt: number | null; phase: Harness2Phase;
+  budget: Harness2Job['budget']; mode: Harness2Job['mode']; k: number;
+}
 interface Journal {
   schema: typeof HARNESS2_SCHEMA; jobHash: string; status: 'running' | 'completed' | 'blocked' | 'failed';
   modelCalls: number; trials: number; rpc: Record<string,RpcRecord>; result?: Harness2Result;
   reason?: string; memory: 'pending' | 'stored' | 'disabled';
+  progress?: Harness2Progress;
 }
 
 function abortable<T>(work: Promise<T>,signal: AbortSignal): Promise<T> {
@@ -99,6 +106,7 @@ export class Harness2Runner {
   async run(job: Harness2Job, signal?: AbortSignal): Promise<Harness2Result> {
     validateJob(job);
     job=structuredClone(job);
+    const configurationHash=procedureHash(job);
     const binding = structuredClone(this.options.practice.binding);
     if (binding.isolated!==true || binding.instanceId===job.sourceInstanceId
       || binding.realm===job.scope.realm) throw Error('Practice requires a separate instance and realm from the source Agent');
@@ -110,13 +118,17 @@ export class Harness2Runner {
     const journalFile = join(directory,'journal.json'), lockFile = join(directory,'run.lock');
     const lock = openSync(lockFile,'wx'); this.running = true;
     let journal: Journal = {schema:HARNESS2_SCHEMA,jobHash,status:'running',modelCalls:0,trials:0,rpc:{},memory:this.options.remember?'pending':'disabled'};
-    const save = () => { const temp=join(directory,`${randomUUID()}.tmp`); writeFileSync(temp,JSON.stringify(journal),{flag:'wx',mode:0o600}); renameSync(temp,journalFile); };
+    const save = () => {
+      if(journal.progress) journal.progress.updatedAt=Date.now();
+      const temp=join(directory,`${randomUUID()}.tmp`); writeFileSync(temp,JSON.stringify(journal),{flag:'wx',mode:0o600}); renameSync(temp,journalFile);
+    };
     let child: ReturnType<typeof spawn> | undefined;
     const controller = new AbortController();
     const abort = () => controller.abort(Error('Harness2 cancelled'));
     signal?.addEventListener('abort',abort,{once:true}); if (signal?.aborted) abort();
     const timer = setTimeout(()=>controller.abort(Error('Harness2 wall budget exhausted')),job.budget.wallMs);
     let fatal = false;
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
     let queue: Promise<unknown> = Promise.resolve();
     try {
       const contextFile=join(directory,'game-context.json');
@@ -147,7 +159,11 @@ export class Harness2Runner {
         journal.status='blocked'; journal.reason='explicit-reconciliation-required'; save();
         throw Error('Previous job is incomplete; inspect original evidence before explicitly starting a new job');
       }
+      journal.progress={scopeHash:procedureHash(job.scope),configurationHash,startedAt:Date.now(),updatedAt:Date.now(),endedAt:null,
+        phase:'preparing',budget:job.budget,mode:job.mode,k:job.k};
       ownsJournal=true;save();
+      heartbeat=setInterval(()=>{try{if(ownsJournal&&journal.status==='running')save();}
+        catch{controller.abort(Error('Experiment journal is unavailable'));}},5000); heartbeat.unref();
       const execute = async (label: string,candidate: PracticeCandidate,fixture: PracticeCase) => {
         controller.signal.throwIfAborted(); if (fatal) throw Error('Job stopped'); validatePracticeCandidate(candidate);
         const trialId=procedureHash({jobHash,label}), hash=procedureHash({candidate,fixture});
@@ -158,13 +174,17 @@ export class Harness2Runner {
         }
         if (journal.trials>=job.budget.trials) throw Error('Practice trial budget exhausted');
         journal.trials++;
-        journal.rpc[trialId]={kind:'trial',phase:'pending',hash}; save();
+        const startedAt=Date.now(), group=label.startsWith('holdout:')?'holdout':'train';
+        const role=group==='holdout'?(label.endsWith(':baseline')?'baseline':'candidate')
+          :label.split('/').at(-1)?.startsWith('base')?'baseline':'candidate';
+        if(journal.progress)journal.progress.phase=group==='holdout'?'holdout':'probe';
+        journal.rpc[trialId]={kind:'trial',phase:'pending',hash,startedAt,caseId:fixture.id,group,role}; save();
         try {
           const trial=await abortable(this.options.practice.execute({trialId,methodId:job.methodId,candidate,fixture,durationMs:job.budget.trialMs},controller.signal),controller.signal);
           if (trial.trialId!==trialId || trial.candidateHash!==procedureHash(candidate) || procedureHash(trial.binding)!==procedureHash(binding)
             || trial.caseId!==fixture.id || trial.cleanup!=='settled') throw Error('Practice evidence identity mismatch');
           const assessment=assessPracticeTrial(trial,fixture,binding);
-          journal.rpc[trialId]={kind:'trial',phase:'returned',hash,value:{trial,assessment}}; save();
+          journal.rpc[trialId]={...journal.rpc[trialId],phase:'returned',endedAt:Date.now(),value:{trial,assessment}}; save();
           return {trial,assessment};
         } catch (error) { fatal=true; journal.status='blocked'; journal.reason='trial-effect-or-cleanup-unknown'; save(); controller.abort(); throw error; }
       };
@@ -184,7 +204,10 @@ export class Harness2Runner {
         if(journal.rpc[request.id])throw Error('Duplicate model invocation is not authorized');
         if (journal.modelCalls>=job.budget.modelCalls) throw Error('Model call budget exhausted');
         journal.modelCalls++;
-        journal.rpc[request.id]={kind:'model',phase:'pending',hash:procedureHash(request)}; save();
+        const label=String(message.label);
+        if(journal.progress)journal.progress.phase=label.startsWith('select.')?'select':label.startsWith('experience.')?'reflect'
+          :label.startsWith('agg')?'compose':'propose';
+        journal.rpc[request.id]={kind:'model',phase:'pending',hash:procedureHash(request),startedAt:Date.now()}; save();
         const reply=await abortable(this.options.model.generate(request,controller.signal),controller.signal);
         controller.signal.throwIfAborted();
         if (!reply || Buffer.byteLength(JSON.stringify(reply))>40000) throw Error('Invalid bounded model reply');
@@ -192,7 +215,7 @@ export class Harness2Runner {
         const usage=reply.usage;
         const metadata=usage ? Object.fromEntries(['inputTokens','outputTokens','cachedTokens'].map(k=>{
           const v=usage[k as keyof typeof usage]; return [k,Number.isSafeInteger(v)&&Number(v)>=0?v:null]; })) : null;
-        journal.rpc[request.id]={kind:'model',phase:'returned',hash:procedureHash(request),value:{usage:metadata,replyHash:procedureHash(reply)}}; save();
+        journal.rpc[request.id]={...journal.rpc[request.id],phase:'returned',endedAt:Date.now(),value:{usage:metadata,replyHash:procedureHash(reply)}}; save();
         return reply;
       };
       child=spawn(this.options.worker.command,[...(this.options.worker.args??[]),this.options.worker.script??harness2WorkerPath()],{
@@ -255,16 +278,20 @@ export class Harness2Runner {
         train:{baseline:base,candidate:chosen.assessment},holdout,gate,experience,
         evidenceRefs:Object.entries(journal.rpc).filter(([,r])=>r.kind==='trial'&&r.phase==='returned').map(([id])=>id),adopted:false};
       // A host memory failure cannot cause a repeated game trial on restart.
-      journal.result=result; journal.status='completed'; save();
+      journal.result=result; journal.status='completed';
+      if(journal.progress){journal.progress.phase=this.options.remember?'remember':'settled';journal.progress.endedAt=Date.now();}save();
       if (this.options.remember) { try { await abortable(this.options.remember(structuredClone(result),controller.signal),controller.signal); journal.memory='stored'; save(); } catch { /* pending: host can retry memory delivery by jobHash, without replaying practice */ } }
+      if(journal.progress)journal.progress.phase='settled';save();
       return structuredClone(result);
     } catch (error) {
       if (ownsJournal && journal.jobHash===jobHash && journal.status==='running') {
         const unknown=Object.values(journal.rpc).some(r=>r.kind==='trial'&&r.phase==='pending');
+        if(journal.progress&&!unknown)journal.progress.endedAt=Date.now();
         journal.status=unknown?'blocked':'failed'; journal.reason=unknown?'trial-effect-or-cleanup-unknown':controller.signal.aborted?'cancelled-or-budget-exhausted':'worker-or-model-failure'; save();
       }
       throw error;
     } finally {
+      if(heartbeat)clearInterval(heartbeat);
       clearTimeout(timer); signal?.removeEventListener('abort',abort); child?.stdin?.end(); child?.kill();
       closeSync(lock); unlinkSync(lockFile); this.running=false;
     }

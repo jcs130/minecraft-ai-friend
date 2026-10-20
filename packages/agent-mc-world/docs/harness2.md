@@ -87,6 +87,16 @@ const result = await runner.run({
 
 元数据账本不记录宿主会话提示、回答、思考正文、聊天或凭据。独立工作目录会保存本次明确提供的游戏任务/召回经验、生成的方法源码/参数和结构化经验，这是可审查的方法产物，不是额外采集私人会话。不要把私人会话、角色资料或环境变量交给 model port。worker 不继承模型凭据。
 
+## 只读实验可视化
+
+`createHarness2Monitor({directory,jobs})` 从 `/decisions` 公开导出。传入明确允许展示的任务列表，复用一个 monitor 的 `snapshot()` 接入 `ClientConsolePort.experiments`，共享面板 `/#experiments` 显示过程和结果。每个宿主统一两秒采样，多个网页不增加文件读取；不会扫描目录、运行任务、调用模型或采用方法。
+
+公开契约是 `agent-mc.experiments/v1`：阶段、调用与执行预算、输入/缓存/输出 token 与用量覆盖、实际试跑记录、基线/候选/留出观测、验证门槛及游戏记忆投递状态。只投影白名单元数据，不输出完整 journal、提示词、回答、思考正文、方法源码或凭据。缺失 token 保持 null，失败、未决效果与未达成目标分别显示。隔离试跑通过始终标注未在线采用。
+
+运行账本五秒写入一次心跳，超过20秒没有更新的运行状态展示为未知，不能据此重放。在已完成记录里展示历史结果，不冒充当前运行状态。尚未开始的任务不伪造零用量。旧版没有 scope/心跳证据的 journal 保留为未知，不自动迁移或补跑。公开 projection 绑定已配置的 realm/account/agent 哈希。
+
+默认面板禁止嵌入。宿主可显式允许精确的 loopback HTTP 或 `dsh-app://app` 桌面来源；CSP 仅放行该父页面，跨来源 API、控制 nonce、Host 与实例隔离检查保持启用。Java1.21.1 主维护，1.20.6 显式兼容构建。
+
 ## 验证与回退
 
 默认单元测试不需要模型、Python或网络：`vitest run tests/harness2.test.ts`。设置 `HARNESS2_TEST_WORKER` 为 worker JSON 后，`tests/harness2-upstream.test.ts` 执行原版算法、实际物理、两个递归模式、反思及恢复检查，使用明确标记的确定性模型替身；它不证明真实 LLM 提升。

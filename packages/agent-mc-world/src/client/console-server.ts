@@ -4,12 +4,14 @@ import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { accountCss, accountPage, accountScript } from './account-page.ts';
+import type { ExperimentsSnapshot } from '../decisions/harness2-monitor.ts';
 
 export interface ClientConsolePort {
   operatorState(): Promise<unknown>;
   operatorAction(action: string): Promise<void>;
   metrics: { snapshot(phase: string): unknown };
   status(): { phase: string };
+  experiments?(): ExperimentsSnapshot;
 }
 const actions = new Set(['connect', 'disconnect', 'observer.start', 'observer.stop', 'player.start', 'player.stop']);
 export interface ClientConsolePresentation {
@@ -18,9 +20,10 @@ export interface ClientConsolePresentation {
 }
 function embeddingPolicy(origins: readonly string[] = []) {
   for (const origin of origins) {
+    if(origin==='dsh-app://app')continue;
     const value = new URL(origin);
     if (value.origin !== origin || value.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(value.hostname)
-      || !value.port || value.username || value.password) throw new Error('Console embedding requires an exact loopback HTTP origin.');
+      || !value.port || value.username || value.password) throw new Error('Console embedding requires an exact loopback HTTP or owned DSH Desktop origin.');
   }
   return origins.length ? [...new Set(origins)].join(' ') : "'none'";
 }
@@ -45,6 +48,9 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
     files = new Map();
   }
   let closing = false;
+  for(const name of ['experiments.js','experiments.css']){
+    try{files.set('/'+name,await readFile(join(assets,name)));}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}
+  }
   const accountPath = `/account/${instanceId}`;
   files.set(accountPath, Buffer.from(accountPage));
   files.set('/account.js', Buffer.from(accountScript));
@@ -58,8 +64,12 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
         'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' });
       response.end(JSON.stringify(body));
     };
+    // An owned Desktop document is cross-site to HTTP loopback. Allow only its
+    // iframe navigation, constrained by frame-ancestors, never cross-site APIs.
+    const embeddedNavigation=ancestors!=="'none'"&&request.method==='GET'&&request.url==='/'&&!request.headers.origin
+      &&request.headers['sec-fetch-mode']==='navigate'&&request.headers['sec-fetch-dest']==='iframe';
     if (request.headers.host !== expected || request.headers.origin && request.headers.origin !== origin
-      || request.headers['sec-fetch-site'] === 'cross-site') { json(403, { error: 'Local operator access only.' }); return; }
+      || request.headers['sec-fetch-site'] === 'cross-site'&&!embeddedNavigation) { json(403, { error: 'Local operator access only.' }); return; }
     try {
       if (request.method === 'GET') {
         if (request.url === '/api/client') {
@@ -67,6 +77,9 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
           json(200, { ...await runtime.operatorState() as object, instanceId, webConsoleAvailable: files.has('/'), controlToken: token, operations: Object.fromEntries(operations) }); return;
         }
         if (request.url === '/api/harness/metrics') { json(200, runtime.metrics.snapshot(runtime.status().phase)); return; }
+        if (request.url === '/api/experiments') {
+          json(200,runtime.experiments?.()??{schema:'agent-mc.experiments/v1',sampledAt:Date.now(),enabled:false,scope:'isolated-practice-only',jobs:[]});return;
+        }
         const file = files.get(request.url ?? '');
         if (!file && (request.url === '/' || request.url === '/metrics')) {
           json(503, { error: '本构建未包含网页控制台；SDK/MCP 仍可用。准备匹配的 viewer 资源包后重新构建可启用网页。' }); return;

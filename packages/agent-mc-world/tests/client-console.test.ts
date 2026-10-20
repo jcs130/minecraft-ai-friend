@@ -44,7 +44,24 @@ it('embeds only for explicit local host pages without authorizing cross-origin c
   expect((await fetch(app.url+'api/client', {headers:{origin:'http://127.0.0.1:17850'}})).status).toBe(403);
   expect(app.runtime.operatorAction).not.toHaveBeenCalled();
 });
-it.each(['*','http://remote.test:17850','http://127.0.0.1:17850/','http://127.0.0.1:17850; script-src *', 'https://127.0.0.1:17850'])('refuses unsafe embedding policy %s before opening a port', async origin => {
+it('accepts the precise Desktop frame origin without granting its cross-origin APIs',async()=>{
+  const app=await setup(undefined,true,['dsh-app://app']);
+  expect((await fetch(app.url)).headers.get('content-security-policy')).toContain('frame-ancestors dsh-app://app;');
+  expect((await app.post('{"action":"connect"}',{origin:'dsh-app://app'})).status).toBe(403);
+  const snapshot=await(await fetch(app.url+'api/experiments')).json();
+  expect(snapshot).toMatchObject({schema:'agent-mc.experiments/v1',enabled:false,jobs:[]});
+  expect((await fetch(app.url+'api/experiments',{headers:{origin:'dsh-app://app'}})).status).toBe(403);
+  const headers={'sec-fetch-site':'cross-site','sec-fetch-mode':'navigate','sec-fetch-dest':'iframe'};
+  const request=(path:string,extra={})=>new Promise<number>((resolve,reject)=>{
+    get(app.url+path,{headers:{...headers,...extra}},res=>{res.resume();resolve(res.statusCode!);}).on('error',reject);
+  });
+  expect(await request('')).toBe(200);
+  expect(await request('api/experiments')).toBe(403);
+  expect(await request('api/client')).toBe(403);
+  expect(await request('',{'sec-fetch-dest':'document'})).toBe(403);
+  expect(app.runtime.operatorAction).not.toHaveBeenCalled();
+});
+it.each(['*','http://remote.test:17850','http://127.0.0.1:17850/','http://127.0.0.1:17850; script-src *', 'https://127.0.0.1:17850','dsh-app://app/','dsh-app://other','dsh-app:','null'])('refuses unsafe embedding policy %s before opening a port', async origin => {
   await expect(serveClientConsole(0, {} as never, undefined, undefined, {embedOrigins:[origin]})).rejects.toThrow();
 });
 it('keeps the local control API usable without optional viewer assets', async () => {
