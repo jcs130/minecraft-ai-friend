@@ -1,5 +1,7 @@
 # QwenPaw ↔ Numen
 
+0.3.0原生日常已实现；当前因普通索敌会暴露遮挡生物而暂停，内容插件修复已通过21项Paper检查，等待本次重启批准。机制、真实行动与验收边界见 [自主日常与索敌修复](../../../docs/QWENPAW_COGNITION.md#2026-10-21-自主日常与普通索敌修复)。
+
 0.2.1已正式启用原生异步子任务、独立复盘会话、只读快照、Scroll跨会话检索和当前PowerContext接口适配；补齐稍后启用角色时的快照工具注册。配置、权限、验证和需要正常重启QwenPaw的原因见 [多会话认知接入](../../../docs/QWENPAW_COGNITION.md)。只重启QwenPaw，Paper不需重启。
 
 原生游戏频道位于 `native_plugin/`，入门Skill在 `skills/qiandengji-start/`。固定QwenPaw2.2.2；接入、限制、隔离验证和回退见 [原生游戏接入](../../../docs/QWENPAW_NATIVE_GAME.md)。常规检查可用该版本的Python执行 `python -m unittest discover -s . -p "test_*.py"`，6项独立联机检查默认跳过。

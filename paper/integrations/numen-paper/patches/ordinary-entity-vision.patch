@@ -1,0 +1,223 @@
+diff --git a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/CombatGameTests.java b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/CombatGameTests.java
+index 7b457f8..0910a0d 100644
+--- a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/CombatGameTests.java
++++ b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/CombatGameTests.java
+@@ -29,6 +29,47 @@ public class CombatGameTests {
+         settleWorld(level, Difficulty.NORMAL, MIDNIGHT);
+     }
+ 
++    /** 索敌和逃跑本能只报告可见威胁,不能因为地底僵尸而追进地面或绕路。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_combat")
++    public static void ordinary_threats_exclude_underground_and_invisible_zombies(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_threat", new BlockPos(3, 2, 3), false);
++        Zombie open = visionZombie(helper, new BlockPos(5, 2, 7));
++        Zombie underground = visionZombie(helper, new BlockPos(9, -3, 3));
++        Zombie invisible = visionZombie(helper, new BlockPos(5, 2, 5));
++        invisible.setInvisible(true);
++        for (int x = 7; x <= 11; x++) {
++            for (int z = 1; z <= 5; z++) {
++                helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, 0, z)),
++                        net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());
++            }
++        }
++        var found = Menace.hostilesAround(companion, 16);
++        helper.assertTrue(found.contains(open), "visible zombie missing from threats");
++        helper.assertTrue(!found.contains(underground), "underground zombie leaked into threats");
++        helper.assertTrue(!found.contains(invisible), "invisible zombie leaked into threats");
++        ToolRun scan = lua(companion, "numen.scan.entities('hostile', {radius = 16})");
++        succeedWhen(helper, () -> {
++            helper.assertTrue(scan.succeeded(), "hostile scan has not finished");
++            var ids = new java.util.HashSet<Integer>();
++            valueIn(scan.reply()).getAsJsonArray().forEach(row -> ids.add(row.getAsJsonObject().get("id").getAsInt()));
++            helper.assertTrue(ids.contains(open.getId()) && !ids.contains(underground.getId())
++                    && !ids.contains(invisible.getId()), "hostile scan leaked hidden zombie: " + scan.reply());
++            List.of(open, underground, invisible).forEach(net.minecraft.world.entity.Entity::discard);
++            CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        });
++    }
++
++    private static Zombie visionZombie(GameTestHelper helper, BlockPos relative) {
++        Zombie zombie = EntityType.ZOMBIE.create(helper.getLevel());
++        BlockPos at = helper.absolutePos(relative);
++        zombie.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
++        zombie.setNoAi(true);
++        zombie.setNoGravity(true);
++        zombie.setPersistenceRequired();
++        helper.getLevel().addFreshEntity(zombie);
++        return zombie;
++    }
++
+     /**
+      * 走位带:她该稳在「它够不着我」与「我够得着它」之间,而且真的能砍到。
+      *
+diff --git a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java
+index 17080fd..1494be4 100644
+--- a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java
++++ b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java
+@@ -154,6 +154,88 @@ public class PerceptionGameTests {
+         return rowOf(scan, entity) != null;
+     }
+ 
++    /** 墙后与隐身的生物连编号、坐标和数量都不进入扫描,可见者仍保留。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_perception")
++    public static void scan_entities_excludes_occluded_and_invisible_entities(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_vision", new BlockPos(3, 2, 3), false);
++        Pig open = visionPig(helper, new BlockPos(5, 2, 7));
++        Pig hidden = visionPig(helper, new BlockPos(10, 2, 3));
++        Pig invisible = visionPig(helper, new BlockPos(5, 2, 5));
++        invisible.setInvisible(true);
++        for (int y = 2; y <= 5; y++) {
++            for (int z = 0; z <= 6; z++) {
++                helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(8, y, z)),
++                        Blocks.STONE.defaultBlockState());
++            }
++        }
++        ToolRun all = lua(companion, "numen.scan.entities('all', {radius = 16})");
++        ToolRun passive = lua(companion, "numen.scan.entities('passive', {radius = 16})");
++        succeedWhen(helper, () -> {
++            for (ToolRun result : List.of(all, passive)) {
++                helper.assertTrue(result.succeeded(), "scan did not finish: " + result.receipt());
++                helper.assertTrue(listsEntity(result, open), "visible pig missing: " + result.reply());
++                helper.assertTrue(!listsEntity(result, hidden), "wall leaked the pig: " + result.reply());
++                helper.assertTrue(!listsEntity(result, invisible), "invisible pig leaked: " + result.reply());
++            }
++            List.of(open, hidden, invisible).forEach(net.minecraft.world.entity.Entity::discard);
++            CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        });
++    }
++
++    /** 地面完整时看不到地底生物,挪到无遮挡位置后下一次扫描才报告。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_perception")
++    public static void scan_entities_rechecks_sight_after_target_moves(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_vision2", new BlockPos(3, 2, 3), false);
++        for (int x = 7; x <= 11; x++) {
++            for (int z = 1; z <= 5; z++) {
++                helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, 0, z)),
++                        Blocks.STONE.defaultBlockState());
++            }
++        }
++        Pig underground = visionPig(helper, new BlockPos(9, -3, 3));
++        ToolRun before = lua(companion, "numen.scan.entities('all', {radius = 16})");
++        java.util.concurrent.atomic.AtomicReference<ToolRun> after = new java.util.concurrent.atomic.AtomicReference<>();
++        steps(helper).thenWaitUntil(() -> {
++            helper.assertTrue(before.succeeded(), "scan has not finished");
++            helper.assertTrue(!listsEntity(before, underground), "ground leaked underground entity: " + before.reply());
++        }).thenExecute(() -> {
++            BlockPos open = helper.absolutePos(new BlockPos(5, 2, 3));
++            underground.moveTo(open.getX() + 0.5, open.getY(), open.getZ() + 0.5, 0, 0);
++            after.set(lua(companion, "numen.scan.entities('all', {radius = 16})"));
++        }).thenWaitUntil(() -> {
++            helper.assertTrue(after.get().succeeded(), "second scan has not finished");
++            helper.assertTrue(listsEntity(after.get(), underground), "newly visible entity missing: " + after.get().reply());
++        }).thenExecute(() -> {
++            underground.discard();
++            CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        }).thenSucceed();
++    }
++
++    /** 观战账号不能出现在普通玩家扫描中。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_perception")
++    public static void scan_entities_excludes_spectators(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_vision3", new BlockPos(3, 2, 3), false);
++        NumenPlayer observer = spawnAt(helper, "gametest_eye", new BlockPos(5, 2, 3), false);
++        observer.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
++        ToolRun scan = lua(companion, "numen.scan.entities('player', {radius = 16})");
++        succeedWhen(helper, () -> {
++            helper.assertTrue(scan.succeeded(), "scan has not finished");
++            helper.assertTrue(!listsEntity(scan, observer), "spectator leaked: " + scan.reply());
++            CompanionFactory.despawn(helper.getLevel().getServer(), observer);
++            CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        });
++    }
++
++    private static Pig visionPig(GameTestHelper helper, BlockPos relative) {
++        Pig pig = EntityType.PIG.create(helper.getLevel());
++        BlockPos at = helper.absolutePos(relative);
++        pig.moveTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, 0, 0);
++        pig.setNoAi(true);
++        pig.setNoGravity(true);
++        helper.getLevel().addFreshEntity(pig);
++        return pig;
++    }
++
+     /** {@code numen.scan.entities} 的这一页里这只实体的那一行;没列出为 null。 */
+     private static com.google.gson.JsonObject rowOf(ToolRun scan, net.minecraft.world.entity.Entity entity) {
+         for (var row : valueIn(scan.reply()).getAsJsonArray()) {
+diff --git a/numen/common/src/main/java/com/dwinovo/numen/combat/Menace.java b/numen/common/src/main/java/com/dwinovo/numen/combat/Menace.java
+index 8eba9b8..b91ba24 100644
+--- a/numen/common/src/main/java/com/dwinovo/numen/combat/Menace.java
++++ b/numen/common/src/main/java/com/dwinovo/numen/combat/Menace.java
+@@ -201,9 +201,13 @@ public final class Menace {
+         return entity instanceof Enemy;
+     }
+ 
+-    /** 半径内所有活着的敌对生物,不管它有没有盯上她。 */
++    /** 半径内看得见的活敌对生物;本能与寻路威胁场也不能通过地面探知地下生物。 */
+     public static List<Mob> hostilesAround(Entity self, double radius) {
+-        return NearbyEntities.within(self, radius, Mob.class, m -> hostile(m) && m.isAlive());
++        if (!(self instanceof LivingEntity observer)) {
++            return List.of();
++        }
++        return NearbyEntities.within(self, radius, Mob.class,
++                m -> hostile(m) && m.isAlive() && NearbyEntities.visibleTo(observer, m));
+     }
+ 
+     /**
+diff --git a/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java b/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java
+index f2eab4b..12b8693 100644
+--- a/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java
++++ b/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java
+@@ -1,6 +1,8 @@
+ package com.dwinovo.numen.scan;
+ 
+ import net.minecraft.world.entity.Entity;
++import net.minecraft.world.entity.LivingEntity;
++import net.minecraft.world.entity.player.Player;
+ 
+ import java.util.List;
+ import java.util.function.Predicate;
+@@ -16,6 +18,12 @@ public final class NearbyEntities {
+ 
+     private NearbyEntities() {}
+ 
++    /** 普通视觉不报告隔墙、隐身或观战实体;在生成坐标与数量之前过滤,不把隐藏目标交给模型。 */
++    public static boolean visibleTo(LivingEntity self, Entity target) {
++        boolean invisible = self instanceof Player player ? target.isInvisibleTo(player) : target.isInvisible();
++        return !target.isSpectator() && !invisible && self.hasLineOfSight(target);
++    }
++
+     /** {@code self} 半径 {@code radius} 格以内(按两者位置的距离)、类型为 {@code type} 且满足 {@code filter} 的实体,不含她自己。 */
+     public static <T extends Entity> List<T> within(Entity self, double radius, Class<T> type,
+                                                     Predicate<? super T> filter) {
+diff --git a/numen/common/src/main/java/com/dwinovo/numen/tools/perception/ScanApi.java b/numen/common/src/main/java/com/dwinovo/numen/tools/perception/ScanApi.java
+index 1ee55b4..fd4a063 100644
+--- a/numen/common/src/main/java/com/dwinovo/numen/tools/perception/ScanApi.java
++++ b/numen/common/src/main/java/com/dwinovo/numen/tools/perception/ScanApi.java
+@@ -143,7 +143,7 @@ public final class ScanApi {
+     /**
+      * 半径内的实体由近及远。倒下、正在消失的(死亡动画那二十来刻)不列:它已经打不着、用不了,列出来脚本会对着一具尸体再打一场。
+      */
+-    @Fn("List the entities near you, nearest first, with the ids other functions take.")
++    @Fn("List the entities you can see near you, nearest first, with the ids other functions take.")
+     @Example("numen.scan.entities(\"hostile\")")
+     @Example("numen.scan.entities({radius = 12})")
+     @Example("numen.scan.entities(\"item\", {radius = 8})")
+@@ -152,6 +152,8 @@ public final class ScanApi {
+     @Note("Instant and read-only. All of them, nearest first: each is an Entity (id, type, category, pos, distance, "
+             + "hp); a dropped item is an Item (also item, count and pickup_delay, ticks before anyone can pick it up); "
+             + "a tamed one has owner: you, your owner, or the other player's name.")
++    @Note("Ordinary vision only: blocks obstruct the line from your eyes. Hidden underground, invisible and "
++            + "spectator entities are not listed or counted. An empty list does not prove the area is clear.")
+     @Note("Hand one on as it is: `local e = numen.scan.entities(\"hostile\")[1]; numen.fight.attack(e)`, and the same "
+             + "with numen.use.entity(e) or numen.move.to(e.pos). The ids are runtime ids and do not survive a "
+             + "restart.")
+@@ -161,7 +163,8 @@ public final class ScanApi {
+         double radius = Math.clamp(args.radius().orElse((double) DEFAULT_ENTITY_RADIUS), MIN_ENTITY_RADIUS,
+                 MAX_ENTITY_RADIUS);
+         Kind filter = args.typeFilter().orElse(Kind.ALL);
+-        List<Entity> raw = NearbyEntities.within(self, radius, Entity.class, Entity::isAlive);
++        List<Entity> raw = NearbyEntities.within(self, radius, Entity.class,
++                e -> e.isAlive() && NearbyEntities.visibleTo(self, e));
+         raw = new ArrayList<>(raw);
+         raw.sort(Comparator.comparingDouble(self::distanceTo));
+         List<Seen> out = new ArrayList<>();

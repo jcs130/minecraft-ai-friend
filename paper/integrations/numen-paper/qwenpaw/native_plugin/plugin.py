@@ -35,6 +35,12 @@ REVIEW_TOOLS = frozenset({"recall_history", "memory_search", "memory_remember", 
 READ_COMMANDS = {"status": "/mycli status", "tasks": "/mycli tasks status", "skills": "/mycli skills status"}
 
 
+def daily_enabled(cfg) -> bool:
+    """Explicit host opt-in; game text and truthy strings grant no autonomy."""
+    autonomy = cfg.get("autonomy") if isinstance(cfg, dict) else None
+    return isinstance(autonomy, dict) and autonomy.get("enabled") is True
+
+
 def normalize_memory_hits(payload: dict) -> list[dict]:
     """QwenPaw 2.2.2 expects entry citations; deployed PowerContext also
     returns atomic-memory hits. Keep the actual artifact reference verbatim;
@@ -330,6 +336,10 @@ class GameEnter(HookBase):
 
     async def run(self, ctx):
         cfg = read_config(Path(ctx.workspace_dir)) if ctx.workspace_dir else None
+        meta = getattr(ctx.request, "channel_meta", None) or {}
+        if meta.get("autonomous_daily") is True and not daily_enabled(cfg):
+            return HookResult(HookAction.SHORT_CIRCUIT, Msg(name="system", role="assistant",
+                content=[TextBlock(type="text", text="自主日常已暂停，本轮未执行。")]))
         if not cfg:
             return HookResult()
         ensure_snapshot_registration(getattr(ctx, "workspace", None))
@@ -542,11 +552,19 @@ class GameChannel(BaseChannel):
         # One low-frequency native tick, no model while busy/offline, no backlog.
         if not self._enqueue or not self.lane or not self._connected or self.lane.lock.locked() or self._queued:
             return False
-        self._queued += 1
-        self._enqueue({"text": "[游戏状态检查] 先查自己的连接与当前行动；只推进已有获准目标的一个短步骤。"
+        daily = daily_enabled(self.lane.cfg)
+        text = ("[自主日常，服主已授权正常玩家玩法] 先按当前状态和待办延续未完成的小目标；没有目标时，"
+                "自行选择附近可完成的任务、补给、装备、探索或战斗，按剑士兴趣安排，不必固定种田。"
+                "先用 /mycli 按需学习，再实际推进一个短阶段并核对结果；可以正常接单、交付和领取本人的奖励。"
+                "不要只查状态后等待新指令。缺少装备去冒险者公会门口公共箱，只动公共或本人物品。"
+                "技能遵守魔力和冷却；保护拒绝按下一步处理，不挖村庄竖井。不重复未知结果的动作。"
+                "保留未完成目标和阻塞原因；必要时后台复盘、记经验，下一轮继续。安全和恢复优先，不独自远征高阶副本。"
+                if daily else
+                "[游戏状态检查] 先查自己的连接与当前行动；只推进已有获准目标的一个短步骤。"
                                "没有目标就检查生存需要并安静待机。需要经验时先 memory_search；当前库存、任务以只读查询为准。"
-                               "超时结果未知，不重放，不自动接单、领奖或开始远征。",
-                       "meta": {"heartbeat": True, "keys": []}})
+                               "超时结果未知，不重放，不自动接单、领奖或开始远征。")
+        self._queued += 1
+        self._enqueue({"text": text, "meta": {"heartbeat": True, "keys": [], "autonomous_daily": daily}})
         return True
 
     async def heartbeat_once(self) -> bool:
@@ -555,6 +573,11 @@ class GameChannel(BaseChannel):
         # Cheap authoritative preflight. A healthy, idle character need not
         # spend several full model contexts just to discover nothing to do.
         try:
+            cfg = read_config(self.lane.workspace)
+            if not cfg or any(cfg[key] != self.lane.cfg[key] for key in
+                              ("companion_uuid", "session_id", "player_name")):
+                return False
+            self.lane.cfg = cfg  # A host pause takes effect without process restart.
             raw = texts(await self.invoke("command", {"line": "/mycli status"}))
             match = re.search(r"(?:^|\n)MC_STATUS\s+(\{)", raw)
             if not match:
@@ -565,7 +588,7 @@ class GameChannel(BaseChannel):
             modes = getattr(getattr(self._workspace, "plugins", None), "modes", ())
             goal = next((mode.sessions.get(self.lane.cfg["session_id"]) for mode in modes
                          if getattr(mode, "name", "") == "goal"), None)
-            if not needs_help and not getattr(goal, "active", False):
+            if not needs_help and not getattr(goal, "active", False) and not daily_enabled(cfg):
                 self.lane.project("idle")
                 return False
         except Exception:

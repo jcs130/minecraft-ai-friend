@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "status": "validated_candidate_daily_paused",
+  "productionJarReplaced": false,
+  "dailyEnabled": false,
+  "qwenpawRoleEnabled": false,
+  "nativeResidentEnabled": false,
+  "bodyIdleVerified": true,
+  "qwenpawPlugin": "0.3.0",
+  "qwenpawUnit": {
+    "passed": 79,
+    "skipped": 6
+  },
+  "numenCommonUnit": {
+    "tests": 204,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "paperGameTests": {
+    "passed": 21,
+    "newTests": [
+      "scan_entities_excludes_occluded_and_invisible_entities",
+      "scan_entities_rechecks_sight_after_target_moves",
+      "scan_entities_excludes_spectators",
+      "ordinary_threats_exclude_underground_and_invisible_zombies"
+    ]
+  },
+  "artifact": {
+    "name": "numen-paper-1.21.1-0.1.4.jar",
+    "currentSha256": "bfe6040eefb3cac792dc70513ae150c5e25f76f9b869fd3d9bb8eff088cb37a4",
+    "candidateSha256": "39887be162507a1588dc5cb5af5bddcb4e47a4f9de79fd7a4447646c689f9fb6",
+    "changedEntries": [
+      "com/dwinovo/numen/combat/Menace.class",
+      "com/dwinovo/numen/scan/NearbyEntities.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$BlockInfo.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Cell.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Look.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Sight.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Storage.class",
+      "com/dwinovo/numen/tools/perception/ScanApi.class"
+    ],
+    "instructionChanges": [
+      "com/dwinovo/numen/combat/Menace.class",
+      "com/dwinovo/numen/scan/NearbyEntities.class",
+      "com/dwinovo/numen/tools/perception/ScanApi.class"
+    ],
+    "sourceDebugOnly": [
+      "com/dwinovo/numen/tools/perception/ScanApi$BlockInfo.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Cell.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Look.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Sight.class",
+      "com/dwinovo/numen/tools/perception/ScanApi$Storage.class"
+    ]
+  },
+  "numenApiPreservedSha256": "77da82ad3241f39fee878e5e51f855bdc5fe7777cabd1ed863a213af5bd60dea",
+  "sourcePatch": "paper/integrations/numen-paper/patches/ordinary-entity-vision.patch",
+  "sourcePatchSha256": "afec687353310499466d9405f5c44a39177464f58f41b9dbcd2fea6f66823682",
+  "dualDiskCandidatesAndRollback": true,
+  "originalBodyUuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+  "resumeAfterApprovedPaperRestart": true,
+  "date": "2026-10-21",
+  "paper": "1.21.1 build 133",
+  "numen": "0.1.4 with local vision patch",
+  "restartApproved": false,
+  "maintenanceQueued": false,
+  "observedDailyActions": [
+    "guide started",
+    "skill catalog lesson verified",
+    "home spell consumed 6 mana",
+    "tm_starter_blade accepted"
+  ],
+  "questCompletionVerified": false,
+  "scope": [
+    "ordinary entity scans",
+    "automatic hostile targeting and threat field"
+  ],
+  "notCovered": [
+    "block and container query visibility",
+    "complete adversarial script sandbox",
+    "16 autonomous agent load",
+    "long term autonomous gameplay"
+  ]
+}

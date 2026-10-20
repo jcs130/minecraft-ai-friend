@@ -1,3 +1,7 @@
+## 2026-10-21 桐人日常已实现，普通索敌候选待重启确认
+
+QwenPaw原生插件0.3.0、显式autonomy.enabled授权与两分钟心跳已热更新；79项单元通过/6项独立联机默认跳过。正式已完成引导/目录实练、归乡耗6魔力并接初级剑士委托，不能宣称完成三次击杀。发现Numen未做视线过滤，桐人日常/角色/常驻均已暂停，原生task.status确认无任务。ordinary-entity-vision.patch补普通实体扫描及自动索敌的遮挡/隐身/观战过滤；内容204项JVM和21项最终Paper感知GameTest通过，3类指令变化+5类仅调试行号变化。E/F候选/回退已核验，正式仍旧内容JAR，未排队或重启；需本次批准后走OPERATIONS完整维护流程，再按原UUID恢复自主日常。不是所有方块/容器接口的防作弊沙箱。见paper/docs/QWENPAW_COGNITION.md及paper/manifests/kirito-daily-vision-candidate-20261021.json；不得混入AgentFriend0.4.48或Freesia af4。
+
 ## 2026-10-20 桐人原生多会话与 PowerContext 已正式上线
 
 服主批准部署并确认Windows管理员弹窗后，原QwenPaw-AutoStart正常退出/启动；旧PID13000→18464，Paper未重启、AgentFriend仍0.4.47.8。千灯纪插件0.2.1启用原生游戏频道、整轮单身体互斥、最多两个只读后台会话、原生子任务与Scroll历史、独立PowerContext空间及10分钟轻量心跳；旧Console事件自动分发关闭，8项原MCP工具保持。QwenPaw2.2.2稍后启用/重载角色会漏掉插件快照工具，已在构建工具前恢复自身受治理描述符，原显式禁用与后台白名单仍生效。70单元通过、6旧联机跳过；正式3项查询、后台真实任务快照/记忆、独立复盘任务/技能及并行通过，现场约4.04秒、后台14.59秒，新进程真实长期记忆召回通过。原UUID、33条库存、末影箱、大背包及职业点数核对；较早基线多4点剑耐久损耗、1次近战击杀/20伤害和法杖外观字段如实记录，不回写旧存档。E/F三次角色冷备份与原配置保持，早期Windows跨会话退出失败/取消、旧基线与MC_PAGE断言误判、快照工具漏注入证据保留。原ReMe保留未批量迁入，Web/OBS消费者及16自主Agent长期负载未验。见paper/docs/QWENPAW_COGNITION.md与qwenpaw-cognition-release-20261020.json；下方候选为历史记录。
