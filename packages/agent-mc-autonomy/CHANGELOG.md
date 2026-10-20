@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.69 — 2026-10-20
+
+- Pin the independently built core rc.55 with fresh scoped goal milestones in
+  request facts, completing the native-core to strategic-review continuity path.
+- Preserve the concurrently merged optional Harness2 practice SDK. It remains
+  explicit and isolated; this pin starts no training or model/worker process.
+
 ## 0.2.68 — 2026-10-20
 
 - Full mode exposes every available native non-lifecycle tool, preserving the

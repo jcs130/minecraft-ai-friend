@@ -1,5 +1,9 @@
 # Agent MC Autonomy
 
+0.2.69 pins core rc.55 so its current goal ledger reaches every native facts
+request. The optional isolated practice SDK is included, with no implicit
+worker/model installation or activation.
+
 0.2.68 exposes native goal/method/tactic/memory contracts directly in full mode
 and retains core project/method summaries in strategic review. Native reflexes
 remain independent. Goals, method saves and candidate programs are evidence to
