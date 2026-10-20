@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "status": "online_after_routine_restart_lock_fix_applied",
+  "date": "2026-10-21",
+  "at": 1792527435.157412,
+  "releaseSourceCommit": "61dc25539d53cf4e4657ffe9cde8a07ab509c232",
+  "all40PluginArtifactsVerified": true,
+  "corePreserved": true,
+  "gatewayChecks": 6,
+  "residentEnabled": true,
+  "externalBody": true,
+  "nativeAutonomyEnabled": true,
+  "tick": "The game is running normallyTarget tick rate: 20.0 per second.\nAverage time per tick: 19.9ms (Target: 50.0ms)Percentiles: P50: 19.6ms P95: 28.0ms P99: 32.7ms, sample: 100",
+  "mspt": "§6Server tick times §e(§7avg§e/§7min§e/§7max§e)§6 from last 5s§7,§6 10s§7,§6 1m§e:\n§6◴ §a20.0§7/§a12.2§7/§a32.7§e, §a18.6§7/§a11.3§7/§a39.0§e, §a18.0§7/§a10.9§7/§c51.3\n",
+  "vision": "MC_VISION {\"enabled\":true,\"viewers\":2,\"targets\":306,\"checks\":955554,\"hides\":1000,\"shows\":700,\"deferred\":38,\"maxTickMicros\":15363,\"maxChecks\":128,\"peakChecks\":128,\"budgetMicros\":2000,\"nativeQueries\":402403,\"worldRays\":564514,\"shapeSkips\":10453504}\n",
+  "profile": {
+    "allExecutionSamples": 2266,
+    "serverThreadSamples": 1920,
+    "visionPathSamples": 85,
+    "visionSamplePercent": 4.43,
+    "topFirstGameClasses": [
+      [
+        "net.minecraft.world.level.chunk.PalettedContainer",
+        316
+      ],
+      [
+        "net.minecraft.world.entity.LivingEntity",
+        208
+      ],
+      [
+        "net.minecraft.server.level.ServerLevel",
+        121
+      ],
+      [
+        "net.minecraft.world.level.Level",
+        108
+      ],
+      [
+        "net.minecraft.world.entity.Entity",
+        93
+      ],
+      [
+        "net.minecraft.core.Holder$Reference",
+        71
+      ],
+      [
+        "net.minecraft.server.MinecraftServer",
+        68
+      ],
+      [
+        "net.minecraft.server.level.ServerChunkCache",
+        59
+      ],
+      [
+        "net.minecraft.world.entity.Mob",
+        42
+      ],
+      [
+        "net.minecraft.server.level.DistanceManager",
+        36
+      ]
+    ],
+    "statisticalSamplingOnly": true,
+    "jfrLocalOnly": true,
+    "profileFile": "server-2026-10-21-041132.jfr"
+  },
+  "backup": {
+    "validDualDiskRecoveryPoint": "20261021-034228",
+    "routineAttempt": "20261021-040021",
+    "routineAttemptComplete": false,
+    "routineFailure": "Windows byte-range lock on controller.lock; robocopy exit 9",
+    "incompleteSnapshotPreserved": true,
+    "scheduledNext": "2026-10-22 04:00 Asia/Shanghai",
+    "scheduleModified": false,
+    "lockExclusionApplied": true,
+    "lockFixtureChecks": 7,
+    "maintenanceScriptSha256": "0a49120d51fd2cf1544d6fe89ec0c311400702a238d409bc8ac26631238f8f0e",
+    "fullRoutineBackupAfterFixVerified": false,
+    "extraRestartForFix": false
+  },
+  "no16ModelLongTermLoadClaim": true
+}

@@ -853,9 +853,12 @@ function Backup-Server {
         # Save the deployment scripts and probes alongside the world. Runtime
         # locks, control tokens, and logs are intentionally not restorable.
         $opsCopy = Join-Path $dest 'ops'
+        $opsCopyLog = Join-Path $dest 'ops-copy.log'
+        # Resident MCP drivers keep a Windows byte-range lock until they exit.
+        # The PID lease is rebuilt at startup and is not restorable state.
         & robocopy.exe $opsDir $opsCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP `
-            /XF '*.log' '*.jsonl' 'manage-server.lock' 'session.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'paper-core-upgrade.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' | Out-Null
-        if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Incomplete backup: $dest" }
+            /XF '*.log' '*.jsonl' 'manage-server.lock' 'controller.lock' 'session.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'paper-core-upgrade.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' "/UNILOG:$opsCopyLog" | Out-Null
+        if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Details: $opsCopyLog. Incomplete backup: $dest" }
         $probeCopy = Join-Path $dest 'probe'
         & robocopy.exe 'E:\MC\probe' $probeCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XD 'node_modules' | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Probe backup failed with exit code $LASTEXITCODE. Incomplete backup: $dest" }
