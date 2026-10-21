@@ -19,6 +19,29 @@
 
 小鱼的模型连接另行核实：已保存的新同伴绑定有真实模型回复和工具回执，保存的模型配置也通过原生 Java 流式调用。后续“another program is already running”是程序占用提示，不能当作 Key 无效；本兼容补丁不修改模型配置或执行槽。
 
+### 官方 Release 完整兼容核对与实现边界（2026-10-21）
+
+**本节是已完成的差异核对及解码原型验证，不是已完成的兼容插件。** 正式仍为上节 `6684d9e3`，此次没有替换 JAR、重启、迁移玩家资料或改变桐人的控制方式。完整兼容不能通过移除频道门禁、跳过解码错误或把旧客户端直接记入新版 `Presence` 实现。
+
+核对目标是官方 [0.1.4](https://github.com/Dwinovo/minecraft-numen/releases/tag/v0.1.4-1.21.1-beta) 与 [0.1.4.1](https://github.com/Dwinovo/minecraft-numen/releases/tag/v0.1.4.1-1.21.1-beta) 的 MC 1.21.1 发布包。对应源码提交为 `26911f83046bc2e2f8d9053707ee1f8e553582ba`、`2a5753cbde3edd342fb50e0b2a4d52dff4269d38`；两者 `api/.../network/payload` 的 25 份源码完全相同，可以按同一协议族处理。Fabric 原始发布 JAR 摘要分别为 `2ab47063de770c9baf86d2beedeb4530f6bfa89f7f4dba30babcbcb22217d4a6`、`ccc0806fd04cf3404dbc39f7579a4d7c20cd1362d06dce358850f5fdaf711a41`。与正式客户端固定基线 `7c931600c2269d21216bb6f9090588cdbe0beb01` 比较，两边各 25 种载荷源码：共有 15 种，其中 11 种的 record 声明与 codec 源码一致，4 种存在差异；另各有 10 种独有载荷。这是源码审计结果，不等于全部载荷已经运行验收。
+
+| 范围 | 核对结果 | 服务端适配要求 |
+| --- | --- | --- |
+| 握手与界面 | Release 无 `hello`/`hello_ack`；当前 `/numen settings` 用新版 `Presence` 判断可用性 | 根据旧版独有频道确认协议族，界面动作发旧格式；区分未装模组、旧协议和握手未完成，不能伪造新版报到 |
+| 同伴名册 | 新版每行多 `removedFor`；旧客户端将“不在名册”视为永久遣散，并删除本机对应资料 | 输出旧版行结构，保留本世界所有仍存在的同伴 UUID；被移出、死亡、未加载均不能简单从兼容名册删掉 |
+| 召唤和换肤 | Release 的召唤带 `name, skinValue, skinSig, creative`，当前只收 `name, creative`；旧版另有 `change_skin` | 分别解码并转换到原生召唤/皮肤接口；保持名称、归属和创造模式权限校验，检查整包已读完 |
+| 模型、记忆与设置 | Release 的 Agent 循环、模型档案、Key、会话和 Lua 模块在玩家客户端；当前版本把它们迁到了服务端 | 官方客户端继续管理自己的原生设置；不因打开界面把服务端其他人的 Key 或资料下发，也不声称两端历史已自动合并 |
+| 执行与回执 | Release 使用 `run_program / program_result / stop_program / cancel_tasks`，当前不再登记这些入口 | 在旧协议边界适配到现有 `ServerPrograms`、身体和权限层；复用当前执行器，按真实执行结果回复，不能只打开界面就称已适配 |
+| 模块和客户端回调 | 旧 `ClientCallResultPayload` 末尾还有 `Optional<ModuleSet>`，当前没有；旧模块按内容指纹补发 | 保留缺模块时尚未执行的语义；模块放在对应旧连接的作用域，不能无条件覆盖服务端现有模块/记忆；未知执行结果不自动重放 |
+| 控制互斥 | 旧客户端本身会运行模型循环；服务端现有循环及桐人 QwenPaw 驾驶仍存在 | 扩展现有 `EXTERNAL` 驾驶判定，按同伴 UUID 只允许一个驱动；旧客户端不得抢占其他外脑；断线撤销自己的执行、回调和控制资格 |
+| 事件与生命周期 | Release 需要 `current_task / numen_event / numen_death / numen_respawn / path_debug`，新版改为服务端 Feed/历史通道 | 转换真实状态、死亡复活和任务终态；核对原版私聊与事件输入是否重复，不能让内外两套大脑重复消费同一条主人消息 |
+
+可复用当前 `OwnedBody` 的 UUID 归属校验、`ServerPrograms` 的 Lua 沙箱/并发/主线程预算、既有身体操作与保护权限、`CompanionRoster`/背包快照，以及现有外脑互斥的生命周期语义。`McpMode` 的连接资格绑定 HTTP 令牌，不能直接伪造一个 MCP 会话来代表游戏客户端；旧客户端应有独立且受同一驱动仲裁约束的连接资格，无需为此开放公网端口。
+
+隔离 JVM 已直接加载官方 0.1.4 NeoForge 发布包内的 Mojang 映射 codec，并使用正式 API 编码，8 项断言通过：0/1/2 个同伴分别验证当前名册与旧格式转换名册；新版一行会剩 1 字节，两行已发生读取错位并抛解码异常，转换后三种数量均完整解码；旧召唤交给当前解码器剩 2 字节，旧客户端回调剩 1 字节。Fabric 两个原始发布包已核对内嵌 API 确实无 Hello、有 RunProgram。上述检查没有启动完整 Fabric/NeoForge 图形客户端，没有验证模型循环、完整交互或长期稳定性。私有复现脚本、差异矩阵和结果在 `E:/MC/ops/repairs/numen-client-owner-20261021/` 的 `audit-release-compat.py`、`ReleaseCodecProbe.java`、`run-release-codec-probe.py` 与 `private/release-compat-*.json` / `private/release-codec-*.json`。
+
+实施应先完成界面、名册、召唤、背包和位置的双协议分流，再接回旧程序/模块/事件及驱动互斥。**发布门槛是完整闭环，不是第一阶段界面能打开**：用未经修改的官方 Fabric 0.1.4/0.1.4.1 和 NeoForge 发布包实测“登录→设置→配置本人模型→召唤→私聊→真实移动/存取→停止→断线重连”，验证另一位主人不能读或驱动其同伴，原物品/UUID 保持；并回归原版 Java、当前协议 3、基岩表单及桐人 QwenPaw。未经这批联机验收和当次维护确认，不部署到正式服。
+
 ## 桐人信息接入追加候选（2026-10-20）
 
 任务、技能、魔力、原库存和异步消息已完成实际读取；接管竞态、长回执及旧账号权限已补。详见 [信息接入与核心复用](KIRITO_SERVER_INFORMATION.md)。正式尚未切换，当前线上仍为下述星灯版本。
