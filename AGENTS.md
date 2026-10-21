@@ -1,3 +1,7 @@
+## 2026-10-21 官方 Numen Release 兼容已上线
+
+服主批准后等待可米墓穴正常结束，重新180/60/10秒预告、原Afu-MC-DailyBackup正常停启，E/F完整冷备份20261021-190408后仅替换Numen API为3ccb46aa，任务结果0。其他1205原条目、Numen内容82133ebd及其他39插件保持；原物品/UUID/归属核验后桐人日常恢复。官方Fabric0.1.4/0.1.4.1可用原JAR配置本机模型、召唤、执行和收回执；原版Java仍可入服，基岩/numenmenu保持。1753 JVM、20精确候选E2E、2官方Fabric图形闭环、15官方NeoForge codec、8原生MCP及14基岩协议/冷启动检查通过；正式21/10/19核验。未做完整NeoForge图形、手机Xbox或16模型长期负载验收。见NUMEN_PAPER.md及numen-release-compat-release-20261021.json；下方6684为此前版本。
+
 ## 2026-10-21 Numen 官方旧客户端入服修复已上线
 
 现役 Numen API 6684d9e3，只改 Paper 频道兼容判断，其他1219个条目及原内容/常驻/视觉保持。服主本次批准后正常通知停启，E/F完整冷备份20261021-164816，维护结果0；桐人日常恢复。官方旧版不再收到读不懂的名册，完整UI仍需配套客户端。1727 JVM、8隔离E2E、4精确候选联机和正式核验通过；未做图形客户端画面验收。上游PR142已提交。详见NUMEN_PAPER.md及numen-legacy-client-release-20261021.json；下方fb4e7a86是先前版本。

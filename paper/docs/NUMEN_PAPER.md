@@ -2,9 +2,9 @@
 
 ## 当前状态更新（2026-10-21）
 
-现役 **Paper 1.21.1 build133 / AgentFriend 0.4.47.10 / Numen 0.1.4 / NumenBedrock 0.1.0**。原版 Java 客户端不必安装 Numen 即可入服；完整 Java 设置面板需要下文固定的 1.21.1 模组包。基岩沿用 `/numenmenu`，原协议 3 与端口保持。最新完整双盘冷备份为 `20261021-164816`；Numen API 已更新为 `6684d9e3`，修复官方旧客户端收到不兼容名册后断线。正式核验和回退见[本次发布记录](../manifests/numen-legacy-client-release-20261021.json)；此前消息降噪与自主运行修复见[前次发布说明](MESSAGE_AUTONOMY_RELEASE_20261021.md)。下方历史候选与暂停描述按当时时点阅读。
+现役 **Paper 1.21.1 build133 / AgentFriend 0.4.47.10 / Numen 0.1.4 / NumenBedrock 0.1.0**，Numen API `3ccb46aa`；已兼容官方 Fabric 0.1.4/0.1.4.1。原版 Java 客户端不必安装 Numen 即可入服；完整 Java 设置面板可用官方 Fabric Release，也保留原配套的 1.21.1 模组包。基岩沿用 `/numenmenu`，原协议 3 与端口保持。最新完整双盘冷备份为 `20261021-190408`。正式核验和回退见[本次发布记录](../manifests/numen-release-compat-release-20261021.json)；此前消息降噪与自主运行修复见[前次发布说明](MESSAGE_AUTONOMY_RELEASE_20261021.md)。下方历史候选与暂停描述按当时时点阅读。
 
-### 官方旧客户端入服断线修复已上线（2026-10-21）
+### 此前的官方旧客户端入服断线修复（6684d9e3，已被下节替代）
 
 服主批准后，经 180/60/10 秒通知、真人退出和副本/PvP 检查，原维护任务完成 E/F 冷备份 `20261021-164816` 并只替换 API JAR，任务结果 0。正式 21 项状态/备份检查、8 项认证协议检查与 19 项同伴身份/物品核验通过，桐人原生心跳已恢复；更新说明已发。初次维护被长名单截断拦截，之后通过维护暂停协调女神守护程序，完整名单验证成功；未绕过真人门禁。见[发布记录](../manifests/numen-legacy-client-release-20261021.json)。
 
@@ -19,9 +19,9 @@
 
 小鱼的模型连接另行核实：已保存的新同伴绑定有真实模型回复和工具回执，保存的模型配置也通过原生 Java 流式调用。后续“another program is already running”是程序占用提示，不能当作 Key 无效；本兼容补丁不修改模型配置或执行槽。
 
-### 官方 Release 兼容候选（2026-10-21，尚未上线）
+### 官方 Release 兼容已上线（2026-10-21）
 
-**已实现并完成隔离验收，正式仍为上节 `6684d9e3`。** 候选 API 为 `3ccb46aadf19b425392b9a0f197b546a4d51a86e000a18bf097024121c3be33f`；本轮没有替换正式 JAR、重启或迁移玩家资料。现在根据官方旧客户端独有的频道组合识别协议族，新版仍走原 `hello_ack`/协议3，原版 Java 不必装模组，基岩仍用 `/numenmenu`。
+**已正常重启上线。** 正式 API 为 `3ccb46aadf19b425392b9a0f197b546a4d51a86e000a18bf097024121c3be33f`，回退为 `6684d9e3`。维护前等待可米的墓穴场次正常结束，重新180/60/10秒预告；E/F完整冷备份 `20261021-190408` 后仅替换API，任务结果0。正式21项状态/备份、10项协议和19项物品/归属核验通过，桐人原生日常已恢复。见[发布记录](../manifests/numen-release-compat-release-20261021.json)。现在根据官方旧客户端独有的频道组合识别协议族，新版仍走原 `hello_ack`/协议3，原版 Java 不必装模组，基岩仍用 `/numenmenu`。
 
 核对目标是官方 [0.1.4](https://github.com/Dwinovo/minecraft-numen/releases/tag/v0.1.4-1.21.1-beta) 与 [0.1.4.1](https://github.com/Dwinovo/minecraft-numen/releases/tag/v0.1.4.1-1.21.1-beta) 的 MC 1.21.1 发布包。对应源码提交为 `26911f83046bc2e2f8d9053707ee1f8e553582ba`、`2a5753cbde3edd342fb50e0b2a4d52dff4269d38`；两者 `api/.../network/payload` 的 25 份源码完全相同，可以按同一协议族处理。Fabric 原始发布 JAR 摘要分别为 `2ab47063de770c9baf86d2beedeb4530f6bfa89f7f4dba30babcbcb22217d4a6`、`ccc0806fd04cf3404dbc39f7579a4d7c20cd1362d06dce358850f5fdaf711a41`。与正式客户端固定基线 `7c931600c2269d21216bb6f9090588cdbe0beb01` 比较，两边各 25 种载荷源码：共有 15 种，其中 11 种的 record 声明与 codec 源码一致，4 种存在差异；另各有 10 种独有载荷。这是源码审计结果，不等于全部载荷已经运行验收。
 
