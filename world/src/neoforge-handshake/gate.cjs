@@ -617,6 +617,12 @@ function relayTo (sess, target, name, params, dir) {
   if (target === sess.front) {
     if (nativeViewerHash) {
       try {
+        if (!sess.nativeViewerRegistriesSent) {
+          const sequence = (sess.nativeViewerSequence || 0) + 1
+          const bytes = NativeViewer.encodeNativePacket('native_registries', NativeViewer.nativeRegistries(sess.bedrockProjection?.registries), nativeViewerHash, sequence)
+          target.write('custom_payload', { channel: NativeViewer.CHANNEL, data: bytes })
+          sess.nativeViewerSequence = sequence; sess.nativeViewerRegistriesSent = true
+        }
         // Serialize before any ItemStack/component/state-ID projection. The
         // mirror belongs only to this frontend connection, never a new bot or
         // a broadcast. Failure ends the native view instead of substituting it.
@@ -637,7 +643,16 @@ function relayTo (sess, target, name, params, dir) {
     // inventory plugin. This is parser isolation, never a fabricated UI.
     if (vanillaAgentProjection && name === 'open_window') {
       try { params = sess.bedrockProjection.project(name, params).params; menuProjected = true }
-      catch (error) { kickFront(sess, error.message); return }
+      catch (error) {
+        if (!nativeViewerHash) { kickFront(sess, error.message); return }
+        if (!sess.menuProxyGuard || sess.menuProxyGuardBackend !== sess.back) {
+          sess.menuProxyGuard = createNativeMenuProxyGuard({ windows: vanillaMenuParserWindows, getPlayerUuid: () => sess.back?.uuid })
+          sess.menuProxyGuardBackend = sess.back
+        }
+        sess.menuProxyGuard.filter(name, params, { forceNativeMenu: true })
+        log(`menu[${sess.username}] native-only window=${params.windowId} type=${params.inventoryType}; original stream retained`)
+        return
+      }
     }
     if (!sess.menuProxyGuard || sess.menuProxyGuardBackend !== sess.back) {
       sess.menuProxyGuard = createNativeMenuProxyGuard({ windows: vanillaMenuParserWindows,

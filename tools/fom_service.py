@@ -37,6 +37,12 @@ def gateway_spec(raw,server,port,health,public,verify_hashes):
         'GATE_CACHE_FILE':str(Path(raw['runtimeDir'])/'gateway-cache.json')}
     for key,name in {'GATE_CHANNELS_FILE':'network-channels.json','GATE_COMPONENTS_FILE':'components.tsv','GATE_PARTICLES_FILE':'particles.tsv',
         'GATE_ENTITY_SERIALIZERS_FILE':'entity-data-serializers.tsv','GATE_IDMAP_FILE':'idmap.json','GATE_BEDROCK_ITEMS_FILE':'items.json'}.items():env[key]=str(root/'registry'/name)
+    native=release.get('nativeViewer')
+    if native is not None:
+        needed={'registry/'+n for n in ('block-states.jsonl','blocks.tsv','items.tsv','entities.tsv')}
+        if not isinstance(native,dict) or native.get('schemaVersion')!=1 or native.get('channel')!='mcviewer:native_packet' or not needed.issubset(files) or native.get('registrySha256')!=files['registry/block-states.jsonl'] or native['registrySha256']!=release.get('nativeExport',{}).get('block-states.jsonl'):
+            raise ValueError('Native Agent view does not match the frozen registry')
+        env.update(GATE_NATIVE_VIEWER='1',GATE_NATIVE_STATES_FILE=str(root/'registry/block-states.jsonl'))
     return {'id':'gate','port':gate_port,'host':'127.0.0.1','listenHost':host,'command':[str(root/'node.exe'),str(root/'gate/gate.cjs'),str(gate_port),'127.0.0.1',str(port)],
         'cwd':str(root),'env':env,'dependsOn':['java'],'readiness':'minecraft','healthUrl':None,'stopMode':'stdin','stopText':'{"kind":"shutdown"}','startupTimeoutSeconds':30},stats
 

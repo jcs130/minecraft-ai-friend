@@ -68,7 +68,7 @@ function createNativeMenuProxyGuard ({ windows, getPlayerUuid = () => null }) {
     proxyWindowId = mode === 'native_only' ? null : windowId
   }
 
-  function filter (name, params, { cookingPotMenu = null } = {}) {
+  function filter (name, params, { cookingPotMenu = null, forceNativeMenu = false } = {}) {
     if (name === 'login' || name === 'respawn') { active = null; proxyWindowId = null; return { forward: true } }
     if (name === 'custom_payload') {
       learnState(params)
@@ -92,7 +92,7 @@ function createNativeMenuProxyGuard ({ windows, getPlayerUuid = () => null }) {
     if (name === 'open_window') {
       if (!positiveId(params.windowId)) return { forward: false, reason: 'invalid_proxy_window_id' }
       const nativeType = nativeTypes.get(params.inventoryType)
-      const supported = parserTypes.has(params.inventoryType) && (!nativeType || nativeType.startsWith('minecraft:'))
+      const supported = !forceNativeMenu && parserTypes.has(params.inventoryType) && (!nativeType || nativeType.startsWith('minecraft:'))
       open(params.windowId, params.inventoryType, supported ? 'installed_vanilla_parser' : 'native_only')
       return { forward: supported, reason: supported ? null : 'native_menu_parser_unavailable',
         parserSource: 'installed_prismarine_windows', nativeMenuType: active.nativeMenuType,

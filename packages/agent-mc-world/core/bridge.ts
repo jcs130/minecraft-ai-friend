@@ -55,6 +55,7 @@ export interface BridgeOptions {
   /** prismarine-viewer 网页端口;0=不开 viewer */
   viewerPort: number;
   viewerAssetsDir?: string;
+  nativeConnection?: import('./native-connection.ts').PreparedNativeConnection;
   viewerSpeakerName?: string;
   viewerSpeechSourceId?: string;
   performanceBridge?: import('./relay-port.ts').RelayConfiguration;
@@ -257,7 +258,14 @@ export class Bridge {
   protected disposedThrough = -1;
   protected readonly bags = new Map<number, ResourceBag>();
   protected readonly disposing = new Set<Promise<void>>();
-  protected viewer: { gen: number; url: string; kind: 'modern' | 'basic'; agentViews?: import('./viewer-agent-views.ts').AgentViewGallery } | null = null;
+  protected viewer: { gen: number; url: string; kind: 'modern' | 'basic' | 'native'; agentViews?: import('./viewer-agent-views.ts').AgentViewGallery } | null = null;
+  protected nativeConnection: { gen: number; value: import('./native-connection.ts').NativeConnection } | null = null;
+  get nativeConfigured(): boolean { return Boolean(this.opts.nativeConnection); }
+  nativeQuery(input: Record<string, unknown>): unknown {
+    if (!this.nativeConnection || this.nativeConnection.gen !== this.generation || !this._bot)
+      return { available: false, reason: this.nativeConfigured ? 'NATIVE_CONNECTION_OFFLINE' : 'NATIVE_CONNECTION_NOT_CONFIGURED' };
+    return this.nativeConnection.value.query(input);
+  }
   protected _invSynced = false;
   protected scaffoldComplained = '';
   protected refusedStreak = 0;
@@ -339,7 +347,7 @@ export class Bridge {
     return this.reconnectAttempt;
   }
 
-  get viewerKind(): 'modern' | 'basic' | null {
+  get viewerKind(): 'modern' | 'basic' | 'native' | null {
     return this.viewer?.gen === this.generation ? this.viewer.kind : null;
   }
 
@@ -469,6 +477,23 @@ export class Bridge {
       return;
     }
     this._bot = bot;
+    if (this.opts.nativeConnection) {
+      try {
+        const value = this.opts.nativeConnection.attach(bot);
+        this.nativeConnection = { gen, value };
+        this.bagFor(gen).register('native-connection', async () => {
+          if (this.nativeConnection?.gen === gen) this.nativeConnection = null;
+          if (this.opts.viewerPort > 0) await this.releaseViewer(gen, this.opts.viewerPort, () => value.close());
+          else await value.close();
+        });
+      } catch (error) {
+        this._bot = null;
+        bot.on('error', err => log.warn(`Rejected native connection closed: ${err.message}`));
+        bot.quit('Native view adapter rejected this connection');
+        this.failure = errorFailure(error instanceof Error ? error : new Error(String(error)));
+        log.warn(`Native view attachment failed: ${this.failure}`); this.scheduleReconnect(this.failure); return;
+      }
+    }
     bot._client.on('session', session => {
       if (this._bot === bot && this.generation === gen && !this.stopped) this.opts.authentication?.acceptProtocolSession(session);
     });
@@ -1119,6 +1144,15 @@ export class Bridge {
             `viewer 端口 ${port} 已被占用,本次不开画面(worlds.minecraft.viewerPort 可改)`,
           );
           return;
+        }
+        if (this.opts.nativeConnection) {
+          const native = this.nativeConnection;
+          if (!native || native.gen !== gen || this.stopped || this._bot !== bot) return;
+          await native.value.listen();
+          if (this.stopped || this._bot !== bot || this.generation !== gen) return;
+          if (!native.value.url) throw new Error('Native view did not publish its listening URL');
+          this.viewer = { gen, url: native.value.url, kind: 'native' };
+          this.opts.log.info(`Native Minecraft viewer started ${native.value.url}`); return;
         }
         let modernAssets = this.opts.viewerAssetsDir;
         let agentViews: import('./viewer-agent-views.ts').AgentViewGallery | undefined;

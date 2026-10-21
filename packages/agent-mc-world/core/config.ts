@@ -26,6 +26,8 @@ export const MINECRAFT_DEFAULTS = {
   viewerPort: 0,
   /** 现代画面资源包根目录；空 = 使用自带 prismarine-viewer */
   viewerAssetsDir: '',
+  /** Optional original-registry Mineflayer adapter; renderer source lives in mc-visual-console. */
+  nativeView: { module: '', assetsDir: '' },
   /** 网页画面中语音气泡显示的称呼；空 = 游戏内用户名 */
   viewerSpeakerName: '',
   metricsDashboardUrl: '',
@@ -208,6 +210,7 @@ export interface MinecraftConfigSection {
   version: string;
   viewerPort: number;
   viewerAssetsDir: string;
+  nativeView?: { module: string; assetsDir: string };
   viewerSpeakerName: string;
   /** Human-opened metrics dashboard; no polling or discovery is performed by the core. */
   metricsDashboardUrl?: string;
@@ -304,6 +307,14 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
         type: 'string', title: '现代画面资源目录', 'x-hot': false,
         description: '空=自带网页画面；填写由对应游戏版本导出的现代画面资源包根目录。',
         'x-path': { kind: 'directory' },
+      },
+      'worlds.minecraft.nativeView.module': {
+        type: 'string', title: '原生画面适配模块', 'x-hot': false,
+        description: '可选。本机受信任适配模块的 file: URL，导出 prepareNativeConnection；与动作身体共用连接，不另登录观战账号。',
+      },
+      'worlds.minecraft.nativeView.assetsDir': {
+        type: 'string', title: '原生注册表与素材目录', 'x-hot': false,
+        description: '必须与服务端当前模组和原生注册表逐哈希匹配；未适配模型明确报不可用。', 'x-path': { kind: 'directory' },
       },
       'worlds.minecraft.viewerSpeakerName': {
         type: 'string', title: '网页语音气泡称呼', 'x-hot': false,

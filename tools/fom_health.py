@@ -25,6 +25,8 @@ def probe(file=DEFAULT):
             expected='1' if cfg['networkExposure']['agentGatewayPublicGameAccess'] else '0'
             checks['agent_gateway_peer_policy_matches_config']=(cfg['services'][1]['env']['GATE_PUBLIC_GAME_ACCESS']==expected
                 and state['networkExposure'].get('agentGatewayPublicGameAccess')==cfg['networkExposure']['agentGatewayPublicGameAccess'])
+            if cfg['services'][1]['env'].get('GATE_NATIVE_VIEWER')=='1':
+                checks['original_agent_view_registry_bound']=bool(cfg['services'][1]['env'].get('GATE_NATIVE_STATES_FILE'))
         result.update(gamePort=cfg['gamePort'],healthPort=cfg['healthPort'],runId=state['runId'],physicsTransport='TCP',publicGameAccess=cfg['networkExposure']['publicGameAccess'],supervisedBy='existing owned-child supervisor')
     except Exception as error:result['error']=type(error).__name__+': '+str(error)
     result['ok']=bool(checks) and all(checks.values()) and 'error' not in result;return result

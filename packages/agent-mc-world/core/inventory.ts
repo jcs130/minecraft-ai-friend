@@ -11,6 +11,7 @@ import { SkillBlocked, checkAbort, sleep, type SkillContext } from './skill-cont
 import { zhName } from './names.ts';
 import { itemCustomName } from './item-display.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
+import { nativeItemName } from './native-item-identity.ts';
 
 
 /** 原版背包格数:9 快捷栏 + 27 主仓。盔甲 4 格与副手 1 格不在其中 */
@@ -37,11 +38,12 @@ export function itemsInReach(bot: Bot): InvItem[] {
 export function invItemNamed(bot: Bot, want: string, pick?: string): InvItem | undefined {
   const items = itemsInReach(bot)
     .filter((i) => itemMatchesPick(pick, i, bot.registry as never));
-  const exact = items.find((i) => i.name === want);
+  const canonical = want.replace(/^minecraft:/, '');
+  const exact = items.find((i) => nativeItemName(i) === canonical);
   if (exact || isRealId(bot.registry, want)) return exact;
   return items.find((i) => itemCustomName(i) === want)
-    ?? items.find((i) => i.name.endsWith(`_${want}`))
-    ?? items.find((i) => i.name.startsWith(`${want}_`));
+    ?? items.find((i) => nativeItemName(i).endsWith(`_${want}`))
+    ?? items.find((i) => nativeItemName(i).startsWith(`${want}_`));
 }
 
 /** invItemNamed 的名字口径,摊开给"这个名字下有哪几件"用 */
@@ -73,7 +75,7 @@ export function playerInvIn(bot: Bot, win: unknown): InvView {
 }
 
 export function invCountIn(view: InvView, pred: InvPred): number {
-  return view.items().filter((i) => pred(i.name, i)).reduce((s, i) => s + i.count, 0);
+  return view.items().filter((i) => pred(nativeItemName(i), i)).reduce((s, i) => s + i.count, 0);
 }
 
 export function invCountByIdIn(view: InvView, id: number): number {

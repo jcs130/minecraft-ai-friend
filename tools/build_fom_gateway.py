@@ -32,14 +32,14 @@ def prepare_mapping(output,node,dependencies,registry):
             'customModelData':8000000+len(items)})
     (output/'items.json').write_text(json.dumps({'schemaVersion':1,'items':items},ensure_ascii=False),encoding='utf-8')
 
-def build(output,node,dependencies,registry,mapping,mods_manifest):
+def build(output,node,dependencies,registry,mapping,mods_manifest,native_viewer=False):
     output=Path(output).resolve()
     if output.exists():raise ValueError('Use a new immutable gateway release directory')
     dependencies=Path(dependencies).resolve();registry=Path(registry).resolve()
     if mapping is None:
         with tempfile.TemporaryDirectory(prefix='fom-gateway-mapping-') as temporary:
             prepare_mapping(temporary,node,dependencies,registry)
-            return build(output,node,dependencies,registry,temporary,mods_manifest)
+            return build(output,node,dependencies,registry,temporary,mods_manifest,native_viewer)
     mapping=Path(mapping).resolve()
     if json.loads((dependencies/'minecraft-protocol/package.json').read_text('utf-8'))['version']!='1.68.0':raise ValueError('Validated minecraft-protocol 1.68.0 required')
     if not (registry/'complete.json').is_file():raise ValueError('Completed native export required')
@@ -54,12 +54,16 @@ def build(output,node,dependencies,registry,mapping,mods_manifest):
     for source in (REPO/'world/src/neoforge-handshake').glob('*.cjs'):
         if not source.name.endswith('.test.cjs'):shutil.copy2(source,output/'gate'/source.name)
     for name in REGISTRY_FILES:shutil.copy2(registry/name,output/'registry'/name)
+    if native_viewer:
+        for name in ('block-states.jsonl','blocks.tsv','items.tsv','entities.tsv'):
+            shutil.copy2(registry/name,output/'registry'/name)
     for name in ('idmap.json','items.json'):shutil.copy2(mapping/name,output/'registry'/name)
     files={p.relative_to(output).as_posix():sha(p) for p in sorted(output.rglob('*')) if p.is_file()}
     record={'schemaVersion':1,'minecraft':'1.21.1','protocol':767,'scope':'partial_vanilla_agent_projection',
         'modFiles':json.loads(Path(mods_manifest).read_text('utf-8'))['files'],'files':files,
         'nativeExport':{name:sha(registry/name) for name in (*REGISTRY_FILES,'blocks.tsv','items.tsv','block-states.jsonl')},
         'exactVanillaStates':idmap['report']['exactVanillaStates'],'additionalMinecraftNames':idmap['report']['additionalMinecraftNames']}
+    if native_viewer:record['nativeViewer']={'schemaVersion':1,'channel':'mcviewer:native_packet','registrySha256':sha(registry/'block-states.jsonl'),'scope':'same_connection_original_before_projection'}
     (output/'release.json').write_text(json.dumps(record,indent=2)+'\n',encoding='utf-8')
     return {'release':str(output),'files':len(files),'bytes':sum((output/name).stat().st_size for name in files),'manifestSha256':sha(output/'release.json')}
 
@@ -67,4 +71,5 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     for key in ('output','node','dependencies','registry','mods-manifest'):parser.add_argument('--'+key,type=Path,required=True)
     parser.add_argument('--mapping',type=Path,help='Optional existing mapping; otherwise derive it from the native export')
+    parser.add_argument('--native-viewer',action='store_true',help='Preserve original packets for the same Mineflayer connection and freeze matching registries')
     args=vars(parser.parse_args());print(json.dumps(build(**args)))

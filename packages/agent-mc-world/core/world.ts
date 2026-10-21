@@ -1,4 +1,5 @@
 import { observationView, observedEntity } from './perception-sight.ts';
+import { nativeInventoryReadout } from './native-connection.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
 import { PlayerMemoryRecall } from './game-memory-player.ts';
 import { GameMemoryService } from './game-memory-service.ts';
@@ -2278,6 +2279,15 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     },
   },
   {
+    name: 'mc_native',
+    tags: ['read'],
+    description: 'Read original modded content from this account’s verified native packet stream. action=status lists readiness and limits; block reads one visible block at absolute position:{x,y,z}; entities lists visible tracked native entities; inventory reads native item IDs and component support. Unloaded or occluded cells are unknown. Ordinary Mineflayer blockAt/scout may contain compatibility IDs; these original IDs must not be used as vanilla protocol IDs. Read only; requires the explicitly configured nativeView adapter.',
+    parameters: { type: 'object', properties: {
+      action: { type: 'string', enum: ['status', 'block', 'entities', 'inventory'] },
+      position: { type: 'object', properties: { x: { type: 'integer' }, y: { type: 'integer' }, z: { type: 'integer' } }, required: ['x', 'y', 'z'], additionalProperties: false },
+    }, additionalProperties: false },
+  },
+  {
     name: 'mc_scout',
     tags: ['read'],
     description:
@@ -2572,7 +2582,8 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'what is in your hand, and what armour you are wearing. Read-only and instant — '
       + 'it never moves you, never touches the world and never touches the work queue. '
       + 'Set item to a material ID, Chinese material name, or exact custom display name to locate it in your inventory, the currently open container, and last observed chest records; '
-      + 'closed virtual backpacks are not included, and chest records are historical until reopened. '
+        + 'closed virtual backpacks are not included, and chest records are historical until reopened. '
+        + 'With an original native adapter, this returns the authoritative native inventory/menu JSON; focused lookup uses exact resource IDs and does not search historical proxy chest records. '
       + 'Ask this instead of re-submitting a task to find out what you are carrying. '
       + 'Once per turn: asking again in the same turn returns a one-line pointer to the answer above.',
     parameters: { type: 'object', properties: {
@@ -3937,6 +3948,8 @@ export class MinecraftWorld implements World {
     this.host = host;
     this.shuttingDown = false; // 重新启用同一个实例时要把收摊闸放开
     const log = host.log;
+    const nativeConnection = await (await import('./native-connection.ts')).prepareNativeConnection(this.cfg.nativeView, this.cfg.viewerPort);
+    if (this.shuttingDown) return;
 
     this.executor = new Executor({
       getBot: () => this.bridge?.bot ?? null,
@@ -4118,6 +4131,7 @@ export class MinecraftWorld implements World {
       loginConfigFile: () => this.cfg.loginConfigFile,
       viewerPort: this.cfg.viewerPort,
       viewerAssetsDir: this.cfg.viewerAssetsDir,
+      nativeConnection,
       viewerSpeakerName: this.cfg.viewerSpeakerName,
       viewerSpeechSourceId: this.botName,
       performanceBridge: this.cfg.performanceBridge, remoteTextures: this.cfg.remoteTextures,
@@ -4319,6 +4333,16 @@ export class MinecraftWorld implements World {
 
   tools(): ToolDef[] {
     const handlers: Record<string, ToolDef['handler']> = {
+      mc_native: async (args, ctx) => {
+        if (ctx.signal?.aborted) return { text: '[mc_native] Observation cancelled', failed: true };
+        if (Object.keys(args).some(key => !['action', 'position'].includes(key))
+          || !['status', 'block', 'entities', 'inventory'].includes(String(args.action ?? 'status')))
+          return { text: '[mc_native] Use action: status|block|entities|inventory and optional absolute position:{x,y,z}.', failed: true };
+        const value = this.bridge?.nativeQuery(args) ?? { available: false, reason: 'NATIVE_CONNECTION_OFFLINE' };
+        const text = JSON.stringify(value);
+        if (Buffer.byteLength(text) > 262144) return { text: '[mc_native] NATIVE_OBSERVATION_TOO_LARGE', failed: true };
+        return { text: this.toolLog('mc_native', args, text), ...((value as { available?: boolean })?.available === false ? { failed: true } : {}) };
+      },
       mc_railway: async (args, ctx) => {
         if (ctx.signal?.aborted) return { text: '[mc_railway 未受理] 观察已取消', failed: true };
         const outcome = railwayReadout(this.bridge?.bot ?? null, args);
@@ -4457,7 +4481,12 @@ export class MinecraftWorld implements World {
       mc_blueprint: async (args) => this.toolLog('mc_blueprint', args, this.setBlueprint(args)),
       mc_check: async (args) => this.toolLog('mc_check', args, this.runCheck(args)),
       mc_bag: async (args, ctx) => this.readOnce('mc_bag', ctx,
-        () => this.bagReadout(typeof args.item === 'string' ? args.item : undefined)),
+        () => {
+          const item = typeof args.item === 'string' ? args.item : undefined;
+          if (!this.bridge?.nativeConfigured) return this.bagReadout(item);
+          const value = this.bridge.nativeQuery({ action: 'inventory' });
+          return nativeInventoryReadout(value, item);
+        }),
       mc_view_map: async (args) => this.viewMap(args),
       mc_queue: async (_args, ctx) => this.readOnce('mc_queue', ctx, () => this.queueReadout()),
       mc_blocked: async (_args, ctx) => this.readOnce('mc_blocked', ctx, () => this.blockedReadout()),
@@ -4480,6 +4509,7 @@ export class MinecraftWorld implements World {
     const bot = this.bridge?.bot;
     return { sampledAt: new Date().toISOString(), connectionGeneration: this.connectionGeneration,
       method: this.methods.current,
+      native: this.bridge?.nativeConfigured ? this.bridge.nativeQuery({ action: 'status' }) : null,
       snapshot: this.snapshot({ scanBlocks: false }), flight: bot ? flightState(bot) : null,
       movement: bot ? movementReadout(bot) : null,
       lastSwim: bot ? lastSwimResult(bot) : null,

@@ -13,6 +13,14 @@ const windows = factory.windows
 const OWN = '11111111-2222-3333-4444-555555555555'
 const OTHER = '99999999-2222-3333-4444-555555555555'
 const hash = 'a'.repeat(64)
+test('explicit original-only menu cannot enter a colliding vanilla parser', () => {
+  const guard = createNativeMenuProxyGuard({ windows, getPlayerUuid: () => OWN })
+  const packet = { windowId: 17, inventoryType: windows['minecraft:crafting'].type }
+  assert.equal(guard.filter('open_window', packet, { forceNativeMenu: true }).forward, false)
+  assert.equal(guard.filter('window_items', { windowId: 17 }).forward, false)
+  assert.equal(guard.filter('set_slot', { windowId: -1, slot: -1 }).forward, false)
+  assert.equal(guard.filter('set_slot', { windowId: 0, slot: 36 }).forward, true)
+})
 const rawType = 29
 const unknown = (id = 3) => ({ windowId: id, inventoryType: rawType, windowTitle: { type: 'string', value: 'Architect Cutter' } })
 const known = (id = 4) => ({ windowId: id, inventoryType: windows['minecraft:crafting'].type,
@@ -178,13 +186,14 @@ test('real Gate relay mirrors unknown open/content/slot/close fully before proxy
   relay('window_items', contents)
   relay('set_slot', slot)
   relay('close_window', { windowId: 3 })
-  assert.equal(writes.length, 4)
+  assert.equal(writes.length, 5)
   assert.equal(writes.every(row => row.name === 'custom_payload' && row.params.channel === NativeViewer.CHANNEL), true)
   const frames = nativeFrames()
-  assert.deepEqual(frames.map(frame => frame.name), ['open_window', 'window_items', 'set_slot', 'close_window'])
-  assert.deepEqual(frames[1].params, contents)
-  assert.deepEqual(frames[2].params, slot)
-  assert.deepEqual(frames[0].params, unknown())
+  assert.deepEqual(frames.map(frame => frame.name), ['native_registries', 'open_window', 'window_items', 'set_slot', 'close_window'])
+  assert.equal(frames[0].params.source, 'same_connection_neoforge_frozen_registry')
+  assert.deepEqual(frames[2].params, contents)
+  assert.deepEqual(frames[3].params, slot)
+  assert.deepEqual(frames[1].params, unknown())
 })
 
 test('real Gate keeps window0 sync plus raw SDK state and subsequent vanilla events in order', () => {

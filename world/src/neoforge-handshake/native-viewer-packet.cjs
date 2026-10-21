@@ -15,12 +15,14 @@ const MAGIC = Buffer.from('MCNP')
 const MAX_WIRE_BYTES = 1024 * 1024
 const MAX_DECODED_BYTES = 16 * 1024 * 1024
 const NAMES = new Set([
-  'login', 'respawn', 'map_chunk', 'unload_chunk', 'block_change', 'multi_block_change',
+  'native_registries', 'login', 'respawn', 'map_chunk', 'unload_chunk', 'block_change', 'multi_block_change',
   'tile_entity_data', 'update_light', 'spawn_entity', 'entity_metadata', 'entity_equipment',
   'entity_destroy', 'rel_entity_move', 'entity_move_look', 'entity_look', 'entity_teleport',
   'entity_head_rotation', 'entity_velocity', 'entity_status', 'animation', 'hurt_animation', 'maid_animation', 'world_particles',
-  'window_items', 'set_slot', 'trade_list', 'open_window', 'close_window',
-  'update_time', 'game_state_change'
+  'window_items', 'set_slot', 'trade_list', 'open_window', 'close_window', 'craft_progress_bar',
+  'update_time', 'game_state_change', 'held_item_slot', 'abilities', 'update_health',
+  'entity_update_attributes', 'entity_effect', 'remove_entity_effect', 'collect',
+  'sound_effect', 'named_sound_effect', 'entity_sound_effect', 'stop_sound'
 ])
 
 function registryHash (file) {
@@ -28,7 +30,27 @@ function registryHash (file) {
   return createHash('sha256').update(fs.readFileSync(file)).digest('hex')
 }
 
+function nativeRegistries (source) {
+  const registries = {}
+  for (const name of ['minecraft:menu', 'minecraft:mob_effect', 'minecraft:potion', 'minecraft:enchantment']) {
+    const rows = source?.get(name)
+    if (!rows) continue
+    if (!(rows instanceof Map) || rows.size > 8192) throw Error('NATIVE_VIEWER_REGISTRY_BUDGET')
+    registries[name] = [...rows].map(([id, value]) => {
+      if (!Number.isInteger(id) || id < 0 || id > 65535 || !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(value)) throw Error('NATIVE_VIEWER_REGISTRY_INVALID')
+      return { id, name: value }
+    })
+  }
+  return { source: 'same_connection_neoforge_frozen_registry', registries }
+}
+
 function encodeNativePacket (name, params, hash, sequence) {
+  if (name === 'custom_payload' && params?.channel === 'neoforge:advanced_open_screen') {
+    const screen = require('./advanced-open-screen.cjs').decodeAdvancedOpenScreen(params.data)
+    if (!Number.isInteger(screen.windowId) || screen.windowId < 1 || screen.windowId > 255 || screen.menuTypeId > 1048575) throw Error('NATIVE_ADVANCED_MENU_INVALID')
+    name = 'open_window'; params = { windowId: screen.windowId, inventoryType: screen.menuTypeId,
+      windowTitle: screen.title, additionalData: screen.additionalData, sourceChannel: 'neoforge:advanced_open_screen' }
+  }
   if (name === 'custom_payload' && params?.channel === 'touhou_little_maid:maid_animation') {
     const bytes = Buffer.from(params.data)
     if (bytes.length < 2 || bytes.length > 10) throw Error('NATIVE_MAID_ANIMATION_PAYLOAD_INVALID')
@@ -96,4 +118,4 @@ function attachNativeViewerPackets (bot, expectedHash) {
   }
 }
 
-module.exports = { CHANNEL, NAMES, registryHash, encodeNativePacket, decodeNativePacket, attachNativeViewerPackets }
+module.exports = { CHANNEL, NAMES, registryHash, nativeRegistries, encodeNativePacket, decodeNativePacket, attachNativeViewerPackets }

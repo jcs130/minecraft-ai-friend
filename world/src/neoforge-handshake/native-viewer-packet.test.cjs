@@ -3,6 +3,12 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const { EventEmitter } = require('node:events')
 const { CHANNEL, encodeNativePacket, decodeNativePacket, attachNativeViewerPackets } = require('./native-viewer-packet.cjs')
+test('original menu registry snapshot is bounded and does not infer vanilla IDs', () => {
+  const { nativeRegistries } = require('./native-viewer-packet.cjs')
+  const value = nativeRegistries(new Map([['minecraft:menu', new Map([[500, 'custom:workbench']])]]))
+  assert.deepEqual(value.registries['minecraft:menu'], [{ id: 500, name: 'custom:workbench' }])
+  assert.throws(() => nativeRegistries(new Map([['minecraft:menu', new Map([[-1, 'custom:workbench']])]])), /REGISTRY_INVALID/)
+})
 const hash = 'a'.repeat(64)
 
 test('1.21.1 hurt animation remains a received cue on the same connection', () => {

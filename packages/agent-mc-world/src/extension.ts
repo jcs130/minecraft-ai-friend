@@ -16,6 +16,8 @@ export { chatInputError } from '../core/skills.ts';
 export { renderTemplate } from '../core/support/runtime.mjs';
 export { canSeeEntity } from '../core/terrain.ts';
 export { type ViewerServerProtocol } from '../core/viewer-extension.ts';
+export type { NativeConnection, PreparedNativeConnection } from '../core/native-connection.ts';
+export { nativeItemName } from '../core/native-item-identity.ts';
 export { type ViewerCustomEvent } from '../core/viewer-presentation.ts';
 export { type ViewerSkills } from '../core/viewer-state.ts';
 export { MINECRAFT_PANEL_DECLS, MINECRAFT_TOOL_DECLS, MinecraftWorld, type MinecraftWorldOptions } from '../core/world.ts';

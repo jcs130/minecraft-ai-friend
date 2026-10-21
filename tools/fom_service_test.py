@@ -99,6 +99,19 @@ class FomGuards(unittest.TestCase):
         self.assertEqual(gate['readiness'],'minecraft');self.assertEqual(gate['env']['GATE_PUBLIC_GAME_ACCESS'],'0')
         self.assertEqual(gate['env']['GATE_AGENT_PREFIX'],'ag_');service.validator(cfg)
 
+    def test_native_view_requires_matching_frozen_registry_and_uses_same_gateway(self):
+        root=self.gateway();release=json.loads((root/'release.json').read_text())
+        for name in ('block-states.jsonl','blocks.tsv','items.tsv','entities.tsv'):
+            file=root/'registry'/name;file.write_bytes(b'original registry '+name.encode());release['files']['registry/'+name]=hashlib.sha256(file.read_bytes()).hexdigest()
+        digest=release['files']['registry/block-states.jsonl']
+        release['nativeViewer']={'schemaVersion':1,'channel':'mcviewer:native_packet','registrySha256':digest}
+        release['nativeExport']={'block-states.jsonl':digest};(root/'release.json').write_text(json.dumps(release))
+        cfg=service.load_config(self.file);self.assertEqual(len(cfg['services']),2)
+        self.assertEqual(cfg['services'][1]['env']['GATE_NATIVE_VIEWER'],'1')
+        self.assertEqual(cfg['services'][1]['env']['GATE_NATIVE_STATES_FILE'],str(root/'registry/block-states.jsonl'))
+        release['nativeViewer']['registrySha256']='0'*64;(root/'release.json').write_text(json.dumps(release))
+        with self.assertRaisesRegex(ValueError,'Native Agent view'):service.load_config(self.file)
+
     def test_gateway_refuses_foreign_pack_manifest(self):
         root=self.gateway();release=json.loads((root/'release.json').read_text());release['modFiles']['unrelated.jar']='00'
         (root/'release.json').write_text(json.dumps(release))
