@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.78
+
+- Pin core rc.59: `mc_goal.revise.progress` can explicitly correct a recorded
+  numeric report with the existing revision guard. Original/replacement counts
+  remain in the receipt; omitted fields preserve their values, null clears a
+  report, and blueprint progress remains separate. Numeric reports do not
+  certify current world facts, milestones or project completion.
+
 ## 0.2.77
 
 - Refuse a new `continue` judgment carrying a stage goal, before acknowledgement,
