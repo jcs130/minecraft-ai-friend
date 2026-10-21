@@ -16,7 +16,8 @@ TASKS = ("walk", "step", "obstacle", "gap", "follow", "recovery")
 
 class Simulator:
     def __init__(self, node: str, environment=None):
-        command = [node, "--import", "tsx", str(ROOT / "worker.ts")]
+        compiled = ROOT.parent / "dist" / "runtime" / "training" / "worker.js"
+        command = [node, str(compiled)] if compiled.is_file() else [node, "--import", "tsx", str(ROOT / "worker.ts")]
         if environment:
             command.append(str(Path(environment).resolve()))
         self.process = subprocess.Popen(command,

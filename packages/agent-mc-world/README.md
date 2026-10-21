@@ -411,6 +411,8 @@ The build version and exact dependencies are recorded in `package.json` and
 deployment. Java 1.21.1 is the primary viewer/build acceptance target; matching
 1.20.6 resources remain an explicit compatibility input.
 
+Installed runtime and engine children execute the compiled JavaScript directly on Node; they do not require a TypeScript loader or its native build scripts. Source checkouts retain `tsx` as a development dependency for source children and training tools. Both child-launch paths share the same implementation; launching a compiled package does not inherit the host's TypeScript loader flags.
+
 ## Photography and optional cloud artwork
 
 The locked candidate bundles matching Java 1.21.1 viewer assets from the shared visual repository while retaining explicit 1.20.6 assets. Mineflayer item decoding, biome IDs and texture URLs use the action connection's version. It retains guarded ground navigation and limits unsticking to short crouched moves over loaded continuous dry support; cancellation releases held keys. These checks do not certify every fall scenario. Package versions and source hashes are recorded in the manifests rather than inferred from a locally running wrapper.

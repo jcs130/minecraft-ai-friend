@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.63",
+  "version": "0.5.7-rc.64",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -175,11 +175,11 @@
     "ses": "2.3.0",
     "socket.io": "4.8.3",
     "socket.io-client": "4.8.3",
-    "tsx": "4.23.15",
     "vec3": "0.2.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "tsx": "4.23.15",
     "@types/node": "^22.10.0",
     "esbuild": "^0.28.2",
     "typescript": "^5.7.2",
