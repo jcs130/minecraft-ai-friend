@@ -1,0 +1,2366 @@
+diff --git a/buildSrc/src/main/groovy/numen-e2e.gradle b/buildSrc/src/main/groovy/numen-e2e.gradle
+index aa45f6031..dea18e765 100644
+--- a/buildSrc/src/main/groovy/numen-e2e.gradle
++++ b/buildSrc/src/main/groovy/numen-e2e.gradle
+@@ -78,6 +78,7 @@ tasks.register('e2eTest', Test) {
+     testClassesDirs = scenes.output.classesDirs
+     classpath = scenes.runtimeClasspath
+     useJUnitPlatform()
++    systemProperty 'e2e.platform', project.name
+     dependsOn 'e2eServerStart'
+     finalizedBy 'e2eServerStop'
+     // 一次起服只跑一遍,不借 Gradle 的最新检查跳过
+@@ -100,3 +101,33 @@ tasks.register('e2eTest', Test) {
+         systemProperty 'e2e.model.profile', spec.modelProfile
+     }
+ }
++
++// 单独选择的图形客户端验收:运行未改动的官方发布 JAR,不要求普通 e2e/CI 安装图形环境。
++if (project.name == 'paper') {
++    tasks.register('officialClientTest', Test) {
++        group = 'verification'
++        def nativeScenes = project(':numen:common').sourceSets.clientE2e
++        testClassesDirs = nativeScenes.output.classesDirs
++        classpath = nativeScenes.runtimeClasspath
++        useJUnitPlatform()
++        dependsOn 'e2eServerStart'
++        finalizedBy 'e2eServerStop'
++        outputs.upToDateWhen { false }
++        maxParallelForks = 1
++        testLogging { events 'passed', 'failed'; exceptionFormat = 'full'; showStandardStreams = true }
++        def spec = e2e
++        doFirst {
++            ['host', 'port'].each { systemProperty "e2e.${it}", spec[it] }
++            systemProperty 'e2e.rcon.port', spec.rconPort
++            systemProperty 'e2e.rcon.password', spec.rconPassword
++            systemProperty 'e2e.model.port', spec.modelPort
++            systemProperty 'e2e.model.key', spec.modelKey
++            systemProperty 'e2e.model.profile', spec.modelProfile
++            systemProperty 'e2e.client.launcher', rootProject.file('numen/common/src/e2e/client/run-release-client.py')
++            systemProperty 'e2e.client.output', layout.buildDirectory.dir('official-client').get().asFile
++            ['python', 'java', 'official', 'fixture', 'cache'].each {
++                systemProperty "e2e.client.${it}", providers.gradleProperty("releaseClient.${it}").get()
++            }
++        }
++    }
++}
+diff --git a/docs/architecture-mind-model.md b/docs/architecture-mind-model.md
+index 99eadcf6d..2f48162e5 100644
+--- a/docs/architecture-mind-model.md
++++ b/docs/architecture-mind-model.md
+@@ -2,6 +2,9 @@
+ 
+ 一个同伴 = 一具身体 + 一个大脑 + 两个消息口,都住在服务端;客户端是可选的前端。大脑二选一:服务端大脑(服务端跑循环、用主人自己的或服主提供的模型)
+ 或外部大脑(外部 agent 经远程端点驾驶)。循环、收件箱、记忆都在服务端(落地见 `docs/input-pipeline.md` §十四)。
++Paper 对官方 0.1.4 / 0.1.4.1 客户端保留旧线路:它在玩家电脑上运行循环与个人资料,作为一种外部驾驶端接入。
++旧线路只负责版本编解码、连接作用域的模块快照与回执;程序仍由唯一的服务端执行器、身体和权限层执行。
++同一身体只认一个驾驶者,已连接的 MCP 外脑优先;客户端断线即撤销自己的驾驶资格,不重放未决动作,不覆盖服务端已有资料。
+ 数据与处理都在服务端;客户端只做这台电脑的设备进出——录音、放音和它们用的 key(存储的归属见 `docs/input-pipeline.md` §六)。
+ 任何新功能必须能在本文档里找到自己的位置;找不到,先修宪再动工。
+ 
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionBrains.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionBrains.java
+index 51e8cb642..ae777fd81 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionBrains.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionBrains.java
+@@ -103,7 +103,8 @@ public final class CompanionBrains {
+                 new LlmMind(ModelServices.of(server).providers(owner), owner, ModelServices.of(server).quota()),
+                 Replies.link(server, owner),
+                 () -> OwnerPresence.mayRun(server, owner, companion),
+-                () -> com.dwinovo.numen.api.mcp.server.McpMode.instance().driving(owner, companion));
++                () -> com.dwinovo.numen.api.mcp.server.McpMode.instance().driving(owner, companion)
++                        || ReleaseClients.driving(owner, companion));
+         return loop;
+     }
+ 
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java
+index 04e169d04..0f3d122a1 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/CompanionLoop.java
+@@ -373,11 +373,15 @@ public final class CompanionLoop {
+ 
+     /** 收一批进队列的输入。什么时候倒出去由队列的熟度和内核的停牌说了算。 */
+     public void push(List<EventQueue.Entry> entries) {
++        if (ReleaseClients.deliver(companion, entries)) {
++            convo.addUser(String.join("\n", EventQueue.render(entries, System.currentTimeMillis())));
++            return;
++        }
+         loop.push(entries);
+     }
+ 
+     private boolean deliver(EventQueue.Entry entry) {
+-        loop.push(List.of(entry));
++        push(List.of(entry));
+         return loop.status().phase() != Phase.MODEL;
+     }
+ 
+@@ -408,6 +412,7 @@ public final class CompanionLoop {
+     }
+ 
+     private void updateDriving() {
++        ReleaseClients.reconcile(companion);
+         // 驾驶席翻成外接的那一下作废在飞的回合:接管之后内脑的回复不该再派工具、整理不该再换历史。
+         // 交还不用做什么——停牌是现算的,内核下一次推进自己看得见。
+         boolean driving = parts.driving().getAsBoolean();
+@@ -473,6 +478,7 @@ public final class CompanionLoop {
+     /** 身体死了:内核冻结,收件箱照收。 */
+     public void onDied(String cause) {
+         deathCause = cause;
++        ReleaseClients.life(companion, cause, false);
+         loop.halt(HaltReason.DEATH, cause);
+     }
+ 
+@@ -482,6 +488,11 @@ public final class CompanionLoop {
+                 : (deathCause != null ? deathCause : "未知原因");
+         String cause = raw.replace('<', '(').replace('>', ')');
+         deathCause = null;
++        if (ReleaseClients.isDriving(companion)) {
++            ReleaseClients.life(companion, cause, true);
++            loop.respawned();
++            return;
++        }
+         Constants.LOG.info("[numen-entity#{}] respawned ({}) — loop thawed", companion, cause);
+         // 死亡是急件——她关于自己处境的认知几乎每一条都作废了:物品掉在死亡地点、位置从矿洞变成了主人身边、
+         // 手上的任务没了、血量装备全变了。这不分"任务中死"还是"空闲死",所以这里没有任何判据。
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ReleaseClients.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ReleaseClients.java
+new file mode 100644
+index 000000000..771f3a41f
+--- /dev/null
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ReleaseClients.java
+@@ -0,0 +1,338 @@
++package com.dwinovo.numen.api.brain;
++
++import com.dwinovo.numen.api.agent.inbox.EventQueue;
++import com.dwinovo.numen.api.agent.loop.Program;
++import com.dwinovo.numen.api.entity.CompanionRegistry;
++import com.dwinovo.numen.api.entity.Companions;
++import com.dwinovo.numen.api.entity.MojangSkins;
++import com.dwinovo.numen.api.entity.NumenPlayer;
++import com.dwinovo.numen.api.library.Fingerprint;
++import com.dwinovo.numen.api.mcp.server.McpMode;
++import com.dwinovo.numen.api.network.NumenNetwork;
++import com.dwinovo.numen.api.network.OwnedBody;
++import com.dwinovo.numen.api.network.ReleasePackets;
++import com.dwinovo.numen.api.platform.ServerLifecycle;
++import com.dwinovo.numen.api.program.NetworkTransport;
++import com.dwinovo.numen.api.program.ReleaseModules;
++import com.dwinovo.numen.api.program.ServerPrograms;
++import com.dwinovo.numen.api.task.CompanionTickDispatcher;
++import com.google.gson.JsonArray;
++import com.google.gson.JsonObject;
++import net.minecraft.server.level.ServerPlayer;
++
++import java.util.HashMap;
++import java.util.LinkedHashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.Set;
++import java.util.UUID;
++import java.util.concurrent.ConcurrentHashMap;
++
++/** 官方发布客户端是一种外部大脑;协议存在不等于新版 Presence,也不授予别人的身体或模型资料。 */
++public final class ReleaseClients {
++    private static final Map<UUID, Session> OWNERS = new ConcurrentHashMap<>();
++    private static final Map<UUID, Session> BODIES = new ConcurrentHashMap<>();
++    private static final Map<UUID, History> HISTORIES = new LinkedHashMap<>();
++    private static final long HISTORY_MS = 60 * 60 * 1000L;
++    private static final int MAX_HISTORY_OWNERS = 64;
++
++    static {
++        ServerLifecycle.onStopped(() -> {
++            List.copyOf(OWNERS.keySet()).forEach(ReleaseClients::left);
++            HISTORIES.clear();
++        });
++    }
++
++    private ReleaseClients() {}
++
++    private static final class History {
++        final Map<UUID, Map<String, Receipt>> books = new HashMap<>();
++        long touched = System.currentTimeMillis();
++        int cachedBytes;
++    }
++
++    private static final class Receipt {
++        final String fingerprint;
++        String result;
++        boolean running = true;
++        Receipt(String fingerprint) { this.fingerprint = fingerprint; }
++    }
++
++    private static final class Session {
++        final ServerPlayer owner;
++        final History history;
++        final Map<UUID, ReleaseModules> modules = new HashMap<>();
++        final Map<UUID, Active> active = new HashMap<>();
++        final Map<UUID, TaskView> tasks = new HashMap<>();
++        volatile Set<UUID> bodies = Set.of();
++        boolean online = true;
++        Session(ServerPlayer owner, History history) { this.owner = owner; this.history = history; }
++    }
++
++    private record Active(String clientId, String serverId) {}
++    private record TaskView(String id, String description) {}
++
++    /** 平台已通过旧版独有频道识别客户端,且玩家已完成入场。主线程调用。 */
++    public static void joined(ServerPlayer owner) {
++        if (owner instanceof NumenPlayer || OWNERS.containsKey(owner.getUUID())) return;
++        long now = System.currentTimeMillis();
++        HISTORIES.entrySet().removeIf(e -> !OWNERS.containsKey(e.getKey()) && now - e.getValue().touched > HISTORY_MS);
++        if (!HISTORIES.containsKey(owner.getUUID()) && HISTORIES.size() >= MAX_HISTORY_OWNERS) {
++            UUID oldest = HISTORIES.keySet().stream().filter(id -> !OWNERS.containsKey(id)).findFirst().orElse(null);
++            if (oldest == null) throw new IllegalStateException("旧客户端连接预算已满");
++            HISTORIES.remove(oldest);
++        }
++        Session session = new Session(owner, HISTORIES.computeIfAbsent(owner.getUUID(), id -> new History()));
++        OWNERS.put(owner.getUUID(), session);
++        refresh(session);
++        // 在旧客户端得到名册并启动循环之前,先让内脑看到驾驶权变化。
++        session.bodies.forEach(id -> CompanionLoops.get(id).ifPresent(CompanionLoop::tick));
++    }
++
++    private static void refresh(Session session) {
++        Set<UUID> ids = CompanionRegistry.get(session.owner.server).ownedBy(session.owner.getUUID()).stream()
++                .map(Map.Entry::getKey).collect(java.util.stream.Collectors.toUnmodifiableSet());
++        BODIES.entrySet().removeIf(e -> e.getValue() == session && !ids.contains(e.getKey()));
++        session.bodies = ids;
++        ids.forEach(id -> BODIES.put(id, session));
++    }
++
++    /** 所有仍存在的同伴都留在名册,包括死亡、休眠和被移出的身体。 */
++    public static void roster(ServerPlayer owner) {
++        Session session = OWNERS.get(owner.getUUID());
++        if (session != null) refresh(session);
++    }
++
++    public static boolean hasClient(UUID owner) { return OWNERS.containsKey(owner); }
++
++    public static boolean driving(UUID owner, UUID body) {
++        Session session = OWNERS.get(owner);
++        return session != null && session.online && session.bodies.contains(body)
++                && !McpMode.instance().driving(owner, body);
++    }
++
++    public static boolean isDriving(UUID body) {
++        Session session = BODIES.get(body);
++        return session != null && driving(session.owner.getUUID(), body);
++    }
++
++    /** 外脑控制权切换先取消旧客户端的程序,避免两个驾驶者交错派发身体动作。 */
++    public static void reconcile(UUID body) {
++        Session session = BODIES.get(body);
++        if (session == null || !McpMode.instance().driving(session.owner.getUUID(), body)) return;
++        Active active = session.active.get(body);
++        if (active != null) ServerPrograms.cutOff(body, active.serverId(), true);
++    }
++
++    /** 收件箱的路由仍由同伴大脑调用;同一输入只交给当前驾驶者一次。 */
++    public static boolean deliver(UUID body, List<EventQueue.Entry> entries) {
++        Session session = BODIES.get(body);
++        if (session == null || !driving(session.owner.getUUID(), body)) return false;
++        NumenNetwork.sendToPlayer(session.owner, new ReleasePackets.Events(body, entries));
++        return true;
++    }
++
++    public static void life(UUID body, String cause, boolean alive) {
++        Session session = BODIES.get(body);
++        if (session != null && driving(session.owner.getUUID(), body)) {
++            if (alive) NumenNetwork.sendToPlayer(session.owner, new ReleasePackets.Respawn(body, cause));
++            else NumenNetwork.sendToPlayer(session.owner, new ReleasePackets.Death(body, cause));
++        }
++    }
++
++    /** 每秒补任务状态,取原任务槽,不由客户端猜自己是否完成。 */
++    public static void tick(net.minecraft.server.MinecraftServer server) {
++        boolean refresh = server.getTickCount() % 20 == 0;
++        for (Session session : OWNERS.values()) {
++            if (refresh) refresh(session);
++            for (UUID id : session.bodies) {
++                var task = CompanionTickDispatcher.currentTaskFor(id);
++                String taskId = task == null ? "" : task.publicId();
++                TaskView old = session.tasks.get(id);
++                if (old != null && old.id().equals(taskId) && !refresh) continue;
++                TaskView view = new TaskView(taskId, task == null ? "" : task.describe());
++                if (view.equals(old)) continue;
++                session.tasks.put(id, view);
++                NumenNetwork.sendToPlayer(session.owner, task == null
++                        ? new ReleasePackets.Task(id, "", "", "", false, 0)
++                        : new ReleasePackets.Task(id, task.publicId(), task.getToolName(), task.describe(),
++                                task.getDeadlineGameTime() >= com.dwinovo.numen.api.task.TaskRecord.NO_DEADLINE,
++                                Math.max(0, server.overworld().getGameTime()
++                                        - task.getStartedGameTime()) * 50));
++            }
++        }
++    }
++
++    private static NumenPlayer body(ServerPlayer owner, UUID id, java.util.function.Consumer<String> refuse) {
++        var entry = CompanionRegistry.get(owner.server).find(id);
++        if (entry == null || !owner.getUUID().equals(entry.owner())) {
++            refuse.accept("不是你的同伴，请先查询本人的同伴名册。");
++            return null;
++        }
++        if (entry.diedAt() > 0) {
++            refuse.accept("同伴正在等待正常复活，请稍后查询名册，不要重复召回或执行程序。");
++            return null;
++        }
++        if (!driving(owner.getUUID(), id)) {
++            refuse.accept("该同伴当前由其他外部大脑控制，请先停止原控制端。");
++            return null;
++        }
++        return OwnedBody.of(owner, id, refuse);
++    }
++
++    public static void run(ReleasePackets.Run request, ServerPlayer owner) {
++        Session session = OWNERS.get(owner.getUUID());
++        if (session == null) return;
++        if (request.programId().isBlank() || request.programId().length() > 256) {
++            result(owner, request, refused("程序编号须为 1 至 256 字符。"));
++            return;
++        }
++        NumenPlayer her = body(owner, request.entityUuid(), why -> result(owner, request, refused(why)));
++        if (her == null) return;
++        Map<String, Receipt> book = session.history.books.computeIfAbsent(her.getUUID(), id -> new LinkedHashMap<>());
++        String identity = Fingerprint.of(request.code() + "\n" + new java.util.TreeMap<>(request.modules().manifest()));
++        Receipt previous = book.get(request.programId());
++        if (previous != null) {
++            result(owner, request, !previous.fingerprint.equals(identity)
++                    ? refused("这个程序编号已用于其他内容，请重新查询状态后使用新编号。")
++                    : previous.result != null ? previous.result
++                    : refused(previous.running ? "该程序仍在执行，请等待原回执，不要重复派发。"
++                            : "该程序的结果尚不能确认，请查询身体和任务状态，不要重放动作。"));
++            return;
++        }
++        if (session.active.containsKey(her.getUUID())) {
++            result(owner, request, refused("这个同伴已有程序在执行，本次没有开始；请等待原回执。"));
++            return;
++        }
++        ReleaseModules modules = session.modules.computeIfAbsent(her.getUUID(), id -> new ReleaseModules());
++        List<String> missing;
++        try {
++            missing = modules.accept(request.modules());
++        } catch (IllegalArgumentException badModule) {
++            result(owner, request, refused(badModule.getMessage()));
++            return;
++        }
++        if (!missing.isEmpty()) {
++            JsonObject json = new JsonObject();
++            JsonArray hashes = new JsonArray();
++            missing.forEach(hashes::add);
++            json.add("missing", hashes);
++            result(owner, request, json.toString());
++            return;
++        }
++        if (book.size() >= 2048) {
++            result(owner, request, refused("程序回执记录已满，本次没有执行。请保存当前进度并联系服主归档记录。"));
++            return;
++        }
++        Receipt receipt = new Receipt(identity);
++        book.put(request.programId(), receipt);
++        Active active = new Active(request.programId(), "release-" + her.getUUID() + "-" + UUID.randomUUID());
++        session.active.put(her.getUUID(), active);
++        ServerPrograms.runClientProgram(her, her.getUUID(), owner.getUUID(), active.serverId(), request.code(), modules,
++                NetworkTransport.INSTANCE, outcome -> {
++                    receipt.running = false;
++                    String json = ended(outcome);
++                    // 保留编号和未知标志,仅回执正文受预算约束;正文被淘汰也不能重执行。
++                    if (session.history.cachedBytes + json.length() * 2 <= 2 * 1024 * 1024) {
++                        receipt.result = json;
++                        session.history.cachedBytes += json.length() * 2;
++                    }
++                    session.active.remove(her.getUUID(), active);
++                    if (session.online) result(owner, request, json);
++                });
++    }
++
++    public static void stopped(ReleasePackets.Stop request, ServerPlayer owner) {
++        Session session = OWNERS.get(owner.getUUID());
++        Active active = session == null ? null : session.active.get(request.entityUuid());
++        if (active == null || !request.programId().equals(active.clientId())
++                || body(owner, request.entityUuid(), why -> {}) == null) return;
++        if (request.cutOff()) ServerPrograms.cutOff(request.entityUuid(), active.serverId(), request.stopBody());
++        else ServerPrograms.interrupt(request.entityUuid(), active.serverId(), request.why());
++    }
++
++    public static void cancel(ReleasePackets.Cancel request, ServerPlayer owner) {
++        NumenPlayer her = body(owner, request.entityUuid(), why -> {});
++        if (her != null) CompanionTickDispatcher.cancelFor(her);
++    }
++
++    public static void clientResult(ReleasePackets.ClientResult reply, ServerPlayer owner) {
++        Session session = OWNERS.get(owner.getUUID());
++        Active active = session == null ? null : session.active.get(reply.entityUuid());
++        if (active == null || !reply.callId().startsWith(active.serverId() + "#")
++                || !driving(owner.getUUID(), reply.entityUuid())) return;
++        if (reply.modules().isPresent()) {
++            try {
++                session.modules.computeIfAbsent(reply.entityUuid(), id -> new ReleaseModules()).accept(reply.modules().get());
++            } catch (IllegalArgumentException invalidModules) {
++                NetworkTransport.INSTANCE.answered(owner.getUUID(), new com.dwinovo.numen.api.network.payload.ClientCallResultPayload(
++                        reply.entityUuid(), reply.callId(), com.dwinovo.numen.script.ApiReply.error(
++                                com.dwinovo.numen.script.ErrorKind.FAILED,
++                                "客户端模块同步失败，文件可能已在客户端保存；请先核对模块，不要直接重做之前的动作。", null, null).toString()));
++                return;
++            }
++        }
++        NetworkTransport.INSTANCE.answered(owner.getUUID(), new com.dwinovo.numen.api.network.payload.ClientCallResultPayload(
++                reply.entityUuid(), reply.callId(), reply.replyJson()));
++    }
++
++    public static void summon(ReleasePackets.Summon request, ServerPlayer owner) {
++        if (!hasClient(owner.getUUID())) return;
++        Companions.summonFor(owner, request.name().trim(), request.creative(), summoned -> {
++            if (summoned.problem() != null) owner.sendSystemMessage(summoned.problem());
++            else if (summoned.body() != null && !request.skinValue().isBlank())
++                Companions.applySkin(owner.server, summoned.body().getUUID(), new MojangSkins.Skin(request.skinValue(), request.skinSig()));
++        });
++    }
++
++    public static void skin(ReleasePackets.Skin request, ServerPlayer owner) {
++        if (body(owner, request.uuid(), why -> {}) != null)
++            Companions.applySkin(owner.server, request.uuid(), request.skinValue().isBlank() ? null
++                    : new MojangSkins.Skin(request.skinValue(), request.skinSig()));
++    }
++
++    public static void left(UUID owner) {
++        Session session = OWNERS.remove(owner);
++        if (session == null) return;
++        session.online = false;
++        session.history.touched = System.currentTimeMillis();
++        BODIES.entrySet().removeIf(e -> e.getValue() == session);
++        Map.copyOf(session.active).forEach((body, program) -> ServerPrograms.cutOff(body, program.serverId(), true));
++        NetworkTransport.INSTANCE.ownerLeft(owner);
++        session.modules.clear();
++    }
++
++    private static void result(ServerPlayer owner, ReleasePackets.Run request, String json) {
++        NumenNetwork.sendToPlayer(owner, new ReleasePackets.Result(request.entityUuid(), request.programId(), json));
++    }
++
++    private static String refused(String message) { return ended(Program.Outcome.refused(message)); }
++
++    /** 与官方 RunResult.Ended 完全相同的 JSON,不把 return 值或私有错误对象搬上网线。 */
++    static String ended(Program.Outcome outcome) {
++        JsonObject out = new JsonObject();
++        out.addProperty("receipt", outcome.receipt());
++        out.addProperty("status", outcome.ending().status().wire());
++        if (outcome.ending().errorKind() != null) out.addProperty("error_kind", outcome.ending().errorKind());
++        JsonArray calls = new JsonArray();
++        outcome.calls().forEach(c -> {
++            JsonObject row = new JsonObject();
++            row.addProperty("function", c.function()); row.addProperty("call", c.call());
++            if (c.first() != null) row.addProperty("first", c.first());
++            if (c.kind() != null) row.addProperty("kind", c.kind());
++            calls.add(row);
++        });
++        out.add("calls", calls);
++        if (outcome.stoppedFor() != null) out.addProperty("stopped_for", outcome.stoppedFor());
++        JsonArray used = new JsonArray();
++        outcome.used().forEach(u -> {
++            JsonObject row = new JsonObject();
++            row.addProperty("module", u.module()); row.addProperty("ok", u.tally().ok());
++            row.addProperty("line", u.tally().line());
++            if (u.tally().error() != null) row.addProperty("error", u.tally().error());
++            used.add(row);
++        });
++        out.add("used", used);
++        return out.toString();
++    }
++}
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/Replies.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/Replies.java
+index 3c9ce0be4..16e68668e 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/Replies.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/Replies.java
+@@ -139,7 +139,7 @@ public final class Replies {
+      * 客户端画答复框;没装的,发给他一条带可点按钮的聊天消息,撤回时说一声为什么。他答复的唯一入口不变:{@code ConsentDesk.reply}。
+      */
+     public static void consent(ServerPlayer owner, String companion, ConsentRequestPayload request) {
+-        if (Presence.hasClient(owner.getUUID())) {
++        if (Presence.hasClient(owner.getUUID()) || ReleaseClients.hasClient(owner.getUUID())) {
+             NumenNetwork.sendToPlayer(owner, request);
+         } else if (!request.withdrawn()) {
+             owner.sendSystemMessage(ConsentChat.ask(companion, request));
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/NumenCommands.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/NumenCommands.java
+index 1430231f9..4d0b8c471 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/NumenCommands.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/NumenCommands.java
+@@ -276,7 +276,7 @@ public final class NumenCommands {
+ 
+     /** 这条指令作用在调用者自己的客户端上:他没装(原版客户端)就说一声,不是悄悄什么都没发生。 */
+     private static boolean needsClient(CommandContext<CommandSourceStack> ctx, ServerPlayer caller) {
+-        if (Presence.hasClient(caller.getUUID())) {
++        if (Presence.hasClient(caller.getUUID()) || com.dwinovo.numen.api.brain.ReleaseClients.hasClient(caller.getUUID())) {
+             return false;
+         }
+         ctx.getSource().sendFailure(Component.translatable(Keys.COMMAND_NEEDS_CLIENT));
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/network/NumenNetwork.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/network/NumenNetwork.java
+index eeb42bf58..ee14e6218 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/network/NumenNetwork.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/network/NumenNetwork.java
+@@ -212,6 +212,19 @@ public final class NumenNetwork {
+         Services.network().registerClientToServer(type, codec, handler, execution);
+     }
+ 
++    public static void registerReleaseProtocol() {
++        // 官方发布客户端在本机跑循环,经这组入口驾驶同一具受权限约束的身体。
++        toServer(ReleasePackets.Run.TYPE, ReleasePackets.Run.CODEC, com.dwinovo.numen.api.brain.ReleaseClients::run);
++        toServer(ReleasePackets.Stop.TYPE, ReleasePackets.Stop.CODEC, com.dwinovo.numen.api.brain.ReleaseClients::stopped);
++        toServer(ReleasePackets.Cancel.TYPE, ReleasePackets.Cancel.CODEC, com.dwinovo.numen.api.brain.ReleaseClients::cancel);
++        toServer(ReleasePackets.Skin.TYPE, ReleasePackets.Skin.CODEC, com.dwinovo.numen.api.brain.ReleaseClients::skin);
++        toClient(ReleasePackets.Result.TYPE, ReleasePackets.Result.CODEC, p -> {});
++        toClient(ReleasePackets.Task.TYPE, ReleasePackets.Task.CODEC, p -> {});
++        toClient(ReleasePackets.Events.TYPE, ReleasePackets.Events.CODEC, p -> {});
++        toClient(ReleasePackets.Death.TYPE, ReleasePackets.Death.CODEC, p -> {});
++        toClient(ReleasePackets.Respawn.TYPE, ReleasePackets.Respawn.CODEC, p -> {});
++    }
++
+     public static void register() {
+         // 两个方向上一条超过单包上限的消息的片(见 Fragments):对端收齐拼回,交给原来的处理器。
+         toServer(FragmentPayload.TO_SERVER, FragmentPayload.TO_SERVER_CODEC, NumenNetwork::fragmentFromClient,
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/network/ReleasePackets.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/network/ReleasePackets.java
+new file mode 100644
+index 000000000..bbe333d1e
+--- /dev/null
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/network/ReleasePackets.java
+@@ -0,0 +1,159 @@
++package com.dwinovo.numen.api.network;
++
++import com.dwinovo.numen.api.agent.inbox.EventQueue;
++import com.dwinovo.numen.api.network.payload.CompanionListPayload;
++import io.netty.buffer.ByteBuf;
++import net.minecraft.core.UUIDUtil;
++import net.minecraft.network.RegistryFriendlyByteBuf;
++import net.minecraft.network.codec.ByteBufCodecs;
++import net.minecraft.network.codec.StreamCodec;
++import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
++import net.minecraft.resources.ResourceLocation;
++
++import java.util.LinkedHashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.Optional;
++import java.util.UUID;
++
++/** 官方 0.1.4 / 0.1.4.1 的线路;同名包也保留各自的布局,不能交给新版解码器。 */
++public final class ReleasePackets {
++    private ReleasePackets() {}
++
++    private static <T extends CustomPacketPayload> CustomPacketPayload.Type<T> type(String path) {
++        return new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("numen_api", path));
++    }
++
++    public record Modules(Map<String, String> manifest, Map<String, String> bodies) {
++        public static final StreamCodec<ByteBuf, Modules> CODEC = StreamCodec.composite(
++                ByteBufCodecs.map(LinkedHashMap::new, Wire.TO_SERVER.text(), ByteBufCodecs.stringUtf8(12), 2048), Modules::manifest,
++                ByteBufCodecs.map(LinkedHashMap::new, ByteBufCodecs.stringUtf8(12), Wire.TO_SERVER.text(), 2048), Modules::bodies,
++                Modules::new);
++        public Modules {
++            manifest = Map.copyOf(manifest);
++            bodies = Map.copyOf(bodies);
++        }
++    }
++
++    public record Run(UUID entityUuid, String programId, String code, Modules modules)
++            implements CustomPacketPayload, Wire.Fragmentable {
++        public static final Type<Run> TYPE = ReleasePackets.type("run_program");
++        public static final StreamCodec<ByteBuf, Run> CODEC = StreamCodec.composite(
++                UUIDUtil.STREAM_CODEC, Run::entityUuid, Wire.TO_SERVER.text(), Run::programId,
++                Wire.TO_SERVER.text(), Run::code, Modules.CODEC, Run::modules, Run::new);
++        @Override public Type<Run> type() { return TYPE; }
++    }
++
++    public record Result(UUID entityUuid, String programId, String resultJson) implements CustomPacketPayload {
++        public static final Type<Result> TYPE = ReleasePackets.type("program_result");
++        public static final StreamCodec<ByteBuf, Result> CODEC = StreamCodec.composite(
++                UUIDUtil.STREAM_CODEC, Result::entityUuid, Wire.TO_CLIENT.text(), Result::programId,
++                Wire.TO_CLIENT.text(), Result::resultJson, Result::new);
++        @Override public Type<Result> type() { return TYPE; }
++    }
++
++    public record Stop(UUID entityUuid, String programId, boolean cutOff, boolean stopBody, String why)
++            implements CustomPacketPayload {
++        public static final Type<Stop> TYPE = ReleasePackets.type("stop_program");
++        public static final StreamCodec<ByteBuf, Stop> CODEC = StreamCodec.composite(
++                UUIDUtil.STREAM_CODEC, Stop::entityUuid, Wire.TO_SERVER.text(), Stop::programId,
++                ByteBufCodecs.BOOL, Stop::cutOff, ByteBufCodecs.BOOL, Stop::stopBody,
++                Wire.TO_SERVER.text(), Stop::why, Stop::new);
++        @Override public Type<Stop> type() { return TYPE; }
++    }
++
++    public record Cancel(UUID entityUuid) implements CustomPacketPayload {
++        public static final Type<Cancel> TYPE = ReleasePackets.type("cancel_tasks");
++        public static final StreamCodec<ByteBuf, Cancel> CODEC = StreamCodec.composite(
++                UUIDUtil.STREAM_CODEC, Cancel::entityUuid, Cancel::new);
++        @Override public Type<Cancel> type() { return TYPE; }
++    }
++
++    public record Skin(UUID uuid, String skinValue, String skinSig) implements CustomPacketPayload {
++        public static final Type<Skin> TYPE = ReleasePackets.type("change_skin");
++        public static final StreamCodec<ByteBuf, Skin> CODEC = StreamCodec.composite(
++                UUIDUtil.STREAM_CODEC, Skin::uuid, Wire.TO_SERVER.text(), Skin::skinValue,
++                Wire.TO_SERVER.text(), Skin::skinSig, Skin::new);
++        @Override public Type<Skin> type() { return TYPE; }
++    }
++
++    public record Summon(String name, String skinValue, String skinSig, boolean creative) {
++        public static final StreamCodec<ByteBuf, Summon> CODEC = StreamCodec.composite(
++                ByteBufCodecs.stringUtf8(16), Summon::name, Wire.TO_SERVER.text(), Summon::skinValue,
++                Wire.TO_SERVER.text(), Summon::skinSig, ByteBufCodecs.BOOL, Summon::creative, Summon::new);
++    }
++
++    public record ClientResult(UUID entityUuid, String callId, String replyJson, Optional<Modules> modules) {
++        public static final StreamCodec<ByteBuf, ClientResult> CODEC = StreamCodec.composite(
++                UUIDUtil.STREAM_CODEC, ClientResult::entityUuid, Wire.TO_SERVER.text(), ClientResult::callId,
++                Wire.TO_SERVER.text(), ClientResult::replyJson, ByteBufCodecs.optional(Modules.CODEC),
++                ClientResult::modules, ClientResult::new);
++    }
++
++    public record Roster(String worldId, List<Row> companions) {
++        public record Row(UUID uuid, String name, long respawnInMs, boolean creative) {
++            static final StreamCodec<RegistryFriendlyByteBuf, Row> CODEC = StreamCodec.composite(
++                    UUIDUtil.STREAM_CODEC, Row::uuid, Wire.TO_CLIENT.text(), Row::name,
++                    ByteBufCodecs.VAR_LONG, Row::respawnInMs, ByteBufCodecs.BOOL, Row::creative, Row::new);
++        }
++        public static final StreamCodec<RegistryFriendlyByteBuf, Roster> CODEC = StreamCodec.composite(
++                Wire.TO_CLIENT.text(), Roster::worldId, Row.CODEC.apply(ByteBufCodecs.list(64)), Roster::companions,
++                Roster::new);
++        public static Roster of(CompanionListPayload payload) {
++            return new Roster(payload.worldId(), payload.companions().stream().map(e -> new Row(
++                    e.uuid(), e.name(), e.respawnInMs(), e.creative())).toList());
++        }
++    }
++
++    public record Death(UUID entityUuid, String cause) implements CustomPacketPayload {
++        public static final Type<Death> TYPE = ReleasePackets.type("numen_death");
++        public static final StreamCodec<ByteBuf, Death> CODEC = StreamCodec.composite(
++                UUIDUtil.STREAM_CODEC, Death::entityUuid, Wire.TO_CLIENT.text(), Death::cause, Death::new);
++        @Override public Type<Death> type() { return TYPE; }
++    }
++
++    public record Respawn(UUID entityUuid, String cause) implements CustomPacketPayload {
++        public static final Type<Respawn> TYPE = ReleasePackets.type("numen_respawn");
++        public static final StreamCodec<ByteBuf, Respawn> CODEC = StreamCodec.composite(
++                UUIDUtil.STREAM_CODEC, Respawn::entityUuid, Wire.TO_CLIENT.text(), Respawn::cause, Respawn::new);
++        @Override public Type<Respawn> type() { return TYPE; }
++    }
++
++    public record Task(UUID entityUuid, String taskId, String tool, String describe, boolean standing, long elapsedMs)
++            implements CustomPacketPayload {
++        public static final Type<Task> TYPE = ReleasePackets.type("current_task");
++        public static final StreamCodec<ByteBuf, Task> CODEC = StreamCodec.composite(
++                UUIDUtil.STREAM_CODEC, Task::entityUuid, Wire.TO_CLIENT.text(), Task::taskId,
++                Wire.TO_CLIENT.text(), Task::tool, Wire.TO_CLIENT.text(), Task::describe,
++                ByteBufCodecs.BOOL, Task::standing, ByteBufCodecs.VAR_LONG, Task::elapsedMs, Task::new);
++        @Override public Type<Task> type() { return TYPE; }
++    }
++
++    public record Events(UUID entityUuid, List<EventQueue.Entry> entries)
++            implements CustomPacketPayload, Wire.Oversized<Events> {
++        public static final Type<Events> TYPE = ReleasePackets.type("numen_event");
++        private static final StreamCodec<ByteBuf, EventQueue.Entry> ENTRY = StreamCodec.composite(
++                Wire.TO_CLIENT.text(), EventQueue.Entry::type, Wire.TO_CLIENT.text(), EventQueue.Entry::text,
++                ByteBufCodecs.VAR_LONG, EventQueue.Entry::ts, ByteBufCodecs.BOOL, EventQueue.Entry::urgent,
++                ByteBufCodecs.optional(Wire.TO_CLIENT.text()), e -> Optional.ofNullable(e.result()).map(Object::toString),
++                (type, text, ts, urgent, result) -> new EventQueue.Entry(type, text, ts, urgent,
++                        result.map(s -> com.google.gson.JsonParser.parseString(s).getAsJsonObject()).orElse(null)));
++        public static final StreamCodec<ByteBuf, Events> CODEC = StreamCodec.composite(
++                UUIDUtil.STREAM_CODEC, Events::entityUuid, ENTRY.apply(ByteBufCodecs.list()), Events::entries,
++                Events::new);
++        @Override public Type<Events> type() { return TYPE; }
++        @Override public Events shrunk(java.util.function.Predicate<Events> fits, int bytes, int budget) {
++            List<EventQueue.Entry> out = new java.util.ArrayList<>(entries);
++            List<Integer> longest = new java.util.ArrayList<>();
++            for (int i = 0; i < entries.size(); i++) longest.add(i);
++            longest.sort(java.util.Comparator.comparingInt((Integer i) -> entries.get(i).text().length()).reversed());
++            for (int i : longest) {
++                EventQueue.Entry e = entries.get(i);
++                out.set(i, new EventQueue.Entry(e.type(), "事件正文过长，请查询当前状态。", e.ts(), e.urgent(), e.result()));
++                Events value = new Events(entityUuid, List.copyOf(out));
++                if (fits.test(value)) return value;
++            }
++            return new Events(entityUuid, List.copyOf(out));
++        }
++    }
++}
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/platform/PlayerSessions.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/platform/PlayerSessions.java
+index 5fdc1640d..40e4428a3 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/platform/PlayerSessions.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/platform/PlayerSessions.java
+@@ -56,6 +56,7 @@ public final class PlayerSessions {
+     /** 主人断线:他名下在服务端跑着的程序收掉,等他答复的反向请求失败,他的模块缓存清掉。 */
+     public static void left(ServerPlayer player) {
+         if (!(player instanceof NumenPlayer)) {
++            com.dwinovo.numen.api.brain.ReleaseClients.left(player.getUUID());
+             OwnerPresence.playerLeft(player.server, player.getUUID());
+             ANNOUNCED.remove(player.getUUID());
+         }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ProgramPort.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ProgramPort.java
+index 5d35fa500..0e5c50904 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ProgramPort.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ProgramPort.java
+@@ -21,11 +21,15 @@ import java.util.function.Consumer;
+ final class ProgramPort implements Program.Port {
+ 
+     private final NumenPlayer her;
+-    private final Modules modules;
++    private final ScriptCatalog.ModuleSource modules;
+     private final ProgramCalls calls;
+ 
+     /** @param her 她的身体;没有世界的单测是 null */
+     ProgramPort(NumenPlayer her, Modules modules, ProgramCalls calls) {
++        this(her, (ScriptCatalog.ModuleSource) modules, calls);
++    }
++
++    ProgramPort(NumenPlayer her, ScriptCatalog.ModuleSource modules, ProgramCalls calls) {
+         this.her = her;
+         this.modules = modules;
+         this.calls = calls;
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ReleaseModules.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ReleaseModules.java
+new file mode 100644
+index 000000000..140f213b5
+--- /dev/null
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ReleaseModules.java
+@@ -0,0 +1,50 @@
++package com.dwinovo.numen.api.program;
++
++import com.dwinovo.numen.api.library.Fingerprint;
++import com.dwinovo.numen.api.network.ReleasePackets;
++import com.dwinovo.numen.api.network.Wire;
++import com.dwinovo.numen.api.script.Modules;
++import com.dwinovo.numen.script.ScriptCatalog;
++
++import java.nio.charset.StandardCharsets;
++import java.util.ArrayList;
++import java.util.LinkedHashMap;
++import java.util.List;
++import java.util.Map;
++
++/** 一个旧客户端连接的模块快照。只存内存,不写进服务端主人的模块库。 */
++public final class ReleaseModules implements ScriptCatalog.ModuleSource {
++    private static final int MAX_ENTRIES = 2048;
++    private final Map<String, String> cache = new LinkedHashMap<>();
++    private volatile Map<String, String> manifest = Map.of();
++
++    /** 先验证整批再提交;坏指纹、非法模块名或超预算不能部分污染缓存。 */
++    public synchronized List<String> accept(ReleasePackets.Modules modules) {
++        if (modules.manifest().size() > MAX_ENTRIES || modules.bodies().size() > MAX_ENTRIES)
++            throw new IllegalArgumentException("模块清单过大，请拆分模块。");
++        for (var item : modules.manifest().entrySet()) {
++            if (Modules.problem(item.getKey()) != null || !item.getValue().matches("[0-9a-f]{12}"))
++                throw new IllegalArgumentException("模块名或内容指纹无效。");
++        }
++        for (var item : modules.bodies().entrySet()) {
++            if (!Fingerprint.of(item.getValue()).equals(item.getKey()))
++                throw new IllegalArgumentException("模块内容与指纹不一致，请重新同步。");
++        }
++        Map<String, String> next = new LinkedHashMap<>(cache);
++        next.putAll(modules.bodies());
++        // 只保留当前清单引用的正文;内存预算不随历史模块版本增长。
++        next.keySet().retainAll(modules.manifest().values());
++        long bytes = next.values().stream().mapToLong(s -> s.getBytes(StandardCharsets.UTF_8).length).sum();
++        if (bytes > Wire.MESSAGE_BYTES / 2 || next.size() > MAX_ENTRIES)
++            throw new IllegalArgumentException("模块正文超过同步预算，请减少本次模块数量。");
++        cache.clear();
++        cache.putAll(next);
++        manifest = Map.copyOf(modules.manifest());
++        List<String> missing = new ArrayList<>();
++        for (String hash : manifest.values()) if (!cache.containsKey(hash) && !missing.contains(hash)) missing.add(hash);
++        return List.copyOf(missing);
++    }
++
++    @Override public synchronized String code(String name) { return cache.get(manifest.get(name)); }
++    @Override public List<String> names() { return manifest.keySet().stream().sorted().toList(); }
++}
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/program/RoutedCalls.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/program/RoutedCalls.java
+index 9cc1e94cf..905985e13 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/program/RoutedCalls.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/program/RoutedCalls.java
+@@ -10,14 +10,22 @@ final class RoutedCalls implements ProgramCalls {
+ 
+     private final ProgramCalls server;
+     private final ProgramCalls client;
++    private final java.util.function.Predicate<Invocation> clientOwned;
+ 
+     RoutedCalls(ProgramCalls server, ProgramCalls client) {
++        this(server, client, invocation -> false);
++    }
++
++    RoutedCalls(ProgramCalls server, ProgramCalls client,
++                java.util.function.Predicate<Invocation> clientOwned) {
+         this.server = server;
+         this.client = client;
++        this.clientOwned = clientOwned;
+     }
+ 
+     @Override
+     public void execute(String callId, Invocation invocation, Consumer<String> done, Runnable sent) {
+-        (Dispatcher.runsOnServer(invocation) ? server : client).execute(callId, invocation, done, sent);
++        (clientOwned.test(invocation) || !Dispatcher.runsOnServer(invocation) ? client : server)
++                .execute(callId, invocation, done, sent);
+     }
+ }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ServerPrograms.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ServerPrograms.java
+index 64dea526a..0cad8c382 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ServerPrograms.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/program/ServerPrograms.java
+@@ -104,6 +104,20 @@ public final class ServerPrograms {
+      */
+     public static void run(NumenPlayer her, UUID companion, UUID owner, Request request, ClientTransport transport,
+                            CallObserver observer, Consumer<Program.Outcome> done) {
++        run(her, companion, owner, request, request.modules(), false, transport, observer, done);
++    }
++
++    /** 官方发布客户端持有自己的模块和帮助库;身体调用仍经同一沙箱、并发门禁与主线程车道。 */
++    public static void runClientProgram(NumenPlayer her, UUID companion, UUID owner, String programId, String code,
++                                        com.dwinovo.numen.script.ScriptCatalog.ModuleSource modules,
++                                        ClientTransport transport, Consumer<Program.Outcome> done) {
++        run(her, companion, owner, new Request(programId, code, null, true), modules, true,
++                transport, CallObserver.NONE, done);
++    }
++
++    private static void run(NumenPlayer her, UUID companion, UUID owner, Request request,
++                            com.dwinovo.numen.script.ScriptCatalog.ModuleSource modules, boolean clientOwned,
++                            ClientTransport transport, CallObserver observer, Consumer<Program.Outcome> done) {
+         MainQueue.Lane lane = QUEUE.lane();
+         ClientCalls client = new ClientCalls(her, companion, lane, transport, () -> ticks);
+         Running running = new Running(companion, owner, request.programId(), lane, client);
+@@ -122,11 +136,12 @@ public final class ServerPrograms {
+         ProgramCalls calls = new ObservedCalls(new RoutedCalls(
+                 new ServerCalls(her, companion, running.lane,
+                         job -> running.claimed = request.reportsToModel() ? job : null),
+-                client), observer);
++                client, invocation -> clientOwned && (invocation.function().startsWith("numen.module.")
++                        || invocation.function().equals("numen.api.help"))), observer);
+         Constants.LOG.info("[numen-program] {} runs {} on the server ({} chars)", companion, request.programId(),
+                 request.code().length());
+         running.program = new Program(request.programId(), request.code(),
+-                new ProgramPort(her, request.modules(), calls), new SerialExecutor(THREADS), outcome -> {
++                new ProgramPort(her, modules, calls), new SerialExecutor(THREADS), outcome -> {
+                     // 程序以任何方式结束(跑完、出错、打断、切断、主人断线)都经这里:它等着的反向请求在这一处撤掉
+                     client.close();
+                     // 排回执与摘登记在同一把锁里做完:看登记的人(准入、idle、running)要么看见它还在跑、回执还没排,
+@@ -134,7 +149,7 @@ public final class ServerPrograms {
+                     synchronized (RUNNING) {
+                         running.lane.post(() -> {
+                             observer.ended(outcome);
+-                            tally(request.modules(), outcome);
++                            if (request.modules() != null) tally(request.modules(), outcome);
+                             done.accept(outcome);
+                         });
+                         running.lane.close();
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/task/CompanionTickDispatcher.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/task/CompanionTickDispatcher.java
+index cbf591831..a5b534ddd 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/task/CompanionTickDispatcher.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/task/CompanionTickDispatcher.java
+@@ -110,6 +110,7 @@ public final class CompanionTickDispatcher {
+         com.dwinovo.numen.api.mcp.server.McpMode.instance().tick();   // 外脑失联、回归的播报
+         com.dwinovo.numen.api.brain.Visits.tick(server);   // 渠道来访:做完这一轮的结束
+         com.dwinovo.numen.api.brain.CompanionLoops.tick();   // 服务端大脑:停牌变化、攒够时长的熟度、推给主人的事件
++        com.dwinovo.numen.api.brain.ReleaseClients.tick(server);
+         Companions.tickRespawns(server);   // timed death recoveries
+         TimerRegistry.tick(server);        // 她自己定的表,到点发事件
+         com.dwinovo.numen.api.permission.PermissionFeed.tick(server);   // 规则表变了,合并推给主人的面板
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/network/OfficialReleaseCodecProbe.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/network/OfficialReleaseCodecProbe.java
+new file mode 100644
+index 000000000..246ef030e
+--- /dev/null
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/network/OfficialReleaseCodecProbe.java
+@@ -0,0 +1,58 @@
++package com.dwinovo.numen.api.network;
++
++import com.dwinovo.numen.api.agent.inbox.EventQueue;
++import io.netty.buffer.Unpooled;
++import net.minecraft.core.RegistryAccess;
++import net.minecraft.network.RegistryFriendlyByteBuf;
++import net.minecraft.network.codec.StreamCodec;
++
++import java.util.List;
++import java.util.Map;
++import java.util.Optional;
++import java.util.UUID;
++
++/** 独立 JVM 把原 NeoForge 发布 API 放上 classpath,实际 codec 双向核对;不把旧 API 打进插件。 */
++public final class OfficialReleaseCodecProbe {
++    private static int checks;
++    @SuppressWarnings("unchecked")
++    private static StreamCodec<RegistryFriendlyByteBuf,Object> official(String name) throws Exception {
++        return (StreamCodec<RegistryFriendlyByteBuf,Object>) Class.forName("com.dwinovo.numen.network.payload."+name)
++                .getField("STREAM_CODEC").get(null);
++    }
++    private static <T> void roundTrip(String name, StreamCodec<? super RegistryFriendlyByteBuf,T> adapter, T value) throws Exception {
++        var out = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
++        var back = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
++        try {
++            adapter.encode(out,value);
++            Object decoded = official(name).decode(out);
++            if(out.isReadable()) throw new AssertionError(name+" official decoder left "+out.readableBytes()+" bytes");
++            official(name).encode(back,decoded);
++            if(!value.equals(adapter.decode(back)) || back.isReadable()) throw new AssertionError(name+" adapter round trip differed");
++            checks++;
++            System.out.println("PASS "+name);
++        } finally { out.release(); back.release(); }
++    }
++    public static void main(String[] args) throws Exception {
++        UUID id=UUID.fromString("11111111-2222-3333-4444-555555555555");
++        var modules=new ReleasePackets.Modules(Map.of("route","123456789abc"),Map.of("123456789abc","return 42"));
++        roundTrip("RunProgramPayload",ReleasePackets.Run.CODEC,new ReleasePackets.Run(id,"probe","return 42",modules));
++        roundTrip("ProgramResultPayload",ReleasePackets.Result.CODEC,new ReleasePackets.Result(id,"probe","{\"receipt\":\"done\",\"status\":\"ok\"}"));
++        roundTrip("StopProgramPayload",ReleasePackets.Stop.CODEC,new ReleasePackets.Stop(id,"probe",true,true,"stop"));
++        roundTrip("CancelTasksPayload",ReleasePackets.Cancel.CODEC,new ReleasePackets.Cancel(id));
++        roundTrip("ChangeSkinPayload",ReleasePackets.Skin.CODEC,new ReleasePackets.Skin(id,"texture","signature"));
++        roundTrip("SummonRequestPayload",ReleasePackets.Summon.CODEC,new ReleasePackets.Summon("CodecProbe","texture","signature",false));
++        roundTrip("ClientCallResultPayload",ReleasePackets.ClientResult.CODEC,new ReleasePackets.ClientResult(id,"probe#1","{}",Optional.empty()));
++        roundTrip("ClientCallResultPayload",ReleasePackets.ClientResult.CODEC,new ReleasePackets.ClientResult(id,"probe#2","{}",Optional.of(modules)));
++        roundTrip("CurrentTaskPayload",ReleasePackets.Task.CODEC,new ReleasePackets.Task(id,"task","move.to","walking",true,1500));
++        roundTrip("NumenDeathPayload",ReleasePackets.Death.CODEC,new ReleasePackets.Death(id,"fell"));
++        roundTrip("NumenRespawnPayload",ReleasePackets.Respawn.CODEC,new ReleasePackets.Respawn(id,"fell"));
++        for(int size=0;size<3;size++) {
++            var row=new ReleasePackets.Roster.Row(id,"CodecProbe",600,false);
++            roundTrip("CompanionListPayload",ReleasePackets.Roster.CODEC,
++                    new ReleasePackets.Roster("world",size==0?List.of():size==1?List.of(row):List.of(row,row)));
++        }
++        roundTrip("NumenEventPayload",ReleasePackets.Events.CODEC,new ReleasePackets.Events(id,
++                List.of(new EventQueue.Entry("query","hello",45,true,null))));
++        System.out.println("OFFICIAL_CODEC_CHECKS="+checks);
++    }
++}
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/network/ReleasePacketsTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/network/ReleasePacketsTest.java
+new file mode 100644
+index 000000000..e76da1d68
+--- /dev/null
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/network/ReleasePacketsTest.java
+@@ -0,0 +1,45 @@
++package com.dwinovo.numen.api.network;
++
++import com.dwinovo.numen.api.network.payload.CompanionListPayload;
++import io.netty.buffer.Unpooled;
++import net.minecraft.core.RegistryAccess;
++import net.minecraft.network.RegistryFriendlyByteBuf;
++import org.junit.jupiter.api.Test;
++import java.util.List;
++import java.util.Map;
++import java.util.UUID;
++import static org.junit.jupiter.api.Assertions.*;
++
++class ReleasePacketsTest {
++    @Test void allExistingCompanionsIncludingRemovedOnesKeepTheirUuidInTheLegacyRoster() {
++        UUID a = UUID.randomUUID(), b = UUID.randomUUID();
++        var value = new CompanionListPayload("world-id", List.of(
++                new CompanionListPayload.Entry(a, "A", -1, false, ""),
++                new CompanionListPayload.Entry(b, "B", -1, false, "outside removal")));
++        var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
++        try {
++            var legacy = ReleasePackets.Roster.of(value);
++            ReleasePackets.Roster.CODEC.encode(buffer, legacy);
++            assertEquals(legacy, ReleasePackets.Roster.CODEC.decode(buffer));
++            assertFalse(buffer.isReadable());
++            assertEquals(List.of(a, b), legacy.companions().stream().map(ReleasePackets.Roster.Row::uuid).toList());
++        } finally { buffer.release(); }
++    }
++
++    @Test void realFragmentTransportReassemblesLongProgramsAndModuleBodies() {
++        String code = "--" + "长".repeat(Wire.TO_SERVER.bytes());
++        var value = new ReleasePackets.Run(UUID.randomUUID(), "test-program", code,
++                new ReleasePackets.Modules(Map.of(), Map.of()));
++        assertEquals(value, Fragments.crossed(Wire.TO_SERVER, ReleasePackets.Run.CODEC, value));
++    }
++
++    @Test void oldSummonReadsBothSkinFieldsAndTheActualCreativeFlag() {
++        var buffer = Unpooled.buffer();
++        try {
++            var expected = new ReleasePackets.Summon("TestPet", "texture", "signature", false);
++            ReleasePackets.Summon.CODEC.encode(buffer, expected);
++            assertEquals(expected, ReleasePackets.Summon.CODEC.decode(buffer));
++            assertFalse(buffer.isReadable());
++        } finally { buffer.release(); }
++    }
++}
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/program/ReleaseModulesTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/program/ReleaseModulesTest.java
+new file mode 100644
+index 000000000..6433662e9
+--- /dev/null
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/program/ReleaseModulesTest.java
+@@ -0,0 +1,55 @@
++package com.dwinovo.numen.api.program;
++
++import com.dwinovo.numen.api.library.Fingerprint;
++import com.dwinovo.numen.api.network.ReleasePackets;
++import org.junit.jupiter.api.Test;
++import java.util.Map;
++import static org.junit.jupiter.api.Assertions.*;
++
++class ReleaseModulesTest {
++    private static final String BODY = "local M = {}; function M.value() return 7 end; return M";
++
++    @Test void missingTextsAreReportedBeforeExecutionAndCanBeSuppliedOnce() {
++        var cache = new ReleaseModules();
++        String hash = Fingerprint.of(BODY);
++        assertEquals(java.util.List.of(hash), cache.accept(new ReleasePackets.Modules(Map.of("my.test", hash), Map.of())));
++        assertNull(cache.code("my.test"));
++        assertTrue(cache.accept(new ReleasePackets.Modules(Map.of("my.test", hash), Map.of(hash, BODY))).isEmpty());
++        assertEquals(BODY, cache.code("my.test"));
++        assertTrue(cache.accept(new ReleasePackets.Modules(Map.of("my.test", hash), Map.of())).isEmpty());
++    }
++
++    @Test void badFingerprintsCannotPartiallyReplaceThePreviousSnapshot() {
++        var cache = new ReleaseModules();
++        String hash = Fingerprint.of(BODY);
++        cache.accept(new ReleasePackets.Modules(Map.of("my.test", hash), Map.of(hash, BODY)));
++        assertThrows(IllegalArgumentException.class, () -> cache.accept(new ReleasePackets.Modules(
++                Map.of("my.changed", hash), Map.of(hash, "return {}"))));
++        assertEquals(BODY, cache.code("my.test"));
++        assertEquals(java.util.List.of("my.test"), cache.names());
++    }
++
++    @Test void oneConnectionsModulesCannotFillAnotherConnectionsCache() {
++        var a = new ReleaseModules(); var b = new ReleaseModules();
++        String hash = Fingerprint.of(BODY);
++        a.accept(new ReleasePackets.Modules(Map.of("my.test", hash), Map.of(hash, BODY)));
++        assertEquals(java.util.List.of(hash), b.accept(new ReleasePackets.Modules(Map.of("my.test", hash), Map.of())));
++    }
++
++    @Test void modulesRemovedByTheClientLeaveTheSnapshot() {
++        var cache = new ReleaseModules();
++        String hash = Fingerprint.of(BODY);
++        cache.accept(new ReleasePackets.Modules(Map.of("my.test", hash), Map.of(hash, BODY)));
++        cache.accept(new ReleasePackets.Modules(Map.of(), Map.of()));
++        assertNull(cache.code("my.test"));
++        assertTrue(cache.names().isEmpty());
++    }
++
++    @Test void invalidModuleNamesNeverBecomeFilesOrScriptNames() {
++        var cache = new ReleaseModules();
++        String hash = Fingerprint.of(BODY);
++        assertThrows(IllegalArgumentException.class, () -> cache.accept(new ReleasePackets.Modules(
++                Map.of("../../server", hash), Map.of(hash, BODY))));
++        assertTrue(cache.names().isEmpty());
++    }
++}
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/program/ServerProgramsTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/program/ServerProgramsTest.java
+index cd6639f70..f399000db 100644
+--- a/numen-api/common/src/test/java/com/dwinovo/numen/api/program/ServerProgramsTest.java
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/program/ServerProgramsTest.java
+@@ -131,6 +131,32 @@ class ServerProgramsTest {
+ 
+     // ---- 两端的函数交替 ----
+ 
++    @Test
++    void releaseClientModulesRunThroughTheNativeServerExecutorWithoutWritingTheServerLibrary() {
++        ReleaseModules snapshot = new ReleaseModules();
++        String hash = com.dwinovo.numen.api.library.Fingerprint.of(PIT);
++        snapshot.accept(new com.dwinovo.numen.api.network.ReleasePackets.Modules(
++                java.util.Map.of("my.pit", hash), java.util.Map.of(hash, PIT)));
++        Started run = new Started();
++        ServerPrograms.runClientProgram(null, UUID.randomUUID(), UUID.randomUUID(), run.id,
++                "return gt.gt_mix.up(my.pit.seven())", snapshot, new Held(), run.result::set);
++        pumpUntil(() -> run.outcome() != null);
++        assertEquals(8, run.returned().getAsInt(), run.message());
++    }
++
++    @Test
++    void releaseClientHelpAndModuleDataAreAskedFromTheOwningClient() {
++        Held transport = new Held();
++        Started run = new Started();
++        ServerPrograms.runClientProgram(null, UUID.randomUUID(), UUID.randomUUID(), run.id,
++                "return numen.api.help('my.client_module')", new ReleaseModules(), transport, run.result::set);
++        pumpUntil(() -> !transport.held.isEmpty());
++        assertEquals("numen.api.help", transport.held.getFirst().function());
++        transport.answer(0, "client-only help");
++        pumpUntil(() -> run.outcome() != null);
++        assertEquals("client-only help", run.returned().getAsString(), run.message());
++    }
++
+     @Test
+     void serverAndClientFunctionsCalledInTurnInOneProgramAreAllAnswered() {
+         ApiTester.Run run = ApiTester.run(null, UUID.randomUUID(), """
+diff --git a/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java b/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java
+index 5d84760f6..6226fde7f 100644
+--- a/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java
++++ b/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java
+@@ -18,6 +18,7 @@ public final class NumenApiPlugin extends JavaPlugin {
+     @Override
+     public void onEnable() {
+         NumenNetwork.register();
++        NumenNetwork.registerReleaseProtocol();
+         PaperPermissions.declare();
+ 
+         getServer().getPluginManager().registerEvents(new PaperEvents(), this);
+diff --git a/numen-api/paper/src/main/java/com/dwinovo/numen/api/PaperEvents.java b/numen-api/paper/src/main/java/com/dwinovo/numen/api/PaperEvents.java
+index 96a208c94..8189253fc 100644
+--- a/numen-api/paper/src/main/java/com/dwinovo/numen/api/PaperEvents.java
++++ b/numen-api/paper/src/main/java/com/dwinovo/numen/api/PaperEvents.java
+@@ -33,6 +33,7 @@ final class PaperEvents implements Listener {
+ 
+     @EventHandler
+     void onJoin(PlayerJoinEvent event) {
++        com.dwinovo.numen.api.platform.PaperReleaseProtocol.registered(handle(event.getPlayer()));
+         PlayerSessions.joined(handle(event.getPlayer()));
+     }
+ 
+@@ -42,6 +43,7 @@ final class PaperEvents implements Listener {
+      */
+     @EventHandler
+     void onChannelRegistered(PlayerRegisterChannelEvent event) {
++        com.dwinovo.numen.api.platform.PaperReleaseProtocol.registered(handle(event.getPlayer()));
+         PlayerSessions.channelReady(handle(event.getPlayer()));
+     }
+ 
+@@ -59,6 +61,7 @@ final class PaperEvents implements Listener {
+             }
+             return;
+         }
++        com.dwinovo.numen.api.platform.PaperReleaseProtocol.disconnected(player.getUUID());
+         PlayerSessions.left(player);
+     }
+ 
+diff --git a/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperNetworkChannel.java b/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperNetworkChannel.java
+index 3f0930140..8bafd8632 100644
+--- a/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperNetworkChannel.java
++++ b/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperNetworkChannel.java
+@@ -36,6 +36,7 @@ public final class PaperNetworkChannel implements INetworkChannel {
+ 
+     /** 下行包的 id → 编码器。 */
+     private final Map<ResourceLocation, StreamCodec<? super RegistryFriendlyByteBuf, ?>> downlink = new HashMap<>();
++    private final Map<String, java.util.function.BiFunction<ServerPlayer, RegistryFriendlyByteBuf, Runnable>> uplink = new HashMap<>();
+ 
+     @Override
+     public <T extends CustomPacketPayload> void registerClientToServer(
+@@ -44,11 +45,14 @@ public final class PaperNetworkChannel implements INetworkChannel {
+             BiConsumer<T, ServerPlayer> handler,
+             Execution execution) {
+         JavaPlugin plugin = JavaPlugin.getProvidingPlugin(PaperNetworkChannel.class);
++        uplink.put(type.id().toString(), (player, in) -> {
++            T payload = PaperReleaseProtocol.read(codec, in);
++            return () -> handler.accept(payload, player);
++        });
+         plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, type.id().toString(),
+                 (channel, bukkitPlayer, bytes) -> {
+                     ServerPlayer player = ((CraftPlayer) bukkitPlayer).getHandle();
+-                    ByteBuf in = Unpooled.wrappedBuffer(bytes);
+-                    handler.accept(codec.decode(new RegistryFriendlyByteBuf(in, player.server.registryAccess())), player);
++                    PaperReleaseProtocol.prepare(channel, bytes, player, uplink).run();
+                 });
+     }
+ 
+@@ -78,9 +82,9 @@ public final class PaperNetworkChannel implements INetworkChannel {
+                 (StreamCodec<? super RegistryFriendlyByteBuf, CustomPacketPayload>) registered;
+         RegistryFriendlyByteBuf out = new RegistryFriendlyByteBuf(Unpooled.buffer(), player.server.registryAccess());
+         try {
+-            codec.encode(out, payload);
++            if (!PaperReleaseProtocol.encode(player, payload, out)) codec.encode(out, payload);
+             player.connection.send(new ClientboundCustomPayloadPacket(
+-                    new DiscardedPayload(id, Unpooled.wrappedBuffer(ByteBufUtil.getBytes(out)))));
++                    new DiscardedPayload(PaperReleaseProtocol.target(player, id), Unpooled.wrappedBuffer(ByteBufUtil.getBytes(out)))));
+         } finally {
+             out.release();
+         }
+@@ -91,6 +95,7 @@ public final class PaperNetworkChannel implements INetworkChannel {
+         var channels = player.getBukkitEntity().getListeningPluginChannels();
+         // 0.1.4 发布客户端登记了同名名册频道,但每行没有 removedFor,收到新版会因多余字节断线。
+         // 名册负责触发 Hello,不能等 Presence 才发;先认它是否支持服务端大脑的握手频道。
+-        return channels.contains(HelloAckPayload.TYPE.id().toString()) && channels.contains(type.id().toString());
++        return PaperReleaseProtocol.accepts(player, type)
++                || channels.contains(HelloAckPayload.TYPE.id().toString()) && channels.contains(type.id().toString());
+     }
+ }
+diff --git a/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperReleaseProtocol.java b/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperReleaseProtocol.java
+new file mode 100644
+index 000000000..307d03c1f
+--- /dev/null
++++ b/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperReleaseProtocol.java
+@@ -0,0 +1,170 @@
++package com.dwinovo.numen.api.platform;
++
++import com.dwinovo.numen.api.brain.ReleaseClients;
++import com.dwinovo.numen.api.network.Fragments;
++import com.dwinovo.numen.api.network.ReleasePackets;
++import com.dwinovo.numen.api.network.Wire;
++import com.dwinovo.numen.api.network.payload.ClientUiActionPayload;
++import com.dwinovo.numen.api.network.payload.CompanionListPayload;
++import com.dwinovo.numen.api.network.payload.FragmentPayload;
++import io.netty.buffer.Unpooled;
++import io.netty.handler.codec.DecoderException;
++import net.minecraft.network.RegistryFriendlyByteBuf;
++import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
++import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.resources.ResourceLocation;
++
++import java.util.HashMap;
++import java.util.Map;
++import java.util.Set;
++import java.util.UUID;
++import java.util.function.BiFunction;
++
++/** Paper 频道边界识别协议族;旧包先完整解码再调原生逻辑,分片也经同一解码边界。 */
++public final class PaperReleaseProtocol {
++    private static final String ACK = "numen_api:hello_ack";
++    private static final Set<String> MARKERS = Set.of("numen_api:companion_list", "numen_api:program_result",
++            "numen_api:numen_event", "numen_api:client_ui_action");
++    private static final Set<String> DOWNLINK = Set.of("numen_api:companion_list", "numen_api:client_ui_action",
++            "numen_api:client_call", "numen_api:consent_request", "numen_api:numen_state", "numen_api:numen_locations",
++            "numen_api:program_result", "numen_api:current_task", "numen_api:numen_event", "numen_api:numen_death",
++            "numen_api:numen_respawn", "numen_api:fragment_to_client", "numen_api:path_debug");
++    private static final Map<UUID, Fragments.Inbox> INBOXES = new HashMap<>();
++    private static final Map<UUID, long[]> BUDGETS = new HashMap<>();
++    private static final Map<UUID, Long> NOTIFIED = new HashMap<>();
++
++    static {
++        ServerLifecycle.onStopped(() -> { INBOXES.clear(); BUDGETS.clear(); NOTIFIED.clear(); });
++    }
++    private PaperReleaseProtocol() {}
++
++    public static boolean release(Set<String> channels) {
++        return !channels.contains(ACK) && channels.containsAll(MARKERS);
++    }
++    public static boolean release(ServerPlayer player) { return release(player.getBukkitEntity().getListeningPluginChannels()); }
++    public static boolean accepts(ServerPlayer player, CustomPacketPayload.Type<?> type) {
++        String id = target(player, type.id()).toString();
++        return release(player) && DOWNLINK.contains(id)
++                && player.getBukkitEntity().getListeningPluginChannels().contains(id);
++    }
++
++    /** 寻路载荷的布局未变,但内容拆分后换了命名空间;这里只映射已审计的这个频道。 */
++    public static ResourceLocation target(ServerPlayer player, ResourceLocation id) {
++        return release(player) && id.toString().equals("numen:path_debug")
++                ? ResourceLocation.fromNamespaceAndPath("numen_api", "path_debug") : id;
++    }
++
++    public static void registered(ServerPlayer player) {
++        if (!player.server.getPlayerList().getPlayers().contains(player)) return;
++        if (release(player)) ReleaseClients.joined(player);
++        else if (ReleaseClients.hasClient(player.getUUID())) disconnected(player.getUUID());
++    }
++
++    public static void disconnected(UUID owner) {
++        ReleaseClients.left(owner);
++        INBOXES.remove(owner);
++        BUDGETS.remove(owner);
++        NOTIFIED.remove(owner);
++    }
++
++    /** 返回是否写入了旧版布局;其余允许的包与当前布局相同。 */
++    public static boolean encode(ServerPlayer player, CustomPacketPayload payload, RegistryFriendlyByteBuf out) {
++        if (!release(player)) return false;
++        if (payload instanceof CompanionListPayload roster) {
++            ReleaseClients.roster(player);
++            ReleasePackets.Roster.CODEC.encode(out, ReleasePackets.Roster.of(roster));
++            return true;
++        }
++        if (payload instanceof ClientUiActionPayload ui) {
++            out.writeVarInt(switch (ui.action()) {
++                case OPEN_SETTINGS -> 0;
++                case DEBUG_TEXT_ON -> 2;
++                case DEBUG_TEXT_OFF -> 3;
++            });
++            return true;
++        }
++        return false;
++    }
++
++    public static Runnable prepare(String channel, byte[] bytes, ServerPlayer player,
++                                Map<String, BiFunction<ServerPlayer, RegistryFriendlyByteBuf, Runnable>> routes) {
++        try {
++            return preparePacket(channel, bytes, player, routes);
++        } catch (DecoderException malformed) {
++            long now = System.nanoTime();
++            Long previous = NOTIFIED.get(player.getUUID());
++            if (previous == null || now - previous > 5_000_000_000L) {
++                NOTIFIED.put(player.getUUID(), now);
++                com.dwinovo.numen.api.Constants.LOG.warn("[numen-net] rejected malformed {} from {}", channel, player.getUUID());
++                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
++                        "[Numen] 数据包格式与当前协议不符，本次没有执行。请核对客户端版本并重新连接。"));
++            }
++            return () -> {};
++        }
++    }
++
++    private static Runnable preparePacket(String channel, byte[] bytes, ServerPlayer player,
++                                Map<String, BiFunction<ServerPlayer, RegistryFriendlyByteBuf, Runnable>> routes) {
++        if (!release(player)) return decode(channel, bytes, player, routes);
++        registered(player);
++        long second = System.nanoTime() / 1_000_000_000L;
++        long[] budget = BUDGETS.computeIfAbsent(player.getUUID(), id -> new long[] {second, 0});
++        if (budget[0] != second) { budget[0] = second; budget[1] = 0; }
++        budget[1] += bytes.length;
++        if (budget[1] > (long) Wire.MESSAGE_BYTES * 2) throw new DecoderException("Numen 旧协议上行超过预算");
++        if (channel.equals(FragmentPayload.TO_SERVER.id().toString())) {
++            var buffer = buffer(player, bytes);
++            try {
++                FragmentPayload fragment = read(FragmentPayload.TO_SERVER_CODEC, buffer);
++                switch (INBOXES.computeIfAbsent(player.getUUID(), id -> new Fragments.Inbox(Wire.TO_SERVER)).accept(fragment)) {
++                    case Fragments.Pending pending -> { return () -> {}; }
++                    case Fragments.Rejected rejected -> throw new DecoderException(rejected.why());
++                    case Fragments.Complete whole -> {
++                        String kind = whole.kind().toString();
++                        if (!kind.equals("numen_api:run_program") && !kind.equals("numen_api:client_call_result"))
++                            throw new DecoderException("Numen 旧协议分片种类无效");
++                        return decode(kind, whole.bytes(), player, routes);
++                    }
++                }
++            } finally { buffer.release(); }
++        } else return decode(channel, bytes, player, routes);
++    }
++
++    private static Runnable decode(String channel, byte[] bytes, ServerPlayer player,
++                                Map<String, BiFunction<ServerPlayer, RegistryFriendlyByteBuf, Runnable>> routes) {
++        var buffer = buffer(player, bytes);
++        try {
++            if (release(player) && channel.equals("numen_api:summon_request")) {
++                var request = read(ReleasePackets.Summon.CODEC, buffer);
++                return () -> ReleaseClients.summon(request, player);
++            } else if (release(player) && channel.equals("numen_api:client_call_result")) {
++                var reply = read(ReleasePackets.ClientResult.CODEC, buffer);
++                return () -> ReleaseClients.clientResult(reply, player);
++            } else {
++                var route = routes.get(channel);
++                if (route == null) throw new DecoderException("Numen 上行种类未登记");
++                return route.apply(player, buffer);
++            }
++        } finally { buffer.release(); }
++    }
++
++    static <T> T read(net.minecraft.network.codec.StreamCodec<? super RegistryFriendlyByteBuf, T> codec,
++                       RegistryFriendlyByteBuf buffer) {
++        try {
++            T value = codec.decode(buffer);
++            consumed(buffer);
++            return value;
++        } catch (DecoderException alreadyExplained) {
++            throw alreadyExplained;
++        } catch (RuntimeException malformed) {
++            throw new DecoderException("Numen 载荷无法按所选协议解码", malformed);
++        }
++    }
++
++    static void consumed(RegistryFriendlyByteBuf buffer) {
++        if (buffer.isReadable()) throw new DecoderException("Numen 数据包还有未读取字段，请核对客户端协议版本");
++    }
++    private static RegistryFriendlyByteBuf buffer(ServerPlayer player, byte[] bytes) {
++        return new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(bytes), player.server.registryAccess());
++    }
++}
+diff --git a/numen/common/build.gradle b/numen/common/build.gradle
+index 5c7c8f8c4..88dad5684 100644
+--- a/numen/common/build.gradle
++++ b/numen/common/build.gradle
+@@ -76,6 +76,10 @@ neoForge.addModdingDependenciesTo(sourceSets.testFixtures)
+  */
+ sourceSets {
+     e2e
++    clientE2e {
++        compileClasspath += sourceSets.e2e.output + sourceSets.e2e.compileClasspath
++        runtimeClasspath += sourceSets.e2e.output + sourceSets.e2e.runtimeClasspath
++    }
+ }
+ 
+ repositories {
+diff --git a/numen/common/src/clientE2e/java/com/dwinovo/numen/e2e/OfficialReleaseClientTest.java b/numen/common/src/clientE2e/java/com/dwinovo/numen/e2e/OfficialReleaseClientTest.java
+new file mode 100644
+index 000000000..e95026d10
+--- /dev/null
++++ b/numen/common/src/clientE2e/java/com/dwinovo/numen/e2e/OfficialReleaseClientTest.java
+@@ -0,0 +1,75 @@
++package com.dwinovo.numen.e2e;
++
++import org.junit.jupiter.params.ParameterizedTest;
++import org.junit.jupiter.params.provider.ValueSource;
++
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.time.Duration;
++import java.util.function.BooleanSupplier;
++import java.util.regex.Pattern;
++
++import static org.junit.jupiter.api.Assertions.*;
++
++/** 原发行客户端自己打开面板、调用模型、发送 Lua 和读取完成回执。 */
++final class OfficialReleaseClientTest extends Scenario {
++    @ParameterizedTest @ValueSource(strings = {"0.1.4", "0.1.4.1"})
++    void nativeReleaseCompletesTheClientModelAndServerBodyRoundTrip(String version) throws Exception {
++        String suffix = version.replace(".", "");
++        String body = "NativeRel" + suffix;
++        Path output = Path.of(System.getProperty("e2e.client.output"), suffix + "-" + System.currentTimeMillis());
++        Files.createDirectories(output);
++        Process process = new ProcessBuilder(System.getProperty("e2e.client.python"),
++                System.getProperty("e2e.client.launcher"), "--java", System.getProperty("e2e.client.java"),
++                "--cache", System.getProperty("e2e.client.cache"), "--official", System.getProperty("e2e.client.official"),
++                "--fixture", System.getProperty("e2e.client.fixture"), "--version", version,
++                "--output", output.toString(), "--server", SPEC.host() + ":" + SPEC.port(),
++                "--model-port", Integer.toString(SPEC.modelPort()), "--body", body, "--owner", "NativeOwner" + suffix)
++                .redirectErrorStream(true).redirectOutput(output.resolve("launcher.log").toFile()).start();
++        try {
++            waitFor(() -> Files.isRegularFile(output.resolve("companion-found.txt")), process, output);
++            var matcher = Pattern.compile("-?\\d+(?:\\.\\d+)?[dD]").matcher(console("data get entity " + body + " Pos"));
++            double[] pos = new double[3];
++            for (int i = 0; i < pos.length; i++) { assertTrue(matcher.find()); String n = matcher.group(); pos[i] = Double.parseDouble(n.substring(0, n.length() - 1)); }
++            int x = (int)Math.floor(pos[0]) + 4, y = (int)Math.floor(pos[1]), z = (int)Math.floor(pos[2]);
++            String floor = console("execute at " + body + " run fill ~-2 ~-1 ~-2 ~8 ~-1 ~2 minecraft:stone");
++            assertFalse(floor.contains("not loaded"), floor);
++            MODEL.whenHeard("native-release-smoke",
++                    FakeModel.lua("numen.move.to({x=" + x + ",y=" + y + ",z=" + z + "}); return numen.status.self()"),
++                    FakeModel.say("native release round trip complete"));
++            Files.writeString(output.resolve("server-prepared.txt"), "ready");
++            waitFor(() -> MODEL.asked().stream().anyMatch(a -> a.lastToolCallId() != null), process, output);
++            var receipt = MODEL.asked().stream().filter(a -> a.lastToolCallId() != null).findFirst().orElseThrow();
++            Files.writeString(output.resolve("model-roundtrip.json"), receipt.body());
++            var messages = com.google.gson.JsonParser.parseString(receipt.body()).getAsJsonObject().getAsJsonArray("messages");
++            String toolResult = java.util.stream.StreamSupport.stream(messages.spliterator(), false)
++                    .map(com.google.gson.JsonElement::getAsJsonObject)
++                    .filter(m -> m.get("role").getAsString().equals("tool"))
++                    .reduce((a,b) -> b).orElseThrow().get("content").getAsString();
++            assertTrue(toolResult.startsWith("ok ") && toolResult.contains("reached") && toolResult.contains("returned:"), toolResult);
++            var arrived = Pattern.compile("(-?\\d+(?:\\.\\d+)?)d").matcher(console("data get entity " + body + " Pos[0]"));
++            assertTrue(arrived.find()); assertEquals(x + .5, Double.parseDouble(arrived.group(1)), 1.0);
++            Files.writeString(output.resolve("server-observed.txt"), "native task arrived and actual client returned its receipt to the model");
++            waitFor(() -> Files.isRegularFile(output.resolve("passed.txt")), process, output);
++            assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS), "client did not exit");
++            assertEquals(0, process.exitValue(), Files.readString(output.resolve("launcher.log")));
++            assertTrue(Files.size(output.resolve("official-settings.png")) > 1000);
++            assertTrue(Files.size(output.resolve("official-world.png")) > 1000);
++        } finally {
++            process.descendants().forEach(child -> { if (child.isAlive()) child.destroy(); });
++            if (process.isAlive()) { process.destroy(); if (!process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) process.destroyForcibly(); }
++            console("numen player despawn " + body);
++        }
++    }
++
++    private static void waitFor(BooleanSupplier condition, Process process, Path output) throws Exception {
++        long deadline = System.nanoTime() + Duration.ofSeconds(210).toNanos();
++        while (!condition.getAsBoolean()) {
++            assertFalse(Files.isRegularFile(output.resolve("failed.txt")), () -> read(output.resolve("failed.txt")));
++            assertTrue(process.isAlive(), () -> "native client exited: " + read(output.resolve("launcher.log")));
++            assertTrue(System.nanoTime() < deadline, () -> "native client timed out: " + read(output.resolve("game/logs/latest.log")));
++            Thread.sleep(100);
++        }
++    }
++    private static String read(Path path) { try { return Files.readString(path); } catch (Exception e) { return e.toString(); } }
++}
+diff --git a/numen/common/src/e2e/client/.gitignore b/numen/common/src/e2e/client/.gitignore
+new file mode 100644
+index 000000000..abc78ba75
+--- /dev/null
++++ b/numen/common/src/e2e/client/.gitignore
+@@ -0,0 +1,2 @@
++/.gradle/
++/build/
+diff --git a/numen/common/src/e2e/client/build.gradle b/numen/common/src/e2e/client/build.gradle
+new file mode 100644
+index 000000000..0859fe15c
+--- /dev/null
++++ b/numen/common/src/e2e/client/build.gradle
+@@ -0,0 +1,11 @@
++plugins { id 'net.fabricmc.fabric-loom-remap' version '1.14.10' }
++group='com.dwinovo.numen.e2e'
++version='1.0'
++repositories { mavenCentral(); maven { url='https://maven.fabricmc.net/' } }
++dependencies {
++    minecraft 'com.mojang:minecraft:1.21.1'
++    mappings loom.officialMojangMappings()
++    modImplementation 'net.fabricmc:fabric-loader:0.18.1'
++    modImplementation 'net.fabricmc.fabric-api:fabric-api:0.116.7+1.21.1'
++}
++java { toolchain.languageVersion=JavaLanguageVersion.of(21) }
+diff --git a/numen/common/src/e2e/client/run-release-client.py b/numen/common/src/e2e/client/run-release-client.py
+new file mode 100644
+index 000000000..552d1e655
+--- /dev/null
++++ b/numen/common/src/e2e/client/run-release-client.py
+@@ -0,0 +1,126 @@
++"""Run an unmodified official release in an isolated offline QA profile (fake model key only)."""
++import argparse
++import hashlib
++import json
++import os
++from pathlib import Path
++import subprocess
++import uuid
++import urllib.request
++import zipfile
++
++
++def get(url):
++    with urllib.request.urlopen(url, timeout=45) as response:
++        return response.read()
++
++
++def digest(path, algorithm="sha1"):
++    return hashlib.new(algorithm, path.read_bytes()).hexdigest()
++
++
++def artifact(cache, gradle, name, url, sha1=None):
++    target = cache / "libraries" / name
++    if target.is_file() and (not sha1 or digest(target) == sha1):
++        return target
++    candidates = list((gradle / "modules-2/files-2.1").glob("*/*/*/*/" + name))
++    candidate = next((p for p in candidates if not sha1 or digest(p) == sha1), None)
++    data = candidate.read_bytes() if candidate else get(url)
++    if sha1 and hashlib.sha1(data).hexdigest() != sha1:
++        raise ValueError("checksum mismatch: " + name)
++    target.parent.mkdir(parents=True, exist_ok=True)
++    target.write_bytes(data)
++    return target
++
++
++def allowed(lib):
++    result = not lib.get("rules")
++    for rule in lib.get("rules", []):
++        system = rule.get("os", {})
++        if system.get("name", "windows") == "windows" and system.get("arch", "x86_64") in ("x86_64", "amd64"):
++            result = rule["action"] == "allow"
++    return result
++
++
++def main():
++    p = argparse.ArgumentParser(description=__doc__)
++    for name in ("java", "cache", "official", "fixture"):
++        p.add_argument("--" + name, required=True, type=Path)
++    p.add_argument("--prepare", action="store_true")
++    for name in ("version", "server", "body", "owner"):
++        p.add_argument("--" + name)
++    p.add_argument("--output", type=Path)
++    p.add_argument("--model-port", type=int)
++    args = p.parse_args()
++    cache = args.cache.resolve()
++    cache.mkdir(parents=True, exist_ok=True)
++    gradle = Path.home() / ".gradle/caches"
++    info = json.loads((gradle / "fabric-loom/1.21.1/mojang_minecraft_info.json").read_text())
++    profile_path = cache / "fabric-profile-0.18.1.json"
++    if not profile_path.is_file():
++        profile_path.write_bytes(get("https://meta.fabricmc.net/v2/versions/loader/1.21.1/0.18.1/profile/json"))
++    profile = json.loads(profile_path.read_text())
++    classpath = []
++    natives = cache / "natives"
++    natives.mkdir(exist_ok=True)
++    for lib in info["libraries"]:
++        if not allowed(lib):
++            continue
++        download = lib["downloads"].get("artifact")
++        if download:
++            jar = artifact(cache, gradle, Path(download["path"]).name, download["url"], download["sha1"])
++            classpath.append(jar)
++            with zipfile.ZipFile(jar) as z:
++                for entry in z.infolist():
++                    if entry.filename.endswith(".dll"):
++                        data = z.read(entry)
++                        target = natives / Path(entry.filename).name
++                        if not target.is_file() or target.read_bytes() != data:
++                            target.write_bytes(data)
++    for lib in profile["libraries"]:
++        group, name, version = lib["name"].split(":")
++        path = group.replace(".", "/") + f"/{name}/{version}/{name}-{version}.jar"
++        classpath.append(artifact(cache, gradle, f"{name}-{version}.jar", lib["url"].rstrip("/") + "/" + path))
++    client = gradle / "fabric-loom/1.21.1/minecraft-client.jar"
++    if digest(client) != info["downloads"]["client"]["sha1"]:
++        raise ValueError("cached Minecraft client does not match Mojang manifest")
++    classpath.append(client)
++    if args.prepare:
++        print(f"Prepared {len(classpath)} runtime libraries from Mojang/Fabric metadata in {cache}")
++        return
++
++    expected = {"0.1.4": "2ab47063de770c9baf86d2beedeb4530f6bfa89f7f4dba30babcbcb22217d4a6",
++                "0.1.4.1": "ccc0806fd04cf3404dbc39f7579a4d7c20cd1362d06dce358850f5fdaf711a41"}
++    release = args.official / f"numen-fabric-1.21.1-{args.version}.jar"
++    if digest(release, "sha256") != expected[args.version]:
++        raise ValueError("official release checksum mismatch")
++    args.output.mkdir(parents=True, exist_ok=True)
++    game = args.output / "game"
++    mods = game / "mods"
++    mods.mkdir(parents=True, exist_ok=True)
++    for source in (release, args.fixture, cache / "fabric-api-0.116.7+1.21.1.jar"):
++        (mods / source.name).write_bytes(source.read_bytes())
++    if digest(cache / "fabric-api-0.116.7+1.21.1.jar", "sha256") != "08018cc48c97415a38016a00dbd5a2c7a460ba6b7a051690a8cb3dbb5e8482a4":
++        raise ValueError("Fabric API checksum mismatch")
++    providers = game / "config/numen/providers.json"
++    providers.parent.mkdir(parents=True, exist_ok=True)
++    providers.write_text(json.dumps({"entries": [{"id": "fixture-model", "name": "Local QA endpoint",
++        "provider": "openai", "model": "e2e-fake", "api_key": "e2e-key", "base_url": f"http://127.0.0.1:{args.model_port}/v1",
++        "reasoning_effort": "", "proxy": "", "ctx": 64000}]}), encoding="utf-8")
++    (game / "options.txt").write_text("onboardAccessibility:false\npauseOnLostFocus:false\nrenderDistance:2\nsimulationDistance:2\nmaxFps:30\nenableVsync:false\nsoundCategory_master:0.0\nlang:zh_cn\n", encoding="utf-8")
++    md5 = bytearray(hashlib.md5(("OfflinePlayer:" + args.owner).encode()).digest())
++    md5[6] = (md5[6] & 15) | 48
++    md5[8] = (md5[8] & 63) | 128
++    command = [str(args.java), "-Xmx1024M", "-Xms256M", "-Dfabric.development=false",
++        "-Djava.library.path=" + str(natives), "-Dorg.lwjgl.system.SharedLibraryExtractPath=" + str(natives),
++        "-Dnumen.test.output=" + str(args.output.resolve()), "-Dnumen.test.server=" + args.server,
++        "-Dnumen.test.body=" + args.body, "-cp", os.pathsep.join(map(str, classpath)), profile["mainClass"],
++        "--username", args.owner, "--uuid", uuid.UUID(bytes=bytes(md5)).hex, "--accessToken", "0", "--version", "1.21.1",
++        "--gameDir", str(game.resolve()), "--assetsDir", str(gradle / "fabric-loom/assets"),
++        "--assetIndex", "1.21.1-17", "--userType", "legacy", "--width", "960", "--height", "540"]
++    result = subprocess.run(command, cwd=game, timeout=240)
++    raise SystemExit(result.returncode)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/numen/common/src/e2e/client/settings.gradle b/numen/common/src/e2e/client/settings.gradle
+new file mode 100644
+index 000000000..a71202d83
+--- /dev/null
++++ b/numen/common/src/e2e/client/settings.gradle
+@@ -0,0 +1,4 @@
++pluginManagement {
++    repositories { maven { url='https://maven.fabricmc.net/' }; gradlePluginPortal(); mavenCentral() }
++}
++rootProject.name='numen-official-client-fixture'
+diff --git a/numen/common/src/e2e/client/src/main/java/com/dwinovo/numen/e2e/client/ReleaseClientFixture.java b/numen/common/src/e2e/client/src/main/java/com/dwinovo/numen/e2e/client/ReleaseClientFixture.java
+new file mode 100644
+index 000000000..0c91622cb
+--- /dev/null
++++ b/numen/common/src/e2e/client/src/main/java/com/dwinovo/numen/e2e/client/ReleaseClientFixture.java
+@@ -0,0 +1,88 @@
++package com.dwinovo.numen.e2e.client;
++
++import net.fabricmc.api.ClientModInitializer;
++import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
++import net.minecraft.client.Minecraft;
++import net.minecraft.client.Screenshot;
++import net.minecraft.client.gui.screens.TitleScreen;
++import net.minecraft.client.gui.screens.ConnectScreen;
++import net.minecraft.client.multiplayer.ServerData;
++import net.minecraft.client.multiplayer.resolver.ServerAddress;
++import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
++import org.lwjgl.glfw.GLFW;
++
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.List;
++import java.util.UUID;
++
++/** 测试辅助模组只点原发布客户端的入口;Numen 原 JAR 和协议均不修改。 */
++public final class ReleaseClientFixture implements ClientModInitializer {
++    private final long started=System.nanoTime();
++    private final Path output=Path.of(System.getProperty("numen.test.output"));
++    private int stage,ticks;
++    private boolean hidden;
++    private UUID companion;
++    private Object loop;
++    private final String body=System.getProperty("numen.test.body","RelNative");
++
++    @Override public void onInitializeClient() {
++        ClientTickEvents.END_CLIENT_TICK.register(this::tick);
++    }
++
++    private void tick(Minecraft mc) {
++        try {
++            if(!hidden){ GLFW.glfwHideWindow(mc.getWindow().getWindow()); hidden=true; }
++            if(System.nanoTime()-started>180_000_000_000L) throw new IllegalStateException("native client fixture timed out at stage "+stage);
++            if(stage==0 && mc.screen instanceof TitleScreen){
++                String address=System.getProperty("numen.test.server");
++                ConnectScreen.startConnecting(new TitleScreen(),mc,ServerAddress.parseString(address),
++                        new ServerData("Numen release test",address,ServerData.Type.OTHER),false,null);
++                stage=1;
++            } else if(stage==1 && mc.player!=null && mc.level!=null){
++                mc.player.connection.sendCommand("numen settings"); stage=2; ticks=0;
++            } else if(stage==2 && mc.screen!=null && mc.screen.getClass().getName().equals("com.dwinovo.numen.client.screen.NumenScreen")){
++                if(++ticks<5)return;
++                Files.createDirectories(output);
++                try(var image=Screenshot.takeScreenshot(mc.getMainRenderTarget())){ image.writeToFile(output.resolve("official-settings.png")); }
++                Files.writeString(output.resolve("settings-opened.txt"),mc.screen.getClass().getName());
++                mc.setScreen(null);
++                Class<?> type=Class.forName("com.dwinovo.numen.network.payload.SummonRequestPayload");
++                Object payload=type.getConstructor(String.class,String.class,String.class,boolean.class)
++                        .newInstance(body,"","",false);
++                Class.forName("com.dwinovo.numen.network.NumenNetwork")
++                        .getMethod("sendToServer",CustomPacketPayload.class).invoke(null,payload);
++                stage=3;
++            } else if(stage==3){
++                Class<?> rosterType=Class.forName("com.dwinovo.numen.client.agent.NumenRoster");
++                Object roster=rosterType.getMethod("instance").invoke(null);
++                List<?> rows=(List<?>)rosterType.getMethod("entries").invoke(roster);
++                for(Object row:rows){
++                    if(!body.equals(row.getClass().getMethod("name").invoke(row)))continue;
++                    companion=(UUID)row.getClass().getMethod("uuid").invoke(row);
++                    loop=Class.forName("com.dwinovo.numen.client.agent.AgentLoopRegistry")
++                            .getMethod("getOrCreate",UUID.class).invoke(null,companion);
++                    Files.writeString(output.resolve("companion-found.txt"),companion.toString());
++                    stage=4; break;
++                }
++            } else if(stage==4 && Files.isRegularFile(output.resolve("server-prepared.txt"))){
++                loop.getClass().getMethod("setProviderEntry",String.class).invoke(loop,"fixture-model");
++                loop.getClass().getMethod("submitPrompt",String.class).invoke(loop,"native-release-smoke");
++                Files.writeString(output.resolve("prompt-submitted.txt"),companion.toString());
++                stage=5; ticks=0;
++            } else if(stage==5 && Files.isRegularFile(output.resolve("server-observed.txt"))){
++                if(++ticks<20)return;
++                try(var image=Screenshot.takeScreenshot(mc.getMainRenderTarget())){ image.writeToFile(output.resolve("official-world.png")); }
++                Files.writeString(output.resolve("passed.txt"),"settings, summon, native client model and server body execution verified");
++                mc.player.connection.sendCommand("numen player despawn "+body);
++                stage=6; ticks=0;
++            } else if(stage==6 && ++ticks>20){
++                stage=7; mc.stop();
++            }
++        } catch(Throwable failure){
++            try { Files.createDirectories(output); java.io.StringWriter text=new java.io.StringWriter(); failure.printStackTrace(new java.io.PrintWriter(text)); Files.writeString(output.resolve("failed.txt"),text.toString()); }
++            catch(Exception ignored){ failure.printStackTrace(); }
++            stage=7; mc.stop();
++        }
++    }
++}
+diff --git a/numen/common/src/e2e/client/src/main/resources/fabric.mod.json b/numen/common/src/e2e/client/src/main/resources/fabric.mod.json
+new file mode 100644
+index 000000000..6eb8ed1c9
+--- /dev/null
++++ b/numen/common/src/e2e/client/src/main/resources/fabric.mod.json
+@@ -0,0 +1,9 @@
++{
++  "schemaVersion": 1,
++  "id": "numen_release_fixture",
++  "version": "1.0",
++  "name": "Official Numen client test fixture",
++  "environment": "client",
++  "entrypoints": { "client": ["com.dwinovo.numen.e2e.client.ReleaseClientFixture"] },
++  "depends": { "fabricloader": ">=0.18.1", "fabric-api": "*", "minecraft": "1.21.1", "numen": "*" }
++}
+diff --git a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/Bot.java b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/Bot.java
+index 9f6272e8a..ddb8c4454 100644
+--- a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/Bot.java
++++ b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/Bot.java
+@@ -15,6 +15,7 @@ import org.geysermc.mcprotocollib.protocol.packet.common.clientbound.Clientbound
+ import org.geysermc.mcprotocollib.protocol.packet.common.clientbound.ClientboundDisconnectPacket;
+ import org.geysermc.mcprotocollib.protocol.packet.common.clientbound.ClientboundPingPacket;
+ import org.geysermc.mcprotocollib.protocol.packet.common.serverbound.ServerboundClientInformationPacket;
++import org.geysermc.mcprotocollib.protocol.packet.common.serverbound.ServerboundCustomPayloadPacket;
+ import org.geysermc.mcprotocollib.protocol.packet.common.serverbound.ServerboundPongPacket;
+ import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundCommandSuggestionsPacket;
+ import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundCustomChatCompletionsPacket;
+@@ -86,6 +87,7 @@ final class Bot implements AutoCloseable {
+     private boolean informed;
+     private final List<String> packetErrors = new CopyOnWriteArrayList<>();
+     private final List<String> payloadChannels = new CopyOnWriteArrayList<>();
++    private final List<ClientboundCustomPayloadPacket> payloads = new CopyOnWriteArrayList<>();
+ 
+     private Bot(String name, String locale, Spec server) {
+         this.name = name;
+@@ -141,6 +143,7 @@ final class Bot implements AutoCloseable {
+     private void received(Packet packet, String locale) {
+         if (packet instanceof ClientboundCustomPayloadPacket payload) {
+             payloadChannels.add(payload.getChannel().asString());
++            payloads.add(payload);
+         }
+         if (packet instanceof ClientboundCustomPayloadPacket && !informed) {
+             // 配置阶段的第一个包(服务端品牌)到了:原版客户端在这个阶段把自己的语言报上去
+@@ -318,6 +321,16 @@ final class Bot implements AutoCloseable {
+         return List.copyOf(payloadChannels);
+     }
+ 
++    /** 模拟可选模组登记频道与发包;场景自己检查对应版本的载荷。 */
++    void payload(String channel, byte[] data) {
++        session.send(new ServerboundCustomPayloadPacket(net.kyori.adventure.key.Key.key(channel), data));
++    }
++
++    List<byte[]> payloads(String channel) {
++        return payloads.stream().filter(p -> p.getChannel().asString().equals(channel))
++                .map(ClientboundCustomPayloadPacket::getData).toList();
++    }
++
+     boolean connected() {
+         return session.isConnected() && disconnected == null;
+     }
+diff --git a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/PaperClientCompatibilityTest.java b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/PaperClientCompatibilityTest.java
+new file mode 100644
+index 000000000..59c738256
+--- /dev/null
++++ b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/PaperClientCompatibilityTest.java
+@@ -0,0 +1,173 @@
++package com.dwinovo.numen.e2e;
++
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++
++import java.io.ByteArrayInputStream;
++import java.io.ByteArrayOutputStream;
++import java.nio.charset.StandardCharsets;
++import java.util.List;
++import java.util.function.BooleanSupplier;
++
++import static com.dwinovo.numen.e2e.FakeModel.say;
++import static org.junit.jupiter.api.Assertions.*;
++import static org.junit.jupiter.api.Assumptions.assumeTrue;
++
++/** Paper 的可选频道不能只凭同名就认作同版:0.1.4 发布包没有 hello,名册每行也没有 removedFor。 */
++class PaperClientCompatibilityTest extends Scenario {
++
++    private static final String ROSTER = "numen_api:companion_list";
++    private static final String ACK = "numen_api:hello_ack";
++    private static final String LIBRARY = "numen_api:library";
++
++    @BeforeEach
++    void paperChannelRegistration() throws Exception {
++        assumeTrue("paper".equals(System.getProperty("e2e.platform")),
++                "tests Bukkit's optional plugin-channel registration");
++    }
++
++    @Test
++    void a_release_client_with_a_companion_can_rejoin_without_an_incompatible_roster() throws Exception {
++        String name = "e2e_old_client";
++        String companion = "LegacyPet";
++        Bot owner = join(name, "en_us");
++        try {
++            int mark = owner.mark();
++            owner.command("numen player summon " + companion);
++            owner.await(mark, m -> m.text().contains("Summoned") && m.text().contains(companion), WAIT, "summon");
++            String originalUuid = console("data get entity " + companion + " UUID");
++
++            // 已有同伴时的频道登记,以及重登后的补发,两条路径都不能发新版名册。
++            register(owner, ROSTER, "numen_api:numen_state", "numen_api:numen_locations");
++            assertLegacyConnection(owner, companion);
++            owner.close();
++            waitFor(() -> !ownerOnList(name), "owner to leave");
++            owner = join(name, "en_us");
++            register(owner, ROSTER, "numen_api:numen_state", "numen_api:numen_locations");
++            assertLegacyConnection(owner, companion);
++            assertEquals(originalUuid, console("data get entity " + companion + " UUID"), "rejoining must keep the body");
++        } finally {
++            if (owner.connected()) {
++                owner.command("numen player despawn " + companion);
++                waitFor(() -> !ownerOnList(companion), "test companion to leave");
++            }
++        }
++    }
++
++    @Test
++    void late_handshake_channel_registration_bootstraps_once_and_model_check_answers() throws Exception {
++        Bot owner = join("e2e_new_client", "en_us");
++        register(owner, ROSTER);
++        barrier(owner);
++        assertTrue(owner.payloads(ROSTER).isEmpty(), "roster-only registration is not protocol compatibility");
++
++        register(owner, ACK, LIBRARY);
++        waitFor(() -> owner.payloads(ROSTER).size() == 1, "modern roster bootstrap");
++        register(owner, ACK, ROSTER);
++        barrier(owner);
++        assertEquals(1, owner.payloads(ROSTER).size(), "registration events must not repeat the bootstrap");
++
++        // 读服务端握手版本再用同版报到,此场景不把版本号复制成另一个常量。
++        owner.payload("numen_api:hello", new byte[]{0});
++        waitFor(() -> !owner.payloads(ACK).isEmpty(), "protocol acknowledgement");
++        int protocol = readVarInt(new ByteArrayInputStream(owner.payloads(ACK).getFirst()));
++        ByteArrayOutputStream hello = new ByteArrayOutputStream();
++        writeVarInt(hello, protocol);
++        owner.payload("numen_api:hello", hello.toByteArray());
++        waitFor(() -> owner.payloads(ACK).size() == 2, "matching handshake");
++
++        MODEL.whenHeard("ping", say("OK"));
++        String draft = "{\"draft\":{\"provider\":\"custom\",\"protocol\":\"chat\",\"model\":\"e2e-fake\","
++                + "\"base_url\":\"http://127.0.0.1:" + SPEC.modelPort() + "/v1\"},\"key\":\"" + SPEC.modelKey() + "\"}";
++        ByteArrayOutputStream request = new ByteArrayOutputStream();
++        writeText(request, "provider-check");
++        writeText(request, "run");
++        writeText(request, draft);
++        writeVarInt(request, 42);
++        owner.payload("numen_api:library_request", request.toByteArray());
++        waitFor(() -> owner.payloads(LIBRARY).stream().map(PaperClientCompatibilityTest::libraryReply)
++                .anyMatch(r -> r.request == 42 && r.entries.contains("\"ok\"")), "final model-check reply");
++        List<LibraryReply> replies = owner.payloads(LIBRARY).stream()
++                .map(PaperClientCompatibilityTest::libraryReply).filter(r -> r.kind.equals("provider-check")).toList();
++        assertTrue(replies.stream().anyMatch(r -> r.request == 0 && r.entries.contains("checking")));
++        assertTrue(replies.stream().anyMatch(r -> r.request == 42 && r.problem.isEmpty()));
++        assertTrue(owner.connected());
++    }
++
++    private static void assertLegacyConnection(Bot owner, String companion) {
++        int mark = owner.mark();
++        owner.command("numen permission mode " + companion);
++        owner.await(mark, m -> m.text().contains(companion), WAIT, "native permission query");
++        assertTrue(owner.connected());
++        assertTrue(owner.payloadChannels().stream().noneMatch(c -> c.startsWith("numen_api:")),
++                "legacy optional channels received newer packets: " + owner.payloadChannels());
++    }
++
++    private static void register(Bot bot, String... channels) {
++        bot.payload("minecraft:register", String.join("\0", channels).getBytes(StandardCharsets.UTF_8));
++    }
++
++    private static void barrier(Bot bot) {
++        int mark = bot.mark();
++        bot.command("numen permission rules list");
++        bot.await(mark, m -> m.text().contains("deny:") && m.text().contains("allow:")
++                && m.text().contains("ask:"), WAIT, "ordered command response");
++    }
++
++    private static boolean ownerOnList(String name) {
++        try {
++            return console("list").contains(name);
++        } catch (Exception e) {
++            throw new AssertionError(e);
++        }
++    }
++
++    private static void waitFor(BooleanSupplier condition, String what) throws InterruptedException {
++        long until = System.nanoTime() + WAIT.toNanos();
++        while (!condition.getAsBoolean()) {
++            assertTrue(System.nanoTime() < until, "timed out waiting for " + what);
++            Thread.sleep(50);
++        }
++    }
++
++    private record LibraryReply(String kind, String entries, String problem, int request) {}
++
++    private static LibraryReply libraryReply(byte[] bytes) {
++        ByteArrayInputStream in = new ByteArrayInputStream(bytes);
++        LibraryReply reply = new LibraryReply(readText(in), readText(in), readText(in), readVarInt(in));
++        assertEquals(0, in.available(), "unread library bytes");
++        return reply;
++    }
++
++    private static String readText(ByteArrayInputStream in) {
++        int size = readVarInt(in);
++        byte[] bytes = new byte[size];
++        assertEquals(size, in.read(bytes, 0, size));
++        return new String(bytes, StandardCharsets.UTF_8);
++    }
++
++    private static int readVarInt(ByteArrayInputStream in) {
++        int result = 0;
++        for (int shift = 0; shift < 35; shift += 7) {
++            int value = in.read();
++            assertTrue(value >= 0, "truncated varint");
++            result |= (value & 127) << shift;
++            if ((value & 128) == 0) return result;
++        }
++        throw new AssertionError("oversized varint");
++    }
++
++    private static void writeText(ByteArrayOutputStream out, String text) {
++        byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
++        writeVarInt(out, bytes.length);
++        out.writeBytes(bytes);
++    }
++
++    private static void writeVarInt(ByteArrayOutputStream out, int value) {
++        do {
++            int next = value & 127;
++            value >>>= 7;
++            out.write(next | (value == 0 ? 0 : 128));
++        } while (value != 0);
++    }
++}
+diff --git a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ReleaseClientTest.java b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ReleaseClientTest.java
+new file mode 100644
+index 000000000..ac52d9e4a
+--- /dev/null
++++ b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ReleaseClientTest.java
+@@ -0,0 +1,356 @@
++package com.dwinovo.numen.e2e;
++
++import com.google.gson.JsonObject;
++import com.google.gson.JsonParser;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++import java.io.*;
++import java.nio.charset.StandardCharsets;
++import java.util.List;
++import java.util.UUID;
++import java.util.function.BooleanSupplier;
++import static org.junit.jupiter.api.Assertions.*;
++import static org.junit.jupiter.api.Assumptions.assumeTrue;
++
++/** 官方发布协议的真实 Paper 连接;二进制布局另用原发布 JAR 的 codec 核对。 */
++class ReleaseClientTest extends Scenario {
++    static final String ROSTER = "numen_api:companion_list", RESULT = "numen_api:program_result";
++    static final String[] CHANNELS = {ROSTER, RESULT, "numen_api:client_ui_action", "numen_api:numen_event",
++            "numen_api:current_task", "numen_api:client_call", "numen_api:consent_request", "numen_api:numen_state",
++            "numen_api:numen_locations", "numen_api:numen_death", "numen_api:numen_respawn", "numen_api:fragment_to_client", "numen_api:path_debug"};
++
++    @BeforeEach void paper() { assumeTrue("paper".equals(System.getProperty("e2e.platform"))); }
++
++    @Test void officialReleaseOpensSettingsSummonsAndReadsOnlyItsOwnCompanions() throws Exception {
++        Bot owner = legacy("rel_gui");
++        owner.command("numen settings");
++        until(() -> !owner.payloads("numen_api:client_ui_action").isEmpty(), "settings UI action");
++        assertArrayEquals(new byte[]{0}, owner.payloads("numen_api:client_ui_action").getFirst());
++        UUID body = summonPacket(owner, "RelPet");
++        console("give RelPet minecraft:diamond 3");
++        String before = console("data get entity RelPet Inventory");
++        owner.payload("numen_api:request_state", uuid(body));
++        until(() -> !owner.payloads("numen_api:numen_state").isEmpty(), "inventory snapshot");
++        assertTrue(owner.payloads("numen_api:numen_state").getLast()[16] != 0);
++
++        Bot other = legacy("rel_other");
++        other.payload("numen_api:request_state", uuid(body));
++        until(() -> !other.payloads("numen_api:numen_state").isEmpty(), "foreign inventory refusal");
++        assertEquals(0, other.payloads("numen_api:numen_state").getLast()[16]);
++        run(other, body, "foreign-program", "return numen.status.self()");
++        assertTrue(result(other, "foreign-program").get("receipt").getAsString().contains("不是你的同伴"));
++        assertEquals(before, console("data get entity RelPet Inventory"));
++        assertTrue(owner.payloads("numen_api:hello_ack").isEmpty());
++        assertTrue(owner.payloads("numen_api:feed").isEmpty());
++        owner.command("numen player despawn RelPet");
++        until(() -> !online("RelPet"), "dismiss test companion");
++    }
++
++    @Test void legacyLuaUsesTheNativeBodyExecutorAndNeverReexecutesACompletedId() throws Exception {
++        Bot owner = legacy("rel_lua");
++        UUID body = summonPacket(owner, "RelLua");
++        console("give RelLua minecraft:cobblestone 6");
++        run(owner, body, "read-self", "return numen.status.self()");
++        assertEquals("ok", result(owner, "read-self").get("status").getAsString());
++        run(owner, body, "answer-42", "print('native-receipt'); return 42");
++        JsonObject first = result(owner, "answer-42");
++        assertTrue(first.get("receipt").getAsString().contains("42"));
++        int count = owner.payloads(RESULT).size();
++        run(owner, body, "answer-42", "print('native-receipt'); return 42");
++        until(() -> owner.payloads(RESULT).size() > count, "cached receipt");
++        assertEquals(first, result(owner, "answer-42"));
++        run(owner, body, "answer-42", "return 999");
++        until(() -> owner.payloads(RESULT).stream().anyMatch(b -> reply(b).id.equals("answer-42")
++                && reply(b).json.toString().contains("其他内容")), "changed duplicate refusal");
++        assertTrue(console("data get entity RelLua Inventory").contains("cobblestone"));
++        owner.command("numen player despawn RelLua");
++        until(() -> !online("RelLua"), "dismiss test companion");
++    }
++
++    @Test void privateWordsAreDeliveredToTheClientDriverAndNotToTheServerModel() throws Exception {
++        Bot owner = legacy("rel_chat");
++        UUID body = summonPacket(owner, "RelChat");
++        owner.command("numen companion RelChat profile " + SPEC.modelProfile());
++        int mark = owner.mark();
++        owner.command("msg RelChat legacy-private-test");
++        until(() -> owner.payloads("numen_api:numen_event").stream()
++                .anyMatch(b -> new String(b, StandardCharsets.UTF_8).contains("legacy-private-test")), "private event");
++        owner.command("numen permission mode RelChat");
++        owner.await(mark, m -> m.text().contains("RelChat"), WAIT, "ordered command response");
++        assertFalse(MODEL.wasToldAbout("legacy-private-test"), "server model must not also process the client's words");
++        run(owner, body, "chat-read", "return numen.status.self()");
++        assertEquals("ok", result(owner, "chat-read").get("status").getAsString());
++        owner.command("numen player despawn RelChat");
++        until(() -> !online("RelChat"), "dismiss test companion");
++    }
++
++    @Test void clientCallbackAndStopWorkThroughTheRealOwnerConnection() throws Exception {
++        Bot owner = legacy("rel_callback");
++        UUID body = summonPacket(owner, "RelCall");
++        run(owner, body, "client-help", "return numen.api.help('my.client_only')");
++        until(() -> !owner.payloads("numen_api:client_call").isEmpty(), "native reverse request");
++        DataInputStream in = new DataInputStream(new ByteArrayInputStream(owner.payloads("numen_api:client_call").getLast()));
++        UUID target = readUuid(in); String call = readText(in); String function = readText(in); readText(in);
++        assertEquals(body, target); assertEquals("numen.api.help", function); assertEquals(0, in.available());
++        ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
++        writeUuid(out, body); writeText(out, call); writeText(out, "{\"ok\":true,\"value\":\"official client help\"}");
++        out.writeBoolean(false);
++        owner.payload("numen_api:client_call_result", bytes.toByteArray());
++        assertTrue(result(owner, "client-help").get("receipt").getAsString().contains("official client help"));
++
++        run(owner, body, "client-stop", "return numen.api.help('my.wait_for_stop')");
++        until(() -> owner.payloads("numen_api:client_call").size() == 2, "waiting client call");
++        bytes.reset(); out = new DataOutputStream(bytes);
++        writeUuid(out, body); writeText(out, "client-stop"); out.writeBoolean(true); out.writeBoolean(true); writeText(out, "owner stop");
++        owner.payload("numen_api:stop_program", bytes.toByteArray());
++        assertNotEquals("ok", result(owner, "client-stop").get("status").getAsString());
++        run(owner, body, "after-stop", "return 17");
++        assertTrue(result(owner, "after-stop").get("receipt").getAsString().contains("17"));
++        owner.command("numen player despawn RelCall");
++        until(() -> !online("RelCall"), "dismiss test companion");
++    }
++
++    @Test void rejoiningKeepsTheBodyInventoryAndCompletedReceipts() throws Exception {
++        Bot owner = legacy("rel_rejoin");
++        UUID body = summonPacket(owner, "RelRejoin");
++        console("give RelRejoin minecraft:emerald 5");
++        run(owner, body, "before-rejoin", "return 23");
++        JsonObject receipt = result(owner, "before-rejoin");
++        String before = console("data get entity RelRejoin Inventory");
++        owner.close();
++        until(() -> !online("rel_rejoin"), "owner leaves");
++        Bot again = legacy("rel_rejoin");
++        until(() -> online("RelRejoin"), "same companion restored");
++        until(() -> roster(again).stream().anyMatch(e -> e.id.equals(body)), "same UUID on roster");
++        assertEquals(before, console("data get entity RelRejoin Inventory"));
++        run(again, body, "before-rejoin", "return 23");
++        assertEquals(receipt, result(again, "before-rejoin"));
++        again.command("numen player despawn RelRejoin");
++        until(() -> !online("RelRejoin"), "dismiss test companion");
++    }
++
++    @Test void permissionReplyIsOwnerBoundAndAnApprovedDropIsNotRepeated() throws Exception {
++        Bot owner = legacy("rel_consent");
++        UUID body = summonPacket(owner, "RelAsk");
++        console("give RelAsk minecraft:diamond 1");
++        run(owner, body, "one-drop", "numen.inv.drop('minecraft:diamond', {count=1})");
++        until(() -> !owner.payloads("numen_api:consent_request").isEmpty(), "native permission request");
++        DataInputStream in = new DataInputStream(new ByteArrayInputStream(owner.payloads("numen_api:consent_request").getFirst()));
++        assertEquals(body, readUuid(in)); long consent = readVarLong(in); assertTrue(consent > 0);
++        Bot other = legacy("rel_untrusted");
++        consent(other, body, consent, 0);
++        int mark = other.mark(); other.command("numen permission rules list");
++        other.await(mark, m -> m.text().contains("deny:"), WAIT, "foreign reply processed");
++        assertTrue(console("data get entity RelAsk Inventory").contains("diamond"));
++        assertTrue(owner.payloads(RESULT).isEmpty(), "another owner must not approve the drop");
++        consent(owner, body, consent, 0);
++        JsonObject first = result(owner, "one-drop");
++        assertEquals("ok", first.get("status").getAsString(), first.toString());
++        assertFalse(console("data get entity RelAsk Inventory").contains("diamond"));
++        int count = owner.payloads(RESULT).size();
++        run(owner, body, "one-drop", "numen.inv.drop('minecraft:diamond', {count=1})");
++        until(() -> owner.payloads(RESULT).size() > count, "drop cached receipt");
++        assertEquals(first, result(owner, "one-drop"));
++        owner.command("numen player despawn RelAsk");
++        until(() -> !online("RelAsk"), "dismiss test companion");
++    }
++
++    @Test void missingModulesAreRequestedBeforeExecutingAnyStatement() throws Exception {
++        Bot owner = legacy("rel_modules");
++        UUID body = summonPacket(owner, "RelModules");
++        console("give RelModules minecraft:diamond 1");
++        String module = "local M = {}; function M.value() return 91 end; return M";
++        String hash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
++                .digest(module.getBytes(StandardCharsets.UTF_8))).substring(0, 12);
++        String code = "numen.inv.drop('minecraft:diamond', {count=1}); return my.test.value()";
++        runModules(owner, body, "modules-program", code, "my.test", hash, null);
++        assertEquals(hash, result(owner, "modules-program").getAsJsonArray("missing").get(0).getAsString());
++        assertTrue(owner.payloads("numen_api:consent_request").isEmpty(), "no statement may run before modules arrive");
++        assertTrue(console("data get entity RelModules Inventory").contains("diamond"));
++        int replies = owner.payloads(RESULT).size();
++        runModules(owner, body, "modules-program", code, "my.test", hash, module);
++        until(() -> !owner.payloads("numen_api:consent_request").isEmpty(), "drop starts only after module sync");
++        DataInputStream in = new DataInputStream(new ByteArrayInputStream(owner.payloads("numen_api:consent_request").getFirst()));
++        readUuid(in); consent(owner, body, readVarLong(in), 0);
++        until(() -> owner.payloads(RESULT).size() > replies, "module program receipt");
++        JsonObject done = result(owner, "modules-program");
++        assertFalse(done.has("missing"));
++        assertTrue(done.get("receipt").getAsString().contains("91"), done.toString());
++        owner.command("numen player despawn RelModules");
++        until(() -> !online("RelModules"), "dismiss test companion");
++    }
++
++    @Test void disconnectSettlesTheOldProgramAndLateRepliesCannotCompleteANewOne() throws Exception {
++        Bot owner = legacy("rel_disconnect");
++        UUID body = summonPacket(owner, "RelDisconnect");
++        run(owner, body, "disconnected-program", "return numen.api.help('old')");
++        until(() -> !owner.payloads("numen_api:client_call").isEmpty(), "old callback");
++        String oldCall = callId(owner.payloads("numen_api:client_call").getLast());
++        owner.close(); until(() -> !online("rel_disconnect"), "owner disconnects");
++        Bot again = legacy("rel_disconnect"); until(() -> online("RelDisconnect"), "same body restored");
++        run(again, body, "disconnected-program", "return numen.api.help('old')");
++        assertNotEquals("ok", result(again, "disconnected-program").get("status").getAsString());
++        assertTrue(again.payloads("numen_api:client_call").isEmpty(), "old unknown program is not restarted");
++        run(again, body, "new-program", "return numen.api.help('new')");
++        until(() -> !again.payloads("numen_api:client_call").isEmpty(), "new callback");
++        String newCall = callId(again.payloads("numen_api:client_call").getLast());
++        assertNotEquals(oldCall, newCall);
++        callback(again, body, oldCall, "late old reply");
++        int mark = again.mark(); again.command("numen permission rules list");
++        again.await(mark, m -> m.text().contains("deny:"), WAIT, "late reply processed");
++        assertFalse(again.payloads(RESULT).stream().map(ReleaseClientTest::reply).anyMatch(r -> r.id.equals("new-program")));
++        callback(again, body, newCall, "new reply");
++        assertTrue(result(again, "new-program").get("receipt").getAsString().contains("new reply"));
++        again.command("numen player despawn RelDisconnect");
++        until(() -> !online("RelDisconnect"), "dismiss test companion");
++    }
++
++    @Test void deathAndRespawnKeepTheRosterIdentityAndDoNotRunAnEarlyProgram() throws Exception {
++        Bot owner = legacy("rel_life"); UUID body = summonPacket(owner, "RelLife");
++        console("gamerule keepInventory true"); console("give RelLife minecraft:emerald 2");
++        String before = console("data get entity RelLife Inventory");
++        console("kill RelLife");
++        until(() -> !owner.payloads("numen_api:numen_death").isEmpty(), "real death event");
++        assertTrue(roster(owner).stream().anyMatch(row -> row.id.equals(body)));
++        run(owner, body, "while-dead", "return 47");
++        assertNotEquals("ok", result(owner, "while-dead").get("status").getAsString());
++        until(() -> !owner.payloads("numen_api:numen_respawn").isEmpty(), "real respawn event");
++        assertTrue(roster(owner).stream().anyMatch(row -> row.id.equals(body)));
++        assertEquals(before, console("data get entity RelLife Inventory"));
++        run(owner, body, "after-respawn", "return 48");
++        assertTrue(result(owner, "after-respawn").get("receipt").getAsString().contains("48"));
++        owner.command("numen player despawn RelLife"); until(() -> !online("RelLife"), "dismiss test companion");
++    }
++
++    private static void consent(Bot owner, UUID body, long id, int decision) throws IOException {
++        ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
++        writeUuid(out, body); writeVarLong(out, id); writeVarInt(out, decision); writeText(out, "");
++        owner.payload("numen_api:consent_reply", bytes.toByteArray());
++    }
++
++    @Test void aLongFragmentedProgramRunsAndMalformedSummonsHaveNoEffect() throws Exception {
++        Bot owner = legacy("rel_fragment"); UUID body = summonPacket(owner, "RelFragment");
++        ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
++        writeUuid(out, body); writeText(out, "fragmented"); writeText(out, "--" + "x".repeat(70_000) + "\nreturn 65");
++        writeVarInt(out, 0); writeVarInt(out, 0);
++        byte[] whole = bytes.toByteArray(); int size = 32_767 - 128, count = (whole.length + size - 1) / size;
++        for(int i=0;i<count;i++){
++            bytes.reset(); out = new DataOutputStream(bytes);
++            writeVarInt(out, 741); writeVarInt(out, i); writeVarInt(out, count);
++            if(i==0) writeText(out, "numen_api:run_program");
++            int n=Math.min(size, whole.length-i*size); writeVarInt(out, n); out.write(whole,i*size,n);
++            owner.payload("numen_api:fragment_to_server", bytes.toByteArray());
++        }
++        assertTrue(result(owner, "fragmented").get("receipt").getAsString().contains("65"));
++        bytes.reset(); out=new DataOutputStream(bytes); writeText(out,"MustNotSpawn"); writeText(out,""); writeText(out,"");
++        out.writeBoolean(false); out.writeByte(77);
++        int mark=owner.mark(); owner.payload("numen_api:summon_request", bytes.toByteArray());
++        owner.await(mark,m->m.text().contains("本次没有执行"),WAIT,"malformed packet guidance");
++        assertFalse(online("MustNotSpawn")); assertTrue(owner.connected());
++        owner.command("numen player despawn RelFragment"); until(()->!online("RelFragment"),"dismiss test companion");
++    }
++
++    @Test void walkingUsesTheNativeTaskAndReportsTheActualArrival() throws Exception {
++        Bot owner=legacy("rel_walk"); UUID body=summonPacket(owner,"RelWalk");
++        var numbers=java.util.regex.Pattern.compile("-?\\d+(?:\\.\\d+)?[dD]").matcher(console("data get entity RelWalk Pos"));
++        double[] pos=new double[3]; for(int i=0;i<3;i++){assertTrue(numbers.find());String n=numbers.group();pos[i]=Double.parseDouble(n.substring(0,n.length()-1));}
++        int x=(int)Math.floor(pos[0])+4,y=(int)Math.floor(pos[1]),z=(int)Math.floor(pos[2]);
++        console("execute at RelWalk run fill ~-2 ~-1 ~-2 ~8 ~-1 ~2 minecraft:stone");
++        owner.command("numen path");
++        run(owner,body,"walk-real-body","numen.move.to({x="+x+",y="+y+",z="+z+"}); return numen.status.self()");
++        JsonObject done=result(owner,"walk-real-body");
++        assertEquals("ok",done.get("status").getAsString(),done.toString());
++        var arrived=java.util.regex.Pattern.compile("(-?\\d+(?:\\.\\d+)?)d").matcher(console("data get entity RelWalk Pos[0]"));
++        assertTrue(arrived.find()); assertEquals(x+.5,Double.parseDouble(arrived.group(1)),1.0);
++        assertFalse(owner.payloads("numen_api:current_task").isEmpty());
++        assertFalse(owner.payloads("numen_api:path_debug").isEmpty(),"the official path overlay channel received nothing");
++        assertTrue(owner.payloads("numen:path_debug").isEmpty(),"release client received the renamed modern channel");
++        owner.command("numen player despawn RelWalk"); until(()->!online("RelWalk"),"dismiss test companion");
++    }
++
++    @Test void aSkinChangeKeepsTheOriginalBodyAndInventory() throws Exception {
++        Bot owner=legacy("rel_skin"); UUID body=summonPacket(owner,"RelSkin");
++        console("give RelSkin minecraft:diamond 3");
++        String before=console("data get entity RelSkin Inventory");
++        int messages=owner.mark();
++        ByteArrayOutputStream bytes=new ByteArrayOutputStream(); DataOutputStream out=new DataOutputStream(bytes);
++        writeUuid(out,body); writeText(out,java.util.Base64.getEncoder().encodeToString("{\"textures\":{}}".getBytes(StandardCharsets.UTF_8))); writeText(out,"");
++        owner.payload("numen_api:change_skin",bytes.toByteArray());
++        owner.await(messages,m->m.text().contains("RelSkin") && m.text().contains("joined"),WAIT,"body re-admitted after skin change");
++        assertEquals(body,roster(owner).stream().filter(e->e.name.equals("RelSkin")).findFirst().orElseThrow().id);
++        assertEquals(before,console("data get entity RelSkin Inventory"));
++        run(owner,body,"skin-original-body","return numen.status.self()");
++        assertEquals("ok",result(owner,"skin-original-body").get("status").getAsString());
++        owner.command("numen player despawn RelSkin"); until(()->!online("RelSkin"),"dismiss test companion");
++    }
++    private static String callId(byte[] bytes) throws IOException {
++        DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes)); readUuid(in); return readText(in);
++    }
++    private static void callback(Bot owner, UUID body, String call, String text) throws IOException {
++        ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
++        writeUuid(out, body); writeText(out, call); JsonObject value = new JsonObject(); value.addProperty("ok", true); value.addProperty("value", text);
++        writeText(out, value.toString()); out.writeBoolean(false); owner.payload("numen_api:client_call_result", bytes.toByteArray());
++    }
++    private static void runModules(Bot owner, UUID body, String id, String code, String name, String hash, String text) throws IOException {
++        ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
++        writeUuid(out, body); writeText(out, id); writeText(out, code); writeVarInt(out, 1); writeText(out, name); writeText(out, hash);
++        writeVarInt(out, text == null ? 0 : 1); if(text != null){writeText(out, hash); writeText(out, text);}
++        owner.payload("numen_api:run_program", bytes.toByteArray());
++    }
++
++    private Bot legacy(String name) throws Exception {
++        Bot owner = join(name, "en_us");
++        owner.payload("minecraft:register", String.join("\0", CHANNELS).getBytes(StandardCharsets.UTF_8));
++        until(() -> !owner.payloads(ROSTER).isEmpty(), "legacy roster");
++        return owner;
++    }
++    private UUID summonPacket(Bot owner, String name) throws Exception {
++        ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
++        writeText(out, name); writeText(out, ""); writeText(out, ""); out.writeBoolean(false);
++        owner.payload("numen_api:summon_request", bytes.toByteArray());
++        until(() -> roster(owner).stream().anyMatch(e -> e.name.equals(name)), "legacy summon " + name);
++        return roster(owner).stream().filter(e -> e.name.equals(name)).findFirst().orElseThrow().id;
++    }
++    private static void run(Bot owner, UUID body, String id, String code) throws IOException {
++        ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
++        writeUuid(out, body); writeText(out, id); writeText(out, code); writeVarInt(out, 0); writeVarInt(out, 0);
++        owner.payload("numen_api:run_program", bytes.toByteArray());
++    }
++    record Reply(UUID body, String id, JsonObject json) {}
++    private static Reply reply(byte[] bytes) {
++        try {
++            DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));
++            Reply result = new Reply(readUuid(in), readText(in), JsonParser.parseString(readText(in)).getAsJsonObject());
++            assertEquals(0, in.available()); return result;
++        } catch (IOException e) { throw new AssertionError(e); }
++    }
++    private static JsonObject result(Bot owner, String id) throws Exception {
++        until(() -> owner.payloads(RESULT).stream().map(ReleaseClientTest::reply).anyMatch(e -> e.id.equals(id)), "receipt " + id);
++        return owner.payloads(RESULT).stream().map(ReleaseClientTest::reply).filter(e -> e.id.equals(id)).reduce((a, b) -> b).orElseThrow().json;
++    }
++    record Row(UUID id, String name) {}
++    private static List<Row> roster(Bot owner) {
++        try {
++            DataInputStream in = new DataInputStream(new ByteArrayInputStream(owner.payloads(ROSTER).getLast()));
++            readText(in); int size = readVarInt(in); java.util.ArrayList<Row> rows = new java.util.ArrayList<>();
++            for (int i = 0; i < size; i++) { rows.add(new Row(readUuid(in), readText(in))); readVarLong(in); in.readBoolean(); }
++            assertEquals(0, in.available(), "legacy roster has unread fields"); return rows;
++        } catch (IOException e) { throw new AssertionError(e); }
++    }
++    private static byte[] uuid(UUID id) throws IOException {
++        ByteArrayOutputStream bytes = new ByteArrayOutputStream(); writeUuid(new DataOutputStream(bytes), id); return bytes.toByteArray();
++    }
++    private static UUID readUuid(DataInputStream in) throws IOException { return new UUID(in.readLong(), in.readLong()); }
++    private static void writeUuid(DataOutputStream out, UUID id) throws IOException { out.writeLong(id.getMostSignificantBits()); out.writeLong(id.getLeastSignificantBits()); }
++    private static void writeText(DataOutputStream out, String text) throws IOException { byte[] data = text.getBytes(StandardCharsets.UTF_8); writeVarInt(out, data.length); out.write(data); }
++    private static String readText(DataInputStream in) throws IOException { return new String(in.readNBytes(readVarInt(in)), StandardCharsets.UTF_8); }
++    private static void writeVarInt(DataOutputStream out, int n) throws IOException { do { int b = n & 127; n >>>= 7; out.writeByte(n == 0 ? b : b | 128); } while(n != 0); }
++    private static void writeVarLong(DataOutputStream out, long n) throws IOException { do { int b = (int)n & 127; n >>>= 7; out.writeByte(n == 0 ? b : b | 128); } while(n != 0); }
++    private static int readVarInt(DataInputStream in) throws IOException { long n = readVarLong(in); return (int)n; }
++    private static long readVarLong(DataInputStream in) throws IOException { long n=0; for(int i=0;i<10;i++){ int b=in.readUnsignedByte(); n|=(long)(b&127)<<(i*7); if((b&128)==0)return n; } throw new IOException("bad VarLong"); }
++    private static void until(BooleanSupplier condition, String what) throws Exception {
++        long deadline=System.nanoTime()+WAIT.toNanos();
++        while(!condition.getAsBoolean()){ assertTrue(System.nanoTime()<deadline, "timed out: "+what); Thread.sleep(25); }
++    }
++    private static boolean online(String name) { try { return console("list").contains(name); } catch(IOException e) { throw new AssertionError(e); } }
++}
+diff --git a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/RemoteBrainGameTests.java b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/RemoteBrainGameTests.java
+index b4c41dc9f..e7c69a401 100644
+--- a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/RemoteBrainGameTests.java
++++ b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/RemoteBrainGameTests.java
+@@ -39,6 +39,64 @@ import static com.dwinovo.numen.gametest.GameTestKit.succeedWhen;
+  */
+ public class RemoteBrainGameTests {
+ 
++    /** 断线必须交回中断回执并释放外接槽；重连继续用原身体，不能永远报 busy。 */
++    @GameTest(template = "floor16", timeoutTicks = 400, batch = "numen_remote_8")
++    public static void a_cancelled_external_call_returns_a_receipt_and_reconnects(GameTestHelper helper)
++            throws Exception {
++        Rig her = new Rig(helper, "gametest_remote_cancel", null);
++        her.companion.getInventory().add(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BAMBOO, 20));
++        her.brain.connect();
++        var args = new com.google.gson.JsonObject();
++        args.addProperty("companion", her.companion.getUUID().toString());
++        args.addProperty("code", "numen.inv.drop(\"minecraft:bamboo\", {count=20})");
++        var first = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
++            try {
++                return her.brain.callResult("lua", args);
++            } catch (Exception e) {
++                throw new java.util.concurrent.CompletionException(e);
++            }
++        });
++        var second = new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CompletableFuture<com.google.gson.JsonObject>>();
++        helper.startSequence().thenWaitUntil(() -> {
++            helper.assertTrue(com.dwinovo.numen.api.permission.ConsentDesk.of(her.companion).pending() != null,
++                    "the real drop was not awaiting permission");
++        }).thenExecute(() -> {
++            try {
++                her.brain.disconnect();
++            } catch (Exception e) {
++                throw new IllegalStateException(e);
++            }
++        }).thenWaitUntil(() -> {
++            helper.assertTrue(first.isDone(), "the cancelled external HTTP caller is still waiting");
++            var receipt = first.join();
++            helper.assertTrue(receipt.get("isError").getAsBoolean(), "cancellation reported success: " + receipt);
++            helper.assertTrue(receipt.toString().contains("interrupted"), "missing interruption reason: " + receipt);
++        }).thenExecute(() -> {
++            try {
++                her.brain.connect();
++            } catch (Exception e) {
++                throw new IllegalStateException(e);
++            }
++            var query = new com.google.gson.JsonObject();
++            query.addProperty("companion", her.companion.getUUID().toString());
++            query.addProperty("code", "print(\"RECONNECTED_ORIGINAL_BODY\")");
++            second.set(java.util.concurrent.CompletableFuture.supplyAsync(() -> {
++                try {
++                    return her.brain.callResult("lua", query);
++                } catch (Exception e) {
++                    throw new java.util.concurrent.CompletionException(e);
++                }
++            }));
++        }).thenWaitUntil(() -> {
++            helper.assertTrue(second.get().isDone(), "the reconnected query is still waiting");
++            var receipt = second.get().join();
++            helper.assertTrue(!receipt.get("isError").getAsBoolean() && receipt.toString().contains("RECONNECTED_ORIGINAL_BODY"),
++                    "the new external call inherited the old busy slot: " + receipt);
++            helper.assertTrue(com.dwinovo.numen.PlayerInv.count(her.companion.getInventory(), net.minecraft.world.item.Items.BAMBOO) == 20,
++                    "the refused/cancelled drop changed the inventory");
++        }).thenExecute(her::close).thenSucceed();
++    }
++
+     /** 一只带产品线路大脑的同伴,和一个扮外部大脑的客户端。 */
+     private static final class Rig {
+         final MinecraftServer server;

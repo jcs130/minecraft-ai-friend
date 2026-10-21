@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "status": "validated_candidate_not_deployed",
+  "sourceRepository": "https://github.com/jcs130/minecraft-numen",
+  "branch": "fix/paper-release-client-compat-20261021",
+  "sourceCommit": "b134eb01e86928ff94ca3b823b8f9ce04ab17097",
+  "productionBaseCommit": "dc6465a3d2c6dc41b16147222fb997a65587a351",
+  "sourcePatch": "paper/integrations/numen-paper/patches/official-release-client-compat.patch",
+  "patchReplayVerified": true,
+  "apiSha256": "3ccb46aadf19b425392b9a0f197b546a4d51a86e000a18bf097024121c3be33f",
+  "previousApiSha256": "6684d9e36d40bcf9a3b651a278fe978c9108f141fbecab8add03701a1496ef2c",
+  "productionContentSha256": "82133ebd12d89db5b7af515160562b64296eebca119f1e0473761ccd85c2bab1",
+  "assembly": {
+    "baselineSha256": "6684d9e36d40bcf9a3b651a278fe978c9108f141fbecab8add03701a1496ef2c",
+    "candidateSha256": "3ccb46aadf19b425392b9a0f197b546a4d51a86e000a18bf097024121c3be33f",
+    "changedClasses": [
+      "com/dwinovo/numen/api/NumenApiPlugin.class",
+      "com/dwinovo/numen/api/PaperEvents.class",
+      "com/dwinovo/numen/api/brain/CompanionBrains.class",
+      "com/dwinovo/numen/api/brain/CompanionLoop$Host.class",
+      "com/dwinovo/numen/api/brain/CompanionLoop$Model.class",
+      "com/dwinovo/numen/api/brain/CompanionLoop.class",
+      "com/dwinovo/numen/api/brain/Replies.class",
+      "com/dwinovo/numen/api/entity/NumenCommands.class",
+      "com/dwinovo/numen/api/network/NumenNetwork.class",
+      "com/dwinovo/numen/api/platform/PaperNetworkChannel.class",
+      "com/dwinovo/numen/api/platform/PlayerSessions.class",
+      "com/dwinovo/numen/api/program/ProgramPort.class",
+      "com/dwinovo/numen/api/program/RoutedCalls.class",
+      "com/dwinovo/numen/api/program/ServerPrograms.class",
+      "com/dwinovo/numen/api/task/CompanionTickDispatcher.class"
+    ],
+    "addedClasses": [
+      "com/dwinovo/numen/api/brain/ReleaseClients$Active.class",
+      "com/dwinovo/numen/api/brain/ReleaseClients$History.class",
+      "com/dwinovo/numen/api/brain/ReleaseClients$Receipt.class",
+      "com/dwinovo/numen/api/brain/ReleaseClients$Session.class",
+      "com/dwinovo/numen/api/brain/ReleaseClients$TaskView.class",
+      "com/dwinovo/numen/api/brain/ReleaseClients.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$Cancel.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$ClientResult.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$Death.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$Events.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$Modules.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$Respawn.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$Result.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$Roster$Row.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$Roster.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$Run.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$Skin.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$Stop.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$Summon.class",
+      "com/dwinovo/numen/api/network/ReleasePackets$Task.class",
+      "com/dwinovo/numen/api/network/ReleasePackets.class",
+      "com/dwinovo/numen/api/platform/PaperReleaseProtocol$1.class",
+      "com/dwinovo/numen/api/platform/PaperReleaseProtocol.class",
+      "com/dwinovo/numen/api/program/ReleaseModules.class"
+    ],
+    "unchangedEntries": 1205
+  },
+  "officialFabricReleases": {
+    "0.1.4": "2ab47063de770c9baf86d2beedeb4530f6bfa89f7f4dba30babcbcb22217d4a6",
+    "0.1.4.1": "ccc0806fd04cf3404dbc39f7579a4d7c20cd1362d06dce358850f5fdaf711a41"
+  },
+  "tests": {
+    "jvm": 1753,
+    "exactApiAndProductionContentPaperE2e": 20,
+    "unmodifiedOfficialFabricGraphicalClients": 2,
+    "officialNeoForgeCodecRoundTrips": 15,
+    "nativeMcpPaperGameTests": 8,
+    "bedrockWire": 11,
+    "bedrockColdRestart": 3,
+    "fabricAndNeoForgeBuilds": "passed (online after offline cache miss)"
+  },
+  "notTested": [
+    "full NeoForge graphical client",
+    "mobile or Xbox hardware UI",
+    "16 autonomous models under long-term load"
+  ],
+  "modelPlacement": "official release client uses its local model profiles, keys, modules, history and memory; no automatic server/client history migration",
+  "receiptRetention": {
+    "memoryOnly": true,
+    "offlineExpiryMinutes": 60,
+    "maxOwnerHistories": 64,
+    "maxProgramIdsPerBody": 2048,
+    "maxReceiptTextBytesPerOwner": 2097152
+  },
+  "productionChanged": false,
+  "restartRequired": "Paper normal restart after separate maintenance approval and E/F full cold backups",
+  "rollback": "Normal maintenance stop; restore only previous API JAR 6684d9e3; preserve latest world/player/companion data. Do not dismiss companions.",
+  "candidateDirectory": "E:\\MC\\ops\\repairs\\numen-release-compat-20261021\\candidate",
+  "rollbackDirectory": "E:\\MC\\ops\\repairs\\numen-release-compat-20261021\\rollback",
+  "initialFailuresRetained": [
+    "fixture fragment channel typo",
+    "fixture floor placed in unloaded chunks",
+    "native fixture asserted runtime summary instead of tool receipt",
+    "fixture repeated DLL extraction on Windows",
+    "isolated Bedrock fixture missing ViaVersion",
+    "optional loader offline build missing YSM JUnit repository cache"
+  ],
+  "coldRestartFixtureStoppedCleanly": true
+}
