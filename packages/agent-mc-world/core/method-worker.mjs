@@ -46,7 +46,7 @@ function capabilities(scope) {
     .filter(name => name !== 'inventory.items').map(name => [name, (...args) => rpc('mineflayer', { name, args }, scope)])) : undefined;
   if (bot) bot.inventory = { items: () => rpc('mineflayer', { name: 'inventory.items', args: [] }, scope) };
   return { mc: harden({ state: () => rpc('state', {}, scope), do: steps => rpc('do', { steps }, scope),
-    flightPlan: args => rpc('flightPlan', args, scope) }), ...(bot ? { bot: harden(bot), Vec3: harden(Vec3) } : {}) };
+    flightPlan: args => rpc('flightPlan', args, scope), swimPlan: args => rpc('swimPlan', args, scope) }), ...(bot ? { bot: harden(bot), Vec3: harden(Vec3) } : {}) };
 }
 
 try {

@@ -86,6 +86,7 @@ export type SkillCall = StepBounds & (
   | { skill: 'goto'; at: Anchor; dimension?: string; groundY?: true; exact?: boolean; walkOnly?: boolean; dryRun?: boolean }
   | { skill: 'look'; at: Anchor }
   | { skill: 'control'; keys: ControlKey[]; durationMs: number; mode: 'ground' | 'water' | 'flight'; yawDeg?: number; pitchDeg?: number }
+  | { skill: 'swim'; at: Anchor; dimension?: string; reserveOxygen: number; maxDurationMs: number; dryRun?: boolean }
   | { skill: 'transit'; at: Anchor }
   | { skill: 'goto_player'; name: string }
   | { skill: 'follow'; name: string }
@@ -156,7 +157,7 @@ export type SkillCall = StepBounds & (
       face?: BlockFace;
     }
   /** 骑上/驾驭/下坐骑。off 单独一态;target 上坐骑;to 驾着走(可与 target 同给) */
-  | { skill: 'ride'; target?: string; to?: Anchor; off?: true }
+  | { skill: 'ride'; target?: string; entityId?: number; to?: Anchor; off?: true }
   /**
    * 拴绳:拴住一只活物,牵着走到 to,到了松开(keep 就继续牵着)、或系到 tie 那根栅栏上。
    * off 单独一态 = 松开现在牵着的那只。
@@ -836,6 +837,10 @@ const PICK_DOC = '同 id 的几件里挑哪一件:写清单括号里的字(「�
 function parseRide(c: Record<string, unknown>, at: string, marks?: MarkLookup): ParseResult {
   const off = c.off === true;
   const target = str(c.target);
+  const entityId = c.entityId;
+  if(entityId!==undefined && (!Number.isSafeInteger(entityId) || Number(entityId)<0 || Number(entityId)>2_147_483_647 || !target || off)) {
+    return {error:`${at} ride 的 entityId 须是非负实体ID，并与 target 一起给；不能用于下车`};
+  }
   const to = c.to === undefined || c.to === null ? null : anchorOf(c.to, marks);
   if (c.to !== undefined && c.to !== null && !to) {
     return { error: `${at} ride 的 to 要 [x,y,z](${RELATIVE_HINT})${markMissNote(c.to, marks)}` };
@@ -853,6 +858,7 @@ function parseRide(c: Record<string, unknown>, at: string, marks?: MarkLookup): 
     step: {
       skill: 'ride',
       ...(target ? { target } : {}),
+      ...(entityId===undefined ? {} : {entityId:Number(entityId)}),
       ...(to ? { to } : {}),
       ...(off ? { off: true as const } : {}),
     },
@@ -1127,6 +1133,18 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
         doc: '当前维度里的一格传送门方块;给字符串 = 当前维度的 mc_map 路标名',
       },
     ],
+  },
+  {
+    name:'swim',
+    doc:'{"skill":"swim","at":[10,61,20],"dimension":"overworld"} 在已加载水体内规划并执行三维绕障路线；只用普通游泳物理，不挖路、不修改位置。\n'
+      + '                                                 干跑 dryRun:true 只返回路线/氧气预算。最多32格、4096搜索节点；未知格不通行，六向邻接不跳过中间障碍。\n'
+      + '                                                 自动核验换气点与实际进展，最多两次有限重算；每段氧气保留reserveOxygen（默认6/20）。\n'
+      + '                                                 完整结果在mc.state().lastSwim，包含实际位置、路径节点数、输入次数、重算次数和耗时；失败不自动重放。',
+    fields:[{key:'at',kind:'anchor',required:true,error:`swim 要 at:[x,y,z](${RELATIVE_HINT})`},
+      {key:'dimension',kind:'string',doc:'当前维度前置条件，不符不移动'},
+      {key:'reserveOxygen',kind:'int',lo:6,hi:16,def:6,unit:'氧气'},
+      {key:'maxDurationMs',kind:'int',lo:1000,hi:90000,def:45000,unit:'毫秒'},
+      {key:'dryRun',kind:'flag'}],
   },
   {
     name: 'goto_player',
@@ -1493,6 +1511,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     parse: parseRide,
     fields: [
       { key: 'target', kind: 'string', doc: '骑上哪种(实体英文 id:pig/boat/horse…);已骑着时可省' },
+      { key: 'entityId', kind: 'int', lo:0,hi:2_147_483_647,def:0,doc:'与target一起指定本连接实体ID；只骑这只，不退回同类最近者' },
       { key: 'to', kind: 'anchor', error: `ride 的 to 要 [x,y,z](${RELATIVE_HINT})`, doc: '驾着去哪;猪、炽足兽和船能驾，马科暂不支持驾驶' },
       { key: 'off', kind: 'flag', doc: '下坐骑;与 target/to 互斥' },
     ],

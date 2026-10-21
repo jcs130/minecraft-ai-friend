@@ -10,6 +10,7 @@
  * 调用方不必分辨两处。
  */
 import type { Bot } from 'mineflayer';
+import { skillSwim } from './swim-route.ts';
 import { observeDamage, type DamageEvidence } from './damage-evidence.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
@@ -734,6 +735,11 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
       const footing = water ? ';仍在水中，未确认登岸' : '';
       return `到了 ${cellText(feetOf(bot))}${arrival}${footing}${call.walkOnly ? ';沿现有通路到达，未挖掘或垫脚' : ''}${note ? `。\n${note}` : ''}`;
     }
+    case 'swim': {
+      if(call.dimension && normalizeDimension(dimensionOf(bot))!==normalizeDimension(call.dimension))throw new SkillBlocked('swim 维度不符，先穿门再重新观察');
+      const at=resolveAt(bot,call.at);
+      return skillSwim(bot,{...call,at:[at.x,at.y,at.z]},ctx);
+    }
     case 'transit': return skillTransit(bot, call, ctx);
     case 'find': return skillFind(bot, call.target, call.direction, call.distance, ctx, call.until);
     case 'goto_player': {
@@ -1132,7 +1138,7 @@ type QueueHoldSlot = 'environment' | 'fall' | 'external';
 function reRunnable(call: SkillCall | undefined): boolean {
   if (!call) return true;
   switch (call.skill) {
-    case 'craft': case 'smelt': case 'toss': case 'stow': case 'take': case 'brew': case 'transit': case 'control': case 'harvest': return false;
+    case 'craft': case 'smelt': case 'toss': case 'stow': case 'take': case 'brew': case 'transit': case 'control': case 'harvest': case 'swim': return false;
     // 只看报价那一形没有副作用,重跑无妨;下过手的那一形扣了等级与青金石,不重跑
     case 'enchant': return call.index === undefined;
     case 'use': return (call.times ?? 1) <= 1 && call.index === undefined;
@@ -1229,7 +1235,7 @@ export function freezeFirstStep(
   const s0 = steps[0];
   let head: SkillCall = s0;
   switch (s0.skill) {
-    case 'goto': case 'transit': case 'tunnel': case 'harvest':
+    case 'goto': case 'transit': case 'tunnel': case 'harvest': case 'swim':
       head = { ...s0, at: fz(s0.at) };
       break;
     case 'fish':
@@ -7191,6 +7197,18 @@ export class Reflexes {
     if (this.fallBot !== bot) {
       this.fallBot = bot;
       this.fall = null;
+    }
+    // Use the body's actual gliding flag, never merely an equipped elytra or a
+    // requested launch. A controlled descent must not accumulate free-fall
+    // distance (including a false deep landing on the next heartbeat).
+    if (bot.entity.elytraFlying === true && !bot.entity.onGround) {
+      if (this.fall?.stopped) {
+        // A previous genuine fall already owns a queue hold. Opening a glider
+        // is not safe footing and cannot silently release or lose that token.
+        this.fall.safeSince = null;
+        this.fall.safeAt = null;
+      } else this.fall = null;
+      return;
     }
     const y = bot.entity.position.y;
     const falling = !bot.entity.onGround && (bot.entity.velocity?.y ?? 0) < 0 && !bodyInWater(bot);

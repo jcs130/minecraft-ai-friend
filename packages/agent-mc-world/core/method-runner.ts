@@ -7,7 +7,7 @@ export const METHOD_ADAPTER = 'minecraft-method/v1';
 export const METHOD_LIMITS = Object.freeze({ sourceChars: 12_000, paramsChars: 4_096,
   calls: 32, actions: 16, messageChars: 24_000, durationMs: 60_000, maxDurationMs: 120_000 });
 
-export type MethodOperation = 'state' | 'do' | 'flightPlan' | 'mineflayer';
+export type MethodOperation = 'state' | 'do' | 'flightPlan' | 'swimPlan' | 'mineflayer';
 export interface MethodTrace {
   call: number; method: MethodOperation; args: unknown; startedAt: string;
   endedAt?: string; result?: unknown; error?: string;
@@ -164,7 +164,7 @@ export class MethodRunner {
         catch (error) { finish('failed', String(error)); }
         return;
       }
-      if (message.kind !== 'call' || !['state', 'do', 'flightPlan', 'mineflayer'].includes(message.method)) {
+      if (message.kind !== 'call' || !['state', 'do', 'flightPlan', 'swimPlan', 'mineflayer'].includes(message.method)) {
         finish('failed', '脚本协议包含未知操作'); return;
       }
       if (request.validate) { finish('failed', '语法校验不可调用World'); return; }

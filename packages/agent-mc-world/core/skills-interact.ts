@@ -1411,7 +1411,7 @@ export async function skillRide(bot: Bot, call: Extract<SkillCall, { skill: 'rid
     const name = zhEntity(v.name ?? '坐骑');
     bot.dismount();
     const t0 = Date.now();
-    while (vehicleOf(bot) && Date.now() - t0 < 3000) await sleep(100);
+    while (vehicleOf(bot) && Date.now() - t0 < 3000) {checkAbort(ctx);await sleep(100);}
     if (vehicleOf(bot)) throw new SkillBlocked(`从${name}上下不来:发了下坐骑的包,3 秒后人还在上面`, [], 'server');
     await sleep(300); // 等服务端把人摆到下车点
     return `从${name}上下来了,人在 ${cellText(feetOf(bot))}`;
@@ -1420,22 +1420,27 @@ export async function skillRide(bot: Bot, call: Extract<SkillCall, { skill: 'rid
   if (call.target) {
     const riding = vehicleOf(bot);
     if (riding) {
+      if(call.entityId!==undefined && (riding as VehicleEntity & {id?:number}).id!==call.entityId)throw new SkillBlocked('当前坐骑不是点名的实体，先明确下车；未切换到别的载具');
       if ((riding.name ?? '') !== call.target) {
         throw new SkillBlocked(`人还骑在${zhEntity(riding.name ?? '坐骑')}上;先 {"skill":"ride","off":true} 下来再骑别的`);
       }
     } else {
       if (!isKnownTarget(bot, call.target)) throw new SkillBlocked(unknownUseTargetText(bot, call.target));
-      const entity = findEntity(bot, call.target, RIDE_FIND_R);
+      const entity = call.entityId===undefined?findEntity(bot,call.target,RIDE_FIND_R):bot.entities[call.entityId];
+      if(call.entityId!==undefined && (!entity || entity.name!==call.target || !entity.isValid || entity.position.distanceTo(bot.entity.position)>RIDE_FIND_R || !canSeeEntity(bot,entity))) {
+        throw new SkillBlocked(`点名载具 ${call.entityId} 不在当前可交互范围或类型不符；未改骑附近同类`);
+      }
       if (!entity) throw new SkillNoop(`附近 ${RIDE_FIND_R} 格内没有${zhEntity(call.target)}`);
       await gotoGoal(bot, new goals.GoalFollow(entity, 2), ctx).catch(() => undefined);
       checkAbort(ctx);
       if (!entity.isValid) throw new SkillBlocked(`${zhEntity(call.target)}走了`);
+      if(entity.position.distanceTo(bot.entity.position)>4.5 || (call.entityId!==undefined && (bot.entities[call.entityId]!==entity || !canSeeEntity(bot,entity))))throw new SkillBlocked('尚未到达点名坐骑的可交互位置；没有远距离右键或改骑其他实体');
       // 手上拿着食物/鞍右键会变成喂食/上鞍,空手骑最稳;驾驭用的钓竿骑上之后再拿
       try { await bot.unequip('hand'); } catch { /* 本来就空手 */ }
       await bot.lookAt(entity.position.offset(0, (entity.height ?? 1) * 0.5, 0));
       bot.mount(entity as never);
       const t0 = Date.now();
-      while (!vehicleOf(bot) && Date.now() - t0 < 3000) await sleep(100);
+      while (!vehicleOf(bot) && Date.now() - t0 < 3000) {checkAbort(ctx);await sleep(100);}
       if (!vehicleOf(bot)) {
         const saddled = readSaddled(bot as never, entity as never);
         const tamed = readHorseTamed(bot as never, entity as never);
@@ -1451,6 +1456,7 @@ export async function skillRide(bot: Bot, call: Extract<SkillCall, { skill: 'rid
   if (!vehicle) {
     throw new SkillBlocked('要驾着走得先骑上:同一步给 target,或先来一步 {"skill":"ride","target":"..."}');
   }
+  if(call.entityId!==undefined && (vehicle as VehicleEntity & {id?:number}).id!==call.entityId)throw new SkillBlocked('服务端确认的坐骑不是点名实体；没有继续驾驶，请核对当前载具身份',[],'server');
   if (!call.to) {
     const animalNote = animalStateNote(bot as never, vehicle as never);
     const saddleNote = readSaddled(bot as never, vehicle as never) === false && RIDE_CONTROL_ITEM[vehicle.name ?? '']
@@ -1887,6 +1893,10 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
   const onCorrect = (p: { x: number; y: number; z: number }): void => {
     corrections += 1;
     pos.set(p.x, p.y, p.z);
+    if(vehicleOf(bot)===vehicle) {
+      vehicle.position.set(p.x,p.y,p.z);
+      bot.entity.position.set(p.x,p.y+RIDER_OVER_VEHICLE,p.z);
+    }
   };
   client.on('vehicle_move', onCorrect);
   const startedAt = Date.now();
@@ -1898,7 +1908,7 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
   try {
     for (;;) {
       checkAbort(ctx);
-      if (!vehicleOf(bot)) { stalledWhy = '人从坐骑上掉下来了(服务端把人卸了下来)'; break; }
+      if (vehicleOf(bot)!==vehicle) { stalledWhy = '坐骑已脱离或身份变化，停止旧坐骑控制'; break; }
       const dx = to.x + 0.5 - pos.x;
       const dz = to.z + 0.5 - pos.z;
       const dist = Math.hypot(dx, dz);
@@ -1963,13 +1973,15 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
   const left = Math.round(Math.hypot(to.x + 0.5 - pos.x, to.z + 0.5 - pos.z));
   const fixNote = corrections > 0 ? `;路上服务端纠了 ${corrections} 次位置` : '';
   if (stalledWhy) {
-    try { bot.dismount(); } catch { /* 已不在坐骑上 */ }
+    if(vehicleOf(bot)===vehicle)try { bot.dismount(); } catch { /* 已不在坐骑上 */ }
     await sleep(500);
     throw new SkillBlocked(
-      `骑着${zhV}走了 ${ridden} 格停在 ${where},离目标还 ${left} 格:${stalledWhy};已经下来了${fixNote}`,
+      `骑着${zhV}走了 ${ridden} 格停在 ${where},离目标还 ${left} 格:${stalledWhy};当前${vehicleOf(bot)?'仍附着载具，请核对身份':'已脱离载具'}${fixNote}`,
       [], 'server',
     );
   }
+  await sleep(200);checkAbort(ctx);
+  if(vehicleOf(bot)!==vehicle || Math.hypot(to.x+.5-pos.x,to.z+.5-pos.z)>RIDE_ARRIVE_R)throw new SkillBlocked('到达后坐骑身份或位置被服务端修正，尚未确认抵达',[],'server');
   return `骑着${zhV}到了 ${where}(走了 ${ridden} 格、${secs}s,离目标 ${left} 格),人还骑着;下来用 {"skill":"ride","off":true}${fixNote}`;
 }
 

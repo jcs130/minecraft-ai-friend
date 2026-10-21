@@ -48,6 +48,7 @@ import { MineflayerMethod, NATIVE_API } from './method-mineflayer.ts';
 import { methodApiHelp } from './method-api.ts';
 import { flightState } from './flight.ts';
 import { movementReadout } from './skills-control.ts';
+import { planSwim, lastSwimResult } from './swim-route.ts';
 import { attachHearing, hearingReadout } from './perception-hearing.ts';
 import { AttentionReader, PERCEPTION_TOOLS, perceptionArgs, validDetection, type DetectionEvidence } from './perception-tools.ts';
 import { IdleBehaviorController, IdlePresentationContext, type IdleBehaviorScene } from './idle-behavior.ts';
@@ -4481,6 +4482,7 @@ export class MinecraftWorld implements World {
       method: this.methods.current,
       snapshot: this.snapshot({ scanBlocks: false }), flight: bot ? flightState(bot) : null,
       movement: bot ? movementReadout(bot) : null,
+      lastSwim: bot ? lastSwimResult(bot) : null,
       temporaryScaffolds: bot ? temporaryScaffoldReadout(bot) : null,
       queue: this.executor?.status() ?? null, bodyRestriction: this.bodyInhibitReason, combatActive: this.combat?.active ?? false,
       combat: this.extensionState() };
@@ -4508,6 +4510,15 @@ export class MinecraftWorld implements World {
       const parsed = parseFlightPlan(args, this.markLookup());
       if ('error' in parsed) throw new Error(parsed.error);
       return previewFlightPlan(bot, parsed.steps, parsed.budgetMs, parsed.subdivide);
+    }
+    if(method==='swimPlan') {
+      const at=args.at;
+      if(!Array.isArray(at)||at.length!==3||!at.every(Number.isSafeInteger)||at.some(n=>Math.abs(n)>30_000_000)
+        ||Object.keys(args).some(k=>k!=='at'&&k!=='reserveOxygen')
+        ||(args.reserveOxygen!==undefined && (!Number.isInteger(args.reserveOxygen)||Number(args.reserveOxygen)<6||Number(args.reserveOxygen)>16))) {
+        throw new Error('swimPlan 要绝对 at:[x,y,z] 和可选 reserveOxygen:6..16');
+      }
+      return planSwim(bot,at as [number,number,number],args.reserveOxygen===undefined?6:Number(args.reserveOxygen),()=>signal.aborted);
     }
     if (this.nativeMethod?.session.ownsBody) throw new Error('当前原生程序已持有身体；mc.do 会等待自身，改用 bot 原生调用或结束后另起方法');
     let decision: TaskAdmissionDecision | undefined;

@@ -1,8 +1,10 @@
 # Mineflayer 工作脚本
 
-七种内置脚本通过通用 `mc_script` 工具运行；它们随 `agent-mc-world` 核心发布，不要求服务端安装 NPC 模组。宿主负责目标与模型推理，脚本负责在一次明确任务中循环观察、操作、核对和停止。没有新增后台 Agent 或控制器。
+十种内置脚本通过通用 `mc_script` 工具运行；它们随 `agent-mc-world` 核心发布，不要求服务端安装 NPC 模组。宿主负责目标与模型推理，脚本负责在一次明确任务中循环观察、操作、核对和停止。没有新增后台 Agent 或控制器。
 
 移动类新增 `navigate_route`、`swim_to`、`flight_route`。参数示例、能力边界及第三方方案比较见 [移动脚本与调研](movement-routines.md)。四种生产/仓储脚本的接口保持。
+
+进阶的 `swim_route`、`ride_route`、`portal_route` 和普通鞘翅原生接口见 [进阶移动](advanced-mobility.md)。
 
 ## 查找、阅读、运行
 

@@ -132,6 +132,57 @@ for (let i=0;i<plan.steps.length;i++) {
 return finish(null,[],{planning});
 `;
 
+const SWIM_ROUTE = `const ROUTINE_ID = 'swim_route';\n` + COMMON + String.raw`
+const from=position(state);
+const group=await mc.do([{skill:'swim',at:params.at,dimension:params.dimension,
+  reserveOxygen:params.reserveOxygen===undefined?6:params.reserveOxygen,maxDurationMs:params.maxDurationMs===undefined?45000:params.maxDurationMs}]);
+state=group.state;stop=unsafe();
+const route=state && state.lastSwim && state.lastSwim.taskId===group.taskId?state.lastSwim:null;
+const met=!stop && group.done && route && route.complete===true && distance(position(state),center(params.at))<=0.8;
+record(params.at,from,group,met);
+return finish(met?null:stop || (route && route.reason) || 'arrival_unconfirmed',met?[]:[params.at],{route});
+`;
+
+const RIDE_ROUTE = `const ROUTINE_ID = 'ride_route';\n` + COMMON + String.raw`
+const mounted=()=>state.snapshot && state.snapshot.vehicle;
+const vehicle=()=>{const v=mounted();return v && v.entityId===params.entityId;};
+if(mounted() && !vehicle())return finish('different_vehicle_attached',params.waypoints);
+if(!vehicle()) {
+  const from=position(state),group=await mc.do([{skill:'ride',target:params.target,entityId:params.entityId}]);
+  state=group.state;stop=unsafe();record(null,from,group,!stop && vehicle());
+  if(stop || !group.done || !vehicle())return finish(stop || 'mount_unconfirmed',params.waypoints);
+}
+for(let i=0;i<params.waypoints.length;i++) {
+  const at=params.waypoints[i],from=position(state);
+  const group=await mc.do([{skill:'ride',to:at}]);state=group.state;stop=unsafe();
+  const v=mounted(),p=v && v.position;
+  const met=!stop && vehicle() && valid(p) && Math.hypot(p.x-at[0]-0.5,p.z-at[2]-0.5)<=2.5;
+  record(at,from,group,met);
+  if(stop || !group.done || !met)return finish(stop || 'vehicle_arrival_unconfirmed',params.waypoints.slice(i));
+}
+if(params.dismountAtEnd===true) {
+  const from=position(state),group=await mc.do([{skill:'ride',off:true}]);state=group.state;stop=unsafe();
+  record(null,from,group,!mounted());
+  if(stop || !group.done || mounted())return finish(stop || 'dismount_unconfirmed',[]);
+}
+return finish(null,[],{vehicle:mounted()});
+`;
+
+const PORTAL_ROUTE = `const ROUTINE_ID = 'portal_route';let expectedDimension=params.dimension;\n`
+  + COMMON.replace('dim(params.dimension)','dim(expectedDimension)').replace('params.waypoints || [params.at]','params.portals')
+    .replace('dimension:params.dimension','dimension:state && state.snapshot && state.snapshot.dimension') + String.raw`
+for(let i=0;i<params.portals.length;i++) {
+  const portal=params.portals[i];
+  if(dim(state.snapshot.dimension)!==dim(portal.fromDimension))return finish('portal_origin_dimension_mismatch',params.portals.slice(i));
+  const from=position(state),group=await mc.do([{skill:'transit',at:portal.at}]);
+  state=group.state;expectedDimension=portal.toDimension;stop=unsafe();
+  const met=!stop && group.done && (dim(portal.fromDimension)!==dim(portal.toDimension) || distance(from,position(state))>64);
+  record(portal.at,from,group,met);
+  if(stop || !group.done || !met)return finish(stop || 'portal_transition_unconfirmed',params.portals.slice(i));
+}
+return finish(null,[]);
+`;
+
 export const MOVEMENT_ROUTINES = [
   { id:'navigate_route',title:'多路点行走',description:'一次提交依次到达的绝对落脚格；每段以实际三维位置核验，失败保留剩余路段。',
     conditions:['最多8个路点，可重复路点组成巡逻或往返；不自动无限巡逻',
@@ -151,4 +202,19 @@ export const MOVEMENT_ROUTINES = [
       'land:false末段悬停；失败时返回当前flight/movement状态，不能把取消当自动落地或自动重试'],
     parameters:{type:'object',additionalProperties:false,properties:{...shared,waypoints:route,land:{type:'boolean'},
       budgetMs:{type:'integer',minimum:1,maximum:120000}},required:['dimension','waypoints']},code:FLIGHT },
+  {id:'swim_route',title:'水下绕障',description:'一次请求在已加载水域内三维寻路、绕障并换气；保存实际输入、重算和耗时指标。',
+    conditions:['最多32格，六向邻接不跳过中间方块；不加载未知区块或拆方块',
+      '规划氧气预算且实际换气后才继续下潜；失败不自动重放整条路线'],
+    parameters:{type:'object',additionalProperties:false,properties:{...shared,at:cell,reserveOxygen:{type:'integer',minimum:6,maximum:16},
+      maxDurationMs:{type:'integer',minimum:1000,maximum:90000}},required:['dimension','at']},code:SWIM_ROUTE},
+  {id:'ride_route',title:'指定载具多路点',description:'按当前连接实体ID上车并串联最多8个水平目的地，核验同一坐骑实际位置。',
+    conditions:['支持现有ride能驾驶的原版船/猪/炽足兽；不声称模组飞机可用',
+      '坐骑身份变化立即停止；默认不下车，dismountAtEnd:true才明确下车；Y不作为驾驶到达条件'],
+    parameters:{type:'object',additionalProperties:false,properties:{...shared,waypoints:route,target:{type:'string',minLength:1,maxLength:80,pattern:'^[a-z0-9_]+$'},
+      entityId:{type:'integer',minimum:0,maximum:2147483647},dismountAtEnd:{type:'boolean'}},required:['dimension','waypoints','target','entityId']},code:RIDE_ROUTE},
+  {id:'portal_route',title:'连续穿门',description:'串联最多4次明确的穿门，按每段起始/目标维度与实际位置核验，传错维度立即停止。',
+    conditions:['fromDimension/toDimension由当前世界实际路线给出，不猜坐标缩放或未发现的传送门',
+      '同维度仅接受transit实测的大于64格折跃；不自动重复穿门'],
+    parameters:{type:'object',additionalProperties:false,properties:{...shared,portals:{type:'array',minItems:1,maxItems:4,items:{type:'object',additionalProperties:false,
+      properties:{at:cell,fromDimension:shared.dimension,toDimension:shared.dimension},required:['at','fromDimension','toDimension']}}},required:['dimension','portals']},code:PORTAL_ROUTE},
 ];

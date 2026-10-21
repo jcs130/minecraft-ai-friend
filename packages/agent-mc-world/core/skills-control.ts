@@ -5,6 +5,7 @@ import { flightState, flyWithInput } from './flight.ts';
 import { SkillBlocked, checkAbort, sleep, type SkillContext } from './skill-context.ts';
 import type { ControlKey, SkillCall } from './skills.ts';
 import { bodyInWater, headInWater, WATER_BLOCKS } from './terrain.ts';
+import { remainingWaterBreathingMs } from './status-effects.ts';
 
 /** Self-local readings only. Unknown water/oxygen is never replaced with a healthy default. */
 export function movementReadout(bot: Bot) {
@@ -21,6 +22,8 @@ export function movementReadout(bot: Bot) {
     oxygen: oxygen !== null && oxygen >= 0 && oxygen <= 20 ? oxygen : null,
     yaw: finite(bot.entity?.yaw), pitch: finite(bot.entity?.pitch),
     onGround: typeof bot.entity?.onGround === 'boolean' ? bot.entity.onGround : null,
+    elytraFlying:typeof (bot.entity as typeof bot.entity & {elytraFlying?:boolean})?.elytraFlying==='boolean'
+      ?(bot.entity as typeof bot.entity & {elytraFlying?:boolean}).elytraFlying:null,
     vehicleAttached: (bot as Bot & { vehicle?: unknown }).vehicle != null };
 }
 
@@ -100,7 +103,7 @@ export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: '
     if (call.mode === 'water') {
       if (!bodyInWater(bot)) throw new SkillBlocked('已离开水体，停止水中输入；重新观察');
       const water = waterReadout(bot);
-      if (!call.keys.includes('jump') && water.headWet && water.oxygen !== null && water.oxygen <= 6) {
+      if (!call.keys.includes('jump') && water.headWet && water.oxygen !== null && water.oxygen <= 6 && !remainingWaterBreathingMs(bot)) {
         throw new SkillBlocked(`氧气 ${water.oxygen}/20，停止下潜；先上浮换气（surface）`);
       }
     }

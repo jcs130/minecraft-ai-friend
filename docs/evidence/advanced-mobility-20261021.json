@@ -1,0 +1,235 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "scope": "independent agent-mc-world advanced mobility; explicit bounded tasks",
+  "sourceBase": "393c6fc9cf27316662f0bdc7249449e88779a35c",
+  "routines": [
+    "swim_route",
+    "ride_route",
+    "portal_route"
+  ],
+  "routineCatalogCount": 10,
+  "nativeApis": [
+    "elytraFly",
+    "mount",
+    "dismount",
+    "moveVehicle"
+  ],
+  "sourceVerification": {
+    "passed": 716,
+    "failed": 0,
+    "skipped": 0,
+    "coreTypecheck": true,
+    "build": true,
+    "runtimeFiles": 11135,
+    "publicDeclarations": 272,
+    "nodeNextConsumer": true,
+    "bundlerConsumer": true,
+    "sourceHealthAssertions": 35,
+    "packedHealthAssertions": 35,
+    "sourceSha256": {
+      "core/executor.ts": "282eb0da070d7aa2a3fc20b6919e9fcdb32c7f4b8dc3219600a6047eecb78a80",
+      "core/swim-route.ts": "6aee85145cb9ed2b1ee28d45d15f2b58fba63d79f69ceae5f8f1ced15651a3f4",
+      "core/movement-routines.ts": "24fa9190e811a74b03b39381e44146f535cfc4d24d0f5c5300bf50e64845f9bb",
+      "core/skills-interact.ts": "f2a7167b99d4cd27d5d5c613c96fd28c89fbac8c08f10d1c06d432103164cf6f",
+      "core/method-mineflayer.ts": "f97de69395be9605299c5dc04a9af09ee7c060ff8505b4e9d8670db1e223d9ad"
+    }
+  },
+  "artifact": {
+    "filename": "agent-mc-world-0.4.0.tgz",
+    "sha256": "2ef8b97002147acde1ecff4ef0859b8fd27510bc477489e45de93bb3f28712de",
+    "bytes": 47016579,
+    "entries": 11876,
+    "isolatedOfflineInstall": true,
+    "npmPublished": false,
+    "groundTestCandidateSha256": "6d312cd2cc9a71f577e0b34444f3db1894a218a2ab2c64f29ff93864a836498f",
+    "changedMembersSinceGroundTest": [
+      "package/core/skills-interact.ts",
+      "package/dist/build.json",
+      "package/dist/runtime/core/skills-interact.js"
+    ],
+    "groundDelta": "Only post-mount exact entity identity guard plus build manifest; dedicated server-substitution regression passes. Final package water/glide/reconnection tested directly."
+  },
+  "isolatedGameplay": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.250",
+    "mods": 103,
+    "transport": "ordinary Mineflayer through the frozen QA gateway",
+    "fixtures": "QA-only prepared ladder, two boats, portal, sealed water chamber, launch platform and real equipped elytra. No OP or creative flight granted to these actors. Console setup is not agent achievement.",
+    "ladderAndFollowChecks": [
+      "ordinary pathfinder climbs the complete six-block ladder to its exit platform",
+      "dynamic follow advances toward another real account and cancellation yields the body"
+    ],
+    "groundChecks": [
+      "escape makes actual progress away from the visible hostile",
+      "exact boat ID mounts, visits two horizontal waypoints and confirms dismount",
+      "ordinary body crosses a real portal; routine and live state both report the actual Nether dimension"
+    ],
+    "waterChecks": [
+      "ordinary survival body enters the isolated submerged test chamber",
+      "baseline direct swimmer cannot complete the target behind a solid column",
+      "read-only three-dimensional planner finds a loaded route around the column",
+      "one action group swims the detour with ordinary server physics, real oxygen and actual arrival",
+      "result remains underwater; swimming completion is not mislabeled as landing"
+    ],
+    "glideChecks": [
+      "server confirms normal elytra glide and real horizontal movement without creative permission",
+      "ordinary gliding physics reaches actual ground without teleportation",
+      "body remains alive; no allow-flight grant or position override was used"
+    ],
+    "reconnectChecks": [
+      "final packed client reconnects the same saved Nether body with no new movement or old action replay"
+    ],
+    "allActorConnectionsNormallyClosed": true,
+    "water": {
+      "routineSourceHash": "6e57aafcbf7b3c3a9f6533c13d867a8332141169613b99429900b1ac65e928f6",
+      "baselineReason": "target_unobserved",
+      "baselineGoalCompleted": false,
+      "goalCompleted": true,
+      "sdkActionGroups": 1,
+      "controlPulses": 30,
+      "replans": 0,
+      "elapsedMs": 6146,
+      "endOxygen": 10,
+      "reserveOxygen": 6,
+      "realWaterBreathingEffectMs": 0,
+      "from": {
+        "x": 433.5,
+        "y": -58.8,
+        "z": 400.5
+      },
+      "actualPosition": {
+        "x": 436.6515573415257,
+        "y": -60.804573794611926,
+        "z": 400.97209642884724
+      },
+      "waypoints": 7,
+      "nodesExpanded": 22,
+      "measurementLimit": "One designed obstacle layout; no general autonomous success-rate or paid-model latency claim."
+    },
+    "glide": {
+      "launch": {
+        "elytraFlying": true,
+        "position": {
+          "x": 504.2971725002388,
+          "y": -44.76994453025813,
+          "z": 450.4999999999994
+        }
+      },
+      "samples": [
+        {
+          "position": {
+            "x": 509.2076588913482,
+            "y": -49.2426585202534,
+            "z": 450.4999999999994
+          },
+          "onGround": false,
+          "elytraFlying": true
+        },
+        {
+          "position": {
+            "x": 574.2673556247872,
+            "y": -60,
+            "z": 450.49999999999613
+          },
+          "onGround": true,
+          "elytraFlying": false
+        }
+      ],
+      "actualLanding": {
+        "position": {
+          "x": 574.2673556247872,
+          "y": -60,
+          "z": 450.49999999999613
+        },
+        "onGround": true,
+        "elytraFlying": false
+      },
+      "finalHealth": 20,
+      "creativeFlightAllowed": false,
+      "arbitraryTerrainAutopilotVerified": false
+    },
+    "portalActualDimension": "the_nether",
+    "shutdown": {
+      "at": "2026-10-21T08:24:34.043358+00:00",
+      "javaExit": 0,
+      "gatewayExit": 0,
+      "ownerExited": true,
+      "portsClosed": [
+        39320,
+        39321,
+        39322
+      ]
+    },
+    "logLimits": {
+      "existingStartupErrorLines": 326,
+      "finalErrorLines": 326,
+      "observedWarnings": [
+        "fixture teleport correction",
+        "first Nether generation 2480ms behind",
+        "ModernFix skipped Strider mount event to avoid deadlock"
+      ],
+      "longRunningLoadTest": false
+    }
+  },
+  "retainedFailuresAndCorrections": [
+    "Initial ground harness passed ladder/follow but truncated a large scripted return; compact results now avoid interpreting missing results as success.",
+    "Two flee probes were honest noops: peaceful difficulty immediately removed the fixture hostile. Switched only the isolated world to easy; the new explicit flee task then completed.",
+    "Initial real elytra launch succeeded but normal glide was cancelled by the deep-fall reflex. Actual gliding is now excluded; closed-glider free fall and existing queue holds have regression coverage.",
+    "First post-fix dive reached fatal impact: the pilot script did not flare. Failure and death preserved; no invulnerability or position override introduced.",
+    "Next low-level glide actually landed but a four-second sample missed its airborne state. A new distinct test captured early gliding and verified alive landing; original failed report remains.",
+    "First offline install used a duplicated store version directory and failed to locate TypeScript; retried with the existing store root, no global dependencies changed."
+  ],
+  "upstreamAssessment": {
+    "schemaVersion": 1,
+    "upstream": "miner-org/mineflayer-baritone",
+    "commit": "5bbb91eeb2ace18b4c83a56d00fcd494f0f976f2",
+    "scope": "unmodified swin.js neighbour generator only; dependency-free base/Vec3 harness",
+    "findings": [
+      {
+        "name": "vertical neighbour skips solid intermediate y=65 plane",
+        "emitted": [
+          {
+            "x": 0,
+            "y": 64,
+            "z": 0,
+            "cost": 1.6
+          },
+          {
+            "x": 0,
+            "y": 63,
+            "z": 0,
+            "cost": 2.4000000000000004
+          }
+        ]
+      },
+      {
+        "name": "diagonal neighbour passes between two solid cardinal neighbours",
+        "emitted": [
+          {
+            "x": 1,
+            "y": 65,
+            "z": 1,
+            "cost": 1.4142135623730951
+          }
+        ]
+      }
+    ],
+    "fullControllerTested": false,
+    "coreDependencyInstalled": false,
+    "productionChanged": false
+  },
+  "remainingLimits": [
+    "Only loaded water within 32 blocks, bounded 4096-node/500ms planning; no one-block-high crawling.",
+    "No general elytra route/landing-site autopilot; cancelling cannot suspend ordinary gliding physics.",
+    "Native mod vehicle input is dispatch plus observation, not proof that every mod implements the same input protocol.",
+    "No end-to-end controller evaluation or installation of JS Baritone; upstream findings concern its neighbor generator only."
+  ],
+  "modelRequests": 0,
+  "newResidentController": false,
+  "productionRestarted": false,
+  "productionChanged": false,
+  "routerOrFirewallChanged": false,
+  "deployment": "Source and locally packed artifact only. Existing agent hosts must explicitly update this package; server/mod/client runtime unchanged.",
+  "privateEvidenceDirectory": "research/movement-advanced-20261021 (world, raw logs, ledgers and archives deliberately not committed)"
+}

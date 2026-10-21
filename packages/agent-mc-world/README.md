@@ -55,6 +55,9 @@ block/quantity evidence, partial results and remaining work. No extra model loop
 or server NPC mod is required. Reviewed [movement routines](docs/movement-routines.md)
 also cover verified waypoints, bounded swimming and permission-aware segmented
 flight, with actual positions, unknown-safe oxygen and remaining legs.
+The [advanced mobility guide](docs/advanced-mobility.md) covers oxygen-aware
+underwater detours, exact vehicle identity, portal itineraries and native elytra
+controls. Existing physics and body ownership remain in place.
 
 ## Build and verification
 

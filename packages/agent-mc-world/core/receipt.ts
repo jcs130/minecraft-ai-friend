@@ -82,6 +82,7 @@ export function describeSkill(c: SkillCall, heldItem?: string | null): string {
     case 'surface': return '脱离水体或向上到露天';
     case 'look': return `原地看向 ${anchorsText([c.at])}`;
     case 'control': return `直接控制 ${c.mode} ${c.keys.join('+') || '转头'} ${c.durationMs}毫秒`;
+    case 'swim': return `水路 ${JSON.stringify(c.at)}${c.dryRun?' 试算':''}`;
     case 'flight': return `${c.dryRun ? '试算飞行' : c.land === false ? '飞至空中悬停' : '飞到安全落脚点'} ${anchorsText([c.at])}`;
     case 'land': return '从空中安全落地';
     case 'collect': return `采集 ${c.count} 个${zhName(c.block)}${c.buried ? '(可挖过去)' : ''}${tool}`;

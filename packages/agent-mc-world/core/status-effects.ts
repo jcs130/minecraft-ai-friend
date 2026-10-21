@@ -26,6 +26,18 @@ export function remainingEffectTicks(effect: TimedEffect, nowMs = Date.now()): n
   return Math.max(0, effect.duration - elapsedTicks);
 }
 
+/** Known server effects only; bounded to the longest single movement action. */
+export function remainingWaterBreathingMs(bot: {entity?: EffectEntity;registry?:{effects?:Record<number,{name?:string}>}}): number {
+  let ms=0;
+  for(const [id,effect] of Object.entries(bot.entity?.effects??{})) {
+    const name=bot.registry?.effects?.[Number(id)]?.name?.replace(/_/g,'').toLowerCase();
+    if(name!=='waterbreathing' && name!=='conduitpower')continue;
+    const ticks=remainingEffectTicks(effect);
+    ms=Math.max(ms,ticks<0?90000:Math.min(90000,ticks*50));
+  }
+  return ms;
+}
+
 /** 一个连接安装一次；重复续效包重新计时，同一效果的快照和网页重放不重置时间。 */
 export function observeStatusEffects(bot: EffectBot): void {
   if (observed.has(bot)) return;
