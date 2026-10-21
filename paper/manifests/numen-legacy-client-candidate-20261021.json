@@ -1,0 +1,31 @@
+{
+  "originalSha256": "fb4e7a8656cb4f1226c13b1b1f04bf45816fedc781c0ccc9f5df6ffc1d5daa78",
+  "candidateSha256": "6684d9e36d40bcf9a3b651a278fe978c9108f141fbecab8add03701a1496ef2c",
+  "changedEntries": [
+    "com/dwinovo/numen/api/platform/PaperNetworkChannel.class"
+  ],
+  "unchangedEntries": 1219,
+  "runtimeModified": false,
+  "tested": true,
+  "schemaVersion": 1,
+  "status": "verified-candidate-not-deployed",
+  "productionRestarted": false,
+  "playerDataModified": false,
+  "maintenanceQueued": false,
+  "upstreamPr": "https://github.com/Dwinovo/minecraft-numen/pull/142",
+  "upstreamCommit": "493e0564a3e175fef2c71d16280f5b04b691452b",
+  "upstreamBase": "a9c30823682d81d931df58336d6a7ba4e8d0d930",
+  "tests": {
+    "jvm": 1727,
+    "upstreamPaperE2e": 8,
+    "exactProductionCandidatePaperE2e": 4,
+    "skipped": 0
+  },
+  "graphicalClientTested": false,
+  "runtimeJar": "plugins/numen_api-paper-1.21.1-0.1.4.jar",
+  "candidateDirectory": "E:\\MC\\ops\\repairs\\numen-client-owner-20261021\\candidate",
+  "rollbackDirectory": "E:\\MC\\ops\\repairs\\numen-client-owner-20261021\\rollback",
+  "mirrorDirectory": "F:\\MC\\ops\\repairs\\numen-client-owner-20261021",
+  "scope": "Paper outbound channel compatibility only; legacy UI/agent protocol is not implemented",
+  "rollback": "Normal maintenance stop, restore only the original API jar; preserve current player and companion data."
+}
