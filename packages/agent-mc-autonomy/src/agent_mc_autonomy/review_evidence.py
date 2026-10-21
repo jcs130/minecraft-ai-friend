@@ -19,7 +19,9 @@ def completion_contract(review_id, reference, *, pending_death, legacy=None):
                      "reason": "One short factual clause from inspected evidence (about 12 words)."},
         "output_guidance": "Keep text fields short. Finish this final tool call before elaborating. "
             "Additional persona material and narration are not completion requirements; a natural reply can follow acknowledgement.",
-        "goal": "Required only for insert/revise; a concise stage within user intent and standing goal.",
+        "goal": "Required only for insert/revise; a concise stage within user intent and standing goal. "
+            "For continue, omit goal: it preserves the existing plan and cannot deliver a correction. "
+            "To send a corrective stage, explicitly choose insert or revise.",
         "constraints": "World-specific capabilities require fresh evidence, not unrelated memories. "
             "Revise requires stage_delivery.can_revise. "
             "For a reassessable historical_goal, continue revalidates it on this baseline; revise replaces it. "
@@ -65,6 +67,26 @@ def fact_preview(value, limit):
     while len(encoded(text + suffix).encode()) > limit:
         text = text[:-1]
     return text + suffix
+
+
+def original_facts(facts, useful):
+    """Keep complete public game fields behind queries, never a clipped original."""
+    originals, status, remaining = {}, {}, 65536
+    priority = ("serverFeedback", "lastTask", "messages", "goals", "methods")
+    keys = [*priority, *(key for key in useful if key not in priority)]
+    for key in keys:
+        text = facts.get(key)
+        if key not in useful or not isinstance(text, str) or text == useful[key]:
+            continue
+        size = len(text.encode("utf-8"))
+        available = size <= min(32768, remaining)
+        status[key] = {"available": available, "utf8_bytes": size}
+        if available:
+            originals[key] = text
+            remaining -= size
+        else:
+            status[key]["reason"] = "Original exceeds the bounded review store; use the source fact handle."
+    return originals, status
 
 
 def save(directory, review, lineage, last_decision):
@@ -201,6 +223,17 @@ def compact(evidence, reference, last_decision=None):
         result["fact_originals"] = {key: preview(original, 180)
             for key, original in evidence.get("fact_originals", {}).items()
             if key in result["facts"]}
+        queries = {}
+        for key, value in result["facts"].items():
+            stored = evidence.get("original_fact_status", {}).get(key)
+            if stored:
+                queries[key] = {**stored, **({"detail_path": ["evidence", "original_facts", key]}
+                                             if stored.get("available") else {})}
+            elif value != evidence["facts"][key]:
+                queries[key] = {"available": True, "detail_path": ["evidence", "facts", key],
+                                "utf8_bytes": len(encoded(evidence["facts"][key]).encode("utf-8"))}
+        if queries:
+            result["fact_detail_queries"] = queries
     # Retain success and failure counts/samples together, rather than slicing a
     # long raw receipt before its successful tail. All outcomes remain in detail.
     result["native_outcomes"] = []

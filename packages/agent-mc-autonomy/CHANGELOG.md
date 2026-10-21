@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.77
+
+- Refuse a new `continue` judgment carrying a stage goal, before acknowledgement,
+  speech or dispatch. Callers must explicitly choose insert/revise to deliver a
+  correction. Previously committed judgments remain immutable.
+- Keep complete abbreviated public game facts behind dated evidence queries,
+  with explicit unavailable status above the bounded original store. Host
+  summaries stay small; private host context is never copied into evidence.
+
 ## 0.2.72
 
 - Publish the actual pending set immediately after persisting a native receipt. A completed task no longer remains publicly accepted during the next slow inference; late acceptances still cannot resurrect it and unknown/barrier semantics are unchanged.

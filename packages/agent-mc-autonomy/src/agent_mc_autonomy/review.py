@@ -64,6 +64,7 @@ def review_observation(status, now):
     # Keep explicit abridgement and original query handles for longer entries.
     for key, size in (("goals", 1200), ("methods", 900)):
         useful[key] = fact_preview(facts.get(key, ""), size)
+    originals, original_status = review_evidence.original_facts(facts, useful)
     reads = snapshot.get("read_activity") or {}
     reads = {key: min(999, reads[key]) for key in (
         "mc_help", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_tool_help", "mc_original",
@@ -77,6 +78,7 @@ def review_observation(status, now):
                                  "origin": active.get("origin", "unknown")}, "pending": pending,
                 "historical_goal": snapshot.get("historical_goal"),
                 "facts": useful, "body_events": feedback["body_events"], "native_outcomes": feedback["native_outcomes"],
+                "original_facts": originals, "original_fact_status": original_status,
                 "outcome_precedence": feedback["outcome_precedence"],
                 "fact_originals": {part["key"]: part["original"] for part in snapshot.get("facts", {}).get("parts", [])
                                    if part.get("key") in useful and part.get("original")},
@@ -629,6 +631,14 @@ class ReviewPort:
                 review["result"].update(reflection_pending=False, reflection_completion=review["reflection_completion"])
                 state.pop("retry_after", None)
                 return review["result"]
+            if decision == "continue" and goal.strip():
+                return {"is_error": True, "error": "continue_cannot_deliver_new_goal",
+                        "acknowledged": False, "dispatched": False, "verified": False,
+                        "stage_delivery": stage,
+                        "next": "continue preserves the existing plan and does not deliver goal. "
+                            "Omit goal to keep that plan, or explicitly choose insert/revise to deliver "
+                            "a corrective stage; revise requires stage_delivery.can_revise. "
+                            "No choice, speech or new goal was committed."}
             request_id = self.request_id(review_id)
             existing = self.mailbox.get(request_id)
             if not existing and (self.mailbox.intent_revision() != review["revision"] or current["intent"] != review["intent"]):
