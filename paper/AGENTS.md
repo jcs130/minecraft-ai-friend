@@ -1,3 +1,7 @@
+## 2026-10-21 Numen个人模型与无模组CLI追加候选
+
+候选API4b36f166尚未上线，正式仍3ccb46aa；没有pending部署或修改玩家资料。原版/基岩复用原生CLI，新增help/status/model list/set，旧版仍用本机模型；专用服共享Key默认按主人UUID拒绝，仅私有凭据或明确授权。1772核心JVM、25精确Paper联机、8MCP及Fabric/NeoForge构建通过；E/F候选与3ccb回退已备，源代码0b3e1bab9。新维护须本次确认、预告、真人/副本检查及原完整双盘冷备份；DSH当前仍Mineflayer适配器，尚未实现Numen驱动，不新增公网接口。见NUMEN_PAPER.md及numen-owner-cli-candidate-20261021.json。
+
 ## 2026-10-21 官方 Numen Release 兼容已上线
 
 服主批准后等待可米墓穴正常结束，重新180/60/10秒预告、原Afu-MC-DailyBackup正常停启，E/F完整冷备份20261021-190408后仅替换Numen API为3ccb46aa，任务结果0。其他1205原条目、Numen内容82133ebd及其他39插件保持；原物品/UUID/归属核验后桐人日常恢复。官方Fabric0.1.4/0.1.4.1可用原JAR配置本机模型、召唤、执行和收回执；原版Java仍可入服，基岩/numenmenu保持。1753 JVM、20精确候选E2E、2官方Fabric图形闭环、15官方NeoForge codec、8原生MCP及14基岩协议/冷启动检查通过；正式21/10/19核验。未做完整NeoForge图形、手机Xbox或16模型长期负载验收。见NUMEN_PAPER.md及numen-release-compat-release-20261021.json；下方6684为此前版本。

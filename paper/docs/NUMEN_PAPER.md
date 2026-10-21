@@ -4,6 +4,52 @@
 
 现役 **Paper 1.21.1 build133 / AgentFriend 0.4.47.10 / Numen 0.1.4 / NumenBedrock 0.1.0**，Numen API `3ccb46aa`；已兼容官方 Fabric 0.1.4/0.1.4.1。原版 Java 客户端不必安装 Numen 即可入服；完整 Java 设置面板可用官方 Fabric Release，也保留原配套的 1.21.1 模组包。基岩沿用 `/numenmenu`，原协议 3 与端口保持。最新完整双盘冷备份为 `20261021-190408`。正式核验和回退见[本次发布记录](../manifests/numen-release-compat-release-20261021.json)；此前消息降噪与自主运行修复见[前次发布说明](MESSAGE_AUTONOMY_RELEASE_20261021.md)。下方历史候选与暂停描述按当时时点阅读。
 
+### 客户端分流、费用归属和通用框架（2026-10-21 追加候选）
+
+**协议自动分流已经上线；下述新增 CLI 和共享 Key 限制是追加候选，尚未部署。** 线上只读检查确认 `server/keys` 为空，没有全服共享模型 Key；桐人沿用专用主人的私有凭据。不能根据有一个服务端模型档案，就认为所有人都可免费使用该模型。
+
+| 接入方式 | 谁运行 Agent 循环 | 设置入口和资料位置 |
+| --- | --- | --- |
+| 官方 Fabric／NeoForge 0.1.4、0.1.4.1 的旧协议 | 玩家电脑上的原生循环，或玩家本机接入的外脑 | `/numen settings`；玩家电脑 `config/numen/`，Key不从服主复制 |
+| 配套当前协议3客户端 | Paper 里的原生循环，或获授权的外部驾驶者 | `/numen settings`；服务器上本人 UUID 的资料和钥匙串 |
+| 原版 Java、Mineflayer、基岩 | 服务端原生循环，或获授权的外脑；这些客户端本身不需要装Numen | 原生命令；基岩另有 `/numenmenu` 表单 |
+
+识别依赖实际登记的频道与 Hello 协议，而非只看模组文件名。两款官方旧版布局相同，共用同一条已验证线路；未知协议不发送无法解码的面板包。新版优先原生握手，旧版按四个专属频道识别，基岩由 Floodgate 识别。不会因一次连接同时开两套模型循环，MCP驾驶优先；断线不重放未决动作。
+
+新增命令对普通玩家开放，结果仅发本人；同伴身体不能用这些管理命令。查询不召唤、不绑定、不测试模型、不消费模型额度：
+
+```text
+/numen help
+/numen status
+/numen model list [页码]
+/numen model set own custom chat "你的模型名" https://你的服务地址/v1
+/numen player summon MyCompanion
+/numen companion MyCompanion profile my:own
+/msg MyCompanion 你好
+```
+
+`model set`只更新本人的 `my:<档案名>`，重复调用不新建 `_2` 条目，保留面板设过的上下文、输出预算和兼容项；通过原生库保存后，在原写车道回读文件再确认。URL不能携带用户名、密码、查询串或片段，Key单独配置。`model list`每页五项，不输出端点或Key明文；`status`区分身体、驾驶者、模型绑定、阻塞原因和共享费用授权。原版 `/numen settings` 自动返回CLI入口；基岩继续显示表单；旧版 `model set`明确提示改本机设置，不写一份实际不会使用的服务端档案。
+
+Key仍用原生本人钥匙串：基岩通过 `/numenmenu` 输入，当前版Java通过设置面板，原版可用原有 `/numen key <服务商> <Key>`。**Paper可能记录斜杠命令，命令输入也可能出现在直播/客户端历史中**；模组/表单路径不把Key拼入命令。服务端本人Key由服务器保管，服主可读取；官方旧版的Key由玩家电脑保管。
+
+追加候选对专用服引入 `server/server.json` 的 `sharedKeyOwners: []`，缺省不允许任何主人回退使用共享Key；只接受服主明确配置的主人UUID。原本人的Key始终优先，删除本人Key后也不借服主的；模型检查和个人MCP连接复用相同取Key策略，界面的“可用Key”跟实际费用授权一致。配置缺失、损坏或UUID表无效时保持关闭。单人世界沿用原本机共享行为。桐人的私有凭据和QwenPaw绑定保持，不把桐人的主人加入普通玩家的Key目录；本次没有给任何其他玩家配置Key或提交真实模型请求。
+
+### Numen API、QwenPaw 与 DSH 的职责
+
+Numen API负责身体、事件、脚本执行、任务槽和权限；Numen内容提供寻路、感知、Lua工具等。完整的Agent框架可以在服务器电脑的独立进程里运行，**不必嵌进Paper JVM**。桐人当前就是独立QwenPaw进程通过本机Numen MCP驱动原身体，QwenPaw负责模型、记忆、会话、目标和子Agent，Numen负责游戏执行。同一身体只允许一个驾驶者。
+
+其他支持MCP的框架可使用同一接口：主人用 `/numen token create brain <同伴名> 30` 获取自己身体的作用域令牌，外脑初始化MCP，读取 `tools/list`，通过 `list_companions`、`get_events`、`say`、`lua` 等实际工具交互。`brain` 是外脑自己思考、自己付费；`channel` 只把人的消息交给内脑，仍会使用该主人已配置的模型，二者不能混用。令牌不是模型Key，也不赋予OP、别人的身体或绕过领地的权限。
+
+已核查 [jcs130/dsh-minecraft-agent](https://github.com/jcs130/dsh-minecraft-agent) 的 `src/mc-harness.mjs` 和 `src/harness-bridge.mjs`：目前创建 `agent-mc-world` 的独立Mineflayer身体，并通过内存MCP传输 `agent-mc/v1` 工具。DSH框架的会话、模型、预算和记忆可复用，但**现有Minecraft适配器不是Numen驱动**，不能只换一个端点就声称接好了。接Numen时应另选Numen MCP驱动，保留DSH原生循环，按Numen实际工具Schema、事件和异步回执适配；不要再为同一角色启动Mineflayer身体或把 `mc_do` 原样发给Numen。此轮仅审查DSH，未修改其仓库、安装进程或接管任何现役Agent。
+
+官方旧客户端的“外接大脑”入口在本机 `G → 设置 → 外接大脑`，能让其他MCP框架驾驶同伴，原内置循环暂停。该MCP端点、令牌和资料归玩家电脑，和Paper服务端端点的令牌不通用；游戏客户端需要保持连接。QwenPaw、DSH和其他框架均使用各自的模型配置与Key。现有服务器MCP只在本机使用；此轮不新增公网端口，也不把本机接口当成公网玩家可直连的服务。
+
+实现源码：[0b3e1bab9](https://github.com/jcs130/minecraft-numen/commit/0b3e1bab925b1c5aa2a9d27d43cf90bdc58a1241)，在已上线兼容基线 `b134eb01e` 上追加。可重放补丁为 `paper/integrations/numen-paper/patches/owner-cli-personal-keys.patch`，已经用独立Git索引验证重放树与提交相同。构建器 `build-owner-cli.py` 固定生产API `3ccb46aa`，只覆盖6个现有class、新增2个，其余1238个原条目逐字节保留；最终候选API SHA256为 `4b36f166b3f7c7f380a297c24a1f8bcd0fe9836ea0365c2da5993bc33792b313`，内容、桥接、角色和玩家资料不随本包改动。
+
+验证：五个核心模块共1772项JVM检查、Fabric和NeoForge构建通过；最终候选与正式内容JAR的25项Paper联机检查全部通过，另有8项原生MCP GameTest通过，包括归属、事件、回执、权限和断线清理。联机覆盖无模组设置入口、私有反馈、档案落盘及重复更新、本人模型真实往返、共享/跨用户Key拒绝、无效URL、旧版本机模型提示，以及既有私聊、权限、行走、断线和回执场景。测试只用本地假模型和假Key。初轮相对URL触发的空值异常已修复；首次联机3项失败来自夹具突发命令触发原版反刷屏、清理未完成影响后续同名同伴，以及读取下一tick之前的旧状态。保留失败日志，夹具按正常节奏发送、同主人只设置一次测试Key，阻塞验证重新查询真实状态；未放宽服务器反刷屏或验收断言。
+
+候选与回退在 E/F `repairs/numen-owner-cli-20261021/`；待本次维护确认后，沿原预告、真人/副本检查和完整双盘冷备份流程正常更换API。回退也先正常停服和备份，再恢复 `3ccb46aa`，保留新增的个人档案、Key和世界数据；不要恢复旧玩家存档。旧API不执行新增共享授权策略，回退时仍须保持共享Key目录为空。没有提交待部署队列，没有用 `/reload` 替代更新，没有在本次新增公网接口。未做手机/Xbox真机、16个自主模型、DSH原生Numen驱动或公网MCP接入验收。
+
 ### 此前的官方旧客户端入服断线修复（6684d9e3，已被下节替代）
 
 服主批准后，经 180/60/10 秒通知、真人退出和副本/PvP 检查，原维护任务完成 E/F 冷备份 `20261021-164816` 并只替换 API JAR，任务结果 0。正式 21 项状态/备份检查、8 项认证协议检查与 19 项同伴身份/物品核验通过，桐人原生心跳已恢复；更新说明已发。初次维护被长名单截断拦截，之后通过维护暂停协调女神守护程序，完整名单验证成功；未绕过真人门禁。见[发布记录](../manifests/numen-legacy-client-release-20261021.json)。

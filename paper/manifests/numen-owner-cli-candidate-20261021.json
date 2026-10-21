@@ -1,0 +1,80 @@
+{
+  "sourceCommit": "0b3e1bab925b1c5aa2a9d27d43cf90bdc58a1241",
+  "sourceBase": "b134eb01e86928ff94ca3b823b8f9ce04ab17097",
+  "replayedTree": "5c9b302611702b539df21c4f96371c1cf1fb5a98",
+  "sourcePatch": "paper/integrations/numen-paper/patches/owner-cli-personal-keys.patch",
+  "sourcePatchSha256": "40e3940a0d357d5abca44846b5445df589c149bbe88aeb47ecf4f9d7241e5a6a",
+  "dshReviewedCommit": "355d0c74d3046874872137f151a919c3cd20ecaa",
+  "productionSharedKeyCount": 0,
+  "deployed": false,
+  "restartRequired": true,
+  "schema": 1,
+  "api": {
+    "baselineSha256": "3ccb46aadf19b425392b9a0f197b546a4d51a86e000a18bf097024121c3be33f",
+    "candidateSha256": "4b36f166b3f7c7f380a297c24a1f8bcd0fe9836ea0365c2da5993bc33792b313",
+    "changedClasses": [
+      "com/dwinovo/numen/api/brain/Libraries.class",
+      "com/dwinovo/numen/api/brain/ModelServices.class",
+      "com/dwinovo/numen/api/config/ServerSettings.class",
+      "com/dwinovo/numen/api/entity/NumenCommands$1.class",
+      "com/dwinovo/numen/api/entity/NumenCommands.class",
+      "com/dwinovo/numen/api/keys/Keys.class"
+    ],
+    "addedClasses": [
+      "com/dwinovo/numen/api/brain/OwnerCommands$1.class",
+      "com/dwinovo/numen/api/brain/OwnerCommands.class"
+    ],
+    "unchangedEntries": 1238
+  },
+  "coreUnitTests": {
+    "tests": 1772,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "exactPaperE2e": {
+    "tests": 25,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "loaderBuilds": [
+    "fabric",
+    "neoforge"
+  ],
+  "productionChanged": false,
+  "queued": false,
+  "productionKeyAudit": {
+    "sharedKeyCount": 0,
+    "rawKeysPrinted": false,
+    "personalKeychainsUnchanged": true
+  },
+  "limitations": [
+    "phone/xbox graphical verification",
+    "16 autonomous LLM load",
+    "DSH Numen driver not implemented",
+    "public MCP not opened"
+  ],
+  "mcpGameTests": {
+    "required": 8,
+    "failed": 0,
+    "status": "passed",
+    "source": "remote-brain-final.log"
+  },
+  "firstFailures": {
+    "unit": "relative URL without a scheme triggered a null check; fixed in production parser",
+    "e2e": "3 failures: command burst spam kick and subsequent cleanup/name collision, plus querying before next-tick state update; native spam rules kept and eventual state re-read"
+  },
+  "evidenceRoots": [
+    "E:\\MC\\ops\\repairs\\numen-owner-cli-20261021",
+    "F:\\MC-backups\\repairs\\numen-owner-cli-20261021"
+  ],
+  "retainedProductionState": {
+    "apiSha256": "3ccb46aadf19b425392b9a0f197b546a4d51a86e000a18bf097024121c3be33f",
+    "sharedModelKeyCount": 0,
+    "kiritoControllerState": "connected",
+    "pendingDeploymentWritten": false
+  },
+  "buildScript": "paper/integrations/numen-paper/build-owner-cli.py",
+  "artifact": "E:\\MC\\ops\\repairs\\numen-owner-cli-20261021\\candidate-final\\numen_api-paper-1.21.1-0.1.4.jar"
+}

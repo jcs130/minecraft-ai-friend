@@ -1,0 +1,798 @@
+diff --git a/docs/architecture-mind-model.md b/docs/architecture-mind-model.md
+index 2f48162e5..48bf80c7d 100644
+--- a/docs/architecture-mind-model.md
++++ b/docs/architecture-mind-model.md
+@@ -6,6 +6,7 @@ Paper 对官方 0.1.4 / 0.1.4.1 客户端保留旧线路:它在玩家电脑上
+ 旧线路只负责版本编解码、连接作用域的模块快照与回执;程序仍由唯一的服务端执行器、身体和权限层执行。
+ 同一身体只认一个驾驶者,已连接的 MCP 外脑优先;客户端断线即撤销自己的驾驶资格,不重放未决动作,不覆盖服务端已有资料。
+ 数据与处理都在服务端;客户端只做这台电脑的设备进出——录音、放音和它们用的 key(存储的归属见 `docs/input-pipeline.md` §六)。
++专用服的模型费用默认由每位主人自己的凭据承担;服主共享钥匙串只供 `sharedKeyOwners` 明确授权的主人,未授权不能回退借用。
+ 任何新功能必须能在本文档里找到自己的位置;找不到,先修宪再动工。
+ 
+ **仓界(2026-07-16 裁决):机器在 Numen API,内容在 Numen。** 判定口诀:
+diff --git a/docs/input-pipeline.md b/docs/input-pipeline.md
+index 0a07700df..1c652d100 100644
+--- a/docs/input-pipeline.md
++++ b/docs/input-pipeline.md
+@@ -265,7 +265,7 @@ pi 有、这里不要的:文件锁(pi 防的是同一台机器上开好几个 pi
+   - 插件卸载了 → 它没被改过的条目一起删,改过的留下、标"来源已卸载"。
+ - **MCP 工具**:玩家只能加 HTTP 类的;stdio 类起的是服务器机器上的进程,只有管理员能加(§十)。
+ - **钥匙串(key 不在条目里)**:档案、声线、MCP 条目只写"用哪个服务商",key 按服务商存在钥匙串里——服务器 `server/keys/`(服主出钱、玩家看不到)、
+-  玩家 `players/<uuid>/keys/`(只有本人看得到、改得了)、本机 `client/keys/`(语音,§八)。用的时候先找主人的,再找服主的;服主的受 `server.json` 里每人每天的 token 限额
++  玩家 `players/<uuid>/keys/`(只有本人看得到、改得了)、本机 `client/keys/`(语音,§八)。用的时候先找主人的;专用服只有 `server.json` 的 `sharedKeyOwners` 明确授权的主人UUID才能再找服主的,缺省为空。单人世界沿用本机共享。服主的受 `server.json` 里每人每天的 token 限额
+   (默认不限,服主查得到每人的用量),主人自己的不受限。所以内置条目能带"推荐的模型档案、MCP 服务器、声线",填上对应服务商的 key 就能用;jar 里永远没有 key。
+ - **皮肤**:条目存原图与 Mojang 签名的皮肤数据(value 与 signature),签名在**服务端**做、一次存永久:正版玩家名向 Mojang 查,图片交给 MineSkin 签。
+   服务端排队一个一个发,被限流就等,告诉玩家排到第几;服主可在钥匙串里填 MineSkin 的 API key 提高额度;代理用服务器上调模型的同一处(国内服直连会超时)。
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/agent/llm/ProviderLibrary.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/agent/llm/ProviderLibrary.java
+index 49e7eac46..2d7d5dfd9 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/agent/llm/ProviderLibrary.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/agent/llm/ProviderLibrary.java
+@@ -14,7 +14,7 @@ import java.util.List;
+  * "内置"(服务器目录里,Numen 或插件随包带来的推荐配置,管理员可改)与"我的"两组,同名时我的优先,存储、开关、同步都是
+  * {@link Library} 这一套;一位同伴选定其中一条,她的请求就跑在那条档案的后端上。
+  *
+- * <p>档案<b>不含 key</b>:只写用哪个服务商、哪个型号这些。key 按服务商存在钥匙串里({@link Keys}),用时先找主人的、再找服主的,
++ * <p>档案<b>不含 key</b>:只写用哪个服务商、哪个型号这些。key 按服务商存在钥匙串里({@link Keys}),先找主人的、获共享授权时再找服主的,
+  * 所以一条内置档案填上对应服务商的 key 就能用,jar 里永远没有 key。没填 key 的档案在第一次请求时给出一条诚实的错误
+  * ({@code Mind.unavailable}),不退到别的档案。
+  *
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/Libraries.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/Libraries.java
+index 7c4637709..9ba9fe82b 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/Libraries.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/Libraries.java
+@@ -792,7 +792,7 @@ public final class Libraries {
+                 row.addProperty("mine", mine);
+             }
+             String shared = sources.serverKeys().get(service);
+-            row.addProperty("serverSet", shared != null);
++            row.addProperty("serverSet", shared != null && (admin || sources.providers(owner).keys().sharedAllowed()));
+             if (admin && shared != null) {
+                 row.addProperty("server", shared);
+             }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ModelServices.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ModelServices.java
+index dea0ff7e2..e2a706fcc 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ModelServices.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/ModelServices.java
+@@ -89,9 +89,9 @@ public final class ModelServices {
+         return ownerKeys.computeIfAbsent(owner, id -> new Keychain(homes.owner(id)));
+     }
+ 
+-    /** 这位玩家用 key 的顺序:先他自己的,再服主的。 */
++    /** 先用本人钥匙串;只有服务器设置明确授权时才用共享额度。每次查找重读授权,撤销后立即生效。 */
+     public Keys keys(UUID owner) {
+-        return new Keys(ownerKeychain(owner), serverKeys);
++        return new Keys(ownerKeychain(owner), serverKeys, () -> settings.canUseSharedKeys(owner));
+     }
+ 
+     /** 这位玩家的模型档案库:服务器的内置加他的"我的"。 */
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/OwnerCommands.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/OwnerCommands.java
+new file mode 100644
+index 000000000..d1aa1fa69
+--- /dev/null
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/OwnerCommands.java
+@@ -0,0 +1,189 @@
++package com.dwinovo.numen.api.brain;
++
++import com.dwinovo.numen.api.Constants;
++import com.dwinovo.numen.api.agent.llm.ProviderLibrary;
++import com.dwinovo.numen.api.entity.CompanionRegistry;
++import com.dwinovo.numen.api.entity.NumenPlayer;
++import com.dwinovo.numen.api.home.Homes;
++import com.dwinovo.numen.api.library.EntryId;
++import com.dwinovo.numen.api.library.LibraryHub;
++import com.dwinovo.numen.api.mcp.server.McpMode;
++import com.google.gson.JsonObject;
++import com.google.gson.JsonParser;
++import com.mojang.brigadier.arguments.IntegerArgumentType;
++import com.mojang.brigadier.arguments.StringArgumentType;
++import com.mojang.brigadier.builder.LiteralArgumentBuilder;
++import com.mojang.brigadier.context.CommandContext;
++import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.commands.Commands;
++import net.minecraft.network.chat.Component;
++
++import java.net.URI;
++import java.nio.file.Files;
++import java.util.List;
++
++/** 无模组玩家的设置入口;同伴、模型与钥匙串仍只用原生服务,所有答复只回发令者。 */
++public final class OwnerCommands {
++    private static final int PAGE_SIZE = 5;
++    private OwnerCommands() {}
++
++    public static LiteralArgumentBuilder<CommandSourceStack> helpNode() {
++        return Commands.literal("help").executes(ctx -> help(ctx.getSource()));
++    }
++
++    public static LiteralArgumentBuilder<CommandSourceStack> statusNode() {
++        return Commands.literal("status").executes(OwnerCommands::status);
++    }
++
++    public static LiteralArgumentBuilder<CommandSourceStack> modelNode() {
++        return Commands.literal("model")
++                .then(Commands.literal("list").executes(ctx -> models(ctx, 1))
++                        .then(Commands.argument("page", IntegerArgumentType.integer(1))
++                                .executes(ctx -> models(ctx, IntegerArgumentType.getInteger(ctx, "page")))))
++                .then(Commands.literal("set")
++                        .then(Commands.argument("name", StringArgumentType.word())
++                                .then(Commands.argument("service", StringArgumentType.word())
++                                        .then(Commands.argument("protocol", StringArgumentType.word())
++                                                .then(Commands.argument("model", StringArgumentType.string())
++                                                        .then(Commands.argument("url", StringArgumentType.greedyString())
++                                                                .executes(OwnerCommands::saveModel)))))));
++    }
++
++    public static int help(CommandSourceStack source) {
++        say(source, "[Numen] 查询：/numen status；模型目录：/numen model list [页码]。");
++        say(source, "[Numen] 设置本人服务端模型：/numen model set <档案名> <服务商> <chat|responses|anthropic> <型号> <地址>。");
++        say(source, "[Numen] 本人Key：/numen key <服务商> <Key>；基岩可用 /numenmenu 表单输入。Paper可能记录命令，勿在直播中展示Key。");
++        say(source, "[Numen] 召唤：/numen player summon <名字>；绑定：/numen companion <名字> profile my:<档案名>。");
++        say(source, "[Numen] 私聊同伴：/msg <名字> <内容>；外脑令牌：/numen token create brain <名字> 30。模型费用由本人承担。");
++        return 1;
++    }
++
++    private static int status(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
++        var owner = ctx.getSource().getPlayerOrException();
++        String client = Presence.hasClient(owner.getUUID()) ? "当前协议客户端（服务端资料）"
++                : ReleaseClients.hasClient(owner.getUUID()) ? "官方旧版客户端（玩家电脑资料）" : "命令入口（无需Numen客户端）";
++        say(ctx.getSource(), "[Numen] 接入=" + client + "；凭据策略=本人优先；共享额度="
++                + (ModelServices.of(owner.server).settings().canUseSharedKeys(owner.getUUID()) ? "服主允许" : "关闭")
++                + "。命令：/numen help");
++        var owned = CompanionRegistry.get(owner.server).ownedBy(owner.getUUID());
++        if (owned.isEmpty()) say(ctx.getSource(), "[Numen] 尚无同伴。命令：/numen player summon <名字>");
++        for (var her : owned) {
++            var id = her.getKey(); var entry = her.getValue();
++            var brain = CompanionLoops.get(id).orElse(null);
++            boolean mcp = McpMode.instance().driving(owner.getUUID(), id);
++            boolean clientBrain = ReleaseClients.driving(owner.getUUID(), id);
++            String driver = mcp ? "MCP外脑" : clientBrain ? "客户端外脑" : "服务端大脑";
++            String body = entry.removed() ? "已移除" : entry.diedAt() > 0 ? "死亡"
++                    : NumenPlayer.findByUuid(owner.server, id) != null ? "在线" : "休眠";
++            String state = brain == null ? "未建脑" : stateLabel(brain.status());
++            String reason = brain == null || brain.status().holdReason() == null ? ""
++                    : "；原因=" + brain.status().holdReason().forModel();
++            say(ctx.getSource(), "[Numen] " + entry.name() + "；身体=" + body + "；驾驶=" + driver + "；状态=" + state
++                    + reason + "；模型=" + (mcp || clientBrain ? "由外脑配置"
++                    : brain == null || brain.bound(Slot.PROVIDER) == null ? "未绑定" : brain.bound(Slot.PROVIDER)));
++        }
++        return 1;
++    }
++
++    private static int models(CommandContext<CommandSourceStack> ctx, int page) throws CommandSyntaxException {
++        var owner = ctx.getSource().getPlayerOrException();
++        var entries = JsonParser.parseString(Libraries.of(owner.server).view(owner.getUUID(), false, Libraries.PROVIDER)).getAsJsonArray();
++        int pages = Math.max(1, (entries.size() + PAGE_SIZE - 1) / PAGE_SIZE);
++        if (page > pages) { ctx.getSource().sendFailure(Component.literal("[Numen] 页码超出范围。命令：/numen model list " + pages)); return 0; }
++        say(ctx.getSource(), "[Numen] 本人可见的服务端模型 " + page + "/" + pages + "（查询不调用模型）；旧版客户端模型请在 /numen settings 查看。");
++        for (int i = (page - 1) * PAGE_SIZE; i < Math.min(entries.size(), page * PAGE_SIZE); i++) {
++            var row = entries.get(i).getAsJsonObject();
++            String key = field(row, "keySource");
++            say(ctx.getSource(), "[Numen] " + field(row, "id") + "；型号=" + field(row, "model") + "；Key="
++                    + (key.equals("mine") ? "本人已配置" : key.equals("server") ? "服主授权" : "未配置")
++                    + (row.has("enabled") && !row.get("enabled").getAsBoolean() ? "；已停用" : ""));
++        }
++        return 1;
++    }
++
++    private static int saveModel(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
++        var owner = ctx.getSource().getPlayerOrException();
++        if (!Presence.hasClient(owner.getUUID()) && ReleaseClients.hasClient(owner.getUUID())) {
++            ctx.getSource().sendFailure(Component.literal("[Numen] 当前由旧版客户端管理模型。请在 /numen settings 配置本人电脑上的档案和Key。"));
++            return 0;
++        }
++        String name = StringArgumentType.getString(ctx, "name");
++        var shelf = LibraryHub.of(owner.server).library(ProviderLibrary.KIND, owner.getUUID()).mine();
++        JsonObject draft;
++        try {
++            var previous = EntryId.segment(name) ? shelf.get(EntryId.mine(name)) : null;
++            draft = profileDraft(name, StringArgumentType.getString(ctx, "service"),
++                    StringArgumentType.getString(ctx, "protocol"), StringArgumentType.getString(ctx, "model"),
++                    StringArgumentType.getString(ctx, "url").strip(), previous == null ? new JsonObject()
++                            : ProviderLibrary.profileToJson(ProviderLibrary.read(previous.text())));
++        } catch (IllegalArgumentException invalid) {
++            ctx.getSource().sendFailure(Component.literal("[Numen] 档案格式不正确：使用有效名称、chat/responses/anthropic协议和不含凭据的HTTP(S)地址。命令：/numen help"));
++            return 0;
++        }
++        var request = draft.deepCopy();
++        request.addProperty("name", name); request.addProperty("id", EntryId.mine(name).toString());
++        var result = Libraries.of(owner.server).handle(owner.getUUID(), false, Libraries.PROVIDER, Libraries.PUT, request);
++        if (result.problem() != null) {
++            ctx.getSource().sendFailure(Component.literal("[Numen] 档案未应用。命令：/numen model list")); return 0;
++        }
++        // 写车道后回读实际文件,不把排队保存说成已持久化。回执不跨玩家连接发送。
++        var home = Homes.of(owner.server).owner(owner.getUUID());
++        home.io().executor().execute(() -> {
++            boolean saved;
++            try {
++                saved = JsonParser.parseString(Files.readString(home.file("provider").resolve("my").resolve(name + ".json"))).equals(draft);
++            } catch (java.io.IOException | RuntimeException failed) {
++                Constants.LOG.warn("[numen] 本人模型档案回读失败: {}", owner.getUUID());
++                saved = false;
++            }
++            boolean confirmed = saved;
++            owner.server.execute(() -> {
++                if (owner.server.getPlayerList().getPlayer(owner.getUUID()) == owner) say(ctx.getSource(), confirmed
++                        ? "[Numen] 本人档案已保存并核对：my:" + name + "。命令：/numen companion <名字> profile my:" + name
++                        : "[Numen] 保存结果未确认，请查询后处理。命令：/numen model list");
++            });
++        });
++        return 1;
++    }
++
++    /** 不含Key的档案更新;保留原生面板设过的上下文、输出预算和兼容项。 */
++    static JsonObject profileDraft(String name, String service, String protocol, String model, String url, JsonObject previous) {
++        if (!EntryId.segment(name) || !name.equals(EntryId.clean(name, "profile")) || !EntryId.segment(service)
++                || !List.of("chat", "responses", "anthropic").contains(protocol) || model == null || model.isBlank())
++            throw new IllegalArgumentException("invalid profile");
++        URI endpoint = URI.create(url);
++        if (!("http".equalsIgnoreCase(endpoint.getScheme()) || "https".equalsIgnoreCase(endpoint.getScheme())) || endpoint.getHost() == null
++                || endpoint.getRawUserInfo() != null || endpoint.getRawQuery() != null || endpoint.getRawFragment() != null)
++            throw new IllegalArgumentException("invalid endpoint");
++        JsonObject draft = previous.deepCopy();
++        draft.addProperty("provider", service); draft.addProperty("protocol", protocol);
++        draft.addProperty("model", model); draft.addProperty("base_url", url);
++        return ProviderLibrary.profileToJson(ProviderLibrary.profileFromJson(draft));
++    }
++
++    private static String field(JsonObject row, String name) {
++        return row.has(name) && row.get(name).isJsonPrimitive() ? row.get(name).getAsString() : "";
++    }
++
++    static String stateLabel(com.dwinovo.numen.api.agent.loop.LoopStatus state) {
++        if (state.hold() != null) return switch (state.hold()) {
++            case DEAD -> "身体离场(DEAD)";
++            case EXTERNAL -> "外脑驾驶(EXTERNAL)";
++            case AWAY -> "主人离线(AWAY)";
++            case OWNER_STOP -> "主人已停止(OWNER_STOP)";
++            case BLOCKED -> "配置阻塞(BLOCKED)";
++            case FAILED -> "调用失败(FAILED)";
++        };
++        if (state.phase() == null) return state.bodyTaskRunning() ? "身体任务执行中" : "待命";
++        return switch (state.phase()) {
++            case MODEL -> "等待模型";
++            case TOOLS -> "执行工具";
++            case COMPACT -> "整理记忆";
++        };
++    }
++
++    private static void say(CommandSourceStack source, String text) {
++        source.sendSuccess(() -> Component.literal(text), false);
++    }
++}
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/config/ServerSettings.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/config/ServerSettings.java
+index 5ee03351b..4b4acb4b4 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/config/ServerSettings.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/config/ServerSettings.java
+@@ -16,6 +16,7 @@ import java.util.UUID;
+  * <ul>
+  *   <li>{@code dailyTokenLimit}:服主的 key 给每位玩家每天能用多少 token(0 = 不限,缺省)。玩家自己的 key 不受限。</li>
+  *   <li>{@code maxCompanions}:每位玩家最多召唤几只同伴(0 = 不限,缺省)。召唤只要一个名字,这是唯一的上限。</li>
++ *   <li>{@code sharedKeyOwners}:允许使用服主共享Key的主人UUID;专用服缺省为空,单人世界沿用本机共享。</li>
+  *   <li>{@code hardRules}:硬规则(别人的东西碰不得)开不开,缺省开。单机就是你自己,想关就关;</li>
+  *   <li>{@code unknownAsOther}:说不清是谁的方块按别人的算。专用服务器缺省是:多人服上说不清的多半是别人装模组前盖的,
+  *       让主人答应就等于让想搞破坏的主人一键拆别人的房子;单机与局域网缺省否,照旧问主人。</li>
+@@ -32,6 +33,7 @@ public final class ServerSettings {
+     private volatile boolean hardRules;
+     private volatile boolean unknownAsOther;
+     private volatile Set<UUID> residentCompanions = Set.of();
++    private volatile Set<UUID> sharedKeyOwners = Set.of();
+ 
+     /** @param dedicated 是不是专用服务器:有的设置缺省值随它而不同 */
+     public ServerSettings(Home server, boolean dedicated) {
+@@ -47,6 +49,7 @@ public final class ServerSettings {
+         hardRules = true;
+         unknownAsOther = dedicated;
+         residentCompanions = Set.of();
++        sharedKeyOwners = Set.of();
+         try {
+             JsonObject root = doc.read().orElse(null);
+             if (root == null) {
+@@ -72,6 +75,13 @@ public final class ServerSettings {
+                 }
+                 residentCompanions = Set.copyOf(residents);
+             }
++            if (root.has("sharedKeyOwners")) {
++                Set<UUID> owners = new TreeSet<>();
++                for (var id : root.getAsJsonArray("sharedKeyOwners")) {
++                    owners.add(UUID.fromString(id.getAsString()));
++                }
++                sharedKeyOwners = Set.copyOf(owners);
++            }
+         } catch (RuntimeException unreadable) {
+             Constants.LOG.warn("[numen-server] {} 读不了,用缺省设置: {}", doc.file(), unreadable.toString());
+         }
+@@ -82,6 +92,11 @@ public final class ServerSettings {
+         return dailyTokenLimit;
+     }
+ 
++    /** 专用服只向服主明确登记的主人提供共享额度;私人钥匙串不受此表影响。 */
++    public boolean canUseSharedKeys(UUID owner) {
++        return !dedicated || sharedKeyOwners.contains(owner);
++    }
++
+     /** 每位玩家最多召唤几只同伴;0 = 不限。 */
+     public int maxCompanions() {
+         return maxCompanions;
+@@ -137,6 +152,9 @@ public final class ServerSettings {
+         var residents = new com.google.gson.JsonArray();
+         new TreeSet<>(residentCompanions).forEach(id -> residents.add(id.toString()));
+         root.add("residentCompanions", residents);
++        var owners = new com.google.gson.JsonArray();
++        new TreeSet<>(sharedKeyOwners).forEach(id -> owners.add(id.toString()));
++        root.add("sharedKeyOwners", owners);
+         return root;
+     }
+ }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/NumenCommands.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/NumenCommands.java
+index 4d0b8c471..b7098ec40 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/NumenCommands.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/NumenCommands.java
+@@ -104,6 +104,9 @@ public final class NumenCommands {
+     }
+ 
+     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
++        graft(dispatcher, com.dwinovo.numen.api.brain.OwnerCommands.helpNode());
++        graft(dispatcher, com.dwinovo.numen.api.brain.OwnerCommands.statusNode());
++        graft(dispatcher, com.dwinovo.numen.api.brain.OwnerCommands.modelNode());
+         graft(dispatcher, Commands.literal("player")
+                 .then(Commands.literal("summon")
+                         .then(Commands.argument("name", StringArgumentType.word())
+@@ -267,6 +270,10 @@ public final class NumenCommands {
+                                     ClientUiActionPayload.Action action)
+             throws CommandSyntaxException {
+         ServerPlayer caller = ctx.getSource().getPlayerOrException();
++        if (action == ClientUiActionPayload.Action.OPEN_SETTINGS && !Presence.hasClient(caller.getUUID())
++                && !com.dwinovo.numen.api.brain.ReleaseClients.hasClient(caller.getUUID())) {
++            return com.dwinovo.numen.api.brain.OwnerCommands.help(ctx.getSource());
++        }
+         if (needsClient(ctx, caller)) {
+             return 0;
+         }
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/keys/Keys.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/keys/Keys.java
+index f3fa7ef0e..d874a90bf 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/keys/Keys.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/keys/Keys.java
+@@ -1,7 +1,7 @@
+ package com.dwinovo.numen.api.keys;
+ 
+ /**
+- * 一位玩家用一个服务时找 key 的顺序:先找他自己的钥匙串,再找服主的。找到的带着出处——服主的 key 花服主的钱,
++ * 一位玩家用一个服务时找 key 的顺序:先找他自己的钥匙串,共享策略允许时再找服主的。找到的带着出处——服主的 key 花服主的钱,
+  * 要受每人每天的 token 限额({@link com.dwinovo.numen.api.config.ServerSettings});主人自己的不受限。
+  */
+ public final class Keys {
+@@ -20,10 +20,16 @@ public final class Keys {
+ 
+     private final Keychain owner;
+     private final Keychain server;
++    private final java.util.function.BooleanSupplier sharedAllowed;
+ 
+     public Keys(Keychain owner, Keychain server) {
++        this(owner, server, () -> true);
++    }
++
++    public Keys(Keychain owner, Keychain server, java.util.function.BooleanSupplier sharedAllowed) {
+         this.owner = owner;
+         this.server = server;
++        this.sharedAllowed = sharedAllowed;
+     }
+ 
+     /** 这个服务用哪把 key;两本里都没有是 {@code null}。 */
+@@ -32,6 +38,9 @@ public final class Keys {
+         if (own != null) {
+             return new Found(own, Source.OWNER);
+         }
++        if (!sharedAllowed()) {
++            return null;
++        }
+         String shared = server.get(service);
+         return shared == null ? null : new Found(shared, Source.SERVER);
+     }
+@@ -45,4 +54,9 @@ public final class Keys {
+     public Keychain server() {
+         return server;
+     }
++
++    /** 此刻能否使用共享钥匙串,供设置页展示可用额度;不返回任何凭据。 */
++    public boolean sharedAllowed() {
++        return sharedAllowed.getAsBoolean();
++    }
+ }
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/LibrariesTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/LibrariesTest.java
+index ca543e664..68b45e886 100644
+--- a/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/LibrariesTest.java
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/LibrariesTest.java
+@@ -62,6 +62,7 @@ class LibrariesTest {
+     private final Map<UUID, Keychain> ownerKeys = new HashMap<>();
+     private LibraryHub hub;
+     private Keychain serverKeys;
++    private final java.util.concurrent.atomic.AtomicBoolean sharedKeysAllowed = new java.util.concurrent.atomic.AtomicBoolean(true);
+     private ModelCatalog catalog;
+     private boolean multiplayer;
+     /** 假的签名队:不联网,签出来的都是 value=v-手臂模型;签好一条(写进货架之后)闸门放行一次。 */
+@@ -117,7 +118,7 @@ class LibrariesTest {
+             @Override
+             public ProviderLibrary providers(UUID owner) {
+                 return new ProviderLibrary(hub.library(ProviderLibrary.KIND, owner),
+-                        new Keys(ownerKeys(owner), serverKeys), catalog);
++                        new Keys(ownerKeys(owner), serverKeys, sharedKeysAllowed::get), catalog);
+             }
+ 
+             @Override
+@@ -246,6 +247,20 @@ class LibrariesTest {
+         return JsonParser.parseString(json).getAsJsonArray();
+     }
+ 
++    @Test
++    void sharedKeyVisibilityMatchesTheActualSpendingPolicy(@TempDir Path dir) {
++        Libraries libraries = libraries(dir);
++        sharedKeysAllowed.set(false);
++        JsonObject key = array(libraries.view(PLAYER, false, Libraries.KEY)).get(0).getAsJsonObject();
++        assertFalse(key.get("serverSet").getAsBoolean());
++        JsonObject profile = array(libraries.view(PLAYER, false, Libraries.PROVIDER)).get(0).getAsJsonObject();
++        assertEquals("", profile.get("keySource").getAsString());
++        libraries.handle(PLAYER, false, Libraries.KEY, Libraries.PUT, body("service", "deepseek", "key", "personal-test-key"));
++        assertEquals("mine", array(libraries.view(PLAYER, false, Libraries.PROVIDER)).get(0).getAsJsonObject().get("keySource").getAsString());
++        assertFalse(libraries.view(OTHER, false, Libraries.KEY).contains("personal-test-key"));
++        assertTrue(array(libraries.view(ADMIN, true, Libraries.KEY)).get(0).getAsJsonObject().get("serverSet").getAsBoolean(), "管理员仍能管理共享钥匙串");
++    }
++
+     /** 一张表里 id 对得上、在这一组的那一行。 */
+     private static JsonObject row(String table, String id, String group) {
+         for (JsonElement e : array(table)) {
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/OwnerCommandsTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/OwnerCommandsTest.java
+new file mode 100644
+index 000000000..71303fca0
+--- /dev/null
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/brain/OwnerCommandsTest.java
+@@ -0,0 +1,47 @@
++package com.dwinovo.numen.api.brain;
++
++import com.google.gson.JsonObject;
++import com.google.gson.JsonParser;
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.params.ParameterizedTest;
++import org.junit.jupiter.params.provider.ValueSource;
++
++import static org.junit.jupiter.api.Assertions.*;
++
++class OwnerCommandsTest {
++    @Test
++    void idleAndBlockedAreDistinctWithoutAStringNullStatus() {
++        assertEquals("待命", OwnerCommands.stateLabel(new com.dwinovo.numen.api.agent.loop.LoopStatus(null, null, null, false, java.util.List.of(), 0, null)));
++        assertEquals("配置阻塞(BLOCKED)", OwnerCommands.stateLabel(new com.dwinovo.numen.api.agent.loop.LoopStatus(null,
++                com.dwinovo.numen.api.agent.loop.Hold.BLOCKED, null, false, java.util.List.of(), 0, null)));
++    }
++    @Test
++    void editingAProfilePreservesBudgetsAndNeverCopiesAKeyIntoIt() {
++        JsonObject old = JsonParser.parseString("{\"ctx\":65536,\"max_tokens\":4096,\"api_key\":\"do-not-copy\",\"temperature\":0.3}").getAsJsonObject();
++        var draft = OwnerCommands.profileDraft("mine", "custom", "responses", "model", "http://127.0.0.1:9000/v1", old);
++        assertEquals(65536, draft.get("ctx").getAsInt());
++        assertEquals(4096, draft.get("max_tokens").getAsInt());
++        assertEquals(0.3, draft.get("temperature").getAsDouble());
++        assertEquals("responses", draft.get("protocol").getAsString());
++        assertFalse(draft.toString().contains("do-not-copy"));
++        assertTrue(old.has("api_key"), "转换不修改调用者提供的对象");
++    }
++
++    @ParameterizedTest
++    @ValueSource(strings = {"file:///secret", "https://user:password@example.test/v1", "https://example.test/v1?key=secret", "https://example.test/#secret", "invalid", "javascript:alert(1)"})
++    void endpointsCannotContainCredentialsOrNonHttpSchemes(String endpoint) {
++        assertThrows(IllegalArgumentException.class, () -> OwnerCommands.profileDraft("mine", "custom", "chat", "model", endpoint, new JsonObject()));
++    }
++
++    @ParameterizedTest
++    @ValueSource(strings = {"../other", "server:profile", ".hidden", "a/b", ""})
++    void namesCannotEscapeTheCallersOwnLibrary(String name) {
++        assertThrows(IllegalArgumentException.class, () -> OwnerCommands.profileDraft(name, "custom", "chat", "model", "https://example.test/v1", new JsonObject()));
++    }
++
++    @Test
++    void unsupportedProtocolsAndEmptyModelsAreRefused() {
++        assertThrows(IllegalArgumentException.class, () -> OwnerCommands.profileDraft("mine", "custom", "auto", "model", "https://example.test", new JsonObject()));
++        assertThrows(IllegalArgumentException.class, () -> OwnerCommands.profileDraft("mine", "custom", "chat", " ", "https://example.test", new JsonObject()));
++    }
++}
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/config/ServerSettingsTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/config/ServerSettingsTest.java
+index 1a5731b12..1950a0e5e 100644
+--- a/numen-api/common/src/test/java/com/dwinovo/numen/api/config/ServerSettingsTest.java
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/config/ServerSettingsTest.java
+@@ -113,4 +113,30 @@ class ServerSettingsTest {
+         settings.reload();
+         assertTrue(settings.residents().isEmpty());
+     }
++
++    @Test
++    void dedicatedSharedKeysAreOptInAndSurviveUnrelatedSettingsWrites(@TempDir Path dir) throws IOException {
++        UUID allowed = UUID.randomUUID(), stranger = UUID.randomUUID();
++        ServerSettings settings = new ServerSettings(home(dir), true);
++        assertFalse(settings.canUseSharedKeys(allowed));
++        assertTrue(new ServerSettings(home(dir.resolve("single")), false).canUseSharedKeys(allowed));
++        Files.writeString(dir.resolve(ServerSettings.FILE), "{\"sharedKeyOwners\":[\"" + allowed + "\"]}");
++        settings.reload();
++        assertTrue(settings.canUseSharedKeys(allowed));
++        assertFalse(settings.canUseSharedKeys(stranger));
++        settings.setResident(UUID.randomUUID(), true);
++        assertTrue(new ServerSettings(home(dir), true).canUseSharedKeys(allowed));
++        Files.writeString(dir.resolve(ServerSettings.FILE), "{}");
++        settings.reload();
++        assertFalse(settings.canUseSharedKeys(allowed));
++    }
++
++    @Test
++    void malformedSharedKeyOwnersNeverEnableAValidPrefix(@TempDir Path dir) throws IOException {
++        UUID owner = UUID.randomUUID();
++        Files.writeString(dir.resolve(ServerSettings.FILE), "{\"sharedKeyOwners\":[\"" + owner + "\",\"broken\"]}");
++        assertFalse(new ServerSettings(home(dir), true).canUseSharedKeys(owner));
++        Files.writeString(dir.resolve(ServerSettings.FILE), "broken json");
++        assertFalse(new ServerSettings(home(dir), true).canUseSharedKeys(owner));
++    }
+ }
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/NumenCommandsTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/NumenCommandsTest.java
+index 6f8ec4687..7a865cb99 100644
+--- a/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/NumenCommandsTest.java
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/NumenCommandsTest.java
+@@ -109,6 +109,22 @@ class NumenCommandsTest {
+         assertTrue(fails("numen permission mode Aria chaos"));
+     }
+ 
++    @Test
++    void optionalClientsHaveAReadOnlyEntryAndExplicitModelWrites() {
++        runs("numen help");
++        runs("numen status");
++        runs("numen model list");
++        runs("numen model list 2");
++        assertTrue(fails("numen model list 0"));
++        var args = runs("numen model set own custom chat example https://example.test/v1");
++        assertEquals("own", args.get("name").getResult());
++        assertEquals("https://example.test/v1", args.get("url").getResult());
++        assertTrue(fails("numen model set own custom chat example"));
++        for (String command : java.util.List.of("numen help", "numen status", "numen model list",
++                "numen model set own custom chat example https://example.test/v1"))
++            assertTrue(fails(command, her), "同伴身体不能替主人配置付费模型");
++    }
++
+     @Test
+     void rulesListAddRemoveReset() {
+         runs("numen permission rules list");
+diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/keys/KeysTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/keys/KeysTest.java
+index d1177b126..6caf92e56 100644
+--- a/numen-api/common/src/test/java/com/dwinovo/numen/api/keys/KeysTest.java
++++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/keys/KeysTest.java
+@@ -90,6 +90,24 @@ class KeysTest {
+         assertNull(new Keychain(home("server")).get("deepseek"));
+     }
+ 
++    @Test
++    void unapprovedOwnersNeverBorrowASharedKeyAndRevocationAffectsExistingResolvers() {
++        Keychain mine = new Keychain(home("players/a"));
++        Keychain server = new Keychain(home("server"));
++        server.put("custom", "shared-test-key");
++        var allowed = new java.util.concurrent.atomic.AtomicBoolean(false);
++        Keys keys = new Keys(mine, server, allowed::get);
++        assertNull(keys.find("custom"));
++        allowed.set(true);
++        assertEquals(new Keys.Found("shared-test-key", Keys.Source.SERVER), keys.find("custom"));
++        allowed.set(false);
++        assertNull(keys.find("custom"));
++        mine.put("custom", "personal-test-key");
++        assertEquals(new Keys.Found("personal-test-key", Keys.Source.OWNER), keys.find("custom"));
++        mine.put("custom", "");
++        assertNull(keys.find("custom"), "删除个人Key不能恢复服主付费通道");
++    }
++
+     // ---- 服主的 key 的每人每天限额 ----
+ 
+     private ServerKeyQuota quota(long limit, AtomicReference<LocalDate> today) throws IOException {
+diff --git a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/Bot.java b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/Bot.java
+index ddb8c4454..6a57eb79f 100644
+--- a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/Bot.java
++++ b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/Bot.java
+@@ -204,6 +204,7 @@ final class Bot implements AutoCloseable {
+ 
+     /** 敲一条指令(不带斜杠,和聊天栏里输入 {@code /…} 发出去的一样)。 */
+     void command(String command) {
++        paceMessage();
+         String verb = command.split(" ", 2)[0];
+         if (SIGNED_COMMANDS.contains(verb)) {
+             session.send(new ServerboundChatCommandSignedPacket(command, System.currentTimeMillis(), 0L, List.of(),
+@@ -215,9 +216,22 @@ final class Bot implements AutoCloseable {
+ 
+     /** 在聊天栏打一句话发出去。 */
+     void say(String message) {
++        paceMessage();
+         session.send(new ServerboundChatPacket(message, System.currentTimeMillis(), 0L, null, 0, new BitSet(20)));
+     }
+ 
++    private long lastMessage;
++
++    /** 保留原版反刷屏,夹具不把交互命令在同一刻全部倾倒到服务器。 */
++    private synchronized void paceMessage() {
++        long remaining = java.time.Duration.ofMillis(400).toNanos() - (System.nanoTime() - lastMessage);
++        if (remaining > 0) {
++            try { TimeUnit.NANOSECONDS.sleep(remaining); }
++            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new IllegalStateException("test interrupted", interrupted); }
++        }
++        lastMessage = System.nanoTime();
++    }
++
+     /** 点聊天里的按钮:原版客户端对 {@code run_command} 的点击,就是把那条命令当成自己敲的发出去。 */
+     void click(String runCommand) {
+         command(runCommand.startsWith("/") ? runCommand.substring(1) : runCommand);
+@@ -245,6 +259,12 @@ final class Bot implements AutoCloseable {
+         }
+     }
+ 
++    List<Message> since(int mark) {
++        synchronized (lock) {
++            return List.copyOf(messages.subList(mark, messages.size()));
++        }
++    }
++
+     /** 此刻自定义补全词的完整历史(每次变动一份)。 */
+     List<List<String>> completionHistory() {
+         synchronized (lock) {
+diff --git a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/OwnerCliTest.java b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/OwnerCliTest.java
+new file mode 100644
+index 000000000..61602676d
+--- /dev/null
++++ b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/OwnerCliTest.java
+@@ -0,0 +1,90 @@
++package com.dwinovo.numen.e2e;
++
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static com.dwinovo.numen.e2e.FakeModel.say;
++
++class OwnerCliTest extends Scenario {
++    @Test
++    void aPublicProfileCannotChargeTheServerOrAnotherPlayersKey() throws Exception {
++        Bot owner = join("cli_unfunded", "zh_cn"), funded = join("cli_funded", "zh_cn");
++        int mark = funded.mark(); funded.command("numen key custom " + SPEC.modelKey());
++        funded.await(mark, m -> m.text().contains("custom"), WAIT, "other player's private test key");
++        try {
++            mark = owner.mark(); owner.command("numen player summon PolicyPet");
++            owner.await(mark, m -> m.text().contains("PolicyPet") && m.text().contains("召唤"), WAIT, "unfunded companion");
++            mark = owner.mark(); owner.command("numen companion PolicyPet profile " + SPEC.modelProfile());
++            owner.await(mark, m -> m.text().contains(SPEC.modelProfile()), WAIT, "public profile without shared spending rights");
++            owner.command("msg PolicyPet no-shared-charge");
++            long deadline = System.nanoTime() + WAIT.toNanos();
++            String state;
++            do {
++                mark = owner.mark(); owner.command("numen status");
++                state = owner.await(mark, m -> m.text().contains("PolicyPet"), WAIT, "fresh brain state").text();
++                assertTrue(System.nanoTime() < deadline, "未获得模型未配置的最终阻塞回执: " + state);
++            } while (!state.contains("BLOCKED"));
++            assertTrue(state.contains("密钥"), "明确报告缺少密钥而非泛化失败");
++            assertTrue(MODEL.asked().isEmpty(), "共享Key和另一个主人的Key均不能被使用");
++        } finally {
++            owner.command("numen player despawn PolicyPet");
++            long deadline = System.nanoTime() + WAIT.toNanos();
++            while (console("list").contains("PolicyPet")) {
++                assertTrue(System.nanoTime() < deadline); Thread.sleep(100);
++            }
++        }
++    }
++
++    @Test
++    void vanillaSettingsAndStatusArePrivateReadOnlyAndNeverRequireAMod() throws Exception {
++        Bot owner = join("cli_reader", "zh_cn"), other = join("cli_bystander", "zh_cn");
++        int bystander = other.mark(), mark = owner.mark();
++        owner.command("numen settings");
++        owner.await(mark, m -> m.text().contains("/numen model set"), WAIT, "vanilla CLI help");
++        owner.command("numen status");
++        owner.await(mark, m -> m.text().contains("共享额度=关闭"), WAIT, "private cost policy");
++        owner.command("numen model list");
++        owner.await(mark, m -> m.text().contains(SPEC.modelProfile()), WAIT, "native model catalog");
++        assertTrue(owner.payloadChannels().stream().noneMatch(c -> c.startsWith("numen_api:")));
++        assertTrue(MODEL.asked().isEmpty(), "查询不能偷偷调用模型");
++        int barrier = other.mark(); other.command("numen status");
++        other.await(barrier, m -> m.text().contains("共享额度=关闭"), WAIT, "ordered private query");
++        assertTrue(other.since(bystander).stream().noneMatch(m -> m.text().contains("/numen model set") || m.text().contains(SPEC.modelProfile())));
++    }
++
++    @Test
++    void vanillaPlayersCanSaveTheirOwnModelAndRunItWithoutBorrowingAServerKey() throws Exception {
++        Bot owner = join("cli_model", "zh_cn"), other = join("cli_other", "zh_cn");
++        String set = "numen model set own custom chat e2e-fake http://127.0.0.1:" + SPEC.modelPort() + "/v1";
++        for (int i = 0; i < 2; i++) {
++            int mark = owner.mark(); owner.command(set);
++            owner.await(mark, m -> m.text().contains("已保存并核对：my:own"), WAIT, "durable profile update");
++        }
++        int mark = owner.mark(); owner.command("numen model list");
++        owner.await(mark, m -> m.text().contains("my:own") && m.text().contains("未配置"), WAIT, "no shared key fallback");
++        assertTrue(owner.since(mark).stream().noneMatch(m -> m.text().contains("my:own_2")), "重复set更新同一条目");
++        mark = other.mark(); other.command("numen model list");
++        other.await(mark, m -> m.text().contains(SPEC.modelProfile()), WAIT, "other catalog");
++        assertTrue(other.since(mark).stream().noneMatch(m -> m.text().contains("my:own")));
++        summon(owner, "CliModelPet");
++        mark = owner.mark(); owner.command("numen companion CliModelPet profile my:own");
++        owner.await(mark, m -> m.text().contains("my:own"), WAIT, "bind own model");
++        MODEL.whenHeard("own-key-check", say("本人模型运行成功"));
++        mark = owner.mark(); owner.command("msg CliModelPet own-key-check");
++        owner.await(mark, m -> m.text().contains("本人模型运行成功"), WAIT, "actual model roundtrip");
++        assertTrue(MODEL.wasToldAbout("own-key-check"));
++    }
++
++    @Test
++    void invalidModelInputDoesNotCreateAProfileOrExposeCredentials() throws Exception {
++        Bot owner = join("cli_invalid", "zh_cn");
++        int mark = owner.mark();
++        owner.command("numen model set invalid custom chat test https://example.test/v1?key=not-a-real-secret");
++        owner.await(mark, m -> m.text().contains("档案格式不正确"), WAIT, "private rejection");
++        assertTrue(owner.since(mark).stream().noneMatch(m -> m.text().contains("not-a-real-secret")));
++        mark = owner.mark(); owner.command("numen model list");
++        owner.await(mark, m -> m.text().contains(SPEC.modelProfile()), WAIT, "unchanged catalog");
++        assertTrue(owner.since(mark).stream().noneMatch(m -> m.text().contains("my:invalid")));
++        assertTrue(MODEL.asked().isEmpty());
++    }
++}
+diff --git a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ReleaseClientTest.java b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ReleaseClientTest.java
+index ac52d9e4a..a0ee31e3f 100644
+--- a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ReleaseClientTest.java
++++ b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/ReleaseClientTest.java
+@@ -14,6 +14,22 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
+ 
+ /** 官方发布协议的真实 Paper 连接;二进制布局另用原发布 JAR 的 codec 核对。 */
+ class ReleaseClientTest extends Scenario {
++    @Test void oldClientModelCommandsExplainWhereItsSettingsActuallyLive() throws Exception {
++        Bot owner = legacy("rel_settings");
++        summonPacket(owner, "RelSettings");
++        int mark = owner.mark(); owner.command("numen status");
++        owner.await(mark, m -> m.text().contains("玩家电脑资料"), WAIT, "release client classification");
++        owner.await(mark, m -> m.text().contains("RelSettings") && m.text().contains("模型=由外脑配置"), WAIT,
++                "server binding must not masquerade as the client's actual model");
++        mark = owner.mark(); owner.command("numen model set no_server_copy custom chat model https://example.test/v1");
++        owner.await(mark, m -> m.text().contains("旧版客户端管理模型"), WAIT, "no unused server profile");
++        mark = owner.mark(); owner.command("numen model list");
++        owner.await(mark, m -> m.text().contains(SPEC.modelProfile()), WAIT, "server catalog");
++        assertTrue(owner.since(mark).stream().noneMatch(m -> m.text().contains("no_server_copy")));
++        assertTrue(MODEL.asked().isEmpty());
++        owner.command("numen player despawn RelSettings");
++        until(() -> !online("RelSettings"), "dismiss test companion");
++    }
+     static final String ROSTER = "numen_api:companion_list", RESULT = "numen_api:program_result";
+     static final String[] CHANNELS = {ROSTER, RESULT, "numen_api:client_ui_action", "numen_api:numen_event",
+             "numen_api:current_task", "numen_api:client_call", "numen_api:consent_request", "numen_api:numen_state",
+diff --git a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/Scenario.java b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/Scenario.java
+index e32066564..0ba8068e4 100644
+--- a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/Scenario.java
++++ b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/Scenario.java
+@@ -23,6 +23,7 @@ abstract class Scenario {
+ 
+     private final List<Bot> bots = new ArrayList<>();
+     private final List<Companion> companions = new ArrayList<>();
++    private final java.util.Set<Bot> configuredOwners = new java.util.HashSet<>();
+ 
+     private record Companion(Bot owner, String name) {}
+ 
+@@ -69,6 +70,12 @@ abstract class Scenario {
+ 
+     /** 主人召唤她,绑上假模型的档案,等服务端回话召唤成了、绑定成了。 */
+     void summon(Bot owner, String her) {
++        // 公共测试档案不代表共享付费许可;每个测试主人明确提供自己的假Key。
++        if (configuredOwners.add(owner)) {
++            int keyMark = owner.mark();
++            owner.command("numen key custom " + SPEC.modelKey());
++            owner.await(keyMark, m -> m.text().contains("custom"), WAIT, "本人的测试Key");
++        }
+         int mark = owner.mark();
+         // 先记下再等回话:等不到回话的场景收场时也要把她遣散,否则同名的她留在服务端,拖累后面的场景
+         companions.add(new Companion(owner, her));
+diff --git a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/TranslationTest.java b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/TranslationTest.java
+index 15155e2f5..8dfe805ed 100644
+--- a/numen/common/src/e2e/java/com/dwinovo/numen/e2e/TranslationTest.java
++++ b/numen/common/src/e2e/java/com/dwinovo/numen/e2e/TranslationTest.java
+@@ -19,8 +19,8 @@ class TranslationTest extends Scenario {
+         int englishMark = english.mark();
+ 
+         // 这条指令作用在 Numen 客户端上,没装的玩家得到一句说明——一条不依赖任何前置状态的 Numen 系统消息
+-        chinese.command("numen settings");
+-        english.command("numen settings");
++        chinese.command("numen debug");
++        english.command("numen debug");
+ 
+         Bot.Message zh = chinese.await(chineseMark, m -> m.text().contains("要装了 Numen 客户端"), WAIT,
+                 "中文的说明");
