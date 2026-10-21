@@ -21,7 +21,7 @@ MAPPINGS = 'maw-native-icons.json'
 CATALOG = 'maw-native-items.json'
 CONTRACT = 'resource-contract.json'
 MARKER_BASE = 8_000_000  # exact in both Java int and post-1.21.4 float component
-PACK_VERSION = [1, 0, 3]
+PACK_VERSION = [1, 0, 4]
 
 
 def sha(data: bytes) -> str:
@@ -84,13 +84,13 @@ class Assets:
         base = self.model(parent, (*seen, name))
         return {**base, 'textures': {**base['textures'], **data.get('textures', {})}}
 
-    def icon(self, model):
+    def icon(self, model, *, animation_preview=False):
         from PIL import Image
         textures = model['textures']
         layers = sorted(k for k in textures if k.startswith('layer') and k[5:].isdigit())
         if not layers or layers != [f'layer{i}' for i in range(len(layers))]:
             raise ValueError('invalid_generated_layers')
-        raws, images = [], []
+        raws, images, preview = [], [], False
         for layer in layers:
             texture = textures[layer]
             seen = set()
@@ -102,17 +102,31 @@ class Assets:
                 texture = 'minecraft:'+texture
             namespace, local = texture.split(':', 1)
             key = f'assets/{namespace}/textures/{local}.png'
+            animation = None
             if key+'.mcmeta' in self.manifest['assets']:
                 meta = self.json(key+'.mcmeta')
-                if meta.get('animation') is not None:
+                animation = meta.get('animation')
+                if animation is not None and not animation_preview:
                     raise ValueError('animated_texture_not_yet_adapted')
             raw = self.read(key)
             image = Image.open(io.BytesIO(raw)).convert('RGBA')
+            if animation is not None:
+                # Bedrock's item atlas has no general Java .mcmeta timeline.
+                # Use the source's first displayed frame as an honest static
+                # icon, never the entire vertical filmstrip or a vanilla block.
+                width=animation.get('width',image.width);height=animation.get('height',width)
+                if not all(isinstance(n,int) and 1<=n<=512 for n in [width,height]) or image.width%width or image.height%height:raise ValueError('invalid_animation_frame_size')
+                frames=animation.get('frames') or [0];first=frames[0]
+                index=first.get('index') if isinstance(first,dict) else first
+                columns=image.width//width
+                if not isinstance(index,int) or not 0<=index<columns*(image.height//height):raise ValueError('invalid_animation_frame_index')
+                x,y=(index%columns)*width,(index//columns)*height
+                image=image.crop((x,y,x+width,y+height));buffer=io.BytesIO();image.save(buffer,format='PNG');raw=buffer.getvalue();preview=True
             if image.width != image.height or not 1 <= image.width <= 512:
                 raise ValueError('non_square_icon')
             raws.append(raw); images.append(image)
         if len(images) == 1:
-            return raws[0], 'source_png_exact'
+            return raws[0], 'source_animation_first_frame_exact' if preview else 'source_png_exact'
         if any(im.size != images[0].size for im in images):
             raise ValueError('mixed_layer_sizes')
         result = images[0].copy()
@@ -154,7 +168,8 @@ def build(assets_root: Path, registry: Path, idmap: Path, output: Path, *, ident
         namespace, local = key.split(':')
         try:
             model = assets.model(namespace+':item/'+local)
-            raw, method = assets.icon(model)
+            raw, method = assets.icon(model,animation_preview=key in {
+                'touhou_little_maid:smart_slab_init','touhou_little_maid:smart_slab_has_maid'})
             base = vanilla.get(mapping.get(str(number)))
             if not base:
                 raise ValueError('vanilla_projection_base_missing')
@@ -163,8 +178,14 @@ def build(assets_root: Path, registry: Path, idmap: Path, output: Path, *, ident
             png_path = 'textures/items/'+namespace+'/'+local+'.png'
             if len(png_path)>=80:png_path='textures/items/long/'+str(number)+'.png'
             entries[png_path] = raw
-            title = ((display_names or {}).get(key) or languages[namespace].get('item.'+namespace+'.'+local)
-                     or languages[namespace].get('block.'+namespace+'.'+local) or key)
+            # ItemSmartSlab#getDescriptionId() shares one native translation
+            # across its init/empty/has-maid registry variants.
+            translation_local = 'smart_slab' if namespace == 'touhou_little_maid' and local in (
+                'smart_slab_init','smart_slab_empty','smart_slab_has_maid') else local
+            supplied = (display_names or {}).get(key)
+            title = ((supplied if supplied != key else None)
+                     or languages[namespace].get('item.'+namespace+'.'+translation_local)
+                     or languages[namespace].get('block.'+namespace+'.'+translation_local) or key)
             marker = MARKER_BASE + number
             if marker >= 2**24:
                 raise ValueError('inexact_float_marker')
@@ -172,6 +193,7 @@ def build(assets_root: Path, registry: Path, idmap: Path, output: Path, *, ident
                    'customModelData': marker, 'bedrockIdentifier': identifier,
                    'icon': icon, 'displayName': title, 'png': png_path,
                    'pngSha256': sha(raw), 'method': method, 'handheld': model['handheld']}
+            if method=='source_animation_first_frame_exact':row['animationParityVerified']=False
             catalog.append(row)
             definitions.setdefault(base, []).append({'type': 'legacy',
                 'custom_model_data': marker, 'bedrock_identifier': identifier,

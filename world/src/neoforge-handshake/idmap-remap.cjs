@@ -89,6 +89,10 @@ function remapChunkBuf (buf) {
 const BLOCK_KEYS = { blockId: 1, newState: 1, blockStateId: 1, block: 1 }
 function remapOut (name, params) { // 后端→前端: NeoForge号→原版号
   if (!MAP) return params
+  if (name === 'world_event' && params.effectId === 2001) return { ...params, data: stateToVanilla(params.data) }
+  if (name === 'world_particles' && ['block','block_marker','falling_dust','dust_pillar'].includes(params.particle?.type)) {
+    return { ...params, particle: { ...params.particle, data: stateToVanilla(params.particle.data) } }
+  }
   if (name === 'block_change' && typeof params.type === 'number') { // 单方块更新:字段名是 type (2026-09-21 pktspy 定谳) ✓
     const v = MAP.bs.get(params.type)
     if (v != null) params.type = v
@@ -125,7 +129,7 @@ function remapOut (name, params) { // 后端→前端: NeoForge号→原版号
     if (Array.isArray(obj)) { for (const v of obj) deep(v, d + 1); return }
     for (const [k, v] of Object.entries(obj)) {
       if (typeof v === 'number' && BLOCK_KEYS[k]) obj[k] = stOut(v)
-      else if (k === 'itemId' && typeof v === 'number') obj[k] = itOut(v)
+      else if (ITEM_KEYS.includes(k) && typeof v === 'number') obj[k] = itOut(v)
       else deep(v, d + 1)
     }
   }
@@ -136,10 +140,12 @@ function remapOut (name, params) { // 后端→前端: NeoForge号→原版号
       if (k) params[k] = stateToVanilla(params[k])
       return params
     }
-    case 'set_slot': if (params.item) remapStack(params.item); return params
-    case 'container_set_content': (params.itemsWithSlots || params.itemStacks || []).forEach(its => its && remapStack(its.itemStack ?? its)); return params
+    // The recursive pass above already visits these stacks. Applying the
+    // native map twice corrupts non-identity vanilla registry assignments.
+    case 'set_slot': return params
+    case 'container_set_content': return params
     case 'container_data': return params
-    case 'entity_equipment_update': if (params.item) remapStack(params.item); if (params.attributeModifiersList) {} return params
+    case 'entity_equipment_update': return params
     default: return params
   }
 }

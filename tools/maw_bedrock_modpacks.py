@@ -15,7 +15,6 @@ import re
 import subprocess
 import uuid
 import zipfile
-from PIL import Image
 from maw_bedrock_resources import Assets, encoded, sha
 from maw_bedrock_animations import adapt
 
@@ -93,9 +92,13 @@ def compile_extension(geyser: Path, java_bin: Path, output: Path):
 
 
 def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path, maid_jar: Path | None = None):
+    from PIL import Image
     assets = Assets(asset_root)
     source_hashes = {row['sha256'] for row in assets.manifest.get('sources', [])}
-    if not {TLM_SHA, YSM_SHA} <= source_hashes: raise ValueError('Model metadata adapter needs the locked TLM/YSM source JARs')
+    if TLM_SHA not in source_hashes: raise ValueError('Model metadata adapter needs the locked TLM source JAR')
+    # FOM has TLM without YSM. Do not require or advertise an uninstalled mod.
+    if any(k.startswith('assets/yes_steve_model/') for k in assets.manifest['assets']) and YSM_SHA not in source_hashes:
+        raise ValueError('YSM assets need the locked YSM source JAR')
     rows, excluded = [], []
     entries = {kind: {} for kind in ['touhou', 'ysm']}
     ids = set()

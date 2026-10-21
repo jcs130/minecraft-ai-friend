@@ -249,7 +249,9 @@ const sessionCount = () => sessions.size
 function startSession (front, username) {
   const sess = { front, username, phase: 'config', retry: 0, closed: false, reconnecting: false, backReady: false, frontQueue: [], playQueue: [] }
   if (process.env.GATE_BEDROCK_PROJECTION === '1' || vanillaAgentProjection) {
-    sess.bedrockProjection = new BedrockProjection(vanillaAgentProjection ? null : require('./bedrock-models.cjs').BedrockModels.load(process.env.GATE_BEDROCK_MODELS_FILE), { strict: vanillaAgentProjection, omitUnsupportedEntities: vanillaAgentProjection })
+    // FOM's strict registry/menu projection is also used by Bedrock. It must
+    // not disable the explicitly installed native entity presentation bridge.
+    sess.bedrockProjection = new BedrockProjection(process.env.GATE_BEDROCK_PROJECTION === '1' ? require('./bedrock-models.cjs').BedrockModels.load(process.env.GATE_BEDROCK_MODELS_FILE) : null, { strict: vanillaAgentProjection, omitUnsupportedEntities: vanillaAgentProjection })
     sess.bedrockItems = BedrockItems.load(process.env.GATE_BEDROCK_ITEMS_FILE)
   }
   sessions.add(sess)
@@ -677,7 +679,7 @@ function relayTo (sess, target, name, params, dir) {
     // 【时间包普查】前端方向也计数(与 backCensus 对照找丢包层)
     sess.frontCensus = sess.frontCensus || {}
     sess.frontCensus[name] = (sess.frontCensus[name] || 0) + 1
-  } else if (vanillaAgentProjection && name === 'window_click') {
+  } else if (vanillaAgentProjection && process.env.GATE_BEDROCK_PROJECTION !== '1' && name === 'window_click') {
     params = authoritativeWindowClick(params)
   } else if (sess.bedrockItems && ['window_click', 'set_creative_slot'].includes(name)) {
     try { params = sess.bedrockItems.incoming(name, params) }

@@ -11,6 +11,7 @@ import fom_service as fom
 import maw_service as service
 import maw_bedrock_service as original
 import maw_bedrock_resources as resources
+import maw_bedrock_modpacks as models
 
 DEFAULT=Path('E:/MC/servers/fom-2.42/ops/fom-bedrock.json')
 PORTS={'lan':(28988,28994,28995,28996),'offline_qa':(28993,28991,28992,28997)}
@@ -63,6 +64,18 @@ def load_config(path,*,verify_hashes=True):
     projection_path=catalog/'fom-projection-contract.json';projection=service.read_json(projection_path)
     if projection.get('schemaVersion')!=1 or projection.get('nativeCatalogSha256')!=sha(release/'registry/items.json') or projection.get('iconCatalogSha256')!=contract['files'][resources.CATALOG]['sha256']:raise ValueError('Native item labels belong to a different FOM release')
     expected[projection_path]=sha(projection_path);expected[catalog/'fom-item-projection.json']=projection['projectionSha256']
+    model_contract=None;extensions=set()
+    if (catalog/models.CONTRACT).is_file():
+        model_contract=models.validate(catalog,deployed=True)
+        definitions=service.read_json(catalog/models.CATALOG,16*1024*1024)
+        maid=definitions.get('maidMetadata',{})
+        if maid.get('jarSha256')!=models.TLM_SHA or models.TLM_SHA not in mod_files.values():raise ValueError('Maid model adapter belongs to another installed mod')
+        if model_contract['geyserJarSha256']!=expected[directory/'plugins/Geyser-ViaProxy.jar']:raise ValueError('Maid extension uses another Geyser build')
+        expected[catalog/models.CONTRACT]=sha(catalog/models.CONTRACT)
+        for name,meta in model_contract['files'].items():
+            expected[catalog/meta['directory']/name]=meta['sha256']
+            if meta['directory']=='extensions':extensions.add(name)
+        if extensions!={models.EXTENSION}:raise ValueError('Unreviewed model extensions')
     stamps={}
     for file,digest in expected.items():
         if not file.is_file() or file.is_symlink() or verify_hashes and sha(file)!=digest:raise ValueError('Bedrock release hash mismatch: '+file.name)
@@ -75,15 +88,18 @@ def load_config(path,*,verify_hashes=True):
             stat=file.stat()
             if (stat.st_size,stat.st_mtime_ns)!=before:raise ValueError('Bedrock release changed: '+file.name)
         if {p.name for p in (directory/'plugins').glob('*.jar')}!={'Geyser-ViaProxy.jar'}:raise ValueError('Unreviewed proxy plugins')
+        if {p.name for p in (catalog/'extensions').glob('*.jar')}!=extensions:raise ValueError('Unreviewed Geyser extensions')
     source=next(s for s in main['services'] if s['id']=='gate');env={**source['env']}
     env.update(NODE_PATH=str(release/'node_modules'),GATE_LISTEN_HOST='127.0.0.1',GATE_PUBLIC_GAME_ACCESS='0',GATE_AGENT_PREFIX='',
         GATE_BEDROCK_ACCOUNT_NAMESPACE='1',GATE_BEDROCK_PROJECTION='1',GATE_NATIVE_VIEWER='0',
         GATE_CACHE_FILE=str(directory/'knowledge.json'),GATE_BEDROCK_ITEMS_FILE=str(catalog/'fom-item-projection.json'))
     env.pop('GATE_LAN_SUBNET',None)
+    env.pop('GATE_BEDROCK_MODELS_FILE',None)
+    if model_contract:env['GATE_BEDROCK_MODELS_FILE']=str(catalog/models.CATALOG)
     for key,name in {'GATE_CHANNELS_FILE':'network-channels.json','GATE_COMPONENTS_FILE':'components.tsv','GATE_PARTICLES_FILE':'particles.tsv','GATE_ENTITY_SERIALIZERS_FILE':'entity-data-serializers.tsv','GATE_IDMAP_FILE':'idmap.json'}.items():env[key]=str(release/'registry'/name)
     command=[str(service.DEFAULT_JAVA),'-Djava.net.preferIPv4Stack=true','-Xms128M','-Xmx512M','-jar',str(directory/'ViaProxy-3.4.14.jar'),'cli','--target-address','127.0.0.1:'+str(gate),'--target-version','1.21.1','--auth-method','NONE','--bind-address','127.0.0.1:'+str(tcp),'--wildcard-domain-handling','NONE']
     return {'serverDir':str(directory),'runtimeDir':str(directory/'ops'),'gamePort':tcp,'healthPort':health,'validator':validate,
-        'fomRunConfig':str(main_path),'mode':mode,'udpPort':udp,'udpAddress':address,'resourceContract':contract,
+        'fomRunConfig':str(main_path),'mode':mode,'udpPort':udp,'udpAddress':address,'resourceContract':contract,'modelContract':model_contract,
         'networkExposure':{'mode':mode,'address':address,'udpPort':udp,'javaListenHost':'127.0.0.1'},
         'services':[{'id':'compat_gate','command':[str(release/'node.exe'),str(release/'gate/gate.cjs'),str(gate),'127.0.0.1',str(main['gamePort'])],'cwd':str(release),'env':env,'host':'127.0.0.1','listenHost':'127.0.0.1','port':gate,'dependsOn':[],'readiness':'minecraft','startupTimeoutSeconds':90,'stopMode':'stdin','stopText':'{"kind":"shutdown"}','fomHealthPort':main['healthPort'],'fomServerDir':str(upstream)},
             {'id':'bedrock','command':command,'cwd':str(directory),'env':{},'host':'127.0.0.1','listenHost':'127.0.0.1','port':tcp,'dependsOn':['compat_gate'],'readiness':'minecraft','startupTimeoutSeconds':90,'stopMode':'stdin','stopText':'stop'}]}
@@ -110,6 +126,7 @@ class BedrockChild(service.Child):
                 if pong['motd']!='My Agent World FOM 2.42' or pong['port']!=config['udpPort'] or pong['maxPlayers']!=8:raise ValueError('Wrong FOM Bedrock endpoint')
                 self.metrics['bedrock']=pong
                 if 'customItems' not in self.metrics:self.metrics['customItems']=resources.registered_items(Path(self.handler.baseFilename),config['resourceContract'],time.time()-(time.monotonic()-self.started)-5)
+                if config.get('modelContract') and 'customModels' not in self.metrics:self.metrics['customModels']=models.registered_models(Path(self.handler.baseFilename),config['modelContract'],time.time()-(time.monotonic()-self.started)-5)
             except Exception as error:
                 self.ready=False;self.problem='fom_bedrock_readiness_failed: '+str(error)
                 if time.monotonic()-self.started>self.spec['startupTimeoutSeconds']:self.stop()
@@ -124,7 +141,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('action',choices=('plan','run','status','pause','resume','shutdown'));parser.add_argument('--config',type=Path,default=DEFAULT)
     args=parser.parse_args();config=load_config(args.config)
     for row in config['services']:
-        if row['id']=='bedrock':row['bridgeConfig']={k:config[k] for k in ('udpPort','udpAddress','resourceContract')}
+        if row['id']=='bedrock':row['bridgeConfig']={k:config[k] for k in ('udpPort','udpAddress','resourceContract','modelContract')}
     if args.action=='run':BedrockSupervisor(config,validator=config['validator'],child_factory=BedrockChild).run()
     elif args.action=='plan':print(json.dumps({**{k:config[k] for k in ('serverDir','runtimeDir','healthPort','mode','udpPort','udpAddress')},'services':[{'id':'bedrock','port':config['gamePort']}]},ensure_ascii=False))
     elif args.action=='status':

@@ -15,6 +15,9 @@ def probe(file=DEFAULT):
         bedrock=next(s for s in state['services'] if s['id']=='bedrock')
         checks['actual_udp_pong']=bedrock['metrics']['bedrock']['port']==config['udpPort']
         checks['native_icon_registration']=bedrock['metrics']['customItems']['nativeItems']==config['resourceContract']['itemCount']
+        if config.get('modelContract'):
+            checks['native_maid_model_registration']=bedrock['metrics']['customModels']['registeredModels']==config['modelContract']['modelCount']
+            checks['native_maid_download_stack']=bedrock['metrics']['customModels']['packsLoaded']==len(config['modelContract']['packs'])
         gate=config['services'][0]
         checks['private_upstream']=gate['listenHost']=='127.0.0.1' and gate['env']['GATE_BEDROCK_ACCOUNT_NAMESPACE']=='1'
         checks['xbox_required_on_lan']=config['mode']=='lan'

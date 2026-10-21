@@ -60,6 +60,17 @@ class ModelPackTests(unittest.TestCase):
             (a/models.CATALOG).write_bytes(b'{}')
             with self.assertRaisesRegex(ValueError,'integrity mismatch'):models.validate(a,deployed=True)
 
+    def test_tlm_only_server_does_not_require_or_advertise_ysm(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);assets,extension,geyser,*_=self.fixture(root)
+            file=assets/'native-assets.json';manifest=json.loads(file.read_bytes())
+            manifest['sources']=[{'sha256':models.TLM_SHA}];file.write_text(json.dumps(manifest),'utf-8')
+            contract=models.build(assets,root/'out',extension=extension,geyser=geyser)
+            self.assertEqual([p['file'] for p in contract['packs']],['maw-touhou-models.mcpack'])
+            manifest['assets']['assets/yes_steve_model/unverified.json']={}
+            file.write_text(json.dumps(manifest),'utf-8')
+            with self.assertRaisesRegex(ValueError,'locked YSM'):models.build(assets,root/'bad',extension=extension,geyser=geyser)
+
     def test_resource_paths_and_conflicting_bones_cannot_be_silently_approximated(self):
         for path in ['../secret','/absolute','a\\b']:
             with self.assertRaises(ValueError):models.relative(path)

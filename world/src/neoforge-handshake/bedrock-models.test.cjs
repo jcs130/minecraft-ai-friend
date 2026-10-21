@@ -121,6 +121,7 @@ test('real downstream pipeline retains native stacks until readiness and still f
   const writes = []; const kicks = []
   const relay = vm.runInNewContext(handler+'\nrelayTo', {
     Buffer, DEBUG_MENUS: false, BRIDGE_COOKING_POT_GUI: false, BRIDGE_NEOFORGE_TIME: false,
+    vanillaAgentProjection: true, process: { env: { GATE_BEDROCK_PROJECTION: '1' } },
     nativeViewerHash: null, componentProtocol: null, vanillaMenuParserWindows: null,
     createNativeMenuProxyGuard: () => ({ filter: () => ({ forward: true }) }),
     REMAP: { hasMap: () => false }, kickFront: (_, reason) => kicks.push(reason), log: () => {}
@@ -142,6 +143,36 @@ test('real downstream pipeline retains native stacks until readiness and still f
     properties: [{ key: '999999', value: 1, modifiers: [] }] })
   assert.equal(attributes.params.properties.length, 0)
   assert.equal(projection.stats.attributesOmitted, 1)
+})
+
+test('strict FOM Bedrock sessions keep model support and restore inventory tokens before native clicks', () => {
+  const source = fs.readFileSync(require.resolve('./gate.cjs'), 'utf8')
+  const start = source.slice(source.indexOf('function startSession ('), source.indexOf('function closeSession ('))
+  const sessions = new Set()
+  const env = { GATE_BEDROCK_PROJECTION: '1', GATE_BEDROCK_MODELS_FILE: 'verified-models' }
+  const begin = vm.runInNewContext(start+'\nstartSession', {
+    sessions, process: { env }, vanillaAgentProjection: true, BedrockProjection, BedrockItems,
+    require: () => ({ BedrockModels: { load: file => { assert.equal(file,'verified-models'); return new BedrockModels(catalog()) } } }),
+    connectBackend: () => {}
+  })
+  begin({ on: () => {} }, 'b_Test')
+  const session = [...sessions][0]
+  assert.ok(session.bedrockProjection.models instanceof BedrockModels)
+  assert.equal(session.bedrockProjection.strict, true)
+  const original = { itemCount: 2, itemId: 3272, components: [], removeComponents: [] }
+  const display = session.bedrockItems.outgoing('set_slot',{item:original}).item
+  display.itemId = 340
+  const handler = source.slice(source.indexOf('function relayTo ('), source.indexOf('// mcp 的 pluginChannels'))
+  let native
+  const relay = vm.runInNewContext(handler+'\nrelayTo', {
+    Buffer, DEBUG_MENUS: false, BRIDGE_COOKING_POT_GUI: false, BRIDGE_NEOFORGE_TIME: false,
+    vanillaAgentProjection: true, process: { env },
+    REMAP: { hasMap: () => false }, bedrockItemWriter: { createPacketBuffer: (_,p) => { native = p.params;return Buffer.alloc(0) } },
+    kickFront: (_,r) => assert.fail(r), log: () => {}
+  })
+  session.back = { writeRaw: () => {} }
+  relay(session,session.back,'window_click',{cursorItem:display},'test')
+  assert.deepEqual(native.cursorItem,original)
 })
 
 test('native voice metadata follows selection, frequency and silence without leaking TLM serializers', () => {

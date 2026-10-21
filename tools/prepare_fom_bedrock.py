@@ -52,13 +52,18 @@ def prepare(output,assets_root=None,main_config=MAIN):
                     continue
                 target=assets/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(data)
                 manifest[key]={'sha256':digest,'bytes':len(data),'source':jar.name}
-    if not assets_root:(assets/'native-assets.json').write_text(json.dumps({'schemaVersion':1,'assetIntegrityVerified':True,'scope':'vanilla and locked FOM jar assets; ambiguous priorities excluded','assets':manifest},ensure_ascii=False),encoding='utf-8')
+    if not assets_root:(assets/'native-assets.json').write_text(json.dumps({'schemaVersion':1,'assetIntegrityVerified':True,'scope':'vanilla and locked FOM jar assets; ambiguous priorities excluded','sources':[{'name':jar.name,'sha256':sha(jar)} for jar in archives],'assets':manifest},ensure_ascii=False),encoding='utf-8')
     release=output/'gateway';release.mkdir();source_record=json.loads((source/'release.json').read_text(encoding='utf-8'))
     for relative,digest in source_record['files'].items():
         src=source/relative;dst=release/relative;dst.parent.mkdir(parents=True,exist_ok=True)
         # Immutable libraries may share bytes, mutable gateway source is copied.
         if relative.startswith('node_modules/') or relative=='node.exe':os.link(src,dst)
         else:shutil.copy2(src,dst)
+    # Keep registry/dependency inputs frozen, but prepare the reviewed Bedrock
+    # fixes from this checkout rather than reviving an older Agent-only gate.
+    for name in ['gate.cjs','idmap-remap.cjs','bedrock-models.cjs','bedrock-account.cjs']:
+        target=release/'gate'/name;shutil.copy2(REPO/'world/src/neoforge-handshake'/name,target)
+        source_record['files']['gate/'+name]=sha(target)
     gateway=release/'gate/gate.cjs';old=gateway.read_text(encoding='utf-8')
     needle='const username = p.username'
     patched="const username = require('./bedrock-account.cjs').bedrockAccountName(p.username, process.env.GATE_BEDROCK_ACCOUNT_NAMESPACE === '1')"

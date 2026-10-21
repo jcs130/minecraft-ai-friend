@@ -11,7 +11,9 @@ const wait=async(predicate,ms=25000)=>{const end=Date.now()+ms;while(!predicate(
 const check=(name,pass)=>{report.checks.push({name,pass:!!pass});assert(pass,name);console.log('PASS '+name)}
 const digest=data=>crypto.createHash('sha256').update(data).digest('hex')
 const uuid=value=>{const b=Buffer.from(value.replaceAll('-',''),'hex');b.subarray(0,8).reverse();b.subarray(8,16).reverse();const s=b.toString('hex');return `${s.slice(0,8)}-${s.slice(8,12)}-${s.slice(12,16)}-${s.slice(16,20)}-${s.slice(20)}`}
-let client,send,error,spawned=false,fixture=false;const packs=[],received=new Map(),complete=new Set(),inventory=[]
+let client,send,error,heartbeat,spawned=false,fixture=false;const packs=[],received=new Map(),complete=new Set(),inventory=[]
+const modelTest=process.argv.includes('--models'),temporaryMaidTag='fom_bedrock_qa_'+crypto.randomBytes(8).toString('hex')
+const fixtureItems=[['farmersdelight:rice',4],['create:shaft',3],['irons_spellbooks:scroll',1],...(modelTest?[['touhou_little_maid:smart_slab_empty',1]]:[])]
 const execFile=require('node:util').promisify(require('node:child_process').execFile)
 const ownConsole=async command=>{const {stdout}=await execFile('E:/MC/runtime/python-3.12.14/python.exe',['-X','utf8','E:/MC/servers/fom-2.42/ops/service-tools/fom_service.py','console','--config',config.mainConfig,'--command',command,'--wait','10'],{encoding:'utf8',timeout:120000,windowsHide:true});const receipt=JSON.parse(stdout);assert(receipt.ok&&receipt.deliveryKnown);return receipt}
 const nativeJson=(message,prefix)=>{const at=message.indexOf(prefix+' ');assert(at>=0);return JSON.parse(message.slice(at+prefix.length+1,message.lastIndexOf('}')+1))}
@@ -29,10 +31,17 @@ async function main(){
  client.on('level_chunk',()=>{report.chunks++});client.on('text',p=>{if(/MC_AUTH_|MC_FOM_|MC_FOM_COMPAT/.test(p.message||''))report.messages.push({message:p.message,type:p.type,at:Date.now()})})
  client.on('inventory_content',p=>{if(report.inventoryPackets.length<25)report.inventoryPackets.push(p);if(p.window_id==='inventory')p.input.forEach((item,i)=>{inventory[i]=item})})
  client.on('inventory_slot',p=>{if(p.window_id==='inventory')inventory[p.slot]=p.item})
+ client.on('item_registry',p=>{report.itemRegistry=p.itemstates.map(i=>({name:i.name,runtime_id:i.runtime_id}))})
+ client.on('add_entity',p=>{if(p.entity_type?.startsWith('maw_native:')){report.models??=[];report.models.push({identifier:p.entity_type,runtimeId:String(p.runtime_id),position:p.position})}})
+ client.on('move_entity',p=>{report.moves??=[];if(report.moves.length<300)report.moves.push({id:String(p.runtime_entity_id),position:p.position})})
  client.on('item_stack_response',p=>report.stackResponses.push(p))
  client.on('container_open',p=>{report.containers??=[];report.containers.push(p)})
- client.on('network_stack_latency',p=>{report.latencyPackets??=[];if(report.latencyPackets.length<12)report.latencyPackets.push({timestamp:String(p.timestamp),needsResponse:p.needs_response})})
+ client.on('network_stack_latency',p=>{report.latencyPackets??=[];if(report.latencyPackets.length<12)report.latencyPackets.push({timestamp:String(p.timestamp),needsResponse:p.needs_response});if(p.needs_response)send('network_stack_latency',{timestamp:p.timestamp,needs_response:false})})
  await wait(()=>spawned&&report.chunks>0,60000)
+ // This protocol-only QA client does not generate a real player's continuous
+ // auth-input ticks. Keep the test active with private read-only native queries
+ // while asynchronous console checks run; do not fabricate keepalive replies.
+ heartbeat=setInterval(()=>{if(!error)say('/fom status')},10000);report.readOnlyHeartbeatSeconds=10
  check('real Bedrock UDP login reaches native FOM terrain',!!report.startGame&&report.chunks>0)
  check('native FOM icon pack must be accepted and downloads with its announced SHA256',report.packsRequired&&report.packDownloads.length>0)
  const expected=JSON.parse(fs.readFileSync(path.join(config.bridgeDir,'plugins/Geyser/resource-contract.json')))
@@ -45,14 +54,35 @@ async function main(){
  say('/fom nearby');await wait(()=>report.messages.some(m=>m.message.includes('MC_FOM_NEARBY ')))
  check('own native inventory and nearby-entity queries return through Bedrock',true)
  check('Bedrock position comes from the native body rather than origin placeholder',auth.position&&Math.abs(auth.position.y)>1)
+ if(process.argv.includes('--recover-fixture')){
+  const file=process.argv[process.argv.indexOf('--recover-fixture')+1],previous=JSON.parse(fs.readFileSync(file))
+  assert.equal(previous.nativeAuth.playerUuid,auth.playerUuid)
+  const before=await nativeInventory();assert.deepEqual(before.items,previous.fixtureAfter.items)
+  for(const [id,count] of previous.suppliedTypes)await ownConsole('execute run clear b_FomBedrockQA '+id+' '+count)
+  const after=await nativeInventory();assert.deepEqual(after.items,previous.fixtureBefore.items)
+  report.recoveredFixture=file;check('previous interrupted QA fixture reconciled by exact native inventory',true)
+ }
  if(process.argv.includes('--items')){
-  const before=await nativeInventory();report.fixtureBefore=before;assert(!before.items.some(i=>['farmersdelight:rice','create:shaft','irons_spellbooks:scroll'].includes(i.nativeId)),'Never overwrite or clear pre-existing fixture item types');assert(!before.items.some(i=>i.slot===8),'Keep pre-existing hotbar items')
+  const before=await nativeInventory();report.fixtureBefore=before
+  // The native first-login gift is a soul charm. Retain it and only supply
+  // missing fixture types; never clear somebody's pre-existing item stack.
+  report.suppliedTypes=fixtureItems.filter(([id])=>!before.items.some(i=>i.nativeId===id));assert(!before.items.some(i=>i.slot===8),'Keep pre-existing hotbar items')
   fixture=true
-  for(const [id,count] of [['farmersdelight:rice',4],['create:shaft',3],['irons_spellbooks:scroll',1]])await ownConsole('execute run give b_FomBedrockQA '+id+' '+count)
+  for(const [id,count] of report.suppliedTypes)await ownConsole('execute run give b_FomBedrockQA '+id+' '+count)
   const supplied=await nativeInventory();report.fixtureSupplied=supplied
   check('three actual mod item types reach the Bedrock connection',supplied.items.some(i=>i.nativeId==='farmersdelight:rice'&&i.count===4)&&supplied.items.some(i=>i.nativeId==='create:shaft'&&i.count===3)&&supplied.items.some(i=>i.nativeId==='irons_spellbooks:scroll'&&i.count===1))
   const rice=supplied.items.find(i=>i.nativeId==='farmersdelight:rice');await wait(()=>inventory[rice.slot]?.count===4)
   const item=inventory[rice.slot];report.riceBedrock=item
+  if(modelTest){
+   const icons=JSON.parse(fs.readFileSync(path.join(config.bridgeDir,'plugins/Geyser/maw-native-items.json'))).items
+   for(const id of ['farmersdelight:rice','touhou_little_maid:smart_slab_init','touhou_little_maid:smart_slab_empty']){
+    const row=icons.find(i=>i.nativeItem===id),slot=supplied.items.find(i=>i.nativeId===id)
+    assert(row&&slot);await wait(()=>inventory[slot.slot]?.count===slot.count)
+    const runtime=inventory[slot.slot].network_id,actual=report.itemRegistry?.find(i=>i.runtime_id===runtime)
+    report.iconBindings??=[];report.iconBindings.push({nativeItem:id,nativeSlot:slot.slot,bedrockRuntimeId:runtime,actual,expected:row.bedrockIdentifier})
+    check('actual Bedrock runtime identity selects original icon: '+id,actual?.name===row.bedrockIdentifier)
+   }
+  }
   check('native mod stack carries a real Bedrock item and server network stack identity',item.network_id!==0&&item.has_stack_id&&Number.isInteger(item.stack_id))
   assert(!inventory[8]||inventory[8].count===0)
   send('interact',{action_id:'open_inventory',target_entity_id:client.entityId,has_position:false})
@@ -62,8 +92,19 @@ async function main(){
   const response=report.stackResponses.flatMap(p=>p.responses||[]).find(r=>r.request_id===1)
   check('ordinary Bedrock inventory swap gets an authoritative success',response.status==='ok')
   const after=await nativeInventory();report.fixtureAfter=after
-  check('native mod identity and count survive the real Bedrock inventory operation',after.items.some(i=>i.nativeId==='farmersdelight:rice'&&i.slot===8&&i.count===4)&&after.items.reduce((n,i)=>n+i.count,0)===before.items.reduce((n,i)=>n+i.count,0)+8&&after.cursor.count===0)
+  check('native mod identity and count survive the real Bedrock inventory operation',after.items.some(i=>i.nativeId==='farmersdelight:rice'&&i.slot===8&&i.count===4)&&after.items.reduce((n,i)=>n+i.count,0)===before.items.reduce((n,i)=>n+i.count,0)+report.suppliedTypes.reduce((n,i)=>n+i[1],0)&&after.cursor.count===0)
   check('original QA guide/items remain in their original slots',before.items.every(i=>after.items.some(a=>a.slot===i.slot&&a.nativeId===i.nativeId&&a.count===i.count&&a.displayName===i.displayName)))
+ }
+ if(modelTest){
+  const definition=JSON.parse(fs.readFileSync(path.join(config.bridgeDir,'plugins/Geyser/modpack-catalog.json'))).models.find(m=>m.modelId==='touhou_little_maid:hourai_doll')
+  assert(definition)
+  await ownConsole('execute at b_FomBedrockQA run summon touhou_little_maid:maid ~2 ~ ~2 {model_id:"touhou_little_maid:hourai_doll",Tags:["'+temporaryMaidTag+'"],NoAI:0b,PersistenceRequired:1b}')
+  await wait(()=>report.models?.some(m=>m.identifier===definition.bedrockIdentifier))
+  const model=report.models.find(m=>m.identifier===definition.bedrockIdentifier)
+  check('real native maid arrives as her own original custom model',!!model)
+  await ownConsole('execute at b_FomBedrockQA run tp @e[tag='+temporaryMaidTag+',limit=1] ~5 ~ ~2')
+  await wait(()=>report.moves?.some(m=>m.id===model.runtimeId&&Math.abs(m.position.x-model.position.x)>1))
+  check('original maid entity movement reaches the same Bedrock actor',true)
  }
  if(process.argv.includes('--soak')){
   const before=await nativeInventory()
@@ -75,6 +116,7 @@ async function main(){
  }
 }
 main().catch(e=>{report.error=e.stack;process.exitCode=1;console.error(e.stack)}).finally(async()=>{
- if(fixture)try{for(const [id,count] of [['farmersdelight:rice',4],['create:shaft',3],['irons_spellbooks:scroll',1]])await ownConsole('execute run clear b_FomBedrockQA '+id+' '+count);report.fixtureCleanupDelivered=true;report.fixtureCleanup=await nativeInventory();assert.deepEqual(report.fixtureCleanup.items,report.fixtureBefore.items);check('only temporary QA items removed; original inventory fully retained',true)}catch(e){report.cleanupError=e.message;process.exitCode=1}
- client?.close();const file=path.join(root,'udp-smoke-'+Date.now()+'.json');fs.writeFileSync(file,JSON.stringify(report,(_,v)=>typeof v==='bigint'?v.toString():v,2));console.log(JSON.stringify({checks:report.checks,packs:report.packDownloads,chunks:report.chunks,error:report.error,report:file}))
+ if(modelTest)try{await ownConsole('execute run kill @e[tag='+temporaryMaidTag+']')}catch(e){report.cleanupError=e.message;process.exitCode=1}
+ if(fixture)try{for(const [id,count] of report.suppliedTypes)await ownConsole('execute run clear b_FomBedrockQA '+id+' '+count);report.fixtureCleanupDelivered=true;report.fixtureCleanup=await nativeInventory();assert.deepEqual(report.fixtureCleanup.items,report.fixtureBefore.items);check('only temporary QA items removed; original inventory fully retained',true)}catch(e){report.cleanupError=e.message;process.exitCode=1}
+ clearInterval(heartbeat);client?.close();const file=path.join(root,'udp-smoke-'+Date.now()+'.json');fs.writeFileSync(file,JSON.stringify(report,(_,v)=>typeof v==='bigint'?v.toString():v,2));console.log(JSON.stringify({checks:report.checks,packs:report.packDownloads,chunks:report.chunks,error:report.error,report:file}))
 })

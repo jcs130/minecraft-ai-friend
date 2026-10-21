@@ -11,6 +11,32 @@ import maw_bedrock_resources as resources
 
 
 class ResourcesTests(unittest.TestCase):
+    def test_soul_charm_variants_use_native_shared_chinese_name_instead_of_registry_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);assets,registry,idmap,png=self.fixture(root)
+            manifest=json.loads((assets/'native-assets.json').read_bytes())
+            values={'assets/touhou_little_maid/lang/zh_cn.json':json.dumps({'item.touhou_little_maid.smart_slab':'魂符'},ensure_ascii=False).encode()}
+            for variant in ['smart_slab_init','smart_slab_empty','smart_slab_has_maid']:
+                values['assets/touhou_little_maid/models/item/'+variant+'.json']=json.dumps({'parent':'minecraft:item/generated','textures':{'layer0':'test:item/meal' if variant=='smart_slab_empty' else 'touhou_little_maid:item/animated'}}).encode()
+            image=Image.new('RGBA',(16,32),(0,255,0,255));image.paste((0,0,255,255),(0,16,16,32));buffer=io.BytesIO();image.save(buffer,'PNG')
+            values['assets/touhou_little_maid/textures/item/animated.png']=buffer.getvalue()
+            values['assets/touhou_little_maid/textures/item/animated.png.mcmeta']=json.dumps({'animation':{'frametime':2,'frames':[1,0]}}).encode()
+            for key,data in values.items():
+                path=assets/key;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
+                manifest['assets'][key]={'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)}
+            (assets/'native-assets.json').write_text(json.dumps(manifest),'utf-8')
+            names=['touhou_little_maid:smart_slab_'+v for v in ['init','empty','has_maid']]
+            registry.write_text('minecraft:paper\t1091\n'+''.join(f'{name}\t{2000+i}\n' for i,name in enumerate(names)))
+            resources.build(assets,registry,idmap,root/'out',display_names={k:k for k in names})
+            rows=json.loads((root/'out'/resources.CATALOG).read_bytes())['items']
+            self.assertEqual(len(rows),3);self.assertTrue(all(r['displayName']=='魂符' for r in rows))
+            with zipfile.ZipFile(root/'out'/resources.PACK) as archive:
+                for row in rows:
+                    if row['nativeItem'].endswith('_empty'):continue
+                    self.assertEqual(row['method'],'source_animation_first_frame_exact')
+                    icon=Image.open(io.BytesIO(archive.read(row['png'])))
+                    self.assertEqual(icon.size,(16,16));self.assertEqual(icon.getpixel((0,0)),(0,0,255,255))
+
     def test_fom_shifted_vanilla_ids_and_separate_pack_cache_identity(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);assets,registry,idmap,png=self.fixture(root)

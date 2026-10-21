@@ -66,6 +66,14 @@ class FomBedrockTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'release changed'):out['validator']()
         self.scenario(run)
 
+    def test_unlisted_geyser_extensions_are_rejected(self):
+        def run(config,raw,contract):
+            out=bridge.load_config(config)
+            extensions=Path(raw['bridgeDir'])/'plugins/Geyser/extensions';extensions.mkdir()
+            (extensions/'unexpected.jar').write_bytes(b'unreviewed')
+            with self.assertRaisesRegex(ValueError,'Unreviewed Geyser extensions'):out['validator']()
+        self.scenario(run)
+
     def test_no_arbitrary_http_or_remote_world_fields(self):
         def run(config,raw,contract):
             raw['remoteServer']='outside.example';config.write_text(json.dumps(raw))
