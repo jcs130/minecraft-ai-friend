@@ -4,6 +4,24 @@ import argparse,hashlib,json,sys
 
 def sha(file):return hashlib.sha256(file.read_bytes()).hexdigest()
 
+def add_client_item_colors(output,shared_source):
+    """Copy the versioned original-client audit artifact, never guessed RGB."""
+    key='assets/minecraft/native/client-item-colors.json'
+    source=shared_source/'packages/modern-viewer/asset-packs/vanilla-1.21.1'/key
+    expected='21c83de83b6f57d38f93c0881edaa98a2d2c06ec8c14eceb260a79c380f9e936'
+    if sha(source)!=expected:raise ValueError('Original client item-color artifact changed')
+    source_data=json.loads(source.read_bytes());manifest_file=output/'native-assets.json';manifest=json.loads(manifest_file.read_bytes())
+    if manifest.get('minecraftVersion')!='1.21.1' or manifest.get('clientJarSha256')!=source_data.get('clientJarSha256') or manifest.get('assetIntegrityVerified') is not True:raise ValueError('Item colors belong to another original Minecraft client')
+    target=output/key
+    if target.exists() and sha(target)!=expected:raise ValueError('Conflicting item-color artifact')
+    target.parent.mkdir(parents=True,exist_ok=True)
+    if not target.exists():target.write_bytes(source.read_bytes())
+    manifest['assets'][key]={'sha256':expected,'bytes':source.stat().st_size,'source':'minecraft-1.21.1-client.jar',
+        'originalClientExport':{'source':source_data['source'],'clientJarSha256':source_data['clientJarSha256']}}
+    manifest['counts']['files']=len(manifest['assets'])
+    manifest_file.write_text(json.dumps(manifest,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
+    return {'path':key,'sha256':expected,'customModPotionColorsVerified':False}
+
 def add_physics(output,source):
     manifest_file=output/'native-assets.json';manifest=json.loads(manifest_file.read_bytes())
     states={r['stateId']:r for r in map(json.loads,(output/'registry/block-states.jsonl').read_text('utf-8').splitlines())}
@@ -36,6 +54,7 @@ def build(shared_source,client_jar,platform_jar,mods_dir,mods_manifest,registry_
     if lock.exists():raise ValueError('Existing native source lock')
     lock.write_text(json.dumps({'schemaVersion':1,'minecraftVersion':'1.21.1','scope':'FOM original server JAR resources; user pack overrides are not assumed','artifacts':[{'kind':'mod','name':n,'sha256':v} for n,v in expected.items()]},indent=2),encoding='utf-8')
     report=export(client_jar,lock,mods_dir,registry_dir,output,platform_jars=[platform_jar])
+    report['itemColors']=add_client_item_colors(output,shared_source)
     if physics:report['physics']=add_physics(output,physics)
     report['verification']=verify_export(output)
     return report

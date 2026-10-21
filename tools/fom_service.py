@@ -38,6 +38,8 @@ def gateway_spec(raw,server,port,health,public,verify_hashes):
     for key,name in {'GATE_CHANNELS_FILE':'network-channels.json','GATE_COMPONENTS_FILE':'components.tsv','GATE_PARTICLES_FILE':'particles.tsv',
         'GATE_ENTITY_SERIALIZERS_FILE':'entity-data-serializers.tsv','GATE_IDMAP_FILE':'idmap.json','GATE_BEDROCK_ITEMS_FILE':'items.json'}.items():env[key]=str(root/'registry'/name)
     native=release.get('nativeViewer')
+    if release.get('modFiles',{}).get('FarmersDelight-1.21.1-1.3.4.jar')=='139ad7696462c89c03eea463f805abffa552526c5dadaadae221dd9624cb197c':
+        env['GATE_BRIDGE_COOKING_POT_GUI']='1'
     if native is not None:
         needed={'registry/'+n for n in ('block-states.jsonl','blocks.tsv','items.tsv','entities.tsv')}
         if not isinstance(native,dict) or native.get('schemaVersion')!=1 or native.get('channel')!='mcviewer:native_packet' or not needed.issubset(files) or native.get('registrySha256')!=files['registry/block-states.jsonl'] or native['registrySha256']!=release.get('nativeExport',{}).get('block-states.jsonl'):

@@ -3,6 +3,34 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const { EventEmitter } = require('node:events')
 const { CHANNEL, encodeNativePacket, decodeNativePacket, attachNativeViewerPackets } = require('./native-viewer-packet.cjs')
+const fs = require('node:fs')
+const vm = require('node:vm')
+
+test('configuration cannot freeze an empty native header; the first play frame has completed original tables', () => {
+  const source = fs.readFileSync(require.resolve('./gate.cjs'), 'utf8')
+  const writes = [], hash = 'c'.repeat(64), NativeViewer = require('./native-viewer-packet.cjs')
+  const projection = new (require('./bedrock-projection.cjs').BedrockProjection)()
+  const relay = vm.runInNewContext('(' + source.slice(source.indexOf('function relayTo ('), source.indexOf('// mcp 的 pluginChannels')) + ')', {
+    DEBUG_MENUS: false, BRIDGE_COOKING_POT_GUI: false, BRIDGE_NEOFORGE_TIME: false,
+    nativeViewerHash: hash, NativeViewer, states: { PLAY: 'play' }, vanillaAgentProjection: false,
+    createNativeMenuProxyGuard: () => ({ filter: () => ({ forward: true }) }), vanillaMenuParserWindows: null,
+    componentProtocol: null, bedrockFrontendProtocol: null, REMAP: { hasMap: () => false }, log: () => {},
+    kickFront: (_, why) => assert.fail(why)
+  })
+  const front = { state: 'configuration', write: (name, params) => writes.push({ name, params }) }
+  const session = { front, back: {}, bedrockProjection: projection }
+  relay(session, front, 'feature_flags', { features: [] }, 'test')
+  assert.equal(writes.length, 1); assert.equal(writes[0].name, 'feature_flags')
+  assert.equal(session.nativeViewerRegistriesSent, undefined)
+  projection.registries.set('minecraft:menu', new Map([[99, 'farmersdelight:cooking_pot']]))
+  projection.learnDynamic({ id: 'minecraft:enchantment', entries: [{ key: 'test:precise' }, { key: 'minecraft:sharpness' }] })
+  front.state = 'play'
+  relay(session, front, 'login', { entityId: 1 }, 'test')
+  const frames = writes.filter(row => row.name === 'custom_payload').map(row => decodeNativePacket(row.params.data, hash))
+  assert.deepEqual(frames.map(row => [row.name, row.sequence]), [['native_registries', 1], ['login', 2]])
+  assert.deepEqual(frames[0].params.registries['minecraft:menu'], [{ id: 99, name: 'farmersdelight:cooking_pot' }])
+  assert.deepEqual(frames[0].params.registries['minecraft:enchantment'], [{ id: 0, name: 'test:precise' }, { id: 1, name: 'minecraft:sharpness' }])
+})
 test('original menu registry snapshot is bounded and does not infer vanilla IDs', () => {
   const { nativeRegistries } = require('./native-viewer-packet.cjs')
   const value = nativeRegistries(new Map([['minecraft:menu', new Map([[500, 'custom:workbench']])]]))

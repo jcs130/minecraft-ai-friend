@@ -32,7 +32,7 @@ function registryHash (file) {
 
 function nativeRegistries (source) {
   const registries = {}
-  for (const name of ['minecraft:menu', 'minecraft:mob_effect', 'minecraft:potion', 'minecraft:enchantment']) {
+  for (const name of ['minecraft:menu', 'minecraft:mob_effect', 'minecraft:potion', 'minecraft:enchantment', 'minecraft:attribute']) {
     const rows = source?.get(name)
     if (!rows) continue
     if (!(rows instanceof Map) || rows.size > 8192) throw Error('NATIVE_VIEWER_REGISTRY_BUDGET')
@@ -41,10 +41,13 @@ function nativeRegistries (source) {
       return { id, name: value }
     })
   }
-  return { source: 'same_connection_neoforge_frozen_registry', registries }
+  return { source: 'same_connection_neoforge_frozen_registry', registryVersion: 2, snapshotPhase: 'play_after_configuration', registries }
 }
 
 function encodeNativePacket (name, params, hash, sequence) {
+  if (name === 'custom_payload' && params?.channel === 'neoforge:advanced_container_set_data') {
+    name = 'craft_progress_bar'; params = { ...require('./advanced-container-data.cjs').decodeAdvancedContainerData(params.data), sourceChannel: params.channel }
+  }
   if (name === 'custom_payload' && params?.channel === 'neoforge:advanced_open_screen') {
     const screen = require('./advanced-open-screen.cjs').decodeAdvancedOpenScreen(params.data)
     if (!Number.isInteger(screen.windowId) || screen.windowId < 1 || screen.windowId > 255 || screen.menuTypeId > 1048575) throw Error('NATIVE_ADVANCED_MENU_INVALID')

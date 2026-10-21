@@ -122,7 +122,7 @@ test('real downstream pipeline retains native stacks until readiness and still f
   const relay = vm.runInNewContext(handler+'\nrelayTo', {
     Buffer, DEBUG_MENUS: false, BRIDGE_COOKING_POT_GUI: false, BRIDGE_NEOFORGE_TIME: false,
     vanillaAgentProjection: true, process: { env: { GATE_BEDROCK_PROJECTION: '1' } },
-    nativeViewerHash: null, componentProtocol: null, vanillaMenuParserWindows: null,
+    nativeViewerHash: null, componentProtocol: null, bedrockFrontendProtocol: null, vanillaMenuParserWindows: null,
     createNativeMenuProxyGuard: () => ({ filter: () => ({ forward: true }) }),
     REMAP: { hasMap: () => false }, kickFront: (_, reason) => kicks.push(reason), log: () => {}
   })
@@ -137,8 +137,10 @@ test('real downstream pipeline retains native stacks until readiness and still f
   assert.equal(writes.length, 0); assert.equal(session.bedrockItems.tokens.size, 0)
   for (const replay of adapter.activate()) relay(session, front, replay.name, replay.params, 'test')
   assert.deepEqual(kicks, [])
-  assert.deepEqual(writes.map(row => row.name), ['custom_payload', 'spawn_entity', 'entity_metadata'])
-  assert.equal(writes[2].params.metadata.length, 1)
+  assert.deepEqual(writes.map(row => row.name), ['custom_payload', 'spawn_entity', 'custom_payload', 'entity_metadata'])
+  assert.equal(writes[2].params.channel, 'mawbedrock:motion')
+  assert.equal(JSON.parse(writes[2].params.data).uuid, UID)
+  assert.equal(writes[3].params.metadata.length, 1)
   const attributes = projection.project('entity_update_attributes', { entityId: 47,
     properties: [{ key: '999999', value: 1, modifiers: [] }] })
   assert.equal(attributes.params.properties.length, 0)
@@ -206,5 +208,33 @@ test('invalid native frequency fails explicitly; ordinary Agent projection remai
   assert.throws(() => adapter.project('entity_metadata', packet, registry), /INVALID_MAID_VOICE_FREQUENCY/)
   const ordinary = new BedrockModels(catalog())
   ordinary.project('spawn_entity', spawn(), registry); ordinary.activate()
-  assert.equal(ordinary.project('entity_metadata', meta(ID), registry).before.length, 2)
+  const before = ordinary.project('entity_metadata', meta(ID), registry).before
+  assert.deepEqual(before.map(p => p.name), ['custom_payload', 'spawn_entity', 'custom_payload'])
+  assert.equal(before[2].params.channel, 'mawbedrock:motion')
+})
+
+test('native motion follows real deltas, flags, sit, look and swing while teleporting never invents walking', () => {
+  let now = 1000
+  const a = new BedrockModels(catalog(), { now: () => now }); a.activate()
+  a.project('spawn_entity', spawn(), registry)
+  const motion = result => JSON.parse(result.before.find(p => p.params.channel === 'mawbedrock:motion').params.data)
+  const first = motion(a.project('entity_metadata', meta(ID), registry))
+  assert.equal(first.uuid, UID); assert.equal(first.pose, 0); assert.equal(first.onGround, null)
+  const walked = motion(a.project('entity_move_look', { entityId: 47, dX: 410, dY: 0, dZ: 0, yaw: 64, pitch: -16, onGround: true }, registry))
+  assert.equal(walked.pose, 1); assert.equal(walked.moving, true); assert.equal(walked.bodyYaw, 90); assert.equal(walked.pitch, -22.5)
+  assert(walked.sequence > first.sequence); assert.equal(walked.onGround, true)
+  now += 250
+  const run = motion(a.project('entity_metadata', { entityId: 47, metadata: [{ key: 0, type: 'byte', value: 8 }] }, registry))
+  assert.equal(run.pose, 2)
+  const sitting = motion(a.project('entity_metadata', { entityId: 47, metadata: [{ key: 17, type: 'byte', value: 1 }] }, registry))
+  assert.equal(sitting.pose, 4)
+  const swing = motion(a.project('animation', { entityId: 47, animation: 0 }, registry)); assert(swing.swinging)
+  now += 600
+  a.project('entity_metadata', { entityId: 47, metadata: [{ key: 17, type: 'byte', value: 0 }] }, registry)
+  now += 210
+  const teleported = motion(a.project('entity_teleport', { entityId: 47, x: 20, y: 70, z: 30, yaw: 0, pitch: 0, onGround: false }, registry))
+  assert.equal(teleported.pose, 0); assert.equal(teleported.moving, false); assert.equal(teleported.swinging, false)
+  const other = new BedrockModels(catalog()); other.activate()
+  assert.equal(other.project('animation', { entityId: 47, animation: 0 }, registry), undefined)
+  a.project('entity_destroy', { entityIds: [47] }, registry); assert.equal(a.entities.size, 0)
 })

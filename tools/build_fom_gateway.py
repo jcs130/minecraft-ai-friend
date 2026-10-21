@@ -63,7 +63,8 @@ def build(output,node,dependencies,registry,mapping,mods_manifest,native_viewer=
         'modFiles':json.loads(Path(mods_manifest).read_text('utf-8'))['files'],'files':files,
         'nativeExport':{name:sha(registry/name) for name in (*REGISTRY_FILES,'blocks.tsv','items.tsv','block-states.jsonl')},
         'exactVanillaStates':idmap['report']['exactVanillaStates'],'additionalMinecraftNames':idmap['report']['additionalMinecraftNames']}
-    if native_viewer:record['nativeViewer']={'schemaVersion':1,'channel':'mcviewer:native_packet','registrySha256':sha(registry/'block-states.jsonl'),'scope':'same_connection_original_before_projection'}
+    if native_viewer:record['nativeViewer']={'schemaVersion':1,'channel':'mcviewer:native_packet','registrySha256':sha(registry/'block-states.jsonl'),'scope':'same_connection_original_before_projection',
+        'registryVersion':2,'snapshotPhase':'play_after_configuration'}
     (output/'release.json').write_text(json.dumps(record,indent=2)+'\n',encoding='utf-8')
     return {'release':str(output),'files':len(files),'bytes':sum((output/name).stat().st_size for name in files),'manifestSha256':sha(output/'release.json')}
 

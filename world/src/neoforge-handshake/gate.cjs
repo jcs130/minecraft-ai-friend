@@ -34,6 +34,7 @@ const P = require('./payloads.cjs')
 const probe = require('./probe.cjs')
 const { decodeNeoForgeTime } = require('./time-payload.cjs')
 const { cookingPotWindow } = require('./advanced-open-screen.cjs')
+const { decodeAdvancedContainerData } = require('./advanced-container-data.cjs')
 const { createNativeMenuProxyGuard } = require('./native-menu-proxy-guard.cjs')
 const { lanPeerPolicy } = require('./lan-peer-policy.cjs')
 const publicGameAccess = process.env.GATE_PUBLIC_GAME_ACCESS ?? '0'
@@ -41,6 +42,7 @@ if (!['0', '1'].includes(publicGameAccess)) throw Error('GATE_PUBLIC_GAME_ACCESS
 const acceptsPeer = lanPeerPolicy(process.env.GATE_LAN_SUBNET ?? null, publicGameAccess === '1')
 const vanillaMenuParserWindows = require('prismarine-windows')('1.21.1').windows
 const { loadBackendComponentProtocol, vanillaProjection, isItemPacket, isOptionalParticleFailure, disconnectComponent } = require('./component-protocol.cjs')
+const bedrockFrontendProtocol = process.env.GATE_BEDROCK_PROJECTION === '1' ? require('./component-protocol.cjs').createBedrockFrontendProtocol() : null
 const componentProtocol = loadBackendComponentProtocol(process.env.GATE_COMPONENTS_FILE, process.env.GATE_PARTICLES_FILE,
   process.env.GATE_ENTITY_SERIALIZERS_FILE)
 const NativeViewer = require('./native-viewer-packet.cjs')
@@ -472,6 +474,11 @@ function onBackPacket (sess, name, params) {
 
   // phase === 'config'
   switch (name) {
+    case 'registry_data':
+      try { sess.bedrockProjection?.learnDynamic(params) }
+      catch (error) { kickFront(sess, '配置注册表读取失败：' + error.message); return }
+      relayTo(sess, sess.front, name, params, '后端->前端')
+      return
     case 'custom_payload': {
       const { channel, data } = params
       if (handleNeoForgePayload(sess, channel, data)) return // 已自答/有意吞掉
@@ -606,7 +613,7 @@ function relayTo (sess, target, name, params, dir) {
   let menuProjected = false
   if (BRIDGE_COOKING_POT_GUI && target === sess.front && name === 'custom_payload' &&
       params.channel === 'neoforge:advanced_open_screen') {
-    try { cookingPotMenu = cookingPotWindow(params.data) }
+    try { cookingPotMenu = cookingPotWindow(params.data, sess.bedrockProjection ? sess.bedrockProjection.registries.get('minecraft:menu') : undefined) }
     catch (e) { log(`烹饪锅菜单负载无法转换：${e.message}`) }
   }
   if (BRIDGE_NEOFORGE_TIME && target === sess.front && name === 'custom_payload' &&
@@ -615,7 +622,10 @@ function relayTo (sess, target, name, params, dir) {
     catch (e) { log(`时间负载无法转换：${e.message}`) }
   }
   if (target === sess.front) {
-    if (nativeViewerHash) {
+    // Configuration also passes through relayTo. Sending a header there would
+    // freeze an empty, pre-handshake map and put play traffic into CONFIG.
+    // All queued play packets are drained only after the frontend PLAY ack.
+    if (nativeViewerHash && sess.front.state === states.PLAY) {
       try {
         if (!sess.nativeViewerRegistriesSent) {
           const sequence = (sess.nativeViewerSequence || 0) + 1
@@ -636,6 +646,15 @@ function relayTo (sess, target, name, params, dir) {
         kickFront(sess, '原生画面数据同步失败：' + error.message.slice(0, 120))
         return
       }
+    }
+    if (name === 'custom_payload' && params.channel === 'neoforge:advanced_container_set_data') {
+      try {
+        const data = decodeAdvancedContainerData(params.data)
+        // The original int32 remains in MCNP. Vanilla/Bedrock's old property
+        // packet only carries int16; do not wrap a larger native counter.
+        if (data.value < -32768 || data.value > 32767) return
+        name = 'craft_progress_bar'; params = data
+      } catch (error) { kickFront(sess, '原生菜单进度解码失败：' + error.message); return }
     }
     // Raw native menu events have already been captured above. Unknown mod
     // menus belong to PlayerMenuBridge/native rendering; feeding them into
@@ -713,7 +732,9 @@ function relayTo (sess, target, name, params, dir) {
     params = REMAP.remapIn(name, params) // 前端→后端: 原版号→NeoForge号 ✓
   }
   try {
-    if (target === sess.back && sess.bedrockItems && name === 'window_click' && bedrockItemWriter) {
+    if (target === sess.front && bedrockFrontendProtocol && ['window_items','set_slot','entity_equipment','trade_list','world_particles','entity_metadata'].includes(name)) {
+      target.writeRaw(bedrockFrontendProtocol.createPacketBuffer('packet', { name, params }))
+    } else if (target === sess.back && sess.bedrockItems && name === 'window_click' && bedrockItemWriter) {
       target.writeRaw(bedrockItemWriter.createPacketBuffer('packet', { name, params }))
     } else target.write(name, params)
     if (cookingPotMenu) {
@@ -798,6 +819,8 @@ function handleNeoForgePayload (sess, channel, data) {
       back.write('custom_payload', { channel: P.CH.KNOWN_DATA_MAPS_REPLY, data: P.encodeDataMapsReply(reply) })
       return true
     }
+    case 'neoforge:advanced_container_set_data':
+      return false // Decoded before projection; never forwarded as a fake timer.
     // Better Combat 配置任务（2026-08-29）：BC 的两个 configuration task 发负载后
     // 靠客户端回 Ack(code) 才 finishCurrentTask——vanilla 客户端不认识这俩负载，
     // 透传只会让它卡死在等 finish_configuration。门代答：吞负载 + 回 Ack。

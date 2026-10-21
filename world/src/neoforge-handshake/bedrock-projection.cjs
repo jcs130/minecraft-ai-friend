@@ -66,6 +66,19 @@ class BedrockProjection {
     this.registries.set(registry.name, registry.ids); this.stats.registries++
   }
 
+  learnDynamic (packet) {
+    // Datapack enchantments are not part of NeoForge's built-in registry sync.
+    // Their IDs are exactly the order of this connection's configuration list.
+    if (packet.id !== 'minecraft:enchantment') return
+    if (!Array.isArray(packet.entries) || packet.entries.length > 8192) throw Error('INVALID_DYNAMIC_REGISTRY')
+    const values = new Map(); const names = new Set()
+    for (const [id, row] of packet.entries.entries()) {
+      if (!/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(row?.key) || names.has(row.key)) throw Error('INVALID_DYNAMIC_REGISTRY')
+      names.add(row.key); values.set(id, row.key)
+    }
+    this.registries.set(packet.id, values); this.stats.registries++
+  }
+
   vanillaId (registry, id) {
     const name = this.registries.get(registry)?.get(id)
     if (!name?.startsWith('minecraft:')) return null

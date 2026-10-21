@@ -18,6 +18,8 @@ def probe(file=DEFAULT):
         if config.get('modelContract'):
             checks['native_maid_model_registration']=bedrock['metrics']['customModels']['registeredModels']==config['modelContract']['modelCount']
             checks['native_maid_download_stack']=bedrock['metrics']['customModels']['packsLoaded']==len(config['modelContract']['packs'])
+            if config['modelContract'].get('packetMotionVersion')==1:
+                checks['native_packet_motion_registration']=bedrock['metrics']['customModels'].get('packetMotionVersion')==1
         if config.get('blockContract'):
             checks['native_block_registration']=bedrock['metrics']['customBlocks']['registeredStates']==config['blockContract']['stateCount']
             checks['native_block_download_stack']=bedrock['metrics']['customBlocks']['packLoaded'] is True

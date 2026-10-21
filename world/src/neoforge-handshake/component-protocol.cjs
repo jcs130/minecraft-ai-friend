@@ -17,6 +17,12 @@ const { contentNativeTypes } = require('./native-content-types.cjs')
 // is fixed 16-byte UUID; ResourceLocation.STREAM_CODEC is a protocol string.
 const MOD_CODECS = {
   'touhou_little_maid:init_maid_owner': 'UUID',
+  // TLM 1.5.3 InitDataComponent.MAID_INFO uses CustomData.STREAM_CODEC,
+  // the same unnamed compound NBT as vanilla custom_data. Capturing a maid
+  // changes the soul slab to HAS_MAID and sends her complete saved data here.
+  // Keep those bytes in native state; only the compatibility projection strips
+  // the mod component. Do not interpret it as the unrelated world MaidInfo.
+  'touhou_little_maid:maid_info': 'anonymousNbt',
   'patchouli:book': 'string',
   // Farmer's Delight 1.3.4: ItemStackWrapper uses OPTIONAL_STREAM_CODEC;
   // cooking time is fixed INT, while skillet time is VAR_LONG (not LONG).
@@ -344,4 +350,12 @@ function vanillaProjection (value) {
   return copy
 }
 
-module.exports = { registryFromTsv, createBackendComponentProtocol, loadBackendComponentProtocol, vanillaProjection, isItemPacket, isOptionalParticleFailure, disconnectComponent }
+function createBedrockFrontendProtocol () {
+  // ViaVersion reads real protocol 767. Unlike the Mineflayer peer's pinned
+  // minecraft-data codec, it does not expect the later customName option in
+  // PotionContents. Keep this detached; never mutate mcp's global cache.
+  const components = new Map(Object.entries(mcData.protocol.types.SlotComponentType[1].mappings)
+    .map(([id, name]) => ['minecraft:' + name, Number(id)]))
+  return createBackendComponentProtocol(components)
+}
+module.exports = { registryFromTsv, createBackendComponentProtocol, createBedrockFrontendProtocol, loadBackendComponentProtocol, vanillaProjection, isItemPacket, isOptionalParticleFailure, disconnectComponent }

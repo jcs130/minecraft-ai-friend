@@ -1,6 +1,16 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
+
+test('datapack enchantment IDs follow this connection entry order and reject duplicate names', () => {
+  const { BedrockProjection } = require('./bedrock-projection.cjs')
+  const a = new BedrockProjection(), b = new BedrockProjection()
+  a.learnDynamic({ id: 'minecraft:enchantment', entries: [{ key: 'mod:magic_edge' }, { key: 'minecraft:sharpness' }] })
+  assert.equal(a.registries.get('minecraft:enchantment').get(0), 'mod:magic_edge')
+  assert.equal(b.registries.size, 0)
+  assert.throws(() => a.learnDynamic({ id: 'minecraft:enchantment', entries: [{ key: 'mod:edge' }, { key: 'mod:edge' }] }), /DYNAMIC_REGISTRY/)
+  assert.equal(a.registries.get('minecraft:enchantment').get(0), 'mod:magic_edge')
+})
 const { BufWriter } = require('./buf.cjs')
 const { BedrockProjection, frozenRegistry } = require('./bedrock-projection.cjs')
 const data = require('minecraft-data')('1.21.1')

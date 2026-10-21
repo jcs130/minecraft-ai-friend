@@ -4,23 +4,24 @@ const data = require('minecraft-data')('1.21.1')
 const TLM_SHA = 'f6db04195820c8508704277ea76d63723804ff236a7b780369ba59ebe5cd9c27'
 const WANDSCAPE_SHA = 'b9ff4debb039f1fbcac006fd8b53d306e49f8042611b9eb385f292f8c75f0788'
 const CHANNEL = 'mawbedrock:entity'
+const MOTION_CHANNEL = 'mawbedrock:motion'
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 
 // Only the Bedrock bridge uses these display carriers. Original entity UUID,
 // entity ID, movement, interactions and authoritative native AI remain unchanged.
 class BedrockModels {
-  constructor (catalog) {
+  constructor (catalog, { now = Date.now } = {}) {
     if (catalog.schemaVersion !== 1 || catalog.maidMetadata?.jarSha256 !== TLM_SHA ||
       catalog.maidMetadata.model !== 23 || catalog.maidMetadata.isYsm !== 19 ||
       catalog.maidMetadata.ysmModel !== 20 || catalog.maidMetadata.ysmTexture !== 21 ||
       catalog.maidMetadata.defaultModel !== 'touhou_little_maid:hakurei_reimu') throw Error('BEDROCK_MAID_METADATA_NOT_LOCKED')
-    this.models = new Map(); this.entities = new Map(); this.ready = false; this.selfState = null
+    this.models = new Map(); this.entities = new Map(); this.ready = false; this.selfState = null; this.now = now
     this.wandscape = catalog.wandscapeMetadata
     if (this.wandscape && (this.wandscape.jarSha256 !== WANDSCAPE_SHA || this.wandscape.skinVariant !== 16 || this.wandscape.hatColor !== 17 || !Number.isInteger(this.wandscape.skinCount) || this.wandscape.skinCount < 1)) throw Error('BEDROCK_WANDSCAPE_METADATA_NOT_LOCKED')
     this.voices = Boolean(catalog.voices)
     this.globalVoiceFrequency = Number(process.env.GATE_MAID_SOUND_FREQUENCY ?? 1)
     if (!Number.isFinite(this.globalVoiceFrequency) || this.globalVoiceFrequency < 0 || this.globalVoiceFrequency > 1) throw Error('INVALID_GLOBAL_MAID_FREQUENCY')
-    this.stats = { modelsBound: 0, modelsUnavailable: 0 }
+    this.stats = { modelsBound: 0, modelsUnavailable: 0, motionFrames: 0 }
     for (const row of catalog.models) {
       const key = row.kind + '\n' + row.modelId + (row.kind === 'ysm' ? '\n' + row.textureId : '')
       if (this.models.has(key) || !/^maw_native:[a-z0-9_]+$/.test(row.bedrockIdentifier)) throw Error('INVALID_BEDROCK_MODEL_BINDING')
@@ -67,6 +68,26 @@ class BedrockModels {
     return row.value
   }
 
+  motion (entityId, state, force = false) {
+    if (!this.ready || !state.shown) return []
+    const at = this.now(), flags = state.metadata.get(0)?.value ?? 0, pose = state.metadata.get(6)?.value ?? 0
+    if (!Number.isInteger(flags) || !Number.isInteger(pose)) throw Error('BEDROCK_ACTOR_POSE_INVALID')
+    const sitting = state.kind === 'touhou' && ((state.metadata.get(17)?.value ?? 0) & 1) !== 0
+    const moving = state.walkUntil > at
+    const variant = sitting ? 4 : pose === 2 ? 5 : pose === 3 || flags & 16 ? 6 : pose === 5 || flags & 2 ? 7
+      : pose === 1 ? 8 : state.onGround === false && state.rising ? 3 : moving ? flags & 8 ? 2 : 1 : 0
+    const swinging = state.swingUntil > at
+    if (!force && variant === state.motionPose && swinging === state.motionSwing && at - state.motionAt < 200) return []
+    state.motionPose = variant; state.motionSwing = swinging; state.motionAt = at
+    this.stats.motionFrames++
+    const angle = value => ((value & 255) * 360 / 256 + 180) % 360 - 180
+    const frame = { schemaVersion: 1, entityId, uuid: state.spawn.objectUUID, sequence: ++state.motionSequence,
+      source: 'same_connection_native_entity_packets', pose: variant, moving, swinging,
+      bodyYaw: angle(state.spawn.yaw), headYaw: angle(state.headYaw ?? state.spawn.yaw), pitch: angle(state.spawn.pitch),
+      onGround: state.onGround, leaseMs: 500 }
+    return [{ name: 'custom_payload', params: { channel: MOTION_CHANNEL, data: Buffer.from(JSON.stringify(frame), 'utf8') } }]
+  }
+
   project (name, packet, registry) {
     if (name === 'custom_payload' && packet.channel === 'maw_agent:menu_state') {
       this.selfState = { ...packet, data: Buffer.from(packet.data) }
@@ -79,7 +100,9 @@ class BedrockModels {
     }
     if (name === 'spawn_entity' && (registry?.get(packet.type) === 'touhou_little_maid:maid' || this.wandscape && registry?.get(packet.type) === 'wandscape:wandscape_npc')) {
       if (this.entities.size >= 4096 || !uuid.test(packet.objectUUID || '')) throw Error('INVALID_BEDROCK_MAID_SPAWN')
-      this.entities.set(packet.entityId, { spawn: structuredClone(packet), metadata: new Map(), shown: null, kind: registry.get(packet.type) === 'wandscape:wandscape_npc' ? 'wandscape' : 'touhou' })
+      this.entities.set(packet.entityId, { spawn: structuredClone(packet), metadata: new Map(), shown: null,
+        motionSequence: 0, motionAt: -Infinity, walkUntil: 0, swingUntil: 0, onGround: null,
+        kind: registry.get(packet.type) === 'wandscape:wandscape_npc' ? 'wandscape' : 'touhou' })
       // Wait for authoritative metadata, including the actual texture suffix.
       return null
     }
@@ -100,6 +123,7 @@ class BedrockModels {
       }
       if (selected.bedrockIdentifier !== state.shown || state.hatColor !== hatColor) {
         state.voiceConfig = null // The remove/spawn below replaces the extension's per-entity cache.
+        state.motionAt = -Infinity
         if (state.shown) before.push({ name: 'entity_destroy', params: { entityIds: [packet.entityId] } })
         before.push({ name: 'custom_payload', params: { channel: CHANNEL, data: Buffer.from(JSON.stringify({
           schemaVersion: 1, entityId: packet.entityId, uuid: state.spawn.objectUUID, identifier: selected.bedrockIdentifier, ...(state.kind === 'wandscape' ? { hatColor } : {})
@@ -125,17 +149,30 @@ class BedrockModels {
       }
       // Entity + LivingEntity fields share the locked inheritance layout.
       // Never let TLM serializer IDs be interpreted as armor-stand fields.
+      before.push(...this.motion(packet.entityId, state))
       return { before, params: { ...packet, metadata: [...state.metadata.values()].filter(row => row.key <= 14) } }
     }
     const spawn = state.spawn
-    if (name === 'entity_teleport') Object.assign(spawn, { x: packet.x, y: packet.y, z: packet.z, yaw: packet.yaw, pitch: packet.pitch })
+    if (name === 'entity_teleport') {
+      Object.assign(spawn, { x: packet.x, y: packet.y, z: packet.z, yaw: packet.yaw, pitch: packet.pitch })
+      // A teleport is a relocation, not evidence of walking speed.
+      state.walkUntil = 0; state.rising = false
+    }
     if (name === 'rel_entity_move' || name === 'entity_move_look') {
       spawn.x += packet.dX / 4096; spawn.y += packet.dY / 4096; spawn.z += packet.dZ / 4096
+      if (packet.dX || packet.dZ) state.walkUntil = this.now() + 300
+      state.rising = packet.dY > 0
     }
     if (name === 'entity_look' || name === 'entity_move_look') { spawn.yaw = packet.yaw; spawn.pitch = packet.pitch }
+    if (name === 'entity_head_rotation') state.headYaw = packet.headYaw
+    if (typeof packet.onGround === 'boolean') state.onGround = packet.onGround
+    if (name === 'animation' && [0, 3].includes(packet.animation)) state.swingUntil = this.now() + 350
     // Continue through the general native attribute/ID adapter after display
     // binding. A known maid must not bypass the vanilla attribute filter.
-    return state.shown ? undefined : null
+    if (!state.shown) return null
+    if (!['rel_entity_move', 'entity_move_look', 'entity_teleport', 'entity_look', 'entity_head_rotation', 'animation'].includes(name)) return undefined
+    const before = this.motion(packet.entityId, state)
+    return before.length ? { before, params: packet } : undefined
   }
 }
-module.exports = { BedrockModels, CHANNEL }
+module.exports = { BedrockModels, CHANNEL, MOTION_CHANNEL }

@@ -29,3 +29,13 @@ test('unknown or truncated mod menu is not converted into a fake container', () 
   assert.equal(cookingPotWindow(unknown), null)
   assert.throws(() => decodeAdvancedOpenScreen(cookingPot.subarray(0, -1)), /invalid menu extra data/)
 })
+
+test('FOM resolves its own cooking-pot registry ID, including a player-named pot', () => {
+  const moved = Buffer.from(cookingPot); moved[1] = 91
+  assert.equal(cookingPotWindow(moved), null)
+  assert.equal(cookingPotWindow(moved, new Map([[91, 'other:machine']])), null)
+  assert.equal(cookingPotWindow(moved, new Map([[91, 'farmersdelight:cooking_pot']])).inventoryType, 0)
+  const nbt = require('prismarine-nbt')
+  const named = Buffer.concat([Buffer.from([2, 91]), nbt.protos.big.createPacketBuffer('anonymousNbt', { type: 'string', value: '萌萌的锅' }), Buffer.from([0])])
+  assert.equal(cookingPotWindow(named, new Map([[91, 'farmersdelight:cooking_pot']])).windowTitle.value, '萌萌的锅')
+})

@@ -75,7 +75,9 @@ def prepare(output,assets_root=None,main_config=MAIN):
         else:shutil.copy2(src,dst)
     # Keep registry/dependency inputs frozen, but prepare the reviewed Bedrock
     # fixes from this checkout rather than reviving an older Agent-only gate.
-    for name in ['gate.cjs','idmap-remap.cjs','bedrock-models.cjs','bedrock-account.cjs','bedrock-blocks.cjs','native-chunk-remap.cjs']:
+    for source_file in sorted((REPO/'world/src/neoforge-handshake').glob('*.cjs')):
+        if source_file.name.endswith('.test.cjs'):continue
+        name=source_file.name
         target=release/'gate'/name;shutil.copy2(REPO/'world/src/neoforge-handshake'/name,target)
         source_record['files']['gate/'+name]=sha(target)
     gateway=release/'gate/gate.cjs';old=gateway.read_text(encoding='utf-8')

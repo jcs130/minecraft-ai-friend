@@ -26,9 +26,14 @@ function decodeAdvancedOpenScreen (data) {
 // This is deliberately a narrow protocol adapter. The cooking pot has nine
 // server-side menu slots, so a vanilla 9x1 menu preserves its slot indices.
 // Other mod menus require their own slot-layout validation before translation.
-function cookingPotWindow (data) {
+function cookingPotWindow (data, menus) {
   const screen = decodeAdvancedOpenScreen(data)
-  if (screen.menuTypeId !== 25 || screen.title?.value?.translate?.value !== 'container.farmersdelight.cooking_pot') return null
+  // The default is only the historical, locked 35-mod layout. FOM passes its
+  // own completed registry: its cooking pot does not have that numeric ID.
+  const known = menus === undefined
+    ? screen.menuTypeId === 25 && screen.title?.value?.translate?.value === 'container.farmersdelight.cooking_pot'
+    : menus instanceof Map && menus.get(screen.menuTypeId) === 'farmersdelight:cooking_pot'
+  if (!known) return null
   return { windowId: screen.windowId, inventoryType: 0, windowTitle: screen.title }
 }
 

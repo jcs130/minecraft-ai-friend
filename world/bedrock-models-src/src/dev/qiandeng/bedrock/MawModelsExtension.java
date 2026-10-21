@@ -42,6 +42,7 @@ public final class MawModelsExtension implements Extension {
         final Map<Integer, Binding> active = new ConcurrentHashMap<>();
         final Map<UUID,String> selected = new ConcurrentHashMap<>();
         ActorPresentation presentation;
+        PacketActorMotion motion;
         MaidVoicePresentation voice;
         volatile String selectedSkin = "";
     }
@@ -154,6 +155,7 @@ public final class MawModelsExtension implements Extension {
             }
             logger().info("MAW_MODELS registered="+definitions.size()+" ysmSkins="+skins.size());
             logger().info("MAW_ACTORS animationVersion=1 actors=24 sceneHz=4 nativeBubbles=true");
+            logger().info("MAW_PACKET_MOTION version=1 source=native_entity_packets idleExpiry=true");
         } catch (Exception error) { throw new IllegalStateException("Native Bedrock model resources rejected", error); }
     }
 
@@ -163,6 +165,10 @@ public final class MawModelsExtension implements Extension {
             throw new IllegalStateException("Pinned Geyser downstream unavailable");
         State state = states.computeIfAbsent(event.connection(), ignored -> new State());
         state.voice = new MaidVoicePresentation(session, Map.copyOf(voicePacks));
+        state.motion=new PacketActorMotion(session,(id,uuid)->{
+            Binding b=state.active.get(id);Model model=b!=null&&b.uuid().equals(uuid)?definitions.get(b.identifier()):null;
+            return model==null?null:model.animations();
+        });
         state.presentation=new ActorPresentation(session,(id,uuid,actor)->{
             Binding b=state.active.get(id);Model model=b!=null&&b.uuid().equals(uuid)?definitions.get(b.identifier()):null;
             if("minecraft:player".equals(actor.get("type"))&&actor.get("ysm") instanceof Map<?,?>){
@@ -181,13 +187,22 @@ public final class MawModelsExtension implements Extension {
             @Override public void packetReceived(Session downstream, Packet packet) {
                 try {
                     if (packet instanceof ClientboundRemoveEntitiesPacket removed) {
-                        for (int id : removed.getEntityIds()){state.bindings.remove(id);state.active.remove(id);session.executeInEventLoop(()->{state.presentation.remove(id);state.voice.remove(id);});}
+                        for (int id : removed.getEntityIds()){state.bindings.remove(id);state.active.remove(id);session.executeInEventLoop(()->{state.presentation.remove(id);state.motion.remove(id);state.voice.remove(id);});}
                     } else if (packet instanceof org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.ClientboundRespawnPacket) {
                         state.bindings.clear(); state.active.clear();
-                        session.executeInEventLoop(()->{state.presentation.clear();state.voice.clear();});
+                        session.executeInEventLoop(()->{state.presentation.clear();state.motion.clear();state.voice.clear();});
                     } else if (packet instanceof ClientboundCustomPayloadPacket payload && payload.getData().length <= 65536) {
                         String channel = payload.getChannel().asString();
-                        if (channel.equals("mawbedrock:voice_config")) {
+                        if (channel.equals("mawbedrock:motion")) {
+                            var frame=ActorMotionFrame.decode(json(payload.getData()));
+                            session.executeInEventLoop(()->{
+                                state.motion.receive(frame);
+                                // Binding/spawn translation and passive listeners
+                                // share a packet but may enter the event loop in
+                                // different orders. Retry only presentation, once.
+                                session.scheduleInEventLoop(()->state.motion.receive(frame),50,java.util.concurrent.TimeUnit.MILLISECONDS);
+                            });
+                        } else if (channel.equals("mawbedrock:voice_config")) {
                             var body = json(payload.getData());
                             session.executeInEventLoop(()->{try{state.voice.configure(body);}catch(RuntimeException e){logger().warning("Native maid voice metadata rejected: "+e.getClass().getSimpleName());}});
                         } else if (channel.equals("touhou_little_maid:play_maid_sound") || channel.equals("touhou_little_maid:play_maid_sound_at_pos")) {
@@ -267,5 +282,5 @@ public final class MawModelsExtension implements Extension {
     }
 
     @Subscribe
-    public void leave(SessionDisconnectEvent event) { State state=states.remove(event.connection());if(state!=null&&state.presentation!=null&&event.connection() instanceof GeyserSession session&&!session.isClosed())state.presentation.clear(); }
+    public void leave(SessionDisconnectEvent event) { State state=states.remove(event.connection());if(state!=null&&state.motion!=null)state.motion.clear();if(state!=null&&state.presentation!=null&&event.connection() instanceof GeyserSession session&&!session.isClosed())state.presentation.clear(); }
 }

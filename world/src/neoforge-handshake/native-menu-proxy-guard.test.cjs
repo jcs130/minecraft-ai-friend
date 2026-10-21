@@ -162,12 +162,12 @@ function relayFixture () {
   const end = source.indexOf('// mcp 的 pluginChannels', start)
   assert(start >= 0 && end > start)
   const writes = []
-  const front = { write: (name, params) => writes.push({ name, params }) }
+  const front = { state: 'play', write: (name, params) => writes.push({ name, params }) }
   const session = { front, back: { uuid: OWN }, username: 'ordinary-player' }
   const context = { Buffer, DEBUG_MENUS: false, BRIDGE_COOKING_POT_GUI: true, BRIDGE_NEOFORGE_TIME: false,
     vanillaAgentProjection: false,
     nativeViewerHash: hash, NativeViewer, createNativeMenuProxyGuard, vanillaMenuParserWindows: windows,
-    cookingPotWindow, decodeNeoForgeTime: () => null, componentProtocol: true,
+    cookingPotWindow, decodeNeoForgeTime: () => null, componentProtocol: true, bedrockFrontendProtocol: null, states: { PLAY: 'play' },
     vanillaProjection: params => ({ ...params, item: { itemId: 1, components: [] } }),
     REMAP: { hasMap: () => false }, normalizeCustomPayload: params => params,
     kickFront: (_session, reason) => { throw Error(reason) }, log: () => {} }

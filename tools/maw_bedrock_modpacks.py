@@ -91,6 +91,32 @@ def compile_extension(geyser: Path, java_bin: Path, output: Path):
     (output/EXTENSION).write_bytes(archive(files))
 
 
+def upgrade_packet_motion(source: Path, output: Path, *, geyser: Path, java_bin: Path):
+    """Build a new extension release; retain every original pack byte/UUID.
+
+    The source is read-only, including when it belongs to a running bridge.
+    Deployment still requires the existing owned-service maintenance workflow.
+    """
+    source, output = Path(source).resolve(), Path(output).resolve()
+    if output.exists(): raise ValueError('Choose a new model adapter release directory')
+    contract = validate(source, deployed=True)
+    if sha(geyser.read_bytes()) != contract['geyserJarSha256']: raise ValueError('Model extension Geyser build differs')
+    output.mkdir(parents=True)
+    for name, meta in contract['files'].items():
+        (output/name).write_bytes((source/meta['directory']/name).read_bytes())
+    compile_extension(geyser, java_bin, output)
+    raw = (output/EXTENSION).read_bytes()
+    contract['files'][EXTENSION] = {'sha256': sha(raw), 'bytes': len(raw), 'directory': 'extensions'}
+    contract.update(packetMotionVersion=1, packetMotionProtocol={
+        'channel':'mawbedrock:motion', 'source':'same_connection_native_entity_packets', 'leaseMs':500},
+        previousContractSha256=sha((source/CONTRACT).read_bytes()))
+    root = Path(__file__).resolve().parents[1]/'world/bedrock-models-src'
+    contract['packetMotionSourceHashes']={p.relative_to(root).as_posix():sha(p.read_bytes()) for p in sorted((root/'src').rglob('*.java'))}
+    (output/CONTRACT).write_bytes(encoded(contract))
+    validate(output)
+    return contract
+
+
 def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path, maid_jar: Path | None = None):
     from PIL import Image
     assets = Assets(asset_root)
@@ -229,6 +255,8 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path, maid
                 for p in [Path(__file__).resolve().parents[1]/'world/society-bridge-src/src/main/java/dev/qiandeng/maw'/n for n in ('PlayerActorVisuals.java','PlayerSceneBridge.java')]}}, 'excluded': excluded, 'actualBedrockVisualVerified': False,
         'animationVersion': 1, 'animatedModelCount': sum(r['movingAnimationAvailable'] for r in rows),
         'nativeClipCount': sum(len(r['nativeClips']) for r in rows),
+        'packetMotionVersion': 1,
+        'packetMotionProtocol': {'channel': 'mawbedrock:motion', 'source': 'same_connection_native_entity_packets', 'leaseMs': 500},
         'actorProtocol': {'channel': 'maw_agent:scene_state', 'hz': 4, 'maxActors': 24, 'radius': 32,
                           'nativeMaidBubbles': True, 'playerPublicChat': True, 'privateChatBubbles': False},
         'limitations': ['Java-only procedural/parallel controllers and clock parity, equipment/backpack layers and first-person arms are not fully ported. Unsupported source clips are listed per model.']}
@@ -246,6 +274,7 @@ def build(asset_root: Path, output: Path, *, extension: Path, geyser: Path, maid
 def validate(directory: Path, *, deployed=False):
     contract = json.loads((directory/CONTRACT).read_bytes())
     if contract.get('schemaVersion') != 1 or not contract.get('packs'): raise ValueError('Invalid modpack contract')
+    if 'packetMotionVersion' in contract and (contract['packetMotionVersion']!=1 or contract.get('packetMotionProtocol')!={'channel':'mawbedrock:motion','source':'same_connection_native_entity_packets','leaseMs':500}):raise ValueError('Invalid packet motion contract')
     paths = {}
     for name, meta in contract['files'].items():
         if relative(name).name != name or meta['directory'] not in ['', 'packs', 'extensions']:
@@ -302,6 +331,10 @@ def registered_models(log: Path, contract: dict, started_after: float):
         if not matches or datetime.datetime.strptime(matches[-1],'%Y-%m-%d %H:%M:%S,%f').timestamp()<started_after:
             raise ValueError('Native actor animation/bubble registration missing or stale')
         results['actorAnimationVersion']=1
+    if contract.get('packetMotionVersion')==1:
+        matches=re.findall(r'(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3}).*MAW_PACKET_MOTION version=1 source=native_entity_packets idleExpiry=true',text)
+        if not matches or datetime.datetime.strptime(matches[-1],'%Y-%m-%d %H:%M:%S,%f').timestamp()<started_after:raise ValueError('Packet-derived actor motion registration missing or stale')
+        results['packetMotionVersion']=1
     if contract.get('voiceVersion') == 1:
         voice = contract['voices']
         pattern = r'(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3}).*MAW_MAID_VOICES version=1 packs=(\d+) recordings=(\d+) events=(\d+)'
