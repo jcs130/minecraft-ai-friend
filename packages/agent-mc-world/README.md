@@ -1,5 +1,13 @@
 # Agent MC World
 
+`0.5.7-rc.59` lets `mc_goal.revise.progress` explicitly correct a recorded
+numeric report while preserving the goal identity and checking its revision.
+Omitting the report keeps it, `null` clears it, and omitted total/unit fields
+keep their previous values. Readouts label these numbers as recorded reports,
+not live world observations. The revision receipt retains the original and
+replacement counts; changing a number does not verify a milestone or close a
+project. Blueprint goals keep their own single source of progress.
+
 `0.5.7-rc.58` waits for a nonempty native terrain commit before admitting a
 photograph. The early hands/entities-only frame is a loading counterexample,
 not an image of an empty or safe world. Unsupported/empty scenes stay explicit.

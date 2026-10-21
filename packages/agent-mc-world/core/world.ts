@@ -670,8 +670,8 @@ function goalBody(g: MinecraftGoal): string {
     g.kind ? `类型:${g.kind}` : '',
     g.target ? `对象:${g.target}` : '',
     g.progress
-      ? `进度:${g.progress.current}${g.progress.total === null ? '' : `/${g.progress.total}`}`
-        + `${g.progress.unit ? ` ${g.progress.unit}` : ''}`
+      ? `登记进度:${g.progress.current}${g.progress.total === null ? '' : `/${g.progress.total}`}`
+        + `${g.progress.unit ? ` ${g.progress.unit}` : ''}（非实时观测）`
       : '',
     `里程碑:${plan.completed}/${plan.total}${plan.next ? `;下一步:${plan.next.do}` : ''}`,
   ].filter(Boolean);
@@ -699,6 +699,8 @@ export function goalSnapshotLine(list: readonly MinecraftGoal[], note?: Blueprin
   return `目标:${list.map((g) => goalLine(g, note)).join(' · ')}`;
 }
 
+type GoalProgressRevision = { current: number; total?: number | null; unit?: string | null };
+
 type GoalOp =
   | { kind: 'query' }
   | {
@@ -710,7 +712,7 @@ type GoalOp =
       progress: { current: number; total: number | null; unit: string | null } | null;
       plan: GoalPlan;
     }
-  | { kind: 'revise'; slot:number; expectedRevision:number; text:string; plan:GoalPlan; reason:string }
+  | { kind: 'revise'; slot:number; expectedRevision:number; text:string; plan:GoalPlan; reason:string; progress?: GoalProgressRevision | null }
   | { kind: 'done'; slot: number }
   | { kind: 'milestone'; slot: number; step: number; judgment: string }
   | { kind: 'reopen'; slot: number; step: number; reason: string }
@@ -783,7 +785,7 @@ export function parseGoal(args: Record<string, unknown>): GoalOp | { error: stri
     const value=args.revise;
     if(!value || typeof value!=='object' || Array.isArray(value))return {error:'revise requires slot, expectedRevision, text, plan and reason'};
     const r=value as Record<string,unknown>;
-    if(Object.keys(r).some(k=>!['slot','expectedRevision','text','plan','reason'].includes(k)))return {error:'Unknown revision field'};
+    if(Object.keys(r).some(k=>!['slot','expectedRevision','text','plan','reason','progress'].includes(k)))return {error:'Unknown revision field'};
     if(!Number.isInteger(r.slot) || Number(r.slot)<1 || Number(r.slot)>GOAL_SLOTS || !Number.isInteger(r.expectedRevision) || Number(r.expectedRevision)<1)
       return {error:'Invalid goal slot or expectedRevision'};
     for (const field of ['text', 'reason'] as const) {
@@ -794,8 +796,28 @@ export function parseGoal(args: Record<string, unknown>): GoalOp | { error: stri
         return {error:`revise.${field} 有 ${r[field].length} 字符，超过 2000；本次未修订，原目标和版本保留。`};
       }
     }
+    let progress: GoalProgressRevision | null | undefined;
+    if (r.progress === null) progress = null;
+    else if (r.progress !== undefined) {
+      if (typeof r.progress !== 'object' || Array.isArray(r.progress)) return {error:'revise.progress 要 {current,total?,unit?} 或 null'};
+      const p = r.progress as Record<string, unknown>;
+      if (Object.keys(p).some(k => !['current', 'total', 'unit'].includes(k))) return {error:'revise.progress 有未知字段'};
+      const current = nonNegativeNumber(p.current);
+      if (current === null) return {error:'revise.progress.current 要一个非负有限数'};
+      progress = {current};
+      if (p.total !== undefined) {
+        const total = p.total === null ? null : nonNegativeNumber(p.total);
+        if (total === null && p.total !== null) return {error:'revise.progress.total 要非负有限数或 null'};
+        progress.total = total;
+      }
+      if (p.unit !== undefined) {
+        const unit = optionalText(p.unit);
+        if (unit !== null && typeof unit === 'object') return {error:'revise.progress.unit 要字符串或 null'};
+        progress.unit = unit;
+      }
+    }
     const plan=parseGoalPlan(r.plan);if('error' in plan)return plan;
-    return {kind:'revise',slot:Number(r.slot),expectedRevision:Number(r.expectedRevision),text:(r.text as string).trim(),plan,reason:(r.reason as string).trim()};
+    return {kind:'revise',slot:Number(r.slot),expectedRevision:Number(r.expectedRevision),text:(r.text as string).trim(),plan,reason:(r.reason as string).trim(),...(progress !== undefined ? {progress} : {})};
   }
   if (which === 'milestone' || which === 'reopen') {
     const body = args[which];
@@ -915,10 +937,17 @@ export function applyGoal(
   if(op.kind==='revise') {
     const revision=hit.revision??1;
     if(revision!==op.expectedRevision)return `#${op.slot} 未修订：expectedRevision ${op.expectedRevision} 与当前 ${revision} 不符。`;
-    const before=structuredClone({text:hit.text,plan:hit.plan,revision});
+    if (hit.blueprint && op.progress !== undefined) return `#${op.slot} 未修订：蓝图目标的进度以蓝图游标为准，不另设登记计数。`;
+    const before=structuredClone({text:hit.text,plan:hit.plan,progress:hit.progress??null,revision});
+    if (op.progress === null) hit.progress = null;
+    else if (op.progress !== undefined) hit.progress = {
+      current: op.progress.current,
+      total: op.progress.total === undefined ? hit.progress?.total ?? null : op.progress.total,
+      unit: op.progress.unit === undefined ? hit.progress?.unit ?? null : op.progress.unit,
+    };
     hit.text=op.text;hit.plan=op.plan;hit.revision=revision+1;
     return JSON.stringify({protocol:'agent-mc/v1',kind:'goal-revision',goalId:`${hit.slot}:${hit.at}:${hit.realTime}`,
-      hostAuthored:true,reason:op.reason,before,after:{text:hit.text,plan:hit.plan,revision:hit.revision},goalCompleted:false});
+      hostAuthored:true,reason:op.reason,before,after:{text:hit.text,plan:hit.plan,progress:hit.progress??null,revision:hit.revision},goalCompleted:false});
   }
   if (op.kind === 'milestone') {
     const result = recordGoalJudgment(hit.plan, op.step, op.judgment, stamp.at);
@@ -2408,9 +2437,12 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
           required: ['text', 'plan'],
         },
         revise: {type:'object',additionalProperties:false,required:['slot','expectedRevision','text','plan','reason'],
-          description:'Host-authored revision of an existing goal; preserves identity and returns both original and replacement plans. New milestones require fresh evidence.',
+          description:'Host-authored revision of an existing goal; preserves identity and returns both original and replacement plans and recorded counts. New milestones require fresh evidence. Numeric progress is a host report, not a live world reading or proof of completion.',
           properties:{slot:{type:'integer',minimum:1,maximum:GOAL_SLOTS},expectedRevision:{type:'integer',minimum:1},
-            text:{type:'string',minLength:1,maxLength:2000},reason:{type:'string',minLength:1,maxLength:2000},plan:GOAL_PLAN_SCHEMA}},
+            text:{type:'string',minLength:1,maxLength:2000},reason:{type:'string',minLength:1,maxLength:2000},plan:GOAL_PLAN_SCHEMA,
+            progress:{type:['object','null'],additionalProperties:false,required:['current'],
+              description:'显式修订登记计数，非实时观测或成果证明；请在 reason 引用实际依据。省略整个 progress 保留旧计数，null 清除；对象里的 total/unit 省略则保留，null 表示未知。不适用于蓝图目标。',
+              properties:{current:{type:'number',minimum:0},total:{type:['number','null'],minimum:0},unit:{type:['string','null']}}}}},
         milestone: {
           type: 'object',
           description: '完成当前最前面的 judgment 里程碑；机械里程碑不能用它代填。',
