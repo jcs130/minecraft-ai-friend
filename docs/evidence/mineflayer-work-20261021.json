@@ -39,8 +39,8 @@
   "package": {
     "name": "agent-mc-world",
     "version": "0.4.0",
-    "artifactSha256": "6c897980c1d386bdc1ad92d40b0dc593e7ea7a36c6a906786999c48624ded317",
-    "artifactBytes": 46981471,
+    "artifactSha256": "e4f8bbf01886b8ba464baa9ec54fc309dbf268fa845fc7134dfcec9bdecf9382",
+    "artifactBytes": 46981625,
     "npmRegistryPublished": false
   },
   "verification": {
@@ -58,7 +58,12 @@
     "liveGameAssertions": 10,
     "newProcessReconciliationAssertions": 2,
     "packedEventAssertions": 3,
-    "liveScriptHashesEqualFinalPackage": true
+    "liveScriptHashesEqualFinalPackage": true,
+    "documentationOnlyRepack": {
+      "onlyChangedFile": "docs/work-routines.md",
+      "allOtherMemberBytesIdentical": true,
+      "previousVerifiedArtifactSha256": "6c897980c1d386bdc1ad92d40b0dc593e7ea7a36c6a906786999c48624ded317"
+    }
   },
   "liveFixture": {
     "minecraft": "1.21.1",
