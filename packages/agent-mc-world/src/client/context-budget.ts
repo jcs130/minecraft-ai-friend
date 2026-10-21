@@ -46,6 +46,10 @@ export function classifyWake(event: Pick<EventEnvelope, 'type' | 'text'> & Parti
   }
   if (event.trigger === 'piggyback') return { wake: false, category: 'piggyback' };
   if (kind === 'task' || kind.startsWith('task.')) return kind === 'task' ? decide('task') : { wake: false, category: 'ambient' };
+  // A whole program finishes after its local substeps. Hosts waiting on that
+  // program must receive its real terminal, without waking for every substep.
+  if (kind === 'method') return event.execution?.kind === 'method' && event.execution.terminal === true
+    ? decide('task') : { wake: false, category: 'ambient' };
   if (kind.startsWith('goal')) return decide('goal');
   if ((kind === 'event' || kind === 'body') && event.trigger === 'flush' && DANGER.test(text)) return decide('danger');
   return { wake: false, category: 'ambient' };

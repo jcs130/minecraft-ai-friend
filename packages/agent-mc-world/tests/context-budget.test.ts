@@ -36,6 +36,19 @@ describe('classifyWake', () => {
     expect(classifyWake(task, { ...self, wakeOn: WAKE_ACTIVE_GOAL }).wake).toBe(true);
     expect(classifyWake({ type: 'minecraft.client.disconnected', text: 'x' } as any, self).wake).toBe(true);
   });
+  it('continues from method terminals while keeping progress, archived and idle notifications quiet', () => {
+    for (const prefix of ['minecraft', 'mymc']) {
+      const terminal = { type: `${prefix}.method`, text: 'method ended', trigger: 'flush',
+        execution: { kind: 'method', id: 'fixture:7', phase: 'blocked', terminal: true, goalCompleted: false } } as const;
+      const active = { ...self, wakeOn: WAKE_ACTIVE_GOAL };
+      expect(classifyWake(terminal, active)).toEqual({ wake: true, category: 'task' });
+      expect(classifyWake(terminal, self).wake).toBe(false);
+      expect(classifyWake({ ...terminal, trigger: 'piggyback' }, active).wake).toBe(false);
+      expect(classifyWake({ ...terminal, contextDelivery: 'archive-only' }, active).wake).toBe(false);
+      expect(classifyWake({ ...terminal, execution: { ...terminal.execution, terminal: false } }, active).wake).toBe(false);
+      expect(classifyWake({ ...terminal, execution: undefined }, active).wake).toBe(false);
+    }
+  });
 });
 
 describe('context helpers', () => {

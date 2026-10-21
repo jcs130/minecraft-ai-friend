@@ -39,6 +39,8 @@
 
 内置工作脚本拥有的子任务保留完整回执，但使用 `piggyback` 投递；总方法终态使用 `flush`。反射自救、伤害等危险事件仍按原规则即时通知。普通自写脚本和独立任务的投递策略保持原合同，宿主应遵守 `agent-mc/v1` 的触发语义。
 
+使用公开 `classifyWake` 的宿主在 `WAKE_ACTIVE_GOAL` 下，将带有真实方法终态的 `minecraft.method`（或对应工具前缀）归入 `task`，以便继续核验结果。空闲默认不因此开启新目标；`piggyback`、仅受理和没有终态凭据的通知不触发此唤醒。唤醒不表示方法达成了游戏目标。
+
 结果格式是 `agent-mc.work/v1`，包含：
 
 - `outcome`: `completed`、`partial`、`blocked`、`noop`。
