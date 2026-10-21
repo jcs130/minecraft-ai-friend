@@ -79,7 +79,7 @@ JAVA_CLIENT_BRIDGE_MANIFEST = {'probe': 'tools/java_client_bridge_health.py', 'o
     'managedBy': 'owning-minecraft-client-lifecycle', 'serverRequired': False, 'bind': '127.0.0.1'}
 FOM_SERVER_MANIFEST = {'probe': 'tools/fom_health.py', 'managedBy': 'existing-owned-child-supervisor',
     'gamePort': 28976, 'healthBind': '127.0.0.1', 'modpack': 'FOM 2.42', 'physicsTransport': 'TCP',
-    'agentGatewayOptional': True, 'agentGatewayPort': 28977, 'agentGatewayPolicy': 'ag_ / LAN only / partial projection'}
+    'agentGatewayOptional': True, 'agentGatewayPort': 28977, 'agentGatewayPolicy': 'ag_ / explicit publicGameAccess policy / partial projection'}
 FOM_BEDROCK_MANIFEST = {'probe':'tools/fom_bedrock_health.py','managedBy':'owned-child-supervisor-and-registered-startup',
     'udpPort':28988,'healthBind':'127.0.0.1','healthPort':28996,'modpack':'FOM 2.42',
     'accountNamespace':'b_ / bh','requiresXboxValidation':True,'optionalNativeMaidModels':True,'optionalNativeBlockPalette':True,

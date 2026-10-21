@@ -12,7 +12,9 @@
 
 这三个入口进入同一个 FOM 世界。旧 Paper 千灯纪独立运行；已退役的旧 35 模组服和它的基岩桥继续暂停，没有恢复旧控制器。
 
-2026-10-21 图标／女仆修复已上线：服主已确认手机能够登录。随后补齐魂符初始、空白和收纳女仆三个状态的原始图标与中文名称，并加载原 TLM 模型包及 Geyser 模型扩展。退出服务器后重新加入并接受资源包下载即可更新，额外资源总计约 13 MiB。手机在此次修复后的实际画面仍待玩家确认；不能以协议验收代替屏幕像素验收。见 [本次修复记录](evidence/fom-bedrock-visual-fix-20261021.json)。
+2026-10-21 方块与动画适配已上线：新增 2,762 种方块的 54,113 个原模型状态、1,268 种原模型三维方块物品，另含 8 种方块的 9 套源纹理动画。新增资源包约 6.3 MiB；重新进服并接受下载即可。机械转动、灶台食物层和其他专用渲染还未全部接通，部分机器当前只有静态底座；不能把这些计数当作所有模组全适配。见 [完整覆盖清单与维护方法](FOM-BEDROCK-VISUAL-COVERAGE.md) 和 [本批发布记录](evidence/fom-bedrock-blocks-20261021.json)。
+
+同日较早的图标／女仆修复已上线：服主已确认手机能够登录。随后补齐魂符初始、空白和收纳女仆三个状态的原始图标与中文名称，并加载原 TLM 模型包及 Geyser 模型扩展，该批资源约 13 MiB。手机在修复后的实际画面仍待玩家确认；不能以协议验收代替屏幕像素验收。见 [前批修复记录](evidence/fom-bedrock-visual-fix-20261021.json)。
 
 2026-10-21：主服与独立基岩桥已按原守护启动，主服12项、基岩桥8项健康检查通过，UDP 28988取得实际Pong。来自本机非家庭网段接口的 Mineflayer 实际登录及 `/fom status` 通过；这验证网关准入，不能代替手机蜂窝网络的外网验证。本轮未更改路由器或 Windows 防火墙。见 [公网准入发布记录](evidence/fom-public-access-20261021.json)。
 
@@ -32,11 +34,15 @@
 
 车万女仆已增加 241 个原模型／贴图绑定，使用原几何、UV、PNG，资源包也包含原模组预录语音；本次未实测手机播放。模型握手完成后保留原实体 ID、UUID、位置和服务端 AI，仅由基岩桥替换显示；不会重新生成玩家的女仆。当前 FOM 没装 YSM，不下发不存在的 YSM 模型。13 个源模型因重复骨骼或几何／贴图规格未通过当前转换器，仍明确列为不支持；并非所有模型、动画控制器、装备层和对话气泡都已移植。
 
-全部方块模型、其他动态纹理、专用物品渲染器、复杂载具和模组 GUI 仍未全面适配。模组方块投影可能近似；不支持的实体不会伪装成其他生物，需结合 `/fom nearby` 和 `/fom inspect` 判断现场。复杂玩法优先使用完整 Java 客户端和客户端桥。
+本批世界方块共有 54,113 个状态使用原几何、UV、贴图、朝向及碰撞；其中 23,880 个不带方块实体，其余 30,233 个暂只提供静态底座。未覆盖状态、专用物品渲染器、复杂载具和模组 GUI 仍需继续适配，不按普通 JSON 模型猜测其形状。基岩本身支持动画和动画控制器，动态玩法需分别把真实游戏状态接入；当前缺口在转换和同步链路。不支持的实体不会伪装成其他生物，需结合 `/fom nearby` 和 `/fom inspect` 判断现场。复杂玩法优先使用完整 Java 客户端和客户端桥。
 
 接受基岩资源包会下载贴图，不会安装 Java 模组或把 Java 专用界面自动搬到基岩。相关机制见 [Geyser 自定义物品](https://geysermc.org/wiki/geyser/custom-items/) 和 [资源包下发](https://geysermc.org/wiki/geyser/packs/)。
 
 ## 已做的验证
+
+本批 51 项 Python、29 项相关 Node、18 项固定 Geyser JVM 断言通过；较早更广的 41 项 Node 组合也通过。真实 UDP 世界方块 13 项、三维物品／女仆及 75 秒会话 21 项、同身份库存重连 10 项、最终原生放置及清理 23 项通过。安山机壳实际放置生成原 `create:andesite_casing` 并只扣一个；临时方块与物品分别独立查询确认清理。E/F 双盘控制备份校验后仅正常重启桥，原主服 Java 30356／runId 34b2c082…及全部 103 JAR 保持，主服 12／桥 13 健康与两项 panel-smoke 通过。隔离服务已正常退出并释放端口。
+
+首次启动登记因继承了不兼容的 PowerShell 模块搜索路径而被权限校验拒绝；只为维护子进程恢复 Windows PowerShell 自带模块路径后完成真实 DACL 校验和同名登记。首次 Geyser 启动遇到微软发现接口 TLS 失败，原守护正常停止该子进程后重试成功，始终保留 Xbox 验证。两次失败的原始记录均保留，没有当成一次成功发布。
 
 2026-10-21 修复验收：30 项 Node、44 项 Python 回归通过；实际 Bedrock UDP 的 19 项检查包含初始／空白魂符与农夫乐事物品的真实运行时 ID 对应原图标、原生库存换槽保全、蓬莱人形原模型生成与同实体位置更新，以及 75 秒会话与库存保留；同一 QA 账号重连另有 9 项检查通过。协议测试客户端不生成真人持续输入，测试期间每 10 秒做一次本人私有只读查询；不是无输入挂机或长时间负载验收。早期测试中的旧槽位缓存、错误 NBT 字段以及无输入超时与失败回执保留；临时物品经实际库存对账清理，临时女仆仅按随机专用标签清理。补齐基岩点击的原生组件恢复，并修正冷却消息 `itemID`、方块破坏特效的编号转换。正式仅重启基岩桥，游戏进程和 103 个模组／认证静态输入保持。
 
@@ -53,7 +59,7 @@
 
 ## 日常维护
 
-基岩桥固定部署在 `E:\MC\servers\fom-2.42\ops\bedrock-20261021-v1`，网关在同级 `bedrock-gateway-20261021-v1`，脚本在 `bedrock-service-tools`。配置是 `ops\fom-bedrock.json`，使用 `E:\MC\runtime\python-3.12.14`，不依赖研究目录、源码 checkout 或 Codex 缓存。生产管理员 HTTP 只监听 `127.0.0.1:28996`；内部 TCP 28994/28995 只监听回环，不需要转发。
+基岩桥固定部署在 `E:\MC\servers\fom-2.42\ops\bedrock-20261021-v2`，网关在同级 `bedrock-gateway-blocks-20261021-v2`，脚本在 `bedrock-service-tools`。配置是 `ops\fom-bedrock.json`，使用 `E:\MC\runtime\python-3.12.14`，不依赖研究目录、源码 checkout 或 Codex 缓存。生产管理员 HTTP 只监听 `127.0.0.1:28996`；内部 TCP 28994/28995 只监听回环，不需要转发。
 
 ```powershell
 & E:\MC\servers\fom-2.42\ops\bedrock-service-tools\fom_bedrock_control.ps1 -Action Status
@@ -69,7 +75,7 @@ python world/ops/health/health_mon.py --society-fom-bedrock-smoke
 
 构建女仆模型复用 `tools/maw_bedrock_modpacks.py`，输入必须含实际安装的 TLM JAR 哈希及原资源完整性清单；FOM 无 YSM 时允许只转换 TLM。编译扩展使用固定 Geyser JAR 和 Java 21。发布将模型契约、目录、扩展和模型包放入候选 `plugins/Geyser`；服务会校验它们与真实模组、Geyser 的 SHA，并周期检查文件漂移、实际模型注册与下载栈。标准库运行还需部署 `maw_bedrock_modpacks.py`、`maw_bedrock_animations.py`、`maw_bedrock_voices.py`，不能漏掉验证依赖。
 
-换桥目录后，先用同一配置路径执行 `maw_service_task.ps1 -Mode Register -StartupMethod Run -FomBedrock`，补齐新运行目录的真实 `startup.json`，再执行 Start；不得伪造注册回执或裸起常驻进程。旧桥、网关保留；本次控制脚本／配置冷备在 E、F 两盘的 `fom-bedrock-fix-20261021/previous-controls.zip`。若回滚，先正常 Stop，按备份恢复控制脚本与配置，再重新登记同名启动项并 Start。游戏世界不需要回滚。
+换桥目录后，先用同一配置路径执行 `maw_service_task.ps1 -Mode Register -StartupMethod Run -FomBedrock`，补齐新运行目录的真实 `startup.json`，再执行 Start；不得伪造注册回执或裸起常驻进程。旧桥、网关保留；本批控制脚本／配置冷备在 E、F 两盘的 `fom-bedrock-blocks-20261021/previous-controls.zip`，上一批备份也保留。若回滚，先正常 Stop，按备份恢复控制脚本与配置，再重新登记同名启动项并 Start。新增验证模块 `fom_bedrock_block_contract.py` 必须随固定工具部署；带方块包的桥堆上限是 2 GiB，游戏服仍为 6 GiB。游戏世界不需要回滚。
 
 回退本次桥：用上述 Stop 等待子进程退出，再用同目录 `maw_service_task.ps1 -Mode Unregister -FomBedrock -Python E:\MC\runtime\python-3.12.14\python.exe -Config E:\MC\servers\fom-2.42\ops\fom-bedrock.json` 移除本桥启动项。保留桥目录及证据；Java 28976、Mineflayer 28977、世界和原认证库均不需回退。不得据此恢复旧服。
 

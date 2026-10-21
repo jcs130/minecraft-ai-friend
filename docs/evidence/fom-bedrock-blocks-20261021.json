@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "scope": "FOM 2.42 Bedrock original blocks, source flipbooks and block-item presentation",
+  "branch": "experiment/agent-society-1.21.1",
+  "deployedSourceCommit": "08e498aae9bf668037f56c9c31b9c48f47700878",
+  "published": true,
+  "coverage": {
+    "modItems": 4465, "existingOriginalModIcons": 1041, "additionalOriginal3dBlockItems": 1268,
+    "modBlockTypes": 3811, "modBlockStates": 156262,
+    "mappedBlockTypesWithAtLeastOneVariant": 2762, "mappedBlockStates": 54113,
+    "mappedStatesWithoutBlockEntity": 23880, "mappedStatesWithStaticBaseOnly": 30233,
+    "uniqueGeometries": 3140, "uniqueAtlases": 3808,
+    "sourceAnimatedAtlases": 9, "sourceAnimatedBlockTypes": 8,
+    "existingMaidModelTextureBindings": 241,
+    "allContentAdapted": false, "allModGameplayVerified": false,
+    "liveMachineRpmAndCookingLayersAdapted": false, "phoneGpuRenderingVerified": false
+  },
+  "blockPack": {
+    "uuid": "affa4056-e3c8-5c86-b803-c39a64d026ab", "version": [1, 0, 0], "bytes": 6632229,
+    "sha256": "4468f594beb3cf290575c250ba36626618291862e79f14d89534c24257740c48"
+  },
+  "validation": {
+    "pythonTestsPassed": 51, "finalRelatedNodeTestsPassed": 29, "earlierBroaderNodeTestsPassed": 41,
+    "pinnedGeyserJvmAssertions": 18,
+    "realUdpWorldBlockChecks": 13, "realUdpItemsModelsAnd75SecondSessionChecks": 21,
+    "sameBodyReconnectAndInventoryReconciliationChecks": 10, "finalRealUdpPlacementAndCleanupChecks": 23,
+    "placedOriginalNativeBlock": "create:andesite_casing", "placementConsumedExactlyOne": true,
+    "nativeInventorySwapPreservedIdentity": true, "temporaryPlacedBlockConfirmedAir": true,
+    "originalInventoryConfirmedPreserved": true, "qaPrivateReadOnlyHeartbeatSeconds": 10,
+    "qaXboxValidationDisabledOnlyOnMarkedLoopback": true, "productionXboxValidationDisabled": false,
+    "actualPhoneTestedAfterThisRelease": false, "multiPlayerLoadTested": false, "modelRequests": 0
+  },
+  "registryParity": {
+    "statesCompared": 186696, "identitiesPropertiesAndNonShapeFieldsExact": true,
+    "occlusionFloat32Exact": true, "differingOcclusionDoubleValues": 40,
+    "maximumDoubleDifference": 5.551115123125783e-17, "rawStateFilesByteEqual": false,
+    "isolatedDiagnosticSupportJarDiffers": true, "productionDiagnosticJarInstalled": false
+  },
+  "production": {
+    "bridgeDirectory": "E:/MC/servers/fom-2.42/ops/bedrock-20261021-v2",
+    "gatewayDirectory": "E:/MC/servers/fom-2.42/ops/bedrock-gateway-blocks-20261021-v2",
+    "mainRunId": "34b2c08221fc404e942318d8df7af67c", "mainJavaPid": 30356,
+    "bridgeRunId": "e379cc5861374a1f9b1bb583931cf172",
+    "mainServerRestarted": false, "bedrockBridgeNormallyRestarted": true,
+    "baselineModJarsAndControlFilesShaPreserved": 106, "unchangedServerModJars": 103,
+    "existingMixedLoginPolicyVerified": true, "xboxValidationRequired": true,
+    "nativeBlockStatesRegistered": 54113, "native3dBlockItemsRegisteredAndRuntimeLinked": 1268,
+    "linkedProtocolVersions": 3, "bridgeHeapLimitMiB": 2048, "mainHeapLimitMiBUnchanged": 6144,
+    "mainHealthChecksPassed": 12, "bridgeHealthChecksPassed": 13, "mainAndBridgePanelSmokePassed": true,
+    "startupName": "MyAgentWorld.FOM.Bedrock.28988", "startupMethod": "existing HKCU Run after user login",
+    "privateDaclVerified": true, "newDaemonAdded": false, "routerOrFirewallChanged": false,
+    "oldServersOrPausedAgentsResumed": false
+  },
+  "rollback": {
+    "controlBackup": "fom-bedrock-blocks-20261021/previous-controls.zip",
+    "eAndFMirrorCrcAndShaVerified": true,
+    "sha256": "bf122977d67597ad4749c45ba192e96ee09b47082e42a249338ac2a6385f91c6",
+    "oldBridgeAndGatewayRetained": true, "worldRollbackRequired": false
+  },
+  "failureEvidenceRetained": [
+    "Unsupported names, oversized collision bounds and excessive box counts rejected in isolated candidates; no clipping used.",
+    "Isolated 512 MiB bridge exhausted its heap; block-enabled bridge raised to 2 GiB, main unchanged.",
+    "Pinned Geyser rejected vanilla custom-item block_placer; non-vanilla definitions and connection-local reverse identity used.",
+    "Pinned custom-item mapping omitted its block runtime; only owned items linked for three protocol tables.",
+    "Old serverbound QA descriptor formats rejected; equipment and transaction formats corrected without weakening packet validation.",
+    "Console delivery raced game-thread execution; native postcondition polling added without replaying mutations.",
+    "First production registration failed Windows PowerShell module loading; maintenance subprocess module path corrected, DACL verification retained.",
+    "First Geyser startup failed Microsoft discovery TLS; existing owner normally stopped and retried its child. Next startup succeeded with Xbox validation enabled."
+  ],
+  "qaShutdown": {
+    "mainAndBridgeChildrenNormalExitCode": 0,
+    "temporaryTcpPortsReleased": [28991, 28992, 28997, 39220, 39221, 39222], "temporaryUdpPortsReleased": [28993]
+  },
+  "privateEvidenceRoot": "E:/MC/research/fom-full-visuals-20261021",
+  "rawAssetsPacketsWorldsPlayerInventoriesAndThirdPartyJarsCommitted": false
+}
