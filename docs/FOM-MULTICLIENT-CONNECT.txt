@@ -8,7 +8,7 @@ My Agent World · 命运齿轮 FOM 2.42
 公网状态已读到新 FOM；手机和手柄实际体验待验证。
 
 Mineflayer：公网 micro.kangqiang.site，端口 28977（TCP）；家里填 192.168.3.163:28977。
-网关已显式允许公网来源；路由器映射和 Windows 防火墙放行由服主配置。
+网关已允许公网来源，Windows 已放行 TCP 28976、TCP 28977、UDP 28988；路由器映射由服主完成。三个入口均取得外部状态查询成功响应。
 version='1.21.1'，auth='offline'，username 用 ag_ 开头。
 首次访客可进入，设过密码后需要 /login 密码。
 等本人 MC_AUTH_STATE 授权成功再行动。

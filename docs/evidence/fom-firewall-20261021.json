@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "scope": "owner-authorized Windows game-port inbound rules",
+  "authorizedThrough": "Explicit user request followed by Windows UAC elevation",
+  "startedAt": "2026-10-21T10:00:39.7992051Z",
+  "completedAt": "2026-10-21T10:00:50.2279920Z",
+  "ok": true,
+  "rules": [
+    {
+      "Name": "MyAgentWorld.FOM.Java.28976.TCP.WAN",
+      "DisplayName": "FOM Java 28976 TCP (WAN)",
+      "Enabled": "True",
+      "Direction": "Inbound",
+      "Action": "Allow",
+      "Profile": "Any",
+      "Protocol": "TCP",
+      "LocalPort": "28976",
+      "LocalAddress": [
+        "192.168.3.163"
+      ],
+      "RemoteAddress": [
+        "Any"
+      ]
+    },
+    {
+      "Name": "MyAgentWorld.FOM.Agent.28977.TCP.WAN",
+      "DisplayName": "FOM Mineflayer 28977 TCP (WAN)",
+      "Enabled": "True",
+      "Direction": "Inbound",
+      "Action": "Allow",
+      "Profile": "Any",
+      "Protocol": "TCP",
+      "LocalPort": "28977",
+      "LocalAddress": [
+        "192.168.3.163"
+      ],
+      "RemoteAddress": [
+        "Any"
+      ]
+    },
+    {
+      "Name": "MyAgentWorld.FOM.Bedrock.28988.UDP.WAN",
+      "DisplayName": "FOM Bedrock 28988 UDP (WAN)",
+      "Enabled": "True",
+      "Direction": "Inbound",
+      "Action": "Allow",
+      "Profile": "Any",
+      "Protocol": "UDP",
+      "LocalPort": "28988",
+      "LocalAddress": [
+        "192.168.3.163"
+      ],
+      "RemoteAddress": [
+        "Any"
+      ]
+    }
+  ],
+  "persistentRuleNames": [
+    "MyAgentWorld.FOM.Java.28976.TCP.WAN",
+    "MyAgentWorld.FOM.Agent.28977.TCP.WAN",
+    "MyAgentWorld.FOM.Bedrock.28988.UDP.WAN"
+  ],
+  "existingRulesChanged": [],
+  "effectiveActiveStoreRulesVerified": 3,
+  "firewallProfilesUnchanged": true,
+  "firewallRemainsEnabled": true,
+  "remoteScope": "Any, so forwarded clients retain their public source addresses",
+  "localScope": "192.168.3.163 only",
+  "routerChangedByAgent": false,
+  "gameServerRestarted": false,
+  "managementPortsOpened": false,
+  "externalVerification": {
+    "java": {
+      "kind": "java",
+      "port": 28976,
+      "online": true,
+      "version": "1.21.1",
+      "motd": [
+        "My Agent World - FOM 2.42"
+      ],
+      "cacheHit": false
+    },
+    "mineflayer": {
+      "kind": "agent",
+      "port": 28977,
+      "online": true,
+      "version": "1.21.1",
+      "motd": [
+        "神社之门 · NeoForge 神使边车"
+      ],
+      "cacheHit": false
+    },
+    "firstBedrockProvider": {
+      "kind": "bedrock",
+      "port": 28988,
+      "online": false,
+      "version": null,
+      "motd": null,
+      "cacheHit": false
+    },
+    "secondBedrockProvider": {
+      "provider": "mcstatus.io",
+      "online": true,
+      "retrievedAt": 1792576973774,
+      "version": "26.52",
+      "motd": "My Agent World FOM 2.42\nJava + Agent + Bedrock"
+    },
+    "limit": "External status responses verify reachability; no external Microsoft/Xbox account login or full mod gameplay claimed."
+  },
+  "retainedProbeIssues": [
+    "web reader could not open colon-containing API paths; actual HTTPS provider requests used instead",
+    "first Bedrock status provider timed out; independent second provider returned a current positive 26.52 FOM response",
+    "optional router read rejected SSH authentication; no router command executed or credentials changed"
+  ],
+  "rollback": "Remove only the three persistentRuleNames with elevated Remove-NetFirewallRule; leave other rules and profiles unchanged.",
+  "modelRequests": 0,
+  "privateEvidenceDirectory": "research/firewall-fom-20261021 (elevated helper, before/after and raw responses excluded from Git)"
+}
