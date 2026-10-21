@@ -26,6 +26,8 @@ from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 
 ALLOWED = {"list_companions", "lua", "skill", "todo", "memory", "say", "command"}
+ACTION_TIMEOUT_SECONDS = 150  # Numen's interactive permission window lasts 120 seconds.
+READ_ONLY_COMMANDS = {"/mycli status", "/mycli status full", "/mycli tasks status", "/mycli inventory status"}
 DESCRIPTIONS = {
     "list_companions": "只读：查询当前身体是否在线。本接口仅控制你自己的角色。",
     "lua": "执行游戏动作或只读查询。先用原生技能目录学习 API；动作完成必须读取实际回执，超时结果未知，不要自动重放。",
@@ -51,6 +53,53 @@ def bound_arguments(arguments: dict, companion: str) -> dict:
     return args
 
 
+def lua_tokens(code: str) -> list[str]:
+    """Ignore only lexical trivia; quoted/long strings keep their exact contents."""
+    tokens = []
+    i = 0
+    while i < len(code):
+        if code[i].isspace():
+            i += 1
+            continue
+        comment = code.startswith("--", i)
+        start = i + 2 if comment else i
+        long = re.match(r"\[(=*)\[", code[start:])
+        if long:
+            closing = "]" + long[1] + "]"
+            end = code.find(closing, start + long.end())
+            end = len(code) if end < 0 else end + len(closing)
+            if not comment:
+                tokens.append(code[i:end])
+            i = end
+        elif comment:
+            end = code.find("\n", start)
+            i = len(code) if end < 0 else end + 1
+        elif code[i] in "\"'":
+            end = i + 1
+            while end < len(code):
+                if code[end] == "\\":
+                    end += 2
+                elif code[end] == code[i]:
+                    end += 1
+                    break
+                else:
+                    end += 1
+            tokens.append(code[i:end])
+            i = end
+        else:
+            token = re.match(r"[A-Za-z_0-9]+|\.\.\.|\.\.|==|~=|<=|>=|::|.", code[i:])[0]
+            tokens.append(token)
+            i += len(token)
+    return tokens
+
+
+def action_key(name: str, args: dict, *, legacy=False) -> str:
+    identity = dict(args)
+    if not legacy and name == "lua" and isinstance(identity.get("code"), str):
+        identity["code"] = lua_tokens(identity["code"])
+    return hashlib.sha256(json.dumps([name, identity], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
 def command_script(line: str) -> str:
     if not isinstance(line, str) or not 1 <= len(line.strip()) <= 512 or any(ord(c) < 32 for c in line):
         raise ValueError("请提供一条不超过 512 字的游戏命令")
@@ -69,7 +118,7 @@ def command_result(result: types.CallToolResult) -> types.CallToolResult:
             "command": raw.get("command"), "commandResult": raw.get("result"), "complete": True, "outputLines": len(raw["output"])},
             content=[types.TextContent(type="text", text="\n".join(raw["output"])), *result.content[1:]])
     if structured.get("commandReceiptError") or re.search(r"\[(?:stdout|returned value) cut at \d+", result_text(result)):
-        return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text=
+        return types.CallToolResult(isError=True, structuredContent={"status": "unknown", "reason": "receipt_incomplete"}, content=[types.TextContent(type="text", text=
             "命令已执行，但完整回执超出传输上限，不能据此判断最终结果；不要重放原动作。请按 /mycli --help 使用分页或单项只读查询确认。")])
     return result
 
@@ -195,6 +244,38 @@ class Controller:
         self.ready = asyncio.Event()
         self.status_file = self.journal.directory / "status.json"
         self.tool_cache = self.journal.directory / "upstream-tools.json"
+        self.receipts_file = self.journal.directory / "action-receipts.json"
+        self.action_receipts = {}
+        if self.receipts_file.exists():
+            saved = json.loads(self.receipts_file.read_text(encoding="utf-8"))
+            if (saved.get("v") != 1 or saved.get("companion") != self.companion
+                    or not isinstance(saved.get("actions"), dict) or len(saved["actions"]) > 128
+                    or any(not re.fullmatch(r"[0-9a-f]{64}", key) or not isinstance(value, dict)
+                           or value.get("outcome") not in {"pending", "unknown", "approval_required"}
+                           for key, value in saved["actions"].items())):
+                raise ValueError("动作回执记录无效；请先人工核对，不恢复自主操作")
+            self.action_receipts = saved["actions"]
+            if saved.get("identity") != "lua-tokens-v1" and self.journal.file.exists():
+                # Recover arguments from our own journal before migrating old
+                # fingerprints. Unmatched old receipts remain blocked by raw key.
+                migrated = dict(self.action_receipts)
+                with self.journal.file.open("rb") as stream:
+                    stream.seek(max(0, self.journal.file.stat().st_size - Journal.LIMIT))
+                    lines = stream.read().decode("utf-8", errors="replace").splitlines()
+                for line in lines:
+                    try:
+                        row = json.loads(line)
+                    except ValueError:
+                        continue
+                    if row.get("kind") != "tool_started" or not isinstance(row.get("arguments"), dict):
+                        continue
+                    old = action_key(row["tool"], row["arguments"], legacy=True)
+                    if old in self.action_receipts:
+                        migrated.pop(old, None)
+                        migrated[action_key(row["tool"], row["arguments"])] = self.action_receipts[old]
+                self.action_receipts = migrated
+                self.persist_receipts()
+        self.consent_denials = 0
         try:
             cached = json.loads(self.tool_cache.read_text(encoding="utf-8"))
             tools = [types.Tool.model_validate(row) for row in cached["tools"]]
@@ -209,6 +290,33 @@ class Controller:
         temp = self.status_file.with_suffix(".tmp")
         temp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         os.replace(temp, self.status_file)
+
+    def save_action(self, key: str, outcome: str | None):
+        if outcome is None:
+            self.action_receipts.pop(key, None)
+        else:
+            self.action_receipts[key] = {"outcome": outcome, "at": time.time()}
+        self.persist_receipts()
+
+    def persist_receipts(self):
+        temp = self.receipts_file.with_suffix(".tmp")
+        with temp.open("w", encoding="utf-8") as stream:
+            json.dump({"v": 1, "identity": "lua-tokens-v1", "companion": self.companion, "actions": self.action_receipts}, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp, self.receipts_file)
+
+    async def unattended_consent(self, _context, params):
+        # Elicitation asks the human owner, not the model. This autonomous
+        # connection has no human approval UI and can only deny, never grant.
+        self.consent_denials += 1
+        self.journal.write("consent_refused", message=str(getattr(params, "message", ""))[:500])
+        schema = getattr(params, "requestedSchema", {})
+        decision = schema.get("properties", {}).get("decision", {}) if isinstance(schema, dict) else {}
+        if "deny" not in decision.get("enum", []):
+            return types.ElicitResult(action="decline")
+        return types.ElicitResult(action="accept", content={"decision": "deny", "note":
+            "常驻自主连接不能代替主人确认。此动作未获许可；不要重复请求。保留物品，按需学习存入本人大背包或有权限公共箱的方法，或改做其他已获准步骤。"})
 
     async def call(self, name: str, arguments: dict) -> types.CallToolResult:
         if name == "events":
@@ -230,6 +338,22 @@ class Controller:
             upstream_name = "lua"
             upstream_args = {"companion": self.companion, "code": command_script(args.get("line"))}
         async with self.action_lock:
+            # A fresh heartbeat or controller reconnect does not prove that an
+            # interrupted action failed. Keep its receipt until host review.
+            guarded = name in {"lua", "say", "command"} and not (
+                name == "command" and args.get("line", "").strip() in READ_ONLY_COMMANDS)
+            key = action_key(name, args) if guarded else None
+            previous = (self.action_receipts.get(key) or self.action_receipts.get(action_key(name, args, legacy=True))) if key else None
+            if previous is not None or (key and len(self.action_receipts) >= 128):
+                outcome = previous["outcome"] if previous else "review_required"
+                self.journal.write("tool_blocked", tool=name, action_id=key, previous_outcome=outcome)
+                return types.CallToolResult(isError=True, structuredContent={"status": "blocked", "reason": outcome,
+                    "thisCallDispatched": False, "retryable": False}, content=[types.TextContent(type="text", text=
+                    ("同一动作已因权限要求而被拒绝。" if outcome == "approval_required" else "同一动作尚无可安全重放的结论。")
+                    + "本次未再次执行。长动作先用 lua 查询 print(numen.task.status())，身体任务可能仍在跑；/mycli status不能确认该动作结果。核对具体库存/位置或任务回执并记下阻塞，改做可行步骤；服主核对前不重放。")])
+            if key:
+                self.save_action(key, "pending")
+            denials_before = self.consent_denials
             self.last_action = time.monotonic()
             # Conservative: arbitrary Lua can already have spoken. The channel
             # must not send its final text again after an uncertain/body reply.
@@ -239,12 +363,20 @@ class Controller:
             self.journal.write("tool_started", tool=name, arguments=args)
             try:
                 # One request only. An interrupted action is unknown, never retried.
-                result = await self.session.call_tool(upstream_name, upstream_args, read_timeout_seconds=timedelta(seconds=100))
+                result = await self.session.call_tool(upstream_name, upstream_args,
+                                                      read_timeout_seconds=timedelta(seconds=ACTION_TIMEOUT_SECONDS))
             except Exception as exc:
+                if key:
+                    self.save_action(key, "unknown")
                 self.journal.write("tool_unknown", tool=name, error=type(exc).__name__)
-                return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text="操作结果未知：连接或等待中断。先查询实际状态，禁止直接重复执行。")])
+                return types.CallToolResult(isError=True, content=[types.TextContent(type="text", text="操作结果未知：连接或等待中断。长动作用 lua 查询 print(numen.task.status())，任务可能仍在跑；再核对具体库存/坐标和任务回执。/mycli status不能确认该动作结果，禁止直接重放。")])
             if name == "command":
                 result = command_result(result)
+            if key:
+                refused = self.consent_denials > denials_before or (result.isError and re.search(
+                    r"\bREFUSED\b|refused by the owner", result_text(result)))
+                outcome = "approval_required" if refused else "unknown" if (result.structuredContent or {}).get("status") == "unknown" else None
+                self.save_action(key, outcome)
             self.journal.write("tool_result", tool=name, result=result.model_dump(mode="json"))
             return result
 
@@ -323,7 +455,7 @@ class Controller:
             try:
                 secret = Path(self.cfg["token_file"]).read_text(encoding="utf-8").strip()
                 async with streamablehttp_client(self.url, headers={"Authorization": "Bearer " + secret}, timeout=15) as (read, write, _):
-                    async with ClientSession(read, write) as session:
+                    async with ClientSession(read, write, elicitation_callback=self.unattended_consent) as session:
                         await session.initialize()
                         upstream = await session.list_tools()
                         tools = []

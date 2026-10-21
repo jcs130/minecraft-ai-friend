@@ -1,0 +1,128 @@
+diff --git a/agent/src/main/java/com/dwinovo/numen/api/agent/loop/AgentLoop.java b/agent/src/main/java/com/dwinovo/numen/api/agent/loop/AgentLoop.java
+index 7f9d375..e6a2b2d 100644
+--- a/agent/src/main/java/com/dwinovo/numen/api/agent/loop/AgentLoop.java
++++ b/agent/src/main/java/com/dwinovo/numen/api/agent/loop/AgentLoop.java
+@@ -582,6 +582,15 @@ public final class AgentLoop {
+         Run cut = run;
+         // 先收工具口、再作废 run:在跑的脚本这时交出它停在哪一行的回执,还记在这次 run 名下进历史
+         List<String> abandoned = tools.cancel(reason.stopsBody());
++        // 取消时,工具口可能先于异步程序回执被放弃。
++        // 结清外接调用并释放槽位,不能让重连永远继承 busy。
++        Consumer<String> external = aside;
++        aside = null;
++        if (external != null) {
++            external.accept(com.dwinovo.numen.api.agent.llm.ToolOutcome.failure(
++                    "External call interrupted (" + reason.words(detail) + "). Previous actions may already have happened; "
++                            + "read current body/task state before deciding, do not replay the call."));
++        }
+         if (cut != null) {
+             run = null;
+             cut.cancel.cancel();
+diff --git a/agent/src/test/java/com/dwinovo/numen/api/agent/loop/AgentLoopTest.java b/agent/src/test/java/com/dwinovo/numen/api/agent/loop/AgentLoopTest.java
+index 828b277..d1c0c2f 100644
+--- a/agent/src/test/java/com/dwinovo/numen/api/agent/loop/AgentLoopTest.java
++++ b/agent/src/test/java/com/dwinovo/numen/api/agent/loop/AgentLoopTest.java
+@@ -50,6 +50,34 @@ class AgentLoopTest extends LoopHarness {
+             assertFalse(loop.asideFree());
+             assertFalse(loop.runAside(new LlmToolCall("ext-b", "lua", "{}"), result -> { }));
+         }
++
++        @Test
++        void disconnectSettlesExternalCallerAndReleasesItsSlot() {
++            List<String> first = new ArrayList<>();
++            assertTrue(loop.runAside(new LlmToolCall("ext-a", "lua", "{}"), first::add));
++            loop.halt(HaltReason.DISCONNECT);
++            assertEquals(1, first.size(), "the external waiter needs an interruption receipt");
++            assertTrue(com.dwinovo.numen.api.agent.llm.ToolOutcome.failed(first.get(0)));
++            assertTrue(first.get(0).contains("before deciding"), first.get(0));
++            assertTrue(loop.asideFree(), "a reconnect must not inherit a permanently busy slot");
++            loop.halt(HaltReason.DISCONNECT);
++            assertEquals(1, first.size(), "an already settled caller is not reported twice");
++            List<String> second = new ArrayList<>();
++            assertTrue(loop.runAside(new LlmToolCall("ext-b", "lua", "{}"), second::add));
++            tools.finish("ext-b");
++            assertEquals(1, second.size());
++            assertEquals(1, first.size());
++        }
++
++        @Test
++        void haltDoesNotRepeatAnAlreadyCompletedExternalReceipt() {
++            List<String> replies = new ArrayList<>();
++            assertTrue(loop.runAside(new LlmToolCall("ext-a", "lua", "{}"), replies::add));
++            tools.finish("ext-a");
++            loop.halt(HaltReason.EXTERNAL);
++            assertEquals(1, replies.size());
++            assertTrue(loop.asideFree());
++        }
+     }
+ 
+     // ---- 开 run 的时机 ----
+diff --git a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/RemoteBrainGameTests.java b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/RemoteBrainGameTests.java
+index b4c41dc..e7c69a4 100644
+--- a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/RemoteBrainGameTests.java
++++ b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/RemoteBrainGameTests.java
+@@ -39,6 +39,64 @@ import static com.dwinovo.numen.gametest.GameTestKit.succeedWhen;
+  */
+ public class RemoteBrainGameTests {
+ 
++    /** 断线必须交回中断回执并释放外接槽；重连继续用原身体，不能永远报 busy。 */
++    @GameTest(template = "floor16", timeoutTicks = 400, batch = "numen_remote_8")
++    public static void a_cancelled_external_call_returns_a_receipt_and_reconnects(GameTestHelper helper)
++            throws Exception {
++        Rig her = new Rig(helper, "gametest_remote_cancel", null);
++        her.companion.getInventory().add(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BAMBOO, 20));
++        her.brain.connect();
++        var args = new com.google.gson.JsonObject();
++        args.addProperty("companion", her.companion.getUUID().toString());
++        args.addProperty("code", "numen.inv.drop(\"minecraft:bamboo\", {count=20})");
++        var first = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
++            try {
++                return her.brain.callResult("lua", args);
++            } catch (Exception e) {
++                throw new java.util.concurrent.CompletionException(e);
++            }
++        });
++        var second = new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CompletableFuture<com.google.gson.JsonObject>>();
++        helper.startSequence().thenWaitUntil(() -> {
++            helper.assertTrue(com.dwinovo.numen.api.permission.ConsentDesk.of(her.companion).pending() != null,
++                    "the real drop was not awaiting permission");
++        }).thenExecute(() -> {
++            try {
++                her.brain.disconnect();
++            } catch (Exception e) {
++                throw new IllegalStateException(e);
++            }
++        }).thenWaitUntil(() -> {
++            helper.assertTrue(first.isDone(), "the cancelled external HTTP caller is still waiting");
++            var receipt = first.join();
++            helper.assertTrue(receipt.get("isError").getAsBoolean(), "cancellation reported success: " + receipt);
++            helper.assertTrue(receipt.toString().contains("interrupted"), "missing interruption reason: " + receipt);
++        }).thenExecute(() -> {
++            try {
++                her.brain.connect();
++            } catch (Exception e) {
++                throw new IllegalStateException(e);
++            }
++            var query = new com.google.gson.JsonObject();
++            query.addProperty("companion", her.companion.getUUID().toString());
++            query.addProperty("code", "print(\"RECONNECTED_ORIGINAL_BODY\")");
++            second.set(java.util.concurrent.CompletableFuture.supplyAsync(() -> {
++                try {
++                    return her.brain.callResult("lua", query);
++                } catch (Exception e) {
++                    throw new java.util.concurrent.CompletionException(e);
++                }
++            }));
++        }).thenWaitUntil(() -> {
++            helper.assertTrue(second.get().isDone(), "the reconnected query is still waiting");
++            var receipt = second.get().join();
++            helper.assertTrue(!receipt.get("isError").getAsBoolean() && receipt.toString().contains("RECONNECTED_ORIGINAL_BODY"),
++                    "the new external call inherited the old busy slot: " + receipt);
++            helper.assertTrue(com.dwinovo.numen.PlayerInv.count(her.companion.getInventory(), net.minecraft.world.item.Items.BAMBOO) == 20,
++                    "the refused/cancelled drop changed the inventory");
++        }).thenExecute(her::close).thenSucceed();
++    }
++
+     /** 一只带产品线路大脑的同伴,和一个扮外部大脑的客户端。 */
+     private static final class Rig {
+         final MinecraftServer server;

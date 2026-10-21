@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "status": "validated_candidate_requires_paper_restart",
+  "date": "2026-10-21",
+  "paper": "1.21.1 build133",
+  "nativePlugin": "0.3.0",
+  "files": [
+    {
+      "target": "numen_api-paper-1.21.1-0.1.4.jar",
+      "source": "E:\\MC\\ops\\repairs\\kirito-autonomy-repair-20261021\\candidate-final\\numen_api-paper-1.21.1-0.1.4.jar",
+      "sha256": "fb4e7a8656cb4f1226c13b1b1f04bf45816fedc781c0ccc9f5df6ffc1d5daa78",
+      "beforeSha256": "77da82ad3241f39fee878e5e51f855bdc5fe7777cabd1ed863a213af5bd60dea"
+    },
+    {
+      "target": "ops/numen-qwenpaw-controller.py",
+      "source": "E:\\MC\\ops\\repairs\\kirito-autonomy-repair-20261021\\candidate-final\\numen_controller.py",
+      "sha256": "31bf3d1f5d9bcf0146b2e89a8f81e73fc15e881bc20a5ad9b72efec027ebeb04",
+      "beforeSha256": "e782a2ba4f02674cdd8c9eda4df6fbf75930a84b0233bba9dadab0d4aa89c303"
+    }
+  ],
+  "tests": {
+    "pythonPassed": 99,
+    "pythonSkipped": 6,
+    "jvm": {
+      "agent": {
+        "tests": 267,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "numen-api/common": {
+        "tests": 952,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "paperRemoteBrain": 8,
+    "initialBridgeLiveChecks": 20,
+    "initialBridgeLiveNotFinalArtifact": true
+  },
+  "binaryReview": {
+    "changed": [
+      "com/dwinovo/numen/api/agent/loop/AgentLoop$Queued.class",
+      "com/dwinovo/numen/api/agent/loop/AgentLoop.class"
+    ],
+    "queuedBytecodeIdentical": true,
+    "addedEntries": 0,
+    "removedEntries": 0
+  },
+  "patchSha256": "7a6bccf83d37dadb3f898d43575155e4a6dc9acb672e7b4ad254fede2a9e8455",
+  "fixes": [
+    "Native MCP elicitation only denies unattended approval; no automatic grants",
+    "150-second action wait covers the native120-second approval window",
+    "Durable unknown/refused/pending action receipts survive heartbeat and reconnect",
+    "Lua comments and lexical whitespace cannot bypass receipt identity; strings remain unchanged",
+    "Halting an external call settles its waiter and clears the execution slot"
+  ],
+  "unchanged": {
+    "content": "82133ebd12d89db5b7af515160562b64296eebca119f1e0473761ccd85c2bab1",
+    "vision": "bf00bb818e824f1b672c441be3fd2838fb072d9d6a066fcffcb704af4654feab",
+    "agentFriend": "6b14294c7759873ab775e2cbd43f70ecbf9737fdf761a1ae43d03d7782b54b89",
+    "core": "39bd8c00b9e18de91dcabd3cc3dcfa5328685a53b7187a2f63280c22e2d287b9"
+  },
+  "deployment": {
+    "queued": false,
+    "restartApproved": false,
+    "dualDiskCandidateRollback": true,
+    "nativeRolePaused": true,
+    "procedure": "Current restart approval, notices, verified roster and activity gates, original complete E/F cold backup before installing both files.",
+    "userDecision": "先保留候选，暂不重启",
+    "fullCandidateDeployed": false,
+    "resumeRequiresMaintenance": true
+  },
+  "retainedFailures": [
+    "Java17 default failed dependency configuration; Java21 build used",
+    "New kernel cancellation regression failed on old code before the fix",
+    "Initial GameTest regex matched no cases; full-name regex ran all8",
+    "Old live bridge exposed comment-only replay and a cancelled execution slot remained busy; full kernel fix not deployed yet"
+  ]
+}
