@@ -354,6 +354,10 @@ class Controller:
         self.runtime_session = runtime_session
         self.context_counter = context_counter
         self.data, self.publish = data, publish
+        from .review import ReviewPort
+        self.review_port=ReviewPort(data)
+        self._review_model_wait=None
+        self._review_inference_bypass=False
         self.operator_stop = False
         self.stop_requested = lambda: self.operator_stop or stop_requested()
         self.commands = commands
@@ -1713,11 +1717,27 @@ class Controller:
                 self.outcome_history_ids.add(key)
         self.retain_history()
 
+    def review_inference_wait(self,urgent=False):
+        """Defer only new slow inference; native polling/work/reflexes continue."""
+        window=None
+        if self.settings.review_model_pool and not (urgent or self._review_inference_bypass or self.feedback_pending or self.stop_requested()):
+            try:
+                window=self.review_port.model_inference_window(self.settings.review_model_pool)
+            except (OSError,ValueError,sqlite3.Error):
+                self.publish(review_model_gate_error='review_store_unavailable')
+        if window!=self._review_model_wait:
+            self._review_model_wait=window
+            self.publish(planner_model_wait=window)
+        return window
+
     async def turn_once(self, goal, prefix, tools):
         if self._event_poll is not None or self._deferred_event_drain:
             self.preempted = True
             self.continuation_needed = True
             return
+        if self.review_inference_wait():
+            self.continuation_needed=True
+            return False  # No model turn began; do not consume a decision/ahead slot.
         self.preempted = False
         self.deferred_wake = False
         self.continuation_needed = False
@@ -1844,6 +1864,11 @@ class Controller:
                 }
                 self.conversation_continuation |= any(
                     conversation_event(consumed[index]) for index in budget["event_delivery"]["included_indices"])
+                # A review can begin while this turn assembles/counts its input.
+                # Do not start another cold prefill after that actual admission.
+                if self.review_inference_wait():
+                    self.continuation_needed=True
+                    return False if round_index==0 else None
                 try:
                     self.model_started_at = datetime.now(timezone.utc).isoformat()
                     self.publish(planner_activity={"phase": "model", **self.model_timing()})
@@ -2125,7 +2150,8 @@ class Controller:
                         and not self.death_waiting
                         and self.death_recovery is None
                         and (elapsed >= self.settings.min_decision_seconds or self.continuation_ready or lookahead)
-                        and time.monotonic() >= self.planner_retry_at):
+                        and time.monotonic() >= self.planner_retry_at
+                        and not self.review_inference_wait(urgent=urgent)):
                     self.lookahead_anchor = lookahead
                     self.lookahead_invalidated = False
                     if lookahead:
@@ -2133,12 +2159,17 @@ class Controller:
                     self.publish(planning_handoff={"mode": "native_lookahead" if lookahead else "ordinary",
                         "anchor": lookahead[1] if lookahead else None, "native_work_continues": bool(self.pending)})
                     try:
-                        await self.turn_once(goal, prefix, tools)
+                        self._review_inference_bypass=urgent
+                        turn_outcome=await self.turn_once(goal, prefix, tools)
                     finally:
+                        self._review_inference_bypass=False
                         self.lookahead_anchor = None
                         self.lookahead_invalidated = False
-                    self.count += 1
-                    self.last_decision = time.monotonic()
+                    if turn_outcome is not False:
+                        self.count += 1
+                        self.last_decision = time.monotonic()
+                    elif lookahead:
+                        self.lookahead_used.discard(lookahead)
                     wake, urgent = self.preempted or self.deferred_wake or self.continuation_needed, self.preempted
                     self.publish(decisions=self.count, pending=list(self.pending.values()))
                 await asyncio.sleep(1)

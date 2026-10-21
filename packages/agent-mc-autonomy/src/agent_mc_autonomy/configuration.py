@@ -146,6 +146,7 @@ class Settings:
     max_tool_rounds: int = 6
     max_output_tokens: int = 1024
     model_timeout_seconds: int = 180
+    review_model_pool: str = ""
     context_tokens: int = DEFAULT_CONTEXT_TOKENS
     context_mode: str = "compact"
     context_history_headroom_tokens: int = 0
@@ -220,6 +221,8 @@ class Settings:
         if bool(renderer) != bool(catalog):
             raise SettingsValidationError("viewer.renderer_directory", "renderer_catalog_pair_required")
         maximum_output = _integer(autonomy, "max_output_tokens", 1024, 128, 131072)
+        from .review_inference import pool_name
+        review_model_pool=pool_name(_text(autonomy,'review_model_pool'))
         context_mode = _text(autonomy, "context_mode", "compact")
         if context_mode not in {"compact", "full"}:
             raise SettingsValidationError("autonomy.context_mode", "invalid_context_mode")
@@ -253,6 +256,7 @@ class Settings:
             max_tool_rounds=_integer(autonomy, "max_tool_rounds", 6, 1, 12),
             max_output_tokens=maximum_output,
             model_timeout_seconds=_integer(autonomy, "model_timeout_seconds", 180, 10, 300),
+            review_model_pool=review_model_pool,
             context_tokens=_integer(autonomy, "context_tokens", DEFAULT_CONTEXT_TOKENS, 4096, 2097152),
             context_mode=context_mode,
             context_history_headroom_tokens=_integer(autonomy, "context_history_headroom_tokens", 0, 0, 131072),

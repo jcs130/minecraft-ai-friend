@@ -263,6 +263,18 @@ class ReviewPort:
         finally:
             db.close()
 
+    def begin_model_inference(self,review_id,pool):
+        from .review_inference import begin
+        return begin(self,review_id,pool)
+
+    def model_inference_window(self,pool):
+        from .review_inference import current
+        return current(self,pool)
+
+    def end_model_inference(self,window_id):
+        from .review_inference import end
+        return end(self,window_id)
+
     def death_record(self, episode):
         """Read under the caller's review write lock; never create history."""
         db = sqlite3.connect(f"{self.path.as_uri()}?mode=ro", uri=True, timeout=5)
