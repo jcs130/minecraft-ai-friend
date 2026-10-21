@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "scope": "FOM same-connection native Mineflayer observations and original browser rendering",
+  "source": {
+    "coreCommit": "c61e4fcabbf99820f6b9278d73b3e2beec4101b6",
+    "rendererCommit": "c66260476824d0160a5ad0bc90ca03506d9e11ce",
+    "rendererRemoteMainReconciled": true
+  },
+  "verification": {
+    "coreTests": {
+      "passed": 720,
+      "failed": 0,
+      "skipped": 0
+    },
+    "gatewayTests": {
+      "passed": 74,
+      "failed": 0
+    },
+    "pythonServiceTests": {
+      "passed": 21,
+      "failed": 0
+    },
+    "sharedRendererTests": {
+      "passed": 1177,
+      "failed": 0,
+      "skipped": 32,
+      "skipScope": "existing optional original asset/integration checks; no skip added by this feature"
+    },
+    "packedPublicSdkIsolatedChecks": 5,
+    "packedPublicSdkProductionChecks": 5,
+    "ordinaryMineflayerReconnectReadOnly": true,
+    "isolatedNativeChecks": 10,
+    "browser": {
+      "headlessAuthorizedByUser": true,
+      "actualWebGL": true,
+      "views": [
+        "first",
+        "third",
+        "inventory"
+      ],
+      "verifiedItemModels": [
+        "create:andesite_casing",
+        "farmersdelight:rice"
+      ],
+      "partialItemModels": [
+        "touhou_little_maid:smart_slab_init"
+      ],
+      "capturedHttpErrors": 0,
+      "consoleDiagnostics": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ],
+      "javaPixelParityVerified": false
+    },
+    "keepalive": {
+      "observedIntervalSeconds": 120,
+      "explicitFomClientTimeoutMs": 180000,
+      "twoHeartbeatsAndNormalCleanupVerified": true
+    },
+    "fixtureCleanupReadBack": true,
+    "qaChildrenExitedNormally": true,
+    "productionGameplayActions": 0,
+    "modelRequests": 0
+  },
+  "deployment": {
+    "mainRunId": "fe08fb633c9743648bec4d079dd8c10f",
+    "mainJavaPid": 16704,
+    "bridgeRunId": "588dda3f0695492fbd2633d80dc0a378",
+    "mainHealthy": true,
+    "bridgeHealthy": true,
+    "gateway": "E:\\MC\\servers\\fom-2.42\\ops\\agent-gateway\\native-view-20261021-v1",
+    "delivery": "E:\\MC\\integrations\\fom-native-view-20261021-v2",
+    "sdkSha256": "bebf5ad804e008d03da2c1e1a45a9b6cf32d5ec4454cbde31179f4636ac92112",
+    "nativeRegistrySha256": "05b7b2d1391e7d2227e282524b7f33b5aba62ba679393dbd365f21586aa453bb",
+    "modsPreserved": 103,
+    "existingStartupOwnersRetained": true,
+    "routerChanged": false,
+    "firewallChanged": false,
+    "pausedAgentsResumed": false
+  },
+  "backup": {
+    "files": 1898,
+    "sha256": "f0c08641dd6f28470489ce958c83768b288f51aea9cb7f111c4535492c876f9f",
+    "copies": [
+      "E:\\MC\\backups\\fom-native-view-20261021\\before.zip",
+      "F:\\MC-backups\\fom-native-view-20261021\\before.zip"
+    ],
+    "immutableModsPreserved": 103
+  },
+  "limitations": [
+    "ordinary Mineflayer blockAt and pathfinder still use compatibility projection",
+    "45 original resource priority conflicts remain unresolved",
+    "all custom GUIs, machine/entity animations, creature renderers and component codecs are not complete",
+    "collision data is an original static reference; player context is not verified",
+    "full scene parity remains false"
+  ],
+  "preservedFailures": [
+    "default 30-second test client timed out against measured 120-second keepalive; explicit FOM timeout verified instead of gameplay heartbeats",
+    "first renderer regression environment lacked sibling sources and native canvas; isolated dependencies and repository layout restored without altering active dependencies",
+    "initial Windows SDK probe needed file: import URL and nullLogger() factory; failed attempts retained",
+    "PowerShell Get-Acl autoload failed during startup registration; corrected PSModulePath only for maintenance child and both original registrations restored"
+  ]
+}

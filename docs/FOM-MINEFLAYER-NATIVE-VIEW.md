@@ -2,6 +2,8 @@
 
 2026-10-21。目标版本为 FOM 2.42 / Minecraft 1.21.1 / NeoForge 21.1.250。
 
+已发布到现有 TCP 28977。交付目录为 `E:\MC\integrations\fom-native-view-20261021-v2`，包含 SDK tgz、冻结 renderer、原素材与 `client.example.json`。示例默认 `enabled:false`；为自己的账号配置后再启用，不会恢复既有暂停 Agent。源码核心 c61e4fca、共享可视化 c6626047；[发布证据](evidence/fom-native-mineflayer-20261021.json) 记录了正式 SDK/普通 Mineflayer 只读登录、双盘备份、健康与覆盖缺口。
+
 ## 数据路径
 
 继续用 TCP 28977、`ag_` 账号和既有 MixAuth 策略。网关先捕获本连接收到的原生包，再生成普通 Mineflayer 所需的兼容投影。原生副本通过私有 clientbound `mcviewer:native_packet` 发回同一连接；不增加观察者账号，不需要公网 MCP、网页管理端口或 OP。
@@ -24,8 +26,8 @@
   "keepAliveTimeoutMs": 180000,
   "viewerPort": 3007,
   "nativeView": {
-    "module": "file:///E:/MC/integrations/fom-native-view-20261021-v1/renderer/host/native-mineflayer.mjs",
-    "assetsDir": "E:/MC/integrations/fom-native-view-20261021-v1/assets"
+    "module": "file:///E:/MC/integrations/fom-native-view-20261021-v2/renderer/host/native-mineflayer.mjs",
+    "assetsDir": "E:/MC/integrations/fom-native-view-20261021-v2/assets"
   }
 }
 ```
