@@ -1,5 +1,13 @@
 # FOM 基岩原生资源覆盖与维护
 
+2026-10-22 增量已发布：原资源包保持，运行桥更新为
+`E:\MC\servers\fom-2.42\ops\bedrock-20261022-v1`。新增实际数据包驱动的女仆
+动作、烹饪锅标准容器操作，并修复药水和 `maid_info` 物品组件解码。
+真实 UDP 已走通魂符召唤、收回、再次放出，女仆 UUID 和原地面保持；
+原用户的收纳魂符数据也保留。详见 [双端适配](FOM-DUAL-CLIENT-ADAPTERS.md)
+与 [最新发布证据](evidence/fom-dual-client-adapters-20261022.json)。
+本次修改后的真实手机画面及完整模组 GUI 仍需另行验收。
+
 2026-10-21，全量排查与第一批适配已发布。范围是现役 FOM 2.42 / Minecraft 1.21.1 / NeoForge 21.1.250；不更换整合包、不重建世界。当前生产入口见 [接入与运维说明](MY-AGENT-WORLD-FOM-BEDROCK.md)，实际上线及验证范围见 [发布证据](evidence/fom-bedrock-blocks-20261021.json)。
 
 ## 覆盖口径

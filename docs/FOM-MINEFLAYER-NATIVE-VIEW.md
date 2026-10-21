@@ -1,8 +1,8 @@
 # FOM 的原生 Mineflayer 观察与网页画面
 
-2026-10-21。目标版本为 FOM 2.42 / Minecraft 1.21.1 / NeoForge 21.1.250。
+2026-10-22 更新。目标版本为 FOM 2.42 / Minecraft 1.21.1 / NeoForge 21.1.250。
 
-已发布到现有 TCP 28977。交付目录为 `E:\MC\integrations\fom-native-view-20261021-v2`，包含 SDK tgz、冻结 renderer、原素材与 `client.example.json`。示例默认 `enabled:false`；为自己的账号配置后再启用，不会恢复既有暂停 Agent。源码核心 c61e4fca、共享可视化 c6626047；[发布证据](evidence/fom-native-mineflayer-20261021.json) 记录了正式 SDK/普通 Mineflayer 只读登录、双盘备份、健康与覆盖缺口。
+已发布到现有 TCP 28977。当前交付目录为 `E:\MC\integrations\fom-native-view-20261022-v2`，包含沿用的 c61e4fca SDK tgz、共享可视化 327de529 的冻结 renderer、原素材与 `client.example.json`。示例默认 `enabled:false`；为自己的账号配置后再启用，不会恢复既有暂停 Agent。网关实现 8e97b2bf 补齐实际注册表、附魔/药水、烹饪锅及收纳女仆数据；交付目录已实际构建网页并通过 WebGL，正式 SDK 只读接入与主/基岩 15/14 项健康检查通过。见 [当前适配说明](FOM-DUAL-CLIENT-ADAPTERS.md) 与 [本批发布证据](evidence/fom-dual-client-adapters-20261022.json)；[前版记录](evidence/fom-native-mineflayer-20261021.json) 保留历史验收与缺口。
 
 ## 数据路径
 

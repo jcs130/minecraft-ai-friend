@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 1,
+  "at": "2026-10-21T17:13:25.893240+00:00",
+  "state": "published",
+  "target": {
+    "modpack": "FOM 2.42",
+    "minecraft": "1.21.1",
+    "neoForge": "21.1.250",
+    "serverModJars": 103
+  },
+  "sources": {
+    "serverCommit": "8e97b2bf3c54462066110475657991246d807dd5",
+    "rendererCommit": "327de5298ba061a0acc555cb32b890e7fe05b837",
+    "unchangedSdkCommit": "c61e4fcabbf99820f6b9278d73b3e2beec4101b6",
+    "serverBranch": "experiment/agent-society-1.21.1",
+    "rendererBranch": "main"
+  },
+  "fixes": [
+    "native registries sent after configuration completes",
+    "original enchantment/potion/effect names and item components",
+    "native cooking-pot slots and int32 progress; standard container operations",
+    "packet-derived Bedrock maid motion with expiry",
+    "real 1.21.1 potion frontend codec for ViaVersion",
+    "CustomData compound codec for captured maid soul slab",
+    "complete frozen renderer runtime and build dependencies"
+  ],
+  "phoneIncident": {
+    "reportedAt": "2026-10-21T16:45:12Z",
+    "confirmedLogComponent": "touhou_little_maid:maid_info",
+    "actualRegisteredCodec": "CustomData.STREAM_CODEC / unnamed compound NBT",
+    "originalCapturedMaidItemRetained": true,
+    "replacementItemsOrMaidsCreatedForUser": false,
+    "postFixPhoneLoginVerified": false
+  },
+  "tests": {
+    "gateway": {
+      "pass": 327,
+      "fail": 0,
+      "skip": 0
+    },
+    "rendererToolSuite": {
+      "pass": 1189,
+      "fail": 0,
+      "conditionalSkip": 25,
+      "total": 1214
+    },
+    "javaDataHostTargeted": {
+      "pass": 7,
+      "fail": 0
+    },
+    "python": {
+      "pass": 40
+    },
+    "actorMotionJvmAssertions": 20,
+    "mineflayerCooking": {
+      "checks": 7,
+      "closed": true,
+      "fixtureCleaned": true
+    },
+    "mineflayerSoulSlab": {
+      "checks": 5,
+      "closed": true,
+      "fixtureCleaned": true,
+      "sameMaidUuidAfterRelease": true
+    },
+    "bedrockSoulSlab": {
+      "checks": 12,
+      "allPassed": true,
+      "sameMaidUuidAfterRelease": true,
+      "groundUnchanged": true,
+      "occupiedOriginalIconVerified": true,
+      "originalInventoryRetained": true,
+      "actualPhone": false,
+      "offlineQaOnly": true
+    },
+    "bedrockOtherCapabilities": {
+      "checks": 28,
+      "actualUdp": true,
+      "cookingPutAndTake": true,
+      "nativeMotionAndPoses": true,
+      "potionMetadata": true,
+      "sessionSeconds": 75,
+      "readOnlyHeartbeatSeconds": 10
+    },
+    "webgl": {
+      "originalCookingGui": "assets/farmersdelight/textures/gui/cooking_pot.png",
+      "httpErrors": 0,
+      "pageErrors": 0,
+      "frozenDeliveryBuiltAndRendered": true,
+      "sceneParityVerified": false
+    },
+    "packedSdk": {
+      "isolatedChecks": [
+        "completed original registries through frozen SDK",
+        "same connection original inventory",
+        "native bag identity retained",
+        "actual frozen browser bundle and WebGL"
+      ],
+      "productionReadOnlyChecks": [
+        "completed original registries through frozen SDK",
+        "same connection original inventory",
+        "native bag identity retained"
+      ],
+      "worldActions": 0,
+      "modelRequests": 0
+    }
+  },
+  "resources": {
+    "path": "assets/minecraft/native/client-item-colors.json",
+    "sha256": "21c83de83b6f57d38f93c0881edaa98a2d2c06ec8c14eceb260a79c380f9e936",
+    "customModPotionColorsVerified": false,
+    "verification": {
+      "assetIntegrityVerified": true,
+      "filesVerified": 52300,
+      "renderParityVerified": false,
+      "complete": false,
+      "resourcePriorityVerified": false
+    },
+    "rendererManifestSha256": "9371eb22a6976f060f3a2b79a6e9d8a24f7bbfc47546d5823f41a76be77a468a",
+    "sdkSha256": "bebf5ad804e008d03da2c1e1a45a9b6cf32d5ec4454cbde31179f4636ac92112",
+    "baseAndModBedrockPacksUnchanged": true
+  },
+  "publication": {
+    "gateway": "E:\\MC\\servers\\fom-2.42\\ops\\agent-gateway\\native-view-20261022-v1",
+    "bridge": "E:\\MC\\servers\\fom-2.42\\ops\\bedrock-20261022-v1",
+    "delivery": "E:\\MC\\integrations\\fom-native-view-20261022-v2",
+    "worldRegenerated": false,
+    "portsChanged": false,
+    "modsPreserved": 103,
+    "mainHealth": {
+      "release_files_and_login_policy_verified": true,
+      "smart_npc_loader_and_budget": true,
+      "smart_npc_chinese_chat": true,
+      "smart_npc_cooperative_roster": true,
+      "correct_server_owner": true,
+      "owner_heartbeat": true,
+      "actual_minecraft_status": true,
+      "explicit_game_bind": true,
+      "private_admin_http": true,
+      "mixed_login_database_created": true,
+      "agent_gateway_ready": true,
+      "agent_gateway_peer_policy_matches_config": true,
+      "original_agent_view_registry_bound": true,
+      "native_registry_snapshot_after_configuration": true,
+      "cooking_pot_standard_menu_enabled": true
+    },
+    "bedrockHealth": {
+      "release_and_actual_fom_registry": true,
+      "correct_owner": true,
+      "fresh_heartbeat": true,
+      "supervised_children_ready": true,
+      "actual_udp_pong": true,
+      "native_icon_registration": true,
+      "native_maid_model_registration": true,
+      "native_maid_download_stack": true,
+      "native_packet_motion_registration": true,
+      "native_block_registration": true,
+      "native_block_download_stack": true,
+      "native_3d_block_item_registration": true,
+      "private_upstream": true,
+      "xbox_required_on_lan": true
+    },
+    "originalRunStartupRegistered": true,
+    "existingOwnedWatchdogsPreserved": true,
+    "xboxValidationEnabled": true,
+    "backup": {
+      "files": 1911,
+      "sha256": "bde34738e9f34b1d12066ee65e8ad99f19c5a180cc2f97362214322d6de17739",
+      "copies": [
+        "E:\\MC\\backups\\fom-adapters-20261022\\before.zip",
+        "F:\\MC-backups\\fom-adapters-20261022\\before.zip"
+      ],
+      "crcAndEveryMemberSha256Verified": true
+    },
+    "qaExitCodes": [
+      0,
+      0
+    ],
+    "qaPortsClosed": true
+  },
+  "preservedFailureHistory": [
+    "Initial empty registry header and missing renderer build dependency",
+    "Cooking succeeded before progress decoder was available; confirmed output reconciled without repeating an unknown operation",
+    "NoAI walking fixture and test-client stack-cache/padded-slot assumptions failed before corrected actual tests",
+    "Broad test invocation without required original-resource environment and a timed Java-host fixture failed; official renderer runner and targeted host checks passed",
+    "First frozen-SDK QA username exceeded 16 characters; rejected before game login",
+    "First production Bedrock start failed Microsoft OpenID TLS handshake; original watchdog stopped/retried normally and recovered; Xbox validation unchanged"
+  ],
+  "limitations": {
+    "allModsPlayable": false,
+    "allModMenusSupported": false,
+    "completeSceneParity": false,
+    "fullJavaAnimationParity": false,
+    "originalNativePathfinder": false,
+    "newPublicPhoneAcceptanceRequired": true
+  },
+  "privateEvidenceHashes": {
+    "gateway-full-v5.log": "63e334b02e5fd297a82f620042606d7273748905859c00684b2ff99a2afa48fa",
+    "shared-tools-v5.log": "89bffcc3da3ad7646a31f68ba0add17238a14139278c5845f5b8a622f5baea0b",
+    "shared-java-host-v5.log": "5897f6fea766889ba188aac061af9e99663fda15987b8e6e7ac2853afb88f6c0",
+    "python-tests-final.log": "9ceea63b31f3af24c1b852090f3da0a74659238b6581fc32a6bcc634255ca9db",
+    "mf-v4/browser-report.json": "636359a3c6bee7b2e6dfb349cd8a8aee691dcbf7e134c3615189c05cea168bf5",
+    "mf-soul-slab-v5.json": "658d142e58a6a2d305a1ef09a2852315e096ee759cf6ed9164c1ab47d755cb1d",
+    "udp-smoke-1792601941681.json": "9f18cc083c78d8fbe86987d3a9e2efc8b28e71a5f67e01cd97433b015d74fe0d",
+    "sdk-delivery-v6/report.json": "cbc16bf86e502ca929f5828c3d97a0bd5c005789033dbdba1380ba13e9302717",
+    "sdk-production-v6/report.json": "4272a7edfa0331938733fb50662baf0c3091935a8155fd9156ae2a047c9d010b",
+    "backup.json": "47e815d508a0c458afb7213249b65cff8972d817fe8c32f4521c3fa9b7746a04",
+    "qa-owner-final-v5.json": "8eabaf47b89a1766099a39aa33c29915f87739ef64184a01f0bf3c3eb0018ba5",
+    "panel-main.json": "de3edb1eea8e0115347a3b779af75d6347b7347487de6ba31bd719beacf8b6d9",
+    "panel-bedrock.json": "0036dbe9621696d54bb51b703265bef6e904421ccd13cae12169012632980ee6"
+  }
+}
