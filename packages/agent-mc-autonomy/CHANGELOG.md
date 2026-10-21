@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.79
+
+- Pin core rc.60 with ten explicit built-in work/movement routines, exact-cell
+  harvest/replant, bounded water-route planning and original mount/glide inputs.
+  Scripts use the existing body queue and keep partial/blocked work separate
+  from JavaScript completion and an agent's learned method library.
+- Keep the current renderer pin: the console experiment-page update changes
+  separate optional UI files, not the renderer source consumed by this runtime.
+
 ## 0.2.78
 
 - Pin core rc.59: `mc_goal.revise.progress` can explicitly correct a recorded
