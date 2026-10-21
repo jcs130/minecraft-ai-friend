@@ -104,6 +104,25 @@ class FomGuards(unittest.TestCase):
         (root/'release.json').write_text(json.dumps(release))
         with self.assertRaisesRegex(ValueError,'exact FOM mod set'):service.load_config(self.file)
 
+    def test_public_agent_gateway_requires_explicit_production_opt_in(self):
+        self.gateway();self.raw['agentGateway']['port']=28977
+        self.raw.update(publicGameAccess=True,gamePort=28976,healthPort=28985);self.write_props(28976,'0.0.0.0')
+        with patch.object(service,'PRODUCTION',self.server):
+            self.save();cfg=service.load_config(self.file)
+            self.assertEqual(cfg['services'][1]['env']['GATE_PUBLIC_GAME_ACCESS'],'0')
+            self.raw['agentGateway']['publicGameAccess']=True;self.save();cfg=service.load_config(self.file)
+            self.assertEqual(cfg['services'][1]['env']['GATE_PUBLIC_GAME_ACCESS'],'1')
+            self.assertTrue(cfg['networkExposure']['agentGatewayPublicGameAccess'])
+            self.assertEqual(cfg['services'][1]['env']['GATE_AGENT_PREFIX'],'ag_')
+            self.assertEqual(cfg['services'][1]['host'],'127.0.0.1')
+            service.validator(cfg)
+
+    def test_public_agent_gateway_refuses_non_boolean_and_loopback_opt_in(self):
+        self.gateway()
+        for flag in ('true',1,None,True):
+            self.raw['agentGateway']['publicGameAccess']=flag;self.save()
+            with self.assertRaisesRegex(ValueError,'boolean|production'):service.load_config(self.file)
+
     def test_gateway_refuses_changed_bytes_and_runtime_drift(self):
         root=self.gateway();cfg=service.load_config(self.file);(root/'gate/gate.cjs').write_bytes(b'changed')
         with self.assertRaisesRegex(ValueError,'Gateway release hash'):service.load_config(self.file)

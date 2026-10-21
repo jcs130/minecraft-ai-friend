@@ -22,7 +22,9 @@ def probe(file=DEFAULT):
         if len(cfg['services'])>1:
             gate=state['services'][1]
             checks['agent_gateway_ready']=gate['ready'] and gate['port']==cfg['services'][1]['port'] and gate['metrics']['version']['protocol']==767
-            checks['agent_gateway_lan_only']=cfg['services'][1]['env']['GATE_PUBLIC_GAME_ACCESS']=='0'
+            expected='1' if cfg['networkExposure']['agentGatewayPublicGameAccess'] else '0'
+            checks['agent_gateway_peer_policy_matches_config']=(cfg['services'][1]['env']['GATE_PUBLIC_GAME_ACCESS']==expected
+                and state['networkExposure'].get('agentGatewayPublicGameAccess')==cfg['networkExposure']['agentGatewayPublicGameAccess'])
         result.update(gamePort=cfg['gamePort'],healthPort=cfg['healthPort'],runId=state['runId'],physicsTransport='TCP',publicGameAccess=cfg['networkExposure']['publicGameAccess'],supervisedBy='existing owned-child supervisor')
     except Exception as error:result['error']=type(error).__name__+': '+str(error)
     result['ok']=bool(checks) and all(checks.values()) and 'error' not in result;return result

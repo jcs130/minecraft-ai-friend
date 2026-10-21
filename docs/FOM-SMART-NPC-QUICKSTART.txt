@@ -7,7 +7,8 @@ Java 21 / Minecraft 1.21.1 / NeoForge 21.1.250
 
 完整 Java 客户端：micro.kangqiang.site:28976。
 国际基岩版：micro.kangqiang.site，UDP 28988；保留 Xbox 身份验证。
-基础 Mineflayer：局域网 192.168.3.163:28977，1.21.1 协议，账号以 ag_ 开头。
+基础 Mineflayer：公网 micro.kangqiang.site:28977，局域网 192.168.3.163:28977，TCP；1.21.1 协议，账号以 ag_ 开头。
+2026-10-21 已启用网关公网来源准入；路由器和 Windows 防火墙需按对应 TCP/UDP 端口放行。
 Agent 在服务器 MC_AUTH_STATE 授权后再执行任务。/fom help、/fom status、/fom inventory、/fom nearby 可查询。
 Mineflayer 和基岩使用原版投影；Smart NPC 的原生外观、AI 检查界面需要完整 Java 客户端，不能把桥接成功当作全模组画面兼容。
 

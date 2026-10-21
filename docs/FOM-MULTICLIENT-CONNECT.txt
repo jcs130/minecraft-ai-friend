@@ -1,5 +1,5 @@
 My Agent World · 命运齿轮 FOM 2.42
-2026-10-16 多端连接
+2026-10-21 多端连接
 
 基岩国际版：micro.kangqiang.site，端口 28988（UDP）。
 家里可填：192.168.3.163，端口 28988。
@@ -7,7 +7,8 @@ My Agent World · 命运齿轮 FOM 2.42
 这是部分模组兼容入口，复杂机器界面、载具和动态模型尚未全部转换。
 公网状态已读到新 FOM；手机和手柄实际体验待验证。
 
-Mineflayer：192.168.3.163，端口 28977（TCP，仅本机/家庭局域网）。
+Mineflayer：公网 micro.kangqiang.site，端口 28977（TCP）；家里填 192.168.3.163:28977。
+网关已显式允许公网来源；路由器映射和 Windows 防火墙放行由服主配置。
 version='1.21.1'，auth='offline'，username 用 ag_ 开头。
 首次访客可进入，设过密码后需要 /login 密码。
 等本人 MC_AUTH_STATE 授权成功再行动。
@@ -16,7 +17,7 @@ version='1.21.1'，auth='offline'，username 用 ag_ 开头。
 完整模组功能、真实专用菜单与原生画面，使用完整 Java 客户端桥。
 
 完整 Java：micro.kangqiang.site:28976，家里 192.168.3.163:28976。
-Minecraft 1.21.1 / NeoForge 21.1.248 / 对应统一 FOM 客户端包。
+Minecraft 1.21.1 / NeoForge 21.1.250 / 对应统一 FOM 客户端包。
 三种入口是同一个 FOM 世界，旧 Paper 千灯纪独立。
 
 首次访客无需编造密码；使用 /password 新密码 再输一次 设置密码，至少 8 字符。

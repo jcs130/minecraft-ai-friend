@@ -11,6 +11,9 @@ JIT='-XX:CompileCommand=exclude,net.caffeinemc.mods.lithium.common.shapes.VoxelS
 def gateway_spec(raw,server,port,health,public,verify_hashes):
     gate=raw.get('agentGateway')
     if gate is None:return None,[]
+    public_agents=gate.get('publicGameAccess',False)
+    if type(public_agents)!=bool:raise ValueError('Agent gateway publicGameAccess must be an explicit boolean')
+    if public_agents and not public:raise ValueError('Public Agent gateway requires selected public production mode')
     root=Path(gate['releaseDir']).resolve();gate_port=gate['port']
     if not root.is_relative_to(server.parent/'ops') or root==server.parent/'ops':raise ValueError('Gateway release must stay in this deployment ops directory')
     if type(gate_port)!=int or gate_port in (port,health) or (public and gate_port!=28977) or (not public and not 39000<=gate_port<=39999):raise ValueError('Invalid FOM Agent gateway port')
@@ -27,7 +30,7 @@ def gateway_spec(raw,server,port,health,public,verify_hashes):
         stat=path.stat();stats.append((str(path),stat.st_size,stat.st_mtime_ns))
     stat=manifest.stat();stats.append((str(manifest),stat.st_size,stat.st_mtime_ns))
     host='0.0.0.0' if public else '127.0.0.1'
-    env={'NODE_PATH':str(root/'node_modules'),'GATE_LISTEN_HOST':host,'GATE_PUBLIC_GAME_ACCESS':'0',
+    env={'NODE_PATH':str(root/'node_modules'),'GATE_LISTEN_HOST':host,'GATE_PUBLIC_GAME_ACCESS':'1' if public_agents else '0',
         'GATE_LAN_SUBNET':'192.168.3.0/24','GATE_AGENT_PREFIX':'ag_',
         'GATE_PREFIX_MSG':'此入口供 ag_ 开头的 Agent 使用；完整模组 Java 客户端请连接 28976。',
         'GATE_VANILLA':'0','GATE_VANILLA_PROJECTION':'1','GATE_REMAP':'1','GATE_SKIP_MOD_RECIPES':'1','GATE_NEOFORGE_TIME_BRIDGE':'1',
@@ -81,7 +84,8 @@ def load_config(file,*,verify_hashes=True):
     if raw.get('agentGateway') is not None and support!='maw-fom-support-0.2.0.jar':raise ValueError('Agent gateway requires explicitly selected FOM support 0.2.0')
     gate,gate_stats=gateway_spec(raw,server,port,health,public,verify_hashes)
     return {'schemaVersion':1,'serverDir':str(server),'gamePort':port,'healthPort':health,'runtimeDir':str(runtime),'services':[spec]+([gate] if gate else []),
-        'networkExposure':{'mode':'lan' if public else 'loopback','listenHost':host,'address':'192.168.3.163' if public else None,'publicGameAccess':public},
+        'networkExposure':{'mode':'lan' if public else 'loopback','listenHost':host,'address':'192.168.3.163' if public else None,'publicGameAccess':public,
+            'agentGatewayPublicGameAccess':bool(raw.get('agentGateway',{}).get('publicGameAccess',False))},
         '_file':str(file),'_raw':raw,'_lock':lock,'_gateStats':gate_stats,'_modStats':[(str(p),p.stat().st_size,p.stat().st_mtime_ns) for p in actual.values()]}
 
 def validator(config):

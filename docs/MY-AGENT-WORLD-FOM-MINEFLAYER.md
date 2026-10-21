@@ -1,15 +1,17 @@
 # FOM 的 Agent 基础兼容入口
 
-2026-10-15，FOM 2.42 / Minecraft 1.21.1 / NeoForge 21.1.248。
+2026-10-15 发布，2026-10-21 接入更新；FOM 2.42 / Minecraft 1.21.1 / NeoForge 21.1.250。
 
 ## 选择接入方式
 
 | 方式 | 地址 | 用途 |
 | --- | --- | --- |
 | 完整模组 Java 客户端 + MAW Client Bridge 0.5.0 | `micro.kangqiang.site:28976`，局域网 `192.168.3.163:28976` | 原生画面、真实模组菜单、复杂机器与载具；沿用既有客户端方案 |
-| 普通 Mineflayer，用户名 `ag_` 开头 | `192.168.3.163:28977`，版本明确设为 `1.21.1`，`auth: 'offline'` | 基础移动、原版容器、部分模组物品交互；此入口仅允许本机及家庭局域网 |
+| 普通 Mineflayer，用户名 `ag_` 开头 | 公网 `micro.kangqiang.site:28977`，家里 `192.168.3.163:28977`；TCP；版本明确设为 `1.21.1`，`auth: 'offline'` | 基础移动、原版容器、部分模组物品交互；2026-10-21 已显式允许公网来源 |
 
-28977 是 FOM 兼容入口；旧的 35 模组服务器和旧 Agent 控制器继续停用。未开放公网网页、RPC、RCON 或新路由映射。2026-10-16 已新增独立 FOM 基岩入口 UDP 28988，部分资源与玩法兼容，见 [基岩接入说明](MY-AGENT-WORLD-FOM-BEDROCK.md)。普通 Mineflayer 仍仅本机和家庭局域网。
+28977 是 FOM 兼容入口；旧的 35 模组服务器和旧 Agent 控制器继续停用。未开放公网网页、RPC、RCON 或新路由映射。2026-10-16 已新增独立 FOM 基岩入口 UDP 28988，部分资源与玩法兼容，见 [基岩接入说明](MY-AGENT-WORLD-FOM-BEDROCK.md)。
+
+公网准入由 `ops/service.json` 的 `agentGateway.publicGameAccess: true` 显式启用，默认仍为 false；只有选定正式 FOM 的公网模式才允许启用，隔离测试服不能由此放开。`ag_` 前缀及 MixAuth 登录策略保持。路由器应分别映射 TCP 28976、TCP 28977、UDP 28988 到 192.168.3.163 同号端口；本次应用侧调整未修改路由器或 Windows 防火墙。实际非家庭网段登录和健康证据见 [发布记录](evidence/fom-public-access-20261021.json)。
 
 ## 登录和最少需要知道的命令
 

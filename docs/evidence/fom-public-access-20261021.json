@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "scope": "FOM explicit public Agent peer policy and existing-service startup",
+  "endpoints": {
+    "java": {
+      "port": 28976,
+      "protocol": "TCP"
+    },
+    "agent": {
+      "port": 28977,
+      "protocol": "TCP"
+    },
+    "bedrock": {
+      "port": 28988,
+      "protocol": "UDP"
+    }
+  },
+  "configuration": {
+    "agentGateway.publicGameAccess": true,
+    "default": false,
+    "researchMayOptIn": false,
+    "agentPrefix": "ag_",
+    "loginPolicyChanged": false,
+    "privateManagementChanged": false,
+    "routerChanged": false,
+    "windowsFirewallChanged": false
+  },
+  "verification": {
+    "pythonTestsPassed": 64,
+    "nodePeerPolicyTestsPassed": 3,
+    "mainHealthChecks": 12,
+    "bedrockHealthChecks": 8,
+    "mainReady": true,
+    "bedrockReady": true,
+    "actualBedrockPong": {
+      "motd": "My Agent World FOM 2.42",
+      "protocol": 2193,
+      "version": "26.52",
+      "online": 0,
+      "maxPlayers": 8,
+      "port": 28988
+    },
+    "nonHomeSubnetLogin": {
+      "localSource": "172.28.176.1",
+      "checks": [
+        "actual non-home-subnet source connects to the public Agent gateway",
+        "ordinary ag_ guest receives authoritative MC_AUTH_STATE authorization",
+        "read-only /fom status returns from the native server"
+      ],
+      "authenticated": true,
+      "nativeStatusAuthenticated": true,
+      "normallyDisconnected": true
+    },
+    "actualWanConnectionTested": false,
+    "phoneXboxPositiveTested": false,
+    "mainRunId": "34b2c08221fc404e942318d8df7af67c",
+    "bedrockRunId": "468d21c5fd6045369af08abc49a0ba9a"
+  },
+  "deployment": {
+    "initialState": "Prior heartbeat dated 2026-10-20, owners absent and selected endpoints closed; old ready=true was historical.",
+    "startMethod": "Existing registered hidden HKCU Run owners through the original control scripts",
+    "backupScope": "Only affected service scripts, release manifests and main service configuration; not a full world backup",
+    "backupBothDisksVerified": true,
+    "backupSha256": "dd0858afe1d2195bd0c0ed2d80185c57d010b50e46dd3466dab471f3f6d27733",
+    "modLockBedrockAndLoginHashesUnchanged": true,
+    "serverProperties": {
+      "onlyStartupTimestampChanged": true,
+      "oldHeader": "#Tue Oct 20 01:37:04 CST 2026",
+      "allPropertyBytesExceptTimestampUnchanged": true
+    },
+    "newServerOrAgentControllerCreated": false,
+    "modsOrWorldReplaced": false
+  },
+  "retainedFailure": "First non-home-subnet probe logged in and received authoritative authorization, but expected MC_FOM instead of actual MC_FOM_AUTH and timed out. Retained original failure; corrected second distinct probe completed. No gameplay effect replayed.",
+  "modelRequests": 0,
+  "probePhysicalActions": 0,
+  "followup": "User configures router DNAT and Windows inbound rules; then verify from an actual WAN device.",
+  "rollback": "Stop the FOM owner normally, set agentGateway.publicGameAccess=false in service.json, then Start through the existing control. Keep the world and authentication database.",
+  "privateEvidenceDirectory": "research/fom-public-access-20261021; raw logs, runtime snapshots and two-disk backups excluded from Git"
+}
