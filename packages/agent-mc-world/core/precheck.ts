@@ -616,7 +616,7 @@ function precheckStow(bot: Bot, call: Extract<SkillCall, { skill: 'stow' }>, dep
   };
 }
 
-type MiningCall = Extract<SkillCall, { skill: 'collect' | 'excavate' | 'tunnel' }>;
+type MiningCall = Extract<SkillCall, { skill: 'collect' | 'excavate' | 'tunnel' | 'harvest' }>;
 
 /** 已知目标的挖掘步骤在动工前排除缺工具与必然无掉落。 */
 /**
@@ -649,7 +649,7 @@ function precheckLead(
 }
 
 function precheckMiningTool(bot: Bot, call: SkillCall, deps: PrecheckDeps): PrecheckNote | null {
-  if (call.skill !== 'collect' && call.skill !== 'excavate' && call.skill !== 'tunnel') return null;
+  if (call.skill !== 'collect' && call.skill !== 'excavate' && call.skill !== 'tunnel' && call.skill !== 'harvest') return null;
   const tool = (call as MiningCall).tool;
   // 与执行器 chooseTool 同一个范围:包里加副手
   const inventory = itemsInReach(bot);
@@ -664,7 +664,7 @@ function precheckMiningTool(bot: Bot, call: SkillCall, deps: PrecheckDeps): Prec
     };
   }
   const blocks = new Set<string>();
-  if (call.skill === 'collect') blocks.add(call.block);
+  if (call.skill === 'collect' || call.skill === 'harvest') blocks.add(call.block);
   if (call.skill === 'excavate') {
     for (const cell of deps.cellsOf(call) ?? []) {
       const block = deps.blockAt(cell);
@@ -725,6 +725,7 @@ export function precheckStep(bot: Bot, call: SkillCall, deps: PrecheckDeps,
       case 'grindstone': return precheckItemStep(bot, call, '磨');
       case 'take': return precheckSlots(bot, call);
       case 'collect': return precheckSlots(bot, call) ?? precheckDeepKit(bot, call, deps);
+      case 'harvest': return precheckSlots(bot, call);
       case 'pickup': return precheckSlots(bot, call);
       case 'surface': return precheckSurfaceHere(bot);
       case 'lead': return precheckLead(bot, call as never, deps);

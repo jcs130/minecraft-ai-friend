@@ -190,6 +190,7 @@ import {
 import { spatialObservationText } from './spatial-observation.ts';
 import { CONTAINER_FIND, FURNACE_KINDS } from './chests.ts';
 import { skillExcavate, skillTunnel } from './skills-dig.ts';
+import { skillHarvest, REPLANT_SEEDS } from './skills-harvest.ts';
 import { reachCell } from './travel.ts';
 import {
   ANVIL_BLOCKS, STATION_FIND_R, WINDOW_SETTLE_MS, containerStacks, findContainers, findStationCell,
@@ -277,6 +278,7 @@ function evaluateExpect(bot: Bot, e: Expectation, gainBase?: number): ExpectVerd
  */
 export function skillProduces(call: SkillCall, bot: Bot | null): string[] {
   switch (call.skill) {
+    case 'harvest':
     case 'collect': {
       const item = bot ? collectDropName(bot, call.block) : call.block;
       return item ? [item] : [];
@@ -292,6 +294,7 @@ export function skillProduces(call: SkillCall, bot: Bot | null): string[] {
 /** 同上的另一半:这一步要消耗的东西。craft 的直接材料在配方表里,没有 bot 就报不出 */
 export function skillNeeds(call: SkillCall, bot: Bot | null): string[] {
   switch (call.skill) {
+    case 'harvest': return call.replant && REPLANT_SEEDS[call.block] ? [REPLANT_SEEDS[call.block]] : [];
     // 蓝图形态要哪些料由图说了算(一整张图十几样),不进因果闸这张窄表
     case 'build': return 'material' in call ? [call.material] : [];
     case 'craft': {
@@ -432,7 +435,7 @@ export function deriveExpect(bot: Bot, call: SkillCall): Expectation | null {
     }
     // collect.count 计方块，掉落数量、名称及归属均可能不同，因此不推导物品存量期望。
     // 技能按块数与入包数回报；craft.count 计产出物品，可在下方推导。
-    case 'collect': return null;
+    case 'collect': case 'harvest': return null;
     case 'craft': {
       const item = skillProduces(call, bot)[0];
       return item ? { has: { item, count: call.count } } : null;
@@ -649,7 +652,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
   switch (call.skill) {
     case 'craft': case 'take': case 'stow': case 'compact': case 'toss':
     case 'equip': case 'eat': case 'smelt': case 'brew': case 'enchant':
-    case 'anvil': case 'grindstone':
+    case 'anvil': case 'grindstone': case 'harvest':
       inventoryMutation = true;
       break;
     case 'use':
@@ -862,6 +865,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
     case 'collect':
       return withBlueprintGain(bot, ctx, () =>
         skillCollect(bot, call.block, call.count, ctx, call.buried === true, call.mature === true, call.tool));
+    case 'harvest': return withBlueprintGain(bot, ctx, () => skillHarvest(bot, call, ctx));
     case 'fish': return skillFish(bot, call, ctx);
     case 'build':
       return 'blueprint' in call ? skillBuildBlueprint(bot, call, ctx) : skillBuild(bot, call, ctx);
@@ -1128,7 +1132,7 @@ type QueueHoldSlot = 'environment' | 'fall' | 'external';
 function reRunnable(call: SkillCall | undefined): boolean {
   if (!call) return true;
   switch (call.skill) {
-    case 'craft': case 'smelt': case 'toss': case 'stow': case 'take': case 'brew': case 'transit': case 'control': return false;
+    case 'craft': case 'smelt': case 'toss': case 'stow': case 'take': case 'brew': case 'transit': case 'control': case 'harvest': return false;
     // 只看报价那一形没有副作用,重跑无妨;下过手的那一形扣了等级与青金石,不重跑
     case 'enchant': return call.index === undefined;
     case 'use': return (call.times ?? 1) <= 1 && call.index === undefined;
@@ -1225,7 +1229,7 @@ export function freezeFirstStep(
   const s0 = steps[0];
   let head: SkillCall = s0;
   switch (s0.skill) {
-    case 'goto': case 'transit': case 'tunnel':
+    case 'goto': case 'transit': case 'tunnel': case 'harvest':
       head = { ...s0, at: fz(s0.at) };
       break;
     case 'fish':

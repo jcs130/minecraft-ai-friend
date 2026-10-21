@@ -83,6 +83,9 @@ FOM_SERVER_MANIFEST = {'probe': 'tools/fom_health.py', 'managedBy': 'existing-ow
 FOM_BEDROCK_MANIFEST = {'probe':'tools/fom_bedrock_health.py','managedBy':'owned-child-supervisor-and-registered-startup',
     'udpPort':28988,'healthBind':'127.0.0.1','healthPort':28996,'modpack':'FOM 2.42',
     'accountNamespace':'b_ / bh','requiresXboxValidation':True,'scope':'selected native item icons and standard gameplay; complex mod renderers remain separate'}
+AGENT_WORK_MANIFEST = {'probe':'tools/agent_work_health.mjs',
+    'managedBy':'existing-agent-mc-world-method-runner', 'newDaemon':False,
+    'scope':'built-in Mineflayer work catalog, schemas, source identity and action-free syntax checks'}
 SOCIETY_UNDERWORLD_MANIFEST = {'probe': 'tools/maw_underworld_health.py',
     'managedBy': 'existing-native-java-supervisor', 'questProvider': 'simplequests',
     'economyProvider': 'economycraft', 'scope': 'installed_content_and_menu_contract'}
@@ -443,6 +446,19 @@ def probe_agent_frame():
 
 
 def probe_panel_smoke(scope=None):
+    if scope == 'agent-work':
+        import os
+        import shutil
+        node = os.environ.get('AGENT_MC_NODE') or shutil.which('node') or str(Path.home()/'AppData/Local/hermes/node/node.exe')
+        try:
+            result = subprocess.run([node, str(PROJECT/AGENT_WORK_MANIFEST['probe'])],
+                cwd=PROJECT, capture_output=True, text=True, encoding='utf-8', timeout=45,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0)
+            report = json.loads(result.stdout)
+            return {'ok':result.returncode == 0 and report.get('ok') is True, 'work':report,
+                    'manifest':AGENT_WORK_MANIFEST, 'modelRequests':0, 'worldActions':0}
+        except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+            return {'ok':False, 'manifest':AGENT_WORK_MANIFEST, 'errorType':type(error).__name__}
     if scope == 'society-fom-bedrock':
         import os
         sys.path.insert(0,str(PROJECT/'tools'))
@@ -2210,6 +2226,9 @@ def inventory_lock_failure(reason):
 
 
 def main():
+    if sys.argv[1:] == ['--agent-work-smoke']:
+        report=probe_panel_smoke(scope='agent-work')
+        print(json.dumps(report,ensure_ascii=True,indent=2));return 0 if report['ok'] else 1
     if sys.argv[1:] in (['--society-fom-bedrock'],['--society-fom-bedrock-smoke']):
         report=probe_panel_smoke(scope='society-fom-bedrock')
         print(json.dumps(report,ensure_ascii=True,indent=2));return 0 if report['ok'] else 1

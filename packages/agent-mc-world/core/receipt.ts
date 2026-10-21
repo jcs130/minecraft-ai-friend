@@ -85,6 +85,7 @@ export function describeSkill(c: SkillCall, heldItem?: string | null): string {
     case 'flight': return `${c.dryRun ? '试算飞行' : c.land === false ? '飞至空中悬停' : '飞到安全落脚点'} ${anchorsText([c.at])}`;
     case 'land': return '从空中安全落地';
     case 'collect': return `采集 ${c.count} 个${zhName(c.block)}${c.buried ? '(可挖过去)' : ''}${tool}`;
+    case 'harvest': return `采集 ${anchorsText([c.at])} 的${zhName(c.block)}${c.replant ? '并补种' : ''}${tool}`;
     case 'fish': return `钓一竿${c.at ? `(在 ${anchorsText([c.at])})` : ''}`;
     case 'build': {
       // 一步可以下 16 处;任务名每份快照都要重发一遍,列全就是 16 份坐标的常驻开销

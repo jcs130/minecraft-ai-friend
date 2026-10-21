@@ -96,6 +96,7 @@ export type SkillCall = StepBounds & (
   | { skill: 'land' }
   | { skill: 'cleanup'; dryRun?: boolean }
   | { skill: 'collect'; block: string; count: number; buried?: boolean; mature?: boolean; tool?: string }
+  | { skill: 'harvest'; block: string; at: Anchor; replant?: boolean; tool?: string }
   | { skill: 'fish'; at?: Anchor }
   | { skill: 'build'; on: PlaceOnFace[]; material: string; temporary?: boolean; dryRun?: boolean }
   | { skill: 'build'; anchors: Anchor[]; material: string; shape?: ShapeName; fill?: BoxFill; temporary?: boolean; dryRun?: boolean }
@@ -1214,6 +1215,20 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
       { key: 'buried', kind: 'flag' },
       { key: 'mature', kind: 'flag' },
       { key: 'tool', kind: 'string', hint: '物品英文 id 或 fastest', doc: '只覆盖本步;不写时节约耐久' },
+    ],
+  },
+  {
+    name: 'harvest',
+    doc: `{"skill":"harvest","block":"wheat","at":[10,64,20],"replant":true} 精确收割这一个成熟作物格并补种；at 是作物格，不是土格。
+                                                 补种支持 wheat/carrots/potatoes/beetroots，须事先预留一个种子或对应作物。实际核验成熟度、土壤、掉落与 age=0。
+{"skill":"harvest","block":"oak_log","at":[12,64,20]} 指定格采木或采集；只用步行通路，不挖路，不改采附近同类。
+                                                 未加载、不可见、目标变化、登记建筑或受保护时受阻；不拆登记建筑材料。未成熟作物保留。
+                                                 取消可能已收割但尚未补种，须读现场后继续，不自动重放。tool 与 collect 相同。`,
+    fields: [
+      { key: 'block', kind: 'string', required: true, hint: '精确方块英文 id；不接受类别' },
+      { key: 'at', kind: 'anchor', required: true, error: `harvest 要 at:[x,y,z](${RELATIVE_HINT})` },
+      { key: 'replant', kind: 'flag' },
+      { key: 'tool', kind: 'string' },
     ],
   },
   {

@@ -16,6 +16,8 @@ Read [connection](references/connection.md) for installation, private configurat
 
 For building, cleanup and editing your own methods, read [building and methods](references/building-methods.md), or request `mc_script {"api":"building"}` / `{"api":"methods"}`. Both guides are on demand; current cleanup obligations arrive separately as fresh facts.
 
+For a known farm, forestry or supply job, first query `mc_script {"routine":{"op":"list"}}`, then read the selected routine's schema/conditions with `routine:{op:"read",id}`. Run explicitly with `routine:{op:"run",id},params`; see [work routines](../../docs/work-routines.md). These scripts use existing actions and return per-cell/quantity evidence. Read `goalCompleted`, `outcome` and `remaining`, not just JavaScript completion. Do not automatically replay interrupted harvests or unknown inventory transfers.
+
 `mc_artifact` stores selected UTF-8 execution artifacts. Versioned `agent-mc.procedure/v1` artifacts (legacy `cortico.procedure/v1` remains readable) can compose existing game methods; the format does not require the Cortico framework. Your host owns memory, retrieval, evaluation and event wakeups. Do not inject the whole method library every turn.
 
 Read actual tool availability before using quick tactics. The generic client currently exposes native control and ordinary reflexes; the legacy RPG tactic/spell adapter is not a default capability. Do not claim a tool or server skill exists because an old server guide mentioned it.

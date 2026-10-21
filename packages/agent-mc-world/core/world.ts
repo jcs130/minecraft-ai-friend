@@ -4,6 +4,7 @@ import { PlayerMemoryRecall } from './game-memory-player.ts';
 import { GameMemoryService } from './game-memory-service.ts';
 import { temporaryScaffoldReadout } from './temporary-scaffold.ts';
 import { setViewerBodyState } from './viewer-body-state.ts';
+import { WORK_ROUTINE_SCHEMA, listWorkRoutines, readWorkRoutine, prepareWorkRoutine } from './work-routines.ts';
 /**
  * MinecraftWorld — 实时游戏 World(worlds-minecraft),实时游戏 World 的范例实现。
  *
@@ -2216,11 +2217,15 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'await methods.run(alias,params) composes only declared dependency versions; all share this program\'s budgets and body lease. Source is loaded directly from the selected blobs, without copying it through model context. '
       + 'Procedure terminal events carry an execution UUID and persistent receipt for explicit goal review/adoption by the owning Persona; completion alone is not proof of improvement. '
       + '{library:{op:"list"}} lists your scoped editable methods; read uses id and optional revision. '
+      + 'Reviewed built-in work scripts use {routine:{op:"list"}}, {routine:{op:"read",id:"farm_harvest"}} and {routine:{op:"run",id},params}. '
+      + 'Read supplies the exact parameter schema/source/conditions; run uses the same queue, cancellation and runId receipts without copying code through the model. '
+      + 'Built-in work result outcome/goalCompleted/remaining are observed task evidence; a completed JavaScript program can still report blocked or partial work. '
       + 'After a validated syntax run, save uses id, code, description, conditions, parent (null for new; current revision for edits), validationRunId. '
       + 'Returns a pinned procedure reference; execution is explicit. Earlier revisions remain runnable for rollback. Library saves never edit engine files or claim verified improvement.',
     parameters: { type: 'object', properties: {
       name: { type: 'string', minLength: 1, maxLength: 80 },
       library: METHOD_LIBRARY_SCHEMA,
+      routine: WORK_ROUTINE_SCHEMA,
       code: { type: 'string', minLength: 1, maxLength: METHOD_LIMITS.sourceChars },
       procedure: { type: 'object', properties: { handle: { type: 'string' }, revision: { type: 'string' } }, required: ['handle', 'revision'] },
       params: { type: 'object', additionalProperties: true },
@@ -4326,6 +4331,24 @@ export class MinecraftWorld implements World {
 
       mc_script: async (args, ctx) => {
         try {
+          if (args.routine !== undefined) {
+            const input = args.routine as Record<string, unknown>;
+            if (!input || typeof input !== 'object' || Array.isArray(input)
+              || Object.keys(input).some(key => key !== 'op' && key !== 'id')) throw new Error('routine 须为 {op,id?}');
+            if (Object.keys(args).some(key => !['routine', 'params', 'durationMs', 'validate'].includes(key))) throw new Error('routine 不能与 code/procedure/library/api/runId/call/stop/name 合用');
+            if (input.op === 'list' || input.op === 'read') {
+              if (Object.keys(args).length !== 1 || (input.op === 'list' && input.id !== undefined)) throw new Error('routine list/read 须单独使用，list 不收 id');
+              return this.toolLog('mc_script', args, JSON.stringify(input.op === 'list' ? listWorkRoutines() : readWorkRoutine(input.id)));
+            }
+            if (input.op !== 'run') throw new Error('routine.op 只认 list/read/run');
+            if (args.validate !== undefined && typeof args.validate !== 'boolean') throw new Error('validate须为布尔值');
+            if (args.validate !== true && (!this.executor || !this.bridge?.bot?.entity)) throw new Error('Minecraft尚未连接');
+            const request = prepareWorkRoutine(input.id, args.params);
+            const run = this.methods.start({ ...request,
+              ...(args.durationMs === undefined ? {} : { durationMs: args.durationMs as number }), validate: args.validate === true });
+            return { text: this.toolLog('mc_script', args, `工作脚本#${run.id}已启动，尚无执行终态：${JSON.stringify(run)}`),
+              execution: { kind: 'method', id: `${this.executionEpoch}:${run.id}`, phase: 'accepted', terminal: false, goalCompleted: false, evidence: { localId: run.id, routine: run.routine } } };
+          }
           if (args.library !== undefined) {
             if (Object.keys(args).some(key => key !== 'library')) throw new Error('library 须单独使用');
             const input = args.library as Record<string, unknown>;
@@ -4527,13 +4550,21 @@ export class MinecraftWorld implements World {
       adapter: procedure.adapter, mode: procedure.mode, status: run.status, startedAt: run.startedAt, endedAt: run.endedAt!,
       invocations: procedure.invocations, trace: run.trace, result: run.result, error: run.error,
     } : undefined;
-    const blobs: BlobInput[] | undefined = receipt ? [{ bytes: new TextEncoder().encode(JSON.stringify({ ...receipt, versions: procedure!.versions })),
+    const work = run.routine && run.result && typeof run.result === 'object'
+      && (run.result as { schema?: string }).schema === 'agent-mc.work/v1' ? run.result as Record<string, unknown> : undefined;
+    const workSummary = work ? { routine: run.routine, outcome: work.outcome, goalCompleted: work.goalCompleted,
+      reason: work.reason, remaining: work.remaining, inventoryDelta: work.inventoryDelta } : undefined;
+    let blobs: BlobInput[] | undefined = receipt ? [{ bytes: new TextEncoder().encode(JSON.stringify({ ...receipt, versions: procedure!.versions })),
       mime: PROCEDURE_RECEIPT_MIME, name: 'procedure-run.json', fallbackText: '方法完整执行回执；按执行 UUID 查询摘要，再按调用编号展开。' }] : undefined;
+    if (work) (blobs ??= []).push({ bytes: new TextEncoder().encode(JSON.stringify({ runId: run.id, executionId: `${this.executionEpoch}:${run.id}`,
+      sourceHash: run.sourceHash, routine: run.routine, startedAt: run.startedAt, endedAt: run.endedAt, result: work })),
+      mime: 'application/json', name: 'work-run.json', fallbackText: '工作脚本实际结果；原始逐格记录与库存净变化，不自动重放。' });
     this.emit('minecraft.method', `方法#${run.id}「${run.name}」终态${run.status}；源码SHA256 ${run.sourceHash}；`
       + `${run.trace.length}次SDK调用。${run.error ?? ''}用 mc_script {runId:${run.id}}读取各次真实回执；`
       + (receipt ? `执行UUID ${receipt.executionId}，方法版本 ${receipt.root.revision}；完整回执已随事件保存。` : '')
+      + (workSummary ? `工作结果 ${workSummary.outcome}，goalCompleted=${String(workSummary.goalCompleted)}，原因 ${String(workSummary.reason)}；逐格回执已保存。` : '')
       + '脚本结束不等于原目标已达成。核对执行后状态，修订方法并记录已验证范围。', true,
-    { execution:{kind:'method',id:`${this.executionEpoch}:${run.id}`,phase:run.status==='validated'?'validated':run.status==='completed'?'completed':run.status==='cancelled'?'cancelled':'blocked',terminal:true,goalCompleted:false,evidence:{sourceHash:run.sourceHash,receipt:receipt??null}}, meta: { runId: run.id, sourceHash: run.sourceHash, status: run.status, ...(receipt ? { procedureReceipt: {
+    { execution:{kind:'method',id:`${this.executionEpoch}:${run.id}`,phase:run.status==='validated'?'validated':run.status==='completed'?'completed':run.status==='cancelled'?'cancelled':'blocked',terminal:true,goalCompleted:false,evidence:{sourceHash:run.sourceHash,receipt:receipt??null,...(workSummary ? {work:workSummary} : {})}}, meta: { runId: run.id, sourceHash: run.sourceHash, status: run.status, ...(workSummary ? {work:workSummary} : {}), ...(receipt ? { procedureReceipt: {
       schema: receipt.schema, executionId: receipt.executionId, root: receipt.root, status: receipt.status } } : {}) }, blobs });
   }
 
@@ -8111,6 +8142,9 @@ export class MinecraftWorld implements World {
    * 说要agent自己拼,拼错了就会往一个已经在做的队列上再排一条。
    */
   protected onTaskReport(r: TaskReport): void {
+    // Settle script-owned substeps normally, but let the complete work receipt wake the host.
+    // Independent tasks and reflex/damage events retain their existing urgent delivery.
+    const workSubtask = r.taskId !== undefined && this.methodTasks.has(r.taskId) && !!this.methods.current?.routine;
     if (r.taskId !== undefined && r.kind !== 'suspended' && r.kind !== 'resumed' && r.kind !== 'reflex') {
       this.methodTerminals.set(r.taskId, r);
       while (this.methodTerminals.size > 64) this.methodTerminals.delete(this.methodTerminals.keys().next().value!);
@@ -8159,8 +8193,8 @@ export class MinecraftWorld implements World {
     const q = this.executor?.status();
     const queue = q && (q.running || q.waiting.length > 0) ? `\n[队列] ${renderQueue(q)}` : '';
     // cancelled 进入事件流并随批次投递，不单独唤醒。
-    this.emit('minecraft.task', `[执行器] ${reportText}${queue}`, r.kind !== 'cancelled',
-      {execution: r.taskId === undefined ? undefined : {kind:'task',id:`${this.executionEpoch}:${r.taskId}`,
+    this.emit('minecraft.task', `[执行器] ${reportText}${queue}`, !workSubtask && r.kind !== 'cancelled',
+      {...(workSubtask ? { trigger: 'piggyback' as const } : {}), execution: r.taskId === undefined ? undefined : {kind:'task',id:`${this.executionEpoch}:${r.taskId}`,
         phase:r.kind==='done'?'completed':r.kind,
         terminal:!['suspended','resumed','reflex'].includes(r.kind),goalCompleted:false,evidence:{receipt:reportText,steps:r.steps??[]}},
         ...(r.repeatFailure ? { meta: { repeatFailure: {

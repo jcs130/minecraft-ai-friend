@@ -48,6 +48,12 @@ versions, syntax-validation requirements, parent conflict checks and explicit ex
 or rollback. Saved source is not evaluated gameplay evidence. See
 [building and editable methods](skills/minecraft-agent/references/building-methods.md).
 
+Reviewed [Mineflayer work routines](docs/work-routines.md) are discoverable through
+`mc_script {"routine":{"op":"list"}}`: harvest/replant, exact-cell logging,
+surplus storage and restocking reuse the existing body queue and return verified
+block/quantity evidence, partial results and remaining work. No extra model loop
+or server NPC mod is required.
+
 ## Build and verification
 
 Run commands in this package directory. Node >=22 is required.
