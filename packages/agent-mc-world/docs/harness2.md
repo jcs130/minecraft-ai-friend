@@ -23,6 +23,7 @@ flowchart LR
 - `MethodPracticeExecutor` 使用现有 `MethodRunner` 沙箱和 `MethodLibrary` 的语法校验、不可变版本、原执行 UUID、回执及复盘。宿主必须向 `host.call` 提供真实适配器，`settle` 必须确认原动作和按键已释放。`mineflayer` 调用沿用 `{value:...}` 返回封装。
 - reset、执行或清理失联后，该执行端被阻断，任务写入 `blocked`。不能通过重开程序、删账本或新建 ID 来重放未决动作；先核对原执行及隔离实例。崩溃留下的 `run.lock` 也需先确认原进程/任务终态，不能按时间自动删除。
 - 实际动作通过核心已有能力执行，不给予候选 shell、文件、网络或模型权限。仅允许修改三个文件：`skills/minecraft-method/scripts/run.js`、`params.json`、`../SKILL.md`。系统说明、工具声明、安全约束及召回记忆不可改；不得增加插件或子 Agent。
+- `SKILL.md` 保留 `name: minecraft-method` 的 frontmatter；描述和正文由 Agent 编辑。描述不要求匹配模板原文。源码、参数与指导文字分别按原有预算校验。
 
 ## 比较与采用
 

@@ -6,6 +6,8 @@ import {afterEach,describe,expect,it} from 'vitest';
 import {Harness2PracticeService,parseHarness2ModelReply} from '../src/learning/harness2-service.ts';
 import {physicsPractice,STEP_CODE} from './harness2-fixture.ts';
 import {procedureHash,PROCEDURE_SCHEMA} from '../core/support/procedure.ts';
+import {GameMemoryBook} from '../core/game-memory.ts';
+import {createPracticeGameMemory} from '../src/learning/practice-memory.ts';
 const directories:string[]=[];
 afterEach(()=>{for(const d of directories.splice(0))rmSync(d,{recursive:true,force:true});});
 function rig() {
@@ -32,6 +34,17 @@ send({type:'done',result:{upstreamRevision:v.revision,candidate,selectedRunId:'l
   return {directory,p,options,args,source,settled,changeScope:()=>scope={...scope,account:'another-player'},calls:()=>calls};
 }
 describe('explicit host method practice service',()=>{
+  it('recalls an attributed cue index for paraphrased tasks with the original confidence boundary and evidence',async()=>{
+    const r=rig(),book=new GameMemoryBook(join(r.directory,'memory')),scope={realm:'lab',account:'fixture',agent:'fixture'};
+    const memory=createPracticeGameMemory({call:async args=>book.execute(args,{scope,dimension:null})});
+    const signal=new AbortController().signal;
+    await memory.remember({jobHash:'a'.repeat(64),jobId:'walk-comparison',upstreamRevision:'fixture',evidenceRefs:['trial:original'],selectedReference:null,
+      gate:{eligible:false,reason:'not-improved',adopted:false},experience:{cue:'Supported flat walk',lesson:'The candidate did not improve the measured target outcome.',evidence:'trial:original',confidence:'Only two flat fixtures; no water or combat.'}},signal);
+    const recalled=await memory.recall('TraverseUnknownPlatformVariant987',signal);
+    expect(recalled).toHaveLength(1);expect(recalled[0].evidenceRefs).toEqual(['trial:original']);
+    expect(recalled[0].lesson).toContain('cue index, relevance unverified');expect(recalled[0].lesson).toContain('no water or combat');
+    expect(recalled[0].lesson).toContain('eligible=false');
+  });
   it('returns acceptance, measures real physics, exposes complete candidate on demand, and restart never replays effects',async()=>{
     const r=rig(),service=new Harness2PracticeService(r.options);
     expect(await service.call(r.args)).toMatchObject({accepted:true,terminal:false,adopted:false});

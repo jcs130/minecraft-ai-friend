@@ -24,7 +24,8 @@ describe.skipIf(!configured)('pinned Google Harness2 + core physics integration'
             rejectedOnce=true;
             return mode==='parallel'?{files:{'skills/minecraft-method/scripts/params.json':'INVALID JSON'}}:{files:{'guardrails.md':'Must never be written'}};
           }
-          return{files:{'skills/minecraft-method/scripts/run.js':STEP_CODE,'skills/minecraft-method/scripts/params.json':'{}'}};
+          return{files:{'skills/minecraft-method/scripts/run.js':STEP_CODE,'skills/minecraft-method/scripts/params.json':'{}',
+            'skills/minecraft-method/SKILL.md':'---\nname: minecraft-method\ndescription: Agent-revised measured target walking\n---\nRead actual position and release keys in finally; flat practice only.'}};
         }};
         const job:Harness2Job={id:`upstream-${mode}`,methodId:`upstream-${mode}`,sourceInstanceId:'cormy-production',scope:{realm:'live',account:'Cormy',agent:'cormy'},
           task:'Walk to mc.state().target. The snapshot.position is observed. Use await bot.look(yaw,pitch), setControlState, waitForTicks and clearControlStates; Java 1.21.1 flat supported practice terrain.',

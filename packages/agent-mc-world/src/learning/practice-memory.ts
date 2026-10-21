@@ -36,8 +36,12 @@ export function createPracticeGameMemory(port: PracticeMemoryPort): {
     },
     async recall(query,signal) {
       signal.throwIfAborted();
-      const found=await port.call({action:'search',kind:'lesson',query:query.slice(0,200),tags:['harness2'],dimension:'*',limit:8},signal);
+      let found=await port.call({action:'search',kind:'lesson',query:query.slice(0,200),tags:['harness2'],dimension:'*',limit:8},signal);
       if(!Array.isArray(found.entries))throw Error('Practice memory search did not return scoped entries');
+      // Local literal search may not match a paraphrased task. Supply a bounded cue index for host judgment.
+      const cueIndex=found.entries.length===0;
+      if(cueIndex){found=await port.call({action:'search',kind:'lesson',tags:['harness2'],dimension:'*',limit:8},signal);
+        if(!Array.isArray(found.entries))throw Error('Practice memory index did not return scoped entries');}
       const out:Array<{cue:string;lesson:string;evidenceRefs:string[]}>=[];
       for(const entry of found.entries as Array<{id:string}>) {
         const reply=await port.call({action:'get',id:entry.id},signal);
@@ -45,7 +49,7 @@ export function createPracticeGameMemory(port: PracticeMemoryPort): {
           const note=JSON.parse((reply.entry as {content:string}).content);
           if(note.schema!=='agent-mc.practice-lesson/v1'||!Array.isArray(note.evidenceRefs)||!note.evidenceRefs.length)continue;
           out.push({cue:short(note.cue,400),
-            lesson:`[isolated practice; eligible=${note.gate?.eligible===true}; ${short(note.gate?.reason,100)}] ${short(note.lesson,1300)} Recheck applicability; this is not live-world success or adoption permission.`,
+            lesson:`[isolated practice; eligible=${note.gate?.eligible===true}; ${short(note.gate?.reason,100)}${cueIndex?'; cue index, relevance unverified':''}] ${short(note.lesson,1000)} Boundary: ${short(note.confidence,200)} Recheck applicability; this is not live-world success or adoption permission.`,
             evidenceRefs:note.evidenceRefs.slice(0,8)});
         }catch{/* Other historical notes remain data and are not injected as optimizer policy. */}
       }

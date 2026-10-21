@@ -27,6 +27,19 @@ FRONT = "---\nname: minecraft-method\ndescription: Bounded Minecraft method for 
 OUT = sys.stdout
 
 
+def method_guidance(text: str) -> str:
+    """Keep the method identity while allowing agent-authored skill descriptions."""
+    normalized = text.replace("\r\n", "\n")
+    match = re.fullmatch(r"---\n(.*?)\n---\n?(.*)", normalized, re.S)
+    if not match or len(match[1]) > 2000:
+        raise ValueError("Method skill needs bounded frontmatter and name: minecraft-method")
+    name = re.search(r"^name:[ \t]*(?:minecraft-method|'minecraft-method'|\"minecraft-method\")[ \t]*$", match[1], re.M)
+    description = re.search(r"^description:[ \t]*(\S[^\n]*)$", match[1], re.M)
+    if not name or not description or len(description[1]) > 800 or len(match[2]) > 4000:
+        raise ValueError("Preserve the method skill name and bounded description/guidance")
+    return match[2]
+
+
 def verify_install() -> None:
     if sys.version_info < (3, 12) or os.name == "nt":
         raise RuntimeError("Harness2 requires Linux Python 3.12+ (WSL is supported)")
@@ -120,11 +133,10 @@ def main():
         params = json.loads(harness[PARAMS])
         if not isinstance(params, dict) or len(json.dumps(params)) > 4096:
             raise ValueError("params.json must contain one bounded object")
-        if not harness[SKILL].startswith(FRONT) or len(harness[SKILL]) - len(FRONT) > 4000:
-            raise ValueError("Preserve method skill frontmatter and bounded guidance")
+        guidance = method_guidance(harness[SKILL])
         if not harness[CODE].strip() or len(harness[CODE]) > 12000:
             raise ValueError("run.js must be a bounded MethodRunner function body")
-        return {"code": harness[CODE], "params": params, "guidance": harness[SKILL][len(FRONT):]}
+        return {"code": harness[CODE], "params": params, "guidance": guidance}
 
     class Adapter:
         def __init__(self):
