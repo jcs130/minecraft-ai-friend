@@ -35,6 +35,7 @@ def test_server_denial_beyond_host_preview_remains_queryable(runtime):
     assert "ACTION_NOT_COUNTED" not in inspected["facts"]["serverFeedback"]
     query = inspected.get("fact_detail_queries", {}).get("serverFeedback")
     assert query and query["available"], inspected.keys()
+    assert query["json_characters"] == len(json.dumps(text, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
     assert original(port, rid, inspected["evidence_ref"], query["detail_path"]) == text
     assert not port.state()["review"].get("result")
 

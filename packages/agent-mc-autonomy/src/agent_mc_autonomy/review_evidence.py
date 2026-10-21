@@ -84,6 +84,7 @@ def original_facts(facts, useful):
         if available:
             originals[key] = text
             remaining -= size
+            status[key]["json_characters"] = len(encoded(text))
         else:
             status[key]["reason"] = "Original exceeds the bounded review store; use the source fact handle."
     return originals, status
@@ -231,7 +232,8 @@ def compact(evidence, reference, last_decision=None):
                                              if stored.get("available") else {})}
             elif value != evidence["facts"][key]:
                 queries[key] = {"available": True, "detail_path": ["evidence", "facts", key],
-                                "utf8_bytes": len(encoded(evidence["facts"][key]).encode("utf-8"))}
+                                "utf8_bytes": len(encoded(evidence["facts"][key]).encode("utf-8")),
+                                "json_characters": len(encoded(evidence["facts"][key]))}
         if queries:
             result["fact_detail_queries"] = queries
     # Retain success and failure counts/samples together, rather than slicing a
