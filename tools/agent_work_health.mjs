@@ -13,19 +13,21 @@ try {
   const module = await import(pathToFileURL(resolve(root,'dist/runtime/core/work-routines.js')).href);
   const { MethodRunner } = await import(pathToFileURL(resolve(root,'dist/runtime/core/method-runner.js')).href);
   const { MINECRAFT_TOOL_DECLS } = await import(pathToFileURL(resolve(root,'dist/runtime/core/world.js')).href);
-  const ids = ['farm_harvest','gather_logs','deposit_surplus','restock'];
+  const ids = ['farm_harvest','gather_logs','deposit_surplus','restock','navigate_route','swim_to','flight_route'];
   check('catalog',JSON.stringify(module.listWorkRoutines().map(r=>r.id))===JSON.stringify(ids));
   check('tool-routine-schema',MINECRAFT_TOOL_DECLS.find(t=>t.name==='mc_script')?.parameters.properties.routine
     && MINECRAFT_TOOL_DECLS.find(t=>t.name==='mc_script').description.includes('routine'));
   const manifest=JSON.parse(await readFile(resolve(root,'dist/build.json'),'utf8'));
-  for (const file of ['core/work-routines.ts','core/skills-harvest.ts','core/skills-gather.ts','core/skills.ts',
-    'core/executor.ts','core/world.ts','core/method-runner.ts','core/method-mineflayer.ts','core/precheck.ts','core/receipt.ts','core/method-api.ts','src/extension.ts']) {
+  for (const file of ['core/work-routines.ts','core/movement-routines.ts','core/skills-control.ts','core/skills-harvest.ts','core/skills-gather.ts','core/skills.ts',
+    'core/executor.ts','core/world.ts','core/flight.ts','core/method-runner.ts','core/method-mineflayer.ts','core/precheck.ts','core/receipt.ts','core/method-api.ts','src/extension.ts']) {
     const digest=createHash('sha256').update(await readFile(resolve(root,file))).digest('hex');
     check(`source:${file}`,manifest.sourceFiles.some(row=>row.file===file&&row.sha256===digest));
   }
   for (const id of ids) {
     const params = id==='farm_harvest'?{dimension:'overworld',crop:'wheat',cells:[[1,64,0]]}
       :id==='gather_logs'?{dimension:'overworld',block:'oak_log',cells:[[1,64,0]]}
+      :id==='navigate_route'||id==='flight_route'?{dimension:'overworld',waypoints:[[1,64,0]]}
+      :id==='swim_to'?{dimension:'overworld',at:[1,64,0]}
       :{dimension:'overworld',chest:[1,64,0],items:[{item:'dirt',count:1}]};
     const result=await new Promise(resolveRun=>{
       const runner=new MethodRunner({onFinish:resolveRun,call:()=>{throw Error('Read-only smoke attempted a World action');}});
@@ -36,6 +38,6 @@ try {
   try {module.prepareWorkRoutine('restock',{chest:[0,64,0],items:[{item:'dirt',count:1}]});check('bad-params-rejected',false);}
   catch {check('bad-params-rejected',true);}
 } catch(error) { report.error=String(error); }
-report.ok=!report.error&&Object.values(report.checks).every(Boolean)&&Object.keys(report.checks).length>=19;
+report.ok=!report.error&&Object.values(report.checks).every(Boolean)&&Object.keys(report.checks).length>=25;
 console.log(JSON.stringify(report));
 if(!report.ok)process.exitCode=1;

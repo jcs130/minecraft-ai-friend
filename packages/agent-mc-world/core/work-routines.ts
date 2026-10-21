@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto';
 import { Ajv } from 'ajv';
 import { METHOD_LIMITS, type MethodRequest } from './method-runner.ts';
+import { MOVEMENT_ROUTINES } from './movement-routines.ts';
 
 export const WORK_ROUTINE_VERSION = 1;
 export const WORK_ROUTINE_SCHEMA = {
@@ -172,6 +173,7 @@ const ROUTINES: WorkRoutine[] = [
     conditions: ['count 是目标随身总量，不是追加数量；每项0–64，最多8种',
       '缺货、背包满或数量未达标即返回；不会自动换箱或重复取物', '模组物品须有正确的原生物品身份，不能把投影 paper 当原生物品名'],
     parameters: storageSchema, code: storageSource(false) },
+  ...MOVEMENT_ROUTINES,
 ];
 
 const ajv = new Ajv({ allErrors: true, strict: true });

@@ -6,10 +6,12 @@ const SDK_API = Object.freeze({
     + 'routine:{op:"read",id:"farm_harvest"} 读取参数 schema、源码、版本与适用条件。'
     + 'routine:{op:"run",id},params:{...} 显式执行，返回 runId 后继续等 minecraft.method 终态或按 runId 查询。'
     + 'farm_harvest 收割补种；gather_logs 定点采木；deposit_surplus 保留指定数量并存余料；restock 补至目标随身数量。'
+    + 'navigate_route 依次走多路点；swim_to 短程三维游泳（非水下A*）；flight_route 使用已有服务端权限分段飞行。'
     + '所有坐标为绝对坐标并要求 dimension；最多8格/物种，120秒；现有单写者队列、保护、取消/死亡/断线收尾保持。'
     + '运行结果含 outcome/goalCompleted/reason/remaining/records/inventoryDelta；completed 脚本不等于工作成功。'
     + '停止或部分完成后先核验 remaining 的现场，不自动重放；这不是后台 NPC 自主循环。',
-  'mc.state': 'await mc.state(): {sampledAt,connectionGeneration,snapshot,flight,queue,temporaryScaffolds,combatActive,combat,method}. '
+  'mc.state': 'await mc.state(): {sampledAt,connectionGeneration,snapshot,flight,movement,queue,temporaryScaffolds,combatActive,combat,method}. '
+    + 'movement contains self-local feetWet/headWet/bodyWet (boolean|null), raw oxygen (0..20|null), yaw/pitch (native radians|null), onGround and vehicleAttached. Unknown oxygen is not replaced with 20; dry-land oxygen may be a stale reading. '
     + 'snapshot can be null; position/dimension/health/food/inventory/equipment are under snapshot. '
     + 'No block scan is performed. Missing readings are unknown. Preserve sampledAt and connectionGeneration when comparing observations.',
   'mc.do': 'await mc.do(steps): {accepted,taskId?,kind,done,receipt,steps?,state}. '

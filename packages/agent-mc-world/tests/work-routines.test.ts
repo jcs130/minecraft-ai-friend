@@ -44,7 +44,7 @@ function rig(id: string, params: Record<string, unknown>, options: { noChange?: 
 
 describe('reviewed Mineflayer work routines', () => {
   it('discovers source, conditions, schemas and stable source identity without a server or worker', () => {
-    expect(listWorkRoutines().map(r => r.id)).toEqual(['farm_harvest', 'gather_logs', 'deposit_surplus', 'restock']);
+    expect(listWorkRoutines().map(r => r.id)).toEqual(['farm_harvest', 'gather_logs', 'deposit_surplus', 'restock', 'navigate_route', 'swim_to', 'flight_route']);
     const read = readWorkRoutine('farm_harvest');
     expect(read).toMatchObject({ version: 1, sourceHash: expect.stringMatching(/^[a-f0-9]{64}$/), automaticallyReplayed: false });
     expect(read.code).toContain('await mc.do');

@@ -52,7 +52,9 @@ Reviewed [Mineflayer work routines](docs/work-routines.md) are discoverable thro
 `mc_script {"routine":{"op":"list"}}`: harvest/replant, exact-cell logging,
 surplus storage and restocking reuse the existing body queue and return verified
 block/quantity evidence, partial results and remaining work. No extra model loop
-or server NPC mod is required.
+or server NPC mod is required. Reviewed [movement routines](docs/movement-routines.md)
+also cover verified waypoints, bounded swimming and permission-aware segmented
+flight, with actual positions, unknown-safe oxygen and remaining legs.
 
 ## Build and verification
 

@@ -47,6 +47,7 @@ import { resolveProcedure, procedureReference, PROCEDURE_RECEIPT_SCHEMA, PROCEDU
 import { MineflayerMethod, NATIVE_API } from './method-mineflayer.ts';
 import { methodApiHelp } from './method-api.ts';
 import { flightState } from './flight.ts';
+import { movementReadout } from './skills-control.ts';
 import { attachHearing, hearingReadout } from './perception-hearing.ts';
 import { AttentionReader, PERCEPTION_TOOLS, perceptionArgs, validDetection, type DetectionEvidence } from './perception-tools.ts';
 import { IdleBehaviorController, IdlePresentationContext, type IdleBehaviorScene } from './idle-behavior.ts';
@@ -4479,6 +4480,7 @@ export class MinecraftWorld implements World {
     return { sampledAt: new Date().toISOString(), connectionGeneration: this.connectionGeneration,
       method: this.methods.current,
       snapshot: this.snapshot({ scanBlocks: false }), flight: bot ? flightState(bot) : null,
+      movement: bot ? movementReadout(bot) : null,
       temporaryScaffolds: bot ? temporaryScaffoldReadout(bot) : null,
       queue: this.executor?.status() ?? null, bodyRestriction: this.bodyInhibitReason, combatActive: this.combat?.active ?? false,
       combat: this.extensionState() };

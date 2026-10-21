@@ -85,7 +85,7 @@ FOM_BEDROCK_MANIFEST = {'probe':'tools/fom_bedrock_health.py','managedBy':'owned
     'accountNamespace':'b_ / bh','requiresXboxValidation':True,'scope':'selected native item icons and standard gameplay; complex mod renderers remain separate'}
 AGENT_WORK_MANIFEST = {'probe':'tools/agent_work_health.mjs',
     'managedBy':'existing-agent-mc-world-method-runner', 'newDaemon':False,
-    'scope':'built-in Mineflayer work catalog, schemas, source identity and action-free syntax checks'}
+    'scope':'built-in Mineflayer work/movement catalog, schemas, source identity and action-free syntax checks'}
 SOCIETY_UNDERWORLD_MANIFEST = {'probe': 'tools/maw_underworld_health.py',
     'managedBy': 'existing-native-java-supervisor', 'questProvider': 'simplequests',
     'economyProvider': 'economycraft', 'scope': 'installed_content_and_menu_contract'}

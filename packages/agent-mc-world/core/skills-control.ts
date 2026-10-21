@@ -4,7 +4,25 @@ import { Vec3 } from 'vec3';
 import { flightState, flyWithInput } from './flight.ts';
 import { SkillBlocked, checkAbort, sleep, type SkillContext } from './skill-context.ts';
 import type { ControlKey, SkillCall } from './skills.ts';
-import { bodyInWater, headInWater } from './terrain.ts';
+import { bodyInWater, headInWater, WATER_BLOCKS } from './terrain.ts';
+
+/** Self-local readings only. Unknown water/oxygen is never replaced with a healthy default. */
+export function movementReadout(bot: Bot) {
+  const wet = (dy: number): boolean | null => {
+    try {
+      const block = bot.entity?.position && bot.blockAt(bot.entity.position.offset(0, dy, 0));
+      return block ? WATER_BLOCKS.has(block.name) : null;
+    } catch { return null; }
+  };
+  const feetWet = wet(0), headWet = wet(1);
+  const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const oxygen = finite(bot.oxygenLevel);
+  return { feetWet, headWet, bodyWet: feetWet === true || headWet === true ? true : feetWet === false && headWet === false ? false : null,
+    oxygen: oxygen !== null && oxygen >= 0 && oxygen <= 20 ? oxygen : null,
+    yaw: finite(bot.entity?.yaw), pitch: finite(bot.entity?.pitch),
+    onGround: typeof bot.entity?.onGround === 'boolean' ? bot.entity.onGround : null,
+    vehicleAttached: (bot as Bot & { vehicle?: unknown }).vehicle != null };
+}
 
 interface InputLease {
   keys: ControlKey[];
