@@ -845,6 +845,15 @@ function installConfirmedPlace(
       setTracing(1);
       try {
         for (let attempt = 1; attempt <= PLACE_TRIES; attempt++) {
+          // A direct exact-cell denial can arrive while a later attempt waits
+          // for confirmation. Recheck cached protection before another send;
+          // ordinary (preflight-off) retries do not add a diagnostic query.
+          if (attempt > 1) {
+            const retryProtection = await bot.cortiProtectCheck?.('place', dest);
+            if (retryProtection && retryProtection.status !== 'allow_likely') {
+              throw new SkillBlocked(`放置重试前的保护预检 ${retryProtection.status}: (${dest.x}, ${dest.y}, ${dest.z}) ${retryProtection.reason}`, [], 'server');
+            }
+          }
           const d = attempt > 1 ? eyeDist() : null;
           if (d !== null && d > PLACE_REACH && !changedAt(bot, dest, before, want)) {
             leftReach = d;
