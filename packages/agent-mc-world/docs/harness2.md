@@ -50,6 +50,10 @@ uv pip install --python ~/.cache/mc-harness2/venv/bin/python -r /path/to/agent-m
 
 ## SDK 接入
 
+`Harness2PracticeService` 从 `/learning` 提供显式后台入口。宿主注入原方法读取、当前身份、模型和隔离执行端后，`tool()` 返回可挂入 SDK/MCP 或 World 的公共 `mc_practice` 契约。`start` 需要原方法的精确版本，立即返回受理；`status` 只展开元数据，`result` 按需展开源码及原父版本。`cancel` 取消原任务，`close` 等待该任务退出；重启只读原账本，不恢复未决试跑。结果经过来源作用域校验。保存到源方法库、自然执行、复盘和采用仍走现有方法生命周期。
+
+`parseHarness2ModelReply` 接受完整 JSON 制品；宿主必须提供能够返回完整源码的工具为空、仅游戏任务的后台模型通道。不要把短观察摘要接口用于代码编辑，也不要截断 JSON 或把完整私人会话交给优化器。取消信号应传回原模型请求。调用和缓存 token 没有回执时保持未知。
+
 ```js
 import { Harness2Runner } from 'agent-mc-world/decisions';
 import { createPhysicsMethodPractice, createPracticeGameMemory } from 'agent-mc-world/learning';
