@@ -1,3 +1,7 @@
+## 2026-10-21 Numen个人模型与无模组CLI已上线
+
+服主批准后，等待可米安全离开墓穴，180/60/10秒预告、原Afu-MC-DailyBackup正常停启，E/F完整冷备份20261021-202316完成后只换API4b36f166，任务结果0。其他39插件、Paper、1238原API条目保持；原身份/库存/私有模型及Key核验，桐人原QwenPaw日常恢复。原版help/status/model list/set、旧版客户端本机资料提示和专用服默认关闭共享Key已生效。1772核心JVM、25精确Paper、8MCP和Fabric/NeoForge构建通过；正式28/16/19核验。源代码0b3e1bab9已推送，GitHub预发布https://github.com/jcs130/minecraft-numen/releases/tag/qiandengji-paper-1.21.1-20261021已匿名下载核对SHA。无新公网接口；DSH Numen驱动、手机Xbox真机和16模型负载未验。详见paper/docs/NUMEN_PAPER.md及paper/manifests/numen-owner-cli-release-20261021.json；下方候选段为此前时点。
+
 ## 2026-10-21 Numen个人模型与无模组CLI追加候选
 
 候选API4b36f166尚未上线，正式仍3ccb46aa；没有pending部署或修改玩家资料。原版/基岩复用原生CLI，新增help/status/model list/set，旧版仍用本机模型；专用服共享Key默认按主人UUID拒绝，仅私有凭据或明确授权。1772核心JVM、25精确Paper联机、8MCP及Fabric/NeoForge构建通过；E/F候选与3ccb回退已备，源代码0b3e1bab9。新维护须本次确认、预告、真人/副本检查及原完整双盘冷备份；DSH当前仍Mineflayer适配器，尚未实现Numen驱动，不新增公网接口。见NUMEN_PAPER.md及numen-owner-cli-candidate-20261021.json。

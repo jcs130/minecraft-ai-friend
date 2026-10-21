@@ -1,3 +1,7 @@
+## 2026-10-21 Numen个人模型与无模组CLI已上线
+
+服主批准后，等待可米安全离开墓穴，180/60/10秒预告、原Afu-MC-DailyBackup正常停启，E/F完整冷备份20261021-202316完成后只换API4b36f166，任务结果0。其他39插件、Paper、1238原API条目保持；原身份/库存/私有模型及Key核验，桐人原QwenPaw日常恢复。原版help/status/model list/set、旧版客户端本机资料提示和专用服默认关闭共享Key已生效。1772核心JVM、25精确Paper、8MCP和Fabric/NeoForge构建通过；正式28/16/19核验。源代码0b3e1bab9已推送，GitHub预发布https://github.com/jcs130/minecraft-numen/releases/tag/qiandengji-paper-1.21.1-20261021已匿名下载核对SHA。无新公网接口；DSH Numen驱动、手机Xbox真机和16模型负载未验。详见paper/docs/NUMEN_PAPER.md及paper/manifests/numen-owner-cli-release-20261021.json；下方候选段为此前时点。
+
 ## 2026-10-21 官方 Numen Release 兼容已上线
 
 服主批准后等待可米墓穴正常结束，重新180/60/10秒预告、原Afu-MC-DailyBackup正常停启，E/F完整冷备份20261021-190408后仅替换Numen API为3ccb46aa，任务结果0。其他1205原条目、Numen内容82133ebd及其他39插件保持；原物品/UUID/归属核验后桐人日常恢复。官方Fabric0.1.4/0.1.4.1可用原JAR配置本机模型、召唤、执行和收回执；原版Java仍可入服，基岩/numenmenu保持。1753 JVM、20精确候选E2E、2官方Fabric图形闭环、15官方NeoForge codec、8原生MCP及14基岩协议/冷启动检查通过；正式21/10/19核验。未做完整NeoForge图形、手机Xbox或16模型长期负载验收。见NUMEN_PAPER.md及numen-release-compat-release-20261021.json；下方6684为此前版本。
