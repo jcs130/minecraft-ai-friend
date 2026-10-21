@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "status": "validated_candidate_not_deployed",
+  "createdAt": "2026-10-21T01:09:02.197472+00:00",
+  "productionUnchanged": true,
+  "production": [
+    {
+      "file": "AgentVision-0.1.0.jar",
+      "sha256": "4a092854cf5769d39342b3db07c02e921684acaa4a8b664dcece4b188891d345"
+    },
+    {
+      "file": "AgentFriend-0.4.47.9.jar",
+      "sha256": "6b14294c7759873ab775e2cbd43f70ecbf9737fdf761a1ae43d03d7782b54b89"
+    },
+    {
+      "file": "numen-paper-1.21.1-0.1.4.jar",
+      "sha256": "c6cfe448bc69cebe27c0c0e807c1cb7a1b674a534cf2e21f824d8c8e56a7ce58"
+    }
+  ],
+  "candidate": [
+    {
+      "file": "AgentVision-0.1.1.jar",
+      "sha256": "bf00bb818e824f1b672c441be3fd2838fb072d9d6a066fcffcb704af4654feab"
+    },
+    {
+      "file": "numen-paper-1.21.1-0.1.4.jar",
+      "sha256": "82133ebd12d89db5b7af515160562b64296eebca119f1e0473761ccd85c2bab1"
+    }
+  ],
+  "paper": "1.21.1 build 133 / Java21",
+  "scope": [
+    "Verified, bounded terrain hints shared by native Numen and network Agent vision",
+    "Current shapes and eye/body geometry revalidated before every cached rejection",
+    "At most8 cells per hint and1024 slots per world; no entity references in terrain hints",
+    "One queue pass per tick, native position reads, immediate viewer release on disconnect",
+    "No async world access, extra plugin dependency or client change"
+  ],
+  "tests": {
+    "unit": {
+      "tests": 211,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "paperGameTests": 32,
+    "protocol": {
+      "1.21.1": 29,
+      "1.20.6": 29
+    },
+    "sixteenConnections": 14,
+    "deploymentBoundary": 16,
+    "numenSourceRebuildSameSha256": "82133ebd12d89db5b7af515160562b64296eebca119f1e0473761ccd85c2bab1"
+  },
+  "performance": {
+    "hidden": {
+      "baselineNs": 1496.64,
+      "candidateNs": 247.74,
+      "timeChangePercent": -83.45,
+      "baselineBytes": 8042.56,
+      "candidateBytes": 169.06,
+      "allocationChangePercent": -97.9,
+      "pairs": 512,
+      "visiblePairs": 0,
+      "baselineWorldRays": 442368,
+      "candidateWorldRays": 0
+    },
+    "open": {
+      "baselineNs": 118.24,
+      "candidateNs": 113.54,
+      "timeChangePercent": -3.97,
+      "baselineBytes": 249.06,
+      "candidateBytes": 249.06,
+      "allocationChangePercent": 0.0,
+      "pairs": 512,
+      "visiblePairs": 512,
+      "baselineWorldRays": 147456,
+      "candidateWorldRays": 147456
+    }
+  },
+  "limitations": [
+    "Controlled same-scene component timings; not a full-server83% speedup",
+    "16 real protocol clients, not16 autonomous LLM workloads",
+    "No new phone/Xbox visual or long-running model workload validation",
+    "Original2ms budget remains cooperative, not a hard real-time bound"
+  ],
+  "evidenceRoot": "E:\\MC\\ops\\repairs\\agent-vision-cache-20261021\\evidence",
+  "mirrorRoot": "F:\\MC-backups\\repairs\\agent-vision-cache-20261021",
+  "opsHelper": {
+    "beforeSha256": "a60781e531d18512e2bbbf6eb4f028ad6e4409c81f211fb957407f8783558db4",
+    "sha256": "b53eef650f6d3c9fc9a67ffbdd1004afc2cb58d6781c0c90df16dbeb0e074c2d"
+  },
+  "deployment": {
+    "plan": "deployment-plan.not-queued.json",
+    "queued": false,
+    "restartApproval": "required",
+    "procedure": "Original notices, body pause, maintenance gates, normal stop and complete E/F cold backups before installing.",
+    "rollback": "Restore the pinned0.1.0 and c6cfe448 content through the original stopped-service lifecycle; preserve current player/world data."
+  },
+  "patch": {
+    "upstream": "https://github.com/Dwinovo/minecraft-numen",
+    "base": "7c931600c2269d21216bb6f9090588cdbe0beb01",
+    "sha256": "7b1ed4f614f38b42b75926196905b40fc5071c687e944ce5d9cc1c867466b6ed"
+  },
+  "retainedFailures": [
+    "Initial RCON-only benchmark sender guard",
+    "Corner fixture still inside the solid wall",
+    "Initial candidate measured only9.65% less hidden-query time",
+    "Per-ray-only savings assertion superseded by complete-query proof counting"
+  ]
+}

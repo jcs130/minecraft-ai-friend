@@ -47,6 +47,7 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
         final Map<UUID, Target> targets = new HashMap<>();
         final ArrayDeque<Target> pending = new ArrayDeque<>();
         Target approvedSpawn;
+        int remainingVisits;
         Viewer(Player player) { this.player = player; }
         Target target(Entity entity) {
             return targets.computeIfAbsent(entity.getUniqueId(), id -> {
@@ -64,7 +65,8 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
     private int interval, maxChecks, maxVisits;
     private long budgetNanos;
     private int budgetTick = Integer.MIN_VALUE, tickChecks, peakChecks;
-    private long tickWorkNanos, checks, hides, shows, deferrals, maxTickNanos;
+    private long tickWorkNanos, totalWorkNanos, checks, hides, shows, deferrals, maxTickNanos, totalVisits;
+    private int lastVisits, peakVisits;
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -98,12 +100,18 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
                 var work = NearbyEntities.work();
                 long targets = viewers.values().stream().mapToLong(v -> v.targets.size()).sum();
                 sender.sendMessage("MC_VISION {\"enabled\":" + running + ",\"viewers\":" + viewers.size()
+                        + ",\"queuedViewers\":" + roundRobin.size()
                         + ",\"targets\":" + targets + ",\"checks\":" + checks + ",\"hides\":" + hides
                         + ",\"shows\":" + shows + ",\"deferred\":" + deferrals
                         + ",\"maxTickMicros\":" + maxTickNanos / 1000 + ",\"maxChecks\":" + maxChecks
                         + ",\"peakChecks\":" + peakChecks
+                        + ",\"tick\":" + Bukkit.getCurrentTick() + ",\"visits\":" + totalVisits
+                        + ",\"lastVisits\":" + lastVisits + ",\"peakVisits\":" + peakVisits
+                        + ",\"workNanos\":" + totalWorkNanos
                         + ",\"budgetMicros\":" + budgetNanos / 1000 + ",\"nativeQueries\":" + work.queries()
-                        + ",\"worldRays\":" + work.worldRays() + ",\"shapeSkips\":" + work.shapeSkips() + "}");
+                        + ",\"worldRays\":" + work.worldRays() + ",\"shapeSkips\":" + work.shapeSkips()
+                        + ",\"hintHits\":" + work.hintHits() + ",\"hintReads\":" + work.hintReads()
+                        + ",\"hintEntries\":" + work.hintEntries() + "}");
                 return true;
             }
         };
@@ -154,11 +162,15 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
     private boolean visible(Viewer viewer, Target target) {
         long start = System.nanoTime();
         try {
-            if (target.entity.getWorld() != viewer.player.getWorld()) return false;
-            if (viewer.player.getLocation().distanceSquared(target.entity.getLocation()) > radiusSquared) return false;
-            return NearbyEntities.visibleTo(((CraftPlayer) viewer.player).getHandle(),
-                    ((CraftEntity) target.entity).getHandle());
-        } finally { tickWorkNanos += System.nanoTime() - start; }
+            var observer = ((CraftPlayer) viewer.player).getHandle();
+            var entity = ((CraftEntity) target.entity).getHandle();
+            if (entity.level() != observer.level() || observer.distanceToSqr(entity) > radiusSquared) return false;
+            return NearbyEntities.visibleTo(observer, entity);
+        } finally {
+            long duration = System.nanoTime() - start;
+            tickWorkNanos += duration;
+            totalWorkNanos += duration;
+        }
     }
 
     private boolean reserve() {
@@ -178,15 +190,29 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
     private void tick() {
         long start = System.nanoTime();
         int visits = 0;
-        while (!roundRobin.isEmpty() && visits++ < maxVisits) {
+        int remaining = 0, idle = 0;
+        for (Viewer viewer : viewers.values()) {
+            viewer.remainingVisits = viewer.pending.size();
+            remaining += viewer.remainingVisits;
+        }
+        // Snapshot one pass. A small, not-yet-due queue must not spin all 512 visit slots every tick.
+        while (remaining > 0 && !roundRobin.isEmpty() && visits < maxVisits) {
             Viewer viewer = roundRobin.removeFirst();
             if (viewers.get(viewer.player.getUniqueId()) != viewer) continue;
-            if (!managed(viewer.player)) { removeViewer(viewer, true); continue; }
-            roundRobin.addLast(viewer);
-            if (viewer.pending.isEmpty()) {
-                if (roundRobin.stream().allMatch(v -> v.pending.isEmpty())) break;
+            if (!managed(viewer.player)) {
+                remaining -= viewer.remainingVisits;
+                removeViewer(viewer, true);
                 continue;
             }
+            roundRobin.addLast(viewer);
+            if (viewer.remainingVisits == 0 || viewer.pending.isEmpty()) {
+                if (++idle >= roundRobin.size()) break;
+                continue;
+            }
+            idle = 0;
+            viewer.remainingVisits--;
+            remaining--;
+            visits++;
             Target target = viewer.pending.removeFirst();
             if (viewer.targets.get(target.entity.getUniqueId()) != target) continue;
             if (!target.entity.isValid() || !ordinary(target.entity)
@@ -203,6 +229,9 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
             target.nextCheck = Bukkit.getCurrentTick() + interval;
             if (visible) restore(viewer, target); else hide(viewer, target);
         }
+        lastVisits = visits;
+        totalVisits += visits;
+        peakVisits = Math.max(peakVisits, visits);
         maxTickNanos = Math.max(maxTickNanos, System.nanoTime() - start);
     }
 
@@ -232,6 +261,7 @@ public final class AgentVisionPlugin extends JavaPlugin implements Listener, Age
 
     private void removeViewer(Viewer viewer, boolean restore) {
         viewers.remove(viewer.player.getUniqueId());
+        roundRobin.remove(viewer); // Empty queues no longer spin, so release disconnected viewers here.
         if (restore) for (Target target : viewer.targets.values()) restore(viewer, target);
         viewer.targets.clear();
         viewer.pending.clear();

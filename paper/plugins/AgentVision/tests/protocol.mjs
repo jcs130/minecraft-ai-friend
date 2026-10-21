@@ -139,7 +139,18 @@ try {
   check('paid sense expiration restores ordinary occlusion',!entity(agent,zombie));
   const stats=await rc('agentvision status');result.stats=JSON.parse(stats.slice(stats.indexOf('{'),stats.lastIndexOf('}')+1));
   check('native blocker reuse exercised',result.stats.shapeSkips>0);
+  check('shared terrain cache exercised',result.stats.hintHits>0);
+  await sleep(500);
+  const later=await rc('agentvision status');
+  const laterStats=JSON.parse(later.slice(later.indexOf('{'),later.lastIndexOf('}')+1));
+  check('small queues stop after one pass',laterStats.lastVisits<=laterStats.targets&&laterStats.lastVisits<512);
+  check('bounded cache retains no more than its world capacity',laterStats.hintEntries<=1024);
   check('no protocol client error',bots.every(b=>b.failures.length===0));
+  bots.forEach(b=>b.quit());
+  await sleep(750);
+  const disconnected=await rc('agentvision status');
+  result.afterDisconnect=JSON.parse(disconnected.slice(disconnected.indexOf('{'),disconnected.lastIndexOf('}')+1));
+  check('disconnect releases all viewer queues',result.afterDisconnect.viewers===0&&result.afterDisconnect.queuedViewers===0);
   result.passed=true;
 } catch(error) {
   result.error=String(error.stack??error);

@@ -12,7 +12,7 @@ function Content-NumenPaperJar([string]$name) {
 }
 
 function Content-AgentVisionJar([string]$name) {
-    return $name -ceq 'AgentVision-0.1.0.jar'
+    return $name -ceq 'AgentVision-0.1.0.jar' -or $name -ceq 'AgentVision-0.1.1.jar'
 }
 
 function Content-YsmProxyTarget([string]$name) {
@@ -125,7 +125,7 @@ function Deploy-PendingContent {
     foreach ($file in @($plan.removeJars)) {
         if ($file.name -match '^ysm-proxy/((?:AgentAppearance|LoginGuard)-[0-9]+\.[0-9]+\.[0-9]+\.jar)$') {
             $target = Content-YsmProxyTarget $Matches[1]
-        } elseif (Content-FirstPartyPreviousJar $file.name) {
+        } elseif ((Content-FirstPartyPreviousJar $file.name) -or (Content-AgentVisionJar $file.name)) {
             $target = Join-Path (Join-Path $serverDir 'plugins') $file.name
         } elseif ($file.name -eq 'worldedit-bukkit-7.3.9.jar') {
             # This exact reviewed replacement is necessary: FAWE provides the

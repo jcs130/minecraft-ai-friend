@@ -1,5 +1,5 @@
 name: AgentVision
-version: '0.1.0'
+version: '0.1.1'
 main: org.afuhome.agentvision.AgentVisionPlugin
 api-version: '1.21'
 description: Shared ordinary entity vision for Numen and network Agents.

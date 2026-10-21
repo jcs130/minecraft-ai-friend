@@ -3,7 +3,8 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot '../content-deploy.ps1')
 foreach($taskCase in @(
     @('AgentVision-0.1.0.jar',$true),
-    @('AgentVision-0.1.1.jar',$false),
+    @('AgentVision-0.1.1.jar',$true),
+    @('AgentVision-0.1.2.jar',$false),
     @('agentvision-0.1.0.jar',$false),
     @('../AgentVision-0.1.0.jar',$false),
     @('AgentVision-0.1.0.jar.disabled',$false),
@@ -18,9 +19,9 @@ New-Item -ItemType Directory -Path (Join-Path $serverDir 'plugins'),$opsDir -For
 $script:taskListening=$false
 function Listener{return $script:taskListening}
 function Log([string]$text){}
-$taskName='AgentVision-0.1.0.jar'
+$taskName='AgentVision-0.1.1.jar'
 $taskFile=@{source=(Join-Path $taskSource $taskName);target=$taskName;sha256=(Get-FileHash -LiteralPath (Join-Path $taskSource $taskName) -Algorithm SHA256).Hash}
-function TaskPlan($id,$file){@{schema=1;id=$id;files=@($file);removeJars=@()}|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $opsDir 'content-plugins.pending.json') -Encoding UTF8}
+function TaskPlan($id,$file,$remove=@()){@{schema=1;id=$id;files=@($file);removeJars=@($remove)}|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $opsDir 'content-plugins.pending.json') -Encoding UTF8}
 function Refuse($id,$file,$reason){
     TaskPlan $id $file
     $failed=$false
@@ -33,10 +34,21 @@ Refuse 'vision-fixture-running' $taskFile 'requires stopped Paper'
 $script:taskListening=$false
 $bad=$taskFile.Clone();$bad.sha256='0'*64
 Refuse 'vision-fixture-hash' $bad 'source hash mismatch'
-$bad=$taskFile.Clone();$bad.target='AgentVision-0.1.1.jar'
+$bad=$taskFile.Clone();$bad.target='AgentVision-0.1.2.jar'
 Refuse 'vision-fixture-version' $bad 'Unexpected plugin JAR'
-TaskPlan 'vision-fixture-success' $taskFile
+foreach($taskBadRemoval in @('AgentVision-0.1.2.jar','../AgentVision-0.1.0.jar')) {
+    TaskPlan ('vision-fixture-remove-'+[guid]::NewGuid().ToString('N')) $taskFile @(@{name=$taskBadRemoval;sha256=$taskFile.sha256})
+    $failed=$false
+    try{Deploy-PendingContent}catch{if($_ -notmatch 'Only previous first-party plugin JAR may be removed'){throw};$failed=$true}
+    if(-not $failed){throw 'Unsafe AgentVision removal accepted'}
+    if(@(Get-ChildItem -LiteralPath $serverDir -Recurse -File).Count){throw 'Rejected removal wrote target'}
+}
+$taskOldName='AgentVision-0.1.0.jar'
+Copy-Item -LiteralPath $taskFile.source -Destination (Join-Path $serverDir ('plugins/'+$taskOldName))
+TaskPlan 'vision-fixture-success' $taskFile @(@{name=$taskOldName;sha256=$taskFile.sha256})
 Deploy-PendingContent
 if((Get-FileHash -LiteralPath (Join-Path $serverDir ('plugins/'+$taskName)) -Algorithm SHA256).Hash -ne $taskFile.sha256){throw 'Installed AgentVision mismatch'}
 if(Test-Path -LiteralPath (Join-Path $opsDir 'content-plugins.pending.json')){throw 'Plan not consumed'}
-Write-Output 'AgentVision deploy: 11 boundary, stopped-service, hash and install checks passed; production untouched'
+if(Test-Path -LiteralPath (Join-Path $serverDir ('plugins/'+$taskOldName))){throw 'Previous AgentVision was left installed'}
+if((Get-FileHash -LiteralPath (Join-Path $opsDir 'repairs/vision-fixture-success/deployment-rollback/1.original') -Algorithm SHA256).Hash -ne $taskFile.sha256){throw 'Removed AgentVision rollback copy missing'}
+Write-Output 'AgentVision deploy: 16 boundary, stopped-service, hash, removal and rollback checks passed; production untouched'

@@ -91,7 +91,7 @@ index 7b457f8..8f53115 100644
       * 走位带:她该稳在「它够不着我」与「我够得着它」之间,而且真的能砍到。
       *
 diff --git a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java
-index 17080fd..705cbb6 100644
+index 17080fd..59da3e2 100644
 --- a/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java
 +++ b/numen/common/src/gametest/java/com/dwinovo/numen/gametest/PerceptionGameTests.java
 @@ -2,6 +2,7 @@ package com.dwinovo.numen.gametest;
@@ -102,7 +102,7 @@ index 17080fd..705cbb6 100644
  import com.google.gson.JsonObject;
  import com.google.gson.JsonParser;
  import java.util.List;
-@@ -154,6 +155,231 @@ public class PerceptionGameTests {
+@@ -154,6 +155,308 @@ public class PerceptionGameTests {
          return rowOf(scan, entity) != null;
      }
  
@@ -319,13 +319,90 @@ index 17080fd..705cbb6 100644
 +        Pig pig = visionPig(helper, new BlockPos(10, 2, 3));
 +        visionWall(helper, 7, 1, 5, 0, 6, Blocks.STONE.defaultBlockState());
 +        var before = NearbyEntities.work();
-+        helper.assertTrue(!NearbyEntities.visibleTo(companion, pig), "wall leaked target");
++        helper.assertTrue(!NearbyEntities.viewOf(companion, pig).visible(), "wall leaked target");
 +        var after = NearbyEntities.work();
 +        helper.assertTrue(after.worldRays() - before.worldRays() <= 3,
 +                "solid wall caused excessive full-world rays: " + (after.worldRays() - before.worldRays()));
 +        helper.assertTrue(after.shapeSkips() - before.shapeSkips() >= 25, "blockers were not reused");
 +        visionWall(helper, 7, 1, 5, 0, 6, Blocks.GLASS.defaultBlockState());
 +        helper.assertTrue(NearbyEntities.visibleTo(companion, pig), "same-tick block change used stale cache");
++        pig.discard();
++        CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        helper.succeed();
++    }
++
++    /** 相邻观察者可复用实墙的地形提示,随后同一刻拆墙会立即失效。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_perception")
++    public static void entity_vision_shared_hint_rechecks_wall_and_moving_bodies(GameTestHelper helper) {
++        NumenPlayer first = spawnAt(helper, "gametest_hint_a", new BlockPos(3, 2, 3), false);
++        NumenPlayer second = spawnAt(helper, "gametest_hint_b", new BlockPos(3, 2, 3), false);
++        second.setPos(first.getX(), first.getY(), first.getZ() + 0.1);
++        first.setNoGravity(true); second.setNoGravity(true);
++        Pig pig = visionPig(helper, new BlockPos(10, 2, 3));
++        visionWall(helper, 7, 1, 5, 0, 6, Blocks.STONE.defaultBlockState());
++        helper.assertTrue(!NearbyEntities.visibleTo(first, pig), "wall leaks first observer");
++        var before = NearbyEntities.work();
++        helper.assertTrue(!NearbyEntities.visibleTo(second, pig), "wall leaks second observer");
++        var after = NearbyEntities.work();
++        helper.assertTrue(after.hintHits() > before.hintHits(), "observers did not share terrain evidence");
++        helper.assertTrue(after.worldRays() == before.worldRays(), "shared solid cover retraced the whole world");
++        visionWall(helper, 7, 1, 5, 0, 6, Blocks.GLASS.defaultBlockState());
++        helper.assertTrue(NearbyEntities.visibleTo(second, pig), "same-tick removal left a stale hidden result");
++        visionWall(helper, 7, 1, 5, 0, 6, Blocks.STONE.defaultBlockState());
++        helper.assertTrue(!NearbyEntities.visibleTo(first, pig), "wall rebuilding was not noticed");
++        second.setPos(helper.absolutePos(new BlockPos(3, 2, 14)).getCenter());
++        helper.assertTrue(NearbyEntities.viewOf(second, pig).visible(), "corner fixture is still behind the wall");
++        helper.assertTrue(NearbyEntities.visibleTo(second, pig), "moving around the corner reused the old view");
++        pig.setPos(helper.absolutePos(new BlockPos(5, 2, 3)).getCenter());
++        helper.assertTrue(NearbyEntities.visibleTo(first, pig), "target moved in front of its cached wall");
++        pig.discard();
++        CompanionFactory.despawn(helper.getLevel().getServer(), first);
++        CompanionFactory.despawn(helper.getLevel().getServer(), second);
++        helper.succeed();
++    }
++
++    /** 缓存不能把有孔的墙拼成实心盒,也不能替代 sight 的最近命中位置。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_perception")
++    public static void entity_vision_hint_does_not_fill_a_window_or_change_sight(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_hint_window", new BlockPos(3, 2, 3), false);
++        companion.setNoGravity(true);
++        Pig pig = visionPig(helper, new BlockPos(10, 2, 3));
++        visionWall(helper, 8, 1, 5, 0, 6, Blocks.STONE.defaultBlockState());
++        helper.assertTrue(!NearbyEntities.visibleTo(companion, pig), "far wall leaks");
++        visionWall(helper, 6, 1, 5, 0, 6, Blocks.STONE.defaultBlockState());
++        var exact = NearbyEntities.viewOf(companion, pig);
++        helper.assertTrue(!exact.visible() && exact.blockedBy().getX() == helper.absolutePos(new BlockPos(6, 2, 3)).getX(),
++                "detailed sight returned the cached far wall rather than the first wall");
++        visionWall(helper, 6, 1, 5, 0, 6, Blocks.AIR.defaultBlockState());
++        // Only the eye ray's cell is removed. Partial body visibility must invalidate the old rectangle.
++        helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(8, 3, 3)), Blocks.AIR.defaultBlockState());
++        helper.assertTrue(NearbyEntities.visibleTo(companion, pig), "cached rectangle filled an actual window");
++        pig.discard();
++        CompanionFactory.despawn(helper.getLevel().getServer(), companion);
++        helper.succeed();
++    }
++
++    /** 门的开关只变方块状态,不依赖破坏事件来清缓存。 */
++    @GameTest(template = "floor16", timeoutTicks = 200, batch = "numen_perception")
++    public static void entity_vision_hint_rechecks_door_state_in_the_same_tick(GameTestHelper helper) {
++        NumenPlayer companion = spawnAt(helper, "gametest_hint_door", new BlockPos(3, 2, 3), false);
++        companion.setNoGravity(true);
++        Pig pig = visionPig(helper, new BlockPos(10, 2, 3));
++        visionWall(helper, 7, 1, 5, 0, 6, Blocks.STONE.defaultBlockState());
++        var lower = helper.absolutePos(new BlockPos(7, 2, 3));
++        var closed = Blocks.OAK_DOOR.defaultBlockState()
++                .setValue(net.minecraft.world.level.block.DoorBlock.FACING, net.minecraft.core.Direction.EAST);
++        helper.getLevel().setBlockAndUpdate(lower, closed);
++        helper.getLevel().setBlockAndUpdate(lower.above(), closed.setValue(net.minecraft.world.level.block.DoorBlock.HALF,
++                net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER));
++        helper.assertTrue(!NearbyEntities.visibleTo(companion, pig), "closed door leaked pig");
++        helper.assertTrue(!NearbyEntities.visibleTo(companion, pig), "closed door was not stable");
++        helper.getLevel().setBlockAndUpdate(lower, closed.setValue(net.minecraft.world.level.block.DoorBlock.OPEN, true));
++        helper.getLevel().setBlockAndUpdate(lower.above(), closed
++                .setValue(net.minecraft.world.level.block.DoorBlock.HALF, net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER)
++                .setValue(net.minecraft.world.level.block.DoorBlock.OPEN, true));
++        helper.assertTrue(NearbyEntities.visibleTo(companion, pig), "opening the door retained stale cover");
++        helper.assertTrue(NearbyEntities.work().hintEntries() <= 1024, "cache grew past its per-world slot cap");
 +        pig.discard();
 +        CompanionFactory.despawn(helper.getLevel().getServer(), companion);
 +        helper.succeed();
@@ -355,12 +432,13 @@ index 8eba9b8..b91ba24 100644
  
      /**
 diff --git a/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java b/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java
-index f2eab4b..0f6c916 100644
+index f2eab4b..00d2f03 100644
 --- a/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java
 +++ b/numen/common/src/main/java/com/dwinovo/numen/scan/NearbyEntities.java
-@@ -1,7 +1,25 @@
+@@ -1,8 +1,30 @@
  package com.dwinovo.numen.scan;
  
++import it.unimi.dsi.fastutil.HashCommon;
 +import net.minecraft.core.BlockPos;
 +import net.minecraft.tags.FluidTags;
  import net.minecraft.world.entity.Entity;
@@ -368,6 +446,7 @@ index f2eab4b..0f6c916 100644
 +import net.minecraft.world.entity.player.Player;
 +import net.minecraft.world.level.BlockGetter;
 +import net.minecraft.world.level.ClipContext;
++import net.minecraft.world.level.Level;
 +import net.minecraft.world.level.block.FenceBlock;
 +import net.minecraft.world.level.block.HalfTransparentBlock;
 +import net.minecraft.world.level.block.LeavesBlock;
@@ -382,15 +461,18 @@ index f2eab4b..0f6c916 100644
  
 +import java.util.ArrayList;
  import java.util.List;
++import java.util.Map;
++import java.util.WeakHashMap;
  import java.util.function.Predicate;
  
-@@ -16,6 +34,113 @@ public final class NearbyEntities {
+ /**
+@@ -16,6 +38,238 @@ public final class NearbyEntities {
  
      private NearbyEntities() {}
  
 +    /** 普通视觉不报告完全遮挡、隐身或观战实体;透光材质与局部露出的身体仍看得见。 */
 +    public static boolean visibleTo(LivingEntity self, Entity target) {
-+        return viewOf(self, target).visible();
++        return viewOf(self, target, true).visible();
 +    }
 +
 +    /** 实体的视觉结果;完全遮挡时附眼睛方向上第一格遮挡,隐身和观战不编造挡路方块。 */
@@ -401,18 +483,33 @@ index f2eab4b..0f6c916 100644
 +    private static long queries;
 +    private static long worldRays;
 +    private static long shapeSkips;
++    private static long hintHits;
++    private static long hintReads;
++    private static final int HINT_SLOTS = 1024;
++    // 只存地形提示,不保存实体或世界引用。每维度固定槽数,各观察者共用。
++    private static final Map<Level, Hint[]> HINTS = new WeakHashMap<>();
 +
 +    /** 服务端主线程上的累计工作量,用于检查遮挡判断的实际成本,不记录实体或玩家资料。 */
-+    public record Work(long queries, long worldRays, long shapeSkips) {}
-+    public static Work work() { return new Work(queries, worldRays, shapeSkips); }
++    public record Work(long queries, long worldRays, long shapeSkips, long hintHits, long hintReads, int hintEntries) {}
++    public static Work work() {
++        int entries = 0;
++        for (Hint[] hints : HINTS.values()) for (Hint hint : hints) if (hint != null) entries++;
++        return new Work(queries, worldRays, shapeSkips, hintHits, hintReads, entries);
++    }
 +
 +    private record Occluder(BlockPos pos, VoxelShape shape) {}
++    private record Hint(Occluder[] blocks, OcclusionBox box) {}
 +
 +    /**
-+     * 先看眼睛,再看身体盒内的 3×3×3 个点,任意一点露出即可。点往盒内收最多一厘米,
-+     * 不用盒外的点绕过完整墙面;通常第一条就返回,只有被遮住才继续检查,不缓存移动或方块变化。
++     * 共享地形提示核实后可判完全遮挡;其余先看眼睛,再看身体盒内的 3×3×3 点,露出一点即可。
++     * 点往盒内收最多一厘米,不绕过整墙;提示每次重读形状与观察位置,不复用过期的显隐结论。
 +     */
 +    public static View viewOf(LivingEntity self, Entity target) {
++        // sight 还要返回最近的挡路格,不能把较远的缓存遮挡当作最近命中。
++        return viewOf(self, target, false);
++    }
++
++    private static View viewOf(LivingEntity self, Entity target, boolean useHint) {
 +        queries++;
 +        boolean invisible = self instanceof Player player ? target.isInvisibleTo(player) : target.isInvisible();
 +        if (self.level() != target.level() || target.isSpectator() || invisible) {
@@ -420,6 +517,17 @@ index f2eab4b..0f6c916 100644
 +        }
 +        Vec3 eye = self.getEyePosition();
 +        VisualRay ray = new VisualRay(eye, target.getEyePosition(), self);
++        Hint[] hints = HINTS.computeIfAbsent(self.level(), level -> new Hint[HINT_SLOTS]);
++        int slot = hintSlot(self, target);
++        Hint hint = hints[slot];
++        if (useHint && hint != null) {
++            // 每次重新读取全部证据块并以本观察者的上下文求形状,不用过期的显隐布尔值。
++            if (!validHint(self, ray, hint)) hints[slot] = null;
++            else if (covers(hint.box(), eye, target)) {
++                hintHits++;
++                return HIDDEN;
++            }
++        }
 +        worldRays++;
 +        BlockHitResult first = self.level().clip(ray);
 +        if (first.getType() == HitResult.Type.MISS) {
@@ -456,7 +564,106 @@ index f2eab4b..0f6c916 100644
 +                }
 +            }
 +        }
++        rememberHint(self, ray, hints, slot, occluders, eye, target);
 +        return new View(false, first.getBlockPos());
++    }
++
++    private static int hintSlot(Entity observer, Entity target) {
++        int key = observer.getBlockX() * 73428767 ^ observer.getBlockY() * 912931
++                ^ observer.getBlockZ() * 438289 ^ target.getBlockX() * 19349663
++                ^ target.getBlockY() * 83492791 ^ target.getBlockZ() * 73856093;
++        // 槽冲突只会少命中一次提示,实际几何仍会重新核对。
++        return HashCommon.mix(key) & (HINT_SLOTS - 1);
++    }
++
++    private static boolean validHint(LivingEntity self, VisualRay ray, Hint hint) {
++        for (Occluder block : hint.blocks()) {
++            hintReads++;
++            if (!self.level().hasChunkAt(block.pos())) return false;
++            BlockState state = self.level().getBlockState(block.pos());
++            VoxelShape now = Shapes.or(ray.getBlockShape(state, self.level(), block.pos()),
++                    ray.getFluidShape(state.getFluidState(), self.level(), block.pos()));
++            if (now != block.shape()) {
++                var boxes = now.toAabbs();
++                if (boxes.size() != 1 || !boxes.getFirst().equals(block.shape().bounds())) return false;
++            }
++        }
++        return true;
++    }
++
++    private static void rememberHint(LivingEntity self, VisualRay ray, Hint[] hints, int slot,
++                                     List<Occluder> blocks, Vec3 eye, Entity target) {
++        if (blocks.isEmpty() || blocks.getFirst().shape().toAabbs().size() != 1) return;
++        Hint prism = solidPrism(self, ray, blocks);
++        if (prism != null && covers(prism.box(), eye, target)) {
++            hints[slot] = prism;
++            return;
++        }
++        OcclusionBox merged = boxOf(blocks.getFirst());
++        List<Occluder> used = new ArrayList<>();
++        used.add(blocks.getFirst());
++        for (int pass = 0; pass < blocks.size(); pass++) {
++            boolean changed = false;
++            for (Occluder block : blocks) {
++                if (used.contains(block) || block.shape().toAabbs().size() != 1) continue;
++                OcclusionBox union = merged.merge(boxOf(block));
++                if (union == null) continue;
++                merged = union; used.add(block); changed = true;
++            }
++            if (!changed) break;
++        }
++        if (covers(merged, eye, target)) hints[slot] = new Hint(used.toArray(Occluder[]::new), merged);
++    }
++
++    /** 射线有时只碰到矩形墙面的三个角;最多核实8格,不能凭包围盒填平实际窗口。 */
++    private static Hint solidPrism(LivingEntity self, VisualRay ray, List<Occluder> blocks) {
++        int minX = Integer.MAX_VALUE, minY = minX, minZ = minX;
++        int maxX = Integer.MIN_VALUE, maxY = maxX, maxZ = maxX;
++        for (Occluder b : blocks) {
++            if (!fullCube(b.shape())) return null;
++            minX = Math.min(minX, b.pos().getX()); maxX = Math.max(maxX, b.pos().getX());
++            minY = Math.min(minY, b.pos().getY()); maxY = Math.max(maxY, b.pos().getY());
++            minZ = Math.min(minZ, b.pos().getZ()); maxZ = Math.max(maxZ, b.pos().getZ());
++        }
++        long width = (long) maxX - minX + 1, height = (long) maxY - minY + 1, depth = (long) maxZ - minZ + 1;
++        if (width > 8 || height > 8 || depth > 8 || width * height * depth > 8) return null;
++        List<Occluder> evidence = new ArrayList<>((int) (width * height * depth));
++        for (int x = minX; x <= maxX; x++) for (int y = minY; y <= maxY; y++) for (int z = minZ; z <= maxZ; z++) {
++            BlockPos pos = new BlockPos(x, y, z);
++            if (!self.level().hasChunkAt(pos)) return null;
++            BlockState state = self.level().getBlockState(pos);
++            VoxelShape shape = Shapes.or(ray.getBlockShape(state, self.level(), pos),
++                    ray.getFluidShape(state.getFluidState(), self.level(), pos));
++            if (!fullCube(shape)) return null;
++            evidence.add(new Occluder(pos, shape));
++        }
++        return new Hint(evidence.toArray(Occluder[]::new), new OcclusionBox(minX, minY, minZ, maxX + 1, maxY + 1, maxZ + 1));
++    }
++
++    private static boolean fullCube(VoxelShape shape) {
++        if (shape == Shapes.block()) return true;
++        return shape.toAabbs().size() == 1 && shape.bounds().equals(Shapes.block().bounds());
++    }
++
++    private static OcclusionBox boxOf(Occluder block) {
++        AABB a = block.shape().bounds();
++        BlockPos p = block.pos();
++        return new OcclusionBox(a.minX + p.getX(), a.minY + p.getY(), a.minZ + p.getZ(),
++                a.maxX + p.getX(), a.maxY + p.getY(), a.maxZ + p.getZ());
++    }
++
++    private static boolean covers(OcclusionBox wall, Vec3 eye, Entity target) {
++        Vec3 to = target.getEyePosition();
++        if (!wall.blocks(eye.x, eye.y, eye.z, to.x, to.y, to.z)) return false;
++        AABB b = target.getBoundingBox();
++        double ix = Math.min(0.01, b.getXsize() / 4), iy = Math.min(0.01, b.getYsize() / 4),
++                iz = Math.min(0.01, b.getZsize() / 4);
++        for (int corner = 0; corner < 8; corner++)
++            if (!wall.blocks(eye.x, eye.y, eye.z,
++                    (corner & 1) == 0 ? b.minX + ix : b.maxX - ix,
++                    (corner & 2) == 0 ? b.minY + iy : b.maxY - iy,
++                    (corner & 4) == 0 ? b.minZ + iz : b.maxZ - iz)) return false;
++        return true;
 +    }
 +
 +    /** 同一次只读判断内复用已经撞上的形状,其余身体点若仍撞上它,不必重新遍历整条世界射线。 */
@@ -562,3 +769,137 @@ index 1ee55b4..fc4cd6b 100644
          } else {
              BlockPos cell = target.cell();
              boolean solid = com.dwinovo.numen.api.entity.Sight.clickable(level, cell);
+diff --git a/numen/common/src/main/java/com/dwinovo/numen/scan/OcclusionBox.java b/numen/common/src/main/java/com/dwinovo/numen/scan/OcclusionBox.java
+new file mode 100644
+--- /dev/null
++++ b/numen/common/src/main/java/com/dwinovo/numen/scan/OcclusionBox.java
+@@ -0,0 +1,47 @@
++package com.dwinovo.numen.scan;
++
++/** 单个实心长方体的影锥是凸集:目标盒八角都在影内,盒内的身体采样点也一定被挡住。 */
++record OcclusionBox(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
++    private static final double EPSILON = 1.0E-7;
++
++    /** 只合并接触或重叠且横截面相同的盒子,不把 L 形或有缝的墙补成实心。 */
++    OcclusionBox merge(OcclusionBox b) {
++        if (minY == b.minY && maxY == b.maxY && minZ == b.minZ && maxZ == b.maxZ
++                && minX <= b.maxX && b.minX <= maxX)
++            return new OcclusionBox(Math.min(minX, b.minX), minY, minZ, Math.max(maxX, b.maxX), maxY, maxZ);
++        if (minX == b.minX && maxX == b.maxX && minZ == b.minZ && maxZ == b.maxZ
++                && minY <= b.maxY && b.minY <= maxY)
++            return new OcclusionBox(minX, Math.min(minY, b.minY), minZ, maxX, Math.max(maxY, b.maxY), maxZ);
++        if (minX == b.minX && maxX == b.maxX && minY == b.minY && maxY == b.maxY
++                && minZ <= b.maxZ && b.minZ <= maxZ)
++            return new OcclusionBox(minX, minY, Math.min(minZ, b.minZ), maxX, maxY, Math.max(maxZ, b.maxZ));
++        return null;
++    }
++
++    /** 射线必须穿过盒内部;擦边、零长、观察者在遮挡内的情况留给原版精检。 */
++    boolean blocks(double x, double y, double z, double toX, double toY, double toZ) {
++        if (maxX - minX <= 2 * EPSILON || maxY - minY <= 2 * EPSILON || maxZ - minZ <= 2 * EPSILON) return false;
++        if (x >= minX && x <= maxX && y >= minY && y <= maxY && z >= minZ && z <= maxZ) return false;
++        double dx = toX - x, dy = toY - y, dz = toZ - z;
++        double near = 0, far = 1;
++        if (dx == 0) {
++            if (x <= minX + EPSILON || x >= maxX - EPSILON) return false;
++        } else {
++            double a = (minX + EPSILON - x) / dx, b = (maxX - EPSILON - x) / dx;
++            near = Math.max(near, Math.min(a, b)); far = Math.min(far, Math.max(a, b));
++        }
++        if (dy == 0) {
++            if (y <= minY + EPSILON || y >= maxY - EPSILON) return false;
++        } else {
++            double a = (minY + EPSILON - y) / dy, b = (maxY - EPSILON - y) / dy;
++            near = Math.max(near, Math.min(a, b)); far = Math.min(far, Math.max(a, b));
++        }
++        if (dz == 0) {
++            if (z <= minZ + EPSILON || z >= maxZ - EPSILON) return false;
++        } else {
++            double a = (minZ + EPSILON - z) / dz, b = (maxZ - EPSILON - z) / dz;
++            near = Math.max(near, Math.min(a, b)); far = Math.min(far, Math.max(a, b));
++        }
++        return far - near > EPSILON;
++    }
++}
+diff --git a/numen/common/src/test/java/com/dwinovo/numen/scan/OcclusionBoxTest.java b/numen/common/src/test/java/com/dwinovo/numen/scan/OcclusionBoxTest.java
+new file mode 100644
+--- /dev/null
++++ b/numen/common/src/test/java/com/dwinovo/numen/scan/OcclusionBoxTest.java
+@@ -0,0 +1,77 @@
++package com.dwinovo.numen.scan;
++
++import com.dwinovo.numen.pathing.Vanilla;
++import java.util.Random;
++import net.minecraft.world.phys.AABB;
++import net.minecraft.world.phys.Vec3;
++import org.junit.jupiter.api.BeforeAll;
++import org.junit.jupiter.api.Test;
++import static org.junit.jupiter.api.Assertions.*;
++
++class OcclusionBoxTest {
++    @BeforeAll static void boot() { Vanilla.boot(); }
++
++    @Test void blocksInAllSixAxisDirections() {
++        var box = new OcclusionBox(0, 0, 0, 1, 1, 1);
++        assertTrue(box.blocks(-2, .5, .5, 3, .5, .5));
++        assertTrue(box.blocks(3, .5, .5, -2, .5, .5));
++        assertTrue(box.blocks(.5, -2, .5, .5, 3, .5));
++        assertTrue(box.blocks(.5, 3, .5, .5, -2, .5));
++        assertTrue(box.blocks(.5, .5, -2, .5, .5, 3));
++        assertTrue(box.blocks(.5, .5, 3, .5, .5, -2));
++    }
++
++    @Test void delegatesOriginInsideAndBoundaryRaysToExactTracing() {
++        var box = new OcclusionBox(0, 0, 0, 1, 1, 1);
++        assertFalse(box.blocks(.5, .5, .5, 3, .5, .5));
++        assertFalse(box.blocks(-2, 0, .5, 3, 0, .5));
++        assertFalse(box.blocks(-2, 1, 1, 3, 1, 1));
++        assertFalse(box.blocks(-2, .5, .5, -2, .5, .5));
++    }
++
++    @Test void doesNotBlockBeforeTheRayReachesTheWall() {
++        var box = new OcclusionBox(0, 0, 0, 1, 1, 1);
++        assertFalse(box.blocks(-2, .5, .5, -.1, .5, .5));
++        assertFalse(box.blocks(-2, .5, .5, 0, .5, .5));
++        assertTrue(box.blocks(-2, .5, .5, .5, .5, .5));
++    }
++
++    @Test void tinyOrEmptyGeometryDoesNotBecomeAnExpandedWall() {
++        assertFalse(new OcclusionBox(0, 0, 0, 1E-9, 1, 1).blocks(-2, .5, .5, 3, .5, .5));
++        assertFalse(new OcclusionBox(0, 0, 0, 1, 0, 1).blocks(-2, 0, .5, 3, 0, .5));
++    }
++
++    @Test void mergesOnlySolidRectangularUnions() {
++        var b = new OcclusionBox(-1, -1, -1, 0, 0, 0);
++        assertEquals(new OcclusionBox(-1, -1, -1, 1, 0, 0), b.merge(new OcclusionBox(0, -1, -1, 1, 0, 0)));
++        assertEquals(new OcclusionBox(-1, -1, -1, 0, 1, 0), b.merge(new OcclusionBox(-1, 0, -1, 0, 1, 0)));
++        assertEquals(new OcclusionBox(-1, -1, -1, 0, 0, 1), b.merge(new OcclusionBox(-1, -1, 0, 0, 0, 1)));
++        assertNull(b.merge(new OcclusionBox(0, 0, -1, 1, 1, 0)), "L-shaped union must not fill its missing corner");
++        assertNull(b.merge(new OcclusionBox(1E-9, -1, -1, 1, 0, 0)), "tiny gaps remain gaps");
++    }
++
++    @Test void randomFastPositiveAlwaysHasAVanillaIntersection() {
++        Random random = new Random(0x71a14);
++        for (int i = 0; i < 20000; i++) {
++            double x = random.nextDouble() * 40 - 20, y = random.nextDouble() * 40 - 20,
++                    z = random.nextDouble() * 40 - 20;
++            var fast = new OcclusionBox(x, y, z, x + .25 + random.nextDouble() * 4,
++                    y + .25 + random.nextDouble() * 4, z + .25 + random.nextDouble() * 4);
++            var exact = new AABB(fast.minX(), fast.minY(), fast.minZ(), fast.maxX(), fast.maxY(), fast.maxZ());
++            Vec3 from = new Vec3(random.nextDouble() * 60 - 30, random.nextDouble() * 60 - 30, random.nextDouble() * 60 - 30);
++            Vec3 to = new Vec3(random.nextDouble() * 60 - 30, random.nextDouble() * 60 - 30, random.nextDouble() * 60 - 30);
++            if (fast.blocks(from.x, from.y, from.z, to.x, to.y, to.z))
++                assertTrue(exact.clip(from, to).isPresent(), "fast path invented an intersection");
++        }
++    }
++
++    @Test void convexShadowCoversTheInteriorWhenAllCornersAreBlocked() {
++        var box = new OcclusionBox(4, -3, -3, 5, 3, 3);
++        var exact = new AABB(4, -3, -3, 5, 3, 3);
++        Vec3 eye = new Vec3(0, 1.5, 0);
++        for (int side = 0; side < 8; side++)
++            assertTrue(box.blocks(eye.x, eye.y, eye.z, 8 + (side & 1), -1 + (side >> 1 & 1) * 3, -1 + (side >> 2 & 1) * 2));
++        for (int x = 0; x <= 8; x++) for (int y = 0; y <= 8; y++) for (int z = 0; z <= 8; z++)
++            assertTrue(exact.clip(eye, new Vec3(8 + x / 8.0, -1 + 3 * y / 8.0, -1 + 2 * z / 8.0)).isPresent());
++    }
++}

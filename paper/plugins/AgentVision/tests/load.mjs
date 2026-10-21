@@ -41,11 +41,36 @@ try{
  check('steady hidden entities do not flap hide/show',end.shows-start.shows<=16);
  check('bounded work continues for all clients',end.checks>start.checks);
  check('per-tick check count obeys configured bound',end.peakChecks<=end.maxChecks);
- check('shape reuse reduces full-world ray traversals',(end.shapeSkips-start.shapeSkips)>(end.worldRays-start.worldRays));
+ // A validated shared hint skips the whole query, so its savings do not increment per-ray shapeSkips.
+ // Each such proof avoids at least one full-world ray; the uncached implementation keeps its original assertion.
+ const avoided=(end.shapeSkips-start.shapeSkips)+(end.hintHits??0)-(start.hintHits??0);
+ check('verified occluder reuse reduces full-world ray traversals',avoided>(end.worldRays-start.worldRays));
  check('all 16 clients remain connected',bots.every(b=>b._client.state==='play'&&b.errors.length===0));
+ if('hintHits' in end){
+  check('shared terrain hints eliminate repeated world traversals',end.hintHits-start.hintHits>(end.checks-start.checks)/3);
+  check('terrain hint storage remains bounded',end.hintEntries<=1024);
+  check('queue visit work respects its configured cap',end.peakVisits<=512);
+ }
+ if(process.env.VISION_BENCH==='1'){
+  const reply=await rc('agentvisionbench');
+  assert(reply.includes('MC_VISION_BENCH'),'test-only benchmark plugin missing');
+  result.hiddenBenchmark=JSON.parse(reply.slice(reply.indexOf('{'),reply.lastIndexOf('}')+1));
+  check('read-only benchmark sees all pairs hidden',result.hiddenBenchmark.visiblePairs===0);
+ }
  await rc('minecraft:fill 104 81 94 104 86 106 minecraft:glass');
  await sleep(2200);
  check('all 16 clients regain exposed targets',bots.every(b=>Object.values(b.entities).filter(e=>e.name==='pig').length>=32));
- result.after=await stats();result.passed=true;
+ if(process.env.VISION_BENCH==='1'){
+  const reply=await rc('agentvisionbench');
+  result.openBenchmark=JSON.parse(reply.slice(reply.indexOf('{'),reply.lastIndexOf('}')+1));
+  check('read-only benchmark sees all exposed pairs',result.openBenchmark.visiblePairs===512);
+ }
+ result.after=await stats();
+ if('queuedViewers' in result.after){
+  bots.forEach(b=>b.quit());await sleep(750);
+  result.afterDisconnect=await stats();
+  check('disconnect releases all 16 viewer queues',result.afterDisconnect.viewers===0&&result.afterDisconnect.queuedViewers===0);
+ }
+ result.passed=true;
 }catch(e){result.error=String(e.stack??e);throw e;}
 finally{bots.forEach(b=>b.quit());await sleep(500);fs.writeFileSync(output,JSON.stringify(result,null,2));}

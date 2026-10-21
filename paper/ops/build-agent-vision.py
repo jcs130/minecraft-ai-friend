@@ -57,7 +57,7 @@ with zipfile.ZipFile(base) as source, zipfile.ZipFile(af, 'x', compression=zipfi
 vision_src = paper / 'plugins/AgentVision'
 vision_classes = a.output / 'vision-classes'
 compile_sources(sorted((vision_src / 'src').rglob('*.java')), vision_classes, [af, *cp])
-vision = a.output / 'AgentVision-0.1.0.jar'
+vision = a.output / 'AgentVision-0.1.1.jar'
 with zipfile.ZipFile(vision, 'x', compression=zipfile.ZIP_DEFLATED) as out:
     for name in ['paper-plugin.yml', 'config.yml']:
         write_entry(out, name, (vision_src / name).read_bytes())
