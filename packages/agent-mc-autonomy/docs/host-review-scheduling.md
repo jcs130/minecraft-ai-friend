@@ -54,3 +54,13 @@ terminal reference is dated evidence and grants no replay authority. The host
 still chooses whether to continue, close, defer or revise a useful project from
 actual effects and current conditions; there is no activity quota or fixed
 survival sequence. A short successful deployment cannot certify lasting behavior.
+
+Maintenance must keep the standing instruction separate from resume evidence.
+Do not append old project counts, method indexes, coordinates or a deployment
+report to `run --goal`: that argument becomes standing intent in both body and
+host review prompts. Preserve such records as dated scoped game memory or
+original evidence instead, and resume from fresh native facts. In particular,
+restarting a session must not reassert an old farm/project snapshot as a new
+objective. Never silently parse or rewrite a human's natural-language goal;
+correct a known maintainer-added appendix as an explicit recorded maintenance
+operation, retaining the original and normal stop/drain/ownership checks.
