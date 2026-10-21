@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "status": "deployed_verified",
+  "id": "message-autonomy-release-20261021",
+  "authorization": "提前提醒后重启，上线两项修复",
+  "paper": {
+    "version": "1.21.1 build133",
+    "sha256": "39bd8c00b9e18de91dcabd3cc3dcfa5328685a53b7187a2f63280c22e2d287b9",
+    "pid": 26112
+  },
+  "versions": {
+    "AgentFriend": "0.4.47.10",
+    "CortiEyeMirror": "0.1.17",
+    "Numen": "0.1.4",
+    "NumenBedrock": "0.1.0",
+    "QwenPawGame": "0.3.0"
+  },
+  "artifacts": [
+    {
+      "target": "AgentFriend-0.4.47.10.jar",
+      "sha256": "fa48a39410854eadb054eb3d8cbaaa65aad3e179c43ce22cad4d8a7f0efa013d"
+    },
+    {
+      "target": "CortiEyeMirror-0.1.17.jar",
+      "sha256": "628242d9b46b2be68037a656986c1ac1274b6a876190451a37d7e85bb8d92f51"
+    },
+    {
+      "target": "numen_api-paper-1.21.1-0.1.4.jar",
+      "sha256": "fb4e7a8656cb4f1226c13b1b1f04bf45816fedc781c0ccc9f5df6ffc1d5daa78",
+      "previousSha256": "77da82ad3241f39fee878e5e51f855bdc5fe7777cabd1ed863a213af5bd60dea"
+    },
+    {
+      "target": "ops/numen-qwenpaw-controller.py",
+      "sha256": "31bf3d1f5d9bcf0146b2e89a8f81e73fc15e881bc20a5ad9b72efec027ebeb04",
+      "previousSha256": "e782a2ba4f02674cdd8c9eda4df6fbf75930a84b0233bba9dadab0d4aa89c303"
+    }
+  ],
+  "coldBackup": {
+    "stamp": "20261021-151552",
+    "EComplete": true,
+    "FComplete": true,
+    "stoppedForCopy": true,
+    "bothVerifiedBeforeInstall": true
+  },
+  "maintenance": {
+    "originalTask": "Afu-MC-DailyBackup",
+    "result": 0,
+    "noticesSeconds": [
+      180,
+      60,
+      10
+    ],
+    "shortChineseReleaseNotes": true,
+    "pending": false,
+    "unrelatedJarEntriesRetained": true,
+    "qwenpawServiceRestarted": false
+  },
+  "verification": {
+    "production": 39,
+    "inventoryFields": 8,
+    "inventoryEntries": 38,
+    "unmoddedProtocolConnections": {
+      "versions": [
+        "1.20.6",
+        "1.21.1"
+      ],
+      "checks": 6
+    },
+    "candidateEvidence": {
+      "chatPolicy": 127,
+      "chatActualConnections": {
+        "1.20.6": 55,
+        "1.21.1": 55
+      },
+      "pythonPassed": 99,
+      "pythonSkipped": 6,
+      "jvmPassed": 1219,
+      "paperRemoteBrain": 8
+    },
+    "professionAndPointsRetained": true,
+    "personalBackpackRetained": true,
+    "normalDifficulty": true,
+    "keepInventoryAllDimensions": true,
+    "nativeQueriesAfterReconnect": true,
+    "noDispatchForCommentVariantOfRefusedAction": true,
+    "receiptMigration": {
+      "oldRecords": 4,
+      "uniqueGuardedActions": 3,
+      "allRemainBlocked": true
+    }
+  },
+  "kirito": {
+    "uuid": "8e7b99e0-595d-3402-935c-7139ac6814e3",
+    "dailyEnabled": true,
+    "nativePlugin": "0.3.0",
+    "tools": 8,
+    "heartbeat": "2m",
+    "otherProfilesPreserved": true,
+    "successfulToolResultsAtSample": 10,
+    "unknownResultsAtSample": 0,
+    "questCompletionClaimed": false
+  },
+  "compatibility": {
+    "numenClientOptional": true,
+    "nativeClientProtocol": 3,
+    "javaFullPanelMinecraft": "1.21.1",
+    "publicPortsAdded": false,
+    "fabricNeoForgePixelsRetested": false,
+    "mobileXboxPixelsRetested": false,
+    "remoteWebDeployed": false,
+    "sixteenAutonomousModelsTested": false
+  },
+  "retainedFailures": [
+    "Preflight initially rejected the new native companion fishy; corrected the fixture to verify server-owned NumenOwner and exact UUID, as the real maintenance gate does.",
+    "Initial verification compared legacy raw receipt keys; changed to prove every prior semantic action remains blocked after lexical identity migration.",
+    "A body deliberately removed for maintenance does not auto-restore; original authenticated owner recalled the same saved body.",
+    "The full roster response was truncated after other players rejoined; original UUID and item retention were verified using direct entity/playerdata queries.",
+    "Existing Mineflayer painting/slot-component parser warnings were not repaired by this release."
+  ],
+  "rollback": "Pause only Kirito; obtain maintenance authorization and notify, then use original stopped E/F backup process to restore previous AgentFriend/Eye/API/controller code together. Keep current world, inventories, tasks, memory and uncertain-action receipts; keep Kirito paused after rollback."
+}
