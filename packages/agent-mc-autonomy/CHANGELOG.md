@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.80
+
+- Preserve the complete bounded standing instruction in strategic review, rather
+  than silently clipping later method-learning and evidence requirements. Larger
+  instructions have an explicit immutable original query.
+- Compare dated public native goal/method summaries across the existing review
+  publication path. Inventory activity no longer hides that sampled milestones
+  and method summaries are unchanged. Keep at most eight samples over an hour,
+  with three in the compact view, isolated by owner/world/run/lifecycle and user
+  intent. This is evidence for the host's choice, not a forced project switch,
+  world-progress certification, extra timer/model call or second body queue.
+
 ## 0.2.79
 
 - Pin core rc.60 with ten explicit built-in work/movement routines, exact-cell

@@ -13,6 +13,7 @@ from datetime import datetime
 from .configuration import _boolean, _integer
 from .host_context import HostContextPort, validate_host_context
 from . import review_evidence
+from . import review_projects
 from .mailbox import Mailbox, observation
 from .observations import body_feedback, feedback_signal, fact_preview, spatial_text, tool_failure_view, native_outcome_summary
 from .death_memory import hydrate_combat, DeathMemory, lifecycle, scope_key, recovery_context
@@ -73,7 +74,7 @@ def review_observation(status, now):
     feedback = body_feedback(snapshot, facts)
     # Raw facts remain in the independent journal/status API; no accumulating prompt history here.
     evidence = {"sampled_at": snapshot["updated_at"], "phase": snapshot["phase"], "connected": snapshot.get("game_connected") is True,
-                "standing_goal": str(snapshot.get("standing_goal", ""))[:600],
+                "standing_goal": str(snapshot.get("standing_goal", "")),
                 "current_goal": {**{key: active.get(key) for key in ("id", "goal", "mode", "parent_id")},
                                  "origin": active.get("origin", "unknown")}, "pending": pending,
                 "historical_goal": snapshot.get("historical_goal"),
@@ -297,6 +298,9 @@ class ReviewPort:
             policy = ReviewPolicy.parse(state.get("policy", {}))
             if not policy.enabled:
                 return
+            review_projects.record(state, observed, now)
+            if projects := review_projects.view(state, observed, now):
+                observed["evidence"]["project_observations"] = projects
             previous = state.get("review", {})
             previous_episode = previous.get("evidence", {}).get("death_episode")
             superseded_death = bool(previous_episode
@@ -539,6 +543,8 @@ class ReviewPort:
                             "next_offset": end, "has_more": end < len(chain)}
                 fresh = current["evidence"]
                 fresh["current_user_goal"] = self.mailbox.current_user_goal(fresh["current_goal"].get("id"))
+                if projects := review_projects.view(state, current, self.now()):
+                    fresh["project_observations"] = projects
                 if candidate := fresh.get("death_episode"):
                     saved, _ = self.death_record(candidate)
                     if saved and (saved.get("reflection") or saved.get("lesson")):

@@ -202,12 +202,29 @@ def sample_preview(samples):
 
 def compact(evidence, reference, last_decision=None):
     result = {key: preview(evidence[key], limit) for key, limit in (
-        ("sampled_at", 100), ("phase", 60), ("connected", 30), ("standing_goal", 750),
+        ("sampled_at", 100), ("phase", 60), ("connected", 30),
         ("current_user_goal", 850), ("current_goal", 850), ("historical_goal", 850), ("pending", 750),
         ("body_baseline", 800), ("tool_failure", 1200), ("planner_error", 400),
         ("runtime_error", 400), ("read_activity", 400), ("death_recovery", 1500),
         ("unactioned_replies", 30), ("planner_retry_seconds", 30), ("material_unchanged_seconds", 30))
         if key in evidence and evidence[key] not in (None, "", [], {})}
+    # Instructions are not disposable scene narration. Preserve a complete
+    # normal bounded instruction, including its later methods/evidence clauses.
+    # Oversize input is explicit and recoverable from the immutable original.
+    if standing := evidence.get("standing_goal"):
+        result["standing_goal"] = preview(standing, 24576)
+        if result["standing_goal"] != standing:
+            result["standing_goal_details"] = {"available": True,
+                "detail_path": ["evidence", "standing_goal"], "json_characters": len(encoded(standing))}
+    if history := evidence.get("project_observations"):
+        rows = history["samples"]
+        indices = sorted({0, max(0, len(rows) - 2), len(rows) - 1}) if rows else []
+        result["project_observations"] = {**{k: v for k, v in history.items() if k != "samples"},
+            "samples": [{**{k: v for k, v in rows[i].items() if k not in {"goals", "methods"}},
+                         "goals": fact_preview(rows[i].get("goals", ""), 600),
+                         "methods": fact_preview(rows[i].get("methods", ""), 350),
+                         "detail_path": ["evidence", "project_observations", "samples", i]} for i in indices],
+            "samples_omitted": len(rows) - len(indices)}
     # A large inventory must never turn the entire live scene into an opaque
     # clipped JSON string: the host needs the current position after a respawn.
     # Bound each field instead; the immutable evidence page retains every byte.

@@ -28,3 +28,29 @@ diagnosis; current run-loop tests independently reproduce the original loss.
 Measure completed requests, controller cancellations and physical idle windows
 separately. A faster provider, a successful callback or one accepted body task
 does not by itself prove fluent long-running gameplay.
+
+## Project evidence across reviews
+
+The standing instruction is retained in full before immutable evidence storage.
+Compact inspection preserves it up to 24 KiB of encoded JSON; larger instructions
+are explicitly abridged and expose their exact original character length/path.
+This prevents later method-authoring, reuse and evidence requirements disappearing
+behind a short scene preview. No host persona or private memory is copied here.
+
+The existing body publication also samples public native goal/method summaries
+every five minutes or when either summary changes. The same strategic database
+keeps at most eight samples from the last hour; inspection reads them without
+creating history, waking a model, or dispatching a stage. Compact inspection keeps
+the oldest and two latest samples and links to every retained original sample.
+Changing owner session, world/run, lifecycle/restriction/unknown boundary,
+standing instruction or explicit user lineage resets the comparison. Ordinary
+host stage revisions do not manufacture a new user intent.
+
+`sampled_summaries_unchanged_seconds` compares sampled summaries, not continuous
+world observation or verified stagnation. A harvest can increase inventory while
+the registered milestone stays unchanged; neither readout proves a project is
+finished. Missing intervals and omitted samples are not action counts. A sampled
+terminal reference is dated evidence and grants no replay authority. The host
+still chooses whether to continue, close, defer or revise a useful project from
+actual effects and current conditions; there is no activity quota or fixed
+survival sequence. A short successful deployment cannot certify lasting behavior.
